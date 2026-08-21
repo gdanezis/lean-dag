@@ -23,9 +23,12 @@ onto the existing Odontoceti development at `c = 0`. Results will carry
 **H**-labels; everything will live in `LeanDag/Hybrid/` with `decide`
 witnesses in `LeanDagTest/Hybrid.lean`, consuming the core read-only.
 
-`hybrid.md`'s closing section on checkpoint safety is out of scope:
-checkpoints and signatures are outside this development's model
-(report §1.4), and nothing below depends on that section.
+The DAG theorems below do not depend on checkpoint signatures. The
+additive `Hybrid/Checkpoint/` subarc is a separate assume-guarantee
+model: it takes possibly forked per-validator histories and messages as
+execution input, then proves resilient finality safety and
+highest-checkpoint recovery. It neither derives AbC-induced forks from
+the DAG nor composes these checkpoint results with the DAG proofs.
 
 ## 1. What the hybrid model splits
 
@@ -265,16 +268,35 @@ on it.
 | `Hybrid/Decision.lean` | the decision relation with canonicity; H5, H6 |
 | `Hybrid/Liveness.lean` | H7 over the `T`-relativised interface |
 | `Hybrid/Conservativity.lean` | H8, the `fc = 0` collapse |
+| `Hybrid/Checkpoint/BaseSpec.lean` | **human review:** AbC classes, execution assumptions, proposal and certificate objects |
+| `Hybrid/Checkpoint/RecoverySpec.lean` | **human review:** broadcast, validation, selection, and epoch-transition contracts |
+| `Hybrid/Checkpoint/SafetyProofs.lean` | **Lean-checked:** quorum, uniqueness, prefix consistency, and recorder derivations |
+| `Hybrid/Checkpoint/RecoveryProofs.lean` | **Lean-checked:** concrete selection, agreement, and preservation derivations |
 | `LeanDagTest/Hybrid.lean` | H9: the `n = 4` crash model and the `n = 9` hybrid model |
+| `LeanDagTest/HybridCheckpoint.lean` | concrete checkpoint certificate, finality certificate and recovery output |
 
 ## 6. Out of scope
 
-- **Checkpoint safety** (`hybrid.md`'s final section): checkpoints,
-  signatures and signer-counting are not in the model.
-- **Recovery.** A crash-prone validator that halts and returns is Safe
-  Skip's subject (report §12); composing the two arcs — the fill
-  proved verdict-invariant under hybrid thresholds — is a natural
-  sequel, not this arc.
+- **Authenticated-broadcast implementation.** Recovery consumes only
+  authentication/integrity, agreement, and delivery of actual inputs
+  from recovery-correct senders. Protocol handlers are separately
+  proved to submit recorded concrete certificate payloads. Local
+  validation checks the closing epoch, quorum, and each signer-indexed
+  authenticated proposal, and its soundness constructs a
+  `CheckpointQC`; malformed inputs may be broadcast but are rejected.
+  Dolev--Strong's rounds and cryptographic argument are not formalized.
+- **Multi-epoch checkpoint safety.** Prefix consistency and
+  same-height uniqueness are intentionally scoped to a single epoch.
+  Recovery connects a selected closing-epoch checkpoint to the next
+  genesis, but does not model arbitrary multi-epoch protocol machinery.
+- **Post-checkpoint VoteQC extension.** The formal recovery output is
+  the highest validated checkpoint history. The paper's deterministic
+  extension with delivered VoteQCs up to the first gap is not modeled,
+  so theorem names claim checkpoint preservation only.
+- **DAG rejoin after recovery.** Safe Skip addresses a crash-prone
+  validator that returns (report §12). The checkpoint subarc proves the
+  recovered prefix safe; composing it with the subsequent DAG fill is
+  outside this model.
 - **Adaptive leaders over hybrid faults.** The adaptive layer is
   rule-agnostic (report §13.5) and should mirror onto the hybrid
   relation as it did onto Odontoceti's; also a sequel.

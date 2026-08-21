@@ -5907,9 +5907,19 @@ for every admissible threshold, and necessity on data one validator
 short — and records the one point where the published DAG
 instantiation is incomplete: its indirect rule needs the canonical
 candidate selection the core protocol's view change already has
-(§14.3), the same repair §10 supplies for Odontoceti. Orcaella's
-Resilient Path — checkpoints, alive-but-corrupt clients, synchronous
-fork recovery — involves signatures and is outside this development's
+(§14.3), the same repair §10 supplies for Odontoceti. The additive
+checkpoint arc is an assume-guarantee model: possibly forked
+per-validator histories and messages are execution inputs, and from
+them it machine-checks same-epoch checkpoint uniqueness, prefix
+consistency, resilient finality, and highest-checkpoint recovery under
+alive-but-corrupt signing faults. It does not derive an AbC-induced
+fork from OrcDAG or compose checkpoint safety with the DAG proofs. It
+treats `BaseSpec.lean` and `RecoverySpec.lean` as the human-reviewed
+trust boundary, with derivations isolated in the two `*Proofs.lean`
+modules. It
+treats authenticated Byzantine broadcast through its agreement,
+integrity, and correct-input delivery contract; the Dolev--Strong
+implementation and executable cryptographic parsing remain outside the
 model.
 
 **Crash-fault DAG consensus.** Nemo-Nemo [Ker+26] carries the

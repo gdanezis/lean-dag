@@ -108,6 +108,29 @@ faults alone.
   also proved **necessary**: one validator short, one view derives
   conflicting verdicts at every threshold
   (`hybrid_bound_necessary`).
+- **Resilient checkpoints** (`LeanDag/Hybrid/Checkpoint/`): explicit
+  epoch-, height-, and history-bearing proposal messages are
+  emitted from append-only per-validator protocol state. Forked
+  per-validator histories are execution inputs: this layer does not
+  derive an AbC fork from the DAG or compose with the DAG safety proofs.
+  `BaseSpec.lean` and `RecoverySpec.lean` are the human-review trust
+  boundary; theorem statements still require review, while the bodies
+  in `SafetyProofs.lean` and `RecoveryProofs.lean` are Lean-checked.
+  Conditional on those inputs, at
+  `fabc < n - 3·fb - 2·fc`, quorum intersection derives same-height
+  uniqueness and within-epoch prefix consistency; checkpoint safety is
+  intentionally scoped to one epoch. Concrete witness messages prove
+  that finality leaves a recovery-correct recorder. Recovery broadcasts
+  concrete checkpoint-certificate payloads carrying signer sets and
+  checkpoint content. An explicit local verifier checks the epoch,
+  quorum, and every authenticated proposal, with a soundness theorem
+  constructing a `CheckpointQC`; malformed broadcast inputs are not
+  channel-excluded. Finite highest-checkpoint selection handles the
+  empty/genesis case and preserves finalized state into next-epoch
+  signing. This recovers checkpoint history under explicit submission,
+  broadcast, validation, and adoption assumptions; it does not recover
+  the discarded DAG or restart consensus. The broadcast algorithm and
+  the paper's post-checkpoint VoteQC extension are not formalized.
 - **Integration** (`LeanDag/Integration/`): the arcs are proved to
   **compose** — not by settling a quadratic matrix, but by naming the
   invariants each consumes and proving the two universe transformers
