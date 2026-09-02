@@ -261,17 +261,29 @@ The lemma is that `Hydrozoan.Reaches`
 `Hydrozoan/Model/CausalHistory.lean:37`) agrees with
 `Causality.historyFrom` (`Causality.lean:190`) across the adapter.
 
-One design decision is genuine rather than mechanical. `waveLength` is
-the number of rounds the direct rule reads from a slot's proposal, and
-Hydrozoan has two direct commit routes at different depths: the fast
-path reads rounds `r` and `r + 1`, the slow path reads `r`, `r + 1` and
-`r + 2`. Setting `waveLength := 3` with
-`DirectCommitIn V L r := FastCommitInView … ∨ SlowCommitInView …` is
-sound, and it makes the leader-count mechanism treat a fast commit as
-occupying a three-round window when it occupies two. Whether the AIMD
-signal should distinguish the two routes is a question for the
-instantiation, not for the interface, and it should be settled before
-the statement is frozen.
+**The wave length looked like a design decision and is forced.**
+Hydrozoan has two direct commit routes at different depths — the fast
+path reads rounds `r` and `r + 1`, the slow path also `r + 2` — so the
+shallower one suggests `waveLength := 2`. It is not available.
+`waveLength` is also the anchor gap of `LiveRule.Descent`'s `indirect`
+law, `S.slotRound i + waveLength ≤ S.slotRound j`, and Hydrozoan's
+`EligibleAsAnchor i j` is `decisionRound i < S.slotRound j`; at wave
+length two the law demands its conclusion from a gap at which no
+Hydrozoan derivation exists, so it is unprovable rather than harder.
+P2 settled this: the wave is three, and `DirectCommitIn` is the
+disjunction of the two routes.
+
+What wave length three changes for the leader count is only which
+slots `WindowHealthy` requires. `observed`
+(`Barnacle/Model/Window.lean`) ranges over every depth in
+`[0, interval]` and counts a fast commit wherever it sits, while
+`expected` and `WindowHealthy` begin at depth `waveLength`; the two
+sides move together and nothing is under-counted. Neither branch of
+the disjunction may be dropped: without the slow branch the count
+falls to zero exactly when the actual faults exceed `p`, the regime in
+which the slow path is the guaranteed one (`hydrozoan.md` §0), and
+without the fast branch it misses the commits the protocol exists for
+(`hydrozoan.md` §11).
 
 **HI5** is the liveness half, and it has three parts rather than two.
 `Barnacle.LiveRule` (`Barnacle/Model/Live.lean`) extends `BaseRule`

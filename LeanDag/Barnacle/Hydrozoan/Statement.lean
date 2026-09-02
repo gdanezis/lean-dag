@@ -29,14 +29,33 @@ Three points where the instantiation carries Hydrozoan's shape.
   `BlockUniverse`, guarded by `NonByzantine`, so the carrier is the
   universe itself.
 
-* **Two direct routes, one window.** `waveLength` is the number of
-  rounds the direct rule reads from a proposal, and Hydrozoan has two
-  direct commits at different depths: the fast path reads the propose
-  and voting rounds, the slow path also the decision round. The wave is
-  therefore three and `DirectCommitIn` is the disjunction. The cost is
-  recorded rather than hidden: the leader-count mechanism scores a fast
-  commit as occupying a three-round window where it occupies two, which
-  makes the window count conservative and never unsound.
+* **Two direct routes, one window, and the wave length is forced.**
+  Hydrozoan has two direct commits at different depths: the fast path
+  reads the propose and voting rounds, the slow path also the decision
+  round. `waveLength` is nonetheless not free to follow the shallower
+  one, because it is also the anchor gap of `LiveRule.Descent`'s
+  `indirect` law, which reads
+  `S.slotRound i + waveLength ≤ S.slotRound j`; Hydrozoan's
+  `EligibleAsAnchor i j` unfolds to `decisionRound i < S.slotRound j`,
+  so at wave length two that law demands its conclusion from a gap no
+  Hydrozoan derivation admits, and is unprovable rather than merely
+  harder. The wave is three, and `DirectCommitIn` is the disjunction.
+
+  What wave length three changes for the leader count is only which
+  slots `WindowHealthy` *requires*: `observed`
+  (`Barnacle/Model/Window.lean`) ranges over every depth in
+  `[0, interval]` and counts a fast commit wherever it sits, while
+  `expected` and `WindowHealthy` start at depth `waveLength`. So the
+  health requirement begins one round deeper than a fast-only rule's
+  would, the two sides of the comparison move together, and nothing is
+  under-counted.
+
+  Neither branch may be dropped. Without the slow branch the count
+  falls to zero exactly when the actual faults exceed `p` — the regime
+  in which the slow path is the guaranteed one (`docs/hydrozoan.md`
+  §0). Without the fast branch it misses the commits the protocol
+  exists for, and `docs/hydrozoan.md` §11 records that a slot can
+  fast-commit while no certificate for it exists anywhere.
 
 * **The payload is `Unit`.** Hydrozoan's blocks carry none, and the
   interface's `block` returns the core's. `adapt` supplies it.
