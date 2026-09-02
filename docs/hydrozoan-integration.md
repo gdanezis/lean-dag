@@ -43,7 +43,7 @@ names, and the position at each is different.
   nominal, one is a missing validity clause, and one is a committee
   condition that is a result in its own right (§2, §3).
 - **Layer D, the delivery structure.** Absent from Hydrozoan
-  altogether. This is what the arc's own §12 defers, and §6 states
+  altogether. This is what `hydrozoan.md` §12 defers, and §6 states
   precisely which theorems of the rest of the development are
   unavailable because of it.
 
@@ -53,6 +53,11 @@ requires no `Faults` instance, so Hydrozoan instantiates it with the
 frozen `Model/` untouched, and the hardest of its laws is discharged by
 HZ3, already proved. The **transformer route** (§5) is where the
 committee condition and the missing validity clause are consumed.
+
+One question runs across both and should be settled before either is
+written: `hydrozoan.md` §12's fixed `T` prevents a recovered replica
+from re-entering the good set, which the Barnacle instantiation
+inherits through `Descent` (§4) and the fill exhibits (§5.2).
 
 ## 1. Layer S: the schedule coincides
 
@@ -224,15 +229,60 @@ signal should distinguish the two routes is a question for the
 instantiation, not for the interface, and it should be settled before
 the statement is frozen.
 
-**HI5** is the liveness half. `Barnacle.LiveRule`
-(`Barnacle/Model/Live.lean`) extends `BaseRule` with
-`Good : Universe → ℕ → ℕ → Prop`, the rule's own notion of a good DAG,
-and `LiveOn S c` concludes on a view satisfying `BaseRule.CoversUpto`.
-Hydrozoan's liveness package instantiates `Good` directly — a
-quorum-sized `T ⊆ Correct` with `SynchronisedOn U T Rnd` and
-`PopulatedOn U T r` through the horizon — and HZ5 and HZ7 conclude on
-`View.CoversUpto`, which is the same interface. The commit gap `c` is
-what HZ7 supplies through `FairRunOn` and `RunsRecur`.
+**HI5** is the liveness half, and it has three parts rather than two.
+`Barnacle.LiveRule` (`Barnacle/Model/Live.lean`) extends `BaseRule`
+with `Good : Universe → ℕ → ℕ → Prop`, the rule's own notion of a good
+DAG, and `LiveOn S c` concludes on a view satisfying
+`BaseRule.CoversUpto`. Hydrozoan's liveness package instantiates `Good`
+directly — a quorum-sized `T ⊆ Correct` with `SynchronisedOn U T Rnd`
+and `PopulatedOn U T r` through the horizon — and HZ5 and HZ7 conclude
+on `View.CoversUpto`, which is the same interface. The commit gap `c`
+is what HZ7 supplies through `FairRunOn` and `RunsRecur`.
+
+The third part is `LiveRule.Descent slack` (`Barnacle/Model/Heads.lean:42`),
+which Orcaella carries at `slack = fb + fc`. Hydrozoan is shaped for it
+at `slack = f + c`:
+
+- `goodLeaders` asks for a set `T` with
+  `Fintype.card Validator ≤ T.card + slack`, which at `slack = f + c`
+  is `T.card ≥ n − f − c = q` — HZ5's own premise.
+- `indirect` at `waveLength = 3` reads `S.slotRound i + 3 ≤ S.slotRound j`,
+  which is `EligibleAsAnchor Replica i j` — slot `j`'s propose round
+  strictly past slot `i`'s decision round — and its conclusion is HZ6's
+  `AnchoredTotality`.
+
+`goodLeaders` quantifies over every schedule *inside* the existential
+for `T`, so `Good U Rnd N` must supply `PopulatedOn U T r` at every
+round of the window rather than at slot rounds alone. That is the
+reading "good from `Rnd` to `N`" should have in any case, and it is how
+the statement should be written.
+
+**The `T` of `Good` is fixed for the whole DAG, which gates HI5.**
+`hydrozoan.md` §12 records that `T` is fixed across the synchrony
+suffix, so a replica that rejoins by jumping to the frontier round sits
+outside `T` permanently; `Descent.goodLeaders` quantifies one `T` per
+good DAG, so the instantiation inherits that. The consequence is stated
+in §5: a replica readmitted by `skipFill` never re-enters the good set,
+and the leader count cannot promote it back within the model. The
+repair Hydrozoan names — a wave-scoped `SynchronisedAt` with a per-wave
+`T` — modifies the frozen `Model/Liveness.lean`, so whether to make it
+is a decision that belongs before HI5's statement is written rather
+than after.
+
+**The health signal reads Hydrozoan's crash class as unhealthy.**
+`SlotDirect` (`Barnacle/Model/Window.lean:55`) counts slots with a
+direct *commit*, and `expected = (interval − waveLength + 1) * m`
+counts a window in which every scoring slot commits. Barnacle records
+the limitation already: `Healthy/Statement.lean` states that a good DAG
+does not make a window healthy, since slots led by validators outside
+the good set do not commit in any case. Under Hydrozoan the statement
+is sharper rather than new — with `c ≥ 1` crashed replicas holding
+slots, `WindowHealthy` is unreachable and BN12 says nothing about such
+a deployment. So the Barnacle route yields Agreement and Ledger in
+full, and the health results only as far as Barnacle's own hold: the
+useful Hydrozoan form is the partial count that
+`Barnacle/Healthy/Statement.lean` names as the next result and does not
+prove.
 
 **HI6** repeats HI4 and HI5 for Optimal-Hydrozoan over `DecidedOpt`,
 with OH3 discharging `agree`. Its evidence rung needs no tie-break
@@ -269,21 +319,88 @@ Three of the six are direct and should be routine: `directFast`,
 filter is invisible to them, which is the argument the core's
 `DirectCommitIn` and `DirectSkipIn` cases already make.
 
-The three indirect constructors are where the risk sits, and the
-grading is why. `indirectWeak` fires only when no candidate has an
-anchor-linked certificate, and `indirectSkip` only when both rungs are
-empty for every candidate. These premises are negative, so removing
-blocks can make them true where they were false: pruning a certificate
-can turn a rung-1 derivation into a rung-2 one. The base-slot premise
-is what should contain this, exactly as it does for the core's own
-anchored constructors, but it is a real theorem with a real possibility
-of needing a further condition on where the horizon may fall. That
-condition, if it exists, belongs in the same category as
-`integration.md` §4.1's third kind of result — a placement condition on
-the horizon, which is the arc's most directly usable output.
+The three indirect constructors carry negative premises — `indirectWeak`
+fires only when no candidate has an anchor-linked certificate, and
+`indirectSkip` only when both rungs are empty for every candidate — and
+removing blocks does not preserve a negative premise in general.
+Under the base-slot premise it should nonetheless transport:
+`chop` empties `refs` only at the base layer, so `Reaches` is preserved
+for targets at rounds at or above `G`, and with
+`G ≤ S.slotRound d ≤ S.slotRound k` every certificate and every vote
+the rungs inspect sits above the cut. The obligation to predict is a
+different one — `EligibleAsAnchor` re-indexes as
+`S.slotRound j − G > S.slotRound k + 2 − G`, and `integration.md` §3.4
+records that truncated subtraction is faithful only above the cut, paid
+three times so far and discharged each time by a hypothesis already in
+scope. Monotonicity of `slotRound` from the base slot supplies it here,
+and this would be the fourth.
 
-`skipFill` and the novelty budget are behind **HI8** and §3, and behind
-the delivery layer for the budget's own statement.
+### 5.1 The fill, and where the two protocols separate
+
+**HI9** is `skipFill` over both rules, and the two do not behave alike.
+
+SS3 concludes that a filled leader candidate is **directly skipped**
+(`SafeSkip/Basic.lean:39`), because no old block references a fresh
+identifier. Hydrozoan's direct skip needs `qFast = n − p` blames, and
+the supply a quorum of correct replicas guarantees is `q = n − f − c`.
+The conclusion therefore requires `n − p ≤ n − f − c`, that is
+`f + c ≤ p`, which is the condition under which Hydrozoan's direct skip
+fires at all and which `hydrozoan.md` §7 keeps outside the liveness
+claim for that reason. **SS3 does not transfer to Hydrozoan.**
+
+What transfers is SS5, `decided_fill_agree`. A filled candidate carries
+no votes, so it reaches neither `qFast` nor `qSlow` nor either rung, and
+no commit verdict appears; and a blame is a voting-round block
+referencing *no* candidate of the slot, so every blame that existed
+before the fill still counts. The verdict a replica reached before the
+fill re-derives after it, which is the statement Hydrozoan supports.
+
+**Optimal-Hydrozoan does obtain SS3.** Its skip is `qCert` blames
+together with a `NoEvidenceQuorum`, both at `qCert ≤ q`, and the
+no-evidence half holds of a filled candidate: `votesFor U C L` is empty,
+while `EvidencePlain` gives `1 ≤ tPlain` and `tEquiv = f + pOpt` is at
+least one, so no decision-round block is fast evidence for it. This is
+the same separation `optimal-hydrozoan.md` D5 records between an
+opportunistic and a guaranteed skip, arriving through a mechanism
+neither arc considered.
+
+It also forces a hypothesis weakening, of the shape `integration.md` I9
+describes. `SkipLiveness` is stated with `∀ L, ¬ IsLeaderBlock U k L` —
+the slot has no candidate at all — and a filled slot has one. What the
+proof consumes is only that no candidate reaches `tPlain` votes, which
+the filled candidate satisfies. So the composite is unstatable until
+`SkipLiveness`'s hypothesis is weakened to the fact it stands for,
+which is the act `integration.md` §4.2 permits and a refactor is not.
+
+### 5.2 The recovered replica cannot re-enter the good set
+
+`skipFill` restores production for a replica that was down, and
+`hydrozoan.md` §12 records that `T` is fixed across the synchrony
+suffix. The replica therefore sits outside `T` for the remainder of the
+run, and by §4 outside the `T` that `Descent.goodLeaders` produces, so
+neither the liveness results nor the leader count can readmit it. The
+core reaches the composite statement through `integration.md` I9's
+`lifecycle`, over a hybrid model whose crash class is a *class* rather
+than a fixed set for the run.
+
+Hydrozoan names the repair itself — a wave-scoped `SynchronisedAt` with
+a per-wave `T`, which would readmit a replica for every wave it
+participates in. It modifies `Model/Liveness.lean`, which is frozen. By
+`integration.md` §4.2's rule the question is whether the composite can
+be stated without it; §5.1's verdict agreement can, and the lifecycle
+statement cannot. The decision belongs with HI5 and HI9 and is recorded
+here as open.
+
+### 5.3 The novelty budget is two layers away
+
+The budget is behind **HI8** and, for its own statement, behind
+the delivery layer: `DoSValid` is a layer-U predicate and needs the
+self-parent clause, while `UniformBudget` and `RefsAccepted` range over
+`Delivery U`. Both together are not sufficient either —
+`integration.md` I16 found `RefsAccepted` refuted under the fill in the
+core, and the refutation describes Safe Skip rather than the
+transformer, so the same result and the same unsettled modelling choice
+about what a `Delivery` records should be expected here.
 
 ## 6. Route C: the delivery layer, and what its absence costs
 
@@ -366,7 +483,7 @@ answers are `LeanDag/SafeSkip/` and a wave-scoped refinement of
 **What the layer would not change.** `synchronisedOn_of_converges`
 concludes `SynchronisedOn U T R`, a statement about the DAG that never
 mentions `Decided`. The delivery layer's output is therefore
-rule-independent, and **HI9** is a port of `ViewPace` to
+rule-independent, and **HI10** is a port of `ViewPace` to
 `Hydrozoan.BlockUniverse` rather than a re-proof of anything above it:
 HZ5, HZ6 and HZ7 would stand unchanged with their hypotheses discharged
 instead of assumed. The rule-specific remainder is small — re-deriving
@@ -383,25 +500,34 @@ step.
 | HI2 | the fault projection under `c ≤ k`, refuted without it | — |
 | HI3 | the block adapter; `Reaches` agrees with `historyFrom` | — |
 | HI4 | Hydrozoan as a `Barnacle.BaseRule` with its `Laws` | HI1, HI3, HZ3 |
-| HI5 | Hydrozoan as a `Barnacle.LiveRule`; `LiveOn` | HI4, HZ5, HZ7 |
-| HI6 | the same two for Optimal-Hydrozoan | HI4, HI5, OH3, OH5 |
+| HI5 | as a `Barnacle.LiveRule`: `Good`, `LiveOn`, `Descent` at `f + c` | HI4, HZ5–HZ7 |
+| HI6 | HI4 and HI5 for Optimal-Hydrozoan | HI4, HI5, OH3, OH5 |
 | HI7 | `decided_chop` for `Decided` and `DecidedOpt` | HI1, HI2, HI3 |
-| HI8 | the self-parent predicate; the transformer arcs over it | HI7 |
-| HI9 | the delivery layer | HI3 |
+| HI8 | the self-parent predicate, stated beside the frozen `ValidWrt` | — |
+| HI9 | the fill: verdict agreement for both rules; SS3 for Optimal alone | HI7, HI8 |
+| HI10 | the delivery layer | HI3 |
 
-The order is HI1–HI3, then HI4–HI6, then HI7, then HI8, then HI9.
+The order is HI1–HI3, then HI4–HI6, then HI7, then HI8 and HI9, then
+HI10.
 
 HI1 to HI6 modify no existing file and are the substantive part: they
 place Hydrozoan and Optimal-Hydrozoan under the adaptive leader count
 and state the exact committee condition under which the rest of the
 core applies to them. HI2 is publishable on its own — it says what
-Hydrozoan's committee admits that the core's does not, and the
-witness at `n = 8`, `f = 1`, `c = 2`, `k = 0` is a `decide`
-obligation.
+Hydrozoan's committee admits that the core's does not, and the witness
+at `n = 8`, `f = 1`, `c = 2`, `k = 0` is a `decide` obligation.
 
-HI7 is the largest proof obligation and the one whose statement may
-need a further condition. HI8 and HI9 are each larger than everything
-above them, and HI9 is larger than HI8.
+HI7 is the largest single proof obligation, six constructors in each of
+two decision relations. HI9 is where the two protocols separate (§5.1),
+and where the weakening of `SkipLiveness` falls due. HI10 is larger
+than everything above it.
+
+**One decision gates HI5 and HI9**, and it should be settled first:
+whether `Model/Liveness.lean`'s `SynchronisedOn` acquires a wave-scoped
+form so that a recovered replica re-enters the good set (§5.2). Every
+result above can be stated without it except the lifecycle composite,
+so under `integration.md` §4.2's rule the default is to leave the file
+frozen and record the composite as unavailable.
 
 ## 8. Findings anticipated
 
@@ -430,6 +556,36 @@ predicted from what was discovered.
   If a further condition is needed it is a placement condition, in the
   category `integration.md` §4.1 names as the integration arc's most
   usable output.
+- **The fill separates the two protocols, and the separation is the
+  one `optimal-hydrozoan.md` already reports.** §5.1. Hydrozoan's
+  direct skip of a filled candidate requires `f + c ≤ p`, so SS3 holds
+  for Optimal-Hydrozoan and not for Hydrozoan, and the composite for
+  Hydrozoan is verdict agreement rather than a direct skip. The
+  expectation is that this is D5's opportunistic-versus-guaranteed skip
+  reached by a route neither arc considered, and that it is the first
+  place where the Optimal variant composes better than the protocol it
+  varies.
+- **The composite will require weakening `SkipLiveness`.** §5.1. Its
+  candidate-less hypothesis is stronger than its proof consumes, which
+  needs only that no candidate reaches `tPlain` votes. The expectation
+  is a one-field weakening of the shape `integration.md` I9 performed
+  on `SkipMsg`, strictly conservative, with the Hydrozoan-side route
+  recovering the old form.
+- **A recovered replica cannot re-enter the good set, and the repair
+  is not free.** §5.2. `T` is fixed across the synchrony suffix, so
+  `skipFill` restores production for a replica that liveness and the
+  leader count can no longer count. The expectation is that every
+  result of §7 except the lifecycle composite can be stated without
+  changing `Model/Liveness.lean`, and that the wave-scoped
+  `SynchronisedAt` Hydrozoan names is the only route to the composite.
+- **Barnacle's health results say nothing about a Hydrozoan deployment
+  with crashed replicas holding slots.** §4. `WindowHealthy` asks every
+  scoring slot to commit directly, which `c ≥ 1` prevents under a
+  schedule that gives crashed replicas slots. The expectation is that
+  this is an instance of the limitation `Barnacle/Healthy/Statement.lean`
+  already records rather than a defect of the instantiation, and that
+  the partial count Barnacle names as its next result is what a
+  Hydrozoan deployment would need.
 
 ## 9. Out of scope
 
@@ -442,5 +598,7 @@ predicted from what was discovered.
   level HI4 needs.
 - **Everything Hydrozoan leaves out** (`hydrozoan.md` §12): delivery,
   GST, weak links, the depth-first reading of a vote, round-jumping
-  recovery. HI9 addresses the first two and nothing else on that list.
+  recovery. HI10 addresses the first two and nothing else on that
+  list, and §5.2 records round-jumping recovery as open rather than
+  settled.
 - **The certified variant, and cryptography.**
