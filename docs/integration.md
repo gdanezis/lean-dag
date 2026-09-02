@@ -811,7 +811,7 @@ the adaptive fixpoint actually consumes from its underlying rule:
 
 Anything satisfying these three admits the adaptive construction. The
 existing Mysticeti and Odontoceti mirrors become instances, the Hybrid
-case follows without a third copy, and the report's §24.5 remark about
+case follows without a third copy, and the report's §26.5 remark about
 the one refactor the development declined ("a rule-parameterised
 decision relation shared between §3.5 and §10.3") is finally
 discharged — with three instances to justify it where two did not.

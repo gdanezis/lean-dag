@@ -16,9 +16,11 @@ words:
   View.full appears in no Statement.lean and no Model/ file
                                        (a liveness statement concludes on a
                                         view a validator can hold — issue #12;
-                                        `full := ...` record fields are data,
-                                        not claims, and are exempt, as are the
-                                        allowlisted files awaiting restatement).
+                                        `full := ...` record fields and the
+                                        `def View.full` site itself are
+                                        vocabulary, not claims, and are exempt,
+                                        as are the allowlisted files awaiting
+                                        restatement).
 
 Part of the trusted base: meant to be read once and believed. Keep it dumb.
 """
@@ -32,12 +34,13 @@ STATEMENT_FORBIDDEN = re.compile(r"^\s*(theorem|lemma|example|instance)\b")
 MODEL_FORBIDDEN = re.compile(r"^\s*(theorem|lemma|example)\b")
 FULLVIEW = re.compile(r"\bView\.full\b")
 FULLVIEW_FIELD = re.compile(r"^\s*full\s*:=")
+FULLVIEW_DEF = re.compile(r"^\s*def View\.full\b")
 FULLVIEW_ALLOW = {
     "LeanDag/MahiMahi/Liveness/Statement.lean",    # MM3a-c await restatement (issue #12)
     "LeanDag/BlackMarlin/Liveness/Statement.lean",  # BML2 awaits restatement (issue #12)
 }
 ROOT = Path(__file__).resolve().parent.parent
-ARCS = ["MahiMahi", "BlackMarlin", "FinWhale", "Barnacle"]
+ARCS = ["MahiMahi", "BlackMarlin", "FinWhale", "Barnacle", "Hydrozoan", "OptimalHydrozoan"]
 SOURCES = [f"{top}/{arc}" for arc in ARCS for top in ("LeanDag", "LeanDagTest")]
 
 
@@ -90,7 +93,8 @@ def main():
                     holes.append(f"{rel}:{lineno}: {match.group(1)} (theorem material in a Model file)")
             if (path.name == "Statement.lean" or (in_model and str(rel).startswith("LeanDag/"))) \
                     and str(rel) not in FULLVIEW_ALLOW \
-                    and FULLVIEW.search(code) and not FULLVIEW_FIELD.search(code):
+                    and FULLVIEW.search(code) and not FULLVIEW_FIELD.search(code) \
+                    and not FULLVIEW_DEF.search(code):
                 holes.append(f"{rel}:{lineno}: View.full (a liveness statement concludes on a view)")
     if holes:
         print("Partitioned-arc discipline violations:")

@@ -65,6 +65,10 @@ ALLOW = {
     "enough_leader_blame", "is_certificate", "try_indirect_decide",
     # Core Lean names the Barnacle statements name in comments.
     "Nat.one_pos",
+    # The paper's threshold names and the core names the Hydrozoan
+    # docstrings quote.
+    "q_fast", "q_cert", "q_slow", "q_weak", "parents.card", "Nat.find",
+    "t_plain", "t_equiv",
 }
 
 

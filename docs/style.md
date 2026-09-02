@@ -114,7 +114,7 @@ here"*. Naming which hypothesis a result consumes, and where.
   layout; mark an elision with `…`.
 - **Labels** are alphanumeric by area — T, M, L (core), V, CU, RS
   (view convergence, catch-up, reactive), P, N, R (trust boundary),
-  CQ, D/C/B/E, G, O, SS, AL, H, NN, MM, BN, I (the arcs) — and must be *introduced where
+  CQ, D/C/B/E, G, O, SS, AL, H, NN, MM, BN, HZ, OH, I (the arcs) — and must be *introduced where
   the reader first meets them*, not only in the appendix.
 - **Tables are left-aligned** (`|:---|`), and carry short cells with the
   explanation in the surrounding prose.

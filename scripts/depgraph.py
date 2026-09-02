@@ -55,6 +55,8 @@ def series_group(label):
     if label.startswith('NN'): return 'nemo'
     if label.startswith('MM'): return 'mahimahi'
     if label.startswith('BN'): return 'bn'
+    if label.startswith('HZ'): return 'hydrozoan'
+    if label.startswith('OH'): return 'optimal'
     if label.startswith('H'): return 'hybrid'
     if label.startswith('I'): return 'integration'
     if label.startswith('E'): return 'dos'
@@ -79,6 +81,8 @@ GROUP_FILL = {
     'nemo': ('#d5efe9', '#3f8f7a'),
     'mahimahi': ('#e0ecf8', '#4a6fa5'),
     'bn': ('#fbe9d7', '#b5652a'),
+    'hydrozoan': ('#dfeee8', '#3d7a66'),
+    'optimal': ('#e6f0e2', '#5a8a3d'),
     'integration': ('#dbe7e0', '#5f8a76'),
 }
 GROUP_TITLE = {
@@ -93,6 +97,8 @@ GROUP_TITLE = {
     'nemo': 'crash-fault consensus (§15)',
     'mahimahi': 'Mahi-Mahi (§17)',
     'bn': 'Barnacle (§21)',
+    'hydrozoan': 'Hydrozoan (§22)',
+    'optimal': 'Optimal-Hydrozoan (§23)',
     'integration': 'integration (§16)',
 }
 
