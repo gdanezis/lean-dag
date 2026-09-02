@@ -126,6 +126,18 @@ generic relation. Each protocol then proves **one** equivalence —
 `its Decided ↔ Generic itsSpec` — and inherits transport for every
 transformer, present and future.
 
+**This is a different proposal from the one `hydrozoan-integration.md`
+§9 rules out, and the difference is the point.** §9 argues that no
+interface of `integration.md` §3.6's shape can carry HI7, because
+`BaseRule.Decided` is a record field with no constructors while
+`decided_chop` is a structural induction over derivations — an
+interface abstracts the *uses* of a decision relation, not inductions
+over it. That argument is correct, and it is an argument against a
+consumer-style record. A generic *inductive* relation has the
+constructors the induction needs, which is exactly what §9's reasoning
+says the job requires. So §9 closes one door and leaves this one open;
+it does not settle the question negatively.
+
 ### 2.3 What it would give, and what it would cost
 
 Give: verdict survival under garbage collection for eight protocols
@@ -133,9 +145,14 @@ that have no such theorem; the same under recovery; a route for
 `ReGenesis` and `denote`; and the collapse of `integration.md` §3.6's
 duplication, where `Adaptive/Odontoceti.lean` repeats 285 of its 362
 non-blank lines from `Basic.lean`, `Run.lean` and `Liveness.lean`.
-Item B of the Hydrozoan arc — Hydrozoan under Adaptive and Hammerhead
-— needs this interface and has no other route that is not a third
-hand-written mirror.
+Hydrozoan under `LeanDag/Adaptive/` — the Hammerhead-style schedule
+that recomputes leaders ahead from an agreed prefix — needs this
+interface, or else a third hand-written `DecidedWithin` mirror beside
+the two that exist. It does **not** settle the other open adaptive
+question, which `hydrozoan-integration.md` §1 states: whether a
+Hydrozoan joiner can recompute Barnacle's leader count from a
+truncation. That one is about the schedule, not the decision relation,
+and nothing here touches it.
 
 Cost, stated honestly: by obligation count the interface loses. Nine
 protocols owing thirteen fields each is more than nine bespoke
