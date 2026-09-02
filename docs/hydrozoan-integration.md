@@ -1211,9 +1211,30 @@ LeanDag/Integration/Hydrozoan/                           B1–B4, not partitione
   Schedule.lean     the Slots instance (§10.2)
   Universe.lean     SelfParenting, toCore, ofCore, the round trip (§10.3)
   Transport.lean    transport and the two preservation lemmas (§10.4)
+  ChopDecided.lean  the cut, for Decided (HI7)
+  FillDecided.lean  the fill, for Decided (HI9)
+  Simulation.lean   the transformer interface: three directions, one induction
+  OptimalTransport.lean    leader exclusion across the cut; the fill refuted
+  OptimalChopDecided.lean  the cut, for DecidedOpt (HI7)
+  Stack.lean        the two transformers composed
+  Liveness.lean     the liveness package across the stack
+  Deployment.lean   the reader-facing layer (HI10)
 LeanDagTest/Barnacle/Hydrozoan.lean, …                   B5's witnesses
-LeanDagTest/Integration/Hydrozoan.lean                   B1–B4's witnesses
+LeanDagTest/Integration/Hydrozoan*.lean                  B1–B4's witnesses
+LeanDagTest/Integration/HydrozoanOptimal.lean            §5's refutation
 ```
+
+**The reader-facing layer is separate on purpose.** Everything in
+`Integration/Hydrozoan/` other than `Deployment.lean` is machinery, and
+its names say what a proof does rather than what a deployment gets. A
+reader should not have to follow `stackHZ`, `slotsChopHZ` and
+`liftViewHZ` to learn that a replica which pruned and recovered still
+agrees with the network. `Deployment` names the object — the DAG the
+network built, one recovery, a horizon, the base slot — and states the
+four claims over it, proving none of them. This is the answer to the
+review's question of whether the theorems express end-user concerns:
+below `Deployment` they do not, and are not meant to; at `Deployment`
+they do.
 
 `Barnacle` is in `ARCS` of `scripts/check-arc-holes.py`, so B5 is under
 the statement/proof partition and follows the existing per-protocol
@@ -1264,7 +1285,7 @@ schemes are distinct.
 | P7 | `decided_chopHZ` for Hydrozoan and for Optimal (**done**) | — | HI7 | P6 |
 | P8 | the fill: verdict agreement (**done**); for Optimal, refuted (**done**) | — | HI9 | P7 |
 | P9 | the stack capstones (**done**) | — | — | P8 |
-| P10 | this record; report §24; the reference pipeline | — | — | P9 |
+| P10 | this record; report §24; the reference pipeline (**done**) | — | — | P9 |
 | P3 | the two Optimal mirrors (**done**) | B5 | HI6 | P1, P2 |
 
 P1 is **done** (`LeanDag/Barnacle/Hydrozoan/`, witnessed in
