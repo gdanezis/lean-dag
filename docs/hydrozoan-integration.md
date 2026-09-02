@@ -931,17 +931,23 @@ def skipFillHZ (hsp) (sk : SkipMsg ..) := transport hsp (fun _ => sk.skipFill)
 ```
 
 Both `HonestNoEquiv` obligations are `integration.md` I1 and are already
-proved. What each transformer adds is one lemma:
+proved. **The `SelfParenting` half needs no lemma per transformer**, which
+P6 established and which is stronger than this section first claimed. The
+condition is the core's `self_parent` clause stated on a Hydrozoan
+universe, and every core universe carries that clause as a field of its
+own validity, so anything arriving through `ofCore` self-parents by
+construction:
 
 ```lean
-theorem selfParenting_chop : SelfParenting U → SelfParenting (chopHZ U hsp G)
-theorem selfParenting_skipFill : SelfParenting U → SelfParenting (skipFillHZ U hsp sk)
+theorem selfParenting_ofCore (U : LeanDag.BlockUniverse Replica BlockId P)
+    (hne : HonestNoEquiv U) : SelfParenting (ofCore U hne) :=
+  fun i hi h => (U.valid i hi).self_parent h
 ```
 
-The second should be immediate: P3′ obliges `fillBlock` to insert a self
-reference, which is the mechanism `integration.md` I13 describes. **This
-is the modularity claim in one definition** — a transformer added later
-costs a line and a preservation lemma, never a re-proof.
+`toCore` consumes the condition and `ofCore` re-supplies it, so a
+transformer added later carries **only** its `HonestNoEquiv` obligation.
+That is the modularity claim, in one three-line theorem rather than one
+lemma per transformer.
 
 ### 10.5 B5 — the Barnacle record, which needs none of B1 to B4
 
