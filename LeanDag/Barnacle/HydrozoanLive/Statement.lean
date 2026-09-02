@@ -29,13 +29,15 @@ three the interface's `slotRound i + 3 ≤ slotRound j` *is*
 
 **Round-robin liveness is where the committee condition appears.**
 `liveOn_roundRobin` needs `waveLength * slack + 1 ≤ n`, here
-`3·(f + c) + 1 ≤ n`, and Hydrozoan's committee bound is
-`3f + 2c + k + 1 ≤ n` — so the two agree exactly when `c ≤ k`. That is
-the same inequality `docs/hydrozoan-integration.md` §2 derives from the
-fault projection, reached here by a route that mentions neither the
-core's quorum nor its intersection argument. It is a hypothesis of
-`RoundRobinLive` and of nothing above it: the laws (P1) and the descent
-laws below are unconditional.
+`3·(f + c) + 1 ≤ n` — the same inequality
+`docs/hydrozoan-integration.md` §2 derives from the fault projection,
+reached here by a route that mentions neither the core's quorum nor its
+intersection argument. Hydrozoan's own committee bound
+`3f + 2c + k + 1 ≤ n` gives it when `c ≤ k`, but that is sufficient
+rather than necessary, so the bound is the hypothesis and the slack
+condition is not. It is a hypothesis of `RoundRobinLive` and of nothing
+above it: the laws (P1) and the descent laws below are
+unconditional.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -70,12 +72,14 @@ def Descent : Prop :=
     (hydrozoanLive (Replica := Replica) (BlockId := BlockId)).Descent (F.f + F.c)
 
 /-- **Hydrozoan under round-robin is live at every leader count**, with
-gap `n + 2`, whenever the slack does not undershoot the crash bound.
-`c ≤ k` is consumed exactly once, at `liveOn_roundRobin`'s wave-length
-bound `3·(f + c) + 1 ≤ n`. -/
+gap `n + 2`, on a committee of at least `3·(f + c) + 1`. That bound is
+what `liveOn_roundRobin` consumes at wave length three and slack
+`f + c`, and it is the hypothesis rather than the sufficient condition
+`c ≤ k`, which Hydrozoan's own committee bound would supply but which
+excludes committees large enough outright. -/
 def RoundRobinLive : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) (BlockId : Type) [LinearOrder BlockId]
-    [F : LeanDag.Hydrozoan.Faults (Fin n)], F.c ≤ F.k →
+    [F : LeanDag.Hydrozoan.Faults (Fin n)], 3 * (F.f + F.c) + 1 ≤ n →
     ∀ (w : ℕ) (hk : Keyed (roundRobin n hn) w) (m : ℕ) (hm : 0 < m) (hmax : m ≤ w),
     (hydrozoanLive (Replica := Fin n) (BlockId := BlockId)).LiveOn
       (Sched (roundRobin n hn) hk m hm hmax) (n + 2)

@@ -38,8 +38,7 @@ open LeanDag LeanDag.Integration.Hydrozoan
 /-- The committee condition at the low-fault four-replica model
 (`f = 0`, `c = 1`, `k = 1`), which is what makes the transport
 available there. -/
-instance factFour : Fact (LeanDag.Hydrozoan.Faults.c (Fin 4)
-    ≤ LeanDag.Hydrozoan.Faults.k (Fin 4)) := ⟨by decide⟩
+instance factFour : Fact (HybridCommittee (Fin 4)) := ⟨by decide⟩
 
 /-! ## The side condition is a real restriction -/
 

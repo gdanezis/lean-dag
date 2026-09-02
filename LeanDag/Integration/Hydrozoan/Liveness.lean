@@ -38,7 +38,7 @@ namespace Hydrozoan
 variable {Replica : Type} [Fintype Replica] [DecidableEq Replica]
 variable {BlockId : Type} [DecidableEq BlockId]
 variable [F : LeanDag.Hydrozoan.Faults Replica]
-  [Fact (LeanDag.Hydrozoan.Faults.c Replica ≤ LeanDag.Hydrozoan.Faults.k Replica)]
+  [Fact (HybridCommittee Replica)]
 variable {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
   {hsp : SelfParenting U} {T : Finset Replica}
 

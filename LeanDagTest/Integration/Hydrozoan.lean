@@ -36,8 +36,7 @@ open LeanDag LeanDag.Integration.Hydrozoan
 
 /-- The committee condition at the seven-replica model, which is what
 makes the projection available there. -/
-instance factSeven : Fact (LeanDag.Hydrozoan.Faults.c (Fin 7)
-    ≤ LeanDag.Hydrozoan.Faults.k (Fin 7)) := ⟨by decide⟩
+instance factSeven : Fact (HybridCommittee (Fin 7)) := ⟨by decide⟩
 
 /-! ## B1 — the projection computes -/
 
@@ -79,6 +78,17 @@ example : ¬ (3 * (0 + 2) + 1 ≤ 5) := by decide
 -- And the eight-replica instance §2 of the record names.
 example : 3 * 1 + 2 * 2 + 0 + 1 ≤ 8 := by decide
 example : ¬ (3 * (1 + 2) + 1 ≤ 8) := by decide
+
+-- The committee bound is the hypothesis, and it is strictly weaker than
+-- the slack condition `c ≤ k`: at `n = 20`, `f = 1`, `c = 2`, `k = 0`
+-- the projection is available and the slack condition fails, so stating
+-- the bound admits configurations stating the slack would refuse.
+example : 3 * (1 + 2) + 1 ≤ 20 := by decide
+example : ¬ ((2 : ℕ) ≤ 0) := by decide
+
+-- The seven-replica model satisfies the bound exactly.
+example : HybridCommittee (Fin 7) := by decide
+example : LeanDag.Hydrozoan.Faults.c (Fin 7) ≤ LeanDag.Hydrozoan.Faults.k (Fin 7) := by decide
 
 /-! ## B2 — the schedule identification is pointwise
 

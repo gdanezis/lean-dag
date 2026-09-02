@@ -115,14 +115,23 @@ carries.
 **The committee bounds are incomparable.** `HybridFaults` requires
 `3 · (fb + fc) + 1 ≤ n` (`Hybrid/Faults.lean:64`), that is
 `3f + 3c + 1 ≤ n`; Hydrozoan requires `3f + 2c + k + 1 ≤ n`
-(`Hydrozoan/Model/Faults.lean:57`). The projection is therefore
-available exactly under
+(`Hydrozoan/Model/Faults.lean:57`). Neither implies the other, and the
+projection consumes the first.
 
-    c ≤ k
+**The hypothesis is that bound and not a condition on the slack.**
+Hydrozoan's own bound yields it when `c ≤ k`, and that is how a
+deployment would usually discharge it (`hybridCommittee_of_slack`), but
+the two are not equivalent: a committee can be large enough outright
+with no slack at all. At `n = 20`, `f = 1`, `c = 2`, `k = 0` both
+bounds hold while `c ≤ k` fails, so requiring the slack would refuse a
+configuration the projection admits. **HI2** therefore asks for
+`3(f + c) + 1 ≤ n` — exactly what `card_validators` needs, and
+literally that field — with `c ≤ k` recorded beside it as the
+convenient sufficient condition.
 
-and not otherwise: at `n = 8`, `f = 1`, `c = 2`, `k = 0` Hydrozoan's
-bound reads `3 + 4 + 0 + 1 ≤ 8` and holds, while the hybrid bound reads
-`3 · 3 + 1 ≤ 8` and fails.
+The condition restricts either way: at `n = 8`, `f = 1`, `c = 2`,
+`k = 0` Hydrozoan's bound reads `3 + 4 + 0 + 1 ≤ 8` and holds, while
+the committee bound reads `3 · 3 + 1 ≤ 8` and fails.
 
 The gap is not slack in either class; it is the difference between the
 two intersection arguments. Two sets of `q = n − f − c` authors
@@ -141,10 +150,9 @@ intersect in at least `n − 2f − 2c`.
 So Hydrozoan admits committees below the core's because it never asks
 for the stronger intersection: a crashed replica does not equivocate,
 and every Hydrozoan uniqueness argument counts `NonByzantine` rather
-than `Correct`. **HI2** states the projection under `c ≤ k` and
-refutes it without, and the refutation is the informative half —
-a deployment at `k < c` can run Hydrozoan and cannot run the core's
-transformers over it.
+than `Correct`. The refutation is the informative half: a deployment
+whose committee misses `3(f + c) + 1` can run Hydrozoan and cannot run
+the core's transformers over it.
 
 ### 2.1 The committee specialises to five of the arcs
 

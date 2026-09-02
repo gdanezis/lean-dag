@@ -68,9 +68,9 @@ instance [LeanDag.Hydrozoan.Faults Replica]
 section Transport
 
 variable [F : LeanDag.Hydrozoan.Faults Replica]
-  [Fact (LeanDag.Hydrozoan.Faults.c Replica ≤ LeanDag.Hydrozoan.Faults.k Replica)]
+  [Fact (HybridCommittee Replica)]
 
-omit [Fact (LeanDag.Hydrozoan.Faults.c Replica ≤ LeanDag.Hydrozoan.Faults.k Replica)] in
+omit [Fact (HybridCommittee Replica)] in
 /-- Hydrozoan's `Correct` is inside its `NonByzantine`: a crashed
 replica does not equivocate. What lets the core's narrower
 non-equivocation guard discharge Hydrozoan's wider one. -/

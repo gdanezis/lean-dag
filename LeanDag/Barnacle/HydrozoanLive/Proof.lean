@@ -9,7 +9,8 @@ import LeanDag.Hydrozoan.IndirectLiveness.Proof
 Unaudited. `goodLeaders` is HZ5 and `indirect` is HZ6, each applied
 without adaptation; round-robin liveness is `liveOn_roundRobin` at
 slack `f + c` and wave length three, whose bound `3·(f + c) + 1 ≤ n`
-is the committee bound read under `c ≤ k`.
+is the committee bound, taken as a hypothesis rather than derived
+from the slack.
 -/
 
 namespace LeanDag
@@ -52,10 +53,8 @@ theorem roundRobinLive : RoundRobinLive := by
   intro n hn BlockId _ F hck w hk m hm hmax
   have hbound : (hydrozoanLive (Replica := Fin n)
       (BlockId := BlockId)).waveLength * (F.f + F.c) + 1 ≤ n := by
-    have hc := F.card_replicas
-    rw [Fintype.card_fin] at hc
     change 3 * (F.f + F.c) + 1 ≤ n
-    omega
+    exact hck
   have h := liveOn_roundRobin hn _ (descent (Fin n) BlockId) (Nat.succ_pos 2) hbound hk m hm hmax
   -- the gap is `n + waveLength - 1`, and the wave length is three
   have hw3 : (hydrozoanLive (Replica := Fin n)

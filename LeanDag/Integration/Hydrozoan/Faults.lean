@@ -9,16 +9,32 @@ model projects onto the hybrid model at `fb := f`, `fc := c`, and
 through the hybrid arc's own `HybridFaults.toFaults` onto the core's.
 One instance therefore reaches both.
 
-**The committee condition is what the projection consumes.**
-`HybridFaults` requires `3·(fb + fc) + 1 ≤ n` and Hydrozoan supplies
-`3f + 2c + k + 1 ≤ n`, so the two agree exactly when `c ≤ k`. It is
-carried as a `Fact` because an instance takes no explicit hypothesis,
-and it is a real restriction: at `n = 8`, `f = 1`, `c = 2`, `k = 0`
-Hydrozoan's bound holds and the hybrid one fails. The reason is not
-slack in either class — Hydrozoan's uniqueness arguments intersect two
-quorums in a **non-Byzantine** replica, needing `n ≥ 3f + 2c + 1`,
-where the core's T0 asks for a fully **correct** one and needs
-`n ≥ 3f + 3c + 1`.
+**The committee condition is what the projection consumes**, and it is
+stated as the bound itself rather than as a restriction on the slack.
+`HybridFaults` requires `3·(fb + fc) + 1 ≤ n`; that is `HybridCommittee`
+below, carried as a `Fact` because an instance takes no explicit
+hypothesis.
+
+The reason it is needed is not slack in either class. Two sets of
+`q = n − f − c` authors overlap in at least `n − 2f − 2c`. Hydrozoan's
+uniqueness arguments need one member of that overlap outside
+`byzantine`, of which there are at most `f`, so they need
+`n ≥ 3f + 2c + 1` — which its own committee bound supplies, a crashed
+replica not equivocating. The core's T0 concludes a fully **correct**
+member, excluding `byzantine ∪ crashed`, and so needs
+`n ≥ 3f + 3c + 1`. The gap between those two is exactly what the
+projection pays.
+
+`c ≤ k` is a **sufficient** condition and not the right hypothesis:
+Hydrozoan's bound `3f + 2c + k + 1 ≤ n` implies the committee bound
+when the slack covers the crash bound, but a committee can be large
+enough outright with no slack at all — at `n = 20`, `f = 1`, `c = 2`,
+`k = 0` both bounds hold and `c ≤ k` fails. So the slack condition is
+recorded as `hybridCommittee_of_slack`, a way of discharging the
+`Fact` from the parameters alone, and the `Fact` itself asks only for
+what is used. The condition is a real restriction either way: at
+`n = 8`, `f = 1`, `c = 2`, `k = 0` Hydrozoan's bound holds and the
+committee bound fails.
 
 **The diamond discipline.** With the projection in scope a single
 `Replica` carries three fault classes, and `Hydrozoan.q` and
@@ -36,12 +52,30 @@ namespace Hydrozoan
 
 variable {Replica : Type*} [Fintype Replica] [DecidableEq Replica]
 
+/-- **The committee the core's intersection argument needs**: its T0
+concludes a fully correct replica from two overlapping quorums, which
+takes `n ≥ 3(f + c) + 1` where Hydrozoan's own arguments take only
+`n ≥ 3f + 2c + 1`. -/
+abbrev HybridCommittee (Replica : Type*) [Fintype Replica] [DecidableEq Replica]
+    [LeanDag.Hydrozoan.Faults Replica] : Prop :=
+  3 * (LeanDag.Hydrozoan.Faults.f Replica + LeanDag.Hydrozoan.Faults.c Replica) + 1
+    ≤ Fintype.card Replica
+
+/-- **Slack covering the crash bound is enough**, by Hydrozoan's own
+committee bound — the convenient way to discharge the `Fact` from the
+parameters, though not the weakest way. -/
+theorem hybridCommittee_of_slack [F : LeanDag.Hydrozoan.Faults Replica]
+    (h : LeanDag.Hydrozoan.Faults.c Replica ≤ LeanDag.Hydrozoan.Faults.k Replica) :
+    HybridCommittee Replica := by
+  have := F.card_replicas
+  omega
+
 /-- **Hydrozoan's fault model is the hybrid one**, at `fb := f` and
-`fc := c`, whenever the slack does not undershoot the crash bound. The
-`Fact` is discharged per configuration; `card_validators` is the only
-field that consumes it. -/
+`fc := c`, on a committee the core's intersection argument can use. The
+`Fact` is discharged per configuration and `card_validators` is the only
+field that consumes it — literally, it *is* that field. -/
 instance toHybrid [F : LeanDag.Hydrozoan.Faults Replica]
-    [hck : Fact (LeanDag.Hydrozoan.Faults.c Replica ≤ LeanDag.Hydrozoan.Faults.k Replica)] :
+    [hcm : Fact (HybridCommittee Replica)] :
     HybridFaults Replica where
   fb := LeanDag.Hydrozoan.Faults.f Replica
   fc := LeanDag.Hydrozoan.Faults.c Replica
@@ -50,15 +84,12 @@ instance toHybrid [F : LeanDag.Hydrozoan.Faults Replica]
   disjoint := F.byzantine_disjoint_crashed
   card_byzantine := F.card_byzantine
   card_crash := F.card_crashed
-  card_validators := by
-    have h := F.card_replicas
-    have hck := hck.out
-    omega
+  card_validators := hcm.out
 
 section Agreements
 
 variable [F : LeanDag.Hydrozoan.Faults Replica]
-  [Fact (LeanDag.Hydrozoan.Faults.c Replica ≤ LeanDag.Hydrozoan.Faults.k Replica)]
+  [Fact (HybridCommittee Replica)]
 
 /-- The two quorums coincide: `n − f − c` is `n − (f + c)`. Not
 definitional, which is why it is a simp lemma rather than left

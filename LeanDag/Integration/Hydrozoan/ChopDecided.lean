@@ -33,7 +33,7 @@ namespace Hydrozoan
 variable {Replica : Type} [Fintype Replica] [DecidableEq Replica]
 variable {BlockId : Type} [DecidableEq BlockId]
 variable [F : LeanDag.Hydrozoan.Faults Replica]
-  [Fact (LeanDag.Hydrozoan.Faults.c Replica ≤ LeanDag.Hydrozoan.Faults.k Replica)]
+  [Fact (HybridCommittee Replica)]
 variable {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
   {hsp : SelfParenting U} {G : ℕ}
 
@@ -101,15 +101,15 @@ monotonicity, unboundedness and keying proofs are reused entire. -/
 def slotsChopHZ (hd : G ≤ S.slotRound d) : LeanDag.Hydrozoan.Slots Replica :=
   ofCoreSlots (LeanDag.Slots.chop (toCoreSlots) G d hd)
 
-omit [Fintype Replica] [DecidableEq Replica] F [Fact (LeanDag.Hydrozoan.Faults.c Replica ≤ LeanDag.Hydrozoan.Faults.k Replica)] in
+omit [Fintype Replica] [DecidableEq Replica] F [Fact (HybridCommittee Replica)] in
 @[simp] theorem slotsChopHZ_slotRound (hd : G ≤ S.slotRound d) (k : ℕ) :
     (slotsChopHZ hd).slotRound k = S.slotRound (d + k) - G := rfl
 
-omit [Fintype Replica] [DecidableEq Replica] F [Fact (LeanDag.Hydrozoan.Faults.c Replica ≤ LeanDag.Hydrozoan.Faults.k Replica)] in
+omit [Fintype Replica] [DecidableEq Replica] F [Fact (HybridCommittee Replica)] in
 @[simp] theorem slotsChopHZ_leader (hd : G ≤ S.slotRound d) (k : ℕ) :
     (slotsChopHZ hd).leader k = S.leader (d + k) := rfl
 
-omit [Fintype Replica] [DecidableEq Replica] F [Fact (LeanDag.Hydrozoan.Faults.c Replica ≤ LeanDag.Hydrozoan.Faults.k Replica)] in
+omit [Fintype Replica] [DecidableEq Replica] F [Fact (HybridCommittee Replica)] in
 /-- Every slot from the base slot on clears the horizon. -/
 theorem horizon_le_slotRoundHZ (hd : G ≤ S.slotRound d) (k : ℕ) :
     G ≤ S.slotRound (d + k) :=
@@ -131,7 +131,7 @@ theorem isLeaderBlockHZ_chop (hd : G ≤ S.slotRound d) {k : ℕ} {L : BlockId} 
   · rintro ⟨hL, hround, hauthor⟩
     exact ⟨⟨hL, by omega⟩, by omega, hauthor⟩
 
-omit [Fintype Replica] [DecidableEq Replica] F [Fact (LeanDag.Hydrozoan.Faults.c Replica ≤ LeanDag.Hydrozoan.Faults.k Replica)] in
+omit [Fintype Replica] [DecidableEq Replica] F [Fact (HybridCommittee Replica)] in
 /-- Anchor eligibility is re-indexed, both slots moving together. -/
 theorem eligibleAsAnchorHZ_chop (hd : G ≤ S.slotRound d) {k j : ℕ} :
     @LeanDag.Hydrozoan.EligibleAsAnchor Replica (slotsChopHZ hd) k j
