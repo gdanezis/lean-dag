@@ -54,10 +54,12 @@ frozen `Model/` untouched, and the hardest of its laws is discharged by
 HZ3, already proved. The **transformer route** (§5) is where the
 committee condition and the missing validity clause are consumed.
 
-One question runs across both and should be settled before either is
-written: `hydrozoan.md` §12's fixed `T` prevents a recovered replica
-from re-entering the good set, which the Barnacle instantiation
-inherits through `Descent` (§4) and the fill exhibits (§5.2).
+One question crosses both routes and is settled in §5.1: Hydrozoan's
+direct skip is a count at the slot where the core's is a condition on
+candidates, so a slot whose leader published nothing is skipped with no
+counting in the core, by a theorem in Optimal-Hydrozoan, and not at all
+in Hydrozoan. It decides which of the two variants admits
+`integration.md` I9's lifecycle composite.
 
 ## 1. Layer S: the schedule coincides
 
@@ -166,6 +168,16 @@ the reason is structural rather than technical:
   budget of `LeanDag/DoS/` therefore does not apply to a Hydrozoan
   universe at all, independently of the delivery layer (§6).
 
+The first of those two is not only a loss. Because nothing chains a
+block to its author's previous one, a replica pruned past its whole
+history can resume by building a block referencing `q` current blocks.
+There is no severed chain, so **Hydrozoan needs no re-genesis for an
+outage longer than the garbage-collection lag**: I8 and I10 to I12
+have no analogue because the condition they repair does not arise, not
+because the machinery for it is missing. The absent clause therefore
+removes a recovery mechanism from the plan at the same time as it
+removes the storage arc from reach.
+
 The property holds of the deployed protocol — a Mysticeti block carries
 its author's previous block — so the situation is that the Hydrozoan
 model omits a clause the implementation has, because the paper's
@@ -257,17 +269,12 @@ round of the window rather than at slot rounds alone. That is the
 reading "good from `Rnd` to `N`" should have in any case, and it is how
 the statement should be written.
 
-**The `T` of `Good` is fixed for the whole DAG, which gates HI5.**
-`hydrozoan.md` §12 records that `T` is fixed across the synchrony
-suffix, so a replica that rejoins by jumping to the frontier round sits
-outside `T` permanently; `Descent.goodLeaders` quantifies one `T` per
-good DAG, so the instantiation inherits that. The consequence is stated
-in §5: a replica readmitted by `skipFill` never re-enters the good set,
-and the leader count cannot promote it back within the model. The
-repair Hydrozoan names — a wave-scoped `SynchronisedAt` with a per-wave
-`T` — modifies the frozen `Model/Liveness.lean`, so whether to make it
-is a decision that belongs before HI5's statement is written rather
-than after.
+`Descent.goodLeaders` produces one `T` per good DAG, and Hydrozoan's
+`SynchronisedOn U T Rnd` fixes one `T` from `Rnd` on, so a replica
+absent for part of the window is outside `T` for all of it. This is the
+core's own shape — `Liveness.lean:229` fixes `T` and `R` the same way —
+and §5.2 states how the fill and the two arcs' results divide the
+window rather than widen `T`.
 
 **The health signal reads Hydrozoan's crash class as unhealthy.**
 `SlotDirect` (`Barnacle/Model/Window.lean:55`) counts slots with a
@@ -372,24 +379,67 @@ the filled candidate satisfies. So the composite is unstatable until
 `SkipLiveness`'s hypothesis is weakened to the fact it stands for,
 which is the act `integration.md` §4.2 permits and a refactor is not.
 
-### 5.2 The recovered replica cannot re-enter the good set
+**The same split decides the lifecycle composite, and there it matters
+more.** `integration.md` I9's `lifecycle` (`Integration/Lifecycle.lean:117`)
+concludes three things at once: the halted leader's slot is skipped,
+the fill restores production with the recovered validator in the set,
+and honest non-equivocation survives. The second and third transport —
+`skipFill_populatedOn` counts blocks, and Hydrozoan's
+`no_equivocation` field is what `honestNoEquiv_skipFill` re-establishes.
+The first divides the same way §5.1 does, and for a reason recorded
+elsewhere in this development.
 
-`skipFill` restores production for a replica that was down, and
-`hydrozoan.md` §12 records that `T` is fixed across the synchrony
-suffix. The replica therefore sits outside `T` for the remainder of the
-run, and by §4 outside the `T` that `Descent.goodLeaders` produces, so
-neither the liveness results nor the leader count can readmit it. The
-core reaches the composite statement through `integration.md` I9's
-`lifecycle`, over a hybrid model whose crash class is a *class* rather
-than a fixed set for the run.
+The core's L5 needs no counting at all. `Decided.directSkip` takes
+`∀ L, IsLeaderBlock U k L → …`, a premise over candidates, so a leader
+that published nothing satisfies it vacuously
+(`Liveness.lean:623`). Hydrozoan's `Decided.directSkip` takes
+`SkippedLeaderInView`, which is `qFast ≤ (blamesInView …).card` — a
+count at the slot, not a condition on candidates — and `qFast` blames
+are not available. Optimal-Hydrozoan's is a count too, but OH5 proves
+it from population alone.
 
-Hydrozoan names the repair itself — a wave-scoped `SynchronisedAt` with
-a per-wave `T`, which would readmit a replica for every wave it
-participates in. It modifies `Model/Liveness.lean`, which is frozen. By
-`integration.md` §4.2's rule the question is whether the composite can
-be stated without it; §5.1's verdict agreement can, and the lifecycle
-statement cannot. The decision belongs with HI5 and HI9 and is recorded
-here as open.
+| conjunct | core | Hydrozoan | Optimal-Hydrozoan |
+|:---|:---|:---|:---|
+| the halted leader's slot is skipped | no counting | needs `qFast` blames | OH5, from population |
+| the fill restores production | SS2 | transports | transports |
+| non-equivocation survives | I1 | transports | transports |
+
+`mahi-mahi.md` reports the same distinction as a finding against the
+core — the per-candidate skip rule is weaker than the implementation's
+slot blame — and it is what decides here which of the two variants
+admits the composite.
+
+### 5.2 The recovered replica, and which window readmits it
+
+`hydrozoan.md` §12 records that `T` is fixed across a synchrony suffix,
+so a replica that rejoins **by jumping to the frontier round** — that
+is, authoring nothing for the rounds it missed — sits outside `T`
+permanently, and names a wave-scoped `SynchronisedAt` as the repair.
+Safe Skip is the mechanism that makes jumping unnecessary: the replica
+fills the rounds instead of skipping them. So HI9 addresses that item
+rather than inheriting it, and the repair `hydrozoan.md` §12 names is
+not a prerequisite for anything in §7.
+
+The fill readmits the replica to the two invariants at different
+points, and the division is `integration.md` I4's, unchanged:
+
+- **Production, across the gap.** `skipFill_populatedOn` puts a block
+  at every filled round, so `PopulatedOn` holds for a set containing
+  the recovered replica at rounds during which it was absent. This is
+  the restoration `lifecycle` claims, and it transports to Hydrozoan
+  by counting.
+- **Coverage, strictly above the fill.** `SynchronisedOn` is refuted
+  for any set containing the recovered replica at its gap rounds, since
+  no block built during the outage references an identifier that did
+  not then exist, and it returns above the fill
+  (`synchronisedOn_skipFill_above`). A window whose `Rnd` lies above
+  the fill therefore has the replica inside `T`.
+
+Neither point is Hydrozoan-specific. The core fixes `T` and `R` the
+same way (`Liveness.lean:229`), and `lifecycle` claims restoration to
+the populated set and does not mention coverage at all. What Hydrozoan
+lacks relative to the core is the first conjunct of that theorem, for
+the reason §5.1 gives, and nothing else.
 
 ### 5.3 The novelty budget is two layers away
 
@@ -519,15 +569,16 @@ at `n = 8`, `f = 1`, `c = 2`, `k = 0` is a `decide` obligation.
 
 HI7 is the largest single proof obligation, six constructors in each of
 two decision relations. HI9 is where the two protocols separate (§5.1),
-and where the weakening of `SkipLiveness` falls due. HI10 is larger
-than everything above it.
+where the weakening of `SkipLiveness` falls due, and where the
+lifecycle composite is available for Optimal-Hydrozoan and not for
+Hydrozoan. HI10 is larger than everything above it.
 
-**One decision gates HI5 and HI9**, and it should be settled first:
-whether `Model/Liveness.lean`'s `SynchronisedOn` acquires a wave-scoped
-form so that a recovered replica re-enters the good set (§5.2). Every
-result above can be stated without it except the lifecycle composite,
-so under `integration.md` §4.2's rule the default is to leave the file
-frozen and record the composite as unavailable.
+**No result here modifies a frozen file.** The one weakening the plan
+predicts is to Optimal-Hydrozoan's `SkipLiveness` (§5.1), which is a
+statement rather than a `Model/` definition, and is conservative in the
+sense `integration.md` §4.2 requires. `hydrozoan.md` §12's wave-scoped
+`SynchronisedAt` is **not** a prerequisite for anything above: §5.2
+gives the reason.
 
 ## 8. Findings anticipated
 
@@ -571,13 +622,18 @@ predicted from what was discovered.
   is a one-field weakening of the shape `integration.md` I9 performed
   on `SkipMsg`, strictly conservative, with the Hydrozoan-side route
   recovering the old form.
-- **A recovered replica cannot re-enter the good set, and the repair
-  is not free.** §5.2. `T` is fixed across the synchrony suffix, so
-  `skipFill` restores production for a replica that liveness and the
-  leader count can no longer count. The expectation is that every
-  result of §7 except the lifecycle composite can be stated without
-  changing `Model/Liveness.lean`, and that the wave-scoped
-  `SynchronisedAt` Hydrozoan names is the only route to the composite.
+- **Safe Skip answers `hydrozoan.md` §12's round-jumping item rather
+  than inheriting it.** §5.2. The item is about a replica that rejoins
+  by authoring nothing for the rounds it missed; the fill authors them.
+  The expectation is that production is readmitted across the gap and
+  coverage above the fill, by `integration.md` I4's division unchanged,
+  and that the wave-scoped `SynchronisedAt` is needed for neither.
+- **The absent self-parent clause removes a recovery mechanism as well
+  as the storage arc.** §3. Without a chain to sever, a replica pruned
+  past its own history can resume unaided. The expectation is that I8
+  and I10 to I12 have no Hydrozoan analogue because their premise is
+  unsatisfiable there, which is a stronger statement than their being
+  unavailable.
 - **Barnacle's health results say nothing about a Hydrozoan deployment
   with crashed replicas holding slots.** §4. `WindowHealthy` asks every
   scoring slot to commit directly, which `c ≥ 1` prevents under a
@@ -599,6 +655,6 @@ predicted from what was discovered.
 - **Everything Hydrozoan leaves out** (`hydrozoan.md` §12): delivery,
   GST, weak links, the depth-first reading of a vote, round-jumping
   recovery. HI10 addresses the first two and nothing else on that
-  list, and §5.2 records round-jumping recovery as open rather than
-  settled.
+  list; §5.2 records round-jumping recovery as answered by HI9, since
+  the fill authors the rounds a jump would leave empty.
 - **The certified variant, and cryptography.**
