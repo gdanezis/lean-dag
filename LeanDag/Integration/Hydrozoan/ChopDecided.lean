@@ -1,5 +1,6 @@
 import LeanDag.Integration.Hydrozoan.Transport
 import LeanDag.GC.ChopDecided
+import LeanDag.Hydrozoan.SlotAgreement.Proof
 
 /-!
 # P7 — the decision relation across the cut, foundations
@@ -408,6 +409,216 @@ theorem weakLinked_chopHZ (hd : G ≤ S.slotRound d) {A L : BlockId}
     exact hbAt
 
 end SlotRules
+
+
+/-! ## P7 — the decision relation survives the cut
+
+The two directions, by structural induction on the derivation. Every
+premise is discharged by a transfer of §"the rules transported"; what
+the induction itself does is re-index slots by the base slot `d` and
+match the derivation trees constructor for constructor.
+
+The three graded rungs carry negative premises — no candidate has an
+anchor-linked certificate, no candidate clears the weak quorum — and
+those transport because every rule transfer above is a
+**biconditional**, not a one-way implication. That is what retires the
+risk `docs/hydrozoan-integration.md` §5 records for this step. -/
+
+section Anchor
+
+variable [LinearOrder BlockId]
+
+/-- A commit verdict is about a candidate of its slot, so the anchor of
+an indirect derivation is a block of the universe. Stated over an
+arbitrary universe and schedule, since the induction below needs it at
+the truncation's. -/
+theorem isLeaderBlock_of_decidedHZ
+    {W : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
+    {SS : LeanDag.Hydrozoan.Slots Replica}
+    {V : LeanDag.Hydrozoan.View W} {k : ℕ} {L : BlockId}
+    (h : LeanDag.Hydrozoan.Decided (S := SS) W V k (some L)) :
+    LeanDag.Hydrozoan.IsLeaderBlock (S := SS) W k L := by
+  cases h with
+  | directFast hL _ => exact hL
+  | directSlow hL _ => exact hL
+  | indirectCert _ _ _ _ hL _ => exact hL
+  | indirectWeak _ _ _ _ _ hL _ _ => exact hL
+
+end Anchor
+
+section Induction
+
+variable [LinearOrder BlockId] [S : LeanDag.Hydrozoan.Slots Replica] {d : ℕ}
+
+/-- The cut and the re-indexing cancel above the base slot. -/
+theorem chopRound_add (hd : G ≤ S.slotRound d) (k : ℕ) :
+    G + (slotsChopHZ hd).slotRound k = S.slotRound (d + k) := by
+  have := horizon_le_slotRoundHZ (S := S) hd k
+  show G + (S.slotRound (d + k) - G) = S.slotRound (d + k)
+  omega
+
+/-- Forward: a verdict reached on the truncation is the original
+verdict, at the re-indexed slot. -/
+theorem decided_of_decided_chopHZ (hd : G ≤ S.slotRound d)
+    {V : LeanDag.Hydrozoan.View U} {k : ℕ} {v : Option BlockId}
+    (h : LeanDag.Hydrozoan.Decided (S := slotsChopHZ hd) (chopHZ U hsp G)
+      (View.chopHZ V hsp G) k v) :
+    LeanDag.Hydrozoan.Decided U V (d + k) v := by
+  induction h with
+  | @directFast k L hL hc =>
+      have hGk := horizon_le_slotRoundHZ (S := S) hd k
+      refine LeanDag.Hydrozoan.Decided.directFast ((isLeaderBlockHZ_chop hd).mp hL) ?_
+      have h2 := (fastCommitInView_chopHZ (V := V) L ((slotsChopHZ hd).slotRound k)).mp hc
+      rwa [chopRound_add hd k] at h2
+  | @directSlow k L hL hc =>
+      have hGk := horizon_le_slotRoundHZ (S := S) hd k
+      refine LeanDag.Hydrozoan.Decided.directSlow ((isLeaderBlockHZ_chop hd).mp hL) ?_
+      have h2 := (slowCommitInView_chopHZ (V := V) L ((slotsChopHZ hd).slotRound k)).mp hc
+      rwa [chopRound_add hd k] at h2
+  | @directSkip k hskip =>
+      exact LeanDag.Hydrozoan.Decided.directSkip
+        ((skippedLeaderInView_chopHZ (V := V) hd k).mp hskip)
+  | @indirectCert k j A L hkj helig hanchor hmid hL hcert ihj ihmid =>
+      have hGk := horizon_le_slotRoundHZ (S := S) hd k
+      have hA : A ∈ U.ids :=
+        (mem_chopHZ_ids.mp (isLeaderBlock_of_decidedHZ hanchor).1).1
+      refine LeanDag.Hydrozoan.Decided.indirectCert (by omega)
+        ((eligibleAsAnchorHZ_chop hd).mp helig) ihj ?_
+        ((isLeaderBlockHZ_chop hd).mp hL) ?_
+      · intro i h1 h2 he
+        obtain ⟨i', rfl⟩ : ∃ i', i = d + i' := ⟨i - d, by omega⟩
+        exact ihmid i' (by omega) (by omega) ((eligibleAsAnchorHZ_chop hd).mpr he)
+      · exact (certifiedIn_chopHZ hd hA k).mp hcert
+  | @indirectWeak k j A L hkj helig hanchor hmid hnocert hL hweak hmin ihj ihmid =>
+      have hGk := horizon_le_slotRoundHZ (S := S) hd k
+      have hA : A ∈ U.ids :=
+        (mem_chopHZ_ids.mp (isLeaderBlock_of_decidedHZ hanchor).1).1
+      refine LeanDag.Hydrozoan.Decided.indirectWeak (by omega)
+        ((eligibleAsAnchorHZ_chop hd).mp helig) ihj ?_ ?_
+        ((isLeaderBlockHZ_chop hd).mp hL) ((weakLinked_chopHZ hd hA k).mp hweak) ?_
+      · intro i h1 h2 he
+        obtain ⟨i', rfl⟩ : ∃ i', i = d + i' := ⟨i - d, by omega⟩
+        exact ihmid i' (by omega) (by omega) ((eligibleAsAnchorHZ_chop hd).mpr he)
+      · intro L' hL' hcert
+        exact hnocert L' ((isLeaderBlockHZ_chop hd).mpr hL')
+          ((certifiedIn_chopHZ hd hA k).mpr hcert)
+      · intro L' hL' hw
+        exact hmin L' ((isLeaderBlockHZ_chop hd).mpr hL')
+          ((weakLinked_chopHZ hd hA k).mpr hw)
+  | @indirectSkip k j A hkj helig hanchor hmid hnocert hnoweak ihj ihmid =>
+      have hGk := horizon_le_slotRoundHZ (S := S) hd k
+      have hA : A ∈ U.ids :=
+        (mem_chopHZ_ids.mp (isLeaderBlock_of_decidedHZ hanchor).1).1
+      refine LeanDag.Hydrozoan.Decided.indirectSkip (by omega)
+        ((eligibleAsAnchorHZ_chop hd).mp helig) ihj ?_ ?_ ?_
+      · intro i h1 h2 he
+        obtain ⟨i', rfl⟩ : ∃ i', i = d + i' := ⟨i - d, by omega⟩
+        exact ihmid i' (by omega) (by omega) ((eligibleAsAnchorHZ_chop hd).mpr he)
+      · intro L' hL' hcert
+        exact hnocert L' ((isLeaderBlockHZ_chop hd).mpr hL')
+          ((certifiedIn_chopHZ hd hA k).mpr hcert)
+      · intro L' hL' hw
+        exact hnoweak L' ((isLeaderBlockHZ_chop hd).mpr hL')
+          ((weakLinked_chopHZ hd hA k).mpr hw)
+
+/-- Backward: the original verdict is reached on the truncation.
+Generalised over the slot, with the re-indexing threaded as an
+equation, so that the induction can move through anchors — an anchor of
+slot `d + k` is not itself `d + k`. -/
+theorem decided_chopHZ_of_decided (hd : G ≤ S.slotRound d)
+    {V : LeanDag.Hydrozoan.View U} {n : ℕ} {v : Option BlockId}
+    (h : LeanDag.Hydrozoan.Decided U V n v) :
+    ∀ k, n = d + k →
+      LeanDag.Hydrozoan.Decided (S := slotsChopHZ hd) (chopHZ U hsp G)
+        (View.chopHZ V hsp G) k v := by
+  induction h with
+  | @directFast n L hL hc =>
+      rintro k rfl
+      refine LeanDag.Hydrozoan.Decided.directFast (S := slotsChopHZ hd) ((isLeaderBlockHZ_chop hd).mpr hL) ?_
+      refine (fastCommitInView_chopHZ (V := V) L ((slotsChopHZ hd).slotRound k)).mpr ?_
+      rwa [chopRound_add hd k]
+  | @directSlow n L hL hc =>
+      rintro k rfl
+      refine LeanDag.Hydrozoan.Decided.directSlow (S := slotsChopHZ hd) ((isLeaderBlockHZ_chop hd).mpr hL) ?_
+      refine (slowCommitInView_chopHZ (V := V) L ((slotsChopHZ hd).slotRound k)).mpr ?_
+      rwa [chopRound_add hd k]
+  | @directSkip n hskip =>
+      rintro k rfl
+      exact LeanDag.Hydrozoan.Decided.directSkip (S := slotsChopHZ hd)
+        ((skippedLeaderInView_chopHZ (V := V) hd k).mpr hskip)
+  | @indirectCert n j A L hkj helig hanchor hmid hL hcert ihj ihmid =>
+      rintro k rfl
+      obtain ⟨j', rfl⟩ : ∃ j', j = d + j' := ⟨j - d, by omega⟩
+      have hA : A ∈ U.ids := (isLeaderBlock_of_decidedHZ hanchor).1
+      refine LeanDag.Hydrozoan.Decided.indirectCert (S := slotsChopHZ hd) (by omega)
+        ((eligibleAsAnchorHZ_chop hd).mpr helig) (ihj j' rfl) ?_
+        ((isLeaderBlockHZ_chop hd).mpr hL) ((certifiedIn_chopHZ hd hA k).mpr hcert)
+      intro i' h1 h2 he
+      exact ihmid (d + i') (by omega) (by omega)
+        ((eligibleAsAnchorHZ_chop hd).mp he) i' rfl
+  | @indirectWeak n j A L hkj helig hanchor hmid hnocert hL hweak hmin ihj ihmid =>
+      rintro k rfl
+      obtain ⟨j', rfl⟩ : ∃ j', j = d + j' := ⟨j - d, by omega⟩
+      have hA : A ∈ U.ids := (isLeaderBlock_of_decidedHZ hanchor).1
+      refine LeanDag.Hydrozoan.Decided.indirectWeak (S := slotsChopHZ hd) (by omega)
+        ((eligibleAsAnchorHZ_chop hd).mpr helig) (ihj j' rfl) ?_ ?_
+        ((isLeaderBlockHZ_chop hd).mpr hL)
+        ((weakLinked_chopHZ hd hA k).mpr hweak) ?_
+      · intro i' h1 h2 he
+        exact ihmid (d + i') (by omega) (by omega)
+          ((eligibleAsAnchorHZ_chop hd).mp he) i' rfl
+      · intro L' hL' hcert
+        exact hnocert L' ((isLeaderBlockHZ_chop hd).mp hL')
+          ((certifiedIn_chopHZ hd hA k).mp hcert)
+      · intro L' hL' hw
+        exact hmin L' ((isLeaderBlockHZ_chop hd).mp hL')
+          ((weakLinked_chopHZ hd hA k).mp hw)
+  | @indirectSkip n j A hkj helig hanchor hmid hnocert hnoweak ihj ihmid =>
+      rintro k rfl
+      obtain ⟨j', rfl⟩ : ∃ j', j = d + j' := ⟨j - d, by omega⟩
+      have hA : A ∈ U.ids := (isLeaderBlock_of_decidedHZ hanchor).1
+      refine LeanDag.Hydrozoan.Decided.indirectSkip (S := slotsChopHZ hd) (by omega)
+        ((eligibleAsAnchorHZ_chop hd).mpr helig) (ihj j' rfl) ?_ ?_ ?_
+      · intro i' h1 h2 he
+        exact ihmid (d + i') (by omega) (by omega)
+          ((eligibleAsAnchorHZ_chop hd).mp he) i' rfl
+      · intro L' hL' hcert
+        exact hnocert L' ((isLeaderBlockHZ_chop hd).mp hL')
+          ((certifiedIn_chopHZ hd hA k).mp hcert)
+      · intro L' hL' hw
+        exact hnoweak L' ((isLeaderBlockHZ_chop hd).mp hL')
+          ((weakLinked_chopHZ hd hA k).mp hw)
+
+/-- **P7 — the decision relation survives the cut.** A replica that has
+pruned below the horizon reaches exactly the verdicts it would have
+reached with its whole history, at the re-indexed slot. The base-slot
+premise `G ≤ S.slotRound d` is the only condition: no synchrony, no
+fairness, no liveness. -/
+theorem decided_chopHZ (hd : G ≤ S.slotRound d)
+    {V : LeanDag.Hydrozoan.View U} {k : ℕ} {v : Option BlockId} :
+    LeanDag.Hydrozoan.Decided (S := slotsChopHZ hd) (chopHZ U hsp G)
+        (View.chopHZ V hsp G) k v
+      ↔ LeanDag.Hydrozoan.Decided U V (d + k) v :=
+  ⟨decided_of_decided_chopHZ hd, fun h => decided_chopHZ_of_decided hd h k rfl⟩
+
+/-- **Cross-cut agreement.** A replica that has pruned below the horizon
+and one that has not cannot disagree about a slot. The pruned replica's
+view `W` is an *arbitrary* view of the truncation, not a truncated
+full-history view — a joiner's view is never of the latter form, since
+lifted to `U` it would not be downward closed, its base layer having
+lost its parents. The proof plays HZ3 inside the truncation and moves
+across the cut by `decided_chopHZ_of_decided`. -/
+theorem decided_agree_chopHZ (hd : G ≤ S.slotRound d)
+    {V : LeanDag.Hydrozoan.View U} {W : LeanDag.Hydrozoan.View (chopHZ U hsp G)}
+    {k : ℕ} {v w : Option BlockId}
+    (hV : LeanDag.Hydrozoan.Decided U V (d + k) v)
+    (hW : LeanDag.Hydrozoan.Decided (S := slotsChopHZ hd) (chopHZ U hsp G) W k w) :
+    v = w :=
+  (@LeanDag.Hydrozoan.SlotAgreement.holds Replica BlockId _ _ _ _ _ (slotsChopHZ hd)
+    (chopHZ U hsp G) W (View.chopHZ V hsp G) k w v hW
+    (decided_chopHZ_of_decided hd hV k rfl)).symm
+
+end Induction
 
 end Hydrozoan
 
