@@ -128,7 +128,7 @@ k' ≥ k` form gives liveness without giving any *rate*.
 
 The three phases the protocol actually passes through, and what each one
 supports. This is the part where the abstraction has to be handled carefully:
-one of the phases turns out to be invisible, and saying so precisely is what
+one of the phases is invisible, and saying so precisely is what
 keeps the framing honest.
 
 §4.4 is **not** a fourth phase. It records why `U` is finite and what that
@@ -199,8 +199,8 @@ The final phase is *"all correct blocks contain all other correct blocks
 because of the sufficient delay"*.
 
 **Honest-to-honest only.** The assumption says a *correct* block references
-every *correct* block of the round below, and both restrictions are load
-bearing:
+every *correct* block of the round below, and both restrictions are
+indispensable:
 
 - **Nothing may be assumed about Byzantine blocks existing.** A Byzantine
   validator can publish nothing at all, so there is no round-`n` block of
@@ -472,7 +472,7 @@ def Timing.DriftFrom (tm : Timing U T N) (n₀ D : ℕ) : Prop :=
 ### The rated layer
 
 `LeanDag/Quantitative.lean`. Three optional hypotheses, each strengthening one
-already in play, and each buying a bound the weak form cannot give (S8, S9).
+already in play, and each yielding a bound the weak form cannot give (S8, S9).
 Nothing above depends on them.
 
 ```lean
@@ -602,7 +602,7 @@ constant timeout of at least `D₀ + Δ`.
 - **L5 — An absent leader is skipped.** If `leader k` has no
   round-`slotRound k` block, the slot is decided `none`.
 
-  Nearly free, and it vindicates a C1 decision: `Decided.directSkip` takes the
+  Immediate, and it is what a C1 decision was drawn for: `Decided.directSkip` takes the
   premise `∀ L, IsLeaderBlock U k L → DirectSkipIn U V L …`, which is
   **vacuously true** when the leader published nothing. Choosing the `∀` form
   over naming a candidate block is what makes this case disappear.
@@ -760,11 +760,11 @@ L0, L2 and L3 come first because none needs a new primitive: L0 is pure DAG
 structure, L2 and L3 are pure view reasoning. That defers every modelling
 decision until something is already proved.
 
-**Every definition gets a witness before anything is proved from it.** An
-earlier draft staged the model before L4 rather than before L1, and that
-ordering is what let an unsatisfiable `Live` be *proved against* before anyone
-tried to satisfy it — `U.ids` is a `Finset`, and the rule forced infinitely
-many blocks. The rule then earned its keep three more times:
+**Every definition gets a witness before anything is proved from it.**
+Staging the model before L4 rather than before L1 is what permits an
+unsatisfiable `Live` to be *proved against* before anyone tries to satisfy
+it — `U.ids` is a `Finset`, and the rule forced infinitely many blocks. The
+rule applies three more times:
 
 - `Timing` had the **identical flaw** — `blk` at every round again forces
   infinitely many blocks — and writing `ugrowTiming` caught it, so `Timing`
@@ -1125,8 +1125,8 @@ first attempt used `timeout = 3`, satisfied the second constraint and failed
 the first. That is exactly the check a degenerate witness cannot perform, and
 finding the window is narrow is itself worth knowing.
 
-**Not done: the round-spread exhibit** §4.1 asks for, and the reason is worth
-recording. At `f = 1`, `n = 3f+1 = 4` there are four validators and `|Correct| = 3 =
+**Not done: the round-spread exhibit** §4.1 asks for, for the following
+reason. At `f = 1`, `n = 3f+1 = 4` there are four validators and `|Correct| = 3 =
 n−f` exactly, so *every* correct validator is needed for a quorum and none
 can lag. Exhibiting round spread alongside commits needs `f ≥ 2` — seven
 validators with one Byzantine, leaving six correct and room for one to fall

@@ -32,7 +32,7 @@ Three things had to be got right, and each is a numbered result:
 `A` is the *frontier* — one round. Earlier rounds are not accepted separately;
 they enter the view inside the histories, which is what makes `|A| ≤ 3f+1`
 rather than `(3f+1)(r+1)`. §4 gives `A` a home in the delivery
-layer, where it turns out to be forced for an entirely different reason.
+layer, where it is forced for an entirely different reason.
 -/
 
 namespace LeanDag

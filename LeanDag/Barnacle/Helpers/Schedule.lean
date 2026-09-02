@@ -50,6 +50,37 @@ theorem roundRobin_windowInjective (n : ℕ) (hn : 0 < n) :
 theorem roundRobin_keyed (n : ℕ) (hn : 0 < n) : Keyed (roundRobin n hn) n :=
   keyed_of_windowInjective (roundRobin_windowInjective n hn)
 
+/-! ## The leader counts are nested
+
+`Sched` at count `m` gives slot `κ` the round `κ / m` and the leader
+`getLeader (κ / m + κ % m)`, so the (round, leader) pairs it realises
+are `{(r, getLeader (r + l)) : l < m}` — a set monotone in `m`. Any
+condition on a DAG that depends on a slot only through that pair
+therefore holds at every admissible count as soon as it holds at the
+largest, which is what `docs/hydrozoan-integration.md` §4.1 needs of
+Optimal-Hydrozoan's leader-exclusion rule. -/
+
+theorem slot_of_pair {w : ℕ} (hw : 0 < w) (r l : ℕ) (hl : l < w) :
+    (r * w + l) / w = r ∧ (r * w + l) % w = l := by
+  constructor
+  · rw [Nat.mul_comm, Nat.mul_add_div hw, Nat.div_eq_of_lt hl, Nat.add_zero]
+  · rw [Nat.mul_comm, Nat.mul_add_mod, Nat.mod_eq_of_lt hl]
+
+/-- **Every slot of a smaller leader count is a slot of a larger one**,
+at the same round and the same leader — witnessed by
+`(κ / m) * w + κ % m`. -/
+theorem sched_pair_mono {Validator : Type} (getLeader : ℕ → Validator) {W : ℕ}
+    (hk : Keyed getLeader W) (m : ℕ) (hm : 0 < m) (hmax : m ≤ W)
+    (w : ℕ) (hw : 0 < w) (hwmax : w ≤ W) (hmw : m ≤ w) (κ : ℕ) :
+    ∃ κ', (Sched getLeader hk w hw hwmax).slotRound κ'
+            = (Sched getLeader hk m hm hmax).slotRound κ
+        ∧ (Sched getLeader hk w hw hwmax).leader κ'
+            = (Sched getLeader hk m hm hmax).leader κ := by
+  have hlt : κ % m < w := lt_of_lt_of_le (Nat.mod_lt _ hm) hmw
+  obtain ⟨hd, hmod⟩ := slot_of_pair hw (κ / m) (κ % m) hlt
+  exact ⟨(κ / m) * w + κ % m, by simp only [Slots.uniform_slotRound, hd],
+    by simp only [Slots.uniform_leader, hd, hmod]⟩
+
 end Barnacle
 
 end LeanDag

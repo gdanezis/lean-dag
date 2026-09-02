@@ -40,7 +40,7 @@ assumed.** Two clauses are written in a way their own sentences do not
 support, and §3 settles both. The leader sequence is genuine round robin
 rather than one chosen to suit the construction; that choice is recorded
 because it could have been made the other way to make a finding look
-stronger than it is, and because the value of `l` turns out to be what
+stronger than it is, and because the value of `l` is what
 §5 is about.
 
 ## 2. What the counterexamples rest on

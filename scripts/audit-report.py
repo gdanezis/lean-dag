@@ -205,16 +205,26 @@ def extracted_names(root):
 
 
 # High-precision register violations only; docs/style.md carries the tables.
+# Each row is written to catch its own inflections: the register is a
+# property of the phrase, not of the tense it happens to appear in, and
+# "turns out" is the same laboratory note as "turned out". Widened only
+# across tense and number -- never from a phrase to its bare verb, which
+# would sweep in the established senses of "bite", "engine" and "cheap"
+# that docs/style.md §1 permits.
 BANNED = re.compile(
-    r"\b(load[- ]bearing|earns its keep|for free|buys|bought|at the price"
-    r"|turned out|an earlier (?:draft|version)|worth recording|first draft"
-    r"|the old (?:schedule|spacing|proof)|gets cheaper|is spent"
+    r"\b(load[- ]bearing|earn(?:s|ed|ing)? its keep|for free"
+    r"|buy(?:s|ing)?|bought|at the price"
+    r"|turn(?:s|ed|ing)? out|earlier (?:draft|version)s?|worth recording"
+    r"|first draft|the old (?:schedule|spacing|proof)"
+    r"|(?:get|gets|got|getting) cheaper|(?:is|are|was|were|be|been|being) spent"
     # commercial metaphor extended to clauses, blocks and thresholds
-    r"|pays? for itself|spends? the|charges? (?:a|the|it)|costs? nothing"
+    r"|pa(?:y|ys|id|ying) for itself|(?:spend|spends|spent|spending) the"
+    r"|charg(?:e|es|ed|ing) (?:a|the|it)|cost(?:s|ing)? nothing"
     r"|more cheaply|unaffordable|affordable"
     # figurative verbs and nouns
-    r"|seen to bite|does not bite|vindication of|headline on data"
-    r"|is its engine)\b", re.I)
+    r"|seen to bite|do(?:es)? not bite|did not bite"
+    r"|vindicat(?:e|es|ed|ing|ion of)|headline on data"
+    r"|(?:is|was|are|were) (?:its|the) engine)\b", re.I)
 
 # A docstring section reference is qualified when a document name or the
 # word "report" sits within forty characters before or after it.
@@ -233,6 +243,43 @@ def load_extracted(root):
     return out
 
 
+def unwrapped(text):
+    """The text with soft line wraps collapsed to single spaces, paragraph
+    breaks retained, and a parallel map giving each character's source line.
+
+    Matching the register line by line misses a phrase a wrap splits, which
+    is how "costs nothing" stood in `barnacle.md` while the check passed.
+    Collapsing every run of whitespace instead would join the end of one
+    paragraph to the start of the next and report a phrase neither
+    contains, so a run holding a blank line becomes a newline rather than a
+    space: `\\b` then keeps it out of any match.
+    """
+    out, lines = [], []
+    line, run, run_line = 1, "", 1
+    for ch in text:
+        if ch.isspace():
+            if not run:
+                run_line = line
+            run += ch
+        else:
+            if run and out:
+                out.append("\n" if run.count("\n") > 1 else " ")
+                lines.append(run_line)
+            run = ""
+            out.append(ch)
+            lines.append(line)
+        if ch == "\n":
+            line += 1
+    return "".join(out), lines
+
+
+def banned_failures(text):
+    """Every banned phrase in `text`, each named by the line it starts on."""
+    flat, at = unwrapped(text)
+    return [("banned", f"line {at[m.start()]}: `{m.group(0)}`")
+            for m in BANNED.finditer(flat)]
+
+
 def audit_register(path):
     """The banned-phrase check alone.
 
@@ -241,11 +288,7 @@ def audit_register(path):
     not apply to them. The register does: it is the one rule that holds
     of every document in `docs/`.
     """
-    failures = [
-        ("banned", f"line {i}: `{m.group(0)}`")
-        for i, line in enumerate(path.read_text().split("\n"), 1)
-        if (m := BANNED.search(line))
-    ]
+    failures = banned_failures(path.read_text())
     for kind, detail in failures:
         print(f"{path.name}: {kind}: {detail}")
     return len(failures)
@@ -276,11 +319,9 @@ def audit(path, decls, suffixes):
         if not resolves(tok, decls, suffixes):
             failures.append(("ident", tok))
 
-    # check 5: the banned phrases, over the whole document
-    for i, line in enumerate(text.split("\n"), 1):
-        m = BANNED.search(line)
-        if m:
-            failures.append(("banned", f"line {i}: `{m.group(0)}`"))
+    # check 5: the banned phrases, over the whole document, matched across
+    # soft line wraps (`unwrapped`)
+    failures.extend(banned_failures(text))
 
     # check 6: docstring section references are qualified
     dpath = ROOT / "docs/decls.json"

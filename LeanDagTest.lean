@@ -28,6 +28,12 @@ import LeanDagTest.Catchup
 import LeanDagTest.Collapse
 import LeanDagTest.Adaptive
 import LeanDagTest.Integration
+import LeanDagTest.Integration.Hydrozoan
+import LeanDagTest.Integration.HydrozoanUniverse
+import LeanDagTest.Integration.HydrozoanTransport
+import LeanDagTest.Integration.HydrozoanChop
+import LeanDagTest.Integration.HydrozoanFill
+import LeanDagTest.Integration.HydrozoanOptimal
 import LeanDagTest.Hybrid
 import LeanDagTest.Integration
 import LeanDagTest.HybridTight
@@ -56,6 +62,9 @@ import LeanDagTest.Barnacle.Majority
 import LeanDagTest.Barnacle.Orcaella
 import LeanDagTest.Barnacle.OrcaellaIndirect
 import LeanDagTest.Barnacle.OrcaellaLive
+import LeanDagTest.Barnacle.Hydrozoan
+import LeanDagTest.Barnacle.HydrozoanLive
+import LeanDagTest.Barnacle.OptimalHydrozoan
 import LeanDagTest.Barnacle.Axioms
 import LeanDagTest.Minnow.Deadlock
 import LeanDagTest.Minnow.Skip

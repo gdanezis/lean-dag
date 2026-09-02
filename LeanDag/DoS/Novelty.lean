@@ -82,8 +82,8 @@ theorem mem_novelty : i ∈ novelty U V b ↔ i ∈ history U b ∧ i ∉ V :=
 
 /-- **Antitone in the view** — the property everything below depends on.
 Deferral is a rate
-limiter, not a verdict: as the view grows, every deferred block only gets
-cheaper. -/
+limiter, not a verdict: as the view grows, every deferred block's novelty
+only decreases. -/
 theorem novelty_anti (h : V ⊆ W) : novelty U W b ⊆ novelty U V b :=
   Finset.sdiff_subset_sdiff (Finset.Subset.refl _) h
 

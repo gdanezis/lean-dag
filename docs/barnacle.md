@@ -61,8 +61,9 @@ Three consequences shape the plan.
   rule takes the validator's own view, and nothing then makes two of them
   agree — a rule reading its view freely could hand two correct
   validators different counts. `Anchored` is the condition that rules
-  that out: the step must not depend on which view computes it. It costs
-  nothing, because the window a rule measures on is the anchor's causal
+  that out: the step must not depend on which view computes it. It needs
+  no further hypothesis, because the window a rule measures on is the
+  anchor's causal
   history, which BN2 shows every view holding the anchor holds whole and
   restricts identically; the AIMD rule satisfies it by not reading the
   view at all (BN7e). Given that, the `(k+1)`-st count is a function of
@@ -451,7 +452,7 @@ arc collapses onto the base development.
 one; a healthy one increases a count below the maximum by one; `backoff`
 resets on a healthy window. For Mysticeti (Phase 5): `observed ≤
 expected`, from A3's locality and `quorumCard ≥ 2`, in whichever of the
-two forms §4 turns out to hold on data.
+two forms §4 holds on data.
 
 ## 7. Liveness, interface half
 

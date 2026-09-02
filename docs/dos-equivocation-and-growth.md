@@ -196,8 +196,8 @@ each validator can enforce alone, without ever knowing who is Byzantine.
 
 `liveness.md` §4.2 fixes `U` as *every block some correct validator ever
 held* — not every block anyone ever wrote. So `|U.ids|` is the storage burden
-imposed on the correct population, and a block revealed to nobody costs
-nothing. Two quantities measure the burden:
+imposed on the correct population, and a block revealed to nobody adds
+nothing to it. Two quantities measure the burden:
 
 - **View size.** `V.ids` is a `Finset`; `|V.ids|` is what a validator
   stores. Views are downward closed, so a view with maximum round `r` spans

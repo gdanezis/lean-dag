@@ -216,7 +216,7 @@ theorem dos_resistance_of_pace {κ : ℕ}
 `dos_resistance_of_pace` are one product: a correct validator's retained view
 grows at a rate of `|Correct| * (1 + f * κ)` blocks per round, over a constant
 offset of `|Correct| * (1 + f)`. Nothing new is proved --- the two bounds are
-equal --- but the rate the budget buys is now readable off the statement. -/
+equal --- but the rate the budget yields is now readable off the statement. -/
 theorem dos_resistance_of_pace' {κ : ℕ}
     (hu : UniformBudget vp.toDelivery κ) :
     (∀ r ≤ N, Populated U r) ∧
