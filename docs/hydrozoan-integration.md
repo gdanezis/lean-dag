@@ -397,16 +397,24 @@ integration arc's most usable output. Hydrozoan proper has no such
 clause: nothing in its `BlockUniverse` mentions the schedule, which is
 why P1 and P2 went through untouched.
 
-**The route that would satisfy the interface** is a carrier bearing
-exclusion at every schedule,
-`{U : BlockUniverse Replica BlockId // ∀ S, LeaderExcludedAt S U}`,
-from which an `OptUniverse` can be built at whatever `S` the interface
-hands. It strengthens what the arc claims — the paper states the rule
-per slot, under the schedule in force — so it is a change to the
-Optimal arc's meaning rather than an adapter, and it needs a
-non-vacuity witness before anything rests on it. That is why HI6 is
-last rather than third: the decision deserves its own consideration,
-and §5 shows nothing else waits on it.
+**The route that satisfies the interface is smaller than it first
+appeared.** Barnacle does not range over all schedules. For a fixed
+`getLeader` it ranges over `Sched getLeader hk m` for `m` in
+`[1, maxLeaders]`, and at count `m` slot `κ` has round `κ / m` and
+leader `getLeader (κ / m + κ % m)` — so the (round, leader) pairs
+realised are `{(r, getLeader (r + l)) : l < m}`, a set **monotone in
+`m`**. `Barnacle.sched_pair_mono` proves it, the witness for a slot of
+the smaller count being `(κ / m) * w + κ % m` in the larger.
+
+Leader exclusion depends on a slot only through that pair. So a carrier
+bearing it at the **largest** admissible count suffices, and no
+quantifier over schedules is needed:
+
+    Universe := {U : BlockUniverse Replica BlockId // LeaderExcludedAt (Sched … maxLeaders) U}
+
+That is one extra field, checkable on a witness, rather than a claim
+about every conceivable schedule. HI6 remains last because §5 shows
+nothing waits on it, not because the condition is unreasonable.
 
 **Nothing below is blocked.** The indexing bites only where an
 arbitrary schedule is quantified over a fixed universe. The
