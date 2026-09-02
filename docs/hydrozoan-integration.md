@@ -397,24 +397,39 @@ integration arc's most usable output. Hydrozoan proper has no such
 clause: nothing in its `BlockUniverse` mentions the schedule, which is
 why P1 and P2 went through untouched.
 
-**The route that satisfies the interface is smaller than it first
-appeared.** Barnacle does not range over all schedules. For a fixed
-`getLeader` it ranges over `Sched getLeader hk m` for `m` in
-`[1, maxLeaders]`, and at count `m` slot `κ` has round `κ / m` and
-leader `getLeader (κ / m + κ % m)` — so the (round, leader) pairs
-realised are `{(r, getLeader (r + l)) : l < m}`, a set **monotone in
-`m`**. `Barnacle.sched_pair_mono` proves it, the witness for a slot of
-the smaller count being `(κ / m) * w + κ % m` in the larger.
+**The obstacle is smaller than it first appeared, and dissolves when
+the clause is stated where it belongs.** Leader exclusion depends on a
+slot only through its `(round, leader)` pair — `decisionRound k` is
+`slotRound k + 2`, and `S.leader k` is the pair's second component — so
+it can be written with no schedule at all:
 
-Leader exclusion depends on a slot only through that pair. So a carrier
-bearing it at the **largest** admissible count suffices, and no
-quantifier over schedules is needed:
+```lean
+def LeaderExcludedAll (U : Hydrozoan.BlockUniverse Replica BlockId) : Prop :=
+  ∀ b ∈ U.ids, ∀ v : Replica, 2 ≤ (U.block b).round →
+    WitnessesAt U ((U.block b).round - 2) v b →
+    ∀ j ∈ (U.block b).parents, (U.block j).author ≠ v
+```
 
-    Universe := {U : BlockUniverse Replica BlockId // LeaderExcludedAt (Sched … maxLeaders) U}
+`Barnacle/Helpers/OptimalHydrozoan.lean`, with `optUniverseOf` building
+an `OptUniverse` at **any** schedule from it. So the carrier is
+`{U // LeaderExcludedAll U}` and the interface may vary the schedule as
+freely as it likes.
 
-That is one extra field, checkable on a witness, rather than a claim
-about every conceivable schedule. HI6 remains last because §5 shows
-nothing waits on it, not because the condition is unreasonable.
+This is the same condition and not a stronger one: a slot gives a pair,
+and for any pair some schedule has a slot at that round led by that
+replica, so exclusion at every schedule and at every pair imply each
+other. The pair form is simply the one writable without a schedule —
+and it is the rule a DAG-building layer can actually enforce, needing to
+know only that a block which has watched a replica equivocate two
+rounds below must not build on it.
+
+`Barnacle.sched_pair_mono` records a related fact found along the way:
+Barnacle's schedule family is nested, the pairs realised at leader count
+`m` being realised at every larger count, witnessed by
+`(κ / m) * w + κ % m`. It would have supported a weaker carrier stated
+at the maximum leader count; the schedule-free form makes it
+unnecessary here, and it is kept because the nesting is worth knowing
+of the family Barnacle varies over.
 
 **Nothing below is blocked.** The indexing bites only where an
 arbitrary schedule is quantified over a fixed universe. The

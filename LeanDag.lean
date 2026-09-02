@@ -189,6 +189,7 @@ import LeanDag.Barnacle.Orcaella.Proof
 import LeanDag.Barnacle.Helpers.Hydrozoan
 import LeanDag.Barnacle.Hydrozoan.Statement
 import LeanDag.Barnacle.Hydrozoan.Proof
+import LeanDag.Barnacle.Helpers.OptimalHydrozoan
 import LeanDag.Barnacle.HydrozoanLive.Statement
 import LeanDag.Barnacle.HydrozoanLive.Proof
 import LeanDag.Minnow.Blocking
