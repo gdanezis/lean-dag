@@ -817,7 +817,25 @@ predicted from what was discovered.
   A specialisation would therefore be a bisimulation per arc, over
   relations already proved, witnessed and pinned to their axiom lists,
   and would yield no statement §7 does not already have.
-- **A transformer interface, deferred rather than declined.** `chop`
+- **A transformer interface, now built** (`Integration/Hydrozoan/Simulation.lean`).
+  The entry is kept in this section because the general form — over
+  protocols rather than over Hydrozoan's two transformers — is still
+  open.
+
+  `Simulates U V S U' V' S' σ Novel` lists the predicates `Decided`
+  inspects — candidacy, anchor eligibility, the three direct rules in
+  view, the two rung tests — and `Simulates.decided` is the
+  six-constructor induction, once. Both transformers are instances:
+  the fill along the identity on slots with the fresh identifiers
+  novel, the cut along `k ↦ d + k` with nothing novel. Neither instance
+  carries an induction of its own.
+
+  The direction from a truncation back to the original is not covered:
+  its slot map is partial where `σ` is total, so
+  `decided_of_decided_chopHZ` stays bespoke. Two of the three
+  inductions are subsumed.
+
+- **The general form, still deferred.** `chop`
   and `skipFill` invariance is currently proved per protocol and per
   transformer, entangled with each transformer's arithmetic. Two
   semantic conditions would give both generically: **upward

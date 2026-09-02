@@ -467,6 +467,7 @@ section Anchor
 
 variable [LinearOrder BlockId]
 
+omit [Fact (HybridCommittee Replica)] in
 /-- A commit verdict is about a candidate of its slot, so the anchor of
 an indirect derivation is a block of the universe. Stated over an
 arbitrary universe and schedule, since the induction below needs it at
