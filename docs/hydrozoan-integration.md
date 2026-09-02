@@ -708,3 +708,353 @@ predicted from what was discovered.
   list; §5.2 records round-jumping recovery as answered by HI9, since
   the fill authors the rounds a jump would leave empty.
 - **The certified variant, and cryptography.**
+
+## 10. The bridges, and the shapes the theorems take
+
+*The signatures in this section are intended shapes, not source: none of
+it is built. §13 says in what order it would be.*
+
+Three mechanisms in this repository transfer a result with no
+per-theorem work, and one class of result resists all three. Naming the
+four is what keeps the arc linear in the number of transformers rather
+than quadratic in the number of arcs.
+
+| kind | mechanism | cost | what it carries |
+|:---|:---|:---|:---|
+| instance bridge | typeclass resolution | one instance | every theorem over `Faults` or `Slots` |
+| structure bridge | universe transport | one function pair | every theorem over a `BlockUniverse` |
+| record bridge | interface instantiation | one record and its laws, per rule | every theorem over `BaseRule` |
+| — | induction over `Decided` | per rule, irreducible | verdict invariance under a transformer |
+
+None of the three is new here. `HybridFaults.toFaults` is the first,
+`chop`'s polymorphism in `Payload` the second, `Barnacle.BaseRule` the
+third; the work is supplying the values they take.
+
+### 10.1 B1 — the fault instance
+
+```lean
+instance toHybrid [F : Hydrozoan.Faults Replica] [Fact (F.c ≤ F.k)] :
+    HybridFaults Replica where
+  fb := F.f;  fc := F.c
+  byzantine := F.byzantine;  crash := F.crashed
+  disjoint := F.byzantine_disjoint_crashed
+  card_byzantine := F.card_byzantine
+  card_crash := F.card_crashed
+  card_validators := by have := F.card_replicas; omega
+```
+
+`Fact` because an instance takes no explicit hypothesis, and `c ≤ k` is
+exactly what `card_validators` consumes (§2). The instance chains
+through the existing `HybridFaults.toFaults`, so one declaration reaches
+both the hybrid arc and the core.
+
+A bridge is unusable without its diamond discipline. Three agreements
+make the two spellings interchangeable, and every later transfer cites
+them:
+
+```lean
+@[simp] theorem quorumCard_eq_q : quorumCard Replica = Hydrozoan.q Replica
+@[simp] theorem correct_eq : (Correct : Finset Replica) = Hydrozoan.Correct
+@[simp] theorem honest_eq : (H.byzantineᶜ : Finset Replica) = Hydrozoan.NonByzantine
+```
+
+The first is `Nat.sub_sub` — `n − (f + c)` against `n − f − c` — and the
+other two hold by unfolding.
+
+### 10.2 B2 — the schedule instance
+
+```lean
+instance [S : Hydrozoan.Slots Replica] : LeanDag.Slots Replica :=
+  ⟨S.slotRound, S.leader, S.mono, S.unbounded, S.keyed⟩
+```
+
+Every field by `rfl` (§1), and `FairRunOn` and `SpansEligible` then
+agree by `Iff.rfl`.
+
+### 10.3 B3 — the universe transport
+
+```lean
+def SelfParenting (U : Hydrozoan.BlockUniverse Replica BlockId) : Prop :=
+  ∀ i ∈ U.ids, 0 < (U.block i).round →
+    ∃ j ∈ (U.block i).parents, (U.block j).author = (U.block i).author
+
+def toCore (U : Hydrozoan.BlockUniverse Replica BlockId) (hsp : SelfParenting U) :
+    LeanDag.BlockUniverse Replica BlockId Unit
+
+def ofCore (U' : LeanDag.BlockUniverse Replica BlockId P) (hne : HonestNoEquiv U') :
+    Hydrozoan.BlockUniverse Replica BlockId
+```
+
+Each direction supplies the field the other structure lacks: `toCore`
+the self-parent clause of §3, `ofCore` non-equivocation at the wider
+class. The second direction is nearly definitional, since
+`HonestNoEquiv`'s `creator ∉ byzantine` is Hydrozoan's
+`author ∈ NonByzantine` (§2):
+
+```lean
+theorem honestNoEquiv_toCore : HonestNoEquiv (toCore U hsp) := U.no_equivocation
+```
+
+Round trips are stated observationally, as `integration.md` I11 states
+its convergence — identifier sets equal, and blocks equal at those
+identifiers, the two objects differing only outside their identifier
+sets, which nothing reads:
+
+```lean
+@[simp] theorem ofCore_toCore : ofCore (toCore U hsp) honestNoEquiv_toCore = U
+theorem toCore_ofCore_ids : (toCore (ofCore U' hne) _).ids = U'.ids
+theorem toCore_ofCore_block :
+  ∀ i ∈ U'.ids, (toCore (ofCore U' hne) _).block i = adapt (U'.block i)
+```
+
+A view transport accompanies it in both directions.
+
+### 10.4 B4 — the transformer bridge
+
+One definition, after which every core universe transformer restricts to
+Hydrozoan universes:
+
+```lean
+def transport {U : Hydrozoan.BlockUniverse Replica BlockId} (hsp : SelfParenting U)
+    (F : LeanDag.BlockUniverse Replica BlockId Unit →
+         LeanDag.BlockUniverse Replica BlockId Unit)
+    (hF : HonestNoEquiv (F (toCore U hsp))) :
+    Hydrozoan.BlockUniverse Replica BlockId :=
+  ofCore (F (toCore U hsp)) hF
+```
+
+`F` closes over the transformer's own arguments, so both existing
+transformers land in one line each:
+
+```lean
+def chopHZ     (hsp) (G : ℕ)           := transport hsp (chop · G) (honestNoEquiv_chop ..)
+def skipFillHZ (hsp) (sk : SkipMsg ..) := transport hsp (fun _ => sk.skipFill)
+                                                       (honestNoEquiv_skipFill ..)
+```
+
+Both `HonestNoEquiv` obligations are `integration.md` I1 and are already
+proved. What each transformer adds is one lemma:
+
+```lean
+theorem selfParenting_chop : SelfParenting U → SelfParenting (chopHZ U hsp G)
+theorem selfParenting_skipFill : SelfParenting U → SelfParenting (skipFillHZ U hsp sk)
+```
+
+The second should be immediate: P3′ obliges `fillBlock` to insert a self
+reference, which is the mechanism `integration.md` I13 describes. **This
+is the modularity claim in one definition** — a transformer added later
+costs a line and a preservation lemma, never a re-proof.
+
+### 10.5 B5 — the Barnacle record, which needs none of B1 to B4
+
+```lean
+def hydrozoan : Barnacle.BaseRule Replica BlockId Unit where
+  Universe := Hydrozoan.BlockUniverse Replica BlockId
+  View := Hydrozoan.View
+  block := fun U i => adapt (U.block i)
+  waveLength := 3
+  DirectCommitIn := fun V L r => FastCommitInView .. ∨ SlowCommitInView ..
+  Decided := fun S V k v => @Hydrozoan.Decided .. (slotsOf S) .. V k v
+  …
+
+theorem hydrozoan_laws : hydrozoan.Laws where
+  agree := SlotAgreement.holds ..
+  view_subset := fun V => V.subset_ids
+  view_complete := fun V => V.complete
+  …
+```
+
+`BaseRule.Universe` is an arbitrary `Type`, and only `block` needs the
+core's `Block` shape, so this bridge depends on the block adapter alone.
+It needs neither `SelfParenting` nor `c ≤ k`, and can therefore be built
+before anything else. `agree` is HZ3, already proved. `LiveRule` and
+`Descent` follow as §4 describes.
+
+### 10.6 The shape of a transfer, and the shape of what resists
+
+Every result crossing B1 to B4 has one form — the core theorem, the
+bridge simp set, one line:
+
+```lean
+theorem exists_nonByzantine_inter (hsp : SelfParenting U) (hs ..) (ht ..) :
+    ∃ v ∈ .., v ∈ (Hydrozoan.NonByzantine : Finset Replica) := by
+  simpa [correct_eq, quorumCard_eq_q, honest_eq] using
+    exists_correct_mem_creators_inter (blk := (toCore U hsp).block) hs ht
+```
+
+This is what carries the sixty declarations of `Causality`,
+`Participation`, `CommonCore` and `History`, none of which mentions
+`Decided`.
+
+What resists has one form too:
+
+```lean
+theorem decided_chop_hz (hd : G ≤ S.slotRound d) {V k v} :
+    Hydrozoan.Decided (chopHZ U hsp G) (V.chop G) k v ↔ Hydrozoan.Decided U V (d + k) v
+```
+
+Six constructors each way, twelve across the two rules, and no bridge
+removes it (§9).
+
+### 10.7 The capstones, and why they need no new argument
+
+HZ3 is quantified over **every** universe:
+
+```lean
+def SlotAgreement.Statement : Prop :=
+  ∀ (Replica BlockId : Type) [..] (U : BlockUniverse Replica BlockId), DecidedUnique U
+```
+
+So the composition capstone is an application rather than a proof, and
+its whole content is that the transported object is a Hydrozoan
+universe — which is B3 and B4:
+
+```lean
+theorem hydrozoan_agree_stack (sk) (hsp) (G) :
+    DecidedUnique (chopHZ (skipFillHZ U hsp sk) (selfParenting_skipFill hsp) G) :=
+  SlotAgreement.holds _ _ _
+```
+
+Safety across the whole stack therefore needs nothing new, which is what
+`integration.md` I7 found for the core. The liveness capstone is the
+same shape one level up, with `PopulatedOn` from SS2 and
+`SynchronisedOn` above the fill (§5.2).
+
+## 11. Witnesses
+
+The house rule is `docs/style.md` §3: a witness precedes the theorem,
+and a definition that cannot be witnessed may be vacuous.
+
+**Six of the nine existing configurations are usable, and three are
+not.** Every `Faults (Fin n)` instance in the two arcs' witness
+directories, against `c ≤ k`:
+
+| file | committee | `f, c, k` | `c ≤ k` |
+|:---|:---|:---|:---|
+| `Hydrozoan/Model.lean` | `Fin 7` | 1, 1, 1 | yes |
+| `Hydrozoan/DirectLiveness.lean` | `Fin 4` | 0, 1, 1 | yes |
+| `Hydrozoan/IndirectLiveness.lean` | `Fin 5` | 1, 0, 1 | yes |
+| `Hydrozoan/LivenessHardening.lean` | `Fin 8` | 1, 1, 2 | yes |
+| `Hydrozoan/LivenessHardening.lean` | `Fin 6` | 0, 2, 1 | no |
+| `Hydrozoan/Grounding.lean` | `Fin 5` | 0, 2, 0 | no |
+| `OptimalHydrozoan/Thresholds.lean` | `Fin 4` | 1, 0, 0 | yes |
+| `OptimalHydrozoan/Thresholds.lean` | `Fin 5` | 1, 0, 0 | yes |
+| `OptimalHydrozoan/Thresholds.lean` | `Fin 3` | 0, 1, 0 | no |
+
+Two of the three exclusions are principal witnesses of their own arcs —
+`Grounding.lean`'s `Fin 5` is the per-slot-rotation starvation
+contrast, and `Thresholds.lean`'s `Fin 3` is the `f = 0` branch and the
+one configuration at which `tEquiv = 1`. No bridge result may reuse a
+Hydrozoan witness without checking the condition, and `Fin 7` against
+`Fin 5` is the ready-made pair for B1's positive and negative.
+
+**No existing witness universe satisfies `SelfParenting`.** In the
+seven-replica universe of `LeanDagTest/Hydrozoan/BlockUniverse.lean`,
+blocks 12 and 13 are authored by replicas 5 and 6 and reference
+`{0, 1, 2, 3, 4}`, which holds neither replica's genesis block. The
+universes were built without the clause because no Hydrozoan theorem
+consumes it (§3). Two consequences: B3 needs universes built for it,
+and the existing ones are the negative witness showing the predicate
+restricts rather than holding everywhere.
+
+The witness files, by bridge:
+
+- **B1.** The projection applied end to end at `Fin 7`, every field of
+  the derived `HybridFaults` pinned by `decide`; the three diamond
+  agreements pinned at a configuration where the quorums are distinct;
+  and `c ≤ k` refuted at `Grounding.lean`'s `Fin 5`, so the `Fact` is
+  seen to restrict.
+- **B2.** The induced `LeanDag.Slots` pinned pointwise against
+  Hydrozoan's, under both the pipelined and the wave-aligned schedules.
+- **B3.** A universe built with self-parent edges throughout, its
+  `SelfParenting` settled by `decide`; the round trip `ofCore_toCore`
+  pinned on it; and the seven-replica universe pinned as
+  `¬ SelfParenting`.
+- **B4.** `chopHZ` at a cut in mid-DAG, `SelfParenting` of the result
+  pinned; the same for `skipFillHZ` over a concrete `SkipMsg`.
+- **B5.** The `BaseRule` fields computed on the six-route universe,
+  `SlotDirect` and `observed` pinned, and `Laws.agree` applied end to
+  end so that a silently strengthened hypothesis fails the build.
+- **The per-rule induction.** The ladder verdicts of an eight-round
+  table, computed before the cut and after it and cross-checked.
+- **The axioms tripwire** (`Axioms.lean`), every `holds` pinned by
+  `#guard_msgs` to its exact axiom list.
+
+## 12. Layout and discipline
+
+The work divides between two directories under **two different
+disciplines**, and the division follows what each host already is.
+
+```
+LeanDag/Barnacle/Hydrozoan/{Statement,Proof}.lean        B5, under the partition
+LeanDag/Barnacle/HydrozoanLive/{Statement,Proof}.lean    LiveRule and Descent
+LeanDag/Barnacle/OptimalHydrozoan{,Live}/                the mirrors
+LeanDag/Integration/Hydrozoan/                           B1–B4, not partitioned
+  Faults.lean       the instance and the diamond simp set (§10.1)
+  Schedule.lean     the Slots instance (§10.2)
+  Universe.lean     SelfParenting, toCore, ofCore, the round trip (§10.3)
+  Transport.lean    transport and the two preservation lemmas (§10.4)
+LeanDagTest/Barnacle/Hydrozoan.lean, …                   B5's witnesses
+LeanDagTest/Integration/Hydrozoan.lean                   B1–B4's witnesses
+```
+
+`Barnacle` is in `ARCS` of `scripts/check-arc-holes.py`, so B5 is under
+the statement/proof partition and follows the existing per-protocol
+convention (`Barnacle/{Mysticeti, MysticetiLive, Nemo, Odontoceti,
+Orcaella}`, with the base rule and the live rule in separate
+directories). `Integration` is **not** in `ARCS` and has no `Model/`, so
+B1–B4 are ordinary files. That is the right home for them: the checker
+forbids `instance` in any `Statement.lean`, and B1 and B2 are
+instances, so they could not sit under the partition even if the
+directory were registered.
+
+**The instance diamond.** Both arc records already carry a rule for two
+`Faults (Fin n)` instances at one `n`. This arc adds a second kind: one
+`Replica` carrying `Hydrozoan.Faults` and, through B1, `HybridFaults`
+and `LeanDag.Faults`. `Hydrozoan.q` and `quorumCard` are then both in
+scope and are equal but not definitionally so, and `Fact (F.c ≤ F.k)`
+resolves against whichever `Faults` instance wins. The discipline: no
+bridge file imports two witness models, every witness table names its
+instance explicitly, and statements are written in Hydrozoan's spelling
+with §10.1's simp set used at the point of transfer.
+
+**Additivity.** No file of either arc is modified, and no file of the
+core. The one weakening the plan predicts is to Optimal-Hydrozoan's
+`SkipLiveness` (§5.1), which is a `Statement.lean` rather than a
+`Model/` definition and is conservative in the sense `integration.md`
+§4.2 requires.
+
+**Completions.** `LeanDag.lean` and `LeanDagTest.lean` take the new
+imports; nothing is added to `ARCS`, since the new directories sit under
+`Barnacle`, which is already there.
+
+## 13. Phases
+
+Each phase runs as the freeze protocol of `hydrozoan.md` §10:
+statements → review → freeze → proofs → witnesses → a reviewing agent
+over the frozen files and the witnesses → commit.
+
+Phases carry **P**-labels; §10's `B1`–`B5` are the bridges, and the two
+schemes are distinct.
+
+| phase | deliverable | bridge | results | depends on |
+| :-- | :-- | :-- | :-- | :-- |
+| P1 | the block adapter; `Barnacle/Hydrozoan/` | B5 | HI3, HI4 | — |
+| P2 | `Barnacle/HydrozoanLive/`: `Good`, `LiveOn`, `Descent` | B5 | HI5 | P1 |
+| P3 | the two Optimal mirrors | B5 | HI6 | P1, P2 |
+| P4 | `Integration/Hydrozoan/{Faults,Schedule}.lean` | B1, B2 | HI1, HI2 | — |
+| P5 | `Universe.lean`: `SelfParenting`, `toCore`, `ofCore` | B3 | HI8 | P4 |
+| P6 | `Transport.lean`: `transport`, the preservation lemmas | B4 | — | P5 |
+| P7 | `decided_chop_hz` for both rules | — | HI7 | P6 |
+| P8 | the fill: verdict agreement, and SS3 for Optimal | — | HI9 | P7 |
+| P9 | the stack capstones | — | — | P8 |
+| P10 | this record; report §24; the reference pipeline | — | — | P9 |
+
+P1 to P3 are additive, need neither `c ≤ k` nor `SelfParenting`, and
+place both rules under the adaptive leader count; P1 alone is a
+deliverable, since `agree` is HZ3 and the rest of `Laws` is read off the
+`Decided` constructors. P4 to P6 are the bridges proper, after which the
+DAG layer and the hybrid arc apply. P7 and P8 are the irreducible
+per-rule work, and P9 is where the four mechanisms are shown to hold
+together. The delivery layer (HI10) is not a phase here: §6 states what
+its absence costs, and it belongs in its own arc.
