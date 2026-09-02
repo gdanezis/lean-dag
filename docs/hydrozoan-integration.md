@@ -335,18 +335,68 @@ useful Hydrozoan form is the partial count that
 `Barnacle/Healthy/Statement.lean` names as the next result and does not
 prove.
 
-**HI6** repeats HI4 and HI5 for Optimal-Hydrozoan over `DecidedOpt`,
-with OH3 discharging `agree`. Its evidence rung needs no tie-break
-(`optimal-hydrozoan.md` §7), so the instantiation requires no
-`LinearOrder` on ids where Hydrozoan's does.
+**HI6** would repeat HI4 and HI5 for Optimal-Hydrozoan over
+`DecidedOpt`, with OH3 discharging `agree`; its evidence rung needs no
+tie-break (`optimal-hydrozoan.md` §7), so it would require no
+`LinearOrder` on ids where Hydrozoan's does. §4.1 records why it is
+deferred to last.
 
 For scale: Orcaella's instantiation is 120 lines of statement and 38 of
-proof. Hydrozoan's should be comparable, plus HI3.
+proof. Hydrozoan's is comparable, plus HI3.
 
-The outcome of this route is that Hydrozoan and Optimal-Hydrozoan
-become the fifth and sixth base rules under the adaptive leader count,
-beside Mysticeti, Odontoceti, Nemo-Nemo and Orcaella, with no frozen
-file modified.
+The outcome of this route is that Hydrozoan becomes the fifth base rule
+under the adaptive leader count, beside Mysticeti, Odontoceti,
+Nemo-Nemo and Orcaella, with no frozen file modified.
+
+### 4.1 Optimal-Hydrozoan's universe is schedule-indexed
+
+`OptUniverse` takes a `Slots Replica` instance, and its leader-exclusion
+field names the schedule twice:
+
+```lean
+leader_excluded : ∀ b ∈ ids, ∀ k,
+  (block b).round = decisionRound Replica k →
+  WitnessesEquivocation toBlockUniverse k b →
+  ∀ j ∈ (block b).parents, (block j).author ≠ S.leader k
+```
+
+`DecidedOpt` shares that instance. `Barnacle.BaseRule` fixes
+`Universe : Type` first and supplies the schedule per call, so the
+carrier cannot be `OptUniverse`.
+
+The obstacle is not a typing artefact. Barnacle exists to **vary the
+schedule over a fixed universe** — `Sched getLeader hk m` at changing
+leader counts, with `Laws.agree` and `Descent` quantified over every
+`S` — and Optimal-Hydrozoan's universe validity depends on the
+schedule. So:
+
+> a DAG valid under one leader count need not be valid under another,
+> because leader exclusion names the leader.
+
+That is a condition on running Optimal-Hydrozoan under an adaptive
+leader count, in the category `integration.md` §4.1 names as the
+integration arc's most usable output. Hydrozoan proper has no such
+clause: nothing in its `BlockUniverse` mentions the schedule, which is
+why P1 and P2 went through untouched.
+
+**The route that would satisfy the interface** is a carrier bearing
+exclusion at every schedule,
+`{U : BlockUniverse Replica BlockId // ∀ S, LeaderExcludedAt S U}`,
+from which an `OptUniverse` can be built at whatever `S` the interface
+hands. It strengthens what the arc claims — the paper states the rule
+per slot, under the schedule in force — so it is a change to the
+Optimal arc's meaning rather than an adapter, and it needs a
+non-vacuity witness before anything rests on it. That is why HI6 is
+last rather than third: the decision deserves its own consideration,
+and §5 shows nothing else waits on it.
+
+**Nothing below is blocked.** The indexing bites only where an
+arbitrary schedule is quantified over a fixed universe. The
+transformers do not do that: `Slots.chop` moves rounds and leaders
+together, `slotRound k := S.slotRound (d + k) − G` and
+`leader k := S.leader (d + k)`, so the pairing `leader_excluded` names
+is re-indexed rather than varied; and `skipFill` leaves the schedule
+alone. §5 records the two obligations this leaves.
 
 ## 5. Route B: the universe transformers
 
@@ -363,6 +413,18 @@ anchors and intermediate slots re-indexed by the base slot `d` and the
 schedule replaced by `Slots.chop S G d hd`. Hydrozoan's relation has
 six constructors (`Hydrozoan/Model/Decided.lean:45`) and
 Optimal-Hydrozoan's another six.
+
+**Optimal-Hydrozoan carries a prior obligation here**, from §4.1's
+indexing. Before `decided_chop` can be *stated* for `DecidedOpt`, the
+truncation must be an `OptUniverse` at the truncated schedule:
+`leader_excluded` must survive the re-indexing from `(S, U)` to
+`(S.chop G d hd, chop U G)`. It should, since `Slots.chop` moves
+`slotRound` and `leader` together and every block the clause inspects
+sits above the cut, but it is a lemma underneath the constructor
+induction rather than beside it. The same clause gives `transport`
+(§10.4) a third preservation obligation for Optimal universes,
+`LeaderExcluded`, alongside `SelfParenting` — at a fixed schedule, so
+an ordinary side condition rather than §4.1's obstacle.
 
 Three of the six are direct and should be routine: `directFast`,
 `directSlow` and `directSkip` count authors at rounds `r + 1` and
@@ -1077,7 +1139,6 @@ schemes are distinct.
 | :-- | :-- | :-- | :-- | :-- |
 | P1 | the block adapter; `Barnacle/Hydrozoan/` | B5 | HI3, HI4 | — |
 | P2 | `Barnacle/HydrozoanLive/`: `Good`, `LiveOn`, `Descent` | B5 | HI5 | P1 |
-| P3 | the two Optimal mirrors | B5 | HI6 | P1, P2 |
 | P4 | `Integration/Hydrozoan/{Faults,Schedule}.lean` | B1, B2 | HI1, HI2 | — |
 | P5 | `Universe.lean`: `SelfParenting`, `toCore`, `ofCore` | B3 | HI8 | P4 |
 | P6 | `Transport.lean`: `transport`, the preservation lemmas | B4 | — | P5 |
@@ -1085,6 +1146,7 @@ schemes are distinct.
 | P8 | the fill: verdict agreement, and SS3 for Optimal | — | HI9 | P7 |
 | P9 | the stack capstones | — | — | P8 |
 | P10 | this record; report §24; the reference pipeline | — | — | P9 |
+| P3 | the two Optimal mirrors, **deferred** (§4.1) | B5 | HI6 | P1, P2 |
 
 P1 is **done** (`LeanDag/Barnacle/Hydrozoan/`, witnessed in
 `LeanDagTest/Barnacle/Hydrozoan.lean`, on the three standard axioms).
@@ -1093,8 +1155,10 @@ the causal-history layer the interface asks for comes from
 `CausalStructure` rather than from B3 (§10.3), so P1 depends on nothing
 below it at all.
 
-P1 to P3 are additive, need neither `c ≤ k` nor `SelfParenting`, and
-place both rules under the adaptive leader count; P1 alone is a
+P1 and P2 are **done**; they are additive, need neither `c ≤ k` nor
+`SelfParenting`, and place Hydrozoan under the adaptive leader count.
+P3 is deferred to last, for the reason §4.1 gives, and nothing else
+waits on it; P1 alone is a
 deliverable, since `agree` is HZ3 and the rest of `Laws` is read off the
 `Decided` constructors. P4 to P6 are the bridges proper, after which the
 DAG layer and the hybrid arc apply. P7 and P8 are the irreducible
