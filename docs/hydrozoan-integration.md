@@ -489,6 +489,35 @@ three times so far and discharged each time by a hypothesis already in
 scope. Monotonicity of `slotRound` from the base slot supplies it here,
 and this would be the fourth.
 
+**§5's prior obligation is discharged for the cut and refuted for the
+fill** (`Integration/Hydrozoan/OptimalTransport.lean`).
+`leaderExcludedAll_chopHZ` carries leader exclusion through a
+truncation: the retained bottom layer has its references emptied and
+discharges the clause vacuously, and above it every reference and every
+vote is the one it was, so a witness in the truncation is a witness in
+the universe it came from.
+
+The fill does not carry it, and the reason is structural rather than a
+missing lemma. The filled block references the recovering replica's
+anchor `B1` **and** the donor's references at that round, and neither
+need have seen what the other saw. At the first gap round the filled
+block's references are `insert B1 (U.block (line (r0+1))).refs`, all at
+round `r0`; if a replica `v` equivocated at round `r0 - 1`, with `B1`
+referencing one twin and a reference of `line (r0+1)` referencing the
+other, the filled block witnesses the equivocation and its references
+include a block authored by `v`. Nothing in the original universe
+witnesses it: `line (r0+1)` sees one twin, and `hline_chain` places
+`line r0` among its references but says nothing about `B1`.
+
+`skipFill` is not at fault — it proves the four validity rules of a
+`BlockUniverse` and never claimed the Optimal clause. The repair
+belongs to the fill: a recovering replica applying the Optimal rule
+would drop the references the rule excludes, which is a different
+construction rather than a side condition on this one. So HI7 for
+`DecidedOpt` is unblocked and HI9 for `DecidedOpt` waits on that
+construction. This is the second place the two protocols separate, and
+§5.1 records the first.
+
 ### 5.1 The fill, and where the two protocols separate
 
 **HI9** is `skipFill` over both rules, and the two do not behave alike.
