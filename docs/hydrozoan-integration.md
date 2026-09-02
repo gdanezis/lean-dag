@@ -146,6 +146,38 @@ refutes it without, and the refutation is the informative half —
 a deployment at `k < c` can run Hydrozoan and cannot run the core's
 transformers over it.
 
+### 2.1 The committee specialises to five of the arcs
+
+The `(f, c, k)` space names most of the committees in this repository,
+and the Optimal variant is the one that reaches them all:
+
+| arc | as `(f, c, k)` | committee | quorum, or fast threshold |
+|:---|:---|:---|:---|
+| Mysticeti | `c = 0`, `k = 0` | `n ≥ 3f + 1` | `q = n − f` |
+| Odontoceti | `c = 0`, `k = 2f` | `n ≥ 5f + 1` | `qFast = n − f` |
+| Orcaella | `f = fb`, `c = fc`, `k = 2fb + fc` | `n ≥ 5fb + 3fc + 1` | `qFast = n − fb − fc` |
+| Nemo-Nemo | `f = 0`, `c` the crash bound, `k = 0` | `n ≥ 2c + 1` | `q = c + 1`, the majority |
+| FinWhale | **Optimal**, `c = 0`, `k = 2p − 2` | `n ≥ 3f + 2p − 1` | `qFastOpt = n − p` |
+
+The last row separates the two variants. At `c = 0` Hydrozoan has
+`p = ⌊k/2⌋`, so an allowance of `p` requires `k = 2p` and a committee
+of `3f + 2p + 1` — two replicas above FinWhale's. Optimal's
+`pOpt = ⌊k/2⌋ + 1` reaches the allowance at `k = 2p − 2` and lands on
+`n ≥ 3f + 2p − 1` exactly, which follows from
+`optimal-hydrozoan.md`'s own account: the device is FinWhale's.
+FinWhale's `1 ≤ p ≤ f` supplies `OptimalFaults`'s standing assumption
+`1 ≤ f + c` on that row.
+
+Two arcs lie outside the space. Mahi-Mahi's parameter is the wave
+length `w ≥ 3`, and Hydrozoan fixes the wave at three
+(`votingRound k = slotRound k + 1`, `decisionRound k = slotRound k + 2`);
+Black Marlin and Minnow are different rules rather than different
+thresholds.
+
+**The specialisation is of the thresholds and never of the rule**, and
+§9 records why the converse route — deriving those arcs from
+Optimal-Hydrozoan — is not taken.
+
 ## 3. Layer U: the self-parent clause is absent
 
 The core's `ValidWrt` (`Block.lean:67`) has four fields; Hydrozoan's
@@ -649,9 +681,27 @@ predicted from what was discovered.
   composition of structural conditions, and nothing about the order in
   which mechanisms fire is modelled.
 - **The decision-relation interface** of `integration.md` §3.6, which
-  that arc moved out for the same reason: it is a refactor of working
-  code, and Barnacle's `BaseRule` already supplies an interface at the
-  level HI4 needs.
+  that arc moved out as a refactor of working code. Two reasons hold
+  here independently of that one. Barnacle's `BaseRule` already
+  supplies an interface at the level HI4 needs, and instantiating it is
+  additive; and no interface of that shape can carry HI7, because
+  `BaseRule.Decided` is a record field with no constructors and `Laws`
+  exposes only consumers of it — `agree`,
+  `decided_of_directCommitIn`, `candidates` — while `decided_chop` is a
+  structural induction over derivations
+  (`GC/ChopDecided.lean:32`). An interface abstracts the uses of a
+  decision relation and not inductions over it, so the per-rule
+  obligation survives any amount of abstraction.
+- **Deriving the other arcs as special cases of Optimal-Hydrozoan.**
+  §2.1's table is of committees and thresholds; the rules themselves
+  differ in kind. The core's `Decided` carries four constructors to
+  Hydrozoan's six, its direct skip is a condition on candidates where
+  Hydrozoan's is a count at the slot, and at `c = k = 0` neither
+  relation contains the other — `qFast = n` and `qWeak = f + 1` leave
+  `directFast` and `indirectWeak` derivable rather than removing them.
+  A specialisation would therefore be a bisimulation per arc, over
+  relations already proved, witnessed and pinned to their axiom lists,
+  and would yield no statement §7 does not already have.
 - **Everything Hydrozoan leaves out** (`hydrozoan.md` §12): delivery,
   GST, weak links, the depth-first reading of a vote, round-jumping
   recovery. HI10 addresses the first two and nothing else on that
