@@ -516,6 +516,14 @@ the only block that references one twin, and the donor's line
 references the other. `leaderExcludedAll_Ux` holds and
 `not_leaderExcludedAll_Ufill` fails, both on the three standard axioms.
 
+**So HI9 is restated rather than pending.** Its `DecidedOpt` half is
+not a theorem waiting to be proved but a refutation, and the refutation
+is the result: verdict transport through a recovery holds for
+`Decided` and fails for `DecidedOpt`, because the recovery breaks the
+validity rule the second protocol adds. An exclusion-respecting fill —
+a recovering replica that drops the references the rule excludes — is
+a different construction, and belongs to whichever arc builds it.
+
 `skipFill` is not at fault — it proves the four validity rules of a
 `BlockUniverse` and never claimed the Optimal clause. The repair
 belongs to the fill: a recovering replica applying the Optimal rule
@@ -735,9 +743,9 @@ step.
 | HI4 | Hydrozoan as a `Barnacle.BaseRule` with its `Laws` | HI1, HI3, HZ3 |
 | HI5 | as a `Barnacle.LiveRule`: `Good`, `LiveOn`, `Descent` at `f + c` | HI4, HZ5–HZ7 |
 | HI6 | HI4 and HI5 for Optimal-Hydrozoan | HI4, HI5, OH3, OH5 |
-| HI7 | `decided_chop` for `Decided` and `DecidedOpt` | HI1, HI2, HI3 |
+| HI7 | `decided_chop` for `Decided` and `DecidedOpt` (**done**) | HI1, HI2, HI3 |
 | HI8 | the self-parent predicate, stated beside the frozen `ValidWrt` | — |
-| HI9 | the fill: verdict agreement for both rules; SS3 for Optimal alone | HI7, HI8 |
+| HI9 | the fill: verdict agreement for `Decided` (**done**); for `DecidedOpt` **refuted**, §5 | HI7, HI8 |
 | HI10 | the delivery layer | HI3 |
 
 The order is HI1–HI3, then HI4–HI6, then HI7, then HI8 and HI9, then
@@ -1253,8 +1261,8 @@ schemes are distinct.
 | P4 | `Integration/Hydrozoan/{Faults,Schedule}.lean` | B1, B2 | HI1, HI2 | — |
 | P5 | `Universe.lean`: `SelfParenting`, `toCore`, `ofCore` | B3 | HI8 | P4 |
 | P6 | `Transport.lean`: `transport`, the preservation lemmas | B4 | — | P5 |
-| P7 | `decided_chopHZ` for Hydrozoan (**done**); Optimal owes §5's prior obligation | — | HI7 | P6 |
-| P8 | the fill: verdict agreement (**done**); SS3 for Optimal with P3 | — | HI9 | P7 |
+| P7 | `decided_chopHZ` for Hydrozoan and for Optimal (**done**) | — | HI7 | P6 |
+| P8 | the fill: verdict agreement (**done**); for Optimal, refuted (**done**) | — | HI9 | P7 |
 | P9 | the stack capstones (**done**) | — | — | P8 |
 | P10 | this record; report §24; the reference pipeline | — | — | P9 |
 | P3 | the two Optimal mirrors (**done**) | B5 | HI6 | P1, P2 |
