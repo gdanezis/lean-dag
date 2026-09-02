@@ -199,8 +199,8 @@ The final phase is *"all correct blocks contain all other correct blocks
 because of the sufficient delay"*.
 
 **Honest-to-honest only.** The assumption says a *correct* block references
-every *correct* block of the round below, and both restrictions are load
-bearing:
+every *correct* block of the round below, and both restrictions are
+indispensable:
 
 - **Nothing may be assumed about Byzantine blocks existing.** A Byzantine
   validator can publish nothing at all, so there is no round-`n` block of
@@ -760,11 +760,11 @@ L0, L2 and L3 come first because none needs a new primitive: L0 is pure DAG
 structure, L2 and L3 are pure view reasoning. That defers every modelling
 decision until something is already proved.
 
-**Every definition gets a witness before anything is proved from it.** An
-earlier draft staged the model before L4 rather than before L1, and that
-ordering is what let an unsatisfiable `Live` be *proved against* before anyone
-tried to satisfy it — `U.ids` is a `Finset`, and the rule forced infinitely
-many blocks. The rule then earned its keep three more times:
+**Every definition gets a witness before anything is proved from it.**
+Staging the model before L4 rather than before L1 is what permits an
+unsatisfiable `Live` to be *proved against* before anyone tries to satisfy
+it — `U.ids` is a `Finset`, and the rule forced infinitely many blocks. The
+rule applies three more times:
 
 - `Timing` had the **identical flaw** — `blk` at every round again forces
   infinitely many blocks — and writing `ugrowTiming` caught it, so `Timing`
@@ -1125,8 +1125,8 @@ first attempt used `timeout = 3`, satisfied the second constraint and failed
 the first. That is exactly the check a degenerate witness cannot perform, and
 finding the window is narrow is itself worth knowing.
 
-**Not done: the round-spread exhibit** §4.1 asks for, and the reason is worth
-recording. At `f = 1`, `n = 3f+1 = 4` there are four validators and `|Correct| = 3 =
+**Not done: the round-spread exhibit** §4.1 asks for, for the following
+reason. At `f = 1`, `n = 3f+1 = 4` there are four validators and `|Correct| = 3 =
 n−f` exactly, so *every* correct validator is needed for a quorum and none
 can lag. Exhibiting round spread alongside commits needs `f ≥ 2` — seven
 validators with one Byzantine, leaving six correct and room for one to fall
