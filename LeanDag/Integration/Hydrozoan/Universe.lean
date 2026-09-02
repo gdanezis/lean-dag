@@ -151,6 +151,38 @@ hold on the nose, structure eta making the block functions one term. -/
     (U : LeanDag.BlockUniverse Replica BlockId Payload) (hne : HonestNoEquiv U) :
     (ofCore U hne).ids = U.ids := rfl
 
+/-! ## Views transport too
+
+A view is a downward-closed subset of identifiers, and neither
+structure constrains it further, so both directions are the identity on
+ids. `View.toCore` is what lets `SafeSkip`'s `liftView` be reached from
+a Hydrozoan view (P8). -/
+
+/-- A Hydrozoan view of `U` is a core view of `toCore U hsp`. -/
+def View.toCore {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
+    (V : LeanDag.Hydrozoan.View U) (hsp : SelfParenting U) :
+    LeanDag.View Replica BlockId Unit (Hydrozoan.toCore U hsp) where
+  ids := V.ids
+  subset_ids := V.subset_ids
+  complete := fun i hi j hj => V.complete i hi j hj
+
+/-- And a core view of any universe is a Hydrozoan view of its reading. -/
+def View.ofCore {Payload : Type} {U' : LeanDag.BlockUniverse Replica BlockId Payload}
+    (W : LeanDag.View Replica BlockId Payload U') (hne : HonestNoEquiv U') :
+    LeanDag.Hydrozoan.View (Hydrozoan.ofCore U' hne) where
+  ids := W.ids
+  subset_ids := W.subset_ids
+  complete := fun i hi j hj => W.complete i hi j hj
+
+@[simp] theorem View.toCore_ids {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
+    (V : LeanDag.Hydrozoan.View U) (hsp : SelfParenting U) :
+    (View.toCore V hsp).ids = V.ids := rfl
+
+@[simp] theorem View.ofCore_ids {Payload : Type}
+    {U' : LeanDag.BlockUniverse Replica BlockId Payload}
+    (W : LeanDag.View Replica BlockId Payload U') (hne : HonestNoEquiv U') :
+    (View.ofCore W hne).ids = W.ids := rfl
+
 end Transport
 
 end Hydrozoan

@@ -1,5 +1,6 @@
 import LeanDag.Integration.Hydrozoan.Universe
 import LeanDag.Integration.Preservation
+import LeanDag.SafeSkip.Invariance
 
 /-!
 # B4 — the transformer bridge
@@ -100,6 +101,22 @@ theorem selfParenting_skipFillHZ (U : LeanDag.Hydrozoan.BlockUniverse Replica Bl
     (hsp : SelfParenting U) (sk : SkipMsg (toCore U hsp)) :
     SelfParenting (skipFillHZ U hsp sk) :=
   selfParenting_transport _ _ _ _
+
+/-- The view a replica holds, lifted across the fill — `SafeSkip`'s
+`liftView`, reached from a Hydrozoan view through the view transport of
+`Universe.lean`. -/
+def liftViewHZ (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
+    (hsp : SelfParenting U) (sk : SkipMsg (toCore U hsp))
+    (V : LeanDag.Hydrozoan.View U) :
+    LeanDag.Hydrozoan.View (skipFillHZ U hsp sk) :=
+  LeanDag.Integration.Hydrozoan.View.ofCore
+    (sk.liftView (LeanDag.Integration.Hydrozoan.View.toCore V hsp))
+    (honestNoEquiv_skipFill sk (honestNoEquiv_toCore U hsp))
+
+@[simp] theorem liftViewHZ_ids (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
+    (hsp : SelfParenting U) (sk : SkipMsg (toCore U hsp))
+    (V : LeanDag.Hydrozoan.View U) :
+    (liftViewHZ U hsp sk V).ids = (sk.liftView (LeanDag.Integration.Hydrozoan.View.toCore V hsp)).ids := rfl
 
 end Hydrozoan
 
