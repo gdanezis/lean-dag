@@ -69,7 +69,7 @@ The overlap is harmless because *every role is assigned by the reader of
 the DAG, not by its writer*. A round-`(r+2)` block was already permitted to be a
 certificate for the slot at `r`, a vote for the slot at `r+1`, and a proposal for
 the slot at `r+2`, because nothing in `Block` or `ValidWrt` records which of
-these it is. Uncertified-DAG modelling paid for itself here: the most conspicuous
+these it is. Uncertified-DAG modelling is what makes this so: the most conspicuous
 feature of pipelining required no change to the model at all.
 
 ## 2. The protocol, as specified
@@ -208,7 +208,7 @@ structure Schedule (Validator : Type*) where
 
 A `List`, not a `Finset`: when a round has several leaders their slots commit in
 a definite order and that order reaches the ledger, so a `Finset` would have to
-buy the order back with a `LinearOrder` on `Validator`. Empty lists are how "a
+recover the order with a `LinearOrder` on `Validator`. Empty lists are how "a
 leader every third round" is said. `nodup` would give `keyed` and `cofinal` would
 give `unbounded`, both becoming theorems rather than assumptions. Slot `k` is the
 `k`-th entry of `leaders 0 ++ leaders 1 ++ ⋯`, so the derivation needs partial
@@ -647,7 +647,7 @@ for `w` slots. The bound is loose by exactly the factor of interest, and
 `Slots.uniform`'s closed form as `slotRound (k+w) ≤ slotRound k + p·⌈w/m⌉` — a
 computation, needing no new hypothesis. It is not done, and is not needed.
 
-Two things worth stating rather than proving. The improvement pipelining does buy
+Two things worth stating rather than proving. The improvement pipelining does yield
 is in *recurrence*, not *latency*: a transaction still waits three rounds from
 the block carrying it to the commit of a leader referencing it. And it is not
 free under attack — more slots means more slots left undecided by the direct

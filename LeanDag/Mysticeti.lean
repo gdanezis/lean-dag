@@ -610,7 +610,7 @@ omit [DecidableEq BlockId] in
 
 Under the old three-round spacing this was free: `slotRound` was injective, so
 distinct slots sat at distinct rounds and a block's round named its slot.
-Under multiple leaders per round it is exactly what `Slots.keyed` buys — two
+Under multiple leaders per round it is exactly what `Slots.keyed` yields — two
 slots sharing a round are told apart by their leaders, and a schedule that
 gave one validator two slots in a round would make one block the candidate for
 both. -/

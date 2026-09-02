@@ -65,7 +65,7 @@ than against incidental facts about a particular universe.
 ## 2. The named invariants
 
 The development already has the right vocabulary; it has simply never
-been collected. Collecting it turns out to be the substantive part of
+been collected. Collecting it is the substantive part of
 the plan, because the invariants do **not** all live at the same level,
 and the level is what determines which transformer can break them.
 
@@ -1034,7 +1034,7 @@ parallel. Both corrections are folded in above; the residual risk is
 that the audit covered capstones rather than every theorem, so an
 intermediate lemma could still consume something unlisted. That is
 cheap to re-check as the arc proceeds and should be re-run whenever a
-new preservation lemma turns out to need a hypothesis not in §2.
+new preservation lemma needs a hypothesis not in §2.
 
 **5.3 The DoS accounting survives a bulk fill, and the risk was
 correctly located.** The concern was that §8's novelty budget limits

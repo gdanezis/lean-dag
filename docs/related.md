@@ -226,7 +226,7 @@ Builds an uncertified DAG with a novel decision rule, and is the first DAG
 protocol to commit in **two** communication rounds rather than three.
 
 **Differs from Mysticeti:**
-- *Weakens the fault threshold to buy a round.* Odontoceti runs with n = 5f+1
+- *Weakens the fault threshold to remove a round.* Odontoceti runs with n = 5f+1
   (≈20% fault tolerance) instead of n = 3f+1 (≈33%). The extra validators make a
   quorum intersection large enough that the vote and certificate rounds can be
   collapsed into one. This is a deliberate trade of security margin for latency,

@@ -16,7 +16,7 @@ The reason is the one `card_correct` was always for. Correct validators are
 never exposed (D15), so they are admissible to every block, forever; and there
 are at least `2f+1` of them. So the correct population's blocks are, on their
 own, an admissible quorum for anybody — whatever has been excluded, and however
-much of the fault budget has been spent.
+much of the fault budget has been used.
 
 **The threshold does not change; the pool it is drawn from does.**
 

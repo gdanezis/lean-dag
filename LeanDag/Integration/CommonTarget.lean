@@ -7,8 +7,8 @@ import LeanDag.CommonCore
 The design question report §16.8 leaves open is which reference
 discipline the protocol should state, and the residual worry behind it
 is *availability*: a validator that cites blocks it does not hold
-cannot serve them, however sound the storage accounting turns out to
-be (§16.7's I17).
+cannot serve them, however sound the storage accounting is
+(§16.7's I17).
 
 Choosing the fill's target from the **common core** removes the worry
 at its source rather than trading it away. Report §5.2's T3c produces,

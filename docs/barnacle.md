@@ -452,7 +452,7 @@ arc collapses onto the base development.
 one; a healthy one increases a count below the maximum by one; `backoff`
 resets on a healthy window. For Mysticeti (Phase 5): `observed ≤
 expected`, from A3's locality and `quorumCard ≥ 2`, in whichever of the
-two forms §4 turns out to hold on data.
+two forms §4 holds on data.
 
 ## 7. Liveness, interface half
 

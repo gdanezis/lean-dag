@@ -107,7 +107,7 @@ Remaining notes:
   general form. Throughout, `n` abbreviates `Fintype.card Validator`;
   quorums are `n − f`, which at the boundary `n = 3f+1` (where every
   concrete witness sits) is the familiar `2f+1`.
-- Rounds are plain `ℕ` throughout. No `Round` abbreviation — it would buy
+- Rounds are plain `ℕ` throughout. No `Round` abbreviation — it would add
   nothing, and two spellings for one type reliably drift apart.
 
 Five consequences worth naming once rather than re-deriving at each use:
@@ -417,7 +417,7 @@ Which form to use is determined by how supporters are obtained:
   `round_le_of_reaches`: following a reference strictly decreases the round
   (§3.2's predecessor condition), so causal history never climbs.
 
-  Earlier drafts called this "well-founded", which overstates it. T3 inducts
+  Calling this "well-founded" overstates it. T3 inducts
   on the round *number*, an ordinary `ℕ`, not on `Reaches`; no
   `WellFoundedRelation` instance is needed, only the fact that a block's
   references sit at a strictly smaller round. Supporting lemmas:

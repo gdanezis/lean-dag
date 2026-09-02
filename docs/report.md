@@ -9835,7 +9835,7 @@ availability become the reader's problem.
 
 The uncertified structure has since been reused with one parameter varied at a
 time: Mahi-Mahi [Jov+24] under asynchrony, committing several leader slots per
-round; Odontoceti [Van25] at `n = 5f+1`, buying a two-round commit with a weaker
+round; Odontoceti [Van25] at `n = 5f+1`, obtaining a two-round commit at a weaker
 fault threshold; Starfish [PMV25] with erasure-coded dissemination; Bluestreak
 [PVM26] with a sparse reference structure, which abandons the rule that every
 block cites a quorum below and so falls outside the present model. Shoal++

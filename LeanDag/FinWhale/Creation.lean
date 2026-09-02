@@ -10,7 +10,7 @@ either a quorum of voters for the round-`(r−1)` leader or an SP-skip
 pattern for it (L2); **C2**, the `2∆` timeout has expired; **C3**, the
 local DAG has `n − f` round-`(r+1)` blocks from distinct validators.
 
-Lemmas 18 and 19 are what those conditions buy: every correct block votes
+Lemmas 18 and 19 are what those conditions yield: every correct block votes
 for a correct leader, and every correct block two rounds up carries a
 quorum of votes. The reactive route takes them as the schedule's wait
 clauses. This file derives them instead, from the conditions themselves

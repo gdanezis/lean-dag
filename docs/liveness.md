@@ -128,7 +128,7 @@ k' ≥ k` form gives liveness without giving any *rate*.
 
 The three phases the protocol actually passes through, and what each one
 supports. This is the part where the abstraction has to be handled carefully:
-one of the phases turns out to be invisible, and saying so precisely is what
+one of the phases is invisible, and saying so precisely is what
 keeps the framing honest.
 
 §4.4 is **not** a fourth phase. It records why `U` is finite and what that
@@ -472,7 +472,7 @@ def Timing.DriftFrom (tm : Timing U T N) (n₀ D : ℕ) : Prop :=
 ### The rated layer
 
 `LeanDag/Quantitative.lean`. Three optional hypotheses, each strengthening one
-already in play, and each buying a bound the weak form cannot give (S8, S9).
+already in play, and each yielding a bound the weak form cannot give (S8, S9).
 Nothing above depends on them.
 
 ```lean
@@ -602,7 +602,7 @@ constant timeout of at least `D₀ + Δ`.
 - **L5 — An absent leader is skipped.** If `leader k` has no
   round-`slotRound k` block, the slot is decided `none`.
 
-  Nearly free, and it vindicates a C1 decision: `Decided.directSkip` takes the
+  Immediate, and it is what a C1 decision was drawn for: `Decided.directSkip` takes the
   premise `∀ L, IsLeaderBlock U k L → DirectSkipIn U V L …`, which is
   **vacuously true** when the leader published nothing. Choosing the `∀` form
   over naming a candidate block is what makes this case disappear.

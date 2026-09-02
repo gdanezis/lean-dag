@@ -205,16 +205,26 @@ def extracted_names(root):
 
 
 # High-precision register violations only; docs/style.md carries the tables.
+# Each row is written to catch its own inflections: the register is a
+# property of the phrase, not of the tense it happens to appear in, and
+# "turns out" is the same laboratory note as "turned out". Widened only
+# across tense and number -- never from a phrase to its bare verb, which
+# would sweep in the established senses of "bite", "engine" and "cheap"
+# that docs/style.md §1 permits.
 BANNED = re.compile(
-    r"\b(load[- ]bearing|earns its keep|for free|buys|bought|at the price"
-    r"|turned out|an earlier (?:draft|version)|worth recording|first draft"
-    r"|the old (?:schedule|spacing|proof)|gets cheaper|is spent"
+    r"\b(load[- ]bearing|earn(?:s|ed|ing)? its keep|for free"
+    r"|buy(?:s|ing)?|bought|at the price"
+    r"|turn(?:s|ed|ing)? out|earlier (?:draft|version)s?|worth recording"
+    r"|first draft|the old (?:schedule|spacing|proof)"
+    r"|(?:get|gets|got|getting) cheaper|(?:is|are|was|were|be|been|being) spent"
     # commercial metaphor extended to clauses, blocks and thresholds
-    r"|pays? for itself|spends? the|charges? (?:a|the|it)|costs? nothing"
+    r"|pa(?:y|ys|id|ying) for itself|(?:spend|spends|spent|spending) the"
+    r"|charg(?:e|es|ed|ing) (?:a|the|it)|cost(?:s|ing)? nothing"
     r"|more cheaply|unaffordable|affordable"
     # figurative verbs and nouns
-    r"|seen to bite|does not bite|vindication of|headline on data"
-    r"|is its engine)\b", re.I)
+    r"|seen to bite|do(?:es)? not bite|did not bite"
+    r"|vindicat(?:e|es|ed|ing|ion of)|headline on data"
+    r"|(?:is|was|are|were) (?:its|the) engine)\b", re.I)
 
 # A docstring section reference is qualified when a document name or the
 # word "report" sits within forty characters before or after it.

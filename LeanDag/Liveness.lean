@@ -618,7 +618,7 @@ theorem decided_of_correct_leader (hs : Synchronised U R)
 
 /-! ## L5 — an absent leader is skipped
 
-`liveness.md` §6. Nearly free, and it vindicates a C1 decision.
+`liveness.md` §6. Immediate, and it is what a C1 decision was drawn for.
 
 `Decided.directSkip` takes the premise `∀ L, IsLeaderBlock U k L → …`. When
 the leader published nothing there is no such `L`, so the premise holds
