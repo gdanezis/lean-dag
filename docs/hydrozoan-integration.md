@@ -817,63 +817,28 @@ predicted from what was discovered.
   A specialisation would therefore be a bisimulation per arc, over
   relations already proved, witnessed and pinned to their axiom lists,
   and would yield no statement §7 does not already have.
-- **A transformer interface, now built** (`Integration/Hydrozoan/Simulation.lean`).
-  The entry is kept in this section because the general form — over
-  protocols rather than over Hydrozoan's two transformers — is still
-  open.
-
-  `Simulates U V S U' V' S' σ Novel` lists the predicates `Decided`
+- **A transformer interface, built** (`Integration/Hydrozoan/Simulation.lean`).
+  `Simulates U V S U' V' S' R Novel` lists the predicates `Decided`
   inspects — candidacy, anchor eligibility, the three direct rules in
   view, the two rung tests — and `Simulates.decided` is the
-  six-constructor induction, once. Both transformers are instances:
-  the fill along the identity on slots with the fresh identifiers
-  novel, the cut along `k ↦ d + k` with nothing novel. Neither instance
-  carries an induction of its own.
+  six-constructor induction, once. **All three transport directions are
+  instances**, and none carries an induction of its own: the fill along
+  `n = k` with the fresh identifiers novel, the cut along `n = d + k`
+  with nothing novel, and the cut backwards along `k = d + n`.
 
-  The direction from a truncation back to the original is not covered:
-  its slot map is partial where `σ` is total, so
-  `decided_of_decided_chopHZ` stays bespoke. Two of the three
-  inductions are subsumed.
+  Slots correspond by a relation rather than a function, which is what
+  lets the third direction in. A function-valued map states the cut
+  forwards as `k ↦ d + k` and cannot state its converse, `k - d` being
+  partial; the relation is the same correspondence read either way. The
+  arithmetic that the function form forced through every field
+  disappears with it.
 
-- **The general form, still deferred.** `chop`
-  and `skipFill` invariance is currently proved per protocol and per
-  transformer, entangled with each transformer's arithmetic. Two
-  semantic conditions would give both generically: **upward
-  locality** — a verdict at slot `k` depends only on the DAG at rounds
-  `≥ slotRound k`, which is what makes the cut invisible, the indirect
-  rule's recursion running upward away from it — and **additive
-  inertness** — blocks nothing references cannot change a verdict,
-  which is what SS3 and SS5 already turn on. A window will not serve
-  for the first: the anchor chain is unbounded above.
-
-  A survey of the repository says the population is larger than this
-  arc's. There are nine inductive decision relations —
-  `Mysticeti`, `Odontoceti`, `Nemo`, `MahiMahi`, `Hybrid`,
-  `Hydrozoan`, `OptimalHydrozoan`, and `Adaptive`'s two mirrored
-  `DecidedWithin` — and exactly **one**, the core's, has transformer
-  invariance. Eight protocols can be deployed under garbage collection
-  with no theorem that their verdicts survive the cut. The two
-  `Adaptive` copies are the duplication `integration.md` §3.6 names, so
-  an interface here would subsume that refactor; Black Marlin, Minnow
-  and FinWhale state commitment as `def`s rather than inductive
-  relations and sit outside the question.
-
-  Against that, actual demand is two — this arc's `chop` and fill — and
-  the integration capstone does not consume verdict transport at all,
-  `hybrid_agree_stack` going through `HonestNoEquiv` and agreement
-  instead. By count the interface also loses, nine protocols needing
-  three obligations each where the direct route needs two; what it
-  saves is the transformer arithmetic inside each, which is where the
-  direct route's length actually goes.
-
-  It is deferred for the reason `integration.md` §3.6 gives for its
-  own: the interface would be designed against **one** worked instance,
-  the core's four-constructor rule with a single commit path and a
-  single rung. P7 supplies a second and very differently shaped one —
-  six constructors, two commit paths, three graded rungs with negative
-  premises — and its transfer lemmas are the material that shows what
-  the abstract obligations must say. Two instances make a better
-  interface than one, which is that section's own argument.
+- **The general form, deferred, and recorded separately.**
+  `docs/transformer-interface.md` holds the design record: what a
+  protocol-generic interface would be, what the survey of the
+  repository's nine decision relations says about its value, and what
+  abstracting the semantic conditions — upward locality and additive
+  inertness — would take. Neither is needed by any result here.
 
 - **Everything Hydrozoan leaves out** (`hydrozoan.md` §12): delivery,
   GST, weak links, the depth-first reading of a vote, round-jumping
