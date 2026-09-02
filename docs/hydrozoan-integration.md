@@ -1195,7 +1195,7 @@ schemes are distinct.
 | P6 | `Transport.lean`: `transport`, the preservation lemmas | B4 | — | P5 |
 | P7 | `decided_chopHZ` for Hydrozoan (**done**); Optimal owes §5's prior obligation | — | HI7 | P6 |
 | P8 | the fill: verdict agreement (**done**); SS3 for Optimal with P3 | — | HI9 | P7 |
-| P9 | the stack capstones | — | — | P8 |
+| P9 | the stack capstones (**done**) | — | — | P8 |
 | P10 | this record; report §24; the reference pipeline | — | — | P9 |
 | P3 | the two Optimal mirrors, **deferred** (§4.1) | B5 | HI6 | P1, P2 |
 

@@ -73,6 +73,7 @@ import LeanDag.Integration.Hydrozoan.Universe
 import LeanDag.Integration.Hydrozoan.Transport
 import LeanDag.Integration.Hydrozoan.ChopDecided
 import LeanDag.Integration.Hydrozoan.FillDecided
+import LeanDag.Integration.Hydrozoan.Stack
 import LeanDag.SafeSkip.Basic
 import LeanDag.SafeSkip.Invariance
 import LeanDag.SafeSkip.Jump
