@@ -1238,7 +1238,7 @@ schemes are distinct.
 | P8 | the fill: verdict agreement (**done**); SS3 for Optimal with P3 | — | HI9 | P7 |
 | P9 | the stack capstones (**done**) | — | — | P8 |
 | P10 | this record; report §24; the reference pipeline | — | — | P9 |
-| P3 | the two Optimal mirrors, **deferred** (§4.1) | B5 | HI6 | P1, P2 |
+| P3 | the two Optimal mirrors (**done**) | B5 | HI6 | P1, P2 |
 
 P1 is **done** (`LeanDag/Barnacle/Hydrozoan/`, witnessed in
 `LeanDagTest/Barnacle/Hydrozoan.lean`, on the three standard axioms).
@@ -1249,8 +1249,8 @@ below it at all.
 
 P1 and P2 are **done**; they are additive, need neither `c ≤ k` nor
 `SelfParenting`, and place Hydrozoan under the adaptive leader count.
-P3 is deferred to last, for the reason §4.1 gives, and nothing else
-waits on it; P1 alone is a
+P3 is done too, §4.1's obstacle having dissolved once leader exclusion
+was stated over a `(round, leader)` pair rather than a slot; P1 alone is a
 deliverable, since `agree` is HZ3 and the rest of `Laws` is read off the
 `Decided` constructors. P4 to P6 are the bridges proper, after which the
 DAG layer and the hybrid arc apply. P7 and P8 are the irreducible

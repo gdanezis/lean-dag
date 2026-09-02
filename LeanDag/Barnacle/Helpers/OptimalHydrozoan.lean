@@ -40,8 +40,31 @@ namespace Barnacle
 namespace OptimalHydrozoan
 
 variable {Replica : Type} [Fintype Replica] [DecidableEq Replica]
-variable [LeanDag.Hydrozoan.Faults Replica]
 variable {BlockId : Type} [DecidableEq BlockId]
+
+/-! ## Optimal's fast threshold
+
+Stated in its own section: `OptimalFaults` carries a `Faults` instance
+of its own, so having both in scope at once would leave which one a
+`BlockUniverse` is indexed by to the elaborator. -/
+
+section FastThreshold
+
+variable [LeanDag.OptimalHydrozoan.OptimalFaults Replica]
+
+/-- Optimal's fast commit in view is a cardinality comparison, so the
+interface's `decDirect` field can synthesise it. -/
+instance decFastCommitOptInView
+    (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
+    (V : LeanDag.Hydrozoan.View U) (L : BlockId) (r : ℕ) :
+    Decidable (LeanDag.OptimalHydrozoan.FastCommitOptInView U V L r) :=
+  inferInstanceAs (Decidable (_ ≤ _))
+
+end FastThreshold
+
+section Rule
+
+variable [LeanDag.Hydrozoan.Faults Replica]
 
 /-- A block of round `r` authored by `v` — `IsLeaderBlock` with the
 slot's `(round, leader)` pair given directly. -/
@@ -83,9 +106,11 @@ instance [Fintype BlockId] (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
     WitnessesAt U ((U.block b).round - 2) v b →
     ∀ j ∈ (U.block b).parents, (U.block j).author ≠ v))
 
+end Rule
+
 section OfSchedule
 
-variable [S : LeanDag.Hydrozoan.Slots Replica]
+variable [LeanDag.Hydrozoan.Faults Replica] [S : LeanDag.Hydrozoan.Slots Replica]
 
 /-- **The schedule-free rule yields an `OptUniverse` at every
 schedule**, which is what lets the carrier be fixed before the

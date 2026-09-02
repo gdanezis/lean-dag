@@ -63,6 +63,7 @@ import LeanDagTest.Barnacle.OrcaellaIndirect
 import LeanDagTest.Barnacle.OrcaellaLive
 import LeanDagTest.Barnacle.Hydrozoan
 import LeanDagTest.Barnacle.HydrozoanLive
+import LeanDagTest.Barnacle.OptimalHydrozoan
 import LeanDagTest.Barnacle.Axioms
 import LeanDagTest.Minnow.Deadlock
 import LeanDagTest.Minnow.Skip

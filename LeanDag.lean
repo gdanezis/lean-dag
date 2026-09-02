@@ -190,6 +190,10 @@ import LeanDag.Barnacle.Helpers.Hydrozoan
 import LeanDag.Barnacle.Hydrozoan.Statement
 import LeanDag.Barnacle.Hydrozoan.Proof
 import LeanDag.Barnacle.Helpers.OptimalHydrozoan
+import LeanDag.Barnacle.OptimalHydrozoan.Statement
+import LeanDag.Barnacle.OptimalHydrozoan.Proof
+import LeanDag.Barnacle.OptimalHydrozoanLive.Statement
+import LeanDag.Barnacle.OptimalHydrozoanLive.Proof
 import LeanDag.Barnacle.HydrozoanLive.Statement
 import LeanDag.Barnacle.HydrozoanLive.Proof
 import LeanDag.Minnow.Blocking
