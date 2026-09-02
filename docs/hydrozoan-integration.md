@@ -1,0 +1,446 @@
+# lean-dag — Hydrozoan integration: connecting the arc to the rest
+
+> **Provenance.** Code and prose in this project were co-written with
+> heavy LLM assistance. The Lean proofs are machine-checked — the kernel
+> verifies every theorem against its stated form — but whether the
+> definitions and theorem statements capture their *intended* meaning,
+> and whether the surrounding prose is faithful to what is proved, has
+> only human-plus-LLM review behind it. Read critically.
+
+This document is the design record for connecting the **Hydrozoan** and
+**Optimal-Hydrozoan** arcs (`hydrozoan.md`, `optimal-hydrozoan.md`) to
+the rest of the development. Both arcs consume nothing from the core:
+`grep '^import'` over `LeanDag/Hydrozoan/` and
+`LeanDag/OptimalHydrozoan/` returns `Mathlib.*` and nothing else. That
+is a deliberate property — `hydrozoan.md` §10 states it, so that the
+arc's trusted core is the Hydrozoan paper's model and nothing further —
+and its consequence is that the integration arc
+(`LeanDag/Integration/`, `integration.md`) does not reach either. The
+integration arc names four mechanisms — truncation at a horizon
+(`chop`), crash recovery by one message (`skipFill`), the adaptive
+leader schedule (`slotsOf`) and the hybrid fault model — and proves
+they compose; Hydrozoan appears in none of its statements, and the
+novelty budget of `LeanDag/DoS/` does not apply to a Hydrozoan
+universe.
+
+The document settles what a connection would require, in what order,
+and what the development lacks while the connection does not exist.
+Results will carry **HI**-labels. Nothing here is proved yet; §7 is the
+work plan.
+
+## 0. Overview
+
+The two developments meet at the three layers `integration.md` §2
+names, and the position at each is different.
+
+- **Layer S, the schedule.** Already identical. `LeanDag.Slots`
+  (`Mysticeti.lean:310`) and `LeanDag.Hydrozoan.Slots`
+  (`Hydrozoan/Model/Slots.lean`) are the same class, field for field:
+  `slotRound`, `leader`, `mono`, `unbounded`, `keyed`. `FairRunOn` and
+  `SpansEligible` are defined in both. A coercion between the two
+  classes is the whole of the work (§1).
+- **Layer U, the block universe.** Three mismatches, of which one is
+  nominal, one is a missing validity clause, and one is a committee
+  condition that is a result in its own right (§2, §3).
+- **Layer D, the delivery structure.** Absent from Hydrozoan
+  altogether. This is what the arc's own §12 defers, and §6 states
+  precisely which theorems of the rest of the development are
+  unavailable because of it.
+
+Two routes follow from this. The **Barnacle route** (§4) needs none of
+layers U or D: `Barnacle.BaseRule` abstracts over the universe type and
+requires no `Faults` instance, so Hydrozoan instantiates it with the
+frozen `Model/` untouched, and the hardest of its laws is discharged by
+HZ3, already proved. The **transformer route** (§5) is where the
+committee condition and the missing validity clause are consumed.
+
+## 1. Layer S: the schedule coincides
+
+Both classes carry the same five fields, and Hydrozoan's slot
+arithmetic — `votingRound k = slotRound k + 1`,
+`decisionRound k = slotRound k + 2` — is the core's three-round wave.
+`FairRunOn` is `Liveness.lean:731` in the core and
+`Hydrozoan/EventualDecision/Statement.lean:49` in the arc, with the
+same statement; `SpansEligible` is `Liveness.lean:752` and
+`Hydrozoan/IndirectLiveness/Statement.lean:45`.
+
+So **HI1** is a coercion `LeanDag.Slots V → Hydrozoan.Slots V` together
+with the two agreements, and every layer-S result of the integration
+arc — I3 (`fairRunOn_chop`, `spansEligible_chop`) and I5
+(horizon-stability, epoch alignment) — transports across it.
+`integration.md` §3.2 predicts this: `Slots.chop` and `slotsOf` are
+functions of a `Slots` instance and nothing else, so the layer-S
+results hold for a validator running any stack of universe
+transformers.
+
+The one substantive question at this layer is not a preservation fact.
+Hydrozoan's HZ8 proves the wave-aligned rotation satisfies
+`FairRunOn Correct 3` with no premise, and exhibits a per-slot rotation
+at `n = 5`, `f = 0`, `c = 2` that starves every correct three-run
+inside the hybrid bound (`hydrozoan.md` §11). Barnacle reports a
+related failure for its own base protocols: the paper's rotation does
+not meet A4 by this development's run-fairness route at two leaders and
+four validators (`barnacle.md` §7). The two arcs found the same class
+of defect in leader rotation independently, and a connected development
+should state the relation between the two counterexamples.
+
+## 2. Layer U: the fault models agree, and the committee bound does not
+
+`HybridFaults.toFaults` (`Hybrid/Faults.lean:74`) sets
+`f := fb + fc` and `byzantine := byzantine ∪ crash`, so the base quorum
+is `n − fb − fc` and the base `Correct` is the fully-correct class.
+Under `fb := f`, `fc := c` this is Hydrozoan's model exactly:
+
+| | Hydrozoan | `HybridFaults.toFaults` |
+|:---|:---|:---|
+| quorum | `q = n − f − c` | `quorumCard = n − fb − fc` |
+| `Correct` | `(byzantine ∪ crashed)ᶜ` | `(byzantine ∪ crash)ᶜ` |
+| never-equivocating class | `NonByzantine = byzantineᶜ` | the honest class |
+
+The agreement extends to the universe. `HonestNoEquiv` — the hybrid
+arc's one genuinely new invariant, U5 of `integration.md` §2.1, and the
+predicate Barnacle's Orcaella instantiation carries a subtype for — is
+Hydrozoan's `no_equivocation` field, stated at `NonByzantine` inside
+the structure (`Hydrozoan/Model/BlockUniverse.lean:54`). A Hydrozoan
+universe needs no subtype, which is one condition fewer than Orcaella
+carries.
+
+**The committee bounds are incomparable.** `HybridFaults` requires
+`3 · (fb + fc) + 1 ≤ n` (`Hybrid/Faults.lean:64`), that is
+`3f + 3c + 1 ≤ n`; Hydrozoan requires `3f + 2c + k + 1 ≤ n`
+(`Hydrozoan/Model/Faults.lean:57`). The projection is therefore
+available exactly under
+
+    c ≤ k
+
+and not otherwise: at `n = 8`, `f = 1`, `c = 2`, `k = 0` Hydrozoan's
+bound reads `3 + 4 + 0 + 1 ≤ 8` and holds, while the hybrid bound reads
+`3 · 3 + 1 ≤ 8` and fails.
+
+The gap is not slack in either class; it is the difference between the
+two intersection arguments. Two sets of `q = n − f − c` authors
+intersect in at least `n − 2f − 2c`.
+
+- Hydrozoan's uniqueness arguments need one member of that intersection
+  outside `byzantine`, of which there are at most `f`, so they need
+  `n − 2f − 2c ≥ f + 1`, that is `n ≥ 3f + 2c + 1`. The committee bound
+  supplies this with `k` to spare.
+- The core's T0 (`exists_correct_mem_inter`, `Validators.lean:179`)
+  concludes a member of `Correct`, which for the derived instance
+  excludes `byzantine ∪ crashed`, of which there are at most `f + c`.
+  It therefore needs `n − 2f − 2c ≥ f + c + 1`, that is
+  `n ≥ 3f + 3c + 1`.
+
+So Hydrozoan admits committees below the core's because it never asks
+for the stronger intersection: a crashed replica does not equivocate,
+and every Hydrozoan uniqueness argument counts `NonByzantine` rather
+than `Correct`. **HI2** states the projection under `c ≤ k` and
+refutes it without, and the refutation is the informative half —
+a deployment at `k < c` can run Hydrozoan and cannot run the core's
+transformers over it.
+
+## 3. Layer U: the self-parent clause is absent
+
+The core's `ValidWrt` (`Block.lean:67`) has four fields; Hydrozoan's
+(`Hydrozoan/Model/Block.lean:79`) has three. The missing one is
+`self_parent`, P3′: a non-genesis block references a block by its own
+author.
+
+P3′ is what `DoS/SelfParent.lean`, `DoS/Pedigree.lean` and
+`DoS/Novelty.lean` rest on, what `fillBlock` is obliged to insert, and
+what `no_blocks_of_no_genesis` descends (`integration.md` §3.2, I8).
+Without it, four integration results have no Hydrozoan analogue, and
+the reason is structural rather than technical:
+
+- **I8, I10, I11, I12** concern a validator whose self-parent chain has
+  been severed by a horizon. In a universe without P3′ a validator with
+  no block in the genesis layer can still produce, so severance is not
+  a condition that arises and re-genesis repairs nothing.
+- **I13, I14, I15** rest on a causal cone being a complete record of
+  its author's acceptances, which is what P3′ supplies. The novelty
+  budget of `LeanDag/DoS/` therefore does not apply to a Hydrozoan
+  universe at all, independently of the delivery layer (§6).
+
+The property holds of the deployed protocol — a Mysticeti block carries
+its author's previous block — so the situation is that the Hydrozoan
+model omits a clause the implementation has, because the paper's
+argument never consumes it. Recording that is the first part of
+**HI8**.
+
+The second part is a choice, and it should be made deliberately. Adding
+a fourth field to `Hydrozoan/Model/Block.lean` modifies a frozen
+audited file, and every witness universe in `LeanDagTest/Hydrozoan/`
+would need self-parent edges added, which changes the author counts
+those `decide` witnesses pin. Defining `SelfParenting U : Prop`
+alongside and conditioning the transformer results on it modifies
+nothing and leaves the arc's statements as they are. `integration.md`
+§4.2 sets the rule that decides this: modify existing code only when a
+result cannot otherwise be stated. A side predicate states every
+result, so the side predicate is the route, and the frozen file stays
+frozen.
+
+## 4. Route A: Hydrozoan as a Barnacle base rule
+
+`Barnacle.BaseRule` (`Barnacle/Model/Rule.lean:58`) abstracts over the
+universe type itself — `Universe : Type`, `View : Universe → Type`,
+`block`, `ids`, `viewIds`, `full`, `historyView`, `waveLength`,
+`DirectCommitIn`, `decDirect`, `Decided` — and takes **no `Faults`
+instance**. Orcaella's instantiation states the principle: the fault
+class lives on the instantiation, never on the interface. Neither the
+committee condition of §2 nor the validity clause of §3 arises on this
+route.
+
+What **HI4** requires:
+
+| obligation | source |
+|:---|:---|
+| `block`, `ids`, `viewIds`, `full` | Hydrozoan's `BlockUniverse`, `View`, `View.full` |
+| `view_subset`, `view_complete`, `full_ids` | `View.subset_ids`, `View.complete`, `View.full`, verbatim |
+| `agree` | **HZ3 `SlotAgreement.holds`**, already proved |
+| `decided_of_directCommitIn`, `candidates` | the `Decided` constructors, which carry `IsLeaderBlock` |
+| `decDirect` | `FastCommit` and `SlowCommit` are `Finset.card` comparisons |
+| `historyView_ids` | **HI3**, below |
+
+**HI3** is the block adapter and one lemma. The interface's `block`
+field returns `LeanDag.Block Validator BlockId Payload`, so the
+instantiation needs
+`Hydrozoan.Block Replica BlockId → LeanDag.Block Replica BlockId Unit`,
+mapping `author` to `creator` and `parents` to `refs`. It is used only
+at the interface boundary; no file under `LeanDag/Hydrozoan/` changes.
+The lemma is that `Hydrozoan.Reaches`
+(`Relation.ReflTransGen (RefStep U)`,
+`Hydrozoan/Model/CausalHistory.lean:37`) agrees with
+`Causality.historyFrom` (`Causality.lean:190`) across the adapter.
+
+One design decision is genuine rather than mechanical. `waveLength` is
+the number of rounds the direct rule reads from a slot's proposal, and
+Hydrozoan has two direct commit routes at different depths: the fast
+path reads rounds `r` and `r + 1`, the slow path reads `r`, `r + 1` and
+`r + 2`. Setting `waveLength := 3` with
+`DirectCommitIn V L r := FastCommitInView … ∨ SlowCommitInView …` is
+sound, and it makes the leader-count mechanism treat a fast commit as
+occupying a three-round window when it occupies two. Whether the AIMD
+signal should distinguish the two routes is a question for the
+instantiation, not for the interface, and it should be settled before
+the statement is frozen.
+
+**HI5** is the liveness half. `Barnacle.LiveRule`
+(`Barnacle/Model/Live.lean`) extends `BaseRule` with
+`Good : Universe → ℕ → ℕ → Prop`, the rule's own notion of a good DAG,
+and `LiveOn S c` concludes on a view satisfying `BaseRule.CoversUpto`.
+Hydrozoan's liveness package instantiates `Good` directly — a
+quorum-sized `T ⊆ Correct` with `SynchronisedOn U T Rnd` and
+`PopulatedOn U T r` through the horizon — and HZ5 and HZ7 conclude on
+`View.CoversUpto`, which is the same interface. The commit gap `c` is
+what HZ7 supplies through `FairRunOn` and `RunsRecur`.
+
+**HI6** repeats HI4 and HI5 for Optimal-Hydrozoan over `DecidedOpt`,
+with OH3 discharging `agree`. Its evidence rung needs no tie-break
+(`optimal-hydrozoan.md` §7), so the instantiation requires no
+`LinearOrder` on ids where Hydrozoan's does.
+
+For scale: Orcaella's instantiation is 120 lines of statement and 38 of
+proof. Hydrozoan's should be comparable, plus HI3.
+
+The outcome of this route is that Hydrozoan and Optimal-Hydrozoan
+become the fifth and sixth base rules under the adaptive leader count,
+beside Mysticeti, Odontoceti, Nemo-Nemo and Orcaella, with no frozen
+file modified.
+
+## 5. Route B: the universe transformers
+
+`chop` (`GC/Chop.lean:92`) is generic over
+`BlockUniverse Validator BlockId Payload` and would apply to a
+Hydrozoan universe under the adapter of §4, with a validity obligation
+one field smaller than the core's. Its verdict-invariance companion is
+the real work.
+
+**HI7** is `decided_chop` for Hydrozoan's `Decided`. The core's version
+(`GC/ChopDecided.lean:214`) is a biconditional proved by structural
+induction under a single premise, `hd : G ≤ S.slotRound d`, with
+anchors and intermediate slots re-indexed by the base slot `d` and the
+schedule replaced by `Slots.chop S G d hd`. Hydrozoan's relation has
+six constructors (`Hydrozoan/Model/Decided.lean:45`) and
+Optimal-Hydrozoan's another six.
+
+Three of the six are direct and should be routine: `directFast`,
+`directSlow` and `directSkip` count authors at rounds `r + 1` and
+`r + 2`, all above the cut under the base-slot premise, so the view
+filter is invisible to them, which is the argument the core's
+`DirectCommitIn` and `DirectSkipIn` cases already make.
+
+The three indirect constructors are where the risk sits, and the
+grading is why. `indirectWeak` fires only when no candidate has an
+anchor-linked certificate, and `indirectSkip` only when both rungs are
+empty for every candidate. These premises are negative, so removing
+blocks can make them true where they were false: pruning a certificate
+can turn a rung-1 derivation into a rung-2 one. The base-slot premise
+is what should contain this, exactly as it does for the core's own
+anchored constructors, but it is a real theorem with a real possibility
+of needing a further condition on where the horizon may fall. That
+condition, if it exists, belongs in the same category as
+`integration.md` §4.1's third kind of result — a placement condition on
+the horizon, which is the arc's most directly usable output.
+
+`skipFill` and the novelty budget are behind **HI8** and §3, and behind
+the delivery layer for the budget's own statement.
+
+## 6. Route C: the delivery layer, and what its absence costs
+
+Hydrozoan has no `Delivery`, no `ViewPace`, no time index. This is
+declared out of scope by `hydrozoan.md` §12, and the declaration is
+defensible: HZ8 proves the liveness hypotheses satisfiable at every
+horizon, so nothing above them is vacuous. The following is what the
+development lacks while the layer does not exist, and it is stated here
+so that the deferral is a known position rather than an unexamined one.
+
+**The two-message-delay claim cannot be stated.** Hydrozoan's principal
+claim is that the fast path commits in two message delays where the
+slow path takes three. `FastLatency` states this in rounds, and rounds
+are not message delays. The theorem that relates the two exists in this
+development, for the arc closest to Hydrozoan in structure —
+`FinWhale.fastCommit_latency` (`FinWhale/Reactive.lean:132`) concludes
+
+    FastCommit D L ∧
+      ∀ v ∈ T, rc.built v (S.slotRound k + 1)
+        ≤ rc.built v (S.slotRound k) + rc.delay + δ + 2 * rc.proc
+
+under `δ`-propagation past GST and at most `p` actual faults, with the
+timeout appearing nowhere, and `no_timeout_of_fast` beside it states
+that the fallback branch of the vote rule is dead where delivery beats
+the timeout. Its fault hypothesis has the same shape as Hydrozoan's
+`FastLatency` premise, and the bound is proved for any protocol on the
+reactive schedule. Hydrozoan has no structure to state it over.
+
+**`PopulatedOn` and `SynchronisedOn` remain hypotheses where the core
+has theorems.** In the core both are derived: `ViewPace.populatedOn`
+(`ViewPace.lean:538`) and `ViewPace.synchronisedOn_of_converges`
+(`ViewPace.lean:594`), from one network clause `converges` — whatever a
+correct validator holds reaches every correct validator within `delay`
+past `gst` — together with two protocol clauses, `references` (P7) and
+`waits` (P9, the waiting rule). The step Hydrozoan defers is
+`covers_of_converges` (`ViewPace.lean:482`), which the core proves from
+`converges` and `references` alone.
+
+Hydrozoan's `Model/Liveness.lean` names the same derivation as future
+work in the same terms: what makes coverage true of the deployed system
+is the protocol's waiting rule, a replica building a full timeout after
+entering a round rather than on the first quorum it holds, together
+with timely post-stabilization delivery. So the audit surface
+`hydrozoan.md` §7 identifies stays at two assumed structural
+predicates, where the core's is one clause about views.
+
+**There is no threshold a deployment can evaluate.**
+`commits_recur_local` (`ViewPace.lean:689`) consumes
+`2 * vp.delay + vp.proc ≤ vp.timeout n`, in which no quantity set by
+the deployment appears, because the pacemaker's catch-up rule collapses
+any clock spread to `delay + proc` in one post-stabilisation round.
+Hydrozoan has no `delay`, no `proc`, no `timeout` and no clock, so
+nothing in the arc tells an operator how to configure the timeout. The
+reference implementation is in `asonnino/mysticeti`, which is where
+this absence has the most direct consequence.
+
+**Liveness is local in the view but not in time.** HZ5 and HZ7 conclude
+on any view satisfying `View.CoversUpto (slotRound k + 2)`, which is a
+genuine localisation and stronger than a whole-universe reading. What
+is missing is a statement of when a replica's view satisfies it. The
+core names the instant:
+`vp.viewAt v (vp.latest (S.slotRound k' + 2) + vp.delay)`.
+
+**The storage line is unavailable for a second, independent reason.**
+`UniformBudget` and `RefsAccepted` range over `Delivery U`, and
+`dos_resistance_of_pace` (`PaceDelivery.lean:205`) concludes liveness
+and linear storage from one structure. One part of that line would
+transport: `heldOf_inj` (`PaceDelivery.lean:92`) derives the acceptance
+rule — at most one block per author, held — from P7 and P2 rather than
+postulating it, and Hydrozoan's `ValidWrt.distinct_authors` is P2. What
+would not transport is everything indexed by a `Delivery` the arc does
+not have.
+
+**Round-jumping recovery stays unmodelled.** `hydrozoan.md` §12 records
+that `T` is fixed across a synchrony suffix, so a replica rejoining by
+jumping to the frontier round sits outside `T` permanently. The core's
+answers are `LeanDag/SafeSkip/` and a wave-scoped refinement of
+`SynchronisedOn`; neither is available.
+
+**What the layer would not change.** `synchronisedOn_of_converges`
+concludes `SynchronisedOn U T R`, a statement about the DAG that never
+mentions `Decided`. The delivery layer's output is therefore
+rule-independent, and **HI9** is a port of `ViewPace` to
+`Hydrozoan.BlockUniverse` rather than a re-proof of anything above it:
+HZ5, HZ6 and HZ7 would stand unchanged with their hypotheses discharged
+instead of assumed. The rule-specific remainder is small — re-deriving
+`decided_local` for the dual-path rule, which amounts to naming the
+instant at which a replica's view holds `qFast` votes or `qSlow`
+certificates — and `View.CoversUpto` is already the interface for that
+step.
+
+## 7. The results, and the order
+
+| | Result | Depends on |
+|:---|:---|:---|
+| HI1 | the schedule coercion; `FairRunOn` and `SpansEligible` agree | — |
+| HI2 | the fault projection under `c ≤ k`, refuted without it | — |
+| HI3 | the block adapter; `Reaches` agrees with `historyFrom` | — |
+| HI4 | Hydrozoan as a `Barnacle.BaseRule` with its `Laws` | HI1, HI3, HZ3 |
+| HI5 | Hydrozoan as a `Barnacle.LiveRule`; `LiveOn` | HI4, HZ5, HZ7 |
+| HI6 | the same two for Optimal-Hydrozoan | HI4, HI5, OH3, OH5 |
+| HI7 | `decided_chop` for `Decided` and `DecidedOpt` | HI1, HI2, HI3 |
+| HI8 | the self-parent predicate; the transformer arcs over it | HI7 |
+| HI9 | the delivery layer | HI3 |
+
+The order is HI1–HI3, then HI4–HI6, then HI7, then HI8, then HI9.
+
+HI1 to HI6 modify no existing file and are the substantive part: they
+place Hydrozoan and Optimal-Hydrozoan under the adaptive leader count
+and state the exact committee condition under which the rest of the
+core applies to them. HI2 is publishable on its own — it says what
+Hydrozoan's committee admits that the core's does not, and the
+witness at `n = 8`, `f = 1`, `c = 2`, `k = 0` is a `decide`
+obligation.
+
+HI7 is the largest proof obligation and the one whose statement may
+need a further condition. HI8 and HI9 are each larger than everything
+above them, and HI9 is larger than HI8.
+
+## 8. Findings anticipated
+
+Recorded before the work, so that the record distinguishes what was
+predicted from what was discovered.
+
+- **Hydrozoan's committee is genuinely weaker than the core's for
+  `k < c`.** §2 derives both bounds from the same intersection and
+  locates the difference in the pool each argument counts. The
+  expectation is that `c ≤ k` is exactly the condition, and that
+  nothing in the transformer arcs weakens it, since T0 is consumed
+  everywhere.
+- **The self-parent clause is a fidelity gap of the Hydrozoan model,
+  not of the protocol.** §3. The expectation is that adding it to
+  `ValidWrt` would be sound and that no Hydrozoan theorem consumes it,
+  which is why it was omitted; the side-predicate route tests this
+  without modifying the frozen file.
+- **Two arcs found the same defect in leader rotation.** §1. The
+  expectation is that Hydrozoan's `n = 5`, `f = 0`, `c = 2`
+  counterexample and Barnacle's two-leader four-validator one are
+  instances of one pigeonhole statement about run-fairness under
+  rotation, and that stating it once would serve both.
+- **The graded indirect rule may constrain where a horizon may fall.**
+  §5. The rungs' negative premises are not preserved by removing
+  blocks in general, and the base-slot premise may not be sufficient.
+  If a further condition is needed it is a placement condition, in the
+  category `integration.md` §4.1 names as the integration arc's most
+  usable output.
+
+## 9. Out of scope
+
+- **Executions**, as for every other arc: composition here is
+  composition of structural conditions, and nothing about the order in
+  which mechanisms fire is modelled.
+- **The decision-relation interface** of `integration.md` §3.6, which
+  that arc moved out for the same reason: it is a refactor of working
+  code, and Barnacle's `BaseRule` already supplies an interface at the
+  level HI4 needs.
+- **Everything Hydrozoan leaves out** (`hydrozoan.md` §12): delivery,
+  GST, weak links, the depth-first reading of a vote, round-jumping
+  recovery. HI9 addresses the first two and nothing else on that list.
+- **The certified variant, and cryptography.**

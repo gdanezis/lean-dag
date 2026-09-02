@@ -400,6 +400,7 @@ the set of declarations changes. `make help` lists them.
 | [`docs/hydrozoan.md`](docs/hydrozoan.md) | the dual-path rule under hybrid faults: the thresholds and their table, the two-case consistency argument as one statement, the slow path as the guaranteed one, the liveness package and its grounding, and the findings |
 | [`docs/optimal-hydrozoan.md`](docs/optimal-hydrozoan.md) | the fast path at Hydrangea's bound: the validity rule and per-block fast evidence, the seam that consumes the rule once, the skip as a liveness claim and FinWhale's attack on it, and the always-fast parametrisation |
 | [`docs/integration.md`](docs/integration.md) | composing the arcs: the invariant interface, and what composition revealed |
+| [`docs/hydrozoan-integration.md`](docs/hydrozoan-integration.md) | connecting the Hydrozoan arcs to the rest: the three layers, the committee condition `c ≤ k`, the missing self-parent clause, Hydrozoan as a Barnacle base rule, and what the absent delivery layer costs |
 | [`docs/related.md`](docs/related.md) | a survey of consensus on uncertified DAGs |
 | [`docs/style.md`](docs/style.md) | writing conventions for the documents and the source |
 
