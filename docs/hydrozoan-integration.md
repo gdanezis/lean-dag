@@ -771,7 +771,31 @@ instance [S : Hydrozoan.Slots Replica] : LeanDag.Slots Replica :=
 Every field by `rfl` (§1), and `FairRunOn` and `SpansEligible` then
 agree by `Iff.rfl`.
 
-### 10.3 B3 — the universe transport
+### 10.3 B3 — the universe transport, and the layer that does not need it
+
+**The causal-history layer needs no bridge**, which P1 established and
+which narrows what B3 is for. `Causality.lean` is stated over a raw
+lookup and id-set through `CausalStructure`, whose two fields are
+completeness and the predecessor condition — no quorum, no fault model,
+no validity beyond that. A Hydrozoan universe supplies both from its
+own fields:
+
+```lean
+theorem causalStructure (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) :
+    CausalStructure (adaptBlk U) U.ids :=
+  { complete := fun i hi j hj => U.complete i hi j hj
+    refs_round := fun i hi j hj => (U.valid i hi).predecessor j hj }
+```
+
+`Barnacle/Helpers/Hydrozoan.lean`, machine-checked. So `historyFrom`,
+`mem_history_iff`, `history_subset_ids` and the rest of that layer
+apply to a Hydrozoan universe under **neither** the committee condition
+of §2 **nor** the self-parent clause of §3, and P1 consumes neither.
+
+What B3 remains for is every result that reads the *whole*
+`BlockUniverse` structure rather than its causal skeleton — the quorum
+condition, the fault classes, and above all the universe transformers
+of B4. The block adapter is shared between the two routes.
 
 ```lean
 def SelfParenting (U : Hydrozoan.BlockUniverse Replica BlockId) : Prop :=
@@ -1049,6 +1073,13 @@ schemes are distinct.
 | P8 | the fill: verdict agreement, and SS3 for Optimal | — | HI9 | P7 |
 | P9 | the stack capstones | — | — | P8 |
 | P10 | this record; report §24; the reference pipeline | — | — | P9 |
+
+P1 is **done** (`LeanDag/Barnacle/Hydrozoan/`, witnessed in
+`LeanDagTest/Barnacle/Hydrozoan.lean`, on the three standard axioms).
+It confirmed the phase table's independence claim and sharpened it:
+the causal-history layer the interface asks for comes from
+`CausalStructure` rather than from B3 (§10.3), so P1 depends on nothing
+below it at all.
 
 P1 to P3 are additive, need neither `c ≤ k` nor `SelfParenting`, and
 place both rules under the adaptive leader count; P1 alone is a
