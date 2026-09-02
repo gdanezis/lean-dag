@@ -1,5 +1,6 @@
 import LeanDag.Integration.Hydrozoan.Transport
 import LeanDag.GC.ChopDecided
+import LeanDag.Integration.ScheduleShape
 import LeanDag.Hydrozoan.SlotAgreement.Proof
 
 /-!
@@ -141,6 +142,44 @@ theorem eligibleAsAnchorHZ_chop (hd : G ≤ S.slotRound d) {k j : ℕ} :
   show S.slotRound (d + k) - G + 2 < S.slotRound (d + j) - G
     ↔ S.slotRound (d + k) + 2 < S.slotRound (d + j)
   omega
+
+/-! ## The schedule's fairness and shape survive the cut
+
+`integration.md` I3, transported. These are functions of a `Slots`
+instance and nothing else, so the coercion of `Schedule.lean` carries
+them: the Hydrozoan predicates and the core's are the same
+propositions, and `slotsChopHZ` is the core's `Slots.chop` read back.
+A replica reasoning inside a truncation therefore has a schedule that
+is fair and spanning in its own right, which is what liveness below the
+cut consumes. -/
+
+omit [Fintype Replica] [DecidableEq Replica] F [Fact (HybridCommittee Replica)] in
+/-- Run fairness survives the cut, the search shifted past the base
+slot. Proved directly rather than through the core's `fairRunOn_chop`,
+which is stated over a `Faults` instance: schedule fairness should not
+depend on a committee condition, and here it does not. -/
+theorem fairRunOn_slotsChopHZ (hd : G ≤ S.slotRound d) {T : Finset Replica} {c : ℕ}
+    (h : LeanDag.Hydrozoan.EventualDecision.FairRunOn Replica T c) :
+    @LeanDag.Hydrozoan.EventualDecision.FairRunOn Replica (slotsChopHZ hd) T c := by
+  intro k
+  obtain ⟨m, hm, hrun⟩ := h (d + k)
+  refine ⟨m - d, by omega, fun i hi => ?_⟩
+  show S.leader (d + (m - d + i)) ∈ T
+  have hshift : d + (m - d + i) = m + i := by omega
+  rw [hshift]
+  exact hrun i hi
+
+omit [Fintype Replica] [DecidableEq Replica] F [Fact (HybridCommittee Replica)] in
+/-- And the runway a committed run needs, by the same re-indexing that
+carries anchor eligibility. -/
+theorem spansEligible_slotsChopHZ (hd : G ≤ S.slotRound d) {c : ℕ}
+    (h : LeanDag.Hydrozoan.IndirectLiveness.SpansEligible Replica c) :
+    @LeanDag.Hydrozoan.IndirectLiveness.SpansEligible Replica (slotsChopHZ hd) c := by
+  intro b i hi
+  refine (eligibleAsAnchorHZ_chop hd).mpr ?_
+  have horig := h (d + b) (d + i) (by omega)
+  have heq : d + b + c - 1 = d + (b + c - 1) := by omega
+  rwa [heq] at horig
 
 end Schedule
 

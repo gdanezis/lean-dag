@@ -71,14 +71,24 @@ arithmetic — `votingRound k = slotRound k + 1`,
 same statement; `SpansEligible` is `Liveness.lean:752` and
 `Hydrozoan/IndirectLiveness/Statement.lean:45`.
 
-So **HI1** is a coercion `LeanDag.Slots V → Hydrozoan.Slots V` together
-with the two agreements, and every layer-S result of the integration
-arc — I3 (`fairRunOn_chop`, `spansEligible_chop`) and I5
-(horizon-stability, epoch alignment) — transports across it.
-`integration.md` §3.2 predicts this: `Slots.chop` and `slotsOf` are
-functions of a `Slots` instance and nothing else, so the layer-S
-results hold for a validator running any stack of universe
-transformers.
+So **HI1** is a coercion `LeanDag.Slots V → Hydrozoan.Slots V`
+together with the two agreements, and I3's content — fairness and the
+runway surviving the cut — transports across it
+(`fairRunOn_slotsChopHZ`, `spansEligible_slotsChopHZ`). Both are proved
+directly rather than through the core's, which are stated over a
+`Faults` instance: schedule fairness should not depend on a committee
+condition, and here it does not. `integration.md` §3.2 predicts the
+shape — `Slots.chop` is a function of a `Slots` instance and nothing
+else, so the layer-S results hold for a replica running any stack of
+universe transformers.
+
+**I5 does not apply, and the earlier claim that it transports was
+wrong.** Horizon-stability and epoch alignment are about
+`LeanDag/Adaptive/`'s `slotsOf` and an `AdaptivePolicy`. Hydrozoan
+reaches the adaptive leader count through Barnacle's `Sched` instead
+(§4), which is a different mechanism, so there is nothing to transport.
+Whether a Hydrozoan joiner can recompute Barnacle's leader count from a
+truncation is a question this arc does not settle.
 
 The one substantive question at this layer is not a preservation fact.
 Hydrozoan's HZ8 proves the wave-aligned rotation satisfies
