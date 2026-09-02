@@ -509,6 +509,13 @@ include a block authored by `v`. Nothing in the original universe
 witnesses it: `line (r0+1)` sees one twin, and `hline_chain` places
 `line r0` among its references but says nothing about `B1`.
 
+**The scenario is a witness, not an argument**
+(`LeanDagTest/Integration/HydrozoanOptimal.lean`). Four replicas, `2`
+Byzantine, `q = 3`; replica `2` equivocates at round `0`, the anchor is
+the only block that references one twin, and the donor's line
+references the other. `leaderExcludedAll_Ux` holds and
+`not_leaderExcludedAll_Ufill` fails, both on the three standard axioms.
+
 `skipFill` is not at fault — it proves the four validity rules of a
 `BlockUniverse` and never claimed the Optimal clause. The repair
 belongs to the fill: a recovering replica applying the Optimal rule

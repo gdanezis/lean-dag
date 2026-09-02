@@ -114,7 +114,8 @@ would drop the references the rule excludes, which is a different
 construction from `skipFill` rather than a side condition on it.
 
 `leaderExcludedAll_chopHZ` above therefore carries HI7 for `DecidedOpt`,
-and HI9 for `DecidedOpt` waits on that construction. -/
+and HI9 for `DecidedOpt` waits on that construction.
+`LeanDagTest/Integration/HydrozoanOptimal.lean` witnesses the failure. -/
 
 end Hydrozoan
 
