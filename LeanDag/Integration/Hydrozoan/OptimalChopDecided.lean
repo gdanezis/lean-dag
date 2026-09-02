@@ -361,3 +361,73 @@ theorem decidedOpt_chopHZ (hd : G ≤ S.slotRound d) {k : ℕ} {v : Option Block
   ⟨decidedOpt_of_decidedOpt_chopHZ hd, fun h => decidedOpt_chopHZ_of_decided hd h k rfl⟩
 
 end Induction
+
+/-! ## What a pruned Optimal deployment gets
+
+The reader-facing statement for this arc, and the counterpart to
+`Deployment.lean`. It sits here rather than there because that file
+carries `Faults` and this one carries `OptimalFaults`, and the two in
+one scope would leave which one a `BlockUniverse` is indexed by to the
+elaborator.
+
+**There is no recovery field, and its absence is the finding.**
+`Deployment` bundles a horizon *and* a one-message recovery, because
+Hydrozoan survives both. Optimal-Hydrozoan survives the horizon alone:
+the recovery breaks its validity rule, witnessed in
+`LeanDagTest/Integration/HydrozoanOptimal.lean` and recorded as §5 of
+the design record. A structure with a `recovery` field would promise
+what no theorem here can supply. -/
+
+section Deployed
+
+/-- **One replica's situation, running Optimal-Hydrozoan**: the DAG the
+network built, and a horizon below which it retains nothing. -/
+structure PrunedOpt (Replica BlockId : Type) [Fintype Replica] [DecidableEq Replica]
+    [DecidableEq BlockId] [LeanDag.OptimalHydrozoan.OptimalFaults Replica]
+    [Fact (HybridCommittee Replica)] [S : LeanDag.Hydrozoan.Slots Replica] where
+  /-- The DAG as the network built it, before this replica pruned. -/
+  network : LeanDag.Hydrozoan.BlockUniverse Replica BlockId
+  /-- Every block carries its author's previous block. -/
+  selfParents : SelfParenting network
+  /-- And the DAG-building layer enforced leader exclusion, in the
+  schedule-free form. -/
+  excluded : LeaderExcludedAll network
+  /-- The horizon below which it retains nothing. -/
+  horizon : ℕ
+  /-- The slot its numbering restarts at. -/
+  base : ℕ
+  /-- The horizon does not reach past that slot. -/
+  retains : horizon ≤ S.slotRound base
+
+namespace PrunedOpt
+
+variable (D : PrunedOpt Replica BlockId)
+
+/-- **What the replica holds**, as an Optimal universe at its own
+schedule — which is what the schedule-free clause exists to allow. -/
+abbrev held : OptUniverse Replica BlockId (S := slotsChopHZ D.retains) :=
+  optChopHZ (hsp := D.selfParents) D.retains D.excluded
+
+/-- **The slot numbering it uses**, rebased at the horizon: its slot `k`
+is the network's slot `base + k`. -/
+abbrev numbering : LeanDag.Hydrozoan.Slots Replica := slotsChopHZ D.retains
+
+/-- **The replica reaches exactly the verdicts it would have reached
+with its whole history**, at its own numbering. Pruning below the
+horizon is invisible to the decision rule. -/
+theorem decides {V : LeanDag.Hydrozoan.View D.network} {k : ℕ} {v : Option BlockId} :
+    DecidedOpt (S := D.numbering) D.held (View.chopHZ V D.selfParents D.horizon) k v
+      ↔ DecidedOpt (S := S)
+          (LeanDag.Barnacle.OptimalHydrozoan.optUniverseOf D.network D.excluded) V
+          (D.base + k) v :=
+  decidedOpt_chopHZ (hle := D.excluded) D.retains
+
+end PrunedOpt
+
+end Deployed
+
+end Hydrozoan
+
+end Integration
+
+end LeanDag

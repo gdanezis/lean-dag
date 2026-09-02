@@ -9533,6 +9533,13 @@ the latter form.
 theorem commits : LeanDag.Hydrozoan.DirectLiveness.CommitLiveness D.held
 ```
 
+A replica running Optimal-Hydrozoan gets the same object with one
+field missing. `PrunedOpt` carries a horizon and no recovery, and
+its `decides` says pruning is invisible to its decision rule —
+but there is no Optimal counterpart to the recovery, because §24.4
+refutes it. **The absent field is the finding**: a structure with a
+`recovery` field would promise what no theorem can supply.
+
 Hydrozoan's liveness theorems apply to what the replica retains, their
 hypotheses surviving both the recovery and the horizon (HI10). The
 conditions are the structure's fields and two instance arguments: the
@@ -10702,7 +10709,7 @@ reused.
 | HI7 | verdicts survive the cut, for `Decided` and for `DecidedOpt`, on the base-slot premise alone | `decided_chopHZ`, `decidedOpt_chopHZ` *(Integration/Hydrozoan/ChopDecided, OptimalChopDecided)* |
 | HI8 | the self-parent clause, and its preservation by every transformer in one lemma | `SelfParenting`, `selfParenting_ofCore` *(Integration/Hydrozoan/Universe, Transport)* |
 | HI9 | verdicts survive the fill for `Decided` with no quorum hypothesis; for `DecidedOpt` the validity clause is refuted | `decided_fill_agreeHZ`, `not_leaderExcludedAll_Ufill` *(Integration/Hydrozoan/FillDecided, Test/Integration/HydrozoanOptimal)* |
-| HI10 | what a deployment gets: safety, agreement with the network, verdict preservation and liveness through a recovery and a horizon | `safe`, `agrees`, `preserves`, `commits` *(Integration/Hydrozoan/Deployment)* |
+| HI10 | what a deployment gets: safety, agreement with the network, verdict preservation and liveness through a recovery and a horizon; and, for Optimal-Hydrozoan, through a horizon alone | `safe`, `agrees`, `preserves`, `commits`, `decides` *(Integration/Hydrozoan/Deployment, OptimalChopDecided)* |
 
 ---
 
@@ -23679,6 +23686,52 @@ abbrev optChopHZ (hd : G ≤ S.slotRound d) (hle : LeaderExcludedAll U) :
 
 The Optimal universe the truncation carries, at the truncation's own schedule.
 
+#### `PrunedOpt`
+
+*structure, `Integration.Hydrozoan.OptimalChopDecided.lean`*
+
+```lean
+structure PrunedOpt (Replica BlockId : Type) [Fintype Replica] [DecidableEq Replica]
+    [DecidableEq BlockId] [LeanDag.OptimalHydrozoan.OptimalFaults Replica]
+    [Fact (HybridCommittee Replica)] [S : LeanDag.Hydrozoan.Slots Replica] where
+  /-- The DAG as the network built it, before this replica pruned. -/
+  network : LeanDag.Hydrozoan.BlockUniverse Replica BlockId
+  /-- Every block carries its author's previous block. -/
+  selfParents : SelfParenting network
+  /-- And the DAG-building layer enforced leader exclusion, in the
+  schedule-free form. -/
+  excluded : LeaderExcludedAll network
+  /-- The horizon below which it retains nothing. -/
+  horizon : ℕ
+  /-- The slot its numbering restarts at. -/
+  base : ℕ
+  /-- The horizon does not reach past that slot. -/
+  retains : horizon ≤ S.slotRound base
+```
+
+**One replica's situation, running Optimal-Hydrozoan**: the DAG the network built, and a horizon below which it retains nothing.
+
+#### `held`
+
+*abbrev, `Integration.Hydrozoan.OptimalChopDecided.lean`*
+
+```lean
+abbrev held : OptUniverse Replica BlockId (S := slotsChopHZ D.retains) :=
+  optChopHZ (hsp := D.selfParents) D.retains D.excluded
+```
+
+**What the replica holds**, as an Optimal universe at its own schedule — which is what the schedule-free clause exists to allow.
+
+#### `numbering`
+
+*abbrev, `Integration.Hydrozoan.OptimalChopDecided.lean`*
+
+```lean
+abbrev numbering : LeanDag.Hydrozoan.Slots Replica := slotsChopHZ D.retains
+```
+
+**The slot numbering it uses**, rebased at the horizon: its slot `k` is the network's slot `base + k`.
+
 #### `ofCoreSlots`
 
 *def, `Integration.Hydrozoan.Schedule.lean`*
@@ -34925,7 +34978,7 @@ The wave-aligned rotation is fair in the single-slot sense too, so L6 and the `V
 
 ## Appendix D. Index of internal lemmas
 
-The 833 lemmas used only within the file that proves
+The 834 lemmas used only within the file that proves
 them. They are steps of the arguments above rather than results
 in their own right, so they are listed rather than displayed;
 the source is the reference for their statements. One
@@ -36514,13 +36567,14 @@ subsection per module, in the layer order of Appendices B and C.
 | `synchronisedOn_stackHZ` | The stack is covered, from a round above the fill, rebased. |
 | `synchronisedOn_toCore` | — |
 
-### `Integration/Hydrozoan/OptimalChopDecided.lean` (13)
+### `Integration/Hydrozoan/OptimalChopDecided.lean` (14)
 
 | Lemma | Role |
 |:---|:---|
 | `blocksAt_decision_chopHZ` | A decision-round block of the truncation is a decision-round block of the original, and sits far enough … |
 | `decidedOpt_chopHZ_of_decided` | Verdicts survive the cut. |
 | `decidedOpt_of_decidedOpt_chopHZ` | And a verdict of the truncation is a verdict of the universe it came from. |
+| `decides` | The replica reaches exactly the verdicts it would have reached with its whole history, at its own … |
 | `decisionRound_chopHZ` | The decision round re-indexes by the horizon, like every other round the rules name. |
 | `decision_block_guards` | What membership at the decision round supplies: presence, and the round guard every lemma above needs. |
 | `evidenceLinked_chopHZ` | Rung 2 is preserved. The witness set is the same set of blocks: each sits at the decision round, is fast … |
@@ -36555,7 +36609,7 @@ subsection per module, in the layer order of Appendices B and C.
 |:---|:---|
 | `decided_chop_of_simulates` | Verdicts survive the cut, now as a corollary. |
 | `decided_fill_of_simulates` | Verdicts survive the fill, now as a corollary. |
-| `decided_of_decided_chop_of_simulates` | A verdict of the truncation is a verdict of the universe it came from, now as a corollary. |
+| `decided_of_chop_of_simulates` | A verdict of the truncation is a verdict of the universe it came from, now as a corollary. |
 | `simulates_chop` | The cut is a simulation along `d + k ↦ k`, with nothing novel: a truncation adds no identifier. |
 | `simulates_chop_bwd` | And the cut read backwards is a simulation too — the same correspondence, `n ↦ d + n`, taken from the … |
 | `simulates_fill` | The fill is a simulation along the identity on slots, with the fresh identifiers as the novel ones. |

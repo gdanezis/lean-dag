@@ -299,7 +299,7 @@ theorem simulates_chop_bwd [S : LeanDag.Hydrozoan.Slots Replica] {d G : ℕ}
 
 /-- **A verdict of the truncation is a verdict of the universe it came
 from**, now as a corollary. -/
-theorem decided_of_decided_chop_of_simulates [S : LeanDag.Hydrozoan.Slots Replica] {d G : ℕ}
+theorem decided_of_chop_of_simulates [S : LeanDag.Hydrozoan.Slots Replica] {d G : ℕ}
     (hd : G ≤ S.slotRound d) {k : ℕ} {v : Option BlockId}
     (h : LeanDag.Hydrozoan.Decided (S := slotsChopHZ hd) (chopHZ U hsp G)
       (View.chopHZ V hsp G) k v) :
