@@ -36,7 +36,7 @@ open LeanDag LeanDag.Integration.Hydrozoan
 
 /-- The committee condition at the seven-replica model, which is what
 makes the projection available there. -/
-instance : Fact (LeanDag.Hydrozoan.Faults.c (Fin 7)
+instance factSeven : Fact (LeanDag.Hydrozoan.Faults.c (Fin 7)
     ≤ LeanDag.Hydrozoan.Faults.k (Fin 7)) := ⟨by decide⟩
 
 /-! ## B1 — the projection computes -/

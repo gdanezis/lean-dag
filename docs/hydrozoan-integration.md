@@ -1046,14 +1046,19 @@ one configuration at which `tEquiv = 1`. No bridge result may reuse a
 Hydrozoan witness without checking the condition, and `Fin 7` against
 `Fin 5` is the ready-made pair for B1's positive and negative.
 
-**No existing witness universe satisfies `SelfParenting`.** In the
-seven-replica universe of `LeanDagTest/Hydrozoan/BlockUniverse.lean`,
-blocks 12 and 13 are authored by replicas 5 and 6 and reference
-`{0, 1, 2, 3, 4}`, which holds neither replica's genesis block. The
-universes were built without the clause because no Hydrozoan theorem
-consumes it (§3). Two consequences: B3 needs universes built for it,
-and the existing ones are the negative witness showing the predicate
-restricts rather than holding everywhere.
+**`SelfParenting` divides the existing witness universes**, which P5
+settled by `decide` in both directions. The seven-replica universe of
+`LeanDagTest/Hydrozoan/BlockUniverse.lean` fails it: blocks 12 and 13
+are authored by replicas 5 and 6 and reference `{0, 1, 2, 3, 4}`, which
+holds neither replica's genesis block. The low-fault `U7` of
+`LeanDagTest/Hydrozoan/DirectLiveness.lean` satisfies it, every
+non-genesis block there referencing all three blocks of the round below
+and so its own author's among them. The arc's universes were written
+without regard to the clause, no theorem of it consuming one (§3), so
+that they divide is incidental rather than designed — and it is what
+makes the predicate neither vacuous nor unsatisfiable, which is what
+`docs/style.md` §3 asks before anything is proved from it. No universe
+had to be built for B3.
 
 The witness files, by bridge:
 

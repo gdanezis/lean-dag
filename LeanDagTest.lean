@@ -29,6 +29,7 @@ import LeanDagTest.Collapse
 import LeanDagTest.Adaptive
 import LeanDagTest.Integration
 import LeanDagTest.Integration.Hydrozoan
+import LeanDagTest.Integration.HydrozoanUniverse
 import LeanDagTest.Hybrid
 import LeanDagTest.Integration
 import LeanDagTest.HybridTight
