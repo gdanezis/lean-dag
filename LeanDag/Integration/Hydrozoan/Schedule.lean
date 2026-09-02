@@ -42,6 +42,17 @@ instance toCoreSlots [S : LeanDag.Hydrozoan.Slots Replica] : LeanDag.Slots Repli
   unbounded := S.unbounded
   keyed := S.keyed
 
+/-- The same identification read the other way, as a function rather
+than an instance: a schedule the core produces — `Slots.chop`'s, in
+particular — read back as Hydrozoan's. -/
+@[reducible]
+def ofCoreSlots (S : LeanDag.Slots Replica) : LeanDag.Hydrozoan.Slots Replica where
+  slotRound := S.slotRound
+  leader := S.leader
+  mono := S.mono
+  unbounded := S.unbounded
+  keyed := S.keyed
+
 section Agreements
 
 variable [S : LeanDag.Hydrozoan.Slots Replica]
