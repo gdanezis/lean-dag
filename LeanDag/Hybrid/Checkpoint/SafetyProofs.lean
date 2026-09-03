@@ -27,9 +27,9 @@ variable {Validator Value : Type*}
 variable [Fintype Validator] [DecidableEq Validator]
 variable [H : HybridFaults Validator]
 
-namespace Model
+namespace FlexibleFaults
 
-variable (M : Model Validator Value)
+variable (M : FlexibleFaults Validator Value)
 
 /-- Reliable signing excludes precisely the two classes allowed to
 equivocate. -/
@@ -139,7 +139,7 @@ namespace CertificatePayload
 def toCheckpointQC (payload : CertificatePayload (Validator := Validator)
     (Value := Value))
     (valid : CertificatePayload.Valid M E payload) :
-    Model.Execution.CheckpointQC M E payload.checkpoint where
+    FlexibleFaults.Execution.CheckpointQC M E payload.checkpoint where
   signers := payload.signers
   quorum := valid.1
   messages := valid.2
@@ -167,8 +167,8 @@ theorem checkpoint_eq_of_reliable_messages
 height by quorum intersection and the protocol's one-state-per-slot
 rule. -/
 theorem checkpointQC_eq_of_same_height {x y : CheckpointData Value}
-    (X : Model.Execution.CheckpointQC M E x)
-    (Y : Model.Execution.CheckpointQC M E y)
+    (X : FlexibleFaults.Execution.CheckpointQC M E x)
+    (Y : FlexibleFaults.Execution.CheckpointQC M E y)
     (he : x.epoch = y.epoch) (hh : x.height = y.height) : x = y := by
   obtain ⟨v, hv, hgood⟩ :=
     M.exists_reliableSigner_mem_inter X.quorum Y.quorum
@@ -181,7 +181,7 @@ Byzantine and AbC validators may emit arbitrary checkpoints; quorum
 counting supplies one reliable signer whose local execution state fixes
 the certified history length. -/
 theorem checkpointQC_height_bound {x : CheckpointData Value}
-    (X : Model.Execution.CheckpointQC M E x) :
+    (X : FlexibleFaults.Execution.CheckpointQC M E x) :
     x.history.length = x.height := by
   obtain ⟨v, hv, hcorrect⟩ :=
     M.exists_recoveryCorrect_mem X.quorum
@@ -199,8 +199,8 @@ theorem checkpointQC_height_bound {x : CheckpointData Value}
 higher certificate because their common reliable signer moved through
 append-only local states. -/
 theorem checkpointQC_prefix {x y : CheckpointData Value}
-    (X : Model.Execution.CheckpointQC M E x)
-    (Y : Model.Execution.CheckpointQC M E y)
+    (X : FlexibleFaults.Execution.CheckpointQC M E x)
+    (Y : FlexibleFaults.Execution.CheckpointQC M E y)
     (he : x.epoch = y.epoch) (hh : x.height ≤ y.height) :
     x.history.IsPrefix y.history := by
   obtain ⟨v, hv, hgood⟩ :=
@@ -217,8 +217,8 @@ theorem checkpointQC_prefix {x y : CheckpointData Value}
 /-- Any two checkpoint certificates from one epoch bind
 prefix-consistent histories. -/
 theorem checkpointQC_compatible {x y : CheckpointData Value}
-    (X : Model.Execution.CheckpointQC M E x)
-    (Y : Model.Execution.CheckpointQC M E y)
+    (X : FlexibleFaults.Execution.CheckpointQC M E x)
+    (Y : FlexibleFaults.Execution.CheckpointQC M E y)
     (he : x.epoch = y.epoch) :
     Compatible x.history y.history := by
   rcases Nat.le_total x.height y.height with hxy | hyx
@@ -228,8 +228,8 @@ theorem checkpointQC_compatible {x y : CheckpointData Value}
 /-- Two finality certificates in one epoch cannot finalize conflicting
 histories. -/
 theorem finalityQC_compatible {x y : CheckpointData Value}
-    (X : Model.Execution.FinalityQC M E x)
-    (Y : Model.Execution.FinalityQC M E y)
+    (X : FlexibleFaults.Execution.FinalityQC M E x)
+    (Y : FlexibleFaults.Execution.FinalityQC M E y)
     (he : x.epoch = y.epoch) :
     Compatible x.history y.history :=
   checkpointQC_compatible M E X.checkpointQC Y.checkpointQC he
@@ -237,7 +237,7 @@ theorem finalityQC_compatible {x y : CheckpointData Value}
 /-- A finality quorum yields a recovery-correct validator that recorded
 the concrete checkpoint certificate before emitting its witness. -/
 theorem exists_recoveryCorrect_recorder {x : CheckpointData Value}
-    (F : Model.Execution.FinalityQC M E x) :
+    (F : FlexibleFaults.Execution.FinalityQC M E x) :
     ∃ v ∈ M.RecoveryCorrect, E.recorded v x := by
   obtain ⟨v, hv, hcorrect⟩ :=
     M.exists_recoveryCorrect_mem F.quorum
@@ -248,6 +248,6 @@ theorem exists_recoveryCorrect_recorder {x : CheckpointData Value}
 
 end Execution
 
-end Model
+end FlexibleFaults
 
 end LeanDag.Hybrid.Checkpoint

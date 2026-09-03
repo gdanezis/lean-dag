@@ -10137,9 +10137,17 @@ per-validator histories and messages are execution inputs, and from
 them it machine-checks same-epoch checkpoint uniqueness, prefix
 consistency, resilient finality, and highest-checkpoint recovery under
 alive-but-corrupt signing faults. It does not derive an AbC-induced
-fork from OrcDAG or compose checkpoint safety with the DAG proofs. It
-treats `BaseSpec.lean` and `RecoverySpec.lean` as the human-reviewed
-trust boundary, with derivations isolated in the two `*Proofs.lean`
+fork from OrcDAG. Its one point of contact with the DAG proofs is the
+secure-base bridge of `CommitSpec.lean`: with no AbC population, a
+deterministic VM maps each `Hybrid.Decided` commit to one checkpoint,
+a `SigningRule` requires each online correct validator to propose the
+checkpoints of the slots it settles on its own view and to witness its
+own proposals, and `CommitProofs.lean` derives the quorum from
+`card_correct`, ties the proposals to a commit through `Hybrid.safety`,
+and composes with `Hybrid.decided_of_leader_mem` so that a correctly
+led slot is finalized from production and coverage alone. It
+treats the three `*Spec.lean` modules as the human-reviewed
+trust boundary, with derivations isolated in the three `*Proofs.lean`
 modules. It
 treats authenticated Byzantine broadcast through its agreement,
 integrity, and correct-input delivery contract; the Dolev--Strong
@@ -23201,12 +23209,12 @@ structure ChkProp (Validator Value : Type*) where
 
 An authenticated checkpoint proposal message.
 
-#### `Model`
+#### `FlexibleFaults`
 
 *structure, `Hybrid.Checkpoint.BaseSpec.lean`*
 
 ```lean
-structure Model (Validator Value : Type*) [Fintype Validator]
+structure FlexibleFaults (Validator Value : Type*) [Fintype Validator]
     [DecidableEq Validator] [H : HybridFaults Validator] where
   /-- Alive-but-corrupt fault bound. -/
   fabc : ℕ
@@ -23225,7 +23233,7 @@ structure Model (Validator Value : Type*) [Fintype Validator]
     fabc + 3 * H.fb + 2 * H.fc < Fintype.card Validator
 ```
 
-Checkpoint-specific extension of the imported `HybridFaults` model. This is not a second definition of hybrid faults: `H` supplies the Byzantine/crash classes and their bounds, while this structure adds the AbC class and the stronger checkpoint resilience bound.
+The flexible fault model: the imported `HybridFaults` classes plus alive-but-corrupt validators. `H` supplies the Byzantine/crash classes and their bounds; this structure adds the AbC class and the stronger checkpoint resilience bound. Setting `abc = ∅` recovers the base hybrid model without removing crash faults.
 
 The disjointness fields preserve the paper's interpretation as distinct fault classes. Current safety derivations do not consume them: their cardinality arguments conservatively use union upper bounds and remain valid if classes overlap.
 
@@ -23345,7 +23353,7 @@ structure ChkWitness (checkpoint : CheckpointData Value) where
   sender : Validator
   /-- The concrete first-phase certificate received by the sender. Its
   dependent type binds the witness to this exact `checkpoint`. -/
-  certificate : Model.Execution.CheckpointQC M E checkpoint
+  certificate : FlexibleFaults.Execution.CheckpointQC M E checkpoint
   /-- If the sender follows recovery and remains available, it stored
   the checkpoint before witnessing it. No condition is imposed when the
   sender is outside `RecoveryCorrect`. -/
@@ -23364,14 +23372,14 @@ For a recovery-correct sender, `recorded` requires durable protocol storage befo
 ```lean
 structure FinalityQC (checkpoint : CheckpointData Value) where
   /-- A concrete first-phase certificate for the finalized content. -/
-  checkpointQC : Model.Execution.CheckpointQC M E checkpoint
+  checkpointQC : FlexibleFaults.Execution.CheckpointQC M E checkpoint
   /-- Distinct witness senders. -/
   witnesses : Finset Validator
   /-- The witness phase uses the hybrid quorum. -/
   quorum : Hybrid.q Validator ≤ witnesses.card
   /-- Every listed sender emitted a concrete validated witness. -/
   messages :
-    ∀ v ∈ witnesses, Model.Execution.ChkWitness M E checkpoint
+    ∀ v ∈ witnesses, FlexibleFaults.Execution.ChkWitness M E checkpoint
   /-- Witness authentication binds each message to its listed sender. -/
   sender_eq : ∀ v (hv : v ∈ witnesses), (messages v hv).sender = v
 ```
@@ -23388,6 +23396,192 @@ def Compatible (x y : History Value) : Prop :=
 ```
 
 Two checkpoint histories are consistent when either extends the other.
+
+#### `checkpointQCOfDecided`
+
+*def, `Hybrid.Checkpoint.CommitProofs.lean`*
+
+```lean
+def checkpointQCOfDecided (P : SigningRule M E U k vm)
+    (hne : HonestNoEquiv U) (hk : Hybrid.Admissible Validator k)
+    {V : View Validator BlockId Payload U} {slot : ℕ} {block : BlockId}
+    (commit : Hybrid.Decided k U V slot (some block))
+    (hall : ∀ v ∈ M.RecoveryCorrect,
+      ∃ b, Hybrid.Decided k U (P.view v) slot (some b)) :
+    FlexibleFaults.Execution.CheckpointQC M E
+      (vm.checkpointAfterCommit slot block) where
+  signers := M.RecoveryCorrect
+  quorum := recoveryCorrect_quorum M P.noAbC
+  messages := by
+    intro v hv
+    obtain ⟨b, hb⟩ := hall v hv
+    exact emitted_of_decided M E vm P hne hk commit hv hb
+```
+
+Construction behind `CommitCertified`: the online correct validators are the signers, each by `emitted_of_decided`.
+
+#### `finalityQCOfDecided`
+
+*def, `Hybrid.Checkpoint.CommitProofs.lean`*
+
+```lean
+def finalityQCOfDecided (P : SigningRule M E U k vm)
+    (hne : HonestNoEquiv U) (hk : Hybrid.Admissible Validator k)
+    {V : View Validator BlockId Payload U} {slot : ℕ} {block : BlockId}
+    (commit : Hybrid.Decided k U V slot (some block))
+    (hall : ∀ v ∈ M.RecoveryCorrect,
+      ∃ b, Hybrid.Decided k U (P.view v) slot (some b)) :
+    FlexibleFaults.Execution.FinalityQC M E
+      (vm.checkpointAfterCommit slot block) :=
+  let Q := checkpointQCOfDecided M E vm P hne hk commit hall
+  { checkpointQC := Q
+    witnesses := M.RecoveryCorrect
+    quorum := recoveryCorrect_quorum M P.noAbC
+    messages := fun v hv =>
+      P.witnesses v hv (Q.messages v hv) Q
+    sender_eq := fun v hv =>
+      P.witnessSender v hv (Q.messages v hv) Q }
+```
+
+Construction behind `CommitFinalized`: every signer of the certificate above also witnesses it, by the rule's second clause.
+
+#### `DeterministicVM`
+
+*structure, `Hybrid.Checkpoint.CommitSpec.lean`*
+
+```lean
+structure DeterministicVM where
+  checkpointAfterCommit : ℕ → BlockId → CheckpointData Value
+```
+
+Deterministic execution interface. For a settled slot and committed block, Lean function application determines one checkpoint value. The implementation of the VM and its application-state semantics remain outside this model.
+
+#### `SigningRule`
+
+*structure, `Hybrid.Checkpoint.CommitSpec.lean`*
+
+```lean
+structure SigningRule (U : BlockUniverse Validator BlockId Payload) (k : ℕ)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) where
+  /-- Byzantine and crash faults remain governed by `HybridFaults`; only
+  the additional AbC checkpoint-fork class is disabled. -/
+  noAbC : M.abc = ∅
+  /-- Each validator's local DAG. -/
+  view : Validator → View Validator BlockId Payload U
+  /-- Sign what you commit. -/
+  proposes :
+    ∀ v ∈ M.RecoveryCorrect, ∀ {slot : ℕ} {block : BlockId},
+      Hybrid.Decided k U (view v) slot (some block) →
+        E.emitted ⟨v, vm.checkpointAfterCommit slot block⟩
+  /-- Witness a certificate for what you proposed. -/
+  witnesses :
+    ∀ v ∈ M.RecoveryCorrect, ∀ {checkpoint : CheckpointData Value},
+      E.emitted ⟨v, checkpoint⟩ →
+        FlexibleFaults.Execution.CheckpointQC M E checkpoint →
+          FlexibleFaults.Execution.ChkWitness M E checkpoint
+  /-- Witness authentication binds each message to its sender. -/
+  witnessSender :
+    ∀ v (hv : v ∈ M.RecoveryCorrect) {checkpoint : CheckpointData Value}
+      (he : E.emitted ⟨v, checkpoint⟩)
+      (Q : FlexibleFaults.Execution.CheckpointQC M E checkpoint),
+      (witnesses v hv he Q).sender = v
+```
+
+The checkpoint signing protocol, as a rule over one DAG universe.
+
+`proposes` ties a proposal to the proposer's own decision: the hypothesis is the validator's `Decided` verdict on its own view, so a proposal cannot be owed for a slot the validator has not settled. `witnesses` ties the second phase to the first: a validator owes a witness for a certificate of a checkpoint it proposed itself. Both are obligations, not restrictions: the rule does not say what a validator does with a certificate for a checkpoint it did not propose, and `Execution` has no witness-emission predicate over which such a restriction could be stated. Both fields are protocol rules, of the same status as `Delivery.includes`; they are implementable and observable but not derived here. The inherited base model still contains Byzantine and crash faults, and neither class is obliged to anything.
+
+#### `RecoveryCorrectQuorum`
+
+*def, `Hybrid.Checkpoint.CommitSpec.lean`*
+
+```lean
+def RecoveryCorrectQuorum : Prop :=
+  M.abc = ∅ → Hybrid.q Validator ≤ M.RecoveryCorrect.card
+```
+
+Claim: with no AbC population, the online correct validators form a checkpoint quorum. This is the only counting fact the bridge derives; it comes from the inherited `fb`, `fc` bounds through `card_correct`.
+
+#### `CommitCertified`
+
+*def, `Hybrid.Checkpoint.CommitSpec.lean`*
+
+```lean
+def CommitCertified (Payload : Type*)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) : Prop :=
+  ∀ {U : BlockUniverse Validator BlockId Payload} {k : ℕ}
+    (P : SigningRule M E U k vm),
+    HonestNoEquiv U → Hybrid.Admissible Validator k →
+    ∀ {V : View Validator BlockId Payload U} {slot : ℕ} {block : BlockId},
+      Hybrid.Decided k U V slot (some block) →
+      (∀ v ∈ M.RecoveryCorrect,
+        ∃ b, Hybrid.Decided k U (P.view v) slot (some b)) →
+      Nonempty (FlexibleFaults.Execution.CheckpointQC M E
+        (vm.checkpointAfterCommit slot block))
+```
+
+Claim: a commit that every online correct validator has settled on its own view has a first-phase certificate. Base safety makes the validators' verdicts agree with the given commit, so the rule's proposals are all for the same checkpoint.
+
+#### `CommitFinalized`
+
+*def, `Hybrid.Checkpoint.CommitSpec.lean`*
+
+```lean
+def CommitFinalized (Payload : Type*)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) : Prop :=
+  ∀ {U : BlockUniverse Validator BlockId Payload} {k : ℕ}
+    (P : SigningRule M E U k vm),
+    HonestNoEquiv U → Hybrid.Admissible Validator k →
+    ∀ {V : View Validator BlockId Payload U} {slot : ℕ} {block : BlockId},
+      Hybrid.Decided k U V slot (some block) →
+      (∀ v ∈ M.RecoveryCorrect,
+        ∃ b, Hybrid.Decided k U (P.view v) slot (some b)) →
+      Nonempty (FlexibleFaults.Execution.FinalityQC M E
+        (vm.checkpointAfterCommit slot block))
+```
+
+Claim: a commit that every online correct validator has settled on its own view has a finality certificate.
+
+#### `LiveCommitFinalized`
+
+*def, `Hybrid.Checkpoint.CommitSpec.lean`*
+
+```lean
+def LiveCommitFinalized (Payload : Type*)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) : Prop :=
+  ∀ {U : BlockUniverse Validator BlockId Payload} {k : ℕ}
+    (P : SigningRule M E U k vm) {R slot : ℕ},
+    HonestNoEquiv U → Hybrid.Admissible Validator k →
+    SynchronisedOn U M.RecoveryCorrect R → R ≤ S.slotRound slot →
+    PopulatedOn U M.RecoveryCorrect (S.slotRound slot) →
+    PopulatedOn U M.RecoveryCorrect (S.slotRound slot + 1) →
+    (∀ v ∈ M.RecoveryCorrect, (P.view v).CoversUpto (S.slotRound slot + 1)) →
+    S.leader slot ∈ M.RecoveryCorrect →
+    ∃ L, IsLeaderBlock U slot L ∧
+      Nonempty (FlexibleFaults.Execution.FinalityQC M E
+        (vm.checkpointAfterCommit slot L))
+```
+
+Claim: DAG liveness delivers the finalized checkpoint. Under the hypotheses of `Hybrid.decided_of_leader_mem` over the online correct validators, a slot led by one of them commits on every such validator's view, and the resulting checkpoint is finalized. No commit is assumed; it is derived from production, coverage, and caught-up views.
+
+#### `CommitCheckpointUnique`
+
+*def, `Hybrid.Checkpoint.CommitSpec.lean`*
+
+```lean
+def CommitCheckpointUnique (Payload : Type*)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) : Prop :=
+  ∀ {U : BlockUniverse Validator BlockId Payload} {k : ℕ},
+    HonestNoEquiv U → Hybrid.Admissible Validator k →
+    ∀ {V₁ V₂ : View Validator BlockId Payload U} {slot : ℕ}
+      {block₁ block₂ : BlockId},
+      Hybrid.Decided k U V₁ slot (some block₁) →
+      Hybrid.Decided k U V₂ slot (some block₂) →
+      vm.checkpointAfterCommit slot block₁ =
+        vm.checkpointAfterCommit slot block₂
+```
+
+Claim: base-consensus safety rules out a checkpoint fork. Under the hypotheses of `Hybrid.safety`, commits for one slot in any two views yield the same checkpoint content.
 
 #### `select`
 
@@ -23555,7 +23749,7 @@ Recovery-transition contract: adopt a checkpoint satisfying `IsSelected` as the 
 def toCheckpointQC (payload : CertificatePayload (Validator := Validator)
     (Value := Value))
     (valid : CertificatePayload.Valid M E payload) :
-    Model.Execution.CheckpointQC M E payload.checkpoint where
+    FlexibleFaults.Execution.CheckpointQC M E payload.checkpoint where
   signers := payload.signers
   quorum := valid.1
   messages := valid.2
@@ -24015,7 +24209,7 @@ Built from `Slots.uniformSingle` rather than by hand, so the class fields need n
 
 ## Appendix C. The theorem reference
 
-The 819 theorems that either another module of the
+The 820 theorems that either another module of the
 development depends on, or that Appendix A indexes as principal
 results — the second clause because the capstones are consumed
 by nothing, being endpoints. Each is the source statement,
@@ -34730,9 +34924,9 @@ Equal-height validated candidates are equal. Thus the implementation's tie resul
 theorem finalized_prefix_next_checkpoint {receiver : Validator}
     (T : EpochTransition M E R receiver)
     {old new : CheckpointData Value}
-    (F : Model.Execution.FinalityQC M E old)
+    (F : FlexibleFaults.Execution.FinalityQC M E old)
     (hold_epoch : old.epoch = epoch)
-    (Q : Model.Execution.CheckpointQC M E new)
+    (Q : FlexibleFaults.Execution.CheckpointQC M E new)
     (hne : new.epoch = T.next_epoch) :
     old.history.IsPrefix new.history
 ```
@@ -34757,8 +34951,8 @@ Every hybrid quorum contains a validator outside both classes allowed to violate
 
 ```lean
 theorem checkpointQC_eq_of_same_height {x y : CheckpointData Value}
-    (X : Model.Execution.CheckpointQC M E x)
-    (Y : Model.Execution.CheckpointQC M E y)
+    (X : FlexibleFaults.Execution.CheckpointQC M E x)
+    (Y : FlexibleFaults.Execution.CheckpointQC M E y)
     (he : x.epoch = y.epoch) (hh : x.height = y.height) : x = y
 ```
 
@@ -34770,8 +34964,8 @@ Checkpoint certificate content is unique at a fixed epoch and height by quorum i
 
 ```lean
 theorem checkpointQC_prefix {x y : CheckpointData Value}
-    (X : Model.Execution.CheckpointQC M E x)
-    (Y : Model.Execution.CheckpointQC M E y)
+    (X : FlexibleFaults.Execution.CheckpointQC M E x)
+    (Y : FlexibleFaults.Execution.CheckpointQC M E y)
     (he : x.epoch = y.epoch) (hh : x.height ≤ y.height) :
     x.history.IsPrefix y.history
 ```
@@ -34784,7 +34978,7 @@ A lower checkpoint certificate in one epoch is a prefix of a higher certificate 
 
 ```lean
 theorem exists_recoveryCorrect_recorder {x : CheckpointData Value}
-    (F : Model.Execution.FinalityQC M E x) :
+    (F : FlexibleFaults.Execution.FinalityQC M E x) :
     ∃ v ∈ M.RecoveryCorrect, E.recorded v x
 ```
 
@@ -34891,6 +35085,20 @@ theorem decidedOpt_chopHZ (hd : G ≤ S.slotRound d) {k : ℕ} {v : Option Block
 
 **HI7 for `DecidedOpt`.** A replica running Optimal-Hydrozoan that has pruned below the horizon reaches exactly the verdicts it would have reached with its whole history, at the re-indexed slot. The base-slot premise and leader exclusion are the only conditions.
 
+#### `decides`
+
+*theorem, `Integration.Hydrozoan.OptimalChopDecided.lean`*
+
+```lean
+theorem decides {V : LeanDag.Hydrozoan.View D.network} {k : ℕ} {v : Option BlockId} :
+    DecidedOpt (S := D.numbering) D.held (View.chopHZ V D.selfParents D.horizon) k v
+      ↔ DecidedOpt (S := S)
+          (LeanDag.Barnacle.OptimalHydrozoan.optUniverseOf D.network D.excluded) V
+          (D.base + k) v
+```
+
+**The replica reaches exactly the verdicts it would have reached with its whole history**, at its own numbering. Pruning below the horizon is invisible to the decision rule.
+
 #### `fairRunOn_eq`
 
 *theorem, `Integration.Hydrozoan.Schedule.lean`*
@@ -34978,7 +35186,7 @@ The wave-aligned rotation is fair in the single-slot sense too, so L6 and the `V
 
 ## Appendix D. Index of internal lemmas
 
-The 834 lemmas used only within the file that proves
+The 839 lemmas used only within the file that proves
 them. They are steps of the arguments above rather than results
 in their own right, so they are listed rather than displayed;
 the source is the reference for their statements. One
@@ -36428,6 +36636,17 @@ subsection per module, in the layer order of Appendices B and C.
 | `descent` | — |
 | `roundRobinLive` | — |
 
+### `Hybrid/Checkpoint/CommitProofs.lean` (6)
+
+| Lemma | Role |
+|:---|:---|
+| `checkpointAfterCommit_eq` | Proof of `CommitCheckpointUnique`: rewrite with `Hybrid.safety`. |
+| `commitCertified` | Proof of `CommitCertified`. |
+| `commitFinalized` | Proof of `CommitFinalized`. |
+| `emitted_of_decided` | The tie between a commit and a proposal: a validator that settled the slot on its own view proposed the … |
+| `liveCommitFinalized` | Proof of `LiveCommitFinalized`: `Hybrid.decided_of_leader_mem` on the full view supplies the commit, and … |
+| `recoveryCorrect_quorum` | Proof of `RecoveryCorrectQuorum`: with no AbC population, `RecoveryCorrect` is the base `Correct` set, and … |
+
 ### `Hybrid/Checkpoint/RecoveryProofs.lean` (14)
 
 | Lemma | Role |
@@ -36567,14 +36786,13 @@ subsection per module, in the layer order of Appendices B and C.
 | `synchronisedOn_stackHZ` | The stack is covered, from a round above the fill, rebased. |
 | `synchronisedOn_toCore` | — |
 
-### `Integration/Hydrozoan/OptimalChopDecided.lean` (14)
+### `Integration/Hydrozoan/OptimalChopDecided.lean` (13)
 
 | Lemma | Role |
 |:---|:---|
 | `blocksAt_decision_chopHZ` | A decision-round block of the truncation is a decision-round block of the original, and sits far enough … |
 | `decidedOpt_chopHZ_of_decided` | Verdicts survive the cut. |
 | `decidedOpt_of_decidedOpt_chopHZ` | And a verdict of the truncation is a verdict of the universe it came from. |
-| `decides` | The replica reaches exactly the verdicts it would have reached with its whole history, at its own … |
 | `decisionRound_chopHZ` | The decision round re-indexes by the horizon, like every other round the rules name. |
 | `decision_block_guards` | What membership at the decision round supplies: presence, and the round guard every lemma above needs. |
 | `evidenceLinked_chopHZ` | Rung 2 is preserved. The witness set is the same set of blocks: each sits at the decision round, is fast … |
