@@ -210,12 +210,10 @@ def bridgeRule :
   witnesses := by
     intro v hv checkpoint he Q
     exact
-      { sender := v
-        certificate := Q
-        recorded := fun hv' => ⟨hv', bridgeExecution_emitted he hv⟩ }
-  witnessSender := by
-    intro v hv checkpoint he Q
-    rfl
+      ⟨{ sender := v
+         certificate := Q
+         recorded := fun hv' => ⟨hv', bridgeExecution_emitted he hv⟩ },
+       rfl⟩
 
 /-- The crash fault remains present and is not required to sign. -/
 example : (8 : Fin 9) ∉ bridgeFaults.RecoveryCorrect := by decide
@@ -283,6 +281,8 @@ def sync9Blk : Fin 21 → Block (Fin 9) (Fin 21) Unit := fun i =>
     { round := 2, creator := ⟨(i : ℕ) - 13, by have := i.isLt; omega⟩,
       refs := {7, 8, 9, 10, 11, 12, 13}, payload := () }
 
+/-- A finite run satisfying the production and synchrony premises used
+to exercise `LiveCommitFinalized` with a correct leader. -/
 def Usync9 : BlockUniverse (Fin 9) (Fin 21) Unit where
   ids := Finset.univ
   block := sync9Blk
@@ -369,6 +369,8 @@ def syncExecution : bridgeFaults.Execution ℕ where
     obtain ⟨rfl, rfl⟩ := usync9_decided_eq hdec
     simp [hc, natVM]
 
+/-- Every proposal in the synchronised execution names the sole
+checkpoint reachable from its block-valued decisions. -/
 theorem syncExecution_emitted {message : ChkProp (Fin 9) ℕ}
     (h : syncExecution.emitted message) :
     message.checkpoint = syncCheckpoint := by
@@ -376,6 +378,8 @@ theorem syncExecution_emitted {message : ChkProp (Fin 9) ℕ}
   obtain ⟨rfl, rfl⟩ := usync9_decided_eq hdec
   exact hc
 
+/-- The synchronised execution follows both checkpoint-signing phases
+on each validator's full view. -/
 def syncRule :
     Checkpoint.FlexibleFaults.Execution.SigningRule bridgeFaults syncExecution
       Usync9 4 (natVM 21) where
@@ -387,12 +391,10 @@ def syncRule :
   witnesses := by
     intro v hv checkpoint he Q
     exact
-      { sender := v
-        certificate := Q
-        recorded := fun hv' => ⟨hv', syncExecution_emitted he⟩ }
-  witnessSender := by
-    intro v hv checkpoint he Q
-    rfl
+      ⟨{ sender := v
+         certificate := Q
+         recorded := fun hv' => ⟨hv', syncExecution_emitted he⟩ },
+       rfl⟩
 
 /-- Coverage over the online correct validators from round `1`: the only
 round pair at or above it is `(1, 2)`, and every round-2 block

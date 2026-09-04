@@ -27,11 +27,12 @@ variable [H : HybridFaults Validator]
 variable [LinearOrder BlockId]
 variable [S : Slots Validator]
 
-/-- Deterministic execution interface. For a settled slot and committed
-block, Lean function application determines one checkpoint value.
-The implementation of the VM and its application-state semantics remain
-outside this model. -/
+/-- Deterministic execution interface mapping a slot and block to one
+checkpoint value. Settlement is imposed by the claims that use this
+interface; the VM implementation and its application-state semantics
+remain outside this model. -/
 structure DeterministicVM where
+  /-- Application state after executing the committed block for a slot. -/
   checkpointAfterCommit : ℕ → BlockId → CheckpointData Value
 
 namespace FlexibleFaults
@@ -53,10 +54,9 @@ obligations, not restrictions: the rule does not say what a validator
 does with a certificate for a checkpoint it did not propose, and
 `Execution` has no witness-emission predicate over which such a
 restriction could be stated. Both fields are protocol rules, of the
-same status as `Delivery.includes`; they are implementable and
-observable but not derived here. The inherited base model still
-contains Byzantine and crash faults, and neither class is obliged to
-anything. -/
+same status as `Delivery.includes`; they are implementable but not
+derived here. The inherited base model still contains Byzantine and
+crash faults, and neither class is obliged to anything. -/
 structure SigningRule (U : BlockUniverse Validator BlockId Payload) (k : ℕ)
     (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) where
   /-- Byzantine and crash faults remain governed by `HybridFaults`; only
@@ -74,13 +74,8 @@ structure SigningRule (U : BlockUniverse Validator BlockId Payload) (k : ℕ)
     ∀ v ∈ M.RecoveryCorrect, ∀ {checkpoint : CheckpointData Value},
       E.emitted ⟨v, checkpoint⟩ →
         FlexibleFaults.Execution.CheckpointQC M E checkpoint →
-          FlexibleFaults.Execution.ChkWitness M E checkpoint
-  /-- Witness authentication binds each message to its sender. -/
-  witnessSender :
-    ∀ v (hv : v ∈ M.RecoveryCorrect) {checkpoint : CheckpointData Value}
-      (he : E.emitted ⟨v, checkpoint⟩)
-      (Q : FlexibleFaults.Execution.CheckpointQC M E checkpoint),
-      (witnesses v hv he Q).sender = v
+          { witness : FlexibleFaults.Execution.ChkWitness M E checkpoint //
+            witness.sender = v }
 
 /-! ## Claims
 
@@ -124,11 +119,11 @@ def CommitFinalized (Payload : Type*)
       Nonempty (FlexibleFaults.Execution.FinalityQC M E
         (vm.checkpointAfterCommit slot block))
 
-/-- Claim: DAG liveness delivers the finalized checkpoint. Under the
+/-- Claim: DAG liveness delivers a finalized checkpoint. Under the
 hypotheses of `Hybrid.decided_of_leader_mem` over the online correct
-validators, a slot led by one of them commits on every such validator's
-view, and the resulting checkpoint is finalized. No commit is assumed;
-it is derived from production, coverage, and caught-up views. -/
+validators, a slot led by one of them reaches checkpoint finality. No
+commit is assumed; the proof derives the decisions it needs from
+production, synchrony, and caught-up views. -/
 def LiveCommitFinalized (Payload : Type*)
     (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) : Prop :=
   ∀ {U : BlockUniverse Validator BlockId Payload} {k : ℕ}

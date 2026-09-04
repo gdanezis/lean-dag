@@ -90,9 +90,9 @@ def finalityQCOfDecided (P : SigningRule M E U k vm)
     witnesses := M.RecoveryCorrect
     quorum := recoveryCorrect_quorum M P.noAbC
     messages := fun v hv =>
-      P.witnesses v hv (Q.messages v hv) Q
+      (P.witnesses v hv (Q.messages v hv) Q).1
     sender_eq := fun v hv =>
-      P.witnessSender v hv (Q.messages v hv) Q }
+      (P.witnesses v hv (Q.messages v hv) Q).2 }
 
 /-- Proof of `CommitCertified`. -/
 theorem commitCertified : CommitCertified M E Payload vm := by

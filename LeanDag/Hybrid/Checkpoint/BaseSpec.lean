@@ -180,11 +180,11 @@ by an abstract possession predicate, so later proofs can inspect the
 same signer evidence that justified the witness.
 
 For a recovery-correct sender, `recorded` requires durable protocol
-storage before the witness is emitted. This lets a finality quorum yield
-at least one honest, available validator that can resubmit the finalized
-checkpoint during recovery. The implication deliberately constrains
-only recovery-correct senders; Byzantine, crashed, and AbC senders make
-no storage promise. -/
+storage as part of supplying the witness. This lets a finality quorum
+yield at least one honest, available validator that can resubmit the
+finalized checkpoint during recovery. The implication deliberately
+constrains only recovery-correct senders; Byzantine, crashed, and AbC
+senders make no storage promise. -/
 structure ChkWitness (checkpoint : CheckpointData Value) where
   /-- Authenticated validator claiming to have validated the certificate. -/
   sender : Validator
@@ -197,8 +197,8 @@ structure ChkWitness (checkpoint : CheckpointData Value) where
   recorded :
     sender ∈ M.RecoveryCorrect → E.recorded sender checkpoint
 
-/-- A finality certificate is a quorum of actual witness messages for
-one checkpoint, rather than an arbitrary possession predicate. -/
+/-- A finality certificate supplies a quorum of authenticated witnesses
+for one checkpoint, rather than an arbitrary possession predicate. -/
 structure FinalityQC (checkpoint : CheckpointData Value) where
   /-- A concrete first-phase certificate for the finalized content. -/
   checkpointQC : FlexibleFaults.Execution.CheckpointQC M E checkpoint
@@ -206,7 +206,7 @@ structure FinalityQC (checkpoint : CheckpointData Value) where
   witnesses : Finset Validator
   /-- The witness phase uses the hybrid quorum. -/
   quorum : Hybrid.q Validator ≤ witnesses.card
-  /-- Every listed sender emitted a concrete validated witness. -/
+  /-- Every listed sender is represented by a concrete validated witness. -/
   messages :
     ∀ v ∈ witnesses, FlexibleFaults.Execution.ChkWitness M E checkpoint
   /-- Witness authentication binds each message to its listed sender. -/
