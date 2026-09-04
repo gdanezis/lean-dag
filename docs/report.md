@@ -23577,7 +23577,7 @@ def CommitCheckpointUnique (Payload : Type*)
         vm.checkpointAfterCommit slot block₂
 ```
 
-Claim: base-consensus safety rules out a checkpoint fork. Under the hypotheses of `Hybrid.safety`, commits for one slot in any two views yield the same checkpoint content.
+Claim: base-consensus safety rules out a checkpoint fork. Under the hypotheses of `Hybrid.safety`, commits for one slot in any two views yield the same checkpoint content. This claim is about the VM and base consensus alone, so it mentions neither the fault model nor an execution.
 
 #### `select`
 
@@ -34872,13 +34872,15 @@ theorem liveCommitFinalized : LiveCommitFinalized M E Payload vm
 
 Proof of `LiveCommitFinalized`: `Hybrid.decided_of_leader_mem` on the full view supplies the commit, and on each online correct validator's own view supplies the settled-everywhere hypothesis.
 
-#### `checkpointAfterCommit_eq`
+#### `commitCheckpointUnique`
 
 *theorem, `Hybrid.Checkpoint.CommitProofs.lean`*
 
 ```lean
-theorem checkpointAfterCommit_eq :
-    CommitCheckpointUnique (Validator := Validator) Payload vm
+theorem commitCheckpointUnique
+    (Payload : Type*)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) :
+    CommitCheckpointUnique Validator Payload vm
 ```
 
 Proof of `CommitCheckpointUnique`: rewrite with `Hybrid.safety`.

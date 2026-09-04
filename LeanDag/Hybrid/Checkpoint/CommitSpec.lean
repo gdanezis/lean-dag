@@ -132,15 +132,24 @@ def LiveCommitFinalized (Payload : Type*)
     SynchronisedOn U M.RecoveryCorrect R → R ≤ S.slotRound slot →
     PopulatedOn U M.RecoveryCorrect (S.slotRound slot) →
     PopulatedOn U M.RecoveryCorrect (S.slotRound slot + 1) →
-    (∀ v ∈ M.RecoveryCorrect, (P.view v).CoversUpto (S.slotRound slot + 1)) →
+    (∀ v ∈ M.RecoveryCorrect,
+      (P.view v).CoversUpto (S.slotRound slot + 1)) →
     S.leader slot ∈ M.RecoveryCorrect →
     ∃ L, IsLeaderBlock U slot L ∧
       Nonempty (FlexibleFaults.Execution.FinalityQC M E
         (vm.checkpointAfterCommit slot L))
 
+end Execution
+
+end FlexibleFaults
+
+variable (Validator)
+
 /-- Claim: base-consensus safety rules out a checkpoint fork. Under the
 hypotheses of `Hybrid.safety`, commits for one slot in any two views
-yield the same checkpoint content. -/
+yield the same checkpoint content. This claim is about the VM and base
+consensus alone, so it mentions neither the fault model nor an
+execution. -/
 def CommitCheckpointUnique (Payload : Type*)
     (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) : Prop :=
   ∀ {U : BlockUniverse Validator BlockId Payload} {k : ℕ},
@@ -151,9 +160,5 @@ def CommitCheckpointUnique (Payload : Type*)
       Hybrid.Decided k U V₂ slot (some block₂) →
       vm.checkpointAfterCommit slot block₁ =
         vm.checkpointAfterCommit slot block₂
-
-end Execution
-
-end FlexibleFaults
 
 end LeanDag.Hybrid.Checkpoint

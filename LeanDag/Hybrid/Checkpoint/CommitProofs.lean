@@ -121,14 +121,18 @@ theorem liveCommitFinalized : LiveCommitFinalized M E Payload vm := by
       (P.view v) (hcov v hv) hlead
   exact ⟨b, hb⟩
 
-/-- Proof of `CommitCheckpointUnique`: rewrite with `Hybrid.safety`. -/
-theorem checkpointAfterCommit_eq :
-    CommitCheckpointUnique (Validator := Validator) Payload vm := by
-  intro U k hne hk V₁ V₂ slot block₁ block₂ commit₁ commit₂
-  rw [Hybrid.safety hne hk commit₁ commit₂]
-
 end Execution
 
 end FlexibleFaults
+
+variable (Validator)
+
+/-- Proof of `CommitCheckpointUnique`: rewrite with `Hybrid.safety`. -/
+theorem commitCheckpointUnique
+    (Payload : Type*)
+    (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) :
+    CommitCheckpointUnique Validator Payload vm := by
+  intro U k hne hk V₁ V₂ slot block₁ block₂ commit₁ commit₂
+  rw [Hybrid.safety hne hk commit₁ commit₂]
 
 end LeanDag.Hybrid.Checkpoint
