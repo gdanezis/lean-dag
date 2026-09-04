@@ -23,12 +23,21 @@ onto the existing Odontoceti development at `c = 0`. Results will carry
 **H**-labels; everything will live in `LeanDag/Hybrid/` with `decide`
 witnesses in `LeanDagTest/Hybrid.lean`, consuming the core read-only.
 
-The DAG theorems below do not depend on checkpoint signatures. The
-additive `Hybrid/Checkpoint/` subarc is a separate assume-guarantee
-model: it takes possibly forked per-validator histories and messages as
+The DAG theorems below do not depend on checkpoint signatures. The core
+`Hybrid/Checkpoint/` safety model uses `FlexibleFaults`, which keeps the
+hybrid Byzantine and crash classes and adds alive-but-corrupt signers.
+It takes possibly forked per-validator histories and messages as
 execution input, then proves resilient finality safety and
-highest-checkpoint recovery. It neither derives AbC-induced forks from
-the DAG nor composes these checkpoint results with the DAG proofs.
+highest-checkpoint recovery. The additive `CommitSpec.lean` bridge
+covers the secure-base case at `abc = ∅`: deterministic execution maps a
+Hybrid commit to one checkpoint, and a `SigningRule` states the protocol
+as rules over a run: a correct online validator proposes the checkpoint
+of every slot it settles on its own view and witnesses certificates for
+its own proposals. `CommitProofs.lean` derives the quorum from the
+inherited fault bound, ties the proposals to a commit through
+`Hybrid.safety`, and composes with `Hybrid.decided_of_leader_mem` to
+finalize a correctly led slot from DAG production and coverage. It does
+not derive AbC-induced DAG forks or an implementation of the rules.
 
 ## 1. What the hybrid model splits
 
@@ -272,8 +281,11 @@ on it.
 | `Hybrid/Checkpoint/RecoverySpec.lean` | **human review:** broadcast, validation, selection, and epoch-transition contracts |
 | `Hybrid/Checkpoint/SafetyProofs.lean` | **Lean-checked:** quorum, uniqueness, prefix consistency, and recorder derivations |
 | `Hybrid/Checkpoint/RecoveryProofs.lean` | **Lean-checked:** concrete selection, agreement, and preservation derivations |
+| `Hybrid/Checkpoint/CommitSpec.lean` | **human review:** deterministic execution, the signing rule, and the bridge's claims as `Prop`s |
+| `Hybrid/Checkpoint/CommitProofs.lean` | **Lean-checked:** proofs of those claims; no statements of its own |
 | `LeanDagTest/Hybrid.lean` | H9: the `n = 4` crash model and the `n = 9` hybrid model |
 | `LeanDagTest/HybridCheckpoint.lean` | concrete checkpoint certificate, finality certificate and recovery output |
+| `LeanDagTest/HybridCheckpointCommit.lean` | `Uhyb9`: a Byzantine-led commit carried through both signing phases, with a Byzantine fork attempt that gets no certificate; `Usync9`: a correct-led slot finalized from production and coverage alone |
 
 ## 6. Out of scope
 
@@ -293,6 +305,17 @@ on it.
   the highest validated checkpoint history. The paper's deterministic
   extension with delivered VoteQCs up to the first gap is not modeled,
   so theorem names claim checkpoint preservation only.
+- **Checkpoint signatures carried in blocks.** `SigningRule.proposes`
+  and `witnesses` are protocol rules over an abstract `E.emitted`;
+  checkpoint messages have no delivery model, and `Execution` has no
+  witness-emission predicate, so `ChkWitness` is dischargeable from
+  `E.recorded`. `Block.payload` is inert in every rule, so the next step
+  is to carry the proposal as block content: `emitted` becomes block
+  authorship, `proposes` follows from a content rule plus `PopulatedOn`,
+  and a round-later block referencing `q` proposals is the witness,
+  derived from `SynchronisedOn` as in `directCommit_of_leader_mem`.
+  This constructs the `Execution` from `(U, vm)` and proves its
+  invariants instead of assuming them.
 - **DAG rejoin after recovery.** Safe Skip addresses a crash-prone
   validator that returns (report §12). The checkpoint subarc proves the
   recovered prefix safe; composing it with the subsequent DAG fill is

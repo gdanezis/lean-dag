@@ -25,7 +25,7 @@ instance checkpointFaults : HybridFaults (Fin 9) where
   card_validators := by decide
 
 /-- One Byzantine and one AbC validator may violate signing rules. -/
-def checkpointModel : Model (Fin 9) ℕ where
+def checkpointFlexible : FlexibleFaults (Fin 9) ℕ where
   fabc := 1
   abc := {1}
   disjoint_byzantine := by decide
@@ -81,11 +81,11 @@ def checkpointRecorded (_ : Fin 9) (checkpoint : CheckpointData ℕ) : Prop :=
 than `0` and `1`, which is the side condition every emission clause
 below discharges. -/
 private theorem reliable_not_faulty {v : Fin 9}
-    (hv : v ∈ checkpointModel.ReliableSigner) :
+    (hv : v ∈ checkpointFlexible.ReliableSigner) :
     v ∉ ({0, 1} : Finset (Fin 9)) := by
   have hv' :
       v ≠ 1 ∧ v ∉ checkpointFaults.byzantine := by
-    simpa [checkpointModel, Model.ReliableSigner] using hv
+    simpa [checkpointFlexible, FlexibleFaults.ReliableSigner] using hv
   have h0 : v ≠ 0 := by
     have hb := hv'.2
     change v ∉ ({0} : Finset (Fin 9)) at hb
@@ -94,7 +94,7 @@ private theorem reliable_not_faulty {v : Fin 9}
 
 /-- The concrete protocol execution, including the genesis adopted after
 the recovery epoch. -/
-def checkpointExecution : checkpointModel.Execution ℕ where
+def checkpointExecution : checkpointFlexible.Execution ℕ where
   genesis := fun epoch => if epoch = 0 then [] else [0, 1]
   localHistory := checkpointLocal
   emitted := checkpointEmitted
@@ -131,7 +131,7 @@ def checkpointExecution : checkpointModel.Execution ℕ where
 
 /-- Seven senders form the lower, deliberately unrecorded certificate. -/
 def checkpointOneQC :
-    Model.Execution.CheckpointQC checkpointModel checkpointExecution
+    FlexibleFaults.Execution.CheckpointQC checkpointFlexible checkpointExecution
       checkpointOne where
   signers := {0, 1, 2, 3, 4, 5, 6}
   quorum := by decide
@@ -142,7 +142,7 @@ def checkpointOneQC :
 
 /-- Seven senders form the finalized height-two certificate. -/
 def checkpointTwoQC :
-    Model.Execution.CheckpointQC checkpointModel checkpointExecution
+    FlexibleFaults.Execution.CheckpointQC checkpointFlexible checkpointExecution
       checkpointTwo where
   signers := {0, 1, 2, 3, 4, 5, 6}
   quorum := by decide
@@ -154,7 +154,7 @@ def checkpointTwoQC :
 /-- A competing signer set certifies the same canonical height-two
 checkpoint, exercising quorum intersection rather than identical sets. -/
 def checkpointTwoAltQC :
-    Model.Execution.CheckpointQC checkpointModel checkpointExecution
+    FlexibleFaults.Execution.CheckpointQC checkpointFlexible checkpointExecution
       checkpointTwo where
   signers := {0, 1, 2, 3, 4, 7, 8}
   quorum := by decide
@@ -166,12 +166,12 @@ def checkpointTwoAltQC :
 /-- Certified height binding is derived from a reliable quorum signer;
 it is not imposed on Byzantine or AbC emissions. -/
 example : checkpointTwo.history.length = checkpointTwo.height :=
-  Model.Execution.checkpointQC_height_bound checkpointModel
+  FlexibleFaults.Execution.checkpointQC_height_bound checkpointFlexible
     checkpointExecution checkpointTwoQC
 
 /-- The next epoch certifies a strict extension of the recovered state. -/
 def checkpointThreeQC :
-    Model.Execution.CheckpointQC checkpointModel checkpointExecution
+    FlexibleFaults.Execution.CheckpointQC checkpointFlexible checkpointExecution
       checkpointThree where
   signers := {0, 1, 2, 3, 4, 5, 6}
   quorum := by decide
@@ -183,7 +183,7 @@ def checkpointThreeQC :
 /-- The second quorum consists of concrete messages whose senders have
 recorded `checkpointTwoQC`. -/
 def checkpointFinality :
-    Model.Execution.FinalityQC checkpointModel checkpointExecution
+    FlexibleFaults.Execution.FinalityQC checkpointFlexible checkpointExecution
       checkpointTwo where
   checkpointQC := checkpointTwoQC
   witnesses := {0, 1, 2, 3, 4, 5, 6}
@@ -221,10 +221,10 @@ example : ¬ checkpointExecution.emitted ⟨2, forkTwo⟩ := by
 /-- Any attempted fork certificate conflicts with the canonical QC and
 is therefore impossible: quorum intersection supplies a reliable signer. -/
 example
-    (forkQC : Model.Execution.CheckpointQC checkpointModel
+    (forkQC : FlexibleFaults.Execution.CheckpointQC checkpointFlexible
       checkpointExecution forkTwo) : False := by
   have heq :=
-    Model.Execution.checkpointQC_eq_of_same_height checkpointModel
+    FlexibleFaults.Execution.checkpointQC_eq_of_same_height checkpointFlexible
       checkpointExecution forkQC checkpointTwoQC rfl rfl
   have hne : forkTwo ≠ checkpointTwo := by decide
   exact hne heq
@@ -232,8 +232,8 @@ example
 /-- The two nonidentical concrete quorums intersect in a reliable signer. -/
 example :
     ∃ v ∈ checkpointTwoQC.signers ∩ checkpointTwoAltQC.signers,
-      v ∈ checkpointModel.ReliableSigner :=
-  checkpointModel.exists_reliableSigner_mem_inter
+      v ∈ checkpointFlexible.ReliableSigner :=
+  checkpointFlexible.exists_reliableSigner_mem_inter
     checkpointTwoQC.quorum checkpointTwoAltQC.quorum
 
 /-- The two certified heights have a strict, non-reflexive prefix. -/
@@ -244,28 +244,28 @@ example :
 
 /-- Concrete lower certificate payload, including every signer. -/
 def checkpointOnePayload :
-    Model.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
+    FlexibleFaults.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
   checkpoint := checkpointOne
   signers := checkpointOneQC.signers
 
 /-- Concrete finalized certificate payload. -/
 def checkpointTwoPayload :
-    Model.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
+    FlexibleFaults.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
   checkpoint := checkpointTwo
   signers := checkpointTwoQC.signers
 
 /-- Malformed recovery payload: Byzantine and AbC signers emitted this
 fork, but the payload falsely claims five additional reliable signers. -/
 def invalidForkPayload :
-    Model.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
+    FlexibleFaults.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
   checkpoint := forkTwo
   signers := {0, 1, 2, 3, 4, 5, 6}
 
 /-- Both canonical wire certificates pass explicit local verification. -/
 example :
-    Model.Execution.CertificatePayload.Valid checkpointModel checkpointExecution
+    FlexibleFaults.Execution.CertificatePayload.Valid checkpointFlexible checkpointExecution
         checkpointOnePayload ∧
-      Model.Execution.CertificatePayload.Valid checkpointModel checkpointExecution
+      FlexibleFaults.Execution.CertificatePayload.Valid checkpointFlexible checkpointExecution
         checkpointTwoPayload := by
   constructor
   · constructor
@@ -281,7 +281,7 @@ example :
 
 /-- The explicit verifier rejects the concrete fork payload. -/
 theorem invalid_fork_payload_rejected :
-    ¬Model.Execution.validateCertificate checkpointModel checkpointExecution
+    ¬FlexibleFaults.Execution.validateCertificate checkpointFlexible checkpointExecution
       0 invalidForkPayload := by
   intro hvalid
   have hem := hvalid.2.2 (2 : Fin 9) (by simp [invalidForkPayload])
@@ -291,7 +291,7 @@ theorem invalid_fork_payload_rejected :
 /-- Broadcast transports only authenticated inputs; no validity or
 storage predicate occurs in this channel contract. -/
 def checkpointBroadcast :
-    Model.Execution.AuthenticatedBroadcast checkpointModel where
+    FlexibleFaults.Execution.AuthenticatedBroadcast checkpointFlexible where
   input := fun sender payload =>
     payload = checkpointOnePayload ∨ payload = checkpointTwoPayload ∨
       (sender = 0 ∧ payload = invalidForkPayload)
@@ -306,7 +306,7 @@ def checkpointBroadcast :
 two delivered payloads accepted by explicit validation.  The malformed
 Byzantine payload is delivered but excluded. -/
 def checkpointRecovery :
-    Model.Execution.RecoveryRound checkpointModel checkpointExecution
+    FlexibleFaults.Execution.RecoveryRound checkpointFlexible checkpointExecution
       checkpointBroadcast 0 where
   validated := fun _ => {checkpointOne, checkpointTwo}
   submits_recorded := by
@@ -361,7 +361,7 @@ example :
 /-- A later recovery round may retain old records without treating them
 as certificates for the new closing epoch. -/
 def emptyRecoveryBroadcast :
-    Model.Execution.AuthenticatedBroadcast checkpointModel where
+    FlexibleFaults.Execution.AuthenticatedBroadcast checkpointFlexible where
   input := fun _ _ => False
   delivered := fun _ _ _ => False
   integrity := by simp
@@ -372,7 +372,7 @@ def emptyRecoveryBroadcast :
 epoch-0 checkpoint, while an epoch-1 round has no current-epoch input.
 The stale record does not make the round contract inconsistent. -/
 def retainedRecordRecovery :
-    Model.Execution.RecoveryRound checkpointModel checkpointExecution
+    FlexibleFaults.Execution.RecoveryRound checkpointFlexible checkpointExecution
       emptyRecoveryBroadcast 1 where
   validated := fun _ => ∅
   submits_recorded := by
@@ -387,34 +387,34 @@ def retainedRecordRecovery :
 /-- Empty recovery selects the canonical checkpoint induced by the
 closing epoch's execution genesis, not caller-supplied data. -/
 example :
-    Model.Execution.RecoveryRound.select checkpointModel checkpointExecution
+    FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible checkpointExecution
       retainedRecordRecovery 2 =
-        Model.Execution.epochGenesis checkpointModel checkpointExecution 1 := by
-  simp [Model.Execution.RecoveryRound.select, retainedRecordRecovery]
+        FlexibleFaults.Execution.epochGenesis checkpointFlexible checkpointExecution 1 := by
+  simp [FlexibleFaults.Execution.RecoveryRound.select, retainedRecordRecovery]
 
 /-- Recovery really selects the higher certificate. -/
 theorem concrete_selection_eq :
-    Model.Execution.RecoveryRound.select checkpointModel checkpointExecution
+    FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible checkpointExecution
       checkpointRecovery 2 = checkpointTwo := by
   have hs : (checkpointRecovery.validated 2).Nonempty :=
     ⟨checkpointOne, by simp [checkpointRecovery]⟩
   have hm :
-      Model.Execution.RecoveryRound.select checkpointModel
+      FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible
           checkpointExecution checkpointRecovery 2 ∈
         checkpointRecovery.validated 2 :=
-    Model.Execution.RecoveryRound.select_mem
-      checkpointModel checkpointExecution checkpointRecovery
+    FlexibleFaults.Execution.RecoveryRound.select_mem
+      checkpointFlexible checkpointExecution checkpointRecovery
         (receiver := (2 : Fin 9)) hs
-  apply Model.Execution.RecoveryRound.eq_of_validated_height
-    checkpointModel checkpointExecution checkpointRecovery
+  apply FlexibleFaults.Execution.RecoveryRound.eq_of_validated_height
+    checkpointFlexible checkpointExecution checkpointRecovery
   · exact hm
   · simp [checkpointRecovery]
   · apply Nat.le_antisymm
     · have hcases :
-          Model.Execution.RecoveryRound.select checkpointModel
+          FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible
                 checkpointExecution checkpointRecovery 2 =
               checkpointOne ∨
-            Model.Execution.RecoveryRound.select checkpointModel
+            FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible
                 checkpointExecution checkpointRecovery 2 =
               checkpointTwo := by
           simpa only [checkpointRecovery, Finset.mem_insert,
@@ -422,21 +422,21 @@ theorem concrete_selection_eq :
       rcases hcases with hcase | hcase
       · simp [hcase, checkpointOne, checkpointTwo]
       · simp [hcase]
-    · exact Model.Execution.RecoveryRound.height_le_select
-        checkpointModel checkpointExecution checkpointRecovery hs
+    · exact FlexibleFaults.Execution.RecoveryRound.height_le_select
+        checkpointFlexible checkpointExecution checkpointRecovery hs
           (by simp [checkpointRecovery])
 
 /-- The concrete epoch transition adopts the recovery selection as the
 next genesis. -/
 noncomputable def checkpointTransition :
-    Model.Execution.RecoveryRound.EpochTransition checkpointModel
+    FlexibleFaults.Execution.RecoveryRound.EpochTransition checkpointFlexible
       checkpointExecution checkpointRecovery 2 where
   receiver_correct := by decide
   selected :=
-    Model.Execution.RecoveryRound.select checkpointModel
+    FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible
       checkpointExecution checkpointRecovery 2
   selection :=
-    Model.Execution.RecoveryRound.select_isSelected checkpointModel
+    FlexibleFaults.Execution.RecoveryRound.select_isSelected checkpointFlexible
       checkpointExecution checkpointRecovery 2
   next_epoch := 1
   next_epoch_eq := rfl
@@ -448,20 +448,21 @@ noncomputable def checkpointTransition :
 strictly extends it in the next epoch. -/
 theorem concrete_recovery_extends :
     checkpointTwo.history <+: checkpointThree.history :=
-  Model.Execution.RecoveryRound.finalized_prefix_next_checkpoint
-    checkpointModel checkpointExecution checkpointRecovery
+  FlexibleFaults.Execution.RecoveryRound.finalized_prefix_next_checkpoint
+    checkpointFlexible checkpointExecution checkpointRecovery
       checkpointTransition checkpointFinality rfl checkpointThreeQC rfl
 
 example : checkpointTwo.history ≠ checkpointThree.history := by decide
 
-#print axioms LeanDag.Hybrid.Checkpoint.Model.Execution.checkpointQC_eq_of_same_height
-#print axioms LeanDag.Hybrid.Checkpoint.Model.Execution.checkpointQC_prefix
-#print axioms LeanDag.Hybrid.Checkpoint.Model.Execution.finalityQC_compatible
-#print axioms LeanDag.Hybrid.Checkpoint.Model.Execution.validateCertificate_sound
-#print axioms LeanDag.Hybrid.Checkpoint.Model.Execution.RecoveryRound.validated_sound
-#print axioms LeanDag.Hybrid.Checkpoint.Model.Execution.RecoveryRound.recovery_preserves_finality
+#print axioms LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.checkpointQC_eq_of_same_height
+#print axioms LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.checkpointQC_prefix
+#print axioms LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.finalityQC_compatible
+#print axioms LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.validateCertificate_sound
+#print axioms LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.RecoveryRound.validated_sound
 #print axioms
-  LeanDag.Hybrid.Checkpoint.Model.Execution.RecoveryRound.finalized_prefix_next_checkpoint
+  LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.RecoveryRound.recovery_preserves_finality
+#print axioms
+  LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.RecoveryRound.finalized_prefix_next_checkpoint
 #print axioms concrete_recovery_extends
 
 end LeanDagTest

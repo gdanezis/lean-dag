@@ -57,16 +57,17 @@ structure ChkProp (Validator Value : Type*) where
   checkpoint : CheckpointData Value
   deriving DecidableEq
 
-/-- Checkpoint-specific extension of the imported `HybridFaults` model.
-This is not a second definition of hybrid faults: `H` supplies the
-Byzantine/crash classes and their bounds, while this structure adds the
-AbC class and the stronger checkpoint resilience bound.
+/-- The flexible fault model: the imported `HybridFaults` classes plus
+alive-but-corrupt validators. `H` supplies the Byzantine/crash classes
+and their bounds; this structure adds the AbC class and the stronger
+checkpoint resilience bound. Setting `abc = ∅` recovers the base
+hybrid model without removing crash faults.
 
 The disjointness fields preserve the paper's interpretation as distinct
 fault classes. Current safety derivations do not consume them: their
 cardinality arguments conservatively use union upper bounds and remain
 valid if classes overlap. -/
-structure Model (Validator Value : Type*) [Fintype Validator]
+structure FlexibleFaults (Validator Value : Type*) [Fintype Validator]
     [DecidableEq Validator] [H : HybridFaults Validator] where
   /-- Alive-but-corrupt fault bound. -/
   fabc : ℕ
@@ -84,9 +85,9 @@ structure Model (Validator Value : Type*) [Fintype Validator]
   resilient :
     fabc + 3 * H.fb + 2 * H.fc < Fintype.card Validator
 
-namespace Model
+namespace FlexibleFaults
 
-variable (M : Model Validator Value)
+variable (M : FlexibleFaults Validator Value)
 
 /-- Validators whose checkpoint protocol state is enforced. -/
 def ReliableSigner : Finset Validator :=
@@ -179,41 +180,41 @@ by an abstract possession predicate, so later proofs can inspect the
 same signer evidence that justified the witness.
 
 For a recovery-correct sender, `recorded` requires durable protocol
-storage before the witness is emitted. This lets a finality quorum yield
-at least one honest, available validator that can resubmit the finalized
-checkpoint during recovery. The implication deliberately constrains
-only recovery-correct senders; Byzantine, crashed, and AbC senders make
-no storage promise. -/
+storage as part of supplying the witness. This lets a finality quorum
+yield at least one honest, available validator that can resubmit the
+finalized checkpoint during recovery. The implication deliberately
+constrains only recovery-correct senders; Byzantine, crashed, and AbC
+senders make no storage promise. -/
 structure ChkWitness (checkpoint : CheckpointData Value) where
   /-- Authenticated validator claiming to have validated the certificate. -/
   sender : Validator
   /-- The concrete first-phase certificate received by the sender. Its
   dependent type binds the witness to this exact `checkpoint`. -/
-  certificate : Model.Execution.CheckpointQC M E checkpoint
+  certificate : FlexibleFaults.Execution.CheckpointQC M E checkpoint
   /-- If the sender follows recovery and remains available, it stored
   the checkpoint before witnessing it. No condition is imposed when the
   sender is outside `RecoveryCorrect`. -/
   recorded :
     sender ∈ M.RecoveryCorrect → E.recorded sender checkpoint
 
-/-- A finality certificate is a quorum of actual witness messages for
-one checkpoint, rather than an arbitrary possession predicate. -/
+/-- A finality certificate supplies a quorum of authenticated witnesses
+for one checkpoint, rather than an arbitrary possession predicate. -/
 structure FinalityQC (checkpoint : CheckpointData Value) where
   /-- A concrete first-phase certificate for the finalized content. -/
-  checkpointQC : Model.Execution.CheckpointQC M E checkpoint
+  checkpointQC : FlexibleFaults.Execution.CheckpointQC M E checkpoint
   /-- Distinct witness senders. -/
   witnesses : Finset Validator
   /-- The witness phase uses the hybrid quorum. -/
   quorum : Hybrid.q Validator ≤ witnesses.card
-  /-- Every listed sender emitted a concrete validated witness. -/
+  /-- Every listed sender is represented by a concrete validated witness. -/
   messages :
-    ∀ v ∈ witnesses, Model.Execution.ChkWitness M E checkpoint
+    ∀ v ∈ witnesses, FlexibleFaults.Execution.ChkWitness M E checkpoint
   /-- Witness authentication binds each message to its listed sender. -/
   sender_eq : ∀ v (hv : v ∈ witnesses), (messages v hv).sender = v
 
 end Execution
 
-end Model
+end FlexibleFaults
 
 /-- Two checkpoint histories are consistent when either extends the
 other. -/

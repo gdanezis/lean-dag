@@ -111,12 +111,23 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   (`hybrid_bound_necessary`).
 - **Resilient checkpoints** (`LeanDag/Hybrid/Checkpoint/`): explicit
   epoch-, height-, and history-bearing proposal messages are
-  emitted from append-only per-validator protocol state. Forked
-  per-validator histories are execution inputs: this layer does not
-  derive an AbC fork from the DAG or compose with the DAG safety proofs.
-  `BaseSpec.lean` and `RecoverySpec.lean` are the human-review trust
-  boundary; theorem statements still require review, while the bodies
-  in `SafetyProofs.lean` and `RecoveryProofs.lean` are Lean-checked.
+  emitted from append-only per-validator protocol state. The
+  `FlexibleFaults` model keeps the hybrid Byzantine and crash classes
+  and adds alive-but-corrupt signers; the standalone safety layer
+  accepts forked histories as execution inputs. `CommitSpec.lean` adds
+  the secure-base bridge at `abc = ∅`: a deterministic VM maps each
+  Hybrid commit to one checkpoint, and a `SigningRule` states the
+  protocol as two rules, sign what you commit on your own view and
+  witness what you proposed. `CommitProofs.lean` derives the quorum
+  from the inherited fault bound, ties every online correct validator's
+  proposal to a given commit through `Hybrid.safety`, and composes with
+  `Hybrid.decided_of_leader_mem` so that DAG production and coverage
+  alone yield a finalized checkpoint for a correctly led slot.
+  The `*Spec.lean` files are the human-review trust boundary.
+  `CommitSpec.lean` also states its theorems as `Prop`-valued claims, so
+  `CommitProofs.lean` needs no reading; the safety and recovery pairs
+  still keep theorem statements in their `*Proofs.lean` files, where
+  the statements, not the bodies, require review.
   Conditional on those inputs, at
   `fabc < n - 3·fb - 2·fc`, quorum intersection derives same-height
   uniqueness and within-epoch prefix consistency; checkpoint safety is

@@ -52,8 +52,10 @@ import LeanDag.Hybrid.Liveness
 import LeanDag.Hybrid.Conservativity
 import LeanDag.Hybrid.Checkpoint.BaseSpec
 import LeanDag.Hybrid.Checkpoint.RecoverySpec
+import LeanDag.Hybrid.Checkpoint.CommitSpec
 import LeanDag.Hybrid.Checkpoint.SafetyProofs
 import LeanDag.Hybrid.Checkpoint.RecoveryProofs
+import LeanDag.Hybrid.Checkpoint.CommitProofs
 import LeanDag.Integration.Preservation
 import LeanDag.Integration.Coverage
 import LeanDag.Integration.ScheduleShape
