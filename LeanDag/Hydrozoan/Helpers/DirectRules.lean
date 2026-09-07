@@ -74,13 +74,6 @@ end Rule
 
 /-! ## The skip reads the schedule at its slot -/
 
-/-- And so is the direct skip. -/
-theorem skippedLeaderInView_congr {S₁ S₂ : Slots Replica} {V : View U} {k : ℕ}
-    (hround : S₁.slotRound k = S₂.slotRound k) (hk : S₁.leader k = S₂.leader k)
-    (h : SkippedLeaderInView (S := S₁) U V k) : SkippedLeaderInView (S := S₂) U V k := by
-  show HoldsAtLeast U V _ (slotBlamers (S := S₂) U k)
-  rwa [← slotBlamers_congr hround hk]
-
 end Hydrozoan
 
 end LeanDag

@@ -1,5 +1,6 @@
 import LeanDag.Nemo.Rules
 import LeanDag.Common.Anchored.Band
+import LeanDag.Common.Rules
 /-!
 # Nemo: the decision relation
 
@@ -30,7 +31,7 @@ omit [DecidableEq BlockId] in
 `L` at the round above it from a majority of validators. -/
 abbrev DirectCommitIn (U : Universe Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (majority Validator) (votesFor U L (r + 1))
+  supportCommit (majority Validator) U V L r
 
 omit S in
 /-- A view can only under-report: its direct commit is genuine. -/
@@ -110,9 +111,8 @@ theorem nemoLaws : (nemoAnchored Validator BlockId Payload).Laws where
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_mono := fun _ _ h => h
   skip_congr := fun _ _ _ h => h
-  link_congr := fun hround _ h => by
-    change Nemo.CertifiedIn _ _ _ _ at h ⊢
-    rwa [← hround]
+  link_congr := (nemoAnchored Validator BlockId Payload).linkCongr_of_round
+    (fun _ U A L r => Nemo.CertifiedIn U A L r) fun _ _ _ _ _ _ => rfl
 
 end Nemo
 

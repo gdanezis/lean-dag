@@ -899,11 +899,13 @@ history of a later, committed *anchor*.
 
 ```lean
 abbrev CertifiedIn (U) (A L : BlockId) (r : ℕ) : Prop :=
-  LinkedVia U A (certificates U L r)
+  certifiedLink IsVote (quorumCard Validator) 2 U A L r
 ```
 
-`LinkedVia U A s` (`Common/History.lean`) says some block of `s` lies in
-`A`'s causal history; it is what every indirect rung asks of an anchor.
+`certifiedLink` (§3.2) asks that some certificate for `L` — a block two
+rounds up carrying a quorum of votes for it — lie in `A`'s causal
+history, through `LinkedVia U A s` (`Common/History.lean`), which is what
+every indirect rung asks of an anchor.
 
 This test is universe-level by design. `certifiedIn_iff_of_view` establishes that
 restricting the search to a view holding the anchor yields the same answer, so
@@ -982,6 +984,31 @@ def coreAnchored : AnchoredRule Validator BlockId Payload ValidWrt Correct where
   Link := fun _ U A L S k => CertifiedIn U A L (S.slotRound k)
   tie := fun _ _ _ => False
 ```
+
+Each field is one of the shapes of `Common/Rules.lean`, a threshold on a
+set the record defines, so that a rule reads as a card of thresholds:
+
+```lean
+abbrev supportCommit (t : ℕ) (U) (V : U.View) (L : BlockId) (r : ℕ) : Prop :=
+  HoldsAtLeast U V t (votesFor U L (r + 1))
+abbrev certCommit (Vote) (t t' off : ℕ) (U) (V : U.View) (L : BlockId) (r : ℕ) : Prop :=
+  HoldsAtLeast U V t (certificatesAt U (Vote U) t' L (r + off))
+abbrev blameSkip (t : ℕ) (U) (V : U.View) (k : ℕ) : Prop :=
+  HoldsAtLeast U V t (slotBlamers U k)
+abbrev certifiedLink (Vote) (t' off : ℕ) (U) (A L : BlockId) (r : ℕ) : Prop :=
+  LinkedVia U A (certificatesAt U (Vote U) t' L (r + off))
+abbrev coneLink (t : ℕ) (U) (A L : BlockId) (r : ℕ) : Prop :=
+  t ≤ (coneSupporters U A L (r + 1)).card
+```
+
+The core's `DirectCommitIn`, `DirectSkipSlotIn` and `CertifiedIn` are
+`certCommit IsVote q q 2`, `blameSkip q` and `certifiedLink IsVote q 2`
+at the quorum `q = n − f`; Odontoceti and Orcaella are `supportCommit`,
+`blameSkip` and `coneLink` at theirs; Nemo is `supportCommit` at a
+majority with no skip; Hydrozoan's two commit routes are
+`supportCommit` and `certCommit`. What is not a shape is the rule's
+own: Mahi-Mahi's per-candidate skip, FinWhale's evidence rules, the
+second rungs of Hydrozoan and Optimal-Hydrozoan.
 
 The relation itself is stated once, over any such record. `R.Eligible k j`
 is `EligibleAt R.wave k j`; `R.RungEmpty U A i k` says no candidate of `k`
@@ -3475,7 +3502,7 @@ abbrev coneSupports (U) (A L : BlockId) (r : ℕ) : Finset Validator :=
   coneSupporters U A L (r + 1)
 
 def ThickLink (U) (A L : BlockId) (r : ℕ) : Prop :=
-  (Fintype.card Validator - 3 * F.f) ≤ (coneSupports U A L r).card
+  coneLink (Fintype.card Validator - 3 * F.f) U A L r
 ```
 
 `ThickLink` is the indirect test: enough supports for `L` visible in an
@@ -11369,7 +11396,7 @@ def DirectCommit (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r 
 ```lean
 abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (quorumCard Validator) (certificates U L r)
+  certCommit IsVote (quorumCard Validator) (quorumCard Validator) 2 U V L r
 ```
 
 Direct commit, as judged from a single view: the view holds certificates for `L` from a quorum of distinct validators.
@@ -11393,7 +11420,7 @@ Direct skip, as judged from a single view: the view holds blocks at the round ab
 ```lean
 abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (k : ℕ) : Prop :=
-  HoldsAtLeast U V (quorumCard Validator) (slotBlamers U k)
+  blameSkip (quorumCard Validator) U V k
 ```
 
 **The slot is directly skipped, as judged from a view**: a quorum of distinct validators holds a voting-round block, in view, that references no candidate of the slot.
@@ -12114,7 +12141,7 @@ def DirectCommit (U : BlockUniverse Validator BlockId Payload)
 ```lean
 def ThickLink (U : BlockUniverse Validator BlockId Payload)
     (A L : BlockId) (r : ℕ) : Prop :=
-  (Fintype.card Validator - 3 * F.f) ≤ (coneSupports U A L r).card
+  coneLink (Fintype.card Validator - 3 * F.f) U A L r
 ```
 
 **The indirect test** (the thesis's ThickLink): at least `n − 3f` distinct authors of support blocks for `L` in the anchor's cone. At `n = 5f+1` this is the thesis's `2f+1`.
@@ -12126,7 +12153,7 @@ def ThickLink (U : BlockUniverse Validator BlockId Payload)
 ```lean
 abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (quorumCard Validator) (votesFor U L (r + 1))
+  supportCommit (quorumCard Validator) U V L r
 ```
 
 Direct commit, as judged from a single view: the view holds votes for `L` at the round above it from a quorum of validators.
@@ -12617,7 +12644,7 @@ def DirectCommit (U : BlockUniverse Validator BlockId Payload)
 ```lean
 def ThickLink (k : ℕ) (U : BlockUniverse Validator BlockId Payload)
     (A L : BlockId) (r : ℕ) : Prop :=
-  k ≤ (coneSupports U A L r).card
+  coneLink k U A L r
 ```
 
 **The indirect test** at threshold `k`: at least `k` distinct authors of support blocks in the anchor's cone.
@@ -12629,7 +12656,7 @@ def ThickLink (k : ℕ) (U : BlockUniverse Validator BlockId Payload)
 ```lean
 abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (q Validator) (votesFor U L (r + 1))
+  supportCommit (q Validator) U V L r
 ```
 
 Direct commit, as judged from a single view: the view holds votes for `L` at the round above it from a hybrid quorum of validators.
@@ -12653,7 +12680,7 @@ Direct skip, as judged from a single view: the view holds blocks at the round ab
 ```lean
 abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (s : ℕ) : Prop :=
-  HoldsAtLeast U V (q Validator) (slotBlamers U s)
+  blameSkip (q Validator) U V s
 ```
 
 **The slot is directly skipped, as judged from a view**: a hybrid quorum of distinct validators holds a voting-round block, in view, that references no candidate of the slot.
@@ -12886,7 +12913,7 @@ def DirectCommit (U : Universe Validator BlockId Payload) (L : BlockId) (r : ℕ
 ```lean
 abbrev DirectCommitIn (U : Universe Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (majority Validator) (votesFor U L (r + 1))
+  supportCommit (majority Validator) U V L r
 ```
 
 Direct commit, as judged from a single view: the view holds votes for `L` at the round above it from a majority of validators.

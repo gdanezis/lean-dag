@@ -1,5 +1,6 @@
 import LeanDag.Odontoceti.Rules
 import LeanDag.Common.Anchored.Bounded
+import LeanDag.Common.Rules
 /-!
 # Odontoceti: the decision relation
 
@@ -42,7 +43,7 @@ variable {L A : BlockId} {r k : ℕ}
 `L` at the round above it from a quorum of validators. -/
 abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (quorumCard Validator) (votesFor U L (r + 1))
+  supportCommit (quorumCard Validator) U V L r
 
 /-- Direct skip, as judged from a single view: the view holds blocks at
 the round above `L` that omit it, from a quorum of validators. -/
@@ -173,10 +174,9 @@ theorem odontocetiLaws : (odontocetiAnchored Validator BlockId Payload).Laws whe
       (not_lt.mp (show ¬ L₁ < L₂ from hm₂ L₁ hL₁ hl₁))
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun _ hround hk h => directSkipSlotIn_congr hround hk h
-  link_congr := fun hround _ h => by
-    change ThickLink _ _ _ _ at h ⊢
-    rwa [← hround]
+  skip_congr := fun _ hround hk h => blameSkip_congr hround hk h
+  link_congr := (odontocetiAnchored Validator BlockId Payload).linkCongr_of_round
+    (fun _ U A L r => ThickLink U A L r) fun _ _ _ _ _ _ => rfl
 
 omit S in
 /-- The rung's tie is the order, so a nonempty rung has a least

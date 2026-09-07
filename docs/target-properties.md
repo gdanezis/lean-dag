@@ -4530,6 +4530,33 @@ theorems stay as the rules' numbered results.
 **Measure.** The step removes 194 lines of Lean and adds 131; the
 library and tests stand at 76,027 lines.
 
+### 11.39 The rule shapes
+
+Step 7 of `docs/common-layer.md`. `Common/Rules.lean` names the five
+shapes every direct rule and rung of the development takes:
+`supportCommit t`, `certCommit Vote t t' off`, `blameSkip t`,
+`certifiedLink Vote t' off` and `coneLink t`. Each is a threshold on a
+set the record already defines, and each rule's predicates are now the
+shapes at its thresholds: the core, Odontoceti, Nemo, Orcaella,
+Hydrozoan and Optimal-Hydrozoan read as cards. The congruence a rule
+owed for its skip is `blameSkip_congr`, once, and the congruence of any
+link that reads the schedule through the slot's round is
+`AnchoredRule.linkCongr_of_round`; the four per-rule copies are gone.
+
+**What the study overestimated.** §4.3 counted 250 lines of `_band`
+lemmas and 60 of law fields against this step; steps 2 to 4 had already
+moved the band lemmas into `Common/`, and the technical fields of
+`Laws` and `BandLaws` were one-liners at them before this step began.
+The step therefore adds more than it removes: 138 lines in, 93 out, the
+shape layer being 60 of the additions. Its value is the presentation —
+a rule is its thresholds — not the count. What remains per rule is the
+residue of `docs/common-layer.md` §1.2: Mahi-Mahi's per-candidate skip
+and its decision-round arithmetic, FinWhale's evidence rules, and the
+second rungs of Hydrozoan and Optimal-Hydrozoan, none of which is a
+threshold on a record-defined set.
+
+**Measure.** The library and tests stand at 76,072 lines.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

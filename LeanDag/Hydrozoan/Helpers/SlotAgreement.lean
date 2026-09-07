@@ -254,6 +254,7 @@ theorem not_certifiedIn_of_fastCommit {L L' : BlockId} {r : ℕ} {A : BlockId}
     (hne : L' ≠ L) (hcreator : (U.block L').creator = (U.block L).creator)
     (h : FastCommit U L r) : ¬ CertifiedIn U A L' r := by
   rintro ⟨C, hC, -⟩
+  change C ∈ certificates U L' r at hC
   rw [certificates_eq_empty_of_fastCommit hne hcreator h] at hC
   exact Finset.notMem_empty C hC
 
@@ -307,6 +308,7 @@ theorem not_certifiedIn_of_skipped {k : ℕ} {L : BlockId} {A : BlockId}
     (hL : IsLeaderBlock U k L) (h : SkippedLeader U k) :
     ¬ CertifiedIn U A L (S.slotRound k) := by
   rintro ⟨C, hC, -⟩
+  change C ∈ certificates U L (S.slotRound k) at hC
   rw [certificates_eq_empty_of_skipped hL h] at hC
   exact Finset.notMem_empty C hC
 

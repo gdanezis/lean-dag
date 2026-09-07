@@ -62,14 +62,14 @@ theorem hybridBandLaws {kt : ℕ} (hpos : 0 < kt) :
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi _ _
     simp only [Hybrid.hybridAnchored_wave] at hhi
     show Hybrid.ThickLink kt U' A L (S'.slotRound k') ↔ Hybrid.ThickLink kt U A L (S.slotRound k)
-    unfold Hybrid.ThickLink Hybrid.coneSupports
+    unfold Hybrid.ThickLink coneLink
     rw [AnchoredRule.coneSupporters_band h hA hAlo hAhi (n := S.slotRound k + 1) (by omega) (by omega)
       (by omega)]
   link_novel := by
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi _ _ hL ht
     simp only [Hybrid.hybridAnchored_wave] at hhi
     change Hybrid.ThickLink kt U' A L (S'.slotRound k') at ht
-    unfold Hybrid.ThickLink Hybrid.coneSupports at ht
+    unfold Hybrid.ThickLink coneLink at ht
     rw [AnchoredRule.coneSupporters_band_novel h hA hAlo hAhi (n := S.slotRound k + 1)
       (by omega) (by omega) (by omega) hL, Finset.card_empty] at ht
     omega
@@ -141,7 +141,9 @@ theorem indirect (kt : ℕ) :
     Indirect (hybridRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) kt)
       (fun sr i j =>
         sr i + (Hybrid.hybridAnchored Validator BlockId Payload kt).wave + 1 ≤ sr j) :=
-  AnchoredRule.indirectOn Hybrid.linkCongr fun hi h => Hybrid.exists_least hi h
+  AnchoredRule.indirectOn ((Hybrid.hybridAnchored Validator BlockId Payload kt).linkCongr_of_round
+    (fun _ U A L r => Hybrid.ThickLink kt U A L r) fun _ _ _ _ _ _ => rfl)
+    fun hi h => Hybrid.exists_least hi h
 
 /-- **And a committed run decides everything below it.** -/
 theorem descends {kt : ℕ} {S : Slots Validator} {c : ℕ} (hc : 0 < c)

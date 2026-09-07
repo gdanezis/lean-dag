@@ -105,14 +105,14 @@ theorem odontocetiBandLaws :
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi _ _
     simp only [Odontoceti.odontocetiAnchored_wave] at hhi
     show Odontoceti.ThickLink U' A L (S'.slotRound k') ↔ Odontoceti.ThickLink U A L (S.slotRound k)
-    unfold Odontoceti.ThickLink Odontoceti.coneSupports
+    unfold Odontoceti.ThickLink coneLink
     rw [AnchoredRule.coneSupporters_band h hA hAlo hAhi (n := S.slotRound k + 1) (by omega) (by omega)
       (by omega)]
   link_novel := by
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi _ _ hL ht
     simp only [Odontoceti.odontocetiAnchored_wave] at hhi
     change Odontoceti.ThickLink U' A L (S'.slotRound k') at ht
-    unfold Odontoceti.ThickLink Odontoceti.coneSupports at ht
+    unfold Odontoceti.ThickLink coneLink at ht
     rw [AnchoredRule.coneSupporters_band_novel h hA hAlo hAhi (n := S.slotRound k + 1)
       (by omega) (by omega) (by omega) hL, Finset.card_empty] at ht
     have := thickLink_threshold_pos (Validator := Validator)

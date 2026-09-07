@@ -1,5 +1,6 @@
 import LeanDag.Mysticeti.Rule
 import LeanDag.Common.History
+import LeanDag.Common.Rules
 /-!
 # Odontoceti: the two-round rule layer
 
@@ -93,7 +94,7 @@ distinct authors of support blocks for `L` in the anchor's cone. At
 `n = 5f+1` this is the thesis's `2f+1`. -/
 def ThickLink (U : BlockUniverse Validator BlockId Payload)
     (A L : BlockId) (r : ℕ) : Prop :=
-  (Fintype.card Validator - 3 * F.f) ≤ (coneSupports U A L r).card
+  coneLink (Fintype.card Validator - 3 * F.f) U A L r
 
 instance : Decidable (ThickLink U A L r) :=
   inferInstanceAs (Decidable (_ ≤ _))
@@ -144,7 +145,7 @@ theorem not_thickLink_of_directSkip (hk : DirectSkip U L r)
     (coneSupporters_subset_supporters (U := U) (A := A) (L := L) (n := r + 1))
   have h2 := card_supporters_le_of_directSkip hk
   have h5 := F.card_validators5
-  unfold ThickLink coneSupports at ht
+  unfold ThickLink coneLink at ht
   omega
 
 /-! ## O3 — propagation: every anchor's cone is the certificate -/
@@ -200,7 +201,7 @@ private theorem thickLink_of_directCommit_aux (h : DirectCommit U L r) :
       have h4 := Finset.card_le_card hsub
       have h5 := F.card_byzantine
       unfold DirectCommit at h
-      unfold ThickLink
+      unfold ThickLink coneLink coneSupports at *
       omega
   | succ d ih =>
       intro A hA hround
@@ -210,7 +211,7 @@ private theorem thickLink_of_directCommit_aux (h : DirectCommit U L r) :
         have := U.round_of_mem_refs hA hp
         omega
       have := ih p hp_ids hp_round
-      unfold ThickLink at this ⊢
+      unfold ThickLink coneLink at this ⊢
       exact le_trans this (Finset.card_le_card
         (coneSupporters_subset_of_reaches hA (Reaches.single hp)))
 
@@ -253,7 +254,7 @@ theorem eq_of_directCommit_of_thickLink {L₁ L₂ : BlockId}
   have h4 := F.card_byzantine
   have h5 := F.card_validators5
   unfold DirectCommit at h₁
-  unfold ThickLink at ht
+  unfold ThickLink coneLink coneSupports at *
   omega
 
 end Odontoceti

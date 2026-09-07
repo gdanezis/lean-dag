@@ -1,6 +1,7 @@
 import LeanDag.Hybrid.Faults
 import LeanDag.Mysticeti.Rule
 import LeanDag.Common.History
+import LeanDag.Common.Rules
 /-!
 # The hybrid two-round rules, and the arithmetic core
 
@@ -129,7 +130,7 @@ abbrev coneSupports (U : BlockUniverse Validator BlockId Payload)
 authors of support blocks in the anchor's cone. -/
 def ThickLink (k : ℕ) (U : BlockUniverse Validator BlockId Payload)
     (A L : BlockId) (r : ℕ) : Prop :=
-  k ≤ (coneSupports U A L r).card
+  coneLink k U A L r
 
 instance : Decidable (ThickLink k U A L r) :=
   inferInstanceAs (Decidable (_ ≤ _))
@@ -182,7 +183,7 @@ theorem not_thickLink_of_directSkip (hne : HonestNoEquiv U)
   have h1 := Finset.card_le_card
     (coneSupporters_subset_supporters (U := U) (A := A) (L := L) (n := r + 1))
   have h2 := card_supporters_le_of_directSkip hne hk
-  unfold ThickLink coneSupports at ht
+  unfold ThickLink coneLink at ht
   omega
 
 /-! ## H4 — link integrity: every anchor's cone is the certificate -/
@@ -239,7 +240,7 @@ private theorem thickLink_of_directCommit_aux (hne : HonestNoEquiv U)
       have h5 := H.card_byzantine
       unfold DirectCommit at h
       unfold q at h
-      unfold ThickLink
+      unfold ThickLink coneLink coneSupports at *
       omega
   | succ d ih =>
       intro A hA hround
@@ -249,7 +250,7 @@ private theorem thickLink_of_directCommit_aux (hne : HonestNoEquiv U)
         have := U.round_of_mem_refs hA hp
         omega
       have := ih p hp_ids hp_round
-      unfold ThickLink at this ⊢
+      unfold ThickLink coneLink at this ⊢
       exact le_trans this (Finset.card_le_card
         (coneSupporters_subset_of_reaches hA (Reaches.single hp)))
 
@@ -295,7 +296,7 @@ theorem eq_of_directCommit_of_thickLink (hne : HonestNoEquiv U)
   have h5 := H.card_validators
   unfold DirectCommit at h₁
   unfold q at h₁
-  unfold ThickLink at ht
+  unfold ThickLink coneLink coneSupports at *
   omega
 
 end Hybrid

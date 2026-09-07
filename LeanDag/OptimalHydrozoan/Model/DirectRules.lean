@@ -1,5 +1,6 @@
 import LeanDag.OptimalHydrozoan.Model.Faults
 import LeanDag.OptimalHydrozoan.Model.Universe
+import LeanDag.Common.Rules
 /-!
 # Optimal-Hydrozoan: direct decision rules
 
@@ -55,7 +56,7 @@ def FastCommitOpt (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (L : Blo
 /-- Fast commit, as judged from a single view. -/
 abbrev FastCommitOptInView (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
     (V : LeanDag.Hydrozoan.View U) (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (qFastOpt Replica) (votesFor U L (r + 1))
+  supportCommit (qFastOpt Replica) U V L r
 
 /-- The replicas among `C`'s refs whose block votes for `L` — the set
 whose cardinality is the paper's `Votes(b, b_leader)` (Algorithm 3). Also

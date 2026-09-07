@@ -1,4 +1,5 @@
 import LeanDag.Common.Ledger
+import LeanDag.Common.Rules
 import LeanDag.Common.Leader
 /-!
 # The anchored decision relation
@@ -257,6 +258,17 @@ abbrev LinkCongr : Prop :=
   ∀ {S₁ S₂ : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {A L : BlockId} {i k : ℕ}, S₁.slotRound k = S₂.slotRound k → S₁.leader k = S₂.leader k →
     R.Link i U A L S₁ k → R.Link i U A L S₂ k
+
+omit S in
+/-- A link that reads the schedule only through the slot's round is
+congruent. -/
+theorem linkCongr_of_round
+    (f : ℕ → (U : BlockRecord Validator BlockId Payload P honest) → BlockId → BlockId → ℕ → Prop)
+    (h : ∀ i U A L (S : Slots Validator) k, R.Link i U A L S k = f i U A L (S.slotRound k)) :
+    R.LinkCongr := by
+  intro S₁ S₂ U A L i k hround _ hl
+  rw [h] at hl ⊢
+  rwa [← hround]
 
 /-- **The laws of an anchored rule** — what the direct predicates and the
 rungs must satisfy for agreement, on the records satisfying an invariant

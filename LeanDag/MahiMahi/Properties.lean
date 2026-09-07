@@ -397,7 +397,9 @@ tie to break — two certificates at one slot name the same candidate. -/
 theorem indirect {w : ℕ} (hw : 1 ≤ w) :
     Indirect (mahiMahiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
       (fun sr i j => sr i + w ≤ sr j) :=
-  (AnchoredRule.indirect MahiMahi.linkCongr fun hi h => MahiMahi.exists_least hi h).congr
+  (AnchoredRule.indirect ((MahiMahi.mahiMahiAnchored Validator BlockId Payload w).linkCongr_of_round
+    (fun _ U A L r => MahiMahi.CertifiedIn U w A L r) fun _ _ _ _ _ _ => rfl)
+    fun hi h => MahiMahi.exists_least hi h).congr
     (fun _ _ _ => by simp only [MahiMahi.mahiMahiAnchored_wave]; omega)
 
 /-! ## The headlines -/

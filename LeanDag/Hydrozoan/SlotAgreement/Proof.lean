@@ -92,16 +92,10 @@ theorem hydrozoanLaws : (hydrozoanAnchored Replica BlockId).Laws where
     · exact Or.inl (HoldsAtLeast.mono hsub h)
     · exact Or.inr (HoldsAtLeast.mono hsub h)
   skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun _ hround hk h => skippedLeaderInView_congr hround hk h
-  link_congr := by
-    intro S₁ S₂ U A L i k hround _ h
-    rcases i with _ | i
-    · change CertifiedIn U A L (S₁.slotRound k) at h
-      change CertifiedIn U A L (S₂.slotRound k)
-      rw [← hround]; exact h
-    · change WeakLinked U A L (S₁.slotRound k) at h
-      change WeakLinked U A L (S₂.slotRound k)
-      rw [← hround]; exact h
+  skip_congr := fun _ hround hk h => blameSkip_congr hround hk h
+  link_congr := (hydrozoanAnchored Replica BlockId).linkCongr_of_round
+    (fun i U A L r => match i with | 0 => CertifiedIn U A L r | _ => WeakLinked U A L r)
+    fun i _ _ _ _ _ => by rcases i with _ | i <;> rfl
 
 variable [S : Slots Replica] {U : BlockUniverse Replica BlockId}
 

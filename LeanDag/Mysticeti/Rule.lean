@@ -221,7 +221,7 @@ contradicts the direct rule. -/
 /-- The indirect rule's test: a certificate for `L` lies in the causal
 history of the anchor `A`. -/
 abbrev CertifiedIn (U : BlockUniverse Validator BlockId Payload) (A L : BlockId) (r : ℕ) : Prop :=
-  LinkedVia U A (certificates U L r)
+  certifiedLink IsVote (quorumCard Validator) 2 U A L r
 
 /-- A certificate in reach is, in particular, a certificate that exists. This
 is what lets M5′ compare an *indirect* commit against anything else. -/
@@ -244,6 +244,7 @@ certificate universe-wide rather than merely out of reach. -/
 theorem not_certifiedIn_of_directSkip {L : BlockId} {r : ℕ} (h : DirectSkip U L r)
     {A : BlockId} : ¬ CertifiedIn U A L r := by
   rintro ⟨C, hC, -⟩
+  change C ∈ certificates U L r at hC
   rw [certificates_eq_empty_of_directSkip h] at hC
   exact absurd hC (Finset.notMem_empty C)
 
@@ -289,7 +290,7 @@ three rounds apart, every later slot is eligible
 certificates for `L` from a quorum of distinct validators. -/
 abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (quorumCard Validator) (certificates U L r)
+  certCommit IsVote (quorumCard Validator) (quorumCard Validator) 2 U V L r
 
 /-- Direct skip, as judged from a single view: the view holds blocks at
 the round above `L` that omit it, from a quorum of distinct validators. -/
@@ -326,7 +327,7 @@ implies (`directSkipIn_of_directSkipSlotIn`) and which a slot with no
 candidate satisfies for nothing. -/
 abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (k : ℕ) : Prop :=
-  HoldsAtLeast U V (quorumCard Validator) (slotBlamers U k)
+  blameSkip (quorumCard Validator) U V k
 
 /-- **The slot-level skip implies the per-candidate one.** -/
 theorem directSkipIn_of_directSkipSlotIn {V : View Validator BlockId Payload U} {k : ℕ}
@@ -461,17 +462,6 @@ theorem not_directSkip_of_directCommitIn {V₁ V₂ : View Validator BlockId Pay
 The slot-level skip reads the schedule only at its own slot, so two
 schedules naming the same round and the same leader there agree on it. -/
 
-omit S in
-/-- **The slot-level skip reads the schedule only at its own slot**, so
-two schedules naming the same round and the same leader there agree on
-whether the slot is skipped. -/
-theorem directSkipSlotIn_congr {S₁ S₂ : Slots Validator}
-    {V : View Validator BlockId Payload U} {k : ℕ}
-    (hround : S₁.slotRound k = S₂.slotRound k) (hk : S₁.leader k = S₂.leader k)
-    (h : DirectSkipSlotIn (S := S₁) U V k) : DirectSkipSlotIn (S := S₂) U V k := by
-  show HoldsAtLeast U V _ (slotBlamers (S := S₂) U k)
-  rwa [← slotBlamers_congr hround hk]
-
 /-! ## Stage C3 — agreement
 
 M6 — no two validators reach conflicting decisions for a slot, whatever
@@ -516,10 +506,9 @@ theorem coreLaws : (coreAnchored Validator BlockId Payload).Laws where
       (certificates_nonempty_of_certifiedIn hl₂)
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun _ hround hk h => directSkipSlotIn_congr hround hk h
-  link_congr := fun hround _ h => by
-    change CertifiedIn _ _ _ _ at h ⊢
-    rwa [← hround]
+  skip_congr := fun _ hround hk h => blameSkip_congr hround hk h
+  link_congr := (coreAnchored Validator BlockId Payload).linkCongr_of_round
+    (fun _ U A L r => CertifiedIn U A L r) fun _ _ _ _ _ _ => rfl
 
 omit S in
 /-- No tie: any certified candidate is the rung's choice. -/

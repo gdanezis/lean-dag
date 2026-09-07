@@ -1,6 +1,7 @@
 import LeanDag.Hydrozoan.Model.DirectRules
 import LeanDag.Common.CausalHistory
 import LeanDag.Common.History
+import LeanDag.Common.Rules
 /-!
 # The graded indirect rule's ingredients
 
@@ -35,7 +36,7 @@ history — the paper's `∃ b : Link(b, b_anchor) ∧ IsCertificate(b, b_leader
 with `r` the candidate's propose round. -/
 abbrev CertifiedIn (U : BlockUniverse Replica BlockId) (A L : BlockId)
     (r : ℕ) : Prop :=
-  LinkedVia U A (certificates U L r)
+  certifiedLink IsVote (qCert Replica) 2 U A L r
 
 /-- Rung 2's test: `q_weak` distinct creators of anchor-reachable votes
 for `L` at the voting round — the paper's

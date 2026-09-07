@@ -1,5 +1,6 @@
 import LeanDag.Hydrozoan.Model.View
 import LeanDag.Common.Leader
+import LeanDag.Common.Rules
 /-!
 # Direct decision rules
 
@@ -106,20 +107,20 @@ section ViewRules
 `L` at the voting round from `q_fast` replicas. -/
 abbrev FastCommitInView (U : BlockUniverse Replica BlockId) (V : View U)
     (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (qFast Replica) (votesFor U L (r + 1))
+  supportCommit (qFast Replica) U V L r
 
 /-- Slow commit, as judged from a single view: the view holds
 certificates for `L` from `q_slow` replicas. -/
 abbrev SlowCommitInView (U : BlockUniverse Replica BlockId) (V : View U)
     (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (qSlow Replica) (certificates U L r)
+  certCommit IsVote (qSlow Replica) (qCert Replica) 2 U V L r
 
 variable [S : Slots Replica]
 
 /-- Skip, as judged from a single view. -/
 abbrev SkippedLeaderInView (U : BlockUniverse Replica BlockId) (V : View U)
     (k : ℕ) : Prop :=
-  HoldsAtLeast U V (qFast Replica) (slotBlamers U k)
+  blameSkip (qFast Replica) U V k
 
 end ViewRules
 

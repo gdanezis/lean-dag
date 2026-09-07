@@ -1,5 +1,6 @@
 import LeanDag.Hybrid.Rules
 import LeanDag.Common.Anchored.Bounded
+import LeanDag.Common.Rules
 /-!
 # The hybrid decision relation
 
@@ -33,7 +34,7 @@ variable {L A : BlockId} {r k : ℕ}
 `L` at the round above it from a hybrid quorum of validators. -/
 abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (q Validator) (votesFor U L (r + 1))
+  supportCommit (q Validator) U V L r
 
 /-- Direct skip, as judged from a single view: the view holds blocks at
 the round above `L` that omit it, from a hybrid quorum of validators. -/
@@ -56,7 +57,7 @@ the candidates that happen to exist is not invariant under a mechanism
 that adds one, so it cannot be `Banded`. -/
 abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (s : ℕ) : Prop :=
-  HoldsAtLeast U V (q Validator) (slotBlamers U s)
+  blameSkip (q Validator) U V s
 
 /-- **The slot-level skip implies the per-candidate one**, so every
 theorem stated over `DirectSkipIn` — H3 in particular — applies to it
@@ -128,15 +129,6 @@ theorem eq_of_directCommitIn_of_thickLink (hne : HonestNoEquiv U)
   eq_of_directCommit_of_thickLink hne hka
     (directCommit_of_directCommitIn h₁) ht (by rw [hL₁.2.2, hL₂.2.2])
 
-omit S in
-/-- The slot-level skip reads the schedule only at its own slot. -/
-theorem directSkipSlotIn_congr {S₁ S₂ : Slots Validator}
-    {V : View Validator BlockId Payload U} {s : ℕ}
-    (hround : S₁.slotRound s = S₂.slotRound s) (hk : S₁.leader s = S₂.leader s)
-    (h : DirectSkipSlotIn (S := S₁) U V s) : DirectSkipSlotIn (S := S₂) U V s := by
-  show HoldsAtLeast U V _ (slotBlamers (S := S₂) U s)
-  rwa [← slotBlamers_congr hround hk]
-
 /-! ## The relation -/
 
 omit S in
@@ -182,13 +174,6 @@ export AnchoredRule.Decided (directCommit directSkip indirectCommit indirectSkip
 end Decided
 
 omit S in
-/-- The rung reads the schedule only at its slot's round. -/
-theorem linkCongr {k : ℕ} : (hybridAnchored Validator BlockId Payload k).LinkCongr :=
-  fun hround _ h => by
-    change ThickLink _ _ _ _ _ at h ⊢
-    rwa [← hround]
-
-omit S in
 /-- **Hybrid's laws**, under `HonestNoEquiv` at an admissible threshold:
 the direct/direct cases by H2 and twin uniqueness, the crossings by
 H3/H4/H5, and two tie-break choices equal by antisymmetry. -/
@@ -212,8 +197,9 @@ theorem hybridLaws {k : ℕ} (hk : Admissible Validator k) :
       (not_lt.mp (show ¬ L₁ < L₂ from hm₂ L₁ hL₁ hl₁))
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun _ hround hk h => directSkipSlotIn_congr hround hk h
-  link_congr := linkCongr
+  skip_congr := fun _ hround hk h => blameSkip_congr hround hk h
+  link_congr := (hybridAnchored Validator BlockId Payload k).linkCongr_of_round
+    (fun _ U A L r => ThickLink k U A L r) fun _ _ _ _ _ _ => rfl
 
 omit S in
 /-- The rung's tie is the order, so a nonempty rung has a least
