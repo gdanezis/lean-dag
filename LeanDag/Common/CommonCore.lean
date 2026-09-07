@@ -248,9 +248,9 @@ theorem exists_common_correct_ancestor {r : ℕ} {c₀ : BlockId}
   obtain ⟨bw, hbw_ids, hbw_round, hbw_correct, hbw_support⟩ :=
     exists_correct_common_support (U := U) (r := r) hp
   refine ⟨bw, hbw_ids, hbw_round, hbw_correct, fun c hc hcr => ?_⟩
-  refine reaches_of_correct_support (b := bw) (r := r)
+  refine reaches_of_honest_support (b := bw) (r := r)
     (S := correctSupporters U bw (r + 1)) ?_ (fun _ hv => correctSupporters_correct hv)
-    hbw_support hc hcr
+    (by have := F.card_validators; omega) hc hcr
   intro v hv
   exact mem_supporters.mp (correctSupporters_subset hv)
 

@@ -169,7 +169,7 @@ example : DecidedOpt OS VS 1 none := DecidedOpt.directSkip (by decide)
 
 -- Slot 6 has a candidate but no voting round: no direct route, and no
 -- anchor above — the table does not decide everything.
-example : IsLeaderBlock US 6 19 ∧ LeanDag.Hydrozoan.supporters US 19 7 = ∅ ∧ ¬ SkippedLeaderOpt US 6 := by
+example : IsLeaderBlock US 6 19 ∧ supporters US 19 7 = ∅ ∧ ¬ SkippedLeaderOpt US 6 := by
   decide
 
 -- Synchrony from R > 0 only: replica 1's round-1 block references the

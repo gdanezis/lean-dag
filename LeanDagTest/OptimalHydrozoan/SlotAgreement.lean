@@ -183,7 +183,7 @@ example :
 
 -- Slot 4's candidate 18 is the anchor, fast-committed by three votes; it
 -- reaches the three witnessing evidence blocks.
-example : IsLeaderBlock UE 4 18 ∧ LeanDag.Hydrozoan.supporters UE 18 5 = {1, 2, 3} := by decide
+example : IsLeaderBlock UE 4 18 ∧ supporters UE 18 5 = {1, 2, 3} := by decide
 example : EvidenceLinked UE 18 4 1 :=
   (evidenceLinked_iff_history (by decide)).mpr (by decide)
 

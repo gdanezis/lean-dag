@@ -44,6 +44,14 @@ theorem exists_mem_inter {Q₁ Q₂ : Finset Validator}
   unfold majority at h₁ h₂
   omega
 
+/-- **A majority is more than a block can miss**: a block references a
+majority of distinct creators, so it misses fewer than a majority. This
+turns a majority of backers into the form the hitting lemma reads. -/
+theorem lt_card_add_majority {T : Finset Validator} (h : majority Validator ≤ T.card) :
+    Fintype.card Validator < T.card + majority Validator := by
+  unfold majority at *
+  omega
+
 /-- Crash block validity: like the core `ValidWrt`, but the parents quorum is the
 majority `n/2+1` rather than `n − f`, and the core's `self_parent` and
 `distinct_creators` fields are gone. The implementation's block verifier imposes
@@ -91,6 +99,13 @@ instance ValidWrt.mechanised :
       (ValidWrt (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) :=
   Validity.Mechanised.of_iff ValidWrt.iff_validAt
 
+/-- **And quorate at the majority.** -/
+instance ValidWrt.quorate :
+    Validity.Quorate
+      (ValidWrt (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
+      (majority Validator) :=
+  Validity.Quorate.of_validAt (by unfold majority; omega) ValidWrt.iff_validAt
+
 /-- **And does not read the creator.** -/
 instance ValidWrt.copyStable :
     Validity.CopyStable
@@ -113,32 +128,6 @@ namespace Universe
 
 variable {U : Universe Validator BlockId Payload}
 
-/-- Two ids with the same author and round are the same id — universal, no
-correctness hypothesis (the crash simplification of the core's T1). -/
-theorem eq_of_creator_eq {i j : BlockId} (hi : i ∈ U.ids) (hj : j ∈ U.ids)
-    (hc : (U.block i).creator = (U.block j).creator)
-    (hround : (U.block i).round = (U.block j).round) : i = j :=
-  U.no_equivocation i hi j hj (Finset.mem_univ _) hc hround
-
-/-- Completeness, as a subset statement. -/
-theorem refs_subset {i : BlockId} (hi : i ∈ U.ids) : (U.block i).refs ⊆ U.ids :=
-  fun _ hj => U.complete i hi _ hj
-
-/-- A reference sits in the round immediately below its referrer. -/
-theorem round_of_mem_refs {i j : BlockId} (hi : i ∈ U.ids) (hj : j ∈ (U.block i).refs) :
-    (U.block j).round + 1 = (U.block i).round :=
-  (U.valid i hi).predecessor j hj
-
-/-- References of a non-genesis block carry a majority of distinct authors. -/
-theorem creators_quorum {i : BlockId} (hi : i ∈ U.ids) (hround : 0 < (U.block i).round) :
-    majority Validator ≤ (creatorsOf U.block (U.block i).refs).card :=
-  (U.valid i hi).quorum hround
-
-/-- A non-genesis block references at least one block. -/
-theorem refs_nonempty {i : BlockId} (hi : i ∈ U.ids) (hround : 0 < (U.block i).round) :
-    (U.block i).refs.Nonempty :=
-  (U.valid i hi).refs_nonempty hround
-
 /-- Distinct creators among references are automatic under crash: two refs of
 the same block sharing a creator sit at the same round (`predecessor`), so
 universal `no_equivocation` identifies them. This is why the crash `ValidWrt`
@@ -148,7 +137,8 @@ theorem eq_of_mem_refs_of_creator_eq {i j k : BlockId} (hi : i ∈ U.ids)
     (hc : (U.block j).creator = (U.block k).creator) : j = k := by
   have h1 := U.round_of_mem_refs hi hj
   have h2 := U.round_of_mem_refs hi hk
-  exact U.eq_of_creator_eq (U.refs_subset hi hj) (U.refs_subset hi hk) hc (by omega)
+  exact U.eq_of_creator_eq (U.refs_subset hi hj) (U.refs_subset hi hk) (Finset.mem_univ _)
+    hc rfl (by omega)
 
 /-- **Two majority-backed sets of round-`n` blocks share a block.** The crash
 analogue of the core's `exists_common_mem_of_quorums`: majority intersection
@@ -165,7 +155,7 @@ theorem exists_common_mem_of_quorums {s t : Finset BlockId} {n : ℕ}
   obtain ⟨hq₁i, hq₁r⟩ := hs q₁ hq₁
   obtain ⟨hq₂i, hq₂r⟩ := ht q₂ hq₂
   have : q₁ = q₂ :=
-    U.eq_of_creator_eq hq₁i hq₂i (hq₁c.trans hq₂c.symm) (by omega)
+    U.eq_of_creator_eq hq₁i hq₂i (Finset.mem_univ _) hq₁c hq₂c (by omega)
   exact ⟨q₁, hq₁, this ▸ hq₂⟩
 
 end Universe

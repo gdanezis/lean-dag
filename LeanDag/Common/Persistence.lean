@@ -78,14 +78,14 @@ theorem reaches_of_quorum_support
     refine ⟨b, rfl, ?_⟩
     -- The quorum contains at least `f+1` *correct* creators, and those are
     -- exactly the supporters the uniform coverage lemma consumes.
-    refine reaches_of_correct_support_of_card (b := b) (r := r)
+    refine reaches_of_honest_support_of_card (b := b) (r := r)
       (S := creatorsOf U.block Q ∩ (Correct : Finset Validator)) ?_ ?_ ?_ hc' hc'r
     · intro v hv
       rw [Finset.mem_inter, mem_creatorsOf] at hv
       obtain ⟨⟨q, hq_mem, hq_creator⟩, _⟩ := hv
       exact ⟨q, hQ hq_mem, hQround q hq_mem, hQref q hq_mem, hq_creator⟩
     · exact fun v hv => Finset.mem_of_mem_inter_right hv
-    · exact card_inter_correct_of_quorum hQquorum
+    · exact lt_card_add_quorumCard (card_inter_correct_of_quorum hQquorum)
   obtain ⟨x, hx, hreach⟩ := reaches_pred_of_round_le hbase hc hcr
   exact hx ▸ hreach
 

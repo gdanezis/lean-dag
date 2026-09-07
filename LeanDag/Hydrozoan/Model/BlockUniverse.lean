@@ -56,6 +56,14 @@ instance ValidWrt.mechanised :
     ⟨fun h => ⟨h.predecessor, h.quorum, h.distinct_creators⟩,
      fun h => ⟨h.predecessor, h.clause, h.quorum⟩⟩
 
+/-- **And quorate at `q`.** -/
+instance ValidWrt.quorate :
+    Validity.Quorate (ValidWrt (Replica := Replica) (BlockId := BlockId)) (q Replica) :=
+  Validity.Quorate.of_validAt (C := Clause.distinct)
+    (by have := F.card_replicas; unfold q; omega) fun _ _ =>
+    ⟨fun h => ⟨h.predecessor, h.quorum, h.distinct_creators⟩,
+     fun h => ⟨h.predecessor, h.clause, h.quorum⟩⟩
+
 /-- **And does not read the creator.** -/
 instance ValidWrt.copyStable :
     Validity.CopyStable (ValidWrt (Replica := Replica) (BlockId := BlockId)) :=

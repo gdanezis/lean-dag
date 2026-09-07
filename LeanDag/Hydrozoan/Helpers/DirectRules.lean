@@ -27,7 +27,7 @@ instance decidableSlowCommit (L : BlockId) (r : ℕ) :
 
 instance decidableFastCommitInView (V : View U) (L : BlockId) (r : ℕ) :
     Decidable (FastCommitInView U V L r) :=
-  inferInstanceAs (Decidable (qFast Replica ≤ (supportersInView U V L (r + 1)).card))
+  inferInstanceAs (Decidable (qFast Replica ≤ (supportersIn U V L (r + 1)).card))
 
 instance decidableSlowCommitInView (V : View U) (L : BlockId) (r : ℕ) :
     Decidable (SlowCommitInView U V L r) :=
@@ -38,11 +38,11 @@ section Skip
 variable [S : Slots Replica]
 
 instance decidableSkippedLeader (k : ℕ) : Decidable (SkippedLeader U k) :=
-  inferInstanceAs (Decidable (qFast Replica ≤ (blames U k).card))
+  inferInstanceAs (Decidable (qFast Replica ≤ (slotBlames U k).card))
 
 instance decidableSkippedLeaderInView (V : View U) (k : ℕ) :
     Decidable (SkippedLeaderInView U V k) :=
-  inferInstanceAs (Decidable (qFast Replica ≤ (blamesInView U V k).card))
+  inferInstanceAs (Decidable (qFast Replica ≤ (slotBlamesIn U V k).card))
 
 end Skip
 
@@ -109,28 +109,12 @@ theorem skippedLeaderInView_mono [S : Slots Replica] {V V' : View U}
 
 /-! ## The skip reads the schedule at its slot -/
 
-/-- The blames of a slot are the same under any two schedules naming the
-same round and leader there. -/
-theorem blamesInView_congr {S₁ S₂ : Slots Replica} {V : View U} {k : ℕ}
-    (hround : S₁.slotRound k = S₂.slotRound k) (hk : S₁.leader k = S₂.leader k) :
-    blamesInView (S := S₁) U V k = blamesInView (S := S₂) U V k := by
-  unfold blamesInView
-  congr 1
-  ext b
-  simp only [Finset.mem_inter, Finset.mem_filter, blocksAt, votingRound, hround]
-  constructor
-  · rintro ⟨⟨⟨hbm, hbr⟩, hbn⟩, hbV⟩
-    exact ⟨⟨⟨hbm, hbr⟩, fun j hj hjL => hbn j hj (isLeaderBlock_congr hround.symm hk.symm hjL)⟩,
-      hbV⟩
-  · rintro ⟨⟨⟨hbm, hbr⟩, hbn⟩, hbV⟩
-    exact ⟨⟨⟨hbm, hbr⟩, fun j hj hjL => hbn j hj (isLeaderBlock_congr hround hk hjL)⟩, hbV⟩
-
 /-- And so is the direct skip. -/
 theorem skippedLeaderInView_congr {S₁ S₂ : Slots Replica} {V : View U} {k : ℕ}
     (hround : S₁.slotRound k = S₂.slotRound k) (hk : S₁.leader k = S₂.leader k)
     (h : SkippedLeaderInView (S := S₁) U V k) : SkippedLeaderInView (S := S₂) U V k := by
   unfold SkippedLeaderInView at h ⊢
-  rw [← blamesInView_congr hround hk]
+  rw [← slotBlamesIn_congr hround hk]
   exact h
 
 end Hydrozoan

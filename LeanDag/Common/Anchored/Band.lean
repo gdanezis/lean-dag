@@ -265,39 +265,31 @@ theorem agreeBand_view (h : AgreeBand R.toDagRule U U' lo hi g g') {V : U.View} 
     (hor.imp id (fun ⟨hb', h1, h2⟩ => ⟨V'.subset_ids hb', h1, h2⟩))
   refs := fun b hb h1 h2 => h.refs b (V.subset_ids hb) h1 h2
 
-/-- **The core's slot-level skip carries across the band**, for any
-anchored rule on the core's record: a voting-round block the view held
+/-- **Blame carries across the band**: a voting-round block the view held
 that referenced no candidate of the slot is a block of the shifted
-universe at the shifted round, and it references no candidate still,
-every candidate it could reference being old. -/
-theorem directSkipSlotIn_band {Validator : Type} [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
-    {R : AnchoredRule Validator BlockId Payload ValidWrt Correct}
-    {U U' : BlockUniverse Validator BlockId Payload} {lo hi g g' : ℕ} {S S' : Slots Validator}
-    (h : AgreeBand R.toDagRule U U' lo hi g g')
+record at the shifted round, and it references no candidate still,
+every candidate it could reference being old. Every rule's slot-level
+skip is a threshold on this count, so this is its band law. -/
+theorem slotBlamesIn_band (h : AgreeBand R.toDagRule U U' lo hi g g')
     {V : U.View} {V' : U'.View} {k k' : ℕ} (hkk : S.slotRound k + g = S'.slotRound k' + g')
     (hlead : S.leader k = S'.leader k') (hlo : lo = S.slotRound k + g)
     (hhi : S.slotRound k + 1 + g ≤ hi)
     (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
-      b ∈ V'.ids)
-    (hs : DirectSkipSlotIn (S := S) U V k) : DirectSkipSlotIn (S := S') U' V' k' := by
-  unfold DirectSkipSlotIn at hs ⊢
-  refine le_trans hs (Finset.card_le_card ?_)
+      b ∈ V'.ids) :
+    slotBlamesIn (S := S) U V k ⊆ slotBlamesIn (S := S') U' V' k' := by
   intro w hw
   obtain ⟨q, hq, hvq⟩ := Finset.mem_image.mp hw
   obtain ⟨hqf, hqV⟩ := Finset.mem_inter.mp hq
-  simp only [slotBlamers, Finset.mem_filter] at hqf
-  obtain ⟨hqA, hqn⟩ := hqf
-  have hqU : q ∈ U.ids := (mem_blocksAt.mp hqA).1
-  have hqr : (U.block q).round = S.slotRound k + 1 := (mem_blocksAt.mp hqA).2
+  rw [mem_slotBlamers (S := S)] at hqf
+  obtain ⟨hqU, hqr, hqn⟩ := hqf
   refine Finset.mem_image.mpr ⟨q, ?_, ?_⟩
-  · simp only [Finset.mem_inter, slotBlamers, Finset.mem_filter]
-    refine ⟨⟨blocksAt_band h (by omega) (by omega) (by omega) hqA, ?_⟩,
-      hV q hqV (by omega) (by omega)⟩
-    rw [band_refs h hqU (by omega) (by omega)]
-    intro j hj hjL
-    have hjU : j ∈ U.ids := U.complete q hqU j hj
-    exact hqn j hj (isLeaderBlock_band_old h hkk hlead (by omega) (by omega) hjU hjL)
+  · rw [Finset.mem_inter, mem_slotBlamers (S := S')]
+    refine ⟨⟨band_mem h hqU (by omega) (by omega), ?_, ?_⟩, hV q hqV (by omega) (by omega)⟩
+    · have := band_block h hqU (by omega) (by omega); omega
+    · rw [band_refs h hqU (by omega) (by omega)]
+      intro j hj hjL
+      exact hqn j hj (isLeaderBlock_band_old h hkk hlead (by omega) (by omega)
+        (U.complete q hqU j hj) hjL)
   · rw [(band_block h hqU (by omega) (by omega)).2]; exact hvq
 
 /-- **What a rule owes the band**: its direct commit, its direct skip and

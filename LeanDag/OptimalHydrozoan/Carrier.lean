@@ -246,21 +246,21 @@ theorem voteSupport_fast_commits
     (by change S.slotRound k ≤ S.slotRound k + 1; omega) (S.leader k) hlead
   have hL : LeanDag.IsLeaderBlock U.val k L := ⟨hLmem, hLr, hLc⟩
   have hfast : LeanDag.OptimalHydrozoan.FastCommitOpt U.val L (S.slotRound k) := by
-    have hsub : T ⊆ LeanDag.Hydrozoan.supporters U.val L (S.slotRound k + 1) := by
+    have hsub : T ⊆ supporters U.val L (S.slotRound k + 1) := by
       intro v hv
       obtain ⟨b, hb, hba, hbr⟩ := hpop (S.slotRound k + 1) (by omega)
         (by change S.slotRound k + 1 ≤ S.slotRound k + 1; omega) v hv
-      exact LeanDag.Hydrozoan.mem_supporters.mpr
+      exact mem_supporters.mpr
         ⟨b, hb, hbr, hcert L ⟨hLmem, hLr, hLc⟩ v hv b hb hba hbr, hba⟩
     exact le_trans hcard (Finset.card_le_card hsub)
   have hin : LeanDag.OptimalHydrozoan.FastCommitOptInView U.val V L (S.slotRound k) := by
-    have hsub : (LeanDag.Hydrozoan.blocksAt U.val (S.slotRound k + 1)).filter
+    have hsub : (blocksAt U.val (S.slotRound k + 1)).filter
         (fun b => LeanDag.Hydrozoan.IsVote U.val b L) ⊆ V.ids := by
       intro b hb
       obtain ⟨hbA, -⟩ := Finset.mem_filter.mp hb
-      obtain ⟨hbU, hbr⟩ := LeanDag.Hydrozoan.mem_blocksAt.mp hbA
+      obtain ⟨hbU, hbr⟩ := mem_blocksAt.mp hbA
       exact hcov b hbU (le_of_eq hbr)
-    unfold LeanDag.OptimalHydrozoan.FastCommitOptInView LeanDag.Hydrozoan.supportersInView
+    unfold LeanDag.OptimalHydrozoan.FastCommitOptInView supportersIn
     rw [Finset.inter_eq_left.2 hsub]
     exact hfast
   refine ⟨L, by omega, LeanDag.OptimalHydrozoan.DecidedOpt.directCommit hL (Or.inl hin), ?_⟩

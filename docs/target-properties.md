@@ -4222,6 +4222,49 @@ at the root are in the directory of the arc they exercise: `Adaptive/`,
 directory has one carrier. The root of the test tree now holds only
 directories, as the library's does.
 
+### 11.31 The substrate, once: quorate records, the hitting lemma, and blame
+
+The first step of the plan in `docs/common-layer.md`. Three things were
+proved at every record that had been proved at the core's, Nemo's and
+Hydrozoan's separately.
+
+**Quorate records.** `Validity.Quorate P q` (`Common/BlockRecord.lean`)
+says a validity predicate admits only blocks referencing `q` distinct
+creators, `q` positive; the core, Nemo, Hydrozoan and FinWhale register
+theirs at `n − f`, the majority, `q` and `n − f` from their equivalence
+with the family. On it, `creators_quorum` and `refs_nonempty` are the
+record's; so are `refs_subset`, `round_of_mem_refs` and T1
+(`eq_of_creator_eq`, with `honest` where the core wrote `Correct`).
+The hitting lemma, propagation and the two coverage forms
+(`Common/Support.lean`) are stated once at any quorate record, with the
+honest set in place of `Correct`; the participation-sensitive threshold
+reads `|pool| + 1 ≤ |T| + q`, and the uniform one `n < |T| + q`, of which
+the core's `f + 1 ≤ |T|` is the reading at `q = n − f`
+(`lt_card_add_quorumCard`) and Nemo's `majority ≤ |T|` the reading at
+the majority (`lt_card_add_majority`). `Nemo/Support.lean` and the core's
+copies are gone.
+
+**Blame.** `Common/Leader.lean` now holds what a schedule says about a
+record: the candidates of a slot as a predicate and as a set, an honest
+leader's single candidate (`isLeaderBlock_unique_of_honest`, which Nemo
+had at `honest = univ`), the voting round, and the blamers of a slot
+(`slotBlamers`, `slotBlames`, `slotBlamesIn`) with their membership,
+monotonicity, the full view, congruence across schedules, and the
+no-candidate case. The core's `DirectSkipSlotIn`, Hybrid's, and
+Hydrozoan's `SkippedLeader` are each one threshold on that count, and
+the band lemma for blame is one subset statement
+(`slotBlamesIn_band`), where three copies of a thirty-line proof stood.
+
+**Hydrozoan reads the substrate.** Its `blocksAt`, `supporters`,
+`supportersInView`, `blames`, `blamesInView`, the three membership
+unfoldings, `votingRound` and the predecessor fact were the record's
+under other names and are deleted; `decisionRound` stays as the paper's
+name for `slotRound + 2`. Optimal inherits the change.
+
+**Measure.** The step removes 914 lines and adds 536, most of the
+additions being the docstrings of the shared notions. The library and
+tests stand at 77,775 lines against 78,397 at the branch point.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

@@ -1,6 +1,6 @@
 import LeanDag.Hydrozoan.Model.Decided
 import LeanDag.Hydrozoan.Helpers.Counting
-import LeanDag.Hydrozoan.Helpers.CausalHistory
+import LeanDag.Common.CausalHistory
 import LeanDag.Hydrozoan.Helpers.DirectRules
 import LeanDag.Hydrozoan.Helpers.IndirectRules
 /-!
@@ -106,7 +106,7 @@ private theorem certifiedIn_of_slowCommit_base {L : BlockId} {r : ℕ}
     exists_common_mem_of_creator_quorums (s := (U.block A).refs)
       (t := certificates U L r) (r := r + 2)
       (fun b hb => ⟨U.complete A hA b hb, by
-        have := round_of_mem_refs hA hb; omega⟩)
+        have := BlockRecord.round_of_mem_refs hA hb; omega⟩)
       (fun b hb => ⟨(mem_certificates.mp hb).1, (mem_certificates.mp hb).2.1⟩)
       (by
         have hq : q Replica ≤ (creatorsOf U.block (U.block A).refs).card :=
@@ -127,7 +127,7 @@ private theorem certifiedIn_of_slowCommit_aux {L : BlockId} {r : ℕ}
       intro A hA hAr
       obtain ⟨b, hb⟩ := refs_nonempty hA (by omega)
       have hbi : b ∈ U.ids := U.complete A hA b hb
-      have hbr := round_of_mem_refs hA hb
+      have hbr := BlockRecord.round_of_mem_refs hA hb
       exact certifiedIn_of_reaches (Reaches.single hb) (ih b hbi (by omega))
 
 /-- **Rung 1 fires.** A slow commit's certificate lies in the causal
@@ -147,7 +147,7 @@ private theorem weakLinked_of_fastCommit_base {L : BlockId} {r : ℕ}
   · intro b hb
     obtain ⟨hbp, hbv⟩ := Finset.mem_filter.mp hb
     have hbi : b ∈ U.ids := U.complete A hA b hbp
-    have hbr := round_of_mem_refs hA hbp
+    have hbr := BlockRecord.round_of_mem_refs hA hbp
     exact ⟨mem_blocksAt.mpr ⟨hbi, by omega⟩, hbv, Reaches.single hbp⟩
   · have hsub :
         (creatorsOf U.block (U.block A).refs ∩ supporters U L (r + 1)) \
@@ -160,7 +160,7 @@ private theorem weakLinked_of_fastCommit_base {L : BlockId} {r : ℕ}
       obtain ⟨p', hp', hpc⟩ := mem_creatorsOf.mp hvP
       obtain ⟨b, hbi, hbr, hbv, hbc⟩ := mem_supporters.mp hvS
       have hpi : p' ∈ U.ids := U.complete A hA p' hp'
-      have hpr := round_of_mem_refs hA hp'
+      have hpr := BlockRecord.round_of_mem_refs hA hp'
       have hnb : (U.block p').creator ∈ (NonByzantine : Finset Replica) := by
         rw [mem_nonByzantine, hpc]; exact hvnb
       have hpb : p' = b :=
@@ -193,7 +193,7 @@ private theorem weakLinked_of_fastCommit_aux {L : BlockId} {r : ℕ}
       intro A hA hAr
       obtain ⟨b, hb⟩ := refs_nonempty hA (by omega)
       have hbi : b ∈ U.ids := U.complete A hA b hb
-      have hbr := round_of_mem_refs hA hb
+      have hbr := BlockRecord.round_of_mem_refs hA hb
       exact weakLinked_of_reaches (Reaches.single hb) (ih b hbi (by omega))
 
 /-- **Rung 2 fires.** A fast commit's weak footprint is visible from
@@ -279,14 +279,14 @@ private theorem supporters_capped_of_skipped {k : ℕ} {L : BlockId}
       Fintype.card Replica + F.f := by
   have h' : (supporters U L (votingRound Replica k)).card + qFast Replica ≤
       Fintype.card Replica + F.f := by
-    have hsub : supporters U L (votingRound Replica k) ∩ blames U k ⊆
+    have hsub : supporters U L (votingRound Replica k) ∩ slotBlames U k ⊆
         F.byzantine := by
       intro v hv
       obtain ⟨h₁, h₂⟩ := Finset.mem_inter.mp hv
       exact byzantine_of_votes_and_blames hL h₁ h₂
     have h1 := Finset.card_union_add_card_inter
-      (supporters U L (votingRound Replica k)) (blames U k)
-    have h2 : (supporters U L (votingRound Replica k) ∪ blames U k).card ≤
+      (supporters U L (votingRound Replica k)) (slotBlames U k)
+    have h2 : (supporters U L (votingRound Replica k) ∪ slotBlames U k).card ≤
         Fintype.card Replica := by
       rw [← Finset.card_univ]; exact Finset.card_le_univ _
     have h3 := Finset.card_le_card hsub

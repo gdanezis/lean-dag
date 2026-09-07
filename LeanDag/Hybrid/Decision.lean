@@ -55,12 +55,11 @@ the candidates that happen to exist is not invariant under a mechanism
 that adds one, so it cannot be `Banded`. -/
 def DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (s : ℕ) : Prop :=
-  q Validator ≤ (creatorsOf U.block (slotBlamers U s ∩ V.ids)).card
+  q Validator ≤ (slotBlamesIn U V s).card
 
 instance decidableDirectSkipSlotIn (V : View Validator BlockId Payload U) (s : ℕ) :
     Decidable (DirectSkipSlotIn U V s) :=
-  inferInstanceAs (Decidable (q Validator ≤
-    (creatorsOf U.block (slotBlamers U s ∩ V.ids)).card))
+  inferInstanceAs (Decidable (q Validator ≤ (slotBlamesIn U V s).card))
 
 /-- **The slot-level skip implies the per-candidate one**, so every
 theorem stated over `DirectSkipIn` — H3 in particular — applies to it
@@ -149,8 +148,7 @@ theorem eq_of_directCommitIn_of_thickLink (hne : HonestNoEquiv U)
 /-- A larger view can only see more blockers. -/
 theorem directSkipSlotIn_mono {V V' : View Validator BlockId Payload U} {s : ℕ}
     (hsub : V.ids ⊆ V'.ids) (h : DirectSkipSlotIn U V s) : DirectSkipSlotIn U V' s :=
-  le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
+  le_trans h (Finset.card_le_card (slotBlamesIn_mono hsub))
 
 omit S in
 /-- The slot-level skip reads the schedule only at its own slot. -/
@@ -159,7 +157,7 @@ theorem directSkipSlotIn_congr {S₁ S₂ : Slots Validator}
     (hround : S₁.slotRound s = S₂.slotRound s) (hk : S₁.leader s = S₂.leader s)
     (h : DirectSkipSlotIn (S := S₁) U V s) : DirectSkipSlotIn (S := S₂) U V s := by
   unfold DirectSkipSlotIn at h ⊢
-  rwa [slotBlamers_congr hround hk] at h
+  rwa [slotBlamesIn_congr hround hk] at h
 
 /-! ## The relation -/
 

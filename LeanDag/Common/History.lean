@@ -18,7 +18,7 @@ steps suffice from any block of the universe.
 
 namespace LeanDag
 
-variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
+variable {Validator : Type*} [DecidableEq Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
 variable {U : BlockRecord Validator BlockId Payload P honest}

@@ -40,7 +40,7 @@ variable (Replica : Type*) [Fintype Replica] [DecidableEq Replica]
 /-- **A fast commit starves every conflicting certificate**,
 `q_cert + q_fast > n + f` (row 2): the `q_fast` voters of a fast-committed
 block and the `q_cert` votes inside any certificate for a conflicting
-block overlap in a non-Byzantine replica. Also what makes `q_cert` LeanDag.Hydrozoan.blames
+block overlap in a non-Byzantine replica. Also what makes `q_cert` slotBlames
 exclude a fast commit — the Optimal direct skip's blame quorum. Replaces
 Hydrozoan's `FastStarvation`, which involved `q_weak`. -/
 def CertFastExclusion : Prop :=

@@ -36,7 +36,7 @@ theorem exists_commonCore {r : ℕ} {c₀ : BlockId}
       ∀ c ∈ U.ids, r + 2 ≤ (U.block c).round → Reaches U c b := by
   obtain ⟨b, hb, hbr, hbc, hreach⟩ := exists_common_correct_ancestor hc₀ hc₀r
   refine ⟨b, hb, hbr, hbc, fun c hc hcr => ?_⟩
-  obtain ⟨b', rfl, hreach'⟩ := reaches_pred_of_round_le (P := fun x => x = b) (N := r + 2)
+  obtain ⟨b', rfl, hreach'⟩ := reaches_pred_of_round_le (U := U) (Q := fun x => x = b) (N := r + 2)
     (fun c' hc' hc'r => ⟨b, rfl, hreach c' hc' hc'r⟩) hc hcr
   exact hreach'
 

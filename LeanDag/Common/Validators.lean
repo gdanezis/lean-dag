@@ -174,6 +174,14 @@ theorem card_inter_ge_of_quorum {Q₁ Q₂ : Finset Validator}
   have := F.card_validators
   omega
 
+/-- **`f + 1` validators are more than a quorum can miss.** A block
+references `n − f` distinct creators, so it misses at most `f`; this
+turns a count of `f + 1` backers into the form the hitting lemma reads. -/
+theorem lt_card_add_quorumCard {T : Finset Validator} (h : F.f + 1 ≤ T.card) :
+    Fintype.card Validator < T.card + quorumCard Validator := by
+  have := F.card_validators
+  omega
+
 /-- **T0.** Two quorums always share a *correct* validator. This is the form
 every later proof cites. -/
 theorem exists_correct_mem_inter {Q₁ Q₂ : Finset Validator}

@@ -5,8 +5,8 @@ import LeanDag.Common.Schedule
 import LeanDag.Mysticeti.Liveness
 open LeanDag
 
-#print axioms LeanDag.BlockUniverse.eq_of_creator_eq
-#print axioms LeanDag.BlockUniverse.creators_quorum
+#print axioms LeanDag.BlockRecord.eq_of_creator_eq
+#print axioms LeanDag.BlockRecord.creators_quorum
 #print axioms LeanDag.round_le_of_reaches
 #print axioms LeanDag.reaches_of_quorum_support
 #print axioms LeanDag.exists_correct_common_support

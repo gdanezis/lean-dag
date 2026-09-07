@@ -24,18 +24,17 @@ variable {BlockId : Type} [DecidableEq BlockId] [LinearOrder BlockId]
 variable [LeanDag.Hydrozoan.Faults Replica] [S : LeanDag.Slots Replica]
 variable {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
 
-/-- Every member of `T` blames the slot. -/
+/-- Every member of `T` slotBlames the slot. -/
 theorem subset_blamesInView {V : LeanDag.Hydrozoan.View U} {T : Finset Replica} {k : ℕ}
     (hpres : ∀ v ∈ T, ∃ c ∈ V.ids, (U.block c).creator = v ∧
       (U.block c).round = S.slotRound k + 1)
     (huns : ∀ c ∈ V.ids, (U.block c).creator ∈ T → (U.block c).round = S.slotRound k + 1 →
       ∀ L, LeanDag.IsLeaderBlock U k L → L ∉ (U.block c).refs) :
-    T ⊆ LeanDag.Hydrozoan.blamesInView U V k := by
+    T ⊆ slotBlamesIn U V k := by
   intro v hv
   obtain ⟨c, hcV, hca, hcr⟩ := hpres v hv
   refine Finset.mem_image.mpr ⟨c, Finset.mem_inter.mpr ⟨Finset.mem_filter.mpr ⟨?_, ?_⟩, hcV⟩, hca⟩
-  · exact Finset.mem_filter.mpr ⟨V.subset_ids hcV, by
-      unfold LeanDag.Hydrozoan.votingRound; exact hcr⟩
+  · exact Finset.mem_filter.mpr ⟨V.subset_ids hcV, hcr⟩
   · intro j hj hL
     exact huns c hcV (by rw [hca]; exact hv) hcr j hL hj
 

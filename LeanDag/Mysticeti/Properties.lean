@@ -395,33 +395,6 @@ theorem directCommitIn_band (h : AgreeBand mysticetiRule U U' lo hi g g')
       hV C hCV (by omega) (by omega)⟩, ?_⟩
   rw [(AnchoredRule.band_block h hCU (by omega) (by omega)).2]; exact hvC
 
-theorem directSkipSlotIn_band (h : AgreeBand mysticetiRule U U' lo hi g g')
-    {V : View Validator BlockId Payload U} {V' : View Validator BlockId Payload U'}
-    {k k' : ℕ} (hkk : S.slotRound k + g = S'.slotRound k' + g')
-    (hlead : S.leader k = S'.leader k') (hlo : lo = S.slotRound k + g)
-    (hhi : S.slotRound k + 1 + g ≤ hi)
-    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
-      b ∈ V'.ids)
-    (hs : DirectSkipSlotIn (S := S) U V k) : DirectSkipSlotIn (S := S') U' V' k' := by
-  unfold DirectSkipSlotIn at hs ⊢
-  refine le_trans hs (Finset.card_le_card ?_)
-  intro w hw
-  obtain ⟨q, hq, hvq⟩ := Finset.mem_image.mp hw
-  obtain ⟨hqf, hqV⟩ := Finset.mem_inter.mp hq
-  simp only [slotBlamers, Finset.mem_filter] at hqf
-  obtain ⟨hqA, hqn⟩ := hqf
-  have hqU : q ∈ U.ids := (mem_blocksAt.mp hqA).1
-  have hqr : (U.block q).round = S.slotRound k + 1 := (mem_blocksAt.mp hqA).2
-  refine Finset.mem_image.mpr ⟨q, ?_, ?_⟩
-  · simp only [Finset.mem_inter, slotBlamers, Finset.mem_filter]
-    refine ⟨⟨AnchoredRule.blocksAt_band h (by omega) (by omega) (by omega) hqA, ?_⟩,
-      hV q hqV (by omega) (by omega)⟩
-    rw [AnchoredRule.band_refs h hqU (by omega) (by omega)]
-    intro j hj hjL
-    have hjU : j ∈ U.ids := U.complete q hqU j hj
-    exact hqn j hj (AnchoredRule.isLeaderBlock_band_old h hkk hlead (by omega) (by omega) hjU hjL)
-  · rw [(AnchoredRule.band_block h hqU (by omega) (by omega)).2]; exact hvq
-
 theorem certifiedIn_band (h : AgreeBand mysticetiRule U U' lo hi g g') {A L : BlockId}
     {r r' : ℕ} (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g)
     (hAhi : (U.block A).round + g ≤ hi) (hrr : r + g = r' + g')
@@ -480,8 +453,8 @@ theorem coreBandLaws : (coreAnchored Validator BlockId Payload).BandLaws where
   commit_band := fun h hkk _ hlo hhi hV _ hc =>
     directCommitIn_band h hkk (by omega) (by simp only [coreAnchored_wave] at hhi; omega) hV hc
   skip_band := fun h hkk hlk hlo hhi hV hs =>
-    AnchoredRule.directSkipSlotIn_band h hkk hlk hlo
-      (by simp only [coreAnchored_wave] at hhi; omega) hV hs
+    le_trans hs (Finset.card_le_card (AnchoredRule.slotBlamesIn_band h hkk hlk hlo
+      (by simp only [coreAnchored_wave] at hhi; omega) hV))
   link_band := fun h hA hAlo hAhi hkk _ hlo hhi _ _ =>
     certifiedIn_band h hA hAlo hAhi hkk hlo (by simp only [coreAnchored_wave] at hhi; omega)
   link_novel := fun h hA hAlo hAhi hkk _ hlo hhi _ _ hL =>

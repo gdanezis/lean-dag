@@ -34,7 +34,7 @@ def EvidenceLinked (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (A L : 
     Prop :=
   ∃ s : Finset BlockId,                            -- some set of blocks such that
     (∀ b ∈ s,                                      -- every block in it
-      b ∈ LeanDag.Hydrozoan.blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k) ∧   -- sits at slot k's decision round,
+      b ∈ blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k) ∧   -- sits at slot k's decision round,
       IsFastEvidence U k b L ∧                     -- is fast evidence for L,
       Reaches U A b) ∧                             -- and lies in the anchor's history;
     qCert Replica ≤ (creatorsOf U.block s).card     -- and they come from q_cert creators

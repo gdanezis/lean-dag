@@ -8,10 +8,10 @@ synchronised, populated wave with a correct leader slow-commits — the slow
 path is unchanged in Optimal-Hydrozoan, and so is the guaranteed commit;
 only the harvest differs (`DecidedOpt`). `SkipLiveness` is what the arc
 adds: a slot whose leader produced **no candidate** is directly skipped by
-the guaranteed quorum alone — `q_cert ≤ q ≤ |T|` LeanDag.Hydrozoan.blames at the voting
+the guaranteed quorum alone — `q_cert ≤ q ≤ |T|` slotBlames at the voting
 round, and every decision-round block is fast evidence for nothing,
 vacuously. No fault-count hypothesis and no synchrony hypothesis appear.
-In Hydrozoan the same skip needs `q_fast = n − p` LeanDag.Hydrozoan.blames, which only
+In Hydrozoan the same skip needs `q_fast = n − p` slotBlames, which only
 `Correct` can supply when the actual faults fit `p`; it is opportunistic
 there (`SkipLatency`, kept outside `Statement`), and a liveness claim here
 (decision D5). The price, recorded in the paper: the verdict lands at the
@@ -19,7 +19,7 @@ decision round, one round later than Hydrozoan's.
 
 `SkipLiveness` is deliberately restricted to candidate-less slots. With a
 candidate present, the Byzantine replicas can vote for it while every
-correct replica LeanDag.Hydrozoan.blames it, and those `f` votes suffice to make every
+correct replica slotBlames it, and those `f` votes suffice to make every
 correct decision-round block fast evidence whenever `f ≥ tPlain` — at the
 minimal committee `tPlain = f + pOpt − 1` when `c + k` is even and
 `f + pOpt` when odd, so the attack exists exactly at `c = k = 0` — and the
@@ -71,12 +71,12 @@ def CommitLiveness (U : OptUniverse Replica BlockId) : Prop :=
 
 /-- **Skip liveness** (the arc's addition): a slot with no candidate is
 directly skipped by any quorum-sized set of correct replicas that fills
-its voting and decision rounds — every voting-round block of `T` LeanDag.Hydrozoan.blames
+its voting and decision rounds — every voting-round block of `T` slotBlames
 the slot, every decision-round block of `T` is fast evidence for no
 candidate, and `q_cert ≤ q ≤ |T|` — and the skip verdict is output on any
-view caught up to the decision round (the LeanDag.Hydrozoan.blames and the no-evidence
+view caught up to the decision round (the slotBlames and the no-evidence
 quorum both sit at or below it). No synchrony and no fault-count
-hypothesis: LeanDag.Hydrozoan.blames and no-evidence reference nothing. `q ≤ |T|` is
+hypothesis: slotBlames and no-evidence reference nothing. `q ≤ |T|` is
 deliberately the DAG quorum, uniform with `CommitLiveness`, although
 `q_cert ≤ |T|` would suffice. -/
 def SkipLiveness (U : OptUniverse Replica BlockId) : Prop :=

@@ -217,13 +217,13 @@ theorem fastCommitInView_of_coversUpto {U : LeanDag.Hydrozoan.BlockUniverse Repl
     {V : LeanDag.Hydrozoan.View U} {L : BlockId} {r : ℕ}
     (h : LeanDag.Hydrozoan.FastCommit U L r) (hcov : V.CoversUpto (r + 1)) :
     LeanDag.Hydrozoan.FastCommitInView U V L r := by
-  have hsub : (LeanDag.Hydrozoan.blocksAt U (r + 1)).filter
+  have hsub : (blocksAt U (r + 1)).filter
       (fun b => LeanDag.Hydrozoan.IsVote U b L) ⊆ V.ids := by
     intro b hb
     obtain ⟨hbA, -⟩ := Finset.mem_filter.mp hb
-    obtain ⟨hbU, hbr⟩ := LeanDag.Hydrozoan.mem_blocksAt.mp hbA
+    obtain ⟨hbU, hbr⟩ := mem_blocksAt.mp hbA
     exact hcov b hbU (le_of_eq hbr)
-  unfold LeanDag.Hydrozoan.FastCommitInView LeanDag.Hydrozoan.supportersInView
+  unfold LeanDag.Hydrozoan.FastCommitInView supportersIn
   rw [Finset.inter_eq_left.2 hsub]
   exact h
 
@@ -245,11 +245,11 @@ theorem voteSupport_fast_commits
     (by change S.slotRound k ≤ S.slotRound k + 1; omega) (S.leader k) hlead
   have hL : LeanDag.IsLeaderBlock U k L := ⟨hLmem, hLr, hLc⟩
   have hfast : LeanDag.Hydrozoan.FastCommit U L (S.slotRound k) := by
-    have hsub : T ⊆ LeanDag.Hydrozoan.supporters U L (S.slotRound k + 1) := by
+    have hsub : T ⊆ supporters U L (S.slotRound k + 1) := by
       intro v hv
       obtain ⟨b, hb, hba, hbr⟩ := hpop (S.slotRound k + 1) (by omega)
         (by change S.slotRound k + 1 ≤ S.slotRound k + 1; omega) v hv
-      exact LeanDag.Hydrozoan.mem_supporters.mpr
+      exact mem_supporters.mpr
         ⟨b, hb, hbr, hcert L ⟨hLmem, hLr, hLc⟩ v hv b hb hba hbr, hba⟩
     exact le_trans hcard (Finset.card_le_card hsub)
   have hin : LeanDag.Hydrozoan.FastCommitInView U V L (S.slotRound k) :=

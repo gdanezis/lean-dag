@@ -21,7 +21,7 @@ Two end-to-end applications, one per claim:
   can apply — and the run still forces a verdict, anchoring on its end
   (slots 2 and 3, though committed, are too close to be eligible).
   Disclosure: in this fully-referenced table the direct skip also
-  reaches slot 1 (with no candidate, every voting-round block LeanDag.Hydrozoan.blames
+  reaches slot 1 (with no candidate, every voting-round block slotBlames
   vacuously), so its `none` verdict has a direct derivation too; `U9`
   below is where a verdict is provably out of the direct rules' reach.
 
@@ -31,7 +31,7 @@ in *any* view (the frozen `DirectSafety` witness also derives
 the weak rung, but only in a withheld view — its full view
 fast-commits): slot 0's candidate gathers exactly `q_weak = 3` votes —
 too few for a fast commit (`q_fast = 6`), too few for any certificate
-to exist (`q_cert = 5`), and leaving only 3 LeanDag.Hydrozoan.blames (< `q_fast`), so
+to exist (`q_cert = 5`), and leaving only 3 slotBlames (< `q_fast`), so
 **no direct rule can ever decide the slot, in any view**. Anchored on
 the fast-committed slot 3 (the nearest possible anchor — no eligible
 slots in between), the weak rung fires at the sole candidate.
@@ -114,7 +114,7 @@ example : FastCommitInView U8 (View.full U8) 7 2 ∧
 
 -- Below the run, slot 1 has no candidate block at all: its leader is
 -- the crashed replica 1, so no commit rule can apply. (With no
--- candidate every round-2 block LeanDag.Hydrozoan.blames vacuously, so the direct skip
+-- candidate every round-2 block slotBlames vacuously, so the direct skip
 -- happens to fire here as well — U9 below is where the direct rules
 -- are provably out of reach.)
 example : Slots.leader (Validator := Fin 4) 1 = 1 := by decide
@@ -213,14 +213,14 @@ def U9 : BlockUniverse (Fin 7) (Fin 43) where
   valid := by decide
   no_equivocation := by decide
 
--- Slot 0's candidate draws exactly q_weak = 3 LeanDag.Hydrozoan.supporters — and with
+-- Slot 0's candidate draws exactly q_weak = 3 supporters — and with
 -- only 3 votes in the whole universe, no certificate can ever form
 -- (q_cert = 5), while the 3 non-voters fall short of a skip quorum
 -- (q_fast = 6): no direct rule decides slot 0, in any view.
 example : IsLeaderBlock U9 0 2 := by decide
-example : Hydrozoan.supporters U9 2 1 = {2, 3, 4} := by decide
+example : supporters U9 2 1 = {2, 3, 4} := by decide
 example : LeanDag.Hydrozoan.certificates U9 2 0 = ∅ := by decide
-example : Hydrozoan.blames U9 0 = {0, 5, 6} := by decide
+example : slotBlames U9 0 = {0, 5, 6} := by decide
 example : ¬ FastCommitInView U9 (View.full U9) 2 0 ∧
     ¬ SlowCommitInView U9 (View.full U9) 2 0 ∧
     ¬ SkippedLeaderInView U9 (View.full U9) 0 := by decide
@@ -234,7 +234,7 @@ example : IsLeaderBlock U9 3 23 ∧ FastCommitInView U9 (View.full U9) 23 3 := b
 
 -- The three votes sit in the anchor's causal history: the weak rung's
 -- footprint, at exactly q_weak.
-example : qWeak (Fin 7) ≤ (creatorsOf U9.block ((Hydrozoan.blocksAt U9 1).filter
+example : qWeak (Fin 7) ≤ (creatorsOf U9.block ((blocksAt U9 1).filter
     fun b => IsVote U9 b 2 ∧ b ∈ history U9 23)).card := by decide
 
 -- The positive weak-rung derivation — the first on a universe
@@ -314,7 +314,7 @@ example : ∃ v, Decided U9 (View.full U9) 0 v :=
 -- history): a NONZERO footprint that still misses q_weak = 3. Guards
 -- the weak threshold itself — a weakening to "any vote suffices" would
 -- flip this example.
-example : (creatorsOf U9.block ((Hydrozoan.blocksAt U9 1).filter
+example : (creatorsOf U9.block ((blocksAt U9 1).filter
     fun b => IsVote U9 b 1 ∧ b ∈ history U9 23)).card = 2 := by decide
 example : ¬ WeakLinked U9 23 1 0 := fun h =>
   absurd ((weakLinked_iff_history (by decide)).mp h) (by decide)
@@ -386,12 +386,12 @@ def U11 : BlockUniverse (Fin 5) (Fin 26) where
 
 -- Slot 0's candidates are exactly the two equivocating copies; the
 -- voters split 3/2, so no direct rule can decide the slot in any view
--- (q_fast = 5, q_cert = 4, and nobody LeanDag.Hydrozoan.blames — every voter voted).
+-- (q_fast = 5, q_cert = 4, and nobody slotBlames — every voter voted).
 example : ∀ L : Fin 26, IsLeaderBlock U11 0 L → L = 0 ∨ L = 1 := by decide
-example : Hydrozoan.supporters U11 0 1 = {0, 1, 2} ∧ Hydrozoan.supporters U11 1 1 = {3, 4} := by
+example : supporters U11 0 1 = {0, 1, 2} ∧ supporters U11 1 1 = {3, 4} := by
   decide
 example : LeanDag.Hydrozoan.certificates U11 0 0 = ∅ ∧ LeanDag.Hydrozoan.certificates U11 1 0 = ∅ := by decide
-example : Hydrozoan.blames U11 0 = ∅ := by decide
+example : slotBlames U11 0 = ∅ := by decide
 example : ¬ FastCommitInView U11 (View.full U11) 0 0 ∧
     ¬ FastCommitInView U11 (View.full U11) 1 0 ∧
     ¬ SkippedLeaderInView U11 (View.full U11) 0 := by decide

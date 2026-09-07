@@ -104,14 +104,14 @@ theorem not_skippedLeader_of_fastCommit {k : ℕ} {L : BlockId}
     ¬ SkippedLeader U k := by
   intro hskip
   have h' : qFast Replica ≤ (supporters U L (votingRound Replica k)).card := h
-  have hsub : supporters U L (votingRound Replica k) ∩ blames U k ⊆
+  have hsub : supporters U L (votingRound Replica k) ∩ slotBlames U k ⊆
       F.byzantine := by
     intro v hv
     obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
     exact byzantine_of_votes_and_blames hL hv₁ hv₂
   have h1 := Finset.card_union_add_card_inter
-    (supporters U L (votingRound Replica k)) (blames U k)
-  have h2 : (supporters U L (votingRound Replica k) ∪ blames U k).card ≤
+    (supporters U L (votingRound Replica k)) (slotBlames U k)
+  have h2 : (supporters U L (votingRound Replica k) ∪ slotBlames U k).card ≤
       Fintype.card Replica := by
     rw [← Finset.card_univ]; exact Finset.card_le_univ _
   have h3 := Finset.card_le_card hsub
@@ -135,14 +135,14 @@ theorem not_skippedLeader_of_slowCommit {k : ℕ} {L : BlockId}
     have : votingRound Replica k = S.slotRound k + 1 := rfl
     rw [this]
     omega
-  have hsub : supporters U L (votingRound Replica k) ∩ blames U k ⊆
+  have hsub : supporters U L (votingRound Replica k) ∩ slotBlames U k ⊆
       F.byzantine := by
     intro v hv
     obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
     exact byzantine_of_votes_and_blames hL hv₁ hv₂
   have h1 := Finset.card_union_add_card_inter
-    (supporters U L (votingRound Replica k)) (blames U k)
-  have h2 : (supporters U L (votingRound Replica k) ∪ blames U k).card ≤
+    (supporters U L (votingRound Replica k)) (slotBlames U k)
+  have h2 : (supporters U L (votingRound Replica k) ∪ slotBlames U k).card ≤
       Fintype.card Replica := by
     rw [← Finset.card_univ]; exact Finset.card_le_univ _
   have h3 := Finset.card_le_card hsub

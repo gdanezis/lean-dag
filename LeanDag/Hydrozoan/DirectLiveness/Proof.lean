@@ -50,10 +50,10 @@ theorem skipLatency :
       [Slots Replica] (U : BlockUniverse Replica BlockId),
       SkipLatency U := by
   intro Replica BlockId _ _ _ _ _ _ U k hfaults hpop hnolead
-  have hsub : (Correct : Finset Replica) ⊆ blames U k := by
+  have hsub : (Correct : Finset Replica) ⊆ slotBlames U k := by
     intro v hv
     obtain ⟨b, hb, hba, hbr⟩ := hpop v hv
-    exact mem_blames.mpr ⟨b, hb, hbr, fun j _ => hnolead j, hba⟩
+    exact mem_slotBlames.mpr ⟨b, hb, hbr, fun j _ => hnolead j, hba⟩
   have h1 := Finset.card_le_card hsub
   have h2 := qFast_le_card_correct hfaults
   simp only [SkippedLeader]

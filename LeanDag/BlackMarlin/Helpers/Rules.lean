@@ -85,7 +85,7 @@ included, since validity is structural.
 The quorum behind the support contains `f + 1` correct authors, each with
 one round-`(r + 1)` block, and a round-`(r + 2)` block names `n − f` of
 the at most `n` authors of that round, so it cannot miss all of them. The
-core's `reaches_of_correct_support_of_card` is that step and
+core's `reaches_of_honest_support_of_card` is that step and
 `reaches_pred_of_round_le` carries it upward. -/
 theorem reaches_of_supported {L : BlockId} {r : ℕ} (h : Supported U L r)
     {c : BlockId} (hc : c ∈ U.ids) (hcr : r + 2 ≤ (U.block c).round) :
@@ -94,9 +94,9 @@ theorem reaches_of_supported {L : BlockId} {r : ℕ} (h : Supported U L r)
     card_inter_correct_of_quorum h
   have hbase : ∀ c ∈ U.ids, (U.block c).round = r + 2 → ∃ b, b = L ∧ Reaches U c b := by
     intro c hc hcr
-    refine ⟨L, rfl, reaches_of_correct_support_of_card
+    refine ⟨L, rfl, reaches_of_honest_support_of_card
       (S := correctSupporters U L (r + 1)) (fun v hv => ?_)
-      (fun v hv => correctSupporters_correct hv) hcard hc hcr⟩
+      (fun v hv => correctSupporters_correct hv) (lt_card_add_quorumCard hcard) hc hcr⟩
     exact mem_supporters.mp (correctSupporters_subset hv)
   obtain ⟨b, hb, hreach⟩ := reaches_pred_of_round_le hbase hc hcr
   exact hb ▸ hreach

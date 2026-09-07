@@ -25,7 +25,7 @@ block fast evidence for the committed block (`EvidencePlain`,
 (`SlowCollectible`, `q ≥ qCert`), a decision-round block is evidence for
 at most one candidate, and two evidence quorums at one anchor share a
 non-Byzantine creator (`CertUniqueness`) — which is why the evidence rung
-needs no tie-break. A direct skip's `qCert` LeanDag.Hydrozoan.blames and no-evidence blocks
+needs no tie-break. A direct skip's `qCert` slotBlames and no-evidence blocks
 exclude LeanDag.Hydrozoan.certificates and evidence quorums the same way.
 -/
 

@@ -210,8 +210,8 @@ theorem odontocetiBandLaws :
     directCommitIn_band h hkk (by omega)
       (by simp only [Odontoceti.odontocetiAnchored_wave] at hhi; omega) hV hc
   skip_band := fun h hkk hlk hlo hhi hV hs =>
-    AnchoredRule.directSkipSlotIn_band h hkk hlk hlo
-      (by simp only [Odontoceti.odontocetiAnchored_wave] at hhi; omega) hV hs
+    le_trans hs (Finset.card_le_card (AnchoredRule.slotBlamesIn_band h hkk hlk hlo
+      (by simp only [Odontoceti.odontocetiAnchored_wave] at hhi; omega) hV))
   link_band := fun h hA hAlo hAhi hkk _ hlo hhi _ _ =>
     thickLink_band h hA hAlo hAhi hkk hlo
       (by simp only [Odontoceti.odontocetiAnchored_wave] at hhi; omega)

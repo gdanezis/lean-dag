@@ -39,8 +39,9 @@ theorem reaches_of_synchronisedOn {T : Finset Validator} {R r : ℕ} {L : BlockI
     have hfcard : F.f + 1 ≤ T.card := by
       have := F.card_validators
       omega
-    obtain ⟨q, hq, hqL⟩ := exists_mem_refs_of_correct_support_of_card
-      (P := fun q => L ∈ (U.block q).refs) hTq (fun v hv => hT hv) hfcard hc hcr
+    obtain ⟨q, hq, hqL⟩ := exists_mem_refs_of_honest_support_of_card
+      (Q := fun q => L ∈ (U.block q).refs) hTq (fun v hv => hT hv)
+      (lt_card_add_quorumCard hfcard) hc hcr
     exact ⟨L, rfl, Reaches.trans (Reaches.single hq) (Reaches.single hqL)⟩
   intro c hc hcr
   obtain ⟨b, rfl, h⟩ := reaches_pred_of_round_le (N := r + 2) hbase hc hcr
@@ -67,8 +68,9 @@ theorem reaches_of_votes {T : Finset Validator} {r : ℕ} {L : BlockId}
     have hfcard : F.f + 1 ≤ T.card := by
       have := F.card_validators
       omega
-    obtain ⟨q, hq, hqL⟩ := exists_mem_refs_of_correct_support_of_card
-      (P := fun q => L ∈ (U.block q).refs) hTq (fun v hv => hT hv) hfcard hc hcr
+    obtain ⟨q, hq, hqL⟩ := exists_mem_refs_of_honest_support_of_card
+      (Q := fun q => L ∈ (U.block q).refs) hTq (fun v hv => hT hv)
+      (lt_card_add_quorumCard hfcard) hc hcr
     exact ⟨L, rfl, Reaches.trans (Reaches.single hq) (Reaches.single hqL)⟩
   intro c hc hcr
   obtain ⟨b, rfl, h⟩ := reaches_pred_of_round_le (N := r + 2) hbase hc hcr

@@ -79,7 +79,7 @@ example : DecidesBelow OD VD gD 7 := by
 example : commitSeq gD 7 = [3, 8, 13, 22] := rfl
 
 -- The shorter replica, in the one-vote-short view: slot 0 fast, slot 1
--- skipped, both directly; slot 2 has no direct route there (its LeanDag.Hydrozoan.blames
+-- skipped, both directly; slot 2 has no direct route there (its slotBlames
 -- pass, its no-evidence quorum fails, no certificate, one vote) and no
 -- anchor (the view cannot fast-commit 22), so the replica stops there.
 theorem vds_gDs : DecidesBelow OD VDs' gDs 2 := by
@@ -232,9 +232,9 @@ theorem vc_gC : DecidesBelow OC VC gC 3 := by
   · exact DecidedOpt.directCommit (by decide) (Or.inl (by decide))
 
 -- Slot 0 also slow-commits (two certifiers), and the crashed leader's
--- slot is skipped by two LeanDag.Hydrozoan.blames and two vacuous no-evidence blocks.
+-- slot is skipped by two slotBlames and two vacuous no-evidence blocks.
 example : DecidedOpt OC VC 0 (some 2) := DecidedOpt.directCommit (by decide) (Or.inr (by decide))
-example : LeanDag.Hydrozoan.blames UC 1 = {1, 2} ∧ (∀ L, ¬ IsLeaderBlock UC 1 L) := by decide
+example : slotBlames UC 1 = {1, 2} ∧ (∀ L, ¬ IsLeaderBlock UC 1 L) := by decide
 
 -- The Optimal headline theorems at f = 0: no view skips slot 0, and
 -- every replica that has decided below 3 outputs [2, 5].

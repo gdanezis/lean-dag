@@ -45,7 +45,7 @@ variable {U U' : LeanDag.Hydrozoan.BlockUniverse Replica BlockId} {lo hi g g' : 
 
 /-! The lemmas are stated for **any** anchored rule on Hydrozoan's
 record, so that Optimal-Hydrozoan, which shares the blocks, votes,
-certificates and blames, reads them at its own carrier. -/
+certificates and slotBlames, reads them at its own carrier. -/
 
 variable {R : AnchoredRule Replica BlockId Unit ValidWrt (NonByzantine : Finset Replica)}
 
@@ -58,9 +58,9 @@ Hydrozoan's own is its round layer and its votes. -/
 equality: `U'` may hold blocks there that `U` did not. -/
 theorem blocksAt_bnd (h : AgreeBand R.toDagRule U U' lo hi g g') {n n' : ℕ}
     (hnn : n + g = n' + g') (h1 : lo ≤ n + g) (h2 : n + g ≤ hi) :
-    LeanDag.Hydrozoan.blocksAt U n ⊆ LeanDag.Hydrozoan.blocksAt U' n' := by
+    blocksAt U n ⊆ blocksAt U' n' := by
   intro b hb
-  simp only [LeanDag.Hydrozoan.blocksAt, Finset.mem_filter] at hb ⊢
+  simp only [blocksAt, Finset.mem_filter] at hb ⊢
   have hbr := (AnchoredRule.band_block h hb.1 (by omega) (by omega)).1
   exact ⟨AnchoredRule.band_mem h hb.1 (by omega) (by omega), by omega⟩
 
@@ -74,7 +74,7 @@ theorem isVote_bnd (h : AgreeBand R.toDagRule U U' lo hi g g') {b L : BlockId} (
 the band already had. -/
 theorem of_mem_blocksAt_old (h : AgreeBand R.toDagRule U U' lo hi g g') {b : BlockId} {n n' : ℕ}
     (hnn : n + g = n' + g') (h1 : lo ≤ n + g) (h2 : n + g ≤ hi) (hbU : b ∈ U.ids)
-    (hb : b ∈ LeanDag.Hydrozoan.blocksAt U' n') : (U.block b).round = n := by
+    (hb : b ∈ blocksAt U' n') : (U.block b).round = n := by
   obtain ⟨hbm, hbr⟩ := Finset.mem_filter.mp hb
   have := (AnchoredRule.band_block' h hbU hbm (by omega) (by omega)).1
   omega
@@ -86,8 +86,8 @@ variable [S : LeanDag.Slots Replica]
 
 theorem votesSet_bnd (h : AgreeBand R.toDagRule U U' lo hi g g') {L : BlockId} {n n' : ℕ}
     (hnn : n + g = n' + g') (h1 : lo < n + g) (h2 : n + g ≤ hi) :
-    ((LeanDag.Hydrozoan.blocksAt U n).filter fun b => LeanDag.Hydrozoan.IsVote U b L)
-      ⊆ ((LeanDag.Hydrozoan.blocksAt U' n').filter fun b =>
+    ((blocksAt U n).filter fun b => LeanDag.Hydrozoan.IsVote U b L)
+      ⊆ ((blocksAt U' n').filter fun b =>
           LeanDag.Hydrozoan.IsVote U' b L) := by
   intro b hb
   obtain ⟨hbA, hbv⟩ := Finset.mem_filter.mp hb
@@ -101,10 +101,10 @@ theorem supportersInView_bnd (h : AgreeBand R.toDagRule U U' lo hi g g')
     (hv : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
       b ∈ V'.ids)
     {L : BlockId} {n n' : ℕ} (hnn : n + g = n' + g') (h1 : lo < n + g) (h2 : n + g ≤ hi) :
-    LeanDag.Hydrozoan.supportersInView U V L n
-      ⊆ LeanDag.Hydrozoan.supportersInView U' V' L n' := by
+    supportersIn U V L n
+      ⊆ supportersIn U' V' L n' := by
   intro a ha
-  unfold LeanDag.Hydrozoan.supportersInView LeanDag.creatorsOf at ha ⊢
+  unfold supportersIn LeanDag.creatorsOf at ha ⊢
   obtain ⟨b, hb, hba⟩ := Finset.mem_image.mp ha
   obtain ⟨hbf, hbV⟩ := Finset.mem_inter.mp hb
   obtain ⟨hbA, hbv⟩ := Finset.mem_filter.mp hbf
@@ -182,7 +182,7 @@ theorem certifiersInView_bnd (h : AgreeBand R.toDagRule U U' lo hi g g')
 
 /-- **The blame set is carried across.** A blamer references no
 candidate, its refs are the refs it had, and a candidate the band
-did not carry is not among them — so it blames the slot still. -/
+did not carry is not among them — so it slotBlames the slot still. -/
 theorem blamesInView_bnd (h : AgreeBand R.toDagRule U U' lo hi g g')
     {V : LeanDag.Hydrozoan.View U} {V' : LeanDag.Hydrozoan.View U'}
     (hv : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
@@ -190,21 +190,21 @@ theorem blamesInView_bnd (h : AgreeBand R.toDagRule U U' lo hi g g')
     {S S' : LeanDag.Slots Replica} {k k' : ℕ}
     (hkk : S.slotRound k + g = S'.slotRound k' + g') (hlead : S.leader k = S'.leader k')
     (h1 : lo ≤ S.slotRound k + g) (h2 : S.slotRound k + 1 + g ≤ hi) :
-    LeanDag.Hydrozoan.blamesInView (S := S) U V k
-      ⊆ LeanDag.Hydrozoan.blamesInView (S := S') U' V' k' := by
+    slotBlamesIn (S := S) U V k
+      ⊆ slotBlamesIn (S := S') U' V' k' := by
   intro a ha
-  unfold LeanDag.Hydrozoan.blamesInView LeanDag.creatorsOf at ha ⊢
+  unfold slotBlamesIn LeanDag.creatorsOf at ha ⊢
   obtain ⟨b, hb, hba⟩ := Finset.mem_image.mp ha
   obtain ⟨hbf, hbV⟩ := Finset.mem_inter.mp hb
   obtain ⟨hbA, hbn⟩ := Finset.mem_filter.mp hbf
   have hbU : b ∈ U.ids := (Finset.mem_filter.mp hbA).1
-  have hbr : (U.block b).round = LeanDag.Hydrozoan.votingRound (S := S) Replica k :=
+  have hbr : (U.block b).round = votingRound (S := S) Replica k :=
     (Finset.mem_filter.mp hbA).2
-  have hvr : LeanDag.Hydrozoan.votingRound (S := S) Replica k = S.slotRound k + 1 := rfl
-  have hvr' : LeanDag.Hydrozoan.votingRound (S := S') Replica k' = S'.slotRound k' + 1 := rfl
+  have hvr : votingRound (S := S) Replica k = S.slotRound k + 1 := rfl
+  have hvr' : votingRound (S := S') Replica k' = S'.slotRound k' + 1 := rfl
   refine Finset.mem_image.mpr ⟨b, Finset.mem_inter.mpr ⟨Finset.mem_filter.mpr
-    ⟨blocksAt_bnd h (n := LeanDag.Hydrozoan.votingRound (S := S) Replica k)
-        (n' := LeanDag.Hydrozoan.votingRound (S := S') Replica k')
+    ⟨blocksAt_bnd h (n := votingRound (S := S) Replica k)
+        (n' := votingRound (S := S') Replica k')
         (by omega) (by omega) (by omega) hbA,
       ?_⟩, hv b hbV (by omega) (by omega)⟩, ?_⟩
   · rw [AnchoredRule.band_refs h hbU (by omega) (by omega)]

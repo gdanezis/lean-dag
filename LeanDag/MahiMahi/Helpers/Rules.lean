@@ -164,8 +164,8 @@ theorem exists_certificate_reaches_of_directCommit {w : ℕ} {L : BlockId} {r : 
       fun _ hv => Finset.mem_of_mem_inter_right hv
     have hcard : F.f + 1 ≤ T.card := card_inter_correct_of_quorum h
     obtain ⟨C, hC_mem, hC_cert⟩ :=
-      exists_mem_refs_of_correct_support_of_card
-        (P := fun q => q ∈ certificates U w L r) hT hTc hcard hc' hc'r
+      exists_mem_refs_of_honest_support_of_card
+        (Q := fun q => q ∈ certificates U w L r) hT hTc (lt_card_add_quorumCard hcard) hc' hc'r
     exact ⟨C, hC_cert, Reaches.single hC_mem⟩
   exact reaches_pred_of_round_le hbase hc hcr
 

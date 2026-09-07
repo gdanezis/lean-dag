@@ -46,7 +46,7 @@ variable (Replica BlockId : Type*) [Fintype Replica] [DecidableEq Replica]
 
 /-- **Hydrozoan as an anchored rule**: wave two; the direct commit is
 the fast path or the slow path in view; the direct skip is `q_fast`
-blames in view; two rungs, the anchor-linked certificate and then the
+slotBlames in view; two rungs, the anchor-linked certificate and then the
 weak quorum, the second tie-broken by the order. -/
 def hydrozoanAnchored :
     AnchoredRule Replica BlockId Unit ValidWrt (NonByzantine : Finset Replica) where

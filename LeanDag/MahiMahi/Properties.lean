@@ -389,7 +389,7 @@ theorem mmSupport_ofCoverage {w : ℕ} (hw : 4 ≤ w) :
     (by unfold MahiMahi.decisionRoundAt; omega) hL (hT hLc') ?_
   intro q hq
   have hqids := BlockRecord.complete U C hC q hq
-  have hqr := BlockUniverse.round_of_mem_refs hC hq
+  have hqr := BlockRecord.round_of_mem_refs hC hq
   exact hreach q hqids (by omega)
 
 /-- **Law 3**: a quorum's certificates at the decision round are the

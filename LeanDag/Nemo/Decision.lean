@@ -24,11 +24,6 @@ variable {U : Universe Validator BlockId Payload}
 variable [S : Slots Validator]
 
 omit [DecidableEq BlockId] in
-/-- **A slot has at most one candidate.** -/
-theorem isLeaderBlock_unique {k : ℕ} {L₁ L₂ : BlockId}
-    (h₁ : IsLeaderBlock U k L₁) (h₂ : IsLeaderBlock U k L₂) : L₁ = L₂ :=
-  U.eq_of_creator_eq h₁.1 h₂.1 (by rw [h₁.2.2, h₂.2.2]) (by rw [h₁.2.1, h₂.2.1])
-
 /-! ## The view-relative direct rule -/
 
 /-- Direct commit, as judged from a single view: the record's
@@ -118,13 +113,13 @@ omit S in
 /-- **Nemo's laws**, every commit-against-commit case by candidate
 uniqueness and the crossings by visibility. -/
 theorem nemoLaws : (nemoAnchored Validator BlockId Payload).Laws where
-  commit_unique := fun _ hL₁ hL₂ _ _ => isLeaderBlock_unique hL₁ hL₂
+  commit_unique := fun _ hL₁ hL₂ _ _ => isLeaderBlock_unique_of_honest (Finset.mem_univ _) hL₁ hL₂
   commit_skip := fun _ _ _ h => h.elim
   commit_link := fun _ _ h hA helig => ⟨0, Nat.one_pos,
     Nemo.certifiedIn_of_directCommitIn_at_anchor (show Nemo.DirectCommitIn _ _ _ _ from h) hA helig⟩
-  commit_link_unique := fun _ hL₁ hL₂ _ _ _ _ _ _ _ => isLeaderBlock_unique hL₁ hL₂
+  commit_link_unique := fun _ hL₁ hL₂ _ _ _ _ _ _ _ => isLeaderBlock_unique_of_honest (Finset.mem_univ _) hL₁ hL₂
   skip_link := fun _ h _ _ => h.elim
-  link_unique := fun _ hL₁ hL₂ _ _ _ _ _ _ _ _ => isLeaderBlock_unique hL₁ hL₂
+  link_unique := fun _ hL₁ hL₂ _ _ _ _ _ _ _ _ => isLeaderBlock_unique_of_honest (Finset.mem_univ _) hL₁ hL₂
   commit_mono := fun _ hsub h => directCommitIn_mono hsub h
   skip_mono := fun _ _ h => h
   skip_congr := fun _ _ _ h => h

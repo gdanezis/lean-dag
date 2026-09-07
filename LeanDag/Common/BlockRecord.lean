@@ -379,4 +379,79 @@ instance ValidAt.copyStable [Clause.CopyStable C] : Validity.CopyStable (ValidAt
 
 end ValidAtMechanised
 
+/-! ## Quorate validity
+
+A validity predicate is **quorate at `q`** when every non-genesis block
+it admits references `q` distinct creators: the counting clause of the
+family, named on its own because the hitting lemma and everything built
+on it — coverage, persistence, the common core — need nothing else of
+validity. The quorum is read off the predicate, so no record restates
+it. -/
+
+namespace Validity
+
+/-- Non-genesis blocks reference `q` distinct creators, and `q` is
+positive, so a non-genesis block references something. -/
+class Quorate [DecidableEq Validator] (P : Validity Validator BlockId Payload)
+    (q : outParam ℕ) : Prop where
+  quorum : ∀ (blk : BlockId → Block Validator BlockId Payload)
+    (b : Block Validator BlockId Payload), P blk b → 0 < b.round → q ≤ (creators blk b).card
+  pos : 0 < q
+
+/-- A predicate equivalent to the family at `q` is quorate at `q`. -/
+theorem Quorate.of_validAt [DecidableEq Validator] {P : Validity Validator BlockId Payload}
+    {q : ℕ} {C : Clause Validator BlockId Payload} (hq : 0 < q)
+    (h : ∀ blk b, P blk b ↔ ValidAt q C blk b) : P.Quorate q where
+  quorum := fun blk b hp hr => ((h blk b).mp hp).quorum hr
+  pos := hq
+
+end Validity
+
+/-! ## Facts of any record
+
+The block-level facts every argument starts from, at any record: what
+completeness, the predecessor clause, non-equivocation and the quorum
+clause say about a block the record holds. -/
+
+namespace BlockRecord
+
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
+variable {U : BlockRecord Validator BlockId Payload P honest}
+
+/-- A reference sits in the round immediately below its referrer. -/
+theorem round_of_mem_refs [P.Mechanised] {i j : BlockId} (hi : i ∈ U.ids)
+    (hj : j ∈ (U.block i).refs) : (U.block j).round + 1 = (U.block i).round :=
+  Validity.Mechanised.pred U.block (U.block i) (U.valid i hi) j hj
+
+/-- **T1.** An honest validator authors at most one block per round, so
+two ids in the record with the same honest author and the same round
+are the *same id*.
+
+Phrased around the author `v` rather than around `(U.block i).creator`,
+because that is how every use site arrives: a quorum intersection
+yields an honest validator, and T1 turns two blocks known to be
+authored by it into a single concrete id. -/
+theorem eq_of_creator_eq {v : Validator} {i j : BlockId}
+    (hi : i ∈ U.ids) (hj : j ∈ U.ids) (hv : v ∈ honest)
+    (hic : (U.block i).creator = v) (hjc : (U.block j).creator = v)
+    (hround : (U.block i).round = (U.block j).round) : i = j :=
+  U.no_equivocation i hi j hj (hic ▸ hv) (hic.trans hjc.symm) hround
+
+variable [DecidableEq Validator]
+
+/-- References of a non-genesis block carry the record's quorum of
+distinct authors. -/
+theorem creators_quorum {q : ℕ} [P.Quorate q] {i : BlockId} (hi : i ∈ U.ids)
+    (hround : 0 < (U.block i).round) :
+    q ≤ (creatorsOf U.block (U.block i).refs).card :=
+  Validity.Quorate.quorum U.block (U.block i) (U.valid i hi) hround
+
+/-- A non-genesis block references at least one block. -/
+theorem refs_nonempty {q : ℕ} [P.Quorate q] {i : BlockId} (hi : i ∈ U.ids)
+    (hround : 0 < (U.block i).round) : (U.block i).refs.Nonempty :=
+  nonempty_of_creatorsOf_card_pos
+    (lt_of_lt_of_le (Validity.Quorate.pos (P := P)) (creators_quorum hi hround))
+
+end BlockRecord
+
 end LeanDag

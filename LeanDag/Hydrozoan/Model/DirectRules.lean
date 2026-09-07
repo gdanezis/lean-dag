@@ -1,5 +1,5 @@
-import LeanDag.Hydrozoan.Model.Slots
 import LeanDag.Hydrozoan.Model.View
+import LeanDag.Common.Leader
 /-!
 # Direct decision rules
 
@@ -18,10 +18,13 @@ under-report them, never exceed them.
 The commit rules are round-parameterized: `r` is the slot's propose
 round, and callers pass `S.slotRound k` (the paper's wave `w` maps to
 `r = ProposeRound(w)`). Only the skip rule is slot-parameterized,
-because blames target the leader slot, not a specific block.
+because slotBlames target the leader slot, not a specific block.
 
-The predicates used inside `Finset.filter` (`IsVote`, `IsCertificate`,
-and `IsLeaderBlock` from `Model/Slots.lean`) are `@[reducible]` so their
+The counting vocabulary — `blocksAt`, `supporters`, `supportersIn`,
+`slotBlames`, `slotBlamesIn`, `votingRound` — is the record's
+(`Common/Support.lean`, `Common/Leader.lean`); what is Hydrozoan's is the
+certificate and the thresholds. The predicates used inside
+`Finset.filter` (`IsVote`, `IsCertificate`) are `@[reducible]` so their
 decidability is inferable; the top-level rules get explicit `Decidable`
 instances in `Helpers/`.
 -/
@@ -33,10 +36,10 @@ namespace Hydrozoan
 variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [F : LeanDag.Hydrozoan.Faults Replica]
 
-/-- The blocks of round `r` — the paper's `DAG[r]`, as used by
-`GetVotingBlocks` and `GetDecisionBlocks`. -/
-def blocksAt (U : BlockUniverse Replica BlockId) (r : ℕ) : Finset BlockId :=
-  U.ids.filter fun i => (U.block i).round = r
+/-- The round at which slot `k`'s slow path is settled (the paper's
+`DecisionRound`): its certificates live here. Its voting round is the
+shared `votingRound`, one above the proposal. -/
+abbrev decisionRound (Replica : Type*) [S : Slots Replica] (k : ℕ) : ℕ := S.slotRound k + 2
 
 /-- `b` votes for `L` (the paper's `IsVote`): `L` is among `b`'s refs.
 
@@ -69,11 +72,6 @@ come from `q_cert` distinct creators. -/
 def IsCertificate (U : BlockUniverse Replica BlockId) (C L : BlockId) : Prop :=
   qCert Replica ≤ (creatorsOf U.block (voteBlocks U C L)).card
 
-/-- The replicas whose round-`r` block votes for `L`. -/
-def supporters (U : BlockUniverse Replica BlockId) (L : BlockId) (r : ℕ) :
-    Finset Replica :=
-  creatorsOf U.block ((blocksAt U r).filter fun b => IsVote U b L)
-
 /-- `L` is fast-committed (the paper's `FastCommittedLeader`): `q_fast`
 votes at the voting round, `r` its propose round. Two message delays. -/
 def FastCommit (U : BlockUniverse Replica BlockId) (L : BlockId) (r : ℕ) :
@@ -101,32 +99,20 @@ section Skip
 
 variable [S : Slots Replica]
 
-/-- The replicas whose voting-round block blames slot `k`: none of its
-refs is a candidate for `k`. Blames target the leader slot, not a
-specific block, so a vote for *any* equivocating copy is not a blame. -/
-def blames (U : BlockUniverse Replica BlockId) (k : ℕ) : Finset Replica :=
-  creatorsOf U.block ((blocksAt U (votingRound Replica k)).filter fun b =>
-    ∀ j ∈ (U.block b).refs, ¬ IsLeaderBlock U k j)
-
-/-- Slot `k` is skipped (the paper's `SkippedLeader`): `q_fast` blames
+/-- Slot `k` is skipped (the paper's `SkippedLeader`): `q_fast` slotBlames
 at the voting round. Opportunistic — safe whenever it fires, but not
 guaranteed to fire. -/
 def SkippedLeader (U : BlockUniverse Replica BlockId) (k : ℕ) : Prop :=
-  qFast Replica ≤ (blames U k).card
+  qFast Replica ≤ (slotBlames U k).card
 
 end Skip
 
 section ViewRules
 
-/-- The supporters of `L` a view actually holds. -/
-def supportersInView (U : BlockUniverse Replica BlockId) (V : View U)
-    (L : BlockId) (r : ℕ) : Finset Replica :=
-  creatorsOf U.block (((blocksAt U r).filter fun b => IsVote U b L) ∩ V.ids)
-
 /-- Fast commit, as judged from a single view. -/
 def FastCommitInView (U : BlockUniverse Replica BlockId) (V : View U)
     (L : BlockId) (r : ℕ) : Prop :=
-  qFast Replica ≤ (supportersInView U V L (r + 1)).card
+  qFast Replica ≤ (supportersIn U V L (r + 1)).card
 
 /-- The certificates for `L` a view actually holds. -/
 def certificatesInView (U : BlockUniverse Replica BlockId) (V : View U)
@@ -145,16 +131,10 @@ def SlowCommitInView (U : BlockUniverse Replica BlockId) (V : View U)
 
 variable [S : Slots Replica]
 
-/-- The blamers of slot `k` a view actually holds. -/
-def blamesInView (U : BlockUniverse Replica BlockId) (V : View U) (k : ℕ) :
-    Finset Replica :=
-  creatorsOf U.block (((blocksAt U (votingRound Replica k)).filter fun b =>
-    ∀ j ∈ (U.block b).refs, ¬ IsLeaderBlock U k j) ∩ V.ids)
-
 /-- Skip, as judged from a single view. -/
 def SkippedLeaderInView (U : BlockUniverse Replica BlockId) (V : View U)
     (k : ℕ) : Prop :=
-  qFast Replica ≤ (blamesInView U V k).card
+  qFast Replica ≤ (slotBlamesIn U V k).card
 
 end ViewRules
 

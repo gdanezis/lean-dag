@@ -15,8 +15,8 @@ import LeanDagTest.OptimalHydrozoan.SlotAgreement
   slot 0; and from a strict sub-view withholding the abstaining vote 28.
 * `DecidedBelowRun` on `OE`, whose slots 1–4 all fast-commit: the runs
   `1, 2, 3` (`c = 3`) and `1, …, 4` (`c = 4`) decide slot 0. Disclosed:
-  slot 0 of `OE` is also *directly* skipped in the full view (four LeanDag.Hydrozoan.blames
-  — the equivocating leader's other copy LeanDag.Hydrozoan.blames — and three no-evidence
+  slot 0 of `OE` is also *directly* skipped in the full view (four slotBlames
+  — the equivocating leader's other copy slotBlames — and three no-evidence
   blocks), so the descent's only below-run slot is not ladder-only; the
   ladder's own verdict for it, a skip anchored on 14, is derived and
   shown to agree with the direct one through slot agreement. A
@@ -117,8 +117,8 @@ theorem spansEligible_fourOpt4 : SpansEligibleAt (Validator := Fin 4) 2 4 := by
 -- OE: slots 1, 2, 3 (and 4) fast-commit — copies 4, 10, 14 at exactly
 -- qFastOpt — while slot 0's candidate 3 has a single vote.
 example :
-    LeanDag.Hydrozoan.supporters UE 4 2 = {0, 1, 3} ∧ LeanDag.Hydrozoan.supporters UE 10 3 = {1, 2, 3} ∧
-      LeanDag.Hydrozoan.supporters UE 14 4 = {1, 2, 3} ∧ LeanDag.Hydrozoan.supporters UE 3 1 = {0} := by
+    supporters UE 4 2 = {0, 1, 3} ∧ supporters UE 10 3 = {1, 2, 3} ∧
+      supporters UE 14 4 = {1, 2, 3} ∧ supporters UE 3 1 = {0} := by
   decide
 
 -- DecidedBelowRun on OE at b = 1 with c = 3 and with c = 4: the run
@@ -173,10 +173,10 @@ theorem oe_slot0_ladder : DecidedOpt OE VE 0 none := by
           absurd ((evidenceLinked_iff_history (by decide)).mp hev) (by decide)
       · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega))
 
--- Disclosed: slot 0 is also directly skipped in the full view (LeanDag.Hydrozoan.blames
--- {0, 1, 2, 3} — the equivocating leader's other copy 4 LeanDag.Hydrozoan.blames — and
+-- Disclosed: slot 0 is also directly skipped in the full view (slotBlames
+-- {0, 1, 2, 3} — the equivocating leader's other copy 4 slotBlames — and
 -- no-evidence blocks 9, 10, 12), and the two verdicts agree.
-example : LeanDag.Hydrozoan.blames UE 0 = {0, 1, 2, 3} ∧ DecidedOpt OE VE 0 none :=
+example : slotBlames UE 0 = {0, 1, 2, 3} ∧ DecidedOpt OE VE 0 none :=
   ⟨by decide, DecidedOpt.directSkip (by decide)⟩
 example : ∀ v, DecidedOpt OE VE 0 v → v = none := fun v h =>
   (OptimalHydrozoan.SlotAgreement.holds (Fin 4) (Fin 22) OE VE VE 0 _ v oe_slot0_ladder h).symm

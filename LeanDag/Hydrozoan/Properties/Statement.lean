@@ -8,7 +8,7 @@ import LeanDag.Hydrozoan.Helpers.Skippability
 growing DAG **unconditionally** and a truncation; and it skips a slot
 whose candidates nobody in `T` supports — **at `qFast ≤ |T|`**.
 
-Persistence is unconditional. Hydrozoan's direct skip counts blames at
+Persistence is unconditional. Hydrozoan's direct skip counts slotBlames at
 the slot, and a count of blocks that are still present does not move
 under an extension. The core's skip once quantified over candidates and
 needed a grade to survive; that was a defect in the rule, since repaired

@@ -131,6 +131,16 @@ instance ValidHere.mechanised :
     ⟨fun h => ⟨h.predecessor, h.quorum, h.distinct_creators, h.leader_clause⟩,
      fun h => ⟨h.predecessor, h.clause.1, h.quorum, h.clause.2⟩⟩
 
+/-- **And quorate at the core's quorum.** -/
+instance ValidHere.quorate :
+    Validity.Quorate
+      (ValidHere (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
+      (quorumCard Validator) :=
+  Validity.Quorate.of_validAt (C := Clause.distinct.and leaderClause)
+    (by have := F.card_validators; omega) fun _ _ =>
+    ⟨fun h => ⟨h.predecessor, h.quorum, h.distinct_creators, h.leader_clause⟩,
+     fun h => ⟨h.predecessor, h.clause.1, h.quorum, h.clause.2⟩⟩
+
 /-- **And does not read the creator**, so the copy fill is valid. -/
 instance ValidHere.copyStable :
     Validity.CopyStable

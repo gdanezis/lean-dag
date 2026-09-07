@@ -25,7 +25,7 @@ eventual-decision phases' cold audits found unguarded:
   0 and 2 the pinned route is provably the ONLY one available in any
   view; slot 1 is deliberately multi-route. The anchors diversify too:
   slot 0's anchor is the development's first SLOW-committed anchor
-  (five LeanDag.Hydrozoan.supporters < `q_fast`, six certifiers ≥ `q_slow`).
+  (five supporters < `q_fast`, six certifiers ≥ `q_slow`).
 * **A sparse schedule** (`U14`, six replicas, three-round spacing): the
   first non-pipelined schedule. With three rounds between slots,
   `SpansEligible` holds already at `c = 1`, and the descent fires below
@@ -128,10 +128,10 @@ theorem u12_synchronised :
   clear hb2 hmax hn
   rcases hn2 with rfl | rfl <;> (revert b a; decide)
 
--- Slot 0 slow-commits at T: six LeanDag.Hydrozoan.supporters < q_fast = 7, but all six
+-- Slot 0 slow-commits at T: six supporters < q_fast = 7, but all six
 -- decision-round blocks certify.
 example : IsLeaderBlock U12 0 0 := by decide
-example : LeanDag.Hydrozoan.supporters U12 0 1 = {1, 2, 3, 4, 5, 6} := by decide
+example : supporters U12 0 1 = {1, 2, 3, 4, 5, 6} := by decide
 example : ¬ FastCommit U12 0 0 ∧ SlowCommit U12 0 0 := by decide
 
 -- End-to-end: CommitLiveness applied at the proper-subset T — the
@@ -207,25 +207,25 @@ def U13 : BlockUniverse (Fin 7) (Fin 43) where
 -- Slot 0 is rung-1-only: five votes (= q_cert, < q_fast), a UNIQUE
 -- certificate (id 13), one certifier (< q_slow), one blame (< q_fast).
 example : IsLeaderBlock U13 0 2 := by decide
-example : LeanDag.Hydrozoan.supporters U13 2 1 = {0, 2, 3, 4, 5} := by decide
+example : supporters U13 2 1 = {0, 2, 3, 4, 5} := by decide
 example : LeanDag.Hydrozoan.certificates U13 2 0 = {13} ∧ certifiers U13 2 0 = {0} := by decide
-example : LeanDag.Hydrozoan.blames U13 0 = {6} := by decide
+example : slotBlames U13 0 = {6} := by decide
 example : ¬ FastCommitInView U13 (View.full U13) 2 0 ∧
     ¬ SlowCommitInView U13 (View.full U13) 2 0 ∧
     ¬ SkippedLeaderInView U13 (View.full U13) 0 := by decide
 
 -- Slot 2 is rung-3-only: two votes (< q_weak = 3, so the weak rung is
--- out and no certificate can form), yet four LeanDag.Hydrozoan.blames (< q_fast = 6).
+-- out and no certificate can form), yet four slotBlames (< q_fast = 6).
 example : IsLeaderBlock U13 2 16 := by decide
-example : LeanDag.Hydrozoan.supporters U13 16 3 = {0, 2} := by decide
-example : LeanDag.Hydrozoan.certificates U13 16 2 = ∅ ∧ LeanDag.Hydrozoan.blames U13 2 = {3, 4, 5, 6} := by
+example : supporters U13 16 3 = {0, 2} := by decide
+example : LeanDag.Hydrozoan.certificates U13 16 2 = ∅ ∧ slotBlames U13 2 = {3, 4, 5, 6} := by
   decide
 example : ¬ SkippedLeaderInView U13 (View.full U13) 2 := by decide
 
 -- Slot 3: the development's first SLOW-committed anchor — five
--- LeanDag.Hydrozoan.supporters < q_fast, six certifiers ≥ q_slow.
+-- supporters < q_fast, six certifiers ≥ q_slow.
 example : IsLeaderBlock U13 3 23 := by decide
-example : LeanDag.Hydrozoan.supporters U13 23 4 = {0, 2, 3, 4, 5} := by decide
+example : supporters U13 23 4 = {0, 2, 3, 4, 5} := by decide
 example : ¬ FastCommit U13 23 3 ∧ SlowCommit U13 23 3 := by decide
 
 -- Slots 1, 4, 5 fast-commit (candidates 9, 30, 31).

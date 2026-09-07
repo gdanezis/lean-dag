@@ -55,7 +55,7 @@ theorem fastCommitOpt_of_fastCommitOptInView {V : LeanDag.Hydrozoan.View U} {L :
 
 /-- The blame half of a skip seen in a view holds in the universe. -/
 theorem qCert_le_blames_of_skippedLeaderOptInView [S : Slots Replica] {V : LeanDag.Hydrozoan.View U} {k : ℕ}
-    (h : SkippedLeaderOptInView U V k) : qCert Replica ≤ (LeanDag.Hydrozoan.blames U k).card :=
+    (h : SkippedLeaderOptInView U V k) : qCert Replica ≤ (slotBlames U k).card :=
   le_trans h.1 (Finset.card_le_card (Finset.image_subset_image Finset.inter_subset_left))
 
 end OptimalHydrozoan

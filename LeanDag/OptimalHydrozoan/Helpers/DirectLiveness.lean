@@ -9,7 +9,7 @@ Generated proof infrastructure; not part of the audit surface. The slow
 path reuses Hydrozoan's wave chain (`Helpers/DirectLiveness.lean`)
 unchanged. New here: the Optimal fast quorum from the fault count, and
 the guaranteed skip of a candidate-less slot — `T`'s voting-round blocks
-are LeanDag.Hydrozoan.blames, `T`'s decision-round blocks are (vacuously) no-evidence, and
+are slotBlames, `T`'s decision-round blocks are (vacuously) no-evidence, and
 `q_cert ≤ q ≤ |T|`.
 -/
 
@@ -41,18 +41,18 @@ section Skip
 variable [S : Slots Replica] {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
   {V : LeanDag.Hydrozoan.View U} {T : Finset Replica} {k : ℕ}
 
-/-- Every `T`-authored voting-round block LeanDag.Hydrozoan.blames a candidate-less slot, in
+/-- Every `T`-authored voting-round block slotBlames a candidate-less slot, in
 any view caught up to the voting round. -/
 theorem subset_blamesInView_of_coversUpto
     (hpop : PopulatedOn U T (S.slotRound k + 1))
     (hnolead : ∀ L, ¬ IsLeaderBlock U k L)
     (hcov : V.CoversUpto (S.slotRound k + 1)) :
-    T ⊆ LeanDag.Hydrozoan.blamesInView U V k := by
+    T ⊆ slotBlamesIn U V k := by
   intro v hv
   obtain ⟨b, hb, hba, hbr⟩ := hpop v hv
-  simp only [LeanDag.Hydrozoan.blamesInView, mem_creatorsOf]
+  simp only [slotBlamesIn, mem_creatorsOf]
   refine ⟨b, Finset.mem_inter.mpr
-    ⟨Finset.mem_filter.mpr ⟨LeanDag.Hydrozoan.mem_blocksAt.mpr ⟨hb, hbr⟩, ?_⟩,
+    ⟨Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hb, hbr⟩, ?_⟩,
       hcov b hb (le_of_eq hbr)⟩, hba⟩
   intro j _ hj
   exact hnolead j hj
@@ -66,17 +66,17 @@ theorem noEvidenceQuorumInView_of_coversUpto
     (hnolead : ∀ L, ¬ IsLeaderBlock U k L)
     (hcov : V.CoversUpto (S.slotRound k + 2)) :
     NoEvidenceQuorumInView U V k := by
-  refine ⟨(LeanDag.Hydrozoan.blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter
+  refine ⟨(blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter
     (fun b => (U.block b).creator ∈ T), fun b hb => ?_, ?_⟩
   · obtain ⟨hb1, -⟩ := Finset.mem_filter.mp hb
-    obtain ⟨hbu, hbr⟩ := LeanDag.Hydrozoan.mem_blocksAt.mp hb1
+    obtain ⟨hbu, hbr⟩ := mem_blocksAt.mp hb1
     exact ⟨hb1, hcov b hbu (le_of_eq hbr), fun L hL _ => hnolead L hL⟩
-  · have hsub : T ⊆ creatorsOf U.block ((LeanDag.Hydrozoan.blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter
+  · have hsub : T ⊆ creatorsOf U.block ((blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter
         (fun b => (U.block b).creator ∈ T)) := by
       intro v hv
       obtain ⟨b, hb, hba, hbr⟩ := hpop v hv
       exact mem_creatorsOf.mpr ⟨b, Finset.mem_filter.mpr
-        ⟨LeanDag.Hydrozoan.mem_blocksAt.mpr ⟨hb, by simp only [LeanDag.Hydrozoan.decisionRound]; exact hbr⟩, hba ▸ hv⟩, hba⟩
+        ⟨mem_blocksAt.mpr ⟨hb, by simp only [LeanDag.Hydrozoan.decisionRound]; exact hbr⟩, hba ▸ hv⟩, hba⟩
     have h1 := Finset.card_le_card hsub
     have h2 := qCert_le_q_opt (Replica := Replica)
     omega

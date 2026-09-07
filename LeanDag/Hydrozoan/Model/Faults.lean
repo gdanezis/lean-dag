@@ -73,7 +73,7 @@ number of refs each block references (`q` in the paper). -/
 def q : ℕ := Fintype.card Replica - F.f - F.c
 
 /-- `q_fast = n − p`: the quorum of votes at the voting round to
-fast-commit a leader; also the quorum of blames to directly skip it. -/
+fast-commit a leader; also the quorum of slotBlames to directly skip it. -/
 def qFast : ℕ := Fintype.card Replica - p Replica
 
 /-- `q_cert = ⌈(n + f + 1)/2⌉`: the quorum of votes a decision-round block

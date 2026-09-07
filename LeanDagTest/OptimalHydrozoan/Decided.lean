@@ -22,13 +22,13 @@ universe with an equivocation, for the evidence predicate itself:
   5 (no vote), and, as the paper's procedure, also "evidence" for the
   non-candidate 6 (consumers guard with `IsLeaderBlock`);
 * slot 0 (leader `3`, candidate the genesis block 3) is **directly
-  skipped with a candidate present**: every voting-round creator LeanDag.Hydrozoan.blames it
+  skipped with a candidate present**: every voting-round creator slotBlames it
   (block 4 does; the equivocator's other copy 5 votes for it), and three
   of the four decision-round blocks reference no vote for it — exactly
   `qCert` no-evidence creators — while block 11 is evidence and does not
-  count. A sub-view withholding block 12 keeps the LeanDag.Hydrozoan.blames but drops the
+  count. A sub-view withholding block 12 keeps the slotBlames but drops the
   no-evidence count to two, so the in-view skip fails. Slot 1 is not
-  skipped, for both reasons at once: no voting block LeanDag.Hydrozoan.blames it, and
+  skipped, for both reasons at once: no voting block slotBlames it, and
   blocks 13 and 14 are evidence for copy 4. Its candidate 3 has no
   evidence quorum in reach of block 14 either (`¬ EvidenceLinked`).
 
@@ -57,7 +57,7 @@ Every premise is stated against the base universe `UD`; the `OptUniverse`
 definitional unfolding carries the facts across.
 
 Not exercised here, deliberately: a no-evidence quorum with fewer than
-`qCert` LeanDag.Hydrozoan.blames, a rival at exactly `tEquiv`, and a witnessing block that
+`qCert` slotBlames, a rival at exactly `tEquiv`, and a witnessing block that
 is evidence for nothing all need `q ≥ 4` refs (at `n = 4`, `q = n − 1`),
 and separating `q`, `qFastOpt`, `qCert`, `qSlow` (all `3` here) needs a
 larger committee — witness material for the safety phases.
@@ -89,17 +89,17 @@ example : IsFastEvidence UX 1 14 6 ∧ ¬ IsLeaderBlock UX 1 6 := by decide
 
 -- Slot 0 of UX: candidate 3 (genesis, leader 3), blamed by every
 -- voting-round creator, with exactly qCert no-evidence decision blocks.
-example : IsLeaderBlock UX 0 3 ∧ LeanDag.Hydrozoan.blames UX 0 = {0, 1, 2, 3} := by decide
+example : IsLeaderBlock UX 0 3 ∧ slotBlames UX 0 = {0, 1, 2, 3} := by decide
 example :
     IsNoFastEvidence UX 0 9 ∧ IsNoFastEvidence UX 0 10 ∧ IsNoFastEvidence UX 0 12 ∧
       ¬ IsNoFastEvidence UX 0 11 := by
   decide
 example :
-    creatorsOf UX.block ((LeanDag.Hydrozoan.blocksAt UX 2).filter fun b => IsNoFastEvidence UX 0 b) = {0, 1, 3} := by
+    creatorsOf UX.block ((blocksAt UX 2).filter fun b => IsNoFastEvidence UX 0 b) = {0, 1, 3} := by
   decide
 example : SkippedLeaderOpt UX 0 ∧ ¬ SkippedLeaderOpt UX 1 := by decide
--- ... for two reasons: no LeanDag.Hydrozoan.blames, and no no-evidence quorum either.
-example : LeanDag.Hydrozoan.blames UX 1 = ∅ ∧ ¬ NoEvidenceQuorum UX 1 := by decide
+-- ... for two reasons: no slotBlames, and no no-evidence quorum either.
+example : slotBlames UX 1 = ∅ ∧ ¬ NoEvidenceQuorum UX 1 := by decide
 
 /-- The full view of `UX`, typed at the `OptUniverse` projection so the
 rule instances match. -/
@@ -119,10 +119,10 @@ def VXs : LeanDag.Hydrozoan.View OX.toBlockRecord where
   subset_ids := by decide
   complete := by decide
 
--- In it the LeanDag.Hydrozoan.blames are intact but the no-evidence creators are only
+-- In it the slotBlames are intact but the no-evidence creators are only
 -- {0, 1}: the in-view skip fails on its second half alone.
 example :
-    qCert (Fin 4) ≤ (blamesInView OX.toBlockRecord VXs 0).card ∧
+    qCert (Fin 4) ≤ (slotBlamesIn OX.toBlockRecord VXs 0).card ∧
       ¬ NoEvidenceQuorumInView OX.toBlockRecord VXs 0 ∧
       ¬ SkippedLeaderOptInView OX.toBlockRecord VXs 0 := by
   decide
@@ -186,7 +186,7 @@ def VD : LeanDag.Hydrozoan.View OD.toBlockRecord := View.full UD
 
 -- Slot 0: candidate 3, three votes (exactly qFastOpt), four certifiers.
 example :
-    IsLeaderBlock UD 0 3 ∧ LeanDag.Hydrozoan.supporters UD 3 1 = {1, 2, 3} ∧
+    IsLeaderBlock UD 0 3 ∧ supporters UD 3 1 = {1, 2, 3} ∧
       certifiers UD 3 0 = {0, 1, 2, 3} := by
   decide
 example : DecidedOpt OD VD 0 (some 3) :=
@@ -199,7 +199,7 @@ example : DecidedOpt OD VD 0 (some 3) :=
 example : FastCommitOpt UD 3 0 ∧ ¬ FastCommit UD 3 0 := by decide
 
 -- Slot 6, the anchor: candidate 22, exactly three votes, one abstention.
-example : IsLeaderBlock UD 6 22 ∧ LeanDag.Hydrozoan.supporters UD 22 7 = {1, 2, 3} := by decide
+example : IsLeaderBlock UD 6 22 ∧ supporters UD 22 7 = {1, 2, 3} := by decide
 example : DecidedOpt OD VD 6 (some 22) :=
   DecidedOpt.directCommit (by decide) (Or.inl (by decide))
 
@@ -211,7 +211,7 @@ def VDm : LeanDag.Hydrozoan.View UD where
   complete := by decide
 
 -- Two votes are one short.
-example : supportersInView UD VDm 22 7 = {1, 2} ∧ ¬ FastCommitOptInView UD VDm 22 6 := by
+example : supportersIn UD VDm 22 7 = {1, 2} ∧ ¬ FastCommitOptInView UD VDm 22 6 := by
   decide
 
 -- Slot 1's candidate 29 is referenced by nothing: no vote, no
@@ -219,12 +219,12 @@ example : supportersInView UD VDm 22 7 = {1, 2} ∧ ¬ FastCommitOptInView UD VD
 -- non-vacuously. Slots 4 and 5 have no candidate: their decision-round
 -- blocks are no-evidence vacuously.
 example :
-    IsLeaderBlock UD 1 29 ∧ LeanDag.Hydrozoan.supporters UD 29 2 = ∅ ∧ LeanDag.Hydrozoan.certificates UD 29 1 = ∅ ∧
+    IsLeaderBlock UD 1 29 ∧ supporters UD 29 2 = ∅ ∧ LeanDag.Hydrozoan.certificates UD 29 1 = ∅ ∧
       (∀ L, ¬ IsLeaderBlock UD 4 L) ∧ (∀ L, ¬ IsLeaderBlock UD 5 L) := by
   decide
 example :
-    LeanDag.Hydrozoan.blames UD 1 = {0, 1, 2, 3} ∧ LeanDag.Hydrozoan.blames UD 4 = {1, 2, 3} ∧
-      LeanDag.Hydrozoan.blames UD 5 = {0, 1, 2, 3} := by
+    slotBlames UD 1 = {0, 1, 2, 3} ∧ slotBlames UD 4 = {1, 2, 3} ∧
+      slotBlames UD 5 = {0, 1, 2, 3} := by
   decide
 example : IsNoFastEvidence UD 1 11 ∧ IsNoFastEvidence UD 4 21 ∧ IsNoFastEvidence UD 5 25 := by
   decide
@@ -241,10 +241,10 @@ example :
       EligibleAt (Validator := Fin 4) 2 1 4 := by
   decide
 
--- Slot 2: candidate 8 with one vote (from 3) and three LeanDag.Hydrozoan.blames; no
+-- Slot 2: candidate 8 with one vote (from 3) and three slotBlames; no
 -- certificate for 8 exists anywhere; every round-4 block is evidence.
 example :
-    IsLeaderBlock UD 2 8 ∧ LeanDag.Hydrozoan.supporters UD 8 3 = {3} ∧ LeanDag.Hydrozoan.blames UD 2 = {0, 1, 2} ∧
+    IsLeaderBlock UD 2 8 ∧ supporters UD 8 3 = {3} ∧ slotBlames UD 2 = {0, 1, 2} ∧
       LeanDag.Hydrozoan.certificates UD 8 2 = ∅ := by
   decide
 example : IsFastEvidence UD 2 15 8 ∧ IsFastEvidence UD 2 16 8 ∧ IsFastEvidence UD 2 17 8 := by
@@ -252,7 +252,7 @@ example : IsFastEvidence UD 2 15 8 ∧ IsFastEvidence UD 2 16 8 ∧ IsFastEviden
 
 -- The direct skip's blame half holds, its no-evidence half fails: no
 -- direct route decides slot 2 in the full view.
-example : qCert (Fin 4) ≤ (LeanDag.Hydrozoan.blames UD 2).card ∧ ¬ NoEvidenceQuorum UD 2 := by decide
+example : qCert (Fin 4) ≤ (slotBlames UD 2).card ∧ ¬ NoEvidenceQuorum UD 2 := by decide
 example :
     ¬ FastCommitOptInView OD.toBlockRecord VD 8 2 ∧
       ¬ SlowCommitInView OD.toBlockRecord VD 8 2 ∧
@@ -292,7 +292,7 @@ example : DecidedOpt OD VD 2 (some 8) := by
 -- Slot 3: candidate 13 with three votes and three certifiers; certificate
 -- 18 is a parent of the anchor.
 example :
-    IsLeaderBlock UD 3 13 ∧ LeanDag.Hydrozoan.supporters UD 13 4 = {0, 1, 2} ∧
+    IsLeaderBlock UD 3 13 ∧ supporters UD 13 4 = {0, 1, 2} ∧
       certifiers UD 13 3 = {1, 2, 3} := by
   decide
 example : LeanDag.Hydrozoan.CertifiedIn UD 22 13 3 := ⟨18, by decide, Reaches.single (by decide)⟩

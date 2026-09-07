@@ -142,7 +142,6 @@ import LeanDag.SafeSkip.Basic
 import LeanDag.SafeSkip.Invariance
 import LeanDag.SafeSkip.Jump
 import LeanDag.Nemo.Basic
-import LeanDag.Nemo.Support
 import LeanDag.Nemo.Rules
 import LeanDag.Nemo.Decision
 import LeanDag.Nemo.Liveness
@@ -297,14 +296,12 @@ import LeanDag.Hydrozoan.Model.Faults
 import LeanDag.Hydrozoan.Model.Block
 import LeanDag.Hydrozoan.Model.BlockUniverse
 import LeanDag.Hydrozoan.Model.View
-import LeanDag.Hydrozoan.Model.Slots
 import LeanDag.Hydrozoan.Model.DirectRules
 import LeanDag.Hydrozoan.Model.Liveness
 import LeanDag.Hydrozoan.Model.IndirectRules
 import LeanDag.Hydrozoan.Model.Decided
 import LeanDag.Hydrozoan.Helpers.Faults
 import LeanDag.Hydrozoan.Helpers.Block
-import LeanDag.Hydrozoan.Helpers.CausalHistory
 import LeanDag.Hydrozoan.Helpers.DirectRules
 import LeanDag.Hydrozoan.Helpers.IndirectRules
 import LeanDag.Hydrozoan.Helpers.Counting

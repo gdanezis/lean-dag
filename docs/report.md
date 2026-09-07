@@ -1608,13 +1608,14 @@ two identifier sets whose creator sets are quorums share a correct author.
 
 **T1.**
 ```lean
-theorem BlockUniverse.eq_of_creator_eq {v : Validator} {i j : BlockId}
-    (hi : i ∈ U.ids) (hj : j ∈ U.ids) (hv : v ∈ Correct)
+theorem BlockRecord.eq_of_creator_eq {v : Validator} {i j : BlockId}
+    (hi : i ∈ U.ids) (hj : j ∈ U.ids) (hv : v ∈ honest)
     (hic : (U.block i).creator = v) (hjc : (U.block j).creator = v)
     (hround : (U.block i).round = (U.block j).round) : i = j
 ```
 
-The statement is organised around the author `v` rather than around
+Stated at any block record, whose honest set is the core's `Correct`. The
+statement is organised around the author `v` rather than around
 `(U.block i).creator`, since that is the form in which every use site arrives: a
 quorum intersection yields a correct validator, and T1 converts two blocks known
 to be authored by it into a single identifier.
@@ -4887,7 +4888,7 @@ H4's object) at link size **one**: a single anchor-visible vote
 suffices, because a vote's author is honest and twins do not exist, so
 the counted `Finset` degenerates to an existential — stated over the
 finite cone `history`, which makes it decidable. The hitting lemma
-**NN2** (`exists_mem_refs_of_correct_support_of_card`) meets a
+**NN2** (the record's `exists_mem_refs_of_honest_support_of_card`) meets a
 majority of backers against a valid block's majority of parents, and
 link integrity **NN3** (`certifiedIn_of_directCommit`) carries a
 direct commit into the cone of every block two or more rounds above,
@@ -4901,7 +4902,7 @@ certificate as the rung, no tie, and no direct skip at all (`Skip` is
 indirect skip does the work. Two clauses present elsewhere are absent
 here. There is no tie and no order on block ids: a slot has at most one
 candidate before commitment is even asked (**NN4**,
-`isLeaderBlock_unique`), non-equivocation applied at the slot's own
+`isLeaderBlock_unique_of_honest`), non-equivocation applied at the slot's own
 round, so the tie-break O5 and H6 require has nothing to select among.
 And the laws carry no side condition at all:
 
@@ -6041,7 +6042,7 @@ equivocator.
 causal history of every block of the universe two rounds above it or
 higher, whoever authored it. It consumes no definition of this arc
 beyond `Supported`, being the core's
-`reaches_of_correct_support_of_card` followed by
+`reaches_of_honest_support_of_card` followed by
 `reaches_pred_of_round_le`.
 
 **BM3** (`quorum_authorsAt_of_lt`, Lemma 4): below the highest round of
@@ -8902,7 +8903,7 @@ def SlowCommit (U : BlockUniverse Replica BlockId) (L : BlockId) (r : ℕ) :
     Prop :=
   qSlow Replica ≤ (certifiers U L r).card
 def SkippedLeader (U : BlockUniverse Replica BlockId) (k : ℕ) : Prop :=
-  qFast Replica ≤ (blames U k).card
+  qFast Replica ≤ (slotBlames U k).card
 ```
 
 Blames target the slot, so a vote for any equivocating copy is not a
@@ -9478,7 +9479,7 @@ and every consumer guards it with the candidate and round predicates:
 ```lean
 def FastCommitOpt (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (L : BlockId) (r : ℕ) :
     Prop :=
-  qFastOpt Replica ≤ (LeanDag.Hydrozoan.supporters U L (r + 1)).card
+  qFastOpt Replica ≤ (supporters U L (r + 1)).card
 ```
 
 `NoEvidenceQuorum` and the evidence rung's test are existential over a
@@ -9877,12 +9878,13 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Common/Validators.lean` | the fault model (`n ≥ 3f+1`); T0 |
 | `Common/Slots.lean` | the slot schedule every rule runs on; its constructors (`uniform`, `uniformSingle`, `identity`, `waveRobin`) |
 | `Common/Schedule.lean` | conservativity of the pipelined schedule |
+| `Common/Leader.lean` | what a schedule says about a record: the candidates of a slot (`IsLeaderBlock`, `leaderBlocksAt`), an honest leader's single candidate, the voting round, and the blamers of a slot (`slotBlamers`, `slotBlames`, `slotBlamesIn`) with their congruence across schedules |
 | `Common/Block.lean` | `Block`, `ValidWrt`; T0′ |
 | `Common/BlockRecord.lean` | the block record and its view, and a view as a record (`View.toRecord`); `chopBlk`; what a validity predicate owes the mechanisms (`Mechanised`, `CopyStable`), and the validity family `ValidAt` with its clauses, which discharges it for every rule |
 | `Common/Record/Chop.lean`, `Common/Record/Fill.lean`, `Common/Record/Genesis.lean` | the cut, the fill and re-genesis, built once at the record |
 | `Common/BlockDag.lean` | `BlockUniverse` and `View` as the record at `ValidWrt`; the core's validity is mechanised; T1 |
 | `Common/CausalHistory.lean` | `Reaches` at any block record; T2, T6a |
-| `Common/Support.lean` | counting vocabulary at any block record, in the record and in a view (`supportersIn`, `blamesIn`); the core's hitting, propagation and coverage lemmas |
+| `Common/Support.lean` | counting vocabulary at any block record, in the record and in a view (`supportersIn`, `blamesIn`); the hitting lemma, propagation and coverage at any quorate record; the core's M3 counting |
 | `Common/Participation.lean` | `PopulatedOn` and `SynchronisedOn`, at raw block data and at any block record |
 | `Common/Ledger.lean` | the ledger at any block record: `commitSeq`, `ledgerSet`, `OutputAt`; monotonicity, uniqueness, and agreement of agreeing assignments |
 | `Common/History.lean` | causal history as a `Finset`, at any block record |
@@ -9965,7 +9967,6 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Mysticeti/Properties.lean`, `Odontoceti/Properties.lean`, `Nemo/Properties.lean`, `Hybrid/Properties.lean`, `MahiMahi/Properties.lean`, `FinWhale/Carrier.lean`, `Hydrozoan/Helpers/`, `OptimalHydrozoan/Carrier.lean`, `Reactive/MysticetiProperties.lean` | each rule's carrier, properties, support and headlines |
 | `Integration/NemoMechanisms.lean`, `FinWhaleMechanisms.lean`, `HybridMechanisms.lean`, `HydrozoanMechanisms.lean`, `OptimalMechanisms.lean`, `ReactiveMechanisms.lean`, `StackRules.lean` | the mechanism cells at each rule: witnesses and instances |
 | `Nemo/Basic.lean` | the majority quorum and its intersection; crash validity; the universe with universal non-equivocation |
-| `Nemo/Support.lean` | the hitting, coverage and propagation lemmas at the majority |
 | `Nemo/Rules.lean` | the wave-two rules: the vote is the certificate; link integrity |
 | `Nemo/Decision.lean` | Nemo as an anchored rule with no direct skip; its laws, without hypotheses |
 | `Nemo/Liveness.lean` | the crash bound and its bridge; the commit half; the descent |
@@ -9989,7 +9990,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Barnacle/Helpers/` | the generated lemma layer |
 | `Hydrozoan/Model/Faults.lean` | the hybrid fault model, the five thresholds, the two pools |
 | `Hydrozoan/Model/Block.lean`, `Hydrozoan/Model/BlockUniverse.lean`, `Hydrozoan/Model/View.lean` | the shared block with no payload, and Hydrozoan's validity; the universe with non-equivocation for non-Byzantine authors; views; reachability |
-| `Hydrozoan/Model/Slots.lean`, `Hydrozoan/Model/DirectRules.lean`, `Hydrozoan/Model/IndirectRules.lean`, `Hydrozoan/Model/Decided.lean` | the slot schedule; votes, certificates, the three direct rules; the rung tests; Hydrozoan as a two-rung anchored rule |
+| `Hydrozoan/Model/DirectRules.lean`, `Hydrozoan/Model/IndirectRules.lean`, `Hydrozoan/Model/Decided.lean` | votes, certificates, the three direct rules, on the record's counting vocabulary; the rung tests; Hydrozoan as a two-rung anchored rule |
 | `Hydrozoan/Model/Liveness.lean` | the liveness package: population, synchrony, the eventual view |
 | `Hydrozoan/ThresholdArithmetic/`, `Hydrozoan/DirectSafety/`, `Hydrozoan/SlotAgreement/`, `Hydrozoan/PrefixAgreement/`, `Hydrozoan/DirectLiveness/`, `Hydrozoan/IndirectLiveness/`, `Hydrozoan/EventualDecision/`, `Hydrozoan/Grounding/` | the eight statements and their proofs (HZ1–HZ8) |
 | `Hydrozoan/Helpers/` | the generated lemma layer; `Record.lean`, the carrier on the record |
@@ -10507,7 +10508,7 @@ result in full, with every other theorem the body names.
 |:---|:---|:---|
 | T0 | two quorums share a correct validator | `exists_correct_mem_inter` *(Validators)* |
 | T0′ | two quorum-backed identifier sets share a correct author | `exists_correct_mem_creators_inter` *(Block)* |
-| T1 | non-equivocation, in usable form | `BlockUniverse.eq_of_creator_eq` *(BlockDag)* |
+| T1 | non-equivocation, in usable form, at any record | `BlockRecord.eq_of_creator_eq` *(Common/BlockRecord)* |
 | T1a | the core's validity is the validity family at its quorum, with distinct creators and a self-parent | `ValidWrt.iff_validAt` *(BlockDag)* |
 | T6 | two quorum-backed sets of round-`n` blocks share a block | `BlockUniverse.exists_common_mem_of_quorums` *(BlockDag)* |
 | T2 | causal history is non-increasing in round | `round_le_of_reaches` *(CausalHistory)* |
@@ -10693,9 +10694,9 @@ reused.
 | H9 | one crash at four validators; the tight hybrid committee | `Uhyb4`, `Uhyb9` witnesses *(LeanDagTest/Hybrid/Model)* |
 | H10 | the bound is necessary, at every threshold | `hybrid_bound_necessary` *(LeanDagTest/Hybrid/Tight)* |
 | NN1 | the counting core: two majorities intersect | `Nemo.exists_mem_inter` *(Nemo/Basic)* |
-| NN2 | the hitting lemma: a majority of backers meets every valid block's parents | `Nemo.exists_mem_refs_of_correct_support_of_card` *(Nemo/Support)* |
+| NN2 | the hitting lemma: a majority of backers meets every valid block's parents, the record's lemma at Nemo's quorum | `exists_mem_refs_of_honest_support_of_card` *(Common/Support)* |
 | NN3 | link integrity: a direct commit is certified two rounds up, everywhere | `Nemo.certifiedIn_of_directCommit` *(Nemo/Rules)* |
-| NN4 | a slot has at most one candidate | `Nemo.isLeaderBlock_unique` *(Nemo/Decision)* |
+| NN4 | a slot has at most one candidate, every leader being honest | `isLeaderBlock_unique_of_honest` *(Common/Leader)* |
 | NN5 | agreement, with no side conditions | `Nemo.nemoLaws` *(Nemo/Decision)*, `NemoProperties.agree` *(NemoProperties)* |
 | NN6 | the ledger is agreed and never retracted | `Nemo.commitSeq_agree`, `Nemo.outputAt_agree` *(Nemo/Decision)* |
 | NN7 | a reliable-led slot commits directly | `Nemo.decided_of_leader_mem` *(Nemo/Liveness)* |
@@ -10916,7 +10917,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 330 definitions and structures the report names, in
+The 333 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -11148,6 +11149,69 @@ def blamesIn (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
 
 The blamers of `L` at round `n` that a view holds.
 
+### Slots and the schedule
+
+#### `IsLeaderBlock`
+
+*def, `Common.Leader.lean`*
+
+```lean
+def IsLeaderBlock (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) (L : BlockId) :
+    Prop :=
+  L ∈ U.ids ∧ (U.block L).round = S.slotRound k ∧ (U.block L).creator = S.leader k
+```
+
+`L` is a candidate block for slot `k`: the right round, the right author. A correct leader has at most one such block; a Byzantine one may have several, which is why the rules quantify over candidates rather than selecting one.
+
+#### `leaderBlocksAt`
+
+*def, `Common.Leader.lean`*
+
+```lean
+def leaderBlocksAt (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) :
+    Finset BlockId :=
+  (blocksAt U (S.slotRound k)).filter (fun b => (U.block b).creator = S.leader k)
+```
+
+The candidates of slot `k`, as a set.
+
+#### `slotBlamers`
+
+*def, `Common.Leader.lean`*
+
+```lean
+def slotBlamers (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) :
+    Finset BlockId :=
+  (blocksAt U (S.slotRound k + 1)).filter
+    (fun q => ∀ j ∈ (U.block q).refs, ¬ IsLeaderBlock U k j)
+```
+
+The voting-round blocks that reference **no candidate** of slot `k`.
+
+#### `slotBlames`
+
+*def, `Common.Leader.lean`*
+
+```lean
+def slotBlames (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) :
+    Finset Validator :=
+  creatorsOf U.block (slotBlamers U k)
+```
+
+The validators whose voting-round block blames slot `k`.
+
+#### `slotBlamesIn`
+
+*def, `Common.Leader.lean`*
+
+```lean
+def slotBlamesIn (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (k : ℕ) :
+    Finset Validator :=
+  creatorsOf U.block (slotBlamers U k ∩ V.ids)
+```
+
+The blamers of slot `k` that a view holds.
+
 ### The commit rule, and the ledger
 
 #### `DirectCommit`
@@ -11192,7 +11256,7 @@ Direct skip, as judged from a single view: the record's `blamesIn` at the round 
 ```lean
 def DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (k : ℕ) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (slotBlamers U k ∩ V.ids)).card
+  quorumCard Validator ≤ (slotBlamesIn U V k).card
 ```
 
 **The slot is directly skipped, as judged from a view**: a quorum of distinct validators holds a voting-round block, in view, that references no candidate of the slot.
@@ -12470,7 +12534,7 @@ Direct skip, as judged from a single view: the record's `blamesIn`.
 ```lean
 def DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (s : ℕ) : Prop :=
-  q Validator ≤ (creatorsOf U.block (slotBlamers U s ∩ V.ids)).card
+  q Validator ≤ (slotBlamesIn U V s).card
 ```
 
 **The slot is directly skipped, as judged from a view**: a hybrid quorum of distinct validators holds a voting-round block, in view, that references no candidate of the slot.
@@ -14233,7 +14297,7 @@ def q : ℕ := Fintype.card Replica - F.f - F.c
 def qFast : ℕ := Fintype.card Replica - p Replica
 ```
 
-`q_fast = n − p`: the quorum of votes at the voting round to fast-commit a leader; also the quorum of blames to directly skip it.
+`q_fast = n − p`: the quorum of votes at the voting round to fast-commit a leader; also the quorum of slotBlames to directly skip it.
 
 #### `qCert`
 
@@ -14343,30 +14407,6 @@ abbrev View {Replica BlockId : Type*} [Fintype Replica]
 ```
 
 A view: one replica's local DAG — a subset of the universe that is closed under references. The block record's view.
-
-#### `supporters`
-
-*def, `Hydrozoan.Model.DirectRules.lean`*
-
-```lean
-def supporters (U : BlockUniverse Replica BlockId) (L : BlockId) (r : ℕ) :
-    Finset Replica :=
-  creatorsOf U.block ((blocksAt U r).filter fun b => IsVote U b L)
-```
-
-The replicas whose round-`r` block votes for `L`.
-
-#### `blames`
-
-*def, `Hydrozoan.Model.DirectRules.lean`*
-
-```lean
-def blames (U : BlockUniverse Replica BlockId) (k : ℕ) : Finset Replica :=
-  creatorsOf U.block ((blocksAt U (votingRound Replica k)).filter fun b =>
-    ∀ j ∈ (U.block b).refs, ¬ IsLeaderBlock U k j)
-```
-
-The replicas whose voting-round block blames slot `k`: none of its refs is a candidate for `k`. Blames target the leader slot, not a specific block, so a vote for *any* equivocating copy is not a blame.
 
 #### `Populated`
 
@@ -14645,7 +14685,7 @@ def CertFastExclusion : Prop :=
   Fintype.card Replica + O.f < qCert Replica + qFastOpt Replica
 ```
 
-**A fast commit starves every conflicting certificate**, `q_cert + q_fast > n + f` (row 2): the `q_fast` voters of a fast-committed block and the `q_cert` votes inside any certificate for a conflicting block overlap in a non-Byzantine replica. Also what makes `q_cert` LeanDag.Hydrozoan.blames exclude a fast commit — the Optimal direct skip's blame quorum. Replaces Hydrozoan's `FastStarvation`, which involved `q_weak`.
+**A fast commit starves every conflicting certificate**, `q_cert + q_fast > n + f` (row 2): the `q_fast` voters of a fast-committed block and the `q_cert` votes inside any certificate for a conflicting block overlap in a non-Byzantine replica. Also what makes `q_cert` slotBlames exclude a fast commit — the Optimal direct skip's blame quorum. Replaces Hydrozoan's `FastStarvation`, which involved `q_weak`.
 
 #### `EvidenceEquiv`
 
@@ -14720,7 +14760,7 @@ Hydrozoan's block universe plus the leader-exclusion rule.
 def NoEvidenceQuorum (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (k : ℕ) : Prop :=
   ∃ s : Finset BlockId,                            -- some set of blocks such that
     (∀ b ∈ s,                                      -- every block in it
-      b ∈ LeanDag.Hydrozoan.blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k) ∧   -- sits at slot k's decision round
+      b ∈ blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k) ∧   -- sits at slot k's decision round
       IsNoFastEvidence U k b) ∧                    -- and is evidence for no candidate;
     qCert Replica ≤ (creatorsOf U.block s).card     -- and they come from q_cert creators
 ```
@@ -14928,7 +14968,7 @@ def CertFastExclusion : Prop :=
   Fintype.card Replica + O.f < qCert Replica + qFastOpt Replica
 ```
 
-**A fast commit starves every conflicting certificate**, `q_cert + q_fast > n + f` (row 2): the `q_fast` voters of a fast-committed block and the `q_cert` votes inside any certificate for a conflicting block overlap in a non-Byzantine replica. Also what makes `q_cert` LeanDag.Hydrozoan.blames exclude a fast commit — the Optimal direct skip's blame quorum. Replaces Hydrozoan's `FastStarvation`, which involved `q_weak`.
+**A fast commit starves every conflicting certificate**, `q_cert + q_fast > n + f` (row 2): the `q_fast` voters of a fast-committed block and the `q_cert` votes inside any certificate for a conflicting block overlap in a non-Byzantine replica. Also what makes `q_cert` slotBlames exclude a fast commit — the Optimal direct skip's blame quorum. Replaces Hydrozoan's `FastStarvation`, which involved `q_weak`.
 
 #### `EvidenceEquiv`
 
@@ -15003,7 +15043,7 @@ Hydrozoan's block universe plus the leader-exclusion rule.
 def NoEvidenceQuorum (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (k : ℕ) : Prop :=
   ∃ s : Finset BlockId,                            -- some set of blocks such that
     (∀ b ∈ s,                                      -- every block in it
-      b ∈ LeanDag.Hydrozoan.blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k) ∧   -- sits at slot k's decision round
+      b ∈ blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k) ∧   -- sits at slot k's decision round
       IsNoFastEvidence U k b) ∧                    -- and is evidence for no candidate;
     qCert Replica ≤ (creatorsOf U.block s).card     -- and they come from q_cert creators
 ```
@@ -15459,18 +15499,6 @@ inductive DecidedWithin (U : BlockRecord Validator BlockId Payload P honest) (V 
 
 **The bounded relation**: `Decided`, with every slot the derivation mentions strictly below `B`.
 
-#### `IsLeaderBlock`
-
-*def, `Common.Anchored.lean`*
-
-```lean
-def IsLeaderBlock (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) (L : BlockId) :
-    Prop :=
-  L ∈ U.ids ∧ (U.block L).round = S.slotRound k ∧ (U.block L).creator = S.leader k
-```
-
-`L` is a candidate block for slot `k`: the right round, the right author. A correct leader has at most one such block; a Byzantine one may have several, which is why the rules quantify over candidates rather than selecting one.
-
 #### `EligibleAt`
 
 *def, `Common.Anchored.lean`*
@@ -15821,6 +15849,20 @@ def and (C D : Clause Validator BlockId Payload) : Clause Validator BlockId Payl
 ```
 
 Two clauses together.
+
+#### `Quorate`
+
+*class, `Common.BlockRecord.lean`*
+
+```lean
+class Quorate [DecidableEq Validator] (P : Validity Validator BlockId Payload)
+    (q : outParam ℕ) : Prop where
+  quorum : ∀ (blk : BlockId → Block Validator BlockId Payload)
+    (b : Block Validator BlockId Payload), P blk b → 0 < b.round → q ≤ (creators blk b).card
+  pos : 0 < q
+```
+
+Non-genesis blocks reference `q` distinct creators, and `q` is positive, so a non-genesis block references something.
 
 #### `commitSeq`
 
@@ -16759,7 +16801,7 @@ def OfCoverage (sp : Support R) (rel : Reliability Validator) : Prop :=
 
 ## Appendix C. The theorem reference
 
-The 519 theorems the body or Appendix A names, each
+The 516 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -16912,55 +16954,53 @@ theorem supportersIn_eq_toRecord {V : U.View} {b : BlockId} {n : ℕ} :
 
 The view's count is the record's count at the view as a record.
 
-#### `exists_mem_refs_of_correct_support_of_card`
+#### `exists_mem_refs_of_honest_support_of_card`
 
 *theorem, `Common.Support.lean`*
 
 ```lean
-theorem exists_mem_refs_of_correct_support_of_card
-    {P : BlockId → Prop} {n : ℕ} {T : Finset Validator}
-    (hT : ∀ v ∈ T, ∃ q ∈ U.ids, (U.block q).round = n ∧ P q ∧ (U.block q).creator = v)
-    (hT_correct : ∀ v ∈ T, v ∈ (Correct : Finset Validator))
-    (hcard : F.f + 1 ≤ T.card)
+theorem exists_mem_refs_of_honest_support_of_card [Fintype Validator]
+    {Q : BlockId → Prop} {n : ℕ} {T : Finset Validator}
+    (hT : ∀ v ∈ T, ∃ b ∈ U.ids, (U.block b).round = n ∧ Q b ∧ (U.block b).creator = v)
+    (hT_honest : ∀ v ∈ T, v ∈ honest)
+    (hcard : Fintype.card Validator < T.card + q)
     {c : BlockId} (hc : c ∈ U.ids) (hcr : (U.block c).round = n + 1) :
-    ∃ q ∈ (U.block c).refs, P q
+    ∃ b ∈ (U.block c).refs, Q b
 ```
 
-**The hitting lemma, uniform form.** `f+1` correct backers always suffice: a round-`(n+1)` block names `n - f` of at most `n` participating authors, so it misses at most `f`.
+**The hitting lemma, uniform form.** More than `n − q` honest backers always suffice: a round-`(n+1)` block names `q` of at most `n` participating authors, so it misses at most `n − q`.
 
 #### `reaches_pred_of_round_le`
 
 *theorem, `Common.Support.lean`*
 
 ```lean
-theorem reaches_pred_of_round_le {P : BlockId → Prop} {N : ℕ}
-    (hbase : ∀ c ∈ U.ids, (U.block c).round = N → ∃ b, P b ∧ Reaches U c b)
+theorem reaches_pred_of_round_le {q : ℕ} [P.Quorate q] {Q : BlockId → Prop} {N : ℕ}
+    (hbase : ∀ c ∈ U.ids, (U.block c).round = N → ∃ b, Q b ∧ Reaches U c b)
     {c : BlockId} (hc : c ∈ U.ids) (hcr : N ≤ (U.block c).round) :
-    ∃ b, P b ∧ Reaches U c b
+    ∃ b, Q b ∧ Reaches U c b
 ```
 
-**Propagation.** Reaching something is inherited upward: if every block at round `N` reaches a `P`-block, so does every block above `N`.
+**Propagation.** Reaching something is inherited upward: if every block at round `N` reaches a `Q`-block, so does every block above `N`.
 
 Shared by T3 and M2, both of which are otherwise just a base case. The step needs nothing but nonempty references and transitivity — height is carried by `Reaches` alone.
 
-#### `reaches_of_correct_support_of_card`
+#### `reaches_of_honest_support_of_card`
 
 *theorem, `Common.Support.lean`*
 
 ```lean
-theorem reaches_of_correct_support_of_card
+theorem reaches_of_honest_support_of_card [Fintype Validator]
     {b : BlockId} {r : ℕ} {S : Finset Validator}
-    (hS_support : ∀ v ∈ S, ∃ q ∈ U.ids,
-      (U.block q).round = r + 1 ∧ b ∈ (U.block q).refs ∧ (U.block q).creator = v)
-    (hS_correct : ∀ v ∈ S, v ∈ (Correct : Finset Validator))
-    (hcard : F.f + 1 ≤ S.card)
+    (hS_support : ∀ v ∈ S, ∃ b' ∈ U.ids,
+      (U.block b').round = r + 1 ∧ b ∈ (U.block b').refs ∧ (U.block b').creator = v)
+    (hS_honest : ∀ v ∈ S, v ∈ honest)
+    (hcard : Fintype.card Validator < S.card + q)
     {c : BlockId} (hc : c ∈ U.ids) (hcr : (U.block c).round = r + 2) :
     Reaches U c b
 ```
 
-**Coverage, uniform form.** `f+1` correct supporters always suffice.
-
-This is the form to use when supporters come from a quorum rather than from counting — see T3, where n−f distinct creators contain `f+1` correct ones by `card_inter_correct_of_quorum`.
+**Coverage, uniform form.** More than `n − q` honest supporters always suffice. This is the form to use when supporters come from a quorum rather than from counting — see T3, where `n − f` distinct creators contain `f + 1` correct ones by `card_inter_correct_of_quorum`.
 
 #### `blames_inter_supporters_subset_byzantine`
 
@@ -17057,6 +17097,20 @@ theorem reaches_of_quorum_support
 **T3 (Persistence).** If `b` is referenced by a quorum of round-`(r+1)` blocks, every block at round `r+2` or later has `b` in its causal history.
 
 Neither `b ∈ U.ids` nor `(U.block b).round = r` is assumed: both follow from the quorum hypothesis (`mem_ids_and_round_of_quorum_support`).
+
+### Slots and the schedule
+
+#### `isLeaderBlock_unique_of_honest`
+
+*theorem, `Common.Leader.lean`*
+
+```lean
+theorem isLeaderBlock_unique_of_honest {k : ℕ} {L₁ L₂ : BlockId}
+    (hk : S.leader k ∈ honest) (h₁ : IsLeaderBlock U k L₁) (h₂ : IsLeaderBlock U k L₂) :
+    L₁ = L₂
+```
+
+**An honest leader has at most one candidate**: two blocks by an honest author at one round are one block. Every rule with a tie to break uses this to see that the tie only ever arises under a dishonest leader.
 
 ### The commit rule, and the ledger
 
@@ -17212,7 +17266,7 @@ theorem directSkipIn_of_directSkipSlotIn {V : View Validator BlockId Payload U} 
     DirectSkipIn U V L (S.slotRound k)
 ```
 
-**The slot-level skip implies the per-candidate one**, so every theorem stated over `DirectSkipIn` — M1 and M3 in particular — applies to it unchanged. A block referencing no candidate references not `L`.
+**The slot-level skip implies the per-candidate one**, so every theorem stated over `DirectSkipIn` — M1 and M3 in particular — applies to it unchanged.
 
 #### `coreLaws`
 
@@ -19724,52 +19778,6 @@ theorem eq_of_mem_refs_of_creator_eq {i j k : BlockId} (hi : i ∈ U.ids)
 
 Distinct creators among references are automatic under crash: two refs of the same block sharing a creator sit at the same round (`predecessor`), so universal `no_equivocation` identifies them. This is why the crash `ValidWrt` has no `distinct_creators` field.
 
-#### `exists_mem_refs_of_correct_support_of_card`
-
-*theorem, `Nemo.Support.lean`*
-
-```lean
-theorem exists_mem_refs_of_correct_support_of_card
-    {P : BlockId → Prop} {n : ℕ} {T : Finset Validator}
-    (hT : ∀ v ∈ T, ∃ q ∈ U.ids, (U.block q).round = n ∧ P q ∧ (U.block q).creator = v)
-    (hcard : majority Validator ≤ T.card)
-    {c : BlockId} (hc : c ∈ U.ids) (hcr : (U.block c).round = n + 1) :
-    ∃ q ∈ (U.block c).refs, P q
-```
-
-**The hitting lemma, uniform form.** A `majority` of backers always suffices: `c` names a majority of the round-`n` authors, and two majorities of the pool intersect. The crash port of `exists_mem_refs_of_correct_support_of_card`.
-
-#### `reaches_of_correct_support_of_card`
-
-*theorem, `Nemo.Support.lean`*
-
-```lean
-theorem reaches_of_correct_support_of_card
-    {b : BlockId} {r : ℕ} {S : Finset Validator}
-    (hS_support : ∀ v ∈ S, ∃ q ∈ U.ids,
-      (U.block q).round = r + 1 ∧ b ∈ (U.block q).refs ∧ (U.block q).creator = v)
-    (hcard : majority Validator ≤ S.card)
-    {c : BlockId} (hc : c ∈ U.ids) (hcr : (U.block c).round = r + 2) :
-    Reaches U c b
-```
-
-**Coverage, uniform form.** A `majority` of supporters always suffices. This is the form to use when supporters come from a quorum rather than from counting — the crash port of `reaches_of_correct_support_of_card`.
-
-#### `reaches_pred_of_round_le`
-
-*theorem, `Nemo.Support.lean`*
-
-```lean
-theorem reaches_pred_of_round_le {P : BlockId → Prop} {N : ℕ}
-    (hbase : ∀ c ∈ U.ids, (U.block c).round = N → ∃ b, P b ∧ Reaches U c b)
-    {c : BlockId} (hc : c ∈ U.ids) (hcr : N ≤ (U.block c).round) :
-    ∃ b, P b ∧ Reaches U c b
-```
-
-**Propagation.** Reaching something is inherited upward: if every block at round `N` reaches a `P`-block, so does every block above `N`.
-
-A verbatim port of the core lemma of the same name: the step needs nothing but nonempty references and transitivity — height is carried by `Reaches` alone, so no quorum content is involved.
-
 #### `certifiedIn_of_directCommit`
 
 *theorem, `Nemo.Rules.lean`*
@@ -19781,17 +19789,6 @@ theorem certifiedIn_of_directCommit {L A : BlockId} {r : ℕ}
 ```
 
 **Link integrity.** A directly committed leader is certified in every block at round `r+2` or above — in particular in every eligible anchor. The depth induction is the generic propagation lemma; the quorum intersection lives entirely in the base case.
-
-#### `isLeaderBlock_unique`
-
-*theorem, `Nemo.Decision.lean`*
-
-```lean
-theorem isLeaderBlock_unique {k : ℕ} {L₁ L₂ : BlockId}
-    (h₁ : IsLeaderBlock U k L₁) (h₂ : IsLeaderBlock U k L₂) : L₁ = L₂
-```
-
-**A slot has at most one candidate.**
 
 #### `directCommit_of_directCommitIn`
 
@@ -20015,7 +20012,7 @@ theorem reaches_of_supported {L : BlockId} {r : ℕ} (h : Supported U L r)
 
 **The paper's Lemma 5.** A supported block is in the causal history of **every** block two rounds above it or higher — Byzantine-authored included, since validity is structural.
 
-The quorum behind the support contains `f + 1` correct authors, each with one round-`(r + 1)` block, and a round-`(r + 2)` block names `n − f` of the at most `n` authors of that round, so it cannot miss all of them. The core's `reaches_of_correct_support_of_card` is that step and `reaches_pred_of_round_le` carries it upward.
+The quorum behind the support contains `f + 1` correct authors, each with one round-`(r + 1)` block, and a round-`(r + 2)` block names `n − f` of the at most `n` authors of that round, so it cannot miss all of them. The core's `reaches_of_honest_support_of_card` is that step and `reaches_pred_of_round_le` carries it upward.
 
 #### `reaches_of_committed_of_le`
 

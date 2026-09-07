@@ -89,11 +89,11 @@ def FastLatency (U : BlockUniverse Replica BlockId) : Prop :=
 /-- **Performance, not liveness — the skip half of the opportunistic
 pair.** With ≤ p actual faults, a slot whose leader produced no
 candidate at all is skipped directly at the voting round: every
-voting-round block blames it vacuously, and the correct pool alone
+voting-round block slotBlames it vacuously, and the correct pool alone
 reaches the q_fast blame quorum. Beyond p faults the direct skip may
 be unreachable — it is opportunistic, not guaranteed — and the slot
 resolves indirectly instead (later phases). No synchrony hypothesis:
-blames reference nothing. -/
+slotBlames reference nothing. -/
 def SkipLatency (U : BlockUniverse Replica BlockId) : Prop :=
   ∀ (k : ℕ),                             -- for any slot k:
     (F.byzantine ∪ F.crashed).card ≤ p Replica →  -- ACTUAL faults fit p,

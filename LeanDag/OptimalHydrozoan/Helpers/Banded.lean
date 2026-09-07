@@ -5,7 +5,7 @@ import LeanDag.OptimalHydrozoan.Helpers.SlotAgreement
 
 Not part of the audit surface. What `Properties.Banded` needs of this
 protocol, on top of Hydrozoan's band file: Optimal shares Hydrozoan's
-blocks, votes, LeanDag.Hydrozoan.certificates and LeanDag.Hydrozoan.blames, so `Hydrozoan/Helpers/Banded.lean`
+blocks, votes, LeanDag.Hydrozoan.certificates and slotBlames, so `Hydrozoan/Helpers/Banded.lean`
 carries the whole direct layer and rung 1 unchanged, and what is left is
 the fast path — fast evidence, the no-evidence quorum, and the anchored
 evidence rung.

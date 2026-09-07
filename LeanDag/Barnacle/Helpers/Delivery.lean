@@ -13,7 +13,7 @@ that block carries a quorum of support and T3 (`reaches_of_quorum_support`)
 puts it in the history of everything two rounds up.
 
 **Nemo-Nemo is not here.** Its persistence lemmas
-(`Nemo.reaches_of_correct_support`, `…_of_card`) conclude from a block at
+(`reaches_of_honest_support`, `…_of_card`) conclude from a block at
 *exactly* two rounds above, where the core's T3 concludes from every
 block at two rounds or more. Closing the gap needs a descent — a block at
 round `r + k` reaches one at `r + 2` — which the crash arc does not

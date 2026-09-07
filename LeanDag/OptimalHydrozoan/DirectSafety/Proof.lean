@@ -32,14 +32,14 @@ theorem eq_of_fastCommitOpt {L₁ L₂ : BlockId} {r : ℕ} (hf : 1 ≤ O.f)
     (hcreator : (U.block L₁).creator = (U.block L₂).creator)
     (h₁ : FastCommitOpt U L₁ r) (h₂ : FastCommitOpt U L₂ r) : L₁ = L₂ := by
   by_contra hne
-  have hsub : LeanDag.Hydrozoan.supporters U L₁ (r + 1) ∩ LeanDag.Hydrozoan.supporters U L₂ (r + 1) ⊆
+  have hsub : supporters U L₁ (r + 1) ∩ supporters U L₂ (r + 1) ⊆
       O.byzantine := by
     intro v hv
     obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
     exact byzantine_of_votes_two hne hcreator hv₁ hv₂
   have h1 := Finset.card_union_add_card_inter
-    (LeanDag.Hydrozoan.supporters U L₁ (r + 1)) (LeanDag.Hydrozoan.supporters U L₂ (r + 1))
-  have h2 : (LeanDag.Hydrozoan.supporters U L₁ (r + 1) ∪ LeanDag.Hydrozoan.supporters U L₂ (r + 1)).card ≤
+    (supporters U L₁ (r + 1)) (supporters U L₂ (r + 1))
+  have h2 : (supporters U L₁ (r + 1) ∪ supporters U L₂ (r + 1)).card ≤
       Fintype.card Replica := by
     rw [← Finset.card_univ]; exact Finset.card_le_univ _
   have h3 := Finset.card_le_card hsub
@@ -56,19 +56,19 @@ theorem eq_of_fastCommitOpt_of_slowCommit {L₁ L₂ : BlockId} {r : ℕ}
   by_contra hne
   obtain ⟨C, hC⟩ := certificates_nonempty_of_slowCommit h₂
   obtain ⟨hCi, hCr, hcert⟩ := LeanDag.Hydrozoan.mem_certificates.mp hC
-  have hcard2 : qCert Replica ≤ (LeanDag.Hydrozoan.supporters U L₂ (r + 1)).card := by
+  have hcard2 : qCert Replica ≤ (supporters U L₂ (r + 1)).card := by
     have hle := Finset.card_le_card
       (creators_voteBlocks_subset_supporters (L := L₂) hCi hCr)
     simp only [LeanDag.Hydrozoan.IsCertificate] at hcert
     omega
-  have hsub : LeanDag.Hydrozoan.supporters U L₁ (r + 1) ∩ LeanDag.Hydrozoan.supporters U L₂ (r + 1) ⊆
+  have hsub : supporters U L₁ (r + 1) ∩ supporters U L₂ (r + 1) ⊆
       O.byzantine := by
     intro v hv
     obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
     exact byzantine_of_votes_two hne hcreator hv₁ hv₂
   have h1 := Finset.card_union_add_card_inter
-    (LeanDag.Hydrozoan.supporters U L₁ (r + 1)) (LeanDag.Hydrozoan.supporters U L₂ (r + 1))
-  have h2 : (LeanDag.Hydrozoan.supporters U L₁ (r + 1) ∪ LeanDag.Hydrozoan.supporters U L₂ (r + 1)).card ≤
+    (supporters U L₁ (r + 1)) (supporters U L₂ (r + 1))
+  have h2 : (supporters U L₁ (r + 1) ∪ supporters U L₂ (r + 1)).card ≤
       Fintype.card Replica := by
     rw [← Finset.card_univ]; exact Finset.card_le_univ _
   have h3 := Finset.card_le_card hsub
@@ -77,19 +77,19 @@ theorem eq_of_fastCommitOpt_of_slowCommit {L₁ L₂ : BlockId} {r : ℕ}
   simp only [FastCommitOpt] at h₁
   omega
 
-/-- Universe-level: a fast commit leaves fewer than `qCert` LeanDag.Hydrozoan.blames. -/
+/-- Universe-level: a fast commit leaves fewer than `qCert` slotBlames. -/
 theorem blames_lt_of_fastCommitOpt {k : ℕ} {L : BlockId}
     (hL : IsLeaderBlock U k L) (h : FastCommitOpt U L (S.slotRound k)) :
-    (LeanDag.Hydrozoan.blames U k).card < qCert Replica := by
-  have h' : qFastOpt Replica ≤ (LeanDag.Hydrozoan.supporters U L (LeanDag.Hydrozoan.votingRound Replica k)).card := h
-  have hsub : LeanDag.Hydrozoan.supporters U L (LeanDag.Hydrozoan.votingRound Replica k) ∩ LeanDag.Hydrozoan.blames U k ⊆
+    (slotBlames U k).card < qCert Replica := by
+  have h' : qFastOpt Replica ≤ (supporters U L (votingRound Replica k)).card := h
+  have hsub : supporters U L (votingRound Replica k) ∩ slotBlames U k ⊆
       O.byzantine := by
     intro v hv
     obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
     exact byzantine_of_votes_and_blames hL hv₁ hv₂
   have h1 := Finset.card_union_add_card_inter
-    (LeanDag.Hydrozoan.supporters U L (LeanDag.Hydrozoan.votingRound Replica k)) (LeanDag.Hydrozoan.blames U k)
-  have h2 : (LeanDag.Hydrozoan.supporters U L (LeanDag.Hydrozoan.votingRound Replica k) ∪ LeanDag.Hydrozoan.blames U k).card ≤
+    (supporters U L (votingRound Replica k)) (slotBlames U k)
+  have h2 : (supporters U L (votingRound Replica k) ∪ slotBlames U k).card ≤
       Fintype.card Replica := by
     rw [← Finset.card_univ]; exact Finset.card_le_univ _
   have h3 := Finset.card_le_card hsub
@@ -97,28 +97,28 @@ theorem blames_lt_of_fastCommitOpt {k : ℕ} {L : BlockId}
   have h5 := nf_lt_qFastOpt_add_qCert (Replica := Replica)
   omega
 
-/-- Universe-level: a slow commit leaves fewer than `qCert` LeanDag.Hydrozoan.blames. -/
+/-- Universe-level: a slow commit leaves fewer than `qCert` slotBlames. -/
 theorem blames_lt_of_slowCommit {k : ℕ} {L : BlockId}
     (hL : IsLeaderBlock U k L) (h : SlowCommit U L (S.slotRound k)) :
-    (LeanDag.Hydrozoan.blames U k).card < qCert Replica := by
+    (slotBlames U k).card < qCert Replica := by
   obtain ⟨C, hC⟩ := certificates_nonempty_of_slowCommit h
   obtain ⟨hCi, hCr, hcert⟩ := LeanDag.Hydrozoan.mem_certificates.mp hC
   have hcard2 : qCert Replica ≤
-      (LeanDag.Hydrozoan.supporters U L (LeanDag.Hydrozoan.votingRound Replica k)).card := by
+      (supporters U L (votingRound Replica k)).card := by
     have hle := Finset.card_le_card
       (creators_voteBlocks_subset_supporters (L := L) hCi hCr)
     simp only [LeanDag.Hydrozoan.IsCertificate] at hcert
-    have : LeanDag.Hydrozoan.votingRound Replica k = S.slotRound k + 1 := rfl
+    have : votingRound Replica k = S.slotRound k + 1 := rfl
     rw [this]
     omega
-  have hsub : LeanDag.Hydrozoan.supporters U L (LeanDag.Hydrozoan.votingRound Replica k) ∩ LeanDag.Hydrozoan.blames U k ⊆
+  have hsub : supporters U L (votingRound Replica k) ∩ slotBlames U k ⊆
       O.byzantine := by
     intro v hv
     obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
     exact byzantine_of_votes_and_blames hL hv₁ hv₂
   have h1 := Finset.card_union_add_card_inter
-    (LeanDag.Hydrozoan.supporters U L (LeanDag.Hydrozoan.votingRound Replica k)) (LeanDag.Hydrozoan.blames U k)
-  have h2 : (LeanDag.Hydrozoan.supporters U L (LeanDag.Hydrozoan.votingRound Replica k) ∪ LeanDag.Hydrozoan.blames U k).card ≤
+    (supporters U L (votingRound Replica k)) (slotBlames U k)
+  have h2 : (supporters U L (votingRound Replica k) ∪ slotBlames U k).card ≤
       Fintype.card Replica := by
     rw [← Finset.card_univ]; exact Finset.card_le_univ _
   have h3 := Finset.card_le_card hsub

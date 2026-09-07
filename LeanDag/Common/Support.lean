@@ -11,12 +11,12 @@ result (T3c). Both rest on one principle:
 "Enough" admits two thresholds, and the difference is the only thing
 separating the two theorems downstream.
 
-* `reaches_of_correct_support` — threshold `p - 2f`, where `p` is the number
+* `reaches_of_honest_support` — threshold `p - 2f`, where `p` is the number
   of validators holding a round-`(r+1)` block. A round-`(r+2)` block draws
   its n−f referenced creators from those same `p`, so it misses exactly
   `p - (n−f)` of them and cannot dodge `p + f + 1 - n` supporters.
 
-* `reaches_of_correct_support_of_card` — threshold `f+1`, uniform. Since
+* `reaches_of_honest_support_of_card` — threshold `f+1`, uniform. Since
   `p ≤ n` always, this is the corollary: a round-`(r+2)` block names n−f
   of the `n` validators, so it misses at most `f`.
 
@@ -38,7 +38,7 @@ references the target.
 
 namespace LeanDag
 
-variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
+variable {Validator : Type*} [DecidableEq Validator]
 variable {BlockId : Type*} {Payload : Type*}
 
 /-! ## Counting, at any block record -/
@@ -91,7 +91,7 @@ theorem mem_authorsAt {v : Validator} {n : ℕ} :
 
 /-- The author pool never exceeds the validator set. This is what turns the
 `p - 2f` threshold into the uniform `f+1` one. -/
-theorem card_authorsAt_le_univ {n : ℕ} : (authorsAt U n).card ≤ Fintype.card Validator :=
+theorem card_authorsAt_le_univ [Fintype Validator] {n : ℕ} : (authorsAt U n).card ≤ Fintype.card Validator :=
   Finset.card_le_univ (authorsAt U n)
 
 /-- The creators of a round-`(n+1)` block's references all hold round-`n`
@@ -238,85 +238,98 @@ end Generic
 
 /-! ## The core's thresholds -/
 
-section Core
+/-! ## The hitting lemma, and coverage
 
-variable [F : Faults Validator]
-variable {U : BlockUniverse Validator BlockId Payload}
+At any quorate record. Both rest on one principle:
+
+> If a block is referenced by the round-`(r+1)` blocks of enough
+> **honest** validators, every round-`(r+2)` block reaches it.
+
+"Enough" admits two thresholds. The participation-sensitive form counts
+against the round-`(r+1)` author pool `p`: a round-`(r+2)` block draws
+its `q` referenced creators from that pool, so it misses at most `p − q`
+of them and cannot dodge `p − q + 1` backers. The uniform form is its
+corollary at `p ≤ n`: more than `n − q` backers always suffice, which
+for the core's `q = n − f` is the familiar `f + 1`.
+
+Honesty of the *supporters* is what makes this work: an honest validator
+has one round-`(r+1)` block, so naming it is enough to reach what it
+references. A Byzantine supporter could hold two, only one of which
+references the target. -/
+
+section Quorate
+
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
+variable {q : ℕ} [P.Quorate q] [P.Mechanised]
+variable {U : BlockRecord Validator BlockId Payload P honest}
 
 /-- **The hitting lemma.** A round-`(n+1)` block cannot avoid referencing a
-block satisfying `P`, once `f+1`-or-so *correct* validators have published
+block satisfying `Q`, once enough honest validators have published
 round-`n` blocks satisfying it.
 
-This is the primitive under both coverage and M2. It is stated with `P` a
+This is the primitive under both coverage and M2. It is stated with `Q` a
 bare predicate rather than a `Finset BlockId` because nothing here takes the
 cardinality of the target set — only of `T`, the validators backing it —
-which keeps the whole file free of `DecidableEq BlockId`.
-
-The threshold is participation-sensitive: `c` draws its `n - f` referenced
-creators from the round-`n` author pool `p`, so it misses at most
-`p - (n - f)` of them and cannot dodge `p + f + 1 - n` backers. At
-`n = 3f+1` this is the familiar `p - 2f`. -/
-theorem exists_mem_refs_of_correct_support
-    {P : BlockId → Prop} {n : ℕ} {T : Finset Validator}
-    (hT : ∀ v ∈ T, ∃ q ∈ U.ids, (U.block q).round = n ∧ P q ∧ (U.block q).creator = v)
-    (hT_correct : ∀ v ∈ T, v ∈ (Correct : Finset Validator))
-    (hp : (authorsAt U n).card + F.f + 1 ≤ T.card + Fintype.card Validator)
+which keeps the whole file free of `DecidableEq BlockId`. -/
+theorem exists_mem_refs_of_honest_support
+    {Q : BlockId → Prop} {n : ℕ} {T : Finset Validator}
+    (hT : ∀ v ∈ T, ∃ b ∈ U.ids, (U.block b).round = n ∧ Q b ∧ (U.block b).creator = v)
+    (hT_honest : ∀ v ∈ T, v ∈ honest)
+    (hp : (authorsAt U n).card + 1 ≤ T.card + q)
     {c : BlockId} (hc : c ∈ U.ids) (hcr : (U.block c).round = n + 1) :
-    ∃ q ∈ (U.block c).refs, P q := by
+    ∃ b ∈ (U.block c).refs, Q b := by
   set A := creatorsOf U.block (U.block c).refs with hA
-  have hA_quorum : quorumCard Validator ≤ A.card := U.creators_quorum hc (by omega)
+  have hA_quorum : q ≤ A.card := U.creators_quorum hc (by omega)
   have hA_sub : A ⊆ authorsAt U n := creators_refs_subset_authorsAt hc hcr
   have hT_auth : T ⊆ authorsAt U n := by
     intro v hv
-    obtain ⟨q, hq_ids, hq_round, _, hq_creator⟩ := hT v hv
+    obtain ⟨b, hb_ids, hb_round, _, hb_creator⟩ := hT v hv
     rw [mem_authorsAt]
-    exact ⟨q, hq_ids, hq_round, hq_creator⟩
+    exact ⟨b, hb_ids, hb_round, hb_creator⟩
   have hunion : (A ∪ T).card ≤ (authorsAt U n).card :=
     Finset.card_le_card (Finset.union_subset hA_sub hT_auth)
   have hadd := Finset.card_union_add_card_inter A T
-  have hinter : 0 < (A ∩ T).card := by
-    have := F.card_validators
-    omega
+  have hinter : 0 < (A ∩ T).card := by omega
   obtain ⟨v, hv⟩ := Finset.card_pos.mp hinter
   rw [Finset.mem_inter] at hv
   obtain ⟨hv_A, hv_T⟩ := hv
   rw [hA, mem_creatorsOf] at hv_A
   obtain ⟨i, hi_mem, hi_creator⟩ := hv_A
-  obtain ⟨q, hq_ids, hq_round, hq_P, hq_creator⟩ := hT v hv_T
+  obtain ⟨b, hb_ids, hb_round, hb_Q, hb_creator⟩ := hT v hv_T
   have hi_ids : i ∈ U.ids := U.complete c hc i hi_mem
   have hi_round : (U.block i).round = n := by
     have := U.round_of_mem_refs hc hi_mem
     omega
-  have hiq : i = q :=
-    U.eq_of_creator_eq hi_ids hq_ids (hT_correct v hv_T) hi_creator hq_creator
-      (by rw [hi_round, hq_round])
-  exact ⟨i, hi_mem, hiq ▸ hq_P⟩
+  have hib : i = b :=
+    U.eq_of_creator_eq hi_ids hb_ids (hT_honest v hv_T) hi_creator hb_creator
+      (by rw [hi_round, hb_round])
+  exact ⟨i, hi_mem, hib ▸ hb_Q⟩
 
-/-- **The hitting lemma, uniform form.** `f+1` correct backers always
-suffice: a round-`(n+1)` block names `n - f` of at most `n` participating
-authors, so it misses at most `f`. -/
-theorem exists_mem_refs_of_correct_support_of_card
-    {P : BlockId → Prop} {n : ℕ} {T : Finset Validator}
-    (hT : ∀ v ∈ T, ∃ q ∈ U.ids, (U.block q).round = n ∧ P q ∧ (U.block q).creator = v)
-    (hT_correct : ∀ v ∈ T, v ∈ (Correct : Finset Validator))
-    (hcard : F.f + 1 ≤ T.card)
+/-- **The hitting lemma, uniform form.** More than `n − q` honest backers
+always suffice: a round-`(n+1)` block names `q` of at most `n`
+participating authors, so it misses at most `n − q`. -/
+theorem exists_mem_refs_of_honest_support_of_card [Fintype Validator]
+    {Q : BlockId → Prop} {n : ℕ} {T : Finset Validator}
+    (hT : ∀ v ∈ T, ∃ b ∈ U.ids, (U.block b).round = n ∧ Q b ∧ (U.block b).creator = v)
+    (hT_honest : ∀ v ∈ T, v ∈ honest)
+    (hcard : Fintype.card Validator < T.card + q)
     {c : BlockId} (hc : c ∈ U.ids) (hcr : (U.block c).round = n + 1) :
-    ∃ q ∈ (U.block c).refs, P q := by
-  refine exists_mem_refs_of_correct_support hT hT_correct ?_ hc hcr
+    ∃ b ∈ (U.block c).refs, Q b := by
+  refine exists_mem_refs_of_honest_support hT hT_honest ?_ hc hcr
   have := card_authorsAt_le_univ (U := U) (n := n)
   omega
 
 /-- **Propagation.** Reaching something is inherited upward: if every block
-at round `N` reaches a `P`-block, so does every block above `N`.
+at round `N` reaches a `Q`-block, so does every block above `N`.
 
 Shared by T3 and M2, both of which are otherwise just a base case. The step
 needs nothing but nonempty references and transitivity — height is carried
 by `Reaches` alone. -/
-theorem reaches_pred_of_round_le {P : BlockId → Prop} {N : ℕ}
-    (hbase : ∀ c ∈ U.ids, (U.block c).round = N → ∃ b, P b ∧ Reaches U c b)
+theorem reaches_pred_of_round_le {q : ℕ} [P.Quorate q] {Q : BlockId → Prop} {N : ℕ}
+    (hbase : ∀ c ∈ U.ids, (U.block c).round = N → ∃ b, Q b ∧ Reaches U c b)
     {c : BlockId} (hc : c ∈ U.ids) (hcr : N ≤ (U.block c).round) :
-    ∃ b, P b ∧ Reaches U c b := by
-  suffices H : ∀ m, ∀ c ∈ U.ids, (U.block c).round = m → N ≤ m → ∃ b, P b ∧ Reaches U c b by
+    ∃ b, Q b ∧ Reaches U c b := by
+  suffices H : ∀ m, ∀ c ∈ U.ids, (U.block c).round = m → N ≤ m → ∃ b, Q b ∧ Reaches U c b by
     exact H _ c hc rfl hcr
   clear hcr hc c
   intro m
@@ -328,43 +341,48 @@ theorem reaches_pred_of_round_le {P : BlockId → Prop} {N : ℕ}
     · obtain ⟨i, hi_mem⟩ := U.refs_nonempty hc (by omega)
       have hi_ids : i ∈ U.ids := U.complete c hc i hi_mem
       have hi_round := U.round_of_mem_refs hc hi_mem
-      obtain ⟨b, hPb, hreach⟩ := ih (U.block i).round (by omega) i hi_ids rfl (by omega)
-      exact ⟨b, hPb, Reaches.of_mem_refs hi_mem hreach⟩
+      obtain ⟨b, hQb, hreach⟩ := ih (U.block i).round (by omega) i hi_ids rfl (by omega)
+      exact ⟨b, hQb, Reaches.of_mem_refs hi_mem hreach⟩
 
 /-- **Coverage, participation-sensitive form.** A block backed by
-`p + f + 1 - n` correct round-`(r+1)` validators is reached by every
-round-`(r+2)` block.
-
-The `P`-instance of the hitting lemma where every target references `b`. -/
-theorem reaches_of_correct_support
+`p − q + 1` honest round-`(r+1)` validators is reached by every
+round-`(r+2)` block. The `Q`-instance of the hitting lemma where every
+target references `b`. -/
+theorem reaches_of_honest_support
     {b : BlockId} {r : ℕ} {S : Finset Validator}
-    (hS_support : ∀ v ∈ S, ∃ q ∈ U.ids,
-      (U.block q).round = r + 1 ∧ b ∈ (U.block q).refs ∧ (U.block q).creator = v)
-    (hS_correct : ∀ v ∈ S, v ∈ (Correct : Finset Validator))
-    (hp : (authorsAt U (r + 1)).card + F.f + 1 ≤ S.card + Fintype.card Validator)
+    (hS_support : ∀ v ∈ S, ∃ b' ∈ U.ids,
+      (U.block b').round = r + 1 ∧ b ∈ (U.block b').refs ∧ (U.block b').creator = v)
+    (hS_honest : ∀ v ∈ S, v ∈ honest)
+    (hp : (authorsAt U (r + 1)).card + 1 ≤ S.card + q)
     {c : BlockId} (hc : c ∈ U.ids) (hcr : (U.block c).round = r + 2) :
     Reaches U c b := by
-  obtain ⟨q, hq_mem, hq_ref⟩ :=
-    exists_mem_refs_of_correct_support (P := fun q => b ∈ (U.block q).refs)
-      hS_support hS_correct hp hc (by omega)
-  exact Reaches.of_mem_refs hq_mem (Reaches.single hq_ref)
+  obtain ⟨b', hb'_mem, hb'_ref⟩ :=
+    exists_mem_refs_of_honest_support (Q := fun b' => b ∈ (U.block b').refs)
+      hS_support hS_honest hp hc (by omega)
+  exact Reaches.of_mem_refs hb'_mem (Reaches.single hb'_ref)
 
-/-- **Coverage, uniform form.** `f+1` correct supporters always suffice.
-
-This is the form to use when supporters come from a quorum rather than from
-counting — see T3, where n−f distinct creators contain `f+1` correct ones
-by `card_inter_correct_of_quorum`. -/
-theorem reaches_of_correct_support_of_card
+/-- **Coverage, uniform form.** More than `n − q` honest supporters
+always suffice. This is the form to use when supporters come from a
+quorum rather than from counting — see T3, where `n − f` distinct
+creators contain `f + 1` correct ones by `card_inter_correct_of_quorum`. -/
+theorem reaches_of_honest_support_of_card [Fintype Validator]
     {b : BlockId} {r : ℕ} {S : Finset Validator}
-    (hS_support : ∀ v ∈ S, ∃ q ∈ U.ids,
-      (U.block q).round = r + 1 ∧ b ∈ (U.block q).refs ∧ (U.block q).creator = v)
-    (hS_correct : ∀ v ∈ S, v ∈ (Correct : Finset Validator))
-    (hcard : F.f + 1 ≤ S.card)
+    (hS_support : ∀ v ∈ S, ∃ b' ∈ U.ids,
+      (U.block b').round = r + 1 ∧ b ∈ (U.block b').refs ∧ (U.block b').creator = v)
+    (hS_honest : ∀ v ∈ S, v ∈ honest)
+    (hcard : Fintype.card Validator < S.card + q)
     {c : BlockId} (hc : c ∈ U.ids) (hcr : (U.block c).round = r + 2) :
     Reaches U c b := by
-  refine reaches_of_correct_support hS_support hS_correct ?_ hc hcr
+  refine reaches_of_honest_support hS_support hS_honest ?_ hc hcr
   have := card_authorsAt_le_univ (U := U) (n := r + 1)
   omega
+
+end Quorate
+
+section Core
+
+variable [Fintype Validator] [F : Faults Validator]
+variable {U : BlockUniverse Validator BlockId Payload}
 
 /-! ## Support sets
 

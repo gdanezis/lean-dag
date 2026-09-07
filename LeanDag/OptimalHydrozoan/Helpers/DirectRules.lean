@@ -33,11 +33,11 @@ theorem isCertificate_iff_votesFor (C L : BlockId) :
 
 instance decidableFastCommitOpt (L : BlockId) (r : ℕ) :
     Decidable (FastCommitOpt U L r) :=
-  inferInstanceAs (Decidable (qFastOpt Replica ≤ (LeanDag.Hydrozoan.supporters U L (r + 1)).card))
+  inferInstanceAs (Decidable (qFastOpt Replica ≤ (supporters U L (r + 1)).card))
 
 instance decidableFastCommitOptInView (V : LeanDag.Hydrozoan.View U) (L : BlockId) (r : ℕ) :
     Decidable (FastCommitOptInView U V L r) :=
-  inferInstanceAs (Decidable (qFastOpt Replica ≤ (LeanDag.Hydrozoan.supportersInView U V L (r + 1)).card))
+  inferInstanceAs (Decidable (qFastOpt Replica ≤ (supportersIn U V L (r + 1)).card))
 
 section Slots
 
@@ -64,7 +64,7 @@ instance decidableIsNoFastEvidence (k : ℕ) (C : BlockId) :
 of no-evidence decision-round blocks. -/
 theorem noEvidenceQuorum_iff_filter {k : ℕ} :
     NoEvidenceQuorum U k ↔
-      qCert Replica ≤ (creatorsOf U.block ((LeanDag.Hydrozoan.blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter
+      qCert Replica ≤ (creatorsOf U.block ((blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter
         fun b => IsNoFastEvidence U k b)).card := by
   constructor
   · rintro ⟨s, hs, hcard⟩
@@ -73,14 +73,14 @@ theorem noEvidenceQuorum_iff_filter {k : ℕ} :
     obtain ⟨h1, h2⟩ := hs b hb
     exact Finset.mem_filter.mpr ⟨h1, h2⟩
   · intro h
-    refine ⟨(LeanDag.Hydrozoan.blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter fun b => IsNoFastEvidence U k b,
+    refine ⟨(blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter fun b => IsNoFastEvidence U k b,
       fun b hb => ?_, h⟩
     exact Finset.mem_filter.mp hb
 
 /-- The in-view no-evidence quorum through its canonical witness set. -/
 theorem noEvidenceQuorumInView_iff_filter {V : LeanDag.Hydrozoan.View U} {k : ℕ} :
     NoEvidenceQuorumInView U V k ↔
-      qCert Replica ≤ (creatorsOf U.block ((LeanDag.Hydrozoan.blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter
+      qCert Replica ≤ (creatorsOf U.block ((blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter
         fun b => b ∈ V.ids ∧ IsNoFastEvidence U k b)).card := by
   constructor
   · rintro ⟨s, hs, hcard⟩
@@ -89,7 +89,7 @@ theorem noEvidenceQuorumInView_iff_filter {V : LeanDag.Hydrozoan.View U} {k : �
     obtain ⟨h1, h2, h3⟩ := hs b hb
     exact Finset.mem_filter.mpr ⟨h1, h2, h3⟩
   · intro h
-    refine ⟨(LeanDag.Hydrozoan.blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter
+    refine ⟨(blocksAt U (LeanDag.Hydrozoan.decisionRound Replica k)).filter
       fun b => b ∈ V.ids ∧ IsNoFastEvidence U k b, fun b hb => ?_, h⟩
     obtain ⟨h1, h2, h3⟩ := Finset.mem_filter.mp hb
     exact ⟨h1, h2, h3⟩
@@ -102,12 +102,12 @@ instance decidableNoEvidenceQuorumInView (V : LeanDag.Hydrozoan.View U) (k : ℕ
   decidable_of_iff _ noEvidenceQuorumInView_iff_filter.symm
 
 instance decidableSkippedLeaderOpt (k : ℕ) : Decidable (SkippedLeaderOpt U k) :=
-  inferInstanceAs (Decidable (qCert Replica ≤ (LeanDag.Hydrozoan.blames U k).card ∧ NoEvidenceQuorum U k))
+  inferInstanceAs (Decidable (qCert Replica ≤ (slotBlames U k).card ∧ NoEvidenceQuorum U k))
 
 instance decidableSkippedLeaderOptInView (V : LeanDag.Hydrozoan.View U) (k : ℕ) :
     Decidable (SkippedLeaderOptInView U V k) :=
   inferInstanceAs
-    (Decidable (qCert Replica ≤ (LeanDag.Hydrozoan.blamesInView U V k).card ∧ NoEvidenceQuorumInView U V k))
+    (Decidable (qCert Replica ≤ (slotBlamesIn U V k).card ∧ NoEvidenceQuorumInView U V k))
 
 end Slots
 
@@ -203,7 +203,7 @@ theorem noEvidenceQuorumInView_congr {V : LeanDag.Hydrozoan.View U}
 theorem skippedLeaderOptInView_congr {V : LeanDag.Hydrozoan.View U}
     (hround : S₁.slotRound k = S₂.slotRound k) (hk : S₁.leader k = S₂.leader k)
     (h : SkippedLeaderOptInView (S := S₁) U V k) : SkippedLeaderOptInView (S := S₂) U V k :=
-  ⟨by have := h.1; rwa [blamesInView_congr hround hk] at this,
+  ⟨by have := h.1; rwa [slotBlamesIn_congr hround hk] at this,
     noEvidenceQuorumInView_congr hround hk h.2⟩
 
 end Congr

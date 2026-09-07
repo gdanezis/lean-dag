@@ -126,10 +126,10 @@ example : IsLeaderBlock U5 0 2 := by decide
 example : LeanDag.Hydrozoan.certificates U5 2 0 = {14, 15, 16, 17, 18, 19} := by decide
 
 -- Slot 1's candidate id 10 is voteless: no round-2 block references
--- it, so it has no LeanDag.Hydrozoan.supporters, no LeanDag.Hydrozoan.certificates — nothing either rung
+-- it, so it has no supporters, no LeanDag.Hydrozoan.certificates — nothing either rung
 -- could ever find.
 example : IsLeaderBlock U5 1 10 := by decide
-example : LeanDag.Hydrozoan.supporters U5 10 2 = ∅ := by decide
+example : supporters U5 10 2 = ∅ := by decide
 example : LeanDag.Hydrozoan.certificates U5 10 1 = ∅ := by decide
 
 -- The second view genuinely differs: the equivocation's second copy is

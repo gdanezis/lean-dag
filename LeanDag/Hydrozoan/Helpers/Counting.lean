@@ -18,30 +18,6 @@ variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [F : LeanDag.Hydrozoan.Faults Replica]
   {U : BlockUniverse Replica BlockId}
 
-omit [DecidableEq BlockId] in
-/-- Membership in a round slice, unfolded. -/
-@[simp]
-theorem mem_blocksAt {i : BlockId} {r : ℕ} :
-    i ∈ blocksAt U r ↔ i ∈ U.ids ∧ (U.block i).round = r := by
-  simp [blocksAt]
-
-/-- Membership in a supporter set, unfolded. -/
-theorem mem_supporters {L : BlockId} {r : ℕ} {v : Replica} :
-    v ∈ supporters U L r ↔
-      ∃ b ∈ U.ids, (U.block b).round = r ∧ IsVote U b L ∧
-        (U.block b).creator = v := by
-  simp only [supporters, mem_creatorsOf, Finset.mem_filter, mem_blocksAt]
-  tauto
-
-/-- Membership in a slot's blamer set, unfolded. -/
-theorem mem_blames [S : Slots Replica] {k : ℕ} {v : Replica} :
-    v ∈ blames U k ↔
-      ∃ b ∈ U.ids, (U.block b).round = votingRound Replica k ∧
-        (∀ j ∈ (U.block b).refs, ¬ IsLeaderBlock U k j) ∧
-        (U.block b).creator = v := by
-  simp only [blames, mem_creatorsOf, Finset.mem_filter, mem_blocksAt]
-  tauto
-
 /-- Membership in a certificate set, unfolded. -/
 theorem mem_certificates {C L : BlockId} {r : ℕ} :
     C ∈ certificates U L r ↔
@@ -83,11 +59,11 @@ Byzantine: its unique voting block would have to both reference a
 candidate and reference none. -/
 theorem byzantine_of_votes_and_blames [S : Slots Replica] {k : ℕ}
     {L : BlockId} {v : Replica} (hL : IsLeaderBlock U k L)
-    (hs : v ∈ supporters U L (votingRound Replica k)) (hb : v ∈ blames U k) :
+    (hs : v ∈ supporters U L (votingRound Replica k)) (hb : v ∈ slotBlames U k) :
     v ∈ F.byzantine := by
   by_contra hv
   obtain ⟨b₁, hb₁, hr₁, hv₁, hc₁⟩ := mem_supporters.mp hs
-  obtain ⟨b₂, hb₂, hr₂, hnovote, hc₂⟩ := mem_blames.mp hb
+  obtain ⟨b₂, hb₂, hr₂, hnovote, hc₂⟩ := mem_slotBlames.mp hb
   have hnb : (U.block b₁).creator ∈ (NonByzantine : Finset Replica) := by
     rw [mem_nonByzantine, hc₁]; exact hv
   have hbeq : b₁ = b₂ :=

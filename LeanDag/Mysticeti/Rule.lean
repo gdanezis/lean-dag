@@ -163,8 +163,8 @@ theorem exists_certificate_reaches_of_directCommit {L : BlockId} {r : ℕ}
       fun _ hv => Finset.mem_of_mem_inter_right hv
     have hcard : F.f + 1 ≤ T.card := card_inter_correct_of_quorum h
     obtain ⟨C, hC_mem, hC_cert⟩ :=
-      exists_mem_refs_of_correct_support_of_card
-        (P := fun q => q ∈ certificates U L r) hT hTc hcard hc' (by omega)
+      exists_mem_refs_of_honest_support_of_card
+        (Q := fun q => q ∈ certificates U L r) hT hTc (lt_card_add_quorumCard hcard) hc' (by omega)
     exact ⟨C, hC_cert, Reaches.single hC_mem⟩
   exact reaches_pred_of_round_le hbase hc hcr
 
@@ -350,25 +350,10 @@ theorem directSkip_of_directSkipIn {V : View Validator BlockId Payload U}
 
 /-! ### The slot-level skip
 
-A blame is the **absence of any candidate** from a voting-round block's
-references, as the reference implementation's `enough_leader_blame` has
-it, and not the absence of one named candidate.
-
-The distinction is invisible inside a fixed universe and decisive
-across universes. A premise quantified over the candidates a universe
-*holds* is discharged vacuously by a slot holding none, so a validator
-that has seen nothing could settle the slot; a later block then supplies
-a candidate, another validator commits it, and the two verdicts stand in
-different universes where no uniqueness theorem compares them. The
-count below is required whatever the slot holds, so the blockers are
-blocks that exist, and a candidate arriving afterwards is referenced by
-none of them. That is what makes a skip final, which is the whole
-purpose of a skip rule. -/
-
-/-- The round-`(r+1)` blocks that reference **no candidate** of slot `k`. -/
-def slotBlamers (U : BlockUniverse Validator BlockId Payload) (k : ℕ) : Finset BlockId :=
-  (blocksAt U (S.slotRound k + 1)).filter
-    (fun q => ∀ j ∈ (U.block q).refs, ¬ IsLeaderBlock U k j)
+A blame is the absence of **any candidate** from a voting-round block's
+references (`slotBlamers`, at `Common/Leader.lean`, which also says why
+the slot and not one named candidate), as the reference implementation's
+`enough_leader_blame` has it. -/
 
 /-- **The slot is directly skipped, as judged from a view**: a quorum of
 distinct validators holds a voting-round block, in view, that references
@@ -379,32 +364,24 @@ implies (`directSkipIn_of_directSkipSlotIn`) and which a slot with no
 candidate satisfies for nothing. -/
 def DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (k : ℕ) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (slotBlamers U k ∩ V.ids)).card
+  quorumCard Validator ≤ (slotBlamesIn U V k).card
 
 instance decidableDirectSkipSlotIn (V : View Validator BlockId Payload U) (k : ℕ) :
     Decidable (DirectSkipSlotIn U V k) :=
-  inferInstanceAs (Decidable (quorumCard Validator ≤
-    (creatorsOf U.block (slotBlamers U k ∩ V.ids)).card))
+  inferInstanceAs (Decidable (quorumCard Validator ≤ (slotBlamesIn U V k).card))
 
 /-- **The slot-level skip implies the per-candidate one**, so every
 theorem stated over `DirectSkipIn` — M1 and M3 in particular — applies
-to it unchanged. A block referencing no candidate references not `L`. -/
+to it unchanged. -/
 theorem directSkipIn_of_directSkipSlotIn {V : View Validator BlockId Payload U} {k : ℕ}
     (h : DirectSkipSlotIn U V k) {L : BlockId} (hL : IsLeaderBlock U k L) :
-    DirectSkipIn U V L (S.slotRound k) := by
-  refine le_trans h (Finset.card_le_card (Finset.image_subset_image ?_))
-  intro q hq
-  rw [Finset.mem_inter] at hq
-  rw [Finset.mem_inter, Finset.mem_filter]
-  obtain ⟨hq1, hq2⟩ := hq
-  rw [slotBlamers, Finset.mem_filter] at hq1
-  exact ⟨⟨hq1.1, fun hmem => hq1.2 L hmem hL⟩, hq2⟩
+    DirectSkipIn U V L (S.slotRound k) :=
+  le_trans h (Finset.card_le_card (slotBlamesIn_subset_blamesIn hL))
 
 /-- A larger view only sees more blamers. -/
 theorem directSkipSlotIn_mono {V V' : View Validator BlockId Payload U} {k : ℕ}
     (hsub : V.ids ⊆ V'.ids) (h : DirectSkipSlotIn U V k) : DirectSkipSlotIn U V' k :=
-  le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
+  le_trans h (Finset.card_le_card (slotBlamesIn_mono hsub))
 
 /-- **A slot with no candidate is blamed by every voting-round block**, so
 the skip reduces to a quorum being present at that round. This is the
@@ -414,11 +391,8 @@ theorem directSkipSlotIn_of_no_candidate {V : View Validator BlockId Payload U} 
     (hq : quorumCard Validator ≤
       (creatorsOf U.block (blocksAt U (S.slotRound k + 1) ∩ V.ids)).card) :
     DirectSkipSlotIn U V k := by
-  refine le_trans hq (Finset.card_le_card (Finset.image_subset_image ?_))
-  intro q hqm
-  rw [Finset.mem_inter] at hqm
-  rw [Finset.mem_inter, slotBlamers, Finset.mem_filter]
-  exact ⟨⟨hqm.1, fun j _ => hnone j⟩, hqm.2⟩
+  unfold DirectSkipSlotIn slotBlamesIn
+  rwa [slotBlamers_of_no_candidate hnone]
 
 /-! ### The decision relation
 
@@ -540,26 +514,12 @@ omit S in
 /-- **The slot-level skip reads the schedule only at its own slot**, so
 two schedules naming the same round and the same leader there agree on
 whether the slot is skipped. -/
-theorem slotBlamers_congr {S₁ S₂ : Slots Validator} {k : ℕ}
-    (hround : S₁.slotRound k = S₂.slotRound k) (hk : S₁.leader k = S₂.leader k) :
-    slotBlamers (S := S₁) U k = slotBlamers (S := S₂) U k := by
-  ext q
-  simp only [slotBlamers, Finset.mem_filter, mem_blocksAt, hround]
-  constructor
-  · rintro ⟨hqb, hqn⟩
-    exact ⟨hqb, fun j hj hjL => hqn j hj (isLeaderBlock_congr hround.symm hk.symm hjL)⟩
-  · rintro ⟨hqb, hqn⟩
-    exact ⟨hqb, fun j hj hjL => hqn j hj (isLeaderBlock_congr hround hk hjL)⟩
-
-omit S in
-/-- The count that reads it is therefore the same count. -/
 theorem directSkipSlotIn_congr {S₁ S₂ : Slots Validator}
     {V : View Validator BlockId Payload U} {k : ℕ}
     (hround : S₁.slotRound k = S₂.slotRound k) (hk : S₁.leader k = S₂.leader k)
     (h : DirectSkipSlotIn (S := S₁) U V k) : DirectSkipSlotIn (S := S₂) U V k := by
   unfold DirectSkipSlotIn at h ⊢
-  rwa [slotBlamers_congr hround hk] at h
-
+  rwa [slotBlamesIn_congr hround hk] at h
 
 /-! ## Stage C3 — agreement
 

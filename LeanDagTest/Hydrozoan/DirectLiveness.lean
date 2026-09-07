@@ -10,7 +10,7 @@ Two configurations, one per claim:
   leader is replica 2 — correct — with candidate id 0): all five
   round-2 blocks certify, the slot slow-commits and is Decided at the
   eventual view — while the fast path **cannot** fire there (five
-  LeanDag.Hydrozoan.supporters < q_fast = 6; actual faults 2 > p = 1). The slow path
+  supporters < q_fast = 6; actual faults 2 > p = 1). The slow path
   fires exactly where the fast path is out of reach: the design story
   in one pair of examples.
 * **Fast path, on a fresh low-fault configuration** `Fin 4` with
@@ -38,7 +38,7 @@ example : LeanDag.Hydrozoan.certificates U6 0 0 = {10, 11, 12, 13, 14} := by dec
 example : SlowCommit U6 0 0 := by decide
 
 -- The fast path is out of reach: only the five correct replicas voted.
-example : LeanDag.Hydrozoan.supporters U6 0 1 = {2, 3, 4, 5, 6} := by decide
+example : supporters U6 0 1 = {2, 3, 4, 5, 6} := by decide
 example : ¬ FastCommit U6 0 0 := by decide
 
 -- The harvest form: Decided at the eventual view, via the slow route.
@@ -127,7 +127,7 @@ theorem u7_synchronised : LeanDag.Hydrozoan.Synchronised U7 0 := by
 -- The fast path fires at exact quorum: all three correct replicas vote
 -- for the correct leader's block.
 example : IsLeaderBlock U7 0 0 := by decide
-example : LeanDag.Hydrozoan.supporters U7 0 1 = {0, 2, 3} := by decide
+example : supporters U7 0 1 = {0, 2, 3} := by decide
 example : FastCommit U7 0 0 := by decide
 
 -- End-to-end: fastLatency applied with every hypothesis discharged
@@ -148,11 +148,11 @@ example : Decided U7 (View.full U7) 1 none :=
 
 -- ## Direct skip at low faults: the other half of the opportunistic
 -- pair. Slot 1's leader is the crashed replica 1 — no candidate exists,
--- every round-2 block LeanDag.Hydrozoan.blames vacuously, and the three correct blamers
+-- every round-2 block slotBlames vacuously, and the three correct blamers
 -- meet q_fast exactly.
 example : Slots.leader (Validator := Fin 4) 1 = 1 := by decide
 example : ∀ L : Fin 9, ¬ IsLeaderBlock U7 1 L := by decide
-example : LeanDag.Hydrozoan.blames U7 1 = {0, 2, 3} := by decide
+example : slotBlames U7 1 = {0, 2, 3} := by decide
 example : SkippedLeader U7 1 := by decide
 
 -- End-to-end: skipLatency applied with every hypothesis discharged.

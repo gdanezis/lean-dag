@@ -146,41 +146,6 @@ theorem not_thickLink_band_novel
   simp only [creatorsOf, Finset.image_empty, Finset.card_empty, Nat.le_zero] at ht
   omega
 
-/-- **And the slot-level skip transports**, which is what the repair was
-for. Blockers stay blockers: a voting-round block referencing no
-candidate of the old slot references none of the new one either, since a
-candidate the band already had is a candidate at either end and a
-candidate it did not have is referenced by no old block. -/
-theorem directSkipSlotIn_band (h : AgreeBand (Hybrid.hybridAnchored Validator BlockId Payload k).toDagRule U U' lo hi g g')
-    {S S' : Slots Validator}
-    {V : View Validator BlockId Payload U} {V' : View Validator BlockId Payload U'}
-    {s s' : ℕ} (hkk : S.slotRound s + g = S'.slotRound s' + g')
-    (hlead : S.leader s = S'.leader s') (hlo : lo = S.slotRound s + g)
-    (hhi : S.slotRound s + 1 + g ≤ hi)
-    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g →
-      (U.block b).round + g ≤ hi → b ∈ V'.ids)
-    (hs : Hybrid.DirectSkipSlotIn (S := S) U V s) :
-    Hybrid.DirectSkipSlotIn (S := S') U' V' s' := by
-  unfold Hybrid.DirectSkipSlotIn at hs ⊢
-  refine le_trans hs (Finset.card_le_card ?_)
-  intro w hw
-  obtain ⟨q, hq, hvq⟩ := Finset.mem_image.mp hw
-  obtain ⟨hqf, hqV⟩ := Finset.mem_inter.mp hq
-  simp only [slotBlamers, Finset.mem_filter] at hqf
-  obtain ⟨hqA, hqn⟩ := hqf
-  have hqU : q ∈ U.ids := (mem_blocksAt.mp hqA).1
-  have hqr : (U.block q).round = S.slotRound s + 1 := (mem_blocksAt.mp hqA).2
-  refine Finset.mem_image.mpr ⟨q, ?_, ?_⟩
-  · simp only [Finset.mem_inter, slotBlamers, Finset.mem_filter]
-    refine ⟨⟨AnchoredRule.blocksAt_band h (by omega) (by omega) (by omega) hqA,
-      ?_⟩, hV q hqV (by omega) (by omega)⟩
-    rw [AnchoredRule.band_refs h hqU (by omega) (by omega)]
-    intro j hj hjL
-    have hjU : j ∈ U.ids := U.complete q hqU j hj
-    exact hqn j hj (AnchoredRule.isLeaderBlock_band_old h hkk hlead
-      (by omega) (by omega) hjU hjL)
-  · rw [(AnchoredRule.band_block h hqU (by omega) (by omega)).2]; exact hvq
-
 end Band
 
 /-- **What Hybrid owes the band**, at a positive threshold: its direct
@@ -193,8 +158,8 @@ theorem hybridBandLaws {kt : ℕ} (hpos : 0 < kt) :
     directCommitIn_band h hkk (by omega)
       (by simp only [Hybrid.hybridAnchored_wave] at hhi; omega) hV hc
   skip_band := fun h hkk hlk hlo hhi hV hs =>
-    directSkipSlotIn_band h hkk hlk hlo
-      (by simp only [Hybrid.hybridAnchored_wave] at hhi; omega) hV hs
+    le_trans hs (Finset.card_le_card (AnchoredRule.slotBlamesIn_band h hkk hlk hlo
+      (by simp only [Hybrid.hybridAnchored_wave] at hhi; omega) hV))
   link_band := fun h hA hAlo hAhi hkk _ hlo hhi _ _ =>
     thickLink_band h hA hAlo hAhi hkk hlo
       (by simp only [Hybrid.hybridAnchored_wave] at hhi; omega)

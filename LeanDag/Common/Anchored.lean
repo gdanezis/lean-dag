@@ -1,5 +1,5 @@
 import LeanDag.Common.Ledger
-import LeanDag.Common.Slots
+import LeanDag.Common.Leader
 /-!
 # The anchored decision relation
 
@@ -32,50 +32,6 @@ namespace LeanDag
 
 variable {Validator : Type*} {BlockId : Type*} {Payload : Type*}
 variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
-
-/-! ## Candidates -/
-
-section Candidates
-
-variable [S : Slots Validator]
-
-/-- `L` is a candidate block for slot `k`: the right round, the right author.
-A correct leader has at most one such block; a Byzantine one may have
-several, which is why the rules quantify over candidates rather than
-selecting one. -/
-@[reducible]
-def IsLeaderBlock (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) (L : BlockId) :
-    Prop :=
-  L ∈ U.ids ∧ (U.block L).round = S.slotRound k ∧ (U.block L).creator = S.leader k
-
-variable {U : BlockRecord Validator BlockId Payload P honest}
-
-omit S in
-/-- Decidable, so concrete models can settle it by `decide`. The
-schedule is a plain implicit, found by unification, so the instance
-applies at any schedule a statement names and not only the ambient
-one. -/
-instance decidableIsLeaderBlock [DecidableEq Validator] [DecidableEq BlockId]
-    {S : Slots Validator} (k : ℕ) (L : BlockId) : Decidable (IsLeaderBlock (S := S) U k L) :=
-  inferInstanceAs (Decidable (L ∈ U.ids ∧ (U.block L).round = S.slotRound k ∧
-    (U.block L).creator = S.leader k))
-
-/-- **A block is the candidate of at most one slot** — what `Slots.keyed`
-yields: two slots sharing a round are told apart by their leaders. -/
-theorem slot_eq_of_isLeaderBlock {k₁ k₂ : ℕ} {L : BlockId}
-    (h₁ : IsLeaderBlock U k₁ L) (h₂ : IsLeaderBlock U k₂ L) : k₁ = k₂ :=
-  S.keyed (by simp only [← h₁.2.1, ← h₂.2.1, ← h₁.2.2, ← h₂.2.2])
-
-omit S in
-/-- Only the leader clause of `IsLeaderBlock` consults the schedule's
-leaders, at the slot itself. -/
-theorem isLeaderBlock_congr {S₁ S₂ : Slots Validator} {k : ℕ} {L : BlockId}
-    (hround : S₁.slotRound k = S₂.slotRound k) (hk : S₁.leader k = S₂.leader k)
-    (h : IsLeaderBlock (S := S₁) U k L) : IsLeaderBlock (S := S₂) U k L := by
-  obtain ⟨h1, h2, h3⟩ := h
-  exact ⟨h1, by rw [← hround]; exact h2, by rw [← hk]; exact h3⟩
-
-end Candidates
 
 /-! ## Eligibility, at a wave
 
