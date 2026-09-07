@@ -34,7 +34,7 @@ open LeanDag.Hydrozoan
 
 namespace EventualDecision
 
-open LeanDag.Hydrozoan.EventualDecision (FairRunOn RunsRecur)
+open LeanDag.Hydrozoan.EventualDecision (RunsRecur)
 
 variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [O : OptimalFaults Replica] [S : Slots Replica]

@@ -4498,6 +4498,38 @@ files, no restatement of an argument the report makes. This pass applies
 it to what the common-layer branch added, in `Common/`, `Adaptive/` and
 `Barnacle/`: 546 comment lines become 222, with no statement changed.
 
+### 11.38 Liveness once
+
+Step 6 of `docs/common-layer.md`. The liveness chain of each rule ended
+in the same two moves, written by hand five times: place a run past the
+target and the synchrony round (`S.unbounded`, `max`, monotonicity),
+then turn `c` `T`-led slots into `c` commits by
+`Nat.add_sub_cancel'` and hand them to `decided_below_of_committed_run`.
+The first is `Slots.exists_run_past` at the one `FairRunOn`, now in
+`Common/Slots.lean`; the core's and Hydrozoan's copies are gone, and
+`Timed.decidedBelow_of_fairRun` and `Support.decidedBelow_of_fairRun`
+take it by name. The second is `AnchoredRule.decided_below_of_run`
+(`Common/Anchored/Bounded.lean`): a run whose leaders satisfy a
+predicate, each slot committing when its leader does, decides every
+slot below. Hybrid, Hydrozoan, Optimal-Hydrozoan and Mahi-Mahi are on
+it; the core, Odontoceti and Nemo were already on the timed chain.
+
+Hydrozoan's `AnchoredTotality` and `DecidedBelowRun`, and Optimal's
+twins, are one pair of statements over any anchored rule,
+`AnchoredRule.Total` and `AnchoredRule.DecidedBelowRun`
+(`Common/Anchored.lean`), proved once from a choice at every nonempty
+rung (`total_of_least`, `decidedBelowRun_of_least`); HZ6 and OH6 are
+those at `exists_least`.
+
+**What did not move.** Hybrid's chain stays at the anchored rule rather
+than at its support: `hybridRule` is the carrier under `HonestNoEquiv`,
+and the timed chain at that carrier would put the invariant on a
+liveness theorem that does not need it. The four `decided_of_leader_mem`
+theorems stay as the rules' numbered results.
+
+**Measure.** The step removes 194 lines of Lean and adds 131; the
+library and tests stand at 76,027 lines.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

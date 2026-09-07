@@ -139,25 +139,15 @@ theorem all_decided_below_of_fairRun {c : ℕ} (hc : 0 < c)
         (∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) → SynchronisedOn U T R →
         S.slotRound (b + c - 1) + 1 ≤ N → V.CoversUpto N →
         ∀ i, i < b → ∃ v, Decided k U V i v := by
-  obtain ⟨k₀, hk₀⟩ := S.unbounded R
-  obtain ⟨b, hb, hrunT⟩ := fair (max s k₀)
-  have hRb : R ≤ S.slotRound b :=
-    le_trans hk₀ (S.mono (le_trans (le_max_right s k₀) hb))
-  refine ⟨b, le_trans (le_max_left _ _) hb, hRb, ?_⟩
-  intro U N V hpop hs hN hcov
-  have hrun : ∀ j, b ≤ j → j ≤ b + c - 1 →
-      ∃ B, Decided k U V j (some B) := by
-    intro j hj1 hj2
-    have hlead : S.leader j ∈ T := by
-      have := hrunT (j - b) (by omega)
-      rwa [Nat.add_sub_cancel' hj1] at this
-    have hRj : R ≤ S.slotRound j := le_trans hRb (S.mono hj1)
-    have hjr : S.slotRound j ≤ S.slotRound (b + c - 1) := S.mono (by omega)
-    obtain ⟨L, _, hdec⟩ :=
-      decided_of_leader_of_populated hT hcard hs hRj hpop (by omega) V hcov hlead
-    exact ⟨L, hdec⟩
-  exact AnchoredRule.decided_below_of_committed_run (fun hi h => exists_least hi h) (by omega)
-    (fun i hi => hspan b i hi) hrun
+  obtain ⟨b, hb, hRb, hlead⟩ := S.exists_run_past fair s R
+  refine ⟨b, hb, hRb, fun U N V hpop hs hN hcov => ?_⟩
+  refine AnchoredRule.decided_below_of_run (fun hi h => exists_least hi h) hc hspan
+    (Led := fun j => S.leader j ∈ T) hlead ?_
+  intro j hj1 hj2 hleadj
+  have hjr : S.slotRound j ≤ S.slotRound (b + c - 1) := S.mono (by omega)
+  obtain ⟨L, _, hdec⟩ := decided_of_leader_of_populated hT hcard hs (le_trans hRb (S.mono hj1))
+    hpop (by omega) V hcov hleadj
+  exact ⟨L, hdec⟩
 
 /-- **H7 at `T := Correct`** — the whole fully-correct class, which the
 tight committee requires exactly. -/

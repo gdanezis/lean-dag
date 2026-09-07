@@ -228,7 +228,7 @@ example : ∀ i, i < 2 → ∃ v, DecidedOpt OS' (View.full US') i v :=
 
 -- A fairness negative: consecutive slots never share a leader, so a
 -- singleton T is starved at c = 2 — FairRunOn is not trivially true.
-example : ¬ Hydrozoan.EventualDecision.FairRunOn (Fin 4) {0} 2 := fun h => by
+example : ¬ FairRunOn ({0} : Finset (Fin 4)) 2 := fun h => by
   obtain ⟨k', -, hl⟩ := h 0
   have h0 : ((k' + 0 + 3) % 4 : ℕ) = 0 :=
     congrArg Fin.val (Finset.mem_singleton.mp (hl 0 (by omega)))
@@ -240,7 +240,7 @@ example : ¬ Hydrozoan.EventualDecision.FairRunOn (Fin 4) {0} 2 := fun h => by
 `c = 3`: a run starts at every `4m + 2` (leaders `1`, `2`, `3`). Proved
 from the definition — finite enumeration cannot reach a ∀-over-ℕ claim. -/
 theorem fairRun_fourOpt :
-    Hydrozoan.EventualDecision.FairRunOn (Fin 4) ({1, 2, 3} : Finset (Fin 4)) 3 := by
+    FairRunOn ({1, 2, 3} : Finset (Fin 4)) 3 := by
   intro k
   refine ⟨4 * k + 2, by omega, fun i hi => ?_⟩
   have hmem : ∀ m : Fin 4, m ≠ 0 → m ∈ ({1, 2, 3} : Finset (Fin 4)) := by decide

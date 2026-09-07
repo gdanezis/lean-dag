@@ -50,7 +50,7 @@ fault count — the pigeonhole finding recorded on `FairRunOn` — which
 is exactly why the wave-aligned schedule is the canonical witness.) -/
 def WaveRobinFair : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) [Faults (Fin n)],
-    EventualDecision.FairRunOn (Fin n) (S := waveRobin n hn)
+    FairRunOn (S := waveRobin n hn)
       (Correct : Finset (Fin n)) 3            -- correct 3-runs recur.
 
 /-- **The liveness hypothesis package is realizable at every horizon.** For

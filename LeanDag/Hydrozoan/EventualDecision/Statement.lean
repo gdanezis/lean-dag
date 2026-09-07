@@ -36,25 +36,13 @@ section Schedule
 
 variable (Replica : Type*) [S : Slots Replica]
 
-/-- Fair leader election, in the only form liveness needs: the schedule
-places `c` consecutive `T`-led slots arbitrarily far out (`k` is
-universal, so such runs recur forever). A round-robin schedule satisfies
-this exactly when its rotation contains `c` consecutive `T`-members —
-always true for `c = 3` at the classical bound `n = 3f + 1`, but NOT
-guaranteed at the hybrid bound (many crashed replicas can be spaced so
-no three correct ones are adjacent) — which is why fairness is a stated
-hypothesis on the schedule rather than a theorem about it. Which leader
-schedules provide it is a separate concern, outside this development. -/
-def FairRunOn (T : Finset Replica) (c : ℕ) : Prop :=
-  ∀ k, ∃ k', k ≤ k' ∧ ∀ i, i < c → S.leader (k' + i) ∈ T
-
 /-- **Fairness places a run wherever needed**: past any slot `k` and any
 round `R`, some run of `c` consecutive `T`-led slots begins. Pure
 schedule arithmetic — no universe appears; feeding the produced location
 to `RunDecidesBelow` is the liveness composition. -/
 def RunsRecur : Prop :=
   ∀ (T : Finset Replica) (c k R : ℕ),
-    FairRunOn Replica T c →              -- given a fair schedule:
+    FairRunOn T c →                      -- given a fair schedule:
     ∃ b, k ≤ b ∧                         -- a run location past k ...
       R ≤ S.slotRound b ∧                -- ... at or after round R ...
       ∀ i, i < c → S.leader (b + i) ∈ T  -- ... with every slot T-led.

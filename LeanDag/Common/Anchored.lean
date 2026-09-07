@@ -234,6 +234,21 @@ theorem Decided.indirectSkip_single {U : BlockRecord Validator BlockId Payload P
     have : i = 0 := by omega
     subst this; exact hnone L hL)
 
+/-- **The indirect rule is total**: a nearest eligible committed anchor
+gives the slot a verdict. -/
+def Total (U : BlockRecord Validator BlockId Payload P honest) : Prop :=
+  ∀ (V : U.View) (k j : ℕ) (A : BlockId), R.Eligible (S := S) k j →
+    R.Decided (S := S) U V j (some A) →
+    (∀ i, k < i → i < j → R.Eligible (S := S) k i → R.Decided (S := S) U V i none) →
+    ∃ v, R.Decided (S := S) U V k v
+
+/-- **A committed run decides everything below it**: `c` committed slots
+from `b`, spanning eligibility, give every slot below `b` a verdict. -/
+def DecidedBelowRun (U : BlockRecord Validator BlockId Payload P honest) : Prop :=
+  ∀ (V : U.View) (b c : ℕ), 0 < c → R.SpansEligible (S := S) c →
+    (∀ j, b ≤ j → j ≤ b + c - 1 → ∃ B, R.Decided (S := S) U V j (some B)) →
+    ∀ i, i < b → ∃ v, R.Decided (S := S) U V i v
+
 /-! ## What a rule owes -/
 
 omit S in

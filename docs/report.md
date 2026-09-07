@@ -9179,41 +9179,37 @@ the run's end anchors everything below — the relation's `SpansEligible`,
 which the pipelined schedule satisfies exactly at *c* ≥ 3 — decide every
 slot below the run. One committed slot does not suffice, since the slots
 just below it cannot use it as an anchor; a three-round run does. Both
-are the relation's theorems, `exists_decided_of_anchor` and
-`decided_below_of_committed_run`, at the graded rule's rung choices
-(`exists_least`: any certified candidate at the first rung, the least
-weak-linked one at the second).
+are the relation's own statements, `AnchoredRule.Total` and
+`AnchoredRule.DecidedBelowRun`, proved once from a choice at every
+nonempty rung (`total_of_least`, `decidedBelowRun_of_least`), which
+for the graded rule is `exists_least`: any certified candidate at the
+first rung, the least weak-linked one at the second.
 
 ```lean
-def AnchoredTotality (U : BlockUniverse Replica BlockId) : Prop :=
-  ∀ (V : View U) (k j : ℕ) (A : BlockId),
-    (hydrozoanAnchored Replica BlockId).Eligible k j →  -- j sits ≥ 3 rounds past k,
-    Decided U V j (some A) →             -- slot j committed A,
-    (∀ i, k < i → i < j →                -- and j is the NEAREST such slot:
-      (hydrozoanAnchored Replica BlockId).Eligible k i →  -- every eligible slot in between
-      Decided U V i none) →              -- skipped;
-    ∃ v, Decided U V k v                 -- then slot k has a verdict.
-def DecidedBelowRun (U : BlockUniverse Replica BlockId) : Prop :=
-  ∀ (V : View U) (b c : ℕ),
-    0 < c →                              -- a nonempty run
-    (hydrozoanAnchored Replica BlockId).SpansEligible c →  -- long enough to anchor below it,
-    (∀ j, b ≤ j → j ≤ b + c - 1 →        -- of committed slots b … b+c−1:
-      ∃ B, Decided U V j (some B)) →
-    ∀ i, i < b → ∃ v, Decided U V i v    -- then every slot below is decided.
+def Total (U : BlockRecord Validator BlockId Payload P honest) : Prop :=
+  ∀ (V : U.View) (k j : ℕ) (A : BlockId), R.Eligible (S := S) k j →
+    R.Decided (S := S) U V j (some A) →
+    (∀ i, k < i → i < j → R.Eligible (S := S) k i → R.Decided (S := S) U V i none) →
+    ∃ v, R.Decided (S := S) U V k v
+def DecidedBelowRun (U : BlockRecord Validator BlockId Payload P honest) : Prop :=
+  ∀ (V : U.View) (b c : ℕ), 0 < c → R.SpansEligible (S := S) c →
+    (∀ j, b ≤ j → j ≤ b + c - 1 → ∃ B, R.Decided (S := S) U V j (some B)) →
+    ∀ i, i < b → ∃ v, R.Decided (S := S) U V i v
 ```
 
 **HZ7.** The composition. A synchronised quorum whose members lead the
 *c* slots of a run and fill every round of the run's span decides every
 slot below it, and fairness — the schedule places *c* consecutive
-*T*-led slots past any point — places such a run past any slot and any
-round:
+*T*-led slots past any point (`FairRunOn`, the one definition every
+rule reads) — places such a run past any slot and any round
+(`Slots.exists_run_past`):
 
 ```lean
-def FairRunOn (T : Finset Replica) (c : ℕ) : Prop :=
+def FairRunOn [S : Slots Validator] (T : Finset Validator) (c : ℕ) : Prop :=
   ∀ k, ∃ k', k ≤ k' ∧ ∀ i, i < c → S.leader (k' + i) ∈ T
 def RunsRecur : Prop :=
   ∀ (T : Finset Replica) (c k R : ℕ),
-    FairRunOn Replica T c →              -- given a fair schedule:
+    FairRunOn T c →                      -- given a fair schedule:
     ∃ b, k ≤ b ∧                         -- a run location past k ...
       R ≤ S.slotRound b ∧                -- ... at or after round R ...
       ∀ i, i < c → S.leader (b + i) ∈ T  -- ... with every slot T-led.
@@ -9261,7 +9257,7 @@ def waveRobin (n : ℕ) (hn : 0 < n) : Slots (Fin n) where
   keyed := fun _ _ h => congrArg Prod.fst h
 def WaveRobinFair : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) [Faults (Fin n)],
-    EventualDecision.FairRunOn (Fin n) (S := waveRobin n hn)
+    FairRunOn (S := waveRobin n hn)
       (Correct : Finset (Fin n)) 3            -- correct 3-runs recur.
 ```
 
@@ -10958,7 +10954,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 345 definitions and structures the report names, in
+The 344 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -11628,23 +11624,6 @@ def FairToEach (T : Finset Validator) : Prop :=
 ```
 
 **Every member of `T` leads arbitrarily far out** — per-validator fairness, strictly stronger than `FairScheduleOn`, which promises only *some* `T`-leader. Round-robin supplies it (`rrSlots_fairToEach`), and the rotation-inclusion result of report §11.5 is what consumes it: a straggler's block enters the ledger when its *own author* leads, so the schedule must return to that author in particular.
-
-#### `FairRunOn`
-
-*def, `Mysticeti.Liveness.lean`*
-
-```lean
-def FairRunOn (T : Finset Validator) (c : ℕ) : Prop :=
-  ∀ k, ∃ k', k ≤ k' ∧ ∀ i, i < c → S.leader (k' + i) ∈ T
-```
-
-**The schedule puts `c` consecutive `T`-led slots arbitrarily far out.**
-
-Stronger than `FairScheduleOn`, which promises one `T`-led slot and no more, and it is what P7′ needs: `decided_below_of_committed_run` is fed a *run* of commits, and L4 turns a run of `T`-led slots into one.
-
-Round-robin over `3f+1` satisfies it with `c = 3` for every `f ≥ 1`, whatever the `f` Byzantine validators are and wherever they sit in the rotation. The `f` of them cut the cycle into at most `f` arcs holding `2f+1` correct slots between them, so some arc has at least `⌈(2f+1)/f⌉ = 3` — the ceiling being `3` for all `f ≥ 1` since `(2f+1)/f = 2 + 1/f`. Three is exactly what pipelining asks for, which is a pleasant coincidence rather than a designed one.
-
-Like `FairScheduleOn` this is an assumption about the schedule, not a theorem: `Slots.leader` is arbitrary and could name Byzantine validators for ever.
 
 ### Time: GST, and the rated bounds
 
@@ -14707,17 +14686,6 @@ def FastLatency (U : BlockUniverse Replica BlockId) : Prop :=
 
 **Performance, not liveness — deliberately outside `Statement`.** When the *actual* faults fit the fast allowance `p`, a synchronised, populated wave with a correct leader fires the fast path in two rounds: `|Correct| = n − |byzantine ∪ crashed| ≥ n − p = q_fast`. The protocol's two-round latency claim; it needs all of `Correct` — a quorum-sized `T` does not suffice in general (only when `f + c ≤ p` does the quorum reach `q_fast`, as in the low-fault witness) — and only the propose and voting rounds.
 
-#### `FairRunOn`
-
-*def, `Hydrozoan.EventualDecision.Statement.lean`*
-
-```lean
-def FairRunOn (T : Finset Replica) (c : ℕ) : Prop :=
-  ∀ k, ∃ k', k ≤ k' ∧ ∀ i, i < c → S.leader (k' + i) ∈ T
-```
-
-Fair leader election, in the only form liveness needs: the schedule places `c` consecutive `T`-led slots arbitrarily far out (`k` is universal, so such runs recur forever). A round-robin schedule satisfies this exactly when its rotation contains `c` consecutive `T`-members — always true for `c = 3` at the classical bound `n = 3f + 1`, but NOT guaranteed at the hybrid bound (many crashed replicas can be spaced so no three correct ones are adjacent) — which is why fairness is a stated hypothesis on the schedule rather than a theorem about it. Which leader schedules provide it is a separate concern, outside this development.
-
 #### `RunsRecur`
 
 *def, `Hydrozoan.EventualDecision.Statement.lean`*
@@ -14725,7 +14693,7 @@ Fair leader election, in the only form liveness needs: the schedule places `c` c
 ```lean
 def RunsRecur : Prop :=
   ∀ (T : Finset Replica) (c k R : ℕ),
-    FairRunOn Replica T c →              -- given a fair schedule:
+    FairRunOn T c →                      -- given a fair schedule:
     ∃ b, k ≤ b ∧                         -- a run location past k ...
       R ≤ S.slotRound b ∧                -- ... at or after round R ...
       ∀ i, i < c → S.leader (b + i) ∈ T  -- ... with every slot T-led.
@@ -14764,7 +14732,7 @@ def RunDecidesBelow (U : BlockUniverse Replica BlockId) : Prop :=
 ```lean
 def WaveRobinFair : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) [Faults (Fin n)],
-    EventualDecision.FairRunOn (Fin n) (S := waveRobin n hn)
+    FairRunOn (S := waveRobin n hn)
       (Correct : Finset (Fin n)) 3            -- correct 3-runs recur.
 ```
 
@@ -16223,6 +16191,17 @@ Slots need **not** be three rounds apart. Under pipelining consecutive slots are
 
 `keyed` says distinct slots differ in round or in leader. It too held under three-round spacing, which makes `slotRound` injective outright. Under multiple leaders it is a real condition on the schedule: the proposers of a round must be distinct validators. Without it one block would be the candidate for two slots, and the ledger would deliver it twice.
 
+#### `FairRunOn`
+
+*def, `Common.Slots.lean`*
+
+```lean
+def FairRunOn {Validator : Type*} [S : Slots Validator] (T : Finset Validator) (c : ℕ) : Prop :=
+  ∀ k, ∃ k', k ≤ k' ∧ ∀ i, i < c → S.leader (k' + i) ∈ T
+```
+
+**A fair schedule offers runs**: past any slot, `c` consecutive `T`-led slots. An assumption about the schedule, not a theorem: `leader` may name faulty validators for ever.
+
 #### `uniform`
 
 *def, `Common.Slots.lean`*
@@ -16990,7 +16969,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 512 theorems the body or Appendix A names, each
+The 513 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -21747,7 +21726,7 @@ theorem ledgerProgress :
     ∀ (T : Finset Replica) (R k c : ℕ),
       T ⊆ (Correct : Finset Replica) → q Replica ≤ T.card →
       0 < c → (hydrozoanAnchored Replica BlockId).SpansEligible c →
-      FairRunOn Replica T c →
+      FairRunOn T c →
       ∃ b, k ≤ b ∧ R ≤ S.slotRound b ∧
         ∀ (U : BlockUniverse Replica BlockId),
           SynchronisedOn U T R →
@@ -21885,7 +21864,7 @@ theorem ledgerProgress :
     ∀ (T : Finset Replica) (R k c : ℕ),
       T ⊆ (LeanDag.Hydrozoan.Correct : Finset Replica) → q Replica ≤ T.card →
       0 < c → (optimalAnchored Replica BlockId).SpansEligible c →
-      FairRunOn Replica T c →
+      FairRunOn T c →
       ∃ b, k ≤ b ∧ R ≤ S.slotRound b ∧
         ∀ (U : OptUniverse Replica BlockId),
           SynchronisedOn U.toBlockRecord T R →
@@ -22022,7 +22001,7 @@ theorem ledgerProgress :
     ∀ (T : Finset Replica) (R k c : ℕ),
       T ⊆ (LeanDag.Hydrozoan.Correct : Finset Replica) → q Replica ≤ T.card →
       0 < c → (optimalAnchored Replica BlockId).SpansEligible c →
-      FairRunOn Replica T c →
+      FairRunOn T c →
       ∃ b, k ≤ b ∧ R ≤ S.slotRound b ∧
         ∀ (U : OptUniverse Replica BlockId),
           SynchronisedOn U.toBlockRecord T R →
@@ -22403,24 +22382,6 @@ theorem decidedWithin_congr_of_slotRound (hl : R.Laws I) {S₁ S₂ : Slots Vali
 
 **The bounded relation moves with the schedule**, for any two schedules naming the same rounds and the same leaders below the bound: the candidate set reads the schedule only through `IsLeaderBlock`, the direct skip only at its slot, and the links not at all.
 
-#### `exists_decided_of_anchor`
-
-*theorem, `Common.Anchored.Bounded.lean`*
-
-```lean
-theorem exists_decided_of_anchor
-    (hleast : ∀ {A : BlockId} {i k : ℕ}, i < R.rungs →
-      (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
-      ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
-        R.Least (S := S) U A i k L)
-    {V : U.View} {k j : ℕ} {A : BlockId} (helig : R.Eligible (S := S) k j)
-    (hj : R.Decided (S := S) U V j (some A))
-    (hmid : ∀ m, k < m → m < j → R.Eligible (S := S) k m → R.Decided (S := S) U V m none) :
-    ∃ v, R.Decided (S := S) U V k v
-```
-
-**Under the nearest eligible committed anchor the slot is decided**: the first nonempty rung's choice commits, or every rung is empty and the slot skips.
-
 #### `decided_below_of_committed_run`
 
 *theorem, `Common.Anchored.Bounded.lean`*
@@ -22438,6 +22399,36 @@ theorem decided_below_of_committed_run
 ```
 
 **The descent, unbounded**: every derivation is bounded, so the run sits within one bound and the bounded descent applies.
+
+#### `total_of_least`
+
+*theorem, `Common.Anchored.Bounded.lean`*
+
+```lean
+theorem total_of_least
+    (hleast : ∀ {A : BlockId} {i k : ℕ}, i < R.rungs →
+      (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
+      ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
+        R.Least (S := S) U A i k L) :
+    R.Total (S := S) U
+```
+
+Totality, from a choice at every nonempty rung.
+
+#### `decidedBelowRun_of_least`
+
+*theorem, `Common.Anchored.Bounded.lean`*
+
+```lean
+theorem decidedBelowRun_of_least
+    (hleast : ∀ {A : BlockId} {i k : ℕ}, i < R.rungs →
+      (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
+      ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
+        R.Least (S := S) U A i k L) :
+    R.DecidedBelowRun (S := S) U
+```
+
+The descent below a committed run, from a choice at every nonempty rung.
 
 #### `eligibleAt_of_lt_of_spacing`
 

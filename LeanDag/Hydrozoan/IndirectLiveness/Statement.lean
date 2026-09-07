@@ -37,40 +37,14 @@ variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [LinearOrder BlockId] [F : LeanDag.Hydrozoan.Faults Replica]
   [S : Slots Replica]
 
-/-- **The graded rule is total.** The premises are verbatim the shared
-anchor prefix of the three indirect `Decided` constructors (minus
-`k < j`, which follows from eligibility): an eligible committed anchor
-whose eligible in-betweens all skipped. The conclusion: some rung fires
-— slot `k` gets a verdict, commit or skip. -/
-def AnchoredTotality (U : BlockUniverse Replica BlockId) : Prop :=
-  ∀ (V : View U) (k j : ℕ) (A : BlockId),
-    (hydrozoanAnchored Replica BlockId).Eligible k j →       -- j sits ≥ 3 rounds past k,
-    Decided U V j (some A) →             -- slot j committed A,
-    (∀ i, k < i → i < j →                -- and j is the NEAREST such slot:
-      (hydrozoanAnchored Replica BlockId).Eligible k i →     -- every eligible slot in between
-      Decided U V i none) →              -- skipped;
-    ∃ v, Decided U V k v                 -- then slot k has a verdict.
-
-/-- **A committed run decides everything below it.** `c` consecutive
-committed slots, under the `SpansEligible` runway, force a verdict on
-every earlier slot: each such slot anchors on its nearest eligible
-committed successor — the run's end if nothing nearer — and the ladder's
-totality does the rest. -/
-def DecidedBelowRun (U : BlockUniverse Replica BlockId) : Prop :=
-  ∀ (V : View U) (b c : ℕ),
-    0 < c →                              -- a nonempty run
-    (hydrozoanAnchored Replica BlockId).SpansEligible c →  -- long enough to anchor below it,
-    (∀ j, b ≤ j → j ≤ b + c - 1 →        -- of committed slots b … b+c−1:
-      ∃ B, Decided U V j (some B)) →
-    ∀ i, i < b → ∃ v, Decided U V i v    -- then every slot below is decided.
-
 /-- Indirect liveness, over every fault configuration, schedule,
 tie-break order, and block universe the model admits. -/
 def Statement : Prop :=
   ∀ (Replica BlockId : Type) [Fintype Replica] [DecidableEq Replica]
     [DecidableEq BlockId] [LinearOrder BlockId] [LeanDag.Hydrozoan.Faults Replica]
     [Slots Replica] (U : BlockUniverse Replica BlockId),
-    AnchoredTotality U ∧ DecidedBelowRun U
+    (hydrozoanAnchored Replica BlockId).Total U ∧
+      (hydrozoanAnchored Replica BlockId).DecidedBelowRun U
 
 end IndirectLiveness
 end Hydrozoan

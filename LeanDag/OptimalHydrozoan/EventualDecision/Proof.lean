@@ -20,7 +20,7 @@ open LeanDag.Hydrozoan
 
 namespace EventualDecision
 
-open LeanDag.Hydrozoan.EventualDecision (FairRunOn RunsRecur)
+open LeanDag.Hydrozoan.EventualDecision (RunsRecur)
 
 variable {Replica BlockId : Type} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [O : OptimalFaults Replica] [S : Slots Replica]
@@ -28,23 +28,18 @@ variable {Replica BlockId : Type} [Fintype Replica] [DecidableEq Replica]
 /-- The composition: direct liveness commits each run slot, and the
 indirect descent settles every slot below the run. -/
 theorem runDecidesBelow (U : OptUniverse Replica BlockId) : RunDecidesBelow U := by
-  intro T R b c hT hcard hsync hc hspan hRb hlead hpop V hcov i hi
-  have hrun : ∀ j, b ≤ j → j ≤ b + c - 1 →
-      ∃ B, DecidedOpt U V j (some B) := by
-    intro j h1 h2
-    have hleadj : S.leader j ∈ T := by
-      have := hlead (j - b) (by omega)
-      rwa [Nat.add_sub_cancel' h1] at this
-    have hRj : R ≤ S.slotRound j := le_trans hRb (S.mono h1)
-    have hbj : S.slotRound b ≤ S.slotRound j := S.mono h1
-    have hjn : S.slotRound j ≤ S.slotRound (b + c - 1) := S.mono h2
-    obtain ⟨L, -, -, hdec⟩ :=
-      (OptimalHydrozoan.DirectLiveness.holds Replica BlockId U).1 T R j hT hcard hsync hRj
-        (hpop _ hbj (by omega)) (hpop _ (by omega) (by omega))
-        (hpop _ (by omega) (by omega)) hleadj V (hcov.mono (by omega))
-    exact ⟨L, hdec⟩
-  exact AnchoredRule.decided_below_of_committed_run exists_least (by omega)
-    (fun i' hi' => hspan b i' hi') hrun i hi
+  intro T R b c hT hcard hsync hc hspan hRb hlead hpop V hcov
+  refine AnchoredRule.decided_below_of_run exists_least hc hspan (Led := fun j => S.leader j ∈ T)
+    hlead ?_
+  intro j h1 h2 hleadj
+  have hRj : R ≤ S.slotRound j := le_trans hRb (S.mono h1)
+  have hbj : S.slotRound b ≤ S.slotRound j := S.mono h1
+  have hjn : S.slotRound j ≤ S.slotRound (b + c - 1) := S.mono h2
+  obtain ⟨L, -, -, hdec⟩ :=
+    (OptimalHydrozoan.DirectLiveness.holds Replica BlockId U).1 T R j hT hcard hsync hRj
+      (hpop _ hbj (by omega)) (hpop _ (by omega) (by omega))
+      (hpop _ (by omega) (by omega)) hleadj V (hcov.mono (by omega))
+  exact ⟨L, hdec⟩
 
 theorem holds : Statement := by
   intro Replica BlockId _ _ _ _ _
@@ -61,7 +56,7 @@ theorem ledgerProgress :
     ∀ (T : Finset Replica) (R k c : ℕ),
       T ⊆ (LeanDag.Hydrozoan.Correct : Finset Replica) → q Replica ≤ T.card →
       0 < c → (optimalAnchored Replica BlockId).SpansEligible c →
-      FairRunOn Replica T c →
+      FairRunOn T c →
       ∃ b, k ≤ b ∧ R ≤ S.slotRound b ∧
         ∀ (U : OptUniverse Replica BlockId),
           SynchronisedOn U.toBlockRecord T R →

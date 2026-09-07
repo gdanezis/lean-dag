@@ -56,12 +56,12 @@ example : (waveRobin 7 (by omega)).leader 6
     ∈ (Correct : Finset (Fin 7)) := by decide
 
 -- End-to-end: fairness at the pinned configuration, premise-free.
-example : EventualDecision.FairRunOn (Fin 7)
+example : FairRunOn
     (S := waveRobin 7 (by omega)) (Correct : Finset (Fin 7)) 3 :=
   Grounding.holds.1 7 (by omega)
 
 -- ... at a second configuration, pinning the ∀-over-n generality.
-example : EventualDecision.FairRunOn (Fin 4)
+example : FairRunOn
     (S := waveRobin 4 (by omega)) (Correct : Finset (Fin 4)) 3 :=
   Grounding.holds.1 4 (by omega)
 
@@ -74,7 +74,7 @@ example : ∃ k', 5 ≤ k' ∧ ∀ i, i < 3 →
 
 -- Negative: fairness is a claim about the leader set, not trivially
 -- true of every `T` — the empty set starves.
-example : ¬ EventualDecision.FairRunOn (Fin 7)
+example : ¬ FairRunOn
     (S := waveRobin 7 (by omega)) (∅ : Finset (Fin 7)) 3 := by
   intro h
   obtain ⟨k', -, hlead⟩ := h 0
@@ -157,7 +157,7 @@ def slotRobin : Slots (Fin 5) where
 -- Correct = {1, 2, 4}: arcs of length 2 and 1 — no room for a 3-run.
 example : (Correct : Finset (Fin 5)) = {1, 2, 4} := by decide
 
-example : ¬ EventualDecision.FairRunOn (Fin 5) (S := slotRobin)
+example : ¬ FairRunOn (S := slotRobin)
     (Correct : Finset (Fin 5)) 3 := by
   intro h
   obtain ⟨k', -, hlead⟩ := h 0

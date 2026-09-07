@@ -1,6 +1,7 @@
 import Mathlib.Order.Monotone.Basic
 import Mathlib.Logic.Function.Basic
 import Mathlib.Data.Fin.Basic
+import Mathlib.Data.Finset.Basic
 
 /-!
 # The slot schedule
@@ -49,6 +50,12 @@ class Slots (Validator : Type*) where
 
 Stated here, below every protocol, so that a rule's grounding witness can
 take a concrete schedule without importing the core. -/
+
+/-- **A fair schedule offers runs**: past any slot, `c` consecutive `T`-led
+slots. An assumption about the schedule, not a theorem: `leader` may
+name faulty validators for ever. -/
+def FairRunOn {Validator : Type*} [S : Slots Validator] (T : Finset Validator) (c : ℕ) : Prop :=
+  ∀ k, ∃ k', k ≤ k' ∧ ∀ i, i < c → S.leader (k' + i) ∈ T
 
 namespace Slots
 
@@ -107,6 +114,15 @@ def uniformSingle (p : ℕ) (hp : 0 < p) (elect : ℕ → Validator) : Slots Val
 theorem uniformSingle_slotRound {p : ℕ} {hp : 0 < p} {elect : ℕ → Validator} (k : ℕ) :
     (uniformSingle p hp elect).slotRound k = p * k := by
   simp
+
+/-- **Fairness places a run past any slot and any round.** -/
+theorem exists_run_past [S : Slots Validator] {T : Finset Validator} {c : ℕ}
+    (fair : FairRunOn T c) (k R : ℕ) :
+    ∃ b, k ≤ b ∧ R ≤ S.slotRound b ∧ ∀ i, i < c → S.leader (b + i) ∈ T := by
+  obtain ⟨k₀, hk₀⟩ := S.unbounded R
+  obtain ⟨b, hb, hlead⟩ := fair (max k k₀)
+  exact ⟨b, le_trans (le_max_left _ _) hb,
+    le_trans hk₀ (S.mono (le_trans (le_max_right _ _) hb)), hlead⟩
 
 end Slots
 

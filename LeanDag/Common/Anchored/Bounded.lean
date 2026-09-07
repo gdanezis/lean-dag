@@ -346,6 +346,42 @@ theorem decided_below_of_committed_run
     hspan hrun' i hi
   exact ⟨v, hv.toDecided⟩
 
+/-- **The descent below a run**: `c` slots from `b` whose leaders satisfy
+`Led`, each of which commits when its leader does, decide every slot below
+`b`. -/
+theorem decided_below_of_run
+    (hleast : ∀ {A : BlockId} {i k : ℕ}, i < R.rungs →
+      (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
+      ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
+        R.Least (S := S) U A i k L)
+    {V : U.View} {b c : ℕ} (hc : 0 < c) (hspan : R.SpansEligible (S := S) c)
+    {Led : ℕ → Prop} (hrun : ∀ i, i < c → Led (b + i))
+    (commit : ∀ j, b ≤ j → j ≤ b + c - 1 → Led j → ∃ L, R.Decided (S := S) U V j (some L)) :
+    ∀ i, i < b → ∃ v, R.Decided (S := S) U V i v :=
+  decided_below_of_committed_run hleast (b := b) (n := b + c - 1) (by omega)
+    (fun i hi => hspan b i hi) fun j h1 h2 => commit j h1 h2 (by
+      have := hrun (j - b) (by omega)
+      rwa [Nat.add_sub_cancel' h1] at this)
+
+/-- Totality, from a choice at every nonempty rung. -/
+theorem total_of_least
+    (hleast : ∀ {A : BlockId} {i k : ℕ}, i < R.rungs →
+      (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
+      ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
+        R.Least (S := S) U A i k L) :
+    R.Total (S := S) U :=
+  fun _ _ _ _ helig hj hmid => exists_decided_of_anchor hleast helig hj hmid
+
+/-- The descent below a committed run, from a choice at every nonempty rung. -/
+theorem decidedBelowRun_of_least
+    (hleast : ∀ {A : BlockId} {i k : ℕ}, i < R.rungs →
+      (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
+      ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
+        R.Least (S := S) U A i k L) :
+    R.DecidedBelowRun (S := S) U :=
+  fun _ b _ hc hspan hrun i hi =>
+    decided_below_of_committed_run hleast (by omega) (fun i hi => hspan b i hi) hrun i hi
+
 end AnchoredRule
 
 /-! ## Into the derived relation -/

@@ -59,13 +59,8 @@ theorem allDecidedBelow {w c d N : ℕ}
   have hd : 1 ≤ d := by
     have := (mahiMahiAnchored Validator BlockId Payload w).lt_of_eligible (hspan 1 0 (by omega))
     omega
-  refine ⟨k', hk1, ?_⟩
-  refine AnchoredRule.decided_below_of_committed_run (fun hi h => exists_least hi h)
-    (b := k') (n := k' + d - 1) (by omega) (fun i hi => hspan k' i hi) ?_
-  intro j hj1 hj2
-  have hj : S.leader j ∈ good U w j := by
-    have := hgood (j - k') (by omega)
-    rwa [Nat.add_sub_cancel' hj1] at this
+  refine ⟨k', hk1, AnchoredRule.decided_below_of_run (fun hi h => exists_least hi h) hd hspan
+    (Led := fun j => S.leader j ∈ good U w j) hgood fun j _ _ hj => ?_⟩
   obtain ⟨L, -, hdec⟩ := decided_of_mem_good hj
   exact ⟨L, hdec⟩
 

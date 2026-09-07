@@ -651,24 +651,6 @@ theorem FairToEach.fairScheduleOn {T : Finset Validator}
   obtain ⟨k', hk, hlead⟩ := h v hv k
   exact ⟨k', hk, hlead ▸ hv⟩
 
-/-- **The schedule puts `c` consecutive `T`-led slots arbitrarily far out.**
-
-Stronger than `FairScheduleOn`, which promises one `T`-led slot and no more, and
-it is what P7′ needs: `decided_below_of_committed_run` is fed a *run* of commits,
-and L4 turns a run of `T`-led slots into one.
-
-Round-robin over `3f+1` satisfies it with `c = 3` for every `f ≥ 1`, whatever the
-`f` Byzantine validators are and wherever they sit in the rotation. The `f` of
-them cut the cycle into at most `f` arcs holding `2f+1` correct slots between
-them, so some arc has at least `⌈(2f+1)/f⌉ = 3` — the ceiling being `3` for all
-`f ≥ 1` since `(2f+1)/f = 2 + 1/f`. Three is exactly what pipelining asks for,
-which is a pleasant coincidence rather than a designed one.
-
-Like `FairScheduleOn` this is an assumption about the schedule, not a theorem:
-`Slots.leader` is arbitrary and could name Byzantine validators for ever. -/
-def FairRunOn (T : Finset Validator) (c : ℕ) : Prop :=
-  ∀ k, ∃ k', k ≤ k' ∧ ∀ i, i < c → S.leader (k' + i) ∈ T
-
 omit [Fintype Validator] [DecidableEq Validator] F in
 /-- A run of `c` slots contains a `T`-led slot, so `FairRunOn` refines
 `FairScheduleOn` and everything proved from the latter still applies. -/

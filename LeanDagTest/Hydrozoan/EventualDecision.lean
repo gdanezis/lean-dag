@@ -111,7 +111,7 @@ example : ∀ i, i < 2 → ∃ v, Decided U10 (View.full U10) i v :=
 
 -- A fairness negative: consecutive slots never share a leader, so a
 -- singleton T is starved at c = 2 — FairRunOn is not trivially true.
-example : ¬ EventualDecision.FairRunOn (Fin 4) {0} 2 := fun h => by
+example : ¬ FairRunOn ({0} : Finset (Fin 4)) 2 := fun h => by
   obtain ⟨k', -, hl⟩ := h 0
   have h0 : ((k' + 0) % 4 : ℕ) = 0 :=
     congrArg Fin.val (Finset.mem_singleton.mp (hl 0 (by omega)))
@@ -123,7 +123,7 @@ example : ¬ EventualDecision.FairRunOn (Fin 4) {0} 2 := fun h => by
 -- starts at every 4k + 2 (leaders 2, 3, 0). Proved from the definition
 -- — finite enumeration cannot reach a ∀-over-ℕ claim.
 theorem fairRun_four :
-    EventualDecision.FairRunOn (Fin 4) (Correct : Finset (Fin 4)) 3 := by
+    FairRunOn (Correct : Finset (Fin 4)) 3 := by
   intro k
   refine ⟨4 * k + 2, by omega, fun i hi => ?_⟩
   have hmem : ∀ m : Fin 4, m ≠ 1 → m ∈ (Correct : Finset (Fin 4)) := by

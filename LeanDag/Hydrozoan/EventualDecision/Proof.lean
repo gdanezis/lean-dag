@@ -28,7 +28,7 @@ theorem ledgerProgress :
     ∀ (T : Finset Replica) (R k c : ℕ),
       T ⊆ (Correct : Finset Replica) → q Replica ≤ T.card →
       0 < c → (hydrozoanAnchored Replica BlockId).SpansEligible c →
-      FairRunOn Replica T c →
+      FairRunOn T c →
       ∃ b, k ≤ b ∧ R ≤ S.slotRound b ∧
         ∀ (U : BlockUniverse Replica BlockId),
           SynchronisedOn U T R →

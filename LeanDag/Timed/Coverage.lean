@@ -154,7 +154,7 @@ theorem decidedBelow_of_fairRun (sp : Support R) {rel : Reliability Validator}
     (hcov : OfCoverage sp rel) (hlc : sp.Commits rel)
     {S : Slots Validator} {c : ℕ} (hd : Descends R S c)
     {T : Finset Validator} (hq : rel.IsQuorum T)
-    (fair : ∀ k, ∃ k', k ≤ k' ∧ ∀ i, i < c → S.leader (k' + i) ∈ T) (Rnd k : ℕ) :
+    (fair : FairRunOn T c) (Rnd k : ℕ) :
     ∃ b, k ≤ b ∧ Rnd ≤ S.slotRound b ∧
       ∀ {U : R.Universe} (V : R.View U) (N : ℕ),
         SynchronisedOn R U T Rnd → (∀ r, Rnd ≤ r → r ≤ N → Properties.PopulatedOn R U T r) →

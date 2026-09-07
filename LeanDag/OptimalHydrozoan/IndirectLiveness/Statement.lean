@@ -42,41 +42,14 @@ namespace IndirectLiveness
 variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [O : OptimalFaults Replica] [S : Slots Replica]
 
-/-- **The graded rule is total.** The premises are verbatim the shared
-anchor prefix of the three indirect `DecidedOpt` constructors (minus
-`k < j`, which follows from eligibility): an eligible committed anchor
-whose eligible in-betweens all skipped. The conclusion: some rung fires
-— slot `k` gets a verdict, commit or skip. -/
-def AnchoredTotality (U : OptUniverse Replica BlockId) : Prop :=
-  ∀ (V : LeanDag.Hydrozoan.View U.toBlockRecord) (k j : ℕ) (A : BlockId),
-    (optimalAnchored Replica BlockId).Eligible k j →       -- j sits ≥ 3 rounds past k,
-    DecidedOpt U V j (some A) →          -- slot j committed A,
-    (∀ i, k < i → i < j →                -- and j is the NEAREST such slot:
-      (optimalAnchored Replica BlockId).Eligible k i →     -- every eligible slot in between
-      DecidedOpt U V i none) →           -- skipped;
-    ∃ v, DecidedOpt U V k v              -- then slot k has a verdict.
-
-/-- **A committed run decides everything below it.** `c` consecutive
-committed slots, under the `SpansEligible` runway, force a verdict on
-every earlier slot: each such slot anchors on its nearest eligible
-committed successor — the run's end if nothing nearer — and the ladder's
-totality does the rest. -/
-def DecidedBelowRun (U : OptUniverse Replica BlockId) : Prop :=
-  ∀ (V : LeanDag.Hydrozoan.View U.toBlockRecord) (b c : ℕ),
-    0 < c →                              -- a nonempty run (implied by the next
-    (optimalAnchored Replica BlockId).SpansEligible c →  -- premise; kept for uniformity), long
-                                        -- enough to anchor below it,
-    (∀ j, b ≤ j → j ≤ b + c - 1 →        -- of committed slots b … b+c−1:
-      ∃ B, DecidedOpt U V j (some B)) →
-    ∀ i, i < b → ∃ v, DecidedOpt U V i v  -- then every slot below is decided.
-
 /-- Indirect liveness of Optimal-Hydrozoan, over every fault
 configuration, schedule, and universe the model admits. -/
 def Statement : Prop :=
   ∀ (Replica BlockId : Type) [Fintype Replica] [DecidableEq Replica]
     [DecidableEq BlockId] [OptimalFaults Replica] [Slots Replica]
     (U : OptUniverse Replica BlockId),
-    AnchoredTotality U ∧ DecidedBelowRun U
+    (optimalAnchored Replica BlockId).Total U.toBlockRecord ∧
+      (optimalAnchored Replica BlockId).DecidedBelowRun U.toBlockRecord
 
 end IndirectLiveness
 

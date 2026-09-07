@@ -59,7 +59,7 @@ with synchrony and production to a horizon in place of `live`, is
 theorem decidedBelow_of_fairRun {rel : Reliability Validator} (hlc : sp.Commits rel)
     {S : Slots Validator} {c : ℕ} (hd : Descends R S c)
     {T : Finset Validator}
-    (fair : ∀ k, ∃ k', k ≤ k' ∧ ∀ i, i < c → S.leader (k' + i) ∈ T) (k : ℕ) :
+    (fair : FairRunOn T c) (k : ℕ) :
     ∃ b, k ≤ b ∧ ∀ {U : R.Universe} (V : R.View U), sp.live rel S V T b (b + c) →
       ∀ i, i < b → ∃ v, DecidedBelow R S (b + c) V i v := by
   obtain ⟨b, hb, hrunT⟩ := fair k
