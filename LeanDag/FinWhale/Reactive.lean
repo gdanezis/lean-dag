@@ -64,7 +64,7 @@ theorem spCertificate_of_certifies (hblk : D.block = U.block) {c : BlockId}
     (h : Certifies U c L) : SPCertificate D c L := by
   change spQuorum Validator ≤ (parentsVoting D c L).card
   have heq : parentsVoting D c L = creatorsOf U.block (votesIn U c L) := by
-    simp only [parentsVoting, votesIn, hblk]
+    simp only [parentsVoting, votesIn, carriedVotes, hblk]
   rw [heq]
   exact le_trans (spQuorum_le_quorumCard (Validator := Validator)) h
 

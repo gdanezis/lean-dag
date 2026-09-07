@@ -149,7 +149,7 @@ example : ∀ i, i < 1 → ∃ v, DecidedOpt OE VE i v :=
 -- (one vote), and no evidence quorum either (only block 11 references
 -- the vote 5) — so the ladder's verdict is a skip ...
 example : ¬ LeanDag.Hydrozoan.CertifiedIn UE 14 3 0 := fun h =>
-  absurd ((certifiedIn_iff_history (by decide)).mp h) (by decide)
+  absurd ((linkedVia_iff_history (by decide)).mp h) (by decide)
 example : ¬ EvidenceLinked UE 14 3 0 := fun h =>
   absurd ((evidenceLinked_iff_history (by decide)).mp h) (by decide)
 
@@ -168,7 +168,7 @@ theorem oe_slot0_ladder : DecidedOpt OE VE 0 none := by
       subst this
       rcases i with _ | _ | i
       · exact fun hcert =>
-          absurd ((certifiedIn_iff_history (by decide)).mp hcert) (by decide)
+          absurd ((linkedVia_iff_history (by decide)).mp hcert) (by decide)
       · exact fun hev =>
           absurd ((evidenceLinked_iff_history (by decide)).mp hev) (by decide)
       · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega))

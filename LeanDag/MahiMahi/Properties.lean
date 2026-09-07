@@ -117,20 +117,11 @@ theorem certifies_band (h : AgreeBand (MahiMahi.mahiMahiAnchored Validator Block
     (hChi : (U.block C).round + g ≤ hi)
     {L : BlockId} (hL : L ∈ U.ids) (hLlo : lo ≤ (U.block L).round + g)
     (hLhi : (U.block L).round + g ≤ hi) :
-    MahiMahi.Certifies U' C L ↔ MahiMahi.Certifies U C L := by
-  have hq : ∀ q ∈ (U.block C).refs, q ∈ U.ids ∧ (U.block q).round + 1 = (U.block C).round :=
-    fun q hqm => ⟨U.complete C hC q hqm, U.round_of_mem_refs hC hqm⟩
-  have hset : MahiMahi.votesIn U' C L = MahiMahi.votesIn U C L := by
-    unfold MahiMahi.votesIn
-    rw [AnchoredRule.band_refs h hC hClo hChi]
-    refine Finset.filter_congr fun q hqm => ?_
-    exact votes_band h (hq q hqm).1 (by have := (hq q hqm).2; omega)
-      (by have := (hq q hqm).2; omega) hL hLlo hLhi
-  unfold MahiMahi.Certifies
-  rw [hset, AnchoredRule.creatorsOf_band h]
-  intro b hb
-  have hbp := (Finset.mem_filter.mp hb).1
-  exact ⟨(hq b hbp).1, by have := (hq b hbp).2; omega, by have := (hq b hbp).2; omega⟩
+    MahiMahi.Certifies U' C L ↔ MahiMahi.Certifies U C L :=
+  AnchoredRule.carriesVotes_band h hC hClo hChi fun q hqm =>
+    votes_band h (U.complete C hC q hqm)
+      (by have := U.round_of_mem_refs hC hqm; omega)
+      (by have := U.round_of_mem_refs hC hqm; omega) hL hLlo hLhi
 
 /-! ## The direct rules
 
@@ -143,16 +134,14 @@ theorem certificates_band (h : AgreeBand (MahiMahi.mahiMahiAnchored Validator Bl
     (hw : 2 ≤ w) {L : BlockId} (hL : L ∈ U.ids) {r r' : ℕ}
     (hLr : (U.block L).round = r) (hrr : r + g = r' + g') (hr : lo ≤ r + g)
     (hhi : r + w - 1 + g ≤ hi) :
-    MahiMahi.certificates U w L r ⊆ MahiMahi.certificates U' w L r' := by
-  intro C hC
-  obtain ⟨hCA, hCc⟩ := Finset.mem_filter.mp hC
-  have hCU : C ∈ U.ids := (mem_blocksAt.mp hCA).1
-  have hCr : (U.block C).round = MahiMahi.decisionRoundAt w r := (mem_blocksAt.mp hCA).2
-  have hdr : MahiMahi.decisionRoundAt w r = r + w - 1 := rfl
-  have hdr' : MahiMahi.decisionRoundAt w r' = r' + w - 1 := rfl
-  refine Finset.mem_filter.mpr ⟨?_, ?_⟩
-  · exact AnchoredRule.blocksAt_band h (by omega) (by omega) (by omega) hCA
-  · exact (certifies_band h hCU (by omega) (by omega) hL (by omega) (by omega)).mpr hCc
+    MahiMahi.certificates U w L r ⊆ MahiMahi.certificates U' w L r' :=
+  AnchoredRule.certificatesAt_band h (by simp only [MahiMahi.decisionRoundAt]; omega)
+    (by simp only [MahiMahi.decisionRoundAt]; omega) (by simp only [MahiMahi.decisionRoundAt]; omega)
+    fun C hC hCr b hb =>
+      votes_band h (U.complete C hC b hb)
+        (by have := U.round_of_mem_refs hC hb; simp only [MahiMahi.decisionRoundAt] at hCr; omega)
+        (by have := U.round_of_mem_refs hC hb; simp only [MahiMahi.decisionRoundAt] at hCr; omega)
+        hL (by omega) (by omega)
 
 /-- **And so does the direct commit.** -/
 theorem directCommitIn_band (h : AgreeBand (MahiMahi.mahiMahiAnchored Validator BlockId Payload w).toDagRule U U' lo hi g g')
@@ -162,18 +151,13 @@ theorem directCommitIn_band (h : AgreeBand (MahiMahi.mahiMahiAnchored Validator 
     {L : BlockId} (hL : L ∈ U.ids) {r r' : ℕ}
     (hLr : (U.block L).round = r) (hrr : r + g = r' + g') (hr : lo ≤ r + g)
     (hhi : r + w - 1 + g ≤ hi) (hc : MahiMahi.DirectCommitIn U V w L r) :
-    MahiMahi.DirectCommitIn U' V' w L r' := by
-  refine le_trans hc (Finset.card_le_card ?_)
-  intro a ha
-  obtain ⟨C, hC, hCa⟩ := Finset.mem_image.mp ha
-  obtain ⟨hCc, hCV⟩ := Finset.mem_inter.mp hC
-  have hCU : C ∈ U.ids := (mem_blocksAt.mp (Finset.mem_filter.mp hCc).1).1
-  have hCr : (U.block C).round = MahiMahi.decisionRoundAt w r :=
-    (mem_blocksAt.mp (Finset.mem_filter.mp hCc).1).2
-  have hdr : MahiMahi.decisionRoundAt w r = r + w - 1 := rfl
-  refine Finset.mem_image.mpr ⟨C, Finset.mem_inter.mpr
-    ⟨certificates_band h hw hL hLr hrr hr hhi hCc, hV C hCV (by omega) (by omega)⟩, ?_⟩
-  rw [(AnchoredRule.band_block h hCU (by omega) (by omega)).2]; exact hCa
+    MahiMahi.DirectCommitIn U' V' w L r' :=
+  AnchoredRule.holdsAtLeast_band h hV
+    (fun C hC => by
+      obtain ⟨hCU, hCr, -⟩ := mem_certificatesAt.mp hC
+      simp only [MahiMahi.decisionRoundAt] at hCr
+      exact ⟨hCU, by omega, by omega⟩)
+    (certificates_band h hw hL hLr hrr hr hhi) hc
 
 /-- **And the direct skip.** A blamer stays a blamer, and a candidate
 the band added changes nothing: the blame reads the blamer's cone, which
@@ -212,28 +196,14 @@ theorem certifiedIn_band (h : AgreeBand (MahiMahi.mahiMahiAnchored Validator Blo
     (hAhi : (U.block A).round + g ≤ hi)
     {L : BlockId} (hL : L ∈ U.ids) {r r' : ℕ} (hLr : (U.block L).round = r)
     (hrr : r + g = r' + g') (hr : lo ≤ r + g) (hhi : r + w - 1 + g ≤ hi) :
-    MahiMahi.CertifiedIn U' w A L r' ↔ MahiMahi.CertifiedIn U w A L r := by
-  have hA' : A ∈ U'.ids := AnchoredRule.band_mem h hA hAlo hAhi
-  have hdr : MahiMahi.decisionRoundAt w r = r + w - 1 := rfl
-  have hdr' : MahiMahi.decisionRoundAt w r' = r' + w - 1 := rfl
-  constructor
-  · rintro ⟨C, hC, hre⟩
-    obtain ⟨hCA, hCc⟩ := Finset.mem_filter.mp hC
-    have hCr' : (U'.block C).round = r' + w - 1 := by
-      have := (mem_blocksAt.mp hCA).2; omega
-    obtain ⟨hCU, hreU, hCeq⟩ :=
-      AgreeBand.reaches_old h hA hAlo hAhi hre
-        (by show lo ≤ (U'.block C).round + g'; omega)
-    have hCeq' : (U.block C).round + g = (U'.block C).round + g' := hCeq
-    exact ⟨C, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hCU, by omega⟩,
-      (certifies_band h hCU (by omega) (by omega) hL (by omega) (by omega)).mp hCc⟩, hreU⟩
-  · rintro ⟨C, hC, hre⟩
-    obtain ⟨hCA, hCc⟩ := Finset.mem_filter.mp hC
-    have hCU : C ∈ U.ids := (mem_blocksAt.mp hCA).1
-    have hCr : (U.block C).round = r + w - 1 := by have := (mem_blocksAt.mp hCA).2; omega
-    exact ⟨C, certificates_band h hw hL hLr hrr hr hhi hC,
-      AgreeBand.reaches_of h hA hAhi hre
-        (by show lo ≤ (U.block C).round + g; omega)⟩
+    MahiMahi.CertifiedIn U' w A L r' ↔ MahiMahi.CertifiedIn U w A L r :=
+  AnchoredRule.linkedVia_certificatesAt_band h hA hAlo hAhi
+    (by simp only [MahiMahi.decisionRoundAt]; omega) (by simp only [MahiMahi.decisionRoundAt]; omega)
+    (by simp only [MahiMahi.decisionRoundAt]; omega) fun C hC hCr b hb =>
+      votes_band h (U.complete C hC b hb)
+        (by have := U.round_of_mem_refs hC hb; simp only [MahiMahi.decisionRoundAt] at hCr; omega)
+        (by have := U.round_of_mem_refs hC hb; simp only [MahiMahi.decisionRoundAt] at hCr; omega)
+        hL (by omega) (by omega)
 
 theorem not_certifiedIn_band_novel
     (h : AgreeBand (MahiMahi.mahiMahiAnchored Validator BlockId Payload w).toDagRule U U' lo hi g g')
@@ -244,23 +214,16 @@ theorem not_certifiedIn_band_novel
     ¬ MahiMahi.CertifiedIn U' w A L r' := by
   rintro ⟨C, hC, hre⟩
   have hdr' : MahiMahi.decisionRoundAt w r' = r' + w - 1 := rfl
-  obtain ⟨hCA, hCc⟩ := Finset.mem_filter.mp hC
-  have hCr' : (U'.block C).round = r' + w - 1 := by have := (mem_blocksAt.mp hCA).2; omega
+  obtain ⟨-, hCr'', hCc⟩ := mem_certificatesAt.mp hC
+  have hCr' : (U'.block C).round = r' + w - 1 := by omega
   obtain ⟨hCU, -, hCeq⟩ :=
     AgreeBand.reaches_old h hA hAlo hAhi hre
       (by show lo ≤ (U'.block C).round + g'; omega)
   have hCeq' : (U.block C).round + g = (U'.block C).round + g' := hCeq
   have hCround : (U.block C).round = r + w - 1 := by omega
   -- the quorum is positive, so some old reference of `C` votes for `L`
-  have hpos : 0 < (MahiMahi.votesIn U' C L).card := by
-    have hq := MysticetiProperties.quorumCard_pos (Validator := Validator)
-    have hcard : (creatorsOf U'.block (MahiMahi.votesIn U' C L)).card
-        ≤ (MahiMahi.votesIn U' C L).card := Finset.card_image_le
-    have hcc := hCc
-    unfold MahiMahi.Certifies at hcc
-    omega
-  obtain ⟨q, hq⟩ := Finset.card_pos.1 hpos
-  obtain ⟨hqm, hqv⟩ := Finset.mem_filter.mp hq
+  obtain ⟨q, hqm, hqv⟩ := exists_vote_of_carriesVotes
+    (MysticetiProperties.quorumCard_pos (Validator := Validator)) hCc
   rw [AnchoredRule.band_refs h hCU
     (by show lo < (U.block C).round + g; omega)
     (by show (U.block C).round + g ≤ hi; omega)] at hqm
@@ -329,7 +292,7 @@ theorem directCommitIn_of_coversUpto {U : BlockUniverse Validator BlockId Payloa
     (h : MahiMahi.DirectCommit U w L r) (hV : V.CoversUpto (MahiMahi.decisionRoundAt w r)) :
     MahiMahi.DirectCommitIn U V w L r :=
   HoldsAtLeast.of_coversUpto (fun C hC => by
-    obtain ⟨hCU, hCr, -⟩ := MahiMahi.mem_certificates.mp hC
+    obtain ⟨hCU, hCr, -⟩ := mem_certificatesAt.mp hC
     exact ⟨hCU, by omega⟩) hV h
 
 /-! ## Mahi-Mahi's support shape
@@ -416,7 +379,7 @@ theorem mmSupport_commits {w : ℕ} (hw : 2 ≤ w) :
     have hCr' : (BlockRecord.block U C).round = MahiMahi.decisionRoundAt w (S.slotRound k) := by
       rw [hdr]; exact hCr
     rw [mem_creatorsOf]
-    exact ⟨C, MahiMahi.mem_certificates.mpr
+    exact ⟨C, mem_certificatesAt.mpr
       ⟨hC, hCr', hcert L ⟨hLmem, hLr, hLc⟩ v hv C hC hCc hCr⟩, hCc⟩
   have hin : MahiMahi.DirectCommitIn U V w L (S.slotRound k) :=
     directCommitIn_of_coversUpto hdc (by rw [hdr]; exact hcov)

@@ -2,6 +2,7 @@ import LeanDag.Common.Support
 import LeanDag.Common.Ledger
 import LeanDag.Common.Anchored
 import LeanDag.Common.Slots
+import LeanDag.Common.History
 /-!
 # Uncertified DAGs: the Mysticeti commit rules
 
@@ -34,44 +35,21 @@ variable [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 variable {U : BlockUniverse Validator BlockId Payload}
 
-/-- The references of `C` that vote for `L`. -/
-def votesIn (U : BlockUniverse Validator BlockId Payload) (C L : BlockId) : Finset BlockId :=
-  (U.block C).refs.filter (fun q => L ∈ (U.block q).refs)
+/-- The references of `C` that vote for `L`: the record's carried votes,
+in the plain sense. -/
+abbrev votesIn (U : BlockUniverse Validator BlockId Payload) (C L : BlockId) : Finset BlockId :=
+  carriedVotes U (IsVote U) C L
 
 /-- A round-`(r+2)` block certifies `L` when its votes for `L` come from a
-quorum of distinct validators. -/
-def Certifies (U : BlockUniverse Validator BlockId Payload) (C L : BlockId) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (votesIn U C L)).card
-
-/-- All three rule predicates are cardinality comparisons and so decidable,
-but as `Prop`-valued `def`s Lean will not see that unaided. `certificates`
-needs this to filter on `Certifies`, and concrete models need it to settle
-the rules by `decide`. -/
-instance decidableCertifies (C L : BlockId) : Decidable (Certifies U C L) :=
-  inferInstanceAs (Decidable (quorumCard Validator ≤ (creatorsOf U.block (votesIn U C L)).card))
+quorum of distinct validators: the record's certificate at `n − f`. -/
+abbrev Certifies (U : BlockUniverse Validator BlockId Payload) (C L : BlockId) : Prop :=
+  CarriesVotes U (IsVote U) (quorumCard Validator) C L
 
 /-- The certificates for a round-`r` block `L`: the round-`(r+2)` blocks that
 certify it. -/
-def certificates (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : ℕ) :
+abbrev certificates (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : ℕ) :
     Finset BlockId :=
-  (blocksAt U (r + 2)).filter (fun C => Certifies U C L)
-
-/-- Membership in `certificates`, unfolded: a round-`r+2` block that certifies `L`. -/
-@[simp]
-theorem mem_certificates {C L : BlockId} {r : ℕ} :
-    C ∈ certificates U L r ↔ C ∈ U.ids ∧ (U.block C).round = r + 2 ∧ Certifies U C L := by
-  simp [certificates, and_assoc]
-
-/-- A vote counted by a round-`(r+2)` certificate really is a round-`(r+1)`
-block of the universe that references `L`. Used wherever a certificate has to
-be turned back into the supporters behind it. -/
-theorem mem_votesIn_spec {C L q : BlockId} {r : ℕ}
-    (hC : C ∈ U.ids) (hCr : (U.block C).round = r + 2) (hq : q ∈ votesIn U C L) :
-    q ∈ U.ids ∧ (U.block q).round = r + 1 ∧ L ∈ (U.block q).refs := by
-  rw [votesIn, Finset.mem_filter] at hq
-  refine ⟨U.complete C hC q hq.1, ?_, hq.2⟩
-  have := U.round_of_mem_refs hC hq.1
-  omega
+  certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2)
 
 /-- `L` is directly committed when its certificates come from a quorum of
 distinct validators. -/
@@ -108,17 +86,18 @@ theorem certificates_eq_empty_of_directSkip {L : BlockId} {r : ℕ}
   have hb : quorumCard Validator ≤ (blames U L (r + 1)).card := h
   rw [Finset.eq_empty_iff_forall_notMem]
   intro C hC
-  rw [mem_certificates] at hC
+  rw [mem_certificatesAt] at hC
   obtain ⟨hC_ids, hC_round, hCert⟩ := hC
-  rw [Certifies] at hCert
+  unfold CarriesVotes at hCert
   -- ... and every vote a certificate counts is a genuine supporter.
   have hsub : creatorsOf U.block (votesIn U C L) ⊆ supporters U L (r + 1) := by
     intro v hv
     rw [mem_creatorsOf] at hv
     obtain ⟨q, hq, hq_creator⟩ := hv
-    obtain ⟨hq_ids, hq_round, hq_ref⟩ := mem_votesIn_spec hC_ids hC_round hq
+    obtain ⟨hq_ids, hq_round, hq_ref⟩ := mem_carriedVotes_spec hC_ids hC_round hq
     exact mem_supporters.mpr ⟨q, hq_ids, hq_round, hq_ref, hq_creator⟩
   have := Finset.card_le_card hsub
+  simp only [votesIn] at this
   have := F.card_validators
   omega
 
@@ -159,7 +138,7 @@ theorem exists_certificate_reaches_of_directCommit {L : BlockId} {r : ℕ}
       intro v hv
       rw [hT_def, Finset.mem_inter, mem_creatorsOf] at hv
       obtain ⟨⟨q, hq_cert, hq_creator⟩, _⟩ := hv
-      obtain ⟨hq_ids, hq_round, -⟩ := mem_certificates.mp hq_cert
+      obtain ⟨hq_ids, hq_round, -⟩ := mem_certificatesAt.mp hq_cert
       exact ⟨q, hq_ids, hq_round, hq_cert, hq_creator⟩
     have hTc : ∀ v ∈ T, v ∈ (Correct : Finset Validator) :=
       fun _ hv => Finset.mem_of_mem_inter_right hv
@@ -203,22 +182,22 @@ theorem eq_of_certificates_nonempty {L₁ L₂ : BlockId} {r : ℕ}
     L₁ = L₂ := by
   obtain ⟨C₁, hC₁⟩ := h₁
   obtain ⟨C₂, hC₂⟩ := h₂
-  rw [mem_certificates] at hC₁ hC₂
+  rw [mem_certificatesAt] at hC₁ hC₂
   obtain ⟨hC₁_ids, hC₁_round, hC₁_cert⟩ := hC₁
   obtain ⟨hC₂_ids, hC₂_round, hC₂_cert⟩ := hC₂
   -- The two vote quorums share a block: one round-`(r+1)` block votes for
   -- both candidates.
   obtain ⟨q, hq₁, hq₂⟩ :=
     U.exists_common_mem_of_quorums (n := r + 1)
-      (fun _ hq => ⟨(mem_votesIn_spec hC₁_ids hC₁_round hq).1,
-        (mem_votesIn_spec hC₁_ids hC₁_round hq).2.1⟩)
-      (fun _ hq => ⟨(mem_votesIn_spec hC₂_ids hC₂_round hq).1,
-        (mem_votesIn_spec hC₂_ids hC₂_round hq).2.1⟩)
+      (fun _ hq => ⟨(mem_carriedVotes_spec hC₁_ids hC₁_round hq).1,
+        (mem_carriedVotes_spec hC₁_ids hC₁_round hq).2.1⟩)
+      (fun _ hq => ⟨(mem_carriedVotes_spec hC₂_ids hC₂_round hq).1,
+        (mem_carriedVotes_spec hC₂_ids hC₂_round hq).2.1⟩)
       hC₁_cert hC₂_cert
   -- Distinctness forbids it referencing two round-`r` blocks by one author.
-  exact (U.valid q (mem_votesIn_spec hC₁_ids hC₁_round hq₁).1).distinct_creators
-    L₁ (mem_votesIn_spec hC₁_ids hC₁_round hq₁).2.2
-    L₂ (mem_votesIn_spec hC₂_ids hC₂_round hq₂).2.2 hcreator
+  exact (U.valid q (mem_carriedVotes_spec hC₁_ids hC₁_round hq₁).1).distinct_creators
+    L₁ (mem_carriedVotes_spec hC₁_ids hC₁_round hq₁).2.2
+    L₂ (mem_carriedVotes_spec hC₂_ids hC₂_round hq₂).2.2 hcreator
 
 /-- **M5.** At most one block per slot is directly committed.
 
@@ -240,16 +219,16 @@ that subgraph, skip otherwise. M4 is the statement that this never
 contradicts the direct rule. -/
 
 /-- The indirect rule's test: does a certificate for `L` lie in the causal
-history of the anchor block `A`? -/
-def CertifiedIn (U : BlockUniverse Validator BlockId Payload) (A L : BlockId) (r : ℕ) : Prop :=
-  ∃ C ∈ certificates U L r, Reaches U A C
+history of the anchor block `A`? The record's `LinkedVia` at the core's
+certificates. -/
+abbrev CertifiedIn (U : BlockUniverse Validator BlockId Payload) (A L : BlockId) (r : ℕ) : Prop :=
+  LinkedVia U A (certificates U L r)
 
 /-- A certificate in reach is, in particular, a certificate that exists. This
 is what lets M5′ compare an *indirect* commit against anything else. -/
 theorem certificates_nonempty_of_certifiedIn {A L : BlockId} {r : ℕ}
-    (h : CertifiedIn U A L r) : (certificates U L r).Nonempty := by
-  obtain ⟨C, hC, -⟩ := h
-  exact ⟨C, hC⟩
+    (h : CertifiedIn U A L r) : (certificates U L r).Nonempty :=
+  h.nonempty
 
 /-- **M4, commit half.** A directly committed block is found by *every*
 anchor from round `r+3` on. This is M2 restated as the indirect rule's test,

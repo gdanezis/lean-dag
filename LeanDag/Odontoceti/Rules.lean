@@ -83,39 +83,14 @@ instance : Decidable (DirectSkip U L r) :=
 /-! ## The indirect test -/
 
 /-- The authors of decision-round support blocks for `L` visible in
-`A`'s cone. Counted by **distinct authors**, not raw blocks: an
-equivocating supporter can plant any number of support-twins in a cone,
-so the block count is adversary-inflatable; the author count is the one
-the arithmetic on both sides actually bounds. -/
-def coneSupports (U : BlockUniverse Validator BlockId Payload)
+`A`'s cone: the record's `coneSupporters` at the round above `L`.
+Counted by **distinct authors**, not raw blocks: an equivocating
+supporter can plant any number of support-twins in a cone, so the block
+count is adversary-inflatable; the author count is the one the
+arithmetic on both sides actually bounds. -/
+abbrev coneSupports (U : BlockUniverse Validator BlockId Payload)
     (A L : BlockId) (r : ℕ) : Finset Validator :=
-  creatorsOf U.block
-    ((blocksAt U (r + 1)).filter
-      (fun q => L ∈ (U.block q).refs ∧ q ∈ history U A))
-
-theorem mem_coneSupports {v : Validator} :
-    v ∈ coneSupports U A L r ↔
-      ∃ q ∈ U.ids, (U.block q).round = r + 1 ∧ L ∈ (U.block q).refs ∧
-        q ∈ history U A ∧ (U.block q).creator = v := by
-  simp only [coneSupports, mem_creatorsOf, Finset.mem_filter, mem_blocksAt]
-  tauto
-
-/-- In-cone supporters are supporters. -/
-theorem coneSupports_subset_supporters :
-    coneSupports U A L r ⊆ supporters U L (r + 1) := by
-  intro v hv
-  obtain ⟨q, hq, hqr, hqL, -, hqc⟩ := mem_coneSupports.mp hv
-  exact mem_supporters.mpr ⟨q, hq, hqr, hqL, hqc⟩
-
-/-- Cones nest, so in-cone support does. -/
-theorem coneSupports_subset_of_reaches {B : BlockId} (hB : B ∈ U.ids)
-    (h : Reaches U B A) :
-    coneSupports U A L r ⊆ coneSupports U B L r := by
-  intro v hv
-  obtain ⟨q, hq, hqr, hqL, hqA, hqc⟩ := mem_coneSupports.mp hv
-  have hA : A ∈ U.ids := mem_ids_of_reaches hB h
-  exact mem_coneSupports.mpr
-    ⟨q, hq, hqr, hqL, history_subset_of_reaches hB h hqA, hqc⟩
+  coneSupporters U A L (r + 1)
 
 /-- **The indirect test** (the thesis's ThickLink): at least `n − 3f`
 distinct authors of support blocks for `L` in the anchor's cone. At
@@ -170,10 +145,10 @@ theorem not_thickLink_of_directSkip (hk : DirectSkip U L r)
     (A : BlockId) : ¬ ThickLink U A L r := by
   intro ht
   have h1 := Finset.card_le_card
-    (coneSupports_subset_supporters (U := U) (A := A) (L := L) (r := r))
+    (coneSupporters_subset_supporters (U := U) (A := A) (L := L) (n := r + 1))
   have h2 := card_supporters_le_of_directSkip hk
   have h5 := F.card_validators5
-  unfold ThickLink at ht
+  unfold ThickLink coneSupports at ht
   omega
 
 /-! ## O3 — propagation: every anchor's cone is the certificate -/
@@ -205,7 +180,7 @@ private theorem thickLink_of_directCommit_aux (h : DirectCommit U L r) :
           omega
         have hpq : p = q :=
           U.eq_of_creator_eq hp_ids hq_ids hvC hpc hqc (by omega)
-        exact mem_coneSupports.mpr
+        exact mem_coneSupporters.mpr
           ⟨p, hp_ids, hp_round, hpq ▸ hqL,
             mem_history_of_mem_refs hA hp, hpc⟩
       have h1 := Finset.card_union_add_card_inter
@@ -241,7 +216,7 @@ private theorem thickLink_of_directCommit_aux (h : DirectCommit U L r) :
       have := ih p hp_ids hp_round
       unfold ThickLink at this ⊢
       exact le_trans this (Finset.card_le_card
-        (coneSupports_subset_of_reaches hA (Reaches.single hp)))
+        (coneSupporters_subset_of_reaches hA (Reaches.single hp)))
 
 /-- **O3 (thesis Lemma 3) — propagation, the heart.** If `L` is
 directly committed, then **every** block from two rounds above it on —
@@ -272,7 +247,7 @@ theorem eq_of_directCommit_of_thickLink {L₁ L₂ : BlockId}
     intro v hv
     obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
     have := not_mem_of_supports_two U.noEquivOn_honest hne hcr hv₁
-      (coneSupports_subset_supporters hv₂)
+      (coneSupporters_subset_supporters hv₂)
     simpa [mem_correct] using this
   have h1 := Finset.card_union_add_card_inter
     (supporters U L₁ (r + 1)) (coneSupports U A L₂ r)

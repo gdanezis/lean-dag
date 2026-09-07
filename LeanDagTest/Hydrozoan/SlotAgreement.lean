@@ -173,7 +173,7 @@ example : Decided U5 Vfull5 1 none := by
       subst this
       rcases i with _ | _ | i
       · exact fun hcert =>
-          absurd ((certifiedIn_iff_history (by decide)).mp hcert) (by decide)
+          absurd ((linkedVia_iff_history (by decide)).mp hcert) (by decide)
       · exact fun hweak =>
           absurd ((weakLinked_iff_history (by decide)).mp hweak) (by decide)
       · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega))

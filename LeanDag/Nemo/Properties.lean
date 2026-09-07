@@ -40,40 +40,6 @@ section Band
 
 variable {U U' : Nemo.Universe Validator BlockId Payload} {lo hi g g' : ℕ}
 
-/-- **The supporters a view holds transport.** A voting-round block the
-view held is a block of the shifted universe at the shifted round, and
-it references the candidate still. -/
-theorem supportersIn_band (h : AgreeBand (nemoRule (Payload := Payload)) U U' lo hi g g')
-    {V : Nemo.View Validator BlockId Payload U} {V' : Nemo.View Validator BlockId Payload U'}
-    {r r' : ℕ} (hrr : r + g = r' + g') (hr : lo ≤ r + g) (hhi : r + 1 + g ≤ hi)
-    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
-      b ∈ V'.ids)
-    {L : BlockId} :
-    supportersIn U V L (r + 1) ⊆ supportersIn U' V' L (r' + 1) := by
-  intro w hw
-  obtain ⟨q, hq, hvq⟩ := Finset.mem_image.mp hw
-  obtain ⟨hqf, hqV⟩ := Finset.mem_inter.mp hq
-  obtain ⟨hqA, hqL⟩ := Finset.mem_filter.mp hqf
-  have hqU : q ∈ U.ids := (mem_blocksAt.mp hqA).1
-  have hqr : (U.block q).round = r + 1 := (mem_blocksAt.mp hqA).2
-  refine Finset.mem_image.mpr ⟨q, Finset.mem_inter.mpr ⟨Finset.mem_filter.mpr ⟨?_, ?_⟩,
-    hV q hqV (by omega) (by omega)⟩, ?_⟩
-  · exact mem_blocksAt.mpr
-      ⟨AnchoredRule.band_mem h hqU (by omega) (by omega),
-       by have := AnchoredRule.band_block h hqU (by omega) (by omega); omega⟩
-  · rw [AnchoredRule.band_refs h hqU (by omega) (by omega)]; exact hqL
-  · rw [(AnchoredRule.band_block h hqU (by omega) (by omega)).2]; exact hvq
-
-/-- **And so does the direct commit.** -/
-theorem directCommitIn_band (h : AgreeBand (nemoRule (Payload := Payload)) U U' lo hi g g')
-    {V : Nemo.View Validator BlockId Payload U} {V' : Nemo.View Validator BlockId Payload U'}
-    {r r' : ℕ} (hrr : r + g = r' + g') (hr : lo ≤ r + g) (hhi : r + 1 + g ≤ hi)
-    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
-      b ∈ V'.ids)
-    {L : BlockId} (hc : Nemo.DirectCommitIn U V L r) :
-    Nemo.DirectCommitIn U' V' L r' :=
-  le_trans hc (Finset.card_le_card (supportersIn_band h hrr hr hhi hV))
-
 /-- **The anchor certifies what it certified.** Both directions: a
 certificate inside an old anchor's history is old, by `reaches_old`, and
 an old one stays inside it, by `reaches_of`. -/
@@ -124,7 +90,8 @@ across a band covering the slot's wave, and a candidate the band did not
 carry is certified from no old anchor. -/
 theorem nemoBandLaws : (Nemo.nemoAnchored Validator BlockId Payload).BandLaws where
   commit_band := fun h hkk _ hlo hhi hV _ hc =>
-    directCommitIn_band h hkk (by omega) (by simp only [Nemo.nemoAnchored_wave] at hhi; omega) hV hc
+    AnchoredRule.holdsAtLeast_votesFor_band h hV (by omega) (by omega)
+      (by simp only [Nemo.nemoAnchored_wave] at hhi; omega) hc
   skip_band := fun _ _ _ _ _ _ h => h.elim
   link_band := fun h hA hAlo hAhi hkk _ hlo hhi _ _ =>
     certifiedIn_band h hA hAlo hAhi hkk hlo (by simp only [Nemo.nemoAnchored_wave] at hhi; omega)

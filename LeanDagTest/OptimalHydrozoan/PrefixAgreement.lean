@@ -126,7 +126,7 @@ theorem vd_gD : DecidesBelow OD VD gD 7 := by
         subst this
         rcases i with _ | _ | i
         · exact fun hcert =>
-            absurd ((certifiedIn_iff_history (by decide)).mp hcert) (by decide)
+            absurd ((linkedVia_iff_history (by decide)).mp hcert) (by decide)
         · exact fun hev =>
             absurd ((evidenceLinked_iff_history (by decide)).mp hev) (by decide)
         · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega))

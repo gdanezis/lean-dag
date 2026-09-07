@@ -4350,6 +4350,53 @@ Hydrozoan and Optimal safety files, are gone.
 **Measure.** The step removes 683 lines and adds 322; the library and
 tests stand at 77,260 lines.
 
+### 11.34 One certificate stack, and the band lemmas once
+
+The fourth step of `docs/common-layer.md`.
+
+**Votes, certificates and links.** `Common/Support.lean` now states the
+certificate stack once, over a vote relation: `IsVote U b L` is the plain
+vote (a reference), `carriedVotes U Vote C L` the references of `C` that
+vote for `L`, `CarriesVotes U Vote t C L` that `C` carries votes for `L`
+from `t` distinct authors, and `certificatesAt U Vote t L n` the round-`n`
+blocks that do. `Common/History.lean` adds `LinkedVia U A s`, some block
+of `s` in `A`'s cone, and `coneSupporters U A L n`, the authors of the
+round-`n` votes for `L` in the cone. The core's `votesIn`, `Certifies`,
+`certificates` and `CertifiedIn`, Hydrozoan's `voteBlocks`,
+`IsCertificate`, `certificates` and `CertifiedIn`, Mahi-Mahi's at its
+own vote, and Odontoceti's and Hybrid's `coneSupports` are each one line,
+an abbreviation of the shared notion at the rule's parameters; their
+membership lemmas, the certificate-to-supporter lemma and the history
+reading of the link are the shared ones.
+
+**The band lemmas.** `Common/Anchored/Band.lean` proves the transports
+once: a plain vote across the band (`isVote_band`), the votes for a
+candidate at a round (`votesFor_band`), what a view holds of an in-band
+set (`heldAuthors_band`, `holdsAtLeast_band`), the carried votes and the
+certificate of an in-band block (`carriedVotes_band`,
+`carriesVotes_band`, `mem_certificatesAt_band`), the link to the
+certificates in both directions (`linkedVia_certificatesAt_band`), that a
+candidate the band did not carry is linked from no old anchor
+(`not_linkedVia_certificatesAt_band_novel`, with the plain vote's
+`not_isVote_band_novel`), and the cone of supporters
+(`coneSupporters_band`, `coneSupporters_band_novel`). Each rule's
+`commit_band`, `link_band` and `link_novel` law is now one application
+of these; the vote relation is the one thing a rule supplies, and for
+every rule but Mahi-Mahi it is `isVote_band_at`. The three verbatim
+`supportersIn_band`, the two `coneSupports_band` with their `thickLink`
+and `not_thickLink` companions, four `certifiedIn_band` and
+`not_certifiedIn_band_novel`, and eleven of Hydrozoan's own band helpers
+are deleted; Mahi-Mahi keeps its vote's transport and the novel case its
+vote needs.
+
+**Left in place.** Nemo's one-rung link over `history` and Hydrozoan's
+`WeakLinked` keep their own transports; both are `coneSupporters` or
+`LinkedVia` at one more step, which the rule cards of step 7 take up.
+FinWhale's `parentsVoting` and `SPCertificate` wait for step 11.
+
+**Measure.** The step removes 995 lines and adds 771; the library and
+tests stand at 77,035 lines.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

@@ -54,13 +54,13 @@ theorem leaderExcludedAll_chop (hU : LeaderExcludedAll U) :
     intro j' hj'
     rwa [BlockRecord.chop_block, chopBlk_refs_of_lt (by omega)] at hj'
   have hcand : ∀ L j', j' ∈ (U.block b).refs →
-      LeanDag.Hydrozoan.IsVote (BlockRecord.chop U G) j' L →
+      IsVote (BlockRecord.chop U G) j' L →
       IsCandidateAt (BlockRecord.chop U G) (((BlockRecord.chop U G).block b).round - 2) v L →
-      IsCandidateAt U ((U.block b).round - 2) v L ∧ LeanDag.Hydrozoan.IsVote U j' L := by
+      IsCandidateAt U ((U.block b).round - 2) v L ∧ IsVote U j' L := by
     intro L j' hj' hv hc
     have hj'U := U.complete b hb.1 j' hj'
     have hj'r := (U.valid b hb.1).predecessor j' hj'
-    unfold LeanDag.Hydrozoan.IsVote at hv ⊢
+    unfold IsVote at hv ⊢
     rw [BlockRecord.chop_block, chopBlk_refs_of_lt (by omega)] at hv
     obtain ⟨hLm, hLr, hLa⟩ := hc
     rw [BlockRecord.mem_chop_ids] at hLm
@@ -77,9 +77,9 @@ variable {sk : SkipData U.ids U.block}
 /-- A candidate voted for by an old block is old, and a candidate in the
 old universe. -/
 theorem isCandidateAt_of_old {r : ℕ} {v : Replica} {j L : BlockId} (hj : j ∈ U.ids)
-    (hv : LeanDag.Hydrozoan.IsVote (BlockRecord.copyFill U sk) j L)
+    (hv : IsVote (BlockRecord.copyFill U sk) j L)
     (hc : IsCandidateAt (BlockRecord.copyFill U sk) r v L) : IsCandidateAt U r v L := by
-  unfold LeanDag.Hydrozoan.IsVote at hv
+  unfold IsVote at hv
   rw [BlockRecord.copyFill_block_old hj] at hv
   have hLU := U.complete j hj L hv
   obtain ⟨-, hLr, hLa⟩ := hc
@@ -105,9 +105,9 @@ theorem leaderExcludedAll_copyFill (hU : LeaderExcludedAll U) :
       isCandidateAt_of_old hj₂U hv₂ ?_, hne, ⟨j₁, hj₁, ?_⟩, ⟨j₂, hj₂, ?_⟩⟩ j hj
     · rw [BlockRecord.copyFill_block_old ho] at hL₁; exact hL₁
     · rw [BlockRecord.copyFill_block_old ho] at hL₂; exact hL₂
-    · unfold LeanDag.Hydrozoan.IsVote at hv₁ ⊢
+    · unfold IsVote at hv₁ ⊢
       rw [BlockRecord.copyFill_block_old hj₁U] at hv₁; exact hv₁
-    · unfold LeanDag.Hydrozoan.IsVote at hv₂ ⊢
+    · unfold IsVote at hv₂ ⊢
       rw [BlockRecord.copyFill_block_old hj₂U] at hv₂; exact hv₂
   · -- a filled block: everything is the donor's
     obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf
@@ -125,9 +125,9 @@ theorem leaderExcludedAll_copyFill (hU : LeaderExcludedAll U) :
     rw [hr] at hL₁ hL₂
     exact hU _ hlm v h2' ⟨L₁, L₂, isCandidateAt_of_old hj₁U hv₁ hL₁,
       isCandidateAt_of_old hj₂U hv₂ hL₂, hne,
-      ⟨j₁, hj₁, by unfold LeanDag.Hydrozoan.IsVote at hv₁ ⊢
+      ⟨j₁, hj₁, by unfold IsVote at hv₁ ⊢
                    rw [BlockRecord.copyFill_block_old hj₁U] at hv₁; exact hv₁⟩,
-      ⟨j₂, hj₂, by unfold LeanDag.Hydrozoan.IsVote at hv₂ ⊢
+      ⟨j₂, hj₂, by unfold IsVote at hv₂ ⊢
                    rw [BlockRecord.copyFill_block_old hj₂U] at hv₂; exact hv₂⟩⟩ j hj
 
 /-- **Leader exclusion survives re-genesis.** The new block sits at round
@@ -168,11 +168,11 @@ theorem leaderExcludedAll_addGenesis {U : LeanDag.Hydrozoan.BlockUniverse Replic
         · rw [BlockRecord.addGenesis_block_old hLU] at hLr hLa
           exact ⟨hLU, hLr, hLa⟩
       have hvote : ∀ j ∈ (U.block b).refs, ∀ L,
-          LeanDag.Hydrozoan.IsVote (BlockRecord.addGenesis U v g () hg hsev) j L →
-          LeanDag.Hydrozoan.IsVote U j L := by
+          IsVote (BlockRecord.addGenesis U v g () hg hsev) j L →
+          IsVote U j L := by
         intro j hj L hv
         have hjU := U.complete b hbU j hj
-        unfold LeanDag.Hydrozoan.IsVote at hv ⊢
+        unfold IsVote at hv ⊢
         rw [BlockRecord.addGenesis_block_old hjU] at hv
         exact hv
       exact hU b hbU u h2 ⟨L₁, L₂, hcand L₁ hL₁, hcand L₂ hL₂, hne,

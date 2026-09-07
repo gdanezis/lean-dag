@@ -28,15 +28,6 @@ theorem mem_candidatesAt {q b : BlockId} {a : Validator} {r : ℕ} :
   simp only [candidatesAt, Finset.mem_filter, mem_blocksAt]
   tauto
 
-theorem mem_votesIn {C L q : BlockId} :
-    q ∈ votesIn U C L ↔ q ∈ (U.block C).refs ∧ Votes U q L :=
-  Finset.mem_filter
-
-theorem mem_certificates {C L : BlockId} {w r : ℕ} :
-    C ∈ certificates U w L r ↔
-      C ∈ U.ids ∧ (U.block C).round = decisionRoundAt w r ∧ Certifies U C L := by
-  simp [certificates, and_assoc]
-
 theorem mem_blamers {w : ℕ} {a : Validator} {r : ℕ} {v : Validator} :
     v ∈ blamers U w a r ↔
       ∃ q ∈ U.ids, (U.block q).round = votingRound w r ∧ Blames U q a r ∧
@@ -85,7 +76,7 @@ theorem votesIn_spec {C L q : BlockId} {w r : ℕ} (hw : 2 ≤ w)
     (hC : C ∈ U.ids) (hCr : (U.block C).round = decisionRoundAt w r)
     (hq : q ∈ votesIn U C L) :
     q ∈ U.ids ∧ (U.block q).round = votingRound w r := by
-  rw [mem_votesIn] at hq
+  rw [mem_carriedVotes] at hq
   refine ⟨U.complete C hC q hq.1, ?_⟩
   have := U.round_of_mem_refs hC hq.1
   rw [decisionRoundAt_eq_votingRound_succ hw] at hCr
@@ -102,14 +93,14 @@ theorem certificates_eq_empty_of_directSkip {w : ℕ} {a : Validator} {r : ℕ} 
     certificates U w L r = ∅ := by
   rw [Finset.eq_empty_iff_forall_notMem]
   intro C hC
-  obtain ⟨hCids, hCr, hcert⟩ := mem_certificates.mp hC
+  obtain ⟨hCids, hCr, hcert⟩ := mem_certificatesAt.mp hC
   obtain ⟨q, hqv, hqb⟩ := U.exists_common_mem_of_quorums (n := votingRound w r)
     (s := votesIn U C L)
     (t := (blocksAt U (votingRound w r)).filter (fun q => Blames U q a r))
     (fun q hq => votesIn_spec hw hCids hCr hq)
     (fun q hq => mem_blocksAt.mp (Finset.mem_filter.mp hq).1)
     hcert h
-  have hv := (mem_votesIn.mp hqv).2
+  have hv := (mem_carriedVotes.mp hqv).2
   have hb := (Finset.mem_filter.mp hqb).2
   rw [← hLc, ← hLr] at hb
   exact not_blames_of_votes hv hb
@@ -123,12 +114,12 @@ theorem eq_of_certificates_nonempty {w r : ℕ} {L₁ L₂ : BlockId} (hw : 2 �
     (hr : (U.block L₁).round = (U.block L₂).round) : L₁ = L₂ := by
   obtain ⟨C₁, hC₁⟩ := h₁
   obtain ⟨C₂, hC₂⟩ := h₂
-  obtain ⟨hC₁ids, hC₁r, hcert₁⟩ := mem_certificates.mp hC₁
-  obtain ⟨hC₂ids, hC₂r, hcert₂⟩ := mem_certificates.mp hC₂
+  obtain ⟨hC₁ids, hC₁r, hcert₁⟩ := mem_certificatesAt.mp hC₁
+  obtain ⟨hC₂ids, hC₂r, hcert₂⟩ := mem_certificatesAt.mp hC₂
   obtain ⟨q, hq₁, hq₂⟩ := U.exists_common_mem_of_quorums (n := votingRound w r)
     (fun q hq => votesIn_spec hw hC₁ids hC₁r hq)
     (fun q hq => votesIn_spec hw hC₂ids hC₂r hq) hcert₁ hcert₂
-  exact eq_of_votes (mem_votesIn.mp hq₁).2 (mem_votesIn.mp hq₂).2 hc hr
+  exact eq_of_votes (mem_carriedVotes.mp hq₁).2 (mem_carriedVotes.mp hq₂).2 hc hr
 
 /-- A direct commit needs a quorum of certificate authors, so at least
 one certificate. -/
@@ -158,7 +149,7 @@ theorem exists_certificate_reaches_of_directCommit {w : ℕ} {L : BlockId} {r : 
       intro v hv
       rw [hT_def, Finset.mem_inter, mem_creatorsOf] at hv
       obtain ⟨⟨q, hq_cert, hq_creator⟩, _⟩ := hv
-      obtain ⟨hq_ids, hq_round, -⟩ := mem_certificates.mp hq_cert
+      obtain ⟨hq_ids, hq_round, -⟩ := mem_certificatesAt.mp hq_cert
       exact ⟨q, hq_ids, hq_round, hq_cert, hq_creator⟩
     have hTc : ∀ v ∈ T, v ∈ (Correct : Finset Validator) :=
       fun _ hv => Finset.mem_of_mem_inter_right hv
@@ -214,13 +205,14 @@ theorem votingRound_three (r : ℕ) : votingRound 3 r = r + 1 := by
 /-- At wave three the certificates of a round-`r` block are the core's. -/
 theorem certificates_eq_of_three {L : BlockId} {r : ℕ} (hLr : (U.block L).round = r) :
     certificates U 3 L r = LeanDag.certificates U L r := by
-  unfold certificates LeanDag.certificates
+  unfold certificates LeanDag.certificates certificatesAt
   rw [decisionRoundAt_three]
   apply Finset.filter_congr
   intro C hC
   obtain ⟨hCids, hCr⟩ := mem_blocksAt.mp hC
-  unfold Certifies LeanDag.Certifies
-  rw [votesIn_eq_of_three hCids hCr hLr]
+  unfold CarriesVotes
+  rw [show carriedVotes U (Votes U) C L = carriedVotes U (IsVote U) C L from
+    votesIn_eq_of_three hCids hCr hLr]
 
 /-- A blame of the slot is a blame of each of its candidates. -/
 theorem not_mem_refs_of_blames {q L : BlockId} {a : Validator} {r : ℕ} (hq : q ∈ U.ids)

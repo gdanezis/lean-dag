@@ -852,15 +852,24 @@ below is assigned by the reader of the DAG, not by its writer.
 ### 3.1 Certificates
 
 ```lean
-def votesIn (U) (C L : BlockId) : Finset BlockId :=
-  (U.block C).refs.filter (fun q => L ∈ (U.block q).refs)
+abbrev votesIn (U) (C L : BlockId) : Finset BlockId :=
+  carriedVotes U (IsVote U) C L
 
-def Certifies (U) (C L : BlockId) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (votesIn U C L)).card
+abbrev Certifies (U) (C L : BlockId) : Prop :=
+  CarriesVotes U (IsVote U) (quorumCard Validator) C L
 
-def certificates (U) (L : BlockId) (r : ℕ) : Finset BlockId :=
-  (blocksAt U (r + 2)).filter (fun C => Certifies U C L)
+abbrev certificates (U) (L : BlockId) (r : ℕ) : Finset BlockId :=
+  certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2)
 ```
+
+These are the record's certificate stack (`Common/Support.lean`) at the
+plain vote and the core's quorum: `carriedVotes U Vote C L` is the
+references of `C` that vote for `L`, `CarriesVotes U Vote t C L` says `C`
+carries votes for `L` from `t` distinct authors, and
+`certificatesAt U Vote t L n` is the round-`n` blocks that do. Every rule
+with a certificate — Nemo's vote, Odontoceti's and Hybrid's cone
+supporters, Hydrozoan's `q_cert` certificate, Mahi-Mahi's with its own
+vote — is the same stack at its vote, threshold and round.
 
 A round-`(r+2)` block certifies a round-`r` block `L` exactly when its own
 references contain blocks by a quorum of distinct validators, each of which
@@ -889,9 +898,12 @@ A slot which the direct rules leave undecided is settled by examining the causal
 history of a later, committed *anchor*.
 
 ```lean
-def CertifiedIn (U) (A L : BlockId) (r : ℕ) : Prop :=
-  ∃ C ∈ certificates U L r, Reaches U A C
+abbrev CertifiedIn (U) (A L : BlockId) (r : ℕ) : Prop :=
+  LinkedVia U A (certificates U L r)
 ```
+
+`LinkedVia U A s` (`Common/History.lean`) says some block of `s` lies in
+`A`'s causal history; it is what every indirect rung asks of an anchor.
 
 This test is universe-level by design. `certifiedIn_iff_of_view` establishes that
 restricting the search to a view holding the anchor yields the same answer, so
@@ -3457,10 +3469,8 @@ def DirectCommit (U) (L : BlockId) (r : ℕ) : Prop :=
 def DirectSkip (U) (L : BlockId) (r : ℕ) : Prop :=
   quorumCard Validator ≤ (blames U L (r + 1)).card
 
-def coneSupports (U) (A L : BlockId) (r : ℕ) : Finset Validator :=
-  creatorsOf U.block
-    ((blocksAt U (r + 1)).filter
-      (fun q => L ∈ (U.block q).refs ∧ q ∈ history U A))
+abbrev coneSupports (U) (A L : BlockId) (r : ℕ) : Finset Validator :=
+  coneSupporters U A L (r + 1)
 
 def ThickLink (U) (A L : BlockId) (r : ℕ) : Prop :=
   (Fintype.card Validator - 3 * F.f) ≤ (coneSupports U A L r).card
@@ -9487,8 +9497,8 @@ the rule:
 def WitnessesEquivocation (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (k : ℕ)
     (b : BlockId) : Prop :=
   ∃ L₁ L₂, IsLeaderBlock U k L₁ ∧ IsLeaderBlock U k L₂ ∧ L₁ ≠ L₂ ∧
-    (∃ j ∈ (U.block b).refs, LeanDag.Hydrozoan.IsVote U j L₁) ∧
-    (∃ j ∈ (U.block b).refs, LeanDag.Hydrozoan.IsVote U j L₂)
+    (∃ j ∈ (U.block b).refs, IsVote U j L₁) ∧
+    (∃ j ∈ (U.block b).refs, IsVote U j L₂)
 ```
 
 The round guard is derivable from the predecessor condition and stated
@@ -9905,10 +9915,10 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Common/Record/Chop.lean`, `Common/Record/Fill.lean`, `Common/Record/Genesis.lean` | the cut, the fill and re-genesis, built once at the record |
 | `Common/BlockDag.lean` | `BlockUniverse` and `View` as the record at `ValidWrt`; the core's validity is mechanised; T1 |
 | `Common/CausalHistory.lean` | `Reaches` at any block record; T2, T6a |
-| `Common/Support.lean` | counting vocabulary at any block record, in the record and in a view (`supportersIn`, `blamesIn`); the hitting lemma, propagation and coverage at any quorate record; the core's M3 counting |
+| `Common/Support.lean` | counting vocabulary at any block record, in the record and in a view (`supportersIn`, `blamesIn`); what a view holds (`heldAuthors`, `HoldsAtLeast`); the certificate stack over a vote relation (`carriedVotes`, `CarriesVotes`, `certificatesAt`); the hitting lemma, propagation and coverage at any quorate record; the counting bounds under non-equivocation |
 | `Common/Participation.lean` | `PopulatedOn` and `SynchronisedOn`, at raw block data and at any block record |
 | `Common/Ledger.lean` | the ledger at any block record: `commitSeq`, `ledgerSet`, `OutputAt`; monotonicity, uniqueness, and agreement of agreeing assignments |
-| `Common/History.lean` | causal history as a `Finset`, at any block record |
+| `Common/History.lean` | causal history as a `Finset`, at any block record; a block of a set in an anchor's cone (`LinkedVia`) and the votes in the cone (`coneSupporters`) |
 | `Common/Persistence.lean` | T3 |
 | `Common/CommonCore.lean` | T3a, T3c |
 | `Common/Anchored.lean` | the anchored decision relation every rule is an instance of: `AnchoredRule` (wave, direct commit and skip on a view, graded rungs, ties), `EligibleAt`, `Decided`, what a rule owes (`Laws`), and agreement, monotonicity and the ledger once |
@@ -10938,7 +10948,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 334 definitions and structures the report names, in
+The 340 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -11109,6 +11119,30 @@ def history (U : BlockRecord Validator BlockId Payload P honest) (b : BlockId) :
 
 The causal history of `b`, as a `Finset`.
 
+#### `LinkedVia`
+
+*abbrev, `Common.History.lean`*
+
+```lean
+abbrev LinkedVia (U : BlockRecord Validator BlockId Payload P honest) (A : BlockId)
+    (s : Finset BlockId) : Prop :=
+  ∃ C ∈ s, Reaches U A C
+```
+
+Some block of `s` lies in `A`'s causal history.
+
+#### `coneSupporters`
+
+*def, `Common.History.lean`*
+
+```lean
+def coneSupporters (U : BlockRecord Validator BlockId Payload P honest) (A L : BlockId)
+    (n : ℕ) : Finset Validator :=
+  creatorsOf U.block (coneVotesFor U A L n)
+```
+
+The authors of the round-`n` votes for `L` in `A`'s cone.
+
 #### `authorsAt`
 
 *def, `Common.Support.lean`*
@@ -11146,6 +11180,18 @@ The validators whose round-`n` block declines to reference `L`.
 
 The complement of `supporters U L n` *within the round-`n` author pool* — but only for honest validators. A Byzantine author can appear in both, by publishing one round-`n` block that votes and another that does not; ruling that out for honest validators is `not_mem_of_supports_of_blames`, and is the whole content of M3.
 
+#### `heldAuthors`
+
+*def, `Common.Support.lean`*
+
+```lean
+def heldAuthors (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
+    (s : Finset BlockId) : Finset Validator :=
+  creatorsOf U.block (s ∩ V.ids)
+```
+
+The authors of the blocks of `s` that a view holds.
+
 #### `HoldsAtLeast`
 
 *def, `Common.Support.lean`*
@@ -11181,6 +11227,45 @@ def blamesIn (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
 ```
 
 The blamers of `L` at round `n` that a view holds.
+
+#### `carriedVotes`
+
+*def, `Common.Support.lean`*
+
+```lean
+def carriedVotes (U : BlockRecord Validator BlockId Payload P honest)
+    (Vote : BlockId → BlockId → Prop) [∀ b L, Decidable (Vote b L)] (C L : BlockId) :
+    Finset BlockId :=
+  (U.block C).refs.filter (fun b => Vote b L)
+```
+
+The references of `C` that vote for `L`: the votes `C` carries for `L`.
+
+#### `CarriesVotes`
+
+*def, `Common.Support.lean`*
+
+```lean
+def CarriesVotes (U : BlockRecord Validator BlockId Payload P honest)
+    (Vote : BlockId → BlockId → Prop) [∀ b L, Decidable (Vote b L)] (t : ℕ) (C L : BlockId) :
+    Prop :=
+  t ≤ (creatorsOf U.block (carriedVotes U Vote C L)).card
+```
+
+**`C` certifies `L` at threshold `t`**: it carries votes for `L` from `t` distinct authors.
+
+#### `certificatesAt`
+
+*def, `Common.Support.lean`*
+
+```lean
+def certificatesAt (U : BlockRecord Validator BlockId Payload P honest)
+    (Vote : BlockId → BlockId → Prop) [∀ b L, Decidable (Vote b L)] (t : ℕ) (L : BlockId)
+    (n : ℕ) : Finset BlockId :=
+  (blocksAt U n).filter (fun C => CarriesVotes U Vote t C L)
+```
+
+The round-`n` blocks certifying `L` at threshold `t`.
 
 ### Slots and the schedule
 

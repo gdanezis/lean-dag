@@ -1,4 +1,5 @@
 import LeanDag.Common.CausalHistory
+import LeanDag.Common.Support
 /-!
 # Causal history as a `Finset`
 
@@ -127,5 +128,89 @@ theorem mem_refs_of_mem_history_of_round_succ {b i : BlockId} (hb : b ∈ U.ids)
 theorem mem_history_of_mem_refs {b j : BlockId} (hb : b ∈ U.ids) (hj : j ∈ (U.block b).refs) :
     j ∈ history U b :=
   U.causal.mem_history_of_mem_refs hb hj
+
+/-! ## A block of a set in the anchor's cone
+
+The indirect rules read an anchor's causal history for one of a rule's
+certificates or votes: does a block of the set lie in the cone? Stated
+once as reachability, with the `history` reading alongside for
+decidability on data. -/
+
+section Linked
+
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
+variable {U : BlockRecord Validator BlockId Payload P honest}
+
+/-- Some block of `s` lies in `A`'s causal history. -/
+abbrev LinkedVia (U : BlockRecord Validator BlockId Payload P honest) (A : BlockId)
+    (s : Finset BlockId) : Prop :=
+  ∃ C ∈ s, Reaches U A C
+
+namespace LinkedVia
+
+variable {A B : BlockId} {s s' : Finset BlockId}
+
+theorem of_mem {C : BlockId} (hC : C ∈ s) (h : Reaches U A C) : LinkedVia U A s := ⟨C, hC, h⟩
+
+theorem nonempty (h : LinkedVia U A s) : s.Nonempty := by
+  obtain ⟨C, hC, -⟩ := h; exact ⟨C, hC⟩
+
+theorem mono (hs : s ⊆ s') (h : LinkedVia U A s) : LinkedVia U A s' := by
+  obtain ⟨C, hC, hre⟩ := h; exact ⟨C, hs hC, hre⟩
+
+/-- Cones nest: whatever an anchor links, everything above the anchor links. -/
+theorem of_reaches (h : Reaches U B A) (hl : LinkedVia U A s) : LinkedVia U B s := by
+  obtain ⟨C, hC, hre⟩ := hl; exact ⟨C, hC, h.trans hre⟩
+
+end LinkedVia
+
+variable [P.Mechanised]
+
+/-- The `history` reading: decidable on data. -/
+theorem linkedVia_iff_history {A : BlockId} {s : Finset BlockId} (hA : A ∈ U.ids) :
+    LinkedVia U A s ↔ (s ∩ history U A).Nonempty := by
+  constructor
+  · rintro ⟨C, hC, hre⟩
+    exact ⟨C, Finset.mem_inter.mpr ⟨hC, (mem_history_iff hA).mpr hre⟩⟩
+  · rintro ⟨C, hC⟩
+    obtain ⟨h1, h2⟩ := Finset.mem_inter.mp hC
+    exact ⟨C, h1, (mem_history_iff hA).mp h2⟩
+
+/-! ## Votes in an anchor's cone
+
+The other indirect test counts, by distinct authors, the votes for a
+candidate that lie in the anchor's cone — the count equivocation cannot
+inflate. -/
+
+/-- The round-`n` votes for `L` in `A`'s cone. -/
+def coneVotesFor (U : BlockRecord Validator BlockId Payload P honest) (A L : BlockId) (n : ℕ) :
+    Finset BlockId :=
+  (votesFor U L n).filter (fun q => q ∈ history U A)
+
+/-- The authors of the round-`n` votes for `L` in `A`'s cone. -/
+def coneSupporters (U : BlockRecord Validator BlockId Payload P honest) (A L : BlockId)
+    (n : ℕ) : Finset Validator :=
+  creatorsOf U.block (coneVotesFor U A L n)
+
+theorem mem_coneSupporters {A L : BlockId} {n : ℕ} {v : Validator} :
+    v ∈ coneSupporters U A L n ↔
+      ∃ q ∈ U.ids, (U.block q).round = n ∧ L ∈ (U.block q).refs ∧
+        q ∈ history U A ∧ (U.block q).creator = v := by
+  simp only [coneSupporters, coneVotesFor, mem_creatorsOf, Finset.mem_filter, mem_votesFor,
+    and_assoc]
+
+/-- In-cone supporters are supporters. -/
+theorem coneSupporters_subset_supporters {A L : BlockId} {n : ℕ} :
+    coneSupporters U A L n ⊆ supporters U L n :=
+  Finset.image_subset_image (Finset.filter_subset _ _)
+
+/-- Cones nest, so in-cone support does. -/
+theorem coneSupporters_subset_of_reaches {A B L : BlockId} {n : ℕ} (hB : B ∈ U.ids)
+    (h : Reaches U B A) : coneSupporters U A L n ⊆ coneSupporters U B L n := by
+  refine Finset.image_subset_image fun q hq => ?_
+  rw [coneVotesFor, Finset.mem_filter] at hq ⊢
+  exact ⟨hq.1, history_subset_of_reaches hB h hq.2⟩
+
+end Linked
 
 end LeanDag

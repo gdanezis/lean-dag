@@ -36,8 +36,8 @@ instance decWitnessesAt [Fintype BlockId]
     (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
     (r : ℕ) (v : Replica) (b : BlockId) : Decidable (WitnessesAt U r v b) :=
   inferInstanceAs (Decidable (∃ L₁ L₂, IsCandidateAt U r v L₁ ∧ IsCandidateAt U r v L₂ ∧
-    L₁ ≠ L₂ ∧ (∃ j ∈ (U.block b).refs, LeanDag.Hydrozoan.IsVote U j L₁) ∧
-    (∃ j ∈ (U.block b).refs, LeanDag.Hydrozoan.IsVote U j L₂)))
+    L₁ ≠ L₂ ∧ (∃ j ∈ (U.block b).refs, IsVote U j L₁) ∧
+    (∃ j ∈ (U.block b).refs, IsVote U j L₂)))
 
 instance [Fintype BlockId] (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) :
     Decidable (LeaderExcludedAll U) :=

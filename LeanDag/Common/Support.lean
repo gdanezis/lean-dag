@@ -113,6 +113,16 @@ variable [DecidableEq BlockId]
 
 /-! ### Votes and omissions -/
 
+/-- `b` votes for `L` in the plain sense: it references `L`. Every rule
+but Mahi-Mahi reads its votes this way. -/
+abbrev IsVote (U : BlockRecord Validator BlockId Payload P honest) (b L : BlockId) : Prop :=
+  L ∈ (U.block b).refs
+
+/-- A candidate the record does not hold is voted for by none of its blocks. -/
+theorem not_isVote_of_notMem {L : BlockId} (hL : L ∉ U.ids) :
+    ∀ b ∈ U.ids, ¬ IsVote U b L :=
+  fun b hb hv => hL (U.complete b hb L hv)
+
 /-- The round-`n` blocks that reference `b`: the votes for `b`. -/
 def votesFor (U : BlockRecord Validator BlockId Payload P honest) (b : BlockId) (n : ℕ) :
     Finset BlockId :=
@@ -294,6 +304,88 @@ theorem blamesIn_eq_toRecord {V : U.View} {L : BlockId} {n : ℕ} :
   ext v
   rw [mem_blamesIn, mem_blames]
   rfl
+
+/-! ### Votes carried by a block, and certificates
+
+A block *carries* the votes among its references. A rule's **certificate**
+is a block carrying votes for a candidate from `t` distinct authors, at
+a round the rule names. What counts as a vote is the reference itself
+for every rule but Mahi-Mahi, whose vote reads the voter's cone, so the
+stack is stated once over a vote relation, and each rule's certificate
+is it at the rule's vote, threshold and round. -/
+
+section Certificates
+
+/-- The references of `C` that vote for `L`: the votes `C` carries for `L`. -/
+def carriedVotes (U : BlockRecord Validator BlockId Payload P honest)
+    (Vote : BlockId → BlockId → Prop) [∀ b L, Decidable (Vote b L)] (C L : BlockId) :
+    Finset BlockId :=
+  (U.block C).refs.filter (fun b => Vote b L)
+
+/-- **`C` certifies `L` at threshold `t`**: it carries votes for `L` from
+`t` distinct authors. -/
+def CarriesVotes (U : BlockRecord Validator BlockId Payload P honest)
+    (Vote : BlockId → BlockId → Prop) [∀ b L, Decidable (Vote b L)] (t : ℕ) (C L : BlockId) :
+    Prop :=
+  t ≤ (creatorsOf U.block (carriedVotes U Vote C L)).card
+
+instance decidableCarriesVotes (U : BlockRecord Validator BlockId Payload P honest)
+    (Vote : BlockId → BlockId → Prop) [∀ b L, Decidable (Vote b L)] (t : ℕ) (C L : BlockId) :
+    Decidable (CarriesVotes U Vote t C L) :=
+  inferInstanceAs (Decidable (_ ≤ _))
+
+/-- The round-`n` blocks certifying `L` at threshold `t`. -/
+def certificatesAt (U : BlockRecord Validator BlockId Payload P honest)
+    (Vote : BlockId → BlockId → Prop) [∀ b L, Decidable (Vote b L)] (t : ℕ) (L : BlockId)
+    (n : ℕ) : Finset BlockId :=
+  (blocksAt U n).filter (fun C => CarriesVotes U Vote t C L)
+
+variable {Vote : BlockId → BlockId → Prop} [∀ b L, Decidable (Vote b L)]
+
+theorem mem_carriedVotes {C L b : BlockId} :
+    b ∈ carriedVotes U Vote C L ↔ b ∈ (U.block C).refs ∧ Vote b L :=
+  Finset.mem_filter
+
+@[simp]
+theorem mem_certificatesAt {t : ℕ} {L : BlockId} {n : ℕ} {C : BlockId} :
+    C ∈ certificatesAt U Vote t L n ↔
+      C ∈ U.ids ∧ (U.block C).round = n ∧ CarriesVotes U Vote t C L := by
+  simp only [certificatesAt, Finset.mem_filter, mem_blocksAt, and_assoc]
+
+theorem certificatesAt_subset_ids {t : ℕ} {L : BlockId} {n : ℕ} :
+    certificatesAt U Vote t L n ⊆ U.ids :=
+  fun _ hC => (mem_certificatesAt.mp hC).1
+
+/-- A certificate at a positive threshold carries a vote. -/
+theorem exists_vote_of_carriesVotes {t : ℕ} {C L : BlockId} (ht : 0 < t)
+    (h : CarriesVotes U Vote t C L) : ∃ b ∈ (U.block C).refs, Vote b L := by
+  have hpos : 0 < (carriedVotes U Vote C L).card :=
+    lt_of_lt_of_le (lt_of_lt_of_le ht h) Finset.card_image_le
+  obtain ⟨b, hb⟩ := Finset.card_pos.mp hpos
+  exact ⟨b, (mem_carriedVotes.mp hb).1, (mem_carriedVotes.mp hb).2⟩
+
+variable [P.Mechanised]
+
+/-- A vote a round-`(n+1)` block carries is a round-`n` block of the record. -/
+theorem mem_carriedVotes_spec {C L b : BlockId} {n : ℕ} (hC : C ∈ U.ids)
+    (hCr : (U.block C).round = n + 1) (hb : b ∈ carriedVotes U Vote C L) :
+    b ∈ U.ids ∧ (U.block b).round = n ∧ Vote b L := by
+  obtain ⟨hm, hv⟩ := mem_carriedVotes.mp hb
+  refine ⟨U.complete C hC b hm, ?_, hv⟩
+  have := U.round_of_mem_refs hC hm
+  omega
+
+/-- The authors of the plain votes a round-`(n+1)` block carries for `L`
+support `L` at round `n`. -/
+theorem creatorsOf_carriedVotes_subset_supporters {C L : BlockId} {n : ℕ} (hC : C ∈ U.ids)
+    (hCr : (U.block C).round = n + 1) :
+    creatorsOf U.block (carriedVotes U (IsVote U) C L) ⊆ supporters U L n := by
+  intro v hv
+  obtain ⟨b, hb, hc⟩ := mem_creatorsOf.mp hv
+  obtain ⟨hbi, hbr, hbv⟩ := mem_carriedVotes_spec (Vote := IsVote U) hC hCr hb
+  exact mem_supporters.mpr ⟨b, hbi, hbr, hbv, hc⟩
+
+end Certificates
 
 /-! ### Votes and blames under non-equivocation
 

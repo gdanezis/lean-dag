@@ -41,10 +41,9 @@ variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
 shared `votingRound`, one above the proposal. -/
 abbrev decisionRound (Replica : Type*) [S : Slots Replica] (k : ℕ) : ℕ := S.slotRound k + 2
 
-/-- `b` votes for `L` (the paper's `IsVote`): `L` is among `b`'s refs.
-
-Recall `ValidWrt.distinct_creators`: a well-formed block never references
-two blocks by the same creator, so `b` votes for at most one copy of any
+/-! A vote is the record's `IsVote`: `L` is among `b`'s refs. Recall
+`ValidWrt.distinct_creators`: a well-formed block never references two
+blocks by the same creator, so `b` votes for at most one copy of any
 leader — even an equivocating one.
 
 **Fidelity gap**: the paper defines a vote by deterministic depth-first
@@ -54,23 +53,17 @@ length 3 the two coincide for the blocks the rules inspect — a leader
 copy can only appear among a voter's direct references — and one vote
 per creator per slot follows from `distinct_creators` plus universe-level
 non-equivocation; the DFS ≡ direct-reference equivalence is argued in
-prose, not in Lean. Definitionally this is `RefStep`, kept under the
-protocol's name. -/
-@[reducible]
-def IsVote (U : BlockUniverse Replica BlockId) (b L : BlockId) : Prop :=
-  L ∈ (U.block b).refs
+prose, not in Lean. -/
 
 /-- The refs of `C` that vote for `L` — the inner set of the paper's
-`IsCertificate`. -/
-def voteBlocks (U : BlockUniverse Replica BlockId) (C L : BlockId) :
-    Finset BlockId :=
-  (U.block C).refs.filter fun b => IsVote U b L
+`IsCertificate`: the record's carried votes. -/
+abbrev voteBlocks (U : BlockUniverse Replica BlockId) (C L : BlockId) : Finset BlockId :=
+  carriedVotes U (IsVote U) C L
 
 /-- `C` certifies `L` (the paper's `IsCertificate`): `C`'s votes for `L`
-come from `q_cert` distinct creators. -/
-@[reducible]
-def IsCertificate (U : BlockUniverse Replica BlockId) (C L : BlockId) : Prop :=
-  qCert Replica ≤ (creatorsOf U.block (voteBlocks U C L)).card
+come from `q_cert` distinct creators — the record's certificate at `q_cert`. -/
+abbrev IsCertificate (U : BlockUniverse Replica BlockId) (C L : BlockId) : Prop :=
+  CarriesVotes U (IsVote U) (qCert Replica) C L
 
 /-- `L` is fast-committed (the paper's `FastCommittedLeader`): `q_fast`
 votes at the voting round, `r` its propose round. Two message delays. -/
@@ -79,9 +72,9 @@ def FastCommit (U : BlockUniverse Replica BlockId) (L : BlockId) (r : ℕ) :
   qFast Replica ≤ (supporters U L (r + 1)).card
 
 /-- The decision-round blocks certifying `L`, `r` its propose round. -/
-def certificates (U : BlockUniverse Replica BlockId) (L : BlockId) (r : ℕ) :
+abbrev certificates (U : BlockUniverse Replica BlockId) (L : BlockId) (r : ℕ) :
     Finset BlockId :=
-  (blocksAt U (r + 2)).filter fun C => IsCertificate U C L
+  certificatesAt U (IsVote U) (qCert Replica) L (r + 2)
 
 /-- The replicas whose decision-round block certifies `L` — the
 slow-path counterpart of `supporters`. -/

@@ -63,7 +63,7 @@ theorem od_slot2_evidence : DecidedOpt OD VD 2 (some 8) := by
       subst this
       have : i = 0 := by omega
       subst this
-      exact absurd ((certifiedIn_iff_history (by decide)).mp hcert) (by decide))
+      exact absurd ((linkedVia_iff_history (by decide)).mp hcert) (by decide))
     (by decide)
     (show EvidenceLinked UD 22 8 2 from (evidenceLinked_iff_history (by decide)).mpr (by decide))
     (fun _ _ _ h => h)
@@ -203,8 +203,8 @@ theorem oe_slot1_evidence : DecidedOpt OE VE 1 (some 4) := by
       have : i = 0 := by omega
       subst this
       rcases hall L' hL' with rfl | rfl
-      · exact absurd ((certifiedIn_iff_history (by decide)).mp hcert) (by decide)
-      · exact absurd ((certifiedIn_iff_history (by decide)).mp hcert) (by decide))
+      · exact absurd ((linkedVia_iff_history (by decide)).mp hcert) (by decide)
+      · exact absurd ((linkedVia_iff_history (by decide)).mp hcert) (by decide))
     (by decide)
     (show EvidenceLinked UE 18 4 1 from (evidenceLinked_iff_history (by decide)).mpr (by decide))
     (fun _ _ _ h => h)

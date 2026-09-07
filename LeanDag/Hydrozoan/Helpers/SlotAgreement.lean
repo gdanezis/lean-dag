@@ -107,7 +107,7 @@ private theorem certifiedIn_of_slowCommit_base {L : BlockId} {r : ℕ}
       (s := (U.block A).refs) (t := certificates U L r) (n := r + 2)
       (fun b hb => ⟨U.complete A hA b hb, by
         have := BlockRecord.round_of_mem_refs hA hb; omega⟩)
-      (fun b hb => ⟨(mem_certificates.mp hb).1, (mem_certificates.mp hb).2.1⟩)
+      (fun b hb => ⟨(mem_certificatesAt.mp hb).1, (mem_certificatesAt.mp hb).2.1⟩)
       (by
         have hq : q Replica ≤ (creatorsOf U.block (U.block A).refs).card :=
           (U.valid A hA).quorum (by omega)
@@ -240,13 +240,13 @@ theorem certificates_eq_empty_of_fastCommit {L L' : BlockId} {r : ℕ}
     (h : FastCommit U L r) : certificates U L' r = ∅ := by
   rw [Finset.eq_empty_iff_forall_notMem]
   intro C hC
-  obtain ⟨hCi, hCr, hcert⟩ := mem_certificates.mp hC
+  obtain ⟨hCi, hCr, hcert⟩ := mem_certificatesAt.mp hC
   have hle := Finset.card_le_card
-    (creators_voteBlocks_subset_supporters (L := L') hCi hCr)
+    (creatorsOf_carriedVotes_subset_supporters (L := L') hCi hCr)
   have h2 := supporters_capped_of_fastCommit hne hcreator h
   have hqc := qWeak_le_qCert (Replica := Replica)
   have h5 := nf_lt_qFast_add_qWeak (Replica := Replica)
-  simp only [IsCertificate] at hcert
+  simp only [CarriesVotes] at hcert
   omega
 
 /-- Starvation of same-creator rivals, rung-1 phrasing. -/
@@ -293,13 +293,13 @@ theorem certificates_eq_empty_of_skipped {k : ℕ} {L : BlockId}
     certificates U L (S.slotRound k) = ∅ := by
   rw [Finset.eq_empty_iff_forall_notMem]
   intro C hC
-  obtain ⟨hCi, hCr, hcert⟩ := mem_certificates.mp hC
+  obtain ⟨hCi, hCr, hcert⟩ := mem_certificatesAt.mp hC
   have hle := Finset.card_le_card
-    (creators_voteBlocks_subset_supporters (L := L) hCi hCr)
+    (creatorsOf_carriedVotes_subset_supporters (L := L) hCi hCr)
   have h2 := supporters_capped_of_skipped hL h
   have hqc := qWeak_le_qCert (Replica := Replica)
   have h5 := nf_lt_qFast_add_qWeak (Replica := Replica)
-  simp only [IsCertificate] at hcert
+  simp only [CarriesVotes] at hcert
   omega
 
 /-- Skip-side, rung-1 phrasing. -/

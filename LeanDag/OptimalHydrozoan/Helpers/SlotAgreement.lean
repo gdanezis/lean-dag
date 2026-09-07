@@ -79,8 +79,9 @@ variable {B : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
 /-- Membership in `votersOf`, unfolded. -/
 theorem mem_votesFor {C L : BlockId} {v : Replica} :
     v ∈ votersOf B C L ↔
-      ∃ p ∈ (B.block C).refs, LeanDag.Hydrozoan.IsVote B p L ∧ (B.block p).creator = v := by
-  simp only [votersOf, LeanDag.Hydrozoan.voteBlocks, mem_creatorsOf, Finset.mem_filter]
+      ∃ p ∈ (B.block C).refs, IsVote B p L ∧ (B.block p).creator = v := by
+  simp only [votersOf, LeanDag.Hydrozoan.voteBlocks, carriedVotes, mem_creatorsOf,
+    Finset.mem_filter]
   tauto
 
 /-- A view's fast commit lifts to the universe, then to the fast/fast
@@ -316,11 +317,11 @@ theorem not_certifiedIn_of_skippedOpt {k : ℕ} {L A : BlockId}
     (hL : IsLeaderBlock B k L) (h : SkippedLeaderOpt B k) :
     ¬ LeanDag.Hydrozoan.CertifiedIn B A L (S.slotRound k) := by
   rintro ⟨C, hC, -⟩
-  obtain ⟨hCi, hCr, hcert⟩ := LeanDag.Hydrozoan.mem_certificates.mp hC
+  obtain ⟨hCi, hCr, hcert⟩ := mem_certificatesAt.mp hC
   have hcard2 : qCert Replica ≤ (supporters B L (S.slotRound k + 1)).card := by
     have hle := Finset.card_le_card
-      (creators_voteBlocks_subset_supporters (L := L) hCi hCr)
-    simp only [LeanDag.Hydrozoan.IsCertificate] at hcert
+      (creatorsOf_carriedVotes_subset_supporters (L := L) hCi hCr)
+    simp only [CarriesVotes] at hcert
     omega
   have := card_supporters_add_card_slotBlames_le B.noEquivOn_honest card_compl_nonByzantine_le hL
   have h5 := nf_lt_two_qCert (Replica := Replica)
@@ -333,11 +334,11 @@ theorem not_certifiedIn_of_fastCommitOpt {k : ℕ} {L L' A : BlockId}
     (hne : L' ≠ L) (hL : IsLeaderBlock B k L) (hL' : IsLeaderBlock B k L')
     (h : FastCommitOpt B L (S.slotRound k)) : ¬ LeanDag.Hydrozoan.CertifiedIn B A L' (S.slotRound k) := by
   rintro ⟨C, hC, -⟩
-  obtain ⟨hCi, hCr, hcert⟩ := LeanDag.Hydrozoan.mem_certificates.mp hC
+  obtain ⟨hCi, hCr, hcert⟩ := mem_certificatesAt.mp hC
   have hcard2 : qCert Replica ≤ (supporters B L' (S.slotRound k + 1)).card := by
     have hle := Finset.card_le_card
-      (creators_voteBlocks_subset_supporters (L := L') hCi hCr)
-    simp only [LeanDag.Hydrozoan.IsCertificate] at hcert
+      (creatorsOf_carriedVotes_subset_supporters (L := L') hCi hCr)
+    simp only [CarriesVotes] at hcert
     omega
   have := card_supporters_add_card_supporters_le B.noEquivOn_honest card_compl_nonByzantine_le
     hne (by rw [hL'.2.2, hL.2.2]) (n := S.slotRound k + 1)

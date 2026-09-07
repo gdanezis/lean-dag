@@ -88,7 +88,7 @@ counted: its references are unchanged, and so are theirs. -/
 theorem votesIn_of_sustains (h : Sustains mysticetiRule U U' G R₀) {C L : BlockId}
     (hC : C ∈ U.ids) (hCr : R₀ + 1 < (U.block C).round) :
     votesIn U' C L = votesIn U C L := by
-  unfold votesIn
+  unfold votesIn carriedVotes
   have hrefs : (U'.block C).refs = (U.block C).refs :=
     h.refs C hC (by change R₀ < (U.block C).round; omega)
   rw [hrefs]
@@ -97,17 +97,19 @@ theorem votesIn_of_sustains (h : Sustains mysticetiRule U U' G R₀) {C L : Bloc
   have hqr := U.round_of_mem_refs hC hq
   have : (U'.block q).refs = (U.block q).refs :=
     h.refs q hqU (by change R₀ < (U.block q).round; omega)
-  rw [this]
+  unfold IsVote; rw [this]
 
 /-- **The core's certificate predicate transports.** -/
 theorem certifies_of_sustains (h : Sustains mysticetiRule U U' G R₀) {C L : BlockId}
     (hC : C ∈ U.ids) (hCr : R₀ + 1 < (U.block C).round) :
     Certifies U' C L ↔ Certifies U C L := by
-  unfold Certifies
-  rw [votesIn_of_sustains h hC hCr]
-  have : creatorsOf U'.block (votesIn U C L) = creatorsOf U.block (votesIn U C L) := by
+  unfold Certifies CarriesVotes
+  rw [show carriedVotes U' (IsVote U') C L = carriedVotes U (IsVote U) C L from
+    votesIn_of_sustains h hC hCr]
+  have : creatorsOf U'.block (carriedVotes U (IsVote U) C L) =
+      creatorsOf U.block (carriedVotes U (IsVote U) C L) := by
     refine Finset.image_congr fun q hq => ?_
-    have hqref := (Finset.mem_filter.mp hq).1
+    have hqref := (mem_carriedVotes.mp hq).1
     have hqU : q ∈ U.ids := U.complete C hC q hqref
     have hqr := U.round_of_mem_refs hC hqref
     exact h.creator q hqU (by change R₀ ≤ (U.block q).round; omega)
@@ -225,23 +227,27 @@ theorem isLeaderBlock_old [S : Slots Validator] (he : Extends mysticetiRule U U'
 /-- The votes an old certificate counts are the votes it counted. -/
 theorem votesIn_old (he : Extends mysticetiRule U U') {C L : BlockId} (hC : C ∈ U.ids) :
     votesIn U' C L = votesIn U C L := by
-  unfold votesIn
+  unfold votesIn carriedVotes
   rw [ext_block he hC]
   refine Finset.filter_congr fun q hq => ?_
-  rw [ext_block he (U.complete C hC q hq)]
+  unfold IsVote; rw [ext_block he (U.complete C hC q hq)]
 
 theorem certifies_old (he : Extends mysticetiRule U U') {C L : BlockId} (hC : C ∈ U.ids) :
     Certifies U' C L ↔ Certifies U C L := by
-  unfold Certifies
-  rw [votesIn_old he hC, creatorsOf_old he]
+  unfold Certifies CarriesVotes
+  rw [show carriedVotes U' (IsVote U') C L = carriedVotes U (IsVote U) C L from votesIn_old he hC,
+    creatorsOf_old he]
   intro q hq
-  exact U.complete C hC q (Finset.mem_filter.mp hq).1
+  exact U.complete C hC q (mem_carriedVotes.mp hq).1
 
 theorem mem_certificates_old (he : Extends mysticetiRule U U') {C L : BlockId} {r : ℕ}
     (hC : C ∈ U.ids) : C ∈ certificates U' L r ↔ C ∈ certificates U L r := by
-  simp only [certificates, Finset.mem_filter, mem_blocksAt]
-  rw [ext_block he hC, certifies_old he hC]
-  exact ⟨fun h => ⟨⟨hC, h.1.2⟩, h.2⟩, fun h => ⟨⟨ext_mem he hC, h.1.2⟩, h.2⟩⟩
+  simp only [mem_certificatesAt]
+  have hb := ext_block he hC
+  have hce := certifies_old he hC (L := L)
+  constructor
+  · rintro ⟨-, hr, hcert⟩; exact ⟨hC, by rw [← hb]; exact hr, hce.mp hcert⟩
+  · rintro ⟨-, hr, hcert⟩; exact ⟨ext_mem he hC, by rw [hb]; exact hr, hce.mpr hcert⟩
 
 /-! ### The direct rules -/
 
@@ -249,14 +255,11 @@ theorem directCommitIn_mono (he : Extends mysticetiRule U U')
     {V : View Validator BlockId Payload U} {V' : View Validator BlockId Payload U'}
     (hV : V.ids ⊆ V'.ids) {L : BlockId} {r : ℕ}
     (h : DirectCommitIn U V L r) : DirectCommitIn U' V' L r := by
-  unfold DirectCommitIn at h ⊢
   refine le_trans h (Finset.card_le_card ?_)
   intro v hv
-  obtain ⟨C, hC, hvC⟩ := Finset.mem_image.mp hv
-  obtain ⟨hCc, hCV⟩ := Finset.mem_inter.mp hC
-  have hCU : C ∈ U.ids := (mem_blocksAt.mp (Finset.mem_filter.mp hCc).1).1
-  refine Finset.mem_image.mpr ⟨C, Finset.mem_inter.mpr
-    ⟨(mem_certificates_old he hCU).mpr hCc, hV hCV⟩, ?_⟩
+  obtain ⟨C, hC, hCV, hvC⟩ := mem_heldAuthors.mp hv
+  have hCU : C ∈ U.ids := (mem_certificatesAt.mp hC).1
+  refine mem_heldAuthors.mpr ⟨C, (mem_certificates_old he hCU).mpr hC, hV hCV, ?_⟩
   rw [ext_block he hCU]; exact hvC
 
 /-- **An old candidate blamed before is blamed still.** -/
@@ -264,15 +267,12 @@ theorem directSkipIn_mono (he : Extends mysticetiRule U U')
     {V : View Validator BlockId Payload U} {V' : View Validator BlockId Payload U'}
     (hV : V.ids ⊆ V'.ids) {L : BlockId} {r : ℕ}
     (h : DirectSkipIn U V L r) : DirectSkipIn U' V' L r := by
-  unfold DirectSkipIn at h ⊢
   refine le_trans h (Finset.card_le_card ?_)
   intro v hv
-  obtain ⟨q, hq, hvq⟩ := Finset.mem_image.mp hv
-  obtain ⟨hqf, hqV⟩ := Finset.mem_inter.mp hq
-  obtain ⟨hqA, hqn⟩ := Finset.mem_filter.mp hqf
-  have hqU : q ∈ U.ids := (mem_blocksAt.mp hqA).1
-  refine Finset.mem_image.mpr ⟨q, Finset.mem_inter.mpr
-    ⟨Finset.mem_filter.mpr ⟨blocksAt_subset he _ hqA, ?_⟩, hV hqV⟩, ?_⟩
+  obtain ⟨q, hq, hqV, hvq⟩ := mem_heldAuthors.mp hv
+  obtain ⟨hqU, hqr, hqn⟩ := mem_omissionsOf.mp hq
+  refine mem_heldAuthors.mpr ⟨q, mem_omissionsOf.mpr ⟨ext_mem he hqU, ?_, ?_⟩, hV hqV, ?_⟩
+  · rw [ext_block he hqU]; exact hqr
   · rw [ext_block he hqU]; exact hqn
   · rw [ext_block he hqU]; exact hvq
 
@@ -313,14 +313,14 @@ theorem not_certifiedIn_novel (he : Extends mysticetiRule U U') {A L : BlockId} 
     (hA : A ∈ U.ids) (hL : L ∉ U.ids) : ¬ CertifiedIn U' A L r := by
   rintro ⟨C, hC, hre⟩
   obtain ⟨-, hCU⟩ := Extends.reaches_old he hA hre
-  have hcert : Certifies U' C L := (Finset.mem_filter.mp hC).2
-  unfold Certifies at hcert
+  have hcert : Certifies U' C L := (mem_certificatesAt.mp hC).2.2
+  unfold Certifies CarriesVotes at hcert
   have hempty : votesIn U' C L = ∅ := by
     rw [votesIn_old he hCU, Finset.eq_empty_iff_forall_notMem]
     intro q hq
-    obtain ⟨hqref, hqv⟩ := Finset.mem_filter.mp hq
+    obtain ⟨hqref, hqv⟩ := mem_carriedVotes.mp hq
     exact hL (U.complete q (U.complete C hCU q hqref) L hqv)
-  rw [hempty] at hcert
+  rw [show carriedVotes U' (IsVote U') C L = ∅ from hempty] at hcert
   simp only [creatorsOf, Finset.image_empty, Finset.card_empty, Nat.le_zero] at hcert
   exact absurd hcert (Nat.pos_iff_ne_zero.mp quorumCard_pos)
 
@@ -342,105 +342,6 @@ the candidate's transport are the relation's (`Anchored/Band.lean`):
 
 variable {S S' : Slots Validator}
 
-/-- The votes an in-band certificate counts are the votes it counted. -/
-theorem votesIn_band (h : AgreeBand mysticetiRule U U' lo hi g g') {C L : BlockId}
-    (hC : C ∈ U.ids) (h1 : lo + 1 < (U.block C).round + g)
-    (h2 : (U.block C).round + g ≤ hi) : votesIn U' C L = votesIn U C L := by
-  unfold votesIn
-  rw [AnchoredRule.band_refs h hC (by omega) h2]
-  refine Finset.filter_congr fun q hq => ?_
-  have hqU : q ∈ U.ids := U.complete C hC q hq
-  have hqr := U.round_of_mem_refs hC hq
-  rw [AnchoredRule.band_refs h hqU (by omega) (by omega)]
-
-theorem certifies_band (h : AgreeBand mysticetiRule U U' lo hi g g') {C L : BlockId}
-    (hC : C ∈ U.ids) (h1 : lo + 1 < (U.block C).round + g)
-    (h2 : (U.block C).round + g ≤ hi) :
-    Certifies U' C L ↔ Certifies U C L := by
-  unfold Certifies
-  rw [votesIn_band h hC h1 h2, AnchoredRule.creatorsOf_band h]
-  intro q hq
-  have hqU : q ∈ U.ids := U.complete C hC q (Finset.mem_filter.mp hq).1
-  have hqr := U.round_of_mem_refs hC (Finset.mem_filter.mp hq).1
-  exact ⟨hqU, by omega, by omega⟩
-
-theorem mem_certificates_band (h : AgreeBand mysticetiRule U U' lo hi g g') {C L : BlockId}
-    {r r' : ℕ} (hC : C ∈ U.ids) (hr : (U.block C).round = r + 2) (hrr : r + g = r' + g')
-    (h1 : lo ≤ r + g) (h2 : r + 2 + g ≤ hi) :
-    C ∈ certificates U' L r' ↔ C ∈ certificates U L r := by
-  simp only [certificates, Finset.mem_filter, mem_blocksAt]
-  have hb := AnchoredRule.band_block h hC (by omega) (by omega)
-  rw [certifies_band h hC (by omega) (by omega)]
-  exact ⟨fun hx => ⟨⟨hC, hr⟩, hx.2⟩,
-    fun hx => ⟨⟨AnchoredRule.band_mem h hC (by omega) (by omega), by omega⟩, hx.2⟩⟩
-
-/-! ### The direct rules and the anchor test, across a shifted band -/
-
-theorem directCommitIn_band (h : AgreeBand mysticetiRule U U' lo hi g g')
-    {V : View Validator BlockId Payload U} {V' : View Validator BlockId Payload U'}
-    {r r' : ℕ} (hrr : r + g = r' + g') (hr : lo ≤ r + g) (hhi : r + 2 + g ≤ hi)
-    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
-      b ∈ V'.ids)
-    {L : BlockId} (hc : DirectCommitIn U V L r) : DirectCommitIn U' V' L r' := by
-  unfold DirectCommitIn at hc ⊢
-  refine le_trans hc (Finset.card_le_card ?_)
-  intro w hw
-  obtain ⟨C, hC, hvC⟩ := Finset.mem_image.mp hw
-  obtain ⟨hCc, hCV⟩ := Finset.mem_inter.mp hC
-  have hCA := (Finset.mem_filter.mp hCc).1
-  have hCU : C ∈ U.ids := (mem_blocksAt.mp hCA).1
-  have hCr : (U.block C).round = r + 2 := (mem_blocksAt.mp hCA).2
-  refine Finset.mem_image.mpr ⟨C, Finset.mem_inter.mpr
-    ⟨(mem_certificates_band h hCU hCr hrr hr hhi).mpr hCc,
-      hV C hCV (by omega) (by omega)⟩, ?_⟩
-  rw [(AnchoredRule.band_block h hCU (by omega) (by omega)).2]; exact hvC
-
-theorem certifiedIn_band (h : AgreeBand mysticetiRule U U' lo hi g g') {A L : BlockId}
-    {r r' : ℕ} (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g)
-    (hAhi : (U.block A).round + g ≤ hi) (hrr : r + g = r' + g')
-    (hr : lo ≤ r + g) (hrhi : r + 2 + g ≤ hi) :
-    CertifiedIn U' A L r' ↔ CertifiedIn U A L r := by
-  unfold CertifiedIn
-  constructor
-  · rintro ⟨C, hC, hre⟩
-    have hCr' : (U'.block C).round = r' + 2 := (mem_blocksAt.mp (Finset.mem_filter.mp hC).1).2
-    have hCrR : (mysticetiRule.block U' C).round = r' + 2 := hCr'
-    obtain ⟨hCU, hreU, hCeq⟩ :=
-      AgreeBand.reaches_old h hA hAlo hAhi hre (by omega)
-    have hCeq' : (U.block C).round + g = (U'.block C).round + g' := hCeq
-    exact ⟨C, (mem_certificates_band h hCU (by omega) hrr hr hrhi).mp hC, hreU⟩
-  · rintro ⟨C, hC, hre⟩
-    have hCA := (Finset.mem_filter.mp hC).1
-    have hCU : C ∈ U.ids := (mem_blocksAt.mp hCA).1
-    have hCr : (U.block C).round = r + 2 := (mem_blocksAt.mp hCA).2
-    have hCrR : (mysticetiRule.block U C).round = r + 2 := hCr
-    exact ⟨C, (mem_certificates_band h hCU hCr hrr hr hrhi).mpr hC,
-      AgreeBand.reaches_of h hA hAhi hre (by omega)⟩
-
-/-- **A candidate the band did not carry is certified by nothing an old
-anchor can see.** -/
-theorem not_certifiedIn_band_novel (h : AgreeBand mysticetiRule U U' lo hi g g')
-    {A L : BlockId} {r r' : ℕ} (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g)
-    (hAhi : (U.block A).round + g ≤ hi) (hrr : r + g = r' + g')
-    (hr : lo ≤ r + g) (hrhi : r + 2 + g ≤ hi) (hL : L ∉ U.ids) :
-    ¬ CertifiedIn U' A L r' := by
-  rintro ⟨C, hC, hre⟩
-  have hCr' : (U'.block C).round = r' + 2 := (mem_blocksAt.mp (Finset.mem_filter.mp hC).1).2
-  have hCrR : (mysticetiRule.block U' C).round = r' + 2 := hCr'
-  obtain ⟨hCU, -, hCeq⟩ := AgreeBand.reaches_old h hA hAlo hAhi hre (by omega)
-  have hCeq' : (U.block C).round + g = (U'.block C).round + g' := hCeq
-  have hcert : Certifies U' C L := (Finset.mem_filter.mp hC).2
-  rw [certifies_band h hCU (by omega) (by omega)] at hcert
-  unfold Certifies at hcert
-  have hempty : votesIn U C L = ∅ := by
-    rw [Finset.eq_empty_iff_forall_notMem]
-    intro q hq
-    obtain ⟨hqref, hqv⟩ := Finset.mem_filter.mp hq
-    exact hL (U.complete q (U.complete C hCU q hqref) L hqv)
-  rw [hempty] at hcert
-  simp only [creatorsOf, Finset.image_empty, Finset.card_empty, Nat.le_zero] at hcert
-  exact absurd hcert (Nat.pos_iff_ne_zero.mp quorumCard_pos)
-
 end Band
 
 /-! ### Persistence -/
@@ -451,15 +352,22 @@ covering the slot's wave, and a candidate the band did not carry is
 certified from no old anchor. -/
 theorem coreBandLaws : (coreAnchored Validator BlockId Payload).BandLaws where
   commit_band := fun h hkk _ hlo hhi hV _ hc =>
-    directCommitIn_band h hkk (by omega) (by simp only [coreAnchored_wave] at hhi; omega) hV hc
+    AnchoredRule.holdsAtLeast_certificatesAt_band h hV (by omega) (by omega)
+      (by simp only [coreAnchored_wave] at hhi; omega)
+      (AnchoredRule.isVote_band_at h (by omega) (by simp only [coreAnchored_wave] at hhi; omega)) hc
   skip_band := fun h hkk hlk hlo hhi hV hs =>
-    le_trans hs (Finset.card_le_card (AnchoredRule.slotBlamesIn_band h hkk hlk hlo
+    le_trans hs (Finset.card_le_card (AnchoredRule.slotBlamesIn_band h hkk hlk hlo.le
       (by simp only [coreAnchored_wave] at hhi; omega) hV))
   link_band := fun h hA hAlo hAhi hkk _ hlo hhi _ _ =>
-    certifiedIn_band h hA hAlo hAhi hkk hlo (by simp only [coreAnchored_wave] at hhi; omega)
-  link_novel := fun h hA hAlo hAhi hkk _ hlo hhi _ _ hL =>
-    not_certifiedIn_band_novel h hA hAlo hAhi hkk hlo
-      (by simp only [coreAnchored_wave] at hhi; omega) hL
+    AnchoredRule.linkedVia_certificatesAt_band h hA hAlo hAhi (by omega) (by omega)
+      (by simp only [coreAnchored_wave] at hhi; omega)
+      (AnchoredRule.isVote_band_at h (by omega) (by simp only [coreAnchored_wave] at hhi; omega))
+  link_novel := by
+    intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi _ _ hL
+    simp only [coreAnchored_wave] at hhi
+    exact AnchoredRule.not_linkedVia_certificatesAt_band_novel h hA hAlo hAhi
+      (n := S.slotRound k + 2) (by omega) (by omega) (by omega)
+      (AnchoredRule.not_isVote_band_novel h hL) quorumCard_pos
 
 /-- **The core reads a band.** -/
 theorem banded : Banded

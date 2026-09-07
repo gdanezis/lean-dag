@@ -102,23 +102,20 @@ instance (q : BlockId) (a : Validator) (r : ℕ) : Decidable (Blames U q a r) :=
 /-- The references of `C` that vote for `L`. Counted among the
 *references* of the decision-round block, as `is_certificate` counts
 them, and not through `C`'s whole cone. -/
-def votesIn (U : BlockUniverse Validator BlockId Payload) (C L : BlockId) : Finset BlockId :=
-  (U.block C).refs.filter (fun q => Votes U q L)
+abbrev votesIn (U : BlockUniverse Validator BlockId Payload) (C L : BlockId) : Finset BlockId :=
+  carriedVotes U (Votes U) C L
 
 /-- A decision-round block certifies `L` when its votes for `L` come from
-a quorum of distinct validators. The core's definition over the new
-`votesIn`. -/
-def Certifies (U : BlockUniverse Validator BlockId Payload) (C L : BlockId) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (votesIn U C L)).card
-
-instance (C L : BlockId) : Decidable (Certifies U C L) :=
-  inferInstanceAs (Decidable (_ ≤ _))
+a quorum of distinct validators: the record's certificate at `n − f`,
+with Mahi-Mahi's vote. -/
+abbrev Certifies (U : BlockUniverse Validator BlockId Payload) (C L : BlockId) : Prop :=
+  CarriesVotes U (Votes U) (quorumCard Validator) C L
 
 /-- The certificates for a candidate `L` proposed at `r`: the blocks of
 the decision round `r + w − 1` that certify it. -/
-def certificates (U : BlockUniverse Validator BlockId Payload)
+abbrev certificates (U : BlockUniverse Validator BlockId Payload)
     (w : ℕ) (L : BlockId) (r : ℕ) : Finset BlockId :=
-  (blocksAt U (decisionRoundAt w r)).filter (fun C => Certifies U C L)
+  certificatesAt U (Votes U) (quorumCard Validator) L (decisionRoundAt w r)
 
 /-- **Direct commit**: a quorum of distinct validators certify `L`. -/
 def DirectCommit (U : BlockUniverse Validator BlockId Payload)

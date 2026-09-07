@@ -351,7 +351,7 @@ theorem certifies_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card)
   have hqcorrect : (U.block q).creator ∈ T := by rw [hqc]; exact hv
   rw [mem_creatorsOf]
   refine ⟨q, ?_, hqc⟩
-  rw [votesIn, Finset.mem_filter]
+  simp only [votesIn, carriedVotes, Finset.mem_filter]
   exact ⟨hs (r + 1) (by omega) C hC (by omega) hCc q hq hqr hqcorrect,
          hs r hRr q hq hqr hqcorrect L hL hLr hLc⟩
 
@@ -384,7 +384,7 @@ theorem directCommit_of_certifiesAt
   intro v hv
   obtain ⟨C, hC, hCc, hCr⟩ := hpop2 v hv
   rw [mem_creatorsOf]
-  exact ⟨C, mem_certificates.mpr ⟨hC, hCr, hc v hv C hC hCc hCr⟩, hCc⟩
+  exact ⟨C, mem_certificatesAt.mpr ⟨hC, hCr, hc v hv C hC hCc hCr⟩, hCc⟩
 
 omit S in
 /-- **L4, at the round level.** A correct block at round `r` is directly
@@ -445,7 +445,7 @@ omit S in
 /-- A universe-level direct commit is one the full view also sees. -/
 theorem directCommitIn_full (h : DirectCommit U L r) :
     DirectCommitIn U (View.full U) L r :=
-  (HoldsAtLeast.full fun _ hC => (mem_certificates.mp hC).1).mpr h
+  (HoldsAtLeast.full fun _ hC => (mem_certificatesAt.mp hC).1).mpr h
 
 omit S in
 /-- A view caught up to the certificate round sees every certificate, so
@@ -454,7 +454,7 @@ theorem directCommitIn_of_coversUpto {V : View Validator BlockId Payload U}
     (h : DirectCommit U L r) (hcov : V.CoversUpto (r + 2)) :
     DirectCommitIn U V L r :=
   HoldsAtLeast.of_coversUpto
-    (fun C hC => ⟨(mem_certificates.mp hC).1, (mem_certificates.mp hC).2.1.le⟩) hcov h
+    (fun C hC => ⟨(mem_certificatesAt.mp hC).1, (mem_certificatesAt.mp hC).2.1.le⟩) hcov h
 
 omit S in
 /-- **The commit argument at the view level.** `directCommit_of_certifiesAt`
@@ -473,7 +473,7 @@ theorem directCommitIn_of_certifiesAt {V : View Validator BlockId Payload U}
   refine le_trans hcard (Finset.card_le_card ?_)
   intro v hv
   obtain ⟨C, hC, hCc, hCr⟩ := hpop2 v hv
-  exact mem_heldAuthors.mpr ⟨C, mem_certificates.mpr ⟨hC, hCr, hc v hv C hC hCc hCr⟩,
+  exact mem_heldAuthors.mpr ⟨C, mem_certificatesAt.mpr ⟨hC, hCr, hc v hv C hC hCc hCr⟩,
     hcov C hC (by rw [hCc]; exact hv) hCr, hCc⟩
 
 /-- **L4, as a decision.** What L6 consumes and L3 propagates. -/
@@ -815,7 +815,8 @@ theorem decided_of_first_eligible_commit {V : View Validator BlockId Payload U}
       (AnchoredRule.lt_of_eligible _ helig) helig hj hmid hL hcert⟩
   · push Not at hc
     exact ⟨none, AnchoredRule.Decided.indirectSkip_single rfl
-      (AnchoredRule.lt_of_eligible _ helig) helig hj hmid hc⟩
+      (AnchoredRule.lt_of_eligible _ helig) helig hj hmid
+      (fun L hL ⟨C, hC, hre⟩ => hc L hL C hC hre)⟩
 
 open Classical in
 /-- **L8.** Given a committed slot, every slot below it is decided — provided
@@ -866,7 +867,8 @@ theorem decided_of_committed_above
         exact ⟨some L, AnchoredRule.Decided.indirectCommit_single rfl (fun _ _ h => h) hij
           (helig i _ hij) hA' hmid hL hcert⟩
       · push Not at hc
-        exact ⟨none, AnchoredRule.Decided.indirectSkip_single rfl hij (helig i _ hij) hA' hmid hc⟩
+        exact ⟨none, AnchoredRule.Decided.indirectSkip_single rfl hij (helig i _ hij) hA' hmid
+          (fun L hL ⟨C, hC, hre⟩ => hc L hL C hC hre)⟩
   intro i hi
   exact key (n - i) i hi (le_refl _)
 

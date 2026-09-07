@@ -63,8 +63,8 @@ theorem certifies_of_refs_reach {w r : ℕ} {C L : BlockId} (hw : 2 ≤ w)
     apply Finset.filter_true_of_mem
     intro q hq
     exact votes_of_reaches (U.complete C hC q hq) hL hLc (hall q hq)
-  unfold Certifies
-  rw [heq]
+  unfold Certifies CarriesVotes
+  rw [show carriedVotes U (Votes U) C L = (U.block C).refs from heq]
   exact U.creators_quorum hC (by unfold decisionRoundAt at hCr; omega)
 
 /-- If every voting-round block reaches a correct candidate, and a quorum
@@ -80,7 +80,7 @@ theorem directCommit_of_voting_reach {w r : ℕ} {L : BlockId} {T : Finset Valid
   intro v hv
   obtain ⟨C, hC, hCc, hCr⟩ := hpop v hv
   rw [mem_creatorsOf]
-  refine ⟨C, mem_certificates.mpr ⟨hC, hCr, ?_⟩, hCc⟩
+  refine ⟨C, mem_certificatesAt.mpr ⟨hC, hCr, ?_⟩, hCc⟩
   refine certifies_of_refs_reach hw hC hCr hL hLc ?_
   intro q hq
   have hqids := U.complete C hC q hq

@@ -76,7 +76,7 @@ theorem slowCommit_of_certifiesAt {U : LeanDag.Hydrozoan.BlockUniverse Replica B
     intro v hv
     obtain ⟨C, hC, hCa, hCr⟩ := hpop2 v hv
     exact LeanDag.mem_creatorsOf.mpr
-      ⟨C, LeanDag.Hydrozoan.mem_certificates.mpr ⟨hC, hCr, hcert v hv C hC hCa hCr⟩, hCa⟩
+      ⟨C, mem_certificatesAt.mpr ⟨hC, hCr, hcert v hv C hC hCa hCr⟩, hCa⟩
   exact le_trans LeanDag.Hydrozoan.qSlow_le_q (le_trans hcard (Finset.card_le_card hsub))
 
 /-- **Hydrozoan's support**: wavelength two, certification the rule's own. -/
@@ -100,9 +100,9 @@ theorem hzSupport_local :
     exact ⟨h.refs b hbU (by change R₀ < (U.block b).round; omega),
       h.creator b hbU (by change R₀ ≤ (U.block b).round; omega)⟩
   change LeanDag.Hydrozoan.IsCertificate U' c L ↔ LeanDag.Hydrozoan.IsCertificate U c L
-  unfold LeanDag.Hydrozoan.IsCertificate LeanDag.Hydrozoan.voteBlocks LeanDag.creatorsOf
+  unfold LeanDag.Hydrozoan.IsCertificate CarriesVotes carriedVotes LeanDag.creatorsOf
   rw [hrefs, Finset.filter_congr (fun b hb => by
-      unfold LeanDag.Hydrozoan.IsVote; rw [(hpar b hb).1]),
+      unfold IsVote; rw [(hpar b hb).1]),
     Finset.image_congr (fun b hb => (hpar b (Finset.mem_of_mem_filter b hb)).2)]
 
 /-- **Law 2.** Coverage toward the candidate over two layers makes every

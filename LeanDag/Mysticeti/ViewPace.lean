@@ -390,7 +390,7 @@ theorem decided_local_of_certifiesAt [S : Slots Validator] {k : ℕ} {L : BlockI
   refine Decided.directCommit hL (le_trans hcard (Finset.card_le_card ?_))
   intro u hu
   obtain ⟨c, hc, hcc, hcr⟩ := hpop2 u hu
-  refine mem_heldAuthors.mpr ⟨c, mem_certificates.mpr ⟨hc, hcr, hcert u hu c hc hcc hcr⟩, ?_, hcc⟩
+  refine mem_heldAuthors.mpr ⟨c, mem_certificatesAt.mpr ⟨hc, hcr, hcert u hu c hc hcc hcr⟩, ?_, hcc⟩
   exact pc.mem_viewAt (pc.holds_roundBlocks hN hg v hv c hc (hcc ▸ hu) hcr)
 
 omit [DecidableEq BlockId] in

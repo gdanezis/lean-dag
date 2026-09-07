@@ -120,37 +120,11 @@ instance : Decidable (DirectSkip U L r) :=
 /-! ## The indirect test -/
 
 /-- The authors of decision-round support blocks for `L` visible in
-`A`'s cone — by distinct authors, the count equivocation cannot
-inflate. -/
-def coneSupports (U : BlockUniverse Validator BlockId Payload)
+`A`'s cone — the record's `coneSupporters` at the round above `L`, by
+distinct authors, the count equivocation cannot inflate. -/
+abbrev coneSupports (U : BlockUniverse Validator BlockId Payload)
     (A L : BlockId) (r : ℕ) : Finset Validator :=
-  creatorsOf U.block
-    ((blocksAt U (r + 1)).filter
-      (fun p => L ∈ (U.block p).refs ∧ p ∈ history U A))
-
-theorem mem_coneSupports {v : Validator} :
-    v ∈ coneSupports U A L r ↔
-      ∃ p ∈ U.ids, (U.block p).round = r + 1 ∧ L ∈ (U.block p).refs ∧
-        p ∈ history U A ∧ (U.block p).creator = v := by
-  simp only [coneSupports, mem_creatorsOf, Finset.mem_filter, mem_blocksAt]
-  tauto
-
-/-- In-cone supporters are supporters. -/
-theorem coneSupports_subset_supporters :
-    coneSupports U A L r ⊆ supporters U L (r + 1) := by
-  intro v hv
-  obtain ⟨p, hp, hpr, hpL, -, hpc⟩ := mem_coneSupports.mp hv
-  exact mem_supporters.mpr ⟨p, hp, hpr, hpL, hpc⟩
-
-/-- Cones nest, so in-cone support does. -/
-theorem coneSupports_subset_of_reaches {B : BlockId} (hB : B ∈ U.ids)
-    (h : Reaches U B A) :
-    coneSupports U A L r ⊆ coneSupports U B L r := by
-  intro v hv
-  obtain ⟨p, hp, hpr, hpL, hpA, hpc⟩ := mem_coneSupports.mp hv
-  have hA : A ∈ U.ids := mem_ids_of_reaches hB h
-  exact mem_coneSupports.mpr
-    ⟨p, hp, hpr, hpL, history_subset_of_reaches hB h hpA, hpc⟩
+  coneSupporters U A L (r + 1)
 
 /-- **The indirect test** at threshold `k`: at least `k` distinct
 authors of support blocks in the anchor's cone. -/
@@ -207,9 +181,9 @@ theorem not_thickLink_of_directSkip (hne : HonestNoEquiv U)
     (A : BlockId) : ¬ ThickLink k U A L r := by
   intro ht
   have h1 := Finset.card_le_card
-    (coneSupports_subset_supporters (U := U) (A := A) (L := L) (r := r))
+    (coneSupporters_subset_supporters (U := U) (A := A) (L := L) (n := r + 1))
   have h2 := card_supporters_le_of_directSkip hne hk
-  unfold ThickLink at ht
+  unfold ThickLink coneSupports at ht
   omega
 
 /-! ## H4 — link integrity: every anchor's cone is the certificate -/
@@ -242,7 +216,7 @@ private theorem thickLink_of_directCommit_aux (hne : HonestNoEquiv U)
           omega
         have hps : p = s :=
           hne.eq_of_creator_eq hp_ids hs_ids hvH hpc hsc (by omega)
-        exact mem_coneSupports.mpr
+        exact mem_coneSupporters.mpr
           ⟨p, hp_ids, hp_round, hps ▸ hsL,
             mem_history_of_mem_refs hA hp, hpc⟩
       have h1 := Finset.card_union_add_card_inter
@@ -278,7 +252,7 @@ private theorem thickLink_of_directCommit_aux (hne : HonestNoEquiv U)
       have := ih p hp_ids hp_round
       unfold ThickLink at this ⊢
       exact le_trans this (Finset.card_le_card
-        (coneSupports_subset_of_reaches hA (Reaches.single hp)))
+        (coneSupporters_subset_of_reaches hA (Reaches.single hp)))
 
 /-- **H4 (O3's mirror) — link integrity.** If `L` is directly
 committed, every block from two rounds above it on carries at least `k`
@@ -311,7 +285,7 @@ theorem eq_of_directCommit_of_thickLink (hne : HonestNoEquiv U)
       H.byzantine := by
     intro v hv
     obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
-    have := not_mem_of_supports_two hne hd hcr hv₁ (coneSupports_subset_supporters hv₂)
+    have := not_mem_of_supports_two hne hd hcr hv₁ (coneSupporters_subset_supporters hv₂)
     simpa [mem_honest] using this
   have h1 := Finset.card_union_add_card_inter
     (supporters U L₁ (r + 1)) (coneSupports U A L₂ r)

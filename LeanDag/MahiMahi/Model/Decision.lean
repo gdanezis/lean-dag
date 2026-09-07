@@ -1,5 +1,6 @@
 import LeanDag.MahiMahi.Model.Rules
 import LeanDag.Common.Anchored
+import LeanDag.Common.History
 /-!
 # Mahi-Mahi — the decision relation at wave `w`
 
@@ -55,9 +56,9 @@ abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
 history of the anchor `A`. The core's `CertifiedIn` at wave `w`. Not
 decidable as stated — `Reaches` is a `Prop` — and not made so: the
 witnesses exhibit the certificate. -/
-def CertifiedIn (U : BlockUniverse Validator BlockId Payload)
+abbrev CertifiedIn (U : BlockUniverse Validator BlockId Payload)
     (w : ℕ) (A L : BlockId) (r : ℕ) : Prop :=
-  ∃ C ∈ certificates U w L r, Reaches U A C
+  LinkedVia U A (certificates U w L r)
 
 /-! ## The relation -/
 

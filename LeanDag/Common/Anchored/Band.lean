@@ -1,4 +1,5 @@
 import LeanDag.Common.Anchored
+import LeanDag.Common.History
 import LeanDag.Properties.Band
 import LeanDag.Properties.Agree
 import LeanDag.Properties.Candidate
@@ -265,6 +266,250 @@ theorem agreeBand_view (h : AgreeBand R.toDagRule U U' lo hi g g') {V : U.View} 
     (hor.imp id (fun ⟨hb', h1, h2⟩ => ⟨V'.subset_ids hb', h1, h2⟩))
   refs := fun b hb h1 h2 => h.refs b (V.subset_ids hb) h1 h2
 
+/-! ### Votes, certificates and links across the band
+
+Every rule's direct commit is a threshold on a set the view holds, and
+every rung a link to a set in the anchor's cone; the sets are votes,
+certificates at a threshold, or the votes in the cone. Each transports
+across the band once, here, and a rule's band laws are these at its sets.
+The one hypothesis a rule supplies is that its vote relation agrees
+across the band, which for the plain vote is `isVote_band`. -/
+
+/-- A plain vote reads the voter's references, which the band preserves. -/
+theorem isVote_band (h : AgreeBand R.toDagRule U U' lo hi g g') {b L : BlockId} (hb : b ∈ U.ids)
+    (h1 : lo < (U.block b).round + g) (h2 : (U.block b).round + g ≤ hi) :
+    IsVote U' b L ↔ IsVote U b L := by
+  unfold IsVote; rw [band_refs h hb h1 h2]
+
+/-- The votes for `L` at an in-band round are votes at the shifted round. -/
+theorem votesFor_band (h : AgreeBand R.toDagRule U U' lo hi g g') {L : BlockId} {n n' : ℕ}
+    (hnn : n + g = n' + g') (h1 : lo < n + g) (h2 : n + g ≤ hi) :
+    votesFor U L n ⊆ votesFor U' L n' := by
+  intro q hq
+  rw [mem_votesFor] at hq ⊢
+  obtain ⟨hqU, hqr, hqL⟩ := hq
+  have hb := band_block h hqU (by omega) (by omega)
+  exact ⟨band_mem h hqU (by omega) (by omega), by omega,
+    by rw [band_refs h hqU (by omega) (by omega)]; exact hqL⟩
+
+/-- **What a view holds of an in-band set, the shifted view holds of the
+shifted set**: the authors are what they were. -/
+theorem heldAuthors_band (h : AgreeBand R.toDagRule U U' lo hi g g') {V : U.View} {V' : U'.View}
+    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
+      b ∈ V'.ids)
+    {s s' : Finset BlockId}
+    (hs : ∀ b ∈ s, b ∈ U.ids ∧ lo ≤ (U.block b).round + g ∧ (U.block b).round + g ≤ hi)
+    (hss : s ⊆ s') : heldAuthors U V s ⊆ heldAuthors U' V' s' := by
+  intro w hw
+  obtain ⟨b, hb, hbV, hbc⟩ := mem_heldAuthors.mp hw
+  obtain ⟨hbU, hb1, hb2⟩ := hs b hb
+  exact mem_heldAuthors.mpr ⟨b, hss hb, hV b hbV hb1 hb2,
+    by rw [(band_block h hbU hb1 hb2).2]; exact hbc⟩
+
+/-- A direct rule's threshold, held of an in-band set, is held of the
+shifted set in the shifted view. -/
+theorem holdsAtLeast_band (h : AgreeBand R.toDagRule U U' lo hi g g') {V : U.View} {V' : U'.View}
+    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
+      b ∈ V'.ids)
+    {s s' : Finset BlockId}
+    (hs : ∀ b ∈ s, b ∈ U.ids ∧ lo ≤ (U.block b).round + g ∧ (U.block b).round + g ≤ hi)
+    (hss : s ⊆ s') {t : ℕ} (hc : HoldsAtLeast U V t s) : HoldsAtLeast U' V' t s' :=
+  le_trans hc (Finset.card_le_card (heldAuthors_band h hV hs hss))
+
+/-- Supporters held at an in-band round transport. -/
+theorem holdsAtLeast_votesFor_band (h : AgreeBand R.toDagRule U U' lo hi g g')
+    {V : U.View} {V' : U'.View}
+    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
+      b ∈ V'.ids)
+    {L : BlockId} {n n' : ℕ} (hnn : n + g = n' + g') (h1 : lo < n + g) (h2 : n + g ≤ hi)
+    {t : ℕ} (hc : HoldsAtLeast U V t (votesFor U L n)) :
+    HoldsAtLeast U' V' t (votesFor U' L n') :=
+  holdsAtLeast_band h hV
+    (fun b hb => by
+      obtain ⟨hbU, hbr, -⟩ := mem_votesFor.mp hb
+      exact ⟨hbU, by omega, by omega⟩)
+    (votesFor_band h hnn h1 h2) hc
+
+section Certificates
+
+variable {Vote Vote' : BlockId → BlockId → Prop} [∀ b L, Decidable (Vote b L)]
+  [∀ b L, Decidable (Vote' b L)]
+
+/-- The votes an in-band block carries are the votes it carried, when the
+vote relations agree on its references. Two rounds of slack: the count
+reads the references' own references. -/
+theorem carriedVotes_band (h : AgreeBand R.toDagRule U U' lo hi g g') {C L : BlockId}
+    (hC : C ∈ U.ids) (h1 : lo < (U.block C).round + g) (h2 : (U.block C).round + g ≤ hi)
+    (hvote : ∀ b ∈ (U.block C).refs, (Vote' b L ↔ Vote b L)) :
+    carriedVotes U' Vote' C L = carriedVotes U Vote C L := by
+  unfold carriedVotes
+  rw [band_refs h hC h1 h2]
+  exact Finset.filter_congr fun b hb => hvote b hb
+
+theorem carriesVotes_band (h : AgreeBand R.toDagRule U U' lo hi g g') {t : ℕ} {C L : BlockId}
+    (hC : C ∈ U.ids) (h1 : lo < (U.block C).round + g) (h2 : (U.block C).round + g ≤ hi)
+    (hvote : ∀ b ∈ (U.block C).refs, (Vote' b L ↔ Vote b L)) :
+    CarriesVotes U' Vote' t C L ↔ CarriesVotes U Vote t C L := by
+  unfold CarriesVotes
+  rw [carriedVotes_band h hC h1 h2 hvote, creatorsOf_band h]
+  intro b hb
+  have hbm := (mem_carriedVotes.mp hb).1
+  have hbU := U.complete C hC b hbm
+  have := U.round_of_mem_refs hC hbm
+  exact ⟨hbU, by omega, by omega⟩
+
+/-- An in-band block is a certificate at the shifted round exactly when
+it was one. -/
+theorem mem_certificatesAt_band (h : AgreeBand R.toDagRule U U' lo hi g g') {t : ℕ}
+    {L C : BlockId} {n n' : ℕ} (hC : C ∈ U.ids) (hr : (U.block C).round = n)
+    (hnn : n + g = n' + g') (h1 : lo < n + g) (h2 : n + g ≤ hi)
+    (hvote : ∀ b ∈ (U.block C).refs, (Vote' b L ↔ Vote b L)) :
+    C ∈ certificatesAt U' Vote' t L n' ↔ C ∈ certificatesAt U Vote t L n := by
+  simp only [mem_certificatesAt]
+  have hb := band_block h hC (by omega) (by omega)
+  rw [carriesVotes_band h hC (by omega) (by omega) hvote]
+  exact ⟨fun hx => ⟨hC, hr, hx.2.2⟩,
+    fun hx => ⟨band_mem h hC (by omega) (by omega), by omega, hx.2.2⟩⟩
+
+/-- The certificates at an in-band round transport. -/
+theorem certificatesAt_band (h : AgreeBand R.toDagRule U U' lo hi g g') {t : ℕ} {L : BlockId}
+    {n n' : ℕ} (hnn : n + g = n' + g') (h1 : lo < n + g) (h2 : n + g ≤ hi)
+    (hvote : ∀ C ∈ U.ids, (U.block C).round = n →
+      ∀ b ∈ (U.block C).refs, (Vote' b L ↔ Vote b L)) :
+    certificatesAt U Vote t L n ⊆ certificatesAt U' Vote' t L n' := by
+  intro C hC
+  obtain ⟨hCU, hCr, -⟩ := mem_certificatesAt.mp hC
+  exact (mem_certificatesAt_band h hCU hCr hnn h1 h2 (hvote C hCU hCr)).mpr hC
+
+/-- Certificates held in view transport. -/
+theorem holdsAtLeast_certificatesAt_band (h : AgreeBand R.toDagRule U U' lo hi g g')
+    {V : U.View} {V' : U'.View}
+    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
+      b ∈ V'.ids)
+    {t : ℕ} {L : BlockId} {n n' : ℕ} (hnn : n + g = n' + g') (h1 : lo < n + g)
+    (h2 : n + g ≤ hi)
+    (hvote : ∀ C ∈ U.ids, (U.block C).round = n →
+      ∀ b ∈ (U.block C).refs, (Vote' b L ↔ Vote b L))
+    {t' : ℕ} (hc : HoldsAtLeast U V t' (certificatesAt U Vote t L n)) :
+    HoldsAtLeast U' V' t' (certificatesAt U' Vote' t L n') :=
+  holdsAtLeast_band h hV
+    (fun C hC => by
+      obtain ⟨hCU, hCr, -⟩ := mem_certificatesAt.mp hC
+      exact ⟨hCU, by omega, by omega⟩)
+    (certificatesAt_band h hnn h1 h2 hvote) hc
+
+/-- **The anchor links what it linked.** Both directions: a certificate
+inside an old anchor's cone is old, by `reaches_old`, and an old one
+stays inside it, by `reaches_of`. -/
+theorem linkedVia_certificatesAt_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A : BlockId}
+    (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
+    {t : ℕ} {L : BlockId} {n n' : ℕ} (hnn : n + g = n' + g') (h1 : lo < n + g)
+    (h2 : n + g ≤ hi)
+    (hvote : ∀ C ∈ U.ids, (U.block C).round = n →
+      ∀ b ∈ (U.block C).refs, (Vote' b L ↔ Vote b L)) :
+    LinkedVia U' A (certificatesAt U' Vote' t L n') ↔
+      LinkedVia U A (certificatesAt U Vote t L n) := by
+  constructor
+  · rintro ⟨C, hC, hre⟩
+    have hCr' : (U'.block C).round = n' := (mem_certificatesAt.mp hC).2.1
+    have hCrR : (R.toDagRule.block U' C).round = n' := hCr'
+    obtain ⟨hCU, hreU, hCeq⟩ := AgreeBand.reaches_old h hA hAlo hAhi hre (by omega)
+    have hCeq' : (U.block C).round + g = (U'.block C).round + g' := hCeq
+    exact ⟨C, (mem_certificatesAt_band h hCU (by omega) hnn h1 h2 (hvote C hCU (by omega))).mp hC,
+      hreU⟩
+  · rintro ⟨C, hC, hre⟩
+    obtain ⟨hCU, hCr, -⟩ := mem_certificatesAt.mp hC
+    have hCrR : (R.toDagRule.block U C).round = n := hCr
+    exact ⟨C, (mem_certificatesAt_band h hCU hCr hnn h1 h2 (hvote C hCU hCr)).mpr hC,
+      AgreeBand.reaches_of h hA hAhi hre (by omega)⟩
+
+/-- **A candidate the band did not carry is certified from no old
+anchor**: its certificate would lie in the anchor's cone, which is old,
+and no old block votes for it. `hnov` is the rule's reason no old
+in-band block votes for a novel candidate; for the plain vote it is
+`not_isVote_band_novel`. Two rounds of slack, since the votes sit one
+round below the certificate and must themselves be in the band. -/
+theorem not_linkedVia_certificatesAt_band_novel (h : AgreeBand R.toDagRule U U' lo hi g g')
+    {A : BlockId} (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g)
+    (hAhi : (U.block A).round + g ≤ hi) {t : ℕ} {L : BlockId} {n n' : ℕ}
+    (hnn : n + g = n' + g') (h1 : lo + 1 < n + g) (h2 : n + g ≤ hi)
+    (hnov : ∀ b ∈ U.ids, lo < (U.block b).round + g → (U.block b).round + g ≤ hi →
+      ¬ Vote' b L) (ht : 0 < t) :
+    ¬ LinkedVia U' A (certificatesAt U' Vote' t L n') := by
+  rintro ⟨C, hC, hre⟩
+  obtain ⟨-, hCr', hcert⟩ := mem_certificatesAt.mp hC
+  have hCrR : (R.toDagRule.block U' C).round = n' := hCr'
+  obtain ⟨hCU, -, hCeq⟩ := AgreeBand.reaches_old h hA hAlo hAhi hre (by omega)
+  have hCeq' : (U.block C).round + g = (U'.block C).round + g' := hCeq
+  obtain ⟨b, hb, hv⟩ := exists_vote_of_carriesVotes ht hcert
+  rw [band_refs h hCU (by omega) (by omega)] at hb
+  have hbU := U.complete C hCU b hb
+  have := U.round_of_mem_refs hCU hb
+  exact hnov b hbU (by omega) (by omega) hv
+
+/-- No old in-band block plainly votes for a candidate the band did not
+carry: its references are the references it had, all old. -/
+theorem not_isVote_band_novel (h : AgreeBand R.toDagRule U U' lo hi g g') {L : BlockId}
+    (hL : L ∉ U.ids) :
+    ∀ b ∈ U.ids, lo < (U.block b).round + g → (U.block b).round + g ≤ hi → ¬ IsVote U' b L :=
+  fun b hbU h1 h2 hv => not_isVote_of_notMem hL b hbU ((isVote_band h hbU h1 h2).mp hv)
+
+/-- The plain vote agrees across the band at every in-band certificate:
+what `hvote` is for every rule but Mahi-Mahi. -/
+theorem isVote_band_at (h : AgreeBand R.toDagRule U U' lo hi g g') {L : BlockId} {n : ℕ}
+    (h1 : lo + 1 < n + g) (h2 : n + g ≤ hi) :
+    ∀ C ∈ U.ids, (U.block C).round = n → ∀ b ∈ (U.block C).refs,
+      (IsVote U' b L ↔ IsVote U b L) := by
+  intro C hC hCr b hb
+  have hbU := U.complete C hC b hb
+  have := U.round_of_mem_refs hC hb
+  exact isVote_band h hbU (by omega) (by omega)
+
+end Certificates
+
+/-- **The anchor's cone of supporters is the cone it was.** Both
+inclusions at once: a supporter inside an old anchor's cone is old, by
+`reaches_old`, and an old one stays inside it, by `reaches_of`. -/
+theorem coneSupporters_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A L : BlockId}
+    (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
+    {n n' : ℕ} (hnn : n + g = n' + g') (h1 : lo < n + g) (h2 : n + g ≤ hi) :
+    coneSupporters U' A L n' = coneSupporters U A L n := by
+  have hA' : A ∈ U'.ids := band_mem h hA hAlo hAhi
+  have hset : coneVotesFor U' A L n' = coneVotesFor U A L n := by
+    ext q
+    simp only [coneVotesFor, Finset.mem_filter, mem_votesFor]
+    constructor
+    · rintro ⟨⟨hqU', hqr', hqL⟩, hqh⟩
+      have hqre : ReachesFrom U'.block A q := (mem_history_iff (U := U') hA').mp hqh
+      have hqrR : (R.toDagRule.block U' q).round = n' := hqr'
+      obtain ⟨hqU, hqreU, hqeq⟩ := AgreeBand.reaches_old h hA hAlo hAhi hqre (by omega)
+      have hqeq' : (U.block q).round + g = (U'.block q).round + g' := hqeq
+      refine ⟨⟨hqU, by omega, ?_⟩, (mem_history_iff (U := U) hA).mpr hqreU⟩
+      rwa [band_refs h hqU (by omega) (by omega)] at hqL
+    · rintro ⟨⟨hqU, hqr, hqL⟩, hqh⟩
+      have hqre : ReachesFrom U.block A q := (mem_history_iff (U := U) hA).mp hqh
+      have hqrR : (R.toDagRule.block U q).round = n := hqr
+      have hb := band_block h hqU (by omega) (by omega)
+      refine ⟨⟨band_mem h hqU (by omega) (by omega), by omega, ?_⟩,
+        (mem_history_iff (U := U') hA').mpr (AgreeBand.reaches_of h hA hAhi hqre (by omega))⟩
+      rw [band_refs h hqU (by omega) (by omega)]; exact hqL
+  unfold coneSupporters
+  rw [hset]
+  refine creatorsOf_band h fun b hb => ?_
+  obtain ⟨hbU, hbr, -⟩ := mem_votesFor.mp (Finset.mem_filter.mp hb).1
+  exact ⟨hbU, by omega, by omega⟩
+
+/-- **A candidate the band did not carry has no supporters in an old
+anchor's cone**: an old block references only old blocks. -/
+theorem coneSupporters_band_novel (h : AgreeBand R.toDagRule U U' lo hi g g') {A L : BlockId}
+    (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
+    {n n' : ℕ} (hnn : n + g = n' + g') (h1 : lo < n + g) (h2 : n + g ≤ hi) (hL : L ∉ U.ids) :
+    coneSupporters U' A L n' = ∅ := by
+  rw [coneSupporters_band h hA hAlo hAhi hnn h1 h2, Finset.eq_empty_iff_forall_notMem]
+  intro v hv
+  obtain ⟨q, hq, -, hqL, -, -⟩ := mem_coneSupporters.mp hv
+  exact hL (U.complete q hq L hqL)
+
 /-- **Blame carries across the band**: a voting-round block the view held
 that referenced no candidate of the slot is a block of the shifted
 record at the shifted round, and it references no candidate still,
@@ -272,7 +517,7 @@ every candidate it could reference being old. Every rule's slot-level
 skip is a threshold on this count, so this is its band law. -/
 theorem slotBlamesIn_band (h : AgreeBand R.toDagRule U U' lo hi g g')
     {V : U.View} {V' : U'.View} {k k' : ℕ} (hkk : S.slotRound k + g = S'.slotRound k' + g')
-    (hlead : S.leader k = S'.leader k') (hlo : lo = S.slotRound k + g)
+    (hlead : S.leader k = S'.leader k') (hlo : lo ≤ S.slotRound k + g)
     (hhi : S.slotRound k + 1 + g ≤ hi)
     (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
       b ∈ V'.ids) :
@@ -291,6 +536,17 @@ theorem slotBlamesIn_band (h : AgreeBand R.toDagRule U U' lo hi g g')
       exact hqn j hj (isLeaderBlock_band_old h hkk hlead (by omega) (by omega)
         (U.complete q hqU j hj) hjL)
   · rw [(band_block h hqU (by omega) (by omega)).2]; exact hvq
+
+/-- Blamers of a slot held in view transport. -/
+theorem holdsAtLeast_slotBlamers_band (h : AgreeBand R.toDagRule U U' lo hi g g')
+    {V : U.View} {V' : U'.View} {k k' : ℕ} (hkk : S.slotRound k + g = S'.slotRound k' + g')
+    (hlead : S.leader k = S'.leader k') (hlo : lo ≤ S.slotRound k + g)
+    (hhi : S.slotRound k + 1 + g ≤ hi)
+    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi →
+      b ∈ V'.ids)
+    {t : ℕ} (hs : HoldsAtLeast U V t (slotBlamers (S := S) U k)) :
+    HoldsAtLeast U' V' t (slotBlamers (S := S') U' k') :=
+  le_trans hs (Finset.card_le_card (slotBlamesIn_band h hkk hlead hlo hhi hV))
 
 /-- **What a rule owes the band**: its direct commit, its direct skip and
 its link rungs carry across a band covering the rounds they read, and a

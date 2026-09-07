@@ -130,7 +130,7 @@ example : Decided U4 V4 0 (some 2) := by
       subst this
       have : i = 0 := by omega
       subst this
-      exact absurd ((certifiedIn_iff_history (by decide)).mp hcert) (by decide))
+      exact absurd ((linkedVia_iff_history (by decide)).mp hcert) (by decide))
     (by decide)
     (show WeakLinked U4 24 2 0 from (weakLinked_iff_history (by decide)).mpr (by decide))
     (fun L' hL' _ => by

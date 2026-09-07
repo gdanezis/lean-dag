@@ -17,16 +17,6 @@ variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [F : LeanDag.Hydrozoan.Faults Replica]
   {U : BlockUniverse Replica BlockId}
 
-/-- Rung 1 through the history surrogate: decidable on concrete data. -/
-theorem certifiedIn_iff_history {A L : BlockId} {r : ℕ} (hA : A ∈ U.ids) :
-    CertifiedIn U A L r ↔ (certificates U L r ∩ history U A).Nonempty := by
-  constructor
-  · rintro ⟨C, hC, hR⟩
-    exact ⟨C, Finset.mem_inter.mpr ⟨hC, (mem_history_iff hA).mpr hR⟩⟩
-  · rintro ⟨C, hC⟩
-    obtain ⟨h1, h2⟩ := Finset.mem_inter.mp hC
-    exact ⟨C, h1, (mem_history_iff hA).mp h2⟩
-
 /-- Rung 2 through the history surrogate: the anchor-linked vote filter
 is the canonical witness set, so the existential form collapses to a
 decidable cardinality bound. -/

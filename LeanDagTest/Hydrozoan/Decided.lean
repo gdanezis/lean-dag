@@ -112,7 +112,7 @@ example : WeakLinked U3 24 2 0 :=
 -- Negative rungs: the withheld equivocation id 8 gathers no votes at
 -- all, so neither rung can ever fire for it.
 example : ¬ LeanDag.Hydrozoan.CertifiedIn U3 24 8 1 := fun h =>
-  absurd ((certifiedIn_iff_history (by decide)).mp h) (by decide)
+  absurd ((linkedVia_iff_history (by decide)).mp h) (by decide)
 example : ¬ WeakLinked U3 24 8 1 := fun h =>
   absurd ((weakLinked_iff_history (by decide)).mp h) (by decide)
 

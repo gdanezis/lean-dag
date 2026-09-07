@@ -1,5 +1,6 @@
 import LeanDag.Hydrozoan.Model.DirectRules
 import LeanDag.Common.CausalHistory
+import LeanDag.Common.History
 /-!
 # The graded indirect rule's ingredients
 
@@ -32,9 +33,9 @@ variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
 /-- Rung 1's test: a certificate for `L` lies in the anchor's causal
 history — the paper's `∃ b : Link(b, b_anchor) ∧ IsCertificate(b, b_leader)`,
 with `r` the candidate's propose round. -/
-def CertifiedIn (U : BlockUniverse Replica BlockId) (A L : BlockId)
+abbrev CertifiedIn (U : BlockUniverse Replica BlockId) (A L : BlockId)
     (r : ℕ) : Prop :=
-  ∃ C ∈ certificates U L r, Reaches U A C
+  LinkedVia U A (certificates U L r)
 
 /-- Rung 2's test: `q_weak` distinct creators of anchor-reachable votes
 for `L` at the voting round — the paper's

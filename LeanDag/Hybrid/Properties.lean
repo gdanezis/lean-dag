@@ -44,108 +44,6 @@ variable {k : ℕ}
 variable {U U' : BlockUniverse Validator BlockId Payload}
 variable {lo hi g g' : ℕ}
 
-/-- **Supporters survive the band.** -/
-theorem supportersIn_band (h : AgreeBand (Hybrid.hybridAnchored Validator BlockId Payload k).toDagRule U U' lo hi g g')
-    {V : View Validator BlockId Payload U} {V' : View Validator BlockId Payload U'}
-    {r r' : ℕ} (hrr : r + g = r' + g') (hr : lo ≤ r + g) (hhi : r + 1 + g ≤ hi)
-    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g →
-      (U.block b).round + g ≤ hi → b ∈ V'.ids)
-    {L : BlockId} :
-    supportersIn U V L (r + 1) ⊆ supportersIn U' V' L (r' + 1) := by
-  intro w hw
-  obtain ⟨q, hq, hvq⟩ := Finset.mem_image.mp hw
-  obtain ⟨hqf, hqV⟩ := Finset.mem_inter.mp hq
-  obtain ⟨hqA, hqL⟩ := Finset.mem_filter.mp hqf
-  have hqU : q ∈ U.ids := (mem_blocksAt.mp hqA).1
-  have hqr : (U.block q).round = r + 1 := (mem_blocksAt.mp hqA).2
-  refine Finset.mem_image.mpr ⟨q, Finset.mem_inter.mpr ⟨Finset.mem_filter.mpr ⟨?_, ?_⟩,
-    hV q hqV (by omega) (by omega)⟩, ?_⟩
-  · exact AnchoredRule.blocksAt_band h (by omega) (by omega) (by omega) hqA
-  · rw [AnchoredRule.band_refs h hqU (by omega) (by omega)]; exact hqL
-  · rw [(AnchoredRule.band_block h hqU (by omega) (by omega)).2]; exact hvq
-
-/-- **And so does the direct commit.** -/
-theorem directCommitIn_band (h : AgreeBand (Hybrid.hybridAnchored Validator BlockId Payload k).toDagRule U U' lo hi g g')
-    {V : View Validator BlockId Payload U} {V' : View Validator BlockId Payload U'}
-    {r r' : ℕ} (hrr : r + g = r' + g') (hr : lo ≤ r + g) (hhi : r + 1 + g ≤ hi)
-    (hV : ∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g →
-      (U.block b).round + g ≤ hi → b ∈ V'.ids)
-    {L : BlockId} (hc : Hybrid.DirectCommitIn U V L r) :
-    Hybrid.DirectCommitIn U' V' L r' :=
-  le_trans hc (Finset.card_le_card (supportersIn_band h hrr hr hhi hV))
-
-/-- **The anchor's cone of supporters is the cone it was.** -/
-theorem coneSupports_band (h : AgreeBand (Hybrid.hybridAnchored Validator BlockId Payload k).toDagRule U U' lo hi g g')
-    {A L : BlockId} {r r' : ℕ} (hA : A ∈ U.ids)
-    (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
-    (hrr : r + g = r' + g') (hr : lo ≤ r + g) (hhi : r + 1 + g ≤ hi) :
-    Hybrid.coneSupports U' A L r' = Hybrid.coneSupports U A L r := by
-  have hset : (blocksAt U' (r' + 1)).filter
-        (fun q => L ∈ (U'.block q).refs ∧ q ∈ history U' A)
-      = (blocksAt U (r + 1)).filter
-        (fun q => L ∈ (U.block q).refs ∧ q ∈ history U A) := by
-    have hA' : A ∈ U'.ids := AnchoredRule.band_mem h hA hAlo hAhi
-    ext q
-    simp only [Finset.mem_filter, mem_blocksAt]
-    constructor
-    · rintro ⟨⟨hqU', hqr'⟩, hqL, hqh⟩
-      have hqre : ReachesFrom U'.block A q := (mem_history_iff (U := U') hA').mp hqh
-      obtain ⟨hqU, hqreU, hqeq⟩ :=
-        AgreeBand.reaches_old h hA hAlo hAhi hqre
-          (by show lo ≤ (U'.block q).round + g'; omega)
-      have hqeq' : (U.block q).round + g = (U'.block q).round + g' := hqeq
-      refine ⟨⟨hqU, by omega⟩, ?_, (mem_history_iff (U := U) hA).mpr hqreU⟩
-      rwa [AnchoredRule.band_refs h hqU (by omega) (by omega)] at hqL
-    · rintro ⟨⟨hqU, hqr⟩, hqL, hqh⟩
-      have hqre : ReachesFrom U.block A q := (mem_history_iff (U := U) hA).mp hqh
-      refine ⟨?_, ?_, ?_⟩
-      · exact mem_blocksAt.mp (AnchoredRule.blocksAt_band h
-          (by omega) (by omega) (by omega) (mem_blocksAt.mpr ⟨hqU, hqr⟩))
-      · rw [AnchoredRule.band_refs h hqU (by omega) (by omega)]; exact hqL
-      · exact (mem_history_iff (U := U') hA').mpr
-          (AgreeBand.reaches_of h hA hAhi hqre
-            (by show lo ≤ (U.block q).round + g; omega))
-  unfold Hybrid.coneSupports
-  rw [hset]
-  refine AnchoredRule.creatorsOf_band h ?_
-  intro b hb
-  obtain ⟨hbA, -⟩ := Finset.mem_filter.mp hb
-  have hbU : b ∈ U.ids := (mem_blocksAt.mp hbA).1
-  have hbr : (U.block b).round = r + 1 := (mem_blocksAt.mp hbA).2
-  exact ⟨hbU, by omega, by omega⟩
-
-/-- **So the indirect test reads the same.** -/
-theorem thickLink_band (h : AgreeBand (Hybrid.hybridAnchored Validator BlockId Payload k).toDagRule U U' lo hi g g')
-    {A L : BlockId} {r r' : ℕ} (hA : A ∈ U.ids)
-    (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
-    (hrr : r + g = r' + g') (hr : lo ≤ r + g) (hhi : r + 1 + g ≤ hi) :
-    Hybrid.ThickLink k U' A L r' ↔ Hybrid.ThickLink k U A L r := by
-  unfold Hybrid.ThickLink
-  rw [coneSupports_band h hA hAlo hAhi hrr hr hhi]
-
-/-- **A candidate the band did not carry passes the indirect test from
-no old anchor.** Its supporters would sit in the anchor's cone, which is
-old, and an old block references only old blocks — so the cone supports
-nothing, and an admissible threshold is positive. -/
-theorem not_thickLink_band_novel
-    (h : AgreeBand (Hybrid.hybridAnchored Validator BlockId Payload k).toDagRule U U' lo hi g g')
-    {A L : BlockId} {r r' : ℕ} (hA : A ∈ U.ids)
-    (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
-    (hrr : r + g = r' + g') (hr : lo ≤ r + g) (hhi : r + 1 + g ≤ hi)
-    (hL : L ∉ U.ids) (hpos : 0 < k) : ¬ Hybrid.ThickLink k U' A L r' := by
-  intro ht
-  rw [thickLink_band h hA hAlo hAhi hrr hr hhi] at ht
-  unfold Hybrid.ThickLink Hybrid.coneSupports at ht
-  have hempty : (blocksAt U (r + 1)).filter
-      (fun q => L ∈ (U.block q).refs ∧ q ∈ history U A) = ∅ := by
-    rw [Finset.eq_empty_iff_forall_notMem]
-    intro q hq
-    obtain ⟨hqA, hqL, -⟩ := Finset.mem_filter.mp hq
-    exact hL (U.complete q (mem_blocksAt.mp hqA).1 L hqL)
-  rw [hempty] at ht
-  simp only [creatorsOf, Finset.image_empty, Finset.card_empty, Nat.le_zero] at ht
-  omega
-
 end Band
 
 /-- **What Hybrid owes the band**, at a positive threshold: its direct
@@ -155,17 +53,26 @@ thick-linked from no old anchor. -/
 theorem hybridBandLaws {kt : ℕ} (hpos : 0 < kt) :
     (Hybrid.hybridAnchored Validator BlockId Payload kt).BandLaws where
   commit_band := fun h hkk _ hlo hhi hV _ hc =>
-    directCommitIn_band h hkk (by omega)
-      (by simp only [Hybrid.hybridAnchored_wave] at hhi; omega) hV hc
+    AnchoredRule.holdsAtLeast_votesFor_band h hV (by omega) (by omega)
+      (by simp only [Hybrid.hybridAnchored_wave] at hhi; omega) hc
   skip_band := fun h hkk hlk hlo hhi hV hs =>
-    le_trans hs (Finset.card_le_card (AnchoredRule.slotBlamesIn_band h hkk hlk hlo
+    le_trans hs (Finset.card_le_card (AnchoredRule.slotBlamesIn_band h hkk hlk hlo.le
       (by simp only [Hybrid.hybridAnchored_wave] at hhi; omega) hV))
-  link_band := fun h hA hAlo hAhi hkk _ hlo hhi _ _ =>
-    thickLink_band h hA hAlo hAhi hkk hlo
-      (by simp only [Hybrid.hybridAnchored_wave] at hhi; omega)
-  link_novel := fun h hA hAlo hAhi hkk _ hlo hhi _ _ hL =>
-    not_thickLink_band_novel h hA hAlo hAhi hkk hlo
-      (by simp only [Hybrid.hybridAnchored_wave] at hhi; omega) hL hpos
+  link_band := by
+    intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi _ _
+    simp only [Hybrid.hybridAnchored_wave] at hhi
+    show Hybrid.ThickLink kt U' A L (S'.slotRound k') ↔ Hybrid.ThickLink kt U A L (S.slotRound k)
+    unfold Hybrid.ThickLink Hybrid.coneSupports
+    rw [AnchoredRule.coneSupporters_band h hA hAlo hAhi (n := S.slotRound k + 1) (by omega) (by omega)
+      (by omega)]
+  link_novel := by
+    intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi _ _ hL ht
+    simp only [Hybrid.hybridAnchored_wave] at hhi
+    change Hybrid.ThickLink kt U' A L (S'.slotRound k') at ht
+    unfold Hybrid.ThickLink Hybrid.coneSupports at ht
+    rw [AnchoredRule.coneSupporters_band_novel h hA hAlo hAhi (n := S.slotRound k + 1)
+      (by omega) (by omega) (by omega) hL, Finset.card_empty] at ht
+    omega
 
 /-- **Hybrid is banded**, at a positive threshold: the relation's band
 under `HonestNoEquiv`. -/

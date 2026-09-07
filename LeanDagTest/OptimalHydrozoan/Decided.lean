@@ -262,7 +262,7 @@ example :
 -- The rungs at the anchor: no certificate in reach, but a quorum of
 -- evidence blocks — 15, 16, 17, two references below 22.
 example : ¬ LeanDag.Hydrozoan.CertifiedIn UD 22 8 2 := fun h =>
-  absurd ((certifiedIn_iff_history (by decide)).mp h) (by decide)
+  absurd ((linkedVia_iff_history (by decide)).mp h) (by decide)
 example : EvidenceLinked UD 22 8 2 :=
   (evidenceLinked_iff_history (by decide)).mpr (by decide)
 
@@ -284,7 +284,7 @@ example : DecidedOpt OD VD 2 (some 8) := by
       subst this
       have : i = 0 := by omega
       subst this
-      exact absurd ((certifiedIn_iff_history (by decide)).mp hcert) (by decide))
+      exact absurd ((linkedVia_iff_history (by decide)).mp hcert) (by decide))
     (by decide)
     (show EvidenceLinked UD 22 8 2 from (evidenceLinked_iff_history (by decide)).mpr (by decide))
     (fun _ _ _ h => h)
@@ -319,7 +319,7 @@ example : DecidedOpt OD VD 3 (some 13) :=
 
 -- Both rungs are empty for candidate 29 at the anchor.
 example : ¬ LeanDag.Hydrozoan.CertifiedIn UD 22 29 1 := fun h =>
-  absurd ((certifiedIn_iff_history (by decide)).mp h) (by decide)
+  absurd ((linkedVia_iff_history (by decide)).mp h) (by decide)
 example : ¬ EvidenceLinked UD 22 29 1 := fun h =>
   absurd ((evidenceLinked_iff_history (by decide)).mp h) (by decide)
 
@@ -341,7 +341,7 @@ example : DecidedOpt OD VD 1 none := by
       subst this
       rcases i with _ | _ | i
       · exact fun hcert =>
-          absurd ((certifiedIn_iff_history (by decide)).mp hcert) (by decide)
+          absurd ((linkedVia_iff_history (by decide)).mp hcert) (by decide)
       · exact fun hev =>
           absurd ((evidenceLinked_iff_history (by decide)).mp hev) (by decide)
       · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega))

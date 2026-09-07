@@ -50,8 +50,8 @@ round `r` by `v`, each voted for by one of `b`'s refs. -/
 def WitnessesAt (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (r : ℕ)
     (v : Replica) (b : BlockId) : Prop :=
   ∃ L₁ L₂, IsCandidateAt U r v L₁ ∧ IsCandidateAt U r v L₂ ∧ L₁ ≠ L₂ ∧
-    (∃ j ∈ (U.block b).refs, LeanDag.Hydrozoan.IsVote U j L₁) ∧
-    (∃ j ∈ (U.block b).refs, LeanDag.Hydrozoan.IsVote U j L₂)
+    (∃ j ∈ (U.block b).refs, IsVote U j L₁) ∧
+    (∃ j ∈ (U.block b).refs, IsVote U j L₂)
 
 /-- **Leader exclusion, without a schedule.** A block that has watched a
 replica equivocate two rounds below it references nothing by that
@@ -80,8 +80,8 @@ its `Decidable` instance (over a `Fintype` of ids) lives in
 def WitnessesEquivocation (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (k : ℕ)
     (b : BlockId) : Prop :=
   ∃ L₁ L₂, IsLeaderBlock U k L₁ ∧ IsLeaderBlock U k L₂ ∧ L₁ ≠ L₂ ∧
-    (∃ j ∈ (U.block b).refs, LeanDag.Hydrozoan.IsVote U j L₁) ∧
-    (∃ j ∈ (U.block b).refs, LeanDag.Hydrozoan.IsVote U j L₂)
+    (∃ j ∈ (U.block b).refs, IsVote U j L₁) ∧
+    (∃ j ∈ (U.block b).refs, IsVote U j L₂)
 
 /-- **Leader exclusion at a schedule** — the validity rule of
 `sections/optimal-protocol.tex`: a block at the decision round of slot

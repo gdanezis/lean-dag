@@ -166,15 +166,16 @@ def ugrowReactive (N : ℕ) : ReactiveM (Ugrow N) {1, 2, 3} N where
     simp only [ugrow_block, rrBlock_round] at hround hcr
     show (Fintype.card (Fin 4) - Faults.f (Fin 4)) ≤ _
     have hsub : ({0, 1, 2, 3} : Finset (Fin 4)) ⊆
-        creatorsOf (Ugrow N).block (votesIn (Ugrow N) c L) := by
+        creatorsOf (Ugrow N).block (carriedVotes (Ugrow N) (IsVote (Ugrow N)) c L) := by
       intro x _
       have hx4 := x.isLt
       refine mem_creatorsOf.mpr ⟨4 * (rrSlots.slotRound k + 1) + (x : ℕ), ?_, ?_⟩
-      · rw [votesIn, Finset.mem_filter]
+      · rw [carriedVotes, Finset.mem_filter]
         constructor
         · simp only [ugrow_block, mem_growBlock_refs]
           omega
-        · simp only [ugrow_block, mem_growBlock_refs]
+        · unfold IsVote
+          simp only [ugrow_block, mem_growBlock_refs]
           omega
       · apply Fin.ext
         simp only [ugrow_block, rrBlock_creator_val]

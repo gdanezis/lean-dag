@@ -39,32 +39,33 @@ theorem eq_of_certificates_nonempty {L₁ L₂ : BlockId} {r : ℕ}
     (h₂ : (certificates U L₂ r).Nonempty) : L₁ = L₂ := by
   obtain ⟨C₁, hC₁⟩ := h₁
   obtain ⟨C₂, hC₂⟩ := h₂
-  obtain ⟨hC₁i, hC₁r, hcert₁⟩ := mem_certificates.mp hC₁
-  obtain ⟨hC₂i, hC₂r, hcert₂⟩ := mem_certificates.mp hC₂
+  obtain ⟨hC₁i, hC₁r, hcert₁⟩ := mem_certificatesAt.mp hC₁
+  obtain ⟨hC₂i, hC₂r, hcert₂⟩ := mem_certificatesAt.mp hC₂
   obtain ⟨b, hb₁, hb₂⟩ :=
     exists_common_block U.noEquivOn_honest card_compl_nonByzantine_le
       (s := voteBlocks U C₁ L₁) (t := voteBlocks U C₂ L₂) (n := r + 1)
-      (fun b hb => ⟨(mem_voteBlocks_spec hC₁i hC₁r hb).1,
-        (mem_voteBlocks_spec hC₁i hC₁r hb).2.1⟩)
-      (fun b hb => ⟨(mem_voteBlocks_spec hC₂i hC₂r hb).1,
-        (mem_voteBlocks_spec hC₂i hC₂r hb).2.1⟩)
+      (fun b hb => ⟨(mem_carriedVotes_spec hC₁i hC₁r hb).1,
+        (mem_carriedVotes_spec hC₁i hC₁r hb).2.1⟩)
+      (fun b hb => ⟨(mem_carriedVotes_spec hC₂i hC₂r hb).1,
+        (mem_carriedVotes_spec hC₂i hC₂r hb).2.1⟩)
       (by
         have h5 := nf_lt_two_qCert (Replica := Replica)
-        simp only [IsCertificate] at hcert₁ hcert₂
+        simp only [CarriesVotes] at hcert₁ hcert₂
+        simp only [voteBlocks]
         omega)
-  have hbids : b ∈ U.ids := (mem_voteBlocks_spec hC₁i hC₁r hb₁).1
+  have hbids : b ∈ U.ids := (mem_carriedVotes_spec hC₁i hC₁r hb₁).1
   exact U.distinct_creators hbids
-    (mem_voteBlocks_spec hC₁i hC₁r hb₁).2.2
-    (mem_voteBlocks_spec hC₂i hC₂r hb₂).2.2 hcreator
+    (mem_carriedVotes_spec hC₁i hC₁r hb₁).2.2
+    (mem_carriedVotes_spec hC₂i hC₂r hb₂).2.2 hcreator
 
 omit S in
 /-- A slow commit's certificate carries `q_cert` supporters. -/
 theorem qCert_le_card_supporters_of_slowCommit {L : BlockId} {r : ℕ} (h : SlowCommit U L r) :
     qCert Replica ≤ (supporters U L (r + 1)).card := by
   obtain ⟨C, hC⟩ := certificates_nonempty_of_slowCommit h
-  obtain ⟨hCi, hCr, hcert⟩ := mem_certificates.mp hC
-  have hle := Finset.card_le_card (creators_voteBlocks_subset_supporters (L := L) hCi hCr)
-  simp only [IsCertificate] at hcert
+  obtain ⟨hCi, hCr, hcert⟩ := mem_certificatesAt.mp hC
+  have hle := Finset.card_le_card (creatorsOf_carriedVotes_subset_supporters (L := L) hCi hCr)
+  simp only [CarriesVotes] at hcert
   omega
 
 omit S in

@@ -248,7 +248,7 @@ example : Decided U13 (View.full U13) 0 (some 2) :=
       · exact absurd h3 (by decide))
     (by decide) (fun _ h => absurd h (Nat.not_lt_zero _))
     (by decide)
-    (show LeanDag.Hydrozoan.CertifiedIn U13 23 2 0 from (certifiedIn_iff_history (by decide)).mpr (by decide))
+    (show LeanDag.Hydrozoan.CertifiedIn U13 23 2 0 from (linkedVia_iff_history (by decide)).mpr (by decide))
     (fun _ _ _ h => h)
 
 -- Slot 2's derivation: the indirect skip, with real negative rungs
@@ -267,7 +267,7 @@ example : Decided U13 (View.full U13) 2 none := by
       subst this
       rcases i with _ | _ | i
       · exact fun hcert =>
-          absurd ((certifiedIn_iff_history (by decide)).mp hcert) (by decide)
+          absurd ((linkedVia_iff_history (by decide)).mp hcert) (by decide)
       · exact fun hweak =>
           absurd ((weakLinked_iff_history (by decide)).mp hweak) (by decide)
       · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega))

@@ -10,7 +10,7 @@ and the direct skip of `sections/optimal-algorithms.tex` (`IsFastEvidence`,
 plus their view-relative variants. Definitions only.
 
 Everything else of the direct layer is Hydrozoan's, untouched and reused:
-`LeanDag.Hydrozoan.IsVote`, `LeanDag.Hydrozoan.voteBlocks`, `LeanDag.Hydrozoan.IsCertificate`, `supporters`, `SlowCommit`, `slotBlames`
+`IsVote`, `LeanDag.Hydrozoan.voteBlocks`, `LeanDag.Hydrozoan.IsCertificate`, `supporters`, `SlowCommit`, `slotBlames`
 and their in-view forms (`Model/DirectRules.lean`). What changes:
 
 * the fast commit counts to `qFastOpt` instead of `qFast`;

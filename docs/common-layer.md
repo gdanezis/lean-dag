@@ -455,7 +455,7 @@ current, and is a commit. Dependencies run downward.
 | 10 | Odontoceti as Hybrid at `fc = 0` (§2.7) | 7 | 1100 |
 | 11 | FinWhale's restriction family and aliases on Common (§2.6); `LeaderExcludedAll` as a clause (§2.5) | 2 | 250 |
 
-**Progress.** Steps 1 to 3 landed as §11.31 to §11.33 of `docs/target-properties.md`.
+**Progress.** Steps 1 to 4 landed as §11.31 to §11.34 of `docs/target-properties.md`.
 
 The estimates sum to about 4,500 lines, or a little under a sixth of the
 library after the last round. Steps 1 to 4 are mechanical and carry no

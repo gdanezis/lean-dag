@@ -257,7 +257,7 @@ example : Decided U9 (View.full U9) 0 (some 2) := by
       subst this
       have : i = 0 := by omega
       subst this
-      exact absurd ((certifiedIn_iff_history (by decide)).mp hcert) (by decide))
+      exact absurd ((linkedVia_iff_history (by decide)).mp hcert) (by decide))
     (by decide)
     (show WeakLinked U9 23 2 0 from (weakLinked_iff_history (by decide)).mpr (by decide))
     (fun L' hL' _ => by
@@ -424,9 +424,9 @@ theorem u11_decided : Decided U11 (View.full U11) 0 (some 0) := by
       have : i = 0 := by omega
       subst this
       rcases hall L' hL' with rfl | rfl
-      · exact absurd ((certifiedIn_iff_history (by decide)).mp hcert)
+      · exact absurd ((linkedVia_iff_history (by decide)).mp hcert)
           (by decide)
-      · exact absurd ((certifiedIn_iff_history (by decide)).mp hcert)
+      · exact absurd ((linkedVia_iff_history (by decide)).mp hcert)
           (by decide))
     (by decide)
     (show WeakLinked U11 19 0 0 from (weakLinked_iff_history (by decide)).mpr (by decide))
