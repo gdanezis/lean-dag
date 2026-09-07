@@ -1,19 +1,19 @@
 import LeanDag.Barnacle.Model.Heads
-import LeanDag.Barnacle.Helpers.Nemo
+import LeanDag.Barnacle.Model.Anchored
 import LeanDag.Nemo.Carrier
+import LeanDag.Nemo.Liveness
 /-!
 # Barnacle over Nemo-Nemo — statement
 
 The crash-fault rule at a bare majority, `n ≥ 2f + 1` (report §15), as
 a base rule with its laws — its safety needs no fault class at all — as
-a live rule whose good set is any synchronised, populated majority of
-the live validators, with its descent laws at the slack such a majority
-may miss, `n − majority`, and the paper's A4 for it under round-robin:
-live at every leader count with gap `n + 1`, at every `n`. The crash
-bound is consumed nowhere in the proofs; it is what makes `Good`
-satisfiable, the live set being a majority. The universe and views are Nemo's own, so the history
-view is `nemoHistoryViewOf`.
-
+a live rule whose good DAGs are `Timed.Good` at Nemo's fault model — any
+synchronised, populated majority, the reliable set being everyone — with
+its descent laws at the slack such a majority may miss, `n − majority`,
+and the paper's A4 for it under round-robin: live at every leader count
+with gap `n + 1`, at every `n`. The crash bound is consumed nowhere in
+the proofs; it is what makes `Good` satisfiable, the live set being a
+majority. Both rules are `ofAnchored` at `nemoAnchored`.
 Statements only; the proofs live in `Proof.lean`.
 -/
 
@@ -24,24 +24,17 @@ namespace Barnacle
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
-/-- **Nemo-Nemo as a base rule** — the data. Wave length two; the direct
-commit predicate counts a majority of supporters at the next round. No
-fault class: the crash-fault universe's safety needs none. -/
-def nemo : BaseRule Validator BlockId Payload where
-  toDagRule := NemoProperties.nemoRule
-  full := fun U => View.full U
-  historyView := fun U A hA => nemoHistoryViewOf U A hA
-  waveLength := 2
-  DirectCommitIn := fun V L r => Nemo.DirectCommitIn _ V L r
-  decDirect := fun _ _ _ => inferInstance
+/-- **Nemo-Nemo as a base rule**: its anchored rule. No fault class: the
+crash-fault universe's safety needs none. -/
+def nemo : BaseRule Validator BlockId Payload :=
+  ofAnchored (Nemo.nemoAnchored Validator BlockId Payload)
 
-/-- **Nemo-Nemo as a live rule**: a DAG is good when a majority of live
-validators is synchronised from `Rnd` and populates the rounds to `N`. -/
+/-- **Nemo-Nemo as a live rule**, at Nemo's fault model: a DAG is good
+when a majority is synchronised from `Rnd` and populates the rounds to
+`N`. -/
 def nemoLive [Nemo.CrashFaults Validator] : LiveRule Validator BlockId Payload :=
-  { nemo with
-    Good := fun U Rnd N => ∃ T ⊆ Nemo.Live Validator,
-      Nemo.majority Validator ≤ T.card ∧ SynchronisedOn U T Rnd ∧
-      ∀ r, Rnd ≤ r → r ≤ N → PopulatedOn U T r }
+  liveOfAnchored (Nemo.nemoAnchored Validator BlockId Payload)
+    (NemoProperties.nemoReliability Validator Nemo.CrashFaults.card_pos)
 
 namespace Nemo
 
@@ -52,10 +45,10 @@ def Laws : Prop :=
     BaseRule.Laws (nemo (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
 
 /-- **Nemo-Nemo has the descent laws at the slack a majority may miss**,
-`n − majority`: its good set is any synchronised majority of the live
-validators, which misses `n − majority` of them — at `n = 2f + 1` exactly
-`f`, and more above the bound. The crash bound enters liveness only
-through `Good` being satisfiable, the live set being a majority. -/
+`n − majority`: its good set is any synchronised majority, which misses
+`n − majority` validators — at `n = 2f + 1` exactly `f`, and more above
+the bound. The crash bound enters liveness only through `Good` being
+satisfiable, the live set being a majority. -/
 def Descent : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LeanDag.Nemo.CrashFaults Validator] [DecidableEq BlockId],

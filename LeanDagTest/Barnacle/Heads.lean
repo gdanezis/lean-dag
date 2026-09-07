@@ -112,7 +112,7 @@ theorem usun_sync : SynchronisedOn Usun {1, 2, 3} 1 := by
 
 theorem usun_good :
     (mysticetiLive (Validator := Fin 4) (BlockId := Fin 32) (Payload := Unit)).Good Usun 1 7 :=
-  ⟨{1, 2, 3}, by rw [bnCorrect], by decide, usun_sync, fun r h1 h2 => by
+  ⟨{1, 2, 3}, ⟨by decide, by decide⟩, usun_sync, fun r h1 h2 => by
     interval_cases r <;> decide⟩
 
 -- Population fails at round `8`: `Good Usun 1 8` needs a block there.
@@ -171,9 +171,11 @@ example : ¬ SynchronisedOn Usk {0, 1, 2, 3} 1 := fun h =>
 quorum is `{1, 2, 3}` itself, and it is not synchronised. -/
 theorem usk_not_good (N : ℕ) :
     ¬ (mysticetiLive (Validator := Fin 4) (BlockId := Fin 32) (Payload := Unit)).Good Usk 1 N := by
-  rintro ⟨T, hsub, hcard, hsync, -⟩
+  rintro ⟨T, ⟨hsub, hcard⟩, hsync, -⟩
+  change T ⊆ Correct at hsub
   rw [bnCorrect] at hsub
   have h3 : 3 ≤ T.card := by
+    change Fintype.card (Fin 4) - Faults.f (Fin 4) ≤ T.card at hcard
     have h4 : Fintype.card (Fin 4) = 4 := Fintype.card_fin 4
     have hf : Faults.f (Fin 4) = 1 := rfl
     rw [h4, hf] at hcard
@@ -209,7 +211,7 @@ theorem bnLiveSk_descent : bnLiveSk.Descent 1 where
     -- every block of `Usk` lies at a round the view covers
     have hround : ∀ b ∈ Usk.ids, (Usk.block b).round ≤ 8 := by decide
     exact ⟨L, AnchoredRule.decided_mono coreLaws trivial (S := S) (fun b hb => hcov b hb (hround b hb)) hL⟩
-  indirect := mysticetiLive_descent.indirect
+  indirect := (MysticetiLive.descent (Fin 4) (Fin 32) Unit).indirect
 
 /-- Slot `2` of `Sched 1` is directly skipped on `Usk`. -/
 theorem usk_skip2 : bnRule32.Decided sched1 (bnLiveSk.full Usk) 2 none :=
@@ -313,7 +315,7 @@ theorem u44_sync : SynchronisedOn U44 {1, 2, 3} 1 := by
 
 theorem u44_good :
     (mysticetiLive (Validator := Fin 4) (BlockId := Fin 44) (Payload := Unit)).Good U44 1 10 :=
-  ⟨{1, 2, 3}, by rw [bnCorrect], by decide, u44_sync, fun r h1 h2 => by
+  ⟨{1, 2, 3}, ⟨by decide, by decide⟩, u44_sync, fun r h1 h2 => by
     interval_cases r <;> decide⟩
 
 abbrev rr4 : ℕ → Fin 4 := roundRobin 4 (by omega)

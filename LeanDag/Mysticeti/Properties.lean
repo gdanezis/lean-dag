@@ -730,8 +730,8 @@ horizon `N`, a `T`-led slot two rounds under it — reached from
 
 The work is entirely in packaging: `LeaderCommits` takes its
 precondition as `coreLive` over a slot window, and the window here is
-the single slot. This is the same bridge `Barnacle.GoodOf` is for
-Barnacle (`docs/target-properties.md` §11.2b), and it is the reason the
+the single slot. This is the same bridge `Timed.Good` is for Barnacle
+(`docs/target-properties.md` §11.2b), and it is the reason the
 capstones do not need their own route into the protocol. -/
 theorem decided_of_leader_of_populated_of_properties [S : Slots Validator]
     {U : BlockUniverse Validator BlockId Payload} {T : Finset Validator} {R N k : ℕ}

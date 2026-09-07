@@ -4427,6 +4427,66 @@ five staged-liveness constructions go through one `coreLive_of`.
 **Measure.** The step removes 286 lines and adds 156; the library and
 tests stand at 76,905 lines.
 
+### 11.36 Barnacle proved once
+
+Step 9 of `docs/common-layer.md`. Barnacle's interface was instantiated
+eight times by hand: each rule's `Statement.lean` built a `BaseRule`
+field by field — the full view, the anchor's history as a view with its
+closure proof, a wave length, the direct predicate and its decidability —
+and each `Proof.lean` or helper discharged the five laws from the rule's
+properties, bridged the rule's `Good` to the properties' packaged
+synchrony by re-tupling, and applied `descent_of_support`. Twenty-two
+files and 1,466 lines before the step.
+
+Every commit rule is an `AnchoredRule`, and `Barnacle.ofAnchored R`
+(`Barnacle/Model/Anchored.lean`) reads a base rule off one: `R.toDagRule`
+as the carrier, `View.full` and `BlockRecord.historyView` — the history
+as a view, once, in `Common/History.lean` — for the two views,
+`R.wave + 1` for the wave length, `R.Commit` for the direct predicate.
+`ofAnchoredOn R I` is the same over the records satisfying an invariant,
+for Orcaella and Optimal-Hydrozoan. `ofAnchored_laws` proves the laws
+once, from the agreement, candidate and direct-commit properties of
+`Common/Anchored/Band.lean`. `liveOfAnchored R rel` adds
+`Good := Timed.Good R.toDagRule rel` — a quorum of the fault model
+synchronised and populating, a definition of `Timed/Coverage.lean` now
+rather than Barnacle's `GoodOf` — so the eight `goodOf` bridges are the
+identity. Each `Statement.lean` is now its anchored rule, its fault
+model, and one committee inequality; each `Proof.lean` is
+`ofAnchored_laws`, `descent_of_support` at the rule's support, and
+`liveOn_roundRobin`.
+
+**Three departures from the plan of §3.2.** `Good` stays a field of
+`LiveRule` and no `rel` field is added: the witnesses of
+`LeanDagTest/Barnacle/Progress.lean` build live rules whose `Good` pins
+one universe, which is what makes BN8 runnable on data. The two `Laws`
+fields with no consumers are kept: `full_ids` and `historyView_ids` are
+the laws of the two view fields, without which the fields would be
+unconstrained. What changed is the type of the other three — `agree`,
+`commitsDirect` and `candidates` *are* `Properties.Agree`,
+`CommitsDirect` and `CommitsCandidate` at the carrier, not restatements
+of them. And `AnchoredRule` gained a field, `decCommit`, the
+decidability of the direct commit, which each rule supplies by
+`inferInstance`: the base rule's `decDirect` reads it, and every
+anchored rule's commit is decidable wherever it is stated
+(`AnchoredRule.instDecidableCommit`).
+
+**What else moved.** `Delivers` is one theorem, `delivers_core`, for
+every anchored rule over the block universe at the core's fault model;
+Mysticeti's and Odontoceti's copies are gone. Hydrozoan's
+`causalStructure` bridge is gone: a Hydrozoan universe is a block record
+and `BlockRecord.causal` is its causal structure, which is where HI3 now
+points. `Properties.PopulatedOn`, `Reliability.IsQuorum` and
+`DagRule.IsCandidate` are decidable, so the witnesses settle
+`Timed.Good` by `decide`. Nemo's good DAGs are any synchronised,
+populated majority rather than one inside the live set: the live-set
+clause was consumed by no proof and the reliable set of Nemo's fault
+model is everyone, so the descent law is the stronger statement, and
+`LeanDagTest/Barnacle/Instances.lean` shows the horizon still bites.
+
+**Measure.** The step removes 1,082 lines of Lean and adds 591;
+`Barnacle/` goes from 4,901 to 4,348 lines and seven helper files are
+deleted; the library and tests stand at 76,414 lines.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

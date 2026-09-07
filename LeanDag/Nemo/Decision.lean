@@ -49,6 +49,7 @@ def nemoAnchored (Validator BlockId Payload : Type) [Fintype Validator] [Decidab
     [DecidableEq BlockId] : AnchoredRule Validator BlockId Payload ValidWrt Finset.univ where
   wave := 1
   Commit := fun U V L r => Nemo.DirectCommitIn U V L r
+  decCommit := fun _ _ _ _ => inferInstance
   Skip := fun _ _ _ _ => False
   rungs := 1
   Link := fun _ U A L S k => CertifiedIn U A L (S.slotRound k)

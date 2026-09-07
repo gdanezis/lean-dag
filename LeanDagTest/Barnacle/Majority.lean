@@ -79,7 +79,7 @@ example : (LeanDag.supporters U3 1 1 : Finset (Fin 3)) = {1} := by decide
 
 theorem u3_good :
     (nemoLive (Validator := Fin 3) (BlockId := Fin 24) (Payload := Unit)).Good U3 0 7 :=
-  ⟨{0, 2}, by decide, by decide, u3_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
+  ⟨{0, 2}, ⟨by decide, by decide⟩, u3_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
 
 example : ¬ PopulatedOn U3 {0, 2} 8 := by decide
 

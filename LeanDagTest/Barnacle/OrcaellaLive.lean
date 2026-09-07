@@ -71,7 +71,7 @@ theorem ul_sync : SynchronisedOn UL {0, 1, 2} 0 := by
 theorem ul_good :
     (orcaellaLive (Validator := Fin 4) (BlockId := Fin 28) (Payload := Unit) 2).Good
       OUL 0 8 :=
-  ⟨{0, 1, 2}, by decide, by decide, ul_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
+  ⟨{0, 1, 2}, ⟨by decide, by decide⟩, ul_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
 
 abbrev rr4 : ℕ → Fin 4 := roundRobin 4 (by omega)
 theorem rr4_keyed : Keyed rr4 4 := roundRobin_keyed 4 (by omega)

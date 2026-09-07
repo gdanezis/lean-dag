@@ -77,6 +77,11 @@ def PopulatedOn (R : DagRule Validator BlockId Payload) (U : R.Universe)
     (T : Finset Validator) (r : ℕ) : Prop :=
   PopulatedFrom (R.block U) (R.ids U) T r
 
+/-- Decidable on concrete data, at any carrier. -/
+instance instDecidablePopulatedOn (R : DagRule Validator BlockId Payload) (U : R.Universe)
+    (T : Finset Validator) (r : ℕ) : Decidable (PopulatedOn R U T r) :=
+  inferInstanceAs (Decidable (PopulatedFrom (R.block U) (R.ids U) T r))
+
 /-! ## The additive half
 
 `Sustains` is a **negative** promise: above the settling round the

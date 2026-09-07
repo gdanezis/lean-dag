@@ -45,7 +45,7 @@ abbrev realRule : LiveRule (Fin 4) ℕ Unit := mysticetiLive
 are a quorum, the family is synchronised from round `0`, and it is
 populated at every round up to `N`. -/
 theorem ugrow_good (N : ℕ) : realRule.Good (Ugrow N) 0 N :=
-  ⟨(Correct : Finset (Fin 4)), Finset.Subset.refl _, card_correct,
+  ⟨(Correct : Finset (Fin 4)), ⟨Finset.Subset.refl _, card_correct⟩,
     ugrow_synchronised N, fun _ _ hr => ugrow_populated hr⟩
 
 /-- The AIMD rule over the real base rule. -/
@@ -107,7 +107,7 @@ theorem real_delivers (K : ℕ) :
   obtain ⟨T, hcard, hT⟩ :=
     Validity.holds (Fin 4) ℕ Unit realRule
       MysticetiProperties.commitsCandidate bnP bnLeader bnWin
-      realUpd (Faults.f (Fin 4)) mysticetiLive_delivers (Ugrow (11 * K + 9))
+      realUpd (Faults.f (Fin 4)) (delivers_core _) (Ugrow (11 * K + 9))
       (realRule.full (Ugrow (11 * K + 9))) K (real_runs K).some 0 (11 * K + 9)
       (ugrow_good _)
   exact ⟨T, hcard, fun b hb hbT hN k hk hround => hT b hb hbT (Nat.zero_le _) hN k hk hround⟩

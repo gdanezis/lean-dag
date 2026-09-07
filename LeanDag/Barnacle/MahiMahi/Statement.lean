@@ -1,20 +1,18 @@
 import LeanDag.Barnacle.Model.Heads
-import LeanDag.Barnacle.Helpers.Mysticeti
+import LeanDag.Barnacle.Model.Anchored
 import LeanDag.MahiMahi.Carrier
 /-!
 # Barnacle over Mahi-Mahi — statement
 
 The wave-`w` rule as a base rule with its laws, as a live rule with its
-descent laws at slack `f`, and A4 for it under round-robin. The
-universe and views are the core's, so the history view is
-`historyViewOf`; the wave length is `w`, which is what the rule's
-indirect eligibility reads.
+descent laws at slack `f`, and A4 for it under round-robin. Both are
+`ofAnchored` at `mahiMahiAnchored w`, whose wave is `w − 1`, so the wave
+length is `w` — what the rule's indirect eligibility reads.
 
 Every statement carries `w` as a parameter, as the carrier does, and
 the committee bound round-robin needs — `w · f + 1 ≤ n` — is taken as
 a hypothesis: the fault model gives `3f + 1 ≤ n`, and a wave longer than
 three asks for more.
-
 Statements only; the proofs live in `Proof.lean`.
 -/
 
@@ -25,22 +23,14 @@ namespace Barnacle
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 
-/-- **Mahi-Mahi as a base rule** — the data, at wave `w`. -/
-def mahiMahi [Faults Validator] (w : ℕ) : BaseRule Validator BlockId Payload where
-  toDagRule := MahiMahiProperties.mahiMahiRule w
-  full := fun U => LeanDag.View.full U
-  historyView := fun U A hA => historyViewOf U A hA
-  waveLength := w
-  DirectCommitIn := fun V L r => MahiMahi.DirectCommitIn _ V w L r
-  decDirect := fun _ _ _ => inferInstance
+/-- **Mahi-Mahi as a base rule**, at wave `w`. -/
+def mahiMahi [Faults Validator] (w : ℕ) : BaseRule Validator BlockId Payload :=
+  ofAnchored (MahiMahi.mahiMahiAnchored Validator BlockId Payload w)
 
-/-- **Mahi-Mahi as a live rule**: a DAG is good when a correct quorum is
-synchronised from `Rnd` and populates the rounds to `N`. -/
+/-- **Mahi-Mahi as a live rule**, at the core's fault model. -/
 def mahiMahiLive [Faults Validator] (w : ℕ) : LiveRule Validator BlockId Payload :=
-  { mahiMahi w with
-    Good := fun U Rnd N => ∃ T ⊆ (Correct : Finset Validator),
-      quorumCard Validator ≤ T.card ∧ SynchronisedOn U T Rnd ∧
-      ∀ r, Rnd ≤ r → r ≤ N → PopulatedOn U T r }
+  liveOfAnchored (MahiMahi.mahiMahiAnchored Validator BlockId Payload w)
+    (coreReliability Validator)
 
 namespace MahiMahi
 

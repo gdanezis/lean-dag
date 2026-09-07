@@ -170,6 +170,17 @@ theorem decidedBelow_of_fairRun (sp : Support R) {rel : Reliability Validator}
   intro j hj
   exact le_trans (Nat.add_le_add_right (S.mono (by omega)) _) hN
 
+/-! ## A good DAG -/
+
+/-- **A good DAG, from `Rnd` to `N`**: some quorum of the fault model is
+synchronised from `Rnd` and populates every round from `Rnd` to `N`.
+Everything a timed model asks of the DAG, packaged: a live rule's notion
+of a good DAG is this at its own carrier and fault model. -/
+def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
+    (U : R.Universe) (Rnd N : ℕ) : Prop :=
+  ∃ T, rel.IsQuorum T ∧ SynchronisedOn R U T Rnd ∧
+    ∀ r, Rnd ≤ r → r ≤ N → Properties.PopulatedOn R U T r
+
 end Timed
 
 end LeanDag

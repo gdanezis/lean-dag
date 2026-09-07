@@ -368,6 +368,7 @@ def coreAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
     AnchoredRule Validator BlockId Payload ValidWrt Correct where
   wave := 2
   Commit := fun U V L r => DirectCommitIn U V L r
+  decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => DirectSkipSlotIn (S := S) U V k
   rungs := 1
   Link := fun _ U A L S k => CertifiedIn U A L (S.slotRound k)

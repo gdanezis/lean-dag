@@ -1,16 +1,14 @@
 import LeanDag.Barnacle.Model.Heads
+import LeanDag.Barnacle.Model.Anchored
 import LeanDag.FinWhale.Carrier
 /-!
 # Barnacle over FinWhale — statement
 
 FinWhale as a base rule with its laws, as a live rule with its descent
-laws at slack `f`, and A4 for it under round-robin. The universe is
-FinWhale's own `Dag` and a view is a reference-closed subset of it, so
-the history view is the causal history of the anchor, closed by
-construction. The wave length is three, which is what the rule's
-eligibility reads; the direct predicate is the one the carrier's
-`CommitsDirect` is stated at.
-
+laws at slack `f`, and A4 for it under round-robin. Both are
+`ofAnchored` at `finWhaleAnchored`: the universe is FinWhale's own
+`Dag`, the wave length three — what the rule's eligibility reads — and
+the direct predicate `DirectCommit`, as a view evaluates it.
 Statements only; the proofs live in `Proof.lean`.
 -/
 
@@ -18,35 +16,18 @@ namespace LeanDag
 
 namespace Barnacle
 
-open LeanDag.FinWhale
-
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable [F : Faults Validator] [P : LeanDag.FinWhale.Params Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 
-/-- **FinWhale as a base rule** — the data. -/
-def finWhale : BaseRule Validator BlockId Payload where
-  toDagRule := FinWhaleProperties.finWhaleRule
-  full := fun D => ⟨D.ids, Finset.Subset.rfl, D.complete⟩
-  historyView := fun D A hA =>
-    ⟨historyFrom D.block A,
-      fun i hi => (LeanDag.FinWhale.causalStructure D).mem_ids_of_reaches hA
-        (((LeanDag.FinWhale.causalStructure D).mem_history_iff hA).mp hi),
-      fun i hi j hj => ((LeanDag.FinWhale.causalStructure D).mem_history_iff hA).mpr
-        (Relation.ReflTransGen.tail
-          (((LeanDag.FinWhale.causalStructure D).mem_history_iff hA).mp hi) hj)⟩
-  waveLength := 3
-  DirectCommitIn := fun V L _ => LeanDag.FinWhale.DirectCommit (V.toRecord) L
-  decDirect := fun V L _ => inferInstanceAs (Decidable
-    (LeanDag.FinWhale.DirectCommit (V.toRecord) L))
+/-- **FinWhale as a base rule**: its anchored rule. -/
+def finWhale : BaseRule Validator BlockId Payload :=
+  ofAnchored (LeanDag.FinWhale.finWhaleAnchored Validator BlockId Payload)
 
-/-- **FinWhale as a live rule**: a DAG is good when a correct quorum is
-synchronised from `Rnd` and populates the rounds to `N`. -/
+/-- **FinWhale as a live rule**, at the core's fault model. -/
 def finWhaleLive : LiveRule Validator BlockId Payload :=
-  { finWhale with
-    Good := fun D Rnd N => ∃ T ⊆ (Correct : Finset Validator),
-      quorumCard Validator ≤ T.card ∧ SynchronisedFrom D.block D.ids T Rnd ∧
-      ∀ r, Rnd ≤ r → r ≤ N → PopulatedFrom D.block D.ids T r }
+  liveOfAnchored (LeanDag.FinWhale.finWhaleAnchored Validator BlockId Payload)
+    (coreReliability Validator)
 
 namespace FinWhale
 

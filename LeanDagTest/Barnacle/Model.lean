@@ -144,7 +144,7 @@ example : certificates U7 11 2 = ∅ := by decide
 -- one short of the quorum's three, and it is not.
 example : bnRule.IsLeaderBlock bnSched2 U7 7 12 := by decide
 example : certificates U7 12 3 ∩ V7.ids = {20, 21, 22} := by decide
-example : certificates U7 12 3 ∩ (historyViewOf U7 20 (by decide)).ids = {20} := by decide
+example : certificates U7 12 3 ∩ (U7.historyView 20 (by decide)).ids = {20} := by decide
 example : bnRule.SlotDirect bnSched2 U7 (bnRule.full U7) 7 := by decide
 example : ¬ bnRule.SlotDirect bnSched2 U7 (bnRule.historyView U7 20 (by decide)) 7 := by decide
 -- Slot `(3, 0)`'s candidate, block `15`, has no certificate anywhere: it
@@ -283,10 +283,10 @@ commit verdict, on the full view `V7` and on the smaller `V7small`. What
 the witness exercises is the proved statement, not a restatement. -/
 
 example : bnRule.Decided bnSched2 V7 7 (some 12) :=
-  (Mysticeti.holds (Fin 4) (Fin 24) Unit).decided_of_directCommitIn bnSched2 V7 7 12
+  (Mysticeti.holds (Fin 4) (Fin 24) Unit).commitsDirect bnSched2 _ V7 7 12
     (by decide) (by decide)
 example : bnRule.Decided bnSched1 V7small 2 (some 10) :=
-  (Mysticeti.holds (Fin 4) (Fin 24) Unit).decided_of_directCommitIn bnSched1 V7small 2 10
+  (Mysticeti.holds (Fin 4) (Fin 24) Unit).commitsDirect bnSched1 _ V7small 2 10
     (by decide) (by decide)
 
 /-! ## The run, at height one

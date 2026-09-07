@@ -1,6 +1,9 @@
 import LeanDag.Mysticeti.Rule
 import LeanDag.Common.Causality
 import LeanDag.Properties.Carrier
+import LeanDag.Properties.Agree
+import LeanDag.Properties.Candidate
+import LeanDag.Properties.Optional.Direct
 /-!
 # Barnacle: the base-protocol interface
 
@@ -11,19 +14,19 @@ configuration. `BaseRule` is that abstraction as a Lean structure — its
 data — and `BaseRule.Laws` the proposition the data must satisfy. The
 arc never counts anything and never inspects a quorum: the leader-count
 mechanism is stated over an arbitrary `BaseRule` satisfying `Laws`, and
-the four commit rules of this development — Mysticeti, Odontoceti (the
-paper's Blue Bottle), Nemo and Orcaella (the hybrid rule) — are each
-shown to, as a result with a `Statement` and a `Proof` (`Mysticeti/`,
-Phase 5's two, and `Orcaella/`).
+the eight commit rules of this development are each shown to, as a
+result with a `Statement` and a `Proof` — through `ofAnchored`
+(`Model/Anchored.lean`), which reads a base rule off any anchored rule,
+and whose laws are proved once (`Helpers/Anchored.lean`).
 
 The universe and view types are *fields*, bundled in `Type`, because
-the four rules do not share them: the Byzantine rules use
-`BlockUniverse` and `View`, the crash rule its own `Nemo.Universe` and
-`Nemo.View`, and the hybrid rule the subtype of universes satisfying
-`HonestNoEquiv`. Bundling puts each rule's fault class on its
-instantiation and nothing on the interface, which is what lets Nemo —
-whose safety needs no fault class at all — instantiate it without one,
-and Orcaella carry a hypothesis the interface has no slot for.
+the rules do not share them: the Byzantine rules use `BlockUniverse`
+and `View`, the crash rule its own `Nemo.Universe` and `Nemo.View`, and
+the hybrid rule the subtype of universes satisfying `HonestNoEquiv`.
+Bundling puts each rule's fault class on its instantiation and nothing
+on the interface, which is what lets Nemo — whose safety needs no fault
+class at all — instantiate it without one, and Orcaella carry a
+hypothesis the interface has no slot for.
 
 The schedule is an explicit argument of `Decided` rather than an
 instance: the arc's whole subject is several `Slots` instances on one
@@ -111,21 +114,20 @@ def CoversUpto (R : BaseRule Validator BlockId Payload) (U : R.Universe)
 consumes of the protocol, and what each instantiation is proved to
 satisfy. A2 — a validator holds a block only with its whole causal
 history — is carried by `BaseRule` itself, as the fields `viewSound`
-and `viewComplete`; `agree` is the safety half of A4 (for a fixed
-schedule, verdicts agree across views); `decided_of_directCommitIn` ties
-the direct predicate to the relation, which is what makes the window
-count a count of *verdicts*: two directly committed candidates of one
-slot are one block, by `agree`; `candidates` is its converse, a
-committed block is a candidate of its slot. The liveness half of A4 is
-stated in Phase 3 over an extension of the data.
+and `viewComplete`. Two laws pin the two view fields: the full view is
+the universe, the history view is the history. The other three are the
+properties of `docs/target-properties.md`, read at the rule's carrier:
+`agree` is the safety half of A4 (for a fixed schedule, verdicts agree
+across views); `commitsDirect` ties the direct predicate to the
+relation, which is what makes the window count a count of *verdicts*:
+two directly committed candidates of one slot are one block, by
+`agree`; `candidates` is its converse, a committed block is a candidate
+of its slot. The liveness half of A4 is stated in Phase 3 over an
+extension of the data.
 
-**What still reads this.** One theorem, `Helpers/Cover.coversUpto_full`,
-for `full_ids`. `agree` and `candidates` survive to build
-`Properties.Agree` and `Properties.CommitsCandidate`, which is what
-every other theorem of the mechanism now takes;
-`decided_of_directCommitIn` and `historyView_ids` have no consumers at
-all. `docs/target-properties.md` §11.2 records why the two dead clauses
-are kept rather than deleted. -/
+Every anchored rule with its laws has these, once
+(`Helpers/Anchored.lean`): the view laws by construction, the three
+properties from `Common/Anchored/Band.lean`. -/
 structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
   /-- The full view holds exactly the universe. -/
   full_ids : ∀ U, R.viewIds (R.full U) = R.ids U
@@ -133,17 +135,13 @@ structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
   historyView_ids : ∀ U A (hA : A ∈ R.ids U),
     R.viewIds (R.historyView U A hA) = historyFrom (R.block U) A
   /-- **A4, safety.** For a fixed schedule, verdicts agree across views. -/
-  agree : ∀ (S : Slots Validator) {U : R.Universe} (V₁ V₂ : R.View U) (k : ℕ)
-    (v₁ v₂ : Option BlockId), R.Decided S V₁ k v₁ → R.Decided S V₂ k v₂ → v₁ = v₂
+  agree : Properties.Agree R.toDagRule
   /-- A directly committed candidate of a slot is a commit verdict. -/
-  decided_of_directCommitIn : ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U)
-    (k : ℕ) (L : BlockId), R.IsLeaderBlock S U k L →
-    R.DirectCommitIn V L (S.slotRound k) → R.Decided S V k (some L)
+  commitsDirect : Properties.CommitsDirect R.toDagRule (fun {U} V L r => R.DirectCommitIn V L r)
   /-- A committed block is a candidate of its slot: the right round, the
   right author. The other half of "verdicts are about candidates", and
   what makes a block appear at most once in the ledger. -/
-  candidates : ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (k : ℕ) (L : BlockId),
-    R.Decided S V k (some L) → R.IsLeaderBlock S U k L
+  candidates : Properties.CommitsCandidate R.toDagRule
 
 end BaseRule
 

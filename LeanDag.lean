@@ -205,7 +205,6 @@ import LeanDag.Barnacle.Helpers.Schedule
 import LeanDag.Barnacle.Helpers.Cover
 import LeanDag.Barnacle.Model.Window
 import LeanDag.Barnacle.Model.Run
-import LeanDag.Barnacle.Helpers.Mysticeti
 import LeanDag.Barnacle.Mysticeti.Statement
 import LeanDag.Barnacle.Mysticeti.Proof
 import LeanDag.Barnacle.Window.Statement
@@ -228,6 +227,8 @@ import LeanDag.Barnacle.Validity.Proof
 import LeanDag.Barnacle.Live.Statement
 import LeanDag.Barnacle.Live.Proof
 import LeanDag.Barnacle.Model.Live
+import LeanDag.Barnacle.Model.Anchored
+import LeanDag.Barnacle.Helpers.Anchored
 import LeanDag.Barnacle.Progress.Statement
 import LeanDag.Barnacle.Helpers.Progress
 import LeanDag.Barnacle.Progress.Proof
@@ -236,19 +237,13 @@ import LeanDag.Barnacle.Heads.Statement
 import LeanDag.Barnacle.Helpers.Heads
 import LeanDag.Barnacle.Heads.Proof
 import LeanDag.Barnacle.MysticetiLive.Statement
-import LeanDag.Barnacle.Helpers.MysticetiLive
 import LeanDag.Barnacle.MysticetiLive.Proof
 import LeanDag.Barnacle.Odontoceti.Statement
-import LeanDag.Barnacle.Helpers.Odontoceti
 import LeanDag.Barnacle.Odontoceti.Proof
-import LeanDag.Barnacle.Helpers.Nemo
 import LeanDag.Barnacle.Nemo.Statement
-import LeanDag.Barnacle.Helpers.NemoLive
 import LeanDag.Barnacle.Nemo.Proof
 import LeanDag.Barnacle.Orcaella.Statement
-import LeanDag.Barnacle.Helpers.Orcaella
 import LeanDag.Barnacle.Orcaella.Proof
-import LeanDag.Barnacle.Helpers.Hydrozoan
 import LeanDag.Barnacle.Hydrozoan.Statement
 import LeanDag.Barnacle.Hydrozoan.Proof
 import LeanDag.Barnacle.OptimalHydrozoan.Statement

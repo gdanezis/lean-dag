@@ -88,12 +88,12 @@ theorem laws7 : LeanDag.Barnacle.BaseRule.Laws R7 :=
 
 -- A fast-committed candidate is a commit verdict, by the law.
 example : R7.Decided S7 LeanDagTest.Hydrozoan.Vfull3 3 (some 24) :=
-  laws7.decided_of_directCommitIn S7 LeanDagTest.Hydrozoan.Vfull3 3 24 (by decide) (by decide)
+  laws7.commitsDirect S7 _ LeanDagTest.Hydrozoan.Vfull3 3 24 (by decide) (by decide)
 
 -- And a commit verdict is a candidate of its slot, by the law.
 example : R7.IsLeaderBlock S7 LeanDagTest.Hydrozoan.U3 3 24 :=
-  laws7.candidates S7 LeanDagTest.Hydrozoan.Vfull3 3 24
-    (laws7.decided_of_directCommitIn S7 LeanDagTest.Hydrozoan.Vfull3 3 24
+  laws7.candidates S7 _ LeanDagTest.Hydrozoan.Vfull3 3 24
+    (laws7.commitsDirect S7 _ LeanDagTest.Hydrozoan.Vfull3 3 24
       (by decide) (by decide))
 
 -- Agreement across views: no view can disagree with the full view
@@ -101,7 +101,7 @@ example : R7.IsLeaderBlock S7 LeanDagTest.Hydrozoan.U3 3 24 :=
 example (V : R7.View LeanDagTest.Hydrozoan.U3) (v : Option (Fin 32))
     (h : R7.Decided S7 V 3 v) : v = some 24 :=
   laws7.agree S7 V LeanDagTest.Hydrozoan.Vfull3 3 v (some 24) h
-    (laws7.decided_of_directCommitIn S7 LeanDagTest.Hydrozoan.Vfull3 3 24
+    (laws7.commitsDirect S7 _ LeanDagTest.Hydrozoan.Vfull3 3 24
       (by decide) (by decide))
 
 end Barnacle

@@ -32,6 +32,7 @@ def finWhaleAnchored :
     AnchoredRule Validator BlockId Payload ValidHere (Correct : Finset Validator) where
   wave := 2
   Commit := fun _ V L _ => DirectCommit V.toRecord L
+  decCommit := fun _ _ _ _ => inferInstance
   Skip := fun _ V S k => DirectSkip S V.toRecord k
   rungs := 1
   Link := fun _ U A L S k => IndirectCommit S U A k L

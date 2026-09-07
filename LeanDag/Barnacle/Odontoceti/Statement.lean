@@ -1,6 +1,5 @@
 import LeanDag.Barnacle.Model.Heads
-import LeanDag.Barnacle.Helpers.Mysticeti
-import LeanDag.Odontoceti.Liveness
+import LeanDag.Barnacle.Model.Anchored
 import LeanDag.Odontoceti.Carrier
 /-!
 # Barnacle over Odontoceti — statement
@@ -8,13 +7,10 @@ import LeanDag.Odontoceti.Carrier
 The two-round rule at `n ≥ 5f + 1` (report §10; the paper's Blue
 Bottle) as a base rule with its laws, as a live rule with its descent
 laws at slack `f`, and the paper's A4 for it under round-robin: live at
-every leader count with gap `n + 1`. The universe and views are the
-Byzantine ones, so the history view is `historyViewOf`; the ids carry a
-linear order, which the two-round indirect rule uses to commit the
-least candidate that passes its test, and which supplies the
-interface's decidable equality — no separate instance is assumed, so
-that the two do not diverge.
-
+every leader count with gap `n + 1`. Both are `ofAnchored` at
+`odontocetiAnchored`; the ids carry a linear order, which the indirect
+rule uses to commit the least candidate that passes its test, and which
+supplies the interface's decidable equality.
 Statements only; the proofs live in `Proof.lean`.
 -/
 
@@ -25,23 +21,14 @@ namespace Barnacle
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 
-/-- **Odontoceti as a base rule** — the data. Wave length two; the direct
-commit predicate counts supporters at the next round. -/
-def odontoceti [Faults5 Validator] : BaseRule Validator BlockId Payload where
-  toDagRule := OdontocetiProperties.odontocetiRule
-  full := fun U => LeanDag.View.full U
-  historyView := fun U A hA => historyViewOf U A hA
-  waveLength := 2
-  DirectCommitIn := fun V L r => Odontoceti.DirectCommitIn _ V L r
-  decDirect := fun _ _ _ => inferInstance
+/-- **Odontoceti as a base rule**: its anchored rule. -/
+def odontoceti [Faults5 Validator] : BaseRule Validator BlockId Payload :=
+  ofAnchored (Odontoceti.odontocetiAnchored Validator BlockId Payload)
 
-/-- **Odontoceti as a live rule**: a DAG is good when a correct quorum is
-synchronised from `Rnd` and populates the rounds to `N`. -/
+/-- **Odontoceti as a live rule**, at the core's fault model. -/
 def odontocetiLive [Faults5 Validator] : LiveRule Validator BlockId Payload :=
-  { odontoceti with
-    Good := fun U Rnd N => ∃ T ⊆ (Correct : Finset Validator),
-      quorumCard Validator ≤ T.card ∧ SynchronisedOn U T Rnd ∧
-      ∀ r, Rnd ≤ r → r ≤ N → PopulatedOn U T r }
+  liveOfAnchored (Odontoceti.odontocetiAnchored Validator BlockId Payload)
+    (coreReliability Validator)
 
 namespace Odontoceti
 

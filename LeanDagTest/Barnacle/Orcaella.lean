@@ -109,7 +109,7 @@ theorem ohyb4_sync : SynchronisedOn Uhyb4 {0, 1, 2} 0 := by
 theorem ohyb4_good :
     (orcaellaLive (Validator := Fin 4) (BlockId := Fin 13) (Payload := Unit) 2).Good
       Ohyb4 0 3 :=
-  ⟨{0, 1, 2}, by decide, by decide, ohyb4_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
+  ⟨{0, 1, 2}, ⟨by decide, by decide⟩, ohyb4_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
 
 /-- Through `Orcaella.holds`: the good set commits a round-`1` slot.
 `goodLeaders` bounds `T` by cardinality only — three of four — so `T`
@@ -162,7 +162,7 @@ example : ∀ (V : bnOrc.View Ohyb4) (v : Option (Fin 13)),
 example :
     ¬ (orcaellaLive (Validator := Fin 4) (BlockId := Fin 13) (Payload := Unit) 2).Good
       Ohyb4 0 4 := by
-  rintro ⟨T, hsub, hcard, hsync, hpop⟩
+  rintro ⟨T, ⟨hsub, hcard⟩, hsync, hpop⟩
   have hne : T.Nonempty := Finset.card_pos.mp (by change 3 ≤ T.card at hcard; omega)
   obtain ⟨v, hv⟩ := hne
   obtain ⟨b, hb, hbc, hbr⟩ := hpop 4 (by omega) (by omega) v hv
@@ -187,7 +187,7 @@ theorem not_descent_zero :
       Ohyb4 3)
     (by omega) (by decide) (by rw [hTuniv]; exact Finset.mem_univ _)
   have hcand := (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 13) Unit 2 (by decide)).candidates
-    _ _ 6 L hL
+    _ _ _ 6 L hL
   have hall : ∀ L : Fin 13, ¬ bnOrc.IsLeaderBlock
       (Sched orcLeader4 orcWin4 4 (by decide) (by decide)) Ohyb4 6 L := by decide
   exact hall L hcand

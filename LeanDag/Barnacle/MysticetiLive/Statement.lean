@@ -1,18 +1,14 @@
 import LeanDag.Barnacle.Model.Heads
 import LeanDag.Barnacle.Mysticeti.Statement
-import LeanDag.Mysticeti.Liveness
 /-!
 # Barnacle over Mysticeti — liveness
 
 Mysticeti as a live rule, its descent laws, and the paper's A4 for
 Mysticeti under its own schedule: round-robin is live at every leader
-count (`barnacle.md` §8, F3). `Good` is the base development's
-own liveness interface — a reliable quorum over which the DAG is
-synchronised from `Rnd` and populated to `N` (report §5) — and the
-descent laws are `decided_of_leader_mem` (L4) and the two indirect
-constructors of `Decided`. The slack is `f`, and the committee bound
-the pigeonhole needs, `3f + 1 ≤ n`, is `Faults.card_validators`.
-
+count (`barnacle.md` §8, F3). A good DAG is `Timed.Good` at the core's
+fault model — a correct quorum synchronised from `Rnd` and populating
+every round to `N` (report §5). The slack is `f`, and the committee
+bound the pigeonhole needs, `3f + 1 ≤ n`, is `Faults.card_validators`.
 Statements only; the proofs live in `Proof.lean`.
 -/
 
@@ -23,14 +19,9 @@ namespace Barnacle
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
-/-- **Mysticeti as a live rule.** A DAG is good from `Rnd` to `N` when
-some quorum of correct validators is synchronised from `Rnd` and
-populates every round from `Rnd` to `N`. -/
+/-- **Mysticeti as a live rule**, at the core's fault model. -/
 def mysticetiLive [Faults Validator] : LiveRule Validator BlockId Payload :=
-  { mysticeti with
-    Good := fun U Rnd N => ∃ T ⊆ (Correct : Finset Validator),
-      quorumCard Validator ≤ T.card ∧ SynchronisedOn U T Rnd ∧
-      ∀ r, Rnd ≤ r → r ≤ N → PopulatedOn U T r }
+  liveOfAnchored (coreAnchored Validator BlockId Payload) (coreReliability Validator)
 
 namespace MysticetiLive
 

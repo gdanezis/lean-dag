@@ -146,6 +146,7 @@ def hybridAnchored (Validator BlockId Payload : Type) [Fintype Validator]
     AnchoredRule Validator BlockId Payload ValidWrt Correct where
   wave := 1
   Commit := fun U V L r => Hybrid.DirectCommitIn U V L r
+  decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S s => Hybrid.DirectSkipSlotIn (S := S) U V s
   rungs := 1
   Link := fun _ U A L S s => ThickLink k U A L (S.slotRound s)

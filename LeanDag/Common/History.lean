@@ -92,6 +92,16 @@ theorem mem_history_self {b : BlockId} : b ∈ history U b := mem_historyFrom_se
 theorem history_subset_ids {b : BlockId} (hb : b ∈ U.ids) : history U b ⊆ U.ids :=
   U.causal.history_subset_ids hb
 
+/-- **The causal history of a block, as a view**: reference-closed
+because reachability is transitive. The view an anchored mechanism
+measures on. -/
+def BlockRecord.historyView (U : BlockRecord Validator BlockId Payload P honest) (A : BlockId)
+    (hA : A ∈ U.ids) : U.View where
+  ids := history U A
+  subset_ids := history_subset_ids hA
+  complete := fun _ hi _ hj =>
+    (mem_history_iff hA).mpr (((mem_history_iff hA).mp hi).trans (ReachesFrom.single hj))
+
 /-- Histories nest along reachability — the `Finset` form of transitivity, and
 what makes D12 one line. -/
 theorem history_subset_of_reaches {c b : BlockId} (hc : c ∈ U.ids) (h : Reaches U c b) :

@@ -88,6 +88,10 @@ core's `n − f`, Nemo's majority, Hydrozoan's `n − f − c`. -/
 def IsQuorum (T : Finset Validator) : Prop :=
   T ⊆ rel.correct ∧ Fintype.card Validator - rel.slack ≤ T.card
 
+/-- Decidable on concrete data. -/
+instance decidableIsQuorum (T : Finset Validator) : Decidable (rel.IsQuorum T) :=
+  inferInstanceAs (Decidable (_ ∧ _))
+
 /-- The reliable set is a quorum of itself. -/
 theorem isQuorum_correct : rel.IsQuorum rel.correct :=
   ⟨Finset.Subset.rfl, by have := rel.card_correct; omega⟩

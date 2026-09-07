@@ -89,7 +89,7 @@ theorem uodo_sync : SynchronisedOn Uodo {1, 2, 3, 4, 5} 1 := by
 
 theorem uodo_good :
     (odontocetiLive (Validator := Fin 6) (BlockId := Fin 24) (Payload := Unit)).Good Uodo 1 3 :=
-  ⟨{1, 2, 3, 4, 5}, by rw [odoCorrect], by decide, uodo_sync, fun r h1 h2 => by
+  ⟨{1, 2, 3, 4, 5}, ⟨by decide, by decide⟩, uodo_sync, fun r h1 h2 => by
     interval_cases r <;> decide⟩
 
 /-- Through `Odontoceti.holds`: the good set commits a round-`1` slot.
@@ -237,7 +237,7 @@ theorem unemo_sync : SynchronisedOn Unemo {0, 1} 1 := by
 
 theorem unemo_good :
     (nemoLive (Validator := Fin 3) (BlockId := Fin 14) (Payload := Unit)).Good Unemo 1 5 :=
-  ⟨{0, 1}, by decide, by decide, unemo_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
+  ⟨{0, 1}, ⟨by decide, by decide⟩, unemo_sync, fun r h1 h2 => by interval_cases r <;> decide⟩
 
 -- Not to round `6`: the universe ends at round `5`.
 example : ¬ PopulatedOn Unemo {0, 1} 6 := by decide
@@ -275,16 +275,20 @@ example : ∀ (V : LeanDag.Nemo.View (Fin 3) (Fin 14) Unit Unemo) (v : Option (F
 /-- The horizon is real for `Good` itself, not just for `PopulatedOn`. -/
 theorem unemo_not_good_6 :
     ¬ (nemoLive (Validator := Fin 3) (BlockId := Fin 14) (Payload := Unit)).Good Unemo 1 6 := by
-  rintro ⟨T, hT, hcard, -, hpop⟩
-  have hlive : (LeanDag.Nemo.Live (Fin 3)).card = 2 := by decide
-  have hmaj : LeanDag.Nemo.majority (Fin 3) = 2 := by decide
-  have hTeq : T = LeanDag.Nemo.Live (Fin 3) :=
-    Finset.eq_of_subset_of_card_le hT (by omega)
-  subst hTeq
-  exact absurd (hpop 6 (by omega) le_rfl) (by decide)
+  rintro ⟨T, ⟨-, hcard⟩, -, hpop⟩
+  have h2 : 2 ≤ T.card := by
+    change Fintype.card (Fin 3) - (Fintype.card (Fin 3) - LeanDag.Nemo.majority (Fin 3))
+      ≤ T.card at hcard
+    have hmaj : LeanDag.Nemo.majority (Fin 3) = 2 := by decide
+    rw [Fintype.card_fin, hmaj] at hcard
+    exact hcard
+  obtain ⟨v, hv⟩ := Finset.card_pos.mp (show 0 < T.card by omega)
+  obtain ⟨b, -, -, hbr⟩ := hpop 6 (by omega) le_rfl v hv
+  have hno : ∀ b : Fin 14, (Unemo.block b).round ≠ 6 := by decide
+  exact hno b hbr
 
-/-- On `Unemo`, `T ⊆ Live` never bites: the non-live majority `{0, 2}` fails
-`PopulatedOn` at round 2 already. -/
+/-- On `Unemo`, a good set need not be live, and it never matters: the
+non-live majority `{0, 2}` fails `PopulatedOn` at round 2 already. -/
 example : ¬ PopulatedOn Unemo {0, 2} 2 := by decide
 
 /-! ### The slack, arithmetically -/

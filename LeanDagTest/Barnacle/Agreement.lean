@@ -257,7 +257,7 @@ example : Vsun.ids ≠ Vsun'.ids := by decide
 /-- The `candidates` law through the run: the anchor `run2'` committed is
 a candidate of its slot. -/
 example : bnRule32.IsLeaderBlock (Sched bnLeader bnWin 1 (by decide) (by decide)) Usun 5 21 :=
-  laws32.candidates _ Vsun' 5 21 (run2'.closed 0 (by decide) 5 (by decide) (by decide))
+  laws32.candidates _ _ Vsun' 5 21 (run2'.closed 0 (by decide) 5 (by decide) (by decide))
 
 /-! ## A verdict outside the range
 

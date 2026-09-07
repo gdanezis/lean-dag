@@ -50,6 +50,7 @@ def optimalAnchored :
       (LeanDag.Hydrozoan.NonByzantine : Finset Replica) where
   wave := 2
   Commit := fun U V L r => FastCommitOptInView U V L r ∨ SlowCommitInView U V L r
+  decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderOptInView (S := S) U V k
   rungs := 2
   Link := fun i U A L S k =>

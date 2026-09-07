@@ -955,13 +955,15 @@ fires on the validator's view, or the slot is read off the nearest
 **eligible** committed slot above it through a link from that anchor.
 What varies between the rules is the data, and the relation takes it as
 a record (`LeanDag/Common/Anchored.lean`): the wave, the two direct predicates
-as a view evaluates them, a number of graded rungs, each a link from the
-anchor to a candidate, and a tie at each rung:
+as a view evaluates them — the commit decidable, so that a validator
+computes it — a number of graded rungs, each a link from the anchor to
+a candidate, and a tie at each rung:
 
 ```lean
 structure AnchoredRule (Validator BlockId Payload) (P : Validity …) (honest : Finset Validator) where
   wave : ℕ
   Commit : (U : BlockRecord …) → U.View → BlockId → ℕ → Prop
+  decCommit : ∀ (U : BlockRecord …) (V : U.View) (L : BlockId) (r : ℕ), Decidable (Commit U V L r)
   Skip : (U : BlockRecord …) → U.View → Slots Validator → ℕ → Prop
   rungs : ℕ
   Link : ℕ → (U : BlockRecord …) → BlockId → BlockId → Slots Validator → ℕ → Prop
@@ -8514,21 +8516,35 @@ structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
   full_ids : ∀ U, R.viewIds (R.full U) = R.ids U
   historyView_ids : ∀ U A (hA : A ∈ R.ids U),
     R.viewIds (R.historyView U A hA) = historyFrom (R.block U) A
-  agree : ∀ (S : Slots Validator) {U : R.Universe} (V₁ V₂ : R.View U) (k : ℕ)
-    (v₁ v₂ : Option BlockId), R.Decided S V₁ k v₁ → R.Decided S V₂ k v₂ → v₁ = v₂
-  decided_of_directCommitIn : ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U)
-    (k : ℕ) (L : BlockId), R.IsLeaderBlock S U k L →
-    R.DirectCommitIn V L (S.slotRound k) → R.Decided S V k (some L)
-  candidates : ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (k : ℕ) (L : BlockId),
-    R.Decided S V k (some L) → R.IsLeaderBlock S U k L
+  agree : Properties.Agree R.toDagRule
+  commitsDirect : Properties.CommitsDirect R.toDagRule (fun {U} V L r => R.DirectCommitIn V L r)
+  candidates : Properties.CommitsCandidate R.toDagRule
 ```
 
-A2 is carried by `BaseRule` itself, which extends `DagRule` and so has the fields `viewSound` and `viewComplete`; `agree` is the
-safety half of A4, and the two candidate laws tie the direct predicate
-to the relation; the liveness half of A4 is a clause on a schedule,
-below. Each rule's fault class lives on its instantiation and none on
-the interface, which is what lets Nemo-Nemo — whose safety needs no
-fault class — instantiate it without one. The schedule of a
+A2 is carried by `BaseRule` itself, which extends `DagRule` and so has the fields `viewSound` and `viewComplete`; the two view
+laws pin the full view to the universe and the history view to the
+history; the other three are the properties of §16 read at the rule's
+carrier — `agree` is the safety half of A4, and the two candidate
+properties tie the direct predicate to the relation. The liveness half
+of A4 is a clause on a schedule, below. Each rule's fault class lives on
+its instantiation and none on the interface, which is what lets
+Nemo-Nemo — whose safety needs no fault class — instantiate it without
+one.
+
+**Every rule instantiates it the same way.** Each commit rule of this
+development is an anchored rule (§3.2), and `ofAnchored R`
+(`Barnacle/Model/Anchored.lean`) reads a base rule off any anchored
+rule: the record as universe, `View.full` and `BlockRecord.historyView`
+for the two views, `R.wave + 1` for the wave length — the gap an anchor
+must clear — and `R.Commit` for the direct predicate; `ofAnchoredOn R I`
+is the same over the records satisfying an invariant, for Orcaella and
+Optimal-Hydrozoan. Its laws are proved once, `ofAnchored_laws`, from the
+carrier's properties (§16.1). `liveOfAnchored R rel` adds the notion of
+a good DAG, `Timed.Good` at the carrier and the rule's fault model — a
+quorum synchronised from `Rnd` and populating every round to `N` — and
+its descent laws are `descent_of_support` at the rule's support. So
+each of the eight instantiations below is its anchored rule, its fault
+model, its support and one committee inequality, and nothing else. The schedule of a
 configuration with `m` leaders is `Sched m`, the uniform pipelined
 schedule of §3 with slot `(r, l)` led by `getLeader (r + l)`, the
 paper's `GetLeader`, so that only which slots exist changes across
@@ -9341,25 +9357,18 @@ an instance of the generic theorem. The results carry **HI**-labels.
 adaptive leader count against the record. Instantiating it is
 additive, and the instantiation is where Hydrozoan acquires multi-leader schedules, which its own arc does not supply.
 
-The carrier is Hydrozoan's own (`LeanDag.Hydrozoan.rule`): `BaseRule`
-extends `DagRule` and the Barnacle rule names the carrier for it.
-Hydrozoan's universe satisfies the causal-structure law by two field
-projections:
-
-```lean
-theorem causalStructure (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) :
-    CausalStructure U.block U.ids
-```
-
-(HI3). The wave length is three, and the interface's direct-commit
-field is the disjunction of the two commit paths. The laws are read off
-the decision relation, `agree` being HZ3 (HI4). The live rule takes
-Hydrozoan's own liveness package as its notion of a good DAG, at slack
-`f + c` — the fully-correct class is what liveness counts — and its
-descent laws come from the support: `hzSupport` with its `Commits` law
-and `Indirect` through `descent_of_support`, since at wave length three
-the interface's spacing condition *is* Hydrozoan's anchor eligibility
-(HI5). Round-robin liveness is the one place a committee condition
+The Barnacle rule is `ofAnchored` at `hydrozoanAnchored` (§21.1), so
+its carrier is Hydrozoan's own (`LeanDag.Hydrozoan.rule`), and
+Hydrozoan's universe satisfies the causal-structure law as every block
+record does, by its own fields (`BlockRecord.causal`, HI3). The wave
+length is three, and the direct-commit predicate is the anchored rule's,
+the disjunction of the two commit paths. The laws are `ofAnchored_laws`
+at HZ3's laws (HI4). The live rule's good DAGs are `Timed.Good` at
+Hydrozoan's fault model, at slack `f + c` — the fully-correct class is
+what liveness counts — and its descent laws come from the support:
+`hzSupport` with its `Commits` law and `Indirect` through
+`descent_of_support`, since at wave length three the interface's
+spacing condition *is* Hydrozoan's anchor eligibility (HI5). Round-robin liveness is the one place a committee condition
 appears, `3(f + c) + 1 ≤ n`, reached by a route that mentions neither
 Hydrozoan's quorum nor its intersection argument.
 
@@ -10016,6 +10025,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Barnacle/Model/Rule.lean` | the base-protocol interface: data and laws (A1–A4), the candidate predicate, update rules |
 | `Barnacle/Model/Schedule.lean`, `Barnacle/Model/Window.lean`, `Barnacle/Model/Run.lean` | the schedule of a configuration; the window count and the AIMD rule; the run and the ledger |
 | `Barnacle/Model/Live.lean`, `Barnacle/Model/Heads.lean` | the liveness clause with its gap; the descent laws and runs of heads |
+| `Barnacle/Model/Anchored.lean` | an anchored rule as a base rule and as a live rule, at a fault model |
 | `Barnacle/Window/`, `Barnacle/Agreement/`, `Barnacle/Healthy/`, `Barnacle/Validity/`, `Barnacle/Ledger/`, `Barnacle/Conservativity/`, `Barnacle/Aimd/`, `Barnacle/Progress/`, `Barnacle/Heads/` | the seven statements and their proofs (BN2, BN3, BN5, BN6, BN7, BN8, BN9) |
 | `Barnacle/Mysticeti/`, `Barnacle/MysticetiLive/`, `Barnacle/Odontoceti/`, `Barnacle/Nemo/`, `Barnacle/Orcaella/`, `Barnacle/MahiMahi/`, `Barnacle/FinWhale/`, `Barnacle/Hydrozoan/`, `Barnacle/HydrozoanLive/`, `Barnacle/OptimalHydrozoan/`, `Barnacle/OptimalHydrozoanLive/` | the eight rules as base and, where stated, live rules, their laws, and their liveness under round-robin (BN10) |
 | `Barnacle/Helpers/` | the generated lemma layer |
@@ -10902,7 +10912,7 @@ reused.
 | BN11 | and so the mechanism over each of them, under round-robin, reaches every height with no clause left assumed, on any view caught up to the horizon | `Barnacle.Live.holds`, `coversUpto_full` *(Barnacle/Live/Proof, Barnacle/Helpers/Cover)* |
 | BN12 | a healthy window is counted as healthy, and the rule then raises the count: the loop cannot back off where every scoring slot committed | `Barnacle.Healthy.holds` *(Barnacle/Healthy/Proof)* |
 | BN13 | BN11 on data: runs of every height on the grown family under the real rule, with nothing assumed | `real_runs` witnesses *(LeanDagTest/Barnacle/Real)* |
-| BN14 | validity: a good author's block lies in the history of the block a closed configuration's anchor commits; the two Byzantine rules deliver | `Barnacle.Validity.holds`, `mysticetiLive_delivers`, `odontocetiLive_delivers` *(Barnacle/Validity/Proof, Barnacle/Helpers/Delivery)* |
+| BN14 | validity: a good author's block lies in the history of the block a closed configuration's anchor commits; every rule over the block universe delivers | `Barnacle.Validity.holds`, `delivers_core` *(Barnacle/Validity/Proof, Barnacle/Helpers/Delivery)* |
 
 **Hydrozoan** (§22):
 
@@ -10934,7 +10944,7 @@ reused.
 
 | Label | Statement | Lean |
 |:---|:---|:---|
-| HI3 | Hydrozoan's universe satisfies the causal-structure interface, by its own fields | `causalStructure` *(Barnacle/Helpers/Hydrozoan)* |
+| HI3 | Hydrozoan's universe satisfies the causal-structure interface, by its own fields | `BlockRecord.causal` *(Common/CausalHistory)* |
 | HI4 | Hydrozoan as a Barnacle base rule, with its laws | `Barnacle.Hydrozoan.holds` *(Barnacle/Hydrozoan/Proof)* |
 | HI5 | as a live rule: the descent laws at slack `f + c`, and round-robin liveness at `3(f + c) + 1 ≤ n` | `Barnacle.HydrozoanLive.holds` *(Barnacle/HydrozoanLive/Proof)* |
 | HI6 | the same two for Optimal-Hydrozoan, its validity clause restated without a schedule | `Barnacle.OptimalHydrozoan.holds`, `LeaderExcludedAll` *(Barnacle/OptimalHydrozoan/Proof, OptimalHydrozoan/Model/Universe)* |
@@ -10948,7 +10958,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 341 definitions and structures the report names, in
+The 342 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -11391,6 +11401,7 @@ def coreAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
     AnchoredRule Validator BlockId Payload ValidWrt Correct where
   wave := 2
   Commit := fun U V L r => DirectCommitIn U V L r
+  decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => DirectSkipSlotIn (S := S) U V k
   rungs := 1
   Link := fun _ U A L S k => CertifiedIn U A L (S.slotRound k)
@@ -14173,22 +14184,18 @@ structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
   historyView_ids : ∀ U A (hA : A ∈ R.ids U),
     R.viewIds (R.historyView U A hA) = historyFrom (R.block U) A
   /-- **A4, safety.** For a fixed schedule, verdicts agree across views. -/
-  agree : ∀ (S : Slots Validator) {U : R.Universe} (V₁ V₂ : R.View U) (k : ℕ)
-    (v₁ v₂ : Option BlockId), R.Decided S V₁ k v₁ → R.Decided S V₂ k v₂ → v₁ = v₂
+  agree : Properties.Agree R.toDagRule
   /-- A directly committed candidate of a slot is a commit verdict. -/
-  decided_of_directCommitIn : ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U)
-    (k : ℕ) (L : BlockId), R.IsLeaderBlock S U k L →
-    R.DirectCommitIn V L (S.slotRound k) → R.Decided S V k (some L)
+  commitsDirect : Properties.CommitsDirect R.toDagRule (fun {U} V L r => R.DirectCommitIn V L r)
   /-- A committed block is a candidate of its slot: the right round, the
   right author. The other half of "verdicts are about candidates", and
   what makes a block appear at most once in the ledger. -/
-  candidates : ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (k : ℕ) (L : BlockId),
-    R.Decided S V k (some L) → R.IsLeaderBlock S U k L
+  candidates : Properties.CommitsCandidate R.toDagRule
 ```
 
-**The laws of a base rule** — what the leader-count mechanism consumes of the protocol, and what each instantiation is proved to satisfy. A2 — a validator holds a block only with its whole causal history — is carried by `BaseRule` itself, as the fields `viewSound` and `viewComplete`; `agree` is the safety half of A4 (for a fixed schedule, verdicts agree across views); `decided_of_directCommitIn` ties the direct predicate to the relation, which is what makes the window count a count of *verdicts*: two directly committed candidates of one slot are one block, by `agree`; `candidates` is its converse, a committed block is a candidate of its slot. The liveness half of A4 is stated in Phase 3 over an extension of the data.
+**The laws of a base rule** — what the leader-count mechanism consumes of the protocol, and what each instantiation is proved to satisfy. A2 — a validator holds a block only with its whole causal history — is carried by `BaseRule` itself, as the fields `viewSound` and `viewComplete`. Two laws pin the two view fields: the full view is the universe, the history view is the history. The other three are the properties of `docs/target-properties.md`, read at the rule's carrier: `agree` is the safety half of A4 (for a fixed schedule, verdicts agree across views); `commitsDirect` ties the direct predicate to the relation, which is what makes the window count a count of *verdicts*: two directly committed candidates of one slot are one block, by `agree`; `candidates` is its converse, a committed block is a candidate of its slot. The liveness half of A4 is stated in Phase 3 over an extension of the data.
 
-**What still reads this.** One theorem, `Helpers/Cover.coversUpto_full`, for `full_ids`. `agree` and `candidates` survive to build `Properties.Agree` and `Properties.CommitsCandidate`, which is what every other theorem of the mechanism now takes; `decided_of_directCommitIn` and `historyView_ids` have no consumers at all. `docs/target-properties.md` §11.2 records why the two dead clauses are kept rather than deleted.
+Every anchored rule with its laws has these, once (`Helpers/Anchored.lean`): the view laws by construction, the three properties from `Common/Anchored/Band.lean`.
 
 #### `Anchored`
 
@@ -14890,6 +14897,7 @@ def optimalAnchored :
       (LeanDag.Hydrozoan.NonByzantine : Finset Replica) where
   wave := 2
   Commit := fun U V L r => FastCommitOptInView U V L r ∨ SlowCommitInView U V L r
+  decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderOptInView (S := S) U V k
   rungs := 2
   Link := fun i U A L S k =>
@@ -15173,6 +15181,7 @@ def optimalAnchored :
       (LeanDag.Hydrozoan.NonByzantine : Finset Replica) where
   wave := 2
   Commit := fun U V L r => FastCommitOptInView U V L r ∨ SlowCommitInView U V L r
+  decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderOptInView (S := S) U V k
   rungs := 2
   Link := fun i U A L S k =>
@@ -15392,7 +15401,7 @@ def Laws : Prop :=
     BaseRule.Laws (hydrozoan (Replica := Replica) (BlockId := BlockId))
 ```
 
-**Hydrozoan satisfies the laws.** Agreement is HZ3 (`LeanDag.Hydrozoan.SlotAgreement`), which is already quantified over every universe and every schedule, so the law is that theorem applied. The remaining six are read off the `View` structure and the `Decided` constructors.
+**Hydrozoan satisfies the laws.** Agreement is HZ3 (`LeanDag.Hydrozoan.SlotAgreement`), already quantified over every universe and every schedule.
 
 #### `Laws`
 
@@ -15418,7 +15427,7 @@ def Laws : Prop :=
     BaseRule.Laws (optimalHydrozoan (Replica := Replica) (BlockId := BlockId))
 ```
 
-**Optimal-Hydrozoan satisfies the laws.** Agreement is OH3, which like HZ3 is already quantified over every universe and every schedule; the rest are read off the `View` structure and the `DecidedOpt` constructors.
+**Optimal-Hydrozoan satisfies the laws.** Agreement is OH3, which like HZ3 is already quantified over every universe and every schedule.
 
 #### `Laws`
 
@@ -15635,6 +15644,10 @@ structure AnchoredRule (Validator : Type*) (BlockId : Type*) (Payload : Type*)
   /-- The direct commit, judged from a view: `Commit U V L r` says the
   candidate `L` proposed at round `r` is committed by what `V` holds. -/
   Commit : (U : BlockRecord Validator BlockId Payload P honest) → U.View → BlockId → ℕ → Prop
+  /-- The direct commit is decidable: a validator computes it from its
+  view, and so does a witness. -/
+  decCommit : ∀ (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (L : BlockId)
+    (r : ℕ), Decidable (Commit U V L r)
   /-- The direct skip of a slot, judged from a view. -/
   Skip : (U : BlockRecord Validator BlockId Payload P honest) → U.View → Slots Validator → ℕ → Prop
   /-- The number of rungs of the indirect test. -/
@@ -16909,12 +16922,25 @@ def OfCoverage (sp : Support R) (rel : Reliability Validator) : Prop :=
 
 **Coverage certifies**, for a support.
 
+#### `Good`
+
+*def, `Timed.Coverage.lean`*
+
+```lean
+def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
+    (U : R.Universe) (Rnd N : ℕ) : Prop :=
+  ∃ T, rel.IsQuorum T ∧ SynchronisedOn R U T Rnd ∧
+    ∀ r, Rnd ≤ r → r ≤ N → Properties.PopulatedOn R U T r
+```
+
+**A good DAG, from `Rnd` to `N`**: some quorum of the fault model is synchronised from `Rnd` and populates every round from `Rnd` to `N`. Everything a timed model asks of the DAG, packaged: a live rule's notion of a good DAG is this at its own carrier and fault model.
+
 
 ---
 
 ## Appendix C. The theorem reference
 
-The 514 theorems the body or Appendix A names, each
+The 511 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -22168,33 +22194,6 @@ theorem coversUpto_full (hR : R.Laws) (U : R.Universe) (N : ℕ) :
 
 **The full view is caught up to every horizon.**
 
-#### `mysticetiLive_delivers`
-
-*theorem, `Barnacle.Helpers.Delivery.lean`*
-
-```lean
-theorem mysticetiLive_delivers [F : Faults Validator] :
-    (mysticetiLive (Validator := Validator) (BlockId := BlockId)
-      (Payload := Payload)).Delivers F.f where
-  reaches
-```
-
-**Mysticeti delivers**, at slack `f`.
-
-#### `odontocetiLive_delivers`
-
-*theorem, `Barnacle.Helpers.Delivery.lean`*
-
-```lean
-theorem odontocetiLive_delivers {Validator : Type} [Fintype Validator] [DecidableEq Validator]
-    [F : Faults5 Validator] {BlockId : Type} [LinearOrder BlockId] {Payload : Type} :
-    (odontocetiLive (Validator := Validator) (BlockId := BlockId)
-      (Payload := Payload)).Delivers F.f where
-  reaches
-```
-
-**Odontoceti delivers**, at slack `f`; the argument is the same, its `Good` being the same predicate. Its block identifiers carry an order, so the binders are restated rather than taken from the section.
-
 #### `descent_of_support`
 
 *theorem, `Barnacle.Helpers.Descent.lean`*
@@ -22205,23 +22204,12 @@ theorem descent_of_support (R : LiveRule Validator BlockId Payload)
     (hcov : Timed.OfCoverage sp rel) (hlc : sp.Commits rel)
     (hind : Properties.Indirect R.toBaseRule.toDagRule R.elig)
     (hwave : sp.wave ≤ R.waveLength)
-    (hgood : ∀ U Rnd N, R.Good U Rnd N → GoodOf R.toBaseRule.toDagRule rel U Rnd N) :
+    (hgood : ∀ U Rnd N, R.Good U Rnd N → Timed.Good R.toBaseRule.toDagRule rel U Rnd N) :
     R.Descent rel.slack where
   goodLeaders
 ```
 
-**The descent laws, from a support.** A rule with `OfCoverage` and `Commits` at a fault model, `Indirect` at its eligibility, a wave no longer than the rule's, and good DAGs that are good in the properties' sense has Barnacle's liveness interface at the model's slack — and so, by `Heads/Proof.lean`, `LiveOn` under round-robin at every leader count. No `LeaderCommits` and no precondition of the rule's own appear: A4 is `Timed.exists_decided_of_coverage` at the quorum a good DAG names.
-
-#### `causalStructure`
-
-*theorem, `Barnacle.Helpers.Hydrozoan.lean`*
-
-```lean
-theorem causalStructure (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) :
-    CausalStructure U.block U.ids
-```
-
-**A Hydrozoan universe is a causal structure.** Completeness is its own field; the predecessor condition is the first field of its validity. Nothing else of `BlockUniverse` is read, which is what makes the history layer available without a bridge.
+**The descent laws, from a support.** A rule with `OfCoverage` and `Commits` at a fault model, `Indirect` at its eligibility, a wave no longer than the rule's, and good DAGs that are `Timed.Good` has Barnacle's liveness interface at the model's slack — and so, by `Heads/Proof.lean`, `LiveOn` under round-robin at every leader count. No `LeaderCommits` and no precondition of the rule's own appear: A4 is `Timed.exists_decided_of_coverage` at the quorum a good DAG names.
 
 #### `holds`
 

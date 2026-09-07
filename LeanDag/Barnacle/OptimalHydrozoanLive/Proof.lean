@@ -1,17 +1,13 @@
 import LeanDag.Barnacle.OptimalHydrozoanLive.Statement
 import LeanDag.Barnacle.Helpers.Heads
 import LeanDag.Barnacle.Helpers.Descent
-import LeanDag.OptimalHydrozoan.Carrier
 /-!
 # Barnacle over Optimal-Hydrozoan — the live rule, proof
 
-Unaudited, and the mirror of `Barnacle/HydrozoanLive/Proof.lean`.
-`goodLeaders` was OH5 and `indirect` was OH6, each applied without
-adaptation; both come from the properties now — OH5 from the support's
-`OfCoverage` and `Commits`, OH6 from `Indirect` — and
-`descent_of_support` assembles them, so what is left is the one-line
-fact that Optimal's good DAG is `GoodOf` at its own quorum. Round-robin liveness is `liveOn_roundRobin` at
-slack `f + c` and wave length three.
+Unaudited, and the mirror of `Barnacle/HydrozoanLive/Proof.lean`: the
+descent laws are `descent_of_support` at Optimal's support, and
+round-robin liveness is `liveOn_roundRobin` at slack `f + c` and wave
+length three.
 -/
 
 namespace LeanDag
@@ -20,29 +16,13 @@ namespace Barnacle
 
 namespace OptimalHydrozoanLive
 
-
-/-- **A good DAG is good in the properties' terms.** -/
-theorem goodOf (Replica BlockId : Type) [Fintype Replica] [DecidableEq Replica]
-    [DecidableEq BlockId] [LeanDag.OptimalHydrozoan.OptimalFaults Replica] :
-    ∀ U Rnd N, (optimalHydrozoanLive (Replica := Replica) (BlockId := BlockId)).Good U Rnd N →
-      GoodOf (optimalHydrozoanLive (Replica := Replica) (BlockId := BlockId)).toBaseRule.toDagRule
-        (LeanDag.Hydrozoan.hzReliability Replica) U Rnd N := by
-  rintro U Rnd N ⟨T, hT, hcard, hs, hpop⟩
-  refine ⟨T, ⟨hT, ?_⟩, hs, ?_⟩
-  · change Fintype.card Replica -
-      (LeanDag.Hydrozoan.Faults.f Replica + LeanDag.Hydrozoan.Faults.c Replica) ≤ T.card
-    unfold LeanDag.Hydrozoan.q at hcard; omega
-  · intro r h1 h2 v hv
-    obtain ⟨b, hb, hba, hbr⟩ := hpop r h1 h2 v hv
-    exact ⟨b, hb, hba, hbr⟩
-
 theorem descent : Descent := by
   intro Replica BlockId _ _ _ _
   exact descent_of_support (optimalHydrozoanLive (Replica := Replica) (BlockId := BlockId))
     LeanDag.OptimalHydrozoanProperties.optSupport
     LeanDag.OptimalHydrozoanProperties.optSupport_ofCoverage
     LeanDag.OptimalHydrozoanProperties.optSupport_commits
-    LeanDag.OptimalHydrozoanProperties.indirect (by change 2 ≤ 3; omega) (goodOf Replica BlockId)
+    LeanDag.OptimalHydrozoanProperties.indirect (by change 2 ≤ 2 + 1; omega) fun _ _ _ h => h
 
 theorem roundRobinLive : RoundRobinLive := by
   intro n hn BlockId _ _ hb w hk m hm hmax

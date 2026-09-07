@@ -102,6 +102,10 @@ structure AnchoredRule (Validator : Type*) (BlockId : Type*) (Payload : Type*)
   /-- The direct commit, judged from a view: `Commit U V L r` says the
   candidate `L` proposed at round `r` is committed by what `V` holds. -/
   Commit : (U : BlockRecord Validator BlockId Payload P honest) → U.View → BlockId → ℕ → Prop
+  /-- The direct commit is decidable: a validator computes it from its
+  view, and so does a witness. -/
+  decCommit : ∀ (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (L : BlockId)
+    (r : ℕ), Decidable (Commit U V L r)
   /-- The direct skip of a slot, judged from a view. -/
   Skip : (U : BlockRecord Validator BlockId Payload P honest) → U.View → Slots Validator → ℕ → Prop
   /-- The number of rungs of the indirect test. -/
@@ -115,6 +119,12 @@ structure AnchoredRule (Validator : Type*) (BlockId : Type*) (Payload : Type*)
   tie : ℕ → BlockId → BlockId → Prop
 
 namespace AnchoredRule
+
+/-- The rule's own decidability of its direct commit, as an instance. -/
+instance instDecidableCommit {R : AnchoredRule Validator BlockId Payload P honest}
+    (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (L : BlockId) (r : ℕ) :
+    Decidable (R.Commit U V L r) :=
+  R.decCommit U V L r
 
 variable (R : AnchoredRule Validator BlockId Payload P honest)
 variable [S : Slots Validator]

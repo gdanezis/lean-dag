@@ -1,16 +1,16 @@
-import LeanDag.Barnacle.MysticetiLive.Statement
-import LeanDag.Barnacle.Odontoceti.Statement
-import LeanDag.Barnacle.Nemo.Statement
+import LeanDag.Barnacle.Model.Anchored
 import LeanDag.Common.Persistence
+import LeanDag.Mysticeti.Liveness
 /-!
 # Barnacle helpers — the delivery law
 
-Not part of the audit surface. `LiveRule.Delivers` for the three rules.
-The argument is the core's, and one lemma serves the two Byzantine rules
-because their `Good` is the same predicate: coverage makes every reliable
-validator's round-`(r+1)` block reference a reliable round-`r` block, so
-that block carries a quorum of support and T3 (`reaches_of_quorum_support`)
-puts it in the history of everything two rounds up.
+Not part of the audit surface. `LiveRule.Delivers` for every anchored
+rule over the block universe at the core's fault model — Mysticeti and
+Odontoceti among them. The argument is the core's: coverage makes every
+reliable validator's round-`(r+1)` block reference a reliable round-`r`
+block, so that block carries a quorum of support and T3
+(`reaches_of_quorum_support`) puts it in the history of everything two
+rounds up.
 
 **Nemo-Nemo is not here.** Its persistence lemmas
 (`reaches_of_honest_support`, `…_of_card`) conclude from a block at
@@ -56,27 +56,14 @@ theorem mem_history_of_good [Faults Validator]
   exact (mem_history_iff hc).mpr
     (reaches_of_quorum_support hQids hQround hQref hQcard hc hcr)
 
-/-- **Mysticeti delivers**, at slack `f`. -/
-theorem mysticetiLive_delivers [F : Faults Validator] :
-    (mysticetiLive (Validator := Validator) (BlockId := BlockId)
-      (Payload := Payload)).Delivers F.f where
+/-- **Every core rule delivers**, at slack `f`: an anchored rule over the
+block universe, made live at the core's fault model. -/
+theorem delivers_core [F : Faults Validator]
+    (R : AnchoredRule Validator BlockId Payload ValidWrt (Correct : Finset Validator)) :
+    (liveOfAnchored R (coreReliability Validator)).Delivers F.f where
   reaches := by
-    intro U Rnd N hgood
-    obtain ⟨T, -, hcard, hsync, hpop⟩ := hgood
-    refine ⟨T, by omega, ?_⟩
-    intro b hb hbT hRnd hN c hc hcr
-    exact mem_history_of_good hcard hsync hRnd (hpop _ (by omega) hN) hb rfl hbT hc hcr
-
-/-- **Odontoceti delivers**, at slack `f`; the argument is the same, its
-`Good` being the same predicate. Its block identifiers carry an order, so
-the binders are restated rather than taken from the section. -/
-theorem odontocetiLive_delivers {Validator : Type} [Fintype Validator] [DecidableEq Validator]
-    [F : Faults5 Validator] {BlockId : Type} [LinearOrder BlockId] {Payload : Type} :
-    (odontocetiLive (Validator := Validator) (BlockId := BlockId)
-      (Payload := Payload)).Delivers F.f where
-  reaches := by
-    intro U Rnd N hgood
-    obtain ⟨T, -, hcard, hsync, hpop⟩ := hgood
+    rintro U Rnd N ⟨T, ⟨-, hcard⟩, hsync, hpop⟩
+    change Fintype.card Validator - F.f ≤ T.card at hcard
     refine ⟨T, by omega, ?_⟩
     intro b hb hbT hRnd hN c hc hcr
     exact mem_history_of_good hcard hsync hRnd (hpop _ (by omega) hN) hb rfl hbT hc hcr

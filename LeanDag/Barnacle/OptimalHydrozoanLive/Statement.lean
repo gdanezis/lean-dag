@@ -1,20 +1,16 @@
-import LeanDag.Barnacle.OptimalHydrozoan.Statement
 import LeanDag.Barnacle.Model.Heads
+import LeanDag.Barnacle.OptimalHydrozoan.Statement
 /-!
 # Barnacle over Optimal-Hydrozoan — the live rule, statement
 
-The mirror of `Barnacle/HydrozoanLive/`. `Good` is Optimal's liveness
-package, which is Hydrozoan's unchanged: the arc reuses the whole
-synchrony rendering (`optimal-hydrozoan.md` §5), so nothing is
-re-stated here either.
+The mirror of `Barnacle/HydrozoanLive/`. A good DAG is `Timed.Good` at
+Hydrozoan's fault model, which is Optimal's unchanged: the arc reuses
+the whole synchrony rendering (`optimal-hydrozoan.md` §5).
 
 The descent laws are OH5 and OH6, at slack `f + c` and wave length
 three, exactly as Hydrozoan's are HZ5 and HZ6. Round-robin liveness
 takes the committee bound `3·(f + c) + 1 ≤ n` directly, for the reason
-`Barnacle/HydrozoanLive/Statement.lean` records: it is what
-`liveOn_roundRobin` consumes, and stating it as a condition on the
-slack would refuse committees large enough outright.
-
+`Barnacle/HydrozoanLive/Statement.lean` records.
 Statements only; the proofs live in `Proof.lean`.
 -/
 
@@ -25,17 +21,11 @@ namespace Barnacle
 variable {Replica : Type} [Fintype Replica] [DecidableEq Replica]
 variable {BlockId : Type} [DecidableEq BlockId]
 
-/-- **Optimal-Hydrozoan as a live rule**: a DAG is good from `Rnd` to
-`N` when a quorum-sized set of correct replicas is synchronised from
-`Rnd` and populates every round up to `N`. -/
+/-- **Optimal-Hydrozoan as a live rule**, at Hydrozoan's fault model. -/
 def optimalHydrozoanLive [LeanDag.OptimalHydrozoan.OptimalFaults Replica] :
     LiveRule Replica BlockId Unit :=
-  { optimalHydrozoan with
-    Good := fun U Rnd N =>
-      ∃ T ⊆ (LeanDag.Hydrozoan.Correct : Finset Replica),
-        LeanDag.Hydrozoan.q Replica ≤ T.card ∧
-        SynchronisedOn U.val T Rnd ∧
-        ∀ r, Rnd ≤ r → r ≤ N → PopulatedOn U.val T r }
+  liveOfAnchoredOn (LeanDag.OptimalHydrozoan.optimalAnchored Replica BlockId)
+    LeanDag.OptimalHydrozoan.LeaderExcludedAll (LeanDag.Hydrozoan.hzReliability Replica)
 
 namespace OptimalHydrozoanLive
 

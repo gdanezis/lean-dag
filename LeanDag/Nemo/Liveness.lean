@@ -85,6 +85,10 @@ section CrashModel
 
 variable [C : CrashFaults Validator]
 
+/-- The committee is non-empty: at least `2f + 1` validators. -/
+theorem CrashFaults.card_pos : 0 < Fintype.card Validator := by
+  have := C.card_validators; omega
+
 variable (Validator) in
 /-- The live validators: everyone outside the crashed set. -/
 def Live : Finset Validator := (C.crashed)ᶜ
