@@ -57,6 +57,18 @@ def PlacesRuns {R : DagRule Validator BlockId Payload} (P : Policy R)
     ∃ b, P.W * (e + 1) ≤ b ∧ b + c ≤ P.W * (e + 2) ∧
       ∀ i, i < c → P.pick U V v (b + i) ∈ T
 
+/-- **A rule's descent, at every induced schedule.** The indirect
+property is stated over the round structure alone, which reassignment
+fixes, so a spanning clause at the base schedule gives the descent at
+each induced one. -/
+theorem descends_slotsOf {R : DagRule Validator BlockId Payload} {wave : ℕ}
+    (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
+    {c : ℕ} (hc : 0 < c) (hspans : SpansEligibleAt (S := S) wave c)
+    (hinj : Function.Injective S.slotRound) (a : ℕ → Validator) :
+    Descends R (slotsOf hinj a) c :=
+  Descends.of_indirect hind hc fun b i hi =>
+    (eligibleAt_iff (S := slotsOf hinj a)).mp (spansEligible_slotsOf hinj a hspans b i hi)
+
 section Existence
 
 variable {R : DagRule Validator BlockId Payload} {P : Policy R}

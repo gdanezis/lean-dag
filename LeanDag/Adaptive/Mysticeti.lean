@@ -70,8 +70,7 @@ theorem decidedWithin_congr {hinj : Function.Injective S.slotRound}
     {v : Option BlockId} (ha : ∀ m, m < B → a₁ m = a₂ m)
     (h : DecidedWithin (S := slotsOf hinj a₁) U V B k v) :
     DecidedWithin (S := slotsOf hinj a₂) U V B k v :=
-  AnchoredRule.decidedWithin_congr_of_slotRound coreLaws trivial (S₁ := slotsOf hinj a₁)
-    (S₂ := slotsOf hinj a₂) rfl ha h
+  AnchoredRule.decidedWithin_slotsOf_congr coreLaws trivial ha h
 
 /-! ## Runs -/
 
@@ -145,25 +144,10 @@ abbrev PlacesRuns (P : AdaptivePolicy Validator BlockId Payload)
     (T : Finset Validator) (c : ℕ) : Prop :=
   Adaptive.PlacesRuns P T c
 
-omit [Fintype Validator] [DecidableEq Validator] F [DecidableEq BlockId] in
-/-- Eligibility reads only the round structure, which reassignment fixes:
-the spanning property transfers to every induced instance verbatim. -/
-theorem spansEligible_slotsOf {hinj : Function.Injective S.slotRound}
-    {a : ℕ → Validator} {c : ℕ}
-    (h : SpansEligibleAt (S := S) 2 c) :
-    SpansEligibleAt (S := slotsOf hinj a) 2 c := h
-
 section Existence
 
 variable {P : AdaptivePolicy Validator BlockId Payload}
 variable {T : Finset Validator} {c R N : ℕ}
-
-/-- The core's descent, at every induced schedule. -/
-theorem descends_slotsOf (hc : 0 < c) (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (a : ℕ → Validator) :
-    Descends (mysticetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-      (slotsOf P.inj a) c :=
-  descends hc (spansEligible_slotsOf hspans)
 
 /-- **One epoch closes** — the generic `Adaptive.epoch_closes` with
 `coreLive` assembled from the global hypotheses. -/
@@ -180,13 +164,11 @@ theorem epoch_closes (hT : T ⊆ (Correct : Finset Validator))
       ∃ w, DecidedBelow mysticetiRule (slotsOf P.inj (fun m => P.pick U V v m))
         (P.W * (E + 2)) V k w := by
   have hlive : coreLive (slotsOf P.inj (fun m => P.pick U V v m)) V T P.W (P.W * (E + 2)) :=
-    ⟨hcard, R, N, hs, hRW, hpop, hcov, fun k hk => by
-      have := S.mono (le_of_lt hk)
-      change S.slotRound k + 2 ≤ N
-      omega⟩
+    coreLive_of hcard hs hRW hpop hcov fun k hk => by
+      have := S.mono (le_of_lt hk); change S.slotRound k + 2 ≤ N; omega
   intro k hk
   obtain ⟨w, hw⟩ := Adaptive.epoch_closes leaderCommits
-    (descends_slotsOf (P := P) hc hspans) hruns V v E hlive k hk
+    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V v E hlive k hk
   exact ⟨w, hw⟩
 
 /-- **Partial runs exist at every height** — the finite-horizon form. -/
@@ -199,14 +181,14 @@ theorem exists_partialRun (hT : T ⊆ (Correct : Finset Validator))
     (V : View Validator BlockId Payload U) (hcov : V.CoversUpto N) (E : ℕ)
     (hN : S.slotRound (P.W * (E + 1)) + 2 ≤ N) :
     Nonempty (PartialRun P U V E) :=
-  Adaptive.exists_partialRun leaderCommits (descends_slotsOf (P := P) hc hspans)
-    hruns V E (fun E' hE' _ => ⟨hcard, R, N, hs, hRW, hpop, hcov, fun k hk => by
+  Adaptive.exists_partialRun leaderCommits (Adaptive.descends_slotsOf indirect hc hspans P.inj)
+    hruns V E (fun E' hE' _ => coreLive_of hcard hs hRW hpop hcov fun k hk => by
       have h1 : k ≤ P.W * (E + 1) := by
         have := Nat.mul_le_mul_left P.W (show E' + 2 ≤ E + 1 by omega)
         omega
       have := S.mono h1
       change S.slotRound k + 2 ≤ N
-      omega⟩)
+      omega)
 
 /-- **AL5: the adaptive fixpoint exists.** On a DAG synchronised over a
 quorum of reliable validators and populated at every round, under a
@@ -221,12 +203,12 @@ theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
     (hpop : ∀ r, Populated U r)
     (V : View Validator BlockId Payload U) (hcov : ∀ N, V.CoversUpto N) :
     Nonempty (AdaptiveRun P U V) :=
-  Adaptive.run_exists agree leaderCommits (descends_slotsOf (P := P) hc hspans)
-    hruns V (fun E _ => ⟨hcard, R, S.slotRound (P.W * (E + 2)) + 2, hs, hRW,
-      fun r _ _ => PopulatedOn.mono hT (hpop r), hcov _, fun k hk => by
+  Adaptive.run_exists agree leaderCommits (Adaptive.descends_slotsOf indirect hc hspans P.inj)
+    hruns V (fun E _ => coreLive_of hcard hs hRW (fun r _ _ => PopulatedOn.mono hT (hpop r))
+      (hcov _) fun k hk => by
         have := S.mono (le_of_lt hk)
         change S.slotRound k + 2 ≤ S.slotRound (P.W * (E + 2)) + 2
-        omega⟩)
+        omega)
 
 /-! ## What the run commits, for the core -/
 
@@ -239,11 +221,10 @@ theorem adaptiveRun_commits (hcard : quorumCard Validator ≤ T.card)
     {k : ℕ} (hk : P.W ≤ k) (hN : S.slotRound k + 2 ≤ N) (hlead : A.assign k ∈ T) :
     ∃ L, A.vdct k = some L :=
   Adaptive.Run.commits agree leaderCommits A (lo := P.W) (K := k + 1)
-    (show coreLive (slotsOf P.inj A.assign) V T P.W (k + 1) from
-      ⟨hcard, R, N, hs, hRW, hpop, hcov, fun j hj => by
+    (coreLive_of (S := slotsOf P.inj A.assign) hcard hs hRW hpop hcov fun j hj => by
         have := S.mono (show j ≤ k by omega)
         change S.slotRound j + 2 ≤ N
-        omega⟩)
+        omega)
     hk (by omega) hlead
 
 /-- **Every epoch past the first carries `c` consecutive commits**, in
@@ -257,12 +238,11 @@ theorem adaptiveRun_commits_in_epoch (hT : T ⊆ (Correct : Finset Validator))
     ∃ b, P.W * (e + 1) ≤ b ∧ b + c ≤ P.W * (e + 2) ∧
       ∀ i, i < c → ∃ L, A.vdct (b + i) = some L :=
   Adaptive.Run.commits_in_epoch agree leaderCommits hruns A e
-    (show coreLive (slotsOf P.inj A.assign) V T P.W (P.W * (e + 2)) from
-      ⟨hcard, R, S.slotRound (P.W * (e + 2)) + 2, hs, hRW,
-        fun r _ _ => PopulatedOn.mono hT (hpop r), hcov _, fun k hk => by
-          have := S.mono (le_of_lt hk)
-          change S.slotRound k + 2 ≤ S.slotRound (P.W * (e + 2)) + 2
-          omega⟩)
+    (coreLive_of (S := slotsOf P.inj A.assign) hcard hs hRW
+      (fun r _ _ => PopulatedOn.mono hT (hpop r)) (hcov _) fun k hk => by
+        have := S.mono (le_of_lt hk)
+        change S.slotRound k + 2 ≤ S.slotRound (P.W * (e + 2)) + 2
+        omega)
 
 end Existence
 

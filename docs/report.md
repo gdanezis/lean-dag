@@ -9970,7 +9970,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Properties/Arcs/Record.lean` | every verdict cell of the cut, the fill and re-genesis, once, at any carrier on the record |
 | `Common/Record/Invariant.lean` | what an invariant a carrier adds owes the mechanisms (`Invariant.Mechanised`) |
 | `Adaptive/Joiner.lean` | the joiner across a cut: horizon-stability, the schedule transformers commute, agreement at the adaptive schedule |
-| `Adaptive/Odontoceti.lean` | the two-round mirror |
+| `Adaptive/Odontoceti.lean` | the two-round rule as an instance of the adaptive mechanism: its runs, agreement and existence as corollaries |
 | `Hybrid/Faults.lean` | the hybrid model; the derived instance; `HonestNoEquiv`; the counting core |
 | `Hybrid/Rules.lean` | the rules at the admissible interval; the arithmetic core H2–H5 |
 | `Hybrid/Decision.lean` | Hybrid as an anchored rule at threshold `k`; its laws under `HonestNoEquiv` |
@@ -10948,7 +10948,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 340 definitions and structures the report names, in
+The 341 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -12786,45 +12786,41 @@ def PlacesRuns {R : DagRule Validator BlockId Payload} (P : Policy R)
 
 **The adaptive fairness clause.** Every assignment the policy can emit places, in each epoch past the base prefix, a run of `c` consecutive `T`-led slots. The clause liveness prices and safety never sees: `run_agree` holds for policies that violate it.
 
-#### `PartialRun`
+#### `AdaptivePolicy`
 
-*structure, `Adaptive.Odontoceti.lean`*
+*abbrev, `Adaptive.Odontoceti.lean`*
 
 ```lean
-structure PartialRun (P : AdaptivePolicy Validator BlockId Payload)
+abbrev AdaptivePolicy (Validator : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults5 Validator] (BlockId : Type) [LinearOrder BlockId] (Payload : Type)
+    [Slots Validator] : Type :=
+  Adaptive.Policy (odontocetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
+```
+
+The adaptive policy over Odontoceti's carrier.
+
+#### `PartialRun`
+
+*abbrev, `Adaptive.Odontoceti.lean`*
+
+```lean
+abbrev PartialRun (P : AdaptivePolicy Validator BlockId Payload)
     (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (E : ℕ) where
-  /-- The leader assignment. -/
-  assign : ℕ → Validator
-  /-- The verdicts. -/
-  vdct : ℕ → Option BlockId
-  /-- Every slot of a closed epoch is decided inside its window. -/
-  closed : ∀ k, epochOf P.W k < E →
-    Odontoceti.DecidedWithin (S := slotsOf P.inj assign) U V
-      (P.W * (epochOf P.W k + 2)) k (vdct k)
-  /-- The assignment is the policy's, as far as the derivations read it. -/
-  coherent : ∀ m, epochOf P.W m < E + 1 → assign m = P.pick U V vdct m
+    (V : View Validator BlockId Payload U) (E : ℕ) : Type :=
+  Adaptive.PartialRun (R := odontocetiRule) P U V E
 ```
 
 A run closed up to epoch height `E`, two-round rule.
 
 #### `AdaptiveRun`
 
-*structure, `Adaptive.Odontoceti.lean`*
+*abbrev, `Adaptive.Odontoceti.lean`*
 
 ```lean
-structure AdaptiveRun (P : AdaptivePolicy Validator BlockId Payload)
+abbrev AdaptiveRun (P : AdaptivePolicy Validator BlockId Payload)
     (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) where
-  /-- The leader assignment. -/
-  assign : ℕ → Validator
-  /-- The verdicts. -/
-  vdct : ℕ → Option BlockId
-  /-- Every slot is decided inside its epoch window. -/
-  closed : ∀ k, Odontoceti.DecidedWithin (S := slotsOf P.inj assign) U V
-    (P.W * (epochOf P.W k + 2)) k (vdct k)
-  /-- The assignment is the policy's, everywhere. -/
-  coherent : ∀ m, assign m = P.pick U V vdct m
+    (V : View Validator BlockId Payload U) : Type :=
+  Adaptive.Run (R := odontocetiRule) P U V
 ```
 
 A total run: the adaptive fixpoint, two-round rule.
@@ -16918,7 +16914,7 @@ def OfCoverage (sp : Support R) (rel : Reliability Validator) : Prop :=
 
 ## Appendix C. The theorem reference
 
-The 516 theorems the body or Appendix A names, each
+The 514 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -19731,6 +19727,20 @@ theorem partialRun_agree {V₁ V₂ : R.View U} {E₁ E₂ : ℕ}
 
 The strong induction the module docstring describes: verdict agreement below an epoch forces assignment agreement through the epoch above it (`adapted`), which forces verdict agreement at the epoch itself (`DecidedBelow.reschedule`, then `Agree`).
 
+#### `descends_slotsOf`
+
+*theorem, `Adaptive.Liveness.lean`*
+
+```lean
+theorem descends_slotsOf {R : DagRule Validator BlockId Payload} {wave : ℕ}
+    (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
+    {c : ℕ} (hc : 0 < c) (hspans : SpansEligibleAt (S := S) wave c)
+    (hinj : Function.Injective S.slotRound) (a : ℕ → Validator) :
+    Descends R (slotsOf hinj a) c
+```
+
+**A rule's descent, at every induced schedule.** The indirect property is stated over the round structure alone, which reassignment fixes, so a spanning clause at the base schedule gives the descent at each induced one.
+
 #### `epoch_closes`
 
 *theorem, `Adaptive.Liveness.lean`*
@@ -19763,20 +19773,6 @@ theorem exists_partialRun (hlc : LeaderCommits R Live)
 
 **Partial runs exist at every height** — the witnessable, finite- horizon form of existence, by induction on the height: each stage re-reads the schedule off the verdicts so far and closes one more epoch, under the precondition for that stage's schedule.
 
-#### `decidedWithin_congr`
-
-*theorem, `Adaptive.Odontoceti.lean`*
-
-```lean
-theorem decidedWithin_congr {hinj : Function.Injective S.slotRound}
-    {a₁ a₂ : ℕ → Validator} {V : View Validator BlockId Payload U} {B k : ℕ}
-    {v : Option BlockId} (ha : ∀ m, m < B → a₁ m = a₂ m)
-    (h : Odontoceti.DecidedWithin (S := slotsOf hinj a₁) U V B k v) :
-    Odontoceti.DecidedWithin (S := slotsOf hinj a₂) U V B k v
-```
-
-Congruence below the bound, canonicity clause included: the candidate set reads the schedule only through `IsLeaderBlock`, which transports in both directions at the decided slot.
-
 #### `partialRun_agree`
 
 *theorem, `Adaptive.Odontoceti.lean`*
@@ -19788,7 +19784,7 @@ theorem partialRun_agree {P : AdaptivePolicy Validator BlockId Payload}
     ∀ k, epochOf P.W k < min E₁ E₂ → R₁.vdct k = R₂.vdct k
 ```
 
-The master agreement lemma, two-round rule — the Mysticeti induction verbatim, with O5 where it used M6.
+**The master agreement lemma, two-round rule.**
 
 #### `adaptiveRun_agree`
 
@@ -19798,31 +19794,10 @@ The master agreement lemma, two-round rule — the Mysticeti induction verbatim,
 theorem adaptiveRun_agree {P : AdaptivePolicy Validator BlockId Payload}
     {V₁ V₂ : View Validator BlockId Payload U}
     (R₁ : AdaptiveRun P U V₁) (R₂ : AdaptiveRun P U V₂) :
-    ∀ k, R₁.vdct k = R₂.vdct k
+    (∀ k, R₁.vdct k = R₂.vdct k) ∧ (∀ m, R₁.assign m = R₂.assign m)
 ```
 
 **Safety, two-round rule: the adaptive fixpoint is unique** — with no fairness, synchrony or view hypothesis, exactly as on the three-round side.
-
-#### `epoch_closes`
-
-*theorem, `Adaptive.Odontoceti.lean`*
-
-```lean
-theorem epoch_closes (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : PlacesRuns P T c)
-    (hspans : (odontocetiAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
-    (V : View Validator BlockId Payload U) (hcov : V.CoversUpto N)
-    (v : ℕ → Option BlockId) (E : ℕ)
-    (hN : S.slotRound (P.W * (E + 2)) + 1 ≤ N) :
-    ∀ k, epochOf P.W k < E + 1 →
-      ∃ w, Odontoceti.DecidedWithin (S := slotsOf P.inj (fun m => P.pick U V v m)) U
-        V (P.W * (E + 2)) k w
-```
-
-One epoch closes, two-round rule, on a view caught up to the horizon: O7 commits the placed run — two populated rounds where Mysticeti needs three, its supporters under the horizon so the view holds them — and the bounded descent clears the epoch below.
 
 #### `exists_partialRun`
 
@@ -19831,7 +19806,7 @@ One epoch closes, two-round rule, on a view caught up to the horizon: O7 commits
 ```lean
 theorem exists_partialRun (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : PlacesRuns P T c)
+    (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
     (hspans : (odontocetiAnchored Validator BlockId Payload).SpansEligible c)
     (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
     (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
@@ -19840,7 +19815,7 @@ theorem exists_partialRun (hT : T ⊆ (Correct : Finset Validator))
     Nonempty (PartialRun P U V E)
 ```
 
-Partial runs exist at every height, two-round rule, on a view caught up to the horizon.
+**Partial runs exist at every height, two-round rule**, on a view caught up to the horizon.
 
 #### `adaptiveRun_exists`
 
@@ -19849,7 +19824,7 @@ Partial runs exist at every height, two-round rule, on a view caught up to the h
 ```lean
 theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : PlacesRuns P T c)
+    (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
     (hspans : (odontocetiAnchored Validator BlockId Payload).SpansEligible c)
     (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
     (hpop : ∀ r, Populated U r)
@@ -19857,7 +19832,7 @@ theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
     Nonempty (AdaptiveRun P U V)
 ```
 
-**AL7: adaptive Odontoceti is safe and live.** The fixpoint exists on every view caught up to every horizon — glued along the diagonal exactly as on the three-round side — and by `Odontoceti.adaptiveRun_agree` it is unique.
+**AL7: adaptive Odontoceti is safe and live.** The fixpoint exists on every view caught up to every horizon, and by `adaptiveRun_agree` it is unique.
 
 ### Nemo-Nemo: crash-fault consensus in two rounds
 
@@ -22109,19 +22084,6 @@ theorem AdaptivePolicy.const_run_decided {W : ℕ} {hW : 0 < W}
 ```
 
 **Conservativity.** Under the constant policy a run's verdicts are ordinary `Decided` verdicts of the base schedule.
-
-#### `descends_slotsOf`
-
-*theorem, `Adaptive.Mysticeti.lean`*
-
-```lean
-theorem descends_slotsOf (hc : 0 < c) (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (a : ℕ → Validator) :
-    Descends (mysticetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-      (slotsOf P.inj a) c
-```
-
-The core's descent, at every induced schedule.
 
 #### `epoch_closes`
 

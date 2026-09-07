@@ -9,7 +9,7 @@ import LeanDag.Properties.Commit
 import LeanDag.Properties.Derived.LeaderCommits
 import LeanDag.Properties.Support
 import LeanDag.Properties.Derived.Bounded
-import LeanDag.Adaptive.Odontoceti
+import LeanDag.Odontoceti.Liveness
 import LeanDag.Properties.Arcs.Liveness
 import LeanDag.Timed.Coverage
 import LeanDag.Properties.Arcs.Headline

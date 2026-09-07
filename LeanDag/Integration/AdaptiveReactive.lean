@@ -40,7 +40,7 @@ theorem exists_partialRun_reactive (hc : 0 < c) (hruns : PlacesRuns P T c)
       reactiveLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E' + 2))) :
     Nonempty (PartialRun P U V E) :=
   Adaptive.exists_partialRun leaderCommits_reactive
-    (descends_slotsOf (P := P) hc hspans) hruns V E hlive
+    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V E hlive
 
 /-- **The adaptive fixpoint exists over reactive Mysticeti.** Under a
 policy that places runs, with the reactive clauses holding at every
@@ -53,7 +53,7 @@ theorem adaptiveRun_exists_reactive (hc : 0 < c) (hruns : PlacesRuns P T c)
       reactiveLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E + 2))) :
     Nonempty (AdaptiveRun P U V) :=
   Adaptive.run_exists agree leaderCommits_reactive
-    (descends_slotsOf (P := P) hc hspans) hruns V hlive
+    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V hlive
 
 /-- **Reliable-led slots commit, reactively.** In any run, a slot past
 the first epoch led by a member of `T` commits, under the staged

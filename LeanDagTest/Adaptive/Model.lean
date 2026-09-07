@@ -1,6 +1,7 @@
 import LeanDag.Adaptive.Basic
 import LeanDag.Adaptive.Run
 import LeanDag.Adaptive.Liveness
+import LeanDag.Adaptive.Mysticeti
 import LeanDag.Adaptive.Odontoceti
 import LeanDagTest.Mysticeti.Model
 import LeanDagTest.Odontoceti.Model
@@ -311,7 +312,7 @@ above the bound derives the same verdict. -/
 example :
     Odontoceti.DecidedWithin (S := slotsOf odo_inj (fun k => if 4 ≤ k then 0 else oBase k))
       Uskip (View.full Uskip) 4 1 (some 7) :=
-  Odontoceti.decidedWithin_congr
+  AnchoredRule.decidedWithin_slotsOf_congr Odontoceti.odontocetiLaws trivial
     (fun m hm => by rw [if_neg (by omega)])
     uskip_decidedWithin_slot1
 

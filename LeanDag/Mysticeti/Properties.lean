@@ -543,6 +543,16 @@ def coreLive (S : Slots Validator) {U : BlockUniverse Validator BlockId Payload}
       (∀ r, R₀ ≤ r → r ≤ N → PopulatedOn U T r) ∧ V.CoversUpto N ∧
       ∀ k, k < K → S.slotRound k + 2 ≤ N
 
+/-- The precondition, from the global hypotheses: what every staged
+statement of the core assembles. -/
+theorem coreLive_of {S : Slots Validator} {U : BlockUniverse Validator BlockId Payload}
+    {V : View Validator BlockId Payload U} {T : Finset Validator} {lo K R₀ N : ℕ}
+    (hcard : quorumCard Validator ≤ T.card) (hs : SynchronisedOn U T R₀)
+    (hRW : R₀ ≤ S.slotRound lo) (hpop : ∀ r, R₀ ≤ r → r ≤ N → PopulatedOn U T r)
+    (hcov : V.CoversUpto N) (hN : ∀ k, k < K → S.slotRound k + 2 ≤ N) :
+    coreLive S V T lo K :=
+  ⟨hcard, R₀, N, hs, hRW, hpop, hcov, hN⟩
+
 /-! ## One precondition for two execution models
 
 `coreLive` asks for coverage and `reactiveLive` asks for a reactive

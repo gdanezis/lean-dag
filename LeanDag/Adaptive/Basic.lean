@@ -1,4 +1,5 @@
 import LeanDag.Common.Schedule
+import LeanDag.Common.Anchored.Bounded
 /-!
 # Adaptive leaders: epochs and induced schedules
 
@@ -80,6 +81,34 @@ conservativity: a constant policy reassigns nothing. -/
 theorem slotsOf_base (hinj : Function.Injective S.slotRound) :
     slotsOf hinj S.leader = S := by
   cases S; rfl
+
+/-! ## What an induced schedule keeps
+
+Reassignment fixes the round structure, so everything a rule reads of
+the schedule through `slotRound` alone transfers to every induced
+instance verbatim: eligibility, and with it the spanning clause; and a
+bounded verdict, whose derivation reads the leaders only below its
+bound, transfers between two assignments agreeing there. -/
+
+/-- The spanning clause transfers to every induced schedule, at any wave. -/
+theorem spansEligible_slotsOf (hinj : Function.Injective S.slotRound) (a : ℕ → Validator)
+    {wave c : ℕ} (h : SpansEligibleAt (S := S) wave c) :
+    SpansEligibleAt (S := slotsOf hinj a) wave c := h
+
+/-- **Congruence below the bound**, at two induced schedules: two
+assignments agreeing below `B` derive the same bounded verdicts. -/
+theorem AnchoredRule.decidedWithin_slotsOf_congr [Fintype Validator] [DecidableEq Validator]
+    {BlockId Payload : Type*} [DecidableEq BlockId]
+    {P : Validity Validator BlockId Payload} {honest : Finset Validator}
+    {R : AnchoredRule Validator BlockId Payload P honest}
+    {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+    (hl : R.Laws I) {hinj : Function.Injective S.slotRound} {a₁ a₂ : ℕ → Validator}
+    {U : BlockRecord Validator BlockId Payload P honest} (hI : I (slotsOf hinj a₁) U)
+    {V : U.View} {B k : ℕ} {v : Option BlockId} (ha : ∀ m, m < B → a₁ m = a₂ m)
+    (h : R.DecidedWithin (S := slotsOf hinj a₁) U V B k v) :
+    R.DecidedWithin (S := slotsOf hinj a₂) U V B k v :=
+  AnchoredRule.decidedWithin_congr_of_slotRound hl hI (S₁ := slotsOf hinj a₁)
+    (S₂ := slotsOf hinj a₂) rfl ha h
 
 end Slots
 

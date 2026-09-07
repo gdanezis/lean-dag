@@ -4397,6 +4397,36 @@ FinWhale's `parentsVoting` and `SPCertificate` wait for step 11.
 **Measure.** The step removes 995 lines and adds 771; the library and
 tests stand at 77,035 lines.
 
+### 11.35 The adaptive arc proved once
+
+Step 8 of `docs/common-layer.md`. The adaptive mechanism was generic over
+a carrier with `Agree`, `LeaderCommits` and `Descends`, and the core read
+it as corollaries, but `Adaptive/Odontoceti.lean` did not: it
+re-declared the partial and total runs against the bounded relation and
+re-proved the strong induction for agreement, the epoch closure, the run
+construction and the diagonal gluing, line for line. It is now the same
+file as the core's, one hundred and thirty-seven lines against two
+hundred and ninety-one: its policy, runs, agreement and existence are
+`Adaptive.Policy`, `Adaptive.Run`, `run_agree` and `run_exists` at
+`odontocetiRule`, with Odontoceti's `Agree`, its `LeaderCommits` read
+off its vote support through the timed bridge (`Timed.live_of_coverage`),
+and its `Descends`. What was Odontoceti's own in the old file is one
+number: its precondition asks the view to cover one round past a slot
+where the core asks two.
+
+**What moved to the generic layer.** An induced schedule fixes the round
+structure, so `Adaptive/Basic.lean` now states once that the spanning
+clause transfers to every induced schedule (`spansEligible_slotsOf`,
+proved by `h`) and that bounded verdicts transfer between assignments
+agreeing below the bound (`AnchoredRule.decidedWithin_slotsOf_congr`);
+`Adaptive/Liveness.lean` states once that a rule's indirect property
+gives its descent at every induced schedule (`descends_slotsOf`). The
+core's, Hydrozoan's and the reactive arc's copies are gone. The core's
+five staged-liveness constructions go through one `coreLive_of`.
+
+**Measure.** The step removes 286 lines and adds 156; the library and
+tests stand at 76,905 lines.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

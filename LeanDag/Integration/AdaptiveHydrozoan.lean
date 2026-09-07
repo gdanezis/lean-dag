@@ -38,14 +38,6 @@ variable {P : Adaptive.Policy (rule (Replica := Replica) (BlockId := BlockId))}
 variable {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
 variable {T : Finset Replica} {c : ℕ}
 
-/-- Anchoring reads the round structure, which reassignment fixes, so
-the spanning clause transfers to every induced schedule verbatim. -/
-theorem spansEligible_slotsOf {hinj : Function.Injective (LeanDag.Slots.slotRound Replica)}
-    {a : ℕ → Replica}
-    (h : (LeanDag.Hydrozoan.hydrozoanAnchored Replica BlockId).SpansEligible (S := S) c) :
-    (LeanDag.Hydrozoan.hydrozoanAnchored Replica BlockId).SpansEligible
-      (S := slotsOf hinj a) c := h
-
 /-- **Safety: the adaptive fixpoint over Hydrozoan is unique.** Two
 total runs on one universe, from any two views, hold the same verdicts
 and run the same schedule — under no synchrony, fairness or population
@@ -67,7 +59,7 @@ theorem adaptiveRun_exists_hz (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
         P.W (P.W * (E + 2))) :
     Nonempty (Adaptive.Run P U V) :=
   Adaptive.run_exists LeanDag.Hydrozoan.agree LeanDag.Hydrozoan.leaderCommits
-    (fun a => LeanDag.Hydrozoan.descends hc (spansEligible_slotsOf (a := a) hspans))
+    (Adaptive.descends_slotsOf LeanDag.Hydrozoan.indirect hc hspans P.inj)
     hruns V hlive
 
 /-- **Progress survives whatever a mechanism adds.** Every slot below a
