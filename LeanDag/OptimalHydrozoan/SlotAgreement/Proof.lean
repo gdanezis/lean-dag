@@ -93,8 +93,8 @@ theorem optimalLaws :
   commit_mono := by
     intro S U V V' L r _ hsub h
     rcases h with h | h
-    · exact Or.inl (fastCommitOptInView_mono hsub h)
-    · exact Or.inr (slowCommitInView_mono hsub h)
+    · exact Or.inl (HoldsAtLeast.mono hsub h)
+    · exact Or.inr (HoldsAtLeast.mono hsub h)
   skip_mono := fun _ hsub h => skippedLeaderOptInView_mono hsub h
   skip_congr := fun _ hround hk h => skippedLeaderOptInView_congr hround hk h
   link_congr := by

@@ -76,11 +76,11 @@ section Universe
 
 variable {B : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
 
-/-- Membership in `votesFor`, unfolded. -/
+/-- Membership in `votersOf`, unfolded. -/
 theorem mem_votesFor {C L : BlockId} {v : Replica} :
-    v ∈ votesFor B C L ↔
+    v ∈ votersOf B C L ↔
       ∃ p ∈ (B.block C).refs, LeanDag.Hydrozoan.IsVote B p L ∧ (B.block p).creator = v := by
-  simp only [votesFor, LeanDag.Hydrozoan.voteBlocks, mem_creatorsOf, Finset.mem_filter]
+  simp only [votersOf, LeanDag.Hydrozoan.voteBlocks, mem_creatorsOf, Finset.mem_filter]
   tauto
 
 /-- A view's fast commit lifts to the universe, then to the fast/fast
@@ -127,7 +127,7 @@ theorem mem_votesFor_of_nonByzantine {k : ℕ} {C L : BlockId} {v : Replica}
     (hC : C ∈ B.ids) (hCr : (B.block C).round = LeanDag.Hydrozoan.decisionRound Replica k)
     (hvA : v ∈ creatorsOf B.block (B.block C).refs)
     (hvS : v ∈ supporters B L (S.slotRound k + 1)) (hvnb : v ∉ O.byzantine) :
-    v ∈ votesFor B C L := by
+    v ∈ votersOf B C L := by
   obtain ⟨p', hp', hpc⟩ := mem_creatorsOf.mp hvA
   obtain ⟨b, hbi, hbr, hbv, hbc⟩ := mem_supporters.mp hvS
   have hpi : p' ∈ B.ids := B.complete C hC p' hp'
@@ -170,8 +170,8 @@ theorem isFastEvidence_of_fastCommitOpt {k : ℕ} {L C : BlockId}
   have hrow1 := qFastOpt_add_q_eq (Replica := Replica)
   have hrow2 := nf_add_tEquiv_le (Replica := Replica)
   refine ⟨fun _ => ?_, fun hw => ⟨?_, ?_⟩⟩
-  · -- plain case: (A ∩ V) \ byzantine ⊆ votesFor
-    have hsub : (A ∩ V) \ O.byzantine ⊆ votesFor B C L := by
+  · -- plain case: (A ∩ V) \ byzantine ⊆ votersOf
+    have hsub : (A ∩ V) \ O.byzantine ⊆ votersOf B C L := by
       intro v hv
       obtain ⟨hvin, hvnb⟩ := Finset.mem_sdiff.mp hv
       obtain ⟨hvA, hvS⟩ := Finset.mem_inter.mp hvin
@@ -185,7 +185,7 @@ theorem isFastEvidence_of_fastCommitOpt {k : ℕ} {L C : BlockId}
       intro hmem
       obtain ⟨j, hj, hjc⟩ := mem_creatorsOf.mp hmem
       exact U.leader_excluded C hC k hCr hw j hj hjc
-    have hsub : (A ∩ V) \ (O.byzantine.erase (S.leader k)) ⊆ votesFor B C L := by
+    have hsub : (A ∩ V) \ (O.byzantine.erase (S.leader k)) ⊆ votersOf B C L := by
       intro v hv
       obtain ⟨hvin, hvnb⟩ := Finset.mem_sdiff.mp hv
       obtain ⟨hvA, hvS⟩ := Finset.mem_inter.mp hvin
@@ -207,7 +207,7 @@ theorem isFastEvidence_of_fastCommitOpt {k : ℕ} {L C : BlockId}
       intro hmem
       obtain ⟨j, hj, hjc⟩ := mem_creatorsOf.mp hmem
       exact U.leader_excluded C hC k hCr hw j hj hjc
-    have hsub : votesFor B C L' ⊆ (A \ V) ∪ O.byzantine.erase (S.leader k) := by
+    have hsub : votersOf B C L' ⊆ (A \ V) ∪ O.byzantine.erase (S.leader k) := by
       intro v hv
       obtain ⟨p', hp', hpv, hpc⟩ := mem_votesFor.mp hv
       have hvA : v ∈ A := mem_creatorsOf.mpr ⟨p', hp', hpc⟩
@@ -267,8 +267,8 @@ theorem isFastEvidence_exclusive {k : ℕ} {C L L' : BlockId}
     have h1 := h.1 hw
     have h2 := h'.1 hw
     have hpos := tPlain_pos (Replica := Replica)
-    obtain ⟨v, hv⟩ := Finset.card_pos.mp (by omega : 0 < (votesFor B C L).card)
-    obtain ⟨v', hv'⟩ := Finset.card_pos.mp (by omega : 0 < (votesFor B C L').card)
+    obtain ⟨v, hv⟩ := Finset.card_pos.mp (by omega : 0 < (votersOf B C L).card)
+    obtain ⟨v', hv'⟩ := Finset.card_pos.mp (by omega : 0 < (votersOf B C L').card)
     obtain ⟨p, hp, hpv, -⟩ := mem_votesFor.mp hv
     obtain ⟨p', hp', hpv', -⟩ := mem_votesFor.mp hv'
     exact ⟨L, L', hL, hL', hne, ⟨p, hp, hpv⟩, ⟨p', hp', hpv'⟩⟩

@@ -143,8 +143,8 @@ example : certificates U7 11 2 = ∅ := by decide
 -- committed there; on the window its only certifier is the anchor itself,
 -- one short of the quorum's three, and it is not.
 example : bnRule.IsLeaderBlock bnSched2 U7 7 12 := by decide
-example : certificatesIn U7 V7 12 3 = {20, 21, 22} := by decide
-example : certificatesIn U7 (historyViewOf U7 20 (by decide)) 12 3 = {20} := by decide
+example : certificates U7 12 3 ∩ V7.ids = {20, 21, 22} := by decide
+example : certificates U7 12 3 ∩ (historyViewOf U7 20 (by decide)).ids = {20} := by decide
 example : bnRule.SlotDirect bnSched2 U7 (bnRule.full U7) 7 := by decide
 example : ¬ bnRule.SlotDirect bnSched2 U7 (bnRule.historyView U7 20 (by decide)) 7 := by decide
 -- Slot `(3, 0)`'s candidate, block `15`, has no certificate anywhere: it

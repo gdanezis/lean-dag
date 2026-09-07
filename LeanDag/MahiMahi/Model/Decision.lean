@@ -37,34 +37,19 @@ A validator applies the direct rules to what it holds. Stated on a
 `View` by intersecting with `V.ids`, so that a view can only
 under-report the universe-level rule. -/
 
-/-- The certificates for `L` that a view holds. -/
-def certificatesIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (w : ℕ) (L : BlockId) (r : ℕ) : Finset BlockId :=
-  certificates U w L r ∩ V.ids
-
-/-- Direct commit, as judged from a single view. -/
-def DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
+/-- Direct commit, as judged from a single view: the view holds
+certificates for `L` from a quorum of distinct validators. -/
+abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (w : ℕ) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (certificatesIn U V w L r)).card
+  HoldsAtLeast U V (quorumCard Validator) (certificates U w L r)
 
-/-- The blamers of the slot `(a, r)` whose voting block a view holds. -/
-def blamersIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (w : ℕ) (a : Validator) (r : ℕ) : Finset Validator :=
-  creatorsOf U.block
-    (((blocksAt U (votingRound w r)).filter (fun q => Blames U q a r)) ∩ V.ids)
-
-/-- Direct skip, as judged from a single view. -/
-def DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
+/-- Direct skip, as judged from a single view: the view holds
+voting-round blocks blaming the slot `(a, r)` from a quorum of distinct
+validators. -/
+abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (w : ℕ) (a : Validator) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (blamersIn U V w a r).card
-
-instance (V : View Validator BlockId Payload U) (w : ℕ) (L : BlockId) (r : ℕ) :
-    Decidable (DirectCommitIn U V w L r) :=
-  inferInstanceAs (Decidable (_ ≤ _))
-
-instance (V : View Validator BlockId Payload U) (w : ℕ) (a : Validator) (r : ℕ) :
-    Decidable (DirectSkipIn U V w a r) :=
-  inferInstanceAs (Decidable (_ ≤ _))
+  HoldsAtLeast U V (quorumCard Validator)
+    ((blocksAt U (votingRound w r)).filter (fun q => Blames U q a r))
 
 /-- **The indirect test**: a certificate for `L` lies in the causal
 history of the anchor `A`. The core's `CertifiedIn` at wave `w`. Not

@@ -305,32 +305,17 @@ through. **Conservativity**: under a schedule whose consecutive slots are
 three rounds apart, every later slot is eligible
 (`eligibleAt_of_lt_of_spacing`). -/
 
-/-- The certificates for `L` that a view actually holds. -/
-def certificatesIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Finset BlockId :=
-  certificates U L r ∩ V.ids
-
-/-- Direct commit, as judged from a single view. -/
-def DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
+/-- Direct commit, as judged from a single view: the view holds
+certificates for `L` from a quorum of distinct validators. -/
+abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (certificatesIn U V L r)).card
+  HoldsAtLeast U V (quorumCard Validator) (certificates U L r)
 
-/-- Direct skip, as judged from a single view: the record's `blamesIn`
-at the round above `L`. -/
-def DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
+/-- Direct skip, as judged from a single view: the view holds blocks at
+the round above `L` that omit it, from a quorum of distinct validators. -/
+abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (blamesIn U V L (r + 1)).card
-
-omit S in
-instance decidableDirectCommitIn (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) :
-    Decidable (DirectCommitIn U V L r) :=
-  inferInstanceAs (Decidable (quorumCard Validator ≤ (creatorsOf U.block (certificatesIn U V L r)).card))
-
-instance decidableDirectSkipIn (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) :
-    Decidable (DirectSkipIn U V L r) :=
-  inferInstanceAs (Decidable (quorumCard Validator ≤
-    (creatorsOf U.block
-      (((blocksAt U (r + 1)).filter (fun q => L ∉ (U.block q).refs)) ∩ V.ids)).card))
+  HoldsAtLeast U V (quorumCard Validator) (omissionsOf U L (r + 1))
 
 omit S in
 /-- **A view can only under-report.** Everything it sees is real, so a
@@ -340,13 +325,11 @@ This one line is what lets all of Stage A be reused unchanged: M2, M4 and M5
 are stated universe-level, and a validator's local judgement feeds straight
 into them. -/
 theorem directCommit_of_directCommitIn {V : View Validator BlockId Payload U}
-    {L : BlockId} {r : ℕ} (h : DirectCommitIn U V L r) : DirectCommit U L r :=
-  le_trans h (Finset.card_le_card (Finset.image_subset_image Finset.inter_subset_left))
+    {L : BlockId} {r : ℕ} (h : DirectCommitIn U V L r) : DirectCommit U L r := h.le
 
 omit S in
 theorem directSkip_of_directSkipIn {V : View Validator BlockId Payload U}
-    {L : BlockId} {r : ℕ} (h : DirectSkipIn U V L r) : DirectSkip U L r :=
-  le_trans h (Finset.card_le_card (Finset.image_subset_image Finset.inter_subset_left))
+    {L : BlockId} {r : ℕ} (h : DirectSkipIn U V L r) : DirectSkip U L r := h.le
 
 /-! ### The slot-level skip
 
@@ -362,13 +345,9 @@ no candidate of the slot.
 Strictly stronger than the per-candidate `DirectSkipIn`, which it
 implies (`directSkipIn_of_directSkipSlotIn`) and which a slot with no
 candidate satisfies for nothing. -/
-def DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (k : ℕ) : Prop :=
-  quorumCard Validator ≤ (slotBlamesIn U V k).card
-
-instance decidableDirectSkipSlotIn (V : View Validator BlockId Payload U) (k : ℕ) :
-    Decidable (DirectSkipSlotIn U V k) :=
-  inferInstanceAs (Decidable (quorumCard Validator ≤ (slotBlamesIn U V k).card))
+  HoldsAtLeast U V (quorumCard Validator) (slotBlamers U k)
 
 /-- **The slot-level skip implies the per-candidate one**, so every
 theorem stated over `DirectSkipIn` — M1 and M3 in particular — applies
@@ -376,22 +355,16 @@ to it unchanged. -/
 theorem directSkipIn_of_directSkipSlotIn {V : View Validator BlockId Payload U} {k : ℕ}
     (h : DirectSkipSlotIn U V k) {L : BlockId} (hL : IsLeaderBlock U k L) :
     DirectSkipIn U V L (S.slotRound k) :=
-  le_trans h (Finset.card_le_card (slotBlamesIn_subset_blamesIn hL))
-
-/-- A larger view only sees more blamers. -/
-theorem directSkipSlotIn_mono {V V' : View Validator BlockId Payload U} {k : ℕ}
-    (hsub : V.ids ⊆ V'.ids) (h : DirectSkipSlotIn U V k) : DirectSkipSlotIn U V' k :=
-  le_trans h (Finset.card_le_card (slotBlamesIn_mono hsub))
+  h.of_subset (slotBlamers_subset_omissionsOf hL)
 
 /-- **A slot with no candidate is blamed by every voting-round block**, so
 the skip reduces to a quorum being present at that round. This is the
 form the liveness statements use. -/
 theorem directSkipSlotIn_of_no_candidate {V : View Validator BlockId Payload U} {k : ℕ}
     (hnone : ∀ L, ¬ IsLeaderBlock U k L)
-    (hq : quorumCard Validator ≤
-      (creatorsOf U.block (blocksAt U (S.slotRound k + 1) ∩ V.ids)).card) :
+    (hq : HoldsAtLeast U V (quorumCard Validator) (blocksAt U (S.slotRound k + 1))) :
     DirectSkipSlotIn U V k := by
-  unfold DirectSkipSlotIn slotBlamesIn
+  show HoldsAtLeast U V _ (slotBlamers U k)
   rwa [slotBlamers_of_no_candidate hnone]
 
 /-! ### The decision relation
@@ -518,8 +491,8 @@ theorem directSkipSlotIn_congr {S₁ S₂ : Slots Validator}
     {V : View Validator BlockId Payload U} {k : ℕ}
     (hround : S₁.slotRound k = S₂.slotRound k) (hk : S₁.leader k = S₂.leader k)
     (h : DirectSkipSlotIn (S := S₁) U V k) : DirectSkipSlotIn (S := S₂) U V k := by
-  unfold DirectSkipSlotIn at h ⊢
-  rwa [slotBlamesIn_congr hround hk] at h
+  show HoldsAtLeast U V _ (slotBlamers (S := S₂) U k)
+  rwa [← slotBlamers_congr hround hk]
 
 /-! ## Stage C3 — agreement
 
@@ -563,9 +536,8 @@ theorem coreLaws : (coreAnchored Validator BlockId Payload).Laws where
     intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ hl₁ hl₂ _ _
     exact eq_of_hasCertificate hL₁ hL₂ (certificates_nonempty_of_certifiedIn hl₁)
       (certificates_nonempty_of_certifiedIn hl₂)
-  commit_mono := fun _ hsub h => le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
-  skip_mono := fun _ hsub h => directSkipSlotIn_mono hsub h
+  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
+  skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_congr := fun _ hround hk h => directSkipSlotIn_congr hround hk h
   link_congr := fun hround _ h => by
     change CertifiedIn _ _ _ _ at h ⊢

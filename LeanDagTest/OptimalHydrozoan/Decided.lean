@@ -76,14 +76,14 @@ set_option maxRecDepth 16384
 -- Part 1: the evidence predicate on the equivocation universe UX.
 
 -- Block 13 witnesses slot 1's equivocation: two votes for 4, one for 5.
-example : votesFor UX 13 4 = {1, 3} ∧ votesFor UX 13 5 = {2} := by decide
+example : votersOf UX 13 4 = {1, 3} ∧ votersOf UX 13 5 = {2} := by decide
 example :
     IsFastEvidence UX 1 13 4 ∧ ¬ IsFastEvidence UX 1 13 5 ∧ ¬ IsNoFastEvidence UX 1 13 := by
   decide
 
 -- Block 14 does not witness: three votes for 4, none for 5 — and it is
 -- "evidence" for the non-candidate 6 too (its refs all reference 6).
-example : votesFor UX 14 4 = {0, 1, 3} ∧ votesFor UX 14 5 = ∅ := by decide
+example : votersOf UX 14 4 = {0, 1, 3} ∧ votersOf UX 14 5 = ∅ := by decide
 example : IsFastEvidence UX 1 14 4 ∧ ¬ IsFastEvidence UX 1 14 5 := by decide
 example : IsFastEvidence UX 1 14 6 ∧ ¬ IsLeaderBlock UX 1 6 := by decide
 

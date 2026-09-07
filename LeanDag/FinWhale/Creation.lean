@@ -327,7 +327,7 @@ theorem Creation.theorem21 (cr : Creation U T N S.leader)
     intro v hv
     obtain ⟨b, hb, hbc, hbr⟩ := cr.toPaceCore.populatedOn card_correct (n + 1) (by omega) v hv
     refine mem_creatorsOf.2 ⟨b, ?_, by rw [hblk]; exact hbc⟩
-    simp only [Finset.mem_filter, blocksAt, hids, hblk, hLrU]
+    simp only [votesFor, Finset.mem_filter, blocksAt, hids, hblk, hLrU]
     exact ⟨⟨hb, hbr⟩, hvotes v hv b hb hbc hbr⟩
   have hcard : fastCard Validator ≤ (Correct : Finset Validator).card := by
     have := card_correct_add_byzantine (Validator := Validator)

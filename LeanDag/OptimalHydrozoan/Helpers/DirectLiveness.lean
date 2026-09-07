@@ -50,12 +50,8 @@ theorem subset_blamesInView_of_coversUpto
     T ⊆ slotBlamesIn U V k := by
   intro v hv
   obtain ⟨b, hb, hba, hbr⟩ := hpop v hv
-  simp only [slotBlamesIn, mem_creatorsOf]
-  refine ⟨b, Finset.mem_inter.mpr
-    ⟨Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hb, hbr⟩, ?_⟩,
-      hcov b hb (le_of_eq hbr)⟩, hba⟩
-  intro j _ hj
-  exact hnolead j hj
+  exact mem_heldAuthors.mpr ⟨b, mem_slotBlamers.mpr ⟨hb, hbr, fun j _ hj => hnolead j hj⟩,
+    hcov b hb (le_of_eq hbr), hba⟩
 
 /-- Every `T`-authored decision-round block is (vacuously) fast evidence
 for nothing at a candidate-less slot, so `T`'s decision-round blocks are a
@@ -95,6 +91,7 @@ theorem skippedLeaderOptInView_of_coversUpto
   have h1 := Finset.card_le_card
     (subset_blamesInView_of_coversUpto hpop1 hnolead (hcov.mono (by omega)))
   have h2 := qCert_le_q_opt (Replica := Replica)
+  show qCert Replica ≤ (slotBlamesIn U V k).card
   omega
 
 end Skip

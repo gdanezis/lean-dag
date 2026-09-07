@@ -4265,6 +4265,49 @@ name for `slotRound + 2`. Optimal inherits the change.
 additions being the docstrings of the shared notions. The library and
 tests stand at 77,775 lines against 78,397 at the branch point.
 
+### 11.32 One count for every direct rule: what a view holds
+
+The second step of `docs/common-layer.md`. Every direct rule of every
+protocol has one shape: the view holds blocks of some set from at least
+`t` distinct authors — the supporters, certifiers or blamers the
+validator has actually seen. That count is now one definition,
+`heldAuthors U V s` (`Common/Support.lean`), and the predicate
+`HoldsAtLeast U V t s` is what a rule is: the core's `DirectCommitIn` is
+`HoldsAtLeast U V (n − f) (certificates U L r)`, its `DirectSkipSlotIn`
+is `HoldsAtLeast U V (n − f) (slotBlamers U k)`, Nemo's commit is the
+same at the majority over `votesFor U L (r + 1)`, Hybrid's at `q`,
+Hydrozoan's fast, slow and skip rules at `qFast`, `qSlow` and `qFast`
+over votes, certificates and blamers, and Optimal's fast commit and the
+blame half of its skip likewise. The block sets themselves are named
+once (`votesFor`, `omissionsOf`, `certificates`, `slotBlamers`), and
+`supporters`, `blames`, `supportersIn`, `blamesIn` and `slotBlamesIn`
+are their author counts.
+
+**What is proved once.** That the count only grows with the view
+(`HoldsAtLeast.mono`), that what a view holds the record has
+(`HoldsAtLeast.le`), that the full view holds everything
+(`HoldsAtLeast.full`), and that a view covering the set's rounds holds
+all of it (`HoldsAtLeast.of_coversUpto`), with one `Decidable` instance.
+The view rules are `abbrev`s, so these apply to them directly: every
+`commit_mono` and `skip_mono` law of the eight rules is
+`HoldsAtLeast.mono hsub h`; every "a view can only under-report" lemma
+is `h.le`; every "a view caught up to the round sees the commit" lemma
+is `of_coversUpto` with the set's round bound, one line each where they
+had been six to ten. The per-rule `_mono` lemmas, the per-rule
+`Decidable` instances of the view rules, the core's and Hydrozoan's
+`certificatesIn`/`certificatesInView`/`certifiersInView`, Mahi-Mahi's
+`blamersIn`, and the six named subset lemmas on `supportersIn`,
+`blamesIn` and `slotBlamesIn` are deleted.
+
+**Left for later.** FinWhale evaluates its rules on `V.toRecord` rather
+than by intersection, so its `_mono` and `_restrict` families stay
+(step 11). Optimal's no-evidence quorum is stated as an existential over
+a block set; it is the same count and will be restated when its skip is
+built from combinators (step 7).
+
+**Measure.** The step removes 506 lines and adds 308; the library and
+tests stand at 77,577 lines.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

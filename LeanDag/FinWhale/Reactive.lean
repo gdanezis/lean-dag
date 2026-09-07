@@ -107,7 +107,7 @@ theorem fastCommit_of_reactive (rc : ReactivePace U T N)
     intro v hv
     obtain ⟨b, hb, hbc, hbr⟩ := hpop v hv
     refine mem_creatorsOf.2 ⟨b, ?_, by rw [hblk]; exact hbc⟩
-    simp only [Finset.mem_filter, blocksAt, hids, hblk, hL.2.1]
+    simp only [votesFor, Finset.mem_filter, blocksAt, hids, hblk, hL.2.1]
     exact ⟨⟨hb, hbr⟩, hvotes v hv b hb hbc hbr⟩
   have hcard : fastCard Validator ≤ (Correct : Finset Validator).card := by
     have := card_correct_add_byzantine (Validator := Validator)

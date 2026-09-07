@@ -26,18 +26,14 @@ variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [O : OptimalFaults Replica]
   {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
 
-/-- Hydrozoan's certificate, read through `votesFor`. -/
+/-- Hydrozoan's certificate, read through `votersOf`. -/
 theorem isCertificate_iff_votesFor (C L : BlockId) :
-    LeanDag.Hydrozoan.IsCertificate U C L ↔ qCert Replica ≤ (votesFor U C L).card :=
+    LeanDag.Hydrozoan.IsCertificate U C L ↔ qCert Replica ≤ (votersOf U C L).card :=
   Iff.rfl
 
 instance decidableFastCommitOpt (L : BlockId) (r : ℕ) :
     Decidable (FastCommitOpt U L r) :=
   inferInstanceAs (Decidable (qFastOpt Replica ≤ (supporters U L (r + 1)).card))
-
-instance decidableFastCommitOptInView (V : LeanDag.Hydrozoan.View U) (L : BlockId) (r : ℕ) :
-    Decidable (FastCommitOptInView U V L r) :=
-  inferInstanceAs (Decidable (qFastOpt Replica ≤ (supportersIn U V L (r + 1)).card))
 
 section Slots
 
@@ -47,7 +43,7 @@ variable [S : Slots Replica]
 threshold. -/
 theorem isFastEvidence_iff_plain {k : ℕ} {C L : BlockId}
     (h : ¬ WitnessesEquivocation U k C) :
-    IsFastEvidence U k C L ↔ tPlain Replica ≤ (votesFor U C L).card :=
+    IsFastEvidence U k C L ↔ tPlain Replica ≤ (votersOf U C L).card :=
   ⟨fun hE => hE.1 h, fun ht => ⟨fun _ => ht, fun hw => absurd hw h⟩⟩
 
 variable [Fintype BlockId]
@@ -113,13 +109,6 @@ end Slots
 
 /-! ## Views only grow -/
 
-/-- A larger view holds every supporter the smaller one does. -/
-theorem fastCommitOptInView_mono {V V' : LeanDag.Hydrozoan.View U} (hsub : V.ids ⊆ V'.ids)
-    {L : BlockId} {r : ℕ} (h : FastCommitOptInView U V L r) :
-    FastCommitOptInView U V' L r :=
-  le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
-
 section ViewMono
 
 variable [S : Slots Replica]
@@ -134,9 +123,7 @@ theorem noEvidenceQuorumInView_mono {V V' : LeanDag.Hydrozoan.View U} (hsub : V.
 one does. -/
 theorem skippedLeaderOptInView_mono {V V' : LeanDag.Hydrozoan.View U} (hsub : V.ids ⊆ V'.ids)
     {k : ℕ} (h : SkippedLeaderOptInView U V k) : SkippedLeaderOptInView U V' k :=
-  ⟨le_trans h.1 (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub))),
-    noEvidenceQuorumInView_mono hsub h.2⟩
+  ⟨HoldsAtLeast.mono hsub h.1, noEvidenceQuorumInView_mono hsub h.2⟩
 
 end ViewMono
 
@@ -203,7 +190,7 @@ theorem noEvidenceQuorumInView_congr {V : LeanDag.Hydrozoan.View U}
 theorem skippedLeaderOptInView_congr {V : LeanDag.Hydrozoan.View U}
     (hround : S₁.slotRound k = S₂.slotRound k) (hk : S₁.leader k = S₂.leader k)
     (h : SkippedLeaderOptInView (S := S₁) U V k) : SkippedLeaderOptInView (S := S₂) U V k :=
-  ⟨by have := h.1; rwa [slotBlamesIn_congr hround hk] at this,
+  ⟨by have := h.1; rwa [slotBlamers_congr hround hk] at this,
     noEvidenceQuorumInView_congr hround hk h.2⟩
 
 end Congr

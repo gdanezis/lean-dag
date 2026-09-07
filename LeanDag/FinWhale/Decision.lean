@@ -58,7 +58,7 @@ theorem voters_of_spCertificate {b l : BlockId} (hb : b ∈ D.ids)
   have hqround : (D.block q).round = (D.block l).round + 1 := by
     have := parent_round hb hq; omega
   refine mem_creatorsOf.2 ⟨q, ?_, hqv⟩
-  rw [Finset.mem_filter]
+  rw [votesFor, Finset.mem_filter]
   exact ⟨by rw [blocksAt, Finset.mem_filter]; exact ⟨hqids, hqround⟩, hqref⟩
 
 /-- **Every direct commit carries a quorum of voters.** The fast path by

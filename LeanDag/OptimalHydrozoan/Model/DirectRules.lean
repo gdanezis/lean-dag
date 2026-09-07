@@ -53,15 +53,15 @@ def FastCommitOpt (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (L : Blo
   qFastOpt Replica ≤ (supporters U L (r + 1)).card
 
 /-- Fast commit, as judged from a single view. -/
-def FastCommitOptInView (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (V : LeanDag.Hydrozoan.View U)
-    (L : BlockId) (r : ℕ) : Prop :=
-  qFastOpt Replica ≤ (supportersIn U V L (r + 1)).card
+abbrev FastCommitOptInView (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
+    (V : LeanDag.Hydrozoan.View U) (L : BlockId) (r : ℕ) : Prop :=
+  HoldsAtLeast U V (qFastOpt Replica) (votesFor U L (r + 1))
 
 /-- The replicas among `C`'s refs whose block votes for `L` — the set
 whose cardinality is the paper's `Votes(b, b_leader)` (Algorithm 3). Also
 the inner set of Hydrozoan's `LeanDag.Hydrozoan.IsCertificate`, which is definitionally
-`qCert ≤ (votesFor U C L).card`. -/
-def votesFor (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (C L : BlockId) :
+`qCert ≤ (votersOf U C L).card`. -/
+def votersOf (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (C L : BlockId) :
     Finset Replica :=
   creatorsOf U.block (LeanDag.Hydrozoan.voteBlocks U C L)
 
@@ -87,11 +87,11 @@ decision relation with `IsLeaderBlock`, the quorum sets with `blocksAt`. -/
 def IsFastEvidence (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (k : ℕ) (C L : BlockId) :
     Prop :=
   (¬ WitnessesEquivocation U k C →                 -- no equivocation witnessed:
-    tPlain Replica ≤ (votesFor U C L).card) ∧      --   t_plain votes for L suffice
+    tPlain Replica ≤ (votersOf U C L).card) ∧      --   t_plain votes for L suffice
   (WitnessesEquivocation U k C →                   -- equivocation witnessed:
-    tEquiv Replica ≤ (votesFor U C L).card ∧       --   t_equiv votes for L, and
+    tEquiv Replica ≤ (votersOf U C L).card ∧       --   t_equiv votes for L, and
     ∀ L', IsLeaderBlock U k L' → L' ≠ L →          --   every rival candidate
-      (votesFor U C L').card < tEquiv Replica)     --   stays below t_equiv
+      (votersOf U C L').card < tEquiv Replica)     --   stays below t_equiv
 
 /-- `C` is fast evidence for no candidate of slot `k` (the paper's
 `IsNoFastEvidence(b, w)`). Vacuously true when the slot has no candidate
@@ -134,7 +134,7 @@ def NoEvidenceQuorumInView (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
 /-- Skip, as judged from a single view. -/
 def SkippedLeaderOptInView (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (V : LeanDag.Hydrozoan.View U)
     (k : ℕ) : Prop :=
-  qCert Replica ≤ (slotBlamesIn U V k).card ∧      -- q_cert slotBlames in view
+  HoldsAtLeast U V (qCert Replica) (slotBlamers U k) ∧  -- q_cert blamers in view
     NoEvidenceQuorumInView U V k                   -- and a no-evidence quorum in view
 
 end Slots

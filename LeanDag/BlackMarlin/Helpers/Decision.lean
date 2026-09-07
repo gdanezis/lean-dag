@@ -22,7 +22,7 @@ omit Rot in
 /-- A view's support quorum is a genuine one. -/
 theorem supported_of_supportedIn {L : BlockId} {r : ℕ} (h : SupportedIn U V L r) :
     Supported U L r :=
-  le_trans h (Finset.card_le_card supportersIn_subset_supporters)
+  le_trans h (Finset.card_le_card heldAuthors_subset)
 
 /-- A view's linking anchors link. -/
 theorem linkersIn_subset {L : BlockId} {r : ℕ} :

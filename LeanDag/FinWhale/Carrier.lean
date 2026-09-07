@@ -340,7 +340,7 @@ theorem voteSupport_fast_commits (h : F.byzantine.card ≤ P.p) :
       have hbr' : (BlockRecord.block D b).round = S.slotRound k + 1 := hbr
       have hbV : b ∈ V.ids := hcov b hb
         (by change (BlockRecord.block D b).round ≤ S.slotRound k + 1; omega)
-      unfold LeanDag.FinWhale.voters supporters creatorsOf
+      unfold LeanDag.FinWhale.voters supporters votesFor creatorsOf
       refine Finset.mem_image.mpr ⟨b, ?_, hbc⟩
       rw [Finset.mem_filter, mem_blocksAt]
       simp only [BlockRecord.View.toRecord_ids, BlockRecord.View.toRecord_block]

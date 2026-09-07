@@ -176,7 +176,7 @@ def VE : LeanDag.Hydrozoan.View OE.toBlockRecord := View.full UE
 -- omits the leader's block; no certificate for either copy exists.
 example :
     WitnessesEquivocation UE 1 13 ∧ IsFastEvidence UE 1 13 4 ∧ ¬ IsFastEvidence UE 1 13 5 ∧
-      votesFor UE 13 4 = {1, 3} ∧ votesFor UE 13 5 = {2} ∧ ¬ IsCertificate UE 13 4 ∧
+      votersOf UE 13 4 = {1, 3} ∧ votersOf UE 13 5 = {2} ∧ ¬ IsCertificate UE 13 4 ∧
       (∀ j ∈ (UE.block 13).refs, (UE.block j).creator ≠ 0) ∧
       LeanDag.Hydrozoan.certificates UE 4 1 = ∅ ∧ LeanDag.Hydrozoan.certificates UE 5 1 = ∅ := by
   decide

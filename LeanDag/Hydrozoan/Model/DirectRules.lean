@@ -109,32 +109,24 @@ end Skip
 
 section ViewRules
 
-/-- Fast commit, as judged from a single view. -/
-def FastCommitInView (U : BlockUniverse Replica BlockId) (V : View U)
+/-- Fast commit, as judged from a single view: the view holds votes for
+`L` at the voting round from `q_fast` replicas. -/
+abbrev FastCommitInView (U : BlockUniverse Replica BlockId) (V : View U)
     (L : BlockId) (r : ℕ) : Prop :=
-  qFast Replica ≤ (supportersIn U V L (r + 1)).card
+  HoldsAtLeast U V (qFast Replica) (votesFor U L (r + 1))
 
-/-- The certificates for `L` a view actually holds. -/
-def certificatesInView (U : BlockUniverse Replica BlockId) (V : View U)
-    (L : BlockId) (r : ℕ) : Finset BlockId :=
-  certificates U L r ∩ V.ids
-
-/-- The certifiers of `L` a view actually holds. -/
-def certifiersInView (U : BlockUniverse Replica BlockId) (V : View U)
-    (L : BlockId) (r : ℕ) : Finset Replica :=
-  creatorsOf U.block (certificatesInView U V L r)
-
-/-- Slow commit, as judged from a single view. -/
-def SlowCommitInView (U : BlockUniverse Replica BlockId) (V : View U)
+/-- Slow commit, as judged from a single view: the view holds
+certificates for `L` from `q_slow` replicas. -/
+abbrev SlowCommitInView (U : BlockUniverse Replica BlockId) (V : View U)
     (L : BlockId) (r : ℕ) : Prop :=
-  qSlow Replica ≤ (certifiersInView U V L r).card
+  HoldsAtLeast U V (qSlow Replica) (certificates U L r)
 
 variable [S : Slots Replica]
 
 /-- Skip, as judged from a single view. -/
-def SkippedLeaderInView (U : BlockUniverse Replica BlockId) (V : View U)
+abbrev SkippedLeaderInView (U : BlockUniverse Replica BlockId) (V : View U)
     (k : ℕ) : Prop :=
-  qFast Replica ≤ (slotBlamesIn U V k).card
+  HoldsAtLeast U V (qFast Replica) (slotBlamers U k)
 
 end ViewRules
 

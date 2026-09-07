@@ -89,9 +89,9 @@ theorem hydrozoanLaws : (hydrozoanAnchored Replica BlockId).Laws where
   commit_mono := by
     intro S U V V' L r _ hsub h
     rcases h with h | h
-    · exact Or.inl (fastCommitInView_mono hsub h)
-    · exact Or.inr (slowCommitInView_mono hsub h)
-  skip_mono := fun _ hsub h => skippedLeaderInView_mono hsub h
+    · exact Or.inl (HoldsAtLeast.mono hsub h)
+    · exact Or.inr (HoldsAtLeast.mono hsub h)
+  skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_congr := fun _ hround hk h => skippedLeaderInView_congr hround hk h
   link_congr := by
     intro S₁ S₂ U A L i k hround _ h

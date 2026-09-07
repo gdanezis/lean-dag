@@ -148,14 +148,9 @@ omit S in
 direct commit in the universe is a direct commit in the view. -/
 theorem directCommitIn_of_coversUpto {V : View Validator BlockId Payload U} {r : ℕ}
     (h : DirectCommit U L r) (hcov : V.CoversUpto (r + 1)) :
-    DirectCommitIn U V L r := by
-  have hsub : (blocksAt U (r + 1)).filter (fun p => L ∈ (U.block p).refs) ⊆ V.ids := by
-    intro p hp
-    obtain ⟨hp, -⟩ := Finset.mem_filter.mp hp
-    obtain ⟨hpids, hpr⟩ := mem_blocksAt.mp hp
-    exact hcov p hpids (le_of_eq hpr)
-  rw [DirectCommitIn, supportersIn, Finset.inter_eq_left.2 hsub]
-  exact h
+    DirectCommitIn U V L r :=
+  HoldsAtLeast.of_coversUpto
+    (fun p hp => ⟨(mem_votesFor.mp hp).1, (mem_votesFor.mp hp).2.1.le⟩) hcov h
 
 /-- The commit half, as a decision — on any view caught up to the
 decision round. -/

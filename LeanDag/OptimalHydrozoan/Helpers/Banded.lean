@@ -49,8 +49,8 @@ reads the refs' own refs. -/
 theorem votesFor_bnd (h : AgreeBand R.toDagRule U U' lo hi g g') {C : BlockId}
     (hC : C ∈ U.ids) (h1 : lo + 1 < (U.block C).round + g)
     (h2 : (U.block C).round + g ≤ hi) (L : BlockId) :
-    votesFor U' C L = votesFor U C L := by
-  unfold votesFor
+    votersOf U' C L = votersOf U C L := by
+  unfold votersOf
   rw [voteBlocks_bnd h hC h1 h2, AnchoredRule.creatorsOf_band h]
   intro b hb
   have hbp := (Finset.mem_filter.mp hb).1
@@ -62,14 +62,14 @@ refs are old and reference only old blocks. -/
 theorem votesFor_eq_empty_of_novel (h : AgreeBand R.toDagRule U U' lo hi g g') {C L : BlockId}
     (hC : C ∈ U.ids) (h1 : lo + 1 < (U.block C).round + g)
     (h2 : (U.block C).round + g ≤ hi) (hL : L ∉ U.ids) :
-    votesFor U' C L = ∅ := by
+    votersOf U' C L = ∅ := by
   rw [votesFor_bnd h hC h1 h2]
   have hempty : LeanDag.Hydrozoan.voteBlocks U C L = ∅ := by
     rw [Finset.eq_empty_iff_forall_notMem]
     intro b hb
     obtain ⟨hbp, hbv⟩ := Finset.mem_filter.mp hb
     exact hL (U.complete b (U.complete C hC b hbp) L hbv)
-  unfold votesFor
+  unfold votersOf
   rw [hempty]
   simp [LeanDag.creatorsOf]
 

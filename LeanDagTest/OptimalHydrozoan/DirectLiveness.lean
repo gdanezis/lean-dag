@@ -160,7 +160,7 @@ example : slotBlames UA 1 = {1, 2, 3} ∧ qCert (Fin 4) ≤ (slotBlames UA 1).ca
 -- by every correct decision-round block, makes each of them fast evidence
 -- for the candidate, so no no-evidence quorum exists.
 example :
-    votesFor UA 12 4 = {0} ∧ IsFastEvidence UA 1 12 4 ∧ ¬ IsNoFastEvidence UA 1 12 ∧
+    votersOf UA 12 4 = {0} ∧ IsFastEvidence UA 1 12 4 ∧ ¬ IsNoFastEvidence UA 1 12 ∧
       ¬ NoEvidenceQuorum UA 1 ∧ ¬ SkippedLeaderOpt UA 1 := by
   decide
 

@@ -25,18 +25,9 @@ variable {U : BlockUniverse Validator BlockId Payload}
 
 /-! ## Lifting a direct commit to the full view -/
 
-theorem certificatesIn_full {w : ℕ} {L : BlockId} {r : ℕ} :
-    certificatesIn U (View.full U) w L r = certificates U w L r := by
-  unfold certificatesIn
-  apply Finset.inter_eq_left.mpr
-  intro C hC
-  exact (mem_certificates.mp hC).1
-
 theorem directCommitIn_full {w : ℕ} {L : BlockId} {r : ℕ} (h : DirectCommit U w L r) :
-    DirectCommitIn U (View.full U) w L r := by
-  unfold DirectCommitIn
-  rw [certificatesIn_full]
-  exact h
+    DirectCommitIn U (View.full U) w L r :=
+  (HoldsAtLeast.full fun _ hC => (mem_certificates.mp hC).1).mpr h
 
 section Slots
 
@@ -113,10 +104,8 @@ theorem localCommit {w : ℕ} (hw : 1 ≤ w) {T : Finset Validator} {N : ℕ} (p
   refine Decided.directCommit hL (le_trans hcard (Finset.card_le_card ?_))
   intro u hu
   obtain ⟨c, hc, hcc, hcr⟩ := hpop u hu
-  refine mem_creatorsOf.mpr ⟨c, ?_, hcc⟩
-  rw [certificatesIn, Finset.mem_inter]
-  refine ⟨mem_certificates.mpr ⟨hc, hcr, hcert u hu c hc hcc hcr⟩, ?_⟩
-  exact pc.mem_viewAt (holds_roundBlocks_eventually pc hN v hv c hc (hcc ▸ hu) hcr)
+  exact mem_heldAuthors.mpr ⟨c, mem_certificates.mpr ⟨hc, hcr, hcert u hu c hc hcc hcr⟩,
+    pc.mem_viewAt (holds_roundBlocks_eventually pc hN v hv c hc (hcc ▸ hu) hcr), hcc⟩
 
 end Slots
 

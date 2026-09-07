@@ -124,7 +124,7 @@ def slotBlames (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) :
 /-- The blamers of slot `k` that a view holds. -/
 def slotBlamesIn (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (k : ℕ) :
     Finset Validator :=
-  creatorsOf U.block (slotBlamers U k ∩ V.ids)
+  heldAuthors U V (slotBlamers U k)
 
 theorem mem_slotBlamers {k : ℕ} {q : BlockId} :
     q ∈ slotBlamers U k ↔
@@ -141,42 +141,15 @@ theorem mem_slotBlames {k : ℕ} {v : Validator} :
   · rintro ⟨q, ⟨hq, hr, hn⟩, hc⟩; exact ⟨q, hq, hr, hn, hc⟩
   · rintro ⟨q, hq, hr, hn, hc⟩; exact ⟨q, ⟨hq, hr, hn⟩, hc⟩
 
-theorem mem_slotBlamesIn {V : U.View} {k : ℕ} {v : Validator} :
-    v ∈ slotBlamesIn U V k ↔
-      ∃ q ∈ V.ids, (U.block q).round = S.slotRound k + 1 ∧
-        (∀ j ∈ (U.block q).refs, ¬ IsLeaderBlock U k j) ∧ (U.block q).creator = v := by
-  simp only [slotBlamesIn, mem_creatorsOf, Finset.mem_inter, mem_slotBlamers]
-  constructor
-  · rintro ⟨q, ⟨⟨hq, hr, hn⟩, hV⟩, hc⟩; exact ⟨q, hV, hr, hn, hc⟩
-  · rintro ⟨q, hV, hr, hn, hc⟩; exact ⟨q, ⟨⟨V.subset_ids hV, hr, hn⟩, hV⟩, hc⟩
-
-/-- A view can only under-report blame. -/
-theorem slotBlamesIn_subset_slotBlames {V : U.View} {k : ℕ} :
-    slotBlamesIn U V k ⊆ slotBlames U k :=
-  Finset.image_subset_image Finset.inter_subset_left
-
-/-- A larger view holds more blamers. -/
-theorem slotBlamesIn_mono {V V' : U.View} (h : V.ids ⊆ V'.ids) {k : ℕ} :
-    slotBlamesIn U V k ⊆ slotBlamesIn U V' k :=
-  Finset.image_subset_image (Finset.inter_subset_inter_left h)
-
-/-- The full view holds every blamer there is. -/
-theorem slotBlamesIn_full (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) :
-    slotBlamesIn U (View.full U) k = slotBlames U k := by
-  unfold slotBlamesIn slotBlames
-  congr 1
-  exact Finset.inter_eq_left.mpr fun q hq => (mem_slotBlamers.mp hq).1
-
 /-- **Blaming the slot is blaming each of its candidates**: a block
 referencing no candidate references not `L`. So every fact about the
 per-candidate blame applies to the slot-level one. -/
-theorem slotBlamesIn_subset_blamesIn {V : U.View} {k : ℕ} {L : BlockId}
-    (hL : IsLeaderBlock U k L) :
-    slotBlamesIn U V k ⊆ blamesIn U V L (S.slotRound k + 1) := by
-  refine Finset.image_subset_image fun q hq => ?_
-  rw [Finset.mem_inter, mem_slotBlamers] at hq
-  rw [Finset.mem_inter, Finset.mem_filter, mem_blocksAt]
-  exact ⟨⟨⟨hq.1.1, hq.1.2.1⟩, fun hmem => hq.1.2.2 L hmem hL⟩, hq.2⟩
+theorem slotBlamers_subset_omissionsOf {k : ℕ} {L : BlockId} (hL : IsLeaderBlock U k L) :
+    slotBlamers U k ⊆ omissionsOf U L (S.slotRound k + 1) := by
+  intro q hq
+  rw [mem_slotBlamers] at hq
+  rw [mem_omissionsOf]
+  exact ⟨hq.1, hq.2.1, fun hmem => hq.2.2 L hmem hL⟩
 
 /-- **A slot with no candidate is blamed by every voting-round block.**
 This is the form the liveness statements use: the skip reduces to a

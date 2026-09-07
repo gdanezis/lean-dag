@@ -104,7 +104,7 @@ theorem supportersInView_bnd (h : AgreeBand R.toDagRule U U' lo hi g g')
     supportersIn U V L n
       ⊆ supportersIn U' V' L n' := by
   intro a ha
-  unfold supportersIn LeanDag.creatorsOf at ha ⊢
+  unfold supportersIn heldAuthors votesFor LeanDag.creatorsOf at ha ⊢
   obtain ⟨b, hb, hba⟩ := Finset.mem_image.mp ha
   obtain ⟨hbf, hbV⟩ := Finset.mem_inter.mp hb
   obtain ⟨hbA, hbv⟩ := Finset.mem_filter.mp hbf
@@ -167,11 +167,9 @@ theorem certifiersInView_bnd (h : AgreeBand R.toDagRule U U' lo hi g g')
       b ∈ V'.ids)
     {L : BlockId} {n n' : ℕ} (hnn : n + g = n' + g') (h1 : lo ≤ n + g)
     (h2 : n + 2 + g ≤ hi) :
-    LeanDag.Hydrozoan.certifiersInView U V L n
-      ⊆ LeanDag.Hydrozoan.certifiersInView U' V' L n' := by
+    heldAuthors U V (certificates U L n) ⊆ heldAuthors U' V' (certificates U' L n') := by
   intro a ha
-  unfold LeanDag.Hydrozoan.certifiersInView LeanDag.Hydrozoan.certificatesInView
-    LeanDag.creatorsOf at ha ⊢
+  unfold heldAuthors LeanDag.creatorsOf at ha ⊢
   obtain ⟨C, hC, hCa⟩ := Finset.mem_image.mp ha
   obtain ⟨hCc, hCV⟩ := Finset.mem_inter.mp hC
   have hCU : C ∈ U.ids := (Finset.mem_filter.mp (Finset.mem_filter.mp hCc).1).1
@@ -193,7 +191,7 @@ theorem blamesInView_bnd (h : AgreeBand R.toDagRule U U' lo hi g g')
     slotBlamesIn (S := S) U V k
       ⊆ slotBlamesIn (S := S') U' V' k' := by
   intro a ha
-  unfold slotBlamesIn LeanDag.creatorsOf at ha ⊢
+  unfold slotBlamesIn heldAuthors LeanDag.creatorsOf at ha ⊢
   obtain ⟨b, hb, hba⟩ := Finset.mem_image.mp ha
   obtain ⟨hbf, hbV⟩ := Finset.mem_inter.mp hb
   obtain ⟨hbA, hbn⟩ := Finset.mem_filter.mp hbf

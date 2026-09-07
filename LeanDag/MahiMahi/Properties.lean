@@ -327,11 +327,10 @@ so it commits what the DAG commits. -/
 theorem directCommitIn_of_coversUpto {U : BlockUniverse Validator BlockId Payload}
     {V : View Validator BlockId Payload U} {w : ℕ} {L : BlockId} {r : ℕ}
     (h : MahiMahi.DirectCommit U w L r) (hV : V.CoversUpto (MahiMahi.decisionRoundAt w r)) :
-    MahiMahi.DirectCommitIn U V w L r := by
-  refine le_trans h (Finset.card_le_card (Finset.image_subset_image ?_))
-  intro C hC
-  obtain ⟨hCU, hCr, -⟩ := MahiMahi.mem_certificates.mp hC
-  exact Finset.mem_inter.mpr ⟨hC, hV C hCU (by omega)⟩
+    MahiMahi.DirectCommitIn U V w L r :=
+  HoldsAtLeast.of_coversUpto (fun C hC => by
+    obtain ⟨hCU, hCr, -⟩ := MahiMahi.mem_certificates.mp hC
+    exact ⟨hCU, by omega⟩) hV h
 
 /-! ## Mahi-Mahi's support shape
 

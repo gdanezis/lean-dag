@@ -249,22 +249,6 @@ premise through untouched below — that is the whole content of the remark.
 
 variable [S : Slots Validator]
 
-omit S in
-/-- A larger view can only see more certificates. -/
-theorem directCommitIn_mono {V V' : View Validator BlockId Payload U}
-    (hsub : V.ids ⊆ V'.ids) {L : BlockId} {r : ℕ} (h : DirectCommitIn U V L r) :
-    DirectCommitIn U V' L r :=
-  le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
-
-omit S in
-/-- A larger view can only see more blame. -/
-theorem directSkipIn_mono {V V' : View Validator BlockId Payload U}
-    (hsub : V.ids ⊆ V'.ids) {L : BlockId} {r : ℕ} (h : DirectSkipIn U V L r) :
-    DirectSkipIn U V' L r :=
-  le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
-
 /-! **L2 — decisions are monotone in the view** — and **L3, commit
 propagation** — are the relation's `decided_mono` and `decided_full` at
 `coreLaws`: a validator never revises a decision as its view grows, and
@@ -458,28 +442,19 @@ L4 concludes the universe-level rule; the ledger is defined over `Decided`.
 The full view closes the gap, since it holds every certificate there is. -/
 
 omit S in
-theorem certificatesIn_full : certificatesIn U (View.full U) L r = certificates U L r :=
-  Finset.inter_eq_left.mpr fun _ hC => (mem_certificates.mp hC).1
-
-omit S in
 /-- A universe-level direct commit is one the full view also sees. -/
 theorem directCommitIn_full (h : DirectCommit U L r) :
-    DirectCommitIn U (View.full U) L r := by
-  rw [DirectCommitIn, certificatesIn_full]
-  exact h
+    DirectCommitIn U (View.full U) L r :=
+  (HoldsAtLeast.full fun _ hC => (mem_certificates.mp hC).1).mpr h
 
 omit S in
 /-- A view caught up to the certificate round sees every certificate, so
 a direct commit in the universe is a direct commit in the view. -/
 theorem directCommitIn_of_coversUpto {V : View Validator BlockId Payload U}
     (h : DirectCommit U L r) (hcov : V.CoversUpto (r + 2)) :
-    DirectCommitIn U V L r := by
-  have hsub : certificates U L r ⊆ V.ids := by
-    intro C hC
-    rw [mem_certificates] at hC
-    exact hcov C hC.1 (le_of_eq hC.2.1)
-  rw [DirectCommitIn, certificatesIn, Finset.inter_eq_left.2 hsub]
-  exact h
+    DirectCommitIn U V L r :=
+  HoldsAtLeast.of_coversUpto
+    (fun C hC => ⟨(mem_certificates.mp hC).1, (mem_certificates.mp hC).2.1.le⟩) hcov h
 
 omit S in
 /-- **The commit argument at the view level.** `directCommit_of_certifiesAt`
@@ -498,11 +473,8 @@ theorem directCommitIn_of_certifiesAt {V : View Validator BlockId Payload U}
   refine le_trans hcard (Finset.card_le_card ?_)
   intro v hv
   obtain ⟨C, hC, hCc, hCr⟩ := hpop2 v hv
-  rw [mem_creatorsOf]
-  refine ⟨C, ?_, hCc⟩
-  rw [certificatesIn, Finset.mem_inter]
-  exact ⟨mem_certificates.mpr ⟨hC, hCr, hc v hv C hC hCc hCr⟩,
-    hcov C hC (by rw [hCc]; exact hv) hCr⟩
+  exact mem_heldAuthors.mpr ⟨C, mem_certificates.mpr ⟨hC, hCr, hc v hv C hC hCc hCr⟩,
+    hcov C hC (by rw [hCc]; exact hv) hCr, hCc⟩
 
 /-- **L4, as a decision.** What L6 consumes and L3 propagates. -/
 theorem decided_of_leader_mem (hcard : quorumCard Validator ≤ T.card)

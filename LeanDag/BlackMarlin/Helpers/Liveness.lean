@@ -85,8 +85,8 @@ theorem committed_of_run (hcard : quorumCard Validator ≤ T.card)
 omit Rot in
 /-- So it counts the same quorum. -/
 theorem supportedIn_full : SupportedIn U (View.full U) L r ↔ Supported U L r := by
-  unfold SupportedIn Supported
-  rw [supportersIn_full]
+  unfold SupportedIn Supported supportersIn supporters
+  rw [heldAuthors_full fun _ hq => (mem_votesFor.mp hq).1]
 
 /-- And it holds every linking anchor there is. -/
 theorem linkersIn_full : linkersIn U (View.full U) L r = linkers U L r := by

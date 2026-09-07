@@ -66,7 +66,7 @@ theorem parentsVoting_of_correct_voter {b l : BlockId}
   simp only [parentSet, mem_creatorsOf] at hpar
   obtain ⟨q, hq, hqv⟩ := hpar
   -- the voting block authored by `v`
-  simp only [voters, supporters, mem_creatorsOf, blocksAt, Finset.mem_filter] at hvot
+  simp only [voters, supporters, votesFor, mem_creatorsOf, blocksAt, Finset.mem_filter] at hvot
   obtain ⟨q', ⟨⟨hq'ids, hq'round⟩, hq'ref⟩, hq'v⟩ := hvot
   -- both are round-`(r+1)` blocks of the same correct validator, hence equal
   have hqids : q ∈ D.ids := D.complete b hb q hq
@@ -92,7 +92,7 @@ two conflicting leader blocks share a creator. -/
 theorem not_voter_of_conflicting {l l' : BlockId} (hconf : Conflicting D l l') :
     ∀ v ∈ voters D l', v ∈ (Correct : Finset Validator) → v ∉ voters D l := by
   intro v hv' hcorr hv
-  simp only [voters, supporters, mem_creatorsOf, blocksAt, Finset.mem_filter] at hv hv'
+  simp only [voters, supporters, votesFor, mem_creatorsOf, blocksAt, Finset.mem_filter] at hv hv'
   obtain ⟨q, ⟨⟨hqids, hqr⟩, hqref⟩, hqv⟩ := hv
   obtain ⟨q', ⟨⟨hq'ids, hq'r⟩, hq'ref⟩, hq'v⟩ := hv'
   -- the two voting blocks are the same block, by `no_equivocation`
@@ -150,7 +150,7 @@ theorem conflicting_parents_lt {b l l' : BlockId}
       have := parent_round hb hq; omega
     refine Finset.mem_inter.2 ⟨mem_creatorsOf.2 ⟨q, hq, hqv⟩, ?_⟩
     refine mem_creatorsOf.2 ⟨q, ?_, hqv⟩
-    rw [Finset.mem_filter]
+    rw [votesFor, Finset.mem_filter]
     exact ⟨by rw [blocksAt, Finset.mem_filter]; exact ⟨hqids, hqround⟩, hqref⟩
   have hcount := conflicting_voters_le (voters := voters D l) (parents := parentSet D b)
     (conflicting := voters D l') hfast hbyz (not_voter_of_conflicting hconf)

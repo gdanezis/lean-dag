@@ -29,16 +29,17 @@ variable {L A : BlockId} {r k : ℕ}
 
 /-! ## The view-relative direct rules -/
 
-/-- Direct commit, as judged from a single view: the record's
-`supportersIn`, at the round above `L`. -/
-def DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
+/-- Direct commit, as judged from a single view: the view holds votes for
+`L` at the round above it from a hybrid quorum of validators. -/
+abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  q Validator ≤ (supportersIn U V L (r + 1)).card
+  HoldsAtLeast U V (q Validator) (votesFor U L (r + 1))
 
-/-- Direct skip, as judged from a single view: the record's `blamesIn`. -/
-def DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
+/-- Direct skip, as judged from a single view: the view holds blocks at
+the round above `L` that omit it, from a hybrid quorum of validators. -/
+abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  q Validator ≤ (blamesIn U V L (r + 1)).card
+  HoldsAtLeast U V (q Validator) (omissionsOf U L (r + 1))
 
 /-! The voting-round blocks that reference no candidate of the slot are
 the core's `slotBlamers`: the same set, over the same `IsLeaderBlock`. -/
@@ -53,35 +54,17 @@ core and Odontoceti were repaired the same way and for the same reason
 (`docs/target-properties.md` §3.2): a rule whose skip quantifies over
 the candidates that happen to exist is not invariant under a mechanism
 that adds one, so it cannot be `Banded`. -/
-def DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (s : ℕ) : Prop :=
-  q Validator ≤ (slotBlamesIn U V s).card
-
-instance decidableDirectSkipSlotIn (V : View Validator BlockId Payload U) (s : ℕ) :
-    Decidable (DirectSkipSlotIn U V s) :=
-  inferInstanceAs (Decidable (q Validator ≤ (slotBlamesIn U V s).card))
+  HoldsAtLeast U V (q Validator) (slotBlamers U s)
 
 /-- **The slot-level skip implies the per-candidate one**, so every
 theorem stated over `DirectSkipIn` — H3 in particular — applies to it
 unchanged. A block referencing no candidate references not `L`. -/
 theorem directSkipIn_of_directSkipSlotIn {V : View Validator BlockId Payload U} {s : ℕ}
     (h : DirectSkipSlotIn U V s) {L : BlockId} (hL : IsLeaderBlock U s L) :
-    DirectSkipIn U V L (S.slotRound s) := by
-  refine le_trans h (Finset.card_le_card (Finset.image_subset_image ?_))
-  intro p hp
-  rw [Finset.mem_inter] at hp
-  obtain ⟨hpb, hpV⟩ := hp
-  rw [slotBlamers, Finset.mem_filter] at hpb
-  rw [Finset.mem_inter, Finset.mem_filter]
-  exact ⟨⟨hpb.1, fun hmem => hpb.2 L hmem hL⟩, hpV⟩
-
-instance {V : View Validator BlockId Payload U} :
-    Decidable (DirectCommitIn U V L r) :=
-  inferInstanceAs (Decidable (_ ≤ _))
-
-instance {V : View Validator BlockId Payload U} :
-    Decidable (DirectSkipIn U V L r) :=
-  inferInstanceAs (Decidable (_ ≤ _))
+    DirectSkipIn U V L (S.slotRound s) :=
+  h.of_subset (slotBlamers_subset_omissionsOf hL)
 
 /-- A view can only under-report: its direct commit is genuine. -/
 theorem directCommit_of_directCommitIn
@@ -145,19 +128,14 @@ theorem eq_of_directCommitIn_of_thickLink (hne : HonestNoEquiv U)
   eq_of_directCommit_of_thickLink hne hka
     (directCommit_of_directCommitIn h₁) ht (by rw [hL₁.2.2, hL₂.2.2])
 
-/-- A larger view can only see more blockers. -/
-theorem directSkipSlotIn_mono {V V' : View Validator BlockId Payload U} {s : ℕ}
-    (hsub : V.ids ⊆ V'.ids) (h : DirectSkipSlotIn U V s) : DirectSkipSlotIn U V' s :=
-  le_trans h (Finset.card_le_card (slotBlamesIn_mono hsub))
-
 omit S in
 /-- The slot-level skip reads the schedule only at its own slot. -/
 theorem directSkipSlotIn_congr {S₁ S₂ : Slots Validator}
     {V : View Validator BlockId Payload U} {s : ℕ}
     (hround : S₁.slotRound s = S₂.slotRound s) (hk : S₁.leader s = S₂.leader s)
     (h : DirectSkipSlotIn (S := S₁) U V s) : DirectSkipSlotIn (S := S₂) U V s := by
-  unfold DirectSkipSlotIn at h ⊢
-  rwa [slotBlamesIn_congr hround hk] at h
+  show HoldsAtLeast U V _ (slotBlamers (S := S₂) U s)
+  rwa [← slotBlamers_congr hround hk]
 
 /-! ## The relation -/
 
@@ -231,8 +209,8 @@ theorem hybridLaws {k : ℕ} (hk : Admissible Validator k) :
     intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ hl₁ hl₂ hm₁ hm₂
     exact le_antisymm (not_lt.mp (show ¬ L₂ < L₁ from hm₁ L₂ hL₂ hl₂))
       (not_lt.mp (show ¬ L₁ < L₂ from hm₂ L₁ hL₁ hl₁))
-  commit_mono := fun _ hsub h => le_trans h (Finset.card_le_card (supportersIn_mono hsub))
-  skip_mono := fun _ hsub h => directSkipSlotIn_mono hsub h
+  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
+  skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_congr := fun _ hround hk h => directSkipSlotIn_congr hround hk h
   link_congr := linkCongr
 

@@ -216,16 +216,9 @@ commit in the universe is a fast commit in that view. -/
 theorem fastCommitInView_of_coversUpto {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
     {V : LeanDag.Hydrozoan.View U} {L : BlockId} {r : ℕ}
     (h : LeanDag.Hydrozoan.FastCommit U L r) (hcov : V.CoversUpto (r + 1)) :
-    LeanDag.Hydrozoan.FastCommitInView U V L r := by
-  have hsub : (blocksAt U (r + 1)).filter
-      (fun b => LeanDag.Hydrozoan.IsVote U b L) ⊆ V.ids := by
-    intro b hb
-    obtain ⟨hbA, -⟩ := Finset.mem_filter.mp hb
-    obtain ⟨hbU, hbr⟩ := mem_blocksAt.mp hbA
-    exact hcov b hbU (le_of_eq hbr)
-  unfold LeanDag.Hydrozoan.FastCommitInView supportersIn
-  rw [Finset.inter_eq_left.2 hsub]
-  exact h
+    LeanDag.Hydrozoan.FastCommitInView U V L r :=
+  HoldsAtLeast.of_coversUpto
+    (fun b hb => ⟨(mem_votesFor.mp hb).1, (mem_votesFor.mp hb).2.1.le⟩) hcov h
 
 /-- **Law 3 of `voteSupport`, for Hydrozoan's fast path**, under the fast
 fault model: `q_fast` votes one round up are a fast commit, and a view

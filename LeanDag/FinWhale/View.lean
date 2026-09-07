@@ -82,7 +82,7 @@ theorem mem_slotBlocks_view {r : ℕ} {b : BlockId} (hb : b ∈ V.ids)
 /-- Fewer blocks, fewer voters. -/
 theorem voters_restrict {l : BlockId} : voters (V.toRecord) l ⊆ voters D l := by
   intro v hv
-  simp only [voters, supporters, mem_creatorsOf, Finset.mem_filter] at hv ⊢
+  simp only [voters, supporters, votesFor, mem_creatorsOf, Finset.mem_filter] at hv ⊢
   obtain ⟨q, ⟨hq, hqref⟩, hqv⟩ := hv
   exact ⟨q, ⟨blocksAt_restrict hq, hqref⟩, hqv⟩
 
@@ -130,7 +130,7 @@ theorem mem_view_of_voters {c l : BlockId} (hc : c ∈ V.ids)
   rw [Finset.mem_inter] at hw
   obtain ⟨q, hq, hqw⟩ := mem_creatorsOf.1 hw.1
   obtain ⟨q', hq', hq'w⟩ := mem_creatorsOf.1 hw.2
-  rw [Finset.mem_filter] at hq'
+  rw [votesFor, Finset.mem_filter] at hq'
   simp only [blocksAt, Finset.mem_filter] at hq'
   have hqids : q ∈ D.ids := D.complete c hcids q hq
   have hqround : (D.block q).round = (D.block l).round + 1 := by
@@ -213,7 +213,7 @@ theorem voters_restrict_eq {l : BlockId}
     (hV1 : blocksAt D ((D.block l).round + 1) ⊆ V.ids) :
     voters (V.toRecord) l = voters D l := by
   refine Finset.Subset.antisymm voters_restrict fun v hv => ?_
-  simp only [voters, supporters, mem_creatorsOf, Finset.mem_filter] at hv ⊢
+  simp only [voters, supporters, votesFor, mem_creatorsOf, Finset.mem_filter] at hv ⊢
   obtain ⟨q, ⟨hq, hqref⟩, hqv⟩ := hv
   refine ⟨q, ⟨?_, hqref⟩, hqv⟩
   simp only [blocksAt, BlockRecord.View.toRecord_ids, BlockRecord.View.toRecord_block, Finset.mem_filter]
@@ -500,7 +500,7 @@ theorem blocksAt_mono {V' : D.View} (hsub : V.ids ⊆ V'.ids) {r : ℕ} :
 theorem voters_mono {V' : D.View} (hsub : V.ids ⊆ V'.ids) {l : BlockId} :
     voters (V.toRecord) l ⊆ voters (V'.toRecord) l := by
   intro v hv
-  simp only [voters, supporters, mem_creatorsOf, Finset.mem_filter] at hv ⊢
+  simp only [voters, supporters, votesFor, mem_creatorsOf, Finset.mem_filter] at hv ⊢
   obtain ⟨q, ⟨hq, hqref⟩, hqv⟩ := hv
   exact ⟨q, ⟨blocksAt_mono hsub hq, hqref⟩, hqv⟩
 
@@ -543,7 +543,7 @@ theorem mem_view_of_directCommit {l : BlockId} (h : DirectCommit (V.toRecord) l)
       simp only [FastCommit] at this
       omega
     obtain ⟨v, hv⟩ := Finset.card_pos.1 hpos
-    simp only [voters, supporters, mem_creatorsOf, Finset.mem_filter, blocksAt,
+    simp only [voters, supporters, votesFor, mem_creatorsOf, Finset.mem_filter, blocksAt,
       BlockRecord.View.toRecord_ids, BlockRecord.View.toRecord_block] at hv
     obtain ⟨q, ⟨⟨hqV, -⟩, hql⟩, -⟩ := hv
     exact V.complete q hqV l hql

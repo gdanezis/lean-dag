@@ -94,14 +94,9 @@ theorem directCommit_of_leader_mem
 direct commit in the universe is a direct commit in the view. -/
 theorem directCommitIn_of_coversUpto {V : View Validator BlockId Payload U} {r : ℕ}
     (h : DirectCommit U L r) (hcov : V.CoversUpto (r + 1)) :
-    DirectCommitIn U V L r := by
-  have hsub : (blocksAt U (r + 1)).filter (fun q => L ∈ (U.block q).refs) ⊆ V.ids := by
-    intro q hq
-    obtain ⟨hq, -⟩ := Finset.mem_filter.mp hq
-    obtain ⟨hqids, hqr⟩ := mem_blocksAt.mp hq
-    exact hcov q hqids (le_of_eq hqr)
-  rw [DirectCommitIn, supportersIn, Finset.inter_eq_left.2 hsub]
-  exact h
+    DirectCommitIn U V L r :=
+  HoldsAtLeast.of_coversUpto
+    (fun q hq => ⟨(mem_votesFor.mp hq).1, (mem_votesFor.mp hq).2.1.le⟩) hcov h
 
 /-- **O7, as a decision** — on any view caught up to the decision
 round. -/

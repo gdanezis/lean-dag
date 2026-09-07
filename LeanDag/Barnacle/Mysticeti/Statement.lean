@@ -36,7 +36,7 @@ def mysticeti [Faults Validator] : BaseRule Validator BlockId Payload where
   historyView := fun U A hA => historyViewOf U A hA
   waveLength := 3
   DirectCommitIn := fun V L r => LeanDag.DirectCommitIn _ V L r
-  decDirect := fun V L r => decidableDirectCommitIn V L r
+  decDirect := fun _ _ _ => inferInstance
 
 namespace Mysticeti
 

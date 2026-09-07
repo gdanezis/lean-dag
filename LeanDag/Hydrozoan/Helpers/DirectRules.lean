@@ -25,24 +25,12 @@ instance decidableSlowCommit (L : BlockId) (r : ℕ) :
     Decidable (SlowCommit U L r) :=
   inferInstanceAs (Decidable (qSlow Replica ≤ (certifiers U L r).card))
 
-instance decidableFastCommitInView (V : View U) (L : BlockId) (r : ℕ) :
-    Decidable (FastCommitInView U V L r) :=
-  inferInstanceAs (Decidable (qFast Replica ≤ (supportersIn U V L (r + 1)).card))
-
-instance decidableSlowCommitInView (V : View U) (L : BlockId) (r : ℕ) :
-    Decidable (SlowCommitInView U V L r) :=
-  inferInstanceAs (Decidable (qSlow Replica ≤ (certifiersInView U V L r).card))
-
 section Skip
 
 variable [S : Slots Replica]
 
 instance decidableSkippedLeader (k : ℕ) : Decidable (SkippedLeader U k) :=
   inferInstanceAs (Decidable (qFast Replica ≤ (slotBlames U k).card))
-
-instance decidableSkippedLeaderInView (V : View U) (k : ℕ) :
-    Decidable (SkippedLeaderInView U V k) :=
-  inferInstanceAs (Decidable (qFast Replica ≤ (slotBlamesIn U V k).card))
 
 end Skip
 
@@ -84,38 +72,14 @@ instance (V : View U) (S : Slots Replica) (k : ℕ) :
 
 end Rule
 
-/-! ## Views only grow -/
-
-/-- A larger view holds every supporter the smaller one does. -/
-theorem fastCommitInView_mono {V V' : View U} (hsub : V.ids ⊆ V'.ids)
-    {L : BlockId} {r : ℕ} (h : FastCommitInView U V L r) :
-    FastCommitInView U V' L r :=
-  le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
-
-/-- A larger view holds every certificate the smaller one does. -/
-theorem slowCommitInView_mono {V V' : View U} (hsub : V.ids ⊆ V'.ids)
-    {L : BlockId} {r : ℕ} (h : SlowCommitInView U V L r) :
-    SlowCommitInView U V' L r :=
-  le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
-
-/-- A larger view holds every blame the smaller one does. -/
-theorem skippedLeaderInView_mono [S : Slots Replica] {V V' : View U}
-    (hsub : V.ids ⊆ V'.ids) {k : ℕ} (h : SkippedLeaderInView U V k) :
-    SkippedLeaderInView U V' k :=
-  le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
-
 /-! ## The skip reads the schedule at its slot -/
 
 /-- And so is the direct skip. -/
 theorem skippedLeaderInView_congr {S₁ S₂ : Slots Replica} {V : View U} {k : ℕ}
     (hround : S₁.slotRound k = S₂.slotRound k) (hk : S₁.leader k = S₂.leader k)
     (h : SkippedLeaderInView (S := S₁) U V k) : SkippedLeaderInView (S := S₂) U V k := by
-  unfold SkippedLeaderInView at h ⊢
-  rw [← slotBlamesIn_congr hround hk]
-  exact h
+  show HoldsAtLeast U V _ (slotBlamers (S := S₂) U k)
+  rwa [← slotBlamers_congr hround hk]
 
 end Hydrozoan
 

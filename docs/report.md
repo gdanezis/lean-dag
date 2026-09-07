@@ -726,6 +726,23 @@ liveness hypotheses and ledger are these at its record, with no copy of
 its own, and the core's `chop`, `addGenesis` and their lemmas are the
 record's names, exported rather than restated.
 
+**What a view holds.** Every direct rule of every protocol has one shape:
+the view holds blocks of some set from at least `t` distinct authors, the
+supporters, certifiers or blamers the validator has actually seen. That
+count is `heldAuthors U V s` and the predicate `HoldsAtLeast U V t s`
+(`Common/Support.lean`). The core's `DirectCommitIn` is `HoldsAtLeast` at
+`n − f` over `certificates U L r`, its slot-level skip the same over
+`slotBlamers U k`; Nemo's commit is the majority over the votes
+`votesFor U L (r + 1)`, Hybrid's the hybrid quorum, and Hydrozoan's fast,
+slow and skip rules are `qFast`, `qSlow` and `qFast` over votes,
+certificates and blamers. The rules are abbreviations of the predicate,
+so that the count only grows with the view (`HoldsAtLeast.mono`), that a
+view can only under-report the record (`HoldsAtLeast.le`), that the full
+view holds everything (`HoldsAtLeast.full`) and that a view covering the
+set's rounds holds all of it (`HoldsAtLeast.of_coversUpto`) are each
+proved once and read at every rule: every `commit_mono` and `skip_mono`
+law of the eight rules is `HoldsAtLeast.mono`.
+
 Non-equivocation is stated at the level of the universe, and must be. A
 per-view formulation is strictly weaker: two views could each satisfy "at most
 one block per correct author per round" while holding *different* such blocks,
@@ -10917,7 +10934,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 333 definitions and structures the report names, in
+The 334 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -11106,7 +11123,7 @@ The validators holding a block at a given round — the pool `p`.
 ```lean
 def supporters (U : BlockRecord Validator BlockId Payload P honest) (b : BlockId) (n : ℕ) :
     Finset Validator :=
-  creatorsOf U.block ((blocksAt U n).filter (fun q => b ∈ (U.block q).refs))
+  creatorsOf U.block (votesFor U b n)
 ```
 
 The validators whose round-`n` block references `b`.
@@ -11118,12 +11135,24 @@ The validators whose round-`n` block references `b`.
 ```lean
 def blames (U : BlockRecord Validator BlockId Payload P honest) (L : BlockId) (n : ℕ) :
     Finset Validator :=
-  creatorsOf U.block ((blocksAt U n).filter (fun q => L ∉ (U.block q).refs))
+  creatorsOf U.block (omissionsOf U L n)
 ```
 
 The validators whose round-`n` block declines to reference `L`.
 
 The complement of `supporters U L n` *within the round-`n` author pool* — but only for correct validators. A Byzantine author can appear in both, by publishing one round-`n` block that votes and another that does not; ruling that out for correct validators is exactly what `blames_inter_supporters_subset_byzantine` does, and is the whole content of M3.
+
+#### `HoldsAtLeast`
+
+*def, `Common.Support.lean`*
+
+```lean
+def HoldsAtLeast (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
+    (t : ℕ) (s : Finset BlockId) : Prop :=
+  t ≤ (heldAuthors U V s).card
+```
+
+**A view holds blocks of `s` from at least `t` distinct authors.**
 
 #### `supportersIn`
 
@@ -11132,7 +11161,7 @@ The complement of `supporters U L n` *within the round-`n` author pool* — but 
 ```lean
 def supportersIn (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
     (b : BlockId) (n : ℕ) : Finset Validator :=
-  creatorsOf U.block (((blocksAt U n).filter (fun q => b ∈ (U.block q).refs)) ∩ V.ids)
+  heldAuthors U V (votesFor U b n)
 ```
 
 The supporters of `b` at round `n` that a view holds.
@@ -11144,7 +11173,7 @@ The supporters of `b` at round `n` that a view holds.
 ```lean
 def blamesIn (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
     (L : BlockId) (n : ℕ) : Finset Validator :=
-  creatorsOf U.block (((blocksAt U n).filter (fun q => L ∉ (U.block q).refs)) ∩ V.ids)
+  heldAuthors U V (omissionsOf U L n)
 ```
 
 The blamers of `L` at round `n` that a view holds.
@@ -11207,7 +11236,7 @@ The validators whose voting-round block blames slot `k`.
 ```lean
 def slotBlamesIn (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (k : ℕ) :
     Finset Validator :=
-  creatorsOf U.block (slotBlamers U k ∩ V.ids)
+  heldAuthors U V (slotBlamers U k)
 ```
 
 The blamers of slot `k` that a view holds.
@@ -11227,36 +11256,36 @@ def DirectCommit (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r 
 
 #### `DirectCommitIn`
 
-*def, `Mysticeti.Rule.lean`*
+*abbrev, `Mysticeti.Rule.lean`*
 
 ```lean
-def DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (certificatesIn U V L r)).card
+  HoldsAtLeast U V (quorumCard Validator) (certificates U L r)
 ```
 
-Direct commit, as judged from a single view.
+Direct commit, as judged from a single view: the view holds certificates for `L` from a quorum of distinct validators.
 
 #### `DirectSkipIn`
 
-*def, `Mysticeti.Rule.lean`*
+*abbrev, `Mysticeti.Rule.lean`*
 
 ```lean
-def DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (blamesIn U V L (r + 1)).card
+  HoldsAtLeast U V (quorumCard Validator) (omissionsOf U L (r + 1))
 ```
 
-Direct skip, as judged from a single view: the record's `blamesIn` at the round above `L`.
+Direct skip, as judged from a single view: the view holds blocks at the round above `L` that omit it, from a quorum of distinct validators.
 
 #### `DirectSkipSlotIn`
 
-*def, `Mysticeti.Rule.lean`*
+*abbrev, `Mysticeti.Rule.lean`*
 
 ```lean
-def DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (k : ℕ) : Prop :=
-  quorumCard Validator ≤ (slotBlamesIn U V k).card
+  HoldsAtLeast U V (quorumCard Validator) (slotBlamers U k)
 ```
 
 **The slot is directly skipped, as judged from a view**: a quorum of distinct validators holds a voting-round block, in view, that references no candidate of the slot.
@@ -12000,27 +12029,27 @@ def ThickLink (U : BlockUniverse Validator BlockId Payload)
 
 #### `DirectCommitIn`
 
-*def, `Odontoceti.Decision.lean`*
+*abbrev, `Odontoceti.Decision.lean`*
 
 ```lean
-def DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (supportersIn U V L (r + 1)).card
+  HoldsAtLeast U V (quorumCard Validator) (votesFor U L (r + 1))
 ```
 
-Direct commit, as judged from a single view: the record's `supportersIn`, at the round above `L`.
+Direct commit, as judged from a single view: the view holds votes for `L` at the round above it from a quorum of validators.
 
 #### `DirectSkipIn`
 
-*def, `Odontoceti.Decision.lean`*
+*abbrev, `Odontoceti.Decision.lean`*
 
 ```lean
-def DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (blamesIn U V L (r + 1)).card
+  HoldsAtLeast U V (quorumCard Validator) (omissionsOf U L (r + 1))
 ```
 
-Direct skip, as judged from a single view: the record's `blamesIn`.
+Direct skip, as judged from a single view: the view holds blocks at the round above `L` that omit it, from a quorum of validators.
 
 #### `Decided`
 
@@ -12505,36 +12534,36 @@ def ThickLink (k : ℕ) (U : BlockUniverse Validator BlockId Payload)
 
 #### `DirectCommitIn`
 
-*def, `Hybrid.Decision.lean`*
+*abbrev, `Hybrid.Decision.lean`*
 
 ```lean
-def DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  q Validator ≤ (supportersIn U V L (r + 1)).card
+  HoldsAtLeast U V (q Validator) (votesFor U L (r + 1))
 ```
 
-Direct commit, as judged from a single view: the record's `supportersIn`, at the round above `L`.
+Direct commit, as judged from a single view: the view holds votes for `L` at the round above it from a hybrid quorum of validators.
 
 #### `DirectSkipIn`
 
-*def, `Hybrid.Decision.lean`*
+*abbrev, `Hybrid.Decision.lean`*
 
 ```lean
-def DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  q Validator ≤ (blamesIn U V L (r + 1)).card
+  HoldsAtLeast U V (q Validator) (omissionsOf U L (r + 1))
 ```
 
-Direct skip, as judged from a single view: the record's `blamesIn`.
+Direct skip, as judged from a single view: the view holds blocks at the round above `L` that omit it, from a hybrid quorum of validators.
 
 #### `DirectSkipSlotIn`
 
-*def, `Hybrid.Decision.lean`*
+*abbrev, `Hybrid.Decision.lean`*
 
 ```lean
-def DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (s : ℕ) : Prop :=
-  q Validator ≤ (slotBlamesIn U V s).card
+  HoldsAtLeast U V (q Validator) (slotBlamers U s)
 ```
 
 **The slot is directly skipped, as judged from a view**: a hybrid quorum of distinct validators holds a voting-round block, in view, that references no candidate of the slot.
@@ -12766,15 +12795,15 @@ def DirectCommit (U : Universe Validator BlockId Payload) (L : BlockId) (r : ℕ
 
 #### `DirectCommitIn`
 
-*def, `Nemo.Decision.lean`*
+*abbrev, `Nemo.Decision.lean`*
 
 ```lean
-def DirectCommitIn (U : Universe Validator BlockId Payload)
+abbrev DirectCommitIn (U : Universe Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  majority Validator ≤ (supportersIn U V L (r + 1)).card
+  HoldsAtLeast U V (majority Validator) (votesFor U L (r + 1))
 ```
 
-Direct commit, as judged from a single view: the record's `supportersIn`, at the round above `L`.
+Direct commit, as judged from a single view: the view holds votes for `L` at the round above it from a majority of validators.
 
 #### `Decided`
 
@@ -12854,27 +12883,28 @@ def DirectCommit (U : BlockUniverse Validator BlockId Payload)
 
 #### `DirectCommitIn`
 
-*def, `MahiMahi.Model.Decision.lean`*
+*abbrev, `MahiMahi.Model.Decision.lean`*
 
 ```lean
-def DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (w : ℕ) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (certificatesIn U V w L r)).card
+  HoldsAtLeast U V (quorumCard Validator) (certificates U w L r)
 ```
 
-Direct commit, as judged from a single view.
+Direct commit, as judged from a single view: the view holds certificates for `L` from a quorum of distinct validators.
 
 #### `DirectSkipIn`
 
-*def, `MahiMahi.Model.Decision.lean`*
+*abbrev, `MahiMahi.Model.Decision.lean`*
 
 ```lean
-def DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
+abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (w : ℕ) (a : Validator) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (blamersIn U V w a r).card
+  HoldsAtLeast U V (quorumCard Validator)
+    ((blocksAt U (votingRound w r)).filter (fun q => Blames U q a r))
 ```
 
-Direct skip, as judged from a single view.
+Direct skip, as judged from a single view: the view holds voting-round blocks blaming the slot `(a, r)` from a quorum of distinct validators.
 
 #### `Decided`
 

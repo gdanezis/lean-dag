@@ -40,7 +40,7 @@ block is one block, and either references `l` or does not. -/
 theorem not_nonVoter_of_voter {l : BlockId} :
     ∀ v ∈ voters D l, v ∈ (Correct : Finset Validator) → v ∉ nonVoters D l := by
   intro v hv hcorr hnv
-  simp only [voters, supporters, nonVoters, mem_creatorsOf, blocksAt, Finset.mem_filter] at hv hnv
+  simp only [voters, supporters, votesFor, nonVoters, mem_creatorsOf, blocksAt, Finset.mem_filter] at hv hnv
   obtain ⟨q, ⟨⟨hqids, hqr⟩, hqref⟩, hqv⟩ := hv
   obtain ⟨q', ⟨⟨hq'ids, hq'r⟩, hq'ref⟩, hq'v⟩ := hnv
   have heq : q = q' :=

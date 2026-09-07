@@ -158,17 +158,9 @@ a universe-level slow commit is a slow commit in that view. -/
 theorem slowCommitInView_of_coversUpto
     {U : BlockUniverse Replica BlockId} {V : View U} {L : BlockId} {r : ℕ}
     (h : SlowCommit U L r) (hcov : V.CoversUpto (r + 2)) :
-    SlowCommitInView U V L r := by
-  have hsub : certificates U L r ⊆ V.ids := by
-    intro C hC
-    obtain ⟨hCids, hCr, -⟩ := mem_certificates.mp hC
-    exact hcov C hCids (le_of_eq hCr)
-  have hinter : certificatesInView U V L r = certificates U L r := by
-    simp only [certificatesInView]
-    exact Finset.inter_eq_left.mpr hsub
-  simp only [SlowCommitInView, certifiersInView, hinter]
-  simp only [SlowCommit, certifiers] at h
-  exact h
+    SlowCommitInView U V L r :=
+  HoldsAtLeast.of_coversUpto
+    (fun C hC => ⟨(mem_certificates.mp hC).1, (mem_certificates.mp hC).2.1.le⟩) hcov h
 
 end Hydrozoan
 

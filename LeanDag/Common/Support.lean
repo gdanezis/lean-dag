@@ -110,16 +110,36 @@ theorem creators_refs_subset_authorsAt [P.Mechanised] {c : BlockId} {n : ℕ}
 
 variable [DecidableEq BlockId]
 
+/-! ### Votes and omissions -/
+
+/-- The round-`n` blocks that reference `b`: the votes for `b`. -/
+def votesFor (U : BlockRecord Validator BlockId Payload P honest) (b : BlockId) (n : ℕ) :
+    Finset BlockId :=
+  (blocksAt U n).filter (fun q => b ∈ (U.block q).refs)
+
+/-- The round-`n` blocks that do not reference `L`. -/
+def omissionsOf (U : BlockRecord Validator BlockId Payload P honest) (L : BlockId) (n : ℕ) :
+    Finset BlockId :=
+  (blocksAt U n).filter (fun q => L ∉ (U.block q).refs)
+
+theorem mem_votesFor {b q : BlockId} {n : ℕ} :
+    q ∈ votesFor U b n ↔ q ∈ U.ids ∧ (U.block q).round = n ∧ b ∈ (U.block q).refs := by
+  simp only [votesFor, Finset.mem_filter, mem_blocksAt, and_assoc]
+
+theorem mem_omissionsOf {L q : BlockId} {n : ℕ} :
+    q ∈ omissionsOf U L n ↔ q ∈ U.ids ∧ (U.block q).round = n ∧ L ∉ (U.block q).refs := by
+  simp only [omissionsOf, Finset.mem_filter, mem_blocksAt, and_assoc]
+
 /-- The validators whose round-`n` block references `b`. -/
 def supporters (U : BlockRecord Validator BlockId Payload P honest) (b : BlockId) (n : ℕ) :
     Finset Validator :=
-  creatorsOf U.block ((blocksAt U n).filter (fun q => b ∈ (U.block q).refs))
+  creatorsOf U.block (votesFor U b n)
 
 /-- Membership in `supporters`, unfolded: a supporter has a round-`n` block referencing `b`. -/
 theorem mem_supporters {b : BlockId} {n : ℕ} {v : Validator} :
     v ∈ supporters U b n ↔
       ∃ q ∈ U.ids, (U.block q).round = n ∧ b ∈ (U.block q).refs ∧ (U.block q).creator = v := by
-  simp [supporters, mem_creatorsOf]
+  simp [supporters, votesFor, mem_creatorsOf]
   tauto
 
 theorem supporters_subset_authorsAt {b : BlockId} {n : ℕ} :
@@ -136,57 +156,131 @@ that out for correct validators is exactly what
 does, and is the whole content of M3. -/
 def blames (U : BlockRecord Validator BlockId Payload P honest) (L : BlockId) (n : ℕ) :
     Finset Validator :=
-  creatorsOf U.block ((blocksAt U n).filter (fun q => L ∉ (U.block q).refs))
+  creatorsOf U.block (omissionsOf U L n)
 
 /-- Membership in `blames`, unfolded: a blamer has a round-`n` block that omits `L`. -/
 theorem mem_blames {L : BlockId} {n : ℕ} {v : Validator} :
     v ∈ blames U L n ↔
       ∃ q ∈ U.ids, (U.block q).round = n ∧ L ∉ (U.block q).refs ∧ (U.block q).creator = v := by
-  simp [blames, mem_creatorsOf]
+  simp [blames, omissionsOf, mem_creatorsOf]
   tauto
+
+/-! ### What a view holds
+
+What a validator holds is a view, and a rule judges from it. Every direct
+rule of every protocol has one shape: the view holds blocks of some set
+from at least `t` distinct authors — the supporters, certifiers or
+blamers the validator has actually seen. `heldAuthors` is that count and
+`HoldsAtLeast` that predicate. A rule names its set and its threshold;
+that the count only grows with the view, that the full view holds
+everything, and that a view covering the set's rounds holds all of it
+are settled here once. -/
+
+/-- The authors of the blocks of `s` that a view holds. -/
+def heldAuthors (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
+    (s : Finset BlockId) : Finset Validator :=
+  creatorsOf U.block (s ∩ V.ids)
+
+theorem mem_heldAuthors {V : U.View} {s : Finset BlockId} {v : Validator} :
+    v ∈ heldAuthors U V s ↔ ∃ b ∈ s, b ∈ V.ids ∧ (U.block b).creator = v := by
+  simp only [heldAuthors, mem_creatorsOf, Finset.mem_inter, and_assoc]
+
+/-- A view can only under-report. -/
+theorem heldAuthors_subset {V : U.View} {s : Finset BlockId} :
+    heldAuthors U V s ⊆ creatorsOf U.block s :=
+  Finset.image_subset_image Finset.inter_subset_left
+
+/-- A larger view holds more. -/
+theorem heldAuthors_mono {V V' : U.View} (h : V.ids ⊆ V'.ids) {s : Finset BlockId} :
+    heldAuthors U V s ⊆ heldAuthors U V' s :=
+  Finset.image_subset_image (Finset.inter_subset_inter_left h)
+
+theorem heldAuthors_mono_set {V : U.View} {s s' : Finset BlockId} (h : s ⊆ s') :
+    heldAuthors U V s ⊆ heldAuthors U V s' :=
+  Finset.image_subset_image (Finset.inter_subset_inter_right h)
+
+/-- The full view holds everything. -/
+theorem heldAuthors_full {s : Finset BlockId} (hs : s ⊆ U.ids) :
+    heldAuthors U (View.full U) s = creatorsOf U.block s := by
+  unfold heldAuthors
+  rw [View.full_ids, Finset.inter_eq_left.mpr hs]
+
+/-- A view covering the rounds of `s` holds all of `s`. -/
+theorem heldAuthors_of_coversUpto {V : U.View} {s : Finset BlockId} {N : ℕ}
+    (hs : ∀ b ∈ s, b ∈ U.ids ∧ (U.block b).round ≤ N) (hcov : V.CoversUpto N) :
+    heldAuthors U V s = creatorsOf U.block s := by
+  unfold heldAuthors
+  rw [Finset.inter_eq_left.mpr fun b hb => hcov b (hs b hb).1 (hs b hb).2]
+
+/-- **A view holds blocks of `s` from at least `t` distinct authors.** -/
+def HoldsAtLeast (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
+    (t : ℕ) (s : Finset BlockId) : Prop :=
+  t ≤ (heldAuthors U V s).card
+
+instance decidableHoldsAtLeast (V : U.View) (t : ℕ) (s : Finset BlockId) :
+    Decidable (HoldsAtLeast U V t s) :=
+  inferInstanceAs (Decidable (t ≤ (heldAuthors U V s).card))
+
+namespace HoldsAtLeast
+
+variable {V V' : U.View} {t t' : ℕ} {s s' : Finset BlockId}
+
+/-- What a view holds, the record has: the rule at the record follows. -/
+theorem le (h : HoldsAtLeast U V t s) : t ≤ (creatorsOf U.block s).card :=
+  le_trans h (Finset.card_le_card heldAuthors_subset)
+
+/-- A larger view holds it still. -/
+theorem mono (hV : V.ids ⊆ V'.ids) (h : HoldsAtLeast U V t s) : HoldsAtLeast U V' t s :=
+  le_trans h (Finset.card_le_card (heldAuthors_mono hV))
+
+theorem of_subset (hs : s ⊆ s') (h : HoldsAtLeast U V t s) : HoldsAtLeast U V t s' :=
+  le_trans h (Finset.card_le_card (heldAuthors_mono_set hs))
+
+theorem of_le (ht : t' ≤ t) (h : HoldsAtLeast U V t s) : HoldsAtLeast U V t' s :=
+  le_trans ht h
+
+/-- The full view holds it exactly when the record does. -/
+theorem full (hs : s ⊆ U.ids) :
+    HoldsAtLeast U (View.full U) t s ↔ t ≤ (creatorsOf U.block s).card := by
+  unfold HoldsAtLeast; rw [heldAuthors_full hs]
+
+/-- A view covering the rounds of `s` holds what the record does. -/
+theorem of_coversUpto {N : ℕ} (hs : ∀ b ∈ s, b ∈ U.ids ∧ (U.block b).round ≤ N)
+    (hcov : V.CoversUpto N) (h : t ≤ (creatorsOf U.block s).card) : HoldsAtLeast U V t s := by
+  unfold HoldsAtLeast; rwa [heldAuthors_of_coversUpto hs hcov]
+
+end HoldsAtLeast
 
 /-! ### Counted in a view
 
-What a validator holds is a view, and a rule judges from it: the
-supporters and blamers it actually holds. Both are the record's counts
-at the view read as a record (`supportersIn_eq_toRecord`), and a view
-can only under-report. -/
+The supporters and blamers a view holds: the record's counts at the view
+read as a record (`supportersIn_eq_toRecord`). -/
 
 /-- The supporters of `b` at round `n` that a view holds. -/
 def supportersIn (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
     (b : BlockId) (n : ℕ) : Finset Validator :=
-  creatorsOf U.block (((blocksAt U n).filter (fun q => b ∈ (U.block q).refs)) ∩ V.ids)
+  heldAuthors U V (votesFor U b n)
 
 /-- The blamers of `L` at round `n` that a view holds. -/
 def blamesIn (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
     (L : BlockId) (n : ℕ) : Finset Validator :=
-  creatorsOf U.block (((blocksAt U n).filter (fun q => L ∉ (U.block q).refs)) ∩ V.ids)
+  heldAuthors U V (omissionsOf U L n)
 
 theorem mem_supportersIn {V : U.View} {b : BlockId} {n : ℕ} {v : Validator} :
     v ∈ supportersIn U V b n ↔
       ∃ q ∈ V.ids, (U.block q).round = n ∧ b ∈ (U.block q).refs ∧ (U.block q).creator = v := by
-  rw [supportersIn, mem_creatorsOf]
+  simp only [supportersIn, mem_heldAuthors, mem_votesFor]
   constructor
-  · rintro ⟨q, hq, hc⟩
-    obtain ⟨hf, hV⟩ := Finset.mem_inter.mp hq
-    obtain ⟨hbl, hb⟩ := Finset.mem_filter.mp hf
-    exact ⟨q, hV, (mem_blocksAt.mp hbl).2, hb, hc⟩
-  · rintro ⟨q, hV, hr, hb, hc⟩
-    exact ⟨q, Finset.mem_inter.mpr
-      ⟨Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨V.subset_ids hV, hr⟩, hb⟩, hV⟩, hc⟩
+  · rintro ⟨q, ⟨_, hr, hb⟩, hV, hc⟩; exact ⟨q, hV, hr, hb, hc⟩
+  · rintro ⟨q, hV, hr, hb, hc⟩; exact ⟨q, ⟨V.subset_ids hV, hr, hb⟩, hV, hc⟩
 
 theorem mem_blamesIn {V : U.View} {L : BlockId} {n : ℕ} {v : Validator} :
     v ∈ blamesIn U V L n ↔
       ∃ q ∈ V.ids, (U.block q).round = n ∧ L ∉ (U.block q).refs ∧ (U.block q).creator = v := by
-  rw [blamesIn, mem_creatorsOf]
+  simp only [blamesIn, mem_heldAuthors, mem_omissionsOf]
   constructor
-  · rintro ⟨q, hq, hc⟩
-    obtain ⟨hf, hV⟩ := Finset.mem_inter.mp hq
-    obtain ⟨hbl, hb⟩ := Finset.mem_filter.mp hf
-    exact ⟨q, hV, (mem_blocksAt.mp hbl).2, hb, hc⟩
-  · rintro ⟨q, hV, hr, hb, hc⟩
-    exact ⟨q, Finset.mem_inter.mpr
-      ⟨Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨V.subset_ids hV, hr⟩, hb⟩, hV⟩, hc⟩
+  · rintro ⟨q, ⟨_, hr, hb⟩, hV, hc⟩; exact ⟨q, hV, hr, hb, hc⟩
+  · rintro ⟨q, hV, hr, hb, hc⟩; exact ⟨q, ⟨V.subset_ids hV, hr, hb⟩, hV, hc⟩
 
 /-- The view's count is the record's count at the view as a record. -/
 theorem supportersIn_eq_toRecord {V : U.View} {b : BlockId} {n : ℕ} :
@@ -201,42 +295,7 @@ theorem blamesIn_eq_toRecord {V : U.View} {L : BlockId} {n : ℕ} :
   rw [mem_blamesIn, mem_blames]
   rfl
 
-/-- A view can only under-report support. -/
-theorem supportersIn_subset_supporters {V : U.View} {b : BlockId} {n : ℕ} :
-    supportersIn U V b n ⊆ supporters U b n :=
-  Finset.image_subset_image Finset.inter_subset_left
-
-theorem blamesIn_subset_blames {V : U.View} {L : BlockId} {n : ℕ} :
-    blamesIn U V L n ⊆ blames U L n :=
-  Finset.image_subset_image Finset.inter_subset_left
-
-/-- A larger view holds more supporters. -/
-theorem supportersIn_mono {V V' : U.View} (h : V.ids ⊆ V'.ids) {b : BlockId} {n : ℕ} :
-    supportersIn U V b n ⊆ supportersIn U V' b n :=
-  Finset.image_subset_image (Finset.inter_subset_inter_left h)
-
-theorem blamesIn_mono {V V' : U.View} (h : V.ids ⊆ V'.ids) {L : BlockId} {n : ℕ} :
-    blamesIn U V L n ⊆ blamesIn U V' L n :=
-  Finset.image_subset_image (Finset.inter_subset_inter_left h)
-
-/-- The full view holds every supporter there is. -/
-theorem supportersIn_full (U : BlockRecord Validator BlockId Payload P honest)
-    (b : BlockId) (n : ℕ) : supportersIn U (View.full U) b n = supporters U b n := by
-  unfold supportersIn supporters
-  congr 1
-  refine Finset.inter_eq_left.mpr fun q hq => ?_
-  exact (mem_blocksAt.mp (Finset.mem_filter.mp hq).1).1
-
-theorem blamesIn_full (U : BlockRecord Validator BlockId Payload P honest)
-    (L : BlockId) (n : ℕ) : blamesIn U (View.full U) L n = blames U L n := by
-  unfold blamesIn blames
-  congr 1
-  refine Finset.inter_eq_left.mpr fun q hq => ?_
-  exact (mem_blocksAt.mp (Finset.mem_filter.mp hq).1).1
-
 end Generic
-
-/-! ## The core's thresholds -/
 
 /-! ## The hitting lemma, and coverage
 

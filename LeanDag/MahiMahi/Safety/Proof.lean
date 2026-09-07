@@ -34,7 +34,8 @@ theorem holds : Statement := by
       refine le_trans h (Finset.card_le_card (Finset.image_subset_image ?_))
       intro q hq
       rw [votingRound_three] at hq
-      rw [Finset.mem_filter] at hq ⊢
+      rw [Finset.mem_filter] at hq
+      rw [omissionsOf, Finset.mem_filter]
       exact ⟨hq.1, not_mem_refs_of_blames (mem_blocksAt.mp hq.1).1 hq.2 hLc hLr⟩
     · intro a r L hL hLc hLr huniq
       constructor
@@ -42,13 +43,15 @@ theorem holds : Statement := by
         refine le_trans h (Finset.card_le_card (Finset.image_subset_image ?_))
         intro q hq
         rw [votingRound_three] at hq
-        rw [Finset.mem_filter] at hq ⊢
+        rw [Finset.mem_filter] at hq
+        rw [omissionsOf, Finset.mem_filter]
         exact ⟨hq.1, not_mem_refs_of_blames (mem_blocksAt.mp hq.1).1 hq.2 hLc hLr⟩
       · intro h
         refine le_trans h (Finset.card_le_card (Finset.image_subset_image ?_))
         intro q hq
         rw [votingRound_three]
-        rw [Finset.mem_filter] at hq ⊢
+        rw [omissionsOf, Finset.mem_filter] at hq
+        rw [Finset.mem_filter]
         obtain ⟨hqids, hqr⟩ := mem_blocksAt.mp hq.1
         exact ⟨hq.1, blames_of_not_mem_refs_of_unique hqids hqr hLc hLr huniq hq.2⟩
 

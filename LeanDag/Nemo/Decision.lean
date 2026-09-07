@@ -26,31 +26,17 @@ variable [S : Slots Validator]
 omit [DecidableEq BlockId] in
 /-! ## The view-relative direct rule -/
 
-/-- Direct commit, as judged from a single view: the record's
-`supportersIn`, at the round above `L`. -/
-def DirectCommitIn (U : Universe Validator BlockId Payload)
+/-- Direct commit, as judged from a single view: the view holds votes for
+`L` at the round above it from a majority of validators. -/
+abbrev DirectCommitIn (U : Universe Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  majority Validator ≤ (supportersIn U V L (r + 1)).card
-
-instance {V : View Validator BlockId Payload U} (L : BlockId) (r : ℕ) :
-    Decidable (DirectCommitIn U V L r) :=
-  inferInstanceAs (Decidable (_ ≤ _))
+  HoldsAtLeast U V (majority Validator) (votesFor U L (r + 1))
 
 omit S in
 /-- A view can only under-report: its direct commit is genuine. -/
 theorem directCommit_of_directCommitIn
     {V : View Validator BlockId Payload U} {L : BlockId} {r : ℕ}
-    (h : DirectCommitIn U V L r) : DirectCommit U L r :=
-  le_trans h (Finset.card_le_card
-    (Finset.image_subset_image Finset.inter_subset_left))
-
-omit S in
-/-- A larger view can only see more supporters. -/
-theorem directCommitIn_mono {V V' : View Validator BlockId Payload U}
-    (hsub : V.ids ⊆ V'.ids) {L : BlockId} {r : ℕ} (h : DirectCommitIn U V L r) :
-    DirectCommitIn U V' L r :=
-  le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
+    (h : DirectCommitIn U V L r) : DirectCommit U L r := h.le
 
 /-! ## The relation -/
 
@@ -120,7 +106,7 @@ theorem nemoLaws : (nemoAnchored Validator BlockId Payload).Laws where
   commit_link_unique := fun _ hL₁ hL₂ _ _ _ _ _ _ _ => isLeaderBlock_unique_of_honest (Finset.mem_univ _) hL₁ hL₂
   skip_link := fun _ h _ _ => h.elim
   link_unique := fun _ hL₁ hL₂ _ _ _ _ _ _ _ _ => isLeaderBlock_unique_of_honest (Finset.mem_univ _) hL₁ hL₂
-  commit_mono := fun _ hsub h => directCommitIn_mono hsub h
+  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_mono := fun _ _ h => h
   skip_congr := fun _ _ _ h => h
   link_congr := fun hround _ h => by

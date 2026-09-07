@@ -317,7 +317,7 @@ theorem ugrow_not_directSkip (N k : ℕ) (h : N < 3 * k)
     simp only [ugrow_ids, Finset.mem_range] at hqi
     simp only [ugrow_block, rrBlock_round, fairSlots_slotRound] at hqr
     omega
-  rw [DirectSkipSlotIn, slotBlamesIn, hempty] at hskip
+  simp only [DirectSkipSlotIn, HoldsAtLeast, heldAuthors, hempty] at hskip
   simp only [creatorsOf, Finset.image_empty, Finset.card_empty] at hskip
   have hc : 3 * Faults.f (Fin 4) + 1 ≤ Fintype.card (Fin 4) := Faults.card_validators
   omega

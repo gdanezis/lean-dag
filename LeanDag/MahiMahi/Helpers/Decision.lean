@@ -138,10 +138,8 @@ theorem mahiMahiLaws {w : ℕ} (hw : 2 ≤ w) :
     intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ hl₁ hl₂ _ _
     exact eq_of_hasCertificate hw hL₁ hL₂ (certificates_nonempty_of_certifiedIn hl₁)
       (certificates_nonempty_of_certifiedIn hl₂)
-  commit_mono := fun _ hsub h => le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
-  skip_mono := fun _ hsub h => le_trans h (Finset.card_le_card (Finset.image_subset_image
-    (Finset.inter_subset_inter Finset.Subset.rfl hsub)))
+  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
+  skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_congr := fun _ hround hk h => by
     show DirectSkipIn _ _ _ _ _
     rw [← hround, ← hk]; exact h
@@ -175,7 +173,7 @@ omit S in
 theorem directCommitIn_three_iff {V : View Validator BlockId Payload U} {L : BlockId} {r : ℕ}
     (hLr : (U.block L).round = r) :
     DirectCommitIn U V 3 L r ↔ LeanDag.DirectCommitIn U V L r := by
-  unfold DirectCommitIn LeanDag.DirectCommitIn certificatesIn LeanDag.certificatesIn
+  unfold DirectCommitIn LeanDag.DirectCommitIn
   rw [certificates_eq_of_three hLr]
 
 omit S in
@@ -187,7 +185,8 @@ theorem core_directSkipIn_of_directSkipIn {V : View Validator BlockId Payload U}
   refine le_trans h (Finset.card_le_card (Finset.image_subset_image ?_))
   intro q hq
   rw [votingRound_three] at hq
-  rw [Finset.mem_inter, Finset.mem_filter] at hq ⊢
+  rw [Finset.mem_inter, Finset.mem_filter] at hq
+  rw [Finset.mem_inter, omissionsOf, Finset.mem_filter]
   obtain ⟨⟨hqb, hqblame⟩, hqV⟩ := hq
   exact ⟨⟨hqb, not_mem_refs_of_blames (mem_blocksAt.mp hqb).1 hqblame hLc hLr⟩, hqV⟩
 

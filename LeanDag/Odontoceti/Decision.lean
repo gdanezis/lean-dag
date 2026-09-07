@@ -38,38 +38,27 @@ variable {L A : BlockId} {r k : ℕ}
 
 /-! ## The view-relative direct rules -/
 
-/-- Direct commit, as judged from a single view: the record's
-`supportersIn`, at the round above `L`. -/
-def DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
+/-- Direct commit, as judged from a single view: the view holds votes for
+`L` at the round above it from a quorum of validators. -/
+abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (supportersIn U V L (r + 1)).card
+  HoldsAtLeast U V (quorumCard Validator) (votesFor U L (r + 1))
 
-/-- Direct skip, as judged from a single view: the record's `blamesIn`. -/
-def DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
+/-- Direct skip, as judged from a single view: the view holds blocks at
+the round above `L` that omit it, from a quorum of validators. -/
+abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (blamesIn U V L (r + 1)).card
-
-instance {V : View Validator BlockId Payload U} :
-    Decidable (DirectCommitIn U V L r) :=
-  inferInstanceAs (Decidable (_ ≤ _))
-
-instance {V : View Validator BlockId Payload U} :
-    Decidable (DirectSkipIn U V L r) :=
-  inferInstanceAs (Decidable (_ ≤ _))
+  HoldsAtLeast U V (quorumCard Validator) (omissionsOf U L (r + 1))
 
 /-- A view can only under-report: its direct commit is genuine. -/
 theorem directCommit_of_directCommitIn
     {V : View Validator BlockId Payload U}
-    (h : DirectCommitIn U V L r) : DirectCommit U L r :=
-  le_trans h (Finset.card_le_card
-    (Finset.image_subset_image Finset.inter_subset_left))
+    (h : DirectCommitIn U V L r) : DirectCommit U L r := h.le
 
 /-- A view can only under-report: its direct skip is genuine. -/
 theorem directSkip_of_directSkipIn
     {V : View Validator BlockId Payload U}
-    (h : DirectSkipIn U V L r) : DirectSkip U L r :=
-  le_trans h (Finset.card_le_card
-    (Finset.image_subset_image Finset.inter_subset_left))
+    (h : DirectSkipIn U V L r) : DirectSkip U L r := h.le
 
 /-! ## The safety lemmas, lifted to views -/
 
@@ -181,8 +170,8 @@ theorem odontocetiLaws : (odontocetiAnchored Validator BlockId Payload).Laws whe
     intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ hl₁ hl₂ hm₁ hm₂
     exact le_antisymm (not_lt.mp (show ¬ L₂ < L₁ from hm₁ L₂ hL₂ hl₂))
       (not_lt.mp (show ¬ L₁ < L₂ from hm₂ L₁ hL₁ hl₁))
-  commit_mono := fun _ hsub h => le_trans h (Finset.card_le_card (supportersIn_mono hsub))
-  skip_mono := fun _ hsub h => directSkipSlotIn_mono hsub h
+  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
+  skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_congr := fun _ hround hk h => directSkipSlotIn_congr hround hk h
   link_congr := fun hround _ h => by
     change ThickLink _ _ _ _ at h ⊢
