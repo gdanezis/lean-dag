@@ -55,7 +55,7 @@ theorem honestNoEquiv_of_fc_zero {BlockId Payload : Type*} (h : H.fc = 0)
   have hcrash : H.crash = ∅ :=
     Finset.card_eq_zero.mp (Nat.le_zero.mp (h ▸ H.card_crash))
   rw [mem_correct, hybrid_byzantine, hcrash, Finset.union_empty]
-  exact hbyz
+  exact mem_honest.mp hbyz
 
 end Collapse
 

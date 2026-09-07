@@ -102,8 +102,10 @@ justify it, and it is what makes the indirect rule agree with the direct one
 (M4). -/
 theorem certificates_eq_empty_of_directSkip {L : BlockId} {r : ℕ}
     (h : DirectSkip U L r) : certificates U L r = ∅ := by
-  -- A quorum of blamers caps the supporters below a quorum (Support.lean) ...
-  have hcap := card_supporters_le_of_card_blames (U := U) (L := L) (n := r + 1) h
+  -- A quorum of blamers caps the supporters below a quorum ...
+  have hcap := card_supporters_add_card_blames_le U.noEquivOn_honest card_compl_correct_le
+    (L := L) (n := r + 1)
+  have hb : quorumCard Validator ≤ (blames U L (r + 1)).card := h
   rw [Finset.eq_empty_iff_forall_notMem]
   intro C hC
   rw [mem_certificates] at hC

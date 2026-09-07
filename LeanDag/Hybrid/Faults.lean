@@ -116,24 +116,9 @@ theorem card_honest_add_byzantine :
   have hle : H.byzantine.card ≤ Fintype.card Validator := Finset.card_le_univ _
   omega
 
-/-- **H1 — the counting core.** Two author sets whose sizes sum past
-`n + fb` share an honest member: their intersection outnumbers the
-Byzantine class. T0′ with the discount at `fb` rather than the derived
-`fb + fc`; every conflict argument of the arc is one application of
-this plus the observation that an honest validator's single block
-cannot face both ways. -/
-theorem exists_honest_mem_inter {a b : Finset Validator}
-    (hab : Fintype.card Validator + H.fb < a.card + b.card) :
-    ∃ v ∈ a ∩ b, v ∉ H.byzantine := by
-  have h1 := Finset.card_union_add_card_inter a b
-  have h2 := Finset.card_le_univ (a ∪ b)
-  have h3 := H.card_byzantine
-  have h4 : ¬ (a ∩ b) ⊆ H.byzantine := by
-    intro hsub
-    have := Finset.card_le_card hsub
-    omega
-  obtain ⟨v, hv, hvb⟩ := Finset.not_subset.mp h4
-  exact ⟨v, hv, hvb⟩
+/-- The validators outside `Honest` are the Byzantine ones: at most `fb`. -/
+theorem card_compl_honest_le : (Honest Validator)ᶜ.card ≤ H.fb := by
+  rw [Honest, compl_compl]; exact H.card_byzantine
 
 section NoEquiv
 
@@ -146,22 +131,11 @@ at the larger class — the base clause follows from it — and it is the
 one genuinely new assumption of the hybrid model, threaded through the
 safety theorems as a hypothesis the way `DoSValid` is. -/
 def HonestNoEquiv (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ i ∈ U.ids, ∀ j ∈ U.ids, (U.block i).creator ∉ H.byzantine →
-    (U.block i).creator = (U.block j).creator →
-    (U.block i).round = (U.block j).round → i = j
+  U.NoEquivOn (Honest Validator)
 
 instance {U : BlockUniverse Validator BlockId Payload} [DecidableEq BlockId] :
     Decidable (HonestNoEquiv U) :=
-  inferInstanceAs (Decidable (∀ _ ∈ _, ∀ _ ∈ _, _ → _ → _ → _))
-
-/-- T1 at the honest class: two ids with one honest author and one
-round are one id. -/
-theorem eq_of_creator_eq_honest {U : BlockUniverse Validator BlockId Payload}
-    (hne : HonestNoEquiv U) {v : Validator} {i j : BlockId}
-    (hi : i ∈ U.ids) (hj : j ∈ U.ids) (hv : v ∉ H.byzantine)
-    (hic : (U.block i).creator = v) (hjc : (U.block j).creator = v)
-    (hround : (U.block i).round = (U.block j).round) : i = j :=
-  hne i hi j hj (hic ▸ hv) (hic.trans hjc.symm) hround
+  inferInstanceAs (Decidable (U.NoEquivOn (Honest Validator)))
 
 end NoEquiv
 

@@ -103,8 +103,8 @@ private theorem certifiedIn_of_slowCommit_base {L : BlockId} {r : ℕ}
     (h : SlowCommit U L r) {A : BlockId} (hA : A ∈ U.ids)
     (hAr : (U.block A).round = r + 3) : CertifiedIn U A L r := by
   obtain ⟨C, hC₁, hC₂⟩ :=
-    exists_common_mem_of_creator_quorums (s := (U.block A).refs)
-      (t := certificates U L r) (r := r + 2)
+    exists_common_block U.noEquivOn_honest card_compl_nonByzantine_le
+      (s := (U.block A).refs) (t := certificates U L r) (n := r + 2)
       (fun b hb => ⟨U.complete A hA b hb, by
         have := BlockRecord.round_of_mem_refs hA hb; omega⟩)
       (fun b hb => ⟨(mem_certificates.mp hb).1, (mem_certificates.mp hb).2.1⟩)
@@ -210,18 +210,8 @@ private theorem supporters_capped_of_fastCommit {L L' : BlockId} {r : ℕ}
     (h : FastCommit U L r) :
     (supporters U L' (r + 1)).card + qFast Replica ≤
       Fintype.card Replica + F.f := by
-  have hsub : supporters U L' (r + 1) ∩ supporters U L (r + 1) ⊆
-      F.byzantine := by
-    intro v hv
-    obtain ⟨h₁, h₂⟩ := Finset.mem_inter.mp hv
-    exact byzantine_of_votes_two hne hcreator h₁ h₂
-  have h1 := Finset.card_union_add_card_inter
-    (supporters U L' (r + 1)) (supporters U L (r + 1))
-  have h2 : (supporters U L' (r + 1) ∪ supporters U L (r + 1)).card ≤
-      Fintype.card Replica := by
-    rw [← Finset.card_univ]; exact Finset.card_le_univ _
-  have h3 := Finset.card_le_card hsub
-  have h4 := F.card_byzantine
+  have := card_supporters_add_card_supporters_le U.noEquivOn_honest card_compl_nonByzantine_le
+    hne hcreator (n := r + 1)
   simp only [FastCommit] at h
   omega
 
@@ -277,23 +267,9 @@ private theorem supporters_capped_of_skipped {k : ℕ} {L : BlockId}
     (hL : IsLeaderBlock U k L) (h : SkippedLeader U k) :
     (supporters U L (S.slotRound k + 1)).card + qFast Replica ≤
       Fintype.card Replica + F.f := by
-  have h' : (supporters U L (votingRound Replica k)).card + qFast Replica ≤
-      Fintype.card Replica + F.f := by
-    have hsub : supporters U L (votingRound Replica k) ∩ slotBlames U k ⊆
-        F.byzantine := by
-      intro v hv
-      obtain ⟨h₁, h₂⟩ := Finset.mem_inter.mp hv
-      exact byzantine_of_votes_and_blames hL h₁ h₂
-    have h1 := Finset.card_union_add_card_inter
-      (supporters U L (votingRound Replica k)) (slotBlames U k)
-    have h2 : (supporters U L (votingRound Replica k) ∪ slotBlames U k).card ≤
-        Fintype.card Replica := by
-      rw [← Finset.card_univ]; exact Finset.card_le_univ _
-    have h3 := Finset.card_le_card hsub
-    have h4 := F.card_byzantine
-    simp only [SkippedLeader] at h
-    omega
-  exact h'
+  have := card_supporters_add_card_slotBlames_le U.noEquivOn_honest card_compl_nonByzantine_le hL
+  simp only [SkippedLeader] at h
+  omega
 
 /-- A skipped slot's candidates never reach the weak rung. -/
 theorem not_weakLinked_of_skipped {k : ℕ} {L : BlockId} {A : BlockId}

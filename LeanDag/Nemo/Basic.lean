@@ -30,20 +30,6 @@ variable {BlockId : Type*} {Payload : Type*}
 def majority (Validator : Type*) [Fintype Validator] : ℕ :=
   Fintype.card Validator / 2 + 1
 
-/-- **The one quorum fact.** Two majorities always intersect —
-`(n/2+1) + (n/2+1) > n` — and, all validators being honest, the shared member is
-consistent. This is the crash analogue of the core's `exists_correct_mem_inter`,
-with the correctness filtering gone. -/
-theorem exists_mem_inter {Q₁ Q₂ : Finset Validator}
-    (h₁ : majority Validator ≤ Q₁.card) (h₂ : majority Validator ≤ Q₂.card) :
-    (Q₁ ∩ Q₂).Nonempty := by
-  rw [← Finset.card_pos]
-  have hunion : (Q₁ ∪ Q₂).card ≤ Fintype.card Validator := by
-    rw [← Finset.card_univ]; exact Finset.card_le_univ _
-  have hadd := Finset.card_union_add_card_inter Q₁ Q₂
-  unfold majority at h₁ h₂
-  omega
-
 /-- **A majority is more than a block can miss**: a block references a
 majority of distinct creators, so it misses fewer than a majority. This
 turns a majority of backers into the form the hitting lemma reads. -/
@@ -139,24 +125,6 @@ theorem eq_of_mem_refs_of_creator_eq {i j k : BlockId} (hi : i ∈ U.ids)
   have h2 := U.round_of_mem_refs hi hk
   exact U.eq_of_creator_eq (U.refs_subset hi hj) (U.refs_subset hi hk) (Finset.mem_univ _)
     hc rfl (by omega)
-
-/-- **Two majority-backed sets of round-`n` blocks share a block.** The crash
-analogue of the core's `exists_common_mem_of_quorums`: majority intersection
-(all honest) plus universal non-equivocation. -/
-theorem exists_common_mem_of_quorums {s t : Finset BlockId} {n : ℕ}
-    (hs : ∀ q ∈ s, q ∈ U.ids ∧ (U.block q).round = n)
-    (ht : ∀ q ∈ t, q ∈ U.ids ∧ (U.block q).round = n)
-    (hsq : majority Validator ≤ (creatorsOf U.block s).card)
-    (htq : majority Validator ≤ (creatorsOf U.block t).card) :
-    ∃ q, q ∈ s ∧ q ∈ t := by
-  obtain ⟨v, hv⟩ := exists_mem_inter hsq htq
-  rw [Finset.mem_inter, mem_creatorsOf, mem_creatorsOf] at hv
-  obtain ⟨⟨q₁, hq₁, hq₁c⟩, q₂, hq₂, hq₂c⟩ := hv
-  obtain ⟨hq₁i, hq₁r⟩ := hs q₁ hq₁
-  obtain ⟨hq₂i, hq₂r⟩ := ht q₂ hq₂
-  have : q₁ = q₂ :=
-    U.eq_of_creator_eq hq₁i hq₂i (Finset.mem_univ _) hq₁c hq₂c (by omega)
-  exact ⟨q₁, hq₁, this ▸ hq₂⟩
 
 end Universe
 

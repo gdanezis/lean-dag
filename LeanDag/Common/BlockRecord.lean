@@ -398,6 +398,21 @@ class Quorate [DecidableEq Validator] (P : Validity Validator BlockId Payload)
     (b : Block Validator BlockId Payload), P blk b → 0 < b.round → q ≤ (creators blk b).card
   pos : 0 < q
 
+/-- References have distinct creators: the clause the counting arguments
+read when two votes of one validator must be one vote. -/
+class Distinct (P : Validity Validator BlockId Payload) : Prop where
+  distinct : ∀ (blk : BlockId → Block Validator BlockId Payload)
+    (b : Block Validator BlockId Payload), P blk b →
+    ∀ i ∈ b.refs, ∀ j ∈ b.refs, (blk i).creator = (blk j).creator → i = j
+
+/-- A predicate equivalent to the family with a clause implying distinct
+creators has them. -/
+theorem Distinct.of_validAt [DecidableEq Validator] {P : Validity Validator BlockId Payload}
+    {q : ℕ} {C : Clause Validator BlockId Payload}
+    (h : ∀ blk b, P blk b ↔ ValidAt q C blk b)
+    (hC : ∀ blk b, C blk b → Clause.distinct blk b) : P.Distinct where
+  distinct := fun blk b hp => hC blk b ((h blk b).mp hp).clause
+
 /-- A predicate equivalent to the family at `q` is quorate at `q`. -/
 theorem Quorate.of_validAt [DecidableEq Validator] {P : Validity Validator BlockId Payload}
     {q : ℕ} {C : Clause Validator BlockId Payload} (hq : 0 < q)
@@ -437,6 +452,12 @@ theorem eq_of_creator_eq {v : Validator} {i j : BlockId}
     (hround : (U.block i).round = (U.block j).round) : i = j :=
   U.no_equivocation i hi j hj (hic ▸ hv) (hic.trans hjc.symm) hround
 
+/-- Two references of one block by one author are one reference. -/
+theorem distinct_creators [P.Distinct] {i j k : BlockId} (hi : i ∈ U.ids)
+    (hj : j ∈ (U.block i).refs) (hk : k ∈ (U.block i).refs)
+    (hc : (U.block j).creator = (U.block k).creator) : j = k :=
+  Validity.Distinct.distinct U.block (U.block i) (U.valid i hi) j hj k hk hc
+
 variable [DecidableEq Validator]
 
 /-- References of a non-genesis block carry the record's quorum of
@@ -451,6 +472,44 @@ theorem refs_nonempty {q : ℕ} [P.Quorate q] {i : BlockId} (hi : i ∈ U.ids)
     (hround : 0 < (U.block i).round) : (U.block i).refs.Nonempty :=
   nonempty_of_creatorsOf_card_pos
     (lt_of_lt_of_le (Validity.Quorate.pos (P := P)) (creators_quorum hi hround))
+
+end BlockRecord
+
+/-! ## Non-equivocation on a set
+
+Every counting argument reads non-equivocation on some set of validators:
+the record's own honest set, or a larger one a rule proves it for, as the
+hybrid model does for its crash-prone validators. Stated once so the
+arguments are stated once. -/
+
+namespace BlockRecord
+
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
+variable {U : BlockRecord Validator BlockId Payload P honest}
+
+/-- The validators of `Hon` author at most one block per round in `U`. -/
+def NoEquivOn (U : BlockRecord Validator BlockId Payload P honest) (Hon : Finset Validator) :
+    Prop :=
+  ∀ i ∈ U.ids, ∀ j ∈ U.ids, (U.block i).creator ∈ Hon →
+    (U.block i).creator = (U.block j).creator →
+    (U.block i).round = (U.block j).round → i = j
+
+instance [DecidableEq Validator] [DecidableEq BlockId]
+    (U : BlockRecord Validator BlockId Payload P honest) (Hon : Finset Validator) :
+    Decidable (U.NoEquivOn Hon) :=
+  inferInstanceAs (Decidable (∀ _ ∈ _, ∀ _ ∈ _, _ → _ → _ → _))
+
+/-- The record's honest set does not equivocate: its own clause. -/
+theorem noEquivOn_honest (U : BlockRecord Validator BlockId Payload P honest) :
+    U.NoEquivOn honest :=
+  U.no_equivocation
+
+/-- T1 on the set: two ids with one author from `Hon` and one round are one id. -/
+theorem NoEquivOn.eq_of_creator_eq {Hon : Finset Validator} (hne : U.NoEquivOn Hon)
+    {v : Validator} {i j : BlockId} (hi : i ∈ U.ids) (hj : j ∈ U.ids) (hv : v ∈ Hon)
+    (hic : (U.block i).creator = v) (hjc : (U.block j).creator = v)
+    (hround : (U.block i).round = (U.block j).round) : i = j :=
+  hne i hi j hj (hic ▸ hv) (hic.trans hjc.symm) hround
 
 end BlockRecord
 

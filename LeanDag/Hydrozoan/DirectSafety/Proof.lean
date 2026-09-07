@@ -22,29 +22,17 @@ variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   {U : BlockUniverse Replica BlockId}
 
 omit S in
-/-- Universe-level fast/fast core. -/
+/-- Universe-level fast/fast core: two fast quorums exceed `n + f`. -/
 theorem eq_of_fastCommit {L₁ L₂ : BlockId} {r : ℕ}
     (hcreator : (U.block L₁).creator = (U.block L₂).creator)
-    (h₁ : FastCommit U L₁ r) (h₂ : FastCommit U L₂ r) : L₁ = L₂ := by
-  by_contra hne
-  have hsub : supporters U L₁ (r + 1) ∩ supporters U L₂ (r + 1) ⊆
-      F.byzantine := by
-    intro v hv
-    obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
-    exact byzantine_of_votes_two hne hcreator hv₁ hv₂
-  have h1 := Finset.card_union_add_card_inter
-    (supporters U L₁ (r + 1)) (supporters U L₂ (r + 1))
-  have h2 : (supporters U L₁ (r + 1) ∪ supporters U L₂ (r + 1)).card ≤
-      Fintype.card Replica := by
-    rw [← Finset.card_univ]; exact Finset.card_le_univ _
-  have h3 := Finset.card_le_card hsub
-  have h4 := F.card_byzantine
-  have h5 := nf_lt_two_qFast (Replica := Replica)
-  simp only [FastCommit] at h₁ h₂
-  omega
+    (h₁ : FastCommit U L₁ r) (h₂ : FastCommit U L₂ r) : L₁ = L₂ :=
+  eq_of_card_supporters U.noEquivOn_honest card_compl_nonByzantine_le hcreator (n := r + 1)
+    (by have := nf_lt_two_qFast (Replica := Replica); simp only [FastCommit] at h₁ h₂; omega)
 
 omit S in
-/-- Universe-level certificate-uniqueness core. -/
+/-- Universe-level certificate-uniqueness core: two certificates' vote
+sets exceed `n + f`, so they share a vote block, which cites one author
+once. -/
 theorem eq_of_certificates_nonempty {L₁ L₂ : BlockId} {r : ℕ}
     (hcreator : (U.block L₁).creator = (U.block L₂).creator)
     (h₁ : (certificates U L₁ r).Nonempty)
@@ -54,8 +42,8 @@ theorem eq_of_certificates_nonempty {L₁ L₂ : BlockId} {r : ℕ}
   obtain ⟨hC₁i, hC₁r, hcert₁⟩ := mem_certificates.mp hC₁
   obtain ⟨hC₂i, hC₂r, hcert₂⟩ := mem_certificates.mp hC₂
   obtain ⟨b, hb₁, hb₂⟩ :=
-    exists_common_mem_of_creator_quorums (s := voteBlocks U C₁ L₁)
-      (t := voteBlocks U C₂ L₂) (r := r + 1)
+    exists_common_block U.noEquivOn_honest card_compl_nonByzantine_le
+      (s := voteBlocks U C₁ L₁) (t := voteBlocks U C₂ L₂) (n := r + 1)
       (fun b hb => ⟨(mem_voteBlocks_spec hC₁i hC₁r hb).1,
         (mem_voteBlocks_spec hC₁i hC₁r hb).2.1⟩)
       (fun b hb => ⟨(mem_voteBlocks_spec hC₂i hC₂r hb).1,
@@ -65,58 +53,40 @@ theorem eq_of_certificates_nonempty {L₁ L₂ : BlockId} {r : ℕ}
         simp only [IsCertificate] at hcert₁ hcert₂
         omega)
   have hbids : b ∈ U.ids := (mem_voteBlocks_spec hC₁i hC₁r hb₁).1
-  exact (U.valid b hbids).distinct_creators
-    L₁ (mem_voteBlocks_spec hC₁i hC₁r hb₁).2.2
-    L₂ (mem_voteBlocks_spec hC₂i hC₂r hb₂).2.2 hcreator
+  exact U.distinct_creators hbids
+    (mem_voteBlocks_spec hC₁i hC₁r hb₁).2.2
+    (mem_voteBlocks_spec hC₂i hC₂r hb₂).2.2 hcreator
 
 omit S in
-/-- Universe-level fast/slow core. -/
+/-- A slow commit's certificate carries `q_cert` supporters. -/
+theorem qCert_le_card_supporters_of_slowCommit {L : BlockId} {r : ℕ} (h : SlowCommit U L r) :
+    qCert Replica ≤ (supporters U L (r + 1)).card := by
+  obtain ⟨C, hC⟩ := certificates_nonempty_of_slowCommit h
+  obtain ⟨hCi, hCr, hcert⟩ := mem_certificates.mp hC
+  have hle := Finset.card_le_card (creators_voteBlocks_subset_supporters (L := L) hCi hCr)
+  simp only [IsCertificate] at hcert
+  omega
+
+omit S in
+/-- Universe-level fast/slow core: a fast quorum and a certificate's
+support exceed `n + f`. -/
 theorem eq_of_fastCommit_of_slowCommit {L₁ L₂ : BlockId} {r : ℕ}
     (hcreator : (U.block L₁).creator = (U.block L₂).creator)
-    (h₁ : FastCommit U L₁ r) (h₂ : SlowCommit U L₂ r) : L₁ = L₂ := by
-  by_contra hne
-  obtain ⟨C, hC⟩ := certificates_nonempty_of_slowCommit h₂
-  obtain ⟨hCi, hCr, hcert⟩ := mem_certificates.mp hC
-  have hcard2 : qCert Replica ≤ (supporters U L₂ (r + 1)).card := by
-    have hle := Finset.card_le_card
-      (creators_voteBlocks_subset_supporters (L := L₂) hCi hCr)
-    simp only [IsCertificate] at hcert
-    omega
-  have hsub : supporters U L₁ (r + 1) ∩ supporters U L₂ (r + 1) ⊆
-      F.byzantine := by
-    intro v hv
-    obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
-    exact byzantine_of_votes_two hne hcreator hv₁ hv₂
-  have h1 := Finset.card_union_add_card_inter
-    (supporters U L₁ (r + 1)) (supporters U L₂ (r + 1))
-  have h2 : (supporters U L₁ (r + 1) ∪ supporters U L₂ (r + 1)).card ≤
-      Fintype.card Replica := by
-    rw [← Finset.card_univ]; exact Finset.card_le_univ _
-  have h3 := Finset.card_le_card hsub
-  have h4 := F.card_byzantine
-  have h5 := nf_lt_qFast_add_qCert (Replica := Replica)
-  simp only [FastCommit] at h₁
-  omega
+    (h₁ : FastCommit U L₁ r) (h₂ : SlowCommit U L₂ r) : L₁ = L₂ :=
+  eq_of_card_supporters U.noEquivOn_honest card_compl_nonByzantine_le hcreator (n := r + 1) (by
+    have := qCert_le_card_supporters_of_slowCommit h₂
+    have := nf_lt_qFast_add_qCert (Replica := Replica)
+    simp only [FastCommit] at h₁
+    omega)
 
 /-- Universe-level fast-commit/skip exclusion core. -/
 theorem not_skippedLeader_of_fastCommit {k : ℕ} {L : BlockId}
     (hL : IsLeaderBlock U k L) (h : FastCommit U L (S.slotRound k)) :
     ¬ SkippedLeader U k := by
   intro hskip
-  have h' : qFast Replica ≤ (supporters U L (votingRound Replica k)).card := h
-  have hsub : supporters U L (votingRound Replica k) ∩ slotBlames U k ⊆
-      F.byzantine := by
-    intro v hv
-    obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
-    exact byzantine_of_votes_and_blames hL hv₁ hv₂
-  have h1 := Finset.card_union_add_card_inter
-    (supporters U L (votingRound Replica k)) (slotBlames U k)
-  have h2 : (supporters U L (votingRound Replica k) ∪ slotBlames U k).card ≤
-      Fintype.card Replica := by
-    rw [← Finset.card_univ]; exact Finset.card_le_univ _
-  have h3 := Finset.card_le_card hsub
-  have h4 := F.card_byzantine
+  have := card_supporters_add_card_slotBlames_le U.noEquivOn_honest card_compl_nonByzantine_le hL
   have h5 := nf_lt_two_qFast (Replica := Replica)
+  simp only [FastCommit] at h
   simp only [SkippedLeader] at hskip
   omega
 
@@ -125,28 +95,8 @@ theorem not_skippedLeader_of_slowCommit {k : ℕ} {L : BlockId}
     (hL : IsLeaderBlock U k L) (h : SlowCommit U L (S.slotRound k)) :
     ¬ SkippedLeader U k := by
   intro hskip
-  obtain ⟨C, hC⟩ := certificates_nonempty_of_slowCommit h
-  obtain ⟨hCi, hCr, hcert⟩ := mem_certificates.mp hC
-  have hcard2 : qCert Replica ≤
-      (supporters U L (votingRound Replica k)).card := by
-    have hle := Finset.card_le_card
-      (creators_voteBlocks_subset_supporters (L := L) hCi hCr)
-    simp only [IsCertificate] at hcert
-    have : votingRound Replica k = S.slotRound k + 1 := rfl
-    rw [this]
-    omega
-  have hsub : supporters U L (votingRound Replica k) ∩ slotBlames U k ⊆
-      F.byzantine := by
-    intro v hv
-    obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
-    exact byzantine_of_votes_and_blames hL hv₁ hv₂
-  have h1 := Finset.card_union_add_card_inter
-    (supporters U L (votingRound Replica k)) (slotBlames U k)
-  have h2 : (supporters U L (votingRound Replica k) ∪ slotBlames U k).card ≤
-      Fintype.card Replica := by
-    rw [← Finset.card_univ]; exact Finset.card_le_univ _
-  have h3 := Finset.card_le_card hsub
-  have h4 := F.card_byzantine
+  have := card_supporters_add_card_slotBlames_le U.noEquivOn_honest card_compl_nonByzantine_le hL
+  have h2 := qCert_le_card_supporters_of_slowCommit h
   have h5 := nf_lt_qFast_add_qCert (Replica := Replica)
   simp only [SkippedLeader] at hskip
   omega

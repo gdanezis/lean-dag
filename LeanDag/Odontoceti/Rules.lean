@@ -129,127 +129,38 @@ instance : Decidable (ThickLink U A L r) :=
 
 /-! ## O1 — commit versus skip, and twin uniqueness -/
 
-/-- A validator that both supports and blames `L` has two distinct
-blocks at the decision round, so it is not correct. -/
-theorem not_correct_of_supports_and_blames {v : Validator}
-    (hs : v ∈ supporters U L (r + 1)) (hb : v ∈ blames U L (r + 1)) :
-    v ∉ (Correct : Finset Validator) := by
-  intro hv
-  obtain ⟨q₁, hq₁, hq₁r, hq₁L, hq₁c⟩ := mem_supporters.mp hs
-  obtain ⟨q₂, hq₂, hq₂r, hq₂L, hq₂c⟩ := mem_blames.mp hb
-  have : q₁ = q₂ :=
-    U.eq_of_creator_eq hq₁ hq₂ hv hq₁c hq₂c (by omega)
-  exact hq₂L (this ▸ hq₁L)
-
 /-- **O1 (thesis Lemma 1).** No leader block is both directly committed
-and directly skipped: the two quorums share `n − 2f ≥ f+1` authors, all
-equivocators — one too many. Needs only `n ≥ 3f+1`. -/
+and directly skipped: supporters and blamers together number at most
+`n + f`, and two quorums are more. Needs only `n ≥ 3f+1`. -/
 theorem not_directSkip_of_directCommit (hc : DirectCommit U L r)
     (hk : DirectSkip U L r) : False := by
-  have hsub : supporters U L (r + 1) ∩ blames U L (r + 1) ⊆ F.byzantine := by
-    intro v hv
-    obtain ⟨hvs, hvb⟩ := Finset.mem_inter.mp hv
-    have := not_correct_of_supports_and_blames hvs hvb
-    simpa [mem_correct] using this
-  have h1 := Finset.card_union_add_card_inter
-    (supporters U L (r + 1)) (blames U L (r + 1))
-  have h2 := Finset.card_le_univ
-    (supporters U L (r + 1) ∪ blames U L (r + 1))
-  have h3 := Finset.card_le_card hsub
-  have h4 := F.card_byzantine
+  have := card_supporters_add_card_blames_le U.noEquivOn_honest card_compl_correct_le
+    (L := L) (n := r + 1)
   have h5 := F.card_validators
   unfold DirectCommit at hc
   unfold DirectSkip at hk
   omega
 
-/-- A validator supporting two *distinct* same-author blocks is not
-correct: one supporting block cannot reference both (that would cite
-one author twice), and two supporting blocks are an equivocation. -/
-theorem not_correct_of_supports_two {L₁ L₂ : BlockId} {v : Validator}
-    (hne : L₁ ≠ L₂) (hcr : (U.block L₁).creator = (U.block L₂).creator)
-    (h₁ : v ∈ supporters U L₁ (r + 1)) (h₂ : v ∈ supporters U L₂ (r + 1)) :
-    v ∉ (Correct : Finset Validator) := by
-  intro hv
-  obtain ⟨q₁, hq₁, hq₁r, hq₁L, hq₁c⟩ := mem_supporters.mp h₁
-  obtain ⟨q₂, hq₂, hq₂r, hq₂L, hq₂c⟩ := mem_supporters.mp h₂
-  have hq : q₁ = q₂ :=
-    U.eq_of_creator_eq hq₁ hq₂ hv hq₁c hq₂c (by omega)
-  subst hq
-  exact hne ((U.valid q₁ hq₁).distinct_creators L₁ hq₁L L₂ hq₂L hcr)
-
 /-- **O1′ (M5 analogue).** Two directly committed blocks by one author
-at one round are equal: their support quorums share `n − 2f ≥ f+1`
-authors, each supporting both — all equivocators. Needs only
-`n ≥ 3f+1`. -/
+at one round are equal: their support quorums together exceed `n + f`.
+Needs only `n ≥ 3f+1`. -/
 theorem eq_of_directCommit {L₁ L₂ : BlockId}
     (h₁ : DirectCommit U L₁ r) (h₂ : DirectCommit U L₂ r)
-    (hcr : (U.block L₁).creator = (U.block L₂).creator) : L₁ = L₂ := by
-  by_contra hne
-  have hsub : supporters U L₁ (r + 1) ∩ supporters U L₂ (r + 1) ⊆
-      F.byzantine := by
-    intro v hv
-    obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
-    have := not_correct_of_supports_two hne hcr hv₁ hv₂
-    simpa [mem_correct] using this
-  have h1 := Finset.card_union_add_card_inter
-    (supporters U L₁ (r + 1)) (supporters U L₂ (r + 1))
-  have h2 := Finset.card_le_univ
-    (supporters U L₁ (r + 1) ∪ supporters U L₂ (r + 1))
-  have h3 := Finset.card_le_card hsub
-  have h4 := F.card_byzantine
-  have h5 := F.card_validators
-  unfold DirectCommit at h₁ h₂
-  omega
+    (hcr : (U.block L₁).creator = (U.block L₂).creator) : L₁ = L₂ :=
+  eq_of_card_supporters U.noEquivOn_honest card_compl_correct_le hcr (n := r + 1)
+    (by unfold DirectCommit at h₁ h₂; have := F.card_validators; omega)
 
 /-! ## O2 — a skipped leader cannot muster the indirect threshold -/
 
 /-- **O2, the counting half.** A directly skipped leader's supporters —
-anywhere in the universe — number at most `2f`. The proof needs the
-exact complement identity `|Correct| = n − |byzantine|`
-(`card_correct_add_byzantine`): correct supporters and correct blamers
-are disjoint, correct blamers number at least `(n−f) − |byzantine|`,
-and the `|byzantine|` cancels. -/
+anywhere in the universe — number at most `2f`: supporters and blamers
+together number at most `n + f`, and the blamers are `n − f`. -/
 theorem card_supporters_le_of_directSkip (hk : DirectSkip U L r) :
     (supporters U L (r + 1)).card ≤ 2 * F.f := by
-  unfold DirectSkip at hk
-  set S := supporters U L (r + 1) with hS
-  set B := blames U L (r + 1) with hB
-  -- correct supporters and correct blamers are disjoint
-  have hdisj : Disjoint (S ∩ (Correct : Finset Validator))
-      (B ∩ (Correct : Finset Validator)) := by
-    rw [Finset.disjoint_left]
-    intro v hv₁ hv₂
-    obtain ⟨hvS, hvC⟩ := Finset.mem_inter.mp hv₁
-    obtain ⟨hvB, -⟩ := Finset.mem_inter.mp hv₂
-    exact not_correct_of_supports_and_blames hvS hvB hvC
-  have h1 : (S ∩ (Correct : Finset Validator)).card +
-      (B ∩ (Correct : Finset Validator)).card ≤
-        (Correct : Finset Validator).card := by
-    rw [← Finset.card_union_of_disjoint hdisj]
-    exact Finset.card_le_card
-      (Finset.union_subset Finset.inter_subset_right Finset.inter_subset_right)
-  -- both split against the complement
-  have h2 : S.card ≤ (S ∩ (Correct : Finset Validator)).card +
-      F.byzantine.card := by
-    refine le_trans (Finset.card_le_card (s := S)
-      (t := S ∩ (Correct : Finset Validator) ∪ F.byzantine) ?_)
-      (Finset.card_union_le _ _)
-    intro v hv
-    by_cases hvC : v ∈ (Correct : Finset Validator)
-    · exact Finset.mem_union_left _ (Finset.mem_inter.mpr ⟨hv, hvC⟩)
-    · exact Finset.mem_union_right _ (by simpa [mem_correct] using hvC)
-  have h3 : B.card ≤ (B ∩ (Correct : Finset Validator)).card +
-      F.byzantine.card := by
-    refine le_trans (Finset.card_le_card (s := B)
-      (t := B ∩ (Correct : Finset Validator) ∪ F.byzantine) ?_)
-      (Finset.card_union_le _ _)
-    intro v hv
-    by_cases hvC : v ∈ (Correct : Finset Validator)
-    · exact Finset.mem_union_left _ (Finset.mem_inter.mpr ⟨hv, hvC⟩)
-    · exact Finset.mem_union_right _ (by simpa [mem_correct] using hvC)
-  have hcc := card_correct_add_byzantine (Validator := Validator)
-  have h4 := F.card_byzantine
+  have := card_supporters_add_card_blames_le U.noEquivOn_honest card_compl_correct_le
+    (L := L) (n := r + 1)
   have h5 := F.card_validators
+  unfold DirectSkip at hk
   omega
 
 /-- **O2 (thesis Lemma 2).** A directly skipped leader fails the
@@ -360,7 +271,7 @@ theorem eq_of_directCommit_of_thickLink {L₁ L₂ : BlockId}
       F.byzantine := by
     intro v hv
     obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
-    have := not_correct_of_supports_two hne hcr hv₁
+    have := not_mem_of_supports_two U.noEquivOn_honest hne hcr hv₁
       (coneSupports_subset_supporters hv₂)
     simpa [mem_correct] using this
   have h1 := Finset.card_union_add_card_inter

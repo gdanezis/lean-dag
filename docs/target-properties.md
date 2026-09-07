@@ -4308,6 +4308,48 @@ built from combinators (step 7).
 **Measure.** The step removes 506 lines and adds 308; the library and
 tests stand at 77,577 lines.
 
+### 11.33 One intersection lemma, and the counting trio at any record
+
+The third step of `docs/common-layer.md`. Every direct-safety argument of
+every rule makes one counting move: two author sets whose sizes sum past
+`n + m` share a member outside any set of at most `m`, and, read the
+other way, two sets that meet only inside a set of at most `m` sum to at
+most `n + m`. `Common/Counting.lean` states both once
+(`exists_mem_inter_notMem`, `card_add_card_le_of_inter_subset`). The
+core's T0, Hybrid's honest intersection, Hydrozoan's, Nemo's two
+majorities, FinWhale's additive form and the checkpoint arc's
+reliable-signer intersection were seven proofs of it.
+
+**Non-equivocation on a set.** `BlockRecord.NoEquivOn U Hon` says the
+validators of `Hon` author one block per round in `U`; the record's own
+clause is `U.noEquivOn_honest`, and Hybrid's `HonestNoEquiv` is now this
+at the honest class by definition. `Validity.Distinct` names the
+distinct-creators clause the way `Quorate` names the quorum, and the
+core, Hydrozoan and FinWhale register theirs.
+
+**The trio, once** (`Common/Support.lean`, on any `Hon` with `m` outside
+it): a validator cannot both vote for a block and omit it
+(`not_mem_of_supports_of_blames`), so supporters and blamers together
+number at most `n + m` (`card_supporters_add_card_blames_le`); with
+distinct creators it cannot vote for two blocks of one author
+(`not_mem_of_supports_two`), so two same-author blocks each voted for
+past the bound are one block (`eq_of_card_supporters`); and two
+same-round block sets whose author counts exceed the bound share a block
+(`exists_common_block`). `Common/Leader.lean` adds the slot form,
+supporters of a candidate against blamers of its slot.
+
+**What each rule keeps.** One arithmetic row per conflict pair, and the
+statement in its own thresholds: the core's M1 and M5, Odontoceti's O1,
+O1′ and O2, Hybrid's H2 and H3 at `fb`, Black Marlin's Lemma 3,
+Hydrozoan's five direct-safety cores and its starvation caps, Optimal's
+four, are each `omega` on the shared bound and the row. Odontoceti's and
+Hybrid's forty-line disjoint-union arguments for the supporters of a
+skipped leader, and the fourteen hand-written intersection blocks in the
+Hydrozoan and Optimal safety files, are gone.
+
+**Measure.** The step removes 683 lines and adds 322; the library and
+tests stand at 77,260 lines.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

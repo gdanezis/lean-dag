@@ -25,6 +25,10 @@ theorem mem_nonByzantine {v : Replica} :
     v ∈ (NonByzantine : Finset Replica) ↔ v ∉ F.byzantine := by
   simp [NonByzantine]
 
+/-- The replicas outside `NonByzantine` are the Byzantine ones: at most `f`. -/
+theorem card_compl_nonByzantine_le : (NonByzantine : Finset Replica)ᶜ.card ≤ F.f := by
+  rw [NonByzantine, compl_compl]; exact F.card_byzantine
+
 /-- Every correct replica is non-Byzantine. -/
 theorem correct_subset_nonByzantine :
     (Correct : Finset Replica) ⊆ NonByzantine := fun v hv => by

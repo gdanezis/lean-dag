@@ -1,4 +1,5 @@
 import LeanDag.Common.CausalHistory
+import LeanDag.Common.Counting
 /-!
 # Support and coverage
 
@@ -149,11 +150,10 @@ theorem supporters_subset_authorsAt {b : BlockId} {n : ℕ} :
 /-- The validators whose round-`n` block declines to reference `L`.
 
 The complement of `supporters U L n` *within the round-`n` author pool* —
-but only for correct validators. A Byzantine author can appear in both, by
+but only for honest validators. A Byzantine author can appear in both, by
 publishing one round-`n` block that votes and another that does not; ruling
-that out for correct validators is exactly what
-`blames_inter_supporters_subset_byzantine`
-does, and is the whole content of M3. -/
+that out for honest validators is `not_mem_of_supports_of_blames`, and is
+the whole content of M3. -/
 def blames (U : BlockRecord Validator BlockId Payload P honest) (L : BlockId) (n : ℕ) :
     Finset Validator :=
   creatorsOf U.block (omissionsOf U L n)
@@ -294,6 +294,90 @@ theorem blamesIn_eq_toRecord {V : U.View} {L : BlockId} {n : ℕ} :
   ext v
   rw [mem_blamesIn, mem_blames]
   rfl
+
+/-! ### Votes and blames under non-equivocation
+
+The counting core of every direct-safety argument, at any record and on
+any set `Hon` that does not equivocate, with `m` bounding the validators
+outside it. A validator of `Hon` has one block per round, so it cannot
+both vote for a block and omit it, nor vote for two blocks of one author;
+so supporters and blamers, or the supporters of two same-author blocks,
+meet only outside `Hon`, and together number at most `n + m`. Each rule's
+"no commit and skip" and "at most one commit per author" is this at its
+thresholds, closed by one arithmetic row. -/
+
+section Bounds
+
+variable {Hon : Finset Validator} {m : ℕ}
+
+/-- A validator both voting for `L` and omitting it at one round has two
+blocks there. -/
+theorem not_mem_of_supports_of_blames (hne : U.NoEquivOn Hon) {L : BlockId} {n : ℕ}
+    {v : Validator} (hs : v ∈ supporters U L n) (hb : v ∈ blames U L n) : v ∉ Hon := by
+  intro hv
+  obtain ⟨q₁, hq₁, hr₁, hL₁, hc₁⟩ := mem_supporters.mp hs
+  obtain ⟨q₂, hq₂, hr₂, hL₂, hc₂⟩ := mem_blames.mp hb
+  have := hne.eq_of_creator_eq hq₁ hq₂ hv hc₁ hc₂ (by rw [hr₁, hr₂])
+  exact hL₂ (this ▸ hL₁)
+
+/-- **Supporters and blamers together number at most `n + m`.** -/
+theorem card_supporters_add_card_blames_le [Fintype Validator] (hne : U.NoEquivOn Hon)
+    (hm : Honᶜ.card ≤ m) {L : BlockId} {n : ℕ} :
+    (supporters U L n).card + (blames U L n).card ≤ Fintype.card Validator + m :=
+  card_add_card_le_of_inter_subset hm fun v hv =>
+    Finset.mem_compl.mpr (not_mem_of_supports_of_blames hne
+      (Finset.mem_inter.mp hv).1 (Finset.mem_inter.mp hv).2)
+
+/-- A validator voting for two distinct blocks of one author at one round
+has two blocks there, or one block citing an author twice. -/
+theorem not_mem_of_supports_two [P.Distinct] (hne : U.NoEquivOn Hon) {L₁ L₂ : BlockId}
+    {n : ℕ} {v : Validator} (hd : L₁ ≠ L₂) (hcr : (U.block L₁).creator = (U.block L₂).creator)
+    (h₁ : v ∈ supporters U L₁ n) (h₂ : v ∈ supporters U L₂ n) : v ∉ Hon := by
+  intro hv
+  obtain ⟨q₁, hq₁, hr₁, hL₁, hc₁⟩ := mem_supporters.mp h₁
+  obtain ⟨q₂, hq₂, hr₂, hL₂, hc₂⟩ := mem_supporters.mp h₂
+  have hq := hne.eq_of_creator_eq hq₁ hq₂ hv hc₁ hc₂ (by rw [hr₁, hr₂])
+  subst hq
+  exact hd (U.distinct_creators hq₁ hL₁ hL₂ hcr)
+
+/-- **The supporters of two distinct same-author blocks together number
+at most `n + m`.** -/
+theorem card_supporters_add_card_supporters_le [Fintype Validator] [P.Distinct]
+    (hne : U.NoEquivOn Hon) (hm : Honᶜ.card ≤ m) {L₁ L₂ : BlockId} {n : ℕ}
+    (hd : L₁ ≠ L₂) (hcr : (U.block L₁).creator = (U.block L₂).creator) :
+    (supporters U L₁ n).card + (supporters U L₂ n).card ≤ Fintype.card Validator + m :=
+  card_add_card_le_of_inter_subset hm fun v hv =>
+    Finset.mem_compl.mpr (not_mem_of_supports_two hne hd hcr
+      (Finset.mem_inter.mp hv).1 (Finset.mem_inter.mp hv).2)
+
+/-- **Two same-author blocks each voted for past the bound are one block.** -/
+theorem eq_of_card_supporters [Fintype Validator] [P.Distinct] (hne : U.NoEquivOn Hon)
+    (hm : Honᶜ.card ≤ m) {L₁ L₂ : BlockId} {n : ℕ}
+    (hcr : (U.block L₁).creator = (U.block L₂).creator)
+    (h : Fintype.card Validator + m < (supporters U L₁ n).card + (supporters U L₂ n).card) :
+    L₁ = L₂ := by
+  by_contra hd
+  exact absurd (card_supporters_add_card_supporters_le hne hm hd hcr (n := n)) (by omega)
+
+omit [DecidableEq BlockId] in
+/-- **Two same-round block sets whose author counts sum past `n + m`
+share a block**: their common author from `Hon` has one block there. -/
+theorem exists_common_block [Fintype Validator] (hne : U.NoEquivOn Hon) (hm : Honᶜ.card ≤ m)
+    {s t : Finset BlockId} {n : ℕ}
+    (hs : ∀ b ∈ s, b ∈ U.ids ∧ (U.block b).round = n)
+    (ht : ∀ b ∈ t, b ∈ U.ids ∧ (U.block b).round = n)
+    (h : Fintype.card Validator + m < (creatorsOf U.block s).card + (creatorsOf U.block t).card) :
+    ∃ b, b ∈ s ∧ b ∈ t := by
+  obtain ⟨v, hv, hvh⟩ := exists_mem_inter_notMem hm h
+  rw [Finset.mem_inter] at hv
+  obtain ⟨b₁, hb₁, hc₁⟩ := mem_creatorsOf.mp hv.1
+  obtain ⟨b₂, hb₂, hc₂⟩ := mem_creatorsOf.mp hv.2
+  have hb : b₁ = b₂ :=
+    hne.eq_of_creator_eq (hs b₁ hb₁).1 (ht b₂ hb₂).1 (by simpa using hvh) hc₁ hc₂
+      (by rw [(hs b₁ hb₁).2, (ht b₂ hb₂).2])
+  exact ⟨b₁, hb₁, hb ▸ hb₂⟩
+
+end Bounds
 
 end Generic
 
@@ -443,6 +527,20 @@ section Core
 variable [Fintype Validator] [F : Faults Validator]
 variable {U : BlockUniverse Validator BlockId Payload}
 
+/-- **Two quorum-backed sets of round-`n` blocks must share a block.**
+
+T0' gives a correct author common to both creator sets, and T1 makes that
+author's round-`n` block unique — so the two blocks it contributes coincide.
+The record's `exists_common_block` at the core's fault model. -/
+theorem BlockUniverse.exists_common_mem_of_quorums {s t : Finset BlockId} {n : ℕ}
+    (hs : ∀ q ∈ s, q ∈ U.ids ∧ (U.block q).round = n)
+    (ht : ∀ q ∈ t, q ∈ U.ids ∧ (U.block q).round = n)
+    (hsq : quorumCard Validator ≤ (creatorsOf U.block s).card)
+    (htq : quorumCard Validator ≤ (creatorsOf U.block t).card) :
+    ∃ q, q ∈ s ∧ q ∈ t :=
+  exists_common_block U.noEquivOn_honest card_compl_correct_le hs ht
+    (by have := F.card_validators; omega)
+
 /-! ## Support sets
 
 The coverage lemmas above take their support set as a bare `Finset Validator`
@@ -470,47 +568,6 @@ theorem correctSupporters_correct {b : BlockId} {n : ℕ} {v : Validator}
     (hv : v ∈ correctSupporters U b n) : v ∈ (Correct : Finset Validator) :=
   Finset.mem_of_mem_inter_right hv
 
-
-/-- A correct validator cannot both vote for `L` and blame it: that would be
-two distinct round-`n` blocks by one correct author. So the overlap between
-blamers and supporters is confined to the Byzantine set.
-
-This is the only place non-equivocation enters M3, and it is what stops a
-Byzantine author from being counted on both sides of the ledger. -/
-theorem blames_inter_supporters_subset_byzantine {L : BlockId} {n : ℕ} :
-    blames U L n ∩ supporters U L n ⊆ F.byzantine := by
-  intro v hv
-  rw [Finset.mem_inter] at hv
-  obtain ⟨hb, hs⟩ := hv
-  obtain ⟨q, hq_ids, hq_round, hq_noref, hq_creator⟩ := mem_blames.mp hb
-  obtain ⟨q', hq'_ids, hq'_round, hq'_ref, hq'_creator⟩ := mem_supporters.mp hs
-  by_contra hcorrect
-  -- If `v` were correct, `q` and `q'` would be the same block — but one
-  -- references `L` and the other does not.
-  have hv_correct : v ∈ (Correct : Finset Validator) := by simpa using hcorrect
-  have : q = q' :=
-    U.eq_of_creator_eq hq_ids hq'_ids hv_correct hq_creator hq'_creator
-      (by rw [hq_round, hq'_round])
-  exact hq_noref (this ▸ hq'_ref)
-
-/-- **The counting core of M3.** A quorum of blamers caps the supporters at
-`2f`, one short of a quorum.
-
-A correct validator sits on at most one side, so the overlap is confined to
-the Byzantine set: `|supporters| ≤ (3f+1) − (2f+1) + f = 2f`. Nothing about
-certificates enters, which is why this belongs here rather than beside the
-commit rules that consume it. -/
-theorem card_supporters_le_of_card_blames {L : BlockId} {n : ℕ}
-    (h : quorumCard Validator ≤ (blames U L n).card) :
-    (supporters U L n).card ≤ 2 * F.f := by
-  have hunion : (blames U L n ∪ supporters U L n).card ≤ Fintype.card Validator := by
-    have := Finset.card_le_univ (blames U L n ∪ supporters U L n)
-    have := F.card_validators
-    omega
-  have hinter : (blames U L n ∩ supporters U L n).card ≤ F.f :=
-    le_trans (Finset.card_le_card blames_inter_supporters_subset_byzantine) F.card_byzantine
-  have hadd := Finset.card_union_add_card_inter (blames U L n) (supporters U L n)
-  omega
 
 end Core
 

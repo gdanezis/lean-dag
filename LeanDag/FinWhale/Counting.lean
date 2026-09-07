@@ -1,4 +1,5 @@
 import LeanDag.FinWhale.Committee
+import LeanDag.Common.Counting
 /-!
 # FinWhale — the counting behind the fast path
 
@@ -42,16 +43,6 @@ namespace FinWhale
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
 variable [F : Faults Validator] [P : Params Validator]
-
-omit F P in
-/-- Two subsets of the validators meet in at least `|A| + |B| − n`.
-Stated additively, so `omega` never sees a truncated subtraction. -/
-theorem card_add_card_le_card_inter_add_card (A B : Finset Validator) :
-    A.card + B.card ≤ (A ∩ B).card + Fintype.card Validator := by
-  have hadd := Finset.card_union_add_card_inter A B
-  have hunion : (A ∪ B).card ≤ Fintype.card Validator := by
-    rw [← Finset.card_univ]; exact Finset.card_le_univ _
-  omega
 
 /-- **The honest votes.** Of the `n − p` votes a validator sees on the
 fast path, at least `n − p − f` are by correct validators, and those are

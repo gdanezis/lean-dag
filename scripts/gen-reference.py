@@ -28,7 +28,7 @@ END = "<!-- END GENERATED REFERENCE -->"
 
 # Modules in the order a reader meets them, grouped into layers.
 LAYERS = [
-    ("The validator set and the fault model", ["Common.Validators"]),
+    ("The validator set and the fault model", ["Common.Counting", "Common.Validators"]),
     ("Blocks, validity, and the universe", ["Common.Block", "Common.BlockDag"]),
     ("Causal structure", ["Common.Causality", "Common.CausalHistory", "Common.History", "Common.Support",
      "Common.CommonCore", "Common.Persistence"]),

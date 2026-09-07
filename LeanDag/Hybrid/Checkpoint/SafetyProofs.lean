@@ -69,13 +69,7 @@ theorem exists_reliableSigner_mem_inter {a b : Finset Validator}
       (H.byzantine ∪ M.abc).card ≤ H.fb + M.fabc :=
     le_trans (Finset.card_union_le _ _)
       (Nat.add_le_add H.card_byzantine M.card_abc)
-  have hunion := Finset.card_union_add_card_inter a b
-  have huniv := Finset.card_le_univ (a ∪ b)
-  have hnsub : ¬ (a ∩ b) ⊆ H.byzantine ∪ M.abc := by
-    intro hsub
-    have hinter := Finset.card_le_card hsub
-    omega
-  obtain ⟨v, hv, hgood⟩ := Finset.not_subset.mp hnsub
+  obtain ⟨v, hv, hgood⟩ := exists_mem_inter_notMem hbad hlarge
   exact ⟨v, hv, by simpa [ReliableSigner] using hgood⟩
 
 /-- Every hybrid quorum contains a validator outside both classes

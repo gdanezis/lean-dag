@@ -37,40 +37,6 @@ theorem mem_voteBlocks_spec {C L b : BlockId} {r : ℕ}
   have hround := (U.valid C hC).predecessor b hmem
   exact ⟨hids, by omega, hvote⟩
 
-/-- A replica voting for two distinct same-creator candidates in one
-round is Byzantine: a non-Byzantine creator has one voting block, and a
-valid block never references two blocks by one creator. -/
-theorem byzantine_of_votes_two {L₁ L₂ : BlockId} {r : ℕ} {v : Replica}
-    (hne : L₁ ≠ L₂) (hcreator : (U.block L₁).creator = (U.block L₂).creator)
-    (h₁ : v ∈ supporters U L₁ r) (h₂ : v ∈ supporters U L₂ r) :
-    v ∈ F.byzantine := by
-  by_contra hv
-  obtain ⟨b₁, hb₁, hr₁, hv₁, hc₁⟩ := mem_supporters.mp h₁
-  obtain ⟨b₂, hb₂, hr₂, hv₂, hc₂⟩ := mem_supporters.mp h₂
-  have hnb : (U.block b₁).creator ∈ (NonByzantine : Finset Replica) := by
-    rw [mem_nonByzantine, hc₁]; exact hv
-  have hb : b₁ = b₂ :=
-    U.no_equivocation b₁ hb₁ b₂ hb₂ hnb (by rw [hc₁, hc₂]) (by rw [hr₁, hr₂])
-  subst hb
-  exact hne ((U.valid b₁ hb₁).distinct_creators L₁ hv₁ L₂ hv₂ hcreator)
-
-/-- A replica voting for a slot's candidate while blaming the slot is
-Byzantine: its unique voting block would have to both reference a
-candidate and reference none. -/
-theorem byzantine_of_votes_and_blames [S : Slots Replica] {k : ℕ}
-    {L : BlockId} {v : Replica} (hL : IsLeaderBlock U k L)
-    (hs : v ∈ supporters U L (votingRound Replica k)) (hb : v ∈ slotBlames U k) :
-    v ∈ F.byzantine := by
-  by_contra hv
-  obtain ⟨b₁, hb₁, hr₁, hv₁, hc₁⟩ := mem_supporters.mp hs
-  obtain ⟨b₂, hb₂, hr₂, hnovote, hc₂⟩ := mem_slotBlames.mp hb
-  have hnb : (U.block b₁).creator ∈ (NonByzantine : Finset Replica) := by
-    rw [mem_nonByzantine, hc₁]; exact hv
-  have hbeq : b₁ = b₂ :=
-    U.no_equivocation b₁ hb₁ b₂ hb₂ hnb (by rw [hc₁, hc₂]) (by rw [hr₁, hr₂])
-  subst hbeq
-  exact hnovote L hv₁ hL
-
 /-- A certificate's vote-creators are supporters at the voting round. -/
 theorem creators_voteBlocks_subset_supporters {C L : BlockId} {r : ℕ}
     (hC : C ∈ U.ids) (hCr : (U.block C).round = r + 2) :
@@ -88,44 +54,6 @@ theorem certificates_nonempty_of_slowCommit {L : BlockId} {r : ℕ}
   simp only [SlowCommit, certifiers, hempty, creatorsOf, Finset.image_empty,
     Finset.card_empty, qSlow] at h
   omega
-
-/-- Two replica sets whose cardinalities sum past `n + f` share a
-non-Byzantine member. -/
-theorem exists_nonByzantine_mem_inter {A B : Finset Replica}
-    (h : Fintype.card Replica + F.f < A.card + B.card) :
-    ∃ v ∈ A ∩ B, v ∉ F.byzantine := by
-  by_contra hcon
-  push Not at hcon
-  have hsub : A ∩ B ⊆ F.byzantine := fun v hv => hcon v hv
-  have hunion : (A ∪ B).card ≤ Fintype.card Replica := by
-    rw [← Finset.card_univ]; exact Finset.card_le_univ _
-  have hadd := Finset.card_union_add_card_inter A B
-  have hle := Finset.card_le_card hsub
-  have hf := F.card_byzantine
-  omega
-
-omit [DecidableEq BlockId] in
-/-- Two same-round block sets whose creator sets meet quorums summing
-past `n + f` share a block: their non-Byzantine common creator's voting
-block is unique. -/
-theorem exists_common_mem_of_creator_quorums {s t : Finset BlockId} {r : ℕ}
-    (hs : ∀ b ∈ s, b ∈ U.ids ∧ (U.block b).round = r)
-    (ht : ∀ b ∈ t, b ∈ U.ids ∧ (U.block b).round = r)
-    (hcard : Fintype.card Replica + F.f <
-      (creatorsOf U.block s).card + (creatorsOf U.block t).card) :
-    ∃ b, b ∈ s ∧ b ∈ t := by
-  obtain ⟨v, hv, hvnb⟩ := exists_nonByzantine_mem_inter hcard
-  rw [Finset.mem_inter] at hv
-  obtain ⟨hvs, hvt⟩ := hv
-  obtain ⟨b₁, hb₁, hc₁⟩ := mem_creatorsOf.mp hvs
-  obtain ⟨b₂, hb₂, hc₂⟩ := mem_creatorsOf.mp hvt
-  obtain ⟨hb₁i, hb₁r⟩ := hs b₁ hb₁
-  obtain ⟨hb₂i, hb₂r⟩ := ht b₂ hb₂
-  have hnb : (U.block b₁).creator ∈ (NonByzantine : Finset Replica) := by
-    rw [mem_nonByzantine, hc₁]; exact hvnb
-  have hbeq : b₁ = b₂ :=
-    U.no_equivocation b₁ hb₁i b₂ hb₂i hnb (by rw [hc₁, hc₂]) (by rw [hb₁r, hb₂r])
-  exact ⟨b₁, hb₁, hbeq ▸ hb₂⟩
 
 /-- `n + f < 2·q_fast` — no two conflicting fast quorums. -/
 theorem nf_lt_two_qFast : Fintype.card Replica + F.f < 2 * qFast Replica := by

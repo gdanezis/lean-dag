@@ -1,4 +1,5 @@
 import Mathlib.Data.Fintype.Card
+import LeanDag.Common.Counting
 import Mathlib.Data.Finset.Card
 import Mathlib.Tactic.Push
 import Mathlib.Tactic.ByContra
@@ -161,16 +162,17 @@ theorem card_inter_correct_of_quorum {S : Finset Validator}
   have := F.card_validators
   omega
 
+/-- The validators outside `Correct` are the Byzantine ones: at most `f`. -/
+theorem card_compl_correct_le : (Correct : Finset Validator)ᶜ.card ≤ F.f := by
+  rw [Correct, compl_compl]; exact F.card_byzantine
+
 /-- **T0 (cardinality half).** Two quorums overlap in at least `f+1`
 validators: `(n−f) + (n−f) − n = n − 2f ≥ f+1`. -/
 theorem card_inter_ge_of_quorum {Q₁ Q₂ : Finset Validator}
     (h₁ : quorumCard Validator ≤ Q₁.card)
     (h₂ : quorumCard Validator ≤ Q₂.card) :
     F.f + 1 ≤ (Q₁ ∩ Q₂).card := by
-  have hunion : (Q₁ ∪ Q₂).card ≤ Fintype.card Validator := by
-    rw [← Finset.card_univ]
-    exact Finset.card_le_univ _
-  have hadd := Finset.card_union_add_card_inter Q₁ Q₂
+  have := card_add_card_le_card_inter_add_card Q₁ Q₂
   have := F.card_validators
   omega
 
@@ -187,7 +189,10 @@ every later proof cites. -/
 theorem exists_correct_mem_inter {Q₁ Q₂ : Finset Validator}
     (h₁ : quorumCard Validator ≤ Q₁.card)
     (h₂ : quorumCard Validator ≤ Q₂.card) :
-    ∃ v ∈ Q₁ ∩ Q₂, v ∈ (Correct : Finset Validator) :=
-  exists_correct_of_card (card_inter_ge_of_quorum h₁ h₂)
+    ∃ v ∈ Q₁ ∩ Q₂, v ∈ (Correct : Finset Validator) := by
+  obtain ⟨v, hv, hvb⟩ :=
+    exists_mem_inter_notMem (A := Q₁) (B := Q₂) F.card_byzantine
+      (by have := F.card_validators; omega)
+  exact ⟨v, hv, mem_correct.mpr hvb⟩
 
 end LeanDag

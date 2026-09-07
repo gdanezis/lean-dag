@@ -56,6 +56,13 @@ instance ValidWrt.mechanised :
     ⟨fun h => ⟨h.predecessor, h.quorum, h.distinct_creators⟩,
      fun h => ⟨h.predecessor, h.clause, h.quorum⟩⟩
 
+/-- **With distinct creators among references.** -/
+instance ValidWrt.distinct :
+    Validity.Distinct (ValidWrt (Replica := Replica) (BlockId := BlockId)) :=
+  Validity.Distinct.of_validAt (C := Clause.distinct) (fun _ _ =>
+    ⟨fun h => ⟨h.predecessor, h.quorum, h.distinct_creators⟩,
+     fun h => ⟨h.predecessor, h.clause, h.quorum⟩⟩) fun _ _ h => h
+
 /-- **And quorate at `q`.** -/
 instance ValidWrt.quorate :
     Validity.Quorate (ValidWrt (Replica := Replica) (BlockId := BlockId)) (q Replica) :=

@@ -131,6 +131,14 @@ instance ValidHere.mechanised :
     ⟨fun h => ⟨h.predecessor, h.quorum, h.distinct_creators, h.leader_clause⟩,
      fun h => ⟨h.predecessor, h.clause.1, h.quorum, h.clause.2⟩⟩
 
+/-- **With distinct creators among references.** -/
+instance ValidHere.distinct :
+    Validity.Distinct
+      (ValidHere (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) :=
+  Validity.Distinct.of_validAt (C := Clause.distinct.and leaderClause) (fun _ _ =>
+    ⟨fun h => ⟨h.predecessor, h.quorum, h.distinct_creators, h.leader_clause⟩,
+     fun h => ⟨h.predecessor, h.clause.1, h.quorum, h.clause.2⟩⟩) fun _ _ h => h.1
+
 /-- **And quorate at the core's quorum.** -/
 instance ValidHere.quorate :
     Validity.Quorate

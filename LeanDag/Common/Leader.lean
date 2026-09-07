@@ -151,6 +151,21 @@ theorem slotBlamers_subset_omissionsOf {k : ℕ} {L : BlockId} (hL : IsLeaderBlo
   rw [mem_omissionsOf]
   exact ⟨hq.1, hq.2.1, fun hmem => hq.2.2 L hmem hL⟩
 
+/-- Blaming the slot is blaming each of its candidates, as counts. -/
+theorem slotBlames_subset_blames {k : ℕ} {L : BlockId} (hL : IsLeaderBlock U k L) :
+    slotBlames U k ⊆ blames U L (S.slotRound k + 1) :=
+  Finset.image_subset_image (slotBlamers_subset_omissionsOf hL)
+
+/-- **Supporters of a candidate and blamers of its slot together number
+at most `n + m`**, on any non-equivocating set `Hon` with `m` outside it. -/
+theorem card_supporters_add_card_slotBlames_le [Fintype Validator] {Hon : Finset Validator}
+    {m : ℕ} (hne : U.NoEquivOn Hon) (hm : Honᶜ.card ≤ m) {k : ℕ} {L : BlockId}
+    (hL : IsLeaderBlock U k L) :
+    (supporters U L (S.slotRound k + 1)).card + (slotBlames U k).card ≤
+      Fintype.card Validator + m :=
+  le_trans (Nat.add_le_add_left (Finset.card_le_card (slotBlames_subset_blames hL)) _)
+    (card_supporters_add_card_blames_le hne hm)
+
 /-- **A slot with no candidate is blamed by every voting-round block.**
 This is the form the liveness statements use: the skip reduces to a
 quorum being present at the voting round. -/

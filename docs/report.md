@@ -1709,9 +1709,10 @@ reduce to `c² ≤ f(l+c)`, which `l ≤ c` converts to `c ≤ 2f` — contradic
 
 **M3** (`certificates_eq_empty_of_directSkip`). A directly skipped block has no
 certificate anywhere in the universe, not merely none within some view. Given
-`n−f` blamers, and since a correct validator cannot appear on both sides
-(`blames_inter_supporters_subset_byzantine`), the supporters number at most `2f`
-(`card_supporters_le_of_card_blames`), one short of a quorum.
+`n−f` blamers, and since a correct validator cannot appear on both sides,
+supporters and blamers together number at most `n + f`
+(`card_supporters_add_card_blames_le`, the record's bound at the core's
+fault model), so the supporters number at most `2f`, one short of a quorum.
 
 The universe-wide strength is what allows a skip to require no anchor to justify
 it, and it is what makes the skip half of M4 unconditional.
@@ -4663,16 +4664,17 @@ genuinely new assumption, threaded through the safety theorems the way
 
 ```lean
 def HonestNoEquiv (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ i ∈ U.ids, ∀ j ∈ U.ids, (U.block i).creator ∉ H.byzantine →
-    (U.block i).creator = (U.block j).creator →
-    (U.block i).round = (U.block j).round → i = j
+  U.NoEquivOn (Honest Validator)
 ```
 
-That crash-prone validators do not equivocate is a clause of the
+the record's non-equivocation on a set (`BlockRecord.NoEquivOn`) at the
+honest class: one block per round for every author outside the Byzantine
+set. That crash-prone validators do not equivocate is a clause of the
 *fault model* — the honesty of a class, like the Byzantine bound
 itself — not conduct the protocol enforces. The counting core the
-conflict arguments route through is H1 (`exists_honest_mem_inter`):
-two author sets whose sizes sum past `n + fb` share an honest member.
+conflict arguments route through is H1, the shared intersection lemma
+(`exists_mem_inter_notMem`) at the Byzantine bound `fb`: two author sets
+whose sizes sum past `n + fb` share an honest member.
 The extraction records the division of labour: the H-family consumes
 P2 and P4 exactly where the Odontoceti family does, with
 `HonestNoEquiv` standing in the place P5 occupies there.
@@ -4858,8 +4860,9 @@ def majority (Validator : Type*) [Fintype Validator] : ℕ :=
   Fintype.card Validator / 2 + 1
 ```
 
-and the arc's whole counting core is **NN1** (`exists_mem_inter`): two
-majorities intersect. Where the Byzantine core must find a _correct_
+and the arc's whole counting core is **NN1**: two majorities intersect,
+the shared intersection lemma (`exists_mem_inter_notMem`) with nothing
+excluded. Where the Byzantine core must find a _correct_
 member in the overlap, and the hybrid arc an _honest_ one (H1), here
 any member serves — which is the crash model itself, stated as the
 universe's non-equivocation clause with no correctness guard: one
@@ -9892,6 +9895,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 
 | Module | Contents |
 |:---|:---|
+| `Common/Counting.lean` | the one counting fact: two sets whose sizes sum past `n + m` meet outside any set of at most `m` (`exists_mem_inter_notMem`), and its contrapositive |
 | `Common/Validators.lean` | the fault model (`n ≥ 3f+1`); T0 |
 | `Common/Slots.lean` | the slot schedule every rule runs on; its constructors (`uniform`, `uniformSingle`, `identity`, `waveRobin`) |
 | `Common/Schedule.lean` | conservativity of the pipelined schedule |
@@ -10700,7 +10704,7 @@ reused.
 
 | Label | Statement | Lean |
 |:---|:---|:---|
-| H1 | the counting core: overlap past `n + fb` yields an honest member | `exists_honest_mem_inter` *(Hybrid/Faults)* |
+| H1 | the counting core: overlap past `n + fb` yields an honest member, the shared intersection lemma at `fb` | `exists_mem_inter_notMem` *(Common/Counting)* |
 | H2 | commit versus skip; twin uniqueness | `Hybrid.not_directSkip_of_directCommit`, `Hybrid.eq_of_directCommit` *(Hybrid/Rules)* |
 | H3 | a skipped leader caps at `2·fb + fc` supporters, below the interval | `Hybrid.card_supporters_le_of_directSkip`, `Hybrid.not_thickLink_of_directSkip` *(Hybrid/Rules)* |
 | H4 | link integrity: every anchor carries the interval's upper end | `Hybrid.thickLink_of_directCommit` *(Hybrid/Rules)* |
@@ -10710,7 +10714,7 @@ reused.
 | H8 | conservativity: the crash-free hybrid is Odontoceti | `Faults5.toHybrid`, `Hybrid.toHybrid_toFaults` *(Hybrid/Conservativity)* |
 | H9 | one crash at four validators; the tight hybrid committee | `Uhyb4`, `Uhyb9` witnesses *(LeanDagTest/Hybrid/Model)* |
 | H10 | the bound is necessary, at every threshold | `hybrid_bound_necessary` *(LeanDagTest/Hybrid/Tight)* |
-| NN1 | the counting core: two majorities intersect | `Nemo.exists_mem_inter` *(Nemo/Basic)* |
+| NN1 | the counting core: two majorities intersect, the shared intersection lemma with nothing excluded | `exists_mem_inter_notMem` *(Common/Counting)* |
 | NN2 | the hitting lemma: a majority of backers meets every valid block's parents, the record's lemma at Nemo's quorum | `exists_mem_refs_of_honest_support_of_card` *(Common/Support)* |
 | NN3 | link integrity: a direct commit is certified two rounds up, everywhere | `Nemo.certifiedIn_of_directCommit` *(Nemo/Rules)* |
 | NN4 | a slot has at most one candidate, every leader being honest | `isLeaderBlock_unique_of_honest` *(Common/Leader)* |
@@ -11140,7 +11144,7 @@ def blames (U : BlockRecord Validator BlockId Payload P honest) (L : BlockId) (n
 
 The validators whose round-`n` block declines to reference `L`.
 
-The complement of `supporters U L n` *within the round-`n` author pool* — but only for correct validators. A Byzantine author can appear in both, by publishing one round-`n` block that votes and another that does not; ruling that out for correct validators is exactly what `blames_inter_supporters_subset_byzantine` does, and is the whole content of M3.
+The complement of `supporters U L n` *within the round-`n` author pool* — but only for honest validators. A Byzantine author can appear in both, by publishing one round-`n` block that votes and another that does not; ruling that out for honest validators is `not_mem_of_supports_of_blames`, and is the whole content of M3.
 
 #### `HoldsAtLeast`
 
@@ -12471,9 +12475,7 @@ The honest validators: everyone outside the Byzantine set. A crash-prone validat
 
 ```lean
 def HonestNoEquiv (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ i ∈ U.ids, ∀ j ∈ U.ids, (U.block i).creator ∉ H.byzantine →
-    (U.block i).creator = (U.block j).creator →
-    (U.block i).round = (U.block j).round → i = j
+  U.NoEquivOn (Honest Validator)
 ```
 
 **The strengthened equivocation clause.** Non-equivocation over `Honest` rather than the derived instance's `Correct`: a crash-prone validator authors at most one block per round too. This is P5's shape at the larger class — the base clause follows from it — and it is the one genuinely new assumption of the hybrid model, threaded through the safety theorems as a hypothesis the way `DoSValid` is.
@@ -16839,6 +16841,18 @@ reference.
 
 ### The validator set and the fault model
 
+#### `exists_mem_inter_notMem`
+
+*theorem, `Common.Counting.lean`*
+
+```lean
+theorem exists_mem_inter_notMem {A B Bad : Finset α} {m : ℕ}
+    (hbad : Bad.card ≤ m) (h : Fintype.card α + m < A.card + B.card) :
+    ∃ v ∈ A ∩ B, v ∉ Bad
+```
+
+**The intersection lemma.** Two sets whose sizes sum past `n + m` share a member outside any set of at most `m`.
+
 #### `reliable_eq_correct`
 
 *theorem, `Common.Validators.lean`*
@@ -16984,6 +16998,18 @@ theorem supportersIn_eq_toRecord {V : U.View} {b : BlockId} {n : ℕ} :
 
 The view's count is the record's count at the view as a record.
 
+#### `card_supporters_add_card_blames_le`
+
+*theorem, `Common.Support.lean`*
+
+```lean
+theorem card_supporters_add_card_blames_le [Fintype Validator] (hne : U.NoEquivOn Hon)
+    (hm : Honᶜ.card ≤ m) {L : BlockId} {n : ℕ} :
+    (supporters U L n).card + (blames U L n).card ≤ Fintype.card Validator + m
+```
+
+**Supporters and blamers together number at most `n + m`.**
+
 #### `exists_mem_refs_of_honest_support_of_card`
 
 *theorem, `Common.Support.lean`*
@@ -17032,32 +17058,22 @@ theorem reaches_of_honest_support_of_card [Fintype Validator]
 
 **Coverage, uniform form.** More than `n − q` honest supporters always suffice. This is the form to use when supporters come from a quorum rather than from counting — see T3, where `n − f` distinct creators contain `f + 1` correct ones by `card_inter_correct_of_quorum`.
 
-#### `blames_inter_supporters_subset_byzantine`
+#### `BlockUniverse.exists_common_mem_of_quorums`
 
 *theorem, `Common.Support.lean`*
 
 ```lean
-theorem blames_inter_supporters_subset_byzantine {L : BlockId} {n : ℕ} :
-    blames U L n ∩ supporters U L n ⊆ F.byzantine
+theorem BlockUniverse.exists_common_mem_of_quorums {s t : Finset BlockId} {n : ℕ}
+    (hs : ∀ q ∈ s, q ∈ U.ids ∧ (U.block q).round = n)
+    (ht : ∀ q ∈ t, q ∈ U.ids ∧ (U.block q).round = n)
+    (hsq : quorumCard Validator ≤ (creatorsOf U.block s).card)
+    (htq : quorumCard Validator ≤ (creatorsOf U.block t).card) :
+    ∃ q, q ∈ s ∧ q ∈ t
 ```
 
-A correct validator cannot both vote for `L` and blame it: that would be two distinct round-`n` blocks by one correct author. So the overlap between blamers and supporters is confined to the Byzantine set.
+**Two quorum-backed sets of round-`n` blocks must share a block.**
 
-This is the only place non-equivocation enters M3, and it is what stops a Byzantine author from being counted on both sides of the ledger.
-
-#### `card_supporters_le_of_card_blames`
-
-*theorem, `Common.Support.lean`*
-
-```lean
-theorem card_supporters_le_of_card_blames {L : BlockId} {n : ℕ}
-    (h : quorumCard Validator ≤ (blames U L n).card) :
-    (supporters U L n).card ≤ 2 * F.f
-```
-
-**The counting core of M3.** A quorum of blamers caps the supporters at `2f`, one short of a quorum.
-
-A correct validator sits on at most one side, so the overlap is confined to the Byzantine set: `|supporters| ≤ (3f+1) − (2f+1) + f = 2f`. Nothing about certificates enters, which is why this belongs here rather than beside the commit rules that consume it.
+T0' gives a correct author common to both creator sets, and T1 makes that author's round-`n` block unique — so the two blocks it contributes coincide. The record's `exists_common_block` at the core's fault model.
 
 #### `exists_correct_common_support`
 
@@ -18589,7 +18605,7 @@ theorem not_directSkip_of_directCommit (hc : DirectCommit U L r)
     (hk : DirectSkip U L r) : False
 ```
 
-**O1 (thesis Lemma 1).** No leader block is both directly committed and directly skipped: the two quorums share `n − 2f ≥ f+1` authors, all equivocators — one too many. Needs only `n ≥ 3f+1`.
+**O1 (thesis Lemma 1).** No leader block is both directly committed and directly skipped: supporters and blamers together number at most `n + f`, and two quorums are more. Needs only `n ≥ 3f+1`.
 
 #### `eq_of_directCommit`
 
@@ -18601,7 +18617,7 @@ theorem eq_of_directCommit {L₁ L₂ : BlockId}
     (hcr : (U.block L₁).creator = (U.block L₂).creator) : L₁ = L₂
 ```
 
-**O1′ (M5 analogue).** Two directly committed blocks by one author at one round are equal: their support quorums share `n − 2f ≥ f+1` authors, each supporting both — all equivocators. Needs only `n ≥ 3f+1`.
+**O1′ (M5 analogue).** Two directly committed blocks by one author at one round are equal: their support quorums together exceed `n + f`. Needs only `n ≥ 3f+1`.
 
 #### `card_supporters_le_of_directSkip`
 
@@ -18612,7 +18628,7 @@ theorem card_supporters_le_of_directSkip (hk : DirectSkip U L r) :
     (supporters U L (r + 1)).card ≤ 2 * F.f
 ```
 
-**O2, the counting half.** A directly skipped leader's supporters — anywhere in the universe — number at most `2f`. The proof needs the exact complement identity `|Correct| = n − |byzantine|` (`card_correct_add_byzantine`): correct supporters and correct blamers are disjoint, correct blamers number at least `(n−f) − |byzantine|`, and the `|byzantine|` cancels.
+**O2, the counting half.** A directly skipped leader's supporters — anywhere in the universe — number at most `2f`: supporters and blamers together number at most `n + f`, and the blamers are `n − f`.
 
 #### `not_thickLink_of_directSkip`
 
@@ -19388,18 +19404,6 @@ So the recipients need no blocks they lack: naming the target suffices, and each
 
 ### Hybrid fault tolerance: Byzantine and crash faults apart
 
-#### `exists_honest_mem_inter`
-
-*theorem, `Hybrid.Faults.lean`*
-
-```lean
-theorem exists_honest_mem_inter {a b : Finset Validator}
-    (hab : Fintype.card Validator + H.fb < a.card + b.card) :
-    ∃ v ∈ a ∩ b, v ∉ H.byzantine
-```
-
-**H1 — the counting core.** Two author sets whose sizes sum past `n + fb` share an honest member: their intersection outnumbers the Byzantine class. T0′ with the discount at `fb` rather than the derived `fb + fc`; every conflict argument of the arc is one application of this plus the observation that an honest validator's single block cannot face both ways.
-
 #### `committee_bound_of_admissible`
 
 *theorem, `Hybrid.Rules.lean`*
@@ -19421,7 +19425,7 @@ theorem not_directSkip_of_directCommit (hne : HonestNoEquiv U)
     (hc : DirectCommit U L r) (hk : DirectSkip U L r) : False
 ```
 
-**H2 (O1's mirror).** No leader block is both directly committed and directly skipped: the two `q`-quorums overlap past the Byzantine class. Needs only `n > 3·fb + 2·fc`.
+**H2 (O1's mirror).** No leader block is both directly committed and directly skipped: honest supporters and blamers together number at most `n + fb`, and two `q`-quorums are more. Needs only `n > 3·fb + 2·fc`.
 
 #### `eq_of_directCommit`
 
@@ -19445,7 +19449,7 @@ theorem card_supporters_le_of_directSkip (hne : HonestNoEquiv U)
     (supporters U L (r + 1)).card ≤ 2 * H.fb + H.fc
 ```
 
-**H3, the counting half.** A directly skipped leader's supporters — anywhere in the universe — number at most `2·fb + fc`: honest supporters and honest blamers are disjoint within the `n − fb` honest validators, the blamers number at least `q − fb` of them, and the complement identity cancels.
+**H3, the counting half.** A directly skipped leader's supporters — anywhere in the universe — number at most `2·fb + fc`: supporters and blamers together number at most `n + fb`, and the blamers are `q`.
 
 #### `not_thickLink_of_directSkip`
 
@@ -19771,18 +19775,6 @@ theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
 **AL7: adaptive Odontoceti is safe and live.** The fixpoint exists on every view caught up to every horizon — glued along the diagonal exactly as on the three-round side — and by `Odontoceti.adaptiveRun_agree` it is unique.
 
 ### Nemo-Nemo: crash-fault consensus in two rounds
-
-#### `exists_mem_inter`
-
-*theorem, `Nemo.Basic.lean`*
-
-```lean
-theorem exists_mem_inter {Q₁ Q₂ : Finset Validator}
-    (h₁ : majority Validator ≤ Q₁.card) (h₂ : majority Validator ≤ Q₂.card) :
-    (Q₁ ∩ Q₂).Nonempty
-```
-
-**The one quorum fact.** Two majorities always intersect — `(n/2+1) + (n/2+1) > n` — and, all validators being honest, the shared member is consistent. This is the crash analogue of the core's `exists_correct_mem_inter`, with the correctness filtering gone.
 
 #### `ValidWrt.iff_validAt`
 
@@ -21522,7 +21514,7 @@ theorem eq_of_certificates_nonempty {L₁ L₂ : BlockId} {r : ℕ}
     (h₂ : (certificates U L₂ r).Nonempty) : L₁ = L₂
 ```
 
-Universe-level certificate-uniqueness core.
+Universe-level certificate-uniqueness core: two certificates' vote sets exceed `n + f`, so they share a vote block, which cites one author once.
 
 #### `holds`
 
@@ -22540,6 +22532,18 @@ theorem Mechanised.of_iff {Q : Validity Validator BlockId Payload} [Q.Mechanised
 ```
 
 The obligations transfer along an equivalence of predicates.
+
+#### `distinct_creators`
+
+*theorem, `Common.BlockRecord.lean`*
+
+```lean
+theorem distinct_creators [P.Distinct] {i j k : BlockId} (hi : i ∈ U.ids)
+    (hj : j ∈ (U.block i).refs) (hk : k ∈ (U.block i).refs)
+    (hc : (U.block j).creator = (U.block k).creator) : j = k
+```
+
+Two references of one block by one author are one reference.
 
 #### `ledgerSet_mono`
 

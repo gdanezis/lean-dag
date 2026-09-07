@@ -33,42 +33,15 @@ theorem creator_eq_of_isAnchor {L₁ L₂ : BlockId} {r : ℕ}
   rw [h₁.2.2, h₂.2.2]
 
 omit Rot in
-/-- A validator supporting two distinct blocks of one author and round is
-not correct: one supporting block cannot reference both, since that would
-cite one author twice, and two supporting blocks are an equivocation. -/
-theorem not_correct_of_supports_two {L₁ L₂ : BlockId} {v : Validator} {n : ℕ}
-    (hne : L₁ ≠ L₂) (hcr : (U.block L₁).creator = (U.block L₂).creator)
-    (h₁ : v ∈ supporters U L₁ n) (h₂ : v ∈ supporters U L₂ n) :
-    v ∉ (Correct : Finset Validator) := by
-  intro hv
-  obtain ⟨q₁, hq₁, hq₁r, hq₁L, hq₁c⟩ := mem_supporters.mp h₁
-  obtain ⟨q₂, hq₂, hq₂r, hq₂L, hq₂c⟩ := mem_supporters.mp h₂
-  have hq : q₁ = q₂ := U.eq_of_creator_eq hq₁ hq₂ hv hq₁c hq₂c (by omega)
-  subst hq
-  exact hne ((U.valid q₁ hq₁).distinct_creators L₁ hq₁L L₂ hq₂L hcr)
-
-omit Rot in
 /-- **The paper's Lemma 3.** Two supported blocks of one author at one
 round are the same block: their support quorums share `n − 2f ≥ f + 1`
 authors, each supporting both, and all of them equivocators. Needs only
 `n ≥ 3f + 1`, which is the whole committee of this arc. -/
 theorem eq_of_supported {L₁ L₂ : BlockId} {r : ℕ}
     (h₁ : Supported U L₁ r) (h₂ : Supported U L₂ r)
-    (hcr : (U.block L₁).creator = (U.block L₂).creator) : L₁ = L₂ := by
-  by_contra hne
-  have hsub : supporters U L₁ (r + 1) ∩ supporters U L₂ (r + 1) ⊆ F.byzantine := by
-    intro v hv
-    obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
-    have := not_correct_of_supports_two hne hcr hv₁ hv₂
-    simpa [mem_correct] using this
-  have h3 := Finset.card_union_add_card_inter
-    (supporters U L₁ (r + 1)) (supporters U L₂ (r + 1))
-  have h4 := Finset.card_le_univ (supporters U L₁ (r + 1) ∪ supporters U L₂ (r + 1))
-  have h5 := Finset.card_le_card hsub
-  have h6 := F.card_byzantine
-  have h7 := F.card_validators
-  unfold Supported at h₁ h₂
-  omega
+    (hcr : (U.block L₁).creator = (U.block L₂).creator) : L₁ = L₂ :=
+  eq_of_card_supporters U.noEquivOn_honest card_compl_correct_le hcr (n := r + 1)
+    (by unfold Supported at h₁ h₂; have := F.card_validators; omega)
 
 /-- Lemma 3 for anchors: at most one anchor block of a round is
 supported, so at most one is committed there. -/

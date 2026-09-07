@@ -288,8 +288,8 @@ theorem evidenceLinked_unique {A L L' : BlockId} {k : ℕ}
     (h : EvidenceLinked B A L k) (h' : EvidenceLinked B A L' k) : L = L' := by
   obtain ⟨s, hs, hcard⟩ := h
   obtain ⟨s', hs', hcard'⟩ := h'
-  obtain ⟨b, hb, hb'⟩ := exists_common_mem_of_creator_quorums (s := s) (t := s')
-    (r := LeanDag.Hydrozoan.decisionRound Replica k)
+  obtain ⟨b, hb, hb'⟩ := exists_common_block B.noEquivOn_honest card_compl_nonByzantine_le
+    (s := s) (t := s') (n := LeanDag.Hydrozoan.decisionRound Replica k)
     (fun b hb => mem_blocksAt.mp (hs b hb).1)
     (fun b hb => mem_blocksAt.mp (hs' b hb).1)
     (by have := nf_lt_two_qCert (Replica := Replica); omega)
@@ -303,8 +303,8 @@ theorem not_evidenceLinked_of_skippedOpt {k : ℕ} {L A : BlockId}
     ¬ EvidenceLinked B A L k := by
   rintro ⟨s, hs, hcard⟩
   obtain ⟨t, ht, htcard⟩ := h.2
-  obtain ⟨b, hb, hbt⟩ := exists_common_mem_of_creator_quorums (s := s) (t := t)
-    (r := LeanDag.Hydrozoan.decisionRound Replica k)
+  obtain ⟨b, hb, hbt⟩ := exists_common_block B.noEquivOn_honest card_compl_nonByzantine_le
+    (s := s) (t := t) (n := LeanDag.Hydrozoan.decisionRound Replica k)
     (fun b hb => mem_blocksAt.mp (hs b hb).1)
     (fun b hb => mem_blocksAt.mp (ht b hb).1)
     (by have := nf_lt_two_qCert (Replica := Replica); omega)
@@ -317,24 +317,12 @@ theorem not_certifiedIn_of_skippedOpt {k : ℕ} {L A : BlockId}
     ¬ LeanDag.Hydrozoan.CertifiedIn B A L (S.slotRound k) := by
   rintro ⟨C, hC, -⟩
   obtain ⟨hCi, hCr, hcert⟩ := LeanDag.Hydrozoan.mem_certificates.mp hC
-  have hcard2 : qCert Replica ≤ (supporters B L (votingRound Replica k)).card := by
+  have hcard2 : qCert Replica ≤ (supporters B L (S.slotRound k + 1)).card := by
     have hle := Finset.card_le_card
       (creators_voteBlocks_subset_supporters (L := L) hCi hCr)
     simp only [LeanDag.Hydrozoan.IsCertificate] at hcert
-    have : votingRound Replica k = S.slotRound k + 1 := rfl
-    rw [this]
     omega
-  have hsub : supporters B L (votingRound Replica k) ∩ slotBlames B k ⊆ O.byzantine := by
-    intro v hv
-    obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
-    exact byzantine_of_votes_and_blames hL hv₁ hv₂
-  have h1 := Finset.card_union_add_card_inter
-    (supporters B L (votingRound Replica k)) (slotBlames B k)
-  have h2 : (supporters B L (votingRound Replica k) ∪ slotBlames B k).card ≤
-      Fintype.card Replica := by
-    rw [← Finset.card_univ]; exact Finset.card_le_univ _
-  have h3 := Finset.card_le_card hsub
-  have h4 := O.card_byzantine
+  have := card_supporters_add_card_slotBlames_le B.noEquivOn_honest card_compl_nonByzantine_le hL
   have h5 := nf_lt_two_qCert (Replica := Replica)
   have hb := h.1
   omega
@@ -351,18 +339,8 @@ theorem not_certifiedIn_of_fastCommitOpt {k : ℕ} {L L' A : BlockId}
       (creators_voteBlocks_subset_supporters (L := L') hCi hCr)
     simp only [LeanDag.Hydrozoan.IsCertificate] at hcert
     omega
-  have hsub : supporters B L' (S.slotRound k + 1) ∩ supporters B L (S.slotRound k + 1) ⊆
-      O.byzantine := by
-    intro v hv
-    obtain ⟨hv₁, hv₂⟩ := Finset.mem_inter.mp hv
-    exact byzantine_of_votes_two hne (by rw [hL'.2.2, hL.2.2]) hv₁ hv₂
-  have h1 := Finset.card_union_add_card_inter
-    (supporters B L' (S.slotRound k + 1)) (supporters B L (S.slotRound k + 1))
-  have h2 : (supporters B L' (S.slotRound k + 1) ∪ supporters B L (S.slotRound k + 1)).card ≤
-      Fintype.card Replica := by
-    rw [← Finset.card_univ]; exact Finset.card_le_univ _
-  have h3 := Finset.card_le_card hsub
-  have h4 := O.card_byzantine
+  have := card_supporters_add_card_supporters_le B.noEquivOn_honest card_compl_nonByzantine_le
+    hne (by rw [hL'.2.2, hL.2.2]) (n := S.slotRound k + 1)
   have h5 := nf_lt_qFastOpt_add_qCert (Replica := Replica)
   simp only [FastCommitOpt] at h
   omega
