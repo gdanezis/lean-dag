@@ -84,11 +84,9 @@ theorem slotsOf_base (hinj : Function.Injective S.slotRound) :
 
 /-! ## What an induced schedule keeps
 
-Reassignment fixes the round structure, so everything a rule reads of
-the schedule through `slotRound` alone transfers to every induced
-instance verbatim: eligibility, and with it the spanning clause; and a
-bounded verdict, whose derivation reads the leaders only below its
-bound, transfers between two assignments agreeing there. -/
+Reassignment fixes the round structure, so eligibility and the spanning
+clause transfer to every induced schedule, and a bounded verdict
+transfers between assignments agreeing below its bound. -/
 
 /-- The spanning clause transfers to every induced schedule, at any wave. -/
 theorem spansEligible_slotsOf (hinj : Function.Injective S.slotRound) (a : ℕ → Validator)

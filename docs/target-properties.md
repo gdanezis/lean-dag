@@ -4487,6 +4487,17 @@ model is everyone, so the descent law is the stronger statement, and
 `Barnacle/` goes from 4,901 to 4,348 lines and seven helper files are
 deleted; the library and tests stand at 76,414 lines.
 
+### 11.37 The docstring norm
+
+Comment and docstring lines were 38% of the non-blank lines of
+`LeanDag/`, about twice Mathlib's share, and the Barnacle instantiations
+of §11.36 inverted the ratio. `docs/style.md` §3 now fixes the norm: one
+sentence, at most two, per declaration; a module docstring of a few
+lines; one line for a `Proof.lean`; no history, no comparison with other
+files, no restatement of an argument the report makes. This pass applies
+it to what the common-layer branch added, in `Common/`, `Adaptive/` and
+`Barnacle/`: 546 comment lines become 222, with no statement changed.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

@@ -5,10 +5,8 @@ import LeanDag.Mysticeti.Properties
 /-!
 # Mysticeti liveness — proof
 
-Generated proof layer; not part of the audit surface. The descent laws
-are `descent_of_support` at the core's support — its `OfCoverage` and
-`Commits`, with `Indirect` — and round-robin liveness is BN9e at slack
-`f` and wave length `3`, with `3f + 1 ≤ n` from `Faults.card_validators`.
+Generated proof layer; not part of the audit surface. The bound
+`3f + 1 ≤ n` is `Faults.card_validators`.
 -/
 
 namespace LeanDag

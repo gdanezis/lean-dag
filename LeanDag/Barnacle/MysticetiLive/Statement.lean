@@ -3,13 +3,10 @@ import LeanDag.Barnacle.Mysticeti.Statement
 /-!
 # Barnacle over Mysticeti — liveness
 
-Mysticeti as a live rule, its descent laws, and the paper's A4 for
-Mysticeti under its own schedule: round-robin is live at every leader
-count (`barnacle.md` §8, F3). A good DAG is `Timed.Good` at the core's
-fault model — a correct quorum synchronised from `Rnd` and populating
-every round to `N` (report §5). The slack is `f`, and the committee
-bound the pigeonhole needs, `3f + 1 ≤ n`, is `Faults.card_validators`.
-Statements only; the proofs live in `Proof.lean`.
+Mysticeti as a live rule at the core's fault model, its descent laws at
+slack `f`, and A4 for its own schedule: round-robin is live at every
+leader count with gap `n + 2` (`barnacle.md` §8, F3). Statements only;
+the proofs live in `Proof.lean`.
 -/
 
 namespace LeanDag

@@ -3,8 +3,7 @@ import LeanDag.Barnacle.Helpers.Anchored
 /-!
 # Barnacle over Mysticeti — proof
 
-Generated proof layer; not part of the audit surface. The laws are
-`ofAnchored_laws` at the core's laws (`coreLaws`).
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

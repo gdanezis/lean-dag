@@ -269,11 +269,10 @@ theorem agreeBand_view (h : AgreeBand R.toDagRule U U' lo hi g g') {V : U.View} 
 /-! ### Votes, certificates and links across the band
 
 Every rule's direct commit is a threshold on a set the view holds, and
-every rung a link to a set in the anchor's cone; the sets are votes,
-certificates at a threshold, or the votes in the cone. Each transports
-across the band once, here, and a rule's band laws are these at its sets.
-The one hypothesis a rule supplies is that its vote relation agrees
-across the band, which for the plain vote is `isVote_band`. -/
+every rung a link to a set in the anchor's cone; the sets transport
+across the band here, once. The one hypothesis a rule supplies is that
+its vote relation agrees across the band (`isVote_band` for the plain
+vote). -/
 
 /-- A plain vote reads the voter's references, which the band preserves. -/
 theorem isVote_band (h : AgreeBand R.toDagRule U U' lo hi g g') {b L : BlockId} (hb : b ∈ U.ids)
@@ -336,8 +335,7 @@ variable {Vote Vote' : BlockId → BlockId → Prop} [∀ b L, Decidable (Vote b
   [∀ b L, Decidable (Vote' b L)]
 
 /-- The votes an in-band block carries are the votes it carried, when the
-vote relations agree on its references. Two rounds of slack: the count
-reads the references' own references. -/
+vote relations agree on its references; two rounds of slack. -/
 theorem carriedVotes_band (h : AgreeBand R.toDagRule U U' lo hi g g') {C L : BlockId}
     (hC : C ∈ U.ids) (h1 : lo < (U.block C).round + g) (h2 : (U.block C).round + g ≤ hi)
     (hvote : ∀ b ∈ (U.block C).refs, (Vote' b L ↔ Vote b L)) :
@@ -398,9 +396,7 @@ theorem holdsAtLeast_certificatesAt_band (h : AgreeBand R.toDagRule U U' lo hi g
       exact ⟨hCU, by omega, by omega⟩)
     (certificatesAt_band h hnn h1 h2 hvote) hc
 
-/-- **The anchor links what it linked.** Both directions: a certificate
-inside an old anchor's cone is old, by `reaches_old`, and an old one
-stays inside it, by `reaches_of`. -/
+/-- **The anchor links what it linked.** -/
 theorem linkedVia_certificatesAt_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A : BlockId}
     (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
     {t : ℕ} {L : BlockId} {n n' : ℕ} (hnn : n + g = n' + g') (h1 : lo < n + g)
@@ -424,11 +420,8 @@ theorem linkedVia_certificatesAt_band (h : AgreeBand R.toDagRule U U' lo hi g g'
       AgreeBand.reaches_of h hA hAhi hre (by omega)⟩
 
 /-- **A candidate the band did not carry is certified from no old
-anchor**: its certificate would lie in the anchor's cone, which is old,
-and no old block votes for it. `hnov` is the rule's reason no old
-in-band block votes for a novel candidate; for the plain vote it is
-`not_isVote_band_novel`. Two rounds of slack, since the votes sit one
-round below the certificate and must themselves be in the band. -/
+anchor.** `hnov` is the rule's reason no old in-band block votes for a
+novel candidate (`not_isVote_band_novel` for the plain vote). -/
 theorem not_linkedVia_certificatesAt_band_novel (h : AgreeBand R.toDagRule U U' lo hi g g')
     {A : BlockId} (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g)
     (hAhi : (U.block A).round + g ≤ hi) {t : ℕ} {L : BlockId} {n n' : ℕ}
@@ -467,9 +460,7 @@ theorem isVote_band_at (h : AgreeBand R.toDagRule U U' lo hi g g') {L : BlockId}
 
 end Certificates
 
-/-- **The anchor's cone of supporters is the cone it was.** Both
-inclusions at once: a supporter inside an old anchor's cone is old, by
-`reaches_old`, and an old one stays inside it, by `reaches_of`. -/
+/-- **The anchor's cone of supporters is the cone it was.** -/
 theorem coneSupporters_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A L : BlockId}
     (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
     {n n' : ℕ} (hnn : n + g = n' + g') (h1 : lo < n + g) (h2 : n + g ≤ hi) :
@@ -510,11 +501,8 @@ theorem coneSupporters_band_novel (h : AgreeBand R.toDagRule U U' lo hi g g') {A
   obtain ⟨q, hq, -, hqL, -, -⟩ := mem_coneSupporters.mp hv
   exact hL (U.complete q hq L hqL)
 
-/-- **Blame carries across the band**: a voting-round block the view held
-that referenced no candidate of the slot is a block of the shifted
-record at the shifted round, and it references no candidate still,
-every candidate it could reference being old. Every rule's slot-level
-skip is a threshold on this count, so this is its band law. -/
+/-- **Blame carries across the band**: a blamer the view held is a blamer
+of the shifted record, every candidate it could reference being old. -/
 theorem slotBlamesIn_band (h : AgreeBand R.toDagRule U U' lo hi g g')
     {V : U.View} {V' : U'.View} {k k' : ℕ} (hkk : S.slotRound k + g = S'.slotRound k' + g')
     (hlead : S.leader k = S'.leader k') (hlo : lo ≤ S.slotRound k + g)

@@ -4,14 +4,10 @@ import LeanDag.Odontoceti.Properties
 /-!
 # Adaptive leaders under the two-round rule
 
-The adaptive mechanism is rule-agnostic, and this file is the proof: it
-applies `Adaptive/{Policy,Run,Liveness}.lean` to Odontoceti exactly as
-`Adaptive/Mysticeti.lean` applies it to the core. Every statement is a
-corollary of the generic theorem at `odontocetiRule`, with Odontoceti's
-`Agree`, its `LeaderCommits` read off its vote support through the timed
-bridge, and its `Descends`. The two-round difference shows in one
-number: the precondition asks the view to cover one round past a slot
-where the core asks two.
+The generic adaptive mechanism at `odontocetiRule`: its `Agree`, its
+`LeaderCommits` read off the vote support through the timed bridge, and
+its `Descends`. The precondition asks the view to cover one round past
+a slot, where the core asks two.
 -/
 
 namespace LeanDag
@@ -51,9 +47,8 @@ theorem partialRun_agree {P : AdaptivePolicy Validator BlockId Payload}
     ∀ k, epochOf P.W k < min E₁ E₂ → R₁.vdct k = R₂.vdct k :=
   Adaptive.partialRun_agree agree R₁ R₂
 
-/-- **Safety, two-round rule: the adaptive fixpoint is unique** — with no
-fairness, synchrony or view hypothesis, exactly as on the three-round
-side. -/
+/-- **Safety, two-round rule: the adaptive fixpoint is unique**, with no
+fairness, synchrony or view hypothesis. -/
 theorem adaptiveRun_agree {P : AdaptivePolicy Validator BlockId Payload}
     {V₁ V₂ : View Validator BlockId Payload U}
     (R₁ : AdaptiveRun P U V₁) (R₂ : AdaptiveRun P U V₂) :
@@ -112,9 +107,7 @@ theorem exists_partialRun (hT : T ⊆ (Correct : Finset Validator))
       change S.slotRound k + 1 ≤ N
       omega)
 
-/-- **AL7: adaptive Odontoceti is safe and live.** The fixpoint exists on
-every view caught up to every horizon, and by `adaptiveRun_agree` it is
-unique. -/
+/-- **AL7: adaptive Odontoceti is safe and live.** -/
 theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card)
     (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)

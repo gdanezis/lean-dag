@@ -5,11 +5,7 @@ import LeanDag.Hydrozoan.Helpers.Commit
 /-!
 # Barnacle over Hydrozoan — the live rule, proof
 
-Unaudited. The descent laws are `descent_of_support` at Hydrozoan's
-support — HZ5 from its `OfCoverage` and `Commits`, HZ6 from `Indirect`.
-Round-robin liveness is `liveOn_roundRobin` at slack `f + c` and wave
-length three, whose bound `3·(f + c) + 1 ≤ n` is the committee bound,
-taken as a hypothesis.
+Unaudited.
 -/
 
 namespace LeanDag

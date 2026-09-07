@@ -3,17 +3,12 @@ import LeanDag.Common.Slots
 /-!
 # Leaders, candidates and blame
 
-What a schedule says about the blocks of a record. Slot `k` is proposed
-at `slotRound k` by `leader k`; its **candidates** are the blocks at that
-round by that author, of which an honest leader has one and an
-equivocating leader may have several. Votes on the slot are cast one
-round above, at its **voting round**, and a voting-round block that
-references no candidate of the slot **blames** it.
-
-Every rule of this development reads the schedule through these notions
-and nothing else: which blocks are candidates, and which validators'
-voting-round blocks support one or blame the slot. The counts are
-threshold-free here; each rule names its own threshold.
+Slot `k` is proposed at `slotRound k` by `leader k`; its **candidates**
+are the blocks at that round by that author, one for an honest leader
+and possibly several for an equivocating one. Votes on the slot are cast
+at its **voting round**, one above, and a voting-round block that
+references no candidate **blames** the slot. The counts are
+threshold-free; each rule names its own.
 -/
 
 namespace LeanDag
@@ -27,10 +22,8 @@ section Candidates
 
 variable [S : Slots Validator]
 
-/-- `L` is a candidate block for slot `k`: the right round, the right author.
-A correct leader has at most one such block; a Byzantine one may have
-several, which is why the rules quantify over candidates rather than
-selecting one. -/
+/-- `L` is a candidate block for slot `k`: the right round, the right
+author. -/
 @[reducible]
 def IsLeaderBlock (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) (L : BlockId) :
     Prop :=
@@ -39,10 +32,8 @@ def IsLeaderBlock (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ)
 variable {U : BlockRecord Validator BlockId Payload P honest}
 
 omit S in
-/-- Decidable, so concrete models can settle it by `decide`. The
-schedule is a plain implicit, found by unification, so the instance
-applies at any schedule a statement names and not only the ambient
-one. -/
+/-- Decidable at any schedule a statement names, the schedule being a
+plain implicit. -/
 instance decidableIsLeaderBlock [DecidableEq Validator] [DecidableEq BlockId]
     {S : Slots Validator} (k : ℕ) (L : BlockId) : Decidable (IsLeaderBlock (S := S) U k L) :=
   inferInstanceAs (Decidable (L ∈ U.ids ∧ (U.block L).round = S.slotRound k ∧
@@ -54,10 +45,8 @@ theorem slot_eq_of_isLeaderBlock {k₁ k₂ : ℕ} {L : BlockId}
     (h₁ : IsLeaderBlock U k₁ L) (h₂ : IsLeaderBlock U k₂ L) : k₁ = k₂ :=
   S.keyed (by simp only [← h₁.2.1, ← h₂.2.1, ← h₁.2.2, ← h₂.2.2])
 
-/-- **An honest leader has at most one candidate**: two blocks by an
-honest author at one round are one block. Every rule with a tie to
-break uses this to see that the tie only ever arises under a dishonest
-leader. -/
+/-- **An honest leader has at most one candidate**, so a tie between
+candidates only arises under a dishonest leader. -/
 theorem isLeaderBlock_unique_of_honest {k : ℕ} {L₁ L₂ : BlockId}
     (hk : S.leader k ∈ honest) (h₁ : IsLeaderBlock U k L₁) (h₂ : IsLeaderBlock U k L₂) :
     L₁ = L₂ :=
@@ -88,16 +77,12 @@ end Candidates
 
 /-! ## The voting round, and blame
 
-A slot is voted on one round above its proposal, whatever the rule: the
-core, Odontoceti and Hybrid count supporters there, Hydrozoan its fast
-votes, and every direct skip counts the blocks there that reference no
-candidate. The blame is the **absence of every candidate**, not of one
-named block: a premise quantified over the candidates a record happens
-to hold is discharged vacuously by a slot holding none, so a validator
-that has seen nothing could settle the slot, and a candidate arriving
-later would be judged by nothing. The count below is required whatever
-the slot holds, so a later candidate is referenced by none of the
-blockers, and a skip is final. -/
+A slot is voted on one round above its proposal, whatever the rule. A
+blame is the absence of **every** candidate from a voting-round block,
+not of one named block: a slot holding no candidate would otherwise be
+settled vacuously, and a candidate arriving later judged by nothing. As
+stated, a later candidate is referenced by none of the blamers, and a
+skip is final. -/
 
 section Blame
 
@@ -141,9 +126,7 @@ theorem mem_slotBlames {k : ℕ} {v : Validator} :
   · rintro ⟨q, ⟨hq, hr, hn⟩, hc⟩; exact ⟨q, hq, hr, hn, hc⟩
   · rintro ⟨q, hq, hr, hn, hc⟩; exact ⟨q, ⟨hq, hr, hn⟩, hc⟩
 
-/-- **Blaming the slot is blaming each of its candidates**: a block
-referencing no candidate references not `L`. So every fact about the
-per-candidate blame applies to the slot-level one. -/
+/-- **Blaming the slot is blaming each of its candidates.** -/
 theorem slotBlamers_subset_omissionsOf {k : ℕ} {L : BlockId} (hL : IsLeaderBlock U k L) :
     slotBlamers U k ⊆ omissionsOf U L (S.slotRound k + 1) := by
   intro q hq
@@ -166,9 +149,8 @@ theorem card_supporters_add_card_slotBlames_le [Fintype Validator] {Hon : Finset
   le_trans (Nat.add_le_add_left (Finset.card_le_card (slotBlames_subset_blames hL)) _)
     (card_supporters_add_card_blames_le hne hm)
 
-/-- **A slot with no candidate is blamed by every voting-round block.**
-This is the form the liveness statements use: the skip reduces to a
-quorum being present at the voting round. -/
+/-- **A slot with no candidate is blamed by every voting-round block**, so
+its skip reduces to a quorum being present there. -/
 theorem slotBlamers_of_no_candidate {k : ℕ} (hnone : ∀ L, ¬ IsLeaderBlock U k L) :
     slotBlamers U k = blocksAt U (S.slotRound k + 1) :=
   Finset.filter_true_of_mem fun _ _ j _ => hnone j

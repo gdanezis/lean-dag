@@ -5,10 +5,8 @@ import LeanDag.Barnacle.Helpers.Heads
 /-!
 # Barnacle over FinWhale — proof
 
-Not part of the audit surface. The laws are `ofAnchored_laws` at
-FinWhale's laws; the descent laws are `descent_of_support` at its slow
-path, a support at wave two under the rule's wave of three; round-robin
-liveness is at slack `f` with `3f + 1 ≤ n` from the committee bound.
+Not part of the audit surface. FinWhale's support is its slow path, at
+wave two under the rule's wave of three.
 -/
 
 namespace LeanDag

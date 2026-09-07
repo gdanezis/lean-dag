@@ -157,13 +157,9 @@ theorem supporters_subset_authorsAt {b : BlockId} {n : ℕ} :
     supporters U b n ⊆ authorsAt U n :=
   Finset.image_subset_image (Finset.filter_subset _ _)
 
-/-- The validators whose round-`n` block declines to reference `L`.
-
-The complement of `supporters U L n` *within the round-`n` author pool* —
-but only for honest validators. A Byzantine author can appear in both, by
-publishing one round-`n` block that votes and another that does not; ruling
-that out for honest validators is `not_mem_of_supports_of_blames`, and is
-the whole content of M3. -/
+/-- The validators whose round-`n` block declines to reference `L`. An
+honest validator supports or blames, never both
+(`not_mem_of_supports_of_blames`); a Byzantine one may do both. -/
 def blames (U : BlockRecord Validator BlockId Payload P honest) (L : BlockId) (n : ℕ) :
     Finset Validator :=
   creatorsOf U.block (omissionsOf U L n)
@@ -177,14 +173,9 @@ theorem mem_blames {L : BlockId} {n : ℕ} {v : Validator} :
 
 /-! ### What a view holds
 
-What a validator holds is a view, and a rule judges from it. Every direct
-rule of every protocol has one shape: the view holds blocks of some set
-from at least `t` distinct authors — the supporters, certifiers or
-blamers the validator has actually seen. `heldAuthors` is that count and
-`HoldsAtLeast` that predicate. A rule names its set and its threshold;
-that the count only grows with the view, that the full view holds
-everything, and that a view covering the set's rounds holds all of it
-are settled here once. -/
+Every direct rule has one shape: the view holds blocks of some set from
+at least `t` distinct authors. `heldAuthors` is that count and
+`HoldsAtLeast` that predicate; a rule names its set and its threshold. -/
 
 /-- The authors of the blocks of `s` that a view holds. -/
 def heldAuthors (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
@@ -307,12 +298,10 @@ theorem blamesIn_eq_toRecord {V : U.View} {L : BlockId} {n : ℕ} :
 
 /-! ### Votes carried by a block, and certificates
 
-A block *carries* the votes among its references. A rule's **certificate**
-is a block carrying votes for a candidate from `t` distinct authors, at
-a round the rule names. What counts as a vote is the reference itself
-for every rule but Mahi-Mahi, whose vote reads the voter's cone, so the
-stack is stated once over a vote relation, and each rule's certificate
-is it at the rule's vote, threshold and round. -/
+A block *carries* the votes among its references, and a rule's
+**certificate** is a block carrying votes for a candidate from `t`
+distinct authors at a round the rule names. The stack is stated over a
+vote relation, since Mahi-Mahi's vote reads the voter's cone. -/
 
 section Certificates
 
@@ -389,14 +378,11 @@ end Certificates
 
 /-! ### Votes and blames under non-equivocation
 
-The counting core of every direct-safety argument, at any record and on
-any set `Hon` that does not equivocate, with `m` bounding the validators
-outside it. A validator of `Hon` has one block per round, so it cannot
-both vote for a block and omit it, nor vote for two blocks of one author;
-so supporters and blamers, or the supporters of two same-author blocks,
-meet only outside `Hon`, and together number at most `n + m`. Each rule's
-"no commit and skip" and "at most one commit per author" is this at its
-thresholds, closed by one arithmetic row. -/
+The counting core of every direct-safety argument, on any set `Hon` that
+does not equivocate with `m` validators outside it: a validator of `Hon`
+has one block per round, so supporters and blamers, or the supporters of
+two same-author blocks, meet only outside `Hon` and together number at
+most `n + m`. -/
 
 section Bounds
 
@@ -475,22 +461,12 @@ end Generic
 
 /-! ## The hitting lemma, and coverage
 
-At any quorate record. Both rest on one principle:
-
-> If a block is referenced by the round-`(r+1)` blocks of enough
-> **honest** validators, every round-`(r+2)` block reaches it.
-
-"Enough" admits two thresholds. The participation-sensitive form counts
-against the round-`(r+1)` author pool `p`: a round-`(r+2)` block draws
-its `q` referenced creators from that pool, so it misses at most `p − q`
-of them and cannot dodge `p − q + 1` backers. The uniform form is its
-corollary at `p ≤ n`: more than `n − q` backers always suffice, which
-for the core's `q = n − f` is the familiar `f + 1`.
-
-Honesty of the *supporters* is what makes this work: an honest validator
-has one round-`(r+1)` block, so naming it is enough to reach what it
-references. A Byzantine supporter could hold two, only one of which
-references the target. -/
+At any quorate record: a block referenced by the round-`(r+1)` blocks of
+enough honest validators is reached by every round-`(r+2)` block. Such a
+block names `q` creators from the round-`(r+1)` author pool `p`, so it
+misses at most `p − q` of them and cannot avoid `p − q + 1` backers; at
+`p ≤ n` more than `n − q` suffice, the core's `f + 1`. Honesty of the
+backers is what makes naming one reach its block. -/
 
 section Quorate
 
@@ -541,8 +517,7 @@ theorem exists_mem_refs_of_honest_support
   exact ⟨i, hi_mem, hib ▸ hb_Q⟩
 
 /-- **The hitting lemma, uniform form.** More than `n − q` honest backers
-always suffice: a round-`(n+1)` block names `q` of at most `n`
-participating authors, so it misses at most `n − q`. -/
+always suffice. -/
 theorem exists_mem_refs_of_honest_support_of_card [Fintype Validator]
     {Q : BlockId → Prop} {n : ℕ} {T : Finset Validator}
     (hT : ∀ v ∈ T, ∃ b ∈ U.ids, (U.block b).round = n ∧ Q b ∧ (U.block b).creator = v)
@@ -581,8 +556,7 @@ theorem reaches_pred_of_round_le {q : ℕ} [P.Quorate q] {Q : BlockId → Prop} 
 
 /-- **Coverage, participation-sensitive form.** A block backed by
 `p − q + 1` honest round-`(r+1)` validators is reached by every
-round-`(r+2)` block. The `Q`-instance of the hitting lemma where every
-target references `b`. -/
+round-`(r+2)` block. -/
 theorem reaches_of_honest_support
     {b : BlockId} {r : ℕ} {S : Finset Validator}
     (hS_support : ∀ v ∈ S, ∃ b' ∈ U.ids,
@@ -597,9 +571,7 @@ theorem reaches_of_honest_support
   exact Reaches.of_mem_refs hb'_mem (Reaches.single hb'_ref)
 
 /-- **Coverage, uniform form.** More than `n − q` honest supporters
-always suffice. This is the form to use when supporters come from a
-quorum rather than from counting — see T3, where `n − f` distinct
-creators contain `f + 1` correct ones by `card_inter_correct_of_quorum`. -/
+always suffice; the form T3 uses. -/
 theorem reaches_of_honest_support_of_card [Fintype Validator]
     {b : BlockId} {r : ℕ} {S : Finset Validator}
     (hS_support : ∀ v ∈ S, ∃ b' ∈ U.ids,
@@ -619,11 +591,8 @@ section Core
 variable [Fintype Validator] [F : Faults Validator]
 variable {U : BlockUniverse Validator BlockId Payload}
 
-/-- **Two quorum-backed sets of round-`n` blocks must share a block.**
-
-T0' gives a correct author common to both creator sets, and T1 makes that
-author's round-`n` block unique — so the two blocks it contributes coincide.
-The record's `exists_common_block` at the core's fault model. -/
+/-- **Two quorum-backed sets of round-`n` blocks share a block**: a
+correct author common to both has one round-`n` block. -/
 theorem BlockUniverse.exists_common_mem_of_quorums {s t : Finset BlockId} {n : ℕ}
     (hs : ∀ q ∈ s, q ∈ U.ids ∧ (U.block q).round = n)
     (ht : ∀ q ∈ t, q ∈ U.ids ∧ (U.block q).round = n)

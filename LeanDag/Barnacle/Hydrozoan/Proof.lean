@@ -4,7 +4,7 @@ import LeanDag.Hydrozoan.SlotAgreement.Proof
 /-!
 # Barnacle over Hydrozoan — proof
 
-Unaudited. The laws are `ofAnchored_laws` at HZ3's laws.
+Unaudited.
 -/
 
 namespace LeanDag

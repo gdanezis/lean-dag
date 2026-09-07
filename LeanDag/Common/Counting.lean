@@ -2,14 +2,10 @@ import Mathlib.Data.Fintype.Card
 /-!
 # Counting in a committee
 
-The one counting fact every quorum argument in the development makes:
-two sets whose sizes sum past `n + m` meet outside any set of at most
-`m` members. Every quorum-intersection lemma — the core's T0 at
-`n − f`, Nemo's two majorities, Hydrozoan's certificate uniqueness,
-Hybrid's at the honest class, FinWhale's fast path — is this at its own
-thresholds, and every "the two quorums cannot both exist" argument is its
-contrapositive: two sets meeting only inside a set of at most `m` sum to
-at most `n + m`.
+Two sets whose sizes sum past `n + m` meet outside any set of at most
+`m` members. Every quorum-intersection lemma of the development is this
+at its thresholds, and every "two quorums cannot both exist" argument
+its contrapositive.
 -/
 
 namespace LeanDag

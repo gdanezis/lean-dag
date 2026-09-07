@@ -3,15 +3,10 @@ import LeanDag.Barnacle.OptimalHydrozoan.Statement
 /-!
 # Barnacle over Optimal-Hydrozoan — the live rule, statement
 
-The mirror of `Barnacle/HydrozoanLive/`. A good DAG is `Timed.Good` at
-Hydrozoan's fault model, which is Optimal's unchanged: the arc reuses
-the whole synchrony rendering (`optimal-hydrozoan.md` §5).
-
-The descent laws are OH5 and OH6, at slack `f + c` and wave length
-three, exactly as Hydrozoan's are HZ5 and HZ6. Round-robin liveness
-takes the committee bound `3·(f + c) + 1 ≤ n` directly, for the reason
-`Barnacle/HydrozoanLive/Statement.lean` records.
-Statements only; the proofs live in `Proof.lean`.
+Optimal-Hydrozoan as a live rule at Hydrozoan's fault model, its descent
+laws at slack `f + c`, and A4 for it under round-robin with gap `n + 2`
+on a committee of at least `3·(f + c) + 1`. Statements only; the proofs
+live in `Proof.lean`.
 -/
 
 namespace LeanDag

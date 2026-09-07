@@ -5,20 +5,12 @@ import LeanDag.Mysticeti.Liveness
 # Barnacle helpers — the delivery law
 
 Not part of the audit surface. `LiveRule.Delivers` for every anchored
-rule over the block universe at the core's fault model — Mysticeti and
-Odontoceti among them. The argument is the core's: coverage makes every
-reliable validator's round-`(r+1)` block reference a reliable round-`r`
-block, so that block carries a quorum of support and T3
+rule over the block universe at the core's fault model: coverage gives a
+reliable block a quorum of supporters one round up, and T3
 (`reaches_of_quorum_support`) puts it in the history of everything two
-rounds up.
-
-**Nemo-Nemo is not here.** Its persistence lemmas
-(`reaches_of_honest_support`, `…_of_card`) conclude from a block at
-*exactly* two rounds above, where the core's T3 concludes from every
-block at two rounds or more. Closing the gap needs a descent — a block at
-round `r + k` reaches one at `r + 2` — which the crash arc does not
-carry. The law is stated for every live rule and BN14 consumes only the
-law, so the crash rule joins by proving that descent and nothing else.
+rounds up. Nemo is not covered: its persistence lemmas conclude from a
+block exactly two rounds above, and the descent that would close the gap
+is not in the crash arc.
 -/
 
 namespace LeanDag
@@ -56,8 +48,7 @@ theorem mem_history_of_good [Faults Validator]
   exact (mem_history_iff hc).mpr
     (reaches_of_quorum_support hQids hQround hQref hQcard hc hcr)
 
-/-- **Every core rule delivers**, at slack `f`: an anchored rule over the
-block universe, made live at the core's fault model. -/
+/-- **Every core rule delivers**, at slack `f`. -/
 theorem delivers_core [F : Faults Validator]
     (R : AnchoredRule Validator BlockId Payload ValidWrt (Correct : Finset Validator)) :
     (liveOfAnchored R (coreReliability Validator)).Delivers F.f where

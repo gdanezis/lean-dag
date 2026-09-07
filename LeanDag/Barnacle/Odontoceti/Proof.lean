@@ -6,11 +6,8 @@ import LeanDag.Odontoceti.Properties
 /-!
 # Barnacle over Odontoceti — proof
 
-Generated proof layer; not part of the audit surface. The laws are
-`ofAnchored_laws` at O5's laws; the descent laws are
-`descent_of_support` at the vote support; round-robin liveness is BN9e
-at slack `f` and wave length `2`, with `2f + 1 ≤ n` from the committee
-bound.
+Generated proof layer; not part of the audit surface. The bound
+`2f + 1 ≤ n` is the committee bound.
 -/
 
 namespace LeanDag

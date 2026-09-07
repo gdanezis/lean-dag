@@ -6,11 +6,8 @@ import LeanDag.Nemo.Properties
 /-!
 # Barnacle over Nemo-Nemo — proof
 
-Generated proof layer; not part of the audit surface. The laws are
-`ofAnchored_laws` at Nemo's laws; the descent laws are
-`descent_of_support` at the vote support, with the reliable set
-everyone; round-robin liveness is BN9e at the majority slack and wave
-length `2`, whose bound holds at every `n`.
+Generated proof layer; not part of the audit surface. The pigeonhole's
+bound `2 · (n − majority) + 1 ≤ n` holds at every `n`.
 -/
 
 namespace LeanDag
@@ -26,8 +23,7 @@ theorem descent : Descent := by
     (NemoProperties.voteSupport_commits LeanDag.Nemo.CrashFaults.card_pos)
     NemoProperties.indirect (by change 1 ≤ 1 + 1; omega) fun _ _ _ h => h
 
-/-- The pigeonhole's committee bound holds for the majority slack at
-every `n`: `2 · (n − majority) + 1 ≤ n`. -/
+/-- The pigeonhole's bound holds for the majority slack at every `n`. -/
 theorem majority_bound (n : ℕ) (hn : 0 < n) :
     2 * (n - LeanDag.Nemo.majority (Fin n)) + 1 ≤ n := by
   unfold LeanDag.Nemo.majority

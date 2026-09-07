@@ -3,8 +3,7 @@ import LeanDag.Barnacle.Helpers.Anchored
 /-!
 # Barnacle over Optimal-Hydrozoan — proof
 
-Unaudited. The laws are `ofAnchoredOn_laws` at OH3's laws, the
-carrier's schedule-free exclusion supplying exclusion at every schedule.
+Unaudited.
 -/
 
 namespace LeanDag

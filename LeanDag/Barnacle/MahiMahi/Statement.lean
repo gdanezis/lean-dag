@@ -5,14 +5,9 @@ import LeanDag.MahiMahi.Carrier
 # Barnacle over Mahi-Mahi — statement
 
 The wave-`w` rule as a base rule with its laws, as a live rule with its
-descent laws at slack `f`, and A4 for it under round-robin. Both are
-`ofAnchored` at `mahiMahiAnchored w`, whose wave is `w − 1`, so the wave
-length is `w` — what the rule's indirect eligibility reads.
-
-Every statement carries `w` as a parameter, as the carrier does, and
-the committee bound round-robin needs — `w · f + 1 ≤ n` — is taken as
-a hypothesis: the fault model gives `3f + 1 ≤ n`, and a wave longer than
-three asks for more.
+descent laws at slack `f`, and A4 for it under round-robin. The
+committee bound round-robin needs, `w · f + 1 ≤ n`, is a hypothesis: the
+fault model gives `3f + 1 ≤ n`, and a longer wave asks for more.
 Statements only; the proofs live in `Proof.lean`.
 -/
 

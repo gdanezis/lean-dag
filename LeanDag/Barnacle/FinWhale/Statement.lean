@@ -5,10 +5,7 @@ import LeanDag.FinWhale.Carrier
 # Barnacle over FinWhale — statement
 
 FinWhale as a base rule with its laws, as a live rule with its descent
-laws at slack `f`, and A4 for it under round-robin. Both are
-`ofAnchored` at `finWhaleAnchored`: the universe is FinWhale's own
-`Dag`, the wave length three — what the rule's eligibility reads — and
-the direct predicate `DirectCommit`, as a view evaluates it.
+laws at slack `f`, and A4 for it under round-robin with gap `n + 2`.
 Statements only; the proofs live in `Proof.lean`.
 -/
 

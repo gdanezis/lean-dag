@@ -4,14 +4,11 @@ import LeanDag.Odontoceti.Carrier
 /-!
 # Barnacle over Odontoceti — statement
 
-The two-round rule at `n ≥ 5f + 1` (report §10; the paper's Blue
-Bottle) as a base rule with its laws, as a live rule with its descent
-laws at slack `f`, and the paper's A4 for it under round-robin: live at
-every leader count with gap `n + 1`. Both are `ofAnchored` at
-`odontocetiAnchored`; the ids carry a linear order, which the indirect
-rule uses to commit the least candidate that passes its test, and which
-supplies the interface's decidable equality.
-Statements only; the proofs live in `Proof.lean`.
+The two-round rule at `n ≥ 5f + 1` (report §10) as a base rule with its
+laws, as a live rule with its descent laws at slack `f`, and A4 for it
+under round-robin with gap `n + 1`. The ids carry a linear order, for the
+indirect rule's tie-break. Statements only; the proofs live in
+`Proof.lean`.
 -/
 
 namespace LeanDag
@@ -38,9 +35,7 @@ def Laws : Prop :=
     [Faults5 Validator] [LinearOrder BlockId],
     BaseRule.Laws (odontoceti (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
 
-/-- **Odontoceti has the descent laws at slack `f`**: O7 is the direct
-commit of a good leader's slot; the indirect rule commits the least
-candidate with a thick link, or skips. -/
+/-- **Odontoceti has the descent laws at slack `f`.** -/
 def Descent : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [F : Faults5 Validator] [LinearOrder BlockId],

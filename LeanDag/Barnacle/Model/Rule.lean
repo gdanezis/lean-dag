@@ -110,24 +110,13 @@ def CoversUpto (R : BaseRule Validator BlockId Payload) (U : R.Universe)
     (V : R.View U) (N : ℕ) : Prop :=
   ∀ b ∈ R.ids U, (R.block U b).round ≤ N → b ∈ R.viewIds V
 
-/-- **The laws of a base rule** — what the leader-count mechanism
-consumes of the protocol, and what each instantiation is proved to
-satisfy. A2 — a validator holds a block only with its whole causal
-history — is carried by `BaseRule` itself, as the fields `viewSound`
-and `viewComplete`. Two laws pin the two view fields: the full view is
-the universe, the history view is the history. The other three are the
-properties of `docs/target-properties.md`, read at the rule's carrier:
-`agree` is the safety half of A4 (for a fixed schedule, verdicts agree
-across views); `commitsDirect` ties the direct predicate to the
-relation, which is what makes the window count a count of *verdicts*:
-two directly committed candidates of one slot are one block, by
-`agree`; `candidates` is its converse, a committed block is a candidate
-of its slot. The liveness half of A4 is stated in Phase 3 over an
-extension of the data.
-
-Every anchored rule with its laws has these, once
-(`Helpers/Anchored.lean`): the view laws by construction, the three
-properties from `Common/Anchored/Band.lean`. -/
+/-- **The laws of a base rule.** The two view laws pin the view fields;
+the other three are the properties of `docs/target-properties.md` at the
+rule's carrier: `agree` is the safety half of A4, and the two candidate
+properties tie the direct predicate to the relation, which makes the
+window count a count of verdicts. A2 is carried by `BaseRule` itself, as
+`viewSound` and `viewComplete`; the liveness half of A4 is
+`LiveRule.LiveOn`. -/
 structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
   /-- The full view holds exactly the universe. -/
   full_ids : ∀ U, R.viewIds (R.full U) = R.ids U
@@ -138,9 +127,7 @@ structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
   agree : Properties.Agree R.toDagRule
   /-- A directly committed candidate of a slot is a commit verdict. -/
   commitsDirect : Properties.CommitsDirect R.toDagRule (fun {U} V L r => R.DirectCommitIn V L r)
-  /-- A committed block is a candidate of its slot: the right round, the
-  right author. The other half of "verdicts are about candidates", and
-  what makes a block appear at most once in the ledger. -/
+  /-- A committed block is a candidate of its slot. -/
   candidates : Properties.CommitsCandidate R.toDagRule
 
 end BaseRule

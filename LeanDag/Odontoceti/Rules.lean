@@ -82,12 +82,8 @@ instance : Decidable (DirectSkip U L r) :=
 
 /-! ## The indirect test -/
 
-/-- The authors of decision-round support blocks for `L` visible in
-`A`'s cone: the record's `coneSupporters` at the round above `L`.
-Counted by **distinct authors**, not raw blocks: an equivocating
-supporter can plant any number of support-twins in a cone, so the block
-count is adversary-inflatable; the author count is the one the
-arithmetic on both sides actually bounds. -/
+/-- The authors of decision-round support blocks for `L` in `A`'s cone,
+by distinct authors — the count equivocation cannot inflate. -/
 abbrev coneSupports (U : BlockUniverse Validator BlockId Payload)
     (A L : BlockId) (r : ℕ) : Finset Validator :=
   coneSupporters U A L (r + 1)

@@ -119,9 +119,8 @@ instance : Decidable (DirectSkip U L r) :=
 
 /-! ## The indirect test -/
 
-/-- The authors of decision-round support blocks for `L` visible in
-`A`'s cone — the record's `coneSupporters` at the round above `L`, by
-distinct authors, the count equivocation cannot inflate. -/
+/-- The authors of decision-round support blocks for `L` in `A`'s cone,
+by distinct authors. -/
 abbrev coneSupports (U : BlockUniverse Validator BlockId Payload)
     (A L : BlockId) (r : ℕ) : Finset Validator :=
   coneSupporters U A L (r + 1)

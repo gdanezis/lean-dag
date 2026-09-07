@@ -6,10 +6,8 @@ import LeanDag.MahiMahi.Properties
 /-!
 # Barnacle over Mahi-Mahi — proof
 
-Not part of the audit surface. The laws are `ofAnchored_laws` at MM2's
-laws; the descent laws are `descent_of_support` at Mahi-Mahi's support,
-whose eligibility is restated from `w` to the anchored rule's
-`(w − 1) + 1`; round-robin liveness takes its bound as a hypothesis.
+Not part of the audit surface. The support's eligibility is restated
+from `w` to the anchored rule's `(w − 1) + 1`.
 -/
 
 namespace LeanDag

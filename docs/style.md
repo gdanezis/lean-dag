@@ -146,9 +146,15 @@ here"*. Naming which hypothesis a result consumes, and where.
   concrete model by `decide` before anything is proved from it. A
   definition that cannot be witnessed is a definition that may be
   vacuous.
-- **Docstrings say why, not what.** The statement already says what.
-  Record the design decision, the alternative rejected, and the
-  hypothesis that is genuinely consumed.
+- **Docstrings are short.** One sentence, at most two, per declaration:
+  what it means in the protocol's terms, and the hypothesis it consumes
+  when that is not evident from the statement. A module docstring says
+  what the file contains and what it rests on, in a few lines; a
+  `Proof.lean` gets one line. No docstring records history, compares its
+  file with another, or restates an argument the report makes — those
+  belong in `report.md` and in the §11 record of `target-properties.md`.
+  A file whose comment lines exceed a quarter of its non-blank lines is
+  over the norm; Mathlib runs near a fifth.
 - **Names**: `X_of_Y` concludes `X` from characteristic hypothesis `Y`;
   a prime marks a post-`R` or incremental variant; a protocol variant
   lives in its own namespace (`Odontoceti.DirectCommit`) rather than

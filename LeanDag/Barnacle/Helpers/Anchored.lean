@@ -3,10 +3,8 @@ import LeanDag.Barnacle.Model.Anchored
 # The laws of an anchored rule, once
 
 Not part of the audit surface. `BaseRule.Laws` for `ofAnchored` and
-`ofAnchoredOn`: the two view laws hold by construction, and the three
-properties are the carrier's, proved for every anchored rule in
-`Common/Anchored/Band.lean`. Each rule's `Statement` is one application
-of these.
+`ofAnchoredOn`: the view laws by construction, the three properties from
+`Common/Anchored/Band.lean`.
 -/
 
 namespace LeanDag
@@ -26,8 +24,7 @@ theorem ofAnchored_laws (hl : R.Laws) : (ofAnchored R).Laws where
   commitsDirect := AnchoredRule.commitsDirect
   candidates := AnchoredRule.commitsCandidate
 
-/-- **And under an invariant**, when the rule's laws hold under one the
-invariant implies at every schedule. -/
+/-- **And under an invariant** that implies the laws' own at every schedule. -/
 theorem ofAnchoredOn_laws {I : BlockRecord Validator BlockId Payload P honest → Prop}
     {J : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
     (hl : R.Laws J) (hJ : ∀ S U, I U → J S U) : (ofAnchoredOn R I).Laws where

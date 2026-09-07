@@ -92,9 +92,7 @@ theorem mem_history_self {b : BlockId} : b ∈ history U b := mem_historyFrom_se
 theorem history_subset_ids {b : BlockId} (hb : b ∈ U.ids) : history U b ⊆ U.ids :=
   U.causal.history_subset_ids hb
 
-/-- **The causal history of a block, as a view**: reference-closed
-because reachability is transitive. The view an anchored mechanism
-measures on. -/
+/-- **The causal history of a block, as a view.** -/
 def BlockRecord.historyView (U : BlockRecord Validator BlockId Payload P honest) (A : BlockId)
     (hA : A ∈ U.ids) : U.View where
   ids := history U A
@@ -141,9 +139,8 @@ theorem mem_history_of_mem_refs {b j : BlockId} (hb : b ∈ U.ids) (hj : j ∈ (
 
 /-! ## A block of a set in the anchor's cone
 
-The indirect rules read an anchor's causal history for one of a rule's
-certificates or votes: does a block of the set lie in the cone? Stated
-once as reachability, with the `history` reading alongside for
+The indirect rules ask whether a certificate or vote lies in the
+anchor's cone: reachability, with the `history` reading for
 decidability on data. -/
 
 section Linked
@@ -188,9 +185,8 @@ theorem linkedVia_iff_history {A : BlockId} {s : Finset BlockId} (hA : A ∈ U.i
 
 /-! ## Votes in an anchor's cone
 
-The other indirect test counts, by distinct authors, the votes for a
-candidate that lie in the anchor's cone — the count equivocation cannot
-inflate. -/
+The votes for a candidate in the anchor's cone, by distinct authors — the
+count equivocation cannot inflate. -/
 
 /-- The round-`n` votes for `L` in `A`'s cone. -/
 def coneVotesFor (U : BlockRecord Validator BlockId Payload P honest) (A L : BlockId) (n : ℕ) :

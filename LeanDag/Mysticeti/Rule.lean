@@ -218,9 +218,8 @@ directly committed *anchor*: commit if a certificate for the slot lies in
 that subgraph, skip otherwise. M4 is the statement that this never
 contradicts the direct rule. -/
 
-/-- The indirect rule's test: does a certificate for `L` lie in the causal
-history of the anchor block `A`? The record's `LinkedVia` at the core's
-certificates. -/
+/-- The indirect rule's test: a certificate for `L` lies in the causal
+history of the anchor `A`. -/
 abbrev CertifiedIn (U : BlockUniverse Validator BlockId Payload) (A L : BlockId) (r : ℕ) : Prop :=
   LinkedVia U A (certificates U L r)
 
@@ -314,10 +313,9 @@ theorem directSkip_of_directSkipIn {V : View Validator BlockId Payload U}
 
 /-! ### The slot-level skip
 
-A blame is the absence of **any candidate** from a voting-round block's
-references (`slotBlamers`, at `Common/Leader.lean`, which also says why
-the slot and not one named candidate), as the reference implementation's
-`enough_leader_blame` has it. -/
+A blame is the absence of **any candidate** from a voting-round block
+(`slotBlamers`), as the reference implementation's `enough_leader_blame`
+has it. -/
 
 /-- **The slot is directly skipped, as judged from a view**: a quorum of
 distinct validators holds a voting-round block, in view, that references
@@ -330,9 +328,7 @@ abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (k : ℕ) : Prop :=
   HoldsAtLeast U V (quorumCard Validator) (slotBlamers U k)
 
-/-- **The slot-level skip implies the per-candidate one**, so every
-theorem stated over `DirectSkipIn` — M1 and M3 in particular — applies
-to it unchanged. -/
+/-- **The slot-level skip implies the per-candidate one.** -/
 theorem directSkipIn_of_directSkipSlotIn {V : View Validator BlockId Payload U} {k : ℕ}
     (h : DirectSkipSlotIn U V k) {L : BlockId} (hL : IsLeaderBlock U k L) :
     DirectSkipIn U V L (S.slotRound k) :=

@@ -382,11 +382,8 @@ end ValidAtMechanised
 /-! ## Quorate validity
 
 A validity predicate is **quorate at `q`** when every non-genesis block
-it admits references `q` distinct creators: the counting clause of the
-family, named on its own because the hitting lemma and everything built
-on it — coverage, persistence, the common core — need nothing else of
-validity. The quorum is read off the predicate, so no record restates
-it. -/
+it admits references `q` distinct creators — all that the hitting lemma,
+coverage and persistence need of validity. -/
 
 namespace Validity
 
@@ -424,9 +421,8 @@ end Validity
 
 /-! ## Facts of any record
 
-The block-level facts every argument starts from, at any record: what
-completeness, the predecessor clause, non-equivocation and the quorum
-clause say about a block the record holds. -/
+What completeness, the predecessor clause, non-equivocation and the
+quorum clause say about a block the record holds. -/
 
 namespace BlockRecord
 
@@ -438,14 +434,9 @@ theorem round_of_mem_refs [P.Mechanised] {i j : BlockId} (hi : i ∈ U.ids)
     (hj : j ∈ (U.block i).refs) : (U.block j).round + 1 = (U.block i).round :=
   Validity.Mechanised.pred U.block (U.block i) (U.valid i hi) j hj
 
-/-- **T1.** An honest validator authors at most one block per round, so
-two ids in the record with the same honest author and the same round
-are the *same id*.
-
-Phrased around the author `v` rather than around `(U.block i).creator`,
-because that is how every use site arrives: a quorum intersection
-yields an honest validator, and T1 turns two blocks known to be
-authored by it into a single concrete id. -/
+/-- **T1.** Two blocks of the record by one honest author at one round
+are one block; phrased around the author, as a quorum intersection
+delivers it. -/
 theorem eq_of_creator_eq {v : Validator} {i j : BlockId}
     (hi : i ∈ U.ids) (hj : j ∈ U.ids) (hv : v ∈ honest)
     (hic : (U.block i).creator = v) (hjc : (U.block j).creator = v)
@@ -477,10 +468,9 @@ end BlockRecord
 
 /-! ## Non-equivocation on a set
 
-Every counting argument reads non-equivocation on some set of validators:
-the record's own honest set, or a larger one a rule proves it for, as the
-hybrid model does for its crash-prone validators. Stated once so the
-arguments are stated once. -/
+The counting arguments read non-equivocation on a set: the record's
+honest set, or a larger one a rule proves it for, as the hybrid model
+does for its crash-prone validators. -/
 
 namespace BlockRecord
 

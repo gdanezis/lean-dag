@@ -4,10 +4,7 @@ import LeanDag.Barnacle.Helpers.Descent
 /-!
 # Barnacle over Optimal-Hydrozoan — the live rule, proof
 
-Unaudited, and the mirror of `Barnacle/HydrozoanLive/Proof.lean`: the
-descent laws are `descent_of_support` at Optimal's support, and
-round-robin liveness is `liveOn_roundRobin` at slack `f + c` and wave
-length three.
+Unaudited.
 -/
 
 namespace LeanDag

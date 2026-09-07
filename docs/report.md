@@ -10958,7 +10958,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 342 definitions and structures the report names, in
+The 345 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -11129,6 +11129,21 @@ def history (U : BlockRecord Validator BlockId Payload P honest) (b : BlockId) :
 
 The causal history of `b`, as a `Finset`.
 
+#### `BlockRecord.historyView`
+
+*def, `Common.History.lean`*
+
+```lean
+def BlockRecord.historyView (U : BlockRecord Validator BlockId Payload P honest) (A : BlockId)
+    (hA : A ∈ U.ids) : U.View where
+  ids := history U A
+  subset_ids := history_subset_ids hA
+  complete := fun _ hi _ hj =>
+    (mem_history_iff hA).mpr (((mem_history_iff hA).mp hi).trans (ReachesFrom.single hj))
+```
+
+**The causal history of a block, as a view.**
+
 #### `LinkedVia`
 
 *abbrev, `Common.History.lean`*
@@ -11186,9 +11201,7 @@ def blames (U : BlockRecord Validator BlockId Payload P honest) (L : BlockId) (n
   creatorsOf U.block (omissionsOf U L n)
 ```
 
-The validators whose round-`n` block declines to reference `L`.
-
-The complement of `supporters U L n` *within the round-`n` author pool* — but only for honest validators. A Byzantine author can appear in both, by publishing one round-`n` block that votes and another that does not; ruling that out for honest validators is `not_mem_of_supports_of_blames`, and is the whole content of M3.
+The validators whose round-`n` block declines to reference `L`. An honest validator supports or blames, never both (`not_mem_of_supports_of_blames`); a Byzantine one may do both.
 
 #### `heldAuthors`
 
@@ -11289,7 +11302,7 @@ def IsLeaderBlock (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ)
   L ∈ U.ids ∧ (U.block L).round = S.slotRound k ∧ (U.block L).creator = S.leader k
 ```
 
-`L` is a candidate block for slot `k`: the right round, the right author. A correct leader has at most one such block; a Byzantine one may have several, which is why the rules quantify over candidates rather than selecting one.
+`L` is a candidate block for slot `k`: the right round, the right author.
 
 #### `leaderBlocksAt`
 
@@ -14187,15 +14200,11 @@ structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
   agree : Properties.Agree R.toDagRule
   /-- A directly committed candidate of a slot is a commit verdict. -/
   commitsDirect : Properties.CommitsDirect R.toDagRule (fun {U} V L r => R.DirectCommitIn V L r)
-  /-- A committed block is a candidate of its slot: the right round, the
-  right author. The other half of "verdicts are about candidates", and
-  what makes a block appear at most once in the ledger. -/
+  /-- A committed block is a candidate of its slot. -/
   candidates : Properties.CommitsCandidate R.toDagRule
 ```
 
-**The laws of a base rule** — what the leader-count mechanism consumes of the protocol, and what each instantiation is proved to satisfy. A2 — a validator holds a block only with its whole causal history — is carried by `BaseRule` itself, as the fields `viewSound` and `viewComplete`. Two laws pin the two view fields: the full view is the universe, the history view is the history. The other three are the properties of `docs/target-properties.md`, read at the rule's carrier: `agree` is the safety half of A4 (for a fixed schedule, verdicts agree across views); `commitsDirect` ties the direct predicate to the relation, which is what makes the window count a count of *verdicts*: two directly committed candidates of one slot are one block, by `agree`; `candidates` is its converse, a committed block is a candidate of its slot. The liveness half of A4 is stated in Phase 3 over an extension of the data.
-
-Every anchored rule with its laws has these, once (`Helpers/Anchored.lean`): the view laws by construction, the three properties from `Common/Anchored/Band.lean`.
+**The laws of a base rule.** The two view laws pin the view fields; the other three are the properties of `docs/target-properties.md` at the rule's carrier: `agree` is the safety half of A4, and the two candidate properties tie the direct predicate to the relation, which makes the window count a count of verdicts. A2 is carried by `BaseRule` itself, as `viewSound` and `viewComplete`; the liveness half of A4 is `LiveRule.LiveOn`.
 
 #### `Anchored`
 
@@ -14328,6 +14337,23 @@ structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : �
 **What a good DAG delivers.** On a DAG good from `Rnd` to `N` there is a set `T` of validators, all but at most `slack`, whose blocks are *reached* by everything two rounds above them: a `T`-authored block at a round from `Rnd`, with its own next round under the horizon, lies in the causal history of every block two rounds up — whoever authored that block.
 
 This is the base protocol's coverage read as delivery, and it is what turns a committed anchor into a delivered block. It is the second law a live rule carries, beside `Descent`: `Descent` says a good leader's slot commits, this says a good author's block is carried by whatever commits above it. Both are facts of the base protocol, and neither mentions the mechanism.
+
+#### `ofAnchored`
+
+*def, `Barnacle.Model.Anchored.lean`*
+
+```lean
+def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest) :
+    BaseRule Validator BlockId Payload where
+  toDagRule := R.toDagRule
+  full := fun U => View.full U
+  historyView := fun U A hA => U.historyView A hA
+  waveLength := R.wave + 1
+  DirectCommitIn := fun {U} V L r => R.Commit U V L r
+  decDirect := fun {U} V L r => R.decCommit U V L r
+```
+
+**An anchored rule as a base rule.**
 
 #### `Laws`
 
@@ -14565,6 +14591,30 @@ def WeakLinked (U : BlockUniverse Replica BlockId) (A L : BlockId)
 Rung 2's test: `q_weak` distinct creators of anchor-reachable votes for `L` at the voting round — the paper's `|{b.creator : Link(b, b_anchor) ∧ IsVote(b, b_leader)}| ≥ q_weak`.
 
 Stated via an explicit witness set of vote blocks (see the module docstring): some set of voting-round blocks, each voting for `L` and reachable from the anchor `A`, carries `q_weak` distinct creators.
+
+#### `hydrozoanAnchored`
+
+*def, `Hydrozoan.Model.Decided.lean`*
+
+```lean
+def hydrozoanAnchored :
+    AnchoredRule Replica BlockId Unit ValidWrt (NonByzantine : Finset Replica) where
+  wave := 2
+  Commit := fun U V L r => FastCommitInView U V L r ∨ SlowCommitInView U V L r
+  decCommit := fun _ _ _ _ => inferInstance
+  Skip := fun U V S k => SkippedLeaderInView (S := S) U V k
+  rungs := 2
+  Link := fun i U A L S k =>
+    match i with
+    | 0 => CertifiedIn U A L (S.slotRound k)
+    | _ => WeakLinked U A L (S.slotRound k)
+  tie := fun i L' L =>
+    match i with
+    | 0 => False
+    | _ => L' < L
+```
+
+**Hydrozoan as an anchored rule**: wave two; the direct commit is the fast path or the slow path in view; the direct skip is `q_fast` slotBlames in view; two rungs, the anchor-linked certificate and then the weak quorum, the second tie-broken by the order.
 
 #### `Decided`
 
@@ -15401,7 +15451,7 @@ def Laws : Prop :=
     BaseRule.Laws (hydrozoan (Replica := Replica) (BlockId := BlockId))
 ```
 
-**Hydrozoan satisfies the laws.** Agreement is HZ3 (`LeanDag.Hydrozoan.SlotAgreement`), already quantified over every universe and every schedule.
+**Hydrozoan satisfies the laws**; agreement is HZ3.
 
 #### `Laws`
 
@@ -15427,7 +15477,7 @@ def Laws : Prop :=
     BaseRule.Laws (optimalHydrozoan (Replica := Replica) (BlockId := BlockId))
 ```
 
-**Optimal-Hydrozoan satisfies the laws.** Agreement is OH3, which like HZ3 is already quantified over every universe and every schedule.
+**Optimal-Hydrozoan satisfies the laws**; agreement is OH3.
 
 #### `Laws`
 
@@ -15441,7 +15491,7 @@ def Laws : Prop :=
     BaseRule.Laws (orcaella (Validator := Validator) (BlockId := BlockId) (Payload := Payload) k)
 ```
 
-**Orcaella satisfies the laws** at every admissible threshold: agreement is the hybrid safety theorem, consuming the bundled `HonestNoEquiv` and the admissibility of `k`.
+**Orcaella satisfies the laws** at every admissible threshold.
 
 #### `commitSeq`
 
@@ -16940,7 +16990,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 511 theorems the body or Appendix A names, each
+The 512 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -17131,7 +17181,7 @@ theorem exists_mem_refs_of_honest_support_of_card [Fintype Validator]
     ∃ b ∈ (U.block c).refs, Q b
 ```
 
-**The hitting lemma, uniform form.** More than `n − q` honest backers always suffice: a round-`(n+1)` block names `q` of at most `n` participating authors, so it misses at most `n − q`.
+**The hitting lemma, uniform form.** More than `n − q` honest backers always suffice.
 
 #### `reaches_pred_of_round_le`
 
@@ -17163,7 +17213,7 @@ theorem reaches_of_honest_support_of_card [Fintype Validator]
     Reaches U c b
 ```
 
-**Coverage, uniform form.** More than `n − q` honest supporters always suffice. This is the form to use when supporters come from a quorum rather than from counting — see T3, where `n − f` distinct creators contain `f + 1` correct ones by `card_inter_correct_of_quorum`.
+**Coverage, uniform form.** More than `n − q` honest supporters always suffice; the form T3 uses.
 
 #### `BlockUniverse.exists_common_mem_of_quorums`
 
@@ -17178,9 +17228,7 @@ theorem BlockUniverse.exists_common_mem_of_quorums {s t : Finset BlockId} {n : �
     ∃ q, q ∈ s ∧ q ∈ t
 ```
 
-**Two quorum-backed sets of round-`n` blocks must share a block.**
-
-T0' gives a correct author common to both creator sets, and T1 makes that author's round-`n` block unique — so the two blocks it contributes coincide. The record's `exists_common_block` at the core's fault model.
+**Two quorum-backed sets of round-`n` blocks share a block**: a correct author common to both has one round-`n` block.
 
 #### `exists_correct_common_support`
 
@@ -17263,7 +17311,7 @@ theorem isLeaderBlock_unique_of_honest {k : ℕ} {L₁ L₂ : BlockId}
     L₁ = L₂
 ```
 
-**An honest leader has at most one candidate**: two blocks by an honest author at one round are one block. Every rule with a tie to break uses this to see that the tie only ever arises under a dishonest leader.
+**An honest leader has at most one candidate**, so a tie between candidates only arises under a dishonest leader.
 
 ### The commit rule, and the ledger
 
@@ -17419,7 +17467,7 @@ theorem directSkipIn_of_directSkipSlotIn {V : View Validator BlockId Payload U} 
     DirectSkipIn U V L (S.slotRound k)
 ```
 
-**The slot-level skip implies the per-candidate one**, so every theorem stated over `DirectSkipIn` — M1 and M3 in particular — applies to it unchanged.
+**The slot-level skip implies the per-candidate one.**
 
 #### `coreLaws`
 
@@ -19823,7 +19871,7 @@ theorem adaptiveRun_agree {P : AdaptivePolicy Validator BlockId Payload}
     (∀ k, R₁.vdct k = R₂.vdct k) ∧ (∀ m, R₁.assign m = R₂.assign m)
 ```
 
-**Safety, two-round rule: the adaptive fixpoint is unique** — with no fairness, synchrony or view hypothesis, exactly as on the three-round side.
+**Safety, two-round rule: the adaptive fixpoint is unique**, with no fairness, synchrony or view hypothesis.
 
 #### `exists_partialRun`
 
@@ -19858,7 +19906,7 @@ theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
     Nonempty (AdaptiveRun P U V)
 ```
 
-**AL7: adaptive Odontoceti is safe and live.** The fixpoint exists on every view caught up to every horizon, and by `adaptiveRun_agree` it is unique.
+**AL7: adaptive Odontoceti is safe and live.**
 
 ### Nemo-Nemo: crash-fault consensus in two rounds
 
@@ -20457,17 +20505,6 @@ theorem c3_margin (f p n : ℕ) (hp : 1 ≤ p) (hn : n + 1 = 3 * f + 2 * p) :
 ```
 
 **And what that one member costs.** The pigeonhole margin over the `f` faulty authors is `|H| − f`. At the paper's `|H| = n − 2f` it is `2p − 1`, positive at every `p`; at the correct `|H| = n − 2f − 1` it is `2p − 2`, and at `p = 1` the set has exactly `f` members, so the intersection bound is zero and the argument names no block.
-
-#### `causalStructure`
-
-*theorem, `FinWhale.Evidence.lean`*
-
-```lean
-theorem causalStructure (D : Dag Validator BlockId Payload) :
-    CausalStructure D.block D.ids
-```
-
-**A FinWhale DAG is a causal structure.** Its two conditions are the DAG's closure under references and validity's predecessor clause.
 
 #### `not_refs_conflicting`
 
@@ -21465,6 +21502,17 @@ theorem not_committedAt_of_dead {k j : ℕ} (hj : j ≤ k) {l : BlockId}
 
 ### Barnacle: the adaptive leader count
 
+#### `ofAnchored_laws`
+
+*theorem, `Barnacle.Helpers.Anchored.lean`*
+
+```lean
+theorem ofAnchored_laws (hl : R.Laws) : (ofAnchored R).Laws where
+  full_ids
+```
+
+**An anchored rule with its laws satisfies Barnacle's.**
+
 #### `progress`
 
 *theorem, `Barnacle.Helpers.Progress.lean`*
@@ -22194,6 +22242,19 @@ theorem coversUpto_full (hR : R.Laws) (U : R.Universe) (N : ℕ) :
 
 **The full view is caught up to every horizon.**
 
+#### `delivers_core`
+
+*theorem, `Barnacle.Helpers.Delivery.lean`*
+
+```lean
+theorem delivers_core [F : Faults Validator]
+    (R : AnchoredRule Validator BlockId Payload ValidWrt (Correct : Finset Validator)) :
+    (liveOfAnchored R (coreReliability Validator)).Delivers F.f where
+  reaches
+```
+
+**Every core rule delivers**, at slack `f`.
+
 #### `descent_of_support`
 
 *theorem, `Barnacle.Helpers.Descent.lean`*
@@ -22209,7 +22270,7 @@ theorem descent_of_support (R : LiveRule Validator BlockId Payload)
   goodLeaders
 ```
 
-**The descent laws, from a support.** A rule with `OfCoverage` and `Commits` at a fault model, `Indirect` at its eligibility, a wave no longer than the rule's, and good DAGs that are `Timed.Good` has Barnacle's liveness interface at the model's slack — and so, by `Heads/Proof.lean`, `LiveOn` under round-robin at every leader count. No `LeaderCommits` and no precondition of the rule's own appear: A4 is `Timed.exists_decided_of_coverage` at the quorum a good DAG names.
+**The descent laws, from a support**, at the fault model's slack.
 
 #### `holds`
 

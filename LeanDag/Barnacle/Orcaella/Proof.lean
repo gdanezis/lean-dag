@@ -6,12 +6,8 @@ import LeanDag.Hybrid.Properties
 /-!
 # Barnacle over Orcaella — proof
 
-Generated proof layer; not part of the audit surface. The laws are
-`ofAnchoredOn_laws` at the hybrid laws under the bundled invariant; the
-descent laws are `descent_of_support` at the vote support, consuming no
-admissibility; round-robin liveness is BN9e at slack `fb + fc` and wave
-length `2`, with `2·(fb + fc) + 1 ≤ n` from the committee bound, itself
-read off the admissible threshold.
+Generated proof layer; not part of the audit surface. The bound
+`2·(fb + fc) + 1 ≤ n` is read off the admissible threshold.
 -/
 
 namespace LeanDag
