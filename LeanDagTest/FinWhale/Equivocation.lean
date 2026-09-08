@@ -2,6 +2,7 @@ import LeanDagTest.Mysticeti.Growth
 import LeanDag.FinWhale.DoSBridge
 import Mathlib.Data.Fin.VecNotation
 import Mathlib.Tactic.IntervalCases
+import LeanDag.FinWhale.Procedure.DoSBridge
 /-!
 # FinWhale witnesses — a DoS-valid execution with a real equivocation
 

@@ -1,6 +1,6 @@
 import LeanDag.FinWhale.Model.Liveness
 import LeanDag.FinWhale.Model.Schedule
-import LeanDag.FinWhale.Model.Verdict
+import LeanDag.FinWhale.Procedure.Model.Verdict
 /-!
 # FinWhale — one execution, and what a validator reads off it
 

@@ -1,9 +1,10 @@
-import LeanDag.FinWhale.Order
+import LeanDag.FinWhale.Procedure.Order
 import LeanDag.FinWhale.Rotation
-import LeanDag.FinWhale.Decided
+import LeanDag.FinWhale.Procedure.Decided
 import LeanDag.FinWhale.View
-import LeanDag.FinWhale.Pass
+import LeanDag.FinWhale.Procedure.Pass
 import Mathlib.Tactic.IntervalCases
+import LeanDag.FinWhale.Procedure.View
 
 /-!
 # FinWhale witnesses — the commit rules on data

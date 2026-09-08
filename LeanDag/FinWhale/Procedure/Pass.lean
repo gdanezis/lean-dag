@@ -1,6 +1,6 @@
 import LeanDag.FinWhale.View
 import Mathlib.Order.Interval.Finset.Nat
-import LeanDag.FinWhale.Model.Pass
+import LeanDag.FinWhale.Procedure.Model.Pass
 /-!
 # FinWhale — the reverse pass, as a procedure
 

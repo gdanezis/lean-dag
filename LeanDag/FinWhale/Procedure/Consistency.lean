@@ -1,5 +1,5 @@
 import LeanDag.FinWhale.Anchor
-import LeanDag.FinWhale.Model.Verdict
+import LeanDag.FinWhale.Procedure.Model.Verdict
 import LeanDag.FinWhale.Model.Decided
 import LeanDag.Common.Anchored.Bounded
 /-!
@@ -78,15 +78,6 @@ theorem chooseLeast_least {A : BlockId} {r : ℕ} {b : BlockId}
     rw [hb] at this
     exact absurd hlt (not_lt.mpr this)
   · exact absurd h (by simp)
-
-/-- **The rung has a choice.** -/
-theorem exists_least {A : BlockId} {i k : ℕ}
-    (_ : i < (finWhaleAnchored Validator BlockId Payload).rungs)
-    (h : ∃ L, IsLeaderBlock (S := S) D k L ∧
-      (finWhaleAnchored Validator BlockId Payload).Link i D A L S k) :
-    ∃ L, IsLeaderBlock (S := S) D k L ∧ (finWhaleAnchored Validator BlockId Payload).Link i D A L S k ∧
-      (finWhaleAnchored Validator BlockId Payload).Least (S := S) D A i k L :=
-  AnchoredRule.exists_least_of_lt (fun _ _ => Iff.rfl) h
 
 end Rule
 

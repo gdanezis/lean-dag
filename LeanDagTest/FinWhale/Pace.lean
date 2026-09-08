@@ -4,7 +4,7 @@ import LeanDag.FinWhale.View
 import LeanDag.FinWhale.Reactive
 import LeanDag.FinWhale.Validity
 import LeanDag.FinWhale.Creation
-import LeanDag.FinWhale.Protocol
+import LeanDag.FinWhale.Procedure.Protocol
 /-!
 # FinWhale witnesses — the pacing structure under liveness
 

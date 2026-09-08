@@ -1,7 +1,9 @@
 import LeanDag.FinWhale.Holdings
-import LeanDag.FinWhale.Model.Protocol
+import LeanDag.FinWhale.Procedure.Model.Protocol
 import LeanDag.FinWhale.Validity
 import LeanDag.FinWhale.View
+import LeanDag.FinWhale.Procedure.View
+import LeanDag.FinWhale.Procedure.Validity
 /-!
 # FinWhale — what the protocol guarantees
 

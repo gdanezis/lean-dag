@@ -1,6 +1,7 @@
 import LeanDag.FinWhale.View
 import LeanDag.FinWhale.Band
-import LeanDag.FinWhale.Pass
+import LeanDag.FinWhale.Least
+import LeanDag.FinWhale.Procedure.Pass
 import LeanDag.Common.Anchored.Band
 import LeanDag.Properties.Agree
 import LeanDag.Properties.Candidate
@@ -126,25 +127,6 @@ the horizon really is above every slot the pass commits. -/
 theorem rle (S : Slots Validator) (D : Dag Validator BlockId Payload) :
     ∀ r, S.slotRound r ≤ D.ids.sup (fun b => (D.block b).round) → r ≤ dagHorizon D :=
   fun _ h => Nat.le_of_lt (LeanDag.Slots.slot_lt_of_slotRound_le (S := S) h)
-
-/-- The pass a view runs. -/
-noncomputable def passOf (S : Slots Validator) (D : Dag Validator BlockId Payload)
-    (V : D.View) : ℕ → Verdict BlockId :=
-  decOf S (EligibleAt (S := S) 2) (V.toRecord) (chooseLeast S D) (dagHorizon D)
-
-/-- It is well formed, at every schedule. -/
-theorem wellFormed_passOf {D : Dag Validator BlockId Payload} {S : Slots Validator}
-    (V : D.View) :
-    WellFormed (EligibleAt (S := S) 2) (viewCommit S D V) (viewSkip S D V) (chooseLeast S D)
-      (passOf S D V) :=
-  wellFormed_decOf (view_bounded D V) (fun _ _ => lt_of_eligibleAt) (rle S D) (chooseLeast S D)
-
-/-- **And every verdict it reaches is the relation's.** -/
-theorem decided_of_passOf {D : Dag Validator BlockId Payload} {S : Slots Validator}
-    {V : D.View} {k : ℕ} (h : passOf S D V k ≠ Verdict.undecided) :
-    (finWhaleRule (Payload := Payload)).Decided S V k (passOf S D V k).optOf :=
-  decided_of_wellFormed (wellFormed_passOf V) (N := dagHorizon D + 1)
-    (fun _ hs => decOf_of_gt (by omega)) k h
 
 /-! ## The liveness property
 

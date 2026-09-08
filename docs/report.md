@@ -13536,147 +13536,6 @@ def IndirectCommit (S : Slots Validator) (D : Dag Validator BlockId Payload) (A 
 
 **The indirect commit condition**, as a predicate of the anchor `A`, the slot's round `r`, and the candidate block `b`. No view occurs in it: the anchor's causal history is a function of the anchor.
 
-#### `WellFormed`
-
-*structure, `FinWhale.Model.Verdict.lean`*
-
-```lean
-structure WellFormed (Elig : ℕ → ℕ → Prop) (dcommit : ℕ → BlockId → Prop) (dskip : ℕ → Prop)
-    (choose : BlockId → ℕ → Option BlockId) (dec : ℕ → Verdict BlockId) : Prop where
-  /-- A direct commit is taken. -/
-  direct_commit : ∀ r l, dcommit r l → dec r = Verdict.commit l
-  /-- A direct skip is taken. -/
-  direct_skip : ∀ r, dskip r → dec r = Verdict.skip
-  /-- Undecided where the anchor is undecided. -/
-  indirect_undecided : ∀ r a, (¬ ∃ l, dcommit r l) → ¬ dskip r → Anchor Elig dec r a →
-    dec a = Verdict.undecided → dec r = Verdict.undecided
-  /-- Decided by the anchor otherwise. -/
-  indirect_commit : ∀ r a A, (¬ ∃ l, dcommit r l) → ¬ dskip r → Anchor Elig dec r a →
-    dec a = Verdict.commit A →
-    dec r = (match choose A r with
-      | some b => Verdict.commit b
-      | none => Verdict.skip)
-  /-- A slot decided without a direct rule was decided from an anchor. -/
-  has_anchor : ∀ r, (¬ ∃ l, dcommit r l) → ¬ dskip r → dec r ≠ Verdict.undecided →
-    ∃ a, Anchor Elig dec r a
-```
-
-**The reverse pass, as a condition on the verdicts.** The direct rules are parameters, since each validator evaluates them on its own view; `choose` is shared, reading only the anchor and the round.
-
-#### `ChooseSound`
-
-*structure, `FinWhale.Model.Verdict.lean`*
-
-```lean
-structure ChooseSound (S : Slots Validator) (D : Dag Validator BlockId Payload)
-    (choose : BlockId → ℕ → Option BlockId) : Prop where
-  /-- Whatever it names is a candidate. -/
-  sound : ∀ A r b, choose A r = some b → IndirectCommit S D A r b
-  /-- Where there is a candidate, it names one. -/
-  total : ∀ A r, (∃ b, IndirectCommit S D A r b) → ∃ b, choose A r = some b
-```
-
-**What the deterministic rule must satisfy**: it names only blocks the anchor could indirectly commit, and names one whenever there is one to name.
-
-#### `chooseLeast`
-
-*def, `FinWhale.Model.Verdict.lean`*
-
-```lean
-noncomputable def chooseLeast [LinearOrder BlockId] (S : Slots Validator)
-    (D : Dag Validator BlockId Payload) (A : BlockId) (r : ℕ) : Option BlockId :=
-  if h : ((slotBlocks S D r).filter (fun b => IndirectCommit S D A r b)).Nonempty then
-    some (((slotBlocks S D r).filter (fun b => IndirectCommit S D A r b)).min' h)
-  else none
-```
-
-**The deterministic rule, exhibited**: the least candidate in the identifier order, sound and total by construction, and a function of the anchor and the round alone, so two validators holding the same anchor make the same choice.
-
-#### `slotVerdict`
-
-*def, `FinWhale.Model.Pass.lean`*
-
-```lean
-def slotVerdict (S : Slots Validator) (Elig : ℕ → ℕ → Prop) [DecidableRel Elig]
-    (D : Dag Validator BlockId Payload)
-    (choose : BlockId → ℕ → Option BlockId) (N : ℕ)
-    (above : ℕ → Verdict BlockId) (r : ℕ) : Verdict BlockId :=
-  if h : (directCommits S D r).Nonempty then Verdict.commit ((directCommits S D r).min' h)
-  else if DirectSkip S D r then Verdict.skip
-  else anchorVerdict Elig choose N above r
-```
-
-**One slot's verdict, from the verdicts above it.**
-
-#### `passFrom`
-
-*def, `FinWhale.Model.Pass.lean`*
-
-```lean
-def passFrom (S : Slots Validator) (Elig : ℕ → ℕ → Prop) [DecidableRel Elig]
-    (D : Dag Validator BlockId Payload)
-    (choose : BlockId → ℕ → Option BlockId) (N : ℕ) (s : ℕ) : ℕ → Verdict BlockId :=
-  if h : N < s then fun _ => Verdict.undecided
-  else fun r =>
-    if r = s then slotVerdict S Elig D choose N (passFrom S Elig D choose N (s + 1)) s
-    else passFrom S Elig D choose N (s + 1) r
-termination_by N + 1 - s
-decreasing_by all_goals omega
-```
-
-**The pass, from slot `s` downward.** Slots below `s` are left undecided; slot `s` is decided from the verdicts above it, and those are what the pass from `s + 1` gives.
-
-#### `decOf`
-
-*def, `FinWhale.Model.Pass.lean`*
-
-```lean
-def decOf (S : Slots Validator) (Elig : ℕ → ℕ → Prop) [DecidableRel Elig]
-    (D : Dag Validator BlockId Payload)
-    (choose : BlockId → ℕ → Option BlockId) (N : ℕ) : ℕ → Verdict BlockId :=
-  passFrom S Elig D choose N 0
-```
-
-**The verdicts of a validator whose view is `D`.**
-
-#### `commitSeq`
-
-*def, `FinWhale.Model.Order.lean`*
-
-```lean
-def commitSeq (dec : ℕ → Verdict BlockId) : ℕ → List BlockId
-  | 0 => []
-  | k + 1 => commitSeq dec k ++ (match dec k with
-      | Verdict.commit b => [b]
-      | Verdict.skip => []
-      | Verdict.undecided => [])
-```
-
-**The committed leader sequence** of the first `k` slots.
-
-#### `linearise`
-
-*def, `FinWhale.Model.Order.lean`*
-
-```lean
-def linearise (hist : BlockId → List BlockId) (ls : List BlockId) : List BlockId :=
-  ls.foldl (fun acc l => acc ++ (hist l).filter (fun b => b ∉ acc)) []
-```
-
-**The delivery order.** Each committed leader contributes the blocks of its causal history that no earlier leader delivered.
-
-#### `histOf`
-
-*def, `FinWhale.Model.Order.lean`*
-
-```lean
-def histOf [LinearOrder BlockId] (D : Dag Validator BlockId Payload) (l : BlockId) :
-    List BlockId :=
-  (historyFrom D.block l).sort (· ≤ ·)
-```
-
-**The delivery order's input, concretely.** A leader contributes its causal history, computed by `historyFrom` and listed in the identifier order — the cheapest deterministic sort that lists each block once, and all that Theorems 24 and 26 read of it.
-
 #### `Creation`
 
 *structure, `FinWhale.Model.Creation.lean`*
@@ -13763,57 +13622,6 @@ def settled (pc : PaceCore U T M) : ℕ :=
 
 The instant by which every reliable block of every round up to `M` has arrived: the latest build of any of those rounds, plus one delay.
 
-#### `Run`
-
-*structure, `FinWhale.Model.Protocol.lean`*
-
-```lean
-structure Run (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [Params Validator] [DecidableEq BlockId] [LinearOrder BlockId] where
-  /-- Every block any correct validator holds. -/
-  dag : Dag Validator BlockId Payload
-  /-- The same blocks, as the pacing line reads them. -/
-  paced : BlockUniverse Validator BlockId Payload
-  /-- The two readings describe the same blocks. -/
-  ids_eq : dag.ids = paced.ids
-  /-- And denote them the same way. -/
-  block_eq : dag.block = paced.block
-  /-- No block sits above this round. -/
-  horizon : ℕ
-  /-- Which is a horizon. -/
-  rounds_le : ∀ b ∈ dag.ids, (dag.block b).round ≤ horizon
-  /-- The rounds the schedule reaches. -/
-  paceHorizon : ℕ
-  /-- The schedule and the network. -/
-  pace : PaceCore paced (Correct : Finset Validator) paceHorizon
-  /-- Rounds advance real time. -/
-  rounds_advance : ∀ u ∈ (Correct : Finset Validator), ∀ n ≤ pace.top u, n ≤ pace.built u n
-  /-- The leader schedule the execution runs. It belongs to the
-  execution rather than to the DAG: a DAG is blocks, and a schedule is
-  not. -/
-  sched : Slots Validator
-  /-- FinWhale runs one slot per round, which is what the reverse pass
-  enumerates. -/
-  roundId : ∀ k, sched.slotRound k = k
-  /-- The network has stabilised by this round. -/
-  stable : ℕ
-  /-- Which is past GST. -/
-  gst_le : pace.gst ≤ stable
-  /-- Below this round the liveness argument applies. -/
-  liveHorizon : ℕ
-  /-- Every correct-led slot below it carries a commit — the input §10
-  supplies, by either route. -/
-  commits : CommitsCorrectLeaders sched dag stable liveHorizon
-  /-- The schedule reaches that far. -/
-  live_le : liveHorizon ≤ paceHorizon
-  /-- Leaders rotate. -/
-  roundRobin : RoundRobin sched.leader
-  /-- Every block references its author's previous block. -/
-  selfParented : SelfParented dag
-```
-
-**A run of FinWhale.** The blocks every correct validator ever holds, the schedule and network that carried them, and the rotation that names leaders.
-
 #### `holdsView`
 
 *def, `FinWhale.Holdings.lean`*
@@ -13846,66 +13654,6 @@ def Dag.ofDoSValid (U : BlockUniverse Validator BlockId Payload) (leader : ℕ �
 ```
 
 **The construction.** A DoS-valid universe, read as a FinWhale DAG at a given leader schedule. Three validity clauses are the core's, the fourth is the theorem above, and non-equivocation is the universe's.
-
-#### `Run.ofDoSValid`
-
-*def, `FinWhale.DoSBridge.lean`*
-
-```lean
-def Run.ofDoSValid [LinearOrder BlockId] (U : BlockUniverse Validator BlockId Payload)
-    (leader : ℕ → Validator) (hdos : DoSValid U)
-    (horizon : ℕ) (rounds_le : ∀ b ∈ U.ids, (U.block b).round ≤ horizon)
-    (paceHorizon : ℕ) (pace : PaceCore U (Correct : Finset Validator) paceHorizon)
-    (rounds_advance : ∀ u ∈ (Correct : Finset Validator), ∀ n ≤ pace.top u, n ≤ pace.built u n)
-    (stable : ℕ) (gst_le : pace.gst ≤ stable) (liveHorizon : ℕ)
-    (commits : CommitsCorrectLeaders (Slots.identity leader) (Dag.ofDoSValid U leader hdos)
-      stable liveHorizon)
-    (live_le : liveHorizon ≤ paceHorizon) (roundRobin : RoundRobin leader) :
-    Run Validator BlockId Payload where
-  dag := Dag.ofDoSValid U leader hdos
-  sched := (Slots.identity leader)
-  roundId := fun _ => rfl
-  paced := U
-  ids_eq := rfl
-  block_eq := rfl
-  horizon := horizon
-  rounds_le := rounds_le
-  paceHorizon := paceHorizon
-  pace := pace
-  rounds_advance := rounds_advance
-  stable := stable
-  gst_le := gst_le
-  liveHorizon := liveHorizon
-  commits := commits
-  live_le := live_le
-  roundRobin := roundRobin
-  selfParented := selfParented_ofDoSValid hdos
-```
-
-**A run over a DoS-valid universe**: the same data a `Run` asks for, less three fields the identification with the universe discharges.
-
-#### `Run.ofDoSValidReactive`
-
-*def, `FinWhale.DoSBridge.lean`*
-
-```lean
-noncomputable def Run.ofDoSValidReactive [LinearOrder BlockId]
-    (U : BlockUniverse Validator BlockId Payload) (hdos : DoSValid U) {N : ℕ}
-    (rm : ReactiveM U (Correct : Finset Validator) N)
-    (hround : ∀ k, S.slotRound k = k) (hrr : RoundRobin S.leader)
-    (horizon : ℕ) (rounds_le : ∀ b ∈ U.ids, (U.block b).round ≤ horizon)
-    (rounds_advance : ∀ u ∈ (Correct : Finset Validator), ∀ n ≤ rm.top u,
-      n ≤ rm.built u n)
-    (stable : ℕ) (hgst : rm.gst ≤ stable)
-    (hto : ∀ n, stable ≤ n → 2 * rm.delay + rm.proc ≤ rm.timeout n) :
-    Run Validator BlockId Payload :=
-  Run.ofDoSValid U S.leader hdos horizon rounds_le N rm.toPaceCore rounds_advance
-    stable hgst N
-    (commits_of_reactive rm rfl rfl hround (fun _ => rfl) (fun _ => rfl) rfl hgst hto)
-    (le_refl N) hrr
-```
-
-**A DoS-valid universe on the reactive schedule is a run**: the pace is the reactive one and the liveness input is `commits_of_reactive`, with four of `Run`'s fields discharged by identification with the universe.
 
 ### Minnow: the minimal commit rule
 
@@ -16243,6 +15991,258 @@ abbrev Decided (D : Dag Validator BlockId Payload) (V : D.View) : ℕ → Option
 ```
 
 The verdicts a validator holding view `V` may reach on slot `k`.
+
+#### `Run.ofDoSValid`
+
+*def, `FinWhale.Procedure.DoSBridge.lean`*
+
+```lean
+def Run.ofDoSValid [LinearOrder BlockId] (U : BlockUniverse Validator BlockId Payload)
+    (leader : ℕ → Validator) (hdos : DoSValid U)
+    (horizon : ℕ) (rounds_le : ∀ b ∈ U.ids, (U.block b).round ≤ horizon)
+    (paceHorizon : ℕ) (pace : PaceCore U (Correct : Finset Validator) paceHorizon)
+    (rounds_advance : ∀ u ∈ (Correct : Finset Validator), ∀ n ≤ pace.top u, n ≤ pace.built u n)
+    (stable : ℕ) (gst_le : pace.gst ≤ stable) (liveHorizon : ℕ)
+    (commits : CommitsCorrectLeaders (Slots.identity leader) (Dag.ofDoSValid U leader hdos)
+      stable liveHorizon)
+    (live_le : liveHorizon ≤ paceHorizon) (roundRobin : RoundRobin leader) :
+    Run Validator BlockId Payload where
+  dag := Dag.ofDoSValid U leader hdos
+  sched := (Slots.identity leader)
+  roundId := fun _ => rfl
+  paced := U
+  ids_eq := rfl
+  block_eq := rfl
+  horizon := horizon
+  rounds_le := rounds_le
+  paceHorizon := paceHorizon
+  pace := pace
+  rounds_advance := rounds_advance
+  stable := stable
+  gst_le := gst_le
+  liveHorizon := liveHorizon
+  commits := commits
+  live_le := live_le
+  roundRobin := roundRobin
+  selfParented := selfParented_ofDoSValid hdos
+```
+
+**A run over a DoS-valid universe**: the same data a `Run` asks for, less three fields the identification with the universe discharges.
+
+#### `Run.ofDoSValidReactive`
+
+*def, `FinWhale.Procedure.DoSBridge.lean`*
+
+```lean
+noncomputable def Run.ofDoSValidReactive [LinearOrder BlockId]
+    (U : BlockUniverse Validator BlockId Payload) (hdos : DoSValid U) {N : ℕ}
+    (rm : ReactiveM U (Correct : Finset Validator) N)
+    (hround : ∀ k, S.slotRound k = k) (hrr : RoundRobin S.leader)
+    (horizon : ℕ) (rounds_le : ∀ b ∈ U.ids, (U.block b).round ≤ horizon)
+    (rounds_advance : ∀ u ∈ (Correct : Finset Validator), ∀ n ≤ rm.top u,
+      n ≤ rm.built u n)
+    (stable : ℕ) (hgst : rm.gst ≤ stable)
+    (hto : ∀ n, stable ≤ n → 2 * rm.delay + rm.proc ≤ rm.timeout n) :
+    Run Validator BlockId Payload :=
+  Run.ofDoSValid U S.leader hdos horizon rounds_le N rm.toPaceCore rounds_advance
+    stable hgst N
+    (commits_of_reactive rm rfl rfl hround (fun _ => rfl) (fun _ => rfl) rfl hgst hto)
+    (le_refl N) hrr
+```
+
+**A DoS-valid universe on the reactive schedule is a run**: the pace is the reactive one and the liveness input is `commits_of_reactive`, with four of `Run`'s fields discharged by identification with the universe.
+
+#### `commitSeq`
+
+*def, `FinWhale.Procedure.Model.Order.lean`*
+
+```lean
+def commitSeq (dec : ℕ → Verdict BlockId) : ℕ → List BlockId
+  | 0 => []
+  | k + 1 => commitSeq dec k ++ (match dec k with
+      | Verdict.commit b => [b]
+      | Verdict.skip => []
+      | Verdict.undecided => [])
+```
+
+**The committed leader sequence** of the first `k` slots.
+
+#### `linearise`
+
+*def, `FinWhale.Procedure.Model.Order.lean`*
+
+```lean
+def linearise (hist : BlockId → List BlockId) (ls : List BlockId) : List BlockId :=
+  ls.foldl (fun acc l => acc ++ (hist l).filter (fun b => b ∉ acc)) []
+```
+
+**The delivery order.** Each committed leader contributes the blocks of its causal history that no earlier leader delivered.
+
+#### `histOf`
+
+*def, `FinWhale.Procedure.Model.Order.lean`*
+
+```lean
+def histOf [LinearOrder BlockId] (D : Dag Validator BlockId Payload) (l : BlockId) :
+    List BlockId :=
+  (historyFrom D.block l).sort (· ≤ ·)
+```
+
+**The delivery order's input, concretely.** A leader contributes its causal history, computed by `historyFrom` and listed in the identifier order — the cheapest deterministic sort that lists each block once, and all that Theorems 24 and 26 read of it.
+
+#### `slotVerdict`
+
+*def, `FinWhale.Procedure.Model.Pass.lean`*
+
+```lean
+def slotVerdict (S : Slots Validator) (Elig : ℕ → ℕ → Prop) [DecidableRel Elig]
+    (D : Dag Validator BlockId Payload)
+    (choose : BlockId → ℕ → Option BlockId) (N : ℕ)
+    (above : ℕ → Verdict BlockId) (r : ℕ) : Verdict BlockId :=
+  if h : (directCommits S D r).Nonempty then Verdict.commit ((directCommits S D r).min' h)
+  else if DirectSkip S D r then Verdict.skip
+  else anchorVerdict Elig choose N above r
+```
+
+**One slot's verdict, from the verdicts above it.**
+
+#### `passFrom`
+
+*def, `FinWhale.Procedure.Model.Pass.lean`*
+
+```lean
+def passFrom (S : Slots Validator) (Elig : ℕ → ℕ → Prop) [DecidableRel Elig]
+    (D : Dag Validator BlockId Payload)
+    (choose : BlockId → ℕ → Option BlockId) (N : ℕ) (s : ℕ) : ℕ → Verdict BlockId :=
+  if h : N < s then fun _ => Verdict.undecided
+  else fun r =>
+    if r = s then slotVerdict S Elig D choose N (passFrom S Elig D choose N (s + 1)) s
+    else passFrom S Elig D choose N (s + 1) r
+termination_by N + 1 - s
+decreasing_by all_goals omega
+```
+
+**The pass, from slot `s` downward.** Slots below `s` are left undecided; slot `s` is decided from the verdicts above it, and those are what the pass from `s + 1` gives.
+
+#### `decOf`
+
+*def, `FinWhale.Procedure.Model.Pass.lean`*
+
+```lean
+def decOf (S : Slots Validator) (Elig : ℕ → ℕ → Prop) [DecidableRel Elig]
+    (D : Dag Validator BlockId Payload)
+    (choose : BlockId → ℕ → Option BlockId) (N : ℕ) : ℕ → Verdict BlockId :=
+  passFrom S Elig D choose N 0
+```
+
+**The verdicts of a validator whose view is `D`.**
+
+#### `Run`
+
+*structure, `FinWhale.Procedure.Model.Protocol.lean`*
+
+```lean
+structure Run (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [Params Validator] [DecidableEq BlockId] [LinearOrder BlockId] where
+  /-- Every block any correct validator holds. -/
+  dag : Dag Validator BlockId Payload
+  /-- The same blocks, as the pacing line reads them. -/
+  paced : BlockUniverse Validator BlockId Payload
+  /-- The two readings describe the same blocks. -/
+  ids_eq : dag.ids = paced.ids
+  /-- And denote them the same way. -/
+  block_eq : dag.block = paced.block
+  /-- No block sits above this round. -/
+  horizon : ℕ
+  /-- Which is a horizon. -/
+  rounds_le : ∀ b ∈ dag.ids, (dag.block b).round ≤ horizon
+  /-- The rounds the schedule reaches. -/
+  paceHorizon : ℕ
+  /-- The schedule and the network. -/
+  pace : PaceCore paced (Correct : Finset Validator) paceHorizon
+  /-- Rounds advance real time. -/
+  rounds_advance : ∀ u ∈ (Correct : Finset Validator), ∀ n ≤ pace.top u, n ≤ pace.built u n
+  /-- The leader schedule the execution runs. It belongs to the
+  execution rather than to the DAG: a DAG is blocks, and a schedule is
+  not. -/
+  sched : Slots Validator
+  /-- FinWhale runs one slot per round, which is what the reverse pass
+  enumerates. -/
+  roundId : ∀ k, sched.slotRound k = k
+  /-- The network has stabilised by this round. -/
+  stable : ℕ
+  /-- Which is past GST. -/
+  gst_le : pace.gst ≤ stable
+  /-- Below this round the liveness argument applies. -/
+  liveHorizon : ℕ
+  /-- Every correct-led slot below it carries a commit — the input §10
+  supplies, by either route. -/
+  commits : CommitsCorrectLeaders sched dag stable liveHorizon
+  /-- The schedule reaches that far. -/
+  live_le : liveHorizon ≤ paceHorizon
+  /-- Leaders rotate. -/
+  roundRobin : RoundRobin sched.leader
+  /-- Every block references its author's previous block. -/
+  selfParented : SelfParented dag
+```
+
+**A run of FinWhale.** The blocks every correct validator ever holds, the schedule and network that carried them, and the rotation that names leaders.
+
+#### `WellFormed`
+
+*structure, `FinWhale.Procedure.Model.Verdict.lean`*
+
+```lean
+structure WellFormed (Elig : ℕ → ℕ → Prop) (dcommit : ℕ → BlockId → Prop) (dskip : ℕ → Prop)
+    (choose : BlockId → ℕ → Option BlockId) (dec : ℕ → Verdict BlockId) : Prop where
+  /-- A direct commit is taken. -/
+  direct_commit : ∀ r l, dcommit r l → dec r = Verdict.commit l
+  /-- A direct skip is taken. -/
+  direct_skip : ∀ r, dskip r → dec r = Verdict.skip
+  /-- Undecided where the anchor is undecided. -/
+  indirect_undecided : ∀ r a, (¬ ∃ l, dcommit r l) → ¬ dskip r → Anchor Elig dec r a →
+    dec a = Verdict.undecided → dec r = Verdict.undecided
+  /-- Decided by the anchor otherwise. -/
+  indirect_commit : ∀ r a A, (¬ ∃ l, dcommit r l) → ¬ dskip r → Anchor Elig dec r a →
+    dec a = Verdict.commit A →
+    dec r = (match choose A r with
+      | some b => Verdict.commit b
+      | none => Verdict.skip)
+  /-- A slot decided without a direct rule was decided from an anchor. -/
+  has_anchor : ∀ r, (¬ ∃ l, dcommit r l) → ¬ dskip r → dec r ≠ Verdict.undecided →
+    ∃ a, Anchor Elig dec r a
+```
+
+**The reverse pass, as a condition on the verdicts.** The direct rules are parameters, since each validator evaluates them on its own view; `choose` is shared, reading only the anchor and the round.
+
+#### `ChooseSound`
+
+*structure, `FinWhale.Procedure.Model.Verdict.lean`*
+
+```lean
+structure ChooseSound (S : Slots Validator) (D : Dag Validator BlockId Payload)
+    (choose : BlockId → ℕ → Option BlockId) : Prop where
+  /-- Whatever it names is a candidate. -/
+  sound : ∀ A r b, choose A r = some b → IndirectCommit S D A r b
+  /-- Where there is a candidate, it names one. -/
+  total : ∀ A r, (∃ b, IndirectCommit S D A r b) → ∃ b, choose A r = some b
+```
+
+**What the deterministic rule must satisfy**: it names only blocks the anchor could indirectly commit, and names one whenever there is one to name.
+
+#### `chooseLeast`
+
+*def, `FinWhale.Procedure.Model.Verdict.lean`*
+
+```lean
+noncomputable def chooseLeast [LinearOrder BlockId] (S : Slots Validator)
+    (D : Dag Validator BlockId Payload) (A : BlockId) (r : ℕ) : Option BlockId :=
+  if h : ((slotBlocks S D r).filter (fun b => IndirectCommit S D A r b)).Nonempty then
+    some (((slotBlocks S D r).filter (fun b => IndirectCommit S D A r b)).min' h)
+  else none
+```
+
+**The deterministic rule, exhibited**: the least candidate in the identifier order, sound and total by construction, and a function of the anchor and the round alone, so two validators holding the same anchor make the same choice.
 
 #### `hzSupport`
 
@@ -20512,118 +20512,6 @@ theorem reaches_fpEvidence_quorum {c l : BlockId} (hc : c ∈ D.ids) (hl : l ∈
 
 **Lemma 5, at any height.** Under a fast commit for `l`, every block at round `r + 3` or above reaches `n − f` round-`(r+2)` blocks, from distinct validators, all FP-evidence for `l` — reached by descending to round `r + 3` first, where Lemma 5 applies directly.
 
-#### `chooseSound_least`
-
-*theorem, `FinWhale.Consistency.lean`*
-
-```lean
-theorem chooseSound_least : ChooseSound S D (chooseLeast S D) where
-  sound
-```
-
-The exhibited tie-break names only candidates, and one whenever there is one.
-
-#### `chooseLeast_least`
-
-*theorem, `FinWhale.Consistency.lean`*
-
-```lean
-theorem chooseLeast_least {A : BlockId} {r : ℕ} {b : BlockId}
-    (h : chooseLeast S D A r = some b) :
-    (finWhaleAnchored Validator BlockId Payload).Least (S := S) D A 0 r b
-```
-
-And what it names is the least candidate: the relation's choice at the rung.
-
-#### `exists_least`
-
-*theorem, `FinWhale.Consistency.lean`*
-
-```lean
-theorem exists_least {A : BlockId} {i k : ℕ}
-    (_ : i < (finWhaleAnchored Validator BlockId Payload).rungs)
-    (h : ∃ L, IsLeaderBlock (S := S) D k L ∧
-      (finWhaleAnchored Validator BlockId Payload).Link i D A L S k) :
-    ∃ L, IsLeaderBlock (S := S) D k L ∧ (finWhaleAnchored Validator BlockId Payload).Link i D A L S k ∧
-      (finWhaleAnchored Validator BlockId Payload).Least (S := S) D A i k L
-```
-
-**The rung has a choice.**
-
-#### `theorem14`
-
-*theorem, `FinWhale.Order.lean`*
-
-```lean
-theorem theorem14 (hist : BlockId → List BlockId) {ls ls' : List BlockId}
-    (h : ls <+: ls') : linearise hist ls <+: linearise hist ls'
-```
-
-**Theorem 14 (Total Order).** A longer committed leader sequence delivers an extension of what a shorter one delivers, so two validators never disagree on the order of what both have delivered. With Lemma 13 this is the total order property: the two leader sequences are prefix-comparable, hence so are the two delivery orders.
-
-#### `theorem15`
-
-*theorem, `FinWhale.Order.lean`*
-
-```lean
-theorem theorem15 (hist : BlockId → List BlockId) (hnd : ∀ l, (hist l).Nodup)
-    (ls : List BlockId) : (linearise hist ls).Nodup
-```
-
-**Theorem 15 (Integrity).** No block is delivered twice: each leader appends only what the accumulator does not already hold, and a causal history lists each block once.
-
-#### `decOf_eq`
-
-*theorem, `FinWhale.Pass.lean`*
-
-```lean
-theorem decOf_eq (hlt : ∀ r a, Elig r a → r < a) {r : ℕ} (hr : r ≤ N) :
-    decOf S Elig D choose N r = slotVerdict S Elig D choose N (decOf S Elig D choose N) r
-```
-
-**The equation the pass satisfies.** At or below the horizon, a slot's verdict is `slotVerdict` applied to the pass itself.
-
-#### `decOf_of_gt`
-
-*theorem, `FinWhale.Pass.lean`*
-
-```lean
-theorem decOf_of_gt {r : ℕ} (hr : N < r) : decOf S Elig D choose N r = Verdict.undecided
-```
-
-Above the horizon the pass decides nothing.
-
-#### `wellFormed_decOf`
-
-*theorem, `FinWhale.Pass.lean`*
-
-```lean
-theorem wellFormed_decOf {N M : ℕ} (hN : ∀ b ∈ D.ids, (D.block b).round ≤ N)
-    (hlt : ∀ r a, Elig r a → r < a)
-    (hrle : ∀ r, S.slotRound r ≤ N → r ≤ M)
-    (choose : BlockId → ℕ → Option BlockId) :
-    WellFormed Elig (fun r l => l ∈ slotBlocks S D r ∧ DirectCommit D l)
-      (fun r => DirectSkip S D r) choose (decOf S Elig D choose M) where
-  direct_commit r l
-```
-
-**The reverse pass is well formed.** Its direct rules are the DAG's own, and `choose` is whatever deterministic rule the validator applies. `hN` is the horizon: no block of the view sits above it.
-
-#### `mem_slotBlocks_of_decOf`
-
-*theorem, `FinWhale.Pass.lean`*
-
-```lean
-theorem mem_slotBlocks_of_decOf {D' : Dag Validator BlockId Payload} {N : ℕ}
-    {choose : BlockId → ℕ → Option BlockId}
-    (hsub : ∀ r, slotBlocks S D' r ⊆ slotBlocks S D r) (hch : ChooseSound S D choose)
-    (hlt : ∀ r a, Elig r a → r < a)
-    {r : ℕ} {A : BlockId} (h : decOf S Elig D' choose N r = Verdict.commit A) :
-    A ∈ slotBlocks S D r
-```
-
-**A committed verdict names a block of its slot.** Either the pass took a direct commit, which is one, or the tie-break named it, and `ChooseSound` says what it names is a candidate.
-
 #### `mem_view_of_voters`
 
 *theorem, `FinWhale.View.lean`*
@@ -20692,20 +20580,6 @@ theorem directSkip_mono {V' : D.View} (hsub : V.ids ⊆ V'.ids) {k : ℕ}
 
 **The direct skip survives the view growing.** A held candidate's blames and no-evidence blocks carry over; a new candidate is referenced by no block the smaller view holds, so it collects no votes and no evidence either.
 
-#### `decided_of_wellFormed`
-
-*theorem, `FinWhale.View.lean`*
-
-```lean
-theorem decided_of_wellFormed {V : D.View} {dec : ℕ → Verdict BlockId}
-    (hwf : WellFormed (EligibleAt (S := S) 2) (viewCommit S D V) (viewSkip S D V)
-      (chooseLeast S D) dec)
-    {N : ℕ} (hN : ∀ s, N ≤ s → dec s = Verdict.undecided) :
-    ∀ r, dec r ≠ Verdict.undecided → Decided D V r (dec r).optOf
-```
-
-**The reverse pass lands in the relation.** Every slot a well-formed assignment decides, it decides as the relation does: direct verdicts by the direct constructor, indirect ones by the induction hypothesis at the nearest eligible committed anchor.
-
 #### `finWhaleLaws`
 
 *theorem, `FinWhale.View.lean`*
@@ -20717,113 +20591,6 @@ theorem finWhaleLaws [LinearOrder BlockId] :
 ```
 
 **FinWhale's laws.**
-
-#### `agreement_of_commits`
-
-*theorem, `FinWhale.View.lean`*
-
-```lean
-theorem agreement_of_commits [LinearOrder BlockId] {V V' : D.View}
-    {dec dec' : ℕ → Verdict BlockId}
-    (hwf : WellFormed (EligibleAt (S := S) 2) (viewCommit S D V) (viewSkip S D V)
-      (chooseLeast S D) dec)
-    (hwf' : WellFormed (EligibleAt (S := S) 2) (viewCommit S D V') (viewSkip S D V')
-      (chooseLeast S D) dec')
-    {M : ℕ} (hbound : ∀ s, M ≤ s → dec s = Verdict.undecided ∧ dec' s = Verdict.undecided)
-    {R N : ℕ} (hsees : SeesCommits S D (viewCommit S D V) R N)
-    (hsees' : SeesCommits S D (viewCommit S D V') R N)
-    (hrr : RoundRobin S.leader) (hid : ∀ s, S.slotRound s = s)
-    {k : ℕ} (hkN : max k R + (3 * F.f + 5) ≤ N)
-    (hist : BlockId → List BlockId) :
-    linearise hist (commitSeq dec k) = linearise hist (commitSeq dec' k)
-```
-
-**Theorem 24 (Agreement), end to end.** Two validators running the reverse pass on their own views deliver the same sequence at every horizon: the relation's agreement settles verdicts both have decided, and Lemma 23 (via `hsees`) makes them decided.
-
-#### `lemma23`
-
-*theorem, `FinWhale.Decided.lean`*
-
-```lean
-theorem lemma23 {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
-    {choose : BlockId → ℕ → Option BlockId} {dec : ℕ → Verdict BlockId}
-    (hEl : ∀ r a, Elig r a ↔ r + 2 < a)
-    (hwf : WellFormed Elig dc ds choose dec) {r a : ℕ} (hra : r < a)
-    (htri : ∀ s, a ≤ s → s ≤ a + 2 → dec s ≠ Verdict.undecided ∧ dec s ≠ Verdict.skip) :
-    dec r ≠ Verdict.undecided
-```
-
-**Lemma 23.** Every slot below a committed triple is decided: taking the highest undecided slot below it, the first non-skipped slot above it is a commit and serves as its anchor.
-
-#### `committed_triple`
-
-*theorem, `FinWhale.Decided.lean`*
-
-```lean
-theorem committed_triple {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
-    {choose : BlockId → ℕ → Option BlockId} {dec : ℕ → Verdict BlockId}
-    (hwf : WellFormed Elig dc ds choose dec) {R N t : ℕ}
-    (hsees : SeesCommits S D dc R N)
-    (hrr : RoundRobin S.leader) (hid : ∀ s, S.slotRound s = s)
-    (hR : R ≤ t) (hN : t + (3 * F.f + 5) ≤ N) :
-    ∃ a, t < a ∧ a + 4 ≤ N ∧
-      ∀ s, a ≤ s → s ≤ a + 2 →
-        dec s ≠ Verdict.undecided ∧ dec s ≠ Verdict.skip
-```
-
-**A committed triple above every round.**
-
-#### `all_decided`
-
-*theorem, `FinWhale.Decided.lean`*
-
-```lean
-theorem all_decided {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
-    {choose : BlockId → ℕ → Option BlockId} {dec : ℕ → Verdict BlockId}
-    (hwf : WellFormed Elig dc ds choose dec) {R N r : ℕ}
-    (hsees : SeesCommits S D dc R N)
-    (hrr : RoundRobin S.leader) (hEl : ∀ r a, Elig r a ↔ r + 2 < a) (hid : ∀ s, S.slotRound s = s)
-    (hN : max r R + (3 * F.f + 5) ≤ N) :
-    dec r ≠ Verdict.undecided
-```
-
-**Lemma 23, composed.** Every slot below the horizon is decided, including those before GST, decided from an anchor above them; only the triple must sit past the coverage round, hence the maximum.
-
-#### `theorem24`
-
-*theorem, `FinWhale.Decided.lean`*
-
-```lean
-theorem theorem24 {dec dec' : ℕ → Verdict BlockId} {k : ℕ}
-    (hagree : ∀ s, dec s ≠ Verdict.undecided → dec' s ≠ Verdict.undecided → dec s = dec' s)
-    (hdec : ∀ s, s < k → dec s ≠ Verdict.undecided)
-    (hdec' : ∀ s, s < k → dec' s ≠ Verdict.undecided)
-    (hist : BlockId → List BlockId) :
-    linearise hist (commitSeq dec k) = linearise hist (commitSeq dec' k)
-```
-
-**Theorem 24 (Agreement)**: two validators that have decided every slot below `k` deliver the same sequence, from Lemma 12's agreement through `commitSeq_congr`.
-
-#### `mem_histOf`
-
-*theorem, `FinWhale.Decided.lean`*
-
-```lean
-theorem mem_histOf [LinearOrder BlockId] {l c : BlockId} (hl : l ∈ D.ids)
-    (h : ReachesFrom D.block l c) : c ∈ histOf D l
-```
-
-`histOf` is the causal history, discharging the faithfulness condition Theorem 26 asks for.
-
-#### `nodup_histOf`
-
-*theorem, `FinWhale.Decided.lean`*
-
-```lean
-theorem nodup_histOf [LinearOrder BlockId] {l : BlockId} : (histOf D l).Nodup
-```
-
-And it lists each block once, which is the condition Theorem 15 asks for.
 
 #### `reaches_of_same_creator`
 
@@ -20838,28 +20605,6 @@ theorem reaches_of_same_creator (hself : SelfParented D) {b c : BlockId}
 ```
 
 **And so a correct validator's block lies in the causal history of every later block of its own.**
-
-#### `theorem26_of_selfParent`
-
-*theorem, `FinWhale.Validity.lean`*
-
-```lean
-theorem theorem26_of_selfParent (hself : SelfParented D)
-    {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
-    {choose : BlockId → ℕ → Option BlockId} {dec : ℕ → Verdict BlockId}
-    (hwf : WellFormed Elig dc ds choose dec) {R N : ℕ}
-    (hsees : SeesCommits S D dc R N)
-    (hrr : RoundRobin S.leader) (hid : ∀ s, S.slotRound s = s) [LinearOrder BlockId]
-    {b : BlockId} {k : ℕ} (hb : b ∈ D.ids)
-    (hbc : (D.block b).creator ∈ (Correct : Finset Validator))
-    (hbound : max ((D.block b).round) R + Fintype.card Validator + 2 ≤ N)
-    (hk : max ((D.block b).round) R + Fintype.card Validator < k) :
-    b ∈ linearise (histOf D) (commitSeq dec k)
-```
-
-**Theorem 26 (Validity), on any schedule.** A correct validator's block is delivered, once the rotation has named its author a leader above it and that slot is committed.
-
-Nothing here is a coverage assumption, so the reactive schedule carries it as readily as the timed one: the block reaches the leader block because the leader block is the *same validator's*, later.
 
 #### `three_correct_of_roundRobin`
 
@@ -21151,38 +20896,6 @@ theorem held_of_pace (pc : PaceCore U T M) (hids : D.ids = U.ids) (hblk : D.bloc
 ```
 
 **And by then the view holds every reliable block from the coverage round up.** Byzantine authors are not covered, and no schedule covers them: nothing obliges a validator to receive what a faulty validator never sent.
-
-#### `all_decided_of_pass`
-
-*theorem, `FinWhale.Holdings.lean`*
-
-```lean
-theorem all_decided_of_pass (pc : PaceCore U (Correct : Finset Validator) M)
-    (hids : D.ids = U.ids) (hblk : D.block = U.block)
-    (hle : ∀ u ∈ (Correct : Finset Validator), ∀ n ≤ pc.top u, n ≤ pc.built u n)
-    {R : ℕ} (hgst : pc.gst ≤ R) {v : Validator} (hv : v ∈ (Correct : Finset Validator))
-    {choose : BlockId → ℕ → Option BlockId} {Np N r : ℕ}
-    (hhorizon : ∀ b ∈ pc.holds v (settled pc), (D.block b).round ≤ Np)
-    (hcommits : CommitsCorrectLeaders S D R N) (hrr : RoundRobin S.leader)
-    (hEl : ∀ r a, Elig r a ↔ r + 2 < a) (hid : ∀ k, S.slotRound k = k) (hNM : N ≤ M)
-    (hN : max r R + (3 * F.f + 5) ≤ N) :
-    decOf S Elig (holdsView pc hids hblk hv (settled pc)).toRecord
-      choose Np r ≠ Verdict.undecided
-```
-
-**Every slot below the horizon is decided**, by a validator whose view is its own holdings and whose verdicts are the reverse pass. Nothing about the validator itself is a hypothesis; what remains is about the schedule and the DAG reaching the rounds.
-
-#### `held`
-
-*theorem, `FinWhale.Protocol.lean`*
-
-```lean
-theorem held (hv : v ∈ (Correct : Finset Validator)) :
-    ∀ n, run.stable ≤ n → n ≤ run.liveHorizon → ∀ b ∈ blocksAt run.dag n,
-      (run.dag.block b).creator ∈ (Correct : Finset Validator) → b ∈ run.view v
-```
-
-Past the stable round, a validator holds every reliable block of every round below the horizon.
 
 #### `leaderClause_of_dosValid`
 
@@ -22548,6 +22261,293 @@ theorem safety : Properties.Safe (finWhaleRule (Validator := Validator) (BlockId
 theorem progress : Properties.Support.Progresses (fwSupport (Validator := Validator)
     (BlockId := BlockId) (Payload := Payload)) (coreReliability Validator)
 ```
+
+#### `exists_least`
+
+*theorem, `FinWhale.Least.lean`*
+
+```lean
+theorem exists_least {A : BlockId} {i k : ℕ}
+    (_ : i < (finWhaleAnchored Validator BlockId Payload).rungs)
+    (h : ∃ L, IsLeaderBlock (S := S) D k L ∧
+      (finWhaleAnchored Validator BlockId Payload).Link i D A L S k) :
+    ∃ L, IsLeaderBlock (S := S) D k L ∧ (finWhaleAnchored Validator BlockId Payload).Link i D A L S k ∧
+      (finWhaleAnchored Validator BlockId Payload).Least (S := S) D A i k L
+```
+
+**The rung has a choice.**
+
+#### `chooseSound_least`
+
+*theorem, `FinWhale.Procedure.Consistency.lean`*
+
+```lean
+theorem chooseSound_least : ChooseSound S D (chooseLeast S D) where
+  sound
+```
+
+The exhibited tie-break names only candidates, and one whenever there is one.
+
+#### `chooseLeast_least`
+
+*theorem, `FinWhale.Procedure.Consistency.lean`*
+
+```lean
+theorem chooseLeast_least {A : BlockId} {r : ℕ} {b : BlockId}
+    (h : chooseLeast S D A r = some b) :
+    (finWhaleAnchored Validator BlockId Payload).Least (S := S) D A 0 r b
+```
+
+And what it names is the least candidate: the relation's choice at the rung.
+
+#### `lemma23`
+
+*theorem, `FinWhale.Procedure.Decided.lean`*
+
+```lean
+theorem lemma23 {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
+    {choose : BlockId → ℕ → Option BlockId} {dec : ℕ → Verdict BlockId}
+    (hEl : ∀ r a, Elig r a ↔ r + 2 < a)
+    (hwf : WellFormed Elig dc ds choose dec) {r a : ℕ} (hra : r < a)
+    (htri : ∀ s, a ≤ s → s ≤ a + 2 → dec s ≠ Verdict.undecided ∧ dec s ≠ Verdict.skip) :
+    dec r ≠ Verdict.undecided
+```
+
+**Lemma 23.** Every slot below a committed triple is decided: taking the highest undecided slot below it, the first non-skipped slot above it is a commit and serves as its anchor.
+
+#### `committed_triple`
+
+*theorem, `FinWhale.Procedure.Decided.lean`*
+
+```lean
+theorem committed_triple {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
+    {choose : BlockId → ℕ → Option BlockId} {dec : ℕ → Verdict BlockId}
+    (hwf : WellFormed Elig dc ds choose dec) {R N t : ℕ}
+    (hsees : SeesCommits S D dc R N)
+    (hrr : RoundRobin S.leader) (hid : ∀ s, S.slotRound s = s)
+    (hR : R ≤ t) (hN : t + (3 * F.f + 5) ≤ N) :
+    ∃ a, t < a ∧ a + 4 ≤ N ∧
+      ∀ s, a ≤ s → s ≤ a + 2 →
+        dec s ≠ Verdict.undecided ∧ dec s ≠ Verdict.skip
+```
+
+**A committed triple above every round.**
+
+#### `all_decided`
+
+*theorem, `FinWhale.Procedure.Decided.lean`*
+
+```lean
+theorem all_decided {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
+    {choose : BlockId → ℕ → Option BlockId} {dec : ℕ → Verdict BlockId}
+    (hwf : WellFormed Elig dc ds choose dec) {R N r : ℕ}
+    (hsees : SeesCommits S D dc R N)
+    (hrr : RoundRobin S.leader) (hEl : ∀ r a, Elig r a ↔ r + 2 < a) (hid : ∀ s, S.slotRound s = s)
+    (hN : max r R + (3 * F.f + 5) ≤ N) :
+    dec r ≠ Verdict.undecided
+```
+
+**Lemma 23, composed.** Every slot below the horizon is decided, including those before GST, decided from an anchor above them; only the triple must sit past the coverage round, hence the maximum.
+
+#### `theorem24`
+
+*theorem, `FinWhale.Procedure.Decided.lean`*
+
+```lean
+theorem theorem24 {dec dec' : ℕ → Verdict BlockId} {k : ℕ}
+    (hagree : ∀ s, dec s ≠ Verdict.undecided → dec' s ≠ Verdict.undecided → dec s = dec' s)
+    (hdec : ∀ s, s < k → dec s ≠ Verdict.undecided)
+    (hdec' : ∀ s, s < k → dec' s ≠ Verdict.undecided)
+    (hist : BlockId → List BlockId) :
+    linearise hist (commitSeq dec k) = linearise hist (commitSeq dec' k)
+```
+
+**Theorem 24 (Agreement)**: two validators that have decided every slot below `k` deliver the same sequence, from Lemma 12's agreement through `commitSeq_congr`.
+
+#### `mem_histOf`
+
+*theorem, `FinWhale.Procedure.Decided.lean`*
+
+```lean
+theorem mem_histOf [LinearOrder BlockId] {l c : BlockId} (hl : l ∈ D.ids)
+    (h : ReachesFrom D.block l c) : c ∈ histOf D l
+```
+
+`histOf` is the causal history, discharging the faithfulness condition Theorem 26 asks for.
+
+#### `nodup_histOf`
+
+*theorem, `FinWhale.Procedure.Decided.lean`*
+
+```lean
+theorem nodup_histOf [LinearOrder BlockId] {l : BlockId} : (histOf D l).Nodup
+```
+
+And it lists each block once, which is the condition Theorem 15 asks for.
+
+#### `all_decided_of_pass`
+
+*theorem, `FinWhale.Procedure.Holdings.lean`*
+
+```lean
+theorem all_decided_of_pass (pc : PaceCore U (Correct : Finset Validator) M)
+    (hids : D.ids = U.ids) (hblk : D.block = U.block)
+    (hle : ∀ u ∈ (Correct : Finset Validator), ∀ n ≤ pc.top u, n ≤ pc.built u n)
+    {R : ℕ} (hgst : pc.gst ≤ R) {v : Validator} (hv : v ∈ (Correct : Finset Validator))
+    {choose : BlockId → ℕ → Option BlockId} {Np N r : ℕ}
+    (hhorizon : ∀ b ∈ pc.holds v (settled pc), (D.block b).round ≤ Np)
+    (hcommits : CommitsCorrectLeaders S D R N) (hrr : RoundRobin S.leader)
+    (hEl : ∀ r a, Elig r a ↔ r + 2 < a) (hid : ∀ k, S.slotRound k = k) (hNM : N ≤ M)
+    (hN : max r R + (3 * F.f + 5) ≤ N) :
+    decOf S Elig (holdsView pc hids hblk hv (settled pc)).toRecord
+      choose Np r ≠ Verdict.undecided
+```
+
+**Every slot below the horizon is decided**, by a validator whose view is its own holdings and whose verdicts are the reverse pass. Nothing about the validator itself is a hypothesis; what remains is about the schedule and the DAG reaching the rounds.
+
+#### `theorem14`
+
+*theorem, `FinWhale.Procedure.Order.lean`*
+
+```lean
+theorem theorem14 (hist : BlockId → List BlockId) {ls ls' : List BlockId}
+    (h : ls <+: ls') : linearise hist ls <+: linearise hist ls'
+```
+
+**Theorem 14 (Total Order).** A longer committed leader sequence delivers an extension of what a shorter one delivers, so two validators never disagree on the order of what both have delivered. With Lemma 13 this is the total order property: the two leader sequences are prefix-comparable, hence so are the two delivery orders.
+
+#### `theorem15`
+
+*theorem, `FinWhale.Procedure.Order.lean`*
+
+```lean
+theorem theorem15 (hist : BlockId → List BlockId) (hnd : ∀ l, (hist l).Nodup)
+    (ls : List BlockId) : (linearise hist ls).Nodup
+```
+
+**Theorem 15 (Integrity).** No block is delivered twice: each leader appends only what the accumulator does not already hold, and a causal history lists each block once.
+
+#### `decOf_eq`
+
+*theorem, `FinWhale.Procedure.Pass.lean`*
+
+```lean
+theorem decOf_eq (hlt : ∀ r a, Elig r a → r < a) {r : ℕ} (hr : r ≤ N) :
+    decOf S Elig D choose N r = slotVerdict S Elig D choose N (decOf S Elig D choose N) r
+```
+
+**The equation the pass satisfies.** At or below the horizon, a slot's verdict is `slotVerdict` applied to the pass itself.
+
+#### `decOf_of_gt`
+
+*theorem, `FinWhale.Procedure.Pass.lean`*
+
+```lean
+theorem decOf_of_gt {r : ℕ} (hr : N < r) : decOf S Elig D choose N r = Verdict.undecided
+```
+
+Above the horizon the pass decides nothing.
+
+#### `wellFormed_decOf`
+
+*theorem, `FinWhale.Procedure.Pass.lean`*
+
+```lean
+theorem wellFormed_decOf {N M : ℕ} (hN : ∀ b ∈ D.ids, (D.block b).round ≤ N)
+    (hlt : ∀ r a, Elig r a → r < a)
+    (hrle : ∀ r, S.slotRound r ≤ N → r ≤ M)
+    (choose : BlockId → ℕ → Option BlockId) :
+    WellFormed Elig (fun r l => l ∈ slotBlocks S D r ∧ DirectCommit D l)
+      (fun r => DirectSkip S D r) choose (decOf S Elig D choose M) where
+  direct_commit r l
+```
+
+**The reverse pass is well formed.** Its direct rules are the DAG's own, and `choose` is whatever deterministic rule the validator applies. `hN` is the horizon: no block of the view sits above it.
+
+#### `mem_slotBlocks_of_decOf`
+
+*theorem, `FinWhale.Procedure.Pass.lean`*
+
+```lean
+theorem mem_slotBlocks_of_decOf {D' : Dag Validator BlockId Payload} {N : ℕ}
+    {choose : BlockId → ℕ → Option BlockId}
+    (hsub : ∀ r, slotBlocks S D' r ⊆ slotBlocks S D r) (hch : ChooseSound S D choose)
+    (hlt : ∀ r a, Elig r a → r < a)
+    {r : ℕ} {A : BlockId} (h : decOf S Elig D' choose N r = Verdict.commit A) :
+    A ∈ slotBlocks S D r
+```
+
+**A committed verdict names a block of its slot.** Either the pass took a direct commit, which is one, or the tie-break named it, and `ChooseSound` says what it names is a candidate.
+
+#### `held`
+
+*theorem, `FinWhale.Procedure.Protocol.lean`*
+
+```lean
+theorem held (hv : v ∈ (Correct : Finset Validator)) :
+    ∀ n, run.stable ≤ n → n ≤ run.liveHorizon → ∀ b ∈ blocksAt run.dag n,
+      (run.dag.block b).creator ∈ (Correct : Finset Validator) → b ∈ run.view v
+```
+
+Past the stable round, a validator holds every reliable block of every round below the horizon.
+
+#### `theorem26_of_selfParent`
+
+*theorem, `FinWhale.Procedure.Validity.lean`*
+
+```lean
+theorem theorem26_of_selfParent (hself : SelfParented D)
+    {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
+    {choose : BlockId → ℕ → Option BlockId} {dec : ℕ → Verdict BlockId}
+    (hwf : WellFormed Elig dc ds choose dec) {R N : ℕ}
+    (hsees : SeesCommits S D dc R N)
+    (hrr : RoundRobin S.leader) (hid : ∀ s, S.slotRound s = s) [LinearOrder BlockId]
+    {b : BlockId} {k : ℕ} (hb : b ∈ D.ids)
+    (hbc : (D.block b).creator ∈ (Correct : Finset Validator))
+    (hbound : max ((D.block b).round) R + Fintype.card Validator + 2 ≤ N)
+    (hk : max ((D.block b).round) R + Fintype.card Validator < k) :
+    b ∈ linearise (histOf D) (commitSeq dec k)
+```
+
+**Theorem 26 (Validity), on any schedule.** A correct validator's block is delivered, once the rotation has named its author a leader above it and that slot is committed.
+
+Nothing here is a coverage assumption, so the reactive schedule carries it as readily as the timed one: the block reaches the leader block because the leader block is the *same validator's*, later.
+
+#### `decided_of_wellFormed`
+
+*theorem, `FinWhale.Procedure.View.lean`*
+
+```lean
+theorem decided_of_wellFormed {V : D.View} {dec : ℕ → Verdict BlockId}
+    (hwf : WellFormed (EligibleAt (S := S) 2) (viewCommit S D V) (viewSkip S D V)
+      (chooseLeast S D) dec)
+    {N : ℕ} (hN : ∀ s, N ≤ s → dec s = Verdict.undecided) :
+    ∀ r, dec r ≠ Verdict.undecided → Decided D V r (dec r).optOf
+```
+
+**The reverse pass lands in the relation.** Every slot a well-formed assignment decides, it decides as the relation does: direct verdicts by the direct constructor, indirect ones by the induction hypothesis at the nearest eligible committed anchor.
+
+#### `agreement_of_commits`
+
+*theorem, `FinWhale.Procedure.View.lean`*
+
+```lean
+theorem agreement_of_commits [LinearOrder BlockId] {V V' : D.View}
+    {dec dec' : ℕ → Verdict BlockId}
+    (hwf : WellFormed (EligibleAt (S := S) 2) (viewCommit S D V) (viewSkip S D V)
+      (chooseLeast S D) dec)
+    (hwf' : WellFormed (EligibleAt (S := S) 2) (viewCommit S D V') (viewSkip S D V')
+      (chooseLeast S D) dec')
+    {M : ℕ} (hbound : ∀ s, M ≤ s → dec s = Verdict.undecided ∧ dec' s = Verdict.undecided)
+    {R N : ℕ} (hsees : SeesCommits S D (viewCommit S D V) R N)
+    (hsees' : SeesCommits S D (viewCommit S D V') R N)
+    (hrr : RoundRobin S.leader) (hid : ∀ s, S.slotRound s = s)
+    {k : ℕ} (hkN : max k R + (3 * F.f + 5) ≤ N)
+    (hist : BlockId → List BlockId) :
+    linearise hist (commitSeq dec k) = linearise hist (commitSeq dec' k)
+```
+
+**Theorem 24 (Agreement), end to end.** Two validators running the reverse pass on their own views deliver the same sequence at every horizon: the relation's agreement settles verdicts both have decided, and Lemma 23 (via `hsees`) makes them decided.
 
 #### `selfParent`
 

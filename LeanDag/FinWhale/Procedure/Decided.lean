@@ -1,4 +1,4 @@
-import LeanDag.FinWhale.Order
+import LeanDag.FinWhale.Procedure.Order
 import LeanDag.FinWhale.Model.Liveness
 import Mathlib.Data.Finset.Sort
 import LeanDag.FinWhale.Rotation
@@ -94,21 +94,6 @@ section Triple
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable [F : Faults Validator] [P : Params Validator]
 variable {Payload : Type} {D : Dag Validator BlockId Payload} {S : Slots Validator}
-
-/-- The commit the interface carries. -/
-theorem directCommit_of_commits {R N : ℕ} (h : CommitsCorrectLeaders S D R N) {s : ℕ}
-    (hR : R ≤ S.slotRound s) (hN : S.slotRound s + 2 ≤ N)
-    (hlead : S.leader s ∈ (Correct : Finset Validator)) :
-    ∃ l ∈ slotBlocks S D s, DirectCommit D l := by
-  obtain ⟨l, hslot, hby⟩ := h s hR hN hlead
-  exact ⟨l, hslot, Or.inr (spCommit_of_spCommitBy hby)⟩
-
-/-- A validator reading the whole universe sees them all. -/
-theorem sees_of_commits {R N : ℕ} (h : CommitsCorrectLeaders S D R N) :
-    SeesCommits S D (fun r l => l ∈ slotBlocks S D r ∧ DirectCommit D l) R N := by
-  intro s hR hN hlead
-  obtain ⟨l, hslot, hcom⟩ := directCommit_of_commits h hR hN hlead
-  exact ⟨l, hslot, hslot, hcom⟩
 
 /-- **A committed triple above every round.** -/
 theorem committed_triple {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}

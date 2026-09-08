@@ -1,4 +1,4 @@
-import LeanDag.FinWhale.Model.Verdict
+import LeanDag.FinWhale.Procedure.Model.Verdict
 import Mathlib.Order.Interval.Finset.Nat
 
 /-!
