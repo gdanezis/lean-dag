@@ -32,6 +32,7 @@ import LeanDagTest.Integration.Model
 import LeanDagTest.Hybrid.Model
 import LeanDagTest.Hybrid.Tight
 import LeanDagTest.Hybrid.Checkpoint
+import LeanDagTest.Hybrid.CheckpointCommit
 import LeanDagTest.SafeSkip.Model
 import LeanDagTest.Mysticeti.Routes
 import LeanDagTest.Nemo.Model

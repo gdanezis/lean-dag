@@ -22,9 +22,9 @@ variable {Validator Value : Type*}
 variable [Fintype Validator] [DecidableEq Validator]
 variable [H : HybridFaults Validator]
 
-namespace Model
+namespace FlexibleFaults
 
-variable (M : Model Validator Value)
+variable (M : FlexibleFaults Validator Value)
 
 namespace Execution
 
@@ -35,7 +35,7 @@ directly builds the corresponding checkpoint QC. -/
 theorem validateCertificate_sound {epoch : ℕ}
     {payload : CertificatePayload (Validator := Validator) (Value := Value)}
     (valid : validateCertificate (M := M) (E := E) epoch payload) :
-    Nonempty (Model.Execution.CheckpointQC M E payload.checkpoint) :=
+    Nonempty (FlexibleFaults.Execution.CheckpointQC M E payload.checkpoint) :=
   ⟨CertificatePayload.toCheckpointQC M E payload valid.2⟩
 
 namespace RecoveryRound
@@ -63,7 +63,7 @@ and the round's closing epoch. -/
 theorem validated_sound {receiver : Validator}
     {checkpoint : CheckpointData Value}
     (member : checkpoint ∈ R.validated receiver) :
-    Nonempty (Model.Execution.CheckpointQC M E checkpoint) ∧
+    Nonempty (FlexibleFaults.Execution.CheckpointQC M E checkpoint) ∧
       checkpoint.epoch = epoch := by
   obtain ⟨sender, payload, delivered, valid, rfl⟩ :=
     R.validated_spec.mp member
@@ -192,7 +192,7 @@ to the round's submission contract rather than to the execution. -/
 theorem recorded_certified {v : Validator} {checkpoint : CheckpointData Value}
     (hv : v ∈ M.RecoveryCorrect) (hrecorded : E.recorded v checkpoint)
     (hepoch : checkpoint.epoch = epoch) :
-    Nonempty (Model.Execution.CheckpointQC M E checkpoint) := by
+    Nonempty (FlexibleFaults.Execution.CheckpointQC M E checkpoint) := by
   obtain ⟨payload, heq, hvalid, _⟩ := R.submits_recorded hv hrecorded hepoch
   exact heq ▸ validateCertificate_sound M E hvalid
 
@@ -232,7 +232,7 @@ correct recipient's validated set: the finality quorum supplies a
 recovery-correct recorder, and the recorded case supplies the rest. -/
 theorem finalized_mem_validated {receiver : Validator}
     (hr : receiver ∈ M.RecoveryCorrect) {checkpoint : CheckpointData Value}
-    (F : Model.Execution.FinalityQC M E checkpoint)
+    (F : FlexibleFaults.Execution.FinalityQC M E checkpoint)
     (hepoch : checkpoint.epoch = epoch) :
     checkpoint ∈ R.validated receiver := by
   obtain ⟨sender, hs, hrec⟩ :=
@@ -245,7 +245,7 @@ finality quorum supplies. -/
 theorem recovery_preserves_finality {receiver : Validator}
     (hr : receiver ∈ M.RecoveryCorrect)
     {checkpoint : CheckpointData Value}
-    (F : Model.Execution.FinalityQC M E checkpoint)
+    (F : FlexibleFaults.Execution.FinalityQC M E checkpoint)
     (hepoch : checkpoint.epoch = epoch) :
     checkpoint.history.IsPrefix
       (select M E R receiver).history := by
@@ -258,7 +258,7 @@ the human-reviewed recovery transition. -/
 theorem finalized_prefix_next_genesis {receiver : Validator}
     (T : EpochTransition M E R receiver)
     {checkpoint : CheckpointData Value}
-    (F : Model.Execution.FinalityQC M E checkpoint)
+    (F : FlexibleFaults.Execution.FinalityQC M E checkpoint)
     (hepoch : checkpoint.epoch = epoch) :
     checkpoint.history.IsPrefix (E.genesis T.next_epoch) := by
   rw [T.adopted, selected_eq_select M E R T.selection]
@@ -270,9 +270,9 @@ reliable signer extends that genesis before emitting a new checkpoint. -/
 theorem finalized_prefix_next_checkpoint {receiver : Validator}
     (T : EpochTransition M E R receiver)
     {old new : CheckpointData Value}
-    (F : Model.Execution.FinalityQC M E old)
+    (F : FlexibleFaults.Execution.FinalityQC M E old)
     (hold_epoch : old.epoch = epoch)
-    (Q : Model.Execution.CheckpointQC M E new)
+    (Q : FlexibleFaults.Execution.CheckpointQC M E new)
     (hne : new.epoch = T.next_epoch) :
     old.history.IsPrefix new.history := by
   obtain ⟨v, hv, hgood⟩ := M.exists_reliableSigner_mem Q.quorum
@@ -285,6 +285,6 @@ end RecoveryRound
 
 end Execution
 
-end Model
+end FlexibleFaults
 
 end LeanDag.Hybrid.Checkpoint
