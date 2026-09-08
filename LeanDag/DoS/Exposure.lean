@@ -39,8 +39,22 @@ def ExposedIn (U : BlockUniverse Validator BlockId Payload) (b : BlockId) (X : V
     Prop :=
   ∃ i ∈ history U b, ∃ j ∈ history U b, EquivPair U X i j
 
+/-- The pair is sought among `X`'s own blocks. Filtering the history by
+author first turns a scan over every pair of the history into one over
+the pairs a single validator authored, which is what a `decide` witness
+over a concrete DAG pays for; the proposition is unchanged. -/
 instance decidableExposedIn (b : BlockId) (X : Validator) : Decidable (ExposedIn U b X) :=
-  inferInstanceAs (Decidable (∃ i ∈ history U b, ∃ j ∈ history U b, EquivPair U X i j))
+  decidable_of_iff
+    (∃ i ∈ (history U b).filter (fun x => (U.block x).creator = X),
+      ∃ j ∈ (history U b).filter (fun x => (U.block x).creator = X),
+        i ≠ j ∧ (U.block i).round = (U.block j).round)
+    (by
+      constructor
+      · rintro ⟨i, hi, j, hj, hij, hr⟩
+        rw [Finset.mem_filter] at hi hj
+        exact ⟨i, hi.1, j, hj.1, hij, hi.2, hj.2, hr⟩
+      · rintro ⟨i, hi, j, hj, hij, hci, hcj, hr⟩
+        exact ⟨i, Finset.mem_filter.mpr ⟨hi, hci⟩, j, Finset.mem_filter.mpr ⟨hj, hcj⟩, hij, hr⟩)
 
 theorem exposedIn_iff_reaches {b : BlockId} {X : Validator} (hb : b ∈ U.ids) :
     ExposedIn U b X ↔
