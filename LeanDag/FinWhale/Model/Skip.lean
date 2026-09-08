@@ -22,10 +22,10 @@ variable [F : Faults Validator] [P : Params Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 variable {D : Dag Validator BlockId Payload}
 
-/-- The validators whose round-`(r+1)` block declines to vote for `l`. -/
-def nonVoters (D : Dag Validator BlockId Payload) (l : BlockId) : Finset Validator :=
-  creatorsOf D.block ((blocksAt D ((D.block l).round + 1)).filter
-    (fun q => l ∉ (D.block q).refs))
+/-- The validators whose round-`(r+1)` block declines to vote for `l`:
+the record's `blames` at the round above `l`. -/
+abbrev nonVoters (D : Dag Validator BlockId Payload) (l : BlockId) : Finset Validator :=
+  blames D l ((D.block l).round + 1)
 
 /-- **Non-FP-evidence**: a round-`(r+2)` block that is FP-evidence for no
 block of the slot. -/

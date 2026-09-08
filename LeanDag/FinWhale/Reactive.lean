@@ -185,7 +185,7 @@ theorem commits_of_reactive (rm : ReactiveM U T N)
     spCommit_of_reactive rm hids hblk (fun _ h => h) card_correct hgst hto
       (by rw [hsr]; exact hR) (by rw [hsr]; omega) (by rw [← hleader]; exact hsc) hLb
   refine ⟨L, ?_, certs, hcertsub, hcard, hcertb⟩
-  simp only [slotBlocks, blocksAt, Finset.mem_filter, hids, hblk, hfr]
+  simp only [slotBlocks, leaderBlocksAt, blocksAt, Finset.mem_filter, hids, hblk, hfr]
   exact ⟨⟨hL, hLr⟩, hLc⟩
 
 end FinWhale

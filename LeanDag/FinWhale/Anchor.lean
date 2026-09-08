@@ -86,7 +86,7 @@ theorem no_indirectCommit_of_fastCommit {A : BlockId} {r : ℕ} {b b' : BlockId}
     (hconf : Conflicting D b b') (hfast : FastCommit D b) :
     ¬ IndirectCommit S D A r b' := by
   have hbround : (D.block b).round = S.slotRound r := by
-    simp only [slotBlocks, blocksAt, Finset.mem_filter] at hbslot; exact hbslot.1.2
+    rw [mem_slotBlocks] at hbslot; exact hbslot.2.1
   rintro ⟨-, hroute⟩
   rcases hroute with ⟨c, hc, -, hcert⟩ | ⟨ev, hev, hevb⟩
   · -- an SP-certificate for `b'` carries a quorum of voters for `b'`
@@ -114,7 +114,7 @@ theorem no_indirectCommit_of_directSkip {A : BlockId} {r : ℕ} {b : BlockId}
   obtain ⟨hsp, nonev, hnon, hnonb⟩ := hskip
   rintro ⟨hbslot, hroute⟩
   have hbround : (D.block b).round = S.slotRound r := by
-    simp only [slotBlocks, blocksAt, Finset.mem_filter] at hbslot; exact hbslot.1.2
+    rw [mem_slotBlocks] at hbslot; exact hbslot.2.1
   rcases hroute with ⟨c, hc, -, hcert⟩ | ⟨ev, hev, hevb⟩
   · simp only [blocksAt, Finset.mem_filter] at hc
     exact no_skip_of_quorum
@@ -141,8 +141,8 @@ theorem indirectCommit_of_directCommit {A : BlockId} {r : ℕ} {l : BlockId}
     (hl : l ∈ slotBlocks S D r) (hcom : DirectCommit D l) :
     IndirectCommit S D A r l := by
   have hl' := hl
-  simp only [slotBlocks, blocksAt, Finset.mem_filter] at hl'
-  obtain ⟨⟨hlids, hlround⟩, -⟩ := hl'
+  rw [mem_slotBlocks] at hl'
+  obtain ⟨hlids, hlround, -⟩ := hl'
   refine ⟨hl, ?_⟩
   rcases hcom with hfast | hsp
   · refine Or.inr ?_
@@ -171,7 +171,7 @@ theorem no_indirectCommit_of_spCommit {A : BlockId} {r : ℕ} {b b' : BlockId}
     (hconf : Conflicting D b b') (hsp : SPCommit D b) :
     ¬ IndirectCommit S D A r b' := by
   have hbround : (D.block b).round = S.slotRound r := by
-    simp only [slotBlocks, blocksAt, Finset.mem_filter] at hbslot; exact hbslot.1.2
+    rw [mem_slotBlocks] at hbslot; exact hbslot.2.1
   obtain ⟨certs, hcerts, hcertb⟩ := hsp
   rintro ⟨-, hroute⟩
   rcases hroute with ⟨c, hc, -, hcert⟩ | ⟨ev, hev, hevb⟩

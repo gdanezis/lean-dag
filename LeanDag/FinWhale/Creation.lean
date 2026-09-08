@@ -304,7 +304,7 @@ theorem commits_of_creation (cr : Creation U T N S.leader)
     cr.toPaceCore.populatedOn card_correct s (by omega) (S.leader s) hsc
   refine ⟨L, ?_, cr.lemma20 hids hblk card_correct hgst hto hR hN
     (hids ▸ hL) (by rw [hblk]; exact hLr) (by rw [hblk]; exact hLc) hsc⟩
-  simp only [slotBlocks, blocksAt, Finset.mem_filter, hids, hblk, hid]
+  simp only [slotBlocks, leaderBlocksAt, blocksAt, Finset.mem_filter, hids, hblk, hid]
   exact ⟨⟨hL, hLr⟩, hLc⟩
 
 /-- **Theorem 21, from the creation rule.** Where at most `p` validators

@@ -191,7 +191,7 @@ theorem wellFormed_decOf {N M : ℕ} (hN : ∀ b ∈ D.ids, (D.block b).round �
   direct_commit r l := by
     rintro ⟨hslot, hcom⟩
     have hru : (D.block l).round = S.slotRound r ∧ l ∈ D.ids := by
-      simp only [slotBlocks, blocksAt, Finset.mem_filter] at hslot
+      simp only [slotBlocks, leaderBlocksAt, blocksAt, Finset.mem_filter] at hslot
       exact ⟨hslot.1.2, hslot.1.1⟩
     have hr : r ≤ M := hrle r (by have := hN l hru.2; omega)
     have hne : (directCommits S D r).Nonempty := ⟨l, Finset.mem_filter.2 ⟨hslot, hcom⟩⟩

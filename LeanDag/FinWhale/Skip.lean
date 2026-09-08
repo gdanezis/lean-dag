@@ -38,15 +38,8 @@ variable {D : Dag Validator BlockId Payload}
 /-- **No correct validator both votes and declines.** Its round-`(r+1)`
 block is one block, and either references `l` or does not. -/
 theorem not_nonVoter_of_voter {l : BlockId} :
-    ∀ v ∈ voters D l, v ∈ (Correct : Finset Validator) → v ∉ nonVoters D l := by
-  intro v hv hcorr hnv
-  simp only [voters, supporters, votesFor, nonVoters, mem_creatorsOf, blocksAt, Finset.mem_filter] at hv hnv
-  obtain ⟨q, ⟨⟨hqids, hqr⟩, hqref⟩, hqv⟩ := hv
-  obtain ⟨q', ⟨⟨hq'ids, hq'r⟩, hq'ref⟩, hq'v⟩ := hnv
-  have heq : q = q' :=
-    D.no_equivocation q hqids q' hq'ids (by rw [hqv]; exact hcorr) (by rw [hqv, hq'v])
-      (by rw [hqr, hq'r])
-  exact hq'ref (heq ▸ hqref)
+    ∀ v ∈ voters D l, v ∈ (Correct : Finset Validator) → v ∉ nonVoters D l :=
+  fun _ hv hcorr hnv => not_mem_of_supports_of_blames D.noEquivOn_honest hv hnv hcorr
 
 /-- **Lemma 6, the slow-path side.** A quorum of votes for `l` and a
 quorum declining to vote for it cannot both exist: they meet in a correct

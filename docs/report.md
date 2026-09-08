@@ -13595,12 +13595,12 @@ def SPSkip (D : Dag Validator BlockId Payload) (l : BlockId) : Prop :=
 
 #### `slotBlocks`
 
-*def, `FinWhale.Model.Decision.lean`*
+*abbrev, `FinWhale.Model.Decision.lean`*
 
 ```lean
-def slotBlocks (S : Slots Validator) (D : Dag Validator BlockId Payload) (k : ℕ) :
+abbrev slotBlocks (S : Slots Validator) (D : Dag Validator BlockId Payload) (k : ℕ) :
     Finset BlockId :=
-  (blocksAt D (S.slotRound k)).filter (fun b => (D.block b).creator = S.leader k)
+  leaderBlocksAt (S := S) D k
 ```
 
 The blocks of the leader slot of round `r`. There may be several, if the leader equivocates.

@@ -32,10 +32,7 @@ variable {S : Slots Validator}
 
 /-- **A slot's blocks are its candidates**: the shared `IsLeaderBlock`. -/
 theorem mem_slotBlocks {b : BlockId} {n : ℕ} :
-    b ∈ slotBlocks S D n ↔ IsLeaderBlock D n b := by
-  unfold slotBlocks
-  rw [Finset.mem_filter, mem_blocksAt]
-  exact ⟨fun h => ⟨h.1.1, h.1.2, h.2⟩, fun h => ⟨⟨h.1, h.2.1⟩, h.2.2⟩⟩
+    b ∈ slotBlocks S D n ↔ IsLeaderBlock D n b := mem_leaderBlocksAt
 
 /-- Naming the witnesses is a restriction, not a weakening. -/
 theorem spCommit_of_spCommitBy {l : BlockId} {T : Finset Validator}
@@ -81,8 +78,8 @@ theorem direct_commit_unique {r : ℕ} {l l' : BlockId}
     (hl : l ∈ slotBlocks S D r) (hl' : l' ∈ slotBlocks S D r)
     (hcom : DirectCommit D l) (hcom' : DirectCommit D l') : l = l' := by
   by_contra hne
-  simp only [slotBlocks, blocksAt, Finset.mem_filter] at hl hl'
-  exact lemma8 ⟨hne, by rw [hl.1.2, hl'.1.2], by rw [hl.2, hl'.2]⟩
+  rw [mem_slotBlocks] at hl hl'
+  exact lemma8 ⟨hne, by rw [hl.2.1, hl'.2.1], by rw [hl.2.2, hl'.2.2]⟩
     (voters_of_directCommit hcom) (voters_of_directCommit hcom')
 
 /-- **Lemma 6 and Lemma 7, the direct half.** A slot with a directly

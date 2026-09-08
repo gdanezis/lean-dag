@@ -320,11 +320,11 @@ theorem nonVoters_subset {l : BlockId} (hlD : l ∈ D.ids)
     (h1 : lo ≤ (D.block l).round + g) (h2 : (D.block l).round + g + 1 ≤ hi) :
     nonVoters D l ⊆ nonVoters D' l := by
   intro v hv
-  simp only [nonVoters, creatorsOf, Finset.mem_image, Finset.mem_filter, blocksAt] at hv ⊢
-  obtain ⟨q, ⟨⟨hqD, hqr⟩, hql⟩, hqc⟩ := hv
+  rw [mem_blames] at hv ⊢
+  obtain ⟨q, hqD, hqr, hql, hqc⟩ := hv
   have hlb := AnchoredRule.band_block hb hlD h1 (by omega)
   have hqb := AnchoredRule.band_block hb hqD (by omega) (by omega)
-  refine ⟨q, ⟨⟨AnchoredRule.band_mem hb hqD (by omega) (by omega), by omega⟩, ?_⟩, ?_⟩
+  refine ⟨q, AnchoredRule.band_mem hb hqD (by omega) (by omega), by omega, ?_, ?_⟩
   · rw [AnchoredRule.band_refs hb hqD (by omega) (by omega)]; exact hql
   · rw [hqb.2]; exact hqc
 
@@ -352,8 +352,9 @@ theorem spSkip_new {c l : BlockId} {n n' : ℕ} (hcD : c ∈ D.ids)
   have hqD : q ∈ D.ids := D.complete c hcD q hqm
   have hqr : (D.block q).round + 1 = (D.block c).round := (D.valid c hcD).predecessor q hqm
   have hqb := AnchoredRule.band_block hb hqD (by omega) (by omega)
-  simp only [nonVoters, creatorsOf, Finset.mem_image, Finset.mem_filter, blocksAt]
-  refine ⟨q, ⟨⟨AnchoredRule.band_mem hb hqD (by omega) (by omega), by omega⟩, ?_⟩, by rw [hqb.2]; exact hqc⟩
+  rw [mem_blames]
+  refine ⟨q, AnchoredRule.band_mem hb hqD (by omega) (by omega), by omega, ?_,
+    by rw [hqb.2]; exact hqc⟩
   rw [AnchoredRule.band_refs hb hqD (by omega) (by omega)]
   exact fun hmem => hlnew (D.complete q hqD l hmem)
 
@@ -367,7 +368,7 @@ theorem slotBlocks_subset (hrk : S.slotRound k + g = S'.slotRound k' + g')
     (hlk : S.leader k = S'.leader k') (h1 : lo ≤ S.slotRound k + g) (h2 : S.slotRound k + g ≤ hi) :
     slotBlocks S D k ⊆ slotBlocks S' D' k' := by
   intro l hl
-  simp only [slotBlocks, Finset.mem_filter, blocksAt] at hl ⊢
+  simp only [slotBlocks, leaderBlocksAt, Finset.mem_filter, blocksAt] at hl ⊢
   obtain ⟨⟨hlD, hlr⟩, hlc⟩ := hl
   have hlb := AnchoredRule.band_block hb hlD (by omega) (by omega)
   exact ⟨⟨AnchoredRule.band_mem hb hlD (by omega) (by omega), by omega⟩, by rw [hlb.2, hlc, hlk]⟩
@@ -376,7 +377,7 @@ theorem slotBlocks_subset (hrk : S.slotRound k + g = S'.slotRound k' + g')
 theorem mem_slotBlocks_of_old (hrk : S.slotRound k + g = S'.slotRound k' + g')
     (hlk : S.leader k = S'.leader k') (h1 : lo ≤ S.slotRound k + g) (h2 : S.slotRound k + g ≤ hi)
     {l : BlockId} (hlD : l ∈ D.ids) (hl : l ∈ slotBlocks S' D' k') : l ∈ slotBlocks S D k := by
-  simp only [slotBlocks, Finset.mem_filter, blocksAt] at hl ⊢
+  simp only [slotBlocks, leaderBlocksAt, Finset.mem_filter, blocksAt] at hl ⊢
   obtain ⟨⟨hlD', hlr⟩, hlc⟩ := hl
   have hlb := AnchoredRule.band_block' hb hlD hlD' (by omega) (by omega)
   exact ⟨⟨hlD, by omega⟩, by rw [← hlb.2, hlc, hlk]⟩
@@ -414,10 +415,10 @@ theorem directSkip (hrk : S.slotRound k + g = S'.slotRound k' + g')
   · by_cases hlD : l ∈ D.ids
     · have hlS := mem_slotBlocks_of_old hb hrk hlk h1 (by omega) hlD hl
       have hlr : (D.block l).round = S.slotRound k := by
-        simp only [slotBlocks, Finset.mem_filter, blocksAt] at hlS; exact hlS.1.2
+        simp only [slotBlocks, leaderBlocksAt, Finset.mem_filter, blocksAt] at hlS; exact hlS.1.2
       exact spSkip hb hlD (by omega) (by omega) (hsp l hlS)
     · have hlr : (D'.block l).round = S'.slotRound k' := by
-        simp only [slotBlocks, Finset.mem_filter, blocksAt] at hl
+        simp only [slotBlocks, leaderBlocksAt, Finset.mem_filter, blocksAt] at hl
         exact hl.1.2
       exact spSkip_new hb hc₀.1 hc₀.2 hrk h1 (by omega) hlD hlr
   · obtain ⟨c, hc, hcc, hcn⟩ := hnon v hv

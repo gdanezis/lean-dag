@@ -1,5 +1,6 @@
 import LeanDag.FinWhale.Model.Skip
 import Mathlib.Data.Fintype.Powerset
+import LeanDag.Common.Leader
 
 /-!
 # FinWhale — the direct decision rule
@@ -30,9 +31,9 @@ variable {D : Dag Validator BlockId Payload}
 
 /-- The blocks of the leader slot of round `r`. There may be several, if
 the leader equivocates. -/
-def slotBlocks (S : Slots Validator) (D : Dag Validator BlockId Payload) (k : ℕ) :
+abbrev slotBlocks (S : Slots Validator) (D : Dag Validator BlockId Payload) (k : ℕ) :
     Finset BlockId :=
-  (blocksAt D (S.slotRound k)).filter (fun b => (D.block b).creator = S.leader k)
+  leaderBlocksAt (S := S) D k
 
 /-- **The slow-path direct commit**: a quorum of SP-certificates from
 distinct validators at round `r + 2`. -/

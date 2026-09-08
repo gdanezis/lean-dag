@@ -296,6 +296,40 @@ theorem blamesIn_eq_toRecord {V : U.View} {L : BlockId} {n : ℕ} :
   rw [mem_blamesIn, mem_blames]
   rfl
 
+/-- **A view holds fewer blocks at a round.** -/
+theorem blocksAt_toRecord_subset {V : U.View} {r : ℕ} : blocksAt V.toRecord r ⊆ blocksAt U r := by
+  intro b hb
+  rw [mem_blocksAt] at hb ⊢
+  exact ⟨V.subset_ids hb.1, hb.2⟩
+
+/-- **And so fewer supporters.** -/
+theorem supporters_toRecord_subset {V : U.View} {b : BlockId} {n : ℕ} :
+    supporters V.toRecord b n ⊆ supporters U b n := by
+  rw [← supportersIn_eq_toRecord]; exact heldAuthors_subset
+
+/-- **And fewer blamers.** -/
+theorem blames_toRecord_subset {V : U.View} {L : BlockId} {n : ℕ} :
+    blames V.toRecord L n ⊆ blames U L n := by
+  rw [← blamesIn_eq_toRecord]; exact heldAuthors_subset
+
+/-- **A larger view holds more of a round.** -/
+theorem blocksAt_toRecord_mono {V V' : U.View} (h : V.ids ⊆ V'.ids) {r : ℕ} :
+    blocksAt V.toRecord r ⊆ blocksAt V'.toRecord r := by
+  intro b hb
+  rw [mem_blocksAt] at hb ⊢
+  exact ⟨h hb.1, hb.2⟩
+
+/-- **And more supporters.** -/
+theorem supporters_toRecord_mono {V V' : U.View} (h : V.ids ⊆ V'.ids) {b : BlockId} {n : ℕ} :
+    supporters V.toRecord b n ⊆ supporters V'.toRecord b n := by
+  rw [← supportersIn_eq_toRecord, ← supportersIn_eq_toRecord]; exact heldAuthors_mono h
+
+/-- **And more blamers.** -/
+theorem blames_toRecord_mono {V V' : U.View} (h : V.ids ⊆ V'.ids) {L : BlockId} {n : ℕ} :
+    blames V.toRecord L n ⊆ blames V'.toRecord L n := by
+  rw [← blamesIn_eq_toRecord, ← blamesIn_eq_toRecord]; exact heldAuthors_mono h
+
+
 /-! ### Votes carried by a block, and certificates
 
 A block *carries* the votes among its references, and a rule's

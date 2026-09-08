@@ -93,7 +93,7 @@ theorem theorem26_of_selfParent (hself : SelfParented D)
     (by rw [hid]; omega) (by rw [hlead]; exact hbc)
   have hlu : l ∈ D.ids ∧ (D.block l).round = s ∧
       (D.block l).creator = S.leader s := by
-    simp only [slotBlocks, blocksAt, Finset.mem_filter, hid] at hslot
+    simp only [slotBlocks, leaderBlocksAt, blocksAt, Finset.mem_filter, hid] at hslot
     exact ⟨hslot.1.1, hslot.1.2, hslot.2⟩
   -- and the leader block is the author's own, later
   have hreach : ReachesFrom D.block l b :=

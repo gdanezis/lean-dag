@@ -124,7 +124,7 @@ this is `r + 2 < a`, which is the shape the protocol's runs meet it in. -/
 
 /-- The validators whose round-`(r+1)` block references `l`: `l`'s voters,
 the record's `supporters` at the round above `l`. -/
-def voters (D : Dag Validator BlockId Payload) (l : BlockId) : Finset Validator :=
+abbrev voters (D : Dag Validator BlockId Payload) (l : BlockId) : Finset Validator :=
   supporters D l ((D.block l).round + 1)
 
 /-- The parents of `b`, as validators. -/

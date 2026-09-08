@@ -4616,6 +4616,36 @@ worth twelve lines, and the file now says so.
 **Measure.** The step removes 28 lines of Lean and adds 20; the library
 and tests stand at 75,867 lines.
 
+### 11.42 FinWhale counts with the record
+
+Step 11 of `docs/common-layer.md`, the FinWhale half. Three of
+FinWhale's sets were parallel copies of the record's: `voters` is
+`supporters` at the round above the candidate, `nonVoters` is `blames`
+there, and `slotBlocks` is `leaderBlocksAt`. All three are now those,
+and the restriction and monotonicity facts they carried move to
+`Common/Support.lean` as `blocksAt_toRecord_subset`,
+`supporters_toRecord_subset`, `blames_toRecord_subset` and their three
+`_mono` companions, each a line from `heldAuthors_subset` or
+`heldAuthors_mono`. FinWhale's six copies are gone, and
+`not_nonVoter_of_voter` — a correct validator votes or declines, never
+both — is `not_mem_of_supports_of_blames` applied.
+
+**What it cost.** The three were `def`s that about twenty proofs
+unfolded by name in `simp only [slotBlocks, blocksAt, …]`, and none of
+those calls fires at an abbreviation of a common set. Each needed the
+common name added to its simp set or the membership lemma in place of
+the unfolding; the rewrite is mechanical but wide, and it is most of
+this step's diff. The count is therefore modest, 109 lines removed
+against 97 added: what the step buys is that FinWhale's counting is the
+record's counting and not a second implementation of it.
+
+**What stays FinWhale's.** The evidence apparatus — `parentsVoting`,
+`SPCertificate`, `ExposesEquivocationBy`, `FPEvidence` and the
+view-independence results about them — counts against a block's parents
+rather than against a round, and no other rule has it.
+
+**Measure.** The library and tests stand at 75,855 lines.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition
