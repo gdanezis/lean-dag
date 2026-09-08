@@ -110,13 +110,30 @@ def declarations(tsv):
 def resolves(name, decls, suffixes):
     """A report name resolves if it is a declaration or a suffix of one.
 
-    The report also writes projections applied to a variable — `U.block` for
-    `BlockUniverse.block`, `V.ids` for `View.ids` — so a dotted name whose
-    tail resolves is accepted too.
+    Two looser forms are admitted, and one is refused.
+
+    A *two-segment* name resolves when its tail does. The report writes
+    projections applied to a variable — `U.block` for `BlockRecord.block`,
+    `V.ids` for `View.ids` — and reaches a structure's field through an
+    abbreviation or a parent, `BlockUniverse.complete` for the record's and
+    `ViewPace.advances` for `PaceCore`'s; it also names a generic theorem by
+    the arc that applies it, `Nemo.ledgerSet_agree`. None of those is a path
+    the extraction can see.
+
+    A name of *three or more* segments is refused that licence: it must
+    resolve whole. `BlackMarlin.Safety.holds` names an arc as well as a
+    module and a declaration, and its arc can be deleted while some
+    unrelated `holds` — there are forty-two, four of them under a `Safety`
+    — keeps the citation looking sound.
     """
     if name in decls or name in suffixes:
         return True
-    return "." in name and name.split(".")[-1] in suffixes
+    if "." not in name:
+        return False
+    parts = name.split(".")
+    if len(parts) >= 3:
+        return False
+    return parts[-1] in suffixes
 
 
 DECL_START = re.compile(r"^(?:@\[[^\]]*\]\s*)?(?:private\s+|protected\s+|noncomputable\s+)?"

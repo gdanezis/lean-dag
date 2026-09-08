@@ -323,48 +323,18 @@ proof effort with no corresponding proof content.
 
 18. **Black Marlin** (§18): the three-round rule of a partially
    synchronous protocol with an anchor in every round and no certificate
-   round, proved safe at the core's committee `n ≥ 3f + 1`
-   (`BlackMarlin.Safety.holds` (BM1–BM7)) — anchor uniqueness, the
-   propagation lemma, and the chaining of committed anchors from which
-   the delivered prefixes nest. The rule's second clause, that the
-   anchor above both references the candidate and is itself supported,
-   is used in exactly one case of one theorem: two committed anchors one
-   round apart, which support alone leaves incomparable — refuted on the
-   paper's own Figure 1 (§18.3). Liveness follows above the structural
-   condition of §6, in place of the paper's timing argument
-   (`BlackMarlin.Liveness.holds` (BML1–BML5)): a run of **two**
-   consecutive reliable anchors commits, and where the core's
-   corresponding fairness clause is an assumption discharged by a
-   wave-aligned witness, a run of two is short enough that the rotation
-   Black Marlin deploys discharges it as a theorem (§18.5). The round
-   rule is modelled on the same pacing trunk as §11, giving reactive
-   liveness with no coverage assumption and latency in `Δ`, `δ` and
-   processing — and showing the fast exit to cost a run of three
-   (§18.6). Agreement follows: the anchor is committed by each reliable
-   validator on its own view, so what one delivers all deliver (§18.7).
-   And the delivered order: `commit`'s descent segments a flush by anchor
-   round, and the link clause keeps it from skipping the round above a
-   committed anchor, which is what stops it ever facing a tie (§18.2).
-   The descent is then computed rather than assumed, and since L24's
-   tie-break reads only the candidate and its own cone, the record of a
-   commit is a function of the block it starts from — which makes the
-   delivered order's agreement a consequence (§18.3). With `τ` and the
-   per-author-and-round filter modelled, what a validator outputs is a
-   list, and Validity for reliable authors and Integrity hold of it,
-   with Total order holding of records that agree (§18.4).
-   **Two of Definition 1's four properties fail.** Two honest validators
-   can output different twins of an equivocating anchor, refuting the
-   paper's Theorem 13 at `n = 4` on a seven-round model with the commit
-   rule untouched (§18.5); and on the same execution they order two
-   *reliable* authors' blocks oppositely, which no rule for choosing
-   among twins can repair (§18.6). Both failures are traced to a named
-   step of the paper's own argument: Lemma 12 carries a conclusion about
-   the commit test into a claim about what validators output, and the
-   recursion that determines output is never given a lemma (§18.7). The
-   arc is scoped to those refutations: a scheme this development has
+   round, at the core's committee `n ≥ 3f + 1` — and **refuted**.
+   §18.5 exhibits an execution, machine-checked at `n = 4`, `f = 1`, in
+   which two reliable validators output different blocks of one author
+   and round and neither ever outputs the other's, which is Definition
+   1's Agreement refuted for the protocol as specified. Its Total order
+   fails on the same execution, and on blocks of *reliable* authors, for
+   a reason that does not turn on the twins at all (§18.6). §18.7
+   locates both failures in a named step of the paper's own argument.
+   The arc is scoped to those refutations: a scheme this development has
    refuted is not one to integrate with §16's properties, so its safety,
    liveness, view-relative order and repair developments are not
-   carried.
+   carried, and it is the one rule of ten with no carrier.
 
 **Minnow's minimal commit rule fails in two ways** (§19). `crs*`, the
 rule proposed for eventual synchrony, decides a leader slot from the
