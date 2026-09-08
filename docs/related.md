@@ -516,7 +516,7 @@ Three observations for the report.
    liveness proof and admit post-GST desynchronisation; Shoal++ argues from the
    certified side that uncertified DAGs are less robust because availability is
    not guaranteed. The report's structural condition and its GST derivation land
-   squarely in this dispute; report §7.5 engages with both by name.
+   squarely in this dispute; report §27 engages with both by name.
 
 3. **A mechanised liveness proof of Mysticeti already exists** — Qiu, Xiao and
    Shao (§4.3.1), in Rocq, at S&P 2026. Priority of mechanisation is therefore

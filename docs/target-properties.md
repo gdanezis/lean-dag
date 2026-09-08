@@ -872,7 +872,7 @@ anything is proved from the relation.
 **And this does not cover everything.** A mechanism can preserve every
 vote and every producer and still cost a protocol its progress, by
 adding a *candidate* the protocol can neither commit nor skip — which is
-what a fill does to Hydrozoan and not to Optimal-Hydrozoan (§5.1). That
+what a fill does to Hydrozoan and not to Optimal-Hydrozoan. That
 residue is §3.7. It predicts that re-genesis carries the same question,
 since it too adds a block with an author; nobody has looked.
 
@@ -1836,8 +1836,7 @@ whose rungs are unique need not carry one.
 It is nonetheless the wrong foundation:
 
 - It cannot describe FinWhale, whose rule is a function with laws.
-- It makes the arc depend on a schema that a protocol might not fit,
-  which was §2.4's own first risk.
+- It makes the arc depend on a schema that a protocol might not fit.
 - The properties are what the mechanisms need. The schema is one way to
   discharge them, not a thing worth depending on.
 
