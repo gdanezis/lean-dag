@@ -1,6 +1,8 @@
 import LeanDagTest.Hybrid.Model
 import LeanDag.Barnacle.Orcaella.Proof
 import LeanDag.Barnacle.Helpers.Cover
+import Mathlib.Tactic.FinCases
+import Mathlib.Tactic.IntervalCases
 /-!
 # Barnacle over Orcaella — the base witnesses
 

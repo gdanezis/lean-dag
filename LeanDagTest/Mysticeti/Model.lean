@@ -3,6 +3,7 @@ import LeanDag.Common.CommonCore
 import LeanDag.Mysticeti.Rule
 import LeanDag.Common.Schedule
 import LeanDag.Mysticeti.Liveness
+import Mathlib.Tactic.IntervalCases
 open LeanDag
 
 #print axioms LeanDag.BlockRecord.eq_of_creator_eq

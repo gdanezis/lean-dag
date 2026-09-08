@@ -1,4 +1,5 @@
 import LeanDagTest.Minnow.Deadlock
+import Mathlib.Data.Fin.VecNotation
 /-!
 # Minnow — the dead zone is a defect of the pair, not of the rule alone
 

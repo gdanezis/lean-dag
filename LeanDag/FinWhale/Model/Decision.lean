@@ -42,7 +42,7 @@ def SPCommit (D : Dag Validator BlockId Payload) (l : BlockId) : Prop :=
     ∀ v ∈ certs, ∃ b ∈ blocksAt D ((D.block l).round + 2),
       (D.block b).creator = v ∧ SPCertificate D b l
 
-set_option synthInstance.maxSize 1000 in
+
 instance (D : Dag Validator BlockId Payload) (l : BlockId) :
     Decidable (SPCommit D l) := by unfold SPCommit; infer_instance
 
@@ -70,7 +70,7 @@ def DirectSkip (S : Slots Validator) (D : Dag Validator BlockId Payload) (k : �
       ∀ v ∈ nonev, ∃ b ∈ blocksAt D (S.slotRound k + 2),
         (D.block b).creator = v ∧ NonFPEvidence D b (slotBlocks S D k)
 
-set_option synthInstance.maxSize 1000 in
+
 instance (S : Slots Validator) (D : Dag Validator BlockId Payload) (k : ℕ) :
     Decidable (DirectSkip S D k) := by unfold DirectSkip; infer_instance
 

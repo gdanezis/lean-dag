@@ -1,8 +1,12 @@
 import LeanDag.Common.Support
--- Broad import: the counting argument below uses big operators, ordered
--- sums, pigeonhole and `nlinarith`. Narrowing this to specific modules is
--- not worth the churn -- the rest of the library keeps its targeted imports.
-import Mathlib
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Group.Action.Defs
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
+import Mathlib.Data.Finset.Card
+import Mathlib.Data.Finset.Image
+import Mathlib.Data.Finset.Lattice.Fold
+import Mathlib.Data.Finset.Max
+import Mathlib.Tactic.Linarith
 
 /-!
 # A common correct ancestor

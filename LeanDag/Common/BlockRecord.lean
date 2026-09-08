@@ -1,4 +1,5 @@
 import LeanDag.Common.Block
+import Mathlib.Data.Finset.Union
 /-!
 # The block record
 
@@ -301,13 +302,30 @@ def leaderExcluded : Clause Validator BlockId Payload := fun blk b =>
       (blk x).creator = v → (blk y).creator = v → x = y)
     ∨ (∀ i ∈ b.refs, (blk i).creator ≠ v)
 
+/-- The clause decided over the parents' references **collected once**.
+`x` and `y` range over the same union whichever parents they come
+through, so the four nested loops over `b.refs × b.refs × refs × refs`
+are one double loop over `b.refs.biUnion (fun i => (blk i).refs)`. The
+proposition is unchanged; only the decision procedure is, which is what
+a `decide` witness over a concrete DAG pays for. -/
 instance [Fintype Validator] [DecidableEq Validator] [DecidableEq BlockId]
     (blk : BlockId → Block Validator BlockId Payload) (b : Block Validator BlockId Payload) :
     Decidable (leaderExcluded blk b) :=
-  inferInstanceAs (Decidable (∀ v : Validator,
-    (∀ i ∈ b.refs, ∀ j ∈ b.refs, ∀ x ∈ (blk i).refs, ∀ y ∈ (blk j).refs,
-      (blk x).creator = v → (blk y).creator = v → x = y)
-    ∨ (∀ i ∈ b.refs, (blk i).creator ≠ v)))
+  decidable_of_iff
+    (∀ v : Validator,
+      (∀ x ∈ b.refs.biUnion (fun i => (blk i).refs),
+        ∀ y ∈ b.refs.biUnion (fun i => (blk i).refs),
+          (blk x).creator = v → (blk y).creator = v → x = y)
+      ∨ (∀ i ∈ b.refs, (blk i).creator ≠ v)) <| by
+    unfold leaderExcluded
+    refine forall_congr' fun v => or_congr ?_ Iff.rfl
+    constructor
+    · intro h i hi j hj x hx y hy
+      exact h x (Finset.mem_biUnion.mpr ⟨i, hi, hx⟩) y (Finset.mem_biUnion.mpr ⟨j, hj, hy⟩)
+    · intro h x hx y hy
+      obtain ⟨i, hi, hx'⟩ := Finset.mem_biUnion.mp hx
+      obtain ⟨j, hj, hy'⟩ := Finset.mem_biUnion.mp hy
+      exact h i hi j hj x hx' y hy'
 
 /-- The clause reads two levels of references and no creator of `b`. -/
 instance : Mechanised (leaderExcluded (Validator := Validator) (BlockId := BlockId)

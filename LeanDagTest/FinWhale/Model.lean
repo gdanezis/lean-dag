@@ -27,9 +27,10 @@ namespace LeanDagTest
 
 namespace FinWhale
 
+-- `decide` over these DAGs reduces through nested `Finset` structure, which
+-- recurses past the default depth; the heartbeat and `synthInstance` limits
+-- this file used to raise are no longer needed.
 set_option maxRecDepth 4000
-set_option synthInstance.maxSize 1000
-set_option synthInstance.maxHeartbeats 1000000
 
 open LeanDag LeanDag.FinWhale
 
@@ -78,7 +79,6 @@ def fastBlk : Fin 36 → Block (Fin 9) (Fin 36) Unit := fun i =>
 /-- The schedule the witnesses run: one slot a round. -/
 def fwSched : Slots (Fin 9) := Slots.identity fwLeader
 
-set_option maxHeartbeats 4000000 in
 theorem fastValid : ∀ i : Fin 36, ValidHere fastBlk (fastBlk i) := by
   intro i
   refine ⟨?_, ?_, ?_, ?_⟩ <;> revert i <;> decide
@@ -194,7 +194,6 @@ def eqBlk : Fin 28 → Block (Fin 9) (Fin 28) Unit := fun i =>
       else {9, 10, 11, 12, 13, 16, 17},
     payload := () }
 
-set_option maxHeartbeats 4000000 in
 theorem eqValid : ∀ i : Fin 28, ValidHere eqBlk (eqBlk i) := by
   intro i
   refine ⟨?_, ?_, ?_, ?_⟩ <;> revert i <;> decide
@@ -274,7 +273,6 @@ def skipBlk : Fin 27 → Block (Fin 9) (Fin 27) Unit := fun i =>
       else {9, 10, 11, 12, 13, 14, 15},
     payload := () }
 
-set_option maxHeartbeats 4000000 in
 theorem skipValid : ∀ i : Fin 27, ValidHere skipBlk (skipBlk i) := by
   intro i
   refine ⟨?_, ?_, ?_, ?_⟩ <;> revert i <;> decide
@@ -378,7 +376,6 @@ def syncBlk : Fin 27 → Block (Fin 9) (Fin 27) Unit := fun i =>
 /-- And the synchronous witness's. -/
 def syncSched : Slots (Fin 9) := Slots.identity syncLeader
 
-set_option maxHeartbeats 4000000 in
 theorem syncValid : ∀ i : Fin 27, ValidHere syncBlk (syncBlk i) := by
   intro i
   refine ⟨?_, ?_, ?_, ?_⟩ <;> revert i <;> decide
