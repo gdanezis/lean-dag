@@ -96,7 +96,7 @@ theorem live_m1 :
         ∃ L, N3.Decided S1 (View.full U3) κ (some L)) :=
   Nemo.holds.2.2 3 (by omega) (Fin 24) Unit 3 rr3_keyed 1 (by omega) (by omega) U3
     (View.full U3) 0 7 u3_good
-    (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 24) Unit) U3 7)
+    (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 24) Unit).full_ids U3 7)
 
 theorem live_m3 :
     (∀ κ, 0 ≤ S3.slotRound κ → S3.slotRound κ + 4 + 2 ≤ 7 →
@@ -106,7 +106,7 @@ theorem live_m3 :
         ∃ L, N3.Decided S3 (View.full U3) κ (some L)) :=
   Nemo.holds.2.2 3 (by omega) (Fin 24) Unit 3 rr3_keyed 3 (by omega) (by omega) U3
     (View.full U3) 0 7 u3_good
-    (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 24) Unit) U3 7)
+    (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 24) Unit).full_ids U3 7)
 
 /-! ### Count 1: slot 1 (round 1, leader 1) — skipped off the head of round 3 -/
 
@@ -219,7 +219,7 @@ theorem not_descent_zero :
   have hTuniv : T = Finset.univ :=
     Finset.eq_univ_of_card T (le_antisymm (Finset.card_le_univ T) (by simpa using hcard))
   obtain ⟨L, hL⟩ := hT S1 (View.full U3) 1
-    (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 24) Unit) U3 7)
+    (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 24) Unit).full_ids U3 7)
     (by decide) (by decide) (by rw [hTuniv]; exact Finset.mem_univ _)
   exact absurd ((Nemo.holds.1 (Fin 3) (Fin 24) Unit).agree S1 _ _ 1 _ _ hL hand1_slot1) (by simp)
 

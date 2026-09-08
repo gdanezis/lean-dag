@@ -16,11 +16,12 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {R : BaseRule Validator BlockId Payload}
 
-/-- **The full view is caught up to every horizon.** -/
-theorem coversUpto_full (hR : R.Laws) (U : R.Universe) (N : ℕ) :
-    R.CoversUpto U (R.full U) N := by
+/-- **The full view is caught up to every horizon.** Only the view law
+pinning `full` is needed, which for a rule built by `ofAnchored` is `rfl`. -/
+theorem coversUpto_full (hfull : ∀ U : R.Universe, R.viewIds (R.full U) = R.ids U)
+    (U : R.Universe) (N : ℕ) : R.CoversUpto U (R.full U) N := by
   intro b hb _
-  rw [hR.full_ids]
+  rw [hfull]
   exact hb
 
 end Barnacle

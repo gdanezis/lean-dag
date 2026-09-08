@@ -126,7 +126,7 @@ example :
     ∃ Rn1 : PartialRun bnLive.toBaseRule bnP bnLeader bnWin bnUpd Usun (bnLive.full Usun) 1,
     Rn1.count 1 = 2 ∧ Rn1.start 1 = 5 ∧ Rn1.anchor 0 = 5 := by
   obtain ⟨Rn1⟩ := (Progress.holds (Fin 4) (Fin 32) Unit bnLive MysticetiProperties.agree bnP bnLeader bnWin bnUpd
-    bnUpd_bounded 0).1 Usun (bnLive.full Usun) 1 8 0 (coversUpto_full laws32 Usun 8) run0 bnLive_liveOn
+    bnUpd_bounded 0).1 Usun (bnLive.full Usun) 1 8 0 (coversUpto_full laws32.full_ids Usun 8) run0 bnLive_liveOn
     (show bnLive.Good Usun 1 8 from ⟨rfl, rfl, rfl⟩) (by decide) (by decide)
   refine ⟨Rn1, ?_⟩
   have h := (Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl))
@@ -139,7 +139,7 @@ example :
 example :
     ∃ Rn1 : PartialRun bnLive.toBaseRule bnP bnLeader bnWin bnUpd Usun (bnLive.full Usun) 1,
     Rn1.start 1 ≤ 0 + 4 + 1 + 0 :=
-  progress_exists MysticetiProperties.agree bnUpd_bounded (coversUpto_full laws32 Usun 8) run0 bnLive_liveOn
+  progress_exists MysticetiProperties.agree bnUpd_bounded (coversUpto_full laws32.full_ids Usun 8) run0 bnLive_liveOn
     (show bnLive.Good Usun 1 8 from ⟨rfl, rfl, rfl⟩) (by decide) (by decide)
 
 -- horizon values
@@ -191,19 +191,19 @@ theorem bnLive_liveOn_all : ∀ m (hm : 0 < m) (hmax : m ≤ bnP.maxLeaders),
 /-- BN8b applied on data: height `1` under horizon `8`. -/
 example :
     Nonempty (PartialRun bnLive.toBaseRule bnP bnLeader bnWin bnUpd Usun (bnLive.full Usun) 1) :=
-  everyHeight MysticetiProperties.agree bnUpd_bounded bnLive_liveOn_all (coversUpto_full laws32 Usun 8)
+  everyHeight MysticetiProperties.agree bnUpd_bounded bnLive_liveOn_all (coversUpto_full laws32.full_ids Usun 8)
     (show bnLive.Good Usun 1 8 from ⟨rfl, rfl, rfl⟩) le_rfl 1 (by decide)
 
 -- Through `holds`.
 example :
     Nonempty (PartialRun bnLive.toBaseRule bnP bnLeader bnWin bnUpd Usun (bnLive.full Usun) 1) :=
   ((Progress.holds (Fin 4) (Fin 32) Unit bnLive MysticetiProperties.agree bnP bnLeader bnWin bnUpd bnUpd_bounded 0).2
-    bnLive_liveOn_all Usun (bnLive.full Usun) 1 8 ⟨rfl, rfl, rfl⟩ (coversUpto_full laws32 Usun 8) le_rfl 1
+    bnLive_liveOn_all Usun (bnLive.full Usun) 1 8 ⟨rfl, rfl, rfl⟩ (coversUpto_full laws32.full_ids Usun 8) le_rfl 1
     (by decide))
 example :
     Nonempty (PartialRun bnLive.toBaseRule bnP bnLeader bnWin bnUpd Usun (bnLive.full Usun) 1) :=
   ((Progress.holds (Fin 4) (Fin 32) Unit bnLive MysticetiProperties.agree bnP bnLeader bnWin bnUpd bnUpd_bounded 0).1
-    Usun (bnLive.full Usun) 1 8 0 (coversUpto_full laws32 Usun 8) run0 bnLive_liveOn ⟨rfl, rfl, rfl⟩
+    Usun (bnLive.full Usun) 1 8 0 (coversUpto_full laws32.full_ids Usun 8) run0 bnLive_liveOn ⟨rfl, rfl, rfl⟩
     (by decide) (by decide))
 
 -- Height 2 at interval 4 is out of the horizon: `13 ≤ 8` is false.
@@ -295,7 +295,7 @@ example :
     ∃ Rn2 : PartialRun bnLive.toBaseRule bnP1 bnLeader bnWin bnUpd1 Usun (bnLive.full Usun) 2,
     Rn2.start 2 = 4 ∧ Rn2.count 2 = 1 ∧ Rn2.backoff 2 = 2 ∧ Rn2.anchor 1 = 4 := by
   obtain ⟨Rn2⟩ := (Progress.holds (Fin 4) (Fin 32) Unit bnLive MysticetiProperties.agree bnP1 bnLeader bnWin bnUpd1
-    bnUpd1_bounded 0).1 Usun (bnLive.full Usun) 1 8 1 (coversUpto_full laws32 Usun 8) runP1v bnLive_liveOn
+    bnUpd1_bounded 0).1 Usun (bnLive.full Usun) 1 8 1 (coversUpto_full laws32.full_ids Usun 8) runP1v bnLive_liveOn
     ⟨rfl, rfl, rfl⟩ (by decide) (by decide)
   refine ⟨Rn2, ?_⟩
   have h := (Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP1 bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl))
@@ -317,7 +317,7 @@ example :
     Nonempty (PartialRun bnLive.toBaseRule bnP1 bnLeader bnWin bnUpd1 Usun (bnLive.full Usun) 2) :=
   ((Progress.holds (Fin 4) (Fin 32) Unit bnLive MysticetiProperties.agree bnP1 bnLeader bnWin bnUpd1
     bnUpd1_bounded 0).2
-    bnLive_liveOn_all Usun (bnLive.full Usun) 1 8 ⟨rfl, rfl, rfl⟩ (coversUpto_full laws32 Usun 8) le_rfl 2
+    bnLive_liveOn_all Usun (bnLive.full Usun) 1 8 ⟨rfl, rfl, rfl⟩ (coversUpto_full laws32.full_ids Usun 8) le_rfl 2
     (by decide))
 example : ¬ (horizon bnP1 bnLive 0 3 ≤ 8) := by decide
 
@@ -350,7 +350,7 @@ theorem no_commit6 : ∀ L, ¬ bnRule32.Decided sched1 (bnLive9.full Usun) 6 (so
 
 theorem bnLive9_not_liveOn0 : ¬ bnLive9.LiveOn sched1 0 := by
   intro h
-  obtain ⟨-, h2⟩ := h Usun (View.full Usun) 1 9 ⟨rfl, rfl, rfl⟩ (coversUpto_full laws32 Usun 9)
+  obtain ⟨-, h2⟩ := h Usun (View.full Usun) 1 9 ⟨rfl, rfl, rfl⟩ (coversUpto_full laws32.full_ids Usun 9)
   obtain ⟨κ, hlo, hhi, L, hL⟩ := h2 6 (by decide) (by decide)
   simp only [Sched_slotRound, Nat.div_one] at hlo hhi
   have hκ : κ = 6 := by omega
@@ -402,7 +402,7 @@ example : bnRule32.Decided sched1 (bnLiveSk.full Usk) 3 (some 15) :=
 
 theorem bnLiveSk_not_liveOn0 : ¬ bnLiveSk.LiveOn sched1 0 := by
   intro h
-  obtain ⟨-, h2⟩ := h Usk (View.full Usk) 1 8 ⟨rfl, rfl, rfl⟩ (coversUpto_full laws32 Usk 8)
+  obtain ⟨-, h2⟩ := h Usk (View.full Usk) 1 8 ⟨rfl, rfl, rfl⟩ (coversUpto_full laws32.full_ids Usk 8)
   obtain ⟨κ, hlo, hhi, L, hL⟩ := h2 2 (by decide) (by decide)
   simp only [Sched_slotRound, Nat.div_one] at hlo hhi
   have hκ : κ = 2 := by omega
@@ -521,7 +521,7 @@ example :
       Rn1.vdct 0 2 = none ∧ Rn1.start 0 + bnP1.interval < 2 / Rn1.count 0 := by
   obtain ⟨Rn1⟩ := (Progress.holds (Fin 4) (Fin 32) Unit bnLiveSk MysticetiProperties.agree bnP1 bnLeader bnWin
     bnUpdSk bnUpdSk_bounded 1).1 Usk (bnLiveSk.full Usk) 1 8 0
-    (coversUpto_full laws32 Usk 8) run0sk bnLiveSk_liveOn1 ⟨rfl, rfl, rfl⟩
+    (coversUpto_full laws32.full_ids Usk 8) run0sk bnLiveSk_liveOn1 ⟨rfl, rfl, rfl⟩
     (by decide) (by decide)
   refine ⟨Rn1, ?_⟩
   have h := (Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP1 bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl))

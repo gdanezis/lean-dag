@@ -127,7 +127,7 @@ example : ∃ κ, 1 ≤ κ ∧ κ ≤ 4 ∧
   obtain ⟨T, hcard, hT0⟩ :=
     (MysticetiLive.holds.1 (Fin 4) (Fin 32) Unit).goodLeaders Usun 1 7 usun_good
   have hT := fun S κ => hT0 S (View.full Usun) κ
-    (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 32) Unit) Usun 7)
+    (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 32) Unit).full_ids Usun 7)
   have h3 : 3 ≤ T.card := by
     have h4 : Fintype.card (Fin 4) = 4 := Fintype.card_fin 4
     have hf : Faults.f (Fin 4) = 1 := rfl
@@ -328,13 +328,13 @@ example : ∃ κ, 1 ≤ sched2_44.slotRound κ ∧ sched2_44.slotRound κ ≤ 1 
     ∃ L, rule44.Decided sched2_44 (View.full U44) κ (some L) :=
   ((MysticetiLive.holds.2 4 (by omega) (Fin 44) Unit 4 (roundRobin_keyed 4 (by omega)) 2
     (by decide) (by decide)) U44 (View.full U44) 1 10 u44_good
-    (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 44) Unit) U44 10)).2 1 (by omega) (by decide)
+    (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 44) Unit).full_ids U44 10)).2 1 (by omega) (by decide)
 
 -- And clause 1: slot 2 (round 1, head) is decided by the theorem.
 example : ∃ v, rule44.Decided sched2_44 (View.full U44) 2 v :=
   ((MysticetiLive.holds.2 4 (by omega) (Fin 44) Unit 4 (roundRobin_keyed 4 (by omega)) 2
     (by decide) (by decide)) U44 (View.full U44) 1 10 u44_good
-    (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 44) Unit) U44 10)).1 2 (by decide) (by decide)
+    (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 44) Unit).full_ids U44 10)).1 2 (by decide) (by decide)
 
 -- One direct commit by `decide` on Fin 44: slot 2 = (round 1, offset 0), leader 1, block 5.
 theorem u44_commit2 : rule44.Decided sched2_44 (View.full U44) 2 (some 5) :=

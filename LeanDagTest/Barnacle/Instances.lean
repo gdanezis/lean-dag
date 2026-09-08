@@ -104,7 +104,7 @@ example : ∃ κ, (Sched bnLeader6' bnWin6' 6 (by decide) (by decide)).slotRound
   obtain ⟨T, hcard, hT0⟩ :=
     (Odontoceti.holds.2.1 (Fin 6) (Fin 24) Unit).goodLeaders Uodo 1 3 uodo_good
   have hT := fun S κ => hT0 S (View.full Uodo) κ
-    (coversUpto_full (Odontoceti.holds.1 (Fin 6) (Fin 24) Unit) Uodo 3)
+    (coversUpto_full (Odontoceti.holds.1 (Fin 6) (Fin 24) Unit).full_ids Uodo 3)
   have h5 : 5 ≤ T.card := by
     have h := hcard
     simp only [Fintype.card_fin] at h
@@ -253,7 +253,7 @@ example : ∃ κ, (Sched bnLeader3 bnWin3 3 (by decide) (by decide)).slotRound �
   obtain ⟨T, hcard, hT0⟩ :=
     (Nemo.holds.2.1 (Fin 3) (Fin 14) Unit).goodLeaders Unemo 1 5 unemo_good
   have hT := fun S κ => hT0 S (View.full Unemo) κ
-    (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 14) Unit) Unemo 5)
+    (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 14) Unit).full_ids Unemo 5)
   have h2 : 2 ≤ T.card := by
     have h := hcard
     simp only [Fintype.card_fin] at h

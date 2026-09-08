@@ -124,7 +124,7 @@ theorem ohyb4_commit :
     (LeanDag.Barnacle.Orcaella.holds.2.1 (Fin 4) (Fin 13) Unit 2 (by decide)).goodLeaders
       Ohyb4 0 3 ohyb4_good
   have hT := fun (S : Slots (Fin 4)) κ => hT0 S (bnOrc.full Ohyb4) κ
-    (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 13) Unit 2 (by decide))
+    (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 13) Unit 2 (by decide)).full_ids
       Ohyb4 3)
   have h3 : 3 ≤ T.card := by
     have h := hcard
@@ -183,7 +183,7 @@ theorem not_descent_zero :
   have hTuniv : T = Finset.univ :=
     Finset.eq_univ_of_card T (le_antisymm (Finset.card_le_univ T) (by simpa using hcard))
   obtain ⟨L, hL⟩ := hT (Sched orcLeader4 orcWin4 4 (by decide) (by decide)) (bnOrc.full Ohyb4) 6
-    (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 13) Unit 2 (by decide))
+    (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 13) Unit 2 (by decide)).full_ids
       Ohyb4 3)
     (by omega) (by decide) (by rw [hTuniv]; exact Finset.mem_univ _)
   have hcand := (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 13) Unit 2 (by decide)).candidates

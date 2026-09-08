@@ -68,7 +68,7 @@ theorem real_runs (K : ℕ) :
     realUpd_bounded
     (Ugrow (11 * K + 9)) (realRule.full (Ugrow (11 * K + 9))) 0 (11 * K + 9)
     (ugrow_good _)
-    (coversUpto_full (Mysticeti.holds (Fin 4) ℕ Unit) _ _) (by omega) K (by show K * (4 + 1 + 6) + 6 + 3 ≤ 11 * K + 9; omega)
+    (coversUpto_full (Mysticeti.holds (Fin 4) ℕ Unit).full_ids _ _) (by omega) K (by show K * (4 + 1 + 6) + 6 + 3 ≤ 11 * K + 9; omega)
 
 /-- **The horizon is exact.** The family stops at `N`: a taller run needs
 a taller DAG, so the `11K + 9` above is the height's cost and not a

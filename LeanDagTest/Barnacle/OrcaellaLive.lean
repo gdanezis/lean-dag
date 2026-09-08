@@ -86,7 +86,7 @@ theorem live_o1 :
         ∃ L, OL.Decided S1 (OL.full OUL) κ (some L)) :=
   LeanDag.Barnacle.Orcaella.holds.2.2 4 (by omega) (Fin 28) Unit 2 (by decide) 4 rr4_keyed
     1 (by omega) (by omega) OUL (OL.full OUL) 0 8 ul_good
-    (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 28) Unit 2 (by decide))
+    (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 28) Unit 2 (by decide)).full_ids
       OUL 8)
 
 /-- The same at count `2`. -/
@@ -98,7 +98,7 @@ theorem live_o2 :
         ∃ L, OL.Decided S2 (OL.full OUL) κ (some L)) :=
   LeanDag.Barnacle.Orcaella.holds.2.2 4 (by omega) (Fin 28) Unit 2 (by decide) 4 rr4_keyed
     2 (by omega) (by omega) OUL (OL.full OUL) 0 8 ul_good
-    (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 28) Unit 2 (by decide))
+    (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 28) Unit 2 (by decide)).full_ids
       OUL 8)
 
 /-! ### The verdicts, pinned -/

@@ -20458,11 +20458,11 @@ theorem holds : Statement
 *theorem, `Barnacle.Helpers.Cover.lean`*
 
 ```lean
-theorem coversUpto_full (hR : R.Laws) (U : R.Universe) (N : ℕ) :
-    R.CoversUpto U (R.full U) N
+theorem coversUpto_full (hfull : ∀ U : R.Universe, R.viewIds (R.full U) = R.ids U)
+    (U : R.Universe) (N : ℕ) : R.CoversUpto U (R.full U) N
 ```
 
-**The full view is caught up to every horizon.**
+**The full view is caught up to every horizon.** Only the view law pinning `full` is needed, which for a rule built by `ofAnchored` is `rfl`.
 
 #### `delivers_core`
 
