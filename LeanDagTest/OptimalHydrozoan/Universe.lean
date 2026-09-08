@@ -95,11 +95,7 @@ def UX : BlockUniverse (Fin 4) (Fin 16) where
   no_equivocation := by decide
 
 /-- ... which is an `OptUniverse`: the leader-exclusion clause holds. -/
-def OX : OptUniverse (Fin 4) (Fin 16) :=
-  { UX with
-    leader_excluded :=
-      leaderExcluded_of_bounded UX 3 3 (fun k hk => by change k + 2 ≤ 3 at hk; omega)
-        (by decide) (by decide) }
+def OX : OptUniverse (Fin 4) (Fin 16) := OptUniverse.ofExcluded UX (by decide)
 
 -- Slot 1 has two candidates, 4 and 5, both by the Byzantine leader 0.
 example : IsLeaderBlock UX 1 4 ∧ IsLeaderBlock UX 1 5 ∧ ¬ IsLeaderBlock UX 1 6 := by
@@ -156,15 +152,6 @@ def fourSlotsTwoPerRound : Slots (Fin 4) where
     have h2 : (a + 2) % 4 = (b + 2) % 4 := congrArg (fun p : ℕ × Fin 4 => (p.2 : ℕ)) h
     omega
 
-/-- The same table under the two-slots-per-round schedule is again an
-`OptUniverse`: slots with a decision round ≤ 3 have index ≤ 3. -/
-def OX2 : @OptUniverse (Fin 4) (Fin 16) _ _ _ _ fourSlotsTwoPerRound := by
-  letI : Slots (Fin 4) := fourSlotsTwoPerRound
-  exact { UX with
-    leader_excluded :=
-      leaderExcluded_of_bounded UX 3 3
-        (fun k hk => by change k / 2 + 2 ≤ 3 at hk; omega) (by decide) (by decide) }
-
 -- Under that schedule, round 1 has two slots: 2 (candidates 4 and 5, by
 -- replica 0) and 3 (the single candidate 6, by replica 1). Block 13
 -- witnesses slot 2 and not slot 3, excludes replica 0's vote, and keeps
@@ -193,14 +180,13 @@ example :
       (UbadX.block 9).creator = Slots.leader 1 := by
   decide
 
--- ... so no `OptUniverse` extends `UbadX`: the clause bites, at
--- exactly (b, k, j) = (15, 1, 9).
+-- ... so `UbadX` is no Optimal universe: block 15 fails the clause.
+example : ¬ Clause.leaderExcluded UbadX.block (UbadX.block 15) := by decide
 example : ¬ ∃ O : OptUniverse (Fin 4) (Fin 16), O.toBlockRecord = UbadX := by
   rintro ⟨O, h⟩
-  have hx := O.leader_excluded 15 (by rw [h]; decide) 1 (by rw [h]; decide)
-    (by rw [h]; decide) 9 (by rw [h]; decide)
-  rw [h] at hx
-  exact hx (by decide)
+  have hx := (O.valid 15 (by rw [← OptUniverse.toBlockRecord_ids, h]; decide)).2
+  rw [← OptUniverse.toBlockRecord_block, h] at hx
+  exact absurd hx (by decide)
 
 end OptimalHydrozoan
 

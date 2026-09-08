@@ -25,19 +25,10 @@ namespace Barnacle
 
 open LeanDag LeanDag.Barnacle
 
-/-- The universe the Optimal arc exhibits as an `OptUniverse` obeys the
-schedule-free rule. -/
-theorem leaderExcluded_UX :
-    OptimalHydrozoan.LeaderExcludedAll LeanDagTest.OptimalHydrozoan.UX := by decide
-
-/-- And the one no `OptUniverse` extends does not. -/
-example : ¬ OptimalHydrozoan.LeaderExcludedAll LeanDagTest.OptimalHydrozoan.UbadX := by
-  decide
-
-/-- The carrier, at the witness universe. -/
-abbrev CX : {U : LeanDag.Hydrozoan.BlockUniverse (Fin 4) (Fin 16) //
-    OptimalHydrozoan.LeaderExcludedAll U} :=
-  ⟨LeanDagTest.OptimalHydrozoan.UX, leaderExcluded_UX⟩
+/-- The universe the arc exhibits fails the exclusion clause at one block,
+so it is no Optimal universe; `OX` is. -/
+example : ¬ Clause.leaderExcluded LeanDagTest.OptimalHydrozoan.UbadX.block
+    (LeanDagTest.OptimalHydrozoan.UbadX.block 15) := by decide
 
 /-- The laws hold at this configuration; applying them end to end is
 what would fail were a hypothesis silently strengthened. -/

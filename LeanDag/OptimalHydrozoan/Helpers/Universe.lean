@@ -3,18 +3,9 @@ import LeanDag.Hydrozoan.Helpers.Block
 /-!
 # Optimal-Hydrozoan: universe lemmas
 
-Generated proof infrastructure over `Optimal/Model/Universe.lean`; not
-part of the audit surface.
-
-`leaderExcluded_of_bounded` is the bridge the witness models use: the
-`leader_excluded` field quantifies over every slot `k`, which `decide`
-cannot enumerate, but for a universe whose rounds stop at `N` only slots
-with a decision round `≤ N` matter, and a concrete schedule bounds those
-slots by some `B` (`B = N` for the pipelined schedule, `B = 2N` with two
-slots per round) — so the bounded, decidable form suffices. The
-`Decidable` instance lets the witness models check
-`WitnessesEquivocation` by `decide` (the existential ranges over a
-`Fintype` of ids).
+Not part of the audit surface. The projection to Hydrozoan's universe,
+exclusion at every schedule from the clause, and the two ways a witness
+model builds an Optimal universe.
 -/
 
 namespace LeanDag
@@ -26,56 +17,60 @@ open LeanDag.Hydrozoan
 variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [F : LeanDag.Hydrozoan.Faults Replica]
 
-/-! ## The schedule-free exclusion -/
+@[simp] theorem OptUniverse.toBlockRecord_ids (U : OptUniverse Replica BlockId) :
+    U.toBlockRecord.ids = U.ids := rfl
 
-instance decIsCandidateAt (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
-    (r : ℕ) (v : Replica) (L : BlockId) : Decidable (IsCandidateAt U r v L) :=
-  inferInstanceAs (Decidable (L ∈ U.ids ∧ (U.block L).round = r ∧ (U.block L).creator = v))
+@[simp] theorem OptUniverse.toBlockRecord_block (U : OptUniverse Replica BlockId) :
+    U.toBlockRecord.block = U.block := rfl
 
-instance decWitnessesAt [Fintype BlockId]
+/-- **An Optimal universe from a Hydrozoan one whose blocks all satisfy
+the clause.** -/
+def OptUniverse.ofExcluded (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
+    (h : ∀ i ∈ U.ids, Clause.leaderExcluded U.block (U.block i)) : OptUniverse Replica BlockId :=
+  { U with valid := fun i hi => ⟨U.valid i hi, h i hi⟩ }
+
+@[simp] theorem OptUniverse.ofExcluded_toBlockRecord
     (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
-    (r : ℕ) (v : Replica) (b : BlockId) : Decidable (WitnessesAt U r v b) :=
-  inferInstanceAs (Decidable (∃ L₁ L₂, IsCandidateAt U r v L₁ ∧ IsCandidateAt U r v L₂ ∧
-    L₁ ≠ L₂ ∧ (∃ j ∈ (U.block b).refs, IsVote U j L₁) ∧
-    (∃ j ∈ (U.block b).refs, IsVote U j L₂)))
+    (h : ∀ i ∈ U.ids, Clause.leaderExcluded U.block (U.block i)) :
+    (OptUniverse.ofExcluded U h).toBlockRecord = U := rfl
 
-instance [Fintype BlockId] (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) :
-    Decidable (LeaderExcludedAll U) :=
-  inferInstanceAs (Decidable (∀ b ∈ U.ids, ∀ v : Replica, 2 ≤ (U.block b).round →
-    WitnessesAt U ((U.block b).round - 2) v b →
-    ∀ j ∈ (U.block b).refs, (U.block j).creator ≠ v))
+/-- **An Optimal universe from one with no equivocation**: the clause is
+vacuous when no replica has two blocks in one round. -/
+def OptUniverse.ofNoEquivocation (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
+    (h : ∀ i ∈ U.ids, ∀ j ∈ U.ids, (U.block i).creator = (U.block j).creator →
+      (U.block i).round = (U.block j).round → i = j) : OptUniverse Replica BlockId :=
+  OptUniverse.ofExcluded U fun b hb v => Or.inl fun i hi j hj x hx y hy hxv hyv => by
+    have hiU := U.complete b hb i hi
+    have hjU := U.complete b hb j hj
+    have hxU := U.complete i hiU x hx
+    have hyU := U.complete j hjU y hy
+    have hir := (U.valid b hb).predecessor i hi
+    have hjr := (U.valid b hb).predecessor j hj
+    have hxr := (U.valid i hiU).predecessor x hx
+    have hyr := (U.valid j hjU).predecessor y hy
+    exact h x hxU y hyU (hxv.trans hyv.symm) (by omega)
+
+@[simp] theorem OptUniverse.ofNoEquivocation_toBlockRecord
+    (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
+    (h : ∀ i ∈ U.ids, ∀ j ∈ U.ids, (U.block i).creator = (U.block j).creator →
+      (U.block i).round = (U.block j).round → i = j) :
+    (OptUniverse.ofNoEquivocation U h).toBlockRecord = U := rfl
 
 variable [S : Slots Replica]
 
-omit [DecidableEq BlockId] in
-/-- **The schedule-free exclusion is exclusion at every schedule.** -/
-theorem leaderExcluded_of_all (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
-    (h : LeaderExcludedAll U) : LeaderExcluded (S := S) U := by
-  intro b hb k hround hwit j hj
-  have h2 : 2 ≤ (U.block b).round := by
-    rw [hround]; unfold LeanDag.Hydrozoan.decisionRound; omega
-  have hr : (U.block b).round - 2 = S.slotRound k := by
-    rw [hround]; unfold LeanDag.Hydrozoan.decisionRound; omega
-  exact h b hb (S.leader k) h2 (by rw [hr]; exact hwit) j hj
-
-/-- **The schedule-free rule yields an `OptUniverse` at every
-schedule**, which is what lets the carrier be fixed before a schedule
-is supplied. -/
-def optUniverseOf (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
-    (h : LeaderExcludedAll U) : OptUniverse Replica BlockId :=
-  ⟨U, leaderExcluded_of_all U h⟩
-
-@[simp] theorem optUniverseOf_toBlockRecord
-    (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (h : LeaderExcludedAll U) :
-    (optUniverseOf U h).toBlockRecord = U := rfl
-
-/-! ## Witnessing, decided through the refs -/
+/-- **An Optimal universe is leader-excluded at every schedule**: the
+clause at each block, read at the slot. -/
+theorem OptUniverse.leader_excluded (U : OptUniverse Replica BlockId) :
+    LeaderExcluded (S := S) U.toBlockRecord := by
+  intro b hb k _ hwit j hj hjc
+  obtain ⟨L₁, L₂, hL₁, hL₂, hne, ⟨j₁, hj₁, hv₁⟩, ⟨j₂, hj₂, hv₂⟩⟩ := hwit
+  rcases (U.valid b hb).2 (S.leader k) with hcons | hnone
+  · exact hne (hcons j₁ hj₁ j₂ hj₂ L₁ hv₁ L₂ hv₂ hL₁.2.2 hL₂.2.2)
+  · exact hnone j hj hjc
 
 omit [DecidableEq BlockId] in
 /-- Witnessing an equivocation, read off the refs' refs: the two
-candidates are votes' targets, so they sit two references below `b`.
-This is the form the witness models decide — a few dozen checks instead
-of a quadratic scan of all ids. -/
+candidates are votes' targets, two references below `b`. -/
 theorem witnessesEquivocation_iff_refs (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
     (k : ℕ) (b : BlockId) :
     WitnessesEquivocation U k b ↔
@@ -96,41 +91,15 @@ instance decidableWitnessesEquivocation
 
 omit [DecidableEq BlockId] in
 /-- A universe with no two blocks of one creator in one round witnesses no
-equivocation anywhere: the two candidates would be such a pair. -/
-theorem not_witnessesEquivocation_of_noEquivocation (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
+equivocation anywhere. -/
+theorem not_witnessesEquivocation_of_noEquivocation
+    (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
     (h : ∀ i ∈ U.ids, ∀ j ∈ U.ids, (U.block i).creator = (U.block j).creator →
       (U.block i).round = (U.block j).round → i = j)
     (k : ℕ) (b : BlockId) : ¬ WitnessesEquivocation U k b := by
   rintro ⟨L₁, L₂, hL₁, hL₂, hne, -, -⟩
   exact hne (h L₁ hL₁.1 L₂ hL₂.1 (hL₁.2.2.trans hL₂.2.2.symm)
     (hL₁.2.1.trans hL₂.2.1.symm))
-
-omit [DecidableEq BlockId] in
-/-- In such a universe the leader-exclusion clause holds vacuously — the
-cheap route for equivocation-free witness models. -/
-theorem leaderExcluded_of_noEquivocation (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
-    (h : ∀ i ∈ U.ids, ∀ j ∈ U.ids, (U.block i).creator = (U.block j).creator →
-      (U.block i).round = (U.block j).round → i = j) :
-    LeaderExcluded (S := S) U :=
-  fun b _ k _ hw => absurd hw (not_witnessesEquivocation_of_noEquivocation U h k b)
-
-omit [DecidableEq BlockId] in
-/-- The leader-exclusion clause follows from its restriction to slots
-`k ≤ B`, given that every slot whose decision round is at most `N` has
-index at most `B`, and that no block sits above round `N`. -/
-theorem leaderExcluded_of_bounded (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (N B : ℕ)
-    (hslot : ∀ k, S.slotRound k + 2 ≤ N → k ≤ B)
-    (hround : ∀ b ∈ U.ids, (U.block b).round ≤ N)
-    (h : ∀ b ∈ U.ids, ∀ k ≤ B,
-      (U.block b).round = LeanDag.Hydrozoan.decisionRound Replica k →
-      WitnessesEquivocation U k b →
-      ∀ j ∈ (U.block b).refs, (U.block j).creator ≠ S.leader k) :
-    LeaderExcluded (S := S) U := by
-  intro b hb k hk
-  refine h b hb k ?_ hk
-  have h1 := hround b hb
-  simp only [LeanDag.Hydrozoan.decisionRound] at hk
-  exact hslot k (by omega)
 
 end OptimalHydrozoan
 

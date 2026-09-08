@@ -304,6 +304,59 @@ instance : CopyStable (distinct (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) where
   copy := fun _ _ _ h => h
 
+/-- **Leader exclusion**: for every validator, either the parents are
+consistent about it — no two of their references are distinct blocks by
+it — or no parent is by it. A block that has watched a validator
+equivocate references nothing by that validator. -/
+def leaderExcluded : Clause Validator BlockId Payload := fun blk b =>
+  ∀ v : Validator,
+    (∀ i ∈ b.refs, ∀ j ∈ b.refs, ∀ x ∈ (blk i).refs, ∀ y ∈ (blk j).refs,
+      (blk x).creator = v → (blk y).creator = v → x = y)
+    ∨ (∀ i ∈ b.refs, (blk i).creator ≠ v)
+
+instance [Fintype Validator] [DecidableEq Validator] [DecidableEq BlockId]
+    (blk : BlockId → Block Validator BlockId Payload) (b : Block Validator BlockId Payload) :
+    Decidable (leaderExcluded blk b) :=
+  inferInstanceAs (Decidable (∀ v : Validator,
+    (∀ i ∈ b.refs, ∀ j ∈ b.refs, ∀ x ∈ (blk i).refs, ∀ y ∈ (blk j).refs,
+      (blk x).creator = v → (blk y).creator = v → x = y)
+    ∨ (∀ i ∈ b.refs, (blk i).creator ≠ v)))
+
+/-- The clause reads two levels of references and no creator of `b`. -/
+instance : Mechanised (leaderExcluded (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)) where
+  reads := by
+    intro blk blk' ids b hcl hb hagree h v
+    rcases h v with h1 | h2
+    · left
+      intro i hi j hj x hx y hy hxv hyv
+      rw [hagree i (hb i hi)] at hx
+      rw [hagree j (hb j hj)] at hy
+      rw [hagree x (hcl i (hb i hi) x hx)] at hxv
+      rw [hagree y (hcl j (hb j hj) y hy)] at hyv
+      exact h1 i hi j hj x hx y hy hxv hyv
+    · right
+      intro i hi
+      rw [hagree i (hb i hi)]
+      exact h2 i hi
+  base := fun _ b _ hr v => Or.inr fun i hi => by
+    rw [hr] at hi; exact absurd hi (Finset.notMem_empty i)
+  chops := by
+    intro blk G b h _ _ v
+    rcases h v with h1 | h2
+    · left
+      intro i hi j hj x hx y hy hxv hyv
+      simp only [chopBlk_creator] at hxv hyv
+      exact h1 i hi j hj x (chopBlk_refs_subset hx) y (chopBlk_refs_subset hy) hxv hyv
+    · right
+      intro i hi
+      rw [chopBlk_creator]
+      exact h2 i hi
+
+instance : CopyStable (leaderExcluded (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)) where
+  copy := fun _ _ _ h => h
+
 /-- A non-genesis block references a block by its own creator. Read by
 the core; not `CopyStable`, which is why the core's fill adds a self
 reference. -/

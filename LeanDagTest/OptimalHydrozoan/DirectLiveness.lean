@@ -144,7 +144,7 @@ def UA : BlockUniverse (Fin 4) (Fin 15) where
 /-- ... as an `OptUniverse` (one block per creator per round: no
 equivocation is witnessed). -/
 def OA : OptUniverse (Fin 4) (Fin 15) :=
-  { UA with leader_excluded := leaderExcluded_of_noEquivocation UA (by decide) }
+  OptUniverse.ofNoEquivocation UA (by decide)
 
 -- Every premise of SkipLiveness but the candidate-less one holds for
 -- T = {1, 2, 3} at slot 1 ...

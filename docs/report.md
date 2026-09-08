@@ -7818,8 +7818,8 @@ structure ValidHere (blk : BlockId → Block Validator BlockId Payload)
   It is a genuine strengthening of the paper's rule, and a harmless one:
   a validator can check it locally, and it drops at most the `f` visibly
   equivocating validators' blocks, leaving the `n − f` its quorum needs.
-  The same shape as Optimal-Hydrozoan's `LeaderExcludedAll`, and adopted
-  for the same reason. -/
+  `Clause.leaderExcluded` of the common layer, which Optimal-Hydrozoan's
+  validity carries for the same reason. -/
   leader_clause : ∀ v : Validator,
     (∀ i ∈ b.refs, ∀ j ∈ b.refs, ∀ x ∈ (blk i).refs, ∀ y ∈ (blk j).refs,
       (blk x).creator = v → (blk y).creator = v → x = y)
@@ -9562,9 +9562,10 @@ def EvidenceLinked (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (A L : 
 (`optimalAnchored`): the Optimal fast path or Hydrozoan's slow path,
 the Optimal skip, and the certificate rung followed by the evidence
 rung, neither tie-broken. Its laws hold under leader exclusion at the
-schedule (`LeaderExcluded`, the field of an `OptUniverse`), so the
-safety statements quantify over those universes; the rule predicates
-themselves are applied to the underlying universe.
+schedule (`LeaderExcluded`), which every `OptUniverse` supplies from
+its validity (`OptUniverse.leader_excluded`), so the safety statements
+quantify over those universes; the rule predicates themselves are
+applied to the Hydrozoan universe beneath (`OptUniverse.toBlockRecord`).
 
 ### 23.2 Safety
 
@@ -9762,44 +9763,34 @@ committee of five or more.
 `LeanDag/Barnacle/OptimalHydrozoan*/`)*
 
 Optimal-Hydrozoan has a carrier of its own,
-`OptimalHydrozoanProperties.optimalRule`: Hydrozoan's universe with
-leader exclusion, the four properties and a support (`optSupport`, and
-a fast-path support at the optimised threshold), and every mechanism
-cell an instance of the generic theorem (§16.1). What is specific to it
-is the invariant carried across each mechanism.
+`OptimalHydrozoanProperties.optimalRule`: its records, read by the
+relation through their projection to Hydrozoan's universe
+(`toDagRuleVia OptUniverse.toBlockRecord`), the four properties and a
+support (`optSupport`, and a fast-path support at the optimised
+threshold), and every mechanism cell an instance of the generic theorem
+(§16.1).
 
-**As a Barnacle rule** (HI6). The universe is indexed by a
-schedule, because the leader-exclusion clause names `S.leader k`, while
-the interface fixes the carrier before the schedule arrives. The clause
-depends on a slot only through its `(round, leader)` pair, so it is
-stated over the pair with no schedule anywhere (`LeaderExcludedAll`,
-in Optimal's own model), and it implies exclusion at *any* schedule
-(`leaderExcluded_of_all`); the carrier is the relation's `toDagRuleOn`
-at it, and its agreement the relation's under the exclusion the
-schedule-free form supplies. The schedule-free form is what lets the cut be stated at the
-truncation's own schedule, and the observation is that **a
-leader-exclusion clause can be stated without a schedule**, which is
-both what a DAG-building layer can enforce and what lets the rule be
-carried to a re-indexed schedule.
+**Leader exclusion is a clause of validity.** `OptUniverse` is the
+block record at `ValidOpt`, Hydrozoan's validity with
+`Clause.leaderExcluded` (§2.4): a block whose parents have voted for
+two distinct blocks of one replica references nothing by that replica.
+The clause names no schedule — it reads two levels of references and
+nothing else — which is what a DAG-building layer can enforce, and it
+yields exclusion at every schedule (`OptUniverse.leader_excluded`), the
+form the relation's laws hold under. FinWhale's validity carries the
+same clause (§20.1). Because it is a clause, the universe is
+`Mechanised` and `CopyStable` by the family's instances, so the cut,
+the copy fill and re-genesis preserve it with nothing proved per
+mechanism: the carrier reads as records with every map the identity
+(`optOnRecord`), and every verdict cell of the cut (HI7), the copy fill
+(HI9) and re-genesis is `Properties/Arcs/Record.lean` at that instance.
+The core's `skipFill`, whose self reference grafts the recovering
+replica's anchor onto the donor's references, adds an edge and is not
+used here. Liveness across both is `Support.live_of_truncates` and
+`Support.live_of_sustains` at `optSupport`.
 
-**Leader exclusion is a mechanised invariant on the record.**
-`Excluded` is the clause read at a record, and `Excluded.mechanised`
-is three facts: exclusion survives the cut (`leaderExcludedAll_chop`:
-a block bound by exclusion sits two rounds above the horizon, so it
-keeps its parents, its parents keep theirs and their authors, and its
-candidates are old blocks at a rebased round); it survives the copy
-fill (`leaderExcludedAll_copyFill`: a filled block's parents are the
-donor's, so no edge is added); and it survives re-genesis
-(`leaderExcludedAll_addGenesis`: the new block is bound by no
-exclusion and is its author's only block). The carrier then reads as
-records under `Excluded` (`optOnRecord`),
-and every verdict cell of the cut (HI7), the copy fill (HI9) and
-re-genesis is `Properties/Arcs/Record.lean` at that instance, with
-nothing written per cell. The core's `skipFill`, whose self reference
-grafts the recovering replica's anchor onto the donor's references,
-adds an edge and is not used here. Liveness across both is
-`Support.live_of_truncates` and `Support.live_of_sustains` at
-`optSupport`; re-genesis is the record's, through `optOnRecord`.
+**As a Barnacle rule** (HI6). `ofAnchoredVia` at the same projection;
+the laws are the relation's under the exclusion every record supplies.
 
 **What a deployment gets** is the headline at the rule (HI10):
 `OptimalHydrozoanProperties.safety` across any stack of the two
@@ -10058,7 +10049,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Hydrozoan/Model/Liveness.lean` | the liveness package: population, synchrony, the eventual view |
 | `Hydrozoan/ThresholdArithmetic/`, `Hydrozoan/DirectSafety/`, `Hydrozoan/SlotAgreement/`, `Hydrozoan/PrefixAgreement/`, `Hydrozoan/DirectLiveness/`, `Hydrozoan/IndirectLiveness/`, `Hydrozoan/EventualDecision/`, `Hydrozoan/Grounding/` | the eight statements and their proofs (HZ1–HZ8) |
 | `Hydrozoan/Helpers/` | the generated lemma layer; `Record.lean`, the carrier on the record |
-| `OptimalHydrozoan/Model/Faults.lean`, `OptimalHydrozoan/Model/Universe.lean` | the allowance `pOpt` and the per-block thresholds; leader exclusion at a schedule and without one (`LeaderExcludedAll`); the universe with the clause |
+| `OptimalHydrozoan/Model/Faults.lean`, `OptimalHydrozoan/Model/Universe.lean` | the allowance `pOpt` and the per-block thresholds; Optimal's validity, Hydrozoan's with `Clause.leaderExcluded`, and the universe at it |
 | `OptimalHydrozoan/Model/DirectRules.lean`, `OptimalHydrozoan/Model/IndirectRules.lean`, `OptimalHydrozoan/Model/Decided.lean` | fast evidence, the no-evidence skip, the evidence rung; Optimal-Hydrozoan as a two-rung anchored rule with no tie |
 | `OptimalHydrozoan/ThresholdArithmetic/`, `OptimalHydrozoan/DirectSafety/`, `OptimalHydrozoan/SlotAgreement/`, `OptimalHydrozoan/PrefixAgreement/`, `OptimalHydrozoan/DirectLiveness/`, `OptimalHydrozoan/IndirectLiveness/`, `OptimalHydrozoan/EventualDecision/`, `OptimalHydrozoan/Grounding/` | the eight statements and their proofs (OH1–OH8) |
 | `OptimalHydrozoan/Helpers/` | the generated lemma layer |
@@ -10970,9 +10961,9 @@ reused.
 | HI3 | Hydrozoan's universe satisfies the causal-structure interface, by its own fields | `BlockRecord.causal` *(Common/CausalHistory)* |
 | HI4 | Hydrozoan as a Barnacle base rule, with its laws | `Barnacle.Hydrozoan.holds` *(Barnacle/Hydrozoan/Proof)* |
 | HI5 | as a live rule: the descent laws at slack `f + c`, and round-robin liveness at `3(f + c) + 1 ≤ n` | `Barnacle.HydrozoanLive.holds` *(Barnacle/HydrozoanLive/Proof)* |
-| HI6 | the same two for Optimal-Hydrozoan, its validity clause restated without a schedule | `Barnacle.OptimalHydrozoan.holds`, `LeaderExcludedAll` *(Barnacle/OptimalHydrozoan/Proof, OptimalHydrozoan/Model/Universe)* |
-| HI7 | verdicts survive the cut, for both rules, on the base-slot premise alone | `DagRule.OnRecord.decided_chop_iff` at `Hydrozoan.onRecord` and `optOnRecord`; `leaderExcludedAll_chop` *(Properties/Arcs/Record, Integration/OptimalMechanisms)* |
-| HI9 | verdicts survive the copy fill for both rules, with no quorum hypothesis; leader exclusion survives it | `DagRule.OnRecord.decided_agree_copyFill` at the two instances; `leaderExcludedAll_copyFill` *(Properties/Arcs/Record, Integration/OptimalMechanisms)* |
+| HI6 | the same two for Optimal-Hydrozoan, its exclusion rule a clause of validity | `Barnacle.OptimalHydrozoan.holds`, `Clause.leaderExcluded` *(Barnacle/OptimalHydrozoan/Proof, Common/BlockRecord)* |
+| HI7 | verdicts survive the cut, for both rules, on the base-slot premise alone | `DagRule.OnRecord.decided_chop_iff` at `Hydrozoan.onRecord` and `optOnRecord` *(Properties/Arcs/Record, Integration/OptimalMechanisms)* |
+| HI9 | verdicts survive the copy fill for both rules, with no quorum hypothesis; exclusion survives it as a clause of validity | `DagRule.OnRecord.decided_agree_copyFill` at the two instances; `ValidOpt.copyStable` *(Properties/Arcs/Record, OptimalHydrozoan/Model/Universe)* |
 | HI10 | what a deployment gets: the headlines at both rules | `Hydrozoan.Properties.safety`, `Hydrozoan.Properties.progress`, `OptimalHydrozoanProperties.safety`, `OptimalHydrozoanProperties.progress` *(Hydrozoan/Properties/Proof, OptimalHydrozoan/Carrier)* |
 
 ---
@@ -10981,7 +10972,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 344 definitions and structures the report names, in
+The 350 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -11388,6 +11379,17 @@ def DirectCommit (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r 
 ```
 
 `L` is directly committed when its certificates come from a quorum of distinct validators.
+
+#### `CertifiedIn`
+
+*abbrev, `Mysticeti.Rule.lean`*
+
+```lean
+abbrev CertifiedIn (U : BlockUniverse Validator BlockId Payload) (A L : BlockId) (r : ℕ) : Prop :=
+  certifiedLink IsVote (quorumCard Validator) 2 U A L r
+```
+
+The indirect rule's test: a certificate for `L` lies in the causal history of the anchor `A`.
 
 #### `DirectCommitIn`
 
@@ -12906,6 +12908,17 @@ def DirectCommit (U : Universe Validator BlockId Payload) (L : BlockId) (r : ℕ
 
 **Direct commit**: a majority of round-`(r+1)` authors reference `L`. At wave length two the votes are the certificates, so the rule counts `supporters` directly.
 
+#### `CertifiedIn`
+
+*def, `Nemo.Rules.lean`*
+
+```lean
+def CertifiedIn (U : Universe Validator BlockId Payload) (A L : BlockId) (r : ℕ) : Prop :=
+  ∃ p ∈ history U A, (U.block p).round = r + 1 ∧ L ∈ (U.block p).refs
+```
+
+**The indirect test** (link size one): a round-`(r+1)` vote for `L` lies in the anchor's cone. The name keeps the core's `CertifiedIn` — under crash the vote block *is* the certificate. Stated over the `history` `Finset` rather than `Reaches`, so it is decidable.
+
 #### `DirectCommitIn`
 
 *abbrev, `Nemo.Decision.lean`*
@@ -13018,6 +13031,18 @@ abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
 ```
 
 Direct skip, as judged from a single view: the view holds voting-round blocks blaming the slot `(a, r)` from a quorum of distinct validators.
+
+#### `CertifiedIn`
+
+*abbrev, `MahiMahi.Model.Decision.lean`*
+
+```lean
+abbrev CertifiedIn (U : BlockUniverse Validator BlockId Payload)
+    (w : ℕ) (A L : BlockId) (r : ℕ) : Prop :=
+  LinkedVia U A (certificates U w L r)
+```
+
+**The indirect test**: a certificate for `L` lies in the causal history of the anchor `A`. The core's `CertifiedIn` at wave `w`. Not decidable as stated — `Reaches` is a `Prop` — and not made so: the witnesses exhibit the certificate.
 
 #### `Decided`
 
@@ -13511,8 +13536,8 @@ structure ValidHere (blk : BlockId → Block Validator BlockId Payload)
   It is a genuine strengthening of the paper's rule, and a harmless one:
   a validator can check it locally, and it drops at most the `f` visibly
   equivocating validators' blocks, leaving the `n − f` its quorum needs.
-  The same shape as Optimal-Hydrozoan's `LeaderExcludedAll`, and adopted
-  for the same reason. -/
+  `Clause.leaderExcluded` of the common layer, which Optimal-Hydrozoan's
+  validity carries for the same reason. -/
   leader_clause : ∀ v : Validator,
     (∀ i ∈ b.refs, ∀ j ∈ b.refs, ∀ x ∈ (blk i).refs, ∀ y ∈ (blk j).refs,
       (blk x).creator = v → (blk y).creator = v → x = y)
@@ -13520,20 +13545,6 @@ structure ValidHere (blk : BlockId → Block Validator BlockId Payload)
 ```
 
 **Validity, as FinWhale extends Mysticeti's.** Every edge sits in the round below, at most one edge per validator, a non-genesis block carries `n − f` of them by distinct validators, and the parent set is either leader-consistent with respect to the leader two rounds down or excludes that leader's block. The last clause is FinWhale's addition and is what the fast path's counting rests on.
-
-#### `leaderClause`
-
-*def, `FinWhale.Model.Rule.lean`*
-
-```lean
-def leaderClause : Clause Validator BlockId Payload := fun blk b =>
-  ∀ v : Validator,
-    (∀ i ∈ b.refs, ∀ j ∈ b.refs, ∀ x ∈ (blk i).refs, ∀ y ∈ (blk j).refs,
-      (blk x).creator = v → (blk y).creator = v → x = y)
-    ∨ (∀ i ∈ b.refs, (blk i).creator ≠ v)
-```
-
-**FinWhale's clause**, as a clause of the validity family: either the parent set is consistent about `v` or `v`'s block is not among the parents.
 
 #### `Dag`
 
@@ -14582,6 +14593,18 @@ abbrev Synchronised (U : BlockUniverse Replica BlockId) (R : ℕ) : Prop :=
 
 The all-of-`Correct` case.
 
+#### `CertifiedIn`
+
+*abbrev, `Hydrozoan.Model.IndirectRules.lean`*
+
+```lean
+abbrev CertifiedIn (U : BlockUniverse Replica BlockId) (A L : BlockId)
+    (r : ℕ) : Prop :=
+  certifiedLink IsVote (qCert Replica) 2 U A L r
+```
+
+Rung 1's test: a certificate for `L` lies in the anchor's causal history — the paper's `∃ b : Link(b, b_anchor) ∧ IsCertificate(b, b_leader)`, with `r` the candidate's propose round.
+
 #### `WeakLinked`
 
 *def, `Hydrozoan.Model.IndirectRules.lean`*
@@ -14876,18 +14899,17 @@ def FastUniqueness : Prop :=
 
 `1 ≤ f` is the paper's exact guard. A silently *stronger* guard (`2 ≤ f`), or `qFast` in place of `qFastOpt` (one larger, so the row only gets easier), would keep every witness green: weakenings of a true row are invisible to `decide`, and reading this line is the only defense.
 
-#### `LeaderExcludedAll`
+#### `OptUniverse`
 
-*def, `OptimalHydrozoan.Model.Universe.lean`*
+*abbrev, `OptimalHydrozoan.Model.Universe.lean`*
 
 ```lean
-def LeaderExcludedAll (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) : Prop :=
-  ∀ b ∈ U.ids, ∀ v : Replica, 2 ≤ (U.block b).round →
-    WitnessesAt U ((U.block b).round - 2) v b →
-    ∀ j ∈ (U.block b).refs, (U.block j).creator ≠ v
+abbrev OptUniverse (Replica BlockId : Type*) [Fintype Replica]
+    [DecidableEq Replica] [DecidableEq BlockId] [F : LeanDag.Hydrozoan.Faults Replica] :=
+  BlockRecord Replica BlockId Unit ValidOpt (NonByzantine : Finset Replica)
 ```
 
-**Leader exclusion, without a schedule.** A block that has watched a replica equivocate two rounds below it references nothing by that replica. The clause depends on a slot only through its `(round, leader)` pair, so this is the form a DAG-building layer can enforce without knowing who leads which slot, and the form the carrier's universes carry; the round is read off the block rather than quantified, which keeps it decidable on a finite model. It implies the slot form at every schedule (`leaderExcluded_of_all`).
+**The block universe**: the block record at Optimal's validity, with non-equivocation asked of the non-Byzantine replicas.
 
 #### `LeaderExcluded`
 
@@ -14901,21 +14923,7 @@ def LeaderExcluded (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) : Prop 
     ∀ j ∈ (U.block b).refs, (U.block j).creator ≠ S.leader k
 ```
 
-**Leader exclusion at a schedule** — the validity rule of `sections/optimal-protocol.tex`: a block at the decision round of slot `k` that witnesses an equivocation in `k` references no block authored by `k`'s leader. The round guard is stated explicitly (decision D4) although it is *redundant* for `b ∈ ids`: witnessing already forces `b`'s round to be `k`'s decision round (twice `predecessor`, from a voted candidate at `k`'s propose round), so no witness can tell its presence — it is here so the rule reads as the paper states it. With several slots per round the rule applies to each slot separately, which the `∀ k` gives directly. The invariant the decision relation's laws hold under.
-
-#### `OptUniverse`
-
-*structure, `OptimalHydrozoan.Model.Universe.lean`*
-
-```lean
-structure OptUniverse (Replica BlockId : Type*) [Fintype Replica]
-    [DecidableEq Replica] [DecidableEq BlockId] [F : LeanDag.Hydrozoan.Faults Replica]
-    [S : Slots Replica] extends LeanDag.Hydrozoan.BlockUniverse Replica BlockId where
-  /-- **Leader exclusion**, at the schedule the universe is indexed by. -/
-  leader_excluded : LeaderExcluded toBlockRecord
-```
-
-Hydrozoan's block universe plus the leader-exclusion rule.
+**Leader exclusion at a schedule** — the validity rule as `sections/optimal-protocol.tex` states it: a block at the decision round of slot `k` that witnesses an equivocation in `k` references no block by `k`'s leader. The form the decision relation's laws hold under; every Optimal universe satisfies it at every schedule (`OptUniverse.leader_excluded`).
 
 #### `NoEvidenceQuorum`
 
@@ -15160,18 +15168,17 @@ def FastUniqueness : Prop :=
 
 `1 ≤ f` is the paper's exact guard. A silently *stronger* guard (`2 ≤ f`), or `qFast` in place of `qFastOpt` (one larger, so the row only gets easier), would keep every witness green: weakenings of a true row are invisible to `decide`, and reading this line is the only defense.
 
-#### `LeaderExcludedAll`
+#### `OptUniverse`
 
-*def, `OptimalHydrozoan.Model.Universe.lean`*
+*abbrev, `OptimalHydrozoan.Model.Universe.lean`*
 
 ```lean
-def LeaderExcludedAll (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) : Prop :=
-  ∀ b ∈ U.ids, ∀ v : Replica, 2 ≤ (U.block b).round →
-    WitnessesAt U ((U.block b).round - 2) v b →
-    ∀ j ∈ (U.block b).refs, (U.block j).creator ≠ v
+abbrev OptUniverse (Replica BlockId : Type*) [Fintype Replica]
+    [DecidableEq Replica] [DecidableEq BlockId] [F : LeanDag.Hydrozoan.Faults Replica] :=
+  BlockRecord Replica BlockId Unit ValidOpt (NonByzantine : Finset Replica)
 ```
 
-**Leader exclusion, without a schedule.** A block that has watched a replica equivocate two rounds below it references nothing by that replica. The clause depends on a slot only through its `(round, leader)` pair, so this is the form a DAG-building layer can enforce without knowing who leads which slot, and the form the carrier's universes carry; the round is read off the block rather than quantified, which keeps it decidable on a finite model. It implies the slot form at every schedule (`leaderExcluded_of_all`).
+**The block universe**: the block record at Optimal's validity, with non-equivocation asked of the non-Byzantine replicas.
 
 #### `LeaderExcluded`
 
@@ -15185,21 +15192,7 @@ def LeaderExcluded (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) : Prop 
     ∀ j ∈ (U.block b).refs, (U.block j).creator ≠ S.leader k
 ```
 
-**Leader exclusion at a schedule** — the validity rule of `sections/optimal-protocol.tex`: a block at the decision round of slot `k` that witnesses an equivocation in `k` references no block authored by `k`'s leader. The round guard is stated explicitly (decision D4) although it is *redundant* for `b ∈ ids`: witnessing already forces `b`'s round to be `k`'s decision round (twice `predecessor`, from a voted candidate at `k`'s propose round), so no witness can tell its presence — it is here so the rule reads as the paper states it. With several slots per round the rule applies to each slot separately, which the `∀ k` gives directly. The invariant the decision relation's laws hold under.
-
-#### `OptUniverse`
-
-*structure, `OptimalHydrozoan.Model.Universe.lean`*
-
-```lean
-structure OptUniverse (Replica BlockId : Type*) [Fintype Replica]
-    [DecidableEq Replica] [DecidableEq BlockId] [F : LeanDag.Hydrozoan.Faults Replica]
-    [S : Slots Replica] extends LeanDag.Hydrozoan.BlockUniverse Replica BlockId where
-  /-- **Leader exclusion**, at the schedule the universe is indexed by. -/
-  leader_excluded : LeaderExcluded toBlockRecord
-```
-
-Hydrozoan's block universe plus the leader-exclusion rule.
+**Leader exclusion at a schedule** — the validity rule as `sections/optimal-protocol.tex` states it: a block at the decision round of slot `k` that witnesses an equivocation in `k` references no block by `k`'s leader. The form the decision relation's laws hold under; every Optimal universe satisfies it at every schedule (`OptUniverse.leader_excluded`).
 
 #### `NoEvidenceQuorum`
 
@@ -15616,23 +15609,15 @@ def toDagRule [P.Mechanised] : DagRule Validator BlockId Payload where
 
 #### `toDagRuleOn`
 
-*def, `Common.Anchored.Band.lean`*
+*abbrev, `Common.Anchored.Band.lean`*
 
 ```lean
-def toDagRuleOn (I : BlockRecord Validator BlockId Payload P honest → Prop) :
-    DagRule Validator BlockId Payload where
-  Universe := {U : BlockRecord Validator BlockId Payload P honest // I U}
-  View := fun U => U.val.View
-  block := fun U i => U.val.block i
-  ids := fun U => U.val.ids
-  viewIds := fun V => V.ids
-  viewSound := fun V => V.subset_ids
-  viewComplete := fun V => V.complete
-  causal := fun U => U.val.causal
-  Decided := fun S U V k v => R.Decided (S := S) U.val V k v
+abbrev toDagRuleOn (I : BlockRecord Validator BlockId Payload P honest → Prop) :
+    DagRule Validator BlockId Payload :=
+  R.toDagRuleVia (fun U : {U : BlockRecord Validator BlockId Payload P honest // I U} => U.val)
 ```
 
-**An anchored rule under an invariant, as a carrier**: the records satisfying `I` as universes, the record's views, the relation as the verdict. For a rule whose laws hold only under an invariant.
+**An anchored rule under an invariant, as a carrier**: the records satisfying `I` as universes.
 
 #### `DecidedWithin`
 
@@ -16192,6 +16177,72 @@ class Invariant.Mechanised [P.Mechanised]
 
 **What an invariant owes the mechanisms.**
 
+#### `supportCommit`
+
+*abbrev, `Common.Rules.lean`*
+
+```lean
+abbrev supportCommit (t : ℕ) (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
+    (L : BlockId) (r : ℕ) : Prop :=
+  HoldsAtLeast U V t (votesFor U L (r + 1))
+```
+
+**Commit by support**: the view holds `t` authors voting for the candidate one round above it.
+
+#### `certCommit`
+
+*abbrev, `Common.Rules.lean`*
+
+```lean
+abbrev certCommit
+    (Vote : (U : BlockRecord Validator BlockId Payload P honest) → BlockId → BlockId → Prop)
+    [∀ U b L, Decidable (Vote U b L)]
+    (t t' off : ℕ) (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
+    (L : BlockId) (r : ℕ) : Prop :=
+  HoldsAtLeast U V t (certificatesAt U (Vote U) t' L (r + off))
+```
+
+**Commit by certificate**: the view holds `t` authors of certificates for the candidate — the blocks `off` rounds above it carrying `t'` votes for it under the vote relation `Vote`.
+
+#### `blameSkip`
+
+*abbrev, `Common.Rules.lean`*
+
+```lean
+abbrev blameSkip [S : Slots Validator] (t : ℕ) (U : BlockRecord Validator BlockId Payload P honest)
+    (V : U.View) (k : ℕ) : Prop :=
+  HoldsAtLeast U V t (slotBlamers U k)
+```
+
+**Skip by blame**: the view holds `t` authors whose voting-round block references no candidate of the slot.
+
+#### `certifiedLink`
+
+*abbrev, `Common.Rules.lean`*
+
+```lean
+abbrev certifiedLink
+    (Vote : (U : BlockRecord Validator BlockId Payload P honest) → BlockId → BlockId → Prop)
+    [∀ U b L, Decidable (Vote U b L)]
+    (t' off : ℕ) (U : BlockRecord Validator BlockId Payload P honest) (A L : BlockId) (r : ℕ) :
+    Prop :=
+  LinkedVia U A (certificatesAt U (Vote U) t' L (r + off))
+```
+
+**Link by certificate**: a certificate for the candidate lies in the anchor's cone.
+
+#### `coneLink`
+
+*abbrev, `Common.Rules.lean`*
+
+```lean
+abbrev coneLink (t : ℕ) (U : BlockRecord Validator BlockId Payload P honest)
+    (A L : BlockId) (r : ℕ) : Prop :=
+  t ≤ (coneSupporters U A L (r + 1)).card
+```
+
+**Link by support in the cone**: `t` authors of votes for the candidate lie in the anchor's cone.
+
 #### `Slots`
 
 *class, `Common.Slots.lean`*
@@ -16315,17 +16366,6 @@ def hzSupport : Support (rule (Replica := Replica) (BlockId := BlockId)) where
 
 **Hydrozoan's support**: wavelength two, certification the rule's own.
 
-#### `Excluded`
-
-*def, `Integration.OptimalMechanisms.lean`*
-
-```lean
-def Excluded (W : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) : Prop :=
-  LeaderExcludedAll W
-```
-
-**Leader exclusion, as an invariant on the record.**
-
 #### `optOnRecord`
 
 *def, `Integration.OptimalMechanisms.lean`*
@@ -16333,11 +16373,11 @@ def Excluded (W : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) : Prop :=
 ```lean
 def optOnRecord :
     (OptimalHydrozoanProperties.optimalRule (Replica := Replica)
-      (BlockId := BlockId)).OnRecord LeanDag.Hydrozoan.ValidWrt
-      (LeanDag.Hydrozoan.NonByzantine : Finset Replica) Excluded where
-  toRec := fun W => W.val
-  inv := fun W => W.property
-  ofRec := fun W h => ⟨W, h⟩
+      (BlockId := BlockId)).OnRecord LeanDag.OptimalHydrozoan.ValidOpt
+      (LeanDag.Hydrozoan.NonByzantine : Finset Replica) BlockRecord.Any where
+  toRec := fun U => U
+  inv := fun _ => True.intro
+  ofRec := fun W _ => W
   ids_to := fun _ => rfl
   block_to := fun _ => rfl
   ids_of := fun _ _ => rfl
@@ -16348,7 +16388,7 @@ def optOnRecord :
   viewIds_of := fun _ => rfl
 ```
 
-**Optimal-Hydrozoan's carrier, on the record**: Hydrozoan's adapter, under `Excluded`.
+**Optimal-Hydrozoan's carrier, on the record**: every map the identity, the views read at the projection.
 
 #### `mysticetiRule`
 
@@ -16396,7 +16436,7 @@ def certLive (S : Slots Validator) {U : BlockUniverse Validator BlockId Payload}
 ```lean
 def optSupport : Support (optimalRule (Replica := Replica) (BlockId := BlockId)) where
   wave := 2
-  Certifies := fun U C L => LeanDag.Hydrozoan.IsCertificate U.val C L
+  Certifies := fun U C L => LeanDag.Hydrozoan.IsCertificate U.toBlockRecord C L
 ```
 
 **Optimal-Hydrozoan's support.**
@@ -16996,7 +17036,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 513 theorems the body or Appendix A names, each
+The 509 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -21783,17 +21823,6 @@ theorem holds : Statement
 theorem holds : Statement
 ```
 
-#### `leaderExcluded_of_all`
-
-*theorem, `OptimalHydrozoan.Helpers.Universe.lean`*
-
-```lean
-theorem leaderExcluded_of_all (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
-    (h : LeaderExcludedAll U) : LeaderExcluded (S := S) U
-```
-
-**The schedule-free exclusion is exclusion at every schedule.**
-
 #### `exists_least`
 
 *theorem, `OptimalHydrozoan.Helpers.Decided.lean`*
@@ -21919,17 +21948,6 @@ theorem holds : Statement
 ```lean
 theorem holds : Statement
 ```
-
-#### `leaderExcluded_of_all`
-
-*theorem, `OptimalHydrozoan.Helpers.Universe.lean`*
-
-```lean
-theorem leaderExcluded_of_all (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId)
-    (h : LeaderExcludedAll U) : LeaderExcluded (S := S) U
-```
-
-**The schedule-free exclusion is exclusion at every schedule.**
 
 #### `exists_least`
 
@@ -22926,41 +22944,6 @@ theorem decided_none_fresh_hz (S : Slots Replica) {V : LeanDag.Hydrozoan.View U}
 
 **SS3 for Hydrozoan**, from its `SkipsUnsupported`: the slot the recovering replica leads at a gap round is skipped at once, at the grade `qFast ≤ |T|`.
 
-#### `leaderExcludedAll_chop`
-
-*theorem, `Integration.OptimalMechanisms.lean`*
-
-```lean
-theorem leaderExcludedAll_chop (hU : LeaderExcludedAll U) :
-    LeaderExcludedAll (BlockRecord.chop U G)
-```
-
-**Leader exclusion survives the cut.** A block bound by exclusion sits two rounds above the horizon, so it keeps its refs, its refs keep theirs and their creators, and its candidates are old blocks at a rebased round.
-
-#### `leaderExcludedAll_copyFill`
-
-*theorem, `Integration.OptimalMechanisms.lean`*
-
-```lean
-theorem leaderExcludedAll_copyFill (hU : LeaderExcludedAll U) :
-    LeaderExcludedAll (BlockRecord.copyFill U sk)
-```
-
-**Leader exclusion survives the copy fill.** A filled block's refs are the donor's; old blocks vote only for old blocks; so whatever a block of the fill witnesses, a block of the old universe with the same refs witnessed, and its refs were already excluded.
-
-#### `leaderExcludedAll_addGenesis`
-
-*theorem, `Integration.OptimalMechanisms.lean`*
-
-```lean
-theorem leaderExcludedAll_addGenesis {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
-    (hU : LeaderExcludedAll U) {v : Replica} {g : BlockId} {hg : g ∉ U.ids}
-    {hsev : ∀ b ∈ U.ids, (U.block b).creator ≠ v} :
-    LeaderExcludedAll (BlockRecord.addGenesis U v g () hg hsev)
-```
-
-**Leader exclusion survives re-genesis.** The new block sits at round zero, so it is bound by no exclusion; and it is its creator's only block, so it can be no second candidate of a witnessed equivocation and no parent of anything old. Every old block's witnesses and refs are unchanged.
-
 #### `stack_core`
 
 *theorem, `Integration.StackRules.lean`*
@@ -23248,7 +23231,7 @@ theorem safety : Properties.Safe (odontocetiRule (Validator := Validator) (Block
 theorem agree : Agree (optimalRule (Replica := Replica) (BlockId := BlockId))
 ```
 
-**Two views decide alike.** OH5 under the property's name: the relation's agreement at Optimal's laws, the carrier's schedule-free exclusion supplying exclusion at every schedule.
+**Two views decide alike.** OH5 under the property's name.
 
 #### `indirect`
 

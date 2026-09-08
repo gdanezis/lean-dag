@@ -46,9 +46,8 @@ theorem horizonUniverse_noEquivocation (T : Finset Replica) (hm : 0 < T.card)
 because nothing equivocates. -/
 noncomputable def horizonOptUniverse (T : Finset Replica) (hm : 0 < T.card)
     (hq : q Replica ≤ T.card) (N : ℕ) : OptUniverse Replica ℕ :=
-  { horizonUniverse T hm hq N with
-    leader_excluded :=
-      leaderExcluded_of_noEquivocation _ (horizonUniverse_noEquivocation T hm hq N) }
+  OptUniverse.ofNoEquivocation (horizonUniverse T hm hq N)
+    (horizonUniverse_noEquivocation T hm hq N)
 
 @[simp] theorem horizonOptUniverse_toBlockRecord (T : Finset Replica)
     (hm : 0 < T.card) (hq : q Replica ≤ T.card) (N : ℕ) :

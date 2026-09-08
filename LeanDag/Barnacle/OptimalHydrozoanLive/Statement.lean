@@ -19,8 +19,8 @@ variable {BlockId : Type} [DecidableEq BlockId]
 /-- **Optimal-Hydrozoan as a live rule**, at Hydrozoan's fault model. -/
 def optimalHydrozoanLive [LeanDag.OptimalHydrozoan.OptimalFaults Replica] :
     LiveRule Replica BlockId Unit :=
-  liveOfAnchoredOn (LeanDag.OptimalHydrozoan.optimalAnchored Replica BlockId)
-    LeanDag.OptimalHydrozoan.LeaderExcludedAll (LeanDag.Hydrozoan.hzReliability Replica)
+  liveOfAnchoredVia (LeanDag.OptimalHydrozoan.optimalAnchored Replica BlockId)
+    LeanDag.OptimalHydrozoan.OptUniverse.toBlockRecord (LeanDag.Hydrozoan.hzReliability Replica)
 
 namespace OptimalHydrozoanLive
 

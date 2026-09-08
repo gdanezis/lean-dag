@@ -19,15 +19,12 @@ disagree — while inside the indirect rule the strict grading
 the anchor is the **nearest eligible committed** slot.
 
 Two differences with `Decided`. The rule's laws hold only under leader
-exclusion (`LeaderExcluded`), so the universe the relation is read at is
-an `OptUniverse` and the safety statements quantify over those; the rule
-predicates themselves are applied to `U.toBlockRecord`. And the
-evidence rung carries **no tie-break** (decision D3): two candidates
-cannot both clear it — two evidence quorums share a non-Byzantine
-creator whose unique decision-round block would be evidence for both —
-so `argmin digest` of the pseudocode is vacuous; uniqueness is a theorem
-of the safety phase, not a premise here. No `LinearOrder BlockId` is
-needed, and the rule's tie is empty at both rungs.
+exclusion (`LeaderExcluded`), which every `OptUniverse` supplies at
+every schedule, so the relation is read at an Optimal universe through
+its projection to Hydrozoan's. And the evidence rung carries **no
+tie-break** (decision D3): two candidates cannot both clear it, so the
+rule's tie is empty at both rungs and no `LinearOrder BlockId` is
+needed.
 -/
 
 namespace LeanDag

@@ -183,7 +183,7 @@ theorem optimal_card_coveredAt_ge_of_decided (S : Slots Replica)
     {V : (LeanDag.OptimalHydrozoanProperties.optimalRule (BlockId := B)).View U}
     {k : ℕ} {L : B} {δ : ℕ}
     (h : (LeanDag.OptimalHydrozoanProperties.optimalRule (BlockId := B)).Decided S V k (some L))
-    (hδ : δ < (U.val.block L).round) :
+    (hδ : δ < (U.block L).round) :
     (LeanDag.Hydrozoan.Correct : Finset Replica).card - (O.f + O.c) ≤
       (coveredAt (LeanDag.OptimalHydrozoanProperties.optimalRule (BlockId := B))
         (LeanDag.Hydrozoan.hzReliability Replica) U L δ).card :=

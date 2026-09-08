@@ -67,20 +67,28 @@ theorem toDagRule_isCandidate {S : Slots Validator}
     {U : BlockRecord Validator BlockId Payload P honest} {k : ℕ} {L : BlockId} :
     R.toDagRule.IsCandidate S U k L ↔ IsLeaderBlock (S := S) U k L := Iff.rfl
 
-/-- **An anchored rule under an invariant, as a carrier**: the records
-satisfying `I` as universes, the record's views, the relation as the
-verdict. For a rule whose laws hold only under an invariant. -/
-def toDagRuleOn (I : BlockRecord Validator BlockId Payload P honest → Prop) :
+/-- **An anchored rule read through a projection, as a carrier**: any
+type `X` whose elements project to records, the projections' views, the
+relation at the projection as the verdict. For a rule at a validity
+weaker than the universe's, and for a rule whose laws hold only under an
+invariant. -/
+def toDagRuleVia {X : Type} (f : X → BlockRecord Validator BlockId Payload P honest) :
     DagRule Validator BlockId Payload where
-  Universe := {U : BlockRecord Validator BlockId Payload P honest // I U}
-  View := fun U => U.val.View
-  block := fun U i => U.val.block i
-  ids := fun U => U.val.ids
+  Universe := X
+  View := fun U => (f U).View
+  block := fun U i => (f U).block i
+  ids := fun U => (f U).ids
   viewIds := fun V => V.ids
   viewSound := fun V => V.subset_ids
   viewComplete := fun V => V.complete
-  causal := fun U => U.val.causal
-  Decided := fun S U V k v => R.Decided (S := S) U.val V k v
+  causal := fun U => (f U).causal
+  Decided := fun S U V k v => R.Decided (S := S) (f U) V k v
+
+/-- **An anchored rule under an invariant, as a carrier**: the records
+satisfying `I` as universes. -/
+abbrev toDagRuleOn (I : BlockRecord Validator BlockId Payload P honest → Prop) :
+    DagRule Validator BlockId Payload :=
+  R.toDagRuleVia (fun U : {U : BlockRecord Validator BlockId Payload P honest // I U} => U.val)
 
 variable {R} {I : BlockRecord Validator BlockId Payload P honest → Prop}
 
@@ -100,6 +108,23 @@ theorem commitsCandidateOn : CommitsCandidate (R.toDagRuleOn I) :=
 /-- **And a direct commit is a verdict**, under the invariant. -/
 theorem commitsDirectOn :
     CommitsDirect (R.toDagRuleOn I) (fun {U} V L r => R.Commit U.val V L r) :=
+  fun S _ _ _ _ hc hd => Decided.directCommit (S := S) hc hd
+
+variable {X : Type} {f : X → BlockRecord Validator BlockId Payload P honest}
+
+/-- **Two views decide alike**, through a projection whose images satisfy
+the laws' invariant. -/
+theorem agreeVia {J : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+    (hl : R.Laws J) (hJ : ∀ S U, J S (f U)) : Agree (R.toDagRuleVia f) :=
+  fun S U _ V₂ _ _ _ h₁ h₂ => decided_unique (S := S) hl (hJ S U) h₁ V₂ _ h₂
+
+/-- **A commit names the slot's candidate**, through a projection. -/
+theorem commitsCandidateVia : CommitsCandidate (R.toDagRuleVia f) :=
+  fun S _ _ _ _ hd => isLeaderBlock_of_decided (S := S) hd
+
+/-- **And a direct commit is a verdict**, through a projection. -/
+theorem commitsDirectVia :
+    CommitsDirect (R.toDagRuleVia f) (fun {U} V L r => R.Commit (f U) V L r) :=
   fun S _ _ _ _ hc hd => Decided.directCommit (S := S) hc hd
 
 /-- **A commit names the slot's candidate.** -/
@@ -173,6 +198,16 @@ theorem indirect (hcongr : R.LinkCongr)
 
 /-- The indirect property under the invariant: the same case split, at
 the record inside. -/
+theorem indirectVia {X : Type} {f : X → BlockRecord Validator BlockId Payload P honest}
+    (hcongr : R.LinkCongr)
+    (hleast : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
+      {A : BlockId} {i k : ℕ}, i < R.rungs →
+      (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
+      ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
+        R.Least (S := S) U A i k L) :
+    Indirect (R.toDagRuleVia f) (fun sr i j => sr i + R.wave + 1 ≤ sr j) :=
+  fun S U V i j A helig hj hmid => indirect hcongr hleast S (U := f U) V i j A helig hj hmid
+
 theorem indirectOn (hcongr : R.LinkCongr)
     (hleast : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
       {A : BlockId} {i k : ℕ}, i < R.rungs →
@@ -745,18 +780,23 @@ theorem banded : Banded R.toDagRule := by
     ht g g' d d' S' U' V' k' hkd hsch hlead hab hV⟩
 
 omit hb in
-/-- A band at the carrier under an invariant is a band at the record. -/
-theorem agreeBand_of_on {U U' : {U : BlockRecord Validator BlockId Payload P honest // I U}}
-    (h : AgreeBand (R.toDagRuleOn I) U U' lo hi g g') :
-    AgreeBand R.toDagRule U.val U'.val lo hi g g' :=
+/-- A band between projections is a band between the records. -/
+theorem agreeBand_of_via {X : Type} {f : X → BlockRecord Validator BlockId Payload P honest}
+    {U U' : X} {lo hi g g' : ℕ}
+    (h : AgreeBand (R.toDagRuleVia f) U U' lo hi g g') :
+    AgreeBand R.toDagRule (f U) (f U') lo hi g g' :=
   ⟨h.mem, h.block, h.refs⟩
 
-/-- **And so is the rule under an invariant.** -/
-theorem bandedOn : Banded (R.toDagRuleOn I) := by
+/-- **The relation reads a band, through a projection.** -/
+theorem bandedVia {X : Type} {f : X → BlockRecord Validator BlockId Payload P honest} :
+    Banded (R.toDagRuleVia f) := by
   intro S U V k v hd
   obtain ⟨top, -, ht⟩ := banded_aux hb (S := S) hd
   exact ⟨top, fun g g' d d' S' U' V' k' hkd hsch hlead hab hV =>
-    ht g g' d d' S' U'.val V' k' hkd hsch hlead (agreeBand_of_on hab) hV⟩
+    ht g g' d d' S' (f U') V' k' hkd hsch hlead (agreeBand_of_via hab) hV⟩
+
+/-- **The relation reads a band, under the invariant.** -/
+theorem bandedOn : Banded (R.toDagRuleOn I) := bandedVia hb
 
 end Band
 

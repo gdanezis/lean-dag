@@ -161,11 +161,7 @@ def UE : BlockUniverse (Fin 4) (Fin 22) where
 /-- ... as an `OptUniverse`: the witnessing blocks 13, 14, 15 omit the
 leader's block 9. Discharged through the bounded bridge (rounds stop at
 5). -/
-def OE : OptUniverse (Fin 4) (Fin 22) :=
-  { UE with
-    leader_excluded :=
-      leaderExcluded_of_bounded UE 5 5 (fun k hk => by change k + 2 ≤ 5 at hk; omega)
-        (by decide) (by decide) }
+def OE : OptUniverse (Fin 4) (Fin 22) := OptUniverse.ofExcluded UE (by decide)
 
 /-- The full view, typed at the projection. -/
 def VE : LeanDag.Hydrozoan.View OE.toBlockRecord := View.full UE

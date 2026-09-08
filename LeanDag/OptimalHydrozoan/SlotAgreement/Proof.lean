@@ -55,9 +55,9 @@ theorem optimalLaws :
     intro S U V k j L A hI hL h hA helig
     rcases h with h | h
     · exact ⟨1, Nat.one_lt_two,
-        evidenceLinked_of_fastCommitOptInView_at_anchor (U := ⟨U, hI⟩) hL h hA helig⟩
+        evidenceLinked_of_fastCommitOptInView_at_anchor hI hL h hA helig⟩
     · exact ⟨0, Nat.zero_lt_two,
-        certifiedIn_of_slowCommitInView_at_anchor_opt (U := ⟨U, hI⟩) h hA helig⟩
+        certifiedIn_of_slowCommitInView_at_anchor_opt h hA helig⟩
   commit_link_unique := by
     intro S U V k j i L₁ L₂ A hI hL₁ hL₂ h hA helig hi hemp hlink _
     have hc : (U.block L₁).creator = (U.block L₂).creator := by rw [hL₁.2.2, hL₂.2.2]
@@ -71,10 +71,10 @@ theorem optimalLaws :
           (LeanDag.Hydrozoan.certificates_nonempty_of_certifiedIn hlink)
     · rcases h with h | h
       · by_contra hne
-        exact not_evidenceLinked_of_fastCommitOpt (U := ⟨U, hI⟩) (fun e => hne e.symm) hL₁ hL₂
+        exact not_evidenceLinked_of_fastCommitOpt hI (fun e => hne e.symm) hL₁ hL₂
           (fastCommitOpt_of_fastCommitOptInView h) hlink
       · exact (hemp 0 Nat.zero_lt_one L₁ hL₁
-          (certifiedIn_of_slowCommitInView_at_anchor_opt (U := ⟨U, hI⟩) h hA helig)).elim
+          (certifiedIn_of_slowCommitInView_at_anchor_opt h hA helig)).elim
     · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega)
   skip_link := by
     intro S U V k i L A _ hskip hL hi

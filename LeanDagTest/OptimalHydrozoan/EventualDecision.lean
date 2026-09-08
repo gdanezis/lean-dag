@@ -78,7 +78,7 @@ def US : BlockUniverse (Fin 4) (Fin 22) where
 
 /-- ... as an `OptUniverse` (no equivocation anywhere). -/
 def OS : OptUniverse (Fin 4) (Fin 22) :=
-  { US with leader_excluded := leaderExcluded_of_noEquivocation US (by decide) }
+  OptUniverse.ofNoEquivocation US (by decide)
 
 -- The run's candidates: slot 2 → 7 (by 1), slot 3 → 11 (by 2), slot 4 → 15
 -- (by 3); slots 1 and 5 have none.
@@ -189,7 +189,7 @@ def US' : BlockUniverse (Fin 4) (Fin 22) where
 
 /-- ... as an `OptUniverse`. -/
 def OS' : OptUniverse (Fin 4) (Fin 22) :=
-  { US' with leader_excluded := leaderExcluded_of_noEquivocation US' (by decide) }
+  OptUniverse.ofNoEquivocation US' (by decide)
 
 -- Not synchronised from round 0 (block 4 omits the T-block 1 of round 0)
 -- ...

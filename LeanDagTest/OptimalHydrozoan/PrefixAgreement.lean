@@ -204,7 +204,7 @@ def UC : BlockUniverse (Fin 3) (Fin 9) where
 
 /-- ... as an `OptUniverse` (no equivocation: nobody is Byzantine). -/
 def OC : OptUniverse (Fin 3) (Fin 9) :=
-  { UC with leader_excluded := leaderExcluded_of_noEquivocation UC (by decide) }
+  OptUniverse.ofNoEquivocation UC (by decide)
 
 /-- The full view, typed at the projection. -/
 def VC : LeanDag.Hydrozoan.View OC.toBlockRecord := View.full UC

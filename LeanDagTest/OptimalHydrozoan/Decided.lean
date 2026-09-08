@@ -179,7 +179,7 @@ def UD : BlockUniverse (Fin 4) (Fin 30) where
 /-- ... as an `OptUniverse`: no creator has two blocks in one round, so
 nothing witnesses an equivocation and the exclusion clause is vacuous. -/
 def OD : OptUniverse (Fin 4) (Fin 30) :=
-  { UD with leader_excluded := leaderExcluded_of_noEquivocation UD (by decide) }
+  OptUniverse.ofNoEquivocation UD (by decide)
 
 /-- The full view, typed at the `OptUniverse` projection. -/
 def VD : LeanDag.Hydrozoan.View OD.toBlockRecord := View.full UD

@@ -77,10 +77,11 @@ theorem holds : Statement := by
         (fastCommitOpt_of_fastCommitOptInView h₂)
     · have hf0 : O.f = 0 := by omega
       have hempty := byzantine_eq_empty_of_f_eq_zero (Replica := Replica) hf0
-      have hnb : (U.block L₁).creator ∈ (LeanDag.Hydrozoan.NonByzantine : Finset Replica) := by
+      have hnb : (U.toBlockRecord.block L₁).creator ∈
+          (LeanDag.Hydrozoan.NonByzantine : Finset Replica) := by
         rw [mem_nonByzantine, hempty]
         exact Finset.notMem_empty _
-      exact U.no_equivocation L₁ hL₁.1 L₂ hL₂.1 hnb (by rw [hL₁.2.2, hL₂.2.2])
+      exact U.toBlockRecord.no_equivocation L₁ hL₁.1 L₂ hL₂.1 hnb (by rw [hL₁.2.2, hL₂.2.2])
         (by rw [hL₁.2.1, hL₂.2.1])
   · intro V₁ V₂ k L₁ L₂ hL₁ hL₂ h₁ h₂
     exact eq_of_fastCommitOpt_of_slowCommit (by rw [hL₁.2.2, hL₂.2.2])

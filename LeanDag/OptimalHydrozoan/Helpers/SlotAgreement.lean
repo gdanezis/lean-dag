@@ -145,20 +145,20 @@ end Universe
 
 section Crown
 
-variable [S : Slots Replica] {U : OptUniverse Replica BlockId}
+variable [S : Slots Replica] {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
 
 /-- **The crown lemma** (`lem:opt-fast-evidence`): if `q_fast` replicas
 vote for `L`, every decision-round block of `L`'s slot is fast evidence
 for `L`. In the witnessing case the equivocating leader is Byzantine and,
 by `leader_excluded`, not among the block's refs, so at most `f − 1`
 undetected Byzantine refs remain. -/
-theorem isFastEvidence_of_fastCommitOpt {k : ℕ} {L C : BlockId}
-    (hL : IsLeaderBlock U.toBlockRecord k L)
-    (h : FastCommitOpt U.toBlockRecord L (S.slotRound k))
-    (hC : C ∈ U.toBlockRecord.ids)
-    (hCr : (U.toBlockRecord.block C).round = LeanDag.Hydrozoan.decisionRound Replica k) :
-    IsFastEvidence U.toBlockRecord k C L := by
-  set B := U.toBlockRecord with hB
+theorem isFastEvidence_of_fastCommitOpt (hI : LeaderExcluded (S := S) U) {k : ℕ} {L C : BlockId}
+    (hL : IsLeaderBlock U k L)
+    (h : FastCommitOpt U L (S.slotRound k))
+    (hC : C ∈ U.ids)
+    (hCr : (U.block C).round = LeanDag.Hydrozoan.decisionRound Replica k) :
+    IsFastEvidence U k C L := by
+  set B := U with hB
   set A := creatorsOf B.block (B.block C).refs with hA
   set V := supporters B L (S.slotRound k + 1) with hV
   have hq : q Replica ≤ A.card :=
@@ -185,7 +185,7 @@ theorem isFastEvidence_of_fastCommitOpt {k : ℕ} {L C : BlockId}
     have hlA : S.leader k ∉ A := by
       intro hmem
       obtain ⟨j, hj, hjc⟩ := mem_creatorsOf.mp hmem
-      exact U.leader_excluded C hC k hCr hw j hj hjc
+      exact hI C hC k hCr hw j hj hjc
     have hsub : (A ∩ V) \ (O.byzantine.erase (S.leader k)) ⊆ votersOf B C L := by
       intro v hv
       obtain ⟨hvin, hvnb⟩ := Finset.mem_sdiff.mp hv
@@ -207,7 +207,7 @@ theorem isFastEvidence_of_fastCommitOpt {k : ℕ} {L C : BlockId}
     have hlA : S.leader k ∉ A := by
       intro hmem
       obtain ⟨j, hj, hjc⟩ := mem_creatorsOf.mp hmem
-      exact U.leader_excluded C hC k hCr hw j hj hjc
+      exact hI C hC k hCr hw j hj hjc
     have hsub : votersOf B C L' ⊆ (A \ V) ∪ O.byzantine.erase (S.leader k) := by
       intro v hv
       obtain ⟨p', hp', hpv, hpc⟩ := mem_votesFor.mp hv
@@ -350,99 +350,100 @@ end Seam
 
 section CrownConsequences
 
-variable [S : Slots Replica] {U : OptUniverse Replica BlockId}
+variable [S : Slots Replica] {U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId}
 
 /-- **Starvation, rung 2**: a fast commit leaves no evidence quorum for any
 same-slot rival — every decision-round block is evidence for the
 committed block, hence for nothing else. -/
-theorem not_evidenceLinked_of_fastCommitOpt {k : ℕ} {L L' A : BlockId}
-    (hne : L' ≠ L) (hL : IsLeaderBlock U.toBlockRecord k L)
-    (hL' : IsLeaderBlock U.toBlockRecord k L')
-    (h : FastCommitOpt U.toBlockRecord L (S.slotRound k)) :
-    ¬ EvidenceLinked U.toBlockRecord A L' k := by
+theorem not_evidenceLinked_of_fastCommitOpt (hI : LeaderExcluded (S := S) U) {k : ℕ}
+    {L L' A : BlockId} (hne : L' ≠ L) (hL : IsLeaderBlock U k L)
+    (hL' : IsLeaderBlock U k L')
+    (h : FastCommitOpt U L (S.slotRound k)) :
+    ¬ EvidenceLinked U A L' k := by
   rintro ⟨s, hs, hcard⟩
   have hpos := qCert_pos_opt (Replica := Replica)
   obtain ⟨v, hv⟩ :=
-    Finset.card_pos.mp (by omega : 0 < (creatorsOf U.toBlockRecord.block s).card)
+    Finset.card_pos.mp (by omega : 0 < (creatorsOf U.block s).card)
   obtain ⟨b, hb, -⟩ := mem_creatorsOf.mp hv
   obtain ⟨hbi, hbr⟩ := mem_blocksAt.mp (hs b hb).1
   exact hne (isFastEvidence_exclusive hL' hL (hs b hb).2.1
-    (isFastEvidence_of_fastCommitOpt hL h hbi hbr))
+    (isFastEvidence_of_fastCommitOpt hI hL h hbi hbr))
 
-private theorem evidenceLinked_of_fastCommitOpt_base {k : ℕ} {L : BlockId}
-    (hL : IsLeaderBlock U.toBlockRecord k L)
-    (h : FastCommitOpt U.toBlockRecord L (S.slotRound k)) {A : BlockId}
-    (hA : A ∈ U.toBlockRecord.ids)
-    (hAr : (U.toBlockRecord.block A).round = S.slotRound k + 3) :
-    EvidenceLinked U.toBlockRecord A L k := by
-  refine ⟨(U.toBlockRecord.block A).refs, fun b hb => ?_, ?_⟩
-  · have hbi := U.toBlockRecord.complete A hA b hb
+private theorem evidenceLinked_of_fastCommitOpt_base (hI : LeaderExcluded (S := S) U) {k : ℕ}
+    {L : BlockId} (hL : IsLeaderBlock U k L)
+    (h : FastCommitOpt U L (S.slotRound k)) {A : BlockId}
+    (hA : A ∈ U.ids)
+    (hAr : (U.block A).round = S.slotRound k + 3) :
+    EvidenceLinked U A L k := by
+  refine ⟨(U.block A).refs, fun b hb => ?_, ?_⟩
+  · have hbi := U.complete A hA b hb
     have hbr := BlockRecord.round_of_mem_refs hA hb
-    have hbr' : (U.toBlockRecord.block b).round = LeanDag.Hydrozoan.decisionRound Replica k := by
+    have hbr' : (U.block b).round = LeanDag.Hydrozoan.decisionRound Replica k := by
       simp only [LeanDag.Hydrozoan.decisionRound]; omega
-    exact ⟨mem_blocksAt.mpr ⟨hbi, hbr'⟩, isFastEvidence_of_fastCommitOpt hL h hbi hbr',
+    exact ⟨mem_blocksAt.mpr ⟨hbi, hbr'⟩, isFastEvidence_of_fastCommitOpt hI hL h hbi hbr',
       Reaches.single hb⟩
   · have hq : q Replica ≤
-        (creatorsOf U.toBlockRecord.block (U.toBlockRecord.block A).refs).card :=
-      (U.toBlockRecord.valid A hA).quorum (by omega)
+        (creatorsOf U.block (U.block A).refs).card :=
+      (U.valid A hA).quorum (by omega)
     have := qCert_le_q_opt (Replica := Replica)
     omega
 
-private theorem evidenceLinked_of_fastCommitOpt_aux {k : ℕ} {L : BlockId}
-    (hL : IsLeaderBlock U.toBlockRecord k L)
-    (h : FastCommitOpt U.toBlockRecord L (S.slotRound k)) :
-    ∀ d, ∀ A, A ∈ U.toBlockRecord.ids →
-      (U.toBlockRecord.block A).round = S.slotRound k + 3 + d →
-      EvidenceLinked U.toBlockRecord A L k := by
+private theorem evidenceLinked_of_fastCommitOpt_aux (hI : LeaderExcluded (S := S) U) {k : ℕ}
+    {L : BlockId} (hL : IsLeaderBlock U k L)
+    (h : FastCommitOpt U L (S.slotRound k)) :
+    ∀ d, ∀ A, A ∈ U.ids →
+      (U.block A).round = S.slotRound k + 3 + d →
+      EvidenceLinked U A L k := by
   intro d
   induction d with
-  | zero => exact fun A hA hAr => evidenceLinked_of_fastCommitOpt_base hL h hA hAr
+  | zero => exact fun A hA hAr => evidenceLinked_of_fastCommitOpt_base hI hL h hA hAr
   | succ d ih =>
       intro A hA hAr
       obtain ⟨b, hb⟩ := LeanDag.Hydrozoan.refs_nonempty hA (by omega)
-      have hbi := U.toBlockRecord.complete A hA b hb
+      have hbi := U.complete A hA b hb
       have hbr := BlockRecord.round_of_mem_refs hA hb
       exact evidenceLinked_of_reaches (Reaches.single hb) (ih b hbi (by omega))
 
 /-- **Rung 2 fires** (`lem:opt-fast-propagation`): every block from round
 `r + 3` on reaches an evidence quorum for a fast-committed block. -/
-theorem evidenceLinked_of_fastCommitOpt {k : ℕ} {L : BlockId}
-    (hL : IsLeaderBlock U.toBlockRecord k L)
-    (h : FastCommitOpt U.toBlockRecord L (S.slotRound k)) {A : BlockId}
-    (hA : A ∈ U.toBlockRecord.ids)
-    (hAr : S.slotRound k + 3 ≤ (U.toBlockRecord.block A).round) :
-    EvidenceLinked U.toBlockRecord A L k :=
-  evidenceLinked_of_fastCommitOpt_aux hL h
-    ((U.toBlockRecord.block A).round - (S.slotRound k + 3)) A hA (by omega)
+theorem evidenceLinked_of_fastCommitOpt (hI : LeaderExcluded (S := S) U) {k : ℕ} {L : BlockId}
+    (hL : IsLeaderBlock U k L)
+    (h : FastCommitOpt U L (S.slotRound k)) {A : BlockId}
+    (hA : A ∈ U.ids)
+    (hAr : S.slotRound k + 3 ≤ (U.block A).round) :
+    EvidenceLinked U A L k :=
+  evidenceLinked_of_fastCommitOpt_aux hI hL h
+    ((U.block A).round - (S.slotRound k + 3)) A hA (by omega)
 
 /-! ## The rungs fire at an eligible anchor -/
 
 /-- The anchor's round, from its slot and eligibility. -/
-theorem anchor_round_opt {k j : ℕ} {A : BlockId} (hA : IsLeaderBlock U.toBlockRecord j A)
+theorem anchor_round_opt {k j : ℕ} {A : BlockId} (hA : IsLeaderBlock U j A)
     (helig : (optimalAnchored Replica BlockId).Eligible k j) :
-    S.slotRound k + 3 ≤ (U.toBlockRecord.block A).round := by
+    S.slotRound k + 3 ≤ (U.block A).round := by
   have := (optimalAnchored Replica BlockId).anchor_round_le hA helig
   simp only [optimalAnchored_wave] at this
   omega
 
 /-- A slow commit in any view is certified at every candidate of an
 eligible slot. -/
-theorem certifiedIn_of_slowCommitInView_at_anchor_opt {V : LeanDag.Hydrozoan.View U.toBlockRecord}
-    {k j : ℕ} {L A : BlockId} (h : SlowCommitInView U.toBlockRecord V L (S.slotRound k))
-    (hA : IsLeaderBlock U.toBlockRecord j A)
+theorem certifiedIn_of_slowCommitInView_at_anchor_opt {V : LeanDag.Hydrozoan.View U}
+    {k j : ℕ} {L A : BlockId} (h : SlowCommitInView U V L (S.slotRound k))
+    (hA : IsLeaderBlock U j A)
     (helig : (optimalAnchored Replica BlockId).Eligible k j) :
-    LeanDag.Hydrozoan.CertifiedIn U.toBlockRecord A L (S.slotRound k) :=
+    LeanDag.Hydrozoan.CertifiedIn U A L (S.slotRound k) :=
   certifiedIn_of_slowCommit (slowCommit_of_slowCommitInView h) hA.1 (anchor_round_opt hA helig)
 
 /-- A fast commit in any view is evidence-linked at every candidate of
 an eligible slot. -/
-theorem evidenceLinked_of_fastCommitOptInView_at_anchor {V : LeanDag.Hydrozoan.View U.toBlockRecord}
-    {k j : ℕ} {L A : BlockId} (hL : IsLeaderBlock U.toBlockRecord k L)
-    (h : FastCommitOptInView U.toBlockRecord V L (S.slotRound k))
-    (hA : IsLeaderBlock U.toBlockRecord j A)
+theorem evidenceLinked_of_fastCommitOptInView_at_anchor (hI : LeaderExcluded (S := S) U)
+    {V : LeanDag.Hydrozoan.View U}
+    {k j : ℕ} {L A : BlockId} (hL : IsLeaderBlock U k L)
+    (h : FastCommitOptInView U V L (S.slotRound k))
+    (hA : IsLeaderBlock U j A)
     (helig : (optimalAnchored Replica BlockId).Eligible k j) :
-    EvidenceLinked U.toBlockRecord A L k :=
-  evidenceLinked_of_fastCommitOpt hL (fastCommitOpt_of_fastCommitOptInView h) hA.1
+    EvidenceLinked U A L k :=
+  evidenceLinked_of_fastCommitOpt hI hL (fastCommitOpt_of_fastCommitOptInView h) hA.1
     (anchor_round_opt hA helig)
 
 end CrownConsequences

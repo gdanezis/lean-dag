@@ -20,17 +20,10 @@ import LeanDag.Properties.Arcs.Headline
 `docs/porting-plan.md` step 3. The carrier and the properties whose
 proof is a single Optimal theorem apiece.
 
-**The universe is the record under the schedule-free exclusion.**
-`OptUniverse` is *indexed by the schedule*: its `leader_excluded` field
-reads `S.leader k` and `LeanDag.Hydrozoan.decisionRound k`, so `OptUniverse` at `S` and at
-`S'` are different types, while `DagRule.Universe` is one type and
-`Properties.Banded` compares verdicts across schedules. The carrier's
-universes are therefore the records satisfying `LeaderExcludedAll`, the
-same exclusion quantified over rounds and validators rather than over
-slots, hence schedule-free; `leaderExcluded_of_all` supplies exclusion
-at whatever schedule a property names, which is what the relation's
-laws hold under. The carrier is the relation's `toDagRuleOn` at that
-invariant, exactly as Hybrid's is at `HonestNoEquiv`.
+**The universes are Optimal's records**, read by the relation through
+their projection to Hydrozoan's: the carrier is the relation's
+`toDagRuleVia OptUniverse.toBlockRecord`, and the exclusion the laws
+hold under is what every Optimal universe carries in its validity.
 -/
 
 namespace LeanDag
@@ -44,11 +37,11 @@ variable {Replica : Type} [Fintype Replica] [DecidableEq Replica]
 variable {BlockId : Type} [DecidableEq BlockId]
 variable [O : LeanDag.OptimalHydrozoan.OptimalFaults Replica]
 
-/-- **Optimal-Hydrozoan as a carrier**: the anchored relation's, on the
-records under the schedule-free exclusion. -/
+/-- **Optimal-Hydrozoan as a carrier**: the anchored relation's, on
+Optimal's records through their projection. -/
 abbrev optimalRule : DagRule Replica BlockId Unit :=
-  (LeanDag.OptimalHydrozoan.optimalAnchored Replica BlockId).toDagRuleOn
-    LeanDag.OptimalHydrozoan.LeaderExcludedAll
+  (LeanDag.OptimalHydrozoan.optimalAnchored Replica BlockId).toDagRuleVia
+    LeanDag.OptimalHydrozoan.OptUniverse.toBlockRecord
 
 /-- **Optimal-Hydrozoan's universes are quorate.** The underlying
 universe is Hydrozoan's, so the clause and the fault model are
@@ -56,7 +49,7 @@ Hydrozoan's. -/
 theorem quorate : Quorate (optimalRule (Replica := Replica) (BlockId := BlockId))
     (LeanDag.Hydrozoan.hzReliability Replica) := by
   intro U b hb hr
-  have h := (U.val.valid b hb).quorum hr
+  have h := (U.valid b hb).1.quorum hr
   have hq : LeanDag.Hydrozoan.q Replica
       = Fintype.card Replica - (LeanDag.Hydrozoan.hzReliability Replica).slack := by
     show LeanDag.Hydrozoan.q Replica = Fintype.card Replica - (_ + _)
@@ -64,25 +57,23 @@ theorem quorate : Quorate (optimalRule (Replica := Replica) (BlockId := BlockId)
   rw [hq] at h
   exact h
 
-/-- **Two views decide alike.** OH5 under the property's name: the
-relation's agreement at Optimal's laws, the carrier's schedule-free
-exclusion supplying exclusion at every schedule. -/
+/-- **Two views decide alike.** OH5 under the property's name. -/
 theorem agree : Agree (optimalRule (Replica := Replica) (BlockId := BlockId)) :=
-  AnchoredRule.agreeOn LeanDag.OptimalHydrozoan.SlotAgreement.optimalLaws
-    (fun S U h => LeanDag.OptimalHydrozoan.leaderExcluded_of_all (S := S) U h)
+  AnchoredRule.agreeVia LeanDag.OptimalHydrozoan.SlotAgreement.optimalLaws
+    (fun S U => LeanDag.OptimalHydrozoan.OptUniverse.leader_excluded (S := S) U)
 
 /-- **A commit names the slot's candidate.** -/
 theorem commitsCandidate :
     CommitsCandidate (optimalRule (Replica := Replica) (BlockId := BlockId)) :=
-  AnchoredRule.commitsCandidateOn
+  AnchoredRule.commitsCandidateVia
 
 /-- **And a direct commit is a verdict**, at Optimal's own direct
 predicate — a *disjunction*, the fast path or the slow one. -/
 theorem commitsDirect :
     CommitsDirect (optimalRule (Replica := Replica) (BlockId := BlockId))
-      (fun {U} V L r => LeanDag.OptimalHydrozoan.FastCommitOptInView U.val V L r ∨
-        LeanDag.Hydrozoan.SlowCommitInView U.val V L r) :=
-  AnchoredRule.commitsDirectOn
+      (fun {U} V L r => LeanDag.OptimalHydrozoan.FastCommitOptInView U.toBlockRecord V L r ∨
+        LeanDag.Hydrozoan.SlowCommitInView U.toBlockRecord V L r) :=
+  AnchoredRule.commitsDirectVia
 
 /-! ## The band -/
 
@@ -90,7 +81,7 @@ theorem commitsDirect :
 laws, which are Hydrozoan's direct layer and rung `0` and Optimal's fast
 path and evidence rung. -/
 theorem banded : Banded (optimalRule (Replica := Replica) (BlockId := BlockId)) :=
-  AnchoredRule.bandedOn LeanDag.OptimalHydrozoan.optimalBandLaws
+  AnchoredRule.bandedVia LeanDag.OptimalHydrozoan.optimalBandLaws
 
 /-! ## The two liveness properties
 
@@ -103,11 +94,11 @@ guarantee, and Optimal leaves it alone — the fast path is about
 latency, not liveness. -/
 def optLive (S : LeanDag.Slots Replica)
     {U : (optimalRule (Replica := Replica) (BlockId := BlockId)).Universe}
-    (V : LeanDag.Hydrozoan.View U.val) (T : Finset Replica) (lo K : ℕ) : Prop :=
+    (V : LeanDag.Hydrozoan.View U.toBlockRecord) (T : Finset Replica) (lo K : ℕ) : Prop :=
   T ⊆ (LeanDag.Hydrozoan.Correct : Finset Replica) ∧
     LeanDag.Hydrozoan.q Replica ≤ T.card ∧
-    ∃ R₀ N, SynchronisedOn U.val T R₀ ∧ R₀ ≤ S.slotRound lo ∧
-      (∀ r, R₀ ≤ r → r ≤ N → PopulatedOn U.val T r) ∧
+    ∃ R₀ N, SynchronisedOn U.toBlockRecord T R₀ ∧ R₀ ≤ S.slotRound lo ∧
+      (∀ r, R₀ ≤ r → r ≤ N → PopulatedOn U.toBlockRecord T r) ∧
       V.CoversUpto N ∧
       ∀ k, k < K → S.slotRound k + 2 ≤ N
 
@@ -121,13 +112,13 @@ Law 3 is Hydrozoan's slow commit wrapped in `DecidedOpt`. -/
 /-- **Optimal-Hydrozoan's support.** -/
 def optSupport : Support (optimalRule (Replica := Replica) (BlockId := BlockId)) where
   wave := 2
-  Certifies := fun U C L => LeanDag.Hydrozoan.IsCertificate U.val C L
+  Certifies := fun U C L => LeanDag.Hydrozoan.IsCertificate U.toBlockRecord C L
 
 /-- **Law 1**, Hydrozoan's at the underlying universe. -/
 theorem optSupport_local [LinearOrder BlockId] :
     Support.Local (R := optimalRule (Replica := Replica) (BlockId := BlockId)) optSupport := by
   intro U U' G R₀ h c L hc hcr hL hLr
-  exact LeanDag.Hydrozoan.hzSupport_local (U := U.val) (U' := U'.val)
+  exact LeanDag.Hydrozoan.hzSupport_local (U := U.toBlockRecord) (U' := U'.toBlockRecord)
     ⟨h.mem, h.round, h.creator, h.refs⟩ c L hc hcr hL hLr
 
 /-- **Law 2**, Hydrozoan's at the underlying universe. -/
@@ -154,28 +145,28 @@ theorem optSupport_commits :
     unfold LeanDag.Hydrozoan.q; omega
   obtain ⟨L, hLmem, hLc, hLr⟩ := hpop (S.slotRound k) le_rfl
     (by change S.slotRound k ≤ S.slotRound k + 2; omega) (S.leader k) hlead
-  have hL : LeanDag.IsLeaderBlock U.val k L := ⟨hLmem, hLr, hLc⟩
-  have hslow : LeanDag.Hydrozoan.SlowCommit U.val L (S.slotRound k) :=
+  have hL : LeanDag.IsLeaderBlock U.toBlockRecord k L := ⟨hLmem, hLr, hLc⟩
+  have hslow : LeanDag.Hydrozoan.SlowCommit U.toBlockRecord L (S.slotRound k) :=
     LeanDag.Hydrozoan.slowCommit_of_certifiesAt hcard
       (hpop (S.slotRound k + 2) (by omega) (by change S.slotRound k + 2 ≤ S.slotRound k + 2; omega))
       (hcert L ⟨hLmem, hLr, hLc⟩)
-  have hin : LeanDag.Hydrozoan.SlowCommitInView U.val V L (S.slotRound k) :=
+  have hin : LeanDag.Hydrozoan.SlowCommitInView U.toBlockRecord V L (S.slotRound k) :=
     LeanDag.Hydrozoan.slowCommitInView_of_coversUpto hslow hcov
   refine ⟨L, by omega, LeanDag.OptimalHydrozoan.DecidedOpt.directCommit hL (Or.inr hin), ?_⟩
   intro S' hround hlead'
   refine LeanDag.OptimalHydrozoan.DecidedOpt.directCommit
     (S := S') ⟨hL.1, ?_, ?_⟩ (Or.inr ?_)
-  · change (U.val.block L).round = S'.slotRound k
+  · change (U.toBlockRecord.block L).round = S'.slotRound k
     rw [hround]; exact hL.2.1
-  · change (U.val.block L).creator = S'.leader k
+  · change (U.toBlockRecord.block L).creator = S'.leader k
     rw [hlead' k (by omega)]; exact hL.2.2
-  · change LeanDag.Hydrozoan.SlowCommitInView U.val V L (S'.slotRound k)
+  · change LeanDag.Hydrozoan.SlowCommitInView U.toBlockRecord V L (S'.slotRound k)
     rw [hround]; exact hin
 
 /-- **Optimal-Hydrozoan's precondition is the support's.** -/
 theorem optSupport_live_of_optLive {S : LeanDag.Slots Replica}
     {U : (optimalRule (Replica := Replica) (BlockId := BlockId)).Universe}
-    {V : LeanDag.Hydrozoan.View U.val} {T : Finset Replica} {lo K : ℕ}
+    {V : LeanDag.Hydrozoan.View U.toBlockRecord} {T : Finset Replica} {lo K : ℕ}
     (h : optLive S (U := U) V T lo K) :
     Support.live (R := optimalRule (Replica := Replica) (BlockId := BlockId)) optSupport
       (LeanDag.Hydrozoan.hzReliability Replica) S (U := U) V T lo K := by
@@ -244,27 +235,27 @@ theorem voteSupport_fast_commits
     exact h2
   obtain ⟨L, hLmem, hLc, hLr⟩ := hpop (S.slotRound k) le_rfl
     (by change S.slotRound k ≤ S.slotRound k + 1; omega) (S.leader k) hlead
-  have hL : LeanDag.IsLeaderBlock U.val k L := ⟨hLmem, hLr, hLc⟩
-  have hfast : LeanDag.OptimalHydrozoan.FastCommitOpt U.val L (S.slotRound k) := by
-    have hsub : T ⊆ supporters U.val L (S.slotRound k + 1) := by
+  have hL : LeanDag.IsLeaderBlock U.toBlockRecord k L := ⟨hLmem, hLr, hLc⟩
+  have hfast : LeanDag.OptimalHydrozoan.FastCommitOpt U.toBlockRecord L (S.slotRound k) := by
+    have hsub : T ⊆ supporters U.toBlockRecord L (S.slotRound k + 1) := by
       intro v hv
       obtain ⟨b, hb, hba, hbr⟩ := hpop (S.slotRound k + 1) (by omega)
         (by change S.slotRound k + 1 ≤ S.slotRound k + 1; omega) v hv
       exact mem_supporters.mpr
         ⟨b, hb, hbr, hcert L ⟨hLmem, hLr, hLc⟩ v hv b hb hba hbr, hba⟩
     exact le_trans hcard (Finset.card_le_card hsub)
-  have hin : LeanDag.OptimalHydrozoan.FastCommitOptInView U.val V L (S.slotRound k) :=
+  have hin : LeanDag.OptimalHydrozoan.FastCommitOptInView U.toBlockRecord V L (S.slotRound k) :=
     HoldsAtLeast.of_coversUpto
       (fun b hb => ⟨(mem_votesFor.mp hb).1, (mem_votesFor.mp hb).2.1.le⟩) hcov hfast
   refine ⟨L, by omega, LeanDag.OptimalHydrozoan.DecidedOpt.directCommit hL (Or.inl hin), ?_⟩
   intro S' hround hlead'
   refine LeanDag.OptimalHydrozoan.DecidedOpt.directCommit
     (S := S') ⟨hL.1, ?_, ?_⟩ (Or.inl ?_)
-  · change (U.val.block L).round = S'.slotRound k
+  · change (U.toBlockRecord.block L).round = S'.slotRound k
     rw [hround]; exact hL.2.1
-  · change (U.val.block L).creator = S'.leader k
+  · change (U.toBlockRecord.block L).creator = S'.leader k
     rw [hlead' k (by omega)]; exact hL.2.2
-  · change LeanDag.OptimalHydrozoan.FastCommitOptInView U.val V L (S'.slotRound k)
+  · change LeanDag.OptimalHydrozoan.FastCommitOptInView U.toBlockRecord V L (S'.slotRound k)
     rw [hround]; exact hin
 
 /-- **The graded rule is total, at a bound**: the relation's indirect
@@ -275,7 +266,7 @@ reassigned — the relation's `link_congr`. -/
 theorem indirect :
     Indirect (optimalRule (Replica := Replica) (BlockId := BlockId))
       (fun sr i j => sr i + 3 ≤ sr j) :=
-  (AnchoredRule.indirectOn LeanDag.OptimalHydrozoan.SlotAgreement.optimalLaws.link_congr
+  (AnchoredRule.indirectVia LeanDag.OptimalHydrozoan.SlotAgreement.optimalLaws.link_congr
     fun hi h => LeanDag.OptimalHydrozoan.exists_least hi h).congr
     (fun _ _ _ => by simp only [LeanDag.OptimalHydrozoan.optimalAnchored_wave])
 

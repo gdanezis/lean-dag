@@ -4557,6 +4557,41 @@ threshold on a record-defined set.
 
 **Measure.** The library and tests stand at 76,072 lines.
 
+### 11.40 Optimal-Hydrozoan's exclusion rule as block validity
+
+Step 11 of `docs/common-layer.md`, the Optimal half. Leader exclusion
+was a property of the universe: `OptUniverse` extended Hydrozoan's
+record with a schedule-indexed field, the carrier was the subtype of
+Hydrozoan universes satisfying a schedule-free restatement
+(`LeaderExcludedAll`), a bridge related the two, and each mechanism
+proved by hand that it preserved the restatement — three proofs, about
+a hundred and forty lines, in `Integration/OptimalMechanisms.lean`.
+
+The rule is a fact about a block and its parents' references, so it is
+a clause of validity. `Clause.leaderExcluded` (`Common/BlockRecord.lean`)
+is FinWhale's leader clause, moved: for every replica, the parents are
+consistent about it or none is by it; it is `Mechanised` and
+`CopyStable` once. `ValidOpt` is Hydrozoan's validity with that clause,
+`OptUniverse` the block record at it, and `OptUniverse.toBlockRecord`
+the projection that forgets the clause, through which Hydrozoan's rules
+and lemmas read an Optimal universe. Exclusion at any schedule, the
+invariant the relation's laws hold under, is one theorem from the
+clause (`OptUniverse.leader_excluded`); the three preservation proofs
+are gone, `optOnRecord` has every map the identity, and the witnesses
+build a universe by `decide` on the clause or by
+`OptUniverse.ofNoEquivocation`.
+
+**What it took in the common layer.** `AnchoredRule.toDagRuleVia f`
+reads a rule at one validity as a carrier over any type projecting to
+its records, with `agreeVia`, `commitsCandidateVia`,
+`commitsDirectVia`, `indirectVia` and `bandedVia`; `toDagRuleOn I` is
+the projection from a subtype, and `Barnacle.ofAnchoredVia` follows.
+The crown lemmas of `OptimalHydrozoan/Helpers/SlotAgreement.lean` take
+exclusion as a hypothesis, as Hybrid's take non-equivocation.
+
+**Measure.** The step removes 621 lines of Lean and adds 424; the
+library and tests stand at 75,875 lines.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition
