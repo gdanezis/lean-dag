@@ -1,6 +1,5 @@
 import LeanDag.Barnacle.MahiMahi.Statement
 import LeanDag.Barnacle.Helpers.Anchored
-import LeanDag.Barnacle.Helpers.Descent
 import LeanDag.Barnacle.Helpers.Heads
 import LeanDag.MahiMahi.Properties
 /-!
@@ -18,14 +17,8 @@ namespace MahiMahi
 
 theorem descent : Descent := by
   intro Validator BlockId Payload _ _ F _ w hw
-  exact descent_of_support (mahiMahiLive (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
-    (MahiMahiProperties.mmSupport w)
-    (MahiMahiProperties.mmSupport_ofCoverage hw)
-    (MahiMahiProperties.mmSupport_commits (by omega))
-    ((MahiMahiProperties.indirect (by omega)).congr fun sr i j => by
-      change sr i + w ≤ sr j ↔ sr i + (w - 1 + 1) ≤ sr j
-      omega)
-    (by change w - 1 ≤ w - 1 + 1; omega) fun _ _ _ h => h
+  exact MahiMahiProperties.descent (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload) hw
 
 theorem holds : Statement := by
   refine ⟨?_, descent, ?_⟩

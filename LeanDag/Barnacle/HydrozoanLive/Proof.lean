@@ -1,6 +1,5 @@
 import LeanDag.Barnacle.HydrozoanLive.Statement
 import LeanDag.Barnacle.Helpers.Heads
-import LeanDag.Barnacle.Helpers.Descent
 import LeanDag.Hydrozoan.Helpers.Commit
 /-!
 # Barnacle over Hydrozoan — the live rule, proof
@@ -16,9 +15,7 @@ namespace HydrozoanLive
 
 theorem descent : Descent := by
   intro Replica BlockId _ _ _ F
-  exact descent_of_support (hydrozoanLive (Replica := Replica) (BlockId := BlockId))
-    LeanDag.Hydrozoan.hzSupport LeanDag.Hydrozoan.hzSupport_ofCoverage
-    LeanDag.Hydrozoan.hzSupport_commits LeanDag.Hydrozoan.indirect (by change 2 ≤ 2 + 1; omega) fun _ _ _ h => h
+  exact LeanDag.Hydrozoan.descent
 
 theorem roundRobinLive : RoundRobinLive := by
   intro n hn BlockId _ F hck w hk m hm hmax

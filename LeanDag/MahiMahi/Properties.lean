@@ -387,6 +387,21 @@ theorem indirect {w : ℕ} (hw : 1 ≤ w) :
     fun hi h => MahiMahi.exists_least hi h).congr
     (fun _ _ _ => by simp only [MahiMahi.mahiMahiAnchored_wave]; omega)
 
+/-- **Mahi-Mahi has the descent laws** at the core fault model's slack,
+at its `w`-round wave. -/
+theorem descent {w : ℕ} (hw : 4 ≤ w) :
+    Properties.Descent (mahiMahiRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload) w)
+      (Timed.Good (mahiMahiRule (Validator := Validator) (BlockId := BlockId)
+        (Payload := Payload) w) (coreReliability Validator))
+      (w - 1 + 1) (coreReliability Validator).slack :=
+  Timed.descent_of_support _ _ _ (mmSupport w) (mmSupport_ofCoverage hw)
+    (mmSupport_commits (by omega))
+    ((indirect (by omega)).congr fun sr i j => by
+      change sr i + w ≤ sr j ↔ sr i + (w - 1 + 1) ≤ sr j
+      omega)
+    (by change w - 1 ≤ w - 1 + 1; omega) fun _ _ _ h => h
+
 /-! ## The headlines -/
 
 theorem safety (hw : 2 ≤ w) : Properties.Safe (mahiMahiRule (Validator := Validator)

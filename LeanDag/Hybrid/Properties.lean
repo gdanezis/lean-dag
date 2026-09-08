@@ -7,6 +7,7 @@ import LeanDag.Hybrid.Liveness
 import LeanDag.Mysticeti.Properties
 import LeanDag.Properties.Band
 import LeanDag.Properties.Derived.Descent
+import LeanDag.Timed.Coverage
 import LeanDag.Properties.Derived.Bounded
 import LeanDag.Properties.Arcs.Headline
 /-!
@@ -129,6 +130,18 @@ theorem indirect (kt : ℕ) :
   AnchoredRule.indirectOn ((Hybrid.hybridAnchored Validator BlockId Payload kt).linkCongr_of_round
     (fun _ U A L r => Hybrid.ThickLink kt U A L r) fun _ _ _ _ _ _ => rfl)
     fun hi h => Hybrid.exists_least hi h
+
+/-- **Orcaella has the descent laws** at the mixed bound's slack, at its
+two-round wave. -/
+theorem descent (kt : ℕ) :
+    Properties.Descent (hybridRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload) kt)
+      (Timed.Good (hybridRule (Validator := Validator) (BlockId := BlockId)
+        (Payload := Payload) kt) (coreReliability Validator))
+      ((Hybrid.hybridAnchored Validator BlockId Payload kt).wave + 1)
+      (coreReliability Validator).slack :=
+  Timed.descent_of_support _ _ _ (Properties.voteSupport _) (Timed.voteSupport_ofCoverage _)
+    (voteSupport_commits kt) (indirect kt) (by change 1 ≤ 1 + 1; omega) fun _ _ _ h => h
 
 /-- **And a committed run decides everything below it.** -/
 theorem descends {kt : ℕ} {S : Slots Validator} {c : ℕ} (hc : 0 < c)

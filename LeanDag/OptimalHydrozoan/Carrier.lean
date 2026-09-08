@@ -270,6 +270,16 @@ theorem indirect :
     fun hi h => LeanDag.OptimalHydrozoan.exists_least hi h).congr
     (fun _ _ _ => by simp only [LeanDag.OptimalHydrozoan.optimalAnchored_wave])
 
+/-- **Optimal-Hydrozoan has the descent laws** at the hybrid fault
+model's slack. -/
+theorem descent :
+    Properties.Descent (optimalRule (Replica := Replica) (BlockId := BlockId))
+      (Timed.Good (optimalRule (Replica := Replica) (BlockId := BlockId))
+        (LeanDag.Hydrozoan.hzReliability Replica))
+      3 (LeanDag.Hydrozoan.hzReliability Replica).slack :=
+  Timed.descent_of_support _ _ 3 optSupport optSupport_ofCoverage optSupport_commits
+    indirect (by change 2 ≤ 3; omega) fun _ _ _ h => h
+
 /-! ## The headlines -/
 
 theorem safety :

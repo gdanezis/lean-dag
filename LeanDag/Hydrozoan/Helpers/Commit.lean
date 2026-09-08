@@ -269,6 +269,14 @@ theorem indirect :
   (AnchoredRule.indirect SlotAgreement.hydrozoanLaws.link_congr fun hi h => exists_least hi h).congr
     (fun _ _ _ => by simp only [hydrozoanAnchored_wave])
 
+/-- **Hydrozoan has the descent laws** at the hybrid fault model's slack. -/
+theorem descent :
+    Properties.Descent (rule (Replica := Replica) (BlockId := BlockId))
+      (Timed.Good (rule (Replica := Replica) (BlockId := BlockId)) (hzReliability Replica))
+      3 (hzReliability Replica).slack :=
+  Timed.descent_of_support _ _ 3 hzSupport hzSupport_ofCoverage hzSupport_commits
+    indirect (by change 2 ≤ 3; omega) fun _ _ _ h => h
+
 /-- **The descent as a property.** Was two lemmas — the graded rule at a
 bound and a downward induction over the run; both are now
 `Descends.of_indirect`. -/

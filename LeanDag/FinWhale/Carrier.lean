@@ -277,6 +277,16 @@ theorem fwSupport_commits :
     (isLeaderBlock_congr (S₁ := S) (S₂ := S') (congrFun hround k).symm
       (hlead' k (by omega)).symm hL) hcom
 
+/-- **FinWhale has the descent laws** at the core fault model's slack. -/
+theorem descent :
+    Properties.Descent (finWhaleRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload))
+      (Timed.Good (finWhaleRule (Validator := Validator) (BlockId := BlockId)
+        (Payload := Payload)) (coreReliability Validator))
+      3 (coreReliability Validator).slack :=
+  Timed.descent_of_support _ _ 3 fwSupport fwSupport_ofCoverage fwSupport_commits
+    indirect (by change 2 ≤ 3; omega) fun _ _ _ h => h
+
 /-! ## FinWhale's fast path
 
 `voteSupport`: `n − p` votes one round up, at a fault model of at most

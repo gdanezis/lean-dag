@@ -1,6 +1,5 @@
 import LeanDag.Barnacle.FinWhale.Statement
 import LeanDag.Barnacle.Helpers.Anchored
-import LeanDag.Barnacle.Helpers.Descent
 import LeanDag.Barnacle.Helpers.Heads
 /-!
 # Barnacle over FinWhale — proof
@@ -17,9 +16,7 @@ namespace FinWhale
 
 theorem descent : Descent := by
   intro Validator BlockId Payload _ _ F _ _
-  exact descent_of_support (finWhaleLive (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-    FinWhaleProperties.fwSupport FinWhaleProperties.fwSupport_ofCoverage
-    FinWhaleProperties.fwSupport_commits FinWhaleProperties.indirect (by change 2 ≤ 2 + 1; omega) fun _ _ _ h => h
+  exact FinWhaleProperties.descent
 
 theorem holds : Statement := by
   refine ⟨?_, descent, ?_⟩

@@ -1,6 +1,5 @@
 import LeanDag.Barnacle.Orcaella.Statement
 import LeanDag.Barnacle.Helpers.Anchored
-import LeanDag.Barnacle.Helpers.Descent
 import LeanDag.Barnacle.Helpers.Heads
 import LeanDag.Hybrid.Properties
 /-!
@@ -18,10 +17,7 @@ namespace Orcaella
 
 theorem descent : Descent := by
   intro Validator BlockId Payload _ _ H _ k _
-  exact descent_of_support (orcaellaLive (Validator := Validator) (BlockId := BlockId) (Payload := Payload) k)
-    (Properties.voteSupport _) (Timed.voteSupport_ofCoverage _)
-    (HybridProperties.voteSupport_commits k) (HybridProperties.indirect k) (by change 1 ≤ 1 + 1; omega)
-    fun _ _ _ h => h
+  exact HybridProperties.descent k
 
 theorem holds : Statement := by
   refine ⟨?_, descent, ?_⟩

@@ -143,7 +143,6 @@ import LeanDag.Hydrozoan.Helpers.Skippability
 import LeanDag.Hydrozoan.Properties.Statement
 import LeanDag.Hydrozoan.Properties.Proof
 import LeanDag.Barnacle.Helpers.DagRule
-import LeanDag.Barnacle.Helpers.Descent
 import LeanDag.SafeSkip.Data
 import LeanDag.SafeSkip.Basic
 import LeanDag.SafeSkip.Invariance

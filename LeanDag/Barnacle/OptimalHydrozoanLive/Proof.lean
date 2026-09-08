@@ -1,6 +1,5 @@
 import LeanDag.Barnacle.OptimalHydrozoanLive.Statement
 import LeanDag.Barnacle.Helpers.Heads
-import LeanDag.Barnacle.Helpers.Descent
 /-!
 # Barnacle over Optimal-Hydrozoan — the live rule, proof
 
@@ -15,11 +14,7 @@ namespace OptimalHydrozoanLive
 
 theorem descent : Descent := by
   intro Replica BlockId _ _ _ _
-  exact descent_of_support (optimalHydrozoanLive (Replica := Replica) (BlockId := BlockId))
-    LeanDag.OptimalHydrozoanProperties.optSupport
-    LeanDag.OptimalHydrozoanProperties.optSupport_ofCoverage
-    LeanDag.OptimalHydrozoanProperties.optSupport_commits
-    LeanDag.OptimalHydrozoanProperties.indirect (by change 2 ≤ 2 + 1; omega) fun _ _ _ h => h
+  exact LeanDag.OptimalHydrozoanProperties.descent
 
 theorem roundRobinLive : RoundRobinLive := by
   intro n hn BlockId _ _ hb w hk m hm hmax

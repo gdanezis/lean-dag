@@ -15995,7 +15995,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 493 theorems the body or Appendix A names, each
+The 492 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -20608,22 +20608,6 @@ theorem delivers_core [F : Faults Validator]
 ```
 
 **Every core rule delivers**, at slack `f`.
-
-#### `descent_of_support`
-
-*theorem, `Barnacle.Helpers.Descent.lean`*
-
-```lean
-theorem descent_of_support (R : LiveRule Validator BlockId Payload)
-    (sp : Properties.Support R.toBaseRule.toDagRule) {rel : Reliability Validator}
-    (hcov : Timed.OfCoverage sp rel) (hlc : sp.Commits rel)
-    (hind : Properties.Indirect R.toBaseRule.toDagRule R.elig)
-    (hwave : sp.wave ≤ R.waveLength)
-    (hgood : ∀ U Rnd N, R.Good U Rnd N → Timed.Good R.toBaseRule.toDagRule rel U Rnd N) :
-    R.Descent rel.slack
-```
-
-**The descent laws, from a support**, at the fault model's slack: `Timed.descent_of_support` at a live rule's own gap and goodness.
 
 #### `holds`
 
