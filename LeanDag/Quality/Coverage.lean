@@ -4,6 +4,10 @@ import LeanDag.Properties.Arcs.Quality
 /-!
 # Chain quality: asynchronous coverage
 
+**An analysis** (`Analyses`): it measures what a committed ledger
+contains — coverage without synchrony, inclusion with it — rather than
+deciding anything. It names no commit rule and transforms no universe.
+
 `chain-quality.md` §3, CQP1 — **CQ1**, **CQ2**, **CQ3**. Every commit
 flushes the entire causal cone of the committed leader, and the quorum
 structure forces every layer of a valid cone to carry blocks from all

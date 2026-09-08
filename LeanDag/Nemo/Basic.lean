@@ -3,6 +3,11 @@ import LeanDag.Common.BlockRecord
 /-!
 # Nemo-Nemo: the crash-fault DAG foundation
 
+**A commit rule** (`Protocols`), with a universe of its own: crash
+faults only, at a majority quorum, so its `ValidWrt` is not the core's.
+The rule is `nemoAnchored`; the carrier and properties are
+`Properties.lean`; the record witness is `Record.lean`.
+
 "Finding Nemo-Nemo: CFT DAG-based Consensus in the WAN." Crash-fault
 tolerant: `n ≥ 2f+1` validators, all honest, may halt but never
 equivocate. Its bare-majority quorum `n/2+1` is outside the core's

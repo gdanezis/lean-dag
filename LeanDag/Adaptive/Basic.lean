@@ -3,6 +3,11 @@ import LeanDag.Common.Anchored.Bounded
 /-!
 # Adaptive leaders: epochs and induced schedules
 
+**A schedule mechanism** (`Schedules`), not a protocol: the adaptive
+arc varies **which** validators lead, reassigning them from the
+committed prefix, and transforms no universe. It applies to any
+`Properties.DagRule` through `Adaptive.Policy`.
+
 Groundwork for the adaptive-leaders arc (`adaptive-leaders.md`): the
 epoch structure, and `slotsOf`, the `Slots` instance a leader
 assignment induces over a fixed round structure. One leader per round

@@ -4,6 +4,11 @@ import LeanDag.Properties.Arcs.Liveness
 /-!
 # The timed model: coverage, and the bridge into certification
 
+**A schedule mechanism** (`Schedules`), and the baseline the others
+are measured against: a validator waits a full timeout every round.
+It transforms no universe; what it supplies is the antecedent a rule's
+support reaches `live` from.
+
 `docs/target-properties.md` §11.16. Synchrony is not a property: it is
 the antecedent a timed execution reaches `Support.live` from, where a
 reactive one reaches it from its wait clauses instead. `SynchronisedOn`,

@@ -2,6 +2,11 @@ import LeanDag.Common.History
 /-!
 # Exposure, and the DoS-protection condition
 
+**An analysis** (`Analyses`): it measures a DAG rather than deciding
+on one. No file of this arc names a commit rule or transforms a
+universe; what it bounds is how much an equivocating author can make a
+correct validator store.
+
 `dos-equivocation-and-growth.md` §3, results D11-D13. `X` is exposed in
 `b`'s history when the history holds two distinct blocks by `X` at one
 round, a local checkable test, and `DoSValid` forbids a block from

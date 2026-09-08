@@ -3,6 +3,11 @@ import LeanDag.Common.History
 /-!
 # Mahi-Mahi — the rule at wave `w`
 
+**A commit rule** (`Protocols`), asynchronous, at wave `w`, on the
+core's universes and validity. The rule is `mahiMahiAnchored`; the
+carrier and properties are `Properties.lean`; the record witness is
+`Record.lean`.
+
 Mysticeti's commit rule stretched to a wave of `w` rounds, with votes
 counted through a voting block's causal cone rather than its direct
 references; at `w = 3` this coincides with the core (`mahi-mahi.md` §1).

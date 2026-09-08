@@ -3,6 +3,12 @@ import LeanDag.Common.Record.Fill
 /-!
 # Safe Skip: rejoining after a crash, in one message
 
+**A universe transform** (`Transforms`): `skipFill` returns a crashed
+validator to production in one message. The arc gives the message and
+the fill; that the fill is an `Extends` and what verdicts cross it are
+`Properties/Arcs/SafeSkip.lean` generically, and the protocol's own
+`Record.lean` at each rule.
+
 A validator that crashes and recovers faces a gap: liveness rests on
 correct validators building every round (P8), and producing the missing
 blocks one by one costs a round trip per round of downtime. **Safe

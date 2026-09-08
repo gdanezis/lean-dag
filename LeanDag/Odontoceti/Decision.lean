@@ -4,6 +4,12 @@ import LeanDag.Common.Rules
 /-!
 # Odontoceti: the decision relation
 
+**A commit rule** (`Protocols`). Two rounds rather than the core's
+three, on the core's universes and validity — Odontoceti extends the
+core rather than replacing it. The rule is `odontocetiAnchored`; the
+carrier and the properties are `Properties.lean`; the record witness,
+the cut and the prompt skip are `Record.lean`.
+
 `odontoceti.md` §4, OP3. Odontoceti decides by the anchored relation
 (`Anchored.lean`) at its data: wavelength one, the supporter-quorum
 direct commit, the core's slot-level direct skip, and one rung of link,

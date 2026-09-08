@@ -4,6 +4,11 @@ import LeanDag.DoS.Exposure
 /-!
 # The horizon: truncation as rebasing
 
+**A universe transform** (`Transforms`): `chop` rebases the DAG above
+a horizon. The arc gives the operator and its lemmas; the witness that
+the cut stands in `Properties.Truncates`, and the verdicts that cross
+it, are the protocol's — `Mysticeti/Record.lean` for the core.
+
 `garbage.md` §2, §4 — **G1** (truncation is a universe, with the
 one-way `DoSValid` transfer) and **G2** (verdict invariance). `chop U G`
 keeps blocks of round `≥ G`, rebases by `−G`, and empties the new base

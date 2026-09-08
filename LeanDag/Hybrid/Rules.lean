@@ -5,6 +5,12 @@ import LeanDag.Common.Rules
 /-!
 # The hybrid two-round rules, and the arithmetic core
 
+**A commit rule** (`Protocols`). Byzantine and crash faults kept
+apart, on the core's universes under the invariant `HonestNoEquiv`.
+The rule is `hybridAnchored`; the carrier and properties are
+`Properties.lean`; the record witness, the self-referencing fill and
+the prompt skip are `Record.lean`.
+
 The Odontoceti rules at the hybrid thresholds: direct rules count
 `q = n − fb − fc` authors, and `ThickLink k` is admissible for
 `2fb + fc + 1 ≤ k ≤ n − 3fb − 2fc`, nonempty exactly at

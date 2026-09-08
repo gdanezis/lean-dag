@@ -3,6 +3,10 @@ import LeanDag.DoS.Novelty
 /-!
 # The DoS capstones, bundling growth with the storage bound
 
+**An analysis** (`Analyses`): the composed capstones, bundling the
+DoS arc's growth bound with the storage bound. It names no commit rule
+and transforms no universe.
+
 The composed statements — DoS resistance in one theorem — with production
 taken as a hypothesis, discharged elsewhere by the `ViewPace` route
 (`ViewPace.populatedOn`, report §6.9).

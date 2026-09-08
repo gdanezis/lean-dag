@@ -2,6 +2,12 @@ import LeanDag.Mysticeti.ViewPace
 /-!
 # The reactive schedule
 
+**A schedule mechanism** (`Schedules`), not a protocol: the reactive
+discipline varies **when** a validator builds — on its exit condition
+rather than a full timeout — and transforms no universe. It has no
+commit rule of its own; `Mysticeti.lean` and `Odontoceti.lean` re-derive
+those rules' liveness under it.
+
 Where the timed schedule of §6.9 waits a full timeout every round, the
 reactive one builds as soon as its exit condition fires — a leader vote
 or, failing that, the full timeout — trading reference coverage for
