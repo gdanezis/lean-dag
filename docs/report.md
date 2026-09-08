@@ -10816,86 +10816,6 @@ def slotBlamesIn (U : BlockRecord Validator BlockId Payload P honest) (V : U.Vie
 
 The blamers of slot `k` that a view holds.
 
-### The commit rule, and the ledger
-
-#### `CertifiedIn`
-
-*abbrev, `Mysticeti.Rule.lean`*
-
-```lean
-abbrev CertifiedIn (U : BlockUniverse Validator BlockId Payload) (A L : BlockId) (r : ℕ) : Prop :=
-  certifiedLink IsVote (quorumCard Validator) 2 U A L r
-```
-
-The indirect rule's test: a certificate for `L` lies in the causal history of the anchor `A`.
-
-#### `DirectCommitIn`
-
-*abbrev, `Mysticeti.Rule.lean`*
-
-```lean
-abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  certCommit IsVote (quorumCard Validator) (quorumCard Validator) 2 U V L r
-```
-
-Direct commit, as judged from a single view: the view holds certificates for `L` from a quorum of distinct validators.
-
-#### `DirectSkipIn`
-
-*abbrev, `Mysticeti.Rule.lean`*
-
-```lean
-abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (quorumCard Validator) (omissionsOf U L (r + 1))
-```
-
-Direct skip, as judged from a single view: the view holds blocks at the round above `L` that omit it, from a quorum of distinct validators.
-
-#### `DirectSkipSlotIn`
-
-*abbrev, `Mysticeti.Rule.lean`*
-
-```lean
-abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (k : ℕ) : Prop :=
-  blameSkip (quorumCard Validator) U V k
-```
-
-**The slot is directly skipped, as judged from a view**: a quorum of distinct validators holds a voting-round block, in view, that references no candidate of the slot. Strictly stronger than the per-candidate `DirectSkipIn`, which it implies.
-
-#### `coreAnchored`
-
-*def, `Mysticeti.Rule.lean`*
-
-```lean
-def coreAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
-    [DecidableEq Validator] [Faults Validator] [DecidableEq BlockId] :
-    AnchoredRule Validator BlockId Payload ValidWrt Correct where
-  wave := 2
-  Commit := fun U V L r => DirectCommitIn U V L r
-  decCommit := fun _ _ _ _ => inferInstance
-  Skip := fun U V S k => DirectSkipSlotIn (S := S) U V k
-  rungs := 1
-  Link := fun _ U A L S k => CertifiedIn U A L (S.slotRound k)
-  tie := fun _ _ _ => False
-```
-
-**The core as an anchored rule.**
-
-#### `Decided`
-
-*abbrev, `Mysticeti.Rule.lean`*
-
-```lean
-abbrev Decided (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U) :
-    ℕ → Option BlockId → Prop :=
-  (coreAnchored Validator BlockId Payload).Decided (S := S) U V
-```
-
-**The decision relation**: the anchored relation at the core's data.
-
 ### Delivery, growth, and coverage
 
 #### `PopulatedFrom`
@@ -15364,6 +15284,84 @@ def hzSupport : Support (rule (Replica := Replica) (BlockId := BlockId)) where
 ```
 
 **Hydrozoan's support**: wavelength two, certification the rule's own.
+
+#### `CertifiedIn`
+
+*abbrev, `Mysticeti.Model.Rule.lean`*
+
+```lean
+abbrev CertifiedIn (U : BlockUniverse Validator BlockId Payload) (A L : BlockId) (r : ℕ) : Prop :=
+  certifiedLink IsVote (quorumCard Validator) 2 U A L r
+```
+
+The indirect rule's test: a certificate for `L` lies in the causal history of the anchor `A`.
+
+#### `DirectCommitIn`
+
+*abbrev, `Mysticeti.Model.Rule.lean`*
+
+```lean
+abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
+  certCommit IsVote (quorumCard Validator) (quorumCard Validator) 2 U V L r
+```
+
+Direct commit, as judged from a single view: the view holds certificates for `L` from a quorum of distinct validators.
+
+#### `DirectSkipIn`
+
+*abbrev, `Mysticeti.Model.Rule.lean`*
+
+```lean
+abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
+  HoldsAtLeast U V (quorumCard Validator) (omissionsOf U L (r + 1))
+```
+
+Direct skip, as judged from a single view: the view holds blocks at the round above `L` that omit it, from a quorum of distinct validators.
+
+#### `DirectSkipSlotIn`
+
+*abbrev, `Mysticeti.Model.Rule.lean`*
+
+```lean
+abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) (k : ℕ) : Prop :=
+  blameSkip (quorumCard Validator) U V k
+```
+
+**The slot is directly skipped, as judged from a view**: a quorum of distinct validators holds a voting-round block, in view, that references no candidate of the slot. Strictly stronger than the per-candidate `DirectSkipIn`, which it implies.
+
+#### `coreAnchored`
+
+*def, `Mysticeti.Model.Rule.lean`*
+
+```lean
+def coreAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
+    [DecidableEq Validator] [Faults Validator] [DecidableEq BlockId] :
+    AnchoredRule Validator BlockId Payload ValidWrt Correct where
+  wave := 2
+  Commit := fun U V L r => DirectCommitIn U V L r
+  decCommit := fun _ _ _ _ => inferInstance
+  Skip := fun U V S k => DirectSkipSlotIn (S := S) U V k
+  rungs := 1
+  Link := fun _ U A L S k => CertifiedIn U A L (S.slotRound k)
+  tie := fun _ _ _ => False
+```
+
+**The core as an anchored rule.**
+
+#### `Decided`
+
+*abbrev, `Mysticeti.Model.Rule.lean`*
+
+```lean
+abbrev Decided (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U) :
+    ℕ → Option BlockId → Prop :=
+  (coreAnchored Validator BlockId Payload).Decided (S := S) U V
+```
+
+**The decision relation**: the anchored relation at the core's data.
 
 #### `mysticetiRule`
 

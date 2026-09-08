@@ -15,6 +15,8 @@ import LeanDag.Common.Support
 import LeanDag.Common.Ledger
 import LeanDag.Common.Persistence
 import LeanDag.Common.CommonCore
+import LeanDag.Mysticeti.Model.Validity
+import LeanDag.Mysticeti.Model.Rule
 import LeanDag.Mysticeti.Rule
 import LeanDag.Common.Schedule
 import LeanDag.Mysticeti.Liveness

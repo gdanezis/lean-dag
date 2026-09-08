@@ -3,17 +3,29 @@ import LeanDag.Common.Ledger
 import LeanDag.Common.Anchored
 import LeanDag.Common.Slots
 import LeanDag.Common.History
+import LeanDag.Mysticeti.Model.Rule
 /-!
-# Uncertified DAGs: the Mysticeti commit rules
+# Mysticeti — what the commit rule guarantees
 
-`spec.md` §4, Phase 2 — Stage A. Where a certified DAG admits a block
-only once `2f+1` validators have signed it, Mysticeti drops that round
-and rebuilds the authority one round further on: a round-`(r+1)` block
-votes for a round-`r` block it references and blames it otherwise; a
-round-`(r+2)` block certifies it once `2f+1` distinct validators' votes
-are among its own references; `L` is directly committed or skipped when
-`2f+1` distinct validators' certificates or blames say so. Everything
-here is universe-level, needing neither views nor a leader schedule.
+The core protocol of this development, in four parts and where each
+lives:
+
+* **the universe** — `Model/Validity.lean`: `ValidWrt` and the
+  `BlockUniverse` at it, the core's own validity, shared by the nine
+  arcs that extend it;
+* **the rule** — `Model/Rule.lean`: certificates, the direct commit and
+  skip, `coreAnchored` and the relation `Decided` it generates;
+* **what it shows** — `Properties.lean`: the carrier `mysticetiRule`
+  and the six target properties at it;
+* **what it gets** — `Record.lean`: the witness that the universe is a
+  block record, from which the cut, the fill and re-genesis follow, and
+  the core's own `chop`.
+
+This file is the third of those in the reading order and the first in
+the proving one: the direct rules exclude one another, a certificate
+identifies the block it certifies, and the indirect test agrees with
+the direct one — which is what `coreLaws` collects for the anchored
+relation.
 -/
 
 namespace LeanDag
@@ -22,38 +34,6 @@ variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
 variable [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 variable {U : BlockUniverse Validator BlockId Payload}
-
-/-- The references of `C` that vote for `L`: the record's carried votes,
-in the plain sense. -/
-abbrev votesIn (U : BlockUniverse Validator BlockId Payload) (C L : BlockId) : Finset BlockId :=
-  carriedVotes U (IsVote U) C L
-
-/-- A round-`(r+2)` block certifies `L` when its votes for `L` come from a
-quorum of distinct validators: the record's certificate at `n − f`. -/
-abbrev Certifies (U : BlockUniverse Validator BlockId Payload) (C L : BlockId) : Prop :=
-  CarriesVotes U (IsVote U) (quorumCard Validator) C L
-
-/-- The certificates for a round-`r` block `L`: the round-`(r+2)` blocks that
-certify it. -/
-abbrev certificates (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : ℕ) :
-    Finset BlockId :=
-  certificatesAt U (IsVote U) (quorumCard Validator) L (r + 2)
-
-/-- `L` is directly committed when its certificates come from a quorum of
-distinct validators. -/
-def DirectCommit (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (certificates U L r)).card
-
-/-- `L` is directly skipped when a quorum of distinct validators declined to
-vote for it. -/
-def DirectSkip (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (blames U L (r + 1)).card
-
-instance decidableDirectCommit (L : BlockId) (r : ℕ) : Decidable (DirectCommit U L r) :=
-  inferInstanceAs (Decidable (quorumCard Validator ≤ (creatorsOf U.block (certificates U L r)).card))
-
-instance decidableDirectSkip (L : BlockId) (r : ℕ) : Decidable (DirectSkip U L r) :=
-  inferInstanceAs (Decidable (quorumCard Validator ≤ (blames U L (r + 1)).card))
 
 /-- **M3.** A directly skipped block has no certificate anywhere in the
 universe, not merely none in some view: `2f+1` blamers cap the
@@ -176,11 +156,6 @@ directly committed *anchor*: commit if a certificate for the slot lies in
 that subgraph, skip otherwise. M4 is the statement that this never
 contradicts the direct rule. -/
 
-/-- The indirect rule's test: a certificate for `L` lies in the causal
-history of the anchor `A`. -/
-abbrev CertifiedIn (U : BlockUniverse Validator BlockId Payload) (A L : BlockId) (r : ℕ) : Prop :=
-  certifiedLink IsVote (quorumCard Validator) 2 U A L r
-
 /-- A certificate in reach is, in particular, a certificate that exists. This
 is what lets M5′ compare an *indirect* commit against anything else. -/
 theorem certificates_nonempty_of_certifiedIn {A L : BlockId} {r : ℕ}
@@ -233,18 +208,6 @@ may anchor `k` when its proposal lies past `k`'s decision round,
 whose consecutive slots are three rounds apart, every later slot is
 eligible (`eligibleAt_of_lt_of_spacing`). -/
 
-/-- Direct commit, as judged from a single view: the view holds
-certificates for `L` from a quorum of distinct validators. -/
-abbrev DirectCommitIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  certCommit IsVote (quorumCard Validator) (quorumCard Validator) 2 U V L r
-
-/-- Direct skip, as judged from a single view: the view holds blocks at
-the round above `L` that omit it, from a quorum of distinct validators. -/
-abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (L : BlockId) (r : ℕ) : Prop :=
-  HoldsAtLeast U V (quorumCard Validator) (omissionsOf U L (r + 1))
-
 omit S in
 /-- **A view can only under-report.** A view-relative direct commit is a
 genuine one, which is what lets Stage A's universe-level theorems apply
@@ -260,14 +223,6 @@ theorem directSkip_of_directSkipIn {V : View Validator BlockId Payload U}
 
 A blame is the absence of any candidate from a voting-round block
 (`slotBlamers`). -/
-
-/-- **The slot is directly skipped, as judged from a view**: a quorum of
-distinct validators holds a voting-round block, in view, that
-references no candidate of the slot. Strictly stronger than the
-per-candidate `DirectSkipIn`, which it implies. -/
-abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (k : ℕ) : Prop :=
-  blameSkip (quorumCard Validator) U V k
 
 /-- **The slot-level skip implies the per-candidate one.** -/
 theorem directSkipIn_of_directSkipSlotIn {V : View Validator BlockId Payload U} {k : ℕ}
@@ -293,18 +248,6 @@ direct commit, the slot-level direct skip, and one rung of link with no
 tie, since two certificates at one slot name the same candidate (M5′). -/
 
 omit S in
-/-- **The core as an anchored rule.** -/
-def coreAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
-    [DecidableEq Validator] [Faults Validator] [DecidableEq BlockId] :
-    AnchoredRule Validator BlockId Payload ValidWrt Correct where
-  wave := 2
-  Commit := fun U V L r => DirectCommitIn U V L r
-  decCommit := fun _ _ _ _ => inferInstance
-  Skip := fun U V S k => DirectSkipSlotIn (S := S) U V k
-  rungs := 1
-  Link := fun _ U A L S k => CertifiedIn U A L (S.slotRound k)
-  tie := fun _ _ _ => False
-
 omit S in
 @[simp] theorem coreAnchored_wave :
     (coreAnchored Validator BlockId Payload).wave = 2 := rfl
@@ -312,22 +255,6 @@ omit S in
 @[simp] theorem coreAnchored_rungs :
     (coreAnchored Validator BlockId Payload).rungs = 1 := rfl
 
-instance {V : View Validator BlockId Payload U} (L : BlockId) (r : ℕ) :
-    Decidable ((coreAnchored Validator BlockId Payload).Commit U V L r) :=
-  inferInstanceAs (Decidable (DirectCommitIn U V L r))
-
-instance {V : View Validator BlockId Payload U} (k : ℕ) :
-    Decidable ((coreAnchored Validator BlockId Payload).Skip U V S k) :=
-  inferInstanceAs (Decidable (DirectSkipSlotIn (S := S) U V k))
-
-/-- **The decision relation**: the anchored relation at the core's data. -/
-abbrev Decided (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U) :
-    ℕ → Option BlockId → Prop :=
-  (coreAnchored Validator BlockId Payload).Decided (S := S) U V
-
-namespace Decided
-export AnchoredRule.Decided (directCommit directSkip indirectCommit indirectSkip)
-end Decided
 
 /-! ## Stage C2 — the direct rules, lifted to views
 
