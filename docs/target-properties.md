@@ -2351,8 +2351,8 @@ why `skipFill` is out of scope for it and not owed.
 ### 11.2e What a rule with its own universe record supplies
 
 Nemo and FinWhale close their four cells in
-`Integration/NemoMechanisms.lean` and
-`Integration/FinWhaleMechanisms.lean`. Two things were changed to make
+`Nemo/Record.lean` and
+`FinWhale/Record.lean`. Two things were changed to make
 that possible, and both are the same change.
 
 **The cut's block operator moved off the universe.** `chopBlk blk G` is
@@ -3429,7 +3429,7 @@ moved here from `OptimalFill.lean`. Both theorems are
 `LeanDag.Hydrozoan.banded`; the self-parent clause is not needed because
 nothing is transported. Optimal-Hydrozoan takes the same two witnesses
 with leader exclusion carried across each
-(`Integration/OptimalMechanisms.lean`: `chopOpt` from
+(`OptimalHydrozoan/Record.lean`: `chopOpt` from
 `leaderExcludedAll_chopHZ`, the copy fill from
 `leaderExcludedAll_copyFillHZ`), so both of Optimal's cells are native
 too. `leaderExcludedAll_chopHZ` is the one proof written fresh: a block
@@ -3683,7 +3683,7 @@ block references a novel id, so nothing supports the slot, and the rule
 skips it. The instances are the fill cells the rules already have:
 `decided_none_fresh` (the core, and so its reactive execution),
 `decided_none_fresh_odontoceti` at the core's fill,
-`decided_none_fresh_hybrid` at `skipFillHybrid`, and
+`HybridProperties.decided_none_fresh` at `skipFillHybrid`, and
 `decided_none_fresh_hz` at Hydrozoan's copy fill through a lifted view
 `liftViewHZ`, each with the grade the rule's property carries (a
 quorum, Hybrid's `q`, Hydrozoan's `qFast`). `audit-mechanisms.py` shows
@@ -3703,7 +3703,7 @@ no view of the fill, and no view of any extension a caught-up view
 reaches, decides that slot other than `none`. That answer is stated
 directly as `decided_none_of_novel_agree` in `Arcs/SafeSkip.lean`,
 with instances `decided_none_fresh_agree` (core),
-`decided_none_fresh_agree_odontoceti`, `decided_none_fresh_agree_hybrid`
+`decided_none_fresh_agree_odontoceti`, `HybridProperties.decided_none_fresh_agree`
 and `decided_none_fresh_agree_hz`.
 
 **What the audits show.** `audit-mechanisms.py` reads the same matrix
@@ -3797,8 +3797,8 @@ the carrier's ids and block map agreeing with the record's, and at any
 such carrier `truncates_chop`, `sustains_chop`, `extends_fill`,
 `sustains_fill`, `extends_copyFill`, `sustains_copyFill`,
 `extends_addGenesis` and `sustains_addGenesis` hold. The core, Nemo and
-FinWhale have the identity maps (`coreOnRecord`, `nemoOnRecord`,
-`finWhaleOnRecord`); Hydrozoan has `toRecord` and `ofRecord`
+FinWhale have the identity maps (`MysticetiProperties.onRecord`, `NemoProperties.onRecord`,
+`FinWhaleProperties.onRecord`); Hydrozoan has `toRecord` and `ofRecord`
 (`Hydrozoan.onRecord`). A rule's mechanism cell is now one line per
 construction and one per witness; Orcaella and Optimal-Hydrozoan, which
 take a neighbour's construction under one further invariant, are
@@ -3844,12 +3844,12 @@ adds — `Any` for the core, Nemo, FinWhale and Hydrozoan — and
 re-genesis; the general fill takes the invariant by hand, since a
 reading other than the copy is the rule's own. `HonestNoEquiv` is
 mechanised in `Integration/Preservation.lean`, with `honestNoEquiv_fill`
-now at any reading, so Orcaella's carrier is `hybridOnRecord` and its
+now at any reading, so Orcaella's carrier is `HybridProperties.onRecord` and its
 self-referencing fill supplies that lemma; leader exclusion is
-`Excluded` in `Integration/OptimalMechanisms.lean`, mechanised by the
+`Excluded` in `OptimalHydrozoan/Record.lean`, mechanised by the
 three lemmas that already existed, so Optimal's carrier is
-`optOnRecord`. Odontoceti and Mahi-Mahi, on the core's record, have
-`odontocetiOnRecord` and `mahiMahiOnRecord` in place of projected
+`OptimalHydrozoanProperties.onRecord`. Odontoceti and Mahi-Mahi, on the core's record, have
+`OdontocetiProperties.onRecord` and `MahiMahiProperties.onRecord` in place of projected
 witnesses. `Integration/ReGenesisRules.lean` is deleted, each rule's
 re-genesis being one line in its own file.
 
@@ -3870,7 +3870,7 @@ BlockId` is `LeanDag.Block Replica BlockId Unit`, so `author` is
 is the record at `Hydrozoan.ValidWrt` with `NonByzantine` as the honest
 set, `Hydrozoan.View` the record's view. The adapter — `adaptBlock`,
 `unadapt`, `hzBlk`, `toRecord`, `ofRecord`, Barnacle's `adapt` and
-`adaptBlk` — is deleted, `Hydrozoan.onRecord` and `optOnRecord` are
+`adaptBlk` — is deleted, `Hydrozoan.onRecord` and `OptimalHydrozoanProperties.onRecord` are
 identity maps, and Hydrozoan's `Model/CausalHistory.lean` and
 `chopBlkHZ` go with it. What Hydrozoan keeps of its own is its validity
 predicate, its fault model and its rules. The one cost is name
@@ -4055,11 +4055,11 @@ the record's names: Nemo's, FinWhale's, Hybrid's and Optimal's
 `chop*`, `skipFill*`, `copyFill*` and `addGenesis*`, and Hydrozoan's
 `chopHZ`, `copyFillHZ` and `addGenesisHZ` with the thirteen lemmas that
 restated `mem_chop_ids`, `chop_block`, `copyFill_block_old` and their
-kin. The stack results are stated at `nemoOnRecord.chop` and
-`finWhaleOnRecord.copyFill`; Optimal's three exclusion invariants are
+kin. The stack results are stated at `NemoProperties.onRecord.chop` and
+`FinWhaleProperties.onRecord.copyFill`; Optimal's three exclusion invariants are
 stated at `BlockRecord.chop`, `BlockRecord.copyFill` and
 `BlockRecord.addGenesis` and renamed `leaderExcludedAll_chop`,
-`_copyFill`, `_addGenesis`; Hybrid keeps `fillHybrid`, which fixes the
+`_copyFill`, `_addGenesis`; Hybrid keeps `HybridProperties.fill`, which fixes the
 self-referencing reading and is not a rename. The core's `chop`,
 `mem_chop_ids`, `chop_block`, `addGenesis` and its three lemmas are the
 record's, `export`ed into the core's namespace so that the spelling
@@ -4565,7 +4565,7 @@ record with a schedule-indexed field, the carrier was the subtype of
 Hydrozoan universes satisfying a schedule-free restatement
 (`LeaderExcludedAll`), a bridge related the two, and each mechanism
 proved by hand that it preserved the restatement — three proofs, about
-a hundred and forty lines, in `Integration/OptimalMechanisms.lean`.
+a hundred and forty lines, in `OptimalHydrozoan/Record.lean`.
 
 The rule is a fact about a block and its parents' references, so it is
 a clause of validity. `Clause.leaderExcluded` (`Common/BlockRecord.lean`)
@@ -4577,7 +4577,7 @@ the projection that forgets the clause, through which Hydrozoan's rules
 and lemmas read an Optimal universe. Exclusion at any schedule, the
 invariant the relation's laws hold under, is one theorem from the
 clause (`OptUniverse.leader_excluded`); the three preservation proofs
-are gone, `optOnRecord` has every map the identity, and the witnesses
+are gone, `OptimalHydrozoanProperties.onRecord` has every map the identity, and the witnesses
 build a universe by `decide` on the clause or by
 `OptUniverse.ofNoEquivocation`.
 

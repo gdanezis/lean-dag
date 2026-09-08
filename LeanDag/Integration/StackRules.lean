@@ -1,8 +1,9 @@
 import LeanDag.Properties.Arcs.Stack
 import LeanDag.Properties.Arcs.GC
 import LeanDag.Properties.Arcs.SafeSkip
-import LeanDag.Integration.NemoMechanisms
-import LeanDag.Integration.FinWhaleMechanisms
+import LeanDag.Nemo.Record
+import LeanDag.FinWhale.Record
+import LeanDag.Mysticeti.Record
 /-!
 # Stacks, at the rules
 
@@ -38,7 +39,7 @@ theorem stack_core (sk : SkipMsg U) (hd : G ≤ S.slotRound d) :
     Stack (MysticetiProperties.mysticetiRule (Payload := Payload)) U S
       (chop sk.skipFill G) (S.chop G d hd) G (max (sk.r + 1) G) d := by
   have st := Stack.step (Rebased.of_sustains (S := S) (sustains_skipFill (Payload := Payload) sk))
-    (Stack.step (Rebased.of_truncates (truncates_chop (U := sk.skipFill) hd)) Stack.nil)
+    (Stack.step (Rebased.of_truncates (MysticetiProperties.truncates_chop (U := sk.skipFill) hd)) Stack.nil)
   simpa using st
 
 end Core
@@ -51,10 +52,10 @@ variable {U : Nemo.Universe Validator BlockId Payload}
 
 theorem stack_nemo (sk : SkipData U.ids U.block) (hd : G ≤ S.slotRound d) :
     Stack (NemoProperties.nemoRule (Validator := Validator) (BlockId := BlockId)
-      (Payload := Payload)) U S (nemoOnRecord.chop (nemoOnRecord.copyFill U sk) G)
+      (Payload := Payload)) U S (NemoProperties.onRecord.chop (NemoProperties.onRecord.copyFill U sk) G)
       (S.chop G d hd) G (max (sk.r + 1) G) d := by
-  simpa using Stack.step (Rebased.of_sustains (S := S) (nemoOnRecord.sustains_copyFill U sk))
-    (Stack.step (Rebased.of_truncates (nemoOnRecord.truncates_chop (nemoOnRecord.copyFill U sk) hd))
+  simpa using Stack.step (Rebased.of_sustains (S := S) (NemoProperties.onRecord.sustains_copyFill U sk))
+    (Stack.step (Rebased.of_truncates (NemoProperties.onRecord.truncates_chop (NemoProperties.onRecord.copyFill U sk) hd))
       Stack.nil)
 
 end Nemo
@@ -70,11 +71,11 @@ variable {B : Type} [LinearOrder B] {D : Dag Validator B Payload}
 
 theorem stack_finwhale (sk : SkipData D.ids D.block) (hd : G ≤ S.slotRound d) :
     Stack (FinWhaleProperties.finWhaleRule (Validator := Validator) (BlockId := B)
-      (Payload := Payload)) D S (finWhaleOnRecord.chop (finWhaleOnRecord.copyFill D sk) G)
+      (Payload := Payload)) D S (FinWhaleProperties.onRecord.chop (FinWhaleProperties.onRecord.copyFill D sk) G)
       (S.chop G d hd) G (max (sk.r + 1) G) d := by
-  simpa using Stack.step (Rebased.of_sustains (S := S) (finWhaleOnRecord.sustains_copyFill D sk))
+  simpa using Stack.step (Rebased.of_sustains (S := S) (FinWhaleProperties.onRecord.sustains_copyFill D sk))
     (Stack.step (Rebased.of_truncates
-      (finWhaleOnRecord.truncates_chop (finWhaleOnRecord.copyFill D sk) hd)) Stack.nil)
+      (FinWhaleProperties.onRecord.truncates_chop (FinWhaleProperties.onRecord.copyFill D sk) hd)) Stack.nil)
 
 end FinWhale
 

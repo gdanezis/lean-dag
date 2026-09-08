@@ -253,7 +253,7 @@ every rule with a non-trivial tie uses implicitly.
 `Common/Anchored.lean`; Black Marlin re-based on `Slots.identity`.
 `LeaderExcludedAll` moves onto the `Clause` mechanism as FinWhale's
 `leaderClause` already does, which retires the three preservation proofs
-at `Integration/OptimalMechanisms.lean:42,93,139`.
+at `OptimalHydrozoan/Record.lean:42,93,139`.
 
 ### 2.6 Nemo's mirrors, FinWhale's restriction family, Minnow
 

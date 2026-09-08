@@ -2,6 +2,7 @@ import LeanDag.GC.Window
 import LeanDag.GC.AttestedBase
 import LeanDag.GC.ChopDecided
 import LeanDag.Properties.Arcs.GC
+import LeanDag.Mysticeti.Record
 /-!
 # Bootstrap: the joiner's view, assembled and bounded
 
@@ -172,7 +173,7 @@ theorem bootstrap_agree [S : Slots Validator] {d : ℕ}
       (joinView (D := D) hs hw hcar hpop hR hmt) k jv)
     (hV : Decided U V (d + k) fv) :
     jv = fv :=
-  Properties.Arcs.decided_agree_chop hd hJ hV
+  MysticetiProperties.decided_agree_chop hd hJ hV
 
 /-! ## G7 — the windowed relay obligation -/
 

@@ -3,6 +3,7 @@ import LeanDag.Properties.Arcs.SafeSkip
 import LeanDag.Integration.ReGenesis
 import LeanDag.Reactive.MysticetiProperties
 import LeanDag.Properties.Arcs.Liveness
+import LeanDag.Mysticeti.Record
 /-!
 # The mechanisms over a reactive execution
 
@@ -45,8 +46,8 @@ theorem live_chop_reactive {G d : ℕ} (hd : G ≤ S.slotRound d)
     MysticetiProperties.coreSupport.live (coreReliability Validator) (S.chop G d hd)
       (U := chop U G) (V.chop G) T (lo - d) (K - d) :=
   MysticetiProperties.coreSupport.live_of_truncates MysticetiProperties.coreSupport_local
-    (truncates_chop hd) (MysticetiProperties.coreSupport_live_of_reactiveLive h) hlo hK
-    (fun _ hGN hc => coversUpto_of_truncates (truncates_chop hd) viewAgreeAbove_chop hGN hc)
+    (MysticetiProperties.truncates_chop hd) (MysticetiProperties.coreSupport_live_of_reactiveLive h) hlo hK
+    (fun _ hGN hc => coversUpto_of_truncates (MysticetiProperties.truncates_chop hd) MysticetiProperties.viewAgreeAbove_chop hGN hc)
 
 /-- **And the fill**, on any view of it caught up as far as the old one. -/
 theorem live_skipFill_reactive (sk : SkipMsg U) {V' : View Validator BlockId Payload sk.skipFill}
@@ -79,9 +80,9 @@ theorem decidedBelow_of_run_chop_reactive {G d c b : ℕ} (hd : G ≤ S.slotRoun
       (S.chop G d hd) (b + c) (V.chop G) i w :=
   MysticetiProperties.coreSupport.decidedBelow_of_run_truncates
     MysticetiProperties.coreSupport_local MysticetiProperties.coreSupport_commits hc
-    (MysticetiProperties.descends hc hspans) (truncates_chop hd) (V.chop G)
+    (MysticetiProperties.descends hc hspans) (MysticetiProperties.truncates_chop hd) (V.chop G)
     (MysticetiProperties.coreSupport_live_of_reactiveLive h)
-    (fun _ hGN hcov => coversUpto_of_truncates (truncates_chop hd) viewAgreeAbove_chop hGN hcov) hlead
+    (fun _ hGN hcov => coversUpto_of_truncates (MysticetiProperties.truncates_chop hd) MysticetiProperties.viewAgreeAbove_chop hGN hcov) hlead
 
 end Integration
 

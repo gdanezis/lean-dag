@@ -148,15 +148,15 @@ otherwise. The same witness gives what the fill does to coverage:
 `not_synchronisedOn_copyFill_hz` is the generic refutation of
 `Timed/Extension.lean` at the record's `extends_copyFill`.
 
-`Integration/OptimalMechanisms.lean` needs no invariant at all:
+`OptimalHydrozoan/Record.lean` needs no invariant at all:
 leader exclusion is now a clause of `OptUniverse`'s own validity
 `ValidOpt` (§3), and the record's cut, copy fill and re-genesis
-preserve validity clause by clause, so `optOnRecord` reads the carrier
+preserve validity clause by clause, so `OptimalHydrozoanProperties.onRecord` reads the carrier
 as records under the trivial invariant `BlockRecord.Any`, with nothing
 proved per mechanism. The record's constructions at it are
-`optOnRecord.chop`, `optOnRecord.copyFill` and `optOnRecord.addGenesis`.
+`OptimalHydrozoanProperties.onRecord.chop`, `OptimalHydrozoanProperties.onRecord.copyFill` and `OptimalHydrozoanProperties.onRecord.addGenesis`.
 Every verdict cell of both rules is `Properties/Arcs/Record.lean` at
-`Hydrozoan.onRecord` or `optOnRecord`, with nothing written per cell.
+`Hydrozoan.onRecord` or `OptimalHydrozoanProperties.onRecord`, with nothing written per cell.
 
 Liveness across every mechanism is the generic `Support.live_of_truncates`
 and `Support.live_of_sustains` at `hzSupport` and `optSupport`, and the

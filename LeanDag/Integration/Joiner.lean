@@ -2,6 +2,7 @@ import LeanDag.GC.ChopDecided
 import LeanDag.Adaptive.Mysticeti
 import LeanDag.Adaptive.Joiner
 import LeanDag.Properties.Arcs.GC
+import LeanDag.Mysticeti.Record
 /-!
 # I5 — the joiner and the adaptive schedule, at the core
 
@@ -71,8 +72,8 @@ theorem joiner_decided_agree (hd : G ≤ S.slotRound d)
           (chop U G) W k w)
     (hV : Decided (S := slotsOf hinj a) U V (d + k) v) : w = v :=
   Adaptive.joiner_decided_agree MysticetiProperties.agree MysticetiProperties.banded
-    (Properties.Arcs.truncates_chop hd) hinj a
-    (Properties.Arcs.viewAgreeAbove_chop (V := V)) hW hV
+    (MysticetiProperties.truncates_chop hd) hinj a
+    (MysticetiProperties.viewAgreeAbove_chop (V := V)) hW hV
 
 /-! ## The policy half, at the core -/
 
@@ -85,7 +86,7 @@ variable {pick' : (U' : BlockUniverse Validator BlockId Payload) →
 /-! The assignment half of I5 — under a horizon-stable rule a joiner
 computes exactly the leaders the network is using — and the schedule
 half are `Adaptive.joiner_assign_agree` and `Adaptive.joiner_leader_agree`
-at the core's `Properties.Arcs.sustains_chop` and `truncates_chop`. -/
+at the core's `MysticetiProperties.sustains_chop` and `truncates_chop`. -/
 
 /-- **I5, whole.** A joiner that computed its own schedule from its own
 truncated view, under a horizon-stable rule, agrees with the network's
@@ -102,8 +103,8 @@ theorem joiner_run_decided_agree (hd : G ≤ S.slotRound d)
           (chop U G) W k w)
     (hV : Decided (S := slotsOf P.inj R.assign) U V (d + k) v) : w = v :=
   Adaptive.joiner_run_decided_agree MysticetiProperties.agree MysticetiProperties.banded
-    hs (Properties.Arcs.truncates_chop hd) R V'
-    (Properties.Arcs.viewAgreeAbove_chop (V := V)) hW hV
+    hs (MysticetiProperties.truncates_chop hd) R V'
+    (MysticetiProperties.viewAgreeAbove_chop (V := V)) hW hV
 
 end Policy
 

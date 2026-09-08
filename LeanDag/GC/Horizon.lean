@@ -1,4 +1,5 @@
 import LeanDag.GC.Bootstrap
+import LeanDag.Mysticeti.Record
 /-!
 # The horizon policy: heterogeneous cuts, one truth
 
@@ -6,7 +7,7 @@ import LeanDag.GC.Bootstrap
 admissible. `chop_chop` composes two cuts into one, so validators at
 different admissible horizons are related by that one operator rather
 than incomparable; agreement across such horizons follows by chaining
-`decided_agree_chop` twice (`Properties.Arcs.decided_agree_horizons_chop`).
+`decided_agree_chop` twice (`MysticetiProperties.decided_agree_horizons_chop`).
 `viewUpto_subset_viewUpto_succ` is the depth rule: post-`R`, everything
 any correct validator retains by round `m` is in every correct
 validator's store by `m + 1`, so a horizon trailing the frontier by

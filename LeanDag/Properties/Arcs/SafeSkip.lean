@@ -4,6 +4,7 @@ import LeanDag.Properties.Optional.Skip
 import LeanDag.SafeSkip.Basic
 import LeanDag.SafeSkip.Invariance
 import LeanDag.Mysticeti.Properties
+import LeanDag.Mysticeti.Record
 import LeanDag.Odontoceti.Properties
 import LeanDag.MahiMahi.Properties
 import LeanDag.Properties.Arcs.GC
@@ -129,7 +130,7 @@ stands in for one that voted, and need not vote as it did. -/
 theorem sustains_skipFill (sk : SkipMsg U) :
     Sustains (MysticetiProperties.mysticetiRule (Payload := Payload))
       U sk.skipFill 0 (sk.r + 1) :=
-  coreOnRecord.sustains_fill (U := U) (sk := sk) (B := sk.selfBlocks U.complete)
+  MysticetiProperties.onRecord.sustains_fill (U := U) (sk := sk) (B := sk.selfBlocks U.complete)
     (hB := fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2) (hI := True.intro)
 
 /-! ### The filled slot is decided, and SS3 falls out
@@ -201,7 +202,7 @@ end Faults
 
 /-! ### The prompt skip, for Odontoceti
 
-The fill's verdict cells are `Arcs/Record.lean` at `odontocetiOnRecord`;
+The fill's verdict cells are `Arcs/Record.lean` at `OdontocetiProperties.onRecord`;
 what is stated here is the prompt skip, which reads the rule's
 `SkipsUnsupported`. -/
 

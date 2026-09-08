@@ -3,6 +3,7 @@ import LeanDag.GC.Horizon
 import LeanDag.Properties.Compose
 import LeanDag.Common.Record.Genesis
 import LeanDag.Properties.Arcs.GC
+import LeanDag.Mysticeti.Record
 /-!
 # Re-genesis: restarting a severed chain at the cut
 
@@ -48,7 +49,7 @@ other. -/
 theorem extends_addGenesis :
     Properties.Extends (MysticetiProperties.mysticetiRule (Payload := Payload))
       V (addGenesis V v g p hg hsev) :=
-  Properties.Arcs.coreOnRecord.extends_addGenesis (U := V) (v := v) (g := g) (p := p)
+  MysticetiProperties.onRecord.extends_addGenesis (U := V) (v := v) (g := g) (p := p)
     (hg := hg) (hsev := hsev)
 
 /-- **And it rebases from round one at no offset.** The block it adds
@@ -57,7 +58,7 @@ the same blocks. -/
 theorem sustains_addGenesis :
     Properties.Sustains (MysticetiProperties.mysticetiRule (Payload := Payload))
       V (addGenesis V v g p hg hsev) 0 1 :=
-  Properties.Arcs.coreOnRecord.sustains_addGenesis (U := V) (v := v) (g := g) (p := p)
+  MysticetiProperties.onRecord.sustains_addGenesis (U := V) (v := v) (g := g) (p := p)
     (hg := hg) (hsev := hsev)
 
 theorem decided_addGenesis [S : Slots Validator]

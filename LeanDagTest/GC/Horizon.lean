@@ -1,6 +1,7 @@
 import LeanDag.Properties.Arcs.GC
 import LeanDag.GC.Horizon
 import LeanDagTest.GC.Bootstrap
+import LeanDag.Mysticeti.Record
 /-!
 # The horizon policy, witnessed
 
@@ -78,10 +79,10 @@ example {w₁ w₂ fv : Option (Fin 20)}
       (View.full (chop Uexcl 2)) 0 w₂)
     (hV : Decided Uexcl (View.full Uexcl) 1 fv) :
     w₁ = w₂ :=
-  Properties.Arcs.decided_agree_horizons_chop (by decide) (by decide) rfl hW₁ hW₂ hV
+  MysticetiProperties.decided_agree_horizons_chop (by decide) (by decide) rfl hW₁ hW₂ hV
 
 #print axioms chop_chop
 #print axioms viewUpto_subset_viewUpto_succ
-#print axioms LeanDag.Properties.Arcs.decided_agree_horizons_chop
+#print axioms LeanDag.MysticetiProperties.decided_agree_horizons_chop
 
 end LeanDagTest

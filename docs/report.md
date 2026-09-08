@@ -9281,7 +9281,7 @@ same clause (§20.1). Because it is a clause, the universe is
 `Mechanised` and `CopyStable` by the family's instances, so the cut,
 the copy fill and re-genesis preserve it with nothing proved per
 mechanism: the carrier reads as records with every map the identity
-(`optOnRecord`), and every verdict cell of the cut (HI7), the copy fill
+(`OptimalHydrozoanProperties.onRecord`), and every verdict cell of the cut (HI7), the copy fill
 (HI9) and re-genesis is `Properties/Arcs/Record.lean` at that instance.
 The core's `skipFill`, whose self reference grafts the recovering
 replica's anchor onto the donor's references, adds an edge and is not
@@ -9518,7 +9518,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Timed/Coverage.lean` | the timed model: coverage, `OfCoverage`, the bridge into `live` |
 | `Timed/Extension.lean` | coverage under an extension: refuted for a set holding a novel author, preserved for any other |
 | `Mysticeti/Properties.lean`, `Odontoceti/Properties.lean`, `Nemo/Properties.lean`, `Hybrid/Properties.lean`, `MahiMahi/Properties.lean`, `FinWhale/Carrier.lean`, `Hydrozoan/Helpers/`, `OptimalHydrozoan/Carrier.lean`, `Reactive/MysticetiProperties.lean` | each rule's carrier, properties, support and headlines |
-| `Integration/NemoMechanisms.lean`, `FinWhaleMechanisms.lean`, `HybridMechanisms.lean`, `HydrozoanMechanisms.lean`, `OptimalMechanisms.lean`, `ReactiveMechanisms.lean`, `StackRules.lean` | the mechanism cells at each rule: witnesses and instances |
+| `Nemo/Record.lean`, `FinWhale/Record.lean`, `Hybrid/Record.lean`, `HydrozoanMechanisms.lean`, `OptimalHydrozoan/Record.lean`, `ReactiveMechanisms.lean`, `StackRules.lean` | the mechanism cells at each rule: witnesses and instances |
 | `Nemo/Basic.lean` | the majority quorum and its intersection; crash validity; the universe with universal non-equivocation |
 | `Nemo/Rules.lean` | the wave-two rules: the vote is the certificate; link integrity |
 | `Nemo/Decision.lean` | Nemo as an anchored rule with no direct skip; its laws, without hypotheses |
@@ -10418,7 +10418,7 @@ reused.
 | HI4 | Hydrozoan as a Barnacle base rule, with its laws | `Barnacle.Hydrozoan.holds` *(Barnacle/Hydrozoan/Proof)* |
 | HI5 | as a live rule: the descent laws at slack `f + c`, and round-robin liveness at `3(f + c) + 1 ≤ n` | `Barnacle.HydrozoanLive.holds` *(Barnacle/HydrozoanLive/Proof)* |
 | HI6 | the same two for Optimal-Hydrozoan, its exclusion rule a clause of validity | `Barnacle.OptimalHydrozoan.holds`, `Clause.leaderExcluded` *(Barnacle/OptimalHydrozoan/Proof, Common/BlockRecord)* |
-| HI7 | verdicts survive the cut, for both rules, on the base-slot premise alone | `DagRule.OnRecord.decided_chop_iff` at `Hydrozoan.onRecord` and `optOnRecord` *(Properties/Arcs/Record, Integration/OptimalMechanisms)* |
+| HI7 | verdicts survive the cut, for both rules, on the base-slot premise alone | `DagRule.OnRecord.decided_chop_iff` at `Hydrozoan.onRecord` and `OptimalHydrozoanProperties.onRecord` *(Properties/Arcs/Record, Integration/OptimalMechanisms)* |
 | HI9 | verdicts survive the copy fill for both rules, with no quorum hypothesis; exclusion survives it as a clause of validity | `DagRule.OnRecord.decided_agree_copyFill` at the two instances; `ValidOpt.copyStable` *(Properties/Arcs/Record, OptimalHydrozoan/Model/Universe)* |
 | HI10 | what a deployment gets: the headlines at both rules | `Hydrozoan.Properties.safety`, `Hydrozoan.Properties.progress`, `OptimalHydrozoanProperties.safety`, `OptimalHydrozoanProperties.progress` *(Hydrozoan/Properties/Proof, OptimalHydrozoan/Carrier)* |
 
@@ -10428,7 +10428,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 326 definitions and structures the report names, in
+The 325 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -15365,30 +15365,6 @@ def hzSupport : Support (rule (Replica := Replica) (BlockId := BlockId)) where
 
 **Hydrozoan's support**: wavelength two, certification the rule's own.
 
-#### `optOnRecord`
-
-*def, `Integration.OptimalMechanisms.lean`*
-
-```lean
-def optOnRecord :
-    (OptimalHydrozoanProperties.optimalRule (Replica := Replica)
-      (BlockId := BlockId)).OnRecord LeanDag.OptimalHydrozoan.ValidOpt
-      (LeanDag.Hydrozoan.NonByzantine : Finset Replica) BlockRecord.Any where
-  toRec := fun U => U
-  inv := fun _ => True.intro
-  ofRec := fun W _ => W
-  ids_to := fun _ => rfl
-  block_to := fun _ => rfl
-  ids_of := fun _ _ => rfl
-  block_of := fun _ _ => rfl
-  toView := fun V => ⟨V.ids, V.subset_ids, V.complete⟩
-  ofView := fun V => ⟨V.ids, V.subset_ids, V.complete⟩
-  viewIds_to := fun _ => rfl
-  viewIds_of := fun _ => rfl
-```
-
-**Optimal-Hydrozoan's carrier, on the record**: every map the identity, the views read at the projection.
-
 #### `mysticetiRule`
 
 *def, `Mysticeti.Properties.lean`*
@@ -16016,7 +15992,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 490 theorems the body or Appendix A names, each
+The 492 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -21484,6 +21460,36 @@ theorem safety {kt : ℕ} (hpos : 0 < kt) (hk : Hybrid.Admissible Validator kt) 
       (Payload := Payload) kt)
 ```
 
+#### `extends_fill`
+
+*theorem, `Hybrid.Record.lean`*
+
+```lean
+theorem extends_fill (sk : SkipMsg U.val) :
+    Extends (HybridProperties.hybridRule (Validator := Validator) (BlockId := BlockId)
+        (Payload := Payload) kt) U (fill U sk)
+```
+
+**The fill is an extension of Hybrid's carrier.**
+
+#### `decided_none_fresh`
+
+*theorem, `Hybrid.Record.lean`*
+
+```lean
+theorem decided_none_fresh {U : (HybridProperties.hybridRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) kt).Universe} (sk : SkipMsg U.val)
+    {V : View Validator BlockId Payload U.val} {T : Finset Validator} {k : ℕ}
+    (hq : Hybrid.q Validator ≤ T.card)
+    (hlead : S.leader k = sk.v1) (hk1 : sk.r0 < S.slotRound k) (hk2 : S.slotRound k ≤ sk.r)
+    (hpres : PresentAt (HybridProperties.hybridRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload) kt) V T (S.slotRound k + 1)) :
+    (HybridProperties.hybridRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload) kt).Decided S (U := fill U sk) (sk.liftView V) k none
+```
+
+**SS3 for Hybrid**, from its `SkipsUnsupported`: the slot the recovering replica leads at a gap round is skipped at once.
+
 #### `agree`
 
 *theorem, `Hydrozoan.Helpers.Commit.lean`*
@@ -21692,6 +21698,55 @@ theorem safety : Properties.Safe (mysticetiRule (Validator := Validator) (BlockI
 ```
 
 **Safety**, across any stack of mechanisms, for the core and for its reactive execution alike.
+
+#### `sustains_chop`
+
+*theorem, `Mysticeti.Record.lean`*
+
+```lean
+theorem sustains_chop :
+    Sustains (MysticetiProperties.mysticetiRule (Payload := Payload)) U (chop U G) G G
+```
+
+**The cut sustains the core from its horizon.** The record's witness.
+
+#### `truncates_chop`
+
+*theorem, `Mysticeti.Record.lean`*
+
+```lean
+theorem truncates_chop (hd : G ≤ S.slotRound d) :
+    Truncates (MysticetiProperties.mysticetiRule (Payload := Payload))
+      U (chop U G) S (S.chop G d hd) G d
+```
+
+**The cut is a truncation.** The witness `Truncates` was written to have, exhibited before anything is proved from it.
+
+#### `decided_chop_iff`
+
+*theorem, `Mysticeti.Record.lean`*
+
+```lean
+theorem decided_chop_iff (hd : G ≤ S.slotRound d)
+    {V : View Validator BlockId Payload U} {k : ℕ} {v : Option BlockId} :
+    Decided U V (d + k) v ↔ Decided (S := S.chop G d hd) (chop U G) (V.chop G) k v
+```
+
+**G3 re-derived, with no induction of its own.** Both directions of the cut's verdict transport, from the band.
+
+#### `decided_agree_chop`
+
+*theorem, `Mysticeti.Record.lean`*
+
+```lean
+theorem decided_agree_chop (hd : G ≤ S.slotRound d)
+    {W : View Validator BlockId Payload (chop U G)}
+    {V : View Validator BlockId Payload U} {k : ℕ} {w v : Option BlockId}
+    (hW : Decided (S := S.chop G d hd) (chop U G) W k w)
+    (hV : Decided U V (d + k) v) : w = v
+```
+
+**G4 re-derived.** `GC/ChopDecided.decided_agree_chop` proves this by running the core's uniqueness inside the truncation and carrying the verdict across by induction. Here it is two properties applied.
 
 #### `agree`
 
@@ -21906,55 +21961,6 @@ theorem decided_agree_horizons (ha : Agree R) (hlt : LocalTruncate R)
 ```
 
 **And across two horizons.** Validators cut at different depths agree on every shared slot, matched through the absolute slot index. Horizons need never be negotiated.
-
-#### `sustains_chop`
-
-*theorem, `Properties.Arcs.GC.lean`*
-
-```lean
-theorem sustains_chop :
-    Sustains (MysticetiProperties.mysticetiRule (Payload := Payload)) U (chop U G) G G
-```
-
-**The cut sustains the core from its horizon.** The record's witness.
-
-#### `truncates_chop`
-
-*theorem, `Properties.Arcs.GC.lean`*
-
-```lean
-theorem truncates_chop (hd : G ≤ S.slotRound d) :
-    Truncates (MysticetiProperties.mysticetiRule (Payload := Payload))
-      U (chop U G) S (S.chop G d hd) G d
-```
-
-**The cut is a truncation.** The witness `Truncates` was written to have, exhibited before anything is proved from it.
-
-#### `decided_chop_iff`
-
-*theorem, `Properties.Arcs.GC.lean`*
-
-```lean
-theorem decided_chop_iff (hd : G ≤ S.slotRound d)
-    {V : View Validator BlockId Payload U} {k : ℕ} {v : Option BlockId} :
-    Decided U V (d + k) v ↔ Decided (S := S.chop G d hd) (chop U G) (V.chop G) k v
-```
-
-**G3 re-derived, with no induction of its own.** Both directions of the cut's verdict transport, from the band.
-
-#### `decided_agree_chop`
-
-*theorem, `Properties.Arcs.GC.lean`*
-
-```lean
-theorem decided_agree_chop (hd : G ≤ S.slotRound d)
-    {W : View Validator BlockId Payload (chop U G)}
-    {V : View Validator BlockId Payload U} {k : ℕ} {w v : Option BlockId}
-    (hW : Decided (S := S.chop G d hd) (chop U G) W k w)
-    (hV : Decided U V (d + k) v) : w = v
-```
-
-**G4 re-derived.** `GC/ChopDecided.decided_agree_chop` proves this by running the core's uniqueness inside the truncation and carrying the verdict across by induction. Here it is two properties applied.
 
 #### `safety`
 

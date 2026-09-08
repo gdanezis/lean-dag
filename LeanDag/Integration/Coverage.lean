@@ -2,6 +2,7 @@ import LeanDag.Integration.Preservation
 import LeanDag.Properties.Arcs.SafeSkip
 import LeanDag.Properties.Arcs.GC
 import LeanDag.Timed.Extension
+import LeanDag.Mysticeti.Record
 /-!
 # I4 — the fill does not restore coverage, and why that is correct
 
@@ -76,7 +77,7 @@ theorem synchronisedOn_chop {T : Finset Validator} {Rs R' : ℕ}
     (hs : LeanDag.SynchronisedOn U T Rs) (hGR : Rs ≤ G + R') :
     LeanDag.SynchronisedOn (chop U G) T R' := by
   have h := Timed.synchronisedOn_of_rebased (R := MysticetiProperties.mysticetiRule)
-    (Properties.Arcs.sustains_chop (U := U) (G := G)) (T := T) (r := G + R') (by omega) (by omega)
+    (MysticetiProperties.sustains_chop (U := U) (G := G)) (T := T) (r := G + R') (by omega) (by omega)
     (Timed.SynchronisedOn.mono ((MysticetiProperties.synchronisedOn_eq).mpr hs) hGR)
   exact MysticetiProperties.synchronisedOn_eq.mp (by simpa using h)
 

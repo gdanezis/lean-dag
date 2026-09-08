@@ -59,16 +59,24 @@ threshold and clause (`Mechanised.of_iff`); a carrier read as records
 the properties read. The core, Nemo, FinWhale and Hydrozoan are records
 by definition, Hydrozoan's block being the shared block with no payload. Rules on the
 core's `BlockUniverse` (the core, Odontoceti, Mahi-Mahi) take the core's
-`chop` and `skipFill` directly, in `Properties/Arcs/`.
+`chop` and `skipFill` directly.
+
+**Each witness sits with its protocol.** A `<Protocol>/Record.lean`
+holds the one instance saying that protocol's universe is a block
+record, in the same namespace as its carrier and under the same name,
+`onRecord`. `Integration/` keeps what needs two arcs at once: a schedule
+over a rule, or mechanisms composed with one another.
 
 | file | rule | instance | constructions |
 |---|---|---|---|
-| `Properties/Arcs/GC.lean` | core, Odontoceti, Mahi-Mahi | `coreOnRecord`, `odontocetiOnRecord`, `mahiMahiOnRecord`, identity maps | the core's `chop`, `skipFill`, `addGenesis` |
-| `NemoMechanisms.lean` | Nemo | `nemoOnRecord`, identity maps | the record's, through `nemoOnRecord` |
-| `FinWhaleMechanisms.lean` | FinWhale | `finWhaleOnRecord`, identity maps | the record's, through `finWhaleOnRecord` |
-| `HybridMechanisms.lean` | Orcaella | `hybridOnRecord`, under `HonestNoEquiv` | `fillHybrid` (the self-referencing fill with `honestNoEquiv_fill`); the prompt skip `decided_none_fresh_hybrid` |
+| `Mysticeti/Record.lean` | core | `MysticetiProperties.onRecord`, identity maps | the core's `chop`, `skipFill`, `addGenesis`, and the cut's `Truncates` witness |
+| `Odontoceti/Record.lean` | Odontoceti | `OdontocetiProperties.onRecord`, identity maps | the core's, through it |
+| `MahiMahi/Record.lean` | Mahi-Mahi | `MahiMahiProperties.onRecord`, identity maps | the core's, through it |
+| `Nemo/Record.lean` | Nemo | `NemoProperties.onRecord`, identity maps | the record's, through `NemoProperties.onRecord` |
+| `FinWhale/Record.lean` | FinWhale | `FinWhaleProperties.onRecord`, identity maps | the record's, through `FinWhaleProperties.onRecord` |
+| `Hybrid/Record.lean` | Orcaella | `HybridProperties.onRecord`, under `HonestNoEquiv` | `HybridProperties.fill` (the self-referencing fill with `honestNoEquiv_fill`); the prompt skip `HybridProperties.decided_none_fresh` |
 | `HydrozoanMechanisms.lean` | Hydrozoan | `Hydrozoan.onRecord`, identity maps | the record's own; `decided_none_fresh_hz`; the coverage refutation |
-| `OptimalMechanisms.lean` | Optimal-Hydrozoan | `optOnRecord`, under `BlockRecord.Any` (leader exclusion is a validity clause, preserved automatically) | the record's, through `optOnRecord` |
+| `OptimalHydrozoan/Record.lean` | Optimal-Hydrozoan | `OptimalHydrozoanProperties.onRecord`, under `BlockRecord.Any` (leader exclusion is a validity clause, preserved automatically) | the record's, through `OptimalHydrozoanProperties.onRecord` |
 | `ReactiveMechanisms.lean` | reactive Mysticeti | — | `live_chop_reactive`, `live_skipFill_reactive`, `live_addGenesis_reactive`, `decidedBelow_of_run_chop_reactive`: the reactive precondition across each mechanism, through `coreSupport` |
 | `StackRules.lean` | core, Nemo, FinWhale | — | `stack_core`, `stack_nemo`, `stack_finwhale`: fill then cut as a `Stack`; the headline `Properties.Safe` reads any of them |
 | `AdaptiveHydrozoan.lean`, `AdaptiveReactive.lean` | Hydrozoan; reactive Mysticeti | — | the adaptive leader mechanism (`Adaptive.run_agree`, `run_exists`) at those rules' properties |
@@ -94,7 +102,7 @@ cut removes blocks, any fill adds blocks only at gap rounds the crash
 left empty, and re-genesis adds a block by an author with none.
 Optimal-Hydrozoan carries no such invariant: leader exclusion is a
 clause of its validity (`ValidOpt`) rather than a separate predicate,
-so `optOnRecord` reads it under the trivial invariant `BlockRecord.Any`
+so `OptimalHydrozoanProperties.onRecord` reads it under the trivial invariant `BlockRecord.Any`
 and every mechanism preserves it clause by clause, with nothing
 proved per mechanism.
 
@@ -204,7 +212,7 @@ nothing but the target's name.
 `Preservation.lean` holds the one invariant of a carrier that is not a
 property: Orcaella's `HonestNoEquiv` survives the cut and the fill
 (`honestNoEquiv_chop`, `honestNoEquiv_skipFill`, I1), which is what lets
-`HybridMechanisms.lean` build its universes.
+`Hybrid/Record.lean` build its universes.
 
 ## 4. Conditions for a deployment
 

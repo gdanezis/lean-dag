@@ -14,7 +14,7 @@ donor's verbatim.
 
 namespace LeanDag
 
-namespace Integration
+namespace NemoProperties
 
 open LeanDag.Properties
 
@@ -22,7 +22,7 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
 /-- **Nemo's carrier, on the record**: every map the identity. -/
-def nemoOnRecord :
+def onRecord :
     (NemoProperties.nemoRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload)).OnRecord Nemo.ValidWrt (Finset.univ : Finset Validator)
       BlockRecord.Any where
@@ -39,9 +39,9 @@ def nemoOnRecord :
   viewIds_of := fun _ => rfl
 
 /-! The cut, the copy fill and re-genesis at Nemo's universe are the
-record's, through `nemoOnRecord`: `nemoOnRecord.chop`,
-`nemoOnRecord.copyFill`, `nemoOnRecord.addGenesis`. -/
+record's, through `onRecord`: `onRecord.chop`,
+`onRecord.copyFill`, `onRecord.addGenesis`. -/
 
-end Integration
+end NemoProperties
 
 end LeanDag

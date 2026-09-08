@@ -14,7 +14,7 @@ reference set onto the donor's.
 
 namespace LeanDag
 
-namespace Integration
+namespace FinWhaleProperties
 
 open LeanDag.Properties
 open LeanDag.FinWhale
@@ -25,7 +25,7 @@ variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 
 /-- **FinWhale's carrier, on the record**: the identity on universes,
 repacking on views. -/
-def finWhaleOnRecord :
+def onRecord :
     (FinWhaleProperties.finWhaleRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload)).OnRecord ValidHere (Correct : Finset Validator)
       BlockRecord.Any where
@@ -42,8 +42,8 @@ def finWhaleOnRecord :
   viewIds_of := fun _ => rfl
 
 /-! The cut, the copy fill and re-genesis at FinWhale's DAG are the
-record's, through `finWhaleOnRecord`. -/
+record's, through `onRecord`. -/
 
-end Integration
+end FinWhaleProperties
 
 end LeanDag
