@@ -38,6 +38,21 @@ def RunsExist (R : LiveRule Validator BlockId Payload) (P : Params)
     ∀ K, horizon P R c K ≤ N →
       Nonempty (PartialRun R.toBaseRule P getLeader hk upd U V K)
 
+/-- **Every height, for any rule and any schedule.** A rule with
+agreement and the descent laws reaches every height under a schedule whose
+good leaders come in runs of a wave; the gap is the schedule's own `c₀`. -/
+def GenericStatement : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [DecidableEq BlockId] (R : LiveRule Validator BlockId Payload) (slack c₀ : ℕ)
+    (getLeader : ℕ → Validator),
+    Properties.Agree R.toBaseRule.toDagRule →
+    R.Descent slack → 0 < R.waveLength →
+    (∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun getLeader T R.waveLength c₀) →
+    ∀ (P : Params) (hk : Keyed getLeader P.maxLeaders) (upd : UpdateRule R.toBaseRule),
+      UpdBounded P upd →
+      RunsExist R P getLeader hk upd c₀
+
 /-- **BN11a** — Barnacle over Mysticeti, under round-robin, at gap
 `n + 2`. -/
 def MysticetiRuns : Prop :=
