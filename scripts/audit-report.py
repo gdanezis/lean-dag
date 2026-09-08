@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Two mechanical checks on docs/report.md, per docs/style.md section 4.
+"""Two mechanical checks on the design documents, per docs/style.md section 4.
+
+Run over docs/report.md whole, and over docs/target-properties.md §0 —
+the part that document declares to be "the arc as it stands". Its §1
+onward is the record of how the arc got here and describes earlier
+states, so auditing it against the present would report its own history
+as failures; the section-number set is still read from the whole file, so
+§0 may name any section.
 
   1. every section cross-reference names a section that exists;
   2. every backticked Lean identifier names a declaration that exists;
@@ -85,6 +92,21 @@ ALLOW = {
     "q_fast", "q_cert", "q_slow", "q_weak", "parents.card", "Nat.find",
     "t_plain", "t_equiv",
 }
+
+
+def current_scope(text, heading):
+    """The slice a document declares to be its current state.
+
+    `docs/target-properties.md` says of itself that §0 is the arc as it
+    stands and §1 onward "describe earlier states and say so", so the
+    identifier and displayed-statement checks read §0 alone. Auditing the
+    record against the present would report its own history as failures.
+    """
+    lines = text.splitlines(keepends=True)
+    lo = next(i for i, l in enumerate(lines) if l.startswith(heading))
+    hi = next((i for i in range(lo + 1, len(lines))
+               if re.match(r"^## ", lines[i])), len(lines))
+    return "".join(lines[lo:hi])
 
 
 def sections(text):
@@ -327,13 +349,27 @@ def audit_register(path):
     return len(failures)
 
 
-def audit(path, decls, suffixes):
+def audit(path, decls, suffixes, current_heading=None):
     text = path.read_text()
     failures = []
 
+    # Sections may be named from anywhere in the document, so the set of
+    # section numbers that exist is read from all of it; every other check
+    # reads only what the document declares to be current.
     have = sections(text)
+    if current_heading is not None:
+        text = current_scope(text, current_heading)
+
+    # A reference naming another document, "`docs/common-layer.md` §1.2",
+    # is qualified and resolves against that document, not this one.
+    elsewhere = set()
+    for doc, ref in re.findall(
+            r"`docs/([a-z-]+\.md)`[^\n]{0,40}?§([0-9]+(?:\.[0-9]+)*)", text):
+        other = ROOT / "docs" / doc
+        if other.exists() and ref in sections(other.read_text()):
+            elsewhere.add(ref)
     for ref in sorted(set(re.findall(r"§([0-9]+(?:\.[0-9]+)*|[A-Z]\b)", text))):
-        if ref not in have:
+        if ref not in have and ref not in elsewhere:
             # a bare "§10" is satisfied by the existence of section 10
             failures.append(("xref", ref))
 
@@ -442,7 +478,7 @@ def audit(path, decls, suffixes):
                                  f"{name} displays `{gaps[0]}`, which the source "
                                  f"does not have at that point"))
 
-    print(f"{path.relative_to(ROOT)}: {len(have)} sections, "
+    print(f"{path.resolve().relative_to(ROOT)}: {len(have)} sections, "
           f"{len(seen)} distinct backticked tokens, {len(shown)} displayed "
           f"statements ({checked} compared verbatim)")
     for kind, item in failures:
@@ -468,16 +504,18 @@ def main(argv):
             suffixes.add(n)
 
     if argv[1:]:
-        paths, register_only = [pathlib.Path(a) for a in argv[1:]], []
+        paths = [(pathlib.Path(a), None) for a in argv[1:]]
+        register_only = []
     else:
-        paths = [ROOT / "docs/report.md"]
+        paths = [(ROOT / "docs/report.md", None),
+                 (ROOT / "docs/target-properties.md", "## 0.")]
         # The register check covers every document in `docs/` except
         # `style.md`, which quotes the banned phrases in order to ban
         # them. A new design record is covered the moment it is added.
         register_only = sorted(
             q for q in (ROOT / "docs").glob("*.md")
             if q.name not in ("report.md", "style.md"))
-    bad = sum(audit(p, decls, suffixes) for p in paths)
+    bad = sum(audit(p, decls, suffixes, h) for p, h in paths)
     bad += sum(audit_register(q) for q in register_only)
     sys.exit(1 if bad else 0)
 
