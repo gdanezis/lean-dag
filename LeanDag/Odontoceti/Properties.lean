@@ -157,6 +157,18 @@ theorem indirect :
         ≤ sr j) :=
   AnchoredRule.indirect Odontoceti.odontocetiLaws.link_congr fun hi h => Odontoceti.exists_least hi h
 
+/-- **Odontoceti has the descent laws** at the core fault model's slack,
+at its two-round wave. -/
+theorem descent :
+    Properties.Descent (odontocetiRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload))
+      (Timed.Good (odontocetiRule (Validator := Validator) (BlockId := BlockId)
+        (Payload := Payload)) (coreReliability Validator))
+      ((Odontoceti.odontocetiAnchored Validator BlockId Payload).wave + 1)
+      (coreReliability Validator).slack :=
+  Timed.descent_of_support _ _ _ (Properties.voteSupport _) (Timed.voteSupport_ofCoverage _)
+    voteSupport_commits indirect (by change 1 ≤ 1 + 1; omega) fun _ _ _ h => h
+
 /-- **And a committed run decides everything below it.** Was a downward
 induction carrying the bound by hand; it is now `Descends.of_indirect`,
 with `Eligible` read as the round inequality. -/

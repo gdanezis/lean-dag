@@ -18,10 +18,7 @@ namespace Odontoceti
 
 theorem descent : Descent := by
   intro Validator BlockId Payload _ _ F _
-  exact descent_of_support (odontocetiLive (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-    (Properties.voteSupport _) (Timed.voteSupport_ofCoverage _)
-    OdontocetiProperties.voteSupport_commits OdontocetiProperties.indirect (by change 1 ≤ 1 + 1; omega)
-    fun _ _ _ h => h
+  exact OdontocetiProperties.descent
 
 theorem holds : Statement := by
   refine ⟨?_, descent, ?_⟩

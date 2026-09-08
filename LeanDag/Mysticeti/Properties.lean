@@ -658,6 +658,18 @@ theorem indirect :
   (AnchoredRule.indirect coreLaws.link_congr fun hi h => exists_least hi h).congr
     (fun _ _ _ => by simp only [coreAnchored_wave] <;> omega)
 
+/-- **Mysticeti has the descent laws** at the core fault model's slack:
+the support commits under coverage, and the indirect rule holds at the
+three-round wave. -/
+theorem coreDescent :
+    Properties.Descent (mysticetiRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload))
+      (Timed.Good (mysticetiRule (Validator := Validator) (BlockId := BlockId)
+        (Payload := Payload)) (coreReliability Validator))
+      3 (coreReliability Validator).slack :=
+  Timed.descent_of_support _ _ 3 coreSupport coreSupport_ofCoverage coreSupport_commits
+    indirect (by change 2 ≤ 3; omega) fun _ _ _ h => h
+
 /-- **L4's capstone form, from the properties.** The shape every
 consumer of direct liveness uses — synchrony from `R`, production to a
 horizon `N`, a `T`-led slot two rounds under it — reached from

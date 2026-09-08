@@ -18,12 +18,8 @@ namespace Nemo
 
 theorem descent : Descent := by
   intro Validator BlockId Payload _ _ _ _
-  exact descent_of_support (nemoLive (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-    (Properties.voteSupport _) (Timed.voteSupport_ofCoverage _)
-    (NemoProperties.voteSupport_commits LeanDag.Nemo.CrashFaults.card_pos)
-    NemoProperties.indirect (by change 1 ≤ 1 + 1; omega) fun _ _ _ h => h
+  exact NemoProperties.descent
 
-/-- The pigeonhole's bound holds for the majority slack at every `n`. -/
 theorem majority_bound (n : ℕ) (hn : 0 < n) :
     2 * (n - LeanDag.Nemo.majority (Fin n)) + 1 ≤ n := by
   unfold LeanDag.Nemo.majority

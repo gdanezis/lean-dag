@@ -140,6 +140,19 @@ theorem indirect :
       (fun sr i j => sr i + (Nemo.nemoAnchored Validator BlockId Payload).wave + 1 ≤ sr j) :=
   AnchoredRule.indirect Nemo.nemoLaws.link_congr fun _ ⟨L, hL, hl⟩ => ⟨L, hL, hl, fun _ _ _ h => h⟩
 
+/-- **Nemo-Nemo has the descent laws** at the majority slack, at its
+two-round wave. -/
+theorem descent [Nemo.CrashFaults Validator] :
+    Properties.Descent (nemoRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload))
+      (Timed.Good (nemoRule (Validator := Validator) (BlockId := BlockId)
+        (Payload := Payload)) (nemoReliability Validator Nemo.CrashFaults.card_pos))
+      ((Nemo.nemoAnchored Validator BlockId Payload).wave + 1)
+      (nemoReliability Validator Nemo.CrashFaults.card_pos).slack :=
+  Timed.descent_of_support _ _ _ (Properties.voteSupport _) (Timed.voteSupport_ofCoverage _)
+    (voteSupport_commits Nemo.CrashFaults.card_pos) indirect (by change 1 ≤ 1 + 1; omega)
+    fun _ _ _ h => h
+
 /-- **And a committed run decides everything below it**, from `Indirect`
 with no induction of its own. -/
 theorem descends {S : Slots Validator} {c : ℕ} (hc : 0 < c)

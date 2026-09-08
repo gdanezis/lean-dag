@@ -17,10 +17,7 @@ namespace MysticetiLive
 
 theorem descent : Descent := by
   intro Validator BlockId Payload _ _ F _
-  exact descent_of_support (mysticetiLive (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-    MysticetiProperties.coreSupport
-    MysticetiProperties.coreSupport_ofCoverage MysticetiProperties.coreSupport_commits
-    MysticetiProperties.indirect (by change 2 ≤ 2 + 1; omega) fun _ _ _ h => h
+  exact MysticetiProperties.coreDescent
 
 theorem holds : Statement := by
   refine ⟨descent, ?_⟩
