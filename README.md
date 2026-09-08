@@ -420,10 +420,6 @@ the set of declarations changes. `make help` lists them.
 | [`docs/related.md`](docs/related.md) | a survey of consensus on uncertified DAGs |
 | [`docs/style.md`](docs/style.md) | writing conventions for the documents and the source |
 
-`docs/archive/` holds design records superseded by later work — each
-carries a status note naming what replaced it and where the current
-account now lives.
-
 ## Contributors
 
 - [Alberto Sonnino](https://github.com/asonnino) — the crash-fault arc

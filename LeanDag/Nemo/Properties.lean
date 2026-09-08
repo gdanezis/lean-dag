@@ -13,7 +13,7 @@ import LeanDag.Properties.Arcs.Headline
 /-!
 # Nemo conforms to the target properties
 
-`docs/archive/porting-plan.md` step 1. `Nemo/Carrier.lean` has the carrier and
+`Nemo/Carrier.lean` has the carrier and
 the three properties that are one Nemo theorem apiece; here is
 `Banded`, the one induction the rule owes, and the liveness pair on top
 of it. Nemo is the cheapest of the four rules — three constructors, no

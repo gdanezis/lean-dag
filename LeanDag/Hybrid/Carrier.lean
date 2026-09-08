@@ -7,7 +7,7 @@ import LeanDag.Properties.Optional.SelfParent
 /-!
 # Hybrid as a carrier, and the three properties its own rules give
 
-`docs/archive/porting-plan.md` step 2: the carrier at indirect threshold `k`.
+The carrier is at indirect threshold `k`.
 The universe is a subtype `{U // HonestNoEquiv U}` rather than a
 hypothesis of the theorems, since `Properties.Agree` is unconditional
 and has no graded form; `Admissible Validator k` stays a hypothesis of

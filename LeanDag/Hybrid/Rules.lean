@@ -31,7 +31,7 @@ variable (Validator) in
 def q : ℕ := Fintype.card Validator - (H.fb + H.fc)
 
 variable (Validator) in
-/-- `archive/hybrid.md`'s tight indirect threshold. -/
+/-- The tight indirect threshold. -/
 def kTight : ℕ := 2 * H.fb + H.fc + 1
 
 variable (Validator) in
