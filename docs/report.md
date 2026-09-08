@@ -344,27 +344,27 @@ proof effort with no corresponding proof content.
    validator on its own view, so what one delivers all deliver (§18.7).
    And the delivered order: `commit`'s descent segments a flush by anchor
    round, and the link clause keeps it from skipping the round above a
-   committed anchor, which is what stops it ever facing a tie (§18.8).
+   committed anchor, which is what stops it ever facing a tie (§18.2).
    The descent is then computed rather than assumed, and since L24's
    tie-break reads only the candidate and its own cone, the record of a
    commit is a function of the block it starts from — which makes the
-   delivered order's agreement a consequence (§18.9). With `τ` and the
+   delivered order's agreement a consequence (§18.3). With `τ` and the
    per-author-and-round filter modelled, what a validator outputs is a
    list, and Validity for reliable authors and Integrity hold of it,
-   with Total order holding of records that agree (§18.10).
+   with Total order holding of records that agree (§18.4).
    **Two of Definition 1's four properties fail.** Two honest validators
    can output different twins of an equivocating anchor, refuting the
    paper's Theorem 13 at `n = 4` on a seven-round model with the commit
-   rule untouched (§18.11); and on the same execution they order two
+   rule untouched (§18.5); and on the same execution they order two
    *reliable* authors' blocks oppositely, which no rule for choosing
-   among twins can repair (§18.12). The rule that repairs both descends
-   to a supported anchor, and no validator can run it: deciding from its
-   own view loses safety and waiting for the evidence loses liveness
-   (§18.14). Both failures are traced to a named step of the paper's own
-   argument: Lemma 12 carries a conclusion about the commit test into a
-   claim about what validators output, and the recursion that determines
-   output is never given a lemma (§18.13). What does hold at a
-   validator's view, and exactly how far, is §18.15.
+   among twins can repair (§18.6). Both failures are traced to a named
+   step of the paper's own argument: Lemma 12 carries a conclusion about
+   the commit test into a claim about what validators output, and the
+   recursion that determines output is never given a lemma (§18.7). The
+   arc is scoped to those refutations: a scheme this development has
+   refuted is not one to integrate with §16's properties, so its safety,
+   liveness, view-relative order and repair developments are not
+   carried.
 
 **Minnow's minimal commit rule fails in two ways** (§19). `crs*`, the
 rule proposed for eventual synchrony, decides a leader slot from the
@@ -5975,11 +5975,13 @@ voter's cone, where the vote goes to the least and only the least;
 lengths and the statement hypotheses pinned; `multi`, three leaders per
 round; and the clause witnesses of §17.3.
 
-## 18. Black Marlin: the three-round commit rule
+## 18. Black Marlin: a refutation
 
-*(modules `LeanDag/BlackMarlin/`; the protocol is Black Marlin [Amo+25],
-a partially synchronous DAG protocol that uses neither reliable
-broadcast nor a common coin, and elects an anchor in every round)*
+*(modules `LeanDag/BlackMarlin/`, witness
+`LeanDagTest/BlackMarlin/Divergence.lean`; the protocol is Black Marlin
+[Amo+25], a partially synchronous DAG protocol that uses neither
+reliable broadcast nor a common coin, and elects an anchor in every
+round)*
 
 Black Marlin commits three rounds after proposal at the core's committee
 `n ≥ 3f + 1`, and without a certificate round. It elects one anchor per
@@ -5987,59 +5989,41 @@ round rather than one per wave, and the test it applies to the anchor
 `B` of round `r` has two clauses: `B` carries support from `n − f`
 distinct validators at round `r + 1`, and some anchor of round `r + 1`
 both references `B` and carries support from `n − f` validators at round
-`r + 2`. The second clause is what the other rules of this development
-obtain from a certificate; §18.3 states what it is used for, which is
-one case of one theorem.
+`r + 2`.
 
-The arc formalises `delivery(r)` (Algorithm 1, L14–L17): §5.1 of the
-paper — the rule and every safety result stated about it (§18.2) — its
-liveness above the structural condition of §6, in place of §5.2's timing
-argument (§18.5), the round rule of L38–L41 and the responsiveness it
-yields (§18.6), Definition 1's Agreement (§18.7), and the order
-`commit`'s descent delivers in (§18.8–§18.10), a refutation of
-Definition 1's Agreement (§18.11), a refutation of its Total order
-(§18.12), where the paper's own proofs go wrong (§18.13), the repair
-that would restore both and why no validator can run it (§18.14), and
-what does hold at a validator's view (§18.15). It is laid out under the statement/proof partition (§17.5); `docs/black-marlin.md` carries its design rationale.
+**This arc is a refutation, and is scoped to be one.** Definition 1's
+Agreement does not hold of the protocol as presented: §18.3 exhibits an
+execution, machine-checked at `n = 4`, `f = 1`, in which two reliable
+validators output different blocks for one author and round and neither
+ever outputs the other's. Its Total order fails too, and on blocks of
+*reliable* authors, for a reason that does not involve the twins at all
+(§18.4). §18.5 locates both failures in the paper's own argument.
 
-**Where the arc lands.** The commit rule's own safety statements hold as
-the paper gives them (§18.2), and so does liveness above the structural
-condition of §6 (§18.5, §18.6). Definition 1's **Agreement** does not.
-§18.11 exhibits an execution, machine-checked at `n = 4`, `f = 1`, in
-which two reliable validators output different blocks for one author and
-round and neither ever outputs the other's — so the protocol as
-presented does not satisfy the property its own Definition 1 asks for.
+**What the arc therefore carries** is the rule (§18.1), the descent and
+the order it delivers (§18.2) — the machinery the refutation reads — and
+the two refutations with the execution behind them. What it carried
+before, and no longer does: the commit rule's own safety results, its
+liveness above the structural condition of §6, the round rule and its
+responsiveness, Definition 1's Agreement as a statement, the
+view-relative order results, and a repair. A scheme this development has
+refuted is not one to integrate with the target properties of §16, so
+the arc has no carrier and states none of them; `audit-conformance.py`
+records it as the one rule with none.
 
-**Its Total order fails too, and on honest blocks.** On the same
-execution two reliable validators deliver two blocks of *reliable*
-authors in opposite orders (§18.12). Neither block has a twin and L27's
-filter never examines either; what orders them is which segment they
-fall in. That failure does not depend on which twin the filter prefers,
-so no rule for choosing among twins repairs it.
+**The repair is gone with the rest, and this is what it established.** Making the descent prefer a *supported* anchor closes the
+execution of §18.3, and every internal claim about it was proved. What
+was never proved, and is argued not to be provable, is that a validator
+can run it: support is a quorum over the **universe**, a validator reads
+a view, and a view carrying a quorum at the round above shares only
+`n − 2f` authors with an anchor's supporters — `f + 1` at `n = 3f + 1`,
+short of the `2f + 1` the test wants. Deciding from what is held selects
+the wrong block; waiting until the quorum is held need never complete.
+The first loses safety and the second liveness, so no member of that
+family is deployable, and carrying its development was not worth the
+weight.
 
-**And no repair keeps both safety and liveness.** The rule that restores
-both descends to a supported anchor, which is a quorum over the
-**universe**. A validator reads a view, and there the rule has two
-implementations: deciding from what is held, which can be too little and
-selects the wrong block, and waiting until the quorum is held, which up
-to `f` Byzantine supporters need never complete. The first loses safety
-and the second loses liveness (§18.14).
-
-**And the failures are located in the paper's own argument.** Every
-lemma of its safety section is about the test at L16; what a validator
-outputs is governed by the recursion, which reads support nowhere.
-Lemma 12 carries the one into the other in a single clause — "by
-construction of the delivery function, party `j` must have also
-committed `B`" — which is asserted rather than argued, and is false.
-Theorem 13's Agreement and Total order clauses both depend on it
-(§18.13).
-
-**What does hold at the view is stated and bounded.** Every reliable
-validator commits at recurring rounds on its own view, by an explicit
-time, and delivers there whatever any view committed below; and two
-records agree on the delivered order for as long as the rotation names
-reliable validators. Both boundaries fall in the same place and neither
-extends past it (§18.15).
+It is laid out under the statement/proof partition (§17.5);
+`docs/black-marlin.md` carries its design rationale.
 
 ### 18.1 The rule
 
@@ -6079,278 +6063,7 @@ does not admit is delivered inside the causal history of a later anchor
 that it does admit, and the whole of what a validator decides is
 `CommittedIn`.
 
-### 18.2 Safety
-
-**BM1**–**BM7** are the conjuncts of `BlackMarlin.Safety.holds`,
-transcribing §5.1 of the paper. None assumes synchrony, a global
-stabilisation time, or any bound beyond `n ≥ 3f + 1`; as in the paper
-they hold during the asynchronous period as well.
-
-They survive intact, and they are not Definition 1's Agreement. These
-are statements about which anchors the rule admits; Agreement is a
-statement about what validators output, which the rule alone does not
-settle. §18.11 refutes it.
-
-**BM1** (`eq_of_isAnchor_of_supported`, the paper's Lemma 3): two
-supported anchor blocks of one round are one block. Their support
-quorums share `n − 2f ≥ f + 1` authors, each supporting both, and a
-validator supporting two blocks of one author and round is an
-equivocator.
-
-**BM2** (`reaches_of_supported`, Lemma 5): a supported block is in the
-causal history of every block of the universe two rounds above it or
-higher, whoever authored it. It consumes no definition of this arc
-beyond `Supported`, being the core's
-`reaches_of_honest_support_of_card` followed by
-`reaches_pred_of_round_le`.
-
-**BM3** (`quorum_authorsAt_of_lt`, Lemma 4): below the highest round of
-the DAG, every round carries blocks from a quorum of distinct authors —
-a consequence of validity alone.
-
-**BM4** (`committed_of_committedIn`, `mem_ids_of_committedIn`): a
-validator's verdict is a verdict of the universe, and the validator
-holds the block it committed. The second half is not a clause of
-`CommittedIn` but a consequence of one — the linking anchor is in the
-view, a view is closed under references, and the link is a reference.
-
-**BM5** (`reaches_of_committed_of_le`, Lemma 6): two committed anchors,
-read from any two views, are one block or one lies in the causal history
-of the other.
-
-**BM6**: the causal history of the lower of two committed anchors is
-contained in that of the higher. `commit(B)` delivers the undelivered
-blocks of `past(B)` and then `B`, so containment of causal histories is
-containment of delivered prefixes: two validators' deliveries agree
-wherever both have delivered, and neither can retract. The order within
-each increment is the deterministic sort the paper writes `τ`, which the
-rule does not constrain and this arc does not model.
-
-### 18.3 The second clause, and the case that uses it
-
-The three cases of BM5 are three ranges of the round gap between the two
-committed anchors. At gap `0`, BM1 identifies them. At gap `2` or more,
-BM2 applies to the higher block itself and the link clause is never
-consulted. The gap of exactly `1` is the only case that uses it: the
-lower anchor's linking block and the higher anchor are both supported
-anchors of round `r + 1`, so BM1 identifies *them*, and the link is then
-a direct reference from the higher anchor to the lower.
-
-Support alone would not suffice, and the refutation is on data. BM2
-begins at a gap of two, and Figure 1 carries the gap of one: `B3` and
-`B4` are both supported anchors, one round apart, and `decide` settles
-that neither is in the causal history of the other. A rule with the
-first clause only would admit both, and BM6 would fail of them. That is
-the whole of what the second clause contributes, and it is why the rule
-commits at three rounds rather than at two.
-
-### 18.4 The partition, the witness, and the departures
-
-The arc is laid out as `Model/` (definitions only, theorem-free),
-`Safety/Statement.lean` (definitions and a `def Statement : Prop`, never
-a proof), `Safety/Proof.lean` and `Helpers/` (generated, unaudited);
-`scripts/check-arc-holes.py`, which covers both partitioned arcs,
-rejects proof holes anywhere in the arc, proofs in a statement file and
-theorems in a model file. `BlackMarlin.Safety.holds` depends on the
-three standard axioms.
-
-The witness (`LeanDagTest/BlackMarlin/Model.lean`) is the paper's
-Figure 1: four validators with validator `0` Byzantine, `f = 1`, six
-rounds, one anchor per round. Anchors `B0` to `B3` all carry a quorum of
-support, but validator `0` omits `B3` from `B4`, so `B3` fails the link
-clause while `B0`, `B1` and `B2` satisfy the whole rule — `decide`
-settles both halves, and `linkers Ubm 15 3 = ∅` names the clause that
-fails. The seven claims are then instantiated at this universe through
-`Safety.holds` itself, so what the witness exercises is the proved
-theorem rather than a restatement of it.
-
-Three departures from the paper are recorded rather than repaired.
-First, the core's `ValidWrt` carries a self-parent clause (P3′, §4.4)
-that Black Marlin does not require; it restricts the universes the
-results range over and is consumed by none of them, so what is proved
-here is weaker than the paper by exactly that clause, and removing it
-would be a change to the core rather than an addition to an arc.
-Second, weak references are not modelled, so the causal history followed
-throughout is the strong one and BM2 and BM5 conclude something stronger
-than the paper's `past`. Third, `Reaches` is reflexive where the paper's
-`past` and `strong` exclude their own argument, which is why BM5 states
-equality as a separate disjunct.
-
-### 18.5 Liveness, and the run of two
-
-The paper reaches liveness through §5.2's timing argument: Lemma 7's
-`3∆` bound on a round, Lemma 10 on the timeout not firing when anchors
-are honest, Lemma 11 on the expected number of rounds to a correct
-anchor. This development states liveness above the structural condition
-instead (§6), so those are replaced rather than transcribed, and no
-timeout, message delay, stabilisation time or probability appears in
-what follows. §18.13 records why the last of them cannot be
-transcribed: Lemma 11 takes an expectation over a rotation the protocol
-deploys deterministically. Five claims (`BlackMarlin.Liveness.holds`):
-
-**BML1** — a run of two consecutive reliable anchors, over three
-populated rounds, is committed. `Supported` is the core's `DirectCommit`
-under another name, so `directCommit_of_votesAt` applies verbatim:
-coverage makes every reliable block one round above the anchor
-reference it, and those authors carry a quorum. The link clause then
-costs no hypothesis of its own — the round-`(r+1)` anchor is one of
-those reliable blocks, so the same coverage fact already makes it
-reference the round-`r` anchor, and it is supported by the same
-argument one round higher.
-
-**BML2** — the full view reaches the verdict the rule reaches, so BML1
-is about a decision some validator can take.
-
-**BML3** (the paper's Lemma 8) — a reliable validator's block lies in
-the causal history of every block two rounds above it, hence of every
-committed anchor there. It consumes no clause of the commit rule:
-coverage gives the block a support quorum and BM2 carries it upward.
-With BML4 this is Definition 1's Validity property, for reliable
-authors.
-
-**BML4** — the rotation names, for every round, a later round that any
-DAG grown two rounds past it and covered from `R` commits. The universe
-is quantified inside the conclusion, as the core's `CommitsAt` is and
-for the same reason (§6.6).
-
-**BML5** — round robin supplies the run of two, at every committee and
-whichever validators are Byzantine.
-
-The last is a theorem where the core's counterpart is an assumption, and
-the difference is the protocol's rather than the mechanisation's. The
-core's `FairRunOn` needs runs of three; its docstring records the
-pigeonhole for per-slot rotation as prose rather than proving it, and
-`Common/WaveRobin.lean` supplies runs of three by rotating in waves instead.
-Black Marlin needs runs of two, and that case is a short counting
-argument: were no two cyclically adjacent anchors reliable, the
-successor map would inject the reliable set into the Byzantine one,
-giving `n − f ≤ f` against `3f + 1 ≤ n`. So the rotation the paper
-deploys discharges the clause outright. What the second commit clause
-contributes to safety (§18.3), it recovers here: asking only for two
-consecutive reliable anchors is what makes the deployed rotation's
-fairness provable.
-
-Liveness runs on a second witness universe — four rounds, every block
-referencing the whole round beneath it. Figure 1 cannot serve, and
-`decide` says why: validator `0` omitting the round-3 anchor from its
-round-4 block is exactly a failure of coverage among the reliable
-validators.
-
-Two things §5.2 asserts are still not covered. **Delivery completeness**
-for blocks of arbitrary authors needs the weak-reference window; and
-**the deterministic sort** `τ`, which turns BM6's nesting into the
-sequence Definition 1's Total Order speaks of, is not modelled.
-
-### 18.6 The round rule, and what the reactive exit costs
-
-`delivery(r)` is one half of the protocol. The other is L38–L41, which
-says when a round is concluded: a validator waits for blocks from `n − f`
-parties and then for **either** the round's anchor together with the two
-anchors below it supported, **or** the round's timeout. That dual
-condition is what keeps the protocol running at the actual delivery time
-rather than at `Δ` without deadlocking on a Byzantine anchor, and it is
-the analogue of the reactive schedule of §11.
-
-`ConcludesAt` states the first disjunct over a `View`, from the three
-clauses `QuorumIn`, `AnchorIn` and `SuppAnchorIn`; the last reads the
-same `SupportedIn` the commit rule reads, so the round rule and the
-commit rule share their arithmetic. `Pace` extends `PaceCore` (§6.9), so
-views, convergence, the progress rule and production are inherited, and
-two clauses are new. `anchor_or_wait` is the round rule read on the block
-a validator produces — a block at the round above a reliable anchor
-either references it, or its builder waited the full timeout — and it is
-the core's `ReactivePace.vote_or_wait`, unchanged, since concluding a
-round requires holding that round's anchor. `prompt_conclude` bounds the
-exit from above, and it is *not* the core's `prompt_vote`: there the exit
-fires once the leader's block is held, here once the whole round rule is
-satisfied.
-
-**BMR1** carries the fallback: past GST, with the timeout clearing
-`2Δ + proc`, every reliable block at the round above a reliable anchor
-references it, by the exit or by the fallback. **BMR2** is what that
-yields — a run of two reliable anchors is committed **with no coverage
-hypothesis at all**. `SynchronisedOn` asks that every reliable block
-reference every reliable block beneath it, which a reactive builder
-deliberately does not do; what survives is exactly what the commit rule
-counts.
-
-**BMR3 is the price of the extra clauses, and it is a round.** For the
-exit to be guaranteed at round `r + 2`, the anchors of rounds `r`,
-`r + 1` and `r + 2` must all be reliable: `quorum` and `anchor` come from
-the round-`(r+2)` blocks, `suppAnchor(r+1)` from those blocks referencing
-the round-`(r+1)` anchor, and `suppAnchor(r)` from the round-`(r+1)`
-blocks referencing the round-`r` anchor. A run of three, where the commit
-rule asks for two (§18.5).
-
-**BMR4** says the third is paid once. `suppAnchor(r)` was already checked
-to conclude round `r + 1`, and holdings only grow, so a validator already
-on the fast path needs one further reliable anchor per round: entering
-costs a run of three, remaining costs a run of two. This is where the
-run-of-three pigeonhole `Common/WaveRobin.lean` sidesteps re-enters the arc —
-not for the commit rule, where BML5 discharges a run of two outright, but
-for the guarantee that no timeout ever fires.
-
-**BMR5** and **BMR6** are then the §11 bounds in Black Marlin's
-constants: the round above is entered within `D + δ + proc` of round
-entry, past GST within `Δ + δ + 2 · proc` with the spread supplied by
-catch-up, and when those undercut the timeout the fallback branch of
-`anchor_or_wait` is dead. The timeout appears in neither latency bound.
-They play the roles of the paper's Lemmas 7 and 10 without their message
-schedule.
-
-The witnesses are two. `ConcludesAt` and its clauses are settled by
-`decide` on the covered four-round model — round `3` may be concluded,
-round `4` may not. The pacing structure is witnessed on `Ugrow`, the
-model §11's reactive arc uses, at the same holdings and the same build
-spacing of `6`; processing is `7` against the core's `5`, because the
-exit is bounded by the round rule rather than by holding one block.
-
-### 18.7 Agreement
-
-Definition 1's Agreement — if an honest party delivers a block, every
-honest party eventually delivers it. Four claims
-(`BlackMarlin.Agreement.holds`).
-
-**BMA1** is the no-divergence half, and it is BM6 read at a single
-block: a block delivered with a committed anchor is delivered with every
-committed anchor from that round on, whichever views the two verdicts
-came from.
-
-**BMA2** is the new work. BML1 and BMR2 say a verdict is *available*
-over the universe; Definition 1 speaks about what a party outputs. BMA2
-runs the same run-of-two argument inside `viewAt v t` rather than inside
-the universe, with `PaceCore.holds_roundBlocks` (§6.9) putting the two
-rounds the rule reads into every reliable validator's hands by
-`max (latest (r+1)) (latest (r+2)) + Δ`. It needs no hypothesis beyond
-BMR2's: that every build past round `R` lies past GST is derived from
-`built_lt`, since the round number bounds the build time from below.
-
-**BMA3** composes them — what one validator delivered with an anchor
-committed at round `ρ`, every reliable validator delivers with the
-anchor it commits at a reliably anchored `r ≥ ρ`, on its own view and by
-an explicit time — and **BMA4** says such an `r` lies above every round,
-so the "eventually" is discharged by the rotation rather than assumed.
-
-**What is stated, and what is not.** A validator delivers `B` when it
-calls `commit(A)` for an anchor it committed with `B ∈ past(A)`, so the
-claims are about `B ∈ history U L` for the anchor `L` each validator
-commits. Two things stand between that and the `ab-deliver` events of
-Definition 1, and neither is modelled: the recursion of `commit`, which
-visits the undelivered anchors of `strong(A)` before flushing and so
-fixes the **order** blocks are delivered in, and the
-per-`(creator, round)` filter of L27, which decides which of an
-equivocator's twins is delivered. This is agreement on the delivered
-**set**, not on the sequence, and not on the choice among twins. Of
-Definition 1's four properties, Validity holds for reliable authors
-(BML3 with BML4) and Agreement is BMA3; Integrity rests on the delivered
-set `D` and Total Order on `τ`, and neither is modelled.
-
-Agreement on the delivered **event** does not follow from BMA3, and does
-not hold: §18.10 models the filter and finds the gap, and §18.11 closes
-it with an execution in which two reliable validators output different
-twins.
-
-### 18.8 The delivered order, and the second job of the link clause
+### 18.2 The delivered order, and the second job of the link clause
 
 `commit(B)` does not deliver `past(B)` in one piece. It descends through
 the undelivered anchors of `strong(B)`, flushing one `τ`-sorted segment
@@ -6394,14 +6107,14 @@ Order at the granularity of segments; the order *within* a segment is
 `τ`, which the rule does not constrain and this arc does not model.
 
 **BMD3's stretch hypothesis is an artifact of taking the record as
-given**, and §18.9 removes it by computing the descent instead. What the
+given**, and §18.3 removes it by computing the descent instead. What the
 arc has at this point is Validity for reliable authors (BML3 with BML4),
 agreement on the delivered **set** between committed anchors (BMA3), and
 agreement by segment between records that agree (BMD6). None of the
 three is Definition 1's Agreement or its Total order, both of which are
-about what validators output; §18.11 and §18.12 refute those.
+about what validators output; §18.5 and §18.6 refute those.
 
-### 18.9 The descent computed, and BMD3 closed
+### 18.3 The descent computed, and BMD3 closed
 
 L24 chooses among tied candidates by minimising
 `|round(A) − round(maxAnchor(strong(A)))|`. That quantity reads the
@@ -6439,12 +6152,12 @@ reads the candidate alone.
 
 On data, the computed record of the four-round model's round-3 anchor is
 its four anchors, by `decide`, and it is the record the hand-built flush
-of §18.8 carries.
+of §18.2 carries.
 
-### 18.10 The delivered sequence, and what Definition 1 has
+### 18.4 The delivered sequence, and what Definition 1 has
 
 Definition 1 speaks about `ab-deliver` events — a list, not a set.
-§18.8 and §18.9 fixed the segment boundaries; this section models the
+§18.2 and §18.3 fixed the segment boundaries; this section models the
 sort `τ` of L26 and the filter of L27, so that what a validator outputs
 is a list.
 
@@ -6476,7 +6189,7 @@ twin that is output depends on the segmentation, and a descent from a
 higher anchor takes the round-`ρ` anchor its own chain reaches, which
 need not be the anchor another validator committed at `ρ`. **BMO8** rules
 the divergence out wherever the two descents meet at a common block, and
-§18.11 and §18.12 exhibit an execution where they do not — costing
+§18.5 and §18.6 exhibit an execution where they do not — costing
 Agreement and Total order respectively.
 
 On data, identifiers of the four-round model run downward along
@@ -6485,7 +6198,7 @@ is not vacuous. The list delivered there is
 `[0, 1, 2, 3, 5, 4, 6, 7, 10, 8, 9, 11, 15]`, one sorted segment per
 anchor round with each anchor last in its own, settled by `decide`.
 
-### 18.11 Agreement, refuted on data
+### 18.5 Agreement, refuted on data
 
 Two validators' records need not agree at a round where neither
 committed directly, and the arc exhibits an execution where two honest
@@ -6561,14 +6274,14 @@ different blocks when the anchor party is Byzantine" — which holds of
 L16, and of the path that runs when L16 fails does not.
 
 A repair is visible — let the descent prefer a *supported* anchor among
-tied candidates, which BM1 makes unique — and §18.14 tests it as a
+tied candidates, which anchor uniqueness makes unique — and it is
 side-condition on the record rather than as a change to the model. The
 same execution costs the protocol its Total order as well, on blocks
-that have nothing to do with the equivocation, which is §18.12.
+that have nothing to do with the equivocation, which is §18.6.
 
-### 18.12 Total order, refuted on blocks of reliable authors
+### 18.6 Total order, refuted on blocks of reliable authors
 
-§18.11 refutes Agreement, and that refutation turns on which twin each
+§18.5 refutes Agreement, and that refutation turns on which twin each
 record delivers. The delivered **sequence** fails for a reason that does
 not involve the twins at all, and the same execution exhibits it.
 
@@ -6617,7 +6330,7 @@ two sequences agree once `3` is removed.
 `commitSeq` filters the anchor `B` as well as the blocks of its segment,
 which is what the paper's §4.4 requires in prose and what the pseudocode
 at L30 does not implement. That is the reading under which the
-refutations above stand, and §18.13 records what the literal one costs.
+refutations above stand, and §18.7 records what the literal one costs.
 
 **Where the defect sits.** The equivocation is a necessary condition and
 not the mechanism, and a controlled comparison separates the two. Hold
@@ -6628,16 +6341,12 @@ only the descent:
 flushRecord Udiv 8 2 = some 8 ∧ flushRecord Udiv 19 2 = some 12
 ```
 
-```lean
-suppAnchorsOf Udiv (strongOf Udiv 19) = {8} ∧
-    descendS Udiv 19 = some 8 ∧
-    flushRecordS Udiv 19 2 = flushRecordS Udiv 8 2
-```
-
-The same equivocation, and no divergence. BMT1 gives the converse: remove
-the equivocation and there is no divergence either. Both are necessary,
-and only one of them is a component that could have been written
-differently.
+A support-preferring descent, run over the universe, gives the same
+equivocation and no divergence; removing the equivocation gives no
+divergence either. Both are necessary, and only one of them is a
+component that could have been written differently — but neither
+alternative is a rule a validator can run, for the reason the chapter
+opening records.
 
 **The commit rule's safety is not what is lost.** BM1 through BM7 stand,
 and `¬ Supported Udiv 12 2` — the rule never admits `12`, correctly. §4.4
@@ -6659,21 +6368,19 @@ governs what is delivered.
 **Three conditions, each necessary.** An equivocating anchor, or BMT1
 applies. A *skipped* anchor round — `19` omits `14`, so
 `coneAnchors Udiv 19 3 = ∅` and the descent lands on the twins instead of
-stepping through round `3`, where BMD1's `StepUnique` would leave one
-candidate; BMD5 shows the link clause forbids this above a *committed*
-anchor, and `14` is supported but not committed. And a support-blind
-choice among what it finds, or `descendS`. The descent supplies two of
-the three.
+stepping through round `3`, where `coneAnchors_subsingleton` would leave
+one candidate; the link clause forbids this above a *committed* anchor,
+and `14` is supported but not committed. And a support-blind choice among
+what it finds. The descent supplies two of the three.
 
-Where the equivocation is irreducible is one level further down: `descendS`
-repairs the descent over the universe, and §18.14 is why no validator can
-run it — telling the twins apart needs support a view need not carry.
+Where the equivocation is irreducible is one level further down: telling
+the twins apart needs support, and support is a fact about the universe
+that a view need not carry.
 
 **This is the more robust of the two failures.** It does not depend on
 which twin the filter prefers, so no rule for choosing among twins
-repairs it — and §18.14 refutes that family for Agreement anyway. What
-would repair it is a rule that makes the two descents agree, and §18.14
-is why no validator can run one.
+repairs it. What would repair it is a rule that makes the two descents
+agree, and the chapter opening records why no validator can run one.
 
 It also disposes of the reading that relaxes Integrity. Dropping L27, so
 that a *block* rather than an author-and-round is what may not be output
@@ -6681,7 +6388,7 @@ twice, leaves the segmentation untouched, and the segmentation is what
 differs — the twins then come out in opposite orders as well, turning
 the Agreement failure into a second Total order failure.
 
-### 18.13 Where the paper's proofs go wrong
+### 18.7 Where the paper's proofs go wrong
 
 Every lemma of the paper's §5.1 is a statement about the test at **L16**. What a
 validator outputs is governed by the recursion of L18–L32, which selects
@@ -6709,7 +6416,7 @@ and the conclusion in the other, and no lemma connects them. Second, the
 connecting claim is **asserted rather than argued**, and it does not
 hold: the descent visits one anchor per round, chosen by `maxAnchor` and
 L24's metric, so `B ∈ past(B′)` gives `j` no reason to descend through
-`B` rather than through a twin. §18.11's execution is exactly that —
+`B` rather than through a twin. §18.5's execution is exactly that —
 `i` commits `8` under L16, `j` commits `19` with `8 ∈ past(19)`, and
 
 ```lean
@@ -6735,7 +6442,7 @@ the step omits the filter it needs to survive.
 > in which the anchor blocks are committed (L16)
 
 — and that is false: the order is fixed by the anchors the *recursion*
-flushes, and those include blocks that never satisfied L16. In §18.12's
+flushes, and those include blocks that never satisfied L16. In §18.6's
 execution one validator's boundary at round `2` is `12`, carrying one
 supporter, and the other's at round `1` is `7`, carrying two of four;
 neither is L16-committed, and they are what order `5` and `7` oppositely.
@@ -6749,7 +6456,7 @@ follows, has both right.
 **Theorem 13, Integrity**, argues that the delivered set makes `j` output
 at most once per author and round. L30 sits outside the loop L27 guards,
 so the anchor `B` is `ab-deliver`ed whatever the delivered set holds, and
-on the literal pseudocode the first validator of §18.11's execution —
+on the literal pseudocode the first validator of §18.5's execution —
 having delivered `8`, then descending to `12` — delivers both, breaking
 Integrity with none of the preceding argument needed. The paper's §4.4
 says in prose that the filter applies to every block, and the pseudocode
@@ -6781,11 +6488,11 @@ its time-complexity section, does not follow from anything proved.
 | Lemma 6 | committed anchors form a chain | BM5, proved |
 | Lemmas 7–10 | round advance and support after GST | replaced by the structural condition (§18.5) |
 | Lemma 11 | expected rounds to a commit | probability over a deterministic rotation; BML5 gives the recurrence without it |
-| Lemma 12 | `i` commits `B` iff `j` eventually commits `B` | **false** (§18.11) |
+| Lemma 12 | `i` commits `B` iff `j` eventually commits `B` | **false** (§18.5) |
 | Thm 13, Validity | | holds for reliable authors, BMO9 |
-| Thm 13, Agreement | | **refuted** (§18.11) |
+| Thm 13, Agreement | | **refuted** (§18.5) |
 | Thm 13, Integrity | | holds of the filter as the paper's §4.4 reads it; fails on the literal L30 |
-| Thm 13, Total order | | **refuted** (§18.12) |
+| Thm 13, Total order | | **refuted** (§18.6) |
 
 **What the pattern is.** Nothing in §5.1 is wrong about the commit rule,
 and the paper's §4.4 claims, correctly, that its conditions "prevent honest parties from
@@ -6793,204 +6500,6 @@ committing different blocks when the anchor party is Byzantine", which
 is true of L16. The proofs go wrong where they carry a conclusion about L16 into
 a claim about what validators output, and the recursion — which is what
 determines output — is never given a lemma of its own.
-
-### 18.14 The repair, and why no validator can run it
-
-§18.11 names a repair. This section makes it as a **side-condition**
-rather than a change to the model — `descend`, `flushRecord` and
-everything proved of them stand, and what is added sits beside them —
-and then asks whether a validator could apply it.
-
-**The weak form filters the tie-break.** A record is
-*support-preferring* when, at any round where some anchor carries a
-quorum of support, what it flushes there is supported; `descendSupp`
-filters the candidates of L21–L24 to those the rule could commit,
-falling back to L24 where none is. **BMP1** is why that is deterministic:
-the candidates of a step share a round, and BM1 gives a round one
-supported anchor, so where the filter bites nothing is left to break ties
-over. **BMP2** and **BMP3** say the repair takes the supported anchor
-where there is one and is the original rule where there is not, so it
-refines L21–L24 rather than replacing it. **BMP5** is the conclusion: two
-support-preferring records that both flush at a round with a supported
-anchor flush the same block, which is what §18.11's execution lacked.
-
-**It does not close the general case.** `descendSupp` chooses among the
-candidates L21–L24 already offers, so where the cone reaches a round's
-supported anchor but the *step* does not — the block it steps through
-citing a twin instead — the filter is empty and the fallback takes the
-twin.
-
-**The strengthened form drops the tie-break instead of filtering it.**
-`descendS` descends to the highest-round supported anchor of the cone and
-nowhere else. **BMP7** answers the equivocation-without-quorum case: a
-round whose anchors carry no quorum is not a boundary at all, so no
-choice is made there and two records cannot part over one. **BMP8** is
-that nothing is passed by — above a committed anchor at `ρ` a supported
-anchor sits at every round the chain could land on, the anchor itself
-from `ρ + 2` up by BM2 and its linking anchor at `ρ + 1` because the
-commit rule makes it supported, with BM1 fixing which block each is.
-**BMP9** and **BMP11** complete it: two records whose tops are committed
-anchors both reach the lower of the two, BM5 putting it in the higher's
-cone, so they agree at every round below, with no hypothesis about what
-lies between the two tops.
-
-**Neither form costs anything of the universe.** What the liveness
-results conclude is `Committed`, the conjunction of `IsAnchor`,
-`Supported` and `Linked`, which mentions no part of the descent —
-**BMP6** is that observation. BML1–BML5 and BMR1–BMR6 hold of the
-repaired protocol word for word; **BMP4** adds that a step never stalls
-and never moves to another round, and **BMP10** that the descent still
-terminates; **BMP12** is the recurrence of committed rounds restated, so
-no execution is stuck after synchrony. The one price is segmentation: a
-chain through a different block descends through a different cone, so a
-record may flush at different rounds. No block is lost, and segments only
-coarsen.
-
-**Which is where the repair stops, because a validator reads a view.**
-`Supported` is a quorum over the universe. **BMP13** closes the gap in
-one case: an anchor by a *reliable* author, past the round coverage takes
-hold, is referenced by every reliable block of the round above, so any
-view holding those sees the quorum. `SynchronisedOn` constrains only
-`T`-authored blocks, so coverage says nothing about a **Byzantine**
-author's anchor — and a Byzantine author's anchor is the whole occasion
-for the repair.
-
-The counting is the obstruction. A view carrying a quorum at the round
-above an anchor shares only `n − 2f` authors with that anchor's
-supporters, which at `n = 3f + 1` is `f + 1`, short of the `2f + 1` the
-test wants. §18.11's execution carries such a view: the cone of the
-round-4 anchor holds a quorum of authors at round `3`, so its holder
-could conclude that round and run the rule, and yet it sees two of `8`'s
-three supporters, the third being the block that anchor does not
-reference.
-
-**Every rule a validator could run, and how each answers.**
-
-| rule | what it reads | verdict |
-| --- | --- | --- |
-| L24's gap metric | the candidates and their own cones | takes the uncommitted twin in §18.11; ties exactly where the twins share a cone |
-| a canonical order on the candidates | the identifiers | already in the model — `descend` takes the `≤`-least of the gap-minimisers — and takes the uncommitted twin |
-| any support-blind function | the candidates and their own cones | refuted as a class |
-| delivering both twins | nothing — L27's filter dropped | turns the Agreement failure into a Total order failure (§18.12) |
-| counting support in the descent's cone | the cone, view-independently | promises the committed twin `1` against its twin's `2f`; wrong at `f = 1` |
-| a quorum of support (`descendS`) | the universe | correct, and not evaluable from a view |
-
-**The support-blind rules fall as a class.** Give the twins the same
-references. They then agree in round, in creator and in cone, so every
-function of the candidate blocks and their own histories returns one
-answer on both: L24's metric ties exactly, and a canonical order decides
-by identifier. Two universes witness the consequence, alike in all of
-those respects and differing only in which twin the round-3 blocks
-reference. `strongOf` agrees on the twins within each and across both;
-`8` is the committed twin in one and `12` in the other; and `descend`,
-which reads neither, answers `8` in both — right once and wrong once.
-
-**Counting support in the cone falls too.** The natural weakening is
-relative rather than absolute — prefer the twin more of the descent's own
-cone references — and it is view-independent by construction, every
-validator descending from one block reading one cone. It has no margin. A
-committed twin holds `2f + 1` supporters of `3f + 1`, at least `f + 1` of
-them reliable; a reliable supporter authors one block at the round above
-and that block references the twin, so it counts exactly when the cone
-holds it, and a cone need only carry `n − f` authors. **One**
-cone-supporter is all the committed twin is promised. Its twin may hold
-`2f`: the two supporter sets meet only inside the `f` Byzantine
-validators, since supporting both means authoring two blocks at one
-round, and `f` more sit outside the quorum. Both ends are realised at
-`f = 1`, on four validators over seven rounds with the twins given the
-same references, so the rule fails at the smallest committee the protocol
-admits.
-
-**So the repair has two implementations and neither is sound.**
-
-*Decide from what is held.* The rule is evaluated against `SupportedIn`,
-which under-reports. §18.11's execution carries a view seeing two of
-three supporters; the `f = 1` model carries one seeing **no** twin
-supported at all. A validator that descends regardless selects by some
-fallback, and every fallback available to it is a refuted row of the
-table. **Safety fails.**
-
-*Wait until the quorum is held.* A committed twin's `2f + 1` supporters
-include at least `f + 1` reliable ones and up to `f` Byzantine ones. The
-reliable blocks arrive; the Byzantine ones need never be sent, and under
-partial synchrony nothing obliges them to be. The `f = 1` model exhibits
-it: the deciding supporter of the committed twin is authored by the
-equivocator and referenced by no reliable block, so a view holding every
-reliable block and everything those reference sees `{1, 2}` for one twin
-and `{0, 3}` for the other — neither a quorum, and no further reliable
-block will settle it. **Liveness fails.**
-
-**What is and is not established.** The refuted class is the
-support-blind one, together with the named rules of the table and the two
-implementations of `descendS`. No claim is made that every conceivable
-view-local rule fails. What is claimed is narrower and enough: the
-protocol as presented satisfies neither Definition 1's Agreement nor its
-Total order, the rule that restores both cannot be evaluated by a
-validator that decides from its own view, and the rule that waits for the
-evidence can be made to wait without end.
-
-### 18.15 Liveness and the delivered order at a validator's view
-
-§18.5, §18.6 and BMP12 conclude `Committed U L r`: the **universe**
-admits a commit at that round. Liveness asserts something else. A
-validator delivers from its own view, and the universe is a device of
-this model rather than an object anyone holds, so a liveness result read
-there is about the wrong object. The same applies to the delivered order,
-whose agreement §18.8 states of records rather than of validators. This
-section states both where they belong
-(`BlackMarlin.ViewLiveness.holds`, `BlackMarlin.ViewOrder.holds`).
-
-**BMV1, `NoValidatorStuck`.** Above every round the rotation names a
-later one that *every* reliable validator commits **on its own view**, by
-a time the pace supplies, in any sufficiently grown DAG under any pace.
-BML4 said such a round exists; this says everyone reaches it.
-
-**BMV2, `NothingHeldBack`.** And what any view committed below that round
-is in what every reliable validator delivers at it. BMA3 asks for a
-reliably anchored round above `ρ` and the rotation supplies one, so the
-hypothesis becomes a conclusion.
-
-**BMV3, `ReadableAtReliableAnchor`, is why BMV1 carries a time.** At a
-reliably anchored round past coverage, an anchor is referenced by every
-reliable block of the round above, so a view holding those sees the
-quorum. The commit rule's input at such a round is reliable blocks, and
-coverage delivers reliable blocks — so the rule applies without waiting
-on anything a Byzantine validator might withhold. On the four-round model
-the reliable supporters of the round-2 anchor are already a quorum, so
-the equivocator's block there is not needed even though it exists.
-
-**BMT1, `ReliableAnchorPins`, does the same for the order.** Two records
-that flush at a round whose anchor is reliable flush the same block,
-whatever views they came from. This needs no agreement argument and no
-coverage: the block flushed there is that round's anchor, its author is
-correct, and `no_equivocation` leaves exactly one such block in the
-universe. A reliable anchor gives the descent no choice, so every view
-makes the same one.
-
-**BMT2, `AgreeOnReliableStretch`.** BMD3 needs a round two records agree
-at; BMT1 supplies one, so agreement descends from any reliably anchored
-round through the stretch a record flushes at, with nothing assumed about
-how either validator got there.
-
-**BMT3, `OrderAgreesWhenAnchorsReliable`.** Where every anchor below a
-round is reliable, two records flushing at the same rounds deliver the
-**same list** — Definition 1's Total order, unconditionally, on that
-stretch.
-
-**Where the arc ends, and why there is nothing past it.** Both boundaries
-fall in the same place. The commit rule reads support at a round the
-rotation names, and where the rotation names a reliable validator
-coverage supplies the input; the descent reads support at whichever
-anchor its chain lands on, and no clause constrains that anchor's author.
-So BMV3 and BMT1 hold at reliably anchored rounds and have no counterpart
-elsewhere: §18.14 exhibits a view holding every reliable block in which
-neither twin is supported, and §18.12 exhibits two records that order two
-reliable authors' blocks oppositely with one Byzantine anchor below them.
-
-The protocol is therefore live at the view for the delivered **set**, its
-delivered order agrees exactly as far as the rotation is reliable, and
-neither statement extends. BMT3 is proved and its converse refuted on
-data, so between them nothing is left open.
 
 ## 19. Minnow: the minimal commit rule, and two defects
 
@@ -10771,28 +10280,11 @@ reused.
 | BM1 | two supported anchor blocks of one round are one block | `BlackMarlin.eq_of_isAnchor_of_supported` *(BlackMarlin/Helpers/Rules)* |
 | BM2 | a supported block is in the causal history of every block two rounds above it | `BlackMarlin.reaches_of_supported` *(BlackMarlin/Helpers/Rules)* |
 | BM3 | below the highest round, every round carries a quorum of distinct authors | `BlackMarlin.quorum_authorsAt_of_lt` *(BlackMarlin/Helpers/Rules)* |
-| BM4 | a view's verdict is the universe's, and the view holds the block it committed | `BlackMarlin.committed_of_committedIn`, `BlackMarlin.mem_ids_of_committedIn` *(BlackMarlin/Helpers/Decision)* |
 | BM5 | two committed anchors are one block, or one is in the causal history of the other | `BlackMarlin.reaches_of_committed_of_le` *(BlackMarlin/Helpers/Rules)* |
-| BM6 | the lower committed anchor's causal history is contained in the higher's | `BlackMarlin.Safety.holds` *(BlackMarlin/Safety/Proof)* |
-| BM7 | under the pipelined round-robin schedule the anchors are the core's leader blocks | `BlackMarlin.Safety.holds` *(BlackMarlin/Safety/Proof)* |
 | BM8 | Figure 1 on data: `B0`–`B2` committed, `B3` supported but unlinked | `Ubm` witnesses *(LeanDagTest/BlackMarlin)* |
-| BML1 | a run of two reliable anchors over three populated rounds is committed | `BlackMarlin.committed_of_run` *(BlackMarlin/Helpers/Liveness)* |
-| BML2 | the full view reaches the verdict the rule reaches | `BlackMarlin.committedIn_full_iff` *(BlackMarlin/Helpers/Liveness)* |
-| BML3 | a reliable validator's block is delivered by every committed anchor two rounds above | `BlackMarlin.mem_history_of_mem` *(BlackMarlin/Helpers/Liveness)* |
-| BML4 | the rotation names a committing round arbitrarily far out | `BlackMarlin.recurrence` *(BlackMarlin/Helpers/Liveness)* |
-| BML5 | round robin supplies the run of two, unconditionally | `BlackMarlin.roundRobin_fairRun` *(BlackMarlin/Helpers/Liveness)* |
 | BML6 | liveness on a covered four-round model, and why Figure 1 is not one | `Ufull` witnesses *(LeanDagTest/BlackMarlin)* |
-| BMR1 | every reliable block above a reliable anchor references it | `BlackMarlin.Pace.votes` *(BlackMarlin/Helpers/Reactive)* |
-| BMR2 | a run of two is committed with no coverage hypothesis | `BlackMarlin.Pace.reactive_committed` *(BlackMarlin/Helpers/Reactive)* |
-| BMR3 | the exit fires, given a run of three reliable anchors | `BlackMarlin.Pace.concludesAt_of_holds` *(BlackMarlin/Helpers/Reactive)* |
-| BMR4 | one further reliable anchor per round sustains it | `BlackMarlin.Pace.concludesAt_of_sustained` *(BlackMarlin/Helpers/Reactive)* |
-| BMR5 | latency `D + δ + proc`, and `Δ + δ + 2·proc` past GST | `BlackMarlin.Pace.built_succ_le_of_fast`, `BlackMarlin.Pace.built_succ_le_of_fast_gst` *(BlackMarlin/Helpers/Reactive)* |
-| BMR6 | the timeout never fires when those constants undercut it | `BlackMarlin.Pace.no_timeout_of_fast_gst` *(BlackMarlin/Helpers/Reactive)* |
 | BMR7 | the round rule on data, and a pace at spacing `6` | `ugrowBM` witnesses *(LeanDagTest/BlackMarlin)* |
 | BMA1 | a delivered block is delivered by every committed anchor from its round on | `BlackMarlin.history_subset_of_committed` *(BlackMarlin/Helpers/Rules)* |
-| BMA2 | a run of two is committed by each reliable validator on its own view | `BlackMarlin.Pace.committedIn_local` *(BlackMarlin/Helpers/Agreement)* |
-| BMA3 | what one validator delivered, every reliable validator delivers | `BlackMarlin.Pace.agreement` *(BlackMarlin/Helpers/Agreement)* |
-| BMA4 | a reliably anchored run of two lies above every round | `BlackMarlin.Agreement.holds` *(BlackMarlin/Agreement/Proof)* |
 | BMA5 | agreement on data, on the four-round model and on the pace | `Ufull`, `ugrowBM` witnesses *(LeanDagTest/BlackMarlin)* |
 | BMD1 | the descent has one candidate where it steps by one round | `BlackMarlin.coneAnchors_subsingleton` *(BlackMarlin/Helpers/Ledger)* |
 | BMD1′ | and at a round whose anchor is reliable, however deep the cone | `BlackMarlin.coneAnchors_subsingleton_of_correct` *(BlackMarlin/Helpers/Ledger)* |
@@ -10814,33 +10306,11 @@ reused.
 | BMO4 | no author-and-round is output twice | `BlackMarlin.deliverSeq_pairwise` *(BlackMarlin/Helpers/Order)* |
 | BMO5 | every author-and-round flushed is output | `BlackMarlin.deliverSeq_key_mem` *(BlackMarlin/Helpers/Order)* |
 | BMO6 | and for a correct author, by the block itself | `BlackMarlin.deliverSeq_of_correct` *(BlackMarlin/Helpers/Order)* |
-| BMO7 | records that agree cannot invert a pair | `BlackMarlin.Order.holds` *(BlackMarlin/Order/Proof)* |
-| BMO8 | two descents that meet output the same list | `BlackMarlin.Order.holds` *(BlackMarlin/Order/Proof)* |
 | BMO9 | a reliable author's block is output | `BlackMarlin.mem_ledgerSeq_of_mem_history` *(BlackMarlin/Helpers/Order)* |
 | BMO10 | a sort exists, and the sequence on data | `TopoSort.ofFinOrder`, `fullSort` witnesses *(LeanDagTest/BlackMarlin)* |
 | BMO11 | two honest validators output different twins: Agreement refuted | `Udiv`, `vFlush`, `wFlush` witnesses *(LeanDagTest/BlackMarlin)* |
-| BMP1 | at most one candidate of a step is supported | `BlackMarlin.suppCandidates_subsingleton` *(BlackMarlin/Helpers/Repair)* |
-| BMP2 | the repaired descent takes it where there is one | `BlackMarlin.descendSupp_supported` *(BlackMarlin/Helpers/Repair)* |
-| BMP3 | and is L21–L24 where there is not | `BlackMarlin.descendSupp_eq_descend` *(BlackMarlin/Helpers/Repair)* |
-| BMP4 | a step never stalls and never moves to another round | `BlackMarlin.descendSupp_isSome_iff`, `BlackMarlin.descendSupp_round_eq` *(BlackMarlin/Helpers/Repair)* |
-| BMP5 | support-preferring records cannot part at a supported round | `BlackMarlin.block_eq_of_supportPreferring` *(BlackMarlin/Helpers/Repair)* |
-| BMP6 | `Committed` mentions no part of the descent, so liveness is untouched | `BlackMarlin.Repair.holds` *(BlackMarlin/Repair/Proof)* |
-| BMP7 | every boundary of the strengthened descent is supported | `BlackMarlin.descendS_mem` *(BlackMarlin/Helpers/Repair)* |
-| BMP8 | and no committed anchor is passed by | `BlackMarlin.descentSUpto_reaches` *(BlackMarlin/Helpers/Repair)* |
-| BMP9 | agreement runs down from any meeting point | `BlackMarlin.flushRecordS_agree` *(BlackMarlin/Helpers/Repair)* |
-| BMP10 | the strengthened descent does not stall | `BlackMarlin.descendS_isSome`, `BlackMarlin.descendS_round_lt` *(BlackMarlin/Helpers/Repair)* |
-| BMP11 | two records with committed tops agree outright | `BlackMarlin.flushRecordS_agree_of_committed` *(BlackMarlin/Helpers/Repair)* |
-| BMP12 | committed rounds still recur, so no execution is stuck | `BlackMarlin.Repair.holds` *(BlackMarlin/Repair/Proof)* |
-| BMP13 | a reliable author's anchor is seen as supported, past coverage | `BlackMarlin.supportedIn_of_synchronised` *(BlackMarlin/Helpers/Liveness)* |
-| BMV1 | above every round, one that every reliable validator commits on its own view | `BlackMarlin.ViewLiveness.holds` *(BlackMarlin/ViewLiveness/Proof)* |
-| BMV2 | and delivers there whatever any view committed below | `BlackMarlin.ViewLiveness.holds` *(BlackMarlin/ViewLiveness/Proof)* |
-| BMV3 | the rule is readable at a reliably anchored round, and only there | `BlackMarlin.ViewLiveness.holds` *(BlackMarlin/ViewLiveness/Proof)* |
 | BMV4 | BMV1–BMV3 on the four-round model, and the reliable supporters alone a quorum | `ViewLiveness` witnesses *(LeanDagTest/BlackMarlin)* |
-| BMT1 | a reliably anchored round pins every record, no view entering | `BlackMarlin.ViewOrder.holds` *(BlackMarlin/ViewOrder/Proof)* |
-| BMT2 | so agreement descends from it through any flushed stretch | `BlackMarlin.ViewOrder.holds` *(BlackMarlin/ViewOrder/Proof)* |
-| BMT3 | and with every anchor below reliable, the delivered lists coincide | `BlackMarlin.ViewOrder.holds` *(BlackMarlin/ViewOrder/Proof)* |
 | BMT4 | and one Byzantine anchor below suffices to order two reliable authors' blocks oppositely, refuting Total order | `deliverSeq` and `commitSeq` witnesses *(LeanDagTest/BlackMarlin/Divergence)* |
-| BMP14 | both repairs on the execution of §18.11, what they cost, a view that misses the support, and a counting rule that reads it wrongly at `f = 1` | `descendSupp`, `descendS`, `coneView`, `Ucnt` witnesses *(LeanDagTest/BlackMarlin)* |
 
 **The properties** (§16.1):
 
@@ -10962,7 +10432,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 353 definitions and structures the report names, in
+The 326 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -11352,17 +10822,6 @@ The blamers of slot `k` that a view holds.
 
 ### The commit rule, and the ledger
 
-#### `DirectCommit`
-
-*def, `Mysticeti.Rule.lean`*
-
-```lean
-def DirectCommit (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (certificates U L r)).card
-```
-
-`L` is directly committed when its certificates come from a quorum of distinct validators.
-
 #### `CertifiedIn`
 
 *abbrev, `Mysticeti.Rule.lean`*
@@ -11587,21 +11046,6 @@ def CertifiesAt (U : BlockUniverse Validator BlockId Payload)
 ```
 
 **What the three-round rule counts**: every `T`-authored block at the decision round certifies `L`. Coverage implies it through the vote layer (`certifiesAt_of_synchronisedOn`); the reactive certificate wait supplies it directly (`ReactiveM.certifies`).
-
-#### `CommitsAt`
-
-*def, `Mysticeti.Liveness.lean`*
-
-```lean
-def CommitsAt (BlockId : Type*) [DecidableEq BlockId] (Payload : Type*)
-    [S : Slots Validator] (T : Finset Validator) (R k : ℕ) : Prop :=
-  ∀ (U : BlockUniverse Validator BlockId Payload) (N : ℕ),
-    (∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) → SynchronisedOn U T R →
-    S.slotRound k + 2 ≤ N →
-    ∃ L, IsLeaderBlock U k L ∧ Decided U (View.full U) k (some L)
-```
-
-**A slot every sufficiently grown synchronous execution commits.** The conclusion the recurrence results share; naming it keeps the quantifier order visible, the slot fixed by the schedule alone before any execution is named. Both production and coverage are asked over the same `T`, a statement about any quorum-sized set of reliable validators rather than all of `Correct` — correct validators outside `T` may be permanently starved and the slot still commits. Production is asked for only from `R` on, which is the range a build-rule structure can actually supply.
 
 #### `FairScheduleOn`
 
@@ -12055,18 +11499,6 @@ class Faults5 (Validator : Type*) [Fintype Validator] [DecidableEq Validator]
 ```
 
 The Odontoceti committee: `n ≥ 5f+1`. An extension of `Faults`, so every existing theorem applies to the same types unchanged; the new bound is consumed only where the two-round arithmetic needs it.
-
-#### `DirectCommit`
-
-*def, `Odontoceti.Rules.lean`*
-
-```lean
-def DirectCommit (U : BlockUniverse Validator BlockId Payload)
-    (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (supporters U L (r + 1)).card
-```
-
-**Direct commit**: a quorum of distinct authors support `L` at its decision round.
 
 #### `ThickLink`
 
@@ -12549,18 +11981,6 @@ def kRel : ℕ := Fintype.card Validator - (3 * H.fb + 2 * H.fc)
 
 The `n`-relative indirect threshold, mirroring the house generalization of `2f + 1` to `n − 3f`; equal to `kTight` at the tight committee.
 
-#### `DirectCommit`
-
-*def, `Hybrid.Rules.lean`*
-
-```lean
-def DirectCommit (U : BlockUniverse Validator BlockId Payload)
-    (L : BlockId) (r : ℕ) : Prop :=
-  q Validator ≤ (supporters U L (r + 1)).card
-```
-
-**Direct commit**: `q` distinct authors support `L` at its decision round.
-
 #### `ThickLink`
 
 *def, `Hybrid.Rules.lean`*
@@ -12817,17 +12237,6 @@ abbrev View (Validator BlockId Payload : Type*) [Fintype Validator]
 
 A view: one validator's local, reference-closed sub-DAG.
 
-#### `DirectCommit`
-
-*def, `Nemo.Rules.lean`*
-
-```lean
-def DirectCommit (U : Universe Validator BlockId Payload) (L : BlockId) (r : ℕ) : Prop :=
-  majority Validator ≤ (supporters U L (r + 1)).card
-```
-
-**Direct commit**: a majority of round-`(r+1)` authors reference `L`. At wave length two the votes are the certificates, so the rule counts `supporters` directly.
-
 #### `CertifiedIn`
 
 *def, `Nemo.Rules.lean`*
@@ -12914,18 +12323,6 @@ abbrev Synchronised (U : Universe Validator BlockId Payload) (R : ℕ) : Prop :=
 The all-of-`Live` coverage case.
 
 ### Mahi-Mahi: the asynchronous rule at wave w
-
-#### `DirectCommit`
-
-*def, `MahiMahi.Model.Rules.lean`*
-
-```lean
-def DirectCommit (U : BlockUniverse Validator BlockId Payload)
-    (w : ℕ) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (creatorsOf U.block (certificates U w L r)).card
-```
-
-**Direct commit**: a quorum of distinct validators certify `L`.
 
 #### `DirectCommitIn`
 
@@ -13018,50 +12415,6 @@ def UnpredictableRunWithin (U : BlockUniverse Validator BlockId Payload)
 
 ### Black Marlin: the three-round commit rule
 
-#### `IsAnchor`
-
-*def, `BlackMarlin.Model.Rules.lean`*
-
-```lean
-def IsAnchor (U : BlockUniverse Validator BlockId Payload) (r : ℕ) (L : BlockId) : Prop :=
-  L ∈ U.ids ∧ (U.block L).round = r ∧ (U.block L).creator = Rot.anchor r
-```
-
-**`L` is an anchor block of round `r`**: a block of the universe, at that round, by the validator the rotation elected for it. A predicate rather than a function, since an equivocating elector may have several anchor blocks at one round; the uniqueness the rule needs is a theorem about supported anchors, not a property of the rotation.
-
-#### `Supported`
-
-*def, `BlackMarlin.Model.Rules.lean`*
-
-```lean
-def Supported (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (supporters U L (r + 1)).card
-```
-
-**`supp(L) ≥ n − f`** for a block proposed at round `r`: a quorum of distinct validators reference `L` from round `r + 1`, through the core's `supporters`, which counts authors so an equivocator contributes one either way. The paper's cone-based side condition on `supp` coincides with this, since a reference sits exactly one round below its referrer (`predecessor`), reducing it to `distinct_creators`.
-
-#### `Linked`
-
-*def, `BlackMarlin.Model.Rules.lean`*
-
-```lean
-def Linked (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : ℕ) : Prop :=
-  (linkers U L r).Nonempty
-```
-
-**`L` is linked**: some anchor of the round above references it and is itself supported — reference rather than reachability, the same thing at a one-round gap since every reference sits immediately below.
-
-#### `Committed`
-
-*def, `BlackMarlin.Model.Rules.lean`*
-
-```lean
-def Committed (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : ℕ) : Prop :=
-  IsAnchor U r L ∧ Supported U L r ∧ Linked U L r
-```
-
-**The commit rule** (L14–L17). The anchor of round `r` is committed when it is supported and linked — the whole of what safety consumes, since the descent and sort only order what this rule admits, which is why the chain and prefix results are stated about `history` rather than the sort (`black-marlin.md` §4).
-
 #### `SupportedIn`
 
 *def, `BlackMarlin.Model.Decision.lean`*
@@ -13098,91 +12451,6 @@ def CommittedIn (U : BlockUniverse Validator BlockId Payload)
 
 **The commit rule, as a validator applies it.** `IsAnchor` is not relativised: which validator anchors a round is a schedule fact rather than an observation, and that the block exists at all is implied by the view holding a block that references it.
 
-#### `QuorumIn`
-
-*def, `BlackMarlin.Model.Round.lean`*
-
-```lean
-def QuorumIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (r : ℕ) : Prop :=
-  quorumCard Validator ≤ (authorsIn U V.ids r).card
-```
-
-**`quorum(r)`**, as the validator computes it: blocks from at least `n − f` distinct authors at round `r` among what the view holds.
-
-#### `AnchorIn`
-
-*def, `BlackMarlin.Model.Round.lean`*
-
-```lean
-def AnchorIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (r : ℕ) : Prop :=
-  ∃ A ∈ V.ids, IsAnchor U r A
-```
-
-**`anchor(r)`**: the view holds a block by the validator the rotation elected for round `r`.
-
-#### `SuppAnchorIn`
-
-*def, `BlackMarlin.Model.Round.lean`*
-
-```lean
-def SuppAnchorIn (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (r : ℕ) : Prop :=
-  ∃ A, IsAnchor U r A ∧ SupportedIn U V A r
-```
-
-**`suppAnchor(r)`**: the view holds an anchor of round `r` carrying a quorum of support, counted among the round-`(r+1)` blocks the view holds. The same `SupportedIn` the commit rule reads, which is why the round rule and the commit rule share their arithmetic.
-
-#### `ConcludesAt`
-
-*def, `BlackMarlin.Model.Round.lean`*
-
-```lean
-def ConcludesAt (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (r : ℕ) : Prop :=
-  QuorumIn U V r ∧ AnchorIn U V r ∧
-    (∀ ρ, ρ + 1 = r → SuppAnchorIn U V ρ) ∧
-    (∀ ρ, ρ + 2 = r → SuppAnchorIn U V ρ)
-```
-
-**The round rule** (L40, first disjunct): what a validator must see before it may conclude round `r` without waiting out the timeout.
-
-#### `Pace`
-
-*structure, `BlackMarlin.Model.Round.lean`*
-
-```lean
-structure Pace (U : BlockUniverse Validator BlockId Payload)
-    (T : Finset Validator) (N : ℕ) extends PaceCore U T N where
-  /-- Time advances with rounds, over the rounds `v` reached. -/
-  built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  /-- **The ceiling.** A validator never waits past the round's timeout;
-  it may build any time before it. -/
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
-  /-- **The anchor wait**, the round rule read on the block a validator
-  produces. At the round above a reliable anchor, a `T`-authored block
-  either references it — the exit fired, requiring it — or waited the
-  full timeout and would have referenced it had it held it. Stated only
-  where the round's elected validator lies in `T`: for a Byzantine
-  anchor it may equivocate, and nothing useful can be said. -/
-  anchor_or_wait : ∀ v ∈ T, ∀ r, r + 1 ≤ N → Rot.anchor r ∈ T →
-    ∀ A, IsAnchor U r A →
-    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = r + 1 →
-    A ∈ (U.block c).refs ∨
-      (built v r + timeout r ≤ built v (r + 1) ∧
-        (A ∈ holds v (built v (r + 1)) → A ∈ (U.block c).refs))
-  /-- **The exit is prompt.** A validator past its round entry that can
-  conclude the round does so within the processing bound — the whole of
-  `ConcludesAt`, where the core's `ReactivePace.prompt_vote` asks only
-  that the leader's block be held. -/
-  prompt_conclude : ∀ v ∈ T, ∀ r, r + 1 ≤ N → ∀ t, built v r ≤ t →
-    ConcludesAt U (toPaceCore.viewAt v t) r →
-    built v (r + 1) ≤ t + proc
-```
-
-**The Black Marlin pacing structure**: the core's `PaceCore` with the reactive discipline of L38–L41 in place of the full-timeout one — no validator waits past its timeout, and the full-timeout floor is absent.
-
 #### `Flush`
 
 *structure, `BlackMarlin.Model.Ledger.lean`*
@@ -13201,30 +12469,6 @@ structure Flush (U : BlockUniverse Validator BlockId Payload) where
 ```
 
 **A flush record**: the anchor block a validator flushed at each round. `step` is the descent's own shape — the anchor at `ρ` is a reference of the anchor at `ρ + 1` — and `dense` says it does not pass over a round its reference set contains; neither says anything about a round the descent skips.
-
-#### `StepUnique`
-
-*def, `BlackMarlin.Ledger.Statement.lean`*
-
-```lean
-def StepUnique (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ (ρ : ℕ) (M X Y : BlockId),
-    M ∈ U.ids → (U.block M).round = ρ + 1 →
-    X ∈ coneAnchors U M ρ → Y ∈ coneAnchors U M ρ → X = Y
-```
-
-**BMD1, the step is unambiguous.**
-
-#### `strongOf`
-
-*def, `BlackMarlin.Model.Descent.lean`*
-
-```lean
-def strongOf (U : BlockUniverse Validator BlockId Payload) (B : BlockId) : Finset BlockId :=
-  (history U B).erase B
-```
-
-**`strong(B)`**: the blocks strictly below `B` in its cone. `history` is reflexive where the paper's `strong` is not, so the block itself is removed.
 
 #### `maxAnchor`
 
@@ -13248,18 +12492,6 @@ def pick (s : Finset BlockId) : Option BlockId :=
 ```
 
 The `≤`-least member of a set, as an `Option`.
-
-#### `descend`
-
-*def, `BlackMarlin.Model.Descent.lean`*
-
-```lean
-def descend (U : BlockUniverse Validator BlockId Payload) (B : BlockId) : Option BlockId :=
-  pick ((maxAnchor U (strongOf U B)).filter
-    (fun A => ∀ C ∈ maxAnchor U (strongOf U B), anchorGap U A ≤ anchorGap U C))
-```
-
-**The descent's choice** (L21–L24): the `≤`-least of the highest-round anchors below `B` that minimise the metric. At `|maxAnchor| = 1` this is L22, and otherwise L24.
 
 #### `flushRecord`
 
@@ -13337,30 +12569,6 @@ def TopoSort.ofFinOrder {n : ℕ} (W : BlockUniverse Validator (Fin n) Payload)
 ```
 
 **The same sort, in a form the kernel evaluates.** `Finset.sort` rests on a merge sort the kernel does not reduce, so a witness filters `List.finRange` instead: the same order, structurally computed, which is what lets a concrete model settle the delivered sequence by `decide`.
-
-#### `descendSupp`
-
-*def, `BlackMarlin.Model.Repair.lean`*
-
-```lean
-def descendSupp (U : BlockUniverse Validator BlockId Payload) (B : BlockId) :
-    Option BlockId :=
-  if (suppCandidates U B).Nonempty then pick (suppCandidates U B) else descend U B
-```
-
-**The repaired choice**: a supported candidate where there is one, and L21–L24 otherwise.
-
-#### `descendS`
-
-*def, `BlackMarlin.Model.Repair.lean`*
-
-```lean
-def descendS (U : BlockUniverse Validator BlockId Payload) (B : BlockId) : Option BlockId :=
-  pick ((suppAnchorsOf U (strongOf U B)).filter
-    (fun A => (U.block A).round = maxSuppRound U (strongOf U B)))
-```
-
-**The strengthened descent**: to the highest-round supported anchor of the cone, and nowhere else.
 
 ### FinWhale: the two-round commit rule
 
@@ -13508,17 +12716,6 @@ abbrev slotBlocks (S : Slots Validator) (D : Dag Validator BlockId Payload) (k :
 ```
 
 The blocks of the leader slot of round `r`. There may be several, if the leader equivocates.
-
-#### `DirectCommit`
-
-*def, `FinWhale.Model.Decision.lean`*
-
-```lean
-def DirectCommit (D : Dag Validator BlockId Payload) (l : BlockId) : Prop :=
-  FastCommit D l ∨ SPCommit D l
-```
-
-**The direct commit rule**: either path.
 
 #### `IndirectCommit`
 
@@ -15151,90 +14348,6 @@ def commitSeq (U : BlockUniverse Validator BlockId Payload) (τ : TopoSort U) :
 ```
 
 **L18–L32**, with fuel for the recursion: descend first, then emit `τ(past(B) \ D)`, then `B` itself. Returns what the invocation `ab-deliver`s and the delivered set it leaves behind, so successive invocations compose.
-
-#### `NoValidatorStuck`
-
-*def, `BlackMarlin.ViewLiveness.Statement.lean`*
-
-```lean
-def NoValidatorStuck : Prop :=
-  ∀ (T : Finset Validator) (R r : ℕ),
-    quorumCard Validator ≤ T.card → Liveness.FairRun T 2 →
-    ∃ r', r ≤ r' ∧ R ≤ r' ∧ CommitsInViews BlockId Payload T R r'
-```
-
-**BMV1, no reliable validator is stuck.** BML4 says a round recurs that the universe admits a commit at; this says a round recurs that every reliable validator commits at, on its own view and by a time the pace names.
-
-#### `NothingHeldBack`
-
-*def, `BlackMarlin.ViewLiveness.Statement.lean`*
-
-```lean
-def NothingHeldBack : Prop :=
-  ∀ (T : Finset Validator) (R ρ : ℕ),
-    quorumCard Validator ≤ T.card → Liveness.FairRun T 2 →
-    ∃ r, ρ ≤ r ∧ R ≤ r ∧ DeliversInViews BlockId Payload T R ρ r
-```
-
-**BMV2, nothing one validator delivered is held back from another.** BMA3 asks for a reliably anchored round above `ρ`; the rotation supplies one, so the hypothesis becomes a conclusion.
-
-#### `ReadableAtReliableAnchor`
-
-*def, `BlackMarlin.ViewLiveness.Statement.lean`*
-
-```lean
-def ReadableAtReliableAnchor (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ (T : Finset Validator) (R ρ : ℕ) (V : View Validator BlockId Payload U) (L : BlockId),
-    quorumCard Validator ≤ T.card →
-    SynchronisedOn U T R → R ≤ ρ → PopulatedOn U T (ρ + 1) →
-    Rot.anchor ρ ∈ T → IsAnchor U ρ L →
-    (∀ b ∈ U.ids, (U.block b).creator ∈ T → (U.block b).round = ρ + 1 → b ∈ V.ids) →
-    SupportedIn U V L ρ
-```
-
-**BMV3, the rule is readable at a reliable anchor.** Past the round coverage takes hold, an anchor whose author is reliable is referenced by every reliable block of the round above, so a view holding those sees the quorum with no block a Byzantine validator might withhold — the boundary of the arc, since coverage constrains only `T`-authored blocks.
-
-#### `ReliableAnchorPins`
-
-*def, `BlackMarlin.ViewOrder.Statement.lean`*
-
-```lean
-def ReliableAnchorPins (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ (f₁ f₂ : Flush U) (ρ : ℕ) (L₁ L₂ : BlockId),
-    Rot.anchor ρ ∈ (Correct : Finset Validator) →
-    f₁.block ρ = some L₁ → f₂.block ρ = some L₂ → L₁ = L₂
-```
-
-**BMT1, a reliable anchor pins every record.** The block flushed at such a round is that round's anchor, and its author is correct, so `no_equivocation` leaves one candidate in the whole universe. No view enters the argument.
-
-#### `AgreeOnReliableStretch`
-
-*def, `BlackMarlin.ViewOrder.Statement.lean`*
-
-```lean
-def AgreeOnReliableStretch (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ (f₁ f₂ : Flush U) (ρ d : ℕ),
-    Rot.anchor (ρ + d) ∈ (Correct : Finset Validator) →
-    (f₁.block (ρ + d)).isSome → (f₂.block (ρ + d)).isSome →
-    (∀ i, 0 < i → i ≤ d → (f₁.block (ρ + i)).isSome) →
-    f₁.block ρ = f₂.block ρ
-```
-
-**BMT2, and agreement descends from it.** BMD3 needs a round the two records agree at; a reliably anchored round both flush at is one, by BMT1, with nothing assumed about either validator's view.
-
-#### `OrderAgreesWhenAnchorsReliable`
-
-*def, `BlackMarlin.ViewOrder.Statement.lean`*
-
-```lean
-def OrderAgreesWhenAnchorsReliable (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ (f₁ f₂ : Flush U) (τ : TopoSort U) (n : ℕ),
-    (∀ σ, σ < n → Rot.anchor σ ∈ (Correct : Finset Validator)) →
-    (∀ σ, σ < n → ((f₁.block σ).isSome ↔ (f₂.block σ).isSome)) →
-    deliverSeq U f₁ τ n = deliverSeq U f₂ τ n
-```
-
-**BMT3, and the delivered lists coincide.** Where no Byzantine validator anchors a round below `n`, two records that flush at the same rounds deliver one list — Definition 1's Total order, unconditionally, on that stretch. The hypothesis is tight: `LeanDagTest/BlackMarlin/Divergence` exhibits a single Byzantine anchor below producing two reliably authored blocks in opposite orders.
 
 #### `toDagRule`
 
@@ -16907,7 +16020,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 510 theorems the body or Appendix A names, each
+The 490 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -17104,23 +16217,6 @@ theorem reaches_pred_of_round_le {q : ℕ} [P.Quorate q] {Q : BlockId → Prop} 
 ```
 
 **Propagation.** Reaching something is inherited upward: if every block at round `N` reaches a `Q`-block, so does every block above `N`, by nonempty references and transitivity alone. Shared by T3 and M2, both otherwise just a base case.
-
-#### `reaches_of_honest_support_of_card`
-
-*theorem, `Common.Support.lean`*
-
-```lean
-theorem reaches_of_honest_support_of_card [Fintype Validator]
-    {b : BlockId} {r : ℕ} {S : Finset Validator}
-    (hS_support : ∀ v ∈ S, ∃ b' ∈ U.ids,
-      (U.block b').round = r + 1 ∧ b ∈ (U.block b').refs ∧ (U.block b').creator = v)
-    (hS_honest : ∀ v ∈ S, v ∈ honest)
-    (hcard : Fintype.card Validator < S.card + q)
-    {c : BlockId} (hc : c ∈ U.ids) (hcr : (U.block c).round = r + 2) :
-    Reaches U c b
-```
-
-**Coverage, uniform form.** More than `n − q` honest supporters always suffice; the form T3 uses.
 
 #### `BlockUniverse.exists_common_mem_of_quorums`
 
@@ -19933,202 +19029,16 @@ theorem holds : Statement
 
 ### Black Marlin: the three-round commit rule
 
-#### `eq_of_isAnchor_of_supported`
+#### `coneAnchors_subsingleton`
 
-*theorem, `BlackMarlin.Helpers.Rules.lean`*
-
-```lean
-theorem eq_of_isAnchor_of_supported {L₁ L₂ : BlockId} {r : ℕ}
-    (ha₁ : IsAnchor U r L₁) (ha₂ : IsAnchor U r L₂)
-    (h₁ : Supported U L₁ r) (h₂ : Supported U L₂ r) : L₁ = L₂
-```
-
-Lemma 3 for anchors: at most one anchor block of a round is supported, so at most one is committed there.
-
-#### `reaches_of_supported`
-
-*theorem, `BlackMarlin.Helpers.Rules.lean`*
+*theorem, `BlackMarlin.Helpers.Ledger.lean`*
 
 ```lean
-theorem reaches_of_supported {L : BlockId} {r : ℕ} (h : Supported U L r)
-    {c : BlockId} (hc : c ∈ U.ids) (hcr : r + 2 ≤ (U.block c).round) :
-    Reaches U c L
+theorem coneAnchors_subsingleton (hM : M ∈ U.ids) (hMr : (U.block M).round = ρ + 1) :
+    ∀ X ∈ coneAnchors U M ρ, ∀ Y ∈ coneAnchors U M ρ, X = Y
 ```
 
-**The paper's Lemma 5.** A supported block is in the causal history of every block two rounds above it or higher — Byzantine-authored included, since validity is structural — via the core's `reaches_of_honest_support_of_card`, carried upward by `reaches_pred_of_round_le`.
-
-#### `reaches_of_committed_of_le`
-
-*theorem, `BlackMarlin.Helpers.Rules.lean`*
-
-```lean
-theorem reaches_of_committed_of_le {L₁ L₂ : BlockId} {r₁ r₂ : ℕ}
-    (h₁ : Committed U L₁ r₁) (h₂ : Committed U L₂ r₂) (hr : r₁ ≤ r₂) :
-    L₁ = L₂ ∨ Reaches U L₂ L₁
-```
-
-**The paper's Lemma 6**, in the form the round comparison gives: of two committed anchors, the lower lies in the causal history of the higher — by Lemma 3 at equal rounds or a gap of one via the shared linking anchor, by Lemma 5 at a gap of two or more.
-
-#### `quorum_authorsAt_of_lt`
-
-*theorem, `BlackMarlin.Helpers.Rules.lean`*
-
-```lean
-theorem quorum_authorsAt_of_lt {c : BlockId} {r : ℕ} (hc : c ∈ U.ids)
-    (hlt : r < (U.block c).round) :
-    quorumCard Validator ≤ (authorsAt U r).card
-```
-
-**The paper's Lemma 4.** Below the highest round of the DAG, every round carries blocks from a quorum of distinct authors.
-
-Downward induction on the gap: a valid block names `n − f` distinct authors one round below, and those authors hold blocks there.
-
-#### `committed_of_committedIn`
-
-*theorem, `BlackMarlin.Helpers.Decision.lean`*
-
-```lean
-theorem committed_of_committedIn {L : BlockId} {r : ℕ} (h : CommittedIn U V L r) :
-    Committed U L r
-```
-
-**The view reading is sound.** What a validator commits by reading its own DAG, the rule commits over the universe.
-
-#### `mem_ids_of_committedIn`
-
-*theorem, `BlackMarlin.Helpers.Decision.lean`*
-
-```lean
-theorem mem_ids_of_committedIn {L : BlockId} {r : ℕ} (h : CommittedIn U V L r) :
-    L ∈ V.ids
-```
-
-A validator that commits an anchor holds it. Not a clause of `CommittedIn` but a consequence of one: the linking anchor is in the view, the view is closed under references, and the link is a reference.
-
-#### `holds`
-
-*theorem, `BlackMarlin.Safety.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `BlackMarlin.Liveness.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `le_built`
-
-*theorem, `BlackMarlin.Helpers.Reactive.lean`*
-
-```lean
-theorem le_built {v : Validator} (hv : v ∈ T) : ∀ n ≤ pc.top v, n ≤ pc.built v n
-```
-
-Rounds advance real time, over the rounds a validator reached.
-
-#### `driftOn_of_catchup`
-
-*theorem, `BlackMarlin.Helpers.Reactive.lean`*
-
-```lean
-theorem driftOn_of_catchup (hcard : quorumCard Validator ≤ T.card)
-    (hgst : pc.gst ≤ R) :
-    DriftOn pc.built T R (pc.delay + pc.proc) N
-```
-
-Drift collapses here as it does under the timed discipline, from the trunk's catch-up rule with `le_built` supplied by `built_lt`.
-
-#### `built_succ_le_of_fast`
-
-*theorem, `BlackMarlin.Helpers.Reactive.lean`*
-
-```lean
-theorem built_succ_le_of_fast {δ : ℕ} {v : Validator}
-    (hcard : quorumCard Validator ≤ T.card) (hv : v ∈ T) (hN : r + 3 ≤ N)
-    (hδ : ∀ n, r + 1 ≤ n → n ≤ r + 2 → ∀ b ∈ U.ids, (U.block b).creator ∈ T →
-      (U.block b).round = n →
-      b ∈ pc.holds v (pc.built ((U.block b).creator) n + δ))
-    (hD : ∀ u ∈ T, ∀ w ∈ T, pc.built u (r + 2) ≤ pc.built w (r + 2) + D)
-    (ha0 : Rot.anchor r ∈ T) (ha1 : Rot.anchor (r + 1) ∈ T)
-    (ha2 : Rot.anchor (r + 2) ∈ T)
-    (hvotes : ∀ n, r ≤ n → n < r + 2 → ∀ A, IsAnchor U n A → VotesAt U T n A) :
-    pc.built v (r + 3) ≤ pc.built v (r + 2) + D + δ + pc.proc
-```
-
-**Latency tracks delivery.** When every reliable block of the two rounds below reaches every reliable validator within `δ` of its build, the next round is entered within `D + δ + proc` of round entry: drift to the last builder, `δ` to arrive, `proc` to conclude. The timeout does not appear.
-
-#### `no_timeout_of_fast`
-
-*theorem, `BlackMarlin.Helpers.Reactive.lean`*
-
-```lean
-theorem no_timeout_of_fast {δ : ℕ} {v : Validator}
-    (hcard : quorumCard Validator ≤ T.card) (hv : v ∈ T) (hN : r + 3 ≤ N)
-    (hδ : ∀ n, r + 1 ≤ n → n ≤ r + 2 → ∀ b ∈ U.ids, (U.block b).creator ∈ T →
-      (U.block b).round = n →
-      b ∈ pc.holds v (pc.built ((U.block b).creator) n + δ))
-    (hD : ∀ u ∈ T, ∀ w ∈ T, pc.built u (r + 2) ≤ pc.built w (r + 2) + D)
-    (ha0 : Rot.anchor r ∈ T) (ha1 : Rot.anchor (r + 1) ∈ T)
-    (ha2 : Rot.anchor (r + 2) ∈ T)
-    (hvotes : ∀ n, r ≤ n → n < r + 2 → ∀ A, IsAnchor U n A → VotesAt U T n A)
-    (hfast : D + δ + pc.proc < pc.timeout (r + 2)) :
-    pc.built v (r + 3) < pc.built v (r + 2) + pc.timeout (r + 2)
-```
-
-**The timeout never fires.** When delivery, drift and processing together undercut the timeout, every reliable validator concludes the round strictly before its deadline: the fallback branch of `anchor_or_wait` is never taken, and the protocol runs at network speed.
-
-#### `holds`
-
-*theorem, `BlackMarlin.Reactive.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `BlackMarlin.Agreement.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `BlackMarlin.Ledger.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `BlackMarlin.Descent.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `BlackMarlin.Order.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `BlackMarlin.Repair.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
+**The step is unambiguous.** At most one anchor of round `ρ` lies in the cone of a round-`(ρ + 1)` block: the round-`ρ` members of that cone are its references, and `distinct_creators` allows one block per author. No tie-break is needed where the descent steps by one round.
 
 ### FinWhale: the two-round commit rule
 
@@ -21798,22 +20708,6 @@ theorem holds : Statement
 #### `holds`
 
 *theorem, `Barnacle.Validity.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `BlackMarlin.ViewLiveness.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `BlackMarlin.ViewOrder.Proof.lean`*
 
 ```lean
 theorem holds : Statement

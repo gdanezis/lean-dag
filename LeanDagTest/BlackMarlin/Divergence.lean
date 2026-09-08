@@ -1,6 +1,8 @@
-import LeanDagTest.BlackMarlin.Ledger
 import LeanDag.BlackMarlin.Model.Recursion
-import LeanDag.BlackMarlin.Repair.Proof
+import LeanDag.BlackMarlin.Helpers.Descent
+import LeanDag.BlackMarlin.Helpers.Ledger
+import LeanDag.BlackMarlin.Helpers.Order
+import Mathlib.Tactic.IntervalCases
 /-!
 # Black Marlin — two honest parties, two different blocks
 
@@ -49,6 +51,14 @@ namespace BlackMarlin
 set_option maxRecDepth 2048
 
 open LeanDag LeanDag.BlackMarlin
+
+/-- Four validators, `0` Byzantine — the committee the construction runs
+on, declared here now that the arc is the rule and this refutation. -/
+local instance divFaults : Faults (Fin 4) where
+  f := 1
+  byzantine := {0}
+  card_validators := by decide
+  card_byzantine := by decide
 
 /-- The rotation: rounds `0` to `6` anchored by `3, 3, 0, 1, 2, 3, 1`.
 Round `2` is anchored by the Byzantine validator. -/
@@ -199,92 +209,6 @@ wherever both flush a committed anchor, and `12` is not one. -/
 example : ¬ Committed Udiv 12 2 := by decide
 
 
-/-! ## The repair, on this execution -/
-
-/-- **The side-condition closes it.** Only one of the two candidates
-below the round-4 anchor is supported, so the repaired descent takes `8`
-— the block the rule committed and the first validator output — and the
-two records now agree at round `2`. -/
-example : suppCandidates Udiv 19 = {8} ∧ descendSupp Udiv 19 = some 8 ∧
-    flushRecordSupp Udiv 19 2 = some 8 ∧ flushRecordSupp Udiv 8 2 = some 8 := by decide
-
-/-- **And what it costs, on data.** The repaired chain passes through
-`8`, whose cone holds no round-1 anchor, so it flushes nothing at round
-`1` where the unrepaired chain flushed `7`. No block is lost — `7` is in
-the round-4 anchor's cone and is delivered in that segment instead — but
-the segmentation differs, which is why BMP4 speaks of a step and not of
-a record. -/
-example : flushRecordSupp Udiv 19 1 = none ∧ flushRecord Udiv 19 1 = some 7 ∧
-    (7 : Fin 29) ∈ history Udiv 19 := by decide
-
-/-- Nothing the commit rule admits has changed: `8` is still committed
-and `12` still is not, since `Committed` mentions no part of the
-descent. -/
-example : Committed Udiv 8 2 ∧ ¬ Committed Udiv 12 2 := by decide
-
-/-! ### The strengthened repair -/
-
-/-- **The strengthened descent never faces the choice at all.** The only
-supported anchor in the round-4 anchor's cone is `8`, so the descent goes
-straight to it, and the two records agree at every round. `12` is never a
-boundary for anyone: a round whose anchors carry no quorum is not one. -/
-example : suppAnchorsOf Udiv (strongOf Udiv 19) = {8} ∧
-    descendS Udiv 19 = some 8 ∧
-    flushRecordS Udiv 19 2 = flushRecordS Udiv 8 2 ∧
-    flushRecordS Udiv 19 1 = flushRecordS Udiv 8 1 ∧
-    flushRecordS Udiv 19 0 = flushRecordS Udiv 8 0 := by decide
-
-/-- Its boundaries are the committed anchors and nothing else here: the
-round-1 and round-0 anchors carry two supporters apiece, one short, so
-neither is a boundary and their blocks come out inside the segment
-above. -/
-example : ¬ Supported Udiv 7 1 ∧ ¬ Supported Udiv 3 0 ∧
-    flushRecordS Udiv 19 4 = some 19 ∧ flushRecordS Udiv 19 3 = none ∧
-    flushRecordS Udiv 19 1 = none ∧ flushRecordS Udiv 19 0 = none := by decide
-
-/-- **And here the support really is in view.** `Supported` is a fact
-about the universe, so a validator can act on it only where its own view
-carries the witnesses. The three supporters of `8` lie in the cone of
-every round-6 block, and the second validator holds a quorum of those by
-the time it concludes round `6` and commits the round-4 anchor — so it
-can see `8` supported exactly when its descent needs to know. That this
-holds in general is not established. -/
-example : ∀ b : Fin 29, (Udiv.block b).round = 6 →
-    ({14, 15, 16} : Finset (Fin 29)) ⊆ history Udiv b := by decide
-
-example : supporters Udiv 8 3 = {1, 2, 3} := by decide
-
-
-/-! ## Is the support in view when the descent needs it?
-
-Both repairs read `Supported`, a fact about the universe. A validator
-reads its own view, and the two need not agree — a view carrying a
-quorum at the round below an anchor shares only `n − 2f` authors with
-that anchor's supporters, which at `n = 3f + 1` is `f + 1`, short of the
-`2f + 1` the test wants. The cone of the round-4 anchor is such a view.
--/
-
-/-- A validator whose holdings are the cone of a block it holds. Views
-are closed under references, so this is a legitimate one. -/
-def coneView : View (Fin 4) (Fin 29) Unit Udiv where
-  ids := history Udiv 19
-  subset_ids := history_subset_ids (by decide)
-  complete := by decide
-
-/-- **The support is not in view.** This view carries a quorum of authors
-at round `3`, so its holder could conclude that round and run the rule —
-and yet it sees two of `8`'s three supporters, one short. So it cannot
-tell that `8` is the supported anchor of round `2`, and the repaired
-descent, run against it, would not make `8` a boundary. -/
-example : Supported Udiv 8 2 ∧ ¬ SupportedIn Udiv coneView 8 2 ∧
-    quorumCard (Fin 4) ≤ (authorsIn Udiv coneView.ids 3).card ∧
-    supportersIn Udiv coneView 8 3 = {2, 3} := by decide
-
-/-- And the reason is the omission the whole construction turns on: the
-third supporter is `14`, which the round-4 anchor does not reference. -/
-example : (14 : Fin 29) ∉ history Udiv 19 ∧ supporters Udiv 8 3 = {1, 2, 3} := by decide
-
-
 /-! ## Total order fails, and on blocks of reliable authors
 
 The refutation above is of Agreement, and turns on which twin each
@@ -347,113 +271,6 @@ example : (∀ b ∈ Udiv.ids, (Udiv.block b).creator = (Udiv.block 5).creator �
       (Udiv.block b).round = (Udiv.block 5).round → b = 5) ∧
     (∀ b ∈ Udiv.ids, (Udiv.block b).creator = (Udiv.block 7).creator →
       (Udiv.block b).round = (Udiv.block 7).round → b = 7) := by decide
-
-/-! ## Relaxing the filter does not help
-
-Dropping L27 — delivering both twins and forbidding only a repeated
-*block* — does not reach the failure above, and does not repair the one
-it aims at either: the segmentation is what differs, and dropping the
-filter leaves it as it was. The first validator's flush at round `2` is the cone of `8`, the
-second's is the cone of `12`, and each picks the other twin up only in
-the round-4 segment. So one emits `8` before `12` and the other `12`
-before `8`: an Agreement failure becomes a Total-order failure. -/
-
-/-- **Both twins are delivered, in opposite orders.** -/
-example :
-    (ledgerSeq Udiv vFlushFull divSort 5).idxOf 8 <
-      (ledgerSeq Udiv vFlushFull divSort 5).idxOf 12 ∧
-    (ledgerSeq Udiv wFlush divSort 5).idxOf 12 <
-      (ledgerSeq Udiv wFlush divSort 5).idxOf 8 := by decide
-
-/-- And it is not only the twins: their cones differ, so ordinary blocks
-invert too. `5` lies below `8` and not below `12`, `7` the other way
-about. -/
-example : (5 : Fin 29) ∈ history Udiv 8 ∧ (5 : Fin 29) ∉ history Udiv 12 ∧
-    (7 : Fin 29) ∈ history Udiv 12 ∧ (7 : Fin 29) ∉ history Udiv 8 := by decide
-
-
-/-! ## No support-blind tie-break resolves it
-
-A canonical order on the twins is already in the model: `descend` picks
-the `≤`-least of the gap-minimisers, and it still takes the wrong one,
-because the gap decides before the order is reached. Dropping the metric
-and going by the order alone does not help either, and the reason is
-general.
-
-Give the twins the **same references**. Then they agree in round, in
-creator and in cone, so every function of the candidate blocks and their
-own histories returns the same answer on both — the metric of L24 ties
-exactly, and any canonical order picks by identifier. What differs is
-which of them the round-3 blocks reference, and that is support.
-
-Two universes below, alike in every one of those respects and differing
-only there. Any rule blind to support answers them the same way, and the
-committed twin is `8` in one and `12` in the other. So one of the two
-answers is wrong, whatever the rule is. -/
-
-/-- The twins made cone-identical: `12` now carries `8`'s references. -/
-def tieBlk (i : Fin 29) : Block (Fin 4) (Fin 29) Unit :=
-  let b := divBlk i
-  if (i : ℕ) = 12 then { b with refs := {4, 5, 6} } else b
-
-/-- The same, with the round-3 support moved from `8` to `12`. -/
-def tieBlk' (i : Fin 29) : Block (Fin 4) (Fin 29) Unit :=
-  match (i : ℕ) with
-  | 12 => { divBlk i with refs := {4, 5, 6} }
-  | 13 => { divBlk i with refs := {9, 10, 8} }
-  | 14 => { divBlk i with refs := {12, 9, 10} }
-  | 15 => { divBlk i with refs := {12, 9, 10} }
-  | 16 => { divBlk i with refs := {12, 9, 11} }
-  | _ => divBlk i
-
-def Utie : BlockUniverse (Fin 4) (Fin 29) Unit where
-  ids := Finset.univ
-  block := tieBlk
-  complete := by decide
-  valid := by decide
-  no_equivocation := by decide
-
-def Utie' : BlockUniverse (Fin 4) (Fin 29) Unit where
-  ids := Finset.univ
-  block := tieBlk'
-  complete := by decide
-  valid := by decide
-  no_equivocation := by decide
-
-/-- **The two are indistinguishable to any support-blind rule.** The
-twins have one round, one creator and one history, in both universes. -/
-example : strongOf Utie 8 = strongOf Utie 12 ∧ strongOf Utie' 8 = strongOf Utie' 12 ∧
-    strongOf Utie 8 = strongOf Utie' 8 ∧
-    (Utie.block 8).refs = (Utie.block 12).refs ∧
-    (Utie.block 8).round = (Utie.block 12).round ∧
-    (Utie.block 8).creator = (Utie.block 12).creator := by decide
-
-/-- **And the committed twin is a different one in each.** -/
-example : Committed Utie 8 2 ∧ ¬ Supported Utie 12 2 ∧
-    Committed Utie' 12 2 ∧ ¬ Supported Utie' 8 2 := by decide
-
-/-- The rest of the construction survives: the round-4 anchor commits,
-skips round `3`, and faces both twins at round `2`. -/
-example : Committed Utie 19 4 ∧ coneAnchors Utie 19 3 = ∅ ∧
-    coneAnchors Utie 19 2 = {8, 12} ∧
-    Committed Utie' 19 4 ∧ coneAnchors Utie' 19 3 = ∅ ∧
-    coneAnchors Utie' 19 2 = {8, 12} := by decide
-
-/-- **L24's metric ties exactly**, so the paper's rule is decided by the
-identifier order alone — and answers both universes the same way. -/
-example : anchorGap Utie 8 = anchorGap Utie 12 ∧
-    anchorGap Utie' 8 = anchorGap Utie' 12 ∧
-    descend Utie 19 = some 8 ∧ descend Utie' 19 = some 8 := by decide
-
-/-- Which is wrong in the second: a validator that committed `12` at
-round `2` flushes it, and the descent from the round-4 anchor takes `8`.
-The same divergence, now beyond the reach of any rule that does not read
-support. -/
-example : flushRecord Utie' 19 2 = some 8 ∧ flushRecord Utie' 12 2 = some 12 ∧
-    Committed Utie' 12 2 := by decide
-
-/-- The support-preferring repair does answer them apart. -/
-example : descendS Utie 19 = some 8 ∧ descendS Utie' 19 = some 12 := by decide
 
 /-! ## The same two validators, under Algorithm 1 itself
 

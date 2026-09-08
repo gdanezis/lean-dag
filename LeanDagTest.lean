@@ -39,14 +39,7 @@ import LeanDagTest.MahiMahi.Model
 import LeanDagTest.MahiMahi.Axioms
 import LeanDagTest.MahiMahi.Counting
 import LeanDagTest.MahiMahi.Liveness
-import LeanDagTest.BlackMarlin.Model
-import LeanDagTest.BlackMarlin.Liveness
-import LeanDagTest.BlackMarlin.Reactive
-import LeanDagTest.BlackMarlin.Agreement
-import LeanDagTest.BlackMarlin.Ledger
 import LeanDagTest.BlackMarlin.Divergence
-import LeanDagTest.BlackMarlin.Counting
-import LeanDagTest.BlackMarlin.ViewLiveness
 import LeanDagTest.Barnacle.Model
 import LeanDagTest.Barnacle.Agreement
 import LeanDagTest.Barnacle.Progress
