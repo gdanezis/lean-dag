@@ -174,6 +174,15 @@ transport across any `Truncates`, both ways) from `Banded`;
 `LeaderCommits` at `Support.live` from Law 2; `Descends` (a committed
 run of `c` slots decides everything below it) from `Indirect`.
 
+A fifth, `Descent` (`Properties/Commit.lean`), is derived the same way —
+from the support's two laws with `Indirect`, by
+`Timed.descent_of_support`, which is stated over a bare `DagRule` at a
+gap and a goodness predicate. It differs only in being named per
+protocol: a schedule mechanism consumes it at a rule, so each of the
+eight discharges its own instance in its own folder, in one call to that
+theorem. The obligation is a property; the discharge is generic; nothing
+of the mechanism appears on either side.
+
 ### 0.5 Synchrony is not a property
 
 Nothing under `Properties/` names synchrony. `SynchronisedOn`,
@@ -248,7 +257,7 @@ theorem, once per mechanism:
 | crash recovery, re-genesis | `Extends`, `Sustains` | `Persist.of_banded`, `decided_agree_extends` | `Support.live_of_sustains` |
 | any stack of them | `Stack` | `Stack.safe_and_live` | the same |
 | adaptive leader schedule | — | `Adaptive.run_agree` | `Adaptive.run_exists` |
-| adaptive leader count | — | Barnacle's `Laws` | `descent_of_support` |
+| adaptive leader count | — | `Agree`, `CommitsCandidate`, `CommitsDirect` | `Descent`, built by `Timed.descent_of_support` |
 | prompt skip | `Extends` + `SkipsUnsupported` | `decided_none_of_novel` | — |
 | chain quality | — | `card_coveredAt_ge` | `committed_of_correct_block` |
 
@@ -379,9 +388,9 @@ across a cut. `BlockRecord.lean` and `Record/` — the block record every
 universe is, and the cut, fill and re-genesis built once at it;
 `Properties/Record.lean` — a carrier read as records, with every
 mechanism's witnesses. Each rule's conformance in
-its `*Properties.lean` or `Carrier.lean`; each rule's mechanism cells
-in `Integration/*Mechanisms.lean` and `Properties/Arcs/`, each an
-`OnRecord` instance with the constructions named.
+its `*Properties.lean` or `Carrier.lean`; each rule's mechanism cells in
+its own `Record.lean`, an `OnRecord` instance with the constructions
+named, with the cross-protocol pairings in `Integration/`.
 
 Six scripts keep it honest and run in CI: `audit-conformance.py` (what
 each rule shows, and the headlines), `audit-mechanisms.py` (which
