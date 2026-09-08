@@ -3275,9 +3275,9 @@ zero, where subtraction is faithful and the schedule's keying survives).
 Views truncate by the same filter (`View.chop`), and:
 
 ```lean
-theorem decided_chop (hd : G ≤ S.slotRound d) :
-    Decided (S := S.chop G d hd) (chop U G) (V.chop G) k v ↔
-      Decided U V (d + k) v
+theorem decided_chop_iff (hd : G ≤ S.slotRound d)
+    {V : View Validator BlockId Payload U} {k : ℕ} {v : Option BlockId} :
+    Decided U V (d + k) v ↔ Decided (S := S.chop G d hd) (chop U G) (V.chop G) k v
 ```
 
 — a validator re-running the protocol on the truncation decides slot `k`
@@ -10283,9 +10283,7 @@ reused.
 | BM5 | two committed anchors are one block, or one is in the causal history of the other | `BlackMarlin.reaches_of_committed_of_le` *(BlackMarlin/Helpers/Rules)* |
 | BM8 | Figure 1 on data: `B0`–`B2` committed, `B3` supported but unlinked | `Ubm` witnesses *(LeanDagTest/BlackMarlin)* |
 | BML6 | liveness on a covered four-round model, and why Figure 1 is not one | `Ufull` witnesses *(LeanDagTest/BlackMarlin)* |
-| BMR7 | the round rule on data, and a pace at spacing `6` | `ugrowBM` witnesses *(LeanDagTest/BlackMarlin)* |
 | BMA1 | a delivered block is delivered by every committed anchor from its round on | `BlackMarlin.history_subset_of_committed` *(BlackMarlin/Helpers/Rules)* |
-| BMA5 | agreement on data, on the four-round model and on the pace | `Ufull`, `ugrowBM` witnesses *(LeanDagTest/BlackMarlin)* |
 | BMD1 | the descent has one candidate where it steps by one round | `BlackMarlin.coneAnchors_subsingleton` *(BlackMarlin/Helpers/Ledger)* |
 | BMD1′ | and at a round whose anchor is reliable, however deep the cone | `BlackMarlin.coneAnchors_subsingleton_of_correct` *(BlackMarlin/Helpers/Ledger)* |
 | BMD2 | two records agreeing at a round agree at the round below | `BlackMarlin.block_eq_of_succ` *(BlackMarlin/Helpers/Ledger)* |
@@ -10293,7 +10291,6 @@ reused.
 | BMD4 | records flushing committed anchors at one round agree there | `BlackMarlin.block_eq_of_committed` *(BlackMarlin/Helpers/Ledger)* |
 | BMD5 | the link clause keeps the descent from skipping | `BlackMarlin.coneAnchors_succ_nonempty_of_committed` *(BlackMarlin/Helpers/Ledger)* |
 | BMD6 | no retraction, agreement, and one position per block | `BlackMarlin.ledgerSet_mono`, `BlackMarlin.ledgerSet_agree`, `BlackMarlin.outputAt_unique`, `BlackMarlin.outputAt_agree` *(BlackMarlin/Helpers/Ledger)* |
-| BMD7 | the descent on data: singleton candidate sets, and a block's position | `fullFlush` witnesses *(LeanDagTest/BlackMarlin)* |
 | BME1 | the descent's choice is an anchor strictly below, at the highest anchor round | `BlackMarlin.descend_mem`, `BlackMarlin.descend_round_lt`, `BlackMarlin.round_descend` *(BlackMarlin/Helpers/Descent)* |
 | BME2 | and is made whenever an anchor lies below | `BlackMarlin.descend_isSome` *(BlackMarlin/Helpers/Descent)* |
 | BME3 | the computed record satisfies `Flush` | `BlackMarlin.flushRecord_step`, `BlackMarlin.flushRecord_dense`, `BlackMarlin.toFlush` *(BlackMarlin/Helpers/Descent)* |
@@ -10307,9 +10304,8 @@ reused.
 | BMO5 | every author-and-round flushed is output | `BlackMarlin.deliverSeq_key_mem` *(BlackMarlin/Helpers/Order)* |
 | BMO6 | and for a correct author, by the block itself | `BlackMarlin.deliverSeq_of_correct` *(BlackMarlin/Helpers/Order)* |
 | BMO9 | a reliable author's block is output | `BlackMarlin.mem_ledgerSeq_of_mem_history` *(BlackMarlin/Helpers/Order)* |
-| BMO10 | a sort exists, and the sequence on data | `TopoSort.ofFinOrder`, `fullSort` witnesses *(LeanDagTest/BlackMarlin)* |
+| BMO10 | a sort exists, and the sequence on data | `TopoSort.ofFinOrder`, `divSort` witnesses *(LeanDagTest/BlackMarlin/Divergence)* |
 | BMO11 | two honest validators output different twins: Agreement refuted | `Udiv`, `vFlush`, `wFlush` witnesses *(LeanDagTest/BlackMarlin)* |
-| BMV4 | BMV1–BMV3 on the four-round model, and the reliable supporters alone a quorum | `ViewLiveness` witnesses *(LeanDagTest/BlackMarlin)* |
 | BMT4 | and one Byzantine anchor below suffices to order two reliable authors' blocks oppositely, refuting Total order | `deliverSeq` and `commitSeq` witnesses *(LeanDagTest/BlackMarlin/Divergence)* |
 
 **The properties** (§16.1):

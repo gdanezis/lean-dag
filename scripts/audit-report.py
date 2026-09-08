@@ -50,6 +50,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # a dotted or underscored identifier, not a file path and not English prose.
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_.'′]*$")
 FILE_SUFFIX = re.compile(r"\.(lean|md|py|sh|tsv|svg|pdf|toml|yml|json)$")
+# A lower-then-upper run marks a camelCase or PascalCase Lean name, which
+# the underscore-or-dot test alone lets through: `descendSupp` named a
+# declaration that had been deleted and no check saw it.
+INNER_CAPS = re.compile(r"[a-z][A-Z]")
 # Words that are legitimately backticked in the report but are not declarations.
 ALLOW = {
     "sorry", "decide", "omega", "simp", "rfl", "native_decide", "propext",
@@ -60,6 +64,17 @@ ALLOW = {
     "Finset.filter", "Finset.min", "Finset.max", "Finset.min'", "lt_trichotomy", "Correct.card", "Finset.max'", "Nat.succ", "refs.card",
     "LeanDagTest.Mysticeti.Growth", "LeanDagTest.Mysticeti.Unbounded", "Environment.constants",
     "le_antisymm", "not_lt", "List.finRange", "Finset.sort",
+    # Scoped notation, not a declaration, so the extraction cannot see it.
+    "quorumCard",
+    # Lean core and Mathlib names with no underscore or dot, which the
+    # camelCase check now reaches.
+    "LinearOrder", "sorryAx",
+    # Pseudocode names of the papers the arcs read, quoted as the papers
+    # write them: Black Marlin's Algorithm 1 and Mysticeti's.
+    "GetLeader", "GetSubDag", "TryDecide", "TryCommit", "UpdateLeaders",
+    "LinearizeSubDags", "ExposesEquivocation", "ExpectedCommits",
+    # Prose names for a clause or a hypothesis, not declarations.
+    "leaderClause", "noEvidence", "hN",
     # Names of the reference implementation (the `mysticeti` repository, Rust)
     # that the Mahi-Mahi arc's docstrings quote.
     "enough_leader_blame", "is_certificate", "try_indirect_decide",
@@ -120,7 +135,8 @@ def source_declarations(root):
     matters.
     """
     decls = {}
-    for f in (root / "LeanDag").rglob("*.lean"):
+    for f in [*(root / "LeanDag").rglob("*.lean"),
+              *(root / "LeanDagTest").rglob("*.lean")]:
         lines = f.read_text().split("\n")
         starts = [i for i, l in enumerate(lines) if DECL_START.match(l)]
         for n, i in enumerate(starts):
@@ -314,7 +330,7 @@ def audit(path, decls, suffixes):
             continue
         if FILE_SUFFIX.search(tok) or "/" in tok:
             continue
-        if "_" not in tok and "." not in tok:
+        if "_" not in tok and "." not in tok and not INNER_CAPS.search(tok):
             continue  # a single English word, not a Lean name
         if not resolves(tok, decls, suffixes):
             failures.append(("ident", tok))
@@ -372,6 +388,17 @@ def audit(path, decls, suffixes):
     for name, disp in shown.items():
         src = sigs.get(name)
         if src is None:
+            # the display may qualify a name the source leaves bare inside a
+            # namespace, or leave bare one the source qualifies
+            short = name.rsplit(".", 1)[-1]
+            src = sigs.get(short)
+            if src is None:
+                cands = [v for k, v in sigs.items() if k.rsplit(".", 1)[-1] == short]
+                src = cands[0] if len(cands) == 1 else None
+        if src is None:
+            # a displayed statement whose declaration is nowhere in the source:
+            # the drift a deletion leaves behind, which no other check sees
+            failures.append(("nosource", f"`{name}` is displayed but declared nowhere"))
             continue
         for tok in set(re.findall(r"[A-Za-z_][A-Za-z0-9_.'\u2032]*", disp)):
             if tok == name or tok in ALLOW:
