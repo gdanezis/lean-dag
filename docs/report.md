@@ -8871,7 +8871,7 @@ failure on drift.
 
 *(modules `LeanDag/Hydrozoan/Helpers/{Carrier,Banded,Commit,Skippability}.lean`,
 `LeanDag/Hydrozoan/Properties/`, `LeanDag/Integration/HydrozoanMechanisms.lean`,
-`LeanDag/Barnacle/Hydrozoan*/`)*
+`LeanDagTest/Barnacle/Rules/Hydrozoan*/`)*
 
 Hydrozoan composes with the mechanisms the way every other rule does
 (§16.1): a carrier `LeanDag.Hydrozoan.rule`, the four properties and a
@@ -9263,7 +9263,7 @@ committee of five or more.
 *(modules `LeanDag/OptimalHydrozoan/Carrier.lean`,
 `LeanDag/OptimalHydrozoan/Helpers/Banded.lean`,
 `LeanDag/Integration/OptimalMechanisms.lean`,
-`LeanDag/Barnacle/OptimalHydrozoan*/`)*
+`LeanDagTest/Barnacle/Rules/OptimalHydrozoan*/`)*
 
 Optimal-Hydrozoan has a carrier of its own,
 `OptimalHydrozoanProperties.optimalRule`: its records, read by the
@@ -9544,7 +9544,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Barnacle/Model/Live.lean`, `Barnacle/Model/Heads.lean` | the liveness clause with its gap; the descent laws and runs of heads |
 | `Barnacle/Model/Anchored.lean` | an anchored rule as a base rule and as a live rule, at a fault model |
 | `Barnacle/Window/`, `Barnacle/Agreement/`, `Barnacle/Healthy/`, `Barnacle/Validity/`, `Barnacle/Ledger/`, `Barnacle/Conservativity/`, `Barnacle/Aimd/`, `Barnacle/Progress/`, `Barnacle/Heads/` | the seven statements and their proofs (BN2, BN3, BN5, BN6, BN7, BN8, BN9) |
-| `Barnacle/Mysticeti/`, `Barnacle/MysticetiLive/`, `Barnacle/Odontoceti/`, `Barnacle/Nemo/`, `Barnacle/Orcaella/`, `Barnacle/MahiMahi/`, `Barnacle/FinWhale/`, `Barnacle/Hydrozoan/`, `Barnacle/HydrozoanLive/`, `Barnacle/OptimalHydrozoan/`, `Barnacle/OptimalHydrozoanLive/` | the eight rules as base and, where stated, live rules, their laws, and their liveness under round-robin (BN10) |
+| `LeanDagTest/Barnacle/Rules/` | the rules as base and, where stated, live rules, their laws and their liveness under round-robin (BN10) — instantiations of the generic results, so they sit with the witnesses that consume them |
 | `Barnacle/Helpers/` | the generated lemma layer |
 | `Hydrozoan/Model/Faults.lean` | the hybrid fault model, the five thresholds, the two pools |
 | `Hydrozoan/Model/Block.lean`, `Hydrozoan/Model/BlockUniverse.lean`, `Hydrozoan/Model/View.lean` | the shared block with no payload, and Hydrozoan's validity; the universe with non-equivocation for non-Byzantine authors; views; reachability |
@@ -10382,7 +10382,7 @@ reused.
 | BN7 | the AIMD rule keeps its count in range, steps as the paper says, is the integer test, and is anchored — it does not read the view, so two validators take one step | `Barnacle.Aimd.holds` *(Barnacle/Aimd/Proof)* |
 | BN8 | progress: a run past the synchrony round extends by one configuration; runs of every height exist under the horizon | `Barnacle.Progress.holds` *(Barnacle/Progress/Proof)* |
 | BN9 | the heads descent: the liveness clause from the descent laws and a run of heads; round-robin has runs of heads by pigeonhole and is live at every count | `Barnacle.Heads.holds` *(Barnacle/Heads/Proof)* |
-| BN10 | the three rules satisfy the laws and the descent laws, and are live under round-robin at every count | `Barnacle.Mysticeti.holds`, `Barnacle.MysticetiLive.holds`, `Barnacle.Odontoceti.holds`, `Barnacle.Nemo.holds` *(Barnacle/Mysticeti/Proof, Barnacle/MysticetiLive/Proof, Barnacle/Odontoceti/Proof, Barnacle/Nemo/Proof)* |
+| BN10 | the three rules satisfy the laws and the descent laws, and are live under round-robin at every count | `Barnacle.Mysticeti.holds`, `Barnacle.MysticetiLive.holds`, `Barnacle.Odontoceti.holds`, `Barnacle.Nemo.holds` *(LeanDagTest/Barnacle/Rules/Mysticeti/Proof, .../MysticetiLive/Proof, .../Odontoceti/Proof, .../Nemo/Proof)* |
 | BN11 | the mechanism over any rule with agreement and the descent laws, under any schedule whose good leaders run a wave, reaches every height with no clause left assumed, on any view caught up to the horizon; round-robin is one such schedule | `Barnacle.Live.holds`, `Barnacle.Live.runsExist_roundRobin`, `coversUpto_full` *(Barnacle/Live/Proof, Barnacle/Helpers/Cover)* |
 | BN12 | a healthy window is counted as healthy, and the rule then raises the count: the loop cannot back off where every scoring slot committed | `Barnacle.Healthy.holds` *(Barnacle/Healthy/Proof)* |
 | BN13 | BN11 on data: runs of every height on the grown family under the real rule, with nothing assumed | `real_runs` witnesses *(LeanDagTest/Barnacle/Real)* |
@@ -10419,9 +10419,9 @@ reused.
 | Label | Statement | Lean |
 |:---|:---|:---|
 | HI3 | Hydrozoan's universe satisfies the causal-structure interface, by its own fields | `BlockRecord.causal` *(Common/CausalHistory)* |
-| HI4 | Hydrozoan as a Barnacle base rule, with its laws | `Barnacle.Hydrozoan.holds` *(Barnacle/Hydrozoan/Proof)* |
-| HI5 | as a live rule: the descent laws at slack `f + c`, and round-robin liveness at `3(f + c) + 1 ≤ n` | `Barnacle.HydrozoanLive.holds` *(Barnacle/HydrozoanLive/Proof)* |
-| HI6 | the same two for Optimal-Hydrozoan, its exclusion rule a clause of validity | `Barnacle.OptimalHydrozoan.holds`, `Clause.leaderExcluded` *(Barnacle/OptimalHydrozoan/Proof, Common/BlockRecord)* |
+| HI4 | Hydrozoan as a Barnacle base rule, with its laws | `Barnacle.Hydrozoan.holds` *(LeanDagTest/Barnacle/Rules/Hydrozoan/Proof)* |
+| HI5 | as a live rule: the descent laws at slack `f + c`, and round-robin liveness at `3(f + c) + 1 ≤ n` | `Barnacle.HydrozoanLive.holds` *(LeanDagTest/Barnacle/Rules/HydrozoanLive/Proof)* |
+| HI6 | the same two for Optimal-Hydrozoan, its exclusion rule a clause of validity | `Barnacle.OptimalHydrozoan.holds`, `Clause.leaderExcluded` *(LeanDagTest/Barnacle/Rules/OptimalHydrozoan/Proof, Common/BlockRecord)* |
 | HI7 | verdicts survive the cut, for both rules, on the base-slot premise alone | `DagRule.OnRecord.decided_chop_iff` at `Hydrozoan.onRecord` and `OptimalHydrozoanProperties.onRecord` *(Properties/Arcs/Record, Integration/OptimalMechanisms)* |
 | HI9 | verdicts survive the copy fill for both rules, with no quorum hypothesis; exclusion survives it as a clause of validity | `DagRule.OnRecord.decided_agree_copyFill` at the two instances; `ValidOpt.copyStable` *(Properties/Arcs/Record, OptimalHydrozoan/Model/Universe)* |
 | HI10 | what a deployment gets: the headlines at both rules | `Hydrozoan.Properties.safety`, `Hydrozoan.Properties.progress`, `OptimalHydrozoanProperties.safety`, `OptimalHydrozoanProperties.progress` *(Hydrozoan/Properties/Proof, OptimalHydrozoan/Carrier)* |
@@ -10432,7 +10432,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 325 definitions and structures the report names, in
+The 318 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -13124,32 +13124,6 @@ def ofAnchoredVia (R : AnchoredRule Validator BlockId Payload P honest) {X : Typ
 
 **An anchored rule read through a projection, as a base rule**: the universes are any type projecting to records.
 
-#### `Laws`
-
-*def, `Barnacle.Odontoceti.Statement.lean`*
-
-```lean
-def Laws : Prop :=
-  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults5 Validator] [LinearOrder BlockId],
-    BaseRule.Laws (odontoceti (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-```
-
-**Odontoceti satisfies the laws**: O5 is the agreement law.
-
-#### `Laws`
-
-*def, `Barnacle.Nemo.Statement.lean`*
-
-```lean
-def Laws : Prop :=
-  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [DecidableEq BlockId],
-    BaseRule.Laws (nemo (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-```
-
-**Nemo-Nemo satisfies the laws**, with no fault class in sight.
-
 ### Hydrozoan: the dual-path rule under hybrid faults
 
 #### `Faults`
@@ -14184,72 +14158,6 @@ abbrev PlacesRuns (P : AdaptivePolicy Validator BlockId Payload)
 ```
 
 **The adaptive fairness clause**, for the core.
-
-#### `Laws`
-
-*def, `Barnacle.FinWhale.Statement.lean`*
-
-```lean
-def Laws : Prop :=
-  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LeanDag.FinWhale.Params Validator] [LinearOrder BlockId],
-    BaseRule.Laws (finWhale (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-```
-
-**FinWhale satisfies the laws.**
-
-#### `Laws`
-
-*def, `Barnacle.Hydrozoan.Statement.lean`*
-
-```lean
-def Laws : Prop :=
-  ∀ (Replica BlockId : Type) [Fintype Replica] [DecidableEq Replica]
-    [LinearOrder BlockId] [LeanDag.Hydrozoan.Faults Replica],
-    BaseRule.Laws (hydrozoan (Replica := Replica) (BlockId := BlockId))
-```
-
-**Hydrozoan satisfies the laws**; agreement is HZ3.
-
-#### `Laws`
-
-*def, `Barnacle.MahiMahi.Statement.lean`*
-
-```lean
-def Laws : Prop :=
-  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] [LinearOrder BlockId] (w : ℕ), 2 ≤ w →
-    BaseRule.Laws (mahiMahi (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
-```
-
-**Mahi-Mahi satisfies the laws** at every wave of length at least two.
-
-#### `Laws`
-
-*def, `Barnacle.OptimalHydrozoan.Statement.lean`*
-
-```lean
-def Laws : Prop :=
-  ∀ (Replica BlockId : Type) [Fintype Replica] [DecidableEq Replica]
-    [DecidableEq BlockId] [LeanDag.OptimalHydrozoan.OptimalFaults Replica],
-    BaseRule.Laws (optimalHydrozoan (Replica := Replica) (BlockId := BlockId))
-```
-
-**Optimal-Hydrozoan satisfies the laws**; agreement is OH3.
-
-#### `Laws`
-
-*def, `Barnacle.Orcaella.Statement.lean`*
-
-```lean
-def Laws : Prop :=
-  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [HybridFaults Validator] [LinearOrder BlockId] (k : ℕ),
-    Hybrid.Admissible Validator k →
-    BaseRule.Laws (orcaella (Validator := Validator) (BlockId := BlockId) (Payload := Payload) k)
-```
-
-**Orcaella satisfies the laws** at every admissible threshold.
 
 #### `commitSeq`
 
@@ -15995,7 +15903,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 492 theorems the body or Appendix A names, each
+The 481 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -19937,38 +19845,6 @@ theorem holds : Statement
 theorem holds : Statement
 ```
 
-#### `holds`
-
-*theorem, `Barnacle.Mysticeti.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `Barnacle.MysticetiLive.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `Barnacle.Odontoceti.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `Barnacle.Nemo.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
 ### Hydrozoan: the dual-path rule under hybrid faults
 
 #### `ValidWrt.refs_empty_of_round_zero`
@@ -20571,14 +20447,6 @@ theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
 
 #### `holds`
 
-*theorem, `Barnacle.FinWhale.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
 *theorem, `Barnacle.Healthy.Proof.lean`*
 
 ```lean
@@ -20611,55 +20479,7 @@ theorem delivers_core [F : Faults Validator]
 
 #### `holds`
 
-*theorem, `Barnacle.Hydrozoan.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `Barnacle.HydrozoanLive.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
 *theorem, `Barnacle.Live.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `Barnacle.MahiMahi.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `Barnacle.OptimalHydrozoan.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `Barnacle.OptimalHydrozoanLive.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `Barnacle.Orcaella.Proof.lean`*
 
 ```lean
 theorem holds : Statement

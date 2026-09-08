@@ -3313,16 +3313,17 @@ fill, and the mechanism has two.
 **Mahi-Mahi and FinWhale × adaptive leaders.** The reason was "no
 `BaseRule` instance", and after §11.8a a `LiveRule` is a small thing:
 `Good` is `GoodOf` at the fault model and the descent laws come from
-the support. What was genuinely per rule was the `BaseRule` record —
-the history view, the direct predicate at the view with its
-decidability, the wave length — and `Barnacle/MahiMahi/` and
-`Barnacle/FinWhale/` supply it in the shape the six others have. Every
-law is a property already proved: `Agree`, `CommitsDirect`,
-`CommitsCandidate` for the base laws; the support's `OfCoverage` and
-`Commits` with `Indirect` for the descent. FinWhale's history view is
-the anchor's causal history, closed by construction; Mahi-Mahi carries
-its wave `w` throughout and takes the round-robin committee bound
-`w · f + 1 ≤ n` as a hypothesis, the fault model giving only `3f + 1`.
+the support. What is genuinely per rule is the `BaseRule` record — the
+history view, the direct predicate at the view with its decidability,
+the wave length — and every law it needs is a property already proved:
+`Agree`, `CommitsDirect`, `CommitsCandidate` for the base laws; the
+support's `OfCoverage` and `Commits` with `Indirect` for the descent.
+FinWhale's history view is the anchor's causal history, closed by
+construction; Mahi-Mahi carries its wave `w` throughout and takes the
+round-robin committee bound `w · f + 1 ≤ n` as a hypothesis, the fault
+model giving only `3f + 1`. Neither instance is built: the mechanism's
+results are generic in the rule, so an instance earns its place only
+where a witness consumes it, and none does for these two.
 
 With these, the only `--` left in the matrix is Black Marlin's row.
 

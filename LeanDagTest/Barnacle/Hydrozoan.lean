@@ -1,5 +1,5 @@
 import LeanDagTest.Hydrozoan.Decided
-import LeanDag.Barnacle.Hydrozoan.Proof
+import LeanDagTest.Barnacle.Rules.Hydrozoan.Proof
 import LeanDag.Barnacle.Model.Window
 import LeanDag.Common.Schedule
 /-!

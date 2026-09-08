@@ -1,5 +1,5 @@
 import LeanDagTest.Hybrid.Model
-import LeanDag.Barnacle.Orcaella.Proof
+import LeanDagTest.Barnacle.Rules.Orcaella.Proof
 import LeanDag.Barnacle.Helpers.Cover
 import Mathlib.Tactic.FinCases
 import Mathlib.Tactic.IntervalCases

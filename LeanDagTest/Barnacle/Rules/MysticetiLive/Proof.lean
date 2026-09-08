@@ -1,4 +1,4 @@
-import LeanDag.Barnacle.MysticetiLive.Statement
+import LeanDagTest.Barnacle.Rules.MysticetiLive.Statement
 import LeanDag.Barnacle.Helpers.Heads
 import LeanDag.Mysticeti.Properties
 /-!

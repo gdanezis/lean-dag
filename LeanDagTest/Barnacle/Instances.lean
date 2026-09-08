@@ -1,6 +1,6 @@
 import LeanDagTest.Barnacle.Model
-import LeanDag.Barnacle.Odontoceti.Proof
-import LeanDag.Barnacle.Nemo.Proof
+import LeanDagTest.Barnacle.Rules.Odontoceti.Proof
+import LeanDagTest.Barnacle.Rules.Nemo.Proof
 import LeanDagTest.Nemo.Model
 import Mathlib.Tactic.FinCases
 import Mathlib.Tactic.IntervalCases

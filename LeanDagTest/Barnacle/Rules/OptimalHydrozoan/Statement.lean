@@ -32,9 +32,6 @@ def Laws : Prop :=
     [DecidableEq BlockId] [LeanDag.OptimalHydrozoan.OptimalFaults Replica],
     BaseRule.Laws (optimalHydrozoan (Replica := Replica) (BlockId := BlockId))
 
-/-- The laws of the base rule. -/
-def Statement : Prop := Laws
-
 end OptimalHydrozoan
 
 end Barnacle

@@ -1,5 +1,5 @@
 import LeanDag.Barnacle.Model.Heads
-import LeanDag.Barnacle.Mysticeti.Statement
+import LeanDagTest.Barnacle.Rules.Mysticeti.Statement
 /-!
 # Barnacle over Mysticeti — liveness
 

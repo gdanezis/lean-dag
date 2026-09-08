@@ -33,9 +33,6 @@ def Laws : Prop :=
     [LinearOrder BlockId] [LeanDag.Hydrozoan.Faults Replica],
     BaseRule.Laws (hydrozoan (Replica := Replica) (BlockId := BlockId))
 
-/-- The laws of the base rule. The live rule is P2. -/
-def Statement : Prop := Laws
-
 end Hydrozoan
 
 end Barnacle

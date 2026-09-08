@@ -1,4 +1,4 @@
-import LeanDag.Barnacle.Hydrozoan.Statement
+import LeanDagTest.Barnacle.Rules.Hydrozoan.Statement
 import LeanDag.Barnacle.Helpers.Anchored
 import LeanDag.Hydrozoan.SlotAgreement.Proof
 /-!
@@ -13,7 +13,7 @@ namespace Barnacle
 
 namespace Hydrozoan
 
-theorem holds : Statement := by
+theorem holds : Laws := by
   intro Replica BlockId _ _ _ _
   exact ofAnchored_laws LeanDag.Hydrozoan.SlotAgreement.hydrozoanLaws
 

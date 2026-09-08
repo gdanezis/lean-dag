@@ -1,6 +1,6 @@
 import LeanDagTest.Barnacle.Model
 import LeanDag.Barnacle.Live.Proof
-import LeanDag.Barnacle.MysticetiLive.Proof
+import LeanDagTest.Barnacle.Rules.MysticetiLive.Proof
 import LeanDag.Barnacle.Validity.Proof
 import LeanDag.Barnacle.Helpers.Delivery
 import LeanDag.Barnacle.Aimd.Proof

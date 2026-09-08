@@ -1,4 +1,4 @@
-import LeanDag.Barnacle.Nemo.Statement
+import LeanDagTest.Barnacle.Rules.Nemo.Statement
 import LeanDag.Barnacle.Helpers.Anchored
 import LeanDag.Barnacle.Helpers.Heads
 import LeanDag.Nemo.Properties

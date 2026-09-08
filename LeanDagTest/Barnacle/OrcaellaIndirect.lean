@@ -1,5 +1,5 @@
 import LeanDagTest.Hybrid.Model
-import LeanDag.Barnacle.Orcaella.Proof
+import LeanDagTest.Barnacle.Rules.Orcaella.Proof
 /-!
 # Barnacle over Orcaella — the indirect rule, witnessed
 

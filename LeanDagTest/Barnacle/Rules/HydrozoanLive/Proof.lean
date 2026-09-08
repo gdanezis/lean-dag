@@ -1,4 +1,4 @@
-import LeanDag.Barnacle.HydrozoanLive.Statement
+import LeanDagTest.Barnacle.Rules.HydrozoanLive.Statement
 import LeanDag.Barnacle.Helpers.Heads
 import LeanDag.Hydrozoan.Helpers.Commit
 /-!

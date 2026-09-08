@@ -1,4 +1,4 @@
-import LeanDag.Barnacle.Orcaella.Statement
+import LeanDagTest.Barnacle.Rules.Orcaella.Statement
 import LeanDag.Barnacle.Helpers.Anchored
 import LeanDag.Barnacle.Helpers.Heads
 import LeanDag.Hybrid.Properties

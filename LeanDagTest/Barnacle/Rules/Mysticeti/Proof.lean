@@ -1,4 +1,4 @@
-import LeanDag.Barnacle.Mysticeti.Statement
+import LeanDagTest.Barnacle.Rules.Mysticeti.Statement
 import LeanDag.Barnacle.Helpers.Anchored
 /-!
 # Barnacle over Mysticeti — proof

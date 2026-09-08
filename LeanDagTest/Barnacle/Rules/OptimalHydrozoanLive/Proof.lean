@@ -1,4 +1,4 @@
-import LeanDag.Barnacle.OptimalHydrozoanLive.Statement
+import LeanDagTest.Barnacle.Rules.OptimalHydrozoanLive.Statement
 import LeanDag.Barnacle.Helpers.Heads
 /-!
 # Barnacle over Optimal-Hydrozoan — the live rule, proof

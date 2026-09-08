@@ -1,4 +1,4 @@
-import LeanDag.Barnacle.Odontoceti.Statement
+import LeanDagTest.Barnacle.Rules.Odontoceti.Statement
 import LeanDag.Barnacle.Helpers.Anchored
 import LeanDag.Barnacle.Helpers.Heads
 import LeanDag.Odontoceti.Properties

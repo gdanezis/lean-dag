@@ -1,4 +1,4 @@
-import LeanDag.Barnacle.OptimalHydrozoan.Statement
+import LeanDagTest.Barnacle.Rules.OptimalHydrozoan.Statement
 import LeanDag.Barnacle.Helpers.Anchored
 /-!
 # Barnacle over Optimal-Hydrozoan — proof
@@ -12,7 +12,7 @@ namespace Barnacle
 
 namespace OptimalHydrozoan
 
-theorem holds : Statement := by
+theorem holds : Laws := by
   intro Replica BlockId _ _ _ _
   exact ofAnchoredVia_laws LeanDag.OptimalHydrozoan.SlotAgreement.optimalLaws
     (fun S U => LeanDag.OptimalHydrozoan.OptUniverse.leader_excluded (S := S) U)

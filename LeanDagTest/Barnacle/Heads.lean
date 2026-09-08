@@ -1,6 +1,6 @@
 import LeanDagTest.Barnacle.Progress
 import LeanDag.Barnacle.Heads.Proof
-import LeanDag.Barnacle.MysticetiLive.Proof
+import LeanDagTest.Barnacle.Rules.MysticetiLive.Proof
 import Mathlib.Tactic.FinCases
 import Mathlib.Tactic.IntervalCases
 /-!
