@@ -1,6 +1,5 @@
 import LeanDag.Barnacle.Model.Anchored
 import LeanDag.Common.Persistence
-import LeanDag.Mysticeti.Liveness
 /-!
 # Barnacle helpers — the delivery law
 

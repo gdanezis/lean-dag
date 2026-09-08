@@ -1,6 +1,7 @@
 import LeanDag.Common.Block
 import LeanDag.Common.BlockRecord
 import LeanDag.Common.Density
+import LeanDag.Common.Participation
 /-!
 # The block universe
 
@@ -108,6 +109,26 @@ read off. -/
 theorem BlockUniverse.quorateOn (U : BlockUniverse Validator BlockId Payload) :
     QuorateOn U.block U.ids (coreReliability Validator) :=
   fun b hb hr => U.creators_quorum hb hr
+
+/-- **What the two-round rules count**: every `T`-authored block one
+round above `r` references `L`. Both pacing disciplines supply it — full
+coverage via `votesAt_of_synchronisedOn`, the reactive exit via
+`ReactivePace.votes` — so the commit arguments are stated against it and
+proved once. -/
+def VotesAt (U : BlockUniverse Validator BlockId Payload)
+    (T : Finset Validator) (r : ℕ) (L : BlockId) : Prop :=
+  ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
+    (U.block c).round = r + 1 → L ∈ (U.block c).refs
+
+/-- Coverage gives the votes: the instantiation of `SynchronisedOn` at
+`n = r`, with `L` the one block singled out. -/
+theorem votesAt_of_synchronisedOn {U : BlockUniverse Validator BlockId Payload}
+    {T : Finset Validator} {R r : ℕ} {L : BlockId}
+    (hs : SynchronisedOn U T R) (hRr : R ≤ r)
+    (hL : L ∈ U.ids) (hLr : (U.block L).round = r)
+    (hLc : (U.block L).creator ∈ T) :
+    VotesAt U T r L :=
+  fun _v hv c hc hcc hcr => hs r hRr c hc hcr (hcc ▸ hv) L hL hLr hLc
 
 end Mechanised
 

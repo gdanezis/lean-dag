@@ -1,4 +1,3 @@
-import LeanDag.Mysticeti.Rule
 import LeanDag.Common.Causality
 import LeanDag.Properties.Carrier
 import LeanDag.Properties.Agree
@@ -72,7 +71,8 @@ structure BaseRule (Validator : Type) [Fintype Validator] [DecidableEq Validator
   /-- The causal history of a block of the universe, as a view. -/
   historyView : ∀ (U : Universe) (A : BlockId), A ∈ ids U → View U
   /-- **A3.** The length of a wave: the rounds the direct rule reads from a
-  slot's proposal. Three for Mysticeti, two for the two-round rules. -/
+  slot's proposal. Three for the three-round rules, two for the
+  two-round ones. -/
   waveLength : ℕ
   /-- **A3.** The direct commit predicate, as judged from a view: block `L`
   proposed at round `r` is directly committed. -/

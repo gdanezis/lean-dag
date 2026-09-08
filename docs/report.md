@@ -10557,6 +10557,19 @@ abbrev View (Validator BlockId Payload : Type*) [Fintype Validator]
 
 **A view**: one validator's local sub-DAG, a subset of the universe itself closed under references. Views share `U.block`, so they disagree about *which* blocks they hold, never about what an id denotes, and they inherit validity and non-equivocation from `U` unchanged. Different correct validators may hold different views — that asymmetry is the entire point of the cross-view results.
 
+#### `VotesAt`
+
+*def, `Common.BlockDag.lean`*
+
+```lean
+def VotesAt (U : BlockUniverse Validator BlockId Payload)
+    (T : Finset Validator) (r : ℕ) (L : BlockId) : Prop :=
+  ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
+    (U.block c).round = r + 1 → L ∈ (U.block c).refs
+```
+
+**What the two-round rules count**: every `T`-authored block one round above `r` references `L`. Both pacing disciplines supply it — full coverage via `votesAt_of_synchronisedOn`, the reactive exit via `ReactivePace.votes` — so the commit arguments are stated against it and proved once.
+
 ### Causal structure
 
 #### `CausalStructure`
@@ -10940,19 +10953,6 @@ def EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
 ```
 
 **The network assumption**: after `R`, correct blocks reach correct validators in time to be built on. This is eventual DAG synchrony proper — pure delivery, no protocol content.
-
-#### `VotesAt`
-
-*def, `Mysticeti.Liveness.lean`*
-
-```lean
-def VotesAt (U : BlockUniverse Validator BlockId Payload)
-    (T : Finset Validator) (r : ℕ) (L : BlockId) : Prop :=
-  ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
-    (U.block c).round = r + 1 → L ∈ (U.block c).refs
-```
-
-**What the two-round rules count**: every `T`-authored block one round above `r` references `L`. Both pacing disciplines supply it — full coverage via `votesAt_of_synchronisedOn`, the reactive exit via `ReactivePace.votes` — so the commit arguments below are stated against it and proved once.
 
 #### `CertifiesAt`
 
@@ -12910,7 +12910,8 @@ structure BaseRule (Validator : Type) [Fintype Validator] [DecidableEq Validator
   /-- The causal history of a block of the universe, as a view. -/
   historyView : ∀ (U : Universe) (A : BlockId), A ∈ ids U → View U
   /-- **A3.** The length of a wave: the rounds the direct rule reads from a
-  slot's proposal. Three for Mysticeti, two for the two-round rules. -/
+  slot's proposal. Three for the three-round rules, two for the
+  two-round ones. -/
   waveLength : ℕ
   /-- **A3.** The direct commit predicate, as judged from a view: block `L`
   proposed at round `r` is directly committed. -/
@@ -16068,6 +16069,21 @@ theorem ValidWrt.iff_validAt (blk : BlockId → Block Validator BlockId Payload)
 
 **The core's validity is the family** at the core's quorum, with distinct creators and the self-parent clause.
 
+#### `votesAt_of_synchronisedOn`
+
+*theorem, `Common.BlockDag.lean`*
+
+```lean
+theorem votesAt_of_synchronisedOn {U : BlockUniverse Validator BlockId Payload}
+    {T : Finset Validator} {R r : ℕ} {L : BlockId}
+    (hs : SynchronisedOn U T R) (hRr : R ≤ r)
+    (hL : L ∈ U.ids) (hLr : (U.block L).round = r)
+    (hLc : (U.block L).creator ∈ T) :
+    VotesAt U T r L
+```
+
+Coverage gives the votes: the instantiation of `SynchronisedOn` at `n = r`, with `L` the one block singled out.
+
 ### Causal structure
 
 #### `round_le_of_reaches`
@@ -16471,19 +16487,6 @@ theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
 ```
 
 **L0 — the DAG is dense below its frontier.** If any block exists at round `r`, every round `n < r` has at least `2f+1` distinct authors: downward induction on the gap `r - n`, generalised over `n` so the step can re-enter at `n+1`.
-
-#### `votesAt_of_synchronisedOn`
-
-*theorem, `Mysticeti.Liveness.lean`*
-
-```lean
-theorem votesAt_of_synchronisedOn (hs : SynchronisedOn U T R) (hRr : R ≤ r)
-    (hL : L ∈ U.ids) (hLr : (U.block L).round = r)
-    (hLc : (U.block L).creator ∈ T) :
-    VotesAt U T r L
-```
-
-Coverage gives the votes: the instantiation of `SynchronisedOn` at `n = r`, with `L` the one block singled out.
 
 #### `certifies_of_synchronisedOn`
 

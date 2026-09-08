@@ -202,17 +202,6 @@ are three local `Populated` facts with no horizon or growth. -/
 
 variable {L C : BlockId} {R r : ℕ} {k : ℕ} {T : Finset Validator}
 
-omit S [DecidableEq BlockId] in
-/-- **What the two-round rules count**: every `T`-authored block one
-round above `r` references `L`. Both pacing disciplines supply it — full
-coverage via `votesAt_of_synchronisedOn`, the reactive exit via
-`ReactivePace.votes` — so the commit arguments below are stated against
-it and proved once. -/
-def VotesAt (U : BlockUniverse Validator BlockId Payload)
-    (T : Finset Validator) (r : ℕ) (L : BlockId) : Prop :=
-  ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
-    (U.block c).round = r + 1 → L ∈ (U.block c).refs
-
 omit S in
 /-- **What the three-round rule counts**: every `T`-authored block at the
 decision round certifies `L`. Coverage implies it through the vote layer
@@ -222,15 +211,6 @@ def CertifiesAt (U : BlockUniverse Validator BlockId Payload)
     (T : Finset Validator) (r : ℕ) (L : BlockId) : Prop :=
   ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
     (U.block c).round = r + 2 → Certifies U c L
-
-omit S [DecidableEq BlockId] in
-/-- Coverage gives the votes: the instantiation of `SynchronisedOn` at
-`n = r`, with `L` the one block singled out. -/
-theorem votesAt_of_synchronisedOn (hs : SynchronisedOn U T R) (hRr : R ≤ r)
-    (hL : L ∈ U.ids) (hLr : (U.block L).round = r)
-    (hLc : (U.block L).creator ∈ T) :
-    VotesAt U T r L :=
-  fun _v hv c hc hcc hcr => hs r hRr c hc hcr (hcc ▸ hv) L hL hLr hLc
 
 omit S in
 /-- A correct round-`(r+2)` block certifies any correct round-`r` block,
