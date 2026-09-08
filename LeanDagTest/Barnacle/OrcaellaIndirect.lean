@@ -42,7 +42,7 @@ namespace Barnacle
 
 namespace OrcaellaIndirect
 
-set_option maxRecDepth 2000000
+set_option maxRecDepth 2048
 
 open LeanDag LeanDag.Barnacle LeanDag.Hybrid
 

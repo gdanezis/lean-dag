@@ -44,8 +44,6 @@ namespace Minnow
 
 open LeanDag LeanDag.Minnow
 
-set_option maxRecDepth 4000000
-
 /-- **Round robin at `l = 1`**, one leader a round. The offset is chosen
 so that the round-1 leader is a process the Byzantine one did **not**
 send to — the case `report.md` §19.4 arranges at every round, and the

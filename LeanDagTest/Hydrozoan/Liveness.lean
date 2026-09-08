@@ -33,8 +33,6 @@ namespace Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan
 
-set_option maxRecDepth 8192
-
 /-- Fifteen blocks: rounds 0–2 × creators 2–6, each non-genesis block
 referencing all five blocks of the round below. -/
 def lk6 : Fin 15 → Block (Fin 7) (Fin 15) := fun i =>

@@ -32,8 +32,6 @@ namespace FinWhaleEquiv
 
 open LeanDag LeanDag.FinWhale
 
-set_option maxRecDepth 40000
-
 /-- The fast-path budget: `n + 1 = 3f + 2p = 5`. -/
 local instance eqParams : Params (Fin 4) where
   p := 1

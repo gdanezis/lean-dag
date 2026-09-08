@@ -25,8 +25,6 @@ ambiguous.
 
 namespace LeanDagTest
 
-set_option maxRecDepth 2000000
-
 open LeanDag
 
 /-- Round-robin, one leader per round: slot `k` at round `k`, led by

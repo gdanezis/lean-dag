@@ -32,8 +32,6 @@ open LeanDagTest.Hydrozoan
 open LeanDag LeanDag.Hydrozoan LeanDag.OptimalHydrozoan
 open Hydrozoan.PrefixAgreement OptimalHydrozoan.PrefixAgreement
 
-set_option maxRecDepth 16384
-
 /-- The seven settled verdicts of `OD` as a decision function: slots 0, 2,
 3, 6 commit (ids 3, 8, 13, 22), slots 1, 4, 5 are skipped. -/
 def gD : ℕ → Option (Fin 30)

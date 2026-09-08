@@ -42,7 +42,7 @@ namespace Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan
 
-set_option maxRecDepth 16384
+set_option maxRecDepth 2048
 
 -- ## A proper-subset T (U12, Fin 8: f = 1, c = 1, k = 2)
 

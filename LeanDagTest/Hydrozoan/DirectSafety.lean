@@ -35,8 +35,6 @@ namespace Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan
 
-set_option maxRecDepth 8192
-
 /-- Thirty-two blocks over five rounds. Ids 0–6: genesis (creator = id).
 Round 1: id 7 (creator 0) votes leader 2; **id 8 (creator 0), the
 equivocating copy, has refs `{0, 1, 3, 4, 5}` — it does NOT vote for

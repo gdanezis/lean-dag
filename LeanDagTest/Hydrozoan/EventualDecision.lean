@@ -31,8 +31,6 @@ namespace Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan
 
-set_option maxRecDepth 16384
-
 /-- Twenty-four blocks: rounds 0–7 × the three correct replicas
 {0, 2, 3} (round `r` holds ids `3r, 3r + 1, 3r + 2`), each non-genesis
 block referencing all three blocks of the round below. -/

@@ -35,8 +35,6 @@ namespace Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan
 
-set_option maxRecDepth 16384
-
 /-- Thirty-eight blocks over six rounds (id 38 is junk, outside the
 universe). Ids 0–6: genesis (creator = id). Ids 7/8: the equivocating
 pair by Byzantine 0 (both vote for genesis 2). Ids 9–13: round 1 by

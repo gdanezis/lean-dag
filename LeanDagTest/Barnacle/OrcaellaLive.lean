@@ -30,8 +30,6 @@ namespace Barnacle
 
 namespace OrcaellaLive
 
-set_option maxRecDepth 2000000
-
 open LeanDag LeanDag.Barnacle LeanDag.Hybrid
 
 /-- Genesis from all four; rounds `1`–`8` from the three survivors,

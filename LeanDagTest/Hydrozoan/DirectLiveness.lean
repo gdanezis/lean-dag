@@ -26,8 +26,6 @@ namespace Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan
 
-set_option maxRecDepth 8192
-
 -- ## Slow path on U6
 
 -- Slot 0's candidate is the round-0 block of correct leader 2.

@@ -71,8 +71,6 @@ open LeanDagTest.Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan LeanDag.OptimalHydrozoan
 
-set_option maxRecDepth 16384
-
 -- Part 1: the evidence predicate on the equivocation universe UX.
 
 -- Block 13 witnesses slot 1's equivocation: two votes for 4, one for 5.

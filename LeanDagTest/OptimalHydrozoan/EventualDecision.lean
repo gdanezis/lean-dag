@@ -47,8 +47,6 @@ open LeanDagTest.Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan LeanDag.OptimalHydrozoan
 
-set_option maxRecDepth 16384
-
 /-- Twenty-two blocks over seven rounds: ids 0–3 genesis; round
 `r ≥ 1` holds ids `3r + 1, 3r + 2, 3r + 3` by replicas `1`, `2`, `3`, each
 referencing the three correct blocks of round `r − 1`. -/

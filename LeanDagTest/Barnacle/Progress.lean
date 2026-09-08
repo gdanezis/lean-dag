@@ -40,8 +40,6 @@ What the file exhibits:
 namespace LeanDagTest
 namespace Barnacle
 
-set_option maxRecDepth 2000000
-
 open LeanDag LeanDag.Barnacle
 
 /-- (E) the `with` spelling -/
@@ -217,7 +215,6 @@ example : ¬ UpdBounded bnP (fun _ _ _ _ _ => ((0, 0) : ℕ × ℕ) : UpdateRule
   fun h => absurd (h 1 0 Usun (View.full Usun) 0).1 (by decide)
 example : ¬ UpdBounded bnP (fun _ _ _ _ _ => ((5, 0) : ℕ × ℕ) : UpdateRule bnRule32) :=
   fun h => absurd (h 1 0 Usun (View.full Usun) 0).2 (by decide)
-
 
 /-! ## Progress from height one, at interval one
 

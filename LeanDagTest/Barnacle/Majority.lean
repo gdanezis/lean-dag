@@ -28,8 +28,6 @@ namespace Barnacle
 
 namespace Majority
 
-set_option maxRecDepth 2000000
-
 open LeanDag LeanDag.Barnacle
 
 instance (priority := high) attackFaults : LeanDag.Nemo.CrashFaults (Fin 3) where

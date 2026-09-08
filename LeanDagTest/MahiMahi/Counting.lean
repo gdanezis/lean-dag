@@ -20,8 +20,6 @@ Same committee as `Model.lean` (validator `0` Byzantine, `f = 1`, quorum
 
 namespace LeanDagTest
 
-set_option maxRecDepth 2000000
-
 open LeanDag
 
 /-- Round-robin, one leader per round. -/

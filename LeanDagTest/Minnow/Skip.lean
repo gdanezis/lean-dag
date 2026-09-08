@@ -26,8 +26,6 @@ namespace Minnow
 
 open LeanDag LeanDag.Minnow
 
-set_option maxRecDepth 4000000
-
 /-- Round `0` carries one vertex per process; round `1` carries six,
 three of them the equivocator's. -/
 def kBlk : Fin 10 → Block (Fin 4) (Fin 10) Unit := fun i =>

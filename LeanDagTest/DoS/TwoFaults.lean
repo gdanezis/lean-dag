@@ -95,7 +95,7 @@ example : ¬ ExposedIn Ufault 10 1 := by decide
 example : ExposedIn Ufault 14 0 := by decide
 example : ExposedIn Ufault 14 1 := by decide
 
-set_option maxRecDepth 8000 in
+set_option maxRecDepth 2048 in
 theorem ufault_dosValid : DoSValid Ufault := by decide
 
 /-! ## D15a at the bound, with the budget fully spent

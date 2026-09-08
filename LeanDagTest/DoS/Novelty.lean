@@ -51,7 +51,7 @@ def dblV0 : Finset (Fin 42) := {4, 5, 6, 7, 8, 9, 10, 11, 12}
 def dblV1 : Finset (Fin 42) := dblV0 ∪ {17, 18, 19, 20, 21, 22, 23, 24, 25}
 def dblV2 : Finset (Fin 42) := dblV1 ∪ {30, 31, 32, 33, 34, 35, 36, 37, 38}
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 2048 in
 /-- **Novelty at depth**: the reveal delivers fifteen never-public blocks
 at once — the four extra geneses, the second helper genesis, every
 Byzantine connector, and itself. -/
@@ -59,14 +59,14 @@ theorem udouble_reveal_novelty :
     novelty Udouble dblV2 41 =
       {41, 39, 40, 26, 27, 28, 29, 0, 1, 2, 3, 13, 14, 15, 16} := by decide
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 2048 in
 example : (novelty Udouble dblV2 41).card = 15 := by decide
 
 -- A correct tip whose cone the view already holds costs exactly one.
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 2048 in
 example : novelty Udouble dblV1 30 = {30} := by decide
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 2048 in
 -- Antitone on data: absorb branch N (block 39's cone) and the reveal's
 -- price drops from 15 to 8. Deferral is a rate limiter, not a verdict.
 example : (novelty Udouble (dblV2 ∪ history Udouble 39) 41).card = 8 := by
@@ -86,11 +86,11 @@ example : (history Utwin 8).card ≤ 5 * (Utwin.block 8).round + 1 :=
 
 example : (history Utwin 8).card = 9 := by decide
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 2048 in
 /-- On `Udouble` the correct chains step by exactly `2f+1 = 9`… -/
 theorem udouble_stepNovelty : StepNovelty Udouble 9 := by decide
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 2048 in
 /-- …and the telescope is **tight**: `|H(30)| = 19 = 9·2 + 1`. -/
 example : (history Udouble 30).card = 9 * (Udouble.block 30).round + 1 := by
   decide

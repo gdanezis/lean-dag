@@ -22,8 +22,6 @@ namespace LeanDagTest
 
 namespace BlackMarlin
 
-set_option maxRecDepth 2000000
-
 open LeanDag LeanDag.BlackMarlin
 
 /-- The rotation of BML5 at four validators. -/

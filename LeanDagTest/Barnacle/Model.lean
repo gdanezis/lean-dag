@@ -46,7 +46,7 @@ namespace LeanDagTest
 
 namespace Barnacle
 
-set_option maxRecDepth 2000000
+set_option maxRecDepth 2048
 
 open LeanDag LeanDag.Barnacle
 

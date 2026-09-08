@@ -36,8 +36,6 @@ open LeanDagTest.Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan LeanDag.OptimalHydrozoan
 
-set_option maxRecDepth 16384
-
 -- Fast/fast with a rival: slot 1 of OX has candidates 4 and 5 (the
 -- Byzantine leader's two copies); 4 gathers exactly qFastOpt votes.
 example :

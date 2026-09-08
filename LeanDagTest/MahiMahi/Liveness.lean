@@ -27,8 +27,6 @@ the unfolded decision round and then decides the finitely many cases.
 
 namespace LeanDagTest
 
-set_option maxRecDepth 2000000
-
 open LeanDag
 
 /-- Round-robin, one leader per round, as in the other witness files. -/

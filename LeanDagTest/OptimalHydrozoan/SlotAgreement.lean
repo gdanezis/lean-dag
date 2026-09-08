@@ -42,8 +42,6 @@ open LeanDagTest.Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan LeanDag.OptimalHydrozoan
 
-set_option maxRecDepth 16384
-
 /-- Slot 2 of `OD` commits 8 through the evidence rung (the derivation of
 `LeanDagTest/OptimalHydrozoan/Decided.lean`, named so it can be fed to the
 theorem). -/

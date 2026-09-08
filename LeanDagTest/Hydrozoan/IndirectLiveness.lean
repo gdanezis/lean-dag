@@ -53,8 +53,6 @@ namespace Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan
 
-set_option maxRecDepth 16384
-
 -- ## Totality on U5 (slot 0 anchored on slot 4)
 
 -- The anchor data, pinned: slot 4's candidate fast-commits in the full

@@ -45,8 +45,6 @@ open LeanDagTest.Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan LeanDag.OptimalHydrozoan
 
-set_option maxRecDepth 8192
-
 /-- The pipelined schedule on four replicas: slot `k` at round `k`, led
 by `(k + 3) % 4` — slot 1 by the Byzantine replica `0`. -/
 instance fourSlotsOpt : Slots (Fin 4) where

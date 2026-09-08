@@ -43,8 +43,6 @@ namespace Minnow
 
 open LeanDag LeanDag.Minnow
 
-set_option maxRecDepth 4000000
-
 /-- The vertices. `id = 4 · round + process`; process `0` is Byzantine.
 Processes `2` and `3` point to everything of the round below, processes
 `0` and `1` omit the Byzantine vertex. -/

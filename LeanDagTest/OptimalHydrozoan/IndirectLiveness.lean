@@ -32,8 +32,6 @@ open LeanDagTest.Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan LeanDag.OptimalHydrozoan
 
-set_option maxRecDepth 16384
-
 -- Totality on OD from the anchor 22 (slot 6): slots 2, 1 and 3 each get
 -- a verdict; the eligible in-betweens 5 (for slot 2) and 4, 5 (for
 -- slot 1) are supplied as their skips, and none exist for slot 3.

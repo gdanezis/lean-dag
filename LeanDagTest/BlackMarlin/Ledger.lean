@@ -18,8 +18,6 @@ namespace LeanDagTest
 
 namespace BlackMarlin
 
-set_option maxRecDepth 2000000
-
 open LeanDag LeanDag.BlackMarlin
 
 /-- The rotation of BML5 at four validators, as in the other witnesses. -/
@@ -110,7 +108,6 @@ example : (3 : Fin 16) ∈ ledgerSet Ufull fullFlush.block 2 :=
   (Ledger.holds (Fin 4) (Fin 16) Unit Ufull).2.2.2.2.2.2.2.2.2.2
     fullFlush 1 5 3 (by decide) ((mem_history_iff (by decide)).mp (by decide))
 
-
 /-! ## The descent computed
 
 `flushRecord` runs L21–L24 rather than assuming a record, so the four
@@ -134,7 +131,6 @@ example : flushRecord Ufull 15 0 = flushRecord Ufull 5 0 :=
     (by decide) (by decide) (by decide) (by decide) (by omega)
 
 #print axioms LeanDag.BlackMarlin.Descent.holds
-
 
 /-! ## The delivered sequence
 

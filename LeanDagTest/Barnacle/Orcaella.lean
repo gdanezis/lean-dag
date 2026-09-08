@@ -47,8 +47,6 @@ namespace Barnacle
 
 namespace OrcaellaBase
 
-set_option maxRecDepth 2000000
-
 open LeanDag LeanDag.Barnacle LeanDag.Hybrid
 
 /-! ## The instance pins: the derived hybrid classes are in force -/

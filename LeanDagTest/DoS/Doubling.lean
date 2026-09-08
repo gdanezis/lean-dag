@@ -87,7 +87,7 @@ def lkd : Fin 42 → Block (Fin 13) (Fin 42) Unit := fun i =>
   else
     { round := 3, creator := 0, refs := {39, 40, 30, 31, 32, 33, 34, 35, 36}, payload := () }
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 def Udouble : BlockUniverse (Fin 13) (Fin 42) Unit where
   ids := Finset.univ
   block := lkd
@@ -97,7 +97,7 @@ def Udouble : BlockUniverse (Fin 13) (Fin 42) Unit where
 
 /-! ## Every constraint, machine-checked -/
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 theorem udouble_dosValid : DoSValid Udouble := by decide
 
 -- Byzantine blocks parasitize real correct blocks: the crux block 39
@@ -114,27 +114,27 @@ example : ∀ i ∈ Udouble.ids, (Udouble.block i).creator ∈ (Correct : Finset
 
 /-! ## The doubling, delivered -/
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 /-- **Four chains of validator 1** in one history. -/
 theorem udouble_four_chains : topsOf Udouble 41 1 = {1, 13, 14, 15} := by decide
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 theorem udouble_exposed : exposedTo Udouble 41 = {1, 2} := by decide
 
 -- The crux: block 39 names the helper (validator 2) and is CLEAN about it —
 -- its cone holds helper chain A only — while lawfully exposed to validator 1.
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 example : ¬ ExposedIn Udouble 39 2 := by decide
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 example : ExposedIn Udouble 39 1 := by decide
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 example : ExposedIn Udouble 40 1 ∧ ¬ ExposedIn Udouble 40 2 := by decide
 
 -- The helper IS exposed at the reveal: its two chains met only in block 41.
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 example : ExposedIn Udouble 41 2 := by decide
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 theorem udouble_exposed_one : ExposedIn Udouble 41 1 := by decide
 
 /-- The proved ceiling `(3f+1-e)·e^(e-1) = 11·2 = 22` against the attained
@@ -145,19 +145,19 @@ example : (topsOf Udouble 41 1).card ≤
       (exposedTo Udouble 41).card ^ ((exposedTo Udouble 41).erase 1).card :=
   card_topsOf_le_of_exposed udouble_dosValid (by decide) udouble_exposed_one
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 example : (topsOf Udouble 41 1).card = 4 := by decide
 
 /-! ## Density, honoured throughout -/
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 /-- Even the reveal block misses at most `f` correct validators per round —
 here it misses exactly `2` at rounds 1 and 2 (validators 11 and 12, whose
 round-1 and round-2 blocks the Byzantine branch never referenced). -/
 example : (missingAt Udouble 41 1).card ≤ Faults.f (Fin 13) ∧
     (missingAt Udouble 41 2).card ≤ Faults.f (Fin 13) := by decide
 
-set_option maxRecDepth 400000 in
+set_option maxRecDepth 4096 in
 example : missingAt Udouble 41 2 = {11, 12} := by decide
 
 #print axioms udouble_dosValid

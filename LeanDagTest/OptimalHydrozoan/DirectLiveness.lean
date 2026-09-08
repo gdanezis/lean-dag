@@ -43,8 +43,6 @@ open LeanDagTest.Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan LeanDag.OptimalHydrozoan
 
-set_option maxRecDepth 16384
-
 -- LeanDag.Hydrozoan.Correct = {1, 2}; every round up to 3 is filled by both.
 example : (LeanDag.Hydrozoan.Correct : Finset (Fin 3)) = {1, 2} := by decide
 example : LeanDag.Hydrozoan.Populated UC 0 ∧ LeanDag.Hydrozoan.Populated UC 1 ∧ LeanDag.Hydrozoan.Populated UC 2 ∧ LeanDag.Hydrozoan.Populated UC 3 := by decide

@@ -46,7 +46,7 @@ namespace LeanDagTest
 
 namespace BlackMarlin
 
-set_option maxRecDepth 4000000
+set_option maxRecDepth 2048
 
 open LeanDag LeanDag.BlackMarlin
 

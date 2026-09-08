@@ -32,8 +32,6 @@ namespace Minnow
 
 open LeanDag LeanDag.Minnow
 
-set_option maxRecDepth 4000000
-
 /-- The vertices. Round `0` carries five, two of them the equivocator's. -/
 def sfBlk : Fin 13 → Block (Fin 4) (Fin 13) Unit := fun i =>
   { round :=

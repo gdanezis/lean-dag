@@ -45,8 +45,6 @@ namespace LeanDagTest
 
 namespace Barnacle
 
-set_option maxRecDepth 2000000
-
 open LeanDag LeanDag.Barnacle
 
 /-! ## Runs of heads, on four validators -/
@@ -290,7 +288,6 @@ example :
   simp only [Sched_slotRound, Nat.div_one] at this
   have hw : bnLiveSk.waveLength = 3 := rfl
   omega
-
 
 /-! ## The paper's A4 on data: eleven rounds -/
 

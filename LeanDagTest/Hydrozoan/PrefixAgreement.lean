@@ -15,8 +15,6 @@ namespace Hydrozoan
 
 open LeanDag LeanDag.Hydrozoan Hydrozoan.PrefixAgreement
 
-set_option maxRecDepth 16384
-
 /-- The five settled verdicts of `U5` as a decision function: slots 0
 and 4 commit (ids 2 and 31), slots 1–3 are skipped. -/
 def g5 : ℕ → Option (Fin 39)
