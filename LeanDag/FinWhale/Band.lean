@@ -104,12 +104,8 @@ An old layer lands on the layer the offset names, and an old block of
 
 /-- **An old layer lands on the layer the offset names.** -/
 theorem blocksAt_subset {n n' : ℕ} (hn : n + g = n' + g') (h1 : lo ≤ n + g) (h2 : n + g ≤ hi) :
-    blocksAt D n ⊆ blocksAt D' n' := by
-  intro b hbm
-  simp only [blocksAt, Finset.mem_filter] at hbm ⊢
-  obtain ⟨hbD, hbr⟩ := hbm
-  have hband := AnchoredRule.band_block hb hbD (by omega) (by omega)
-  exact ⟨AnchoredRule.band_mem hb hbD (by omega) (by omega), by omega⟩
+    blocksAt D n ⊆ blocksAt D' n' :=
+  AnchoredRule.blocksAt_band hb hn h1 h2
 
 /-- **And an old block of that layer of `D'` was in it.** -/
 theorem mem_blocksAt_of_old {n n' : ℕ} (hn : n + g = n' + g') (h1 : lo ≤ n + g) (h2 : n + g ≤ hi)
@@ -334,21 +330,17 @@ variable {S S' : Slots Validator} {k k' : ℕ}
 slot. -/
 theorem slotBlocks_subset (hrk : S.slotRound k + g = S'.slotRound k' + g')
     (hlk : S.leader k = S'.leader k') (h1 : lo ≤ S.slotRound k + g) (h2 : S.slotRound k + g ≤ hi) :
-    slotBlocks S D k ⊆ slotBlocks S' D' k' := by
-  intro l hl
-  simp only [slotBlocks, leaderBlocksAt, Finset.mem_filter, blocksAt] at hl ⊢
-  obtain ⟨⟨hlD, hlr⟩, hlc⟩ := hl
-  have hlb := AnchoredRule.band_block hb hlD (by omega) (by omega)
-  exact ⟨⟨AnchoredRule.band_mem hb hlD (by omega) (by omega), by omega⟩, by rw [hlb.2, hlc, hlk]⟩
+    slotBlocks S D k ⊆ slotBlocks S' D' k' := fun l hl =>
+  (mem_leaderBlocksAt (S := S')).2
+    (AnchoredRule.isLeaderBlock_band hb hrk hlk h1 h2 ((mem_leaderBlocksAt (S := S)).1 hl))
 
 /-- And an old candidate of the corresponding slot came from this one. -/
 theorem mem_slotBlocks_of_old (hrk : S.slotRound k + g = S'.slotRound k' + g')
     (hlk : S.leader k = S'.leader k') (h1 : lo ≤ S.slotRound k + g) (h2 : S.slotRound k + g ≤ hi)
-    {l : BlockId} (hlD : l ∈ D.ids) (hl : l ∈ slotBlocks S' D' k') : l ∈ slotBlocks S D k := by
-  simp only [slotBlocks, leaderBlocksAt, Finset.mem_filter, blocksAt] at hl ⊢
-  obtain ⟨⟨hlD', hlr⟩, hlc⟩ := hl
-  have hlb := AnchoredRule.band_block' hb hlD hlD' (by omega) (by omega)
-  exact ⟨⟨hlD, by omega⟩, by rw [← hlb.2, hlc, hlk]⟩
+    {l : BlockId} (hlD : l ∈ D.ids) (hl : l ∈ slotBlocks S' D' k') : l ∈ slotBlocks S D k :=
+  (mem_leaderBlocksAt (S := S)).2
+    (AnchoredRule.isLeaderBlock_band_old hb hrk hlk h1 h2 hlD
+      ((mem_leaderBlocksAt (S := S')).1 hl))
 
 /-- **A blame stays a blame**: FP-evidence is the same for old candidates,
 and nothing old is evidence for a new one. -/
