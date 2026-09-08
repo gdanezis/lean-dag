@@ -107,7 +107,7 @@ blocks of one author and round is an equivocator — one more than the
 fault bound admits. Only `n ≥ 3f + 1` is used, which is the whole
 committee of this arc.
 
-**BM2** is the core's `reaches_of_correct_support_of_card` followed by
+**BM2** is the core's `reaches_of_honest_support_of_card` followed by
 `reaches_pred_of_round_le`, so it consumes no Black Marlin definition
 beyond `Supported`. The support quorum holds `f + 1` correct authors,
 each with one block at the round above; a block two rounds above names

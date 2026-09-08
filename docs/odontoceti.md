@@ -39,10 +39,10 @@ with no certificate round.
 
 **The headline results.**
 
-- **Safety** (`Odontoceti.decided_unique`, `Odontoceti.safety`): no two
+- **Safety** (`Odontoceti.agree`, `Odontoceti.safety`): no two
   validators reach conflicting decisions for any slot, whatever views
   they hold and whichever routes — direct or indirect — they took.
-- **Liveness** (`Odontoceti.all_decided_below_of_fairRun`): under
+- **Liveness** (`OdontocetiProperties.all_decided_below_of_fairRun`): under
   `Live`, `DeliversQuorum`, post-`R` synchrony, and a recurring run of
   **two** consecutive correct-led slots, every slot below the run is
   decided on any view caught up to the horizon (`View.CoversUpto`) —
@@ -245,7 +245,7 @@ canonicity discussed in §6.
 
 ## 5. Safety (O5, O6)
 
-**`decided_unique` (O5; thesis Lemma 5).** No two validators reach
+**`agree` (O5; thesis Lemma 5), in `Carrier.lean`.** No two validators reach
 conflicting decisions for a slot. Structural induction on the first
 derivation, in exactly the M6 shape:
 
@@ -374,20 +374,22 @@ exactly where hand proofs about uncertified DAGs tend to be thinnest.
   the supporters sit one round above the leader, so a caught-up view
   holds them; the full view is the special case
   (`View.coversUpto_full`).
-- **O8** (`SpansEligible`, `spansEligible_two`; thesis Lemma 10's
+- **O8** (the generic `AnchoredRule.SpansEligible`; thesis Lemma 10's
   content). Under a pipelined identity-round schedule, a run of **two**
   consecutive committed slots spans eligibility for everything below:
   a slot cannot anchor on the round immediately above it
   (`Eligible k j ↔ slotRound k + 2 ≤ slotRound j`), but the second
   slot of the run clears the bound. This is exactly why the thesis
   needs two consecutive honest top-ranked leaders.
-- **O9** (`decided_below_of_committed_run`; thesis Lemma 11). A
+- **O9** (the generic `Common/Anchored/Bounded.lean` theorem
+  `decided_below_of_committed_run`; thesis Lemma 11). A
   committed run of eligible span clears every slot below it: the
   nearest-eligible-committed-anchor induction, with the indirect
   commit taking the `Finset.min'` of the passing candidates — the
   constructive face of the canonicity premise.
-- **O10** (`all_decided_below_of_fairRun`,
-  `all_decided_below_of_fairRun_correct`; thesis Theorem 12). The
+- **O10** (`OdontocetiProperties.all_decided_below_of_fairRun`,
+  `all_decided_below_of_fairRun_correct`, in `Odontoceti/Properties.lean`;
+  thesis Theorem 12). The
   composition, under enforceable hypotheses only: `Live`,
   `DeliversQuorum`, `SynchronisedOn`, and a `FairRunOn` run of `c`
   correct-led slots placed past both the target and `R` by fairness —
@@ -413,7 +415,7 @@ leaders (slot `k` at round `k`, leader `k % 6`).
   untouched `BlockUniverse` accepts the Odontoceti parameters, the §2
   reuse claim as a computation. Slot 1 commits directly with all six
   supporters; O7 applied commits slot 2 from `uodo_populated` and
-  `uodo_synchronised`; O8 applied (`spansEligible_two`).
+  `uodo_synchronised`; O8 applied (`SpansEligible`).
 - **`Uskip`** (`Fin 36`, six rounds — the decision zoo, all four
   `Decided` constructors on one universe): slot 0's Byzantine leader is
   **directly skipped** — five blames, exactly the quorum, with author 0
@@ -474,6 +476,8 @@ Odontoceti-specific instantiation was not this arc's concern.
 | module | contents |
 |---|---|
 | `LeanDag/Odontoceti/Rules.lean` | `Faults5`; `DirectCommit`/`DirectSkip`/`coneSupports`/`ThickLink`; the arithmetic core O1, O1′, O2, O3, O4′ |
-| `LeanDag/Odontoceti/Decision.lean` | `decisionRound`/`Eligible`; the view layer; `Decided` with the canonicity premise; `decided_unique` (O5), `safety` (O6) |
-| `LeanDag/Odontoceti/Liveness.lean` | O7 (`decided_of_leader_mem`), O8 (`spansEligible_two`), O9 (`decided_below_of_committed_run`), O10 (`all_decided_below_of_fairRun`) |
+| `LeanDag/Odontoceti/Decision.lean` | `decisionRound`/`Eligible`; the view layer; `Decided` with the canonicity premise; `safety` (O6) |
+| `LeanDag/Odontoceti/Liveness.lean` | O7 (`decided_of_leader_mem`), O8 (`AnchoredRule.SpansEligible`) |
+| `LeanDag/Odontoceti/Carrier.lean` | O5 (`agree`) |
+| `LeanDag/Odontoceti/Properties.lean` | O9 (the generic `decided_below_of_committed_run`), O10 (`all_decided_below_of_fairRun`) |
 | `LeanDagTest/Odontoceti/Model.lean` | the boundary instance; `Uodo`, `Uskip`, `Utwin6`; every rule and all four `Decided` constructors witnessed by `decide`, including `utwin6_both_pass` |

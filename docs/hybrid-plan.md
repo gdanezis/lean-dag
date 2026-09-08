@@ -7,6 +7,10 @@
 > and whether the surrounding prose is faithful to what is proved, has
 > only human-plus-LLM review behind it. Read critically.
 
+> **Status (September 2026).** Built. `docs/report.md` §14 is the final
+> account; this document is the design rationale as written before the
+> work, kept for the reasoning the report states more tersely.
+
 This document is the design record for the **hybrid** arc, written
 before the development. The subject is the hybrid fault model for
 two-round DAG consensus (arXiv:2607.04789; the working notes are
@@ -17,10 +21,10 @@ never equivocate), with the claimed tight bound
     n = 5f + 3c + 1,   q = 4f + 2c + 1,   k = 2f + c + 1
 
 for committee size, direct threshold and indirect threshold. The goal
-is machine-checked safety and liveness of the two-round commit rule
+was machine-checked safety and liveness of the two-round commit rule
 under this model, at the generalized bound `n ≥ 5f + 3c + 1`, collapsing
-onto the existing Odontoceti development at `c = 0`. Results will carry
-**H**-labels; everything will live in `LeanDag/Hybrid/` with `decide`
+onto the existing Odontoceti development at `c = 0`. Results carry
+**H**-labels; everything lives in `LeanDag/Hybrid/` with `decide`
 witnesses in `LeanDagTest/Hybrid/Model.lean`, consuming the core read-only.
 
 The DAG theorems below do not depend on checkpoint signatures. The

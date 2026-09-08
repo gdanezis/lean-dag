@@ -532,31 +532,32 @@ Three observations for the report.
 ## 8. The pacemaker against the liveness assumptions here
 
 This section compares Starfish's pacemaker (§4.3) and Qiu et al.'s round-jumping
-rule (§4.3.1) against `LeanDag/Timing.lean`, `LeanDag/Mysticeti/Liveness.lean` and the
-trust boundary of report §4.
+rule (§4.3.1) against `LeanDag/Mysticeti/ViewPace.lean`, `LeanDag/Mysticeti/Liveness.lean`
+and the trust boundary of report §4.
 
 ### 8.1 The correspondence
 
 | Starfish | Qiu et al. | This development | Status here |
 |---|---|---|---|
-| A1: 2f+1 blocks of round r−1 | — | `Live.builds` + `DeliversQuorum` (P8) | assumed (protocol) |
-| **A2: created own block of round r−1** | **after GCT, no jumping over r′ unless r′−2 decided** | `Live.builds`, giving L1 `Populated`; `Timing.blk` total for n ≤ N | **assumed (P8) — the clause the argument rests on** |
-| C1: wait for leader + votes | — | not modelled — `waits` is a pure timeout | absent |
-| C2: timeout δ_TO = **2Δ** | — | `Timing.waits` + backoff past `D + delay`; **= 2Δ** when D = Δ | derived |
-| C3: safe jump on 2f+1 blocks of round r | the "unless decided" clause | `Timing.prompt`: `built v (n+1) ≤ max (built v n + timeout n) (latest n + delay)` | assumed (P9) |
-| B1/B2: broadcast unknown history on create **and on advance** | — | `Timing.covers` + P7 (references everything held) | assumed (network + protocol) |
-| **Lemma 4**: honest validators enter round r within Δ | — | `Timing.DriftFrom`, via `driftFrom_of_prompt` | **derived — but from an assumed base case** |
+| A1: 2f+1 blocks of round r−1 | — | `PaceCore.converges` (N2) delivering the quorum `PaceCore.advances` reads | assumed (network + protocol) |
+| **A2: created own block of round r−1** | **after GCT, no jumping over r′ unless r′−2 decided** | `PaceCore.advances`, giving `ViewPace.populatedOn` (V17); `PaceCore.built_of_le_top` total for every n ≤ N | **assumed (P8) — the clause the argument rests on** |
+| C1: wait for leader + votes | — | not modelled — `ViewPace.waits` is a pure timeout | absent |
+| C2: timeout δ_TO = **2Δ** | — | `ViewPace.waits` (P9) + backoff past `D + delay`; **= 2Δ** when D = Δ | derived |
+| C3: safe jump on 2f+1 blocks of round r | the "unless decided" clause | `PaceCore.advances`: past round n once a quorum of round-n authors is held — the same clause as A1/A2, no separate ceiling | assumed (P8) |
+| B1/B2: broadcast unknown history on create **and on advance** | — | `ViewPace.references` (P7, protocol) and `Delivery.includes` (storage side) | assumed (network + protocol) |
+| **Lemma 4**: honest validators enter round r within Δ | — | `DriftOn`, via `PaceCore.driftOn_of_catchup` | **derived, unconditionally** |
 | Lemma 5: honest leader committed | their liveness theorem | `directCommit_of_correct_leader`, `decided_of_correct_leader` | derived |
 
 ### 8.2 The counterexample does not apply here — and that is the point
 
 The Qiu et al. counterexample is an infinite trace in which honest processes jump
 rounds and no leader is ever committed. It cannot be instantiated in this model,
-because **P8 (`Live.builds` — a validator builds on holding a quorum) excludes
-round-jumping outright**, and L1 ("no stall") turns that into the statement that
-every correct validator has a block at *every* round up to the horizon. `Timing`
-then takes this for granted: `blk : Validator → ℕ → BlockId` is total over
-`n ≤ N`.
+because **P8 (`PaceCore.advances` — a validator advances past round n on holding
+a quorum of round-n authors) excludes round-jumping outright**, and
+`ViewPace.populatedOn` (V17) turns that into the statement that every correct
+validator has a block at *every* round up to the horizon. `PaceCore.built_of_le_top`
+takes this for granted: a validator's block is total over every round it reached,
+up to N.
 
 So the theorems here are not threatened by the counterexample. But the reason
 they are not is exactly the clause the literature has now identified as the crux.
@@ -577,50 +578,46 @@ Worth stating precisely, because it bounds what can be claimed:
 - **Qiu et al.** permit jumping over round r′ when a decision for r′−2 already
   exists — jumping is restricted, not forbidden, and only after GCT.
 - **Starfish A2** requires a block only in the immediately preceding round.
-- **Here**, `blk` is total: a correct validator has a block at every round ≤ N,
-  with no exception clause and no analogue of GCT.
+- **Here**, `PaceCore.built_of_le_top` is total: a correct validator has a block
+  at every round ≤ N, with no exception clause and no analogue of GCT.
 
 This is sound but strictly stronger, so it describes a protocol doing more work
 than the minimal fix. Two consequences. First, no claim of *minimality* for the
 condition is available. Second, there is a clear route to a sharper result:
-weakening `Live.builds` to Qiu et al.'s "unless already decided" form, and
-checking L1 and `Timing` survive, would put this development at the same strength
-as the S&P 2026 result rather than above it.
+weakening `PaceCore.advances` to Qiu et al.'s "unless already decided" form, and
+checking `ViewPace.populatedOn` and the pace machinery survive, would put this
+development at the same strength as the S&P 2026 result rather than above it.
 
-### 8.4 Where the accounts genuinely differ
+### 8.4 Where the accounts now agree, and one point of method
 
-**The base case is assumed here and derived there.** `driftFrom_of_prompt` proves
-drift is *preserved*, not established: `exists_synchronisedOn_of_backoff` takes
-
-```lean
-(hbase : ∀ v ∈ T, ∀ w ∈ T, tm.built w n₀ ≤ tm.built v n₀ + D)
-```
-
-as a hypothesis, recorded honestly in the trust boundary as R4 ("round-`0` spread
-at most `D₀`", deployment). Starfish's **Lemma 4** instead *derives* the
-corresponding Δ-synchronisation for every round past r_max, and its condition
-**B2** — broadcast on round advancement, not merely on block creation — is precisely
-what supplies it. Note that B2 is vacuous in this model: advancement and
-block creation coincide when `blk` is total, so B1 alone suffices, which is why
-its absence here is not an error. But it does mean **R4 is avoidable**: adopting
-a B2-style clause would let the round-0 spread assumption be discharged rather
-than assumed, tightening §4.4's "derived, not assumed" claim at its one soft
-point. Report §4.5 records this.
+**The base case is derived here too, by the same kind of route as Starfish's.**
+`PaceCore.driftOn_of_catchup` collapses drift to `delay + proc` from any starting
+spread, at the first round every validator reaches past GST, with — its own
+docstring says — no base hypothesis anywhere. The trust boundary's R4 (report
+§4.5) is only the timeout bound `∀ n, 2Δ + proc ≤ timeout n`, a specification
+clause carrying no deployment quantity; report §4.5 states plainly that "no
+deployment quantity exists in the development", because `PaceCore.catchup`
+(P11) forecloses the round-`0`-spread case that Starfish's **Lemma 4** also
+forecloses, through its own rule **B2**. Report §4.5 draws the comparison
+to Starfish's Lemma 4 directly, calling both routes "a consequence of a
+pacemaker clause, not a hypothesis about deployment."
 
 **The 2Δ agreement is a genuine corroboration.** Starfish independently fixes its
-block-creation timeout at δ_TO = **2Δ**. Report §6.10/§7.1 derives a required wait
-of `D₀ + Δ`, which is **2Δ** under a common broadcast start (D₀ ≤ Δ). Two
-different routes — a protocol designer's choice there, a derived threshold here —
-landing on the same constant. It is the kind of external check a formalisation
-rarely gets, and report §6.10 now records it.
+block-creation timeout at δ_TO = **2Δ**. This development derives the wait
+threshold `Delay(Δ) = 2Δ + proc` (report §6.10), which is **exactly 2Δ** at
+instantaneous round entry (`proc = 0`) and degrades linearly in the processing
+bound elsewhere. Two different routes — a protocol designer's choice there, a
+derived threshold here — landing on the same constant at that limit. It is the
+kind of external check a formalisation rarely gets, and report §6.10 now
+records it.
 
 **Method.** Qiu et al. work operationally (traces, transition system, explicit
 time) in Rocq; the account here is structural and execution-free, with time
-confined to `Timing.lean` and no theorem above it mentioning a clock. The
-comparison to draw is not who proved it first — they did — but that the
-structural formulation isolates the time-dependence into a single file, which is
-what makes the P8/A2 dependency visible as a *hypothesis of one theorem* rather
-than as a clause buried in a transition relation.
+confined to `Mysticeti/ViewPace.lean` and no theorem above it mentioning a
+clock. The comparison to draw is not who proved it first — they did — but that
+the structural formulation isolates the time-dependence into a single file,
+which is what makes the P8/A2 dependency visible as a *hypothesis of one
+theorem* rather than as a clause buried in a transition relation.
 
 ---
 
@@ -735,8 +732,8 @@ the 2f+1 honest processes have a vertex in any given round.
 
 So the counterexample **does not refute L4, and does not refute any theorem in
 this repository.** It refutes the *availability* of L4's hypothesis under
-Mysticeti as published. Formally it is a countermodel to `Populated`, hence to
-L1, hence to **P8 `Live.builds`** — the clause stating that a correct validator
+Mysticeti as published. Formally it is a countermodel to `PopulatedOn`, hence to
+**P8 `PaceCore.advances`** — the clause stating that a correct validator
 holding a quorum at round r *has* a block at round r+1. That clause is what
 forbids round-jumping, and it is imported, not derived.
 
@@ -761,7 +758,7 @@ vertices. Their Theorem 5 closes that concern: with all processes honest, after
 GST+6Δ every new vertex is a certificate, so a jumping validator has already seen
 2f+1 certificates for every round ≤ r−2 and creates just one vertex.
 
-`Live.builds` has neither refinement: it demands a block at every round
+`PaceCore.advances` has neither refinement: it demands a block at every round
 unconditionally and from the start. Sound, and simpler, but strictly stronger,
 and it forecloses any minimality claim (§8.3).
 
@@ -847,8 +844,8 @@ segmented traces.
 The contrast with this development is real and worth stating plainly rather than
 competitively. Theirs is operational and quantified over traces and instants;
 liveness is a property of executions. The account here is structural:
-`SynchronisedOn` is a condition on a DAG, no theorem above `Timing.lean` mentions
-time, and the time-dependence is confined to one file. The payoff of the
+`SynchronisedOn` is a condition on a DAG, no theorem above `Mysticeti/ViewPace.lean`
+mentions time, and the time-dependence is confined to one file. The payoff of the
 structural style is visible in §9.3 — the dependency on the round-jumping clause
 shows up as a named hypothesis (`PopulatedOn`) of a single lemma, rather than as a
 line in a transition relation. The cost is that their theorems cannot be stated

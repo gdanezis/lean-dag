@@ -146,12 +146,17 @@ verbatim `directCommitIn_of_coversUpto` at `Nemo/Liveness.lean:149`,
 `Odontoceti/Liveness.lean:95`, `Hybrid/Liveness.lean:82`,
 `Mysticeti/Liveness.lean:474`, `MahiMahi/Properties.lean:327`.
 
-**Once:** `CountIn U V s t` in `Common/Support.lean` with `CountIn_mono`,
-`CountIn_congr` (given the set's congruence), `CountIn_of_coversUpto`
-(given the set's round bound), `CountIn_full`, `CountIn_band` (given the
-set's transport, §4.3) and one `Decidable` instance. Obligation per
-counted set: its members' rounds, its congruence, its transport, and
-`0 < t`. Estimated removal: about 250 lines across seven directories.
+**Once (landed as step 2, `docs/target-properties.md` §11.32):**
+`heldAuthors U V s` and the predicate `HoldsAtLeast U V t s` in
+`Common/Support.lean`, with `HoldsAtLeast.mono` (grows only with the
+view), `HoldsAtLeast.le` (bounded by what the record holds),
+`HoldsAtLeast.full` (the full view holds everything) and
+`HoldsAtLeast.of_coversUpto` (given the set's round bound), plus
+`heldAuthors_band`/`holdsAtLeast_band` for the set's transport
+(§4.3, `Common/Anchored/Band.lean`) and one `Decidable` instance.
+Obligation per counted set: its members' rounds, its congruence, its
+transport, and `0 < t`. Estimated removal: about 250 lines across seven
+directories.
 
 ### 2.2 Quorum intersection: one lemma family
 
@@ -224,12 +229,15 @@ identical (`Mysticeti/Rule.lean:242`, `Hydrozoan/Model/IndirectRules.lean:35`).
 
 ### 2.5 Leaders: the blocks of a slot, and the schedule as identity
 
-`IsLeaderBlock` is generic (`Common/Anchored.lean:47`) but only as a
-`Prop`. Its `Finset` form is written six times: `FinWhale/Model/Decision.lean:33`
+`IsLeaderBlock` is generic (`Common/Leader.lean`), with a generic
+`Finset` form, `leaderBlocksAt`, alongside it. Its `Finset` form is
+still written separately in places: `FinWhale/Model/Decision.lean:33`
 `slotBlocks`, `MahiMahi/Model/Rules.lean:68` `candidatesAt`,
 `BlackMarlin/Model/Rules.lean:70` `IsAnchor`,
-`OptimalHydrozoan/Model/Universe.lean:44` `IsCandidateAt`,
-`Minnow/Model/Rule.lean:110`, and inside `slotBlamers`. Black Marlin's
+`Minnow/Model/Rule.lean:110`, and inside `slotBlamers`.
+Optimal-Hydrozoan's own copy is gone with the validity refactor
+(`docs/optimal-hydrozoan.md`); it reads `leaderBlocksAt` at its
+projection to Hydrozoan's record. Black Marlin's
 `class Rotation` (`BlackMarlin/Model/Rules.lean:53`) is `Slots.identity`
 (`Common/Slots.lean:116`). Hydrozoan's `votingRound`/`decisionRound`
 (`Hydrozoan/Model/Slots.lean:30,34`) and Mahi-Mahi's
@@ -320,6 +328,15 @@ come from `Common/Anchored/Band.lean:87,505,120` and
 `Properties/Derived/Descent.lean:94`. Each rule then supplies `hleast`,
 its `Live` and the staged-live lemma, and `Persist` for growth.
 
+**What landed (step 8) took a different shape than this bundled call.**
+There is no `Adaptive.ofAnchored`; instead `Adaptive/Policy.lean` states
+`Adaptive.Policy` over any `Properties.DagRule`, and `Adaptive/Basic.lean`
+holds the shared lemmas this section asks for (`descends_slotsOf` among
+them). `Adaptive/Odontoceti.lean` is 130 lines, not 291, and states its
+own `AdaptivePolicy`/`PartialRun`/`AdaptiveRun` as instances of the
+generic policy rather than a bespoke re-proof against
+`AnchoredRule.DecidedWithin`.
+
 ### 3.2 Barnacle
 
 Every generic theorem consumes `Properties.*` only (`Barnacle/Model/Rule.lean:121`
@@ -348,6 +365,21 @@ bridges the identity. `historyView_of_causalStructure` once removes the
 four closure proofs. The two dead `Laws` fields go. Estimated removal:
 about 700 of the 1466 lines.
 
+**What landed (step 9, `docs/target-properties.md` §11.36) is not one
+bundled call.** `Barnacle.ofAnchored R` (`Barnacle/Model/Anchored.lean`)
+builds the `BaseRule` alone; `ofAnchored_laws` proves the laws
+separately, from `Common/Anchored/Band.lean`'s agreement, candidate and
+direct-commit properties; `descent_of_support` (renamed from
+`descent_of_properties`, §11.36) is its own call at the rule's support.
+Three departures from this plan: `Good` stays a field of `LiveRule`
+rather than gaining a `rel` field, so `LeanDagTest/Barnacle/Progress.lean`
+can still pin one universe; the two view laws (`full_ids`,
+`historyView_ids`) stay in `Laws` rather than going, since nothing else
+constrains those fields; and `GoodOf` is renamed `Timed.Good`
+(`Timed/Coverage.lean`), not merely redefined. Otherwise the shape
+matches: `historyView` comes from `BlockRecord.historyView`, not a
+closure proof rebuilt per rule.
+
 ## 4. Proof shapes that repeat
 
 ### 4.1 The liveness chain
@@ -358,7 +390,7 @@ coverage after `SynchronisedOn` gives (a)'s premise; (c) a view covering
 `r + wave` sees the commit; (d) a run of `c` commits with `SpansEligible c`
 decides everything below. Links (b) and (d) are generic today
 (`Timed/Coverage.lean:94,116,135`, `Common/Anchored/Bounded.lean:319`).
-Link (c) is §2.1's `CountIn_of_coversUpto`. Link (a) is the one per-rule
+Link (c) is §2.1's `HoldsAtLeast.of_coversUpto`. Link (a) is the one per-rule
 fact.
 
 Yet the chain is assembled by hand in two families. Nemo, Odontoceti and
@@ -376,13 +408,14 @@ Marlin (`BlackMarlin/Helpers/Liveness.lean:129`) each open-code the
 `Odontoceti/Liveness.lean:81,108`, `Mysticeti/Liveness.lean:433,508`)
 and duplicate `Timed.exists_decided_of_coverage`.
 
-**Once:** `AnchoredRule.decided_below_of_fairRun (hleast) (hspan) (fair) (commit)`
+**Once:** `AnchoredRule.decided_below_of_run (hleast) (hc) (hspan) (hrun) (commit)`
 in `Common/Anchored/Bounded.lean`, with `commit` the link-(a) fact; and
 the four rules not yet on `Support` + `Timed` migrated. The
-`AnchoredTotality`/`DecidedBelowRun` statements of Hydrozoan and Optimal
+`AnchoredRule.Total`/`DecidedBelowRun` statements of Hydrozoan and Optimal
 (`Hydrozoan/IndirectLiveness/Statement.lean:45`, its Optimal twin, with
-byte-identical eight-line proofs) become one statement over `R`.
-Estimated removal: about 300 lines.
+byte-identical eight-line proofs) become one statement over `R`, read at
+dot notation (`(hydrozoanAnchored ..).Total`) rather than a standalone
+`AnchoredTotality` name. Estimated removal: about 300 lines.
 
 Where the chains genuinely differ is in the hypotheses, not the proof:
 Nemo needs `FairRunOn T 2` because it has no direct skip; Mahi-Mahi takes
@@ -444,14 +477,14 @@ current, and is a commit. Dependencies run downward.
 | # | step | needs | est. removed |
 |--:|:--|:--|--:|
 | 1 | Hydrozoan and Optimal read `Common/Support` (§2.3); `blamesP` for slot blames (§2.4); `leaderBlocksAt`, `votingRound`, `isLeaderBlock_unique_of_honest` (§2.5); Nemo's copies deleted (§2.6) | — | 500 |
-| 2 | `CountIn` with its five lemmas and instance (§2.1); the `_mono`/`_congr`/`_of_coversUpto` families and decidability rewritten through it | 1 | 250 |
+| 2 | `heldAuthors`/`HoldsAtLeast` with its lemmas and instance (§2.1); the `_mono`/`_congr`/`_of_coversUpto` families and decidability rewritten through it | 1 | 250 |
 | 3 | the quorum-intersection family in `Common/` (§2.2); the M3/M5 lemma trio at any record; Hydrozoan and Optimal direct safety on rows | 1 | 350 |
 | 4 | `Certified` section over a vote relation (§2.4); `directSkipSlotIn_band` at a threshold; `supportersIn_band`, `coneSupports_band`, `certifiedIn_band` in `Common/Anchored/Band.lean` (§4.3) | 1, 2 | 400 |
 | 5 | `tie_wf` on `Laws`; `exists_least` and `link_unique` derived (§4.2) | — | 70 |
-| 6 | `AnchoredRule.decided_below_of_fairRun`; generic `AnchoredTotality`; Hybrid, Hydrozoan, Optimal, Mahi-Mahi on `Support` + `Timed` (§4.1) | 2, 5 | 300 |
+| 6 | `AnchoredRule.decided_below_of_run`; generic `AnchoredRule.Total`; Hybrid, Hydrozoan, Optimal, Mahi-Mahi on `Support` + `Timed` (§4.1) | 2, 5 | 300 |
 | 7 | the combinators (§1.1) and each rule's `Rule.lean` as parameters; `Laws`/`BandLaws` fields that are combinator theorems removed (§4.3) | 2, 3, 4 | 300 |
 | 8 | `DecidedBelow ↔ DecidedWithin`; `Adaptive/Odontoceti.lean` as corollaries; `slotsOf` lemmas in `Adaptive/Basic.lean`; the staged-live combinator (§3.1) | 5 | 350 |
-| 9 | `Barnacle.ofAnchored`; `rel` on `LiveRule`; `historyView_of_causalStructure`; dead `Laws` fields retired (§3.2) | 7 | 700 |
+| 9 | `Barnacle.ofAnchored`, `ofAnchored_laws`, `descent_of_support`; `historyView_of_causalStructure` (§3.2 — `rel` on `LiveRule` and the two view `Laws` fields were not adopted, see the note there) | 7 | 700 |
 | 10 | Odontoceti as Hybrid at `fc = 0` (§2.7) | 7 | 1100 |
 | 11 | FinWhale's restriction family and aliases on Common (§2.6); `LeaderExcludedAll` as a clause (§2.5) | 2 | 250 |
 

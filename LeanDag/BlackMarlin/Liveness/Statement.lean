@@ -13,7 +13,7 @@ every committee and fault configuration — a theorem, not an assumption.
 
 None of a timeout, a message delay, a stabilisation time, or a
 probability is a hypothesis: this development states liveness above the
-structural condition instead (`liveness.md`), replacing the paper's
+structural condition instead (`archive/liveness.md`), replacing the paper's
 timing argument rather than transcribing it, and BML5 makes the
 recurring run deterministic where the paper's Lemma 11 only bounds an
 expectation.

@@ -3,7 +3,7 @@
 # Generated documents (rebuild with ./scripts/build-pdf.sh)
 *.pdf
 docs/pdf/
-docs/hybrid.md
+docs/archive/hybrid.md
 
 # Python bytecode from scripts/
 __pycache__/

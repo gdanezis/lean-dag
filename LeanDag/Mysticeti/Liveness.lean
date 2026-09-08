@@ -3,7 +3,7 @@ import LeanDag.Common.Participation
 /-!
 # Liveness — results needing no new primitives
 
-`liveness.md` §6, results **L0**–**L3**. L0 (the DAG cannot grow tall
+`archive/liveness.md` §6, results **L0**–**L3**. L0 (the DAG cannot grow tall
 and thin, from validity alone), L2 (decisions are monotone in the
 view) and L3 (commit propagation, L2 at the full view) assume neither
 `Live` nor `Synchronised`; L1 (no stall) is the first result needing
@@ -59,7 +59,7 @@ theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
 
 /-! ## L1 — no stall
 
-`liveness.md` §3(a), §4.4, §6. `Correct` means only *does not equivocate*,
+`archive/liveness.md` §3(a), §4.4, §6. `Correct` means only *does not equivocate*,
 a purely negative condition a crashed validator satisfies too, so
 liveness needs a positive rule, `Live`. It is an explicit argument
 rather than a class, unlike the universal `Faults`: L0, L2 and L3 do
@@ -80,7 +80,7 @@ abbrev Populated (U : BlockUniverse Validator BlockId Payload) (r : ℕ) : Prop 
 
 /-! ## The delivery layer
 
-`liveness.md` §8 questions 2 and 8. `held` says what a validator has
+`archive/liveness.md` §8 questions 2 and 8. `held` says what a validator has
 actually received, as distinct from `builds`' quorum-in-view rule and
 `Synchronised`'s reference guarantee, which otherwise have to be stated
 on `refs` and hoped to coincide. It contains no clock: a timeout's only
@@ -139,7 +139,7 @@ omit [DecidableEq BlockId] in
 coverage assumption: from round `R` on, every `T`-authored block
 references every `T`-authored block of the round below. It does not
 follow from view convergence — a block's references are frozen when
-built — so it is an assumption, not a theorem (`liveness.md` §4.3). -/
+built — so it is an assumption, not a theorem (`archive/liveness.md` §4.3). -/
 
 /-- The all-of-`Correct` case. -/
 abbrev Synchronised (U : BlockUniverse Validator BlockId Payload) (R : ℕ) : Prop :=
@@ -147,7 +147,7 @@ abbrev Synchronised (U : BlockUniverse Validator BlockId Payload) (R : ℕ) : Pr
 
 /-! ## L7 — `Synchronised`, derived
 
-`liveness.md` §8 question 8. `Synchronised` welds a protocol rule and a
+`archive/liveness.md` §8 question 8. `Synchronised` welds a protocol rule and a
 network guarantee into one object stated on `refs`, since the static
 model has no delivery layer to state it on separately. Splitting it
 into `includes` (implementable and observable) plus
@@ -165,7 +165,7 @@ def EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
 
 /-! ## L2 — decisions are monotone in the view
 
-`liveness.md` §6. If `V ⊆ V'` then every verdict `V` reaches, `V'`
+`archive/liveness.md` §6. If `V ⊆ V'` then every verdict `V` reaches, `V'`
 reaches too: combined with M1, a validator never revises a decision as
 its view grows. This works only because `CertifiedIn` is universe-level
 — were it view-relative, the `indirectSkip` case's negative premise
@@ -180,7 +180,7 @@ variable [S : Slots Validator]
 
 /-! ## L3 — commit propagation
 
-`liveness.md` §4.2, §6. Eventual DAG synchrony says anything one
+`archive/liveness.md` §4.2, §6. Eventual DAG synchrony says anything one
 correct validator holds, all eventually hold, so every correct
 validator's eventual view is the full view and L3 is L2 instantiated
 there. -/
@@ -193,7 +193,7 @@ it at every `N`. -/
 
 /-! ## L4 — a correct leader commits
 
-`liveness.md` §6. Two layers of coverage: every correct round-`(r+1)`
+`archive/liveness.md` §6. Two layers of coverage: every correct round-`(r+1)`
 block references correct-authored `L`, every correct round-`(r+2)`
 block then references all of those, so its votes for `L` form a
 quorum and it certifies, and the certificates themselves come from a
@@ -407,7 +407,7 @@ theorem decided_of_correct_leader (hs : Synchronised U R)
 
 /-! ## L5 — an absent leader is skipped
 
-`liveness.md` §6. `Decided.directSkip` asks for a quorum of voting-round
+`archive/liveness.md` §6. `Decided.directSkip` asks for a quorum of voting-round
 blocks referencing no candidate of the slot; when the leader published
 nothing every voting-round block qualifies, so the premise reduces to a
 quorum being present at that round. The count cannot be dropped: a
@@ -463,7 +463,7 @@ def CommitsAt (BlockId : Type*) [DecidableEq BlockId] (Payload : Type*)
 
 /-! ## L6 — commits recur
 
-`liveness.md` §6. The statement's quantifier order is its whole content:
+`archive/liveness.md` §6. The statement's quantifier order is its whole content:
 fixing the DAG and horizon first would let the horizon cap how far
 fairness may reach, since a correct leader's slot could lie past it.
 Naming the slot from the schedule alone, before any DAG, avoids this —

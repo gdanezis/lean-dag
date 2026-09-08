@@ -1,5 +1,10 @@
 # Converging liveness on `ViewPace`
 
+> **Archived.** The programme this document plans was carried out in
+> full (see its own italicised preamble below, added when the work
+> completed) and the single-route account now lives in `docs/report.md`
+> §§4, 6, 16–18. Kept for historical record only.
+
 *Design record, and now the record of the executed programme. The plan of
 §§3–8 was carried out on branch `liveness-route-audit`: the feature arcs
 are relativised (steps 1–2), the necessity witnesses, V1 and the

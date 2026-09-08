@@ -68,7 +68,7 @@ core's `BlockUniverse` (the core, Odontoceti, Mahi-Mahi) take the core's
 | `FinWhaleMechanisms.lean` | FinWhale | `finWhaleOnRecord`, identity maps | the record's, through `finWhaleOnRecord` |
 | `HybridMechanisms.lean` | Orcaella | `hybridOnRecord`, under `HonestNoEquiv` | `fillHybrid` (the self-referencing fill with `honestNoEquiv_fill`); the prompt skip `decided_none_fresh_hybrid` |
 | `HydrozoanMechanisms.lean` | Hydrozoan | `Hydrozoan.onRecord`, identity maps | the record's own; `decided_none_fresh_hz`; the coverage refutation |
-| `OptimalMechanisms.lean` | Optimal-Hydrozoan | `optOnRecord`, under `Excluded` (`leaderExcludedAll_chop`, `_copyFill`, `_addGenesis`) | the record's, through `optOnRecord` |
+| `OptimalMechanisms.lean` | Optimal-Hydrozoan | `optOnRecord`, under `BlockRecord.Any` (leader exclusion is a validity clause, preserved automatically) | the record's, through `optOnRecord` |
 | `ReactiveMechanisms.lean` | reactive Mysticeti | — | `live_chop_reactive`, `live_skipFill_reactive`, `live_addGenesis_reactive`, `decidedBelow_of_run_chop_reactive`: the reactive precondition across each mechanism, through `coreSupport` |
 | `StackRules.lean` | core, Nemo, FinWhale | — | `stack_core`, `stack_nemo`, `stack_finwhale`: fill then cut as a `Stack`; the headline `Properties.Safe` reads any of them |
 | `AdaptiveHydrozoan.lean`, `AdaptiveReactive.lean` | Hydrozoan; reactive Mysticeti | — | the adaptive leader mechanism (`Adaptive.run_agree`, `run_exists`) at those rules' properties |
@@ -87,16 +87,16 @@ The Hydrozoan and Optimal cells are described in more detail in
 instance is a dozen `rfl`s, the constructions are one line each, and
 the file proves nothing about the rule's decision relation.
 
-Orcaella and Optimal-Hydrozoan each carry one invariant that is not a
-property, and each shows it survives the cut, the copy fill and
-re-genesis once (`Invariant.Mechanised`). Honest non-equivocation
-survives because the cut removes blocks, any fill adds blocks only at
-gap rounds the crash left empty, and re-genesis adds a block by an
-author with none. Leader exclusion survives the cut because a block
-bound by it sits two rounds above the horizon, so it keeps its parents
-and its parents keep theirs; the copy fill because a filled block's
-parents are the donor's, so no edge is added; and re-genesis because
-the new block is bound by no exclusion and is its author's only block.
+Orcaella carries one invariant that is not a property, and shows it
+survives the cut, the copy fill and re-genesis once
+(`Invariant.Mechanised`). Honest non-equivocation survives because the
+cut removes blocks, any fill adds blocks only at gap rounds the crash
+left empty, and re-genesis adds a block by an author with none.
+Optimal-Hydrozoan carries no such invariant: leader exclusion is a
+clause of its validity (`ValidOpt`) rather than a separate predicate,
+so `optOnRecord` reads it under the trivial invariant `BlockRecord.Any`
+and every mechanism preserves it clause by clause, with nothing
+proved per mechanism.
 
 ## 3. What the properties do not state
 

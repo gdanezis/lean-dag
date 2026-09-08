@@ -12,7 +12,7 @@ import LeanDag.Properties.Arcs.Headline
 /-!
 # Hybrid conforms to the target properties
 
-`docs/porting-plan.md` step 2: `Banded` and the liveness pair, alongside
+`docs/archive/porting-plan.md` step 2: `Banded` and the liveness pair, alongside
 the three one-theorem properties in `Carrier.lean`. Hybrid's skip needed
 the same slot-level repair as the core's and Odontoceti's
 (`Hybrid/Decision.lean`); the band helpers are the core's, reached

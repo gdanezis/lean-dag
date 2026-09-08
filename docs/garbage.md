@@ -261,7 +261,7 @@ alternatives:
 **Breaks, by design, and is replaced.** Global downward closure and
 "full history available to all". The replacement, proved: for everything
 the protocol still *does* — validate new blocks (G1), decide slots
-(`decided_chop_iff`), stay live (`live_chopD`), bound storage
+(`decided_chop_iff`), stay live (`sustains_chop`), bound storage
 (`card_retained_le`) — the truncated universe is as good as the full
 one.
 
@@ -280,15 +280,16 @@ results, in that idiom:
   `complete`, `valid`, `no_equivocation`;
   `DoSValid U → DoSValid (chop U G)` (`dosValid_chop`). Immediate
   consequence: every existing theorem holds of `chop U G`.
-- **G2 (verdict invariance)** — `Chop.lean`, `ChopDecided.lean`. For a
-  slot at rebased round `s` (original round `G + s`):
-  `supporters_chop`, `blames_chop`, `certificates_chop`,
-  `directCommit_chop`, `directSkip_chop`, and the indirect test
-  `certifiedIn_chop` — plus the view-relative forms
-  (`certificatesIn_chop`, `directCommitIn_chop`, `directSkipIn_chop`)
-  against the truncated view `View.chop`. Window-locality does all the
-  work; the rule layer is round-indexed and schedule-free, so no slot
-  correspondence appears at this level.
+- **G2 (verdict invariance)** — one witness now, not a lemma per
+  relation. `truncates_chop` (`Properties/Arcs/GC.lean`) exhibits the
+  cut in the generic `Truncates` relation: the rebased round's blocks
+  keep their membership, authorship and references above the settling
+  round. `Properties.LocalTruncate.of_banded` turns that witness into
+  G3 below for any rule with a band, which is what replaced the nine
+  separate per-relation lemmas the old `Chop.lean`/`ChopDecided.lean`
+  proved by hand (`supporters_chop`, `blames_chop`, `certificates_chop`,
+  `directCommit_chop`, `directSkip_chop`, `certifiedIn_chop`,
+  `certificatesIn_chop`, `directCommitIn_chop`, `directSkipIn_chop`).
 - **G3 (decision invariance)** — per slot, and for the **full decision
   relation**: `decided_chop_iff` (`Properties/Arcs/GC.lean`). A validator
   re-running Mysticeti on the truncation from its truncated view
@@ -316,12 +317,14 @@ counting was never redone.
 
 ## 5. Liveness, storage, and the cost of joining
 
-- **G5 (liveness transfer)** — `Window.lean`. A `Delivery` for `U`
-  induces a `Delivery` for `chop U G` (`chopD`, drop everything below
-  `G`); `DeliversQuorum` transfers (`deliversQuorum_chopD`), `Live`
-  transfers with the horizon offset (`live_chopD`), hence L1 holds in
-  the truncated universe (`populated_chop`), and the post-`R` commit
-  chain with it.
+- **G5 (liveness transfer)** — `sustains_chop` (`Properties/Arcs/GC.lean`)
+  is the one witness that the cut `Sustains` the protocol from its
+  horizon: every predicate a mechanism computes from a block's
+  membership, authorship and references — a protocol's own certificate
+  layer among them — transports across the cut with it, which is what
+  used to need a `DeliversQuorum`/`Live` transfer lemma apiece. `Window.lean`
+  still gives the store-level facts (`populated_chop`), so L1 holds in
+  the truncated universe, and the post-`R` commit chain with it.
 - **G13 (windowed novelty)** — `Window.lean`. The definition of §3 with
   its cut-advance law (`history_chop_anti`, `novelty_chop_anti`): as
   the window slides, pruning only cheapens blocks. Prerequisite to G6
@@ -572,8 +575,8 @@ commits the same blocks; it just stores more junk.
 
 | module | contents |
 |---|---|
-| `LeanDag/GC/Chop.lean` | the operator; universe laws; `dosValid_chop`; per-slot verdict invariance (G1, G2, per-slot G3) |
-| `LeanDag/GC/ChopDecided.lean` | `View.chop`, `Slots.chop`, rule correspondences, `decided_chop_iff`, `decided_agree_chop` (G3, G4) |
+| `LeanDag/GC/Chop.lean` | the operator; reachability and history across the cut; `dosValid_chop` (G1) |
+| `LeanDag/GC/ChopDecided.lean` | `Slots.chop`, the induced schedule (G3, G4); `View.chop` moved to `Common/Record/Chop.lean`, and `decided_chop_iff`/`decided_agree_chop` to `Properties/Arcs/GC.lean` (§4) |
 | `LeanDag/GC/Window.lean` | `chopD`, windowed novelty and store correspondence, liveness transfer, `card_retained_le` (G5, G6, G13, G14) |
 | `LeanDag/GC/AttestedBase.lean` | `attesters`, `Base`, the sandwich (G10) |
 | `LeanDag/GC/Bootstrap.lean` | `accepted_mem_base`, `joinIds`/`joinView`, `card_joinIds_le`, `card_serve_le`, `bootstrap_agree` (G11, G6b, G7, G12) |

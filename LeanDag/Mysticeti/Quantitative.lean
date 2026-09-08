@@ -3,7 +3,7 @@ import LeanDag.Mysticeti.Properties
 /-!
 # Quantitative liveness — bounds, from rated assumptions
 
-`liveness.md` §8 Q3 and Q4. Under the unrated hypotheses `hub` (the
+`archive/liveness.md` §8 Q3 and Q4. Under the unrated hypotheses `hub` (the
 backoff clears any threshold eventually) and `FairScheduleOn` (a
 `T`-leader recurs, with no gap bound), no numeric bound exists at all:
 a slow enough timeout or a schedule with unbounded gaps between
@@ -23,7 +23,7 @@ variable {T : Finset Validator} {D N : ℕ}
 
 /-! ## Part 1 — a rated backoff pins `R`
 
-`liveness.md` §8 Q3. The threshold coverage consumes is
+`archive/liveness.md` §8 Q3. The threshold coverage consumes is
 `D + delay ≤ timeout n` for every `n ≥ R`; with a rate the least such
 `R` is read off directly (`ViewPace.synchronisedOn_of_rate`). -/
 
@@ -47,7 +47,7 @@ theorem unbounded_of_rated {timeout : ℕ → ℕ} (hrate : Rated timeout) :
 
 /-! ## Part 2 — a rated schedule pins the committing slot
 
-`liveness.md` §8 Q4. `FairWithin` promises a `T`-leader inside a fixed
+`archive/liveness.md` §8 Q4. `FairWithin` promises a `T`-leader inside a fixed
 window `w`; round-robin over `3f+1` validators supplies `w = f + 1`,
 since at most `f` non-`T` validators can be consecutive in the
 rotation. -/

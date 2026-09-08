@@ -98,7 +98,8 @@ Every Hydrozoan name the arc reuses — `q`, `qCert`, `qSlow`, `Correct`,
 `NonByzantine`, `BlockUniverse`, `View`, `Reaches`, `Slots`,
 `IsLeaderBlock`, `IsVote`, `IsCertificate`, `supporters`, `SlowCommit`,
 `blames`, `CertifiedIn`, the liveness package — is
-`LeanDag.Hydrozoan`'s, applied to `U.toBlockUniverse`.
+`LeanDag.Hydrozoan`'s, applied to `U.toBlockRecord`, the projection
+that forgets Optimal's validity clause.
 
 ## 1. The fault model and the thresholds
 
@@ -136,13 +137,19 @@ of the slot are each voted for by one of its parents — the paper's
 *WitnessesEquivocation*, whose quantification over the leader blocks of
 the local DAG coincides with the universe-level form here, since the two
 candidates a witnessing block sees are parents of its parents and so
-held by any view holding the block (decision D6). `OptUniverse` extends
-`BlockUniverse` with the rule: a block at the decision round of a slot
-that witnesses an equivocation in it references no block by the slot's
-leader. The round guard is stated although it is derivable from the
-predecessor condition (decision D4), so the rule reads as the paper
-states it; with several slots per round the rule applies to each
-separately, which the quantifier over slots gives. Views are Hydrozoan's
+held by any view holding the block (decision D6). The exclusion itself
+is a clause of validity, `Clause.leaderExcluded` (`Common/BlockRecord.lean`,
+shared with FinWhale): for every replica, either a block's parents are
+consistent about it or none of them is by it. `OptUniverse` is the
+plain block record at `ValidOpt`, Hydrozoan's validity conjoined with
+that clause — no schedule anywhere in the universe type. The
+schedule-dependent form the decision relation's laws consume — a block
+at a slot's decision round that witnesses an equivocation in it
+references no block by the slot's leader — is `LeaderExcluded`, a
+theorem every `OptUniverse` satisfies at every schedule
+(`OptUniverse.leader_excluded`), not a field. With several slots per
+round the rule applies to each separately, which the quantifier over
+slots gives. Views are Hydrozoan's
 over the projection. The witness file exhibits a block universe over
 which no `OptUniverse` exists: the rule bites, at one block.
 
@@ -162,11 +169,11 @@ candidates or to decision-round blocks — every consumer guards:
 def IsFastEvidence (U : BlockUniverse Replica BlockId) (k : ℕ) (C L : BlockId) :
     Prop :=
   (¬ WitnessesEquivocation U k C →
-    tPlain Replica ≤ (votesFor U C L).card) ∧
+    tPlain Replica ≤ (votersOf U C L).card) ∧
   (WitnessesEquivocation U k C →
-    tEquiv Replica ≤ (votesFor U C L).card ∧
+    tEquiv Replica ≤ (votersOf U C L).card ∧
     ∀ L', IsLeaderBlock U k L' → L' ≠ L →
-      (votesFor U C L').card < tEquiv Replica)
+      (votersOf U C L').card < tEquiv Replica)
 ```
 
 `IsNoFastEvidence` is evidence for no candidate of the slot, vacuously
@@ -242,12 +249,12 @@ def SkipLiveness (U : OptUniverse Replica BlockId) : Prop :=
   ∀ (T : Finset Replica) (k : ℕ),
     T ⊆ (Correct : Finset Replica) →
     q Replica ≤ T.card →
-    PopulatedOn U.toBlockUniverse T (S.slotRound k + 1) →
-    PopulatedOn U.toBlockUniverse T (S.slotRound k + 2) →
-    (∀ L, ¬ IsLeaderBlock U.toBlockUniverse k L) →
-    ∀ V : View U.toBlockUniverse,
+    PopulatedOn U.toBlockRecord T (S.slotRound k + 1) →
+    PopulatedOn U.toBlockRecord T (S.slotRound k + 2) →
+    (∀ L, ¬ IsLeaderBlock U.toBlockRecord k L) →
+    ∀ V : View U.toBlockRecord,
       V.CoversUpto (S.slotRound k + 2) →
-    SkippedLeaderOpt U.toBlockUniverse k ∧
+    SkippedLeaderOpt U.toBlockRecord k ∧
       DecidedOpt U V k none
 ```
 
@@ -368,7 +375,7 @@ Results: `ThresholdArithmetic` (OH1), `DirectSafety` (OH2),
 
 **Relation to the Hydrozoan arc.** Read-only, by construction (D1):
 `OptUniverse` extends `BlockUniverse`, every rule predicate is applied
-to `U.toBlockUniverse`, and a `Statement.lean` may import the Hydrozoan
+to `U.toBlockRecord`, and a `Statement.lean` may import the Hydrozoan
 `Statement.lean` it mirrors to reuse claim shapes (`CertUniqueness`,
 `commitSeq`, `SpansEligible`, `FairRunOn`) — a reviewed file importing a
 reviewed file, the one sanctioned exception to "imports `Model/` only".

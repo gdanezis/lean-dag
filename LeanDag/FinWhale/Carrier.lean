@@ -14,7 +14,7 @@ import LeanDag.Properties.Arcs.Headline
 /-!
 # FinWhale as a carrier
 
-`docs/porting-plan.md` step 4. FinWhale's carrier is the anchored
+`docs/archive/porting-plan.md` step 4. FinWhale's carrier is the anchored
 relation's (`Model/Decided.lean`), and the reverse pass a validator
 runs lands in it (`decided_of_wellFormed`), so the properties transfer
 to the pass through `passOf` and `decided_of_passOf`. Safety comes from

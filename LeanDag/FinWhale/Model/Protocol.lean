@@ -46,7 +46,7 @@ structure Run (Validator BlockId Payload : Type) [Fintype Validator] [DecidableE
   rounds_advance : ∀ u ∈ (Correct : Finset Validator), ∀ n ≤ pace.top u, n ≤ pace.built u n
   /-- The leader schedule the execution runs. It belongs to the
   execution rather than to the DAG: a DAG is blocks, and a schedule is
-  not (`docs/porting-plan.md`). -/
+  not (`docs/archive/porting-plan.md`). -/
   sched : Slots Validator
   /-- FinWhale runs one slot per round, which is what the reverse pass
   enumerates. -/

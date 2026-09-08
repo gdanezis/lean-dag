@@ -17,7 +17,7 @@ import LeanDag.Properties.Arcs.Headline
 /-!
 # Optimal-Hydrozoan as a carrier, and the three properties its rules give
 
-`docs/porting-plan.md` step 3. The carrier and the properties whose
+`docs/archive/porting-plan.md` step 3. The carrier and the properties whose
 proof is a single Optimal theorem apiece.
 
 **The universes are Optimal's records**, read by the relation through

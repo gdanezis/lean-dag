@@ -1,5 +1,13 @@
 # lean-dag — Liveness
 
+> **Archived.** These exploratory liveness notes describe a `Live` /
+> `DeliversQuorum` / `Timing.lean` route family that no longer exists —
+> `docs/liveness-routes.md` records its deletion in favour of the single
+> `ViewPace` route now in `LeanDag/Mysticeti/ViewPace.lean` and
+> `LeanDag/Timed/`. The current account is `docs/report.md` §§4, 6,
+> 16–18. Kept for historical record only; do not rely on the Lean names
+> below.
+
 > **Provenance.** Code and prose in this project were co-written with
 > heavy LLM assistance. The Lean proofs are machine-checked — the kernel
 > verifies every theorem against its stated form — but whether the

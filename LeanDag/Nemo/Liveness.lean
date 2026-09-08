@@ -35,7 +35,7 @@ no twins to tie-break.
 Every decision-valued statement concludes on a validator's own view,
 caught up to the horizon it reads; the full view is caught up to every
 horizon, so the whole-universe reading is the special case
-(`liveness.md` §4.2).
+(`archive/liveness.md` §4.2).
 -/
 
 namespace LeanDag

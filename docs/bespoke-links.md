@@ -42,8 +42,9 @@ eight, all Optimal's — were closed the same way as the original 35:
 `SlotAgreement.holds` and the constructors,
 `Barnacle.OptimalHydrozoanLive` is `descent_of_properties` over
 `LeaderCommits` and `Indirect`, and
-`Integration.Hydrozoan.decidedOpt_chopHZ` is `LocalTruncate.of_banded`
-over a `Truncates` — two more inductions over a decision relation
+Optimal-Hydrozoan's own cut/fill verdict cells are the generic
+`Properties/Arcs/Record.lean` cells applied at `optOnRecord`, with no
+bespoke name left to route — two more inductions over a decision relation
 deleted. Every rule with a carrier now shows the six, so the audit's
 separate column has nothing left to report.
 

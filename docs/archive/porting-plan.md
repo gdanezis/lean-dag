@@ -1,5 +1,12 @@
 # Porting the four remaining rules to the properties
 
+> **Archived.** The plan is complete: Nemo, Hybrid/Orcaella,
+> Optimal-Hydrozoan and FinWhale all now show the six properties this
+> document ports them onto (`scripts/audit-conformance.py`,
+> `scripts/audit-bespoke.py`). The closing section below, written before
+> Optimal-Hydrozoan's `Banded` was finished, is corrected in place.
+> Kept for historical record only.
+
 `docs/bespoke-links.md` closed the protocol-to-mechanism gap for the four
 rules that show the six properties. Fifteen links stand, and they stand
 because their rule has no `Banded` to route through:
@@ -478,8 +485,8 @@ decision relation is what let the carrier take an arbitrary schedule.
 
 Every rule this plan named is ported. FinWhale shows all six required
 properties and `CommitsDirect`; Nemo, Hybrid/Orcaella and Odontoceti
-did earlier. **Optimal-Hydrozoan is the one carrier still short**: it
-has `Agree` and `CommitsCandidate` through `Barnacle.Laws` and no
-`Banded`, which is the last source of the eight recorded bespoke links
-and of the three `OptimalChopDecided` inductions that a band would
-delete.
+did earlier. **Optimal-Hydrozoan finished last**: it now has `Banded`
+too (`OptimalHydrozoan/Carrier.lean`), the eight recorded bespoke links
+and the `OptimalChopDecided` inductions a band deletes are gone, and
+`scripts/audit-conformance.py` shows all eight rules with carriers
+at the six properties. The plan is complete.

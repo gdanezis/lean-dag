@@ -623,7 +623,7 @@ statements that need it carry the round as a hypothesis.
 | 3 | `Model/Good.lean`, `Counting/` (`CommonCore`, MM2, MM2b); `aim4`, `multi` | `0257c8e` |
 | 4 | `Model/Unpredictable.lean`, `Liveness/` (MM3a–d, MM2′); the clause witnesses | `544eeda` |
 | 5 | `Synchrony/` (MM5) | `72dea05` |
-| 6 | this record brought to the final position; report §17; `related.md` §4.1; README | — |
+| 6 | this record brought to the final position; report §17; `related.md` §4.1; README | done |
 
 Each phase ran as statements → review → freeze → proofs → commit; phases
 1, 3 and 4 were planned before their statements were written.

@@ -8,12 +8,16 @@
 > only human-plus-LLM review behind it. Read critically.
 
 Two diagrams of the development's claim structure, extracted from the
-compiled Lean environment rather than written by hand:
+compiled Lean environment rather than written by hand, each in two
+renderings:
 
 * `support-core.svg` — the assumptions of report §4 and the core
-  safety/liveness results (T, M, L).
+  safety/liveness results (T, M, L), with each box's Lean name.
 * `support-full.svg` — the same, plus every principal result of the four
-  arcs (CQ, D/C/B, G, O).
+  arcs (CQ, D/C/B, G, O), with each box's Lean name.
+* `support-core-compact.svg`, `support-full-compact.svg` — the same two
+  diagrams at smaller scale with Lean names omitted, embedded as the
+  report's own two figures (§6.8 and §25).
 
 An arrow `A → B` means **`A` is used in the proof of `B`**, directly or
 through unlabelled lemmas. Arrows implied by longer paths are removed, so
@@ -77,13 +81,13 @@ three claims come out exactly as stated:
 
     scripts/svg2pdf.sh
 
-places vector PDFs of both diagrams in `docs/pdf/`, each on a page cut to
+places vector PDFs of all four SVGs in `docs/pdf/`, each on a page cut to
 the diagram's own size. Typst is already required for the document build
 and renders SVG natively, so no separate converter is involved.
 
 ## Regenerating
 
-Both files are checked in, but they are build products: re-run the two
-commands above after adding results or renaming lemmas. `deps.tsv` is
-also useful on its own — it is the full declaration-level dependency
-graph of the development (≈900 declarations, ≈7,700 edges).
+All four SVGs are checked in, but they are build products: re-run the
+two commands above after adding results or renaming lemmas. `deps.tsv`
+is also useful on its own — it is the full declaration-level dependency
+graph of the development (≈9,900 declarations, ≈82,500 edges).

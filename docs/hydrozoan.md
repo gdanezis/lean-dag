@@ -84,7 +84,7 @@ Three consequences shape the arc.
 | Model and thresholds (`algorithms.tex`) | `Model/Faults.lean` — `Faults`, `p`, `q`, `qFast`, `qCert`, `qSlow`, `qWeak`, `Correct`, `NonByzantine` |
 | DAG-building layer (`algorithms.tex`) | `Model/Block.lean` (`ValidWrt`), `Model/BlockUniverse.lean`, `Model/View.lean` |
 | `Link` | the shared `Reaches` (`LeanDag/Common/CausalHistory.lean`) |
-| Waves and pipelining, `ProposeRound`, `VotingRound`, `DecisionRound`, `GetLeaderBlocks` | `Model/Slots.lean` — `Slots`, `votingRound`, `decisionRound`, `IsLeaderBlock` |
+| Waves and pipelining, `ProposeRound`, `VotingRound`, `DecisionRound`, `GetLeaderBlocks` | the shared `Common/Slots.lean` (`Slots`), `Common/Leader.lean` (`votingRound`, `IsLeaderBlock`); `decisionRound` in `Model/DirectRules.lean` |
 | `IsVote`, `IsCertificate`, `FastCommittedLeader`, `SlowCommittedLeader`, `SkippedLeader` | `Model/DirectRules.lean` |
 | `TryIndirectDecide`, `DecideFromAnchor` | `Model/IndirectRules.lean` (`CertifiedIn`, `WeakLinked`), `Model/Decided.lean` (`hydrozoanAnchored`, the rule as an instance of the shared anchored relation `LeanDag/Common/Anchored.lean`, whose eligibility `EligibleAt` at wave two is the paper's `r_decision < s.round`; `Decided`) |
 | after GST | `Model/Liveness.lean` — `PopulatedOn`, `SynchronisedOn`, `View.full`, `View.CoversUpto` |
@@ -334,8 +334,10 @@ verifies is that the guaranteed path is the slow one.
 
 **HZ6 — indirect liveness** (`IndirectLiveness/`), pure
 decision-relation combinatorics with no synchrony, population or fault
-hypothesis. `AnchoredTotality`: once a nearest eligible committed anchor
-exists, some rung fires. `DecidedBelowRun`: `c` consecutive committed
+hypothesis, now the generic `(hydrozoanAnchored ..).Total` and
+`.DecidedBelowRun` (`Common/Anchored.lean`) at Hydrozoan's rung choice.
+`Total`: once a nearest eligible committed anchor exists, some rung
+fires. `DecidedBelowRun`: `c` consecutive committed
 slots, long enough that the run's end anchors everything below
 (`SpansEligible`, which the pipelined schedule satisfies exactly at
 `c ≥ 3`), decide every slot below the run. One committed slot does not
@@ -345,13 +347,16 @@ three-round run does.
 **HZ7 — eventual decision** (`EventualDecision/`), the composition.
 `RunDecidesBelow` is the per-universe workhorse with the run's location
 explicit; `RunsRecur` is the schedule-only claim that fairness places a
-`T`-led run past any slot and any round, from
+`T`-led run past any slot and any round, from the shared
+`Common/Slots.lean`:
 
 ```lean
-def FairRunOn (T : Finset Replica) (c : ℕ) : Prop :=
+def FairRunOn {Validator : Type*} [S : Slots Validator]
+    (T : Finset Validator) (c : ℕ) : Prop :=
   ∀ k, ∃ k', k ≤ k' ∧ ∀ i, i < c → S.leader (k' + i) ∈ T
 ```
 
+with `Slots.exists_run_past` placing one; Hydrozoan's own copy is gone.
 The composed form — for every slot `k` a bound `b ≥ k` with every slot
 below `b` decided on any view caught up to the run's last decision
 round — is `ledgerProgress` on the proof side; the audited content is
@@ -440,8 +445,9 @@ meet. `Hydrozoan` is in `ARCS` of `scripts/check-arc-holes.py`.
 ```
 LeanDag/Hydrozoan/
   Model/         definitions only — no theorem and no proof term:
-                 Faults (§1), Block, BlockUniverse, View, CausalHistory (§2),
-                 Slots (§3), DirectRules (§4), IndirectRules, Decided (§5),
+                 Faults (§1), Block, BlockUniverse, View (§2; CausalHistory
+                 and Slots are the shared `Common/` ones, by import),
+                 DirectRules (§3, §4), IndirectRules, Decided (§5),
                  Liveness (§7)
   Helpers/       lemma and construction infrastructure; unaudited
   <Result>/Statement.lean   imports Model/ only; `def Statement : Prop`; never a proof

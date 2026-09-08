@@ -340,25 +340,39 @@ the set of declarations changes. `make help` lists them.
 - `LeanDag/` — theorem/definition source: the core DAG and Mysticeti
   development at the top level, with the pacing structures in
   `Mysticeti/ViewPace.lean` and the delivery layer they induce in
-  `Mysticeti/PaceDelivery.lean`; `Common/Causality.lean` and `Common/Participation.lean` hold the
+  `Mysticeti/PaceDelivery.lean`. `Common/` (twenty files) holds what
+  every rule shares: `BlockRecord.lean` is the one universe shape every
+  rule instantiates, with the generic cut, fill and re-genesis built
+  against it once; `Causality.lean` and `Participation.lean` hold the
   fault-agnostic vocabulary — reachability, the finite cone, production
-  and coverage — stated over the raw block data, so the Byzantine and
-  crash universes instantiate one set of definitions rather than
-  restating them. The arcs are in subdirectories (`Quality/` —
+  and coverage — stated over the raw block data beneath it; `Anchored/`,
+  `Support.lean`, `Rules.lean` and `Ledger.lean` hold the generic
+  anchored-rule interface, the counting arguments a support discharges,
+  the five rule combinators, and the ledger a decided sequence assembles
+  into. `Properties/` states the target properties themselves
+  (`DagRule`, `Agree`, `Commit`, `Band`, `Sustain`, `Truncate`, …) and
+  the generic mechanism theorems every carrier gets for free
+  (`Properties/Arcs/`); `Timed/` holds the timed model built on top —
+  coverage, and the bridge from synchrony into certification — kept
+  apart from `Properties/` since it is timing-specific
+  (`scripts/check-arc-holes.py` enforces the separation). The arcs are
+  in subdirectories (`Quality/` —
   chain quality; `DoS/` — equivocation and the novelty budget; `GC/` —
   garbage collection; `Odontoceti/` — the two-round protocol;
   `Reactive/` — the reactive schedule; `SafeSkip/` — crash recovery in
-  one message; `Adaptive/` — adaptive leader schedules; `Hybrid/` —
-  Byzantine and crash faults apart; `Nemo/` — crash-fault consensus at
-  a majority quorum; `FinWhale/` — the fast path at
-  `n = 3f + 2p − 1`, whose `Model/` holds every definition of the
-  protocol and no proof; `MahiMahi/` — the asynchronous rule at wave `w`,
-  `BlackMarlin/` — the three-round rule with an anchor every round, and
-  `Barnacle/` — the adaptive leader count over an interface for the
-  four base rules, `Hydrozoan/` — the dual-path rule under hybrid
-  faults, with its own fault model and universe, and
-  `OptimalHydrozoan/` — its fast path at Hydrangea's bound, a peer arc
-  importing the first, all under a statement/proof partition (`Model/`, `<Result>/Statement.lean`,
+  one message; `Adaptive/` — adaptive leader schedules, generalised over
+  any `Properties.DagRule`; `Hybrid/` — Byzantine and crash faults
+  apart; `Nemo/` — crash-fault consensus at a majority quorum;
+  `Minnow/` — the minimal commit rule and its counterexamples;
+  `FinWhale/` — the fast path at `n = 3f + 2p − 1`, whose `Model/` holds
+  every definition of the protocol and no proof; `MahiMahi/` — the
+  asynchronous rule at wave `w`, `BlackMarlin/` — the three-round rule
+  with an anchor every round, and `Barnacle/` — the adaptive leader
+  count over an interface for the four base rules, `Hydrozoan/` — the
+  dual-path rule under hybrid faults, with its own fault model and
+  universe, and `OptimalHydrozoan/` — its fast path at Hydrangea's
+  bound, a peer arc importing the first, all under a statement/proof
+  partition (`Model/`, `<Result>/Statement.lean`,
   `<Result>/Proof.lean`); `Network/` — the composed
   denial-of-service capstones; `Integration/` — how the arcs compose).
 - `LeanDag.lean` — root import file.
@@ -387,15 +401,12 @@ the set of declarations changes. `make help` lists them.
 |---|---|
 | [`docs/report.md`](docs/report.md) | **the entry point**: the full report — model, commit rule, trust boundary (including what the adversary may do), safety, liveness on view convergence, the extension arcs, satisfiability, mechanisation — plus generated reference appendices giving **every definition and public theorem verbatim** and an index of the internal lemmas |
 | [`docs/spec.md`](docs/spec.md) | the safety design record |
-| [`docs/liveness.md`](docs/liveness.md) | the liveness design record, and eventual DAG synchrony |
-| [`docs/liveness-routes.md`](docs/liveness-routes.md) | why one liveness route was kept and the others deleted, and what the later clause changes cost |
-| [`docs/pipelining-and-multi-leader.md`](docs/pipelining-and-multi-leader.md) | the schedule generalization: eligibility, runs, pipelined commits |
 | [`docs/chain-quality.md`](docs/chain-quality.md) | chain quality: coverage without synchrony, inclusion with it |
 | [`docs/dos-equivocation-and-growth.md`](docs/dos-equivocation-and-growth.md) | equivocation, exposure, view growth, and the novelty budget |
 | [`docs/garbage.md`](docs/garbage.md) | the horizon: truncation, bounded storage, bootstrap without consensus |
 | [`docs/odontoceti.md`](docs/odontoceti.md) | the two-round protocol: the generalized thresholds, and the findings |
-| [`docs/adaptive-leaders.md`](docs/adaptive-leaders.md) | adaptive leader schedules: the design record and theorem plan |
-| [`docs/hybrid-plan.md`](docs/hybrid-plan.md) | hybrid fault tolerance: the design record and theorem plan |
+| [`docs/adaptive-leaders.md`](docs/adaptive-leaders.md) | adaptive leader schedules: the design record, built and since generalised to `Adaptive.Policy` over any rule |
+| [`docs/hybrid-plan.md`](docs/hybrid-plan.md) | hybrid fault tolerance: the design record, built, kept as the reasoning behind report §14 |
 | [`docs/mahi-mahi.md`](docs/mahi-mahi.md) | the asynchronous rule at wave `w`: the clause, and the statement/proof partition |
 | [`docs/black-marlin.md`](docs/black-marlin.md) | the three-round commit rule: the link clause, the run of two, what the reactive exit costs, agreement, the delivered order the descent computes, the sequence it outputs, where Agreement fails, and a repair |
 | [`docs/minnow.md`](docs/minnow.md) | the minimal commit rule: the two readings its own sentences force, and the two defects that survive both |
@@ -408,6 +419,10 @@ the set of declarations changes. `make help` lists them.
 | [`docs/hydrozoan-integration.md`](docs/hydrozoan-integration.md) | Hydrozoan and Optimal-Hydrozoan through the properties: the carriers and supports, the Barnacle instantiations and the committee bound round-robin needs, the schedule-free leader-exclusion clause, the native cut and fill |
 | [`docs/related.md`](docs/related.md) | a survey of consensus on uncertified DAGs |
 | [`docs/style.md`](docs/style.md) | writing conventions for the documents and the source |
+
+`docs/archive/` holds design records superseded by later work — each
+carries a status note naming what replaced it and where the current
+account now lives.
 
 ## Contributors
 

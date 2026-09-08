@@ -7,7 +7,7 @@ import LeanDag.Properties.Optional.SelfParent
 /-!
 # Nemo as a carrier, and the three properties its own rules give
 
-`docs/target-properties.md` §8, `docs/porting-plan.md` step 1. The
+`docs/target-properties.md` §8, `docs/archive/porting-plan.md` step 1. The
 carrier and the properties whose proof is a single Nemo theorem apiece:
 `Agree` is Nemo's `decided_unique`, `CommitsCandidate` is
 `isLeaderBlock_of_decided`, `CommitsDirect` is the direct constructor.

@@ -1,5 +1,11 @@
 # lean-dag — Pipelining and multiple leaders
 
+> **Archived.** Complete and folded into the main account: pipelining
+> and multiple leaders are now the assumed default throughout
+> `docs/report.md` and the Lean development, not a separately argued
+> extension. Kept for historical record; the `FairRunOn` device below is
+> now `LeanDag.FairRunOn` in `Common/Slots.lean`.
+
 > **Provenance.** Code and prose in this project were co-written with
 > heavy LLM assistance. The Lean proofs are machine-checked — the kernel
 > verifies every theorem against its stated form — but whether the

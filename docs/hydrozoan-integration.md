@@ -31,10 +31,13 @@ and the universe is a block DAG by its `complete` field and the
 `predecessor` clause of its validity.
 
 `OptimalHydrozoanProperties.optimalRule` (`OptimalHydrozoan/Carrier.lean`)
-is the subtype of Hydrozoan universes satisfying `LeaderExcludedAll`
-(§3), with `DecidedOpt` at the `OptUniverse` that clause builds. Both
-carriers are the ones Barnacle's `hydrozoan` and `optimalHydrozoan`
-rules name for their `DagRule` parent, so there is one carrier per rule.
+is `OptUniverse`'s own anchored relation read through its projection to
+Hydrozoan's record, `toDagRuleVia OptUniverse.toBlockRecord`; the
+exclusion the laws hold under is `Clause.leaderExcluded`, one clause of
+`OptUniverse`'s own validity `ValidOpt` (§3), and `DecidedOpt` is the
+decision relation that projection builds. Both carriers are the ones
+Barnacle's `hydrozoan` and `optimalHydrozoan` rules name for their
+`DagRule` parent, so there is one carrier per rule.
 
 The fault model is `hzReliability`: the correct set with slack `f + c`,
 Byzantine and crashed together, a minority by Hydrozoan's committee
@@ -80,8 +83,9 @@ and a proof file. The decisions they embody:
   `LeanDag.Hydrozoan.rule`; the wave length is three; the interface's
   direct-commit field is the disjunction of the two commit paths, each
   judged from the view (`FastCommitInView ∨ SlowCommitInView`), and it
-  is decidable. `Barnacle/Helpers/Hydrozoan.lean` reads the universe's
-  own block map; there is no adapter.
+  is decidable. `hydrozoan` is `ofAnchored (Hydrozoan.hydrozoanAnchored ..)`
+  (`Model/Anchored.lean`), the generic adapter every rule of this arc
+  now uses; nothing under `Helpers/` is bespoke to Hydrozoan any more.
 - **The laws are read off the decision relation.** `agree` is HZ3;
   `candidates` is `commitsCandidate`. The history view is defined with
   `historyFrom`, so the interface's `historyView_ids` law is by
@@ -105,17 +109,18 @@ and a proof file. The decisions they embody:
   sufficient rather than necessary, so the bound is the hypothesis and
   the slack condition is not. It is a hypothesis of `RoundRobinLive` and
   of nothing above it.
-- **Optimal's leader exclusion is stated without a schedule.**
-  `OptUniverse` is indexed by a `Slots` instance, because its exclusion
-  field names `S.leader k`, while the interface fixes the universe type
-  before the schedule arrives. The clause depends on a slot only through
-  its `(round, leader)` pair, so `LeaderExcludedAll`
-  (`OptimalHydrozoan/Model/Universe.lean`) states it over the pair and
-  `optUniverseOf` builds an `OptUniverse` at whatever schedule the
-  interface hands over. A multi-leader schedule realises the pairs
-  `{(r, getLeader (r + l)) : l < m}`, monotone in `m`
-  (`Barnacle/Helpers/Schedule.lean`), so the clause holds at every
-  admissible leader count as soon as it holds at the largest. Optimal's
+- **Optimal's leader exclusion carries no schedule at all.**
+  `Clause.leaderExcluded` (`Common/BlockRecord.lean`) is a clause of
+  `OptUniverse`'s own validity `ValidOpt`, stated over a block's parents
+  and their votes with no `Slots` instance anywhere in its type — it
+  binds before any schedule is chosen, not merely independently of the
+  leader count. `OptUniverse.leader_excluded`
+  (`OptimalHydrozoan/Helpers/Universe.lean`) is the theorem reading it
+  back at a schedule, giving `LeaderExcluded` — the round/leader form
+  `sections/optimal-protocol.tex` states and the decision relation's
+  laws consume (`SlotAgreement/Proof.lean`) — at every `Slots` instance
+  the interface hands over, so no leader-count monotonicity argument is
+  needed: the clause was never schedule-indexed to begin with. Optimal's
   evidence rung needs no tie-break, so `DecidableEq` suffices where
   Hydrozoan's instantiation takes a `LinearOrder`.
 
@@ -143,15 +148,12 @@ otherwise. The same witness gives what the fill does to coverage:
 `not_synchronisedOn_copyFill_hz` is the generic refutation of
 `Timed/Extension.lean` at the record's `extends_copyFill`.
 
-`Integration/OptimalMechanisms.lean` reads leader exclusion as an
-invariant on the record, `Excluded`, and shows it mechanised:
-`leaderExcludedAll_chop` (a block bound by exclusion sits two rounds
-above the horizon, so it keeps its parents and its candidates are old
-blocks at a rebased round), `leaderExcludedAll_copyFill` (a filled
-block's parents are the donor's, so it adds no edge) and
-`leaderExcludedAll_addGenesis` (the new block is bound by no exclusion
-and is its author's only block). `optOnRecord` reads the carrier as
-records under `Excluded`, and the record's constructions at it are
+`Integration/OptimalMechanisms.lean` needs no invariant at all:
+leader exclusion is now a clause of `OptUniverse`'s own validity
+`ValidOpt` (§3), and the record's cut, copy fill and re-genesis
+preserve validity clause by clause, so `optOnRecord` reads the carrier
+as records under the trivial invariant `BlockRecord.Any`, with nothing
+proved per mechanism. The record's constructions at it are
 `optOnRecord.chop`, `optOnRecord.copyFill` and `optOnRecord.addGenesis`.
 Every verdict cell of both rules is `Properties/Arcs/Record.lean` at
 `Hydrozoan.onRecord` or `optOnRecord`, with nothing written per cell.
@@ -177,9 +179,12 @@ explicitly as `S7` in every statement so that nothing depends on which
 `Slots` instance resolution would pick. `LeanDagTest/Barnacle/HydrozoanLive.lean`
 exhibits configurations on both sides of the round-robin bound
 `3(f + c) + 1 ≤ n`, and shows where `c ≤ k` is consumed.
-`LeanDagTest/Barnacle/OptimalHydrozoan.lean` shows that `LeaderExcludedAll`
-separates exactly the universes the arc's own rule does, on the
-sixteen-block universe where the Byzantine leader equivocates. The
+`LeanDagTest/Barnacle/OptimalHydrozoan.lean` shows that
+`Clause.leaderExcluded` separates exactly the universes the arc's own
+rule does, on the sixteen-block universe where the Byzantine leader
+equivocates: `UX`, exhibited as an `OptUniverse`, satisfies it, and
+`UbadX`, exhibited as a `BlockUniverse` no `OptUniverse` extends, fails
+it at one block. The
 `holds` statements are audited for axioms in `LeanDagTest/Barnacle/Axioms.lean`.
 The cut and fill are checked by the build and by the audits of
 `docs/target-properties.md`, which show every mechanism cell for both

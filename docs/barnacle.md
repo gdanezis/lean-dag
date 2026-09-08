@@ -147,33 +147,29 @@ fault class on its instantiation, never on the interface
 
 ```lean
 structure BaseRule (Validator : Type) [Fintype Validator] [DecidableEq Validator]
-    (BlockId : Type) [DecidableEq BlockId] (Payload : Type) where
-  Universe : Type
-  View : Universe → Type
-  block : Universe → BlockId → Block Validator BlockId Payload
-  ids : Universe → Finset BlockId
-  viewIds : ∀ {U : Universe}, View U → Finset BlockId
+    (BlockId : Type) [DecidableEq BlockId] (Payload : Type)
+    extends Properties.DagRule Validator BlockId Payload where
   full : ∀ U : Universe, View U
   historyView : ∀ (U : Universe) (A : BlockId), A ∈ ids U → View U
   waveLength : ℕ
   DirectCommitIn : ∀ {U : Universe}, View U → BlockId → ℕ → Prop
   decDirect : ∀ {U : Universe} (V : View U) (L : BlockId) (r : ℕ),
     Decidable (DirectCommitIn V L r)
-  Decided : Slots Validator → ∀ {U : Universe}, View U → ℕ → Option BlockId → Prop
 
 structure BaseRule.Laws (R : BaseRule Validator BlockId Payload) : Prop where
-  view_complete : ∀ {U : R.Universe} (V : R.View U),
-    ∀ i ∈ R.viewIds V, ∀ j ∈ (R.block U i).refs, j ∈ R.viewIds V
   full_ids : ∀ U, R.viewIds (R.full U) = R.ids U
   historyView_ids : ∀ U A (hA : A ∈ R.ids U),
     R.viewIds (R.historyView U A hA) = historyFrom (R.block U) A
-  agree : ∀ (S : Slots Validator) {U : R.Universe} (V₁ V₂ : R.View U) (k : ℕ)
-    (v₁ v₂ : Option BlockId), R.Decided S V₁ k v₁ → R.Decided S V₂ k v₂ → v₁ = v₂
-  decided_of_directCommitIn : ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U)
-    (k : ℕ) (L : BlockId), R.IsLeaderBlock S U k L →
-    R.DirectCommitIn V L (S.slotRound k) → R.Decided S V k (some L)
+  agree : Properties.Agree R.toDagRule
+  commitsDirect : Properties.CommitsDirect R.toDagRule
+    (fun {U} V L r => R.DirectCommitIn V L r)
+  candidates : Properties.CommitsCandidate R.toDagRule
 ```
 
+`Universe`, `View`, `block`, `ids`, `viewIds`, `viewSound`,
+`viewComplete`, `causal` and `Decided` are `Properties.DagRule`'s own
+fields, common to every carrier of `docs/target-properties.md` and
+stated there rather than restated here (§12, target-properties.md G0).
 The interface is split into **data** and **laws**, so that the data —
 what the rule *is* — is proof-free and audited, and the laws — what it
 must satisfy — are a proposition each instantiation is proved to meet
@@ -181,14 +177,14 @@ as a result of the house shape: `Mysticeti/Statement.lean` defines the
 data and states `Laws mysticeti`, `Mysticeti/Proof.lean` proves it, and
 Phase 5 adds the same pair for Odontoceti and Nemo. Every generic
 theorem takes `(hR : R.Laws)`. The laws render the paper's
-assumptions: A2 has moved into `BaseRule` as fields (a validator
-holds a block only with its whole causal history), `DirectCommitIn` and
-`waveLength` are A3, `agree` is the safety half of A4; the liveness
-half is §7. `BaseRule.IsLeaderBlock
-R S U k L` is the generic candidate predicate — the right round, the
-right author — over the interface's `block` and `ids`; it is the
-conjunction every rule of the development states, so each
-instantiation's `Decided.directCommit` accepts it by unfolding.
+assumptions: A2 is carried by the shared `DagRule` interface as
+`viewSound` and `viewComplete` (a validator holds a block only with its
+whole causal history), `DirectCommitIn` and `waveLength` are A3,
+`agree` is the safety half of A4; the liveness half is §7.
+`BaseRule.IsLeaderBlock R S U k L` is the generic candidate predicate —
+the right round, the right author — over the interface's `block` and
+`ids`; it is the conjunction every rule of the development states, so
+each instantiation's `Decided.directCommit` accepts it by unfolding.
 
 Three shapes are fixed by the instantiations rather than by taste. The
 schedule is an *explicit* argument of `Decided`, `R.Decided S V k v`: an
@@ -204,12 +200,12 @@ structure, so that the frozen file is not reopened.
 
 One construction the data needs cannot be proof-free: the anchor's
 history as a `View`, whose closure the core's `View` type requires as a
-field. It lives in `Helpers/Mysticeti.lean` (`historyViewOf`), the one
-helper a `Statement.lean` of this arc imports, and it is not trusted:
-the law `historyView_ids` pins its ids to the history whatever the
-helper builds.
+field. It is `BlockRecord.historyView` (`Common/History.lean`), generic
+across every carrier and wired into each `BaseRule` instantiation
+through `ofAnchored` (`Model/Anchored.lean`), and it is not trusted: the
+law `historyView_ids` pins its ids to the history whatever it builds.
 
-`decided_of_directCommitIn` is what makes the window count well defined:
+`commitsDirect` is what makes the window count well defined:
 two directly committed candidates of one slot on one view are one block
 by `agree`, so the paper's count over leader *blocks* — several upon
 equivocation — equals a count over *slots* (§4).
@@ -627,17 +623,17 @@ committee bound `3f + 1 ≤ n` is exactly `g · slack + 1 ≤ n` at `g = 3`,
 on `n ≥ w · slack + 1` validators is live under round-robin at every
 count, with gap `n + w − 1`.
 
-**Three of the six no longer prove the descent laws here.** Mysticeti,
-Odontoceti and Hydrozoan get `Descent` from
-`Barnacle.descent_of_properties`: `goodLeaders` is
-`Properties.LeaderCommits` at a one-slot window with its bound thrown
-away, `indirect` is `Properties.Indirect` read at the schedule it is
-given, and all that is left in `Helpers/MysticetiLive.lean`,
-`Helpers/Odontoceti.lean` and `HydrozoanLive/Proof.lean` is a bridge
-from the rule's `Good` to its own liveness precondition — which mentions
-no verdict. Nemo, Orcaella and Optimal-Hydrozoan keep their own proofs,
-because they have neither property yet
-(`docs/target-properties.md` §11.2b).
+**All eight rules now get the descent laws the same way, from a
+support.** `Barnacle.descent_of_support` (`Helpers/Descent.lean`)
+derives `LiveRule.Descent` for any live rule carrying a `Support` whose
+`OfCoverage` and `Commits` hold at a fault model's reliability, an
+`Indirect` property at the rule's eligibility, and good DAGs that are
+`Timed.Good`: `goodLeaders` is `Timed.exists_decided_of_coverage` read
+at the support's coverage and commit laws, and `indirect` is the
+property read at the schedule it is given. Mysticeti, Odontoceti,
+Hydrozoan, Nemo, Orcaella, Optimal-Hydrozoan, FinWhale and Mahi-Mahi
+each call it once from their own `Proof.lean`; nothing rule-specific is
+left under `Helpers/`.
 
 **Mysticeti (`MysticetiLive/`).** `mysticetiLive` is Mysticeti with the
 base development's own liveness interface as `Good` — a correct quorum
@@ -959,7 +955,7 @@ threshold, the descent laws at slack `fb + fc` — the only place the
 mixed bound enters, through the reliable set being the fully-correct
 class at quorum `q = n − fb − fc` — and round-robin liveness at every
 leader count with gap `n + 1` (`Orcaella/Statement.lean`, proofs in
-`Orcaella/Proof.lean` and `Helpers/Orcaella.lean`).
+`Orcaella/Proof.lean`).
 
 The witnesses span three files, none of which may import
 `LeanDagTest.Mysticeti.Model`'s competing `Faults (Fin 4)` instance (each file's

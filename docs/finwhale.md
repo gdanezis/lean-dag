@@ -1,7 +1,7 @@
 # FinWhale — the fast path, and what its safety proof consumes
 
-The design record for `LeanDag/FinWhale/`. There is no report chapter
-yet; this is where the reasoning behind the model lives.
+The design record for `LeanDag/FinWhale/`. The report chapter is §20;
+this is where the reasoning behind the model lives.
 
 The protocol is Ladelsky and Friedman, *FinWhale: An Optimally Resilient
 Two-Round Terminating DAG Protocol*, arXiv:2606.26292v2 (18 August 2026).

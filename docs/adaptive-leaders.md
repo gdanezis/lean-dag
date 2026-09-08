@@ -8,11 +8,12 @@
 > only human-plus-LLM review behind it. Read critically.
 
 > **Status (September 2026).** Built, and since generalised. The
-> mechanism planned below is now stated over `Properties.BoundedRule`
-> and five properties (`target-properties.md` §4); the core's bounded
-> relation `DecidedWithin` lives in `MysticetiProperties.lean`, and every
-> statement planned here stands verbatim in `Adaptive/Mysticeti.lean` as
-> a corollary of the generic theorem.
+> mechanism planned below is now `Adaptive.Policy` over any
+> `Properties.DagRule` (`Adaptive/Policy.lean`, `Adaptive/Basic.lean`,
+> `Adaptive/Liveness.lean`); the core's bounded relation `DecidedWithin`
+> is `AnchoredRule.DecidedWithin` (`Common/Anchored/Bounded.lean`), and
+> every statement planned here stands verbatim in `Adaptive/Mysticeti.lean`
+> and `Adaptive/Odontoceti.lean` as corollaries of the generic theorems.
 
 This document is the design record for the **adaptive-leaders** arc,
 written before the development rather than after it: the definitions and

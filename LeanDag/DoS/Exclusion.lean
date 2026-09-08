@@ -333,7 +333,7 @@ theorem mem_history_of_correct {R : ℕ} (hs : SynchronisedOn U (Correct : Finse
 /-! ## Two delivery policies: made explicit, nothing an author publishes
 is invisible to the correct population. -/
 
-/-- **What `U` means, made explicit.** §4.2 of `liveness.md` defines `U` as
+/-- **What `U` means, made explicit.** §4.2 of `archive/liveness.md` defines `U` as
 every block some correct validator held; the model has never said so. -/
 def HeldByCorrect (D : Delivery U) : Prop :=
   ∀ i ∈ U.ids, ∃ v ∈ (Correct : Finset Validator), i ∈ D.held v (U.block i).round
