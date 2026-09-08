@@ -58,11 +58,9 @@ are not leader-consistent, the two conflicting versions they reference
 are both in its causal history, so the leader is exposed in it — and an
 exposed author may not be cited. -/
 theorem leaderClause_of_dosValid (hdos : DoSValid U)
-    {b : BlockId} (hb : b ∈ U.ids) (v : Validator) :
-    (∀ i ∈ (U.block b).refs, ∀ j ∈ (U.block b).refs, ∀ x ∈ (U.block i).refs,
-        ∀ y ∈ (U.block j).refs, (U.block x).creator = v →
-        (U.block y).creator = v → x = y)
-      ∨ (∀ i ∈ (U.block b).refs, (U.block i).creator ≠ v) := by
+    {b : BlockId} (hb : b ∈ U.ids) :
+    Clause.leaderExcluded U.block (U.block b) := by
+  intro v
   by_cases hcons : ∀ i ∈ (U.block b).refs, ∀ j ∈ (U.block b).refs, ∀ x ∈ (U.block i).refs,
       ∀ y ∈ (U.block j).refs, (U.block x).creator = v →
       (U.block y).creator = v → x = y

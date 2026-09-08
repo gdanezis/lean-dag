@@ -4592,6 +4592,30 @@ exclusion as a hypothesis, as Hybrid's take non-equivocation.
 **Measure.** The step removes 621 lines of Lean and adds 424; the
 library and tests stand at 75,875 lines.
 
+### 11.41 FinWhale's validity names its clause
+
+FinWhale's `ValidHere` restated the leader clause verbatim in its fourth
+field, and `leaderClause_of_dosValid` restated it again in its
+conclusion — three copies of the same six lines, one of them now living
+in `Common/BlockRecord.lean` as `Clause.leaderExcluded` (§11.40). Both
+are the clause by name: the field is `Clause.leaderExcluded blk b`, and
+the denial-of-service bridge concludes it, so FW13 reads as producing
+the clause rather than a disjunction that happens to match it.
+
+**What the arc's partition forbids.** The four validity instances each
+carry the equivalence with `ValidAt` inline, twelve lines where one
+named `iff_validAt` would do, as the core and Nemo have. The shared
+theorem cannot be written: `Model/Rule.lean` is a `Model/` file and
+`scripts/check-arc-holes.py` admits definitions and instances only.
+Hydrozoan and Optimal-Hydrozoan carry the same four copies for the same
+reason. Extracting them would mean either moving validity out of the
+trusted core or defining `ValidHere` as `ValidAt` outright, which costs
+the named fields every proof and the report read off it; neither is
+worth twelve lines, and the file now says so.
+
+**Measure.** The step removes 28 lines of Lean and adds 20; the library
+and tests stand at 75,867 lines.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

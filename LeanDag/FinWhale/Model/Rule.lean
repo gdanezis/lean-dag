@@ -54,29 +54,23 @@ structure ValidHere (blk : BlockId → Block Validator BlockId Payload)
   distinct_creators : ∀ i ∈ b.refs, ∀ j ∈ b.refs, (blk i).creator = (blk j).creator → i = j
   /-- A non-genesis block carries `n − f` edges by distinct validators. -/
   quorum : 0 < b.round → quorumCard Validator ≤ (creators blk b).card
-  /-- **FinWhale's clause, at every validator.** Either the parent set is
-  consistent about `v` — the parents vote for at most one of `v`'s blocks
-  — or `v`'s block is not among the parents. Consistency is a condition
-  on what the parents *reference*, not on who authored them.
+  /-- **FinWhale's clause**: `Clause.leaderExcluded` of the common layer,
+  which Optimal-Hydrozoan's validity carries too. Stated at every
+  validator rather than at the leader, which is what makes it
+  schedule-free — a rule whose validity mentions the schedule cannot be
+  related to another DAG by a band. It is a genuine strengthening of the
+  paper's rule, and a harmless one: a validator checks it locally, and it
+  drops at most the `f` visibly equivocating validators' blocks, leaving
+  the `n − f` its quorum needs. -/
+  leader_clause : Clause.leaderExcluded blk b
 
-  **Stated at every validator rather than at the leader**, which is what
-  makes it schedule-free, and what lets a `Dag` be a `Properties.DagRule`
-  universe: a rule whose validity mentions the schedule cannot be
-  related to another DAG by a band, since a band is a statement about
-  blocks (`docs/porting-plan.md`).
+/-! **FinWhale's validity is the family** at the core's quorum, with
+distinct creators and leader exclusion, so the four instances are the
+family's. Each carries the equivalence itself rather than a shared
+theorem: this is a `Model/` file, and the arc's partition admits
+definitions and instances only (`scripts/check-arc-holes.py`). -/
 
-  It is a genuine strengthening of the paper's rule, and a harmless one:
-  a validator can check it locally, and it drops at most the `f` visibly
-  equivocating validators' blocks, leaving the `n − f` its quorum needs.
-  `Clause.leaderExcluded` of the common layer, which Optimal-Hydrozoan's
-  validity carries for the same reason. -/
-  leader_clause : ∀ v : Validator,
-    (∀ i ∈ b.refs, ∀ j ∈ b.refs, ∀ x ∈ (blk i).refs, ∀ y ∈ (blk j).refs,
-      (blk x).creator = v → (blk y).creator = v → x = y)
-    ∨ (∀ i ∈ b.refs, (blk i).creator ≠ v)
-
-/-- **FinWhale's validity is the family** at the core's quorum, with distinct
-creators and the leader clause, and so is mechanised. -/
+/-- **Mechanised**, along the family. -/
 instance ValidHere.mechanised :
     Validity.Mechanised
       (ValidHere (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) :=

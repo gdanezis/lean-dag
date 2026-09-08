@@ -7804,23 +7804,16 @@ structure ValidHere (blk : BlockId → Block Validator BlockId Payload)
   distinct_creators : ∀ i ∈ b.refs, ∀ j ∈ b.refs, (blk i).creator = (blk j).creator → i = j
   /-- A non-genesis block carries `n − f` edges by distinct validators. -/
   quorum : 0 < b.round → quorumCard Validator ≤ (creators blk b).card
-  /-- **FinWhale's clause, at every validator.** Either the parent set is
-  consistent about `v` — the parents vote for at most one of `v`'s blocks
-  — or `v`'s block is not among the parents. Consistency is a condition
-  on what the parents *reference*, not on who authored them.
+  /-- **FinWhale's clause**: `Clause.leaderExcluded` of the common layer. -/
+  leader_clause : Clause.leaderExcluded blk b
+```
 
-  **Stated at every validator rather than at the leader**, which is what
-  makes it schedule-free, and what lets a `Dag` be a `Properties.DagRule`
-  universe: a rule whose validity mentions the schedule cannot be
-  related to another DAG by a band, since a band is a statement about
-  blocks (`docs/porting-plan.md`).
+`Clause.leaderExcluded` (§2.4) is the fourth clause, shared with
+Optimal-Hydrozoan (§23.7):
 
-  It is a genuine strengthening of the paper's rule, and a harmless one:
-  a validator can check it locally, and it drops at most the `f` visibly
-  equivocating validators' blocks, leaving the `n − f` its quorum needs.
-  `Clause.leaderExcluded` of the common layer, which Optimal-Hydrozoan's
-  validity carries for the same reason. -/
-  leader_clause : ∀ v : Validator,
+```lean
+def leaderExcluded : Clause Validator BlockId Payload := fun blk b =>
+  ∀ v : Validator,
     (∀ i ∈ b.refs, ∀ j ∈ b.refs, ∀ x ∈ (blk i).refs, ∀ y ∈ (blk j).refs,
       (blk x).creator = v → (blk y).creator = v → x = y)
     ∨ (∀ i ∈ b.refs, (blk i).creator ≠ v)
@@ -8193,11 +8186,8 @@ at unbounded depth, and permanently. **FW13** is the implication:
 
 ```lean
 theorem leaderClause_of_dosValid (hdos : DoSValid U)
-    {b : BlockId} (hb : b ∈ U.ids) (v : Validator) :
-    (∀ i ∈ (U.block b).refs, ∀ j ∈ (U.block b).refs, ∀ x ∈ (U.block i).refs,
-        ∀ y ∈ (U.block j).refs, (U.block x).creator = v →
-        (U.block y).creator = v → x = y)
-      ∨ (∀ i ∈ (U.block b).refs, (U.block i).creator ≠ v)
+    {b : BlockId} (hb : b ∈ U.ids) :
+    Clause.leaderExcluded U.block (U.block b)
 ```
 
 `Dag.ofDoSValid` builds the DAG from it: three validity clauses are the
@@ -10972,7 +10962,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 350 definitions and structures the report names, in
+The 353 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -13522,26 +13512,15 @@ structure ValidHere (blk : BlockId → Block Validator BlockId Payload)
   distinct_creators : ∀ i ∈ b.refs, ∀ j ∈ b.refs, (blk i).creator = (blk j).creator → i = j
   /-- A non-genesis block carries `n − f` edges by distinct validators. -/
   quorum : 0 < b.round → quorumCard Validator ≤ (creators blk b).card
-  /-- **FinWhale's clause, at every validator.** Either the parent set is
-  consistent about `v` — the parents vote for at most one of `v`'s blocks
-  — or `v`'s block is not among the parents. Consistency is a condition
-  on what the parents *reference*, not on who authored them.
-
-  **Stated at every validator rather than at the leader**, which is what
-  makes it schedule-free, and what lets a `Dag` be a `Properties.DagRule`
-  universe: a rule whose validity mentions the schedule cannot be
-  related to another DAG by a band, since a band is a statement about
-  blocks (`docs/porting-plan.md`).
-
-  It is a genuine strengthening of the paper's rule, and a harmless one:
-  a validator can check it locally, and it drops at most the `f` visibly
-  equivocating validators' blocks, leaving the `n − f` its quorum needs.
-  `Clause.leaderExcluded` of the common layer, which Optimal-Hydrozoan's
-  validity carries for the same reason. -/
-  leader_clause : ∀ v : Validator,
-    (∀ i ∈ b.refs, ∀ j ∈ b.refs, ∀ x ∈ (blk i).refs, ∀ y ∈ (blk j).refs,
-      (blk x).creator = v → (blk y).creator = v → x = y)
-    ∨ (∀ i ∈ b.refs, (blk i).creator ≠ v)
+  /-- **FinWhale's clause**: `Clause.leaderExcluded` of the common layer,
+  which Optimal-Hydrozoan's validity carries too. Stated at every
+  validator rather than at the leader, which is what makes it
+  schedule-free — a rule whose validity mentions the schedule cannot be
+  related to another DAG by a band. It is a genuine strengthening of the
+  paper's rule, and a harmless one: a validator checks it locally, and it
+  drops at most the `f` visibly equivocating validators' blocks, leaving
+  the `n − f` its quorum needs. -/
+  leader_clause : Clause.leaderExcluded blk b
 ```
 
 **Validity, as FinWhale extends Mysticeti's.** Every edge sits in the round below, at most one edge per validator, a non-genesis block carries `n − f` of them by distinct validators, and the parent set is either leader-consistent with respect to the leader two rounds down or excludes that leader's block. The last clause is FinWhale's addition and is what the fast path's counting rests on.
@@ -14372,6 +14351,24 @@ def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest) :
 
 **An anchored rule as a base rule.**
 
+#### `ofAnchoredVia`
+
+*def, `Barnacle.Model.Anchored.lean`*
+
+```lean
+def ofAnchoredVia (R : AnchoredRule Validator BlockId Payload P honest) {X : Type}
+    (f : X → BlockRecord Validator BlockId Payload P honest) :
+    BaseRule Validator BlockId Payload where
+  toDagRule := R.toDagRuleVia f
+  full := fun U => View.full (f U)
+  historyView := fun U A hA => (f U).historyView A hA
+  waveLength := R.wave + 1
+  DirectCommitIn := fun {U} V L r => R.Commit (f U) V L r
+  decDirect := fun {U} V L r => R.decCommit (f U) V L r
+```
+
+**An anchored rule read through a projection, as a base rule**: the universes are any type projecting to records.
+
 #### `Laws`
 
 *def, `Barnacle.Odontoceti.Statement.lean`*
@@ -14899,6 +14896,17 @@ def FastUniqueness : Prop :=
 
 `1 ≤ f` is the paper's exact guard. A silently *stronger* guard (`2 ≤ f`), or `qFast` in place of `qFastOpt` (one larger, so the row only gets easier), would keep every witness green: weakenings of a true row are invisible to `decide`, and reading this line is the only defense.
 
+#### `ValidOpt`
+
+*abbrev, `OptimalHydrozoan.Model.Universe.lean`*
+
+```lean
+abbrev ValidOpt : Validity Replica BlockId Unit := fun blk b =>
+  LeanDag.Hydrozoan.ValidWrt blk b ∧ Clause.leaderExcluded blk b
+```
+
+**Optimal-Hydrozoan's validity**: Hydrozoan's, and leader exclusion.
+
 #### `OptUniverse`
 
 *abbrev, `OptimalHydrozoan.Model.Universe.lean`*
@@ -14910,6 +14918,18 @@ abbrev OptUniverse (Replica BlockId : Type*) [Fintype Replica]
 ```
 
 **The block universe**: the block record at Optimal's validity, with non-equivocation asked of the non-Byzantine replicas.
+
+#### `OptUniverse.toBlockRecord`
+
+*def, `OptimalHydrozoan.Model.Universe.lean`*
+
+```lean
+def OptUniverse.toBlockRecord (U : OptUniverse Replica BlockId) :
+    LeanDag.Hydrozoan.BlockUniverse Replica BlockId :=
+  { U with valid := fun i hi => (U.valid i hi).1 }
+```
+
+**The Hydrozoan universe beneath**: the same blocks, the exclusion forgotten. Hydrozoan's rules and lemmas read an Optimal universe through it.
 
 #### `LeaderExcluded`
 
@@ -15168,6 +15188,17 @@ def FastUniqueness : Prop :=
 
 `1 ≤ f` is the paper's exact guard. A silently *stronger* guard (`2 ≤ f`), or `qFast` in place of `qFastOpt` (one larger, so the row only gets easier), would keep every witness green: weakenings of a true row are invisible to `decide`, and reading this line is the only defense.
 
+#### `ValidOpt`
+
+*abbrev, `OptimalHydrozoan.Model.Universe.lean`*
+
+```lean
+abbrev ValidOpt : Validity Replica BlockId Unit := fun blk b =>
+  LeanDag.Hydrozoan.ValidWrt blk b ∧ Clause.leaderExcluded blk b
+```
+
+**Optimal-Hydrozoan's validity**: Hydrozoan's, and leader exclusion.
+
 #### `OptUniverse`
 
 *abbrev, `OptimalHydrozoan.Model.Universe.lean`*
@@ -15179,6 +15210,18 @@ abbrev OptUniverse (Replica BlockId : Type*) [Fintype Replica]
 ```
 
 **The block universe**: the block record at Optimal's validity, with non-equivocation asked of the non-Byzantine replicas.
+
+#### `OptUniverse.toBlockRecord`
+
+*def, `OptimalHydrozoan.Model.Universe.lean`*
+
+```lean
+def OptUniverse.toBlockRecord (U : OptUniverse Replica BlockId) :
+    LeanDag.Hydrozoan.BlockUniverse Replica BlockId :=
+  { U with valid := fun i hi => (U.valid i hi).1 }
+```
+
+**The Hydrozoan universe beneath**: the same blocks, the exclusion forgotten. Hydrozoan's rules and lemmas read an Optimal universe through it.
 
 #### `LeaderExcluded`
 
@@ -17036,7 +17079,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 509 theorems the body or Appendix A names, each
+The 510 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -21477,11 +21520,8 @@ Past the stable round, a validator holds every reliable block of every round bel
 
 ```lean
 theorem leaderClause_of_dosValid (hdos : DoSValid U)
-    {b : BlockId} (hb : b ∈ U.ids) (v : Validator) :
-    (∀ i ∈ (U.block b).refs, ∀ j ∈ (U.block b).refs, ∀ x ∈ (U.block i).refs,
-        ∀ y ∈ (U.block j).refs, (U.block x).creator = v →
-        (U.block y).creator = v → x = y)
-      ∨ (∀ i ∈ (U.block b).refs, (U.block i).creator ≠ v)
+    {b : BlockId} (hb : b ∈ U.ids) :
+    Clause.leaderExcluded U.block (U.block b)
 ```
 
 **The DoS condition implies the leader clause.** If a block's parents are not leader-consistent, the two conflicting versions they reference are both in its causal history, so the leader is exposed in it — and an exposed author may not be cited.
@@ -21823,6 +21863,17 @@ theorem holds : Statement
 theorem holds : Statement
 ```
 
+#### `OptUniverse.leader_excluded`
+
+*theorem, `OptimalHydrozoan.Helpers.Universe.lean`*
+
+```lean
+theorem OptUniverse.leader_excluded (U : OptUniverse Replica BlockId) :
+    LeaderExcluded (S := S) U.toBlockRecord
+```
+
+**An Optimal universe is leader-excluded at every schedule**: the clause at each block, read at the slot.
+
 #### `exists_least`
 
 *theorem, `OptimalHydrozoan.Helpers.Decided.lean`*
@@ -21948,6 +21999,17 @@ theorem holds : Statement
 ```lean
 theorem holds : Statement
 ```
+
+#### `OptUniverse.leader_excluded`
+
+*theorem, `OptimalHydrozoan.Helpers.Universe.lean`*
+
+```lean
+theorem OptUniverse.leader_excluded (U : OptUniverse Replica BlockId) :
+    LeaderExcluded (S := S) U.toBlockRecord
+```
+
+**An Optimal universe is leader-excluded at every schedule**: the clause at each block, read at the slot.
 
 #### `exists_least`
 
