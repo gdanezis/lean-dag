@@ -20,6 +20,7 @@ namespace LeanDag
 
 namespace Integration
 
+open LeanDag.MysticetiProperties
 open LeanDag.Properties LeanDag.Properties.Arcs
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]

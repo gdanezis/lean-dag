@@ -1,6 +1,7 @@
 import LeanDag.Properties.Arcs.Record
 import LeanDag.Integration.Preservation
 import LeanDag.Hybrid.Properties
+import LeanDag.Mysticeti.Record
 /-!
 # Garbage collection, crash recovery and re-genesis for Hybrid
 
@@ -15,6 +16,7 @@ namespace LeanDag
 
 namespace HybridProperties
 
+open LeanDag.MysticetiProperties
 open LeanDag.Properties LeanDag.Properties.Arcs LeanDag.Integration
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]

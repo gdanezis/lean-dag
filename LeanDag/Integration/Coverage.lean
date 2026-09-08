@@ -67,7 +67,7 @@ theorem synchronisedOn_skipFill_above (sk : SkipMsg U) {T : Finset Validator}
     {R R' : ℕ} (hs : SynchronisedOn U T R) (hR : R ≤ R') (hR' : sk.r < R') :
     SynchronisedOn sk.skipFill T R' := by
   have h := Timed.synchronisedOn_of_rebased
-    (R := MysticetiProperties.mysticetiRule) (Properties.Arcs.sustains_skipFill sk)
+    (R := MysticetiProperties.mysticetiRule) (MysticetiProperties.sustains_skipFill sk)
     (T := T) (r := R') (Nat.succ_le_of_lt hR') (Nat.zero_le _)
     (Timed.SynchronisedOn.mono (MysticetiProperties.synchronisedOn_eq.mpr hs) hR)
   exact MysticetiProperties.synchronisedOn_eq.mp (by simpa using h)

@@ -21746,6 +21746,47 @@ theorem decided_agree_chop (hd : G ≤ S.slotRound d)
 
 **G4 re-derived.** `GC/ChopDecided.decided_agree_chop` proves this by running the core's uniqueness inside the truncation and carrying the verdict across by induction. Here it is two properties applied.
 
+#### `decided_fill_of_persist`
+
+*theorem, `Mysticeti.Record.lean`*
+
+```lean
+theorem decided_fill_of_persist [S : Slots Validator] (sk : SkipMsg U)
+    {V : View Validator BlockId Payload U} {k : ℕ} {v : Option BlockId}
+    (h : Decided U V k v) :
+    Decided sk.skipFill (sk.liftView V) k v
+```
+
+**Verdicts survive the core's fill**, from the core's `Persist`.
+
+#### `decided_fill_agree_of_properties`
+
+*theorem, `Mysticeti.Record.lean`*
+
+```lean
+theorem decided_fill_agree_of_properties [S : Slots Validator] (sk : SkipMsg U)
+    {V : View Validator BlockId Payload U}
+    {W : View Validator BlockId Payload sk.skipFill} {k : ℕ} {v w : Option BlockId}
+    (hv : Decided U V k v) (hw : Decided sk.skipFill W k w) : v = w
+```
+
+**Agreement across the core's recovery**: a verdict reached before agrees with any reached after.
+
+#### `decided_none_fresh`
+
+*theorem, `Mysticeti.Record.lean`*
+
+```lean
+theorem decided_none_fresh [S : Slots Validator] (sk : SkipMsg U)
+    {V : View Validator BlockId Payload U} {T : Finset Validator} {k : ℕ}
+    (hcard : quorumCard Validator ≤ T.card)
+    (hlead : S.leader k = sk.v1) (hk1 : sk.r0 < S.slotRound k) (hk2 : S.slotRound k ≤ sk.r)
+    (hpres : PresentAt MysticetiProperties.mysticetiRule V T (S.slotRound k + 1)) :
+    Decided sk.skipFill (sk.liftView V) k none
+```
+
+**SS3, as a verdict, from the properties.** The slot the recovering replica leads at a gap round is decided `none` on the lifted view, given a quorum of the pre-crash view present one round above it. No induction; the fill is an extension, and the core skips what nothing supports.
+
 #### `agree`
 
 *theorem, `Nemo.Carrier.lean`*
@@ -22211,47 +22252,6 @@ theorem decided_none_of_novel_agree {R : DagRule Validator BlockId Payload}
 ```
 
 **The prompt skip conflicts with no verdict**, on any further extension a caught-up view reaches.
-
-#### `decided_fill_of_persist`
-
-*theorem, `Properties.Arcs.SafeSkip.lean`*
-
-```lean
-theorem decided_fill_of_persist [S : Slots Validator] (sk : SkipMsg U)
-    {V : View Validator BlockId Payload U} {k : ℕ} {v : Option BlockId}
-    (h : Decided U V k v) :
-    Decided sk.skipFill (sk.liftView V) k v
-```
-
-**Verdicts survive the core's fill**, from the core's `Persist`.
-
-#### `decided_fill_agree_of_properties`
-
-*theorem, `Properties.Arcs.SafeSkip.lean`*
-
-```lean
-theorem decided_fill_agree_of_properties [S : Slots Validator] (sk : SkipMsg U)
-    {V : View Validator BlockId Payload U}
-    {W : View Validator BlockId Payload sk.skipFill} {k : ℕ} {v w : Option BlockId}
-    (hv : Decided U V k v) (hw : Decided sk.skipFill W k w) : v = w
-```
-
-**Agreement across the core's recovery**: a verdict reached before agrees with any reached after.
-
-#### `decided_none_fresh`
-
-*theorem, `Properties.Arcs.SafeSkip.lean`*
-
-```lean
-theorem decided_none_fresh [S : Slots Validator] (sk : SkipMsg U)
-    {V : View Validator BlockId Payload U} {T : Finset Validator} {k : ℕ}
-    (hcard : quorumCard Validator ≤ T.card)
-    (hlead : S.leader k = sk.v1) (hk1 : sk.r0 < S.slotRound k) (hk2 : S.slotRound k ≤ sk.r)
-    (hpres : PresentAt MysticetiProperties.mysticetiRule V T (S.slotRound k + 1)) :
-    Decided sk.skipFill (sk.liftView V) k none
-```
-
-**SS3, as a verdict, from the properties.** The slot the recovering replica leads at a gap round is decided `none` on the lifted view, given a quorum of the pre-crash view present one round above it. No induction; the fill is an extension, and the core skips what nothing supports.
 
 #### `Stack.rebased`
 
