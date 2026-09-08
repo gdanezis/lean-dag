@@ -2,31 +2,14 @@ import LeanDag.Hybrid.Rules
 /-!
 # Human-reviewed base specification for resilient checkpoints
 
-Every declaration in this file is part of the trusted protocol model.
-Human reviewers must check that its types, predicates, fault bounds, and
-structure fields express the intended checkpoint protocol. Structure
-fields are contract obligations: concrete executions must prove them,
-while generic downstream theorems use them as assumptions. Proof files
-machine-check consequences of these declarations but cannot establish
-that this specification matches an implementation or paper.
-
-Checkpoint signatures are emitted from explicit per-validator protocol
-state. A correct signer has one state at each `(epoch,height)`, and its
-states extend with height. Byzantine and alive-but-corrupt validators
-are not constrained by these transition rules. Certificates contain
-the actual authenticated proposal messages from which their signer sets
-are obtained.
-
-The checkpoint layer takes per-validator histories and emitted messages
-as execution input. Those inputs may describe forks, including forks
-caused by alive-but-corrupt behavior. This layer neither derives such a
-fork from the DAG model nor composes its results with the DAG safety
-proofs; its guarantee is conditional checkpoint safety for any execution
-satisfying the state and quorum clauses below.
-
-Histories are represented directly as lists. Equality of histories is
-the minimal abstraction of collision-resistant content binding; no
-cryptographic or checkpoint-safety conclusion is assumed.
+Every declaration here is part of the trusted protocol model; human
+reviewers must check that its types, predicates, fault bounds and
+structure fields express the intended checkpoint protocol, since proof
+files can only check consequences of these declarations, not that they
+match an implementation or paper. Checkpoint signatures come from
+per-validator protocol state, and histories are compared by equality —
+the minimal abstraction of collision-resistant content binding, with no
+cryptographic conclusion assumed.
 -/
 
 namespace LeanDag.Hybrid.Checkpoint
@@ -56,15 +39,12 @@ structure ChkProp (Validator Value : Type*) where
   checkpoint : CheckpointData Value
   deriving DecidableEq
 
-/-- Checkpoint-specific extension of the imported `HybridFaults` model.
-This is not a second definition of hybrid faults: `H` supplies the
-Byzantine/crash classes and their bounds, while this structure adds the
-AbC class and the stronger checkpoint resilience bound.
-
-The disjointness fields preserve the paper's interpretation as distinct
-fault classes. Current safety derivations do not consume them: their
-cardinality arguments conservatively use union upper bounds and remain
-valid if classes overlap. -/
+/-- Checkpoint-specific extension of the imported `HybridFaults` model:
+`H` supplies the Byzantine/crash classes and bounds, this structure adds
+the AbC class and the stronger checkpoint resilience bound. The
+disjointness fields are unused by current safety derivations, whose
+cardinality arguments use union upper bounds valid even if classes
+overlap. -/
 structure Model (Validator Value : Type*) [Fintype Validator]
     [DecidableEq Validator] [H : HybridFaults Validator] where
   /-- Alive-but-corrupt fault bound. -/
@@ -98,10 +78,9 @@ def RecoveryCorrect : Finset Validator :=
   M.ReliableSigner \ H.crash
 
 /-- A protocol execution exposes local checkpoint state, emitted
-messages, and recorded certificates. Its fields are required execution
-invariants, not conclusions proved by this structure. The state clauses
-describe normal append-only transitions; signatures inherit safety from
-them through `emitted_from_state`. -/
+messages, and recorded certificates — required execution invariants,
+not conclusions proved by this structure; signatures inherit safety
+from the state clauses through `emitted_from_state`. -/
 structure Execution (Value : Type*) where
   /-- Genesis history adopted for each recovery epoch. -/
   genesis : ℕ → History Value
@@ -171,18 +150,13 @@ def Valid (payload : CertificatePayload (Validator := Validator)
 
 end CertificatePayload
 
-/-- A second-phase witness says that `sender` received and validated a
-concrete first-phase certificate for exactly `checkpoint`. The
-certificate is retained in the message object rather than represented
-by an abstract possession predicate, so later proofs can inspect the
-same signer evidence that justified the witness.
-
-For a recovery-correct sender, `recorded` requires durable protocol
-storage before the witness is emitted. This lets a finality quorum yield
-at least one honest, available validator that can resubmit the finalized
-checkpoint during recovery. The implication deliberately constrains
-only recovery-correct senders; Byzantine, crashed, and AbC senders make
-no storage promise. -/
+/-- A second-phase witness says `sender` received and validated a
+concrete first-phase certificate for exactly `checkpoint`, retained in
+the message object so later proofs can inspect it directly. For a
+recovery-correct sender, `recorded` requires durable storage before the
+witness is emitted, so a finality quorum yields an honest, available
+resubmitter during recovery; other sender classes make no such
+promise. -/
 structure ChkWitness (checkpoint : CheckpointData Value) where
   /-- Authenticated validator claiming to have validated the certificate. -/
   sender : Validator

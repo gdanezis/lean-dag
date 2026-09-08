@@ -4,16 +4,13 @@ import LeanDag.Mysticeti.Liveness
 # The lifted view, and reachability across the fill
 
 What is left of the bespoke verdict transport across a Safe Skip fill.
-The transport itself — every verdict a view reached before the fill
-re-derives in the extension — is `Arcs/SafeSkip.lean`'s
-`decided_fill_of_persist`, which is `Persist` applied, and the dozen
-rule-by-rule transfer lemmas that carried it by induction were deleted
-with the induction (`docs/target-properties.md` §11.12). Two things
-remain because other files read them: the view of the extension a
-pre-crash view lifts to, which `Arcs/SafeSkip.lean` and the hybrid,
-Odontoceti and Mahi-Mahi cells consume, and the fact that reachability
-from an old block never leaves the old ids, which the exposure and
-coverage arcs consume.
+The transport itself, that every verdict a view reached before the fill
+re-derives in the extension, is `Arcs/SafeSkip.lean`'s
+`decided_fill_of_persist`, `Persist` applied. Two things remain because
+other files read them: the view of the extension a pre-crash view
+lifts to, consumed by `Arcs/SafeSkip.lean` and the hybrid, Odontoceti
+and Mahi-Mahi cells; and that reachability from an old block never
+leaves the old ids, consumed by the exposure and coverage arcs.
 -/
 
 namespace LeanDag

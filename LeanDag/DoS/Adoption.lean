@@ -5,42 +5,15 @@ import Mathlib.Data.Finset.Max
 /-!
 # The adoption collapse, and the main bound
 
-`dos-equivocation-and-growth.md` §5, the machinery C1′ asked for and the
-first installment of the bound itself.
-
-With self-parents (S10), an author's blocks inside a history organise into
-**chains** under the self-parent edge, and the whole counting question
-reduces to: *how many chains of one author can a single history hold?* The
-route:
-
-1. **Chains are exact** (D21/D11): within any history that is clean about
-   `X` — in particular within any `X`-authored block's own history — there
-   is at most one `X`-block per round, so `X`-content *is* a chain.
-2. **Every `X`-block lies below a top** (`exists_top_of_mem_history`): an
-   `X`-block with no `X`-child in the history. So per round, the `X`-count
-   is at most the number of tops (`card_filter_creator_le_card_topsOf`).
-3. **Tops funnel through namers**: a top that is not `b` itself is
-   referenced, and its referencer cannot be `X`-authored — so it is *named*
-   by another author's block.
-4. **One chain adopts one top** (`top_eq_of_mem_namer_history`, the
-   adoption collapse): a namer's history has room for only one `X`-chain,
-   and any named `X`-block strictly below another acquires an `X`-child —
-   so it was no top. Hence two namers on one chain name the *same* top, and
-   distinct tops need distinct namer **authors**.
-
-When every author other than `X` is unexposed — so each has all its blocks
-on a single chain (`mem_history_of_creator_eq_of_not_exposedIn`) — step 4
-bounds the tops by the number of *other authors*, `3f`, and the whole
-history by
-
-> `|H(b)| ≤ (6f+1)(r+1)` — **linear in `r`**  (`card_history_le_of_unique_equivocator`)
-
-At `f ≤ 1` the hypothesis is free (exposure is Byzantine, D15, and there is
-at most one Byzantine validator), so this settles C1′ unconditionally at
-`f = 1` (`card_history_le_of_f_le_one`). For `f ≥ 2` with several exposed
-authors, exposed chains can name each other and the count needs the
-distinct-author-sequence induction of §5 — the machinery here is its base
-case, and what remains is the recursion over author sets.
+`dos-equivocation-and-growth.md` §5. With self-parents, an author's blocks
+in a history organise into chains, and counting reduces to how many
+chains one author can hold: every block lies below a top
+(`exists_top_of_mem_history`), a top other than `b` is named by another
+author's block, and one namer names only one chain's top
+(`top_eq_of_mem_namer_history`, the adoption collapse). When every other
+author is unexposed, tops are bounded by the `3f` other authors, giving
+`|H(b)| ≤ (6f+1)(r+1)` (`card_history_le_of_unique_equivocator`), which
+settles C1′ unconditionally at `f = 1`.
 -/
 
 namespace LeanDag
@@ -69,8 +42,7 @@ theorem exists_referencer {b i : BlockId} (hb : b ∈ U.ids) (hi : i ∈ history
 
 /-- **Unexposed means one chain.** Two same-author blocks of a history, the
 author unexposed there, are chain-related: the lower lies in the higher
-one's history. With D20 this says an unexposed author's content *is* a
-single self-parent chain. -/
+one's history. -/
 theorem mem_history_of_creator_eq_of_not_exposedIn {b i j : BlockId} {X : Validator}
     (hb : b ∈ U.ids) (hX : ¬ ExposedIn U b X)
     (hi : i ∈ history U b) (hj : j ∈ history U b)
@@ -160,9 +132,7 @@ theorem card_filter_creator_le_card_topsOf (hdos : DoSValid U) {b : BlockId}
       (h₁.2.trans htc.symm) (h₂.2.trans htc.symm) hrnd
 
 /-- **The adoption collapse.** Two tops, one lying inside the history of a
-block that references the other, coincide: a namer's history has room for
-only one `X`-chain, and a named `X`-block strictly below another has an
-`X`-child there — so it was no top. -/
+block that references the other, coincide. -/
 theorem top_eq_of_mem_namer_history (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids)
     {X : Validator} {t₁ t₂ j : BlockId}
     (ht₁ : t₁ ∈ topsOf U b X) (ht₂ : t₂ ∈ topsOf U b X)
@@ -258,12 +228,7 @@ theorem card_topsOf_le (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) {X :
   omega
 
 /-- **The main bound, unique-equivocator regime.** If at most one author is
-exposed in `b`'s history, the history is linear in the round:
-
-> `|H(b)| ≤ (6f+1)(r+1)`
-
-The exposed author's fiber is priced by tops × rounds, every other fiber by
-its single chain. -/
+exposed in `b`'s history, `|H(b)| ≤ (6f+1)(r+1)`. -/
 theorem card_history_le_of_unique_equivocator (hdos : DoSValid U) {b : BlockId}
     (hb : b ∈ U.ids) {X : Validator} (hother : ∀ W, W ≠ X → ¬ ExposedIn U b W) :
     (history U b).card ≤ ((2 * Fintype.card Validator - 1)) * ((U.block b).round + 1) := by

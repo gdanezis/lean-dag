@@ -4,33 +4,16 @@ import Mathlib.Data.Finset.Prod
 /-!
 # Self-parent chains, and what a reference costs
 
-`dos-equivocation-and-growth.md` §5, results **D20**–**D24**.
-
-The self-parent condition (`ValidWrt.self_parent`) says a non-genesis block
-references *some* block by its own creator. This file develops what that
-buys against the DoS condition, and the shape of the results is the point:
-
-* **D20** — chains are *contiguous to the ground*: below any block sits a
-  block by its author at **every** round down to `0`. There are no
-  round-skipping "singleton" blocks that shed their author's past.
-* **D21** — under `DoSValid`, **no block is exposed to its own author**: a
-  block always references its self-parent, so an author whose equivocation
-  is visible in a history can never author a block *on top of* that history
-  again. Equivocation cannot be laundered through one's own later blocks.
-* **D22/D23** — the exact cost of a reference. Naming an author at round
-  `r` puts **exactly one** block of that author at every round below into
-  the history: no more (that would be exposure, D11) and no fewer (the
-  chain, D20). A reference buys a full, single, clean chain — nothing else.
-* **D24** — the floor: a valid block at round `r` carries at least
-  `(n−f)·r + 1` blocks, because its quorum of referenced authors each
-  contributes a full disjoint chain.
-
-Together D21–D23 close the laundering gap that made C1′ false without the
-condition: the super-linear families all needed a fresh block that adopts a
-fresh equivocation branch while carrying none of its author's past, and D20
-says no such block exists. What remains open (the adoption-collapse bound,
-§5) is bounding the content of authors a history holds but does *not*
-reference.
+`dos-equivocation-and-growth.md` §5, results D20-D24. The self-parent
+condition says a non-genesis block references some block by its own
+creator. D20 says chains are contiguous to the ground: a block by an
+author at every round down to 0. D21 says no block is exposed to its own
+author, so equivocation cannot be laundered through one's own later
+blocks. D22/D23 give the exact cost of a reference: naming an author at
+round `r` puts exactly one block of that author at every round below
+into the history. D24 is the floor: a valid block at round `r` carries
+at least `(n−f)·r + 1` blocks. Together D21-D23 close the laundering gap
+that made C1′ false without the condition.
 -/
 
 namespace LeanDag
@@ -57,23 +40,17 @@ private theorem exists_self_ancestor_aux (n : ℕ) :
       exact ⟨i, history_subset_of_reaches hb (Reaches.single hp) hi,
         by rw [hic, hpc], hir⟩
 
-/-- **D20 (chains reach the ground).** A block's history holds a block by its
-own author at *every* round below it. Contiguity is the content: an author
-cannot appear at round `t` without a full pedigree at `t-1, …, 0`. -/
+/-- **D20 (chains reach the ground).** A block's history holds a block by
+its own author at every round below it. -/
 theorem exists_self_ancestor {b : BlockId} (hb : b ∈ U.ids) {t : ℕ}
     (ht : t ≤ (U.block b).round) :
     ∃ i ∈ history U b,
       (U.block i).creator = (U.block b).creator ∧ (U.block i).round = t :=
   exists_self_ancestor_aux ((U.block b).round - t) hb (by omega)
 
-/-- **D21 (no self-laundering).** Under the DoS condition no valid block is
-exposed to its own author. A block cites its self-parent, and `DoSValid`
-forbids citing an exposed author — so once an author's equivocation is
-visible in some history, that author can never build on that history again.
-
-This is the indispensable half of D20: the fresh "carrier" block that adopts
-an equivocation branch while carrying none of its author's past — the mechanism
-of every super-linear history family — cannot exist. -/
+/-- **D21 (no self-laundering).** Under the DoS condition no valid block
+is exposed to its own author: once an author's equivocation is visible
+in some history, that author can never build on that history again. -/
 theorem not_exposedIn_self_creator (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) :
     ¬ ExposedIn U b (U.block b).creator := by
   rcases Nat.eq_zero_or_pos (U.block b).round with h0 | hpos
@@ -81,9 +58,8 @@ theorem not_exposedIn_self_creator (hdos : DoSValid U) {b : BlockId} (hb : b ∈
   · obtain ⟨p, hp, hpc⟩ := (U.valid b hb).self_parent hpos
     exact hpc ▸ hdos b hb p hp
 
-/-- **D22, per round.** A block's own author sits in its history *exactly
-once* per round: at least once by the chain (D20), at most once because a
-second block would be self-exposure (D21 + D11). -/
+/-- **D22, per round.** A block's own author sits in its history exactly
+once per round: at least once by D20, at most once by D21 and D11. -/
 theorem card_historyBlocksOf_self (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids)
     {t : ℕ} (ht : t ≤ (U.block b).round) :
     (historyBlocksOf U b (U.block b).creator t).card = 1 := by
@@ -92,11 +68,9 @@ theorem card_historyBlocksOf_self (hdos : DoSValid U) {b : BlockId} (hb : b ∈ 
   obtain ⟨i, hi, hic, hir⟩ := exists_self_ancestor hb ht
   exact Finset.card_pos.mpr ⟨i, mem_historyBlocksOf.mpr ⟨hi, hic, hir⟩⟩
 
-/-- **D23, per round.** Referencing a block puts its author into the history
-exactly once per round strictly below — the referenced author's chain, whole
-and nothing else. `≤` is the DoS condition itself (the reference is only
-legal because the author is unexposed); `≥` is the referenced block's chain
-(D20) sitting inside the referencing history. -/
+/-- **D23, per round.** Referencing a block puts its author into the
+history exactly once per round strictly below: `≤` from the DoS
+condition, `≥` from the referenced block's own chain (D20). -/
 theorem card_historyBlocksOf_of_mem_refs (hdos : DoSValid U) {b p : BlockId}
     (hb : b ∈ U.ids) (hp : p ∈ (U.block b).refs) {t : ℕ}
     (ht : t < (U.block b).round) :
@@ -109,8 +83,7 @@ theorem card_historyBlocksOf_of_mem_refs (hdos : DoSValid U) {b p : BlockId}
     ⟨history_subset_of_reaches hb (Reaches.single hp) hi, hic, hir⟩⟩
 
 /-- **D22, totalled.** The own-author content of a history is exactly
-`round + 1` blocks — one per round, the block's own chain, with the block
-itself at the top. -/
+`round + 1` blocks. -/
 theorem card_filter_self_creator (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) :
     ((history U b).filter fun i => (U.block i).creator = (U.block b).creator).card
       = (U.block b).round + 1 := by
@@ -133,10 +106,8 @@ theorem card_filter_self_creator (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U
     obtain ⟨i, hi, hic, hir⟩ := exists_self_ancestor hb (t := t) (by omega)
     exact ⟨i, Finset.mem_filter.mpr ⟨hi, hic⟩, hir⟩
 
-/-- **D23, totalled.** For any *other* author the block references, the cost
-is exactly `round` blocks: rounds `0` to `round - 1`, once each, and nothing
-at the block's own round (only `b` itself sits there). Referencing an author
-is neither free nor inflatable — its price is one clean chain, in full. -/
+/-- **D23, totalled.** For any other author the block references, the
+cost is exactly `round` blocks: one clean chain, in full. -/
 theorem card_filter_creator_of_mem_refs (hdos : DoSValid U) {b p : BlockId}
     (hb : b ∈ U.ids) (hp : p ∈ (U.block b).refs)
     (hne : (U.block p).creator ≠ (U.block b).creator) :
@@ -168,14 +139,9 @@ theorem card_filter_creator_of_mem_refs (hdos : DoSValid U) {b p : BlockId}
     exact ⟨i, Finset.mem_filter.mpr
       ⟨history_subset_of_reaches hb (Reaches.single hp) hi, hic⟩, hir⟩
 
-/-- **D24 (the floor).** With self-parents, histories have a *minimum* size:
-a valid block at round `r` carries at least `(n−f)·r + 1` blocks — a full
-chain for each of its quorum of referenced authors, plus itself. Needs no
-DoS hypothesis: it is pure validity.
-
-The flip side of every upper bound in the plan: under this model storage is
-`Θ(f·r)` per history from below, so the open question is only how far above
-the floor an adversary can push. -/
+/-- **D24 (the floor).** With self-parents, a valid block at round `r`
+carries at least `(n−f)·r + 1` blocks — a full chain for each of its
+quorum of referenced authors, plus itself. Needs no DoS hypothesis. -/
 theorem card_history_ge {b : BlockId} (hb : b ∈ U.ids) (h0 : 0 < (U.block b).round) :
     (quorumCard Validator) * (U.block b).round + 1 ≤ (history U b).card := by
   set r := (U.block b).round with hr

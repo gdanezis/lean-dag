@@ -4,19 +4,11 @@ import LeanDag.Common.Ledger
 # Prefix agreement — statement
 
 The output guarantee: replicas' committed sequences are consistent.
-`commitSeq` is the shape of the paper's `ExtendCommitSeq` result — the
-committed leaders in slot order, skipped slots dropped — and `ledger`
-applies a linearizer to every committed leader, the paper's
-`LinearizeSubDags` **abstracted to an arbitrary function**: determinism
-is the only property the results use, so the claims hold for any
-concrete traversal.
-
-Three claims: equal horizons give equal sequences; different horizons
-give a prefix (`<+:` is `List.IsPrefix`); and ledgers inherit prefix
-consistency for every linearizer. `DecidesBelow` requires a derivation
-for every slot below the horizon — an undecided slot has none — so the
-claims speak exactly where replicas have produced output, matching the
-no-conflicting-decision reading of slot agreement.
+`commitSeq` is the committed leaders in slot order, skips dropped;
+`ledger` applies a linearizer, abstracted to an arbitrary function since
+determinism is all the results use. Three claims: equal horizons give
+equal sequences, different horizons give a prefix, and ledgers inherit
+prefix consistency for every linearizer.
 -/
 
 namespace LeanDag
@@ -28,10 +20,6 @@ namespace PrefixAgreement
 section Sequences
 
 variable {BlockId : Type*}
-
-/-! The committed leaders below slot `n`, in slot order, skips
-dropped — the output shape of the paper's `ExtendCommitSeq` — is the
-record's `commitSeq` (`Ledger.lean`). -/
 
 /-- A ledger: every committed leader flattened by a linearizer — the
 paper's `LinearizeSubDags`, abstracted to an arbitrary function. -/

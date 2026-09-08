@@ -5,28 +5,14 @@ import LeanDag.Hybrid.Faults
 /-!
 # Preservation: the transformer × invariant table, layer U
 
-Each lemma here has the shape
-
-    I U  →  I (F U)
-
-for a named invariant `I` and a universe transformer `F`, so that every
-property stated against named invariants transfers to the transformed
-universe with no further proof. The table this file fills:
-
-| Invariant | `chop U G` | `skipFill` |
-|:---|:---|:---|
-| `HonestNoEquiv` | I2 | I3 |
-| `SynchronisedOn` | I2, `Integration.synchronisedOn_chop`, from `Sustains` | I4 — *refuted* for a set holding the recovering validator, `Integration/Coverage.lean` |
-
-`Populated`, `DoSValid` and the verdict facts already had their cells
-filled by the arcs themselves (`populated_chop`, `dosValid_chop`,
-`decided_chop`; SS2, SS5).
-
-One wrinkle recurs and is worth naming once: `chopBlock` rebases rounds
-to `round − G`, so equal *chopped* rounds do not by themselves give
-equal original rounds — truncated subtraction is faithful only above
-the cut, and the `chop` filter supplies `G ≤ round` on both sides to
-close the gap. Every round-sensitive `chop` lemma below pays it.
+Each lemma has the shape `I U → I (F U)` for a named invariant `I` and a
+universe transformer `F`, so a property stated against the invariant
+transfers with no further proof. This file fills `HonestNoEquiv` and
+`SynchronisedOn` against `chop` and `skipFill`; `Populated`, `DoSValid`
+and the verdict facts already had their cells filled by the arcs
+themselves. `chop` rebases rounds to `round − G`, so equal chopped
+rounds need `G ≤ round` on both sides before truncated subtraction is
+faithful.
 -/
 
 namespace LeanDag
@@ -36,13 +22,9 @@ namespace Integration
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 
-/-! ## I2 — truncation preserves honest non-equivocation
-
-The lemma that makes report §14 (hybrid) compose with report §9 (garbage collection):
-a hybrid-model universe stays a hybrid-model universe below a horizon.
-Truncation removes blocks and never adds them, and `HonestNoEquiv` is
-universally quantified over pairs of retained blocks, so it restricts
-downward. -/
+/-! ## I2 — truncation preserves honest non-equivocation: `chop` removes
+blocks and never adds them, and `HonestNoEquiv` is universal over pairs
+of retained blocks, so it restricts downward. -/
 
 section Chop
 
@@ -61,14 +43,9 @@ theorem honestNoEquiv_chop (hne : HonestNoEquiv U) :
 
 end Chop
 
-/-! ## I4 — truncation preserves coverage, above the cut
-
-Coverage transfers, with the round offset the truncation introduces:
-a chopped round `n` is original round `G + n`, so a chopped universe is
-synchronised from `R'` whenever the original is synchronised from
-`R ≤ G + R'`. The base layer is not an exception here, unlike
-`supporters_chop`: the clause only constrains blocks at chopped round
-`n + 1 ≥ 1`, whose references `chop` retains. -/
+/-! ## I4 — truncation preserves coverage, above the cut: a chopped round
+`n` is original round `G + n`, so a chopped universe is synchronised
+from `R'` whenever the original is synchronised from `R ≤ G + R'`. -/
 
 section Coverage
 
@@ -78,15 +55,9 @@ variable {T : Finset Validator} {R R' : ℕ}
 
 end Coverage
 
-/-! ## I3 — the fill preserves honest non-equivocation
-
-The recovering validator is honest, so the blocks its fill creates must
-not equivocate against its own history. That is exactly what the
-record's fill proves for the *derived* correct class; this is the same
-argument at the wider honest class, for any reading of the filled
-blocks, and it turns on the same clause — `hgap`, the crash itself. A
-fresh block sits at a gap round, an old block by `v1` at a gap round
-contradicts `hgap`, and two fresh blocks at one round are one block. -/
+/-! ## I3 — the fill preserves honest non-equivocation: the same
+argument the record's fill proves for the derived correct class, at the
+wider honest class, turning on `hgap`. -/
 
 section Fill
 
@@ -143,8 +114,7 @@ theorem honestNoEquiv_addGenesis (hne : HonestNoEquiv U)
     exact hne i ho j ho' hib hij hround
 
 /-- **Honest non-equivocation is a mechanised invariant**: it survives
-the cut, the copy fill and re-genesis, so Orcaella's carrier reads as
-records under it. -/
+the cut, the copy fill and re-genesis. -/
 instance honestNoEquiv.mechanised :
     BlockRecord.Invariant.Mechanised
       (HonestNoEquiv (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) where

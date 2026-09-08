@@ -2,28 +2,15 @@ import LeanDag.Common.Block
 /-!
 # The block record
 
-**One universe shape for every rule.** A universe is a set of
-identifiers, a block map, closure under references, validity of every
-block against a rule's own predicate, and one block per author per
-round for the authors the rule's fault model constrains. The core, Nemo
-and FinWhale *are* this record at their own validity predicate and
-honest set; Hydrozoan is it through its block adapter
-(`Hydrozoan/Helpers/Record.lean`); Orcaella and Optimal-Hydrozoan are a
-neighbour's record under one further invariant.
-
-**What a validity predicate owes the mechanisms** is `Validity.Mechanised`:
-references sit one round below, the predicate reads only referenced
-blocks, a reference-free round-zero block is valid, and validity
-survives the cut strictly above the horizon. With those four facts the
-cut (`Record/Chop.lean`), the fill (`Record/Fill.lean`) and re-genesis
-(`Record/Genesis.lean`) are built once, and a rule's mechanism cell is
-the generic construction at its instance. A predicate that does not
-read the author (`Validity.CopyStable`) also gets the copy fill's
-validity for free; the core's fill adds a self reference for its
-self-parent clause and proves that block valid itself.
-
-The block-level cut `chopBlk` lives here because it is what the
-`chops` obligation is stated against.
+**One universe shape for every rule**: a set of identifiers, a block
+map, closure under references, validity against the rule's own
+predicate, and one block per author per round for the authors its fault
+model constrains. A validity predicate owes the mechanisms
+`Validity.Mechanised` — references sit one round below, the predicate
+reads only referenced blocks, a reference-free round-zero block is
+valid, and validity survives the cut above the horizon — from which the
+cut, the fill and re-genesis are built once. `chopBlk`, the block-level
+cut, lives here because the `chops` obligation is stated against it.
 -/
 
 namespace LeanDag

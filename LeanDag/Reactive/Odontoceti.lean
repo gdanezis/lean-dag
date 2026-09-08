@@ -3,21 +3,11 @@ import LeanDag.Odontoceti.Liveness
 /-!
 # Reactive Odontoceti
 
-The two-round rule, run reactively. Odontoceti has no certificate stage —
-its direct commit counts *supporters* at the round above the leader — so
-the vote stage of `ReactivePace` is the entire reactive protocol: a
-validator waits at `r + 1` only until it holds the leader's block, with
-the timeout as the fallback, and no further wait exists to react out of.
-
-That makes the two-round protocol the natural home of the reactive
-discipline. Under Mysticeti a fast slot still crosses two reactive exits;
-here it crosses one, and the latency of a fast slot is a single
-delivery plus processing (`ReactivePace.built_succ_le_of_fast`).
-
-As with the Mysticeti file, the commit rule is consumed as found — in
-particular `Odontoceti.Decided` with its canonicity premise — and the
-`Faults5` committee is required only where the rule requires it, not by
-the schedule.
+The two-round rule, run reactively. Odontoceti's direct commit counts
+supporters at the round above the leader with no certificate stage, so
+`ReactivePace`'s vote stage is the entire reactive protocol: a fast
+slot crosses one reactive exit rather than Mysticeti's two, and its
+latency is a single delivery plus processing.
 -/
 
 namespace LeanDag

@@ -3,24 +3,13 @@ import LeanDag.FinWhale.Evidence
 # FinWhale — what follows from Lemma 4
 
 The paper's Lemmas 2, 5, 8, and the direct-commit halves of 9 and 10.
-
-**Voters for conflicting blocks are disjoint** (`parentsVoting_disjoint`),
-because validity gives a block one edge per validator and two blocks of a
-slot share an author. That single fact carries Lemma 2 and Lemma 8, and
-it is also what Lemma 9's third case actually needs.
-
-**Lemma 9's third case is right for a reason the paper does not give.**
-The paper argues that under a fast commit for `b`, "any honest validator
-can produce FP-evidence blocks only for `b`, and not for the conflicting
-block `b′`, by Lemma 4". Lemma 4 says every round-`(r+2)` block *is*
-FP-evidence for `b`; it does not say none is *also* FP-evidence for `b′`,
-and the paper elsewhere notes that a DAG may carry FP-evidence for
-conflicting blocks at once. The conclusion holds, and
-`not_fpEvidence_conflicting` proves it, but from the definition's own two
-branches rather than from Lemma 4: a block that has seen the equivocation
-carries fewer than `f + p` parents voting for `b′`, which is what its
-branch forbids, and one that has not is leader-consistent, so its parents
-vote for at most one of the pair.
+Voters for conflicting blocks are disjoint (`parentsVoting_disjoint`),
+since validity gives a block one edge per validator and two blocks of a
+slot share an author; that fact carries Lemma 2 and Lemma 8.
+`not_fpEvidence_conflicting` proves Lemma 9's third case from
+FP-evidence's own two branches rather than from Lemma 4 as the paper
+argues, since Lemma 4 does not itself rule out a block being evidence
+for both of a conflicting pair.
 -/
 
 namespace LeanDag
@@ -32,9 +21,9 @@ variable [F : Faults Validator] [P : Params Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 variable {D : Dag Validator BlockId Payload}
 
-/-- **A validator's parent votes once.** A block carries one edge per
-validator, and two blocks of a slot share an author, so no parent votes
-for both and the two voter sets are disjoint. -/
+/-- **A validator's parent votes once**: one edge per validator and a
+shared author across the slot's blocks make the two voter sets
+disjoint. -/
 theorem parentsVoting_disjoint {b l l' : BlockId} (hb : b ∈ D.ids)
     (hconf : Conflicting D l l') :
     Disjoint (parentsVoting D b l) (parentsVoting D b l') := by
@@ -51,9 +40,9 @@ theorem parentsVoting_disjoint {b l l' : BlockId} (hb : b ∈ D.ids)
   have hqids : q ∈ D.ids := D.complete b hb q hq
   exact hconf.1 ((D.valid q hqids).distinct_creators l hqref l' hq'ref hconf.2.2)
 
-/-- **A quorum for one block bounds the parents voting for the other.**
-The two voter sets are disjoint inside a parent set of at most `n`, so
-`2f + p` for one leaves at most `f + p − 1` for the other. -/
+/-- **A quorum for one block bounds the parents voting for the other**:
+disjoint inside a parent set of at most `n`, `2f + p` for one leaves at
+most `f + p − 1` for the other. -/
 theorem conflicting_le_of_spQuorum {b l l' : BlockId} (hb : b ∈ D.ids)
     (hconf : Conflicting D l l') (hcert : SPCertificate D b l) :
     (parentsVoting D b l').card + 1 ≤ F.f + P.p := by
@@ -66,10 +55,8 @@ theorem conflicting_le_of_spQuorum {b l l' : BlockId} (hb : b ∈ D.ids)
   simp only [SPCertificate, spQuorum] at hcert
   omega
 
-/-- **Lemma 2.** Any SP-certificate for `l` is also FP-evidence for `l`.
-Its `2f + p` parents voting for `l` clear both branches, and on the
-equivocating branch they leave at most `f + p − 1` for anything
-conflicting. -/
+/-- **Lemma 2**: any SP-certificate for `l` is also FP-evidence for `l`,
+its `2f + p` parents clearing both branches. -/
 theorem lemma2 {b l : BlockId} (hb : b ∈ D.ids) (hcert : SPCertificate D b l) :
     FPEvidence D b l := by
   have hq : spQuorum Validator ≤ (parentsVoting D b l).card := hcert
@@ -82,9 +69,9 @@ theorem lemma2 {b l : BlockId} (hb : b ∈ D.ids) (hcert : SPCertificate D b l) 
   · rw [if_neg hexp]
     simp only [spQuorum] at hq; omega
 
-/-- **Lemma 8.** At most one block of a slot gathers a quorum of votes.
-Two quorums of `2f + p` among `n = 3f + 2p − 1` share `f + 1` validators,
-one of them correct, and a correct validator votes once. -/
+/-- **Lemma 8**: at most one block of a slot gathers a quorum of votes,
+since two such quorums would share a correct validator who votes
+once. -/
 theorem lemma8 {l l' : BlockId} (hconf : Conflicting D l l')
     (h : spQuorum Validator ≤ (voters D l).card)
     (h' : spQuorum Validator ≤ (voters D l').card) : False := by
@@ -104,15 +91,9 @@ theorem spQuorum_le_of_fastCommit {l : BlockId} (hfast : FastCommit D l) :
 
 /-- **Lemma 9's third case, proved from the definition rather than from
 Lemma 4.** Under a fast commit for `l`, no round-`(r+2)` block is
-FP-evidence for a conflicting `l'`.
-
-A block that has seen the equivocation is FP-evidence for `l` by Lemma 4,
-and that branch bounds its parents voting for `l'` below `f + p` — which
-is exactly what FP-evidence for `l'` would need. A block that has not
-seen it is FP-evidence for `l` with `f + p − 1` parents voting for `l`,
-and those parents are disjoint from the ones voting for `l'`; the same
-branch would need `f + p − 1` for `l'`, and the parent set is too small
-to hold both. -/
+FP-evidence for a conflicting `l'`: whichever branch a block's own
+FP-evidence for `l` falls in bounds its parents voting for `l'` below
+what evidence for `l'` needs. -/
 theorem not_fpEvidence_conflicting {b l l' : BlockId}
     (hb : b ∈ D.ids) (hl : l ∈ D.ids) (hl' : l' ∈ D.ids)
     (hround : (D.block b).round = (D.block l).round + 2)
@@ -138,13 +119,9 @@ theorem not_fpEvidence_conflicting {b l l' : BlockId}
     · rw [← Finset.card_pos]; omega
     · rw [← Finset.card_pos]; omega
 
-/-- **The same exclusion, under a slow-path commit.** A block carrying an
-SP-certificate for `l` is not FP-evidence for a conflicting `l'`.
-
-If it has seen the equivocation, the FP-evidence branch caps its parents
-voting for `l` below `f + p`, and the certificate already has `2f + p` of
-them. If it has not, both counts are positive — `f + p − 1` for `l'` and
-`2f + p` for `l` — which is the equivocation it would have to have seen. -/
+/-- **The same exclusion, under a slow-path commit**: a block carrying
+an SP-certificate for `l` is not FP-evidence for a conflicting `l'`, by
+the same case split on whether it has seen the equivocation. -/
 theorem not_fpEvidence_of_spCertificate {c l l' : BlockId}
     (hl : l ∈ D.ids) (hl' : l' ∈ D.ids)
     (hconf : Conflicting D l l') (hcert : SPCertificate D c l) :

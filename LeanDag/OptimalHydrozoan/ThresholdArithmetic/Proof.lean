@@ -2,11 +2,7 @@ import LeanDag.OptimalHydrozoan.ThresholdArithmetic.Statement
 /-!
 # Optimal-Hydrozoan: threshold arithmetic — proof
 
-Generated proof layer; not part of the audit surface. Every row unfolds
-to linear arithmetic over `n`, `f`, `c`, `k` with the floor divisions
-`p = (c + k) / 2` and `q_cert = (n + f) / 2 + 1`, under the committee
-bound and `1 ≤ f + c`; `omega` decides all of it, natural-number
-subtraction included.
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

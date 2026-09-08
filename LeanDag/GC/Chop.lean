@@ -4,26 +4,13 @@ import LeanDag.DoS.Exposure
 /-!
 # The horizon: truncation as rebasing
 
-`garbage.md` §2, §4 — the operator and the safety half: **G1** (truncation
-is a universe, with the one-way `DoSValid` transfer) and **G2** (verdict
-invariance): `supporters`, `blames`, `certificates`, `DirectCommit`,
-`DirectSkip` and the indirect test `CertifiedIn` computed in `chop U G`
-agree with `U` for slots at or above the cut.
-
-The design (`garbage.md` §2): `chop U G` keeps the blocks of rounds `≥ G`,
-rebases rounds by `−G`, and empties the reference sets of the new base
-layer — the round-`G` blocks become the new geneses. Every validity clause
-then holds of the truncation exactly as it held of the original, so
-`chop U G` is a bona-fide `BlockUniverse` and every existing theorem
-applies to it verbatim. Verdict invariance is pure window-locality: each
-rule reads rounds strictly above the base layer, where `chop` changes
-nothing but the round label.
-
-The one-way `DoSValid` transfer (`dosValid_chop`) is where the *statute of
-limitations* lives: cones shrink under truncation, so exposure shrinks, so
-the condition weakens per block. The converse fails by design — an
-equivocation whose witnessing pair falls strictly below the cut is
-forgiven — and the witness file makes that visible on data.
+`garbage.md` §2, §4 — **G1** (truncation is a universe, with the
+one-way `DoSValid` transfer) and **G2** (verdict invariance). `chop U G`
+keeps blocks of round `≥ G`, rebases by `−G`, and empties the new base
+layer's references, so every validity clause and rule reading rounds
+above the base layer carries over unchanged. The `DoSValid` transfer is
+one-way by design: exposure shrinks under truncation, so an
+equivocation whose witnessing pair falls below the cut is forgiven.
 -/
 
 namespace LeanDag

@@ -5,25 +5,21 @@ import LeanDag.Common.Rules
 # Odontoceti: the decision relation
 
 `odontoceti.md` §4, OP3. Odontoceti decides by the anchored relation
-(`Anchored.lean`) at its data: wavelength one — supports at the decision
-round are the whole story, there is no certificate round — the
-supporter-quorum direct commit, the core's slot-level direct skip, and
-one rung of link, `ThickLink`, with the **least** linked candidate
-committed. That tie-break is not decoration — it is a gap in the thesis
-made explicit. Lemma 5's proof asserts that sharing an anchor yields
-agreement, but nothing in the quorum arithmetic prevents two
-equivocating candidates from *both* passing `ThickLink` at one anchor
-(the witness file realises exactly that configuration on data at
-`n = 5f+1`); the implementation's determinism — the iteration order of
-`GetLeaderBlocks` — is what actually arbitrates, and the tie is that
-determinism as mathematics, under `[LinearOrder BlockId]`.
+(`Anchored.lean`) at its data: wavelength one, the supporter-quorum
+direct commit, the core's slot-level direct skip, and one rung of link,
+`ThickLink`, with the **least** linked candidate committed. That
+tie-break is a genuine gap in the thesis made explicit: Lemma 5 asserts
+that sharing an anchor yields agreement, but nothing in the quorum
+arithmetic prevents two equivocating candidates from both passing
+`ThickLink` at one anchor (realised on data at `n = 5f+1`); the
+implementation's iteration order is what actually arbitrates, and the
+tie-break is that determinism as mathematics, under
+`[LinearOrder BlockId]`.
 
-What Odontoceti proves is `odontocetiLaws`: the direct/direct cases by
-O1/O1′, the direct-versus-indirect crossings by O2/O3/O4′ — a directly
-committed block is the unique candidate that can pass the test
-anywhere, which is why the direct verdicts need no tie — and two
-tie-break choices equal by antisymmetry. Agreement (O5), the band and
-the descent are the relation's.
+`odontocetiLaws` gives the direct/direct cases by O1/O1′, the
+direct-versus-indirect crossings by O2/O3/O4′, and two tie-break choices
+equal by antisymmetry. Agreement (O5), the band and the descent are the
+relation's.
 -/
 
 namespace LeanDag

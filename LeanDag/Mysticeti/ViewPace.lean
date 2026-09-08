@@ -6,46 +6,14 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 /-!
 # A build schedule that can be stuck
 
-The route this file replaced, `ViewGrowth`, derived production from the
-build rule, but paid for it with `hcross`: no `T`-validator completes the
-round straddling GST within `delay` of it. That hypothesis is not about the network and not about the
-DAG — it is about the *schedule*, and it is there for one reason.
-
-`built` is a **total** function --- as it was in each of the route
-structures this file replaced. It assigns a build time to every round,
-whether or not the validator could build there. A real validator lacking a quorum does not
-complete the round; it waits, and its build time lands after the quorum
-arrives. The total schedule cannot say that. It admits, alongside the real
-executions, schedules in which a validator "builds" round `n+1` at a time
-when no quorum is in hand — and there the round is permanently empty, so
-at `T.card = n - f` everything above it is empty too. `hcross` is the
-clause that excludes those non-executions.
-
-Adding P8's converse to a total schedule does not help, and the reason is
-the same: since `built v (n+1)` is a number that exists, *"the build waits
-for the quorum"* forces the quorum to be in hand at that time, which is
-production asserted rather than derived.
-
-So the repair is to make the schedule partial, which is what this file
-does. `top v` is the highest round `v` reached; `built v n` is read only
-at `n ≤ top v`, and rounds above `top v` were never built. **Stuck** is
-then expressible — it is `top v = n` — and the deadline disappears with
-it: a validator advances *whenever* the quorum arrives, not at a time
-fixed in advance. That is exactly what `hcross` was compensating for, and
-`ViewPace.populatedOn` needs no counterpart to it.
-
-What the partial schedule needs instead is the pacemaker's own rule, that
-a validator which *can* advance *does*:
-
-```
-advances : v holds a quorum of round-n authors at some time  ⟹  n < top v
-```
-
-It is conditional on holding a quorum, so it asserts no production; it is
-P8's forward direction restated as advancement rather than as a block at a
-predetermined time. Nothing else about timing enters the derivation —
-production here uses neither drift, nor the backoff, nor `timeout`, since
-with no deadline there is nothing to beat.
+`built` is a partial function: `top v` is the highest round `v`
+reached, and `built v n` is read only at `n ≤ top v`, so a validator
+that cannot yet build a round simply has not reached it — **stuck** is
+expressible as `top v = n`, with no deadline to compensate for. What
+the schedule needs instead is the pacemaker's own progress rule,
+`advances`: a validator holding a quorum of round-`n` authors at any
+time is past round `n`, conditional on the quorum so it asserts no
+production by itself.
 
 ```
 genesis + converges + advances   ──▶  PopulatedOn, at every round
@@ -69,28 +37,14 @@ def DriftOn (built : Validator → ℕ → ℕ) (T : Finset Validator)
 
 /-! ## Factoring the bound
 
-`converges` is partial synchrony in its usual two-part shape, and the
-parts can be separated. Qualitatively, holdings converge at all —
-whatever one correct validator holds, every correct validator holds
-*some time later*, with no claim about when. Quantitatively, from `gst`
-on that lag is uniformly at most `delay`.
-
-`convergesWithin_iff_bounded` is the factoring: under monotone holdings,
-convergence-with-a-bound is exactly eventual convergence whose lag is
-uniformly bounded after `gst`. So
-
-> **view convergence under synchrony  =  view convergence  +  a bound on
-> the lag.**
-
-The bound is not decoration. Eventual convergence alone cannot yield
-reference coverage, for the reason `covers_of_converges` makes visible:
-the block must be in the builder's hands *before it builds*, and the only
-way to arrange that is to choose a timeout exceeding the lag. A lag that
-merely exists cannot be compared with a timeout; a lag bounded by `delay`
-can, and `D + delay ≤ timeout n` is where the comparison happens. This is
-also why the bound is asserted only from `gst`: before it there is
-nothing for a timeout to clear, which is precisely the content of partial
-synchrony. -/
+`converges` is partial synchrony in its usual two-part shape:
+qualitatively, whatever one correct validator holds, every correct
+validator holds some time later; quantitatively, from `gst` on that
+lag is uniformly at most `delay`. `convergesWithin_iff_bounded` factors
+convergence-with-a-bound into eventual convergence plus a uniform
+post-`gst` lag bound — the bound is not decoration, since only a
+bounded lag can be compared against a timeout to yield reference
+coverage. -/
 
 section Factoring
 
@@ -145,28 +99,14 @@ theorem convergesWithin_iff_bounded
 
 end Factoring
 
-/-- **The shared trunk of every pacing discipline**, over a **partial**
-build schedule.
-
-`top v` is the highest round `v` reached. Its two clauses say that `v`'s
-blocks are exactly the rounds `0` through `top v`: `built_of_le_top`
-supplies one at each of them, and `le_top_of_built` says there are none
-above. Neither is an assumption about the network — the first at `n = 0`
-is genesis, which a validator satisfies alone, and the rest of it is the
-definition of how far the validator got. The schedule clauses of the
-extensions are guarded by `n < top v`, since a round the validator never
-reached has no build time worth constraining.
-
-The trunk carries the schedule data, the views, the network's
-convergence clause, and the pacemaker's two rules — `advances` (a quorum
-in hand means the round is passed) and `catchup` (a round sighted is a
-round entered, within `proc`) — everything production and drift consume,
-and nothing about *when* a validator chooses to build within a round.
-The timeout disciplines extend it: `ViewPace` adds the full-timeout
-floor (P9) with global referencing (P7); the reactive schedule (report
-§11) adds the deadline and the vote clauses in their place. Production
-(`PaceCore.populatedOn`) and the drift collapse (`drift_collapse`) are
-proved here, once, and inherited by both. -/
+/-- **The shared trunk of every pacing discipline**, over a partial
+build schedule. `top v` is the highest round `v` reached: `v`'s blocks
+are exactly the rounds `0` through `top v`. The trunk carries the
+schedule data, the views, `converges`, and the pacemaker's two rules —
+`advances` and `catchup` — everything production and drift consume;
+`ViewPace` extends it with the full-timeout floor (P9) and global
+referencing (P7), the reactive schedule with the deadline and vote
+clauses instead. -/
 structure PaceCore (U : BlockUniverse Validator BlockId Payload)
     (T : Finset Validator) (N : ℕ) where
   /-- The highest round `v` reached. Rounds above it were never built. -/
@@ -201,15 +141,9 @@ structure PaceCore (U : BlockUniverse Validator BlockId Payload)
   view-relative decision rules. -/
   holds_sub : ∀ v, ∀ t, holds v t ⊆ U.ids
   /-- **S4.** Holdings are causally closed: a validator that holds a block
-  holds everything it references. This is P4 as a *store* property — the
-  universe-level version is already assumed, and this says a validator
-  receives blocks the same way it stores them. A block whose history is
-  missing cannot be validated (P3, P3′ read the referenced blocks) and
-  cannot be built upon, so an implementation that admitted one could not
-  act on it; the clause is what stops the model obliging a validator to
-  advance on evidence no implementation could use, and it is what makes
-  `viewAt` a validator's own view rather than the closure of its
-  fragments (`viewAt_ids`). -/
+  holds everything it references — P4 as a store property, and what
+  makes `viewAt` a validator's own view rather than the closure of its
+  fragments. -/
   holds_closed : ∀ v ∈ T, ∀ t, ∀ b ∈ holds v t,
     ∀ j ∈ (U.block b).refs, j ∈ holds v t
   /-- **S5.** A validator's block references only what it held when it
@@ -226,17 +160,10 @@ structure PaceCore (U : BlockUniverse Validator BlockId Payload)
   holds_mono : ∀ v, ∀ s t, s ≤ t → holds v s ⊆ holds v t
   /-- **N2, as view convergence** (network). -/
   converges : ∀ v ∈ T, ∀ w ∈ T, ∀ t, gst ≤ t → holds w t ⊆ holds v (t + delay)
-  /-- **P8, as the pacemaker's progress rule** (protocol). A validator that
-  holds a quorum of distinct round-`n` authors — *at any time whatever* —
-  gets past round `n`.
-
-  This is the clause a total schedule cannot carry honestly. There, the
-  quorum had to be in hand at the one time `built v (n+1)` names, so the
-  rule either missed it (and the round stayed empty for ever) or, stated as
-  a converse, forced the quorum to exist. Here there is no such time: the
-  hypothesis is that `v` ever holds a quorum, and the conclusion is that it
-  advances. It asserts no production, since it says nothing until a quorum
-  is in hand. -/
+  /-- **P8, as the pacemaker's progress rule** (protocol). A validator
+  that holds a quorum of distinct round-`n` authors at any time gets
+  past round `n`. Conditional on the quorum, so it asserts no
+  production until one is in hand. -/
   advances : ∀ v ∈ T, ∀ n < N, ∀ t,
     quorumCard Validator ≤ (authorsIn U (holds v t) n).card → n < top v
   /-- The processing bound: how long round entry may lag evidence. -/
@@ -244,18 +171,10 @@ structure PaceCore (U : BlockUniverse Validator BlockId Payload)
   /-- **Catch-up** (protocol). Seeing a round is entering it: any
   `T`-authored block of round `n` in hand at a post-GST time `t` means
   the holder reached round `n` and built its own block there by
-  `t + proc`. This is the rule real pacemakers run, and it is what makes
-  drift a *derived* quantity: the spread at any post-GST round is at
-  most `delay + proc`, whatever it was at the start (`drift_collapse`),
-  so no start-spread hypothesis survives into the headline statements.
-
-  The clause is asserted only from `gst` — like `converges`, and for the
-  same reason: what a validator runs is the GST-free clamped rule (enter
-  a sighted round within `proc`, never before the own floor), and past
-  GST the floor provably never delays it, while before GST it may. An
-  unconditional clause would over-claim about every real
-  implementation; the gated one asserts exactly what the clamped rule
-  delivers. -/
+  `t + proc`. Asserted only from `gst`, like `converges`, since before
+  it the clamped floor may delay a validator past what this clause
+  would claim. Makes drift a derived quantity (`drift_collapse`), with
+  no start-spread hypothesis surviving into the headline statements. -/
   catchup : ∀ v ∈ T, ∀ n ≤ N, ∀ b ∈ U.ids,
     (U.block b).creator ∈ T → (U.block b).round = n →
     ∀ t, gst ≤ t → b ∈ holds v t → n ≤ top v ∧ built v n ≤ t + proc
@@ -266,13 +185,10 @@ variable (pc : PaceCore U T N)
 
 omit [DecidableEq BlockId] in
 /-- **Every reliable validator reaches every round below the horizon** —
-with `T` a quorum, nobody in `T` is stuck. The induction: each `w ∈ T`
-reached round `n`, so holds its own block there; `holds_mono` carries it
-to the common time `max (latest n) gst`; `converges` puts a quorum of
-distinct round-`n` authors in `v`'s hands; `advances` fires.
-
-Proved on the trunk, so every pacing discipline inherits it: nothing
-here mentions a floor, a ceiling, or a timeout. -/
+with `T` a quorum, nobody in `T` is stuck: `holds_mono` carries each
+`w ∈ T`'s round-`n` block to a common time, `converges` puts a quorum
+of them in `v`'s hands, and `advances` fires. Proved on the trunk, with
+no floor, ceiling or timeout mentioned. -/
 theorem reached (hcard : quorumCard Validator ≤ T.card) :
     ∀ n ≤ N, ∀ v ∈ T, n ≤ pc.top v := by
   intro n
@@ -298,17 +214,11 @@ theorem populatedOn (pc : PaceCore U T N)
     ∀ n ≤ N, PopulatedOn U T n :=
   fun n hn v hv => pc.built_of_le_top v hv n (pc.reached hcard n hn v hv)
 
-/-- **The view a validator's holdings generate.** The causal closure of what
-`v` holds at `t` — a legitimate `View`, so the decision rules of the safety
-development apply to it directly. Closure is discharged by transitivity of
-`Reaches`, exactly as for `View.ofAccepted`: a union of causal histories is
-downward closed, and no closure obligation is met by hand.
-
-This is the object that connects the two halves of the development. The
-pacing line reasons about `holds`, a time-indexed set with no structure; the
-commit rules reason about a `View`. `viewAt` is the bridge, and it is what
-lets liveness be stated about a validator's *own* view rather than about the
-full universe. -/
+/-- **The view a validator's holdings generate.** The causal closure of
+what `v` holds at `t` — a legitimate `View`, closure discharged by
+transitivity of `Reaches`. The bridge between the pacing line's
+time-indexed `holds` and the commit rules' `View`, letting liveness be
+stated about a validator's own view rather than the full universe. -/
 def viewAt (pc : PaceCore U T N) (v : Validator) (t : ℕ) :
     View Validator BlockId Payload U where
   ids := (pc.holds v t).biUnion (history U)
@@ -341,12 +251,10 @@ theorem mem_viewAt (pc : PaceCore U T N) {v : Validator} {t : ℕ} {b : BlockId}
     (hb : b ∈ pc.holds v t) : b ∈ (pc.viewAt v t).ids :=
   Finset.mem_biUnion.mpr ⟨b, hb, mem_history_self⟩
 
-/-- **The view a validator holds is exactly what it holds.** Under closure
-the causal closure is a no-op, so `viewAt` adds nothing: a reliable
-validator's view *is* its holdings, and the local liveness statement is
-about the blocks the validator actually has. Without `holds_closed` the
-inclusion runs one way only, and `viewAt` would be the closure of a
-validator's fragments rather than its view. -/
+/-- **The view a validator holds is exactly what it holds.** Under
+closure `viewAt` adds nothing: a reliable validator's view is its
+holdings, and the local liveness statement is about blocks it actually
+has. -/
 theorem viewAt_ids (pc : PaceCore U T N) {v : Validator} (hv : v ∈ T) (t : ℕ) :
     (pc.viewAt v t).ids = pc.holds v t := by
   refine Finset.Subset.antisymm (fun i hi => ?_) (fun b hb => pc.mem_viewAt hb)
@@ -370,14 +278,10 @@ theorem holds_roundBlocks (pc : PaceCore U T N) {n : ℕ} (hn : n ≤ N)
     (le_trans (hg _ hbT) hle) (pc.holds_mono _ _ _ hle hown)
 
 /-- **The local commit argument, stated once.** Given a leader block, a
-quorum-sized `T` whose decision-round blocks all certify it, and post-GST
-builds, every reliable validator decides the slot **on its own view**: the
-counting of `directCommit_of_certifiesAt` run inside `viewAt v t` rather than
-inside the universe, with the delivery lemma putting the certificates there.
-
-Stated on the trunk, so both pacing disciplines inherit it — the
-full-timeout one supplying `CertifiesAt` through coverage, the reactive one
-through its certificate wait. -/
+quorum-sized `T` whose decision-round blocks all certify it, and
+post-GST builds, every reliable validator decides the slot on its own
+view: the counting of `directCommit_of_certifiesAt` run inside
+`viewAt v t` rather than the universe. -/
 theorem decided_local_of_certifiesAt [S : Slots Validator] {k : ℕ} {L : BlockId}
     (pc : PaceCore U T N) (hcard : quorumCard Validator ≤ T.card)
     (hN : S.slotRound k + 2 ≤ N)
@@ -395,11 +299,10 @@ theorem decided_local_of_certifiesAt [S : Slots Validator] {k : ℕ} {L : BlockI
 
 omit [DecidableEq BlockId] in
 /-- **Drift collapses, from any starting value.** At any round whose
-builds all lie past GST, the spread is at most `delay + proc`, whatever
-it was before: the earliest builder's block reaches the laggard within
-`delay`, and catch-up converts the sighting into entry within `proc`.
-`htop` guards the rounds the statement reads; `driftOn_of_catchup`
-discharges it from the quorum bound. -/
+builds all lie past GST, the spread is at most `delay + proc`,
+whatever it was before: the earliest builder's block reaches the
+laggard within `delay`, and catch-up converts the sighting into entry
+within `proc`. -/
 theorem drift_collapse {n : ℕ} (hn : n ≤ N)
     (htop : ∀ u ∈ T, n ≤ pc.top u)
     (hg : ∀ u ∈ T, pc.gst ≤ pc.built u n) :
@@ -428,16 +331,11 @@ theorem driftOn_of_catchup {R : ℕ}
 
 end PaceCore
 
-/-- The full-timeout discipline: `PaceCore` with P9 — the waiting floor —
-and the global referencing clause P7. This is the structure the coverage
-derivation and the quantitative results run on; the reactive schedule
-(report §11) extends the same trunk with a deadline in place of the
-floor.
-
-No promptness ceiling and no attainment clause appear: drift is derived
-from the trunk's catch-up rule (`driftOn_of_catchup`), which needs
-neither — the collapse argument runs on `converges`, `holds_own` and
-`catchup` alone. -/
+/-- The full-timeout discipline: `PaceCore` with P9 (the waiting floor)
+and the global referencing clause P7. The structure the coverage
+derivation and quantitative results run on. No promptness ceiling or
+attainment clause appears, since drift is derived from the trunk's
+catch-up rule alone. -/
 structure ViewPace (U : BlockUniverse Validator BlockId Payload)
     (T : Finset Validator) (N : ℕ) extends PaceCore U T N where
   /-- **P9, the waiting rule** (protocol), over the rounds `v` reached. -/
@@ -463,21 +361,12 @@ theorem convergesEventually (vp : ViewPace U T N) :
   convergesEventually_of_within vp.holds_mono vp.converges
 
 omit [DecidableEq BlockId] in
-/-- **The separation, on this route** — V1's content over the partial
-schedule. The fused covers-shape (*a `T`-block built after GST and early
-enough is referenced*) is derivable from `converges` and `references`
-alone: the block is in its
-author's hands when built (`holds_own`), reaches the builder within
-`delay` (`converges`), is still there when the builder acts
-(`holds_mono`), and is therefore referenced (`references`). No counting,
-no drift, no waiting rule — those enter only when the *hypothesis*
-`built … + delay ≤ built … (n+1)` must itself be discharged, which is
-the race the drift argument wins.
-
-This is where report §4.3's claim that the network's whole contribution
-is one sentence about views is discharged on the route the development
-keeps: `converges` mentions no blocks, rounds or references, and the
-step from views to references is the protocol's clause P7. -/
+/-- **The separation** — V1's content over the partial schedule: a
+`T`-block built after GST and early enough is referenced, derivable
+from `converges` and `references` alone — the block is in its author's
+hands when built, reaches the builder within `delay`, and is still
+there when the builder acts. No counting, drift or waiting rule enters
+until the arrival-time hypothesis itself must be discharged. -/
 theorem covers_of_converges {n : ℕ} (hn : n < N)
     {c : BlockId} (hc : c ∈ U.ids) (hcT : (U.block c).creator ∈ T)
     (hcr : (U.block c).round = n + 1)
@@ -506,27 +395,12 @@ theorem le_built {v : Validator} (hv : v ∈ T) : ∀ n ≤ vp.top v, n ≤ vp.b
       omega
 
 omit [DecidableEq BlockId] in
-/-- **Production, with no deadline to beat.** Every round below the horizon
-is populated, from genesis, view convergence and the progress rule — and
-from nothing else. No drift, no backoff, no `timeout`, and no schedule
-side condition of any kind.
-
-The step is the familiar one with the deadline removed. Each `w ∈ T`
-reached round `n` (induction hypothesis), so it has a block there and holds
-it from `built w n`; `holds_mono` carries that forward to
-`max (latest n) gst`, a single time serving every `w` at once; `converges`
-puts all of them in `v`'s hands by `max (latest n) gst + delay`. That is a
-quorum of distinct authors, so `advances` fires and `v` is past round `n` —
-whereupon `built_of_le_top` supplies its round-`n+1` block.
-
-**Why no side condition survives.** Over a total build schedule the
-quorum must arrive by `built v (n+1)`, a time fixed before the run, and a
-condition on the round straddling GST is what makes that deadline
-meetable. Here the arrival time is not compared with anything:
-`advances` takes the quorum at whatever time it appears. A schedule that
-raced ahead of the network pre-GST is not excluded by hypothesis — it is
-not expressible, because a validator that never held a quorum at round
-`n` never reached round `n+1`. -/
+/-- **Production, with no deadline to beat.** Every round below the
+horizon is populated, from genesis, view convergence and the progress
+rule alone, with no drift, backoff, timeout or schedule side condition.
+By induction: each `w ∈ T` holds its round-`n` block, `holds_mono`
+carries it to a common time, `converges` puts a quorum of them in `v`'s
+hands, and `advances` fires. -/
 theorem reached (vp : ViewPace U T N)
     (hcard : quorumCard Validator ≤ T.card) :
     ∀ n ≤ N, ∀ v ∈ T, n ≤ vp.top v :=
@@ -541,10 +415,8 @@ theorem populatedOn (vp : ViewPace U T N)
 
 omit [DecidableEq BlockId] in
 /-- **Drift is derived**, from the trunk's catch-up rule: the collapsed
-spread `delay + proc`, from any `R` past GST, with **no hypothesis about
-the start**. The quorum bound enters because the collapse reads builds at
-rounds every `T`-validator reached, which is `reached`'s conclusion; the
-schedule contributes only `le_built` (rounds advance real time), placing
+spread `delay + proc`, from any `R` past GST, with no hypothesis about
+the start. The quorum bound enters through `reached`, which places
 those builds past GST. -/
 theorem driftOn_of_catchup (vp : ViewPace U T N) {R : ℕ}
     (hcard : quorumCard Validator ≤ T.card) (hgst : vp.gst ≤ R) :
@@ -552,19 +424,11 @@ theorem driftOn_of_catchup (vp : ViewPace U T N) {R : ℕ}
   vp.toPaceCore.driftOn_of_catchup hcard hgst (fun u hu => vp.le_built hu)
 
 omit [DecidableEq BlockId] in
-/-- **The coverage engine** — the race, run against an *arbitrary* drift
-bound `D`. The guards come out of `le_top_of_built`: a block at round
-`n+1` authored by `v` puts `n + 1 ≤ top v`, so `waits` and `le_built`
-apply where they are used, and the straddling case cannot arise —
-coverage is claimed only from `R`, and `gst ≤ R ≤ n ≤ built w n`.
-
-This needs neither production, nor the quorum bound, nor
-`T ⊆ Correct`: `references` and `holds_own` are stated over any block a
-validator authored, so there is nothing to identify by non-equivocation.
-The headline (`synchronisedOn_of_converges`) discharges `hD` internally
-from catch-up, which costs the quorum; this form is kept for reliable
-sets below the quorum, where drift must be supplied from outside
-(`reliable_set_is_forced_pace` runs on a two-member `T`). -/
+/-- **The coverage engine** — the race, run against an arbitrary drift
+bound `D`. Needs neither production, the quorum bound, nor
+`T ⊆ Correct`, since `references` and `holds_own` are stated over any
+block a validator authored. Kept for reliable sets below the quorum,
+where drift must be supplied from outside. -/
 theorem synchronisedOn_of_driftOn {R D : ℕ}
     (hD : DriftOn vp.built T R D N) (hgst : vp.gst ≤ R)
     (hbackoff : ∀ n, R ≤ n → D + vp.delay ≤ vp.timeout n) :
@@ -585,11 +449,8 @@ theorem synchronisedOn_of_driftOn {R D : ℕ}
 omit [DecidableEq BlockId] in
 /-- **Reference coverage, drift-free.** From any `R` past GST, once the
 timeout clears `2Δ + proc`, every reliable round-`n+1` block references
-every reliable round-`n` block. No drift hypothesis and no start spread:
-the spread at `R` is whatever catch-up left, which is `delay + proc`
-(`driftOn_of_catchup`), and the race of the engine is run against that
-constant. The quorum bound is consumed here — the collapse reads builds
-at rounds `reached` guarantees — where the engine alone needs none. -/
+every reliable round-`n` block, with no start-spread hypothesis: the
+spread at `R` is whatever catch-up left, `delay + proc`. -/
 theorem synchronisedOn_of_converges {R : ℕ}
     (hcard : quorumCard Validator ≤ T.card) (hgst : vp.gst ≤ R)
     (hbackoff : ∀ n, R ≤ n → 2 * vp.delay + vp.proc ≤ vp.timeout n) :
@@ -602,15 +463,10 @@ section Liveness
 variable [S : Slots Validator]
 
 /-- **The liveness spine** (V17): commits recur, with the seed at round
-`0`, where it is genesis, and no schedule side condition of any kind.
-
-What is assumed divides cleanly. The network contributes `converges` and
-`vp.gst ≤ R`. The protocol contributes `built_of_le_top` at round `0`
-(genesis), `advances` (the pacemaker does not stall), `catchup` (seeing a
-round is entering it), `references` (P7) and `waits` (P9). No drift
-appears: the backoff clears the constant `2Δ + proc`, and the spread —
-whatever it was at the start — is the collapsed `Δ + proc` by the time
-coverage reads it. Production needs none of the timing clauses. -/
+`0` genesis, and no schedule side condition. The network contributes
+`converges` and `vp.gst ≤ R`; the protocol contributes genesis,
+`advances`, `catchup`, `references` and `waits`; no drift appears,
+since the backoff clears the collapsed spread. -/
 theorem commits_recur_via_pace (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card)
     (fair : FairScheduleOn T) (R k : ℕ) :
@@ -632,27 +488,15 @@ theorem commits_recur_via_pace (hT : T ⊆ (Correct : Finset Validator))
 
 /-! ### Liveness, localised to a validator's own view
 
-Every liveness statement above concludes `Decided U (View.full U) k (some L)`
-— the *full* view decides. That is the right statement for agreement, since
-`decided_full` (L3) lifts any view's verdict to it, but it is not what a
-deployed validator has: no validator ever holds the universe.
+Every liveness statement above concludes on the full view, which no
+deployed validator ever holds. The pacing structure says more: past
+GST the delivery lemma puts every reliable decision-round block into
+every reliable validator's own `viewAt`, by an explicit time. -/
 
-The pacing structure can say more. A validator's holdings generate a view
-(`viewAt`), and past GST the delivery lemma puts every reliable
-decision-round block into every reliable validator's hands at an explicit
-time. So the commit is not merely available *somewhere* — each reliable
-validator reaches it *itself*, by `latest (slotRound k + 2) + delay`. -/
-
-/-- **Liveness is local** (V18): past GST, every reliable validator decides
-the slot **on its own view**, by an explicit time.
-
-The hypotheses are those of the main line — GST and the constant backoff —
-and nothing further. The proof is the counting argument of L4 run inside
-`viewAt v t` rather than inside the universe: coverage makes every
-`T`-authored decision-round block a certificate (`certifiesAt_of_synchronisedOn`),
-production supplies one per reliable validator, and the delivery lemma puts
-all of them in `v`'s view at once. `decided_full` recovers the global
-statement, so this strictly strengthens it. -/
+/-- **Liveness is local** (V18): past GST, every reliable validator
+decides the slot on its own view, by an explicit time — L4's counting
+argument run inside `viewAt v t` rather than the universe. Strictly
+strengthens the global statement, which `decided_full` recovers. -/
 theorem decided_local (vp : ViewPace U T N)
     (hcard : quorumCard Validator ≤ T.card) (hgst : vp.gst ≤ R)
     (hbackoff : ∀ n, R ≤ n → 2 * vp.delay + vp.proc ≤ vp.timeout n)
@@ -677,15 +521,9 @@ theorem decided_local (vp : ViewPace U T N)
   exact ⟨L, hL, vp.toPaceCore.decided_local_of_certifiesAt hcard hN hg hL hcert⟩
 
 /-- **The liveness spine, localised** (V18): commits recur, and at the
-recurring slot every reliable validator decides **on its own view**.
-
-The quantifier order of `commits_recur_via_pace` is preserved --- the slot
-is fixed by the schedule and the round bound alone, before any execution is
-named --- and the conclusion is the local one. Note what is absent:
-`T ⊆ Correct` is not needed. The global spine threads it through
-`commits_recur_on`, whose production comes from L1 over `Correct`; here
-production is the pacing structure's own, over `T` directly, so the
-hypothesis has nothing left to do. -/
+recurring slot every reliable validator decides on its own view, the
+slot fixed by the schedule and the round bound alone. `T ⊆ Correct` is
+not needed, since production is the pacing structure's own over `T`. -/
 theorem commits_recur_local (hcard : quorumCard Validator ≤ T.card)
     (fair : FairScheduleOn T) (R k : ℕ) :
     ∃ k', k ≤ k' ∧ R ≤ S.slotRound k' ∧
@@ -703,13 +541,10 @@ theorem commits_recur_local (hcard : quorumCard Validator ≤ T.card)
   intro U N vp hgst hbackoff hN
   exact vp.decided_local hcard hgst hbackoff hRk' hN hlead
 
-/-- **Liveness, execution first** (V18′). The same result with the pacing
-structure fixed before the slot, which is the order the statement is read in:
-in a given run, past GST and with the timeout clearing `2Δ + proc`, commits
-recur and every reliable validator decides on its own view.
-
-`commits_recur_local` fixes the slot from the schedule and `R` alone, ahead of
-any execution, and that is the stronger reading; this is it, instantiated. -/
+/-- **Liveness, execution first** (V18′). The same result with the
+pacing structure fixed before the slot: in a given run, past GST with
+the timeout clearing `2Δ + proc`, commits recur and every reliable
+validator decides on its own view. -/
 theorem commits_recur_local_of_pace (vp : ViewPace U T N)
     (hcard : quorumCard Validator ≤ T.card)
     (fair : FairScheduleOn T) (R : ℕ) (hgst : vp.gst ≤ R)
@@ -744,23 +579,12 @@ end ViewPace
 
 /-! ## The rush bound
 
-The pacemaker rules are stated over `T`, but `T` is an analysis-side
-object: no validator can test membership of it, so a deployment runs the
-author-blind strengthening of each clause — in particular, it catches up
-on *any* valid block it holds, whoever authored it. The worry that
-clause raises is being rushed: could a Byzantine validator, by not
-waiting, manufacture evidence of a far-future round and drag every
-correct validator past its own timeouts?
-
-It cannot, and the reason is validity itself. A block of round `n + 1`
-references a quorum of distinct round-`n` authors (P3), and a quorum
-meets any quorum-sized `T` — so **every valid non-genesis block carries
-a reliable parent**, and by `waits` that parent's author has paid the
-full timeout bill for every round below. Evidence of a round cannot
-exist before the honest schedule permits the round: catch-up only ever
-pulls a validator to where a reliable peer already is. The adversary's
-whole freedom is the one layer it may build the instant a quorum forms
-beneath it. -/
+The pacemaker rules are stated over `T`, but a deployment runs the
+author-blind strengthening of each clause, catching up on any valid
+block whoever authored it. This cannot be rushed: a block of round
+`n + 1` references a quorum of distinct round-`n` authors, which meets
+any quorum-sized `T`, so every valid non-genesis block carries a
+reliable parent that has paid the full timeout bill below it. -/
 
 section RushBound
 
@@ -825,12 +649,8 @@ theorem ViewPace.built_ge_sum (vp : ViewPace U T N) {u : Validator}
 omit [DecidableEq BlockId] in
 /-- **The honest floor** (CU5): a valid block of round `n + 1` certifies
 that some reliable validator reached round `n` having genuinely waited
-out all `n` timeouts. Evidence of a round cannot exist before the honest
-schedule permits the round, so the author-blind catch-up a deployment
-runs is executable: it never pulls a validator past where a reliable
-peer already is, and the obligation `catchup` states over `T`-authored
-blocks is the analysis-side restriction of a rule that is safe over all
-of them. -/
+out all `n` timeouts, so the author-blind catch-up a deployment runs
+never pulls a validator past where a reliable peer already is. -/
 theorem ViewPace.exists_honest_floor (vp : ViewPace U T N)
     (hcard : quorumCard Validator ≤ T.card)
     {b : BlockId} (hb : b ∈ U.ids) {n : ℕ}
@@ -852,17 +672,10 @@ variable (vp : ViewPace U T N)
 /-! ## The quantitative arc, on this route
 
 Report §6.10's results, over the partial schedule. `Rated`, `FairWithin`
-and `BoundedSpacing` are properties of the timeout and the schedule alone
-and carry over verbatim; what needs restating is the explicit coverage
-round and the wait bound — both now free of any start spread, since the
-threshold everywhere is the constant `2Δ + proc` of the network and the
-implementation. No quantity set by deployment survives in a hypothesis.
-
-One question had to be settled first (`liveness-routes.md` §9): what a
-wait bound means when a validator can be stuck. The answer is `reached`:
-with `T` a quorum and the progress rule, no `T`-validator is stuck below
-the horizon — as a *theorem*, where the total schedule had it as the
-shape of a field. -/
+and `BoundedSpacing` carry over verbatim; the explicit coverage round
+and wait bound are free of any start spread, the threshold everywhere
+being the constant `2Δ + proc`. `reached` answers what a wait bound
+means when a validator can be stuck: with `T` a quorum, none is. -/
 
 section Quantitative
 
@@ -881,12 +694,10 @@ theorem synchronisedOn_of_rate (vp : ViewPace U T N)
 
 variable [S : Slots Validator] {R k : ℕ}
 
-/-- **The wait bound** (Q2 headline, report §6.10): a constant timeout of
-`2Δ + proc` commits every reliable-led slot past GST. The threshold is a
-constant of the network and the implementation — no start spread appears
-in any hypothesis, because catch-up collapses whatever spread the
-deployment began with. Production is derived, so nothing asserts blocks
-above round `0`, and `T ⊆ Correct` is not consumed. -/
+/-- **The wait bound** (Q2 headline, report §6.10): a constant timeout
+of `2Δ + proc` commits every reliable-led slot past GST, with no start
+spread in any hypothesis, since catch-up collapses whatever spread the
+deployment began with. -/
 theorem directCommit_of_wait (vp : ViewPace U T N)
     (hcard : quorumCard Validator ≤ T.card)
     (hgst : vp.gst ≤ R)

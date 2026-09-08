@@ -2,10 +2,7 @@ import LeanDag.Hydrozoan.ThresholdArithmetic.Statement
 /-!
 # Threshold arithmetic — proof
 
-Generated proof layer; not part of the audit surface. Every row of the
-table unfolds to linear arithmetic over `n`, `f`, `c`, `k` with the two
-floor divisions `p = (c + k) / 2` and `q_cert = (n + f) / 2 + 1`, all of
-which `omega` decides natively (including natural-number subtraction).
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

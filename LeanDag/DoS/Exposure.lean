@@ -2,22 +2,13 @@ import LeanDag.Common.History
 /-!
 # Exposure, and the DoS-protection condition
 
-`dos-equivocation-and-growth.md` §3, results **D11**–**D13**.
-
-`X` is *exposed* in `b`'s history when that history holds two distinct blocks
-by `X` at one round. It is a local, checkable test — no quorum, no round bound,
-no network assumption — and `DoSValid` is the rule that a block may not
-reference an exposed author.
-
-The three results are what make the rule usable rather than merely stateable:
-
-* **D11** — being inflated by `X` and exposing `X` are the *same condition*, so
-  the rule fires exactly when there is damage to prevent. This is why nothing
-  here has to catch equivocators reliably: an equivocator that is never exposed
-  is one that never inflated anything.
-* **D12** — exposure is inherited upward, so exclusion is permanent.
-* **D13** — the test is view-independent (T6a), so two correct validators
-  holding different views never disagree about whether a block is valid.
+`dos-equivocation-and-growth.md` §3, results D11-D13. `X` is exposed in
+`b`'s history when the history holds two distinct blocks by `X` at one
+round, a local checkable test, and `DoSValid` forbids a block from
+referencing an exposed author. D11 says being inflated by `X` and
+exposing `X` are the same condition; D12 says exposure is inherited
+upward, so exclusion is permanent; D13 says the test is
+view-independent.
 -/
 
 namespace LeanDag
@@ -27,11 +18,8 @@ variable [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 variable {U : BlockUniverse Validator BlockId Payload}
 
-/-- Two ids witnessing an equivocation by `X`: distinct, both authored by `X`,
-both at one round.
-
-Split out from `ExposedIn` so that D13 can quantify over the *same* witness
-condition with and without a view restriction. -/
+/-- Two ids witnessing an equivocation by `X`: distinct, both authored by
+`X`, both at one round. -/
 def EquivPair (U : BlockUniverse Validator BlockId Payload) (X : Validator) (i j : BlockId) :
     Prop :=
   i ≠ j ∧ (U.block i).creator = X ∧ (U.block j).creator = X ∧
@@ -46,11 +34,7 @@ theorem EquivPair.symm {X : Validator} {i j : BlockId} (h : EquivPair U X i j) :
   ⟨h.1.symm, h.2.2.1, h.2.1, h.2.2.2.symm⟩
 
 /-- **`X` is exposed in `b`'s history**: two distinct blocks by `X` at one
-round lie below `b`.
-
-Stated over `history` rather than over `Reaches` so that it is decidable and
-countable; `exposedIn_iff_reaches` gives the `Reaches` form for a block of the
-universe. -/
+round lie below `b`. -/
 def ExposedIn (U : BlockUniverse Validator BlockId Payload) (b : BlockId) (X : Validator) :
     Prop :=
   ∃ i ∈ history U b, ∃ j ∈ history U b, EquivPair U X i j
@@ -67,19 +51,14 @@ theorem exposedIn_iff_reaches {b : BlockId} {X : Validator} (hb : b ∈ U.ids) :
   · rintro ⟨i, j, hi, hj, hpair⟩
     exact ⟨i, (mem_history_iff hb).mpr hi, j, (mem_history_iff hb).mpr hj, hpair⟩
 
-/-- **The DoS-protection condition** (`dos-equivocation-and-growth.md` §3): a block may not reference an author
-exposed in its own history.
-
-A predicate on the universe, deliberately **not** a field of `ValidWrt`. Every
-safety and liveness theorem in the development applies verbatim under it,
-because none of them mention it; results that need it take it as an extra
-hypothesis. -/
+/-- **The DoS-protection condition** (`dos-equivocation-and-growth.md` §3):
+a block may not reference an author exposed in its own history. A
+predicate on the universe, not a field of `ValidWrt`, so results that need
+it take it as an extra hypothesis. -/
 def DoSValid (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ ExposedIn U b (U.block i).creator
 
-/-- Decidable on concrete data, so a small DAG can be checked by `decide` —
-which is how a witness confirms the condition is satisfiable *and* biting
-rather than vacuous. -/
+/-- Decidable on concrete data, so a small DAG can be checked by `decide`. -/
 instance decidableDoSValid : Decidable (DoSValid U) :=
   inferInstanceAs (Decidable (∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs,
     ¬ ExposedIn U b (U.block i).creator))
@@ -98,11 +77,8 @@ theorem mem_historyBlocksOf {b i : BlockId} {X : Validator} {n : ℕ} :
       i ∈ history U b ∧ (U.block i).creator = X ∧ (U.block i).round = n := by
   simp [historyBlocksOf]
 
-/-- **Not exposed** and **at most one block per round** are the same condition.
-
-The counting form of `ExposedIn`, and the whole content of D11: an author that
-is never exposed in `b`'s history contributes at most one block per round to
-it, so the equivocation achieved nothing. -/
+/-- **Not exposed** and **at most one block per round** are the same
+condition — the counting form of `ExposedIn`, and the content of D11. -/
 theorem not_exposedIn_iff_card_le_one {b : BlockId} {X : Validator} :
     ¬ ExposedIn U b X ↔ ∀ n, (historyBlocksOf U b X n).card ≤ 1 := by
   constructor
@@ -119,14 +95,9 @@ theorem not_exposedIn_iff_card_le_one {b : BlockId} {X : Validator} :
     exact hne (hcard i (mem_historyBlocksOf.mpr ⟨hi, hi_creator, rfl⟩)
       j (mem_historyBlocksOf.mpr ⟨hj, hj_creator, hround.symm⟩))
 
-/-- **D11.** Under the DoS condition, for every block and every author exactly
-one of two things holds: the author contributed at most one block per round to
-that history — so equivocating gained it nothing there — or the block does not
-reference it.
-
-The dichotomy is not a theorem about the protocol so much as a reading of the
-definitions: *inflated* and *exposed* are the same word. What the DoS condition
-adds is the second disjunct. -/
+/-- **D11.** Under the DoS condition, an author either contributed at most
+one block per round to a block's history, or that block does not reference
+it. -/
 theorem card_le_one_or_not_mem_refs (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids)
     (X : Validator) :
     (∀ n, (historyBlocksOf U b X n).card ≤ 1) ∨
@@ -140,28 +111,15 @@ theorem card_le_one_or_not_mem_refs (hdos : DoSValid U) {b : BlockId} (hb : b �
 
 omit [DecidableEq BlockId] in
 /-- **D7, the no-equivocation half.** A block's references carry distinct
-authors, so the layer immediately below a block is equivocation-free.
-
-Per *block*, not per round: two different round-`r` blocks may perfectly well
-reference opposite halves of an `(r-1)` equivocation, and that is exactly what
-makes D8 interesting. -/
+authors, so the layer immediately below a block is equivocation-free. -/
 theorem eq_of_mem_refs_of_creator_eq {b i j : BlockId} (hb : b ∈ U.ids)
     (hi : i ∈ (U.block b).refs) (hj : j ∈ (U.block b).refs)
     (hcreator : (U.block i).creator = (U.block j).creator) : i = j :=
   (U.valid b hb).distinct_creators i hi j hj hcreator
 
 /-- **D8.** An equivocation shows up in a history only two rounds above the
-round it happened at.
-
-Both witnesses lie in `H(b)`; neither can sit at `b`'s own round, since only
-`b` does; and neither can sit one below, since that layer *is* `b.refs`, whose
-authors are distinct. So the pair is at least two rounds down.
-
-The consequence drawn in the plan: the reference graph cannot report an
-equivocation one round after the fact. A correct validator holding both halves
-cannot say so in its next block, because the two references it would need are
-exactly what `distinct_creators` forbids. What it *can* do is reference two
-blocks that disagree — and that is D8a, the merge. -/
+round it happened at: neither witness can sit at `b`'s round or the one
+below, whose authors are distinct by validity. -/
 theorem round_add_two_le_of_equivPair {b i j : BlockId} {X : Validator} (hb : b ∈ U.ids)
     (hi : i ∈ history U b) (hj : j ∈ history U b) (hpair : EquivPair U X i j) :
     (U.block i).round + 2 ≤ (U.block b).round := by
@@ -188,34 +146,24 @@ theorem not_exposedIn_of_round_le_one {b : BlockId} {X : Validator} (hb : b ∈ 
 /-! ## D12 — exposure is permanent -/
 
 /-- **D12.** Exposure is inherited by everything above: what one block's
-history reveals, every block reaching it reveals too.
-
-So exclusion, once earned, is never lost — which is what makes `DoSValid` a
-ratchet rather than a condition an author can wait out. -/
+history reveals, every block reaching it reveals too. -/
 theorem ExposedIn.mono {c b : BlockId} {X : Validator} (hc : c ∈ U.ids)
     (hreach : Reaches U c b) (h : ExposedIn U b X) : ExposedIn U c X := by
   obtain ⟨i, hi, j, hj, hpair⟩ := h
   have hsub := history_subset_of_reaches hc hreach
   exact ⟨i, hsub hi, j, hsub hj, hpair⟩
 
-/-- Exposure passes up a single reference — the form the induction in D17 will
-want. -/
+/-- Exposure passes up a single reference. -/
 theorem ExposedIn.of_mem_refs {c b : BlockId} {X : Validator} (hc : c ∈ U.ids)
     (hb : b ∈ (U.block c).refs) (h : ExposedIn U b X) : ExposedIn U c X :=
   h.mono hc (Reaches.single hb)
 
-/-! ## D15, D15a — who can be excluded, and what it costs
+/-! ## D15, D15a — who can be excluded, and what it costs (§4). Exposure
+never lands on a correct validator; each exposed author costs one unit
+of the margin over the quorum. -/
 
-`dos-equivocation-and-growth.md` §4. Exposure never lands on a correct
-validator, so the admissible authors always include `Correct`; and each
-exposed author costs exactly one unit of the margin over the quorum. -/
-
-/-- **D15 — exclusion is sound.** An exposed author is Byzantine.
-
-T1 contraposed: the two witnesses are distinct ids of the universe with one
-author and one round, which a correct validator cannot have. So a correct
-validator is never excluded, by anybody, ever — and everything in `dos-equivocation-and-growth.md` §4 rests on
-that. -/
+/-- **D15 — exclusion is sound.** An exposed author is Byzantine: T1
+contraposed, since a correct validator cannot have two ids at one round. -/
 theorem ExposedIn.not_correct {b : BlockId} {X : Validator} (hb : b ∈ U.ids)
     (h : ExposedIn U b X) : X ∉ (Correct : Finset Validator) := by
   obtain ⟨i, hi, j, hj, hne, hic, hjc, hround⟩ := h
@@ -237,12 +185,12 @@ theorem exposedTo_subset_byzantine {b : BlockId} (hb : b ∈ U.ids) :
   intro X hX
   simpa using (mem_exposedTo.mp hX).not_correct hb
 
-/-- **At most `f` authors can be exposed**, since exposure requires equivocation and only Byzantine validators equivocate. -/
+/-- At most `f` authors can be exposed, since exposure requires
+equivocation. -/
 theorem card_exposedTo_le {b : BlockId} (hb : b ∈ U.ids) : (exposedTo U b).card ≤ F.f :=
   le_trans (Finset.card_le_card (exposedTo_subset_byzantine hb)) F.card_byzantine
 
-/-- A block never names an author its own history has caught — `DoSValid`,
-read as a disjointness. -/
+/-- A block never names an author its own history has caught. -/
 theorem creators_refs_disjoint_exposedTo (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) :
     Disjoint (creatorsOf U.block (U.block b).refs) (exposedTo U b) := by
   rw [Finset.disjoint_right]
@@ -251,12 +199,9 @@ theorem creators_refs_disjoint_exposedTo (hdos : DoSValid U) {b : BlockId} (hb :
   obtain ⟨i, hi, rfl⟩ := hXc
   exact hdos b hb i hi (mem_exposedTo.mp hX)
 
-/-- **D15a — the margin.** The authors a block references and the authors it
-has caught are disjoint subsets of the validator set, so together they fit
-inside `n`.
-
-With the quorum requirement this reads: `k` caught equivocators leave a margin
-of `f − k` over the `n−f` a block must name. A gradient, not a cliff. -/
+/-- **D15a — the margin.** The authors a block references and the authors
+it has caught are disjoint, so together they fit inside `n`: `k` caught
+equivocators leave a margin of `f − k` over the `n−f` a block must name. -/
 theorem card_creators_refs_add_card_exposedTo_le (hdos : DoSValid U) {b : BlockId}
     (hb : b ∈ U.ids) :
     (creatorsOf U.block (U.block b).refs).card + (exposedTo U b).card ≤ Fintype.card Validator := by
@@ -271,13 +216,8 @@ theorem card_creators_refs_add_card_exposedTo_le (hdos : DoSValid U) {b : BlockI
   simp only [Finset.card_empty] at hadd
   omega
 
-/-- **D15a at the bound.** Once a block has caught the whole fault budget, its
-references are *exactly* the correct validators — every one of them.
-
-The margin is gone, and this is what it means concretely: with `f` authors
-excluded the admissible set is `Correct`, which numbers exactly `2f+1`, so a
-block that must name `n−f` distinct admissible authors must name all of
-them. -/
+/-- **D15a at the bound.** Once a block has caught the whole fault budget,
+its references are exactly the correct validators. -/
 theorem creators_refs_eq_correct (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids)
     (hround : 0 < (U.block b).round) (hk : F.f ≤ (exposedTo U b).card) :
     creatorsOf U.block (U.block b).refs = (Correct : Finset Validator) := by
@@ -300,23 +240,17 @@ theorem creators_refs_eq_correct (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U
   rw [hcorrect]
   exact U.creators_quorum hb hround
 
-/-! ## D13 — exposure is view-independent
-
-T6a (`View.exists_reaches_iff`) says a causal-history question gives the same
-answer whether or not the search is confined to a view. Exposure is such a
-question, so a validator's local verdict on `DoSValid` is the universe's. -/
+/-! ## D13 — exposure is view-independent (T6a): a causal-history
+question gives the same answer whether or not confined to a view. -/
 
 /-- Causal history never escapes a view — T6a in `Finset` form. -/
 theorem history_subset_view {V : View Validator BlockId Payload U} {b : BlockId}
     (hb : b ∈ V.ids) : history U b ⊆ V.ids :=
   fun _ hi => View.mem_of_reaches hb ((mem_history_iff (V.subset_ids hb)).mp hi)
 
-/-- **D13.** Restricting the search for an equivocation to a view that holds
-`b` changes nothing: the witnesses could never have lain outside it.
-
-Two correct validators with different views therefore never disagree about
-whether a block is DoS-valid, which is what makes the condition a validity
-condition rather than a matter of opinion. -/
+/-- **D13.** Restricting the search for an equivocation to a view that
+holds `b` changes nothing, so two correct validators with different views
+never disagree about `DoSValid`. -/
 theorem exposedIn_iff_of_view {V : View Validator BlockId Payload U} {b : BlockId}
     {X : Validator} (hb : b ∈ V.ids) :
     (∃ i ∈ V.ids, ∃ j ∈ V.ids, i ∈ history U b ∧ j ∈ history U b ∧ EquivPair U X i j) ↔

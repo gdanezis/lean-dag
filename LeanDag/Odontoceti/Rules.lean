@@ -8,34 +8,23 @@ import LeanDag.Common.Rules
 protocol and the arithmetic core behind them — O1, O1′, O2, O3, O4′.
 
 The DAG layer is consumed as-is: at `n ≥ 5f+1` the Odontoceti quorums
-are `n − f`, which is literally what every existing definition uses, so
-`supporters`/`blames` *are* the protocol's support/blame and the
-universe machinery applies unchanged. Everything here is stated at the
-generalized thresholds — direct rules at `n − f`, the indirect test at
-`n − 3f` — which specialize to the thesis's `4f+1` / `2f+1` at the
-boundary `n = 5f+1`.
+are `n − f`, so `supporters`/`blames` are the protocol's support/blame
+directly. Everything here is stated at the generalized thresholds —
+direct rules at `n − f`, the indirect test at `n − 3f` — which
+specialize to the thesis's `4f+1` / `2f+1` at `n = 5f+1`.
 
-Where each `f` is used, in one place:
-
-* **O1** (commit vs skip) and **O1′** (twin uniqueness for direct
-  commits) need only `n ≥ 3f+1`: two `n−f` quorums over `n` authors
-  share `n−2f ≥ f+1`, all of whom must be equivocators.
-* **O3** (propagation — the heart): `n−f` supports at the decision
-  round put `n−3f` of the *support blocks* in every deeper cone — the
-  parent quorum meets the supporter set in `n−2f` authors, of whom up
-  to `f` are Byzantine equivocators whose referenced block may be a
-  non-supporting twin. Cone monotonicity then carries the bound to any
-  depth. Every anchor's cone *is* the certificate.
-* **O2** (skip vs indirect commit): a directly skipped leader's
-  supporters number `≤ 2f` — by the **exact complement identity**
-  `|Correct| = n − |byzantine|`; the naive `|Correct| ≤ n` bounding
-  yields `3f` and dies at the boundary — and `2f < n−3f` is exactly
-  `n ≥ 5f+1`. This is where the fifth `f` is used.
-* **O4′** (a direct commit excludes every rival): `n−f` supports for
-  `L₁` and `n−3f` in-cone supports for a same-author `L₂` overlap in
-  `≥ n−5f ≥ 1` correct authors, who cannot support two twins
-  (`distinct_creators`) — the other place `n ≥ 5f+1` bites, and what
-  replaces Mysticeti's M5′ in the direct-vs-indirect crossings.
+O1 and O1′ need only `n ≥ 3f+1`: two `n−f` quorums over `n` authors
+share `n−2f ≥ f+1`, all equivocators. O3, propagation, puts `n−3f`
+support-block authors in every deeper cone, since the parent quorum
+meets the supporter set in `n−2f` authors of whom up to `f` may be
+Byzantine; cone monotonicity carries the bound to any depth. O2 needs
+the exact complement identity `|Correct| = n − |byzantine|` — the naive
+bound `|Correct| ≤ n` would give `3f` and fail at the boundary — so a
+directly skipped leader's supporters number at most `2f`, and
+`2f < n−3f` is exactly `n ≥ 5f+1`. O4′ needs the same bound: `n−f`
+supports for `L₁` and `n−3f` in-cone supports for a same-author `L₂`
+overlap in at least `n−5f ≥ 1` correct authors, who cannot support two
+twins.
 -/
 
 namespace LeanDag
@@ -58,10 +47,8 @@ variable {L A : BlockId} {r : ℕ}
 
 /-! ## The direct rules
 
-Support and blame are the existing `supporters`/`blames` — a block
-supports a leader block iff it references it as a parent. The decision
-round of a leader at round `r` is `r+1`; there is no certificate
-round. -/
+Support and blame are the existing `supporters`/`blames`; the decision
+round of a leader at round `r` is `r+1`, with no certificate round. -/
 
 /-- **Direct commit**: a quorum of distinct authors support `L` at its
 decision round. -/
@@ -215,12 +202,10 @@ private theorem thickLink_of_directCommit_aux (h : DirectCommit U L r) :
       exact le_trans this (Finset.card_le_card
         (coneSupporters_subset_of_reaches hA (Reaches.single hp)))
 
-/-- **O3 (thesis Lemma 3) — propagation, the heart.** If `L` is
-directly committed, then **every** block from two rounds above it on —
-Byzantine-authored included, validity is structural — carries at least
-`n − 3f` distinct authors of support blocks in its cone. One hop is
-quorum intersection minus the twin discount; depth is cone
-monotonicity. Every anchor's cone *is* the certificate. -/
+/-- **O3 (thesis Lemma 3) — propagation.** If `L` is directly committed,
+every block from two rounds above it on carries at least `n − 3f`
+distinct authors of support blocks in its cone — one hop by quorum
+intersection minus the twin discount, depth by cone monotonicity. -/
 theorem thickLink_of_directCommit (h : DirectCommit U L r) {A : BlockId}
     (hA : A ∈ U.ids) (hround : r + 2 ≤ (U.block A).round) :
     ThickLink U A L r :=
@@ -229,12 +214,10 @@ theorem thickLink_of_directCommit (h : DirectCommit U L r) {A : BlockId}
 
 /-! ## O4′ — a direct commit excludes every rival candidate -/
 
-/-- **O4′.** A directly committed block is the **only** same-author
-block that can pass the indirect test, at any anchor: `n−f` supporters
-of `L₁` and `n−3f` in-cone supporters of `L₂` would overlap in
-`≥ n−5f ≥ 1` correct authors, each supporting two twins — impossible.
-The second place `n ≥ 5f+1` bites, and the replacement for Mysticeti's
-M5′ in every direct-versus-indirect crossing. -/
+/-- **O4′.** A directly committed block is the only same-author block
+that can pass the indirect test, at any anchor: `n−f` supporters of
+`L₁` and `n−3f` in-cone supporters of `L₂` would overlap in at least
+`n−5f ≥ 1` correct authors, each supporting two twins — impossible. -/
 theorem eq_of_directCommit_of_thickLink {L₁ L₂ : BlockId}
     (h₁ : DirectCommit U L₁ r) (ht : ThickLink U A L₂ r)
     (hcr : (U.block L₁).creator = (U.block L₂).creator) : L₁ = L₂ := by

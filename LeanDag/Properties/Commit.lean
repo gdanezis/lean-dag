@@ -3,16 +3,11 @@ import LeanDag.Properties.Bounded
 # The indirect rule
 
 `docs/target-properties.md` §4 and §11.8. The one liveness-side
-obligation that is a *property*: an anchor eligible for a slot,
-committed, with every eligible slot between them skipped, decides it,
-at a bound and under any reassignment of the other leaders. What the
-indirect rule gives — `Descends`, and with it everything below a
-committed run — is derived in `Derived/Descent.lean`.
-
-`LeaderCommits` stood here as a second obligation. It is now a
-consequence of `Support` (`Derived/LeaderCommits.lean`): a rule that
-says what its commit counts, and that a quorum's certificates commit,
-has `LeaderCommits` at `Support.live` with no proof of its own.
+obligation that is a property: an anchor eligible for a slot, committed,
+with every eligible slot between them skipped, decides it, at a bound
+and under any reassignment of the other leaders. `Derived/Descent.lean`
+derives `Descends` from it; `Derived/LeaderCommits.lean` derives
+`LeaderCommits` from `Support`, so neither is a second obligation.
 -/
 
 namespace LeanDag

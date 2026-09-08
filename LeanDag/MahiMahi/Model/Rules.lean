@@ -3,37 +3,13 @@ import LeanDag.Common.History
 /-!
 # Mahi-Mahi — the rule at wave `w`
 
-Mysticeti's commit rule stretched to a wave of `w` rounds: a candidate
-proposed at round `r` is voted on at round `r + w − 2` and decided at
-round `r + w − 1`, and a vote is counted through the **causal cone** of
-the voting block rather than among its direct references. At `w = 3`
-the two readings coincide and the definitions below are the core's
-(`mahi-mahi.md` §1); at `w ≥ 4` the cone is what lets a candidate be
-reached through intermediate rounds, which is the mechanism of the
-common-core argument (`mahi-mahi.md` §4).
-
-**Trusted core of the arc: definitions only.** No theorem lives in this
-file or in `Decision.lean`; the `Decidable` instances are definitions
-by `inferInstanceAs` and carry no proof content. Results are stated in
-`<Result>/Statement.lean` files and proved in their `Proof.lean`
-(`mahi-mahi.md` §9).
-
-**Canonical support.** A voting block's cone may hold two twins of a
-Byzantine leader, reached by different paths, so "the block `q`
-supports at `(a, r)`" must be a choice. The reference implementation
-chooses by depth-first order over the block's stored references; this
-development's references carry no order, so the choice is the
-`≤`-least block at `(a, r)` in the cone under a `[LinearOrder BlockId]`
-— hash order, in a deployment. Safety consumes only that the choice is
-unique per block; which block a shared rule picks is immaterial
-(`mahi-mahi.md` §2).
-
-**Wave length.** `w` is an explicit argument, not a class, so that the
-`w = 3` conservativity statement can mention both sides. The rounds use
-truncated subtraction, which is harmless: every result assumes `3 ≤ w`,
-and at the literal `w = 3` the rounds are definitionally `r + 1` and
-`r + 2`. Wave length two — where the vote is the certificate — is the
-Odontoceti and Nemo arcs' territory and is not covered here.
+Mysticeti's commit rule stretched to a wave of `w` rounds, with votes
+counted through a voting block's causal cone rather than its direct
+references; at `w = 3` this coincides with the core (`mahi-mahi.md` §1).
+Definitions only — results live in `<Result>/Statement.lean` and
+`Proof.lean`. Canonical support, which block in a cone a vote picks, is
+chosen by a `[LinearOrder BlockId]` since references carry no order;
+only the choice's uniqueness matters for safety.
 -/
 
 namespace LeanDag
@@ -60,22 +36,17 @@ def decisionRoundAt (w r : ℕ) : ℕ := r + w - 1
 
 /-! ## Support through the cone -/
 
-/-- The blocks of author `a` at round `r` in the cone of `q` — the set the
-vote is chosen from. A correct author has at most one; an equivocator may
-have several, which is what the minimality clause of `Votes` arbitrates.
-Stated with `blocksAt` outermost so that membership unfolds through
-`mem_blocksAt`, as the Odontoceti arc's `coneSupports` does. -/
+/-- The blocks of author `a` at round `r` in `q`'s cone — the set a vote
+is chosen from. A correct author has at most one; an equivocator may
+have several, arbitrated by `Votes`'s minimality clause. -/
 def candidatesAt (U : BlockUniverse Validator BlockId Payload)
     (q : BlockId) (a : Validator) (r : ℕ) : Finset BlockId :=
   (blocksAt U r).filter (fun b => (U.block b).creator = a ∧ b ∈ history U q)
 
 /-- **`q` votes for `L`**: `L` is the least block of its own author and
-round in `q`'s cone. The minimality clause is the canonical-support
-choice (`mahi-mahi.md` §2), written `¬ L' < L` rather than `L ≤ L'` so
-that agreement closes by `le_antisymm` on two `not_lt`s, the form the
-Odontoceti arc's canonicity premise takes. `L`'s author and round are
-read off `L` itself, so the rules keep the proposal round `r` as a
-separate parameter exactly as the core does. -/
+round in `q`'s cone, the canonical-support choice (`mahi-mahi.md` §2).
+Stated as `¬ L' < L` rather than `L ≤ L'` so agreement closes by
+`le_antisymm` on two `not_lt`s. -/
 def Votes (U : BlockUniverse Validator BlockId Payload) (q L : BlockId) : Prop :=
   L ∈ candidatesAt U q (U.block L).creator (U.block L).round ∧
     ∀ L' ∈ candidatesAt U q (U.block L).creator (U.block L).round, ¬ L' < L

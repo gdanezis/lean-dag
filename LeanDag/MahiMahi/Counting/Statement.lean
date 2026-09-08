@@ -3,37 +3,13 @@ import LeanDag.Mysticeti.Liveness
 /-!
 # The counting lemma — statement
 
-What a wave commits with **no network hypothesis** (`mahi-mahi.md` §4).
-Four claims:
-
-* **`CommonCore`** — the paper's Lemma C.12, lifted to every higher
-  round: if any round-`(r+2)` block exists, some correct round-`r` block
-  lies in the cone of every block at every round `≥ r + 2`;
-* **`GoodNonempty`**, MM2 at `w ≥ 4` — some correct validator's round-`r`
-  block is directly committed;
-* **`GoodCard`**, MM2 at `w ≥ 5` — at least `n − f − |byzantine|` correct
-  validators' round-`r` blocks are directly committed;
-* **`MultiLeader`**, MM2b — with `2f + 1` distinct validators leading
-  slots at one round, some slot of the round is good, for every
-  schedule.
-
-The hypotheses are the fault model, validity, and population by a
-reliable set `T` (`T ⊆ Correct`, a quorum) at **two** rounds: the round
-that supplies the common core's existence and the decision round. Not
-`SynchronisedOn`, not delivery, not time.
-
-On the `w ≥ 5` bound. The paper's Lemma C.13 counts all `n − f`
-references of the round-`(r+1)` common core as committable. A reference
-by an equivocating author is not: a voting block that also reaches a
-second twin may vote for the twin, and the adversary can split the
-voters so that no twin of that author gathers a quorum. What the
-argument proves is the bound on the *correct* references, which at
-`n = 3f + 1` leaves `f + 1` good correct leaders against an active
-equivocator; the paper's `2f + 1` is recovered in any wave whose
-round-`r` authors do not equivocate, which is the hypothesis under which
-Cordial Miners states the same count. `MultiLeader` carries the
-threshold this bound supports, `2f + 1` leaders, where the paper's
-Lemma C.15 has `f + 1`.
+What a wave commits with no network hypothesis (`mahi-mahi.md` §4):
+`CommonCore` (a correct round-`r` block reached by every later block),
+`GoodNonempty` and `GoodCard` (direct commits at `w ≥ 4` and `w ≥ 5`),
+and `MultiLeader`. The `w ≥ 5` bound counts only correct references,
+since an equivocating author's reference need not vote for a fixed
+twin; this yields `2f+1` good leaders under no-equivocation, matching
+Cordial Miners, where the paper's `f+1` needs no such restriction.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -84,12 +60,10 @@ def GoodNonempty (U : BlockUniverse Validator BlockId Payload) (w : ℕ) : Prop 
     -- then some correct validator's round-r block is directly committed
     (goodAt U w r ∩ (Correct : Finset Validator)).Nonempty
 
-/-- **MM2 at `w ≥ 5`.** `n − f ≤ |good ∩ Correct| + |byzantine|`: the
-correct authors among the `n − f` references of the round-`(r + 1)`
-common core are all directly committed, since every voting-round block
-(`r + w − 2 ≥ r + 3`) reaches the core and, through it, each reference.
-At `n = 3f + 1` and `|byzantine| = f` this is `f + 1` good correct
-validators. -/
+/-- **MM2 at `w ≥ 5`.** `n − f ≤ |good ∩ Correct| + |byzantine|`: every
+correct author among the round-`(r+1)` common core's references is
+directly committed, since every voting-round block reaches the core and
+each reference through it. At `n = 3f+1` this is `f + 1` validators. -/
 def GoodCard (U : BlockUniverse Validator BlockId Payload) (w : ℕ) : Prop :=
   ∀ (T : Finset Validator) (r : ℕ),
     -- at least five rounds: the voting round r + w − 2 is at or above r + 3,
@@ -108,11 +82,9 @@ def GoodCard (U : BlockUniverse Validator BlockId Payload) (w : ℕ) : Prop :=
       (goodAt U w r ∩ (Correct : Finset Validator)).card + F.byzantine.card
 
 /-- **MM2b, deterministic commits under multiple leaders.** If `2f + 1`
-distinct validators lead slots at round `r` and `w ≥ 5`, one of those
-slots is good — for every schedule, with no randomness clause: `f + 1`
-good correct validators and `2f + 1` leaders cannot be disjoint in
-`3f + 1`. The `w ≥ 4` analogue with every validator leading is
-`GoodNonempty` itself. -/
+distinct validators lead slots at round `r` and `w ≥ 5`, one is good,
+for every schedule: `f + 1` good validators and `2f + 1` leaders cannot
+be disjoint in `3f + 1`. -/
 def MultiLeader (U : BlockUniverse Validator BlockId Payload) (w : ℕ) : Prop :=
   ∀ (T : Finset Validator) (r : ℕ),
     -- the hypotheses of GoodCard, verbatim

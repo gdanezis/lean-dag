@@ -3,28 +3,12 @@ import LeanDag.Hydrozoan.Model.Liveness
 /-!
 # Statement: eventual decision — the ledger does not stall
 
-The liveness headline, composing the two previous claims. Direct
-liveness commits any synchronised, populated, correct-led wave; indirect
-liveness settles everything below a committed run. The one ingredient
-still missing is fairness: the schedule must actually *offer* runs of
-correct-led slots.
-
-Two Props, factored so each is about one thing:
-
-- `RunDecidesBelow`: the per-universe workhorse with the run location
-  `b` explicit — a synchronised quorum whose members lead the `c` slots
-  `b, …, b + c − 1` and fill every round of the run's span decides every
-  slot below `b`. No fairness: where the run sits is a hypothesis.
-- `RunsRecur`: the schedule-only claim — fairness places a `T`-led run
-  past any slot and any round. No universe: pure `Slots` arithmetic.
-
-The two compose by direct application (get the run location from
-`RunsRecur`, hand it to `RunDecidesBelow`): for every slot `k` there is
-a bound `b ≥ k` with every slot below `b` decided at the eventual view —
-verdicts march past any point, which is exactly "the ledger does not
-stall". That composed form is stated and proven on the generated side
-(`ledgerProgress` in `Proof.lean`); the audited content is exactly the
-two Props above.
+The liveness headline, composing direct liveness (commits a
+synchronised, populated, correct-led wave) with indirect liveness
+(settles everything below a committed run). `RunDecidesBelow` takes the
+run's location as a hypothesis; `RunsRecur` is the schedule-only claim
+that fairness places one past any point. `ledgerProgress` in
+`Proof.lean` composes them.
 -/
 
 namespace LeanDag
@@ -38,8 +22,7 @@ variable (Replica : Type*) [S : Slots Replica]
 
 /-- **Fairness places a run wherever needed**: past any slot `k` and any
 round `R`, some run of `c` consecutive `T`-led slots begins. Pure
-schedule arithmetic — no universe appears; feeding the produced location
-to `RunDecidesBelow` is the liveness composition. -/
+schedule arithmetic. -/
 def RunsRecur : Prop :=
   ∀ (T : Finset Replica) (c k R : ℕ),
     FairRunOn T c →                      -- given a fair schedule:

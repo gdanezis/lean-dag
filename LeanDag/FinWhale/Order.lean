@@ -3,27 +3,12 @@ import LeanDag.FinWhale.Model.Order
 /-!
 # FinWhale — commit sequences and the delivered order
 
-Lemma 12 settles one slot at a time. The properties Byzantine atomic
-broadcast asks for are about the whole sequence, and this file carries
-the argument the rest of the way.
-
-`commitSeq` is a validator's committed leader sequence: the committed
-blocks of its decided slots, in slot order. **Lemma 13** says two such
-sequences are always prefix-comparable, which is Lemma 12 plus the fact
-that a validator commits up to its first undecided slot and no further.
-
-`linearise` is the delivery order: walk the leader sequence, and after
-each leader append the blocks of its causal history that have not been
-delivered yet. Two facts about it finish the safety half of the paper.
-**Theorem 14** is that the delivered sequences are prefix-comparable,
-because `linearise` only ever appends — a longer leader sequence extends
-the delivery order rather than revising it. **Theorem 15** is that no
-block is delivered twice, because each round appends only what the
-accumulator does not already hold.
-
-Both are proved for a `linearise` that takes the causal histories as a
-parameter, so they say what the paper's proofs say: the order is a
-function of the committed leader sequence and nothing else.
+Lemma 12 settles one slot at a time; this file carries the argument to
+the whole sequence. `commitSeq` is a validator's committed leader
+sequence; Lemma 13 makes any two prefix-comparable. `linearise` is the
+delivery order built by walking the leader sequence and appending each
+leader's undelivered causal history; Theorem 14 (total order) and
+Theorem 15 (integrity) follow since it only ever appends.
 -/
 
 

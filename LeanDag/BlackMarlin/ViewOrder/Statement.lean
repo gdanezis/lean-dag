@@ -3,36 +3,22 @@ import LeanDag.BlackMarlin.Order.Statement
 # Black Marlin — the delivered order at a validator's view, stated
 
 BMV1 and BMV2 conclude `B ∈ history U L`: membership in what a validator
-delivers, not position in the sequence it delivers. The position is
-fixed by the descent, and `black-marlin.md` §15 left that open. This
-settles it, in both directions. Three claims:
+delivers, not position in the sequence, which `black-marlin.md` §15 left
+open. BMT1 says two records flushing at a reliably anchored round flush
+the same block — there being only one such block, non-equivocation
+ruling out a second. BMT2 carries that agreement down through any
+stretch either record flushes at. BMT3 says where every anchor below a
+round is reliable, two records flushing at the same rounds deliver the
+same list.
 
-* **BMT1, `ReliableAnchorPins`** — two records that flush at a round
-  whose anchor is *reliable* flush the same block, whatever views they
-  came from. Not an agreement argument: there is only one such block in
-  the universe, non-equivocation having ruled out a second;
-* **BMT2, `AgreeOnReliableStretch`** — so agreement descends from a
-  reliably anchored round through any stretch the record flushes at,
-  with no hypothesis about how either validator got there;
-* **BMT3, `OrderAgreesWhenAnchorsReliable`** — and where every anchor
-  below a round is reliable, two records flushing at the same rounds
-  deliver the **same list**.
-
-## Which is exactly as far as it goes
-
-BMT3's hypothesis cannot be weakened to allow one Byzantine anchor
-below, and the failure is not confined to the equivocator's own blocks.
-In the execution of `black-marlin.md` §13 the two records deliver `5`
-before `7` and `7` before `5`. Both are authored by *reliable*
-validators, neither has a twin, and the filter of L27 never touches
-either. What orders them is which segment they fall in, and the segments
-differ because the two descents took different twins a round below.
-
-So Definition 1's **Total order** fails, and it fails on honest blocks.
-That is independent of which twin the filter prefers, so no rule for
-choosing among twins repairs it — only a rule that makes the two
-descents agree, which is §14's repair, and §15 records that it has no
-live implementation.
+**Which is exactly as far as it goes.** BMT3's hypothesis cannot be
+weakened to allow one Byzantine anchor below: in the execution of §13
+two records deliver `5` before `7` and `7` before `5`, both reliably
+authored with no twin, ordered only by which segment the descents'
+diverging choice a round below put them in. Definition 1's Total order
+fails on honest blocks, independent of which twin the filter prefers —
+only a rule making the two descents agree would fix it, which is §14's
+repair, and §15 records that it has no live implementation.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -69,11 +55,9 @@ def AgreeOnReliableStretch (U : BlockUniverse Validator BlockId Payload) : Prop 
 /-- **BMT3, and the delivered lists coincide.** Where no Byzantine
 validator anchors a round below `n`, two records that flush at the same
 rounds deliver one list — Definition 1's Total order, unconditionally,
-on that stretch.
-
-The hypothesis is tight. `LeanDagTest/BlackMarlin/Divergence` exhibits
-two records with a single Byzantine anchor below them that deliver two
-reliably authored blocks in opposite orders. -/
+on that stretch. The hypothesis is tight:
+`LeanDagTest/BlackMarlin/Divergence` exhibits a single Byzantine anchor
+below producing two reliably authored blocks in opposite orders. -/
 def OrderAgreesWhenAnchorsReliable (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ (f₁ f₂ : Flush U) (τ : TopoSort U) (n : ℕ),
     (∀ σ, σ < n → Rot.anchor σ ∈ (Correct : Finset Validator)) →

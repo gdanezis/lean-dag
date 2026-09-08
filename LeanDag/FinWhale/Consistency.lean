@@ -5,22 +5,12 @@ import LeanDag.Common.Anchored.Bounded
 /-!
 # FinWhale — the reverse pass lands in the relation
 
-The reverse pass of `Model/Verdict.lean` is a condition on a verdict
-assignment; the anchored relation of `Model/Decided.lean` is what the
-safety properties are stated over. `decided_of_wellFormed`
-(`View.lean`) says every verdict a well-formed assignment reaches — the
-direct rules on the validator's view, the least candidate at the anchor
-— is a derivation of the relation; this file supplies what it reads of
-the tie-break.
-
-**The tie-break is a function of the anchor.** `IndirectCommit` mentions
-no view, and `chooseLeast` takes only the anchor and the round, so it is
-the relation's choice at its one rung: sound (`chooseSound_least`) and
-least (`chooseLeast_least`). That is the whole of the difference from
-Black Marlin, where the same kind of deterministic choice was unsafe:
-there the two validators descended from *different* anchors and the
-choice saw different data; here the anchor is pinned by agreement above,
-and the data is the anchor's history.
+`decided_of_wellFormed` (`View.lean`) says every verdict a well-formed
+assignment reaches is a derivation of `Model/Decided.lean`'s anchored
+relation; this file supplies what it reads of the tie-break.
+`IndirectCommit` mentions no view, and `chooseLeast` takes only the
+anchor and the round, so it is the relation's choice at its one rung:
+sound (`chooseSound_least`) and least (`chooseLeast_least`).
 -/
 
 namespace LeanDag

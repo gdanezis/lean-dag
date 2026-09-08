@@ -5,22 +5,12 @@ import LeanDag.FinWhale.View
 /-!
 # FinWhale — what the protocol guarantees
 
-The results below this file are stated over whatever each of them needs:
-a verdict assignment and its well-formedness, a view and its closure, a
-horizon and a bound. That is the right shape for a proof and the wrong
-shape for a reader, who wants to know what FinWhale guarantees and under
-what.
-
-`Run` collects one execution of the protocol — the blocks, the schedule
-and the network that carried them, the rotation — and the four
-properties are stated over it. Their hypotheses are about the run
-and nothing else: which validators are correct, and how far the
-horizon reaches.
-
-Each property is the corollary of a theorem proved elsewhere, and the
-docstring names it. Nothing new is proved here; what is new is that the
-statements no longer mention verdict assignments, views, well-formedness
-or bounds.
+`Run` collects one execution — the blocks, schedule and network that
+carried them — and the four properties below are stated over it, with
+hypotheses about the run alone: which validators are correct, and how
+far the horizon reaches. Each is a corollary of a theorem proved
+elsewhere, restated to no longer mention verdict assignments, views,
+well-formedness or bounds.
 -/
 
 namespace LeanDag
@@ -53,9 +43,8 @@ noncomputable def delivers (hv : v ∈ (Correct : Finset Validator)) (k : ℕ) :
 
 /-! ## What each validator's pass amounts to
 
-Five short facts, each an instance of a theorem proved elsewhere. They
-are what the four properties below are assembled from, and none of them
-is a hypothesis of a run. -/
+Five facts the four properties below are assembled from, none of them
+a hypothesis of a run. -/
 
 /-- The blocks a validator holds sit below the run's horizon. -/
 theorem view_rounds_le (hv : v ∈ (Correct : Finset Validator)) :
@@ -102,12 +91,9 @@ theorem held (hv : v ∈ (Correct : Finset Validator)) :
 
 /-! ## The four properties -/
 
-/-- **Every slot below the horizon is decided.** Lemma 23, over a run:
-the rotation names three consecutive correct leaders, their blocks are
-committed, and the reverse pass reads every slot below them off that.
-
-The bound is the window Lemma 22 needs — `3f + 3` rounds — plus the two
-the anchor sits above, past the round the network stabilised. -/
+/-- **Every slot below the horizon is decided**: Lemma 23 over a run,
+the rotation's three consecutive correct leaders giving a committed
+triple the reverse pass reads every slot below off. -/
 theorem decided (hv : v ∈ (Correct : Finset Validator)) {r : ℕ}
     (hr : max r run.stable + (3 * F.f + 5) ≤ run.liveHorizon) :
     run.verdicts hv r ≠ Verdict.undecided :=
@@ -140,10 +126,9 @@ theorem verdicts_agree (hv : v ∈ (Correct : Finset Validator))
   Verdict.optOf_inj h1 h2 (AnchoredRule.decided_agree (S := run.sched) finWhaleLaws trivial
     (run.decided_of_verdicts hv h1) (run.decided_of_verdicts hw h2))
 
-/-- **Agreement.** Two correct validators deliver the same sequence.
-Theorem 24, with the verdicts computed rather than assumed: each
-validator's view is what it holds, and its verdicts are the reverse pass
-on that view. -/
+/-- **Agreement.** Two correct validators deliver the same sequence —
+Theorem 24, with the verdicts computed from each validator's own view
+rather than assumed. -/
 theorem agreement (hv : v ∈ (Correct : Finset Validator))
     (hw : w ∈ (Correct : Finset Validator)) {k : ℕ}
     (hk : max k run.stable + (3 * F.f + 5) ≤ run.liveHorizon) :
@@ -156,9 +141,8 @@ theorem agreement (hv : v ∈ (Correct : Finset Validator))
     (sees_of_commits_of_held (V := run.viewOf hw) run.commits (run.held hw))
     run.roundRobin run.roundId hk (histOf run.dag)
 
-/-- **Total order.** One validator's sequence is a prefix of another's,
-at any two horizons. Theorem 14 over Lemma 13, the agreement being the
-relation's. -/
+/-- **Total order**: one validator's sequence is a prefix of another's,
+at any two horizons — Theorem 14 over Lemma 13. -/
 theorem totalOrder (hv : v ∈ (Correct : Finset Validator))
     (hw : w ∈ (Correct : Finset Validator)) {k k' : ℕ}
     (hk : max k run.stable + (3 * F.f + 5) ≤ run.liveHorizon)
@@ -169,17 +153,15 @@ theorem totalOrder (hv : v ∈ (Correct : Finset Validator))
   · exact Or.inl (theorem14 _ h)
   · exact Or.inr (theorem14 _ h)
 
-/-- **Integrity.** No block is delivered twice. Theorem 15 at the
-concrete order, and it asks nothing of the run: the order appends only
-what it has not already delivered, and a causal history lists each block
-once. -/
+/-- **Integrity.** No block is delivered twice — Theorem 15 at the
+concrete order, asking nothing of the run. -/
 theorem integrity (hv : v ∈ (Correct : Finset Validator)) (k : ℕ) :
     (run.delivers hv k).Nodup :=
   nodup_delivery _
 
-/-- **Validity.** A correct validator's block is delivered. Theorem 26:
-the block lies in the causal history of its own author's next leader
-block, by the self-parent chain, and that slot is committed. -/
+/-- **Validity.** A correct validator's block is delivered — Theorem 26:
+it lies in its author's next leader block's history, by the
+self-parent chain. -/
 theorem validity (hv : v ∈ (Correct : Finset Validator)) {b : BlockId} {k : ℕ}
     (hb : b ∈ run.dag.ids)
     (hbc : (run.dag.block b).creator ∈ (Correct : Finset Validator))

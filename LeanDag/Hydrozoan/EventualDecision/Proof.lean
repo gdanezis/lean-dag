@@ -2,9 +2,7 @@ import LeanDag.Hydrozoan.Helpers.EventualDecision
 /-!
 # Proof: eventual decision
 
-Generated. The two conjuncts come from the helpers; `ledgerProgress` is
-the composed headline — "the ledger does not stall" — obtained by
-feeding the run location `RunsRecur` produces into `RunDecidesBelow`.
+Generated.
 -/
 
 namespace LeanDag

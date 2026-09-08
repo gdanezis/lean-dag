@@ -10,25 +10,9 @@ import LeanDag.Properties.Arcs.GC
 /-!
 # Crash recovery, for any protocol with `Persist`
 
-`docs/target-properties.md` G2, the crash-recovery half. Safe Skip
-restores a crashed validator by one message, denoting the repaired DAG
-as `SkipMsg.skipFill`. This file says what that construction is, in the
-vocabulary of `Properties`, and draws the conclusion for any protocol
-that has proved `Persist`.
-
-**The file is short, and that is the point.** All the depth moves into
-the per-protocol `Persist` proof — one induction over that protocol's
-own relation, paid once and serving every extension-shaped mechanism,
-where today each pair of mechanism and protocol is a separate
-development. What is left here is the observation that the fill is an
-extension, which is two of its own simp lemmas.
-
-**No mechanism is named but this one.** The rule the arc keeps is that
-mechanisms depend on properties and never on each other, so nothing
-below mentions the adaptive leader count, garbage collection or any
-protocol. A rule reaches the fill through the four equations of
-`extends_of_skipFill`, which are `rfl` for any protocol whose universes
-are core block universes.
+`docs/target-properties.md` G2. `SkipMsg.skipFill` is an extension, so
+any protocol with `Persist` recovers a crashed validator through the
+generic properties, with no mechanism named but this one.
 -/
 
 namespace LeanDag
@@ -41,12 +25,9 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 /-! ## Promptness: the fill cannot conjure a commit
 
-For any rule that skips unsupported slots (`SkipsUnsupported`, optional)
-and any extension whose candidates at a slot are all novel: the slot is
-decided `none` at once, on any view whose reliable blocks one round up
-are old. No old block references a novel id (`Extends.old_refs_old`),
-so the slot is unsupported, and the rule skips it. This is SS3 for
-every rule that shows the property, at every fill. -/
+A slot whose candidates are all novel is unsupported by any old view
+(`Extends.old_refs_old`), so `SkipsUnsupported` skips it at once — SS3
+for every rule that shows the property, at every fill. -/
 
 /-- **A slot whose candidates are all novel is skipped**, promptly. -/
 theorem decided_none_of_novel {R : DagRule Validator BlockId Payload}
@@ -64,11 +45,9 @@ section Faults
 
 variable [Faults Validator]
 
-/-- **The fill is an extension.** It holds every block the original
-held — `ids` is a union — and denotes each of them unchanged, which is
-`skipFill_block_old`. Stated through four equations rather than a type
-equality, so that a rule whose universes *are* core block universes can
-apply it with `rfl` and this file need name no protocol. -/
+/-- **The fill is an extension**: it holds every old block unchanged.
+Stated through four equations rather than a type equality, so a rule
+whose universes are core block universes applies it with `rfl`. -/
 theorem extends_of_skipFill (R : DagRule Validator BlockId Payload)
     {U U' : R.Universe} {D : BlockUniverse Validator BlockId Payload}
     (sk : SkipMsg D)
@@ -82,9 +61,7 @@ theorem extends_of_skipFill (R : DagRule Validator BlockId Payload)
     rw [hi] at h
     rw [hb', hb, sk.skipFill_block_old h]
 
-/-- **Verdicts survive the recovery**, for any protocol that has proved
-persistence. The replica that recovered reaches every verdict it reached
-before, so what it had already output stands. -/
+/-- **Verdicts survive the recovery**, for any protocol with `Persist`. -/
 theorem decided_skipFill {R : DagRule Validator BlockId Payload} (hp : Persist R)
     {S : Slots Validator} {U U' : R.Universe}
     {D : BlockUniverse Validator BlockId Payload} (sk : SkipMsg D)
@@ -96,11 +73,8 @@ theorem decided_skipFill {R : DagRule Validator BlockId Payload} (hp : Persist R
   hp S U U' (extends_of_skipFill R sk hi hb hi' hb') V V' hV k v h
 
 omit [Faults Validator] in
-/-- **Agreement across the recovery.** A validator that recovered agrees
-with one that did not, from any view of the extension — the same shape
-as cross-cut agreement (`Arcs/GC.lean`), with `Persist` going up where
-`LocalTruncate` goes down. Stated for any extension, so re-genesis and
-the fill both take it. -/
+/-- **Agreement across the recovery**, for any extension: `Persist`
+carries the earlier verdict up to meet `Agree`. -/
 theorem decided_agree_extends {R : DagRule Validator BlockId Payload}
     (ha : Agree R) (hp : Persist R) {S : Slots Validator} {U U' : R.Universe}
     (he : Extends R U U') {V : R.View U} {V' W : R.View U'}
@@ -109,10 +83,8 @@ theorem decided_agree_extends {R : DagRule Validator BlockId Payload}
   ha S V' W k v w (hp S U U' he V V' hsub k v hV) hW
 
 omit [Faults Validator] in
-/-- **The prompt skip conflicts with no verdict.** On any view of the
-extension, and on any view of any further extension a caught-up view
-reaches, a verdict at the skipped slot is `none`: `Agree` at the
-extension, `Persist` past it. -/
+/-- **The prompt skip conflicts with no verdict**, on any further
+extension a caught-up view reaches. -/
 theorem decided_none_of_novel_agree {R : DagRule Validator BlockId Payload}
     (ha : Agree R) (hb : Banded R) {Ok : Finset Validator → Prop} (hsk : SkipsUnsupported R Ok)
     {U U' : R.Universe} (he : Extends R U U') (S : Slots Validator)
@@ -127,28 +99,13 @@ theorem decided_none_of_novel_agree {R : DagRule Validator BlockId Payload}
   (decided_agree_extends ha (Persist.of_banded hb) he' hsub
     (decided_none_of_novel hsk he S hok hpres hnov hold) hW).symm
 
-/-! ## For the core: the grade the fill meets, and the bespoke theorem re-derived
-
-The consumer test for `MysticetiProperties.persist`. The bespoke
-transport in `SafeSkip/Invariance.lean` proved the fill carries the
-core's verdicts by a four-constructor induction under
-`QuorateOverGap`, and the theorem below followed from
-`persist` with no induction of its own.
-
-`QuorateOverGap` used to be needed here, to meet a grade the core's
-persistence carried. Both went when the core's skip rule was repaired,
-so the transport now asks nothing of the view. -/
+/-! ## For the core -/
 
 section Core
 
 variable {U : BlockUniverse Validator BlockId Payload}
 
-/-- **Verdicts survive the core's fill, from `Persist`.** The bespoke
-theorem's statement, with no induction: persistence is proved once for
-the protocol, and the fill is one extension among others. That theorem
-carried `QuorateOverGap`; this does not, the hypothesis having gone with
-the grade it was there to meet. It has since been deleted, leaving this
-the only route. -/
+/-- **Verdicts survive the core's fill**, from the core's `Persist`. -/
 theorem decided_fill_of_persist [S : Slots Validator] (sk : SkipMsg U)
     {V : View Validator BlockId Payload U} {k : ℕ} {v : Option BlockId}
     (h : Decided U V k v) :
@@ -156,30 +113,19 @@ theorem decided_fill_of_persist [S : Slots Validator] (sk : SkipMsg U)
   decided_skipFill (R := MysticetiProperties.mysticetiRule) MysticetiProperties.persist sk
     (U := U) (U' := sk.skipFill) rfl rfl rfl rfl (fun _ hb => hb) h
 
-/-- **Agreement across the core's recovery, from `Persist` and
-`Agree`.** A verdict reached before the recovery agrees with any reached
-after it.
-The bespoke version composed its induction with `decided_agree` by hand;
-this is `decided_agree_extends`, which every rule with the two
-properties has. -/
+/-- **Agreement across the core's recovery**: a verdict reached before
+agrees with any reached after. -/
 theorem decided_fill_agree_of_properties [S : Slots Validator] (sk : SkipMsg U)
     {V : View Validator BlockId Payload U}
     {W : View Validator BlockId Payload sk.skipFill} {k : ℕ} {v w : Option BlockId}
     (hv : Decided U V k v) (hw : Decided sk.skipFill W k w) : v = w :=
   MysticetiProperties.agree S (sk.liftView V) W k v w (decided_fill_of_persist sk hv) hw
 
-/-! ### What the fill sustains
+/-! ### What the fill sustains -/
 
-The witness §11.2's table recorded as missing. The cut had one
-(`Arcs/GC.lean`) and Hydrozoan's fill had one
-(`Integration/Hydrozoan/ViaProperties.lean`); the core's fill did not,
-so the two core mechanisms could not be composed through the properties
-even though each had a transport of its own. -/
-
-/-- **A fill sustains from the top of its gap.** Above `sk.r` the fill
-added nothing, so every block there is old and unchanged. Below it the
-claim would be false, and deliberately: the blocks a fill adds stand in
-for blocks that voted, and need not vote as they did. -/
+/-- **A fill sustains from the top of its gap**: above `sk.r` nothing
+was added. Below it the claim is false, deliberately — a filled block
+stands in for one that voted, and need not vote as it did. -/
 theorem sustains_skipFill (sk : SkipMsg U) :
     Sustains (MysticetiProperties.mysticetiRule (Payload := Payload))
       U sk.skipFill 0 (sk.r + 1) :=
@@ -188,19 +134,11 @@ theorem sustains_skipFill (sk : SkipMsg U) :
 
 /-! ### The filled slot is decided, and SS3 falls out
 
-`SafeSkip.directSkip_fresh` (SS3) says the fill cannot conjure a
-commit: a filled block on a leader slot is blamed by every reliable
-block above it. Here the same conclusion is reached from the properties
-— the fill is an extension, so its candidates are unsupported by the
-old view (`unsupported_of_novel`), and the core skips an unsupported
-slot from a correct quorum (`skipsUnsupported`) — and it lands as a
-*verdict*, `Decided … k none`, rather than SS3's universe-level
-`DirectSkip`.
-
-SS3's hypothesis `v1 ∉ T` is not needed. Presence is asked of the
-pre-crash view, whose blocks are old, and `hgap` says the recovering
-replica authored nothing in the gap — so a `T` present at a gap round
-cannot contain it. -/
+`SafeSkip.directSkip_fresh` (SS3) as a *verdict*: the fill is an
+extension, so its candidates are unsupported by the old view, and the
+core skips what nothing supports. SS3's hypothesis `v1 ∉ T` is not
+needed: `hgap` already rules the recovering replica out of any `T`
+present at a gap round. -/
 
 /-- Presence in the pre-crash view is presence in the lifted one: the
 ids are the same and old blocks are unchanged. -/

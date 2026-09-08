@@ -52,15 +52,10 @@ theorem anchor_le_top (hlead : Rot.anchor r ∈ T) (hA : IsAnchor U r A) :
 /-! ## The fallback route -/
 
 /-- **Every reliable block at the round above a reliable anchor
-references it.** Past GST, with the timeout clearing `2Δ + proc`, whether
-by the exit or by the fallback.
-
-The fallback is the only argument: the anchor holds its own block when it
-builds, convergence carries it across within `delay`, the collapsed drift
-and the full timeout place that arrival before the waiter's build, and
-the fallback clause then obliges the reference. The exit needs nothing —
-concluding the round required holding the anchor, so the block cites
-it. -/
+references it.** Past GST, with the timeout clearing `2Δ + proc`,
+whether by the exit — which required holding the anchor — or the
+fallback, whose convergence and drift bounds place the anchor's arrival
+before the waiter's build. -/
 theorem votes (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card) (hgst : pc.gst ≤ R)
     (hto : ∀ n, R ≤ n → 2 * pc.delay + pc.proc ≤ pc.timeout n)
@@ -124,15 +119,9 @@ theorem suppAnchorIn_mono {v : Validator} {s t : ℕ} (hst : s ≤ t) {ρ : ℕ}
     (Finset.inter_subset_inter (Finset.Subset.refl _) (pc.viewAt_ids_mono hst))
 
 /-- **The exit fires.** A validator holding every reliable block of the
-two rounds below `r + 2` can conclude round `r + 2` — provided the
-anchors of rounds `r`, `r + 1` and `r + 2` are all reliable, and the
-reliable blocks of rounds `r + 1` and `r + 2` reference the anchors
-beneath them.
-
-Three anchors, where the commit rule asks for two. `quorum` and `anchor`
-are supplied by the round-`(r+2)` blocks, `suppAnchor(r+1)` by those same
-blocks referencing the round-`(r+1)` anchor, and `suppAnchor(r)` by the
-round-`(r+1)` blocks referencing the round-`r` anchor. -/
+two rounds below `r + 2` can conclude round `r + 2`, given reliable
+anchors at rounds `r`, `r + 1` and `r + 2` — three, where the commit
+rule asks for two. -/
 theorem concludesAt_of_holds {v : Validator} {t : ℕ}
     (hcard : quorumCard Validator ≤ T.card) (hv : v ∈ T) (hN : r + 2 ≤ N)
     (hheld : ∀ n, r + 1 ≤ n → n ≤ r + 2 → ∀ b ∈ U.ids, (U.block b).creator ∈ T →

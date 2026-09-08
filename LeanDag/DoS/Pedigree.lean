@@ -5,40 +5,19 @@ import Mathlib.Tactic.Ring
 /-!
 # Pedigrees, and the general bound
 
-`dos-equivocation-and-growth.md` §5, the multi-equivocator case — the
-last open piece of C1′.
-
-`Adoption.lean` closed the count when at most one author is exposed:
-distinct tops need distinct namer authors. With several exposed authors that
-argument stalls, because exposed chains can name each other's tops and the
-flat per-cone system never grounds. What grounds it is **nesting**: an
-adopted top lies *inside* its adopter's history, so iterating "who adopted
-the adopter" climbs through strictly higher rounds and strictly nested
-cones, and must end at `b` — the only unreferenced block. Three facts turn
-that climb into a count:
-
-1. **Pedigrees exist** (`exists_pedigree`): every top climbs to `b` through
-   adopters, and the authors met on the way — together with the top's own —
-   are **pairwise distinct**: a repeat would put the lower block on the
-   repeated author's chain (D21/D22), handing it a child and unmaking the
-   top.
-2. **Pedigrees determine** (`pedigree_deterministic`): each step is unique —
-   one adopted top per (adopter, author), by the adoption collapse — so a
-   top is a function of its pedigree's *author list*.
-3. **Author lists are few**: duplicate-free over `3f+1` validators, hence
-   length at most `3f+1`, hence at most `(3f+2)^(3f+1)` of them (embedding
-   lists into `Fin (3f+1) → Option Validator`).
-
-Together: `|topsOf U b X| ≤ (3f+2)^(3f+1) =: c(f)`, and therefore
-
-> **C1′** (`card_historyBlocksOf_le`): an author contributes at most `c(f)`
-> blocks *per round* to any history, and
-> **the general bound** (`card_history_le`):
-> `|H(b)| ≤ (3f+1)·c(f)·(r+1)` — linear in `r`, for every `f`.
-
-`c(f)` is astronomically loose — the `f ≤ 1` theorem gives `7(r+1)` where
-this gives `4·5⁴·(r+1)` — but it is *constant in `r`*, which is the whole
-of C1′: no compounding, at any fault budget.
+`dos-equivocation-and-growth.md` §5, the multi-equivocator case, the
+last open piece of C1′. With several exposed authors, distinct tops need
+not have distinct namer authors, so the flat count of `Adoption.lean`
+stalls. What grounds it is nesting: an adopted top lies inside its
+adopter's history, and climbing "who adopted the adopter" ends at `b`.
+Three facts turn the climb into a count: pedigrees exist with
+pairwise-distinct authors (`exists_pedigree`), a pedigree determines its
+top from its author list (`pedigree_deterministic`), and duplicate-free
+author lists over `3f+1` validators number at most `(3f+2)^(3f+1)`.
+Together: `|topsOf U b X| ≤ (3f+2)^(3f+1) =: c(f)`, giving C1′
+(`card_historyBlocksOf_le`) and the general bound
+(`card_history_le`): `|H(b)| ≤ (3f+1)·c(f)·(r+1)`, linear in `r` at
+every fault budget, though `c(f)` is astronomically loose.
 -/
 
 namespace LeanDag
@@ -335,13 +314,8 @@ theorem card_historyBlocksOf_le (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.
   le_trans (card_historyBlocksOf_le_card_topsOf hdos hb X n)
     (card_topsOf_le_pow hdos hb X)
 
-/-- **The general bound.** Every DoS-valid history is linear in its round,
-at every fault budget:
-
-> `|H(b)| ≤ (3f+1) · (3f+2)^(3f+1) · (r+1)`
-
-The constant is far from tight — `f ≤ 1` has `7(r+1)` by the adoption
-theorem — but it is constant in `r`, which is C1′'s whole demand. -/
+/-- **The general bound.** Every DoS-valid history is linear in its
+round, at every fault budget: `|H(b)| ≤ (3f+1) · (3f+2)^(3f+1) · (r+1)`. -/
 theorem card_history_le (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) :
     (history U b).card
       ≤ (Fintype.card Validator) * ((Fintype.card Validator + 1)) ^ (Fintype.card Validator) * ((U.block b).round + 1) := by
@@ -364,25 +338,13 @@ theorem card_history_le (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) :
     _ = (Fintype.card Validator) * ((Fintype.card Validator + 1)) ^ (Fintype.card Validator) * ((U.block b).round + 1) := by
         rw [Nat.mul_assoc]
 
-/-! ## Tightening the constant
-
-Two facts the count above wastes. **An author with two chains is exposed**:
-both chains reach round 0 (D20), so they collide there — hence at most one
-top per *unexposed* author (`card_topsOf_le_one_of_not_exposedIn`), and only
-exposed authors, at most `f` of them, can branch at all. And **a pedigree
-can stop at its first unexposed-author adopter**: that adopter is *the*
-unique top of its author, so it anchors the determination just as well as
-`b` does, and the entries below it are all exposed authors — at most `e - 1`
-choices per slot, where `e := |exposedTo U b| ≤ f`, instead of `3f + 1`.
-
-`PedigreeVia` is the anchored pedigree; the count drops to
-
-> `|topsOf U b X| ≤ (3f+1-e) · e^(e-1)`  (`card_topsOf_le_of_exposed`)
-
-giving per round `c(f) = 1 + 3f·f^(f-1)` (`card_historyBlocksOf_le'`) and in
-total `|H(b)| ≤ (3f+1 + 3f^(f+1))·(r+1)` (`card_history_le'`) — at `f = 1`
-exactly the adoption theorem's `7(r+1)`, and at `f = 2` a constant of `31`
-where the unrefined pedigree count gave `7·8⁷`. -/
+/-! ## Tightening the constant: an author with two chains is exposed, so
+only exposed authors branch, and a pedigree can stop at its first
+unexposed-author adopter (`PedigreeVia`). The refined count is
+`|topsOf U b X| ≤ (3f+1-e) · e^(e-1)` where `e := |exposedTo U b| ≤ f`
+(`card_topsOf_le_of_exposed`), giving `|H(b)| ≤ (3f+1 + 3f^(f+1))·(r+1)`
+(`card_history_le'`), which matches the adoption theorem's `7(r+1)` at
+`f = 1`. -/
 
 /-- **An unexposed author has at most one chain.** Two tops would be
 chain-related, and the lower would have a child. Contrapositive: branching
@@ -586,11 +548,7 @@ theorem exists_pedigreeVia (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids) 
           fun W hW => by simp at hW⟩
 
 /-- The padded encoding of a list of at most `m` members of `E'`: entry
-`k` is the `k`-th element when there is one, and `none` past the end.
-
-Used to count lists by counting functions — a `Finset` of lists of
-bounded length has no convenient cardinality, whereas `Fin m → Option _`
-does. -/
+`k` is the `k`-th element when there is one, and `none` past the end. -/
 def encodeList (E' : Finset Validator) (m : ℕ) (l : List Validator) :
     Fin m → Option {W // W ∈ E'} :=
   fun k => if hk : (k : ℕ) < l.length then
@@ -598,12 +556,7 @@ def encodeList (E' : Finset Validator) (m : ℕ) (l : List Validator) :
     else none
 
 /-- **The encoding is faithful.** Two lists over `E'` of length at most
-`m` with the same encoding are equal: the first index past the shorter
-one separates them if the lengths differ, and after that the entries
-match pointwise.
-
-Nothing here concerns pedigrees; it is the general fact that padding a
-bounded list into a fixed-width option vector loses nothing. -/
+`m` with the same encoding are equal. -/
 theorem encodeList_injOn {E' : Finset Validator} {m : ℕ} {l₁ l₂ : List Validator}
     (h₁ : l₁.length ≤ m) (h₂ : l₂.length ≤ m)
     (he₁ : ∀ W ∈ l₁, W ∈ E') (he₂ : ∀ W ∈ l₂, W ∈ E')
@@ -633,18 +586,8 @@ theorem encodeList_injOn {E' : Finset Validator} {m : ℕ} {l₁ l₂ : List Val
     dif_pos (he₁ _ (List.getElem_mem _)), dif_pos (he₂ _ (List.getElem_mem _))] at hthis
   exact congrArg Subtype.val (Option.some_injective _ hthis)
 
-/-- **Every top has an anchored pedigree, in totalised form.**
-
-`exists_pedigreeVia` gives a pedigree for each top of an exposed author:
-an anchor that is the sole top of some *unexposed* author, and the list
-of authors traversed on the way, which is duplicate-free and avoids `X`
-itself. This restates it as a total function so that `choose` applies —
-outside `topsOf U b X` the witness is arbitrary and the implication
-vacuous.
-
-Split out because it is the constructive half of the counting argument:
-the bound that follows counts these pairs, and needs nothing about how
-they were obtained. -/
+/-- **Every top has an anchored pedigree, in totalised form**, so that
+`choose` applies. -/
 theorem exists_pedigree_data (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U.ids)
     {X : Validator} (hX : ExposedIn U b X) :
     ∀ t : BlockId, ∃ p : BlockId × List Validator,

@@ -4,26 +4,14 @@ import LeanDag.Properties.Derived.Persist
 /-!
 # The fixpoint under growth of the DAG
 
-`run_agree` is agreement over one universe. A running system's DAG
-grows, and the question a deployment asks is whether a validator's run
-at `U` is the prefix of another's at `U' ⊇ U`. This is the first
-composition theorem of the arc: `Persist` — the protocol's promise that
-a verdict survives extension — composed with the fixpoint.
-
-One clause is owed by the policy and by nothing else. `adapted` says
-the leader of a slot reads the verdict prefix and not the view, but it
-quantifies views over *one* universe; a policy that read the size of
-the universe would satisfy it and reassign differently at `U'`.
-`Policy.Stable` closes this: under extension the rule returns the same
-leader for the same verdicts. A reputation rule reading the committed
-blocks satisfies it, since extension preserves every old block
-(`Extends.block`); the constant policy satisfies it by `rfl`.
-
-The argument is the strong induction of `partialRun_agree` with one
-extra step at each epoch: the smaller run's verdict is carried to the
-larger view by `Persist`, at the smaller run's schedule, where the
-larger run's verdict also lives after `SchedLocal`, and the two agree
-by `Agree`.
+`run_agree` is agreement over one universe; this composes `Persist`
+with the fixpoint to ask whether a validator's run at `U` is the prefix
+of another's at `U' ⊇ U`. One clause is owed by the policy alone:
+`adapted` quantifies views over *one* universe, so a policy reading the
+size of the universe could reassign differently at `U'` — `Policy.Stable`
+rules this out. The argument is `partialRun_agree`'s induction with one
+extra step per epoch: the smaller run's verdict is carried to the
+larger view by `Persist`, and the two agree by `Agree`.
 -/
 
 namespace LeanDag

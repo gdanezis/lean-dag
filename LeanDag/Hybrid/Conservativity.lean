@@ -4,15 +4,10 @@ import LeanDag.Odontoceti.Rules
 # Conservativity: the crash-free hybrid is Odontoceti
 
 H8. At `fc = 0` the hybrid thresholds are the pure-Byzantine two-round
-ones — `q = n − f`, `kRel = n − 3f`, the admissible interval anchored
-at `2f + 1` — and the fault models identify: every `Faults5` committee
-is a crash-free hybrid committee (`Faults5.toHybrid`), and the two
-derived `Faults` instances are *equal* (`toHybrid_toFaults`), so a
-block universe over one is a block universe over the other with no
-transport. The hybrid rule bodies at these parameters are syntactically
-the Odontoceti ones — `q` supporters, `q` blamers, `k` in-cone
-authors — which is what the plan meant by conservativity being
-definitional rather than a theorem with content.
+ones, and the fault models identify definitionally
+(`Faults5.toHybrid`, `toHybrid_toFaults`), so a block universe over one
+is a block universe over the other with no transport, and the hybrid
+rule bodies are syntactically the Odontoceti ones.
 -/
 
 namespace LeanDag
@@ -41,13 +36,9 @@ theorem kTight_eq_of_fc_zero (h : H.fc = 0) :
   unfold kTight; omega
 
 /-- **At `fc = 0` the strengthened clause is free.** With no crash
-class, honest *is* correct — the union class is the Byzantine class
-alone — so the base structure's `no_equivocation` already yields
-`HonestNoEquiv`: the hybrid model's one genuinely new assumption
-restricts nothing in the crash-free case, and Orcaella's subtype
-universe is full. The counterpart of `Ubad`
-(`LeanDagTest/Barnacle/Orcaella.lean`), which shows the clause is a
-real restriction as soon as a crash class exists. -/
+class, honest *is* correct, so the base structure's `no_equivocation`
+already yields `HonestNoEquiv`; the hybrid model's one new assumption
+restricts nothing in the crash-free case. -/
 theorem honestNoEquiv_of_fc_zero {BlockId Payload : Type*} (h : H.fc = 0)
     (U : BlockUniverse Validator BlockId Payload) : HonestNoEquiv U := by
   intro i hi j hj hbyz hc hr

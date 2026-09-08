@@ -3,38 +3,12 @@ import LeanDag.Common.Counting
 /-!
 # Support and coverage
 
-The common foundation under both persistence (T3) and the common-ancestor
-result (T3c). Both rest on one principle:
-
-> If a block is referenced by the round-`(r+1)` blocks of enough **correct**
-> validators, every round-`(r+2)` block reaches it.
-
-"Enough" admits two thresholds, and the difference is the only thing
-separating the two theorems downstream.
-
-* `reaches_of_honest_support` — threshold `p - 2f`, where `p` is the number
-  of validators holding a round-`(r+1)` block. A round-`(r+2)` block draws
-  its n−f referenced creators from those same `p`, so it misses exactly
-  `p - (n−f)` of them and cannot dodge `p + f + 1 - n` supporters.
-
-* `reaches_of_honest_support_of_card` — threshold `f+1`, uniform. Since
-  `p ≤ n` always, this is the corollary: a round-`(r+2)` block names n−f
-  of the `n` validators, so it misses at most `f`.
-
-The `f+1` form is the one to reach for when supporters are *assumed* (T3
-gets them free: a quorum of n−f distinct creators contains at least `f+1`
-correct ones). The `p` form is needed when supporters are *counted* (T3a can
-only guarantee `p - 2f`, which is strictly less than `f+1` when `p < 3f+1`).
-
-The two agree: `p - 2f` is `f+1` net of the validators that never produced a
-round-`(r+1)` block. Absentees shrink the requirement exactly as fast as they
-shrink what counting can deliver, which is why no progress assumption
-appears anywhere.
-
-Correctness of the *supporters* is what makes this work: a correct validator
-has one round-`(r+1)` block, so naming it is enough to reach what it
-references. A Byzantine supporter could hold two, only one of which
-references the target.
+The common foundation under persistence (T3) and the common-ancestor
+result (T3c): if a block is referenced by the round-`(r+1)` blocks of
+enough correct validators, every round-`(r+2)` block reaches it.
+`reaches_of_honest_support` counts against the actual round-`(r+1)`
+author pool `p`; `reaches_of_honest_support_of_card` is its uniform
+corollary at `p ≤ n`, the `f+1` form T3 uses.
 -/
 
 namespace LeanDag
@@ -510,12 +484,9 @@ variable {U : BlockRecord Validator BlockId Payload P honest}
 
 /-- **The hitting lemma.** A round-`(n+1)` block cannot avoid referencing a
 block satisfying `Q`, once enough honest validators have published
-round-`n` blocks satisfying it.
-
-This is the primitive under both coverage and M2. It is stated with `Q` a
-bare predicate rather than a `Finset BlockId` because nothing here takes the
-cardinality of the target set — only of `T`, the validators backing it —
-which keeps the whole file free of `DecidableEq BlockId`. -/
+round-`n` blocks satisfying it — the primitive under both coverage and
+M2. `Q` is a bare predicate, not a `Finset`, so the file stays free of
+`DecidableEq BlockId`. -/
 theorem exists_mem_refs_of_honest_support
     {Q : BlockId → Prop} {n : ℕ} {T : Finset Validator}
     (hT : ∀ v ∈ T, ∃ b ∈ U.ids, (U.block b).round = n ∧ Q b ∧ (U.block b).creator = v)
@@ -564,11 +535,9 @@ theorem exists_mem_refs_of_honest_support_of_card [Fintype Validator]
   omega
 
 /-- **Propagation.** Reaching something is inherited upward: if every block
-at round `N` reaches a `Q`-block, so does every block above `N`.
-
-Shared by T3 and M2, both of which are otherwise just a base case. The step
-needs nothing but nonempty references and transitivity — height is carried
-by `Reaches` alone. -/
+at round `N` reaches a `Q`-block, so does every block above `N`, by
+nonempty references and transitivity alone. Shared by T3 and M2, both
+otherwise just a base case. -/
 theorem reaches_pred_of_round_le {q : ℕ} [P.Quorate q] {Q : BlockId → Prop} {N : ℕ}
     (hbase : ∀ c ∈ U.ids, (U.block c).round = N → ∃ b, Q b ∧ Reaches U c b)
     {c : BlockId} (hc : c ∈ U.ids) (hcr : N ≤ (U.block c).round) :
@@ -638,13 +607,9 @@ theorem BlockUniverse.exists_common_mem_of_quorums {s t : Finset BlockId} {n : �
 
 /-! ## Support sets
 
-The coverage lemmas above take their support set as a bare `Finset Validator`
-so they stay instance-free. These are the concrete sets callers build, and
-forming them needs decidable equality on ids.
-
-Mysticeti's *voters* for a leader block are exactly `supporters` at the
-following round, which is why these sit here rather than beside the counting
-argument that first used them. -/
+Concrete support sets, needing `DecidableEq BlockId` where the coverage
+lemmas above stay instance-free. Mysticeti's *voters* for a leader block
+are `supporters` at the following round. -/
 
 variable [DecidableEq BlockId]
 

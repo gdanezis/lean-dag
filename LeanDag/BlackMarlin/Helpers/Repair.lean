@@ -102,7 +102,7 @@ theorem descendSupp_eq_descend (h : ¬ (suppCandidates U B).Nonempty) :
     descendSupp U B = descend U B := by
   rw [descendSupp, if_neg h]
 
-/-! ## What the repair buys -/
+/-! ## What the repair yields -/
 
 /-- **Two support-preferring records cannot part at a supported round.**
 The whole content of the repair: BM1 makes the supported anchor of a
@@ -178,10 +178,8 @@ theorem mem_suppAnchorsOf_of_committed {A : BlockId} {ρ : ℕ} {s : Finset Bloc
 
 /-- **The strengthened descent reaches every committed anchor of the
 cone.** The step down cannot pass one by: a supported anchor sits at
-every round the chain could land on above it — the committed anchor
-itself two rounds up or more, and its linking anchor one round up, which
-the commit rule makes supported — and anchor uniqueness fixes which block
-each of those is. -/
+every round the chain could land on above it, and anchor uniqueness
+fixes which block each of those is. -/
 theorem descentSUpto_reaches : ∀ (n : ℕ) (B : BlockId), B ∈ U.ids →
     (U.block B).round ≤ n → ∀ (L : BlockId) (ρ : ℕ), Committed U L ρ →
     L ∈ strongOf U B → descentSUpto U n B ρ = some L := by

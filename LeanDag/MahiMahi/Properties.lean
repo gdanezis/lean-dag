@@ -12,24 +12,12 @@ import LeanDag.Properties.Arcs.Headline
 /-!
 # Mahi-Mahi's band, and the two liveness properties
 
-`docs/target-properties.md` §3.4c said this band was *reachable* under
-`2 ≤ w` and nobody had reached it. What was in the way was a note —
-"needs a carrier per width" — that Hybrid had already answered and
-nobody re-read (`MahiMahi/Carrier.lean`).
-
-**Mahi-Mahi shares the core's block vocabulary**, so the relation's
-band lemmas apply at its carrier directly. What is Mahi-Mahi's own is that every rule reads a
-*cone*: a vote is the least block of its author and round in the voting
-block's causal history, and a blame is the absence of any such block.
-`MahiMahi.candidatesAt` is where that lands, and it is the one transport this
-file has to prove; everything above it follows.
-
-**The wave rounds truncate, and `2 ≤ w` is what repairs them.**
-`votingRound w r = r + w - 2` and `decisionRoundAt w r = r + w - 1` are
-`ℕ` subtractions, so `(r + g) + w - 2 = (r + w - 2) + g` needs
-`2 ≤ r + w`. Every hypothesis below carries `2 ≤ w`, and every
-Mahi-Mahi theorem already carries `3 ≤ w` or more, so it costs no
-consumer anything.
+Fills the one transport Mahi-Mahi's cone-based rules need:
+`MahiMahi.candidatesAt` agrees across a shifted universe, from which
+`Votes`, `Blames`, `Certifies` and `good`'s persistence all follow.
+Every hypothesis below carries `2 ≤ w`, needed because `votingRound` and
+`decisionRoundAt` use truncated `ℕ` subtraction; every Mahi-Mahi theorem
+already assumes `3 ≤ w`, so this costs no consumer anything.
 -/
 
 namespace LeanDag
@@ -47,9 +35,8 @@ variable {U U' : BlockUniverse Validator BlockId Payload} {lo hi g g' w : ℕ}
 /-! ## The band, across a shifted universe -/
 
 /-- **The candidates a block's cone holds at a round are the ones it
-held.** Both inclusions: a block inside an old cone at a band round is
-old, by `reaches_old`, and an old one stays inside it, by `reaches_of`.
-This is the transport every Mahi-Mahi rule rests on — votes, blames,
+held.** Both inclusions, by `reaches_old` and `reaches_of` — the
+transport every Mahi-Mahi rule rests on, since votes, blames,
 certificates and the indirect test all read this set. -/
 theorem candidatesAt_band (h : AgreeBand (MahiMahi.mahiMahiAnchored Validator BlockId Payload w).toDagRule U U' lo hi g g')
     {q : BlockId} (hq : q ∈ U.ids) (hqlo : lo ≤ (U.block q).round + g)
@@ -96,11 +83,9 @@ theorem votes_band (h : AgreeBand (MahiMahi.mahiMahiAnchored Validator BlockId P
   rw [hset]
 
 /-- **And a blame is the blame it was.** The skip rule reads a *cone*
-rather than the universe's candidates, and a cone is settled by the band
-in both directions — so the shape `docs/target-properties.md` §3.2
-recorded as a defect, a negative clause a larger DAG can falsify, does
-not arise here at all. A candidate the band added is in no old block's
-history. -/
+rather than the universe's candidates, settled by the band in both
+directions, so a negative clause a larger DAG could falsify — the shape
+`docs/target-properties.md` §3.2 flagged — does not arise here. -/
 theorem blames_band (h : AgreeBand (MahiMahi.mahiMahiAnchored Validator BlockId Payload w).toDagRule U U' lo hi g g')
     {q : BlockId} (hq : q ∈ U.ids) (hqlo : lo ≤ (U.block q).round + g)
     (hqhi : (U.block q).round + g ≤ hi) {a : Validator} {r r' : ℕ}

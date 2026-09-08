@@ -4,35 +4,16 @@ import LeanDag.BlackMarlin.Liveness.Statement
 # Black Marlin — agreement, stated
 
 Definition 1's **Agreement**: if an honest party delivers a block, every
-honest party eventually delivers it (`black-marlin.md` §10). Four
-claims:
+honest party eventually delivers it (`black-marlin.md` §10). BMA1 is
+no-divergence; BMA2 says a run of two reliable anchors is committed by
+every reliable validator on its own view; BMA3 composes the two into
+delivery agreement across validators; BMA4 supplies the growing round
+BMA3 needs, from the rotation's fairness.
 
-* **BMA1, `Monotone`** — what one committed anchor delivers, every
-  committed anchor from its round on delivers. The no-divergence half,
-  and a restatement of BM6 at the level of a single block;
-* **BMA2, `LocalCommit`** — past GST, a run of two reliable anchors is
-  committed **by each reliable validator on its own view**, at an
-  explicit time. The universe-level BML1 and BMR2 say the anchor is
-  committable; this says it is committed;
-* **BMA3, `Delivered`** — the two composed: what one validator delivered
-  with an anchor committed at round `ρ`, every reliable validator
-  delivers with the anchor it commits at any reliably anchored `r ≥ ρ`;
-* **BMA4, `RunRecurs`** — such an `r` exists above every round, so the
-  "eventually" of Definition 1 is discharged by the rotation rather than
-  assumed.
-
-**What this states, and what it does not.** A validator delivers `B` when
-it calls `commit(A)` for an anchor `A` it committed and `B` lies in
-`past(A)`, so the claims below are about `B ∈ history U L` for the anchor
-`L` each validator commits. Two things stand between that and the
-`ab-deliver` events of Definition 1, and neither is modelled here. The
-recursion of `commit` visits the undelivered anchors of `strong(A)`
-before flushing, which fixes the **order** in which blocks are delivered;
-and the per-`(creator, round)` filter of L27 decides which of an
-equivocator's twins is delivered, which the recursion and the
-deterministic sort `τ` together arbitrate. So these are agreement on the
-delivered **set**, not on the delivered sequence, and not on the choice
-among twins.
+This is agreement on the delivered **set** — `B ∈ history U L` for the
+anchor `L` each validator commits — not on the delivered sequence or on
+the choice among an equivocator's twins, both of which the recursion and
+the deterministic sort `τ` arbitrate elsewhere.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -58,11 +39,8 @@ def Monotone (U : BlockUniverse Validator BlockId Payload) : Prop :=
 
 /-- **BMA2, the commit is local.** Past GST, with the timeout clearing
 `2Δ + proc`, a run of two reliable anchors is committed by **every**
-reliable validator on its own view, by the time the two rounds the rule
-reads have converged.
-
-The universe-level results say a verdict is available; this says each
-validator reaches it, which is what Definition 1 speaks about. -/
+reliable validator on its own view — where the universe-level results
+say a verdict is available, this says each validator reaches it. -/
 def LocalCommit (pc : Pace U T N) : Prop :=
   ∀ (R r : ℕ),
     T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →

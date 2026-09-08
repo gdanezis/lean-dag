@@ -2,33 +2,17 @@ import LeanDag.Common.Support
 /-!
 # Persistence
 
-`spec.md` T3 — the theorem the rest of the development exists to support.
+`spec.md` T3. If a block `b` at round `r` is referenced by a quorum of
+round-`(r+1)` blocks, every block from round `r+2` onward has `b` in its
+causal history: once a quorum backs a block, it can never be forgotten.
 
-If a block `b` at round `r` is referenced by a *quorum* of blocks at round
-`r+1`, then every block from round `r+2` onward has `b` in its causal
-history. Once a quorum backs a block, it can never be forgotten.
-
-Two things about the statement are worth flagging, both settled during
-review and both easy to get wrong:
-
-* **The bound is `r+2`, not `r+1`, and it is tight.** A round-`(r+1)` block
-  outside the quorum need not reference `b` at all. With `f = 1` and
-  validators `{A,B,C,D}`, let `b` be A's round-`r` block and let `A,B,C`'s
-  round-`(r+1)` blocks reference it; D's round-`(r+1)` block may reference
-  `{B,C,D}` instead, and since all its references sit at round `r`, `b` is
-  not in its causal history. Quorum intersection needs *two* ref-quorums to
-  compare, and `r+2` is the first round that has them.
-
-* **The quorum hypothesis is on `Q`'s creator set, not on `Q.card`.** `Q` is
-  an arbitrary set of ids, not a block's references, so it carries no
-  distinctness invariant of its own; a Byzantine author could otherwise pad
-  it with equivocating blocks.
-
-The proof uses quorum intersection exactly **once**, in the base case. Above
-that layer, height is carried by transitivity alone. Note also that the
-distinct-creators invariant is *not* used anywhere here — the validator
-pulled from the intersection is correct by construction, so non-equivocation
-(T1) already supplies the uniqueness that identifies the two blocks.
+The bound is `r+2`, not `r+1`, and tight — a round-`(r+1)` block outside
+the quorum need not reference `b` at all, and `r+2` is the first round
+with two ref-quorums to intersect. The quorum hypothesis is on `Q`'s
+creator set, not `Q.card`, since `Q` is an arbitrary set of ids with no
+distinctness invariant of its own. Quorum intersection is used exactly
+once, in the base case; above it, height is carried by transitivity
+alone.
 -/
 
 namespace LeanDag
@@ -38,10 +22,9 @@ variable [F : Faults Validator]
 variable {BlockId : Type*} {Payload : Type*}
 variable {U : BlockUniverse Validator BlockId Payload}
 
-/-- The quorum hypothesis already forces `b` into the universe at round `r`,
-so T3 need not assume either. A quorum has at least `2f+1 ≥ 1` authors, so
-`Q` is nonempty; any member is in the universe, references `b`, and sits at
-round `r+1`, which pins `b` by completeness and the predecessor condition. -/
+/-- The quorum hypothesis already forces `b` into the universe at round
+`r`, so T3 need not assume either: a nonempty `Q` has a member in the
+universe referencing `b`, which pins it by completeness. -/
 theorem mem_ids_and_round_of_quorum_support
     {b : BlockId} {r : ℕ} {Q : Finset BlockId} (hQ : Q ⊆ U.ids)
     (hQround : ∀ q ∈ Q, (U.block q).round = r + 1)
@@ -59,11 +42,10 @@ theorem mem_ids_and_round_of_quorum_support
   have h2 := hQround q hq
   omega
 
-/-- **T3 (Persistence).** If `b` is referenced by a quorum of round-`(r+1)`
-blocks, every block at round `r+2` or later has `b` in its causal history.
-
-Neither `b ∈ U.ids` nor `(U.block b).round = r` is assumed: both follow from
-the quorum hypothesis (`mem_ids_and_round_of_quorum_support`). -/
+/-- **T3 (Persistence).** If `b` is referenced by a quorum of
+round-`(r+1)` blocks, every block at round `r+2` or later has `b` in its
+causal history — neither `b ∈ U.ids` nor its round assumed, both
+following from the quorum hypothesis. -/
 theorem reaches_of_quorum_support
     {b : BlockId} {r : ℕ}
     {Q : Finset BlockId} (hQ : Q ⊆ U.ids)

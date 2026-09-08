@@ -5,32 +5,18 @@ import LeanDag.Properties.Bounded
 /-!
 # The band a verdict reads
 
-`docs/target-properties.md` §3.8. Locality and persistence say the same
-thing twice, in different units and from different ends, and this is the
-statement they are both shadows of.
+`docs/target-properties.md` §3.8. Locality and persistence are shadows
+of one statement: given a verdict at slot `k`, there is a range of
+rounds — from the slot's own round up to some finite top — such that
+the blocks a view holds there already carry the verdict, and any
+universe and view agreeing on that range decide the slot the same way.
+The top is variable, since an indirect verdict's anchor may sit
+arbitrarily high; what the property claims is that it exists.
 
-*Given a verdict at slot `k`, there is a **range of rounds** — from the
-slot's own round up to some finite top — such that the blocks the view
-holds in that range already carry the verdict. Any universe and any view
-agreeing there decide the slot the same way.*
-
-The top is variable, as it must be: an indirect verdict anchors on a
-committed slot that may sit arbitrarily high, and the anchor's own
-derivation reaches higher still. What the property claims is that the
-top **exists**, so a verdict is never a function of unboundedly much of
-the DAG.
-
-**What follows from it** is in `Derived/FromBand.lean`: persistence,
-locality, monotonicity in the view, and the slot bound the adaptive
-fixpoint reads. One induction per protocol, four consequences out.
-
-**What does not.** Truncation (`Truncate.lean`) renumbers rounds and
-slots as well as restricting them, and no agreement hypothesis states a
-renumbering; `LocalTruncate` stays separate, and
-`Truncate.lean` records why the renumbering cannot be isolated. The
-slot-level bound the adaptive fixpoint needs (`Bounded.lean`) is a bound
-in **slots**, which a bound in rounds does not supply when a round
-carries several slots.
+`Derived/FromBand.lean` draws persistence, locality, view monotonicity
+and the adaptive fixpoint's slot bound from one induction per protocol.
+Truncation renumbers as well as restricts, which no agreement
+hypothesis states, so `LocalTruncate` stays separate (`Truncate.lean`).
 -/
 
 namespace LeanDag
@@ -42,27 +28,14 @@ variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {R : DagRule Validator BlockId Payload}
 
 /-- **`U'` carries `U`'s band, up to a shift.** Every block `U` holds
-whose round lies in `[lo, hi]` *once `g` is added* is a block of `U'`,
-at the round the shift names and with the same author, and above the
-floor with the same references.
-
-The two offsets put both universes in one frame: `b` sits at
-`round_U b + g` read from `U` and at `round_U' b + g'` read from `U'`,
-and the `block` clause says those agree. At `g = g' = 0` this is
-agreement on the nose, which is what an extension and an
-above-a-round agreement give. At `g = 0`, `g' = G` it is a truncation by
-`G`, whose survivors all moved down. Swapping `U` with `U'` swaps the
-offsets, so reading the relation backwards is another instance of it,
-which is what lets a two-directional consumer like `LocalTruncate` be
-served.
-
-Deliberately **one-directional** in membership: `U'` may hold blocks `U`
-does not, in the band or out of it, which is what a fill does.
-
-The references clause stops at the floor rather than including it. A
-truncation empties the references of its bottom layer, and a rule reads
-a vote from a *parent*, so the floor contributes presence and authorship
-but no vote. -/
+whose round lies in `[lo, hi]` once `g` is added is a block of `U'`, at
+the round the shift names and with the same author, and above the floor
+with the same references. The two offsets `g, g'` put both universes in
+one frame of rounds; at `g = g' = 0` this is agreement on the nose, and
+at `g = 0, g' = G` it is a truncation by `G`. Membership is
+one-directional — `U'` may hold blocks `U` does not, as a fill does —
+and the references clause stops at the floor, since a rule reads a vote
+from a parent and a truncation empties the bottom layer's refs. -/
 structure AgreeBand (R : DagRule Validator BlockId Payload) (U U' : R.Universe)
     (lo hi g g' : ℕ) : Prop where
   /-- A block of the band is a block of `U'`. -/
@@ -122,15 +95,11 @@ theorem mono {U U' : R.Universe} {lo hi lo' hi' g g' : ℕ} (h : AgreeBand R U U
 
 variable {U U' : R.Universe} {lo hi g g' : ℕ}
 
-/-- **Causal history inside the band is the same history.**
-
-The floor is included, and deliberately: a path *into* the floor reads
-the references of the layer above it, which the band preserves, so the
-last step survives even though the floor's own references do not. Only a
-path that started below the floor would need them, and there is none —
-`lo ≤ (R.block U C).round + g` is the hypothesis. Mahi-Mahi is what
-forced the strengthening: its votes are read from a cone at the slot's
-*propose* round, which is the floor exactly. -/
+/-- **Causal history inside the band is the same history.** The floor is
+included: a path *into* it reads the layer above, which the band
+preserves, even though the floor's own references need not be
+preserved. Mahi-Mahi needs exactly this, its votes reading a cone at
+the slot's propose round, the floor itself. -/
 theorem reaches_of (h : AgreeBand R U U' lo hi g g')
     {A : BlockId} (hA : A ∈ R.ids U) (hAhi : (R.block U A).round + g ≤ hi) :
     ∀ {C : BlockId}, ReachesFrom (R.block U) A C → lo ≤ (R.block U C).round + g →
@@ -182,14 +151,10 @@ theorem reaches_old (h : AgreeBand R U U' lo hi g g')
 
 /-! ## Reading a band, at any carrier
 
-Five projections that every rule's band proof needs and that existed
-only at the core's carrier, where they were written. `MysticetiProperties`
-keeps its own copies, which these subsume; a rule being ported states
-none of them (`docs/porting-plan.md`).
-
-The two that are not field projections are the two that matter: a round
-layer lands on the layer the shift names, and a set of blocks inside the
-band has the authors it had. -/
+Five projections every rule's band proof needs: three are the
+structure's own fields, and the two that matter are that a round layer
+lands on the layer the shift names, and a set inside the band keeps its
+authors. -/
 
 variable {U U' : R.Universe} {lo hi g g' : ℕ}
 
@@ -245,19 +210,13 @@ end AgreeBand
 /-- **Every verdict reads a band of rounds.** From the slot's own round
 up to some top, the blocks the view holds and the leaders of the slots
 sitting there already carry the verdict: any universe carrying the band
-**up to a shift**, any view holding those blocks, and any schedule whose
+up to a shift, any view holding those blocks, and any schedule whose
 slots correspond and whose leaders match inside the band, decides the
-corresponding slot the same way.
-
-Four naturals name the correspondence. `g` and `g'` put the two
-universes in one frame of rounds; `d` and `d'` put the two schedules in
-one frame of slots, slot `m` of `S` answering to slot `m'` of `S'` when
-`m + d' = m' + d`. All four are zero for persistence, locality and
-monotonicity in the view. The ceiling is read in the source's own frame,
-so the band always covers the rounds `[slotRound k, top]` of `U`
-whatever the offset, and a large shift cannot empty the hypothesis. A truncation by `G` from base slot `d` uses
-`g = 0`, `g' = G`, `d' = 0`, and reading it backwards swaps the pairs,
-which is why one property serves a two-directional consumer. -/
+corresponding slot the same way. `g, g'` put the two universes in one
+frame of rounds and `d, d'` the two schedules in one frame of slots
+(slot `m` of `S` answering to `m'` of `S'` when `m + d' = m' + d`); all
+four are zero for persistence, locality and view monotonicity, and a
+truncation by `G` from base slot `d` uses `g = 0, g' = G, d' = 0`. -/
 def Banded (R : DagRule Validator BlockId Payload) : Prop :=
   ∀ (S : Slots Validator) (U : R.Universe) (V : R.View U) (k : ℕ) (v : Option BlockId),
     R.Decided S V k v →

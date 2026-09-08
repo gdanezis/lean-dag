@@ -5,15 +5,11 @@ import Mathlib.Data.Finset.Max
 /-!
 # Machine-checked recovery derivations
 
-Human reviewers must inspect the theorem statements in this file to
-confirm that they express the intended guarantees. Once those statements
-and the two specification modules are accepted, the `by` bodies are
-proof engineering checked by Lean and need not be trusted by inspection.
-
-The concrete selector below implements `RecoveryRound.IsSelected`.
-Recovery handlers agree on validated evidence, select a highest
-checkpoint or the closing epoch's canonical genesis, and preserve
-closing-epoch recorded and finalized histories into the next epoch.
+Human reviewers must inspect the theorem statements to confirm they
+express the intended guarantees; once those and the two specification
+modules are accepted, the `by` bodies need not be trusted by
+inspection. The concrete selector below implements
+`RecoveryRound.IsSelected`.
 -/
 
 namespace LeanDag.Hybrid.Checkpoint
@@ -183,12 +179,10 @@ theorem validated_prefix_select {receiver : Validator}
     (height_le_select M E R hs hc)
 
 include R in
-/-- What a closing-epoch record is: a recovery-correct handler holds one
-only for a checkpoint some quorum certified. The `Execution` structure
-does not say so — `submits_recorded` does, through the payload it
-requires the handler to input, and `validateCertificate_sound` returns
-that payload as a certificate. `R` is explicit because the fact belongs
-to the round's submission contract rather than to the execution. -/
+/-- A recovery-correct handler holds a closing-epoch record only for a
+checkpoint some quorum certified — not a fact `Execution` states, but
+one `submits_recorded`'s payload obligation and
+`validateCertificate_sound` together establish. -/
 theorem recorded_certified {v : Validator} {checkpoint : CheckpointData Value}
     (hv : v ∈ M.RecoveryCorrect) (hrecorded : E.recorded v checkpoint)
     (hepoch : checkpoint.epoch = epoch) :

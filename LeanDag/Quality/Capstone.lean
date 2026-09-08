@@ -3,29 +3,12 @@ import LeanDag.Mysticeti.Quantitative
 /-!
 # Chain quality: the capstone, and the quantitative bounds
 
-`chain-quality.md` §4, CQP3 — **CQ7**. Two packagings of the arc's
-results, in the house style of `dos_resistance`: quote enforceable or
-standard conditions only, and say everything in one place.
-
-* `chain_quality` — the combined statement: under a fair schedule over
-  reliable validators, (a) *unconditionally*, every commit's flush
-  covers all but at most `f` correct validators at every round below
-  it — at least half — and (b) post-`R`, every correct block is in the
-  flush of a committed slot the schedule fixes in advance.
-* `committed_of_correct_block_within` / `…_by_round` — the quantitative
-  forms: under a windowed-fair schedule the committing slot lies within
-  `w` slots of the first slot above the block's round, and under
-  bounded spacing its round is within `s·w` rounds — *"a correct block
-  is committed within a schedule-window of its creation, once the DAG
-  is synchronous."*
-
-The block-fraction purity statement (CQ4) was assessed and **dropped**,
-per the gate recorded in the design document: under `DoSValid` alone the
-per-author block count in a cone carries the exponential pedigree
-constant, and under the budget the cone-level Byzantine count is the
-author's whole store bound — linear in the round, not in the layer —
-so neither route yields a ratio worth quoting. The author-coverage
-metric of CQ1–CQ3 is the honest one.
+`chain-quality.md` §4, CQP3 — **CQ7**: under a fair schedule over
+reliable validators, every commit's flush covers at least half the
+correct validators unconditionally, and post-`R` every correct block
+lands in the flush of a committed slot fixed by the schedule in
+advance. `committed_of_correct_block_within` / `…_by_round` give the
+quantitative form of the second half, in slots or in rounds.
 -/
 
 namespace LeanDag

@@ -6,33 +6,14 @@ import LeanDag.Properties.Carrier
 The reassignment rule, packaged with the clauses it owes. `pick` maps
 the universe and a verdict function to a leader assignment; `adapted` is
 the measurability clause — the leader of slot `k` is a function of the
-verdicts of epochs `≤ epochOf k − 2` and of nothing else — and it is the
-whole of what safety will consume. The lag of two is the least that
-makes the adaptive fixpoint well-founded: with lag one, the slots at the
-top of an epoch would have no eligible anchors inside their window (see
-`adaptive-leaders.md` §2).
-
-`pick` receives the universe and the validator's own view of it, so
-that a reputation rule may consult the committed blocks themselves —
-certification patterns, payload contents — and not merely the verdict
-vector. The view is what a validator actually has; nothing then makes
-two validators agree, and nothing should — a rule reading its own view
-freely could hand two correct validators different leaders. `adapted`
-is what rules that out: the leader of a slot is a function of the
-verdict prefix and of nothing else, the view included. That is not a
-restriction in practice — the committed prefix is what every view
-holding those verdicts holds whole, by causal completeness — and a
-rule computing from its own copy of it satisfies the clause; as with
-the enforceability discussion of report §4 the model states the
-mathematical condition while the implementation owes the discipline.
-
-`base_prefix` pins epochs `0` and `1` to the base schedule: the first
-window from which `pick` has a two-epoch-old prefix to read is epoch
-`2`.
-
-The policy reads a protocol's *carrier* only — its universes and views
-— so it is stated over `Properties.DagRule`; the core's `AdaptivePolicy`
-is this structure at the core's carrier (`Adaptive/Mysticeti.lean`).
+verdicts of epochs `≤ epochOf k − 2` and of nothing else, the view
+included, and it is the whole of what safety consumes. The lag of two
+is the least that makes the adaptive fixpoint well-founded (`adaptive-leaders.md`
+§2); `base_prefix` pins epochs `0` and `1` to the base schedule, since
+epoch `2` is the first with a two-epoch-old prefix to read. The policy
+reads a protocol's carrier only, so it is stated over
+`Properties.DagRule`; the core's `AdaptivePolicy` is this structure at
+the core's carrier (`Adaptive/Mysticeti.lean`).
 -/
 
 namespace LeanDag
@@ -45,10 +26,8 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
 /-- A Hammerhead-style reassignment policy over a carrier: epoch length,
-the rule, and the clauses it owes. Fairness — the clause liveness will
-price — is deliberately *not* here: safety must hold for arbitrary, even
-adversarial, adapted policies, and stating fairness where liveness
-consumes it keeps that separation visible. -/
+the rule, and the clauses it owes. Fairness is deliberately not here:
+safety must hold for arbitrary, even adversarial, adapted policies. -/
 structure Policy (R : DagRule Validator BlockId Payload) [S : Slots Validator] where
   /-- The epoch length, in slots. -/
   W : ℕ

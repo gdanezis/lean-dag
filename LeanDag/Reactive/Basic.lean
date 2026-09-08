@@ -2,51 +2,15 @@ import LeanDag.Mysticeti.ViewPace
 /-!
 # The reactive schedule
 
-The timed schedules of §6.9 direct a validator to wait a full timeout in
-every round (`waits`), which buys reference coverage at the price of
-latency: every round costs a timeout even when the network is fast. The
-reactive schedule inverts the discipline — a validator builds *as soon
-as* its exit condition is met, with the timeout only as a fallback
-ceiling — and pays for it in coverage: a reactive builder omits whatever
-had not arrived when its exit fired, so `SynchronisedOn` fails in
-general. What survives is exactly what the commit rule counts, and the
-exit conditions are chosen to guarantee it:
-
-* `deadline` — the ceiling. A validator never waits *past* the timeout;
-  the full-timeout floor is gone; only `built_lt` (time advances) bounds
-  builds from below.
-* `vote_or_wait` — at the round above a reliable leader, a block either
-  references the leader (the reactive exit), or its builder waited the
-  full timeout and would have referenced the leader had it held it (the
-  fallback). Building early *without* the leader is thereby excluded,
-  which is the whole discipline: the schedule accelerates only where
-  acceleration cannot cost the vote.
-
-The clause is stated only for slots whose leader lies in `T`. For a
-Byzantine leader nothing useful can be said — it may equivocate, and
-`ValidWrt.distinct_creators` forbids referencing two of its blocks — and
-no liveness statement concerns such slots.
-
-For the fast path, `prompt_vote` bounds the reactive exit from above: once
-a validator past its round entry holds the leader *and* every reliable
-round-`r` block, it builds within the processing bound `proc`. The
-latency and no-timeout theorems (`built_succ_le_of_fast`,
-`no_timeout_of_fast`) quantify the resulting speed: rounds advance at the
-pace of actual propagation, and if delivery is faster than the timeout
-the timeout never fires.
-
-**`ReactivePace` extends the same trunk as the full-timeout discipline.**
-`PaceCore` carries the partial schedule, the views, `converges` and the
-progress rule, so production is *inherited* (`PaceCore.populatedOn`)
-rather than assumed: the reactive arc no longer carries a block function,
-and its clauses are stated over any `T`-authored block, with
-non-equivocation never needed. Where the earlier `ReactiveCore` supplied
-population from `blk`-as-data, every block this file names is now
-produced by the derivation of §6.9.
-
-Everything here consumes the DAG layer read-only; the commit rules are
-untouched, and each protocol's file derives its own `DirectCommit` from
-the votes this stage guarantees.
+Where the timed schedule of §6.9 waits a full timeout every round, the
+reactive one builds as soon as its exit condition fires — a leader vote
+or, failing that, the full timeout — trading reference coverage for
+latency: a reactive builder omits whatever had not arrived, so
+`SynchronisedOn` fails in general and only what the commit rule counts
+survives. `prompt_vote` bounds the fast exit, giving the latency and
+no-timeout theorems below it. `ReactivePace` extends the same `PaceCore`
+trunk as the full-timeout discipline, so production is inherited rather
+than assumed.
 -/
 
 namespace LeanDag
@@ -59,14 +23,8 @@ variable [S : Slots Validator]
 variable {T : Finset Validator} {D N R : ℕ} {k : ℕ} {L : BlockId}
 
 /-- The reactive schedule and network layer, shared by both protocols:
-`PaceCore` with the reactive discipline in place of the full-timeout one.
-
-Relative to `ViewPace`, the floor `waits` is replaced by `deadline`,
-`built_lt`, `vote_or_wait` and `prompt_vote`, and the referencing clause
-is carried inside `vote_or_wait`'s fallback rather than stated globally
-— a reactive builder deliberately does *not* reference everything it
-holds. The processing bound `proc` is the trunk's: the same constant
-bounds catch-up entry and the reactive exit. -/
+`PaceCore` with `deadline`, `built_lt`, `vote_or_wait` and `prompt_vote`
+in place of `ViewPace`'s full-timeout floor. -/
 structure ReactivePace (U : BlockUniverse Validator BlockId Payload)
     (T : Finset Validator) (N : ℕ) extends PaceCore U T N where
   /-- Time advances with rounds — the only lower bound a reactive
@@ -133,16 +91,9 @@ theorem driftOn_of_catchup
 
 /-- **Every reliable vote block votes.** Past GST, with the timeout
 clearing `2Δ + proc`, every `T`-authored block at the round above a
-reliable leader references the leader's block — whether by the reactive
-exit or by the fallback.
-
-The fallback case is the only argument: the leader holds its own block
-when it builds, convergence carries it across within `delay`, the
-collapsed drift (`driftOn_of_catchup` — no drift hypothesis is taken)
-and the full timeout place that arrival before the waiter's build, and
-the fallback clause then obliges the vote. The reactive exit needs
-nothing: it *is* the vote. Stated over any `T`-authored block, so
-non-equivocation is never consulted. -/
+reliable leader references it — by the reactive exit directly, or by
+the fallback once convergence and the collapsed drift place the
+leader's arrival before the waiter's build. -/
 theorem votes (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card)
     (hgst : rc.gst ≤ R)
@@ -232,11 +183,8 @@ theorem no_timeout_of_fast {δ : ℕ}
 
 /-! ### The spread, discharged
 
-The two results above take the spread `D` between reliable round entries as a
-parameter, which leaves the reader to supply it. Past GST there is nothing to
-supply: the catch-up rule collapses the spread to `delay + proc`
-(`driftOn_of_catchup`), and the latency is then stated in the constants the
-deployment already knows --- `Δ`, the actual delivery `δ`, and `proc`. -/
+Past GST the catch-up rule collapses the spread `D` to `delay + proc`,
+so latency below is stated in the deployment's own constants. -/
 
 omit [DecidableEq BlockId] in
 /-- **Latency, in the deployment's own constants.** Past GST, with a quorum

@@ -6,21 +6,15 @@ import LeanDag.GC.ChopDecided
 /-!
 # A carrier on the block record, and the witnesses every mechanism owes
 
-A rule whose universes are block records — every rule with a carrier —
-gets its cut, fill and re-genesis from `Record/`, and the witnesses
-those mechanisms owe the properties (`Truncates`, `Extends`,
-`Sustains`) are proved here once, for any such rule.
-
+A rule whose universes are block records gets its cut, fill and
+re-genesis from `Record/`, and the witnesses those mechanisms owe the
+properties (`Truncates`, `Extends`, `Sustains`) are proved here once.
 `DagRule.OnRecord` says how a carrier's universes and views are read as
-records: a map each way for universes and for views, with the
-carrier's ids, block map and view ids agreeing with the record's, and
-an invariant `I` the carrier adds — `Any` for the core, Nemo, FinWhale
-and Hydrozoan, `HonestNoEquiv` for Orcaella, leader exclusion for
-Optimal-Hydrozoan — that the record's constructions preserve
-(`Invariant.Mechanised`). For the core, Nemo and FinWhale every map is
-the identity; for Hydrozoan they are the block adapter and its inverse.
-Nothing here mentions verdicts, which is why one structure serves rules
-with different view types; the verdict cells are `Arcs/Record.lean`.
+records, with an invariant `I` the carrier adds that the record's
+constructions preserve (`Invariant.Mechanised`) — `Any` for most rules,
+`HonestNoEquiv` for Orcaella. Nothing here mentions verdicts, so one
+structure serves rules with different view types; the verdict cells are
+`Arcs/Record.lean`.
 -/
 
 namespace LeanDag

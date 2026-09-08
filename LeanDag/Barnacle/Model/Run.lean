@@ -2,33 +2,15 @@ import LeanDag.Barnacle.Model.Window
 /-!
 # Barnacle: the run
 
-The object safety and liveness are stated on (`barnacle.md` §5).
-Configurations are indexed `k = 0, 1, …`; configuration `k` is in force
-at the rounds above `start k`, with `count k` leaders per round, and its
-*range* is the rounds up to and including the next anchor's. Every slot
-of the range is decided by the base relation against the configuration's
-own schedule, `Sched (count k)` — including whatever decision-anchors
-above the next anchor an indirect decision reads, because Algorithm 2
-decides under the count in force and switches only afterwards
-(`barnacle.md` §5). That is what makes the dependency well-founded
-by induction on `k`.
-
-A `PartialRun` is closed up to a configuration height `K`: the ranges
-of configurations below `K` are decided in full — through the end of
-the anchor's round — and configuration `K` is determined. There is no
-total run: every configuration commits an anchor at its own round, and
-a universe holds finitely many blocks, so a run closes finitely many
-configurations and the paper's *sequence* of configurations is what
-every prefix of it agrees on (`barnacle.md` §5).
-
-Slots are numbered per configuration: `vdct k` is a verdict function on
-`Sched (count k)`, the object every base theorem speaks about. The round
-clauses are written as `κ / count k`, which is `Sched`'s `slotRound`.
-
-The initial configuration is `(0, 1)`: one leader, and `lastRound = 0`
-as Algorithm 2 initialises it. Round `0` therefore lies in no range —
-faithful to the algorithm, whose first decision walk starts at round
-`1`.
+Configuration `k` (`barnacle.md` §5) is in force above round `start k`
+with `count k` leaders, and its range runs to the next anchor's round;
+every slot of the range is decided against the configuration's own
+schedule `Sched (count k)`, which is what makes the dependency on `k`
+well-founded. `PartialRun` closes configurations `0, …, K`: their
+ranges decided in full, `K` itself only determined — there is no total
+run, since a universe holds finitely many blocks. The initial
+configuration is `(0, 1)` with `lastRound = 0`, so round `0` lies in no
+range, matching Algorithm 2.
 
 **Trusted core of the arc: definitions only.**
 -/
@@ -70,8 +52,8 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
   init : start 0 = 0 ∧ count 0 = 1 ∧ backoff 0 = 0
   count_pos : ∀ k, 0 < count k
   count_le : ∀ k, count k ≤ P.maxLeaders
-  /-- Every slot of the range is decided against the configuration's
-  schedule. -/
+  /-- Every slot of the range — after `start k`, through the anchor's
+  round — decided against the configuration's schedule (`TryDecide`). -/
   closed : ∀ k, k < K → ∀ κ, start k < κ / count k → κ / count k ≤ start (k + 1) →
     R.Decided (Sched getLeader hk (count k) (count_pos k) (count_le k)) V κ (vdct k κ)
   /-- The anchor is committed, past the threshold … -/

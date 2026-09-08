@@ -5,14 +5,9 @@ import Mathlib.Order.Interval.Finset.Nat
 # FinWhale — the reverse pass, as a procedure
 
 `Model/Verdict.lean` states the pass as a condition on a verdict
-assignment. This file computes it. `slotVerdict` decides one slot from
-the verdicts above it — a direct commit if there is one, a direct skip if
-there is one, and otherwise the first slot above `r + 2` that is not
-skipped, read through the tie-break — and `passFrom` threads that down
-from the horizon, where nothing is decided, to slot `0`. `decOf` is the
-result, a function of the DAG, the tie-break and the horizon.
-
-`Pass.lean` proves it well-formed.
+assignment; this file computes it. `slotVerdict` decides one slot from
+the verdicts above it, and `passFrom` threads that down from the
+horizon to slot `0`, giving `decOf`. `Pass.lean` proves it well formed.
 -/
 
 
@@ -31,15 +26,9 @@ def directCommits (S : Slots Validator) (D : Dag Validator BlockId Payload) (r :
   (slotBlocks S D r).filter (fun l => DirectCommit D l)
 
 /-- The candidates for the anchor of `r`: the **eligible** slots below
-the horizon that the verdicts above do not skip.
-
-Stated as a filter over `Iic N` rather than over the interval
-`Ioc (r + 2) N`. The interval was the identity-slot reading, and while
-the pass enumerated it the pass was well formed at that eligibility and
-no other — which is what confined FinWhale's carrier to schedules whose
-slots are their rounds (`docs/porting-plan.md`). Filtering leaves the
-pass well formed at whatever eligibility it is run with, which is how
-every other rule here reads its anchor. -/
+the horizon that the verdicts above do not skip. Filtered over `Iic N`
+rather than the interval `Ioc (r + 2) N`, so the pass stays well formed
+at whatever eligibility it is run with. -/
 def anchorCands (Elig : ℕ → ℕ → Prop) [DecidableRel Elig] (N : ℕ)
     (above : ℕ → Verdict BlockId) (r : ℕ) : Finset ℕ :=
   (Finset.Iic N).filter (fun a => Elig r a ∧ above a ≠ Verdict.skip)

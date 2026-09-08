@@ -4636,8 +4636,8 @@ those calls fires at an abbreviation of a common set. Each needed the
 common name added to its simp set or the membership lemma in place of
 the unfolding; the rewrite is mechanical but wide, and it is most of
 this step's diff. The count is therefore modest, 109 lines removed
-against 97 added: what the step buys is that FinWhale's counting is the
-record's counting and not a second implementation of it.
+against 97 added: what the step yields is that FinWhale's counting is
+the record's counting and not a second implementation of it.
 
 **What stays FinWhale's.** The evidence apparatus — `parentsVoting`,
 `SPCertificate`, `ExposesEquivocationBy`, `FPEvidence` and the

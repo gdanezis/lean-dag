@@ -4,22 +4,12 @@ import LeanDag.Mysticeti.Properties
 /-!
 # Adaptive Mysticeti: the core as an instance
 
-The adaptive mechanism (`Adaptive/{Policy,Run,Liveness}.lean`) is stated
-over a `Properties.BoundedRule` and five properties. This file applies
-it to the core: every statement the arc made before the mechanism was
-generic — `AdaptivePolicy`, `PartialRun`, `AdaptiveRun`,
-`partialRun_agree`, `adaptiveRun_agree`, `epoch_closes`,
-`exists_partialRun`, `adaptiveRun_exists`, and the congruence lemmas —
-is restated here verbatim, and each is now a corollary of the generic
-theorem at `MysticetiProperties.mysticetiRule` with the core's
-proofs of the five properties. Nothing downstream changes.
-
-The one visible difference is in how the liveness hypotheses are
-supplied: the generic theorems ask for the protocol's precondition
-`Live` stage by stage, and the core's `coreLive` reads no leader, so
-the usual global hypotheses — `SynchronisedOn`, `PopulatedOn` to a
-horizon, `CoversUpto` — produce it at every stage. That is what the
-proofs below do and all they do.
+The generic adaptive mechanism (`Adaptive/{Policy,Run,Liveness}.lean`)
+at `MysticetiProperties.mysticetiRule`, with the core's proofs of its
+five properties. The one supplied part: the generic theorems ask for
+the precondition `Live` stage by stage, and the core's `coreLive` reads
+no leader, so the usual global hypotheses — `SynchronisedOn`,
+`PopulatedOn` to a horizon, `CoversUpto` — produce it at every stage.
 -/
 
 namespace LeanDag
@@ -62,9 +52,8 @@ theorem isLeaderBlock_slotsOf_congr {hinj : Function.Injective S.slotRound}
     IsLeaderBlock (S := slotsOf hinj a₂) U k L :=
   isLeaderBlock_congr (S₁ := slotsOf hinj a₁) (S₂ := slotsOf hinj a₂) rfl hk h
 
-/-- **Congruence below the bound.** Two assignments agreeing below `B`
-derive the same bounded verdicts — `decidedWithin_congr_of_slotRound`
-at two induced schedules. -/
+/-- **Congruence below the bound**: two assignments agreeing below `B`
+derive the same bounded verdicts. -/
 theorem decidedWithin_congr {hinj : Function.Injective S.slotRound}
     {a₁ a₂ : ℕ → Validator} {V : View Validator BlockId Payload U} {B k : ℕ}
     {v : Option BlockId} (ha : ∀ m, m < B → a₁ m = a₂ m)
@@ -190,11 +179,9 @@ theorem exists_partialRun (hT : T ⊆ (Correct : Finset Validator))
       change S.slotRound k + 2 ≤ N
       omega)
 
-/-- **AL5: the adaptive fixpoint exists.** On a DAG synchronised over a
-quorum of reliable validators and populated at every round, under a
-policy that places runs, a total adaptive run exists on every view
-caught up to every horizon. With `adaptiveRun_agree` it is THE fixpoint:
-adaptive Mysticeti decides every slot, and uniquely. -/
+/-- **AL5: the adaptive fixpoint exists**, on a synchronised, populated
+DAG under a policy that places runs. With `adaptiveRun_agree` it is THE
+fixpoint. -/
 theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card)
     (hc : 0 < c) (hruns : PlacesRuns P T c)

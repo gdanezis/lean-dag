@@ -37,14 +37,9 @@ def linearise (hist : BlockId → List BlockId) (ls : List BlockId) : List Block
   ls.foldl (fun acc l => acc ++ (hist l).filter (fun b => b ∉ acc)) []
 
 /-- **The delivery order's input, concretely.** A leader contributes its
-causal history, which `historyFrom` computes from the references alone,
-listed in the identifier order.
-
-The paper asks only for "a deterministic sort", and what Theorems 24 and
-26 read is that the list is a function of the block and lists its causal
-history once each. Sorting by identifier is the cheapest such function
-and keeps the definition computable; a causal order would serve equally
-and is not what any result here consumes. -/
+causal history, computed by `historyFrom` and listed in the identifier
+order — the cheapest deterministic sort that lists each block once, and
+all that Theorems 24 and 26 read of it. -/
 def histOf [LinearOrder BlockId] (D : Dag Validator BlockId Payload) (l : BlockId) :
     List BlockId :=
   (historyFrom D.block l).sort (· ≤ ·)

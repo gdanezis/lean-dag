@@ -5,34 +5,19 @@ import Mathlib.Order.Interval.Finset.Nat
 /-!
 # BN12 — a healthy window is read as healthy
 
-Safety and liveness are unconditional in the leader count: BN3 holds for
-every update rule and BN8 at whatever count the run reaches. That is the
-right design, and it leaves one thing unsaid. Nothing so far stops the
-measurement reading a window in which *every* scoring slot committed as
-unhealthy, so nothing stops the AIMD rule driving the count to one and
-holding it there for ever. The mechanism would be safe, live, and inert.
+Safety and liveness are unconditional in the leader count, and that
+leaves one thing unsaid: nothing so far stops the measurement reading
+every scoring slot as unhealthy and the AIMD rule driving the count to
+one for ever, safe and live but inert. `WindowHealthy` says what a
+healthy window is — every slot of every scoring round directly
+committed on the anchor's history — and BN12 says such a window reaches
+the `expected` count, since the scoring rounds `waveLength ≤ d ≤
+interval` are exactly `expected` divided by the count.
 
-This file closes that. `WindowHealthy` says what a healthy window is —
-every slot of every scoring round directly committed on the anchor's
-history — and BN12 says the count then reaches `expected`, so the
-threshold test passes and the rule increases.
-
-**Which rounds can score.** A direct commit at round `r` rests on
-evidence at round `r + waveLength − 1`, so the anchor at round `ra` can
-carry it only when `r + waveLength − 1 ≤ ra`, that is `d ≥ waveLength −
-1` for `r = ra − d`. The round at `d = waveLength − 1` has the anchor
-itself as its only certifier in the window and never scores, so the
-scoring rounds are `waveLength ≤ d ≤ interval` — `interval − waveLength
-+ 1` of them, which is `expected` divided by the count. `expected` is
-therefore exactly the count of a window in which every scoring slot
-commits, and BN12 is that reading, proved.
-
-**What this does not claim.** That a *good DAG* makes the window
+**What this does not claim**: that a good DAG *makes* the window
 healthy. That needs the anchor's history to carry the good validators'
-blocks below it, which is a property of the base protocol and not of the
-mechanism; it is the natural next result, and slots led by validators
-outside the good set will not commit in any case, so the bound there is
-partial rather than `expected`.
+blocks below it, a property of the base protocol rather than of the
+mechanism, and is the natural next result.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -65,11 +50,9 @@ def Counted (R : BaseRule Validator BlockId Payload) (P : Params)
     WindowHealthy R P getLeader hk U A hA m hm hmax →
     expected R P m ≤ observed R P getLeader hk U A m hm hmax
 
-/-- **BN12b, and the rule then increases.** At a threshold of at most one
-— the paper's `num / den ≤ 1`, which every deployment satisfies — a
-healthy window raises the count by one, capped at `maxLeaders`, and
-resets the back-off. So the loop cannot read a window in which every
-scoring slot committed as a reason to back off. -/
+/-- **BN12b, and the rule then increases.** At a threshold of at most
+one — the paper's `num / den ≤ 1` — a healthy window raises the count
+by one, capped at `maxLeaders`, and resets the back-off. -/
 def Raises (R : BaseRule Validator BlockId Payload) (P : Params)
     (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders) : Prop :=
   ∀ (U : R.Universe) (A : BlockId) (hA : A ∈ R.ids U) (m : ℕ) (hm : 0 < m)
@@ -78,14 +61,10 @@ def Raises (R : BaseRule Validator BlockId Payload) (P : Params)
     WindowHealthy R P getLeader hk U A hA m hm hmax →
     Aimd.rule R P getLeader hk m backoff U V A = (min (m + 1) P.maxLeaders, 0)
 
-/-- **BN12c, the count counts verdicts.** Every slot the window counts
-is a slot the protocol committed.
-
-Without this the arc's other two results are true of a rule whose direct
-predicate holds of everything: the count would reach its expectation,
-the leader count would rise every window, and nothing would be measured.
-`Properties.CommitsDirect` is what rules that out, and it is the one
-thing the leader count asks of a protocol that agreement does not. -/
+/-- **BN12c, the count counts verdicts.** Every slot the window counts is
+a slot the protocol committed — `Properties.CommitsDirect`, without
+which a rule whose direct predicate holds of everything would pass this
+count vacuously. -/
 def Sound (R : BaseRule Validator BlockId Payload) (P : Params)
     (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders) : Prop :=
   ∀ (U : R.Universe) (A : BlockId) (hA : A ∈ R.ids U) (m : ℕ) (hm : 0 < m)

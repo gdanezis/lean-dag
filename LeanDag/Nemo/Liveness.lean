@@ -3,57 +3,39 @@ import LeanDag.Mysticeti.Liveness
 /-!
 # Nemo-Nemo: crash liveness
 
-The liveness chain for the crash arc, mirroring the hybrid arc's structure
-at the majority quorum over the crash `Universe`.
+The liveness chain for the crash arc, mirroring the hybrid arc's
+structure at the majority quorum over the crash `Universe`. Crash
+safety is free — everything through `Decision.lean` holds on any
+committee — and only liveness pays: `CrashFaults` (`crashed.card ≤ f`,
+`2f + 1 ≤ n`) is defined here and consumed through one bridge,
+`majority_le_card_live`.
 
-**The fault bound enters here for the first time.** Everything in
-`Basic`..`Decision` holds on any committee with no bound whatsoever — crash
-safety is free. Only liveness pays: the `CrashFaults` class (`crashed.card ≤
-f`, `2f + 1 ≤ n`) is defined in this file, imported by nothing on the safety
-side, and consumed through a single bridge, `majority_le_card_live`.
+**No `directSkip`.** The implementation pins the direct-skip quorum to
+the full stake, so a crashed leader's empty slot cannot be skipped at
+its own round; every skip routes through `indirectSkip`, anchored on a
+later live-led commit, which is why the headline is
+`all_decided_below_of_fairRun` with no L5 analogue.
 
-**No `directSkip`, so no slot-local skip of a crashed leader.** The
-implementation pins the direct-skip quorum to the full stake, so `Decided`
-has three constructors — a slot whose leader crashed and produced no block
-cannot be skipped at its own round the way the core's L5 skips an absent
-leader. Every skip routes through `indirectSkip`, anchored on a later
-live-led commit, which is why the arc's headline is
-`all_decided_below_of_fairRun` and there is no L5 analogue.
+**Why a run of two consecutive commits.** A crashed validator is
+indistinguishable from a slow one, so the anchor scan cannot step past
+an undecided slot, and every commit at round `r` casts a shadow at
+round `r − 1` — a slot it can neither anchor nor step past. A lone
+commit settles only itself and round `r − 2`; two commits at
+*consecutive* rounds are the minimal self-sufficient configuration,
+since the upper one anchors the lower one's shadow and its own shadow
+is the lower commit itself. Hence `FairRunOn T 2`, harmless for
+round-robin over `n = 2f + 1`: `f + 1` live validators cannot be
+pairwise non-adjacent on a cycle of `2f + 1`.
 
-**Why a *run* of two consecutive commits.** A crashed validator is
-indistinguishable from a slow one, so there is no failure detector: the
-anchor scan cannot step past an undecided slot (deciding through a farther
-anchor would break the nearest-anchor determinism on which `decided_unique`
-rests), and the only evidence that a slot can never commit is the
-full-stake blame census, unattainable once anyone crashes. Every commit at
-round `r` therefore casts a *shadow* at round `r − 1` — a slot it can
-neither anchor (one round too close) nor step past. A lone commit settles
-only itself and round `r − 2`: for any commit set with no two members at
-adjacent rounds, the settled slots are exactly the commits and their
-round-minus-two neighbours, and everything else stalls forever — commits at
-every even round, both pipeline stages committing infinitely often, still
-settle no odd slot. Two commits at *consecutive* rounds are the minimal
-self-sufficient configuration: the upper one anchors the lower one's shadow
-with a vacuous intermediate premise, and the upper one's shadow is the
-lower commit itself. Hence `FairRunOn T 2`. The hypothesis is harmless for
-the intended schedule: round-robin over `n = 2f + 1` with at most `f`
-crashed always has two adjacent live leaders, since `f + 1` live validators
-cannot be pairwise non-adjacent on a cycle of `2f + 1`.
-
-The participation vocabulary (`PopulatedOn`, `SynchronisedOn`, `View.full`,
-`View.CoversUpto`) is restated over the crash `Universe`; the schedule
-vocabulary (`FairScheduleOn`, `FairRunOn`) is fault-agnostic and reused from
-the core; `SpansEligible` is restated at this arc's wavelength-two
-`Eligible`. The descent is the *core's* simple form — `isLeaderBlock_unique`
-leaves no twins to tie-break, so the hybrid arc's canonicity block and its
-`[LinearOrder BlockId]` never appear.
+The participation vocabulary is restated over the crash `Universe`; the
+schedule vocabulary is fault-agnostic and reused from the core. The
+descent is the core's simple form, since `isLeaderBlock_unique` leaves
+no twins to tie-break.
 
 Every decision-valued statement concludes on a validator's own view,
-caught up to the horizon it reads (`View.CoversUpto`): the supporters sit
-one round above the leader, so a caught-up view holds them
-(`directCommitIn_of_coversUpto`), and the descent is view-parametric. The
-full view is caught up to every horizon (`View.coversUpto_full`), so the
-whole-universe reading is the special case (`liveness.md` §4.2).
+caught up to the horizon it reads; the full view is caught up to every
+horizon, so the whole-universe reading is the special case
+(`liveness.md` §4.2).
 -/
 
 namespace LeanDag

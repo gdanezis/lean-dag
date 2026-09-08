@@ -4,22 +4,13 @@ import LeanDag.FinWhale.Counting
 /-!
 # FinWhale — Lemma 4 in the shape the paper states it, and what follows
 
-`Counting.lean` proves the arithmetic. This file spends it, by supplying
-the one thing the arithmetic cannot see: that a *correct* validator's
-round-`(r+1)` block is one block, so a validator that voted for `b` and
-appears among some later block's parents voted for `b` **there too**.
-That is `parentsVoting_of_correct_voter`, and it is what "in any DAG"
-means once the DAG is read as the universe every view is a part of.
-
-With it, Lemma 4 is the two counts of `Counting.lean` applied to a
-block's parent set, and Lemmas 2, 5, 8, 9 and 10 follow.
-
-The equivocating branch also needs the leader to be *Byzantine*, which it
-is: two blocks of one validator at one round is what `no_equivocation`
-forbids of a correct one. `leader_byzantine_of_conflicting` says so, and
-`parents_byzantine_lt` turns it into the `f − 1` bound the count wants,
-via the validity clause that makes a block exposing equivocation drop the
-leader from its parents.
+`Counting.lean` proves the arithmetic; this file spends it, supplying
+what it cannot see — that a correct validator's single round-`(r+1)`
+block is the one it voted with, wherever it is later referenced
+(`parentsVoting_of_correct_voter`). With that, Lemma 4 is the two counts
+applied to a block's parent set. The equivocating branch also needs the
+leader to be Byzantine, which `parents_byzantine_lt` gives via the
+validity clause dropping it from an exposing block's parents.
 -/
 
 namespace LeanDag
@@ -36,26 +27,22 @@ theorem parent_round {b i : BlockId} (hb : b ∈ D.ids) (hi : i ∈ (D.block b).
     (D.block i).round + 1 = (D.block b).round :=
   (D.valid b hb).predecessor i hi
 
-/-- **A FinWhale DAG is a causal structure.** Its two conditions are the
-DAG's closure under references and validity's predecessor clause. -/
+/-- **A FinWhale DAG is a causal structure**: closure under references
+and validity's predecessor clause. -/
 theorem causalStructure (D : Dag Validator BlockId Payload) :
     CausalStructure D.block D.ids :=
   ⟨D.complete, fun i hi j hj => (D.valid i hi).predecessor j hj⟩
 
 /-- **No block references two blocks of one author.** Validity's
-`distinct_creators` says so directly, and it is why `selects_leader` and
-`selects_votes` below are guarded: a selection clause that obliged a
-builder to reference every version of an equivocating leader's block it
-held would be satisfiable by no valid DAG at all. -/
+`distinct_creators` says so directly. -/
 theorem not_refs_conflicting {c l l' : BlockId}
     (hc : c ∈ D.ids) (hconf : Conflicting D l l')
     (hl : l ∈ (D.block c).refs) (hl' : l' ∈ (D.block c).refs) : False :=
   hconf.1 ((D.valid c hc).distinct_creators l hl l' hl' hconf.2.2)
 
 /-- **The bridge.** A correct validator that both parents `b` and votes
-for `l` votes for `l` among `b`'s parents. Its round-`(r+1)` block is one
-block, so the vote the fast path counted and the parent `b` references
-are the same block. -/
+for `l` votes for `l` among `b`'s parents: its single round-`(r+1)`
+block is both. -/
 theorem parentsVoting_of_correct_voter {b l : BlockId}
     (hb : b ∈ D.ids) (hround : (D.block b).round = (D.block l).round + 2) :
     parentSet D b ∩ (voters D l ∩ (Correct : Finset Validator)) ⊆ parentsVoting D b l := by
@@ -86,9 +73,8 @@ theorem byzantine_of_conflicting {l l' : BlockId}
   intro hcorr
   exact hconf.1 (D.no_equivocation l hl l' hl' hcorr hconf.2.2 hconf.2.1)
 
-/-- **A correct validator votes for at most one block of a slot.** Its
-single round-`(r+1)` block carries at most one edge per validator, and
-two conflicting leader blocks share a creator. -/
+/-- **A correct validator votes for at most one block of a slot**: its
+single round-`(r+1)` block carries at most one edge per validator. -/
 theorem not_voter_of_conflicting {l l' : BlockId} (hconf : Conflicting D l l') :
     ∀ v ∈ voters D l', v ∈ (Correct : Finset Validator) → v ∉ voters D l := by
   intro v hv' hcorr hv
@@ -115,9 +101,8 @@ theorem fpEvidence_nonequivocating {b l : BlockId}
   have hsub := Finset.card_le_card (parentsVoting_of_correct_voter hb hround)
   omega
 
-/-- **Lemma 4, the equivocating branch, at the block level.** A block
-whose parents disagree about the round-`r` leader must, by validity, drop
-that leader from its parents; the leader is Byzantine, so at most `f − 1`
+/-- **Lemma 4, the equivocating branch, at the block level**: the
+leader is dropped from the parents and is Byzantine, so at most `f − 1`
 of the parents are, and the count reaches `f + p`. -/
 theorem fpEvidence_equivocating {b l : BlockId}
     (hb : b ∈ D.ids) (hround : (D.block b).round = (D.block l).round + 2)
@@ -130,9 +115,9 @@ theorem fpEvidence_equivocating {b l : BlockId}
     (parents := parentSet D b) hfast hpar hbyz
   exact le_trans hcount (Finset.card_le_card (parentsVoting_of_correct_voter hb hround))
 
-/-- **The conflicting side.** Under a fast commit for `l`, a block whose
-parents drop the Byzantine leader references fewer than `f + p` parents
-voting for any conflicting `l'`. -/
+/-- **The conflicting side**: under a fast commit for `l`, such a block
+references fewer than `f + p` parents voting for any conflicting
+`l'`. -/
 theorem conflicting_parents_lt {b l l' : BlockId}
     (hb : b ∈ D.ids)
     (hround : (D.block b).round = (D.block l).round + 2)
@@ -158,12 +143,9 @@ theorem conflicting_parents_lt {b l l' : BlockId}
     Finset.card_le_card hsub
   omega
 
-/-- **A block that exposes a validator's equivocation drops it.** Its
-parents disagree about `w`, so validity's first clause fails at `w` and
-the second must hold: `w`'s block is not a parent.
-
-The round hypothesis is gone with the schedule: the clause now holds at
-every validator, so nothing has to place `w` two rounds down. -/
+/-- **A block that exposes a validator's equivocation drops it**:
+validity's first clause fails at `w`, so the second holds and `w`'s
+block is not a parent. -/
 theorem exposed_not_parent {b : BlockId} (hb : b ∈ D.ids) {w : Validator}
     (hexp : ExposesEquivocationBy D b w) : w ∉ parentSet D b := by
   obtain ⟨l, hl, l', hl', hconf, hlead, ⟨v, hv⟩, ⟨v', hv'⟩⟩ := hexp
@@ -180,8 +162,8 @@ theorem exposed_not_parent {b : BlockId} (hb : b ∈ D.ids) {w : Validator}
     obtain ⟨i, hi, hiv⟩ := hmem
     exact hdrop i hi hiv
 
-/-- **The `f − 1` bound.** The validator that equivocated is Byzantine and
-is not a parent, so at most `f − 1` of the parents are Byzantine. -/
+/-- **The `f − 1` bound**: the equivocator is Byzantine and not a
+parent, so at most `f − 1` of the parents are Byzantine. -/
 theorem parents_byzantine_lt {b : BlockId} {w : Validator}
     (hb : b ∈ D.ids) (hexp : ExposesEquivocationBy D b w) :
     (parentSet D b ∩ F.byzantine).card + 1 ≤ F.f := by
@@ -202,14 +184,9 @@ theorem parents_byzantine_lt {b : BlockId} {w : Validator}
   omega
 
 /-- **Lemma 4.** If `n − p` distinct validators vote for a leader block
-`l` of round `r`, then every round-`(r+2)` block is FP-evidence for `l`.
-Both branches of the definition are met: the count of parents voting for
-`l`, and — where the block has seen the equivocation — the bound on the
-parents voting for anything conflicting.
-
-**It no longer needs to know that `l` is a leader block.** The rule reads
-the equivocation at `l`'s own author, and the validity clause holds at
-every validator, so the schedule never enters. -/
+`l` of round `r`, every round-`(r+2)` block is FP-evidence for `l`. Both
+branches of the definition are met, and no schedule is needed: the rule
+reads the equivocation at `l`'s own author. -/
 theorem lemma4 {b l : BlockId}
     (hb : b ∈ D.ids) (_hl : l ∈ D.ids)
     (hround : (D.block b).round = (D.block l).round + 2)

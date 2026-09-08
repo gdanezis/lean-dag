@@ -3,33 +3,24 @@ import LeanDag.BlackMarlin.Model.Descent
 # Black Marlin — the descent, repaired
 
 The execution of `black-marlin.md` §13 turns on the descent taking an
-unsupported twin where the rule had committed the supported one. This
-file states the condition that excludes it and a descent that meets the
-condition (`black-marlin.md` §14). Nothing already in the model is
-altered: `descend`, `flushRecord` and everything proved of them stand,
-and what is added sits beside them.
+unsupported twin where the rule had committed the supported one; this
+file states the condition that excludes it and a descent that meets it
+(`black-marlin.md` §14), leaving `descend` and `flushRecord` unaltered.
 
-**The condition.** A record is *support-preferring* when, at any round
-where some anchor carries a quorum of support, what it flushes there is
-supported. BM1 makes the supported anchor of a round unique, so two
-support-preferring records cannot part at such a round.
+A record is **support-preferring** when, at any round where some anchor
+carries a quorum of support, what it flushes there is supported; BM1
+makes that supported anchor unique, so two such records cannot part
+there. `descendSupp` filters the candidates of L21–L24 to those the
+rule could commit and falls back to L24 only where none is; a step
+never stalls, though a chain through a different block descends through
+a different cone, so the rounds a whole record flushes at may differ.
 
-**The descent that meets it.** `descendSupp` filters the candidates of
-L21–L24 to those the rule could commit, and falls back to L24 only where
-none is. By BM1 the filter never leaves more than one candidate, so where
-it bites there is nothing left to break ties over. A step never stalls
-and never moves to another round; a chain through a different block does
-descend through a different cone, so the rounds a whole record flushes at
-may differ.
+`Supported` is a fact about the universe, and a validator computes
+support from its own view, which under-reports — so this states a
+repair rather than supplies one; an implementation would still have to
+establish that the support it needs is in view.
 
-**What this is not.** `Supported` here is a fact about the universe, and
-a validator computes support from its own view, which under-reports. So
-the condition states a repair rather than supplies one: an implementation
-would have to establish that the support it needs is in view, and this
-file does not.
-
-**Trusted core of the arc: definitions only.** No theorem lives in this
-file.
+**Trusted core of the arc: definitions only.**
 -/
 
 namespace LeanDag
@@ -73,19 +64,13 @@ def SupportPreferring (U : BlockUniverse Validator BlockId Payload) (f : Flush U
 
 /-! ## The strengthened repair
 
-`descendSupp` chooses among the candidates L21–L24 already offers, so it
-can only help where the supported anchor is among them. Where the cone
-above reaches the supported anchor of a round but the *step* does not —
-because the block it steps through references a twin instead — the filter
-is empty and the fallback takes the twin.
-
-`descendS` drops the tie-break altogether: it descends to the
-highest-round **supported** anchor of the cone, and nowhere else. Anchor
-uniqueness (BM1) makes that one block, so no tie ever arises, and there
-is no rule left for an adversary to steer. Rounds whose anchor carries no
-quorum are simply not boundaries; their blocks come out inside the next
-segment above, so nothing is delivered later than before and nothing is
-lost. -/
+`descendSupp` only helps where the supported anchor is among the
+candidates L21–L24 already offers; where the step instead references a
+twin, the filter is empty and the fallback takes it. `descendS` drops
+the tie-break altogether and descends to the highest-round supported
+anchor of the cone, which BM1 makes unique, leaving no rule for an
+adversary to steer; rounds with no quorum are simply not boundaries, so
+nothing is delivered later than before and nothing is lost. -/
 
 /-- The anchors of a set that carry a quorum of support. -/
 def suppAnchorsOf (U : BlockUniverse Validator BlockId Payload) (s : Finset BlockId) :

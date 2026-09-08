@@ -16,23 +16,14 @@ Optimal-Hydrozoan all take `[S : Slots Validator]`.
 namespace LeanDag
 
 /-- The leader schedule: which validator proposes at which round, as a
-sequence of slots.
-
-Slots need **not** be three rounds apart. Under pipelining consecutive slots
-are one round apart, and under multiple leaders per round they share a round,
-so all that is required of `slotRound` is that it be monotone. The three-round
-separation M4's commit half needs is no longer a property of *consecutive*
-slots and is therefore not derivable here; it is required instead of the
-particular pairs that use it, by `Eligible` below.
-
-`unbounded` was a theorem under three-round spacing (`3 * k ≤
-slotRound k`) and is underivable from `mono` alone — a schedule parking every
-slot at one round is monotone. Liveness needs it, so it is assumed.
-
-`keyed` says distinct slots differ in round or in leader. It too held under three-round spacing, which makes `slotRound` injective outright. Under
-multiple leaders it is a real condition on the schedule: the proposers of a
-round must be distinct validators. Without it one block would be the candidate
-for two slots, and the ledger would deliver it twice. -/
+sequence of slots. Slots need not be three rounds apart — under
+pipelining they are one round apart, and under multiple leaders per
+round they share one — so `slotRound` need only be monotone, and the
+separation M4's commit half needs is required instead at `Eligible`
+below. `unbounded` is assumed, not derivable from `mono` alone. `keyed`
+is a real condition once several leaders share a round: without it one
+block would be the candidate for two slots, and the ledger would
+deliver it twice. -/
 class Slots (Validator : Type*) where
   /-- The round at which slot `k` is proposed. -/
   slotRound : ℕ → ℕ
@@ -62,12 +53,9 @@ namespace Slots
 variable {Validator : Type*}
 
 /-- **The uniform schedule**: `m` leaders in every `p`-th round, slot `k`
-proposed by `elect k`.
-
-`hblock` is the one real condition — the `m` proposers sharing a round are
-distinct validators. Round-robin `elect k = k % n` satisfies it whenever
-`m ≤ n`. Without it a single block would be the candidate for two slots and
-the ledger would deliver it twice. -/
+proposed by `elect k`. `hblock` is the one real condition — the `m`
+proposers of a round are distinct validators — which round-robin
+satisfies whenever `m ≤ n`. -/
 @[reducible]
 def uniform (p m : ℕ) (hp : 0 < p) (hm : 0 < m) (elect : ℕ → Validator)
     (hblock : ∀ k₁ k₂, k₁ / m = k₂ / m → elect k₁ = elect k₂ → k₁ = k₂) :
@@ -132,14 +120,10 @@ The three laws are immediate. -/
 def Slots.identity {Validator : Type*} (leader : ℕ → Validator) : Slots Validator :=
   ⟨id, leader, fun _ _ h => h, fun n => ⟨n, le_rfl⟩, fun _ _ h => congrArg Prod.fst h⟩
 
-/-- **The wave-aligned round-robin schedule** on `n` validators: pipelined
-(one slot per round), with the leader holding for a whole wave — three
-consecutive slots — before the rotation advances.
-
-Written out field by field so that `slotRound k = k` holds by `rfl`, which
-Hydrozoan's grounding reads definitionally. A `def` rather than an
-`instance`, like `rrSlots` in the witness files: a second `Slots` instance
-on the same type would make synthesis ambiguous, so every use passes
+/-- **The wave-aligned round-robin schedule** on `n` validators:
+pipelined, with the leader holding for a whole wave of three slots
+before the rotation advances. A `def`, not an `instance` — a second
+`Slots` instance would make synthesis ambiguous — so every use passes
 `(S := waveRobin n hn)` explicitly. -/
 @[reducible]
 def waveRobin (n : ℕ) (hn : 0 < n) : Slots (Fin n) where

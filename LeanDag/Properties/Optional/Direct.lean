@@ -2,23 +2,13 @@ import LeanDag.Properties.Candidate
 /-!
 # What a rule owes about its own direct rule
 
-`docs/target-properties.md` §11.4b. `Properties/Optional/` holds what a
-protocol **may** show and need not, and this is the second such
-property. A rule with no direct-commit predicate — or one no mechanism
-counts — owes nothing here.
-
-**Who asks for it.** `Barnacle`'s leader count adapts on a window count:
-how many slots of the recent past were directly committed, measured on
-the anchor's causal history. That count filters on the rule's own direct
-predicate, and until this property existed nothing related that
-predicate to the decision relation. A rule whose direct predicate held
-of everything would reach its expected count every window and raise the
-leader count forever, with every theorem about the count still true.
-
-**Where it came from.** `Barnacle.BaseRule.Laws.decided_of_directCommitIn`,
-promoted. It sat unused for exactly as long as its own docstring claimed
-it was what made the window count a count of verdicts: six protocols
-proved it and nothing read it.
+`docs/target-properties.md` §11.4b. Optional, like the rest of
+`Properties/Optional/`: a rule with no direct-commit predicate owes
+nothing here. `Barnacle`'s leader count adapts on a window count of
+directly committed slots, filtered on the rule's own direct predicate,
+so this property is what ties that predicate to the decision relation
+— without it, a direct predicate holding of everything would inflate
+the count with every theorem about it still true.
 -/
 
 namespace LeanDag

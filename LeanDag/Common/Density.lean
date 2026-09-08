@@ -8,43 +8,23 @@ import Mathlib.Data.Fintype.Card
 
 **A cone cannot be selectively blind.** A valid block references a
 quorum of distinct authors one round below, of which at most `f` are
-Byzantine, so a correct author one round down always appears — and, by
+Byzantine, so a correct author always appears one round down — and, by
 induction, all but at most `f` of the correct authors appear at *every*
-round below. That is D25, and this file states it at the lowest level
-it is true: a block assignment, a set of ids, the causal structure that
-relates them, and one counting law about references.
+round below (D25). Stated at the lowest level it is true: a block
+assignment, a set of ids, the causal structure relating them, and one
+counting law about references — nothing about verdicts, views or
+schedules — so one induction serves every rule that shows
+`Properties.Quorate`.
 
-**Why it is here and not in `DoS/`, where it was written.**
-`dos-equivocation-and-growth.md` proved density for the core's
-`BlockUniverse`; `chain-quality.md` then read it there. Every other
-protocol in this development has the same validity clause and would
-have needed the same induction, and `docs/target-properties.md` §11.4
-recorded that as the one place still calling for a new *carrier* field.
-It is not a carrier question. Density needs `blk`, `ids`, and
-`QuorateOn` — nothing about verdicts, views or schedules — so stating
-it once here serves the DoS arc, the chain-quality arc, and every rule
-that shows `Properties.Quorate` (`Properties/Optional/Quorate.lean`),
-with a single induction in the development.
+Two results: `card_missingAtFrom_le` is D25 itself; `mem_historyFrom_of_correct`
+is the **backbone** it feeds — after synchrony settles, a correct
+block's history holds every correct block of every round since.
+Neither needs population, delivery or self-parents.
 
-Two results, and the second is what post-synchrony inclusion rests on:
-
-* `card_missingAtFrom_le` — all but at most `f` of the correct authors
-  appear at every round below a block;
-* `mem_historyFrom_of_correct` — the **backbone**: after synchrony
-  settles, a correct block's history contains every correct block of
-  every round from there to its own.
-
-Neither needs population, delivery or self-parents. `QuorateOn` is the
-whole hypothesis, and it is what every validity rule in this
-development already says.
-
-**The fault model is a parameter, and it has to be.** Six fault classes
-are in play — the core's `Faults`, Hydrozoan's with its crash set,
-Odontoceti's `Faults5`, Nemo's crash-only, Hybrid's two thresholds,
-FinWhale's `Params` — and density counts against whichever one a rule
-carries. `Reliability` is what the count actually needs: a reliable set,
-a slack bounding everything outside it, and the slack being a minority.
-Every fault class in the development supplies one in a line.
+**The fault model is a parameter.** Six fault classes are in play across
+the rules, and `Reliability` bundles what density's count actually
+needs of any of them: a reliable set, a slack bounding everything
+outside it, and the slack a minority.
 -/
 
 namespace LeanDag
@@ -54,14 +34,10 @@ variable {BlockId : Type*} {Payload : Type*}
 variable {blk : BlockId → Block Validator BlockId Payload} {ids : Finset BlockId}
 
 /-- **A reliable set, and the slack around it.** What a counting
-argument needs of a fault model, with no commitment to which model: the
-validators worth counting, a bound on how many are not, and that bound
-being a minority.
-
-`minority` is the standing committee condition read at the right
-strength — `n = 3f + 1` gives it, and so does every other committee
-bound here. It is what lets a quorum of references always contain a
-reliable one, which is the step density's induction takes. -/
+argument needs of a fault model, with no commitment to which one: the
+validators worth counting, a bound on everything else, and that bound a
+minority — which is what lets a quorum of references always contain a
+reliable one, the step density's induction takes. -/
 structure Reliability (Validator : Type*) [Fintype Validator] [DecidableEq Validator] where
   /-- The validators the count is about. -/
   correct : Finset Validator
@@ -113,12 +89,9 @@ end Reliability
 variable {rel : Reliability Validator}
 
 /-- **A quorum of authors below every block.** The counting half of
-block validity, and the only half density reads: a non-genesis block
-references blocks by at least `n − f` distinct authors.
-
-Stated over the references rather than over a `ValidWrt`-style record
-so that a rule whose validity is packaged differently — FinWhale's
-`ValidHere`, Hydrozoan's `ValidWrt` — supplies it by projection. -/
+block validity, and the only half density reads. Stated over the
+references rather than a `ValidWrt`-style record, so a rule whose
+validity is packaged differently supplies it by projection. -/
 def QuorateOn (blk : BlockId → Block Validator BlockId Payload)
     (ids : Finset BlockId) (rel : Reliability Validator) : Prop :=
   ∀ b ∈ ids, 0 < (blk b).round →
@@ -221,13 +194,10 @@ theorem card_missingAtFrom_le (C : CausalStructure blk ids) (hq : QuorateOn blk 
     (missingAtFrom blk rel b δ).card ≤ rel.slack :=
   card_missingAtFrom_le_aux C hq ((blk b).round - δ) hb hδ (by omega)
 
-/-- **The backbone.** After `R`, correct histories contain the whole
-correct past: a correct block's history holds every correct block of
-every round from `R` up to its own.
-
-No population hypothesis: a block always has a correct reference one
-round down (`exists_correct_memRefs`), so the induction has a step
-whatever the DAG looks like. -/
+/-- **The backbone.** After `R`, a correct block's history holds every
+correct block of every round from `R` up to its own — no population
+hypothesis, since a block always has a correct reference one round down
+(`exists_correct_memRefs`). -/
 theorem mem_historyFrom_of_correct (C : CausalStructure blk ids) (hq : QuorateOn blk ids rel)
     {R : ℕ} (hs : SynchronisedFrom blk ids rel.correct R) :
     ∀ d : ℕ, ∀ c ∈ ids, ∀ a ∈ ids,

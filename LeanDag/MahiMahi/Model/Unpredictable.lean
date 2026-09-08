@@ -3,31 +3,12 @@ import LeanDag.MahiMahi.Model.Good
 # Mahi-Mahi — the unpredictable-leader clause
 
 The hypothesis under which the rule is live with no network assumption
-(`mahi-mahi.md` §5). In words: *in every stretch of `c` consecutive
-waves, the schedule names a validator whose block the DAG actually
-committed.* It relates the schedule to the DAG — the single change from
-the core's `FairScheduleOn`, whose target set is fixed — because under
-asynchrony nothing about a validator guarantees that its block commits;
-only the DAG's shape does. It says nothing about how the leader is
-chosen: a coin revealed after the wave makes it true with probability
-one, and any mechanism with the same effect qualifies.
-
-**The horizon.** `U.ids` is a `Finset`, so `good` is empty past some
-round and no finite DAG satisfies an unbounded `∀ k`. Both forms
-therefore quantify only over windows whose decision rounds lie below a
-horizon `N`. The window `c` is a free parameter; its probabilistic
-reading is that `c` consecutive misses have probability `(1 − p)^c`,
-with `p` the bound the counting lemma gives.
-
-**Two forms.** The single-hit form yields recurring commits. A commit
-does not decide every slot below it — a slot is decided through its
-lowest eligible slot, and an undecided one there blocks it — so deciding
-every slot needs a *run* of consecutive committed slots spanning
-eligibility, as the core's `FairRunOn` and `SpansEligible` arrange under
-synchrony. The run form is that clause with the target set replaced by
-`good`.
-
-**Definitions only**, as in the other model files.
+(`mahi-mahi.md` §5): in every stretch of `c` consecutive waves, the
+schedule names a validator whose block the DAG actually committed. It
+relates the schedule to the DAG rather than fixing a target set, since
+under asynchrony only the DAG's shape guarantees a commit. Both the
+single-hit and run forms quantify only below a horizon `N`, since
+`good` is empty past some round in any finite DAG. Definitions only.
 -/
 
 namespace LeanDag
@@ -39,10 +20,8 @@ variable [F : Faults Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 
 /-- **Two universes agree up to round `d`**: the same ids at rounds `≤ d`,
-denoting the same blocks. What the measurability result MM2′ consumes —
-whatever decides `good` at a wave is fixed by the rounds up to its
-decision round, which is the round at which a deployment reveals the
-leader. -/
+denoting the same blocks — what MM2′ consumes, since `good` at a wave is
+fixed by the rounds up to its decision round. -/
 structure AgreeUpto (U₁ U₂ : BlockUniverse Validator BlockId Payload) (d : ℕ) : Prop where
   /-- The ids at rounds `≤ d` coincide. -/
   ids : ∀ i, (i ∈ U₁.ids ∧ (U₁.block i).round ≤ d) ↔ (i ∈ U₂.ids ∧ (U₂.block i).round ≤ d)

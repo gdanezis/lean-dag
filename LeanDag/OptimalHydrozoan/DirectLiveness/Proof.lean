@@ -3,11 +3,7 @@ import LeanDag.OptimalHydrozoan.Helpers.DirectLiveness
 /-!
 # Optimal-Hydrozoan: direct liveness — proof
 
-Generated proof layer; not part of the audit surface. `CommitLiveness`
-is Hydrozoan's wave chain harvested as `DecidedOpt.directSlow`;
-`SkipLiveness` is the guaranteed skip of `Optimal/Helpers/DirectLiveness.lean`
-harvested as `DecidedOpt.directSkip`; `fastLatency` is Hydrozoan's
-argument with `qFastOpt`.
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

@@ -5,34 +5,14 @@ import LeanDag.Common.Anchored.Band
 
 `docs/target-properties.md` §3.8 asks every rule for a band: a range of
 rounds such that any DAG agreeing there reaches the same verdicts. The
-induction over the derivation is the relation's; what this file supplies
-is the transport of each of FinWhale's predicates across a band, the
-relation's band laws at the end.
-
-**The band is one-directional in membership**, which is what makes it
-work at all and what makes it awkward. `D'` holds every block of `D` in
-the range, at the round the offset names and with the same author and
-references; it may hold *more*. So the rules split three ways.
-
-* **Anchored rules transport both ways.** `IndirectCommit S D A k b`
-  says something about `A`'s causal history, and a band preserves a
-  history in both directions — nothing new can enter it, because the
-  blocks that would witness the entry are old and their references are
-  unchanged. This is what lets the tie-break be the same function on
-  both sides, which is what the reverse pass needs.
-* **Positive rules transport forwards.** A vote, a certificate, a blame
-  is evidence, and evidence survives.
-* **The skip rule quantifies over the slot's candidates**, and a band
-  may add one. That is the shape §3.2 recorded as a defect in the core
-  and §3.12 in Odontoceti, and FinWhale escapes it for a reason neither
-  of those had: a new candidate is *not referenced by any old block*, so
-  no old block is FP-evidence for it, and the old blamers' parents — a
-  quorum of them, by validity — are all non-voters for it. The skip
-  survives the new candidate rather than being repaired to ignore it.
-
-Nothing here mentions a schedule beyond `Slots.slotRound` and `Slots.leader`
-at the slot in hand. The band is the shared `AgreeBand` at any rule on
-FinWhale's record, read at views through the relation's `agreeBand_view`.
+induction over the derivation is the relation's; this file transports
+each of FinWhale's predicates across a band, feeding the relation's
+band laws at the end. `D'` may hold more than `D` does in the range, so
+the rules split three ways: anchored rules transport both ways, since a
+causal history admits no new members; positive rules (votes,
+certificates, blames) transport forwards only; and the skip rule
+survives a new candidate outright, because FinWhale's blames read a
+block's parents, and an old block's parents reference only old blocks.
 -/
 
 namespace LeanDag
@@ -119,9 +99,8 @@ include hb
 
 /-! ## Layers
 
-Everything below reads a round layer, so the two facts about layers come
-first: an old layer lands on the layer the offset names, and an old
-block of `D'` in that layer was in the layer it came from. -/
+An old layer lands on the layer the offset names, and an old block of
+`D'` in that layer was in the layer it came from. -/
 
 /-- **An old layer lands on the layer the offset names.** -/
 theorem blocksAt_subset {n n' : ℕ} (hn : n + g = n' + g') (h1 : lo ≤ n + g) (h2 : n + g ≤ hi) :
@@ -142,12 +121,9 @@ theorem mem_blocksAt_of_old {n n' : ℕ} (hn : n + g = n' + g') (h1 : lo ≤ n +
 
 /-! ## What a block's parents see
 
-`parentsVoting`, and everything counted against it, reads a block's
-references and *their* references — two rounds down. So the lemma is
-stated two rounds above the floor, and from there the vote counts are
-equal rather than merely monotone, whatever block they are counted for:
-a new block is referenced by nothing old, so it collects no votes on
-either side. -/
+`parentsVoting` reads a block's references and their references, two
+rounds down, so it is equal rather than merely monotone two rounds
+above the floor: a new block is referenced by nothing old. -/
 
 /-- **A block two rounds above the floor votes the same way in both
 DAGs**, for every block whatever. -/
@@ -179,8 +155,8 @@ theorem conflicting_iff {l l' : BlockId} (hlD : l ∈ D.ids) (hl'D : l' ∈ D.id
   · rintro ⟨hne, hr, hc⟩; exact ⟨hne, by omega, by rw [← hl.2, ← hl'.2]; exact hc⟩
   · rintro ⟨hne, hr, hc⟩; exact ⟨hne, by omega, by rw [hl.2, hl'.2]; exact hc⟩
 
-/-- **And so is the equivocation a block exposes.** Both directions: a
-witness on the `D'` side is voted for by an old parent, so it is old. -/
+/-- **And so is the equivocation a block exposes**: a witness on either
+side is voted for by an old parent, so it is old. -/
 theorem exposes_iff {b : BlockId} (hbD : b ∈ D.ids)
     (h1 : lo + 2 ≤ (D.block b).round + g) (h2 : (D.block b).round + g ≤ hi) (v : Validator) :
     ExposesEquivocationBy D' b v ↔ ExposesEquivocationBy D b v := by
@@ -206,10 +182,9 @@ theorem exposes_iff {b : BlockId} (hbD : b ∈ D.ids)
     · rw [hpv]; exact hn
     · rw [hpv]; exact hn'
 
-/-- **FP-evidence is the same evidence.** The counts are equal, and the
-negative clause of the equivocating branch survives the band's new
-blocks: a new conflicting version collects no votes, and an empty count
-clears the threshold on the right side of the inequality. -/
+/-- **FP-evidence is the same evidence.** The counts are equal, and a
+new conflicting version collects no votes, so the negative clause
+survives too. -/
 theorem fpEvidence_iff {b : BlockId} (hbD : b ∈ D.ids)
     (h1 : lo + 2 ≤ (D.block b).round + g) (h2 : (D.block b).round + g ≤ hi) (l : BlockId) :
     FPEvidence D' b l ↔ FPEvidence D b l := by
@@ -252,9 +227,8 @@ theorem fpEvidence_iff {b : BlockId} (hbD : b ∈ D.ids)
 /-! ## The commit rules, forwards
 
 A vote, a certificate and a fast quorum are evidence, and a band only
-adds blocks, so each of them survives. Nothing here is an equivalence:
-`D'` may commit a slot `D` left undecided, and that is what the
-exclusions of `Consistency.lean` — read inside `D'` alone — are for. -/
+adds blocks, so each survives — forwards only: `D'` may commit a slot
+`D` left undecided. -/
 
 /-- Votes survive: an old voter is a voter. -/
 theorem voters_subset {l : BlockId} (hlD : l ∈ D.ids)
@@ -307,13 +281,8 @@ theorem directCommit {l : BlockId} (hlD : l ∈ D.ids)
 /-! ## The skip rule, and the candidate a band may add
 
 `DirectSkip` quantifies over the slot's candidates, so a band adding one
-could destroy it. This is where the core (§3.2) and Odontoceti (§3.12)
-had to be repaired, and FinWhale does not, for a reason those rules
-could not use: FinWhale's blames are counted against what a block's
-*parents* reference, and an old block's parents reference only old
-blocks. A new candidate therefore collects no FP-evidence at all, and
-the old blamers' parents — a quorum of them, by validity — are all
-non-voters for it. -/
+could destroy it — but a new candidate collects no votes from an old
+block, hence no FP-evidence, so the old blamers survive it. -/
 
 /-- Declining to vote survives, since references do. -/
 theorem nonVoters_subset {l : BlockId} (hlD : l ∈ D.ids)
@@ -334,10 +303,9 @@ theorem spSkip {l : BlockId} (hlD : l ∈ D.ids)
     (h : SPSkip D l) : SPSkip D' l :=
   le_trans h (Finset.card_le_card (nonVoters_subset hb hlD h1 h2))
 
-/-- **And a candidate the band adds is skipped too.** An old block two
-rounds above the slot carries a quorum of parents by validity; they sit
-one round above the slot, they are old, and their references are old, so
-none of them votes for the new candidate. -/
+/-- **And a candidate the band adds is skipped too**: an old block's
+quorum of parents, one round above the slot, references only old
+blocks. -/
 theorem spSkip_new {c l : BlockId} {n n' : ℕ} (hcD : c ∈ D.ids)
     (hcr : (D.block c).round = n + 2) (hn : n + g = n' + g')
     (h1 : lo ≤ n + g) (h2 : n + g + 2 ≤ hi)
@@ -382,9 +350,8 @@ theorem mem_slotBlocks_of_old (hrk : S.slotRound k + g = S'.slotRound k' + g')
   have hlb := AnchoredRule.band_block' hb hlD hlD' (by omega) (by omega)
   exact ⟨⟨hlD, by omega⟩, by rw [← hlb.2, hlc, hlk]⟩
 
-/-- **A blame stays a blame.** For the old candidates because FP-evidence
-is the same evidence; for a candidate the band added because nothing old
-is evidence for it at all. -/
+/-- **A blame stays a blame**: FP-evidence is the same for old candidates,
+and nothing old is evidence for a new one. -/
 theorem nonFPEvidence (hrk : S.slotRound k + g = S'.slotRound k' + g')
     (hlk : S.leader k = S'.leader k') (h1 : lo ≤ S.slotRound k + g) (h2 : S.slotRound k + g + 2 ≤ hi)
     {c : BlockId} (hcD : c ∈ D.ids) (hcr : (D.block c).round = S.slotRound k + 2)
@@ -429,12 +396,9 @@ theorem directSkip (hrk : S.slotRound k + g = S'.slotRound k' + g')
     simp only [blocksAt, Finset.mem_filter]
     exact ⟨AnchoredRule.band_mem hb hc.1 (by omega) (by omega), by omega⟩
 
-/-- **The indirect rule is the same rule on both sides.** Every clause of
-it is read off the anchor's causal history — the certifying block is
-reached from the anchor, and the candidate is voted for by that block's
-parents — so the band settles all of them, new blocks included: a new
-block is in no old block's history, so it is neither certified nor
-evidenced, and neither DAG indirectly commits it. -/
+/-- **The indirect rule is the same rule on both sides.** Every clause
+reads the anchor's causal history, which the band settles, new blocks
+included: a new block is in no old block's history. -/
 theorem indirectCommit_iff (hrk : S.slotRound k + g = S'.slotRound k' + g')
     (hlk : S.leader k = S'.leader k') (h1 : lo ≤ S.slotRound k + g) (h2 : S.slotRound k + g + 2 ≤ hi)
     {A : BlockId} (hAD : A ∈ D.ids) (hAlo : lo ≤ (D.block A).round + g)
@@ -513,12 +477,9 @@ theorem indirectCommit_iff (hrk : S.slotRound k + g = S'.slotRound k' + g')
       rw [(AnchoredRule.band_block hb hcD.1 (by omega) (by omega)).2]; exact hcc
 
 open scoped Classical in
-/-- **And so the tie-break is the same function.** It names the least
-block of the slot the anchor indirectly commits, and both the slot and
-the rule are settled by the band, so the two sides filter the same set
-and take the same minimum. This is what lets the reverse pass be
-compared across a band at all: `choose` is shared between validators by
-construction, and here it is shared between DAGs. -/
+/-- **And so the tie-break is the same function**: both the slot and the
+rule are settled by the band, so the two sides filter the same set and
+take the same minimum. -/
 theorem chooseLeast_band [LinearOrder BlockId] (hrk : S.slotRound k + g = S'.slotRound k' + g')
     (hlk : S.leader k = S'.leader k') (h1 : lo ≤ S.slotRound k + g) (h2 : S.slotRound k + g + 2 ≤ hi)
     {A : BlockId} (hAD : A ∈ D.ids) (hAlo : lo ≤ (D.block A).round + g)
@@ -542,12 +503,8 @@ end Band
 
 /-! ## The band laws
 
-What the relation's band induction asks of the rules: the direct
-predicates a view evaluates carry across a band the view holds, the rung
-carries across at the universe both ways, and a candidate the band did
-not carry is linked from no old anchor — which is the forward direction
-of `indirectCommit_iff` read at a block the band could not have
-placed. -/
+What the relation's band induction asks of the rules, assembled from
+the theorems above. -/
 
 /-- **FinWhale's band laws.** -/
 theorem finWhaleBandLaws [LinearOrder BlockId] :

@@ -2,35 +2,17 @@ import LeanDag.Properties.Candidate
 /-!
 # Persistence: verdicts survive a growing DAG
 
-`docs/target-properties.md` §3.2 and §3.3, the property the crash-recovery
-mechanisms rest on.
+`docs/target-properties.md` §3.2 and §3.3. Every protocol's uniqueness
+theorem compares two views of the *same* universe, so comparing a
+replica that decided against one deciding later on a larger DAG needs
+the first derivation moved into the second — the move this file names.
 
-**Why this is a property and not a corollary of safety.** Every
-protocol's uniqueness theorem is stated for two views of the *same*
-universe (`Mysticeti.lean:708`). To compare a replica that decided on
-the DAG it held against one deciding later on a larger DAG, the first
-derivation must first be moved into the second universe — and that move
-is what this file names. Without it, uniqueness protects only replicas
-holding identical DAGs, which is not the deployment situation.
-
-**Why it is graded rather than absolute.** The failure mode is not that
-a different verdict appears; that would be plain unsafety. It is that a
-derivation ceases to exist, leaving a slot undecided. The core's direct
-skip quantifies over candidates, so a slot whose leader published
-nothing is skipped *vacuously*; add a block by that leader and the
-premise acquires content it cannot discharge. Hydrozoan's skip counts
-blames at the slot, and a count does not move when the blocks it counts
-are still there.
-
-> A verdict justified by evidence survives extension. A verdict
-> justified by the absence of evidence does not.
-
-So `Persist` carries a side condition `Ok` on the extension, and **which
-condition a protocol needs is a fact about its skip rule** rather than
-an artefact. A protocol whose verdicts are evidence-backed proves
-`Persist R fun _ _ _ => True`; one whose skip is vacuous proves it only
-under a condition, and the condition is the content of its safety
-argument rather than bookkeeping.
+`Persist` is graded rather than absolute because the failure mode is
+not a different verdict, which would be unsafety, but a derivation
+ceasing to exist: a vacuous skip (nothing referenced) loses its premise
+once a new block is added, where a counted skip does not. So `Persist`
+carries a side condition `Ok` on the extension, and which condition a
+protocol needs is a fact about its skip rule rather than bookkeeping.
 -/
 
 namespace LeanDag
@@ -50,10 +32,8 @@ structure Extends (R : DagRule Validator BlockId Payload) (U U' : R.Universe) : 
   /-- And denotes the same block: same round, author and references. -/
   block : ∀ b, b ∈ R.ids U → R.block U' b = R.block U b
 
-/-- **What an extension adds.** A parameter in
-`Integration/Hydrozoan/Simulation.lean`, because that interface covers
-truncations too and there "novel" has to be supplied as empty. For an
-extension it is determined, so it is a definition here. -/
+/-- **What an extension adds**: a block the new universe has that the
+old one lacked. -/
 def Novel (R : DagRule Validator BlockId Payload) (U U' : R.Universe) (b : BlockId) : Prop :=
   b ∈ R.ids U' ∧ b ∉ R.ids U
 
@@ -76,15 +56,11 @@ theorem not_novel_of_mem_refs (he : Extends R U U')
     ¬ Novel R U U' j :=
   fun hn => hn.2 (old_refs_old he hb hj)
 
-/-- **Nothing an old block reaches is new.** The reference lemma
-propagated along causal history: an extension can add blocks, but none
-of them enters the history of a block that was already there.
-
-This is what every protocol's persistence proof turns on. A rung test
-asks whether something is in reach of the *anchor*, and the anchor of a
-derivation over the old universe is old — so the extension cannot
-supply a new certificate, a new vote, or a new candidate to any rung,
-and the negative premises that would otherwise be destroyed survive. -/
+/-- **Nothing an old block reaches is new**: `old_refs_old` propagated
+along causal history. What every protocol's persistence proof turns on
+— a rung test asks whether something is in reach of the anchor, and the
+anchor of an old derivation is old, so the extension supplies no new
+certificate, vote or candidate to any rung. -/
 theorem reaches_old (he : Extends R U U')
     {A B : BlockId} (hA : A ∈ R.ids U) (h : ReachesFrom (R.block U') A B) :
     ReachesFrom (R.block U) A B ∧ B ∈ R.ids U := by

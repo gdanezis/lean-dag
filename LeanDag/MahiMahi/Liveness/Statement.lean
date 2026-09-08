@@ -3,31 +3,13 @@ import LeanDag.Mysticeti.ViewPace
 /-!
 # Liveness under the clause — statement
 
-What the rule decides with **no network hypothesis**, under the
-unpredictable-leader clause (`mahi-mahi.md` §5–6). Five claims:
-
-* **MM3a, `GoodCommits`** — a good leader's slot is directly committed in
-  the full view. The role the core's L4 plays, and here the unfolding of
-  `good`;
-* **MM3b, `CommitsWithin`** — under the single-hit clause, every window
-  below the horizon commits a slot;
-* **MM3c, `AllDecidedBelow`** — under the run form, with a run length that
-  spans eligibility, every slot below the run is decided;
-* **MM3d, `LocalCommit`** — every reliable validator commits a candidate
-  on its *own* view, at an explicit time, from eventual delivery alone;
-* **MM2′, `GoodMeasurable`** — `good` depends only on the blocks at rounds
-  up to the decision round.
-
-Not among the hypotheses: `SynchronisedOn`, `gst ≤ R`, timeouts, backoff.
-
-On MM3d. A direct commit in the universe is a quorum of certificates by
-*some* authors, and a reliable view is guaranteed to receive reliable
-blocks only, so the local result takes the premise the core's
-`decided_local_of_certifiesAt` takes: every reliable decision-round block
-certifies the candidate. The counting lemma supplies exactly this for the
-common-core candidates (`Helpers/Counting.lean`, `certifies_of_refs_reach`).
-The pacing structure's convergence is consumed as eventual delivery — the
-time is `max (latest d) gst + delay` — and its production needs no timing.
+What the rule decides with no network hypothesis, under the
+unpredictable-leader clause (`mahi-mahi.md` §5–6): MM3a-MM3d give a good
+leader's commit, windowed and run-length liveness, and a local commit
+from eventual delivery alone; MM2′ says `good` depends only on blocks up
+to the decision round. MM3d needs every reliable decision-round block
+to certify the candidate, which the counting lemma supplies for the
+common-core candidates.
 
 Statements only; the proofs live in `Proof.lean`.
 -/

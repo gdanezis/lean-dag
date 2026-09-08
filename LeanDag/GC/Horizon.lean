@@ -2,46 +2,15 @@ import LeanDag.GC.Bootstrap
 /-!
 # The horizon policy: heterogeneous cuts, one truth
 
-`garbage.md` **G8** and **G9** — what "slightly different horizons are
-fine" means as theorems, in a model with no per-validator clocks.
-
-The design resisted running consensus on `G`: horizons need not be equal,
-only admissible. Three facts make that safe, and they are what this file
-proves:
-
-* **`chop_chop`** — the composition law: a deeper cut is just another
-  cut, `chop (chop U G₁) (G₂ − G₁) = chop U G₂`. Validators at different
-  admissible horizons do not inhabit incomparable worlds; the deeper
-  validator's universe is a further truncation of the shallower one's,
-  and every transfer theorem composes along the tower. This is the
-  model's form of the skew story (G8): the *relation* between two
-  horizons is always the one operator, whatever the offsets.
-* **`decided_agree_horizons`** — G8's agreement content: validators
-  truncated at *different* horizons `G₁, G₂`, holding arbitrary views of
-  their respective truncations, agree on every shared slot. Each agrees
-  with the full history (`decided_agree_chop`), and slots are matched
-  through their absolute index `d₁ + k₁ = d₂ + k₂`. The full-history
-  verdict the two are compared against exists under liveness — L8/L10
-  (`all_decided_below_of_fairRun`) decide every slot below a committed
-  run, which is also what discharges admissibility invariant A1.
-* **`viewUpto_subset_viewUpto_succ`** — G9's engine, the depth rule:
-  post-`R`, everything **any** correct validator retains by round `m` is
-  in **every** correct validator's store by `m + 1`. Possession is
-  universal one round deep, so a horizon trailing a correct frontier by
-  `Λ ≥ 1` discards nothing any correct peer still lacks —
-  `pruned_subset_peer_store` states the pruned set's containment
-  explicitly. A validator outside the envelope — partitioned, crashed,
-  joining — is by definition on the bootstrap path, where the attested
-  base (G10–G12) takes over.
-
-**A deviation, recorded.** The prose G8 promised "frontiers differ by at
-most the commit lag". This model is round-synchronous — `Populated` gives
-every correct validator a block each round, and views are static
-snapshots with no clock — so a quantitative clock-skew constant has no
-carrier here. What the model *can* say, it says exactly: verdicts are
-horizon-independent (agreement), horizons compose (`chop_chop`), and
-possession universalises in one round (the depth bound). The timing
-constant lives where timing lives: in `liveness.md`'s discussion of `R`.
+`garbage.md` **G8** and **G9**: horizons need not be equal, only
+admissible. `chop_chop` composes two cuts into one, so validators at
+different admissible horizons are related by that one operator rather
+than incomparable; agreement across such horizons follows by chaining
+`decided_agree_chop` twice (`Properties.Arcs.decided_agree_horizons_chop`).
+`viewUpto_subset_viewUpto_succ` is the depth rule: post-`R`, everything
+any correct validator retains by round `m` is in every correct
+validator's store by `m + 1`, so a horizon trailing the frontier by
+`Λ ≥ 1` discards nothing a correct peer still lacks.
 -/
 
 namespace LeanDag
@@ -93,13 +62,6 @@ theorem chop_chop {G₁ G₂ : ℕ} (hG : G₁ ≤ G₂) :
     exact ⟨hi, by omega⟩
   · rintro ⟨hi, h2⟩
     exact ⟨⟨hi, by omega⟩, by omega⟩
-
-/-! ## G8 — agreement across heterogeneous horizons
-
-`decided_agree_horizons` stood here, chaining G4 twice. It is now
-`Properties.Arcs.decided_agree_horizons_chop`, the same statement from
-`Agree` and `LocalTruncate`, and holds for any rule with a band rather
-than for the core alone. -/
 
 /-! ## G9 — the depth rule -/
 

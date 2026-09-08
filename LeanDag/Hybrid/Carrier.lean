@@ -7,23 +7,12 @@ import LeanDag.Properties.Optional.SelfParent
 /-!
 # Hybrid as a carrier, and the three properties its own rules give
 
-`docs/porting-plan.md` step 2. The carrier at indirect threshold `k`,
-and the properties whose proof is a single Hybrid theorem apiece.
-
-**The universe is a subtype, and that is the whole difficulty.**
-`Hybrid.decided_unique` is conditional on `HonestNoEquiv U`: the fault
-model is Byzantine, so agreement is not a fact about every DAG.
-`Properties.Agree` is unconditional and has no graded form, so the
-hypothesis has to become part of the *object* rather than a premise of
-the theorem. Taking `Universe := {U // HonestNoEquiv U}` does that, and
-`Agree` then holds outright. Barnacle's `orcaella` carrier already had
-this shape; the plan predicted the obstacle and this is the answer it
-predicted.
-
-`Admissible Validator k` stays a hypothesis of the two theorems that
-need it, not of the carrier: a rule is a carrier before it has proved
-anything, and the threshold's admissibility is a fact about the
-committee rather than about the DAG.
+`docs/porting-plan.md` step 2: the carrier at indirect threshold `k`.
+The universe is a subtype `{U // HonestNoEquiv U}` rather than a
+hypothesis of the theorems, since `Properties.Agree` is unconditional
+and has no graded form; `Admissible Validator k` stays a hypothesis of
+the two theorems that need it, since admissibility is a fact about the
+committee, not the DAG.
 -/
 
 namespace LeanDag

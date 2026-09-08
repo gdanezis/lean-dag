@@ -4,16 +4,7 @@ import LeanDag.OptimalHydrozoan.Helpers.IndirectRules
 /-!
 # Optimal-Hydrozoan: slot agreement — proof
 
-Generated proof layer; not part of the audit surface. Slot agreement is
-the anchored relation's `decided_unique` at Optimal's laws, which hold
-under leader exclusion at the schedule. What the laws ask is what the
-arc had proved: direct-versus-direct pairings close by the direct-safety
-cores, a direct commit is linked at some rung from any candidate of an
-eligible slot and cannot coexist with a rung choice for a different
-block (the "rung fires" / starvation lemmas of
-`Optimal/Helpers/SlotAgreement.lean`), a skipped slot links nothing, and
-two choices at one rung agree — certificate uniqueness at rung `0`,
-`evidenceLinked_unique` at rung `1`, so no tie-break is needed.
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

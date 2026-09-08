@@ -7,20 +7,13 @@ import LeanDag.Timed.Extension
 /-!
 # Garbage collection, crash recovery and re-genesis for Hydrozoan
 
-Hydrozoan's universe is a block record through the adapter between its
-block type and the shared one (`Hydrozoan/Helpers/Record.lean`), and
-its carrier reads as records by that adapter and its inverse. Every
-mechanism cell is `Arcs/Record.lean` at `Hydrozoan.onRecord`: the
-constructions below are the record's, read back through the adapter,
-and the witnesses and verdict theorems hold with nothing written per
-cell. What Hydrozoan supplied is that its validity, read through the
-adapter, is `Mechanised` and `CopyStable`.
-
-What is stated here beyond the constructions is what no property
-states: the shape of a truncated block in Hydrozoan's own vocabulary,
-which Optimal-Hydrozoan's exclusion proof reads; the coverage
-refutation at the copy fill; and the prompt skip, from Hydrozoan's
-`SkipsUnsupported`.
+Hydrozoan's universe is a block record through the adapter of
+`Hydrozoan/Helpers/Record.lean`, so its carrier reads as records by
+that adapter and its inverse, and every mechanism cell is
+`Arcs/Record.lean` at `Hydrozoan.onRecord`. Beyond the constructions,
+this file states the shape of a truncated block (which
+Optimal-Hydrozoan's exclusion proof reads), the coverage refutation at
+the copy fill, and the prompt skip from `SkipsUnsupported`.
 -/
 
 namespace LeanDag

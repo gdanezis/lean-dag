@@ -3,26 +3,12 @@ import LeanDag.FinWhale.Model.Skip
 /-!
 # FinWhale — why a commit rules the skip out
 
-Lemmas 6 and 7 say a commit and a skip cannot both happen. Two counting
-arguments over the rule of `Model/Skip.lean`, and the second is the one
-worth being careful about.
-
-**The slow-path side is quorum intersection over validators.** A commit
-carries `2f + p` validators voting for `l`; a skip carries `2f + p`
-declining to. They meet in `f + 1`, one of them correct, and a correct
-validator's single round-`(r+1)` block either references `l` or does not
-(`no_skip_of_quorum`).
-
-**The fast-path side needs a correct validator, not merely a distinct
-one.** A commit's `2f + p` FP-evidence blocks and a skip's `2f + p`
-Non-FP-evidence blocks are counted by author, and the paper's argument is
-that some author appears in both. That alone is not a contradiction: a
-Byzantine author may write two round-`(r+2)` blocks, one of each kind,
-and both counts are satisfied. What rules the skip out is that the
-intersection is `f + 1` and so contains a *correct* author, whose single
-round-`(r+2)` block cannot be both FP-evidence for `l` and evidence for
-nothing (`no_skip_of_fpEvidence`). The margin is exactly one validator
-wide.
+Lemmas 6 and 7 say a commit and a skip cannot both happen, by two
+counting arguments over `Model/Skip.lean`'s rule. The slow-path side is
+quorum intersection over validators (`no_skip_of_quorum`). The fast-path
+side needs a *correct* author in the intersection, not merely a distinct
+one, since a Byzantine author could write one block of each kind
+(`no_skip_of_fpEvidence`) — the margin is exactly one validator wide.
 -/
 
 
@@ -56,13 +42,9 @@ theorem no_skip_of_quorum {l : BlockId}
   exact not_nonVoter_of_voter v hv.1 hvc hv.2
 
 /-- **Lemma 6, the fast-path side.** A quorum of FP-evidence blocks for
-`l` and a quorum of Non-FP-evidence blocks cannot both exist.
-
-The counts are by author, so the two sets meet in `f + 1` authors — and
-the argument needs one of them to be *correct*, since a Byzantine author
-may write one block of each kind and satisfy both counts with no
-contradiction. A correct author writes one round-`(r+2)` block, and that
-block cannot be FP-evidence for `l` and for nothing at once. -/
+`l` and a quorum of Non-FP-evidence blocks cannot both exist: the counts
+meet in `f + 1` authors, and a correct one among them writes a single
+round-`(r+2)` block that cannot be both. -/
 theorem no_skip_of_fpEvidence {l : BlockId} {slot : Finset BlockId}
     (hl : l ∈ slot) {ev nonev : Finset Validator}
     (hev : spQuorum Validator ≤ ev.card) (hnon : spQuorum Validator ≤ nonev.card)

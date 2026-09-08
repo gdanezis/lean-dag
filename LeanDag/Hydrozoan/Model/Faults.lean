@@ -4,28 +4,12 @@ import Mathlib.Data.Finset.Card
 /-!
 # Replicas, hybrid faults, and thresholds
 
-Trusted core: the fault model and the five thresholds of the paper's
-"Model and thresholds" paragraph (`sections/algorithms.tex`). Definitions
-only — every lemma about them lives in `Helpers/`.
-
-The system has `n ≥ 3f + 2c + k + 1` replicas, of which at most `f` are
-Byzantine and at most `c` crashed; `k` is a tunable slack that widens the
-fast path. The three behavior classes:
-
-* **Byzantine** replicas may deviate arbitrarily — in the structural model
-  this surfaces as authoring several blocks per round (equivocation).
-* **Crashed** replicas follow the protocol but may halt: they never
-  equivocate, but nothing may count on their blocks existing.
-* Everything else is **correct**: follows the protocol, never halts.
-
-A static block universe has no notion of behavior, so the classes enter the
-development only through *which set the counting hypotheses of later
-definitions mention*: uniqueness arguments count `NonByzantine`
-(never-equivocating) replicas, availability and liveness arguments count
-`Correct` ones.
-
-`p = ⌊(c + k)/2⌋` is **derived, never an input** — the design makes a
-too-large `p` unrepresentable rather than assumed away.
+The fault model and the five thresholds of the hybrid model: `n ≥ 3f +
+2c + k + 1` replicas, at most `f` Byzantine (may equivocate), at most `c`
+crashed (never equivocate, but not counted on), `k` a tunable slack
+widening the fast path. `p = ⌊(c + k)/2⌋` is derived, never an input, so
+a too-large `p` is unrepresentable rather than assumed away. Definitions
+only; lemmas live in `Helpers/`.
 -/
 
 namespace LeanDag
@@ -77,12 +61,8 @@ fast-commit a leader; also the quorum of slotBlames to directly skip it. -/
 def qFast : ℕ := Fintype.card Replica - p Replica
 
 /-- `q_cert = ⌈(n + f + 1)/2⌉`: the quorum of votes a decision-round block
-must reference for it to count as a certificate.
-
-Written as the smallest strict majority of `n + f`, namely
-`(n + f)/2 + 1` in floor division — the two expressions agree for both
-parities of `n + f`, and this form makes `2 · q_cert > n + f`
-(certificate uniqueness, Phase 2) immediate. -/
+must reference to count as a certificate, written as the smallest strict
+majority of `n + f` so that `2 · q_cert > n + f` is immediate. -/
 def qCert : ℕ := (Fintype.card Replica + F.f) / 2 + 1
 
 /-- `q_slow = 2f + c + 1`: the quorum of certificates at the decision

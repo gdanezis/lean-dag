@@ -2,32 +2,16 @@ import LeanDag.Integration.DeliveryFill
 /-!
 # I17, I18 — the two remaining readings, made theorems
 
-Two readings of the storage account, as theorems (`integration.md` §3.5).
-
-**I17 — a severed validator counts against the fault budget.** A
-validator whose history fell below a horizon can read after bootstrap
-but cannot produce (`no_blocks_of_no_genesis`). The reliable sets
-liveness quantifies over are defined by production, so such a validator
-belongs to none of them — and since liveness needs a reliable set of
-quorum size, at most `f` validators can be severed at once. **The
-horizon lag is therefore a liveness-margin parameter, not only a
-storage one**: a shorter lag saves disk and lengthens the window in
-which a returning validator is dead weight.
-
-**I18 — the reference discipline is stated more tightly than the
-storage bound needs.** Report §8.4's `RefsAccepted` charges a block's
-cone to *its own author's* view. The pool argument does not need that:
-`card_novelty_le_viewGap_add_one` is already generic in whose
-acceptances the references lie inside, and `card_viewGap_succ_le` asks
-only that the validator in question **have a block at the round** —
-which a donor line does at every gap round. So the budget holds for a
-block whose references sit inside *any* correct validator's
-acceptances, its author's or not.
-
-That settles the modelling choice report §16.8 records: the Safe Skip
+Two readings of the storage account (`integration.md` §3.5). I17: a
+severed validator (past its horizon lag, `no_blocks_of_no_genesis`)
+belongs to no reliable set, so at most `f` can be severed at once
+without costing liveness — the horizon lag is a liveness-margin
+parameter too, not only a storage one. I18: the reference discipline is
+stated tighter than the storage bound needs — `RefsAccepted` charges a
+block's cone to its own author's view, but the pool argument works for
+any correct validator with a block at the round, so the Safe Skip
 fill's blocks respect the novelty budget under either reading of what a
-`Delivery` records, because their material is attributable to the
-donor whether or not the recovering validator ever accepted it.
+`Delivery` records.
 -/
 
 namespace LeanDag
@@ -51,13 +35,8 @@ theorem notMem_of_no_blocks {T : Finset Validator} {r : ℕ} {v : Validator}
   exact hsev b hb hbc
 
 /-- **I17.** At most `f` validators can be severed at once without
-costing liveness. A reliable set of quorum size is disjoint from every
-severed validator, so the severed cannot number more than the fault
-budget — and a validator recovering from an outage longer than the
-horizon lag is severed until it re-genesises.
-
-The hypothesis is the one every liveness capstone carries; the
-conclusion prices the recovery window. -/
+costing liveness: a reliable set of quorum size is disjoint from every
+severed validator. -/
 theorem card_severed_le {T S : Finset Validator} {r : ℕ}
     (hsev : ∀ v ∈ S, ∀ b ∈ U.ids, (U.block b).creator ≠ v)
     (hpop : PopulatedOn U T r)
@@ -80,13 +59,8 @@ section Budget
 variable {D : Delivery U} {v w : Validator} {b : BlockId} {n : ℕ}
 
 /-- **I18.** The novelty budget holds for a block whose references lie
-inside **any** correct validator's acceptances, provided that validator
-has a block at the round — not specifically the block's own author.
-
-Report §8.4's `RefsAccepted` asks for the author, and the pool argument
-uses only this. The two component lemmas were already stated at the
-right generality; composing them at a `w` other than the author is what
-had not been done. -/
+inside any correct validator's acceptances, provided that validator has
+a block at the round — not specifically the block's own author. -/
 theorem card_novelty_le_of_donor {κ R : ℕ} (hbyz : ByzBudget D κ)
     (hED : EventuallyDelivers D R) (hn : R ≤ n + 1)
     (hv : v ∈ (Correct : Finset Validator))

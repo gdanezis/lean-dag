@@ -7,33 +7,12 @@ import LeanDag.Properties.Optional.SelfParent
 /-!
 # Chain quality, for any protocol with a quorum law
 
-`docs/target-properties.md` §11.4, the last mechanism whose capstone was
-written at one protocol. `chain-quality.md` proved CQ1–CQ7 for the core
-over its own `BlockUniverse` and `Decided`; this file is the same arc
-over `Properties.DagRule`, and the core's is now an instance of it
-(`Quality/`).
-
-**What the arc needs of a rule, in full.** Three things, and only the
-last is about verdicts:
-
-* the carrier's `causal` law — references are present and one round
-  down.
-* `Quorate` — a non-genesis block references a quorum of distinct
-  authors (`Properties/Optional/Quorate.lean`). This is the carrier law
-  §11.4 predicted, arriving as a property.
-* `CommitsCandidate` — a committed block is a block of its slot. Already
-  one of the six, and the one step the coverage half takes from the
-  decision rule.
-
-The inclusion half adds `LeaderCommits` for the committing slot, and
-`SelfParent` with `NoEquiv` (`Optional/SelfParent.lean`) for the
-author's chain. No synchrony: a reliable block reaches its author's next
-committed leader block along the self-parent chain, and a schedule that
-returns to every reliable author commits every reliable block.
-
-**What it does not need.** No band, no agreement, no view monotonicity.
-Chain quality is a statement about what a *single* commit carries, so
-it reads the rule at one verdict and never compares two.
+`docs/target-properties.md` §11.4. CQ1–CQ7 over `Properties.DagRule`,
+for any rule with `causal`, `Quorate` and `CommitsCandidate`; the
+inclusion half adds `LeaderCommits`, `SelfParent` and `NoEquiv` for the
+author's self-reference chain, with no synchrony. Chain quality is a
+statement about what a *single* commit carries, so no band, agreement
+or view monotonicity is needed either.
 -/
 
 namespace LeanDag
@@ -47,7 +26,7 @@ variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {R : DagRule Validator BlockId Payload} {rel : Reliability Validator}
 variable {U : R.Universe} {b L : BlockId} {δ : ℕ}
 
-/-! ## Coverage, with no decision rule in sight -/
+/-! ## Coverage -/
 
 /-- The reliable validators whose round-`δ` block a cone carries — the
 complement, within the reliable set, of `missingAtFrom`. -/
@@ -91,15 +70,10 @@ theorem card_coveredAt_ge (hq : Quorate R rel)
   rw [coveredAt_eq_sdiff, hcard]
   omega
 
-/-- **CQ2 (the half, where the committee gives it).** Every cone
-carries, at every round below it, blocks from at least half the reliable
-validators.
-
-`hhalf` is the committee condition the packaging needs and `Reliability`
-does not carry: the core has it from `n = 3f + 1`, and a model whose
-crash bound outruns its slack parameter need not. Stating it as a
-hypothesis is what lets the rules that have it quote the half and the
-rules that do not still quote `card_coveredAt_ge`. -/
+/-- **CQ2, where the committee gives it.** Every cone carries, at every
+round below it, blocks from at least half the reliable validators.
+`hhalf` is a hypothesis rather than a field of `Reliability`, since not
+every model's committee gives it. -/
 theorem card_correct_le_two_mul_coveredAt (hq : Quorate R rel)
     (hhalf : 2 * rel.slack ≤ rel.correct.card)
     (hb : b ∈ R.ids U) (hδ : δ < (R.block U b).round) :
@@ -109,8 +83,8 @@ theorem card_correct_le_two_mul_coveredAt (hq : Quorate R rel)
 
 /-! ## What a commit carries
 
-One step from the decision rule, and it is `CommitsCandidate`: a
-committed block is a block. Everything above then applies to it. -/
+`CommitsCandidate` makes a committed block a block, so coverage applies
+to it. -/
 
 section Decided
 
@@ -166,16 +140,9 @@ theorem ledger_coverage (hq : Quorate R rel) (hcc : CommitsCandidate R)
 
 /-! ## Inclusion, from self-reference
 
-The aggregate coverage above upgrades to an *individual* guarantee —
-every reliable block enters the ledger — with no synchrony in the
-argument. A reliable author's blocks form a chain: each references the
-one before (`SelfParent`), and there is one per round (`NoEquiv`), so
-any later block by the author reaches every earlier one. The next leader
-block the author commits is such a block, and a schedule that returns
-to every reliable author supplies it. Synchrony used to stand here, and
-it stood for something weaker: a correct block would be in *every*
-correct commit after the synchrony round, where this puts it in its
-author's own commits at any time. -/
+A reliable author's blocks form a chain — one per round (`NoEquiv`),
+each referencing the one before (`SelfParent`) — so any later block by
+the author reaches every earlier one, with no synchrony needed. -/
 
 /-- **CQ5.** A reliable block is in the cone of every committed leader
 block by the same author at or above its round — any commit route, any
@@ -192,9 +159,9 @@ theorem mem_history_of_decided_commit (hsp : SelfParent R) (hne : NoEquiv R rel)
 
 /-! ## Inclusion liveness
 
-The slot is produced *before* the universe is quantified: the schedule
-fixes it, and any execution meeting the rule's own liveness precondition
-then commits it. -/
+The slot is fixed by the schedule before the universe is quantified;
+any execution meeting the rule's own liveness precondition commits
+it. -/
 
 /-- **What a reliably-led slot includes.** Any execution meeting the
 rule's precondition at slot `k'` commits a leader block whose history
@@ -221,18 +188,10 @@ theorem includes_of_leads
       (by rw [hbc, hLc]) (by rw [hbr, hLr]; exact hm)
   exact ⟨hmem, fun g n hg hn => mem_ledgerSetOf_of_mem_history hg hn (hcc.mem hdec) hmem⟩
 
-/-- **CQ6 (inclusion liveness).** Under a schedule that keeps returning
-to every reliable validator, for every round `m` and every reliable
-`v` there is a slot at or above `m` that `v` leads, which any execution
-meeting the rule's liveness precondition commits, and whose flush holds
-**every** round-`m` block by `v`; hence every reliable block is in the
-ledger of any verdict assignment covering its author's next committed
-slot.
-
-Fairness is per validator — the schedule returns to each member of `T`
-— because the argument runs along one author's chain. A schedule fair
-to the set but starving one of its members would leave that member's
-blocks to synchrony, which is what this arc no longer assumes. -/
+/-- **CQ6 (inclusion liveness).** Under a schedule returning to every
+reliable validator, every reliable block is in the ledger of the slot
+its author next leads and commits. Fairness is per validator, since the
+argument runs along one author's chain. -/
 theorem committed_of_correct_block
     {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator →
       ℕ → ℕ → Prop}
@@ -257,12 +216,10 @@ theorem committed_of_correct_block
 
 /-! ## The capstone -/
 
-/-- **CQ7 (the capstone).** Chain quality in one statement, for any rule
-with a quorum law, self-reference and one block per reliable author per
-round. Unconditionally: every commit's flush covers at least half the
-reliable validators at every round below it. Under a schedule that keeps
-returning to every reliable validator: every reliable block is in the
-flush of a slot its author leads, fixed in advance by the schedule. -/
+/-- **CQ7 (the capstone).** Chain quality in one statement: every
+commit's flush covers half the reliable validators, and under a
+returning schedule every reliable block is in the flush of a slot its
+author leads. -/
 theorem chain_quality
     {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator →
       ℕ → ℕ → Prop}

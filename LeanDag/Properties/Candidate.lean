@@ -2,28 +2,14 @@ import LeanDag.Properties.Carrier
 /-!
 # What a commit names
 
-`docs/target-properties.md` §11.5 item 4. A verdict of `some L` is a
-claim about a block, and this is the property that says the claim is
-about a **real** block — present in the DAG, at the slot's round, by
-the slot's leader. Nothing above the carrier needs it until a
-consumer reasons about the committed block itself rather than about the
-verdict; then it needs it immediately, because `Decided S V k (some L)`
-alone says nothing about `L` at all.
-
-**Seven protocols proved this before it had a name.** `Mysticeti`,
-`Odontoceti`, `Nemo`, `Mahi-Mahi`, `Hybrid`, `Hydrozoan` and
-`Optimal-Hydrozoan` each carry an `isLeaderBlock_of_decided`, and
-`Integration/Hydrozoan/ChopDecided.lean` carries an eighth copy for a
-second schedule. Every one is the same two-case discharge: a commit
-constructor carries its `IsLeaderBlock` premise, and a skip constructor
-concludes `none`. That is what a property is for.
-
-**The consumer is chain quality.** `Quality/Coverage.lean` and
-`Quality/Inclusion.lean` take a commit and then reason about `L`'s
-round and causal cone — `card_coveredAt_ge` wants `L ∈ U.ids`, and the
-ledger wants the same. The structural half of that arc, the density
-bound, is about valid DAGs and needs no rule; this property is the
-whole of its dependence on one.
+`docs/target-properties.md` §11.5 item 4. A verdict of `some L` says
+`L` is a real block — present in the DAG, at the slot's round, by the
+slot's leader — since `Decided S V k (some L)` alone says nothing about
+`L`. Every protocol proved this before it had a name, each the same
+two-case discharge: a commit constructor carries its `IsLeaderBlock`
+premise, a skip constructor concludes `none`. `Quality/Coverage.lean`
+and `Quality/Inclusion.lean` are the consumers, reasoning about `L`'s
+round and causal cone.
 -/
 
 namespace LeanDag

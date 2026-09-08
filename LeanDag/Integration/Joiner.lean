@@ -5,16 +5,11 @@ import LeanDag.Properties.Arcs.GC
 /-!
 # I5 — the joiner and the adaptive schedule, at the core
 
-`Adaptive/Joiner.lean` at the core's cut. The schedule half is the
-core's `Slots.chop` read as a `Rebases` witness; the verdict half is the
-generic cross-cut agreement at `truncates_chop` with the chopped view.
-The two constructions the generic theorem relates — truncating an
-adaptive schedule and adapting a truncated one — are here
-definitionally equal, so `slotsChop_slotsOf_eq` closes by `rfl`.
-
-The deployment obligations are the generic file's: the policy's rule
-must be horizon-stable (`Adaptive.HorizonStable`), and the base slot
-must fall on an epoch boundary (`epochOf_add_of_dvd`).
+`Adaptive/Joiner.lean` at the core's cut: the schedule half is
+`Slots.chop` read as a `Rebases` witness, the verdict half the generic
+cross-cut agreement at `truncates_chop`. Truncating an adaptive
+schedule and adapting a truncated one are definitionally equal, so
+`slotsChop_slotsOf_eq` closes by `rfl`.
 -/
 
 namespace LeanDag

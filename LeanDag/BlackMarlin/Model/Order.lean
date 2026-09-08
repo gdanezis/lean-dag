@@ -3,28 +3,22 @@ import LeanDag.BlackMarlin.Model.Ledger
 # Black Marlin — the delivered sequence
 
 Algorithm 1, L26–L31 (`black-marlin.md` §12). Having fixed the segment
-boundaries, `commit` flushes each segment through `τ`, "any deterministic
-topological sorting", and emits a block only if no block of the same
-author and round was emitted before. This file models both, so that what
-a validator outputs is a **list** rather than a set.
+boundaries, `commit` flushes each segment through `τ`, "any
+deterministic topological sorting", and emits a block only if no block
+of the same author and round was emitted before; this file models both,
+so a validator's output is a list rather than a set.
 
-**`τ` is a structure, not a choice.** The paper fixes no particular sort;
-what it uses of one is that it is a function — hence shared — and that it
-respects causality. `TopoSort` asks exactly that, so every result below
-holds for whichever sort a deployment picks.
+`TopoSort` is a structure, not a choice of sort: the paper uses only
+that it is a shared function respecting causality, so every result
+below holds for whichever sort a deployment picks. The anchor needs no
+separate emission — a topological sort of `history U B \ 𝒟` places `B`
+last of its own accord, since every block of `history U B` is reachable
+from it, so the segment below is that one list. The filter is
+stateful: L27 tests the delivered set as it stands, changing within a
+segment as well as between them, so `filterFirstFrom` threads it and
+returns both the emitted list and the set it leaves behind.
 
-**The anchor needs no separate emission.** L26 flushes `τ(past(B) \ 𝒟)`
-and L30 then emits `B`. Since every block of `history U B` is reachable
-from `B`, a topological sort of `history U B \ 𝒟` places `B` last of its
-own accord, and the segment below is that one list.
-
-**The filter is stateful.** L27 tests the delivered set as it stands,
-which changes within a segment as well as between them, so
-`filterFirstFrom` threads it and returns both the emitted list and the
-set it leaves behind.
-
-**Trusted core of the arc: definitions only.** No theorem lives in this
-file.
+**Trusted core of the arc: definitions only.**
 -/
 
 namespace LeanDag

@@ -3,46 +3,18 @@ import LeanDag.Properties.Compose
 /-!
 # The joiner: an adaptive schedule across a cut
 
-An adaptive schedule is a function of the committed verdicts, and a cut
-prunes the verdicts below a horizon. A validator that joins from the
-truncation may therefore not hold what the policy reads, and if it
-computes a different schedule, `run_agree` does not reach it: that
-theorem quantifies over runs of one policy over **one** universe, and
-the joiner's run is over another, under a re-indexed schedule.
-
-The answer has two halves, and both are generic.
-
-**The schedule half is arithmetic.** A cut rebases the schedule
-(`Properties.Rebases`), and rebasing commutes with replacing the
-leaders by an assignment: the truncation of an adaptive schedule is the
-adaptation of the truncated one by the assignment shifted past the base
-slot (`Rebases.slotsOf`). So the joiner and the network do not disagree
-about who leads, provided the joiner can *produce* the shifted
-assignment.
-
-**Whether it can is a restriction on policies**, `HorizonStable`: the
-joiner's rule, run on the truncation with its own slot numbering,
-returns what the network's policy returns on the full history at the
-corresponding slot. A policy that reads arbitrarily far back into
-committed history cannot satisfy it, which is the content: such a
-policy is incompatible with garbage collection.
-
-**The verdict half is cross-cut agreement**, `decided_agree_rebased` at
-the adaptive schedule. Nothing about adaptivity enters: `Agree` and
-`Banded` hold at every schedule, so one that varies with the verdicts
-is no harder than a fixed one. `joiner_run_decided_agree` puts the
-halves together: pruning does not split the ledger, even when the
-schedule is derived from it.
-
-The obligation is stated on the joiner's *rule*, a bare `pick`-shaped
-function, rather than on a `Policy`: a policy is indexed by its `Slots`
-instance, so a joiner's inhabits a different type from the network's,
-while `pick`'s type mentions no schedule and can be compared across the
-re-indexing.
-
-A cut is also read here through `RebasedAbove R U U' G G` alone, the
-universe half of `Truncates`, because horizon-stability is about what
-the two validators hold and not about how their slots are numbered.
+A validator that joins from a truncation may compute a different
+adaptive schedule than the network, since the schedule is a function of
+verdicts a cut has pruned. Two generic facts close the gap: rebasing
+commutes with adapting (`Rebases.slotsOf`), so the truncated schedule
+*is* the adaptation of the rebased one; and cross-cut agreement
+(`Agree`, `Banded`) holds at any schedule, adaptive ones included. A
+joiner is `HorizonStable` when its rule, run on the cut with its own
+slot numbering, returns what the network's policy returns on the full
+history — the restriction that rules out policies incompatible with
+garbage collection. The obligation is stated on the bare `pick`-shaped
+rule rather than on a `Policy`, since a policy's `Slots` instance
+differs across the re-indexing.
 -/
 
 namespace LeanDag
@@ -98,13 +70,9 @@ variable {R : DagRule Validator BlockId Payload}
 which prefers the most recent local, finds the base schedule. -/
 variable {S' : Slots Validator} [S : Slots Validator]
 
-/-- **Horizon-stability.** The joiner's rule, run on a cut of the
-universe with the joiner's own slot indices, returns what the network's
-policy returns on the full history at the corresponding slot.
-
-Read as a deployment obligation: *a validator that pruned below `G` and
-re-indexed from `d` must still compute the leaders everyone else is
-using.* -/
+/-- **Horizon-stability**: a validator that pruned below `G` and
+re-indexed from `d` still computes the leaders everyone else is
+using. -/
 def HorizonStable (P : Policy R) (G d : ℕ)
     (pick' : (U' : R.Universe) → R.View U' → (ℕ → Option BlockId) → ℕ → Validator) : Prop :=
   ∀ (U U' : R.Universe), RebasedAbove R U U' G G →
@@ -147,11 +115,8 @@ theorem joiner_decided_agree (ha : Agree R) (hb : Banded R)
   decided_agree_rebased ha hb (Rebased.of_truncates (ht.slotsOf hinj a)) hv
     (by have := ht.slotRound k; change G ≤ S.slotRound (d + k); omega) hW hV
 
-/-- **The joiner, whole.** A joiner that computed its own schedule from
-its own view `V'` of the truncation, under a horizon-stable rule,
-agrees with the network's run on every shared slot. The agreement is
-read through some view `V₀` of the truncation agreeing with the
-network's above the horizon, which a cut supplies. -/
+/-- **The joiner, whole**: under a horizon-stable rule, a joiner's own
+computed schedule agrees with the network's run on every shared slot. -/
 theorem joiner_run_decided_agree (ha : Agree R) (hb : Banded R)
     (hs : HorizonStable P G d pick')
     {U U' : R.Universe} (ht : Truncates R U U' S S' G d)
@@ -167,12 +132,8 @@ theorem joiner_run_decided_agree (ha : Agree R) (hb : Banded R)
   rw [hassign] at hW
   exact joiner_decided_agree ha hb ht P.inj A.assign hv hW hV
 
-/-- The constant policy is horizon-stable exactly when the base slot is
-the origin, which is the degenerate case, and the point is the
-contrast: a rule that ignores verdicts still has to be *re-indexed* to
-survive a cut. Horizon-stability is not only about how far back a
-policy reads, but about whether it is stated relative to the reader's
-own slot numbering. -/
+/-- The constant policy is horizon-stable only at base slot `0`: even a
+rule that ignores verdicts must still be re-indexed to survive a cut. -/
 theorem horizonStable_const_zero {W : ℕ} {hW : 0 < W}
     {hinj : Function.Injective S.slotRound} :
     HorizonStable (Policy.const (R := R) W hW hinj) G 0 (fun _ _ _ k => S.leader k) := by

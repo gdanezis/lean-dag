@@ -5,14 +5,11 @@ import Mathlib.Data.Finset.Max
 /-!
 # The bounded relation, and the descent
 
-`DecidedWithin` is the anchored relation with every slot the derivation
-mentions — the decided slot, the anchor, the eligible intermediates —
-strictly below a bound. It is a rule's own tool rather than part of any
-interface: the mechanisms read `Properties.DecidedBelow`, and
-`decidedBelow_of_decidedWithin` carries this into that. What it adds is
-a **tight** bound, which the semantic form cannot recover; the bound
-lives in the relation because a `Decided` derivation is a proof of a
-`Prop` and its anchors cannot be recovered from it.
+`DecidedWithin` is `Decided` with every slot the derivation mentions
+strictly below a bound `B` — added because a `Decided` derivation is a
+proof of a `Prop`, and its anchors cannot be recovered from it after the
+fact. `decidedBelow_of_decidedWithin` carries it into
+`Properties.DecidedBelow`, which the mechanisms read instead.
 
 Every derivation is bounded (`exists_bound`), and **the descent** — a
 committed run of eligible span decides everything below it — is one

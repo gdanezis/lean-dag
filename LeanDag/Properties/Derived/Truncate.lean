@@ -5,18 +5,12 @@ import LeanDag.Properties.Band
 # Truncation invariance
 
 `docs/target-properties.md` §3.4b. No longer an obligation: it follows
-from the band, once the band carries an offset.
-
-A truncation moves rounds, and the band once compared them by equality,
-which is why this was a separate obligation for as long as it was. With
-`AgreeBand` reading both universes in a common frame, a cut is the
-instance `g = 0`, `g' = G`, and reading it backwards is the instance
-with the pairs swapped. Both directions of the `↔` are therefore
-instances of one property, which is what the two offsets were for.
-
-What the band was already right about is the horizon's references: its
-clause is guarded strictly above the floor, which is exactly the licence
-a cut needs when it empties its bottom layer.
+from the band, now that `AgreeBand` reads both universes in a common
+frame — a cut is the instance `g = 0, g' = G`, and reading it backwards
+swaps the pairs, so both directions of the `↔` are instances of one
+property. The band's references clause is guarded strictly above the
+floor, which is exactly the licence a cut needs to empty its bottom
+layer.
 -/
 
 namespace LeanDag

@@ -24,34 +24,20 @@ import LeanDag.Properties.Arcs.Headline
 # The core rule as a carrier, and what it makes of a sustaining mechanism
 
 The core protocol is a single file, `Mysticeti.lean`, rather than a
-directory, so its properties-arc material lives here rather than in a
-`Mysticeti/Properties/` pair. Two things:
-
-* `mysticetiRule`, the core rule as a `Properties.DagRule` — stated here
-  rather than taken from `Barnacle.mysticeti.toDagRule` so that the core's
-  conformance depends on no mechanism.
-
-* **What a sustaining mechanism gives the core's liveness.** `Sustains`
-  promises that above a settling round old blocks keep their authors,
-  references and (shifted) rounds; `certifiesAt_of_sustains` turns that
-  into transport of the core's own certificate layer, and
-  `directCommit_of_sustains` feeds the result to
-  `directCommit_of_certifiesAt` — the lemma the reactive commit runs
-  through. So any mechanism that sustains preserves the reactive
-  discipline's commit on the transformed DAG, **with no pacing structure
-  transported**: what the reactive exit produces is a certificate like
-  any other, and certificates are made of references.
-
-This is the consumer test `Sustains` owed. The first statement of that
-obligation transported votes by name and could not be fed to this lemma;
-the restatement over blocks can.
+directory, so its properties-arc material lives here: `mysticetiRule`,
+the core rule as a `Properties.DagRule`, stated independently of any
+mechanism; and what a sustaining mechanism gives the core's liveness —
+`Sustains` transports the certificate layer
+(`certifiesAt_of_sustains`), so any mechanism that sustains preserves
+the reactive discipline's commit on the transformed DAG, with no pacing
+structure carried across.
 -/
 
 namespace LeanDag
 
 /-! Schedule congruence of the candidate and the slot-level skip is in
 `Anchored.lean` (`isLeaderBlock_congr`) and `Mysticeti.lean`
-(`directSkipSlotIn_congr`). -/
+(`blameSkip_congr`). -/
 
 namespace MysticetiProperties
 
@@ -149,20 +135,10 @@ theorem directCommit_of_sustains (h : Sustains mysticetiRule U U' G R₀)
 
 /-! ## Persistence
 
-The second protocol to prove it, and the one that found the defect. The
-core's skip once quantified over the candidates a universe holds, so a
-slot with none was skipped *vacuously* and an extension supplying one
-broke the derivation. Persistence was therefore stated at a grade,
-`Quorate`, asking the view to hold a blaming quorum at the voting round
-of every slot the extension gave a candidate to.
-
-That grade named the repair rather than a property of the protocol. A
-skip resting on the absence of a candidate is not final, which is the
-one thing a skip rule exists to be, and `Decided.directSkip` now takes
-`DirectSkipSlotIn` — a count of blockers at the slot, as Hydrozoan's
-does. Both protocols persist unconditionally, the grade is gone from
-`Persist`, and `Quorate` with it.
--/
+The core persists unconditionally: `Decided.directSkip` takes
+`DirectSkipSlotIn`, a count of blockers at the slot rather than at a
+candidate, so a skip is never vacuous on a candidate an extension adds
+later. -/
 
 /-- **The core's universes are quorate**, at the core's fault model:
 validity's counting clause read at the carrier. This is what chain
@@ -326,19 +302,16 @@ theorem not_certifiedIn_novel (he : Extends mysticetiRule U U') {A L : BlockId} 
 
 /-! ### The band, and the helpers it needs
 
-The same lemmas as above, with the extension replaced by agreement on a
-range of rounds. One-directional: `U'` may hold blocks `U` does not,
-inside the band or out of it. -/
+The same lemmas as above, with the extension replaced by agreement on
+a range of rounds; one-directional, since `U'` may hold blocks `U`
+does not. -/
 
 section Band
 
 variable {lo hi g g' : ℕ}
 
-/-! The band's field projections, the layer and creator transports and
-the candidate's transport are the relation's (`Anchored/Band.lean`):
-`AnchoredRule.band_mem`, `band_block`, `band_block'`, `band_refs`,
-`blocksAt_band`, `creatorsOf_band`, `isLeaderBlock_band` and
-`isLeaderBlock_band_old`, at `mysticetiRule`. -/
+/-! The band's field projections, layer and creator transports and
+candidate transport are `Anchored/Band.lean`'s, at `mysticetiRule`. -/
 
 variable {S S' : Slots Validator}
 
@@ -387,12 +360,7 @@ theorem commitsCandidate : CommitsCandidate
   AnchoredRule.commitsCandidate
 
 /-- **A direct commit is a verdict**, at the core's own direct-commit
-predicate. `Decided.directCommit` under the property's name.
-
-This completes the core and the reactive discipline, which share the
-rule: Barnacle's `Laws.decided_of_directCommitIn` says the same thing at
-Barnacle's carrier for the same protocol, and a rule wants it at the
-carrier its own mechanisms use. -/
+predicate: `Decided.directCommit` under the property's name. -/
 theorem commitsDirect : CommitsDirect
     (mysticetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
     (fun {U} V L r => DirectCommitIn U V L r) :=
@@ -410,14 +378,10 @@ end PersistProof
 
 /-! ## Skippability, at a correct quorum
 
-The core's direct skip quantifies over candidates and, for each, counts
-the voting-round blocks that do *not* reference it. If every `T`-block
-at the voting round references none of the slot's candidates, every one
-of them is a blamer for every candidate at once, so `quorumCard ≤ |T|`
-is enough — **a correct quorum skips an unsupported slot**.
-
-Hydrozoan reaches no skip from a correct quorum: its slot-level `qFast`
-count is a higher threshold, which is the price of the unconditional
+If every `T`-block at the voting round references none of a slot's
+candidates, each is a blamer for every candidate at once, so a correct
+quorum skips an unsupported slot. Hydrozoan needs a higher threshold,
+which is the price of the unconditional
 persistence the core had to be repaired to reach. -/
 
 section Skip
@@ -446,14 +410,8 @@ theorem skipsUnsupported :
     Decided.directSkip (le_trans hq (Finset.card_le_card (subset_blamers (S := S) hpres huns)))
 
 /-- **L5 from the properties.** A slot whose leader produced nothing at
-all is skipped, on any view holding a quorum of the round above.
-
-The reliable set is read off the view: it is exactly the creators of the
-blocks the view holds one round up, so `Ok` is the quorum bound the
-caller already has and `PresentAt` is what membership of that set means.
-`Unsupported` is vacuous — with no candidate at the slot there is
-nothing to support — which is the whole content of "the leader
-halted". -/
+all is skipped, on any view holding a quorum of the round above:
+`Unsupported` is vacuous with no candidate to support. -/
 theorem decided_none_of_leader_absent_of_properties [S : Slots Validator]
     {U : BlockUniverse Validator BlockId Payload}
     {V : View Validator BlockId Payload U} {k : ℕ}
@@ -482,12 +440,10 @@ end MysticetiProperties
 
 /-! ## The core's bounded decision relation
 
-`DecidedWithin` is the relation's (`Anchored/Bounded.lean`) at the core:
-`Decided`, with every slot the derivation mentions — the decided slot,
-the anchor, the eligible intermediates — strictly below a bound `B`. It
-is the protocol's own tool, not part of any interface: the mechanism
-reads `Properties.DecidedBelow`, and `decidedBelow_of_decidedWithin`
-carries this into that. -/
+`DecidedWithin` is `Anchored/Bounded.lean`'s at the core: `Decided`
+with every slot the derivation mentions strictly below a bound `B`.
+`decidedBelow_of_decidedWithin` carries it into the mechanism's
+`Properties.DecidedBelow`. -/
 
 section BoundedRelation
 
@@ -510,11 +466,8 @@ end BoundedRelation
 
 /-! ## Conformance to the schedule family
 
-Two properties, where there were five. `Agree` for safety;
-`LeaderCommits` under the timed precondition `coreLive`, and `Descends`
-under `SpansEligible`, for liveness. `Bounded` and `SchedLocal` are
-gone: `DecidedBelow` is a definition over `DagRule`, so its laws are
-theorems and no protocol proves them. -/
+`Agree` for safety; `LeaderCommits` under the timed precondition
+`coreLive`, and `Descends` under `SpansEligible`, for liveness. -/
 
 namespace MysticetiProperties
 
@@ -531,11 +484,9 @@ theorem agree :
   AnchoredRule.agree coreLaws
 
 /-- **The timed core's liveness precondition**, over a slot window: a
-quorum `T` synchronised from some round `R₀` at or below the window's
-first slot, the DAG populated by `T` from `R₀` to a horizon `N`, the
-view caught up to `N`, and every slot of the window two rounds under
-`N`. It reads no leader, so it holds under every schedule with the same
-rounds. -/
+quorum synchronised and populating from some round to a horizon, the
+view caught up to it, and every slot two rounds under it. Reads no
+leader, so it holds under every schedule with the same rounds. -/
 def coreLive (S : Slots Validator) {U : BlockUniverse Validator BlockId Payload}
     (V : View Validator BlockId Payload U) (T : Finset Validator) (lo K : ℕ) : Prop :=
   quorumCard Validator ≤ T.card ∧
@@ -556,30 +507,18 @@ theorem coreLive_of {S : Slots Validator} {U : BlockUniverse Validator BlockId P
 /-! ## One precondition for two execution models
 
 `coreLive` asks for coverage and `reactiveLive` asks for a reactive
-execution past GST, and the two are incomparable: a reactive builder
-omits whatever had not arrived when its exit fired, so `SynchronisedOn`
-is false in a reactive execution by design. They were therefore two
-preconditions and two `LeaderCommits` proofs for one decision relation.
-
-`certLive` is what both deliver, and it is stated in the vocabulary the
-commit rule actually counts in: the reliable set certifies the slot's
-leader block. `LeaderCommits` is proved once against it, and each
-execution model contributes a bridge — coverage through
+execution past GST, and the two are incomparable, a reactive builder's
+`SynchronisedOn` being false by design. `certLive` is what both
+deliver — the reliable set certifies the slot's leader block —
+`LeaderCommits` is proved once against it, and each execution model
+contributes its own bridge: coverage through
 `certifiesAt_of_synchronisedOn`, the reactive discipline through
-`ReactiveM.certifies`. The old preconditions survive as the antecedents
-of those bridges, and the two old theorems as corollaries.
-
-**Where the work goes.** `LeaderCommits` becomes shape alone; the
-substance moves into the bridges, which is where the two models
-genuinely differ. The vacuity guard is unaffected, because
-`LiveReachable`'s antecedent stays coverage and the chain from network
-facts to verdict is the same length. -/
+`ReactiveM.certifies`. -/
 
 /-- **The core's precondition, in what its commit rule counts.** A
-quorum `T`, a horizon `N` the view is caught up to with every slot of
-the window two rounds under it, production at the slot's round and its
-certificate round, and `T` certifying every candidate of every `T`-led
-slot in the window. -/
+quorum, a horizon the view is caught up to with every slot two rounds
+under it, production at the propose and certificate rounds, and `T`
+certifying every candidate of every `T`-led slot in the window. -/
 def certLive (S : Slots Validator) {U : BlockUniverse Validator BlockId Payload}
     (V : View Validator BlockId Payload U) (T : Finset Validator) (lo K : ℕ) : Prop :=
   quorumCard Validator ≤ T.card ∧
@@ -635,13 +574,10 @@ theorem leaderCommits :
 
 /-! ## The core's support shape
 
-`Properties/Support.lean`. What the core's commit counts: certificates
-two rounds above the candidate, each a block whose parents voting for
-the candidate form a quorum. The three laws are three existing lemmas
-restated — locality is `certifies_of_sustains`, coverage is
-`certifies_of_synchronisedOn` with its antecedent cut down to the two
-layers it reads, and commitment is `leaderCommits_cert` with the
-precondition unpacked. -/
+`Properties/Support.lean`, at what the core's commit counts:
+certificates two rounds above the candidate, whose parents' votes for
+the candidate form a quorum. The three laws are `certifies_of_sustains`,
+`certifies_of_synchronisedOn` and `leaderCommits_cert`, each unpacked. -/
 
 /-- **The core's support**: wavelength two, certification the rule's own. -/
 def coreSupport : Support (mysticetiRule (Validator := Validator) (BlockId := BlockId)
@@ -725,12 +661,9 @@ theorem indirect :
 /-- **L4's capstone form, from the properties.** The shape every
 consumer of direct liveness uses — synchrony from `R`, production to a
 horizon `N`, a `T`-led slot two rounds under it — reached from
-`LeaderCommits` and `CommitsCandidate` rather than from
-`decided_of_leader_of_populated`.
-
-The work is entirely in packaging: `LeaderCommits` takes its
-precondition as `coreLive` over a slot window, and the window here is
-the single slot. This is the same bridge `Timed.Good` is for Barnacle
+`LeaderCommits` and `CommitsCandidate` at the single-slot window,
+rather than from `decided_of_leader_of_populated`. This is the same
+bridge `Timed.Good` is for Barnacle
 (`docs/target-properties.md` §11.2b), and it is the reason the
 capstones do not need their own route into the protocol. -/
 theorem decided_of_leader_of_populated_of_properties [S : Slots Validator]
@@ -752,13 +685,7 @@ theorem decided_of_leader_of_populated_of_properties [S : Slots Validator]
 
 /-- **L6, from the properties.** Commits recur under a fair schedule:
 some slot past `k` and past round `R` is led by a member of `T`, and
-every DAG grown past it commits it.
-
-The schedule half is `Slots.unbounded` and `Slots.mono` and belongs to
-nobody in particular; the verdict half is the bridge above. Stated here
-rather than read from `Liveness.commits_recur_on` so that a pacing or
-quality mechanism consuming it does not thereby reach into the
-protocol. -/
+every DAG grown past it commits it. -/
 theorem commits_recur_on_of_properties [S : Slots Validator] {T : Finset Validator}
     (hT : T ⊆ (Correct : Finset Validator)) (hcard : quorumCard Validator ≤ T.card)
     (fair : FairScheduleOn T) (R k : ℕ) :
@@ -775,10 +702,8 @@ theorem commits_recur_on_of_properties [S : Slots Validator] {T : Finset Validat
 relation's `decidedBelow_of_decidedWithin` at `coreLaws`. -/
 
 /-- **The descent as a property**, under the spanning hypothesis on the
-round structure. What stood here was a downward induction carrying the
-bound by hand; it is now `Descends.of_indirect`, and the only
-Mysticeti-specific step is reading `Eligible` as the round inequality
-the property is stated with. -/
+round structure: `Descends.of_indirect` at `Eligible` read as the round
+inequality the property is stated with. -/
 theorem descends {S : Slots Validator} {c : ℕ} (hc : 0 < c)
     (hspans : (coreAnchored Validator BlockId Payload).SpansEligible (S := S) c) :
     Descends (mysticetiRule (Validator := Validator) (BlockId := BlockId)
@@ -793,25 +718,14 @@ end MysticetiProperties
 
 /-! ## L10 — the ledger does not stall
 
-The last step of P7′, and the first theorem of the core's liveness
-story to be stated *after* the properties rather than before them.
-`FairRunOn T c` gives `c` consecutive `T`-led slots arbitrarily far out,
-and `SpansEligible c` says the run reaches far enough for every slot
-below it to anchor on its last member. What used to follow was a proof
-of its own — L4 at each slot of the run, then the committed-run
-descent — and is now `Timed.decidedBelow_of_fairRun` at the core's
-support: `coreSupport_commits` commits the run, `descends` settles what
-is under it.
-
-The quantifier order is L6's and for L6's reason: the run is named by
-the **schedule** alone, before any DAG is mentioned, and any DAG grown
-past it decides everything below. Reversing the order would let the
-horizon cap how far fairness may reach.
-
-At the two schedules of interest this reads: `c = 1` under the old
-three-round spacing, so a single correct leader clears everything below
-it; `c = 3` under pipelining, so three consecutive correct leaders do —
-and round-robin over `3f+1` supplies three for every `f ≥ 1`. -/
+`FairRunOn T c` gives `c` consecutive `T`-led slots arbitrarily far
+out, and `SpansEligible c` says the run reaches far enough for every
+slot below it to anchor on its last member; `Timed.decidedBelow_of_fairRun`
+at the core's support settles everything below. The run is named by the
+schedule alone, before any DAG is mentioned, so the horizon cannot cap
+how far fairness may reach: `c = 1` under three-round spacing, `c = 3`
+under pipelining, where round-robin over `3f+1` supplies three
+consecutive correct leaders for every `f ≥ 1`. -/
 
 section Ledger
 
@@ -820,14 +734,9 @@ variable [F : Faults Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable [S : Slots Validator] {T : Finset Validator}
 
-/-- **L10.** For every slot `k` there is a `b ≥ k` such that every slot below
-`b` is decided, in any sufficiently grown synchronous DAG.
-
-This is what "the ledger does not stall" means operationally: `commitSeq` reads
-verdicts in slot order and halts at the first undecided slot, so a prefix of
-decided slots growing without bound is exactly the ledger advancing. Contrast
-L6, which gives infinitely many *commits* while saying nothing about the gaps
-between them. -/
+/-- **L10.** For every slot `k` there is a `b ≥ k` such that every slot
+below `b` is decided, in any sufficiently grown synchronous DAG: the
+ledger advances rather than merely committing, unlike L6. -/
 theorem all_decided_below_of_fairRun {c : ℕ} (hc : 0 < c)
     (hT : T ⊆ (Correct : Finset Validator)) (hcard : quorumCard Validator ≤ T.card)
     (hspan : (coreAnchored Validator BlockId Payload).SpansEligible c)

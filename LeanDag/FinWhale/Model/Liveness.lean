@@ -3,27 +3,12 @@ import LeanDag.Mysticeti.ViewPace
 /-!
 # FinWhale — the interfaces liveness supplies and safety consumes
 
-Three definitions, none of which is a rule of the protocol. Each names
-something the proofs pass between layers, so that no result has to learn
-which schedule produced it.
-
-`CommitsCorrectLeaders` is the liveness input: every correct-led slot
-whose *round* is past the coverage round and two below the horizon
-carries a slow-path commit *whose certificates are reliable validators'
-blocks*. The certificates
-are named rather than merely existent because a validator's view has to
-see them, and what a view can be shown to hold is what reliable
-validators produced. `commits_of_creation` and `commits_of_reactive`
-supply it.
-
-`SeesCommits` is the form Lemma 23 consumes: the deciding validator sees
-a direct commit at every correct-led slot. Read the other way it says the
-certificates have arrived, which is the "eventually" of the paper's
-statement.
-
-`settled` is the instant by which every reliable block of every round up
-to the horizon has arrived — the latest build of any of those rounds,
-plus one delay.
+Three definitions that pass information between layers without either
+learning which schedule produced it. `CommitsCorrectLeaders` is the
+liveness input, supplied by `commits_of_creation` and
+`commits_of_reactive`; `SeesCommits` is the form Lemma 23 consumes; and
+`settled` is the instant by which every reliable block up to the
+horizon has arrived.
 -/
 
 namespace LeanDag

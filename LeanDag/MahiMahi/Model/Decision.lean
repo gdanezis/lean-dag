@@ -5,22 +5,11 @@ import LeanDag.Common.History
 # Mahi-Mahi — the decision relation at wave `w`
 
 The slot-indexed layer: eligibility, the view-relative direct rules, the
-indirect test, and `Decided`. Everything is the core's
-(`Mysticeti.lean`, Stages B and C) with the wave length substituted —
-which is what the core's `decisionRound` docstring anticipated — and one
-deliberate departure recorded at `Decided.directSkip`.
-
-**Definitions only**, as in `Rules.lean`. `CertifiedIn` and `Decided`
-have no `Decidable` instance, as in the core: the witnesses build
-`Decided` by its constructors, discharging each decidable premise by
-`decide` and exhibiting a certificate for the indirect test.
-
-**No canonicity clause.** The Odontoceti arc's indirect rule commits the
-`≤`-least passing candidate because two twins can both pass its test.
-Here the indirect test is "a certificate in the anchor's cone", and two
-certificates at one slot name the same candidate (`mahi-mahi.md` §3,
-MM1b), exactly as in the core; `[LinearOrder BlockId]` is consumed by
-`Votes` alone.
+indirect test, and `Decided` — the core's Stages B and C with the wave
+length substituted, apart from one departure at `Decided.directSkip`.
+Definitions only; unlike the Odontoceti arc there is no canonicity
+clause, since two certificates at one slot already name the same
+candidate (MM1b).
 -/
 
 namespace LeanDag
@@ -62,14 +51,12 @@ abbrev CertifiedIn (U : BlockUniverse Validator BlockId Payload)
 
 /-! ## The relation -/
 
-/-- **Mahi-Mahi as an anchored rule** at wave `w`: wavelength `w − 1`
-above the proposal — certificates live at `slotRound k + w − 1` — the
-certificate-quorum direct commit, the slot's blame as direct skip, and
-one rung of link, a certificate in the anchor's cone, with no tie to
-break since two certificates at one slot name the same candidate
-(`mahi-mahi.md` §3, MM1b). The one departure from the core is the skip,
-taken on the slot: `DirectSkipIn U V w (S.leader k) (S.slotRound k)`,
-where the core quantifies over the slot's candidates. -/
+/-- **Mahi-Mahi as an anchored rule** at wave `w`: certificate-quorum
+direct commit, slot-level direct skip, and one rung of link (a
+certificate in the anchor's cone), with no tie needed since two
+certificates at one slot already name the same candidate (MM1b). The
+one departure from the core: skip is judged on the slot as a whole,
+not per candidate. -/
 def mahiMahiAnchored (Validator BlockId Payload : Type) [Fintype Validator]
     [DecidableEq Validator] [Faults Validator] [LinearOrder BlockId] (w : ℕ) :
     AnchoredRule Validator BlockId Payload ValidWrt Correct where

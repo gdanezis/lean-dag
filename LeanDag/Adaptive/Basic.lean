@@ -3,21 +3,13 @@ import LeanDag.Common.Anchored.Bounded
 /-!
 # Adaptive leaders: epochs and induced schedules
 
-The groundwork for the adaptive-leaders arc (`adaptive-leaders.md`): a
-Hammerhead-style schedule recomputes the leaders ahead from the agreed
-prefix, and the question is whether safety and liveness survive.
-
-This file holds the two notions that belong to no protocol: the epoch
-structure, and `slotsOf`, the `Slots` instance a leader assignment
-induces over a fixed round structure. One leader per round —
-`slotRound` injective — is assumed for the whole arc: it makes the
-`keyed` clause a lemma, where under multi-leader rounds a reassignment
-could collide two slots of one round onto one validator and the policy
-would owe the distinctness clause itself.
-
-The bounded decision relation the fixpoint needs is a *property of the
-protocol* — `Properties/Bounded.lean` states it, `MysticetiProperties`
-proves it for the core — and the mechanism reads only the property.
+Groundwork for the adaptive-leaders arc (`adaptive-leaders.md`): the
+epoch structure, and `slotsOf`, the `Slots` instance a leader
+assignment induces over a fixed round structure. One leader per round
+(`slotRound` injective) is assumed for the whole arc, making the
+`keyed` clause a lemma rather than an obligation on the policy. The
+bounded decision relation the fixpoint needs is a property of the
+protocol (`Properties/Bounded.lean`), and the mechanism reads only it.
 -/
 
 namespace LeanDag

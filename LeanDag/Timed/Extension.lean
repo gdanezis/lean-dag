@@ -3,25 +3,10 @@ import LeanDag.Properties.Extends
 /-!
 # Coverage under an extension
 
-What a fill does to coverage, stated once for every rule. An extension
-holds the old blocks unchanged (`Properties.Extends`), and an old block
-references only old blocks (`Extends.old_refs_old`). From that one fact
-both halves follow.
-
-**It fails**, for any reliable set holding the author of a novel block,
-at that block's round: an old reliable block one round up references
-no novel identifier, so it does not reference the new one. This is the
-fact that makes a fill safe — no old block sees what the fill adds, so
-the fill can manufacture no commit — read the other way round: the fill
-can manufacture no coverage either.
-
-**It is preserved** for any reliable set holding no author of a novel
-block: the clause never quantifies over the new blocks, and on the old
-ones nothing changed.
-
-Above the settling round it returns for every set, which is
-`synchronisedOn_of_rebased` at the fill's `Sustains` witness and needs
-nothing from here.
+What a fill does to coverage, stated once for every rule: a reliable set
+holding a novel block's author loses coverage at that block's round, and
+one holding no such author keeps it, since an extension leaves old
+blocks and their references unchanged (`Properties.Extends`).
 -/
 
 namespace LeanDag

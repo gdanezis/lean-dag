@@ -117,14 +117,10 @@ theorem block_eq_of_committed {f₁ f₂ : Flush U} {L₁ L₂ : BlockId}
     (eq_of_isAnchor_of_supported hc₁.1 hc₂.1 hc₁.2.1 hc₂.2.1)
 
 /-- **The link clause keeps the descent from skipping.** Above a
-committed anchor at round `ρ` sits a *supported* anchor at `ρ + 1`, so by
-propagation it lies in the cone of every block from round `ρ + 3` up: a
-descent arriving there finds a candidate rather than an empty round.
-
-This is the second clause of the commit rule doing a second job. Safety
-uses it in one case of one theorem; here it is what stops the descent
-from reaching a round where two twins of an equivocating anchor are both
-candidates. -/
+committed anchor at round `ρ` sits a supported anchor at `ρ + 1`, so by
+propagation it lies in the cone of every block from round `ρ + 3` up —
+stopping the descent from reaching a round where two twins of an
+equivocating anchor are both candidates. -/
 theorem coneAnchors_succ_nonempty_of_committed (h : Committed U L ρ)
     {C : BlockId} (hC : C ∈ U.ids) (hCr : ρ + 3 ≤ (U.block C).round) :
     (coneAnchors U C (ρ + 1)).Nonempty := by

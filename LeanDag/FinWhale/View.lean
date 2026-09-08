@@ -4,43 +4,15 @@ import LeanDag.FinWhale.Consistency
 /-!
 # FinWhale — views, and the direct rules relative to one
 
-The direct rules are evaluated on the validator's own sub-DAG. This
-file proves what relates them to the universe — a view's direct verdict
-is one of the universe, and, for liveness, the universe's direct commit
-is one of the view (`hsees`) — and assembles FinWhale's laws for the
-anchored relation from them.
-
-A **view** is a reference-closed subset of the universe's blocks, and it
-is a `Dag` in its own right: validity and non-equivocation are inherited,
-and closure is its completeness. `restrict` builds it.
-
-Three facts make the transfer work.
-
-**Most of the vocabulary does not read the population at all.**
-`parentsVoting`, `parentSet` and `SPCertificate` are computed from a
-block's references, so they are the same in a view as in the universe.
-
-**Closure carries a block into the view whenever anything in the view
-votes for it.** `mem_view_of_parentsVoting` is the immediate form, and
-`mem_view_of_voters` is the counting form: a view holding a single
-round-`(r+2)` block holds every block a quorum of round-`(r+1)`
-validators votes for, because that block's `n − f` parents meet the
-quorum in a correct author.
-
-**And so FP-evidence is view-independent.** Its equivocation test
-quantifies over the population, but the blocks it can find are voted for
-by the block's own parents, hence in any view holding the block.
-
-The skip rule is where the two directions part. Its first condition
-quantifies over the slot's blocks *as the view sees them*, so a view's
-skip is not a skip of the universe, and the exclusions it takes part in
-have to be proved directly — `no_directSkip_of_commit_view` and
-`no_indirectCommit_of_directSkip_view` below. Both run through the second
-condition, the quorum of Non-FP-evidence blocks, which is what makes the
-missing block visible. The same quorum is what makes the skip grow with
-the view (`directSkip_mono`): a candidate a larger view adds is
-referenced by no block of the smaller one, so the no-evidence blocks'
-parents all decline to vote for it and none of them is evidence for it.
+A view is a reference-closed subset of the universe's blocks, and a
+`Dag` in its own right, with validity and non-equivocation inherited.
+This file relates its direct verdicts to the universe's and assembles
+FinWhale's laws for the anchored relation. The skip rule is where the
+two directions part: it quantifies over the slot's blocks as the view
+sees them, so its exclusions (`no_directSkip_of_commit_view`,
+`no_indirectCommit_of_directSkip_view`) and its growth
+(`directSkip_mono`) are proved directly, through the quorum of
+Non-FP-evidence blocks.
 -/
 
 
@@ -93,9 +65,8 @@ theorem mem_view_of_parentsVoting {b l : BlockId} (hb : b ∈ V.ids)
 
 /-- **Closure, in its counting form.** A view holding one round-`(r+2)`
 block holds every block a quorum of round-`(r+1)` validators votes for:
-that block carries `n − f` parents, which meet the quorum in `f + p`
-authors, one of them correct — and a correct author's round-`(r+1)` block
-is one block, so the parent and the vote are the same block. -/
+the two quorums meet in a correct author, whose vote and parent
+coincide. -/
 theorem mem_view_of_voters {c l : BlockId} (hc : c ∈ V.ids)
     (hcround : (D.block c).round = (D.block l).round + 2)
     (hvote : spQuorum Validator ≤ (voters D l).card) : l ∈ V.ids := by
@@ -232,17 +203,16 @@ theorem directCommit_of_holds {l : BlockId}
 
 /-! ## The two exclusions the skip rule needs
 
-A view's direct skip is *not* a direct skip of the universe: its first
-condition quantifies over the slot blocks the view holds, and a view
-holding none of them satisfies it for nothing. Both exclusions therefore
-run through the second condition, the quorum of Non-FP-evidence blocks —
-which is also what forces the committed block into the view. -/
+A view's direct skip is not one of the universe's, since its first
+condition quantifies over the slot blocks the view holds. Both
+exclusions run through the second condition instead, the quorum of
+Non-FP-evidence blocks, which is also what forces the committed block
+into the view. -/
 
-/-- **A view's direct skip is incompatible with a direct commit.** The
-skip carries a quorum of round-`(r+2)` blocks, and a single one of them
-already puts the committed block in the view; then either Lemma 4 or
-Lemma 2 makes one of those blocks FP-evidence for it, which is what
-Non-FP-evidence denies. -/
+/-- **A view's direct skip is incompatible with a direct commit**: a
+single round-`(r+2)` block of the skip's quorum puts the committed
+block in the view, and Lemma 4 or Lemma 2 makes it evidence for it,
+which Non-FP-evidence denies. -/
 theorem no_directSkip_of_commit_view {r : ℕ} {l : BlockId}
     (hl : l ∈ slotBlocks S D r) (hcom : DirectCommit D l) :
     ¬ DirectSkip S (V.toRecord) r := by
@@ -290,9 +260,8 @@ theorem no_directSkip_of_commit_view {r : ℕ} {l : BlockId}
     exact hnonfp l hlslot ((fpEvidence_restrict hc₂V).2 (heq ▸ lemma2 hc₁.1 hc₁cert))
 
 /-- **A view's direct skip is incompatible with an indirect commit.**
-Either route puts the candidate in the view — an SP-certificate through
-the voter count, a quorum of evidence through the author the two quorums
-share — and then the skip's own conditions deny it. -/
+Either route puts the candidate in the view, and the skip's own
+conditions deny it there. -/
 theorem no_indirectCommit_of_directSkip_view {A : BlockId} {r : ℕ} {b : BlockId}
     (hskip : DirectSkip S (V.toRecord) r) : ¬ IndirectCommit S D A r b := by
   obtain ⟨hsp, nonev, hnon, hnonb⟩ := hskip
@@ -365,11 +334,9 @@ theorem no_indirectCommit_of_directSkip_view {A : BlockId} {r : ℕ} {b : BlockI
     exact mem_view_of_parentsVoting  (heq ▸ hc₂V)
       (parentsVoting_nonempty_of_fpEvidence hc₁fp)
 
-/-- **A view holding the reliable blocks sees the commits.** The liveness
-interface names its certificates as reliable validators' blocks, and a
-view holds those; the leader's own block is reliable too, the slot being
-correct-led. Nothing is asked of the view about Byzantine authors, which
-is as much as a schedule can give. -/
+/-- **A view holding the reliable blocks sees the commits.** Nothing is
+asked of it about Byzantine authors, which is as much as a schedule can
+give. -/
 theorem sees_of_commits_of_held {V : D.View} {R N : ℕ}
     (hcommits : CommitsCorrectLeaders S D R N)
     (hheld : ∀ n, R ≤ n → n ≤ N → ∀ b ∈ blocksAt D n,
@@ -396,10 +363,8 @@ theorem sees_of_commits_of_held {V : D.View} {R N : ℕ}
     simp only [blocksAt, Finset.mem_filter] at hb
     exact ⟨hbV, hb.2⟩
 
-/-- **Lemma 23, on a view.** A validator whose view holds the blocks up
-to the horizon decides every slot below it. `hsees` is discharged by
-`directCommit_of_holds`: holding the two rounds above a slot is seeing
-whatever direct commit is there. -/
+/-- **Lemma 23, on a view**: holding the blocks up to the horizon decides
+every slot below it, `hsees` discharged by `directCommit_of_holds`. -/
 theorem all_decided_of_view {V : D.View}
     {choose : BlockId → ℕ → Option BlockId} {dec : ℕ → Verdict BlockId}
     (hwf : WellFormed Elig (viewCommit S D V ) (viewSkip S D V ) choose dec) {R N r : ℕ}
@@ -413,11 +378,9 @@ theorem all_decided_of_view {V : D.View}
 
 /-! ## What a slot reads of its schedule
 
-Every rule reads the schedule at the slot it is deciding and nowhere
-else: the round the candidate proposes at, and who proposes it. Two
-schedules agreeing there give the same verdict, which is what a bound on
-a decision means — the relation's `skip_congr` and `link_congr`, and the
-second quantifier of `Properties.Indirect`. -/
+Every rule reads the schedule only at the slot it is deciding, so two
+schedules agreeing there give the same verdict — the relation's
+`skip_congr` and `link_congr`. -/
 
 /-- **A slot's blocks read the schedule only at that slot.** -/
 theorem slotBlocks_congr {S S' : Slots Validator} {D : Dag Validator BlockId Payload} {k : ℕ}
@@ -519,12 +482,10 @@ theorem mem_view_of_directCommit {l : BlockId} (h : DirectCommit (V.toRecord) l)
       exact Finset.card_pos.1 hpos'
     exact mem_view_of_parentsVoting hbV hne
 
-/-- **The direct skip survives the view growing.** For a candidate the
-smaller view held, its blames and its no-evidence blocks carry over. For
-a candidate the larger view adds, no block of the smaller view
-references it: the no-evidence blocks' parents — a quorum of them, by
-validity — all decline to vote for it, and none of those blocks has a
-parent voting for it, so none is evidence for it. -/
+/-- **The direct skip survives the view growing.** A held candidate's
+blames and no-evidence blocks carry over; a new candidate is referenced
+by no block the smaller view holds, so it collects no votes and no
+evidence either. -/
 theorem directSkip_mono {V' : D.View} (hsub : V.ids ⊆ V'.ids) {k : ℕ}
     (h : DirectSkip S (V.toRecord) k) : DirectSkip S (V'.toRecord) k := by
   obtain ⟨hsp, nonev, hnon, hnonb⟩ := h
@@ -573,11 +534,9 @@ section Pass
 variable [LinearOrder BlockId]
 
 /-- **The reverse pass lands in the relation.** Every slot a well-formed
-assignment decides, it decides as the relation does: a direct verdict
-is the direct constructor; an indirect one reads the anchor — the least
-eligible unskipped slot, hence committed and with every eligible slot
-between skipped, both by the induction hypothesis — and the tie-break's
-choice is the rung's, or the rung is empty and the slot skips. -/
+assignment decides, it decides as the relation does: direct verdicts by
+the direct constructor, indirect ones by the induction hypothesis at
+the nearest eligible committed anchor. -/
 theorem decided_of_wellFormed {V : D.View} {dec : ℕ → Verdict BlockId}
     (hwf : WellFormed (EligibleAt (S := S) 2) (viewCommit S D V) (viewSkip S D V)
       (chooseLeast S D) dec)
@@ -631,13 +590,8 @@ end Pass
 
 /-! ## The laws
 
-What the relation asks of the rule, each a theorem above or in
-`Decision.lean` and `Anchor.lean`: a direct commit lifts from the view
-to the universe, where two of one slot are one block and a commit bars
-the skip; a direct commit is certified or evidenced in every eligible
-anchor's history, and no rival candidate is; a skipped slot links
-nothing; the least of two choices is both; and the direct rules grow
-with the view and read the schedule at their slot alone. -/
+What the relation asks of the rule, assembled from the theorems above
+and in `Decision.lean` and `Anchor.lean`. -/
 
 /-- **FinWhale's laws.** -/
 theorem finWhaleLaws [LinearOrder BlockId] :
@@ -671,12 +625,10 @@ theorem finWhaleLaws [LinearOrder BlockId] :
 
 /-! ## The two theorems, end to end -/
 
-/-- **Theorem 24 (Agreement), end to end.** Two validators of one DAG,
-each running the reverse pass on its own view, deliver the same sequence
-at every horizon the DAG supports. The relation's agreement makes the
-verdicts agree wherever both are decided — each pass lands in the
-relation — and Lemma 23 makes them decided. `hsees` is the liveness
-interface, and the schedule that supplies it does not appear. -/
+/-- **Theorem 24 (Agreement), end to end.** Two validators running the
+reverse pass on their own views deliver the same sequence at every
+horizon: the relation's agreement settles verdicts both have decided,
+and Lemma 23 (via `hsees`) makes them decided. -/
 theorem agreement_of_commits [LinearOrder BlockId] {V V' : D.View}
     {dec dec' : ℕ → Verdict BlockId}
     (hwf : WellFormed (EligibleAt (S := S) 2) (viewCommit S D V) (viewSkip S D V)

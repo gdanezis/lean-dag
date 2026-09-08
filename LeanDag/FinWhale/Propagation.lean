@@ -2,26 +2,11 @@ import LeanDag.FinWhale.Skip
 /-!
 # FinWhale — Lemmas 3 and 5, the evidence reaching upward
 
-Once a leader block is committed, the evidence has to survive into every
-later block's history, or a later anchor could skip past it. That is
-Lemma 3 for the slow path and Lemma 5 for the fast one.
-
-**Lemma 3.** A quorum of `2f + p` SP-certificates at round `r + 2` is
-reached by every block above round `r + 2`. One round up it is quorum
-intersection: a round-`(r+3)` block references `n − f` validators, the
-certificates come from `2f + p`, and at this committee those meet in
-`f + p` — of which `p ≥ 1` are correct. A correct validator's
-round-`(r+2)` block is one block, so the one referenced *is* the
-certificate. Above that it is induction: a block references at least one
-parent, and the parent already reaches a certificate.
-
-**Lemma 5.** Under a fast commit no intersection is needed. Lemma 4 makes
-*every* round-`(r+2)` block FP-evidence, so a round-`(r+3)` block's whole
-parent set is FP-evidence, and it has `n − f` of them by validity alone.
-
-The two are not the same argument, and the difference is the point of the
-fast path: the slow path must *find* its evidence among a quorum, the
-fast path cannot avoid it.
+Once a leader block is committed, its evidence must survive into every
+later block's history, or a later anchor could skip past it. Lemma 3
+gets there for the slow path by quorum intersection, one round at a
+time; Lemma 5 gets there for the fast path without intersection, since
+Lemma 4 leaves no round-`(r+2)` block that is not evidence.
 -/
 
 namespace LeanDag
@@ -135,11 +120,8 @@ theorem reaches_round : ∀ k : ℕ, ∀ c ∈ D.ids, ∀ t : ℕ, (D.block c).r
 
 /-- **Lemma 5, at any height.** Under a fast commit for `l`, every block
 at round `r + 3` or above reaches `n − f` round-`(r+2)` blocks, from
-distinct validators, all of them FP-evidence for `l` — the paper's count,
-at every height rather than only at `r + 3`.
-
-The block descends to round `r + 3` first; there Lemma 5 applies to its
-parents, and reachability composes. -/
+distinct validators, all FP-evidence for `l` — reached by descending to
+round `r + 3` first, where Lemma 5 applies directly. -/
 theorem reaches_fpEvidence_quorum {c l : BlockId} (hc : c ∈ D.ids) (hl : l ∈ D.ids)
     (hround : (D.block l).round + 3 ≤ (D.block c).round)
     (hfast : FastCommit D l) :

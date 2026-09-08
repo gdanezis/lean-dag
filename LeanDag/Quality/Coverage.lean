@@ -6,27 +6,12 @@ import LeanDag.Properties.Arcs.Quality
 
 `chain-quality.md` §3, CQP1 — **CQ1**, **CQ2**, **CQ3**. Every commit
 flushes the entire causal cone of the committed leader, and the quorum
-structure forces every layer of every valid cone to carry blocks from
-all but at most `f` of the correct validators. So each commit carries,
-at every round below it, blocks from **at least half of the correct
-validators** — with no synchrony assumption, no delivery model, and no
-populated rounds anywhere in the hypotheses. The engine is density
-(D25, `card_missingAt_le`); everything here is packaging.
-
-The metric is **per-round author coverage**, not a block-count
-fraction: an equivocator can inflate a cone with any number of blocks
-per round, so the raw fraction is adversary-deflatable, while the
-author count is what density bounds (`chain-quality.md` §2, a recorded
-decision).
-
-**Every result here is now an instance.** The arc was written at the
-core and read the core's `Decided` at one step, which
-`Properties.CommitsCandidate` replaced. What was left tying it to one
-protocol was density's dependence on block validity, and
-`Properties.Quorate` is that clause at the carrier — so the whole arc
-moved to `Properties/Arcs/Quality.lean` and this file names the core's
-instance of it. The statements are unchanged; the proofs are one
-application each.
+structure forces every layer of a valid cone to carry blocks from all
+but at most `f` of the correct validators — with no synchrony
+assumption and no populated rounds in the hypotheses. The metric is
+per-round author coverage rather than a block count, which an
+equivocator could inflate. The generic arc lives in
+`Properties/Arcs/Quality.lean`; this file names the core's instance.
 -/
 
 namespace LeanDag
@@ -54,15 +39,9 @@ theorem card_coveredAt_ge (hb : b ∈ U.ids) (hδ : δ < (U.block b).round) :
 
 /-! ## Where the arc depends on the rule
 
-Exactly one step, and it is a property. `card_coveredAt_ge` above is
-about valid DAGs and knows nothing of a decision rule; what the theorems
-below add is that a *committed* block is one of those blocks, at the
-slot's round. That is `Properties.CommitsCandidate`, which seven
-protocols proved separately as `isLeaderBlock_of_decided` before it had
-a name (`Properties/Candidate.lean`). Reading it from the property
-rather than from the core's lemma is what lets a second protocol have
-this arc without a second copy of it — and `Properties/Arcs/Quality.lean`
-is that arc. -/
+Exactly one step: a committed block is a candidate at the slot's round,
+which is `Properties.CommitsCandidate` (`Properties/Candidate.lean`).
+Everything above is about valid DAGs alone. -/
 
 section Decided
 

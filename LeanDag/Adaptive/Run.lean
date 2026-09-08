@@ -6,31 +6,19 @@ import LeanDag.Properties.Derived.Bounded
 A `Run` is a schedule-and-verdict pair coherent with a policy: every
 slot's verdict is derivable with anchors inside its epoch window,
 against the schedule the policy computes from the verdicts themselves.
-Existence and uniqueness are deliberately separated, mirroring the base
-development's split between the `Decided` relation and `decided_unique`:
-**uniqueness is the safety theorem, existence is the liveness theorem.**
+Uniqueness (`run_agree`) is a strong induction on epochs: verdict
+agreement below an epoch forces the two assignments to agree through it
+(`adapted`), which forces verdict agreement at the epoch itself
+(`DecidedBelow.reschedule`, then `Agree`) — with no fairness, synchrony
+or view hypothesis, for arbitrary, even adversarial, policies.
 
-The safety argument (`run_agree`) is a strong induction on epochs in
-which nothing about counting is ever re-proved. At epoch `e` the verdict
-prefixes of both runs agree below by hypothesis, so `adapted` forces the
-two assignments to agree through epoch `e + 1`, so `DecidedBelow.reschedule` places
-both runs' epoch-`e` derivations in the *same* `Slots` instance — where
-agreement is `Agree`, through `Bounded`. The theorem carries **no
-fairness, synchrony or view hypothesis of any kind**: adaptivity is safe
-unconditionally, for arbitrary — even adversarial — adapted policies,
-and only liveness prices the policy's choices.
-
-Everything here is stated over a `Properties.DagRule` and one property,
-`Agree`; no protocol is named. The bound a run carries is
-`Properties.DecidedBelow`, a definition rather than a second relation
-the carrier supplies, so its laws are theorems and a protocol proves
-none of them.
-The induction is stated over *partial* runs — closed up to an epoch
-height — so that two validators that have not decided equally far agree
-on their common prefix; total runs are the special case at every height.
-Conservativity (`Policy.const_run_decided`) anchors the definitions:
-under the constant policy a run's verdicts are ordinary `Decided`
-verdicts of the base schedule.
+Everything is stated over a `Properties.DagRule` and `Agree`; no
+protocol is named. The induction runs over *partial* runs, closed up to
+an epoch height, so two validators that have not decided equally far
+still agree on their common prefix; total runs are the special case at
+every height. `Policy.const_run_decided` anchors the definitions: under
+the constant policy a run's verdicts are ordinary `Decided` verdicts of
+the base schedule.
 -/
 
 namespace LeanDag
@@ -86,15 +74,9 @@ section Agreement
 variable (ha : Agree R)
 include ha
 
-/-- **The master agreement lemma.** Two partial runs over one universe —
-whatever views, each computing its schedule on its own, whatever heights
-— agree on the verdicts of their common epochs and on the assignments
-those verdicts determine.
-
-The strong induction the module docstring describes: verdict agreement
-below an epoch forces assignment agreement through the epoch above it
-(`adapted`), which forces verdict agreement at the epoch itself
-(`DecidedBelow.reschedule`, then `Agree`). -/
+/-- **The master agreement lemma**: two partial runs over one universe,
+whatever views and heights, agree on the verdicts of their common
+epochs — the strong induction the module docstring describes. -/
 theorem partialRun_agree {V₁ V₂ : R.View U} {E₁ E₂ : ℕ}
     (A₁ : PartialRun P U V₁ E₁) (A₂ : PartialRun P U V₂ E₂) :
     ∀ k, epochOf P.W k < min E₁ E₂ → A₁.vdct k = A₂.vdct k := by
@@ -131,9 +113,8 @@ theorem partialRun_assign_agree {V₁ V₂ : R.View U} {E₁ E₂ : ℕ}
   exact partialRun_agree ha A₁ A₂ j (by omega)
 
 /-- **Safety: the adaptive fixpoint is unique.** Two total runs over one
-universe — derived from any two views, under no synchrony or fairness
-hypothesis — hold the same verdicts and run the same schedule. Adaptive
-validators cannot diverge, whatever the policy adapts to. -/
+universe, from any two views and with no synchrony or fairness
+hypothesis, hold the same verdicts and run the same schedule. -/
 theorem run_agree {V₁ V₂ : R.View U} (A₁ : Run P U V₁) (A₂ : Run P U V₂) :
     (∀ k, A₁.vdct k = A₂.vdct k) ∧ (∀ m, A₁.assign m = A₂.assign m) := by
   constructor
@@ -147,10 +128,7 @@ theorem run_agree {V₁ V₂ : R.View U} (A₁ : Run P U V₁) (A₂ : Run P U V
 end Agreement
 
 /-- **Conservativity.** Under the constant policy a run's verdicts are
-ordinary `Decided` verdicts of the base schedule — the adaptive
-development instantiates to the base one, per the house rule that a new
-relation must collapse onto the old. With `Agree` this also pins each
-`vdct k` to the unique base verdict. -/
+ordinary `Decided` verdicts of the base schedule. -/
 theorem Policy.const_run_decided
     {W : ℕ} {hW : 0 < W} {hinj : Function.Injective S.slotRound} {V : R.View U}
     (A : Run (Policy.const (R := R) W hW hinj) U V) (k : ℕ) :

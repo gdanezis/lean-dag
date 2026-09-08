@@ -4,24 +4,18 @@ import LeanDag.Barnacle.Model.Live
 /-!
 # BN14 — validity: a good author's block is delivered
 
-BN5 gives the paper's Agreement, Total order and Integrity. The fourth
+BN5 gives Agreement, Total order and Integrity; this is the fourth
 property the rest of this development proves of a commit rule — that a
-correct validator's block eventually *reaches* the ledger — was absent,
-and the paper does not claim it, but the bar here is the development's.
+correct validator's block eventually reaches the ledger — absent from
+the paper but held to the development's own bar.
 
-The route is the one the base protocols already supply. A run of height
-`K` commits an anchor at each of its `K` configurations, at the round the
-next configuration starts (`start_succ`). A good author's block two
-rounds below such an anchor lies in the anchor's causal history, by
-`LiveRule.Delivers` — which is coverage read as delivery, and holds of
-whoever authored the anchor, not only of good authors. So the block is
-carried by something the run commits.
-
-Nothing about leadership is needed. The author does not have to lead a
-slot, nor to be in the schedule at the right round: the anchor delivers
-it whether or not the author ever leads again. That is a stronger route
-than "a correct validator is eventually a leader", and it costs no
-rotation hypothesis.
+A run of height `K` commits an anchor at each configuration, at the
+round the next one starts (`start_succ`), and a good author's block two
+rounds below such an anchor lies in its causal history by
+`LiveRule.Delivers` — coverage read as delivery, holding of whoever
+authored the anchor. Nothing about leadership is needed: the author
+need not lead a slot or ever lead again, which costs no rotation
+hypothesis.
 
 Statements only; the proofs live in `Proof.lean`.
 -/

@@ -4,11 +4,7 @@ import LeanDag.Hydrozoan.Helpers.DirectRules
 /-!
 # Direct-rule safety — proof
 
-Generated proof layer; not part of the audit surface. Each conjunct
-lifts the view rules to the universe (Phase 4a bridges), overlaps two
-creator quorums in a non-Byzantine replica (`Helpers/Counting.lean`),
-collapses its voting blocks through `no_equivocation`, and collapses
-the two candidates through `distinct_creators`.
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

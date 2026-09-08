@@ -3,25 +3,20 @@ import LeanDag.BlackMarlin.Model.Rules
 # Black Marlin — the rule as a validator applies it
 
 `black-marlin.md` §3. A validator runs `delivery(r)` against its own
-`DAG`, so every count of the rule is taken over the blocks it holds. The
-definitions below are those of `Rules.lean` with each `Finset` of blocks
-intersected against a view.
+`DAG`, so every count of `Rules.lean` is here intersected against a
+view.
 
-There is no separate decision relation. Mysticeti and Odontoceti carry
-one because a slot may be *skipped*, and a skip has to be derived through
-an anchor; Black Marlin has no skip verdict and no indirect rule — an
-anchor the rule does not admit is delivered, in its turn, inside the
-causal history of a later anchor that the rule does admit. So the whole
-of what a validator decides is `CommittedIn`, and agreement is the
-statement that two validators' committed anchors lie on one chain
+There is no separate decision relation: Black Marlin has no skip verdict
+and no indirect rule, since an anchor the rule does not admit is simply
+delivered, in its turn, inside a later admitted anchor's causal history.
+So the whole of what a validator decides is `CommittedIn`, and agreement
+is the statement that two validators' committed anchors lie on one chain
 (`Safety/Statement.lean`).
 
-A view under-reports: it holds a subset of the universe, so each count it
-takes is at most the universe's. That direction is the only one safety
-needs, and it is what `Helpers/Decision.lean` establishes.
+A view under-reports, so each count it takes is at most the universe's —
+the one direction safety needs, established in `Helpers/Decision.lean`.
 
-**Trusted core of the arc: definitions only.** No theorem lives in this
-file.
+**Trusted core of the arc: definitions only.**
 -/
 
 namespace LeanDag

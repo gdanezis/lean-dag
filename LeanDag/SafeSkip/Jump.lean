@@ -4,44 +4,32 @@ import LeanDag.SafeSkip.Basic
 
 A slow validator at round `r` that sights a quorum at round `R ≫ r`
 wants its next block at `R + 1` without first authoring one block per
-gap round. The pacemaker already permits the jump — P11 (report §6.11) turns
-evidence of a round into entry into it — but P3′ pins the DAG: a block
-at `R + 1` must reference a block by its own creator at round `R`, and
-the laggard has none. Safe Skip closes exactly that gap, and report §12.5
-claims in prose that its message "needs to carry nothing but the
-target's name". This file makes the claim a theorem, in three steps:
+gap round. The pacemaker already permits the jump (P11, report §6.11),
+but P3′ pins the DAG: a block at `R + 1` must reference a block by its
+own creator at round `R`, and the laggard has none. Safe Skip closes
+that gap, and report §12.5 claims its message "needs to carry nothing
+but the target's name" — this file makes the claim a theorem, in three
+steps.
 
-* **SS8** (`SkipMsg.line_eq_lineOf`) — the donor line is not free data.
-  P2 gives every block at most one reference by any single author, so
-  the self-parent is a *function* (`selfParent`), and the chain pinned
-  by the message's target block is the only line there is: any `line`
-  satisfying a `SkipMsg`'s clauses coincides with the derived chain
-  `lineOf U B2` on the whole gap.
-* **SS9** (`SkipMsg.skipFill_eq_of_core`) — the denotation is a
-  function of the compact core. Two messages naming the same anchor
-  `B1` and the same target (and drawing fresh identifiers from the same
-  supply) denote observationally equal universes: same identifiers, and
-  the same block at every one of them. The decoder `idx` needs no
-  hypothesis — it is only ever consulted at fresh identifiers, where
-  `hidx` pins it.
-* **SS10** (`lineOf_mem_view`, `JumpMsg.denote_eq_of_core`) — every
-  receiver derives the same fill, locally. Views are closed downward
-  and share `U.block`, so a view holding the target holds the entire
-  derived line, and the elaboration `JumpMsg.toSkipMsg` reads nothing a
-  receiver lacks. This is the pattern of I11 (report §16.6): a re-genesis
-  block is *derived rather than transmitted*, so nothing is sent and
-  nothing can be rejected; here the same move prices the whole fill.
+SS8 says the donor line is not free data: P2 makes the self-parent a
+function, so the chain pinned by the message's target block is the
+only line satisfying a `SkipMsg`'s clauses. SS9 says the denotation is
+a function of the compact core: two messages naming the same anchor and
+target, drawing fresh identifiers from the same supply, denote
+observationally equal universes. SS10 says every receiver derives the
+same fill locally, since views are closed downward and share
+`U.block` — the pattern of I11 (report §16.6), where a re-genesis block
+is derived rather than transmitted, priced here for the whole fill.
 
-`JumpMsg` is the compact message itself — four names, `(v1, B1, v2,
-B2)`, plus the fresh-identifier supply — and `JumpMsg.denote` is the
-round jump: elaborate the line from `B2`, fill the gap, produce at
-`R + 1`. Everything proved of a fill (SS1–SS6) applies to `denote`
-verbatim, because `denote` *is* a `skipFill`.
+`JumpMsg` is the compact message — `(v1, B1, v2, B2)` plus the
+fresh-identifier supply — and `JumpMsg.denote` is the round jump:
+elaborate the line, fill the gap, produce at `R + 1`. Everything proved
+of a fill (SS1–SS6) applies to it verbatim, since `denote` *is* a
+`skipFill`.
 
-What is deliberately not claimed: the *logical* universe still grows by
-one block per gap round, so the counting results of report §8 and report §9 read
-unchanged. The theorems price the wire and the derivation, not the
-denotation.
+What is not claimed: the logical universe still grows by one block per
+gap round, so the counting results of report §8 and §9 read unchanged.
+The theorems price the wire and the derivation, not the denotation.
 -/
 
 namespace LeanDag
@@ -54,9 +42,8 @@ variable {U : BlockUniverse Validator BlockId Payload}
 /-! ## The self-parent function
 
 P3′ supplies a reference by the block's own creator; P2 forbids a
-second one. Together they make "the self-parent" well defined, and this
-section extracts it as a function — total with junk off the good case,
-in the manner of `BlockUniverse.block` itself. -/
+second one, making "the self-parent" well defined, extracted here as a
+function total with junk off the good case. -/
 
 /-- The self-parent of a block: its unique reference by its own
 creator. Total, with the block itself as junk value when no such
@@ -181,11 +168,9 @@ end LineOf
 /-! ## SS8 — the donor line is unique given its tip -/
 
 /-- **SS8.** A `SkipMsg`'s donor line is determined by its top block:
-on the whole interval the message's clauses govern, `line` coincides
-with the chain derived by following self-parents down from
-`line r`. The step is P2 through `eq_selfParent_of_mem`: the chain
-clause hands the line's next block to the one above as an
-own-creator reference, and there is only one of those. -/
+on the interval its clauses govern, `line` coincides with the chain
+derived by following self-parents down from `line r`, by P2's
+uniqueness of the own-creator reference. -/
 theorem SkipMsg.line_eq_lineOf (sk : SkipMsg U) :
     ∀ k, sk.r0 ≤ k → k ≤ sk.r → sk.line k = lineOf U (sk.line sk.r) k := by
   have hR0 : sk.r0 = (U.block sk.B1).round := rfl
@@ -247,12 +232,9 @@ theorem SkipMsg.v1_eq_of_B1 (sk₁ sk₂ : SkipMsg U) (hB1 : sk₁.B1 = sk₂.B1
 /-- **SS9.** Two messages naming the same anchor and the same target,
 drawing fresh identifiers from the same supply, denote observationally
 equal universes: the identifier sets are equal and the blocks agree at
-every member. Stated in the style of `regenesis_converges` — the two
-objects may differ on junk outside their identifiers, which nothing
-reads.
-
-The decoder needs no hypothesis: `block` consults `idx` only at fresh
-identifiers, where `hidx` pins both decoders to the same index. -/
+every member, differing only on junk outside their identifiers. The
+decoder needs no hypothesis, since `block` consults `idx` only at fresh
+identifiers, where `hidx` pins both to the same index. -/
 theorem SkipMsg.skipFill_eq_of_core [DecidableEq BlockId] (sk₁ sk₂ : SkipMsg U)
     (hB1 : sk₁.B1 = sk₂.B1) (hr : sk₁.r = sk₂.r)
     (htop : sk₁.line sk₁.r = sk₂.line sk₂.r) (hfresh : sk₁.fresh = sk₂.fresh) :
@@ -295,11 +277,8 @@ theorem SkipMsg.skipFill_eq_of_core [DecidableEq BlockId] (sk₁ sk₂ : SkipMsg
 
 /-- **The jump message**: the compact core a recovering validator
 actually sends — its own name and anchor, the target block and its
-author — together with the fresh-identifier supply and the semantic
-clauses a `SkipMsg` carries about them. No line: the line is derived.
-
-`hB2r` places the target at or above the anchor; the gap may be empty,
-in which case the denotation is `U` plus nothing. -/
+author — with the fresh-identifier supply and a `SkipMsg`'s semantic
+clauses about them, but no line: the line is derived. -/
 structure JumpMsg (U : BlockUniverse Validator BlockId Payload) where
   /-- The recovering validator. -/
   v1 : Validator

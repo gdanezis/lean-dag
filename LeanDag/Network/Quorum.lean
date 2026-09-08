@@ -4,16 +4,8 @@ import LeanDag.DoS.Novelty
 # The DoS capstones, bundling growth with the storage bound
 
 The composed statements — DoS resistance in one theorem — with production
-as the hypothesis every liveness result takes: `PopulatedOn`, discharged
-by the `ViewPace` route (`ViewPace.populatedOn`, report §6.9) as
-everywhere else in the development.
-
-This file once carried the quorum route to production — N1
-(`DeliversQuorum`) with the build rule (`Live`), yielding `Populated`
-through L1 (`no_stall`). That route is deleted: production is derived
-from genesis, view convergence and the pacemaker's progress rule, and no
-result names a `Live` or a `DeliversQuorum` any more. What survives of
-the file is the pairing the route was bundled with.
+taken as a hypothesis, discharged elsewhere by the `ViewPace` route
+(`ViewPace.populatedOn`, report §6.9).
 -/
 
 namespace LeanDag
@@ -24,16 +16,9 @@ variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 variable {U : BlockUniverse Validator BlockId Payload}
 variable {D : Delivery U} {G N : ℕ}
 
-/-- **The composed statement — DoS resistance in one theorem.** One set of
-hypotheses — production, post-`R` delivery, the *enforceable* budget, and
-the reference discipline — supports liveness and linear storage
-**simultaneously**: no correct validator ever stalls, and no correct
-validator's retained view grows faster than
-`|Correct|·(f·κ+1) + f·κ` per round. The two conclusions do not compete:
-liveness never needs a Byzantine block (D15b, and post-`R` the quorum is
-derivable from the correct set alone,
-`card_creators_accepted_of_eventuallyDelivers`), and by C3″ enforcing the
-budget never defers a correct one. -/
+/-- **DoS resistance, with post-`R` delivery.** Production, delivery, an
+enforceable budget and the reference discipline together give liveness
+and a linear bound on retained view growth. -/
 theorem populated_and_card_viewUpto_le' {κ R N : ℕ}
     (hpop : ∀ r ≤ N, Populated U r)
     (hED : EventuallyDelivers D R)
@@ -45,10 +30,9 @@ theorem populated_and_card_viewUpto_le' {κ R N : ℕ}
             ((Correct : Finset Validator).card * (F.f * κ + 1) + F.f * κ) :=
   ⟨hpop, fun _v hv _n hn => card_viewUpto_le' hbyz hED hra hv hn⟩
 
-/-- **The capstone, unconditional.** `EventuallyDelivers` is gone:
-production plus the enforceable budget plus the reference discipline give
-liveness and linear storage from round 0 — DoS resistance under full
-asynchrony, in one theorem. -/
+/-- **DoS resistance, unconditionally.** Production, an enforceable
+budget and the reference discipline give liveness and linear storage
+from round 0, with no delivery hypothesis. -/
 theorem populated_and_card_viewUpto_le {κ N : ℕ}
     (hpop : ∀ r ≤ N, Populated U r)
     (hbyz : ByzBudget D κ) (hra : RefsAccepted D) :

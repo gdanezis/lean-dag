@@ -6,35 +6,19 @@ import LeanDag.Properties.Derived.Descent
 # Liveness: the adaptive fixpoint exists
 
 Safety (`run_agree`) is uniqueness of the run; this file is existence,
-from the two liveness properties of `Properties/Commit.lean` — a
-reliable leader's slot commits (`LeaderCommits`), a committed run
-decides everything below it (`Descends`) — plus the one clause that
-prices the policy's choices: `PlacesRuns`, the adaptive counterpart of
-`FairRunOn`. Every assignment the policy can emit must contain, in each
-epoch after the first, `c` consecutive `T`-led slots. Hammerhead's
-purpose lands on this clause: a policy that reacts to observed skips
-satisfies it by construction where a blind rotation satisfies it by
-assumption — but which validators are reliable is not the designer's to
-know, so it remains a joint condition exactly as P10 is.
+from `LeaderCommits`, `Descends`, and `PlacesRuns` — the adaptive
+counterpart of `FairRunOn`: every assignment the policy can emit
+contains, in each epoch past the first, `c` consecutive `T`-led slots.
+The construction is strong recursion on epochs: the run `PlacesRuns`
+puts in epoch `e + 1` commits by `LeaderCommits`, `Descends` clears
+everything below it, and partial runs at every height glue into a
+total run along the diagonal, `partialRun_agree` supplying the
+coherence.
 
-The construction is by strong recursion on epochs, one application of
-`LeaderCommits` per run slot and nothing counted anew. The run that
-`PlacesRuns` puts in epoch `e + 1` commits, `Descends` decides every
-slot below the run with anchors under the run's top, strictly inside
-epoch `e`'s window, and `Bounded.mono` relaxes to the window. Partial
-runs at every height glue into a total run along the diagonal, with
-`partialRun_agree` supplying the coherence that the stage-by-stage
-choices need not.
-
-**The precondition is staged.** `Live` is the protocol's liveness
-precondition, indexed by the schedule and by a slot window, and the
-existence theorems ask for it at every height `E`, under the schedule
-the policy computes from any height-`E` partial run's verdicts, over the
-slots `[W, W·(E+2))` that schedule has determined. For the timed core
-the precondition reads no leader and the staged form follows from the
-usual global one (`Adaptive/Mysticeti.lean`); for a reactive execution
-the staging is the honest statement, since its clauses hold only under
-the schedule the validators actually followed.
+`Live`, the protocol's liveness precondition, is asked for at every
+height `E` under the schedule the policy computes from that height's
+partial run — staged, since a reactive execution's clauses hold only
+under the schedule the validators actually followed.
 -/
 
 namespace LeanDag
@@ -75,10 +59,8 @@ variable {R : DagRule Validator BlockId Payload} {P : Policy R}
 variable {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator → ℕ → ℕ → Prop}
 variable {T : Finset Validator} {c : ℕ} {U : R.Universe}
 
-/-- **One epoch closes.** Against the schedule an arbitrary verdict
-function induces, with the protocol's precondition over the slots that
-schedule determines, every slot of epoch `E` is decided inside its
-window: the run `PlacesRuns` puts in epoch `E + 1` commits, and the
+/-- **One epoch closes**: every slot of epoch `E` is decided inside its
+window — the run `PlacesRuns` puts in epoch `E + 1` commits, and the
 descent clears everything below it. -/
 theorem epoch_closes (hlc : LeaderCommits R Live)
     (hd : ∀ a : ℕ → Validator, Descends R (slotsOf P.inj a) c)
@@ -112,10 +94,9 @@ theorem epoch_closes (hlc : LeaderCommits R Live)
   obtain ⟨w, hw⟩ := hbelow k hkb
   exact ⟨w, hw.mono hb2⟩
 
-/-- **Partial runs exist at every height** — the witnessable, finite-
-horizon form of existence, by induction on the height: each stage
+/-- **Partial runs exist at every height**, by induction: each stage
 re-reads the schedule off the verdicts so far and closes one more
-epoch, under the precondition for that stage's schedule. -/
+epoch. -/
 theorem exists_partialRun (hlc : LeaderCommits R Live)
     (hd : ∀ a : ℕ → Validator, Descends R (slotsOf P.inj a) c)
     (hruns : PlacesRuns P T c) (V : R.View U) (E : ℕ)
@@ -178,11 +159,8 @@ theorem exists_partialRun (hlc : LeaderCommits R Live)
         rw [hagree k hkE']
         exact this
 
-/-- **The adaptive fixpoint exists.** Under a policy that places runs,
-with the protocol's precondition at every height, a total adaptive run
-exists — partial runs at every height glued along the diagonal,
-`partialRun_agree` making the stage-by-stage choices cohere. With
-`run_agree` it is THE fixpoint. -/
+/-- **The adaptive fixpoint exists**: partial runs at every height glued
+along the diagonal. With `run_agree` it is THE fixpoint. -/
 theorem run_exists (ha : Agree R) (hlc : LeaderCommits R Live)
     (hd : ∀ a : ℕ → Validator, Descends R (slotsOf P.inj a) c)
     (hruns : PlacesRuns P T c) (V : R.View U)
@@ -215,12 +193,10 @@ theorem run_exists (ha : Agree R) (hlc : LeaderCommits R Live)
 
 /-! ## What the run commits
 
-Existence says every slot has a verdict. The two theorems below say
-which verdicts are commits: at a reliable-led slot inside a live window
-the run's verdict is `some L`, by `LeaderCommits` and `Agree` through
-`Bounded`, and under `PlacesRuns` every epoch past the first holds `c`
-consecutive commits. The precondition is asked for at the run's own
-schedule; `Run.live_of_staged` obtains it from the staged form. -/
+At a reliable-led slot inside a live window the verdict is `some L`;
+under `PlacesRuns` every epoch past the first holds `c` consecutive
+commits. `Run.live_of_staged` reads the staged precondition at the
+run's own schedule. -/
 
 /-- The run's schedule is the policy's, as a function. -/
 theorem Run.assign_eq {V : R.View U} (A : Run P U V) :

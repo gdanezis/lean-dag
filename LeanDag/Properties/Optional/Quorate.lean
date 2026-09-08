@@ -3,34 +3,15 @@ import LeanDag.Common.Density
 /-!
 # What a rule owes about its own validity
 
-`docs/target-properties.md` §11.4, the carrier law chain quality asked
-for. `Properties/Optional/` holds what a protocol **may** show and need
-not, and this is the third such property.
-
-**Who asks for it.** Chain quality
-(`Properties/Arcs/Quality.lean`): every guarantee it makes rests on
-density, and density rests on one clause of block validity — a
-non-genesis block references a quorum of distinct authors one round
-below. `Causal` states the other two clauses a DAG needs, references
-being present and sitting one round down; this is the counting clause
-that goes with them.
-
-**Why a property and not a carrier field.** §11.4 predicted a field, on
-the precedent of `viewSound` and `viewComplete`, which are fields
-because every view type carries the proof already. Validity is the same
-kind of fact, but `Causal` is the closer precedent and it is a `Prop`:
-a structural claim about the universe, stated once and discharged per
-rule, costing no carrier a change. Making it a field would also oblige
-`Barnacle.BaseRule`, which has no validity clause either, and through it
-six more instances. The content is identical; only the blast radius
-differs.
-
-**Why optional rather than a seventh obligation.** A rule that shows the
-six composes with every mechanism in the development except this one.
-Chain quality is a guarantee a deployment may or may not want to quote,
-and `CommitsDirect` and `SkipsUnsupported` are already in this category
-for the same reason. Every rule here can discharge it in a line, which
-is the point: the cost of the mechanism is one projection, not an arc.
+`docs/target-properties.md` §11.4. Optional, like the rest of
+`Properties/Optional/`: chain quality (`Arcs/Quality.lean`) rests on
+density, which rests on one clause of block validity — a non-genesis
+block references a quorum of distinct authors one round below — and
+`Quorate` names that clause as a `Prop` rather than a carrier field, on
+the precedent of `Causal`. A rule that shows the six composes with
+every other mechanism regardless; chain quality is a guarantee a
+deployment may or may not want to quote, and every rule here discharges
+`Quorate` in a line.
 -/
 
 namespace LeanDag

@@ -5,27 +5,14 @@ import LeanDag.Common.CommonCore
 /-!
 # Liveness survives exclusion
 
-`dos-equivocation-and-growth.md` §4, **D15b**, and §7 S8.
-
-D15a says each caught equivocator costs one unit of the margin over the quorum,
-and that at the fault bound a block must reference every correct block of the
-round below. This file is the other half, and the one that settles the design:
-**exclusion can never make the quorum threshold unreachable.**
-
-The reason is the one `card_correct` was always for. Correct validators are
-never exposed (D15), so they are admissible to every block, forever; and there
-are at least `2f+1` of them. So the correct population's blocks are, on their
-own, an admissible quorum for anybody — whatever has been excluded, and however
-much of the fault budget has been used.
-
-**The threshold does not change; the pool it is drawn from does.**
-
-Note the hypothesis. `card_correct` counts correct *validators*, not their
-blocks, so something has to say they built: `Populated U n`. That places the
-result — it is the induction step of L1 under the condition, not a standalone
-claim that building always succeeds. Before `R` the adversary can withhold, and
-the step does not fire; after `R`, `EventuallyDelivers` supplies it. Which is
-why, under the condition, L1 holds from `R` rather than from round 0.
+`dos-equivocation-and-growth.md` §4, D15b, and §7 S8. D15a says each
+caught equivocator costs one unit of the margin over the quorum; this
+file shows exclusion can never make the quorum threshold unreachable.
+Correct validators are never exposed and there are at least `2f+1` of
+them, so the correct population's blocks are always an admissible
+quorum for anybody, whatever has been excluded. `Populated U n` is the
+hypothesis carrying the induction step of L1 under the condition, from
+`R` on once `EventuallyDelivers` supplies it.
 -/
 
 namespace LeanDag
@@ -58,16 +45,9 @@ theorem creator_notMem_exposedTo_of_mem_correctBlocksAt (hb : b ∈ U.ids) {i : 
   intro hmem
   exact (mem_exposedTo.mp hmem).not_correct hb (mem_correctBlocksAt.mp hi).2.2
 
-/-- **D15b — the threshold is met by the correct set alone.**
-
-Given a populated round `n`, its correct blocks are an admissible quorum for
-*every* block `b`: they carry `2f+1` distinct authors, and not one of those
-authors is exposed to `b`, whoever else is.
-
-So a validator that has heard from the correct population can always build,
-and exclusion never starves it. What the adversary can force is the pool down
-to exactly `Correct` (D15a) — which is precisely the situation
-`|Correct| ≥ 2f+1` was there to survive. -/
+/-- **D15b — the threshold is met by the correct set alone.** Given a
+populated round `n`, its correct blocks are an admissible quorum for every
+block `b`: they carry `2f+1` distinct authors, none exposed to `b`. -/
 theorem correctBlocksAt_admissible_quorum (h : Populated U n) (hb : b ∈ U.ids) :
     quorumCard Validator ≤ (creatorsOf U.block (correctBlocksAt U n)).card ∧
       ∀ i ∈ correctBlocksAt U n, (U.block i).creator ∉ exposedTo U b :=
@@ -86,10 +66,9 @@ theorem dosValid_refs_of_correctBlocksAt (hb : b ∈ U.ids)
 
 /-! ## The acceptance policy, and where the quorum comes from after `R`
 
-`Delivery` is deliberately free of the DoS vocabulary — it says what arrived
-and what was built on, in either regime. The condition enters as a *policy* on
-a given delivery: a correct validator declines to build on authors its own next
-block would expose. -/
+`Delivery` is free of the DoS vocabulary; the condition enters as a policy
+on a delivery: a correct validator declines to build on authors its own
+next block would expose. -/
 
 /-- The policy: nothing a correct validator accepts is exposed to the block it
 goes on to build. -/
@@ -98,21 +77,17 @@ def DoSAccepting (D : Delivery U) : Prop :=
     (U.block b).creator = v → (U.block b).round = n + 1 →
     ∀ i ∈ D.accepted v n, ¬ ExposedIn U b (U.block i).creator
 
-/-- The tight half of `includes`: a correct validator references *exactly* what
-it accepted, no more. `Delivery.includes` gives the other inclusion, and D3's
-sharp bound wants both. -/
+/-- The tight half of `includes`: a correct validator references exactly
+what it accepted, no more. -/
 def ReferencesAccepted (D : Delivery U) : Prop :=
   ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = v → (U.block b).round = n + 1 →
     (U.block b).refs ⊆ D.accepted v n
 
 /-- **The condition is implementable.** A correct validator following the
-policy produces blocks that satisfy the DoS reference constraint.
-
-Only the correct half of `DoSValid` is derivable, and necessarily so: no
-delivery assumption constrains what a Byzantine validator publishes. That the
-condition is a *validity* rule is what covers the other half — a Byzantine
-block breaking it is not in the universe at all. -/
+policy produces blocks that satisfy the DoS reference constraint. Only the
+correct half of `DoSValid` is derivable this way; the Byzantine half is
+covered by the condition being a validity rule. -/
 theorem not_exposedIn_refs_of_policy (D : Delivery U) (hacc : DoSAccepting D)
     (href : ReferencesAccepted D) {b : BlockId} (hb : b ∈ U.ids)
     (hbc : (U.block b).creator ∈ (Correct : Finset Validator)) :
@@ -126,17 +101,10 @@ theorem not_exposedIn_refs_of_policy (D : Delivery U) (hacc : DoSAccepting D)
     exact hacc _ hbc n b hb rfl hn i (href _ hbc n b hb rfl hn hi)
 
 omit [DecidableEq BlockId] in
-/-- **Where the quorum comes from after `R`** — and the settled answer to the
-plan's Q1.
-
-The liveness argument needs a quorum of *accepted* creators. After `R` that is not an
-extra assumption: `EventuallyDelivers` puts every correct block in every
-correct validator's hands, `Delivery.accepts_correct` accepts them, and a
-populated round supplies `2f+1` of them. `DeliversQuorum` is therefore a
-**consequence** from `R` on, not a hypothesis.
-
-Before `R` it is not, and that is exactly the cost the condition carries: L1
-holds from `R` rather than from round 0. -/
+/-- **Where the quorum comes from after `R`.** After `R`, a quorum of
+accepted creators is a consequence rather than a hypothesis:
+`EventuallyDelivers` and `accepts_correct` supply it from a populated
+round. Before `R` it is not, which is why L1 holds only from `R`. -/
 theorem card_creators_accepted_of_eventuallyDelivers {R : ℕ} (D : Delivery U)
     (hd : EventuallyDelivers D R) (hn : R ≤ n) (hpop : Populated U n)
     {v : Validator} (hv : v ∈ (Correct : Finset Validator)) :
@@ -147,19 +115,14 @@ theorem card_creators_accepted_of_eventuallyDelivers {R : ℕ} (D : Delivery U)
   have hheld : a ∈ D.held v n := hd n hn v hv a ha har (by rw [hac]; exact hw)
   exact mem_creatorsOf.mpr ⟨a, D.accepts_correct v hv n a hheld (by rw [hac]; exact hw), hac⟩
 
-/-! ## Exclusion after `R` (§4)
-
-D16 produces the exposure, D17 propagates it to every valid block, and D18 is
-the companion about what an author gives up by publishing honestly. Only D16
-uses synchrony; D17's propagation needs nothing but the fact that every block,
-however authored, leans on `f+1` correct blocks. -/
+/-! ## Exclusion after `R` (§4): D16 produces the exposure, D17 propagates
+it to every valid block, D18 is what an author gives up by publishing
+honestly. Only D16 uses synchrony. -/
 
 omit [DecidableEq BlockId] in
-/-- Every non-genesis block references a **correct** block of the round below.
-
-`2f+1` distinct creators, at most `f` of them Byzantine. This is the fact D17
-and D18 both run on, and it holds of Byzantine blocks as much as correct ones —
-which is what makes exclusion total rather than a convention. -/
+/-- Every non-genesis block references a correct block of the round below:
+`2f+1` distinct creators, at most `f` Byzantine, of any block whatever its
+author. -/
 theorem exists_correct_mem_refs {b : BlockId} (hb : b ∈ U.ids)
     (hround : 0 < (U.block b).round) :
     ∃ i ∈ (U.block b).refs, i ∈ U.ids ∧
@@ -168,13 +131,9 @@ theorem exists_correct_mem_refs {b : BlockId} (hb : b ∈ U.ids)
   exists_correct_memRefs U.causal U.quorateOn hb hround
 
 /-- **D17 — exclusion is total, and permanent.** If every correct block of
-round `n+1` is exposed to `X`, then so is every block from round `n+2` on,
-whoever authored it — and under the condition none of them may name `X`.
-
-The induction is one round at a time and uses no synchrony: a block leans on a
-correct block below (`exists_correct_mem_refs`), that one is exposed, and
-exposure passes upward (D12). Synchrony is what produces the antecedent (D16),
-not what propagates it. -/
+round `n+1` is exposed to `X`, so is every block from round `n+2` on,
+whoever authored it. The induction uses no synchrony, only that every
+block leans on a correct block below. -/
 theorem exposedIn_of_correct_exposed {X : Validator} {n : ℕ}
     (hexp : ∀ c ∈ U.ids, (U.block c).round = n + 1 →
       (U.block c).creator ∈ (Correct : Finset Validator) → ExposedIn U c X) :
@@ -202,15 +161,10 @@ theorem not_mem_creators_refs_of_correct_exposed (hdos : DoSValid U) {X : Valida
   obtain ⟨i, hi, rfl⟩ := mem_creatorsOf.mp hX
   exact hdos b hb i hi (exposedIn_of_correct_exposed hexp k b hb hk)
 
-/-- **D16 — after `R`, agree or be exposed.** If the histories of two correct
-round-`n` blocks between them hold an equivocation by `X`, then *every* correct
-round-`(n+1)` block is exposed to `X`.
-
-`SynchronisedOn` puts both round-`n` blocks into the references of every correct
-block one round up, so each of the latter inherits the union of their histories.
-No tie-break policy can avoid this: correct validators either agree about `X` —
-in which case D11 says it gained nothing — or they are all exposed one round
-later. -/
+/-- **D16 — after `R`, agree or be exposed.** If the histories of two
+correct round-`n` blocks between them hold an equivocation by `X`, every
+correct round-`(n+1)` block is exposed to `X`: `SynchronisedOn` puts both
+into every correct block one round up. -/
 theorem exposedIn_of_correct_disagree {R n : ℕ} {X : Validator}
     (hs : SynchronisedOn U (Correct : Finset Validator) R) (hn : R ≤ n)
     {c₁ c₂ : BlockId} (hc₁ : c₁ ∈ U.ids) (hc₁r : (U.block c₁).round = n)
@@ -228,15 +182,10 @@ theorem exposedIn_of_correct_disagree {R n : ℕ} {X : Validator}
       (Reaches.single (hs n hn b hb hbr hbc c₂ hc₂ hc₂r hc₂c)) hj,
    hpair⟩
 
-/-- **D18 — pinning.** If all but at most `f` correct validators put `A` into
-their round-`(j+1)` block, then every block from round `j+2` on holds `A` in its
-history.
-
-A block leans on `f+1` correct blocks of the round below, and there are not
-`f+1` correct validators lacking `A` to draw them all from. So the honest
-publisher loses the freedom to be disagreed about later — while an author that
-publishes to a strict subset keeps it, which is `liveness.md` §4.3 showing up as
-the selective-publication gap that `dos-equivocation-and-growth.md` §5's doubling family exploits. -/
+/-- **D18 — pinning.** If all but at most `f` correct validators put `A`
+into their round-`(j+1)` block, every block from round `j+2` on holds `A`
+in its history: a block leans on `f+1` correct blocks below, and not `f+1`
+of them can lack `A`. -/
 theorem mem_history_of_pinned {A : BlockId} {j : ℕ}
     (hpin : ((Correct : Finset Validator).filter
       (fun v => ¬ ∃ c ∈ U.ids, (U.block c).round = j + 1 ∧ (U.block c).creator = v ∧
@@ -276,18 +225,9 @@ theorem mem_history_of_pinned {A : BlockId} {j : ℕ}
       obtain ⟨i, hi, hi_ids, _, hi_round⟩ := exists_correct_mem_refs hb (by omega)
       exact history_subset_of_reaches hb (Reaches.single hi) (ih i hi_ids (by omega))
 
-/-! ## D8a — exposure is structural, not accidental
-
-D8 says the reference graph cannot *report* an equivocation, which reads as
-making exposure a matter of luck. It is not. A validator accepts one block per
-author and references what it accepted, so if any two authors it accepts carry
-different halves in their histories, the validator performs the merge itself,
-in its own next block, as a matter of course.
-
-Note what the two accepted blocks are: they have **different authors**. The
-acceptance rule forbids accepting both halves directly (`accepted_inj`), so the
-equivocation is never in the accepted set — it is one layer down, in the
-histories of two blocks that disagree. Which is exactly `Umerge`. -/
+/-! ## D8a — exposure is structural, not accidental: a validator that
+accepts two authors whose histories carry different halves of an
+equivocation performs the merge itself, in its own next block. -/
 
 /-- **D8a.** A validator whose accepted set spans two disagreeing histories
 exposes the author in its own next block. -/
@@ -301,21 +241,12 @@ theorem exposedIn_of_accepted_span (D : Delivery U) {v : Validator}
    j, history_subset_of_reaches hb (Reaches.single (D.includes v hv n b hb hbc hbr hq)) hj,
    hpair⟩
 
-/-! ## The intersection lemma
-
-A sharpening of D18, kept for its own sake. Two blocks that both *name* `X` are both `X`-clean, and
-each leans on `f+1` correct blocks; when the correct validators number at most
-`2f+1` those two sets must meet, and a correct validator has one block per round
-(T1), so meeting in a *creator* means meeting in a *block*. Both then contain
-that block's history, and being clean, both must agree with it about `X`.
-
-This strictly strengthens D18: the hypothesis becomes *some shared ancestor
-heard from `X`*, rather than *`X` published to all but `f` correct validators*.
-
-Its scope is a case split that may be the whole proof. The intersection needs
-`|Correct| ≤ 2f+1`, i.e. the adversary spending its full budget — and when it
-spends less, D9's branching factor, which is the *number* of Byzantine authors,
-falls by the same amount. The adversary cannot have both. -/
+/-! ## The intersection lemma: a sharpening of D18. Two blocks that both
+name `X` are both `X`-clean and each leans on `f+1` correct blocks; at
+`|Correct| ≤ 2f+1` those sets must meet in a block, and both being clean
+must agree with it about `X`. Strictly stronger than D18: the hypothesis
+is some shared ancestor heard from `X`, not that `X` published to all but
+`f` correct validators. -/
 
 omit [DecidableEq BlockId] in
 /-- Two blocks of the same round share a correct reference, when the correct
@@ -357,16 +288,8 @@ theorem exists_shared_correct_ref (hcard : (Correct : Finset Validator).card ≤
       (by have := U.round_of_mem_refs hc₁ hi₁; have := U.round_of_mem_refs hc₂ hi₂; omega)
   exact ⟨i₁, hi₁, this ▸ hi₂, by rw [hi₁c]; exact hvc⟩
 
-/-- **The intersection lemma.** Two blocks that both name `X` agree about `X`
-wherever their shared correct reference speaks about it.
-
-`A` is the shared ancestor's `X`-block at some round; each namer, being
-`X`-clean, can hold only one `X`-block at that round, and already holds `A`. So
-whatever either of them holds there *is* `A`.
-
-Where the shared ancestor is silent about `X` the two may still differ —
-which is why the per-round count ultimately needs the pedigree machinery of
-`dos-equivocation-and-growth.md` §5. -/
+/-- **The intersection lemma.** Two blocks that both name `X` agree about
+`X` wherever their shared correct reference speaks about it. -/
 theorem eq_of_both_name_of_shared (hdos : DoSValid U)
     {c₁ c₂ w : BlockId} (hc₁ : c₁ ∈ U.ids) (hc₂ : c₂ ∈ U.ids)
     (hw₁ : w ∈ (U.block c₁).refs) (hw₂ : w ∈ (U.block c₂).refs)
@@ -393,16 +316,9 @@ theorem eq_of_both_name_of_shared (hdos : DoSValid U)
     exact hclean₂ ⟨A₂, hA₂, A, hAw₂, hne, hA₂c, hAc, hA₂r⟩
   rw [e₁, e₂]
 
-/-! ## The correct backbone
-
-After `R`,
-`SynchronisedOn` makes every correct block reference every correct block one
-round below — and that composes: **a correct block's history contains every
-correct block of every round from `R` to its own.**
-
-The induction needs no population hypothesis. A block references `2f+1`
-distinct creators of which at most `f` are Byzantine, so a correct block one
-round up always exists to step through (`exists_correct_mem_refs`). -/
+/-! ## The correct backbone: after `R`, `SynchronisedOn` makes every
+correct block's history contain every correct block of every round from
+`R` to its own. -/
 
 /-- **The backbone lemma.** After `R`, correct histories contain the whole
 correct past. -/
@@ -414,33 +330,23 @@ theorem mem_history_of_correct {R : ℕ} (hs : SynchronisedOn U (Correct : Finse
       a ∈ history U c :=
   mem_historyFrom_of_correct U.causal U.quorateOn hs
 
-/-! ## Two delivery policies, and what they do and do not yield
-
-`dos-equivocation-and-growth.md` §5. Two policies making explicit what the
-model otherwise leaves to prose; with them, nothing an author publishes is
-invisible to the correct population. -/
+/-! ## Two delivery policies: made explicit, nothing an author publishes
+is invisible to the correct population. -/
 
 /-- **What `U` means, made explicit.** §4.2 of `liveness.md` defines `U` as
 every block some correct validator held; the model has never said so. -/
 def HeldByCorrect (D : Delivery U) : Prop :=
   ∀ i ∈ U.ids, ∃ v ∈ (Correct : Finset Validator), i ∈ D.held v (U.block i).round
 
-/-- **A stronger acceptance policy**: a validator that holds a block by some
-author accepts *some* block by that author. `Delivery.accepts_correct` demands
-this only of correct authors. -/
+/-- **A stronger acceptance policy**: a validator that holds a block by
+some author accepts some block by that author. -/
 def AcceptsSome (D : Delivery U) : Prop :=
   ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ a ∈ D.held v n,
     ∃ i ∈ D.accepted v n, (U.block i).creator = (U.block a).creator
 
 omit [DecidableEq BlockId] in
-/-- What the two policies do yield: **nothing an author publishes is invisible to
-the correct population.** If any block by `X` at round `n` exists at all, some
-correct validator accepted a block by `X` at round `n` — and so referenced one,
-if it built.
-
-Kept because it stands on its own; the C1′ proof itself goes through the
-pedigree machinery of
-`dos-equivocation-and-growth.md` §5. -/
+/-- What the two policies yield: nothing an author publishes is invisible
+to the correct population. -/
 theorem exists_accepted_of_mem_ids (D : Delivery U) (hheld : HeldByCorrect D)
     (hsome : AcceptsSome D) {A : BlockId} (hA : A ∈ U.ids) :
     ∃ v ∈ (Correct : Finset Validator), ∃ i ∈ D.accepted v (U.block A).round,

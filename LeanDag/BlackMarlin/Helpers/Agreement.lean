@@ -51,14 +51,10 @@ theorem holds_two_rounds (hcard : quorumCard Validator ≤ T.card)
   omega
 
 /-- **The commit, on every reliable validator's own view.** A run of two
-reliable anchors past GST is committed by each of them separately, at the
-explicit time the two rounds' blocks have converged — the local
+reliable anchors past GST is committed by each of them separately, at
+the explicit time the two rounds' blocks have converged — the local
 counterpart of `reactive_committed`, which states the same verdict over
-the universe.
-
-This is what makes agreement a statement about validators rather than
-about the DAG: the anchor is not merely committable, it is committed by
-each of them. -/
+the universe. -/
 theorem committedIn_local (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card) (hgst : pc.gst ≤ R)
     (hto : ∀ n, R ≤ n → 2 * pc.delay + pc.proc ≤ pc.timeout n)
@@ -102,11 +98,8 @@ theorem committedIn_local (hT : T ⊆ (Correct : Finset Validator))
 
 /-- **Agreement.** What one validator delivered with an anchor committed
 at round `ρ`, every reliable validator delivers with the anchor they each
-commit at any reliably anchored round `r ≥ ρ`.
-
-The two halves are the prefix result — the lower committed anchor's
-causal history is contained in the higher's — and the local commit above,
-which says the higher anchor really is committed by each of them. -/
+commit at any reliably anchored round `r ≥ ρ`: the prefix result composed
+with the local commit above. -/
 theorem agreement (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card) (hgst : pc.gst ≤ R)
     (hto : ∀ n, R ≤ n → 2 * pc.delay + pc.proc ≤ pc.timeout n)

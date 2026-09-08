@@ -4,17 +4,11 @@ import LeanDag.Hybrid.Properties
 /-!
 # Garbage collection, crash recovery and re-genesis for Hybrid
 
-Hybrid's universe is the core's record under `HonestNoEquiv`, and that
-invariant is mechanised (`Integration/Preservation.lean`): it survives
-the cut, any fill and re-genesis. The carrier therefore reads as records
-under it, by the identity maps, and every mechanism cell is
-`Arcs/Record.lean` at that instance. The fill is the core's
-self-referencing one, since Hybrid's validity is the core's and has its
-self-parent clause; its invariant is `honestNoEquiv_fill`, supplied by
-hand where the copy fill's is the class's.
-
-What is stated here beyond the constructions is the prompt skip, from
-Hybrid's `SkipsUnsupported`.
+Hybrid's universe is the core's record under `HonestNoEquiv`, mechanised
+in `Integration/Preservation.lean`, so the carrier reads as records
+under it and every mechanism cell is `Arcs/Record.lean` at that
+instance. Beyond the constructions, this file states the prompt skip
+from Hybrid's `SkipsUnsupported`.
 -/
 
 namespace LeanDag

@@ -2,13 +2,10 @@ import LeanDag.Barnacle.Model.Window
 /-!
 # BN7 — the AIMD rule
 
-What the paper says of its update (`barnacle.md` §4, §6): the
-count stays in `[1, maxLeaders]`; a healthy window raises it by one and
-resets the back-off, a cap excepted; an unhealthy window lowers it by
-`2^backoff`, a floor excepted, and doubles the next step. Stated of
-`Aimd.update` — the step — and of `Aimd.rule`, the update rule a run
-consumes, whose bounds hold unconditionally so that a run under it
-needs no bound clause of its own.
+What the paper says of its update (`barnacle.md` §4, §6): the count
+stays in `[1, maxLeaders]`; a healthy window raises it by one, a cap
+excepted, and resets the back-off; an unhealthy window lowers it by
+`2^backoff`, a floor excepted, and doubles the next step.
 
 * **BN7a, bounds** — the rule's count is in `[1, maxLeaders]`, whatever
   the input.
@@ -66,10 +63,8 @@ def Test (R : BaseRule Validator BlockId Payload) (P : Params)
         (decide (P.num * expected R P m ≤ P.den * observed R P getLeader hk U A m hm hmax))
 
 /-- **BN7e, the rule is anchored.** It does not read the view, so two
-validators holding the anchor take the same step — the condition BN3 asks
-of an update rule now that the type lets one read its own view. The
-window it does read is the anchor's causal history, which BN2 shows every
-view holding the anchor holds whole. -/
+validators holding the anchor take the same step — the condition BN3
+asks of an update rule. -/
 def RuleAnchored (R : BaseRule Validator BlockId Payload) (P : Params)
     (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders) : Prop :=
   Anchored R (rule R P getLeader hk)

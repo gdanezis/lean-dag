@@ -7,28 +7,11 @@ import LeanDag.Properties.Optional.SelfParent
 /-!
 # Mahi-Mahi as a carrier, and the properties its rules give
 
-The five that need no induction. `Banded` and the two liveness
-properties are in `MahiMahiProperties.lean`, which is downstream of the
-adaptive arc; this file is upstream of every mechanism, which is where a
-conformance layer has to sit (`docs/target-properties.md` §11.2c).
-
-**One carrier per wave width, and that is the whole of what was in the
-way.** `DagRule.Decided` takes a schedule, a universe, a view, a slot
-and a verdict — and no wave length, so `w` has to be fixed before the
-rule is. `audit-conformance.py` recorded that as "needs a carrier per
-width" and the row read `--` for three arcs afterwards. Hybrid had
-already answered it: `hybridRule (k : ℕ)` is a carrier per indirect
-threshold, and nothing about a per-width family costs anything. The
-recorded reason had stopped being a reason and nothing re-read it —
-which is `docs/target-properties.md` §11.2d's finding, one level up.
-
-**The conditions travel with the rule, not inside the property.**
-`Agree R` and `Banded R` are predicates on `R` alone, so a rule whose
-agreement needs `2 ≤ w` cannot state it as a hypothesis *of the
-property*; it states it as a hypothesis of the theorem, at a carrier
-where `w` is already fixed. Hybrid's `agree` takes `Admissible` and its
-`banded` takes `0 < kt` for the same reason. Every Mahi-Mahi result
-assumes `3 ≤ w` or more, so the condition is free at every use site.
+The five properties needing no induction; `Banded` and the two liveness
+properties live in `Properties.lean`. Each wave width needs its own
+carrier, since `DagRule.Decided` fixes no wave length; conditions such
+as `2 ≤ w` are therefore stated at the theorem, not inside the
+property, since a rule's carrier already fixes `w`.
 -/
 
 namespace LeanDag

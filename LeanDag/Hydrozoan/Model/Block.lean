@@ -3,14 +3,9 @@ import LeanDag.Hydrozoan.Model.Faults
 /-!
 # Blocks and validity
 
-Hydrozoan's block is the shared one, `LeanDag.Block Replica BlockId Unit`:
-a round, a creator, the ids of the blocks it references from the
-preceding round, and no payload. `BlockId` is the block's identity —
-two blocks by the same creator in the same round (equivocation) are
-simply two distinct ids.
-
-**Fidelity gap** (stated once, here): references point only to the
-immediately preceding round — the model has no weak links.
+Hydrozoan's block is the shared one, with no payload: a round, a
+creator, and the ids it references from the preceding round only — the
+model has no weak links.
 -/
 
 namespace LeanDag
@@ -25,18 +20,10 @@ section Validity
 variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [F : LeanDag.Hydrozoan.Faults Replica]
 
-/-- Block validity, relative to a lookup function — the paper's
-"referencing `≥ q` distinct valid blocks from the previous round".
-
-The predecessor condition is additive (`+ 1 =`, never `− 1`): this avoids
-natural-number subtraction, and it makes the genesis case derivable
-rather than assumed — at round `0` the equation `(blk i).round + 1 = 0`
-is unsatisfiable, so `refs = ∅` follows. Only the quorum condition
-needs a round guard.
-
-The quorum counts **creators**, not `refs.card`: the protocol means `q`
-distinct *replicas'* blocks, and the creator-set form is what every
-counting argument consumes (with `distinct_creators` the two coincide). -/
+/-- Block validity, relative to a lookup function: `q` distinct-creator
+references from the preceding round. The predecessor condition is
+additive (`+1 =`, never `−1`), so the genesis case (`refs = ∅`) is
+derivable rather than assumed. -/
 structure ValidWrt (blk : BlockId → Block Replica BlockId)
     (b : Block Replica BlockId) : Prop where
   /-- Every reference sits in the immediately preceding round. -/

@@ -7,32 +7,11 @@ import Mathlib.Tactic.Ring
 # FinWhale — the round-robin schedule supplies three correct leaders
 
 Lemma 22: in any window of `3f + 3` rounds, round robin names three
-consecutive rounds whose leaders are all correct. Lemma 23 consumes it —
-an undecided slot needs a committed anchor above it, and three
-consecutive correct leaders supply one at every offset.
-
-The paper's proof counts maximal runs of correct leaders in the cyclic
-order and then observes that a window of `3f + 3` rounds "contains a full
-cycle of `n` rounds plus the first two rounds of the next cycle". That
-last step needs `3f + 3 ≥ n + 2`, which at `n = 3f + 2p − 1` holds only
-for `p = 1`. For `p ≥ 2` the window is shorter than a cycle and the
-argument does not apply.
-
-The statement is still true at every `p`, by two arguments rather than
-one, and both are here.
-
-* `three_correct_of_roundRobin` is the cyclic half, and gives a triple
-  inside any window of `n + 2` rounds. It counts incidences rather than
-  runs: if every cyclic triple held a Byzantine leader, each Byzantine
-  validator would cover at most three of the `n` triples, so `n ≤ 3f`,
-  against `n ≥ 3f + 1`. This needs only the fault bound, not `Params`.
-* `three_correct_window` is the pigeonhole half, for `3f + 3 ≤ n`: the
-  window's rounds are one cycle or less, so their leaders are distinct,
-  and `f + 1` disjoint triples would need `f + 1` distinct Byzantine
-  validators.
-
-`lemma22` is the paper's statement, by the first argument at `p = 1` —
-where `3f + 3` is exactly `n + 2` — and the second at `p ≥ 2`.
+consecutive correct-led rounds, which Lemma 23 needs for its committed
+anchor. The paper's single cyclic argument only reaches `p = 1`; for
+`p ≥ 2` the window is shorter than a cycle, so `three_correct_window`
+supplies a pigeonhole argument instead, and `lemma22` picks whichever
+of the two applies.
 -/
 
 
@@ -48,14 +27,11 @@ cyclic group of order `n`. -/
 theorem neZero_card : NeZero (Fintype.card Validator) :=
   ⟨by have := F.card_validators; omega⟩
 
-/-- **Lemma 22, the cyclic half.** Every window of `n` starting rounds
-contains one whose three consecutive leaders are all correct — so the
-triple itself lies within `n + 2` rounds.
-
-If it did not, every cyclic position would carry a Byzantine leader
-within two of it. A Byzantine validator sits at one cyclic position and
-so answers for at most three positions, leaving `n ≤ 3f`, against the
-fault model's `3f + 1 ≤ n`. -/
+/-- **Lemma 22, the cyclic half**: some triple of consecutive correct
+leaders lies within `n + 2` rounds, since otherwise every cyclic
+position would carry a Byzantine leader within two of it, and each
+Byzantine validator covers at most three positions, giving `n ≤ 3f`
+against the fault model. -/
 theorem three_correct_of_roundRobin {leader : ℕ → Validator} (h : RoundRobin leader) (r₀ : ℕ) :
     ∃ r, r₀ ≤ r ∧ r < r₀ + Fintype.card Validator ∧
       leader r ∈ (Correct : Finset Validator) ∧
@@ -131,8 +107,8 @@ theorem three_correct_of_roundRobin {leader : ℕ → Validator} (h : RoundRobin
   have := F.card_byzantine
   omega
 
-/-- **Round robin names every validator once a cycle.** For any validator
-and any starting round there is a round within the cycle it leads. -/
+/-- **Round robin names every validator once a cycle**, within any
+starting round. -/
 theorem exists_round_led_by {leader : ℕ → Validator} (h : RoundRobin leader)
     (v : Validator) (r₀ : ℕ) :
     ∃ s, r₀ ≤ s ∧ s < r₀ + Fintype.card Validator ∧ leader s = v := by
@@ -148,8 +124,8 @@ theorem exists_round_led_by {leader : ℕ → Validator} (h : RoundRobin leader)
   rw [hcast, Equiv.apply_symm_apply]
 
 omit [DecidableEq Validator] F in
-/-- **Round robin is injective within a cycle.** Two rounds of one cycle
-with the same leader are the same round. -/
+/-- **Round robin is injective within a cycle**: two rounds of one
+cycle with the same leader are the same round. -/
 theorem leader_injOn {leader : ℕ → Validator} (h : RoundRobin leader) (a i i' : ℕ)
     (hi : i < Fintype.card Validator) (hi' : i' < Fintype.card Validator)
     (heq : leader (a + i) = leader (a + i')) : i = i' := by
@@ -162,8 +138,8 @@ theorem leader_injOn {leader : ℕ → Validator} (h : RoundRobin leader) (a i i
   rwa [Nat.mod_eq_of_lt hi, Nat.mod_eq_of_lt hi'] at hcancel
 
 /-- **Lemma 22, the pigeonhole half**, where the window fits inside a
-cycle. The `3f + 3` rounds then name distinct validators, and `f + 1`
-disjoint triples would need `f + 1` distinct Byzantine leaders. -/
+cycle: `f + 1` disjoint triples would need `f + 1` distinct Byzantine
+leaders. -/
 theorem three_correct_window {leader : ℕ → Validator} (h : RoundRobin leader)
     (hwide : 3 * F.f + 3 ≤ Fintype.card Validator) (r₀ : ℕ) :
     ∃ r, r₀ ≤ r ∧ r + 2 < r₀ + (3 * F.f + 3) ∧
@@ -205,13 +181,9 @@ theorem three_correct_window {leader : ℕ → Validator} (h : RoundRobin leader
   omega
 
 /-- **Lemma 22.** In any window of `3f + 3` rounds, round robin names
-three consecutive rounds with correct leaders.
-
-Two arguments, by regime. Where the window fits inside a cycle — which is
-`p ≥ 2` — it is the pigeonhole. Where it does not, `p = 1` and the
-committee is `3f + 1`, so `3f + 3` is exactly a cycle and two rounds, and
-the cyclic count applies. The paper gives only the second, and states it
-for every `p`. -/
+three consecutive correct-led rounds — the pigeonhole where the window
+fits inside a cycle, the cyclic count at `p = 1` otherwise, though the
+paper gives only the latter. -/
 theorem lemma22 [P : Params Validator] {leader : ℕ → Validator} (h : RoundRobin leader)
     (r₀ : ℕ) :
     ∃ r, r₀ ≤ r ∧ r + 2 < r₀ + (3 * F.f + 3) ∧

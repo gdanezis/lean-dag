@@ -6,41 +6,22 @@ import Mathlib.Data.Finset.Max
 # Odontoceti: liveness
 
 `odontoceti.md` §5, OP4 — O7 through O10. The two-round rule's liveness
-is *simpler* than Mysticeti's, which is the protocol's whole point:
-
-* **O7** (`directCommit_of_leader_mem`, `decided_of_leader_mem`) —
-  post-`R`, a correct leader's block is referenced by every correct
-  decision-round block (`SynchronisedOn`, one step), so its supporters
-  include a full quorum: **two** populated rounds against Mysticeti's
-  three.
-* **O8** (`SpansEligible`, `spansEligible_two`) — under a pipelined
-  identity-round schedule a run of **two** consecutive committed slots
-  spans eligibility for everything below: a slot cannot anchor on the
-  round immediately above it, but the second slot of the run clears
-  `slotRound + 2`. Two consecutive honest leaders is the thesis's
-  Lemma 10; the schedule fact itself is hypothesized (`FairRunOn`), in
-  house style.
-* **O9** (`decided_below_of_committed_run`) — a run of committed slots
-  clears every slot below it, by the nearest-eligible-committed-anchor
-  induction. The indirect commit picks the **least** passing candidate
-  (`Finset.min'`), which is exactly what the canonicity premise of
-  `Decided.indirectCommit` asks for.
-* **O10** (`all_decided_below_of_fairRun`) — the composition, under
-  enforceable hypotheses only: `Live`, `DeliversQuorum`,
-  `SynchronisedOn`, and a recurring run of `c` correct-led slots. Note
-  the horizon: the run's last slot needs rounds up to
-  `slotRound + 1` — one round of certificates fewer than Mysticeti's
-  `+ 2`.
+is simpler than Mysticeti's, which is the protocol's point. O7 says a
+correct leader's block is referenced by every correct decision-round
+block post-`R`, so its supporters include a full quorum in two
+populated rounds against Mysticeti's three. O8 says a pipelined
+identity-round schedule spans eligibility at a run of two consecutive
+committed slots — the thesis's Lemma 10. O9 clears every slot below a
+committed run by the nearest-eligible-committed-anchor induction, with
+the indirect commit picking the least passing candidate. O10 composes
+all three under enforceable hypotheses, with a horizon one round of
+certificates shorter than Mysticeti's.
 
 Every decision-valued statement concludes on a validator's own view,
-caught up to the horizon it reads (`View.CoversUpto`): the direct
-commit's supporters sit one round above the leader, so a caught-up view
-holds them (`directCommitIn_of_coversUpto`), and the descent is
-view-parametric. The full view is caught up to every horizon
-(`View.coversUpto_full`), so the whole-universe reading is the special
-case; under eventual DAG synchrony (`liveness.md` §4.2) every correct
-validator's view is caught up once delivery has reached the horizon,
-which is what makes the statement one about validators.
+caught up to the horizon it reads: the direct commit's supporters sit
+one round above the leader, so a caught-up view holds them, and the
+full view is caught up to every horizon, making the whole-universe
+reading the special case.
 -/
 
 namespace LeanDag
@@ -56,13 +37,10 @@ variable {T : Finset Validator} {L : BlockId} {k R N : ℕ}
 
 /-! ## O7 — honest leaders commit directly, in one step -/
 
-/-- **The commit argument, stated once** — the two-round counterpart of
-`directCommit_of_certifiesAt`. A quorum-sized `T` whose blocks one round
-above `r` all vote for `L` directly commits it: a vote *is* a support,
-each `v ∈ T` has a supporting block by production, and `T`'s cardinality
-does the counting. Both pacing disciplines end here — the full-timeout
-one arriving through `votesAt_of_synchronisedOn`, the reactive one
-through `ReactivePace.votes`. -/
+/-- **The commit argument, stated once**: a quorum-sized `T` whose
+blocks one round above `r` all vote for `L` directly commits it, since a
+vote is a support and each `v ∈ T` has one by production. Both pacing
+disciplines end here. -/
 theorem directCommit_of_votesAt {r : ℕ}
     (hcard : quorumCard Validator ≤ T.card)
     (hpop1 : PopulatedOn U T (r + 1))
@@ -126,14 +104,11 @@ theorem decided_of_correct_leader (hs : Synchronised U R)
 
 /-! ## O8, O9 — spanning and the descent
 
-A run of `c` slots spanning eligibility is the relation's
-`AnchoredRule.SpansEligible`; under a pipelined identity-round schedule
-`c = 2` spans (`spansEligible_of_identity`): slot `b − 1` cannot anchor
-on slot `b` — one round is one too close — but slot `b + 1` clears
-`slotRound + 2`, which is why the thesis's Lemma 10 asks for **two
-consecutive** honest leaders. And O9 (thesis Lemma 11), that every slot
-below a committed run of eligible span is decided, is the relation's
-`decided_below_of_committed_run` at `Odontoceti.exists_least`. -/
+A run of `c` slots spanning eligibility is `AnchoredRule.SpansEligible`;
+under a pipelined identity-round schedule `c = 2` spans, since slot
+`b + 1` clears `slotRound + 2` where `b − 1` cannot, which is why the
+thesis's Lemma 10 asks for two consecutive honest leaders. O9 (Lemma
+11) is `decided_below_of_committed_run` at `Odontoceti.exists_least`. -/
 
 end Odontoceti
 

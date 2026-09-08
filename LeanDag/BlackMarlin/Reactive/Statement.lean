@@ -4,38 +4,23 @@ import LeanDag.BlackMarlin.Model.Round
 
 What the round rule of L38–L41 yields when a validator builds as soon as
 it can conclude the round rather than waiting out every timeout
-(`black-marlin.md` §10). Six claims:
+(`black-marlin.md` §10). BMR1 says every reliable round-above block
+references a reliable anchor, past GST; BMR2 is the resulting commit,
+with no coverage hypothesis. BMR3 says a validator holding the two
+rounds below can conclude the round, given three consecutive reliable
+anchors — one more than the commit rule needs — and BMR4 says only
+entering costs that, not staying. BMR5 bounds the round-entry latency
+and BMR6 says it can undercut the timeout entirely.
 
-* **BMR1, `Votes`** — past GST, with the timeout clearing `2Δ + proc`,
-  every reliable block at the round above a reliable anchor references
-  that anchor, whether the exit fired or the fallback did;
-* **BMR2, `ReactiveCommit`** — hence a run of two reliable anchors is
-  committed, with **no coverage hypothesis**: the reactive discipline
-  supplies exactly the references the commit rule counts;
-* **BMR3, `Exit`** — a validator holding the reliable blocks of the two
-  rounds below can conclude the round, provided the anchors of **three**
-  consecutive rounds are reliable;
-* **BMR4, `ExitSustained`** — but only to enter. A validator that
-  already saw the lower anchor supported needs one further reliable
-  anchor per round, the check it passed before carrying forward;
-* **BMR5, `Latency`** — when reliable blocks propagate within `δ`, the
-  next round is entered within `D + δ + proc` of round entry, and past
-  GST within `Δ + δ + 2 * proc`, the timeout appearing in neither;
-* **BMR6, `NoTimeout`** — and when those constants undercut the timeout,
-  no validator ever waits one out.
+**Where this differs from the core's reactive arc.** The exit clause is
+the same, `anchor_or_wait`, but the core's fires once the leader's block
+is held while Black Marlin's fires once the round rule's three further
+clauses are satisfied — BMR3's cost, paid once per BMR4.
 
-**Where this differs from the core's reactive arc.** `ReactivePace`'s
-`vote_or_wait` is the same clause as `anchor_or_wait` here: a validator
-concludes a round only with that round's anchor in hand, so its next
-block cites it. `prompt_vote` is not the same as `prompt_conclude`. The
-core's exit fires once the leader's block is held; Black Marlin's fires
-once the round rule is satisfied, which is three further clauses, and
-BMR3 is what they cost — a run of three reliable anchors where the
-commit rule (BML1) asks for two. BMR4 says the cost is paid once.
-
-`δ` is the actual per-block propagation bound of the execution — a
-premise about this run, not an assumption about the network in general —
-so the bounds degrade continuously as it approaches the timeout.
+`δ` is the actual per-block propagation bound of the execution, a
+premise about this run rather than an assumption about the network in
+general, so the bounds degrade continuously as it approaches the
+timeout.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -52,13 +37,9 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
   {U : BlockUniverse Validator BlockId Payload} {T : Finset Validator} {N : ℕ}
 
 /-- **BMR1, the fallback route.** Past GST, every reliable block at the
-round above a reliable anchor references that anchor.
-
-The exit needs no argument — concluding the round required holding the
-anchor, so the block cites it. The fallback is the whole content: the
-anchor holds its own block when it builds, convergence carries it across
-within `Δ`, and the collapsed drift plus the full timeout place that
-arrival before the waiter's build. -/
+round above a reliable anchor references it: the exit route holds it by
+construction, and convergence within `Δ` carries it to the fallback
+route before its timeout builds. -/
 def Votes (pc : Pace U T N) : Prop :=
   ∀ (R r : ℕ) (A : BlockId),
     T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
@@ -81,14 +62,8 @@ def ReactiveCommit (pc : Pace U T N) : Prop :=
 
 /-- **BMR3, the exit fires — at a run of three.** A validator holding
 every reliable block of rounds `r + 1` and `r + 2` can conclude round
-`r + 2`, given reliable anchors at `r`, `r + 1` and `r + 2` and the
-references the rounds above them carry.
-
-`quorum` and `anchor` come from the round-`(r+2)` blocks,
-`suppAnchor(r+1)` from those blocks referencing the round-`(r+1)` anchor,
-and `suppAnchor(r)` from the round-`(r+1)` blocks referencing the
-round-`r` anchor. Three rounds of anchors, against the commit rule's
-two. -/
+`r + 2`, given reliable anchors at `r`, `r + 1` and `r + 2` — three
+rounds of anchors, against the commit rule's two. -/
 def Exit (pc : Pace U T N) : Prop :=
   ∀ (r : ℕ) (v : Validator) (t : ℕ),
     quorumCard Validator ≤ T.card → v ∈ T → r + 2 ≤ N →
@@ -133,10 +108,8 @@ def Latency (pc : Pace U T N) : Prop :=
 
 /-- **BMR6, the timeout never fires.** When delivery, drift and
 processing together undercut the timeout, every reliable validator
-concludes strictly before its deadline: the fallback branch of
-`anchor_or_wait` is dead, and the protocol runs at network speed. At the
-minimal timeout `2Δ + proc` the second hypothesis reads
-`δ + proc < Δ`. -/
+concludes strictly before its deadline and the protocol runs at network
+speed. -/
 def NoTimeout (pc : Pace U T N) : Prop :=
   ∀ (r : ℕ) (v : Validator) (δ R : ℕ),
     quorumCard Validator ≤ T.card → v ∈ T → r + 3 ≤ N →

@@ -2,20 +2,13 @@ import LeanDag.Properties.Carrier
 /-!
 # Self-reference, and one block per reliable author per round
 
-Two optional properties, and what they give together: a reliable
-author's block reaches every earlier block of the same author.
-
-`SelfParent` is the core's P3′ at the carrier — every non-genesis block
-references a block of its own author, which `causal` puts one round
-below. `NoEquiv` is the non-equivocation clause of every universe record
-here, at a fault model. Neither is derivable from the band, and neither
-is owed by a rule that reads only certification; what they are for is
-inclusion (`Arcs/Quality.lean`): a correct block is in the history of
-its author's next committed leader block, so a schedule that returns to
-every reliable author commits every reliable block, with no synchrony
-in the argument. Nemo's model drops the self-parent clause and
-Hydrozoan's never had one, so those rules do not show `SelfParent` and
-get the coverage half of chain quality only.
+Two optional properties whose conjunction gives a reliable author's
+block reach to every earlier block of the same author. `SelfParent` is
+the core's P3′ at the carrier; `NoEquiv` is the non-equivocation clause
+at a fault model. Neither is derivable from the band, and both exist
+for inclusion (`Arcs/Quality.lean`), with no synchrony in the argument.
+Nemo drops self-parent and Hydrozoan never had one, so those rules get
+the coverage half of chain quality only.
 -/
 
 namespace LeanDag

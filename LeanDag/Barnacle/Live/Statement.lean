@@ -5,18 +5,14 @@ import LeanDag.Barnacle.Nemo.Statement
 /-!
 # BN11 — the mechanism over a base protocol, end to end
 
-BN8b gives runs of every height *given* the liveness clause at every
-count, and BN10 proves that clause for round-robin, at every count, for
-each of the three rules. Nothing joined them, so the arc's liveness claim
-for a real protocol stood as two halves. This file states the join.
-
-`RunsExist` is BN8b's consequent — the clause discharged rather than
-assumed — and the three conjuncts below instantiate it at Mysticeti,
-Odontoceti and Nemo-Nemo under the paper's own rotation, with the gaps
-BN10 establishes: `n + 2` for the three-round rule, `n + 1` for the
-two-round ones. Nothing beyond the committee bound of each rule is
-asked: the pigeonhole of BN9 turns `waveLength · slack + 1 ≤ n` into
-runs of heads, and those into the clause.
+BN8b gives runs of every height *given* the liveness clause, and BN10
+proves that clause for round-robin at every count, for each of the
+three rules; this file joins them. `RunsExist` is BN8b's consequent
+discharged rather than assumed, and the three conjuncts instantiate it
+at Mysticeti, Odontoceti and Nemo-Nemo under round-robin, at the gaps
+BN10 establishes — `n + 2` for the three-round rule, `n + 1` for the
+two-round ones — beyond which only each rule's committee bound is
+asked.
 
 Statements only; the proofs live in `Proof.lean`.
 -/

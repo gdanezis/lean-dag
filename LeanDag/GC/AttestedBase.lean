@@ -3,30 +3,13 @@ import LeanDag.DoS.Exclusion
 /-!
 # The attested base: the inexact certificate
 
-`garbage.md` §6, **G10**. A joining validator cannot fetch the pruned
-prefix; it adopts the new genesis layer from others. Correct presenters
-never agree block-for-block — their layers share the correct core exactly
-but differ in Byzantine fringe — so the certificate is *inexact*, filtered
-per block: **attest the layer, keep what `f+1` distinct authors attest.**
-
-No signatures: in this model a validator's attestation *is its block* —
-its cone is its objective (D13), unforgeable statement of what the layer
-contains — so the certificate is DAG-internal and decidable, and
-equivocating attesters are neutered by counting distinct authors.
-
-The sandwich, in two halves:
-
-* **soundness** (`exists_correct_attester_of_mem_base`): everything in the
-  base has a correct attester, hence lies in a correct cone — `f+1`
-  authors always include a correct one;
-* **completeness** (`correct_mem_base`): post-`R`, every correct block of
-  the layer is attested by *every* correct author with a round-`t` block
-  (the backbone), so nothing of the shared correct layer can be filtered
-  out — by anyone.
-
-Bases at different attestation samples differ only in fringe, and the
-verdict machinery above the cut never reads the difference (G2): inexact
-certificates, exact decisions.
+`garbage.md` §6, **G10**. A joining validator adopts a new genesis layer
+from others rather than fetching the pruned prefix, and correct
+presenters need not agree block-for-block on it, only on the correct
+core: the certificate keeps a round-`G` block once `f + 1` distinct
+authors attest it, an author's attestation being simply its own block
+(D13, no signatures). Soundness and completeness give the sandwich:
+everything kept has a correct attester, and nothing correct is filtered.
 -/
 
 namespace LeanDag

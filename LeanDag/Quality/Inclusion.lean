@@ -4,25 +4,13 @@ import LeanDag.Mysticeti.Properties
 /-!
 # Chain quality: inclusion, from self-reference
 
-`chain-quality.md` §4, CQP2 — **CQ5**, **CQ6**. The aggregate coverage
-of `Coverage.lean` upgrades to an *individual* guarantee — every correct
-block enters the agreed ledger — and the argument has no synchrony in
-it. A correct validator's blocks form a chain, each referencing the one
-before (P3′) and one per round (non-equivocation), so any later block of
-the author reaches every earlier one; the author's next committed leader
-block is such a block; and a schedule that returns to every correct
-validator supplies it.
-
-Synchrony stood here before, and it stood for something both weaker and
-more expensive: after the synchrony round a correct block was in *every*
-correct commit, at the price of coverage over every round in between.
-Now it is in its author's own commits, at any time, at the price of
-fairness to each validator rather than to the set.
-
-**Both results are instances.** `Properties/Arcs/Quality.lean` states
-them for any rule with `SelfParent`, `NoEquiv`, `CommitsCandidate` and
-`LeaderCommits`; what is left here is the core's names, and its
-certification precondition `certLive` in place of the abstract `Live`.
+`chain-quality.md` §4, CQP2 — **CQ5**, **CQ6**: the aggregate coverage
+of `Coverage.lean` upgrades to an individual guarantee, that every
+correct block enters the agreed ledger, with no synchrony. A correct
+validator's self-referencing chain (P3′) reaches every earlier block of
+its own, so its author's next committed leader block carries it, and a
+schedule fair to each validator supplies that slot. The generic arc is
+`Properties/Arcs/Quality.lean`; this file names the core's instance.
 -/
 
 namespace LeanDag

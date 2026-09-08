@@ -3,33 +3,12 @@ import LeanDag.Mysticeti.ViewPace
 /-!
 # FinWhale — the bridge to the development's pacing line
 
-A `ViewPace` (report §6.9) carries view convergence and the pacemaker's
-progress and catch-up rules, and from them the core derives production
-and reference coverage: `ViewPace.populatedOn` and
-`ViewPace.synchronisedOn_of_converges`, the latter through the drift
-bound `ViewPace.driftOn_of_catchup`. This file carries both to a FinWhale
-DAG.
-
-**What this is not.** It is not the route FinWhale's liveness runs on.
-Coverage is obtained from `ViewPace.waits`, a waiting *floor* — a validator
-never builds before the timeout expires — and FinWhale's pacemaker builds
-on C1 or C3 long before that. Its liveness is established in
-`Creation.lean`, from the block-creation conditions themselves, and the
-argument the floor would have supplied appears there as the C2 case.
-
-What the bridge is for is compatibility, in the sense
-`LeanDagTest/Routes.lean` gives the word: a FinWhale DAG can be fed from
-the development's main line, and the two conditions the feature arcs
-consume are available over it.
-
-**Why the bridge is a hypothesis about two structures rather than a
-coercion.** `ViewPace` is stated over a `BlockUniverse`, whose validity
-rule carries the self-parent clause; `FinWhale.ValidHere` does not, since
-no result of the safety arc reads it. The paper's block structure has it
-— "every block includes an edge that references the previous block
-created by the same validator" — so a FinWhale execution satisfies both
-rules, and the bridge asks only that the two structures describe the same
-blocks.
+Carries a `ViewPace`'s production and coverage results
+(`ViewPace.populatedOn`, `ViewPace.synchronisedOn_of_converges`) to a
+FinWhale DAG, for compatibility with the development's main line. It is
+not the route FinWhale's own liveness runs on: that comes from the
+block-creation conditions in `Creation.lean`, since a reactive builder
+has no waiting floor to derive coverage from.
 -/
 
 namespace LeanDag

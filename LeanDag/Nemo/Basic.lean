@@ -3,20 +3,17 @@ import LeanDag.Common.BlockRecord
 /-!
 # Nemo-Nemo: the crash-fault DAG foundation
 
-"Finding Nemo-Nemo: CFT DAG-based Consensus in the WAN."
+"Finding Nemo-Nemo: CFT DAG-based Consensus in the WAN." Crash-fault
+tolerant: `n ≥ 2f+1` validators, all honest, may halt but never
+equivocate. Its bare-majority quorum `n/2+1` is outside the core's
+Byzantine model, so this arc builds a self-contained crash foundation
+consuming only the fault-agnostic parts of the core. Non-equivocation
+is universal here, so the single quorum fact is that two majorities
+intersect.
 
-Nemo-Nemo is crash-fault-tolerant: `n ≥ 2f+1` validators, all honest — they may
-halt, but never equivocate. Its quorum is a bare **majority** `n/2+1`, which is
-mathematically outside the core Byzantine model (`Faults` forces `n − f`, a
-`~2n/3` supermajority). So this arc builds a self-contained crash foundation
-consuming only the fault-agnostic parts of the core (`Block`, `creatorsOf`).
-
-The crash setting is *leaner* than the Byzantine one: there is no `byzantine`
-set, every validator is correct, so non-equivocation is universal and the single
-quorum fact is that **two majorities intersect** — no correct-member filtering.
-
-This file provides the majority quorum, its intersection lemma, crash block
-validity, the crash universe, and the block-level lemmas the commit rule needs.
+This file provides the majority quorum, its intersection lemma, crash
+block validity, the crash universe, and the block-level lemmas the
+commit rule needs.
 -/
 
 namespace LeanDag
@@ -38,13 +35,11 @@ theorem lt_card_add_majority {T : Finset Validator} (h : majority Validator ≤ 
   unfold majority at *
   omega
 
-/-- Crash block validity: like the core `ValidWrt`, but the parents quorum is the
-majority `n/2+1` rather than `n − f`, and the core's `self_parent` and
-`distinct_creators` fields are gone. The implementation's block verifier imposes
-neither: there is no self-parent check, and duplicate-author includes are
-deduplicated by the stake aggregator, not rejected. Under crash the second is
-also derivable — universal non-equivocation makes duplicate creators among refs
-impossible (`Universe.eq_of_mem_refs_of_creator_eq`). -/
+/-- Crash block validity: like the core `ValidWrt`, but the parents quorum is
+the majority `n/2+1` rather than `n − f`, and `self_parent` and
+`distinct_creators` are gone — the implementation's verifier imposes
+neither, and under crash the second is derivable from universal
+non-equivocation anyway. -/
 structure ValidWrt (blk : BlockId → Block Validator BlockId Payload)
     (b : Block Validator BlockId Payload) : Prop where
   /-- Every reference sits in the immediately preceding round. -/

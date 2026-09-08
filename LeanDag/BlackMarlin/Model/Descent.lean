@@ -10,32 +10,22 @@ Algorithm 1, L18–L25 (`black-marlin.md` §11). `commit(B)` sets
 choosing among ties by the metric of L24. `Model/Ledger.lean` takes the
 record that descent leaves as given; this file computes it.
 
-**The choice is block-intrinsic.** L24 minimises
-`|round(A) − round(maxAnchor(strong(A)))|`, which reads only the
-candidate and its own cone — so every validator evaluates it identically,
-and the descent from a block is a function of that block. That is what
-lets the record's agreement be derived rather than assumed, and it is the
-property `Ledger/Statement.lean`'s BMD3 had to carry as a hypothesis.
+The choice is **block-intrinsic**: L24's metric reads only the candidate
+and its own cone, so every validator evaluates it identically and the
+descent from a block is a function of that block alone — what lets the
+record's agreement be derived rather than carried as a hypothesis
+(`Ledger/Statement.lean`'s BMD3). **`𝒟` is dropped**: it only removes
+what an earlier descent already visited, so a validator's flushed
+anchors over all its commits are one chain read from its highest commit
+down, and the record below is that chain. **Ties break at the
+`≤`-least survivor** under a `LinearOrder` on identifiers, as Odontoceti
+and Mahi-Mahi read their own canonical choices; nothing below depends on
+which rule it is. **Fuel, not well-founded recursion**: a step drops the
+round strictly, so `round B` steps exhaust the descent, and the fuelled
+form needs no termination argument, as `historyUpto` uses for the causal
+walk.
 
-**`𝒟` is dropped.** The delivered set only removes what an earlier
-descent already visited, so the anchors a validator flushes over all its
-commits are the anchors of one chain read from its highest commit down.
-The record below is that chain.
-
-**The tie-break is the `≤`-least survivor.** The paper says "break ties
-deterministically" without fixing a rule; this development uses the
-`≤`-least block under a `LinearOrder` on identifiers — hash order, in a
-deployment — as the Odontoceti and Mahi-Mahi arcs do for their canonical
-choices. Nothing below depends on which rule it is, only that it is
-shared and reads the candidate alone.
-
-**Fuel rather than well-founded recursion.** A step drops the round
-strictly, so `round B` steps exhaust the descent; the fuelled form is
-structural and needs no termination argument inside the model, as
-`historyUpto` does for the causal walk.
-
-**Trusted core of the arc: definitions only.** No theorem lives in this
-file.
+**Trusted core of the arc: definitions only.**
 -/
 
 namespace LeanDag

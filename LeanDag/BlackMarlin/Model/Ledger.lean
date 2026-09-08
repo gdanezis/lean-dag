@@ -3,35 +3,28 @@ import LeanDag.Common.Ledger
 /-!
 # Black Marlin — the flush record
 
-`commit(B)` does not deliver `past(B)` in one piece. It descends through
-the undelivered anchors of `strong(B)`, flushing one segment per anchor
-round from the lowest up (Algorithm 1, L18–L32), so what a validator
-outputs is segmented by anchor round whether or not it applied the rule
-at that round itself (`black-marlin.md` §11).
+`commit(B)` descends through the undelivered anchors of `strong(B)`,
+flushing one segment per anchor round from the lowest up (Algorithm 1,
+L18–L32), so a validator's output is segmented by anchor round whether
+or not it applied the rule there itself (`black-marlin.md` §11). That
+segmentation is what makes two validators' orders agree: one that
+committed at rounds `3` and `5` and one that committed only at `7` flush
+the same segments, since the second one's descent visits `5`, `4` and
+`3` on the way down. A validator's record is modelled here rather than
+the recursion that builds it, as the core models `Decided` rather than
+the implementation deciding it.
 
-That segmentation is what the delivered **order** is, and it is also what
-makes two validators' orders agree: a validator that committed at rounds
-`3` and `5` and one that committed only at `7` flush the same segments,
-because the second one's descent visits `5`, `4` and `3` on the way down.
-A validator's record is modelled here rather than the recursion that
-builds it, in the same way the core models `Decided` rather than the
-implementation that decides.
+**The descent steps by one round, and that pins it.** The candidates at
+round `ρ` below a round-`(ρ+1)` block are that block's references, and
+`distinct_creators` allows one block per author, so a consecutive step
+needs no tie-break. The paper's L21–L24 supplies one for the case where
+the descent skips an anchor round; that rule is block-intrinsic — its
+minimised quantity depends on the candidate and its own cone alone — but
+is not modelled here, which would mean modelling `maxAnchor` and the
+sort `τ`. `step` and `dense` are what the descent guarantees where it
+does not skip; §11 records what is left over.
 
-**The descent steps by one round, and that is what pins it.** The
-candidates at round `ρ` below a round-`(ρ+1)` block are that block's
-references, and `ValidWrt.distinct_creators` allows at most one block per
-author — so a consecutive step has at most one candidate and needs no
-tie-break at all. The paper's L21–L24 supplies a tie-break for the case
-where the descent skips an anchor round, and that rule is
-**block-intrinsic**: the quantity it minimises,
-`|round(A) − round(maxAnchor(strong(A)))|`, depends on the candidate and
-its own cone alone, so every validator computes it identically. It is
-not modelled here, which would mean modelling `maxAnchor` and the sort
-`τ`; `step` and `dense` are what the descent guarantees where it does
-not skip, and `black-marlin.md` §11 records what is left over.
-
-**Trusted core of the arc: definitions only.** No theorem lives in this
-file.
+**Trusted core of the arc: definitions only.**
 -/
 
 namespace LeanDag
@@ -50,13 +43,10 @@ def coneAnchors (U : BlockUniverse Validator BlockId Payload)
   (blocksAt U ρ).filter (fun X => (U.block X).creator = Rot.anchor ρ ∧ X ∈ history U A)
 
 /-- **A flush record**: the anchor block a validator flushed at each
-round, and what the descent guarantees of it.
-
-`step` is the descent's own shape — the anchor flushed at `ρ` is a
-reference of the anchor flushed at `ρ + 1` — and `dense` says the descent
-does not pass over a round whose anchor that reference set contains.
-Neither says anything about a round the descent skips, which is the case
-the paper's tie-break is for. -/
+round. `step` is the descent's own shape — the anchor at `ρ` is a
+reference of the anchor at `ρ + 1` — and `dense` says it does not pass
+over a round its reference set contains; neither says anything about a
+round the descent skips. -/
 structure Flush (U : BlockUniverse Validator BlockId Payload) where
   /-- The anchor flushed at each round, where the descent flushed one. -/
   block : ℕ → Option BlockId
@@ -69,14 +59,11 @@ structure Flush (U : BlockUniverse Validator BlockId Payload) where
     (block ρ).isSome
 
 /-! **What a record outputs** is the record's ledger (`Ledger.lean`) at
-the flush's blocks: `ledgerSet U f.block n` holds everything in the
-causal history of an anchor flushed below `n`, and `OutputAt U f.block b
-ρ` says `b` enters at round `ρ`, the first flushed anchor whose causal
-history holds it — a block's position in the delivered sequence, at the
-granularity of segments. Ordering *within* a segment is the
-deterministic sort `τ`, which the rule does not constrain and this arc
-does not model, so the ledger is a set and the record's rounds are its
-positions. -/
+the flush's blocks: `ledgerSet` holds everything in the causal history
+of an anchor flushed below `n`, and `OutputAt` gives a block's segment
+position, the first flushed anchor whose history holds it. Ordering
+*within* a segment, the sort `τ`, is not modelled, so the ledger is a
+set and the record's rounds are its positions. -/
 
 end BlackMarlin
 

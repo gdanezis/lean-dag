@@ -3,43 +3,17 @@ import LeanDag.FinWhale.Model.Creation
 /-!
 # FinWhale — the block-creation rule, and the votes it forces
 
-FinWhale creates a round-`(r+1)` block when one of three conditions
-holds: **C1**, the local DAG has the round-`r` leader's block (L1) and
-either a quorum of voters for the round-`(r−1)` leader or an SP-skip
-pattern for it (L2); **C2**, the `2∆` timeout has expired; **C3**, the
-local DAG has `n − f` round-`(r+1)` blocks from distinct validators.
-
-Lemmas 18 and 19 are what those conditions yield: every correct block votes
-for a correct leader, and every correct block two rounds up carries a
-quorum of votes. The reactive route takes them as the schedule's wait
-clauses. This file derives them instead, from the conditions themselves
-together with two properties of the network and one of parent selection.
-
-**The induction replaces the paper's `H`.** The paper's C3 case argues
-that the fastest `n − 2f` honest validators cannot have been triggered by
-C3, and that a C3-triggered validator must have received one of their
-blocks. The pigeonhole behind the second step needs the honest set to be
-exactly `n − f`, and is unavailable when fewer than `f` validators are
-actually faulty. Induction on build time needs neither: a C3-triggered
-validator holds `n − f` blocks of its own round, at least one of them
-from a correct validator that built *strictly earlier*, and the induction
-hypothesis applies to that one. What its block references, the holder
-holds — views are closed under references — so the leader's block is in
-hand, and parent selection puts it among the parents.
-
-Two network properties and one selection property are what remain
-assumed:
-
-* `holds_built` — a correct validator's block is held only after it is
-  built. A message is not received before it is sent.
-* `builds_distinct` — no two correct validators build the same round at
-  the same instant. An idealisation, and the only place a tie would stall
-  the induction.
-* `selects_leader` and `selects_votes` — parent selection takes the
-  leader's block, and the votes, when they are held. This is the paper's
-  "selecting the blocks that satisfy conditions L1 and L2", stated for
-  every trigger rather than only for C1, which is how its own Lemmas 18
-  and 19 use it.
+FinWhale creates a round-`(r+1)` block on one of three triggers: C1 (the
+leader's block plus L1/L2), C2 (the timeout), or C3 (`n − f` blocks of
+the round). This file derives Lemmas 18 and 19 — every correct block
+votes for a correct leader, and every correct block two rounds up
+carries a quorum of votes — from those triggers by induction on build
+time, rather than assuming them as the reactive route's wait clauses.
+The C3 case replaces the paper's pigeonhole argument: a C3-triggered
+validator holds a block from a correct validator that built strictly
+earlier, and the induction hypothesis applies to it. Two network
+properties (`holds_built`, `builds_distinct`) and parent selection
+(`selects_leader`, `selects_votes`) remain assumed.
 -/
 
 namespace LeanDag
@@ -75,9 +49,8 @@ theorem driftOn_of_catchup {R : ℕ} (hcard : quorumCard Validator ≤ T.card)
   cr.toPaceCore.driftOn_of_catchup hcard hgst (fun _ hu => cr.le_built hu)
 
 /-- **A timeout-triggered builder holds every reliable block of the round
-below.** The block is in its author's hands when built, convergence
-carries it across within `delay`, and the collapsed drift plus the full
-timeout place that arrival before the waiter's build. -/
+below**: convergence carries it across within `delay`, and the full
+timeout places that arrival before the waiter's build. -/
 theorem holds_of_timeout {R n : ℕ} (hcard : quorumCard Validator ≤ T.card)
     (hgst : cr.gst ≤ R) (hto : ∀ m, R ≤ m → 2 * cr.delay + cr.proc ≤ cr.timeout m)
     (hR : R ≤ n) (hN : n + 1 ≤ N) {v : Validator} (hv : v ∈ T)
@@ -98,15 +71,8 @@ theorem holds_of_timeout {R n : ℕ} (hcard : quorumCard Validator ≤ T.card)
 
 /-- **Lemma 18, derived from the creation rule.** Past the coverage
 round, every reliable round-`(n+1)` block references a reliable leader's
-round-`n` block.
-
-The three conditions are three ways of holding the leader's block when
-building. C1 holds it by its own L1. C2 waited the full timeout, and the
-drift bound places the arrival first. C3 holds `n − f` blocks of the
-round it is building, and the two quorums meet in a reliable validator
-other than the builder, which built strictly earlier — so the induction
-hypothesis makes *its* block a vote, and a view closed under references
-holds what that block references. Parent selection does the rest. -/
+round-`n` block: C1 by its own L1, C2 by the timeout, C3 through a
+strictly earlier reliable builder the induction hypothesis covers. -/
 theorem lemma18 {R n : ℕ} (hcard : quorumCard Validator ≤ T.card)
     (hgst : cr.gst ≤ R) (hto : ∀ m, R ≤ m → 2 * cr.delay + cr.proc ≤ cr.timeout m)
     (hR : R ≤ n) (hN : n + 1 ≤ N)
@@ -156,15 +122,9 @@ theorem lemma18 {R n : ℕ} (hcard : quorumCard Validator ≤ T.card)
 
 /-- **Lemma 19, derived from the creation rule.** Every reliable
 round-`(n+2)` block carries a slow-path quorum of parents voting for a
-reliable leader's round-`n` block.
-
-C1 holds a quorum of voters by its own L2 — its other branch, a quorum
-declining to vote, is refuted by Lemma 18: a reliable validator's single
-round-`(n+1)` block does vote, so such a quorum would be Byzantine and
-`f < 2f + p`. C2 holds every reliable vote, by the same timeout argument
-one round up. C3 goes through a strictly earlier reliable builder of its
-own round, whose parents are votes and whose references the holder
-therefore holds. -/
+reliable leader's round-`n` block: C1's skip branch is refuted by Lemma
+18, C2 by the timeout one round up, C3 through a strictly earlier
+reliable builder. -/
 theorem lemma19 {R n : ℕ} (hcard : quorumCard Validator ≤ T.card)
     (hgst : cr.gst ≤ R) (hto : ∀ m, R ≤ m → 2 * cr.delay + cr.proc ≤ cr.timeout m)
     (hR : R ≤ n) (hN : n + 2 ≤ N)
@@ -265,9 +225,8 @@ theorem spCertificate_of_certifiesSP (hblk : D.block = U.block) {c L : BlockId}
   change spQuorum Validator ≤ (parentsVoting D c L).card
   simpa only [CertifiesSP, parentsVoting, hblk] using h
 
-/-- **Lemma 20, from the creation rule.** A reliable leader's block is
-committed by the slow path: every reliable validator's round-`(r+2)`
-block certifies it, and they are `n − f ≥ 2f + p`. -/
+/-- **Lemma 20, from the creation rule**: a reliable leader's block is
+committed by the slow path, at `n − f ≥ 2f + p` certifiers. -/
 theorem Creation.lemma20 (cr : Creation U T N S.leader)
     (hids : D.ids = U.ids) (hblk : D.block = U.block)
     (hcard : quorumCard Validator ≤ T.card) {R n : ℕ}
@@ -288,9 +247,9 @@ theorem Creation.lemma20 (cr : Creation U T N S.leader)
   simp only [blocksAt, Finset.mem_filter, hids, hblk, hLrU]
   exact ⟨hb, hbr⟩
 
-/-- **The liveness interface, from the creation rule.** Every correct-led
-slot below the horizon carries a direct commit — with the vote and
-certificate clauses derived from C1, C2 and C3 rather than assumed. -/
+/-- **The liveness interface, from the creation rule**: every
+correct-led slot below the horizon carries a direct commit, with the
+vote and certificate clauses derived rather than assumed. -/
 theorem commits_of_creation (cr : Creation U T N S.leader)
     (hids : D.ids = U.ids) (hblk : D.block = U.block)
     (hTeq : T = (Correct : Finset Validator)) {R : ℕ}
@@ -307,8 +266,9 @@ theorem commits_of_creation (cr : Creation U T N S.leader)
   simp only [slotBlocks, leaderBlocksAt, blocksAt, Finset.mem_filter, hids, hblk, hid]
   exact ⟨⟨hL, hLr⟩, hLc⟩
 
-/-- **Theorem 21, from the creation rule.** Where at most `p` validators
-are Byzantine, the reliable validators' votes alone are a fast commit. -/
+/-- **Theorem 21, from the creation rule**: where at most `p` validators
+are Byzantine, the reliable validators' votes alone are a fast
+commit. -/
 theorem Creation.theorem21 (cr : Creation U T N S.leader)
     (hids : D.ids = U.ids) (hblk : D.block = U.block)
     (hTeq : T = (Correct : Finset Validator)) (hfew : F.byzantine.card ≤ P.p)

@@ -3,47 +3,12 @@ import LeanDag.Mysticeti.Liveness
 /-!
 # Decisions survive the cut
 
-`garbage.md` **G3** and **G4** used to be proved here, by structural
-induction over the decision relation; they are now
-`Properties/Arcs/GC.lean`, from `Banded` and `Agree`. What remains is
-the construction the witness needs. The per-slot verdicts
-(`directCommit_chop` and friends) said each *rule* reads only the window
-above the horizon; this file lifts that to the full decision relation — the
-recursion through anchors and intermediate skips included — and closes with
-the cross-cut agreement theorem: a validator that joined from the truncation
-and never saw the pruned prefix decides every slot exactly as a full-history
-validator does.
-
-Three pieces of transport, then the theorem:
-
-* **`View.chop`** — a validator's view, truncated at the horizon. Downward
-  closure survives because a retained block's references sit one round below
-  it, hence at or above the cut — except at the base layer, where `chop`
-  emptied them.
-* **`Slots.chop`** — the induced schedule: slots re-indexed from a base slot
-  `d` whose round clears the horizon, rounds rebased by `−G`. Monotonicity,
-  unboundedness and keying all descend from the original schedule; keying
-  needs the base-slot condition `G ≤ slotRound d`, which pins the rebased
-  rounds above zero where subtraction is faithful.
-* **the rule correspondences** — `IsLeaderBlock`, `Eligible`,
-  `DirectCommitIn`, `DirectSkipIn` and the indirect test, each computed in
-  the truncation against the truncated view, agree with the original. The
-  view-relative ones ride on the fact that everything a rule counts lives
-  strictly above the cut, so the view filter is invisible to it.
-
-**`decided_chop`** then follows by structural induction both ways: the
-derivation trees match constructor for constructor, with anchors and
-intermediate slots re-indexed by `d`. The slot-`d` premise is the *only*
-condition — no synchrony, no fairness, no liveness.
-
-**`decided_agree_chop`** is the payoff (G4), and it is deliberately
-asymmetric: the joiner's view `W` is an **arbitrary** view of the
-truncation — not a truncated full-history view. A joiner's view is never of
-the form `V.chop`: lifted to `U` it would not be downward closed, its base
-layer having lost its references. The theorem instead plays `decided_unique`
-*inside the truncation* against a truncated view, and moves across the cut
-through `decided_chop`. So the two validators need share nothing but the
-truncation itself.
+`garbage.md` **G3** and **G4**: the construction — `Slots.chop`, the
+induced schedule re-indexed from a base slot `d` clearing the horizon —
+that `Properties/Arcs/GC.lean` reads to give cross-cut agreement for
+any rule with a `Banded` and `Agree`. A joiner's view of the truncation
+is arbitrary, not necessarily a truncated full-history view, so the
+agreement holds however little the two validators share.
 -/
 
 namespace LeanDag
@@ -115,24 +80,5 @@ schedule alone. -/
 theorem horizon_le_slotRound (hd : G ≤ S.slotRound d) (k : ℕ) :
     G ≤ S.slotRound (d + k) :=
   hd.trans (S.mono (Nat.le_add_right d k))
-
-/-! ## Where the rest of this file went
-
-`isLeaderBlock_chop` and seven more transport lemmas stood here, and
-above them G3 — `decided_chop`, both directions by structural induction
-over the decision relation — and G4, cross-cut agreement. All of it is
-now `Properties/Arcs/GC.lean`: `decided_chop_iff` and
-`decided_agree_chop` are the same statements, reached from `Banded` and
-`Agree` for any rule with a band, and `truncates_chop` is the witness
-that the cut stands in the relation they read.
-
-What stays here is the *construction* — `chop`, `Slots.chop`,
-`View.chop` and the facts relating their fields — which the witness
-needs and which no property can supply. After this file no theorem of
-the garbage-collection mechanism mentions `Decided`.
-
-`docs/target-properties.md` §11.4c records why the duplicates went: two
-proofs of one statement is redundancy rather than a cross-check, since
-Lean already guarantees the types agree. -/
 
 end LeanDag

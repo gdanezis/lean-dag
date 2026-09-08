@@ -2,31 +2,12 @@ import LeanDag.OptimalHydrozoan.Model.Decided
 /-!
 # Optimal-Hydrozoan: slot agreement — statement
 
-The headline safety claim for a single slot: **any two verdicts agree** —
-across views, across routes. Whether a replica commits via the fast path,
-the slow path, the certificate rung, or the evidence rung, and whether
-another skips directly or indirectly, two derivable verdicts for one slot
-are equal. Undecided replicas assert nothing, so this is
-no-conflicting-decision, not termination — Hydrozoan's `SlotAgreement`
-read over `DecidedOpt`, minus the tie-break order.
-
-This is the paper's `lem:opt-direct-decision` together with the
-indirect/indirect case in one statement — and slightly more:
-`lem:opt-indirect-decision` covers two decisions from the *same* anchor,
-while this claim also covers two views whose nearest eligible committed
-anchors differ (the paper leaves that selection argument in prose).
-The proof (generated) consumes: `OptimalHydrozoan.DirectSafety` for the
-direct-vs-direct pairings; `AnchorSeesSlow` (rung 1 fires at every
-eligible anchor after a slow commit) and `CertUniqueness`; and, for the
-fast path, the arc's own seam — a fast commit makes every decision-round
-block fast evidence for the committed block (`EvidencePlain`,
-`EvidenceEquiv`, the latter through the leader-exclusion clause of
-`OptUniverse`), every eligible anchor therefore reaches an evidence quorum
-(`SlowCollectible`, `q ≥ qCert`), a decision-round block is evidence for
-at most one candidate, and two evidence quorums at one anchor share a
-non-Byzantine creator (`CertUniqueness`) — which is why the evidence rung
-needs no tie-break. A direct skip's `qCert` slotBlames and no-evidence blocks
-exclude LeanDag.Hydrozoan.certificates and evidence quorums the same way.
+Hydrozoan's `SlotAgreement` read over `DecidedOpt`, minus the tie-break
+order: any two verdicts on one slot agree, across views and routes. The
+fast path's own seam — a fast commit makes every decision-round block
+fast evidence for the committed block, so every eligible anchor reaches
+an evidence quorum, and two such quorums share a non-Byzantine creator —
+is what makes the evidence rung need no tie-break.
 -/
 
 namespace LeanDag

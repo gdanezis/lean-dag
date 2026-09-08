@@ -51,15 +51,11 @@ theorem eq_of_isAnchor_of_supported {L₁ L₂ : BlockId} {r : ℕ}
   eq_of_supported h₁ h₂ (creator_eq_of_isAnchor ha₁ ha₂)
 
 omit Rot in
-/-- **The paper's Lemma 5.** A supported block is in the causal history of
-**every** block two rounds above it or higher — Byzantine-authored
-included, since validity is structural.
-
-The quorum behind the support contains `f + 1` correct authors, each with
-one round-`(r + 1)` block, and a round-`(r + 2)` block names `n − f` of
-the at most `n` authors of that round, so it cannot miss all of them. The
-core's `reaches_of_honest_support_of_card` is that step and
-`reaches_pred_of_round_le` carries it upward. -/
+/-- **The paper's Lemma 5.** A supported block is in the causal history
+of every block two rounds above it or higher — Byzantine-authored
+included, since validity is structural — via the core's
+`reaches_of_honest_support_of_card`, carried upward by
+`reaches_pred_of_round_le`. -/
 theorem reaches_of_supported {L : BlockId} {r : ℕ} (h : Supported U L r)
     {c : BlockId} (hc : c ∈ U.ids) (hcr : r + 2 ≤ (U.block c).round) :
     Reaches U c L := by
@@ -76,13 +72,8 @@ theorem reaches_of_supported {L : BlockId} {r : ℕ} (h : Supported U L r)
 
 /-- **The paper's Lemma 6**, in the form the round comparison gives: of
 two committed anchors, the lower lies in the causal history of the
-higher.
-
-Three cases, one per clause of the rule. At equal rounds Lemma 3 makes
-them the same block. At a gap of one the linking anchor of the lower is
-supported at the same round as the higher one, so Lemma 3 identifies the
-two and the link is a direct reference. At a gap of two or more Lemma 5
-applies to the higher block itself. -/
+higher — by Lemma 3 at equal rounds or a gap of one via the shared
+linking anchor, by Lemma 5 at a gap of two or more. -/
 theorem reaches_of_committed_of_le {L₁ L₂ : BlockId} {r₁ r₂ : ℕ}
     (h₁ : Committed U L₁ r₁) (h₂ : Committed U L₂ r₂) (hr : r₁ ≤ r₂) :
     L₁ = L₂ ∨ Reaches U L₂ L₁ := by

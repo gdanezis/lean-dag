@@ -7,13 +7,11 @@ import LeanDag.Properties.Arcs.SafeSkip
 # The verdict cells, at any carrier on the record
 
 A carrier read as records with `Banded` and `Agree` has every verdict
-cell of the cut, the fill and re-genesis: transport of a verdict across
-the mechanism at the same validator, and agreement between a validator
-that ran the mechanism and one that did not, from any view. Each is one
-generic transport theorem at the carrier bridge's witness and view lift.
-A rule's mechanism cell is therefore the `OnRecord` instance and
-nothing else; `scripts/audit-mechanisms.py` reads an instance as the
-cell.
+cell of the cut, the fill and re-genesis for free: transport of a
+verdict at the same validator, and agreement between a validator that
+ran the mechanism and one that did not. A rule's mechanism cell is
+therefore the `OnRecord` instance and nothing else;
+`scripts/audit-mechanisms.py` reads an instance as the cell.
 -/
 
 namespace LeanDag

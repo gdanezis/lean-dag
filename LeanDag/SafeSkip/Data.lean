@@ -2,23 +2,18 @@ import LeanDag.Common.BlockRecord
 /-!
 # Safe Skip: the data of a fill
 
-A validator that crashes and recovers faces a gap: liveness rests on
-correct validators building in every round (P8), skipping rounds is
-known to break it, and producing the missing blocks one by one costs a
-round trip per round of downtime. **Safe Skip** closes the gap with a
-single message. The recovering validator `v1` names a block `B2` at
-round `r` on another validator `v2`'s history line, and its own last
-block `B1`; the message *denotes* one block per gap round, deterministic
-given the DAG.
+A recovering validator `v1` closes the gap left by a crash with a
+single message: it names a block `B2` on another validator `v2`'s
+history line and its own last block `B1`, and the message denotes one
+block per gap round, deterministic given the DAG (`Basic.lean`).
 
 `SkipData` is that message, stated over an id set and a block map
-rather than over a universe because the *data* of a fill is the same
-for every rule and only the invariants a universe carries differ. Two
-readings of the filled block are supplied: `fillBlock` adds a self
-reference to `v1`'s block of the round below, which the core's
+rather than a universe, since the data of a fill is shared across rules
+and only the invariants a universe carries differ. `fillBlock` adds a
+self reference to `v1`'s block of the round below, which the core's
 self-parent clause demands; `copyBlock` carries the donor's references
-verbatim, which every rule without that clause takes. `Blocks` is what
-a reading owes the record for the fill to close (`Record/Fill.lean`).
+verbatim, for a rule without that clause. `Blocks` is what a reading
+owes the record for the fill to close (`Record/Fill.lean`).
 -/
 
 namespace LeanDag
@@ -26,14 +21,11 @@ namespace LeanDag
 variable {Validator : Type*}
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 
-/-- The denotation of a Safe Skip message, together with the freshness
-data an implementation supplies (new ids for the filled blocks and their
-decoder).
-
-`line` is `v2`'s history line: one block per round from `r0 := round B1`
-up to `r`, each referencing the one below — the chain the message's `B2`
-pins by following self-parents. `hgap` is the crash itself: `v1`
-authored nothing strictly between `B1` and `r`. -/
+/-- The denotation of a Safe Skip message, with the freshness data an
+implementation supplies. `line` is `v2`'s history line, one block per
+round from `r0 := round B1` up to `r`, each referencing the one below;
+`hgap` is the crash itself, `v1` authoring nothing strictly between
+`B1` and `r`. -/
 structure SkipData (ids : Finset BlockId)
     (blk : BlockId → Block Validator BlockId Payload) where
   /-- The recovering validator. -/
@@ -50,11 +42,8 @@ structure SkipData (ids : Finset BlockId)
   fresh : ℕ → BlockId
   idx : BlockId → ℕ
   /-- `B1` is `v1`'s only block at its round — the whole of what the
-  boundary argument needs. Stated directly rather than as `v1 ∈ Correct`
-  because the two are not interchangeable in every fault model:
-  non-equivocation gives it for a correct `v1` (`hB1uniq_of_correct`),
-  and the hybrid model of report §14 gives it for a *crash-prone* one,
-  which is the case Safe Skip exists to serve. -/
+  boundary argument needs, stated directly rather than as `v1 ∈ Correct`
+  since a crash-prone `v1` needs it too (report §14). -/
   hB1uniq : ∀ j ∈ ids, (blk j).creator = v1 →
     (blk j).round = (blk B1).round → j = B1
   hv12 : v1 ≠ v2
@@ -95,15 +84,11 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
   payload := (blk (sk.line k)).payload
 
 /-- The filled block **without the self reference**: `v2`'s references
-at that round, re-authored.
-
-The self reference exists to satisfy the core's `ValidWrt.self_parent`,
-and it is the one thing about the fill a validity rule can object to: it
-grafts the anchor's reference set onto the donor's, and a rule that
-constrains what a *pair* of references may see together — FinWhale's
-`ValidHere.leader_clause` — is not preserved by that graft. A rule with
-no self-parent clause takes this block instead, and then validity is the
-donor's verbatim. -/
+at that round, re-authored. The self reference exists only to satisfy
+`self_parent`, and it is the one thing a rule constraining a pair of
+references together — FinWhale's `leader_clause` — cannot survive; a
+rule with no self-parent clause takes this block instead, and validity
+is the donor's verbatim. -/
 def copyBlock (k : ℕ) : Block Validator BlockId Payload where
   round := k
   creator := sk.v1

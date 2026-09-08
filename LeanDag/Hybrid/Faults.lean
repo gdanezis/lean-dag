@@ -2,37 +2,14 @@ import LeanDag.Common.BlockDag
 /-!
 # The hybrid fault model: Byzantine and crash-prone
 
-The model of `hybrid-plan.md`: `fb` Byzantine validators (may
-equivocate), `fc` crash-prone validators (honest, may halt, never
-equivocate), committee `n ≥ 5·fb + 3·fc + 1`. The base development's
-`Correct` plays two roles at once — the non-equivocating population and
-the reliable population — and this file splits them:
-
-* **`Honest`** (`≥ n − fb`): the complement of the Byzantine set alone.
-  Crash-prone validators are honest — a block they produce is one
-  block, identical to all recipients. This is the population the
-  safety counting discounts against.
-* **`Correct`** (`≥ n − fb − fc`, through the derived instance): honest
-  *and* available — the population liveness may rely on.
-
-Two devices keep the arc small. The **derived instance**
-`HybridFaults.toFaults` places the union class `byzantine ∪ crash` in
-the base `Faults` structure, so the base quorum `n − F.f` is the hybrid
-quorum `q = n − fb − fc` on the nose and the whole DAG layer — validity
-P3, views, the counting vocabulary, the `T`-relativised liveness
-interface — instantiates verbatim. And crashing itself is *invisible to
-a structural model*: a crash is absence, so the crash class needs no
-behavioural clause — only the cardinality arithmetic here and its
-exclusion from liveness's reliable set.
-
-What the derived instance gets wrong is exactly one clause: its P5
-binds only the fully-correct class, and the hybrid safety counting
-needs non-equivocation over the larger `Honest`. That strengthening is
-`HonestNoEquiv`, the arc's one genuinely new assumption — a clause of
-the *fault model* (the honesty of a class, like the Byzantine bound
-itself), not conduct the protocol enforces. `H1` is the counting core
-every conflict argument routes through: two author sets whose sizes sum
-past `n + fb` share an honest member.
+`hybrid-plan.md`'s model: `fb` Byzantine (may equivocate), `fc`
+crash-prone (honest, may halt, never equivocate), `n ≥ 5fb + 3fc + 1`.
+Splits the base `Correct` into `Honest` (`≥ n − fb`) and `Correct`
+(`≥ n − fb − fc`, honest and available); the derived instance
+`HybridFaults.toFaults` lets the whole DAG layer instantiate verbatim,
+except its P5 binds only the fully-correct class, which
+`HonestNoEquiv` strengthens to `Honest` — the arc's one new hypothesis,
+and `H1`'s counting core.
 -/
 
 namespace LeanDag
@@ -53,23 +30,19 @@ class HybridFaults (Validator : Type*) [Fintype Validator]
   disjoint : Disjoint byzantine crash
   card_byzantine : byzantine.card ≤ fb
   card_crash : crash.card ≤ fc
-  /-- The base bound — what the *derived instance* needs. The hybrid
-  committee bound `n ≥ 5·fb + 3·fc + 1` deliberately does **not** live
-  here: every safety theorem consumes it through the admissible
-  interval, whose nonemptiness implies it — and keeping the class at
-  the base bound is what lets the one-short committee `n = 5·fb + 3·fc`
-  be *expressed*, so that the tightness counterexample (H10) is a
-  theorem rather than an unstatable aside. -/
+  /-- The base bound the derived instance needs — deliberately not the
+  hybrid committee bound `n ≥ 5fb + 3fc + 1`, which every safety
+  theorem consumes through the admissible interval instead, so the
+  one-short committee `n = 5fb + 3fc` stays expressible for the
+  tightness counterexample (H10). -/
   card_validators : 3 * (fb + fc) + 1 ≤ Fintype.card Validator
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
 variable [H : HybridFaults Validator]
 
-/-- **The derived instance**: the union class in the base structure.
-Its `Correct` is the fully-correct class and its quorum is
-`q = n − fb − fc` — so every quorum-shaped clause of the base
-development instantiates at the hybrid parameters with no
-restatement. -/
+/-- **The derived instance**: the union class in the base structure,
+with `Correct` the fully-correct class and quorum `q = n − fb − fc`,
+so every quorum-shaped base clause instantiates with no restatement. -/
 instance HybridFaults.toFaults : Faults Validator where
   f := H.fb + H.fc
   byzantine := H.byzantine ∪ H.crash
@@ -125,11 +98,9 @@ section NoEquiv
 variable {BlockId : Type*} {Payload : Type*}
 
 /-- **The strengthened equivocation clause.** Non-equivocation over
-`Honest` rather than the derived instance's `Correct`: a crash-prone
-validator authors at most one block per round too. This is P5's shape
-at the larger class — the base clause follows from it — and it is the
-one genuinely new assumption of the hybrid model, threaded through the
-safety theorems as a hypothesis the way `DoSValid` is. -/
+`Honest` rather than the derived instance's `Correct` — P5's shape at
+the larger class, the base clause following from it — is the hybrid
+model's one genuinely new assumption. -/
 def HonestNoEquiv (U : BlockUniverse Validator BlockId Payload) : Prop :=
   U.NoEquivOn (Honest Validator)
 

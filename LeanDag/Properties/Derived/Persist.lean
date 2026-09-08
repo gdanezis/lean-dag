@@ -2,18 +2,13 @@ import LeanDag.Properties.Extends
 /-!
 # Persistence
 
-`docs/target-properties.md` §11.4b. A statement a mechanism reads, and
-no protocol proves directly any more: both instances obtain it from
-`Banded` (`Derived/FromBand.lean`). It stays a named property because
-that is what the crash-recovery arc consumes, and because a rule with
-no band could still prove it on its own.
-
-*Verdicts survive extension of the DAG.* This is not a consequence of
-safety; it is the **prerequisite** for safety to mean anything as a DAG
-grows. Every protocol's uniqueness theorem is stated for two views of
-the *same* universe. To compare a replica that decided on the DAG it
-held against one deciding later on a larger DAG, the first derivation
-must be moved into the second universe, and that move is persistence.
+`docs/target-properties.md` §11.4b. *Verdicts survive extension of the
+DAG.* Not a consequence of safety but its prerequisite as the DAG
+grows, since every uniqueness theorem is stated for two views of the
+*same* universe. Both instances obtain it from `Banded`
+(`Derived/FromBand.lean`); it stays a named property because that is
+what crash recovery consumes, and a bandless rule could still prove it
+directly.
 -/
 
 namespace LeanDag

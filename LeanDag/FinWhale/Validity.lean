@@ -4,26 +4,13 @@ import LeanDag.FinWhale.Model.Schedule
 /-!
 # FinWhale — Validity, on any schedule
 
-Theorem 26 says a correct validator's block is eventually delivered. The
-step it rests on is the paper's remark that "every block created by an
-honest validator becomes part of the causal history of some honest leader
-block". Where does that come from?
-
-Coverage gives it in one round — the next round's correct leader
-references everything correct below it — but coverage is the full-timeout
-discipline's, and a reactive builder has none. This file gives it without
-coverage, from the paper's own block structure instead: **every block
-references its author's previous block**. A correct validator's blocks
-therefore form a chain, each reaching all the earlier ones, and round
-robin makes that validator a leader once a cycle. So a correct block lies
-in the causal history of its own author's next leader block, whatever the
-schedule, and whatever the builder chose to reference besides.
-
-`SelfParented` is that clause, taken as a hypothesis rather than added to
-`ValidHere`: no safety result reads it, and the arc's other witnesses are
-not built to satisfy it. The paper's block structure does — "every block
-includes an edge that references the previous block created by the same
-validator".
+Theorem 26 needs every correct block to reach the causal history of some
+later correct leader block. Coverage would give that in one round, but
+coverage belongs to the full-timeout discipline and a reactive builder
+has none. `SelfParented` — every block references its author's previous
+block, taken as a hypothesis rather than added to `ValidHere` — gives it
+instead: a correct validator's blocks form a chain, and round robin
+makes that validator a leader once a cycle.
 -/
 
 

@@ -3,30 +3,12 @@ import LeanDag.Hydrozoan.PrefixAgreement.Statement
 /-!
 # Optimal-Hydrozoan: prefix agreement — statement
 
-The output guarantee, the safety headline of the arc: replicas' committed
-sequences are consistent. Hydrozoan's `PrefixAgreement` read over
-`DecidedOpt`: the sequence shapes `commitSeq` (committed leaders in slot
-order, skipped slots dropped — the paper's `ExtendCommitSeq`) and `ledger`
-(a *memoryless per-leader* linearizer `BlockId → List BlockId` applied to
-it) are reused as they are, being generic in the verdict function; only
-`DecidesBelow` and the three claims are re-stated, over an `OptUniverse`
-and views of its underlying universe.
-
-The linearizer abstraction is narrower than the paper's
-`LinearizeSubDags`, which is stateful: its persistent set `H` suppresses
-blocks already output under an earlier leader, so what it emits for a
-leader depends on the committed prefix before it. That procedure is
-prefix-monotone and therefore also prefix-consistent, but the formal
-ledger claim covers only linearizers with no such memory. (Inherited
-from Hydrozoan's `PrefixAgreement`, which states the same claim.)
-
-Three claims: equal horizons give equal sequences; different horizons
-give a prefix (`<+:` is `List.IsPrefix`); and ledgers inherit prefix
-consistency for every linearizer. `DecidesBelow` requires a derivation
-for every slot below the horizon — an undecided slot has none — so the
-claims speak exactly where replicas have produced output. Everything
-here is a harvest of `OptimalHydrozoan.SlotAgreement`; no arithmetic row enters
-directly. No `LinearOrder BlockId` (decision D3).
+Hydrozoan's `PrefixAgreement` read over `DecidedOpt`: `commitSeq` and
+`ledger`, generic in the verdict function, are reused as they are;
+`DecidesBelow` and the three claims (sequence agreement, prefix
+consistency, ledger prefix consistency) are re-stated over an
+`OptUniverse`. A harvest of `OptimalHydrozoan.SlotAgreement`; no
+arithmetic row enters directly.
 -/
 
 namespace LeanDag
@@ -63,7 +45,7 @@ def PrefixConsistency (U : OptUniverse Replica BlockId) : Prop :=
     commitSeq g₁ n₁ <+: commitSeq g₂ n₂
 
 /-- **Ledger prefix consistency**, for every memoryless per-leader
-linearizer (see the module docstring for the paper's stateful one). -/
+linearizer. -/
 def LedgerPrefixConsistency (U : OptUniverse Replica BlockId) : Prop :=
   ∀ (lin : BlockId → List BlockId) (V₁ V₂ : LeanDag.Hydrozoan.View U.toBlockRecord)
     (g₁ g₂ : ℕ → Option BlockId) (n₁ n₂ : ℕ),

@@ -3,31 +3,19 @@ import LeanDag.Properties.Arcs.Liveness
 /-!
 # The composition theorem: every stack of mechanisms is one mechanism
 
-`docs/target-properties.md` §11.11, the third part of the goal. Each
-DAG-transforming mechanism delivers one relation between the universe
-it reads and the one it writes — a rebase of the universe above a
-settling round, and a rebase of the schedule. `Rebased` names the pair;
-a cut is one at settling round equal to its horizon, a fill or a
-re-genesis one at no offset. `Stack` is a finite sequence of them, and
-`Stack.rebased` says the sequence is one `Rebased`: offsets add, base
-slots add, the settling round is the latest of them read in the first
-universe's frame.
-
-`Stack.safe_and_live` is then the claim: for any rule with `Banded`,
-`Agree` and a support, and any stack of mechanisms on it, every verdict
-above the composite settling round transports to the composite's own
-numbering, any view of the composite agrees with the original, and the
-liveness precondition carries. Nothing is said about which mechanisms
-are in the stack or in what order — a validator that filled a crash
-gap, pruned below a horizon, rejoined with a fresh chain and pruned
-again is one `Stack`, and the theorem reads it as one rebase.
-
-Two view hypotheses, because they are two different facts. Safety asks
-that the two views agree above the settling round, which is what a
-validator that keeps its own blocks has. Liveness asks that the
+`docs/target-properties.md` §11.11. Each DAG-transforming mechanism
+delivers a `Rebased`: a rebase of the universe above a settling round,
+and of the schedule. `Stack` is a finite sequence of them, and
+`Stack.rebased` says the sequence is one `Rebased` — offsets and base
+slots add, the settling round is the latest read in the first
+universe's frame — with no restriction on which mechanisms or in what
+order. `Stack.safe_and_live` is the claim: for any rule with `Banded`,
+`Agree` and a support, every verdict above the composite settling round
+transports, agrees across views, and the liveness precondition
+carries. Two view hypotheses, since they are different facts: safety
+asks the views agree above the settling round, liveness asks the
 composite's view cover the horizon, which includes blocks the
-mechanisms added — a fill's blocks were never in the old view, so no
-agreement with it can supply them.
+mechanisms added.
 -/
 
 namespace LeanDag

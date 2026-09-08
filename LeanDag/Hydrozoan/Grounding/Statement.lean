@@ -2,35 +2,11 @@ import LeanDag.Hydrozoan.EventualDecision.Statement
 /-!
 # Statement: grounding — the liveness hypotheses are dischargeable
 
-The liveness arc consumes three kinds of assumed hypotheses: synchrony
-and population (the `Model/Liveness.lean` package, witnessed by finite
-tables) and schedule fairness. This claim grounds them systematically:
-
-- `WaveRobinFair`: SOME schedule provably satisfies the fairness
-  hypothesis — the wave-aligned rotation, where the same leader holds
-  for a whole wave before the schedule rotates, is fair with NO
-  premise at all: a single correct leader produces a full run by
-  itself, and the fault bounds always guarantee one. One schedule is
-  all grounding needs; the liveness theorems quantify over every
-  `Slots` instance, so any other fair schedule inherits them.
-- `HypothesesRealizable`: for every quorum-sized `T` and every horizon
-  `N`, some universe authored ENTIRELY by `T` satisfies the whole
-  liveness-hypothesis package up to `N` — the hypotheses cohere at
-  arbitrary size, not only in the pinned tables.
-- `GroundedProgress`: under wave-aligned round-robin, past every slot
-  some bound is COMMITTED with every slot below it decided — the
-  composed conclusion of the liveness arc, satisfiable with no premise
-  beyond the fault model itself.
-
-One statement-level liveness hypothesis is grounded only implicitly:
-`SpansEligible`, the schedule-shape premise of the descent. It holds
-for any pipelined schedule at run length 3 (`waveRobin` included), but
-no Prop here records that — it is discharged inside the generated
-proof, not on the audit surface.
-
-Deliberately NOT here: message delivery, GST, timeouts. `SynchronisedOn`
-records that deriving synchrony from delivery primitives is future
-work; this claim grounds satisfiability, not operational realizability.
+The liveness arc assumes schedule fairness and the synchrony/population
+package of `Model/Liveness.lean`; this claim shows each is satisfiable
+rather than vacuous, at every scale, under the wave-aligned round-robin
+schedule. Message delivery, GST and timeouts are out of scope: this
+grounds satisfiability, not operational realizability.
 -/
 
 namespace LeanDag
@@ -38,39 +14,23 @@ namespace LeanDag
 namespace Hydrozoan
 namespace Grounding
 
-/- The wave-aligned round-robin schedule is the shared `waveRobin`
-(`LeanDag/Slots.lean`). -/
-
-/-- **A fair schedule exists — wave-aligned rotation, unconditionally.**
-One correct leader's wave is a full correct 3-run all by itself, it
-recurs every cycle, and the fault bounds guarantee a correct replica
-exists — so no premise is needed beyond the fault model. (Per-slot
-rotation would NOT do: it needs `n` to exceed three times the actual
-fault count — the pigeonhole finding recorded on `FairRunOn` — which
-is exactly why the wave-aligned schedule is the canonical witness.) -/
+/-- **A fair schedule exists, unconditionally.** One correct leader's
+wave is a full correct 3-run by itself and recurs every cycle, so
+wave-aligned round-robin is fair with no premise beyond the fault
+model — unlike per-slot rotation, which needs `n` to exceed three times
+the actual fault count. -/
 def WaveRobinFair : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) [Faults (Fin n)],
     FairRunOn (S := waveRobin n hn)
       (Correct : Finset (Fin n)) 3            -- correct 3-runs recur.
 
-/-- **The liveness hypothesis package is realizable at every horizon.** For
-any set `T` of at least DAG-quorum size and any horizon `N`, some
-universe authored ENTIRELY by `T` has `T` filling every round up to `N`
-and internally synchronised from round 0.
-
-In the paper's terms: "a quorum of steady replicas produces a block
-every round and hears each other's blocks in time" — the good-period
-scenario the liveness theorems condition on — is a CONSISTENT scenario
-of the model, at every scale and length, not only in the pinned finite
-tables. The point is joint satisfiability: the universe must meet
-population, synchrony, validity, and non-equivocation all at once.
-
-The `T`-only clause makes the claim self-supporting — no outside
-creators pad the DAG — and it is what earns the `q ≤ T.card` premise:
-past genesis, a `T`-only universe cannot validly populate any round
-below quorum size (`ValidWrt` demands `q` distinct-creator refs per
-block, and here every parent is `T`'s). Without the clause the premise
-would be dead weight, dischargeable by non-`T` padding. -/
+/-- **The liveness hypothesis package is realizable at every horizon.**
+For any quorum-sized `T` and any horizon `N`, some universe authored
+entirely by `T` has `T` filling every round to `N` and synchronised
+from round 0 — the good-period scenario is jointly satisfiable, not
+only witnessed in the pinned finite tables. `T`-only authorship is what
+earns the `q ≤ T.card` premise: a smaller `T` cannot validly populate
+any round past genesis. -/
 def HypothesesRealizable : Prop :=
   ∀ (Replica : Type) [Fintype Replica] [DecidableEq Replica]
     [LeanDag.Hydrozoan.Faults Replica] (T : Finset Replica) (N : ℕ),
@@ -80,19 +40,11 @@ def HypothesesRealizable : Prop :=
       (∀ r, r ≤ N → PopulatedOn U T r) ∧   -- populated to the horizon
       SynchronisedOn U T 0                 -- and synchronised throughout.
 
-/-- **Grounded progress.** Under wave-aligned round-robin, the
-composed liveness conclusion is achievable with no premise at all:
-past every point, some universe commits a bound with every slot below
-it decided — on any view caught up to the bound's decision round
-(`b + 4 = slotRound (b + 2) + 2` under the wave-aligned schedule; the
-eventual view is caught up to every horizon, so it instantiates the
-claim). An achievability claim — the statement asserts the
-conclusion's satisfiability, not the route to it (a universe may reach
-these verdicts by any rule). Each horizon is witnessed by its own
-finite universe (`U.ids` is a `Finset`, so no single universe decides
-all slots), and the bound `b` itself must COMMIT — an all-skip
-universe, where every slot is decided by blame alone, does not
-qualify. -/
+/-- **Grounded progress.** Under wave-aligned round-robin, past every
+slot some bound is committed with every slot below it decided, on any
+view caught up to the decision round — satisfiability, not a claim
+about which rule reaches the verdict. The bound itself must commit; an
+all-skip universe does not qualify. -/
 def GroundedProgress : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) [Faults (Fin n)],
     ∀ k : ℕ, ∃ b, k ≤ b ∧                     -- past any slot k,

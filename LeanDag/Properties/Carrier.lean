@@ -3,41 +3,18 @@ import LeanDag.Common.Schedule
 /-!
 # The carrier a target property talks about
 
-`docs/target-properties.md` G0. Before locality can be *stated* there
-must be a way to say "two DAGs agree above round `r`", and the
-protocols' carriers differ — the core's universe has a payload,
-Hydrozoan's has none, Nemo's is a different structure again.
+`docs/target-properties.md` G0. `DagRule` is the shape `Barnacle.BaseRule`
+already has — a universe type, a dependent view type, projections into
+the shared `Block` vocabulary, and the decision relation — restated
+here rather than imported, since mechanisms depend on properties and
+properties depend on nothing: a `Properties` importing Barnacle would
+tie every other mechanism to the adaptive leader count.
 
-**The shape was already discovered once**, by `Barnacle.BaseRule`: a
-universe type, a view type dependent on it, projections into the shared
-`Block` vocabulary, and the decision relation as a field. Six protocols
-instantiate it, and `Barnacle.BaseRule` now extends the `DagRule` below,
-each instance naming the protocol's carrier.
-
-`DagRule` is nonetheless stated here rather than imported, and the
-reason is the arc's layering rule. **Mechanisms depend on properties;
-properties depend on nothing.** Barnacle is one of the mechanisms this
-arc serves, so a `Properties` that imported it would invert the
-dependency and tie every other mechanism — garbage collection, crash
-recovery, chain quality — to the adaptive leader count. A protocol
-shows conformance to `DagRule`; each mechanism reads only `DagRule` and
-the properties; no mechanism refers to another.
-
-**Why a record of uses is enough.** `DagRule.Decided` is a field with no
-constructors, so nothing stated over a `DagRule` can induct on a
-derivation. Nothing here needs to: locality and persistence are
-*hypotheses*, which a protocol discharges by induction over its own
-relation, where the constructors are available, and the mechanism
-theorems then consume them without induction. The interface assumes
-the properties over the carrier; it does not derive them from it.
-
-Three things this file supplies:
-
-* `DagRule` — the carrier: what a mechanism may read of a protocol.
-* the `causal` law — that a rule's universes are closed under
-  references and respect the predecessor condition, carried by the
-  carrier as `viewSound` and `viewComplete` are.
-* `AgreeAbove` — the agreement notion locality is stated against.
+`Decided` is a field with no constructors, so nothing here can induct
+on a derivation. Locality and persistence are *hypotheses* a protocol
+discharges by induction over its own relation; the mechanism theorems
+then consume them without induction. Beside `DagRule` this file gives
+the `causal` law and `AgreeAbove`, the agreement notion locality reads.
 -/
 
 namespace LeanDag
@@ -47,11 +24,10 @@ namespace Properties
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
-/-- **What a mechanism may read of a protocol.** A universe type, views
-over it, the projections into the shared `Block` vocabulary, and the
-decision relation. Deliberately smaller than `Barnacle.BaseRule`, which
-adds what its own mechanism needs — a wave length, a direct-commit
-predicate and its decidability, the full and history views. -/
+/-- **What a mechanism may read of a protocol**: a universe type, views
+over it, the projections into `Block`, and the decision relation —
+smaller than `Barnacle.BaseRule`, which adds what its own mechanism
+needs. -/
 structure DagRule (Validator : Type) [Fintype Validator] [DecidableEq Validator]
     (BlockId : Type) [DecidableEq BlockId] (Payload : Type) where
   /-- The universe type of the base development. -/
@@ -64,51 +40,30 @@ structure DagRule (Validator : Type) [Fintype Validator] [DecidableEq Validator]
   ids : Universe → Finset BlockId
   /-- The ids a view holds. -/
   viewIds : ∀ {U : Universe}, View U → Finset BlockId
-  /-- A view holds only blocks the universe has. A law rather than a
-  property: every protocol's view type carries this proof already, so
-  asking for it here costs an instance nothing and spares every
-  consumer a hypothesis. -/
+  /-- A view holds only blocks the universe has. Every protocol's view
+  type carries this proof already, so it costs an instance nothing. -/
   viewSound : ∀ {U : Universe} (V : View U), viewIds V ⊆ ids U
   /-- A view is closed under references: it holds what its blocks point
-  at. The second law every view type already carries, and the one a
-  window count needs — a validator holding a block holds its whole
-  causal history, so a window measured on that history is the same
-  window whoever measures it (`Barnacle/Window/`). -/
+  at, which is what a window count needs to be measurement-independent
+  (`Barnacle/Window/`). -/
   viewComplete : ∀ {U : Universe} (V : View U),
     ∀ i ∈ viewIds V, ∀ j ∈ (block U i).refs, j ∈ viewIds V
   /-- **A universe is a block DAG**: every reference is present and sits
-  one round below. The third law, for the reason the other two are laws:
-  every universe type in the development carries it in its validity
-  record, and it is a fact about the DAG model rather than about any
-  rule. It was a property (`Causal`) that nine carriers proved with the
-  same four lines. -/
+  one round below. A fact about the DAG model, carried by every
+  universe's validity record, rather than a rule-specific property. -/
   causal : ∀ U : Universe, CausalStructure (block U) (ids U)
   /-- The decision relation under a schedule. -/
   Decided : Slots Validator → ∀ {U : Universe}, View U → ℕ → Option BlockId → Prop
 
 /-- **One DAG is another above a round, rebased.** At and above `R₀`
 the two universes hold the same blocks, at rounds `G` apart, with the
-same authors; and strictly above `R₀`, the same references. Nothing is
-said below `R₀`, which is where a mechanism does its work.
-
-**This one relation is what every mechanism here delivers.** A
-truncation rebases by its horizon (`Truncates`, at `R₀ = G`); a fill or
-an extension rebases by nothing and settles at the top of its gap
-(`Sustains`); plain agreement above a round is the zero offset
-(`AgreeAbove`). They were three structures with the same four clauses
-until the clauses were compared.
-
-`mem` pairs presence with the round condition rather than stating them
-separately, which is what lets the relation be read from either
-universe: without it, "present and above `R₀`" could hold in one and
-not the other, and the definition would name a direction it does not
-mean.
-
-References are compared **strictly** above `R₀`: a truncation retains
-its bottom layer's blocks but empties their references, since what they
-referenced is gone. Every rule reads a vote from a *parent*, so a block
-at exactly `R₀` contributes its presence and its author but no vote,
-which is what the clause says. -/
+same authors; strictly above `R₀`, the same references too. Nothing is
+said below `R₀`, where a mechanism does its work. One relation serves a
+truncation (`R₀ = G`), a fill or extension (no rebasing), and plain
+agreement (the zero offset, `AgreeAbove`). References are compared
+strictly above `R₀`: a truncation empties its bottom layer's
+references, and every rule reads a vote from a parent, so a block at
+exactly `R₀` contributes presence and authorship but no vote. -/
 structure RebasedAbove (R : DagRule Validator BlockId Payload)
     (U U' : R.Universe) (G R₀ : ℕ) : Prop where
   /-- The same blocks at and above `R₀`. -/

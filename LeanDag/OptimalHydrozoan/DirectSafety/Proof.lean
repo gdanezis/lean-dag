@@ -4,14 +4,7 @@ import LeanDag.Hydrozoan.DirectSafety.Proof
 /-!
 # Optimal-Hydrozoan: direct-rule safety — proof
 
-Generated proof layer; not part of the audit surface. The inherited rows
-are Hydrozoan's `DirectSafety.holds` on the underlying universe. The
-Optimal rows follow Hydrozoan's proofs with `qFastOpt` in place of
-`qFast`: overlap two creator quorums in a non-Byzantine replica
-(`Helpers/Counting.lean`), collapse its voting blocks through
-`no_equivocation`, and collapse the two candidates through
-`distinct_creators`. Fast/fast at `f = 0` is non-equivocation of the
-leader directly.
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

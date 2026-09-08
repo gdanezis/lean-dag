@@ -5,8 +5,7 @@ import LeanDag.Barnacle.Model.Run
 Under the constant rule the arc collapses onto the base development at
 one leader (`barnacle.md` §6): every configuration has the initial
 count and back-off, and every verdict of a run is a verdict of the
-one-leader schedule `Sched 1`. The anchor demanded of every new relation
-of this development — that it instantiate to the old one.
+one-leader schedule `Sched 1`.
 
 * **BN6a, the count never moves** — under `constRule`, `count k = 1` and
   `backoff k = 0` at every configuration the run determines, `k ≤ K`.

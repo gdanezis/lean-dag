@@ -2,26 +2,14 @@ import LeanDag.Properties.Carrier
 /-!
 # Agreement above a round: the vocabulary locality is stated in
 
-`docs/target-properties.md` §3.1, the property garbage collection rests
-on.
-
-*If two DAGs agree above round `r`, they decide alike at every slot
-whose round is at least `r`.*
-
-Stated as agreement rather than existence, which is what makes it worth
-having: a protocol proving it gets garbage collection at **every**
-admissible horizon, not at one. The indirect rule's recursion runs
-upward from the slot — an anchor sits above what it decides — so the
-region the hypothesis covers is closed under the recursion, which is
-`Causal.refs_above`. The chain is unbounded above, so no window
-formulation would serve; the condition has to be a genuine lower bound.
-
-**What locality does not cover.** A truncation restricts *and* rebases:
-it drops what lies below the horizon and renumbers what remains to
-start at zero. Locality is about the restriction alone, and the
-renumbering is `Reindex.lean`. The two compose only through the
-universe that has been restricted and not yet renumbered, which
-`Arcs/GC.lean` takes as a parameter and a protocol must exhibit.
+`docs/target-properties.md` §3.1. *If two DAGs agree above round `r`,
+they decide alike at every slot whose round is at least `r`.* Stated as
+agreement rather than existence, so a protocol proving it gets garbage
+collection at every admissible horizon, not one; the indirect rule's
+upward recursion is closed under this region (`Causal.refs_above`), and
+no window formulation would serve since the chain is unbounded above.
+Locality is about restriction alone — the renumbering half is
+`Reindex.lean`.
 -/
 
 namespace LeanDag

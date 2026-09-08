@@ -5,30 +5,14 @@ import LeanDag.Properties.Band
 /-!
 # Transport composes
 
-`docs/target-properties.md` §11.3, the third part of the goal: the
-mechanisms compose with one another through the properties,
-automatically.
-
-**What a mechanism owes is a rebase** (`Properties/Carrier.lean`): above
-a settling round the transformed DAG holds the same blocks, at rounds
-some offset apart, with the same authors and — strictly above — the same
-references. A validator that runs two mechanisms has applied two
-rebases, and the whole claim of this file is that two rebases are one.
-
-The arithmetic is the content. Offsets add; the settling round of the
-composite is the higher of the two, **read in the source's frame**, so
-the second mechanism's round has the first's offset added to it before
-the comparison. Get that wrong and the composite claims agreement over a
-band the second mechanism never promised.
-
-`Extends.trans` is the same fact for the relation that adds blocks
-rather than moving them, and it lives beside `Extends`; these live here
-because the offset is what makes them worth stating together.
-
-**The consumer is `Arcs/Stack.lean`**: a `Stack` of mechanisms is a
-finite sequence of `Rebased` steps, and `Stack.rebased` composes them
-with these lemmas into one `Rebased`, which every verdict and the
-liveness precondition then cross at once.
+`docs/target-properties.md` §11.3. A mechanism owes a rebase
+(`Properties/Carrier.lean`), and a validator running two mechanisms has
+applied two — the claim here is that two rebases are one. Offsets add;
+the settling round of the composite is the higher of the two, read in
+the source's frame, so the second mechanism's round has the first's
+offset added before the comparison. `Arcs/Stack.lean` composes a
+`Stack` of mechanisms into one `Rebased` with these lemmas, which every
+verdict then crosses at once.
 -/
 
 namespace LeanDag
@@ -122,15 +106,11 @@ theorem trans (h : Rebases S S' G₁ d₁) (h' : Rebases S' S'' G₂ d₂) :
     have h2 := h'.base
     omega
 
-/-- **A rebase determines the schedule it produces.** Both fields are
-pinned — rounds by the offset, leaders by the base slot — so two
-schedules rebased alike from one original are the same schedule.
-
-What this is for: a mechanism that re-indexes a schedule can be built in
-more than one way, and the ways have to be shown to agree.
-`Integration/Joiner.lean` compares truncating an adaptive schedule with
-adapting a truncated one; both are rebases of the original by the same
-offset, so this settles it without unfolding either construction. -/
+/-- **A rebase determines the schedule it produces**: two schedules
+rebased alike from one original are the same schedule. What this is
+for: `Integration/Joiner.lean` compares truncating an adaptive schedule
+with adapting a truncated one, both rebases by the same offset, and
+this settles it with no unfolding. -/
 theorem unique {S S₁ S₂ : Slots Validator} {G d : ℕ}
     (h₁ : Rebases S S₁ G d) (h₂ : Rebases S S₂ G d) : S₁ = S₂ := by
   have hr : S₁.slotRound = S₂.slotRound := by
@@ -195,8 +175,8 @@ end Rebased
 /-! ## Safety across a rebase
 
 `LocalTruncate.of_banded` is this at a cut, where the settling round is
-the horizon. A fill settles higher than it shifts, so the general form
-carries the settling round separately and asks the slot to sit above it. -/
+the horizon; a fill settles higher than it shifts, so the general form
+carries the settling round separately. -/
 
 variable {U U' : R.Universe} {S S' : Slots Validator} {G R₀ d : ℕ}
 

@@ -5,15 +5,7 @@ import LeanDag.Hydrozoan.DirectSafety.Proof
 /-!
 # Slot agreement — proof
 
-Generated proof layer; not part of the audit surface. Slot agreement is
-the anchored relation's `decided_unique` at Hydrozoan's laws. What the
-laws ask is exactly what the arc had proved: direct-versus-direct
-pairings close by `DirectSafety`, a direct commit is linked at some rung
-from any candidate of an eligible slot (the rung-fires lemmas of
-`Helpers/SlotAgreement.lean`), and cannot coexist with a rung choice for
-a different block (the starvation lemmas), a skipped slot links nothing,
-and two choices at one rung agree — certificate uniqueness at rung `0`,
-antisymmetry of the order at rung `1`.
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

@@ -4,26 +4,10 @@ import LeanDag.Hydrozoan.Model.Liveness
 /-!
 # Optimal-Hydrozoan: eventual decision — the ledger does not stall
 
-Hydrozoan's `EventualDecision` read over `DecidedOpt`: the liveness
-headline, composing direct liveness (a synchronised, populated,
-correct-led wave commits) with indirect liveness (a committed run settles
-everything below). The one ingredient still missing is fairness — the
-schedule must actually *offer* runs of correct-led slots — and that is a
-schedule-only notion, so `FairRunOn` and `RunsRecur` are Hydrozoan's,
-reused verbatim; only the per-universe workhorse is re-stated:
-
-- `RunDecidesBelow`: a synchronised quorum whose members lead the `c`
-  slots `b, …, b + c − 1` and fill every round of the run's span decides
-  every slot below `b` at the eventual view. No fairness: where the run
-  sits is a hypothesis.
-- `RunsRecur` (Hydrozoan's): fairness places a `T`-led run past any slot
-  and any round.
-
-The two compose by direct application; the composed form is stated and
-proven on the generated side (`ledgerProgress` in `Proof.lean`), as in
-Hydrozoan. Imports Hydrozoan's `EventualDecision.Statement` and the
-Optimal `IndirectLiveness.Statement` for the reused shapes (the
-sanctioned reviewed-imports-reviewed exception).
+Hydrozoan's `EventualDecision` read over `DecidedOpt`: `FairRunOn` and
+`RunsRecur` are Hydrozoan's, reused verbatim, since fairness is
+schedule-only; only `RunDecidesBelow` is re-stated. `ledgerProgress` in
+`Proof.lean` composes them, as in Hydrozoan.
 -/
 
 namespace LeanDag
@@ -39,10 +23,9 @@ open LeanDag.Hydrozoan.EventualDecision (RunsRecur)
 variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [O : OptimalFaults Replica] [S : Slots Replica]
 
-/-- **A committed-to-be run decides everything below it.** The workhorse
-with the run location `b` explicit: direct liveness commits each of the
-`c` run slots (through the unchanged slow path), and the indirect descent
-settles every slot below. -/
+/-- **A committed-to-be run decides everything below it.** Direct
+liveness commits each of the `c` run slots through the unchanged slow
+path, and the indirect descent settles every slot below. -/
 def RunDecidesBelow (U : OptUniverse Replica BlockId) : Prop :=
   ∀ (T : Finset Replica) (R b c : ℕ),
     T ⊆ (LeanDag.Hydrozoan.Correct : Finset Replica) →     -- a set of correct replicas ...
@@ -59,9 +42,8 @@ def RunDecidesBelow (U : OptUniverse Replica BlockId) : Prop :=
       V.CoversUpto (S.slotRound (b + c - 1) + 2) →  -- ... to that round:
     ∀ i, i < b → ∃ v, DecidedOpt U V i v  -- all below decided.
 
-/-- Eventual decision of Optimal-Hydrozoan, over every fault
-configuration, schedule, and universe the model admits — together with
-Hydrozoan's schedule-only fairness claim. -/
+/-- Eventual decision, together with Hydrozoan's schedule-only fairness
+claim. -/
 def Statement : Prop :=
   ∀ (Replica BlockId : Type) [Fintype Replica] [DecidableEq Replica]
     [DecidableEq BlockId] [OptimalFaults Replica] [Slots Replica],

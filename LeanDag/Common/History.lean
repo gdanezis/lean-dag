@@ -3,18 +3,11 @@ import LeanDag.Common.Support
 /-!
 # Causal history as a `Finset`
 
-`Reaches` is a `Prop`, which the DoS budgets cannot count. `history U b` is
-the same relation as data: the block, its references, their references, and
-so on down to genesis.
-
-The walk and its lemmas live in `Causality.lean`, over the raw block data;
-a universe supplies the `CausalStructure` they consume. This file is that
-layer read at `U.block`/`U.ids`, keeping the names the rest of the
-development uses.
-
-The one lemma that does any work is `mem_history_iff`: the search is fuelled
-by a step count, and a reference drops the round by one (T2), so `round + 1`
-steps suffice from any block of the universe.
+`Reaches` is a `Prop`, which the DoS budgets cannot count. `history U b`
+is the same relation as data, walked with the fuel `round + 1` — enough
+by T2, since a reference drops the round by one. `Causality.lean` has
+the walk itself, over raw block data; this file reads it at
+`U.block`/`U.ids`.
 -/
 
 namespace LeanDag
@@ -25,10 +18,8 @@ variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
 variable {U : BlockRecord Validator BlockId Payload P honest}
 
 /-- Everything reachable from `b` in at most `n` reference steps.
-
-Structural in the fuel `n`, so it is computable and needs no decidability
-hypothesis. Outside `U.ids` it still evaluates — to junk, like `U.block`
-itself — and every statement below quantifies over ids of the universe. -/
+Structural in the fuel `n`, so computable with no decidability
+hypothesis. -/
 def historyUpto (U : BlockRecord Validator BlockId Payload P honest) :
     ℕ → BlockId → Finset BlockId :=
   historyUptoFrom U.block
@@ -62,12 +53,9 @@ theorem reaches_of_mem_historyUpto {n : ℕ} {b i : BlockId}
 
 variable [P.Mechanised]
 
-/-- **Completeness**, with the fuel accounted for. A path from `b` drops the
-round by one per step (T2), so `round b` steps exhaust it — and one more is
-harmless by `historyUpto_mono`.
-
-The base case is where the round bound does its work: at round `0` a
-reference would have to sit below round `0`, so `b` reaches only itself. -/
+/-- **Completeness**, with the fuel accounted for: a path from `b` drops
+the round by one per step (T2), so `round b` steps exhaust it, and one
+more is harmless by `historyUpto_mono`. -/
 theorem mem_historyUpto_of_reaches {n : ℕ} {b i : BlockId} (hb : b ∈ U.ids)
     (hn : (U.block b).round ≤ n) (h : Reaches U b i) : i ∈ historyUpto U n b :=
   U.causal.mem_historyUpto_of_reaches hb hn h
@@ -106,10 +94,9 @@ theorem history_subset_of_reaches {c b : BlockId} (hc : c ∈ U.ids) (h : Reache
     history U b ⊆ history U c :=
   U.causal.history_subset_of_reaches hc h
 
-/-- The one-step unfolding: a history is its block, plus the histories of its
-references. The fuel bookkeeping is what makes this need a proof rather than
-`rfl` — the recursion hands out `round b` steps, and each reference wants
-`round + 1` of its own, which the predecessor condition reconciles. -/
+/-- The one-step unfolding: a history is its block, plus the histories of
+its references. Needs a proof, not `rfl`, because the fuel splits
+unevenly between the block and each reference. -/
 theorem mem_history_succ_iff {b : BlockId} (hb : b ∈ U.ids) {i : BlockId} :
     i ∈ history U b ↔ i = b ∨ ∃ j ∈ (U.block b).refs, i ∈ history U j :=
   U.causal.mem_history_succ_iff hb

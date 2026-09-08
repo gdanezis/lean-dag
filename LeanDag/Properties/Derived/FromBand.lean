@@ -2,18 +2,14 @@ import LeanDag.Properties.Band
 /-!
 # What follows from the band
 
-`docs/target-properties.md` §3.8 and §4. Nothing here is an obligation.
-Every theorem below discharges one property from another, once and
-generically, so that a protocol proving `Banded` need not prove any of
-them and a protocol that would rather prove them directly still may —
-Hydrozoan proved `Persist` on its own, having no `Banded`.
-
-The split this file marks is the one worth keeping in view. A protocol
-or a mechanism must *show*: `Causal`, `Agree`, `Banded`, `ViewSound`,
-`LocalTruncate`, `LeaderCommits`, `Descends`, and, on the mechanism
-side, `Sustains`. Everything else in `Properties/` is vocabulary the
-obligations are stated in, a consequence, or optional; the consequences
-live here and `Optional/` holds the rest.
+`docs/target-properties.md` §3.8 and §4. Nothing here is an obligation:
+every theorem discharges one property from `Banded`, once and
+generically, so a protocol proving it need not prove any of them —
+though a protocol may still prove one directly, as Hydrozoan does for
+`Persist`. What a protocol or mechanism must show is `Causal`, `Agree`,
+`Banded`, `ViewSound`, `LocalTruncate`, `LeaderCommits`, `Descends` and
+`Sustains`; the rest of `Properties/` is vocabulary, a consequence
+(here), or optional (`Optional/`).
 -/
 
 namespace LeanDag

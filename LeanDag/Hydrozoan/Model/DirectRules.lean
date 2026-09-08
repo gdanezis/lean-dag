@@ -4,30 +4,13 @@ import LeanDag.Common.Rules
 /-!
 # Direct decision rules
 
-Trusted core: votes, certificates, and the three direct rules of
-`sections/algorithms.tex` — `FastCommittedLeader`, `SlowCommittedLeader`,
-`SkippedLeader` — as predicates over the block universe, plus their
-view-relative variants (the rules a replica actually runs on its local
-DAG, differing from the universe versions by exactly `∩ V.ids`).
-
-Every rule is a cardinality comparison **counting creators**, never raw
-blocks — the pseudocode's "count creators, as replicas may equivocate" —
-against the audited thresholds of `Model/Faults.lean`. Universe-level
-rules are primary (the safety arithmetic happens there); a view can only
-under-report them, never exceed them.
-
-The commit rules are round-parameterized: `r` is the slot's propose
-round, and callers pass `S.slotRound k` (the paper's wave `w` maps to
-`r = ProposeRound(w)`). Only the skip rule is slot-parameterized,
-because slotBlames target the leader slot, not a specific block.
-
-The counting vocabulary — `blocksAt`, `supporters`, `supportersIn`,
-`slotBlames`, `slotBlamesIn`, `votingRound` — is the record's
+Votes, certificates, and the three direct rules — `FastCommittedLeader`,
+`SlowCommittedLeader`, `SkippedLeader` — as predicates over the block
+universe and their view-relative variants, each a cardinality comparison
+counting creators, never raw blocks, against the thresholds of
+`Model/Faults.lean`. The counting vocabulary is the record's
 (`Common/Support.lean`, `Common/Leader.lean`); what is Hydrozoan's is the
-certificate and the thresholds. The predicates used inside
-`Finset.filter` (`IsVote`, `IsCertificate`) are `@[reducible]` so their
-decidability is inferable; the top-level rules get explicit `Decidable`
-instances in `Helpers/`.
+certificate and the thresholds.
 -/
 
 namespace LeanDag
@@ -42,19 +25,10 @@ variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
 shared `votingRound`, one above the proposal. -/
 abbrev decisionRound (Replica : Type*) [S : Slots Replica] (k : ℕ) : ℕ := S.slotRound k + 2
 
-/-! A vote is the record's `IsVote`: `L` is among `b`'s refs. Recall
-`ValidWrt.distinct_creators`: a well-formed block never references two
-blocks by the same creator, so `b` votes for at most one copy of any
-leader — even an equivocating one.
-
-**Fidelity gap**: the paper defines a vote by deterministic depth-first
-traversal — `L` is the first block by its creator encountered in `b`'s
-causal history. The model uses the direct reference instead. At wave
-length 3 the two coincide for the blocks the rules inspect — a leader
-copy can only appear among a voter's direct references — and one vote
-per creator per slot follows from `distinct_creators` plus universe-level
-non-equivocation; the DFS ≡ direct-reference equivalence is argued in
-prose, not in Lean. -/
+/-! A vote is the record's `IsVote`, direct reference rather than the
+paper's depth-first traversal; the two coincide at wave length 3, argued
+in prose and not in Lean. `distinct_creators` gives at most one vote per
+creator per slot. -/
 
 /-- The refs of `C` that vote for `L` — the inner set of the paper's
 `IsCertificate`: the record's carried votes. -/

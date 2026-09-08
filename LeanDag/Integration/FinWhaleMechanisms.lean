@@ -3,16 +3,13 @@ import LeanDag.FinWhale.Carrier
 /-!
 # Garbage collection, crash recovery and re-genesis for FinWhale
 
-FinWhale's DAG is the block record at `ValidHere` and its views are the
-record's, so its carrier reads as records by the identity. Every mechanism cell is
-`Arcs/Record.lean` at that instance. What FinWhale supplied is
-`ValidHere.mechanised` and `ValidHere.copyStable`, in
-`FinWhale/Model/Rule.lean`.
-
-**The fill copies the donor's references and adds nothing.** The self
-reference the core's fill adds is exactly what `ValidHere.leader_clause`
-would object to: it grafts the anchor's reference set onto the donor's,
-and the clause constrains what a pair of references may see together.
+FinWhale's DAG is the block record at `ValidHere`, so its carrier reads
+as records by the identity, and every mechanism cell is
+`Arcs/Record.lean` at that instance (`ValidHere.mechanised` and
+`ValidHere.copyStable`, `FinWhale/Model/Rule.lean`). The fill copies
+only the donor's references, adding no self reference:
+`ValidHere.leader_clause` would object to grafting the anchor's
+reference set onto the donor's.
 -/
 
 namespace LeanDag

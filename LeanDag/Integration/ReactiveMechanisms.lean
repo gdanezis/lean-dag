@@ -6,34 +6,16 @@ import LeanDag.Properties.Arcs.Liveness
 /-!
 # The mechanisms over a reactive execution
 
-The cell `Properties/Support.lean` could not reach. `Timed.OfCoverage` asks a
-rule's liveness precondition to follow from coverage and production, and
-a reactive execution has production but not coverage: a reactive builder
-omits whatever had not arrived when its exit condition fired, so
-`SynchronisedOn` is false in one by design (`Reactive/Basic.lean`). So
-reactive Mysticeti's own precondition is guarded by a witness rather
-than by `Timed.OfCoverage`, and the question left open was whether its
-commits survive a mechanism.
-
-**They do, and coverage was never what the mechanism needed.** The
-mechanism reads `CertifiesAt` — the certificates the commit rule counts
-— and carries them across `Sustains`, because a certificate is made of
-references and `Sustains` preserves references. The reactive discipline
-delivers `CertifiesAt` (`ReactiveM.certifies`, from `cert_or_wait`),
-which is exactly what it is designed to deliver in place of coverage.
-Nothing about the pacing structure is transported: no `ReactiveM` is
-built for the truncation or the fill, and none is needed.
-
-Three cells follow, one per DAG-transforming mechanism, each the same
-two theorems composed at a different `Sustains` witness.
-
-The reason this reaches further than `Timed.OfCoverage` does is worth
-stating. `CertifiesAt` counts in the *rule's* vocabulary, and
-`DagRule` has none — a carrier knows `ids`, `block` and `refs`, and
-every rule's certificate is a different threshold over them. Coverage is
-the strongest fact statable without that vocabulary, which is what makes
-it the right antecedent for a property and the wrong one for a reactive
-execution.
+A reactive execution has production but not coverage — a reactive
+builder omits whatever had not arrived when its exit condition fired,
+so `SynchronisedOn` is false in one by design (`Reactive/Basic.lean`).
+Reactive Mysticeti's precondition is therefore guarded by a witness
+rather than `Timed.OfCoverage`, but its commits still survive a
+mechanism: the mechanism reads `CertifiesAt`, made of references, which
+`Sustains` preserves regardless of coverage, and the reactive discipline
+delivers `CertifiesAt` directly (`ReactiveM.certifies`). Three cells
+follow, one per DAG-transforming mechanism, each the same two theorems
+composed at a different `Sustains` witness.
 -/
 
 namespace LeanDag
@@ -49,15 +31,10 @@ variable [S : Slots Validator]
 variable {U : BlockUniverse Validator BlockId Payload}
 variable {T : Finset Validator} {N R k : ℕ} {L : BlockId}
 
-/-! ## The precondition, across the three mechanisms
-
-With `Support.live_of_sustains` and `Support.live_of_truncates` the
-whole window carries, and everything downstream — `LeaderCommits`,
-`decidedBelow_of_run`, chain quality — applies in the transformed
-universe with no further argument. Reactive Mysticeti reaches
-`Support.live` by its own bridge and needs nothing else. A slot-level
-version of these, at the direct commit, stood here first and was
-deleted when the window-level one arrived. -/
+/-! ## The precondition, across the three mechanisms: with
+`Support.live_of_sustains` and `Support.live_of_truncates` the whole
+window carries, and everything downstream applies in the transformed
+universe with no further argument. -/
 
 variable {V : View Validator BlockId Payload U} {lo K : ℕ}
 

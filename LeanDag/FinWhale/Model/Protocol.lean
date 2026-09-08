@@ -4,22 +4,13 @@ import LeanDag.FinWhale.Model.Verdict
 /-!
 # FinWhale — one execution, and what a validator reads off it
 
-`Run` collects everything a deployment fixes: the blocks, the schedule
+`Run` collects everything a deployment fixes — the blocks, the schedule
 and network that carried them, the rotation, the self-parent edge, and
-the liveness input of `Model/Liveness.lean`. The tie-break among an
-anchor's candidates is the least one, `chooseLeast`. It is
-the object the four guarantees are stated over, so that none of them has
-to mention a verdict assignment, a view, a well-formedness condition or a
-bound.
-
-`Run.view` is what a validator holds once the network has delivered every
-reliable block of every round the schedule reaches.
-
-The two definitions that follow it in `Protocol.lean` — `Run.verdicts`
-and `Run.delivers` — are not here, because each takes a *proof* as an
-argument: the reverse pass runs on `restrict`, which needs the holdings
-to be a view. That proof is `Run.isView`, and the two definitions sit
-beside it.
+the liveness input — so that the four guarantees stated over it need not
+mention a verdict assignment, a view, or a well-formedness condition.
+`Run.view` is what a validator holds once the network has delivered
+every reliable block the schedule reaches; `Run.verdicts` and
+`Run.delivers` sit in `Protocol.lean` beside the proof they need.
 -/
 
 namespace LeanDag

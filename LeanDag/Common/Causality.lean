@@ -5,23 +5,14 @@ import Mathlib.Data.Finset.Union
 /-!
 # Causal history, over the raw block data
 
-Reachability and the finite causal cone, stated over a block assignment and
-an id population rather than over a universe type — the same hoist
-`Participation.lean` performs for production and coverage, and for the same
-reason: neither notion mentions validity, quorums, equivocation or a fault
-model, so pinning them to a universe type would force every universe to
-restate them.
-
-What the layer does consume is two structural facts, packaged as
-`CausalStructure`: references stay inside the population, and a reference
-sits one round below its referrer. Every other fact this file needs follows
-from those two. In particular a round-`0` block has no references at all —
-one would have to sit at round `-1` — so the fuelled search's base case
-needs no separate validity clause.
-
-The Byzantine `BlockUniverse` and the crash `Nemo.Universe` each supply a
-`CausalStructure`, and their `Reaches`/`history` are this file's notions at
-their own data. What used to be two copies of the same 280 lines is now one.
+Reachability and the finite causal cone, stated over a block assignment
+and an id population rather than over a universe type, since neither
+notion mentions validity, quorums, equivocation or a fault model. The
+layer consumes two structural facts, packaged as `CausalStructure`:
+references stay inside the population, and sit one round below their
+referrer; everything else follows from those two. The Byzantine
+`BlockUniverse` and the crash `Nemo.Universe` each supply one, and their
+`Reaches`/`history` are this file's notions at their own data.
 -/
 
 namespace LeanDag

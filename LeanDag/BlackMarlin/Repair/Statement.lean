@@ -5,48 +5,26 @@ import LeanDag.BlackMarlin.Liveness.Statement
 
 The execution of `black-marlin.md` §13 turns on `commit`'s descent
 taking an unsupported twin where the rule had committed the supported
-one. This phase asks what a side-condition on the descent buys, and what
-it costs (`black-marlin.md` §14). Nothing in the model is altered: `descend`,
-`flushRecord` and everything proved of them stand, and what is added
-sits beside them. Six claims:
+one. This phase asks what a side-condition on the descent yields and what
+it costs (`black-marlin.md` §14); `descend` and `flushRecord` stand
+unaltered. `descendSupp` prefers a supported candidate where there is
+one (BMP2) and is L21–L24 verbatim otherwise (BMP3) — a refinement, not
+a replacement — since at most one candidate of a step is ever supported
+(BMP1). It never stalls (BMP4), agrees with any other support-preferring
+record wherever an anchor is supported (BMP5, what §13's execution
+needed), and leaves the liveness results untouched since `Committed` is
+a property of the rule alone (BMP6). `descendS` instead drops the
+tie-break outright and descends to the highest-round supported anchor of
+the cone (BMP7–BMP12). BMP13 is the one case a validator can apply
+either from its own view: a reliable author's anchor, past the round
+coverage takes hold — not the case the repair exists for.
 
-* **BMP1, `AtMostOneSupported`** — at most one candidate of a step is
-  supported. The candidates of a step share a round and an anchor round
-  has one supported anchor (BM1), so where the filter bites there is
-  nothing left to break ties over;
-* **BMP2, `RepairPrefers`** — `descendSupp` takes a supported candidate
-  wherever there is one;
-* **BMP3, `RepairRefines`** — and is L21–L24 verbatim where there is
-  not, so it refines the rule rather than replacing it;
-* **BMP4, `NoStall`** — the repaired step returns a block exactly when
-  the unrepaired one does, and always at the same round. A *record* may
-  still flush at different rounds, since a chain that passes through a
-  different block passes through a different cone; what cannot happen is
-  a step that stalls;
-* **BMP5, `Agrees`** — two support-preferring records cannot part at a
-  round that has a supported anchor. This is what the execution of
-  `black-marlin.md` §13 needed and did not have;
-* **BMP6, `LivenessUntouched`** — nothing the liveness results speak
-  about mentions the descent: `Committed` is a property of the rule
-  alone, so BML1 and BMR2 hold of the repaired protocol word for word;
-* **BMP13, `SupportInView`** — and the one case where a validator can
-  apply either condition from its own view: a *reliable* author's
-  anchor, past the round coverage takes hold. Which is not the case the
-  repair exists for;
-* **BMP7–BMP12** are the strengthened form, which drops the tie-break
-  rather than filtering it: every boundary is supported, no committed
-  anchor is passed by, agreement runs down from any meeting point, two
-  records with committed tops therefore agree outright, and the descent
-  still terminates while committed rounds still recur.
-
-**What this does not settle.** `Supported` is a fact about the universe,
-and a validator computes support from its own view, which under-reports.
-So a record built by a real validator meets `SupportPreferring` only if
-the support it needs is in view when it descends — which holds in the
-execution of `black-marlin.md` §13, where the second validator has the
-whole round-4 layer by the time it commits, but is not established in
-general. The repair is therefore stated, not supplied, and
-`black-marlin.md` §14 records what supplying it would take.
+**What this does not settle.** A validator computes support from its own
+view, which under-reports, so a record it builds meets
+`SupportPreferring` only if the support it needs is in view when it
+descends — true in §13's execution, not established in general. The
+repair is stated, not supplied; §14 records what supplying it would
+take.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -103,11 +81,9 @@ def LivenessUntouched (U : BlockUniverse Validator BlockId Payload) : Prop :=
 
 /-! ## The strengthened repair
 
-`descendSupp` chooses among the candidates L21–L24 already offers, so it
-helps only where the supported anchor is among them — and a step through
-a block that cites a twin instead offers none. `descendS` drops the
-tie-break: it descends to the highest-round **supported** anchor of the
-cone and nowhere else. Four further claims. -/
+`descendSupp` only chooses among the candidates L21–L24 already offers;
+`descendS` drops the tie-break and descends to the highest-round
+supported anchor of the cone outright. -/
 
 /-- **BMP7, every boundary is supported.** So a round whose anchors carry
 no quorum is not a boundary at all: where an anchor equivocates and
@@ -156,15 +132,10 @@ def StrongAgreesCommitted (U : BlockUniverse Validator BlockId Payload) : Prop :
 
 /-- **BMP13, when the support is in view.** Both repairs read
 `Supported`, a fact about the universe, where a validator reads its own
-view. They agree in one case: an anchor by a **reliable** author, past
-the round coverage takes hold, is referenced by every reliable block of
-the round above, so a view holding those sees the quorum.
-
-For a Byzantine author's anchor coverage says nothing, and a view
-holding a quorum at the round above shares only `n − 2f` authors with
-the supporters — `f + 1` at `n = 3f + 1`, short of the `2f + 1` the test
-wants. So this claim does not reach the case the repair exists for, and
-`black-marlin.md` §13's execution carries a view that misses it. -/
+view; they agree at a reliable author's anchor past the round coverage
+takes hold, since coverage puts the quorum in any view holding the round
+above. For a Byzantine author's anchor coverage says nothing, so this
+does not reach the case the repair exists for. -/
 def SupportInView (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ (T : Finset Validator) (R ρ : ℕ) (V : View Validator BlockId Payload U) (L : BlockId),
     quorumCard Validator ≤ T.card →
@@ -174,12 +145,9 @@ def SupportInView (U : BlockUniverse Validator BlockId Payload) : Prop :=
     SupportedIn U V L ρ
 
 variable (Validator BlockId Payload) in
-/-- **BMP12, and no execution is stuck.** The recurrence of committed
-rounds is a statement about `Committed` and the rotation, neither of
-which the repair touches, so it holds of the repaired protocol word for
-word: for every round the rotation names a later one that any
-sufficiently grown covered DAG commits, and BML5 supplies the clause it
-needs at every committee. -/
+/-- **BMP12, and no execution is stuck.** Recurrence of committed rounds
+is a statement about `Committed` and the rotation, neither touched by
+the repair, so it holds word for word of the repaired protocol. -/
 def NotStuck : Prop :=
   ∀ (T : Finset Validator) (R r : ℕ),
     quorumCard Validator ≤ T.card → Liveness.FairRun T 2 →

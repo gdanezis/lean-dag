@@ -3,32 +3,15 @@ import LeanDag.Hydrozoan.Model.Liveness
 /-!
 # Optimal-Hydrozoan: direct liveness — statement
 
-Two claims form `Statement`. `CommitLiveness` is Hydrozoan's: a
-synchronised, populated wave with a correct leader slow-commits — the slow
-path is unchanged in Optimal-Hydrozoan, and so is the guaranteed commit;
-only the harvest differs (`DecidedOpt`). `SkipLiveness` is what the arc
-adds: a slot whose leader produced **no candidate** is directly skipped by
-the guaranteed quorum alone — `q_cert ≤ q ≤ |T|` slotBlames at the voting
-round, and every decision-round block is fast evidence for nothing,
-vacuously. No fault-count hypothesis and no synchrony hypothesis appear.
-In Hydrozoan the same skip needs `q_fast = n − p` slotBlames, which only
-`Correct` can supply when the actual faults fit `p`; it is opportunistic
-there (`SkipLatency`, kept outside `Statement`), and a liveness claim here
-(decision D5). The price, recorded in the paper: the verdict lands at the
-decision round, one round later than Hydrozoan's.
-
-`SkipLiveness` is deliberately restricted to candidate-less slots. With a
-candidate present, the Byzantine replicas can vote for it while every
-correct replica slotBlames it, and those `f` votes suffice to make every
-correct decision-round block fast evidence whenever `f ≥ tPlain` — at the
-minimal committee `tPlain = f + pOpt − 1` when `c + k` is even and
-`f + pOpt` when odd, so the attack exists exactly at `c = k = 0` — and the
-skip is not guaranteed: the paper's remark on FinWhale's attack. Such a
-slot resolves indirectly.
-
-`FastLatency` stays outside `Statement`, as in Hydrozoan: a performance
-characterization, firing exactly when the actual faults fit the fast
-allowance — now `pOpt`, one more than Hydrozoan's `p`.
+`CommitLiveness` is Hydrozoan's slow path, unchanged, harvested as
+`DecidedOpt`. `SkipLiveness` is the arc's addition: a candidate-less
+slot is directly skipped by the guaranteed quorum alone, with no
+fault-count or synchrony hypothesis — a liveness claim where Hydrozoan's
+same skip is only opportunistic. It is restricted to candidate-less
+slots deliberately: with a candidate present, Byzantine votes can make
+every correct decision-round block fast evidence (FinWhale's attack), so
+such a slot resolves indirectly instead. `FastLatency` stays outside
+`Statement`, as in Hydrozoan: a performance characterization at `pOpt`.
 -/
 
 namespace LeanDag
@@ -43,16 +26,10 @@ variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [O : OptimalFaults Replica] [S : Slots Replica]
 
 /-- **Commit liveness** (Hydrozoan's, harvested as `DecidedOpt`): a
-quorum-sized set of correct replicas, populated through the wave's three
-rounds and synchronised from some `R` at or before the wave, commits its
-correct leader — the slow-commit threshold is met, and the decision logic
-outputs the commit verdict on any view caught up to the decision round
-(the LeanDag.Hydrozoan.certificates sit there, so a caught-up view holds them; the eventual
-view is caught up to every horizon).
-
-`SlowCommit` here is a threshold fact, not a route: the fast path may also
-fire in the same universe — this is the one the guaranteed quorum always
-reaches. -/
+quorum-sized correct set, populated through the wave and synchronised
+from `R`, slow-commits its correct leader, on any view caught up to the
+decision round. The fast path may also fire in the same universe; this
+is the route the guaranteed quorum always reaches. -/
 def CommitLiveness (U : OptUniverse Replica BlockId) : Prop :=
   ∀ (T : Finset Replica) (R k : ℕ),      -- for any set T, round R, slot k:
     T ⊆ (LeanDag.Hydrozoan.Correct : Finset Replica) →     -- T holds only correct replicas ...
@@ -69,16 +46,11 @@ def CommitLiveness (U : OptUniverse Replica BlockId) : Prop :=
       SlowCommit U.toBlockRecord L (S.slotRound k) ∧   -- the slow threshold is met,
       DecidedOpt U V k (some L)          -- and its verdict is committed
 
-/-- **Skip liveness** (the arc's addition): a slot with no candidate is
-directly skipped by any quorum-sized set of correct replicas that fills
-its voting and decision rounds — every voting-round block of `T` slotBlames
-the slot, every decision-round block of `T` is fast evidence for no
-candidate, and `q_cert ≤ q ≤ |T|` — and the skip verdict is output on any
-view caught up to the decision round (the slotBlames and the no-evidence
-quorum both sit at or below it). No synchrony and no fault-count
-hypothesis: slotBlames and no-evidence reference nothing. `q ≤ |T|` is
-deliberately the DAG quorum, uniform with `CommitLiveness`, although
-`q_cert ≤ |T|` would suffice. -/
+/-- **Skip liveness** (the arc's addition): a candidate-less slot is
+directly skipped by any quorum-sized correct set filling its voting and
+decision rounds, on any view caught up to the decision round. No
+synchrony or fault-count hypothesis: slotBlames and no-evidence
+reference nothing. -/
 def SkipLiveness (U : OptUniverse Replica BlockId) : Prop :=
   ∀ (T : Finset Replica) (k : ℕ),        -- for any set T and slot k:
     T ⊆ (LeanDag.Hydrozoan.Correct : Finset Replica) →     -- T holds only correct replicas ...
@@ -100,12 +72,9 @@ def Statement : Prop :=
     CommitLiveness U ∧ SkipLiveness U
 
 /-- **Performance, not liveness — deliberately outside `Statement`.**
-When the *actual* faults fit the Optimal fast allowance `pOpt`, a
-synchronised, populated wave with a correct leader fires the fast path in
-two rounds: `|LeanDag.Hydrozoan.Correct| = n − |byzantine ∪ crashed| ≥ n − pOpt = q_fast`.
-One more actual fault than Hydrozoan's `FastLatency` admits. It needs all
-of `Correct` — a quorum-sized `T` does not suffice in general — and only
-the propose and voting rounds. -/
+When the actual faults fit `pOpt`, a synchronised, populated wave with a
+correct leader fires the fast path in two rounds — needing all of
+`Correct`, not just a quorum-sized `T`. -/
 def FastLatency (U : OptUniverse Replica BlockId) : Prop :=
   ∀ (R k : ℕ),                           -- for any round R and slot k:
     (O.byzantine ∪ O.crashed).card ≤ pOpt Replica →  -- ACTUAL faults fit pOpt,

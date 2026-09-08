@@ -2,51 +2,16 @@ import LeanDag.Common.Validators
 /-!
 # FinWhale — the committee, and the two thresholds it fixes
 
-FinWhale [LF26] adds a two-round fast path to Mysticeti's commit rule. The
-fast path costs resilience, and the paper pays for it in the committee
-size: `n = 3f + 2p − 1`, where `f` is the fault bound as usual and `p` is
-the number of validators whose round-`(r+1)` votes the fast path can do
-without, with `1 ≤ p ≤ f`. Setting `p = f` recovers `n = 5f − 1`; `p = 1`
-gives `n = 3f + 1`, the core's committee.
-
-`p` is a *threshold parameter, not a second fault class*. This
-development has one fault set — `Faults.byzantine`, bounded by `f` — and
-`p` never partitions it. Safety assumes nothing about `p`: `lemma4` takes
-a fast commit and the standing bound `|byzantine| ≤ f`, and holds however
-many validators actually failed. Only fast-path *liveness* assumes
-`|byzantine| ≤ p` (`fastCommit_of_reactive`), and there it is a counting
-step and nothing more: the correct validators all vote past GST, there
-are `n − |byzantine|` of them, and that clears `n − p` exactly when
-`|byzantine| ≤ p`. Above `p` failures the fast path stays sound and
-simply does not fire.
-
-So `p` counts missing votes, whatever their cause — a crash, a Byzantine
-validator withholding, or one voting for a conflicting block. The
-threshold counts distinct authors that did vote and does not ask why the
-others did not. A correct validator that is merely slow consumes none of
-it past GST, since reactive delivery puts its vote in time.
-
-Two thresholds follow, and every counting argument of the arc is about
-one of them.
-
-* The **slow-path quorum** is the paper's `⌈(n+f+1)/2⌉`, which at this
-  committee is exactly `2f + p`. `spQuorum` is written as that closed
-  form, and `spQuorum_eq_ceil` checks the two agree.
-* The **fast-path threshold** is `n − p`, the number of distinct
-  round-`(r+1)` voters a leader block of round `r` needs to commit — one
-  round above itself, where the slow path needs two.
-
-`Params` is a class on top of `Faults` rather than a replacement for it:
-`n = 3f + 2p − 1` with `p ≥ 1` implies `n ≥ 3f + 1`, so a FinWhale
-committee is a core committee and everything proved of `Faults` applies
-unchanged (`card_validators` is re-derivable, and `params_arith` hands
-`omega` the rest).
-
-The committee equation is stated **additively**, as `n + 1 = 3f + 2p`,
-so that no truncated subtraction ever reaches `omega`. The arithmetic
-that follows from it — `params_arith`, the closed form of the paper's
-quorum, and the ordering of the three thresholds — is proved in
-`Counting.lean`, this file being definitions only.
+FinWhale [LF26] adds a two-round fast path to Mysticeti's commit rule at
+committee `n = 3f + 2p − 1`, where `p` (`1 ≤ p ≤ f`) is a threshold
+parameter, not a second fault class: it counts missing votes, whatever
+their cause, and safety assumes nothing about it. Two thresholds follow
+— the slow-path quorum `spQuorum = 2f + p` and the fast-path threshold
+`fastCard = n − p` — and every counting argument in the arc is about
+one of them. `Params` extends `Faults` rather than replacing it, and
+the committee equation is stated additively, `n + 1 = 3f + 2p`, so no
+truncated subtraction reaches `omega`. This file is definitions only;
+the arithmetic is `Counting.lean`.
 -/
 
 namespace LeanDag
@@ -55,7 +20,7 @@ namespace FinWhale
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
 
-/-- **FinWhale's committee.** `n = 3f + 2p − 1`, with `1 ≤ p ≤ f`. -/
+/-- **FinWhale's committee**: `n = 3f + 2p − 1`, with `1 ≤ p ≤ f`. -/
 class Params (Validator : Type*) [Fintype Validator] [DecidableEq Validator]
     [F : Faults Validator] where
   /-- How many round-`(r+1)` votes the fast path can do without. -/

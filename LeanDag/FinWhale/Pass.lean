@@ -4,25 +4,11 @@ import LeanDag.FinWhale.Model.Pass
 /-!
 # FinWhale — the reverse pass, as a procedure
 
-`WellFormed` states what the reverse pass must satisfy; nothing so far
-produces an assignment satisfying it, so every result above it is
-conditional on a validator's verdicts being well formed. This file
-defines the pass and proves that they are.
-
-The definition runs the slots downward from the horizon. `slotVerdict`
-decides one slot from the verdicts above it — a direct commit if there is
-one, a direct skip if there is one, and otherwise the first slot above
-`r + 2` that is not skipped, read through the tie-break. `passFrom`
-threads that down from `N + 1`, where nothing is decided, to `0`.
-
-Two facts make the definition usable. Slots above `N` are undecided
-(`passFrom_gt`), which is `hbound`; and at or below `N` the pass agrees
-with `slotVerdict` applied to itself (`decOf_eq`), which is the equation
-the five `WellFormed` fields are read off.
-
-What this does not discharge is `hk` — that a commit sequence stops at
-its first undecided slot is a condition on the horizon the caller picks,
-and `all_decided` is what establishes it.
+`WellFormed` states what the reverse pass must satisfy; this file
+defines the pass (`passFrom`, running the slots downward from the
+horizon) and proves it satisfies `WellFormed`. `decOf_eq` is the
+equation the five `WellFormed` fields are read off. What this does not
+discharge is `hk`, the horizon condition `all_decided` establishes.
 -/
 
 

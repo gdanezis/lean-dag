@@ -4,11 +4,7 @@ import LeanDag.Hydrozoan.PrefixAgreement.Proof
 /-!
 # Optimal-Hydrozoan: prefix agreement — proof
 
-Generated proof layer; not part of the audit surface. A harvest of
-`OptimalHydrozoan.SlotAgreement.decided_unique` — pointwise verdict agreement
-below the horizon — followed by Hydrozoan's list plumbing
-(`commitSeq_prefix`, `isPrefix_flatMap`), which is generic in the
-verdict function and reused as is.
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

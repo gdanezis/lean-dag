@@ -16,35 +16,11 @@ import LeanDag.Properties.Arcs.Headline
 /-!
 # Odontoceti conforms to the target properties
 
-`docs/target-properties.md` §11.2. The third rule to be put through the
-properties at its own carrier, and the first not written for them.
-
-**Why this rule and not another.** Odontoceti mirrors the core
-constructor for constructor at a shorter wavelength —
-`decisionRound k = slotRound k + 1`, no certificate round — so if the
-six obligations are the right six, the differences it does have should
-be the only work. That is what a third instance is for.
-
-**All six, and the fifth found a defect on the way.**
-
-`Decided.directSkip` used to quantify over the candidates the universe
-holds, so a slot with no candidate was skipped *vacuously*.
-`AgreeBand`'s membership clause runs one way — a block of `U` in the
-band is a block of `U'` — because a band must admit universes that hold
-*more*. A candidate present in `U'` and absent from `U` was therefore
-beyond reach, and the goal `L ∈ U.ids` could not be closed.
-
-That was the core's own defect, before its repair
-(`docs/target-properties.md` §3.2), and the repair transferred without
-change: Odontoceti's `DirectSkipIn` and the core's are the same
-predicate, so `Decided.directSkip` now takes `DirectSkipSlotIn`.
-
-What is Odontoceti's own, and what this file has to supply, is the
-shorter wavelength — the direct rule counts supporters at
-`slotRound k + 1` where the core counts certificates two rounds up —
-and `ThickLink`, the indirect test, which counts supporters inside the
-anchor's cone. Both needed their own band transport. The minimality
-premise on `indirectCommit`, which the core has no analogue of, needed
+`docs/target-properties.md` §11.2. Odontoceti's own content is a
+shorter wavelength — `decisionRound k = slotRound k + 1`, no
+certificate round — and `ThickLink`, the indirect test counting
+supporters inside the anchor's cone; both need their own band
+transport, and the minimality premise on `indirectCommit` needs
 `not_thickLink_band_novel`: a fresh candidate is thick-linked from no
 old anchor, so it cannot undercut the least one.
 -/
@@ -63,19 +39,12 @@ variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 /-! ## What this file adds to `Odontoceti/Carrier.lean`
 
 The carrier, `Causal`, `Agree`, `CommitsCandidate` and `CommitsDirect`
-are there, upstream of every mechanism. Here is the band and everything
-the band gives, plus the two liveness properties, which need the bounded
-relation and so the adaptive arc.
-
-## The band, across a shifted universe
-
-Odontoceti shares the core's block vocabulary — `IsLeaderBlock`,
-`blocksAt`, `slotBlamers` — so the core's band lemmas apply once the
-carriers are identified, which `toCore` does by the three fields. What
-is Odontoceti's own is the direct rule, which counts *supporters* at
-`slotRound k + 1` rather than certificates two rounds up, and the
-indirect test `ThickLink`, which counts supporters inside the anchor's
-cone. Those need their own transport, and they are what follows. -/
+are there. Here is the band and what it gives, plus the two liveness
+properties needing the bounded relation. Odontoceti shares the core's
+block vocabulary, so the core's band lemmas apply once the carriers are
+identified; its own content is the direct rule counting supporters at
+`slotRound k + 1` and the indirect test `ThickLink`, needing their own
+transport. -/
 
 section Band
 
@@ -210,8 +179,7 @@ namespace Odontoceti
 
 `Timed.decidedBelow_of_fairRun` at Odontoceti's vote support: the run
 commits by `voteSupport_commits`, and `descends` clears what is under
-it. The direct proof this replaced ran O7 at each slot of the run and
-then O9. -/
+it. -/
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable [F : Faults5 Validator]

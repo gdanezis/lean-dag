@@ -2,31 +2,12 @@ import LeanDag.Barnacle.Model.Run
 /-!
 # Barnacle: the liveness interface
 
-The liveness half of the paper's A4 (`barnacle.md` §7): for a fixed
-configuration, after the network stabilises, the base protocol decides
-every slot and commits new leaders infinitely often. In this development
-liveness is structural — a condition on the DAG, no clock — and every
-statement carries a horizon, because a universe is finite and decides
-nothing above its last rounds.
-
-`LiveRule` extends the base-rule data with one field, `Good`: the rule's
-own notion of a DAG that is good from a round `Rnd` to a horizon `N` —
-for the rules of this development, synchronised over a reliable quorum
-and populated. The mechanism never inspects it; it is the precondition
-of `LiveOn`, the clause the liveness results consume, and each
-instantiation defines it from its own predicates.
-
-`LiveOn S c` is A4-liveness on one schedule: on a good DAG, every slot
-with `c` rounds and a wave under the horizon is decided on any view
-caught up to the horizon (`BaseRule.CoversUpto`), and from every round a
-committed slot lies within `c` rounds — on that same view. The
-gap `c` is what lets the leader-count mechanism find each
-configuration's anchor before the horizon, and it is also the margin a
-slot needs above it to be decided: a slot the direct rule does not
-settle is decided by a committed anchor at least a wave above it, whose
-own wave must fit under the horizon, so no rule decides every slot up to
-`N − waveLength` (`barnacle.md` §11, F9). A schedule's own
-liveness theorem supplies `c`.
+A4's liveness half (`barnacle.md` §7): on a good DAG every slot is
+eventually decided and new leaders committed infinitely often, both
+read on any view caught up to a horizon. `LiveRule` adds one field,
+`Good`, the rule's own notion of a DAG good from `Rnd` to horizon `N`;
+`LiveOn S c` is that liveness on schedule `S`, with commit gap `c`
+supplied by the schedule's own liveness theorem.
 
 **Trusted core of the arc: definitions only.**
 -/
@@ -69,19 +50,10 @@ def UpdBounded {R : BaseRule Validator BlockId Payload} (P : Params) (upd : Upda
     Prop :=
   ∀ m b U V A, 0 < (upd m b U V A).1 ∧ (upd m b U V A).1 ≤ P.maxLeaders
 
-/-- **What a good DAG delivers.** On a DAG good from `Rnd` to `N` there
-is a set `T` of validators, all but at most `slack`, whose blocks are
-*reached* by everything two rounds above them: a `T`-authored block at a
-round from `Rnd`, with its own next round under the horizon, lies in the
-causal history of every block two rounds up — whoever authored that
-block.
-
-This is the base protocol's coverage read as delivery, and it is what
-turns a committed anchor into a delivered block. It is the second law a
-live rule carries, beside `Descent`: `Descent` says a good leader's slot
-commits, this says a good author's block is carried by whatever commits
-above it. Both are facts of the base protocol, and neither mentions the
-mechanism. -/
+/-- **What a good DAG delivers**: a `slack`-missing set of validators
+whose blocks, from `Rnd`, are reached by everything two rounds above
+them — the base protocol's coverage read as delivery, the second law a
+live rule carries beside `Descent`. -/
 structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop where
   /-- A good author's block is in the history of every block two rounds
   above it. -/
@@ -92,10 +64,9 @@ structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : �
         ∀ c ∈ R.ids U, (R.block U b).round + 2 ≤ (R.block U c).round →
           b ∈ historyFrom (R.block U) c
 
-/-- The horizon a run of height `K` needs from a synchrony round at
-genesis: each configuration's anchor lies within `interval + 1 + c`
-rounds of the previous start, and the last range needs the gap and one
-wave above it to be decided. -/
+/-- The horizon a run of height `K` needs, from a synchrony round at
+genesis: each anchor within `interval + 1 + c` rounds of the last, plus
+the gap and one wave to decide the final range. -/
 def horizon (P : Params) (R : LiveRule Validator BlockId Payload) (c K : ℕ) : ℕ :=
   K * (P.interval + 1 + c) + c + R.waveLength
 

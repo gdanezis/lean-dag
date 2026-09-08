@@ -5,60 +5,20 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 /-!
 # The novelty budget
 
-`dos-equivocation-and-growth.md` §6. The slogan: **legislate novelty,
-prove size**.
-
-§5 settles that inside the bare model the per-author chain count is
-exponential in the exposed count `e` from both sides — the doubling family
-is valid, and no acceptance rule on cone *shape* can refuse it without
-convicting correct blocks (the forced merge of `Utwin`). What distinguishes the family is invisible to any intrinsic
-predicate: its mass is *novel to the observer* — old blocks, never public,
-delivered in one reveal. So the rule this file formalizes is observer-
-relative: a block is measured by `novelty U V b := history U b \ V`, what
-accepting it would newly pull into the view `V`.
-
-The layers, each usable without the ones after it:
-
-* **The measure.** `novelty`, antitone in the view — which is what makes
-  deferral a rate limiter rather than a verdict: a deferred block only ever
-  becomes cheaper.
-* **The telescope** (pure DAG, no delivery model). If each block of a
-  correct author adds at most `κ'` over its self-parent (`StepNovelty`),
-  the whole history is linear: `|H(b)| ≤ κ'·r + 1`, by S10's descent.
-* **The budget** (at the acceptance layer). `viewUpto` accumulates
-  `Delivery.accepted` with whole histories — the retained view of S1. Two
-  forms, sandwiching within one factor of `f` (`uniform_of_byzBudget`):
-  `ByzBudget` — the analysis side, only Byzantine-authored acceptances
-  capped at `κ`, the weakest thing the theorems need — and
-  `UniformBudget` — the mechanism side, every acceptance capped,
-  author-blind, what a validator actually runs.
-* **C3, and the collapse.** After `R`, the novelty of a correct block at
-  any correct validator is `1 +` the standing *view gap* toward its author
-  (C3a, `card_novelty_le_viewGap_add_one`) — and the gap does not drift: a
-  correct block's cone is a complete record of its author's acceptances
-  (`viewUpto_subset_history` — `includes` per round, chained by S10), so
-  one delivered block collapses the gap to one round of Byzantine budget
-  (C3′, `card_viewGap_succ_le`), and the hysteresis threshold is
-  the derived **constant** `Κ = f·κ + 1` (C3″,
-  `card_novelty_le_of_byzBudget`) — the correct clause of the budget is a
-  theorem, given only the Byzantine clause. The adversary's hidden mass
-  appears nowhere, which is what makes the contagion attack of §6
-  harmless. B3′ (`card_viewUpto_le'`) telescopes this into
-  post-`R` linear storage, and the capstone
-  `no_stall_and_card_viewUpto_le'` adds liveness.
-* **B4** (unconditional). Even the post-`R` base is dispensable: the
-  global Byzantine pool (`byzPool`) grows by at most `|Correct|·f·κ` per
-  round with **no synchrony at all** — every Byzantine block in a correct
-  view entered through some correct validator's budgeted acceptance — so
-  storage is linear from round 0 under full asynchrony
-  (`card_viewUpto_le`, `no_stall_and_card_viewUpto_le`).
-* **The headline.** `dos_resistance` and `dos_resistance'` restate the
-  capstones from enforceable conditions only — `Live`, `DeliversQuorum`,
-  `UniformBudget`, `RefsAccepted` — none of which consults an identity.
-
-The one hypothesis the C3 chain takes beyond `Delivery` is
-`RefsAccepted` — `refs ⊆ accepted`, the converse of `includes`, i.e. D3's
-ordinary case: a correct validator references only what it accepted.
+`dos-equivocation-and-growth.md` §6: legislate novelty, prove size. §5's
+doubling family shows the per-author chain count is exponential in the
+exposed count from both sides, and its mass is novel to the observer —
+old blocks delivered in one reveal — which no intrinsic cone-shape
+predicate can catch. `novelty U V b := history U b \ V` measures what
+accepting `b` would newly pull into a view `V`, and everything below
+bounds that measure: a self-parent telescope with no delivery model
+(`StepNovelty`), a budget at the acceptance layer with two forms
+sandwiching within one factor of `f` (`ByzBudget`, `UniformBudget`), the
+post-`R` collapse of the view gap to one round of Byzantine budget (C3),
+unconditional linear storage from round 0 with no synchrony (B4), and
+the headline `dos_resistance` restated from enforceable conditions only.
+The one hypothesis beyond `Delivery` is `RefsAccepted`, D3's ordinary
+case: a correct validator references only what it accepted.
 -/
 
 namespace LeanDag
@@ -80,10 +40,8 @@ def novelty (U : BlockUniverse Validator BlockId Payload) (V : Finset BlockId)
 theorem mem_novelty : i ∈ novelty U V b ↔ i ∈ history U b ∧ i ∉ V :=
   Finset.mem_sdiff
 
-/-- **Antitone in the view** — the property everything below depends on.
-Deferral is a rate
-limiter, not a verdict: as the view grows, every deferred block's novelty
-only decreases. -/
+/-- **Antitone in the view**: as the view grows, every deferred block's
+novelty only decreases. -/
 theorem novelty_anti (h : V ⊆ W) : novelty U W b ⊆ novelty U V b :=
   Finset.sdiff_subset_sdiff (Finset.Subset.refl _) h
 
@@ -107,15 +65,12 @@ theorem history_eq_singleton_of_round_zero (hb : b ∈ U.ids)
     exact eq_of_mem_history_of_round_eq hb hi (by omega)
   · simp
 
-/-! ## The telescope — pure DAG, no delivery model
+/-! ## The telescope — pure DAG, no delivery model: if each block of a
+correct author adds at most `κ'` over its self-parent, the history is
+linear in the round, needing nothing but S10. -/
 
-If each block of a correct author adds at most `κ'` over its self-parent,
-the history is linear in the round. This is §6's quotable form: it needs
-no schedule, no network, nothing but S10. -/
-
-/-- Stepwise novelty: every correct block adds at most `κ'` blocks over the
-history of its self-parent. For a correct author the self-parent is unique
-(`no_equivocation`), so the `∀` is free of content. -/
+/-- Stepwise novelty: every correct block adds at most `κ'` blocks over
+the history of its self-parent, unique for a correct author. -/
 def StepNovelty (U : BlockUniverse Validator BlockId Payload) (κ' : ℕ) : Prop :=
   ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
     ∀ p ∈ (U.block b).refs, (U.block p).creator = (U.block b).creator →
@@ -218,28 +173,21 @@ theorem round_le_of_mem_viewUpto (hi : i ∈ viewUpto D v n) :
         have := round_le_of_mem_history ha_ids hia
         omega
 
-/-! ## The budget
+/-! ## The budget: round 0 needs no clause in either form, genesis
+histories being singletons. -/
 
-Round 0 needs no clause in either form: genesis histories are singletons. -/
-
-/-- The **analysis-side budget**: only the Byzantine clause. This is the
-weakest thing the theorems need — Byzantine-authored acceptances were
-within the budget — and the correct clause is *derived* from it
-(`card_novelty_le_of_byzBudget`): a schedule keeping Byzantine acceptances
-under `κ` never carries a correct block over `f·κ + 1`. The creator guard
-is bookkeeping, never something a validator evaluates; the enforced form
-is `UniformBudget` below. -/
+/-- The **analysis-side budget**: only the Byzantine clause. The weakest
+thing the theorems need; the correct clause is derived from it
+(`card_novelty_le_of_byzBudget`). The enforced form is `UniformBudget`
+below. -/
 def ByzBudget (D : Delivery U) (κ : ℕ) : Prop :=
   ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
     (U.block b).creator ∉ (Correct : Finset Validator) →
     (novelty U (viewUpto D v n) b).card ≤ κ
 
 /-- **The mechanism-side budget** — the rule a validator actually runs: a
-guard-free cap on every acceptance, author-blind. Enforcing the cap on
-everyone enforces it on the Byzantine authors (`UniformBudget.byzBudget`),
-and post-`R` the converse holds at `f·κ + 1` (`uniform_of_byzBudget`
-below) — the two formulations sandwich within one factor of `f`, the
-exact price of author-blindness. -/
+guard-free cap on every acceptance, author-blind. The two formulations
+sandwich within one factor of `f` (`uniform_of_byzBudget`). -/
 def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
   ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
     (novelty U (viewUpto D v n) b).card ≤ τ
@@ -374,13 +322,10 @@ private theorem card_viewUpto_succ_le_of_bounds {κc κb n : ℕ}
           ((Correct : Finset Validator).card * κc + F.f * κb) :=
         Nat.add_le_add_left hsum _
 
-/-! ## C3 — the liveness half
-
-What a correct validator must be willing to fetch so that no correct block
-is ever deferred. The answer: one plus the standing *view gap* toward the
-block's author (C3a) — and the gap collapses to one round of Byzantine
-budget (C3′ below). The adversary's hidden mass never appears in either
-bound. -/
+/-! ## C3 — the liveness half: what a correct validator must fetch so
+that no correct block is deferred is one plus the standing view gap
+toward its author (C3a), which collapses to one round of Byzantine
+budget (C3′). -/
 
 /-- The standing divergence between two correct validators' retained views:
 what `w` holds that `v` does not. -/
@@ -410,17 +355,10 @@ theorem card_novelty_le_viewGap_add_one {R : ℕ} (hED : EventuallyDelivers D R)
           ⟨history_subset_viewUpto (le_refl n) htw hit, hiv⟩)
   exact (Finset.card_le_card hsub).trans (Finset.card_insert_le _ _)
 
-/-! ## The gap collapses — the DAG is its own repair channel
-
-A naive telescope would let the gap drift by `f·κ` per round, making the
-hysteresis threshold a function of time. It does not drift. The repair
-mechanism §6 asked for already exists in `Delivery`: `includes`
-puts every round's acceptances among the next block's references, and the
-self-parent chain (S10) carries every earlier round forward — so a correct
+/-! ## The gap collapses — the DAG is its own repair channel: a correct
 validator's block is, in its cone, a complete record of everything its
-author ever accepted. One such block delivered post-`R` erases the whole
-standing gap; what remains is at most the author's *current* Byzantine
-frontier, priced by the budget. No cone-sharing protocol is needed. -/
+author ever accepted, so one such block delivered post-`R` erases the
+whole standing gap. -/
 
 /-- A correct validator's block carries everything its author ever
 accepted: `includes` per round, chained by the self-parent (S10). -/
@@ -448,11 +386,10 @@ theorem viewUpto_subset_history (hw : w ∈ (Correct : Finset Validator))
         exact history_subset_of_reaches hb
           (Reaches.single (D.includes w hw (n + 1) b hb hbc hbr ht)) hit
 
-/-- **C3′ — the gap is constant, not a drift.** After `R`, as long as the
-author has a current block (which L1 supplies), the divergence between two
-correct validators' views is at most **one round of Byzantine budget**:
-`w`'s round-`(n+1)` block hands `v` all of `viewUpto w n` at once, and the
-remainder is `w`'s budgeted Byzantine frontier. -/
+/-- **C3′ — the gap is constant, not a drift.** After `R`, the divergence
+between two correct validators' views is at most one round of Byzantine
+budget: `w`'s round-`(n+1)` block hands `v` all of `viewUpto w n` at
+once, the remainder being `w`'s budgeted Byzantine frontier. -/
 theorem card_viewGap_succ_le {κ R : ℕ} (hbyz : ByzBudget D κ)
     (hED : EventuallyDelivers D R) (hn : R ≤ n + 1)
     (hv : v ∈ (Correct : Finset Validator))
@@ -489,10 +426,8 @@ theorem card_viewGap_succ_le {κ R : ℕ} (hbyz : ByzBudget D κ)
 
 /-- **C3″ — the correct side of the budget is a theorem.** A validator
 enforcing only the Byzantine clause `κ` never meets a correct block over
-`f·κ + 1` after `R`: the gap toward its author, collapsed through the
-author's own self-parent, plus the block itself. So the hysteresis
-threshold is the *constant* `Κ = f·κ + 1` — derived, not assumed, and
-better than `dos-equivocation-and-growth.md` §6's designed `f·κ + 3f+1`. -/
+`f·κ + 1` after `R`, so the hysteresis threshold `Κ = f·κ + 1` is
+derived, not assumed. -/
 theorem card_novelty_le_of_byzBudget {κ R : ℕ} (hbyz : ByzBudget D κ)
     (hED : EventuallyDelivers D R) (hn : R ≤ n + 1)
     (hv : v ∈ (Correct : Finset Validator)) (hb : b ∈ U.ids)
@@ -519,11 +454,8 @@ def RefsAccepted (D : Delivery U) : Prop :=
     (U.block b).refs ⊆ D.accepted w n
 
 /-- **The sandwich, converse direction.** After `R`, a `ByzBudget κ`
-schedule is uniformly budgeted at `f·κ + 1` with **no creator guard**:
-Byzantine acceptances by enforcement, correct ones by C3″. Together with
-`UniformBudget.byzBudget` this makes the guard-free and guarded
-formulations equivalent up to one factor of `f` — a validator that runs
-the author-blind cap loses only constants, never theorems. -/
+schedule is uniformly budgeted at `f·κ + 1` with no creator guard:
+Byzantine acceptances by enforcement, correct ones by C3″. -/
 theorem uniform_of_byzBudget {κ R : ℕ} (hbyz : ByzBudget D κ)
     (hED : EventuallyDelivers D R) (hra : RefsAccepted D)
     (hv : v ∈ (Correct : Finset Validator)) {n : ℕ} (hn : R ≤ n + 1)
@@ -545,11 +477,10 @@ theorem uniform_of_byzBudget {κ R : ℕ} (hbyz : ByzBudget D κ)
     have := Nat.le_mul_of_pos_left κ hf
     omega
 
-/-- **B3′ — linear storage from the enforceable rule alone.** After `R`, a
-correct validator's view grows by at most
+/-- **B3′ — linear storage from the enforceable rule alone.** After `R`,
+a correct validator's view grows by at most
 `|Correct|·(f·κ + 1) + f·κ` per round, under nothing but the Byzantine
-budget and the reference discipline: the correct side is supplied by
-C3″. -/
+budget and the reference discipline. -/
 theorem card_viewUpto_le' {κ R : ℕ} (hbyz : ByzBudget D κ)
     (hED : EventuallyDelivers D R) (hra : RefsAccepted D)
     (hv : v ∈ (Correct : Finset Validator)) {n : ℕ} (hn : R + 1 ≤ n) :
@@ -586,19 +517,11 @@ theorem card_viewUpto_le' {κ R : ℕ} (hbyz : ByzBudget D κ)
             rw [hsub, Nat.succ_mul, Nat.add_assoc]
 
 
-/-! ## B4 — unconditional linear storage
-
-The capstone above still measures from a post-`R` base. That base is
-itself linear, and for a reason that needs no synchrony at all: **every
-Byzantine block in any correct view entered through some correct
-validator's budgeted acceptance.** A Byzantine block reaches a correct
-view either as a direct acceptance — priced `≤ κ` by `ByzBudget` — or
-inside an accepted *correct* block's cone; but a correct block's cone sits
-inside its author's own earlier view (`RefsAccepted`), so the mass was
-already in the pool. The global Byzantine pool therefore grows by at most
-`|Correct|·f·κ` per round from round 0, with no delivery guarantee
-anywhere — which closes the pre-`R` residue of §6 and makes the DoS
-bound fully asynchronous. -/
+/-! ## B4 — unconditional linear storage: every Byzantine block in a
+correct view entered through some correct validator's budgeted
+acceptance, either directly or inside an accepted correct block's cone,
+so the global Byzantine pool grows by at most `|Correct|·f·κ` per round
+from round 0, with no delivery guarantee at all. -/
 
 /-- A view holds real blocks. -/
 theorem viewUpto_subset_ids : viewUpto D v n ⊆ U.ids := by
@@ -767,12 +690,9 @@ theorem card_byzPool_le {κ : ℕ} (hbyz : ByzBudget D κ) (hra : RefsAccepted D
       omega
 
 /-- **B4 — unconditional linear storage.** Under nothing but the
-enforceable budget and the reference discipline — no synchrony, no `R`, no
-delivery guarantee — every correct validator's retained view is linear in
-the round: at most one block per correct author per round, plus the global
-Byzantine pool. This is `dos-equivocation-and-growth.md` §6's pre-`R` conjecture, closed: the base the
-capstone measures from is itself linear, so the DoS bound holds from
-round 0 under full asynchrony. -/
+enforceable budget and the reference discipline — no synchrony, no `R`,
+no delivery guarantee — every correct validator's retained view is
+linear in the round. -/
 theorem card_viewUpto_le {κ : ℕ} (hbyz : ByzBudget D κ)
     (hra : RefsAccepted D) (hv : v ∈ (Correct : Finset Validator)) (n : ℕ) :
     (viewUpto D v n).card ≤
@@ -797,24 +717,14 @@ theorem card_viewUpto_le {κ : ℕ} (hbyz : ByzBudget D κ)
         Nat.add_le_add (card_viewUpto_filter_correct_le v n)
           (hbyzpart.trans (card_byzPool_le hbyz hra n))
 
-/-! ## The headline — enforceable conditions only
-
-Every budget hypothesis above is discharged by the author-blind cap, so
-the final statements quote nothing a validator cannot implement. The
-hypothesis audit for `dos_resistance`:
-
-- `Live` — local conduct: build once you hold a quorum, start at genesis;
-- `DeliversQuorum` — L1's minimal network assumption, asynchrony-safe;
-- `UniformBudget T` — local conduct: never accept anything costing more
-  than `T` novel blocks, whoever signed it;
-- `RefsAccepted` — local conduct: reference only what you accepted.
-
-No hypothesis consults `Correct`, `byzantine`, or any identity. -/
+/-! ## The headline — enforceable conditions only: `dos_resistance`
+quotes nothing a validator cannot implement — `Live`, `DeliversQuorum`,
+`UniformBudget` and `RefsAccepted` are all local conduct or a pure
+network assumption, and no hypothesis consults `Correct`, `byzantine`,
+or any identity. -/
 
 /-- **DoS resistance, from enforceable conditions only.** Liveness and
-linear storage from round 0 under full asynchrony; every hypothesis is
-local protocol conduct or a pure network assumption, and the author-blind
-cap replaces every creator-guarded budget. -/
+linear storage from round 0 under full asynchrony. -/
 theorem dos_resistance {τ N : ℕ} {P : Finset Validator}
     (hpop : ∀ r ≤ N, PopulatedOn U P r)
     (hu : UniformBudget D τ) (hra : RefsAccepted D) :

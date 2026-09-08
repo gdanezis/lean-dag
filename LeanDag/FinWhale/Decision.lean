@@ -4,19 +4,11 @@ import LeanDag.Common.Anchored
 /-!
 # FinWhale — what a direct verdict excludes
 
-Lemma 12 says two validators never decide a slot differently, and its
-proof splits: either one of them decided **directly**, and the direct
-rules exclude each other, or both decided from an anchor. This file
-settles the first branch; `Consistency.lean` settles the second.
-
-Every direct commit carries a quorum of round-`(r+1)` voters — the fast
-path by its threshold, the slow path because an SP-certificate
-*references* that quorum (`voters_of_spCertificate`). One quorum of
-voters excludes another for a conflicting block (Lemma 8) and excludes
-the SP-skip half of the skip rule (Lemma 6), so `direct_commit_unique`
-and `no_directSkip_of_commit` close every case where either validator
-decided directly, and neither needs the FP-evidence half of the skip rule
-at all. They are the relation's `commit_unique` and `commit_skip`.
+Lemma 12 splits on whether a validator decided **directly**; this file
+settles that branch, `Consistency.lean` the anchored one. Every direct
+commit carries a quorum of round-`(r+1)` voters, which excludes another
+commit for a conflicting block (Lemma 8) and the SP-skip half of the
+skip rule (Lemma 6) — the relation's `commit_unique` and `commit_skip`.
 -/
 
 

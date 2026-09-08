@@ -4,49 +4,34 @@ import LeanDag.Common.Record.Fill
 # Safe Skip: rejoining after a crash, in one message
 
 A validator that crashes and recovers faces a gap: liveness rests on
-correct validators building in every round (P8), skipping rounds is
-known to break it, and producing the missing blocks one by one costs a
-round trip per round of downtime. **Safe Skip** closes the gap with a
-single message. The recovering validator `v1` names a block `B2` at
-round `r` on another validator `v2`'s history line, and its own last
-block `B1`; the message *denotes* one block per gap round, deterministic
-given the DAG: at each round the filled block carries the references of
-`v2`'s block on the line, **plus one added self reference** to `v1`'s
-block of the round below — `B1` at the boundary, the previous filled
-block above it.
+correct validators building every round (P8), and producing the missing
+blocks one by one costs a round trip per round of downtime. **Safe
+Skip** closes it with a single message: the recovering validator `v1`
+names a block `B2` at round `r` on another validator `v2`'s history
+line and its own last block `B1`, and the message denotes one block per
+gap round, deterministic given the DAG — each filled block carries
+`v2`'s line references plus one added self reference to `v1`'s block of
+the round below (`B1` at the boundary, the previous filled block
+above).
 
-The added self reference is not an optimisation but a validity
-requirement: `ValidWrt.self_parent` (P3′) demands that every non-genesis
-block reference a block by its own creator, and `v2`'s references cannot
-supply one — `v1` authored nothing in the gap. With it, every clause of
-validity holds: the copied references sit one round below (P1 of the
-line), `v1` appears among the authors exactly once (in the gap there is
-no `v1`-authored block for the line to have referenced, and at the
-boundary the only candidate is `B1` itself, by non-equivocation), and
-the reference quorum only grows.
+The added self reference is a validity requirement, not an
+optimisation: `self_parent` (P3′) demands a self-authored reference
+that `v2`'s line cannot supply. With it every clause of validity holds,
+by non-equivocation at the boundary and monotone growth of the
+reference quorum.
 
-The denotation is `skipFill`: a universe extending `U` with the filled
-blocks, every old block untouched. What this file proves:
+`skipFill` is the denotation: a universe extending `U` with the filled
+blocks, old blocks untouched. This file proves it is a `BlockUniverse`;
+that old blocks and references are preserved verbatim
+(`skipFill_block_old`); that the gap is populated
+(`skipFill_populatedOn`), the production hypothesis liveness consumes;
+and that a filled block landing on a leader slot is directly skipped
+(`directSkip_fresh`) — its only supporter is `v1`'s own line, so the
+fill cannot conjure a commit for a slot the network already passed.
 
-* `skipFill` **is** a `BlockUniverse` — validity, completeness and
-  non-equivocation survive the fill;
-* old blocks and their references are preserved verbatim
-  (`skipFill_block_old`), so every store, view and certificate built on
-  `U` reads the same in the extension;
-* the gap is populated (`skipFill_populatedOn`): with `v1` restored,
-  `PopulatedOn` holds at every gap round, which is the production
-  hypothesis liveness consumes;
-* a filled block that lands on a leader slot is **directly skipped**
-  (`directSkip_fresh`): its only supporter is `v1`'s own line, and every
-  other reliable validator's block at the round above blames it. The
-  fill cannot conjure a commit for a slot the network already passed —
-  the mechanism restores production without touching consensus.
-
-Full verdict invariance across the fill — every `Decided U V k v`
-re-derives in `skipFill U`, and hence agrees with every verdict reached
-after recovery — is the pair of verdict transports in
-`Invariance.lean`, the `decided_chop` analogue for extension rather than
-truncation.
+Full verdict invariance across the fill is the pair of verdict
+transports in `Invariance.lean`, the `decided_chop` analogue for
+extension rather than truncation.
 -/
 
 namespace LeanDag
@@ -57,20 +42,16 @@ variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 variable {U : BlockUniverse Validator BlockId Payload}
 
 /-- **A Safe Skip message at a core universe**: the same data, read off
-`U`. Stated over `ids`/`blk` rather than over a universe because the
-*data* of a fill is the same for every rule in this development, and
-only the invariants a universe carries differ — the shape `chopBlk`
-takes for the cut. Nemo and FinWhale build their own fills from it
-(`docs/target-properties.md` §11.4). -/
+`U`, stated over `ids`/`blk` since the data of a fill is shared across
+rules — only the invariants a universe carries differ. Nemo and
+FinWhale build their own fills from it. -/
 abbrev SkipMsg (U : BlockUniverse Validator BlockId Payload) :=
   SkipData U.ids U.block
 
 /-- **The boundary condition from correctness.** For a `v1` outside the
-ambient model's Byzantine set, non-equivocation pins its round-`r0`
-block to `B1`. This is how a `SkipMsg` is built in the base fault
-model, and it is what the `hB1uniq` field generalises: report §14's
-hybrid model discharges the same field for a *crash-prone* `v1`, whom
-`Correct` excludes. -/
+Byzantine set, non-equivocation pins its round-`r0` block to `B1` — how
+a `SkipMsg` is built here, and what `hB1uniq` generalises for a
+crash-prone `v1` in the hybrid model. -/
 theorem hB1uniq_of_correct {v1 : Validator} {B1 : BlockId}
     (hB1 : B1 ∈ U.ids) (hB1c : (U.block B1).creator = v1)
     (hv1 : v1 ∈ (Correct : Finset Validator)) :
@@ -86,11 +67,9 @@ open SkipData
 variable (sk : SkipMsg U)
 
 /-- **The filled block is valid** under the extended block map: the
-copied references sit one round below (P1 of the line), `v1` appears
-among the authors exactly once — in the gap there is no `v1`-authored
-block for the line to have referenced, and at the boundary the only
-candidate is `B1` itself, by `hB1uniq` — the reference quorum only
-grows, and the added self reference is P3′. -/
+copied references sit one round below (P1), `v1` appears among the
+authors exactly once (by `hB1uniq` at the boundary), the reference
+quorum only grows, and the added self reference is P3′. -/
 theorem fillBlock_valid {k : ℕ} (hk1 : sk.r0 < k) (hk2 : k ≤ sk.r) :
     ValidWrt (fun b => if b ∈ U.ids then U.block b else sk.fillBlock (sk.idx b))
       (sk.fillBlock k) := by

@@ -3,29 +3,11 @@ import LeanDag.Hydrozoan.DirectSafety.Statement
 /-!
 # Optimal-Hydrozoan: direct-rule safety — statement
 
-The direct decision rules of Optimal-Hydrozoan never disagree about a
-slot. The same five claims as Hydrozoan's `DirectSafety`, over an
-`OptUniverse` and views of its underlying universe: fast/fast,
-certificate/certificate, slow/slow, fast/slow, and commit/skip. Two of
-them — certificate uniqueness and slow/slow agreement — involve only
-rules the arc inherits unchanged, so they are Hydrozoan's own claims
-applied to `U.toBlockRecord`; the other three read the Optimal rules.
-
-Each claim rests on a row of `Optimal/ThresholdArithmetic`:
-`FastUniqueness` for fast/fast (guarded by `f ≥ 1`; at `f = 0` no replica
-equivocates and a slot holds a single candidate, so agreement is by
-non-equivocation); `CertUniqueness` for LeanDag.Hydrozoan.certificates, for slow/slow, and
-for the slow half of commit/skip (the `qCert` slotBlames of the Optimal skip
-against the `qCert` votes inside a certificate); `CertFastExclusion` for
-fast/slow and for the fast half of commit/skip (the slotBlames against the
-`qFastOpt` fast voters).
-
-Commit/skip here is the paper's `lem:opt-commit-excludes-direct-skip`
-restricted to *direct* commits; its no-evidence half is never needed
-against them (the slotBlames suffice) and only matters against the evidence
-rung, which is slot agreement's business.
-
-Statements only; the proofs live in `Proof.lean` (generated).
+Hydrozoan's `DirectSafety`, over an `OptUniverse`: certificate uniqueness
+and slow/slow agreement are Hydrozoan's claims applied unchanged to
+`U.toBlockRecord`; fast/fast, fast/slow and commit/skip read the Optimal
+rules, each resting on a row of `Optimal/ThresholdArithmetic`.
+Statements only; the proofs live in `Proof.lean`.
 -/
 
 namespace LeanDag
@@ -58,9 +40,7 @@ def SlowSlowAgreement (U : OptUniverse Replica BlockId) : Prop :=
   Hydrozoan.DirectSafety.SlowSlowAgreement U.toBlockRecord
 
 /-- **Fast/slow agreement**: an Optimal fast commit and a slow commit for
-one slot, across views, name the same block — the `qFastOpt` voters and
-the `qCert` votes of any conflicting certificate would share a
-non-Byzantine replica. -/
+one slot, across views, name the same block. -/
 def FastSlowAgreement (U : OptUniverse Replica BlockId) : Prop :=
   ∀ (V₁ V₂ : LeanDag.Hydrozoan.View U.toBlockRecord) (k : ℕ) (L₁ L₂ : BlockId),
     IsLeaderBlock U.toBlockRecord k L₁ → IsLeaderBlock U.toBlockRecord k L₂ →
@@ -68,9 +48,7 @@ def FastSlowAgreement (U : OptUniverse Replica BlockId) : Prop :=
     SlowCommitInView U.toBlockRecord V₂ L₂ (S.slotRound k) → L₁ = L₂
 
 /-- **Commit/skip exclusion**: a slot committed by either direct route in
-any view is never directly skipped in any view — the `qCert` blamers and
-the committed block's voters would share a non-Byzantine replica, whose
-unique voting block cannot both vote and blame. -/
+any view is never directly skipped in any view. -/
 def CommitSkipExclusion (U : OptUniverse Replica BlockId) : Prop :=
   ∀ (V₁ V₂ : LeanDag.Hydrozoan.View U.toBlockRecord) (k : ℕ) (L : BlockId),
     IsLeaderBlock U.toBlockRecord k L →

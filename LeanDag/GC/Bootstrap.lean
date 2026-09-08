@@ -5,38 +5,12 @@ import LeanDag.Properties.Arcs.GC
 /-!
 # Bootstrap: the joiner's view, assembled and bounded
 
-`garbage.md` **G11**, **G6b**, **G7**, **G12** — the constructive half of
-the attested-base story. G10 said the base is sound and complete for the
-*correct* layer; this file says the base is complete for the **obtainable
-window** (Byzantine freight included), that the whole fetch is bounded by
-the G6 constant, that a correct validator's serving obligation is bounded
-by the same constant, and that the view a joiner assembles from base plus
-window is a bona-fide view of the truncation — so `decided_agree_chop`
-applies to it verbatim.
-
-* **G11** (`accepted_mem_base`): every round-`G` block a correct validator
-  has *accepted* into its window by `m` — whoever authored it — is in the
-  base attested at any `t ≥ m + 2`. The composition promised in the design:
-  acceptance puts the block in a correct store, the store rides into its
-  keeper's next block (`viewUpto_subset_history`), the backbone
-  (`mem_history_of_correct`) carries that block into every correct
-  round-`t` cone — and a cone *is* an attestation. This is why the
-  attestation round sits one lag above the window frontier: `t ≥ m + 2` is
-  one round for the carrier block, one for the backbone to pick it up.
-* **G6b** (`base_subset_retained`, `card_joinIds_le`): the joiner's entire
-  fetch — base and window both — comes out of **one correct peer's
-  retained store**, which G6 bounds by a constant. GC bounds sync cost,
-  not just storage.
-* **G7** (`history_chop_subset_retained`, `card_serve_le`): the windowed
-  relay obligation. What a correct author can be asked to serve for its
-  round-`(n+1)` block is that block's truncated cone — which is its own
-  retained store plus the block itself (`RefsAccepted` one step down, S10
-  the rest of the way). Same constant, plus one.
-* **G12** (`joinView`, `bootstrap_agree`): base ∪ window is downward
-  closed in the truncation — window references above the cut stay in the
-  window, and the references *into* the base layer are exactly the G11
-  blocks — so the assembly is a `View` of `chop U G`, and any decision
-  reached from it agrees with any full-history validator's.
+`garbage.md` **G11**, **G6b**, **G7**, **G12**: the base is complete for
+the whole obtainable window, not just the correct layer (G10 gave the
+correct case); the fetch and the serving obligation are both bounded by
+the G6 constant; and the view a joiner assembles from base plus window
+is a bona-fide view of the truncation, so `decided_agree_chop` applies
+to it directly.
 -/
 
 namespace LeanDag

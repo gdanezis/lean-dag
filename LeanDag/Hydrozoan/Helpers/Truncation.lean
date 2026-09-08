@@ -4,28 +4,10 @@ import LeanDag.Properties.Truncate
 # Hydrozoan's rules across a truncation
 
 Not part of the audit surface. The transfer lemmas
-`Properties.LocalTruncate` needs of this protocol: a truncation prunes
-below a horizon **and** renumbers what remains from it, and every
-predicate Hydrozoan reads moves by the horizon exactly once.
-
-**The guards read cleanly in the truncation's own numbering.** A block
-of the truncation at round `m` sits at round `m + G` in the original, so
-the horizon guard `G < round` becomes `0 < m`: the block is not in the
-retained bottom layer. A certificate counts votes cast by its own
-refs, so it needs `1 < m`. Both are supplied at every use site —
-votes sit one round above a slot and certificates two, so in the
-truncation's numbering they are at `slotRound k + 1 ≥ 1` and
-`slotRound k + 2 ≥ 2`.
-
-**The dead end, kept as a record.** `no_base_of_naive_shift` below is
-why this file states one relation rather than two. A *pure* renumbering
-— every block kept, every round lower by `G` — puts the bottom layer at
-round zero carrying the references it had at round `G`, and validity
-allows a round-zero block none. Any non-empty valid universe has a
-round-zero block, by descending the predecessor condition from any block
-at all. So a pure shift by a positive horizon has no non-empty model,
-and a property quantified over such shifts is vacuous. Only the
-combination below has models.
+`Properties.LocalTruncate` needs: a truncation prunes below a horizon
+and renumbers what remains, and `no_base_of_naive_shift` records why a
+pure renumbering (no pruning) admits no non-empty model — a round-zero
+block would need empty refs, which validity forbids past genesis.
 -/
 
 namespace LeanDag
@@ -74,16 +56,6 @@ theorem no_base_of_naive_shift (h : NaiveShift U U' G) (hG : 0 < G)
   simp only [LeanDag.creators, LeanDag.creatorsOf, hparU,
     Finset.image_empty, Finset.card_empty, Nat.le_zero] at hqq
   omega
-
-/-! ## The relation that does have models
-
-`Properties.Truncates`, in `Properties/Truncate.lean`. This file used to
-hold a Hydrozoan copy of it, `TruncatesHZ`, field for field, and a
-`decided_iff` that re-proved `Properties.LocalTruncate.of_banded` in
-Hydrozoan's own vocabulary. Both are gone: the generic relation is
-stated over `rule`, whose projections are Hydrozoan's by `rfl`, and
-`Integration/Hydrozoan/ViaProperties.lean` exhibits the cut as a witness
-for it directly. -/
 
 end Hydrozoan
 

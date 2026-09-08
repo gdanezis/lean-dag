@@ -4,36 +4,13 @@ import LeanDag.Common.Rules
 /-!
 # Optimal-Hydrozoan: direct decision rules
 
-Trusted core of the Optimal-Hydrozoan arc: the fast commit read with the
-new allowance, the per-block *fast evidence* of `sections/optimal-protocol.tex`,
-and the direct skip of `sections/optimal-algorithms.tex` (`IsFastEvidence`,
-`IsNoFastEvidence`, `SkippedLeader`), as predicates over the block universe
-plus their view-relative variants. Definitions only.
-
-Everything else of the direct layer is Hydrozoan's, untouched and reused:
-`IsVote`, `LeanDag.Hydrozoan.voteBlocks`, `LeanDag.Hydrozoan.IsCertificate`, `supporters`, `SlowCommit`, `slotBlames`
-and their in-view forms (`Model/DirectRules.lean`). What changes:
-
-* the fast commit counts to `qFastOpt` instead of `qFast`;
-* the weak rung's aggregated vote count is replaced by a property of a
-  *single* decision-round block — being fast evidence for a candidate —
-  with quorums of such blocks counted where Hydrozoan counted votes;
-* the direct skip needs `qCert` slotBlames **and** `qCert` decision-round
-  blocks that are fast evidence for no candidate; it is decided at the
-  decision round, and its blame quorum is `qCert`, not `qFast`.
-
-Quorums of decision-round blocks are stated **existentially over a witness
-set**, as `WeakLinked` is (`Model/IndirectRules.lean`): the block property
-quantifies over ids, so a `Finset.filter` in the core would need
-decidability the core does not carry. The two forms are equivalent
-(`Optimal/Helpers/DirectRules.lean`).
-
-**Fidelity** (decision D6): the paper's `IsNoFastEvidence` quantifies over
-the candidates *in the local DAG*; here over the universe. The two agree:
-being evidence for `L` references a vote for `L` (`tPlain, tEquiv ≥ 1`),
-which references `L`, so any view holding the block holds `L`; and a rival
-candidate outside the view has no vote among the block's refs, so the
-rival clause is view-insensitive. Argued in prose, recorded here.
+Trusted core: the fast commit at the new allowance, per-block *fast
+evidence*, and the direct skip (`IsFastEvidence`, `IsNoFastEvidence`,
+`SkippedLeader`), as predicates over the block universe and their
+view-relative variants. Everything else of the direct layer is
+Hydrozoan's, unchanged. Quorums of decision-round blocks are stated
+existentially over a witness set, as `WeakLinked` is, since the
+property is not decidable on a `Finset.filter`.
 -/
 
 namespace LeanDag
@@ -70,21 +47,11 @@ section Slots
 
 variable [S : Slots Replica]
 
-/-- `C` is *fast evidence* for `L` in slot `k` (the paper's
-`IsFastEvidence(b, b_leader, w)`, Algorithm 3), by cases on whether `C`
-witnesses an equivocation in `k`:
-
-* it does not: `C` references votes for `L` from at least `tPlain`
-  replicas;
-* it does: at least `tEquiv` for `L`, and fewer than `tEquiv` for every
-  other candidate of the slot — so a witnessing block is evidence for at
-  most one candidate by construction.
-
-Stated as two implications rather than an `if`: no decidability is needed
-in the core. Not restricted to candidates, nor to decision-round blocks:
-like the paper's procedure, it may hold of a non-candidate `L` or of a
-`C` at any round; every consumer guards — `IsNoFastEvidence` and the
-decision relation with `IsLeaderBlock`, the quorum sets with `blocksAt`. -/
+/-- `C` is *fast evidence* for `L` in slot `k`: if `C` witnesses no
+equivocation in `k`, `tPlain` votes for `L` suffice; if it does, `tEquiv`
+votes for `L` and fewer than `tEquiv` for every rival candidate, so a
+witnessing block is evidence for at most one candidate. Stated as two
+implications, needing no decidability. -/
 def IsFastEvidence (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (k : ℕ) (C L : BlockId) :
     Prop :=
   (¬ WitnessesEquivocation U k C →                 -- no equivocation witnessed:

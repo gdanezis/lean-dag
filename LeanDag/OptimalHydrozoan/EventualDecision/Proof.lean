@@ -6,10 +6,7 @@ import LeanDag.Hydrozoan.EventualDecision.Proof
 /-!
 # Optimal-Hydrozoan: eventual decision — proof
 
-Generated proof layer; not part of the audit surface. The composition of
-`OptimalHydrozoan.DirectLiveness.holds` (each run slot commits) with the descent
-`decidedOpt_below_of_committed_run`; `RunsRecur` is Hydrozoan's theorem,
-reused. `ledgerProgress` is the composed headline, as in Hydrozoan.
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

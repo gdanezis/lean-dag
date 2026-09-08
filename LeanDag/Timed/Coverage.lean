@@ -4,26 +4,12 @@ import LeanDag.Properties.Arcs.Liveness
 /-!
 # The timed model: coverage, and the bridge into certification
 
-**Synchrony is not a property.** `docs/target-properties.md` §11.16.
-The properties a protocol shows for liveness are a `Support` — how far
-above a candidate its certifiers sit, what certifying is — with the laws
-`Local` and `Commits`, and the precondition `Support.live` those laws
-read: a quorum, a view caught up to a horizon, production across the
-wave and **certification of every candidate**. Every generic liveness
-theorem is stated at `live`. A reactive execution reaches `live` from its
-wait clauses; a timed one reaches it from coverage, and this file is
-where that happens.
-
-`SynchronisedOn`, `CoversToward`, `OfCoverage` and the theorems that
-consume them live here, in `LeanDag.Timed`, and nowhere under
-`Properties/`. `scripts/check-arc-holes.py` fails the build if one of
-them is named there again. The reason is recorded once: coverage is the
-strongest fact statable without a rule's vocabulary, and the *wrong*
-antecedent for an execution that omits what has not arrived; making it
-a property would make reactive rules a special case, which is what the
-support was introduced to avoid. A timed model is one way to discharge
-`live`, `live_of_coverage` below is that way, and it is the only place
-synchrony is allowed to enter.
+`docs/target-properties.md` §11.16. Synchrony is not a property: it is
+the antecedent a timed execution reaches `Support.live` from, where a
+reactive one reaches it from its wait clauses instead. `SynchronisedOn`,
+`CoversToward`, `OfCoverage` and the theorems consuming them live here,
+in `LeanDag.Timed`, and nowhere under `Properties/`
+(`scripts/check-arc-holes.py` enforces this).
 -/
 
 namespace LeanDag

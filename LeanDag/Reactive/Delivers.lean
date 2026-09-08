@@ -4,33 +4,13 @@ import LeanDag.Properties.Deliver
 /-!
 # A paced validator delivers
 
-The second witness for `Properties.DeliversOn`, from a mechanism with
-different timing from the first. `DoS/Delivers.lean` exhibits it for a
-rate limiter; this exhibits it for the pacing discipline that
-`Reactive/Mysticeti.lean` runs on.
-
-**The question this settles.** A reactive validator advances as soon as
-a quorum has arrived, so it does not wait for every correct validator
-and its *references* omit whatever was late — `Reactive/Mysticeti.lean`
-says so, and gives up reference coverage deliberately. It looks as
-though such a validator cannot promise to cover the reliable set, and so
-cannot meet `DeliversOn`.
-
-It can, because the early exit governs what a validator **references**
-and not what it **holds**. `PaceCore.holds` is passive delivery; the
-view is built from it (`viewAt`), and `holds_roundBlocks` already says
-that after GST a paced validator holds every reliable block of a round.
-`Synchronised` — reference coverage, a property of the *universe* — is
-what the early exit costs, and it is not what the view obligation asks
-for.
-
-**That is the reason `CoversUpto` was the wrong predicate and `CoversOn`
-is the right one**, and this arc is independent evidence: the reactive
-commit was already stated in the `CoversOn` shape before the obligation
-existed. `ViewPace.decided_local_of_certifiesAt` counts a reliable
-quorum's certificates inside `viewAt v t` — the same counting
-`Liveness.directCommitIn_of_certifiesAt` does and the same one
-`DoS/Delivers.lean` consumes. Three arcs, one shape.
+A second witness for `Properties.DeliversOn` (`DoS/Delivers.lean` gives
+the first, for a rate limiter), for the pacing discipline
+`Reactive/Mysticeti.lean` runs on. A reactive validator's early exit
+governs what it *references*, not what it *holds*: `PaceCore.holds` is
+passive delivery, so `holds_roundBlocks` already gives it every
+reliable block of a round after GST, and the view built from that
+covers the reliable set even though `Synchronised` fails.
 -/
 
 namespace LeanDag

@@ -5,38 +5,22 @@ import LeanDag.Properties.Derived.FromBand
 # The headline theorems: safety and liveness, from the properties
 
 `docs/target-properties.md` §11.18. Two statements a protocol gets by
-showing the properties and nothing else, in the shape a reader of a
-consensus paper expects.
+showing the properties and nothing else.
 
-**Safety** (`Safe`, from `Banded`, `Agree`, `CommitsCandidate`) is
-stated across a `Stack`: any composition of cuts, fills and re-genesis,
-in any order, the empty stack included. Four clauses there: verdicts
-above the settling round transport to the composite's numbering; any
-view of the composite agrees with any view of the source; a commit
-names a real block of its slot; and no block is committed at two slots.
-A fifth clause reads an extension step on its own: across an
-`Extends`, verdicts agree at *every* slot, with no settling round —
-which is what a fill's gap slots need, since the stack abstracts a fill
-to a `Sustains` that settles only above the gap. The ledger reading —
-two validators that have decided prefixes agree on the common prefix —
-is `Safe.prefix_agree`.
+**Safety** (`Safe`, from `Banded`, `Agree`, `CommitsCandidate`) holds
+across a `Stack` — any composition of cuts, fills and re-genesis:
+verdicts transport to the composite's numbering, agree across views,
+name a real candidate, and never commit one block at two slots; a fifth
+clause carries agreement across a plain `Extends` at every slot, which
+is what a fill's gap needs. `Safe.prefix_agree` is the ledger reading.
 
 **Liveness** (`Lives`, from a support's `Commits`, `CommitsCandidate`,
-`SelfParent` and `NoEquiv`) has one antecedent, `Support.live`:
-certification of every candidate of every reliably-led slot in a
-window, production across the wave, and the reader's view caught up to
-a horizon. No synchrony appears (§11.16); a timed execution reaches
-`live` from coverage through `Timed.live_of_coverage`, a reactive one
-from its wait clauses, and the theorem is the same for both. Three
-clauses, the schedule quantified before the execution: every slot
-below a fair run is decided; a reliably-led slot the execution
-commits lies past every point; every block by a reliable author is in
-the ledger through a slot its author leads. `Progresses` is the first
-two, for rules whose model has no self-parent clause.
-
-The third conjunct of `Stack.safe_and_live` carries `live` across any
-stack, so both headlines hold at a transformed universe with no
-restatement.
+`SelfParent` and `NoEquiv`) has one antecedent, `Support.live`, reached
+from coverage or from a reactive execution's wait clauses alike (no
+synchrony, §11.16): every slot below a fair run is decided, a
+reliably-led slot commits past every point, and every reliable block
+enters the ledger through a slot its author leads. `Progresses` is the
+first two, for models with no self-parent clause.
 -/
 
 namespace LeanDag
@@ -74,11 +58,8 @@ def Safe (R : DagRule Validator BlockId Payload) : Prop :=
     {V : R.View U} {V' W : R.View U'}, R.viewIds V ⊆ R.viewIds V' →
       ∀ (k : ℕ) (v w : Option BlockId), R.Decided S V k v → R.Decided S W k w → v = w)
 
-/-- **The safety headline.** Transport and agreement are
-`Stack.safe_and_live`'s first two clauses; integrity is
-`CommitsCandidate`; uniqueness is the keyed schedule; agreement across
-an extension at every slot is `Persist` (the band at no offset) and
-`Agree`. -/
+/-- **The safety headline**, assembled from `Banded`, `Agree` and
+`CommitsCandidate`. -/
 theorem safety (hb : Banded R) (ha : Agree R) (hcc : CommitsCandidate R) : Safe R := by
   refine ⟨?_, ?_⟩
   · intro U U' S S' G R₀ d st V V' hv

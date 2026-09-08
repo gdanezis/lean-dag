@@ -13,17 +13,12 @@ import LeanDag.Properties.Arcs.Headline
 /-!
 # Nemo conforms to the target properties
 
-`docs/porting-plan.md` step 1, and the first rule ported after the
-audit that closed the mechanism side. `Nemo/Carrier.lean` has the
-carrier and the three properties that are one Nemo theorem apiece; here
-is `Banded`, the one induction the rule owes, and the liveness pair on
-top of it.
-
-**Nemo is the cheapest of the four**, and deliberately so: three
-constructors, no direct skip, a wave of two, and rules that read one
-round above the slot. The band helpers it needs are the generic ones
-now in `Properties/Band.lean`, which is what porting Nemo was meant to
-establish.
+`docs/porting-plan.md` step 1. `Nemo/Carrier.lean` has the carrier and
+the three properties that are one Nemo theorem apiece; here is
+`Banded`, the one induction the rule owes, and the liveness pair on top
+of it. Nemo is the cheapest of the four rules — three constructors, no
+direct skip, a wave of two, rules reading one round above the slot —
+and needs only the generic band helpers of `Properties/Band.lean`.
 -/
 
 namespace LeanDag
@@ -161,9 +156,7 @@ namespace Nemo
 /-! ## Liveness, composed
 
 `Timed.decidedBelow_of_fairRun` at Nemo's vote support, under the
-majority fault model `nemoReliability`. The direct proof this replaced
-committed each slot of the run and ran the crash descent; both are the
-generic theorems now. -/
+majority fault model `nemoReliability`. -/
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
@@ -171,12 +164,11 @@ variable [C : CrashFaults Validator] [S : Slots Validator] {T : Finset Validator
 
 /-- **Liveness.** Under post-`R` coverage, growth to the horizon, and a
 recurring run of `c` reliable-led slots, every slot below the run is
-decided — the run placed past both the target and `R` by fairness.
-
-The quantifier order is the content: the slot `b` is fixed by the *schedule*
-alone, before any universe is named, so "eventually" means "any DAG grown
-past this schedule-fixed slot". Crashed-leader slots are settled here and
-only here: they descend onto the run via `indirectSkip`. -/
+decided, the run placed past both the target and `R` by fairness. The
+slot `b` is fixed by the schedule alone, before any universe is named,
+so "eventually" means any DAG grown past this schedule-fixed slot;
+crashed-leader slots are settled here and only here, via
+`indirectSkip`. -/
 theorem all_decided_below_of_fairRun {c : ℕ} (hc : 0 < c)
     (hT : T ⊆ Live Validator)
     (hcard : majority Validator ≤ T.card)

@@ -3,23 +3,14 @@ import LeanDag.DoS.Exclusion
 /-!
 # The two conditions, composed
 
-`dos-equivocation-and-growth.md` §6. Theorem B (`dos_resistance`) does not
-assume DoS validity; the budget alone bounds the Byzantine share of a
-correct view by a *rate* — `|Correct|·f·κ` per round, sustained forever.
-DoS validity is what terminates it. Once every Byzantine author is exposed
-to the correct population (`AllExposed`), D17's propagation makes every
-later valid block silent about every Byzantine author; through `includes`
-a correct validator then *accepts* nothing Byzantine-authored, so the
-global Byzantine pool freezes at its current value
-(`byzPool_subset_of_allExposed`) — and the view bound's slope decays to
-the correct-production rate:
-
-> `|V_v(n)| ≤ |Correct|·(n+1) + |byzPool(m+1)|`   (**B5**)
-
-for every `n ≥ m+1`: linear with slope `|Correct|`, Byzantine term
-constant. With the budget the constant is explicit,
-`|Correct|·f·(1 + (m+1)·κ)`. The division of labour, stated as one
-theorem: the budget paces what an author can inject; exclusion ends it.
+`dos-equivocation-and-growth.md` §6. Theorem B (`dos_resistance`) bounds
+the Byzantine share of a correct view by a rate, without DoS validity.
+DoS validity terminates it: once every Byzantine author is exposed
+(`AllExposed`), D17 makes every later valid block silent about them, so
+the global Byzantine pool freezes (`byzPool_subset_of_allExposed`) and
+the view bound's slope decays to the correct-production rate (B5,
+`card_viewUpto_le_of_allExposed`). The budget limits how much an author
+injects before being caught; exclusion then ends it.
 -/
 
 namespace LeanDag
@@ -86,9 +77,7 @@ theorem byzPool_succ_subset (hra : RefsAccepted D)
           (hra (U.block t).creator htc n t ht_ids rfl ht_round hs) his, hic⟩
 
 /-- **The pool freezes.** After exposure-complete at `m`, the global
-Byzantine pool never grows past its round-`(m+1)` value. Population is
-needed only for the rounds actually stepped through — each correct
-validator must have the next block whose references D17 constrains. -/
+Byzantine pool never grows past its round-`(m+1)` value. -/
 theorem byzPool_subset_of_allExposed (hdos : DoSValid U)
     (hra : RefsAccepted D) (hexp : AllExposed U m) (hn : m + 1 ≤ n)
     (hpop : ∀ r, m + 3 ≤ r → r ≤ n + 1 → Populated U r) :
@@ -103,9 +92,8 @@ theorem byzPool_subset_of_allExposed (hdos : DoSValid U)
         (hpop (n + 2) (by omega) (by omega) w hw) t ht
 
 /-- **B5 — the slope decays to the correct-production rate.** After
-exposure-complete at `m`, a correct view is the correct part — one block
-per author per round — plus a **constant**: the pool as it stood when the
-last author was caught. The Byzantine term stops growing. -/
+exposure-complete at `m`, a correct view is the correct part plus a
+constant, the pool as it stood when the last author was caught. -/
 theorem card_viewUpto_le_of_allExposed (hdos : DoSValid U)
     (hra : RefsAccepted D) (hexp : AllExposed U m)
     (hv : v ∈ (Correct : Finset Validator)) (hn : m + 1 ≤ n)
@@ -129,8 +117,7 @@ theorem card_viewUpto_le_of_allExposed (hdos : DoSValid U)
         Nat.add_le_add (card_viewUpto_filter_correct_le v n) hbyzpart
 
 /-- **B5, with the constant made explicit by the budget**: the frozen pool
-is at most `|Correct|·f·(1 + (m+1)·κ)`. The budget paces what an author
-can inject before being caught; exclusion ends it — one theorem. -/
+is at most `|Correct|·f·(1 + (m+1)·κ)`. -/
 theorem card_viewUpto_le_of_allExposed' {κ : ℕ} (hdos : DoSValid U)
     (hbyz : ByzBudget D κ) (hra : RefsAccepted D) (hexp : AllExposed U m)
     (hv : v ∈ (Correct : Finset Validator)) (hn : m + 1 ≤ n)

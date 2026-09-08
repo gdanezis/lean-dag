@@ -3,11 +3,7 @@ import LeanDag.Hydrozoan.Helpers.DirectLiveness
 /-!
 # Direct-commit liveness — proof
 
-Generated proof layer; not part of the audit surface. Both conjuncts
-are the wave chain of `Helpers/DirectLiveness.lean`; the harvest form
-adds the caught-up-view lift (`slowCommitInView_of_coversUpto`) and
-`Decided.directSlow`. `fastLatency` is the demoted performance
-characterization, proven with the same care.
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

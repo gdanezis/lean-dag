@@ -12,20 +12,11 @@ import LeanDag.Properties.Arcs.Headline
 /-!
 # Hybrid conforms to the target properties
 
-`docs/porting-plan.md` step 2. `Hybrid/Carrier.lean` has the carrier at
-each threshold and the three properties that are one Hybrid theorem
-apiece; here is `Banded` and the liveness pair.
-
-**The band forced a repair before it could be proved.** Hybrid's skip
-quantified over the candidates a slot happens to have, which a mechanism
-adding one defeats; `DirectSkipSlotIn` replaced it, as it replaced the
-core's and Odontoceti's. That is recorded where it happened, in
-`Hybrid/Decision.lean`.
-
-**The universe is the core's**, so the band helpers are the core's too,
-reached through `toCore` — the carrier's universe is a subtype of the
-core's, and `AgreeBand` at the subtype is `AgreeBand` at the underlying
-universe by its three fields.
+`docs/porting-plan.md` step 2: `Banded` and the liveness pair, alongside
+the three one-theorem properties in `Carrier.lean`. Hybrid's skip needed
+the same slot-level repair as the core's and Odontoceti's
+(`Hybrid/Decision.lean`); the band helpers are the core's, reached
+through `toCore` since the carrier's universe is a subtype.
 -/
 
 namespace LeanDag
@@ -83,17 +74,11 @@ theorem banded {kt : ℕ} (hpos : 0 < kt) :
 
 /-! ## The two liveness properties, and the skip -/
 
-/-- **Hybrid skips an unsupported slot from a hybrid quorum.**
-
-The liveness half of the repair, and the reason to believe it was a
-repair rather than a tightening: making the skip a count of blockers
-made it strictly harder to satisfy, and a rule no quorum can trigger
-would be sound and useless. This says the repaired rule is still
-reachable — a set meeting the hybrid quorum whose voting-round blocks
-reference no candidate skips the slot, with no anchor and no synchrony.
-
-The blamer set is the core's shape, so the containment argument is the
-core's; only the threshold differs. -/
+/-- **Hybrid skips an unsupported slot from a hybrid quorum.** The
+liveness half of the slot-level repair: a set meeting the hybrid quorum
+whose voting-round blocks reference no candidate skips the slot, with
+no anchor and no synchrony needed — confirming the repaired rule is
+still reachable, not merely tightened. -/
 theorem skipsUnsupported (kt : ℕ) :
     SkipsUnsupported (hybridRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) kt) (fun T => Hybrid.q Validator ≤ T.card) := by

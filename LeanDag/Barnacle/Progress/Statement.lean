@@ -4,16 +4,13 @@ import LeanDag.Barnacle.Model.Live
 # BN8 — the configuration sequence exists
 
 The paper's Configuration Progress lemma and Liveness theorem
-(`barnacle.md` §7), in the prefix form that a finite universe
-admits (§5): a run whose current configuration lies past the synchrony
-round extends by one configuration, and from a synchrony round at
-genesis runs of every height exist, each under the horizon its height
-needs. Both on any view caught up to the horizon — a validator's own
-holdings, the full view included (`CoversUpto`).
-
-The safety law `agree` is consumed inside liveness: the verdict chosen
-for the anchor's slot and the commit the liveness clause provides for it
-are identified by agreement.
+(`barnacle.md` §7), in the prefix form a finite universe admits (§5): a
+run whose current configuration lies past the synchrony round extends
+by one configuration, and from a synchrony round at genesis runs of
+every height exist, each under the horizon it needs — both on any view
+caught up to the horizon (`CoversUpto`). Agreement identifies the
+verdict chosen for the anchor's slot with the commit liveness provides
+for it.
 
 * **BN8a, progress** — one more configuration, needing `LiveOn` at the
   run's own count only.

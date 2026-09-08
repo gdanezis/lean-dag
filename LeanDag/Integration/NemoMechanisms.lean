@@ -3,19 +3,13 @@ import LeanDag.Nemo.Properties
 /-!
 # Garbage collection, crash recovery and re-genesis for Nemo
 
-Nemo's universe is the block record at Nemo's validity — a majority
-parent quorum rather than `n − f` — with non-equivocation asked of
-every validator, since the crash model has no Byzantine ones. Its
-carrier reads as records by the identity maps, and every mechanism cell
-is `Arcs/Record.lean` at that instance: the constructions below are the
-record's, and the witnesses and verdict theorems across each hold with
-nothing written per cell. What Nemo supplied is
-`Nemo.ValidWrt.mechanised` and `Nemo.ValidWrt.copyStable`, in
-`Nemo/Basic.lean`.
-
-**The fill copies the donor's references and adds nothing.** Nemo has
-no self-parent clause, so it takes the copy reading and the filled
-block's validity is the donor's verbatim.
+Nemo's universe is the block record at Nemo's own validity, a majority
+parent quorum with non-equivocation asked of every validator, so its
+carrier reads as records by the identity maps and every mechanism cell
+is `Arcs/Record.lean` at that instance (`Nemo.ValidWrt.mechanised` and
+`.copyStable`, `Nemo/Basic.lean`). Nemo has no self-parent clause, so
+the fill takes the copy reading, the filled block's validity being the
+donor's verbatim.
 -/
 
 namespace LeanDag

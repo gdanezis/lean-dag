@@ -3,35 +3,14 @@ import LeanDag.Common.Density
 /-!
 # Density: histories are almost all of the correct past
 
-`dos-equivocation-and-growth.md` §5, **D25**.
-
-The quorum condition says a block's references carry `2f+1` distinct
-creators, of which at most `f` are Byzantine — so at least `2f+1 - β`
-correct, where `β := |byzantine|`. Since the correct validators number
-exactly `3f+1 - β`, a block *misses* at most
-`(3f+1-β) - (2f+1-β) = f` of the correct validators of the round below —
-independent of `β`. And missing is monotone through any correct reference:
-what `b`'s history lacks at a deep round, its references' histories lack
-too. Inducting through any one correct reference:
-
-> **D25 (density).** A valid block's history contains a block by all but at
-> most `f` of the correct validators, at *every* round strictly below it.
-
-This is T3/L0 sharpened from "a quorum of authors appears" to "almost
-everyone appears", and it is the model's strongest expression of the fact
-the DoS analysis leans on: **cones cannot be selectively blind**. A block
-may curate its `≤ f` misses, but it swallows everything else — including
-everything those correct blocks had already swallowed. Nothing here needs
-`DoSValid` or self-parents; it is pure validity.
-
-**The induction moved.** It read `U.valid`, `U.complete` and
-`U.round_of_mem_refs` and nothing else, which is `CausalStructure` plus
-one counting law, so it is stated over the raw block data in
-`LeanDag/Density.lean` and this file names the core's instance of it.
-Every other rule in the development has the same validity clause, and
-`Properties.Quorate` is how a rule hands it over
-(`Properties/Optional/Quorate.lean`); what was one arc's lemma is now
-the whole development's.
+`dos-equivocation-and-growth.md` §5, D25. A block's references carry
+`2f+1` distinct creators, of which at most `f` are Byzantine, and
+missing is monotone through any correct reference; inducting gives: a
+valid block's history contains a block by all but at most `f` of the
+correct validators, at every round strictly below it. Nothing here needs
+`DoSValid` or self-parents — pure validity. The induction is stated once
+over raw block data (`LeanDag/Density.lean`, `CausalStructure` plus one
+counting law); this file names the core's instance of it.
 -/
 
 namespace LeanDag

@@ -4,29 +4,16 @@ import LeanDag.Common.Leader
 /-!
 # The anchored decision relation
 
-Every leader-based rule of this development decides a slot the same way.
-A *direct* rule reads the slot's own rounds from a view and commits a
-candidate or skips the slot outright. When the direct evidence is
-inconclusive, the rule looks up to an **anchor** — the nearest eligible
-slot above that is itself committed — and asks what that anchor's causal
-history says about the slot's candidates, through one or more graded
-*rungs* of link: a candidate linked at the first rung is committed; if no
-candidate is linked at the first rung, one linked at the second is
-committed; and so on; if no candidate is linked at any rung, the slot is
-skipped. Where a rung may hold several candidates a tie-break names the
-least.
-
-What varies between the rules is only the data below: the wave offset in
-eligibility, the direct commit and skip predicates, and the rungs with
-their ties. What every rule proves about that data is `Laws`, eight facts
-each rule has under its own name. From them, agreement across views,
-monotonicity in the view, and the ledger's agreement follow once, here.
-
-"Nearest" is stated positively: every eligible slot strictly between the
-slot and its anchor is decided `none`. The negative reading would be a
-negative premise, which an inductive definition cannot carry; the
-positive form is equivalent, since the sweep decides every slot it
-passes, and it keeps every recursive occurrence strictly positive.
+Every leader-based rule decides a slot the same way: a direct rule reads
+the slot's own rounds and commits or skips outright; failing that, it
+looks to the nearest eligible committed **anchor** above and asks what
+its causal history says through one or more graded **rungs** of link,
+the first rung with a linked candidate winning, a tie-break naming the
+least where several qualify. Only the data varies per rule — the wave
+offset, the direct predicates, the rungs and their ties — and `Laws`,
+eight facts each rule proves under its own name, is what yields
+agreement across views, monotonicity in the view, and the ledger's
+agreement, proved once here.
 -/
 
 namespace LeanDag
@@ -345,12 +332,10 @@ theorem slot_eq_of_decided_commit {V₁ V₂ : U.View} {k₁ k₂ : ℕ} {L : Bl
   slot_eq_of_isLeaderBlock (isLeaderBlock_of_decided h₁) (isLeaderBlock_of_decided h₂)
 
 /-- **The anchor comparison.** Two indirect decisions for one slot each
-name an anchor, together with the premise that every eligible slot
-strictly between the slot and that anchor was decided `none`. Whichever
-anchor is the earlier is then decided `none` by the other side and `some`
-by its own, so the anchors coincide — and with them the blocks they name.
-The statement carries no consensus content: `Dec` and `Elig` are arbitrary
-predicates. -/
+name an anchor and the premise that every eligible slot between it and
+the slot decided `none`; whichever anchor is earlier is then `none` on
+the other side and `some` on its own, so the anchors — and their blocks —
+coincide. Carries no consensus content: `Dec` and `Elig` are arbitrary. -/
 theorem anchor_eq {W : Type*} {Dec : W → ℕ → Option BlockId → Prop}
     {Elig : ℕ → Prop} {k j j₂ : ℕ} {A A₂ : BlockId} {V₂ : W}
     (hkj : k < j) (helig : Elig j) (hkj₂ : k < j₂) (helig₂ : Elig j₂)
@@ -382,11 +367,9 @@ theorem eq_of_indirect (hl : R.Laws I) (hI : I S U) {k j i₁ i₂ : ℕ} {L₁ 
   · exact absurd hlink₂ (hemp₁ i₂ hgt L₂ hL₂)
 
 /-- **Agreement.** No two validators reach conflicting decisions for a
-slot, whatever views they hold and whichever routes they took. Structural
-induction on the first derivation: every commit-against-commit case
-closes by a uniqueness law, the direct-against-indirect crossings by
-visibility or by the skip law, and the one real case — indirect against
-indirect — by comparing the two anchors. -/
+slot. Structural induction on the first derivation: commit-against-commit
+closes by a uniqueness law, direct-against-indirect by visibility or the
+skip law, and indirect-against-indirect by comparing the two anchors. -/
 theorem decided_unique (hl : R.Laws I) (hI : I S U) {V₁ : U.View} {k : ℕ} {v₁ : Option BlockId}
     (h₁ : R.Decided U V₁ k v₁) :
     ∀ (V₂ : U.View) (v₂ : Option BlockId), R.Decided U V₂ k v₂ → v₁ = v₂ := by
@@ -453,9 +436,8 @@ theorem not_decided_skip_of_decided_commit (hl : R.Laws I) (hI : I S U)
 
 /-! ## Monotonicity in the view -/
 
-/-- **Decisions are monotone in the view.** The direct cases are the
-monotonicity laws; the indirect cases rebuild themselves from the
-inductive hypotheses, their link premises unchanged. -/
+/-- **Decisions are monotone in the view**: the direct cases are the
+monotonicity laws, the indirect cases rebuild from the link premises. -/
 theorem decided_mono (hl : R.Laws I) (hI : I S U) {V V' : U.View} (hsub : V.ids ⊆ V'.ids) {k : ℕ}
     {v : Option BlockId} (h : R.Decided U V k v) : R.Decided U V' k v := by
   induction h with

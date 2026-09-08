@@ -2,24 +2,12 @@ import LeanDag.Hydrozoan.Model.Decided
 /-!
 # Slot agreement — statement
 
-The headline safety claim for a single slot: **any two verdicts agree** —
-across views, across routes. Whether a replica commits via the fast
-path, the slow path, the certificate rung, or the weak rung, and whether
-another skips directly or indirectly, two derivable verdicts for one
-slot are equal. Undecided replicas assert nothing, so this is
-no-conflicting-decision, not termination.
-
-This is the paper's two-case consistency argument in one statement. The
-proof (generated) consumes: `DirectSafety` (the direct-vs-direct
-pairings), certificate uniqueness (rung 1 agreement), the starvation
-invariant `q_fast + q_weak > n + f` and the rung ordering
-`q_weak ≤ q_cert` (a fast commit starves every conflicting candidate off
-both rungs), the "anchor sees any slow commit" row `q + q_slow > n + f`
-(rung 1 fires at every eligible anchor), and a **strengthened** form of
-the "anchor sees the fast footprint" row — `q_fast + q − n − f ≥ q_weak`
-— because a Byzantine creator's block in the anchor's history may be its
-non-voting equivocation, so only the non-Byzantine overlap contributes
-anchor-linked votes.
+The headline safety claim for a single slot: any two verdicts agree,
+across views and across routes (fast, slow, certificate rung, weak
+rung, direct or indirect skip). Undecided replicas assert nothing, so
+this is no-conflicting-decision, not termination. The proof (generated)
+consumes `DirectSafety` and the quorum-intersection rows of
+`ThresholdArithmetic`.
 -/
 
 namespace LeanDag

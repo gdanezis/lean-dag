@@ -11054,20 +11054,13 @@ structure ValidWrt (blk : BlockId → Block Validator BlockId Payload)
   distinct_creators : ∀ i ∈ b.refs, ∀ j ∈ b.refs, (blk i).creator = (blk j).creator → i = j
   /-- Non-genesis blocks reference a quorum of distinct validators. -/
   quorum : 0 < b.round → quorumCard Validator ≤ (creators blk b).card
-  /-- Non-genesis blocks reference a block by their own creator — *some* such
-  block, not a unique one: an equivocator's blocks form a forest of
-  predecessor chains, one edge per block, and the condition does not (and
-  need not) collapse the forest. Combined with `predecessor` the parent sits
-  at the round immediately below, and with `distinct_creators` it is the
-  *only* reference sharing the block's author. -/
+  /-- Non-genesis blocks reference *some* block by their own creator, not
+  a unique one — an equivocator's blocks form a forest of predecessor
+  chains, one edge per block, which this does not collapse. -/
   self_parent : 0 < b.round → ∃ i ∈ b.refs, (blk i).creator = b.creator
 ```
 
-Block validity, relative to a lookup function.
-
-The predecessor condition is stated additively rather than as `(blk i).round = b.round - 1`. That avoids `ℕ`-subtraction, and it makes the genesis case *derivable* rather than a separate branch: at round `0` the equation `(blk i).round + 1 = 0` is unsatisfiable, so `refs = ∅` follows (`refs_empty_of_round_zero`). Only the quorum condition needs a round guard.
-
-The quorum is stated on the *creator set*, not on `refs.card`. That is the form every downstream proof wants, and it is the faithful reading of "2f+1 blocks from the previous round" — the protocol means 2f+1 *validators*.
+Block validity, relative to a lookup function. The predecessor condition is stated additively (`+ 1 = round`, not `round - 1`), which avoids `ℕ`-subtraction and makes the genesis case derivable rather than a branch: at round `0`, `refs = ∅` follows from unsatisfiability (`refs_empty_of_round_zero`). The quorum is on the *creator set*, not `refs.card` — the faithful reading of "2f+1 validators".
 
 #### `BlockUniverse`
 
@@ -11415,9 +11408,7 @@ abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
   blameSkip (quorumCard Validator) U V k
 ```
 
-**The slot is directly skipped, as judged from a view**: a quorum of distinct validators holds a voting-round block, in view, that references no candidate of the slot.
-
-Strictly stronger than the per-candidate `DirectSkipIn`, which it implies (`directSkipIn_of_directSkipSlotIn`) and which a slot with no candidate satisfies for nothing.
+**The slot is directly skipped, as judged from a view**: a quorum of distinct validators holds a voting-round block, in view, that references no candidate of the slot. Strictly stronger than the per-candidate `DirectSkipIn`, which it implies.
 
 #### `coreAnchored`
 
@@ -11545,11 +11536,7 @@ structure Delivery (U : BlockUniverse Validator BlockId Payload) where
     accepted v n ⊆ (U.block b).refs
 ```
 
-What each validator had in hand, one round at a time — and which of it it chose to build on.
-
-**Two fields, because delivery and policy are two things.** `held` is what the network brought; `accepted` is what the validator will reference. Until equivocation nothing forces them apart, and a structure carrying only `held`, with `includes` demanding that a correct validator reference *everything* it held, would be **unsatisfiable** the moment a correct validator holds both halves of an equivocation: `distinct_creators` forbids referencing two blocks by one author, so no valid block exists and the validator cannot build at all. See `dos-equivocation-and-growth.md` §4.
-
-`held` must *not* be deduplicated: `U` is defined as every block some correct validator held (`liveness.md` §4.2), so pruning at the delivery layer would put the second half of an equivocation outside the universe altogether. The choice of which half to accept is left unspecified, exactly as the timeout is — the model says what was in hand and what was built on, never how either was decided.
+What each validator had in hand, one round at a time, and which of it it chose to build on. Two fields because delivery and policy are two things: a structure demanding a correct validator reference everything it `held` would be unsatisfiable the moment it holds both halves of an equivocation, since `distinct_creators` forbids referencing both (`dos-equivocation-and-growth.md` §4). `held` is not deduplicated, since `U` is every block some correct validator held.
 
 #### `Synchronised`
 
@@ -11586,7 +11573,7 @@ def VotesAt (U : BlockUniverse Validator BlockId Payload)
     (U.block c).round = r + 1 → L ∈ (U.block c).refs
 ```
 
-**What the two-round rules count** — the targeted half of coverage: every `T`-authored block one round above `r` references `L`. This is the meet point of the pacing disciplines (report §11): full coverage implies it outright (`votesAt_of_synchronisedOn`), and the reactive exit supplies it directly (`ReactivePace.votes`), so the commit arguments below are stated against it and proved once. Round-indexed and schedule-free, as L4's round-level forms are.
+**What the two-round rules count**: every `T`-authored block one round above `r` references `L`. Both pacing disciplines supply it — full coverage via `votesAt_of_synchronisedOn`, the reactive exit via `ReactivePace.votes` — so the commit arguments below are stated against it and proved once.
 
 #### `CertifiesAt`
 
@@ -11614,13 +11601,7 @@ def CommitsAt (BlockId : Type*) [DecidableEq BlockId] (Payload : Type*)
     ∃ L, IsLeaderBlock U k L ∧ Decided U (View.full U) k (some L)
 ```
 
-**A slot every sufficiently grown synchronous execution commits.**
-
-The conclusion the recurrence results share. Naming it keeps their quantifier order visible — the slot is fixed by the schedule alone, before any execution is named — and keeps production and coverage as the two separate hypotheses they are, rather than bundling them.
-
-**Both hypotheses are relative to the same `T`.** They were not: production was asked over all of `Correct` while coverage was asked over `T`, which is strictly more than anything downstream consumes — `decided_of_leader_of_populated` discarded the excess immediately. Asking both over `T` makes this a statement about *any* quorum-sized set of reliable validators: the correct validators outside `T` may be permanently starved and the slot still commits. That is not a vacuous generality — `reliable_set_is_forced_pace` (V12) exhibits a DAG in which coverage over a proper subset of `Correct` holds and coverage over `Correct` fails. It is a genuine weakening only below full fault load, since `|byzantine| = f` forces `T = Correct` (`reliable_eq_correct`).
-
-**Production is asked for only from `R` on.** The rule reads it off at three rounds, all of them at or above `R`, so rounds below the synchrony round were never consumed. Dropping them matters because that is exactly the range a structure carrying the *build rule* rather than a total block function can supply. With the hypothesis cut to the range that is used, P8 in its conditional form reaches liveness — `ViewPace.commits_recur_via_pace`.
+**A slot every sufficiently grown synchronous execution commits.** The conclusion the recurrence results share; naming it keeps the quantifier order visible, the slot fixed by the schedule alone before any execution is named. Both production and coverage are asked over the same `T`, a statement about any quorum-sized set of reliable validators rather than all of `Correct` — correct validators outside `T` may be permanently starved and the slot still commits. Production is asked for only from `R` on, which is the range a build-rule structure can actually supply.
 
 #### `FairScheduleOn`
 
@@ -11642,7 +11623,7 @@ def FairToEach (T : Finset Validator) : Prop :=
   ∀ v ∈ T, ∀ k, ∃ k', k ≤ k' ∧ S.leader k' = v
 ```
 
-**Every member of `T` leads arbitrarily far out** — per-validator fairness, strictly stronger than `FairScheduleOn`, which promises only *some* `T`-leader. Round-robin supplies it (`rrSlots_fairToEach`), and the rotation-inclusion result of report §11.5 is what consumes it: a straggler's block enters the ledger when its *own author* leads, so the schedule must return to that author in particular.
+**Every member of `T` leads arbitrarily far out** — per-validator fairness, strictly stronger than `FairScheduleOn`. Round-robin supplies it, and the rotation-inclusion result of report §11.5 consumes it: a straggler's block enters the ledger when its own author leads.
 
 ### Time: GST, and the rated bounds
 
@@ -11654,9 +11635,7 @@ def FairToEach (T : Finset Validator) : Prop :=
 def Rated (timeout : ℕ → ℕ) : Prop := ∀ n, n ≤ timeout n
 ```
 
-A backoff that grows **at least as fast as the round index**.
-
-Weaker than it may look, and deliberately so: it fixes no shape, and any schedule dominating the identity qualifies — linear, exponential, or a step function that jumps early and then plateaus high. What it rules out is exactly what `hub` permits: growth so slow that clearing a fixed threshold takes unboundedly many rounds.
+A backoff that grows at least as fast as the round index. Any schedule dominating the identity qualifies; it rules out growth slow enough that clearing a fixed threshold takes unboundedly many rounds.
 
 #### `FairWithin`
 
@@ -11667,9 +11646,7 @@ def FairWithin (T : Finset Validator) (w : ℕ) : Prop :=
   ∀ k, ∃ k', k ≤ k' ∧ k' < k + w ∧ S.leader k' ∈ T
 ```
 
-The schedule names a `T`-leader **within every window of `w` slots**.
-
-The rated form of `FairScheduleOn`. Note `w` is a property of the schedule alone — no DAG, no network — which is what keeps L6's quantifier order intact: the slot is still fixed before any universe is mentioned.
+The schedule names a `T`-leader within every window of `w` slots, the rated form of `FairScheduleOn`. `w` is a property of the schedule alone, which keeps L6's quantifier order intact.
 
 #### `BoundedSpacing`
 
@@ -11758,15 +11735,9 @@ structure PaceCore (U : BlockUniverse Validator BlockId Payload)
   view-relative decision rules. -/
   holds_sub : ∀ v, ∀ t, holds v t ⊆ U.ids
   /-- **S4.** Holdings are causally closed: a validator that holds a block
-  holds everything it references. This is P4 as a *store* property — the
-  universe-level version is already assumed, and this says a validator
-  receives blocks the same way it stores them. A block whose history is
-  missing cannot be validated (P3, P3′ read the referenced blocks) and
-  cannot be built upon, so an implementation that admitted one could not
-  act on it; the clause is what stops the model obliging a validator to
-  advance on evidence no implementation could use, and it is what makes
-  `viewAt` a validator's own view rather than the closure of its
-  fragments (`viewAt_ids`). -/
+  holds everything it references — P4 as a store property, and what
+  makes `viewAt` a validator's own view rather than the closure of its
+  fragments. -/
   holds_closed : ∀ v ∈ T, ∀ t, ∀ b ∈ holds v t,
     ∀ j ∈ (U.block b).refs, j ∈ holds v t
   /-- **S5.** A validator's block references only what it held when it
@@ -11783,17 +11754,10 @@ structure PaceCore (U : BlockUniverse Validator BlockId Payload)
   holds_mono : ∀ v, ∀ s t, s ≤ t → holds v s ⊆ holds v t
   /-- **N2, as view convergence** (network). -/
   converges : ∀ v ∈ T, ∀ w ∈ T, ∀ t, gst ≤ t → holds w t ⊆ holds v (t + delay)
-  /-- **P8, as the pacemaker's progress rule** (protocol). A validator that
-  holds a quorum of distinct round-`n` authors — *at any time whatever* —
-  gets past round `n`.
-
-  This is the clause a total schedule cannot carry honestly. There, the
-  quorum had to be in hand at the one time `built v (n+1)` names, so the
-  rule either missed it (and the round stayed empty for ever) or, stated as
-  a converse, forced the quorum to exist. Here there is no such time: the
-  hypothesis is that `v` ever holds a quorum, and the conclusion is that it
-  advances. It asserts no production, since it says nothing until a quorum
-  is in hand. -/
+  /-- **P8, as the pacemaker's progress rule** (protocol). A validator
+  that holds a quorum of distinct round-`n` authors at any time gets
+  past round `n`. Conditional on the quorum, so it asserts no
+  production until one is in hand. -/
   advances : ∀ v ∈ T, ∀ n < N, ∀ t,
     quorumCard Validator ≤ (authorsIn U (holds v t) n).card → n < top v
   /-- The processing bound: how long round entry may lag evidence. -/
@@ -11801,28 +11765,16 @@ structure PaceCore (U : BlockUniverse Validator BlockId Payload)
   /-- **Catch-up** (protocol). Seeing a round is entering it: any
   `T`-authored block of round `n` in hand at a post-GST time `t` means
   the holder reached round `n` and built its own block there by
-  `t + proc`. This is the rule real pacemakers run, and it is what makes
-  drift a *derived* quantity: the spread at any post-GST round is at
-  most `delay + proc`, whatever it was at the start (`drift_collapse`),
-  so no start-spread hypothesis survives into the headline statements.
-
-  The clause is asserted only from `gst` — like `converges`, and for the
-  same reason: what a validator runs is the GST-free clamped rule (enter
-  a sighted round within `proc`, never before the own floor), and past
-  GST the floor provably never delays it, while before GST it may. An
-  unconditional clause would over-claim about every real
-  implementation; the gated one asserts exactly what the clamped rule
-  delivers. -/
+  `t + proc`. Asserted only from `gst`, like `converges`, since before
+  it the clamped floor may delay a validator past what this clause
+  would claim. Makes drift a derived quantity (`drift_collapse`), with
+  no start-spread hypothesis surviving into the headline statements. -/
   catchup : ∀ v ∈ T, ∀ n ≤ N, ∀ b ∈ U.ids,
     (U.block b).creator ∈ T → (U.block b).round = n →
     ∀ t, gst ≤ t → b ∈ holds v t → n ≤ top v ∧ built v n ≤ t + proc
 ```
 
-**The shared trunk of every pacing discipline**, over a **partial** build schedule.
-
-`top v` is the highest round `v` reached. Its two clauses say that `v`'s blocks are exactly the rounds `0` through `top v`: `built_of_le_top` supplies one at each of them, and `le_top_of_built` says there are none above. Neither is an assumption about the network — the first at `n = 0` is genesis, which a validator satisfies alone, and the rest of it is the definition of how far the validator got. The schedule clauses of the extensions are guarded by `n < top v`, since a round the validator never reached has no build time worth constraining.
-
-The trunk carries the schedule data, the views, the network's convergence clause, and the pacemaker's two rules — `advances` (a quorum in hand means the round is passed) and `catchup` (a round sighted is a round entered, within `proc`) — everything production and drift consume, and nothing about *when* a validator chooses to build within a round. The timeout disciplines extend it: `ViewPace` adds the full-timeout floor (P9) with global referencing (P7); the reactive schedule (report §11) adds the deadline and the vote clauses in their place. Production (`PaceCore.populatedOn`) and the drift collapse (`drift_collapse`) are proved here, once, and inherited by both.
+**The shared trunk of every pacing discipline**, over a partial build schedule. `top v` is the highest round `v` reached: `v`'s blocks are exactly the rounds `0` through `top v`. The trunk carries the schedule data, the views, `converges`, and the pacemaker's two rules — `advances` and `catchup` — everything production and drift consume; `ViewPace` extends it with the full-timeout floor (P9) and global referencing (P7), the reactive schedule with the deadline and vote clauses instead.
 
 #### `viewAt`
 
@@ -11845,9 +11797,7 @@ def viewAt (pc : PaceCore U T N) (v : Validator) (t : ℕ) :
       (((mem_history_iff ha_ids).mp hia).trans (Reaches.single hj))
 ```
 
-**The view a validator's holdings generate.** The causal closure of what `v` holds at `t` — a legitimate `View`, so the decision rules of the safety development apply to it directly. Closure is discharged by transitivity of `Reaches`, exactly as for `View.ofAccepted`: a union of causal histories is downward closed, and no closure obligation is met by hand.
-
-This is the object that connects the two halves of the development. The pacing line reasons about `holds`, a time-indexed set with no structure; the commit rules reason about a `View`. `viewAt` is the bridge, and it is what lets liveness be stated about a validator's *own* view rather than about the full universe.
+**The view a validator's holdings generate.** The causal closure of what `v` holds at `t` — a legitimate `View`, closure discharged by transitivity of `Reaches`. The bridge between the pacing line's time-indexed `holds` and the commit rules' `View`, letting liveness be stated about a validator's own view rather than the full universe.
 
 #### `ViewPace`
 
@@ -11865,9 +11815,7 @@ structure ViewPace (U : BlockUniverse Validator BlockId Payload)
     a ∈ (U.block c).refs
 ```
 
-The full-timeout discipline: `PaceCore` with P9 — the waiting floor — and the global referencing clause P7. This is the structure the coverage derivation and the quantitative results run on; the reactive schedule (report §11) extends the same trunk with a deadline in place of the floor.
-
-No promptness ceiling and no attainment clause appear: drift is derived from the trunk's catch-up rule (`driftOn_of_catchup`), which needs neither — the collapse argument runs on `converges`, `holds_own` and `catchup` alone.
+The full-timeout discipline: `PaceCore` with P9 (the waiting floor) and the global referencing clause P7. The structure the coverage derivation and quantitative results run on. No promptness ceiling or attainment clause appears, since drift is derived from the trunk's catch-up rule alone.
 
 ### Denial of service
 
@@ -11883,8 +11831,6 @@ def ExposedIn (U : BlockUniverse Validator BlockId Payload) (b : BlockId) (X : V
 
 **`X` is exposed in `b`'s history**: two distinct blocks by `X` at one round lie below `b`.
 
-Stated over `history` rather than over `Reaches` so that it is decidable and countable; `exposedIn_iff_reaches` gives the `Reaches` form for a block of the universe.
-
 #### `DoSValid`
 
 *def, `DoS.Exposure.lean`*
@@ -11894,9 +11840,7 @@ def DoSValid (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ ExposedIn U b (U.block i).creator
 ```
 
-**The DoS-protection condition** (`dos-equivocation-and-growth.md` §3): a block may not reference an author exposed in its own history.
-
-A predicate on the universe, deliberately **not** a field of `ValidWrt`. Every safety and liveness theorem in the development applies verbatim under it, because none of them mention it; results that need it take it as an extra hypothesis.
+**The DoS-protection condition** (`dos-equivocation-and-growth.md` §3): a block may not reference an author exposed in its own history. A predicate on the universe, not a field of `ValidWrt`, so results that need it take it as an extra hypothesis.
 
 #### `View.ofAccepted`
 
@@ -11918,9 +11862,7 @@ def View.ofAccepted (h : Accepted U A n) : View Validator BlockId Payload U wher
       (((mem_history_iff ha_ids).mp hia).trans (Reaches.single hj))
 ```
 
-**D1 — the view an accepted set generates.**
-
-That this typechecks *is* the result: `complete` is discharged by transitivity of `Reaches`, so a union of causal histories is downward closed and no closure obligation has to be met by hand.
+**D1.** The view an accepted set generates: the union of the histories of what it accepted, downward closed by transitivity of `Reaches`.
 
 #### `StepNovelty`
 
@@ -11933,7 +11875,7 @@ def StepNovelty (U : BlockUniverse Validator BlockId Payload) (κ' : ℕ) : Prop
       (novelty U (history U p) b).card ≤ κ'
 ```
 
-Stepwise novelty: every correct block adds at most `κ'` blocks over the history of its self-parent. For a correct author the self-parent is unique (`no_equivocation`), so the `∀` is free of content.
+Stepwise novelty: every correct block adds at most `κ'` blocks over the history of its self-parent, unique for a correct author.
 
 #### `viewUpto`
 
@@ -11958,7 +11900,7 @@ def ByzBudget (D : Delivery U) (κ : ℕ) : Prop :=
     (novelty U (viewUpto D v n) b).card ≤ κ
 ```
 
-The **analysis-side budget**: only the Byzantine clause. This is the weakest thing the theorems need — Byzantine-authored acceptances were within the budget — and the correct clause is *derived* from it (`card_novelty_le_of_byzBudget`): a schedule keeping Byzantine acceptances under `κ` never carries a correct block over `f·κ + 1`. The creator guard is bookkeeping, never something a validator evaluates; the enforced form is `UniformBudget` below.
+The **analysis-side budget**: only the Byzantine clause. The weakest thing the theorems need; the correct clause is derived from it (`card_novelty_le_of_byzBudget`). The enforced form is `UniformBudget` below.
 
 #### `UniformBudget`
 
@@ -11970,7 +11912,7 @@ def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
     (novelty U (viewUpto D v n) b).card ≤ τ
 ```
 
-**The mechanism-side budget** — the rule a validator actually runs: a guard-free cap on every acceptance, author-blind. Enforcing the cap on everyone enforces it on the Byzantine authors (`UniformBudget.byzBudget`), and post-`R` the converse holds at `f·κ + 1` (`uniform_of_byzBudget` below) — the two formulations sandwich within one factor of `f`, the exact price of author-blindness.
+**The mechanism-side budget** — the rule a validator actually runs: a guard-free cap on every acceptance, author-blind. The two formulations sandwich within one factor of `f` (`uniform_of_byzBudget`).
 
 #### `RefsAccepted`
 
@@ -12223,9 +12165,7 @@ structure ReactivePace (U : BlockUniverse Validator BlockId Payload)
     built v (S.slotRound k + 1) ≤ t + proc
 ```
 
-The reactive schedule and network layer, shared by both protocols: `PaceCore` with the reactive discipline in place of the full-timeout one.
-
-Relative to `ViewPace`, the floor `waits` is replaced by `deadline`, `built_lt`, `vote_or_wait` and `prompt_vote`, and the referencing clause is carried inside `vote_or_wait`'s fallback rather than stated globally — a reactive builder deliberately does *not* reference everything it holds. The processing bound `proc` is the trunk's: the same constant bounds catch-up entry and the reactive exit.
+The reactive schedule and network layer, shared by both protocols: `PaceCore` with `deadline`, `built_lt`, `vote_or_wait` and `prompt_vote` in place of `ViewPace`'s full-timeout floor.
 
 #### `ReactiveM`
 
@@ -12264,7 +12204,7 @@ abbrev SkipMsg (U : BlockUniverse Validator BlockId Payload) :=
   SkipData U.ids U.block
 ```
 
-**A Safe Skip message at a core universe**: the same data, read off `U`. Stated over `ids`/`blk` rather than over a universe because the *data* of a fill is the same for every rule in this development, and only the invariants a universe carries differ — the shape `chopBlk` takes for the cut. Nemo and FinWhale build their own fills from it (`docs/target-properties.md` §11.4).
+**A Safe Skip message at a core universe**: the same data, read off `U`, stated over `ids`/`blk` since the data of a fill is shared across rules — only the invariants a universe carries differ. Nemo and FinWhale build their own fills from it.
 
 #### `skipFill`
 
@@ -12339,9 +12279,7 @@ structure JumpMsg (U : BlockUniverse Validator BlockId Payload) where
     (U.block b).round ≤ (U.block B2).round → False
 ```
 
-**The jump message**: the compact core a recovering validator actually sends — its own name and anchor, the target block and its author — together with the fresh-identifier supply and the semantic clauses a `SkipMsg` carries about them. No line: the line is derived.
-
-`hB2r` places the target at or above the anchor; the gap may be empty, in which case the denotation is `U` plus nothing.
+**The jump message**: the compact core a recovering validator actually sends — its own name and anchor, the target block and its author — with the fresh-identifier supply and a `SkipMsg`'s semantic clauses about them, but no line: the line is derived.
 
 ### Integration: composing the arcs
 
@@ -12412,7 +12350,7 @@ def chopMsg (sk : SkipMsg U) (hG : G ≤ (U.block sk.B1).round)
     exact sk.hgap b hb.1 hbc (by omega) (by omega)
 ```
 
-**I7b.** With the anchor retained, a Safe Skip message over the original universe induces one over the truncation: same validators, same anchor, every round rebased by `−G`. A validator that pruned can still rejoin with one message.
+**I7b.** With the anchor retained, a Safe Skip message over the original universe induces one over the truncation: same validators, same anchor, every round rebased by `−G`.
 
 #### `recoveryMsg`
 
@@ -12473,8 +12411,6 @@ def recoveryMsg (r : ℕ) (line fresh : ℕ → BlockId) (idx : BlockId → ℕ)
 
 **The catch-up fill.** After re-genesis the returning validator rejoins production with one message: a `SkipMsg` anchored on its new genesis block, filling every round from the cut to the target.
 
-The donor data is the ordinary requirement — a line of `v2` blocks from the anchor's round to the target, each citing the one below, all of them in the retained window that every validator holds. The two clauses peculiar to recovery come at no cost: `hB1uniq` from `hB1uniq_of_addGenesis`, and `hgap` from the absence itself, since a validator with no blocks authored none during the gap either.
-
 #### `skipFillD`
 
 *def, `Integration.DeliveryFill.lean`*
@@ -12517,9 +12453,7 @@ def skipFillD (sk : SkipMsg U) (D : Delivery U)
       exact Finset.empty_subset _
 ```
 
-**I15a — the delivery transformer.** The fill's delivery structure is the original's: the recovering validator's blocks were never delivered to anyone, being reconstructed after the fact.
-
-`hdown` is the hypothesis `Delivery.includes` forces — the recovering validator accepted nothing while it was down. It is the acceptance-side counterpart of `hgap`, which says the same of production.
+**I15a — the delivery transformer.** The fill's delivery structure is the original's: the recovering validator's blocks were never delivered to anyone, being reconstructed after the fact. `hdown` is the hypothesis `Delivery.includes` forces.
 
 #### `CommonAt`
 
@@ -12532,7 +12466,7 @@ def CommonAt (U : BlockUniverse Validator BlockId Payload)
     ∀ c ∈ U.ids, (U.block c).round = r + 2 → Reaches U c b
 ```
 
-A block is **common at round `r`** when every block two rounds above it reaches it. Report §5.2's T3c supplies one at every round, of correct authorship, with no assumption whatever.
+A block is **common at round `r`** when every block two rounds above it reaches it.
 
 ### Hybrid fault tolerance: Byzantine and crash faults apart
 
@@ -12554,13 +12488,11 @@ class HybridFaults (Validator : Type*) [Fintype Validator]
   disjoint : Disjoint byzantine crash
   card_byzantine : byzantine.card ≤ fb
   card_crash : crash.card ≤ fc
-  /-- The base bound — what the *derived instance* needs. The hybrid
-  committee bound `n ≥ 5·fb + 3·fc + 1` deliberately does **not** live
-  here: every safety theorem consumes it through the admissible
-  interval, whose nonemptiness implies it — and keeping the class at
-  the base bound is what lets the one-short committee `n = 5·fb + 3·fc`
-  be *expressed*, so that the tightness counterexample (H10) is a
-  theorem rather than an unstatable aside. -/
+  /-- The base bound the derived instance needs — deliberately not the
+  hybrid committee bound `n ≥ 5fb + 3fc + 1`, which every safety
+  theorem consumes through the admissible interval instead, so the
+  one-short committee `n = 5fb + 3fc` stays expressible for the
+  tightness counterexample (H10). -/
   card_validators : 3 * (fb + fc) + 1 ≤ Fintype.card Validator
 ```
 
@@ -12585,7 +12517,7 @@ def HonestNoEquiv (U : BlockUniverse Validator BlockId Payload) : Prop :=
   U.NoEquivOn (Honest Validator)
 ```
 
-**The strengthened equivocation clause.** Non-equivocation over `Honest` rather than the derived instance's `Correct`: a crash-prone validator authors at most one block per round too. This is P5's shape at the larger class — the base clause follows from it — and it is the one genuinely new assumption of the hybrid model, threaded through the safety theorems as a hypothesis the way `DoSValid` is.
+**The strengthened equivocation clause.** Non-equivocation over `Honest` rather than the derived instance's `Correct` — P5's shape at the larger class, the base clause following from it — is the hybrid model's one genuinely new assumption.
 
 #### `q`
 
@@ -12675,9 +12607,7 @@ abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
   blameSkip (q Validator) U V s
 ```
 
-**The slot is directly skipped, as judged from a view**: a hybrid quorum of distinct validators holds a voting-round block, in view, that references no candidate of the slot.
-
-Strictly stronger than the per-candidate `DirectSkipIn`, which it implies and which a slot with no candidate satisfies for nothing. The core and Odontoceti were repaired the same way and for the same reason (`docs/target-properties.md` §3.2): a rule whose skip quantifies over the candidates that happen to exist is not invariant under a mechanism that adds one, so it cannot be `Banded`.
+**The slot is directly skipped, as judged from a view**: a hybrid quorum of voting-round blocks, in view, reference no candidate of the slot. Strictly stronger than the per-candidate `DirectSkipIn`, needed for the same reason the core and Odontoceti were repaired (`docs/target-properties.md` §3.2): a skip over the candidates that happen to exist is not `Banded`.
 
 #### `Decided`
 
@@ -12752,7 +12682,7 @@ structure Policy (R : DagRule Validator BlockId Payload) [S : Slots Validator] w
     pick U V v k = S.leader k
 ```
 
-A Hammerhead-style reassignment policy over a carrier: epoch length, the rule, and the clauses it owes. Fairness — the clause liveness will price — is deliberately *not* here: safety must hold for arbitrary, even adversarial, adapted policies, and stating fairness where liveness consumes it keeps that separation visible.
+A Hammerhead-style reassignment policy over a carrier: epoch length, the rule, and the clauses it owes. Fairness is deliberately not here: safety must hold for arbitrary, even adversarial, adapted policies.
 
 #### `PartialRun`
 
@@ -12873,7 +12803,7 @@ structure ValidWrt (blk : BlockId → Block Validator BlockId Payload)
   quorum : 0 < b.round → majority Validator ≤ (creators blk b).card
 ```
 
-Crash block validity: like the core `ValidWrt`, but the parents quorum is the majority `n/2+1` rather than `n − f`, and the core's `self_parent` and `distinct_creators` fields are gone. The implementation's block verifier imposes neither: there is no self-parent check, and duplicate-author includes are deduplicated by the stake aggregator, not rejected. Under crash the second is also derivable — universal non-equivocation makes duplicate creators among refs impossible (`Universe.eq_of_mem_refs_of_creator_eq`).
+Crash block validity: like the core `ValidWrt`, but the parents quorum is the majority `n/2+1` rather than `n − f`, and `self_parent` and `distinct_creators` are gone — the implementation's verifier imposes neither, and under crash the second is derivable from universal non-equivocation anyway.
 
 #### `View`
 
@@ -13097,9 +13027,7 @@ def IsAnchor (U : BlockUniverse Validator BlockId Payload) (r : ℕ) (L : BlockI
   L ∈ U.ids ∧ (U.block L).round = r ∧ (U.block L).creator = Rot.anchor r
 ```
 
-**`L` is an anchor block of round `r`**: a block of the universe, at that round, by the validator the rotation elected for it.
-
-A predicate rather than a function, because `RR` "returns both blocks" when the elected validator equivocates: an anchor round has one elected *author* but may hold several anchor *blocks*, and the uniqueness the rule needs is a theorem about supported anchors, not a property of the rotation.
+**`L` is an anchor block of round `r`**: a block of the universe, at that round, by the validator the rotation elected for it. A predicate rather than a function, since an equivocating elector may have several anchor blocks at one round; the uniqueness the rule needs is a theorem about supported anchors, not a property of the rotation.
 
 #### `Supported`
 
@@ -13110,11 +13038,7 @@ def Supported (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : �
   quorumCard Validator ≤ (supporters U L (r + 1)).card
 ```
 
-**`supp(L) ≥ n − f`** for a block proposed at round `r`: a quorum of distinct validators reference `L` from round `r + 1`.
-
-The core's `supporters` counts authors rather than blocks, which is what makes the count a quorum: an equivocator contributes one either way.
-
-The paper's side condition on `supp` excludes a supporter whose **cone** holds a second block of `L`'s author and round, not merely one whose references do. The two coincide, and the reason is a fact about the model rather than a modelling choice: a reference sits exactly one round below its referrer (`ValidWrt.predecessor`), so the round-`r` members of a round-`(r+1)` block's cone are exactly its references, and the condition reduces to `ValidWrt.distinct_creators`.
+**`supp(L) ≥ n − f`** for a block proposed at round `r`: a quorum of distinct validators reference `L` from round `r + 1`, through the core's `supporters`, which counts authors so an equivocator contributes one either way. The paper's cone-based side condition on `supp` coincides with this, since a reference sits exactly one round below its referrer (`predecessor`), reducing it to `distinct_creators`.
 
 #### `Linked`
 
@@ -13125,9 +13049,7 @@ def Linked (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : ℕ)
   (linkers U L r).Nonempty
 ```
 
-**`L` is linked**: some anchor of the round above references it and is itself supported.
-
-Reference rather than reachability, which at a one-round gap is the same thing: the paper writes `B ∈ strong(B')`, and every reference of a valid block sits in the round immediately below it.
+**`L` is linked**: some anchor of the round above references it and is itself supported — reference rather than reachability, the same thing at a one-round gap since every reference sits immediately below.
 
 #### `Committed`
 
@@ -13138,9 +13060,7 @@ def Committed (U : BlockUniverse Validator BlockId Payload) (L : BlockId) (r : �
   IsAnchor U r L ∧ Supported U L r ∧ Linked U L r
 ```
 
-**The commit rule** (L14–L17). The anchor of round `r` is committed when it is supported and linked.
-
-Three conjuncts, in the order the paper's line reads them. The rule is the whole of what safety consumes: `commit(B)`'s recursion over `strong(B) \ D`, and the deterministic sort of `past(B)`, decide the *order* in which blocks are delivered, but every block they deliver lies in the causal history of a block this rule admitted — which is why the chain and prefix results below are stated about `history` rather than about the sort (`black-marlin.md` §4).
+**The commit rule** (L14–L17). The anchor of round `r` is committed when it is supported and linked — the whole of what safety consumes, since the descent and sort only order what this rule admits, which is why the chain and prefix results are stated about `history` rather than the sort (`black-marlin.md` §4).
 
 #### `SupportedIn`
 
@@ -13242,13 +13162,10 @@ structure Pace (U : BlockUniverse Validator BlockId Payload)
   deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
   /-- **The anchor wait**, the round rule read on the block a validator
   produces. At the round above a reliable anchor, a `T`-authored block
-  either references that anchor — the exit fired, and concluding the
-  round required holding it — or its builder waited the full timeout and
-  would have referenced the anchor had it held it.
-
-  Stated only where the round's elected validator lies in `T`. For a
-  Byzantine anchor nothing useful can be said: it may equivocate, and
-  `ValidWrt.distinct_creators` forbids referencing two of its blocks. -/
+  either references it — the exit fired, requiring it — or waited the
+  full timeout and would have referenced it had it held it. Stated only
+  where the round's elected validator lies in `T`: for a Byzantine
+  anchor it may equivocate, and nothing useful can be said. -/
   anchor_or_wait : ∀ v ∈ T, ∀ r, r + 1 ≤ N → Rot.anchor r ∈ T →
     ∀ A, IsAnchor U r A →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = r + 1 →
@@ -13256,20 +13173,15 @@ structure Pace (U : BlockUniverse Validator BlockId Payload)
       (built v r + timeout r ≤ built v (r + 1) ∧
         (A ∈ holds v (built v (r + 1)) → A ∈ (U.block c).refs))
   /-- **The exit is prompt.** A validator past its round entry that can
-  conclude the round does so within the processing bound.
-
-  The core's `ReactivePace.prompt_vote` asks only that the leader's block
-  be held. Here the whole of `ConcludesAt` is asked for, which is what
-  the protocol checks, and the extra clauses are what
-  `Reactive/Statement.lean` measures. -/
+  conclude the round does so within the processing bound — the whole of
+  `ConcludesAt`, where the core's `ReactivePace.prompt_vote` asks only
+  that the leader's block be held. -/
   prompt_conclude : ∀ v ∈ T, ∀ r, r + 1 ≤ N → ∀ t, built v r ≤ t →
     ConcludesAt U (toPaceCore.viewAt v t) r →
     built v (r + 1) ≤ t + proc
 ```
 
-**The Black Marlin pacing structure**: the core's `PaceCore` with the reactive discipline of L38–L41 in place of the full-timeout one.
-
-`built_lt` and `deadline` are the core reactive pair — time advances with rounds, and no validator waits past its timeout — and the full-timeout floor is absent, which is the whole of what makes the schedule responsive.
+**The Black Marlin pacing structure**: the core's `PaceCore` with the reactive discipline of L38–L41 in place of the full-timeout one — no validator waits past its timeout, and the full-timeout floor is absent.
 
 #### `Flush`
 
@@ -13288,9 +13200,7 @@ structure Flush (U : BlockUniverse Validator BlockId Payload) where
     (block ρ).isSome
 ```
 
-**A flush record**: the anchor block a validator flushed at each round, and what the descent guarantees of it.
-
-`step` is the descent's own shape — the anchor flushed at `ρ` is a reference of the anchor flushed at `ρ + 1` — and `dense` says the descent does not pass over a round whose anchor that reference set contains. Neither says anything about a round the descent skips, which is the case the paper's tie-break is for.
+**A flush record**: the anchor block a validator flushed at each round. `step` is the descent's own shape — the anchor at `ρ` is a reference of the anchor at `ρ + 1` — and `dense` says it does not pass over a round its reference set contains; neither says anything about a round the descent skips.
 
 #### `StepUnique`
 
@@ -13473,7 +13383,7 @@ class Params (Validator : Type*) [Fintype Validator] [DecidableEq Validator]
   card_add_one : Fintype.card Validator + 1 = 3 * F.f + 2 * p
 ```
 
-**FinWhale's committee.** `n = 3f + 2p − 1`, with `1 ≤ p ≤ f`.
+**FinWhale's committee**: `n = 3f + 2p − 1`, with `1 ≤ p ≤ f`.
 
 #### `spQuorum`
 
@@ -13512,18 +13422,12 @@ structure ValidHere (blk : BlockId → Block Validator BlockId Payload)
   distinct_creators : ∀ i ∈ b.refs, ∀ j ∈ b.refs, (blk i).creator = (blk j).creator → i = j
   /-- A non-genesis block carries `n − f` edges by distinct validators. -/
   quorum : 0 < b.round → quorumCard Validator ≤ (creators blk b).card
-  /-- **FinWhale's clause**: `Clause.leaderExcluded` of the common layer,
-  which Optimal-Hydrozoan's validity carries too. Stated at every
-  validator rather than at the leader, which is what makes it
-  schedule-free — a rule whose validity mentions the schedule cannot be
-  related to another DAG by a band. It is a genuine strengthening of the
-  paper's rule, and a harmless one: a validator checks it locally, and it
-  drops at most the `f` visibly equivocating validators' blocks, leaving
-  the `n − f` its quorum needs. -/
+  /-- **FinWhale's clause**: `Clause.leaderExcluded` of the common
+  layer, a genuine but harmless strengthening of the paper's rule. -/
   leader_clause : Clause.leaderExcluded blk b
 ```
 
-**Validity, as FinWhale extends Mysticeti's.** Every edge sits in the round below, at most one edge per validator, a non-genesis block carries `n − f` of them by distinct validators, and the parent set is either leader-consistent with respect to the leader two rounds down or excludes that leader's block. The last clause is FinWhale's addition and is what the fast path's counting rests on.
+**Validity, as FinWhale extends Mysticeti's**: the core's three clauses, plus leader exclusion, which the fast path's counting rests on.
 
 #### `Dag`
 
@@ -13657,7 +13561,7 @@ structure WellFormed (Elig : ℕ → ℕ → Prop) (dcommit : ℕ → BlockId �
     ∃ a, Anchor Elig dec r a
 ```
 
-**The reverse pass, as a condition on the verdicts.** The direct rules are taken as parameters, because each validator evaluates them on its own view: `dcommit r l` is "this validator sees a direct commit of `l` at `r`", `dskip r` likewise. `choose` is the paper's deterministic rule and is *shared*, since it reads only the anchor and the round.
+**The reverse pass, as a condition on the verdicts.** The direct rules are parameters, since each validator evaluates them on its own view; `choose` is shared, reading only the anchor and the round.
 
 #### `ChooseSound`
 
@@ -13672,7 +13576,7 @@ structure ChooseSound (S : Slots Validator) (D : Dag Validator BlockId Payload)
   total : ∀ A r, (∃ b, IndirectCommit S D A r b) → ∃ b, choose A r = some b
 ```
 
-**What the deterministic rule must satisfy.** It names only blocks the anchor could indirectly commit, and it names one whenever there is one to name. The paper's rule is a choice among the candidates, so both hold of it.
+**What the deterministic rule must satisfy**: it names only blocks the anchor could indirectly commit, and names one whenever there is one to name.
 
 #### `chooseLeast`
 
@@ -13686,9 +13590,7 @@ noncomputable def chooseLeast [LinearOrder BlockId] (S : Slots Validator)
   else none
 ```
 
-**The deterministic rule, exhibited.** The paper resolves the choice among an anchor's candidates "according to a deterministic rule" and names none; this is one — the least candidate in the identifier order.
-
-Soundness and totality are all any result here reads, and both hold of it by construction. It is a function of the anchor and the round, so two validators holding the same anchor make the same choice, which is what `finwhale.md` §6 turns on.
+**The deterministic rule, exhibited**: the least candidate in the identifier order, sound and total by construction, and a function of the anchor and the round alone, so two validators holding the same anchor make the same choice.
 
 #### `slotVerdict`
 
@@ -13773,9 +13675,7 @@ def histOf [LinearOrder BlockId] (D : Dag Validator BlockId Payload) (l : BlockI
   (historyFrom D.block l).sort (· ≤ ·)
 ```
 
-**The delivery order's input, concretely.** A leader contributes its causal history, which `historyFrom` computes from the references alone, listed in the identifier order.
-
-The paper asks only for "a deterministic sort", and what Theorems 24 and 26 read is that the list is a function of the block and lists its causal history once each. Sorting by identifier is the cheapest such function and keeps the definition computable; a causal order would serve equally and is not what any result here consumes.
+**The delivery order's input, concretely.** A leader contributes its causal history, computed by `historyFrom` and listed in the identifier order — the cheapest deterministic sort that lists each block once, and all that Theorems 24 and 26 read of it.
 
 #### `Creation`
 
@@ -13816,26 +13716,19 @@ structure Creation (U : BlockUniverse Validator BlockId Payload)
       b ∈ holds v (built v (n + 1)) ∧ (U.block b).creator = u ∧
       (U.block b).round = n + 1
   /-- **Parent selection takes the leader's block** when it is held and
-  the leader is reliable.
-
-  The guard is not decoration. Without it the clause would range over
-  every block of an equivocating leader, and a validator holding two of
-  them would have to reference both — which `distinct_creators` forbids,
-  so no execution with an equivocating leader would admit a `Creation` at
-  all. A reliable leader has one block per round, and every use below has
-  a reliable leader. -/
+  the leader is reliable. The reliability guard is not decoration: an
+  equivocating leader would force a validator holding two of its blocks
+  to reference both, which `distinct_creators` forbids. -/
   selects_leader : ∀ v ∈ T, ∀ n, lead n ∈ T → ∀ c ∈ U.ids, (U.block c).creator = v →
     (U.block c).round = n + 1 → ∀ L ∈ U.ids, (U.block L).round = n →
     (U.block L).creator = lead n → L ∈ holds v (built v (n + 1)) →
       L ∈ (U.block c).refs
   /-- **And it takes the votes** it holds: where the builder holds a
   round-`(n+1)` block voting for the reliable leader's block, its own
-  block has a parent by that same validator, voting for it too.
-
-  Stated that way rather than as "the held block is itself a parent",
-  which would force two references by one author where a Byzantine
-  validator issued two voting blocks. What the certificate counts is
-  authors of voting parents, so this is what it reads. -/
+  block has a parent by that same validator, voting for it too. Stated
+  as "has a parent by that author," not "the held block is a parent,"
+  since a Byzantine validator's two voting blocks would force two
+  references otherwise — what the certificate counts is authors. -/
   selects_votes : ∀ v ∈ T, ∀ n, lead n ∈ T → ∀ c ∈ U.ids, (U.block c).creator = v →
     (U.block c).round = n + 2 → ∀ L ∈ U.ids, (U.block L).round = n →
     (U.block L).creator = lead n → ∀ b ∈ U.ids, (U.block b).round = n + 1 →
@@ -13989,7 +13882,7 @@ def Run.ofDoSValid [LinearOrder BlockId] (U : BlockUniverse Validator BlockId Pa
   selfParented := selfParented_ofDoSValid hdos
 ```
 
-**A run over a DoS-valid universe.** The same data a `Run` asks for, less three: the DAG *is* the universe, so `ids_eq` and `block_eq` are `rfl`, and the self-parent edge is the core's.
+**A run over a DoS-valid universe**: the same data a `Run` asks for, less three fields the identification with the universe discharges.
 
 #### `Run.ofDoSValidReactive`
 
@@ -14012,9 +13905,7 @@ noncomputable def Run.ofDoSValidReactive [LinearOrder BlockId]
     (le_refl N) hrr
 ```
 
-**A DoS-valid universe on the reactive schedule is a run.** The DAG is the universe, the pace is the reactive one, and the liveness input is `commits_of_reactive`; the tie-break is `chooseLeast`. Four of `Run`'s fields that a caller would otherwise discharge are `rfl` or theorems here: the two readings of the blocks, the self-parent edge, and the schedule's leader being the DAG's.
-
-The horizon of the schedule serves as the horizon of the liveness argument, so no relation between them is asked for.
+**A DoS-valid universe on the reactive schedule is a run**: the pace is the reactive one and the liveness input is `commits_of_reactive`, with four of `Run`'s fields discharged by identification with the universe.
 
 ### Minnow: the minimal commit rule
 
@@ -14245,7 +14136,7 @@ def expected (R : BaseRule Validator BlockId Payload) (P : Params) (m : ℕ) : �
   (P.interval - R.waveLength + 1) * m
 ```
 
-**The expected count** (`ExpectedCommits`): the decidable slots of the window under count `m`, `interval − waveLength + 1` rounds of `m` slots. Below `waveLength ≤ interval` the subtraction truncates; the results that bound the count carry that hypothesis.
+**The expected count** (`ExpectedCommits`): `interval − waveLength + 1` rounds of `m` slots each, at count `m`; below `waveLength ≤ interval` the subtraction truncates.
 
 #### `PartialRun`
 
@@ -14270,8 +14161,8 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
   init : start 0 = 0 ∧ count 0 = 1 ∧ backoff 0 = 0
   count_pos : ∀ k, 0 < count k
   count_le : ∀ k, count k ≤ P.maxLeaders
-  /-- Every slot of the range is decided against the configuration's
-  schedule. -/
+  /-- Every slot of the range — after `start k`, through the anchor's
+  round — decided against the configuration's schedule (`TryDecide`). -/
   closed : ∀ k, k < K → ∀ κ, start k < κ / count k → κ / count k ≤ start (k + 1) →
     R.Decided (Sched getLeader hk (count k) (count_pos k) (count_le k)) V κ (vdct k κ)
   /-- The anchor is committed, past the threshold … -/
@@ -14330,9 +14221,7 @@ structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : �
           b ∈ historyFrom (R.block U) c
 ```
 
-**What a good DAG delivers.** On a DAG good from `Rnd` to `N` there is a set `T` of validators, all but at most `slack`, whose blocks are *reached* by everything two rounds above them: a `T`-authored block at a round from `Rnd`, with its own next round under the horizon, lies in the causal history of every block two rounds up — whoever authored that block.
-
-This is the base protocol's coverage read as delivery, and it is what turns a committed anchor into a delivered block. It is the second law a live rule carries, beside `Descent`: `Descent` says a good leader's slot commits, this says a good author's block is carried by whatever commits above it. Both are facts of the base protocol, and neither mentions the mechanism.
+**What a good DAG delivers**: a `slack`-missing set of validators whose blocks, from `Rnd`, are reached by everything two rounds above them — the base protocol's coverage read as delivery, the second law a live rule carries beside `Descent`.
 
 #### `ofAnchored`
 
@@ -14467,9 +14356,7 @@ def qFast : ℕ := Fintype.card Replica - p Replica
 def qCert : ℕ := (Fintype.card Replica + F.f) / 2 + 1
 ```
 
-`q_cert = ⌈(n + f + 1)/2⌉`: the quorum of votes a decision-round block must reference for it to count as a certificate.
-
-Written as the smallest strict majority of `n + f`, namely `(n + f)/2 + 1` in floor division — the two expressions agree for both parities of `n + f`, and this form makes `2 · q_cert > n + f` (certificate uniqueness, Phase 2) immediate.
+`q_cert = ⌈(n + f + 1)/2⌉`: the quorum of votes a decision-round block must reference to count as a certificate, written as the smallest strict majority of `n + f` so that `2 · q_cert > n + f` is immediate.
 
 #### `qSlow`
 
@@ -14537,11 +14424,7 @@ structure ValidWrt (blk : BlockId → Block Replica BlockId)
   quorum : 0 < b.round → q Replica ≤ (creators blk b).card
 ```
 
-Block validity, relative to a lookup function — the paper's "referencing `≥ q` distinct valid blocks from the previous round".
-
-The predecessor condition is additive (`+ 1 =`, never `− 1`): this avoids natural-number subtraction, and it makes the genesis case derivable rather than assumed — at round `0` the equation `(blk i).round + 1 = 0` is unsatisfiable, so `refs = ∅` follows. Only the quorum condition needs a round guard.
-
-The quorum counts **creators**, not `refs.card`: the protocol means `q` distinct *replicas'* blocks, and the creator-set form is what every counting argument consumes (with `distinct_creators` the two coincide).
+Block validity, relative to a lookup function: `q` distinct-creator references from the preceding round. The predecessor condition is additive (`+1 =`, never `−1`), so the genesis case (`refs = ∅`) is derivable rather than assumed.
 
 #### `BlockUniverse`
 
@@ -14614,9 +14497,7 @@ def WeakLinked (U : BlockUniverse Replica BlockId) (A L : BlockId)
     qWeak Replica ≤ (creatorsOf U.block s).card
 ```
 
-Rung 2's test: `q_weak` distinct creators of anchor-reachable votes for `L` at the voting round — the paper's `|{b.creator : Link(b, b_anchor) ∧ IsVote(b, b_leader)}| ≥ q_weak`.
-
-Stated via an explicit witness set of vote blocks (see the module docstring): some set of voting-round blocks, each voting for `L` and reachable from the anchor `A`, carries `q_weak` distinct creators.
+Rung 2's test: `q_weak` distinct creators of anchor-reachable votes for `L` at the voting round, stated over a witness set of such blocks rather than a filter.
 
 #### `hydrozoanAnchored`
 
@@ -14710,9 +14591,7 @@ def CommitLiveness (U : BlockUniverse Replica BlockId) : Prop :=
       Decided U V k (some L)             -- and its verdict is committed
 ```
 
-**Commit liveness**: a quorum-sized set of correct replicas, populated through the wave's three rounds and synchronised from some `R` at or before the wave, commits its correct leader — the slow-commit threshold is met, and the decision logic outputs the commit verdict on any view caught up to the decision round (the harvest form the later phases consume). The certificates sit at the decision round, so a caught-up view holds them; the eventual view is caught up to every horizon.
-
-`SlowCommit` here is a threshold fact, not a route: the fast path may also fire in the same universe (the rule predicates are not exclusive) — this is the one the guaranteed quorum always reaches.
+**Commit liveness**: a quorum-sized correct set, populated through the wave and synchronised from `R`, slow-commits its correct leader on any view caught up to the decision round. The fast path may also fire in the same universe; this is the route the guaranteed quorum always reaches.
 
 #### `FastLatency`
 
@@ -14731,7 +14610,7 @@ def FastLatency (U : BlockUniverse Replica BlockId) : Prop :=
       FastCommit U L (S.slotRound k)     -- ... and it fast-commits (2 rounds)
 ```
 
-**Performance, not liveness — deliberately outside `Statement`.** When the *actual* faults fit the fast allowance `p`, a synchronised, populated wave with a correct leader fires the fast path in two rounds: `|Correct| = n − |byzantine ∪ crashed| ≥ n − p = q_fast`. The protocol's two-round latency claim; it needs all of `Correct` — a quorum-sized `T` does not suffice in general (only when `f + c ≤ p` does the quorum reach `q_fast`, as in the low-fault witness) — and only the propose and voting rounds.
+**Performance, not liveness — deliberately outside `Statement`.** When the actual faults fit `p`, a synchronised, populated wave with a correct leader fires the fast path in two rounds — needing all of `Correct`, not just a quorum-sized `T`.
 
 #### `RunsRecur`
 
@@ -14746,7 +14625,7 @@ def RunsRecur : Prop :=
       ∀ i, i < c → S.leader (b + i) ∈ T  -- ... with every slot T-led.
 ```
 
-**Fairness places a run wherever needed**: past any slot `k` and any round `R`, some run of `c` consecutive `T`-led slots begins. Pure schedule arithmetic — no universe appears; feeding the produced location to `RunDecidesBelow` is the liveness composition.
+**Fairness places a run wherever needed**: past any slot `k` and any round `R`, some run of `c` consecutive `T`-led slots begins. Pure schedule arithmetic.
 
 #### `RunDecidesBelow`
 
@@ -14783,7 +14662,7 @@ def WaveRobinFair : Prop :=
       (Correct : Finset (Fin n)) 3            -- correct 3-runs recur.
 ```
 
-**A fair schedule exists — wave-aligned rotation, unconditionally.** One correct leader's wave is a full correct 3-run all by itself, it recurs every cycle, and the fault bounds guarantee a correct replica exists — so no premise is needed beyond the fault model. (Per-slot rotation would NOT do: it needs `n` to exceed three times the actual fault count — the pigeonhole finding recorded on `FairRunOn` — which is exactly why the wave-aligned schedule is the canonical witness.)
+**A fair schedule exists, unconditionally.** One correct leader's wave is a full correct 3-run by itself and recurs every cycle, so wave-aligned round-robin is fair with no premise beyond the fault model — unlike per-slot rotation, which needs `n` to exceed three times the actual fault count.
 
 #### `GroundedProgress`
 
@@ -14801,7 +14680,7 @@ def GroundedProgress : Prop :=
           Decided (S := waveRobin n hn) U V i v  -- decided.
 ```
 
-**Grounded progress.** Under wave-aligned round-robin, the composed liveness conclusion is achievable with no premise at all: past every point, some universe commits a bound with every slot below it decided — on any view caught up to the bound's decision round (`b + 4 = slotRound (b + 2) + 2` under the wave-aligned schedule; the eventual view is caught up to every horizon, so it instantiates the claim). An achievability claim — the statement asserts the conclusion's satisfiability, not the route to it (a universe may reach these verdicts by any rule). Each horizon is witnessed by its own finite universe (`U.ids` is a `Finset`, so no single universe decides all slots), and the bound `b` itself must COMMIT — an all-skip universe, where every slot is decided by blame alone, does not qualify.
+**Grounded progress.** Under wave-aligned round-robin, past every slot some bound is committed with every slot below it decided, on any view caught up to the decision round — satisfiability, not a claim about which rule reaches the verdict. The bound itself must commit; an all-skip universe does not qualify.
 
 ### Optimal-Hydrozoan: the fast path at Hydrangea's bound
 
@@ -14817,7 +14696,7 @@ class OptimalFaults (Replica : Type*) [Fintype Replica] [DecidableEq Replica]
   nontrivial : 1 ≤ f + c
 ```
 
-The fault model of Optimal-Hydrozoan: Hydrozoan's `Faults` — the same committee bound `n ≥ 3f + 2c + k + 1`, the same actual fault sets — plus the paper's standing assumption `f + c ≥ 1`. Under `f = c = 0` the model is trivial (no fault of any kind), and it is the one configuration in which the arithmetic of `sections/optimal-proof.tex` (`lem:opt-thresholds`) is not guaranteed — it fails, for instance, at `n = 1` — so it is excluded here by construction rather than assumed away in every statement.
+Hydrozoan's `Faults`, plus the standing assumption `f + c ≥ 1`: at `f = c = 0` the threshold arithmetic is not guaranteed (it fails at `n = 1`), so the case is excluded here rather than assumed away in every statement.
 
 #### `pOpt`
 
@@ -14827,7 +14706,7 @@ The fault model of Optimal-Hydrozoan: Hydrozoan's `Faults` — the same committe
 def pOpt : ℕ := p Replica + 1
 ```
 
-`pOpt = ⌊(c+k)/2⌋ + 1`: the fast path's fault allowance, one more than Hydrozoan's `p` — defined through it, so the "+1" is definitional. This is Hydrangea's lower bound `⌊(c+k+2)/2⌋` on two-round commits.
+`pOpt = ⌊(c+k)/2⌋ + 1`: the fast path's fault allowance, one more than Hydrozoan's `p`, defined through it.
 
 #### `qFastOpt`
 
@@ -14837,7 +14716,7 @@ def pOpt : ℕ := p Replica + 1
 def qFastOpt : ℕ := Fintype.card Replica - pOpt Replica
 ```
 
-`q_fast = n − pOpt`: the quorum of votes at the voting round to fast-commit a leader (`FastCommittedLeader`, read with the new `p`). One vote fewer than Hydrozoan's `q_fast` at the same committee size. Unlike Hydrozoan, this is **not** the blame quorum of the direct skip, which becomes `q_cert` (O4, `Optimal/Model/DirectRules.lean`).
+`q_fast = n − pOpt`: the quorum of votes at the voting round to fast-commit a leader, one fewer than Hydrozoan's at the same committee size. Unlike Hydrozoan, this is not the direct skip's blame quorum, which becomes `q_cert`.
 
 #### `tPlain`
 
@@ -14847,9 +14726,7 @@ def qFastOpt : ℕ := Fintype.card Replica - pOpt Replica
 def tPlain : ℕ := Fintype.card Replica - (2 * O.f + O.c + pOpt Replica)
 ```
 
-`t_plain = n − 2f − c − pOpt`: the votes for a leader block that a decision-round block must reference to be *fast evidence* for it, when the block does not witness an equivocation of the leader (`IsFastEvidence`, first case; O4).
-
-A truncated ℕ subtraction, on purpose: the arithmetic phase (O2, `Optimal/ThresholdArithmetic`) states the identity `q_fast + q = n + f + t_plain` as an equality, which fails under truncation — so the row the seam proof consumes also certifies that no truncation occurred.
+`t_plain = n − 2f − c − pOpt`: the votes for a leader block a decision-round block must reference to be fast evidence for it, absent an equivocation witness. A truncated ℕ subtraction on purpose: the arithmetic phase's identity `q_fast + q = n + f + t_plain` fails under truncation, so proving it also certifies none occurred.
 
 #### `tEquiv`
 
@@ -14870,7 +14747,7 @@ def CertFastExclusion : Prop :=
   Fintype.card Replica + O.f < qCert Replica + qFastOpt Replica
 ```
 
-**A fast commit starves every conflicting certificate**, `q_cert + q_fast > n + f` (row 2): the `q_fast` voters of a fast-committed block and the `q_cert` votes inside any certificate for a conflicting block overlap in a non-Byzantine replica. Also what makes `q_cert` slotBlames exclude a fast commit — the Optimal direct skip's blame quorum. Replaces Hydrozoan's `FastStarvation`, which involved `q_weak`.
+**A fast commit starves every conflicting certificate**, `q_cert + q_fast > n + f` (row 2): the two quorums overlap in a non-Byzantine replica, which is also what makes `q_cert` slotBlames exclude a fast commit.
 
 #### `EvidenceEquiv`
 
@@ -14881,7 +14758,7 @@ def EvidenceEquiv : Prop :=
   Fintype.card Replica + O.f + tEquiv Replica ≤ qFastOpt Replica + q Replica + 1
 ```
 
-**Fast evidence with an exposed equivocation**, row 6: the paper's `q_fast + q − n − f + 1 ≥ t_equiv`, stated subtraction-free as `n + f + t_equiv ≤ q_fast + q + 1`. The `+ 1` is the leader-exclusion dividend: a block that witnesses the leader's equivocation does not reference that leader's block, so at most `f − 1` of its refs are undetected Byzantine replicas, and votes for the candidate from at least `t_equiv = f + pOpt` parties remain. This is the row that pins `n ≥ 3f + c + 2·pOpt − 1`.
+**Fast evidence with an exposed equivocation**, row 6: subtraction-free as `n + f + t_equiv ≤ q_fast + q + 1`. The `+ 1` is the leader-exclusion dividend — a witnessing block excludes the leader, so at most `f − 1` of its refs are undetected Byzantine.
 
 #### `FastUniqueness`
 
@@ -14892,9 +14769,7 @@ def FastUniqueness : Prop :=
   1 ≤ O.f → Fintype.card Replica + O.f < 2 * qFastOpt Replica
 ```
 
-**No two conflicting fast commits**, `2·q_fast > n + f`, guarded by `f ≥ 1` (the lemma's last claim): two fast quorums overlap in a non-Byzantine replica. The guard is necessary — at `f = 0` the row can fail (`LeanDagTest/OptimalHydrozoan/Thresholds.lean`, `fourCrashOnlySlack`) — and sufficient for the claim's use: with `f = 0` no replica equivocates, so a slot holds a single candidate and fast/fast agreement is immediate.
-
-`1 ≤ f` is the paper's exact guard. A silently *stronger* guard (`2 ≤ f`), or `qFast` in place of `qFastOpt` (one larger, so the row only gets easier), would keep every witness green: weakenings of a true row are invisible to `decide`, and reading this line is the only defense.
+**No two conflicting fast commits**, `2·q_fast > n + f`, guarded by `f ≥ 1`: two fast quorums overlap in a non-Byzantine replica. The guard is necessary — at `f = 0` the row can fail (`fourCrashOnlySlack`) — and `1 ≤ f` is the paper's exact form; a silently stronger guard would still pass every witness, since a weakening of a true row is invisible to `decide`.
 
 #### `ValidOpt`
 
@@ -14980,7 +14855,7 @@ def optimalAnchored :
   tie := fun _ _ _ => False
 ```
 
-**Optimal-Hydrozoan as an anchored rule**: wave two; the direct commit is the Optimal fast path or Hydrozoan's slow path in view; the direct skip is Optimal's; two rungs, the anchor-linked certificate and then the anchor-linked evidence quorum, neither tie-broken.
+**Optimal-Hydrozoan as an anchored rule**: wave two, the direct commit the Optimal fast path or Hydrozoan's slow path, two rungs (certificate, then evidence quorum), neither tie-broken.
 
 #### `DecidedOpt`
 
@@ -15028,9 +14903,7 @@ def CommitLiveness (U : OptUniverse Replica BlockId) : Prop :=
       DecidedOpt U V k (some L)          -- and its verdict is committed
 ```
 
-**Commit liveness** (Hydrozoan's, harvested as `DecidedOpt`): a quorum-sized set of correct replicas, populated through the wave's three rounds and synchronised from some `R` at or before the wave, commits its correct leader — the slow-commit threshold is met, and the decision logic outputs the commit verdict on any view caught up to the decision round (the LeanDag.Hydrozoan.certificates sit there, so a caught-up view holds them; the eventual view is caught up to every horizon).
-
-`SlowCommit` here is a threshold fact, not a route: the fast path may also fire in the same universe — this is the one the guaranteed quorum always reaches.
+**Commit liveness** (Hydrozoan's, harvested as `DecidedOpt`): a quorum-sized correct set, populated through the wave and synchronised from `R`, slow-commits its correct leader, on any view caught up to the decision round. The fast path may also fire in the same universe; this is the route the guaranteed quorum always reaches.
 
 #### `FastLatency`
 
@@ -15049,7 +14922,7 @@ def FastLatency (U : OptUniverse Replica BlockId) : Prop :=
       FastCommitOpt U.toBlockRecord L (S.slotRound k)  -- ... and it fast-commits
 ```
 
-**Performance, not liveness — deliberately outside `Statement`.** When the *actual* faults fit the Optimal fast allowance `pOpt`, a synchronised, populated wave with a correct leader fires the fast path in two rounds: `|LeanDag.Hydrozoan.Correct| = n − |byzantine ∪ crashed| ≥ n − pOpt = q_fast`. One more actual fault than Hydrozoan's `FastLatency` admits. It needs all of `Correct` — a quorum-sized `T` does not suffice in general — and only the propose and voting rounds.
+**Performance, not liveness — deliberately outside `Statement`.** When the actual faults fit `pOpt`, a synchronised, populated wave with a correct leader fires the fast path in two rounds — needing all of `Correct`, not just a quorum-sized `T`.
 
 #### `RunDecidesBelow`
 
@@ -15073,7 +14946,7 @@ def RunDecidesBelow (U : OptUniverse Replica BlockId) : Prop :=
     ∀ i, i < b → ∃ v, DecidedOpt U V i v  -- all below decided.
 ```
 
-**A committed-to-be run decides everything below it.** The workhorse with the run location `b` explicit: direct liveness commits each of the `c` run slots (through the unchanged slow path), and the indirect descent settles every slot below.
+**A committed-to-be run decides everything below it.** Direct liveness commits each of the `c` run slots through the unchanged slow path, and the indirect descent settles every slot below.
 
 #### `GroundedProgress`
 
@@ -15093,9 +14966,7 @@ def GroundedProgress : Prop :=
           DecidedOpt U V i v                  -- decided.
 ```
 
-**Grounded progress.** Under wave-aligned round-robin, the composed Optimal liveness conclusion is achievable with no premise at all: past every point, some Optimal universe commits a bound with every slot below it decided — on any view caught up to the bound's decision round (`b + 4` under the wave-aligned schedule; the eventual view instantiates the claim). An achievability claim, as in Hydrozoan — the statement asserts the conclusion's satisfiability, not the route to it (a universe may reach these verdicts by any of the six `DecidedOpt` routes). Each horizon is witnessed by its own finite universe, and the bound `b` itself must COMMIT — an all-skip universe does not qualify.
-
-The universe is authored by CORRECT replicas alone. Without that clause the claim would never consult the fault sets: a universe in which every replica, faulty or not, creators every round satisfies the conclusion at any configuration. With it, the faulty replicas contribute nothing, and the claim is that the correct ones suffice — which is what "no premise beyond the fault model" is meant to say.
+**Grounded progress.** Under wave-aligned round-robin, past every point some Optimal universe authored by correct replicas alone commits a bound with every slot below it decided, on any view caught up to the decision round — satisfiability, as in Hydrozoan. Correct-only authorship is what makes the claim consult the fault sets at all: without it, a universe where every replica participates would satisfy the conclusion trivially.
 
 #### `OptimalFaults`
 
@@ -15109,7 +14980,7 @@ class OptimalFaults (Replica : Type*) [Fintype Replica] [DecidableEq Replica]
   nontrivial : 1 ≤ f + c
 ```
 
-The fault model of Optimal-Hydrozoan: Hydrozoan's `Faults` — the same committee bound `n ≥ 3f + 2c + k + 1`, the same actual fault sets — plus the paper's standing assumption `f + c ≥ 1`. Under `f = c = 0` the model is trivial (no fault of any kind), and it is the one configuration in which the arithmetic of `sections/optimal-proof.tex` (`lem:opt-thresholds`) is not guaranteed — it fails, for instance, at `n = 1` — so it is excluded here by construction rather than assumed away in every statement.
+Hydrozoan's `Faults`, plus the standing assumption `f + c ≥ 1`: at `f = c = 0` the threshold arithmetic is not guaranteed (it fails at `n = 1`), so the case is excluded here rather than assumed away in every statement.
 
 #### `pOpt`
 
@@ -15119,7 +14990,7 @@ The fault model of Optimal-Hydrozoan: Hydrozoan's `Faults` — the same committe
 def pOpt : ℕ := p Replica + 1
 ```
 
-`pOpt = ⌊(c+k)/2⌋ + 1`: the fast path's fault allowance, one more than Hydrozoan's `p` — defined through it, so the "+1" is definitional. This is Hydrangea's lower bound `⌊(c+k+2)/2⌋` on two-round commits.
+`pOpt = ⌊(c+k)/2⌋ + 1`: the fast path's fault allowance, one more than Hydrozoan's `p`, defined through it.
 
 #### `qFastOpt`
 
@@ -15129,7 +15000,7 @@ def pOpt : ℕ := p Replica + 1
 def qFastOpt : ℕ := Fintype.card Replica - pOpt Replica
 ```
 
-`q_fast = n − pOpt`: the quorum of votes at the voting round to fast-commit a leader (`FastCommittedLeader`, read with the new `p`). One vote fewer than Hydrozoan's `q_fast` at the same committee size. Unlike Hydrozoan, this is **not** the blame quorum of the direct skip, which becomes `q_cert` (O4, `Optimal/Model/DirectRules.lean`).
+`q_fast = n − pOpt`: the quorum of votes at the voting round to fast-commit a leader, one fewer than Hydrozoan's at the same committee size. Unlike Hydrozoan, this is not the direct skip's blame quorum, which becomes `q_cert`.
 
 #### `tPlain`
 
@@ -15139,9 +15010,7 @@ def qFastOpt : ℕ := Fintype.card Replica - pOpt Replica
 def tPlain : ℕ := Fintype.card Replica - (2 * O.f + O.c + pOpt Replica)
 ```
 
-`t_plain = n − 2f − c − pOpt`: the votes for a leader block that a decision-round block must reference to be *fast evidence* for it, when the block does not witness an equivocation of the leader (`IsFastEvidence`, first case; O4).
-
-A truncated ℕ subtraction, on purpose: the arithmetic phase (O2, `Optimal/ThresholdArithmetic`) states the identity `q_fast + q = n + f + t_plain` as an equality, which fails under truncation — so the row the seam proof consumes also certifies that no truncation occurred.
+`t_plain = n − 2f − c − pOpt`: the votes for a leader block a decision-round block must reference to be fast evidence for it, absent an equivocation witness. A truncated ℕ subtraction on purpose: the arithmetic phase's identity `q_fast + q = n + f + t_plain` fails under truncation, so proving it also certifies none occurred.
 
 #### `tEquiv`
 
@@ -15162,7 +15031,7 @@ def CertFastExclusion : Prop :=
   Fintype.card Replica + O.f < qCert Replica + qFastOpt Replica
 ```
 
-**A fast commit starves every conflicting certificate**, `q_cert + q_fast > n + f` (row 2): the `q_fast` voters of a fast-committed block and the `q_cert` votes inside any certificate for a conflicting block overlap in a non-Byzantine replica. Also what makes `q_cert` slotBlames exclude a fast commit — the Optimal direct skip's blame quorum. Replaces Hydrozoan's `FastStarvation`, which involved `q_weak`.
+**A fast commit starves every conflicting certificate**, `q_cert + q_fast > n + f` (row 2): the two quorums overlap in a non-Byzantine replica, which is also what makes `q_cert` slotBlames exclude a fast commit.
 
 #### `EvidenceEquiv`
 
@@ -15173,7 +15042,7 @@ def EvidenceEquiv : Prop :=
   Fintype.card Replica + O.f + tEquiv Replica ≤ qFastOpt Replica + q Replica + 1
 ```
 
-**Fast evidence with an exposed equivocation**, row 6: the paper's `q_fast + q − n − f + 1 ≥ t_equiv`, stated subtraction-free as `n + f + t_equiv ≤ q_fast + q + 1`. The `+ 1` is the leader-exclusion dividend: a block that witnesses the leader's equivocation does not reference that leader's block, so at most `f − 1` of its refs are undetected Byzantine replicas, and votes for the candidate from at least `t_equiv = f + pOpt` parties remain. This is the row that pins `n ≥ 3f + c + 2·pOpt − 1`.
+**Fast evidence with an exposed equivocation**, row 6: subtraction-free as `n + f + t_equiv ≤ q_fast + q + 1`. The `+ 1` is the leader-exclusion dividend — a witnessing block excludes the leader, so at most `f − 1` of its refs are undetected Byzantine.
 
 #### `FastUniqueness`
 
@@ -15184,9 +15053,7 @@ def FastUniqueness : Prop :=
   1 ≤ O.f → Fintype.card Replica + O.f < 2 * qFastOpt Replica
 ```
 
-**No two conflicting fast commits**, `2·q_fast > n + f`, guarded by `f ≥ 1` (the lemma's last claim): two fast quorums overlap in a non-Byzantine replica. The guard is necessary — at `f = 0` the row can fail (`LeanDagTest/OptimalHydrozoan/Thresholds.lean`, `fourCrashOnlySlack`) — and sufficient for the claim's use: with `f = 0` no replica equivocates, so a slot holds a single candidate and fast/fast agreement is immediate.
-
-`1 ≤ f` is the paper's exact guard. A silently *stronger* guard (`2 ≤ f`), or `qFast` in place of `qFastOpt` (one larger, so the row only gets easier), would keep every witness green: weakenings of a true row are invisible to `decide`, and reading this line is the only defense.
+**No two conflicting fast commits**, `2·q_fast > n + f`, guarded by `f ≥ 1`: two fast quorums overlap in a non-Byzantine replica. The guard is necessary — at `f = 0` the row can fail (`fourCrashOnlySlack`) — and `1 ≤ f` is the paper's exact form; a silently stronger guard would still pass every witness, since a weakening of a true row is invisible to `decide`.
 
 #### `ValidOpt`
 
@@ -15272,7 +15139,7 @@ def optimalAnchored :
   tie := fun _ _ _ => False
 ```
 
-**Optimal-Hydrozoan as an anchored rule**: wave two; the direct commit is the Optimal fast path or Hydrozoan's slow path in view; the direct skip is Optimal's; two rungs, the anchor-linked certificate and then the anchor-linked evidence quorum, neither tie-broken.
+**Optimal-Hydrozoan as an anchored rule**: wave two, the direct commit the Optimal fast path or Hydrozoan's slow path, two rungs (certificate, then evidence quorum), neither tie-broken.
 
 #### `DecidedOpt`
 
@@ -15320,9 +15187,7 @@ def CommitLiveness (U : OptUniverse Replica BlockId) : Prop :=
       DecidedOpt U V k (some L)          -- and its verdict is committed
 ```
 
-**Commit liveness** (Hydrozoan's, harvested as `DecidedOpt`): a quorum-sized set of correct replicas, populated through the wave's three rounds and synchronised from some `R` at or before the wave, commits its correct leader — the slow-commit threshold is met, and the decision logic outputs the commit verdict on any view caught up to the decision round (the LeanDag.Hydrozoan.certificates sit there, so a caught-up view holds them; the eventual view is caught up to every horizon).
-
-`SlowCommit` here is a threshold fact, not a route: the fast path may also fire in the same universe — this is the one the guaranteed quorum always reaches.
+**Commit liveness** (Hydrozoan's, harvested as `DecidedOpt`): a quorum-sized correct set, populated through the wave and synchronised from `R`, slow-commits its correct leader, on any view caught up to the decision round. The fast path may also fire in the same universe; this is the route the guaranteed quorum always reaches.
 
 #### `FastLatency`
 
@@ -15341,7 +15206,7 @@ def FastLatency (U : OptUniverse Replica BlockId) : Prop :=
       FastCommitOpt U.toBlockRecord L (S.slotRound k)  -- ... and it fast-commits
 ```
 
-**Performance, not liveness — deliberately outside `Statement`.** When the *actual* faults fit the Optimal fast allowance `pOpt`, a synchronised, populated wave with a correct leader fires the fast path in two rounds: `|LeanDag.Hydrozoan.Correct| = n − |byzantine ∪ crashed| ≥ n − pOpt = q_fast`. One more actual fault than Hydrozoan's `FastLatency` admits. It needs all of `Correct` — a quorum-sized `T` does not suffice in general — and only the propose and voting rounds.
+**Performance, not liveness — deliberately outside `Statement`.** When the actual faults fit `pOpt`, a synchronised, populated wave with a correct leader fires the fast path in two rounds — needing all of `Correct`, not just a quorum-sized `T`.
 
 #### `RunDecidesBelow`
 
@@ -15365,7 +15230,7 @@ def RunDecidesBelow (U : OptUniverse Replica BlockId) : Prop :=
     ∀ i, i < b → ∃ v, DecidedOpt U V i v  -- all below decided.
 ```
 
-**A committed-to-be run decides everything below it.** The workhorse with the run location `b` explicit: direct liveness commits each of the `c` run slots (through the unchanged slow path), and the indirect descent settles every slot below.
+**A committed-to-be run decides everything below it.** Direct liveness commits each of the `c` run slots through the unchanged slow path, and the indirect descent settles every slot below.
 
 #### `GroundedProgress`
 
@@ -15385,9 +15250,7 @@ def GroundedProgress : Prop :=
           DecidedOpt U V i v                  -- decided.
 ```
 
-**Grounded progress.** Under wave-aligned round-robin, the composed Optimal liveness conclusion is achievable with no premise at all: past every point, some Optimal universe commits a bound with every slot below it decided — on any view caught up to the bound's decision round (`b + 4` under the wave-aligned schedule; the eventual view instantiates the claim). An achievability claim, as in Hydrozoan — the statement asserts the conclusion's satisfiability, not the route to it (a universe may reach these verdicts by any of the six `DecidedOpt` routes). Each horizon is witnessed by its own finite universe, and the bound `b` itself must COMMIT — an all-skip universe does not qualify.
-
-The universe is authored by CORRECT replicas alone. Without that clause the claim would never consult the fault sets: a universe in which every replica, faulty or not, creators every round satisfies the conclusion at any configuration. With it, the faulty replicas contribute nothing, and the claim is that the correct ones suffice — which is what "no premise beyond the fault model" is meant to say.
+**Grounded progress.** Under wave-aligned round-robin, past every point some Optimal universe authored by correct replicas alone commits a bound with every slot below it decided, on any view caught up to the decision round — satisfiability, as in Hydrozoan. Correct-only authorship is what makes the claim consult the fault sets at all: without it, a universe where every replica participates would satisfy the conclusion trivially.
 
 ### Not otherwise grouped
 
@@ -15403,9 +15266,7 @@ def HorizonStable (P : Policy R) (G d : ℕ)
       pick' U' V' (fun m => v (d + m)) k = P.pick U V v (d + k)
 ```
 
-**Horizon-stability.** The joiner's rule, run on a cut of the universe with the joiner's own slot indices, returns what the network's policy returns on the full history at the corresponding slot.
-
-Read as a deployment obligation: *a validator that pruned below `G` and re-indexed from `d` must still compute the leaders everyone else is using.*
+**Horizon-stability**: a validator that pruned below `G` and re-indexed from `d` still computes the leaders everyone else is using.
 
 #### `AdaptivePolicy`
 
@@ -15583,9 +15444,7 @@ def ReadableAtReliableAnchor (U : BlockUniverse Validator BlockId Payload) : Pro
     SupportedIn U V L ρ
 ```
 
-**BMV3, the rule is readable at a reliable anchor.** Past the round coverage takes hold, an anchor whose author is reliable is referenced by every reliable block of the round above, so a view holding those sees the quorum — the support clause needs no block a Byzantine validator might withhold.
-
-This is the boundary of the arc. Replace `Rot.anchor ρ ∈ T` by nothing and the statement is false: coverage constrains only `T`-authored blocks, and a committed anchor's `2f + 1` supporters need contain only `f + 1` reliable ones. That is the case the descent meets and the repair needs, and `black-marlin.md` §14 records what it costs.
+**BMV3, the rule is readable at a reliable anchor.** Past the round coverage takes hold, an anchor whose author is reliable is referenced by every reliable block of the round above, so a view holding those sees the quorum with no block a Byzantine validator might withhold — the boundary of the arc, since coverage constrains only `T`-authored blocks.
 
 #### `ReliableAnchorPins`
 
@@ -15627,9 +15486,7 @@ def OrderAgreesWhenAnchorsReliable (U : BlockUniverse Validator BlockId Payload)
     deliverSeq U f₁ τ n = deliverSeq U f₂ τ n
 ```
 
-**BMT3, and the delivered lists coincide.** Where no Byzantine validator anchors a round below `n`, two records that flush at the same rounds deliver one list — Definition 1's Total order, unconditionally, on that stretch.
-
-The hypothesis is tight. `LeanDagTest/BlackMarlin/Divergence` exhibits two records with a single Byzantine anchor below them that deliver two reliably authored blocks in opposite orders.
+**BMT3, and the delivered lists coincide.** Where no Byzantine validator anchors a round below `n`, two records that flush at the same rounds deliver one list — Definition 1's Total order, unconditionally, on that stretch. The hypothesis is tight: `LeanDagTest/BlackMarlin/Divergence` exhibits a single Byzantine anchor below producing two reliably authored blocks in opposite orders.
 
 #### `toDagRule`
 
@@ -16304,13 +16161,7 @@ class Slots (Validator : Type*) where
   keyed : Function.Injective (fun k => (slotRound k, leader k))
 ```
 
-The leader schedule: which validator proposes at which round, as a sequence of slots.
-
-Slots need **not** be three rounds apart. Under pipelining consecutive slots are one round apart, and under multiple leaders per round they share a round, so all that is required of `slotRound` is that it be monotone. The three-round separation M4's commit half needs is no longer a property of *consecutive* slots and is therefore not derivable here; it is required instead of the particular pairs that use it, by `Eligible` below.
-
-`unbounded` was a theorem under three-round spacing (`3 * k ≤ slotRound k`) and is underivable from `mono` alone — a schedule parking every slot at one round is monotone. Liveness needs it, so it is assumed.
-
-`keyed` says distinct slots differ in round or in leader. It too held under three-round spacing, which makes `slotRound` injective outright. Under multiple leaders it is a real condition on the schedule: the proposers of a round must be distinct validators. Without it one block would be the candidate for two slots, and the ledger would deliver it twice.
+The leader schedule: which validator proposes at which round, as a sequence of slots. Slots need not be three rounds apart — under pipelining they are one round apart, and under multiple leaders per round they share one — so `slotRound` need only be monotone, and the separation M4's commit half needs is required instead at `Eligible` below. `unbounded` is assumed, not derivable from `mono` alone. `keyed` is a real condition once several leaders share a round: without it one block would be the candidate for two slots, and the ledger would deliver it twice.
 
 #### `FairRunOn`
 
@@ -16343,9 +16194,7 @@ def uniform (p m : ℕ) (hp : 0 < p) (hm : 0 < m) (elect : ℕ → Validator)
     exact hblock k₁ k₂ (Nat.eq_of_mul_eq_mul_left hp h.1) h.2
 ```
 
-**The uniform schedule**: `m` leaders in every `p`-th round, slot `k` proposed by `elect k`.
-
-`hblock` is the one real condition — the `m` proposers sharing a round are distinct validators. Round-robin `elect k = k % n` satisfies it whenever `m ≤ n`. Without it a single block would be the candidate for two slots and the ledger would deliver it twice.
+**The uniform schedule**: `m` leaders in every `p`-th round, slot `k` proposed by `elect k`. `hblock` is the one real condition — the `m` proposers of a round are distinct validators — which round-robin satisfies whenever `m ≤ n`.
 
 #### `uniformSingle`
 
@@ -16382,9 +16231,7 @@ def waveRobin (n : ℕ) (hn : 0 < n) : Slots (Fin n) where
   keyed := fun _ _ h => congrArg Prod.fst h
 ```
 
-**The wave-aligned round-robin schedule** on `n` validators: pipelined (one slot per round), with the leader holding for a whole wave — three consecutive slots — before the rotation advances.
-
-Written out field by field so that `slotRound k = k` holds by `rfl`, which Hydrozoan's grounding reads definitionally. A `def` rather than an `instance`, like `rrSlots` in the witness files: a second `Slots` instance on the same type would make synthesis ambiguous, so every use passes `(S := waveRobin n hn)` explicitly.
+**The wave-aligned round-robin schedule** on `n` validators: pipelined, with the leader holding for a whole wave of three slots before the rotation advances. A `def`, not an `instance` — a second `Slots` instance would make synthesis ambiguous — so every use passes `(S := waveRobin n hn)` explicitly.
 
 #### `Decided`
 
@@ -16470,7 +16317,7 @@ def certLive (S : Slots Validator) {U : BlockUniverse Validator BlockId Payload}
           ∀ L, IsLeaderBlock (S := S) U k L → CertifiesAt U T (S.slotRound k) L
 ```
 
-**The core's precondition, in what its commit rule counts.** A quorum `T`, a horizon `N` the view is caught up to with every slot of the window two rounds under it, production at the slot's round and its certificate round, and `T` certifying every candidate of every `T`-led slot in the window.
+**The core's precondition, in what its commit rule counts.** A quorum, a horizon the view is caught up to with every slot two rounds under it, production at the propose and certificate rounds, and `T` certifying every candidate of every `T`-led slot in the window.
 
 #### `optSupport`
 
@@ -16530,9 +16377,7 @@ def Banded (R : DagRule Validator BlockId Payload) : Prop :=
         R.Decided S' V' k' v
 ```
 
-**Every verdict reads a band of rounds.** From the slot's own round up to some top, the blocks the view holds and the leaders of the slots sitting there already carry the verdict: any universe carrying the band **up to a shift**, any view holding those blocks, and any schedule whose slots correspond and whose leaders match inside the band, decides the corresponding slot the same way.
-
-Four naturals name the correspondence. `g` and `g'` put the two universes in one frame of rounds; `d` and `d'` put the two schedules in one frame of slots, slot `m` of `S` answering to slot `m'` of `S'` when `m + d' = m' + d`. All four are zero for persistence, locality and monotonicity in the view. The ceiling is read in the source's own frame, so the band always covers the rounds `[slotRound k, top]` of `U` whatever the offset, and a large shift cannot empty the hypothesis. A truncation by `G` from base slot `d` uses `g = 0`, `g' = G`, `d' = 0`, and reading it backwards swaps the pairs, which is why one property serves a two-directional consumer.
+**Every verdict reads a band of rounds.** From the slot's own round up to some top, the blocks the view holds and the leaders of the slots sitting there already carry the verdict: any universe carrying the band up to a shift, any view holding those blocks, and any schedule whose slots correspond and whose leaders match inside the band, decides the corresponding slot the same way. `g, g'` put the two universes in one frame of rounds and `d, d'` the two schedules in one frame of slots (slot `m` of `S` answering to `m'` of `S'` when `m + d' = m' + d`); all four are zero for persistence, locality and view monotonicity, and a truncation by `G` from base slot `d` uses `g = 0, g' = G, d' = 0`.
 
 #### `DecidedBelow`
 
@@ -16579,30 +16424,23 @@ structure DagRule (Validator : Type) [Fintype Validator] [DecidableEq Validator]
   ids : Universe → Finset BlockId
   /-- The ids a view holds. -/
   viewIds : ∀ {U : Universe}, View U → Finset BlockId
-  /-- A view holds only blocks the universe has. A law rather than a
-  property: every protocol's view type carries this proof already, so
-  asking for it here costs an instance nothing and spares every
-  consumer a hypothesis. -/
+  /-- A view holds only blocks the universe has. Every protocol's view
+  type carries this proof already, so it costs an instance nothing. -/
   viewSound : ∀ {U : Universe} (V : View U), viewIds V ⊆ ids U
   /-- A view is closed under references: it holds what its blocks point
-  at. The second law every view type already carries, and the one a
-  window count needs — a validator holding a block holds its whole
-  causal history, so a window measured on that history is the same
-  window whoever measures it (`Barnacle/Window/`). -/
+  at, which is what a window count needs to be measurement-independent
+  (`Barnacle/Window/`). -/
   viewComplete : ∀ {U : Universe} (V : View U),
     ∀ i ∈ viewIds V, ∀ j ∈ (block U i).refs, j ∈ viewIds V
   /-- **A universe is a block DAG**: every reference is present and sits
-  one round below. The third law, for the reason the other two are laws:
-  every universe type in the development carries it in its validity
-  record, and it is a fact about the DAG model rather than about any
-  rule. It was a property (`Causal`) that nine carriers proved with the
-  same four lines. -/
+  one round below. A fact about the DAG model, carried by every
+  universe's validity record, rather than a rule-specific property. -/
   causal : ∀ U : Universe, CausalStructure (block U) (ids U)
   /-- The decision relation under a schedule. -/
   Decided : Slots Validator → ∀ {U : Universe}, View U → ℕ → Option BlockId → Prop
 ```
 
-**What a mechanism may read of a protocol.** A universe type, views over it, the projections into the shared `Block` vocabulary, and the decision relation. Deliberately smaller than `Barnacle.BaseRule`, which adds what its own mechanism needs — a wave length, a direct-commit predicate and its decidability, the full and history views.
+**What a mechanism may read of a protocol**: a universe type, views over it, the projections into `Block`, and the decision relation — smaller than `Barnacle.BaseRule`, which adds what its own mechanism needs.
 
 #### `RebasedAbove`
 
@@ -16626,13 +16464,7 @@ structure RebasedAbove (R : DagRule Validator BlockId Payload)
     (R.block U' b).refs = (R.block U b).refs
 ```
 
-**One DAG is another above a round, rebased.** At and above `R₀` the two universes hold the same blocks, at rounds `G` apart, with the same authors; and strictly above `R₀`, the same references. Nothing is said below `R₀`, which is where a mechanism does its work.
-
-**This one relation is what every mechanism here delivers.** A truncation rebases by its horizon (`Truncates`, at `R₀ = G`); a fill or an extension rebases by nothing and settles at the top of its gap (`Sustains`); plain agreement above a round is the zero offset (`AgreeAbove`). They were three structures with the same four clauses until the clauses were compared.
-
-`mem` pairs presence with the round condition rather than stating them separately, which is what lets the relation be read from either universe: without it, "present and above `R₀`" could hold in one and not the other, and the definition would name a direction it does not mean.
-
-References are compared **strictly** above `R₀`: a truncation retains its bottom layer's blocks but empties their references, since what they referenced is gone. Every rule reads a vote from a *parent*, so a block at exactly `R₀` contributes its presence and its author but no vote, which is what the clause says.
+**One DAG is another above a round, rebased.** At and above `R₀` the two universes hold the same blocks, at rounds `G` apart, with the same authors; strictly above `R₀`, the same references too. Nothing is said below `R₀`, where a mechanism does its work. One relation serves a truncation (`R₀ = G`), a fill or extension (no rebasing), and plain agreement (the zero offset, `AgreeAbove`). References are compared strictly above `R₀`: a truncation empties its bottom layer's references, and every rule reads a vote from a parent, so a block at exactly `R₀` contributes presence and authorship but no vote.
 
 #### `Indirect`
 
@@ -16987,11 +16819,7 @@ structure Truncates (R : DagRule Validator BlockId Payload) (U U' : R.Universe)
     extends RebasedAbove R U U' G G, Rebases S S' G d
 ```
 
-**`U'` is `U` pruned below `G` and renumbered from slot `d`.**
-
-The two clauses that distinguish this from a pure shift are `mem` and `refs`. Membership keeps only what lies at or above the horizon, so what lies below is legitimately gone; and references are compared only **strictly** above the horizon, so the retained bottom layer may legitimately lose the references that pointed below it. A relation demanding either of those in full has no models.
-
-Both clauses are `RebasedAbove`'s, read at `R₀ = G`. That was not how this started: `Truncates` was written with its own four block clauses, and they were found to be the same four a mechanism already owed under `Sustains`. What is left here is the schedule half.
+**`U'` is `U` pruned below `G` and renumbered from slot `d`.** `mem` keeps only what lies at or above the horizon, and `refs` compares references strictly above it, so the retained bottom layer may lose what pointed below it. Both are `RebasedAbove`'s, at `R₀ = G`; what this structure adds is the schedule half.
 
 #### `r0`
 
@@ -17110,9 +16938,7 @@ theorem reliable_eq_correct {T : Finset Validator} (hfull : F.byzantine.card = F
     T = (Correct : Finset Validator)
 ```
 
-**At full fault load the reliable set is forced.** The liveness results run at any `T ⊆ Correct` with `n - f ≤ T.card`, which is strictly weaker than `T = Correct` — correct validators outside `T` may be starved for the whole run. This says how much weaker: none at all, when the adversary spends its whole budget. `|byzantine| = f` makes `Correct` exactly `n - f` large, and a subset of a set of the same cardinality is that set.
-
-So the generality has bite only below full fault load, and `T := Correct` (`commits_recur`, at `Correct`) is not a restriction but the only instantiation always available.
+**At full fault load the reliable set is forced.** The liveness results run at any `T ⊆ Correct` with `n − f ≤ T.card`, strictly weaker than `T = Correct`; at full fault load `Correct` is exactly `n − f` large, so `T := Correct` is the only instantiation available.
 
 #### `exists_correct_mem_inter`
 
@@ -17141,9 +16967,7 @@ theorem exists_correct_mem_creators_inter
     ∃ v ∈ creatorsOf blk s ∩ creatorsOf blk t, v ∈ (Correct : Finset Validator)
 ```
 
-**T0'.** Two id-sets whose creator sets are quorums share a *correct* author.
-
-Stated on bare `Finset BlockId`s rather than on blocks, because that is what every call site needs: T3 intersects a block's refs with an arbitrary set `Q`, and T5 intersects two arbitrary sets, neither of which is any block's refs. For a block, apply it with `s := b.refs` and discharge the hypothesis with `ValidWrt.quorum`.
+**T0'.** Two id-sets whose creator sets are quorums share a *correct* author. Stated on bare `Finset BlockId`s, since call sites intersect arbitrary sets that are nobody's refs; for a block, apply with `s := b.refs` and `ValidWrt.quorum`.
 
 #### `ValidWrt.iff_validAt`
 
@@ -17180,7 +17004,7 @@ theorem BlockRecord.causal [P.Mechanised] (U : BlockRecord Validator BlockId Pay
     CausalStructure U.block U.ids
 ```
 
-**A block record is a causal structure.** The two facts the history layer consumes, projected out of the record's completeness and the predecessor fact its validity owes. Stated at the record, so every rule's universe has it.
+**A block record is a causal structure**: the two facts the history layer consumes, projected out of completeness and the predecessor fact validity owes.
 
 #### `round_le_of_reaches`
 
@@ -17191,9 +17015,7 @@ theorem round_le_of_reaches {c b : BlockId} (hc : c ∈ U.ids) (h : Reaches U c 
     (U.block b).round ≤ (U.block c).round
 ```
 
-**T2.** Causal history runs downward in rounds: anything `c` reaches sits at a round no greater than `c`'s.
-
-This is the substantive half of T2 — reflexivity, single steps and transitivity are inherited from `ReflTransGen`. It rests on `spec.md` §3.2's predecessor condition, which is the second field of the universe's `CausalStructure`.
+**T2.** Causal history runs downward in rounds: anything `c` reaches sits at a round no greater than `c`'s, from the predecessor condition (`CausalStructure`'s second field).
 
 #### `View.mem_of_reaches`
 
@@ -17218,9 +17040,7 @@ theorem View.exists_reaches_iff {U : BlockRecord Validator BlockId Payload P hon
     (∃ b, b ∈ V.ids ∧ Q b ∧ Reaches U c b) ↔ (∃ b, Q b ∧ Reaches U c b)
 ```
 
-**T6a, in the form the commit rules consume.** Asking "is there a `P`-block in `c`'s causal history?" gives the same answer whether or not the search is confined to the view. Restricting to `V` changes nothing, because the answer could never have lain outside it.
-
-This is what makes a view-relative certificate check well defined: two validators with different views but the same anchor cannot disagree.
+**T6a, in the form the commit rules consume.** Asking whether a `P`-block lies in `c`'s history gives the same answer confined to the view or not — what makes a view-relative certificate check well defined.
 
 #### `authorsAt_eq_authorsIn`
 
@@ -17283,9 +17103,7 @@ theorem reaches_pred_of_round_le {q : ℕ} [P.Quorate q] {Q : BlockId → Prop} 
     ∃ b, Q b ∧ Reaches U c b
 ```
 
-**Propagation.** Reaching something is inherited upward: if every block at round `N` reaches a `Q`-block, so does every block above `N`.
-
-Shared by T3 and M2, both of which are otherwise just a base case. The step needs nothing but nonempty references and transitivity — height is carried by `Reaches` alone.
+**Propagation.** Reaching something is inherited upward: if every block at round `N` reaches a `Q`-block, so does every block above `N`, by nonempty references and transitivity alone. Shared by T3 and M2, both otherwise just a base case.
 
 #### `reaches_of_honest_support_of_card`
 
@@ -17367,7 +17185,7 @@ theorem mem_ids_and_round_of_quorum_support
     b ∈ U.ids ∧ (U.block b).round = r
 ```
 
-The quorum hypothesis already forces `b` into the universe at round `r`, so T3 need not assume either. A quorum has at least `2f+1 ≥ 1` authors, so `Q` is nonempty; any member is in the universe, references `b`, and sits at round `r+1`, which pins `b` by completeness and the predecessor condition.
+The quorum hypothesis already forces `b` into the universe at round `r`, so T3 need not assume either: a nonempty `Q` has a member in the universe referencing `b`, which pins it by completeness.
 
 #### `reaches_of_quorum_support`
 
@@ -17384,9 +17202,7 @@ theorem reaches_of_quorum_support
     Reaches U c b
 ```
 
-**T3 (Persistence).** If `b` is referenced by a quorum of round-`(r+1)` blocks, every block at round `r+2` or later has `b` in its causal history.
-
-Neither `b ∈ U.ids` nor `(U.block b).round = r` is assumed: both follow from the quorum hypothesis (`mem_ids_and_round_of_quorum_support`).
+**T3 (Persistence).** If `b` is referenced by a quorum of round-`(r+1)` blocks, every block at round `r+2` or later has `b` in its causal history — neither `b ∈ U.ids` nor its round assumed, both following from the quorum hypothesis.
 
 ### Slots and the schedule
 
@@ -17413,11 +17229,7 @@ theorem certificates_eq_empty_of_directSkip {L : BlockId} {r : ℕ}
     (h : DirectSkip U L r) : certificates U L r = ∅
 ```
 
-**M3.** A directly skipped block has **no certificate anywhere** in the universe — not merely none in some view.
-
-With `2f+1` blamers, and correct validators unable to sit on both sides, the supporters number at most `(3f+1) - (2f+1) + f = 2f`. A certificate needs `2f+1` distinct vote-creators, and every voter among a round-`(r+2)` block's references is a genuine supporter, so no such block can exist.
-
-Universe-wide is the right strength: it is why a skip needs no anchor to justify it, and it is what makes the indirect rule agree with the direct one (M4).
+**M3.** A directly skipped block has no certificate anywhere in the universe, not merely none in some view: `2f+1` blamers cap the supporters at `2f`, below what a certificate's `2f+1` voters need.
 
 #### `not_directCommit_of_directSkip`
 
@@ -17428,9 +17240,7 @@ theorem not_directCommit_of_directSkip {L : BlockId} {r : ℕ}
     (h : DirectSkip U L r) : ¬ DirectCommit U L r
 ```
 
-**M1.** No block is both directly committed and directly skipped.
-
-Immediate from M3: a skip leaves no certificates at all, and a commit needs `2f+1` distinct certificate authors.
+**M1.** No block is both directly committed and directly skipped, immediate from M3: a skip leaves no certificates, and a commit needs `2f+1` of them.
 
 #### `exists_certificate_reaches_of_directCommit`
 
@@ -17443,11 +17253,7 @@ theorem exists_certificate_reaches_of_directCommit {L : BlockId} {r : ℕ}
     ∃ C ∈ certificates U L r, Reaches U c C
 ```
 
-**M2.** Once a block is directly committed, its certificate becomes unavoidable: every block from round `r+3` on has one in its causal history.
-
-The bound is `r+3` and it is **tight**. Certificates sit at round `r+2`, and a round-`(r+2)` block's own references sit at `r+1`, so a round-`(r+2)` block that is not itself a certificate reaches none. One round above the certificates is needed before the intersection argument bites — the same phenomenon as T3's `r+2`.
-
-This is what makes the indirect rule agree with the direct one, and it is why the slot schedule must space leaders at least 3 rounds apart: that is exactly what puts every anchor at round `≥ r+3`.
+**M2.** Once a block is directly committed, its certificate becomes unavoidable: every block from round `r+3` on has one in its causal history. The bound is tight — a round-`(r+2)` block that is not itself a certificate reaches none — which is why the slot schedule must space leaders at least three rounds apart.
 
 #### `eq_of_certificates_nonempty`
 
@@ -17460,13 +17266,7 @@ theorem eq_of_certificates_nonempty {L₁ L₂ : BlockId} {r : ℕ}
     L₁ = L₂
 ```
 
-**M5′ (certificate uniqueness).** A slot admits at most one *certifiable* block: if certificates exist for two round-`r` blocks by the same author, those blocks coincide.
-
-Stronger than M5, and the form the indirect rule needs — the indirect rule commits on the strength of a *single* certificate lying in reach, not on a quorum of them.
-
-The proof needs no relationship between the two certificates. Each names n−f distinct voters, so the two voter sets intersect in a correct `w` (T0'); `w`'s single round-`(r+1)` block votes for both (T1); and **distinctness** forbids one block referencing two round-`r` blocks by one author. That last step is the one place in the development where distinctness is indispensable.
-
-The rounds need no hypothesis: a voter for `L₁` sits at round `r+1` and references it, which pins `L₁` to round `r`, and likewise for `L₂`.
+**M5′ (certificate uniqueness).** A slot admits at most one certifiable block: if certificates exist for two round-`r` blocks by the same author, those blocks coincide. Stronger than M5, and the form the indirect rule needs, since it commits on a single reachable certificate rather than a quorum of them.
 
 #### `eq_of_directCommit_of_creator_eq`
 
@@ -17479,9 +17279,7 @@ theorem eq_of_directCommit_of_creator_eq {L₁ L₂ : BlockId} {r : ℕ}
     L₁ = L₂
 ```
 
-**M5.** At most one block per slot is directly committed.
-
-Now a corollary of M5′: a direct commit implies a certificate exists. Note the outer certificate-quorum intersection this proof used to perform is not needed — M5′ never requires the two certificates to be the same block.
+**M5.** At most one block per slot is directly committed — a corollary of M5′, since a direct commit implies a certificate exists.
 
 #### `certifiedIn_of_directCommit`
 
@@ -17493,7 +17291,7 @@ theorem certifiedIn_of_directCommit {L : BlockId} {r : ℕ} (h : DirectCommit U 
     CertifiedIn U A L r
 ```
 
-**M4, commit half.** A directly committed block is found by *every* anchor from round `r+3` on. This is M2 restated as the indirect rule's test, and it is why the slot schedule must space leaders at least three rounds apart — that spacing is exactly what puts every anchor in range.
+**M4, commit half.** A directly committed block is found by every anchor from round `r+3` on — M2 restated as the indirect rule's test.
 
 #### `indirect_agrees_with_direct`
 
@@ -17506,9 +17304,7 @@ theorem indirect_agrees_with_direct {L : BlockId} {r : ℕ}
       (DirectSkip U L r → ¬ CertifiedIn U A L r)
 ```
 
-**M4.** Where the direct rule decides, the indirect rule agrees.
-
-The asymmetry between the halves is worth noting. Commit needs the anchor to be far enough along (`r+3`), since the certificate must be *reachable*. Skip needs nothing at all, since there is no certificate anywhere to reach.
+**M4.** Where the direct rule decides, the indirect rule agrees: commit needs the anchor at round `r+3` or beyond, skip needs nothing at all, since there is no certificate anywhere to reach.
 
 #### `certifiedIn_iff_of_view`
 
@@ -17520,9 +17316,7 @@ theorem certifiedIn_iff_of_view {V : View Validator BlockId Payload U} {A L : Bl
     (∃ C, C ∈ V.ids ∧ C ∈ certificates U L r ∧ Reaches U A C) ↔ CertifiedIn U A L r
 ```
 
-The indirect test is **view-independent**: a validator holding the anchor computes the same verdict from its own local DAG as from the whole universe.
-
-T6a in action — the certificate could never have lain outside the view, so confining the search to it changes nothing. This is what stops two validators with different views but the same anchor from disagreeing.
+The indirect test is view-independent: a validator holding the anchor computes the same verdict from its own local DAG as from the whole universe (T6a).
 
 #### `directCommit_of_directCommitIn`
 
@@ -17533,9 +17327,7 @@ theorem directCommit_of_directCommitIn {V : View Validator BlockId Payload U}
     {L : BlockId} {r : ℕ} (h : DirectCommitIn U V L r) : DirectCommit U L r
 ```
 
-**A view can only under-report.** Everything it sees is real, so a view-relative direct commit is a genuine one.
-
-This one line is what lets all of Stage A be reused unchanged: M2, M4 and M5 are stated universe-level, and a validator's local judgement feeds straight into them.
+**A view can only under-report.** A view-relative direct commit is a genuine one, which is what lets Stage A's universe-level theorems apply to a validator's local judgement unchanged.
 
 #### `directSkip_of_directSkipIn`
 
@@ -17567,7 +17359,7 @@ theorem coreLaws : (coreAnchored Validator BlockId Payload).Laws where
   commit_unique
 ```
 
-**The core's laws.** Every commit-against-commit case is certificate uniqueness; the crossings are cross-view M1, the visibility lemma and M3.
+**The core's laws.** Every commit-against-commit case is certificate uniqueness; the crossings are M1, the visibility lemma and M3.
 
 #### `exists_least`
 
@@ -17608,11 +17400,7 @@ theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
     quorumCard Validator ≤ (authorsAt U n).card
 ```
 
-**L0 — the DAG is dense below its frontier.** If any block exists at round `r`, then *every* round `n < r` has at least `2f+1` distinct authors.
-
-Downward induction on the gap `r - n`. The step is where the two lemmas above meet: the inductive hypothesis gives a quorum of authors one round higher, that quorum is nonempty so some block sits there, and `card_authorsAt_of_succ` walks it down one more round.
-
-The induction runs on the gap rather than on `r` itself because the statement is not about `r`: nothing distinguishes the block's own round, and generalising over `n` is what lets the step re-enter at `n+1`.
+**L0 — the DAG is dense below its frontier.** If any block exists at round `r`, every round `n < r` has at least `2f+1` distinct authors: downward induction on the gap `r - n`, generalised over `n` so the step can re-enter at `n+1`.
 
 #### `votesAt_of_synchronisedOn`
 
@@ -17641,9 +17429,7 @@ theorem certifies_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card)
     Certifies U C L
 ```
 
-A correct round-`(r+2)` block certifies any correct round-`r` block, once round `r+1` is populated and synchrony has taken hold.
-
-This is both layers at once: `q` references `L` by coverage at `n = r`, and `C` references `q` by coverage at `n = r+1`.
+A correct round-`(r+2)` block certifies any correct round-`r` block, once round `r+1` is populated and synchrony has taken hold: both layers of coverage at once.
 
 #### `certifiesAt_of_synchronisedOn`
 
@@ -17673,7 +17459,7 @@ theorem directCommit_of_certifiesAt
     DirectCommit U L r
 ```
 
-**The commit argument, stated once.** A quorum-sized `T` whose decision-round blocks all certify `L` directly commits it: each `v ∈ T` has a round-`(r+2)` block by production, it certifies by hypothesis, and `T`'s cardinality does the counting. Both pacing disciplines end here — the full-timeout one arriving through `certifiesAt_of_synchronisedOn`, the reactive one through `ReactiveM.certifies`.
+**The commit argument, stated once.** A quorum-sized `T` whose decision-round blocks all certify `L` directly commits it. Both pacing disciplines end here, one through `certifiesAt_of_synchronisedOn`, the other through `ReactiveM.certifies`.
 
 #### `directCommit_of_synchronisedOn`
 
@@ -17687,9 +17473,7 @@ theorem directCommit_of_synchronisedOn (hcard : quorumCard Validator ≤ T.card)
     DirectCommit U L r
 ```
 
-**L4, at the round level.** A correct block at round `r` is directly committed, given coverage from `r` and correct blocks at `r+1` and `r+2`.
-
-Stated without `Slots`: nothing in the argument cares that `L` is a leader block, only that it is correct-authored — the same separation Stage A makes for M1–M3. The proof is the composition through the targeted interface: coverage supplies `CertifiesAt`, and the shared counting theorem does the rest.
+**L4, at the round level.** A correct block at round `r` is directly committed, given coverage from `r` and correct blocks at `r+1` and `r+2`. Stated without `Slots`, since the argument only needs `L` correct-authored, not a leader.
 
 #### `directCommit_of_leader_mem`
 
@@ -17781,9 +17565,7 @@ theorem commits_recur_on (hT : T ⊆ (Correct : Finset Validator))
       CommitsAt BlockId Payload T R k'
 ```
 
-**L6 — commits recur.** For every slot `k` there is a later slot `k'` that **every** sufficiently grown synchronous DAG commits.
-
-Note the conclusion quantifies over `U` and `N` *inside* the existential: the slot is fixed by the schedule alone, and any DAG grown past it commits it.
+**L6 — commits recur.** For every slot `k` there is a later slot `k'` that every sufficiently grown synchronous DAG commits, the slot fixed by the schedule alone before the DAG is named.
 
 #### `commits_recur`
 
@@ -17810,11 +17592,7 @@ theorem decided_of_first_eligible_commit {V : View Validator BlockId Payload U}
     ∃ v, Decided U V k v
 ```
 
-**The escape.** If `j` is committed and *nothing strictly between `k` and `j` is eligible to anchor `k`*, then `k` is decided outright: the intermediate-skip premise is vacuous, so there is no induction and no appeal to nearestness.
-
-This is the fact that keeps pipelining live, and the one most easily overlooked. Slot `j - 1` sitting immediately below a committed `j` cannot anchor on `j` — one round on, inside its decision round — but it *can* anchor on `j + 2`, and neither `j` nor `j + 1` is eligible for it, so the premise is empty and the slot resolves at once. Under fair leader election `j + 2` is committed whenever `j` is, correct validators holding runs of `2f+1 ≥ 3` consecutive slots.
-
-No hypothesis on the schedule, and none on synchrony: like L8 this is pure decision-relation combinatorics.
+**The escape.** If `j` is committed and nothing strictly between `k` and `j` is eligible to anchor `k`, then `k` is decided outright: the intermediate-skip premise is vacuous. This is what keeps pipelining live — slot `j - 1` cannot anchor on `j` but can anchor on `j + 2` with an empty intermediate range, and fair leader election commits `j + 2` whenever `j` is committed.
 
 #### `decided_of_committed_above`
 
@@ -17828,11 +17606,7 @@ theorem decided_of_committed_above
     ∀ i, i ≤ n → ∃ v, Decided U V i v
 ```
 
-**L8.** Given a committed slot, every slot below it is decided — provided every later slot may anchor an earlier one.
-
-No synchrony, no timing, no fairness: this is pure decision-relation combinatorics, which is why it is worth isolating. The work is choosing the *nearest* committed slot above `i` and reading the intermediate premise off the induction hypothesis — an intermediate slot is decided by induction, and cannot be decided `some` without contradicting nearestness, so it is decided `none`.
-
-Note the proof never consults the direct rules. It does not need to: where the direct rule commits, M2 puts the certificate in reach of the anchor, so the indirect branch taken here agrees with it — and M6 guarantees as much in any case.
+**L8.** Given a committed slot, every slot below it is decided, provided every later slot may anchor an earlier one — pure decision-relation combinatorics, with no synchrony, timing or fairness. The work is choosing the nearest committed slot above `i` and reading the intermediate premise off the induction hypothesis.
 
 #### `all_decided_below_of_spacing`
 
@@ -17850,9 +17624,7 @@ theorem all_decided_below_of_spacing
         ∀ i, i ≤ n → ∃ v, Decided U (View.full U) i v
 ```
 
-**L8 under the old three-round spacing.** Combining L6 with L8: for every slot `k` there is a slot `n ≥ k` such that a sufficiently grown synchronous DAG decides *every* slot up to `n` — so the ledger does not stall below it.
-
-`hsp` is the field the `Slots` class used to carry. A pipelined or multi-leader schedule does not satisfy it, and the counterexample above is why this is stated conditionally rather than dropped.
+**L8 under three-round spacing.** Combining L6 with L8: for every slot `k` there is a slot `n ≥ k` such that a sufficiently grown synchronous DAG decides every slot up to `n`. A pipelined or multi-leader schedule does not satisfy `hsp`, which is why this is stated conditionally.
 
 ### Time: GST, and the rated bounds
 
@@ -17865,9 +17637,7 @@ theorem backoff_ge_of_rate {timeout : ℕ → ℕ} (hrate : Rated timeout) (m : 
     ∀ n, m ≤ n → m ≤ timeout n
 ```
 
-**A rated backoff clears any threshold by the threshold itself.**
-
-Monotonicity is not used here — the bound at `n` comes from `n` itself, so it cannot lapse afterwards — where the retired existential form needed `Monotone` to turn one clearing round into all later ones.
+**A rated backoff clears any threshold by the threshold itself.** Monotonicity is not used: the bound at `n` comes from `n` itself, so it cannot lapse afterwards.
 
 #### `unbounded_of_rated`
 
@@ -17902,11 +17672,7 @@ theorem commits_recur_within (hT : T ⊆ (Correct : Finset Validator))
       CommitsAt BlockId Payload T R k'
 ```
 
-**Q4, the schedule half.** L6 with the committing slot **bounded**.
-
-L6 says a committing slot exists beyond any `k`; this says it lies within `w` slots of `max k R`. Everything else is unchanged — the quantifier order, the `∀ U D N` inside the existential, the horizon condition — and the DAG-facing content is `commits_recur_on`'s, reproduced here only because the slot has to be named by `FairWithin` rather than `FairScheduleOn`.
-
-The starting point is not slack: the slot must clear both the caller's `k` and the synchrony round `R`. The old statement wrote that as `max k R`, relying on `3 * k ≤ slotRound k` to make slot `R` sit past round `R`. A monotone schedule gives no such coincidence — under `m` leaders per round slot `R` is around round `R / m` — so the slot past round `R` is named explicitly by `slotAt Validator R`. Under three-round spacing `slotAt R ≤ R`, so the bound is no weaker than it was.
+**Q4, the schedule half.** L6 with the committing slot bounded: it lies within `w` slots of `max k R`, where the slot past round `R` is named explicitly by `slotAt Validator R` rather than assuming a coincidence a monotone schedule need not give.
 
 #### `commits_recur_by_round`
 
@@ -17924,13 +17690,7 @@ theorem commits_recur_by_round {s : ℕ} (hT : T ⊆ (Correct : Finset Validator
         ∃ L, IsLeaderBlock U k' L ∧ Decided U (View.full U) k' (some L)
 ```
 
-**Q4 in rounds.** The committing slot's round is bounded, so the horizon a DAG must reach before it is guaranteed to commit becomes an explicit number rather than "far enough".
-
-Read the two summands: `slotRound (max k (slotAt R))` is where the search starts, and `s * w` is the worst-case cost of walking to the next `T`-leader. The `+ 2` is the certificate round — L4's `r + 2`, unchanged.
-
-At the standard settings — round-robin over `3f+1` so `w = f + 1`, and slots every three rounds so `s = 3` — this reads `3 * (f + 1)` rounds past the starting slot, which is the concrete latency figure `liveness.md` §8 Q4 asks for.
-
-**This bound is blind to multiple leaders.** `BoundedSpacing s` says consecutive slots are at most `s` rounds apart, and with `m` leaders sharing a round that is still `s = 1`, not `0` — only one step in `m` advances the round, which `BoundedSpacing` cannot see. So `s * w` reads `w` rounds for `w` slots however large `m` is. A bound that improves with `m` needs the schedule to expose it, which `Slots.uniform` does; this statement is kept because it is the only one that says anything about an irregular schedule.
+**Q4 in rounds.** The committing slot's round is bounded: the search starts at `slotRound (max k (slotAt R))`, `s * w` is the worst-case cost of walking to the next `T`-leader, and `+ 2` is the certificate round. At the standard settings this reads `3 * (f + 1)` rounds past the starting slot. Blind to multiple leaders — `BoundedSpacing s` cannot see that several leaders may share a round — but the only statement that says anything about an irregular schedule.
 
 ### The pacing structures, and the delivery they induce
 
@@ -17957,9 +17717,7 @@ theorem reached (hcard : quorumCard Validator ≤ T.card) :
     ∀ n ≤ N, ∀ v ∈ T, n ≤ pc.top v
 ```
 
-**Every reliable validator reaches every round below the horizon** — with `T` a quorum, nobody in `T` is stuck. The induction: each `w ∈ T` reached round `n`, so holds its own block there; `holds_mono` carries it to the common time `max (latest n) gst`; `converges` puts a quorum of distinct round-`n` authors in `v`'s hands; `advances` fires.
-
-Proved on the trunk, so every pacing discipline inherits it: nothing here mentions a floor, a ceiling, or a timeout.
+**Every reliable validator reaches every round below the horizon** — with `T` a quorum, nobody in `T` is stuck: `holds_mono` carries each `w ∈ T`'s round-`n` block to a common time, `converges` puts a quorum of them in `v`'s hands, and `advances` fires. Proved on the trunk, with no floor, ceiling or timeout mentioned.
 
 #### `populatedOn`
 
@@ -17982,7 +17740,7 @@ theorem viewAt_ids (pc : PaceCore U T N) {v : Validator} (hv : v ∈ T) (t : ℕ
     (pc.viewAt v t).ids = pc.holds v t
 ```
 
-**The view a validator holds is exactly what it holds.** Under closure the causal closure is a no-op, so `viewAt` adds nothing: a reliable validator's view *is* its holdings, and the local liveness statement is about the blocks the validator actually has. Without `holds_closed` the inclusion runs one way only, and `viewAt` would be the closure of a validator's fragments rather than its view.
+**The view a validator holds is exactly what it holds.** Under closure `viewAt` adds nothing: a reliable validator's view is its holdings, and the local liveness statement is about blocks it actually has.
 
 #### `holds_roundBlocks`
 
@@ -18026,9 +17784,7 @@ theorem covers_of_converges {n : ℕ} (hn : n < N)
     a ∈ (U.block c).refs
 ```
 
-**The separation, on this route** — V1's content over the partial schedule. The fused covers-shape (*a `T`-block built after GST and early enough is referenced*) is derivable from `converges` and `references` alone: the block is in its author's hands when built (`holds_own`), reaches the builder within `delay` (`converges`), is still there when the builder acts (`holds_mono`), and is therefore referenced (`references`). No counting, no drift, no waiting rule — those enter only when the *hypothesis* `built … + delay ≤ built … (n+1)` must itself be discharged, which is the race the drift argument wins.
-
-This is where report §4.3's claim that the network's whole contribution is one sentence about views is discharged on the route the development keeps: `converges` mentions no blocks, rounds or references, and the step from views to references is the protocol's clause P7.
+**The separation** — V1's content over the partial schedule: a `T`-block built after GST and early enough is referenced, derivable from `converges` and `references` alone — the block is in its author's hands when built, reaches the builder within `delay`, and is still there when the builder acts. No counting, drift or waiting rule enters until the arrival-time hypothesis itself must be discharged.
 
 #### `le_built`
 
@@ -18050,11 +17806,7 @@ theorem reached (vp : ViewPace U T N)
     ∀ n ≤ N, ∀ v ∈ T, n ≤ vp.top v
 ```
 
-**Production, with no deadline to beat.** Every round below the horizon is populated, from genesis, view convergence and the progress rule — and from nothing else. No drift, no backoff, no `timeout`, and no schedule side condition of any kind.
-
-The step is the familiar one with the deadline removed. Each `w ∈ T` reached round `n` (induction hypothesis), so it has a block there and holds it from `built w n`; `holds_mono` carries that forward to `max (latest n) gst`, a single time serving every `w` at once; `converges` puts all of them in `v`'s hands by `max (latest n) gst + delay`. That is a quorum of distinct authors, so `advances` fires and `v` is past round `n` — whereupon `built_of_le_top` supplies its round-`n+1` block.
-
-**Why no side condition survives.** Over a total build schedule the quorum must arrive by `built v (n+1)`, a time fixed before the run, and a condition on the round straddling GST is what makes that deadline meetable. Here the arrival time is not compared with anything: `advances` takes the quorum at whatever time it appears. A schedule that raced ahead of the network pre-GST is not excluded by hypothesis — it is not expressible, because a validator that never held a quorum at round `n` never reached round `n+1`.
+**Production, with no deadline to beat.** Every round below the horizon is populated, from genesis, view convergence and the progress rule alone, with no drift, backoff, timeout or schedule side condition. By induction: each `w ∈ T` holds its round-`n` block, `holds_mono` carries it to a common time, `converges` puts a quorum of them in `v`'s hands, and `advances` fires.
 
 #### `populatedOn`
 
@@ -18078,7 +17830,7 @@ theorem driftOn_of_catchup (vp : ViewPace U T N) {R : ℕ}
     DriftOn vp.built T R (vp.delay + vp.proc) N
 ```
 
-**Drift is derived**, from the trunk's catch-up rule: the collapsed spread `delay + proc`, from any `R` past GST, with **no hypothesis about the start**. The quorum bound enters because the collapse reads builds at rounds every `T`-validator reached, which is `reached`'s conclusion; the schedule contributes only `le_built` (rounds advance real time), placing those builds past GST.
+**Drift is derived**, from the trunk's catch-up rule: the collapsed spread `delay + proc`, from any `R` past GST, with no hypothesis about the start. The quorum bound enters through `reached`, which places those builds past GST.
 
 #### `synchronisedOn_of_driftOn`
 
@@ -18091,9 +17843,7 @@ theorem synchronisedOn_of_driftOn {R D : ℕ}
     SynchronisedOn U T R
 ```
 
-**The coverage engine** — the race, run against an *arbitrary* drift bound `D`. The guards come out of `le_top_of_built`: a block at round `n+1` authored by `v` puts `n + 1 ≤ top v`, so `waits` and `le_built` apply where they are used, and the straddling case cannot arise — coverage is claimed only from `R`, and `gst ≤ R ≤ n ≤ built w n`.
-
-This needs neither production, nor the quorum bound, nor `T ⊆ Correct`: `references` and `holds_own` are stated over any block a validator authored, so there is nothing to identify by non-equivocation. The headline (`synchronisedOn_of_converges`) discharges `hD` internally from catch-up, which costs the quorum; this form is kept for reliable sets below the quorum, where drift must be supplied from outside (`reliable_set_is_forced_pace` runs on a two-member `T`).
+**The coverage engine** — the race, run against an arbitrary drift bound `D`. Needs neither production, the quorum bound, nor `T ⊆ Correct`, since `references` and `holds_own` are stated over any block a validator authored. Kept for reliable sets below the quorum, where drift must be supplied from outside.
 
 #### `commits_recur_via_pace`
 
@@ -18112,9 +17862,7 @@ theorem commits_recur_via_pace (hT : T ⊆ (Correct : Finset Validator))
         ∃ L, IsLeaderBlock U k' L ∧ Decided U (View.full U) k' (some L)
 ```
 
-**The liveness spine** (V17): commits recur, with the seed at round `0`, where it is genesis, and no schedule side condition of any kind.
-
-What is assumed divides cleanly. The network contributes `converges` and `vp.gst ≤ R`. The protocol contributes `built_of_le_top` at round `0` (genesis), `advances` (the pacemaker does not stall), `catchup` (seeing a round is entering it), `references` (P7) and `waits` (P9). No drift appears: the backoff clears the constant `2Δ + proc`, and the spread — whatever it was at the start — is the collapsed `Δ + proc` by the time coverage reads it. Production needs none of the timing clauses.
+**The liveness spine** (V17): commits recur, with the seed at round `0` genesis, and no schedule side condition. The network contributes `converges` and `vp.gst ≤ R`; the protocol contributes genesis, `advances`, `catchup`, `references` and `waits`; no drift appears, since the backoff clears the collapsed spread.
 
 #### `commits_recur_local`
 
@@ -18132,9 +17880,7 @@ theorem commits_recur_local (hcard : quorumCard Validator ≤ T.card)
             k' (some L)
 ```
 
-**The liveness spine, localised** (V18): commits recur, and at the recurring slot every reliable validator decides **on its own view**.
-
-The quantifier order of `commits_recur_via_pace` is preserved --- the slot is fixed by the schedule and the round bound alone, before any execution is named --- and the conclusion is the local one. Note what is absent: `T ⊆ Correct` is not needed. The global spine threads it through `commits_recur_on`, whose production comes from L1 over `Correct`; here production is the pacing structure's own, over `T` directly, so the hypothesis has nothing left to do.
+**The liveness spine, localised** (V18): commits recur, and at the recurring slot every reliable validator decides on its own view, the slot fixed by the schedule and the round bound alone. `T ⊆ Correct` is not needed, since production is the pacing structure's own over `T`.
 
 #### `decided_of_local`
 
@@ -18191,7 +17937,7 @@ theorem ViewPace.exists_honest_floor (vp : ViewPace U T N)
       vp.built u 0 + (∑ i ∈ Finset.range n, vp.timeout i) ≤ vp.built u n
 ```
 
-**The honest floor** (CU5): a valid block of round `n + 1` certifies that some reliable validator reached round `n` having genuinely waited out all `n` timeouts. Evidence of a round cannot exist before the honest schedule permits the round, so the author-blind catch-up a deployment runs is executable: it never pulls a validator past where a reliable peer already is, and the obligation `catchup` states over `T`-authored blocks is the analysis-side restriction of a rule that is safe over all of them.
+**The honest floor** (CU5): a valid block of round `n + 1` certifies that some reliable validator reached round `n` having genuinely waited out all `n` timeouts, so the author-blind catch-up a deployment runs never pulls a validator past where a reliable peer already is.
 
 #### `decided_of_wait`
 
@@ -18236,9 +17982,7 @@ theorem heldOf_inj {v : Validator} (hv : v ∈ (Correct : Finset Validator))
     (hij : (U.block i).creator = (U.block j).creator) : i = j
 ```
 
-**The acceptance rule is derived** (V19). A correct validator never holds two blocks by one author at a build instant --- not because it deduplicates, but because P7 would oblige its block to reference both and P2 forbids that. The hypothesis is production at the round above, which the pacing structure supplies.
-
-This is the field the storage development assumes; here it is a theorem about the reference discipline.
+**The acceptance rule is derived** (V19). A correct validator never holds two blocks by one author at a build instant, not by deduplication but because P7 would oblige its block to reference both and P2 forbids that. The storage development assumes this; here it is a theorem.
 
 ### Chain quality
 
@@ -18382,8 +18126,6 @@ theorem eq_of_mem_refs_of_creator_eq {b i j : BlockId} (hb : b ∈ U.ids)
 
 **D7, the no-equivocation half.** A block's references carry distinct authors, so the layer immediately below a block is equivocation-free.
 
-Per *block*, not per round: two different round-`r` blocks may perfectly well reference opposite halves of an `(r-1)` equivocation, and that is exactly what makes D8 interesting.
-
 #### `card_exposedTo_le`
 
 *theorem, `DoS.Exposure.lean`*
@@ -18392,7 +18134,7 @@ Per *block*, not per round: two different round-`r` blocks may perfectly well re
 theorem card_exposedTo_le {b : BlockId} (hb : b ∈ U.ids) : (exposedTo U b).card ≤ F.f
 ```
 
-**At most `f` authors can be exposed**, since exposure requires equivocation and only Byzantine validators equivocate.
+At most `f` authors can be exposed, since exposure requires equivocation.
 
 #### `creators_refs_eq_correct`
 
@@ -18404,9 +18146,7 @@ theorem creators_refs_eq_correct (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U
     creatorsOf U.block (U.block b).refs = (Correct : Finset Validator)
 ```
 
-**D15a at the bound.** Once a block has caught the whole fault budget, its references are *exactly* the correct validators — every one of them.
-
-The margin is gone, and this is what it means concretely: with `f` authors excluded the admissible set is `Correct`, which numbers exactly `2f+1`, so a block that must name `n−f` distinct admissible authors must name all of them.
+**D15a at the bound.** Once a block has caught the whole fault budget, its references are exactly the correct validators.
 
 #### `card_missingAt_le`
 
@@ -18442,11 +18182,7 @@ theorem card_creators_accepted_of_eventuallyDelivers {R : ℕ} (D : Delivery U)
     quorumCard Validator ≤ (creatorsOf U.block (D.accepted v n)).card
 ```
 
-**Where the quorum comes from after `R`** — and the settled answer to the plan's Q1.
-
-The liveness argument needs a quorum of *accepted* creators. After `R` that is not an extra assumption: `EventuallyDelivers` puts every correct block in every correct validator's hands, `Delivery.accepts_correct` accepts them, and a populated round supplies `2f+1` of them. `DeliversQuorum` is therefore a **consequence** from `R` on, not a hypothesis.
-
-Before `R` it is not, and that is exactly the cost the condition carries: L1 holds from `R` rather than from round 0.
+**Where the quorum comes from after `R`.** After `R`, a quorum of accepted creators is a consequence rather than a hypothesis: `EventuallyDelivers` and `accepts_correct` supply it from a populated round. Before `R` it is not, which is why L1 holds only from `R`.
 
 #### `mem_history_of_correct`
 
@@ -18525,7 +18261,7 @@ theorem card_viewGap_succ_le {κ R : ℕ} (hbyz : ByzBudget D κ)
     (viewGap D v w (n + 1)).card ≤ F.f * κ
 ```
 
-**C3′ — the gap is constant, not a drift.** After `R`, as long as the author has a current block (which L1 supplies), the divergence between two correct validators' views is at most **one round of Byzantine budget**: `w`'s round-`(n+1)` block hands `v` all of `viewUpto w n` at once, and the remainder is `w`'s budgeted Byzantine frontier.
+**C3′ — the gap is constant, not a drift.** After `R`, the divergence between two correct validators' views is at most one round of Byzantine budget: `w`'s round-`(n+1)` block hands `v` all of `viewUpto w n` at once, the remainder being `w`'s budgeted Byzantine frontier.
 
 #### `uniform_of_byzBudget`
 
@@ -18539,7 +18275,7 @@ theorem uniform_of_byzBudget {κ R : ℕ} (hbyz : ByzBudget D κ)
     (novelty U (viewUpto D v (n + 1)) b).card ≤ F.f * κ + 1
 ```
 
-**The sandwich, converse direction.** After `R`, a `ByzBudget κ` schedule is uniformly budgeted at `f·κ + 1` with **no creator guard**: Byzantine acceptances by enforcement, correct ones by C3″. Together with `UniformBudget.byzBudget` this makes the guard-free and guarded formulations equivalent up to one factor of `f` — a validator that runs the author-blind cap loses only constants, never theorems.
+**The sandwich, converse direction.** After `R`, a `ByzBudget κ` schedule is uniformly budgeted at `f·κ + 1` with no creator guard: Byzantine acceptances by enforcement, correct ones by C3″.
 
 #### `card_byzPool_le`
 
@@ -18567,7 +18303,7 @@ theorem card_viewUpto_le {κ : ℕ} (hbyz : ByzBudget D κ)
           n * ((Correct : Finset Validator).card * (F.f * κ)))
 ```
 
-**B4 — unconditional linear storage.** Under nothing but the enforceable budget and the reference discipline — no synchrony, no `R`, no delivery guarantee — every correct validator's retained view is linear in the round: at most one block per correct author per round, plus the global Byzantine pool. This is `dos-equivocation-and-growth.md` §6's pre-`R` conjecture, closed: the base the capstone measures from is itself linear, so the DoS bound holds from round 0 under full asynchrony.
+**B4 — unconditional linear storage.** Under nothing but the enforceable budget and the reference discipline — no synchrony, no `R`, no delivery guarantee — every correct validator's retained view is linear in the round.
 
 #### `dos_resistance`
 
@@ -18585,7 +18321,7 @@ theorem dos_resistance {τ N : ℕ} {P : Finset Validator}
               n * ((Correct : Finset Validator).card * (F.f * τ)))
 ```
 
-**DoS resistance, from enforceable conditions only.** Liveness and linear storage from round 0 under full asynchrony; every hypothesis is local protocol conduct or a pure network assumption, and the author-blind cap replaces every creator-guarded budget.
+**DoS resistance, from enforceable conditions only.** Liveness and linear storage from round 0 under full asynchrony.
 
 #### `dos_resistance'`
 
@@ -18620,7 +18356,7 @@ theorem card_viewUpto_le_of_allExposed' {κ : ℕ} (hdos : DoSValid U)
           (m + 1) * ((Correct : Finset Validator).card * (F.f * κ)))
 ```
 
-**B5, with the constant made explicit by the budget**: the frozen pool is at most `|Correct|·f·(1 + (m+1)·κ)`. The budget paces what an author can inject before being caught; exclusion ends it — one theorem.
+**B5, with the constant made explicit by the budget**: the frozen pool is at most `|Correct|·f·(1 + (m+1)·κ)`.
 
 ### Garbage collection
 
@@ -18685,9 +18421,7 @@ theorem populated_chop {N : ℕ} (hpop : ∀ r ≤ N, Populated U r) (hG : G ≤
     ∀ r ≤ N - G, Populated (chop U G) r
 ```
 
-**G5.** The truncated universe never stalls above the cut.
-
-Production upstream is all this needs: a round-`r` block of `chop U G` is a round-`(G+r)` block of `U`, so the statement is the hypothesis with its index shifted. It consumes no network assumption, and any of the three production routes discharges it.
+**G5.** The truncated universe never stalls above the cut: a round-`r` block of `chop U G` is a round-`(G+r)` block of `U`, so this is the production hypothesis with its index shifted.
 
 #### `card_retained_le`
 
@@ -18703,7 +18437,7 @@ theorem card_retained_le {κ Λ t : ℕ} (hbyz : ByzBudget D κ)
           Λ * ((Correct : Finset Validator).card * (F.f * κ)))
 ```
 
-**G6.** A validator whose horizon `G` trails its current round `t` by at most `Λ` retains a **constant** number of blocks — independent of `t`, hence of how long the system has run. B4 gave linear-forever; the horizon makes it constant-at-lag-`Λ`. Stated per time: the retained store is the truncated store (G14), which B4 bounds on `chop U G` at window depth `t − G ≤ Λ`.
+**G6.** A validator whose horizon `G` trails its round `t` by at most `Λ` retains a constant number of blocks, independent of `t`: the retained store is the truncated store (G14), which B4 bounds at window depth `t − G ≤ Λ`.
 
 #### `exists_correct_attester_of_mem_base`
 
@@ -18895,7 +18629,7 @@ theorem thickLink_of_directCommit (h : DirectCommit U L r) {A : BlockId}
     ThickLink U A L r
 ```
 
-**O3 (thesis Lemma 3) — propagation, the heart.** If `L` is directly committed, then **every** block from two rounds above it on — Byzantine-authored included, validity is structural — carries at least `n − 3f` distinct authors of support blocks in its cone. One hop is quorum intersection minus the twin discount; depth is cone monotonicity. Every anchor's cone *is* the certificate.
+**O3 (thesis Lemma 3) — propagation.** If `L` is directly committed, every block from two rounds above it on carries at least `n − 3f` distinct authors of support blocks in its cone — one hop by quorum intersection minus the twin discount, depth by cone monotonicity.
 
 #### `eq_of_directCommit_of_thickLink`
 
@@ -18907,7 +18641,7 @@ theorem eq_of_directCommit_of_thickLink {L₁ L₂ : BlockId}
     (hcr : (U.block L₁).creator = (U.block L₂).creator) : L₁ = L₂
 ```
 
-**O4′.** A directly committed block is the **only** same-author block that can pass the indirect test, at any anchor: `n−f` supporters of `L₁` and `n−3f` in-cone supporters of `L₂` would overlap in `≥ n−5f ≥ 1` correct authors, each supporting two twins — impossible. The second place `n ≥ 5f+1` bites, and the replacement for Mysticeti's M5′ in every direct-versus-indirect crossing.
+**O4′.** A directly committed block is the only same-author block that can pass the indirect test, at any anchor: `n−f` supporters of `L₁` and `n−3f` in-cone supporters of `L₂` would overlap in at least `n−5f ≥ 1` correct authors, each supporting two twins — impossible.
 
 #### `directCommit_of_directCommitIn`
 
@@ -18972,7 +18706,7 @@ theorem directCommit_of_votesAt {r : ℕ}
     DirectCommit U L r
 ```
 
-**The commit argument, stated once** — the two-round counterpart of `directCommit_of_certifiesAt`. A quorum-sized `T` whose blocks one round above `r` all vote for `L` directly commits it: a vote *is* a support, each `v ∈ T` has a supporting block by production, and `T`'s cardinality does the counting. Both pacing disciplines end here — the full-timeout one arriving through `votesAt_of_synchronisedOn`, the reactive one through `ReactivePace.votes`.
+**The commit argument, stated once**: a quorum-sized `T` whose blocks one round above `r` all vote for `L` directly commits it, since a vote is a support and each `v ∈ T` has one by production. Both pacing disciplines end here.
 
 #### `directCommit_of_leader_mem`
 
@@ -19102,7 +18836,7 @@ theorem hB1uniq_of_correct {v1 : Validator} {B1 : BlockId}
       (U.block j).round = (U.block B1).round → j = B1
 ```
 
-**The boundary condition from correctness.** For a `v1` outside the ambient model's Byzantine set, non-equivocation pins its round-`r0` block to `B1`. This is how a `SkipMsg` is built in the base fault model, and it is what the `hB1uniq` field generalises: report §14's hybrid model discharges the same field for a *crash-prone* `v1`, whom `Correct` excludes.
+**The boundary condition from correctness.** For a `v1` outside the Byzantine set, non-equivocation pins its round-`r0` block to `B1` — how a `SkipMsg` is built here, and what `hB1uniq` generalises for a crash-prone `v1` in the hybrid model.
 
 #### `fillBlock_valid`
 
@@ -19114,7 +18848,7 @@ theorem fillBlock_valid {k : ℕ} (hk1 : sk.r0 < k) (hk2 : k ≤ sk.r) :
       (sk.fillBlock k)
 ```
 
-**The filled block is valid** under the extended block map: the copied references sit one round below (P1 of the line), `v1` appears among the authors exactly once — in the gap there is no `v1`-authored block for the line to have referenced, and at the boundary the only candidate is `B1` itself, by `hB1uniq` — the reference quorum only grows, and the added self reference is P3′.
+**The filled block is valid** under the extended block map: the copied references sit one round below (P1), `v1` appears among the authors exactly once (by `hB1uniq` at the boundary), the reference quorum only grows, and the added self reference is P3′.
 
 #### `reaches_fill_old`
 
@@ -19148,7 +18882,7 @@ theorem SkipMsg.line_eq_lineOf (sk : SkipMsg U) :
     ∀ k, sk.r0 ≤ k → k ≤ sk.r → sk.line k = lineOf U (sk.line sk.r) k
 ```
 
-**SS8.** A `SkipMsg`'s donor line is determined by its top block: on the whole interval the message's clauses govern, `line` coincides with the chain derived by following self-parents down from `line r`. The step is P2 through `eq_selfParent_of_mem`: the chain clause hands the line's next block to the one above as an own-creator reference, and there is only one of those.
+**SS8.** A `SkipMsg`'s donor line is determined by its top block: on the interval its clauses govern, `line` coincides with the chain derived by following self-parents down from `line r`, by P2's uniqueness of the own-creator reference.
 
 #### `SkipMsg.v1_eq_of_B1`
 
@@ -19173,9 +18907,7 @@ theorem SkipMsg.skipFill_eq_of_core [DecidableEq BlockId] (sk₁ sk₂ : SkipMsg
       ∧ ∀ b ∈ sk₁.skipFill.ids, sk₁.skipFill.block b = sk₂.skipFill.block b
 ```
 
-**SS9.** Two messages naming the same anchor and the same target, drawing fresh identifiers from the same supply, denote observationally equal universes: the identifier sets are equal and the blocks agree at every member. Stated in the style of `regenesis_converges` — the two objects may differ on junk outside their identifiers, which nothing reads.
-
-The decoder needs no hypothesis: `block` consults `idx` only at fresh identifiers, where `hidx` pins both decoders to the same index.
+**SS9.** Two messages naming the same anchor and the same target, drawing fresh identifiers from the same supply, denote observationally equal universes: the identifier sets are equal and the blocks agree at every member, differing only on junk outside their identifiers. The decoder needs no hypothesis, since `block` consults `idx` only at fresh identifiers, where `hidx` pins both to the same index.
 
 #### `lineOf_mem_view`
 
@@ -19238,9 +18970,7 @@ theorem not_synchronisedOn_skipFill (sk : SkipMsg U) {T : Finset Validator}
     ¬ SynchronisedOn sk.skipFill T R
 ```
 
-**I4, refuted.** The fill does not restore coverage. If the recovering validator is counted reliable — which is exactly what SS2 does — then at any gap round `k` above the coverage round, an old reliable block at `k+1` fails to reference the filled block at `k`.
-
-The hypotheses are the situation SS2 creates: `hv1` puts `v1` in the reliable set, `hk` places the gap round in the covered range, and `hb` asks only that some reliable validator built at the round above, which `PopulatedOn` supplies.
+**I4, refuted.** The fill does not restore coverage: if the recovering validator is counted reliable, an old reliable block at any gap round `k+1` fails to reference the filled block at `k`.
 
 #### `synchronisedOn_skipFill_of_notMem`
 
@@ -19252,7 +18982,7 @@ theorem synchronisedOn_skipFill_of_notMem (sk : SkipMsg U) {T : Finset Validator
     SynchronisedOn sk.skipFill T R
 ```
 
-**The refutation is narrow: it is about counting the recovering validator reliable during the gap it slept through.** Exclude it from the reliable set and coverage is untouched: the fill's blocks are its alone, so the clause never quantifies over them.
+**The refutation is narrow.** Exclude the recovering validator from the reliable set and coverage is untouched: the fill's blocks are its alone.
 
 #### `synchronisedOn_skipFill_above`
 
@@ -19264,9 +18994,7 @@ theorem synchronisedOn_skipFill_above (sk : SkipMsg U) {T : Finset Validator}
     SynchronisedOn sk.skipFill T R'
 ```
 
-**I4, positively.** Coverage holds *strictly* above the fill: past the target round every block is old, references are preserved, and the original condition applies unchanged. This is the form a liveness argument after recovery consumes.
-
-The strictness is not slack. At `n = sk.r` the lower block may still be the last filled one, and `not_synchronisedOn_skipFill` refutes coverage there; `sk.r < R'` is exactly the first round at which every block in play is old.
+**I4, positively.** Coverage holds strictly above the fill: past the target round every block is old and the original condition applies unchanged. The strictness is not slack — `not_synchronisedOn_skipFill` refutes it at `n = sk.r`.
 
 #### `synchronisedOn_chop`
 
@@ -19278,7 +19006,7 @@ theorem synchronisedOn_chop {T : Finset Validator} {Rs R' : ℕ}
     LeanDag.SynchronisedOn (chop U G) T R'
 ```
 
-**Synchrony survives the cut, from the rebase** (I2). `Sustains` applied, as votes and production already were.
+**Synchrony survives the cut, from the rebase** (I2).
 
 #### `slotsChop_slotsOf_eq`
 
@@ -19323,7 +19051,7 @@ theorem anchor_pruned (sk : SkipMsg U) (hG : (U.block sk.B1).round < G)
     (sk' : SkipMsg (chop U G)) : sk'.B1 ≠ sk.B1
 ```
 
-**I7a.** A horizon past the crash round prunes the anchor, and a pruned anchor cannot be used: every `SkipMsg` over the truncation must name a different one. This is the constraint, stated sharply.
+**I7a.** A horizon past the crash round prunes the anchor, so every `SkipMsg` over the truncation must name a different one.
 
 #### `no_blocks_of_no_genesis`
 
@@ -19337,8 +19065,6 @@ theorem no_blocks_of_no_genesis {v : Validator}
 
 **A severed chain cannot restart.** With no block at round `0`, a validator has no block at any round: P3′ walks every block down to genesis one round at a time, and P1 supplies the descent.
 
-Stated for an arbitrary universe because it is not about garbage collection — it is what P3′ means. Report §2.2 records that safety and liveness never consume the clause; this is a place where its *absence* would be felt, and it is consumed here to say what the clause costs.
-
 #### `severed_of_pruned_anchor`
 
 *theorem, `Integration.Retention.lean`*
@@ -19349,9 +19075,7 @@ theorem severed_of_pruned_anchor (sk : SkipMsg U)
     ∀ b ∈ (chop U G).ids, ((chop U G).block b).creator ≠ sk.v1
 ```
 
-**The recovering validator is severed, not merely unable to fill.** If the horizon has passed the crash round, the crashed validator has no block in the truncation's genesis layer — `hgap` says it authored nothing there — so by `no_blocks_of_no_genesis` it has no block in the truncation at all.
-
-This is why filling only the retained rounds is not a repair: there is nothing to chain the first filled block to, and the same obstruction blocks *any* attempt to resume, Safe Skip or otherwise. Rejoining after a horizon has passed one's whole history needs a protocol provision the model does not have — a re-genesis block, exempt from P3′ — and the practical alternative is the one I7 quantifies: keep the lag longer than the outage.
+**The recovering validator is severed, not merely unable to fill.** If the horizon has passed the crash round, `hgap` says the validator authored nothing in the truncation's genesis layer, so by `no_blocks_of_no_genesis` it has no block in the truncation at all.
 
 #### `outage_bounded_by_lag`
 
@@ -19363,9 +19087,7 @@ theorem outage_bounded_by_lag (sk : SkipMsg U) {Λ : ℕ}
     G ≤ sk.r0 ↔ sk.r - sk.r0 ≤ Λ
 ```
 
-**The lag bounds the recoverable outage.** With the horizon trailing the recovery round by `Λ`, the anchor survives exactly when the outage did not exceed `Λ`.
-
-So the two mechanisms are coupled by one inequality: *garbage collection at lag `Λ` supports Safe Skip recovery from outages of up to `Λ` rounds, and no more.* Beyond it the validator's last block has been pruned and it must bootstrap by report §9.5's attested base — which is why the two routes exist, and where the boundary between them falls.
+**The lag bounds the recoverable outage.** With the horizon trailing the recovery round by `Λ`, the anchor survives exactly when the outage did not exceed `Λ`: garbage collection at lag `Λ` supports Safe Skip recovery from outages of up to `Λ` rounds, and no more.
 
 #### `extends_addGenesis`
 
@@ -19377,7 +19099,7 @@ theorem extends_addGenesis :
       V (addGenesis V v g p hg hsev)
 ```
 
-**Re-genesis is an extension.** It adds one block and touches no other, which is the whole of the safety side.
+**Re-genesis is an extension.** It adds one block and touches no other.
 
 #### `sustains_addGenesis`
 
@@ -19389,7 +19111,7 @@ theorem sustains_addGenesis :
       V (addGenesis V v g p hg hsev) 0 1
 ```
 
-**And it rebases from round one at no offset.** The block it adds sits at round zero, so at and above round one the two universes hold the same blocks. Below that the relation says nothing, which is exactly where the mechanism does its work.
+**And it rebases from round one at no offset.** The block it adds sits at round zero, so at and above round one the two universes hold the same blocks.
 
 #### `populatedOn_addGenesis`
 
@@ -19402,9 +19124,7 @@ theorem populatedOn_addGenesis {hg : g ∉ V.ids}
     PopulatedOn (addGenesis V v g p hg hsev) (insert v T) 0
 ```
 
-**The chain restarts.** After re-genesis the stranded validator has a block at round `0`, so it is no longer severed: `no_blocks_of_no_genesis` no longer applies to it, and an ordinary Safe Skip anchored on the new block fills the rounds above.
-
-Stated as the population fact liveness consumes — the validator is back in the genesis layer, which is the hypothesis P8 asks for at round `0`.
+**The chain restarts.** After re-genesis the stranded validator has a block at round `0`, so it is no longer severed, and an ordinary Safe Skip anchored on the new block fills the rounds above.
 
 #### `dosValid_addGenesis`
 
@@ -19415,7 +19135,7 @@ theorem dosValid_addGenesis (hdos : DoSValid V) :
     DoSValid (addGenesis V v g p hg hsev)
 ```
 
-**I19a.** Re-genesis preserves the exposure condition. A block with no references can neither cite an exposed author nor enlarge anyone else's cone, so report §8's per-cone bound applies to the extended universe unchanged.
+**I19a.** Re-genesis preserves the exposure condition. A block with no references can neither cite an exposed author nor enlarge anyone else's cone.
 
 #### `chop_addGenesis`
 
@@ -19430,8 +19150,6 @@ theorem chop_addGenesis (hd : 0 < d)
 ```
 
 **A derived genesis is pruned by the next cut, without trace.** Any further truncation removes the round-`0` block and leaves the ordinary truncation of what lay beneath.
-
-Stated observationally — identifiers, and blocks at those identifiers — because the two universes differ on the junk outside their identifier sets, which nothing consults.
 
 #### `regenesis_converges`
 
@@ -19449,9 +19167,7 @@ theorem regenesis_converges {U : BlockUniverse Validator BlockId Payload}
             = (chop U G₂).block b
 ```
 
-**The convergence.** A validator at horizon `G₁`, truncating on to a later horizon `G₂`, holds exactly the blocks of a validator that cut at `G₂` directly — its derived genesis having been pruned on the way. Both then derive the same genesis from the same base, so heterogeneous horizons need no agreement.
-
-The identifier sets are equal and the blocks agree on them; the two universes are the same object as far as anything that reads them is concerned.
+**The convergence.** A validator at horizon `G₁`, truncating on to a later horizon `G₂`, holds exactly the blocks of a validator that cut at `G₂` directly.
 
 #### `hB1uniq_of_addGenesis`
 
@@ -19501,9 +19217,7 @@ theorem dosValid_skipFill (hdos : DoSValid U)
     DoSValid sk.skipFill
 ```
 
-**I1.** The fill can break the exposure condition only at its own blocks. Given `DoSValid U`, the extension is `DoSValid` as soon as each filled block is sound — a condition on the fill alone, which a recipient checks by computing the fill and inspecting it.
-
-This is the form report §8 asks of its clauses: structural, author-blind, and checkable by the party it binds. The predicted failure (`history_B1_subset_fill`) is not thereby avoided — a fill whose enlarged cone exposes a donor citation simply fails the check, and is refused rather than accepted and unsound.
+**I1.** The fill can break the exposure condition only at its own blocks. Given `DoSValid U`, the extension is `DoSValid` as soon as each filled block is sound — a condition on the fill alone.
 
 #### `fill_cone_subset`
 
@@ -19528,9 +19242,7 @@ theorem dosValid_skipFill_of_covered (hdos : DoSValid U)
     DoSValid sk.skipFill
 ```
 
-**I14.** The enforceable check reduces to reachability. If each donor block reaches the anchor and `v1` never equivocates, the fill preserves the exposure condition outright — no exposure computation over the extension is needed.
-
-This is the deployable form: a recipient verifies that the donor line covers the anchor, which is one reachability query per gap round against its own DAG.
+**I14.** The enforceable check reduces to reachability. If each donor block reaches the anchor and `v1` never equivocates, the fill preserves the exposure condition outright.
 
 #### `viewUpto_skipFillD`
 
@@ -19552,7 +19264,7 @@ theorem uniformBudget_skipFillD {T : ℕ} (hu : UniformBudget D T) :
     UniformBudget (skipFillD sk D hdown) T
 ```
 
-**I15b — the budget transfers.** Novelty is measured over the cone of an accepted block against the accumulated view, and both are unchanged, so the author-blind budget holds of the fill's delivery at the same constant.
+**I15b — the budget transfers.** Novelty is measured over the cone of an accepted block against the accumulated view, both unchanged, so the author-blind budget holds at the same constant.
 
 #### `not_refsAccepted_skipFillD`
 
@@ -19564,11 +19276,7 @@ theorem not_refsAccepted_skipFillD (hne : sk.r0 < sk.r)
     ¬ RefsAccepted (skipFillD sk D hdown)
 ```
 
-**I15c — the reference discipline does not transfer, and the failure is the mechanism's own.** `RefsAccepted` is the converse of `includes`: a correct validator references *only* what it accepted. A filled block references the donor's blocks, which the recovering validator did not accept — it was down. So the discipline fails at every filled block.
-
-This is not a defect of the transformer but a description of what Safe Skip does. The fill asserts references on `v1`'s behalf for rounds it slept through; `RefsAccepted` says a validator cites only what reached it. The two cannot both hold of a retroactive reconstruction under the delivery structure that records what actually arrived.
-
-The alternative is to model recovery as *acceptance at recovery time* — `v1` obtains the donor's blocks when it rejoins, and accepts exactly what its filled blocks cite. Both `includes` and `RefsAccepted` then hold by construction, `accepted_inj` following from the P2 clause `skipFill` already proves for `fillBlock`. What that model does not give away is the budget: the novelty of the newly accepted blocks is then a property of the fill, to be checked as in report §16.7 rather than inherited. Which model is right is a specification question about what a `Delivery` is meant to record, and it is recorded here rather than settled.
+**I15c — the reference discipline does not transfer, and the failure is the mechanism's own.** `RefsAccepted` says a correct validator references only what it accepted; a filled block references the donor's blocks, which `v1` did not accept while down. An alternative model, acceptance at recovery time, would satisfy both at the cost of the budget becoming a property of the fill to check rather than inherit; which model is right is a specification question, left open here.
 
 #### `notMem_of_no_blocks`
 
@@ -19594,9 +19302,7 @@ theorem card_severed_le {T S : Finset Validator} {r : ℕ}
     S.card ≤ F.f
 ```
 
-**I17.** At most `f` validators can be severed at once without costing liveness. A reliable set of quorum size is disjoint from every severed validator, so the severed cannot number more than the fault budget — and a validator recovering from an outage longer than the horizon lag is severed until it re-genesises.
-
-The hypothesis is the one every liveness capstone carries; the conclusion prices the recovery window.
+**I17.** At most `f` validators can be severed at once without costing liveness: a reliable set of quorum size is disjoint from every severed validator.
 
 #### `card_novelty_le_of_donor`
 
@@ -19613,9 +19319,7 @@ theorem card_novelty_le_of_donor {κ R : ℕ} (hbyz : ByzBudget D κ)
     (novelty U (viewUpto D v (n + 1)) b).card ≤ F.f * κ + 1
 ```
 
-**I18.** The novelty budget holds for a block whose references lie inside **any** correct validator's acceptances, provided that validator has a block at the round — not specifically the block's own author.
-
-Report §8.4's `RefsAccepted` asks for the author, and the pool argument uses only this. The two component lemmas were already stated at the right generality; composing them at a `w` other than the author is what had not been done.
+**I18.** The novelty budget holds for a block whose references lie inside any correct validator's acceptances, provided that validator has a block at the round — not specifically the block's own author.
 
 #### `exists_commonAt`
 
@@ -19627,7 +19331,7 @@ theorem exists_commonAt {r : ℕ} {c₀ : BlockId} (hc₀ : c₀ ∈ U.ids)
     ∃ b, CommonAt U b r ∧ (U.block b).creator ∈ (Correct : Finset Validator)
 ```
 
-**Common blocks exist at every round**, and are correct-authored — T3c restated in the vocabulary above. The hypothesis is only that some block exists two rounds up, which is what having a round to fill means.
+**Common blocks exist at every round**, and are correct-authored — T3c restated in the vocabulary above.
 
 #### `fill_refs_available`
 
@@ -19642,9 +19346,7 @@ theorem fill_refs_available (sk : SkipMsg U)
     i ∈ history U c
 ```
 
-**I19 — a fill against a common donor line transmits nothing.** Every reference the fill copies at a gap round lies in the causal past of every validator holding a block two rounds above that round.
-
-So the recipients need no blocks they lack: naming the target suffices, and each reconstructs the filled blocks from its own DAG. The `prev` reference is the recovering validator's own chain, supplied by the fill itself, so the copied references are the whole of what would otherwise have to be sent.
+**I19 — a fill against a common donor line transmits nothing.** Every reference the fill copies at a gap round lies in the causal past of every validator holding a block two rounds above it, so naming the target suffices.
 
 ### Hybrid fault tolerance: Byzantine and crash faults apart
 
@@ -19719,7 +19421,7 @@ theorem thickLink_of_directCommit (hne : HonestNoEquiv U)
     ThickLink k U A L r
 ```
 
-**H4 (O3's mirror) — link integrity.** If `L` is directly committed, every block from two rounds above it on carries at least `k` distinct support authors in its cone, for every admissible `k`: one hop is quorum intersection at `2q − n − fb = n − 3·fb − 2·fc ≥ k` — the interval's upper end, consumed exactly here — and depth is cone monotonicity.
+**H4 (O3's mirror) — link integrity.** If `L` is directly committed, every block two or more rounds above it carries at least `k` distinct support authors in its cone: one hop is quorum intersection at `n − 3fb − 2fc ≥ k`, the interval's upper end; depth is cone monotonicity.
 
 #### `eq_of_directCommit_of_thickLink`
 
@@ -19732,7 +19434,7 @@ theorem eq_of_directCommit_of_thickLink (hne : HonestNoEquiv U)
     (hcr : (U.block L₁).creator = (U.block L₂).creator) : L₁ = L₂
 ```
 
-**H5 (O4′'s mirror).** A directly committed block is the only same-author block that can pass the indirect test at any anchor: `q` supporters of `L₁` and `k` in-cone supporters of `L₂` overlap past the Byzantine class — `q + k > n + fb` is the interval's lower end again — and an honest overlap member supports two twins, which P2 and honesty jointly forbid.
+**H5 (O4′'s mirror).** A directly committed block is the only same-author block that can pass the indirect test at any anchor: `q` supporters of `L₁` and `k` in-cone supporters of `L₂` overlap past the Byzantine class, and an honest overlap member supporting two twins is what P2 and honesty jointly forbid.
 
 #### `directSkipIn_of_directSkipSlotIn`
 
@@ -19838,7 +19540,7 @@ theorem all_decided_below_of_fairRun {c : ℕ} (hc : 0 < c)
         ∀ i, i < b → ∃ v, Decided k U V i v
 ```
 
-**H7 (O10's mirror).** Under post-`R` coverage, growth to the horizon, and a recurring run of `c` reliable-led slots, every slot below the run is decided on any view caught up to the horizon — at every threshold `k`, the run placed past both the target and `R` by fairness. The reliable set excludes the crash-prone by construction: `T ⊆ Correct` reads through the derived instance.
+**H7 (O10's mirror).** Under post-`R` coverage, growth to the horizon, and a recurring run of `c` reliable-led slots, every slot below the run is decided on any view caught up to the horizon, at every threshold `k` — the reliable set excluding the crash-prone through the derived instance.
 
 #### `toHybrid_toFaults`
 
@@ -19886,9 +19588,7 @@ theorem partialRun_agree {V₁ V₂ : R.View U} {E₁ E₂ : ℕ}
     ∀ k, epochOf P.W k < min E₁ E₂ → A₁.vdct k = A₂.vdct k
 ```
 
-**The master agreement lemma.** Two partial runs over one universe — whatever views, each computing its schedule on its own, whatever heights — agree on the verdicts of their common epochs and on the assignments those verdicts determine.
-
-The strong induction the module docstring describes: verdict agreement below an epoch forces assignment agreement through the epoch above it (`adapted`), which forces verdict agreement at the epoch itself (`DecidedBelow.reschedule`, then `Agree`).
+**The master agreement lemma**: two partial runs over one universe, whatever views and heights, agree on the verdicts of their common epochs — the strong induction the module docstring describes.
 
 #### `descends_slotsOf`
 
@@ -19919,7 +19619,7 @@ theorem epoch_closes (hlc : LeaderCommits R Live)
         (P.W * (E + 2)) V k w
 ```
 
-**One epoch closes.** Against the schedule an arbitrary verdict function induces, with the protocol's precondition over the slots that schedule determines, every slot of epoch `E` is decided inside its window: the run `PlacesRuns` puts in epoch `E + 1` commits, and the descent clears everything below it.
+**One epoch closes**: every slot of epoch `E` is decided inside its window — the run `PlacesRuns` puts in epoch `E + 1` commits, and the descent clears everything below it.
 
 #### `exists_partialRun`
 
@@ -19934,7 +19634,7 @@ theorem exists_partialRun (hlc : LeaderCommits R Live)
     Nonempty (PartialRun P U V E)
 ```
 
-**Partial runs exist at every height** — the witnessable, finite- horizon form of existence, by induction on the height: each stage re-reads the schedule off the verdicts so far and closes one more epoch, under the precondition for that stage's schedule.
+**Partial runs exist at every height**, by induction: each stage re-reads the schedule off the verdicts so far and closes one more epoch.
 
 #### `partialRun_agree`
 
@@ -20255,9 +19955,7 @@ theorem reaches_of_supported {L : BlockId} {r : ℕ} (h : Supported U L r)
     Reaches U c L
 ```
 
-**The paper's Lemma 5.** A supported block is in the causal history of **every** block two rounds above it or higher — Byzantine-authored included, since validity is structural.
-
-The quorum behind the support contains `f + 1` correct authors, each with one round-`(r + 1)` block, and a round-`(r + 2)` block names `n − f` of the at most `n` authors of that round, so it cannot miss all of them. The core's `reaches_of_honest_support_of_card` is that step and `reaches_pred_of_round_le` carries it upward.
+**The paper's Lemma 5.** A supported block is in the causal history of every block two rounds above it or higher — Byzantine-authored included, since validity is structural — via the core's `reaches_of_honest_support_of_card`, carried upward by `reaches_pred_of_round_le`.
 
 #### `reaches_of_committed_of_le`
 
@@ -20269,9 +19967,7 @@ theorem reaches_of_committed_of_le {L₁ L₂ : BlockId} {r₁ r₂ : ℕ}
     L₁ = L₂ ∨ Reaches U L₂ L₁
 ```
 
-**The paper's Lemma 6**, in the form the round comparison gives: of two committed anchors, the lower lies in the causal history of the higher.
-
-Three cases, one per clause of the rule. At equal rounds Lemma 3 makes them the same block. At a gap of one the linking anchor of the lower is supported at the same round as the higher one, so Lemma 3 identifies the two and the link is a direct reference. At a gap of two or more Lemma 5 applies to the higher block itself.
+**The paper's Lemma 6**, in the form the round comparison gives: of two committed anchors, the lower lies in the causal history of the higher — by Lemma 3 at equal rounds or a gap of one via the shared linking anchor, by Lemma 5 at a gap of two or more.
 
 #### `quorum_authorsAt_of_lt`
 
@@ -20490,7 +20186,7 @@ theorem honest_voters (voters : Finset Validator)
     2 * F.f + P.p ≤ (voters ∩ (Correct : Finset Validator)).card + 1
 ```
 
-**The honest votes.** Of the `n − p` votes a validator sees on the fast path, at least `n − p − f` are by correct validators, and those are the same in every DAG.
+**The honest votes.** Of the `n − p` votes a validator sees, at least `n − p − f` are by correct validators, the same in every DAG.
 
 #### `nonequivocating_voters`
 
@@ -20503,7 +20199,7 @@ theorem nonequivocating_voters {voters parents : Finset Validator}
     F.f + P.p ≤ (parents ∩ (voters ∩ (Correct : Finset Validator))).card + 1
 ```
 
-**Lemma 4, non-equivocating branch.** A round-`(r+2)` block that does not expose the leader's equivocation references at least `f + p − 1` parents voting for `b`.
+**Lemma 4, non-equivocating branch**: such a block references at least `f + p − 1` parents voting for `b`.
 
 #### `honest_nonvoters`
 
@@ -20515,7 +20211,7 @@ theorem honest_nonvoters {voters : Finset Validator}
     ((Correct : Finset Validator) \ voters).card ≤ P.p
 ```
 
-**At most `p` correct validators fail to vote.** The `n − p` votes may include up to `|byzantine|` that no other DAG sees, but the same `|byzantine|` is missing from `Correct`, so the two cancel: whatever the actual fault load, at most `p` correct validators are non-voters.
+**At most `p` correct validators fail to vote**: the votes another DAG might not see and the validators `Correct` excludes are the same size, so they cancel.
 
 #### `equivocating_voters`
 
@@ -20529,7 +20225,7 @@ theorem equivocating_voters {voters parents : Finset Validator}
     F.f + P.p ≤ (parents ∩ (voters ∩ (Correct : Finset Validator))).card
 ```
 
-**Lemma 4, equivocating branch.** A round-`(r+2)` block that exposes the equivocation may not reference the equivocating leader, so at most `f − 1` of its parents are Byzantine. Its honest parents number `n − 2f + 1`, of which at most `p` fail to vote, leaving `f + p` voting for `b` — one more than the other branch, which is what the definition asks of a block that has seen the equivocation.
+**Lemma 4, equivocating branch**: such a block excludes the equivocating leader, so at most `f − 1` of its parents are Byzantine, and at most `p` of its `n − 2f + 1` honest parents fail to vote.
 
 #### `conflicting_voters_le`
 
@@ -20543,9 +20239,7 @@ theorem conflicting_voters_le {voters parents conflicting : Finset Validator}
     (parents ∩ conflicting).card + 1 ≤ F.f + P.p
 ```
 
-**The conflicting side of Lemma 4.** Under the same hypotheses, a block that exposes the equivocation references at most `f + p − 1` parents voting for any block conflicting with `b`: at most `p` correct non-voters, and at most `f − 1` Byzantine parents.
-
-`conflicting` is any set of validators no correct voter belongs to — a correct validator votes once per slot, so it cannot vote for two blocks of it.
+**The conflicting side of Lemma 4**: such a block references at most `f + p − 1` parents voting for any block conflicting with `b`, `conflicting` being any set no correct voter for `b` belongs to.
 
 #### `equivocating_margin`
 
@@ -20557,9 +20251,7 @@ theorem equivocating_margin (f p n m : ℕ) (hp : 1 ≤ p) (_hpf : p ≤ f)
     (n - 2 * f + 1) - p = f + p ∧ (m - 2 * f + 1) - p + 1 = f + p
 ```
 
-**The committee bound is tight.** The equivocating branch counts the honest parents of a block that excludes the equivocating leader, `n − 2f + 1`, less the correct non-voters, at most `p`. At `n = 3f + 2p − 1` that is exactly `f + p`, the threshold the FP-evidence definition asks for, with nothing to spare. One validator fewer and it is `f + p − 1`, one short, for every `f` and `p` in range.
-
-So the committee is not chosen with slack: it is the least at which Lemma 4 holds.
+**The committee bound is tight**: at `n = 3f + 2p − 1` the equivocating branch clears its threshold with nothing to spare, and one validator fewer misses it by one, for every `f` and `p` in range.
 
 #### `window_margin`
 
@@ -20570,7 +20262,7 @@ theorem window_margin (f p n : ℕ) (hp : 1 ≤ p) (hn : n + 1 = 3 * f + 2 * p) 
     3 * f + 3 + 2 * p = n + 4 ∧ (n + 2 ≤ 3 * f + 3 ↔ p ≤ 1)
 ```
 
-**Lemma 22's window against the cycle.** Its proof reads a window of `3f + 3` rounds as "a full cycle of `n` rounds plus the first two rounds of the next". The difference `3f + 3 − n` is `4 − 2p` and does not involve `f`, so the reading is available exactly at `p ≤ 1`: a cycle plus two rounds at `p = 1`, one cycle at `p = 2`, and short of a cycle beyond.
+**Lemma 22's window against the cycle**: its `3f + 3`-round window reads as a full cycle plus two rounds exactly at `p ≤ 1`.
 
 #### `c3_reachable`
 
@@ -20581,7 +20273,7 @@ theorem c3_reachable (f n j : ℕ) (hn : 2 * f ≤ n) :
     n - f ≤ j + 1 + f ↔ n - 2 * f - 1 ≤ j
 ```
 
-**When C3 becomes reachable.** A validator with `j` honest validators ahead of it holds at most `j + 1 + f` blocks of its own round, so C3's threshold of `n − f` is within reach exactly from `j = n − 2f − 1`. The validators that certainly cannot use C3 are therefore the fastest `n − 2f − 1`, one fewer than the `n − 2f` the paper's set has.
+**When C3 becomes reachable**: at `j` honest validators ahead of it, C3's threshold `n − f` is within reach exactly from `j = n − 2f − 1`.
 
 #### `c3_margin`
 
@@ -20593,7 +20285,7 @@ theorem c3_margin (f p n : ℕ) (hp : 1 ≤ p) (hn : n + 1 = 3 * f + 2 * p) :
       (p = 1 → n - 2 * f - 1 = f)
 ```
 
-**And what that one member costs.** The pigeonhole margin over the `f` faulty authors is `|H| − f`. At the paper's `|H| = n − 2f` it is `2p − 1`, positive at every `p`; at the correct `|H| = n − 2f − 1` it is `2p − 2`, and at `p = 1` the set has exactly `f` members, so the intersection bound is zero and the argument names no block.
+**And what that one member costs**: the pigeonhole margin `|H| − f` drops from `2p − 1` at the paper's `|H|` to `2p − 2` at the correct one, vanishing at `p = 1`.
 
 #### `not_refs_conflicting`
 
@@ -20605,7 +20297,7 @@ theorem not_refs_conflicting {c l l' : BlockId}
     (hl : l ∈ (D.block c).refs) (hl' : l' ∈ (D.block c).refs) : False
 ```
 
-**No block references two blocks of one author.** Validity's `distinct_creators` says so directly, and it is why `selects_leader` and `selects_votes` below are guarded: a selection clause that obliged a builder to reference every version of an equivocating leader's block it held would be satisfiable by no valid DAG at all.
+**No block references two blocks of one author.** Validity's `distinct_creators` says so directly.
 
 #### `exposed_not_parent`
 
@@ -20616,9 +20308,7 @@ theorem exposed_not_parent {b : BlockId} (hb : b ∈ D.ids) {w : Validator}
     (hexp : ExposesEquivocationBy D b w) : w ∉ parentSet D b
 ```
 
-**A block that exposes a validator's equivocation drops it.** Its parents disagree about `w`, so validity's first clause fails at `w` and the second must hold: `w`'s block is not a parent.
-
-The round hypothesis is gone with the schedule: the clause now holds at every validator, so nothing has to place `w` two rounds down.
+**A block that exposes a validator's equivocation drops it**: validity's first clause fails at `w`, so the second holds and `w`'s block is not a parent.
 
 #### `parents_byzantine_lt`
 
@@ -20630,7 +20320,7 @@ theorem parents_byzantine_lt {b : BlockId} {w : Validator}
     (parentSet D b ∩ F.byzantine).card + 1 ≤ F.f
 ```
 
-**The `f − 1` bound.** The validator that equivocated is Byzantine and is not a parent, so at most `f − 1` of the parents are Byzantine.
+**The `f − 1` bound**: the equivocator is Byzantine and not a parent, so at most `f − 1` of the parents are Byzantine.
 
 #### `lemma4`
 
@@ -20644,9 +20334,7 @@ theorem lemma4 {b l : BlockId}
     FPEvidence D b l
 ```
 
-**Lemma 4.** If `n − p` distinct validators vote for a leader block `l` of round `r`, then every round-`(r+2)` block is FP-evidence for `l`. Both branches of the definition are met: the count of parents voting for `l`, and — where the block has seen the equivocation — the bound on the parents voting for anything conflicting.
-
-**It no longer needs to know that `l` is a leader block.** The rule reads the equivocation at `l`'s own author, and the validity clause holds at every validator, so the schedule never enters.
+**Lemma 4.** If `n − p` distinct validators vote for a leader block `l` of round `r`, every round-`(r+2)` block is FP-evidence for `l`. Both branches of the definition are met, and no schedule is needed: the rule reads the equivocation at `l`'s own author.
 
 #### `lemma8`
 
@@ -20658,7 +20346,7 @@ theorem lemma8 {l l' : BlockId} (hconf : Conflicting D l l')
     (h' : spQuorum Validator ≤ (voters D l').card) : False
 ```
 
-**Lemma 8.** At most one block of a slot gathers a quorum of votes. Two quorums of `2f + p` among `n = 3f + 2p − 1` share `f + 1` validators, one of them correct, and a correct validator votes once.
+**Lemma 8**: at most one block of a slot gathers a quorum of votes, since two such quorums would share a correct validator who votes once.
 
 #### `no_skip_of_quorum`
 
@@ -20686,9 +20374,7 @@ theorem no_skip_of_fpEvidence {l : BlockId} {slot : Finset BlockId}
       (D.block b).creator = v ∧ NonFPEvidence D b slot) : False
 ```
 
-**Lemma 6, the fast-path side.** A quorum of FP-evidence blocks for `l` and a quorum of Non-FP-evidence blocks cannot both exist.
-
-The counts are by author, so the two sets meet in `f + 1` authors — and the argument needs one of them to be *correct*, since a Byzantine author may write one block of each kind and satisfy both counts with no contradiction. A correct author writes one round-`(r+2)` block, and that block cannot be FP-evidence for `l` and for nothing at once.
+**Lemma 6, the fast-path side.** A quorum of FP-evidence blocks for `l` and a quorum of Non-FP-evidence blocks cannot both exist: the counts meet in `f + 1` authors, and a correct one among them writes a single round-`(r+2)` block that cannot be both.
 
 #### `no_nonFPEvidence_of_fastCommit`
 
@@ -20747,7 +20433,7 @@ theorem indirectCommitOn_iff {A : BlockId} (hA : A ∈ D.ids) {r : ℕ} {b : Blo
     IndirectCommitOn S D A r b ↔ IndirectCommit S D A r b
 ```
 
-**And they are the same condition**, for an anchor of the DAG.
+**They are the same condition**, for an anchor of the DAG.
 
 #### `indirect_view_independent`
 
@@ -20759,7 +20445,7 @@ theorem indirect_view_independent {A : BlockId} {S : Finset BlockId}
     {c : BlockId} (hreach : ReachesFrom D.block A c) : c ∈ S
 ```
 
-**The tie-break reads only the anchor.** A validator whose view holds the anchor holds every block the anchor reaches, so the whole condition is evaluable there and gives the same answer as anywhere else. This is what Black Marlin's descent lacked: there the input differed because the anchors differed.
+**The tie-break reads only the anchor**: a validator whose view holds it holds every block it reaches, so the condition gives the same answer wherever it is evaluated.
 
 #### `no_indirectCommit_of_fastCommit`
 
@@ -20772,7 +20458,7 @@ theorem no_indirectCommit_of_fastCommit {A : BlockId} {r : ℕ} {b b' : BlockId}
     ¬ IndirectCommit S D A r b'
 ```
 
-**A direct commit rules out an indirect commit of a conflicting block.** Either route to `b'` would need a quorum of validators behind it: an SP-certificate carries a quorum of voters, which Lemma 8 forbids beside `b`'s; and a quorum of FP-evidence blocks for `b'` is impossible under a fast commit for `b`, since no round-`(r+2)` block is FP-evidence for a conflicting block at all.
+**A direct commit rules out an indirect commit of a conflicting block**: an SP-certificate would carry a second quorum Lemma 8 forbids, and no round-`(r+2)` block is FP-evidence for a conflicting block under a fast commit.
 
 #### `no_indirectCommit_of_directSkip`
 
@@ -20783,7 +20469,7 @@ theorem no_indirectCommit_of_directSkip {A : BlockId} {r : ℕ} {b : BlockId}
     (hskip : DirectSkip S D r) : ¬ IndirectCommit S D A r b
 ```
 
-**A direct skip rules out an indirect commit.** Either route needs a quorum the skip pattern denies: an SP-certificate carries a quorum of voters against the SP-skip half, and a quorum of FP-evidence blocks meets the quorum of Non-FP-evidence blocks in a correct author, whose single round-`(r+2)` block cannot be both.
+**A direct skip rules out an indirect commit**: either route needs a quorum the skip pattern denies, meeting its Non-FP-evidence quorum in a correct author whose one block cannot be both.
 
 #### `indirectCommit_of_directCommit`
 
@@ -20796,7 +20482,7 @@ theorem indirectCommit_of_directCommit {A : BlockId} {r : ℕ} {l : BlockId}
     IndirectCommit S D A r l
 ```
 
-**A direct commit is visible from every anchor above it.** This is Lemma 7's indirect half: whichever path committed `l` directly leaves a trail that any block at round `r + 3` or above reaches — a quorum of FP-evidence blocks under the fast path, an SP-certificate under the slow one. So the anchor's rule always has a candidate to name.
+**A direct commit is visible from every anchor above it**: Lemma 7's indirect half, leaving a trail — FP-evidence or an SP-certificate — that any block at round `r + 3` or above reaches.
 
 #### `no_indirectCommit_of_directCommit`
 
@@ -20824,9 +20510,7 @@ theorem reaches_fpEvidence_quorum {c l : BlockId} (hc : c ∈ D.ids) (hl : l ∈
         ReachesFrom D.block c b ∧ (D.block b).creator = v ∧ FPEvidence D b l
 ```
 
-**Lemma 5, at any height.** Under a fast commit for `l`, every block at round `r + 3` or above reaches `n − f` round-`(r+2)` blocks, from distinct validators, all of them FP-evidence for `l` — the paper's count, at every height rather than only at `r + 3`.
-
-The block descends to round `r + 3` first; there Lemma 5 applies to its parents, and reachability composes.
+**Lemma 5, at any height.** Under a fast commit for `l`, every block at round `r + 3` or above reaches `n − f` round-`(r+2)` blocks, from distinct validators, all FP-evidence for `l` — reached by descending to round `r + 3` first, where Lemma 5 applies directly.
 
 #### `chooseSound_least`
 
@@ -20950,7 +20634,7 @@ theorem mem_view_of_voters {c l : BlockId} (hc : c ∈ V.ids)
     (hvote : spQuorum Validator ≤ (voters D l).card) : l ∈ V.ids
 ```
 
-**Closure, in its counting form.** A view holding one round-`(r+2)` block holds every block a quorum of round-`(r+1)` validators votes for: that block carries `n − f` parents, which meet the quorum in `f + p` authors, one of them correct — and a correct author's round-`(r+1)` block is one block, so the parent and the vote are the same block.
+**Closure, in its counting form.** A view holding one round-`(r+2)` block holds every block a quorum of round-`(r+1)` validators votes for: the two quorums meet in a correct author, whose vote and parent coincide.
 
 #### `fpEvidence_restrict`
 
@@ -20984,7 +20668,7 @@ theorem no_directSkip_of_commit_view {r : ℕ} {l : BlockId}
     ¬ DirectSkip S (V.toRecord) r
 ```
 
-**A view's direct skip is incompatible with a direct commit.** The skip carries a quorum of round-`(r+2)` blocks, and a single one of them already puts the committed block in the view; then either Lemma 4 or Lemma 2 makes one of those blocks FP-evidence for it, which is what Non-FP-evidence denies.
+**A view's direct skip is incompatible with a direct commit**: a single round-`(r+2)` block of the skip's quorum puts the committed block in the view, and Lemma 4 or Lemma 2 makes it evidence for it, which Non-FP-evidence denies.
 
 #### `no_indirectCommit_of_directSkip_view`
 
@@ -20995,7 +20679,7 @@ theorem no_indirectCommit_of_directSkip_view {A : BlockId} {r : ℕ} {b : BlockI
     (hskip : DirectSkip S (V.toRecord) r) : ¬ IndirectCommit S D A r b
 ```
 
-**A view's direct skip is incompatible with an indirect commit.** Either route puts the candidate in the view — an SP-certificate through the voter count, a quorum of evidence through the author the two quorums share — and then the skip's own conditions deny it.
+**A view's direct skip is incompatible with an indirect commit.** Either route puts the candidate in the view, and the skip's own conditions deny it there.
 
 #### `directSkip_mono`
 
@@ -21006,7 +20690,7 @@ theorem directSkip_mono {V' : D.View} (hsub : V.ids ⊆ V'.ids) {k : ℕ}
     (h : DirectSkip S (V.toRecord) k) : DirectSkip S (V'.toRecord) k
 ```
 
-**The direct skip survives the view growing.** For a candidate the smaller view held, its blames and its no-evidence blocks carry over. For a candidate the larger view adds, no block of the smaller view references it: the no-evidence blocks' parents — a quorum of them, by validity — all decline to vote for it, and none of those blocks has a parent voting for it, so none is evidence for it.
+**The direct skip survives the view growing.** A held candidate's blames and no-evidence blocks carry over; a new candidate is referenced by no block the smaller view holds, so it collects no votes and no evidence either.
 
 #### `decided_of_wellFormed`
 
@@ -21020,7 +20704,7 @@ theorem decided_of_wellFormed {V : D.View} {dec : ℕ → Verdict BlockId}
     ∀ r, dec r ≠ Verdict.undecided → Decided D V r (dec r).optOf
 ```
 
-**The reverse pass lands in the relation.** Every slot a well-formed assignment decides, it decides as the relation does: a direct verdict is the direct constructor; an indirect one reads the anchor — the least eligible unskipped slot, hence committed and with every eligible slot between skipped, both by the induction hypothesis — and the tie-break's choice is the rung's, or the rung is empty and the slot skips.
+**The reverse pass lands in the relation.** Every slot a well-formed assignment decides, it decides as the relation does: direct verdicts by the direct constructor, indirect ones by the induction hypothesis at the nearest eligible committed anchor.
 
 #### `finWhaleLaws`
 
@@ -21054,7 +20738,7 @@ theorem agreement_of_commits [LinearOrder BlockId] {V V' : D.View}
     linearise hist (commitSeq dec k) = linearise hist (commitSeq dec' k)
 ```
 
-**Theorem 24 (Agreement), end to end.** Two validators of one DAG, each running the reverse pass on its own view, deliver the same sequence at every horizon the DAG supports. The relation's agreement makes the verdicts agree wherever both are decided — each pass lands in the relation — and Lemma 23 makes them decided. `hsees` is the liveness interface, and the schedule that supplies it does not appear.
+**Theorem 24 (Agreement), end to end.** Two validators running the reverse pass on their own views deliver the same sequence at every horizon: the relation's agreement settles verdicts both have decided, and Lemma 23 (via `hsees`) makes them decided.
 
 #### `lemma23`
 
@@ -21069,11 +20753,7 @@ theorem lemma23 {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
     dec r ≠ Verdict.undecided
 ```
 
-**Lemma 23.** Every slot below a committed triple is decided.
-
-The paper's argument, with the maximality made explicit: if some slot below the triple were undecided, take the highest such. Everything above it up to the triple is decided, so the first non-skipped slot above it is a commit and serves as its anchor — and a slot with a committed anchor is decided by the reverse pass.
-
-The triple is what covers the three offsets: the anchor must sit above `r + 2`, and for `r` within two of the triple's start only its later members qualify.
+**Lemma 23.** Every slot below a committed triple is decided: taking the highest undecided slot below it, the first non-skipped slot above it is a commit and serves as its anchor.
 
 #### `committed_triple`
 
@@ -21107,7 +20787,7 @@ theorem all_decided {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
     dec r ≠ Verdict.undecided
 ```
 
-**Lemma 23, composed.** Every slot below the horizon is decided — including the slots before GST, which the reverse pass decides from an anchor above them. Only the *triple* has to sit past the coverage round, which is why `R` enters through a maximum rather than as a floor on `r`.
+**Lemma 23, composed.** Every slot below the horizon is decided, including those before GST, decided from an anchor above them; only the triple must sit past the coverage round, hence the maximum.
 
 #### `theorem24`
 
@@ -21122,7 +20802,7 @@ theorem theorem24 {dec dec' : ℕ → Verdict BlockId} {k : ℕ}
     linearise hist (commitSeq dec k) = linearise hist (commitSeq dec' k)
 ```
 
-**Theorem 24 (Agreement).** Two validators that have decided every slot below `k` deliver the same sequence — not merely comparable ones. Lemma 12 supplies the agreement, `commitSeq_congr` carries it to the sequence, and the delivery order is a function of that.
+**Theorem 24 (Agreement)**: two validators that have decided every slot below `k` deliver the same sequence, from Lemma 12's agreement through `commitSeq_congr`.
 
 #### `mem_histOf`
 
@@ -21133,7 +20813,7 @@ theorem mem_histOf [LinearOrder BlockId] {l c : BlockId} (hl : l ∈ D.ids)
     (h : ReachesFrom D.block l c) : c ∈ histOf D l
 ```
 
-`histOf` is the causal history: the faithfulness condition Theorem 26 asks for, discharged.
+`histOf` is the causal history, discharging the faithfulness condition Theorem 26 asks for.
 
 #### `nodup_histOf`
 
@@ -21193,9 +20873,7 @@ theorem three_correct_of_roundRobin {leader : ℕ → Validator} (h : RoundRobin
       leader (r + 2) ∈ (Correct : Finset Validator)
 ```
 
-**Lemma 22, the cyclic half.** Every window of `n` starting rounds contains one whose three consecutive leaders are all correct — so the triple itself lies within `n + 2` rounds.
-
-If it did not, every cyclic position would carry a Byzantine leader within two of it. A Byzantine validator sits at one cyclic position and so answers for at most three positions, leaving `n ≤ 3f`, against the fault model's `3f + 1 ≤ n`.
+**Lemma 22, the cyclic half**: some triple of consecutive correct leaders lies within `n + 2` rounds, since otherwise every cyclic position would carry a Byzantine leader within two of it, and each Byzantine validator covers at most three positions, giving `n ≤ 3f` against the fault model.
 
 #### `exists_round_led_by`
 
@@ -21207,7 +20885,7 @@ theorem exists_round_led_by {leader : ℕ → Validator} (h : RoundRobin leader)
     ∃ s, r₀ ≤ s ∧ s < r₀ + Fintype.card Validator ∧ leader s = v
 ```
 
-**Round robin names every validator once a cycle.** For any validator and any starting round there is a round within the cycle it leads.
+**Round robin names every validator once a cycle**, within any starting round.
 
 #### `three_correct_window`
 
@@ -21222,7 +20900,7 @@ theorem three_correct_window {leader : ℕ → Validator} (h : RoundRobin leader
       leader (r + 2) ∈ (Correct : Finset Validator)
 ```
 
-**Lemma 22, the pigeonhole half**, where the window fits inside a cycle. The `3f + 3` rounds then name distinct validators, and `f + 1` disjoint triples would need `f + 1` distinct Byzantine leaders.
+**Lemma 22, the pigeonhole half**, where the window fits inside a cycle: `f + 1` disjoint triples would need `f + 1` distinct Byzantine leaders.
 
 #### `lemma22`
 
@@ -21237,9 +20915,7 @@ theorem lemma22 [P : Params Validator] {leader : ℕ → Validator} (h : RoundRo
       leader (r + 2) ∈ (Correct : Finset Validator)
 ```
 
-**Lemma 22.** In any window of `3f + 3` rounds, round robin names three consecutive rounds with correct leaders.
-
-Two arguments, by regime. Where the window fits inside a cycle — which is `p ≥ 2` — it is the pigeonhole. Where it does not, `p = 1` and the committee is `3f + 1`, so `3f + 3` is exactly a cycle and two rounds, and the cyclic count applies. The paper gives only the second, and states it for every `p`.
+**Lemma 22.** In any window of `3f + 3` rounds, round robin names three consecutive correct-led rounds — the pigeonhole where the window fits inside a cycle, the cyclic count at `p = 1` otherwise, though the paper gives only the latter.
 
 #### `spCertificate_of_certifies`
 
@@ -21250,7 +20926,7 @@ theorem spCertificate_of_certifies (hblk : D.block = U.block) {c : BlockId}
     (h : Certifies U c L) : SPCertificate D c L
 ```
 
-**Mysticeti's certificate is FinWhale's.** Both count the parents that vote, and FinWhale asks for `2f + p` where the validity quorum is `n − f`, which is no smaller.
+**Mysticeti's certificate is FinWhale's**: both count voting parents, and FinWhale's `2f + p` is no larger than the validity quorum.
 
 #### `spCommit_of_reactive`
 
@@ -21266,7 +20942,7 @@ theorem spCommit_of_reactive (rm : ReactiveM U T N)
     SPCommitBy D L T
 ```
 
-**Lemma 20 on the reactive route.** The reliable validators' own round-`(r+2)` blocks are certificates for a reliable leader's block, and there are `n − f ≥ 2f + p` of them.
+**Lemma 20 on the reactive route**: the reliable validators' round-`(r+2)` blocks are certificates for a reliable leader's block, `n − f ≥ 2f + p` of them.
 
 #### `fastCommit_of_reactive`
 
@@ -21282,7 +20958,7 @@ theorem fastCommit_of_reactive (rc : ReactivePace U T N)
     FastCommit D L
 ```
 
-**Theorem 21 on the reactive route.** Where at most `p` validators are Byzantine, the reliable validators' votes alone are a fast commit — and the reactive exit is what makes them votes.
+**Theorem 21 on the reactive route**: where at most `p` validators are Byzantine, the reliable validators' votes alone are a fast commit.
 
 #### `fastCommit_latency`
 
@@ -21303,7 +20979,7 @@ theorem fastCommit_latency (rc : ReactivePace U T N)
         ≤ rc.built v (S.slotRound k) + rc.delay + δ + 2 * rc.proc
 ```
 
-**The fast commit, and when its votes are built.** Under `δ`-propagation past GST and at most `p` actual faults, the correct validators' round-`(r+1)` blocks all vote for a correct leader's block — which is a fast commit — and each is built within `Δ + δ + 2·proc` of its author entering round `r`: the collapsed spread, one delivery, and two processing steps. The timeout does not appear.
+**The fast commit, and when its votes are built**: under `δ`-propagation past GST and at most `p` actual faults, every correct round-`(r+1)` block votes and is built within `Δ + δ + 2·proc` of its author entering round `r`, with no timeout involved.
 
 #### `no_timeout_of_fast`
 
@@ -21377,7 +21053,7 @@ theorem holds_of_timeout {R n : ℕ} (hcard : quorumCard Validator ≤ T.card)
     b ∈ cr.holds v (cr.built v (n + 1))
 ```
 
-**A timeout-triggered builder holds every reliable block of the round below.** The block is in its author's hands when built, convergence carries it across within `delay`, and the collapsed drift plus the full timeout place that arrival before the waiter's build.
+**A timeout-triggered builder holds every reliable block of the round below**: convergence carries it across within `delay`, and the full timeout places that arrival before the waiter's build.
 
 #### `lemma18`
 
@@ -21393,9 +21069,7 @@ theorem lemma18 {R n : ℕ} (hcard : quorumCard Validator ≤ T.card)
       L ∈ (U.block c).refs
 ```
 
-**Lemma 18, derived from the creation rule.** Past the coverage round, every reliable round-`(n+1)` block references a reliable leader's round-`n` block.
-
-The three conditions are three ways of holding the leader's block when building. C1 holds it by its own L1. C2 waited the full timeout, and the drift bound places the arrival first. C3 holds `n − f` blocks of the round it is building, and the two quorums meet in a reliable validator other than the builder, which built strictly earlier — so the induction hypothesis makes *its* block a vote, and a view closed under references holds what that block references. Parent selection does the rest.
+**Lemma 18, derived from the creation rule.** Past the coverage round, every reliable round-`(n+1)` block references a reliable leader's round-`n` block: C1 by its own L1, C2 by the timeout, C3 through a strictly earlier reliable builder the induction hypothesis covers.
 
 #### `lemma19`
 
@@ -21411,9 +21085,7 @@ theorem lemma19 {R n : ℕ} (hcard : quorumCard Validator ≤ T.card)
       CertifiesSP U c L
 ```
 
-**Lemma 19, derived from the creation rule.** Every reliable round-`(n+2)` block carries a slow-path quorum of parents voting for a reliable leader's round-`n` block.
-
-C1 holds a quorum of voters by its own L2 — its other branch, a quorum declining to vote, is refuted by Lemma 18: a reliable validator's single round-`(n+1)` block does vote, so such a quorum would be Byzantine and `f < 2f + p`. C2 holds every reliable vote, by the same timeout argument one round up. C3 goes through a strictly earlier reliable builder of its own round, whose parents are votes and whose references the holder therefore holds.
+**Lemma 19, derived from the creation rule.** Every reliable round-`(n+2)` block carries a slow-path quorum of parents voting for a reliable leader's round-`n` block: C1's skip branch is refuted by Lemma 18, C2 by the timeout one round up, C3 through a strictly earlier reliable builder.
 
 #### `Creation.lemma20`
 
@@ -21430,7 +21102,7 @@ theorem Creation.lemma20 (cr : Creation U T N S.leader)
     SPCommitBy D L T
 ```
 
-**Lemma 20, from the creation rule.** A reliable leader's block is committed by the slow path: every reliable validator's round-`(r+2)` block certifies it, and they are `n − f ≥ 2f + p`.
+**Lemma 20, from the creation rule**: a reliable leader's block is committed by the slow path, at `n − f ≥ 2f + p` certifiers.
 
 #### `commits_of_creation`
 
@@ -21445,7 +21117,7 @@ theorem commits_of_creation (cr : Creation U T N S.leader)
     CommitsCorrectLeaders S D R N
 ```
 
-**The liveness interface, from the creation rule.** Every correct-led slot below the horizon carries a direct commit — with the vote and certificate clauses derived from C1, C2 and C3 rather than assumed.
+**The liveness interface, from the creation rule**: every correct-led slot below the horizon carries a direct commit, with the vote and certificate clauses derived rather than assumed.
 
 #### `Creation.theorem21`
 
@@ -21463,7 +21135,7 @@ theorem Creation.theorem21 (cr : Creation U T N S.leader)
     FastCommit D L
 ```
 
-**Theorem 21, from the creation rule.** Where at most `p` validators are Byzantine, the reliable validators' votes alone are a fast commit.
+**Theorem 21, from the creation rule**: where at most `p` validators are Byzantine, the reliable validators' votes alone are a fast commit.
 
 #### `held_of_pace`
 
@@ -21498,9 +21170,7 @@ theorem all_decided_of_pass (pc : PaceCore U (Correct : Finset Validator) M)
       choose Np r ≠ Verdict.undecided
 ```
 
-**Every slot below the horizon is decided**, by a validator whose view is its own holdings and whose verdicts are the reverse pass.
-
-Nothing about the validator is a hypothesis here. Its view is `pc.holds v` — the store clauses make that a view — its verdicts are `decOf`, which `wellFormed_decOf` makes well formed, and what it holds is what the network delivered. What is left is about the schedule and the DAG: that the pace reaches the rounds (`hle`, `hcard`), that the coverage round is past GST, that the liveness interface holds, and that the rotation is round robin.
+**Every slot below the horizon is decided**, by a validator whose view is its own holdings and whose verdicts are the reverse pass. Nothing about the validator itself is a hypothesis; what remains is about the schedule and the DAG reaching the rounds.
 
 #### `held`
 
@@ -21524,7 +21194,7 @@ theorem leaderClause_of_dosValid (hdos : DoSValid U)
     Clause.leaderExcluded U.block (U.block b)
 ```
 
-**The DoS condition implies the leader clause.** If a block's parents are not leader-consistent, the two conflicting versions they reference are both in its causal history, so the leader is exposed in it — and an exposed author may not be cited.
+**The DoS condition implies the leader clause**: two conflicting versions an inconsistent parent set votes for are both in the block's history, so the leader is exposed and may not be cited.
 
 #### `selfParented_ofDoSValid`
 
@@ -21546,7 +21216,7 @@ theorem citable_of_correct {b : BlockId} (hb : b ∈ U.ids) {X : Validator}
     (hX : X ∈ (Correct : Finset Validator)) : ¬ ExposedIn U b X
 ```
 
-**Correct authors are always citable.** An exposed author has equivocated, so it is Byzantine; the DoS condition therefore never forbids citing a correct validator, which is every block either reactive clause obliges a builder to reference.
+**Correct authors are always citable**: an exposed author has equivocated, hence is Byzantine, so the condition never forbids citing a correct validator.
 
 #### `quorumCard_le_citable`
 
@@ -21557,9 +21227,7 @@ theorem quorumCard_le_citable {b : BlockId} (hb : b ∈ U.ids) :
     quorumCard Validator ≤ ((exposedTo U b)ᶜ).card
 ```
 
-**The condition never exhausts a builder's parents.** Validity asks for `n − f` parents by distinct authors, and `DoSValid` withdraws the authors a block's own history convicts. Those are equivocators, hence Byzantine, hence at most `f`; the correct validators are never among them and number at least `n − f`. So the authors a block may cite always include a validity quorum, and the two conditions cannot squeeze a builder between them.
-
-The margin is nil, not small: at exactly `f` Byzantine validators the citable authors are the `n − f` correct ones and no others, so every one of them has to be cited. That is a condition on what has arrived rather than on what may be cited, and it is what the pacing structure supplies past GST.
+**The condition never exhausts a builder's parents.** The authors it withdraws are convicted equivocators, hence Byzantine and at most `f`, so the citable authors always include a validity quorum of `n − f`.
 
 ### Minnow: the minimal commit rule
 
@@ -22175,7 +21843,7 @@ theorem joiner_run_decided_agree (ha : Agree R) (hb : Banded R)
     (hV : R.Decided (slotsOf P.inj A.assign) V (d + k) v) : w = v
 ```
 
-**The joiner, whole.** A joiner that computed its own schedule from its own view `V'` of the truncation, under a horizon-stable rule, agrees with the network's run on every shared slot. The agreement is read through some view `V₀` of the truncation agreeing with the network's above the horizon, which a cut supplies.
+**The joiner, whole**: under a horizon-stable rule, a joiner's own computed schedule agrees with the network's run on every shared slot.
 
 #### `decidedWithin_congr`
 
@@ -22189,7 +21857,7 @@ theorem decidedWithin_congr {hinj : Function.Injective S.slotRound}
     DecidedWithin (S := slotsOf hinj a₂) U V B k v
 ```
 
-**Congruence below the bound.** Two assignments agreeing below `B` derive the same bounded verdicts — `decidedWithin_congr_of_slotRound` at two induced schedules.
+**Congruence below the bound**: two assignments agreeing below `B` derive the same bounded verdicts.
 
 #### `partialRun_agree`
 
@@ -22299,7 +21967,7 @@ theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
     Nonempty (AdaptiveRun P U V)
 ```
 
-**AL5: the adaptive fixpoint exists.** On a DAG synchronised over a quorum of reliable validators and populated at every round, under a policy that places runs, a total adaptive run exists on every view caught up to every horizon. With `adaptiveRun_agree` it is THE fixpoint: adaptive Mysticeti decides every slot, and uniquely.
+**AL5: the adaptive fixpoint exists**, on a synchronised, populated DAG under a policy that places runs. With `adaptiveRun_agree` it is THE fixpoint.
 
 #### `holds`
 
@@ -22617,7 +22285,7 @@ theorem decided_unique (hl : R.Laws I) (hI : I S U) {V₁ : U.View} {k : ℕ} {v
     ∀ (V₂ : U.View) (v₂ : Option BlockId), R.Decided U V₂ k v₂ → v₁ = v₂
 ```
 
-**Agreement.** No two validators reach conflicting decisions for a slot, whatever views they hold and whichever routes they took. Structural induction on the first derivation: every commit-against-commit case closes by a uniqueness law, the direct-against-indirect crossings by visibility or by the skip law, and the one real case — indirect against indirect — by comparing the two anchors.
+**Agreement.** No two validators reach conflicting decisions for a slot. Structural induction on the first derivation: commit-against-commit closes by a uniqueness law, direct-against-indirect by visibility or the skip law, and indirect-against-indirect by comparing the two anchors.
 
 #### `decided_agree`
 
@@ -22793,9 +22461,7 @@ theorem waveRobin_fairRun (n : ℕ) (hn : 0 < n) [F : Faults (Fin n)] :
     FairRunOn (S := waveRobin n hn) (Correct : Finset (Fin n)) 3
 ```
 
-**A fair schedule exists — wave-aligned rotation, unconditionally.**
-
-The witness for slot `k` is the correct validator `v`'s wave in the `k`-th rotation cycle: slot `3 * (v + n * k)` opens a wave led by `v`, lies past `k`, and its three slots are all `v`-led. This is `FairRunOn` produced with no premise at all, where per-slot rotation would need the pigeonhole argument recorded on `FairRunOn` — which is exactly why the wave-aligned schedule is the canonical witness.
+**A fair schedule exists — wave-aligned rotation, unconditionally.** The witness for slot `k` is a correct validator `v`'s wave in the `k`-th rotation cycle: slot `3 * (v + n * k)` opens a wave led by `v`, past `k`, with all three slots `v`-led.
 
 #### `waveRobin_spansEligible`
 
@@ -22806,7 +22472,7 @@ theorem waveRobin_spansEligible (n : ℕ) (hn : 0 < n) :
     SpansEligibleAt (S := waveRobin n hn) 2 3
 ```
 
-**`SpansEligibleAt 2 3`, the core's pipelined shape, at every `n`.** A run of three consecutive slots reaches three rounds past everything below it — the same arithmetic as `pipe_spansEligible`, freed of the committee.
+**`SpansEligibleAt 2 3`, the core's pipelined shape, at every `n`.** A run of three consecutive slots reaches three rounds past everything below it.
 
 #### `waveRobin_fairSchedule`
 
@@ -23124,9 +22790,7 @@ theorem all_decided_below_of_fairRun {c : ℕ} (hc : 0 < c)
         ∀ i, i < b → ∃ v, Decided U (View.full U) i v
 ```
 
-**L10.** For every slot `k` there is a `b ≥ k` such that every slot below `b` is decided, in any sufficiently grown synchronous DAG.
-
-This is what "the ledger does not stall" means operationally: `commitSeq` reads verdicts in slot order and halts at the first undecided slot, so a prefix of decided slots growing without bound is exactly the ledger advancing. Contrast L6, which gives infinitely many *commits* while saying nothing about the gaps between them.
+**L10.** For every slot `k` there is a `b ≥ k` such that every slot below `b` is decided, in any sufficiently grown synchronous DAG: the ledger advances rather than merely committing, unlike L6.
 
 #### `safety`
 
@@ -23180,9 +22844,7 @@ theorem all_decided_below_of_fairRun {c : ℕ} (hc : 0 < c)
         ∀ i, i < b → ∃ v, Decided U V i v
 ```
 
-**Liveness.** Under post-`R` coverage, growth to the horizon, and a recurring run of `c` reliable-led slots, every slot below the run is decided — the run placed past both the target and `R` by fairness.
-
-The quantifier order is the content: the slot `b` is fixed by the *schedule* alone, before any universe is named, so "eventually" means "any DAG grown past this schedule-fixed slot". Crashed-leader slots are settled here and only here: they descend onto the run via `indirectSkip`.
+**Liveness.** Under post-`R` coverage, growth to the horizon, and a recurring run of `c` reliable-led slots, every slot below the run is decided, the run placed past both the target and `R` by fairness. The slot `b` is fixed by the schedule alone, before any universe is named, so "eventually" means any DAG grown past this schedule-fixed slot; crashed-leader slots are settled here and only here, via `indirectSkip`.
 
 #### `all_decided_below_of_fairRun_live`
 
@@ -23412,7 +23074,7 @@ theorem decided_agree_chop (hd : G ≤ S.slotRound d)
 theorem safety (hb : Banded R) (ha : Agree R) (hcc : CommitsCandidate R) : Safe R
 ```
 
-**The safety headline.** Transport and agreement are `Stack.safe_and_live`'s first two clauses; integrity is `CommitsCandidate`; uniqueness is the keyed schedule; agreement across an extension at every slot is `Persist` (the band at no offset) and `Agree`.
+**The safety headline**, assembled from `Banded`, `Agree` and `CommitsCandidate`.
 
 #### `Safe.prefix_agree`
 
@@ -23520,9 +23182,7 @@ theorem committed_of_correct_block
                 b ∈ ledgerSetOf R U g n
 ```
 
-**CQ6 (inclusion liveness).** Under a schedule that keeps returning to every reliable validator, for every round `m` and every reliable `v` there is a slot at or above `m` that `v` leads, which any execution meeting the rule's liveness precondition commits, and whose flush holds **every** round-`m` block by `v`; hence every reliable block is in the ledger of any verdict assignment covering its author's next committed slot.
-
-Fairness is per validator — the schedule returns to each member of `T` — because the argument runs along one author's chain. A schedule fair to the set but starving one of its members would leave that member's blocks to synchrony, which is what this arc no longer assumes.
+**CQ6 (inclusion liveness).** Under a schedule returning to every reliable validator, every reliable block is in the ledger of the slot its author next leads and commits. Fairness is per validator, since the argument runs along one author's chain.
 
 #### `chain_quality`
 
@@ -23548,7 +23208,7 @@ theorem chain_quality
                 b ∈ ledgerSetOf R U g n
 ```
 
-**CQ7 (the capstone).** Chain quality in one statement, for any rule with a quorum law, self-reference and one block per reliable author per round. Unconditionally: every commit's flush covers at least half the reliable validators at every round below it. Under a schedule that keeps returning to every reliable validator: every reliable block is in the flush of a slot its author leads, fixed in advance by the schedule.
+**CQ7 (the capstone).** Chain quality in one statement: every commit's flush covers half the reliable validators, and under a returning schedule every reliable block is in the flush of a slot its author leads.
 
 #### `decided_chop_iff`
 
@@ -23619,7 +23279,7 @@ theorem extends_of_skipFill (R : DagRule Validator BlockId Payload)
   subset
 ```
 
-**The fill is an extension.** It holds every block the original held — `ids` is a union — and denotes each of them unchanged, which is `skipFill_block_old`. Stated through four equations rather than a type equality, so that a rule whose universes *are* core block universes can apply it with `rfl` and this file need name no protocol.
+**The fill is an extension**: it holds every old block unchanged. Stated through four equations rather than a type equality, so a rule whose universes are core block universes applies it with `rfl`.
 
 #### `decided_skipFill`
 
@@ -23636,7 +23296,7 @@ theorem decided_skipFill {R : DagRule Validator BlockId Payload} (hp : Persist R
     R.Decided S V' k v
 ```
 
-**Verdicts survive the recovery**, for any protocol that has proved persistence. The replica that recovered reaches every verdict it reached before, so what it had already output stands.
+**Verdicts survive the recovery**, for any protocol with `Persist`.
 
 #### `decided_none_of_novel_agree`
 
@@ -23656,7 +23316,7 @@ theorem decided_none_of_novel_agree {R : DagRule Validator BlockId Payload}
     v = none
 ```
 
-**The prompt skip conflicts with no verdict.** On any view of the extension, and on any view of any further extension a caught-up view reaches, a verdict at the skipped slot is `none`: `Agree` at the extension, `Persist` past it.
+**The prompt skip conflicts with no verdict**, on any further extension a caught-up view reaches.
 
 #### `decided_fill_of_persist`
 
@@ -23669,7 +23329,7 @@ theorem decided_fill_of_persist [S : Slots Validator] (sk : SkipMsg U)
     Decided sk.skipFill (sk.liftView V) k v
 ```
 
-**Verdicts survive the core's fill, from `Persist`.** The bespoke theorem's statement, with no induction: persistence is proved once for the protocol, and the fill is one extension among others. That theorem carried `QuorateOverGap`; this does not, the hypothesis having gone with the grade it was there to meet. It has since been deleted, leaving this the only route.
+**Verdicts survive the core's fill**, from the core's `Persist`.
 
 #### `decided_fill_agree_of_properties`
 
@@ -23682,7 +23342,7 @@ theorem decided_fill_agree_of_properties [S : Slots Validator] (sk : SkipMsg U)
     (hv : Decided U V k v) (hw : Decided sk.skipFill W k w) : v = w
 ```
 
-**Agreement across the core's recovery, from `Persist` and `Agree`.** A verdict reached before the recovery agrees with any reached after it. The bespoke version composed its induction with `decided_agree` by hand; this is `decided_agree_extends`, which every rule with the two properties has.
+**Agreement across the core's recovery**: a verdict reached before agrees with any reached after.
 
 #### `decided_none_fresh`
 
@@ -23915,9 +23575,7 @@ theorem committed_of_correct_block
               b ∈ ledgerSet U g n
 ```
 
-**RS5 — reactive inclusion.** For every round `m` and author `u ∈ T`, the schedule fixes a `u`-led slot above `m` before any execution is named, and every sufficiently grown reactive execution commits that slot with a leader block whose cone contains `u`'s round-`m` block — which is therefore in the agreed ledger of any verdict assignment covering the slot.
-
-No coverage appears: the hypotheses are the reactive wait clauses, GST and the backoff, exactly as in `ReactiveM.decided`. What is added is only `FairToEach` — the schedule must return to `u` itself — and the self-parent chain does the rest.
+**RS5 — reactive inclusion.** The schedule fixes a `u`-led slot above any round `m` before an execution is named, and a sufficiently grown reactive execution commits it with a leader block whose cone contains `u`'s round-`m` block, so it lands in the agreed ledger.
 
 #### `SynchronisedOn.mono`
 

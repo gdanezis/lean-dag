@@ -52,17 +52,12 @@ theorem mem_creatorsOf {blk : BlockId → Block Validator BlockId Payload}
     v ∈ creatorsOf blk s ↔ ∃ i ∈ s, (blk i).creator = v :=
   Finset.mem_image
 
-/-- Block validity, relative to a lookup function.
-
-The predecessor condition is stated additively rather than as
-`(blk i).round = b.round - 1`. That avoids `ℕ`-subtraction, and it makes the
-genesis case *derivable* rather than a separate branch: at round `0` the
-equation `(blk i).round + 1 = 0` is unsatisfiable, so `refs = ∅` follows
-(`refs_empty_of_round_zero`). Only the quorum condition needs a round guard.
-
-The quorum is stated on the *creator set*, not on `refs.card`. That is the
-form every downstream proof wants, and it is the faithful reading of "2f+1
-blocks from the previous round" — the protocol means 2f+1 *validators*. -/
+/-- Block validity, relative to a lookup function. The predecessor
+condition is stated additively (`+ 1 = round`, not `round - 1`), which
+avoids `ℕ`-subtraction and makes the genesis case derivable rather than
+a branch: at round `0`, `refs = ∅` follows from unsatisfiability
+(`refs_empty_of_round_zero`). The quorum is on the *creator set*, not
+`refs.card` — the faithful reading of "2f+1 validators". -/
 structure ValidWrt (blk : BlockId → Block Validator BlockId Payload)
     (b : Block Validator BlockId Payload) : Prop where
   /-- Every reference sits in the immediately preceding round. -/
@@ -71,21 +66,14 @@ structure ValidWrt (blk : BlockId → Block Validator BlockId Payload)
   distinct_creators : ∀ i ∈ b.refs, ∀ j ∈ b.refs, (blk i).creator = (blk j).creator → i = j
   /-- Non-genesis blocks reference a quorum of distinct validators. -/
   quorum : 0 < b.round → quorumCard Validator ≤ (creators blk b).card
-  /-- Non-genesis blocks reference a block by their own creator — *some* such
-  block, not a unique one: an equivocator's blocks form a forest of
-  predecessor chains, one edge per block, and the condition does not (and
-  need not) collapse the forest. Combined with `predecessor` the parent sits
-  at the round immediately below, and with `distinct_creators` it is the
-  *only* reference sharing the block's author. -/
+  /-- Non-genesis blocks reference *some* block by their own creator, not
+  a unique one — an equivocator's blocks form a forest of predecessor
+  chains, one edge per block, which this does not collapse. -/
   self_parent : 0 < b.round → ∃ i ∈ b.refs, (blk i).creator = b.creator
 
 omit [Fintype Validator] F in
-/-- A nonempty creator set can only come from a nonempty set of ids: the
-image of `∅` is `∅`.
-
-Small, but it was inlined in three places — `ValidWrt.refs_nonempty` here,
-and the two "a quorum implies at least one block" steps in `Persistence` and
-`Mysticeti`. -/
+/-- A nonempty creator set can only come from a nonempty set of ids:
+the image of `∅` is `∅`. -/
 theorem nonempty_of_creatorsOf_card_pos {blk : BlockId → Block Validator BlockId Payload}
     {s : Finset BlockId} (h : 0 < (creatorsOf blk s).card) : s.Nonempty := by
   rcases Finset.eq_empty_or_nonempty s with rfl | hne
@@ -130,14 +118,10 @@ theorem card_refs (h : ValidWrt blk b) (h0 : 0 < b.round) : quorumCard Validator
   rw [← h.card_creators]
   exact h.quorum h0
 
-/-- A non-genesis block has at least one reference. Used by T3's inductive
-step, which needs only this much of validity.
-
-Proved from the quorum condition **alone**, deliberately not via `card_refs`:
-the image of `∅` is `∅`, so an empty `refs` would give an empty creator set.
-Routing through `card_refs` would drag `distinct_creators` onto T3's
-dependency path, and the whole point of `spec.md` §3.2's analysis is that Phase 1 and
-1b never need it. -/
+/-- A non-genesis block has at least one reference; T3's inductive step
+needs only this much of validity. Proved from the quorum condition
+alone, not via `card_refs`, so `distinct_creators` never enters T3's
+dependency path. -/
 theorem refs_nonempty (h : ValidWrt blk b) (h0 : 0 < b.round) : b.refs.Nonempty := by
   have hq : quorumCard Validator ≤ (creatorsOf blk b.refs).card := h.quorum h0
   have hpos : 0 < (creatorsOf blk b.refs).card := by
@@ -147,14 +131,10 @@ theorem refs_nonempty (h : ValidWrt blk b) (h0 : 0 < b.round) : b.refs.Nonempty 
 
 end ValidWrt
 
-/-- **T0'.** Two id-sets whose creator sets are quorums share a *correct*
-author.
-
-Stated on bare `Finset BlockId`s rather than on blocks, because that is what
-every call site needs: T3 intersects a block's refs with an arbitrary set
-`Q`, and T5 intersects two arbitrary sets, neither of which is any block's
-refs. For a block, apply it with `s := b.refs` and discharge the hypothesis
-with `ValidWrt.quorum`. -/
+/-- **T0'.** Two id-sets whose creator sets are quorums share a
+*correct* author. Stated on bare `Finset BlockId`s, since call sites
+intersect arbitrary sets that are nobody's refs; for a block, apply with
+`s := b.refs` and `ValidWrt.quorum`. -/
 theorem exists_correct_mem_creators_inter
     {blk : BlockId → Block Validator BlockId Payload} {s t : Finset BlockId}
     (hs : quorumCard Validator ≤ (creatorsOf blk s).card)

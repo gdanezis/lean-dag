@@ -5,19 +5,12 @@ import LeanDag.Properties.Derived.Bounded
 /-!
 # A committed run decides everything below it
 
-`docs/target-properties.md` §11.4c. The statement that says a mechanism
-adding blocks cannot stall a protocol. It is a **consequence of two
-properties**, in the same sense that `Persist` follows from `Banded`,
-and not a composition of mechanisms: `LeaderCommits` gives the run,
-`Descends` gives everything under it, and nothing else is used.
-
-The reading is the one the crash-recovery arc wants. A fill adds a
-candidate nothing old references, so the slot it lands on is undecided.
-This says the slot does not stay that way: as soon as a run of `c`
-reliable-led slots above it commits, every slot below the run has a
-verdict, and the fresh candidate is disposed of by the anchored rule
-rather than by any direct one. Nothing here mentions the mechanism,
-because nothing about it is special.
+`docs/target-properties.md` §11.4c. A mechanism adding blocks cannot
+stall a protocol: `LeaderCommits` gives the run, `Descends` gives
+everything under it, a consequence of the two rather than a composition
+of mechanisms. What the crash-recovery arc wants: a fill's fresh,
+undecided candidate does not stay that way once a run of `c`
+reliable-led slots above it commits.
 -/
 
 namespace LeanDag

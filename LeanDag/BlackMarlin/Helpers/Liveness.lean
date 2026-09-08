@@ -60,13 +60,9 @@ theorem exists_supported_anchor (hcard : quorumCard Validator ≤ T.card)
 /-! ## The commit step -/
 
 /-- **BML1.** Two consecutive reliably anchored rounds, over three
-populated rounds, are committed.
-
-The link costs no hypothesis of its own. The round-`(r+1)` anchor is a
-reliable author's block at the round above `r`, so the very coverage
-fact that supported the round-`r` anchor also makes that anchor
-reference it; and the round-`(r+1)` anchor is supported by the same
-argument one round up, which is the third populated round. -/
+populated rounds, are committed — the link costing no further hypothesis,
+since the coverage fact supporting the round-`r` anchor already makes
+the round-`(r+1)` anchor reference it. -/
 theorem committed_of_run (hcard : quorumCard Validator ≤ T.card)
     (hs : SynchronisedOn U T R) (hR : R ≤ r)
     (hpop : PopulatedOn U T r) (hpop1 : PopulatedOn U T (r + 1))
@@ -108,11 +104,8 @@ theorem committedIn_full_iff :
 
 omit Rot in
 /-- **BML3.** A reliable author's block lies in the causal history of
-every block two rounds above it — so it is delivered by whichever anchor
-the rule admits up there.
-
-No clause of the commit rule is consumed: coverage gives the block a
-support quorum, and BM2 carries it upward. -/
+every block two rounds above it, from coverage and BM2 alone — no
+clause of the commit rule is consumed. -/
 theorem mem_history_of_mem (hcard : quorumCard Validator ≤ T.card)
     (hs : SynchronisedOn U T R) (hR : R ≤ r) (hpop1 : PopulatedOn U T (r + 1))
     (hL : L ∈ U.ids) (hLr : (U.block L).round = r) (hLc : (U.block L).creator ∈ T)
@@ -140,11 +133,10 @@ theorem recurrence (hcard : quorumCard Validator ≤ T.card)
 
 /-! ## The rotation is fair
 
-The core's `FairRunOn` is an assumption, discharged on `Fin n` by the
-wave-aligned witness of `WaveRobin.lean` because it needs runs of three.
-Black Marlin needs runs of two, and that case is a counting argument: if
-no two cyclically adjacent anchors were reliable, the successor map would
-carry the reliable set into the Byzantine one.
+The core's `FairRunOn` needs runs of three and stays an assumption;
+Black Marlin's runs of two are short enough to prove by counting — two
+cyclically adjacent unreliable anchors would inject the reliable set
+into the Byzantine one.
 -/
 
 section RoundRobin
@@ -220,12 +212,10 @@ end RoundRobin
 /-! ## When the support *is* in view
 
 The repairs read `Supported`, a fact about the universe, where a
-validator reads its own view. The two agree in one case, and it is not
-the case the repair needs: for an anchor by a **reliable** author, past
-the round coverage takes hold, every reliable block of the round above
-references it, so a view holding those sees the quorum. For a Byzantine
-author's anchor coverage says nothing, and a view holding a quorum at
-the round above shares only `n − 2f` authors with the supporters. -/
+validator reads its own view. They agree at a reliable author's anchor
+past the round coverage takes hold, since coverage puts the quorum in
+view — not the case the repair needs, since for a Byzantine anchor
+coverage says nothing. -/
 
 /-- **A reliable author's anchor is seen as supported**, by any view that
 holds the reliable blocks of the round above, once coverage has taken

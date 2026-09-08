@@ -2,15 +2,11 @@ import LeanDag.Properties.Bounded
 /-!
 # The laws of a bounded verdict
 
-`docs/target-properties.md` §11.4b. Nothing here is an obligation.
+`docs/target-properties.md` §11.4b. Nothing here is an obligation:
 `DecidedBelow` is a definition, so what a mechanism reads of it is
-theorems, and they are proved once for every rule.
-
-`toDecided` and `lt_bound` are projections. `mono` is the observation
-that a larger bound asks agreement of more leaders and so claims less.
-`reschedule` is what used to be the property `SchedLocal`, which a
-protocol had to prove: two schedules with one round structure, agreeing
-on the leaders below the bound, carry the same bounded verdicts. And
+theorems, proved once for every rule. `mono` says a larger bound claims
+less; `reschedule` is what used to be the obligation `SchedLocal` —
+schedules agreeing below the bound carry the same bounded verdicts; and
 `agree` is `Agree` read through the verdict inside.
 -/
 

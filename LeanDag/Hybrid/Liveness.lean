@@ -6,31 +6,11 @@ import Mathlib.Data.Finset.Max
 # Hybrid liveness
 
 H7: the Odontoceti liveness chain at the hybrid quorum, over the
-`T`-relativised interface consumed exactly as the base development
-states it — `T ⊆ Correct` now excludes the crash-prone through the
-derived instance, `q ≤ T.card` is satisfiable because the fully-correct
-class numbers at least `q`, and coverage (`SynchronisedOn`) and
-production (`Populated`) never mention a leader or a fault class.
-
-Note what liveness does *not* need: `HonestNoEquiv` appears nowhere —
-no liveness argument counts an equivocator — and the indirect threshold
-`k` is unconstrained, every step below holding at *any* `k`. Only
-agreement prices the threshold; the committed-run descent merely
-selects the least candidate passing whatever test is in force, which is
-exactly what the canonicity premise asks for.
-
-At the tight committee `n = 5·fb + 3·fc + 1` the correct class is
-exactly `q`: the reliable set must be *all* of it, the hybrid analogue
-of the base development's remark that at `f = 1` every correct
-validator is needed for a quorum.
-
-Every decision-valued statement concludes on a validator's own view,
-caught up to the horizon it reads (the core `View.CoversUpto` — the
-arc shares the core's `View`): the supporters sit one round above the
-leader, so a caught-up view holds them
-(`directCommitIn_of_coversUpto`), and the descent is view-parametric.
-The full view is caught up to every horizon (`View.coversUpto_full`),
-so the whole-universe reading is the special case (`liveness.md` §4.2).
+`T`-relativised interface, with `T ⊆ Correct` now excluding the
+crash-prone. `HonestNoEquiv` appears nowhere and the indirect threshold
+`k` is unconstrained — only agreement prices it. At the tight committee
+the reliable set must be all of the correct class, the hybrid analogue
+of the base development's `f = 1` remark.
 -/
 
 namespace LeanDag
@@ -124,10 +104,9 @@ threshold `k`. -/
 
 /-- **H7 (O10's mirror).** Under post-`R` coverage, growth to the
 horizon, and a recurring run of `c` reliable-led slots, every slot
-below the run is decided on any view caught up to the horizon — at
-every threshold `k`, the run placed past both the target and `R` by
-fairness. The reliable set excludes the crash-prone by construction:
-`T ⊆ Correct` reads through the derived instance. -/
+below the run is decided on any view caught up to the horizon, at
+every threshold `k` — the reliable set excluding the crash-prone
+through the derived instance. -/
 theorem all_decided_below_of_fairRun {c : ℕ} (hc : 0 < c)
     (hT : T ⊆ (Correct : Finset Validator))
     (hcard : q Validator ≤ T.card)

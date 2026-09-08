@@ -4,37 +4,15 @@ import LeanDag.Mysticeti.Properties
 /-!
 # The novelty budget delivers
 
-`Properties/Deliver.lean` states what a **view-level** mechanism owes,
-and this is the witness. A rate limiter is the case that obligation
-exists for: `DoS/` builds no universe, only views, and until the
-obligation was written a limiter that deferred a block forever satisfied
-everything in this development.
-
-**The strong form is not what a limiter can promise, and the attempt is
-what shows it.** `Properties.Delivers` asks the view to hold *every*
-block of the universe up to a round. Nothing here forces that:
-`Delivery.accepts_correct` constrains acceptance for correct blocks
-alone, and a block a Byzantine author withholds from everyone is a block
-of `U` in nobody's view. Worse, `Delivery.accepted_inj` *requires* a
-validator to drop one of an equivocating pair, so at a round where an
-equivocator published twice no admissible delivery covers the layer. The
-strong obligation's only model is `View.full`, which is the mechanism
-that does nothing.
-
-**The weak form is the right one, and it holds.** `Properties.CoversOn`
-asks for the blocks of a reliable set over a window, and that is exactly
-what `accepts_correct` and `EventuallyDelivers` supply: after the
-settling round a correct validator holds every correct block, accepts
-every one it holds, and its retained store keeps whole causal cones. The
-budget never enters the argument — a rate limit that defers a *correct*
-block would have to violate `accepts_correct`, so the novelty budget's
-own theorems, which bound the *size* of `viewUpto`, are not needed and
-not used.
-
-**And it commits.** `directCommitIn_of_certifiesAt` counts a reliable
-quorum's certificates inside a view rather than in the universe, so the
-coverage proved here is enough for a rate-limited validator to reach the
-verdict. That is the consumer the obligation was stated for.
+`Properties/Deliver.lean` states what a view-level mechanism owes, and
+this is the witness. `Properties.Delivers`, holding every block of the
+universe, has no model but `View.full`: an equivocator's dropped pair
+already breaks it. `Properties.CoversOn`, the blocks of a reliable set
+over a window, is what `Delivery.accepts_correct` and
+`EventuallyDelivers` supply — after the settling round a correct
+validator holds and accepts every correct block — with no appeal to the
+novelty budget. `directCommitIn_of_certifiesAt` then reaches the verdict
+from that coverage.
 -/
 
 namespace LeanDag
@@ -60,8 +38,7 @@ def View.ofViewUpto (D : Delivery U) (v : Validator) (n : ℕ) :
 
 /-- **What a rate-limited store holds.** After the settling round a
 correct validator's store contains every correct block up to its own
-round — the store is built from what it accepted, it accepted every
-correct block it held, and eventual delivery gave it all of them. -/
+round. -/
 theorem correct_mem_viewUpto {R : ℕ} (hED : EventuallyDelivers D R)
     (hv : v ∈ (Correct : Finset Validator)) {a : BlockId} (ha : a ∈ U.ids)
     (hac : (U.block a).creator ∈ (Correct : Finset Validator))
@@ -74,8 +51,8 @@ theorem correct_mem_viewUpto {R : ℕ} (hED : EventuallyDelivers D R)
   exact history_subset_viewUpto hhi hacc ((mem_history_iff ha).mpr Relation.ReflTransGen.refl)
 
 /-- **The witness.** The novelty budget's stores cover the correct
-validators from the settling round on, so a rate limiter delivers in the
-sense `Properties.DeliversOn` names. -/
+validators from the settling round on, in the sense `Properties.DeliversOn`
+names. -/
 theorem deliversOn_viewUpto {R : ℕ} (hED : EventuallyDelivers D R)
     (hv : v ∈ (Correct : Finset Validator)) :
     Properties.DeliversOn (MysticetiProperties.mysticetiRule (Payload := Payload))
@@ -84,8 +61,7 @@ theorem deliversOn_viewUpto {R : ℕ} (hED : EventuallyDelivers D R)
 
 /-- **A rate-limited validator commits.** Given a reliable quorum whose
 decision-round blocks certify `L`, a store that has settled reaches the
-direct commit — no appeal to the budget, and no coverage of anything an
-equivocator produced. -/
+direct commit. -/
 theorem directCommitIn_viewUpto [S : Slots Validator] {R r : ℕ} {L : BlockId}
     {T : Finset Validator} (hED : EventuallyDelivers D R)
     (hv : v ∈ (Correct : Finset Validator)) (hT : T ⊆ (Correct : Finset Validator))

@@ -3,20 +3,13 @@ import LeanDag.Reactive.MysticetiProperties
 /-!
 # Adaptive leaders over reactive Mysticeti
 
-`docs/target-properties.md` §4. The first result the schedule family
-produces that the bespoke development did not have: Hammerhead-style
-adaptive leaders over the *reactive* Mysticeti execution.
-
-Safety is `adaptiveRun_agree` unchanged — the rule is the core's, and
-the reactive discipline changes no verdict. Liveness is the generic
-`Adaptive.run_exists` fed with `leaderCommits_reactive` in place of the
-timed `leaderCommits`; nothing else moves. The precondition is staged,
-as the generic theorem states it: at every height `E`, the reactive
-clauses hold under the schedule the policy computes from a height-`E`
-partial run's verdicts, over the slots `[W, W·(E+2))` that schedule has
-determined. Any two height-`E` runs compute the same leaders there
-(`partialRun_agree` and `adapted`), so the hypothesis names one
-schedule prefix per height — the one the validators followed.
+`docs/target-properties.md` §4: Hammerhead-style adaptive leaders over
+the reactive Mysticeti execution. Safety is `adaptiveRun_agree`
+unchanged, since the rule is the core's and the reactive discipline
+changes no verdict. Liveness is the generic `Adaptive.run_exists` fed
+with `leaderCommits_reactive` in place of the timed `leaderCommits`,
+staged at every height over the schedule that height's partial run
+computes.
 -/
 
 namespace LeanDag
@@ -44,8 +37,7 @@ theorem exists_partialRun_reactive (hc : 0 < c) (hruns : PlacesRuns P T c)
 
 /-- **The adaptive fixpoint exists over reactive Mysticeti.** Under a
 policy that places runs, with the reactive clauses holding at every
-height under the schedule that height computes, a total adaptive run
-exists; with `adaptiveRun_agree` it is unique. -/
+height, a total adaptive run exists. -/
 theorem adaptiveRun_exists_reactive (hc : 0 < c) (hruns : PlacesRuns P T c)
     (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
     (V : View Validator BlockId Payload U)
@@ -56,8 +48,7 @@ theorem adaptiveRun_exists_reactive (hc : 0 < c) (hruns : PlacesRuns P T c)
     (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V hlive
 
 /-- **Reliable-led slots commit, reactively.** In any run, a slot past
-the first epoch led by a member of `T` commits, under the staged
-reactive precondition. -/
+the first epoch led by a member of `T` commits. -/
 theorem adaptiveRun_commits_reactive (V : View Validator BlockId Payload U)
     (A : AdaptiveRun P U V)
     (hlive : ∀ (E : ℕ) (A' : PartialRun P U V E),

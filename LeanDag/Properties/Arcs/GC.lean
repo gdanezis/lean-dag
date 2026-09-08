@@ -11,22 +11,11 @@ import LeanDag.Properties.Record
 /-!
 # Garbage collection, for any protocol with a band
 
-`docs/target-properties.md` G2, the garbage-collection half.
-
-**This file is thin on purpose, and it was not always going to be.** An
-earlier version composed a locality property with a re-indexing one and
-looked like it was doing work; the composition had hypotheses nothing
-could satisfy, because restriction and renumbering are not separately
-realisable (`Properties/Truncate.lean` records why). What replaced it
-is a single statement, `LocalTruncate`, so garbage collection *is* that
-statement applied, and the two corollaries below are the directions a
-deployment uses.
-
-A protocol no longer proves `LocalTruncate`. Once the band carries a
-round offset, `Properties.LocalTruncate.of_banded` derives it from
-`Banded` and `ViewSound`, so the depth sits in the band a protocol was
-already proving for persistence and locality. What a mechanism still
-owes is the witness that its cut stands in the `Truncates` relation.
+`docs/target-properties.md` G2. Garbage collection is `LocalTruncate`
+applied; the two corollaries below are the directions a deployment
+uses. `Properties.LocalTruncate.of_banded` derives it from `Banded` and
+`ViewSound`, so a protocol proves nothing new — what a mechanism owes
+is the witness that its cut stands in the `Truncates` relation.
 -/
 
 namespace LeanDag
@@ -57,19 +46,10 @@ theorem decided_of_truncated (h : LocalTruncate R) (ht : Truncates R U U' S S' G
 
 /-! ## The agreement half
 
-`decided_of_truncate` and its converse compare a verdict with *the same
-validator's* verdict. What a deployment asks is different and stronger:
-a validator that joined from the truncation holds an **arbitrary** view
-of it, with no history below the cut and no relation to anyone's
-full-history view, and must still agree.
-
-`GC/ChopDecided.lean` proves that for the core (G4) and `GC/Horizon.lean`
-across two horizons (G8), each by hand; `Integration/Hydrozoan` has its
-own copy. None of that was necessary. `Agree` compares two views of one
-universe, `LocalTruncate` puts the full-history verdict into the
-truncation, and the two compose — so every rule with a band and
-agreement has cross-cut agreement, and neither protocol needed to prove
-it. -/
+A deployment needs more than `decided_of_truncate`: a validator that
+joined from the truncation holds an arbitrary view of it and must still
+agree with a full-history one. `Agree` and `LocalTruncate` compose to
+give this for any rule with both, with nothing proved per protocol. -/
 
 /-- **Cross-cut agreement.** A validator holding any view of the
 truncation agrees, slot for slot, with a full-history validator. -/
@@ -96,11 +76,8 @@ theorem decided_agree_horizons (ha : Agree R) (hlt : LocalTruncate R)
 
 /-! ## The liveness half, for the core
 
-Garbage collection is a mechanism, so on the liveness side it *owes*
-`Sustains` rather than consuming it, and the core's carrier is where the
-obligation can be discharged against a real consumer. This section
-imports the mechanism it is about and the protocol it serves, and no
-other mechanism. -/
+On the liveness side the mechanism *owes* `Sustains`; the core's
+carrier discharges it. -/
 
 section Core
 
@@ -141,17 +118,9 @@ end Core
 
 /-! ## The canonical cut is a truncation, and the arc's theorems follow
 
-With the band carrying an offset, truncation invariance is no longer an
-obligation: `Properties.LocalTruncate.of_banded` derives it for any rule
-with a band. What is left for this file is the **witness** — that the
-cut the mechanism builds stands in the `Truncates` relation — and the
-observation that the arc's own two transport theorems come back out of
-the property with no induction.
-
-That is the consumer test the arc asks for, and it measures what the
-offset removed: `GC/ChopDecided.lean` proves those two by structural
-induction over the decision relation, and here they are again, from a
-property proved once for other reasons. -/
+What is left is the witness that the cut stands in `Truncates`; the
+arc's own transport theorems then come out of the band property with no
+induction, where `GC/ChopDecided.lean` proves them by hand. -/
 
 section CoreTruncate
 
@@ -226,9 +195,8 @@ end CoreTruncate
 /-! ## The rules on the core's record
 
 Odontoceti and Mahi-Mahi run on the core's universes, so their carriers
-read as records by the identity maps, and every mechanism cell — the
-cut, the fill, re-genesis, and the verdict theorems across each — is
-`Arcs/Record.lean` at the instance. Nothing is written per cell. -/
+read as records by the identity maps, and every mechanism cell is
+`Arcs/Record.lean` at the instance. -/
 
 section OdontocetiRecord
 

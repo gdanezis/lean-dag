@@ -4,51 +4,23 @@ import LeanDag.BlackMarlin.Model.Ledger
 
 What `commit`'s descent settles that the commit rule alone does not
 (`black-marlin.md` §11). BM6 and BMA3 give the delivered **set**; the
-order it comes out in is the record of anchors the descent flushed, and
-these are the claims about that record. Six:
+order is the record of anchors the descent flushed. BMD1 says the
+descent has at most one candidate where it steps by one round, so BMD2
+and BMD3 carry agreement at a round down through any stretch the record
+flushes at every round of. BMD4 gives BMD3 its starting point: two
+records flushing directly committed anchors at one round flush the
+same block. BMD5 is the phase's point — the commit rule's link clause,
+used only once for safety, here stops a *committed* anchor's round from
+being the one the descent skips, which is what would otherwise let two
+twins of an equivocating anchor both become candidates. BMD6 packages
+the result as a ledger.
 
-* **BMD1, `StepUnique`** — the descent has at most one candidate where it
-  steps by one round: the round-`ρ` members of a round-`(ρ+1)` block's
-  cone are its references, and `distinct_creators` allows one block per
-  author. No tie-break is needed there;
-* **BMD2, `AgreeStep`** — so two records that agree at a round agree at
-  the round below it, whether or not either flushes there;
-* **BMD3, `AgreeBelow`** — and hence throughout any stretch below a round
-  they agree at, provided the record flushes at every round between;
-* **BMD4, `CommittedPins`** — two records flushing *directly committed*
-  anchors at one round flush the same block. This is the starting point
-  BMD3 needs, and a round every reliable validator commits at supplies
-  it;
-* **BMD5, `LinkPopulates`** — the link clause of the commit rule keeps
-  the descent from skipping the round above a committed anchor: that
-  anchor is supported, so propagation puts it in every cone from three
-  rounds up;
-* **BMD6, `Ledger`** — nothing output is ever dropped, records that agree
-  output the same blocks, a block enters at exactly one round, and
-  records that agree concur on which.
-
-**BMD5 is the point of the phase.** The commit rule's second clause was
-used in exactly one case of one theorem for safety (§4). Here it does a
-second job: the case the paper's L21–L24 tie-break exists for is the
-descent arriving at a round where two twins of an equivocating anchor are
-both candidates, and that needs an anchor round to have been skipped. The
-link clause is what stops a *committed* anchor's round from being the one
-skipped.
-
-**What is left over.** Where the descent does skip an anchor round *and*
-the round it lands on has an equivocating anchor, nothing here applies.
-The paper's rule for that case, L21–L24, is well formed and
-**block-intrinsic** — the quantity it minimises depends on the candidate
-and its own cone alone, so every validator computes it identically — but
-it is not modelled, which would mean modelling `maxAnchor` and the sort
-`τ`. So BMD3 carries its stretch as a hypothesis rather than deriving
-it. The one defect in the pseudocode is small: L20 guards
-`𝒜 ≠ ∅` where L21–L24 need `maxAnchor(𝒜) ≠ ∅`, so `B′` is undefined
-when the undelivered remainder holds no anchor at all.
-
-Ordering *within* a segment is the deterministic sort `τ`, which the rule
-does not constrain and this arc does not model, so the ledger is a set
-and a record's rounds are the positions in it.
+**What is left over.** Where the descent does skip an anchor round and
+lands on an equivocating one, the paper's tie-break L21–L24 is not
+modelled, so BMD3 carries its stretch as a hypothesis rather than
+deriving it. Ordering *within* a segment is the deterministic sort `τ`,
+not modelled either, so the ledger is a set and a record's rounds are
+the positions in it.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -69,13 +41,10 @@ def StepUnique (U : BlockUniverse Validator BlockId Payload) : Prop :=
     M ∈ U.ids → (U.block M).round = ρ + 1 →
     X ∈ coneAnchors U M ρ → Y ∈ coneAnchors U M ρ → X = Y
 
-/-- **BMD1′, a Byzantine anchor is necessary for a tie.** BMD1 says the
-descent has one candidate where it steps by one round. This says the
-other half: at a round whose elected validator is reliable, the
-candidates are a singleton however deep the cone — non-equivocation
-gives it one block there. So a choice needs *both* a skipped anchor round
-and an equivocating anchor at the round the descent lands on; either
-alone leaves the descent determinate. -/
+/-- **BMD1′, a Byzantine anchor is necessary for a tie.** At a round whose
+elected validator is reliable, the candidates are a singleton, so a
+choice needs both a skipped anchor round and an equivocating anchor
+where the descent lands. -/
 def CorrectAnchorUnique (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ (ρ : ℕ) (C X Y : BlockId),
     Rot.anchor ρ ∈ (Correct : Finset Validator) →

@@ -7,27 +7,13 @@ import Mathlib.Tactic.ByContra
 /-!
 # Validators, faults, and quorum intersection
 
-The system model of `spec.md` §2, plus the quorum-intersection lemma T0.
-
-There are `n ≥ 3f+1` validators, of which at most `f` are Byzantine. A
-*quorum* is any set of at least `n − f` validators — at `n = 3f+1` this is
-the familiar `2f+1`. The single fact everything downstream rests on is
-that two quorums always share a **correct** validator
-(`exists_correct_mem_inter`): two sets of size `n − f` drawn from `n`
-overlap in at least `n − 2f ≥ f+1` elements, one more than the fault
-bound.
-
-The quorum threshold is written literally as
-`quorumCard Validator` throughout, which keeps every counting
-argument within `omega`'s reach given `card_validators`.
-
-The fault model is bundled as a class `Faults` rather than threaded as
-section variables. Bundling keeps the two cardinality hypotheses attached to
-the instance, so they never appear as explicit arguments and no `include` is
-needed; it also lets `Correct` be written without an argument, since the
-instance is inferred from `Validator`. Refer to the fault bound as `F.f`,
-never as a bare `f` — a bare field access cannot determine which `Validator`
-it belongs to and will elaborate to a metavariable.
+The system model of `spec.md` §2, plus the quorum-intersection lemma T0:
+`n ≥ 3f+1` validators, at most `f` Byzantine, a quorum any `n − f` of
+them, and two quorums always share a correct validator
+(`exists_correct_mem_inter`). The fault model is a class, `Faults`, so
+its cardinality hypotheses attach to the instance rather than being
+threaded as arguments, and `Correct` needs none. Refer to the fault
+bound as `F.f`, never a bare `f`, which cannot determine its `Validator`.
 -/
 
 namespace LeanDag
@@ -47,12 +33,9 @@ class Faults (Validator : Type*) [Fintype Validator] [DecidableEq Validator] whe
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
 variable [F : Faults Validator]
 
-/-- The quorum size `n − f`: what every counting argument counts to.
-
-Notation rather than a definition, deliberately: the term *is* the
-subtraction, so every lemma, `omega` call and `decide` sees exactly what
-it always saw, while statements and goals read and print as
-`quorumCard Validator`. -/
+/-- The quorum size `n − f`. Notation rather than a definition: the term
+*is* the subtraction, so every `omega` call and `decide` sees it plainly
+while statements print as `quorumCard Validator`. -/
 scoped notation:max "quorumCard " V:max => Fintype.card V - Faults.f V
 
 /-- The correct (non-Byzantine) validators. -/
@@ -63,12 +46,8 @@ def Correct : Finset Validator := (F.byzantine)ᶜ
 theorem mem_correct {v : Validator} : v ∈ (Correct : Finset Validator) ↔ v ∉ F.byzantine := by
   simp [Correct]
 
-/-- The correct and Byzantine validators partition the whole set.
-
-Stated additively so it yields both bounds without ℕ subtraction. The
-*upper* bound on `Correct.card` is the one the counting arguments need —
-they divide an incidence count by the number of correct validators, for
-which a lower bound is useless. -/
+/-- The correct and Byzantine validators partition the whole set. Stated
+additively so it yields both bounds without ℕ subtraction. -/
 theorem card_correct_add_byzantine :
     (Correct : Finset Validator).card + F.byzantine.card = Fintype.card Validator := by
   have h : (Correct : Finset Validator).card = Fintype.card Validator - F.byzantine.card :=
@@ -76,14 +55,8 @@ theorem card_correct_add_byzantine :
   have hle : F.byzantine.card ≤ Fintype.card Validator := Finset.card_le_univ _
   omega
 
-/-- **The standing arithmetic of the fault model**, in the form `omega`
-consumes it: the correct and Byzantine sets partition the validators, at
-most `f` are Byzantine, and there are at least `3f+1` in all.
-
-A conjunction because the three are always wanted together — every
-counting argument in the development opens by introducing them, and
-naming the bundle says that these, and only these, are what the fault
-model contributes to an arithmetic step. -/
+/-- **The standing arithmetic of the fault model**, bundled because every
+counting argument opens by introducing all three at once. -/
 theorem faults_arith :
     (Correct : Finset Validator).card + F.byzantine.card = Fintype.card Validator ∧
       F.byzantine.card ≤ F.f ∧ 3 * F.f + 1 ≤ Fintype.card Validator :=
@@ -97,16 +70,10 @@ theorem card_correct : quorumCard Validator ≤ (Correct : Finset Validator).car
   have := F.card_byzantine
   omega
 
-/-- **At full fault load the reliable set is forced.** The liveness results
-run at any `T ⊆ Correct` with `n - f ≤ T.card`, which is strictly weaker than
-`T = Correct` — correct validators outside `T` may be starved for the whole
-run. This says how much weaker: none at all, when the adversary spends its
-whole budget. `|byzantine| = f` makes `Correct` exactly `n - f` large, and a
-subset of a set of the same cardinality is that set.
-
-So the generality has bite only below full fault load, and `T := Correct`
-(`commits_recur`, at `Correct`) is not a restriction but the only
-instantiation always available. -/
+/-- **At full fault load the reliable set is forced.** The liveness
+results run at any `T ⊆ Correct` with `n − f ≤ T.card`, strictly weaker
+than `T = Correct`; at full fault load `Correct` is exactly `n − f`
+large, so `T := Correct` is the only instantiation available. -/
 theorem reliable_eq_correct {T : Finset Validator} (hfull : F.byzantine.card = F.f)
     (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card) :
@@ -136,9 +103,7 @@ theorem exists_correct_of_card {S : Finset Validator} (h : F.f + 1 ≤ S.card) :
   omega
 
 /-- Byzantine validators can absorb at most `f` of any set: removing the
-correct members of `S` leaves something no bigger than the Byzantine set.
-
-The workhorse behind "a quorum still contains many correct validators".
+correct members of `S` leaves nothing bigger than the Byzantine set.
 Stated additively so it composes without ℕ subtraction. -/
 theorem card_le_card_inter_correct_add_byzantine (S : Finset Validator) :
     S.card ≤ (S ∩ (Correct : Finset Validator)).card + F.byzantine.card := by
@@ -150,10 +115,8 @@ theorem card_le_card_inter_correct_add_byzantine (S : Finset Validator) :
   omega
 
 /-- A quorum contains at least `f+1` *correct* validators:
-`(n − f) − f = n − 2f ≥ f+1`.
-
-The cardinality strengthening of `exists_correct_of_card`, which only
-produces one. -/
+`(n − f) − f = n − 2f ≥ f+1`, strengthening `exists_correct_of_card`
+from one witness to a count. -/
 theorem card_inter_correct_of_quorum {S : Finset Validator}
     (h : quorumCard Validator ≤ S.card) :
     F.f + 1 ≤ (S ∩ (Correct : Finset Validator)).card := by

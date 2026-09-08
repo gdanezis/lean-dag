@@ -3,26 +3,14 @@ import LeanDag.Mysticeti.ViewPace
 /-!
 # FinWhale — the block-creation conditions
 
-FinWhale's pacemaker is reactive. A block of round `r` is created when
-any of three conditions holds: **C1**, the local DAG has the
-round-`(r−1)` leader's block together with a quorum of voters for the
-round-`(r−2)` leader, or an SP-skip pattern for it; **C2**, the `2∆`
-timeout has expired; **C3**, the local DAG has `n − f` round-`r` blocks.
-The timeout is the fallback, not the rule.
-
-`Trigger` names which condition fired, and `Creation` is the discipline:
-a `PaceCore` — the development's model of a schedule and a network — with
-those three conditions and the protocol's parent-selection rule stated as
-fields. Two of its fields are properties of the network rather than of
-the protocol: `holds_built`, that a block enters a DAG only after its
-creator made it, and `builds_distinct`, that no two reliable validators
-build one round at one instant.
-
-`CertifiesSP` is `SPCertificate` in the universe's vocabulary, so that
-the creation route and the decision layer can be related.
-
-`Creation.lean` derives the paper's Lemmas 18 to 20 and Theorem 21 from
-these fields.
+A block of round `r` is created under any of three conditions: **C1**,
+the local DAG has the round-`(r−1)` leader's block with a quorum of
+voters for the round-`(r−2)` leader (or an SP-skip pattern for it);
+**C2**, the `2∆` timeout has expired; **C3**, the local DAG has `n − f`
+round-`r` blocks. `Trigger` names which fired, and `Creation` is the
+discipline, a `PaceCore` with these conditions and the parent-selection
+rule as fields. `CertifiesSP` is `SPCertificate` in the universe's
+vocabulary. Lemmas 18–20 and Theorem 21 follow from these fields.
 -/
 
 namespace LeanDag
@@ -81,26 +69,19 @@ structure Creation (U : BlockUniverse Validator BlockId Payload)
       b ∈ holds v (built v (n + 1)) ∧ (U.block b).creator = u ∧
       (U.block b).round = n + 1
   /-- **Parent selection takes the leader's block** when it is held and
-  the leader is reliable.
-
-  The guard is not decoration. Without it the clause would range over
-  every block of an equivocating leader, and a validator holding two of
-  them would have to reference both — which `distinct_creators` forbids,
-  so no execution with an equivocating leader would admit a `Creation` at
-  all. A reliable leader has one block per round, and every use below has
-  a reliable leader. -/
+  the leader is reliable. The reliability guard is not decoration: an
+  equivocating leader would force a validator holding two of its blocks
+  to reference both, which `distinct_creators` forbids. -/
   selects_leader : ∀ v ∈ T, ∀ n, lead n ∈ T → ∀ c ∈ U.ids, (U.block c).creator = v →
     (U.block c).round = n + 1 → ∀ L ∈ U.ids, (U.block L).round = n →
     (U.block L).creator = lead n → L ∈ holds v (built v (n + 1)) →
       L ∈ (U.block c).refs
   /-- **And it takes the votes** it holds: where the builder holds a
   round-`(n+1)` block voting for the reliable leader's block, its own
-  block has a parent by that same validator, voting for it too.
-
-  Stated that way rather than as "the held block is itself a parent",
-  which would force two references by one author where a Byzantine
-  validator issued two voting blocks. What the certificate counts is
-  authors of voting parents, so this is what it reads. -/
+  block has a parent by that same validator, voting for it too. Stated
+  as "has a parent by that author," not "the held block is a parent,"
+  since a Byzantine validator's two voting blocks would force two
+  references otherwise — what the certificate counts is authors. -/
   selects_votes : ∀ v ∈ T, ∀ n, lead n ∈ T → ∀ c ∈ U.ids, (U.block c).creator = v →
     (U.block c).round = n + 2 → ∀ L ∈ U.ids, (U.block L).round = n →
     (U.block L).creator = lead n → ∀ b ∈ U.ids, (U.block b).round = n + 1 →

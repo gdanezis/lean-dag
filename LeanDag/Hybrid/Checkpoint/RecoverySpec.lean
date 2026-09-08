@@ -2,19 +2,13 @@ import LeanDag.Hybrid.Checkpoint.BaseSpec
 /-!
 # Human-reviewed recovery specification
 
-Every declaration in this file is part of the trusted recovery model.
-Human reviewers must check the authenticated-broadcast contract, local
-validation predicate, handler-state obligations, selection semantics,
-and epoch-transition requirements. Structure fields are contract
-obligations: concrete instances must prove them, while generic recovery
-theorems use them as assumptions. `RecoveryProofs.lean` constructs a
-selector and machine-checks consequences of this specification.
-
-`RecoveryCorrect` membership alone is not a recovery protocol. The
-specification additionally requires correct certificate submission,
-authenticated broadcast, local validation, deterministic selection,
-and adoption of the selected history as the next epoch's genesis. It
-recovers checkpoint state, not the discarded DAG or its runtime state.
+Every declaration here is part of the trusted recovery model; human
+reviewers must check the broadcast contract, validation predicate,
+handler-state obligations, selection semantics and epoch-transition
+requirements. `RecoveryCorrect` membership alone is not a recovery
+protocol — the specification also requires correct submission,
+authenticated broadcast, local validation, deterministic selection, and
+adoption of the selected history as the next epoch's genesis.
 -/
 
 namespace LeanDag.Hybrid.Checkpoint
@@ -79,13 +73,9 @@ structure RecoveryRound (B : AuthenticatedBroadcast M) (epoch : ℕ) where
   /-- Finite set of checkpoint contents parsed and validated locally. -/
   validated : Validator → Finset (CheckpointData Value)
   /-- A correct handler inputs a concrete valid payload for every
-  closing-epoch checkpoint certificate it recorded. Retained records
-  from older epochs impose no submission obligation in this round.
-
-  This clause carries two obligations. Requiring the payload to be
-  input is submission; requiring it to validate is what makes a
-  closing-epoch record a certified checkpoint, which is the reading
-  `recorded_certified` extracts. -/
+  closing-epoch checkpoint certificate it recorded — submission and
+  validity together, which is what makes a recorded checkpoint
+  certified, the reading `recorded_certified` extracts. -/
   submits_recorded :
     ∀ {sender checkpoint}, sender ∈ M.RecoveryCorrect →
       E.recorded sender checkpoint →

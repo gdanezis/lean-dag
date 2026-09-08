@@ -4,41 +4,12 @@ import LeanDag.Hydrozoan.Helpers.Skippability
 /-!
 # Hydrozoan conforms to the target properties — statement
 
-**HZ9.** Hydrozoan's universes are block DAGs; its verdicts survive a
-growing DAG **unconditionally** and a truncation; and it skips a slot
-whose candidates nobody in `T` supports — **at `qFast ≤ |T|`**.
-
-Persistence is unconditional. Hydrozoan's direct skip counts slotBlames at
-the slot, and a count of blocks that are still present does not move
-under an extension. The core's skip once quantified over candidates and
-needed a grade to survive; that was a defect in the rule, since repaired
-(`docs/target-properties.md` §3.2), and `Persist` carries no grade any
-more.
-
-`CommitsCandidate` is the newest, and it is stated because Hydrozoan
-proves it directly: a commit names a block the DAG holds, at the slot's
-round, by the slot's leader. Chain quality is what consumes it.
-
-**What is stated here is smaller than what Hydrozoan satisfies.**
-`Persist`, `Local` and `LocalTruncate` are absent, and all three hold:
-each is `Banded` applied, derived once in `Properties/Derived/` for
-every rule with a band. A conformance statement lists what a protocol
-*owes*, so naming a consequence here would invent an obligation. A
-mechanism that wants one of the three reaches it from `Banded`, which is
-listed.
-
-**The last grade is the finding.** A quorum of correct replicas has
-`q = n − f − c` members and Hydrozoan's skip needs `qFast = n − p`, so a
-correct quorum skips an unsupported slot exactly when `f + c ≤ p` — the
-condition `docs/hydrozoan-integration.md` §2 records, the grade of a property. Optimal-Hydrozoan's skip is at
-`qCert ≤ q` and needs no such condition.
-
-What conformance is worth: any mechanism stated against these
-properties applies to Hydrozoan without further proof. Crash recovery
-is the first (`Properties/Arcs/SafeSkip.lean`) and garbage collection
-the second (`Properties/Arcs/GC.lean`); the mechanisms that follow cost
-this arc nothing more.
-
+**HZ9.** Hydrozoan's universes are block DAGs, its verdicts survive a
+growing DAG and a truncation, and it skips an unsupported slot at
+`qFast ≤ |T|` — the one graded property, since a correct quorum only
+skips when `f + c ≤ p`; Optimal-Hydrozoan needs no such condition.
+`Persist`, `Local` and `LocalTruncate` are absent but all hold, each
+`Banded` applied, so a conformance statement need not name them.
 Statement only; the proof lives in `Proof.lean`.
 -/
 

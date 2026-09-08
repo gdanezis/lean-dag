@@ -3,21 +3,11 @@ import LeanDag.Mysticeti.Quantitative
 /-!
 # Partial synchrony, recovered — statement
 
-The arc must remain usable by the partially synchronous development. Two
-claims (`mahi-mahi.md` §7):
-
-* **MM5a, `GoodOfSynchrony`** — under the core's coverage hypothesis
-  `SynchronisedOn` at a slot's round, a reliable leader's block is a
-  committed candidate: `S.leader k ∈ good U w k`. Coverage is needed at
-  **one** round only — the round above the proposal — where the core's
-  L4 needs it at two: once every reliable round-`(r+1)` block references
-  the candidate, every block two rounds up reaches it through its
-  reference quorum, and the wave does the rest;
-* **MM5b, `ClauseOfSynchrony`** — hence under synchrony from the start
-  and population through the horizon, the unpredictable-leader clause is
-  *derived* from the core's rated fairness `FairWithin`: the partially
-  synchronous route instantiates, with the clause as a theorem rather
-  than an assumption.
+Two claims keeping the arc usable under partial synchrony
+(`mahi-mahi.md` §7): MM5a derives a committed candidate from
+`SynchronisedOn` at one round only, where the core's L4 needs two; MM5b
+derives the unpredictable-leader clause itself from the core's
+`FairWithin` under synchrony and population through the horizon.
 
 Statements only; the proofs live in `Proof.lean`.
 -/

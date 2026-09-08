@@ -4,63 +4,24 @@ import LeanDag.Properties.Derived.Persist
 # Skippability: settling an unsupported slot without an anchor
 
 **Optional.** `docs/target-properties.md` §11.4c. A protocol may show
-this and need not. It is a claim about *promptness*, not about liveness,
-and the earlier reading of it as an obligation was wrong for a reason
-worth recording.
+this and need not: if every block of `T` one round above a slot
+references none of that slot's candidates, the protocol skips the
+slot, with the size `T` must reach left as a grade since it differs by
+rule.
 
-## What it says
-
-*If every block of `T` one round above a slot references none of that
-slot's candidates, the protocol skips the slot* — with the size `T` must
-reach left as a grade, since it differs by rule.
-
-## Why it is not an obligation
-
-It was introduced as the residue `Sustains` leaves behind. `Sustains`
-says a mechanism destroys no vote and silences no producer, and the
-crash-recovery fill still adds a *candidate*: the recovering replica's
-block lands on a slot that replica leads. A candidate nothing old
-references cannot be committed, and the concern was that for some rules
-it could not be skipped either, leaving the slot dead.
-
-That concern was inherited from a defect since fixed. Under the old
-direct skip a candidate-less slot was decided `none` for nothing, so a
-fill adding a candidate took a *decided* slot back to undecided and
-something had to restore the verdict. The rule now counts blockers
-(report §3.5), so the slot was never decided in the first place. It is
-undecided until an anchor above resolves it, which is ordinary
-operation.
-
-**And the anchor does resolve it.** Every rule's anchored case splits on
-whether some candidate is reachable from the anchor, and that split is
-total: a fresh candidate falls on the negative side, so the slot is
-skipped indirectly. It cannot fall on the positive side, because nothing
-old references it and the anchor is old — which both protocols prove as
-part of `Banded` (`not_certifiedIn_band_novel`, and for Hydrozoan
-`not_weakLinked_bnd_novel`, which is what protects its minimality
-tie-break). So eventual decision after a fill rests on `Descends`, an
-obligation stated over the anchored rule that every protocol has, rather
-than on a direct rule that only some do.
-
-Demanding a direct skip would exclude rules that have none. Nemo has
-none, and nothing in the setting says a rule must.
-
-## What the grade still gives
-
-Promptness, and a deployment condition. Hydrozoan needs `qFast ≤ |T|`,
-because its skip is `qFast` blames at the slot. A quorum of correct
-replicas has `q = n − f − c` and `qFast = n − p`, so a correct quorum
-suffices exactly when `f + c ≤ p` — which is the condition `hydrozoan-integration.md` §2 records, as a grade.
-The core reaches it at a correct quorum. Optimal-Hydrozoan's skip wants
-`qCert` blames and a no-evidence quorum at the decision round, two
-rounds of presence where this supplies one, so its instance would
-reshape the statement.
+It is a claim about *promptness*, not about liveness. A rule without
+it still settles a fill's fresh candidate once an anchor resolves it:
+the anchored case splits on whether a candidate is reachable from the
+anchor, and a fresh one falls on the negative side, since nothing old
+references it and the anchor is old (`Banded`'s `not_certifiedIn_band_novel`
+and its analogues). So eventual decision after a fill rests on
+`Descends`, which every protocol has, rather than on a direct skip,
+which only some do — Nemo has none.
 
 `unsupported_of_novel` is the bridge from the mechanism's side: after an
-extension, any slot all of whose candidates are novel is unsupported by
-the old blocks, because an old block references only old blocks
-(`Extends.old_refs_old`). A rule with this property settles such a slot
-at once; a rule without it waits for an anchor.
+extension, a slot all of whose candidates are novel is unsupported by
+the old blocks, since an old block references only old blocks
+(`Extends.old_refs_old`).
 -/
 
 namespace LeanDag
@@ -99,11 +60,9 @@ variable {Ok Ok' : Finset Validator → Prop}
 
 end SkipsUnsupported
 
-/-- **The bridge from the mechanism.** After an extension, a slot all of
+/-- **The bridge from the mechanism**: after an extension, a slot all of
 whose candidates are novel is unsupported by any `T` whose voting-round
-blocks are old — because an old block references only old blocks. This
-is the hypothesis a fill hands the protocol; `SkipsUnsupported`'s grade
-says whether the protocol can use it. -/
+blocks are old. -/
 theorem unsupported_of_novel {U U' : R.Universe} (he : Extends R U U')
     {S : Slots Validator} {V' : R.View U'} {T : Finset Validator} {k : ℕ}
     (hnov : ∀ L, R.IsCandidate S U' k L → Novel R U U' L)

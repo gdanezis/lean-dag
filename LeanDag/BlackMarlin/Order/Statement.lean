@@ -7,35 +7,20 @@ import LeanDag.BlackMarlin.Liveness.Statement
 Definition 1 speaks about `ab-deliver` events: a **list**, not a set.
 `Ledger` and `Agreement` gave the set; this phase gives the list, by
 modelling the sort `τ` of L26 and the filter of L27
-(`black-marlin.md` §12). Nine claims:
-
-* **BMO1, `AnchorLast`** — the anchor is last in its own segment, so the
-  single sorted list of `history U L \ 𝒟` is what L26 and L30 emit
-  together;
-* **BMO2, `SeqAgree`** — records that agree below a round flush the same
-  list;
-* **BMO3, `SeqPrefix`** — and the list only extends;
-* **BMO4, `Integrity`** — Definition 1's Integrity: no author-and-round
-  is output twice, and everything output is a block of the universe;
-* **BMO5, `KeyDelivered`** — every author-and-round flushed is output, by
-  that block or by one of the same author and round;
-* **BMO6, `CorrectDelivered`** — and for a *correct* author, by the block
-  itself: it has no twin for the filter to prefer;
-* **BMO7, `TotalOrder`** — Definition 1's Total order: two records that
-  agree cannot output a pair in opposite orders;
-* **BMO8, `DescentOrder`** — two descents that reach a common block
-  output the same list below it, with no further hypothesis. BME5 and
-  BMO2 composed;
-* **BMO9, `Validity`** — Definition 1's Validity for reliable authors: a
-  reliable validator's block is output by any record that flushes an
-  anchor two rounds above it.
+(`black-marlin.md` §12). BMO1 says the anchor is last in its own
+segment; BMO2 and BMO3 say agreeing records flush the same list, which
+only extends; BMO4 to BMO7 are Definition 1's Integrity, key delivery
+(BMO5, and by the block itself for a correct author, BMO6), and Total
+order; BMO8 composes BME5 with BMO2 so two descents reaching a common
+block output the same list below it; BMO9 is Validity for reliable
+authors.
 
 **Where the twin case still sits.** BMO6 delivers the block itself only
-for a correct author. For an equivocator, BMO5 says *some* block of that
-author and round is output, and which one depends on the segmentation —
-so two validators whose records differ at a round can output different
-twins. BMO8 rules that out wherever their descents meet; what is not
-established is that they always do. §12 records what that would need.
+for a correct author; for an equivocator, BMO5 says some block of that
+author and round is output, and which one can differ between two
+validators whose records differ at a round. BMO8 rules that out
+wherever their descents meet, not that they always do — §12 records
+what more that would need.
 
 Statements only; the proofs live in `Proof.lean`.
 -/

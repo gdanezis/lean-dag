@@ -5,24 +5,13 @@ import LeanDag.FinWhale.Rotation
 /-!
 # FinWhale — every slot is decided, and what follows
 
-Lemma 23 and Theorems 24 and 26. The relation's agreement says two
-validators never disagree; these say they eventually agree about
-*everything*. The end-to-end form, `agreement_of_commits`, is in
-`View.lean`, where the views are.
-
-**Lemma 23 is a statement about one DAG, not about time.** The paper
-reads it as "after GST any undecided slot eventually gets decided", where
-eventually means in a later and larger DAG. Written that way it would
-contradict the finiteness Lemma 12 consumes — nothing above some `N` is
-decided in a DAG that stops. What holds of a single DAG is the content of
-the argument: a slot below a committed anchor is decided, and §10's
-liveness supplies committed anchors above every round once the leader
-schedule names three correct leaders in a row.
-
-So `lemma23` here takes a committed triple above the slot and concludes
-that the slot is decided. Growth enters where it belongs, in the
-hypothesis: a larger DAG carries a triple further up, and every slot
-below it is decided.
+Lemma 23 and Theorems 24 and 26: the relation's agreement says two
+validators never disagree, these say they eventually agree about
+everything. `lemma23` is a statement about one DAG, not about time — it
+takes a committed triple above a slot and concludes the slot is
+decided; growth enters through the hypothesis, since a larger DAG
+carries a triple further up. The end-to-end form,
+`agreement_of_commits`, is in `View.lean`, where the views are.
 -/
 
 namespace LeanDag
@@ -33,17 +22,9 @@ variable {BlockId : Type} [DecidableEq BlockId]
 variable {Elig : ℕ → ℕ → Prop}
 
 omit [DecidableEq BlockId] in
-/-- **Lemma 23.** Every slot below a committed triple is decided.
-
-The paper's argument, with the maximality made explicit: if some slot
-below the triple were undecided, take the highest such. Everything above
-it up to the triple is decided, so the first non-skipped slot above it is
-a commit and serves as its anchor — and a slot with a committed anchor is
-decided by the reverse pass.
-
-The triple is what covers the three offsets: the anchor must sit above
-`r + 2`, and for `r` within two of the triple's start only its later
-members qualify. -/
+/-- **Lemma 23.** Every slot below a committed triple is decided: taking
+the highest undecided slot below it, the first non-skipped slot above
+it is a commit and serves as its anchor. -/
 theorem lemma23 {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
     {choose : BlockId → ℕ → Option BlockId} {dec : ℕ → Verdict BlockId}
     (hEl : ∀ r a, Elig r a ↔ r + 2 < a)
@@ -103,16 +84,10 @@ theorem lemma23 {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
 
 /-! ## Committed anchors, from §10's liveness
 
-`lemma23` asks for a committed triple. This is where it comes from: the
-rotation names three consecutive correct leaders (Lemma 22), and coverage
-commits each of their blocks (Lemma 20).
-
-One hypothesis carries the growth. `hsees` says a validator's view holds
-what the universe holds — that a direct commit of the universe is a
-direct commit of this validator's view. Read the other way it is the
-statement that the certificates have arrived, which is the "eventually"
-the paper's Lemma 23 is stated with, and it is the converse of what
-`exclusions_of_dag` consumes for safety. -/
+`lemma23` asks for a committed triple, which the rotation supplies
+(Lemma 22, three consecutive correct leaders) and coverage commits
+(Lemma 20). `hsees` carries the growth: a validator's view holds what
+the universe holds. -/
 
 section Triple
 
@@ -154,11 +129,9 @@ theorem committed_triple {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
   rw [hwf.direct_commit s l hdcl]
   exact ⟨by simp, by simp⟩
 
-/-- **Lemma 23, composed.** Every slot below the horizon is decided —
-including the slots before GST, which the reverse pass decides from an
-anchor above them. Only the *triple* has to sit past the coverage round,
-which is why `R` enters through a maximum rather than as a floor on
-`r`. -/
+/-- **Lemma 23, composed.** Every slot below the horizon is decided,
+including those before GST, decided from an anchor above them; only the
+triple must sit past the coverage round, hence the maximum. -/
 theorem all_decided {dc : ℕ → BlockId → Prop} {ds : ℕ → Prop}
     {choose : BlockId → ℕ → Option BlockId} {dec : ℕ → Verdict BlockId}
     (hwf : WellFormed Elig dc ds choose dec) {R N r : ℕ}
@@ -198,8 +171,8 @@ theorem subset_foldl (hist : BlockId → List BlockId) (ls acc : List BlockId) :
   rw [ht]
   exact List.mem_append_left _ hb
 
-/-- **Everything in a committed leader's history is delivered.** Either
-an earlier leader delivered it, or this one does. -/
+/-- **Everything in a committed leader's history is delivered**, by an
+earlier leader or this one. -/
 theorem mem_linearise (hist : BlockId → List BlockId) :
     ∀ (ls : List BlockId) (acc : List BlockId) (l : BlockId), l ∈ ls → ∀ b ∈ hist l,
       b ∈ ls.foldl (fun acc l => acc ++ (hist l).filter (fun b => b ∉ acc)) acc := by
@@ -222,10 +195,9 @@ theorem lemma25 {dec : ℕ → Verdict BlockId} {r k : ℕ} {l : BlockId}
     (hr : r < k) (hcom : dec r = Verdict.commit l) : l ∈ commitSeq dec k :=
   mem_commitSeq k hr hcom
 
-/-- **Theorem 24 (Agreement).** Two validators that have decided every
-slot below `k` deliver the same sequence — not merely comparable ones.
-Lemma 12 supplies the agreement, `commitSeq_congr` carries it to the
-sequence, and the delivery order is a function of that. -/
+/-- **Theorem 24 (Agreement)**: two validators that have decided every
+slot below `k` deliver the same sequence, from Lemma 12's agreement
+through `commitSeq_congr`. -/
 theorem theorem24 {dec dec' : ℕ → Verdict BlockId} {k : ℕ}
     (hagree : ∀ s, dec s ≠ Verdict.undecided → dec' s ≠ Verdict.undecided → dec s = dec' s)
     (hdec : ∀ s, s < k → dec s ≠ Verdict.undecided)
@@ -234,7 +206,7 @@ theorem theorem24 {dec dec' : ℕ → Verdict BlockId} {k : ℕ}
     linearise hist (commitSeq dec k) = linearise hist (commitSeq dec' k) := by
   rw [commitSeq_congr k fun s hs => hagree s (hdec s hs) (hdec' s hs)]
 
-/-- **Theorem 26 (Validity), at the list layer.** A block in the causal
+/-- **Theorem 26 (Validity), at the list layer**: a block in the causal
 history of a committed leader is delivered. -/
 theorem theorem26 {dec : ℕ → Verdict BlockId} {hist : BlockId → List BlockId} {r k : ℕ}
     {l b : BlockId} (hr : r < k) (hcom : dec r = Verdict.commit l) (hb : b ∈ hist l) :
@@ -249,8 +221,8 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable [F : Faults Validator] [P : Params Validator]
 variable {Payload : Type} {D : Dag Validator BlockId Payload} {S : Slots Validator}
 
-/-- `histOf` is the causal history: the faithfulness condition Theorem 26
-asks for, discharged. -/
+/-- `histOf` is the causal history, discharging the faithfulness
+condition Theorem 26 asks for. -/
 theorem mem_histOf [LinearOrder BlockId] {l c : BlockId} (hl : l ∈ D.ids)
     (h : ReachesFrom D.block l c) : c ∈ histOf D l :=
   (Finset.mem_sort _).2 (((causalStructure D).mem_history_iff hl).2 h)

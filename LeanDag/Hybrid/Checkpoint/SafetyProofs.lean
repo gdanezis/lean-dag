@@ -2,22 +2,13 @@ import LeanDag.Hybrid.Checkpoint.BaseSpec
 /-!
 # Machine-checked checkpoint safety derivations
 
-Human reviewers must inspect the theorem statements in this file to
-confirm that they express the intended guarantees. Once those statements
-and `BaseSpec.lean` are accepted, the `by` bodies are proof engineering
-checked by Lean and need not be trusted by inspection.
-
-Quorum arithmetic supplies a signer outside the Byzantine and AbC
-classes. Authentication connects that signer to an emitted proposal;
-the emission rule connects the proposal to the signer's unique local
-state. Same-height uniqueness and within-epoch prefix consistency are
-therefore consequences of protocol state.
-
-Forked histories are permitted inputs to this checkpoint model. The
-results do not invoke the DAG's non-equivocation or agreement theorems
-and do not claim that the DAG model produces these inputs. They prove
-that, once any such execution is supplied, conflicting branches cannot
-both acquire checkpoint certificates under the stated AbC bound.
+Human reviewers must inspect the theorem statements to confirm they
+express the intended guarantees; once those and `BaseSpec.lean` are
+accepted, the `by` bodies need not be trusted by inspection. Forked
+histories are permitted inputs — the results prove that, given any
+such execution, conflicting branches cannot both acquire checkpoint
+certificates under the stated AbC bound, without invoking the DAG's
+own non-equivocation or agreement theorems.
 -/
 
 namespace LeanDag.Hybrid.Checkpoint
@@ -45,12 +36,10 @@ theorem mem_recoveryCorrect {v : Validator} :
   simp [RecoveryCorrect, ReliableSigner, and_assoc, and_left_comm, and_comm]
 
 /-!
-The next two counting arguments follow the same pattern as
-`HybridFaults.exists_honest_mem_inter` in `Hybrid/Faults.lean` and
-`exists_correct_of_card` in `Validators.lean`. They are restated here
-because those lemmas exclude the base Byzantine or crash classes, while
-checkpoint signing must additionally exclude `M.abc`; `M.resilient`
-supplies the correspondingly stronger cardinal bounds.
+The next two counting arguments restate
+`HybridFaults.exists_honest_mem_inter` and `exists_correct_of_card`
+because checkpoint signing must additionally exclude `M.abc`, which
+`M.resilient` supplies the correspondingly stronger bounds for.
 -/
 
 /-- Two hybrid quorums share a validator outside both classes allowed

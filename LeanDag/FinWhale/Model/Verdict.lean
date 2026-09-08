@@ -4,25 +4,14 @@ import Mathlib.Data.Finset.Max
 /-!
 # FinWhale — verdicts, the reverse pass, and the tie-break
 
-A validator's decisions are a verdict per leader slot. The reverse pass
-fixes them: a slot decided by the direct rules takes that verdict, and
-otherwise the validator finds its **anchor** — the first slot above
-`r + 2` that is not skipped — and reads the slot off the anchor's causal
-history, marking the slot undecided if the anchor is. `Verdict`, `Anchor`
-and `WellFormed` state that, the last as a condition on a verdict
-assignment rather than as a procedure. `Model/Pass.lean` gives the
-procedure.
-
-`WellFormed` takes the direct rules as parameters, because each validator
-evaluates them on its own view. `choose` — the paper's "deterministic
-rule" for selecting among an anchor's conflicting candidates — is shared,
-since it reads only the anchor and the round. `ChooseSound` is what such
-a rule must satisfy, and `chooseLeast` is one that does: the least
-candidate in the identifier order, where the paper names none.
-
-What the pass computes lands in the shared anchored relation
-(`Model/Decided.lean`, `decided_of_wellFormed`), and agreement between
-validators is the relation's.
+A validator's decisions are a verdict per leader slot: a slot the
+direct rules decide takes that verdict, and otherwise the validator
+finds its anchor — the first non-skipped slot above `r + 2` — and reads
+the slot off its causal history. `Verdict`, `Anchor` and `WellFormed`
+state that as a condition on a verdict assignment; `Model/Pass.lean`
+gives the procedure. `choose` is the paper's deterministic tie-break,
+shared since it reads only the anchor and the round; `chooseLeast` is
+one instance, the least candidate in the identifier order.
 -/
 
 
@@ -52,24 +41,15 @@ def Verdict.optOf {BlockId : Type*} : Verdict BlockId → Option BlockId
   | Verdict.commit b => some b
   | _ => none
 
-/-- **The anchor of `r`**: the first *eligible* slot above `r` that is
-not skipped.
-
-**Eligibility is a parameter**, where it used to be `r + 2 < a`. That
-reading is right only when slots are rounds, and it is what kept
-FinWhale's verdicts round-indexed and so kept the rule off
-`Properties.DagRule`, whose schedule maps slots to rounds
-(`docs/porting-plan.md`). Every use below is order-theoretic — the
-anchor is the least eligible non-skipped slot — so nothing here depends
-on which relation it is, only that an eligible slot is above. -/
+/-- **The anchor of `r`**: the first eligible slot above `r` that is not
+skipped. Eligibility is a parameter rather than the fixed `r + 2 < a`,
+so nothing here depends on which relation it is. -/
 def Anchor (Elig : ℕ → ℕ → Prop) (dec : ℕ → Verdict BlockId) (r a : ℕ) : Prop :=
   Elig r a ∧ dec a ≠ Verdict.skip ∧ ∀ a', Elig r a' → a' < a → dec a' = Verdict.skip
 
 /-- **The reverse pass, as a condition on the verdicts.** The direct
-rules are taken as parameters, because each validator evaluates them on
-its own view: `dcommit r l` is "this validator sees a direct commit of
-`l` at `r`", `dskip r` likewise. `choose` is the paper's deterministic
-rule and is *shared*, since it reads only the anchor and the round. -/
+rules are parameters, since each validator evaluates them on its own
+view; `choose` is shared, reading only the anchor and the round. -/
 structure WellFormed (Elig : ℕ → ℕ → Prop) (dcommit : ℕ → BlockId → Prop) (dskip : ℕ → Prop)
     (choose : BlockId → ℕ → Option BlockId) (dec : ℕ → Verdict BlockId) : Prop where
   /-- A direct commit is taken. -/
@@ -89,10 +69,9 @@ structure WellFormed (Elig : ℕ → ℕ → Prop) (dcommit : ℕ → BlockId �
   has_anchor : ∀ r, (¬ ∃ l, dcommit r l) → ¬ dskip r → dec r ≠ Verdict.undecided →
     ∃ a, Anchor Elig dec r a
 
-/-- **What the deterministic rule must satisfy.** It names only blocks
-the anchor could indirectly commit, and it names one whenever there is
-one to name. The paper's rule is a choice among the candidates, so both
-hold of it. -/
+/-- **What the deterministic rule must satisfy**: it names only blocks
+the anchor could indirectly commit, and names one whenever there is one
+to name. -/
 structure ChooseSound (S : Slots Validator) (D : Dag Validator BlockId Payload)
     (choose : BlockId → ℕ → Option BlockId) : Prop where
   /-- Whatever it names is a candidate. -/
@@ -101,14 +80,10 @@ structure ChooseSound (S : Slots Validator) (D : Dag Validator BlockId Payload)
   total : ∀ A r, (∃ b, IndirectCommit S D A r b) → ∃ b, choose A r = some b
 
 open scoped Classical in
-/-- **The deterministic rule, exhibited.** The paper resolves the choice
-among an anchor's candidates "according to a deterministic rule" and
-names none; this is one — the least candidate in the identifier order.
-
-Soundness and totality are all any result here reads, and both hold of it
-by construction. It is a function of the anchor and the round, so two
-validators holding the same anchor make the same choice, which is what
-`finwhale.md` §6 turns on. -/
+/-- **The deterministic rule, exhibited**: the least candidate in the
+identifier order, sound and total by construction, and a function of
+the anchor and the round alone, so two validators holding the same
+anchor make the same choice. -/
 noncomputable def chooseLeast [LinearOrder BlockId] (S : Slots Validator)
     (D : Dag Validator BlockId Payload) (A : BlockId) (r : ℕ) : Option BlockId :=
   if h : ((slotBlocks S D r).filter (fun b => IndirectCommit S D A r b)).Nonempty then

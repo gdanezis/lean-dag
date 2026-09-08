@@ -6,21 +6,13 @@ import LeanDag.Integration.FinWhaleMechanisms
 /-!
 # Stacks, at the rules
 
-`Properties/Arcs/Stack.lean` proves the composition theorem once. What
-a rule contributes to it is nothing: the stack is assembled from the
-witnesses its mechanisms already have — `Rebased.of_sustains` on a fill
-or a re-genesis, `Rebased.of_truncates` on a cut — and
-`Stack.safe_and_live` reads it. Three rules are shown below, one with
-the core's universe and two with their own, in the order a deployment
-takes: fill, then cut. A longer stack is one more
-`Stack.step`.
-
-What a stack gives is read by the headline: `Properties.Safe`, which
-every rule instantiates once (`MysticetiProperties.safety` and the
-rest), quantifies over every stack, so nothing is stated here beyond
-the witnesses themselves. The per-rule `stack_*_safe_and_live` theorems
-that once stood beside them were that headline at three stacks, and
-are retired.
+`Properties/Arcs/Stack.lean` proves the composition theorem once, and a
+rule contributes nothing to it: the stack assembles from witnesses its
+mechanisms already have (`Rebased.of_sustains`, `Rebased.of_truncates`),
+and `Stack.safe_and_live` reads it. Three rules are shown below, fill
+then cut; a longer stack is one more `Stack.step`. `Properties.Safe`
+already quantifies over every stack, so nothing beyond the witnesses is
+stated here.
 -/
 
 namespace LeanDag

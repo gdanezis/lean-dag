@@ -3,11 +3,7 @@ import LeanDag.Hydrozoan.SlotAgreement.Proof
 /-!
 # Prefix agreement — proof
 
-Generated proof layer; not part of the audit surface. Everything is a
-harvest of `SlotAgreement.decided_unique`: pointwise verdict agreement
-below the horizon, then list plumbing (`filterMap` congruence over
-`range`, `range`/`filterMap` distribution over append, and prefix
-preservation under `flatMap`).
+Generated proof layer; not part of the audit surface.
 -/
 
 namespace LeanDag

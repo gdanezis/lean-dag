@@ -4,17 +4,13 @@ import LeanDag.Barnacle.Model.Run
 # BN5 — the ledger
 
 The paper's Safety theorem in the form this development states it
-(`barnacle.md` §6): the committed sequence read from any two runs
-is one list as far as both reach (Agreement, Total Order), it only grows
-(Total Order), and a block appears in it at most once (Integrity).
-Stated of partial runs, the only runs there are (`barnacle.md`
-§5): the ledger of a run of height `K` is defined through configuration
-`K − 1`.
-
-Integrity rests on the law `candidates` — a committed block is a
-candidate of its slot, the right round and author: two slots of one
-range holding the same block share a round and a leader and are one
-slot (`Slots.keyed`), and two ranges hold blocks of disjoint rounds.
+(`barnacle.md` §6): the committed sequence read from any two runs is one
+list as far as both reach (Agreement, Total Order), it only grows (Total
+Order), and a block appears in it at most once (Integrity). Stated of
+partial runs, the only runs there are (`barnacle.md` §5). Integrity
+rests on `candidates`: a committed block is a candidate of its slot, so
+two slots of one range holding it are one slot (`Slots.keyed`), and two
+ranges hold blocks of disjoint rounds.
 
 * **BN5a, the ledger is agreed** — range by range, and as one list, as
   far as both runs reach.
@@ -37,11 +33,9 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 
 /-! ## What this asks of the rule
 
-`Agree` and `CommitsCandidate`, in place of the seven-clause `R.Laws`.
-The ledger results read exactly two of those clauses — `agree`, through
-the agreement theorem, and `candidates`, to identify a committed block's
-slot — and both are properties. See `Agreement/Statement.lean` for why
-the change is a signature and not an argument. -/
+`Agree`, through the agreement theorem, and `CommitsCandidate`, to
+identify a committed block's slot — both properties, in place of the
+seven-clause `R.Laws`. -/
 
 /-- **BN5a, the ledger is agreed**: two runs over one universe read the
 same committed sequence from every range both have closed, hence the

@@ -104,17 +104,12 @@ theorem exists_decided_of_sustains {rel : Reliability Validator}
 
 /-! ## The precondition itself survives a mechanism
 
-`exists_decided_of_sustains` carries one slot's commit. What every
-consumer downstream reads — `LeaderCommits`, `decidedBelow_of_run`,
-chain quality, Barnacle — is `Support.live`, the whole window, and the
-two theorems below carry that. After them, liveness across a mechanism
-is the same shape as safety across one: proved once, fed by the
-`Sustains` or `Truncates` witness the mechanism already has, with the
-rule contributing nothing but its support.
-
-The view is a hypothesis in both. A fill's blocks were never in the
-old view, and a truncation's view is the old one cut down, so what the
-transformed view covers is the mechanism's business, not the rule's. -/
+What every consumer downstream reads — `LeaderCommits`,
+`decidedBelow_of_run`, chain quality, Barnacle — is `Support.live`, the
+whole window, and the two theorems below carry that across a `Sustains`
+or `Truncates` witness, with the rule contributing nothing but its
+support. The view is a hypothesis in both: what the transformed view
+covers is the mechanism's business, not the rule's. -/
 
 /-- **`live` survives a sustaining mechanism**, at the same schedule:
 production and certification carry across, and the candidates are the

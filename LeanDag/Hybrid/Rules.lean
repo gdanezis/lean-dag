@@ -5,25 +5,12 @@ import LeanDag.Common.Rules
 /-!
 # The hybrid two-round rules, and the arithmetic core
 
-The Odontoceti rules at the hybrid thresholds. The direct rules count
-`q = n − fb − fc` distinct authors — the derived instance's quorum,
-written out so the arithmetic is visible to `omega` — and the indirect
-test `ThickLink k` carries its threshold as a parameter: any
-
-    2·fb + fc + 1  ≤  k  ≤  n − 3·fb − 2·fc
-
-is admissible, the lower end consumed by the skip-side conflicts
-(H3, H5), the upper end supplied by link integrity (H4), and the
-interval nonempty exactly at the class bound `n ≥ 5·fb + 3·fc + 1`.
-`hybrid.md`'s tight constant and the `n`-relative house choice are the
-two named instantiations (`kTight`, `kRel`).
-
-Every safety theorem here threads `HonestNoEquiv`: the counting
-discounts against the *honest* population `n − fb` (crash-prone
-validators cannot face both ways either), while every quorum is taken
-against the derived population `n − fb − fc`. This split is the whole
-difference from the pure-Byzantine arithmetic; the proof skeletons are
-the Odontoceti ones with the discount moved.
+The Odontoceti rules at the hybrid thresholds: direct rules count
+`q = n − fb − fc` authors, and `ThickLink k` is admissible for
+`2fb + fc + 1 ≤ k ≤ n − 3fb − 2fc`, nonempty exactly at
+`n ≥ 5fb + 3fc + 1`. Every safety theorem threads `HonestNoEquiv`,
+discounting against `Honest` (`n − fb`) while quorums are taken against
+`n − fb − fc` — the one difference from the pure-Byzantine arithmetic.
 -/
 
 namespace LeanDag
@@ -255,10 +242,9 @@ private theorem thickLink_of_directCommit_aux (hne : HonestNoEquiv U)
         (coneSupporters_subset_of_reaches hA (Reaches.single hp)))
 
 /-- **H4 (O3's mirror) — link integrity.** If `L` is directly
-committed, every block from two rounds above it on carries at least `k`
-distinct support authors in its cone, for every admissible `k`: one hop
-is quorum intersection at `2q − n − fb = n − 3·fb − 2·fc ≥ k` — the
-interval's upper end, consumed exactly here — and depth is cone
+committed, every block two or more rounds above it carries at least `k`
+distinct support authors in its cone: one hop is quorum intersection at
+`n − 3fb − 2fc ≥ k`, the interval's upper end; depth is cone
 monotonicity. -/
 theorem thickLink_of_directCommit (hne : HonestNoEquiv U)
     (hkb : k + 3 * H.fb + 2 * H.fc ≤ Fintype.card Validator)
@@ -271,11 +257,10 @@ theorem thickLink_of_directCommit (hne : HonestNoEquiv U)
 /-! ## H5 — a direct commit excludes every rival candidate -/
 
 /-- **H5 (O4′'s mirror).** A directly committed block is the only
-same-author block that can pass the indirect test at any anchor:
-`q` supporters of `L₁` and `k` in-cone supporters of `L₂` overlap past
-the Byzantine class — `q + k > n + fb` is the interval's lower end
-again — and an honest overlap member supports two twins, which P2 and
-honesty jointly forbid. -/
+same-author block that can pass the indirect test at any anchor: `q`
+supporters of `L₁` and `k` in-cone supporters of `L₂` overlap past the
+Byzantine class, and an honest overlap member supporting two twins is
+what P2 and honesty jointly forbid. -/
 theorem eq_of_directCommit_of_thickLink (hne : HonestNoEquiv U)
     (hka : 2 * H.fb + H.fc + 1 ≤ k) {L₁ L₂ : BlockId}
     (h₁ : DirectCommit U L₁ r) (ht : ThickLink k U A L₂ r)

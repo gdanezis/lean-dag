@@ -5,16 +5,11 @@ import LeanDag.Common.Rules
 # The hybrid decision relation
 
 The Odontoceti decision layer at the hybrid thresholds: the anchored
-relation (`Anchored.lean`) at wavelength one, the view-relative direct
-rules at `q`, and one rung of link, `ThickLink` at the indirect
-threshold `k`, with the least linked candidate committed — retained
-unchanged, since a *Byzantine* leader can still plant two passing
-candidates in one anchor's cone, and nothing about the crash class
-closes that gap.
-
-The laws hold under `HonestNoEquiv` and an admissible `k`: `hybridLaws`
-threads both, and agreement (H6) is the relation's at them. The relation
-itself is a definition and carries neither.
+relation at wavelength one, the view-relative direct rules at `q`, and
+`ThickLink` at threshold `k`, with the least linked candidate committed
+— unchanged, since a Byzantine leader can still plant two passing
+candidates in one anchor's cone. The laws hold under `HonestNoEquiv`
+and an admissible `k`.
 -/
 
 namespace LeanDag
@@ -46,15 +41,11 @@ abbrev DirectSkipIn (U : BlockUniverse Validator BlockId Payload)
 the core's `slotBlamers`: the same set, over the same `IsLeaderBlock`. -/
 
 /-- **The slot is directly skipped, as judged from a view**: a hybrid
-quorum of distinct validators holds a voting-round block, in view, that
-references no candidate of the slot.
-
-Strictly stronger than the per-candidate `DirectSkipIn`, which it
-implies and which a slot with no candidate satisfies for nothing. The
-core and Odontoceti were repaired the same way and for the same reason
-(`docs/target-properties.md` §3.2): a rule whose skip quantifies over
-the candidates that happen to exist is not invariant under a mechanism
-that adds one, so it cannot be `Banded`. -/
+quorum of voting-round blocks, in view, reference no candidate of the
+slot. Strictly stronger than the per-candidate `DirectSkipIn`, needed
+for the same reason the core and Odontoceti were repaired
+(`docs/target-properties.md` §3.2): a skip over the candidates that
+happen to exist is not `Banded`. -/
 abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (s : ℕ) : Prop :=
   blameSkip (q Validator) U V s

@@ -3,37 +3,17 @@ import LeanDag.BlackMarlin.Model.Descent
 # Black Marlin — the descent computed, stated
 
 `Ledger/Statement.lean` takes the record `commit`'s descent leaves as
-given and carries BMD3's stretch as a hypothesis. This phase computes the
-descent instead, and the hypothesis goes away (`black-marlin.md` §11).
-Five claims:
+given; this phase computes the descent and discharges that hypothesis
+(`black-marlin.md` §11). BME1 and BME2 say the choice of L21–L24 is a
+sound and total function of the candidate; BME3 says the generated
+record is a `Flush`; BME4 says the record below a visited block is that
+block's own, which is why BME5's agreement — two records reaching one
+block agree at every round below it — needs no hypothesis about the
+rounds between.
 
-* **BME1, `DescendSound`** — the choice of L21–L24 is an anchor of the
-  universe strictly below `B`, at the highest anchor round its cone
-  reaches;
-* **BME2, `DescendTotal`** — and it is made whenever an anchor lies
-  below, so the descent stops only where there is nothing left to visit.
-  L20's guard is `𝒜 ≠ ∅` where L21–L24 need `maxAnchor(𝒜) ≠ ∅`; this
-  states the condition that is actually required;
-* **BME3, `RecordIsFlush`** — the record generated from an anchor
-  satisfies the three conditions of `Flush`, so BMD6's ledger results
-  apply to it. `step` and `dense` are derived here rather than assumed;
-* **BME4, `Suffix`** — the record below a block the descent visited *is*
-  that block's own record. This is the reason the descent's agreement is
-  a consequence: the choice at each round reads only the block above,
-  which L24's metric — `|round(A) − round(maxAnchor(strong(A)))|`, a
-  function of the candidate and its own cone — makes shared;
-* **BME5, `AgreeBelow`** — so two records that reach the same block at a
-  round agree at **every** round below it, with no hypothesis about the
-  rounds in between. This closes BMD3.
-
-**What is modelled, and what is chosen.** `𝒟` is dropped: the delivered
-set only removes what an earlier descent visited, so the anchors a
-validator flushes over all its commits are one chain read from its
-highest commit down. And "break ties deterministically" is read as the
-`≤`-least survivor under a `LinearOrder` on identifiers — hash order, in
-a deployment — as the Odontoceti and Mahi-Mahi arcs read their canonical
-choices. Nothing below depends on which rule it is, only that it is
-shared and reads the candidate alone.
+Ties are broken by the `≤`-least survivor under a `LinearOrder` on
+identifiers, as Odontoceti and Mahi-Mahi read their canonical choices;
+nothing below depends on which rule it is.
 
 Statements only; the proofs live in `Proof.lean`.
 -/

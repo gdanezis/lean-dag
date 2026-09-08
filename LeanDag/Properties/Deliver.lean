@@ -2,39 +2,17 @@ import LeanDag.Properties.Band
 /-!
 # What a view-level mechanism owes
 
-`docs/target-properties.md` §11.5. `Sustains` is what a mechanism that
-transforms the **DAG** owes a protocol. Rate limiting and the joiner
-transform a **view**: `LeanDag/DoS/` builds no universe at all — its one
-constructor is `View.ofAccepted` — and a rate-limited validator differs
-from an unlimited one only in what it holds.
-
-**Safety needs nothing.** A verdict reached on a smaller view is reached
-on a larger one (`decided_mono_of_banded`), so a rate limiter cannot
-make a validator decide wrongly. That is the whole safety story for this
-class of mechanism, and it was already derived.
-
-**Liveness had nothing at all.** Nothing said a rate limiter eventually
-delivers enough for a slot to decide, and a mechanism that deferred a
-block forever would have satisfied every obligation in this development.
-`DeliversOn` is that statement.
-
-**The protocol side is derived, not owed.** `exists_coversUpto_decides`
-below: every verdict has a round it is settled by, and any view covering
-to that round reaches it. So a protocol proves nothing new here — the
-band already said which rounds a verdict reads, and covering them is
-what a view has to do. The obligation falls entirely on the mechanism,
-which is the same asymmetry §3.6 records for `Sustains`.
-
-**On what a rate limiter can honestly promise.** `Delivers` asks for
-coverage of *everything* the universe holds up to a round. A limiter
-that permanently drops Byzantine spam does not satisfy it, and should
-not have to: the verdict is reached because a quorum of correct blocks
-suffices, not because every block arrives. A weaker obligation naming
-only the correct blocks would serve those mechanisms, and stating it
-needs a consumer that asks for it — which is why it is not stated here.
-`DoS/Novelty.lean` bounds the *size* of a rate-limited view and says
-nothing yet about its coverage, so this obligation has no witness in
-this development.
+`docs/target-properties.md` §11.5. Rate limiting and the joiner
+transform a **view** rather than the DAG `Sustains` covers. Safety needs
+nothing: a verdict reached on a smaller view is reached on a larger one.
+Liveness needs `DeliversOn`, since nothing else says a rate limiter
+eventually delivers enough for a slot to decide. The protocol side is
+derived, not owed: `exists_coversUpto_decides` says every verdict has a
+round it is settled by, from the band alone, so the obligation falls
+entirely on the mechanism. `Delivers` asks coverage of everything up to
+a round, which a limiter that drops Byzantine spam need not give; a
+weaker obligation over the correct blocks alone would serve such a
+mechanism but has no witness or consumer here yet.
 -/
 
 namespace LeanDag
@@ -46,10 +24,7 @@ variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {R : DagRule Validator BlockId Payload}
 
 /-- **A view is caught up to round `N`**: it holds every block the
-universe has at or below that round.
-
-The record states it once as `View.CoversUpto` (`BlockRecord.lean`);
-this is the same three lines at a carrier. -/
+universe has at or below that round. -/
 def CoversUpto (R : DagRule Validator BlockId Payload) {U : R.Universe}
     (V : R.View U) (N : ℕ) : Prop :=
   ∀ b, b ∈ R.ids U → (R.block U b).round ≤ N → b ∈ R.viewIds V
@@ -59,12 +34,8 @@ theorem CoversUpto.mono {U : R.Universe} {V : R.View U} {M N : ℕ}
     (h : CoversUpto R V N) (hMN : M ≤ N) : CoversUpto R V M :=
   fun b hb hr => h b hb (le_trans hr hMN)
 
-/-- **A verdict is reached by every view caught up far enough.** The
-round is the band's ceiling: the verdict reads nothing above it, so a
-view holding everything up to it holds everything the verdict reads.
-
-This is the protocol's whole contribution to view-level liveness, and it
-is `Banded` applied. -/
+/-- **A verdict is reached by every view caught up far enough**: the
+band's ceiling is a round the verdict reads nothing above. -/
 theorem exists_coversUpto_decides (h : Banded R) {S : Slots Validator}
     {U : R.Universe} {W : R.View U} {k : ℕ} {v : Option BlockId}
     (hW : R.Decided S W k v) :

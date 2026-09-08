@@ -4,22 +4,18 @@ import LeanDag.Common.History
 /-!
 # Nemo-Nemo: the commit rule
 
-The crash commit rule at wave length two. The implementation collapses the
-certificate onto the vote: with voting and decision on the same round `r+1`,
-a "certificate" for a leader block `L` is literally a round-`(r+1)` block
-referencing `L` (`is_certificate` reduces to `is_vote`). Direct commit is a
-majority of such voters — the existing `supporters` set — and the indirect
-test, at link size one, asks for a *single* vote inside the anchor's cone.
+The crash commit rule at wave length two. Voting and decision share
+round `r+1`, so a certificate for a leader block `L` is literally a
+round-`(r+1)` block referencing `L`. Direct commit is a majority of
+such voters — the existing `supporters` set — and the indirect test, at
+link size one, asks for a single vote inside the anchor's cone.
 
 Deliberately absent, compared to the Byzantine core and the hybrid arc:
-
-* **No `DirectSkip`.** The implementation pins the direct-skip quorum to the
-  full stake, unreachable in practice — a crashed leader never yields a
-  full-census blame at round `r+1` — so leaders are skipped only indirectly
-  and the direct-skip rule is not modeled.
-* **No twin counting.** Universal `no_equivocation` makes the candidate
-  leader block of a slot unique outright (`eq_of_creator_eq`), so
-  the M5′/H5-style uniqueness lemmas have nothing left to prove.
+no `DirectSkip`, since the implementation pins the direct-skip quorum
+to the full stake, unreachable once a leader has crashed, so leaders
+are skipped only indirectly; and no twin counting, since universal
+`no_equivocation` makes the candidate leader block of a slot unique
+outright.
 -/
 
 namespace LeanDag

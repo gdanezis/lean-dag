@@ -5,22 +5,15 @@ import LeanDag.Barnacle.Model.Run
 
 The paper's Leader-Count Agreement proposition, and the safety
 theorem's core (`barnacle.md` §6): two validators adopt the same
-sequence of configurations — the same start rounds *and* the same
-counts — and the same verdicts.
-
-The claim is stated for **any update rule**, with no synchrony, fairness
-or view hypothesis: the verdicts of a range are derivations against one
-fixed schedule and agree by the base rule's own agreement law; the
-anchor is the least committed slot past one threshold in one verdict
-function; and the update is one function of one universe, one anchor
-and one state. The AIMD rule is one instance.
+sequence of configurations — the same start rounds and counts — and the
+same verdicts, for **any update rule**, with no synchrony, fairness or
+view hypothesis. There is no total form: a universe holds finitely many
+blocks and every configuration commits one, so agreement of prefixes is
+the whole claim (`barnacle.md` §5).
 
 * **BN3, partial runs agree** — two runs closed to any two heights, over
   any two views, agree on every configuration up to the lower height and
-  on every verdict of the ranges below it. There is no total form: a
-  universe holds finitely many blocks and every configuration commits
-  one, so runs are prefixes and agreement of prefixes is the whole claim
-  (`barnacle.md` §5).
+  on every verdict of the ranges below it.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -36,17 +29,9 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 
 /-! ## What this asks of the rule
 
-`Properties.Agree`, and nothing else. The hypothesis used to be
-`R.Laws`, which bundles seven clauses of which this proof reads one —
-so a protocol reaching Barnacle went through Barnacle's own interface
-rather than through the properties, and the two collections stayed
-parallel. `docs/target-properties.md` §11.2 records what that cost.
-
-Stating it at the property instead is a signature change and no more:
-`Laws.agree` and `Properties.Agree R.toDagRule` are the same
-proposition, since `toDagRule` preserves `Decided` by `rfl`. What it
-buys is the direction — a rule with `Agree` feeds this theorem whether
-or not it has ever heard of `BaseRule.Laws`. -/
+`Properties.Agree`, and nothing else: `Laws.agree` and
+`Properties.Agree R.toDagRule` are the same proposition, so a rule with
+`Agree` feeds this theorem whether or not it has `BaseRule.Laws`. -/
 
 /-- **BN3, partial runs agree.** Two partial runs over one universe —
 whatever views, whatever heights `K₁`, `K₂` — agree on `start`, `count`

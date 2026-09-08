@@ -3,19 +3,12 @@ import LeanDag.Common.Anchored
 /-!
 # FinWhale — the decision relation
 
-FinWhale as the shared anchored relation. The direct commit is the
-fast path or the slow path, evaluated on the validator's own view; the
-direct skip is the skip rule on that view; the one rung is the anchored
-indirect rule, an SP-certificate or a quorum of FP-evidence in the
-anchor's causal history, tie-broken by the identifier order — the
-paper's "deterministic rule", exhibited as the least candidate
-(`chooseLeast`). Eligibility is wave two: the anchor's candidate sits
-three rounds above the slot's.
-
-The reverse pass (`Model/Verdict.lean`, `Model/Pass.lean`) is the
-procedure a validator runs; what it computes is a derivation of this
-relation (`decided_of_wellFormed`), so agreement between validators is
-the relation's `decided_agree` at FinWhale's laws.
+FinWhale as the shared anchored relation: the direct commit is the fast
+or slow path on the validator's own view, the one rung is the anchored
+indirect rule tie-broken by `chooseLeast`, and eligibility is wave two.
+The reverse pass computes a derivation of this relation
+(`decided_of_wellFormed`), so agreement is the relation's
+`decided_agree` at FinWhale's laws.
 -/
 
 namespace LeanDag

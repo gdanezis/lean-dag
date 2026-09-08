@@ -2,26 +2,12 @@ import LeanDag.Hydrozoan.Model.Faults
 /-!
 # Optimal-Hydrozoan: fault model and thresholds
 
-Trusted core of the Optimal-Hydrozoan arc: the "Thresholds" paragraph of
-`sections/optimal-protocol.tex`. Definitions only — every lemma about
-them lives on the generated side (`Optimal/Helpers/`, written with the
-later phases).
-
-Optimal-Hydrozoan keeps Hydrozoan's committee (`n ≥ 3f + 2c + k + 1`)
-and every threshold of `Model/Faults.lean` except the fast-path
-allowance and, through it, the fast quorum: `p` becomes
-`pOpt = ⌊(c+k)/2⌋ + 1`, one more fault than
-Hydrozoan tolerates in two rounds and exactly Hydrangea's lower bound
-`⌊(c+k+2)/2⌋`. The weak-rung threshold `q_weak` is not used; in its place
-come two **per-block** thresholds, `tPlain` and `tEquiv`, on the votes
-that a single decision-round block references. The quorum `q_cert` is
-reused, unchanged, as the quorum of fast-evidence blocks and of
-no-evidence blocks (the decision rules of the O4 phase,
-`Optimal/Model/DirectRules.lean` and `Optimal/Model/IndirectRules.lean`).
-
-Everything here is layered on the frozen `Faults` class: `OptimalFaults`
-*extends* it with one extra field, so `q`, `qCert`, `qSlow`, `Correct`
-and `NonByzantine` are inherited as they are — never re-defined.
+`OptimalFaults` extends Hydrozoan's `Faults` with one field; `q`,
+`qCert`, `qSlow`, `Correct` and `NonByzantine` are inherited unchanged.
+The fast-path allowance becomes `pOpt = ⌊(c+k)/2⌋ + 1`, one fault more
+than Hydrozoan tolerates; `q_weak` is replaced by two per-block
+thresholds, `tPlain` and `tEquiv`, on the votes a single decision-round
+block references. Definitions only; lemmas live in `Helpers/`.
 -/
 
 namespace LeanDag
@@ -30,13 +16,9 @@ namespace OptimalHydrozoan
 
 open LeanDag.Hydrozoan
 
-/-- The fault model of Optimal-Hydrozoan: Hydrozoan's `Faults` — the same
-committee bound `n ≥ 3f + 2c + k + 1`, the same actual fault sets — plus
-the paper's standing assumption `f + c ≥ 1`. Under `f = c = 0` the model
-is trivial (no fault of any kind), and it is the one configuration in
-which the arithmetic of `sections/optimal-proof.tex` (`lem:opt-thresholds`)
-is not guaranteed — it fails, for instance, at `n = 1` — so it is
-excluded here by construction rather than assumed away in every
+/-- Hydrozoan's `Faults`, plus the standing assumption `f + c ≥ 1`: at
+`f = c = 0` the threshold arithmetic is not guaranteed (it fails at
+`n = 1`), so the case is excluded here rather than assumed away in every
 statement. -/
 class OptimalFaults (Replica : Type*) [Fintype Replica] [DecidableEq Replica]
     extends LeanDag.Hydrozoan.Faults Replica where
@@ -49,28 +31,21 @@ section Thresholds
 variable (Replica : Type*) [Fintype Replica] [DecidableEq Replica]
   [O : OptimalFaults Replica]
 
-/-- `pOpt = ⌊(c+k)/2⌋ + 1`: the fast path's fault allowance, one more than
-Hydrozoan's `p` — defined through it, so the "+1" is definitional. This
-is Hydrangea's lower bound `⌊(c+k+2)/2⌋` on two-round commits. -/
+/-- `pOpt = ⌊(c+k)/2⌋ + 1`: the fast path's fault allowance, one more
+than Hydrozoan's `p`, defined through it. -/
 def pOpt : ℕ := p Replica + 1
 
 /-- `q_fast = n − pOpt`: the quorum of votes at the voting round to
-fast-commit a leader (`FastCommittedLeader`, read with the new `p`). One
-vote fewer than Hydrozoan's `q_fast` at the same committee size. Unlike
-Hydrozoan, this is **not** the blame quorum of the direct skip, which
-becomes `q_cert` (O4, `Optimal/Model/DirectRules.lean`). -/
+fast-commit a leader, one fewer than Hydrozoan's at the same committee
+size. Unlike Hydrozoan, this is not the direct skip's blame quorum,
+which becomes `q_cert`. -/
 def qFastOpt : ℕ := Fintype.card Replica - pOpt Replica
 
-/-- `t_plain = n − 2f − c − pOpt`: the votes for a leader block that a
-decision-round block must reference to be *fast evidence* for it, when
-the block does not witness an equivocation of the leader
-(`IsFastEvidence`, first case; O4).
-
-A truncated ℕ subtraction, on purpose: the arithmetic phase (O2,
-`Optimal/ThresholdArithmetic`) states the identity
-`q_fast + q = n + f + t_plain` as an equality, which fails under
-truncation — so the row the seam proof consumes also certifies
-that no truncation occurred. -/
+/-- `t_plain = n − 2f − c − pOpt`: the votes for a leader block a
+decision-round block must reference to be fast evidence for it, absent
+an equivocation witness. A truncated ℕ subtraction on purpose: the
+arithmetic phase's identity `q_fast + q = n + f + t_plain` fails under
+truncation, so proving it also certifies none occurred. -/
 def tPlain : ℕ := Fintype.card Replica - (2 * O.f + O.c + pOpt Replica)
 
 /-- `t_equiv = f + pOpt`: the same threshold when the decision-round block

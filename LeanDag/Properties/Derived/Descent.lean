@@ -3,24 +3,13 @@ import LeanDag.Properties.Derived.Bounded
 /-!
 # `Descends` from the indirect rule
 
-`docs/target-properties.md` §4. `Descends` was an obligation, and every
-protocol discharged it the same way: a downward induction over the slots
-below the run, taking at each step the *least* eligible anchor that
-commits, so that everything between is skipped, and applying the
-indirect rule once. Three protocols carried that induction, differing
-only in which constructors the last line named.
-
-`Indirect` is that last line, and the induction is here. What makes the
-factoring possible is the second quantifier of `Indirect`: the descent
-has to produce verdicts at a **tight** bound — unchanged when the
-leaders at or above the run's top are reassigned — and a protocol proves
-that clause for its own indirect step without extra work, because the
-step reads slot `i`'s candidate and the anchor's history and nothing
-else.
-
-The eligibility relation is a parameter. It reads the round structure
-alone, so `Elig S'.slotRound = Elig S.slotRound` for every schedule the
-bound admits, and the induction never has to transport it.
+`docs/target-properties.md` §4. `Descends` was an obligation each
+protocol discharged the same way: a downward induction taking, at each
+step, the least eligible anchor that commits. `Indirect` is that last
+step, and the induction lives here once. `Indirect`'s tight-bound
+clause is what makes this possible: a protocol proves it for its own
+indirect step at no extra cost, since the step reads only slot `i`'s
+candidate and the anchor's history.
 -/
 
 namespace LeanDag

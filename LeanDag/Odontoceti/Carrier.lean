@@ -10,17 +10,10 @@ import LeanDag.Properties.Optional.SelfParent
 `docs/target-properties.md` §8. The carrier and the properties whose
 proof is a single Odontoceti theorem apiece: `Agree` is O5,
 `CommitsCandidate` is `isLeaderBlock_of_decided`, `CommitsDirect` is the
-direct constructor.
-
-**Why these three sit here and not in `OdontocetiProperties.lean`.**
-That file holds the band and everything the band gives, and it imports
-the adaptive arc for the bounded relation — so it is downstream of a
-mechanism. Anything a mechanism needs to consume has to be upstream of
-every mechanism, and these three are consumed by the adaptive arc and by
-Barnacle. Hydrozoan has had this shape since its own carrier was
-written (`Hydrozoan/Helpers/Carrier.lean`); Odontoceti acquired it when
-`scripts/audit-bespoke.py` found the adaptive arc reaching past it to
-`Odontoceti.decided_unique`.
+direct constructor. These sit here, upstream of every mechanism, rather
+than in `OdontocetiProperties.lean`, which holds the band and imports
+the adaptive arc; the adaptive arc and Barnacle both consume these
+three.
 -/
 
 namespace LeanDag

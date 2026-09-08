@@ -3,37 +3,16 @@ import LeanDag.Common.CommonCore
 /-!
 # I19 — Safe Skip against a common-core target
 
-The design question report §16.8 leaves open is which reference
-discipline the protocol should state, and the residual worry behind it
-is *availability*: a validator that cites blocks it does not hold
-cannot serve them, however sound the storage accounting is
-(§16.7's I17).
-
-Choosing the fill's target from the **common core** removes the worry
-at its source rather than trading it away. Report §5.2's T3c produces,
-at every round, a correct-authored block that *every* block two rounds
-later reaches (`exists_common_correct_ancestor`) — so a validator
-holding any recent block already has it, and everything below it, in
-its own causal past. A fill whose donor line is built from such blocks
-therefore cites only material every producing validator already holds.
-
-Three consequences, and they are the ones the mechanism wants:
-
-* **No transmission.** The message names the target; every recipient
-  reconstructs the filled blocks from its own DAG, because the blocks
-  the fill cites are already in its cone.
-* **The recovering validator holds what it cites.** After bootstrap it
-  has the common core like everyone else, so the tight, author-
-  attributed discipline is satisfiable rather than something to weaken.
-* **The choice of §16.8 stops mattering in practice.** Either clause is
-  met, so the specification can state whichever it prefers on other
-  grounds.
-
-The common core is not a new assumption. T3c is a counting theorem of
-report §5.2 with no synchrony hypothesis and no progress hypothesis —
-it holds of every universe, which is what makes this a restriction on
-*how a message chooses its target*, not on the executions the protocol
-admits.
+Report §16.8 leaves open which reference discipline the fill's target
+should follow; the worry is availability, that a validator cites blocks
+it does not hold. Choosing the target from the common core removes it
+at the source: T3c (report §5.2) produces, at every round, a
+correct-authored block every block two rounds later reaches
+(`exists_common_correct_ancestor`), so a validator holding any recent
+block already has it and everything below it. A fill built from such
+blocks transmits nothing — every recipient reconstructs it from its own
+DAG — and needs no synchrony or progress hypothesis, holding of every
+universe.
 -/
 
 namespace LeanDag
@@ -46,17 +25,14 @@ variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 variable {U : BlockUniverse Validator BlockId Payload}
 
 /-- A block is **common at round `r`** when every block two rounds
-above it reaches it. Report §5.2's T3c supplies one at every round, of
-correct authorship, with no assumption whatever. -/
+above it reaches it. -/
 def CommonAt (U : BlockUniverse Validator BlockId Payload)
     (b : BlockId) (r : ℕ) : Prop :=
   b ∈ U.ids ∧ (U.block b).round = r ∧
     ∀ c ∈ U.ids, (U.block c).round = r + 2 → Reaches U c b
 
 /-- **Common blocks exist at every round**, and are correct-authored —
-T3c restated in the vocabulary above. The hypothesis is only that some
-block exists two rounds up, which is what having a round to fill
-means. -/
+T3c restated in the vocabulary above. -/
 theorem exists_commonAt {r : ℕ} {c₀ : BlockId} (hc₀ : c₀ ∈ U.ids)
     (hc₀r : (U.block c₀).round = r + 2) :
     ∃ b, CommonAt U b r ∧ (U.block b).creator ∈ (Correct : Finset Validator) := by
@@ -71,11 +47,8 @@ theorem mem_history_of_commonAt {b c : BlockId} {r : ℕ}
   (mem_history_iff hc).mpr (hcom.2.2 c hc hcr)
 
 /-- **And everything it cites.** Cones nest, so a common block's
-references — the very blocks a fill would copy — are in every later
-validator's past too.
-
-This is the statement the mechanism needs: the material a fill against
-a common target reproduces is material its recipients already have. -/
+references, the blocks a fill would copy, are in every later
+validator's past too. -/
 theorem refs_mem_history_of_commonAt {b c : BlockId} {r : ℕ}
     (hcom : CommonAt U b r) (hc : c ∈ U.ids) (hcr : (U.block c).round = r + 2)
     {i : BlockId} (hi : i ∈ (U.block b).refs) :
@@ -85,13 +58,8 @@ theorem refs_mem_history_of_commonAt {b c : BlockId} {r : ℕ}
 
 /-- **I19 — a fill against a common donor line transmits nothing.**
 Every reference the fill copies at a gap round lies in the causal past
-of every validator holding a block two rounds above that round.
-
-So the recipients need no blocks they lack: naming the target suffices,
-and each reconstructs the filled blocks from its own DAG. The `prev`
-reference is the recovering validator's own chain, supplied by the fill
-itself, so the copied references are the whole of what would otherwise
-have to be sent. -/
+of every validator holding a block two rounds above it, so naming the
+target suffices. -/
 theorem fill_refs_available (sk : SkipMsg U)
     (hcom : ∀ k, sk.r0 < k → k ≤ sk.r → CommonAt U (sk.line k) k)
     {k : ℕ} (hk1 : sk.r0 < k) (hk2 : k ≤ sk.r)

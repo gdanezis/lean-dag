@@ -4,19 +4,13 @@ import LeanDag.Common.Density
 /-!
 # The block universe
 
-`spec.md` §3.3 and the non-equivocation lemma T1.
-
-A `BlockUniverse` is every block that exists — authored by anyone, correct
-or Byzantine. Non-equivocation is stated **here**, at the universe level,
-rather than on any individual DAG. Per-DAG would be too weak: two DAGs could
-each satisfy "at most one block per correct validator per round" while
-holding *different* such blocks, which is exactly a correct validator
-equivocating, with both DAGs looking well-formed. T5 would silently break.
-
-Note the `valid` field reads `ValidWrt block (block i)`, mentioning only its
-sibling field `block`. That is the whole reason `ValidWrt` (§3.2) takes a
-lookup function rather than a universe: a structure field cannot mention the
-structure being defined.
+`spec.md` §3.3 and T1. A `BlockUniverse` is every block that exists,
+authored by anyone. Non-equivocation is stated at the universe level,
+not per-DAG: two DAGs could each satisfy "one block per correct
+validator per round" while holding *different* such blocks, which is a
+correct validator equivocating with both DAGs looking well-formed.
+`ValidWrt` takes a lookup function rather than a universe because a
+structure field cannot mention the structure being defined.
 -/
 
 namespace LeanDag

@@ -2,21 +2,11 @@ import LeanDag.Hydrozoan.Model.DirectRules
 /-!
 # Direct-rule safety — statement
 
-The direct decision rules never disagree about a slot. Five claims, one
-per way two verdicts could meet: fast/fast, certificate/certificate,
-slow/slow, fast/slow, and commit/skip. The commit-agreement claims are
-**view-level** — the paper's actual assertion, that two replicas acting
-on their own local DAGs reach compatible verdicts; certificate
-uniqueness is **universe-level**, the strongest form (any two
-certificates anywhere, no views involved).
-
-Each claim rests on a quorum-intersection invariant from the design
-note's table, machine-checked in Phase 2 (`ThresholdArithmetic`):
-`2·q_fast > n + f` (fast/fast, commit/skip), `2·q_cert > n + f`
-(certificates), and `q_fast + q_cert > n + f` (fast/slow — the fast
-path starves every conflicting certificate).
-
-Statements only; the proofs live in `Proof.lean` (generated).
+The direct decision rules never disagree about a slot: five claims, one
+per way two verdicts could meet. The commit-agreement claims are
+view-level; certificate uniqueness is universe-level. Each rests on a
+quorum-intersection invariant of `ThresholdArithmetic`. Statements only;
+the proofs live in `Proof.lean`.
 -/
 
 namespace LeanDag
@@ -37,10 +27,7 @@ def FastFastAgreement (U : BlockUniverse Replica BlockId) : Prop :=
     FastCommitInView U V₂ L₂ (S.slotRound k) → L₁ = L₂
 
 /-- **Certificate uniqueness**: two certified candidates for one slot
-are the same block — universe-level, no views needed
-(`2·q_cert > n + f` — the invariant that becomes safety-critical from
-`k = 1`, where the certificate threshold diverges from the fault
-count). -/
+are the same block, universe-level, from `2·q_cert > n + f`. -/
 def CertUniqueness (U : BlockUniverse Replica BlockId) : Prop :=
   ∀ (k : ℕ) (L₁ L₂ : BlockId),
     IsLeaderBlock U k L₁ → IsLeaderBlock U k L₂ →
@@ -56,9 +43,7 @@ def SlowSlowAgreement (U : BlockUniverse Replica BlockId) : Prop :=
     SlowCommitInView U V₂ L₂ (S.slotRound k) → L₁ = L₂
 
 /-- **Fast/slow agreement**: a fast commit and a slow commit for one
-slot, across views, name the same block — the fast path starves every
-conflicting certificate (`q_fast + q_cert > n + f`, from the starvation
-row and the rung ordering `q_weak ≤ q_cert`). -/
+slot, across views, name the same block. -/
 def FastSlowAgreement (U : BlockUniverse Replica BlockId) : Prop :=
   ∀ (V₁ V₂ : View U) (k : ℕ) (L₁ L₂ : BlockId),
     IsLeaderBlock U k L₁ → IsLeaderBlock U k L₂ →
@@ -66,9 +51,7 @@ def FastSlowAgreement (U : BlockUniverse Replica BlockId) : Prop :=
     SlowCommitInView U V₂ L₂ (S.slotRound k) → L₁ = L₂
 
 /-- **Commit/skip exclusion**: a slot committed by either direct route
-in any view is never skipped in any view — a non-Byzantine replica
-would have to both vote for the candidate and blame the slot through
-its unique voting block. -/
+in any view is never skipped in any view. -/
 def CommitSkipExclusion (U : BlockUniverse Replica BlockId) : Prop :=
   ∀ (V₁ V₂ : View U) (k : ℕ) (L : BlockId),
     IsLeaderBlock U k L →

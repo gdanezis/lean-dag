@@ -4,27 +4,21 @@ import LeanDag.BlackMarlin.Model.Descent
 # Black Marlin — `commit(B)` as the paper writes it
 
 `Flush` models a validator's boundaries as a function of round, and
-`ledgerSeq` reads them off in round order. Algorithm 1 does something
-narrower: `commit(B)` recurses into the undelivered anchors of
-`strong(B)`, and it is invoked afresh at each `delivery(r)` that
-succeeds, threading the delivered set `D` across invocations
-(`black-marlin.md` §16).
-
-The two differ where a *later* commit descends below a boundary an
-earlier one already passed. The round-indexed record cannot express
-that, since the blocks it flushes then come out after blocks of a higher
-round. This file writes the recursion directly so the abstraction can be
-checked against it rather than assumed faithful.
+`ledgerSeq` reads them off in round order; Algorithm 1 is narrower —
+`commit(B)` recurses into the undelivered anchors of `strong(B)` afresh
+at each successful `delivery(r)`, threading the delivered set `D` across
+invocations (`black-marlin.md` §16). The two differ where a later commit
+descends below a boundary an earlier one already passed, which a
+round-indexed record cannot express; this file writes the recursion
+directly so the abstraction can be checked against it.
 
 **L30 is outside L27's filter.** Read literally, the anchor `B` is
-`ab-deliver`ed whatever `D` holds, so a validator that committed one
-twin and later descends to the other delivers both — Definition 1's
-Integrity, outright. §4.4's prose says otherwise: "In case of conflicting
-blocks from the same party and round, only the first block ... is
-ab-delivered". `commitSeq` takes the prose, filtering `B` as well.
+delivered whatever `D` holds, so a validator that committed one twin and
+later descends to the other delivers both — Integrity, outright. §4.4's
+prose says otherwise ("only the first block ... is ab-delivered"), and
+`commitSeq` takes the prose, filtering `B` as well.
 
-**Trusted core of the arc: definitions only.** No theorem lives in this
-file.
+**Trusted core of the arc: definitions only.**
 -/
 
 namespace LeanDag

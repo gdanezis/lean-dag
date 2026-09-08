@@ -7,30 +7,19 @@ import Mathlib
 /-!
 # A common correct ancestor
 
-`spec.md` §4, Phase 1b — T3a and T3c.
-
-Persistence (T3) says a block *already backed by a quorum* survives forever.
-This file says something is **always** backed, whether or not anyone arranged
-it: across any three consecutive rounds, some correct validator's round-`r`
-block ends up in the causal history of every round-`(r+2)` block. The
-argument is a counting one, in the spirit of the Gather protocol's
-common-core lemma.
-
-This file *produces* the correct supporters that coverage (`Support.lean`)
-consumes; `Persistence.lean` instead gets its supporters free from a quorum
-hypothesis. Neither file imports the other.
-
-Everything is parameterised by `p := (authorsAt U (r+1)).card`, the number of
-validators holding a round-`(r+1)` block. A round-`(r+2)` block draws its
-n−f referenced creators from those same `p`, so it misses exactly
-`p - (n−f)`. Low participation weakens the counting but narrows the room to
-dodge by exactly as much, which is why no progress assumption is needed.
+`spec.md` §4, Phase 1b — T3a and T3c. Persistence (T3) says a block
+already backed by a quorum survives forever; this file says something
+is **always** backed: across any three consecutive rounds, some correct
+validator's round-`r` block lies in the causal history of every
+round-`(r+2)` block, by a counting argument in the spirit of the Gather
+protocol's common-core lemma. This file produces the correct supporters
+that `Support.lean` consumes; `Persistence.lean` gets its own free from
+a quorum hypothesis instead.
 
 Thresholds are stated **additively** (`p ≤ k + 2 * F.f`) rather than as
-`p - 2f ≤ k`. Truncated `ℕ` subtraction would silently collapse the
-threshold to `0` whenever `p ≤ 2f` — precisely the degenerate range where no
-round-`(r+2)` block exists — turning a vacuous case into an apparently
-provable one.
+`p - 2f ≤ k`: truncated `ℕ` subtraction would silently collapse the
+threshold to `0` whenever `p ≤ 2f`, turning a vacuous case into an
+apparently provable one.
 -/
 
 namespace LeanDag
