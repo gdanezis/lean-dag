@@ -1,5 +1,6 @@
 import LeanDagTest.Barnacle.Model
 import LeanDag.Barnacle.Live.Proof
+import LeanDag.Barnacle.MysticetiLive.Proof
 import LeanDag.Barnacle.Validity.Proof
 import LeanDag.Barnacle.Helpers.Delivery
 import LeanDag.Barnacle.Aimd.Proof
@@ -62,7 +63,9 @@ BN11, the bound from BN7a, and the goodness from the family itself. -/
 theorem real_runs (K : ℕ) :
     Nonempty (PartialRun realRule.toBaseRule bnP bnLeader bnWin realUpd
       (Ugrow (11 * K + 9)) (realRule.full (Ugrow (11 * K + 9))) K) :=
-  Live.holds.1 4 (by omega) ℕ Unit bnP bnWin realUpd realUpd_bounded
+  Live.runsExist_roundRobin (by omega) realRule MysticetiProperties.agree
+    (MysticetiLive.descent (Fin 4) ℕ Unit) (Nat.succ_pos 2) (by decide) bnP bnWin realUpd
+    realUpd_bounded
     (Ugrow (11 * K + 9)) (realRule.full (Ugrow (11 * K + 9))) 0 (11 * K + 9)
     (ugrow_good _)
     (coversUpto_full (Mysticeti.holds (Fin 4) ℕ Unit) _ _) (by omega) K (by show K * (4 + 1 + 6) + 6 + 3 ≤ 11 * K + 9; omega)

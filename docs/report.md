@@ -8309,6 +8309,15 @@ def RoundRobinLive : Prop :=
 This is the paper's A4 for its own schedule, assumed there and proved
 here.
 
+**BN11.** The mechanism's conclusion names neither a protocol nor a
+schedule. A live rule with agreement and the descent laws at slack
+`slack`, under a schedule whose good sets have runs of `waveLength`
+heads within `c₀`, reaches every height whose horizon fits under `N`, on
+any view caught up to `N`. Round-robin is one such schedule, at
+`c₀ = n + waveLength − 1` under the committee bound of BN9, and the
+rules above enter as instances of it — each supplying its agreement, its
+descent laws and its committee bound, and nothing further.
+
 ### 21.5 Findings for the paper
 
 - **The anchor's round is ambiguous in the pseudocode.** Algorithm 2
@@ -10367,7 +10376,7 @@ reused.
 | BN8 | progress: a run past the synchrony round extends by one configuration; runs of every height exist under the horizon | `Barnacle.Progress.holds` *(Barnacle/Progress/Proof)* |
 | BN9 | the heads descent: the liveness clause from the descent laws and a run of heads; round-robin has runs of heads by pigeonhole and is live at every count | `Barnacle.Heads.holds` *(Barnacle/Heads/Proof)* |
 | BN10 | the three rules satisfy the laws and the descent laws, and are live under round-robin at every count | `Barnacle.Mysticeti.holds`, `Barnacle.MysticetiLive.holds`, `Barnacle.Odontoceti.holds`, `Barnacle.Nemo.holds` *(Barnacle/Mysticeti/Proof, Barnacle/MysticetiLive/Proof, Barnacle/Odontoceti/Proof, Barnacle/Nemo/Proof)* |
-| BN11 | and so the mechanism over each of them, under round-robin, reaches every height with no clause left assumed, on any view caught up to the horizon | `Barnacle.Live.holds`, `coversUpto_full` *(Barnacle/Live/Proof, Barnacle/Helpers/Cover)* |
+| BN11 | the mechanism over any rule with agreement and the descent laws, under any schedule whose good leaders run a wave, reaches every height with no clause left assumed, on any view caught up to the horizon; round-robin is one such schedule | `Barnacle.Live.holds`, `Barnacle.Live.runsExist_roundRobin`, `coversUpto_full` *(Barnacle/Live/Proof, Barnacle/Helpers/Cover)* |
 | BN12 | a healthy window is counted as healthy, and the rule then raises the count: the loop cannot back off where every scoring slot committed | `Barnacle.Healthy.holds` *(Barnacle/Healthy/Proof)* |
 | BN13 | BN11 on data: runs of every height on the grown family under the real rule, with nothing assumed | `real_runs` witnesses *(LeanDagTest/Barnacle/Real)* |
 | BN14 | validity: a good author's block lies in the history of the block a closed configuration's anchor commits; every rule over the block universe delivers | `Barnacle.Validity.holds`, `delivers_core` *(Barnacle/Validity/Proof, Barnacle/Helpers/Delivery)* |
