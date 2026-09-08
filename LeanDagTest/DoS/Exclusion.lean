@@ -1,6 +1,7 @@
 import LeanDagTest.Mysticeti.Growth
 import LeanDag.DoS.Exclusion
 import LeanDag.DoS.Counting
+import Mathlib.Tactic.IntervalCases
 /-!
 # Liveness survives exclusion, end to end
 

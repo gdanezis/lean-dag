@@ -1,5 +1,7 @@
 import LeanDagTest.Mysticeti.Growth
 import LeanDag.Network.Quorum
+import Mathlib.Tactic.FinCases
+import Mathlib.Tactic.Ring
 /-!
 # Partial views — the non-degenerate witnesses
 

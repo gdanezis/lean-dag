@@ -1,5 +1,6 @@
 import LeanDag.Mysticeti.ViewPace
 import LeanDagTest.Mysticeti.Growth
+import Mathlib.Tactic.FinCases
 /-!
 # What the view-convergence route cannot do without
 

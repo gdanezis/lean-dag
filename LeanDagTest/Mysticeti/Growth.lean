@@ -1,4 +1,4 @@
-import Mathlib
+import Mathlib.Tactic.Ring
 import LeanDag.Common.Schedule
 import LeanDag.Mysticeti.Liveness
 import LeanDag.Mysticeti.ViewPace

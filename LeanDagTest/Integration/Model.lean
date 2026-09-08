@@ -8,6 +8,7 @@ import LeanDag.Integration.Margin
 import LeanDag.Integration.CommonTarget
 import LeanDag.Integration.HydrozoanMechanisms
 import LeanDagTest.SafeSkip.Model
+import Mathlib.Tactic.IntervalCases
 /-!
 # The integration lemmas, witnessed
 

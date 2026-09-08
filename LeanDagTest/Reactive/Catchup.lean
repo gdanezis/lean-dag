@@ -1,5 +1,6 @@
 import LeanDagTest.Reactive.Model
 import LeanDagTest.Mysticeti.ViewPace
+import Mathlib.Algebra.Group.Action.Defs
 /-!
 # The collapse bound is tight
 
