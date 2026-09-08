@@ -516,14 +516,32 @@ collects the deployment conditions their composition reveals.
 
 §§17–23 analyse seven protocols of the family against this development:
 Mahi-Mahi's asynchronous rule at wave `w` (`MahiMahi.Safety.holds`
-(MM1)), Black Marlin's three-round rule (`BlackMarlin.Safety.holds`
-(BM1)), Minnow's minimal rule, FinWhale's two-round fast path
+(MM1)), Black Marlin's three-round rule, refuted on data (BMO11, BMT4),
+Minnow's minimal rule, FinWhale's two-round fast path
 (`lemma4` (FW1), `Run.agreement` (FW12)), and Barnacle's adaptive leader
 count (`Barnacle.Agreement.holds` (BN3), `Barnacle.Heads.holds` (BN9)),
 and Hydrozoan's dual-path rule under hybrid faults
 (`Hydrozoan.SlotAgreement.holds` (HZ3), `Hydrozoan.Grounding.holds` (HZ8)), and
 its Optimal variant's fast path at Hydrangea's bound
 (`OptimalHydrozoan.SlotAgreement.holds` (OH3), `OptimalHydrozoan.DirectLiveness.holds` (OH5)).
+
+**The development has four kinds of arc, and the source says which each
+is.** A **commit rule** carries a universe, a decision relation, the
+properties it shows and the mechanisms it earns: the core, Odontoceti,
+Nemo, Hybrid, Mahi-Mahi, Hydrozoan, Optimal-Hydrozoan, FinWhale, and the
+two refuted ones, Black Marlin and Minnow. A **universe transform**
+rewrites the DAG and owes a witness that it does so lawfully —
+garbage collection's cut, Safe Skip's fill, re-genesis. A **schedule
+mechanism** rewrites the `Slots` a rule runs on and touches no universe
+at all: Barnacle varies how many leaders a round has, the adaptive arc
+which validators lead, the reactive arc when a validator builds, and the
+timed model is the full-timeout baseline the other two are read against.
+An **analysis** measures a DAG rather than deciding on one:
+denial-of-service resistance, chain quality, and the composed network
+capstones. The properties of §16 are the contract the first kind meets
+and the other three consume, and what pairs two kinds at once — a
+schedule over a rule, or two transforms composed — is the integration
+layer.
 
 §24 exhibits the witness models. §25 describes the mechanisation, §26
 discusses the formulation, the lessons of the extensions, and the

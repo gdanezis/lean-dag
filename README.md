@@ -337,6 +337,23 @@ the set of declarations changes. `make help` lists them.
 
 ## Layout
 
+**Four kinds of arc.** Each directory under `LeanDag/` is one of them,
+and its entry file says which:
+
+| kind | what it varies | arcs |
+|---|---|---|
+| **commit rule** | the decision relation | `Mysticeti/` (the core), `Odontoceti/`, `Nemo/`, `Hybrid/`, `MahiMahi/`, `Hydrozoan/`, `OptimalHydrozoan/`, `FinWhale/`, and the two refuted rules `BlackMarlin/` and `Minnow/` |
+| **universe transform** | the DAG, owing a witness that it does so lawfully | `GC/` (the cut), `SafeSkip/` (the fill), re-genesis |
+| **schedule mechanism** | the `Slots` a rule runs on, and no universe at all | `Barnacle/` (how many leaders a round has), `Adaptive/` (which validators lead), `Reactive/` (when a validator builds), `Timed/` (the full-timeout baseline) |
+| **analysis** | nothing — it measures a DAG rather than deciding on one | `DoS/`, `Quality/`, `Network/` |
+
+`Common/` is the substrate all four read; `Properties/` is the contract
+a commit rule meets and the other three consume; `Integration/` is what
+pairs two kinds at once — a schedule over a rule, or two transforms
+composed. A commit rule reads in four parts, and its files are named for
+them: the universe and the rule under `Model/`, what it shows in
+`Properties.lean` or `Carrier.lean`, and what it earns in `Record.lean`.
+
 - `LeanDag/` — theorem/definition source: the core DAG and Mysticeti
   development at the top level, with the pacing structures in
   `Mysticeti/ViewPace.lean` and the delivery layer they induce in
