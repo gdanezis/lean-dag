@@ -68,6 +68,24 @@ theorem commitsDirect : CommitsDirect
     (fun {_} V L _ => LeanDag.FinWhale.DirectCommit (V.toRecord) L) :=
   AnchoredRule.commitsDirect
 
+/-! ## Totality and the descent, relationally
+
+The two statements every other arc makes of its anchored rule, from the
+same choice at every nonempty rung. Neither mentions a verdict
+assignment or the reverse pass: they are facts about the relation, so
+they stand whether or not a procedure computing them is present. -/
+
+/-- **The graded rule is total**: a nearest eligible committed anchor
+always returns a verdict. -/
+theorem total {D : Dag Validator BlockId Payload} {S : Slots Validator} :
+    (finWhaleAnchored Validator BlockId Payload).Total (S := S) D :=
+  AnchoredRule.total_of_least LeanDag.FinWhale.exists_least
+
+/-- **Every slot below a committed run is decided.** -/
+theorem decidedBelowRun {D : Dag Validator BlockId Payload} {S : Slots Validator} :
+    (finWhaleAnchored Validator BlockId Payload).DecidedBelowRun (S := S) D :=
+  AnchoredRule.decidedBelowRun_of_least LeanDag.FinWhale.exists_least
+
 /-- **FinWhale reads a band**: the relation's band at its band laws. -/
 theorem banded : Banded (finWhaleRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) :=
