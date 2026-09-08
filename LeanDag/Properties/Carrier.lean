@@ -112,6 +112,13 @@ theorem DagRule.causal_refs_above {R : DagRule Validator BlockId Payload}
   have := (R.causal U).refs_round b hb j hj
   omega
 
+/-- **A view caught up to `N`**: it holds every block of the universe at
+round `N` or below — what a validator that has received everything up to
+the horizon holds. -/
+def DagRule.CoversUpto (R : DagRule Validator BlockId Payload) (U : R.Universe)
+    (V : R.View U) (N : ℕ) : Prop :=
+  ∀ b ∈ R.ids U, (R.block U b).round ≤ N → b ∈ R.viewIds V
+
 end Properties
 
 end LeanDag

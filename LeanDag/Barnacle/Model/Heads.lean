@@ -1,3 +1,4 @@
+import LeanDag.Properties.Commit
 import LeanDag.Barnacle.Model.Live
 /-!
 # Barnacle: the descent laws and runs of heads
@@ -21,24 +22,11 @@ namespace Barnacle
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
-/-- **The descent laws** of a live rule, with `slack` the number of
+/-- **The descent laws** of a live rule: `Properties.Descent` at the
+rule's own gap and goodness predicate, with `slack` the number of
 validators the good set may miss. -/
-structure LiveRule.Descent (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop where
-  /-- **A4, direct commits.** On a DAG good from `Rnd` to `N`, some
-  `slack`-missing set of validators commits every slot it leads from
-  `Rnd` whose wave fits under `N`, on any view caught up to `N`. -/
-  goodLeaders : ∀ (U : R.Universe) (Rnd N : ℕ), R.Good U Rnd N →
-    ∃ T : Finset Validator, Fintype.card Validator ≤ T.card + slack ∧
-      ∀ (S : Slots Validator) (V : R.View U) (κ : ℕ), R.toBaseRule.CoversUpto U V N →
-        Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N →
-        S.leader κ ∈ T → ∃ L, R.Decided S V κ (some L)
-  /-- **A3, the indirect rule.** A committed slot a full wave above `i`,
-  with every full-wave-eligible slot between them skipped, decides `i`. -/
-  indirect : ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (i j : ℕ) (A : BlockId),
-    S.slotRound i + R.waveLength ≤ S.slotRound j → R.Decided S V j (some A) →
-    (∀ i', i < i' → i' < j → S.slotRound i + R.waveLength ≤ S.slotRound i' →
-      R.Decided S V i' none) →
-    ∃ v, R.Decided S V i v
+abbrev LiveRule.Descent (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop :=
+  Properties.Descent R.toBaseRule.toDagRule R.Good R.waveLength slack
 
 /-- **A run of heads**: from every round `r`, within `c₀` rounds, `g`
 consecutive rounds whose heads — first slots, led by `getLeader` of the

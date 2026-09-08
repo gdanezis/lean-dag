@@ -8240,22 +8240,29 @@ slots spanning a wave (`FairRunOn`, §6) — has no instance at `n = 4`,
 `f = 1`, `m = 2`: three consecutive rounds name every validator. What
 exists is a run of correct-led *heads*, the first slots of consecutive
 rounds, and a head committed a wave above a slot decides it with no
-eligible slot between. Two facts of the base protocol carry this,
-stated as a second law structure over a live rule:
+eligible slot between. Two facts of the base protocol carry this. They
+are what a protocol owes a schedule mechanism on the liveness side, so
+they are stated as a property, over a bare `DagRule` at a gap `g` and a
+goodness predicate:
 
 ```lean
-structure LiveRule.Descent (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop where
-  goodLeaders : ∀ (U : R.Universe) (Rnd N : ℕ), R.Good U Rnd N →
+structure Descent (R : DagRule Validator BlockId Payload)
+    (Good : R.Universe → ℕ → ℕ → Prop) (g slack : ℕ) : Prop where
+  goodLeaders : ∀ (U : R.Universe) (Rnd N : ℕ), Good U Rnd N →
     ∃ T : Finset Validator, Fintype.card Validator ≤ T.card + slack ∧
-      ∀ (S : Slots Validator) (V : R.View U) (κ : ℕ), R.toBaseRule.CoversUpto U V N →
-        Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N →
+      ∀ (S : Slots Validator) (V : R.View U) (κ : ℕ), R.CoversUpto U V N →
+        Rnd ≤ S.slotRound κ → S.slotRound κ + g ≤ N →
         S.leader κ ∈ T → ∃ L, R.Decided S V κ (some L)
   indirect : ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (i j : ℕ) (A : BlockId),
-    S.slotRound i + R.waveLength ≤ S.slotRound j → R.Decided S V j (some A) →
-    (∀ i', i < i' → i' < j → S.slotRound i + R.waveLength ≤ S.slotRound i' →
+    S.slotRound i + g ≤ S.slotRound j → R.Decided S V j (some A) →
+    (∀ i', i < i' → i' < j → S.slotRound i + g ≤ S.slotRound i' →
       R.Decided S V i' none) →
     ∃ v, R.Decided S V i v
 ```
+
+`LiveRule.Descent R slack` is this at the rule's own `waveLength` and
+`Good`, so a protocol discharges it in its own folder and the mechanism
+reads it without naming the protocol.
 
 `goodLeaders` is A4's direct half — after stabilisation a good leader's
 slot commits, on any view caught up to the horizon, the commit's evidence
@@ -15987,7 +15994,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 492 theorems the body or Appendix A names, each
+The 493 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -20610,11 +20617,10 @@ theorem descent_of_support (R : LiveRule Validator BlockId Payload)
     (hind : Properties.Indirect R.toBaseRule.toDagRule R.elig)
     (hwave : sp.wave ≤ R.waveLength)
     (hgood : ∀ U Rnd N, R.Good U Rnd N → Timed.Good R.toBaseRule.toDagRule rel U Rnd N) :
-    R.Descent rel.slack where
-  goodLeaders
+    R.Descent rel.slack
 ```
 
-**The descent laws, from a support**, at the fault model's slack.
+**The descent laws, from a support**, at the fault model's slack: `Timed.descent_of_support` at a live rule's own gap and goodness.
 
 #### `holds`
 
@@ -22478,6 +22484,24 @@ theorem SynchronisedOn.mono {U : R.Universe} {T : Finset Validator} {r r' : ℕ}
 ```
 
 Synchrony from a round is synchrony from any later one.
+
+#### `descent_of_support`
+
+*theorem, `Timed.Coverage.lean`*
+
+```lean
+theorem descent_of_support (R : Properties.DagRule Validator BlockId Payload)
+    (Good : R.Universe → ℕ → ℕ → Prop) (g : ℕ)
+    (sp : Properties.Support R) {rel : Reliability Validator}
+    (hcov : OfCoverage sp rel) (hlc : sp.Commits rel)
+    (hind : Properties.Indirect R (fun sr i j => sr i + g ≤ sr j))
+    (hwave : sp.wave ≤ g)
+    (hgood : ∀ U Rnd N, Good U Rnd N → Timed.Good R rel U Rnd N) :
+    Properties.Descent R Good g rel.slack where
+  goodLeaders
+```
+
+**The descent laws, from a support.** A rule whose support commits under coverage at a fault model, with the indirect rule at gap `g` and a goodness predicate that implies `Timed.Good`, has the descent laws at the model's slack.
 
 #### `not_synchronisedOn_of_extends`
 

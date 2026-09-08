@@ -10,8 +10,7 @@ import LeanDag.Timed.Coverage
 Not part of the audit surface. `LiveRule.Descent` for any live rule with
 a `Support` whose `OfCoverage` and `Commits` hold at a fault model, an
 `Indirect` property at the rule's eligibility, and good DAGs that are
-`Timed.Good`: `goodLeaders` is `Timed.exists_decided_of_coverage`, and
-`indirect` is the property read at the schedule it is given.
+`Timed.Good` — the generic theorem read at the rule's own gap.
 -/
 
 namespace LeanDag
@@ -25,25 +24,16 @@ variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 def LiveRule.elig (R : LiveRule Validator BlockId Payload) : (ℕ → ℕ) → ℕ → ℕ → Prop :=
   fun sr i j => sr i + R.waveLength ≤ sr j
 
-/-- **The descent laws, from a support**, at the fault model's slack. -/
+/-- **The descent laws, from a support**, at the fault model's slack:
+`Timed.descent_of_support` at a live rule's own gap and goodness. -/
 theorem descent_of_support (R : LiveRule Validator BlockId Payload)
     (sp : Properties.Support R.toBaseRule.toDagRule) {rel : Reliability Validator}
     (hcov : Timed.OfCoverage sp rel) (hlc : sp.Commits rel)
     (hind : Properties.Indirect R.toBaseRule.toDagRule R.elig)
     (hwave : sp.wave ≤ R.waveLength)
     (hgood : ∀ U Rnd N, R.Good U Rnd N → Timed.Good R.toBaseRule.toDagRule rel U Rnd N) :
-    R.Descent rel.slack where
-  goodLeaders := by
-    intro U Rnd N hg
-    obtain ⟨T, hq, hs, hpop⟩ := hgood U Rnd N hg
-    refine ⟨T, by have := hq.2; omega, ?_⟩
-    intro S V κ hcovV hRnd hN hlead
-    obtain ⟨L, hL⟩ := Timed.exists_decided_of_coverage sp hcov hlc hq hs hpop S V κ
-      (fun b hb hr => hcovV b hb hr) hRnd (by omega) hlead
-    exact ⟨L, hL.2.1⟩
-  indirect := by
-    intro S U V i j A hij hj hmid
-    exact hind.decided S V hij hj hmid
+    R.Descent rel.slack :=
+  Timed.descent_of_support _ R.Good R.waveLength sp hcov hlc hind hwave hgood
 
 end Barnacle
 

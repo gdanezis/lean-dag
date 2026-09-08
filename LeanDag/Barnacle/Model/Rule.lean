@@ -114,7 +114,7 @@ liveness results hold of its own view rather than of the whole
 universe. The full view satisfies it at every `N`. -/
 def CoversUpto (R : BaseRule Validator BlockId Payload) (U : R.Universe)
     (V : R.View U) (N : ℕ) : Prop :=
-  ∀ b ∈ R.ids U, (R.block U b).round ≤ N → b ∈ R.viewIds V
+  R.toDagRule.CoversUpto U V N
 
 /-- **The laws of a base rule.** The two view laws pin the view fields;
 the other three are the properties of `docs/target-properties.md` at the

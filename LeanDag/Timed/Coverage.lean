@@ -1,6 +1,7 @@
 import LeanDag.Properties.Sustain
 import LeanDag.Properties.Support
 import LeanDag.Properties.Arcs.Liveness
+import LeanDag.Properties.Commit
 /-!
 # The timed model: coverage, and the bridge into certification
 
@@ -171,6 +172,30 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
     (U : R.Universe) (Rnd N : ℕ) : Prop :=
   ∃ T, rel.IsQuorum T ∧ SynchronisedOn R U T Rnd ∧
     ∀ r, Rnd ≤ r → r ≤ N → Properties.PopulatedOn R U T r
+
+/-- **The descent laws, from a support.** A rule whose support commits
+under coverage at a fault model, with the indirect rule at gap `g` and a
+goodness predicate that implies `Timed.Good`, has the descent laws at the
+model's slack. -/
+theorem descent_of_support (R : Properties.DagRule Validator BlockId Payload)
+    (Good : R.Universe → ℕ → ℕ → Prop) (g : ℕ)
+    (sp : Properties.Support R) {rel : Reliability Validator}
+    (hcov : OfCoverage sp rel) (hlc : sp.Commits rel)
+    (hind : Properties.Indirect R (fun sr i j => sr i + g ≤ sr j))
+    (hwave : sp.wave ≤ g)
+    (hgood : ∀ U Rnd N, Good U Rnd N → Timed.Good R rel U Rnd N) :
+    Properties.Descent R Good g rel.slack where
+  goodLeaders := by
+    intro U Rnd N hg
+    obtain ⟨T, hq, hs, hpop⟩ := hgood U Rnd N hg
+    refine ⟨T, by have := hq.2; omega, ?_⟩
+    intro S V κ hcovV hRnd hN hlead
+    obtain ⟨L, hL⟩ := exists_decided_of_coverage sp hcov hlc hq hs hpop S V κ
+      (fun b hb hr => hcovV b hb hr) hRnd (by omega) hlead
+    exact ⟨L, hL.2.1⟩
+  indirect := by
+    intro S U V i j A hij hj hmid
+    exact hind.decided S V hij hj hmid
 
 end Timed
 
