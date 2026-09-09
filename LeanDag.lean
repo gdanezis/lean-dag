@@ -2,6 +2,7 @@ import LeanDag.Common.Counting
 import LeanDag.Common.Validators
 import LeanDag.Common.Block
 import LeanDag.Common.Slots
+import LeanDag.Common.Frame
 import LeanDag.Common.BlockRecord
 import LeanDag.Common.Record.Chop
 import LeanDag.Common.Record.Fill
@@ -95,6 +96,7 @@ import LeanDag.Properties.Commit
 import LeanDag.Properties.Band
 import LeanDag.Properties.Derived.Bounded
 import LeanDag.Properties.Derived.FromBand
+import LeanDag.Properties.Derived.Frame
 import LeanDag.Properties.Derived.Progress
 import LeanDag.Properties.Derived.Truncate
 import LeanDag.Properties.Derived.Descent
@@ -174,6 +176,7 @@ import LeanDag.BlackMarlin.Model.Order
 import LeanDag.BlackMarlin.Helpers.Order
 import LeanDag.Barnacle.Model.Rule
 import LeanDag.Barnacle.Model.Schedule
+import LeanDag.Barnacle.Helpers.Frame
 import LeanDag.Barnacle.Helpers.Schedule
 import LeanDag.Barnacle.Helpers.Cover
 import LeanDag.Barnacle.Model.Window

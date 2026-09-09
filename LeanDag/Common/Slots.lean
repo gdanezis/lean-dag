@@ -205,4 +205,10 @@ cycle are led by validator `v`. -/
 theorem waveRobin_leader_val {n : ℕ} {hn : 0 < n} (k : ℕ) :
     ((waveRobin n hn).leader k).val = k / 3 % n := rfl
 
+/-- Two schedules with the same rounds and the same leaders are the same
+schedule: what remains of `Slots` is propositions. -/
+theorem Slots.ext' {Validator : Type*} {S T : Slots Validator}
+    (hr : S.slotRound = T.slotRound) (hl : S.leader = T.leader) : S = T := by
+  cases S; cases T; cases hr; cases hl; rfl
+
 end LeanDag
