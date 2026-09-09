@@ -431,5 +431,49 @@ def genesis (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) �
 end Composed
 
 
+section Closing
+
+variable {BlockId' : Type}
+
+
+/-- **What a configuration owes.** Some slot at or past the threshold
+commits. The threshold is a slot, `Frame.cum` of the first round past
+`P.interval`, which is the same condition as Barnacle's round form by
+`Frame.cum_le_iff_le_roundOf`. -/
+def Closes (P : Params) (F : Frame) (vdct : ℕ → Option BlockId') (start : ℕ) : Prop :=
+  ∃ g, F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome
+
+open Classical in
+/-- **The anchor a closing configuration names**: the least committed
+slot at or past the threshold. -/
+noncomputable def anchorOf {P : Params} {F : Frame} {vdct : ℕ → Option BlockId'}
+    {start : ℕ} (h : Closes P F vdct start) : ℕ :=
+  Nat.find (p := fun g => F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome)
+    (by obtain ⟨g, h1, h2⟩ := h; exact ⟨g, h1, h2⟩)
+
+/-- It is committed, and past the threshold — `CompRun.anchor_commits`. -/
+theorem anchorOf_commits {P : Params} {F : Frame} {vdct : ℕ → Option BlockId'}
+    {start : ℕ} (h : Closes P F vdct start) :
+    (∃ A, vdct (anchorOf h) = some A) ∧ F.cum (start + P.interval + 1) ≤ anchorOf h := by
+  classical
+  obtain ⟨h1, h2⟩ := Nat.find_spec
+    (p := fun g => F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome)
+    (by obtain ⟨g, ha, hb⟩ := h; exact ⟨g, ha, hb⟩)
+  exact ⟨Option.isSome_iff_exists.mp h2, h1⟩
+
+/-- And it is the least such — `CompRun.anchor_least`. -/
+theorem anchorOf_least {P : Params} {F : Frame} {vdct : ℕ → Option BlockId'}
+    {start : ℕ} (h : Closes P F vdct start) {g : ℕ}
+    (hthr : F.cum (start + P.interval + 1) ≤ g) (hlt : g < anchorOf h) : vdct g = none := by
+  classical
+  have hmin := Nat.find_min
+    (p := fun g => F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome)
+    (by obtain ⟨x, ha, hb⟩ := h; exact ⟨x, ha, hb⟩) hlt
+  cases hv : vdct g with
+  | none => rfl
+  | some A => exact absurd ⟨hthr, by rw [hv]; rfl⟩ hmin
+
+end Closing
+
 end Integration
 end LeanDag

@@ -175,16 +175,21 @@ round, nothing decided, no configuration closed, and the assignment the
 policy's by definition. So `Composed` is inhabited outright and
 `Composed.agree` is not a theorem about an empty family.
 
-What is not built is the extension. `Closes` and `extend` exist only in
-the superseded `OneEpoch` shape, and porting them means giving a
-configuration's own liveness at the composed schedule and then showing a
-run of height `K` reaches `K + 1`. The clause a configuration owes is
-unchanged in substance — some slot past the threshold commits, and the
-range is decided — but it is now asked at a frame and against
-`SettlesInTwoEpochs` rather than at a uniform schedule. Removing the
-alignment restrictions should make it no harder, since the anchor is no
-longer required to arrive inside a fixed window, but none of it is
-proved.
+`Closes P F vdct start` is what a configuration owes: some slot at or
+past the threshold commits, the threshold being the slot form of §6.2's.
+`anchorOf` is the least such slot and `anchorOf_commits` and
+`anchorOf_least` are `CompRun`'s two anchor clauses, so a closing
+configuration names its anchor and nothing further is owed about it.
+
+**What is not built is `extend`.** Producing a run of height `K + 1` from
+one of height `K` means extending the frame as well as the data: a frame
+is total, so a run of height `K` leaves the widths above `start K`
+arbitrary, and the extension fixes them over the new configuration's
+rounds. The numbering below `F.cum (start K)` is untouched by that, which
+is what makes it coherent, but the bookkeeping is the work — and with it
+the relation between the configuration height `K` and the epoch height
+`H`, which `cover_of_horizon` states and `extend` would have to advance.
+`every_height` follows from `extend` and `genesis` as before.
 
 ### 6.2 The bridge to Barnacle's numbering — built
 
