@@ -184,7 +184,23 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   rounds; the certificate lemmas ask for three, the wave at which the
   vote-and-certify pattern of the `3f + 1` pair has a round to put a
   certificate in. A witness on data settles why an undecided slot reads
-  the floor at its own wave and not at its anchor's. The arc is under
+  the floor at its own wave and not at its anchor's. Live under
+  synchrony at the slot's own wave. **A committed asynchronous slot does
+  not decide the synchronous slots below it**: a direct commit reaches a
+  lower slot only through a decided stretch, and at every period
+  `k ≥ ws` that stretch holds a synchronous slot the adversary keeps
+  undecided, the leader block delivered to exactly `f + 1` validators so
+  that neither quorum forms, on data at `n = 4`. The protocol therefore
+  drives its period from a second verdict, which the paper puts on the
+  asynchronous slots and the arc reads at every round after the
+  reference implementation: the Mahi-Mahi arc at the identity schedule
+  under a coin map, agreed, live under Mahi-Mahi's clause with a run of
+  `wa`, and committing with the counting lemma's probability under a
+  uniform coin (`PMF`). The period sequence is stated afresh as a
+  relation over fixed intervals and is agreed under any deterministic
+  update rule, so the output at the adaptive wavelength is too, over the
+  intervals the record's own rounds fall in, and so are the ledger of a
+  settled prefix and the slot each block enters at. The arc is under
   the statement/proof partition and imports nothing of Barnacle.
 - **Black Marlin** (`LeanDag/BlackMarlin/`): the three-round commit rule
   of a partially synchronous protocol (DISC 2025) that uses neither
@@ -444,6 +460,7 @@ them: the universe and the rule under `Model/`, what it shows in
 | [`docs/barnacle.md`](docs/barnacle.md) | the adaptive leader count: the interface A1–A4, the configuration-sequence model and why it needs no fixpoint, the liveness clause and its margin, the heads descent, the four instantiations, and the findings |
 | [`docs/hydrozoan.md`](docs/hydrozoan.md) | the dual-path rule under hybrid faults: the thresholds and their table, the two-case consistency argument as one statement, the slow path as the guaranteed one, the liveness package and its grounding, and the findings |
 | [`docs/optimal-hydrozoan.md`](docs/optimal-hydrozoan.md) | the fast path at Hydrangea's bound: the validity rule and per-block fast evidence, the seam that consumes the rule once, the skip as a liveness claim and FinWhale's attack on it, and the always-fast parametrisation |
+| [`docs/steelhead.md`](docs/steelhead.md) | two rules at one wavelength function: the anchor floor, the stall and the chain verdict, the drain, the period sequence and its agreement, the coin, and the findings for the paper |
 | [`docs/target-properties.md`](docs/target-properties.md) | the properties: what a rule shows and what it gets, the definitions displayed verbatim, the one-carrier-per-rule discipline, the audits, and the record of the passes that reached them |
 | [`docs/integration.md`](docs/integration.md) | the mechanisms at every rule: the cut and fill cells and the relation they witness, and the standing facts no property states — coverage under the fill, horizon placement, re-genesis, the exposure check, the storage budgets — with the deployment conditions they yield |
 | [`docs/hydrozoan-integration.md`](docs/hydrozoan-integration.md) | Hydrozoan and Optimal-Hydrozoan through the properties: the carriers and supports, the Barnacle instantiations and the committee bound round-robin needs, the schedule-free leader-exclusion clause, the native cut and fill |

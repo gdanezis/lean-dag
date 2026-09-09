@@ -17,7 +17,7 @@ renderings:
   arcs (CQ, D/C/B, G, O), with each box's Lean name.
 * `support-core-compact.svg`, `support-full-compact.svg` — the same two
   diagrams at smaller scale with Lean names omitted, embedded as the
-  report's own two figures (§6.8 and §25).
+  report's own two figures (§6.8 and §26).
 
 An arrow `A → B` means **`A` is used in the proof of `B`**, directly or
 through unlabelled lemmas. Arrows implied by longer paths are removed, so
