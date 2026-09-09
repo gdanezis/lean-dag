@@ -28,6 +28,50 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {R : Properties.DagRule Validator BlockId Payload} {P : Params}
 
+section Closing
+
+variable {BlockId' : Type}
+
+
+/-- **What a configuration owes.** Some slot at or past the threshold
+commits. The threshold is a slot, `Frame.cum` of the first round past
+`P.interval`, which is the same condition as Barnacle's round form by
+`Frame.cum_le_iff_le_roundOf`. -/
+def Closes (P : Params) (F : Frame) (vdct : ℕ → Option BlockId') (start : ℕ) : Prop :=
+  ∃ g, F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome
+
+open Classical in
+/-- **The anchor a closing configuration names**: the least committed
+slot at or past the threshold. -/
+noncomputable def anchorOf {P : Params} {F : Frame} {vdct : ℕ → Option BlockId'}
+    {start : ℕ} (h : Closes P F vdct start) : ℕ :=
+  Nat.find (p := fun g => F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome)
+    (by obtain ⟨g, h1, h2⟩ := h; exact ⟨g, h1, h2⟩)
+
+/-- It is committed, and past the threshold — `CompRun.anchor_commits`. -/
+theorem anchorOf_commits {P : Params} {F : Frame} {vdct : ℕ → Option BlockId'}
+    {start : ℕ} (h : Closes P F vdct start) :
+    (∃ A, vdct (anchorOf h) = some A) ∧ F.cum (start + P.interval + 1) ≤ anchorOf h := by
+  classical
+  obtain ⟨h1, h2⟩ := Nat.find_spec
+    (p := fun g => F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome)
+    (by obtain ⟨g, ha, hb⟩ := h; exact ⟨g, ha, hb⟩)
+  exact ⟨Option.isSome_iff_exists.mp h2, h1⟩
+
+/-- And it is the least such — `CompRun.anchor_least`. -/
+theorem anchorOf_least {P : Params} {F : Frame} {vdct : ℕ → Option BlockId'}
+    {start : ℕ} (h : Closes P F vdct start) {g : ℕ}
+    (hthr : F.cum (start + P.interval + 1) ≤ g) (hlt : g < anchorOf h) : vdct g = none := by
+  classical
+  have hmin := Nat.find_min
+    (p := fun g => F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome)
+    (by obtain ⟨x, ha, hb⟩ := h; exact ⟨x, ha, hb⟩) hlt
+  cases hv : vdct g with
+  | none => rfl
+  | some A => exact absurd ⟨hthr, by rw [hv]; rfl⟩ hmin
+
+end Closing
+
 /-- **A run of both mechanisms.** Barnacle's configuration data, and the
 frame and verdicts of `FrameRun`. `cnt` is the frame's widths and
 `cnt_eq` is the bridge: a round of configuration `k` is `count k` slots
@@ -526,53 +570,137 @@ def reframe (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W)
       have hmul : W * H ≤ W * (H + 1) := Nat.mul_le_mul_left W (by omega)
       omega
 
+
+
+/-- **Progress: one more configuration.** A run whose current
+configuration closes extends by one. The frame is extended past the run's
+last start at the count in force there, `reframe` carries the old
+configurations across it, and the new configuration's clauses are the
+anchor `Closes` names. -/
+theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 0 < K)
+    (hhor : W * (H + 1) ≤ Rn.F.cum (Rn.start K))
+    (hkeyed : ∀ r, Rn.start K < r → ∀ i j, i < Rn.count K → j < Rn.count K →
+      Rn.asg r i = Rn.asg r j → i = j)
+    (hupd : ∀ b A, 0 < (upd (Rn.count K) b U V A).1)
+    (hcl : Closes P (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K))
+      Rn.vdct (Rn.start K))
+    {H' : ℕ}
+    (hcoh : ∀ r i, i < (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).width r →
+      epochOf W ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i) < H' + 1 →
+      Rn.asg r i = pick U V Rn.vdct
+        ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i))
+    (hclosed : ∀ r i, i < (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).width r →
+      epochOf W ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i) < H' →
+      DecidedFrameBelow R (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)) Rn.asg
+        ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).roundOf
+          (W * (epochOf W ((Rn.F.extend (Rn.start K) (Rn.count K)
+            (Rn.count_pos K)).index r i) + 2)))
+        V ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i)
+        (Rn.vdct ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i))) :
+    Nonempty (Composed (R := R) W P pick upd U V (K + 1) H') := by
+  classical
+  set F' := Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K) with hF'
+  set Rn₁ := Rn.reframe hW (Rn.count_pos K) hK hhor hkeyed with hRn1
+  obtain ⟨⟨A, hA⟩, hthr⟩ := anchorOf_commits hcl
+  set a := anchorOf hcl with ha
+  set nxt := upd (Rn.count K) (Rn.backoff K) U V A with hnxt
+  have hs_lo : ∀ j, j ≤ K → (if j ≤ K then Rn.start j else F'.roundOf a + P.gap)
+      = Rn.start j := fun j hj => if_pos hj
+  have hs_hi : (if K + 1 ≤ K then Rn.start (K + 1) else F'.roundOf a + P.gap)
+      = F'.roundOf a + P.gap := if_neg (by omega)
+  have hc_lo : ∀ j, j ≤ K → (if j ≤ K then Rn.count j else nxt.1) = Rn.count j :=
+    fun j hj => if_pos hj
+  have hc_hi : (if K + 1 ≤ K then Rn.count (K + 1) else nxt.1) = nxt.1 := if_neg (by omega)
+  have hb_lo : ∀ j, j ≤ K → (if j ≤ K then Rn.backoff j else nxt.2) = Rn.backoff j :=
+    fun j hj => if_pos hj
+  have hb_hi : (if K + 1 ≤ K then Rn.backoff (K + 1) else nxt.2) = nxt.2 := if_neg (by omega)
+  have ha_lo : ∀ j, j ≠ K → (if j = K then a else Rn.anchor j) = Rn.anchor j :=
+    fun j hj => if_neg hj
+  have ha_hi : (if K = K then a else Rn.anchor K) = a := if_pos rfl
+  refine ⟨{
+    start := fun k => if k ≤ K then Rn.start k else F'.roundOf a + P.gap
+    count := fun k => if k ≤ K then Rn.count k else nxt.1
+    backoff := fun k => if k ≤ K then Rn.backoff k else nxt.2
+    anchor := fun k => if k = K then a else Rn.anchor k
+    F := F'
+    vdct := Rn.vdct
+    asg := Rn.asg
+    init := ⟨by simp only [Nat.zero_le, if_true]; exact Rn.init.1,
+      by simp only [Nat.zero_le, if_true]; exact Rn.init.2.1,
+      by simp only [Nat.zero_le, if_true]; exact Rn.init.2.2⟩
+    count_pos := fun k => by
+      by_cases h : k ≤ K
+      · simp only [h, if_true]; exact Rn.count_pos k
+      · simp only [h, if_false]; exact hupd _ _
+    cnt_zero := Rn₁.cnt_zero
+    cnt_eq := ?cnt_eq
+    anchor_commits := ?ac
+    anchor_least := ?al
+    start_succ := ?ss
+    update := ?upd
+    keyed := Rn₁.keyed
+    coherent := hcoh
+    closed := hclosed }⟩
+  case cnt_eq =>
+    intro k hk r hlo hhi
+    rcases Nat.lt_or_ge k K with h | h
+    · rw [hc_lo k (by omega)]
+      rw [hs_lo k (by omega)] at hlo
+      rw [hs_lo (k + 1) (by omega)] at hhi
+      exact Rn₁.cnt_eq k h r hlo hhi
+    · have hkK : k = K := by omega
+      subst hkK
+      rw [hc_lo k (by omega)]
+      rw [hs_lo k (by omega)] at hlo
+      exact Frame.extend_width_gt hlo
+  case ac =>
+    intro k hk
+    rcases Nat.lt_or_ge k K with h | h
+    · rw [ha_lo k (by omega), hs_lo k (by omega)]
+      exact Rn₁.anchor_commits k h
+    · have hkK : k = K := by omega
+      subst hkK
+      rw [ha_hi, hs_lo k (by omega)]
+      exact ⟨⟨A, hA⟩, hthr⟩
+  case al =>
+    intro k hk g hg hlt
+    rcases Nat.lt_or_ge k K with h | h
+    · rw [ha_lo k (by omega)] at hlt
+      rw [hs_lo k (by omega)] at hg
+      exact Rn₁.anchor_least k h g hg hlt
+    · have hkK : k = K := by omega
+      subst hkK
+      rw [ha_hi] at hlt
+      rw [hs_lo k (by omega)] at hg
+      exact anchorOf_least hcl hg hlt
+  case ss =>
+    intro k hk
+    rcases Nat.lt_or_ge k K with h | h
+    · rw [hs_lo (k + 1) (by omega), ha_lo k (by omega)]
+      exact Rn₁.start_succ k h
+    · have hkK : k = K := by omega
+      subst hkK
+      rw [hs_hi, ha_hi]
+  case upd =>
+    intro k hk B hB
+    rcases Nat.lt_or_ge k K with h | h
+    · rw [hc_lo (k + 1) (by omega), hb_lo (k + 1) (by omega), hc_lo k (by omega),
+        hb_lo k (by omega)]
+      rw [ha_lo k (by omega)] at hB
+      exact Rn.update k h B hB
+    · have hkK : k = K := by omega
+      subst hkK
+      rw [hc_hi, hb_hi, hc_lo k (by omega), hb_lo k (by omega)]
+      rw [ha_hi, hA] at hB
+      have hBA : B = A := by injection hB.symm
+      subst hBA
+      rfl
+
 end Composed
 
 
 
-section Closing
 
-variable {BlockId' : Type}
-
-
-/-- **What a configuration owes.** Some slot at or past the threshold
-commits. The threshold is a slot, `Frame.cum` of the first round past
-`P.interval`, which is the same condition as Barnacle's round form by
-`Frame.cum_le_iff_le_roundOf`. -/
-def Closes (P : Params) (F : Frame) (vdct : ℕ → Option BlockId') (start : ℕ) : Prop :=
-  ∃ g, F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome
-
-open Classical in
-/-- **The anchor a closing configuration names**: the least committed
-slot at or past the threshold. -/
-noncomputable def anchorOf {P : Params} {F : Frame} {vdct : ℕ → Option BlockId'}
-    {start : ℕ} (h : Closes P F vdct start) : ℕ :=
-  Nat.find (p := fun g => F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome)
-    (by obtain ⟨g, h1, h2⟩ := h; exact ⟨g, h1, h2⟩)
-
-/-- It is committed, and past the threshold — `CompRun.anchor_commits`. -/
-theorem anchorOf_commits {P : Params} {F : Frame} {vdct : ℕ → Option BlockId'}
-    {start : ℕ} (h : Closes P F vdct start) :
-    (∃ A, vdct (anchorOf h) = some A) ∧ F.cum (start + P.interval + 1) ≤ anchorOf h := by
-  classical
-  obtain ⟨h1, h2⟩ := Nat.find_spec
-    (p := fun g => F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome)
-    (by obtain ⟨g, ha, hb⟩ := h; exact ⟨g, ha, hb⟩)
-  exact ⟨Option.isSome_iff_exists.mp h2, h1⟩
-
-/-- And it is the least such — `CompRun.anchor_least`. -/
-theorem anchorOf_least {P : Params} {F : Frame} {vdct : ℕ → Option BlockId'}
-    {start : ℕ} (h : Closes P F vdct start) {g : ℕ}
-    (hthr : F.cum (start + P.interval + 1) ≤ g) (hlt : g < anchorOf h) : vdct g = none := by
-  classical
-  have hmin := Nat.find_min
-    (p := fun g => F.cum (start + P.interval + 1) ≤ g ∧ (vdct g).isSome)
-    (by obtain ⟨x, ha, hb⟩ := h; exact ⟨x, ha, hb⟩) hlt
-  cases hv : vdct g with
-  | none => rfl
-  | some A => exact absurd ⟨hthr, by rw [hv]; rfl⟩ hmin
-
-end Closing
 
 end Integration
 end LeanDag

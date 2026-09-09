@@ -191,15 +191,21 @@ obligation is `hkeyed`: the assignment must be lawful at the extended
 count too, which is what a count-varying mechanism owes at every count it
 can reach.
 
-**What is not built is `extend` itself**: taking a reframed run of height
-`K`, the anchor `Closes` names, and the verdicts and assignment of the
-new configuration's slots, and producing a run of height `K + 1` with the
-epoch height advanced. Every clause it needs is proved —
-`anchorOf_commits` and `anchorOf_least` for the anchor, `reframe` for the
-old configurations, `closed_of_settles` for the new slots — so what
-remains is supplying the new data and discharging `cover_of_horizon` at
-the larger height. `every_height` follows from `extend` and `genesis` as
-before.
+`Composed.extend` is progress: a run whose current configuration closes
+extends by one. The frame is extended past the run's last start at the
+count in force there, `reframe` carries the old configurations across it,
+and the new configuration's clauses are the anchor `Closes` names. The
+verdicts and the assignment are not extended at all — they are total
+functions of which the shorter run said nothing above `F.cum (start K)`,
+so the extension adds clauses rather than data.
+
+**What is not built is `every_height`**: iterating `extend` from
+`genesis`. Each step must supply the clauses `extend` asks — that the
+configuration closes, that the assignment is the policy's and the new
+slots decided at the larger epoch height — and must advance
+`cover_of_horizon`, whose condition relates the configuration height to
+the epoch height. Both are what the protocol's own liveness gives; the
+work is threading them through the recursion.
 
 ### 6.2 The bridge to Barnacle's numbering — built
 
