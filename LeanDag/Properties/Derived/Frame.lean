@@ -44,6 +44,48 @@ theorem toSlots_agree {F F' : Frame} {asg asg' : ℕ → ℕ → Validator} {hk 
   simp only [toSlots_leader, hr, e0]
   exact ha _ _ hm (by have := F.pos_lt_width m; omega)
 
+
+/-- **A frame extended past a round.** Below `s` it is the old frame;
+above, every round holds `m` slots. A run of finite height leaves the
+widths above its last configuration unfixed, and this is what fixes
+them. -/
+def extend (F : Frame) (s m : ℕ) (hm : 0 < m) : Frame where
+  width := fun r => if r ≤ s then F.width r else m
+  width_pos := fun r => by
+    by_cases h : r ≤ s
+    · simpa [h] using F.width_pos r
+    · simpa [h] using hm
+
+@[simp] theorem extend_width_le {F : Frame} {s m : ℕ} {hm : 0 < m} {r : ℕ} (h : r ≤ s) :
+    (F.extend s m hm).width r = F.width r := by simp [extend, h]
+
+@[simp] theorem extend_width_gt {F : Frame} {s m : ℕ} {hm : 0 < m} {r : ℕ} (h : s < r) :
+    (F.extend s m hm).width r = m := by simp [extend, Nat.not_le.mpr h]
+
+/-- **The numbering below the extension is untouched.** -/
+theorem extend_cum {F : Frame} {s m : ℕ} {hm : 0 < m} {x : ℕ} (hx : x ≤ s + 1) :
+    (F.extend s m hm).cum x = F.cum x :=
+  cum_congr (F := F) (F' := F.extend s m hm) (B := s + 1)
+    (fun r hr => extend_width_le (by omega)) hx
+
+theorem extend_index {F : Frame} {s m : ℕ} {hm : 0 < m} {r i : ℕ} (hr : r ≤ s) :
+    (F.extend s m hm).index r i = F.index r i := by
+  simp only [index]
+  rw [extend_cum (F := F) (s := s) (m := m) (hm := hm) (x := r) (by omega)]
+
+theorem extend_roundOf {F : Frame} {s m : ℕ} {hm : 0 < m} {g : ℕ}
+    (hg : F.roundOf g ≤ s) : (F.extend s m hm).roundOf g = F.roundOf g :=
+  roundOf_congr (F := F) (F' := F.extend s m hm) (B := s + 1)
+    (fun r hr => extend_width_le (by omega)) (by omega)
+
+/-- A slot below the extension's first round is at a round below it. -/
+theorem roundOf_lt_of_lt_cum {F : Frame} {g s : ℕ} (h : g < F.cum s) : F.roundOf g < s := by
+  by_contra hc
+  push_neg at hc
+  have := F.cum_mono hc
+  have := F.cum_roundOf_le g
+  omega
+
 end Frame
 
 namespace Properties
@@ -73,6 +115,22 @@ theorem DecidedFrameBelow.mono {F : Frame} {a : ℕ → ℕ → Validator} {B B'
     DecidedFrameBelow R F a B' V g v :=
   fun F' a' hk' hw ha => h F' a' hk' (fun r hr => hw r (by omega))
     (fun r i hr hi => ha r i (by omega) hi)
+
+/-- **Extending a frame past a round leaves what lies below it
+unchanged**, the settled verdicts included: the clause quantifies over
+frames agreeing below `B`, and below `s + 1` the two frames are the
+same. -/
+theorem decidedFrameBelow_extend {F : Frame} {s m : ℕ} {hm : 0 < m}
+    {a : ℕ → ℕ → Validator} {B : ℕ} (hB : B ≤ s + 1) {U : R.Universe} {V : R.View U}
+    {g : ℕ} {v : Option BlockId} :
+    DecidedFrameBelow R (F.extend s m hm) a B V g v ↔ DecidedFrameBelow R F a B V g v := by
+  constructor
+  · intro h F' a' hk' hw ha
+    exact h F' a' hk' (fun r hr => by rw [hw r hr, Frame.extend_width_le (by omega)])
+      (fun r i hr hi => ha r i hr (by rwa [Frame.extend_width_le (by omega)] at hi))
+  · intro h F' a' hk' hw ha
+    exact h F' a' hk' (fun r hr => by rw [hw r hr]; exact Frame.extend_width_le (by omega))
+      (fun r i hr hi => ha r i hr (by rw [Frame.extend_width_le (by omega)]; exact hi))
 
 /-- **A verdict survives a change of frame above the rounds it reads.**
 Every decided slot has a round bound below which the widths and the

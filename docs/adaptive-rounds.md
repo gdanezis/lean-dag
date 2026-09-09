@@ -181,15 +181,25 @@ past the threshold commits, the threshold being the slot form of §6.2's.
 `anchorOf_least` are `CompRun`'s two anchor clauses, so a closing
 configuration names its anchor and nothing further is owed about it.
 
-**What is not built is `extend`.** Producing a run of height `K + 1` from
-one of height `K` means extending the frame as well as the data: a frame
-is total, so a run of height `K` leaves the widths above `start K`
-arbitrary, and the extension fixes them over the new configuration's
-rounds. The numbering below `F.cum (start K)` is untouched by that, which
-is what makes it coherent, but the bookkeeping is the work — and with it
-the relation between the configuration height `K` and the epoch height
-`H`, which `cover_of_horizon` states and `extend` would have to advance.
-`every_height` follows from `extend` and `genesis` as before.
+`Frame.extend` fixes the widths above a round, and
+`Composed.reframe` is what makes that harmless: a run of height `K`
+survives its frame being extended past `start K`. The horizon condition
+is what does it — every slot the run speaks of lies in an epoch below
+`H + 1`, hence below `W * (H + 1) ≤ F.cum (start K)`, hence at a round
+below `start K`, where the frame does not move. `reframe`'s one new
+obligation is `hkeyed`: the assignment must be lawful at the extended
+count too, which is what a count-varying mechanism owes at every count it
+can reach.
+
+**What is not built is `extend` itself**: taking a reframed run of height
+`K`, the anchor `Closes` names, and the verdicts and assignment of the
+new configuration's slots, and producing a run of height `K + 1` with the
+epoch height advanced. Every clause it needs is proved —
+`anchorOf_commits` and `anchorOf_least` for the anchor, `reframe` for the
+old configurations, `closed_of_settles` for the new slots — so what
+remains is supplying the new data and discharging `cover_of_horizon` at
+the larger height. `every_height` follows from `extend` and `genesis` as
+before.
 
 ### 6.2 The bridge to Barnacle's numbering — built
 

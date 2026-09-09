@@ -428,7 +428,106 @@ def genesis (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) �
   coherent := fun _ _ _ _ => rfl
   closed := fun _ _ _ h => absurd h (by omega)
 
+
+/-- **A run survives its frame being extended.** A frame is total, so a
+run of height `K` leaves the widths above `start K` unfixed; extending
+them changes nothing the run says, because the horizon condition puts
+every slot the run speaks of at a round below `start K`.
+
+`hkeyed` is the one thing genuinely new: the assignment must be lawful at
+the extended count too, which is what a count-varying mechanism owes at
+each count it can reach. -/
+def reframe (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W)
+    {m : ℕ} (hm : 0 < m) (hK : 0 < K)
+    (hhor : W * (H + 1) ≤ Rn.F.cum (Rn.start K))
+    (hkeyed : ∀ r, Rn.start K < r → ∀ i j, i < m → j < m → Rn.asg r i = Rn.asg r j → i = j) :
+    Composed (R := R) W P pick upd U V K H where
+  start := Rn.start
+  count := Rn.count
+  backoff := Rn.backoff
+  anchor := Rn.anchor
+  F := Rn.F.extend (Rn.start K) m hm
+  vdct := Rn.vdct
+  asg := Rn.asg
+  init := Rn.init
+  count_pos := Rn.count_pos
+  cnt_zero := by rw [Frame.extend_width_le (by omega)]; exact Rn.cnt_zero
+  cnt_eq := fun k hk r hlo hhi => by
+    rw [Frame.extend_width_le
+      (le_trans hhi (Rn.toCompRun.start_mono (by omega) (by omega)))]
+    exact Rn.cnt_eq k hk r hlo hhi
+  anchor_commits := fun k hk => by
+    rw [Frame.extend_cum (by
+      have := Rn.toCompRun.thr_lt_start_succ k hk
+      have := Rn.toCompRun.start_mono (a := k + 1) (b := K) (by omega) (by omega)
+      omega)]
+    exact Rn.anchor_commits k hk
+  anchor_least := fun k hk g hg => by
+    rw [Frame.extend_cum (by
+      have := Rn.toCompRun.thr_lt_start_succ k hk
+      have := Rn.toCompRun.start_mono (a := k + 1) (b := K) (by omega) (by omega)
+      omega)] at hg
+    exact Rn.anchor_least k hk g hg
+  start_succ := fun k hk => by
+    have hr : Rn.F.roundOf (Rn.anchor k) ≤ Rn.start K := by
+      have := Rn.start_succ k hk
+      have := Rn.toCompRun.start_mono (a := k + 1) (b := K) (by omega) (by omega)
+      omega
+    rw [Frame.extend_roundOf hr]
+    exact Rn.start_succ k hk
+  update := Rn.update
+  keyed := fun r i j hi hj hij => by
+    by_cases h : r ≤ Rn.start K
+    · rw [Frame.extend_width_le h] at hi hj
+      exact Rn.keyed r i j hi hj hij
+    · rw [Frame.extend_width_gt (by omega)] at hi hj
+      exact hkeyed r (by omega) i j hi hj hij
+  coherent := fun r i hi hep => by
+    by_cases h : r ≤ Rn.start K
+    · rw [Frame.extend_width_le h] at hi
+      rw [Frame.extend_index h]
+      rw [Frame.extend_index h] at hep
+      exact Rn.coherent r i hi hep
+    · exfalso
+      have h1 : Rn.F.cum (Rn.start K) ≤ (Rn.F.extend (Rn.start K) m hm).index r i := by
+        have : (Rn.F.extend (Rn.start K) m hm).cum (Rn.start K)
+            = Rn.F.cum (Rn.start K) := Frame.extend_cum (by omega)
+        have hc := (Rn.F.extend (Rn.start K) m hm).cum_mono (Nat.le_of_lt (by omega : Rn.start K < r))
+        simp only [Frame.index]; omega
+      have := (epochOf_lt_iff (W := W) (k := (Rn.F.extend (Rn.start K) m hm).index r i)
+        (e := H + 1) hW).mp hep
+      omega
+  closed := fun r i hi hep => by
+    by_cases h : r ≤ Rn.start K
+    · rw [Frame.extend_width_le h] at hi
+      rw [Frame.extend_index h] at hep ⊢
+      have hle : Rn.F.roundOf (W * (epochOf W (Rn.F.index r i) + 2)) ≤ Rn.start K := by
+        have h1 : W * (epochOf W (Rn.F.index r i) + 2) ≤ W * (H + 1) :=
+          Nat.mul_le_mul_left W (by omega)
+        by_contra hc
+        push_neg at hc
+        have hA : Rn.F.cum (Rn.start K + 1)
+            ≤ Rn.F.cum (Rn.F.roundOf (W * (epochOf W (Rn.F.index r i) + 2))) :=
+          Rn.F.cum_mono (by omega)
+        have hB := Rn.F.cum_roundOf_le (W * (epochOf W (Rn.F.index r i) + 2))
+        have hC := Rn.F.cum_lt_succ (Rn.start K)
+        omega
+      rw [Frame.extend_roundOf hle,
+        Properties.decidedFrameBelow_extend (by omega)]
+      exact Rn.closed r i hi hep
+    · exfalso
+      have h1 : Rn.F.cum (Rn.start K) ≤ (Rn.F.extend (Rn.start K) m hm).index r i := by
+        have : (Rn.F.extend (Rn.start K) m hm).cum (Rn.start K)
+            = Rn.F.cum (Rn.start K) := Frame.extend_cum (by omega)
+        have hc := (Rn.F.extend (Rn.start K) m hm).cum_mono (Nat.le_of_lt (by omega : Rn.start K < r))
+        simp only [Frame.index]; omega
+      have hlt := (epochOf_lt_iff (W := W) (k := (Rn.F.extend (Rn.start K) m hm).index r i)
+        (e := H) hW).mp hep
+      have hmul : W * H ≤ W * (H + 1) := Nat.mul_le_mul_left W (by omega)
+      omega
+
 end Composed
+
 
 
 section Closing
