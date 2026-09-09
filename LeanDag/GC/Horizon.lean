@@ -1,5 +1,6 @@
+import LeanDag.Common.Slots
+import LeanDag.Network.Delivery
 import LeanDag.GC.Bootstrap
-import LeanDag.Mysticeti.Record
 /-!
 # The horizon policy: heterogeneous cuts, one truth
 

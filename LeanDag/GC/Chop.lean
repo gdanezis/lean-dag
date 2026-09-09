@@ -1,4 +1,5 @@
-import LeanDag.Mysticeti.Rule
+import LeanDag.Common.Slots
+import LeanDag.Network.Delivery
 import LeanDag.Common.Record.Chop
 import LeanDag.DoS.Exposure
 /-!

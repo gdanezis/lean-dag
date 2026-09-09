@@ -1,4 +1,5 @@
-import LeanDag.Mysticeti.Rule
+import LeanDag.Common.Anchored
+import LeanDag.Common.Slots
 import Mathlib.Data.Finset.Prod
 
 /-!

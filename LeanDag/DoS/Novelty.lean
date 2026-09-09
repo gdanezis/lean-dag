@@ -1,4 +1,5 @@
-import LeanDag.Mysticeti.Liveness
+import LeanDag.Common.Slots
+import LeanDag.Network.Delivery
 import LeanDag.Common.History
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 

@@ -1,5 +1,6 @@
+import LeanDag.Common.Slots
+import LeanDag.Network.Delivery
 import LeanDag.GC.Chop
-import LeanDag.Mysticeti.Liveness
 /-!
 # Decisions survive the cut
 

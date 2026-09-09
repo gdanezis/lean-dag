@@ -48,6 +48,21 @@ name faulty validators for ever. -/
 def FairRunOn {Validator : Type*} [S : Slots Validator] (T : Finset Validator) (c : ℕ) : Prop :=
   ∀ k, ∃ k', k ≤ k' ∧ ∀ i, i < c → S.leader (k' + i) ∈ T
 
+/-- The schedule names a correct leader arbitrarily far out. Without it no
+recurrence statement holds: `Slots.leader` is an arbitrary function and could
+name Byzantine validators forever, however synchronous the network. -/
+def FairScheduleOn {Validator : Type*} [S : Slots Validator] (T : Finset Validator) : Prop :=
+  ∀ k, ∃ k', k ≤ k' ∧ S.leader k' ∈ T
+
+/-- A run of `c` slots contains a `T`-led slot, so `FairRunOn` refines
+`FairScheduleOn` and everything proved from the latter still applies. -/
+theorem FairRunOn.fairScheduleOn {Validator : Type*} [S : Slots Validator]
+    {T : Finset Validator} {c : ℕ} (hc : 0 < c) (h : FairRunOn T c) :
+    FairScheduleOn T := by
+  intro k
+  obtain ⟨k', hk', hrun⟩ := h k
+  exact ⟨k', hk', by simpa using hrun 0 hc⟩
+
 namespace Slots
 
 variable {Validator : Type*}

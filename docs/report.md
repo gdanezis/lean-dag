@@ -10888,76 +10888,6 @@ def SynchronisedOn (U : BlockRecord Validator BlockId Payload P honest)
 
 From round `R` on, every `T`-authored block references every `T`-authored block of the round below. An assumption about the network after stabilisation, not a theorem: a block's references are frozen when it is built.
 
-#### `Populated`
-
-*abbrev, `Mysticeti.Liveness.lean`*
-
-```lean
-abbrev Populated (U : BlockUniverse Validator BlockId Payload) (r : ℕ) : Prop :=
-  PopulatedOn U (Correct : Finset Validator) r
-```
-
-The all-of-`Correct` case, which is what L1 produces.
-
-#### `Delivery`
-
-*structure, `Mysticeti.Liveness.lean`*
-
-```lean
-structure Delivery (U : BlockUniverse Validator BlockId Payload) where
-  /-- What `v` held from round `n` when it built its round-`(n+1)` block. -/
-  held : Validator → ℕ → Finset BlockId
-  /-- Held ids are real blocks of the stated round — what keeps `Delivery`
-  meaningful, since without it `held` could be junk and `includes` would
-  demand blocks reference it. -/
-  held_spec : ∀ v n, ∀ i ∈ held v n, i ∈ U.ids ∧ (U.block i).round = n
-  /-- What `v` chose to build on: a subset of what it held. -/
-  accepted : Validator → ℕ → Finset BlockId
-  /-- You can only accept what arrived. -/
-  accepted_sub : ∀ v n, accepted v n ⊆ held v n
-  /-- **The acceptance rule**: at most one block per author. Forced by
-  `distinct_creators` — a validator holding two blocks by one author must pick
-  one, because it cannot reference both. -/
-  accepted_inj : ∀ v n, ∀ i ∈ accepted v n, ∀ j ∈ accepted v n,
-    (U.block i).creator = (U.block j).creator → i = j
-  /-- A correct block is always accepted. It never conflicts with anything —
-  its author has only the one block for that round (T1) — so nothing is ever
-  given up by taking it, and L7 needs it. -/
-  accepts_correct : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ a ∈ held v n,
-    (U.block a).creator ∈ (Correct : Finset Validator) → a ∈ accepted v n
-  /-- **The protocol rule.** A correct validator references everything it
-  accepted. Implementable and observable — unlike `Synchronised` itself. -/
-  includes : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
-    (U.block b).creator = v → (U.block b).round = n + 1 →
-    accepted v n ⊆ (U.block b).refs
-```
-
-What each validator had in hand, one round at a time, and which of it it chose to build on. Two fields because delivery and policy are two things: a structure demanding a correct validator reference everything it `held` would be unsatisfiable the moment it holds both halves of an equivocation, since `distinct_creators` forbids referencing both (`dos-equivocation-and-growth.md` §4). `held` is not deduplicated, since `U` is every block some correct validator held.
-
-#### `Synchronised`
-
-*abbrev, `Mysticeti.Liveness.lean`*
-
-```lean
-abbrev Synchronised (U : BlockUniverse Validator BlockId Payload) (R : ℕ) : Prop :=
-  SynchronisedOn U (Correct : Finset Validator) R
-```
-
-The all-of-`Correct` case.
-
-#### `EventuallyDelivers`
-
-*def, `Mysticeti.Liveness.lean`*
-
-```lean
-def EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
-  ∀ n, R ≤ n → ∀ v ∈ (Correct : Finset Validator), ∀ a ∈ U.ids,
-    (U.block a).round = n → (U.block a).creator ∈ (Correct : Finset Validator) →
-    a ∈ D.held v n
-```
-
-**The network assumption**: after `R`, correct blocks reach correct validators in time to be built on. This is eventual DAG synchrony proper — pure delivery, no protocol content.
-
 #### `CertifiesAt`
 
 *def, `Mysticeti.Liveness.lean`*
@@ -10970,17 +10900,6 @@ def CertifiesAt (U : BlockUniverse Validator BlockId Payload)
 ```
 
 **What the three-round rule counts**: every `T`-authored block at the decision round certifies `L`. Coverage implies it through the vote layer (`certifiesAt_of_synchronisedOn`); the reactive certificate wait supplies it directly (`ReactiveM.certifies`).
-
-#### `FairScheduleOn`
-
-*def, `Mysticeti.Liveness.lean`*
-
-```lean
-def FairScheduleOn (T : Finset Validator) : Prop :=
-  ∀ k, ∃ k', k ≤ k' ∧ S.leader k' ∈ T
-```
-
-The schedule names a correct leader arbitrarily far out. Without it no recurrence statement holds: `Slots.leader` is an arbitrary function and could name Byzantine validators forever, however synchronous the network.
 
 #### `FairToEach`
 
@@ -14778,6 +14697,17 @@ def FairRunOn {Validator : Type*} [S : Slots Validator] (T : Finset Validator) (
 
 **A fair schedule offers runs**: past any slot, `c` consecutive `T`-led slots. An assumption about the schedule, not a theorem: `leader` may name faulty validators for ever.
 
+#### `FairScheduleOn`
+
+*def, `Common.Slots.lean`*
+
+```lean
+def FairScheduleOn {Validator : Type*} [S : Slots Validator] (T : Finset Validator) : Prop :=
+  ∀ k, ∃ k', k ≤ k' ∧ S.leader k' ∈ T
+```
+
+The schedule names a correct leader arbitrarily far out. Without it no recurrence statement holds: `Slots.leader` is an arbitrary function and could name Byzantine validators forever, however synchronous the network.
+
 #### `uniform`
 
 *def, `Common.Slots.lean`*
@@ -15228,6 +15158,76 @@ def certLive (S : Slots Validator) {U : BlockUniverse Validator BlockId Payload}
 ```
 
 **The core's precondition, in what its commit rule counts.** A quorum, a horizon the view is caught up to with every slot two rounds under it, production at the propose and certificate rounds, and `T` certifying every candidate of every `T`-led slot in the window.
+
+#### `Populated`
+
+*abbrev, `Network.Delivery.lean`*
+
+```lean
+abbrev Populated (U : BlockUniverse Validator BlockId Payload) (r : ℕ) : Prop :=
+  PopulatedOn U (Correct : Finset Validator) r
+```
+
+The all-of-`Correct` case, which is what L1 produces.
+
+#### `Delivery`
+
+*structure, `Network.Delivery.lean`*
+
+```lean
+structure Delivery (U : BlockUniverse Validator BlockId Payload) where
+  /-- What `v` held from round `n` when it built its round-`(n+1)` block. -/
+  held : Validator → ℕ → Finset BlockId
+  /-- Held ids are real blocks of the stated round — what keeps `Delivery`
+  meaningful, since without it `held` could be junk and `includes` would
+  demand blocks reference it. -/
+  held_spec : ∀ v n, ∀ i ∈ held v n, i ∈ U.ids ∧ (U.block i).round = n
+  /-- What `v` chose to build on: a subset of what it held. -/
+  accepted : Validator → ℕ → Finset BlockId
+  /-- You can only accept what arrived. -/
+  accepted_sub : ∀ v n, accepted v n ⊆ held v n
+  /-- **The acceptance rule**: at most one block per author. Forced by
+  `distinct_creators` — a validator holding two blocks by one author must pick
+  one, because it cannot reference both. -/
+  accepted_inj : ∀ v n, ∀ i ∈ accepted v n, ∀ j ∈ accepted v n,
+    (U.block i).creator = (U.block j).creator → i = j
+  /-- A correct block is always accepted. It never conflicts with anything —
+  its author has only the one block for that round (T1) — so nothing is ever
+  given up by taking it, and L7 needs it. -/
+  accepts_correct : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ a ∈ held v n,
+    (U.block a).creator ∈ (Correct : Finset Validator) → a ∈ accepted v n
+  /-- **The protocol rule.** A correct validator references everything it
+  accepted. Implementable and observable — unlike `Synchronised` itself. -/
+  includes : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
+    (U.block b).creator = v → (U.block b).round = n + 1 →
+    accepted v n ⊆ (U.block b).refs
+```
+
+What each validator had in hand, one round at a time, and which of it it chose to build on. Two fields because delivery and policy are two things: a structure demanding a correct validator reference everything it `held` would be unsatisfiable the moment it holds both halves of an equivocation, since `distinct_creators` forbids referencing both (`dos-equivocation-and-growth.md` §4). `held` is not deduplicated, since `U` is every block some correct validator held.
+
+#### `Synchronised`
+
+*abbrev, `Network.Delivery.lean`*
+
+```lean
+abbrev Synchronised (U : BlockUniverse Validator BlockId Payload) (R : ℕ) : Prop :=
+  SynchronisedOn U (Correct : Finset Validator) R
+```
+
+The all-of-`Correct` case.
+
+#### `EventuallyDelivers`
+
+*def, `Network.Delivery.lean`*
+
+```lean
+def EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
+  ∀ n, R ≤ n → ∀ v ∈ (Correct : Finset Validator), ∀ a ∈ U.ids,
+    (U.block a).round = n → (U.block a).creator ∈ (Correct : Finset Validator) →
+    a ∈ D.held v n
+```
+
+**The network assumption**: after `R`, correct blocks reach correct validators in time to be built on. This is eventual DAG synchrony proper — pure delivery, no protocol content.
 
 #### `optSupport`
 

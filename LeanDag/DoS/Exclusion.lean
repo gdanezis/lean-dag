@@ -1,6 +1,7 @@
+import LeanDag.Common.Slots
+import LeanDag.Network.Delivery
 import LeanDag.DoS.Density
 import LeanDag.DoS.Exposure
-import LeanDag.Mysticeti.Liveness
 import LeanDag.Common.CommonCore
 /-!
 # Liveness survives exclusion

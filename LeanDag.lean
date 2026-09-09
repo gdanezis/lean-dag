@@ -19,6 +19,7 @@ import LeanDag.Mysticeti.Model.Validity
 import LeanDag.Mysticeti.Model.Rule
 import LeanDag.Mysticeti.Rule
 import LeanDag.Common.Schedule
+import LeanDag.Network.Delivery
 import LeanDag.Mysticeti.Liveness
 import LeanDag.Common.WaveRobin
 import LeanDag.Mysticeti.Quantitative

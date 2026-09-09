@@ -1,5 +1,5 @@
+import LeanDag.Common.Slots
 import LeanDag.Common.Schedule
-import LeanDag.Mysticeti.Liveness
 /-!
 # The wave-aligned rotation — fairness as a theorem
 
