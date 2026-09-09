@@ -332,3 +332,5 @@ import LeanDag.Steelhead.Model.Coin
 import LeanDag.Steelhead.Coin.Statement
 import LeanDag.Steelhead.Helpers.Coin
 import LeanDag.Steelhead.Coin.Proof
+import LeanDag.Steelhead.Ledger.Statement
+import LeanDag.Steelhead.Ledger.Proof
