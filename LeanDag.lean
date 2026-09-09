@@ -324,3 +324,7 @@ import LeanDag.Steelhead.Properties
 import LeanDag.Steelhead.Liveness.Statement
 import LeanDag.Steelhead.Helpers.Liveness
 import LeanDag.Steelhead.Liveness.Proof
+import LeanDag.Steelhead.Model.Period
+import LeanDag.Steelhead.Period.Statement
+import LeanDag.Steelhead.Helpers.Period
+import LeanDag.Steelhead.Period.Proof
