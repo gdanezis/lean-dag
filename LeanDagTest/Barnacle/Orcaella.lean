@@ -74,7 +74,7 @@ def Ohyb4 : bnOrc.Universe := ⟨Uhyb4, by decide⟩
 /-! ## The window count at wave length two -/
 
 /-- Three-round interval, at most four leaders. -/
-def orcPo : Params := ⟨3, 4, 96, 100, by decide, by decide⟩
+def orcPo : Params := ⟨3, 4, 96, 100, 0, by decide, by decide⟩
 
 def orcLeader4 : ℕ → Fin 4 := roundRobin 4 (by omega)
 

@@ -25,12 +25,12 @@ theorem holds : Statement := by
   refine ⟨A, hA, ?_⟩
   -- the anchor's block is a candidate of its slot, so it sits at the round
   -- the next configuration starts
-  have hdec := Rn.closed k hkK (Rn.anchor k) (by omega) (by rw [Rn.start_succ k hkK])
+  have hdec := Rn.closed k hkK (Rn.anchor k) (by omega) (by rw [Rn.start_succ k hkK]; omega)
   rw [hA] at hdec
   obtain ⟨hAids, hAr, -⟩ := hR _ _ _ _ A hdec
   refine hT b hb hbT hRnd hN A hAids ?_
   have hlink : (R.toBaseRule.toDagRule.block U A).round = (R.block U A).round := rfl
-  rw [← hlink, hAr, Sched_slotRound, ← Rn.start_succ k hkK]
+  rw [← hlink, hAr, Sched_slotRound]
   exact hround
 
 end Validity

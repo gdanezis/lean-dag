@@ -63,7 +63,7 @@ def bnLeader6' : ℕ → Fin 6 := roundRobin 6 (by omega)
 theorem bnWin6' : Keyed bnLeader6' 6 := roundRobin_keyed 6 (by omega)
 
 /-- Three-round interval, at most six leaders. -/
-def bnPo : Params := ⟨3, 6, 96, 100, by decide, by decide⟩
+def bnPo : Params := ⟨3, 6, 96, 100, 0, by decide, by decide⟩
 
 /-! ## The window count at wave length two -/
 
@@ -214,7 +214,7 @@ def bnLeader3 : ℕ → Fin 3 := roundRobin 3 (by omega)
 theorem bnWin3 : Keyed bnLeader3 3 := roundRobin_keyed 3 (by omega)
 
 /-- Three-round interval, at most three leaders. -/
-def bnPn : Params := ⟨3, 3, 96, 100, by decide, by decide⟩
+def bnPn : Params := ⟨3, 3, 96, 100, 0, by decide, by decide⟩
 
 -- Anchor `11` (round `4`, author `1`); window rounds `1` to `4`. Round `1`
 -- scores (block `4`, both round-`2` blocks support it); round `2`'s head

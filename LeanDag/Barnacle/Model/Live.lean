@@ -68,7 +68,7 @@ structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : �
 genesis: each anchor within `interval + 1 + c` rounds of the last, plus
 the gap and one wave to decide the final range. -/
 def horizon (P : Params) (R : LiveRule Validator BlockId Payload) (c K : ℕ) : ℕ :=
-  K * (P.interval + 1 + c) + c + R.waveLength
+  K * (P.interval + 1 + c + P.gap) + c + R.waveLength
 
 end Barnacle
 

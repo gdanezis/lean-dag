@@ -63,7 +63,7 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
   anchor_least : ∀ k, k < K → ∀ κ, κ < anchor k →
     start k + P.interval < κ / count k → vdct k κ = none
   /-- The next configuration is in force after the anchor's round. -/
-  start_succ : ∀ k, k < K → start (k + 1) = anchor k / count k
+  start_succ : ∀ k, k < K → start (k + 1) = anchor k / count k + P.gap
   /-- The next configuration is the rule's. -/
   update : ∀ k, k < K → ∀ A, vdct k (anchor k) = some A →
     (count (k + 1), backoff (k + 1)) = upd (count k) (backoff k) U V A

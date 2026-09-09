@@ -34,6 +34,15 @@ structure Params where
   num : ℕ
   /-- The threshold's denominator. -/
   den : ℕ
+  /-- **Rounds between an anchor and the count it sets taking effect.**
+  Barnacle alone may install a count at the next round, and does at
+  `gap = 0`. A mechanism reading the same verdicts on a lag needs the
+  count settled before it reads it: an adaptive leader schedule at epoch
+  length `W` asks for `2 * W`, since the gap's rounds run at the old
+  count and so hold at least `gap` slots. The configuration's range
+  extends over the gap, so the horizon grows by `gap` per configuration
+  (`Model/Live.lean`) and nothing else changes. -/
+  gap : ℕ
   interval_pos : 0 < interval
   max_pos : 0 < maxLeaders
 

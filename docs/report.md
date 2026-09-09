@@ -12870,6 +12870,15 @@ structure Params where
   num : ℕ
   /-- The threshold's denominator. -/
   den : ℕ
+  /-- **Rounds between an anchor and the count it sets taking effect.**
+  Barnacle alone may install a count at the next round, and does at
+  `gap = 0`. A mechanism reading the same verdicts on a lag needs the
+  count settled before it reads it: an adaptive leader schedule at epoch
+  length `W` asks for `2 * W`, since the gap's rounds run at the old
+  count and so hold at least `gap` slots. The configuration's range
+  extends over the gap, so the horizon grows by `gap` per configuration
+  (`Model/Live.lean`) and nothing else changes. -/
+  gap : ℕ
   interval_pos : 0 < interval
   max_pos : 0 < maxLeaders
 ```
@@ -12921,7 +12930,7 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
   anchor_least : ∀ k, k < K → ∀ κ, κ < anchor k →
     start k + P.interval < κ / count k → vdct k κ = none
   /-- The next configuration is in force after the anchor's round. -/
-  start_succ : ∀ k, k < K → start (k + 1) = anchor k / count k
+  start_succ : ∀ k, k < K → start (k + 1) = anchor k / count k + P.gap
   /-- The next configuration is the rule's. -/
   update : ∀ k, k < K → ∀ A, vdct k (anchor k) = some A →
     (count (k + 1), backoff (k + 1)) = upd (count k) (backoff k) U V A
@@ -19602,7 +19611,7 @@ theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBound
     (Rn : PartialRun R.toBaseRule P getLeader hk upd U V K)
     (hlive : R.LiveOn (Sched getLeader hk (Rn.count K) (Rn.count_pos K) (Rn.count_le K)) c)
     (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
-    (hN : Rn.start K + P.interval + 1 + 2 * c + R.waveLength ≤ N) :
+    (hN : Rn.start K + P.interval + 1 + 2 * c + P.gap + R.waveLength ≤ N) :
     Nonempty (PartialRun R.toBaseRule P getLeader hk upd U V (K + 1))
 ```
 

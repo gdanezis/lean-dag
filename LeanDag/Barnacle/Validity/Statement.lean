@@ -44,10 +44,11 @@ def Delivered (R : LiveRule Validator BlockId Payload) (P : Params)
     -- … there is a good set, all but at most `slack` validators, …
     ∃ T : Finset Validator, Fintype.card Validator ≤ T.card + slack ∧
       -- … each of whose blocks, past the synchrony round and under the
-      -- horizon, and two rounds below a closed configuration's anchor, …
+      -- horizon, and two rounds below the round of a closed
+      -- configuration's anchor, …
       ∀ b ∈ R.ids U, (R.block U b).creator ∈ T → Rnd ≤ (R.block U b).round →
         (R.block U b).round + 1 ≤ N →
-        ∀ k, k < K → (R.block U b).round + 2 ≤ Rn.start (k + 1) →
+        ∀ k, k < K → (R.block U b).round + 2 ≤ Rn.anchor k / Rn.count k →
           -- … is in the history of the block that configuration commits.
           ∃ A, Rn.vdct k (Rn.anchor k) = some A ∧ b ∈ historyFrom (R.block U) A
 

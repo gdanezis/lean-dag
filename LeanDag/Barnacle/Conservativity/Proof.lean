@@ -34,7 +34,7 @@ theorem holds : Statement := by
   intro U V K Rn k hkK κ h1 h2
   obtain ⟨hc, _⟩ := hcount U V K Rn k (by omega)
   have hd := Rn.closed k hkK κ (by rw [hc, Nat.div_one]; exact h1)
-    (by rw [hc, Nat.div_one, Rn.start_succ k hkK, hc, Nat.div_one]; exact h2)
+    (by rw [hc, Nat.div_one, Rn.start_succ k hkK, hc, Nat.div_one]; omega)
   rw [Sched_congr getLeader hk hc (Rn.count_pos k) (Rn.count_le k) Nat.one_pos P.max_pos] at hd
   exact hd
 

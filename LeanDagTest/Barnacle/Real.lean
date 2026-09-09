@@ -104,7 +104,8 @@ theorem real_delivers (K : ℕ) :
     ∃ T : Finset (Fin 4), Fintype.card (Fin 4) ≤ T.card + Faults.f (Fin 4) ∧
       ∀ b ∈ (Ugrow (11 * K + 9)).ids, ((Ugrow (11 * K + 9)).block b).creator ∈ T →
         ((Ugrow (11 * K + 9)).block b).round + 1 ≤ 11 * K + 9 →
-        ∀ k, k < K → ((Ugrow (11 * K + 9)).block b).round + 2 ≤ (real_runs K).some.start (k + 1) →
+        ∀ k, k < K → ((Ugrow (11 * K + 9)).block b).round + 2
+            ≤ (real_runs K).some.anchor k / (real_runs K).some.count k →
           ∃ A, (real_runs K).some.vdct k ((real_runs K).some.anchor k) = some A ∧
             b ∈ historyFrom (Ugrow (11 * K + 9)).block A := by
   obtain ⟨T, hcard, hT⟩ :=

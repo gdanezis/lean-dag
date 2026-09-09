@@ -46,7 +46,7 @@ def ProgressStmt (R : LiveRule Validator BlockId Payload) (P : Params)
     R.Good U Rnd N → Rnd ≤ Rn.start K + 1 →
     -- … and the horizon leaves room for the threshold, the gap to the
     -- anchor, and the gap and one wave above it:
-    Rn.start K + P.interval + 1 + 2 * c + R.waveLength ≤ N →
+    Rn.start K + P.interval + 1 + 2 * c + P.gap + R.waveLength ≤ N →
     -- there is a run of height `K + 1`.
     Nonempty (PartialRun R.toBaseRule P getLeader hk upd U V (K + 1))
 

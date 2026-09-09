@@ -52,8 +52,12 @@ theorem anchor_agree (hR : Properties.Agree R.toDagRule) (R₁ : PartialRun R P 
       rw [← hs, ← hc]; exact hround
     have hnone := R₂.anchor_least k hk₂ (R₁.anchor k) hlt hr₂
     have hv := vdct_agree hR R₁ R₂ hc hk₁ hk₂ (κ := R₁.anchor k) (by omega)
-      (by rw [R₁.start_succ k hk₁])
-      (by omega) (by rw [R₂.start_succ k hk₂]; exact Nat.div_le_div_right hlt.le)
+      (by rw [R₁.start_succ k hk₁]; omega)
+      (by omega)
+      (by rw [R₂.start_succ k hk₂]
+          have hd : R₁.anchor k / R₂.count k ≤ R₂.anchor k / R₂.count k :=
+            Nat.div_le_div_right hlt.le
+          omega)
     rw [hA, hnone] at hv
     exact Option.some_ne_none A hv
   · obtain ⟨⟨A, hA⟩, hround⟩ := R₂.anchor_commits k hk₂
@@ -61,8 +65,11 @@ theorem anchor_agree (hR : Properties.Agree R.toDagRule) (R₁ : PartialRun R P 
       rw [hs, hc]; exact hround
     have hnone := R₁.anchor_least k hk₁ (R₂.anchor k) hgt hr₁
     have hv := vdct_agree hR R₁ R₂ hc hk₁ hk₂ (κ := R₂.anchor k) (by omega)
-      (by rw [R₁.start_succ k hk₁]; exact Nat.div_le_div_right hgt.le)
-      (by omega) (by rw [R₂.start_succ k hk₂])
+      (by rw [R₁.start_succ k hk₁]
+          have hd : R₂.anchor k / R₁.count k ≤ R₁.anchor k / R₁.count k :=
+            Nat.div_le_div_right hgt.le
+          omega)
+      (by omega) (by rw [R₂.start_succ k hk₂]; omega)
     rw [hA, hnone] at hv
     exact Option.some_ne_none A hv.symm
 
@@ -77,8 +84,8 @@ theorem configAgree_succ (hR : Properties.Agree R.toDagRule) (hanc : Anchored R 
   obtain ⟨⟨A, hA⟩, hround⟩ := R₁.anchor_commits k hk₁
   have hA₂ : R₂.vdct k (R₂.anchor k) = some A := by
     rw [← ha, ← vdct_agree hR R₁ R₂ hc hk₁ hk₂ (κ := R₁.anchor k) (by omega)
-      (by rw [R₁.start_succ k hk₁])
-      (by rw [← hs, ← hc]; omega) (by rw [R₂.start_succ k hk₂, ← ha, ← hc])]
+      (by rw [R₁.start_succ k hk₁]; omega)
+      (by rw [← hs, ← hc]; omega) (by rw [R₂.start_succ k hk₂, ← ha, ← hc]; omega)]
     exact hA
   have e₁ := R₁.update k hk₁ A hA
   have e₂ := R₂.update k hk₂ A hA₂

@@ -59,13 +59,13 @@ def bnLeader : ℕ → Fin 4 := roundRobin 4 (by omega)
 theorem bnWin : Keyed bnLeader 4 := roundRobin_keyed 4 (by omega)
 
 /-- Four-round interval, at most four leaders, threshold `96 / 100`. -/
-def bnP : Params := ⟨4, 4, 96, 100, by decide, by decide⟩
+def bnP : Params := ⟨4, 4, 96, 100, 0, by decide, by decide⟩
 
 /-- One-round interval; `expected` truncates to `m`. -/
-def bnP1 : Params := ⟨1, 4, 96, 100, by decide, by decide⟩
+def bnP1 : Params := ⟨1, 4, 96, 100, 0, by decide, by decide⟩
 
 /-- Three-round interval — one wave. -/
-def bnP3 : Params := ⟨3, 4, 96, 100, by decide, by decide⟩
+def bnP3 : Params := ⟨3, 4, 96, 100, 0, by decide, by decide⟩
 
 /-- Mysticeti over the four-validator committee of `LeanDagTest/Model.lean`. -/
 abbrev bnRule : BaseRule (Fin 4) (Fin 24) Unit := mysticeti
@@ -246,7 +246,7 @@ def bnLeader6 : ℕ → Fin 6 := roundRobin 6 (by omega)
 theorem bnWin6 : Keyed bnLeader6 6 := roundRobin_keyed 6 (by omega)
 
 /-- Three-round interval, at most six leaders. -/
-def bnP6 : Params := ⟨3, 6, 96, 100, by decide, by decide⟩
+def bnP6 : Params := ⟨3, 6, 96, 100, 0, by decide, by decide⟩
 
 -- Anchor `20` (round `3`); one scoring round, every slot of it scores.
 example : observed bnRule6 bnP6 bnLeader6 bnWin6 Uodo 20 1 (by decide) (by decide) = 1 := by
