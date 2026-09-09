@@ -18,6 +18,43 @@ variable [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 variable {U : BlockUniverse Validator BlockId Payload}
 
+omit [DecidableEq BlockId] in
+/-- A round with any author at all has a block. The bridge that lets L0's
+induction step back down: a cardinality bound on `authorsAt` is turned into
+a witness block, which the next step then references from. -/
+theorem exists_mem_of_authorsAt_card_pos {n : ℕ} (h : 0 < (authorsAt U n).card) :
+    ∃ i ∈ U.ids, (U.block i).round = n := by
+  obtain ⟨v, hv⟩ := Finset.card_pos.mp h
+  obtain ⟨i, hi, hir, _⟩ := mem_authorsAt.mp hv
+  exact ⟨i, hi, hir⟩
+omit [DecidableEq BlockId] in
+/-- One step of L0: a block at round `n+1` forces a quorum of authors at
+round `n`, immediate from validity — its references carry `2f+1`
+distinct creators, each holding a round-`n` block. -/
+theorem card_authorsAt_of_succ {n : ℕ} {i : BlockId}
+    (hi : i ∈ U.ids) (hir : (U.block i).round = n + 1) :
+    quorumCard Validator ≤ (authorsAt U n).card :=
+  le_trans (U.creators_quorum hi (by omega))
+    (Finset.card_le_card (creators_refs_subset_authorsAt hi hir))
+omit [DecidableEq BlockId] in
+/-- **L0 — the DAG is dense below its frontier.** If any block exists at
+round `r`, every round `n < r` has at least `2f+1` distinct authors:
+downward induction on the gap `r - n`, generalised over `n` so the step
+can re-enter at `n+1`. -/
+theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
+    (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
+    quorumCard Validator ≤ (authorsAt U n).card := by
+  obtain ⟨d, rfl⟩ : ∃ d, r = n + 1 + d := ⟨r - n - 1, by omega⟩
+  clear hn
+  induction d generalizing n i with
+  | zero => exact card_authorsAt_of_succ hi hir
+  | succ d ih =>
+      have h1 : quorumCard Validator ≤ (authorsAt U (n + 1)).card :=
+        ih (n := n + 1) (i := i) hi (by omega)
+      obtain ⟨j, hj, hjr⟩ := exists_mem_of_authorsAt_card_pos (U := U) (n := n + 1)
+        (by have := F.card_validators; omega)
+      exact card_authorsAt_of_succ hj hjr
+
 /-- The all-of-`Correct` case, which is what L1 produces. -/
 abbrev Populated (U : BlockUniverse Validator BlockId Payload) (r : ℕ) : Prop :=
   PopulatedOn U (Correct : Finset Validator) r

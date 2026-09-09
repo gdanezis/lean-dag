@@ -16298,18 +16298,6 @@ theorem SynchronisedOn.mono {T T' : Finset Validator} {R : ℕ} (hsub : T ⊆ T'
 
 Coverage is antitone too.
 
-#### `card_authorsAt_of_lt`
-
-*theorem, `Mysticeti.Liveness.lean`*
-
-```lean
-theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
-    (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
-    quorumCard Validator ≤ (authorsAt U n).card
-```
-
-**L0 — the DAG is dense below its frontier.** If any block exists at round `r`, every round `n < r` has at least `2f+1` distinct authors: downward induction on the gap `r - n`, generalised over `n` so the step can re-enter at `n+1`.
-
 #### `certifies_of_synchronisedOn`
 
 *theorem, `Mysticeti.Liveness.lean`*
@@ -21475,6 +21463,18 @@ theorem progress (hn : 0 < Fintype.card Validator) :
     Properties.Support.Progresses (Properties.voteSupport (nemoRule (Validator := Validator)
       (BlockId := BlockId) (Payload := Payload))) (nemoReliability Validator hn)
 ```
+
+#### `card_authorsAt_of_lt`
+
+*theorem, `Network.Delivery.lean`*
+
+```lean
+theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
+    (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
+    quorumCard Validator ≤ (authorsAt U n).card
+```
+
+**L0 — the DAG is dense below its frontier.** If any block exists at round `r`, every round `n < r` has at least `2f+1` distinct authors: downward induction on the gap `r - n`, generalised over `n` so the step can re-enter at `n+1`.
 
 #### `selfParent`
 
