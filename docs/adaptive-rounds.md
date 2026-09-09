@@ -8,8 +8,9 @@
 > only human-plus-LLM review behind it. Read critically.
 
 > **Status (September 2026).** §2 to §5, §6.2, §6.3 and §6.4 are built or
-> settled on this branch, and §6.1 is built but for the derivation of
-> `Progresses` from a protocol's own liveness. The composition on branches
+> settled on this branch. §6.1 is built but for the joint fixpoint of
+> §10's last item, which is what stands between `Progresses` as a
+> hypothesis and `Progresses` as a theorem. The composition on branches
 > `compose-barnacle-hammerhead` and `compose-cadence` is superseded, and
 > retained only for the proofs §8 names.
 
@@ -373,9 +374,17 @@ statement is preserved. Composition results are `I`-labelled, as in
 5. **Done.** §4: `Params.gap`, and the arc's absorption of it.
 6. **Done.** §6.2: the bridge, `Params.gap` discharging `hwd`, and
    `Composed.agree`.
-7. §6.1: liveness over the frame, which is now the whole of what the
-   composition still owes. §6.3 and §6.4 are to be settled as they are
-   met.
+7. **Done.** §6.3 and §6.4, and §6.1 but for its last item:
+   `Composed.genesis`, `extend`, `every_height`, `closes_of_leaderCommits`
+   and `closed_of_settles`.
+8. The joint fixpoint: a construction supplying a composed run's
+   assignment and verdicts epoch by epoch. `coherent` is `rfl` if the
+   assignment is defined as the policy's reading, but the verdicts are
+   then those of the schedule that reading builds, and the frame is fixed
+   by the configurations the verdicts settle. `Adaptive/Liveness.lean`
+   resolves the corresponding circle for a fixed schedule by strong
+   recursion on epochs, using the lag; the composed circle has the frame
+   in it as well. This is the one substantial item left.
 
 ## 11. What could still go wrong
 
