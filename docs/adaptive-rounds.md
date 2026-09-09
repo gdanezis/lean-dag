@@ -216,14 +216,19 @@ is the existence of the slot, which is the reassignment's obligation and
 not the rule's. `closed_of_settles` (§6.3) derives the third clause the
 same way.
 
-**What is not built is the second clause and the recursion's
-bookkeeping.** `extend` also asks that the assignment is the policy's at
-the larger epoch height, and `Progresses` asks that the horizon advance.
-`Adaptive/Liveness.lean` does the corresponding work for a fixed schedule
-from `PlacesRuns`, in 318 lines. Nothing in it is open, and the pieces it
-would rest on — `closes_of_leaderCommits`, `closed_of_settles`,
-`extend` — are proved; what remains is the construction that supplies a
-run's assignment and verdicts epoch by epoch.
+`extend` takes the assignment and the verdicts of the run it builds
+rather than carrying the shorter run's, which a run of height `K`
+constrains nowhere above `F.cum (start K)`. So `coherent` is immediate —
+define the assignment as the policy's reading of the verdicts at the new
+frame and it is `rfl` — and `hag`, that the two assignments agree below,
+follows from `adapted` once the verdicts do.
+
+**What is left is that the protocol decides the new configuration's
+slots.** That is `Decided` at the composed schedule, and it is the same
+assumption the adaptive arc already makes, discharged there from
+`LeaderCommits`, `Descends` and `PlacesRuns`. With it,
+`closed_of_settles` gives `extend`'s closure clause and
+`closes_of_leaderCommits` gives its anchor clause. No circle remains.
 
 ### 6.2 The bridge to Barnacle's numbering — built
 
@@ -377,14 +382,11 @@ statement is preserved. Composition results are `I`-labelled, as in
 7. **Done.** §6.3 and §6.4, and §6.1 but for its last item:
    `Composed.genesis`, `extend`, `every_height`, `closes_of_leaderCommits`
    and `closed_of_settles`.
-8. The joint fixpoint: a construction supplying a composed run's
-   assignment and verdicts epoch by epoch. `coherent` is `rfl` if the
-   assignment is defined as the policy's reading, but the verdicts are
-   then those of the schedule that reading builds, and the frame is fixed
-   by the configurations the verdicts settle. `Adaptive/Liveness.lean`
-   resolves the corresponding circle for a fixed schedule by strong
-   recursion on epochs, using the lag; the composed circle has the frame
-   in it as well. This is the one substantial item left.
+8. **Done.** `extend` takes the assignment and the verdicts of the run it
+   builds, rather than carrying the shorter run's. A run of height `K`
+   constrains neither above `F.cum (start K)`, so each step chooses them
+   afresh for its own frame, and the recursion is local. What was going to
+   be a joint fixpoint is not one.
 
 ## 11. What could still go wrong
 

@@ -137,6 +137,19 @@ theorem start_mono (Rn : CompRun (R := R) W P upd U V K) {a b : ℕ} (hab : a �
       · subst h; exact le_refl _
       · exact le_trans (ih (by omega) (by omega)) (le_of_lt (Rn.start_lt j (by omega)))
 
+/-- **An earlier configuration's anchor is a slot the run has settled.**
+Its round is `P.gap` below where the next configuration starts, so its
+slot is below the first slot of the run's last start. -/
+theorem anchor_lt_cum_start (Rn : CompRun (R := R) W P upd U V K) (hgap : 0 < P.gap)
+    {k : ℕ} (hk : k < K) : Rn.anchor k < Rn.F.cum (Rn.start K) := by
+  have e := Rn.start_succ k hk
+  have hle : Rn.start (k + 1) ≤ Rn.start K := Rn.start_mono (by omega) (by omega)
+  have h1 : Rn.anchor k < Rn.F.cum (Rn.F.roundOf (Rn.anchor k) + 1) :=
+    Rn.F.lt_cum_roundOf_succ _
+  have h2 : Rn.F.cum (Rn.F.roundOf (Rn.anchor k) + 1) ≤ Rn.F.cum (Rn.start K) :=
+    Rn.F.cum_mono (by omega)
+  omega
+
 /-- **The anchor of an earlier configuration is two epochs below.** The
 run's own frame, read through `anchor_two_epochs_below`'s counting. -/
 theorem anchor_below (Rn : CompRun (R := R) W P upd U V K) (hW : 0 < W)
@@ -582,22 +595,28 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     (hhor : W * (H + 1) ≤ Rn.F.cum (Rn.start K))
     (hkeyed : ∀ r, Rn.start K < r → ∀ i j, i < Rn.count K → j < Rn.count K →
       Rn.asg r i = Rn.asg r j → i = j)
-    (hupd : ∀ b A, 0 < (upd (Rn.count K) b U V A).1)
+    (hupd : ∀ b A, 0 < (upd (Rn.count K) b U V A).1) (hgap : 0 < P.gap)
+    (asg' : ℕ → ℕ → Validator) (vdct' : ℕ → Option BlockId)
+    (hag : ∀ r i, r ≤ Rn.start K → asg' r i = Rn.asg r i)
+    (hvd : ∀ g, g < Rn.F.cum (Rn.start K) → vdct' g = Rn.vdct g)
+    (hkeyed' : ∀ r i j, i < (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).width r →
+      j < (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).width r →
+      asg' r i = asg' r j → i = j)
     (hcl : Closes P (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K))
-      Rn.vdct (Rn.start K))
+      vdct' (Rn.start K))
     {H' : ℕ}
     (hcoh : ∀ r i, i < (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).width r →
       epochOf W ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i) < H' + 1 →
-      Rn.asg r i = pick U V Rn.vdct
+      asg' r i = pick U V vdct'
         ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i))
     (hclosed : ∀ r i, i < (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).width r →
       epochOf W ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i) < H' →
-      DecidedFrameBelow R (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)) Rn.asg
+      DecidedFrameBelow R (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)) asg'
         ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).roundOf
           (W * (epochOf W ((Rn.F.extend (Rn.start K) (Rn.count K)
             (Rn.count_pos K)).index r i) + 2)))
         V ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i)
-        (Rn.vdct ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i)))
+        (vdct' ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i)))
     (hhor' : W * (H' + 1) ≤
       (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).cum
         ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).roundOf
@@ -629,8 +648,8 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     backoff := fun k => if k ≤ K then Rn.backoff k else nxt.2
     anchor := fun k => if k = K then a else Rn.anchor k
     F := F'
-    vdct := Rn.vdct
-    asg := Rn.asg
+    vdct := vdct'
+    asg := asg'
     init := ⟨by simp only [Nat.zero_le, if_true]; exact Rn.init.1,
       by simp only [Nat.zero_le, if_true]; exact Rn.init.2.1,
       by simp only [Nat.zero_le, if_true]; exact Rn.init.2.2⟩
@@ -644,7 +663,7 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     anchor_least := ?al
     start_succ := ?ss
     update := ?upd
-    keyed := Rn₁.keyed
+    keyed := hkeyed'
     coherent := hcoh
     closed := hclosed }, by simpa only [if_neg (show ¬ (K + 1 ≤ K) by omega)] using hhor'⟩⟩
   case cnt_eq =>
@@ -663,7 +682,9 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     intro k hk
     rcases Nat.lt_or_ge k K with h | h
     · rw [ha_lo k (by omega), hs_lo k (by omega)]
-      exact Rn₁.anchor_commits k h
+      obtain ⟨⟨A', hA'⟩, hthr'⟩ := Rn₁.anchor_commits k h
+      exact ⟨⟨A', by
+        rw [hvd _ (CompRun.anchor_lt_cum_start Rn.toCompRun hgap h)]; exact hA'⟩, hthr'⟩
     · have hkK : k = K := by omega
       subst hkK
       rw [ha_hi, hs_lo k (by omega)]
@@ -673,6 +694,9 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     rcases Nat.lt_or_ge k K with h | h
     · rw [ha_lo k (by omega)] at hlt
       rw [hs_lo k (by omega)] at hg
+      rw [hvd g (by
+        have := CompRun.anchor_lt_cum_start Rn.toCompRun hgap h
+        omega)]
       exact Rn₁.anchor_least k h g hg hlt
     · have hkK : k = K := by omega
       subst hkK
@@ -693,6 +717,7 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     · rw [hc_lo (k + 1) (by omega), hb_lo (k + 1) (by omega), hc_lo k (by omega),
         hb_lo k (by omega)]
       rw [ha_lo k (by omega)] at hB
+      rw [hvd _ (CompRun.anchor_lt_cum_start Rn.toCompRun hgap h)] at hB
       exact Rn.update k h B hB
     · have hkK : k = K := by omega
       subst hkK
