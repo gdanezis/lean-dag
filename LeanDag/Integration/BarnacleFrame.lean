@@ -9,7 +9,7 @@ configuration; a frame indexes widths by round and slots once. `cfgAt`
 and `frameOf` cross between them, and `frameOf_width_eq` is the crossing:
 the width of a round of configuration `k` is that configuration's count.
 
-`anchor_two_epochs_below` is what `Params.gap` buys. Barnacle names the
+`anchor_two_epochs_below` states what `Params.gap` is for. Barnacle names the
 count of configuration `k + 1` from the anchor of configuration `k`,
 whose round sits `P.gap` below where the new count takes effect. At
 `P.gap = 2 * W` those rounds hold at least `2 * W` slots whatever the

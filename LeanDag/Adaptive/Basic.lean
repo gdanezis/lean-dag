@@ -35,7 +35,7 @@ theorem epochOf_mono (W : ℕ) {j k : ℕ} (h : j ≤ k) :
   Nat.div_le_div_right h
 
 /-- **Two epochs of slots are two epochs.** What a gap counted in slots
-buys a clause counted in epochs. -/
+gives a clause counted in epochs. -/
 theorem epochOf_add_two {W x y : ℕ} (hW : 0 < W) (h : x + 2 * W ≤ y) :
     epochOf W x + 2 ≤ epochOf W y := by
   have h1 : epochOf W (x + 2 * W) ≤ epochOf W y := epochOf_mono W h

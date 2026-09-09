@@ -176,14 +176,36 @@ the alignment restrictions should make them easier rather than harder,
 since the anchor is no longer required to arrive inside a fixed window,
 but none of it is proved.
 
-### 6.2 The bridge to Barnacle's numbering
+### 6.2 The bridge to Barnacle's numbering — mostly built
 
-`FrameRun` names no Barnacle. Connecting them means relating Barnacle's
-per-configuration slot numbering to the frame's global one through
-`Frame.index`, and proving that `Params.gap` discharges `hwd`. The
-facilities exist; the bridge does not. The alternative, restating
-Barnacle over the frame, is three times the size of restating the
-adaptive arc and is not proposed.
+`Integration/BarnacleFrame.lean` crosses between the two indexings:
+`cfgAt` and `frameOf` build the frame a Barnacle run induces, and
+`frameOf_width_eq` is the crossing, a round of configuration `k` being
+that configuration's count wide. `anchor_two_epochs_below` is what
+`Params.gap` is for, and it settles §11's first entry: `Frame.cum_gap` says
+`g` rounds hold at least `g` slots because every round holds one, and
+`epochOf_add_two` says `2 * W` slots are two epochs, so the round-valued
+parameter is the right shape and need not depend on the count.
+
+`Integration/CompRun.lean` is the run of both mechanisms: Barnacle's
+configuration data and a frame, with one numbering throughout — anchors
+are global slot indices and `cnt_eq` is the bridge. `anchor_below` is
+`anchor_two_epochs_below` at the run's own frame, `cnt_det` derives the
+widths from the configurations, and `anchor_det` derives the anchor from
+the verdicts.
+
+**What remains is their assembly.** `hwd` asks that widths agree given
+verdicts two epochs below, and the chain runs: verdicts agree there, so
+the anchors of earlier configurations agree (`anchor_det`), so the
+configurations agree, so the widths do (`cnt_det`). The step that does
+not yet close is inside a configuration: `anchor_det` at `k` needs the
+widths to agree at rounds up to the anchor's own, which lie in
+configuration `k`'s range and so above where `cnt_det` reaches from the
+configurations below. The two runs' ranges may differ in extent until
+their anchors are known equal, which is what is being proved. Resolving
+it means either an induction that advances the widths and the anchor
+together within a configuration, or a formulation of `anchor_least` that
+compares slot indices without reading rounds.
 
 ### 6.3 Is `FrameRun.closed` satisfiable?
 
@@ -268,11 +290,15 @@ statement is preserved. Composition results are `I`-labelled, as in
 
 ## 11. What could still go wrong
 
-**§6.2 may show the gap is the wrong shape.** `hwd` is stated over epochs
-of the global frame, and `Params.gap` in rounds of a configuration. §4's
-sizing argument — that `2 * W` rounds suffice because the gap's rounds
-hold at least `gap` slots — is prose here and Lean nowhere. If it fails,
-the gap becomes count-dependent and `Params` is the wrong place for it.
+**Settled.** §4's sizing argument was prose and is now
+`Frame.cum_gap` with `epochOf_add_two`; the gap is round-valued and does
+not depend on the count.
+
+**The assembly inside a configuration may want more than a lag.** §6.2's
+open step compares two runs' anchors while their configurations' extents
+are still unknown. If neither route there works, the structure would have
+to fix a configuration's extent independently of its anchor, which is a
+restriction of the kind §3.2 records the composition as not needing.
 
 **Liveness may ask what safety did not.** §3.2 records that safety needs
 no alignment between a width change and an epoch boundary. `Closes` asks

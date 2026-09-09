@@ -16,6 +16,17 @@ theorem cum_congr {F F' : Frame} {B : ℕ}
   | succ j ih =>
       rw [cum_succ, cum_succ, ih (by omega), h j (by omega)]
 
+/-- **Frames agreeing below a round agree about which round a slot is
+in**, for every slot in a round below it. -/
+theorem roundOf_congr {F F' : Frame} {B : ℕ}
+    (hw : ∀ r, r < B → F'.width r = F.width r)
+    {g : ℕ} (hg : F.roundOf g < B) : F'.roundOf g = F.roundOf g := by
+  have hlo : F.cum (F.roundOf g) ≤ g := F.cum_roundOf_le g
+  have hhi : g < F.cum (F.roundOf g + 1) := F.lt_cum_roundOf_succ g
+  have e0 : F'.cum (F.roundOf g) = F.cum (F.roundOf g) := cum_congr hw (by omega)
+  have e1 : F'.cum (F.roundOf g + 1) = F.cum (F.roundOf g + 1) := cum_congr hw (by omega)
+  exact F'.roundOf_eq (by omega) (by omega)
+
 /-- **Frames agreeing below a round induce schedules agreeing there.**
 Every slot at a round below `B` keeps its round and its leader. -/
 theorem toSlots_agree {F F' : Frame} {asg asg' : ℕ → ℕ → Validator} {hk hk'} {B : ℕ}

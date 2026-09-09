@@ -5,7 +5,7 @@ import LeanDag.Properties.Derived.Frame
 
 `Sched getLeader hk m` is the constant frame: every round holds `m`
 slots and position `i` of round `r` is led by `getLeader (r + i)`.
-`sched_frame_local` is what that buys — a configuration's verdicts are
+`sched_frame_local` is what that gives — a configuration's verdicts are
 settled within its own rounds, so the count may change above them.
 -/
 
