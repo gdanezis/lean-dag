@@ -2,6 +2,7 @@ import LeanDag.Common.Anchored
 import LeanDag.Common.History
 import LeanDag.Properties.Band
 import LeanDag.Properties.Agree
+import LeanDag.Properties.Derived.Frame
 import LeanDag.Properties.Candidate
 import LeanDag.Properties.Optional.Direct
 import LeanDag.Properties.Commit
@@ -782,6 +783,74 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
       · intro i hi
         exact rungEmpty_band hb hab hAL.1 hAlo hAhi hkk hlk (by omega) (by omega) hi
           (hnone i hi)
+
+/-- **A directly decided slot's band is tight**: its top is exactly the
+slot's own round plus a wave. `banded_aux` gives an upper end that the
+derivation determines, and for a direct commit or a direct skip that
+derivation reads the slot's own wave and nothing above it. This is what
+a mechanism needs when the bound it can afford is fixed in advance
+rather than read off the derivation. -/
+theorem banded_direct {V : U.View} {k : ℕ} {v : Option BlockId}
+    (hd : R.Decided (S := S) U V k v)
+    (hdir : (∃ L, v = some L ∧ IsLeaderBlock (S := S) U k L ∧
+        R.Commit U V L (S.slotRound k)) ∨ (v = none ∧ R.Skip U V S k)) :
+    ∀ (g g' d d' : ℕ) (S' : Slots Validator)
+      (U' : BlockRecord Validator BlockId Payload P honest) (V' : U'.View) (k' : ℕ),
+      k + d' = k' + d →
+      (∀ m m', m + d' = m' + d → S.slotRound m ≤ S.slotRound k + R.wave →
+        S.slotRound m + g = S'.slotRound m' + g') →
+      (∀ m m', m + d' = m' + d → S.slotRound m ≤ S.slotRound k + R.wave →
+        S.leader m = S'.leader m') →
+      AgreeBand R.toDagRule U U' (S.slotRound k + g) (S.slotRound k + R.wave + g) g g' →
+      (∀ b, b ∈ V.ids → S.slotRound k ≤ (U.block b).round →
+        (U.block b).round ≤ S.slotRound k + R.wave → b ∈ V'.ids) →
+      R.Decided (S := S') U' V' k' v := by
+  intro g g' d d' S' U' V' k' hkd hsch hlead hab hV
+  have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd (by omega)
+  have hlk : S.leader k = S'.leader k' := hlead k k' hkd (by omega)
+  rcases hdir with ⟨L, hv, hL, hc⟩ | ⟨hv, hs⟩
+  · subst hv
+    exact Decided.directCommit (S := S')
+      (isLeaderBlock_band hab hkk hlk (by omega) (by omega) hL)
+      (hb.commit_band hab hkk hlk rfl (by omega)
+        (fun b hb h1 h2 => hV b hb (by omega) (by omega)) hL hc)
+  · subst hv
+    exact Decided.directSkip (S := S')
+      (hb.skip_band hab hkk hlk rfl (by omega)
+        (fun b hb h1 h2 => hV b hb (by omega) (by omega)) hs)
+
+/-- **A directly decided slot is settled within its own wave**, at a
+frame. `banded_direct` says the band's top is the slot's round plus a
+wave; this reads that as a bound in rounds, so a schedule agreeing with
+this one that far — its widths as well as its leaders — decides the slot
+the same way. It is what `Integration.SettlesInTwoEpochs` asks, at the
+slots a rule decides directly, and it is a theorem rather than an
+assumption. -/
+theorem decidedFrameBelow_direct {F : Frame} {a : ℕ → ℕ → Validator}
+    {hkf : ∀ r i j, i < F.width r → j < F.width r → a r i = a r j → i = j}
+    {V : U.View} {k : ℕ} {v : Option BlockId}
+    (hS : S = F.toSlots a hkf) (hd : R.Decided (S := S) U V k v)
+    (hdir : (∃ L, v = some L ∧ IsLeaderBlock (S := S) U k L ∧
+        R.Commit U V L (S.slotRound k)) ∨ (v = none ∧ R.Skip U V S k)) :
+    Properties.DecidedFrameBelow R.toDagRule F a (F.roundOf k + R.wave + 1) V k v := by
+  subst hS
+  intro F' a' hk' hw ha
+  refine banded_direct hb hd hdir 0 0 0 0 (F'.toSlots a' hk') U V k rfl ?_ ?_
+    Properties.AgreeBand.refl (fun b hb _ _ => hb)
+  · intro m m' hm hbnd
+    have hmm : m = m' := by omega
+    subst hmm
+    simp only [Nat.add_zero, Frame.toSlots_slotRound] at *
+    exact (Frame.roundOf_congr hw (by omega)).symm
+  · intro m m' hm hbnd
+    have hmm : m = m' := by omega
+    subst hmm
+    simp only [Frame.toSlots_slotRound] at hbnd
+    have hro : F'.roundOf m = F.roundOf m := Frame.roundOf_congr hw (by omega)
+    have hcum : F'.cum (F.roundOf m) = F.cum (F.roundOf m) := Frame.cum_congr hw (by omega)
+    show a (F.roundOf m) _ = a' (F'.roundOf m) _
+    rw [hro, hcum]
+    exact (ha (F.roundOf m) _ (by omega) (F.pos_lt_width m)).symm
 
 /-- **An anchored rule is banded.** -/
 theorem banded : Banded R.toDagRule := by

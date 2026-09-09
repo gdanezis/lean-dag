@@ -366,11 +366,25 @@ it and the rule's decisions.
 
 `Banded` gives every verdict *some* round below which it is settled
 (`decided_of_frame_agree`), so the clause is not unreachable; what it
-adds is that the round is soon enough, which is
-`settlesInTwoEpochs_of_banded`'s hypothesis. This is a property of a rule
-together with a schedule, and the adaptive arc's standing assumption read
-at a frame — it is an assumption in both settings, not a new obligation
-the composition creates.
+adds is that the round is soon enough.
+
+**At the slots a rule decides directly it is a theorem.**
+`AnchoredRule.banded_direct` says a direct commit or a direct skip has a
+band whose top is exactly the slot's round plus a wave — `banded_aux`
+computes that top from the derivation, and a direct derivation reads the
+slot's own wave and nothing above it. `decidedFrameBelow_direct` reads
+that as a bound in rounds, so a schedule agreeing that far, its widths as
+well as its leaders, decides the slot the same way. That is
+`SettlesInTwoEpochs` at those slots, once the wave fits in the epoch
+window.
+
+What is not a theorem is the indirect case, where the band's top is the
+anchor's and the anchor is existential in the derivation. `Decided` is an
+opaque field, so nothing in `Properties/` bounds how far an indirect
+derivation reaches; a rule that settles indirect verdicts within a wave
+of the anchor would have to say so. This is the remaining content of the
+assumption, and it is the same shape in the adaptive arc, which asserts
+its bound of a run rather than proving it of every verdict.
 
 ### 6.4 The joiner and conservativity — settled
 
