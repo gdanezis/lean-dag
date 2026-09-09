@@ -207,15 +207,22 @@ exists that has. `Composed.extend` is how a protocol discharges
 `Progresses`, since `extend`'s hypotheses are exactly what a
 configuration owes.
 
-**What is not built is the derivation of those hypotheses from a
-protocol's own liveness.** `extend` asks that the configuration closes,
-that the assignment is the policy's, and that the new slots are decided;
-`Adaptive/Liveness.lean` derives the corresponding clauses for a fixed
-schedule from `LeaderCommits`, `Descends` and `PlacesRuns`, in 318 lines,
-and the frame version of that construction is the remaining work. It is
-the same argument at a frame rather than a new one, and nothing in it is
-open — but it is not small, and it is what stands between
-`Progresses` as a hypothesis and `Progresses` as a theorem.
+`closes_of_leaderCommits` derives the first of `extend`'s clauses from
+the protocol: a configuration closes when a reliable leader is scheduled
+past its threshold. `LeaderCommits` is what the rule supplies and `Agree`
+identifies that commit with the run's own verdict; the fairness consumed
+is the existence of the slot, which is the reassignment's obligation and
+not the rule's. `closed_of_settles` (§6.3) derives the third clause the
+same way.
+
+**What is not built is the second clause and the recursion's
+bookkeeping.** `extend` also asks that the assignment is the policy's at
+the larger epoch height, and `Progresses` asks that the horizon advance.
+`Adaptive/Liveness.lean` does the corresponding work for a fixed schedule
+from `PlacesRuns`, in 318 lines. Nothing in it is open, and the pieces it
+would rest on — `closes_of_leaderCommits`, `closed_of_settles`,
+`extend` — are proved; what remains is the construction that supplies a
+run's assignment and verdicts epoch by epoch.
 
 ### 6.2 The bridge to Barnacle's numbering — built
 

@@ -1,5 +1,6 @@
 import LeanDag.Integration.BarnacleFrame
 import LeanDag.Integration.AdaptiveFrame
+import LeanDag.Properties.Derived.LeaderCommits
 /-!
 # A run of both mechanisms
 
@@ -739,6 +740,30 @@ end Composed
 
 
 
+
+
+/-- **A configuration closes when a reliable leader is scheduled past its
+threshold.** `LeaderCommits` is what the protocol supplies — a slot led
+by a reliable validator commits — and `Agree` identifies that commit with
+the run's own verdict. The fairness this consumes is the existence of the
+slot, which is the reassignment's obligation and not the rule's. -/
+theorem closes_of_leaderCommits
+    {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator → ℕ → ℕ → Prop}
+    (hlc : LeaderCommits R Live) (hag : Agree R)
+    {F : Frame} {a : ℕ → ℕ → Validator}
+    {hk : ∀ r i j, i < F.width r → j < F.width r → a r i = a r j → i = j}
+    {T : Finset Validator} {U : R.Universe} {V : R.View U}
+    {vdct : ℕ → Option BlockId} {lo Kb : ℕ}
+    (hlive : Live (F.toSlots a hk) V T lo Kb)
+    (hdec : ∀ g, R.Decided (F.toSlots a hk) V g (vdct g))
+    {start : ℕ}
+    (hpl : ∃ g, F.cum (start + P.interval + 1) ≤ g ∧ lo ≤ g ∧ g < Kb ∧
+      (F.toSlots a hk).leader g ∈ T) :
+    Closes P F vdct start := by
+  obtain ⟨g, hthr, hlo, hhi, hT⟩ := hpl
+  obtain ⟨L, hL⟩ := hlc (F.toSlots a hk) V T lo Kb hlive g hlo hhi hT
+  have : vdct g = some L := hag _ V V g _ _ (hdec g) hL.toDecided
+  exact ⟨g, hthr, by rw [this]; rfl⟩
 
 end Integration
 end LeanDag
