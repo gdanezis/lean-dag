@@ -650,6 +650,20 @@ theorem coreSupport_commits :
       hpop _ (by omega) (by change S.slotRound k + 2 ≤ S.slotRound k + 2; omega),
       fun L hL => hcert L hL⟩
 
+
+/-- **`LeaderCommits` at the support's own precondition** — the socket
+both execution models reach: coverage through `coreSupport_ofCoverage`
+and `Timed.live_of_coverage`, the reactive discipline through
+`coreSupport_live_of_reactiveLive`. A mechanism stated against this asks
+for neither. -/
+theorem leaderCommits_support :
+    LeaderCommits (mysticetiRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload))
+      (fun S {U} V T lo K =>
+        (coreSupport (Validator := Validator) (BlockId := BlockId) (Payload := Payload)).live
+          (coreReliability Validator) S (U := U) V T lo K) :=
+  coreSupport.leaderCommits coreSupport_commits
+
 /-- **A3 as a property**: the relation's indirect property at the core,
 with no tie to break, read at the three-round eligibility. -/
 theorem indirect :

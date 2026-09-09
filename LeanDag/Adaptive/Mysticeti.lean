@@ -6,10 +6,11 @@ import LeanDag.Mysticeti.Properties
 
 The generic adaptive mechanism (`Adaptive/{Policy,Run,Liveness}.lean`)
 at `MysticetiProperties.mysticetiRule`, with the core's proofs of its
-five properties. The one supplied part: the generic theorems ask for
-the precondition `Live` stage by stage, and the core's `coreLive` reads
-no leader, so the usual global hypotheses — `SynchronisedOn`,
-`PopulatedOn` to a horizon, `CoversUpto` — produce it at every stage.
+five properties. The generic theorems ask for the precondition `Live`
+stage by stage, and it is read here at `coreSupport.live` — the socket
+both execution models reach, coverage through `Timed.live_of_coverage`
+and the reactive discipline through `coreSupport_live_of_reactiveLive`.
+Nothing below names synchrony.
 -/
 
 namespace LeanDag
@@ -136,100 +137,70 @@ abbrev PlacesRuns (P : AdaptivePolicy Validator BlockId Payload)
 section Existence
 
 variable {P : AdaptivePolicy Validator BlockId Payload}
-variable {T : Finset Validator} {c R N : ℕ}
+variable {T : Finset Validator} {c : ℕ}
 
-/-- **One epoch closes** — the generic `Adaptive.epoch_closes` with
-`coreLive` assembled from the global hypotheses. -/
-theorem epoch_closes (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : PlacesRuns P T c)
+/-- **The core's staged precondition**, at the support both execution
+models reach: `Timed.live_of_coverage` supplies it under coverage,
+`coreSupport_live_of_reactiveLive` under the reactive discipline. -/
+abbrev coreSupportLive (S : Slots Validator)
+    {U : BlockUniverse Validator BlockId Payload}
+    (V : View Validator BlockId Payload U) (T : Finset Validator) (lo K : ℕ) : Prop :=
+  (coreSupport (Validator := Validator) (BlockId := BlockId) (Payload := Payload)).live
+    (coreReliability Validator) S (U := U) V T lo K
+
+/-- **One epoch closes**, from the staged precondition alone. -/
+theorem epoch_closes (hc : 0 < c) (hruns : PlacesRuns P T c)
     (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
-    (V : View Validator BlockId Payload U) (hcov : V.CoversUpto N)
-    (v : ℕ → Option BlockId) (E : ℕ)
-    (hN : S.slotRound (P.W * (E + 2)) + 2 ≤ N) :
+    (V : View Validator BlockId Payload U) (v : ℕ → Option BlockId) (E : ℕ)
+    (hlive : coreSupportLive (slotsOf P.inj (fun m => P.pick U V v m)) V T P.W
+      (P.W * (E + 2))) :
     ∀ k, epochOf P.W k < E + 1 →
       ∃ w, DecidedBelow mysticetiRule (slotsOf P.inj (fun m => P.pick U V v m))
-        (P.W * (E + 2)) V k w := by
-  have hlive : coreLive (slotsOf P.inj (fun m => P.pick U V v m)) V T P.W (P.W * (E + 2)) :=
-    coreLive_of hcard hs hRW hpop hcov fun k hk => by
-      have := S.mono (le_of_lt hk); change S.slotRound k + 2 ≤ N; omega
-  intro k hk
-  obtain ⟨w, hw⟩ := Adaptive.epoch_closes leaderCommits
+        (P.W * (E + 2)) V k w :=
+  fun k hk => Adaptive.epoch_closes leaderCommits_support
     (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V v E hlive k hk
-  exact ⟨w, hw⟩
 
 /-- **Partial runs exist at every height** — the finite-horizon form. -/
-theorem exists_partialRun (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : PlacesRuns P T c)
+theorem exists_partialRun (hc : 0 < c) (hruns : PlacesRuns P T c)
     (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
-    (V : View Validator BlockId Payload U) (hcov : V.CoversUpto N) (E : ℕ)
-    (hN : S.slotRound (P.W * (E + 1)) + 2 ≤ N) :
+    (V : View Validator BlockId Payload U) (E : ℕ)
+    (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
+      coreSupportLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W
+        (P.W * (E' + 2))) :
     Nonempty (PartialRun P U V E) :=
-  Adaptive.exists_partialRun leaderCommits (Adaptive.descends_slotsOf indirect hc hspans P.inj)
-    hruns V E (fun E' hE' _ => coreLive_of hcard hs hRW hpop hcov fun k hk => by
-      have h1 : k ≤ P.W * (E + 1) := by
-        have := Nat.mul_le_mul_left P.W (show E' + 2 ≤ E + 1 by omega)
-        omega
-      have := S.mono h1
-      change S.slotRound k + 2 ≤ N
-      omega)
+  Adaptive.exists_partialRun leaderCommits_support
+    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V E hlive
 
-/-- **AL5: the adaptive fixpoint exists**, on a synchronised, populated
-DAG under a policy that places runs. With `adaptiveRun_agree` it is THE
-fixpoint. -/
-theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : PlacesRuns P T c)
+/-- **AL5: the adaptive fixpoint exists**, under a policy that places
+runs, with the precondition holding at every height. -/
+theorem adaptiveRun_exists (hc : 0 < c) (hruns : PlacesRuns P T c)
     (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, Populated U r)
-    (V : View Validator BlockId Payload U) (hcov : ∀ N, V.CoversUpto N) :
+    (V : View Validator BlockId Payload U)
+    (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
+      coreSupportLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W
+        (P.W * (E + 2))) :
     Nonempty (AdaptiveRun P U V) :=
-  Adaptive.run_exists agree leaderCommits (Adaptive.descends_slotsOf indirect hc hspans P.inj)
-    hruns V (fun E _ => coreLive_of hcard hs hRW (fun r _ _ => PopulatedOn.mono hT (hpop r))
-      (hcov _) fun k hk => by
-        have := S.mono (le_of_lt hk)
-        change S.slotRound k + 2 ≤ S.slotRound (P.W * (E + 2)) + 2
-        omega)
-
-/-! ## What the run commits, for the core -/
+  Adaptive.run_exists agree leaderCommits_support
+    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V hlive
 
 /-- **Every reliable-led slot past the first epoch commits**, in every
-run, on a view caught up two rounds past it. -/
-theorem adaptiveRun_commits (hcard : quorumCard Validator ≤ T.card)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
-    {V : View Validator BlockId Payload U} (hcov : V.CoversUpto N) (A : AdaptiveRun P U V)
-    {k : ℕ} (hk : P.W ≤ k) (hN : S.slotRound k + 2 ≤ N) (hlead : A.assign k ∈ T) :
+run. -/
+theorem adaptiveRun_commits {V : View Validator BlockId Payload U}
+    (A : AdaptiveRun P U V) {k : ℕ} (hk : P.W ≤ k) (hK : k < P.W * (epochOf P.W k + 2))
+    (hlive : coreSupportLive (slotsOf P.inj A.assign) V T P.W
+      (P.W * (epochOf P.W k + 2)))
+    (hlead : A.assign k ∈ T) :
     ∃ L, A.vdct k = some L :=
-  Adaptive.Run.commits agree leaderCommits A (lo := P.W) (K := k + 1)
-    (coreLive_of (S := slotsOf P.inj A.assign) hcard hs hRW hpop hcov fun j hj => by
-        have := S.mono (show j ≤ k by omega)
-        change S.slotRound j + 2 ≤ N
-        omega)
-    hk (by omega) hlead
+  Adaptive.Run.commits agree leaderCommits_support A hlive hk hK hlead
 
 /-- **Every epoch past the first carries `c` consecutive commits**, in
-every run — the liveness statement AL5 was standing in for. -/
-theorem adaptiveRun_commits_in_epoch (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card) (hruns : PlacesRuns P T c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, Populated U r)
-    {V : View Validator BlockId Payload U} (hcov : ∀ N, V.CoversUpto N)
-    (A : AdaptiveRun P U V) (e : ℕ) :
+every run. -/
+theorem adaptiveRun_commits_in_epoch (hruns : PlacesRuns P T c)
+    {V : View Validator BlockId Payload U} (A : AdaptiveRun P U V) (e : ℕ)
+    (hlive : coreSupportLive (slotsOf P.inj A.assign) V T P.W (P.W * (e + 2))) :
     ∃ b, P.W * (e + 1) ≤ b ∧ b + c ≤ P.W * (e + 2) ∧
       ∀ i, i < c → ∃ L, A.vdct (b + i) = some L :=
-  Adaptive.Run.commits_in_epoch agree leaderCommits hruns A e
-    (coreLive_of (S := slotsOf P.inj A.assign) hcard hs hRW
-      (fun r _ _ => PopulatedOn.mono hT (hpop r)) (hcov _) fun k hk => by
-        have := S.mono (le_of_lt hk)
-        change S.slotRound k + 2 ≤ S.slotRound (P.W * (e + 2)) + 2
-        omega)
+  Adaptive.Run.commits_in_epoch agree leaderCommits_support hruns A e hlive
 
 end Existence
 

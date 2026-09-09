@@ -180,6 +180,7 @@
 <path d="M88.0,1368.0 C165.0,1368.0 165.0,922.5 242.0,922.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M88.0,1368.0 C165.0,1368.0 165.0,592.5 242.0,592.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M88.0,1368.0 C111.0,1368.0 111.0,1203.0 134.0,1203.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
+<path d="M88.0,1368.0 C219.0,1368.0 219.0,2374.5 350.0,2374.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M88.0,1368.0 C165.0,1368.0 165.0,2407.5 242.0,2407.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M88.0,1368.0 C111.0,1368.0 111.0,114.0 134.0,114.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M88.0,1368.0 C165.0,1368.0 165.0,955.5 242.0,955.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
@@ -318,6 +319,7 @@
 <path d="M88.0,1401.0 C165.0,1401.0 165.0,922.5 242.0,922.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M88.0,1401.0 C165.0,1401.0 165.0,592.5 242.0,592.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M88.0,1401.0 C219.0,1401.0 219.0,922.5 350.0,922.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
+<path d="M88.0,1401.0 C219.0,1401.0 219.0,2374.5 350.0,2374.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M88.0,1401.0 C165.0,1401.0 165.0,2407.5 242.0,2407.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M88.0,1401.0 C165.0,1401.0 165.0,1186.5 242.0,1186.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M88.0,1401.0 C111.0,1401.0 111.0,114.0 134.0,114.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
@@ -461,10 +463,11 @@
 <path d="M304.0,988.5 C327.0,988.5 327.0,1516.5 350.0,1516.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M304.0,1780.5 C381.0,1780.5 381.0,1368.0 458.0,1368.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M196.0,2655.0 C273.0,2655.0 273.0,1219.5 350.0,1219.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
+<path d="M196.0,741.0 C273.0,741.0 273.0,2374.5 350.0,2374.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M196.0,741.0 C219.0,741.0 219.0,1450.5 242.0,1450.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
-<path d="M196.0,741.0 C219.0,741.0 219.0,2605.5 242.0,2605.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M196.0,741.0 C273.0,741.0 273.0,1087.5 350.0,1087.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M196.0,741.0 C219.0,741.0 219.0,2572.5 242.0,2572.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
+<path d="M196.0,741.0 C219.0,741.0 219.0,2605.5 242.0,2605.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <g><title>LeanDag.BlockUniverse.exists_common_mem_of_quorums — two quorum-backed sets of round-`n` blocks share a block</title>
 <rect x="134.0" y="102.0" width="62" height="24" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="114.0" text-anchor="middle">T6</text></g>

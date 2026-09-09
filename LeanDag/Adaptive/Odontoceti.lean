@@ -87,41 +87,26 @@ theorem odoLive_of {S : Slots Validator} {V : View Validator BlockId Payload U} 
     ⟨hT, by change Fintype.card Validator - Faults.f Validator ≤ T.card; exact hcard⟩
     hs hpop S V hcov hRW hN
 
-/-- **Partial runs exist at every height, two-round rule**, on a view
-caught up to the horizon. -/
-theorem exists_partialRun (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
+/-- **Partial runs exist at every height, two-round rule**, from the
+staged precondition alone. `odoLive_of` supplies it under coverage. -/
+theorem exists_partialRun (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
     (hspans : (odontocetiAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
-    (V : View Validator BlockId Payload U) (hcov : V.CoversUpto N) (E : ℕ)
-    (hN : S.slotRound (P.W * (E + 1)) + 1 ≤ N) :
+    (V : View Validator BlockId Payload U) (E : ℕ)
+    (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
+      odoLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E' + 2))) :
     Nonempty (PartialRun P U V E) :=
-  Adaptive.exists_partialRun leaderCommits (Adaptive.descends_slotsOf indirect hc hspans P.inj)
-    hruns V E (fun E' hE' _ => odoLive_of hT hcard hs hRW hpop hcov fun k hk => by
-      have h1 : k ≤ P.W * (E + 1) := by
-        have := Nat.mul_le_mul_left P.W (show E' + 2 ≤ E + 1 by omega)
-        omega
-      have := S.mono h1
-      change S.slotRound k + 1 ≤ N
-      omega)
+  Adaptive.exists_partialRun leaderCommits
+    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V E hlive
 
 /-- **AL7: adaptive Odontoceti is safe and live.** -/
-theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
+theorem adaptiveRun_exists (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
     (hspans : (odontocetiAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, Populated U r)
-    (V : View Validator BlockId Payload U) (hcov : ∀ N, V.CoversUpto N) :
+    (V : View Validator BlockId Payload U)
+    (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
+      odoLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E + 2))) :
     Nonempty (AdaptiveRun P U V) :=
-  Adaptive.run_exists agree leaderCommits (Adaptive.descends_slotsOf indirect hc hspans P.inj)
-    hruns V (fun E _ => odoLive_of hT hcard hs hRW (fun r _ _ => PopulatedOn.mono hT (hpop r))
-      (hcov (S.slotRound (P.W * (E + 2)) + 1)) fun k hk => by
-        have := S.mono (le_of_lt hk)
-        change S.slotRound k + 1 ≤ S.slotRound (P.W * (E + 2)) + 1
-        omega)
+  Adaptive.run_exists agree leaderCommits
+    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V hlive
 
 end Existence
 

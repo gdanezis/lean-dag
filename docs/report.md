@@ -4520,13 +4520,12 @@ remains a joint condition exactly as P10 is.
 
 **AL5.**
 ```lean
-theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : PlacesRuns P T c)
+theorem adaptiveRun_exists (hc : 0 < c) (hruns : PlacesRuns P T c)
     (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, Populated U r)
-    (V : View Validator BlockId Payload U) (hcov : ∀ N, V.CoversUpto N) :
+    (V : View Validator BlockId Payload U)
+    (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
+      coreSupportLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W
+        (P.W * (E + 2))) :
     Nonempty (AdaptiveRun P U V)
 ```
 
@@ -4549,10 +4548,17 @@ re-reading the schedule off the verdicts so far at each stage. Partial
 runs at every height then glue into a total run along the diagonal,
 with `partialRun_agree` supplying the coherence that the
 stage-by-stage choices need not. A total run decides every slot there
-is, which is why its growth hypothesis is `∀ r, Populated U r` and its
-view is caught up to every horizon; the finite-horizon statement is
-`exists_partialRun`, on a view caught up to `N`, and it is the
-witnessable form.
+is, which is why the precondition is asked for at every height; the
+finite-horizon statement is `exists_partialRun`, which asks for it only
+below `E`, and it is the witnessable form.
+
+The precondition itself is `coreSupport.live`, the support's own, and the
+theorem names no execution model. A synchronous caller supplies it from
+coverage through `Timed.live_of_coverage` — production at every round and
+a view caught up to every horizon — and a reactive one through
+`coreSupport_live_of_reactiveLive`, whose `SynchronisedOn` is false by
+design. The two were separate instantiations of the same construction
+until they were read at the socket both already reach.
 
 Hammerhead [Tsi+23] — the reputation-based schedule deployed in Sui
 mainnet since v1.9.1 — proves an analogous result by a different route.
@@ -18648,31 +18654,26 @@ theorem adaptiveRun_agree {P : AdaptivePolicy Validator BlockId Payload}
 *theorem, `Adaptive.Odontoceti.lean`*
 
 ```lean
-theorem exists_partialRun (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
+theorem exists_partialRun (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
     (hspans : (odontocetiAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
-    (V : View Validator BlockId Payload U) (hcov : V.CoversUpto N) (E : ℕ)
-    (hN : S.slotRound (P.W * (E + 1)) + 1 ≤ N) :
+    (V : View Validator BlockId Payload U) (E : ℕ)
+    (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
+      odoLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E' + 2))) :
     Nonempty (PartialRun P U V E)
 ```
 
-**Partial runs exist at every height, two-round rule**, on a view caught up to the horizon.
+**Partial runs exist at every height, two-round rule**, from the staged precondition alone. `odoLive_of` supplies it under coverage.
 
 #### `adaptiveRun_exists`
 
 *theorem, `Adaptive.Odontoceti.lean`*
 
 ```lean
-theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
+theorem adaptiveRun_exists (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
     (hspans : (odontocetiAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, Populated U r)
-    (V : View Validator BlockId Payload U) (hcov : ∀ N, V.CoversUpto N) :
+    (V : View Validator BlockId Payload U)
+    (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
+      odoLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E + 2))) :
     Nonempty (AdaptiveRun P U V)
 ```
 
@@ -20394,35 +20395,29 @@ theorem AdaptivePolicy.const_run_decided {W : ℕ} {hW : 0 < W}
 *theorem, `Adaptive.Mysticeti.lean`*
 
 ```lean
-theorem epoch_closes (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : PlacesRuns P T c)
+theorem epoch_closes (hc : 0 < c) (hruns : PlacesRuns P T c)
     (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
-    (V : View Validator BlockId Payload U) (hcov : V.CoversUpto N)
-    (v : ℕ → Option BlockId) (E : ℕ)
-    (hN : S.slotRound (P.W * (E + 2)) + 2 ≤ N) :
+    (V : View Validator BlockId Payload U) (v : ℕ → Option BlockId) (E : ℕ)
+    (hlive : coreSupportLive (slotsOf P.inj (fun m => P.pick U V v m)) V T P.W
+      (P.W * (E + 2))) :
     ∀ k, epochOf P.W k < E + 1 →
       ∃ w, DecidedBelow mysticetiRule (slotsOf P.inj (fun m => P.pick U V v m))
         (P.W * (E + 2)) V k w
 ```
 
-**One epoch closes** — the generic `Adaptive.epoch_closes` with `coreLive` assembled from the global hypotheses.
+**One epoch closes**, from the staged precondition alone.
 
 #### `exists_partialRun`
 
 *theorem, `Adaptive.Mysticeti.lean`*
 
 ```lean
-theorem exists_partialRun (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : PlacesRuns P T c)
+theorem exists_partialRun (hc : 0 < c) (hruns : PlacesRuns P T c)
     (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
-    (V : View Validator BlockId Payload U) (hcov : V.CoversUpto N) (E : ℕ)
-    (hN : S.slotRound (P.W * (E + 1)) + 2 ≤ N) :
+    (V : View Validator BlockId Payload U) (E : ℕ)
+    (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
+      coreSupportLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W
+        (P.W * (E' + 2))) :
     Nonempty (PartialRun P U V E)
 ```
 
@@ -20433,17 +20428,16 @@ theorem exists_partialRun (hT : T ⊆ (Correct : Finset Validator))
 *theorem, `Adaptive.Mysticeti.lean`*
 
 ```lean
-theorem adaptiveRun_exists (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card)
-    (hc : 0 < c) (hruns : PlacesRuns P T c)
+theorem adaptiveRun_exists (hc : 0 < c) (hruns : PlacesRuns P T c)
     (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (hs : SynchronisedOn U T R) (hRW : R ≤ S.slotRound P.W)
-    (hpop : ∀ r, Populated U r)
-    (V : View Validator BlockId Payload U) (hcov : ∀ N, V.CoversUpto N) :
+    (V : View Validator BlockId Payload U)
+    (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
+      coreSupportLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W
+        (P.W * (E + 2))) :
     Nonempty (AdaptiveRun P U V)
 ```
 
-**AL5: the adaptive fixpoint exists**, on a synchronised, populated DAG under a policy that places runs. With `adaptiveRun_agree` it is THE fixpoint.
+**AL5: the adaptive fixpoint exists**, under a policy that places runs, with the precondition holding at every height.
 
 #### `holds`
 
