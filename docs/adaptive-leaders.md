@@ -12,8 +12,11 @@
 > `Properties.DagRule` (`Adaptive/Policy.lean`, `Adaptive/Basic.lean`,
 > `Adaptive/Liveness.lean`); the core's bounded relation `DecidedWithin`
 > is `AnchoredRule.DecidedWithin` (`Common/Anchored/Bounded.lean`), and
-> every statement planned here stands verbatim in `Adaptive/Mysticeti.lean`
-> and `Adaptive/Odontoceti.lean` as corollaries of the generic theorems.
+> every statement planned here stands verbatim in
+> `Integration/AdaptiveMysticeti.lean` and
+> `Integration/AdaptiveOdontoceti.lean` as corollaries of the generic
+> theorems, the mechanism itself naming no protocol. §5's module plan is
+> the plan as written.
 
 This document is the design record for the **adaptive-leaders** arc,
 written before the development rather than after it: the definitions and

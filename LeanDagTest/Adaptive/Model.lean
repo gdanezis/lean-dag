@@ -1,8 +1,8 @@
 import LeanDag.Adaptive.Basic
 import LeanDag.Adaptive.Run
 import LeanDag.Adaptive.Liveness
-import LeanDag.Adaptive.Mysticeti
-import LeanDag.Adaptive.Odontoceti
+import LeanDag.Integration.AdaptiveMysticeti
+import LeanDag.Integration.AdaptiveOdontoceti
 import LeanDagTest.Mysticeti.Model
 import LeanDagTest.Odontoceti.Model
 /-!

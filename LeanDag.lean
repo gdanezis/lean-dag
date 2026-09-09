@@ -61,8 +61,8 @@ import LeanDag.Adaptive.Run
 import LeanDag.Adaptive.Joiner
 import LeanDag.Adaptive.Liveness
 import LeanDag.Adaptive.Growth
-import LeanDag.Adaptive.Mysticeti
-import LeanDag.Adaptive.Odontoceti
+import LeanDag.Integration.AdaptiveMysticeti
+import LeanDag.Integration.AdaptiveOdontoceti
 import LeanDag.Hybrid.Faults
 import LeanDag.Hybrid.Rules
 import LeanDag.Hybrid.Decision

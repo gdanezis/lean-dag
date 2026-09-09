@@ -36,11 +36,6 @@ def const (W : ℕ) (hW : 0 < W) (hinj : Function.Injective S.slotRound) :
     AdaptivePolicy Validator BlockId Payload :=
   Adaptive.Policy.const W hW hinj
 
-@[simp] theorem const_pick (W : ℕ) (hW : 0 < W)
-    (hinj : Function.Injective S.slotRound)
-    (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
-    (v : ℕ → Option BlockId) (k : ℕ) : (const W hW hinj).pick U V v k = S.leader k := rfl
-
 end AdaptivePolicy
 
 /-! ## Congruence, at induced schedules -/
@@ -202,13 +197,6 @@ theorem adaptiveRun_commits_in_epoch (hruns : PlacesRuns P T c)
 end Existence
 
 /-! ## Growth, for the core -/
-
-/-- The constant policy is stable under extension. -/
-theorem AdaptivePolicy.const_stable (W : ℕ) (hW : 0 < W)
-    (hinj : Function.Injective S.slotRound) :
-    (AdaptivePolicy.const (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
-      W hW hinj).Stable :=
-  Adaptive.Policy.const_stable W hW hinj
 
 /-- **The adaptive fixpoint is a prefix of the fixpoint on any
 extension**, under the core's persistence condition `Quorate` at the

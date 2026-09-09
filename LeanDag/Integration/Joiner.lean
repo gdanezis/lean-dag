@@ -1,5 +1,5 @@
 import LeanDag.GC.ChopDecided
-import LeanDag.Adaptive.Mysticeti
+import LeanDag.Integration.AdaptiveMysticeti
 import LeanDag.Adaptive.Joiner
 import LeanDag.Properties.Arcs.GC
 import LeanDag.Mysticeti.Record
