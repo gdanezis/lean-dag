@@ -7,11 +7,10 @@
 > and whether the surrounding prose is faithful to what is proved, has
 > only human-plus-LLM review behind it. Read critically.
 
-> **Status (September 2026).** §2, §3, §4.3, §4.4 and §5's first item are
-> built and on this branch; §4.1, §4.2, §4.5, §4.6 and §4.7 remain. The
-> composition on branches `compose-barnacle-hammerhead` and
-> `compose-cadence` is superseded, and retained only for the proofs §5
-> names.
+> **Status (September 2026).** §2 to §5 are built and on this branch; §6
+> is what remains. The composition on branches
+> `compose-barnacle-hammerhead` and `compose-cadence` is superseded, and
+> retained only for the proofs §8 names.
 
 This document plans the composition of Barnacle (`docs/barnacle.md`),
 which sets how many leaders a round has, with the adaptive leader
@@ -37,7 +36,8 @@ independently.
 
 Two remedies were available: give the composition one numbering, or
 state the policy in coordinates a renumbering does not disturb. §2 and §3
-take the first. The second — restating the adaptive arc in rounds — is
+take the first, and §4 is what Barnacle owes it. The second — restating
+the adaptive arc in rounds — is
 **not needed** and is not planned; §3.3 records what it would still be
 worth, which is a question about meaning rather than about proof.
 
@@ -120,27 +120,55 @@ epoch should mean — how far back a reputation window reaches in time
 rather than in leader opportunities — and it is now separable from the
 composition. It is not planned here.
 
-## 4. What remains, and what is uncertain in it
+## 4. The gap: what Barnacle owes `hwd`
 
-In rough order of how much is unknown.
+Barnacle set the count of configuration `k + 1` from the anchor that
+closes configuration `k`, effective at the next round: a lag of zero
+epochs where §3.1 asks for two. `Params` therefore gains a `gap`, the
+rounds between an anchor and the count it computes taking effect, and
 
-### 4.1 Barnacle must supply `hwd`, and cannot today
+    start_succ : ∀ k, k < K → start (k + 1) = anchor k / count k + P.gap
 
-Barnacle sets the count of configuration `k + 1` from the anchor that
-closes configuration `k`, and it takes effect at the next round: a lag of
-zero epochs where `hwd` asks for two. **Barnacle must delay installing a
-new count until two epochs after the anchor that computed it.** That is a
-change to the control loop, not to the composition — the rule reacts
-later — and it is the outstanding design decision.
+`gap = 0` is Barnacle as it was, and is what the witnesses use, so this
+generalises the arc rather than replacing it.
 
-Uncertain: which of `Barnacle/`'s 2986 lines survive the delay.
-Agreement (BN3) is a determinism argument and a delay should not disturb
-it. Progress and liveness (BN8, BN10, BN11) carry horizon arithmetic
-keyed to `start_succ = anchor / count`, which the delay changes, and the
-size of that is not assessed. The latency cost of the delay is also not
-quantified.
+**Sizing.** At epoch length `W` the gap wanted is `2 * W` rounds. The
+gap's rounds run at the old count, so they hold at least `gap` slots
+whatever the count is, and a round-valued parameter therefore suffices —
+it need not depend on the count.
 
-### 4.2 Liveness over a frame is not attempted
+**Cost to the arc.** About fifty lines across nine files. Agreement (BN3)
+is untouched in substance: three bounds move from equalities to
+inequalities and `omega` closes them, and it still depends on `propext`
+and `Quot.sound` alone. Progress (BN8) carries the rest, because a
+configuration's range now extends over the gap and the slots there must
+be decided, so the horizon grows by the gap at each configuration:
+
+    horizon P R c K = K * (P.interval + 1 + c + P.gap) + c + R.waveLength
+
+with `ProgressStmt`'s bound and `everyHeight_bound`'s invariant
+following. BN14 is restated in terms of the anchor's round rather than
+`start (k + 1)`, which it happened to equal at `gap = 0`; its docstring
+already read "two rounds below the anchor".
+
+**Cost to a deployment.** Each configuration is `gap` rounds longer, so
+the update rule reacts that much later. `W` small keeps `2 * W` small,
+and the choice is a tuning question rather than a structural one.
+
+## 5. Several leaders per round
+
+`Policy.inj` stated that the base schedule places one leader per round,
+and `Slots.keyed` then held whatever the policy did, because the rounds
+separated the slots by themselves. A composition with a count-varying
+mechanism contradicts that, so the clause the reassignment owes is now
+explicit, as `Policy.keyed`, with `slotsOfKeyed` the induced schedule
+under it and `PickKeyed` the same law at every count up to a bound.
+Carried across `Adaptive/{Basic,Policy,Run,Liveness,Growth,Joiner}.lean`,
+`Integration/Joiner.lean` and the witness.
+
+## 6. What remains
+
+### 6.1 Liveness over a frame
 
 `frameRun_agree` is safety alone. `Closes`, `extend`, `genesis` and
 `every_height` exist only in the superseded `OneEpoch` shape. Removing
@@ -148,34 +176,16 @@ the alignment restrictions should make them easier rather than harder,
 since the anchor is no longer required to arrive inside a fixed window,
 but none of it is proved.
 
-### 4.3 `FrameRun` and `PartialRun` are two run notions — settled
+### 6.2 The bridge to Barnacle's numbering
 
-They are, and neither subsumes the other, by §4.4. `FrameRun` is not a
-second run of the adaptive arc but the run of a mechanism that varies the
-widths, so it lives in `Integration/AdaptiveFrame.lean`;
-`Adaptive/Run.lean` keeps the general run over a fixed `Slots`.
+`FrameRun` names no Barnacle. Connecting them means relating Barnacle's
+per-configuration slot numbering to the frame's global one through
+`Frame.index`, and proving that `Params.gap` discharges `hwd`. The
+facilities exist; the bridge does not. The alternative, restating
+Barnacle over the frame, is three times the size of restating the
+adaptive arc and is not proposed.
 
-### 4.4 A frame cannot represent every schedule — settled
-
-`Frame` asks `0 < width r` at every round, so it cannot express a
-schedule that skips rounds. `Slots.uniform p m` at period `p > 1` does
-skip them, and the witnesses use it: `uniformSingle 3` in
-`LeanDagTest/Mysticeti/Model.lean`, `Quantitative.lean` and
-`Growth.lean`, `uniformSingle 2` in `LeanDagTest/Hybrid/Tight.lean`, and
-`uniformSingle 3` in `LeanDagTest/Hydrozoan/LivenessHardening.lean`.
-
-Admitting empty rounds was considered and rejected. `Frame.cum` is then
-only monotone, and `frameRun_agree` needs it strictly monotone at exactly
-the boundary: a run of empty rounds below the window's end leaves the
-widths there to be settled by verdicts the induction is deciding.
-Leaving them unconstrained is not available either, since a width at an
-empty round shifts the numbering above it.
-
-So `Frame` is the presentation of a schedule with a leader in every
-round, which is what a width-varying mechanism produces, and `Slots`
-remains the general notion.
-
-### 4.5 Is `FrameRun.closed` satisfiable?
+### 6.3 Is `FrameRun.closed` satisfiable?
 
 It asks `DecidedFrameBelow` at bound `F.roundOf (W * (epoch + 2))`.
 `decided_of_frame_agree` supplies *some* bound; nothing yet says a
@@ -185,15 +195,7 @@ round bounds and the commit gap shown to fit inside two epochs. That is
 the adaptive arc's standing assumption, so it should hold, but it is
 unproved in this setting.
 
-### 4.6 The bridge to Barnacle's numbering
-
-`FrameRun` names no Barnacle. Connecting them means relating Barnacle's
-per-configuration slot numbering to the frame's global one through
-`Frame.index`. The facility exists; the bridge does not. The alternative,
-restating Barnacle over the frame, is three times the size of restating
-the adaptive arc and is not proposed.
-
-### 4.7 The joiner and conservativity
+### 6.4 The joiner and conservativity
 
 `epochOf_add_of_dvd` states that a numbering starting at an aligned
 offset agrees with the original about epochs, and `Adaptive/Joiner.lean`
@@ -202,14 +204,34 @@ offset is a slot offset into varying widths, and whether the lemma
 survives is not assessed. `Policy.const_run_decided` anchors the
 definitions and must still collapse correctly at the constant frame.
 
-## 5. Carried over from the superseded branches
+## 7. Questions settled, and how
 
-Proved, and to be reused rather than reproved:
+**A frame gives every round a leader.** Admitting empty rounds was
+considered and rejected: `Frame.cum` is then only monotone, and
+`frameRun_agree` needs it strictly monotone at exactly the boundary,
+where a run of empty rounds below the window's end would leave the widths
+there to be settled by verdicts the induction is deciding. Leaving them
+unconstrained is not available either, since a width at an empty round
+shifts the numbering above it.
 
-* **Done.** `PickKeyed`, `Policy.keyed`, `slotsOfKeyed` — `Policy.inj`
-  stated one leader per round, which the composition contradicts. Carried
-  over across `Adaptive/{Basic,Policy,Run,Liveness,Growth,Joiner}.lean`,
-  `Integration/Joiner.lean` and the witness.
+So a frame does not present a schedule that skips rounds, and
+`Slots.uniform p m` at period `p > 1` does — the witnesses use it:
+`uniformSingle 3` in `LeanDagTest/Mysticeti/{Model,Quantitative,Growth}`,
+`uniformSingle 2` in `LeanDagTest/Hybrid/Tight.lean`, and
+`uniformSingle 3` in `LeanDagTest/Hydrozoan/LivenessHardening.lean`.
+`Slots` remains the general notion.
+
+**`FrameRun` and `PartialRun` are two run notions, and neither subsumes
+the other**, by the paragraph above. `FrameRun` is not a second run of
+the adaptive arc but the run of a mechanism that varies the widths, so it
+lives in `Integration/AdaptiveFrame.lean`; `Adaptive/Run.lean` keeps the
+general run over a fixed `Slots`.
+
+## 8. Carried over from the superseded branches
+
+Reused rather than reproved:
+
+* **Done.** `PickKeyed`, `Policy.keyed`, `slotsOfKeyed` — §5.
 * `config_det`, `anchor_det` — the configuration data and the anchor are
   functions of the verdicts below them.
 * `extend`, `genesis`, `every_height` — the liveness shape, less the
@@ -224,22 +246,36 @@ Superseded, and not to be carried: `base`, `width`, `flat`, `flat_eq`,
 `le_roundUp`, `roundUp_lt`, `delay_lt`, `UpdDivides`, `mixLeader` and its
 laws.
 
-## 6. Labels
+## 9. Labels
 
 The AL labels of `docs/adaptive-leaders.md` are preserved where the
 statement is preserved. Composition results are `I`-labelled, as in
 `docs/integration.md`.
 
-## 7. Order of work
+## 10. Order of work
 
 1. **Done.** §2: the band's round clause, `exists_roundLocal`,
    `sched_frame_local`.
 2. **Done.** §3: `Frame`, `decided_of_frame_agree`, `frameRun_agree`.
-3. **Done.** §4.4 and §4.3: a frame gives every round a leader, and a
-   frame's run lives in `Integration/`.
-4. **Done.** §5's `keyed`, `slotsOfKeyed`, `PickKeyed`.
-5. §4.1: the delayed Barnacle, and the measurement of what the delay
-   costs the rest of the arc. This is the design decision, and it gates
-   the rest.
-6. §4.2 and §4.6: liveness over the frame, and the bridge to Barnacle's
-   numbering. §4.5 and §4.7 are to be settled as they are met.
+3. **Done.** §7's two questions.
+4. **Done.** §5: `keyed`, `slotsOfKeyed`, `PickKeyed`.
+5. **Done.** §4: `Params.gap`, and the arc's absorption of it.
+6. §6.2: the bridge, and `Params.gap` discharging `hwd`. This is what
+   makes the composition a composition rather than two mechanisms with
+   compatible statements, and it is next.
+7. §6.1: liveness over the frame. §6.3 and §6.4 are to be settled as they
+   are met.
+
+## 11. What could still go wrong
+
+**§6.2 may show the gap is the wrong shape.** `hwd` is stated over epochs
+of the global frame, and `Params.gap` in rounds of a configuration. §4's
+sizing argument — that `2 * W` rounds suffice because the gap's rounds
+hold at least `gap` slots — is prose here and Lean nowhere. If it fails,
+the gap becomes count-dependent and `Params` is the wrong place for it.
+
+**Liveness may ask what safety did not.** §3.2 records that safety needs
+no alignment between a width change and an epoch boundary. `Closes` asks
+a configuration to decide its own range, and whether that range interacts
+with the epoch grid is not established; §6.1 and §6.3 are where it would
+appear.
