@@ -75,6 +75,7 @@ import LeanDag.Properties.Arcs.Headline
 import LeanDag.Integration.StackRules
 import LeanDag.Integration.Coverage
 import LeanDag.Integration.AdaptiveFrame
+import LeanDag.Integration.BarnacleFrame
 import LeanDag.Integration.Joiner
 import LeanDag.Integration.Retention
 import LeanDag.Integration.ReGenesis

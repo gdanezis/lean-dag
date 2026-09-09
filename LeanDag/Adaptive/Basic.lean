@@ -34,6 +34,16 @@ theorem epochOf_mono (W : ℕ) {j k : ℕ} (h : j ≤ k) :
     epochOf W j ≤ epochOf W k :=
   Nat.div_le_div_right h
 
+/-- **Two epochs of slots are two epochs.** What a gap counted in slots
+buys a clause counted in epochs. -/
+theorem epochOf_add_two {W x y : ℕ} (hW : 0 < W) (h : x + 2 * W ≤ y) :
+    epochOf W x + 2 ≤ epochOf W y := by
+  have h1 : epochOf W (x + 2 * W) ≤ epochOf W y := epochOf_mono W h
+  have h2 : epochOf W (x + 2 * W) = epochOf W x + 2 := by
+    simp only [epochOf]
+    rw [Nat.mul_comm 2 W, Nat.add_mul_div_left _ _ hW]
+  omega
+
 /-- **Epoch alignment.** When a base slot is a whole number of epochs,
 a numbering that starts there is the original shifted by a constant,
 and every epoch window corresponds. This is what a cut must respect

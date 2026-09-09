@@ -150,6 +150,24 @@ theorem toSlots_leader_index {asg : ℕ → ℕ → Validator} {hkey} {r i : ℕ
   rw [toSlots_leader, F.roundOf_index hi, index]
   simp
 
+
+/-- **`g` rounds hold at least `g` slots**, since every round holds one.
+This is what lets a gap stated in rounds bound a gap in slots, whatever
+the widths are. -/
+theorem add_le_cum_add (a g : ℕ) : F.cum a + g ≤ F.cum (a + g) := by
+  induction g with
+  | zero => simp
+  | succ j ih =>
+      have hw := F.width_pos (a + j)
+      have he : a + (j + 1) = (a + j) + 1 := by omega
+      rw [he, cum_succ]
+      omega
+
+/-- And so a gap of `g` rounds below a round puts that round's first slot
+at least `g` slots up. -/
+theorem cum_gap {a b g : ℕ} (h : a + g ≤ b) : F.cum a + g ≤ F.cum b :=
+  le_trans (F.add_le_cum_add a g) (F.cum_mono h)
+
 end Frame
 
 /-- **The constant frame**: every round holds `m` slots, which is
