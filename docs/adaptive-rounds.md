@@ -7,8 +7,9 @@
 > and whether the surrounding prose is faithful to what is proved, has
 > only human-plus-LLM review behind it. Read critically.
 
-> **Status (September 2026).** §2 to §5 and §6.2 are built and on this
-> branch; §6.1, §6.3 and §6.4 are what remain. The composition on branches
+> **Status (September 2026).** §2 to §5, §6.2, §6.3 and §6.4 are built or
+> settled on this branch, and §6.1 is built but for the derivation of
+> `Progresses` from a protocol's own liveness. The composition on branches
 > `compose-barnacle-hammerhead` and `compose-cadence` is superseded, and
 > retained only for the proofs §8 names.
 
@@ -199,13 +200,22 @@ verdicts and the assignment are not extended at all — they are total
 functions of which the shorter run said nothing above `F.cum (start K)`,
 so the extension adds clauses rather than data.
 
-**What is not built is `every_height`**: iterating `extend` from
-`genesis`. Each step must supply the clauses `extend` asks — that the
-configuration closes, that the assignment is the policy's and the new
-slots decided at the larger epoch height — and must advance
-`cover_of_horizon`, whose condition relates the configuration height to
-the epoch height. Both are what the protocol's own liveness gives; the
-work is threading them through the recursion.
+`Progresses` is what the recursion consumes — a run that has reached its
+horizon extends to one that has — and `Composed.every_height` iterates
+it: from a run that has closed one configuration, a run of every height
+exists that has. `Composed.extend` is how a protocol discharges
+`Progresses`, since `extend`'s hypotheses are exactly what a
+configuration owes.
+
+**What is not built is the derivation of those hypotheses from a
+protocol's own liveness.** `extend` asks that the configuration closes,
+that the assignment is the policy's, and that the new slots are decided;
+`Adaptive/Liveness.lean` derives the corresponding clauses for a fixed
+schedule from `LeaderCommits`, `Descends` and `PlacesRuns`, in 318 lines,
+and the frame version of that construction is the remaining work. It is
+the same argument at a frame rather than a new one, and nothing in it is
+open — but it is not small, and it is what stands between
+`Progresses` as a hypothesis and `Progresses` as a theorem.
 
 ### 6.2 The bridge to Barnacle's numbering — built
 
@@ -285,14 +295,18 @@ together with a schedule, and the adaptive arc's standing assumption read
 at a frame — it is an assumption in both settings, not a new obligation
 the composition creates.
 
-### 6.4 The joiner and conservativity
+### 6.4 The joiner and conservativity — settled
 
-`epochOf_add_of_dvd` states that a numbering starting at an aligned
-offset agrees with the original about epochs, and `Adaptive/Joiner.lean`
-uses it for a validator that joins mid-execution; under a frame the
-offset is a slot offset into varying widths, and whether the lemma
-survives is not assessed. `Policy.const_run_decided` anchors the
-definitions and must still collapse correctly at the constant frame.
+Neither is disturbed. `Adaptive/` names `Frame` nowhere: the frame is a
+presentation used in `Integration/`, and the adaptive arc keeps its run
+over a fixed `Slots` (§7). So `epochOf_add_of_dvd`,
+`Adaptive/Joiner.lean`'s `joiner_run_decided_agree` and
+`Policy.const_run_decided` stand unchanged, and each still depends on
+`propext` and `Quot.sound` alone.
+
+A joiner *of a composed run*, and conservativity of a composed run at the
+unit frame, would be new results rather than repairs, and neither is
+attempted.
 
 ## 7. Questions settled, and how
 

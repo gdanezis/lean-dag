@@ -596,8 +596,13 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
           (W * (epochOf W ((Rn.F.extend (Rn.start K) (Rn.count K)
             (Rn.count_pos K)).index r i) + 2)))
         V ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i)
-        (Rn.vdct ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i))) :
-    Nonempty (Composed (R := R) W P pick upd U V (K + 1) H') := by
+        (Rn.vdct ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i)))
+    (hhor' : W * (H' + 1) ≤
+      (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).cum
+        ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).roundOf
+          (anchorOf hcl) + P.gap)) :
+    Nonempty { Rn' : Composed (R := R) W P pick upd U V (K + 1) H' //
+      W * (H' + 1) ≤ Rn'.F.cum (Rn'.start (K + 1)) } := by
   classical
   set F' := Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K) with hF'
   set Rn₁ := Rn.reframe hW (Rn.count_pos K) hK hhor hkeyed with hRn1
@@ -617,7 +622,7 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
   have ha_lo : ∀ j, j ≠ K → (if j = K then a else Rn.anchor j) = Rn.anchor j :=
     fun j hj => if_neg hj
   have ha_hi : (if K = K then a else Rn.anchor K) = a := if_pos rfl
-  refine ⟨{
+  refine ⟨⟨{
     start := fun k => if k ≤ K then Rn.start k else F'.roundOf a + P.gap
     count := fun k => if k ≤ K then Rn.count k else nxt.1
     backoff := fun k => if k ≤ K then Rn.backoff k else nxt.2
@@ -640,7 +645,7 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     update := ?upd
     keyed := Rn₁.keyed
     coherent := hcoh
-    closed := hclosed }⟩
+    closed := hclosed }, by simpa only [if_neg (show ¬ (K + 1 ≤ K) by omega)] using hhor'⟩⟩
   case cnt_eq =>
     intro k hk r hlo hhi
     rcases Nat.lt_or_ge k K with h | h
@@ -696,7 +701,40 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
       subst hBA
       rfl
 
+
+/-- **What the recursion consumes.** A run that has reached its horizon
+extends to one that has. `Composed.extend` is how a protocol discharges
+it: the clauses there are what a configuration owes, and this is that
+obligation stated once for every height. -/
+def Progresses (W : ℕ) (P : Params)
+    (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator)
+    (upd : ℕ → ℕ → (U : R.Universe) → R.View U → BlockId → ℕ × ℕ)
+    (U : R.Universe) (V : R.View U) : Prop :=
+  ∀ K H (Rn : Composed (R := R) W P pick upd U V K H), 0 < K →
+    W * (H + 1) ≤ Rn.F.cum (Rn.start K) →
+    ∃ H', Nonempty { Rn' : Composed (R := R) W P pick upd U V (K + 1) H' //
+      W * (H' + 1) ≤ Rn'.F.cum (Rn'.start (K + 1)) }
+
+/-- **Every height.** From a run that has closed one configuration and
+reached its horizon, a run of every height exists that has. -/
+theorem every_height (hp : Progresses (R := R) W P pick upd U V) {H₁ : ℕ}
+    (Rn₁ : Composed (R := R) W P pick upd U V 1 H₁)
+    (hh : W * (H₁ + 1) ≤ Rn₁.F.cum (Rn₁.start 1)) :
+    ∀ K, 0 < K → ∃ H, Nonempty { Rn : Composed (R := R) W P pick upd U V K H //
+      W * (H + 1) ≤ Rn.F.cum (Rn.start K) } := by
+  intro K
+  induction K with
+  | zero => intro h; omega
+  | succ j ih =>
+      intro _
+      rcases Nat.eq_zero_or_pos j with h0 | h0
+      · subst h0; exact ⟨H₁, ⟨⟨Rn₁, hh⟩⟩⟩
+      · obtain ⟨H, hne⟩ := ih h0
+        obtain ⟨⟨Rn, hH⟩⟩ := hne
+        exact hp j H Rn h0 hH
+
 end Composed
+
 
 
 
