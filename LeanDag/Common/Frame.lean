@@ -182,6 +182,19 @@ at least `g` slots up. -/
 theorem cum_gap {a b g : ℕ} (h : a + g ≤ b) : F.cum a + g ≤ F.cum b :=
   le_trans (F.add_le_cum_add a g) (F.cum_mono h)
 
+
+/-- **Bounded widths bound the slots a stretch of rounds holds.** -/
+theorem cum_add_le_of_bounded {F : Frame} {M : ℕ} (hM : ∀ r, F.width r ≤ M) (r n : ℕ) :
+    F.cum (r + n) ≤ F.cum r + M * n := by
+  induction n with
+  | zero => simp
+  | succ j ih =>
+      have he : r + (j + 1) = (r + j) + 1 := by omega
+      rw [he, cum_succ]
+      have := hM (r + j)
+      have : M * (j + 1) = M * j + M := by rw [Nat.mul_succ]
+      omega
+
 end Frame
 
 /-- **The constant frame**: every round holds `m` slots, which is

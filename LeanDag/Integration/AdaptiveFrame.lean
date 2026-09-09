@@ -1,5 +1,5 @@
 import LeanDag.Properties.Derived.Frame
-import LeanDag.Adaptive.Basic
+import LeanDag.Adaptive.Liveness
 /-!
 # The adaptive policy over a frame whose widths vary
 
@@ -192,6 +192,49 @@ theorem closed_of_settles {W : ℕ} {F : Frame} {a : ℕ → ℕ → Validator}
         (F.roundOf (W * (epochOf W (F.index r i) + 2))) V (F.index r i)
         (vdct (F.index r i)) :=
   fun r i hi hep => hs _ _ (hd r i hi hep)
+
+namespace Frame
+
+
+/-- **A frame whose rounds are at most `M` wide spans a wave in
+`M * (wave + 1)` slots.** This is what `Descends` needs of a schedule:
+the last of `c` consecutive slots must be eligible for everything below
+the first, and at a frame that holds once the widths are bounded — which
+they are under a count-varying mechanism, by its own bound on the
+count. -/
+theorem spansEligible_toSlots {Validator : Type*} {F : Frame} {M : ℕ}
+    (hM : ∀ r, F.width r ≤ M) {asg : ℕ → ℕ → Validator}
+    {hk : ∀ r i j, i < F.width r → j < F.width r → asg r i = asg r j → i = j}
+    {wave c : ℕ} (hc : M * (wave + 1) ≤ c) :
+    SpansEligibleAt (S := F.toSlots asg hk) wave c := by
+  intro b i hib
+  show F.roundOf i + wave < F.roundOf (b + c - 1)
+  have hlo : F.cum (F.roundOf i) ≤ i := F.cum_roundOf_le i
+  have hb : F.cum (F.roundOf i + (wave + 1)) ≤ F.cum (F.roundOf i) + M * (wave + 1) :=
+    Frame.cum_add_le_of_bounded hM _ _
+  have hkey : F.cum (F.roundOf i + wave + 1) ≤ b + c - 1 := by
+    have he : F.roundOf i + wave + 1 = F.roundOf i + (wave + 1) := by omega
+    rw [he]; omega
+  have := F.cum_le_iff_le_roundOf.mp hkey
+  omega
+
+end Frame
+
+/-- **The arc's descent applies at a frame's schedule unchanged.**
+`descends_slotsOf` is generic in the round structure; all a frame has to
+supply is the spanning clause, and bounded widths supply it. So the
+construction that produces a run's verdicts — `Adaptive.epoch_closes` and
+what rests on it — is reused here rather than restated. -/
+theorem descends_frame {F : Frame} {asg : ℕ → ℕ → Validator}
+    {hkf : ∀ r i j, i < F.width r → j < F.width r → asg r i = asg r j → i = j}
+    {wave M c : ℕ} (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
+    (hc : 0 < c) (hM : ∀ r, F.width r ≤ M) (hspan : M * (wave + 1) ≤ c)
+    (a : ℕ → Validator)
+    (h : ∀ k₁ k₂, (F.toSlots asg hkf).slotRound k₁ = (F.toSlots asg hkf).slotRound k₂ →
+      a k₁ = a k₂ → k₁ = k₂) :
+    Descends R (slotsOfKeyed (S := F.toSlots asg hkf) a h) c :=
+  Adaptive.descends_slotsOf (S := F.toSlots asg hkf) hind hc
+    (Frame.spansEligible_toSlots hM hspan) a h
 
 end Integration
 end LeanDag

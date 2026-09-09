@@ -224,11 +224,22 @@ frame and it is `rfl` — and `hag`, that the two assignments agree below,
 follows from `adapted` once the verdicts do.
 
 **What is left is that the protocol decides the new configuration's
-slots.** That is `Decided` at the composed schedule, and it is the same
-assumption the adaptive arc already makes, discharged there from
-`LeaderCommits`, `Descends` and `PlacesRuns`. With it,
-`closed_of_settles` gives `extend`'s closure clause and
-`closes_of_leaderCommits` gives its anchor clause. No circle remains.
+slots**, which is `Decided` at the composed schedule. The adaptive arc's
+own construction supplies it, and applies here unchanged:
+`Adaptive.descends_slotsOf` and `Adaptive.epoch_closes` are generic in
+the round structure, and a frame's schedule is a `Slots` like any other.
+
+The one thing a frame has to supply is the spanning clause — that the
+last of `c` consecutive slots is eligible for everything below the first
+— since at a frame `c` slots need not span any rounds at all.
+`Frame.spansEligible_toSlots` supplies it from bounded widths, at
+`c ≥ M * (wave + 1)`, and a count-varying mechanism bounds its widths by
+its own bound on the count. `descends_frame` is the arc's descent read at
+a frame, and it is `descends_slotsOf` applied, not restated.
+
+So what remains is the fairness clause `PlacesRuns` at the composed
+policy, which is an assumption in both settings and the one liveness
+prices.
 
 ### 6.2 The bridge to Barnacle's numbering — built
 
