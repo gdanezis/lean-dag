@@ -1,5 +1,5 @@
+import LeanDag.Common.CausalHistory
 import LeanDag.SafeSkip.Basic
-import LeanDag.Mysticeti.Liveness
 /-!
 # The lifted view, and reachability across the fill
 
