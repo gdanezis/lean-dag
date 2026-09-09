@@ -15854,7 +15854,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 471 theorems the body or Appendix A names, each
+The 472 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -21080,6 +21080,51 @@ theorem agree (hR : Properties.Agree R) (hW : 0 < W) (hgap : P.gap = 2 * W)
 ```
 
 **Safety of the composition.** Two composed runs over one universe and view have the same verdicts: Barnacle's counts and the policy's leaders are both functions of the verdicts, and `Params.gap` is what puts the counts far enough back to be read where they are needed.
+
+#### `step`
+
+*theorem, `Integration.CompRun.lean`*
+
+```lean
+theorem step (hag : Agree R)
+    (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 0 < K)
+    (hhor : W * (H + 1) ≤ Rn.F.cum (Rn.start K))
+    (hkeyed : ∀ r, Rn.start K < r → ∀ i j, i < Rn.count K → j < Rn.count K →
+      Rn.asg r i = Rn.asg r j → i = j)
+    (hupd : ∀ b A, 0 < (upd (Rn.count K) b U V A).1)
+    (hupdle : ∀ b A, (upd (Rn.count K) b U V A).1 ≤ P.maxLeaders) (hgap : 0 < P.gap)
+    (Pol : Adaptive.Policy R) (hPW : Pol.W = W) (hPp : Pol.pick = pick)
+    (hS : S = (Rn.reframe hW (Rn.count_pos K) (Rn.count_le K) hK hhor hkeyed).F.toSlots
+      (Rn.reframe hW (Rn.count_pos K) (Rn.count_le K) hK hhor hkeyed).asg
+      (Rn.reframe hW (Rn.count_pos K) (Rn.count_le K) hK hhor hkeyed).keyed)
+    {H' : ℕ} (hHH : H ≤ H') (A : Adaptive.PartialRun Pol U V H')
+    (hset : SettlesInTwoEpochs R W
+      (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K))
+      (fun r i => A.assign ((Rn.F.extend (Rn.start K) (Rn.count K)
+        (Rn.count_pos K)).index r i))
+      (fun r i j hi hj he => by
+        have hSr : (@Slots.slotRound Validator S)
+            = (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).roundOf :=
+          congrArg (@Slots.slotRound Validator) hS
+        have hri := (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).roundOf_index hi
+        have hrj := (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).roundOf_index hj
+        have hk := A.keyed _ _ (by rw [hSr, hri, hrj]) he
+        simp only [Frame.index] at hk
+        omega) V)
+    (hcl : Closes P (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K))
+      A.vdct (Rn.start K))
+    (hanc : epochOf W (anchorOf hcl) < H')
+    (hhor' : W * (H' + 1) ≤
+      (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).cum
+        ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).roundOf
+          (anchorOf hcl) + P.gap)) :
+    Nonempty { Rn' : Composed (R := R) W P pick upd U V (K + 1) H' //
+      W * (H' + 1) ≤ Rn'.F.cum (Rn'.start (K + 1)) }
+```
+
+**The step, taken from the arc's own run.** `A` is an adaptive run over the extended frame — what `Adaptive.exists_partialRun` produces — and its assignment and verdicts are the next configuration's.
+
+Nothing has to be reconciled across the boundary. The agreement `extend` asks is `partialRun_agree`'s, `anchor_closed` puts the anchors it consults inside that range, and the assignment it replaces wholesale.
 
 #### `not_synchronisedOn_copyFill_hz`
 

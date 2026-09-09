@@ -255,6 +255,14 @@ reconciliation by hand. `anchor_decided` is the fact underneath
 settled, which it has to be, since the configuration reads that block to
 compute the next count.
 
+`Composed.step` is the whole of it: given an adaptive run over the
+extended frame — what `Adaptive.exists_partialRun` produces — a composed
+run of height `K` that has reached its horizon extends to one of height
+`K + 1` that has. Nothing is reconciled across the boundary. The
+agreement `extend` asks is `partialRun_agree`'s, `anchor_closed` puts the
+anchors it consults inside that range, and the assignment it replaces
+wholesale. `step` discharges `Progresses`, which `every_height` iterates.
+
 **What is left is that the protocol decides the new configuration's
 slots**, which is `Decided` at the composed schedule. The adaptive arc's
 own construction supplies it, and applies here unchanged:
