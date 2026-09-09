@@ -3388,8 +3388,12 @@ content: window references above the cut stay in the window, references *at*
 the cut are exactly the blocks `accepted_mem_base` puts in the base), and:
 
 ```lean
-theorem bootstrap_agree … (hJ : Decided … (joinView …) k jv)
-    (hV : Decided U V (d + k) fv) : jv = fv
+theorem bootstrap_agree {R : Properties.DagRule Validator BlockId Payload}
+    (c : R.OnRecord ValidWrt (Correct : Finset Validator) …)
+    (ha : Properties.Agree R) (hb : Properties.Banded R) …
+    (hJ : R.Decided (S.chop G d hd)
+      (c.chop_ofRec U True.intro ▸ c.ofView (joinView …)) k jv)
+    (hV : R.Decided S V (d + k) fv) : jv = fv
 ```
 
 — any decision reached from base-plus-window equals any full-history
@@ -15601,6 +15605,12 @@ structure DagRule.OnRecord (R : DagRule Validator BlockId Payload)
   block_to : ∀ U, (toRec U).block = R.block U
   ids_of : ∀ W h, R.ids (ofRec W h) = W.ids
   block_of : ∀ W h, R.block (ofRec W h) = W.block
+  /-- **The maps are inverse on the record side.** Reading a record as a
+  universe and back is the identity, which is what lets a construction
+  that starts on the record — a joiner assembling a view out of what it
+  fetched — be read as the rule's. Every carrier here discharges it by
+  `rfl`. -/
+  toRec_ofRec : ∀ W h, toRec (ofRec W h) = W
   /-- A view, as a view of the record. -/
   toView : ∀ {U : R.Universe}, R.View U → (toRec U).View
   /-- A view of a record, as a view of the universe it makes. -/
@@ -17385,18 +17395,21 @@ theorem card_joinIds_le {κ Λ R m t : ℕ} (hbyz : ByzBudget D κ)
 *theorem, `GC.Bootstrap.lean`*
 
 ```lean
-theorem bootstrap_agree [S : Slots Validator] {d : ℕ}
-    (hd : G ≤ S.slotRound d) {R m t : ℕ} (hs : Synchronised U R)
-    (hw : w ∈ (Correct : Finset Validator)) (hcar : Populated U (m + 1))
-    (hpop : Populated U t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t)
-    {V : View Validator BlockId Payload U} {k : ℕ} {jv fv : Option BlockId}
-    (hJ : Decided (S := S.chop G d hd) (chop U G)
-      (joinView (D := D) hs hw hcar hpop hR hmt) k jv)
-    (hV : Decided U V (d + k) fv) :
-    jv = fv
+theorem bootstrap_agree {R : Properties.DagRule Validator BlockId Payload}
+    (c : R.OnRecord ValidWrt (Correct : Finset Validator)
+      (BlockRecord.Any (P := ValidWrt) (honest := (Correct : Finset Validator))))
+    (ha : Properties.Agree R) (hb : Properties.Banded R)
+    [S : Slots Validator] {d : ℕ} (hd : G ≤ S.slotRound d)
+    {R' m t : ℕ} (hs : Synchronised U R') (hw : w ∈ (Correct : Finset Validator))
+    (hcar : Populated U (m + 1)) (hpop : Populated U t) (hR : R' ≤ m + 1) (hmt : m + 2 ≤ t)
+    {V : R.View (c.ofRec U True.intro)} {k : ℕ} {jv fv : Option BlockId}
+    (hJ : R.Decided (S.chop G d hd)
+      (c.chop_ofRec U True.intro ▸
+        c.ofView (h := True.intro) (joinView (D := D) (G := G) hs hw hcar hpop hR hmt)) k jv)
+    (hV : R.Decided S V (d + k) fv) : jv = fv
 ```
 
-**G12 (bootstrap safety).** A joiner that assembles its view from the attested base and a correct peer's window, and runs Mysticeti on the truncation, never conflicts with any full-history validator on any slot. The composition *is* the proof: `joinView` is a view of `chop U G`, and cross-cut agreement never asked whose view it was.
+**G12 (bootstrap safety).** A joiner that assembles its view from the attested base and a correct peer's window, and runs the rule on the truncation, never conflicts with any full-history validator on any slot. The composition *is* the proof: `joinView` is a view of `chop U G`, and cross-cut agreement never asked whose view it was. Stated for any rule whose universes are the block universes — the round trip of its carrier is what reads the joiner's view, built on the record, as the rule's.
 
 #### `card_serve_le`
 

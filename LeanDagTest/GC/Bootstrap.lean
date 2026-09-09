@@ -1,3 +1,4 @@
+import LeanDag.Mysticeti.Record
 import LeanDag.GC.Bootstrap
 import LeanDagTest.DoS.Exclusion
 /-!
@@ -168,7 +169,8 @@ example {jv fv : Option (Fin 20)}
         (uexcl_populated 3 (by omega)) (uexcl_populated 4 (by omega))
         (by omega) (by omega)) 0 jv)
     (hV : Decided Uexcl (View.full Uexcl) 1 fv) : jv = fv :=
-  bootstrap_agree (by decide)
+  bootstrap_agree MysticetiProperties.onRecord MysticetiProperties.agree
+    MysticetiProperties.banded (by decide)
     (SynchronisedOn.mono (by decide) uexcl_synchronised) (by decide)
     (uexcl_populated 3 (by omega)) (uexcl_populated 4 (by omega))
     (by omega) (by omega) hJ hV

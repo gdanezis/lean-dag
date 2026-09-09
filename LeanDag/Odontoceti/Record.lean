@@ -37,6 +37,7 @@ def onRecord :
   block_to := fun _ => rfl
   ids_of := fun _ _ => rfl
   block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
   toView := fun V => V
   ofView := fun V => V
   viewIds_to := fun _ => rfl

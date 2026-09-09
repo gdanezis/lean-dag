@@ -2,7 +2,7 @@ import LeanDag.GC.Window
 import LeanDag.GC.AttestedBase
 import LeanDag.GC.ChopDecided
 import LeanDag.Properties.Arcs.GC
-import LeanDag.Mysticeti.Record
+import LeanDag.Properties.Arcs.Record
 /-!
 # Bootstrap: the joiner's view, assembled and bounded
 
@@ -160,20 +160,25 @@ theorem joinView_ids {R m t : ℕ} (hs : Synchronised U R)
       joinIds D w m t G := rfl
 
 /-- **G12 (bootstrap safety).** A joiner that assembles its view from the
-attested base and a correct peer's window, and runs Mysticeti on the
+attested base and a correct peer's window, and runs the rule on the
 truncation, never conflicts with any full-history validator on any slot.
 The composition *is* the proof: `joinView` is a view of `chop U G`, and
-cross-cut agreement never asked whose view it was. -/
-theorem bootstrap_agree [S : Slots Validator] {d : ℕ}
-    (hd : G ≤ S.slotRound d) {R m t : ℕ} (hs : Synchronised U R)
-    (hw : w ∈ (Correct : Finset Validator)) (hcar : Populated U (m + 1))
-    (hpop : Populated U t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t)
-    {V : View Validator BlockId Payload U} {k : ℕ} {jv fv : Option BlockId}
-    (hJ : Decided (S := S.chop G d hd) (chop U G)
-      (joinView (D := D) hs hw hcar hpop hR hmt) k jv)
-    (hV : Decided U V (d + k) fv) :
-    jv = fv :=
-  MysticetiProperties.decided_agree_chop hd hJ hV
+cross-cut agreement never asked whose view it was. Stated for any rule
+whose universes are the block universes — the round trip of its carrier
+is what reads the joiner's view, built on the record, as the rule's. -/
+theorem bootstrap_agree {R : Properties.DagRule Validator BlockId Payload}
+    (c : R.OnRecord ValidWrt (Correct : Finset Validator)
+      (BlockRecord.Any (P := ValidWrt) (honest := (Correct : Finset Validator))))
+    (ha : Properties.Agree R) (hb : Properties.Banded R)
+    [S : Slots Validator] {d : ℕ} (hd : G ≤ S.slotRound d)
+    {R' m t : ℕ} (hs : Synchronised U R') (hw : w ∈ (Correct : Finset Validator))
+    (hcar : Populated U (m + 1)) (hpop : Populated U t) (hR : R' ≤ m + 1) (hmt : m + 2 ≤ t)
+    {V : R.View (c.ofRec U True.intro)} {k : ℕ} {jv fv : Option BlockId}
+    (hJ : R.Decided (S.chop G d hd)
+      (c.chop_ofRec U True.intro ▸
+        c.ofView (h := True.intro) (joinView (D := D) (G := G) hs hw hcar hpop hR hmt)) k jv)
+    (hV : R.Decided S V (d + k) fv) : jv = fv :=
+  c.decided_agree_chop ha hb hd hJ hV
 
 /-! ## G7 — the windowed relay obligation -/
 
