@@ -16,12 +16,18 @@ change and an epoch boundary, no divisibility, and no change to the
 numbering the policy reads, since a frame has one numbering and nothing
 is renumbered when a width changes.
 
+`Frame` asks a leader of every round, so it does not present a schedule
+that skips rounds — `Slots.uniform p m` at period `p > 1` does, and the
+witnesses use it. This is therefore the run of a mechanism that varies
+the widths, not a second run of the arc: `Adaptive/Run.lean` keeps the
+general one over a fixed `Slots`, and neither subsumes the other.
+
 **Trusted core: `FrameRun` is a definition.** What it asks of a rule is
 `Properties.Agree` and nothing else.
 -/
 
 namespace LeanDag
-namespace Adaptive
+namespace Integration
 open Properties
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
@@ -137,5 +143,5 @@ theorem frameRun_agree (hR : Agree R) (hW : 0 < W)
     have d₂ := Rn'.decided_self g hgH
     exact hR _ V V g _ _ d₁ d₂
 
-end Adaptive
+end Integration
 end LeanDag

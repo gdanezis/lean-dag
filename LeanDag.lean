@@ -53,7 +53,6 @@ import LeanDag.Reactive.Delivers
 import LeanDag.Reactive.Odontoceti
 import LeanDag.Reactive.MysticetiProperties
 import LeanDag.Adaptive.Basic
-import LeanDag.Adaptive.Frame
 import LeanDag.Adaptive.Policy
 import LeanDag.Adaptive.Run
 import LeanDag.Adaptive.Joiner
@@ -75,6 +74,7 @@ import LeanDag.Properties.Arcs.Stack
 import LeanDag.Properties.Arcs.Headline
 import LeanDag.Integration.StackRules
 import LeanDag.Integration.Coverage
+import LeanDag.Integration.AdaptiveFrame
 import LeanDag.Integration.Joiner
 import LeanDag.Integration.Retention
 import LeanDag.Integration.ReGenesis

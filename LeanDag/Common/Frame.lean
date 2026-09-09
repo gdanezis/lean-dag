@@ -6,9 +6,18 @@ namespace LeanDag
 variable {Validator : Type*}
 
 /-- **A round structure given by its widths.** Round `r` holds
-`width r` slots. Barnacle varies the widths and leaves the leaders
-alone; Hammerhead varies the leaders and leaves the widths alone, so
-this is the half of a schedule one mechanism owns. -/
+`width r` slots. One mechanism varies the widths and leaves the leaders
+alone, another varies the leaders and leaves the widths alone, so this is
+the half of a schedule one of them owns.
+
+Every round holds a slot. A frame therefore does not present a schedule
+that skips rounds, and `Slots.uniform p m` at period `p > 1` does skip
+them. Admitting empty rounds was considered and rejected: `cum` is then
+only monotone, and the agreement argument for a varying frame
+(`Integration/AdaptiveFrame.lean`) needs it strictly monotone at exactly
+the boundary — a run of empty rounds below the window's end would leave
+the widths there to be settled by verdicts the induction is deciding.
+`Slots` remains the general notion. -/
 structure Frame where
   /-- The number of slots round `r` holds. -/
   width : ℕ → ℕ
