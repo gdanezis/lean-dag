@@ -66,11 +66,11 @@ theorem partialRun_agree_extends (hext : Extends R U U')
       refine P.adapted U' V' V' A.vdct A'.vdct m (fun j hj => ?_)
       exact ih (epochOf P.W j) (by omega) j rfl (by omega)
     -- The smaller run's verdict, persisted to the larger view.
-    have h₁ : R.Decided (slotsOf P.inj A.assign) V' k (A.vdct k) :=
+    have h₁ : R.Decided (slotsOfKeyed A.assign A.keyed) V' k (A.vdct k) :=
       hp _ U U' hext V V' hsub k _ (A.closed k (by omega)).toDecided
     -- The larger run's verdict, transported to the smaller run's schedule.
-    have h₂ : R.Decided (slotsOf P.inj A.assign) V' k (A'.vdct k) :=
-      ((A'.closed k (by omega)).reschedule (S' := slotsOf P.inj A.assign) rfl
+    have h₂ : R.Decided (slotsOfKeyed A.assign A.keyed) V' k (A'.vdct k) :=
+      ((A'.closed k (by omega)).reschedule (S' := slotsOfKeyed A.assign A.keyed) rfl
         (fun m hm => hassign m hm)).toDecided
     exact ha _ V' V' k _ _ h₁ h₂
 

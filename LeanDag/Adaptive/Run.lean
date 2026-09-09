@@ -40,10 +40,15 @@ structure PartialRun (P : Policy R) (U : R.Universe) (V : R.View U) (E : ℕ) wh
   assign : ℕ → Validator
   /-- The verdicts. -/
   vdct : ℕ → Option BlockId
+  /-- **The assignment is a lawful schedule.** Under one leader per
+  round the rounds separate slots whatever the assignment names, and
+  this is free; under multiple leaders a run must exhibit an assignment
+  that does not collide two slots of one round onto one validator. -/
+  keyed : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → assign k₁ = assign k₂ → k₁ = k₂
   /-- Every slot of a closed epoch is decided inside its window: anchors
   strictly below the start of epoch `e + 2`. -/
   closed : ∀ k, epochOf P.W k < E →
-    DecidedBelow R (slotsOf P.inj assign) (P.W * (epochOf P.W k + 2)) V k (vdct k)
+    DecidedBelow R (slotsOfKeyed assign keyed) (P.W * (epochOf P.W k + 2)) V k (vdct k)
   /-- The assignment is the policy's, computed on this view, as far as
   the derivations read it. -/
   coherent : ∀ m, epochOf P.W m < E + 1 → assign m = P.pick U V vdct m
@@ -54,8 +59,13 @@ structure Run (P : Policy R) (U : R.Universe) (V : R.View U) where
   assign : ℕ → Validator
   /-- The verdicts. -/
   vdct : ℕ → Option BlockId
+  /-- **The assignment is a lawful schedule.** Under one leader per
+  round the rounds separate slots whatever the assignment names, and
+  this is free; under multiple leaders a run must exhibit an assignment
+  that does not collide two slots of one round onto one validator. -/
+  keyed : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → assign k₁ = assign k₂ → k₁ = k₂
   /-- Every slot is decided inside its epoch window. -/
-  closed : ∀ k, DecidedBelow R (slotsOf P.inj assign)
+  closed : ∀ k, DecidedBelow R (slotsOfKeyed assign keyed)
     (P.W * (epochOf P.W k + 2)) V k (vdct k)
   /-- The assignment is the policy's, computed on this view, everywhere. -/
   coherent : ∀ m, assign m = P.pick U V vdct m
@@ -66,6 +76,7 @@ variable {P : Policy R} {U : R.Universe}
 def Run.toPartial {V : R.View U} (A : Run P U V) (E : ℕ) : PartialRun P U V E where
   assign := A.assign
   vdct := A.vdct
+  keyed := A.keyed
   closed := fun k _ => A.closed k
   coherent := fun m _ => A.coherent m
 
@@ -100,7 +111,7 @@ theorem partialRun_agree {V₁ V₂ : R.View U} {E₁ E₂ : ℕ}
     -- Both derivations live in one instance; agreement is `Agree`.
     have h₁ := A₁.closed k (by omega)
     have h₂ := A₂.closed k (by omega)
-    exact DecidedBelow.agree ha (h₁.reschedule (S' := slotsOf P.inj A₂.assign) rfl
+    exact DecidedBelow.agree ha (h₁.reschedule (S' := slotsOfKeyed A₂.assign A₂.keyed) rfl
       (fun m hm => (hassign m hm).symm)) h₂
 
 /-- Assignments agree wherever the common verdicts determine them. -/

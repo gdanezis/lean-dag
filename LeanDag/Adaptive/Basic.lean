@@ -55,6 +55,20 @@ section Slots
 
 variable [S : Slots Validator]
 
+/-- **The induced instance, at any base schedule.** `Slots.keyed` asks
+that distinct slots differ in round or in leader; under one leader per
+round the rounds already separate them, which is `slotsOf` below. What
+the law actually needs is weaker and survives multiple leaders: distinct
+slots of *one* round get distinct validators. -/
+@[reducible] def slotsOfKeyed (a : ℕ → Validator)
+    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
+    Slots Validator where
+  slotRound := S.slotRound
+  leader := a
+  mono := S.mono
+  unbounded := S.unbounded
+  keyed := fun _ _ h => hk _ _ (congrArg Prod.fst h) (congrArg Prod.snd h)
+
 /-- The `Slots` instance a leader assignment induces: the base round
 structure, the given leaders. `keyed` is where one-leader-per-round
 enters: with `slotRound` injective, distinct slots differ in round
@@ -89,6 +103,22 @@ transfers between assignments agreeing below its bound. -/
 theorem spansEligible_slotsOf (hinj : Function.Injective S.slotRound) (a : ℕ → Validator)
     {wave c : ℕ} (h : SpansEligibleAt (S := S) wave c) :
     SpansEligibleAt (S := slotsOf hinj a) wave c := h
+
+/-- The same at a lawful assignment, which is all reassignment needs. -/
+theorem spansEligible_slotsOfKeyed (a : ℕ → Validator)
+    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂)
+    {wave c : ℕ} (h : SpansEligibleAt (S := S) wave c) :
+    SpansEligibleAt (S := slotsOfKeyed a hk) wave c := h
+
+/-- **The instance depends on the assignment alone.** `keyed` is a
+proposition, so two lawful assignments that agree give the same
+schedule — which is what lets a run's assignment be rewritten under a
+`Slots` argument. -/
+theorem slotsOfKeyed_congr {a a' : ℕ → Validator}
+    {hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂}
+    {hk' : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a' k₁ = a' k₂ → k₁ = k₂}
+    (h : a = a') : slotsOfKeyed a hk = slotsOfKeyed a' hk' := by
+  subst h; rfl
 
 /-- **Congruence below the bound**, at two induced schedules: two
 assignments agreeing below `B` derive the same bounded verdicts. -/

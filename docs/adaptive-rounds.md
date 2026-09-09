@@ -7,10 +7,11 @@
 > and whether the surrounding prose is faithful to what is proved, has
 > only human-plus-LLM review behind it. Read critically.
 
-> **Status (September 2026).** §2 and §3 are built and on this branch.
-> §4 is what remains, none of it built. The composition on branches
-> `compose-barnacle-hammerhead` and `compose-cadence` is superseded, and
-> retained only for the proofs §5 names.
+> **Status (September 2026).** §2, §3, §4.3, §4.4 and §5's first item are
+> built and on this branch; §4.1, §4.2, §4.5, §4.6 and §4.7 remain. The
+> composition on branches `compose-barnacle-hammerhead` and
+> `compose-cadence` is superseded, and retained only for the proofs §5
+> names.
 
 This document plans the composition of Barnacle (`docs/barnacle.md`),
 which sets how many leaders a round has, with the adaptive leader
@@ -86,7 +87,7 @@ round `B` decides slot `g` and nothing above `B` changes that;
 
 ### 3.1 Safety over a varying frame
 
-`Adaptive.frameRun_agree` (`Adaptive/Frame.lean`). A `FrameRun` carries a
+`Integration.frameRun_agree` (`Integration/AdaptiveFrame.lean`). A `FrameRun` carries a
 frame, an assignment by round and position, and verdicts by global slot
 index. Two such runs over one universe and view have the same verdicts.
 
@@ -147,28 +148,32 @@ the alignment restrictions should make them easier rather than harder,
 since the anchor is no longer required to arrive inside a fixed window,
 but none of it is proved.
 
-### 4.3 `FrameRun` and `PartialRun` are two run notions
+### 4.3 `FrameRun` and `PartialRun` are two run notions — settled
 
-`Adaptive/Frame.lean` states a run over a frame; `Adaptive/Run.lean`
-states one over a fixed `Slots`. They coexist, and one of them should
-subsume the other. The obvious move — restate `Adaptive/Run.lean` over
-frames, with a fixed schedule as the constant case — is blocked by §4.4.
+They are, and neither subsumes the other, by §4.4. `FrameRun` is not a
+second run of the adaptive arc but the run of a mechanism that varies the
+widths, so it lives in `Integration/AdaptiveFrame.lean`;
+`Adaptive/Run.lean` keeps the general run over a fixed `Slots`.
 
-### 4.4 A frame cannot represent every schedule
+### 4.4 A frame cannot represent every schedule — settled
 
 `Frame` asks `0 < width r` at every round, so it cannot express a
 schedule that skips rounds. `Slots.uniform p m` at period `p > 1` does
 skip them, and the witnesses use it: `uniformSingle 3` in
-`LeanDagTest/Mysticeti/Model.lean` and `Quantitative.lean`,
-`uniformSingle 2` in `LeanDagTest/Hybrid/Tight.lean`,
-`uniformSingle 3` in `LeanDagTest/Hydrozoan/LivenessHardening.lean` and
-`Mysticeti/Growth.lean`.
+`LeanDagTest/Mysticeti/Model.lean`, `Quantitative.lean` and
+`Growth.lean`, `uniformSingle 2` in `LeanDagTest/Hybrid/Tight.lean`, and
+`uniformSingle 3` in `LeanDagTest/Hydrozoan/LivenessHardening.lean`.
 
-So `Frame` is a presentation for mechanisms that vary widths, not a
-replacement for `Slots`. Either it is generalised to admit empty rounds —
-`roundOf` then needs care and `Slots.mono` and `unbounded` need widths
-positive infinitely often — or §4.3 is settled by keeping both notions
-and relating them. Which is right is not decided.
+Admitting empty rounds was considered and rejected. `Frame.cum` is then
+only monotone, and `frameRun_agree` needs it strictly monotone at exactly
+the boundary: a run of empty rounds below the window's end leaves the
+widths there to be settled by verdicts the induction is deciding.
+Leaving them unconstrained is not available either, since a width at an
+empty round shifts the numbering above it.
+
+So `Frame` is the presentation of a schedule with a leader in every
+round, which is what a width-varying mechanism produces, and `Slots`
+remains the general notion.
 
 ### 4.5 Is `FrameRun.closed` satisfiable?
 
@@ -201,9 +206,10 @@ definitions and must still collapse correctly at the constant frame.
 
 Proved, and to be reused rather than reproved:
 
-* `PickKeyed`, `Policy.keyed`, `slotsOfKeyed` — `Policy.inj` states one
-  leader per round, which the composition contradicts. This is the one
-  change the adaptive arc needs whatever else is decided.
+* **Done.** `PickKeyed`, `Policy.keyed`, `slotsOfKeyed` — `Policy.inj`
+  stated one leader per round, which the composition contradicts. Carried
+  over across `Adaptive/{Basic,Policy,Run,Liveness,Growth,Joiner}.lean`,
+  `Integration/Joiner.lean` and the witness.
 * `config_det`, `anchor_det` — the configuration data and the anchor are
   functions of the verdicts below them.
 * `extend`, `genesis`, `every_height` — the liveness shape, less the
@@ -229,12 +235,11 @@ statement is preserved. Composition results are `I`-labelled, as in
 1. **Done.** §2: the band's round clause, `exists_roundLocal`,
    `sched_frame_local`.
 2. **Done.** §3: `Frame`, `decided_of_frame_agree`, `frameRun_agree`.
-3. §4.4, which is cheap and decides §4.3: whether `Frame` admits empty
-   rounds.
-4. §5's `keyed`, `slotsOfKeyed`, `PickKeyed`, carried over.
+3. **Done.** §4.4 and §4.3: a frame gives every round a leader, and a
+   frame's run lives in `Integration/`.
+4. **Done.** §5's `keyed`, `slotsOfKeyed`, `PickKeyed`.
 5. §4.1: the delayed Barnacle, and the measurement of what the delay
-   costs the rest of the arc.
-6. §4.2 and §4.6: liveness over the frame, and the bridge.
-
-Steps 3 and 4 are independent of the design decision in §4.1 and may
-proceed before it is taken.
+   costs the rest of the arc. This is the design decision, and it gates
+   the rest.
+6. §4.2 and §4.6: liveness over the frame, and the bridge to Barnacle's
+   numbering. §4.5 and §4.7 are to be settled as they are met.

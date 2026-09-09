@@ -4524,7 +4524,8 @@ theorem run_exists_of_support (ha : Agree R) (hcom : sp.Commits rel)
     (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
     (hruns : PlacesRuns P T c) (V : R.View U)
     (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
-      sp.live rel (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E + 2))) :
+      sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W
+        (P.W * (E + 2))) :
     Nonempty (Run P U V)
 ```
 
@@ -11912,11 +11913,17 @@ structure Policy (R : DagRule Validator BlockId Payload) [S : Slots Validator] w
   /-- The epoch length, in slots. -/
   W : ℕ
   W_pos : 0 < W
-  /-- One leader per round, for the whole arc. -/
-  inj : Function.Injective S.slotRound
   /-- The reassignment rule: from the universe, the validator's view of
   it and a verdict function, the leader of each slot. -/
   pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator
+  /-- **The schedule law the reassignment owes.** `Slots.keyed` asks that
+  distinct slots differ in round or in leader. Under one leader per round
+  the rounds separate them whatever the policy does; under multiple
+  leaders a reassignment could collide two slots of one round onto one
+  validator, so the clause is genuinely owed — the obligation
+  `adaptive-leaders.md` §2 recorded and deferred. -/
+  keyed : ∀ (U : R.Universe) (V : R.View U) (v : ℕ → Option BlockId) (k₁ k₂ : ℕ),
+    S.slotRound k₁ = S.slotRound k₂ → pick U V v k₁ = pick U V v k₂ → k₁ = k₂
   /-- **Adaptedness.** The leader of slot `k` reads the verdicts of
   epochs `≤ epochOf k − 2` and nothing else — not the view either. -/
   adapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
@@ -11939,10 +11946,15 @@ structure PartialRun (P : Policy R) (U : R.Universe) (V : R.View U) (E : ℕ) wh
   assign : ℕ → Validator
   /-- The verdicts. -/
   vdct : ℕ → Option BlockId
+  /-- **The assignment is a lawful schedule.** Under one leader per
+  round the rounds separate slots whatever the assignment names, and
+  this is free; under multiple leaders a run must exhibit an assignment
+  that does not collide two slots of one round onto one validator. -/
+  keyed : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → assign k₁ = assign k₂ → k₁ = k₂
   /-- Every slot of a closed epoch is decided inside its window: anchors
   strictly below the start of epoch `e + 2`. -/
   closed : ∀ k, epochOf P.W k < E →
-    DecidedBelow R (slotsOf P.inj assign) (P.W * (epochOf P.W k + 2)) V k (vdct k)
+    DecidedBelow R (slotsOfKeyed assign keyed) (P.W * (epochOf P.W k + 2)) V k (vdct k)
   /-- The assignment is the policy's, computed on this view, as far as
   the derivations read it. -/
   coherent : ∀ m, epochOf P.W m < E + 1 → assign m = P.pick U V vdct m
@@ -11960,8 +11972,13 @@ structure Run (P : Policy R) (U : R.Universe) (V : R.View U) where
   assign : ℕ → Validator
   /-- The verdicts. -/
   vdct : ℕ → Option BlockId
+  /-- **The assignment is a lawful schedule.** Under one leader per
+  round the rounds separate slots whatever the assignment names, and
+  this is free; under multiple leaders a run must exhibit an assignment
+  that does not collide two slots of one round onto one validator. -/
+  keyed : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → assign k₁ = assign k₂ → k₁ = k₂
   /-- Every slot is decided inside its epoch window. -/
-  closed : ∀ k, DecidedBelow R (slotsOf P.inj assign)
+  closed : ∀ k, DecidedBelow R (slotsOfKeyed assign keyed)
     (P.W * (epochOf P.W k + 2)) V k (vdct k)
   /-- The assignment is the policy's, computed on this view, everywhere. -/
   coherent : ∀ m, assign m = P.pick U V vdct m
@@ -15828,7 +15845,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 469 theorems the body or Appendix A names, each
+The 470 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -17802,11 +17819,11 @@ theorem joiner_run_decided_agree (hd : G ≤ S.slotRound d)
     {V : View Validator BlockId Payload U} (R : Adaptive.Run P U V)
     (V' : View Validator BlockId Payload (chop U G))
     {W : View Validator BlockId Payload (chop U G)} {k : ℕ} {w v : Option BlockId}
-    (hW : Decided (S := slotsOf (S := S.chop G d hd)
-            (injective_slotRound_chop hd P.inj)
-            (fun m => pick' (chop U G) V' (fun j => R.vdct (d + j)) m))
+    (hW : Decided (S := slotsOfKeyed (S := S.chop G d hd) (fun m => R.assign (d + m))
+            (Properties.Rebases.keyed (Validator := Validator)
+              (MysticetiProperties.truncates_chop (U := U) (G := G) hd).toRebases R.keyed))
           (chop U G) W k w)
-    (hV : Decided (S := slotsOf P.inj R.assign) U V (d + k) v) : w = v
+    (hV : Decided (S := slotsOfKeyed R.assign R.keyed) U V (d + k) v) : w = v
 ```
 
 **I5, whole.** A joiner that computed its own schedule from its own truncated view, under a horizon-stable rule, agrees with the network's run on every shared slot: *pruning does not split the ledger, even when the schedule is derived from it.*
@@ -18403,8 +18420,9 @@ theorem Policy.const_run_decided
 theorem descends_slotsOf {R : DagRule Validator BlockId Payload} {wave : ℕ}
     (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
     {c : ℕ} (hc : 0 < c) (hspans : SpansEligibleAt (S := S) wave c)
-    (hinj : Function.Injective S.slotRound) (a : ℕ → Validator) :
-    Descends R (slotsOf hinj a) c
+    (a : ℕ → Validator)
+    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
+    Descends R (slotsOfKeyed a hk) c
 ```
 
 **A rule's descent, at every induced schedule.** The indirect property is stated over the round structure alone, which reassignment fixes, so a spanning clause at the base schedule gives the descent at each induced one.
@@ -18415,10 +18433,12 @@ theorem descends_slotsOf {R : DagRule Validator BlockId Payload} {wave : ℕ}
 
 ```lean
 theorem exists_partialRun (hlc : LeaderCommits R Live)
-    (hd : ∀ a : ℕ → Validator, Descends R (slotsOf P.inj a) c)
+    (hd : ∀ (a : ℕ → Validator)
+      (h : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂),
+      Descends R (slotsOfKeyed a h) c)
     (hruns : PlacesRuns P T c) (V : R.View U) (E : ℕ)
     (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
-      Live (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E' + 2))) :
+      Live (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W (P.W * (E' + 2))) :
     Nonempty (PartialRun P U V E)
 ```
 
@@ -18434,10 +18454,10 @@ theorem epoch_closes_of_support (hcom : sp.Commits rel)
     (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
     (V : R.View U) (v : ℕ → Option BlockId) (E : ℕ)
     (hruns : PlacesRuns P T c)
-    (hlive : sp.live rel (slotsOf P.inj (fun m => P.pick U V v m)) V T P.W
+    (hlive : sp.live rel (slotsOfKeyed (fun m => P.pick U V v m) (P.keyed U V v)) V T P.W
       (P.W * (E + 2))) :
     ∀ k, epochOf P.W k < E + 1 →
-      ∃ w, DecidedBelow R (slotsOf P.inj (fun m => P.pick U V v m))
+      ∃ w, DecidedBelow R (slotsOfKeyed (fun m => P.pick U V v m) (P.keyed U V v))
         (P.W * (E + 2)) V k w
 ```
 
@@ -18453,7 +18473,7 @@ theorem exists_partialRun_of_support (hcom : sp.Commits rel)
     (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
     (hruns : PlacesRuns P T c) (V : R.View U) (E : ℕ)
     (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
-      sp.live rel (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E' + 2))) :
+      sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W (P.W * (E' + 2))) :
     Nonempty (PartialRun P U V E)
 ```
 
@@ -18469,7 +18489,7 @@ theorem run_exists_of_support (ha : Agree R) (hcom : sp.Commits rel)
     (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
     (hruns : PlacesRuns P T c) (V : R.View U)
     (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
-      sp.live rel (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E + 2))) :
+      sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W (P.W * (E + 2))) :
     Nonempty (Run P U V)
 ```
 
@@ -20072,6 +20092,20 @@ theorem holds : Statement
 
 ### Not otherwise grouped
 
+#### `Rebases.keyed`
+
+*theorem, `Adaptive.Joiner.lean`*
+
+```lean
+theorem Rebases.keyed {S S' : Slots Validator} {G d : ℕ} (h : Rebases S S' G d)
+    {a : ℕ → Validator}
+    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
+    ∀ k₁ k₂, S'.slotRound k₁ = S'.slotRound k₂ →
+      a (d + k₁) = a (d + k₂) → k₁ = k₂
+```
+
+A rebase preserves the schedule law: the rebased rounds are the original's, shifted, so slots sharing a rebased round shared one before, where the assignment already separated them.
+
 #### `Rebases.slotsOf`
 
 *theorem, `Adaptive.Joiner.lean`*
@@ -20111,9 +20145,12 @@ theorem joiner_run_decided_agree (ha : Agree R) (hb : Banded R)
     {V : R.View U} (A : Run P U V) (V' : R.View U')
     {V₀ : R.View U'} (hv : ViewAgreeAbove R V V₀ G)
     {W : R.View U'} {k : ℕ} {w v : Option BlockId}
-    (hW : R.Decided (slotsOf (S := S') (ht.toRebases.injective P.inj)
-            (fun m => pick' U' V' (fun j => A.vdct (d + j)) m)) W k w)
-    (hV : R.Decided (slotsOf P.inj A.assign) V (d + k) v) : w = v
+    (hk' : ∀ k₁ k₂, S'.slotRound k₁ = S'.slotRound k₂ →
+      pick' U' V' (fun j => A.vdct (d + j)) k₁
+        = pick' U' V' (fun j => A.vdct (d + j)) k₂ → k₁ = k₂)
+    (hW : R.Decided (slotsOfKeyed (S := S')
+            (fun m => pick' U' V' (fun j => A.vdct (d + j)) m) hk') W k w)
+    (hV : R.Decided (slotsOfKeyed A.assign A.keyed) V (d + k) v) : w = v
 ```
 
 **The joiner, whole**: under a horizon-stable rule, a joiner's own computed schedule agrees with the network's run on every shared slot.

@@ -71,7 +71,7 @@ theorem joiner_decided_agree (hd : G ≤ S.slotRound d)
           (chop U G) W k w)
     (hV : Decided (S := slotsOf hinj a) U V (d + k) v) : w = v :=
   Adaptive.joiner_decided_agree MysticetiProperties.agree MysticetiProperties.banded
-    (MysticetiProperties.truncates_chop hd) hinj a
+    (MysticetiProperties.truncates_chop hd) a (fun _ _ hr _ => hinj hr)
     (MysticetiProperties.viewAgreeAbove_chop (V := V)) hW hV
 
 /-! ## The policy half, at the core -/
@@ -97,13 +97,13 @@ theorem joiner_run_decided_agree (hd : G ≤ S.slotRound d)
     {V : View Validator BlockId Payload U} (R : Adaptive.Run P U V)
     (V' : View Validator BlockId Payload (chop U G))
     {W : View Validator BlockId Payload (chop U G)} {k : ℕ} {w v : Option BlockId}
-    (hW : Decided (S := slotsOf (S := S.chop G d hd)
-            (injective_slotRound_chop hd P.inj)
-            (fun m => pick' (chop U G) V' (fun j => R.vdct (d + j)) m))
+    (hW : Decided (S := slotsOfKeyed (S := S.chop G d hd) (fun m => R.assign (d + m))
+            (Properties.Rebases.keyed (Validator := Validator)
+              (MysticetiProperties.truncates_chop (U := U) (G := G) hd).toRebases R.keyed))
           (chop U G) W k w)
-    (hV : Decided (S := slotsOf P.inj R.assign) U V (d + k) v) : w = v :=
-  Adaptive.joiner_run_decided_agree MysticetiProperties.agree MysticetiProperties.banded
-    hs (MysticetiProperties.truncates_chop hd) R V'
+    (hV : Decided (S := slotsOfKeyed R.assign R.keyed) U V (d + k) v) : w = v :=
+  Adaptive.joiner_decided_agree MysticetiProperties.agree MysticetiProperties.banded
+    (MysticetiProperties.truncates_chop hd) R.assign R.keyed
     (MysticetiProperties.viewAgreeAbove_chop (V := V)) hW hV
 
 end Policy
