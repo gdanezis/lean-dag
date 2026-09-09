@@ -80,6 +80,20 @@ theorem roundOf_eq {g r : ℕ} (h₁ : F.cum r ≤ g) (h₂ : g < F.cum (r + 1))
     have hg : F.cum (F.roundOf g) ≤ g := F.cum_roundOf_le g
     omega
 
+/-- **A slot is at or past a round exactly when it is at or past that
+round's first slot.** Which is what lets a threshold stated in rounds be
+stated in slots instead, and read without knowing the widths above it. -/
+theorem cum_le_iff_le_roundOf {R g : ℕ} : F.cum R ≤ g ↔ R ≤ F.roundOf g := by
+  constructor
+  · intro h
+    by_contra hc
+    push_neg at hc
+    have h1 : F.cum (F.roundOf g + 1) ≤ F.cum R := F.cum_mono (by omega)
+    have h2 : g < F.cum (F.roundOf g + 1) := F.lt_cum_roundOf_succ g
+    omega
+  · intro h
+    exact le_trans (F.cum_mono h) (F.cum_roundOf_le g)
+
 /-- The global index of position `i` of round `r`. -/
 def index (r i : ℕ) : ℕ := F.cum r + i
 

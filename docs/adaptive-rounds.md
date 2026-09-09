@@ -194,18 +194,33 @@ are global slot indices and `cnt_eq` is the bridge. `anchor_below` is
 widths from the configurations, and `anchor_det` derives the anchor from
 the verdicts.
 
-**What remains is their assembly.** `hwd` asks that widths agree given
-verdicts two epochs below, and the chain runs: verdicts agree there, so
-the anchors of earlier configurations agree (`anchor_det`), so the
-configurations agree, so the widths do (`cnt_det`). The step that does
-not yet close is inside a configuration: `anchor_det` at `k` needs the
-widths to agree at rounds up to the anchor's own, which lie in
-configuration `k`'s range and so above where `cnt_det` reaches from the
-configurations below. The two runs' ranges may differ in extent until
-their anchors are known equal, which is what is being proved. Resolving
-it means either an induction that advances the widths and the anchor
-together within a configuration, or a formulation of `anchor_least` that
-compares slot indices without reading rounds.
+The chain that discharges `hwd` is `config_det`: verdicts agreeing at the
+anchors below a configuration give agreeing anchors (`anchor_det`), hence
+agreeing starts (`start_succ_det`), hence agreeing counts, hence agreeing
+widths (`cnt_agree_upto`). It is proved.
+
+What unblocked it is the threshold. Barnacle states it as a round —
+`start k + interval < anchor k / count k` — and reading a round of a slot
+needs the widths below it, which is what would not have been available.
+`Frame.cum_le_iff_le_roundOf` says a slot is at or past a round exactly
+when it is at or past that round's first slot, so the same threshold is
+`F.cum (start k + P.interval + 1) ≤ anchor k`: a *slot*, fixed by the
+widths below the threshold rather than below the anchor. The two runs
+therefore agree about it well inside both configurations, long before
+they agree about where those configurations end. The reformulation is
+equivalent, not weaker.
+
+**What remains is `width_det` at a round late in a configuration.**
+`config_det` at `k` gives the count of configuration `k`, which is what
+the width of its rounds is, and the anchor that set it lies two epochs
+below by `anchor_below`. The gap is the other run's *extent*: applying
+`cnt_eq` there needs `r ≤ Rn'.start (k + 1)`, which is configuration
+`k`'s own anchor and so not two epochs below `r`. The route is to refute
+`Rn'.start (k + 1) < r` directly — in that case both anchors are two
+epochs below `r`, so `anchor_det` and `start_succ_det` apply and give
+`Rn.start (k + 1) = Rn'.start (k + 1) < r`, against `r ≤ Rn.start (k+1)`.
+The alternative is for `frameRun_agree` to carry width agreement forward
+through its own induction rather than ask for it at each round.
 
 ### 6.3 Is `FrameRun.closed` satisfiable?
 

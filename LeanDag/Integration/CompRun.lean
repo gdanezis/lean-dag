@@ -52,11 +52,16 @@ structure CompRun (W : ℕ) (P : Params)
   Round `0` precedes every range and is genesis, at one leader. -/
   cnt_zero : F.width 0 = 1
   cnt_eq : ∀ k, k < K → ∀ r, start k < r → r ≤ start (k + 1) → F.width r = count k
-  /-- The anchor is committed past the threshold, and least such. -/
+  /-- **The anchor is committed past the threshold, and least such.**
+  The threshold is `Frame.cum` of the first round past it, which is the
+  same slot as Barnacle's round condition by
+  `Frame.cum_le_iff_le_roundOf` — and unlike the round condition it is
+  fixed by the widths *below* the threshold, so two runs agree about it
+  long before they agree about where their configurations end. -/
   anchor_commits : ∀ k, k < K → (∃ A, vdct (anchor k) = some A) ∧
-    start k + P.interval < F.roundOf (anchor k)
-  anchor_least : ∀ k, k < K → ∀ g, g < anchor k →
-    start k + P.interval < F.roundOf g → vdct g = none
+    F.cum (start k + P.interval + 1) ≤ anchor k
+  anchor_least : ∀ k, k < K → ∀ g, F.cum (start k + P.interval + 1) ≤ g →
+    g < anchor k → vdct g = none
   /-- The next configuration begins `P.gap` rounds after the anchor's. -/
   start_succ : ∀ k, k < K → start (k + 1) = F.roundOf (anchor k) + P.gap
   /-- The next configuration is the rule's, at the anchor's block. -/
@@ -71,9 +76,11 @@ variable {U : R.Universe} {V : R.View U} {K : ℕ}
 theorem start_lt (Rn : CompRun (R := R) W P upd U V K) (k : ℕ) (hk : k < K) :
     Rn.start k < Rn.start (k + 1) := by
   obtain ⟨-, hthr⟩ := Rn.anchor_commits k hk
+  have hr : Rn.start k + P.interval + 1 ≤ Rn.F.roundOf (Rn.anchor k) :=
+    Rn.F.cum_le_iff_le_roundOf.mp hthr
   rw [Rn.start_succ k hk]
   have := P.interval_pos
-  exact lt_of_lt_of_le (by omega) (Nat.le_add_right _ _)
+  omega
 
 /-- **The anchor of an earlier configuration is two epochs below.** The
 run's own frame, read through `anchor_two_epochs_below`'s counting. -/
@@ -117,38 +124,122 @@ theorem cnt_det {Rn Rn' : CompRun (R := R) W P upd U V K} {k : ℕ} (hk : k < K)
 
 
 /-- **The anchor is a function of the verdicts.** Both runs' anchors are
-the least committed slot past the same threshold, and a set has one least
-element. The widths must agree far enough for the two to mean the same by
-"past the threshold", which is what `hcnt` supplies. -/
+the least committed slot at or past the same threshold, and a set has one
+least element. The widths need only agree below the threshold's round,
+which is `P.interval` above the configuration's start and so well inside
+both runs' ranges — no round above an anchor is read, which is what lets
+this be proved before the configurations' extents are known. -/
 theorem anchor_det {Rn Rn' : CompRun (R := R) W P upd U V K} {k : ℕ} (hk : k < K)
     (hs : Rn.start k = Rn'.start k)
-    (hcnt : ∀ r, r < Rn.start (k + 1) + 1 → Rn'.F.width r = Rn.F.width r)
-    (hs1 : Rn.start (k + 1) = Rn'.start (k + 1))
-    (hv : ∀ g, Rn.vdct g = Rn'.vdct g) : Rn.anchor k = Rn'.anchor k := by
+    (hcnt : ∀ r, r < Rn.start k + P.interval + 1 → Rn'.F.width r = Rn.F.width r)
+    (hv : ∀ g, g ≤ Rn.anchor k → Rn.vdct g = Rn'.vdct g) :
+    Rn.anchor k = Rn'.anchor k := by
   obtain ⟨⟨A, hA⟩, hthr⟩ := Rn.anchor_commits k hk
   obtain ⟨⟨A', hA'⟩, hthr'⟩ := Rn'.anchor_commits k hk
-  -- the anchors' rounds are below the next configuration's start
-  have hr : Rn.F.roundOf (Rn.anchor k) < Rn.start (k + 1) + 1 := by
-    have := Rn.start_succ k hk; omega
-  have hr' : Rn'.F.roundOf (Rn'.anchor k) < Rn.start (k + 1) + 1 := by
-    have := Rn'.start_succ k hk; omega
+  have hcum : Rn'.F.cum (Rn.start k + P.interval + 1)
+      = Rn.F.cum (Rn.start k + P.interval + 1) := Frame.cum_congr hcnt (le_refl _)
+  rw [← hs] at hthr'
+  rw [hcum] at hthr'
   rcases Nat.lt_trichotomy (Rn.anchor k) (Rn'.anchor k) with hlt | heq | hgt
   · exfalso
-    have hro : Rn'.F.roundOf (Rn.anchor k) = Rn.F.roundOf (Rn.anchor k) :=
-      Frame.roundOf_congr (F := Rn.F) (F' := Rn'.F) hcnt hr
-    have hno := Rn'.anchor_least k hk (Rn.anchor k) hlt (by rw [hro, ← hs]; exact hthr)
-    rw [← hv (Rn.anchor k)] at hno
+    have hno := Rn'.anchor_least k hk (Rn.anchor k) (by rw [← hs, hcum]; exact hthr) hlt
+    rw [← hv (Rn.anchor k) (le_refl _)] at hno
     exact absurd (hno ▸ hA) (by simp)
   · exact heq
   · exfalso
-    have hrg : Rn.F.roundOf (Rn'.anchor k) < Rn.start (k + 1) + 1 :=
-      lt_of_le_of_lt (Rn.F.roundOf_mono (le_of_lt hgt)) hr
-    have hro : Rn'.F.roundOf (Rn'.anchor k) = Rn.F.roundOf (Rn'.anchor k) :=
-      Frame.roundOf_congr (F := Rn.F) (F' := Rn'.F) hcnt hrg
-    have hno := Rn.anchor_least k hk (Rn'.anchor k) hgt (by rw [← hro, hs]; exact hthr')
-    rw [hv (Rn'.anchor k)] at hno
+    have hno := Rn.anchor_least k hk (Rn'.anchor k) hthr' hgt
+    rw [hv (Rn'.anchor k) (le_of_lt hgt)] at hno
     exact absurd (hno ▸ hA') (by simp)
 
+
+/-- **Widths agree as far as both configurations reach.** Below the
+configuration's start by hypothesis, and inside it because both give the
+round the same count. -/
+theorem cnt_agree_upto {Rn Rn' : CompRun (R := R) W P upd U V K} {k : ℕ} (hk : k < K)
+    (hs : Rn.start k = Rn'.start k) (hc : Rn.count k = Rn'.count k)
+    (hlow : ∀ r, r ≤ Rn.start k → Rn'.F.width r = Rn.F.width r)
+    {b : ℕ} (hb : b ≤ Rn.start (k + 1)) (hb' : b ≤ Rn'.start (k + 1)) :
+    ∀ r, r ≤ b → Rn'.F.width r = Rn.F.width r := by
+  intro r hr
+  rcases Nat.lt_or_ge (Rn.start k) r with h | h
+  · rw [Rn.cnt_eq k hk r h (by omega), Rn'.cnt_eq k hk r (by omega) (by omega), hc]
+  · exact hlow r h
+
+/-- The threshold's round is inside the configuration. -/
+theorem thr_lt_start_succ (Rn : CompRun (R := R) W P upd U V K) (k : ℕ) (hk : k < K) :
+    Rn.start k + P.interval + 1 ≤ Rn.start (k + 1) := by
+  obtain ⟨-, hthr⟩ := Rn.anchor_commits k hk
+  have hr : Rn.start k + P.interval + 1 ≤ Rn.F.roundOf (Rn.anchor k) :=
+    Rn.F.cum_le_iff_le_roundOf.mp hthr
+  rw [Rn.start_succ k hk]; omega
+
+/-- **And so the next configuration starts at the same round.** With the
+anchors equal as slots, the two runs disagree about the round only if
+they disagree about the widths below it — and where they would have to
+disagree is inside the shorter of the two ranges, where they cannot. -/
+theorem start_succ_det {Rn Rn' : CompRun (R := R) W P upd U V K} {k : ℕ} (hk : k < K)
+    (hs : Rn.start k = Rn'.start k) (hc : Rn.count k = Rn'.count k)
+    (hlow : ∀ r, r ≤ Rn.start k → Rn'.F.width r = Rn.F.width r)
+    (ha : Rn.anchor k = Rn'.anchor k) :
+    Rn.start (k + 1) = Rn'.start (k + 1) := by
+  have e := Rn.start_succ k hk
+  have e' := Rn'.start_succ k hk
+  rcases Nat.lt_trichotomy (Rn.F.roundOf (Rn.anchor k)) (Rn'.F.roundOf (Rn'.anchor k))
+    with hlt | heq | hgt
+  · exfalso
+    have hw := cnt_agree_upto hk hs hc hlow (b := Rn.start (k + 1)) (le_refl _) (by omega)
+    have hcg : Rn'.F.roundOf (Rn.anchor k) = Rn.F.roundOf (Rn.anchor k) :=
+      Frame.roundOf_congr (F := Rn.F) (F' := Rn'.F) (B := Rn.start (k + 1) + 1)
+        (fun r hr => hw r (by omega)) (by omega)
+    rw [ha] at hcg hlt; omega
+  · omega
+  · exfalso
+    have hw := cnt_agree_upto hk hs hc hlow (b := Rn'.start (k + 1)) (by omega) (le_refl _)
+    have hcg : Rn.F.roundOf (Rn'.anchor k) = Rn'.F.roundOf (Rn'.anchor k) :=
+      Frame.roundOf_congr (F := Rn'.F) (F' := Rn.F) (B := Rn'.start (k + 1) + 1)
+        (fun r hr => (hw r (by omega)).symm) (by omega)
+    rw [← ha] at hcg hgt; omega
+
+/-- **The configuration data is a function of the verdicts.** -/
+theorem config_det {Rn Rn' : CompRun (R := R) W P upd U V K} {kb : ℕ} (hkb : kb ≤ K)
+    (hv : ∀ j, j < kb → ∀ g, g ≤ Rn.anchor j → Rn.vdct g = Rn'.vdct g) :
+    ∀ k, k ≤ kb →
+      (Rn.start k = Rn'.start k ∧ Rn.count k = Rn'.count k ∧
+        Rn.backoff k = Rn'.backoff k) ∧
+      (∀ r, r ≤ Rn.start k → Rn'.F.width r = Rn.F.width r) := by
+  intro k
+  induction k with
+  | zero =>
+      intro _
+      obtain ⟨s, c, b⟩ := Rn.init
+      obtain ⟨s', c', b'⟩ := Rn'.init
+      refine ⟨⟨by rw [s, s'], by rw [c, c'], by rw [b, b']⟩, fun r hr => ?_⟩
+      have : r = 0 := by rw [s] at hr; omega
+      subst this
+      rw [Rn.cnt_zero, Rn'.cnt_zero]
+  | succ k ih =>
+      intro hk1
+      obtain ⟨⟨hs, hc, hb⟩, hlow⟩ := ih (by omega)
+      have hkb' : k < kb := by omega
+      have hk : k < K := by omega
+      have hthr := Rn.thr_lt_start_succ k hk
+      have hthr' := Rn'.thr_lt_start_succ k hk
+      have hwthr := cnt_agree_upto hk hs hc hlow
+        (b := Rn.start k + P.interval + 1) (by omega) (by omega)
+      have ha : Rn.anchor k = Rn'.anchor k :=
+        anchor_det hk hs (fun r hr => hwthr r (by omega)) (hv k hkb')
+      have hs1 : Rn.start (k + 1) = Rn'.start (k + 1) := start_succ_det hk hs hc hlow ha
+      obtain ⟨⟨A, hA⟩, -⟩ := Rn.anchor_commits k hk
+      have hA' : Rn'.vdct (Rn'.anchor k) = some A := by
+        rw [← ha, ← hv k hkb' (Rn.anchor k) (le_refl _)]; exact hA
+      have u := Rn.update k hk A hA
+      have u' := Rn'.update k hk A hA'
+      rw [hc, hb] at u
+      have hu := u.trans u'.symm
+      refine ⟨⟨hs1, congrArg Prod.fst hu, congrArg Prod.snd hu⟩, ?_⟩
+      exact cnt_agree_upto hk hs hc hlow (b := Rn.start (k + 1)) (le_refl _) (by omega)
+
 end CompRun
+
 end Integration
 end LeanDag
