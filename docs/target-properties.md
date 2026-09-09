@@ -359,9 +359,11 @@ Rules whose model has no self-parent clause show `Progresses` alone.
 
 ### 0.8 The rules
 
-Nine carriers over nine rules show the four properties and a support,
-and every mechanism cell is an instance or derived
-(`scripts/audit-conformance.py`, `scripts/audit-mechanisms.py`):
+Nine carriers over eleven rules, of which nine show the four properties
+and a support, and every mechanism cell is an instance or derived
+(`scripts/audit-conformance.py`, `scripts/audit-mechanisms.py`).
+Steelhead shows all but the band, which its wavelength function
+forecloses (§3.4c); Black Marlin has no carrier:
 
 | rule | support | optional shown | headline |
 |---|---|---|---|
@@ -373,11 +375,13 @@ and every mechanism cell is an instance or derived
 | FinWhale | `fwSupport`, and a fast path | direct, quorate, no-equiv | `safety`, `progress` |
 | Hydrozoan | `hzSupport`, and a fast path | direct, skip, quorate | `safety`, `progress` |
 | Optimal-Hydrozoan | `optSupport`, and a fast path | direct, quorate | `safety`, `progress` |
+| Steelhead | `shSupport w`, per wavelength function | direct, quorate, self-parent, no-equiv | `liveness`; no `safety`, since the rule has no band (§3.4c) |
 | Black Marlin | no carrier: commits by round, no slot-indexed relation | | |
 
 Nemo's model drops the self-parent clause by design and Hydrozoan's
 never had one, which is why those rules show progress and not
-inclusion. Black Marlin is out of scope by decision.
+inclusion. Steelhead has no `safety` headline because that headline is
+proved from the band. Black Marlin is out of scope by decision.
 
 ### 0.9 Where things live, and what checks them
 
@@ -771,6 +775,7 @@ making that rule's band unprovable.
 | Optimal-Hydrozoan | `slotRound k`, `+1`, `+2` | reachable |
 | Mahi-Mahi | `slotRound k + w - 1`, `r + w - 2` | proved, under `2 ≤ w` (§3.16) |
 | FinWhale | ~~`leader (round b - 2)`~~ **fixed** | the read is gone, and the band followed (§3.13) |
+| Steelhead | `slotRound k + w (slotRound k) - 1`, and `r % k` inside `w` | none, by design: the wave is a function of the absolute round |
 
 **Mahi-Mahi's wave rounds truncate.** `votingRound w r = r + w - 2`,
 `decisionRoundAt w r = r + w - 1` and `decisionRound w k = slotRound k +
@@ -783,6 +788,20 @@ carrier instance is per-width and its band is conditional, `Banded
 unconditional. `Banded R` is a predicate on the rule alone, so the width
 has to be fixed before the property is stated rather than appear inside
 it.
+
+**Steelhead reads the absolute round on purpose.** Its wavelength is a
+function of the round number, `periodic ws wa k r = if r % k = 0 then wa
+else ws`, and the rule reads it at the slot's round: `waveAt r = w r − 1`
+in `steelheadAnchored`, and the same in `shSupport`. A band rebases every
+round by a constant `g`, under which `r % k` and `(r + g) % k` differ, so
+no offset band exists for the rule, and none is claimed: `Persist` and
+view monotonicity are proved through the extension laws
+(`AnchoredRule.ExtendLaws`) instead, and `LocalTruncate` and the `Safe`
+headline are absent (`LeanDag/Steelhead/Properties.lean`). `scripts/audit-rounds.py`
+records the rule's own subtraction, `waveAt r = w r - 1` in
+`steelheadAnchored`, in `ALLOW`; the modulus sits in `periodic`, which
+the relation reaches only through its wavelength parameter and which the
+closure therefore does not examine.
 
 **FinWhale indexed its leader by an absolute round**, and no longer
 does. `ExposesEquivocation D b` read `D.leader ((D.block b).round - 2)`:
@@ -2116,7 +2135,7 @@ one relation (§11.4d). Chain quality has no property of its own (§5).
 
 ### 11.2 Against part 2: two protocols, every mechanism
 
-**Ten decision rules, eight carriers.** `scripts/audit-conformance.py`
+**Eleven decision rules, nine carriers.** `scripts/audit-conformance.py`
 recomputes this from `docs/decls.json`: a rule shows a property when
 some theorem concludes it at one of the rule's carriers, or when its
 conformance `Statement` lists it.
@@ -2132,11 +2151,16 @@ conformance `Statement` lists it.
 | Hybrid / Orcaella | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Mahi-Mahi | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
 | FinWhale | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| Steelhead | —† | ✓ | ✓ | ✓ | ✓ | ✓ | — |
 | Black Marlin | — | — | — | — | — | — | — |
 
 \* optional (`Properties/Optional/`): owed when a mechanism counts the
 rule's direct predicate, or when the rule skips without waiting for an
 anchor. A dash there is not a gap.
+
+† Steelhead's wavelength is a function of the absolute round, so the
+rule has no offset band by design (§3.4c); `Persist` is proved through
+the extension laws instead, and `LocalTruncate` is not claimed.
 
 `Persist` and `LocalTruncate` are not columns: they follow from `Banded`
 for every rule that has it, so there is nothing per protocol to record.
