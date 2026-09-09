@@ -210,17 +210,27 @@ therefore agree about it well inside both configurations, long before
 they agree about where those configurations end. The reformulation is
 equivalent, not weaker.
 
-**What remains is `width_det` at a round late in a configuration.**
-`config_det` at `k` gives the count of configuration `k`, which is what
-the width of its rounds is, and the anchor that set it lies two epochs
-below by `anchor_below`. The gap is the other run's *extent*: applying
-`cnt_eq` there needs `r ≤ Rn'.start (k + 1)`, which is configuration
-`k`'s own anchor and so not two epochs below `r`. The route is to refute
-`Rn'.start (k + 1) < r` directly — in that case both anchors are two
-epochs below `r`, so `anchor_det` and `start_succ_det` apply and give
-`Rn.start (k + 1) = Rn'.start (k + 1) < r`, against `r ≤ Rn.start (k+1)`.
-The alternative is for `frameRun_agree` to carry width agreement forward
-through its own induction rather than ask for it at each round.
+`width_det` is `hwd` at a run of both mechanisms, and it is proved. The
+count of configuration `k` — which is what the width of its rounds is —
+follows from `config_det`, since the anchor that set it is the anchor of
+configuration `k - 1` and lies two epochs below by `anchor_below`. What
+needed more is the other run's *extent*: reading its width through
+`cnt_eq` asks `r ≤ Rn'.start (k + 1)`, which configuration `k`'s own
+anchor settles, and that anchor is not two epochs below `r`. It is
+refuted rather than proved: were the other run's configuration to end
+before `r`, its anchor would lie two epochs below after all, so the two
+anchors would agree and the two configurations would end together.
+
+`frameRun_agree`'s `hwd` is correspondingly restricted to the rounds it
+reads, `r < F.roundOf (W * (H + 1))`, which is what `width_det` supplies
+and all the induction ever consulted.
+
+**What remains is the structure.** `CompRun` carries Barnacle's side and
+the frame; it does not yet carry the adaptive side — `asg`, `keyed`,
+`coherent`, `closed` — so there is no map `CompRun → FrameRun` and hence
+no single theorem saying a composed run is safe. Adding those fields and
+writing that map is the remaining work in §6.2, and it is assembly: both
+halves and the clause between them are proved.
 
 ### 6.3 Is `FrameRun.closed` satisfiable?
 

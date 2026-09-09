@@ -106,7 +106,8 @@ theorem frameRun_agree (hR : Agree R) (hW : 0 < W)
       (∀ j, epochOf W j + 2 ≤ epochOf W k → v j = w j) →
       pick U V₁ v k = pick U V₂ w k)
     (Rn Rn' : FrameRun (R := R) W pick U V H)
-    (hwd : ∀ r, (∀ j, epochOf W j + 2 ≤ epochOf W (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
+    (hwd : ∀ r, r < Rn.F.roundOf (W * (H + 1)) →
+      (∀ j, epochOf W j + 2 ≤ epochOf W (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
       Rn'.F.width r = Rn.F.width r) :
     ∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g := by
   suffices main : ∀ e g, epochOf W g = e → epochOf W g < H → Rn.vdct g = Rn'.vdct g by
@@ -116,9 +117,11 @@ theorem frameRun_agree (hR : Agree R) (hW : 0 < W)
   | _ e ih =>
     intro g hge hgH
     set B := Rn.F.roundOf (W * (epochOf W g + 2)) with hB
+    have hBle : B ≤ Rn.F.roundOf (W * (H + 1)) :=
+      Rn.F.roundOf_mono (Nat.mul_le_mul_left W (by omega))
     have hw : ∀ r', r' < B → Rn'.F.width r' = Rn.F.width r' := by
       intro r' hr'
-      refine hwd r' (fun j hj => ?_)
+      refine hwd r' (by omega) (fun j hj => ?_)
       have h1 : Rn.F.cum r' < Rn.F.cum B := Rn.F.cum_strictMono hr'
       have h2 : Rn.F.cum B ≤ W * (epochOf W g + 2) := Rn.F.cum_roundOf_le _
       have h3 : epochOf W (Rn.F.cum r') < epochOf W g + 2 :=

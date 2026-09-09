@@ -82,6 +82,16 @@ theorem start_lt (Rn : CompRun (R := R) W P upd U V K) (k : ℕ) (hk : k < K) :
   have := P.interval_pos
   omega
 
+theorem start_mono (Rn : CompRun (R := R) W P upd U V K) {a b : ℕ} (hab : a ≤ b)
+    (hb : b ≤ K) : Rn.start a ≤ Rn.start b := by
+  induction b with
+  | zero => have : a = 0 := by omega
+            subst this; exact le_refl _
+  | succ j ih =>
+      rcases Nat.eq_or_lt_of_le hab with h | h
+      · subst h; exact le_refl _
+      · exact le_trans (ih (by omega) (by omega)) (le_of_lt (Rn.start_lt j (by omega)))
+
 /-- **The anchor of an earlier configuration is two epochs below.** The
 run's own frame, read through `anchor_two_epochs_below`'s counting. -/
 theorem anchor_below (Rn : CompRun (R := R) W P upd U V K) (hW : 0 < W)
@@ -132,7 +142,7 @@ this be proved before the configurations' extents are known. -/
 theorem anchor_det {Rn Rn' : CompRun (R := R) W P upd U V K} {k : ℕ} (hk : k < K)
     (hs : Rn.start k = Rn'.start k)
     (hcnt : ∀ r, r < Rn.start k + P.interval + 1 → Rn'.F.width r = Rn.F.width r)
-    (hv : ∀ g, g ≤ Rn.anchor k → Rn.vdct g = Rn'.vdct g) :
+    (hv : ∀ g, g ≤ Rn.anchor k → g ≤ Rn'.anchor k → Rn.vdct g = Rn'.vdct g) :
     Rn.anchor k = Rn'.anchor k := by
   obtain ⟨⟨A, hA⟩, hthr⟩ := Rn.anchor_commits k hk
   obtain ⟨⟨A', hA'⟩, hthr'⟩ := Rn'.anchor_commits k hk
@@ -143,12 +153,12 @@ theorem anchor_det {Rn Rn' : CompRun (R := R) W P upd U V K} {k : ℕ} (hk : k <
   rcases Nat.lt_trichotomy (Rn.anchor k) (Rn'.anchor k) with hlt | heq | hgt
   · exfalso
     have hno := Rn'.anchor_least k hk (Rn.anchor k) (by rw [← hs, hcum]; exact hthr) hlt
-    rw [← hv (Rn.anchor k) (le_refl _)] at hno
+    rw [← hv (Rn.anchor k) (le_refl _) (le_of_lt hlt)] at hno
     exact absurd (hno ▸ hA) (by simp)
   · exact heq
   · exfalso
     have hno := Rn.anchor_least k hk (Rn'.anchor k) hthr' hgt
-    rw [hv (Rn'.anchor k) (le_of_lt hgt)] at hno
+    rw [hv (Rn'.anchor k) (le_of_lt hgt) (le_refl _)] at hno
     exact absurd (hno ▸ hA') (by simp)
 
 
@@ -227,7 +237,8 @@ theorem config_det {Rn Rn' : CompRun (R := R) W P upd U V K} {kb : ℕ} (hkb : k
       have hwthr := cnt_agree_upto hk hs hc hlow
         (b := Rn.start k + P.interval + 1) (by omega) (by omega)
       have ha : Rn.anchor k = Rn'.anchor k :=
-        anchor_det hk hs (fun r hr => hwthr r (by omega)) (hv k hkb')
+        anchor_det hk hs (fun r hr => hwthr r (by omega))
+          (fun g hg _ => hv k hkb' g hg)
       have hs1 : Rn.start (k + 1) = Rn'.start (k + 1) := start_succ_det hk hs hc hlow ha
       obtain ⟨⟨A, hA⟩, -⟩ := Rn.anchor_commits k hk
       have hA' : Rn'.vdct (Rn'.anchor k) = some A := by
@@ -239,7 +250,64 @@ theorem config_det {Rn Rn' : CompRun (R := R) W P upd U V K} {kb : ℕ} (hkb : k
       refine ⟨⟨hs1, congrArg Prod.fst hu, congrArg Prod.snd hu⟩, ?_⟩
       exact cnt_agree_upto hk hs hc hlow (b := Rn.start (k + 1)) (le_refl _) (by omega)
 
+
+/-- **The widths are a function of the verdicts two epochs below.** This
+is `Integration.frameRun_agree`'s `hwd`, at a run of both mechanisms.
+
+The width of a round of configuration `k` is `count k`, which the anchor
+of configuration `k - 1` sets, and that anchor lies two epochs below by
+`anchor_below` — so the count follows from `config_det`. What needs more
+is the other run's *extent*: reading its width at `r` through `cnt_eq`
+asks `r ≤ Rn'.start (k + 1)`, which configuration `k`'s own anchor
+settles, and that anchor is not two epochs below `r`. It is refuted
+instead: were the other run's configuration to end before `r`, its anchor
+would lie two epochs below after all, so the two anchors would agree and
+the two configurations would end together. -/
+theorem width_det {Rn Rn' : CompRun (R := R) W P upd U V K} (hW : 0 < W)
+    (hgap : P.gap = 2 * W) {k : ℕ} (hk : k < K) {r : ℕ}
+    (hlo : Rn.start k < r) (hhi : r ≤ Rn.start (k + 1))
+    (hv : ∀ g, epochOf W g + 2 ≤ epochOf W (Rn.F.cum r) → Rn.vdct g = Rn'.vdct g) :
+    Rn'.F.width r = Rn.F.width r := by
+  -- the configurations below `k` agree, since their anchors are two epochs down
+  obtain ⟨⟨hs, hc, -⟩, hlow⟩ :=
+    config_det (Rn := Rn) (Rn' := Rn') (kb := k) (by omega)
+      (fun j hj g hg => hv g (le_trans (Nat.add_le_add_right (epochOf_mono W hg) 2)
+        (Rn.anchor_below hW hgap (by omega)
+          (lt_of_le_of_lt (Rn.start_mono (by omega) (by omega)) hlo)))) k (le_refl _)
+  -- and so does the extent of configuration `k` itself
+  have hext : r ≤ Rn'.start (k + 1) := by
+    by_contra hc'
+    push_neg at hc'
+    have hw2 := cnt_agree_upto hk hs hc hlow (b := Rn'.start (k + 1)) (by omega) (le_refl _)
+    have hcum : ∀ x, x ≤ Rn'.start (k + 1) + 1 → Rn'.F.cum x = Rn.F.cum x :=
+      fun x hx => Frame.cum_congr (fun s hs' => hw2 s (by omega)) hx
+    have e' := Rn'.start_succ k hk
+    obtain ⟨-, hthr'⟩ := Rn'.anchor_commits k hk
+    have hgapp : P.gap ≤ Rn'.start (k + 1) := by omega
+    -- the other run's anchor is two epochs below `r`
+    have h1 : Rn'.anchor k < Rn'.F.cum (Rn'.F.roundOf (Rn'.anchor k) + 1) :=
+      Rn'.F.lt_cum_roundOf_succ _
+    have h2 : Rn'.F.cum (Rn'.F.roundOf (Rn'.anchor k) + 1)
+        = Rn.F.cum (Rn'.F.roundOf (Rn'.anchor k) + 1) := hcum _ (by omega)
+    have h3 : Rn.F.cum (Rn'.F.roundOf (Rn'.anchor k) + 1) + P.gap
+        ≤ Rn.F.cum (Rn'.start (k + 1) + 1) := Rn.F.cum_gap (by omega)
+    have h4 : Rn.F.cum (Rn'.start (k + 1) + 1) ≤ Rn.F.cum r := Rn.F.cum_mono (by omega)
+    have hbelow : epochOf W (Rn'.anchor k) + 2 ≤ epochOf W (Rn.F.cum r) :=
+      epochOf_add_two hW (by omega)
+    -- so the anchors agree, and the configurations end together
+    have hwthr := cnt_agree_upto hk hs hc hlow
+      (b := Rn.start k + P.interval + 1)
+      (by have := Rn.thr_lt_start_succ k hk; omega)
+      (by have := Rn'.thr_lt_start_succ k hk; omega)
+    have ha : Rn.anchor k = Rn'.anchor k :=
+      anchor_det hk hs (fun s hs' => hwthr s (by omega))
+        (fun g _ hg2 => hv g (le_trans (Nat.add_le_add_right (epochOf_mono W hg2) 2) hbelow))
+    have hs1 := start_succ_det hk hs hc hlow ha
+    omega
+  rw [Rn.cnt_eq k hk r hlo hhi, Rn'.cnt_eq k hk r (by omega) hext, hc]
+
 end CompRun
+
 
 end Integration
 end LeanDag
