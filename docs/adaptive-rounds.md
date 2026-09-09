@@ -216,6 +216,21 @@ is the existence of the slot, which is the reassignment's obligation and
 not the rule's. `closed_of_settles` (§6.3) derives the third clause the
 same way.
 
+`Composed.toPartialRun` reads a composed run as an
+`Adaptive.PartialRun` over its own schedule: the configuration data fixes
+the frame, the frame and the assignment make a `Slots`, and what the
+composed run says of its verdicts is what the arc's run asks. So the
+arc's own results apply to it — `partialRun_agree` for the verdicts,
+`partialRun_assign_agree` for the leaders, and the liveness of
+`Adaptive/Liveness.lean` for its existence — rather than being restated.
+
+`Properties.decidedBelow_of_decidedFrameBelow` is what that turns on. The
+arc bounds a verdict by slot index and holds the round structure fixed; a
+frame bounds it by round and lets the widths move above. The second is
+the stronger clause, and this is the reading of it the arc consumes: a
+schedule with the frame's rounds and agreeing leaders is the frame's own
+schedule at a reassigned leader function.
+
 `extend` takes the assignment and the verdicts of the run it builds
 rather than carrying the shorter run's, which a run of height `K`
 constrains nowhere above `F.cum (start K)`. So `coherent` is immediate —

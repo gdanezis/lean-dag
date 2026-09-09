@@ -152,5 +152,46 @@ theorem decided_of_frame_agree (h : Banded R) {F : Frame} {asg : ℕ → ℕ →
   · exact fun m hm => (Frame.toSlots_agree hw ha hm).1
   · exact fun m hm => (Frame.toSlots_agree hw ha hm).2
 
+
+/-- **A verdict settled below a round is settled below the slots that
+round holds.** The arc bounds a verdict by slot index and holds the round
+structure fixed; a frame bounds it by round and lets the widths move
+above. The second is the stronger clause, and this is the reading of it
+the arc consumes: a schedule with the frame's rounds and agreeing leaders
+is the frame's own schedule at a reassigned leader function. -/
+theorem decidedBelow_of_decidedFrameBelow {F : Frame} {a : ℕ → ℕ → Validator}
+    {hk : ∀ r i j, i < F.width r → j < F.width r → a r i = a r j → i = j}
+    {B : ℕ} {U : R.Universe} {V : R.View U} {g : ℕ} {v : Option BlockId}
+    (h : DecidedFrameBelow R F a B V g v) :
+    DecidedBelow R (F.toSlots a hk) (max (g + 1) (F.cum B)) V g v := by
+  refine ⟨lt_of_lt_of_le (Nat.lt_succ_self g) (le_max_left _ _), ?_, ?_⟩
+  · exact h F a hk (fun _ _ => rfl) (fun _ _ _ _ => rfl)
+  · intro S' hround hlead
+    have hkey : ∀ r i j, i < F.width r → j < F.width r →
+        S'.leader (F.index r i) = S'.leader (F.index r j) → i = j := by
+      intro r i j hi hj he
+      have := S'.keyed (a₁ := F.index r i) (a₂ := F.index r j) ?_
+      · have hri : F.roundOf (F.index r i) = r := F.roundOf_index hi
+        have hrj : F.roundOf (F.index r j) = r := F.roundOf_index hj
+        simp only [Frame.index] at this; omega
+      · refine Prod.ext ?_ he
+        simp only [hround, Frame.toSlots_slotRound, F.roundOf_index hi, F.roundOf_index hj]
+    have heq : F.toSlots (fun r i => S'.leader (F.index r i)) hkey = S' := by
+      refine Slots.ext' ?_ ?_
+      · funext g'
+        show F.roundOf g' = S'.slotRound g'
+        rw [hround]; rfl
+      · funext g'
+        show S'.leader (F.index (F.roundOf g') (g' - F.cum (F.roundOf g'))) = S'.leader g'
+        rw [F.index_roundOf_self g']
+    rw [← heq]
+    refine h F _ hkey (fun _ _ => rfl) (fun r i hr hi => ?_)
+    show S'.leader (F.index r i) = _
+    refine (hlead (F.index r i) ?_).trans (F.toSlots_leader_index hi)
+    have h1 : F.cum (r + 1) ≤ F.cum B := F.cum_mono (by omega)
+    have h2 := F.cum_succ r
+    have h3 : F.cum B ≤ max (g + 1) (F.cum B) := le_max_right _ _
+    simp only [Frame.index]; omega
+
 end Properties
 end LeanDag

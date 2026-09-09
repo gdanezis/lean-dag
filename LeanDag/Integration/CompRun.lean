@@ -822,6 +822,60 @@ theorem anchor_isCandidate (hcc : Properties.CommitsCandidate R)
   rw [hA] at hd
   exact hcc _ _ _ _ _ hd
 
+
+section ToPartialRun
+
+variable [S : Slots Validator]
+
+
+/-- **A composed run is an adaptive run over its own schedule.** The
+configuration data fixes the frame, the frame and the assignment make a
+`Slots`, and what the composed run says of its verdicts is what the arc's
+`PartialRun` asks — once the frame's round bound is read as the arc's
+slot bound.
+
+With this the arc's own results apply to a composed run:
+`partialRun_agree` for the verdicts, `partialRun_assign_agree` for the
+leaders, and the liveness of `Adaptive/Liveness.lean` for its existence. -/
+def toPartialRun (Rn : Composed (R := R) W P pick upd U V K H) (Pol : Adaptive.Policy R)
+    (hW : 0 < W) (hS : S = Rn.F.toSlots Rn.asg Rn.keyed)
+    (hPW : Pol.W = W) (hPp : Pol.pick = pick) :
+    Adaptive.PartialRun Pol U V H where
+  assign := S.leader
+  keyed := fun k₁ k₂ hr hl => S.keyed (Prod.ext hr hl)
+  vdct := Rn.vdct
+  coherent := fun m hm => by
+    subst hS
+    rw [hPW] at hm
+    rw [hPp]
+    have hi : m - Rn.F.cum (Rn.F.roundOf m) < Rn.F.width (Rn.F.roundOf m) :=
+      Rn.F.pos_lt_width m
+    have h := Rn.coherent (Rn.F.roundOf m) (m - Rn.F.cum (Rn.F.roundOf m)) hi
+      (by rw [Rn.F.index_roundOf_self m]; exact hm)
+    rw [Rn.F.index_roundOf_self m] at h
+    exact h
+  closed := fun k hk => by
+    subst hS
+    rw [hPW] at hk ⊢
+    have hi : k - Rn.F.cum (Rn.F.roundOf k) < Rn.F.width (Rn.F.roundOf k) :=
+      Rn.F.pos_lt_width k
+    have h := Rn.closed (Rn.F.roundOf k) (k - Rn.F.cum (Rn.F.roundOf k)) hi
+      (by rw [Rn.F.index_roundOf_self k]; exact hk)
+    rw [Rn.F.index_roundOf_self k] at h
+    have hb := Properties.decidedBelow_of_decidedFrameBelow (hk := Rn.keyed) h
+    refine DecidedBelow.mono hb ?_
+    have h1 : Rn.F.cum (Rn.F.roundOf (W * (epochOf W k + 2))) ≤ W * (epochOf W k + 2) :=
+      Rn.F.cum_roundOf_le _
+    have h2 : k < W * (epochOf W k + 2) := by
+      simp only [epochOf]
+      have hd := Nat.div_add_mod k W
+      have hm2 : k % W < W := Nat.mod_lt _ hW
+      have he : W * (k / W + 2) = W * (k / W) + W * 2 := Nat.mul_add W (k / W) 2
+      omega
+    omega
+
+end ToPartialRun
+
 end Composed
 
 
