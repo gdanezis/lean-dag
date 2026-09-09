@@ -238,6 +238,15 @@ define the assignment as the policy's reading of the verdicts at the new
 frame and it is `rfl` — and `hag`, that the two assignments agree below,
 follows from `adapted` once the verdicts do.
 
+`extend`'s agreement clause now asks what the arc can supply.
+`Adaptive.partialRun_agree` gives agreement on the epochs two runs have
+both closed, so `hvd` reads `epochOf W g < H` rather than a bound in
+slots — and `anchor_closed`, that a closed configuration's anchor is a
+slot of a closed epoch, is what makes the three places `extend` reads a
+verdict fall inside it. Without that clause a run could name an anchor
+past everything it has decided, and nothing it says would settle that
+anchor's verdict.
+
 **What is left is that the protocol decides the new configuration's
 slots**, which is `Decided` at the composed schedule. The adaptive arc's
 own construction supplies it, and applies here unchanged:

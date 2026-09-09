@@ -387,6 +387,10 @@ structure Composed (W : ℕ) (P : Params)
   /-- The assignment is the policy's. -/
   coherent : ∀ r i, i < F.width r → epochOf W (F.index r i) < H + 1 →
     asg r i = pick U V vdct (F.index r i)
+  /-- **A closed configuration's anchor is a slot of a closed epoch.**
+  Without this a run could name an anchor past everything it has decided,
+  and nothing it says would settle that anchor's verdict. -/
+  anchor_closed : ∀ k, k < K → epochOf W (anchor k) < H
   /-- Every slot of a closed epoch is decided by the schedule below the
   round at which its window ends. -/
   closed : ∀ r i, i < F.width r → epochOf W (F.index r i) < H →
@@ -486,6 +490,7 @@ def genesis (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) �
   anchor_least := fun _ h => absurd h (by omega)
   start_succ := fun _ h => absurd h (by omega)
   update := fun _ h => absurd h (by omega)
+  anchor_closed := fun _ h => absurd h (by omega)
   keyed := fun _ i j hi hj _ => by
     have : i = 0 := by simpa [constFrame] using hi
     have : j = 0 := by simpa [constFrame] using hj
@@ -546,6 +551,7 @@ def reframe (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W)
     rw [Frame.extend_roundOf hr]
     exact Rn.start_succ k hk
   update := Rn.update
+  anchor_closed := Rn.anchor_closed
   keyed := fun r i j hi hj hij => by
     by_cases h : r ≤ Rn.start K
     · rw [Frame.extend_width_le h] at hi hj
@@ -611,7 +617,7 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     (hupdle : ∀ b A, (upd (Rn.count K) b U V A).1 ≤ P.maxLeaders) (hgap : 0 < P.gap)
     (asg' : ℕ → ℕ → Validator) (vdct' : ℕ → Option BlockId)
     (hag : ∀ r i, r ≤ Rn.start K → asg' r i = Rn.asg r i)
-    (hvd : ∀ g, g < Rn.F.cum (Rn.start K) → vdct' g = Rn.vdct g)
+    (hvd : ∀ g, epochOf W g < H → vdct' g = Rn.vdct g)
     (hkeyed' : ∀ r i j, i < (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).width r →
       j < (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).width r →
       asg' r i = asg' r j → i = j)
@@ -630,6 +636,7 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
             (Rn.count_pos K)).index r i) + 2)))
         V ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i)
         (vdct' ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).index r i)))
+    (hHH : H ≤ H') (hanc : epochOf W (anchorOf hcl) < H')
     (hhor' : W * (H' + 1) ≤
       (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).cum
         ((Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).roundOf
@@ -681,6 +688,7 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     anchor_least := ?al
     start_succ := ?ss
     update := ?upd
+    anchor_closed := ?anc
     keyed := hkeyed'
     coherent := hcoh
     closed := hclosed }, by simpa only [if_neg (show ¬ (K + 1 ≤ K) by omega)] using hhor'⟩⟩
@@ -702,7 +710,7 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     · rw [ha_lo k (by omega), hs_lo k (by omega)]
       obtain ⟨⟨A', hA'⟩, hthr'⟩ := Rn₁.anchor_commits k h
       exact ⟨⟨A', by
-        rw [hvd _ (CompRun.anchor_lt_cum_start Rn.toCompRun hgap h)]; exact hA'⟩, hthr'⟩
+        rw [hvd _ (Rn.anchor_closed k h)]; exact hA'⟩, hthr'⟩
     · have hkK : k = K := by omega
       subst hkK
       rw [ha_hi, hs_lo k (by omega)]
@@ -713,7 +721,8 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     · rw [ha_lo k (by omega)] at hlt
       rw [hs_lo k (by omega)] at hg
       rw [hvd g (by
-        have := CompRun.anchor_lt_cum_start Rn.toCompRun hgap h
+        have h1 := Rn.anchor_closed k h
+        have h2 : epochOf W g ≤ epochOf W (Rn.anchor k) := epochOf_mono W (by omega)
         omega)]
       exact Rn₁.anchor_least k h g hg hlt
     · have hkK : k = K := by omega
@@ -729,13 +738,22 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     · have hkK : k = K := by omega
       subst hkK
       rw [hs_hi, ha_hi]
+  case anc =>
+    intro k hk
+    rcases Nat.lt_or_ge k K with h | h
+    · rw [ha_lo k (by omega)]
+      exact lt_of_lt_of_le (Rn.anchor_closed k h) hHH
+    · have hkK : k = K := by omega
+      subst hkK
+      rw [ha_hi]
+      exact hanc
   case upd =>
     intro k hk B hB
     rcases Nat.lt_or_ge k K with h | h
     · rw [hc_lo (k + 1) (by omega), hb_lo (k + 1) (by omega), hc_lo k (by omega),
         hb_lo k (by omega)]
       rw [ha_lo k (by omega)] at hB
-      rw [hvd _ (CompRun.anchor_lt_cum_start Rn.toCompRun hgap h)] at hB
+      rw [hvd _ (Rn.anchor_closed k h)] at hB
       exact Rn.update k h B hB
     · have hkK : k = K := by omega
       subst hkK
