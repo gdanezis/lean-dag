@@ -247,6 +247,14 @@ verdict fall inside it. Without that clause a run could name an anchor
 past everything it has decided, and nothing it says would settle that
 anchor's verdict.
 
+`vdct_agree_of_partialRun` discharges `hvd` from the arc: whatever
+`Adaptive.exists_partialRun` produces already agrees with the shorter run
+where `extend` reads it, so the next configuration's verdicts need no
+reconciliation by hand. `anchor_decided` is the fact underneath
+`anchor_closed` — the commit a configuration acts on is one the run has
+settled, which it has to be, since the configuration reads that block to
+compute the next count.
+
 **What is left is that the protocol decides the new configuration's
 slots**, which is `Decided` at the composed schedule. The adaptive arc's
 own construction supplies it, and applies here unchanged:

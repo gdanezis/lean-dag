@@ -604,6 +604,20 @@ def reframe (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W)
 
 
 
+@[simp] theorem reframe_F (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W)
+    {m : ℕ} (hm : 0 < m) (hmle : m ≤ P.maxLeaders) (hK : 0 < K)
+    (hhor : W * (H + 1) ≤ Rn.F.cum (Rn.start K))
+    (hkeyed : ∀ r, Rn.start K < r → ∀ i j, i < m → j < m →
+      Rn.asg r i = Rn.asg r j → i = j) :
+    (Rn.reframe hW hm hmle hK hhor hkeyed).F = Rn.F.extend (Rn.start K) m hm := rfl
+
+@[simp] theorem reframe_asg (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W)
+    {m : ℕ} (hm : 0 < m) (hmle : m ≤ P.maxLeaders) (hK : 0 < K)
+    (hhor : W * (H + 1) ≤ Rn.F.cum (Rn.start K))
+    (hkeyed : ∀ r, Rn.start K < r → ∀ i j, i < m → j < m →
+      Rn.asg r i = Rn.asg r j → i = j) :
+    (Rn.reframe hW hm hmle hK hhor hkeyed).asg = Rn.asg := rfl
+
 /-- **Progress: one more configuration.** A run whose current
 configuration closes extends by one. The frame is extended past the run's
 last start at the count in force there, `reframe` carries the old
@@ -616,7 +630,6 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     (hupd : ∀ b A, 0 < (upd (Rn.count K) b U V A).1)
     (hupdle : ∀ b A, (upd (Rn.count K) b U V A).1 ≤ P.maxLeaders) (hgap : 0 < P.gap)
     (asg' : ℕ → ℕ → Validator) (vdct' : ℕ → Option BlockId)
-    (hag : ∀ r i, r ≤ Rn.start K → asg' r i = Rn.asg r i)
     (hvd : ∀ g, epochOf W g < H → vdct' g = Rn.vdct g)
     (hkeyed' : ∀ r i j, i < (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).width r →
       j < (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K)).width r →
@@ -825,6 +838,18 @@ theorem decided_at (Rn : Composed (R := R) W P pick upd U V K H) (g : ℕ)
     (Rn.F.pos_lt_width g) (by rw [Rn.F.index_roundOf_self g]; exact hep)
   rwa [Rn.F.index_roundOf_self g] at h
 
+/-- **A closed configuration's anchor is decided.** Barnacle closes a
+configuration when it observes a commit past the threshold, and that
+observation is a decided verdict — it has to be, since the configuration
+reads the anchor's block to compute the next count. `anchor_closed` is
+what the structure says of that, and this is it read back: the commit a
+configuration acts on is one the run has settled. -/
+theorem anchor_decided (Rn : Composed (R := R) W P pick upd U V K H) {k : ℕ} (hk : k < K) :
+    ∃ A, Rn.vdct (Rn.anchor k) = some A ∧
+      R.Decided (Rn.F.toSlots Rn.asg Rn.keyed) V (Rn.anchor k) (some A) := by
+  obtain ⟨⟨A, hA⟩, -⟩ := Rn.anchor_commits k hk
+  exact ⟨A, hA, hA ▸ Rn.decided_at (Rn.anchor k) (Rn.anchor_closed k hk)⟩
+
 /-- **The block a configuration commits is a candidate of its anchor's
 slot.** This is what BN14 turns on, and it holds of a composed run for
 the reason it holds of Barnacle's: the anchor is decided, and a decided
@@ -891,6 +916,26 @@ def toPartialRun (Rn : Composed (R := R) W P pick upd U V K H) (Pol : Adaptive.P
       have he : W * (k / W + 2) = W * (k / W) + W * 2 := Nat.mul_add W (k / W) 2
       omega
     omega
+
+
+/-- **`extend`'s agreement clause is the arc's.** A composed run read as
+an adaptive run and any other run of the same policy over the same view
+hold the same verdicts on the epochs both have closed — `partialRun_agree`
+— and that is exactly the range `extend` reads, since `anchor_closed`
+puts the anchors it consults inside it.
+
+So the verdicts of the next configuration need not be reconciled with the
+shorter run's by hand: whatever `Adaptive.exists_partialRun` produces
+already agrees where it must. -/
+theorem vdct_agree_of_partialRun (hag : Agree R)
+    (Rn : Composed (R := R) W P pick upd U V K H)
+    (Pol : Adaptive.Policy R) (hW : 0 < W)
+    (hS : S = Rn.F.toSlots Rn.asg Rn.keyed) (hPW : Pol.W = W) (hPp : Pol.pick = pick)
+    {H' : ℕ} (A : Adaptive.PartialRun Pol U V H') :
+    ∀ g, epochOf W g < min H H' → A.vdct g = Rn.vdct g :=
+  fun g hg =>
+    (Adaptive.partialRun_agree hag (Rn.toPartialRun Pol hW hS hPW hPp) A g
+      (by rw [hPW]; exact hg)).symm
 
 end ToPartialRun
 
