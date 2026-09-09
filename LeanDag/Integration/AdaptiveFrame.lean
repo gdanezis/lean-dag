@@ -1,5 +1,6 @@
 import LeanDag.Properties.Derived.Frame
 import LeanDag.Adaptive.Liveness
+import LeanDag.Barnacle.Model.Heads
 /-!
 # The adaptive policy over a frame whose widths vary
 
@@ -235,6 +236,43 @@ theorem descends_frame {F : Frame} {asg : ℕ → ℕ → Validator}
     Descends R (slotsOfKeyed (S := F.toSlots asg hkf) a h) c :=
   Adaptive.descends_slotsOf (S := F.toSlots asg hkf) hind hc
     (Frame.spansEligible_toSlots hM hspan) a h
+
+section Fairness
+
+open Adaptive
+
+variable [S : Slots Validator]
+
+
+/-- **Barnacle's fairness gives the adaptive arc's, at the rotation.**
+`HeadsRun` says the rotation has a stretch of `c` reliable leaders within
+`c₀` of every round; `PlacesRuns` asks for a stretch of `c` reliable
+slots inside every epoch. At one leader per round the two are the same
+stretch, and the epoch has room for it as soon as `c₀ ≤ W`.
+
+This is what makes the composition no less live than the schedule it
+starts from: the clause the adaptive arc prices is one Barnacle already
+pays. -/
+theorem placesRuns_const_of_headsRun {W : ℕ} (hW : 0 < W)
+    (hinj : Function.Injective S.slotRound)
+    {getLeader : ℕ → Validator} (hleader : ∀ κ, S.leader κ = getLeader κ)
+    {T : Finset Validator} {c c₀ : ℕ} (hc₀ : c₀ ≤ W)
+    (hhr : Barnacle.HeadsRun getLeader T c c₀) :
+    PlacesRuns (Policy.const (R := R) W hW hinj) T c := by
+  intro U V v e
+  obtain ⟨ρ, h1, h2, h3⟩ := hhr (W * (e + 1))
+  refine ⟨ρ, ?_, ?_, fun i hi => ?_⟩
+  · show W * (e + 1) ≤ ρ
+    exact h1
+  · show ρ + c ≤ W * (e + 2)
+    have he : W * (e + 2) = W * (e + 1) + W := by
+      have hee : e + 2 = (e + 1) + 1 := by omega
+      rw [hee, Nat.mul_succ]
+    omega
+  · rw [Policy.const_pick, hleader]
+    exact h3 i hi
+
+end Fairness
 
 end Integration
 end LeanDag

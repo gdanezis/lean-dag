@@ -237,9 +237,22 @@ last of `c` consecutive slots is eligible for everything below the first
 its own bound on the count. `descends_frame` is the arc's descent read at
 a frame, and it is `descends_slotsOf` applied, not restated.
 
-So what remains is the fairness clause `PlacesRuns` at the composed
-policy, which is an assumption in both settings and the one liveness
-prices.
+`placesRuns_const_of_headsRun` connects the two arcs' fairness notions
+where they meet. `HeadsRun` says Barnacle's rotation has a stretch of `c`
+reliable leaders within `c₀` of every round; `PlacesRuns` asks for a
+stretch of `c` reliable slots inside every epoch. At one leader per round
+those are the same stretch, and the epoch has room for it as soon as
+`c₀ ≤ W`. So the clause the adaptive arc prices is one Barnacle already
+pays, and the composition is no less live than the schedule it starts
+from.
+
+Beyond one leader per round the two part company: `HeadsRun` gives a run
+of consecutive *rotation indices*, and at count `m` a round's slots take
+`m` consecutive indices while the next round restarts them, so a run of
+slots crossing a round boundary is not a run of indices. Barnacle's own
+`LiveOnOfHeads` is where that is handled at each count, and the composed
+form of `PlacesRuns` above the base prefix remains an assumption — the
+one liveness prices, and the one a reputation scheme owes.
 
 ### 6.2 The bridge to Barnacle's numbering — built
 
