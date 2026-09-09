@@ -309,5 +309,95 @@ theorem width_det {Rn Rn' : CompRun (R := R) W P upd U V K} (hW : 0 < W)
 end CompRun
 
 
+variable {W : ℕ} {upd : ℕ → ℕ → (U : R.Universe) → R.View U → BlockId → ℕ × ℕ}
+variable {U : R.Universe} {V : R.View U} {K : ℕ}
+
+/-- **A composed run.** Barnacle's configuration data and frame, with the
+adaptive assignment on top: the same object read as a `FrameRun`. -/
+structure Composed (W : ℕ) (P : Params)
+    (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator)
+    (upd : ℕ → ℕ → (U : R.Universe) → R.View U → BlockId → ℕ × ℕ)
+    (U : R.Universe) (V : R.View U) (K H : ℕ) extends CompRun (R := R) W P upd U V K where
+  /-- The leaders, by round and position. -/
+  asg : ℕ → ℕ → Validator
+  keyed : ∀ r i j, i < F.width r → j < F.width r → asg r i = asg r j → i = j
+  /-- The assignment is the policy's. -/
+  coherent : ∀ r i, i < F.width r → epochOf W (F.index r i) < H + 1 →
+    asg r i = pick U V vdct (F.index r i)
+  /-- Every slot of a closed epoch is decided by the schedule below the
+  round at which its window ends. -/
+  closed : ∀ r i, i < F.width r → epochOf W (F.index r i) < H →
+    DecidedFrameBelow R F asg
+      (F.roundOf (W * (epochOf W (F.index r i) + 2))) V (F.index r i)
+      (vdct (F.index r i))
+
+namespace Composed
+
+variable {pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator}
+variable {H : ℕ}
+
+/-- **A composed run is a run over its own frame.** -/
+def toFrameRun (Rn : Composed (R := R) W P pick upd U V K H) : FrameRun (R := R) W pick U V H where
+  F := Rn.F
+  asg := Rn.asg
+  keyed := Rn.keyed
+  vdct := Rn.vdct
+  coherent := Rn.coherent
+  closed := Rn.closed
+
+/-- **The widths are a function of the verdicts**, at every round the
+induction reads — `width_det` where a configuration holds the round, and
+`cnt_zero` at genesis, which no configuration's range covers. -/
+theorem hwd {Rn Rn' : Composed (R := R) W P pick upd U V K H} (hW : 0 < W)
+    (hgap : P.gap = 2 * W)
+    (hcover : ∀ r, 0 < r → r < Rn.F.roundOf (W * (H + 1)) →
+      ∃ k, k < K ∧ Rn.start k < r ∧ r ≤ Rn.start (k + 1)) :
+    ∀ r, r < Rn.F.roundOf (W * (H + 1)) →
+      (∀ j, epochOf W j + 2 ≤ epochOf W (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
+      Rn'.F.width r = Rn.F.width r := by
+  intro r hr hv
+  rcases Nat.eq_zero_or_pos r with h0 | h0
+  · subst h0; rw [Rn.cnt_zero, Rn'.cnt_zero]
+  · obtain ⟨k, hk, hlo, hhi⟩ := hcover r h0 hr
+    exact CompRun.width_det (Rn := Rn.toCompRun) (Rn' := Rn'.toCompRun) hW hgap hk hlo hhi hv
+
+/-- **A run that reaches the horizon covers every round the induction
+reads.** The condition is on slots — the run's configurations hold at
+least `W * (H + 1)` of them — which is what the epoch height asks. -/
+theorem cover_of_horizon (Rn : Composed (R := R) W P pick upd U V K H) (hK : 0 < K)
+    (hhor : W * (H + 1) ≤ Rn.F.cum (Rn.start K)) :
+    ∀ r, 0 < r → r < Rn.F.roundOf (W * (H + 1)) →
+      ∃ k, k < K ∧ Rn.start k < r ∧ r ≤ Rn.start (k + 1) := by
+  intro r h0 hr
+  have h1 : Rn.F.cum (r + 1) ≤ Rn.F.cum (Rn.F.roundOf (W * (H + 1))) :=
+    Rn.F.cum_mono (by omega)
+  have h2 : Rn.F.cum (Rn.F.roundOf (W * (H + 1))) ≤ W * (H + 1) :=
+    Rn.F.cum_roundOf_le _
+  have h3 : r + 1 ≤ Rn.start K := by
+    by_contra hc
+    push_neg at hc
+    have := Rn.F.cum_strictMono hc
+    omega
+  have hKK : K - 1 + 1 = K := by omega
+  obtain ⟨j, hj, ha, hb⟩ :=
+    Rn.toCompRun.exists_cfg (k := K - 1) (by omega) h0 (by rw [hKK]; omega)
+  exact ⟨j, by omega, ha, hb⟩
+
+/-- **Safety of the composition.** Two composed runs over one universe
+and view have the same verdicts: Barnacle's counts and the policy's
+leaders are both functions of the verdicts, and `Params.gap` is what puts
+the counts far enough back to be read where they are needed. -/
+theorem agree (hR : Properties.Agree R) (hW : 0 < W) (hgap : P.gap = 2 * W)
+    (hadapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
+      (∀ j, epochOf W j + 2 ≤ epochOf W k → v j = w j) →
+      pick U V₁ v k = pick U V₂ w k)
+    (Rn Rn' : Composed (R := R) W P pick upd U V K H)
+    (hcover : ∀ r, 0 < r → r < Rn.F.roundOf (W * (H + 1)) →
+      ∃ k, k < K ∧ Rn.start k < r ∧ r ≤ Rn.start (k + 1)) :
+    ∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g :=
+  frameRun_agree hR hW hadapted Rn.toFrameRun Rn'.toFrameRun (hwd hW hgap hcover)
+
+end Composed
+
 end Integration
 end LeanDag

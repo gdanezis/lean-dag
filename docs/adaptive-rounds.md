@@ -7,8 +7,8 @@
 > and whether the surrounding prose is faithful to what is proved, has
 > only human-plus-LLM review behind it. Read critically.
 
-> **Status (September 2026).** §2 to §5 are built and on this branch; §6
-> is what remains. The composition on branches
+> **Status (September 2026).** §2 to §5 and §6.2 are built and on this
+> branch; §6.1, §6.3 and §6.4 are what remain. The composition on branches
 > `compose-barnacle-hammerhead` and `compose-cadence` is superseded, and
 > retained only for the proofs §8 names.
 
@@ -176,7 +176,7 @@ the alignment restrictions should make them easier rather than harder,
 since the anchor is no longer required to arrive inside a fixed window,
 but none of it is proved.
 
-### 6.2 The bridge to Barnacle's numbering — mostly built
+### 6.2 The bridge to Barnacle's numbering — built
 
 `Integration/BarnacleFrame.lean` crosses between the two indexings:
 `cfgAt` and `frameOf` build the frame a Barnacle run induces, and
@@ -225,12 +225,19 @@ anchors would agree and the two configurations would end together.
 reads, `r < F.roundOf (W * (H + 1))`, which is what `width_det` supplies
 and all the induction ever consulted.
 
-**What remains is the structure.** `CompRun` carries Barnacle's side and
-the frame; it does not yet carry the adaptive side — `asg`, `keyed`,
-`coherent`, `closed` — so there is no map `CompRun → FrameRun` and hence
-no single theorem saying a composed run is safe. Adding those fields and
-writing that map is the remaining work in §6.2, and it is assembly: both
-halves and the clause between them are proved.
+`Composed` extends `CompRun` with the adaptive side — `asg`, `keyed`,
+`coherent`, `closed` — and `toFrameRun` reads it as a `FrameRun`.
+`Composed.agree` is then the composition's safety theorem: two composed
+runs over one universe and view have the same verdicts. Barnacle's counts
+and the policy's leaders are both functions of the verdicts, and
+`Params.gap` is what puts the counts far enough back to be read where
+they are needed.
+
+Its one side condition is that the run reaches the horizon, and
+`cover_of_horizon` states that in slots — the run's configurations hold
+at least `W * (H + 1)` of them, which is what an epoch height `H` asks —
+so `agree` is applied to a run that has gone far enough rather than to a
+hypothesis about rounds.
 
 ### 6.3 Is `FrameRun.closed` satisfiable?
 
@@ -307,11 +314,11 @@ statement is preserved. Composition results are `I`-labelled, as in
 3. **Done.** §7's two questions.
 4. **Done.** §5: `keyed`, `slotsOfKeyed`, `PickKeyed`.
 5. **Done.** §4: `Params.gap`, and the arc's absorption of it.
-6. §6.2: the bridge, and `Params.gap` discharging `hwd`. This is what
-   makes the composition a composition rather than two mechanisms with
-   compatible statements, and it is next.
-7. §6.1: liveness over the frame. §6.3 and §6.4 are to be settled as they
-   are met.
+6. **Done.** §6.2: the bridge, `Params.gap` discharging `hwd`, and
+   `Composed.agree`.
+7. §6.1: liveness over the frame, which is now the whole of what the
+   composition still owes. §6.3 and §6.4 are to be settled as they are
+   met.
 
 ## 11. What could still go wrong
 

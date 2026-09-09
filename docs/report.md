@@ -15854,7 +15854,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 470 theorems the body or Appendix A names, each
+The 471 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -21063,6 +21063,23 @@ theorem safety : LeanDag.Properties.Safe (rule (Replica := Replica) (BlockId := 
 theorem progress : LeanDag.Properties.Support.Progresses
     (hzSupport (Replica := Replica) (BlockId := BlockId)) (hzReliability Replica)
 ```
+
+#### `agree`
+
+*theorem, `Integration.CompRun.lean`*
+
+```lean
+theorem agree (hR : Properties.Agree R) (hW : 0 < W) (hgap : P.gap = 2 * W)
+    (hadapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
+      (∀ j, epochOf W j + 2 ≤ epochOf W k → v j = w j) →
+      pick U V₁ v k = pick U V₂ w k)
+    (Rn Rn' : Composed (R := R) W P pick upd U V K H)
+    (hcover : ∀ r, 0 < r → r < Rn.F.roundOf (W * (H + 1)) →
+      ∃ k, k < K ∧ Rn.start k < r ∧ r ≤ Rn.start (k + 1)) :
+    ∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g
+```
+
+**Safety of the composition.** Two composed runs over one universe and view have the same verdicts: Barnacle's counts and the policy's leaders are both functions of the verdicts, and `Params.gap` is what puts the counts far enough back to be read where they are needed.
 
 #### `not_synchronisedOn_copyFill_hz`
 
