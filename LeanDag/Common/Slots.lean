@@ -1,3 +1,6 @@
+import Mathlib.Tactic.Linarith
+import Mathlib.Order.Basic
+import Mathlib.Data.Nat.Find
 import Mathlib.Order.Monotone.Basic
 import Mathlib.Logic.Function.Basic
 import Mathlib.Data.Fin.Basic
@@ -62,6 +65,50 @@ theorem FairRunOn.fairScheduleOn {Validator : Type*} [S : Slots Validator]
   intro k
   obtain ⟨k', hk', hrun⟩ := h k
   exact ⟨k', hk', by simpa using hrun 0 hc⟩
+
+/-- **Every member of `T` leads arbitrarily far out** — per-validator
+fairness, strictly stronger than `FairScheduleOn`. Round-robin supplies
+it, and the rotation-inclusion result of report §11.5 consumes it: a
+straggler's block enters the ledger when its own author leads. -/
+def FairToEach {Validator : Type*} [S : Slots Validator] (T : Finset Validator) : Prop :=
+  ∀ v ∈ T, ∀ k, ∃ k', k ≤ k' ∧ S.leader k' = v
+
+/-- The least slot proposed at or after round `n`, named explicitly
+since under multiple leaders slot `n` itself may sit far below round
+`n`. -/
+def slotAt (Validator : Type*) [S : Slots Validator] (n : ℕ) : ℕ := Nat.find (S.unbounded n)
+
+/-- `slotAt n` names a slot at or past round `n` — the defining property
+of the index. -/
+theorem le_slotRound_slotAt {Validator : Type*} [S : Slots Validator] (n : ℕ) :
+    n ≤ S.slotRound (slotAt Validator n) :=
+  Nat.find_spec (S.unbounded n)
+
+/-- Round `0` is served by slot `0`. -/
+@[simp]
+theorem slotAt_zero {Validator : Type*} [S : Slots Validator] :
+    slotAt Validator 0 = 0 := by
+  rw [slotAt, Nat.find_eq_zero]
+  omega
+
+/-- Consecutive slots are at most `s` rounds apart — the upper companion
+to such a field. Every real schedule has one; the class omits it because
+no safety result ever asks. -/
+def BoundedSpacing {Validator : Type*} [S : Slots Validator] (s : ℕ) : Prop :=
+  ∀ k, S.slotRound (k + 1) ≤ S.slotRound k + s
+
+/-- Bounded spacing accumulates: `d` slots on costs at most `s * d` rounds. -/
+theorem slotRound_le_of_boundedSpacing {Validator : Type*} [S : Slots Validator] {s : ℕ}
+    (hs : BoundedSpacing (Validator := Validator) s) (k d : ℕ) :
+    S.slotRound (k + d) ≤ S.slotRound k + s * d := by
+  induction d with
+  | zero => simp
+  | succ d ih =>
+      have hstep := hs (k + d)
+      have hmul : s * (d + 1) = s * d + s := Nat.mul_succ s d
+      have hassoc : k + (d + 1) = (k + d) + 1 := by omega
+      rw [hassoc]
+      omega
 
 namespace Slots
 

@@ -2839,16 +2839,14 @@ authors, and a committed leader's block is in particular valid — any
 commit route, any view:
 
 ```lean
-theorem card_coveredAt_ge_of_decided {V : View Validator BlockId Payload U}
-    {k : ℕ} (h : Decided U V k (some L)) (hδ : δ < (U.block L).round) :
-    (Correct : Finset Validator).card - F.f ≤ (Arcs.coveredAt (MysticetiProperties.mysticetiRule (Payload := Payload))
-      (coreReliability Validator) U L δ).card
+theorem card_coveredAt_ge_of_decided (hq : Quorate R rel) (hcc : CommitsCandidate R)
+    (h : R.Decided S V k (some L)) (hδ : δ < (R.block U L).round) :
+    rel.correct.card - rel.slack ≤ (coveredAt R rel U L δ).card
 
-theorem card_correct_le_two_mul_coveredAt_of_decided
-    {V : View Validator BlockId Payload U} {k : ℕ}
-    (h : Decided U V k (some L)) (hδ : δ < (U.block L).round) :
-    (Correct : Finset Validator).card ≤ 2 * (Arcs.coveredAt (MysticetiProperties.mysticetiRule (Payload := Payload))
-      (coreReliability Validator) U L δ).card
+theorem card_correct_le_two_mul_coveredAt_of_decided (hq : Quorate R rel)
+    (hcc : CommitsCandidate R) (hhalf : 2 * rel.slack ≤ rel.correct.card)
+    (h : R.Decided S V k (some L)) (hδ : δ < (R.block U L).round) :
+    rel.correct.card ≤ 2 * (coveredAt R rel U L δ).card
 ```
 
 — **every commit carries, at every round below it, blocks from at
@@ -2887,10 +2885,11 @@ def IncludesAt (BlockId : Type) [DecidableEq BlockId] (Payload : Type)
         ∀ (g : ℕ → Option BlockId) (n : ℕ), g k = some L → k < n →
           b ∈ ledgerSet U g n
 
-theorem committed_of_correct_block (hT : T ⊆ (Correct : Finset Validator))
-    (fair : FairToEach T) (m : ℕ) {v : Validator} (hv : v ∈ T) :
-    ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
-      IncludesAt (Validator := Validator) BlockId Payload T m k'
+theorem committed_of_correct_block
+    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hlc : LeaderCommits R Live) (S : Slots Validator) (hT : T ⊆ rel.correct)
+    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) (hv : v ∈ T) :
+    ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧ …
 ```
 
 — for every round `m` and every `v ∈ T` the schedule fixes, *before the
@@ -10905,17 +10904,6 @@ def CertifiesAt (U : BlockUniverse Validator BlockId Payload)
 
 **What the three-round rule counts**: every `T`-authored block at the decision round certifies `L`. Coverage implies it through the vote layer (`certifiesAt_of_synchronisedOn`); the reactive certificate wait supplies it directly (`ReactiveM.certifies`).
 
-#### `FairToEach`
-
-*def, `Mysticeti.Liveness.lean`*
-
-```lean
-def FairToEach (T : Finset Validator) : Prop :=
-  ∀ v ∈ T, ∀ k, ∃ k', k ≤ k' ∧ S.leader k' = v
-```
-
-**Every member of `T` leads arbitrarily far out** — per-validator fairness, strictly stronger than `FairScheduleOn`. Round-robin supplies it, and the rotation-inclusion result of report §11.5 consumes it: a straggler's block enters the ledger when its own author leads.
-
 ### Time: GST, and the rated bounds
 
 #### `Rated`
@@ -10938,16 +10926,6 @@ def FairWithin (T : Finset Validator) (w : ℕ) : Prop :=
 ```
 
 The schedule names a `T`-leader within every window of `w` slots, the rated form of `FairScheduleOn`. `w` is a property of the schedule alone, which keeps L6's quantifier order intact.
-
-#### `BoundedSpacing`
-
-*def, `Mysticeti.Quantitative.lean`*
-
-```lean
-def BoundedSpacing (s : ℕ) : Prop := ∀ k, S.slotRound (k + 1) ≤ S.slotRound k + s
-```
-
-Consecutive slots are at most `s` rounds apart — the upper companion to such a field. Every real schedule has one; the class omits it because no safety result ever asks.
 
 ### The pacing structures, and the delivery they induce
 
@@ -14712,6 +14690,28 @@ def FairScheduleOn {Validator : Type*} [S : Slots Validator] (T : Finset Validat
 
 The schedule names a correct leader arbitrarily far out. Without it no recurrence statement holds: `Slots.leader` is an arbitrary function and could name Byzantine validators forever, however synchronous the network.
 
+#### `FairToEach`
+
+*def, `Common.Slots.lean`*
+
+```lean
+def FairToEach {Validator : Type*} [S : Slots Validator] (T : Finset Validator) : Prop :=
+  ∀ v ∈ T, ∀ k, ∃ k', k ≤ k' ∧ S.leader k' = v
+```
+
+**Every member of `T` leads arbitrarily far out** — per-validator fairness, strictly stronger than `FairScheduleOn`. Round-robin supplies it, and the rotation-inclusion result of report §11.5 consumes it: a straggler's block enters the ledger when its own author leads.
+
+#### `BoundedSpacing`
+
+*def, `Common.Slots.lean`*
+
+```lean
+def BoundedSpacing {Validator : Type*} [S : Slots Validator] (s : ℕ) : Prop :=
+  ∀ k, S.slotRound (k + 1) ≤ S.slotRound k + s
+```
+
+Consecutive slots are at most `s` rounds apart — the upper companion to such a field. Every real schedule has one; the class omits it because no safety result ever asks.
+
 #### `uniform`
 
 *def, `Common.Slots.lean`*
@@ -15827,7 +15827,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 475 theorems the body or Appendix A names, each
+The 469 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -16876,134 +16876,6 @@ theorem heldOf_inj {v : Validator} (hv : v ∈ (Correct : Finset Validator))
 ```
 
 **The acceptance rule is derived** (V19). A correct validator never holds two blocks by one author at a build instant, not by deduplication but because P7 would oblige its block to reference both and P2 forbids that. The storage development assumes this; here it is a theorem.
-
-### Chain quality
-
-#### `card_coveredAt_ge_of_decided`
-
-*theorem, `Quality.Coverage.lean`*
-
-```lean
-theorem card_coveredAt_ge_of_decided {V : View Validator BlockId Payload U}
-    {k : ℕ} (h : Decided U V k (some L)) (hδ : δ < (U.block L).round) :
-    (Correct : Finset Validator).card - F.f ≤ (Arcs.coveredAt (MysticetiProperties.mysticetiRule (Payload := Payload))
-      (coreReliability Validator) U L δ).card
-```
-
-**CQ1.** A committed leader's flush covers all but at most `f` of the correct validators at every round below it — any route, any view, no synchrony.
-
-#### `card_correct_le_two_mul_coveredAt_of_decided`
-
-*theorem, `Quality.Coverage.lean`*
-
-```lean
-theorem card_correct_le_two_mul_coveredAt_of_decided
-    {V : View Validator BlockId Payload U} {k : ℕ}
-    (h : Decided U V k (some L)) (hδ : δ < (U.block L).round) :
-    (Correct : Finset Validator).card ≤ 2 * (Arcs.coveredAt (MysticetiProperties.mysticetiRule (Payload := Payload))
-      (coreReliability Validator) U L δ).card
-```
-
-**CQ2 (the half, exactly).** Every commit carries, at every round below it, blocks from at least half of the correct validators: `|Correct| ≤ 2·|covered|`, since `|Correct| ≥ 2f + 1`.
-
-#### `ledger_coverage`
-
-*theorem, `Quality.Coverage.lean`*
-
-```lean
-theorem ledger_coverage {V : View Validator BlockId Payload U}
-    {g : ℕ → Option BlockId} {n k : ℕ}
-    (hdec : Decided U V k (some L)) (hg : g k = some L) (hk : k < n)
-    (hδ : δ < (U.block L).round) :
-    ∃ S : Finset Validator, S ⊆ (Correct : Finset Validator) ∧
-      (Correct : Finset Validator).card - F.f ≤ S.card ∧
-      ∀ v ∈ S, ∃ i ∈ ledgerSet U g n,
-        (U.block i).creator = v ∧ (U.block i).round = δ
-```
-
-**CQ3 (ledger coverage, cumulative).** For a verdict assignment `g` of a view with a committed slot `k < n` whose leader sits at round `r`: for every `δ < r`, at least `|Correct| − f` correct validators each have a round-`δ` block in the ledger `ledgerSet U g n`. The set is exhibited (`coveredAt`), so no choice and no decidability of the ledger is needed; view-independence is `ledgerSet_agree`.
-
-#### `mem_history_of_decided_commit`
-
-*theorem, `Quality.Inclusion.lean`*
-
-```lean
-theorem mem_history_of_decided_commit
-    {V : View Validator BlockId Payload U} {k : ℕ}
-    (hdec : Decided U V k (some L))
-    (hLc : (U.block L).creator ∈ (Correct : Finset Validator))
-    (hb : b ∈ U.ids) (hbc : (U.block b).creator = (U.block L).creator)
-    (hle : (U.block b).round ≤ (U.block L).round) :
-    b ∈ history U L
-```
-
-**CQ5.** A correct block is in the cone of every committed leader block by the same author at or above its round — any commit route, any view, no synchrony. The self-parent chain does all the work.
-
-#### `committed_of_correct_block`
-
-*theorem, `Quality.Inclusion.lean`*
-
-```lean
-theorem committed_of_correct_block (hT : T ⊆ (Correct : Finset Validator))
-    (fair : FairToEach T) (m : ℕ) {v : Validator} (hv : v ∈ T) :
-    ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
-      IncludesAt (Validator := Validator) BlockId Payload T m k'
-```
-
-**CQ6 (inclusion liveness).** Under a schedule fair to each member of `T`, for every round `m` and every `v ∈ T` there is a slot at or above `m` that `v` leads, which any execution meeting the certification precondition commits, and whose flush contains **every** round-`m` block by `v`; hence every correct block is in the agreed ledger of any verdict assignment covering its author's next committed slot.
-
-The slot is produced *before* the universe is quantified: the schedule fixes it, and any execution then commits it.
-
-#### `committed_of_correct_block_within`
-
-*theorem, `Quality.Capstone.lean`*
-
-```lean
-theorem committed_of_correct_block_within
-    (hT : T ⊆ (Correct : Finset Validator))
-    (fair : FairToEachWithin T w) (m : ℕ) {v : Validator} (hv : v ∈ T) :
-    ∃ k', slotAt Validator m ≤ k' ∧ k' < slotAt Validator m + w ∧
-      m ≤ S.slotRound k' ∧ S.leader k' = v ∧
-      IncludesAt (Validator := Validator) BlockId Payload T m k'
-```
-
-**CQ7, windowed.** Under a schedule windowed-fair to each validator, the committing slot for `v`'s round-`m` blocks lies within `w` slots of the first slot at or above round `m`.
-
-#### `committed_of_correct_block_by_round`
-
-*theorem, `Quality.Capstone.lean`*
-
-```lean
-theorem committed_of_correct_block_by_round
-    (hT : T ⊆ (Correct : Finset Validator))
-    (fair : FairToEachWithin T w) (hs : BoundedSpacing (Validator := Validator) s)
-    (m : ℕ) {v : Validator} (hv : v ∈ T) :
-    ∃ k', m ≤ S.slotRound k' ∧
-      S.slotRound k' ≤ S.slotRound (slotAt Validator m) + s * w ∧
-      S.leader k' = v ∧
-      IncludesAt (Validator := Validator) BlockId Payload T m k'
-```
-
-**CQ7, by round.** With bounded slot spacing, the committing slot's round is within `s·w` rounds of the first slot at or above `m`: a correct block is committed within a schedule-window of rounds of its creation.
-
-#### `chain_quality`
-
-*theorem, `Quality.Capstone.lean`*
-
-```lean
-theorem chain_quality (hT : T ⊆ (Correct : Finset Validator))
-    (fair : FairToEach T) (m : ℕ) :
-    (∀ (U : BlockUniverse Validator BlockId Payload)
-        (V : View Validator BlockId Payload U) (k : ℕ) (L : BlockId)
-        (δ : ℕ), Decided U V k (some L) → δ < (U.block L).round →
-        (Correct : Finset Validator).card ≤
-          2 * (Properties.Arcs.coveredAt (MysticetiProperties.mysticetiRule (Payload := Payload))
-            (coreReliability Validator) U L δ).card) ∧
-    ∀ v ∈ T, ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
-      IncludesAt (Validator := Validator) BlockId Payload T m k'
-```
-
-**CQ7 (the capstone).** Chain quality in one statement, enforceable or standard conditions only. Unconditionally: every commit's flush covers at least half of the correct validators at every round below it. Under a schedule fair to each member of `T`: every block by a member of `T` is in the flush of a slot its author leads, fixed in advance by the schedule.
 
 ### Denial of service
 
@@ -21766,6 +21638,52 @@ theorem chain_quality
 ```
 
 **CQ7 (the capstone).** Chain quality in one statement: every commit's flush covers half the reliable validators, and under a returning schedule every reliable block is in the flush of a slot its author leads.
+
+#### `committed_of_correct_block_within`
+
+*theorem, `Properties.Arcs.Quality.lean`*
+
+```lean
+theorem committed_of_correct_block_within
+    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hlc : LeaderCommits R Live) (hT : T ⊆ rel.correct)
+    (fair : FairToEachWithin T w) (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    ∃ k', slotAt Validator m ≤ k' ∧ k' < slotAt Validator m + w ∧
+      m ≤ S.slotRound k' ∧ S.leader k' = v ∧
+      ∀ (U : R.Universe) (V : R.View U), Live S V T k' (k' + 1) →
+        ∃ L, R.Decided S V k' (some L) ∧
+          ∀ b ∈ R.ids U, (R.block U b).creator = S.leader k' →
+            (R.block U b).round = m →
+            b ∈ historyFrom (R.block U) L ∧
+              ∀ (g : ℕ → Option BlockId) (n : ℕ), g k' = some L → k' < n →
+                b ∈ ledgerSetOf R U g n
+```
+
+**CQ7, windowed.** The committing slot for `v`'s round-`m` blocks lies within `w` slots of the first slot at or above round `m`.
+
+#### `committed_of_correct_block_by_round`
+
+*theorem, `Properties.Arcs.Quality.lean`*
+
+```lean
+theorem committed_of_correct_block_by_round
+    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hlc : LeaderCommits R Live) (hT : T ⊆ rel.correct)
+    (fair : FairToEachWithin T w) (hs : BoundedSpacing (Validator := Validator) s)
+    (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    ∃ k', m ≤ S.slotRound k' ∧
+      S.slotRound k' ≤ S.slotRound (slotAt Validator m) + s * w ∧
+      S.leader k' = v ∧
+      ∀ (U : R.Universe) (V : R.View U), Live S V T k' (k' + 1) →
+        ∃ L, R.Decided S V k' (some L) ∧
+          ∀ b ∈ R.ids U, (R.block U b).creator = S.leader k' →
+            (R.block U b).round = m →
+            b ∈ historyFrom (R.block U) L ∧
+              ∀ (g : ℕ → Option BlockId) (n : ℕ), g k' = some L → k' < n →
+                b ∈ ledgerSetOf R U g n
+```
+
+**CQ7, by round.** With bounded slot spacing the committing slot's round is within `s * w` rounds of the first slot at or above `m`.
 
 #### `decided_chop_iff`
 

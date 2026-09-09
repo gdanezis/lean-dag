@@ -92,26 +92,7 @@ theorem commits_recur_within (hT : T ⊆ (Correct : Finset Validator))
 latency claim wants the opposite bound, so the round bound needs its
 own hypothesis, the mirror image of that spacing. -/
 
-/-- Consecutive slots are at most `s` rounds apart — the upper companion to
-such a field. Every real schedule has one; the class omits it because no
-safety result ever asks. -/
-def BoundedSpacing (s : ℕ) : Prop := ∀ k, S.slotRound (k + 1) ≤ S.slotRound k + s
-
 omit [Fintype Validator] [DecidableEq Validator] F in
-/-- Bounded spacing accumulates: `d` slots on costs at most `s * d` rounds. -/
-theorem slotRound_le_of_boundedSpacing {s : ℕ}
-    (hs : BoundedSpacing (Validator := Validator) s) (k d : ℕ) :
-    S.slotRound (k + d) ≤ S.slotRound k + s * d := by
-  induction d with
-  | zero => simp
-  | succ d ih =>
-      have hstep := hs (k + d)
-      have hmul : s * (d + 1) = s * d + s := Nat.mul_succ s d
-      calc S.slotRound (k + (d + 1)) = S.slotRound (k + d + 1) := rfl
-        _ ≤ S.slotRound (k + d) + s := hstep
-        _ ≤ S.slotRound k + s * d + s := by omega
-        _ = S.slotRound k + s * (d + 1) := by omega
-
 omit [Fintype Validator] [DecidableEq Validator] F in
 /-- A slot bound becomes a round bound. -/
 theorem slotRound_le_of_lt {s : ℕ} (hs : BoundedSpacing (Validator := Validator) s)

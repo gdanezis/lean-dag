@@ -329,13 +329,6 @@ can be grown far enough to commit. -/
 /-- The all-of-`Correct` case. -/
 abbrev FairSchedule : Prop := FairScheduleOn (Correct : Finset Validator)
 
-/-- **Every member of `T` leads arbitrarily far out** — per-validator
-fairness, strictly stronger than `FairScheduleOn`. Round-robin supplies
-it, and the rotation-inclusion result of report §11.5 consumes it: a
-straggler's block enters the ledger when its own author leads. -/
-def FairToEach (T : Finset Validator) : Prop :=
-  ∀ v ∈ T, ∀ k, ∃ k', k ≤ k' ∧ S.leader k' = v
-
 /-- Per-validator fairness is fairness. -/
 theorem FairToEach.fairScheduleOn {T : Finset Validator}
     (h : FairToEach T) (hne : T.Nonempty) : FairScheduleOn T := by
@@ -355,23 +348,8 @@ omit [Fintype Validator] [DecidableEq Validator] F in
 theorem exists_slotRound_ge (n : ℕ) : ∃ k, n ≤ S.slotRound k := S.unbounded n
 
 variable (Validator) in
-/-- The least slot proposed at or after round `n`, named explicitly
-since under multiple leaders slot `n` itself may sit far below round
-`n`. -/
-def slotAt (n : ℕ) : ℕ := Nat.find (S.unbounded n)
-
 omit [Fintype Validator] [DecidableEq Validator] F in
-/-- `slotAt n` names a slot at or past round `n` — the defining property of the index. -/
-theorem le_slotRound_slotAt (n : ℕ) : n ≤ S.slotRound (slotAt Validator n) :=
-  Nat.find_spec (S.unbounded n)
-
 omit [Fintype Validator] [DecidableEq Validator] F in
-/-- Round `0` is served by slot `0`. -/
-@[simp]
-theorem slotAt_zero : slotAt Validator 0 = 0 := by
-  rw [slotAt, Nat.find_eq_zero]
-  omega
-
 omit [Fintype Validator] [DecidableEq Validator] F in
 /-! **Every slot has an eligible anchor somewhere** — the relation's
 `exists_eligible`, from `unbounded`: the restriction to slots past `k`'s

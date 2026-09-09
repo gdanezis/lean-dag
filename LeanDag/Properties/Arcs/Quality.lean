@@ -243,6 +243,78 @@ theorem chain_quality
 
 end Decided
 
+
+/-! ## Windowed inclusion
+
+`committed_of_correct_block` fixes a slot but says nothing about how far
+out it is. Under a schedule that reaches each validator within a window,
+the slot is near, and under bounded spacing its round is near too. Both
+are facts about the schedule; the rule enters only through the inclusion
+statement they carry. -/
+
+/-- **Windowed fairness to each validator**: within any `w` consecutive
+slots every member of `T` leads once. Round-robin over `n` validators
+has it at `w = n`. -/
+def FairToEachWithin [S : Slots Validator] (T : Finset Validator) (w : ℕ) : Prop :=
+  ∀ v ∈ T, ∀ k, ∃ k', k ≤ k' ∧ k' < k + w ∧ S.leader k' = v
+
+section Windowed
+
+variable {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator →
+  ℕ → ℕ → Prop}
+variable [S : Slots Validator] {T : Finset Validator} {w s m : ℕ}
+
+/-- **CQ7, windowed.** The committing slot for `v`'s round-`m` blocks
+lies within `w` slots of the first slot at or above round `m`. -/
+theorem committed_of_correct_block_within
+    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hlc : LeaderCommits R Live) (hT : T ⊆ rel.correct)
+    (fair : FairToEachWithin T w) (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    ∃ k', slotAt Validator m ≤ k' ∧ k' < slotAt Validator m + w ∧
+      m ≤ S.slotRound k' ∧ S.leader k' = v ∧
+      ∀ (U : R.Universe) (V : R.View U), Live S V T k' (k' + 1) →
+        ∃ L, R.Decided S V k' (some L) ∧
+          ∀ b ∈ R.ids U, (R.block U b).creator = S.leader k' →
+            (R.block U b).round = m →
+            b ∈ historyFrom (R.block U) L ∧
+              ∀ (g : ℕ → Option BlockId) (n : ℕ), g k' = some L → k' < n →
+                b ∈ ledgerSetOf R U g n := by
+  obtain ⟨k', hk₁, hk₂, hlead⟩ := fair v hv (slotAt Validator m)
+  have hm : m ≤ S.slotRound k' :=
+    le_trans (le_slotRound_slotAt (Validator := Validator) m) (S.mono hk₁)
+  exact ⟨k', hk₁, hk₂, hm, hlead,
+    fun U V hlive => includes_of_leads hsp hne hcc hlc S hT (by rw [hlead]; exact hv) hm U V hlive⟩
+
+/-- **CQ7, by round.** With bounded slot spacing the committing slot's
+round is within `s * w` rounds of the first slot at or above `m`. -/
+theorem committed_of_correct_block_by_round
+    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hlc : LeaderCommits R Live) (hT : T ⊆ rel.correct)
+    (fair : FairToEachWithin T w) (hs : BoundedSpacing (Validator := Validator) s)
+    (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    ∃ k', m ≤ S.slotRound k' ∧
+      S.slotRound k' ≤ S.slotRound (slotAt Validator m) + s * w ∧
+      S.leader k' = v ∧
+      ∀ (U : R.Universe) (V : R.View U), Live S V T k' (k' + 1) →
+        ∃ L, R.Decided S V k' (some L) ∧
+          ∀ b ∈ R.ids U, (R.block U b).creator = S.leader k' →
+            (R.block U b).round = m →
+            b ∈ historyFrom (R.block U) L ∧
+              ∀ (g : ℕ → Option BlockId) (n : ℕ), g k' = some L → k' < n →
+                b ∈ ledgerSetOf R U g n := by
+  obtain ⟨k', hk₁, hk₂, hm, hlead, hinc⟩ :=
+    committed_of_correct_block_within hsp hne hcc hlc hT fair m hv
+  refine ⟨k', hm, ?_, hlead, hinc⟩
+  have hd : k' - slotAt Validator m ≤ w := by omega
+  have h := slotRound_le_of_boundedSpacing hs (slotAt Validator m) (k' - slotAt Validator m)
+  rw [Nat.add_sub_cancel' hk₁] at h
+  calc S.slotRound k'
+      ≤ S.slotRound (slotAt Validator m) + s * (k' - slotAt Validator m) := h
+    _ ≤ S.slotRound (slotAt Validator m) + s * w :=
+        Nat.add_le_add_left (Nat.mul_le_mul_left s hd) _
+
+end Windowed
+
 end Arcs
 
 end Properties

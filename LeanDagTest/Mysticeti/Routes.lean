@@ -1,3 +1,4 @@
+import LeanDagTest.Quality.Model
 import LeanDag
 
 /-!
