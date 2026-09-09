@@ -7,20 +7,16 @@
 > and whether the surrounding prose is faithful to what is proved, has
 > only human-plus-LLM review behind it. Read critically.
 
-> **Status (September 2026).** §2 is built and on this branch. §3 is the
-> open question and §4 the experiment that settles it; nothing after §2
-> is built. The composition on branches `compose-barnacle-hammerhead` and
-> `compose-cadence` is superseded, and retained only for the proofs §6
-> names.
+> **Status (September 2026).** §2 and §3 are built and on this branch.
+> §4 is what remains, none of it built. The composition on branches
+> `compose-barnacle-hammerhead` and `compose-cadence` is superseded, and
+> retained only for the proofs §5 names.
 
 This document plans the composition of Barnacle (`docs/barnacle.md`),
 which sets how many leaders a round has, with the adaptive leader
-schedule (`docs/adaptive-leaders.md`), which sets who they are. An
-earlier revision proposed re-coordinatising the adaptive arc in rounds.
-§2 removed the obstacle that proposal was drawn against, and §3 states
-what is left of it.
+schedule (`docs/adaptive-leaders.md`), which sets who they are.
 
-## 1. Two numberings
+## 1. Two numberings, and the remedy taken
 
 Barnacle sets how many leaders a round has. Under `Sched getLeader hk m`
 slot `κ` is proposed at round `κ / m`, so a change of `m` at round `r`
@@ -28,13 +24,9 @@ renumbers every slot at and above `r`. Barnacle never changes the rounds:
 round `r` is round `r` at every count.
 
 The adaptive arc indexes both its epochs and its verdicts by slot
-number. `epochOf W k = k / W` (`Adaptive/Basic.lean`), and a run's
-verdicts are `vdct : ℕ → Option BlockId` (`Adaptive/Run.lean`).
-`Policy.adapted` states the lag in that numbering: the leader of slot `k`
-is a function of `v j` for those `j` with `epochOf W j + 2 ≤ epochOf W k`.
-
-A composition must therefore relate a configuration's numbering to the
-one the policy reads. On `compose-barnacle-hammerhead` that relation is
+number, and `Policy.adapted` states its lag in that numbering. A
+composition must therefore relate a configuration's numbering to the one
+the policy reads. On `compose-barnacle-hammerhead` that relation is
 `base`, `width`, `flat`, `flat_eq`, `base_eq`, `base_det`, `flat_det` and
 `dvd_base`, with the restriction `OneEpoch` — every configuration is
 exactly `W` slots — and its consequences `count_dvd`, `span_eq` and
@@ -42,38 +34,40 @@ exactly `W` slots — and its consequences `count_dvd`, `span_eq` and
 equal the policy's epoch length, so the two mechanisms cannot be tuned
 independently.
 
-Two remedies are available. Give the composition **one** numbering, so
-that no relation is needed; or state the policy in coordinates a
-renumbering does not disturb. §2 supplies the first. §3 asks whether the
-second is still wanted.
+Two remedies were available: give the composition one numbering, or
+state the policy in coordinates a renumbering does not disturb. §2 and §3
+take the first. The second — restating the adaptive arc in rounds — is
+**not needed** and is not planned; §3.3 records what it would still be
+worth, which is a question about meaning rather than about proof.
 
-## 2. What is built
-
-### 2.1 The band bounds the rounds it reads
+## 2. The band bounds the rounds it reads
 
 `Banded` (`Properties/Band.lean`) transports a decided verdict to
 another schedule. Its leader clause was already local to the band; its
 round clause was not, so nothing related two schedules differing in
-`slotRound` anywhere. The round clause now carries the same restriction:
-
-    (∀ m m', m + d' = m' + d → S.slotRound m ≤ top →
-      S.slotRound m + g = S'.slotRound m' + g') →
+`slotRound` anywhere. The round clause now carries the same restriction.
 
 No protocol owes anything new. `BandLaws` states each clause pointwise at
 a slot, with the round correspondence as a hypothesis there; none reads a
 global one. Four of the five protocols discharge `Banded` by delegation
 in one line and are unchanged, and consumers are unchanged because a
 weaker hypothesis on `S'` makes the property stronger. The work was
-confined to `banded_aux`, the single generic transport, where each site
-needed what the leader clause already needed — that the slot is in the
-band.
+confined to `banded_aux`, the single generic transport.
 
 `Properties.exists_roundLocal` is the consequence: every decided slot has
 a round bound below which the schedule settles it, and any schedule
 agreeing there, on the rounds as well as the leaders, decides it the same
 way.
 
-### 2.2 A schedule is a frame and an assignment
+`Barnacle.sched_frame_local` is that read at Barnacle's schedule, and
+states what the arc had been assuming. `PartialRun.closed` records a
+configuration's verdicts as decided against
+`Sched getLeader hk (count k)` — the uniform schedule at that count,
+extended to every round — which is not the schedule that runs once the
+count changes. The arc is sound because a configuration's verdicts are
+settled within its own rounds; that is now a theorem.
+
+## 3. One numbering: the frame
 
     structure Frame where
       width : ℕ → ℕ
@@ -82,176 +76,165 @@ way.
 `Frame.cum r` is the slots below round `r`, `Frame.roundOf g` the round
 index `g` falls in, `Frame.index r i` the index of position `i` of round
 `r`, and `Frame.toSlots` the `Slots` a frame and an assignment make,
-enumerating slots in round order. `Slots.keyed` follows from distinctness
-within a round.
+enumerating slots in round order. `constFrame m` is the constant frame,
+and `Barnacle.Sched_eq_frame` says Barnacle's schedule at count `m` is
+exactly that.
 
-This is the decomposition the two mechanisms make: Barnacle varies the
-widths, the adaptive arc varies the leaders. `constFrame m` is the
-constant frame, and `Barnacle.Sched_eq_frame` says Barnacle's schedule at
-count `m` is exactly that, so the arc needs no change to acquire the
-reading.
+`Properties.DecidedFrameBelow R F a B V g v` says the schedule below
+round `B` decides slot `g` and nothing above `B` changes that;
+`decided_of_frame_agree` produces one from `Banded`.
 
-### 2.3 Verdicts survive a change of width above them
+### 3.1 Safety over a varying frame
 
-`Properties.decided_of_frame_agree`: a slot decided under one frame is
-decided under any frame agreeing with it below a round bound the verdict
-determines, whatever the widths above.
+`Adaptive.frameRun_agree` (`Adaptive/Frame.lean`). A `FrameRun` carries a
+frame, an assignment by round and position, and verdicts by global slot
+index. Two such runs over one universe and view have the same verdicts.
 
-`Barnacle.sched_frame_local` is that at the constant frame, and states
-what the arc has been assuming. `PartialRun.closed` records a
-configuration's verdicts as decided against
-`Sched getLeader hk (count k)` — the uniform schedule at that count,
-extended to every round — which is not the schedule that runs once the
-count changes. The arc is sound because a configuration's verdicts are
-settled within its own rounds; that is now a theorem rather than a
-reading.
+The whole of what the varying widths cost is one hypothesis:
 
-### 2.4 What §2 removed from the earlier plan
+    hwd : ∀ r, (∀ j, epochOf W j + 2 ≤ epochOf W (Rn.F.cum r) →
+      Rn.vdct j = Rn'.vdct j) → Rn'.F.width r = Rn.F.width r
 
-`DecidedBelowRound` was proposed as a definition protocols would owe. It
-is unnecessary: `exists_roundLocal` is stronger and follows from
-`Banded`.
+This is `Policy.adapted` read of the widths rather than the leaders: the
+width of round `r` is a function of the verdicts of epochs at least two
+behind the epoch `r`'s slots begin in. The induction needs it for the
+same reason it needs `adapted` — deciding an epoch reads the schedule two
+epochs ahead, and what it reads there must already be settled. At epoch
+`e` the step reads the widths at every round below the one holding slot
+`W * (e + 2)`.
 
-The earlier §2.7 held that two runs' verdicts could be compared only
-against a schedule they agree on everywhere, and concluded that a
-composition must compare inside a configuration, against a schedule
-uniform there. That is no longer so, and the retention of `configSched`
-had no other reason.
+### 3.2 What is not owed
 
-## 3. The open question
+No alignment between a width change and an epoch boundary. No
+divisibility of a width into the epoch length. No `OneEpoch`. And no
+change to the coordinates the policy reads: a frame has one numbering,
+nothing is renumbered when a width changes, and the translation those
+restrictions came from does not arise.
 
-**Does the composition still need the adaptive arc in round
-coordinates?**
+### 3.3 What round coordinates would still be worth
 
-The case that it does not. A composed run may carry one global frame,
-whose widths are the counts in force. Slots are then enumerated once, by
-`Frame.index`, and there is no second numbering to relate: `flat`,
-`base`, `flat_eq` and `base_eq` are replaced by `Frame.cum` and
-`Frame.index`, which are general and proved. `epochOf` continues to read
-the global index. Two runs' numberings agree wherever their widths do,
-and §2.3 is what makes that enough, since the frames need agree only
-below the bound.
+Under a frame an epoch is `W` slots and so spans a variable number of
+rounds. Making it a fixed span of rounds is a statement about what an
+epoch should mean — how far back a reputation window reaches in time
+rather than in leader opportunities — and it is now separable from the
+composition. It is not planned here.
 
-The case that it does. Under a global frame an epoch is `W` slots and so
-spans a variable number of rounds, since the widths vary. Round
-coordinates would make an epoch a fixed span of rounds. This is a
-statement about what an epoch means, not about whether the proof closes,
-and it should be decided on its merits rather than under pressure from
-the numbering.
+## 4. What remains, and what is uncertain in it
 
-**What is not in question.** Neither remedy needs `OneEpoch`, the
-divisibility `count k ∣ W`, or any alignment between configuration
-boundaries and epoch boundaries. Those were consequences of relating two
-numberings and have no source once there is one.
+In rough order of how much is unknown.
 
-**What remains in either case** is the lag. `Policy.adapted` fixes the
-assignment two epochs behind the verdicts. The count is also derived from
-verdicts — from a configuration's anchor — and the composition's
-induction needs it settled where it is read. Whether Barnacle owes a lag
-on the count, and of what size, is the substance of §4 and is independent
-of coordinates.
+### 4.1 Barnacle must supply `hwd`, and cannot today
 
-## 4. The experiment that settles §3
+Barnacle sets the count of configuration `k + 1` from the anchor that
+closes configuration `k`, and it takes effect at the next round: a lag of
+zero epochs where `hwd` asks for two. **Barnacle must delay installing a
+new count until two epochs after the anchor that computed it.** That is a
+change to the control loop, not to the composition — the rule reacts
+later — and it is the outstanding design decision.
 
-Rebuild the composition on a global frame with the adaptive arc
-otherwise unchanged, and find where the induction stalls.
+Uncertain: which of `Barnacle/`'s 2986 lines survive the delay.
+Agreement (BN3) is a determinism argument and a delay should not disturb
+it. Progress and liveness (BN8, BN10, BN11) carry horizon arithmetic
+keyed to `start_succ = anchor / count`, which the delay changes, and the
+size of that is not assessed. The latency cost of the delay is also not
+quantified.
 
-    structure ComposedRun … where
-      cnt   : ℕ → ℕ                      -- the count in force at round r
-      asg   : ℕ → Validator              -- by global slot index
-      vdct  : ℕ → Option BlockId         -- by global slot index
-      …
+### 4.2 Liveness over a frame is not attempted
 
-with `F := ⟨cnt, _⟩` the frame and `F.toSlots` the schedule. Barnacle's
-configuration data — `start`, `count`, `backoff`, `anchor` — is retained
-in its own numbering, and `Frame.index` relates the two where Barnacle's
-theorems are used.
+`frameRun_agree` is safety alone. `Closes`, `extend`, `genesis` and
+`every_height` exist only in the superseded `OneEpoch` shape. Removing
+the alignment restrictions should make them easier rather than harder,
+since the anchor is no longer required to arrive inside a fixed window,
+but none of it is proved.
 
-The safety induction runs on the epoch, and at each step needs the
-widths, then the assignment, then the verdicts. The first of those is
-where a lag on the count would be needed, and the experiment's purpose is
-to see exactly which rounds' widths the step reads. That is a question
-about `Frame.cum` and the bound of §2.3, and it can be answered without
-touching either arc.
+### 4.3 `FrameRun` and `PartialRun` are two run notions
 
-This is much smaller than either rewrite, and it is to be done before
-either is begun.
+`Adaptive/Frame.lean` states a run over a frame; `Adaptive/Run.lean`
+states one over a fixed `Slots`. They coexist, and one of them should
+subsume the other. The obvious move — restate `Adaptive/Run.lean` over
+frames, with a fixed schedule as the constant case — is blocked by §4.4.
 
-## 5. What survives §3 either way
+### 4.4 A frame cannot represent every schedule
 
-`Policy.inj : Function.Injective S.slotRound` states one leader per
-round, which the composition contradicts. It becomes
+`Frame` asks `0 < width r` at every round, so it cannot express a
+schedule that skips rounds. `Slots.uniform p m` at period `p > 1` does
+skip them, and the witnesses use it: `uniformSingle 3` in
+`LeanDagTest/Mysticeti/Model.lean` and `Quantitative.lean`,
+`uniformSingle 2` in `LeanDagTest/Hybrid/Tight.lean`,
+`uniformSingle 3` in `LeanDagTest/Hydrozoan/LivenessHardening.lean` and
+`Mysticeti/Growth.lean`.
 
-    keyed : ∀ U V v κ₁ κ₂, S.slotRound κ₁ = S.slotRound κ₂ →
-      pick U V v κ₁ = pick U V v κ₂ → κ₁ = κ₂
+So `Frame` is a presentation for mechanisms that vary widths, not a
+replacement for `Slots`. Either it is generalised to admit empty rounds —
+`roundOf` then needs care and `Slots.mono` and `unbounded` need widths
+positive infinitely often — or §4.3 is settled by keeping both notions
+and relating them. Which is right is not decided.
 
-with `slotsOf` becoming `slotsOfKeyed`, and the derived clause
-`PickKeyed` — the same law at every count up to a bound — for the
-composition's use. All three are proved on
-`compose-barnacle-hammerhead` and are to be carried over rather than
-rewritten. This is the one change the adaptive arc needs whatever §3
-decides.
+### 4.5 Is `FrameRun.closed` satisfiable?
 
-## 6. Carried over from the superseded branches
+It asks `DecidedFrameBelow` at bound `F.roundOf (W * (epoch + 2))`.
+`decided_of_frame_agree` supplies *some* bound; nothing yet says a
+protocol's is small enough. `LeaderCommits` gives a verdict at slot bound
+`κ + 1` and `Descends` at `b + c`, and both would have to be converted to
+round bounds and the commit gap shown to fit inside two epochs. That is
+the adaptive arc's standing assumption, so it should hold, but it is
+unproved in this setting.
+
+### 4.6 The bridge to Barnacle's numbering
+
+`FrameRun` names no Barnacle. Connecting them means relating Barnacle's
+per-configuration slot numbering to the frame's global one through
+`Frame.index`. The facility exists; the bridge does not. The alternative,
+restating Barnacle over the frame, is three times the size of restating
+the adaptive arc and is not proposed.
+
+### 4.7 The joiner and conservativity
+
+`epochOf_add_of_dvd` states that a numbering starting at an aligned
+offset agrees with the original about epochs, and `Adaptive/Joiner.lean`
+uses it for a validator that joins mid-execution; under a frame the
+offset is a slot offset into varying widths, and whether the lemma
+survives is not assessed. `Policy.const_run_decided` anchors the
+definitions and must still collapse correctly at the constant frame.
+
+## 5. Carried over from the superseded branches
 
 Proved, and to be reused rather than reproved:
 
-* `PickKeyed`, `Policy.keyed`, `slotsOfKeyed` — §5.
+* `PickKeyed`, `Policy.keyed`, `slotsOfKeyed` — `Policy.inj` states one
+  leader per round, which the composition contradicts. This is the one
+  change the adaptive arc needs whatever else is decided.
 * `config_det`, `anchor_det` — the configuration data and the anchor are
   functions of the verdicts below them.
 * `extend`, `genesis`, `every_height` — the liveness shape, less the
   divisibility conditions, which came from `OneEpoch`.
 * `Closes` — what a configuration owes on the schedule the composition
   computes for it, asked at the reassignment rather than the rotation.
-* The two-sided `mixLeader` (`compose-cadence`), if a per-configuration
-  assignment is retained. Under §4's global assignment it is not needed.
 
 Superseded, and not to be carried: `base`, `width`, `flat`, `flat_eq`,
 `base_eq`, `base_det`, `width_det`, `flat_det`, `dvd_base`, `OneEpoch`,
 `count_dvd`, `span_eq`, `count_interval`, `EpochAligned`,
 `epochAligned_sum`, `rangeSlots`, `roundUp`, `dvd_roundUp`,
-`le_roundUp`, `roundUp_lt`, `delay_lt`, `UpdDivides`.
+`le_roundUp`, `roundUp_lt`, `delay_lt`, `UpdDivides`, `mixLeader` and its
+laws.
 
-## 7. Labels
+## 6. Labels
 
 The AL labels of `docs/adaptive-leaders.md` are preserved where the
 statement is preserved. Composition results are `I`-labelled, as in
 `docs/integration.md`.
 
-## 8. Order of work
+## 7. Order of work
 
-1. **Done.** §2: the band's round clause, `exists_roundLocal`, `Frame`,
-   `decided_of_frame_agree`, `Sched_eq_frame`, `sched_frame_local`.
-2. §5: `keyed`, `slotsOfKeyed`, `PickKeyed`, carried over.
-3. §4: the composition on a global frame, to the point where the safety
-   induction either closes or names the lag it needs.
-4. Whatever §4 reports: either the lag on the count, or the round
-   coordinates, or both. Not planned further here, because §4 decides
-   what is worth planning.
+1. **Done.** §2: the band's round clause, `exists_roundLocal`,
+   `sched_frame_local`.
+2. **Done.** §3: `Frame`, `decided_of_frame_agree`, `frameRun_agree`.
+3. §4.4, which is cheap and decides §4.3: whether `Frame` admits empty
+   rounds.
+4. §5's `keyed`, `slotsOfKeyed`, `PickKeyed`, carried over.
+5. §4.1: the delayed Barnacle, and the measurement of what the delay
+   costs the rest of the arc.
+6. §4.2 and §4.6: liveness over the frame, and the bridge.
 
-## 9. What could go wrong
-
-**The cost of restating an arc.** `Adaptive/` is 889 lines and
-`Barnacle/` is 2986. Restating Barnacle over the frame is therefore some
-three times the work of restating the adaptive arc, and neither is
-warranted before §4. §4 avoids both: it keeps each arc's own numbering
-and relates them with `Frame.index`, which §2.2 supplies.
-
-**The lag on the count.** If §4 reports that the count must be settled
-two epochs before it is read, Barnacle installs a new count one
-configuration after the anchor that computed it and would have to install
-it two. That is a change to the control loop rather than to the
-composition — the rule reacts a configuration later — and it is a design
-decision, not a proof obligation.
-
-**`Frame.roundOf` is a search.** It is `Nat.findGreatest`, and every
-statement about a slot index is a statement about `Frame.cum`. The design
-keeps such statements to the `closed` clause. If they multiply, the frame
-presentation removes less than it introduces and a per-configuration
-numbering should be kept instead.
-
-**The joiner.** `epochOf_add_of_dvd` states that a numbering starting at
-an aligned offset agrees with the original about epochs, and
-`Adaptive/Joiner.lean` uses it for a validator that joins mid-execution.
-Under a global frame the offset is a slot offset into a varying frame,
-and whether the lemma survives is not assessed.
+Steps 3 and 4 are independent of the design decision in §4.1 and may
+proceed before it is taken.
