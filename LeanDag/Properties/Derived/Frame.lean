@@ -41,6 +41,28 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {R : DagRule Validator BlockId Payload}
 
+/-- **A verdict settled below a round.** The schedule below round `B` —
+its widths and its leaders — decides slot `g`, and nothing above `B`
+changes that. `DecidedBelow` is the same idea with the round structure
+held fixed and a bound on the slot index; this is the form a mechanism
+that varies the widths can state. -/
+def DecidedFrameBelow (R : DagRule Validator BlockId Payload) (F : Frame)
+    (a : ℕ → ℕ → Validator) (B : ℕ) {U : R.Universe} (V : R.View U)
+    (g : ℕ) (v : Option BlockId) : Prop :=
+  ∀ (F' : Frame) (a' : ℕ → ℕ → Validator)
+    (hk' : ∀ r i j, i < F'.width r → j < F'.width r → a' r i = a' r j → i = j),
+    (∀ r, r < B → F'.width r = F.width r) →
+    (∀ r i, r < B → i < F.width r → a' r i = a r i) →
+    R.Decided (F'.toSlots a' hk') V g v
+
+/-- A verdict settled below a round is settled below any larger one. -/
+theorem DecidedFrameBelow.mono {F : Frame} {a : ℕ → ℕ → Validator} {B B' : ℕ}
+    {U : R.Universe} {V : R.View U} {g : ℕ} {v : Option BlockId}
+    (h : DecidedFrameBelow R F a B V g v) (hBB : B ≤ B') :
+    DecidedFrameBelow R F a B' V g v :=
+  fun F' a' hk' hw ha => h F' a' hk' (fun r hr => hw r (by omega))
+    (fun r i hr hi => ha r i (by omega) hi)
+
 /-- **A verdict survives a change of frame above the rounds it reads.**
 Every decided slot has a round bound below which the widths and the
 leaders settle it: a schedule built from any frame agreeing there decides
@@ -55,11 +77,7 @@ that statement. -/
 theorem decided_of_frame_agree (h : Banded R) {F : Frame} {asg : ℕ → ℕ → Validator} {hk}
     {U : R.Universe} {V : R.View U} {g : ℕ} {v : Option BlockId}
     (hd : R.Decided (F.toSlots asg hk) V g v) :
-    ∃ B, F.roundOf g < B ∧
-      ∀ (F' : Frame) (asg' : ℕ → ℕ → Validator) (hk'),
-        (∀ r, r < B → F'.width r = F.width r) →
-        (∀ r i, r < B → i < F.width r → asg' r i = asg r i) →
-        R.Decided (F'.toSlots asg' hk') V g v := by
+    ∃ B, F.roundOf g < B ∧ DecidedFrameBelow R F asg B V g v := by
   obtain ⟨B, hB, ht⟩ := exists_roundLocal h hd
   refine ⟨B, hB, fun F' asg' hk' hw ha => ht _ ?_ ?_⟩
   · exact fun m hm => (Frame.toSlots_agree hw ha hm).1

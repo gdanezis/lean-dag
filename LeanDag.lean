@@ -53,6 +53,7 @@ import LeanDag.Reactive.Delivers
 import LeanDag.Reactive.Odontoceti
 import LeanDag.Reactive.MysticetiProperties
 import LeanDag.Adaptive.Basic
+import LeanDag.Adaptive.Frame
 import LeanDag.Adaptive.Policy
 import LeanDag.Adaptive.Run
 import LeanDag.Adaptive.Joiner

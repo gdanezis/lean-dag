@@ -78,6 +78,13 @@ def index (r i : ℕ) : ℕ := F.cum r + i
     F.roundOf (F.index r i) = r :=
   F.roundOf_eq (by simp [index]) (by rw [index, cum_succ]; omega)
 
+/-- Every index is the index of its own round and position. -/
+theorem index_roundOf_self (g : ℕ) :
+    F.index (F.roundOf g) (g - F.cum (F.roundOf g)) = g := by
+  have := F.cum_roundOf_le g
+  simp only [index]
+  omega
+
 theorem roundOf_mono : Monotone F.roundOf := by
   intro a b hab
   by_contra hc
