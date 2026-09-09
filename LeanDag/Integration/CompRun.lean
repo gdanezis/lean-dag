@@ -93,6 +93,11 @@ structure CompRun (W : ℕ) (P : Params)
   vdct : ℕ → Option BlockId
   init : start 0 = 0 ∧ count 0 = 1 ∧ backoff 0 = 0
   count_pos : ∀ k, 0 < count k
+  count_le : ∀ k, count k ≤ P.maxLeaders
+  /-- **No round holds more leaders than the parameters allow.** The
+  count bounds the widths where a configuration sets them, and this
+  carries the bound to the rounds no configuration has reached. -/
+  cnt_le : ∀ r, F.width r ≤ P.maxLeaders
   /-- **A round of a configuration is that configuration's count wide.**
   Round `0` precedes every range and is genesis, at one leader. -/
   cnt_zero : F.width 0 = 1
@@ -473,6 +478,8 @@ def genesis (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) �
   asg := fun r i => pick U V (fun _ => none) ((constFrame 1 Nat.one_pos).index r i)
   init := ⟨rfl, rfl, rfl⟩
   count_pos := fun _ => Nat.one_pos
+  count_le := fun _ => P.max_pos
+  cnt_le := fun _ => P.max_pos
   cnt_zero := rfl
   cnt_eq := fun _ h => absurd h (by omega)
   anchor_commits := fun _ h => absurd h (by omega)
@@ -496,7 +503,7 @@ every slot the run speaks of at a round below `start K`.
 the extended count too, which is what a count-varying mechanism owes at
 each count it can reach. -/
 def reframe (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W)
-    {m : ℕ} (hm : 0 < m) (hK : 0 < K)
+    {m : ℕ} (hm : 0 < m) (hmle : m ≤ P.maxLeaders) (hK : 0 < K)
     (hhor : W * (H + 1) ≤ Rn.F.cum (Rn.start K))
     (hkeyed : ∀ r, Rn.start K < r → ∀ i j, i < m → j < m → Rn.asg r i = Rn.asg r j → i = j) :
     Composed (R := R) W P pick upd U V K H where
@@ -509,6 +516,11 @@ def reframe (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W)
   asg := Rn.asg
   init := Rn.init
   count_pos := Rn.count_pos
+  count_le := Rn.count_le
+  cnt_le := fun r => by
+    by_cases h : r ≤ Rn.start K
+    · rw [Frame.extend_width_le h]; exact Rn.cnt_le r
+    · rw [Frame.extend_width_gt (by omega)]; exact hmle
   cnt_zero := by rw [Frame.extend_width_le (by omega)]; exact Rn.cnt_zero
   cnt_eq := fun k hk r hlo hhi => by
     rw [Frame.extend_width_le
@@ -595,7 +607,8 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
     (hhor : W * (H + 1) ≤ Rn.F.cum (Rn.start K))
     (hkeyed : ∀ r, Rn.start K < r → ∀ i j, i < Rn.count K → j < Rn.count K →
       Rn.asg r i = Rn.asg r j → i = j)
-    (hupd : ∀ b A, 0 < (upd (Rn.count K) b U V A).1) (hgap : 0 < P.gap)
+    (hupd : ∀ b A, 0 < (upd (Rn.count K) b U V A).1)
+    (hupdle : ∀ b A, (upd (Rn.count K) b U V A).1 ≤ P.maxLeaders) (hgap : 0 < P.gap)
     (asg' : ℕ → ℕ → Validator) (vdct' : ℕ → Option BlockId)
     (hag : ∀ r i, r ≤ Rn.start K → asg' r i = Rn.asg r i)
     (hvd : ∀ g, g < Rn.F.cum (Rn.start K) → vdct' g = Rn.vdct g)
@@ -625,7 +638,7 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
       W * (H' + 1) ≤ Rn'.F.cum (Rn'.start (K + 1)) } := by
   classical
   set F' := Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K) with hF'
-  set Rn₁ := Rn.reframe hW (Rn.count_pos K) hK hhor hkeyed with hRn1
+  set Rn₁ := Rn.reframe hW (Rn.count_pos K) (Rn.count_le K) hK hhor hkeyed with hRn1
   obtain ⟨⟨A, hA⟩, hthr⟩ := anchorOf_commits hcl
   set a := anchorOf hcl with ha
   set nxt := upd (Rn.count K) (Rn.backoff K) U V A with hnxt
@@ -657,6 +670,11 @@ theorem extend (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) (hK : 
       by_cases h : k ≤ K
       · simp only [h, if_true]; exact Rn.count_pos k
       · simp only [h, if_false]; exact hupd _ _
+    count_le := fun k => by
+      by_cases h : k ≤ K
+      · simp only [h, if_true]; exact Rn.count_le k
+      · simp only [h, if_false]; exact hupdle _ _
+    cnt_le := Rn₁.cnt_le
     cnt_zero := Rn₁.cnt_zero
     cnt_eq := ?cnt_eq
     anchor_commits := ?ac
@@ -759,7 +777,54 @@ theorem every_height (hp : Progresses (R := R) W P pick upd U V) {H₁ : ℕ}
         obtain ⟨⟨Rn, hH⟩⟩ := hne
         exact hp j H Rn h0 hH
 
+
+/-- **A composed run's schedule decides its own verdicts.** -/
+theorem decided_self (Rn : Composed (R := R) W P pick upd U V K H) {r i : ℕ}
+    (hi : i < Rn.F.width r) (hep : epochOf W (Rn.F.index r i) < H) :
+    R.Decided (Rn.F.toSlots Rn.asg Rn.keyed) V (Rn.F.index r i)
+      (Rn.vdct (Rn.F.index r i)) :=
+  Rn.closed r i hi hep Rn.F Rn.asg Rn.keyed (fun _ _ => rfl) (fun _ _ _ _ => rfl)
+
+/-- **The widths a composed run's frame gives are bounded**, so the
+descent applies at its schedule: `cnt_le` is what `descends_frame` asks,
+and the structure now carries it. -/
+theorem descends (Rn : Composed (R := R) W P pick upd U V K H) {wave c : ℕ}
+    (hind : Properties.Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspan : P.maxLeaders * (wave + 1) ≤ c)
+    (a : ℕ → Validator)
+    (h : ∀ k₁ k₂, (Rn.F.toSlots Rn.asg Rn.keyed).slotRound k₁
+      = (Rn.F.toSlots Rn.asg Rn.keyed).slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
+    Properties.Descends R
+      (slotsOfKeyed (S := Rn.F.toSlots Rn.asg Rn.keyed) a h) c :=
+  descends_frame hind hc Rn.cnt_le hspan a h
+
+
+/-- `decided_self`, read at a global slot. -/
+theorem decided_at (Rn : Composed (R := R) W P pick upd U V K H) (g : ℕ)
+    (hep : epochOf W g < H) :
+    R.Decided (Rn.F.toSlots Rn.asg Rn.keyed) V g (Rn.vdct g) := by
+  have h := Rn.decided_self (r := Rn.F.roundOf g) (i := g - Rn.F.cum (Rn.F.roundOf g))
+    (Rn.F.pos_lt_width g) (by rw [Rn.F.index_roundOf_self g]; exact hep)
+  rwa [Rn.F.index_roundOf_self g] at h
+
+/-- **The block a configuration commits is a candidate of its anchor's
+slot.** This is what BN14 turns on, and it holds of a composed run for
+the reason it holds of Barnacle's: the anchor is decided, and a decided
+commit is a candidate. The delivery law then places a good author's
+blocks below the anchor's round in that block's history, exactly as
+`Barnacle/Validity` has it. -/
+theorem anchor_isCandidate (hcc : Properties.CommitsCandidate R)
+    (Rn : Composed (R := R) W P pick upd U V K H) {k : ℕ} (hk : k < K)
+    (hep : epochOf W (Rn.anchor k) < H) {A : BlockId}
+    (hA : Rn.vdct (Rn.anchor k) = some A) :
+    R.IsCandidate (Rn.F.toSlots Rn.asg Rn.keyed) U (Rn.anchor k) A := by
+  have hd := Rn.decided_at (Rn.anchor k) hep
+  rw [hA] at hd
+  exact hcc _ _ _ _ _ hd
+
 end Composed
+
+
 
 
 

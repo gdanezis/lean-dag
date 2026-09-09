@@ -345,6 +345,29 @@ A joiner *of a composed run*, and conservativity of a composed run at the
 unit frame, would be new results rather than repairs, and neither is
 attempted.
 
+### 6.5 What a composed run inherits from Barnacle
+
+A composed run is not a `Barnacle.PartialRun` and cannot be one: that
+structure's `closed` asks for decisions against `Sched getLeader`, the
+rotation, and a composed run decides against the reassignment. So
+Barnacle's theorems do not transfer by instantiation, and what the
+composition needs of them is restated instead.
+
+Most of it already was. `config_det` with `anchor_det` is BN3's content —
+two runs agree on the configuration data and the anchors — and
+`Composed.agree` supplies the verdicts BN3 also claims. `Composed.extend`
+is BN8's. `count_le` and `cnt_le` are BN7's bound, and `cnt_le` is what
+`Composed.descends` reads, so the bounded widths the descent needs now
+come from the structure rather than from a hypothesis.
+`anchor_isCandidate` is what BN14 turns on: the block a configuration
+commits is a candidate of its anchor's slot, so it sits at the anchor's
+round, and the delivery law places a good author's blocks below that
+round in its history exactly as `Barnacle/Validity` has it.
+
+What is not restated is the ledger — `Barnacle/Ledger`'s account of the
+committed sequence — and the AIMD arc's own theorems about how the count
+moves. Neither is consumed by safety or liveness of the composition.
+
 ## 7. Questions settled, and how
 
 **A frame gives every round a leader.** Admitting empty rounds was
