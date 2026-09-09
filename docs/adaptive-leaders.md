@@ -186,7 +186,9 @@ prefix agreement for validators that have not decided equally far.
 **AL3 (safety: the fixpoint is unique).** `adaptiveRun_unique`: any two
 runs over the same universe — *whatever views they were derived from,
 and with no fairness or synchrony hypothesis at all* — have equal
-assignments and equal verdicts; corollary `adaptive_decided_agree`.
+assignments and equal verdicts. Built as `Adaptive.run_agree`, whose two
+halves are the verdict and assignment statements directly, so the planned
+corollary is a projection.
 Proof plan, by strong induction on the epoch: the verdict prefixes
 below epoch `e − 1` agree by hypothesis, so `adapted` forces the
 assignments to agree through epoch `e + 1`, so `decidedWithin_congr`
@@ -204,7 +206,7 @@ per the house rule that a new relation must instantiate to the old one.
 
 **AL5 (liveness: the fixpoint exists).** Under the standard interface —
 `SynchronisedOn` and `PopulatedOn`, supplied by view convergence
-unchanged — and the policy's fairness clause, an `AdaptiveRun` exists on
+unchanged — and the policy's fairness clause, an `Adaptive.Run` exists on
 any view caught up to the horizon (`View.CoversUpto`: the view holds
 every block at a round up to `N`). The full view is caught up to every
 horizon, so the whole-universe reading is the special case; under
@@ -280,7 +282,7 @@ an explicit hypothesis rather than a chosen constant.
 |:---|:---|
 | `Adaptive/Basic.lean` | epochs; `DecidedWithin`; congruence and embedding (AL2) |
 | `Adaptive/Policy.lean` | `Policy`, `slotsOf` (AL1) |
-| `Adaptive/Run.lean` | `AdaptiveRun`; uniqueness/safety (AL3); conservativity (AL4); the ledger (AL6) |
+| `Adaptive/Run.lean` | `Adaptive.Run`; uniqueness/safety (AL3); conservativity (AL4); the ledger (AL6) |
 | `Adaptive/Liveness.lean` | the bounded committed-run lemma; existence (AL5) |
 | `Adaptive/Odontoceti.lean` | the two-round mirror (AL7) |
 | `LeanDagTest/Adaptive/Model.lean` | demote-on-skip on the round-robin base (AL8) |

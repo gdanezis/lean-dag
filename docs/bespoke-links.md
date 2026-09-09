@@ -53,8 +53,8 @@ separate column has nothing left to report.
 `Hydrozoan.agree` replaces `SlotAgreement.holds` at the stack capstones
 and in `ViaProperties`, and `Deployment.{agrees,safe}` follow through
 them. `OdontocetiProperties.agree` replaces `Odontoceti.decided_unique`
-in the adaptive arc, taking `partialRun_agree`, `adaptiveRun_agree` and
-`adaptiveRun_exists` with it.
+in the adaptive arc, taking `partialRun_agree`, `run_agree` and
+`run_exists_of_support` with it.
 
 `SkipMsg.decided_fill_agree` was **deleted** rather than rerouted. Like
 garbage collection and Hydrozoan's two transformers, the bespoke

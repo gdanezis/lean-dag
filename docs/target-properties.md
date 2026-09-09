@@ -1270,7 +1270,7 @@ the bridge that recovers a blame against a specific candidate from a
 blame against the slot. `Adaptive/Odontoceti.lean`'s bounded relation
 `DecidedWithin` mirrors the constructor and needed the same change,
 with `directSkipSlotIn_congr` for the schedule-reassignment case, where
-the old form used `isLeaderBlock_slotsOf_congr`. The safety development
+the old form used a congruence lemma per rule. The safety development
 is otherwise untouched, which is what the core's repair predicted:
 where a candidate exists the two forms agree.
 
@@ -1638,7 +1638,7 @@ The existence theorems ask for `Live` at every height `E`, under the
 schedule the policy computes from a height-`E` partial run's verdicts,
 over the slots `[W, W·(E+2))`. For the timed core this is a
 restatement: `coreLive` reads no leader, and the global hypotheses of
-the old `adaptiveRun_exists` produce it at every height, which is all
+the old per-rule existence theorem produce it at every height, which is all
 `Adaptive/Mysticeti.lean` does. For a reactive execution it is the
 statement: `ReactiveM`'s `cert_or_wait` reads `S.leader k`, so its
 clauses hold only under the schedule the validators followed, and an
@@ -1668,15 +1668,13 @@ model, not of the rule.
   `leaderCommits_reactive` under `reactiveLive`, from
   `ReactiveM.directCommit`. This is the case `Live` was made a
   parameter for.
-- **Consumers.** `Adaptive/Mysticeti.lean` restates every statement of
-  the arc before the generalisation verbatim — `AdaptivePolicy`,
-  `PartialRun`, `AdaptiveRun`, `partialRun_agree`, `adaptiveRun_agree`,
-  `epoch_closes`, `exists_partialRun`, `adaptiveRun_exists`,
-  `decidedWithin_congr` — each a corollary of the generic theorem at the
-  core instance. `Integration/AdaptiveReactive.lean` is the result the
-  bespoke development did not have: `adaptiveRun_exists_reactive`,
-  Hammerhead over reactive Mysticeti, from `Adaptive.run_exists` fed
-  with `leaderCommits_reactive` and nothing else changed.
+- **Consumers.** There are none. Every per-rule restatement of the arc
+  was a corollary of the generic theorem at that rule's carrier, so the
+  per-rule files are gone and the mechanism is read at the generic
+  theorems directly. Hammerhead over reactive Mysticeti — the result the
+  bespoke development did not have — is `Adaptive.run_exists_of_support`
+  with `coreSupport_live_of_reactiveLive` supplying the precondition, and
+  nothing else changed.
 
 ### 4.4 Commits, and growth
 
@@ -1689,9 +1687,8 @@ a live window of the run's own schedule the verdict is `some L`, by
 adds that under `PlacesRuns` every epoch past the first holds `c`
 consecutive commits. `Run.live_of_staged` reads the staged precondition
 at the total run's schedule, since that schedule is the policy's
-(`Run.assign_eq`). For the core, `adaptiveRun_commits_in_epoch` is the
-liveness statement AL5 was standing in for; for reactive Mysticeti,
-`adaptiveRun_commits_reactive`.
+(`Run.assign_eq`). `Run.commits_in_epoch` is the liveness statement AL5 was standing in
+for, at any rule and either execution model.
 
 **The fixpoint under growth** (`Adaptive/Growth.lean`). `run_agree` is
 agreement over one universe; a running system's DAG grows.
@@ -1703,8 +1700,7 @@ induction of `partialRun_agree` with one extra step per epoch: the
 smaller run's verdict is carried to the larger view by `Persist` at the
 smaller run's schedule, where the larger run's verdict also lives after
 `SchedLocal`, and `Agree` closes. So `Ok` is asked for at the smaller
-run's schedule; for the core that is `Quorate` there
-(`adaptiveRun_agree_extends`).
+run's schedule; for the core that is `Quorate` there.
 
 It needed one clause the policy owes and nothing else does. `adapted`
 says the leader of a slot reads the verdict prefix and not the view,
@@ -1742,8 +1738,8 @@ depends on.
 
 | | Needs | Result |
 |---|---|---|
-| safety | `Agree` | `adaptiveRun_agree_hz` |
-| liveness | `Agree`, `LeaderCommits`, `Descends`, `PlacesRuns` | `adaptiveRun_exists_hz` |
+| safety | `Agree` | `Adaptive.run_agree` |
+| liveness | `Agree`, `LeaderCommits`, `Descends`, `PlacesRuns` | `Adaptive.run_exists` |
 
 Safety holds under no synchrony, fairness or population hypothesis, for
 any adapted policy including adversarial ones. Liveness adds the policy
@@ -1985,7 +1981,7 @@ directory, hence the one flat module.
   reactive**): `BoundedRule`, `Agree`, `Bounded`, `SchedLocal`,
   `LeaderCommits`, `Descends`; `Adaptive/{Policy,Run,Liveness}` generic
   over them with the old statements as corollaries; the core and
-  reactive instances; `adaptiveRun_exists_reactive`; `Run.commits` and
+  reactive instances; the reactive bridge; `Run.commits` and
   `run_agree_extends` (§4.4). Remaining: collapse
   the `Adaptive` and `Reactive` Odontoceti mirrors onto instances;
   Hydrozoan's bounded relation.
@@ -2190,7 +2186,8 @@ induction deleted (§11.4e): `decided_fillHZ`, `decided_chopHZ`,
 `directCommit_chop` for liveness, and the adaptive arc entire, AL3 and
 AL5 standing verbatim as corollaries. One result the bespoke
 development did not have: Hammerhead over reactive Mysticeti
-(`adaptiveRun_exists_reactive`, `adaptiveRun_commits_reactive`).
+(`Adaptive.run_exists_of_support` and `Run.commits_of_support`, the
+reactive bridge supplying the precondition).
 
 What part 2 does not yet deliver:
 
@@ -2428,7 +2425,7 @@ fixpoint under `Extends`.
 **Adaptive leaders under garbage collection (I5) closed too.** The
 joiner arc proved that a pruned validator computes the same *leaders* as
 the network — the premise an agreement argument needs — and stopped
-there. `adaptiveRun_agree` could not supply the argument, since it
+there. `run_agree` could not supply the argument, since it
 quantifies over runs of one policy over **one** universe and the
 joiner's run is over another under a re-indexed schedule.
 `joiner_decided_agree` supplies it from `decided_agree_chop`,
@@ -3959,7 +3956,7 @@ what the copies occupy; the order is the order to take them in.
 | the ledger (**done**, §11.27) | `commitSeq`, `ledgerSet`, `OutputAt` and their theorems in `Mysticeti.lean`, `Nemo/Decision.lean`, `BlackMarlin/*/Ledger.lean`, `FinWhale/Model/Order.lean` | ~330 |
 | the anchored decision procedure (**done**, §11.29) | `Decided`, `decisionRound`, `Eligible`, `anchor_round_le`, `decided_unique`, `decided_agree` in `Nemo/Decision.lean`, `Odontoceti/Decision.lean`, `Hybrid/Decision.lean`, `MahiMahi/*/Decision.lean`, `Mysticeti.lean` | ~1,900 |
 | band and liveness proofs per rule (**done**, §11.29) | `banded_aux`, `directCommitIn_band`, `supportersIn_band`, `certifiedIn_band`, `all_decided_below_of_fairRun` in the five `*Properties.lean` files; `decided_of_leader_mem`, `decided_below_of_committed_run` in the `*/Liveness.lean` files | ~4,800 |
-| adaptive instantiations | `toPartial`, `partialRun_agree`, `epoch_closes`, `exists_partialRun`, `adaptiveRun_exists` in `Adaptive/Mysticeti.lean` and `Adaptive/Odontoceti.lean` | ~750 |
+| adaptive instantiations (**done**) | the per-rule restatements of the arc, since deleted: the mechanism is read at the generic theorems | ~750 |
 
 **Counting on a view** follows from `View.toRecord` (§11.25): every
 `supportersIn V L r` is `supporters` at the view read as a record, and

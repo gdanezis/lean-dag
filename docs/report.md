@@ -15817,7 +15817,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 470 theorems the body or Appendix A names, each
+The 475 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -18485,6 +18485,42 @@ theorem partialRun_agree {V₁ V₂ : R.View U} {E₁ E₂ : ℕ}
 
 **The master agreement lemma**: two partial runs over one universe, whatever views and heights, agree on the verdicts of their common epochs — the strong induction the module docstring describes.
 
+#### `run_agree`
+
+*theorem, `Adaptive.Run.lean`*
+
+```lean
+theorem run_agree {V₁ V₂ : R.View U} (A₁ : Run P U V₁) (A₂ : Run P U V₂) :
+    (∀ k, A₁.vdct k = A₂.vdct k) ∧ (∀ m, A₁.assign m = A₂.assign m)
+```
+
+**Safety: the adaptive fixpoint is unique.** Two total runs over one universe, from any two views and with no synchrony or fairness hypothesis, hold the same verdicts and run the same schedule.
+
+#### `run_commitSeq_agree`
+
+*theorem, `Adaptive.Run.lean`*
+
+```lean
+theorem run_commitSeq_agree (ha : Agree R) {V₁ V₂ : R.View U}
+    (A₁ : Run P U V₁) (A₂ : Run P U V₂) (n : ℕ) :
+    commitSeq A₁.vdct n = commitSeq A₂.vdct n
+```
+
+**AL6 — the adaptive ledger is agreed.** The commit sequence read off any two total runs is the same list, at every length.
+
+#### `Policy.const_run_decided`
+
+*theorem, `Adaptive.Run.lean`*
+
+```lean
+theorem Policy.const_run_decided
+    {W : ℕ} {hW : 0 < W} {hinj : Function.Injective S.slotRound} {V : R.View U}
+    (A : Run (Policy.const (R := R) W hW hinj) U V) (k : ℕ) :
+    R.Decided S V k (A.vdct k)
+```
+
+**Conservativity.** Under the constant policy a run's verdicts are ordinary `Decided` verdicts of the base schedule.
+
 #### `descends_slotsOf`
 
 *theorem, `Adaptive.Liveness.lean`*
@@ -18498,23 +18534,6 @@ theorem descends_slotsOf {R : DagRule Validator BlockId Payload} {wave : ℕ}
 ```
 
 **A rule's descent, at every induced schedule.** The indirect property is stated over the round structure alone, which reassignment fixes, so a spanning clause at the base schedule gives the descent at each induced one.
-
-#### `epoch_closes`
-
-*theorem, `Adaptive.Liveness.lean`*
-
-```lean
-theorem epoch_closes (hlc : LeaderCommits R Live)
-    (hd : ∀ a : ℕ → Validator, Descends R (slotsOf P.inj a) c)
-    (hruns : PlacesRuns P T c)
-    (V : R.View U) (v : ℕ → Option BlockId) (E : ℕ)
-    (hlive : Live (slotsOf P.inj (fun m => P.pick U V v m)) V T P.W (P.W * (E + 2))) :
-    ∀ k, epochOf P.W k < E + 1 →
-      ∃ w, DecidedBelow R (slotsOf P.inj (fun m => P.pick U V v m))
-        (P.W * (E + 2)) V k w
-```
-
-**One epoch closes**: every slot of epoch `E` is decided inside its window — the run `PlacesRuns` puts in epoch `E + 1` commits, and the descent clears everything below it.
 
 #### `exists_partialRun`
 
@@ -18530,6 +18549,57 @@ theorem exists_partialRun (hlc : LeaderCommits R Live)
 ```
 
 **Partial runs exist at every height**, by induction: each stage re-reads the schedule off the verdicts so far and closes one more epoch.
+
+#### `epoch_closes_of_support`
+
+*theorem, `Adaptive.Liveness.lean`*
+
+```lean
+theorem epoch_closes_of_support (hcom : sp.Commits rel)
+    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (V : R.View U) (v : ℕ → Option BlockId) (E : ℕ)
+    (hruns : PlacesRuns P T c)
+    (hlive : sp.live rel (slotsOf P.inj (fun m => P.pick U V v m)) V T P.W
+      (P.W * (E + 2))) :
+    ∀ k, epochOf P.W k < E + 1 →
+      ∃ w, DecidedBelow R (slotsOf P.inj (fun m => P.pick U V v m))
+        (P.W * (E + 2)) V k w
+```
+
+**One epoch closes**, from a support.
+
+#### `exists_partialRun_of_support`
+
+*theorem, `Adaptive.Liveness.lean`*
+
+```lean
+theorem exists_partialRun_of_support (hcom : sp.Commits rel)
+    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hruns : PlacesRuns P T c) (V : R.View U) (E : ℕ)
+    (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
+      sp.live rel (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E' + 2))) :
+    Nonempty (PartialRun P U V E)
+```
+
+**Partial runs exist at every height**, from a support.
+
+#### `run_exists_of_support`
+
+*theorem, `Adaptive.Liveness.lean`*
+
+```lean
+theorem run_exists_of_support (ha : Agree R) (hcom : sp.Commits rel)
+    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hruns : PlacesRuns P T c) (V : R.View U)
+    (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
+      sp.live rel (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E + 2))) :
+    Nonempty (Run P U V)
+```
+
+**The adaptive fixpoint exists**, from a support: safety's `Agree`, the support's Law 2, the indirect rule at the support's wave, and the precondition at every height.
 
 ### Nemo-Nemo: crash-fault consensus in two rounds
 

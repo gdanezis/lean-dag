@@ -303,8 +303,8 @@ properties (`Adaptive/Run.lean:98` `partialRun_agree`,
 `Adaptive/Liveness.lean:174` `run_exists`, `Adaptive/Joiner.lean:140`),
 with `Live` a bare parameter. The per-rule files:
 
-- `Adaptive/Odontoceti.lean` (291 lines) **does not use it**. It
-  re-declares `PartialRun` and `AdaptiveRun` (`:47,62`), re-proves the
+- `Adaptive/Odontoceti.lean` (291 lines, since deleted) **did not use
+  it**. It re-declared the run types, re-proved the
   strong induction (`:86`), the epoch closure (`:132`), the run
   construction with its `dif` splicing (`:185`) and the diagonal gluing
   (`:256`), against `AnchoredRule.DecidedWithin` where the generic
@@ -332,10 +332,10 @@ its `Live` and the staged-live lemma, and `Persist` for growth.
 There is no `Adaptive.ofAnchored`; instead `Adaptive/Policy.lean` states
 `Adaptive.Policy` over any `Properties.DagRule`, and `Adaptive/Basic.lean`
 holds the shared lemmas this section asks for (`descends_slotsOf` among
-them). `Adaptive/Odontoceti.lean` is 130 lines, not 291, and states its
-own `AdaptivePolicy`/`PartialRun`/`AdaptiveRun` as instances of the
-generic policy rather than a bespoke re-proof against
-`AnchoredRule.DecidedWithin`.
+them). The per-rule files are gone entirely: each
+statement of the arc was a corollary of the generic theorem at that
+rule's carrier, so the mechanism is read at the generic theorems and no
+rule restates it.
 
 ### 3.2 Barnacle
 
