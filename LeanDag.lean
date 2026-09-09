@@ -320,3 +320,4 @@ import LeanDag.Steelhead.Model.Chain
 import LeanDag.Steelhead.Safety.Statement
 import LeanDag.Steelhead.Helpers.Decision
 import LeanDag.Steelhead.Safety.Proof
+import LeanDag.Steelhead.Properties
