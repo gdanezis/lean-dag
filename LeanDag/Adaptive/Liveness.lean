@@ -233,6 +233,72 @@ theorem Run.commits_in_epoch (ha : Agree R) (hlc : LeaderCommits R Live) (hruns 
     omega
   exact A.commits ha hlc hlive hWle (by omega) hlead
 
+/-! ## From a support
+
+The four results above ask for `LeaderCommits` at a precondition and a
+`Descends` at every assignment. A rule with a support supplies both: Law
+2 gives the first at `Support.live`, and the indirect rule with
+`SpansEligible` gives the second. What is left for a caller is the
+precondition itself, which each execution model reaches its own way. -/
+
+section OfSupport
+
+variable {sp : Support R} {rel : Reliability Validator}
+
+/-- **One epoch closes**, from a support. -/
+theorem epoch_closes_of_support (hcom : sp.Commits rel)
+    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (V : R.View U) (v : ℕ → Option BlockId) (E : ℕ)
+    (hruns : PlacesRuns P T c)
+    (hlive : sp.live rel (slotsOf P.inj (fun m => P.pick U V v m)) V T P.W
+      (P.W * (E + 2))) :
+    ∀ k, epochOf P.W k < E + 1 →
+      ∃ w, DecidedBelow R (slotsOf P.inj (fun m => P.pick U V v m))
+        (P.W * (E + 2)) V k w :=
+  epoch_closes (sp.leaderCommits hcom) (descends_slotsOf hind hc hspans P.inj) hruns V v E hlive
+
+/-- **Partial runs exist at every height**, from a support. -/
+theorem exists_partialRun_of_support (hcom : sp.Commits rel)
+    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hruns : PlacesRuns P T c) (V : R.View U) (E : ℕ)
+    (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
+      sp.live rel (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E' + 2))) :
+    Nonempty (PartialRun P U V E) :=
+  exists_partialRun (sp.leaderCommits hcom) (descends_slotsOf hind hc hspans P.inj) hruns V E hlive
+
+/-- **The adaptive fixpoint exists**, from a support: safety's `Agree`,
+the support's Law 2, the indirect rule at the support's wave, and the
+precondition at every height. -/
+theorem run_exists_of_support (ha : Agree R) (hcom : sp.Commits rel)
+    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hruns : PlacesRuns P T c) (V : R.View U)
+    (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
+      sp.live rel (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E + 2))) :
+    Nonempty (Run P U V) :=
+  run_exists ha (sp.leaderCommits hcom) (descends_slotsOf hind hc hspans P.inj) hruns V hlive
+
+/-- **A reliably-led slot commits**, from a support. -/
+theorem Run.commits_of_support (ha : Agree R) (hcom : sp.Commits rel)
+    {V : R.View U} (A : Run P U V) {lo K : ℕ}
+    (hlive : sp.live rel (slotsOf P.inj A.assign) V T lo K)
+    {k : ℕ} (hlo : lo ≤ k) (hK : k < K) (hlead : A.assign k ∈ T) :
+    ∃ L, A.vdct k = some L :=
+  Run.commits ha (sp.leaderCommits hcom) A hlive hlo hK hlead
+
+/-- **Each epoch past the first carries `c` consecutive commits**, from a
+support. -/
+theorem Run.commits_in_epoch_of_support (ha : Agree R) (hcom : sp.Commits rel)
+    (hruns : PlacesRuns P T c) {V : R.View U} (A : Run P U V) (e : ℕ)
+    (hlive : sp.live rel (slotsOf P.inj A.assign) V T P.W (P.W * (e + 2))) :
+    ∃ b, P.W * (e + 1) ≤ b ∧ b + c ≤ P.W * (e + 2) ∧
+      ∀ i, i < c → ∃ L, A.vdct (b + i) = some L :=
+  Run.commits_in_epoch ha (sp.leaderCommits hcom) hruns A e hlive
+
+end OfSupport
+
 end Existence
 
 end Adaptive

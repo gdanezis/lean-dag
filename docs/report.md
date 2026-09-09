@@ -15909,7 +15909,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 481 theorems the body or Appendix A names, each
+The 482 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -22249,6 +22249,20 @@ theorem sustains_addGenesis : Sustains R U (c.addGenesis U v g p hg hsev) 0 1 wh
 ```
 
 **And it sustains the carrier from round one.**
+
+#### `coreSupport_live_of_reactiveLive`
+
+*theorem, `Reactive.MysticetiProperties.lean`*
+
+```lean
+theorem coreSupport_live_of_reactiveLive {S : Slots Validator}
+    {U : BlockUniverse Validator BlockId Payload} {V : View Validator BlockId Payload U}
+    {T : Finset Validator} {lo K : ℕ} (h : reactiveLive S (U := U) V T lo K) :
+    (coreSupport (Validator := Validator) (BlockId := BlockId) (Payload := Payload)).live
+      (coreReliability Validator) S (U := U) V T lo K
+```
+
+**The reactive discipline reaches the core's support precondition** (`Properties/Support.lean`): a reactive execution past GST is a quorum certifying every candidate of every reliably-led slot in the window, which is `Support.live` and the socket every mechanism reads.
 
 #### `committed_of_correct_block`
 

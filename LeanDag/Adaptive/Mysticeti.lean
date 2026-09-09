@@ -157,8 +157,7 @@ theorem epoch_closes (hc : 0 < c) (hruns : PlacesRuns P T c)
     ∀ k, epochOf P.W k < E + 1 →
       ∃ w, DecidedBelow mysticetiRule (slotsOf P.inj (fun m => P.pick U V v m))
         (P.W * (E + 2)) V k w :=
-  fun k hk => Adaptive.epoch_closes leaderCommits_support
-    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V v E hlive k hk
+  Adaptive.epoch_closes_of_support coreSupport_commits indirect hc hspans V v E hruns hlive
 
 /-- **Partial runs exist at every height** — the finite-horizon form. -/
 theorem exists_partialRun (hc : 0 < c) (hruns : PlacesRuns P T c)
@@ -168,8 +167,7 @@ theorem exists_partialRun (hc : 0 < c) (hruns : PlacesRuns P T c)
       coreSupportLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W
         (P.W * (E' + 2))) :
     Nonempty (PartialRun P U V E) :=
-  Adaptive.exists_partialRun leaderCommits_support
-    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V E hlive
+  Adaptive.exists_partialRun_of_support coreSupport_commits indirect hc hspans hruns V E hlive
 
 /-- **AL5: the adaptive fixpoint exists**, under a policy that places
 runs, with the precondition holding at every height. -/
@@ -180,8 +178,7 @@ theorem adaptiveRun_exists (hc : 0 < c) (hruns : PlacesRuns P T c)
       coreSupportLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W
         (P.W * (E + 2))) :
     Nonempty (AdaptiveRun P U V) :=
-  Adaptive.run_exists agree leaderCommits_support
-    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V hlive
+  Adaptive.run_exists_of_support agree coreSupport_commits indirect hc hspans hruns V hlive
 
 /-- **Every reliable-led slot past the first epoch commits**, in every
 run. -/
@@ -191,7 +188,7 @@ theorem adaptiveRun_commits {V : View Validator BlockId Payload U}
       (P.W * (epochOf P.W k + 2)))
     (hlead : A.assign k ∈ T) :
     ∃ L, A.vdct k = some L :=
-  Adaptive.Run.commits agree leaderCommits_support A hlive hk hK hlead
+  Adaptive.Run.commits_of_support agree coreSupport_commits A hlive hk hK hlead
 
 /-- **Every epoch past the first carries `c` consecutive commits**, in
 every run. -/
@@ -200,7 +197,7 @@ theorem adaptiveRun_commits_in_epoch (hruns : PlacesRuns P T c)
     (hlive : coreSupportLive (slotsOf P.inj A.assign) V T P.W (P.W * (e + 2))) :
     ∃ b, P.W * (e + 1) ≤ b ∧ b + c ≤ P.W * (e + 2) ∧
       ∀ i, i < c → ∃ L, A.vdct (b + i) = some L :=
-  Adaptive.Run.commits_in_epoch agree leaderCommits_support hruns A e hlive
+  Adaptive.Run.commits_in_epoch_of_support agree coreSupport_commits hruns A e hlive
 
 end Existence
 

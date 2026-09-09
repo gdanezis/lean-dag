@@ -67,13 +67,6 @@ abbrev odoLive (S : Slots Validator) {U : BlockUniverse Validator BlockId Payloa
   (voteSupport (odontocetiRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload))).live (coreReliability Validator) S V T lo K
 
-/-- **A reliably-led slot commits**, from the vote support's Law 3. -/
-theorem leaderCommits :
-    LeaderCommits (odontocetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-      (fun S {U} V T lo K => odoLive S (U := U) V T lo K) :=
-  (voteSupport (odontocetiRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload))).leaderCommits voteSupport_commits
-
 /-- The precondition, from the global hypotheses: synchrony from `R`,
 population to a horizon the view covers, one round past every slot of
 the window. -/
@@ -95,8 +88,7 @@ theorem exists_partialRun (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
     (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
       odoLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E' + 2))) :
     Nonempty (PartialRun P U V E) :=
-  Adaptive.exists_partialRun leaderCommits
-    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V E hlive
+  Adaptive.exists_partialRun_of_support voteSupport_commits indirect hc hspans hruns V E hlive
 
 /-- **AL7: adaptive Odontoceti is safe and live.** -/
 theorem adaptiveRun_exists (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
@@ -105,8 +97,7 @@ theorem adaptiveRun_exists (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
     (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
       odoLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E + 2))) :
     Nonempty (AdaptiveRun P U V) :=
-  Adaptive.run_exists agree leaderCommits
-    (Adaptive.descends_slotsOf indirect hc hspans P.inj) hruns V hlive
+  Adaptive.run_exists_of_support agree voteSupport_commits indirect hc hspans hruns V hlive
 
 end Existence
 
