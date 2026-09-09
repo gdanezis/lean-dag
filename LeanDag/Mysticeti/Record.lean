@@ -180,31 +180,6 @@ core skips what nothing supports. SS3's hypothesis `v1 ∉ T` is not
 needed: `hgap` already rules the recovering replica out of any `T`
 present at a gap round. -/
 
-/-- Presence in the pre-crash view is presence in the lifted one: the
-ids are the same and old blocks are unchanged. -/
-theorem presentAt_liftView [S : Slots Validator] (sk : SkipMsg U)
-    {V : View Validator BlockId Payload U} {T : Finset Validator} {r : ℕ}
-    (h : PresentAt MysticetiProperties.mysticetiRule V T r) :
-    PresentAt MysticetiProperties.mysticetiRule (sk.liftView V) T r := by
-  intro v hv
-  obtain ⟨c, hcV, hcc, hcr⟩ := h v hv
-  have hcU : c ∈ U.ids := V.subset_ids hcV
-  refine ⟨c, hcV, ?_, ?_⟩
-  · show (sk.skipFill.block c).creator = v
-    rw [sk.skipFill_block_old hcU]; exact hcc
-  · show (sk.skipFill.block c).round = r
-    rw [sk.skipFill_block_old hcU]; exact hcr
-
-/-- **Every candidate of a slot the recovering replica leads, at a gap
-round, is a filled block** — the replica authored nothing old there. -/
-theorem candidates_fresh [S : Slots Validator] (sk : SkipMsg U) {k : ℕ}
-    (hlead : S.leader k = sk.v1) (hk1 : sk.r0 < S.slotRound k) (hk2 : S.slotRound k ≤ sk.r)
-    {L : BlockId} (hL : IsLeaderBlock sk.skipFill k L) : L ∉ U.ids := by
-  intro hLU
-  obtain ⟨-, hLr, hLc⟩ := hL
-  rw [sk.skipFill_block_old hLU] at hLr hLc
-  exact sk.hgap L hLU (by rw [hLc, hlead]) (by change sk.r0 < _; omega) (by omega)
-
 /-- **SS3, as a verdict, from the properties.** The slot the recovering
 replica leads at a gap round is decided `none` on the lifted view, given
 a quorum of the pre-crash view present one round above it. No induction;
@@ -217,7 +192,9 @@ theorem decided_none_fresh [S : Slots Validator] (sk : SkipMsg U)
     Decided sk.skipFill (sk.liftView V) k none :=
   decided_none_of_novel MysticetiProperties.skipsUnsupported
     (extends_of_skipFill MysticetiProperties.mysticetiRule sk rfl rfl rfl rfl) S hcard
-    (presentAt_liftView sk hpres) (fun L hL => candidates_fresh sk hlead hk1 hk2 hL)
+    (presentAt_liftView MysticetiProperties.mysticetiRule (U := U) (U' := sk.skipFill)
+      (V := V) (V' := sk.liftView V) sk rfl rfl rfl rfl hpres)
+    (fun L hL => candidates_fresh sk hlead hk1 hk2 hL)
     (fun c hcV _ _ => V.subset_ids hcV)
 
 /-- **And the skip conflicts with no verdict**: any view of the fill, or

@@ -99,4 +99,32 @@ theorem decided_none_of_novel_agree {R : DagRule Validator BlockId Payload}
     (decided_none_of_novel hsk he S hok hpres hnov hold) hW).symm
 
 
+/-- **Every candidate of a slot the recovering replica leads, at a gap
+round, is a filled block** — the replica authored nothing old there. A
+fact about the recovery message alone: no rule appears. -/
+theorem candidates_fresh [S : Slots Validator]
+    {D : BlockUniverse Validator BlockId Payload} (sk : SkipMsg D) {k : ℕ}
+    (hlead : S.leader k = sk.v1) (hk1 : sk.r0 < S.slotRound k) (hk2 : S.slotRound k ≤ sk.r)
+    {L : BlockId} (hL : IsLeaderBlock sk.skipFill k L) : L ∉ D.ids := by
+  intro hLU
+  obtain ⟨-, hLr, hLc⟩ := hL
+  rw [sk.skipFill_block_old hLU] at hLr hLc
+  exact sk.hgap L hLU (by rw [hLc, hlead]) (by change sk.r0 < _; omega) (by omega)
+
+/-- **The recovering view still holds a present quorum.** The lift adds
+blocks and renames nothing, so what was present stays present. Stated
+through the same equations as `extends_of_skipFill`. -/
+theorem presentAt_liftView (R : DagRule Validator BlockId Payload)
+    {U U' : R.Universe} {D : BlockUniverse Validator BlockId Payload} (sk : SkipMsg D)
+    (hi : R.ids U = D.ids) (hbU : R.block U = D.block)
+    (hb' : R.block U' = sk.skipFill.block)
+    {V : R.View U} {V' : R.View U'} (hv : R.viewIds V' = R.viewIds V)
+    {T : Finset Validator} {r : ℕ} (h : PresentAt R V T r) : PresentAt R V' T r := by
+  intro v hv'
+  obtain ⟨c, hcV, hcc, hcr⟩ := h v hv'
+  have hcU : c ∈ R.ids U := R.viewSound V hcV
+  refine ⟨c, by rw [hv]; exact hcV, ?_, ?_⟩
+  · rw [hb', sk.skipFill_block_old (by rw [← hi]; exact hcU), ← hbU]; exact hcc
+  · rw [hb', sk.skipFill_block_old (by rw [← hi]; exact hcU), ← hbU]; exact hcr
+
 end Faults
