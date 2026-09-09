@@ -263,8 +263,8 @@ proof effort with no corresponding proof content.
    ahead recomputed from the agreed prefix — proved safe and live for both
    commit rules. Safety is uniqueness of the schedule-and-verdict fixpoint,
    with no synchrony or fairness hypothesis of any kind
-   (`adaptiveRun_agree` (AL3)); liveness is its existence under the one
-   clause that prices the policy (`adaptiveRun_exists` (AL5)); and the
+   (`run_agree` (AL3)); liveness is its existence under the one
+   clause that prices the policy (`run_exists_of_support` (AL5)); and the
    layer is rule-agnostic, its two-round mirror consuming the policy
    objects unchanged (AL7).
 
@@ -476,7 +476,7 @@ Odontoceti (`Odontoceti.odontocetiLaws`,
 (`ReactiveM.decided` (RS2), `Odontoceti.reactive_decided` (RS3),
 `ReactivePace.no_timeout_of_fast` (RS4)); safe-skip recovery
 (`decided_fill_agree_of_properties` (SS6)); adaptive leader schedules
-(`adaptiveRun_agree` (AL3), `adaptiveRun_exists` (AL5)); and hybrid
+(`run_agree` (AL3), `run_exists_of_support` (AL5)); and hybrid
 fault tolerance (`Hybrid.hybridLaws` (H6),
 `hybrid_bound_necessary` (H10)); and crash-fault consensus
 (`Nemo.nemoLaws` (NN5), `Nemo.all_decided_below_of_fairRun`
@@ -4461,8 +4461,6 @@ structure Run (P : Policy R) (U : R.Universe) (V : R.View U) where
   coherent : ∀ m, assign m = P.pick U V vdct m
 ```
 
-The core's `AdaptiveRun` abbreviates `Adaptive.Run` at `mysticetiRule`.
-
 Existence and uniqueness are deliberately separated, mirroring the
 base development's split between the `Decided` relation and
 `decided_unique`: **uniqueness is the safety theorem, existence is the
@@ -4473,10 +4471,8 @@ epoch height) states what a validator holds mid-execution.
 
 **AL3.**
 ```lean
-theorem adaptiveRun_agree {P : AdaptivePolicy Validator BlockId Payload}
-    {V₁ V₂ : View Validator BlockId Payload U}
-    (R₁ : AdaptiveRun P U V₁) (R₂ : AdaptiveRun P U V₂) :
-    (∀ k, R₁.vdct k = R₂.vdct k) ∧ (∀ m, R₁.assign m = R₂.assign m)
+theorem run_agree {V₁ V₂ : R.View U} (A₁ : Run P U V₁) (A₂ : Run P U V₂) :
+    (∀ k, A₁.vdct k = A₂.vdct k) ∧ (∀ m, A₁.assign m = A₂.assign m)
 ```
 
 Two adaptive fixpoints over one universe — derived from *any* two
@@ -4486,14 +4482,14 @@ epochs in which nothing about counting is ever re-proved: verdict
 agreement below an epoch forces the two assignments to agree through
 the epoch above it (`adapted`), which places both runs' derivations in
 the *same* `Slots` instance (`DecidedBelow.reschedule`), where agreement
-is the property `Agree` — M6 for the core. The theorem is
-`Adaptive.run_agree` at `mysticetiRule`. The induction is carried by the partial-run
-form (`partialRun_agree`), so validators that have not decided equally
-far agree on their common prefix. Two corollaries: the commit sequence
-read from any two runs is the same list (`adaptive_commitSeq_agree`,
-AL6, the shape of M7), and under the constant policy a run's verdicts
-are ordinary `Decided` verdicts of the base schedule
-(`AdaptivePolicy.const_run_decided`, AL4) — the anchor demanded by the
+is the property `Agree`, which Mysticeti, Odontoceti, Hydrozoan and
+Nemo-Nemo each prove of their own rule. The induction is carried by the
+partial-run form (`partialRun_agree`), so validators that have not
+decided equally far agree on their common prefix. Two corollaries: the
+commit sequence read from any two runs is the same list
+(`run_commitSeq_agree`, AL6, the shape of M7), and under the constant
+policy a run's verdicts are ordinary `Decided` verdicts of the base
+schedule (`Policy.const_run_decided`, AL4) — the anchor demanded by the
 house rule that a new relation must instantiate to the old one.
 
 ### 13.4 Liveness: the fixpoint exists
@@ -4520,13 +4516,13 @@ remains a joint condition exactly as P10 is.
 
 **AL5.**
 ```lean
-theorem adaptiveRun_exists (hc : 0 < c) (hruns : PlacesRuns P T c)
-    (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (V : View Validator BlockId Payload U)
+theorem run_exists_of_support (ha : Agree R) (hcom : sp.Commits rel)
+    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hruns : PlacesRuns P T c) (V : R.View U)
     (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
-      coreSupportLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W
-        (P.W * (E + 2))) :
-    Nonempty (AdaptiveRun P U V)
+      sp.live rel (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E + 2))) :
+    Nonempty (Run P U V)
 ```
 
 The statement is on a validator's own view, caught up to the horizon —
@@ -4534,10 +4530,12 @@ The statement is on a validator's own view, caught up to the horizon —
 `N` — which the full view is at every `N` (`View.coversUpto_full`), so
 the whole-universe reading is the special case; under eventual DAG
 synchrony (§2) every correct validator's view is caught up once
-delivery has reached the horizon. The construction is the generic `Adaptive.run_exists`, consuming the
-derived `LeaderCommits` and `Descends` of the rule — the core discharges
-them from L4 and the committed-run descent (`descends_slotsOf`) — and it
-counts nothing anew: the run
+delivery has reached the horizon. The construction consumes the derived `LeaderCommits` and `Descends` of
+the rule, and derives both from a support: Law 2 gives the first at
+`Support.live`, the indirect rule with `SpansEligible` the second
+(`descends_slotsOf`). Mysticeti, Odontoceti, Hydrozoan and Nemo-Nemo each
+supply a support with Law 2, so each instantiates the mechanism without a
+theorem of its own. It counts nothing anew: the run
 `PlacesRuns` puts in epoch `e + 1` commits directly (L4 at the induced
 instance, its certificates under the horizon and so in the view), the
 committed-run descent —
@@ -4569,7 +4567,7 @@ schedules, interleaved with the base protocol's own liveness — its
 safety corollary is stated to follow from its liveness lemma directly.
 The account here separates the two questions instead: `DecidedWithin`'s
 bound makes divergence unstatable rather than something to reconverge
-from, so `adaptiveRun_agree` needs no synchrony assumption at all, and
+from, so `run_agree` needs no synchrony assumption at all, and
 liveness is the independent question of whether the fixpoint the bound
 describes exists.
 
@@ -4598,7 +4596,7 @@ two-round descent with its least-candidate selection — two populated
 rounds where Mysticeti needs three:
 
 ```lean
-theorem adaptiveRun_agree {P : AdaptivePolicy Validator BlockId Payload}
+theorem run_agree {V₁ V₂ : R.View U}
     {V₁ V₂ : View Validator BlockId Payload U}
     (R₁ : AdaptiveRun P U V₁) (R₂ : AdaptiveRun P U V₂) :
     ∀ k, R₁.vdct k = R₂.vdct k
@@ -9331,7 +9329,7 @@ every theorem above it vacuous, and vacuity is not otherwise detectable.
 | `Ucrash N`, `ucrashMsg` | `SkipMsg`: a crashed line, the message against it, and the fill (SS7) |
 | `Usun`, `Usk`, `U44`, `U3` | `PartialRun` with a rising count, a skipped slot past the threshold, the real `Good` with the theorems yielding verdicts, and a bare majority under attack (BN3, BN8, BN9, BN10) |
 | `ucrashJump` | `JumpMsg`: the compact core of `ucrashMsg`, elaborating to the same fill (SS11) |
-| `demotePolicy`, `run7` | `AdaptivePolicy`, `AdaptiveRun`, `PlacesRuns`: a genuinely adapting policy and its total runs (AL8) |
+| `demotePolicy`, `run7` | a genuinely adapting policy and its total runs, at the core's carrier (AL8) |
 | `Uhyb4`, `Uhyb9` | `HybridFaults`, `HonestNoEquiv`: one crash at four validators; the tight hybrid committee (H9) |
 | `UtightA`, `UtightB` | the one-short committee: agreement refuted at every threshold (H10) |
 | `Unemo` | `CrashFaults` at the tight crash committee: three validators, one halted line, every decidable rule settled by `decide` (NN9) |
@@ -9423,8 +9421,8 @@ no errors.
 `Odontoceti.all_decided_below_of_fairRun`, `chain_quality`,
 `committed_of_correct_block`, `decided_fill_of_persist` (SS5) and
 `decided_fill_agree_of_properties` (SS6), `SkipMsg.skipFill_eq_of_core` (SS9)
-and `JumpMsg.denote_eq_of_core` (SS10), `adaptiveRun_agree` (AL3) and
-`adaptiveRun_exists` (AL5), `Hybrid.hybridLaws` (H6),
+and `JumpMsg.denote_eq_of_core` (SS10), `run_agree` (AL3) and
+`run_exists_of_support` (AL5), `Hybrid.hybridLaws` (H6),
 `HybridProperties.safety`, `hybrid_bound_necessary` (H10), `Nemo.nemoLaws`
 (NN5), `Nemo.outputAt_agree` (NN6) and
 `Nemo.all_decided_below_of_fairRun` (NN8), and
@@ -10236,11 +10234,11 @@ reused.
 |:---|:---|:---|
 | AL1 | the induced instance; the base schedule is its own | `slotsOf`, `slotsOf_base` *(Adaptive/Basic)* |
 | AL2 | the bounded relation; the embedding and the congruence | `AnchoredRule.DecidedWithin`, `AnchoredRule.DecidedWithin.toDecided`, `AnchoredRule.decidedWithin_congr_of_slotRound` *(Anchored/Bounded)*; `decidedWithin_congr` *(Integration/AdaptiveMysticeti)* |
-| AL3 | safety: the fixpoint is unique, unconditionally | `partialRun_agree`, `adaptiveRun_agree` *(Adaptive/Run)* |
-| AL4 | conservativity at the constant policy | `AdaptivePolicy.const_run_decided` *(Adaptive/Run)* |
-| AL5 | liveness: the fixpoint exists, one epoch at a time | `epoch_closes`, `exists_partialRun`, `adaptiveRun_exists` *(Adaptive/Liveness)* |
-| AL6 | the adaptive ledger is agreed | `adaptive_commitSeq_agree` *(Adaptive/Run)* |
-| AL7 | the two-round mirror, from the same policy objects | `Odontoceti.adaptiveRun_agree`, `Odontoceti.adaptiveRun_exists` *(Integration/AdaptiveOdontoceti)* |
+| AL3 | safety: the fixpoint is unique, unconditionally, for any rule with `Agree` | `partialRun_agree`, `run_agree` *(Adaptive/Run)* |
+| AL4 | conservativity at the constant policy | `Policy.const_run_decided` *(Adaptive/Run)* |
+| AL5 | liveness: the fixpoint exists, one epoch at a time, for any rule with a support satisfying Law 2 | `epoch_closes_of_support`, `exists_partialRun_of_support`, `run_exists_of_support` *(Adaptive/Liveness)* |
+| AL6 | the adaptive ledger is agreed | `run_commitSeq_agree` *(Adaptive/Run)* |
+| AL7 | every rule showing the properties instantiates the mechanism: Mysticeti, Odontoceti, Hydrozoan and Nemo-Nemo, synchronous or reactive | `Adaptive.run_exists_of_support` *(Adaptive/Liveness)* |
 | AL8 | adaptivity on data: the verdict moves with the assignment | `demotePolicy` witnesses *(LeanDagTest/Adaptive/Model)* |
 
 **Hybrid fault tolerance** (§14):
@@ -10438,7 +10436,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 318 definitions and structures the report names, in
+The 311 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -15114,96 +15112,6 @@ def hzSupport : Support (rule (Replica := Replica) (BlockId := BlockId)) where
 
 **Hydrozoan's support**: wavelength two, certification the rule's own.
 
-#### `AdaptivePolicy`
-
-*abbrev, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-abbrev AdaptivePolicy (Validator : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults Validator] (BlockId : Type) [DecidableEq BlockId] (Payload : Type)
-    [Slots Validator] : Type :=
-  Adaptive.Policy (mysticetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-```
-
-The adaptive policy over the core's carrier.
-
-#### `PartialRun`
-
-*abbrev, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-abbrev PartialRun (P : AdaptivePolicy Validator BlockId Payload)
-    (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (E : ℕ) : Type :=
-  Adaptive.PartialRun (R := mysticetiRule) P U V E
-```
-
-A run closed up to epoch height `E`, over the core.
-
-#### `AdaptiveRun`
-
-*abbrev, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-abbrev AdaptiveRun (P : AdaptivePolicy Validator BlockId Payload)
-    (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) : Type :=
-  Adaptive.Run (R := mysticetiRule) P U V
-```
-
-A total run: the adaptive fixpoint itself, over the core.
-
-#### `PlacesRuns`
-
-*abbrev, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-abbrev PlacesRuns (P : AdaptivePolicy Validator BlockId Payload)
-    (T : Finset Validator) (c : ℕ) : Prop :=
-  Adaptive.PlacesRuns P T c
-```
-
-**The adaptive fairness clause**, for the core.
-
-#### `AdaptivePolicy`
-
-*abbrev, `Integration.AdaptiveOdontoceti.lean`*
-
-```lean
-abbrev AdaptivePolicy (Validator : Type) [Fintype Validator] [DecidableEq Validator]
-    [Faults5 Validator] (BlockId : Type) [LinearOrder BlockId] (Payload : Type)
-    [Slots Validator] : Type :=
-  Adaptive.Policy (odontocetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-```
-
-The adaptive policy over Odontoceti's carrier.
-
-#### `PartialRun`
-
-*abbrev, `Integration.AdaptiveOdontoceti.lean`*
-
-```lean
-abbrev PartialRun (P : AdaptivePolicy Validator BlockId Payload)
-    (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (E : ℕ) : Type :=
-  Adaptive.PartialRun (R := odontocetiRule) P U V E
-```
-
-A run closed up to epoch height `E`, two-round rule.
-
-#### `AdaptiveRun`
-
-*abbrev, `Integration.AdaptiveOdontoceti.lean`*
-
-```lean
-abbrev AdaptiveRun (P : AdaptivePolicy Validator BlockId Payload)
-    (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) : Type :=
-  Adaptive.Run (R := odontocetiRule) P U V
-```
-
-A total run: the adaptive fixpoint, two-round rule.
-
 #### `CertifiedIn`
 
 *abbrev, `Mysticeti.Model.Rule.lean`*
@@ -15909,7 +15817,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 482 theorems the body or Appendix A names, each
+The 470 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -18017,7 +17925,7 @@ theorem slotsChop_slotsOf_eq (hd : G ≤ S.slotRound d)
 ```lean
 theorem joiner_run_decided_agree (hd : G ≤ S.slotRound d)
     (hs : HorizonStable P G d pick')
-    {V : View Validator BlockId Payload U} (R : AdaptiveRun P U V)
+    {V : View Validator BlockId Payload U} (R : Adaptive.Run P U V)
     (V' : View Validator BlockId Payload (chop U G))
     {W : View Validator BlockId Payload (chop U G)} {k : ℕ} {w v : Option BlockId}
     (hW : Decided (S := slotsOf (S := S.chop G d hd)
@@ -21165,179 +21073,6 @@ theorem safety : LeanDag.Properties.Safe (rule (Replica := Replica) (BlockId := 
 theorem progress : LeanDag.Properties.Support.Progresses
     (hzSupport (Replica := Replica) (BlockId := BlockId)) (hzReliability Replica)
 ```
-
-#### `decidedWithin_congr`
-
-*theorem, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-theorem decidedWithin_congr {hinj : Function.Injective S.slotRound}
-    {a₁ a₂ : ℕ → Validator} {V : View Validator BlockId Payload U} {B k : ℕ}
-    {v : Option BlockId} (ha : ∀ m, m < B → a₁ m = a₂ m)
-    (h : DecidedWithin (S := slotsOf hinj a₁) U V B k v) :
-    DecidedWithin (S := slotsOf hinj a₂) U V B k v
-```
-
-**Congruence below the bound**: two assignments agreeing below `B` derive the same bounded verdicts.
-
-#### `partialRun_agree`
-
-*theorem, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-theorem partialRun_agree {P : AdaptivePolicy Validator BlockId Payload}
-    {V₁ V₂ : View Validator BlockId Payload U} {E₁ E₂ : ℕ}
-    (R₁ : PartialRun P U V₁ E₁) (R₂ : PartialRun P U V₂ E₂) :
-    ∀ k, epochOf P.W k < min E₁ E₂ → R₁.vdct k = R₂.vdct k
-```
-
-**The master agreement lemma**, for the core.
-
-#### `adaptiveRun_agree`
-
-*theorem, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-theorem adaptiveRun_agree {P : AdaptivePolicy Validator BlockId Payload}
-    {V₁ V₂ : View Validator BlockId Payload U}
-    (R₁ : AdaptiveRun P U V₁) (R₂ : AdaptiveRun P U V₂) :
-    (∀ k, R₁.vdct k = R₂.vdct k) ∧ (∀ m, R₁.assign m = R₂.assign m)
-```
-
-**AL3 — safety: the adaptive fixpoint is unique.**
-
-#### `adaptive_commitSeq_agree`
-
-*theorem, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-theorem adaptive_commitSeq_agree {P : AdaptivePolicy Validator BlockId Payload}
-    {V₁ V₂ : View Validator BlockId Payload U}
-    (R₁ : AdaptiveRun P U V₁) (R₂ : AdaptiveRun P U V₂) (n : ℕ) :
-    commitSeq R₁.vdct n = commitSeq R₂.vdct n
-```
-
-**The adaptive ledger is agreed** — M7's shape.
-
-#### `AdaptivePolicy.const_run_decided`
-
-*theorem, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-theorem AdaptivePolicy.const_run_decided {W : ℕ} {hW : 0 < W}
-    {hinj : Function.Injective S.slotRound}
-    {V : View Validator BlockId Payload U}
-    (R : AdaptiveRun (AdaptivePolicy.const (Validator := Validator) (BlockId := BlockId)
-      (Payload := Payload) W hW hinj) U V) (k : ℕ) :
-    Decided U V k (R.vdct k)
-```
-
-**Conservativity.** Under the constant policy a run's verdicts are ordinary `Decided` verdicts of the base schedule.
-
-#### `epoch_closes`
-
-*theorem, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-theorem epoch_closes (hc : 0 < c) (hruns : PlacesRuns P T c)
-    (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (V : View Validator BlockId Payload U) (v : ℕ → Option BlockId) (E : ℕ)
-    (hlive : coreSupportLive (slotsOf P.inj (fun m => P.pick U V v m)) V T P.W
-      (P.W * (E + 2))) :
-    ∀ k, epochOf P.W k < E + 1 →
-      ∃ w, DecidedBelow mysticetiRule (slotsOf P.inj (fun m => P.pick U V v m))
-        (P.W * (E + 2)) V k w
-```
-
-**One epoch closes**, from the staged precondition alone.
-
-#### `exists_partialRun`
-
-*theorem, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-theorem exists_partialRun (hc : 0 < c) (hruns : PlacesRuns P T c)
-    (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (V : View Validator BlockId Payload U) (E : ℕ)
-    (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
-      coreSupportLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W
-        (P.W * (E' + 2))) :
-    Nonempty (PartialRun P U V E)
-```
-
-**Partial runs exist at every height** — the finite-horizon form.
-
-#### `adaptiveRun_exists`
-
-*theorem, `Integration.AdaptiveMysticeti.lean`*
-
-```lean
-theorem adaptiveRun_exists (hc : 0 < c) (hruns : PlacesRuns P T c)
-    (hspans : (coreAnchored Validator BlockId Payload).SpansEligible c)
-    (V : View Validator BlockId Payload U)
-    (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
-      coreSupportLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W
-        (P.W * (E + 2))) :
-    Nonempty (AdaptiveRun P U V)
-```
-
-**AL5: the adaptive fixpoint exists**, under a policy that places runs, with the precondition holding at every height.
-
-#### `partialRun_agree`
-
-*theorem, `Integration.AdaptiveOdontoceti.lean`*
-
-```lean
-theorem partialRun_agree {P : AdaptivePolicy Validator BlockId Payload}
-    {V₁ V₂ : View Validator BlockId Payload U} {E₁ E₂ : ℕ}
-    (R₁ : PartialRun P U V₁ E₁) (R₂ : PartialRun P U V₂ E₂) :
-    ∀ k, epochOf P.W k < min E₁ E₂ → R₁.vdct k = R₂.vdct k
-```
-
-**The master agreement lemma, two-round rule.**
-
-#### `adaptiveRun_agree`
-
-*theorem, `Integration.AdaptiveOdontoceti.lean`*
-
-```lean
-theorem adaptiveRun_agree {P : AdaptivePolicy Validator BlockId Payload}
-    {V₁ V₂ : View Validator BlockId Payload U}
-    (R₁ : AdaptiveRun P U V₁) (R₂ : AdaptiveRun P U V₂) :
-    (∀ k, R₁.vdct k = R₂.vdct k) ∧ (∀ m, R₁.assign m = R₂.assign m)
-```
-
-**Safety, two-round rule: the adaptive fixpoint is unique**, with no fairness, synchrony or view hypothesis.
-
-#### `exists_partialRun`
-
-*theorem, `Integration.AdaptiveOdontoceti.lean`*
-
-```lean
-theorem exists_partialRun (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
-    (hspans : (odontocetiAnchored Validator BlockId Payload).SpansEligible c)
-    (V : View Validator BlockId Payload U) (E : ℕ)
-    (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
-      odoLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E' + 2))) :
-    Nonempty (PartialRun P U V E)
-```
-
-**Partial runs exist at every height, two-round rule**, from the staged precondition alone. `odoLive_of` supplies it under coverage.
-
-#### `adaptiveRun_exists`
-
-*theorem, `Integration.AdaptiveOdontoceti.lean`*
-
-```lean
-theorem adaptiveRun_exists (hc : 0 < c) (hruns : Adaptive.PlacesRuns P T c)
-    (hspans : (odontocetiAnchored Validator BlockId Payload).SpansEligible c)
-    (V : View Validator BlockId Payload U)
-    (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
-      odoLive (slotsOf P.inj (fun m => P.pick U V A.vdct m)) V T P.W (P.W * (E + 2))) :
-    Nonempty (AdaptiveRun P U V)
-```
-
-**AL7: adaptive Odontoceti is safe and live.**
 
 #### `not_synchronisedOn_copyFill_hz`
 

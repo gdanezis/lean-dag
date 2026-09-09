@@ -53,16 +53,12 @@ import LeanDag.Reactive.Mysticeti
 import LeanDag.Reactive.Delivers
 import LeanDag.Reactive.Odontoceti
 import LeanDag.Reactive.MysticetiProperties
-import LeanDag.Integration.AdaptiveReactive
-import LeanDag.Integration.AdaptiveHydrozoan
 import LeanDag.Adaptive.Basic
 import LeanDag.Adaptive.Policy
 import LeanDag.Adaptive.Run
 import LeanDag.Adaptive.Joiner
 import LeanDag.Adaptive.Liveness
 import LeanDag.Adaptive.Growth
-import LeanDag.Integration.AdaptiveMysticeti
-import LeanDag.Integration.AdaptiveOdontoceti
 import LeanDag.Hybrid.Faults
 import LeanDag.Hybrid.Rules
 import LeanDag.Hybrid.Decision

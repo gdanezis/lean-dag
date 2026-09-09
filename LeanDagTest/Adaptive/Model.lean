@@ -1,8 +1,9 @@
 import LeanDag.Adaptive.Basic
 import LeanDag.Adaptive.Run
 import LeanDag.Adaptive.Liveness
-import LeanDag.Integration.AdaptiveMysticeti
-import LeanDag.Integration.AdaptiveOdontoceti
+import LeanDag.Adaptive.Growth
+import LeanDag.Mysticeti.Properties
+import LeanDag.Odontoceti.Properties
 import LeanDagTest.Mysticeti.Model
 import LeanDagTest.Odontoceti.Model
 /-!
@@ -22,6 +23,58 @@ are exhibited on data before anything is proved from the definitions:
   that differ only above the bound — the exact situation of an epoch
   judged against a schedule whose later epochs are not yet determined.
 -/
+
+namespace LeanDag
+
+open Properties MysticetiProperties
+
+variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
+variable [F : Faults Validator]
+variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
+variable {U : BlockUniverse Validator BlockId Payload}
+variable [S : Slots Validator]
+
+/-- The adaptive policy over the core's carrier. -/
+abbrev AdaptivePolicy (Validator : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] (BlockId : Type) [DecidableEq BlockId] (Payload : Type)
+    [Slots Validator] : Type :=
+  Adaptive.Policy (mysticetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
+
+/-- A run closed up to epoch height `E`, over the core. -/
+abbrev PartialRun (P : AdaptivePolicy Validator BlockId Payload)
+    (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) (E : ℕ) : Type :=
+  Adaptive.PartialRun (R := mysticetiRule) P U V E
+
+/-- **The adaptive fairness clause**, for the core. -/
+abbrev PlacesRuns (P : AdaptivePolicy Validator BlockId Payload)
+    (T : Finset Validator) (c : ℕ) : Prop :=
+  Adaptive.PlacesRuns P T c
+
+/-- **Congruence below the bound**: two assignments agreeing below `B`
+derive the same bounded verdicts. -/
+theorem decidedWithin_congr {hinj : Function.Injective S.slotRound}
+    {a₁ a₂ : ℕ → Validator} {V : View Validator BlockId Payload U} {B k : ℕ}
+    {v : Option BlockId} (ha : ∀ m, m < B → a₁ m = a₂ m)
+    (h : DecidedWithin (S := slotsOf hinj a₁) U V B k v) :
+    DecidedWithin (S := slotsOf hinj a₂) U V B k v :=
+  AnchoredRule.decidedWithin_slotsOf_congr coreLaws trivial ha h
+
+/-- **The master agreement lemma**, for the core. -/
+theorem partialRun_agree {P : AdaptivePolicy Validator BlockId Payload}
+    {V₁ V₂ : View Validator BlockId Payload U} {E₁ E₂ : ℕ}
+    (R₁ : PartialRun P U V₁ E₁) (R₂ : PartialRun P U V₂ E₂) :
+    ∀ k, epochOf P.W k < min E₁ E₂ → R₁.vdct k = R₂.vdct k :=
+  Adaptive.partialRun_agree agree R₁ R₂
+
+/-- Assignments agree wherever the common verdicts determine them. -/
+theorem partialRun_assign_agree {P : AdaptivePolicy Validator BlockId Payload}
+    {V₁ V₂ : View Validator BlockId Payload U} {E₁ E₂ : ℕ}
+    (R₁ : PartialRun P U V₁ E₁) (R₂ : PartialRun P U V₂ E₂) :
+    ∀ m, epochOf P.W m < min E₁ E₂ + 1 → R₁.assign m = R₂.assign m :=
+  Adaptive.partialRun_assign_agree agree R₁ R₂
+
+end LeanDag
 
 namespace LeanDagTest
 
@@ -235,9 +288,9 @@ theorem demote_placesRuns : PlacesRuns demotePolicy {0, 1} 1 := by
   rw [hp]
   split_ifs <;> decide
 
-#print axioms LeanDag.adaptiveRun_agree
-#print axioms LeanDag.adaptiveRun_exists
-#print axioms LeanDag.AdaptivePolicy.const_run_decided
+#print axioms LeanDag.Adaptive.run_agree
+#print axioms LeanDag.Adaptive.run_exists_of_support
+#print axioms LeanDag.Adaptive.Policy.const_run_decided
 #print axioms run7
 #print axioms demote_placesRuns
 
@@ -316,8 +369,8 @@ example :
     (fun m hm => by rw [if_neg (by omega)])
     uskip_decidedWithin_slot1
 
-#print axioms LeanDag.Odontoceti.adaptiveRun_agree
-#print axioms LeanDag.Odontoceti.adaptiveRun_exists
+#print axioms LeanDag.Adaptive.run_commitSeq_agree
+#print axioms LeanDag.Adaptive.exists_partialRun_of_support
 #print axioms uskip_decidedWithin_slot1
 
 end LeanDagTest

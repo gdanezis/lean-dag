@@ -1,5 +1,4 @@
 import LeanDag.GC.ChopDecided
-import LeanDag.Integration.AdaptiveMysticeti
 import LeanDag.Adaptive.Joiner
 import LeanDag.Properties.Arcs.GC
 import LeanDag.Mysticeti.Record
@@ -79,7 +78,8 @@ theorem joiner_decided_agree (hd : G ≤ S.slotRound d)
 
 section Policy
 
-variable {P : AdaptivePolicy Validator BlockId Payload}
+variable {P : Adaptive.Policy (MysticetiProperties.mysticetiRule
+  (Validator := Validator) (BlockId := BlockId) (Payload := Payload))}
 variable {pick' : (U' : BlockUniverse Validator BlockId Payload) →
       View Validator BlockId Payload U' → (ℕ → Option BlockId) → ℕ → Validator}
 
@@ -94,7 +94,7 @@ run on every shared slot: *pruning does not split the ledger, even when
 the schedule is derived from it.* -/
 theorem joiner_run_decided_agree (hd : G ≤ S.slotRound d)
     (hs : HorizonStable P G d pick')
-    {V : View Validator BlockId Payload U} (R : AdaptiveRun P U V)
+    {V : View Validator BlockId Payload U} (R : Adaptive.Run P U V)
     (V' : View Validator BlockId Payload (chop U G))
     {W : View Validator BlockId Payload (chop U G)} {k : ℕ} {w v : Option BlockId}
     (hW : Decided (S := slotsOf (S := S.chop G d hd)

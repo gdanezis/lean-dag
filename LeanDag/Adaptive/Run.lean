@@ -125,6 +125,13 @@ theorem run_agree {V₁ V₂ : R.View U} (A₁ : Run P U V₁) (A₂ : Run P U V
     exact partialRun_assign_agree ha (A₁.toPartial (epochOf P.W m + 1))
       (A₂.toPartial (epochOf P.W m + 1)) m (by omega)
 
+/-- **AL6 — the adaptive ledger is agreed.** The commit sequence read
+off any two total runs is the same list, at every length. -/
+theorem run_commitSeq_agree (ha : Agree R) {V₁ V₂ : R.View U}
+    (A₁ : Run P U V₁) (A₂ : Run P U V₂) (n : ℕ) :
+    commitSeq A₁.vdct n = commitSeq A₂.vdct n := by
+  rw [funext (run_agree ha A₁ A₂).1]
+
 end Agreement
 
 /-- **Conservativity.** Under the constant policy a run's verdicts are

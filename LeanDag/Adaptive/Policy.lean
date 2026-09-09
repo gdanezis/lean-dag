@@ -12,8 +12,8 @@ is the least that makes the adaptive fixpoint well-founded (`adaptive-leaders.md
 §2); `base_prefix` pins epochs `0` and `1` to the base schedule, since
 epoch `2` is the first with a two-epoch-old prefix to read. The policy
 reads a protocol's carrier only, so it is stated over
-`Properties.DagRule`; the core's `AdaptivePolicy` is this structure at
-the core's carrier (`Adaptive/Mysticeti.lean`).
+`Properties.DagRule`; a rule's own `AdaptivePolicy` is this structure at
+its carrier, and lives with the pairing in `Integration/`.
 -/
 
 namespace LeanDag
