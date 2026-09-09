@@ -328,3 +328,7 @@ import LeanDag.Steelhead.Model.Period
 import LeanDag.Steelhead.Period.Statement
 import LeanDag.Steelhead.Helpers.Period
 import LeanDag.Steelhead.Period.Proof
+import LeanDag.Steelhead.Model.Coin
+import LeanDag.Steelhead.Coin.Statement
+import LeanDag.Steelhead.Helpers.Coin
+import LeanDag.Steelhead.Coin.Proof
