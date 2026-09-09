@@ -170,11 +170,21 @@ Carried across `Adaptive/{Basic,Policy,Run,Liveness,Growth,Joiner}.lean`,
 
 ### 6.1 Liveness over a frame
 
-`frameRun_agree` is safety alone. `Closes`, `extend`, `genesis` and
-`every_height` exist only in the superseded `OneEpoch` shape. Removing
-the alignment restrictions should make them easier rather than harder,
-since the anchor is no longer required to arrive inside a fixed window,
-but none of it is proved.
+`Composed.genesis` is a composed run of height zero: one leader in every
+round, nothing decided, no configuration closed, and the assignment the
+policy's by definition. So `Composed` is inhabited outright and
+`Composed.agree` is not a theorem about an empty family.
+
+What is not built is the extension. `Closes` and `extend` exist only in
+the superseded `OneEpoch` shape, and porting them means giving a
+configuration's own liveness at the composed schedule and then showing a
+run of height `K` reaches `K + 1`. The clause a configuration owes is
+unchanged in substance — some slot past the threshold commits, and the
+range is decided — but it is now asked at a frame and against
+`SettlesInTwoEpochs` rather than at a uniform schedule. Removing the
+alignment restrictions should make it no harder, since the anchor is no
+longer required to arrive inside a fixed window, but none of it is
+proved.
 
 ### 6.2 The bridge to Barnacle's numbering — built
 
@@ -239,15 +249,20 @@ at least `W * (H + 1)` of them, which is what an epoch height `H` asks —
 so `agree` is applied to a run that has gone far enough rather than to a
 hypothesis about rounds.
 
-### 6.3 Is `FrameRun.closed` satisfiable?
+### 6.3 What `FrameRun.closed` asks — named
 
-It asks `DecidedFrameBelow` at bound `F.roundOf (W * (epoch + 2))`.
-`decided_of_frame_agree` supplies *some* bound; nothing yet says a
-protocol's is small enough. `LeaderCommits` gives a verdict at slot bound
-`κ + 1` and `Descends` at `b + c`, and both would have to be converted to
-round bounds and the commit gap shown to fit inside two epochs. That is
-the adaptive arc's standing assumption, so it should hold, but it is
-unproved in this setting.
+`SettlesInTwoEpochs R W F a hk V` is that clause, named: every verdict
+the schedule reaches is settled by it below the round at which the slot's
+epoch-plus-two begins. `closed_of_settles` derives `FrameRun.closed` from
+it and the rule's decisions.
+
+`Banded` gives every verdict *some* round below which it is settled
+(`decided_of_frame_agree`), so the clause is not unreachable; what it
+adds is that the round is soon enough, which is
+`settlesInTwoEpochs_of_banded`'s hypothesis. This is a property of a rule
+together with a schedule, and the adaptive arc's standing assumption read
+at a frame — it is an assumption in both settings, not a new obligation
+the composition creates.
 
 ### 6.4 The joiner and conservativity
 

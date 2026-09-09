@@ -146,5 +146,52 @@ theorem frameRun_agree (hR : Agree R) (hW : 0 < W)
     have d₂ := Rn'.decided_self g hgH
     exact hR _ V V g _ _ d₁ d₂
 
+
+/-- **The window fits in two epochs.** Every verdict a schedule reaches
+is settled by that schedule below the round at which the slot's
+epoch-plus-two begins.
+
+This is exactly what `FrameRun.closed` asks, named. `Banded` gives every
+verdict *some* round below which it is settled
+(`Properties.decided_of_frame_agree`); what this adds is that the round
+is soon enough, which is the standing assumption of the adaptive arc read
+at a frame. It is a property of a rule together with a schedule, not of
+the composition. -/
+def SettlesInTwoEpochs (R : Properties.DagRule Validator BlockId Payload) (W : ℕ)
+    (F : Frame) (a : ℕ → ℕ → Validator)
+    (hk : ∀ r i j, i < F.width r → j < F.width r → a r i = a r j → i = j)
+    {U : R.Universe} (V : R.View U) : Prop :=
+  ∀ g v, R.Decided (F.toSlots a hk) V g v →
+    DecidedFrameBelow R F a (F.roundOf (W * (epochOf W g + 2))) V g v
+
+/-- **A rule with a band settles in two epochs whenever its own round is
+soon enough.** `Banded` names the round; the hypothesis is that it is
+within two epochs, and nothing else is asked. -/
+theorem settlesInTwoEpochs_of_banded (hb : Banded R) {W : ℕ} {F : Frame}
+    {a : ℕ → ℕ → Validator}
+    {hk : ∀ r i j, i < F.width r → j < F.width r → a r i = a r j → i = j}
+    {U : R.Universe} {V : R.View U}
+    (hfit : ∀ g v, R.Decided (F.toSlots a hk) V g v →
+      ∀ B, DecidedFrameBelow R F a B V g v →
+        DecidedFrameBelow R F a (F.roundOf (W * (epochOf W g + 2))) V g v) :
+    SettlesInTwoEpochs R W F a hk V := by
+  intro g v hd
+  obtain ⟨B, -, hB⟩ := decided_of_frame_agree hb hd
+  exact hfit g v hd B hB
+
+/-- **And then the closure clause is the rule's decisions.** A verdict
+function whose values the schedule reaches gives `FrameRun.closed`. -/
+theorem closed_of_settles {W : ℕ} {F : Frame} {a : ℕ → ℕ → Validator}
+    {hk : ∀ r i j, i < F.width r → j < F.width r → a r i = a r j → i = j}
+    {U : R.Universe} {V : R.View U} {vdct : ℕ → Option BlockId} {H : ℕ}
+    (hs : SettlesInTwoEpochs R W F a hk V)
+    (hd : ∀ r i, i < F.width r → epochOf W (F.index r i) < H →
+      R.Decided (F.toSlots a hk) V (F.index r i) (vdct (F.index r i))) :
+    ∀ r i, i < F.width r → epochOf W (F.index r i) < H →
+      DecidedFrameBelow R F a
+        (F.roundOf (W * (epochOf W (F.index r i) + 2))) V (F.index r i)
+        (vdct (F.index r i)) :=
+  fun r i hi hep => hs _ _ (hd r i hi hep)
+
 end Integration
 end LeanDag

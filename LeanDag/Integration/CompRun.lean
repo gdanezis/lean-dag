@@ -397,7 +397,39 @@ theorem agree (hR : Properties.Agree R) (hW : 0 < W) (hgap : P.gap = 2 * W)
     ∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g :=
   frameRun_agree hR hW hadapted Rn.toFrameRun Rn'.toFrameRun (hwd hW hgap hcover)
 
+
+/-- **The genesis run.** One leader in every round, nothing decided, no
+configuration closed: every clause of a run of height zero is about a
+configuration it does not have, and the assignment is the policy's by
+definition. `Composed` is therefore inhabited outright. -/
+def genesis (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator)
+    (upd : ℕ → ℕ → (U : R.Universe) → R.View U → BlockId → ℕ × ℕ)
+    (U : R.Universe) (V : R.View U) (W : ℕ) (P : Params) :
+    Composed (R := R) W P pick upd U V 0 0 where
+  start := fun _ => 0
+  count := fun _ => 1
+  backoff := fun _ => 0
+  anchor := fun _ => 0
+  F := constFrame 1 Nat.one_pos
+  vdct := fun _ => none
+  asg := fun r i => pick U V (fun _ => none) ((constFrame 1 Nat.one_pos).index r i)
+  init := ⟨rfl, rfl, rfl⟩
+  count_pos := fun _ => Nat.one_pos
+  cnt_zero := rfl
+  cnt_eq := fun _ h => absurd h (by omega)
+  anchor_commits := fun _ h => absurd h (by omega)
+  anchor_least := fun _ h => absurd h (by omega)
+  start_succ := fun _ h => absurd h (by omega)
+  update := fun _ h => absurd h (by omega)
+  keyed := fun _ i j hi hj _ => by
+    have : i = 0 := by simpa [constFrame] using hi
+    have : j = 0 := by simpa [constFrame] using hj
+    omega
+  coherent := fun _ _ _ _ => rfl
+  closed := fun _ _ _ h => absurd h (by omega)
+
 end Composed
+
 
 end Integration
 end LeanDag
