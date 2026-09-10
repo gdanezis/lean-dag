@@ -978,3 +978,38 @@ header says so, and instance pins guard the resolution):
   tall enough for the gap, `RoundRobinLive` applied at counts one and
   two with both clauses non-vacuous and verdicts pinned through
   `agree`.
+
+## The assumption a run makes without stating it
+
+`PartialRun.closed` records a configuration's verdicts as decided against
+`Sched getLeader hk (count k)` — the uniform schedule at that count,
+extended to every round. That is not the schedule that runs once the
+count changes, and an indirectly decided slot near the top of a
+configuration's range takes its anchor from a round the next
+configuration governs.
+
+`Barnacle.sched_local` is why the clause is nonetheless sound. Every slot
+decided at count `m` has a round bound below which that count and its
+rotation settle it, from `Properties.exists_roundLocal`; above the bound
+the schedule may be anything, and in particular it may be the count the
+next configuration installs.
+
+What makes the bound reachable is the protocol's own discipline rather
+than anything in the run. The paper's `TryCommit` walks the decision
+sequence in order **up to the first undecided slot**, and the pivot at
+which the count changes is a leader it has committed, so at the moment of
+the switch every slot below the pivot is decided — each of them derived
+while the configuration list still named count `m` at every round. Its
+`TryDecide` then stops at the committed prefix and never re-derives below
+it. The formalisation states the outcome and not the discipline; this
+note records the discipline, since without it the clause would be asking
+for a derivation no validator computes.
+
+One consequence for anything built on top. A mechanism that delays the
+next configuration past the pivot's round — starting it at the anchor's
+round plus a gap rather than at the round after — puts slots *above* the
+pivot inside the configuration's range. Those are not in the committed
+prefix when the switch is fixed, so an implementation would derive them
+with the next count above the boundary while `closed` asks for this one
+throughout. The paper starts the new configuration at the round after the
+pivot's, and a formalisation that keeps that has nothing to reconcile.

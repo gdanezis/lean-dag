@@ -25,7 +25,7 @@ only blocks; a larger view holds everything the band names. -/
 theorem Persist.of_banded (h : Banded R) : Persist R := by
   intro S U U' he V V' hV k v hd
   obtain ⟨top, htop⟩ := h S U V k v hd
-  exact htop 0 0 0 0 S U' V' k (by omega) (fun m m' hm => by
+  exact htop 0 0 0 0 S U' V' k (by omega) (fun m m' hm _ => by
       have : m = m' := by omega
       subst this; rfl)
     (fun m m' hm _ => by have : m = m' := by omega
@@ -40,7 +40,7 @@ theorem decided_mono_of_banded (h : Banded R) {S : Slots Validator} {U : R.Unive
     {V V' : R.View U} (hsub : R.viewIds V ⊆ R.viewIds V') {k : ℕ} {v : Option BlockId}
     (hd : R.Decided S V k v) : R.Decided S V' k v := by
   obtain ⟨top, htop⟩ := h S U V k v hd
-  exact htop 0 0 0 0 S U V' k (by omega) (fun m m' hm => by
+  exact htop 0 0 0 0 S U V' k (by omega) (fun m m' hm _ => by
       have : m = m' := by omega
       subst this; rfl)
     (fun m m' hm _ => by have : m = m' := by omega
@@ -64,7 +64,7 @@ theorem exists_decidedBelow (h : Banded R) {S : Slots Validator} {U : R.Universe
   refine ⟨max (k + 1) B₀, lt_of_lt_of_le (Nat.lt_succ_self k) (le_max_left _ _), hd, ?_⟩
   intro S' hround hlead
   refine ht 0 0 0 0 S' U V k (by omega) ?_ ?_ AgreeBand.refl (fun b hb _ _ => hb)
-  · intro m m' hm
+  · intro m m' hm _
     have hmm : m = m' := by omega
     subst hmm
     simp only [Nat.add_zero]
@@ -78,6 +78,41 @@ theorem exists_decidedBelow (h : Banded R) {S : Slots Validator} {U : R.Universe
     have hB : B₀ ≤ m := le_trans (le_max_right _ _) hge
     have := S.mono hB
     omega
+
+/-- **A verdict is local in the rounds, not only in the leaders.** Every
+decided slot has a round bound below which the schedule settles it: any
+schedule agreeing with this one — on the rounds as well as the leaders —
+at every slot below that round decides the slot the same way.
+
+`DecidedBelow` gives the leader half of this and holds the round
+structure fixed, which is what reassignment means. This is the other
+half, and it is what a mechanism needs when it varies the rounds
+themselves: Barnacle changes how many slots a round holds, so a
+configuration's schedule and its successor's differ in `slotRound`, and
+no leader-only clause relates them. -/
+theorem exists_roundLocal (h : Banded R) {S : Slots Validator} {U : R.Universe}
+    {V : R.View U} {k : ℕ} {v : Option BlockId} (hd : R.Decided S V k v) :
+    ∃ B, S.slotRound k < B ∧
+      ∀ S' : Slots Validator,
+        (∀ m, S.slotRound m < B → S'.slotRound m = S.slotRound m) →
+        (∀ m, S.slotRound m < B → S'.leader m = S.leader m) →
+        R.Decided S' V k v := by
+  obtain ⟨top, ht⟩ := h S U V k v hd
+  refine ⟨max (S.slotRound k + 1) (top + 1), lt_of_lt_of_le (Nat.lt_succ_self _)
+    (le_max_left _ _), ?_⟩
+  intro S' hround hlead
+  refine ht 0 0 0 0 S' U V k (by omega) ?_ ?_ AgreeBand.refl (fun b hb _ _ => hb)
+  · intro m m' hm hbnd
+    have hmm : m = m' := by omega
+    subst hmm
+    simp only [Nat.add_zero]
+    exact (hround m (lt_of_le_of_lt hbnd (lt_of_lt_of_le (Nat.lt_succ_self _)
+      (le_max_right _ _)))).symm
+  · intro m m' hm hbnd
+    have hmm : m = m' := by omega
+    subst hmm
+    exact (hlead m (lt_of_le_of_lt hbnd (lt_of_lt_of_le (Nat.lt_succ_self _)
+      (le_max_right _ _)))).symm
 
 end Properties
 

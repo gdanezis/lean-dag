@@ -32,11 +32,17 @@ structure Policy (R : DagRule Validator BlockId Payload) [S : Slots Validator] w
   /-- The epoch length, in slots. -/
   W : ℕ
   W_pos : 0 < W
-  /-- One leader per round, for the whole arc. -/
-  inj : Function.Injective S.slotRound
   /-- The reassignment rule: from the universe, the validator's view of
   it and a verdict function, the leader of each slot. -/
   pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator
+  /-- **The schedule law the reassignment owes.** `Slots.keyed` asks that
+  distinct slots differ in round or in leader. Under one leader per round
+  the rounds separate them whatever the policy does; under multiple
+  leaders a reassignment could collide two slots of one round onto one
+  validator, so the clause is genuinely owed — the obligation
+  `adaptive-leaders.md` §2 recorded and deferred. -/
+  keyed : ∀ (U : R.Universe) (V : R.View U) (v : ℕ → Option BlockId) (k₁ k₂ : ℕ),
+    S.slotRound k₁ = S.slotRound k₂ → pick U V v k₁ = pick U V v k₂ → k₁ = k₂
   /-- **Adaptedness.** The leader of slot `k` reads the verdicts of
   epochs `≤ epochOf k − 2` and nothing else — not the view either. -/
   adapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
@@ -50,13 +56,34 @@ namespace Policy
 
 variable {R : DagRule Validator BlockId Payload} [S : Slots Validator]
 
+/-- **The reassignment is lawful at every count.** `Policy.keyed` asks
+the law at the policy's own schedule; a mechanism that varies the number
+of leaders per round asks it at each count it may switch to, since one
+reputation rule serves every configuration. `Barnacle.Keyed` for a
+reassignment rather than a fixed map. -/
+def PickKeyed (maxLeaders : ℕ)
+    (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator) : Prop :=
+  ∀ m, 0 < m → m ≤ maxLeaders →
+    ∀ (U : R.Universe) (V : R.View U) (v : ℕ → Option BlockId) (k₁ k₂ : ℕ),
+      k₁ / m = k₂ / m → pick U V v k₁ = pick U V v k₂ → k₁ = k₂
+
+/-- At one leader per round it is free: `k₁ / 1 = k₂ / 1` already says
+the slots are equal. -/
+theorem pickKeyed_one
+    (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator) :
+    PickKeyed (R := R) 1 pick := by
+  intro m hm hmax U V v k₁ k₂ hdiv _
+  have : m = 1 := by omega
+  subst this
+  simpa using hdiv
+
 /-- The constant policy: reassign nothing. The conservativity anchor —
 under it the adaptive development must collapse onto the base one. -/
 def const (W : ℕ) (hW : 0 < W) (hinj : Function.Injective S.slotRound) : Policy R where
   W := W
   W_pos := hW
-  inj := hinj
   pick _ _ _ k := S.leader k
+  keyed := fun _ _ _ _ _ hr _ => hinj hr
   adapted _ _ _ _ _ _ _ := rfl
   base_prefix _ _ _ _ _ := rfl
 

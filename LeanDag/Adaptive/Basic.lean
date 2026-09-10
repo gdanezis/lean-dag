@@ -34,6 +34,16 @@ theorem epochOf_mono (W : ℕ) {j k : ℕ} (h : j ≤ k) :
     epochOf W j ≤ epochOf W k :=
   Nat.div_le_div_right h
 
+/-- **Two epochs of slots are two epochs.** What a gap counted in slots
+gives a clause counted in epochs. -/
+theorem epochOf_add_two {W x y : ℕ} (hW : 0 < W) (h : x + 2 * W ≤ y) :
+    epochOf W x + 2 ≤ epochOf W y := by
+  have h1 : epochOf W (x + 2 * W) ≤ epochOf W y := epochOf_mono W h
+  have h2 : epochOf W (x + 2 * W) = epochOf W x + 2 := by
+    simp only [epochOf]
+    rw [Nat.mul_comm 2 W, Nat.add_mul_div_left _ _ hW]
+  omega
+
 /-- **Epoch alignment.** When a base slot is a whole number of epochs,
 a numbering that starts there is the original shifted by a constant,
 and every epoch window corresponds. This is what a cut must respect
@@ -54,6 +64,20 @@ example : epochOf 2 (1 + 1) ≠ 1 / 2 + epochOf 2 1 := by decide
 section Slots
 
 variable [S : Slots Validator]
+
+/-- **The induced instance, at any base schedule.** `Slots.keyed` asks
+that distinct slots differ in round or in leader; under one leader per
+round the rounds already separate them, which is `slotsOf` below. What
+the law actually needs is weaker and survives multiple leaders: distinct
+slots of *one* round get distinct validators. -/
+@[reducible] def slotsOfKeyed (a : ℕ → Validator)
+    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
+    Slots Validator where
+  slotRound := S.slotRound
+  leader := a
+  mono := S.mono
+  unbounded := S.unbounded
+  keyed := fun _ _ h => hk _ _ (congrArg Prod.fst h) (congrArg Prod.snd h)
 
 /-- The `Slots` instance a leader assignment induces: the base round
 structure, the given leaders. `keyed` is where one-leader-per-round
@@ -89,6 +113,22 @@ transfers between assignments agreeing below its bound. -/
 theorem spansEligible_slotsOf (hinj : Function.Injective S.slotRound) (a : ℕ → Validator)
     {wave c : ℕ} (h : SpansEligibleAt (S := S) wave c) :
     SpansEligibleAt (S := slotsOf hinj a) wave c := h
+
+/-- The same at a lawful assignment, which is all reassignment needs. -/
+theorem spansEligible_slotsOfKeyed (a : ℕ → Validator)
+    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂)
+    {wave c : ℕ} (h : SpansEligibleAt (S := S) wave c) :
+    SpansEligibleAt (S := slotsOfKeyed a hk) wave c := h
+
+/-- **The instance depends on the assignment alone.** `keyed` is a
+proposition, so two lawful assignments that agree give the same
+schedule — which is what lets a run's assignment be rewritten under a
+`Slots` argument. -/
+theorem slotsOfKeyed_congr {a a' : ℕ → Validator}
+    {hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂}
+    {hk' : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a' k₁ = a' k₂ → k₁ = k₂}
+    (h : a = a') : slotsOfKeyed a hk = slotsOfKeyed a' hk' := by
+  subst h; rfl
 
 /-- **Congruence below the bound**, at two induced schedules: two
 assignments agreeing below `B` derive the same bounded verdicts. -/

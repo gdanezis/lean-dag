@@ -296,9 +296,10 @@ an explicit hypothesis rather than a chosen constant.
   policy, not derived: no scoring rule is modelled, and nothing is said
   about an adversary gaming reputation. What is proved is that *any*
   adapted policy is safe and *any* adapted-and-fair policy is live.
-- **Multi-leader reassignment.** The `keyed` obligation under
-  multi-leader rounds is recorded but the initial development takes one
-  leader per round.
+- ~~**Multi-leader reassignment.**~~ Built. `Policy.keyed` replaces the
+  one-leader clause `inj`, `slotsOfKeyed` replaces `slotsOf` through the
+  arc, and `Adaptive.PickKeyed` states the obligation at every count a
+  count-varying mechanism may reach. Report §13.1 and AL1.
 - **Changing `slotRound`.** Adaptivity here reassigns leader identity
   only; the round structure of the schedule stays fixed, as it does in
   Hammerhead.
