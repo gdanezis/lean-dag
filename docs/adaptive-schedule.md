@@ -397,6 +397,14 @@ its `toFrameRun`, and `agree`, where each of `frameRun_agree`'s three
 determinisms is one of the schedule's clauses read at the two runs.
 `coherent` is `rfl`, the assignment being the policy's by construction.
 
+Progress is `extend`: a run gains an epoch as soon as that epoch's slots
+are decided, and since a `ScheduleRun` carries nothing but verdicts, the
+extension adds a clause rather than data and the frames stay where they
+were. `everyHeight` is the unbounded form and `ofSettles` is what a rule
+discharges it with — `closed_of_settles` at the schedule's own two
+frames, given that the rule decides every slot and settles each within
+two epochs.
+
 One hypothesis changed shape. `frameRun_agree`'s `hadapted` quantified
 over every pair of verdict functions with the epoch frame fixed; a
 schedule reads the epoch of a slot at *its own* frame, so the two cannot
@@ -435,11 +443,20 @@ leaders are round-robin over the slots, so `pick_adapted` is `rfl` and
 what is exercised is the two clauses the arc adds. `aRun` inhabits
 `ScheduleRun` at height zero.
 
-`bRun` closes an epoch. Its leaders are round-robin over `1, 2, 3`, all
+`bRun` closes two epochs. Its leaders are round-robin over `1, 2, 3`, all
 correct under `Ugrow`'s fault model, so slot `0` commits; the schedule
 reads that and takes its wider frames, epochs of four slots past the
-second and rounds of two past the sixth. Epoch `0`'s three slots are each
-decided below round `6`, where epoch `2` begins.
+second and rounds of two past the sixth. Slots `0` to `5` are each
+decided below the round their own window ends at, which is round `6` or
+later since a window reaches two epochs and epoch `2` begins at slot `6`.
+
+`bSched_placesRunsIn` discharges the fairness clause outright — every
+epoch holds at least three slots and every slot is led by a correct
+validator — and `bRun_certLive` discharges the rule's own precondition
+from `Ugrow`'s synchrony and its populated rounds, through
+`certLive_of_coreLive`. `bRun_commits_in_epoch` is `commits_in_epoch`
+applied: epoch `1` of `bRun` carries three consecutive commits, with no
+hypothesis left standing.
 
 `aF_eq_bF` and `aE_eq_bE` are what close the circle. The frames are named
 first and the verdicts read off them, and these two say the schedule at

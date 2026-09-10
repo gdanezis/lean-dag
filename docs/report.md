@@ -4773,15 +4773,26 @@ construction where nothing commits, a configuration not closing until a
 commit lands past its threshold, and a schedule must decide that case in
 `len` and `widthOf`.
 
-**AS6 — witnesses.** `Schedule.ofFixed` reads no verdict, so its clauses
+**AS6 — progress, and liveness applied.** `ScheduleRun.extend` gains an
+epoch as soon as that epoch's slots are decided, and since a run carries
+nothing but verdicts the extension adds a clause rather than data;
+`everyHeight` is the unbounded form and `ScheduleRun.ofSettles` is what a
+rule discharges it with, `closed_of_settles` read at the schedule's own
+two frames. On the data, `bSched_placesRunsIn` discharges the fairness
+clause — every epoch holds at least three slots and every slot is led by
+a correct validator — and `bRun_certLive` discharges the rule's own
+precondition from `Ugrow`'s synchrony and its populated rounds, so
+`bRun_commits_in_epoch` is AS4 applied with no hypothesis left standing.
+
+**AS7 — witnesses.** `Schedule.ofFixed` reads no verdict, so its clauses
 hold at any two frames; `LeanDagTest.ScheduleModel.sched` is it at epochs
 of `3, 4, 5` slots over rounds of `1, 2, 3`, neither constant and neither
 aligned with the other. `aSched` is adapted in both frames — the epoch
 lengths and the widths turn on whether slot `0` committed — and the
 clauses hold because slot `0` lies in epoch `0`, two below every epoch
-either function is consulted for. `bRun` closes an epoch over `Ugrow`:
-its leaders are correct, so slot `0` commits, the schedule takes its
-wider frames, and epoch `0`'s three slots are each decided.
+either function is consulted for. `bRun` closes two epochs over
+`Ugrow`: its leaders are correct, so slot `0` commits, the schedule takes
+its wider frames, and slots `0` to `5` are each decided.
 `aF_eq_bF` and `aE_eq_bE` are what make that a fixed point rather than an
 assertion — the schedule at those verdicts gives back the frames the
 verdicts were read off.
@@ -10340,7 +10351,7 @@ quality, C, D,
 B and E for the denial-of-service arc, G for garbage collection, O for
 Odontoceti; P, N and R name clauses of the trust boundary rather than
 results. Labels resolving to witness models rather than library
-theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, AS6, H9, H10, BN13, I25) are
+theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, AS7, H9, H10, BN13, I25) are
 excluded from the diagrams, which show the library; so are MM4, BM8, BML6, BMR7, BMA5, BMD7, BME6, BMO10, BMO11 and BMP14. Two labels are
 absent from the Barnacle rows below and are named here rather than left
 to be noticed: **BN1**, that `Sched m` is a lawful `Slots` instance at
@@ -10531,7 +10542,8 @@ reused.
 | AS3 | the boundaries are a function of the verdicts too, so the epoch induction settles where the epochs are before what they decide | `Adaptive.frameRun_agree` *(Adaptive/Frame)*, `Adaptive.epochOf_eq_roundOf`, `Adaptive.roundOf_lt_iff` *(Adaptive/EpochFrame)* |
 | AS4 | liveness: every epoch a run has closed carries `c` consecutive commits, at a fairness clause read over an epoch the policy sized | `Adaptive.ScheduleRun.commits_in_epoch`, `Adaptive.ScheduleRun.commits`, `Adaptive.ScheduleRun.descends` *(Adaptive/ScheduleLive)*, `placesRunsIn_ofFixed_of_headsRun` *(Integration/AdaptiveFrame)* |
 | AS5 | a frame whose rounds differ in width spans a wave: the descent asks the widths to be bounded and not equal | `Frame.spansEligible_toSlots`, `descends_frame` *(Adaptive/Frame)*, `LeanDagTest.VaryingFrame.vF_spans` *(LeanDagTest/Integration/VaryingFrame)* |
-| AS6 | the schedule on data: both frames read from the verdicts, and a run that closes an epoch | `LeanDagTest.ScheduleModel.aSched`, `LeanDagTest.ScheduleModel.bRun`, `LeanDagTest.ScheduleModel.aF_eq_bF` *(LeanDagTest/Adaptive/ScheduleModel)* |
+| AS6 | progress: a run gains an epoch as soon as that epoch's slots are decided, and liveness applied on the data with no hypothesis left standing | `Adaptive.ScheduleRun.extend`, `Adaptive.ScheduleRun.everyHeight`, `Adaptive.ScheduleRun.ofSettles` *(Adaptive/ScheduleRun)*, `LeanDagTest.ScheduleModel.bRun_commits_in_epoch` *(LeanDagTest/Adaptive/ScheduleModel)* |
+| AS7 | the schedule on data: both frames read from the verdicts, and a run that closes two epochs | `LeanDagTest.ScheduleModel.aSched`, `LeanDagTest.ScheduleModel.bRun`, `LeanDagTest.ScheduleModel.aF_eq_bF` *(LeanDagTest/Adaptive/ScheduleModel)* |
 
 **Hybrid fault tolerance** (§14):
 

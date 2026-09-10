@@ -300,11 +300,16 @@ theorem bE_cum2 : bE.cum 2 = 6 := by
 
 theorem bE_cum1 : bE.cum 1 = 3 := by rw [Frame.cum_succ, Frame.cum_zero]; rfl
 
-/-- **A run that closes an epoch.** Epoch `0` holds slots `0`, `1` and
-`2`, each at its own round, and each is decided below round `6`, where
-epoch `2` begins. -/
+theorem bF_roundOf6 : bF.roundOf 6 = 6 :=
+  bF.roundOf_eq (by rw [bF_cum_low 6 (le_refl 6)])
+    (by rw [Frame.cum_succ, bF_cum_low 6 (le_refl 6), bF_width, if_neg (by omega)]; omega)
+
+/-- **A run that closes two epochs.** Epochs `0` and `1` hold slots `0`
+to `5`, each at its own round, and each is decided below the round its
+own window ends at — which is round `6` or later, since a window reaches
+two epochs and epoch `2` begins at slot `6`. -/
 noncomputable def bRun : ScheduleRun bSched (Ugrow Composition.N)
-    (View.full (Ugrow Composition.N)) 1 where
+    (View.full (Ugrow Composition.N)) 2 where
   vdct := bVdct
   closed := fun r i hi hep => by
     have hasg : bSched.asgOf bVdct (Ugrow Composition.N) (View.full (Ugrow Composition.N))
@@ -313,9 +318,9 @@ noncomputable def bRun : ScheduleRun bSched (Ugrow Composition.N)
       show bPick ((aF bVdct).index r' i') = bPick (bF.index r' i')
       rw [aF_eq_bF]
     simp only [bSched_frameOf, bSched_epochFrame, aF_eq_bF, aE_eq_bE, hasg] at hi hep ⊢
-    have hlt : bF.index r i < 3 := by
-      have := (Adaptive.roundOf_lt_iff (E := bE) (g := bF.index r i) (e := 1)).mp hep
-      rwa [bE_cum1] at this
+    have hlt : bF.index r i < 6 := by
+      have := (Adaptive.roundOf_lt_iff (E := bE) (g := bF.index r i) (e := 2)).mp hep
+      rwa [bE_cum2] at this
     have hr6 : r < 6 := by
       by_contra hc
       have h6 : bF.cum 6 ≤ bF.cum r := bF.cum_mono (by omega)
@@ -330,14 +335,11 @@ noncomputable def bRun : ScheduleRun bSched (Ugrow Composition.N)
       rw [Frame.index, bF_cum_low r (show r ≤ 6 by omega)]
       omega
     rw [hidx]
-    have he0 : bE.roundOf r = 0 := by
-      have : bE.roundOf r < 1 := by rw [← hidx]; exact hep
-      omega
-    have hbnd : bF.roundOf (bE.cum (bE.roundOf r + 2)) = 6 := by
-      rw [he0, bE_cum2]
-      exact bF.roundOf_eq (by rw [bF_cum_low 6 (le_refl 6)])
-        (by rw [Frame.cum_succ, bF_cum_low 6 (le_refl 6), bF_width, if_neg (by omega)]; omega)
-    rw [hbnd]
+    have hbnd : 6 ≤ bF.roundOf (bE.cum (bE.roundOf r + 2)) := by
+      have h1 : bE.cum 2 ≤ bE.cum (bE.roundOf r + 2) := bE.cum_mono (by omega)
+      rw [bE_cum2] at h1
+      have h2 := bF.roundOf_mono h1
+      rwa [bF_roundOf6] at h2
     have hv : bVdct r = some (4 * r + (bPick r).val) := by
       show Composition.vdctOf bF bAsg r = _
       rw [Composition.vdctOf, bF_roundOf_low (show r < 6 by omega),
@@ -346,11 +348,73 @@ noncomputable def bRun : ScheduleRun bSched (Ugrow Composition.N)
       rw [hidx]
     rw [hv]
     have hfin := Composition.decidedFrameBelow_of_asg (F := bF)
-      (asg := fun r' i' => bPick (bF.index r' i')) (r := r) (i := 0) (B := 6)
-      (by rw [hwr]; omega) (show r < 6 by omega) (show r + 2 ≤ 24 by omega)
+      (asg := fun r' i' => bPick (bF.index r' i')) (r := r) (i := 0)
+      (B := bF.roundOf (bE.cum (bE.roundOf r + 2)))
+      (by rw [hwr]; omega) (by omega) (show r + 2 ≤ 24 by omega)
       (bPick_correct _)
     rw [hidx] at hfin
     exact hfin
+
+/-! ## Liveness, applied
+
+`commits_in_epoch` asks two things of the world: that the schedule places
+a stretch of reliable slots in every epoch, and that the rule is live
+where it reads. `bSched` gives the first outright — its leaders are `1`,
+`2`, `3` and its epochs never fall below three slots — and `Ugrow` gives
+the second, being synchronised from round `0` and populated to its
+height.
+-/
+
+theorem aLen_ge (v : ℕ → Option ℕ) (e : ℕ) : 3 ≤ aLen v e := by
+  unfold aLen; split
+  · omega
+  · split <;> omega
+
+/-- **The fairness clause, on the data.** Every epoch of `bSched` holds
+at least three slots and every slot is led by a correct validator, so the
+first three slots of each epoch are the stretch. -/
+theorem bSched_placesRunsIn (U : (mysticetiRule (Validator := Fin 4) (BlockId := ℕ)
+      (Payload := Unit)).Universe) (V : View (Fin 4) ℕ Unit U) :
+    PlacesRunsIn bSched U V (Correct : Finset (Fin 4)) 3 := by
+  intro v e
+  refine ⟨(bSched.epochFrame v).cum (e + 1), le_refl _, ?_, fun i _ => bPick_correct _⟩
+  have hs : (bSched.epochFrame v).cum (e + 2)
+      = (bSched.epochFrame v).cum (e + 1) + aLen v (e + 1) := by
+    have he : e + 2 = (e + 1) + 1 := by omega
+    rw [he, Frame.cum_succ]
+    rfl
+  have := aLen_ge v (e + 1)
+  omega
+
+/-- **The rule is live where the run reads**, from `Ugrow`'s synchrony
+and its populated rounds. -/
+theorem bRun_certLive : MysticetiProperties.certLive bRun.sched
+    (View.full (Ugrow Composition.N)) (Correct : Finset (Fin 4))
+    ((bSched.epochFrame bRun.vdct).cum 1) ((bSched.epochFrame bRun.vdct).cum 2) :=
+  MysticetiProperties.certLive_of_coreLive
+    (MysticetiProperties.coreLive_of (R₀ := 0) (N := Composition.N) card_correct
+      (ugrow_synchronised Composition.N) (Nat.zero_le _)
+      (fun _ _ hr => ugrow_populated hr) (View.coversUpto_full _ _)
+      (fun k hk => by
+        have h1 : bRun.sched.slotRound k = (bSched.frameOf bRun.vdct).roundOf k := rfl
+        have h2 : (bSched.frameOf bRun.vdct).roundOf k ≤ k :=
+          Composition.frame_roundOf_le _ k
+        have h3 : (bSched.epochFrame bRun.vdct).cum 2 = 6 := by
+          simp only [bSched_epochFrame, aE_eq_bE]; exact bE_cum2
+        rw [h1]
+        show (bSched.frameOf bRun.vdct).roundOf k + 2 ≤ 24
+        omega))
+
+/-- **Liveness on the data.** Epoch `1` of `bRun` carries three
+consecutive commits. -/
+theorem bRun_commits_in_epoch :
+    ∃ b, (bSched.epochFrame bRun.vdct).cum 1 ≤ b ∧
+      b + 3 ≤ (bSched.epochFrame bRun.vdct).cum 2 ∧
+      ∀ i, i < 3 → ∃ L, bRun.vdct (b + i) = some L :=
+  ScheduleRun.commits_in_epoch MysticetiProperties.leaderCommits_cert
+    MysticetiProperties.agree bRun
+    (bSched_placesRunsIn (Ugrow Composition.N) (View.full (Ugrow Composition.N)))
+    0 (by omega) bRun_certLive
 
 end ScheduleModel
 

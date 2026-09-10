@@ -62,6 +62,67 @@ def toFrameRun (Rn : ScheduleRun P U V H) : FrameRun (R := R) P.pick U V H where
 @[simp] theorem toFrameRun_vdct (Rn : ScheduleRun P U V H) :
     Rn.toFrameRun.vdct = Rn.vdct := rfl
 
+/-- **Height zero is free.** Every clause is about an epoch the run has
+not closed. -/
+def zero (P : Schedule R) (U : R.Universe) (V : R.View U)
+    (vdct : ℕ → Option BlockId) : ScheduleRun P U V 0 where
+  vdct := vdct
+  closed := fun _ _ _ h => absurd h (by omega)
+
+/-- **Progress: one more epoch.** A run extends by an epoch as soon as
+that epoch's slots are decided. The verdicts do not move — a
+`ScheduleRun` carries nothing else — so extending adds a clause rather
+than data, and with it the frames stay exactly where they were. -/
+def extend (Rn : ScheduleRun P U V H)
+    (h : ∀ r i, i < (P.frameOf Rn.vdct).width r →
+      (P.epochFrame Rn.vdct).roundOf ((P.frameOf Rn.vdct).index r i) = H →
+      DecidedFrameBelow R (P.frameOf Rn.vdct) (P.asgOf Rn.vdct U V)
+        ((P.frameOf Rn.vdct).roundOf ((P.epochFrame Rn.vdct).cum
+          ((P.epochFrame Rn.vdct).roundOf ((P.frameOf Rn.vdct).index r i) + 2)))
+        V ((P.frameOf Rn.vdct).index r i) (Rn.vdct ((P.frameOf Rn.vdct).index r i))) :
+    ScheduleRun P U V (H + 1) where
+  vdct := Rn.vdct
+  closed := fun r i hi hep => by
+    rcases Nat.lt_or_ge ((P.epochFrame Rn.vdct).roundOf
+      ((P.frameOf Rn.vdct).index r i)) H with hlt | hge
+    · exact Rn.closed r i hi hlt
+    · exact h r i hi (by omega)
+
+@[simp] theorem extend_vdct (Rn : ScheduleRun P U V H) (h) :
+    (Rn.extend h).vdct = Rn.vdct := rfl
+
+/-- **Every height.** A verdict function whose every slot is decided
+below its own window gives a run of every height. -/
+def everyHeight (P : Schedule R) (U : R.Universe) (V : R.View U)
+    (vdct : ℕ → Option BlockId)
+    (h : ∀ r i, i < (P.frameOf vdct).width r →
+      DecidedFrameBelow R (P.frameOf vdct) (P.asgOf vdct U V)
+        ((P.frameOf vdct).roundOf ((P.epochFrame vdct).cum
+          ((P.epochFrame vdct).roundOf ((P.frameOf vdct).index r i) + 2)))
+        V ((P.frameOf vdct).index r i) (vdct ((P.frameOf vdct).index r i))) :
+    ∀ H, ScheduleRun P U V H := fun _ =>
+  { vdct := vdct, closed := fun r i hi _ => h r i hi }
+
+@[simp] theorem everyHeight_vdct (P : Schedule R) (U : R.Universe) (V : R.View U)
+    (vdct : ℕ → Option BlockId) (h) (H : ℕ) :
+    (everyHeight P U V vdct h H).vdct = vdct := rfl
+
+/-- **What a rule owes for a run to exist**: that it decides every slot
+of the schedule, and that it settles each within two epochs.
+`closed_of_settles` is the second read at the schedule's own frames, and
+`everyHeight` is what it feeds. -/
+def ofSettles (P : Schedule R) (U : R.Universe) (V : R.View U)
+    (vdct : ℕ → Option BlockId)
+    (hs : SettlesInTwoEpochs R (P.epochFrame vdct) (P.frameOf vdct)
+      (P.asgOf vdct U V) (P.asgOf_keyed vdct U V) V)
+    (hd : ∀ r i, i < (P.frameOf vdct).width r →
+      R.Decided ((P.frameOf vdct).toSlots (P.asgOf vdct U V) (P.asgOf_keyed vdct U V)) V
+        ((P.frameOf vdct).index r i) (vdct ((P.frameOf vdct).index r i))) :
+    ∀ H, ScheduleRun P U V H :=
+  everyHeight P U V vdct (fun r i hi =>
+    closed_of_settles (H := (P.epochFrame vdct).roundOf ((P.frameOf vdct).index r i) + 1) hs
+      (fun r' i' hi' _ => hd r' i' hi') r i hi (by omega))
+
 /-- **Safety of the adaptive schedule.** Two runs over one universe, held
 by validators with different views of it, have the same verdicts below
 the horizon.
