@@ -54,17 +54,26 @@ structure Config (Validator : Type) where
   /-- Rounds from this configuration's start before the next
   reconfiguration is due. -/
   interval : ℕ
-  interval_pos : 0 < interval
-  /-- No round holds more than `width` slots. What the descent reads,
-  and the only thing the model asks of how the schedule is shaped. -/
-  width : ℕ
-  width_bound : ∀ k, sched.slotRound k < sched.slotRound (k + width)
 ```
 
-`width_bound` says any `width + 1` consecutive slots span more than one
-round, which is "at most `width` slots to a round" without naming a width
-function. It is what `SpansEligibleAt` consumes, and it replaces
-`Params.maxLeaders` as the bound liveness reads.
+Two fields and no proofs. What a configuration must satisfy is where the
+present arc puts it — a clause of the run, beside `count_pos` and
+`count_le`:
+
+```lean
+interval_pos : ∀ k, 0 < (cfg k).interval
+width_le : ∀ k κ, (cfg k).sched.slotRound κ
+  < (cfg k).sched.slotRound (κ + P.maxLeaders)
+```
+
+`width_le` says two slots `maxLeaders` apart cannot share a round, which
+is "at most `maxLeaders` slots to a round" stated without naming a width
+function. It is what `SpansEligibleAt` consumes, and it is `count_le` at
+a schedule rather than at a number.
+
+`LeanDagTest.VaryingSchedule.vary` is the check §1 needs: rounds
+alternating one slot and two, a lawful `Slots`, and `vary_width_le` the
+bound at two.
 
 `UpdateRule` becomes
 
@@ -175,9 +184,11 @@ what a configuration *is*, not when it starts.
 
 ## 9. Order of work
 
-1. `Config` and `width_bound`, with a witness: a schedule whose rounds
-   differ in width, exhibited as a lawful `Slots`. *This is the check
-   that the class admits what §1 claims it does.*
+1. ~~`Config` and the width bound, with a witness: a schedule whose
+   rounds differ in width, exhibited as a lawful `Slots`.~~ The witness
+   is `LeanDagTest.VaryingSchedule.vary` — rounds alternating one slot
+   and two — and `vary_width_le` is the bound at two. The class admits
+   what §1 claims it does, and `Config` itself is two fields.
 2. `UpdateRule` and `PartialRun` at `Config`, and the constant instance —
    `Config` at a fixed rotation and a fixed count reproduces the present
    arc. *Nothing new is proved; the check is that the arc still builds.*
