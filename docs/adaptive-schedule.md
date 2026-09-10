@@ -44,10 +44,10 @@ these four validators lead* rather than only the last clause.
 
 ## 2. The clause the development already asks for
 
-`Integration.FrameRun` is a frame, an assignment, verdicts, that the
+`Adaptive.FrameRun` is a frame, an assignment, verdicts, that the
 assignment is the policy's, and that every slot of a closed epoch is
 decided. It names no count mechanism. Its safety theorem,
-`Integration.frameRun_agree`, takes one hypothesis about widths:
+`Adaptive.frameRun_agree`, takes one hypothesis about widths:
 
 ```lean
 (hwd : ∀ r, r < Rn.F.roundOf (W * (H + 1)) →

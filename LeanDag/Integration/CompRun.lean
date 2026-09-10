@@ -1,4 +1,5 @@
 import LeanDag.Integration.BarnacleFrame
+import LeanDag.Adaptive.Frame
 import LeanDag.Integration.AdaptiveFrame
 import LeanDag.Properties.Derived.LeaderCommits
 /-!
@@ -15,7 +16,7 @@ composition's safety argument needs — the widths from the configurations,
 and the anchor from the verdicts.
 
 What is not here is their assembly into
-`Integration.frameRun_agree`'s `hwd`; `docs/adaptive-rounds.md` §6.2
+`Adaptive.frameRun_agree`'s `hwd`; `docs/adaptive-rounds.md` §6.2
 records what that still asks for.
 
 **Trusted core: `CompRun` is a definition.**
@@ -23,7 +24,7 @@ records what that still asks for.
 
 namespace LeanDag
 namespace Integration
-open Barnacle Properties
+open Barnacle Properties Adaptive
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
@@ -357,7 +358,7 @@ theorem config_det {Rn Rn' : CompRun (R := R) W P upd U V K} {kb : ℕ} (hkb : k
 
 
 /-- **The widths are a function of the verdicts two epochs below.** This
-is `Integration.frameRun_agree`'s `hwd`, at a run of both mechanisms.
+is `Adaptive.frameRun_agree`'s `hwd`, at a run of both mechanisms.
 
 The width of a round of configuration `k` is `count k`, which the anchor
 of configuration `k - 1` sets, and that anchor lies two epochs below by

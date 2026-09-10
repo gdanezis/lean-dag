@@ -5870,7 +5870,7 @@ the base prefix is assumed at more than one leader a round;
 The design record is `adaptive-rounds.md`. `adaptive-schedule.md`
 records the alternative that was not built — the epoch length, the widths
 and the leaders all emitted by the policy, with no second mechanism to
-compose — and states what `Integration.frameRun_agree` would ask of it.
+compose — and states what `Adaptive.frameRun_agree` would ask of it.
 
 **I25 — witnesses.** `Ugrow` is the universe, its height a parameter,
 because a two-epoch window does not close inside the fixed models. `cRun`
@@ -10487,11 +10487,11 @@ reused.
 | I17 | the budget needs a donor, not the author | `card_novelty_le_of_donor` *(Integration/Margin)* |
 | I18 | severance costs liveness margin: at most `f` at once | `notMem_of_no_blocks`, `card_severed_le` *(Integration/Margin)* |
 | I19 | a common-core target makes the fill transmission-free | `CommonAt`, `exists_commonAt`, `fill_refs_available` *(Integration/CommonTarget)* |
-| I20 | Barnacle and adaptive leaders compose: two runs over one universe, at different views, agree on the verdicts, the configuration data, the anchors and the widths — BN3 at a composed run | `Composed.agreement`, `CompRun.config_det`, `CompRun.width_det`, `frameRun_agree` *(Integration/CompRun, Integration/AdaptiveFrame)* |
+| I20 | Barnacle and adaptive leaders compose: two runs over one universe, at different views, agree on the verdicts, the configuration data, the anchors and the widths — BN3 at a composed run | `Composed.agreement`, `CompRun.config_det`, `CompRun.width_det`, `frameRun_agree` *(Integration/CompRun, Adaptive/Frame)* |
 | I21 | every epoch a composed run has closed carries `c` consecutive commits, at the adaptive arc's own fairness clause | `Composed.commits_in_epoch`, `Composed.commits`, `Composed.sched_leader_eq` *(Integration/CompRun)* |
 | I22 | a composed run whose configuration closes extends by one, and so to every height | `Composed.extend`, `Composed.step`, `Composed.every_height`, `closes_of_leaderCommits` *(Integration/CompRun)* |
 | I23 | Barnacle's ledger, conservativity and validity at a composed run — BN5, BN6, BN14 | `Composed.ledgerUpto_agree`, `Composed.ledgerUpto_prefix`, `Composed.ledgerUpto_nodup` *(Integration/Ledger)*, `CompRun.const_count`, `Composed.const_decided` *(Integration/Conservativity)*, `Composed.delivered` *(Integration/Validity)* |
-| I24 | the composition's two assumptions: a verdict settles within two epochs, proved at the directly decided slots; and a run of reliable leaders in every epoch, discharged at one leader a round | `SettlesInTwoEpochs`, `settlesInTwoEpochs_of_banded`, `decidedFrameBelow_direct`, `placesRuns_const_of_headsRun` *(Integration/AdaptiveFrame, Common/Anchored/Band, Integration/AdaptiveFrame)* |
+| I24 | the composition's two assumptions: a verdict settles within two epochs, proved at the directly decided slots; and a run of reliable leaders in every epoch, discharged at one leader a round | `SettlesInTwoEpochs`, `settlesInTwoEpochs_of_banded`, `decidedFrameBelow_direct`, `placesRuns_const_of_headsRun` *(Adaptive/Frame, Common/Anchored/Band, Integration/AdaptiveFrame)* |
 | I25 | the composed run on data: height three over eleven epochs, the count moving inside the epochs it decides | `LeanDagTest.Composition.mRun`, `LeanDagTest.Composition.mRun_extends`, `LeanDagTest.Composition.mRun_commits_in_epoch` *(LeanDagTest/Integration/ComposedRun)* |
 
 **FinWhale** (§20):

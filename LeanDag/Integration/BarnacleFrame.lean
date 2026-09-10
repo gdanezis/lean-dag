@@ -15,7 +15,7 @@ whose round sits `P.gap` below where the new count takes effect. At
 `P.gap = 2 * W` those rounds hold at least `2 * W` slots whatever the
 widths are, so the verdict the count reads lies two epochs below the
 slots the count is read at — the arithmetic
-`Integration.frameRun_agree`'s `hwd` asks for.
+`Adaptive.frameRun_agree`'s `hwd` asks for.
 -/
 
 namespace LeanDag
@@ -43,7 +43,7 @@ the anchor of configuration `k`, whose round is `P.gap` below where the
 new count takes effect. At `P.gap = 2 * W` those rounds hold at least
 `2 * W` slots, whatever the widths are, so the verdict the count reads
 lies two epochs below the slots the count is read at — which is what
-`Integration.frameRun_agree`'s `hwd` asks.
+`Adaptive.frameRun_agree`'s `hwd` asks.
 
 The frame is arbitrary: the claim is about counting rounds into slots and
 holds of any schedule with a leader in every round. -/

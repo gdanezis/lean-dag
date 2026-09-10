@@ -89,7 +89,7 @@ round `B` decides slot `g` and nothing above `B` changes that;
 
 ### 3.1 Safety over a varying frame
 
-`Integration.frameRun_agree` (`Integration/AdaptiveFrame.lean`). A `FrameRun` carries a
+`Adaptive.frameRun_agree` (`Adaptive/Frame.lean`). A `FrameRun` carries a
 frame, an assignment by round and position, and verdicts by global slot
 index. Two such runs over one universe and view have the same verdicts.
 
@@ -600,7 +600,7 @@ So a frame does not present a schedule that skips rounds, and
 **`FrameRun` and `PartialRun` are two run notions, and neither subsumes
 the other**, by the paragraph above. `FrameRun` is not a second run of
 the adaptive arc but the run of a mechanism that varies the widths, so it
-lives in `Integration/AdaptiveFrame.lean`; `Adaptive/Run.lean` keeps the
+lives in `Adaptive/Frame.lean`; `Adaptive/Run.lean` keeps the
 general run over a fixed `Slots`.
 
 ## 8. Carried over from the superseded branches

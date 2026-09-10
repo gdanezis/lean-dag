@@ -1,4 +1,4 @@
-import LeanDag.Integration.AdaptiveFrame
+import LeanDag.Adaptive.Frame
 /-!
 # A frame whose rounds differ in width
 
@@ -8,7 +8,7 @@ exhibits that: `vF` cycles through widths `1`, `2`, `3`, so no two
 consecutive rounds are alike, and it is a lawful schedule that satisfies
 the spanning clause liveness consumes.
 
-What forbids per-round widths is `CompRun.cnt_eq`, which makes every
+What forbids per-round widths is `Integration.CompRun.cnt_eq`, which makes every
 round of a configuration's range that configuration's count wide. That is
 Barnacle's clause, not the frame's.
 -/
@@ -16,7 +16,7 @@ Barnacle's clause, not the frame's.
 namespace LeanDagTest
 namespace VaryingFrame
 
-open LeanDag LeanDag.Integration
+open LeanDag LeanDag.Adaptive
 
 /-- Widths `1, 2, 3, 1, 2, 3, …`: no two consecutive rounds alike. -/
 def vF : Frame where

@@ -14,7 +14,7 @@ Every round holds a slot. A frame therefore does not present a schedule
 that skips rounds, and `Slots.uniform p m` at period `p > 1` does skip
 them. Admitting empty rounds was considered and rejected: `cum` is then
 only monotone, and the agreement argument for a varying frame
-(`Integration/AdaptiveFrame.lean`) needs it strictly monotone at exactly
+(`Adaptive/Frame.lean`) needs it strictly monotone at exactly
 the boundary — a run of empty rounds below the window's end would leave
 the widths there to be settled by verdicts the induction is deciding.
 `Slots` remains the general notion. -/
