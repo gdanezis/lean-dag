@@ -317,37 +317,85 @@ identically, so two validators compute one answer. Restricting `len`,
 `e − 2` is stronger than either arc currently asks, and should be stated
 rather than assumed.
 
-## 11. Module plan
+## 11. Where the files go
 
-* `LeanDag/Adaptive/EpochFrame.lean` — `len` and its clauses on `Policy`,
-  `epochFrame` by strong recursion on the epoch, and `epochOf` restated
-  as `E.roundOf`, with the arithmetic that the arc reads of it.
-* `LeanDag/Adaptive/Width.lean` — `widthOf` and its clauses, `frameOf` by
-  strong recursion on the round.
-* `LeanDag/Adaptive/ScheduleRun.lean` — `FrameRun`'s `epochs` and
-  `widths` fields, `hbd` and `hwd` as lemmas, and safety as a corollary
-  of `frameRun_agree` with §5's third induction step.
-* `LeanDag/Adaptive/ScheduleLive.lean` — the descent at `maxWidth`, and
-  `commits_in_epoch` at a schedule-emitting policy.
-* `LeanDagTest/Adaptive/ScheduleModel.lean` — a policy on `Ugrow` whose
-  epoch length and width both move, its epochs at the floor of §6, and
-  the degenerate case of §7 exhibited.
+The arc belongs under `Adaptive/`, and one move is needed first.
+`Integration/AdaptiveFrame.lean` holds two things: `FrameRun`,
+`frameRun_agree`, `SettlesInTwoEpochs` and the spanning clause, which
+name no second mechanism; and `placesRuns_const_of_headsRun`, which reads
+`Barnacle.HeadsRun` and is the only reason that file imports Barnacle at
+all. The first is adaptive-arc material sitting in the integration
+directory.
 
-Nothing under `Integration/` is needed: the arc composes with no second
-mechanism.
+| file | holds |
+|:---|:---|
+| `LeanDag/Adaptive/Frame.lean` | `FrameRun` and `frameRun_agree`, moved from `Integration/AdaptiveFrame.lean`, with `SettlesInTwoEpochs`, `closed_of_settles`, `Frame.spansEligible_toSlots` and `descends_frame` |
+| `LeanDag/Adaptive/EpochFrame.lean` | `epochOf` as a frame's `roundOf`, and the arithmetic the arc reads of it |
+| `LeanDag/Adaptive/Schedule.lean` | `Schedule`, `len` and `widthOf` with their clauses, `epochFrame` and `frameOf` by strong recursion |
+| `LeanDag/Adaptive/ScheduleRun.lean` | the run, its `toFrameRun`, `hbd` and `hwd` as lemmas, safety |
+| `LeanDag/Adaptive/ScheduleLive.lean` | the descent at `maxWidth`, `PlacesRuns` at a variable epoch, and the commits result |
+| `LeanDag/Integration/AdaptiveFrame.lean` | what is left: `placesRuns_const_of_headsRun` alone |
+| `LeanDagTest/Adaptive/ScheduleModel.lean` | the witness over `Ugrow` |
 
-## 12. Order of work, and what is separable
+`Schedule` should **extend** `Policy` rather than add fields to it.
+`Policy.const`, `LeanDagTest.demotePolicy` and every theorem of
+`Adaptive/Liveness.lean` are stated at a `Policy`, and a `Schedule`
+projects to one; adding fields to `Policy` would restate the built arc to
+no purpose.
 
-1. `epochFrame`, and `epochOf` restated as `E.roundOf` at a *constant*
-   `E`. This changes no theorem's content and is the substitution of §3;
-   the arc should still build.
-2. `hbd`, and `frameRun_agree`'s induction carried on the slot bound of
-   §5. Still at a constant `E`, so the new step is proved before it is
-   needed.
-3. `len` on `Policy`, and `epochFrame` from it. §5's argument is now
-   consumed rather than idle.
-4. `widthOf`, `frameOf`, `hwd`. Independent of 1–3 and could go first.
-5. The witness of §11.
+## 12. Order of work
+
+Each step names what it changes and what must still hold when it is done.
+
+**0. Move the frame arc.** `Adaptive/Frame.lean` takes everything of
+`Integration/AdaptiveFrame.lean` above its `Fairness` section; that
+section stays and imports the new file. `Common/Frame.lean`'s docstring
+names the old path and is corrected. *No content changes; the build and
+the six audits are unchanged, and no proof is edited.*
+
+**1. Epochs as a frame, instantiated constant.** `EpochFrame.lean`
+records `epochOf W k = (constFrame W hW).roundOf k` and the frame forms
+of `epochOf_lt_iff` and `epochOf_add_two`. `FrameRun` and
+`frameRun_agree` take a frame `E` where they took `W`, and every present
+caller passes `constFrame W`. *Still no content changes: `Composed` and
+the witnesses build with the new argument and no new proof.*
+
+**2. The third determinism, still constant.** `frameRun_agree` gains
+`hbd` and its induction hypothesis moves to the slot bound of §5.
+Callers discharge `hbd` by `rfl`, `E` being constant. *This is the only
+genuinely new argument in the plan, and it is proved before anything
+depends on it.*
+
+**3. The policy emits the widths.** `Schedule.lean` adds `maxWidth`,
+`widthOf` and its four clauses, and `frameOf` by strong recursion on the
+round with its `cum` and `roundOf` arithmetic. `ScheduleRun.lean` builds
+the run, `toFrameRun`, and `hwd` from `widthOf_adapted`. *A `Schedule`
+whose `widthOf` is constantly `1` reproduces the arc as it stands, which
+is the check that nothing was lost.*
+
+**4. The policy emits the epoch lengths.** `len` and its four clauses,
+`epochFrame` by strong recursion on the epoch, and `hbd` from
+`len_adapted`. *Step 2's argument is now consumed rather than
+discharged by `rfl`.*
+
+**5. Liveness.** `ScheduleLive.lean`: the descent from `widthOf_le`,
+`PlacesRuns` over an epoch the policy sized, the commits result, and the
+degenerate case of §7 from `Policy.const`. `Composed.commits` and
+`Composed.commits_in_epoch` are stated at a composed run and could be
+restated at a `FrameRun`, which would give both arcs one proof; that is
+a refactor and not a dependency.
+
+**6. The witness.** `ScheduleModel.lean` over `Ugrow`: a schedule whose
+epoch length and width both move, epochs at the floor of §6, and the
+degenerate case exhibited. Closed forms for `epochFrame`'s and
+`frameOf`'s cumulative functions will be wanted, as `mF_cum_high` is for
+the composed witness.
+
+**7. The record.** `LeanDag.lean` and `LeanDagTest.lean` gain the
+imports; the report gains a subsection of §13 and Appendix A gains the
+**AS** rows; `scripts/audit-mechanisms.py` gains the arc; and
+`deps.tsv`, `decls.json` and the four dependency-graph SVGs are
+regenerated.
 
 **Separable, and not required.** The sharpened descent of §6 — stated at
 the widths of the span rather than at `maxWidth` — is a change to
