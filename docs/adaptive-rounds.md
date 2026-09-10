@@ -454,16 +454,24 @@ at the frame's own `toSlots` and not only at the uniform schedule
 `cRun_horizon` is what `Composed.every_height` consumes, so the run is a
 base case for the recursion and not only an inhabitant.
 
-`wRun` is the same run with `upd` returning two. Configuration `0` runs
-at one leader a round and closes at slot `2`; configuration `1` runs at
-two, so every round past `10` holds two slots, under two different
-validators. Epoch `0` still closes, because it lies below the round the
-new count takes effect at — which is what `Params.gap` is for, now read
-off a witness rather than only off `anchor_below`.
+`mRun` closes two configurations and five epochs, at `W = 2` and a gap of
+four. Configuration `0` runs at one leader a round and closes at slot
+`2`; configuration `1` runs at two, closes at slot `9`, and sets the
+width from round `7` on. Epochs `0` to `4` are all closed, and epoch `3`
+straddles the change: slot `6` is the only slot of round `6`, slot `7`
+the first of two at round `7`, and both slots of round `7` are decided,
+under validators `1` and `2`.
 
-Neither run reaches height two. Doing so wants a second closing
-configuration and a taller universe, and `Composed.extend` is the route:
-`cRun_horizon` and `wRun_horizon` are exactly its horizon hypothesis.
+Two things make `mRun` short. Its verdicts are read off the frame —
+`vdctOf` names the block `Ugrow` puts at a slot's round under that slot's
+leader — and its policy hands back the frame's own leader, so `coherent`
+holds wherever the frame does and `closed` reduces to
+`decidedFrameBelow_of_asg` at every slot. What is left to check by cases
+is only which round each slot of a closed epoch sits at, which is
+`mF_bound`.
+
+Neither run reaches a third configuration. `Composed.extend` is the
+route, and both horizon theorems are exactly its horizon hypothesis.
 
 ## 7. Questions settled, and how
 
