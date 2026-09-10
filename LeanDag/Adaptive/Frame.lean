@@ -39,9 +39,13 @@ variable {R : DagRule Validator BlockId Payload}
 /-- **A run over a global frame.** One numbering: slots are enumerated in
 round order over the widths the run itself carries, so nothing is
 renumbered at a change of width. -/
-structure FrameRun (E : Frame)
+structure FrameRun
     (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator)
     (U : R.Universe) (V : R.View U) (H : ℕ) where
+  /-- The epochs: how many slots each holds. A run carries its own, so
+  two runs may place a boundary differently until their verdicts say
+  otherwise. -/
+  E : Frame
   /-- The widths: how many leaders each round has. -/
   F : Frame
   /-- The leaders, by round and position. -/
@@ -59,7 +63,6 @@ structure FrameRun (E : Frame)
       (F.roundOf (E.cum (E.roundOf (F.index r i) + 2))) V (F.index r i)
       (vdct (F.index r i))
 
-variable {E : Frame}
 variable {pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator}
 variable {U : R.Universe} {V : R.View U} {H : ℕ}
 
@@ -75,19 +78,19 @@ theorem index_lt_of_round_lt {F : Frame} {n r i : ℕ} (hr : r < F.roundOf n)
 
 namespace FrameRun
 
-variable (Rn : FrameRun (R := R) E pick U V H)
+variable (Rn : FrameRun (R := R) pick U V H)
 
 /-- `closed`, read at a global slot rather than at a round and a
 position. -/
-theorem closed_at (g : ℕ) (hg : E.roundOf g < H) :
+theorem closed_at (g : ℕ) (hg : Rn.E.roundOf g < H) :
     DecidedFrameBelow R Rn.F Rn.asg
-      (Rn.F.roundOf (E.cum (E.roundOf g + 2))) V g (Rn.vdct g) := by
+      (Rn.F.roundOf (Rn.E.cum (Rn.E.roundOf g + 2))) V g (Rn.vdct g) := by
   have h := Rn.closed (Rn.F.roundOf g) (g - Rn.F.cum (Rn.F.roundOf g))
     (Rn.F.pos_lt_width g) (by rw [Rn.F.index_roundOf_self g]; exact hg)
   rwa [Rn.F.index_roundOf_self g] at h
 
 /-- A run's own schedule decides its own verdicts. -/
-theorem decided_self (g : ℕ) (hg : E.roundOf g < H) :
+theorem decided_self (g : ℕ) (hg : Rn.E.roundOf g < H) :
     R.Decided (Rn.F.toSlots Rn.asg Rn.keyed) V g (Rn.vdct g) :=
   Rn.closed_at g hg Rn.F Rn.asg Rn.keyed (fun _ _ => rfl) (fun _ _ _ _ => rfl)
 
@@ -103,52 +106,66 @@ already do.
 induction needs it for the same reason — deciding an epoch reads the
 schedule two epochs ahead, and what it reads there must already be
 settled. -/
-theorem frameRun_agree (hR : Agree R)
+theorem frameRun_agree (hR : Agree R) {V' : R.View U}
+    (Rn : FrameRun (R := R) pick U V H) (Rn' : FrameRun (R := R) pick U V' H)
     (hadapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
-      (∀ j, E.roundOf j + 2 ≤ E.roundOf k → v j = w j) →
+      (∀ j, Rn.E.roundOf j + 2 ≤ Rn.E.roundOf k → v j = w j) →
       pick U V₁ v k = pick U V₂ w k)
-    {V' : R.View U}
-    (Rn : FrameRun (R := R) E pick U V H) (Rn' : FrameRun (R := R) E pick U V' H)
-    (hwd : ∀ r, r < Rn.F.roundOf (E.cum (H + 1)) →
-      (∀ j, E.roundOf j + 2 ≤ E.roundOf (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
+    (hbd : ∀ e, e < H + 1 →
+      (∀ j, Rn.E.roundOf j + 2 ≤ e → Rn.vdct j = Rn'.vdct j) →
+      Rn'.E.width e = Rn.E.width e)
+    (hwd : ∀ r, r < Rn.F.roundOf (Rn.E.cum (H + 1)) →
+      (∀ j, Rn.E.roundOf j + 2 ≤ Rn.E.roundOf (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
       Rn'.F.width r = Rn.F.width r) :
-    ∀ g, E.roundOf g < H → Rn.vdct g = Rn'.vdct g := by
-  suffices main : ∀ e g, E.roundOf g = e → E.roundOf g < H → Rn.vdct g = Rn'.vdct g by
-    intro g hg; exact main _ g rfl hg
+    ∀ g, Rn.E.roundOf g < H → Rn.vdct g = Rn'.vdct g := by
+  suffices main : ∀ e, e ≤ H → ∀ j, j < Rn.E.cum e → Rn.vdct j = Rn'.vdct j by
+    intro g hg
+    exact main H (le_refl H) g (roundOf_lt_iff.mp hg)
   intro e
-  induction e using Nat.strong_induction_on with
-  | _ e ih =>
-    intro g hge hgH
-    set B := Rn.F.roundOf (E.cum (E.roundOf g + 2)) with hB
-    have hBle : B ≤ Rn.F.roundOf (E.cum (H + 1)) :=
-      Rn.F.roundOf_mono (E.cum_mono (by omega))
-    have hw : ∀ r', r' < B → Rn'.F.width r' = Rn.F.width r' := by
-      intro r' hr'
-      refine hwd r' (by omega) (fun j hj => ?_)
-      have h1 : Rn.F.cum r' < Rn.F.cum B := Rn.F.cum_strictMono hr'
-      have h2 : Rn.F.cum B ≤ E.cum (E.roundOf g + 2) := Rn.F.cum_roundOf_le _
-      have h3 : E.roundOf (Rn.F.cum r') < E.roundOf g + 2 :=
-        roundOf_lt_iff.mpr (by omega)
-      exact ih (E.roundOf j) (by omega) j rfl (by omega)
-    have hcum : ∀ r', r' ≤ B → Rn'.F.cum r' = Rn.F.cum r' :=
-      fun r' hr' => Frame.cum_congr hw hr'
-    have ha : ∀ r' i', r' < B → i' < Rn.F.width r' → Rn'.asg r' i' = Rn.asg r' i' := by
-      intro r' i' hr' hi'
-      have hlt : Rn.F.index r' i' < E.cum (E.roundOf g + 2) :=
-        index_lt_of_round_lt hr' hi'
-      have hep : E.roundOf (Rn.F.index r' i') < E.roundOf g + 2 :=
-        roundOf_lt_iff.mpr hlt
-      have heq : Rn'.F.index r' i' = Rn.F.index r' i' := by
-        simp only [Frame.index, hcum r' (by omega)]
-      have hi'' : i' < Rn'.F.width r' := by rw [hw r' hr']; exact hi'
-      rw [Rn'.coherent r' i' hi'' (by rw [heq]; omega),
-        Rn.coherent r' i' hi' (by omega), heq]
-      refine hadapted U V' V Rn'.vdct Rn.vdct _ (fun j hj => ?_)
-      exact (ih (E.roundOf j) (by omega) j rfl (by omega)).symm
-    have d₁ := Rn.closed_at g hgH Rn'.F Rn'.asg Rn'.keyed hw ha
-    have d₂ := Rn'.decided_self g hgH
-    exact hR _ V V' g _ _ d₁ d₂
-
+  induction e with
+  | zero => intro _ j hj; simp only [Frame.cum_zero] at hj; omega
+  | succ e ih =>
+      intro heH j hj
+      rcases Nat.lt_or_ge j (Rn.E.cum e) with hlow | hhigh
+      · exact ih (by omega) j hlow
+      have hIH : ∀ j', j' < Rn.E.cum e → Rn.vdct j' = Rn'.vdct j' := ih (by omega)
+      have hje : Rn.E.roundOf j = e := Rn.E.roundOf_eq hhigh hj
+      have hgH : Rn.E.roundOf j < H := by omega
+      -- The boundaries agree as far as this epoch's window reaches, which
+      -- is what `hbd` says once the verdicts below it agree.
+      have hEw : ∀ e', e' < e + 2 → Rn'.E.width e' = Rn.E.width e' := fun e' he' =>
+        hbd e' (by omega) (fun j' hj' => hIH j' (roundOf_lt_iff.mp (by omega)))
+      have hEr : ∀ y, Rn.E.roundOf y < e + 2 → Rn'.E.roundOf y = Rn.E.roundOf y :=
+        fun y hy => Frame.roundOf_congr hEw hy
+      set B := Rn.F.roundOf (Rn.E.cum (Rn.E.roundOf j + 2)) with hB
+      have hBle : B ≤ Rn.F.roundOf (Rn.E.cum (H + 1)) :=
+        Rn.F.roundOf_mono (Rn.E.cum_mono (by omega))
+      have hw : ∀ r', r' < B → Rn'.F.width r' = Rn.F.width r' := by
+        intro r' hr'
+        refine hwd r' (by omega) (fun j' hj' => ?_)
+        have h1 : Rn.F.cum r' < Rn.F.cum B := Rn.F.cum_strictMono hr'
+        have h2 : Rn.F.cum B ≤ Rn.E.cum (Rn.E.roundOf j + 2) := Rn.F.cum_roundOf_le _
+        have h3 : Rn.E.roundOf (Rn.F.cum r') < Rn.E.roundOf j + 2 :=
+          roundOf_lt_iff.mpr (by omega)
+        exact hIH j' (roundOf_lt_iff.mp (by omega))
+      have hcum : ∀ r', r' ≤ B → Rn'.F.cum r' = Rn.F.cum r' :=
+        fun r' hr' => Frame.cum_congr hw hr'
+      have ha : ∀ r' i', r' < B → i' < Rn.F.width r' → Rn'.asg r' i' = Rn.asg r' i' := by
+        intro r' i' hr' hi'
+        have hlt : Rn.F.index r' i' < Rn.E.cum (Rn.E.roundOf j + 2) :=
+          index_lt_of_round_lt hr' hi'
+        have hep : Rn.E.roundOf (Rn.F.index r' i') < Rn.E.roundOf j + 2 :=
+          roundOf_lt_iff.mpr hlt
+        have heq : Rn'.F.index r' i' = Rn.F.index r' i' := by
+          simp only [Frame.index, hcum r' (by omega)]
+        have hi'' : i' < Rn'.F.width r' := by rw [hw r' hr']; exact hi'
+        rw [Rn'.coherent r' i' hi'' (by rw [heq, hEr _ (by omega)]; omega),
+          Rn.coherent r' i' hi' (by omega), heq]
+        refine hadapted U V' V Rn'.vdct Rn.vdct _ (fun j' hj' => ?_)
+        exact (hIH j' (roundOf_lt_iff.mp (by omega))).symm
+      have d₁ := Rn.closed_at j hgH Rn'.F Rn'.asg Rn'.keyed hw ha
+      have d₂ := Rn'.decided_self j (by rw [hEr j (by omega)]; exact hgH)
+      exact hR _ V V' j _ _ d₁ d₂
 
 /-- **The window fits in two epochs.** Every verdict a schedule reaches
 is settled by that schedule below the round at which the slot's

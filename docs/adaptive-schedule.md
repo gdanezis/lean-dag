@@ -50,8 +50,8 @@ decided. It names no count mechanism. Its safety theorem,
 `Adaptive.frameRun_agree`, takes one hypothesis about widths:
 
 ```lean
-(hwd : ∀ r, r < Rn.F.roundOf (E.cum (H + 1)) →
-    (∀ j, E.roundOf j + 2 ≤ E.roundOf (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
+(hwd : ∀ r, r < Rn.F.roundOf (Rn.E.cum (H + 1)) →
+    (∀ j, Rn.E.roundOf j + 2 ≤ Rn.E.roundOf (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
     Rn'.F.width r = Rn.F.width r)
 ```
 
@@ -156,6 +156,11 @@ epochs at or below `e − 2` agree. So there is a clause beside `hwd`:
     (∀ j, Rn.E.roundOf j + 2 ≤ e → Rn.vdct j = Rn'.vdct j) →
     Rn'.E.width e = Rn.E.width e)
 ```
+
+`E` is a field of `FrameRun` rather than a parameter, which is what lets
+two runs place a boundary differently and makes `hbd` say something. A
+run whose epochs are fixed sets it to `constFrame W` and discharges `hbd`
+by `rfl`.
 
 and the induction at epoch `e` runs in three steps instead of two: the
 boundaries, then the round widths, then the verdicts.
