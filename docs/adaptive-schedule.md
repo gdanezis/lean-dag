@@ -272,7 +272,11 @@ changes more slowly.
 
 **Granularity.** `CompRun.cnt_eq` makes every round of a configuration's
 range the same width. A policy emitting the widths is under no such
-clause, so each round may differ from the next.
+clause, so each round may differ from the next. Nothing in the common
+layer stands in the way: `Frame.width` is an arbitrary function of the
+round, and `LeanDagTest.VaryingFrame.vF` cycles through widths `1`, `2`,
+`3` and still satisfies the spanning clause, `Frame.spansEligible_toSlots`
+asking the widths to be bounded rather than equal.
 
 **Alignment.** Under the composition an epoch meets at most two
 configurations, since a configuration's range is at least `2 * W + 2`
