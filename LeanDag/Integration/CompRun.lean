@@ -1017,7 +1017,72 @@ theorem step (hag : Agree R)
 
 end ToPartialRun
 
+
+/-- The schedule a composed run runs on: its frame's rounds at its own
+assignment. -/
+noncomputable abbrev sched (Rn : Composed (R := R) W P pick upd U V K H) :
+    Slots Validator :=
+  Rn.F.toSlots Rn.asg Rn.keyed
+
+/-- **The leader a composed run's schedule names is the policy's.**
+`coherent` says it of a round and a position; this says it of a slot. -/
+theorem sched_leader_eq (Rn : Composed (R := R) W P pick upd U V K H) {g : ℕ}
+    (hep : epochOf W g < H + 1) : Rn.sched.leader g = pick U V Rn.vdct g := by
+  have hi : g - Rn.F.cum (Rn.F.roundOf g) < Rn.F.width (Rn.F.roundOf g) :=
+    Rn.F.pos_lt_width g
+  have h := Rn.coherent (Rn.F.roundOf g) (g - Rn.F.cum (Rn.F.roundOf g)) hi
+    (by rw [Rn.F.index_roundOf_self g]; exact hep)
+  rw [Rn.F.index_roundOf_self g] at h
+  exact h
+
+/-- **A reliable leader's slot commits in a composed run.** The rule
+supplies the commit and `Agree` identifies it with the run's own verdict,
+which the run has because the slot lies in an epoch it has closed. This
+is `Adaptive.Run.commits` at a composed run, and it is proved the same
+way — what differs is only where the verdict comes from. -/
+theorem commits {Live : Slots Validator → ∀ {U : R.Universe}, R.View U →
+      Finset Validator → ℕ → ℕ → Prop}
+    (hlc : LeaderCommits R Live) (hag : Agree R)
+    (Rn : Composed (R := R) W P pick upd U V K H) {T : Finset Validator} {lo B g : ℕ}
+    (hlive : Live Rn.sched V T lo B) (hlo : lo ≤ g) (hB : g < B)
+    (hep : epochOf W g < H) (hlead : Rn.sched.leader g ∈ T) :
+    ∃ L, Rn.vdct g = some L := by
+  obtain ⟨L, hL⟩ := hlc Rn.sched V T lo B hlive g hlo hB hlead
+  exact ⟨L, hag _ V V g _ _ (Rn.decided_at g hep) hL.toDecided⟩
+
+/-- **Every epoch a composed run has closed carries `c` consecutive
+commits.** This is the composition's liveness, and it prices exactly the
+clause the adaptive arc prices: `Adaptive.PlacesRuns` at the policy whose
+leaders the run's are. Nothing about the count enters — a configuration
+may change the width anywhere in the epoch, since `commits` reads the
+verdict at the run's own schedule whatever the widths do. -/
+theorem commits_in_epoch [S : Slots Validator]
+    {Live : Slots Validator → ∀ {U : R.Universe}, R.View U →
+      Finset Validator → ℕ → ℕ → Prop}
+    (hlc : LeaderCommits R Live) (hag : Agree R) (hW : 0 < W)
+    (Rn : Composed (R := R) W P pick upd U V K H)
+    (Pol : Adaptive.Policy R) (hPW : Pol.W = W) (hPp : Pol.pick = pick)
+    {T : Finset Validator} {c : ℕ} (hruns : Adaptive.PlacesRuns Pol T c)
+    (e : ℕ) (heH : e + 2 ≤ H)
+    (hlive : Live Rn.sched V T W (W * (e + 2))) :
+    ∃ b, W * (e + 1) ≤ b ∧ b + c ≤ W * (e + 2) ∧
+      ∀ i, i < c → ∃ L, Rn.vdct (b + i) = some L := by
+  obtain ⟨b, hb1, hb2, hbT⟩ := hruns U V Rn.vdct e
+  rw [hPW] at hb1 hb2
+  refine ⟨b, hb1, hb2, fun i hi => ?_⟩
+  have hlt : b + i < W * (e + 2) := by omega
+  have hep : epochOf W (b + i) < e + 2 := (epochOf_lt_iff hW).mpr hlt
+  have hWle : W ≤ b + i := by
+    have : W * 1 ≤ W * (e + 1) := Nat.mul_le_mul_left W (by omega)
+    omega
+  have hT := hbT i hi
+  rw [hPp] at hT
+  refine Rn.commits hlc hag hlive hWle hlt (by omega) ?_
+  rw [Rn.sched_leader_eq (by omega)]
+  exact hT
+
 end Composed
+
 
 
 

@@ -494,6 +494,32 @@ run, and `extend`'s hypotheses at an arbitrary run are the two
 assumptions of §6.1 and §6.3. What `mRun_extends` settles is that those
 hypotheses are satisfiable together, at a rule this development has.
 
+### 6.7 Liveness of the composition
+
+`Composed.commits` is `Adaptive.Run.commits` at a composed run: a slot
+led by a reliable validator commits, because the rule supplies the commit
+and `Agree` identifies it with the run's own verdict, which the run has
+because the slot lies in an epoch it has closed.
+
+`Composed.commits_in_epoch` is the composition's liveness. Every epoch a
+composed run has closed carries `c` consecutive commits, and the clause
+it prices is the arc's own — `Adaptive.PlacesRuns` at a policy whose
+leaders the run's are, related by `sched_leader_eq`, which reads
+`coherent` at a slot rather than at a round and a position. Nothing about
+the count enters: a configuration may change the width anywhere in the
+epoch, since the verdict is read at the run's own schedule whatever the
+widths do.
+
+`mPol` is that policy for `mRun` — the composed schedule read back as a
+reassignment rule — and `mPol_placesRuns` holds on the data, every slot
+of `mRun` being led by validator `1` or `2` and both correct.
+`mRun_commits_in_epoch` is the theorem applied: every epoch `mRun` has
+closed carries two consecutive commits, with the rule's agreement and
+leader-commits law discharged at Mysticeti's own. What is left as a
+hypothesis is `certLive`, the rule's liveness precondition, which every
+other liveness result in this development takes and which is not the
+composition's to supply.
+
 ## 7. Questions settled, and how
 
 **A frame gives every round a leader.** Admitting empty rounds was

@@ -1,5 +1,6 @@
 import LeanDagTest.Mysticeti.Growth
 import LeanDag.Integration.CompRun
+import LeanDag.Adaptive.Liveness
 /-!
 # A composed run past height zero
 
@@ -571,6 +572,59 @@ theorem mRun_extends :
     (fun _ _ hi _ => coherent_ext hi)
     (fun _ _ hi hep => closed_ext hi hep)
     (by decide) anc_ext horizon_ext
+
+/-! ## Liveness at the witness
+
+`Composed.commits_in_epoch` prices the adaptive arc's own fairness
+clause, `Adaptive.PlacesRuns`, at a policy whose leaders the run's are.
+`mPol` is that policy for `mRun`: the composed schedule read back as a
+reassignment rule. Its clauses hold for the reason the frame's do — the
+leader of a slot *is* the assignment at that slot's round and position.
+-/
+
+section Policy
+
+/-- `mRun`'s own schedule, as the ambient one. `Growth.lean`'s
+`fairSlots` is an instance too, and this section is about the composed
+run's, so it is named locally rather than left to resolution. -/
+noncomputable local instance mSlots : Slots (Fin 4) := mRun.sched
+
+/-- **The composed schedule, as a policy.** Its clauses hold for the
+reason the frame's do: the leader of a slot is the assignment at that
+slot's round and position. -/
+noncomputable def mPol : Adaptive.Policy gRule where
+  W := 2
+  W_pos := by omega
+  pick := fun _ _ _ g => mAsg (mF.roundOf g) (g - mF.cum (mF.roundOf g))
+  keyed := fun _ _ _ _ _ hr hl => mSlots.keyed (Prod.ext hr hl)
+  adapted := fun _ _ _ _ _ _ _ => rfl
+  base_prefix := fun _ _ _ _ _ => rfl
+
+/-- **The fairness clause holds on the data.** Every slot of `mRun` is
+led by validator `1` or `2`, and both are correct, so each epoch's first
+two slots are a run of two. -/
+theorem mPol_placesRuns : Adaptive.PlacesRuns mPol (Correct : Finset (Fin 4)) 2 := by
+  intro _ _ _ e
+  refine ⟨2 * (e + 1), le_refl _, ?_, fun i _ => ?_⟩
+  · change 2 * (e + 1) + 2 ≤ 2 * (e + 2)
+    omega
+  · exact mAsg_correct (mF.roundOf (2 * (e + 1) + i)) _
+
+/-- **The composition's liveness, on the data.** Every epoch `mRun` has
+closed carries two consecutive commits. Every clause that belongs to the
+composition is discharged here — the policy, its fairness, the rule's
+agreement and its leader-commits law — and what is left is `certLive`,
+the rule's own liveness precondition, which is what every other liveness
+result in this development takes. -/
+theorem mRun_commits_in_epoch (e : ℕ) (heH : e + 2 ≤ 5)
+    (hlive : MysticetiProperties.certLive mRun.sched (View.full (Ugrow N))
+      (Correct : Finset (Fin 4)) 2 (2 * (e + 2))) :
+    ∃ b, 2 * (e + 1) ≤ b ∧ b + 2 ≤ 2 * (e + 2) ∧
+      ∀ i, i < 2 → ∃ L, mRun.vdct (b + i) = some L :=
+  Composed.commits_in_epoch MysticetiProperties.leaderCommits_cert
+    MysticetiProperties.agree (by decide) mRun mPol rfl rfl mPol_placesRuns e heH hlive
+
+end Policy
 
 end Composition
 end LeanDagTest
