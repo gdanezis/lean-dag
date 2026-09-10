@@ -313,10 +313,26 @@ say in it.
 object: `Barnacle.Aimd` and `Barnacle.Healthy` are stated over the update
 rule and the parameters, not over a run, and they hold of a composed run
 unchanged. A policy emitting the schedule carries the control rule inside
-itself and owes its soundness again. The composition also blocks by
-construction where nothing commits, a configuration not closing until a
-commit lands past its threshold; a policy must decide that case in `len`
-and `widthOf`, which §7 is.
+itself and owes its soundness again.
+
+**What it does not keep, and this record earlier said it did.** The
+composition's boundary is commit-defined — `start (k + 1)` is the
+anchor's round plus the gap, and the anchor is a committed slot — so a
+validator that has not committed it has no next configuration rather than
+a different one, and BN3 concludes at `min K₁ K₂` over runs of two
+heights. That is a real difference in the *trigger*, and it is not a
+safety advantage. `PartialRun.closed` asserts
+
+    R.Decided (Sched getLeader hk (count k) …) V κ (vdct k κ)
+
+for every slot of the range, at a schedule defined at every round and
+running that count for ever, and nothing bounds the derivation's anchor
+to lie inside the range. Where it lies above `start (k + 1)` the clause
+asserts a derivation in a world where the count continued, and the system
+is running the next one there. So the composition rests on the anchor
+landing soon enough exactly as this arc does; the difference is that this
+arc names the assumption `SettlesInTwoEpochs` and the composition leaves
+it inside a field.
 
 ## 9a. A shared prefix, and where healing stops
 
@@ -358,6 +374,49 @@ evidence that decisions have been slow gives itself a wider margin. That
 is a mitigation and not a guarantee — the evidence is past and asynchrony
 may outrun it — but it is a reason to vary `len` beyond the performance
 one of §6.
+
+## 9b. Segments: a schedule that changes only below a decided frontier
+
+The obstruction of §9a is that an undecided slot's anchor may lie above
+the point where two schedules part. A design that removes it rather than
+assuming it away: build the schedule in **segments**, and switch only at
+a slot below which everything is decided.
+
+Segment `i` is run as one schedule. Its slots are decided at *that*
+schedule, and a slot near its top may take its anchor from a slot further
+up the same segment. When every slot below some frontier `b` is decided,
+segment `i + 1` is computed from the verdicts below `b` and takes effect
+from `b` onward. Verdicts once derived are not revised: segment `i + 1`'s
+indirect rule may disagree about a slot below `b`, and is never asked.
+
+Two validators then agree by an induction on segments rather than on
+epochs. Both run segment `0`, so both derive its verdicts below the
+frontier at one schedule and `Agree` settles them; both compute segment
+`1` from the same verdicts, so both run the same segment `1`; and so on.
+The anchors are inside the segment by the frontier's definition, which is
+what §9a's argument needed and could not have.
+
+Three things this costs, and they are the honest ones.
+
+**The lag is no longer two epochs but however long settling takes.**
+Under asynchrony the frontier does not advance and the schedule does not
+change. That is the correct behaviour and the same trade §21's mechanism
+makes; what it gives up is a schedule that reassigns on a fixed cadence.
+
+**Verdict immutability becomes a clause.** Neither arc has it: `vdct` is
+one function and `closed` asks it to be derivable at the run's schedule,
+so a slot decided under an earlier schedule and not re-derivable under a
+later one has no home. A segmented run would carry, per segment, the
+schedule its slots were decided at.
+
+**It is a different structure from `FrameRun`.** A run becomes a sequence
+of segments with a frontier apiece, and the induction is over segments.
+That is `CompRun`'s shape rather than this arc's — `start (k + 1)` fixed
+by where the anchor landed — so the design converges on §21's answer,
+applied to the whole schedule rather than to the count alone. What it
+adds over §21 is that the frontier is required to be *below* the
+anchors, which `PartialRun.closed` does not require and which is exactly
+the assumption §9's table now records.
 
 ## 10. What `adapted` permits and an implementation must not
 
