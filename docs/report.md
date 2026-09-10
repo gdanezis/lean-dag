@@ -5755,6 +5755,128 @@ every round of every universe.
 
 ---
 
+### 16.8 Barnacle and adaptive leaders: one numbering
+
+§21's mechanism varies how many leaders a round has; §13's varies who
+they are. Composed, the two disagree about what a slot is: Barnacle
+numbers slots within a configuration, reading a round as `κ / count k`,
+and the adaptive arc numbers them globally, reading an epoch as
+`epochOf W k`. A `Frame` gives each round a width and settles it —
+`Frame.cum` is the first slot of a round, `Frame.roundOf` the round of a
+slot, and `Frame.toSlots` reads a frame and an assignment as a `Slots`.
+Barnacle's own schedule is the constant case, `Sched_eq_frame`, so what
+follows is one numbering rather than a translation between two.
+
+`CompRun` carries Barnacle's configuration data over a frame; `Composed`
+adds the adaptive side — the assignment, that it is the policy's, and
+that every slot of a closed epoch is decided below the round its window
+ends at. `Params.gap` is new on Barnacle's parameters: the rounds between
+an anchor and the count it sets taking effect. Barnacle alone may install
+a count at the next round and does at `gap = 0`; a mechanism reading the
+same verdicts on a lag needs `2 * W`, and `anchor_below` is that read at
+the run's own frame.
+
+**I20 — safety, and Barnacle's BN3 with it.** Two composed runs over one
+universe, held by validators with different views of it, agree on every
+verdict below the horizon, on when each configuration starts, how many
+leaders it has and what its back-off is, on the anchor of every
+configuration both have closed, and on the widths as far as both reach.
+
+```lean
+theorem agreement (hR : Properties.Agree R) (hW : 0 < W) (hgap : P.gap = 2 * W)
+    (hadapted : …) (hupd : …)
+    {V' : R.View U} (Rn : Composed (R := R) W P pick upd U V K H)
+    (Rn' : Composed (R := R) W P pick upd U V' K H)
+    (hK : 0 < K) (hhor : W * (H + 1) ≤ Rn.F.cum (Rn.start K)) :
+    (∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g) ∧
+      (∀ k, k ≤ K → Rn.start k = Rn'.start k ∧ Rn.count k = Rn'.count k ∧
+        Rn.backoff k = Rn'.backoff k) ∧
+      (∀ k, k < K → Rn.anchor k = Rn'.anchor k) ∧
+      (∀ k, k ≤ K → ∀ r, r ≤ Rn.start k → Rn'.F.width r = Rn.F.width r)
+```
+
+Both mechanisms read the verdicts, and each is a function of them:
+`config_det` derives the configuration data, `width_det` the widths, and
+`frameRun_agree` the verdicts by induction on epochs. `hadapted` is the
+policy's lag and `hupd` is Barnacle's `Anchored` — that neither reads the
+view — and `CompRun.reView` is why the second suffices for two views,
+`update` being the only clause a `CompRun` states of one.
+
+**I21 — liveness.** Every epoch a composed run has closed carries `c`
+consecutive commits, and the fairness consumed is `Adaptive.PlacesRuns`,
+the clause §13.4 already states, at a policy whose leaders the run's are.
+
+```lean
+theorem commits_in_epoch [S : Slots Validator] {Live : …}
+    (hlc : LeaderCommits R Live) (hag : Agree R) (hW : 0 < W)
+    (Rn : Composed (R := R) W P pick upd U V K H)
+    (Pol : Adaptive.Policy R) (hPW : Pol.W = W) (hPp : Pol.pick = pick)
+    {T : Finset Validator} {c : ℕ} (hruns : Adaptive.PlacesRuns Pol T c)
+    (e : ℕ) (heH : e + 2 ≤ H)
+    (hlive : Live Rn.sched V T W (W * (e + 2))) :
+    ∃ b, W * (e + 1) ≤ b ∧ b + c ≤ W * (e + 2) ∧
+      ∀ i, i < c → ∃ L, Rn.vdct (b + i) = some L
+```
+
+Nothing about the count enters. A configuration may change the width
+anywhere inside the epoch, since the verdict is read at the run's own
+schedule whatever the widths do; `sched_leader_eq` is the step that reads
+`coherent` at a slot rather than at a round and a position.
+
+**I22 — progress.** A run whose current configuration closes extends by
+one: `Composed.extend` is that step, `Composed.step` discharges it from
+an `Adaptive.PartialRun`, and `Composed.every_height` iterates it.
+`Closes` is what a configuration owes — some slot at or past the
+threshold commits — and `closes_of_leaderCommits` derives it from the
+rule.
+
+**I23 — Barnacle's arcs at a composed run.** `Aimd` and `Healthy` are
+stated over the update rule and the parameters rather than over a run, so
+they hold of a composed run as they stand. Of the run-indexed arcs, BN3
+is I20, and three more transfer with the interval moved from
+`count k * r` to `Frame.cum r`:
+
+* **BN5.** `ledgerUpto_agree`, `ledgerUpto_prefix` and `ledgerUpto_nodup`
+  — the ledger is agreed, grows by prefixes, and holds each block once,
+  the first from I20 and the last from `Slots.keyed` within a range and
+  disjoint rounds across ranges.
+* **BN6.** `const_count` and `const_decided` — under the rule that
+  returns the count it was given, and with the assignment the base leader
+  function, the count never moves and every verdict is a verdict of
+  `Sched` at one leader a round. The composition has two ways to be
+  inert and conservativity asks for both.
+* **BN14.** `Composed.delivered` — a good author's block two rounds below
+  a closed configuration's anchor is in the history of the block that
+  configuration commits. `anchor_isCandidate` gives the anchor's block
+  its round and `anchor_closed` puts the anchor in an epoch the run has
+  decided.
+
+`RangeClosed` is the one clause Barnacle does not owe. Its runs decide
+their whole range by construction; a composed run decides an epoch at a
+time, and its last configuration may reach past the last epoch it has
+closed. `Heads` is not carried across: it is about a static rotation
+having runs of reliable leaders, which is what `PlacesRuns` replaces.
+
+**I24 — what the composition assumes.** Two clauses, both the shape §13
+already states of itself. `SettlesInTwoEpochs` — that a verdict is
+settled within two epochs of its slot — is a theorem at the slots a rule
+decides directly, `banded_direct` bounding the band at the slot's own
+round plus a wave; the indirect case is not, the anchor being existential
+in the derivation and `Decided` an opaque field. And `PlacesRuns` above
+the base prefix is assumed at more than one leader a round;
+`placesRuns_const_of_headsRun` discharges it at one, from §21.4's
+`HeadsRun`.
+
+**I25 — witnesses.** `Ugrow` is the universe, its height a parameter,
+because a two-epoch window does not close inside the fixed models. `cRun`
+is a composed run of height one and the conservativity case; `mRun`
+closes two configurations and five epochs with the count moving between
+them, its third epoch straddling the round the change takes effect at and
+both slots of that round decided under different validators;
+`mRun_extends` is `Composed.extend` applied to it, giving a run of height
+three over eleven epochs. `mRun_commits_in_epoch` is I21 on the data,
+with the rule's own liveness precondition left as the hypothesis it is.
+
 ## 17. Mahi-Mahi: the asynchronous rule, and the clause
 
 *(modules `LeanDag/MahiMahi/`; the protocol is Mahi-Mahi [Jov+24], the
@@ -10058,7 +10180,7 @@ quality, C, D,
 B and E for the denial-of-service arc, G for garbage collection, O for
 Odontoceti; P, N and R name clauses of the trust boundary rather than
 results. Labels resolving to witness models rather than library
-theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, H9, H10, BN13) are
+theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, H9, H10, BN13, I25) are
 excluded from the diagrams, which show the library; so are MM4, BM8, BML6, BMR7, BMA5, BMD7, BME6, BMO10, BMO11 and BMP14. Two labels are
 absent from the Barnacle rows below and are named here rather than left
 to be noticed: **BN1**, that `Sched m` is a lawful `Slots` instance at
@@ -10359,6 +10481,12 @@ reused.
 | I17 | the budget needs a donor, not the author | `card_novelty_le_of_donor` *(Integration/Margin)* |
 | I18 | severance costs liveness margin: at most `f` at once | `notMem_of_no_blocks`, `card_severed_le` *(Integration/Margin)* |
 | I19 | a common-core target makes the fill transmission-free | `CommonAt`, `exists_commonAt`, `fill_refs_available` *(Integration/CommonTarget)* |
+| I20 | Barnacle and adaptive leaders compose: two runs over one universe, at different views, agree on the verdicts, the configuration data, the anchors and the widths — BN3 at a composed run | `Composed.agreement`, `CompRun.config_det`, `CompRun.width_det`, `frameRun_agree` *(Integration/CompRun, Integration/AdaptiveFrame)* |
+| I21 | every epoch a composed run has closed carries `c` consecutive commits, at the adaptive arc's own fairness clause | `Composed.commits_in_epoch`, `Composed.commits`, `Composed.sched_leader_eq` *(Integration/CompRun)* |
+| I22 | a composed run whose configuration closes extends by one, and so to every height | `Composed.extend`, `Composed.step`, `Composed.every_height`, `closes_of_leaderCommits` *(Integration/CompRun)* |
+| I23 | Barnacle's ledger, conservativity and validity at a composed run — BN5, BN6, BN14 | `Composed.ledgerUpto_agree`, `Composed.ledgerUpto_prefix`, `Composed.ledgerUpto_nodup` *(Integration/Ledger)*, `CompRun.const_count`, `Composed.const_decided` *(Integration/Conservativity)*, `Composed.delivered` *(Integration/Validity)* |
+| I24 | the composition's two assumptions: a verdict settles within two epochs, proved at the directly decided slots; and a run of reliable leaders in every epoch, discharged at one leader a round | `SettlesInTwoEpochs`, `settlesInTwoEpochs_of_banded`, `decidedFrameBelow_direct`, `placesRuns_const_of_headsRun` *(Integration/AdaptiveFrame, Common/Anchored/Band, Integration/AdaptiveFrame)* |
+| I25 | the composed run on data: height three over eleven epochs, the count moving inside the epochs it decides | `LeanDagTest.Composition.mRun`, `LeanDagTest.Composition.mRun_extends`, `LeanDagTest.Composition.mRun_commits_in_epoch` *(LeanDagTest/Integration/ComposedRun)* |
 
 **FinWhale** (§20):
 
