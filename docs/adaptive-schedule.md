@@ -420,10 +420,16 @@ leaders are round-robin over the slots, so `pick_adapted` is `rfl` and
 what is exercised is the two clauses the arc adds. `aRun` inhabits
 `ScheduleRun` at height zero.
 
-What is still wanting is a run of height above zero over `Ugrow`, which
-needs the decision machinery `LeanDagTest/Integration/ComposedRun.lean`
-carries for the composed witness and closed forms for the two cumulative
-functions, as `mF_cum_high` is there.
+`bRun` closes an epoch. Its leaders are round-robin over `1, 2, 3`, all
+correct under `Ugrow`'s fault model, so slot `0` commits; the schedule
+reads that and takes its wider frames, epochs of four slots past the
+second and rounds of two past the sixth. Epoch `0`'s three slots are each
+decided below round `6`, where epoch `2` begins.
+
+`aF_eq_bF` and `aE_eq_bE` are what close the circle. The frames are named
+first and the verdicts read off them, and these two say the schedule at
+those verdicts gives back the frames it was read against. Without them
+the run would be a fixed point asserted rather than checked.
 
 **7. The record.** `LeanDag.lean` and `LeanDagTest.lean` gain the
 imports; the report gains a subsection of §13 and Appendix A gains the

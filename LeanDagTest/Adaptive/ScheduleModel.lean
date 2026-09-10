@@ -2,6 +2,7 @@ import LeanDag.Adaptive.ScheduleRun
 import LeanDag.Mysticeti.Properties
 import LeanDagTest.Integration.VaryingFrame
 import LeanDagTest.Mysticeti.Growth
+import LeanDagTest.Integration.ComposedRun
 /-!
 # A schedule whose epochs and widths both vary
 
@@ -176,6 +177,180 @@ def aRun (U : (mysticetiRule (Validator := Fin 4) (BlockId := ℕ)
     ScheduleRun aSched U V 0 where
   vdct := fun _ => none
   closed := fun _ _ _ h => absurd h (by omega)
+
+/-! ## A run above height zero
+
+`aRun` closes no epoch, so its `closed` field says nothing. This section
+closes one. The leaders are round-robin over `1, 2, 3`, all correct under
+`Ugrow`'s fault model, so every slot commits; slot `0` therefore commits,
+and the schedule reads that and takes its *wider* frames — epochs of four
+slots past the second, rounds of two past the sixth.
+
+The frame is named first and the verdicts read off it, and `bF_eq` is
+what closes the circle: the schedule at those verdicts gives back that
+frame.
+-/
+
+/-- Leaders `1, 2, 3` by slot, all correct. -/
+abbrev bPick : ℕ → Fin 4 := fun k => ⟨k % 3 + 1, by omega⟩
+
+theorem bPick_correct (k : ℕ) : bPick k ∈ (Correct : Finset (Fin 4)) := by
+  have h : k % 3 = 0 ∨ k % 3 = 1 ∨ k % 3 = 2 := by omega
+  have hv : bPick k = 1 ∨ bPick k = 2 ∨ bPick k = 3 := by
+    rcases h with h | h | h
+    · exact Or.inl (Fin.ext (by simp [h]))
+    · exact Or.inr (Or.inl (Fin.ext (by simp [h])))
+    · exact Or.inr (Or.inr (Fin.ext (by simp [h])))
+  rcases hv with h | h | h <;> rw [h] <;> decide
+
+/-- The frame the wider reading gives: one slot a round below `6`, two
+after. -/
+def bF : Frame where
+  width := fun r => if r < 6 then 1 else 2
+  width_pos := fun _ => by split <;> omega
+
+@[simp] theorem bF_width (r : ℕ) : bF.width r = if r < 6 then 1 else 2 := rfl
+
+theorem bF_cum_low : ∀ r, r ≤ 6 → bF.cum r = r := by
+  intro r
+  induction r with
+  | zero => intro _; simp
+  | succ j ih => intro hj; rw [Frame.cum_succ, ih (by omega), bF_width, if_pos (by omega)]
+
+theorem bF_roundOf_low {g : ℕ} (h : g < 6) : bF.roundOf g = g :=
+  bF.roundOf_eq (by rw [bF_cum_low _ (by omega)]) (by rw [bF_cum_low _ (by omega)]; omega)
+
+/-- The assignment: position `i` of round `r` is led by that slot's
+validator. -/
+abbrev bAsg : ℕ → ℕ → Fin 4 := fun r i => bPick (bF.index r i)
+
+/-- The verdicts: the block `Ugrow` puts at each slot's round under that
+slot's leader. -/
+noncomputable def bVdct : ℕ → Option ℕ := Composition.vdctOf bF bAsg
+
+theorem bVdct_zero : bVdct 0 ≠ none := by
+  rw [bVdct, Composition.vdctOf]
+  exact Option.some_ne_none _
+
+/-- **The schedule at these verdicts gives back this frame.** -/
+theorem bF_eq (r : ℕ) : aWid bVdct r = bF.width r := by
+  rw [aWid, bF_width]
+  split
+  · rfl
+  · rw [if_neg bVdct_zero]
+
+theorem bE_len (e : ℕ) : aLen bVdct e = if e < 2 then 3 else 4 := by
+  rw [aLen]
+  split
+  · rfl
+  · rw [if_neg bVdct_zero]
+
+/-- Leaders `1, 2, 3` are distinct within a round of at most two slots. -/
+theorem bPick_keyed (v : ℕ → Option ℕ) :
+    ∀ r i j, i < aWid v r → j < aWid v r →
+      bPick ((aF v).index r i) = bPick ((aF v).index r j) → i = j := by
+  intro r i j hi hj h
+  have hi2 : i < 2 := lt_of_lt_of_le hi (aWid_le v r)
+  have hj2 : j < 2 := lt_of_lt_of_le hj (aWid_le v r)
+  have := congrArg Fin.val h
+  simp only [Frame.index] at this
+  omega
+
+/-- `aSched` with leaders that are always correct. -/
+def bSched : Schedule (mysticetiRule (Validator := Fin 4) (BlockId := ℕ) (Payload := Unit)) where
+  len := aLen
+  len_pos := aLen_pos
+  widthOf := aWid
+  widthOf_pos := aWid_pos
+  maxWidth := 2
+  widthOf_le := aWid_le
+  pick := fun _ _ _ k => bPick k
+  keyed := fun _ _ v => bPick_keyed v
+  len_adapted := aSched.len_adapted
+  widthOf_adapted := aSched.widthOf_adapted
+  pick_adapted := fun _ _ _ _ _ _ _ => rfl
+
+@[simp] theorem bSched_frameOf (v : ℕ → Option ℕ) : bSched.frameOf v = aF v := rfl
+
+@[simp] theorem bSched_epochFrame (v : ℕ → Option ℕ) : bSched.epochFrame v = aE v := rfl
+
+/-- The epochs the wider reading gives: three slots each for the first
+two, four after. -/
+def bE : Frame where
+  width := fun e => if e < 2 then 3 else 4
+  width_pos := fun _ => by split <;> omega
+
+@[simp] theorem bE_width (e : ℕ) : bE.width e = if e < 2 then 3 else 4 := rfl
+
+/-- **The circle closes.** The schedule at these verdicts gives back the
+two frames the verdicts were read off. -/
+theorem aF_eq_bF : aF bVdct = bF := by
+  show (⟨aWid bVdct, aWid_pos bVdct⟩ : Frame) = bF
+  have h : aWid bVdct = bF.width := funext bF_eq
+  simp only [h]
+
+theorem aE_eq_bE : aE bVdct = bE := by
+  show (⟨aLen bVdct, aLen_pos bVdct⟩ : Frame) = bE
+  have h : aLen bVdct = bE.width := funext bE_len
+  simp only [h]
+
+theorem bE_cum2 : bE.cum 2 = 6 := by
+  rw [Frame.cum_succ, Frame.cum_succ, Frame.cum_zero]
+  rfl
+
+theorem bE_cum1 : bE.cum 1 = 3 := by rw [Frame.cum_succ, Frame.cum_zero]; rfl
+
+/-- **A run that closes an epoch.** Epoch `0` holds slots `0`, `1` and
+`2`, each at its own round, and each is decided below round `6`, where
+epoch `2` begins. -/
+noncomputable def bRun : ScheduleRun bSched (Ugrow Composition.N)
+    (View.full (Ugrow Composition.N)) 1 where
+  vdct := bVdct
+  closed := fun r i hi hep => by
+    have hasg : bSched.asgOf bVdct (Ugrow Composition.N) (View.full (Ugrow Composition.N))
+        = fun r' i' => bPick (bF.index r' i') := by
+      funext r' i'
+      show bPick ((aF bVdct).index r' i') = bPick (bF.index r' i')
+      rw [aF_eq_bF]
+    simp only [bSched_frameOf, bSched_epochFrame, aF_eq_bF, aE_eq_bE, hasg] at hi hep ⊢
+    have hlt : bF.index r i < 3 := by
+      have := (Adaptive.roundOf_lt_iff (E := bE) (g := bF.index r i) (e := 1)).mp hep
+      rwa [bE_cum1] at this
+    have hr6 : r < 6 := by
+      by_contra hc
+      have h6 : bF.cum 6 ≤ bF.cum r := bF.cum_mono (by omega)
+      rw [bF_cum_low 6 (le_refl 6)] at h6
+      have : bF.cum r ≤ bF.index r i := by rw [Frame.index]; omega
+      omega
+    have hwr : bF.width r = 1 := by rw [bF_width, if_pos hr6]
+    have hi' : i < bF.width r := hi
+    have hi0 : i = 0 := by rw [hwr] at hi'; omega
+    subst hi0
+    have hidx : bF.index r 0 = r := by
+      rw [Frame.index, bF_cum_low r (show r ≤ 6 by omega)]
+      omega
+    rw [hidx]
+    have he0 : bE.roundOf r = 0 := by
+      have : bE.roundOf r < 1 := by rw [← hidx]; exact hep
+      omega
+    have hbnd : bF.roundOf (bE.cum (bE.roundOf r + 2)) = 6 := by
+      rw [he0, bE_cum2]
+      exact bF.roundOf_eq (by rw [bF_cum_low 6 (le_refl 6)])
+        (by rw [Frame.cum_succ, bF_cum_low 6 (le_refl 6), bF_width, if_neg (by omega)]; omega)
+    rw [hbnd]
+    have hv : bVdct r = some (4 * r + (bPick r).val) := by
+      show Composition.vdctOf bF bAsg r = _
+      rw [Composition.vdctOf, bF_roundOf_low (show r < 6 by omega),
+        bF_cum_low r (show r ≤ 6 by omega), Nat.sub_self]
+      show some (4 * r + (bPick (bF.index r 0)).val) = _
+      rw [hidx]
+    rw [hv]
+    have hfin := Composition.decidedFrameBelow_of_asg (F := bF)
+      (asg := fun r' i' => bPick (bF.index r' i')) (r := r) (i := 0) (B := 6)
+      (by rw [hwr]; omega) (show r < 6 by omega) (show r + 2 ≤ 24 by omega)
+      (bPick_correct _)
+    rw [hidx] at hfin
+    exact hfin
 
 end ScheduleModel
 
