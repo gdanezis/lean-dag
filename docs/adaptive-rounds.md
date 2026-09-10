@@ -436,9 +436,26 @@ rule, with the AIMD update and the arc's own leader function. The
 composed structure is therefore inhabited at a rule this development has,
 not only generically.
 
-Neither witness exercises a composed run past height zero. That wants a
-concrete frame, assignment and verdicts over a universe tall enough for
-two epochs, and it is the witness still missing.
+`LeanDagTest.Composition.cRun` is a composed run of height one over
+`Ugrow`, whose height is a parameter: the fixed `Fin n` models run out of
+rounds before a two-epoch window closes. Its frame holds one slot per
+round, so slot `k` sits at round `k`; validator `1` leads every slot and
+is correct. Configuration `0` closes at slot `2`, the least committed
+slot at or past its threshold, and the next configuration begins at round
+`10`. Epoch `0` is closed: each of its four slots is decided, by any
+schedule agreeing with the run's below round `8`.
+
+What makes the epoch closable is that `decided_of_correct_leader` is
+stated over the ambient schedule rather than a fixed one, so it applies
+at the frame's own `toSlots` and not only at the uniform schedule
+`Ugrow`'s other theorems use. The candidate it produces is existential;
+`leaderBlock_eq` pins it to `4 * r + 1`, which `Ugrow`'s layout forces.
+
+`cRun_horizon` is what `Composed.every_height` consumes, so the run is a
+base case for the recursion and not only an inhabitant. Its count does
+not move: `upd` returns one at every configuration, and the frame is one
+slot wide throughout. A witness whose width changes is the one still
+missing.
 
 ## 7. Questions settled, and how
 
