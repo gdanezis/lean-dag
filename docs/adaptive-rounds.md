@@ -470,8 +470,29 @@ holds wherever the frame does and `closed` reduces to
 is only which round each slot of a closed epoch sits at, which is
 `mF_bound`.
 
-Neither run reaches a third configuration. `Composed.extend` is the
-route, and both horizon theorems are exactly its horizon hypothesis.
+`mRun_extends` turns the recursion: `mRun` has closed two configurations
+and reached its horizon, so `Composed.extend` gives a run of height three
+over eleven epochs that has reached its own. Its third configuration
+closes at slot `21`, at round `14`, and `horizon_ext` is the clause that
+makes it a base for the next turn. This is the first application of
+`extend` to a run rather than to a hypothesis.
+
+The extended frame adds no width here — `mRun`'s last configuration
+already runs at two leaders a round, so `mFe` has `mF`'s widths at every
+round — and `mFe_width`, `mFe_cum` and `mFe_roundOf` are what carry the
+frame's arithmetic across `Frame.extend`.
+
+Two general facts remove the case analysis both runs would otherwise
+need. `roundOf_lt_of_width_le` says a round holding at most `m` slots
+cannot hold both `g` and `g + m + 1`, so a slot of a closed epoch lies
+below the round its window ends at whatever the frame; `frame_roundOf_le`
+bounds a round by its own first slot, which is what puts the certificate
+rounds under the universe's height.
+
+`Progresses` itself is still not discharged: it quantifies over every
+run, and `extend`'s hypotheses at an arbitrary run are the two
+assumptions of §6.1 and §6.3. What `mRun_extends` settles is that those
+hypotheses are satisfiable together, at a rule this development has.
 
 ## 7. Questions settled, and how
 

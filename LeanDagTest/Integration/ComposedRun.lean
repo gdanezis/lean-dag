@@ -24,8 +24,8 @@ open LeanDag LeanDag.Integration LeanDag.Barnacle
 abbrev gRule : Properties.DagRule (Fin 4) ℕ Unit :=
   MysticetiProperties.mysticetiRule
 
-/-- Rounds `0 … 12`, four blocks each. -/
-abbrev N : ℕ := 12
+/-- Rounds `0 … 24`, four blocks each. -/
+abbrev N : ℕ := 24
 
 /-- One round past the threshold, four rounds to an epoch, and a gap of
 `2 * W` rounds between an anchor and the configuration it sets. -/
@@ -117,6 +117,36 @@ theorem decidedFrameBelow_of_asg {F : Frame} {asg : ℕ → ℕ → Fin 4} {B r 
       = asg r i
   rw [hround, hcum, Frame.index, Nat.add_sub_cancel_left]
   exact ha r i hrB hi
+
+/-- A round is at most its own first slot's index, since every round
+holds a slot. -/
+theorem frame_roundOf_le (F : Frame) (g : ℕ) : F.roundOf g ≤ g :=
+  le_trans (F.le_cum _) (F.cum_roundOf_le g)
+
+/-- **Slots far enough apart lie in different rounds.** A round holding
+at most `m` slots cannot hold both `g` and `g + m + 1`. -/
+theorem roundOf_lt_of_width_le {F : Frame} {m : ℕ} (hm : ∀ r, F.width r ≤ m)
+    {g h : ℕ} (hgh : g + m + 1 ≤ h) : F.roundOf g < F.roundOf h := by
+  by_contra hc
+  have hle : F.roundOf h ≤ F.roundOf g := by omega
+  have h1 : h < F.cum (F.roundOf h + 1) := F.lt_cum_roundOf_succ h
+  have h2 : F.cum (F.roundOf h + 1) ≤ F.cum (F.roundOf g + 1) := F.cum_mono (by omega)
+  have h3 : F.cum (F.roundOf g + 1) = F.cum (F.roundOf g) + F.width (F.roundOf g) :=
+    F.cum_succ _
+  have h4 : F.cum (F.roundOf g) ≤ g := F.cum_roundOf_le g
+  have h5 : F.width (F.roundOf g) ≤ m := hm _
+  omega
+
+/-- **A slot of a closed epoch sits below the round its window ends
+at**, at any frame no round of which holds more than two slots. -/
+theorem bound_of_width_le {F : Frame} (hm : ∀ r, F.width r ≤ 2) {r i : ℕ}
+    (hi : i < F.width r) : r < F.roundOf (2 * (epochOf 2 (F.index r i) + 2)) := by
+  have hr : F.roundOf (F.index r i) = r := F.roundOf_index hi
+  have hlt := roundOf_lt_of_width_le (F := F) hm (g := F.index r i)
+    (h := 2 * (epochOf 2 (F.index r i) + 2))
+    (by have : epochOf 2 (F.index r i) = F.index r i / 2 := rfl
+        omega)
+  omega
 
 /-- The verdict a frame and an assignment name at every slot: the block
 `Ugrow` puts at that slot's round under that slot's leader. -/
@@ -213,8 +243,8 @@ noncomputable def cRun :
       rw [hep0]; change cF.roundOf 8 = 8; rw [constFrame_roundOf]
     rw [hB]
     exact fun F' a' hk' hw ha =>
-      decided_below (show r + 2 ≤ 12 by omega) (show r < 8 by omega)
-        (show (8 : ℕ) ≤ 12 by omega) hk'
+      decided_below (show r + 2 ≤ 24 by omega) (show r < 8 by omega)
+        (show (8 : ℕ) ≤ 24 by omega) hk'
         (fun r' hr' => hw r' hr') (fun r' hr' => ha r' 0 hr' Nat.one_pos)
 
 /-- The run has reached its horizon, which is what `Composed.every_height`
@@ -277,74 +307,40 @@ theorem mF_width_le (r : ℕ) : mF.width r ≤ 2 := by
 theorem mF_cum_low {r : ℕ} (h : r ≤ 7) : mF.cum r = r :=
   cum_eq_of_thin (B := 7) (fun r' hr' => mF_width_low (by omega)) r h
 
-theorem mF_cum8 : mF.cum 8 = 9 := by
-  rw [Frame.cum_succ, mF_cum_low (le_refl 7)]; rfl
+theorem mF_width_high {r : ℕ} (h : 6 < r) : mF.width r = 2 := if_neg (by omega)
 
-theorem mF_cum9 : mF.cum 9 = 11 := by rw [Frame.cum_succ, mF_cum8]; rfl
+/-- Past round `6` each round adds a second slot. -/
+theorem mF_cum_high : ∀ r, 7 ≤ r → mF.cum r = 2 * r - 7 := by
+  intro r hr
+  induction r, hr using Nat.le_induction with
+  | base => rw [mF_cum_low (by omega)]
+  | succ n hn ih => rw [Frame.cum_succ, ih, mF_width_high (by omega)]; omega
 
-theorem mF_cum10 : mF.cum 10 = 13 := by rw [Frame.cum_succ, mF_cum9]; rfl
+theorem mF_cum8 : mF.cum 8 = 9 := by rw [mF_cum_high _ (by omega)]
 
-theorem mF_cum12 : mF.cum 12 = 17 := by
-  rw [Frame.cum_succ, Frame.cum_succ, mF_cum10]; rfl
+theorem mF_cum9 : mF.cum 9 = 11 := by rw [mF_cum_high _ (by omega)]
+
+theorem mF_cum12 : mF.cum 12 = 17 := by rw [mF_cum_high _ (by omega)]
+
+theorem mF_cum14 : mF.cum 14 = 21 := by rw [mF_cum_high _ (by omega)]
+
+theorem mF_cum15 : mF.cum 15 = 23 := by rw [mF_cum_high _ (by omega)]
+
+theorem mF_cum18 : mF.cum 18 = 29 := by rw [mF_cum_high _ (by omega)]
 
 theorem mF_roundOf_low {g : ℕ} (h : g ≤ 6) : mF.roundOf g = g :=
   mF.roundOf_eq (by rw [mF_cum_low (by omega)]) (by rw [mF_cum_low (by omega)]; omega)
 
-theorem mF_roundOf8 : mF.roundOf 8 = 7 :=
-  mF.roundOf_eq (by rw [mF_cum_low (by omega)]; omega) (by rw [mF_cum8]; omega)
-
 theorem mF_roundOf9 : mF.roundOf 9 = 8 :=
   mF.roundOf_eq (by rw [mF_cum8]) (by rw [mF_cum9]; omega)
 
-theorem mF_roundOf10 : mF.roundOf 10 = 8 :=
-  mF.roundOf_eq (by rw [mF_cum8]; omega) (by rw [mF_cum9]; omega)
+theorem mF_roundOf21 : mF.roundOf 21 = 14 :=
+  mF.roundOf_eq (by rw [mF_cum14]) (by rw [mF_cum15]; omega)
 
-theorem mF_roundOf12 : mF.roundOf 12 = 9 :=
-  mF.roundOf_eq (by rw [mF_cum9]; omega) (by rw [mF_cum10]; omega)
-
-/-- **Where the slots of a closed epoch sit.** Every slot below `10` is
-at a round below the one its epoch's window ends at, and low enough that
-`Ugrow` holds its three certificate rounds. -/
-theorem mF_bound {r i : ℕ} (hi : i < mF.width r) (hlt : mF.index r i < 10) :
-    r + 2 ≤ N ∧ r < mF.roundOf (mW * (epochOf mW (mF.index r i) + 2)) := by
-  have hr8 : r ≤ 8 := by
-    by_contra hc
-    have h1 : mF.cum 9 ≤ mF.cum r := mF.cum_mono (by omega)
-    rw [mF_cum9] at h1
-    have : mF.cum r + i < 10 := hlt
-    omega
-  have hthin : ∀ r' : ℕ, r' ≤ 6 → i = 0 → mF.index r' i = r' := by
-    intro r' h hi0; rw [hi0, Frame.index, mF_cum_low (by omega)]; omega
-  have hcases : r = 0 ∨ r = 1 ∨ r = 2 ∨ r = 3 ∨ r = 4 ∨ r = 5 ∨ r = 6 ∨ r = 7 ∨ r = 8 := by
-    omega
-  have hN : r + 2 ≤ N := by change r + 2 ≤ 12; omega
-  refine ⟨hN, ?_⟩
-  clear hN
-  rcases hcases with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl
-  all_goals try
-    (have hi0 : i = 0 := by rw [mF_width_low (by omega)] at hi; omega
-     rw [hthin _ (by omega) hi0])
-  · change (0 : ℕ) < mF.roundOf 4; rw [mF_roundOf_low (by omega)]; omega
-  · change (1 : ℕ) < mF.roundOf 4; rw [mF_roundOf_low (by omega)]; omega
-  · change (2 : ℕ) < mF.roundOf 6; rw [mF_roundOf_low (by omega)]; omega
-  · change (3 : ℕ) < mF.roundOf 6; rw [mF_roundOf_low (by omega)]; omega
-  · change (4 : ℕ) < mF.roundOf 8; rw [mF_roundOf8]; omega
-  · change (5 : ℕ) < mF.roundOf 8; rw [mF_roundOf8]; omega
-  · change (6 : ℕ) < mF.roundOf 10; rw [mF_roundOf10]; omega
-  · -- round 7 holds two slots, in epochs 3 and 4
-    have hi2 : i < 2 := lt_of_lt_of_le hi (mF_width_le 7)
-    have h7 : mF.index 7 i = 7 + i := by rw [Frame.index, mF_cum_low (by omega)]
-    rw [h7]
-    have : i = 0 ∨ i = 1 := by omega
-    rcases this with rfl|rfl
-    · change (7 : ℕ) < mF.roundOf 10; rw [mF_roundOf10]; omega
-    · change (7 : ℕ) < mF.roundOf 12; rw [mF_roundOf12]; omega
-  · -- round 8: only its first slot is below the horizon
-    have h8 : mF.index 8 i = 9 + i := by rw [Frame.index, mF_cum8]
-    rw [h8] at hlt ⊢
-    have hi0 : i = 0 := by omega
-    subst hi0
-    change (8 : ℕ) < mF.roundOf 12; rw [mF_roundOf12]; omega
+/-- The bound at `mF`, whose rounds hold one slot or two. -/
+theorem mF_bound {r i : ℕ} (hi : i < mF.width r) :
+    r < mF.roundOf (mW * (epochOf mW (mF.index r i) + 2)) :=
+  bound_of_width_le mF_width_le hi
 
 /-- **A composed run of height two, over five epochs.** Configuration `0`
 runs at one leader a round and closes at slot `2`; configuration `1` runs
@@ -421,9 +417,11 @@ noncomputable def mRun :
     have hlt : mF.index r i < 10 := by
       have : mF.index r i / 2 < 5 := hep
       omega
-    obtain ⟨hN, hrB⟩ := mF_bound hi hlt
+    have hr : r ≤ mF.index r i := by
+      have := mF.roundOf_index hi; have := frame_roundOf_le mF (mF.index r i); omega
     rw [vdctOf_index hi]
-    exact decidedFrameBelow_of_asg hi hrB hN (mAsg_correct r i)
+    exact decidedFrameBelow_of_asg hi (mF_bound hi) (by change r + 2 ≤ 24; omega)
+      (mAsg_correct r i)
 
 /-- Two configurations closed, five epochs closed, and the count moving
 between them. -/
@@ -452,6 +450,127 @@ example : gRule.Decided (mF.toSlots mAsg mRun.keyed) (View.full (Ugrow N)) 8
 theorem mRun_horizon : mW * (5 + 1) ≤ mRun.F.cum (mRun.start 2) := by
   change (12 : ℕ) ≤ mF.cum 12
   rw [mF_cum12]; omega
+
+/-! ## The recursion, turned once
+
+`Composed.extend` is what discharges `Progresses`, and until now nothing
+applied it. `mRun_extends` does: `mRun` has closed two configurations and
+reached its horizon, so it extends to a run of height three that has.
+
+The extended frame adds nothing here — `mRun`'s last configuration
+already runs at two leaders a round, so `mFe` has `mF`'s widths at every
+round. What the extension supplies is the third configuration: its anchor
+is slot `21`, at round `14`, and the epochs it closes run to `10`.
+-/
+
+/-- `mF` extended past `mRun`'s last start at the count in force there. -/
+noncomputable def mFe : Frame := mF.extend 12 2 (by omega)
+
+theorem mFe_width (r : ℕ) : mFe.width r = mF.width r := by
+  unfold mFe
+  by_cases h : r ≤ 12
+  · exact Frame.extend_width_le h
+  · rw [Frame.extend_width_gt (by omega), mF_width_high (by omega)]
+
+theorem mFe_width_le (r : ℕ) : mFe.width r ≤ 2 := by rw [mFe_width]; exact mF_width_le r
+
+theorem mFe_cum (r : ℕ) : mFe.cum r = mF.cum r :=
+  Frame.cum_congr (B := r) (fun r' _ => mFe_width r') (le_refl r)
+
+theorem mFe_roundOf (g : ℕ) : mFe.roundOf g = mF.roundOf g :=
+  Frame.roundOf_congr (B := g + 1) (fun r' _ => mFe_width r')
+    (lt_of_le_of_lt (frame_roundOf_le mF g) (by omega))
+
+theorem mFe_index (r i : ℕ) : mFe.index r i = mF.index r i := by
+  rw [Frame.index, Frame.index, mFe_cum]
+
+theorem vdctOf_mFe (g : ℕ) : vdctOf mFe mAsg g = vdctOf mF mAsg g := by
+  rw [vdctOf, vdctOf, mFe_roundOf, mFe_cum]
+
+/-- **The third configuration closes**, at slot `21` — the first slot at
+or past its threshold, every slot being decided. -/
+theorem mFe_closes : Closes mP mFe (vdctOf mFe mAsg) 12 :=
+  ⟨21, by rw [mFe_cum]; exact le_of_eq mF_cum14, rfl⟩
+
+theorem anchorOf_mFe : anchorOf mFe_closes = 21 := by
+  have hle : anchorOf mFe_closes ≤ 21 := by
+    unfold anchorOf
+    exact Nat.find_le ⟨by rw [mFe_cum]; exact le_of_eq mF_cum14, rfl⟩
+  have hge : (21 : ℕ) ≤ anchorOf mFe_closes := by
+    have h := (anchorOf_commits mFe_closes).2
+    rw [mFe_cum] at h
+    change mF.cum 14 ≤ _ at h
+    rw [mF_cum14] at h
+    exact h
+  omega
+
+/-- `mAsg` names two validators, so it is lawful at any count of two. -/
+theorem mAsg_inj {r i j : ℕ} (hi : i < 2) (hj : j < 2) (h : mAsg r i = mAsg r j) : i = j := by
+  by_cases h0 : i = 0 <;> by_cases h1 : j = 0
+  · omega
+  · exact absurd h (by simp [mAsg, h0, h1])
+  · exact absurd h (by simp [mAsg, h0, h1])
+  · omega
+
+theorem keyed_ext {r i j : ℕ} (hi : i < mFe.width r) (hj : j < mFe.width r)
+    (h : mAsg r i = mAsg r j) : i = j :=
+  mAsg_inj (lt_of_lt_of_le hi (mFe_width_le r)) (lt_of_lt_of_le hj (mFe_width_le r)) h
+
+/-- The policy still hands back the frame's own leader: `mFe` and `mF`
+have the same widths, so they place the slots the same way. -/
+theorem coherent_ext {r i : ℕ} (hi : i < mFe.width r) :
+    mAsg r i = mAsg (mF.roundOf (mFe.index r i))
+      (mFe.index r i - mF.cum (mF.roundOf (mFe.index r i))) := by
+  rw [mFe_index]
+  exact (pickOf_index (by rw [← mFe_width]; exact hi)).symm
+
+/-- Every slot of the eleven closed epochs is decided. -/
+theorem closed_ext {r i : ℕ} (hi : i < mFe.width r)
+    (hep : epochOf mW (mFe.index r i) < 11) :
+    Properties.DecidedFrameBelow gRule mFe mAsg
+      (mFe.roundOf (mW * (epochOf mW (mFe.index r i) + 2))) (View.full (Ugrow N))
+      (mFe.index r i) (vdctOf mFe mAsg (mFe.index r i)) := by
+  have hlt : mFe.index r i < 22 := by
+    have : mFe.index r i / 2 < 11 := hep
+    omega
+  have hr : r ≤ mFe.index r i := by
+    have := mFe.roundOf_index hi
+    have := frame_roundOf_le mFe (mFe.index r i)
+    omega
+  rw [vdctOf_index hi]
+  exact decidedFrameBelow_of_asg hi (bound_of_width_le mFe_width_le hi)
+    (by change r + 2 ≤ 24; omega) (mAsg_correct r i)
+
+/-- The third configuration reaches its own horizon in turn. -/
+theorem horizon_ext :
+    mW * (11 + 1) ≤ mFe.cum (mFe.roundOf (anchorOf mFe_closes) + mP.gap) := by
+  rw [anchorOf_mFe, mFe_roundOf, mF_roundOf21]
+  change (24 : ℕ) ≤ mFe.cum 18
+  rw [mFe_cum, mF_cum18]
+  omega
+
+/-- Its anchor is a slot of an epoch it closes. -/
+theorem anc_ext : epochOf mW (anchorOf mFe_closes) < 11 := by
+  rw [anchorOf_mFe]; decide
+
+/-- **A run of height three.** `mRun` has closed two configurations and
+reached its horizon, so `Composed.extend` gives a third: a run over
+eleven epochs whose own horizon is reached in turn. This is the first
+application of the recursion to a run rather than to a hypothesis. -/
+theorem mRun_extends :
+    Nonempty { Rn' : Composed (R := gRule) mW mP
+        (fun _ _ _ g => mAsg (mF.roundOf g) (g - mF.cum (mF.roundOf g)))
+        (fun _ _ _ _ _ => (2, 0)) (Ugrow N) (View.full (Ugrow N)) 3 11 //
+      mW * (11 + 1) ≤ Rn'.F.cum (Rn'.start 3) } :=
+  mRun.extend (by decide) (by decide) mRun_horizon
+    (fun r _ i j hi hj h => mAsg_inj (r := r) hi hj h)
+    (fun _ _ => Nat.zero_lt_two) (fun _ _ => by decide) (by decide)
+    mAsg (vdctOf mFe mAsg) (fun g _ => vdctOf_mFe g)
+    (fun _ _ _ hi hj h => keyed_ext hi hj h)
+    mFe_closes (H' := 11)
+    (fun _ _ hi _ => coherent_ext hi)
+    (fun _ _ hi hep => closed_ext hi hep)
+    (by decide) anc_ext horizon_ext
 
 end Composition
 end LeanDagTest
