@@ -15,18 +15,18 @@ namespace Heads
 
 theorem holds : Statement := by
   refine ⟨?_, ?_, ?_⟩
-  · intro Validator BlockId Payload _ _ _ R slack getLeader w hk c₀
+  · intro Validator BlockId Payload _ _ _ R slack C c₀
     refine ⟨?_, ?_, ?_⟩
     · intro hD S U V b top hspan hdec htop
       exact stretchDescent hD S V hspan hdec htop
-    · intro hD hw U V Rnd N T hT m hm hmax ρ hRnd hN hheads
-      exact headsDecide_at getLeader hk m hm hmax hD hw V hT ρ hRnd hN hheads
-    · intro hD hw hheads m hm hmax
-      exact liveOn_of_headsRun getLeader hk m hm hmax hD hw hheads
+    · intro hD hw U V Rnd N T hT C' ρ hRnd hN hheads
+      exact headsDecide_at C' hD hw V hT ρ hRnd hN hheads
+    · intro hD hw hheads
+      exact liveOn_of_headsRun C hD hw hheads
   · intro n hn T slack g hT hbound
     exact roundRobin_headsRun n hn T slack g hT hbound
-  · intro n hn BlockId Payload _ R slack hD hw hbound w hk m hm hmax
-    exact liveOn_roundRobin hn R hD hw hbound hk m hm hmax
+  · intro n hn BlockId Payload _ R slack hD hw hbound C hC
+    exact liveOn_roundRobin hn R hD hw hbound C hC
 
 end Heads
 

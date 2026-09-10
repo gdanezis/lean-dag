@@ -32,9 +32,9 @@ def Descent : Prop :=
 A4 for its own schedule, with gap `n + 2`. -/
 def RoundRobinLive : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) [Faults (Fin n)] (BlockId Payload : Type) [DecidableEq BlockId]
-    (w : ℕ) (hk : Keyed (roundRobin n hn) w) (m : ℕ) (hm : 0 < m) (hmax : m ≤ w),
+    (C : Config (Fin n)) (hC : C.head = roundRobin n hn),
     (mysticetiLive (Validator := Fin n) (BlockId := BlockId) (Payload := Payload)).LiveOn
-      (Sched (roundRobin n hn) hk m hm hmax) (n + 2)
+      C.sched (n + 2)
 
 /-- The descent laws, and liveness under round-robin at every count. -/
 def Statement : Prop := Descent ∧ RoundRobinLive

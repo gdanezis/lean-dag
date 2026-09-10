@@ -143,8 +143,8 @@ example : ∃ κ, 1 ≤ κ ∧ κ ≤ 4 ∧
 /-! ## The paper's A4 for Mysticeti, at `n = 4` -/
 
 example : (mysticetiLive (Validator := Fin 4) (BlockId := Fin 32) (Payload := Unit)).LiveOn
-    (Sched bnLeader bnWin 2 (by decide) (by decide)) 6 :=
-  MysticetiLive.holds.2 4 (by omega) (Fin 32) Unit 4 bnWin 2 (by decide) (by decide)
+    bnC2.sched 6 :=
+  MysticetiLive.holds.2 4 (by omega) (Fin 32) Unit bnC2 (by funext ρ; rfl)
 
 /-! ## The descent producing a skip, on `Usk` -/
 
@@ -225,12 +225,12 @@ example : ∃ v₀ v₁ v₂ L,
     bnRule32.Decided sched1 (bnLiveSk.full Usk) 0 v₀ ∧
     bnRule32.Decided sched1 (bnLiveSk.full Usk) 1 v₁ ∧
     bnRule32.Decided sched1 (bnLiveSk.full Usk) 2 v₂ ∧
-    bnRule32.Decided sched1 (bnLiveSk.full Usk) (1 * 3) (some L) ∧
+    bnRule32.Decided sched1 (bnLiveSk.full Usk) (bnC1.cum 3) (some L) ∧
     v₀ = some 0 ∧ v₁ = some 5 ∧ v₂ = none ∧ L = 15 := by
   obtain ⟨hdec, L, hL⟩ :=
-    (Heads.holds.1 (Fin 4) (Fin 32) Unit bnLiveSk 1 bnLeader 4 bnWin 0).2.1
+    (Heads.holds.1 (Fin 4) (Fin 32) Unit bnLiveSk 1 bnC1 0).2.1
     bnLiveSk_descent (Nat.succ_pos 2) Usk (bnLiveSk.full Usk) 1 8 {0, 1, 3}
-    (fun S κ h1 h2 h3 => usk_goodT S κ h1 h2 h3) 1 (by decide) (by decide) 3 (by decide)
+    (fun S κ h1 h2 h3 => usk_goodT S κ h1 h2 h3) bnC1 3 (by decide)
     (by decide) (by decide)
   obtain ⟨v₀, h0⟩ := hdec 0 (by decide) (by decide)
   obtain ⟨v₁, h1⟩ := hdec 1 (by decide) (by decide)
@@ -260,9 +260,9 @@ example : ∃ v₀ v₁ v₂,
     bnRule32.Decided sched1 (bnLiveSk.full Usk) 2 v₂ ∧
     v₀ = some 0 ∧ v₁ = some 5 ∧ v₂ = none := by
   have hw : bnLiveSk.waveLength = 3 := rfl
-  have hstretch := (Heads.holds.1 (Fin 4) (Fin 32) Unit bnLiveSk 1 bnLeader 4 bnWin 0).1
+  have hstretch := (Heads.holds.1 (Fin 4) (Fin 32) Unit bnLiveSk 1 bnC1 0).1
     bnLiveSk_descent sched1 Usk (bnLiveSk.full Usk) 3 5
-    (fun i hi => by simp only [Sched_slotRound, Nat.div_one]; omega)
+    (fun i hi => by simp only [sched1_slotRound]; omega)
     (fun j hlo hhi => by
       have : j = 3 ∨ j = 4 ∨ j = 5 := by omega
       rcases this with rfl | rfl | rfl
@@ -285,7 +285,7 @@ example :
     ¬ (∀ i, i < 3 → sched1.slotRound i + bnLiveSk.waveLength ≤ sched1.slotRound 4) := by
   intro h
   have := h 2 (by omega)
-  simp only [Sched_slotRound, Nat.div_one] at this
+  simp only [sched1_slotRound] at this
   have hw : bnLiveSk.waveLength = 3 := rfl
   omega
 
@@ -318,23 +318,26 @@ theorem u44_good :
     interval_cases r <;> decide⟩
 
 abbrev rr4 : ℕ → Fin 4 := roundRobin 4 (by omega)
-abbrev sched2_44 : Slots (Fin 4) :=
-  Sched rr4 (roundRobin_keyed 4 (by omega)) 2 (by decide) (by decide)
+abbrev cfg2_44 : Config (Fin 4) := bnC2
+theorem cfg2_44_head : cfg2_44.head = rr4 := by funext ρ; rfl
+abbrev sched2_44 : Slots (Fin 4) := cfg2_44.sched
 abbrev rule44 : BaseRule (Fin 4) (Fin 44) Unit := mysticeti
 
 /-- The real theorem, the real `Good`, a verdict on data: under two leaders,
 some slot at a round in `[1, 7]` of `U44` is committed. -/
 example : ∃ κ, 1 ≤ sched2_44.slotRound κ ∧ sched2_44.slotRound κ ≤ 1 + 6 ∧
     ∃ L, rule44.Decided sched2_44 (View.full U44) κ (some L) :=
-  ((MysticetiLive.holds.2 4 (by omega) (Fin 44) Unit 4 (roundRobin_keyed 4 (by omega)) 2
-    (by decide) (by decide)) U44 (View.full U44) 1 10 u44_good
-    (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 44) Unit).full_ids U44 10)).2 1 (by omega) (by decide)
+  ((MysticetiLive.holds.2 4 (by omega) (Fin 44) Unit cfg2_44 cfg2_44_head)
+    U44 (View.full U44) 1 10 u44_good
+    (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 44) Unit).full_ids U44 10)).2 1 (by omega)
+    (by decide)
 
 -- And clause 1: slot 2 (round 1, head) is decided by the theorem.
 example : ∃ v, rule44.Decided sched2_44 (View.full U44) 2 v :=
-  ((MysticetiLive.holds.2 4 (by omega) (Fin 44) Unit 4 (roundRobin_keyed 4 (by omega)) 2
-    (by decide) (by decide)) U44 (View.full U44) 1 10 u44_good
-    (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 44) Unit).full_ids U44 10)).1 2 (by decide) (by decide)
+  ((MysticetiLive.holds.2 4 (by omega) (Fin 44) Unit cfg2_44 cfg2_44_head)
+    U44 (View.full U44) 1 10 u44_good
+    (coversUpto_full (Mysticeti.holds (Fin 4) (Fin 44) Unit).full_ids U44 10)).1 2 (by decide)
+    (by decide)
 
 -- One direct commit by `decide` on Fin 44: slot 2 = (round 1, offset 0), leader 1, block 5.
 theorem u44_commit2 : rule44.Decided sched2_44 (View.full U44) 2 (some 5) :=

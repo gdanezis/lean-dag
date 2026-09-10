@@ -29,15 +29,14 @@ theorem holds : Statement := by
   refine ⟨?_, descent, ?_⟩
   · intro Validator BlockId Payload _ _ _
     exact ofAnchored_laws LeanDag.Nemo.nemoLaws
-  · intro n hn C BlockId Payload _ w hk m hm hmax
+  · intro n hn C BlockId Payload _ C hC
     have hbound : (nemoLive (Validator := Fin n) (BlockId := BlockId)
         (Payload := Payload)).waveLength * (Fintype.card (Fin n) - LeanDag.Nemo.majority (Fin n))
           + 1 ≤ n := by
       change 2 * (Fintype.card (Fin n) - LeanDag.Nemo.majority (Fin n)) + 1 ≤ n
       rw [Fintype.card_fin]
       exact majority_bound n hn
-    exact liveOn_roundRobin hn _ (descent (Fin n) BlockId Payload) (Nat.succ_pos 1) hbound hk m
-      hm hmax
+    exact liveOn_roundRobin hn _ (descent (Fin n) BlockId Payload) (Nat.succ_pos 1) hbound C hC
 
 end Nemo
 

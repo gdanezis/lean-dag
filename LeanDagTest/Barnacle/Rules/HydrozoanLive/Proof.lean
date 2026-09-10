@@ -18,12 +18,12 @@ theorem descent : Descent := by
   exact LeanDag.Hydrozoan.descent
 
 theorem roundRobinLive : RoundRobinLive := by
-  intro n hn BlockId _ F hck w hk m hm hmax
+  intro n hn BlockId _ F hck C hC
   have hbound : (hydrozoanLive (Replica := Fin n)
       (BlockId := BlockId)).waveLength * (F.f + F.c) + 1 ≤ n := by
     change 3 * (F.f + F.c) + 1 ≤ n
     exact hck
-  have h := liveOn_roundRobin hn _ (descent (Fin n) BlockId) (Nat.succ_pos 2) hbound hk m hm hmax
+  have h := liveOn_roundRobin hn _ (descent (Fin n) BlockId) (Nat.succ_pos 2) hbound C hC
   have hw3 : (hydrozoanLive (Replica := Fin n)
       (BlockId := BlockId)).waveLength = 3 := rfl
   rw [hw3] at h

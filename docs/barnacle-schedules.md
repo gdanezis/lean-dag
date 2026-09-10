@@ -50,13 +50,14 @@ The width function is the primitive, and the schedule derives from it.
 
 ```lean
 structure Config (Validator : Type) where
-  /-- Slots per round. -/
-  width : ℕ → ℕ
-  width_pos : ∀ r, 0 < width r
+  /-- How many slots round `r` holds. A function of the round, so a
+  configuration's rounds need not agree. -/
+  slotsAt : ℕ → ℕ
+  slotsAt_pos : ∀ r, 0 < slotsAt r
   /-- Who leads position `i` of round `r`. -/
   lead : ℕ → ℕ → Validator
   /-- Distinct positions of a round have distinct leaders. -/
-  keyed : ∀ r i j, i < width r → j < width r → lead r i = lead r j → i = j
+  keyed : ∀ r i j, i < slotsAt r → j < slotsAt r → lead r i = lead r j → i = j
   /-- Rounds from this configuration's start before the next
   reconfiguration is due. -/
   interval : ℕ
@@ -88,13 +89,13 @@ as a clause of the run beside `count_pos` and `count_le`:
 
 ```lean
 interval_pos : ∀ k, 0 < (cfg k).interval
-width_le : ∀ k r, (cfg k).width r ≤ P.maxLeaders
+slotsAt_le : ∀ k r, (cfg k).slotsAt r ≤ P.maxLeaders
 ```
 
-`width_le` is `count_le` with a round argument, and it is what the
+`slotsAt_le` is `count_le` with a round argument, and it is what the
 descent's spanning clause reads.
 
-`Config.uniform getLeader hk m` is the present arc: `width` constantly
+`Config.uniform getLeader hk m` is the present arc: `slotsAt` constantly
 `m`, `lead r i = getLeader (r + i)`. `uniform_sched` says its schedule is
 `Sched getLeader hk m`, and that identity is what makes step 2's check a
 rewrite rather than a re-proof.
@@ -140,9 +141,10 @@ inspects `slotRound`; it only needs both runs to hold the same one.
 
 ## 5. Liveness
 
-`Descends` needs the spanning clause, which `width_bound` supplies at
-`c ≥ width * (wave + 1)` — the same arithmetic `Frame.spansEligible`
-did, read off the schedule instead of a width function.
+`Descends` needs the spanning clause, which `slotsAt_le` supplies at
+`c ≥ maxLeaders * (wave + 1)` —
+the same arithmetic the spanning clause
+always did, read off the configuration.
 
 The fairness clause is Barnacle's `HeadsRun` at a schedule the mechanism
 now chooses. That is a real change: `HeadsRun` is a property of a *fixed*
@@ -184,14 +186,14 @@ what a configuration *is*, not when it starts.
 
 ## 8. Module plan
 
-* `LeanDag/Barnacle/Model/Config.lean` — `Config`, `width_bound`, and
-  the arithmetic that a bound on slots per round gives.
+* `LeanDag/Barnacle/Model/Config.lean` — `Config`, its `cum`, `roundOf`
+  and `sched`, and the arithmetic those need.
 * `LeanDag/Barnacle/Model/Rule.lean` — `UpdateRule` at a `Config`.
 * `LeanDag/Barnacle/Model/Run.lean` — `PartialRun` at `cfg`.
 * `LeanDag/Barnacle/Agreement/` — BN3, the same induction.
 * `LeanDag/Barnacle/Ledger/`, `Validity/`, `Conservativity/` — the
   interval read off `Config`, otherwise mechanical.
-* `LeanDag/Barnacle/Live/` — the descent from `width_bound`, and the
+* `LeanDag/Barnacle/Live/` — the descent from `slotsAt_le`, and the
   fairness clause on the update rule.
 * `LeanDagTest/Barnacle/` — a run whose second configuration differs from
   its first in all three: a leader, a round's width, and the interval.
@@ -207,7 +209,7 @@ what a configuration *is*, not when it starts.
 
    * **2a** `Model/Config.lean`: the structure, `cum`, `roundOf`,
      `index`, `sched`, and the arithmetic those need — `cum_succ`,
-     `cum_mono`, `roundOf_cum`, `roundOf_index`, `pos_lt_width`,
+     `cum_mono`, `roundOf_cum`, `roundOf_index`, `pos_lt_slotsAt`,
      `cum_le_iff_le_roundOf`. Nothing beyond what §2 and §3 read.
    * **2b** `Config.uniform` and `uniform_sched`. The bridge to `Sched`,
      and what makes the rest of this step a rewrite.
@@ -246,7 +248,7 @@ even where it is shallow.
 **Emitting a schedule is a large surface.** The present rule returns two
 naturals and a validator can check the whole of it by inspection. A rule
 returning a `Config` returns two functions, bounded by `Config`'s own
-clauses, `width_le`, and §5's fairness — and the last of those is
+clauses, `slotsAt_le`, and §5's fairness — and the last of those is
 assumed. What a rule may emit is therefore much wider than what it may
 emit today, and the arc says less about it.
 

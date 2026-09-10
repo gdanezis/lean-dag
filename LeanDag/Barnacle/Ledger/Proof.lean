@@ -16,13 +16,13 @@ namespace Barnacle
 namespace Ledger
 
 theorem holds : Statement := by
-  intro Validator BlockId Payload _ _ _ R hRa hRc P getLeader hk upd hanc
+  intro Validator BlockId Payload _ _ _ R hRa hRc P upd C₀ hanc
   refine ⟨?_, ?_, ?_⟩
   · -- BN5a.
     intro U V₁ V₂ K₁ K₂ R₁ R₂
     have hrange : ∀ k, k < min K₁ K₂ → R₁.rangeLedger k = R₂.rangeLedger k := by
       intro k hkm
-      have h := Agreement.holds Validator BlockId Payload R hRa P getLeader hk upd hanc
+      have h := Agreement.holds Validator BlockId Payload R hRa P upd C₀ hanc
         U V₁ V₂ K₁ K₂ R₁ R₂
       obtain ⟨hs, hc, _, hrest⟩ := h k (by omega)
       obtain ⟨_, hv⟩ := hrest hkm

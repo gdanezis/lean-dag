@@ -73,8 +73,14 @@ theorem ul_good :
 
 abbrev rr4 : ℕ → Fin 4 := roundRobin 4 (by omega)
 theorem rr4_keyed : Keyed rr4 4 := roundRobin_keyed 4 (by omega)
-abbrev S1 : Slots (Fin 4) := Sched rr4 rr4_keyed 1 (by omega) (by omega)
-abbrev S2 : Slots (Fin 4) := Sched rr4 rr4_keyed 2 (by omega) (by omega)
+def rr4Lead : ℕ → ℕ → Fin 4 := leadOf rr4
+theorem rr4LeadKeyed : LeadKeyed rr4Lead 4 := leadKeyed_of_keyed (by omega) rr4_keyed
+abbrev C1 : Config (Fin 4) := Config.uniform rr4Lead rr4LeadKeyed 1 (by omega) (by omega) 4
+abbrev C2 : Config (Fin 4) := Config.uniform rr4Lead rr4LeadKeyed 2 (by omega) (by omega) 4
+theorem C1_head : C1.head = rr4 := by funext ρ; rfl
+theorem C2_head : C2.head = rr4 := by funext ρ; rfl
+abbrev S1 : Slots (Fin 4) := C1.sched
+abbrev S2 : Slots (Fin 4) := C2.sched
 
 /-- `Orcaella.RoundRobinLive` applied at `n = 4`, count `1`, gap `5`,
 horizon `8`. -/
@@ -84,8 +90,8 @@ theorem live_o1 :
     (∀ r, 0 ≤ r → r + 5 + 2 ≤ 8 →
       ∃ κ, r ≤ S1.slotRound κ ∧ S1.slotRound κ ≤ r + 5 ∧
         ∃ L, OL.Decided S1 (OL.full OUL) κ (some L)) :=
-  LeanDag.Barnacle.Orcaella.holds.2.2 4 (by omega) (Fin 28) Unit 2 (by decide) 4 rr4_keyed
-    1 (by omega) (by omega) OUL (OL.full OUL) 0 8 ul_good
+  LeanDag.Barnacle.Orcaella.holds.2.2 4 (by omega) (Fin 28) Unit 2 (by decide) C1 C1_head
+    OUL (OL.full OUL) 0 8 ul_good
     (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 28) Unit 2 (by decide)).full_ids
       OUL 8)
 
@@ -96,8 +102,8 @@ theorem live_o2 :
     (∀ r, 0 ≤ r → r + 5 + 2 ≤ 8 →
       ∃ κ, r ≤ S2.slotRound κ ∧ S2.slotRound κ ≤ r + 5 ∧
         ∃ L, OL.Decided S2 (OL.full OUL) κ (some L)) :=
-  LeanDag.Barnacle.Orcaella.holds.2.2 4 (by omega) (Fin 28) Unit 2 (by decide) 4 rr4_keyed
-    2 (by omega) (by omega) OUL (OL.full OUL) 0 8 ul_good
+  LeanDag.Barnacle.Orcaella.holds.2.2 4 (by omega) (Fin 28) Unit 2 (by decide) C2 C2_head
+    OUL (OL.full OUL) 0 8 ul_good
     (coversUpto_full (LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 28) Unit 2 (by decide)).full_ids
       OUL 8)
 
@@ -129,7 +135,7 @@ theorem promise_slot0 :
 theorem promise_r0 :
     ∃ κ, κ ≤ 5 ∧ κ ≠ 3 ∧ ∃ L, OL.Decided S1 (OL.full OUL) κ (some L) := by
   obtain ⟨κ, h1, h2, L, hL⟩ := live_o1.2 0 (by omega) (by omega)
-  simp only [Sched_slotRound, Nat.div_one] at h1 h2
+  simp only [Config.sched_slotRound, Config.uniform_roundOf, Nat.div_one] at h1 h2
   refine ⟨κ, by omega, fun h => ?_, L, hL⟩
   subst h
   exact absurd ((LeanDag.Barnacle.Orcaella.holds.1 (Fin 4) (Fin 28) Unit 2 (by decide)).agree

@@ -20,22 +20,24 @@ variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 section Progress
 
 variable {R : LiveRule Validator BlockId Payload} {P : Params}
-variable {getLeader : ℕ → Validator} {hk : Keyed getLeader P.maxLeaders}
-variable {upd : UpdateRule R.toBaseRule} {U : R.Universe}
+variable {upd : UpdateRule R.toBaseRule} {C₀ : Config Validator}
+variable {Q : Config Validator → Prop} {U : R.Universe}
 
 /-- The height-`0` run: `init` only. -/
 def PartialRun.zero (R : BaseRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders)
-    (upd : UpdateRule R) (U : R.Universe) (V : R.View U) :
-    PartialRun R P getLeader hk upd U V 0 where
+    (upd : UpdateRule R) (C₀ : Config Validator)
+    (hle : ∀ r, C₀.slotsAt r ≤ P.maxLeaders) (hpos : 0 < C₀.interval)
+    (hint : C₀.interval ≤ P.maxInterval) (U : R.Universe) (V : R.View U) :
+    PartialRun R P upd C₀ U V 0 where
   start := fun _ => 0
-  count := fun _ => 1
+  cfg := fun _ => C₀
   backoff := fun _ => 0
   anchor := fun _ => 0
   vdct := fun _ _ => none
   init := ⟨rfl, rfl, rfl⟩
-  count_pos := fun _ => Nat.one_pos
-  count_le := fun _ => P.max_pos
+  slotsAt_le := fun _ => hle
+  interval_pos := fun _ => hpos
+  interval_le := fun _ => hint
   closed := fun _ h => absurd h (Nat.not_lt_zero _)
   anchor_commits := fun _ h => absurd h (Nat.not_lt_zero _)
   anchor_least := fun _ h => absurd h (Nat.not_lt_zero _)
@@ -44,97 +46,105 @@ def PartialRun.zero (R : BaseRule Validator BlockId Payload) (P : Params)
 
 open Classical in
 /-- **Configuration progress, with the bound on the new start.** -/
-theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd) {c K Rnd N : ℕ}
+theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd)
+    (hupdh : UpdKeeps upd Q) {c K Rnd N : ℕ}
     {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
-    (Rn : PartialRun R.toBaseRule P getLeader hk upd U V K)
-    (hlive : R.LiveOn (Sched getLeader hk (Rn.count K) (Rn.count_pos K) (Rn.count_le K)) c)
+    (Rn : PartialRun R.toBaseRule P upd C₀ U V K)
+    (hlive : R.LiveOn (Rn.cfg K).sched c) (hQK : Q (Rn.cfg K))
     (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
-    (hN : Rn.start K + P.interval + 1 + 2 * c + R.waveLength ≤ N) :
-    ∃ Rn' : PartialRun R.toBaseRule P getLeader hk upd U V (K + 1),
-      Rn'.start (K + 1) ≤ Rn.start K + P.interval + 1 + c := by
+    (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
+    ∃ Rn' : PartialRun R.toBaseRule P upd C₀ U V (K + 1),
+      Rn'.start (K + 1) ≤ Rn.start K + P.maxInterval + 1 + c ∧ Q (Rn'.cfg (K + 1)) := by
   obtain ⟨h1, h2⟩ := hlive U V Rnd N hgood hcov
-  -- Clause 1 with the rounds read as quotients.
-  have h1' : ∀ κ, Rnd ≤ κ / Rn.count K → κ / Rn.count K + c + R.waveLength ≤ N →
-      ∃ v, R.Decided (Rn.sched K) V κ v := by
+  have hIle := Rn.interval_le K
+  -- Clause 1 with the rounds read off the configuration.
+  have h1' : ∀ κ, Rnd ≤ (Rn.cfg K).roundOf κ →
+      (Rn.cfg K).roundOf κ + c + R.waveLength ≤ N → ∃ v, R.Decided (Rn.sched K) V κ v := by
     intro κ a b
     exact h1 κ (by simpa using a) (by simpa using b)
   -- The verdicts of the new range, chosen from clause 1; `none` off the good rounds.
   let v : ℕ → Option BlockId := fun κ =>
-    if h : Rnd ≤ κ / Rn.count K ∧ κ / Rn.count K + c + R.waveLength ≤ N then
+    if h : Rnd ≤ (Rn.cfg K).roundOf κ ∧
+        (Rn.cfg K).roundOf κ + c + R.waveLength ≤ N then
       Classical.choose (h1' κ h.1 h.2) else none
-  have hv : ∀ κ, Rnd ≤ κ / Rn.count K → κ / Rn.count K + c + R.waveLength ≤ N →
+  have hv : ∀ κ, Rnd ≤ (Rn.cfg K).roundOf κ →
+      (Rn.cfg K).roundOf κ + c + R.waveLength ≤ N →
       R.Decided (Rn.sched K) V κ (v κ) := by
     intro κ a b
     simp only [v, dif_pos (And.intro a b)]
     exact Classical.choose_spec (h1' κ a b)
   -- Clause 2 at the threshold round: a committed slot within `c`.
   obtain ⟨κ₀, hκ₀, hκ₀', L₀, hL₀⟩ :=
-    h2 (Rn.start K + P.interval + 1) (by omega) (by omega)
-  simp only [Sched_slotRound] at hκ₀ hκ₀'
+    h2 (Rn.start K + (Rn.cfg K).interval + 1) (by omega) (by omega)
+  simp only [Config.sched_slotRound] at hκ₀ hκ₀'
   -- Its chosen verdict is that commit, by agreement.
   have hvκ₀ : v κ₀ = some L₀ :=
     hR _ _ _ κ₀ _ _ (hv κ₀ (by omega) (by omega)) hL₀
   -- The anchor: the least committed slot past the threshold.
-  have hex : ∃ κ, Rn.start K + P.interval < κ / Rn.count K ∧ ∃ L, v κ = some L :=
-    ⟨κ₀, by omega, L₀, hvκ₀⟩
+  have hex : ∃ κ, Rn.start K + (Rn.cfg K).interval < (Rn.cfg K).roundOf κ ∧
+      ∃ L, v κ = some L := ⟨κ₀, by omega, L₀, hvκ₀⟩
   obtain ⟨a, ha_spec, ha_min, ha_le⟩ : ∃ a,
-      (Rn.start K + P.interval < a / Rn.count K ∧ ∃ L, v a = some L) ∧
-      (∀ κ, κ < a →
-        ¬ (Rn.start K + P.interval < κ / Rn.count K ∧ ∃ L, v κ = some L)) ∧
+      (Rn.start K + (Rn.cfg K).interval < (Rn.cfg K).roundOf a ∧ ∃ L, v a = some L) ∧
+      (∀ κ, κ < a → ¬ (Rn.start K + (Rn.cfg K).interval < (Rn.cfg K).roundOf κ ∧
+        ∃ L, v κ = some L)) ∧
       a ≤ κ₀ :=
     ⟨Nat.find hex, Nat.find_spec hex, fun κ hκ => Nat.find_min hex hκ,
       Nat.find_min' hex ⟨by omega, L₀, hvκ₀⟩⟩
-  have ha_round : a / Rn.count K ≤ Rn.start K + P.interval + 1 + c :=
-    le_trans (Nat.div_le_div_right ha_le) hκ₀'
+  have ha_round : (Rn.cfg K).roundOf a ≤ Rn.start K + P.maxInterval + 1 + c := by
+    have := le_trans ((Rn.cfg K).roundOf_mono ha_le) hκ₀'
+    omega
   -- The next configuration, by the rule at the anchor block.
-  let next : ℕ × ℕ := (v a).elim (1, 0) (fun A => upd (Rn.count K) (Rn.backoff K) U V A)
-  have hnext : 0 < next.1 ∧ next.1 ≤ P.maxLeaders := by
+  let next : Config Validator × ℕ :=
+    (v a).elim (Rn.cfg K, Rn.backoff K) (fun A => upd (Rn.cfg K) (Rn.backoff K) U V A)
+  have hnext : (∀ r, next.1.slotsAt r ≤ P.maxLeaders) ∧ 0 < next.1.interval ∧
+      next.1.interval ≤ P.maxInterval := by
     obtain ⟨_, A, hA⟩ := ha_spec
     simp only [next, hA, Option.elim_some]
-    exact hupd _ _ _ _ _
+    exact hupd _ _ _ _ _ (Rn.slotsAt_le K) (Rn.interval_pos K) hIle
+  have hnexth : Q next.1 := by
+    obtain ⟨_, A, hA⟩ := ha_spec
+    simp only [next, hA, Option.elim_some]
+    exact hupdh _ _ _ _ _ hQK
   refine ⟨{
-    start := fun k => if k ≤ K then Rn.start k else a / Rn.count K
-    count := fun k => if k ≤ K then Rn.count k else if k = K + 1 then next.1 else 1
+    start := fun k => if k ≤ K then Rn.start k else (Rn.cfg K).roundOf a
+    cfg := fun k => if k ≤ K then Rn.cfg k else next.1
     backoff := fun k => if k ≤ K then Rn.backoff k else if k = K + 1 then next.2 else 0
     anchor := fun k => if k = K then a else Rn.anchor k
     vdct := fun k κ => if k = K then v κ else Rn.vdct k κ
     init := by simp only [Nat.zero_le, if_true]; exact Rn.init
-    count_pos := ?_
-    count_le := ?_
+    slotsAt_le := ?_
+    interval_pos := ?_
+    interval_le := ?_
     closed := ?_
     anchor_commits := ?_
     anchor_least := ?_
     start_succ := ?_
-    update := ?_ }, ?_⟩
+    update := ?_ }, ?_, ?_⟩
   · intro k
     by_cases hkK : k ≤ K
-    · simp only [hkK, if_true]; exact Rn.count_pos k
-    · by_cases hk1 : k = K + 1
-      · subst hk1; simp only [hkK, if_false, if_true]; exact hnext.1
-      · simp only [hkK, hk1, if_false]; exact Nat.one_pos
+    · simp only [hkK, if_true]; exact Rn.slotsAt_le k
+    · simp only [hkK, if_false]; exact hnext.1
   · intro k
     by_cases hkK : k ≤ K
-    · simp only [hkK, if_true]; exact Rn.count_le k
-    · by_cases hk1 : k = K + 1
-      · subst hk1; simp only [hkK, if_false, if_true]; exact hnext.2
-      · simp only [hkK, hk1, if_false]; exact P.max_pos
+    · simp only [hkK, if_true]; exact Rn.interval_pos k
+    · simp only [hkK, if_false]; exact hnext.2.1
+  · intro k
+    by_cases hkK : k ≤ K
+    · simp only [hkK, if_true]; exact Rn.interval_le k
+    · simp only [hkK, if_false]; exact hnext.2.2
   · -- closed
     intro k hkK1 κ hlo hhi
     by_cases hkK : k = K
     · subst hkK
       have hk1 : ¬ (k + 1 ≤ k) := by omega
       simp only [le_refl, if_true, hk1, if_false] at hlo hhi ⊢
-      have hround : Rnd ≤ κ / Rn.count k := by omega
-      have hround' : κ / Rn.count k + c + R.waveLength ≤ N := by omega
-      have hd := hv κ hround hround'
-      rwa [PartialRun.sched, Sched_congr getLeader hk (show Rn.count k = Rn.count k from rfl)
-        (Rn.count_pos k) (Rn.count_le k)] at hd
+      have hround : Rnd ≤ (Rn.cfg k).roundOf κ := by omega
+      have hround' : (Rn.cfg k).roundOf κ + c + R.waveLength ≤ N := by omega
+      exact hv κ hround hround'
     · have hkK' : k ≤ K := by omega
       have hk1 : k + 1 ≤ K := by omega
       simp only [hkK', hk1, hkK, if_true, if_false] at hlo hhi ⊢
-      have hd := Rn.closed k (by omega) κ hlo hhi
-      rwa [Sched_congr getLeader hk (show Rn.count k = Rn.count k from rfl)
-        (Rn.count_pos k) (Rn.count_le k)] at hd
+      exact Rn.closed k (by omega) κ hlo hhi
   · -- anchor_commits
     intro k hkK1
     by_cases hkK : k = K
@@ -182,44 +192,58 @@ theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : U
     have hk1 : ¬ (K + 1 ≤ K) := by omega
     simp only [hk1, if_false]
     exact ha_round
+  · -- the new configuration is one the rule emits
+    have hk1 : ¬ (K + 1 ≤ K) := by omega
+    simp only [hk1, if_false]
+    exact hnexth
 
-theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd) {c K Rnd N : ℕ}
+theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd)
+    {c K Rnd N : ℕ}
     {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
-    (Rn : PartialRun R.toBaseRule P getLeader hk upd U V K)
-    (hlive : R.LiveOn (Sched getLeader hk (Rn.count K) (Rn.count_pos K) (Rn.count_le K)) c)
+    (Rn : PartialRun R.toBaseRule P upd C₀ U V K)
+    (hlive : R.LiveOn (Rn.cfg K).sched c)
     (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
-    (hN : Rn.start K + P.interval + 1 + 2 * c + R.waveLength ≤ N) :
-    Nonempty (PartialRun R.toBaseRule P getLeader hk upd U V (K + 1)) :=
-  let ⟨Rn', _⟩ := progress_exists hR hupd hcov Rn hlive hgood hRnd hN
+    (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
+    Nonempty (PartialRun R.toBaseRule P upd C₀ U V (K + 1)) :=
+  let ⟨Rn', _⟩ := progress_exists (Q := fun _ => True) hR hupd (fun _ _ _ _ _ _ => trivial)
+    hcov Rn hlive trivial hgood hRnd hN
   ⟨Rn'⟩
 
 /-- (D) -/
-theorem everyHeight_bound (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd) {c : ℕ}
-    (hlive : ∀ m (hm : 0 < m) (hmax : m ≤ P.maxLeaders),
-      R.LiveOn (Sched getLeader hk m hm hmax) c)
+theorem everyHeight_bound (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd)
+    (hupdh : UpdKeeps upd Q) {c : ℕ}
+    (hlive : ∀ C : Config Validator, (∀ r, C.slotsAt r ≤ P.maxLeaders) →
+      0 < C.interval → C.interval ≤ P.maxInterval → Q C → R.LiveOn C.sched c)
+    (h₀ : ∀ r, C₀.slotsAt r ≤ P.maxLeaders) (h₀' : 0 < C₀.interval)
+    (h₀'' : C₀.interval ≤ P.maxInterval) (hQ₀ : Q C₀)
     {Rnd N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ 1) :
     ∀ K, horizon P R c K ≤ N →
-      ∃ Rn : PartialRun R.toBaseRule P getLeader hk upd U V K,
-        Rn.start K ≤ K * (P.interval + 1 + c)
-  | 0, _ => ⟨PartialRun.zero _ P getLeader hk upd U V, Nat.zero_le _⟩
+      ∃ Rn : PartialRun R.toBaseRule P upd C₀ U V K,
+        Rn.start K ≤ K * (P.maxInterval + 1 + c) ∧ Q (Rn.cfg K)
+  | 0, _ => ⟨PartialRun.zero _ P upd C₀ h₀ h₀' h₀'' U V, Nat.zero_le _, hQ₀⟩
   | K + 1, hN => by
-    have hN' : (K + 1) * (P.interval + 1 + c) + c + R.waveLength ≤ N := hN
+    have hN' : (K + 1) * (P.maxInterval + 1 + c) + c + R.waveLength ≤ N := hN
     rw [Nat.succ_mul] at hN'
     have hhor : horizon P R c K ≤ N := by unfold horizon; omega
-    obtain ⟨Rn, hstart⟩ := everyHeight_bound hR hupd hlive hcov hgood hRnd K hhor
-    obtain ⟨Rn', hstart'⟩ := progress_exists hR hupd hcov Rn
-      (hlive (Rn.count K) (Rn.count_pos K) (Rn.count_le K)) hgood (by omega) (by omega)
-    exact ⟨Rn', by rw [Nat.succ_mul]; omega⟩
+    obtain ⟨Rn, hstart, hhead⟩ :=
+      everyHeight_bound hR hupd hupdh hlive h₀ h₀' h₀'' hQ₀ hcov hgood hRnd K hhor
+    obtain ⟨Rn', hstart', hhead'⟩ := progress_exists hR hupd hupdh hcov Rn
+      (hlive (Rn.cfg K) (Rn.slotsAt_le K) (Rn.interval_pos K) (Rn.interval_le K) hhead) hhead
+      hgood (by omega) (by omega)
+    exact ⟨Rn', by rw [Nat.succ_mul]; omega, hhead'⟩
 
-theorem everyHeight (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd) {c : ℕ}
-    (hlive : ∀ m (hm : 0 < m) (hmax : m ≤ P.maxLeaders),
-      R.LiveOn (Sched getLeader hk m hm hmax) c)
+theorem everyHeight (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd)
+    (hupdh : UpdKeeps upd Q) {c : ℕ}
+    (hlive : ∀ C : Config Validator, (∀ r, C.slotsAt r ≤ P.maxLeaders) →
+      0 < C.interval → C.interval ≤ P.maxInterval → Q C → R.LiveOn C.sched c)
+    (h₀ : ∀ r, C₀.slotsAt r ≤ P.maxLeaders) (h₀' : 0 < C₀.interval)
+    (h₀'' : C₀.interval ≤ P.maxInterval) (hQ₀ : Q C₀)
     {Rnd N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ 1) (K : ℕ)
     (hK : horizon P R c K ≤ N) :
-    Nonempty (PartialRun R.toBaseRule P getLeader hk upd U V K) :=
-  let ⟨Rn, _⟩ := everyHeight_bound hR hupd hlive hcov hgood hRnd K hK
+    Nonempty (PartialRun R.toBaseRule P upd C₀ U V K) :=
+  let ⟨Rn, _⟩ := everyHeight_bound hR hupd hupdh hlive h₀ h₀' h₀'' hQ₀ hcov hgood hRnd K hK
   ⟨Rn⟩
 
 end Progress

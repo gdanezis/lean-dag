@@ -53,9 +53,9 @@ def Descent : Prop :=
 def RoundRobinLive : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) [HybridFaults (Fin n)] (BlockId Payload : Type) [LinearOrder BlockId]
     (k : ℕ), Hybrid.Admissible (Fin n) k →
-    ∀ (w : ℕ) (hk : Keyed (roundRobin n hn) w) (m : ℕ) (hm : 0 < m) (hmax : m ≤ w),
+    ∀ (C : Config (Fin n)) (hC : C.head = roundRobin n hn),
     (orcaellaLive (Validator := Fin n) (BlockId := BlockId) (Payload := Payload) k).LiveOn
-      (Sched (roundRobin n hn) hk m hm hmax) (n + 1)
+      C.sched (n + 1)
 
 /-- The laws, the descent laws, and liveness under round-robin. -/
 def Statement : Prop := Laws ∧ Descent ∧ RoundRobinLive

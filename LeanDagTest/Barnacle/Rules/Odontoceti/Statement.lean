@@ -45,9 +45,9 @@ def Descent : Prop :=
 `n + 1`. -/
 def RoundRobinLive : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) [Faults5 (Fin n)] (BlockId Payload : Type) [LinearOrder BlockId]
-    (w : ℕ) (hk : Keyed (roundRobin n hn) w) (m : ℕ) (hm : 0 < m) (hmax : m ≤ w),
+    (C : Config (Fin n)) (hC : C.head = roundRobin n hn),
     (odontocetiLive (Validator := Fin n) (BlockId := BlockId) (Payload := Payload)).LiveOn
-      (Sched (roundRobin n hn) hk m hm hmax) (n + 1)
+      C.sched (n + 1)
 
 /-- The laws, the descent laws, and liveness under round-robin. -/
 def Statement : Prop := Laws ∧ Descent ∧ RoundRobinLive

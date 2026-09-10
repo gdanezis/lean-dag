@@ -20,8 +20,8 @@ namespace Barnacle
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {R : BaseRule Validator BlockId Payload} {P : Params}
-variable {getLeader : ℕ → Validator} {hk : Keyed getLeader P.maxLeaders}
-variable {upd : UpdateRule R} {U : R.Universe} {V : R.View U} {K : ℕ}
+variable {upd : UpdateRule R} {C₀ : Config Validator}
+variable {U : R.Universe} {V : R.View U} {K : ℕ}
 
 omit [Fintype Validator] [DecidableEq Validator] [DecidableEq BlockId] in
 /-- Membership in `ledgerOf`: some slot of the interval commits the block. -/
@@ -47,28 +47,29 @@ theorem ledgerOf_congr {v w : ℕ → Option BlockId} {lo hi : ℕ}
   exact h _ (by omega) (by omega)
 
 /-- A slot of the interval of range `k` lies in the range's rounds. -/
-theorem round_of_mem_interval (Rn : PartialRun R P getLeader hk upd U V K) {k κ : ℕ}
-    (h1 : Rn.count k * (Rn.start k + 1) ≤ κ) (h2 : κ < Rn.count k * (Rn.start (k + 1) + 1)) :
-    Rn.start k < κ / Rn.count k ∧ κ / Rn.count k ≤ Rn.start (k + 1) := by
-  have hpos := Rn.count_pos k
-  constructor
-  · have h := Nat.div_le_div_right (c := Rn.count k) h1
-    rw [Nat.mul_div_cancel_left _ hpos] at h
+theorem round_of_mem_interval (Rn : PartialRun R P upd C₀ U V K) {k κ : ℕ}
+    (h1 : (Rn.cfg k).cum (Rn.start k + 1) ≤ κ)
+    (h2 : κ < (Rn.cfg k).cum (Rn.start (k + 1) + 1)) :
+    Rn.start k < (Rn.cfg k).roundOf κ ∧ (Rn.cfg k).roundOf κ ≤ Rn.start (k + 1) := by
+  refine ⟨?_, ?_⟩
+  · have := (Config.cum_le_iff_le_roundOf (Rn.cfg k)).1 h1
     omega
-  · have h := Nat.div_lt_of_lt_mul h2
+  · by_contra hcon
+    have := (Config.cum_le_iff_le_roundOf (Rn.cfg k)).2
+      (show Rn.start (k + 1) + 1 ≤ (Rn.cfg k).roundOf κ by omega)
     omega
 
 /-- `start` grows strictly across a closed configuration: the next start
 is the anchor's round, past the threshold. -/
-theorem start_lt_succ (Rn : PartialRun R P getLeader hk upd U V K) {k : ℕ} (hk : k < K) :
+theorem start_lt_succ (Rn : PartialRun R P upd C₀ U V K) {k : ℕ} (hk : k < K) :
     Rn.start k < Rn.start (k + 1) := by
   rw [Rn.start_succ k hk]
   have := (Rn.anchor_commits k hk).2
-  have := P.interval_pos
+  have := Rn.interval_pos k
   omega
 
 /-- `start` is monotone over the determined configurations. -/
-theorem start_mono (Rn : PartialRun R P getLeader hk upd U V K) {k k' : ℕ} (h : k ≤ k')
+theorem start_mono (Rn : PartialRun R P upd C₀ U V K) {k k' : ℕ} (h : k ≤ k')
     (hK : k' ≤ K) : Rn.start k ≤ Rn.start k' := by
   induction h with
   | refl => exact le_rfl
@@ -76,7 +77,7 @@ theorem start_mono (Rn : PartialRun R P getLeader hk upd U V K) {k k' : ℕ} (h 
 
 /-- A block of range `k`'s ledger has a round in the range. -/
 theorem round_of_mem_rangeLedger (hR : Properties.CommitsCandidate R.toDagRule)
-    (Rn : PartialRun R P getLeader hk upd U V K)
+    (Rn : PartialRun R P upd C₀ U V K)
     {k : ℕ} (hk : k < K) {L : BlockId} (h : L ∈ Rn.rangeLedger k) :
     Rn.start k < (R.block U L).round ∧ (R.block U L).round ≤ Rn.start (k + 1) := by
   obtain ⟨κ, h1, h2, hv⟩ := mem_ledgerOf.mp h
@@ -85,16 +86,18 @@ theorem round_of_mem_rangeLedger (hR : Properties.CommitsCandidate R.toDagRule)
   rw [hv] at hd
   have hc := hR _ _ _ κ L hd
   have hlink : (R.toDagRule.block U L).round = (R.block U L).round := rfl
-  rw [← hlink, hc.2.1, Sched_slotRound]
+  rw [← hlink, hc.2.1]
   exact ⟨hlo, hhi⟩
 
 /-- Within a range a block is committed by one slot: two committing slots
 share the block's round and author, and `Slots.keyed` identifies them. -/
 theorem slot_unique_of_rangeLedger (hR : Properties.CommitsCandidate R.toDagRule)
-    (Rn : PartialRun R P getLeader hk upd U V K)
+    (Rn : PartialRun R P upd C₀ U V K)
     {k : ℕ} (hk : k < K) {κ₁ κ₂ : ℕ} {L : BlockId}
-    (h₁ : Rn.count k * (Rn.start k + 1) ≤ κ₁) (h₁' : κ₁ < Rn.count k * (Rn.start (k + 1) + 1))
-    (h₂ : Rn.count k * (Rn.start k + 1) ≤ κ₂) (h₂' : κ₂ < Rn.count k * (Rn.start (k + 1) + 1))
+    (h₁ : (Rn.cfg k).cum (Rn.start k + 1) ≤ κ₁)
+    (h₁' : κ₁ < (Rn.cfg k).cum (Rn.start (k + 1) + 1))
+    (h₂ : (Rn.cfg k).cum (Rn.start k + 1) ≤ κ₂)
+    (h₂' : κ₂ < (Rn.cfg k).cum (Rn.start (k + 1) + 1))
     (hv₁ : Rn.vdct k κ₁ = some L) (hv₂ : Rn.vdct k κ₂ = some L) : κ₁ = κ₂ := by
   obtain ⟨hlo₁, hhi₁⟩ := round_of_mem_interval Rn h₁ h₁'
   obtain ⟨hlo₂, hhi₂⟩ := round_of_mem_interval Rn h₂ h₂'
@@ -110,11 +113,11 @@ theorem slot_unique_of_rangeLedger (hR : Properties.CommitsCandidate R.toDagRule
 
 /-- A closed range's ledger has no repetition. -/
 theorem rangeLedger_nodup (hR : Properties.CommitsCandidate R.toDagRule)
-    (Rn : PartialRun R P getLeader hk upd U V K)
+    (Rn : PartialRun R P upd C₀ U V K)
     {k : ℕ} (hk : k < K) : (Rn.rangeLedger k).Nodup := by
   unfold PartialRun.rangeLedger
-  set lo := Rn.count k * (Rn.start k + 1)
-  set hi := Rn.count k * (Rn.start (k + 1) + 1)
+  set lo := (Rn.cfg k).cum (Rn.start k + 1)
+  set hi := (Rn.cfg k).cum (Rn.start (k + 1) + 1)
   -- Restrict the verdicts to the interval so that injectivity is global.
   have : ledgerOf (Rn.vdct k) lo hi =
       ledgerOf (fun κ => if lo ≤ κ ∧ κ < hi then Rn.vdct k κ else none) lo hi :=
@@ -131,7 +134,7 @@ theorem rangeLedger_nodup (hR : Properties.CommitsCandidate R.toDagRule)
 /-- Two closed ranges' ledgers are disjoint: their blocks have rounds in
 disjoint intervals. -/
 theorem rangeLedger_disjoint (hR : Properties.CommitsCandidate R.toDagRule)
-    (Rn : PartialRun R P getLeader hk upd U V K)
+    (Rn : PartialRun R P upd C₀ U V K)
     {k k' : ℕ} (h : k < k') (hK : k' < K) : (Rn.rangeLedger k).Disjoint (Rn.rangeLedger k') := by
   intro L hL hL'
   obtain ⟨_, hhi⟩ := round_of_mem_rangeLedger hR Rn (by omega) hL

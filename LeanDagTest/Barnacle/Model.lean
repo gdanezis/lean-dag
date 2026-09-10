@@ -12,11 +12,11 @@ Every definition of `LeanDag/Barnacle/Model/` settled by `decide`
 on the existing four- and six-validator universes before anything is
 proved from it (`barnacle.md` §9). What this file exhibits:
 
-* `Sched` genuinely has `m` slots per round: at count `2` slots `10`
-  and `11` share round `5`, are led by different validators, and slot
-  `(5, 1)` has exactly one candidate — block `22` — that no slot has at
-  count `1`; at the cap, count `4`, every validator leads every round,
-  and `Keyed` fails one past it.
+* A uniform `Config` genuinely has `m` slots per round: at count `2`
+  slots `10` and `11` share round `5`, are led by different validators,
+  and slot `(5, 1)` has exactly one candidate — block `22` — that no slot
+  has at count `1`; at the cap, count `4`, every validator leads every
+  round, and `Keyed` fails one past it.
 * `observed` reads the window, and the window matters: on `U7` with an
   anchor at round `5` and an interval of four rounds, two slots score
   at count `1`, three at count `2`, five at count `4`; on `Uodo` the
@@ -25,11 +25,11 @@ proved from it (`barnacle.md` §9). What this file exhibits:
   on the window, where its only certifier is the anchor itself. This is
   the data point behind the `expected` formula (`barnacle.md` §4,
   F2): the round `r − 2` cannot score inside a window that ends at `r`.
-* The `d ≤ round` guard of `observed` is needed: at an anchor below the
-  interval the unguarded count would score round `0` twice.
-* `Aimd.update` on both branches: the cap, the floor, the doubling and
-  the reset; `Aimd.rule` on real windows in both directions, at the cap
-  and at the floor; `constRule`; `ledgerOf`.
+* The window stops at round `0`: at an anchor below the interval it
+  scores the rounds there are and no more.
+* `Aimd.count` on both branches: the cap, the floor and the step;
+  `Aimd.rule` on real windows in both directions, at the cap and at the
+  floor; `constRule`; `ledgerOf`.
 * A slot with two candidates — the equivocator of `U6` — has one
   directly committed block: the slot count and the paper's block count
   agree.
@@ -58,26 +58,54 @@ def bnLeader : ℕ → Fin 4 := roundRobin 4 (by omega)
 /-- Round-robin's distinctness, from `Helpers/Schedule.lean`. -/
 theorem bnWin : Keyed bnLeader 4 := roundRobin_keyed 4 (by omega)
 
-/-- Four-round interval, at most four leaders, threshold `96 / 100`. -/
-def bnP : Params := ⟨4, 4, 96, 100, by decide, by decide⟩
+/-- At most four leaders and a four-round interval, threshold `96 / 100`. -/
+def bnP : Params := ⟨4, 4, 96, 100, by decide⟩
 
-/-- One-round interval; `expected` truncates to `m`. -/
-def bnP1 : Params := ⟨1, 4, 96, 100, by decide, by decide⟩
+/-- The witness leader function as a configuration's. -/
+def bnLead : ℕ → ℕ → Fin 4 := leadOf bnLeader
 
-/-- Three-round interval — one wave. -/
-def bnP3 : Params := ⟨3, 4, 96, 100, by decide, by decide⟩
+theorem bnLeadKeyed : LeadKeyed bnLead 4 := leadKeyed_of_keyed (by omega) bnWin
+
+/-- The configuration at count `m` and interval `I`. -/
+def bnCfg (m I : ℕ) (hm : 0 < m) (hmax : m ≤ 4) : Config (Fin 4) :=
+  Config.uniform bnLead bnLeadKeyed m hm hmax I
+
+/-- Count `1`, four-round interval. -/
+abbrev bnC1 : Config (Fin 4) := bnCfg 1 4 (by decide) (by decide)
+
+/-- Count `2`, four-round interval. -/
+abbrev bnC2 : Config (Fin 4) := bnCfg 2 4 (by decide) (by decide)
+
+/-- Count `4` — the cap — four-round interval. -/
+abbrev bnC4 : Config (Fin 4) := bnCfg 4 4 (by decide) (by decide)
+
+/-- Count `2`, one-round interval: no round of the window is old enough
+to score. -/
+abbrev bnC2I1 : Config (Fin 4) := bnCfg 2 1 (by decide) (by decide)
+
+/-- Count `2`, three-round interval — one wave. -/
+abbrev bnC2I3 : Config (Fin 4) := bnCfg 2 3 (by decide) (by decide)
 
 /-- Mysticeti over the four-validator committee of `LeanDagTest/Model.lean`. -/
 abbrev bnRule : BaseRule (Fin 4) (Fin 24) Unit := mysticeti
 
 /-- The schedule at count `1`. -/
-abbrev bnSched1 : Slots (Fin 4) := Sched bnLeader bnWin 1 (by decide) (by decide)
+abbrev bnSched1 : Slots (Fin 4) := bnC1.sched
 
 /-- The schedule at count `2`. -/
-abbrev bnSched2 : Slots (Fin 4) := Sched bnLeader bnWin 2 (by decide) (by decide)
+abbrev bnSched2 : Slots (Fin 4) := bnC2.sched
 
 /-- The schedule at the cap, count `4`. -/
-abbrev bnSched4 : Slots (Fin 4) := Sched bnLeader bnWin 4 (by decide) (by decide)
+abbrev bnSched4 : Slots (Fin 4) := bnC4.sched
+
+/-- **The bridge**: a uniform configuration on `bnLead` has the schedule
+the arc ran on before configurations carried their leaders. -/
+theorem bnUniform_sched (m I : ℕ) (hm : 0 < m) (hmax : m ≤ 4) :
+    (Config.uniform bnLead bnLeadKeyed m hm hmax I).sched = Sched bnLeader bnWin m hm hmax :=
+  Config.uniform_sched bnLeader (by omega) bnWin m hm hmax I
+
+example : bnSched2 = Sched bnLeader bnWin 2 (by decide) (by decide) :=
+  bnUniform_sched 2 4 (by decide) (by decide)
 
 /-! ## The schedule of a configuration -/
 
@@ -119,11 +147,11 @@ example : bnRule.viewIds (bnRule.historyView U7 20 (by decide)) =
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 16, 17, 18, 20} := by decide
 
 -- Interval four: window rounds `1` to `5`.
-example : observed bnRule bnP bnLeader bnWin U7 20 1 (by decide) (by decide) = 2 := by decide
-example : observed bnRule bnP bnLeader bnWin U7 20 2 (by decide) (by decide) = 3 := by decide
-example : observed bnRule bnP bnLeader bnWin U7 20 4 (by decide) (by decide) = 5 := by decide
-example : expected bnRule bnP 1 = 2 := by decide
-example : expected bnRule bnP 2 = 4 := by decide
+example : observed bnRule bnC1 U7 20 = 2 := by decide
+example : observed bnRule bnC2 U7 20 = 3 := by decide
+example : observed bnRule bnC4 U7 20 = 5 := by decide
+example : expected bnRule bnC1 5 = 2 := by decide
+example : expected bnRule bnC2 5 = 4 := by decide
 
 -- Which slots score at count `2`: round `1` at both offsets and round `2`
 -- at offset `0` — rounds `r − 4` and `r − 3`.
@@ -151,29 +179,31 @@ example : ¬ bnRule.SlotDirect bnSched2 U7 (bnRule.historyView U7 20 (by decide)
 -- fails on the DAG, not on the window.
 example : certificates U7 15 3 = ∅ := by decide
 
--- **The guard `d ≤ round`.** Anchor `12` sits at round `3`, below the
--- interval; without the guard round `0` would be counted twice.
-example : observed bnRule bnP bnLeader bnWin U7 12 2 (by decide) (by decide) = 1 := by decide
+-- **The window stops at round `0`.** Anchor `12` sits at round `3`, below
+-- the interval, so the window is rounds `0` to `3` and one slot scores.
+example : observed bnRule bnC2 U7 12 = 1 := by decide
 example : bnRule.SlotDirect bnSched2 U7 (bnRule.historyView U7 12 (by decide)) 1 := by decide
 
--- `expected` truncates below one wave: intervals `1` and `3` give the same
--- number at count `2`.
-example : expected bnRule bnP1 2 = 2 := by decide
-example : expected bnRule bnP3 2 = 2 := by decide
+-- Below one wave nothing is expected: at interval `1` no round of the
+-- window is old enough to have been decided, and at interval `3` exactly
+-- one round is.
+example : expected bnRule bnC2I1 5 = 0 := by decide
+example : expected bnRule bnC2I3 5 = 2 := by decide
 
 /-! ## The AIMD rule -/
 
--- Healthy: one more leader, back-off reset; capped at `maxLeaders`.
-example : Aimd.update bnP 2 3 true = (3, 0) := by decide
-example : Aimd.update bnP 4 0 true = (4, 0) := by decide
--- Unhealthy: `2^backoff` fewer, back-off doubled; floored at one.
-example : Aimd.update bnP 4 1 false = (2, 2) := by decide
-example : Aimd.update bnP 1 3 false = (1, 4) := by decide
+-- Healthy: one more leader; capped at `maxLeaders`.
+example : Aimd.count bnP 2 3 true = 3 := by decide
+example : Aimd.count bnP 4 0 true = 4 := by decide
+-- Unhealthy: `2^backoff` fewer; floored at one.
+example : Aimd.count bnP 4 1 false = 2 := by decide
+example : Aimd.count bnP 1 3 false = 1 := by decide
 
 -- On `U7` at count `2` the window is unhealthy (`100 · 3 < 96 · 4`); at
 -- count `4` too (`100 · 5 < 96 · 8`); at count `1` it is healthy
 -- (`100 · 2 ≥ 96 · 2`).
-example : Aimd.rule bnRule bnP bnLeader bnWin 2 0 U7 (View.full U7) 20 = (1, 1) := by decide
+example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC2 0 U7 (View.full U7) 20).1.slotsAt 0 = 1 ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC2 0 U7 (View.full U7) 20).2 = 1 := by decide
 
 /-! ## BN12 on data: a healthy window, and the step it forces
 
@@ -183,51 +213,54 @@ sense of `Healthy.WindowHealthy`, and BN12 turns that into the count's
 rise with no appeal to `decide` on the rule itself. -/
 
 theorem u7_window_healthy :
-    Healthy.WindowHealthy bnRule bnP bnLeader bnWin U7 20 (by decide) 1
-      (by decide) (by decide) := by
-  intro d h1 h2 l hl
+    Healthy.WindowHealthy bnRule bnC1 U7 20 (by decide) := by
+  intro d h1 h2 i hi
   change 3 ≤ d at h1
   change d ≤ 4 at h2
-  change l < 1 at hl
-  interval_cases d <;> interval_cases l <;> decide
+  change i < 1 at hi
+  interval_cases d <;> interval_cases i <;> decide
 
 /-- **BN12b applied**: the rule raises the count to `2` and resets the
 back-off, because the window is healthy — not because the arithmetic was
 computed. -/
-example : Aimd.rule bnRule bnP bnLeader bnWin 1 0 U7 (View.full U7) 20 = (2, 0) :=
-  (Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLeader bnWin
-      MysticetiProperties.commitsDirect).2.1 U7 20 (by decide) 1
-    (by decide) (by decide) 0 (View.full U7) (by decide) (by decide) (by decide)
-    u7_window_healthy
+example : Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) 20 =
+    (Config.uniform bnLead bnLeadKeyed (Aimd.count bnP (bnC1.slotsAt 5) 0 true)
+      (Aimd.count_pos bnP _ _ _) (Aimd.count_le bnP _ _ _) bnC1.interval, 0) :=
+  (Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
+      MysticetiProperties.commitsDirect).2.1 bnC1 U7 20 (by decide) 0 (View.full U7)
+    (by decide) (by decide) (by decide) u7_window_healthy
+
+/-- And that count is two. -/
+example : Aimd.count bnP (bnC1.slotsAt 5) 0 true = 2 := by decide
 
 /-- And `observed` meets `expected` there, which is BN12a. -/
-example : expected bnRule bnP 1 ≤ observed bnRule bnP bnLeader bnWin U7 20 1
-    (by decide) (by decide) :=
-  (Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLeader bnWin
-      MysticetiProperties.commitsDirect).1 U7 20 (by decide) 1
-    (by decide) (by decide) (by decide) (by decide) u7_window_healthy
+example : expected bnRule bnC1 5 ≤ observed bnRule bnC1 U7 20 :=
+  (Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
+      MysticetiProperties.commitsDirect).1 bnC1 U7 20 (by decide)
+    (by decide) (by decide) u7_window_healthy
 
 /-- **BN12c applied**: every slot the healthy window counted is a
 commit *verdict*, not merely a slot whose direct predicate held. -/
-example : ∀ d, bnRule.waveLength ≤ d → d ≤ bnP.interval → ∀ l, l < 1 →
-    ∃ L, bnRule.Decided (Sched bnLeader bnWin 1 (by decide) (by decide))
-      (bnRule.historyView U7 20 (by decide)) (1 * ((bnRule.block U7 20).round - d) + l)
-      (some L) :=
-  (Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLeader bnWin
-      MysticetiProperties.commitsDirect).2.2
-    U7 20 (by decide) 1 (by decide) (by decide) u7_window_healthy
+example : ∀ d, bnRule.waveLength ≤ d → d ≤ bnC1.interval →
+    ∀ i, i < bnC1.slotsAt ((bnRule.block U7 20).round - d) →
+      ∃ L, bnRule.Decided bnC1.sched (bnRule.historyView U7 20 (by decide))
+        (bnC1.index ((bnRule.block U7 20).round - d) i) (some L) :=
+  (Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
+      MysticetiProperties.commitsDirect).2.2 bnC1 U7 20 (by decide) u7_window_healthy
 
 #print axioms LeanDag.Barnacle.Healthy.holds
-example : Aimd.rule bnRule bnP bnLeader bnWin 4 0 U7 (View.full U7) 20 = (3, 1) := by decide
-example : Aimd.rule bnRule bnP bnLeader bnWin 1 0 U7 (View.full U7) 20 = (2, 0) := by decide
+example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC4 0 U7 (View.full U7) 20).1.slotsAt 0 = 3 ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC4 0 U7 (View.full U7) 20).2 = 1 := by decide
 -- At the floor, an unhealthy window (anchor `12`, nothing scores at
--- count `1`) leaves the count at one and doubles the back-off.
-example : Aimd.rule bnRule bnP bnLeader bnWin 1 3 U7 (View.full U7) 12 = (1, 4) := by decide
--- Outside `[1, maxLeaders]` the rule returns the initial state.
-example : Aimd.rule bnRule bnP bnLeader bnWin 5 0 U7 (View.full U7) 20 = (1, 0) := by decide
+-- count `1`) leaves the count at one and moves the back-off on.
+example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 3 U7 (View.full U7) 12).1.slotsAt 0 = 1 ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 3 U7 (View.full U7) 12).2 = 4 := by decide
+-- The emitted configuration carries the interval it was given.
+example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 3 U7 (View.full U7) 12).1.interval = 4 :=
+  rfl
 
 -- The constant rule reconfigures nothing.
-example : constRule bnRule 2 3 U7 (View.full U7) 20 = (2, 3) := by decide
+example : constRule bnRule bnC2 3 U7 (View.full U7) 20 = (bnC2, 3) := rfl
 
 -- The ledger of a slot interval: `lo` inclusive, `hi` exclusive, skips dropped.
 example : ledgerOf (fun k => if k = 3 then some (7 : Fin 24) else if k = 5 then some 9 else none)
@@ -246,19 +279,30 @@ def bnLeader6 : ℕ → Fin 6 := roundRobin 6 (by omega)
 theorem bnWin6 : Keyed bnLeader6 6 := roundRobin_keyed 6 (by omega)
 
 /-- Three-round interval, at most six leaders. -/
-def bnP6 : Params := ⟨3, 6, 96, 100, by decide, by decide⟩
+def bnP6 : Params := ⟨6, 3, 96, 100, by decide⟩
+
+def bnLead6 : ℕ → ℕ → Fin 6 := leadOf bnLeader6
+
+theorem bnLeadKeyed6 : LeadKeyed bnLead6 6 := leadKeyed_of_keyed (by omega) bnWin6
+
+/-- The six-validator configuration at count `m`, three-round interval. -/
+def bnCfg6 (m : ℕ) (hm : 0 < m) (hmax : m ≤ 6) : Config (Fin 6) :=
+  Config.uniform bnLead6 bnLeadKeyed6 m hm hmax 3
+
+abbrev bnC6_1 : Config (Fin 6) := bnCfg6 1 (by decide) (by decide)
+abbrev bnC6_2 : Config (Fin 6) := bnCfg6 2 (by decide) (by decide)
+abbrev bnC6_6 : Config (Fin 6) := bnCfg6 6 (by decide) (by decide)
 
 -- Anchor `20` (round `3`); one scoring round, every slot of it scores.
-example : observed bnRule6 bnP6 bnLeader6 bnWin6 Uodo 20 1 (by decide) (by decide) = 1 := by
-  decide
-example : observed bnRule6 bnP6 bnLeader6 bnWin6 Uodo 20 2 (by decide) (by decide) = 2 := by
-  decide
-example : observed bnRule6 bnP6 bnLeader6 bnWin6 Uodo 20 6 (by decide) (by decide) = 6 := by
-  decide
-example : expected bnRule6 bnP6 6 = 6 := by decide
+example : observed bnRule6 bnC6_1 Uodo 20 = 1 := by decide
+example : observed bnRule6 bnC6_2 Uodo 20 = 2 := by decide
+example : observed bnRule6 bnC6_6 Uodo 20 = 6 := by decide
+example : expected bnRule6 bnC6_6 3 = 6 := by decide
 -- Healthy at every count: the count rises, and stays capped at six.
-example : Aimd.rule bnRule6 bnP6 bnLeader6 bnWin6 1 0 Uodo (View.full Uodo) 20 = (2, 0) := by decide
-example : Aimd.rule bnRule6 bnP6 bnLeader6 bnWin6 6 0 Uodo (View.full Uodo) 20 = (6, 0) := by decide
+example : (Aimd.rule bnRule6 bnP6 bnLead6 bnLeadKeyed6 bnC6_1 0 Uodo (View.full Uodo) 20).1.slotsAt
+    0 = 2 := by decide
+example : (Aimd.rule bnRule6 bnP6 bnLead6 bnLeadKeyed6 bnC6_6 0 Uodo (View.full Uodo) 20).1.slotsAt
+    0 = 6 := by decide
 
 /-! ## Slots against blocks: the equivocator of `U6`
 
@@ -291,38 +335,66 @@ example : bnRule.Decided bnSched1 V7small 2 (some 10) :=
 
 /-! ## The run, at height one
 
-At interval `1` and count `1`, slots `1` and `2` of `Sched 1` (blocks `5`
-and `10`) commit directly; slot `2`, at round `2 > 0 + 1`, is the anchor.
-Its window scores nothing (`observed = 0` against `expected = 1`), so
-the count stays at the floor and the back-off moves to `1`. Every clause
-of `PartialRun` is discharged on data. A run whose count *rises* needs a
-healthy window — an interval of at least three rounds and an anchor
-committed on `V7` at round `4` or above — and `U7` has no committed slot
-there; that is Phase 2's witness, on a taller universe. -/
+At interval `1` and count `1`, slots `1` and `2` of the configuration's
+schedule (blocks `5` and `10`) commit directly; slot `2`, at round
+`2 > 0 + 1`, is the anchor. Its window holds no round old enough to have
+been decided — the interval is one round, the wave three — so `expected`
+is zero, the measurement passes, and the rule raises the count. Every
+clause of `PartialRun` is discharged on data.
+
+An interval below one wave is what makes the step vacuous here. The
+witness of a *measured* rise is BN12 above, at interval four on the same
+universe. -/
+
+/-- One-round interval, at most four leaders. -/
+def bnPI1 : Params := ⟨4, 1, 96, 100, by decide⟩
+
+/-- The genesis configuration of the run: count `1`, interval `1`. -/
+abbrev bnC1I1 : Config (Fin 4) := bnCfg 1 1 (by decide) (by decide)
+
+/-- The rule the run follows. -/
+abbrev bnUpd : UpdateRule bnRule := Aimd.rule bnRule bnPI1 bnLead bnLeadKeyed
+
+/-- The configuration the anchor produces. -/
+abbrev bnCfg1' : Config (Fin 4) × ℕ := bnUpd bnC1I1 0 U7 V7 10
 
 /-- The verdicts of configuration `0`. -/
 def vd1 : ℕ → ℕ → Option (Fin 24) :=
   fun _ κ => if κ = 1 then some 5 else if κ = 2 then some 10 else none
 
-def run1 : PartialRun bnRule bnP1 bnLeader bnWin (Aimd.rule bnRule bnP1 bnLeader bnWin) U7 V7 1
-    where
+def run1 : PartialRun bnRule bnPI1 bnUpd bnC1I1 U7 V7 1 where
   start := fun k => if k = 0 then 0 else 2
-  count := fun _ => 1
-  backoff := fun k => if k = 0 then 0 else 1
+  cfg := fun k => if k = 0 then bnC1I1 else bnCfg1'.1
+  backoff := fun k => if k = 0 then 0 else bnCfg1'.2
   anchor := fun _ => 2
   vdct := vd1
   init := ⟨rfl, rfl, rfl⟩
-  count_pos := fun _ => Nat.one_pos
-  count_le := fun _ => by decide
+  slotsAt_le := by
+    intro k r
+    by_cases h : k = 0
+    · subst h; simp only [if_true]; exact (by decide : (1 : ℕ) ≤ 4)
+    · simp only [h, if_false]; exact Aimd.count_le bnPI1 _ _ _
+  interval_pos := by
+    intro k
+    by_cases h : k = 0
+    · subst h; exact (by decide)
+    · simp only [h, if_false]; exact (by decide)
+  interval_le := by
+    intro k
+    by_cases h : k = 0
+    · subst h; exact (by decide)
+    · simp only [h, if_false]; exact (by decide)
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega
     subst hk0
-    simp at h1 h2
+    simp only [if_true, bnC1I1, bnCfg, Config.uniform_roundOf, Nat.div_one] at h1 h2
+    simp only [show (0 : ℕ) + 1 = 1 from rfl, one_ne_zero, if_false] at h2
     have : κ = 1 ∨ κ = 2 := by omega
+    simp only [if_true]
     rcases this with rfl | rfl
-    · exact Decided.directCommit (S := bnSched1) (by decide) (by decide)
-    · exact Decided.directCommit (S := bnSched1) (by decide) (by decide)
+    · exact Decided.directCommit (S := bnC1I1.sched) (by decide) (by decide)
+    · exact Decided.directCommit (S := bnC1I1.sched) (by decide) (by decide)
   anchor_commits := by
     intro k hk
     have hk0 : k = 0 := by omega
@@ -332,8 +404,8 @@ def run1 : PartialRun bnRule bnP1 bnLeader bnWin (Aimd.rule bnRule bnP1 bnLeader
     intro k hk κ hκ h
     have hk0 : k = 0 := by omega
     subst hk0
-    simp only [if_true, Nat.div_one] at h
-    have hi : bnP1.interval = 1 := rfl
+    simp only [if_true, bnC1I1, bnCfg, Config.uniform_roundOf, Config.uniform_interval,
+      Nat.div_one] at h
     omega
   start_succ := by
     intro k hk
@@ -347,12 +419,16 @@ def run1 : PartialRun bnRule bnP1 bnLeader bnWin (Aimd.rule bnRule bnP1 bnLeader
     have hA' : A = 10 := by
       simp [vd1] at hA; exact hA.symm
     subst hA'
-    decide
+    rfl
 
--- The configuration the anchor produced: count at the floor, back-off one,
--- in force after round `2`.
-example : run1.count 1 = 1 ∧ run1.backoff 1 = 1 ∧ run1.start 1 = 2 := ⟨rfl, rfl, rfl⟩
-example : observed bnRule bnP1 bnLeader bnWin U7 10 1 (by decide) (by decide) = 0 := by decide
+-- The configuration the anchor produced is in force after round `2`, with
+-- two leaders a round and the back-off reset.
+example : run1.start 1 = 2 := rfl
+example : (run1.cfg 1).slotsAt 0 = 2 := by decide
+example : run1.backoff 1 = 0 := by decide
+-- And the measurement it passed was vacuous: nothing was expected.
+example : expected bnRule bnC1I1 2 = 0 := by decide
+example : observed bnRule bnC1I1 U7 10 = 0 := by decide
 
 /-! ## Axioms
 

@@ -37,9 +37,9 @@ gap `n + 2`, on a committee of at least `3·(f + c) + 1`. -/
 def RoundRobinLive : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) (BlockId : Type) [LinearOrder BlockId]
     [F : LeanDag.Hydrozoan.Faults (Fin n)], 3 * (F.f + F.c) + 1 ≤ n →
-    ∀ (w : ℕ) (hk : Keyed (roundRobin n hn) w) (m : ℕ) (hm : 0 < m) (hmax : m ≤ w),
+    ∀ (C : Config (Fin n)) (hC : C.head = roundRobin n hn),
     (hydrozoanLive (Replica := Fin n) (BlockId := BlockId)).LiveOn
-      (Sched (roundRobin n hn) hk m hm hmax) (n + 2)
+      C.sched (n + 2)
 
 /-- The descent laws, and liveness under round-robin. -/
 def Statement : Prop := Descent ∧ RoundRobinLive

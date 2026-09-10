@@ -13,9 +13,9 @@ verdict chosen for the anchor's slot with the commit liveness provides
 for it.
 
 * **BN8a, progress** — one more configuration, needing `LiveOn` at the
-  run's own count only.
+  run's own configuration only.
 * **BN8b, every height** — runs of every height, under `LiveOn` at every
-  count.
+  configuration within the bounds that the rule can emit.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -32,49 +32,54 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 /-- **BN8a, progress**: a run past the synchrony round extends by one
 configuration. -/
 def ProgressStmt (R : LiveRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders)
-    (upd : UpdateRule R.toBaseRule) (c : ℕ) : Prop :=
+    (upd : UpdateRule R.toBaseRule) (C₀ : Config Validator) (c : ℕ) : Prop :=
   -- A run of height `K` on any view of `U` caught up to the horizon —
   -- what a validator that has received everything up to `N` holds …
   ∀ (U : R.Universe) (V : R.View U) (Rnd N K : ℕ),
     R.toBaseRule.CoversUpto U V N →
-    ∀ (Rn : PartialRun R.toBaseRule P getLeader hk upd U V K),
+    ∀ (Rn : PartialRun R.toBaseRule P upd C₀ U V K),
     -- … whose current configuration's schedule is live with gap `c` …
-    R.LiveOn (Sched getLeader hk (Rn.count K) (Rn.count_pos K) (Rn.count_le K)) c →
+    R.LiveOn (Rn.cfg K).sched c →
     -- … on a DAG good from `Rnd` to `N`, where the current configuration's
     -- range starts at or after `Rnd` …
     R.Good U Rnd N → Rnd ≤ Rn.start K + 1 →
     -- … and the horizon leaves room for the threshold, the gap to the
     -- anchor, and the gap and one wave above it:
-    Rn.start K + P.interval + 1 + 2 * c + R.waveLength ≤ N →
+    Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N →
     -- there is a run of height `K + 1`.
-    Nonempty (PartialRun R.toBaseRule P getLeader hk upd U V (K + 1))
+    Nonempty (PartialRun R.toBaseRule P upd C₀ U V (K + 1))
 
 /-- **BN8b, every height**: from a synchrony round at genesis, a run of
 every height exists under the horizon that height needs. -/
 def EveryHeight (R : LiveRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders)
-    (upd : UpdateRule R.toBaseRule) (c : ℕ) : Prop :=
-  -- If every configuration's schedule is live with gap `c` …
-  (∀ m (hm : 0 < m) (hmax : m ≤ P.maxLeaders), R.LiveOn (Sched getLeader hk m hm hmax) c) →
+    (upd : UpdateRule R.toBaseRule) (C₀ : Config Validator)
+    (Q : Config Validator → Prop) (c : ℕ) : Prop :=
+  -- If the schedule of every configuration within the bounds that the rule
+  -- can emit is live with gap `c`, and the genesis configuration is within
+  -- the bounds and is one of them …
+  (∀ C : Config Validator, (∀ r, C.slotsAt r ≤ P.maxLeaders) → 0 < C.interval →
+    C.interval ≤ P.maxInterval → Q C → R.LiveOn C.sched c) →
+  (∀ r, C₀.slotsAt r ≤ P.maxLeaders) → 0 < C₀.interval → C₀.interval ≤ P.maxInterval →
+  Q C₀ →
   -- … then on a DAG good from round `1` (or `0`) to `N` …
   ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good U Rnd N →
     R.toBaseRule.CoversUpto U V N → Rnd ≤ 1 →
     -- … every height whose horizon fits under `N` is reached, on any view
     -- caught up to `N`.
     ∀ K, horizon P R c K ≤ N →
-      Nonempty (PartialRun R.toBaseRule P getLeader hk upd U V K)
+      Nonempty (PartialRun R.toBaseRule P upd C₀ U V K)
 
 /-- Progress and every height, for every live rule satisfying the laws,
-every parameter set, every keyed leader function, every update rule that
-keeps the count in range, and every gap. -/
+every parameter set, every update rule that keeps a configuration within
+the bounds, every genesis configuration, every clause the rule's output
+satisfies, and every gap. -/
 def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [DecidableEq BlockId] (R : LiveRule Validator BlockId Payload),
     Properties.Agree R.toBaseRule.toDagRule →
-    ∀ (P : Params) (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders)
-      (upd : UpdateRule R.toBaseRule), UpdBounded P upd → ∀ c,
-      ProgressStmt R P getLeader hk upd c ∧ EveryHeight R P getLeader hk upd c
+    ∀ (P : Params) (upd : UpdateRule R.toBaseRule), UpdBounded P upd →
+      ∀ (C₀ : Config Validator) (Q : Config Validator → Prop), UpdKeeps upd Q →
+        ∀ c : ℕ, ProgressStmt R P upd C₀ c ∧ EveryHeight R P upd C₀ Q c
 
 end Progress
 

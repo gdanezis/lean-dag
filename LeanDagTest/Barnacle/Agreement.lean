@@ -74,6 +74,15 @@ def Vsun' : View (Fin 4) (Fin 32) Unit Usun where
 
 abbrev bnRule32 : BaseRule (Fin 4) (Fin 32) Unit := mysticeti
 
+/-- The AIMD rule at the four-round interval, and the configuration it
+produces from the anchor of range `0`. -/
+abbrev bnUpd32 : UpdateRule bnRule32 := Aimd.rule bnRule32 bnP bnLead bnLeadKeyed
+
+abbrev sunNext : Config (Fin 4) × ℕ := bnUpd32 bnC1 0 Usun Vsun 21
+
+/-- The constant rule at the one-round interval, for the two-height run. -/
+abbrev bnUpdC : UpdateRule bnRule32 := constRule bnRule32
+
 /-- The verdicts of configuration `0`: slots `1` to `5` commit their
 round's first leader's block. -/
 def vd2 : ℕ → ℕ → Option (Fin 32) :=
@@ -83,10 +92,9 @@ def vd2 : ℕ → ℕ → Option (Fin 32) :=
 
 -- Anchor `21`: rounds `1` and `2` score at count `1`; rounds `3` to `5`
 -- do not — round `3`'s only certifier in the window is the anchor.
-example : observed bnRule32 bnP bnLeader bnWin Usun 21 1 (by decide) (by decide) = 2 := by
-  decide
-example : expected bnRule32 bnP 1 = 2 := by decide
-example : Aimd.rule bnRule32 bnP bnLeader bnWin 1 0 Usun (View.full Usun) 21 = (2, 0) := by decide
+example : observed bnRule32 bnC1 Usun 21 = 2 := by decide
+example : expected bnRule32 bnC1 5 = 2 := by decide
+example : sunNext.1.slotsAt 0 = 2 ∧ sunNext.2 = 0 := by decide
 
 /-! ## The run whose count rises -/
 
@@ -95,25 +103,37 @@ example : Aimd.rule bnRule32 bnP bnLeader bnWin 1 0 Usun (View.full Usun) 21 = (
 has a round above the threshold `4` — as it is for every anchor that is
 the first slot past the threshold; a non-vacuous instance needs a
 skipped slot there. -/
-def run2 : PartialRun bnRule32 bnP bnLeader bnWin (Aimd.rule bnRule32 bnP bnLeader bnWin)
-    Usun Vsun 1 where
+def run2 : PartialRun bnRule32 bnP bnUpd32 bnC1 Usun Vsun 1 where
   start := fun k => if k = 0 then 0 else 5
-  count := fun k => if k = 0 then 1 else 2
-  backoff := fun _ => 0
+  cfg := fun k => if k = 0 then bnC1 else sunNext.1
+  backoff := fun k => if k = 0 then 0 else sunNext.2
   anchor := fun _ => 5
   vdct := vd2
   init := ⟨rfl, rfl, rfl⟩
-  count_pos := fun k => by split_ifs <;> decide
-  count_le := fun k => by split_ifs <;> decide
+  slotsAt_le := by
+    intro k r
+    by_cases h : k = 0
+    · subst h; simp only [if_true]; exact (by decide : (1 : ℕ) ≤ 4)
+    · simp only [h, if_false]; exact Aimd.count_le bnP _ _ _
+  interval_pos := by
+    intro k
+    by_cases h : k = 0
+    · subst h; simp only [if_true]; exact (by decide : (0 : ℕ) < 4)
+    · simp only [h, if_false]; exact (by decide : (0 : ℕ) < 4)
+  interval_le := by
+    intro k
+    by_cases h : k = 0
+    · subst h; simp only [if_true]; exact (by decide : (4 : ℕ) ≤ 4)
+    · simp only [h, if_false]; exact (by decide : (4 : ℕ) ≤ 4)
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega
     subst hk0
-    simp at h1 h2
+    simp only [if_true, bnC1, bnCfg, Config.uniform_roundOf, Nat.div_one,
+      show (0 : ℕ) + 1 = 1 from rfl, one_ne_zero, if_false] at h1 h2 ⊢
     have : κ = 1 ∨ κ = 2 ∨ κ = 3 ∨ κ = 4 ∨ κ = 5 := by omega
     rcases this with rfl | rfl | rfl | rfl | rfl <;>
-      exact Decided.directCommit (S := Sched bnLeader bnWin 1 (by decide) (by decide))
-        (by decide) (by decide)
+      exact Decided.directCommit (S := bnC1.sched) (by decide) (by decide)
   anchor_commits := by
     intro k hk
     have hk0 : k = 0 := by omega
@@ -123,8 +143,8 @@ def run2 : PartialRun bnRule32 bnP bnLeader bnWin (Aimd.rule bnRule32 bnP bnLead
     intro k hk κ hκ h
     have hk0 : k = 0 := by omega
     subst hk0
-    simp only [if_true, Nat.div_one] at h
-    have hi : bnP.interval = 4 := rfl
+    simp only [if_true, bnC1, bnCfg, Config.uniform_roundOf, Config.uniform_interval,
+      Nat.div_one] at h
     omega
   start_succ := by
     intro k hk
@@ -138,28 +158,40 @@ def run2 : PartialRun bnRule32 bnP bnLeader bnWin (Aimd.rule bnRule32 bnP bnLead
     have hA' : A = 21 := by
       simp [vd2] at hA; exact hA.symm
     subst hA'
-    decide
+    rfl
 
 /-- The same run on the smaller view. -/
-def run2' : PartialRun bnRule32 bnP bnLeader bnWin (Aimd.rule bnRule32 bnP bnLeader bnWin)
-    Usun Vsun' 1 where
+def run2' : PartialRun bnRule32 bnP bnUpd32 bnC1 Usun Vsun' 1 where
   start := fun k => if k = 0 then 0 else 5
-  count := fun k => if k = 0 then 1 else 2
-  backoff := fun _ => 0
+  cfg := fun k => if k = 0 then bnC1 else sunNext.1
+  backoff := fun k => if k = 0 then 0 else sunNext.2
   anchor := fun _ => 5
   vdct := vd2
   init := ⟨rfl, rfl, rfl⟩
-  count_pos := fun k => by split_ifs <;> decide
-  count_le := fun k => by split_ifs <;> decide
+  slotsAt_le := by
+    intro k r
+    by_cases h : k = 0
+    · subst h; simp only [if_true]; exact (by decide : (1 : ℕ) ≤ 4)
+    · simp only [h, if_false]; exact Aimd.count_le bnP _ _ _
+  interval_pos := by
+    intro k
+    by_cases h : k = 0
+    · subst h; simp only [if_true]; exact (by decide : (0 : ℕ) < 4)
+    · simp only [h, if_false]; exact (by decide : (0 : ℕ) < 4)
+  interval_le := by
+    intro k
+    by_cases h : k = 0
+    · subst h; simp only [if_true]; exact (by decide : (4 : ℕ) ≤ 4)
+    · simp only [h, if_false]; exact (by decide : (4 : ℕ) ≤ 4)
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega
     subst hk0
-    simp at h1 h2
+    simp only [if_true, bnC1, bnCfg, Config.uniform_roundOf, Nat.div_one,
+      show (0 : ℕ) + 1 = 1 from rfl, one_ne_zero, if_false] at h1 h2 ⊢
     have : κ = 1 ∨ κ = 2 ∨ κ = 3 ∨ κ = 4 ∨ κ = 5 := by omega
     rcases this with rfl | rfl | rfl | rfl | rfl <;>
-      exact Decided.directCommit (S := Sched bnLeader bnWin 1 (by decide) (by decide))
-        (by decide) (by decide)
+      exact Decided.directCommit (S := bnC1.sched) (by decide) (by decide)
   anchor_commits := by
     intro k hk
     have hk0 : k = 0 := by omega
@@ -169,8 +201,8 @@ def run2' : PartialRun bnRule32 bnP bnLeader bnWin (Aimd.rule bnRule32 bnP bnLea
     intro k hk κ hκ h
     have hk0 : k = 0 := by omega
     subst hk0
-    simp only [if_true, Nat.div_one] at h
-    have hi : bnP.interval = 4 := rfl
+    simp only [if_true, bnC1, bnCfg, Config.uniform_roundOf, Config.uniform_interval,
+      Nat.div_one] at h
     omega
   start_succ := by
     intro k hk
@@ -184,10 +216,10 @@ def run2' : PartialRun bnRule32 bnP bnLeader bnWin (Aimd.rule bnRule32 bnP bnLea
     have hA' : A = 21 := by
       simp [vd2] at hA; exact hA.symm
     subst hA'
-    decide
+    rfl
 
 -- The count moved: two leaders after round `5`.
-example : run2.count 1 = 2 ∧ run2.start 1 = 5 ∧ run2.backoff 1 = 0 := ⟨rfl, rfl, rfl⟩
+example : (run2.cfg 1).slotsAt 0 = 2 ∧ run2.start 1 = 5 ∧ run2.backoff 1 = 0 := by decide
 
 /-! ## The results, on this data -/
 
@@ -202,12 +234,13 @@ abbrev candidates32 : Properties.CommitsCandidate bnRule32.toDagRule :=
 
 /-- BN3 on `run2` and `run2'`: the two views hold one configuration `1`
 and one anchor. -/
-example : run2.count 1 = run2'.count 1 ∧ run2.start 1 = run2'.start 1 :=
-  let h := (Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl))
-    Usun Vsun Vsun' 1 1 run2 run2' 1 (by decide)
+example : run2.cfg 1 = run2'.cfg 1 ∧ run2.start 1 = run2'.start 1 :=
+  let h := (Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP bnUpd32 bnC1
+    (fun _ _ _ _ _ _ => rfl)) Usun Vsun Vsun' 1 1 run2 run2' 1 (by decide)
   ⟨h.2.1, h.1⟩
 example : run2.anchor 0 = run2'.anchor 0 :=
-  ((Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl))
+  ((Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP bnUpd32 bnC1
+    (fun _ _ _ _ _ _ => rfl))
     Usun Vsun Vsun' 1 1 run2 run2' 0 (by decide)).2.2.2 (by decide) |>.1
 
 /-- BN2 on `Usun`: the smaller view holds the anchor, hence its history. -/
@@ -216,38 +249,38 @@ example : historyFrom Usun.block 21 ⊆ Vsun'.ids :=
 
 /-- BN7a on the witness parameters: the rule stays in range at the values
 the run meets. -/
-example : 0 < (Aimd.rule bnRule32 bnP bnLeader bnWin 1 0 Usun (View.full Usun) 21).1 ∧
-    (Aimd.rule bnRule32 bnP bnLeader bnWin 1 0 Usun (View.full Usun) 21).1 ≤ bnP.maxLeaders :=
-  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLeader bnWin).1 1 0 Usun
+example : (∀ r, (bnUpd32 bnC1 0 Usun (View.full Usun) 21).1.slotsAt r ≤ bnP.maxLeaders) ∧
+    (bnUpd32 bnC1 0 Usun (View.full Usun) 21).1.interval = bnC1.interval :=
+  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLead bnLeadKeyed).1 bnC1 0 Usun
     (View.full Usun) 21
 -- BN7b: below the cap, one more leader.
-example : Aimd.update bnP 3 0 true = (4, 0) :=
-  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLeader bnWin).2.1.1 3 0 (by decide)
--- BN7c: from count `4` at back-off `1`, strictly fewer and the back-off
--- incremented; the step is `4 - 2`; at the floor, the floor.
-example : (Aimd.update bnP 4 1 false).1 < 4 ∧ (Aimd.update bnP 4 1 false).2 = 2 :=
-  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLeader bnWin).2.2.1.1 4 1 (by decide)
-example : (Aimd.update bnP 4 1 false).1 = 4 - 2 ^ 1 :=
-  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLeader bnWin).2.2.1.2.1 4 1 (by decide)
-example : (Aimd.update bnP 1 3 false).1 = 1 :=
-  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLeader bnWin).2.2.1.2.2 3
--- BN7d: the rule at anchor `21`, count `2`, is the step of the integer
--- test — `96 · 4 ≤ 100 · 4` here, healthy; at interval one and anchor
--- `20` the test fails, `96 · 1 ≤ 100 · 0`.
-example : Aimd.rule bnRule32 bnP bnLeader bnWin 2 0 Usun (View.full Usun) 21 =
-    Aimd.update bnP 2 0 (decide (bnP.num * expected bnRule32 bnP 2 ≤
-      bnP.den * observed bnRule32 bnP bnLeader bnWin Usun 21 2 (by decide) (by decide))) :=
-  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLeader bnWin).2.2.2.1 2 0 (by decide)
-    (by decide) Usun (View.full Usun) 21
-example : Aimd.rule bnRule32 bnP bnLeader bnWin 2 0 Usun (View.full Usun) 21 = (3, 0) := by decide
-example : Aimd.rule bnRule32 bnP1 bnLeader bnWin 1 1 Usun (View.full Usun) 20 =
-    Aimd.update bnP1 1 1 (decide (bnP1.num * expected bnRule32 bnP1 1 ≤
-      bnP1.den * observed bnRule32 bnP1 bnLeader bnWin Usun 20 1 (by decide) (by decide))) :=
-  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP1 bnLeader bnWin).2.2.2.1 1 1 (by decide)
-    (by decide) Usun (View.full Usun) 20
--- On `Usun` at anchor `21` the window is healthy at every count: the
--- count climbs to the cap and stays there.
-example : Aimd.rule bnRule32 bnP bnLeader bnWin 4 0 Usun (View.full Usun) 21 = (4, 0) := by decide
+example : Aimd.count bnP 3 0 true = 4 :=
+  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLead bnLeadKeyed).2.1.1 3 0 (by decide)
+-- BN7c: from count `4` at back-off `1`, strictly fewer; the step is
+-- `4 - 2`; at the floor, the floor.
+example : Aimd.count bnP 4 1 false < 4 :=
+  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLead bnLeadKeyed).2.2.1.1 4 1
+    (by decide) (by decide)
+example : Aimd.count bnP 4 1 false = 4 - 2 ^ 1 :=
+  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLead bnLeadKeyed).2.2.1.2.1 4 1
+    (by decide) (by decide)
+example : Aimd.count bnP 1 3 false = 1 :=
+  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLead bnLeadKeyed).2.2.1.2.2 3
+-- BN7d: at anchor `21` and count `2` the integer test passes, and the
+-- rule takes the healthy step with the back-off reset.
+example : (bnUpd32 bnC2 0 Usun (View.full Usun) 21).1.slotsAt 5 =
+      Aimd.count bnP (bnC2.slotsAt 5) 0 true ∧
+    (bnUpd32 bnC2 0 Usun (View.full Usun) 21).2 = 0 :=
+  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLead bnLeadKeyed).2.2.2.1 bnC2 0 Usun
+    (View.full Usun) 21 (by decide)
+example : (bnUpd32 bnC2 0 Usun (View.full Usun) 21).1.slotsAt 0 = 3 := by decide
+-- On `Usun` at anchor `21` the window is healthy at the cap too — eight
+-- slots score against the eight the four-wide scoring rounds offered —
+-- so the count stays at the cap and the back-off stays reset.
+example : observed bnRule32 bnC4 Usun 21 = 8 := by decide
+example : expected bnRule32 bnC4 5 = 8 := by decide
+example : (bnUpd32 bnC4 0 Usun (View.full Usun) 21).1.slotsAt 0 = 4 ∧
+    (bnUpd32 bnC4 0 Usun (View.full Usun) 21).2 = 0 := by decide
 
 /-- BN2b on two views: the views differ, the windows do not. -/
 example : historyFrom Usun.block 21 ∩ Vsun.ids = historyFrom Usun.block 21 ∩ Vsun'.ids :=
@@ -256,7 +289,7 @@ example : Vsun.ids ≠ Vsun'.ids := by decide
 
 /-- The `candidates` law through the run: the anchor `run2'` committed is
 a candidate of its slot. -/
-example : bnRule32.IsLeaderBlock (Sched bnLeader bnWin 1 (by decide) (by decide)) Usun 5 21 :=
+example : bnRule32.IsLeaderBlock bnC1.sched Usun 5 21 :=
   laws32.candidates _ _ Vsun' 5 21 (run2'.closed 0 (by decide) 5 (by decide) (by decide))
 
 /-! ## A verdict outside the range
@@ -268,25 +301,37 @@ differ beyond it. -/
 
 def vd2x : ℕ → ℕ → Option (Fin 32) := fun k κ => if κ = 9 then some 0 else vd2 k κ
 
-def run2x : PartialRun bnRule32 bnP bnLeader bnWin (Aimd.rule bnRule32 bnP bnLeader bnWin)
-    Usun Vsun' 1 where
+def run2x : PartialRun bnRule32 bnP bnUpd32 bnC1 Usun Vsun' 1 where
   start := fun k => if k = 0 then 0 else 5
-  count := fun k => if k = 0 then 1 else 2
-  backoff := fun _ => 0
+  cfg := fun k => if k = 0 then bnC1 else sunNext.1
+  backoff := fun k => if k = 0 then 0 else sunNext.2
   anchor := fun _ => 5
   vdct := vd2x
   init := ⟨rfl, rfl, rfl⟩
-  count_pos := fun k => by split_ifs <;> decide
-  count_le := fun k => by split_ifs <;> decide
+  slotsAt_le := by
+    intro k r
+    by_cases h : k = 0
+    · subst h; simp only [if_true]; exact (by decide : (1 : ℕ) ≤ 4)
+    · simp only [h, if_false]; exact Aimd.count_le bnP _ _ _
+  interval_pos := by
+    intro k
+    by_cases h : k = 0
+    · subst h; simp only [if_true]; exact (by decide : (0 : ℕ) < 4)
+    · simp only [h, if_false]; exact (by decide : (0 : ℕ) < 4)
+  interval_le := by
+    intro k
+    by_cases h : k = 0
+    · subst h; simp only [if_true]; exact (by decide : (4 : ℕ) ≤ 4)
+    · simp only [h, if_false]; exact (by decide : (4 : ℕ) ≤ 4)
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega
     subst hk0
-    simp at h1 h2
+    simp only [if_true, bnC1, bnCfg, Config.uniform_roundOf, Nat.div_one,
+      show (0 : ℕ) + 1 = 1 from rfl, one_ne_zero, if_false] at h1 h2 ⊢
     have : κ = 1 ∨ κ = 2 ∨ κ = 3 ∨ κ = 4 ∨ κ = 5 := by omega
     rcases this with rfl | rfl | rfl | rfl | rfl <;>
-      exact Decided.directCommit (S := Sched bnLeader bnWin 1 (by decide) (by decide))
-        (by decide) (by decide)
+      exact Decided.directCommit (S := bnC1.sched) (by decide) (by decide)
   anchor_commits := by
     intro k hk
     have hk0 : k = 0 := by omega
@@ -296,8 +341,8 @@ def run2x : PartialRun bnRule32 bnP bnLeader bnWin (Aimd.rule bnRule32 bnP bnLea
     intro k hk κ hκ h
     have hk0 : k = 0 := by omega
     subst hk0
-    simp only [if_true, Nat.div_one] at h
-    have hi : bnP.interval = 4 := rfl
+    simp only [if_true, bnC1, bnCfg, Config.uniform_roundOf, Config.uniform_interval,
+      Nat.div_one] at h
     omega
   start_succ := by
     intro k hk
@@ -311,10 +356,11 @@ def run2x : PartialRun bnRule32 bnP bnLeader bnWin (Aimd.rule bnRule32 bnP bnLea
     have hA' : A = 21 := by
       simp [vd2x, vd2] at hA; exact hA.symm
     subst hA'
-    decide
+    rfl
 
 example : run2.vdct 0 3 = run2x.vdct 0 3 :=
-  ((Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl))
+  ((Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP bnUpd32 bnC1
+    (fun _ _ _ _ _ _ => rfl))
     Usun Vsun Vsun' 1 1 run2 run2x 0 (by decide)).2.2.2 (by decide) |>.2 3 (by decide) (by decide)
 example : run2.vdct 0 9 ≠ run2x.vdct 0 9 := by decide
 
@@ -332,30 +378,30 @@ def vdP1 : ℕ → ℕ → Option (Fin 32) := fun k κ =>
   else if k = 1 then (if κ = 3 then some 15 else if κ = 4 then some 16 else none)
   else none
 
-def runP1 : PartialRun bnRule32 bnP1 bnLeader bnWin (Aimd.rule bnRule32 bnP1 bnLeader bnWin)
-    Usun Vsun 2 where
+def runP1 : PartialRun bnRule32 bnPI1 bnUpdC bnC1I1 Usun Vsun 2 where
   start := fun k => if k = 0 then 0 else if k = 1 then 2 else 4
-  count := fun _ => 1
-  backoff := fun k => if k = 0 then 0 else if k = 1 then 1 else 2
+  cfg := fun _ => bnC1I1
+  backoff := fun _ => 0
   anchor := fun k => if k = 0 then 2 else 4
   vdct := vdP1
   init := ⟨rfl, rfl, rfl⟩
-  count_pos := fun _ => Nat.one_pos
-  count_le := fun _ => by decide
+  slotsAt_le := fun _ _ => (by decide : (1 : ℕ) ≤ 4)
+  interval_pos := fun _ => (by decide : (0 : ℕ) < 1)
+  interval_le := fun _ => (by decide : (1 : ℕ) ≤ 1)
   closed := by
     intro k hk κ h1 h2
-    have : k = 0 ∨ k = 1 := by omega
-    rcases this with rfl | rfl
-    · simp at h1 h2
+    have hkk : k = 0 ∨ k = 1 := by omega
+    rcases hkk with rfl | rfl
+    · simp only [bnC1I1, bnCfg, Config.uniform_roundOf, Nat.div_one] at h1 h2
+      simp at h1 h2
       have : κ = 1 ∨ κ = 2 := by omega
       rcases this with rfl | rfl <;>
-        exact Decided.directCommit (S := Sched bnLeader bnWin 1 (by decide) (by decide))
-          (by decide) (by decide)
-    · simp at h1 h2
+        exact Decided.directCommit (S := bnC1I1.sched) (by decide) (by decide)
+    · simp only [bnC1I1, bnCfg, Config.uniform_roundOf, Nat.div_one] at h1 h2
+      simp at h1 h2
       have : κ = 3 ∨ κ = 4 := by omega
       rcases this with rfl | rfl <;>
-        exact Decided.directCommit (S := Sched bnLeader bnWin 1 (by decide) (by decide))
-          (by decide) (by decide)
+        exact Decided.directCommit (S := bnC1I1.sched) (by decide) (by decide)
   anchor_commits := by
     intro k hk
     have : k = 0 ∨ k = 1 := by omega
@@ -364,10 +410,10 @@ def runP1 : PartialRun bnRule32 bnP1 bnLeader bnWin (Aimd.rule bnRule32 bnP1 bnL
     · exact ⟨⟨16, rfl⟩, by decide⟩
   anchor_least := by
     intro k hk κ hκ h
-    have hi : bnP1.interval = 1 := rfl
     have : k = 0 ∨ k = 1 := by omega
     rcases this with rfl | rfl <;>
-      simp only [if_true, Nat.div_one, one_ne_zero, if_false] at hκ h <;> omega
+      simp only [bnC1I1, bnCfg, Config.uniform_roundOf, Config.uniform_interval, Nat.div_one,
+        if_true, one_ne_zero, if_false] at hκ h <;> omega
   start_succ := by
     intro k hk
     have : k = 0 ∨ k = 1 := by omega
@@ -377,30 +423,30 @@ def runP1 : PartialRun bnRule32 bnP1 bnLeader bnWin (Aimd.rule bnRule32 bnP1 bnL
     have : k = 0 ∨ k = 1 := by omega
     rcases this with rfl | rfl
     · have hA' : A = 10 := by simp [vdP1] at hA; exact hA.symm
-      subst hA'; decide
+      subst hA'; rfl
     · have hA' : A = 16 := by simp [vdP1] at hA; exact hA.symm
-      subst hA'; decide
+      subst hA'; rfl
 
 /-- The same execution seen from `Vsun'`, closed one configuration lower. -/
-def runP1' : PartialRun bnRule32 bnP1 bnLeader bnWin (Aimd.rule bnRule32 bnP1 bnLeader bnWin)
-    Usun Vsun' 1 where
+def runP1' : PartialRun bnRule32 bnPI1 bnUpdC bnC1I1 Usun Vsun' 1 where
   start := fun k => if k = 0 then 0 else 2
-  count := fun _ => 1
-  backoff := fun k => if k = 0 then 0 else 1
+  cfg := fun _ => bnC1I1
+  backoff := fun _ => 0
   anchor := fun _ => 2
   vdct := fun _ κ => if κ = 1 then some 5 else if κ = 2 then some 10 else none
   init := ⟨rfl, rfl, rfl⟩
-  count_pos := fun _ => Nat.one_pos
-  count_le := fun _ => by decide
+  slotsAt_le := fun _ _ => (by decide : (1 : ℕ) ≤ 4)
+  interval_pos := fun _ => (by decide : (0 : ℕ) < 1)
+  interval_le := fun _ => (by decide : (1 : ℕ) ≤ 1)
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega
     subst hk0
-    simp at h1 h2
+    simp only [bnC1I1, bnCfg, Config.uniform_roundOf, Nat.div_one, if_true,
+      show (0 : ℕ) + 1 = 1 from rfl, one_ne_zero, if_false] at h1 h2
     have : κ = 1 ∨ κ = 2 := by omega
     rcases this with rfl | rfl <;>
-      exact Decided.directCommit (S := Sched bnLeader bnWin 1 (by decide) (by decide))
-        (by decide) (by decide)
+      exact Decided.directCommit (S := bnC1I1.sched) (by decide) (by decide)
   anchor_commits := by
     intro k hk
     have hk0 : k = 0 := by omega
@@ -410,8 +456,8 @@ def runP1' : PartialRun bnRule32 bnP1 bnLeader bnWin (Aimd.rule bnRule32 bnP1 bn
     intro k hk κ hκ h
     have hk0 : k = 0 := by omega
     subst hk0
-    simp only [if_true, Nat.div_one] at h
-    have hi : bnP1.interval = 1 := rfl
+    simp only [bnC1I1, bnCfg, Config.uniform_roundOf, Config.uniform_interval,
+      Nat.div_one, if_true] at h
     omega
   start_succ := by
     intro k hk
@@ -422,21 +468,20 @@ def runP1' : PartialRun bnRule32 bnP1 bnLeader bnWin (Aimd.rule bnRule32 bnP1 bn
     intro k hk A hA
     have hk0 : k = 0 := by omega
     subst hk0
-    have hA' : A = 10 := by simp at hA; exact hA.symm
-    subst hA'
-    decide
+    rfl
 
--- The back-off doubles across two configurations; the count never leaves the floor.
-example : runP1.backoff 0 = 0 ∧ runP1.backoff 1 = 1 ∧ runP1.backoff 2 = 2 ∧ runP1.count 2 = 1 :=
-  ⟨rfl, rfl, rfl, rfl⟩
--- BN3 at heights `2` and `1`: agreement on configuration `1` — not pinned by `init` —
--- and on the verdicts of range `0`; `k = 2` is not offered (`2 ≤ min 2 1` fails).
-example : runP1.backoff 1 = runP1'.backoff 1 ∧ runP1.start 1 = runP1'.start 1 :=
-  let h := (Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP1 bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl))
-    Usun Vsun Vsun' 2 1 runP1 runP1' 1 (by decide)
-  ⟨h.2.2.1, h.1⟩
+-- Two configurations close, at rounds `2` and `4`.
+example : runP1.start 1 = 2 ∧ runP1.start 2 = 4 := ⟨rfl, rfl⟩
+-- BN3 at heights `2` and `1`: agreement on the start of configuration `1` — not
+-- pinned by `init` — and on the verdicts of range `0`; `k = 2` is not offered
+-- (`2 ≤ min 2 1` fails).
+example : runP1.cfg 1 = runP1'.cfg 1 ∧ runP1.start 1 = runP1'.start 1 :=
+  let h := (Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnPI1 bnUpdC bnC1I1
+    (fun _ _ _ _ _ _ => rfl)) Usun Vsun Vsun' 2 1 runP1 runP1' 1 (by decide)
+  ⟨h.2.1, h.1⟩
 example : runP1.vdct 0 2 = runP1'.vdct 0 2 :=
-  ((Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnP1 bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl))
+  ((Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnPI1 bnUpdC bnC1I1
+    (fun _ _ _ _ _ _ => rfl))
     Usun Vsun Vsun' 2 1 runP1 runP1' 0 (by decide)).2.2.2 (by decide) |>.2 2 (by decide) (by decide)
 
 
@@ -450,43 +495,45 @@ without repetition. -/
 example : run2.rangeLedger 0 = [5, 10, 15, 16, 21] := by decide
 example : run2.ledgerUpto 1 = [5, 10, 15, 16, 21] := by decide
 example : run2.ledgerUpto 1 = run2'.ledgerUpto 1 :=
-  ((Ledger.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 candidates32 bnP bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl)).1
+  ((Ledger.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 candidates32 bnP bnUpd32 bnC1 (fun _ _ _ _ _ _ => rfl)).1
     Usun Vsun Vsun' 1 1 run2 run2').2 1 (by decide)
 example : run2.ledgerUpto 0 <+: run2.ledgerUpto 1 :=
-  (Ledger.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 candidates32 bnP bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl)).2.1
+  (Ledger.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 candidates32 bnP bnUpd32 bnC1 (fun _ _ _ _ _ _ => rfl)).2.1
     Usun Vsun 1 run2 0 1 (by decide)
 example : (run2.ledgerUpto 1).Nodup :=
-  (Ledger.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 candidates32 bnP bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl)).2.2
+  (Ledger.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 candidates32 bnP bnUpd32 bnC1 (fun _ _ _ _ _ _ => rfl)).2.2
     Usun Vsun 1 run2 1 le_rfl
 -- Two ranges at interval one: `[5, 10]` then `[15, 16]`, one list without
 -- repetition.
 example : runP1.ledgerUpto 2 = [5, 10, 15, 16] := by decide
 example : (runP1.ledgerUpto 2).Nodup :=
-  (Ledger.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 candidates32 bnP1 bnLeader bnWin _ (fun _ _ _ _ _ _ => rfl)).2.2
+  (Ledger.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 candidates32 bnPI1 bnUpdC bnC1I1 (fun _ _ _ _ _ _ => rfl)).2.2
     Usun Vsun 2 runP1 2 le_rfl
 
 /-! ## Conservativity, through the theorem -/
 
 /-- `run1` again, under the constant rule: the same verdicts, the anchor
 at slot `2`, and the configuration after it unchanged. -/
-def run1c : PartialRun bnRule bnP1 bnLeader bnWin (constRule bnRule) U7 V7 1 where
+def run1c : PartialRun bnRule bnPI1 (constRule bnRule) bnC1I1 U7 V7 1 where
   start := fun k => if k = 0 then 0 else 2
-  count := fun _ => 1
+  cfg := fun _ => bnC1I1
   backoff := fun _ => 0
   anchor := fun _ => 2
   vdct := vd1
   init := ⟨rfl, rfl, rfl⟩
-  count_pos := fun _ => Nat.one_pos
-  count_le := fun _ => by decide
+  slotsAt_le := fun _ _ => (by decide : (1 : ℕ) ≤ 4)
+  interval_pos := fun _ => (by decide : (0 : ℕ) < 1)
+  interval_le := fun _ => (by decide : (1 : ℕ) ≤ 1)
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega
     subst hk0
-    simp at h1 h2
+    simp only [bnC1I1, bnCfg, Config.uniform_roundOf, Nat.div_one, if_true,
+      show (0 : ℕ) + 1 = 1 from rfl, one_ne_zero, if_false] at h1 h2
     have : κ = 1 ∨ κ = 2 := by omega
     rcases this with rfl | rfl
-    · exact Decided.directCommit (S := bnSched1) (by decide) (by decide)
-    · exact Decided.directCommit (S := bnSched1) (by decide) (by decide)
+    · exact Decided.directCommit (S := bnC1I1.sched) (by decide) (by decide)
+    · exact Decided.directCommit (S := bnC1I1.sched) (by decide) (by decide)
   anchor_commits := by
     intro k hk
     have hk0 : k = 0 := by omega
@@ -496,8 +543,8 @@ def run1c : PartialRun bnRule bnP1 bnLeader bnWin (constRule bnRule) U7 V7 1 whe
     intro k hk κ hκ h
     have hk0 : k = 0 := by omega
     subst hk0
-    simp at h
-    have hi : bnP1.interval = 1 := rfl
+    simp only [bnC1I1, bnCfg, Config.uniform_roundOf, Config.uniform_interval,
+      Nat.div_one, if_true] at h
     omega
   start_succ := by
     intro k hk
@@ -510,10 +557,10 @@ def run1c : PartialRun bnRule bnP1 bnLeader bnWin (constRule bnRule) U7 V7 1 whe
     subst hk0
     rfl
 
-example : run1c.count 1 = 1 ∧ run1c.backoff 1 = 0 :=
-  (Conservativity.holds (Fin 4) (Fin 24) Unit bnRule bnP1 bnLeader bnWin).1 U7 V7 1 run1c 1 le_rfl
-example : bnRule.Decided bnSched1 V7 2 (run1c.vdct 0 2) :=
-  (Conservativity.holds (Fin 4) (Fin 24) Unit bnRule bnP1 bnLeader bnWin).2 U7 V7 1 run1c 0
+example : run1c.cfg 1 = bnC1I1 ∧ run1c.backoff 1 = 0 :=
+  (Conservativity.holds (Fin 4) (Fin 24) Unit bnRule bnPI1 bnC1I1).1 U7 V7 1 run1c 1 le_rfl
+example : bnRule.Decided bnC1I1.sched V7 2 (run1c.vdct 0 2) :=
+  (Conservativity.holds (Fin 4) (Fin 24) Unit bnRule bnPI1 bnC1I1).2 U7 V7 1 run1c 0
     (by decide) 2 (by decide) (by decide)
 
 #print axioms run2

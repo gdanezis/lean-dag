@@ -20,15 +20,14 @@ theorem descent : Descent := by
 
 theorem holds : Statement := by
   refine ⟨descent, ?_⟩
-  intro n hn F BlockId Payload _ w hk m hm hmax
+  intro n hn F BlockId Payload _ C hC
   have hbound : (mysticetiLive (Validator := Fin n) (BlockId := BlockId)
       (Payload := Payload)).waveLength * F.f + 1 ≤ n := by
     have := F.card_validators
     rw [Fintype.card_fin] at this
     change 3 * F.f + 1 ≤ n
     omega
-  exact liveOn_roundRobin hn _ (descent (Fin n) BlockId Payload) (Nat.succ_pos 2) hbound hk m hm
-    hmax
+  exact liveOn_roundRobin hn _ (descent (Fin n) BlockId Payload) (Nat.succ_pos 2) hbound C hC
 
 end MysticetiLive
 

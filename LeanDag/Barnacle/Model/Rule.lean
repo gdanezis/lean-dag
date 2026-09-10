@@ -1,3 +1,4 @@
+import LeanDag.Barnacle.Config
 import LeanDag.Common.Causality
 import LeanDag.Properties.Carrier
 import LeanDag.Properties.Agree
@@ -138,20 +139,21 @@ structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
 
 end BaseRule
 
-/-- **An update rule**: from the current leader count and back-off, the
-universe and the anchor block, the next count and back-off. Safety is
-stated for every such function (`barnacle.md` §1); the paper's
+/-- **An update rule**: from the current configuration and back-off, the
+universe and the anchor block, the next configuration and back-off.
+Safety is stated for every such function (`barnacle.md` §1); the paper's
 AIMD rule is one instance (`Model/Window.lean`). -/
 abbrev UpdateRule (R : BaseRule Validator BlockId Payload) : Type :=
-  ℕ → ℕ → (U : R.Universe) → R.View U → BlockId → ℕ × ℕ
+  Config Validator → ℕ → (U : R.Universe) → R.View U → BlockId →
+    Config Validator × ℕ
 
 /-- **A rule a validator can run without disagreeing.** The step depends
-on the count, the back-off and the anchor, and on the *view* only through
+on the configuration, the back-off and the anchor, and on the *view* only through
 what every view holding the anchor shares.
 
 The type above lets a rule read the view, which is what a validator
 actually has. Nothing then makes two validators agree, and nothing
-should: a rule reading its own view freely could return different counts
+should: a rule reading its own view freely could return different configurations
 to two correct validators and break the configuration sequence outright.
 `Anchored` is the condition that rules that out, and it is not a
 restriction in practice — the window a rule measures on is the anchor's
@@ -160,8 +162,8 @@ whole and restricts identically. A rule computing from its own copy of
 that history satisfies this; the AIMD rule of `Model/Window.lean` does,
 by not reading the view at all. -/
 def Anchored (R : BaseRule Validator BlockId Payload) (upd : UpdateRule R) : Prop :=
-  ∀ (U : R.Universe) (V₁ V₂ : R.View U) (m b : ℕ) (A : BlockId),
-    upd m b U V₁ A = upd m b U V₂ A
+  ∀ (U : R.Universe) (V₁ V₂ : R.View U) (C : Config Validator) (b : ℕ) (A : BlockId),
+    upd C b U V₁ A = upd C b U V₂ A
 
 end Barnacle
 

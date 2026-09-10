@@ -62,8 +62,22 @@ def bnLeader6' : ℕ → Fin 6 := roundRobin 6 (by omega)
 
 theorem bnWin6' : Keyed bnLeader6' 6 := roundRobin_keyed 6 (by omega)
 
-/-- Three-round interval, at most six leaders. -/
-def bnPo : Params := ⟨3, 6, 96, 100, by decide, by decide⟩
+/-- At most six leaders and a three-round interval. -/
+def bnPo : Params := ⟨6, 3, 96, 100, by decide⟩
+
+def bnLead6' : ℕ → ℕ → Fin 6 := leadOf bnLeader6'
+
+theorem bnLeadKeyed6' : LeadKeyed bnLead6' 6 := leadKeyed_of_keyed (by omega) bnWin6'
+
+/-- The configuration at count `m`, three-round interval. -/
+def bnCfgO (m : ℕ) (hm : 0 < m) (hmax : m ≤ 6) : Config (Fin 6) :=
+  Config.uniform bnLead6' bnLeadKeyed6' m hm hmax 3
+
+abbrev bnCO1 : Config (Fin 6) := bnCfgO 1 (by decide) (by decide)
+abbrev bnCO3 : Config (Fin 6) := bnCfgO 3 (by decide) (by decide)
+abbrev bnCO6 : Config (Fin 6) := bnCfgO 6 (by decide) (by decide)
+
+theorem bnCO6_head : bnCO6.head = bnLeader6' := by funext ρ; rfl
 
 /-! ## The window count at wave length two -/
 
@@ -71,14 +85,14 @@ def bnPo : Params := ⟨3, 6, 96, 100, by decide, by decide⟩
 -- Rounds `0` and `1` score: their supporters, at rounds `1` and `2`, are
 -- all in the anchor's history; round `2`'s only supporter in the window
 -- is the anchor itself.
-example : observed bnOdo bnPo bnLeader6' bnWin6' Uodo 20 1 (by decide) (by decide) = 2 := by
-  decide
-example : observed bnOdo bnPo bnLeader6' bnWin6' Uodo 20 3 (by decide) (by decide) = 6 := by
-  decide
-example : expected bnOdo bnPo 1 = 2 := by decide
-example : expected bnOdo bnPo 3 = 6 := by decide
-example : Aimd.rule bnOdo bnPo bnLeader6' bnWin6' 1 0 Uodo (View.full Uodo) 20 = (2, 0) := by decide
-example : Aimd.rule bnOdo bnPo bnLeader6' bnWin6' 6 0 Uodo (View.full Uodo) 20 = (6, 0) := by decide
+example : observed bnOdo bnCO1 Uodo 20 = 2 := by decide
+example : observed bnOdo bnCO3 Uodo 20 = 6 := by decide
+example : expected bnOdo bnCO1 3 = 2 := by decide
+example : expected bnOdo bnCO3 3 = 6 := by decide
+example : (Aimd.rule bnOdo bnPo bnLead6' bnLeadKeyed6' bnCO1 0 Uodo
+    (View.full Uodo) 20).1.slotsAt 0 = 2 := by decide
+example : (Aimd.rule bnOdo bnPo bnLead6' bnLeadKeyed6' bnCO6 0 Uodo
+    (View.full Uodo) 20).1.slotsAt 0 = 6 := by decide
 
 /-! ## Odontoceti's `Good` on `Uodo`, and its descent law -/
 
@@ -98,9 +112,8 @@ theorem uodo_good :
 `goodLeaders` bounds `T` by cardinality only — five of six — so no
 validator can be assumed in it; at count `6` every validator leads a
 slot of round `1`, and a member of `T` leads one of them. -/
-example : ∃ κ, (Sched bnLeader6' bnWin6' 6 (by decide) (by decide)).slotRound κ = 1 ∧
-    ∃ L, bnOdo.Decided (Sched bnLeader6' bnWin6' 6 (by decide) (by decide)) (View.full Uodo)
-      κ (some L) := by
+example : ∃ κ, bnCO6.sched.slotRound κ = 1 ∧
+    ∃ L, bnOdo.Decided bnCO6.sched (View.full Uodo) κ (some L) := by
   obtain ⟨T, hcard, hT0⟩ :=
     (Odontoceti.holds.2.1 (Fin 6) (Fin 24) Unit).goodLeaders Uodo 1 3 uodo_good
   have hT := fun S κ => hT0 S (View.full Uodo) κ
@@ -213,23 +226,35 @@ def bnLeader3 : ℕ → Fin 3 := roundRobin 3 (by omega)
 
 theorem bnWin3 : Keyed bnLeader3 3 := roundRobin_keyed 3 (by omega)
 
-/-- Three-round interval, at most three leaders. -/
-def bnPn : Params := ⟨3, 3, 96, 100, by decide, by decide⟩
+/-- At most three leaders and a three-round interval. -/
+def bnPn : Params := ⟨3, 3, 96, 100, by decide⟩
+
+def bnLead3 : ℕ → ℕ → Fin 3 := leadOf bnLeader3
+
+theorem bnLeadKeyed3 : LeadKeyed bnLead3 3 := leadKeyed_of_keyed (by omega) bnWin3
+
+/-- The configuration at count `m`, three-round interval. -/
+def bnCfgN (m : ℕ) (hm : 0 < m) (hmax : m ≤ 3) : Config (Fin 3) :=
+  Config.uniform bnLead3 bnLeadKeyed3 m hm hmax 3
+
+abbrev bnCN1 : Config (Fin 3) := bnCfgN 1 (by decide) (by decide)
+abbrev bnCN3 : Config (Fin 3) := bnCfgN 3 (by decide) (by decide)
 
 -- Anchor `11` (round `4`, author `1`); window rounds `1` to `4`. Round `1`
 -- scores (block `4`, both round-`2` blocks support it); round `2`'s head
 -- is the crashed validator's, with no candidate; round `3`'s only
 -- supporter in the window is the anchor. One against an expected two:
 -- unhealthy, the count stays at the floor and the back-off moves.
-example : observed bnNemo bnPn bnLeader3 bnWin3 Unemo 11 1 (by decide) (by decide) = 1 := by
+example : observed bnNemo bnCN1 Unemo 11 = 1 := by decide
+example : expected bnNemo bnCN1 4 = 2 := by decide
+example : (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo
+    (View.full Unemo) 11).1.slotsAt 0 = 1 ∧
+    (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo (View.full Unemo) 11).2 = 1 := by
   decide
-example : expected bnNemo bnPn 1 = 2 := by decide
-example : Aimd.rule bnNemo bnPn bnLeader3 bnWin3 1 0 Unemo (View.full Unemo) 11 = (1, 1) := by decide
 -- At count `3` every validator leads every round: round `1` scores three
 -- slots, round `2` two (validator `2` has no block), round `3` none.
-example : observed bnNemo bnPn bnLeader3 bnWin3 Unemo 11 3 (by decide) (by decide) = 5 := by
-  decide
-example : expected bnNemo bnPn 3 = 6 := by decide
+example : observed bnNemo bnCN3 Unemo 11 = 5 := by decide
+example : expected bnNemo bnCN3 4 = 6 := by decide
 
 /-- The model's own synchrony from round `0`, over the live pair. -/
 theorem unemo_sync : SynchronisedOn Unemo {0, 1} 1 := by
@@ -247,9 +272,8 @@ example : ¬ PopulatedOn Unemo {0, 1} 6 := by decide
 /-- Through `Nemo.holds`: the good set — two of three, by cardinality
 alone — commits a round-`1` slot at count `3`, where every validator
 leads one; the crashed validator's round-`1` block is supported too. -/
-example : ∃ κ, (Sched bnLeader3 bnWin3 3 (by decide) (by decide)).slotRound κ = 1 ∧
-    ∃ L, bnNemo.Decided (Sched bnLeader3 bnWin3 3 (by decide) (by decide))
-      (View.full Unemo) κ (some L) := by
+example : ∃ κ, bnCN3.sched.slotRound κ = 1 ∧
+    ∃ L, bnNemo.Decided bnCN3.sched (View.full Unemo) κ (some L) := by
   obtain ⟨T, hcard, hT0⟩ :=
     (Nemo.holds.2.1 (Fin 3) (Fin 14) Unit).goodLeaders Unemo 1 5 unemo_good
   have hT := fun S κ => hT0 S (View.full Unemo) κ

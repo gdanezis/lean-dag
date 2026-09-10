@@ -23,15 +23,14 @@ theorem holds : Statement := by
   refine ⟨?_, descent, ?_⟩
   · intro Validator BlockId Payload _ _ _ _ k hk
     exact ofAnchoredOn_laws (Hybrid.hybridLaws hk) (fun _ _ h => h)
-  · intro n hn H BlockId Payload _ k hadm w hkey m hm hmax
+  · intro n hn H BlockId Payload _ k hadm C hC
     have hbound : (orcaellaLive (Validator := Fin n) (BlockId := BlockId)
         (Payload := Payload) k).waveLength * (H.fb + H.fc) + 1 ≤ n := by
       have hcommittee := Hybrid.committee_bound_of_admissible hadm
       rw [Fintype.card_fin] at hcommittee
       change 2 * (H.fb + H.fc) + 1 ≤ n
       omega
-    exact liveOn_roundRobin hn _ (descent (Fin n) BlockId Payload k hadm) (Nat.succ_pos 1) hbound
-      hkey m hm hmax
+    exact liveOn_roundRobin hn _ (descent (Fin n) BlockId Payload k hadm) (Nat.succ_pos 1) hbound C hC
 
 end Orcaella
 
