@@ -78,6 +78,7 @@ import LeanDag.Adaptive.EpochFrame
 import LeanDag.Adaptive.Frame
 import LeanDag.Adaptive.Schedule
 import LeanDag.Adaptive.ScheduleRun
+import LeanDag.Adaptive.ScheduleLive
 import LeanDag.Integration.AdaptiveFrame
 import LeanDag.Integration.BarnacleFrame
 import LeanDag.Integration.CompRun

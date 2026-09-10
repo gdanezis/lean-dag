@@ -1,4 +1,5 @@
 import LeanDag.Adaptive.Frame
+import LeanDag.Adaptive.ScheduleLive
 import LeanDag.Barnacle.Model.Heads
 /-!
 # Barnacle's fairness, read as the adaptive arc's
@@ -47,6 +48,41 @@ theorem placesRuns_const_of_headsRun {W : ℕ} (hW : 0 < W)
     omega
   · rw [Policy.const_pick, hleader]
     exact h3 i hi
+
+/-- **Barnacle's fairness gives the adaptive schedule's, at the
+rotation.** `HeadsRun` places a stretch of `c` reliable heads within `c₀`
+of every round; a schedule at one leader a round has the head of round
+`r` at slot `r`, so the stretch is a stretch of slots, and it falls
+inside epoch `e + 1` as soon as that epoch is `c₀` slots long.
+
+This is the degenerate case of an emitted schedule: where the score has
+nothing to read the policy returns the rotation, and the rotation's own
+fairness is what liveness then reads. -/
+theorem placesRunsIn_ofFixed_of_headsRun {E : Frame} {M : ℕ}
+    (hM : ∀ r, (constFrame 1 Nat.one_pos).width r ≤ M)
+    {getLeader : ℕ → Validator}
+    (hk : ∀ r i j, i < (constFrame 1 Nat.one_pos).width r →
+      j < (constFrame 1 Nat.one_pos).width r →
+      getLeader (r + i) = getLeader (r + j) → i = j)
+    {U : R.Universe} {V : R.View U} {T : Finset Validator} {c c₀ : ℕ}
+    (hc₀ : ∀ e, c₀ ≤ E.width e) (hhr : Barnacle.HeadsRun getLeader T c c₀) :
+    Adaptive.PlacesRunsIn
+      (Adaptive.Schedule.ofFixed (R := R) E (constFrame 1 Nat.one_pos) M hM
+        (fun r i => getLeader (r + i)) hk) U V T c := by
+  intro v e
+  obtain ⟨ρ, h1, h2, h3⟩ := hhr (E.cum (e + 1))
+  refine ⟨ρ, h1, ?_, fun i hi => ?_⟩
+  · show ρ + c ≤ E.cum (e + 2)
+    have he : E.cum (e + 2) = E.cum (e + 1) + E.width (e + 1) := by
+      have : e + 2 = (e + 1) + 1 := by omega
+      rw [this, Frame.cum_succ]
+    have := hc₀ (e + 1)
+    omega
+  · show getLeader ((constFrame 1 Nat.one_pos).roundOf (ρ + i)
+        + ((ρ + i) - (constFrame 1 Nat.one_pos).cum
+            ((constFrame 1 Nat.one_pos).roundOf (ρ + i)))) ∈ T
+    rw [constFrame_roundOf, constFrame_cum]
+    simpa using h3 i hi
 
 end Integration
 

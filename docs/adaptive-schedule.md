@@ -394,12 +394,20 @@ schedule whose two frames both move. `Schedule.ofFixed` and
 rounds of `1, 2, 3`, neither aligned with the other and neither
 constant.*
 
-**5. Liveness.** `ScheduleLive.lean`: the descent from `widthOf_le`,
-`PlacesRuns` over an epoch the policy sized, the commits result, and the
-degenerate case of §7 from `Policy.const`. `Composed.commits` and
-`Composed.commits_in_epoch` are stated at a composed run and could be
-restated at a `FrameRun`, which would give both arcs one proof; that is
-a refactor and not a dependency.
+**5. Liveness.** `ScheduleLive.lean`: `commits`, that a slot led by a
+reliable validator commits; `PlacesRunsIn`, the fairness clause at an
+epoch the policy sized; `commits_in_epoch`, that every epoch a run has
+closed carries `c` consecutive commits; and `descends`, the descent from
+`widthOf_le`, which asks the widths to be bounded and not equal. The
+degenerate case is `placesRunsIn_ofFixed_of_headsRun`, in `Integration/`
+because it reads Barnacle's rotation: at one leader a round the head of
+round `r` is slot `r`, so `HeadsRun`'s stretch is a stretch of slots and
+falls inside an epoch as soon as that epoch is `c₀` slots long, which is
+§6's floor stated per epoch.
+
+`Composed.commits` and `Composed.commits_in_epoch` are stated at a
+composed run and could be restated at a `FrameRun`, which would give both
+arcs one proof; that is a refactor and not a dependency.
 
 **6. The witness.** `ScheduleModel.lean` over `Ugrow`: a schedule whose
 epoch length and width both move, epochs at the floor of §6, and the
