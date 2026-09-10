@@ -166,6 +166,26 @@ theorem frameRun_agree (hR : Agree R) {V' : R.View U}
       have d₂ := Rn'.decided_self j (by rw [hEr j (by omega)]; exact hgH)
       exact hR _ V V' j _ _ d₁ d₂
 
+/-- **Two schedules sharing a prefix agree on a verdict settled inside
+it.** Where one run's verdict at `g` is settled below round `B`, and the
+other's frame and assignment agree with the first's below `B`, the two
+verdicts are the same — whatever either schedule does above `B`, and
+whatever heights the two runs have reached.
+
+This is `frameRun_agree`'s last step standing on its own. The induction
+there exists to *establish* agreement below `B` from the verdicts; where
+a common prefix is given rather than derived, the conclusion needs only
+`Agree`. -/
+theorem verdict_agree_of_prefix (hR : Agree R) {F F' : Frame}
+    {a a' : ℕ → ℕ → Validator}
+    {hk' : ∀ r i j, i < F'.width r → j < F'.width r → a' r i = a' r j → i = j}
+    {U : R.Universe} {V V' : R.View U} {B g : ℕ} {v v' : Option BlockId}
+    (hw : ∀ r, r < B → F'.width r = F.width r)
+    (ha : ∀ r i, r < B → i < F.width r → a' r i = a r i)
+    (hd : DecidedFrameBelow R F a B V g v)
+    (hd' : R.Decided (F'.toSlots a' hk') V' g v') : v = v' :=
+  hR _ V V' g v v' (hd F' a' hk' hw ha) hd'
+
 /-- **The window fits in two epochs.** Every verdict a schedule reaches
 is settled by that schedule below the round at which the slot's
 epoch-plus-two begins.

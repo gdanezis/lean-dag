@@ -318,6 +318,47 @@ construction where nothing commits, a configuration not closing until a
 commit lands past its threshold; a policy must decide that case in `len`
 and `widthOf`, which §7 is.
 
+## 9a. A shared prefix, and where healing stops
+
+`agree_on_prefix` is the first of the three steps a healing argument
+would need, and it is proved. Two runs of one schedule that share a
+prefix of rounds agree on every slot the run in front has settled inside
+that prefix, whatever heights they have reached and whatever either does
+above it. The two runs need not have closed the same epochs, which is
+what a validator behind another amounts to.
+
+`verdict_agree_of_prefix` is the same fact without the run: it is
+`frameRun_agree`'s last step standing alone. The induction there exists
+to *establish* agreement below a round from the verdicts; where a common
+prefix is given rather than derived, the conclusion needs only `Agree`.
+
+The second step does not follow. Suppose a validator reaches the round
+its epoch was to change at without having settled the verdicts the new
+schedule reads, and continues on the old one. The two schedules now
+share the prefix and differ above it, so the first step applies to every
+slot whose window ends inside the prefix — and *not* to a slot whose
+anchor lies above the boundary. An undecided slot is exactly the case
+where the anchor may lie above it: the anchor is the first eligible slot
+that commits, and the reason the slot is undecided is that none has yet.
+So the slots a delay leaves open are the ones the prefix argument does
+not reach, and it is the same window condition again.
+
+What would carry the second step is a boundary defined by settlement
+rather than by slot count — the epoch does not end until the verdicts it
+reads are settled, so the anchor lies inside the prefix by construction.
+That is Barnacle's shape: `start (k + 1)` is the anchor's round plus the
+gap, not a fixed count. It is not expressible by an emitted `len`,
+because `len` reads the verdicts and *when* a verdict became derivable is
+not a function of them: this model has verdicts, not a timed process. A
+run either has one or does not exist at that height.
+
+What an emitted `len` *can* do is widen the window, since the window is
+two epochs measured in slots: a policy that lengthens its epochs on
+evidence that decisions have been slow gives itself a wider margin. That
+is a mitigation and not a guarantee — the evidence is past and asynchrony
+may outrun it — but it is a reason to vary `len` beyond the performance
+one of §6.
+
 ## 10. What `adapted` permits and an implementation must not
 
 `Policy.adapted` constrains the dependence of `pick` on the verdicts and

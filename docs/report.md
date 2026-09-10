@@ -4784,7 +4784,26 @@ a correct validator — and `bRun_certLive` discharges the rule's own
 precondition from `Ugrow`'s synchrony and its populated rounds, so
 `bRun_commits_in_epoch` is AS4 applied with no hypothesis left standing.
 
-**AS7 — conservativity.** Where a schedule reads no verdict, takes
+**AS7 — a shared prefix.** `ScheduleRun.agree_on_prefix`: two runs of
+one schedule that share a prefix of rounds agree on every slot the run in
+front has settled inside it, at whatever heights the two have reached and
+whatever either does above the prefix. `Adaptive.verdict_agree_of_prefix`
+is the same without the run — AS2's last step standing alone, the
+induction there existing to *establish* agreement below a round rather
+than to use it.
+
+What it does not reach is a slot whose window ends above the prefix, and
+an undecided slot is exactly that case: its anchor is the first eligible
+slot that commits, and it is undecided because none has. So a validator
+that reaches an epoch boundary without having settled the verdicts the
+new schedule reads is not healed by this — the open slots are the ones
+the prefix argument misses. What would carry it is a boundary defined by
+settlement rather than by slot count, which is §21's shape and not
+something an emitted `len` expresses, since *when* a verdict became
+derivable is not a function of the verdicts. §13.7's AL9 is the same
+question from the other side.
+
+**AS8 — conservativity.** Where a schedule reads no verdict, takes
 epochs of `W` slots and runs one leader a round, it is the schedule
 §13.2 runs on. `ScheduleRun.ofFixed_slotRound` says the numbering is the
 identity, `ofFixed_leader` that the leader of a slot is the assignment at
@@ -4792,7 +4811,7 @@ it, and `agree_const` that AS2 then concludes what §13.3 concludes, at
 `epochOf W` and with no frame in the statement. The arc collapses onto
 the one it generalises where neither of its two new functions moves.
 
-**AS8 — witnesses.** `Schedule.ofFixed` reads no verdict, so its clauses
+**AS9 — witnesses.** `Schedule.ofFixed` reads no verdict, so its clauses
 hold at any two frames; `LeanDagTest.ScheduleModel.sched` is it at epochs
 of `3, 4, 5` slots over rounds of `1, 2, 3`, neither constant and neither
 aligned with the other. `aSched` is adapted in both frames — the epoch
@@ -10359,7 +10378,7 @@ quality, C, D,
 B and E for the denial-of-service arc, G for garbage collection, O for
 Odontoceti; P, N and R name clauses of the trust boundary rather than
 results. Labels resolving to witness models rather than library
-theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, AS8, H9, H10, BN13, I25) are
+theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, AS9, H9, H10, BN13, I25) are
 excluded from the diagrams, which show the library; so are MM4, BM8, BML6, BMR7, BMA5, BMD7, BME6, BMO10, BMO11 and BMP14. Two labels are
 absent from the Barnacle rows below and are named here rather than left
 to be noticed: **BN1**, that `Sched m` is a lawful `Slots` instance at
@@ -10551,8 +10570,9 @@ reused.
 | AS4 | liveness: every epoch a run has closed carries `c` consecutive commits, at a fairness clause read over an epoch the policy sized | `Adaptive.ScheduleRun.commits_in_epoch`, `Adaptive.ScheduleRun.commits`, `Adaptive.ScheduleRun.descends` *(Adaptive/ScheduleLive)*, `placesRunsIn_ofFixed_of_headsRun` *(Integration/AdaptiveFrame)* |
 | AS5 | a frame whose rounds differ in width spans a wave: the descent asks the widths to be bounded and not equal | `Frame.spansEligible_toSlots`, `descends_frame` *(Adaptive/Frame)*, `LeanDagTest.VaryingFrame.vF_spans` *(LeanDagTest/Integration/VaryingFrame)* |
 | AS6 | progress: a run gains an epoch as soon as that epoch's slots are decided, and liveness applied on the data with no hypothesis left standing | `Adaptive.ScheduleRun.extend`, `Adaptive.ScheduleRun.everyHeight`, `Adaptive.ScheduleRun.ofSettles` *(Adaptive/ScheduleRun)*, `LeanDagTest.ScheduleModel.bRun_commits_in_epoch` *(LeanDagTest/Adaptive/ScheduleModel)* |
-| AS7 | conservativity: at epochs of `W` slots and one leader a round the numbering is the identity and safety is §13.3's, stated at `epochOf W` | `Adaptive.ScheduleRun.agree_const`, `Adaptive.ScheduleRun.ofFixed_slotRound`, `Adaptive.ScheduleRun.ofFixed_leader` *(Adaptive/ScheduleLive)* |
-| AS8 | the schedule on data: both frames read from the verdicts, and a run that closes two epochs | `LeanDagTest.ScheduleModel.aSched`, `LeanDagTest.ScheduleModel.bRun`, `LeanDagTest.ScheduleModel.aF_eq_bF` *(LeanDagTest/Adaptive/ScheduleModel)* |
+| AS7 | two runs of a schedule sharing a prefix of rounds agree on every slot settled inside it, at whatever heights they have reached | `Adaptive.ScheduleRun.agree_on_prefix` *(Adaptive/ScheduleRun)*, `Adaptive.verdict_agree_of_prefix` *(Adaptive/Frame)* |
+| AS8 | conservativity: at epochs of `W` slots and one leader a round the numbering is the identity and safety is §13.3's, stated at `epochOf W` | `Adaptive.ScheduleRun.agree_const`, `Adaptive.ScheduleRun.ofFixed_slotRound`, `Adaptive.ScheduleRun.ofFixed_leader` *(Adaptive/ScheduleLive)* |
+| AS9 | the schedule on data: both frames read from the verdicts, and a run that closes two epochs | `LeanDagTest.ScheduleModel.aSched`, `LeanDagTest.ScheduleModel.bRun`, `LeanDagTest.ScheduleModel.aF_eq_bF` *(LeanDagTest/Adaptive/ScheduleModel)* |
 
 **Hybrid fault tolerance** (§14):
 

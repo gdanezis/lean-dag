@@ -138,6 +138,30 @@ theorem agree (hR : Agree R) {V' : R.View U}
     (fun e _ h => P.len_adapted Rn.vdct Rn'.vdct e (fun j hj => (h j hj).symm))
     (fun r _ h => P.widthOf_adapted Rn.vdct Rn'.vdct r (fun j hj => (h j hj).symm))
 
+/-- **Two runs of a schedule that share a prefix agree on it**, whatever
+heights they have reached and whatever they do above the prefix. The two
+runs need not have closed the same epochs: one validator may be behind
+the other, and this still holds of every slot the one in front has
+settled inside the shared prefix.
+
+`hb` is the whole of what is asked: the slot's window ends inside the
+prefix. That is the condition the two-epoch bound is there to give, and
+where it fails the statement says nothing — which is what a schedule
+computed from verdicts that have not settled amounts to. -/
+theorem agree_on_prefix (hR : Agree R) {H' : ℕ}
+    (Rn : ScheduleRun P U V H) {V' : R.View U} (Rn' : ScheduleRun P U V' H')
+    {B g : ℕ}
+    (hw : ∀ r, r < B → (P.frameOf Rn'.vdct).width r = (P.frameOf Rn.vdct).width r)
+    (ha : ∀ r i, r < B → i < (P.frameOf Rn.vdct).width r →
+      P.asgOf Rn'.vdct U V' r i = P.asgOf Rn.vdct U V r i)
+    (hg : (P.epochFrame Rn.vdct).roundOf g < H)
+    (hb : (P.frameOf Rn.vdct).roundOf ((P.epochFrame Rn.vdct).cum
+      ((P.epochFrame Rn.vdct).roundOf g + 2)) ≤ B)
+    (hg' : (P.epochFrame Rn'.vdct).roundOf g < H') :
+    Rn.vdct g = Rn'.vdct g :=
+  verdict_agree_of_prefix hR hw ha
+    ((Rn.toFrameRun.closed_at g hg).mono hb) (Rn'.toFrameRun.decided_self g hg')
+
 end ScheduleRun
 
 end Adaptive
