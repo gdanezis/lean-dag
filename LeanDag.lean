@@ -76,6 +76,8 @@ import LeanDag.Integration.StackRules
 import LeanDag.Integration.Coverage
 import LeanDag.Adaptive.EpochFrame
 import LeanDag.Adaptive.Frame
+import LeanDag.Adaptive.Schedule
+import LeanDag.Adaptive.ScheduleRun
 import LeanDag.Integration.AdaptiveFrame
 import LeanDag.Integration.BarnacleFrame
 import LeanDag.Integration.CompRun

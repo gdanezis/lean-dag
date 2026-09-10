@@ -108,9 +108,8 @@ schedule two epochs ahead, and what it reads there must already be
 settled. -/
 theorem frameRun_agree (hR : Agree R) {V' : R.View U}
     (Rn : FrameRun (R := R) pick U V H) (Rn' : FrameRun (R := R) pick U V' H)
-    (hadapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
-      (∀ j, Rn.E.roundOf j + 2 ≤ Rn.E.roundOf k → v j = w j) →
-      pick U V₁ v k = pick U V₂ w k)
+    (hadapted : ∀ k, (∀ j, Rn.E.roundOf j + 2 ≤ Rn.E.roundOf k → Rn'.vdct j = Rn.vdct j) →
+      pick U V' Rn'.vdct k = pick U V Rn.vdct k)
     (hbd : ∀ e, e < H + 1 →
       (∀ j, Rn.E.roundOf j + 2 ≤ e → Rn.vdct j = Rn'.vdct j) →
       Rn'.E.width e = Rn.E.width e)
@@ -161,7 +160,7 @@ theorem frameRun_agree (hR : Agree R) {V' : R.View U}
         have hi'' : i' < Rn'.F.width r' := by rw [hw r' hr']; exact hi'
         rw [Rn'.coherent r' i' hi'' (by rw [heq, hEr _ (by omega)]; omega),
           Rn.coherent r' i' hi' (by omega), heq]
-        refine hadapted U V' V Rn'.vdct Rn.vdct _ (fun j' hj' => ?_)
+        refine hadapted _ (fun j' hj' => ?_)
         exact (hIH j' (roundOf_lt_iff.mp (by omega))).symm
       have d₁ := Rn.closed_at j hgH Rn'.F Rn'.asg Rn'.keyed hw ha
       have d₂ := Rn'.decided_self j (by rw [hEr j (by omega)]; exact hgH)

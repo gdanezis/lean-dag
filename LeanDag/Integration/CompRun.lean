@@ -533,9 +533,9 @@ theorem agree (hR : Properties.Agree R) (hW : 0 < W) (hgap : P.gap = 2 * W)
       ∃ k, k < K ∧ Rn.start k < r ∧ r ≤ Rn.start (k + 1)) :
     ∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g := by
   have h := frameRun_agree hR (Rn.toFrameRun hW) (Rn'.toFrameRun hW)
-    (fun U V₁ V₂ v w k hj => hadapted U V₁ V₂ v w k
+    (fun k hj => hadapted U V' V Rn'.vdct Rn.vdct k
       (fun j hj' => hj j (by
-        simp only [toFrameRun_E]
+        simp only [toFrameRun_E, toFrameRun_vdct]
         rwa [← Adaptive.epochOf_eq_roundOf W hW, ← Adaptive.epochOf_eq_roundOf W hW])))
     (fun _ _ _ => rfl)
     (fun r hr hv => hwd hW hgap hupd hcover r

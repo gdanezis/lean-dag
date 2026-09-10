@@ -342,11 +342,12 @@ directory.
 | `LeanDag/Integration/AdaptiveFrame.lean` | what is left: `placesRuns_const_of_headsRun` alone |
 | `LeanDagTest/Adaptive/ScheduleModel.lean` | the witness over `Ugrow` |
 
-`Schedule` should **extend** `Policy` rather than add fields to it.
-`Policy.const`, `LeanDagTest.demotePolicy` and every theorem of
-`Adaptive/Liveness.lean` are stated at a `Policy`, and a `Schedule`
-projects to one; adding fields to `Policy` would restate the built arc to
-no purpose.
+`Schedule` is **not** an extension of `Policy`. The reason is the
+adaptedness clause: `Policy.adapted` reads the epoch of a slot at a fixed
+`W`, and a schedule that emits the lengths must read it at its own epoch
+frame. A `Schedule` therefore carries its own `pick` and its own
+adaptedness, and `Policy` stays what the fixed-epoch arc is stated at —
+`Policy.const` and `Adaptive/Liveness.lean` are untouched.
 
 ## 12. Order of work
 
@@ -371,17 +372,27 @@ Callers discharge `hbd` by `rfl`, `E` being constant. *This is the only
 genuinely new argument in the plan, and it is proved before anything
 depends on it.*
 
-**3. The policy emits the widths.** `Schedule.lean` adds `maxWidth`,
-`widthOf` and its four clauses, and `frameOf` by strong recursion on the
-round with its `cum` and `roundOf` arithmetic. `ScheduleRun.lean` builds
-the run, `toFrameRun`, and `hwd` from `widthOf_adapted`. *A `Schedule`
-whose `widthOf` is constantly `1` reproduces the arc as it stands, which
-is the check that nothing was lost.*
+**3 and 4. The policy emits the widths and the epoch lengths.**
+`Schedule.lean` is the structure — `len`, `widthOf`, `pick`, `maxWidth`
+and the three adaptedness clauses — with `epochFrame` and `frameOf` the
+two frames it gives at a verdict function. Neither is a recursion: `len`
+and `widthOf` take the index directly, and it is the clauses that name
+the frames the indices are read against. `ScheduleRun.lean` is the run,
+its `toFrameRun`, and `agree`, where each of `frameRun_agree`'s three
+determinisms is one of the schedule's clauses read at the two runs.
+`coherent` is `rfl`, the assignment being the policy's by construction.
 
-**4. The policy emits the epoch lengths.** `len` and its four clauses,
-`epochFrame` by strong recursion on the epoch, and `hbd` from
-`len_adapted`. *Step 2's argument is now consumed rather than
-discharged by `rfl`.*
+One hypothesis changed shape. `frameRun_agree`'s `hadapted` quantified
+over every pair of verdict functions with the epoch frame fixed; a
+schedule reads the epoch of a slot at *its own* frame, so the two cannot
+be reconciled in general. The hypothesis is now stated at the runs it is
+applied to, which is all the induction ever used.
+
+*The check is that the three clauses are satisfiable together at a
+schedule whose two frames both move. `Schedule.ofFixed` and
+`LeanDagTest.ScheduleModel.sched` are it: epochs of `3, 4, 5` slots over
+rounds of `1, 2, 3`, neither aligned with the other and neither
+constant.*
 
 **5. Liveness.** `ScheduleLive.lean`: the descent from `widthOf_le`,
 `PlacesRuns` over an epoch the policy sized, the commits result, and the

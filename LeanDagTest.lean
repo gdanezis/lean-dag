@@ -28,6 +28,7 @@ import LeanDagTest.Reactive.Model
 import LeanDagTest.Reactive.Catchup
 import LeanDagTest.Reactive.Collapse
 import LeanDagTest.Adaptive.Model
+import LeanDagTest.Adaptive.ScheduleModel
 import LeanDagTest.Integration.Model
 import LeanDagTest.Integration.Composed
 import LeanDagTest.Integration.ComposedRun
