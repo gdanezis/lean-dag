@@ -198,37 +198,62 @@ what a configuration *is*, not when it starts.
 * `LeanDagTest/Barnacle/` — a run whose second configuration differs from
   its first in all three: a leader, a round's width, and the interval.
 
-## 9. Order of work
+## 9. Order of work, and what the work was
 
 1. ~~`Config` and the width bound, with a witness: a schedule whose
    rounds differ in width, exhibited as a lawful `Slots`.~~ The witness
    is `LeanDagTest.VaryingSchedule.vary` — rounds alternating one slot
    and two — and `vary_width_le` is the bound at two. The class admits
-   what §1 claims it does, and `Config` itself is two fields.
-2. `Config` and the run, in five parts.
+   what §1 claims it does.
+2. ~~`Config` and the run, in five parts, nothing new proved.~~ Done, but
+   not in five separable parts, and not with nothing new proved. **The
+   plan's step 2 was not separable from steps 3 to 5.** The moment
+   `PartialRun` stops carrying a count, `Model/Window.lean` has no count
+   to read, so `observed`, `expected` and the AIMD rule move with it;
+   and every arc stated over `PartialRun` breaks at once. What was
+   actually done in one pass:
 
-   * **2a** `Model/Config.lean`: the structure, `cum`, `roundOf`,
-     `index`, `sched`, and the arithmetic those need — `cum_succ`,
-     `cum_mono`, `roundOf_cum`, `roundOf_index`, `pos_lt_slotsAt`,
-     `cum_le_iff_le_roundOf`. Nothing beyond what §2 and §3 read.
-   * **2b** `Config.uniform` and `uniform_sched`. The bridge to `Sched`,
-     and what makes the rest of this step a rewrite.
-   * **2c** `UpdateRule` at `Config`, `PartialRun` at `cfg`, with
-     `interval_pos` and `width_le` replacing `count_pos` and `count_le`.
-   * **2d** the arithmetic in `Helpers/Progress.lean` and
-     `Helpers/Ledger.lean`. Every `κ / count k` is a `roundOf` and every
-     `count k * r` a `cum`; `Progress` has eighteen of the first and the
-     ledger's range is the second.
-   * **2e** the check: an existing witness at `Config.uniform` proves
-     what it proved.
+   * `Barnacle/Config.lean`: the structure, `cum`, `roundOf`, `index`,
+     `head`, `sched`, `LeadKeyed`, `Config.uniform` and the arithmetic
+     those need. The file is not under `Model/`, which carries no
+     theorems.
+   * `Model/Rule.lean`, `Model/Run.lean`: `UpdateRule` emits a `Config`;
+     `PartialRun` carries `cfg` and a genesis `C₀`, with `slotsAt_le`,
+     `interval_pos` and `interval_le` replacing `count_pos` and
+     `count_le`.
+   * `Model/Window.lean` and `Aimd/Rule.lean`: the measurement and the
+     step at a configuration. `Params` keeps `maxLeaders`,
+     `maxInterval`, `num`, `den`.
+   * `Helpers/Schedule.lean`: `Config.uniform_sched`, the bridge, and
+     `leadKeyed_of_keyed`.
+   * `Helpers/Agreement.lean`, `Helpers/Ledger.lean`,
+     `Helpers/Progress.lean`, `Helpers/Heads.lean`: every `κ / count k`
+     a `roundOf`, every `count k * r` a `cum`, every `m * ρ` a `cum ρ`.
+   * BN3, BN5, BN6, BN7, BN8, BN9, BN11, BN12 and BN14 restated and
+     reproved, and the witnesses rewritten at `Config.uniform`.
 
-   *Nothing new is proved in this step. If 2e needs an argument rather
-   than a rewrite, `uniform_sched` is wrong and the shape of §2 is
-   wrong with it.*
-3. BN3. The induction is §4's and should be short.
-4. Ledger, validity, conservativity.
-5. Liveness, and the fairness clause on the update rule.
-6. The witness of §8, and the report.
+   Three things needed an argument rather than a rewrite, and §2's shape
+   was wrong about each:
+
+   * `expected` is now the slots the window's scoring rounds offer,
+     `cum (r − wave + 1) − cum (r − interval)`. At one width `m` this is
+     the paper's `(interval − wave + 1) · m`; below one wave it is `0`,
+     where the old truncation gave `m` for a window with no decidable
+     round. The witnesses at interval one change verdict as a result: a
+     window nothing scores is read as healthy because nothing was
+     expected.
+   * BN3 asks both runs to start from one genesis configuration. `init`
+     no longer pins a count of one — there is no canonical `Config` —
+     so there is nothing else to agree on at height zero.
+   * Liveness asks the update rule to preserve a clause `Q` of the
+     configurations it emits (`UpdKeeps`) and asks `LiveOn` only of
+     those. Without it BN8b would need liveness at *every* configuration
+     inside the bounds, including ones of varying width that the AIMD
+     rule never emits — a strictly stronger hypothesis than the
+     mechanism needs, and one the finite witnesses cannot discharge by
+     case analysis on a width.
+3. The witness of §8 — a run whose second configuration differs from its
+   first in a leader, a round's width and the interval — and the report.
 
 ## 10. What could go wrong
 
