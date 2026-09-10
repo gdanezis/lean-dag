@@ -149,9 +149,10 @@ Report §21's mechanism starts the next configuration at the round after
 the pivot's. `barnacle.md` records why that matters: `TryCommit` walks
 the decision sequence in order up to the first undecided slot, so the
 pivot sits above a fully decided prefix, and every slot below it was
-derived while the configuration list still named the old schedule at
-every round. A mechanism that started the next configuration *later*
-would put slots above the pivot inside the old configuration's range,
+derived while the configuration list still named that configuration's
+schedule at every round. A mechanism that started the next configuration
+*later* would put slots above the pivot inside a range it does not
+govern,
 where an implementation reads the next configuration's schedule and
 the clause asks for this one's.
 
