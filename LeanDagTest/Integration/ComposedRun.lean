@@ -45,23 +45,21 @@ abbrev cVdct : ℕ → Option ℕ := fun k => some (4 * k + 1)
 
 theorem cF_width (r : ℕ) : cF.width r = 1 := rfl
 
-/-- A frame agreeing with `cF` below `B` counts slots the same way there. -/
-theorem cum_eq_of_agree {F' : Frame} {B : ℕ}
-    (hw : ∀ r, r < B → F'.width r = cF.width r) :
+/-- A frame one slot wide below `B` counts slots the same way there. -/
+theorem cum_eq_of_thin {F' : Frame} {B : ℕ} (hw : ∀ r, r < B → F'.width r = 1) :
     ∀ r, r ≤ B → F'.cum r = r := by
   intro r
   induction r with
   | zero => intro _; simp
   | succ j ih =>
       intro hj
-      rw [Frame.cum_succ, ih (by omega), hw j (by omega), cF_width]
+      rw [Frame.cum_succ, ih (by omega), hw j (by omega)]
 
 /-- And so it puts slot `k` at round `k`. -/
-theorem roundOf_eq_of_agree {F' : Frame} {B : ℕ}
-    (hw : ∀ r, r < B → F'.width r = cF.width r) {k : ℕ} (hk : k < B) :
-    F'.roundOf k = k :=
-  F'.roundOf_eq (by rw [cum_eq_of_agree hw k (by omega)])
-    (by rw [cum_eq_of_agree hw (k + 1) (by omega)]; omega)
+theorem roundOf_eq_of_thin {F' : Frame} {B : ℕ} (hw : ∀ r, r < B → F'.width r = 1)
+    {k : ℕ} (hk : k < B) : F'.roundOf k = k :=
+  F'.roundOf_eq (by rw [cum_eq_of_thin hw k (by omega)])
+    (by rw [cum_eq_of_thin hw (k + 1) (by omega)]; omega)
 
 /-- **The candidate a slot of `Ugrow` has is the one the layout names.**
 `Ugrow` puts validator `v`'s round-`r` block at `4 * r + v`, so a leader
@@ -84,14 +82,13 @@ rounds fit under `Ugrow`'s height, and the leader is correct. -/
 theorem decided_below {B k : ℕ} (hB : k + 2 ≤ N) (hk : k < B) (_hB' : B ≤ N)
     {F' : Frame} {a' : ℕ → ℕ → Fin 4}
     (hk' : ∀ r i j, i < F'.width r → j < F'.width r → a' r i = a' r j → i = j)
-    (hw : ∀ r, r < B → F'.width r = cF.width r)
-    (ha : ∀ r i, r < B → i < cF.width r → a' r i = cAsg r i) :
+    (hw : ∀ r, r < B → F'.width r = 1) (ha : ∀ r, r < B → a' r 0 = 1) :
     gRule.Decided (F'.toSlots a' hk') (View.full (Ugrow N)) k (cVdct k) := by
-  have hround : (F'.toSlots a' hk').slotRound k = k := roundOf_eq_of_agree hw hk
+  have hround : (F'.toSlots a' hk').slotRound k = k := roundOf_eq_of_thin hw hk
   have hlead : (F'.toSlots a' hk').leader k = 1 := by
     change a' (F'.roundOf k) (k - F'.cum (F'.roundOf k)) = 1
-    rw [roundOf_eq_of_agree hw hk, cum_eq_of_agree hw k (by omega), Nat.sub_self]
-    exact ha k 0 hk Nat.one_pos
+    rw [roundOf_eq_of_thin hw hk, cum_eq_of_thin hw k (by omega), Nat.sub_self]
+    exact ha k hk
   obtain ⟨L, hLB, hdec⟩ :=
     decided_of_correct_leader (S := F'.toSlots a' hk') (R := 0)
       (ugrow_synchronised N) (Nat.zero_le _)
@@ -160,7 +157,8 @@ noncomputable def cRun :
     rw [hB]
     exact fun F' a' hk' hw ha =>
       decided_below (show r + 2 ≤ 12 by omega) (show r < 8 by omega)
-        (show (8 : ℕ) ≤ 12 by omega) hk' hw ha
+        (show (8 : ℕ) ≤ 12 by omega) hk'
+        (fun r' hr' => hw r' hr') (fun r' hr' => ha r' 0 hr' Nat.one_pos)
 
 /-- The run has reached its horizon, which is what `Composed.every_height`
 consumes: two epochs of slots sit below the round configuration `1`
@@ -177,6 +175,145 @@ example : gRule.Decided (cF.toSlots cAsg cRun.keyed) (View.full (Ugrow N)) 2 (so
 example : cRun.anchor 0 = 2 := rfl
 example : cRun.start 1 = 10 := rfl
 example : cRun.F.width 0 = 1 := rfl
+
+/-! ## A run whose count moves
+
+`cRun` is one slot wide throughout, so nothing in it exercises the
+mechanism Barnacle contributes. `wRun` is the same run with `upd`
+returning two: rounds past `10`, where configuration `1` is in force, are
+two slots wide, and the assignment there names two different validators.
+-/
+
+/-- One slot per round up to `10`, two after: the width configuration `1`
+sets. -/
+def wF : Frame where
+  width := fun r => if r ≤ 10 then 1 else 2
+  width_pos := fun r => by split <;> omega
+
+theorem wF_width_low {r : ℕ} (h : r ≤ 10) : wF.width r = 1 := if_pos h
+
+theorem wF_width_le (r : ℕ) : wF.width r ≤ 2 := by
+  change (if r ≤ 10 then 1 else 2) ≤ 2; split <;> omega
+
+theorem wF_cum {r : ℕ} (h : r ≤ 11) : wF.cum r = r :=
+  cum_eq_of_thin (B := 11) (fun r' hr' => wF_width_low (by omega)) r h
+
+theorem wF_roundOf {k : ℕ} (h : k < 11) : wF.roundOf k = k :=
+  roundOf_eq_of_thin (B := 11) (fun r' hr' => wF_width_low (by omega)) h
+
+/-- **Below slot `11` the frame is still thin**, so a slot there is its
+own round's only slot, and its index is that round. -/
+theorem wF_low {r i : ℕ} (hi : i < wF.width r) (h : wF.index r i < 11) :
+    i = 0 ∧ wF.index r i = r := by
+  have hr : r ≤ 10 := by
+    by_contra hc
+    have : wF.cum 11 ≤ wF.cum r := wF.cum_mono (by omega)
+    rw [wF_cum (le_refl 11)] at this
+    have : wF.cum r + i < 11 := h
+    omega
+  rw [wF_width_low hr] at hi
+  have hi0 : i = 0 := by omega
+  subst hi0
+  exact ⟨rfl, by rw [Frame.index, wF_cum (by omega)]; omega⟩
+
+/-- Validator `1` leads the first slot of a round, validator `2` the
+second. -/
+abbrev wAsg : ℕ → ℕ → Fin 4 := fun _ i => if i = 0 then 1 else 2
+
+/-- **A composed run whose count moves.** Configuration `0` runs at one
+leader a round and closes at slot `2`; configuration `1` runs at two, so
+every round past `10` holds two slots under two different validators.
+Epoch `0` still closes, because it lies below the round the new count
+takes effect at — which is what `Params.gap` is for. -/
+noncomputable def wRun :
+    Composed (R := gRule) W cP (fun _ _ _ _ => 1) (fun _ _ _ _ _ => (2, 0))
+      (Ugrow N) (View.full (Ugrow N)) 1 1 where
+  start := fun k => if k = 0 then 0 else 10
+  count := fun k => if k = 0 then 1 else 2
+  backoff := fun _ => 0
+  anchor := fun _ => 2
+  F := wF
+  vdct := cVdct
+  asg := wAsg
+  init := ⟨rfl, rfl, rfl⟩
+  count_pos := fun _ => by split <;> omega
+  count_le := fun _ => by split <;> decide
+  cnt_le := fun r => le_trans (wF_width_le r) (by decide)
+  cnt_zero := rfl
+  cnt_eq := fun k hk r hlo hhi => by
+    have hk0 : k = 0 := by omega
+    subst hk0
+    have hr : r ≤ 10 := hhi
+    rw [wF_width_low hr]
+    rfl
+  anchor_commits := fun k hk => by
+    have hk0 : k = 0 := by omega
+    subst hk0
+    refine ⟨⟨9, rfl⟩, ?_⟩
+    change wF.cum (0 + cP.interval + 1) ≤ 2
+    rw [show 0 + cP.interval + 1 = 2 from rfl, wF_cum (by omega)]
+  anchor_least := fun k hk g hg hlt => by
+    have hk0 : k = 0 := by omega
+    subst hk0
+    have : wF.cum 2 ≤ g := hg
+    rw [wF_cum (by omega)] at this
+    omega
+  start_succ := fun k hk => by
+    have hk0 : k = 0 := by omega
+    subst hk0
+    change (10 : ℕ) = wF.roundOf 2 + cP.gap
+    rw [wF_roundOf (by omega)]
+    rfl
+  update := fun k hk _ _ => by
+    have hk0 : k = 0 := by omega
+    subst hk0
+    rfl
+  anchor_closed := fun _ _ => by decide
+  keyed := fun r i j hi hj h => by
+    have hi' : i < 2 := lt_of_lt_of_le hi (wF_width_le r)
+    have hj' : j < 2 := lt_of_lt_of_le hj (wF_width_le r)
+    by_cases h0 : i = 0 <;> by_cases h1 : j = 0
+    · omega
+    · exact absurd h (by simp [wAsg, h0, h1])
+    · exact absurd h (by simp [wAsg, h0, h1])
+    · omega
+  coherent := fun r i hi hep => by
+    have hlt : wF.index r i < 8 := by
+      have : wF.index r i / 4 < 2 := by simpa [epochOf] using hep
+      omega
+    obtain ⟨hi0, _⟩ := wF_low hi (by omega)
+    subst hi0
+    rfl
+  closed := fun r i hi hep => by
+    have hlt : wF.index r i < 4 := by
+      have : wF.index r i / 4 < 1 := by simpa [epochOf] using hep
+      omega
+    obtain ⟨hi0, hidx⟩ := wF_low hi (by omega)
+    subst hi0
+    rw [hidx] at hep hlt ⊢
+    have hep0 : epochOf W r = 0 := Nat.div_eq_of_lt (by omega)
+    have hB : wF.roundOf (W * (epochOf W r + 2)) = 8 := by
+      rw [hep0]; change wF.roundOf 8 = 8; exact wF_roundOf (by omega)
+    rw [hB]
+    exact fun F' a' hk' hw ha =>
+      decided_below (show r + 2 ≤ 12 by omega) (show r < 8 by omega)
+        (show (8 : ℕ) ≤ 12 by omega) hk'
+        (fun r' hr' => by rw [hw r' hr', wF_width_low (by omega)])
+        (fun r' hr' => by
+          rw [ha r' 0 hr' (by rw [wF_width_low (by omega)]; omega)]; rfl)
+
+/-- The width genuinely changes: round `10` still holds one slot, round
+`11` holds two, and they are led by different validators. -/
+example : wRun.F.width 10 = 1 := rfl
+example : wRun.F.width 11 = 2 := rfl
+example : wRun.asg 11 0 ≠ wRun.asg 11 1 := by decide
+example : wRun.count 0 = 1 := rfl
+example : wRun.count 1 = 2 := rfl
+
+/-- And it too has reached its horizon. -/
+theorem wRun_horizon : W * (1 + 1) ≤ wRun.F.cum (wRun.start 1) := by
+  change (8 : ℕ) ≤ wF.cum 10
+  rw [wF_cum (by omega)]; omega
 
 end Composition
 end LeanDagTest

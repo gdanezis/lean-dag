@@ -452,10 +452,18 @@ at the frame's own `toSlots` and not only at the uniform schedule
 `leaderBlock_eq` pins it to `4 * r + 1`, which `Ugrow`'s layout forces.
 
 `cRun_horizon` is what `Composed.every_height` consumes, so the run is a
-base case for the recursion and not only an inhabitant. Its count does
-not move: `upd` returns one at every configuration, and the frame is one
-slot wide throughout. A witness whose width changes is the one still
-missing.
+base case for the recursion and not only an inhabitant.
+
+`wRun` is the same run with `upd` returning two. Configuration `0` runs
+at one leader a round and closes at slot `2`; configuration `1` runs at
+two, so every round past `10` holds two slots, under two different
+validators. Epoch `0` still closes, because it lies below the round the
+new count takes effect at — which is what `Params.gap` is for, now read
+off a witness rather than only off `anchor_below`.
+
+Neither run reaches height two. Doing so wants a second closing
+configuration and a taller universe, and `Composed.extend` is the route:
+`cRun_horizon` and `wRun_horizon` are exactly its horizon hypothesis.
 
 ## 7. Questions settled, and how
 
