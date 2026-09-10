@@ -375,48 +375,32 @@ is a mitigation and not a guarantee — the evidence is past and asynchrony
 may outrun it — but it is a reason to vary `len` beyond the performance
 one of §6.
 
-## 9b. Segments: a schedule that changes only below a decided frontier
+## 9b. Segments, and where they lead
 
 The obstruction of §9a is that an undecided slot's anchor may lie above
 the point where two schedules part. A design that removes it rather than
-assuming it away: build the schedule in **segments**, and switch only at
-a slot below which everything is decided.
+assuming it away is recorded separately as `barbouni.md`: build the
+schedule in segments, commit only a prefix of each, and let the next
+segment be a function of the verdicts already frozen.
 
-Segment `i` is run as one schedule. Its slots are decided at *that*
-schedule, and a slot near its top may take its anchor from a slot further
-up the same segment. When every slot below some frontier `b` is decided,
-segment `i + 1` is computed from the verdicts below `b` and takes effect
-from `b` onward. Verdicts once derived are not revised: segment `i + 1`'s
-indirect rule may disagree about a slot below `b`, and is never asked.
+Two things about it belong here, since they bear on this arc.
 
-Two validators then agree by an induction on segments rather than on
-epochs. Both run segment `0`, so both derive its verdicts below the
-frontier at one schedule and `Agree` settles them; both compute segment
-`1` from the same verdicts, so both run the same segment `1`; and so on.
-The anchors are inside the segment by the frontier's definition, which is
-what §9a's argument needed and could not have.
+**A schedule is a reading of the DAG, not a rule for producing it.**
+`IsLeaderBlock` asks only that a block with the right round and creator
+exists, and `Populated` is a fact about the universe. So a segment change
+re-reads rounds already past, and two validators that finish deciding at
+different moments re-read the same DAG under the same next segment. There
+is no moment at which they are running different schedules over the same
+rounds — a point this record earlier had wrong.
 
-Three things this costs, and they are the honest ones.
+**The window is what segmentation removes.** The lag of two epochs exists
+to make the verdicts a schedule reads likely to have settled; a frontier
+makes them settled by construction. So `SettlesInTwoEpochs` is not
+discharged there, it is absent, and with it `adapted`'s lag and the
+composition's `Params.gap`. What the design asks instead is that decided
+verdicts are never revised, which neither this arc nor §21's has.
 
-**The lag is no longer two epochs but however long settling takes.**
-Under asynchrony the frontier does not advance and the schedule does not
-change. That is the correct behaviour and the same trade §21's mechanism
-makes; what it gives up is a schedule that reassigns on a fixed cadence.
-
-**Verdict immutability becomes a clause.** Neither arc has it: `vdct` is
-one function and `closed` asks it to be derivable at the run's schedule,
-so a slot decided under an earlier schedule and not re-derivable under a
-later one has no home. A segmented run would carry, per segment, the
-schedule its slots were decided at.
-
-**It is a different structure from `FrameRun`.** A run becomes a sequence
-of segments with a frontier apiece, and the induction is over segments.
-That is `CompRun`'s shape rather than this arc's — `start (k + 1)` fixed
-by where the anchor landed — so the design converges on §21's answer,
-applied to the whole schedule rather than to the count alone. What it
-adds over §21 is that the frontier is required to be *below* the
-anchors, which `PartialRun.closed` does not require and which is exactly
-the assumption §9's table now records.
+## 10. What `adapted` permits and an implementation must not
 
 ## 10. What `adapted` permits and an implementation must not
 
