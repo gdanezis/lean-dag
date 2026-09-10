@@ -14,10 +14,12 @@ Mahi-Mahi's fact at the wave of the slot it concerns. `Support` holds
 with Mahi-Mahi's certificate and the wave read at the candidate's round;
 its `Local` and `Commits` laws at two rounds and above, the timed
 model's `OfCoverage` bridge at three and above, the wave-three case by
-the core's argument and the higher waves by Mahi-Mahi's. `Banded` does
-not hold: a wave that alternates with the round reads an absolute round,
-and the band's offset does not preserve it (`docs/target-properties.md`
-§3.4c). What the band derives that needs no offset, persistence and view
+the core's argument and the higher waves by Mahi-Mahi's. `Descends` is
+proved outright in `Helpers/Liveness.lean`, under `SpansEligible c` at
+each slot's own wave, rather than derived. `Banded` does not hold: a
+wave that alternates with the round reads an absolute round, and the
+band's offset does not preserve it (`docs/target-properties.md` §3.4c).
+What the band derives that needs no offset, persistence and view
 monotonicity, is proved here through the extension laws; `LocalTruncate`
 and the `Safe` headline, which rebase by an arbitrary offset, are not
 claimed.
