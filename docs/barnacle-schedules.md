@@ -252,8 +252,17 @@ what a configuration *is*, not when it starts.
      rule never emits — a strictly stronger hypothesis than the
      mechanism needs, and one the finite witnesses cannot discharge by
      case analysis on a width.
-3. The witness of §8 — a run whose second configuration differs from its
-   first in a leader, a round's width and the interval — and the report.
+3. ~~The witness of §8 — a run whose second configuration differs from
+   its first in a leader, a round's width and the interval.~~
+   `LeanDagTest/Barnacle/Varying.lean`. `varC` is two slots wide at round
+   `4` and one elsewhere, its leaders are the rotation shifted by a
+   round, and its interval is two; `varRun` is a height-`2` run on `Usun`
+   that installs it after round `2`, decides its range — slots `3` to
+   `6`, four slots over three rounds — against `varC.sched`, and finds
+   its anchor at slot `6`, which is round `5` where under one leader a
+   round it would be round `6`. The rule is not the AIMD rule, which is
+   the point: BN3 and BN5 hold for every update rule, and BN3 applied to
+   two views identifies the configuration itself rather than a count.
 
 ## 10. What could go wrong
 

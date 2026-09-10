@@ -1033,6 +1033,13 @@ header says so, and instance pins guard the resolution):
   configurations of counts one and two with both clauses non-vacuous and
   verdicts pinned through `agree`.
 
+`LeanDagTest/Barnacle/Varying.lean` is the witness that the run asks for
+none of the paper's uniformity: `varC` differs from the genesis
+configuration in a round's width, in its leaders and in its interval, and
+a height-`2` run installs it, decides its range against its schedule and
+finds its anchor under it. BN3 there identifies the configuration itself
+rather than a count.
+
 ## The assumption a run makes without stating it
 
 `PartialRun.closed` records a configuration's verdicts as decided against

@@ -43,6 +43,7 @@ import LeanDagTest.MahiMahi.Liveness
 import LeanDagTest.BlackMarlin.Divergence
 import LeanDagTest.Barnacle.Model
 import LeanDagTest.Barnacle.Agreement
+import LeanDagTest.Barnacle.Varying
 import LeanDagTest.Barnacle.Progress
 import LeanDagTest.Barnacle.Heads
 import LeanDagTest.Barnacle.Instances
