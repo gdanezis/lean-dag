@@ -1,5 +1,6 @@
 import LeanDag.Properties.Derived.Frame
 import LeanDag.Adaptive.Liveness
+import LeanDag.Adaptive.EpochFrame
 /-!
 # The adaptive policy over a frame whose widths vary
 
@@ -38,7 +39,7 @@ variable {R : DagRule Validator BlockId Payload}
 /-- **A run over a global frame.** One numbering: slots are enumerated in
 round order over the widths the run itself carries, so nothing is
 renumbered at a change of width. -/
-structure FrameRun (W : ℕ)
+structure FrameRun (E : Frame)
     (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator)
     (U : R.Universe) (V : R.View U) (H : ℕ) where
   /-- The widths: how many leaders each round has. -/
@@ -49,16 +50,16 @@ structure FrameRun (W : ℕ)
   /-- The verdicts, by global slot index. -/
   vdct : ℕ → Option BlockId
   /-- The assignment is the policy's. -/
-  coherent : ∀ r i, i < F.width r → epochOf W (F.index r i) < H + 1 →
+  coherent : ∀ r i, i < F.width r → E.roundOf (F.index r i) < H + 1 →
     asg r i = pick U V vdct (F.index r i)
   /-- Every slot of a closed epoch is decided by the schedule below the
   round at which its window ends. -/
-  closed : ∀ r i, i < F.width r → epochOf W (F.index r i) < H →
+  closed : ∀ r i, i < F.width r → E.roundOf (F.index r i) < H →
     DecidedFrameBelow R F asg
-      (F.roundOf (W * (epochOf W (F.index r i) + 2))) V (F.index r i)
+      (F.roundOf (E.cum (E.roundOf (F.index r i) + 2))) V (F.index r i)
       (vdct (F.index r i))
 
-variable {W : ℕ}
+variable {E : Frame}
 variable {pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator}
 variable {U : R.Universe} {V : R.View U} {H : ℕ}
 
@@ -74,19 +75,19 @@ theorem index_lt_of_round_lt {F : Frame} {n r i : ℕ} (hr : r < F.roundOf n)
 
 namespace FrameRun
 
-variable (Rn : FrameRun (R := R) W pick U V H)
+variable (Rn : FrameRun (R := R) E pick U V H)
 
 /-- `closed`, read at a global slot rather than at a round and a
 position. -/
-theorem closed_at (g : ℕ) (hg : epochOf W g < H) :
+theorem closed_at (g : ℕ) (hg : E.roundOf g < H) :
     DecidedFrameBelow R Rn.F Rn.asg
-      (Rn.F.roundOf (W * (epochOf W g + 2))) V g (Rn.vdct g) := by
+      (Rn.F.roundOf (E.cum (E.roundOf g + 2))) V g (Rn.vdct g) := by
   have h := Rn.closed (Rn.F.roundOf g) (g - Rn.F.cum (Rn.F.roundOf g))
     (Rn.F.pos_lt_width g) (by rw [Rn.F.index_roundOf_self g]; exact hg)
   rwa [Rn.F.index_roundOf_self g] at h
 
 /-- A run's own schedule decides its own verdicts. -/
-theorem decided_self (g : ℕ) (hg : epochOf W g < H) :
+theorem decided_self (g : ℕ) (hg : E.roundOf g < H) :
     R.Decided (Rn.F.toSlots Rn.asg Rn.keyed) V g (Rn.vdct g) :=
   Rn.closed_at g hg Rn.F Rn.asg Rn.keyed (fun _ _ => rfl) (fun _ _ _ _ => rfl)
 
@@ -102,48 +103,48 @@ already do.
 induction needs it for the same reason — deciding an epoch reads the
 schedule two epochs ahead, and what it reads there must already be
 settled. -/
-theorem frameRun_agree (hR : Agree R) (hW : 0 < W)
+theorem frameRun_agree (hR : Agree R)
     (hadapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
-      (∀ j, epochOf W j + 2 ≤ epochOf W k → v j = w j) →
+      (∀ j, E.roundOf j + 2 ≤ E.roundOf k → v j = w j) →
       pick U V₁ v k = pick U V₂ w k)
     {V' : R.View U}
-    (Rn : FrameRun (R := R) W pick U V H) (Rn' : FrameRun (R := R) W pick U V' H)
-    (hwd : ∀ r, r < Rn.F.roundOf (W * (H + 1)) →
-      (∀ j, epochOf W j + 2 ≤ epochOf W (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
+    (Rn : FrameRun (R := R) E pick U V H) (Rn' : FrameRun (R := R) E pick U V' H)
+    (hwd : ∀ r, r < Rn.F.roundOf (E.cum (H + 1)) →
+      (∀ j, E.roundOf j + 2 ≤ E.roundOf (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
       Rn'.F.width r = Rn.F.width r) :
-    ∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g := by
-  suffices main : ∀ e g, epochOf W g = e → epochOf W g < H → Rn.vdct g = Rn'.vdct g by
+    ∀ g, E.roundOf g < H → Rn.vdct g = Rn'.vdct g := by
+  suffices main : ∀ e g, E.roundOf g = e → E.roundOf g < H → Rn.vdct g = Rn'.vdct g by
     intro g hg; exact main _ g rfl hg
   intro e
   induction e using Nat.strong_induction_on with
   | _ e ih =>
     intro g hge hgH
-    set B := Rn.F.roundOf (W * (epochOf W g + 2)) with hB
-    have hBle : B ≤ Rn.F.roundOf (W * (H + 1)) :=
-      Rn.F.roundOf_mono (Nat.mul_le_mul_left W (by omega))
+    set B := Rn.F.roundOf (E.cum (E.roundOf g + 2)) with hB
+    have hBle : B ≤ Rn.F.roundOf (E.cum (H + 1)) :=
+      Rn.F.roundOf_mono (E.cum_mono (by omega))
     have hw : ∀ r', r' < B → Rn'.F.width r' = Rn.F.width r' := by
       intro r' hr'
       refine hwd r' (by omega) (fun j hj => ?_)
       have h1 : Rn.F.cum r' < Rn.F.cum B := Rn.F.cum_strictMono hr'
-      have h2 : Rn.F.cum B ≤ W * (epochOf W g + 2) := Rn.F.cum_roundOf_le _
-      have h3 : epochOf W (Rn.F.cum r') < epochOf W g + 2 :=
-        (epochOf_lt_iff hW).mpr (by omega)
-      exact ih (epochOf W j) (by omega) j rfl (by omega)
+      have h2 : Rn.F.cum B ≤ E.cum (E.roundOf g + 2) := Rn.F.cum_roundOf_le _
+      have h3 : E.roundOf (Rn.F.cum r') < E.roundOf g + 2 :=
+        roundOf_lt_iff.mpr (by omega)
+      exact ih (E.roundOf j) (by omega) j rfl (by omega)
     have hcum : ∀ r', r' ≤ B → Rn'.F.cum r' = Rn.F.cum r' :=
       fun r' hr' => Frame.cum_congr hw hr'
     have ha : ∀ r' i', r' < B → i' < Rn.F.width r' → Rn'.asg r' i' = Rn.asg r' i' := by
       intro r' i' hr' hi'
-      have hlt : Rn.F.index r' i' < W * (epochOf W g + 2) :=
+      have hlt : Rn.F.index r' i' < E.cum (E.roundOf g + 2) :=
         index_lt_of_round_lt hr' hi'
-      have hep : epochOf W (Rn.F.index r' i') < epochOf W g + 2 :=
-        (epochOf_lt_iff hW).mpr hlt
+      have hep : E.roundOf (Rn.F.index r' i') < E.roundOf g + 2 :=
+        roundOf_lt_iff.mpr hlt
       have heq : Rn'.F.index r' i' = Rn.F.index r' i' := by
         simp only [Frame.index, hcum r' (by omega)]
       have hi'' : i' < Rn'.F.width r' := by rw [hw r' hr']; exact hi'
       rw [Rn'.coherent r' i' hi'' (by rw [heq]; omega),
         Rn.coherent r' i' hi' (by omega), heq]
       refine hadapted U V' V Rn'.vdct Rn.vdct _ (fun j hj => ?_)
-      exact (ih (epochOf W j) (by omega) j rfl (by omega)).symm
+      exact (ih (E.roundOf j) (by omega) j rfl (by omega)).symm
     have d₁ := Rn.closed_at g hgH Rn'.F Rn'.asg Rn'.keyed hw ha
     have d₂ := Rn'.decided_self g hgH
     exact hR _ V V' g _ _ d₁ d₂
@@ -159,39 +160,39 @@ verdict *some* round below which it is settled
 is soon enough, which is the standing assumption of the adaptive arc read
 at a frame. It is a property of a rule together with a schedule, not of
 the composition. -/
-def SettlesInTwoEpochs (R : Properties.DagRule Validator BlockId Payload) (W : ℕ)
+def SettlesInTwoEpochs (R : Properties.DagRule Validator BlockId Payload) (E : Frame)
     (F : Frame) (a : ℕ → ℕ → Validator)
     (hk : ∀ r i j, i < F.width r → j < F.width r → a r i = a r j → i = j)
     {U : R.Universe} (V : R.View U) : Prop :=
   ∀ g v, R.Decided (F.toSlots a hk) V g v →
-    DecidedFrameBelow R F a (F.roundOf (W * (epochOf W g + 2))) V g v
+    DecidedFrameBelow R F a (F.roundOf (E.cum (E.roundOf g + 2))) V g v
 
 /-- **A rule with a band settles in two epochs whenever its own round is
 soon enough.** `Banded` names the round; the hypothesis is that it is
 within two epochs, and nothing else is asked. -/
-theorem settlesInTwoEpochs_of_banded (hb : Banded R) {W : ℕ} {F : Frame}
+theorem settlesInTwoEpochs_of_banded (hb : Banded R) {E F : Frame}
     {a : ℕ → ℕ → Validator}
     {hk : ∀ r i j, i < F.width r → j < F.width r → a r i = a r j → i = j}
     {U : R.Universe} {V : R.View U}
     (hfit : ∀ g v, R.Decided (F.toSlots a hk) V g v →
       ∀ B, DecidedFrameBelow R F a B V g v →
-        DecidedFrameBelow R F a (F.roundOf (W * (epochOf W g + 2))) V g v) :
-    SettlesInTwoEpochs R W F a hk V := by
+        DecidedFrameBelow R F a (F.roundOf (E.cum (E.roundOf g + 2))) V g v) :
+    SettlesInTwoEpochs R E F a hk V := by
   intro g v hd
   obtain ⟨B, -, hB⟩ := decided_of_frame_agree hb hd
   exact hfit g v hd B hB
 
 /-- **And then the closure clause is the rule's decisions.** A verdict
 function whose values the schedule reaches gives `FrameRun.closed`. -/
-theorem closed_of_settles {W : ℕ} {F : Frame} {a : ℕ → ℕ → Validator}
+theorem closed_of_settles {E F : Frame} {a : ℕ → ℕ → Validator}
     {hk : ∀ r i j, i < F.width r → j < F.width r → a r i = a r j → i = j}
     {U : R.Universe} {V : R.View U} {vdct : ℕ → Option BlockId} {H : ℕ}
-    (hs : SettlesInTwoEpochs R W F a hk V)
-    (hd : ∀ r i, i < F.width r → epochOf W (F.index r i) < H →
+    (hs : SettlesInTwoEpochs R E F a hk V)
+    (hd : ∀ r i, i < F.width r → E.roundOf (F.index r i) < H →
       R.Decided (F.toSlots a hk) V (F.index r i) (vdct (F.index r i))) :
-    ∀ r i, i < F.width r → epochOf W (F.index r i) < H →
+    ∀ r i, i < F.width r → E.roundOf (F.index r i) < H →
       DecidedFrameBelow R F a
-        (F.roundOf (W * (epochOf W (F.index r i) + 2))) V (F.index r i)
+        (F.roundOf (E.cum (E.roundOf (F.index r i) + 2))) V (F.index r i)
         (vdct (F.index r i)) :=
   fun r i hi hep => hs _ _ (hd r i hi hep)
 

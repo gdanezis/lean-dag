@@ -50,14 +50,14 @@ decided. It names no count mechanism. Its safety theorem,
 `Adaptive.frameRun_agree`, takes one hypothesis about widths:
 
 ```lean
-(hwd : ∀ r, r < Rn.F.roundOf (W * (H + 1)) →
-    (∀ j, epochOf W j + 2 ≤ epochOf W (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
+(hwd : ∀ r, r < Rn.F.roundOf (E.cum (H + 1)) →
+    (∀ j, E.roundOf j + 2 ≤ E.roundOf (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
     Rn'.F.width r = Rn.F.width r)
 ```
 
 Read as a clause on a mechanism rather than a hypothesis of a theorem,
 `hwd` says: *the width of round `r` is a function of the verdicts of
-epochs at or below `epochOf (F.cum r) − 2`.* That is `Policy.adapted`
+epochs at or below `E.roundOf (F.cum r) − 2`.* That is `Policy.adapted`
 with `width` in place of `pick`.
 
 So the safety argument for adaptive widths already exists.

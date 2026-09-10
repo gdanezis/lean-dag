@@ -446,14 +446,24 @@ namespace Composed
 variable {pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator}
 variable {H : ℕ}
 
-/-- **A composed run is a run over its own frame.** -/
-def toFrameRun (Rn : Composed (R := R) W P pick upd U V K H) : FrameRun (R := R) W pick U V H where
+/-- **A composed run is a run over its own frame.** The epoch structure
+it runs on is the frame of constant width `W`, `epochOf_eq_roundOf` being
+that identity. -/
+def toFrameRun (Rn : Composed (R := R) W P pick upd U V K H) (hW : 0 < W) :
+    FrameRun (R := R) (constFrame W hW) pick U V H where
   F := Rn.F
   asg := Rn.asg
   keyed := Rn.keyed
   vdct := Rn.vdct
-  coherent := Rn.coherent
-  closed := Rn.closed
+  coherent := fun r i hi hep =>
+    Rn.coherent r i hi (by rw [Adaptive.epochOf_eq_roundOf W hW]; exact hep)
+  closed := fun r i hi hep => by
+    have hb : (constFrame W hW).cum ((constFrame W hW).roundOf (Rn.F.index r i) + 2)
+        = W * (epochOf W (Rn.F.index r i) + 2) := by
+      rw [constFrame_cum, ← Adaptive.epochOf_eq_roundOf W hW]
+      exact Nat.mul_comm _ _
+    rw [hb]
+    exact Rn.closed r i hi (by rw [Adaptive.epochOf_eq_roundOf W hW]; exact hep)
 
 /-- **The widths are a function of the verdicts**, at every round the
 induction reads — `width_det` where a configuration holds the round, and
@@ -511,8 +521,18 @@ theorem agree (hR : Properties.Agree R) (hW : 0 < W) (hgap : P.gap = 2 * W)
     (Rn' : Composed (R := R) W P pick upd U V' K H)
     (hcover : ∀ r, 0 < r → r < Rn.F.roundOf (W * (H + 1)) →
       ∃ k, k < K ∧ Rn.start k < r ∧ r ≤ Rn.start (k + 1)) :
-    ∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g :=
-  frameRun_agree hR hW hadapted Rn.toFrameRun Rn'.toFrameRun (hwd hW hgap hupd hcover)
+    ∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g := by
+  have h := frameRun_agree hR
+    (fun U V₁ V₂ v w k hj => hadapted U V₁ V₂ v w k
+      (fun j hj' => hj j (by rwa [← Adaptive.epochOf_eq_roundOf W hW,
+        ← Adaptive.epochOf_eq_roundOf W hW])))
+    (Rn.toFrameRun hW) (Rn'.toFrameRun hW)
+    (fun r hr hv => hwd hW hgap hupd hcover r
+      (by rw [constFrame_cum, Nat.mul_comm] at hr; exact hr)
+      (fun j hj => hv j (by rwa [Adaptive.epochOf_eq_roundOf W hW,
+        Adaptive.epochOf_eq_roundOf W hW] at hj)))
+  intro g hg
+  exact h g (by rw [← Adaptive.epochOf_eq_roundOf W hW]; exact hg)
 
 
 /-- **BN3 at a composed run.** Two composed runs over one universe, held
@@ -1050,7 +1070,7 @@ theorem step (hag : Agree R)
       (Rn.reframe hW (Rn.count_pos K) (Rn.count_le K) hK hhor hkeyed).asg
       (Rn.reframe hW (Rn.count_pos K) (Rn.count_le K) hK hhor hkeyed).keyed)
     {H' : ℕ} (hHH : H ≤ H') (A : Adaptive.PartialRun Pol U V H')
-    (hset : SettlesInTwoEpochs R W
+    (hset : SettlesInTwoEpochs R (constFrame W hW)
       (Rn.F.extend (Rn.start K) (Rn.count K) (Rn.count_pos K))
       (fun r i => A.assign ((Rn.F.extend (Rn.start K) (Rn.count K)
         (Rn.count_pos K)).index r i))
@@ -1103,6 +1123,11 @@ theorem step (hag : Agree R)
     rw [hPp] at h
     exact h
   · intro r i hi hep
+    have hb : (constFrame W hW).cum ((constFrame W hW).roundOf (F'.index r i) + 2)
+        = W * (epochOf W (F'.index r i) + 2) := by
+      rw [constFrame_cum, ← Adaptive.epochOf_eq_roundOf W hW]
+      exact Nat.mul_comm _ _
+    rw [← hb]
     refine hset _ _ ?_
     have h := (A.closed (F'.index r i) (by rw [hPW]; omega)).toDecided
     rw [← hsched] at h

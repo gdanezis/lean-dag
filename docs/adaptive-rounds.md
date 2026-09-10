@@ -91,11 +91,13 @@ round `B` decides slot `g` and nothing above `B` changes that;
 
 `Adaptive.frameRun_agree` (`Adaptive/Frame.lean`). A `FrameRun` carries a
 frame, an assignment by round and position, and verdicts by global slot
-index. Two such runs over one universe and view have the same verdicts.
+index. Two such runs over one universe have the same verdicts, `E` being the
+frame the epochs are read from — `constFrame W` where the composition
+uses it.
 
 The whole of what the varying widths cost is one hypothesis:
 
-    hwd : ∀ r, (∀ j, epochOf W j + 2 ≤ epochOf W (Rn.F.cum r) →
+    hwd : ∀ r, (∀ j, E.roundOf j + 2 ≤ E.roundOf (Rn.F.cum r) →
       Rn.vdct j = Rn'.vdct j) → Rn'.F.width r = Rn.F.width r
 
 This is `Policy.adapted` read of the widths rather than the leaders: the
