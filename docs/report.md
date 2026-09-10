@@ -4634,6 +4634,156 @@ delicate, and the answer may need more than four validators.
 
 ---
 
+### 13.8 The adaptive schedule: the whole of it emitted
+
+§13.2's policy varies one of a schedule's three parts. It reassigns the
+leaders and leaves the rest alone: the epoch is `Policy.W` slots long
+whatever happens, and how many leaders a round holds is not the policy's
+to say. `Adaptive.Schedule` emits all three.
+
+| | emitted by | in §13.2 |
+|:---|:---|:---|
+| `len v e` | slots in epoch `e` | fixed, `Policy.W` |
+| `widthOf v r` | slots in round `r` | not the policy's |
+| `pick U V v k` | the leader of slot `k` | `Policy.pick` |
+
+`epochFrame` and `frameOf` are the two `Frame`s a schedule gives at a
+verdict function, and neither is a recursion: `len` and `widthOf` take
+the index directly, and it is the clauses that name the frames the
+indices are read against. Epochs stand to slots as slots stand to rounds,
+and the identity making that exact is `constFrame_roundOf` — a frame of
+constant width `m` has `roundOf g = g / m`, so §13.1's
+`epochOf W k = k / W` **is** `(constFrame W hW).roundOf k`, and varying
+the epoch structure is the substitution of an arbitrary frame for that
+one.
+
+Rounds may differ in width from one to the next.
+`LeanDagTest.VaryingFrame.vF` cycles through `1, 2, 3` and is a lawful
+schedule; what forbids that under §21's mechanism is
+`Integration.CompRun.cnt_eq`, which is Barnacle's clause and not the
+frame's.
+
+**AS1 — what the three functions owe.** Six clauses, and each is
+consumed somewhere.
+
+* `len_pos` and `widthOf_pos`: every epoch holds a slot and **every
+  round holds a slot**. The second is the degenerate case's floor, and it
+  is not a convention: `Frame.width_pos` excludes empty rounds because
+  with them `Frame.cum` is only monotone, and the agreement induction
+  needs it strictly monotone at the window's end. A schedule of one slot
+  every `wave` rounds is therefore not available at all, and one leader a
+  round is the sparsest a policy may emit.
+* `widthOf_le`: the widths are bounded by `maxWidth`. The descent reads
+  it — `Frame.spansEligible_toSlots` asks the widths to be bounded and
+  not to be equal.
+* `keyed`: distinct positions of a round are led by distinct validators,
+  **at every width the schedule can choose**. §13.2 owes this once, at a
+  width someone else fixed; a policy choosing the width owes it at each.
+* `len_adapted`, `widthOf_adapted`, `pick_adapted`: each function reads
+  the verdicts of epochs two below the thing it schedules and nothing
+  else. This is `Policy.adapted` read of the other two functions, and it
+  is what the safety induction consumes.
+
+Two further conditions are consequences rather than clauses. An epoch
+must hold at least `maxWidth * (wave + 1)` slots, since `PlacesRunsIn`
+asks its run of `c` reliable slots to fit inside one epoch and the
+descent asks `maxWidth * (wave + 1) ≤ c`; and at least `c₀`, the reach of
+the rotation, if the degenerate case is to discharge the fairness clause.
+An epoch of `len` slots at width `m` spans `len / m` rounds, so at the
+widest schedule the floor is `wave + 1` rounds and at one leader a round
+it is `len`.
+
+**AS2 — safety.** Two runs over one universe, held by validators with
+different views of it, have the same verdicts below the horizon.
+
+```lean
+theorem agree (hR : Agree R) {V' : R.View U}
+    (Rn : ScheduleRun P U V H) (Rn' : ScheduleRun P U V' H) :
+    ∀ g, (P.epochFrame Rn.vdct).roundOf g < H → Rn.vdct g = Rn'.vdct g
+```
+
+A `ScheduleRun` carries verdicts and nothing else, so its epochs, widths
+and leaders are the schedule's readings of them and `FrameRun.coherent`
+holds by `rfl`. `Adaptive.frameRun_agree`'s three determinisms are then
+the three adaptedness clauses read at the runs.
+
+**AS3 — the third determinism.** The induction that §13.3 runs on epochs
+now has to settle where the epochs *are* before it can say what a verdict
+two epochs down is. `hbd` is that clause — two runs agreeing on the
+verdicts below epoch `e` agree on how many slots epoch `e` holds — and it
+sits beside `hwd` in `frameRun_agree`, whose step runs in three parts
+where §16.8's runs in two. The induction hypothesis moved with it: it is
+carried on the slot bound `j < Rn.E.cum e`, which is frame-independent,
+rather than on the epoch of a slot, which is a fact about a run once the
+boundaries are in question.
+
+**AS4 — liveness.** Every epoch a run has closed carries `c` consecutive
+commits, and the fairness consumed is `PlacesRunsIn`: the stretch of `c`
+reliable slots must fall inside an epoch **the same policy sized**.
+
+```lean
+theorem commits_in_epoch (hlc : LeaderCommits R Live) (hag : Agree R)
+    (Rn : ScheduleRun P U V H) {T : Finset Validator} {c : ℕ}
+    (hruns : PlacesRunsIn P U V T c) (e : ℕ) (heH : e + 2 ≤ H)
+    (hlive : Live Rn.sched V T ((P.epochFrame Rn.vdct).cum 1)
+      ((P.epochFrame Rn.vdct).cum (e + 2))) :
+    ∃ b, (P.epochFrame Rn.vdct).cum (e + 1) ≤ b ∧
+      b + c ≤ (P.epochFrame Rn.vdct).cum (e + 2) ∧
+      ∀ i, i < c → ∃ L, Rn.vdct (b + i) = some L
+```
+
+Nothing about the widths enters: the verdict is read at the run's own
+schedule whatever the widths do, so a width may change anywhere inside an
+epoch. `ScheduleRun.descends` is the descent at `maxWidth`, and
+`placesRunsIn_ofFixed_of_headsRun` is the degenerate case — at one leader
+a round the head of round `r` is slot `r`, so §21.4's `HeadsRun` places a
+stretch of slots, and it falls inside an epoch as soon as that epoch is
+`c₀` slots long.
+
+**AS5 — against §16.8's composition.** Both deliver variable widths at a
+two-epoch lag. They differ in what can be checked.
+
+| | §16.8, Barnacle composed | §13.8, emitted |
+|:---|:---|:---|
+| lag | two epochs | two epochs |
+| rate of width change | `≥ 2 * W + 2` rounds | every round |
+| widths within a range | equal (`cnt_eq`) | free |
+| epoch length | fixed, `Policy.W` | emitted |
+| gap parameter | `Params.gap = 2 * W` | none |
+| `hwd` discharged by | `width_det`, and four determinisms under it | one adaptedness clause |
+
+The rate follows from the gap: a configuration's range is at least
+`interval + 1 + gap` rounds, so at width `m` a width change is at least
+`m * (2 * W + 2)` slots from the last. Neither design is more current —
+the lag is two epochs in both — but the composition changes more slowly,
+and since a configuration's range is at least `2 * W + 2` rounds while an
+epoch spans at most `W` of them, it admits at most one width change
+inside an epoch.
+
+What the composition keeps is Barnacle's control loop as a proved object.
+`Barnacle.Aimd.holds` and `Barnacle.Healthy.holds` are stated over the
+update rule and the parameters rather than over a run, so they hold of a composed run
+unchanged; a schedule emitting the widths carries the control rule inside
+itself and owes its soundness again. The composition also blocks by
+construction where nothing commits, a configuration not closing until a
+commit lands past its threshold, and a schedule must decide that case in
+`len` and `widthOf`.
+
+**AS6 — witnesses.** `Schedule.ofFixed` reads no verdict, so its clauses
+hold at any two frames; `LeanDagTest.ScheduleModel.sched` is it at epochs
+of `3, 4, 5` slots over rounds of `1, 2, 3`, neither constant and neither
+aligned with the other. `aSched` is adapted in both frames — the epoch
+lengths and the widths turn on whether slot `0` committed — and the
+clauses hold because slot `0` lies in epoch `0`, two below every epoch
+either function is consulted for. `bRun` closes an epoch over `Ugrow`:
+its leaders are correct, so slot `0` commits, the schedule takes its
+wider frames, and epoch `0`'s three slots are each decided.
+`aF_eq_bF` and `aE_eq_bE` are what make that a fixed point rather than an
+assertion — the schedule at those verdicts gives back the frames the
+verdicts were read off.
+
+The design record is `adaptive-schedule.md`.
+
 ## 14. Hybrid fault tolerance: Byzantine and crash faults apart
 
 *(modules `LeanDag/Hybrid/`; the design record is `hybrid-plan.md`; the
@@ -9738,7 +9888,7 @@ detail than a report admits: `spec.md` (safety), `liveness.md`
 (liveness), `pipelining-and-multi-leader.md` (the schedule
 generalisation), `chain-quality.md` (§7), `dos-equivocation-and-growth.md`
 (§8), `garbage.md` (§9), `odontoceti.md` (§10), `adaptive-leaders.md`
-(§13), `hybrid-plan.md` (§14), `adaptive-rounds.md` (§16.8),
+(§13), `adaptive-schedule.md` (§13.8), `hybrid-plan.md` (§14), `adaptive-rounds.md` (§16.8),
 `target-properties.md` (§16, whose
 opening part is the current statement of the properties), `mahi-mahi.md`
 (§17), `black-marlin.md` (§18), `minnow.md` (§19), `finwhale.md` (§20),
@@ -10186,7 +10336,7 @@ quality, C, D,
 B and E for the denial-of-service arc, G for garbage collection, O for
 Odontoceti; P, N and R name clauses of the trust boundary rather than
 results. Labels resolving to witness models rather than library
-theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, H9, H10, BN13, I25) are
+theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, AS6, H9, H10, BN13, I25) are
 excluded from the diagrams, which show the library; so are MM4, BM8, BML6, BMR7, BMA5, BMD7, BME6, BMO10, BMO11 and BMP14. Two labels are
 absent from the Barnacle rows below and are named here rather than left
 to be noticed: **BN1**, that `Sched m` is a lawful `Slots` instance at
@@ -10372,6 +10522,12 @@ reused.
 | AL6 | the adaptive ledger is agreed | `run_commitSeq_agree` *(Adaptive/Run)* |
 | AL7 | every rule showing the properties instantiates the mechanism: Mysticeti, Odontoceti, Hydrozoan and Nemo-Nemo, synchronous or reactive | `Adaptive.run_exists_of_support` *(Adaptive/Liveness)* |
 | AL8 | adaptivity on data: the verdict moves with the assignment | `demotePolicy` witnesses *(LeanDagTest/Adaptive/Model)* |
+| AS1 | the three functions a schedule emits, and the six clauses they owe: every round holds a slot, the widths are bounded, distinct positions differ in leader at every width, and each function reads the verdicts of epochs two below it | `Adaptive.Schedule` *(Adaptive/Schedule)* |
+| AS2 | safety: two runs of a schedule over one universe, at different views, have the same verdicts below the horizon | `Adaptive.ScheduleRun.agree` *(Adaptive/ScheduleRun)* |
+| AS3 | the boundaries are a function of the verdicts too, so the epoch induction settles where the epochs are before what they decide | `Adaptive.frameRun_agree` *(Adaptive/Frame)*, `Adaptive.epochOf_eq_roundOf`, `Adaptive.roundOf_lt_iff` *(Adaptive/EpochFrame)* |
+| AS4 | liveness: every epoch a run has closed carries `c` consecutive commits, at a fairness clause read over an epoch the policy sized | `Adaptive.ScheduleRun.commits_in_epoch`, `Adaptive.ScheduleRun.commits`, `Adaptive.ScheduleRun.descends` *(Adaptive/ScheduleLive)*, `placesRunsIn_ofFixed_of_headsRun` *(Integration/AdaptiveFrame)* |
+| AS5 | a frame whose rounds differ in width spans a wave: the descent asks the widths to be bounded and not equal | `Frame.spansEligible_toSlots`, `descends_frame` *(Adaptive/Frame)*, `LeanDagTest.VaryingFrame.vF_spans` *(LeanDagTest/Integration/VaryingFrame)* |
+| AS6 | the schedule on data: both frames read from the verdicts, and a run that closes an epoch | `LeanDagTest.ScheduleModel.aSched`, `LeanDagTest.ScheduleModel.bRun`, `LeanDagTest.ScheduleModel.aF_eq_bF` *(LeanDagTest/Adaptive/ScheduleModel)* |
 
 **Hybrid fault tolerance** (§14):
 

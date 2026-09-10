@@ -7,10 +7,13 @@
 > and whether the surrounding prose is faithful to what is proved, has
 > only human-plus-LLM review behind it. Read critically.
 
-> **Status (September 2026).** Proposed, not built. Nothing below is in
-> the development. `adaptive-rounds.md` records the built alternative —
-> variable widths obtained by composing `Adaptive.Policy` with Barnacle —
-> and §9 compares the two.
+> **Status (September 2026).** Built, through §12's step 7. Safety is
+> `Adaptive.ScheduleRun.agree`, liveness is
+> `Adaptive.ScheduleRun.commits_in_epoch`, and the witnesses are
+> `LeanDagTest/Adaptive/ScheduleModel.lean`. Report §13.8 states the arc
+> and carries the **AS**-labels. `adaptive-rounds.md` records the
+> alternative — variable widths obtained by composing `Adaptive.Policy`
+> with Barnacle — and §9 compares the two.
 
 This document is the design record for the **adaptive schedule**: a
 second question put to the arc of `adaptive-leaders.md`, which varies who
@@ -431,10 +434,12 @@ first and the verdicts read off them, and these two say the schedule at
 those verdicts gives back the frames it was read against. Without them
 the run would be a fixed point asserted rather than checked.
 
-**7. The record.** `LeanDag.lean` and `LeanDagTest.lean` gain the
-imports; the report gains a subsection of §13 and Appendix A gains the
-**AS** rows; `scripts/audit-mechanisms.py` gains the arc; and
-`deps.tsv`, `decls.json` and the four dependency-graph SVGs are
+**7. The record — done.** Report §13.8 states the arc: the three
+functions a schedule emits, the six clauses they owe and the two
+consequences, safety, the third determinism, liveness, and a table
+against §16.8's composition. Appendix A carries **AS1**–**AS6**, `AS6`
+joining the labels the diagrams exclude, and `adaptive-schedule.md` joins
+the companion list. `deps.tsv`, `decls.json` and the four SVGs are
 regenerated.
 
 **Separable, and not required.** The sharpened descent of §6 — stated at
