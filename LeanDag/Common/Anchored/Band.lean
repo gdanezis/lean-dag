@@ -645,7 +645,8 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
       ∀ (g g' d d' : ℕ) (S' : Slots Validator)
         (U' : BlockRecord Validator BlockId Payload P honest) (V' : U'.View) (k' : ℕ),
         k + d' = k' + d →
-        (∀ m m', m + d' = m' + d → S.slotRound m + g = S'.slotRound m' + g') →
+        (∀ m m', m + d' = m' + d → S.slotRound m ≤ top →
+          S.slotRound m + g = S'.slotRound m' + g') →
         (∀ m m', m + d' = m' + d → S.slotRound m ≤ top → S.leader m = S'.leader m') →
         AgreeBand R.toDagRule U U' (S.slotRound k + g) (top + g) g g' →
         (∀ b, b ∈ V.ids → S.slotRound k ≤ (U.block b).round →
@@ -656,7 +657,7 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
   | @directCommit k L hL hc =>
       refine ⟨S.slotRound k + R.wave, le_refl _, ?_⟩
       intro g g' d d' S' U' V' k' hkd hsch hlead hab hV
-      have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd
+      have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd (by omega)
       have hlk : S.leader k = S'.leader k' := hlead k k' hkd (by omega)
       exact Decided.directCommit (S := S')
         (isLeaderBlock_band hab hkk hlk (by omega) (by omega) hL)
@@ -665,7 +666,7 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
   | @directSkip k hs =>
       refine ⟨S.slotRound k + R.wave, le_refl _, ?_⟩
       intro g g' d d' S' U' V' k' hkd hsch hlead hab hV
-      have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd
+      have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd (by omega)
       have hlk : S.leader k = S'.leader k' := hlead k k' hkd (by omega)
       exact Decided.directSkip (S := S')
         (hb.skip_band hab hkk hlk rfl (by omega)
@@ -689,15 +690,18 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
       have htopk : S.slotRound k + R.wave ≤ top := by omega
       refine ⟨top, htopk, ?_⟩
       intro g g' d d' S' U' V' k' hkd hsch hlead hab hV
-      have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd
+      have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd (by omega)
       have hlk : S.leader k = S'.leader k' := hlead k k' hkd (by omega)
       have hjd : j + d' = (j - k + k') + d := by omega
-      have hjj : S.slotRound j + g = S'.slotRound (j - k + k') + g' := hsch j _ hjd
+      have hjtop : S.slotRound j ≤ top := by omega
+      have hjj : S.slotRound j + g = S'.slotRound (j - k + k') + g' :=
+        hsch j _ hjd hjtop
       have hAhi : (U.block A).round + g ≤ top + g := by rw [hAL.2.1]; omega
       have hAlo : S.slotRound k + g ≤ (U.block A).round + g := by rw [hAL.2.1]; omega
       refine Decided.indirectCommit (S := S') (i := i) (by omega) (by
           rw [R.eligible_iff]; omega)
-        (hjt g g' d d' S' U' V' (j - k + k') hjd hsch
+        (hjt g g' d d' S' U' V' (j - k + k') hjd
+          (fun m m' hm hbnd => hsch m m' hm (by omega))
           (fun m m' hm hb => hlead m m' hm (by omega))
           (hab.mono (by omega) (by omega))
           (fun b hb h1 h2 => hV b hb (by omega) (by omega))) ?_ hi ?_
@@ -708,12 +712,14 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
         have hij : i' - k' + k < j := by omega
         have helg : R.Eligible (S := S) k (i' - k' + k) := by
           have hii := hsch _ i' hi'd
+            (le_trans (S.mono (Nat.le_of_lt hij)) hjtop)
           rw [R.eligible_iff (S := S')] at h3
           rw [R.eligible_iff (S := S)]; omega
         have hk2 := hkey _ hki hij helg
         obtain ⟨htopi, hit⟩ := (ihmid _ hki hij helg).choose_spec
         have hkr : S.slotRound k ≤ S.slotRound (i' - k' + k) := S.mono (by omega)
-        exact hit g g' d d' S' U' V' i' hi'd hsch
+        exact hit g g' d d' S' U' V' i' hi'd
+          (fun m m' hm hbnd => hsch m m' hm (by omega))
           (fun m m' hm hb => hlead m m' hm (by omega))
           (hab.mono (by omega) (by omega))
           (fun b hb ha1 ha2 => hV b hb (by omega) (by omega))
@@ -741,15 +747,18 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
       have htopk : S.slotRound k + R.wave ≤ top := by omega
       refine ⟨top, htopk, ?_⟩
       intro g g' d d' S' U' V' k' hkd hsch hlead hab hV
-      have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd
+      have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd (by omega)
       have hlk : S.leader k = S'.leader k' := hlead k k' hkd (by omega)
       have hjd : j + d' = (j - k + k') + d := by omega
-      have hjj : S.slotRound j + g = S'.slotRound (j - k + k') + g' := hsch j _ hjd
+      have hjtop : S.slotRound j ≤ top := by omega
+      have hjj : S.slotRound j + g = S'.slotRound (j - k + k') + g' :=
+        hsch j _ hjd hjtop
       have hAhi : (U.block A).round + g ≤ top + g := by rw [hAL.2.1]; omega
       have hAlo : S.slotRound k + g ≤ (U.block A).round + g := by rw [hAL.2.1]; omega
       refine Decided.indirectSkip (S := S') (by omega) (by
           rw [R.eligible_iff]; omega)
-        (hjt g g' d d' S' U' V' (j - k + k') hjd hsch
+        (hjt g g' d d' S' U' V' (j - k + k') hjd
+          (fun m m' hm hbnd => hsch m m' hm (by omega))
           (fun m m' hm hb => hlead m m' hm (by omega))
           (hab.mono (by omega) (by omega))
           (fun b hb h1 h2 => hV b hb (by omega) (by omega))) ?_ ?_
@@ -759,18 +768,55 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
         have hij : i' - k' + k < j := by omega
         have helg : R.Eligible (S := S) k (i' - k' + k) := by
           have hii := hsch _ i' hi'd
+            (le_trans (S.mono (Nat.le_of_lt hij)) hjtop)
           rw [R.eligible_iff (S := S')] at h3
           rw [R.eligible_iff (S := S)]; omega
         have hk2 := hkey _ hki hij helg
         obtain ⟨htopi, hit⟩ := (ihmid _ hki hij helg).choose_spec
         have hkr : S.slotRound k ≤ S.slotRound (i' - k' + k) := S.mono (by omega)
-        exact hit g g' d d' S' U' V' i' hi'd hsch
+        exact hit g g' d d' S' U' V' i' hi'd
+          (fun m m' hm hbnd => hsch m m' hm (by omega))
           (fun m m' hm hb => hlead m m' hm (by omega))
           (hab.mono (by omega) (by omega))
           (fun b hb ha1 ha2 => hV b hb (by omega) (by omega))
       · intro i hi
         exact rungEmpty_band hb hab hAL.1 hAlo hAhi hkk hlk (by omega) (by omega) hi
           (hnone i hi)
+
+/-- **A directly decided slot's band is tight**: its top is exactly the
+slot's own round plus a wave. `banded_aux` gives an upper end that the
+derivation determines, and for a direct commit or a direct skip that
+derivation reads the slot's own wave and nothing above it. This is what
+a mechanism needs when the bound it can afford is fixed in advance
+rather than read off the derivation. -/
+theorem banded_direct {V : U.View} {k : ℕ} {v : Option BlockId}
+    (hd : R.Decided (S := S) U V k v)
+    (hdir : (∃ L, v = some L ∧ IsLeaderBlock (S := S) U k L ∧
+        R.Commit U V L (S.slotRound k)) ∨ (v = none ∧ R.Skip U V S k)) :
+    ∀ (g g' d d' : ℕ) (S' : Slots Validator)
+      (U' : BlockRecord Validator BlockId Payload P honest) (V' : U'.View) (k' : ℕ),
+      k + d' = k' + d →
+      (∀ m m', m + d' = m' + d → S.slotRound m ≤ S.slotRound k + R.wave →
+        S.slotRound m + g = S'.slotRound m' + g') →
+      (∀ m m', m + d' = m' + d → S.slotRound m ≤ S.slotRound k + R.wave →
+        S.leader m = S'.leader m') →
+      AgreeBand R.toDagRule U U' (S.slotRound k + g) (S.slotRound k + R.wave + g) g g' →
+      (∀ b, b ∈ V.ids → S.slotRound k ≤ (U.block b).round →
+        (U.block b).round ≤ S.slotRound k + R.wave → b ∈ V'.ids) →
+      R.Decided (S := S') U' V' k' v := by
+  intro g g' d d' S' U' V' k' hkd hsch hlead hab hV
+  have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd (by omega)
+  have hlk : S.leader k = S'.leader k' := hlead k k' hkd (by omega)
+  rcases hdir with ⟨L, hv, hL, hc⟩ | ⟨hv, hs⟩
+  · subst hv
+    exact Decided.directCommit (S := S')
+      (isLeaderBlock_band hab hkk hlk (by omega) (by omega) hL)
+      (hb.commit_band hab hkk hlk rfl (by omega)
+        (fun b hb h1 h2 => hV b hb (by omega) (by omega)) hL hc)
+  · subst hv
+    exact Decided.directSkip (S := S')
+      (hb.skip_band hab hkk hlk rfl (by omega)
+        (fun b hb h1 h2 => hV b hb (by omega) (by omega)) hs)
 
 /-- **An anchored rule is banded.** -/
 theorem banded : Banded R.toDagRule := by

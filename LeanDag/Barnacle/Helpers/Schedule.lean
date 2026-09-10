@@ -1,4 +1,5 @@
 import LeanDag.Barnacle.Model.Schedule
+import LeanDag.Properties.Derived.FromBand
 import Mathlib.Data.Nat.ModEq
 
 /-!
@@ -108,6 +109,39 @@ theorem Sched_congr (getLeader : ℕ → Validator) {w : ℕ} (hk : Keyed getLea
     {m₁ m₂ : ℕ} (h : m₁ = m₂) (h₁ : 0 < m₁) (h₁' : m₁ ≤ w) (h₂ : 0 < m₂) (h₂' : m₂ ≤ w) :
     Sched getLeader hk m₁ h₁ h₁' = Sched getLeader hk m₂ h₂ h₂' := by
   subst h; rfl
+
+/-- **A configuration's verdicts do not depend on what the count becomes
+later.** Every slot decided under the schedule of count `m` has a round
+bound below which that count and its rotation settle it; above the bound
+the schedule may be anything, and in particular it may be the one the
+next configuration installs.
+
+This is the assumption a Barnacle run makes and does not state.
+`PartialRun` records a configuration's verdicts as decided against
+`Sched getLeader hk (count k)` — the uniform schedule at that count,
+extended to every round — which is not the schedule that runs once the
+count changes. What makes that sound is that a configuration's verdicts
+are settled within its own rounds, and this is that statement, at
+`Properties.exists_roundLocal`. -/
+theorem sched_local [Fintype Validator] [DecidableEq Validator]
+    {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
+    {R : Properties.DagRule Validator BlockId Payload} (hb : Properties.Banded R)
+    {getLeader : ℕ → Validator} {w : ℕ} {hk : Keyed getLeader w}
+    {m : ℕ} {hm : 0 < m} {hmax : m ≤ w}
+    {U : R.Universe} {V : R.View U} {g : ℕ} {v : Option BlockId}
+    (hd : R.Decided (Sched getLeader hk m hm hmax) V g v) :
+    ∃ B, g / m < B ∧
+      ∀ S' : Slots Validator,
+        (∀ κ, κ / m < B → S'.slotRound κ = κ / m) →
+        (∀ κ, κ / m < B → S'.leader κ = getLeader (κ / m + κ % m)) →
+        R.Decided S' V g v := by
+  obtain ⟨B, hB, hall⟩ := Properties.exists_roundLocal hb hd
+  rw [Sched_slotRound] at hB
+  refine ⟨B, hB, fun S' hround hlead => hall S' (fun κ hκ => ?_) (fun κ hκ => ?_)⟩
+  · rw [Sched_slotRound] at hκ
+    rw [hround κ hκ, Sched_slotRound]
+  · rw [Sched_slotRound] at hκ
+    rw [hlead κ hκ, Sched_leader]
 
 end Barnacle
 

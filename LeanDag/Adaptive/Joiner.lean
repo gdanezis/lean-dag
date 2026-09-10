@@ -37,6 +37,40 @@ theorem Rebases.injective {S S' : Slots Validator} {G d : ℕ} (h : Rebases S S'
   have := hinj this
   omega
 
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- A rebase preserves the schedule law: the rebased rounds are the
+original's, shifted, so slots sharing a rebased round shared one before,
+where the assignment already separated them. -/
+theorem Rebases.keyed {S S' : Slots Validator} {G d : ℕ} (h : Rebases S S' G d)
+    {a : ℕ → Validator}
+    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
+    ∀ k₁ k₂, S'.slotRound k₁ = S'.slotRound k₂ →
+      a (d + k₁) = a (d + k₂) → k₁ = k₂ := by
+  intro k₁ k₂ hr ha
+  have h₁ := h.slotRound k₁
+  have h₂ := h.slotRound k₂
+  have hrr : S.slotRound (d + k₁) = S.slotRound (d + k₂) := by omega
+  have := hk _ _ hrr ha
+  omega
+
+/-- **Rebasing commutes with adapting**, at a lawful assignment. -/
+theorem Rebases.slotsOfKeyed {S S' : Slots Validator} {G d : ℕ} (h : Rebases S S' G d)
+    (a : ℕ → Validator)
+    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
+    Rebases (slotsOfKeyed (S := S) a hk)
+      (slotsOfKeyed (S := S') (fun m => a (d + m)) (h.keyed hk)) G d where
+  slotRound := h.slotRound
+  leader := fun _ => rfl
+  base := h.base
+
+/-- And so a cut at the base schedule is a cut at the adaptive one. -/
+theorem Truncates.slotsOfKeyed {U U' : R.Universe} {S S' : Slots Validator} {G d : ℕ}
+    (h : Truncates R U U' S S' G d) (a : ℕ → Validator)
+    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
+    Truncates R U U' (slotsOfKeyed (S := S) a hk)
+      (slotsOfKeyed (S := S') (fun m => a (d + m)) (h.toRebases.keyed hk)) G d :=
+  { h.toRebasedAbove, h.toRebases.slotsOfKeyed a hk with }
+
 /-- **Rebasing commutes with adapting.** Rebase a schedule and then
 install an assignment shifted past the base slot, or install the
 assignment first and rebase: the same rounds, the same leaders. -/
@@ -94,11 +128,12 @@ theorem joiner_assign_agree (hs : HorizonStable P G d pick')
 /-- The joiner's schedule *is* the network's, seen from another origin. -/
 theorem joiner_leader_agree (hs : HorizonStable P G d pick')
     {U U' : R.Universe} (ht : Truncates R U U' S S' G d)
-    {V : R.View U} (A : Run P U V) (V' : R.View U') (k : ℕ) :
-    (slotsOf (S := S') (ht.toRebases.injective P.inj)
-        (fun m => pick' U' V' (fun j => A.vdct (d + j)) m)).leader k
-      = (slotsOf P.inj A.assign).leader (d + k) := by
-  simp only [slotsOf_leader]
+    {V : R.View U} (A : Run P U V) (V' : R.View U')
+    (hk' : ∀ k₁ k₂, S'.slotRound k₁ = S'.slotRound k₂ →
+      pick' U' V' (fun j => A.vdct (d + j)) k₁
+        = pick' U' V' (fun j => A.vdct (d + j)) k₂ → k₁ = k₂) (k : ℕ) :
+    (slotsOfKeyed (S := S') (fun m => pick' U' V' (fun j => A.vdct (d + j)) m) hk').leader k
+      = (slotsOfKeyed A.assign A.keyed).leader (d + k) := by
   exact joiner_assign_agree hs ht.toRebasedAbove A V' k
 
 /-- **The verdict half.** Across a cut, the truncation under the shifted
@@ -107,12 +142,14 @@ slot, from any view of the truncation. `decided_agree_rebased` at the
 adaptive schedule; nothing about adaptivity enters. -/
 theorem joiner_decided_agree (ha : Agree R) (hb : Banded R)
     {U U' : R.Universe} (ht : Truncates R U U' S S' G d)
-    (hinj : Function.Injective S.slotRound) (a : ℕ → Validator)
+    (a : ℕ → Validator)
+    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂)
     {V : R.View U} {V' : R.View U'} (hv : ViewAgreeAbove R V V' G)
     {W : R.View U'} {k : ℕ} {w v : Option BlockId}
-    (hW : R.Decided (slotsOf (S := S') (ht.toRebases.injective hinj) (fun m => a (d + m))) W k w)
-    (hV : R.Decided (slotsOf (S := S) hinj a) V (d + k) v) : w = v :=
-  decided_agree_rebased ha hb (Rebased.of_truncates (ht.slotsOf hinj a)) hv
+    (hW : R.Decided (slotsOfKeyed (S := S') (fun m => a (d + m))
+            (ht.toRebases.keyed hk)) W k w)
+    (hV : R.Decided (slotsOfKeyed (S := S) a hk) V (d + k) v) : w = v :=
+  decided_agree_rebased ha hb (Rebased.of_truncates (ht.slotsOfKeyed a hk)) hv
     (by have := ht.slotRound k; change G ≤ S.slotRound (d + k); omega) hW hV
 
 /-- **The joiner, whole**: under a horizon-stable rule, a joiner's own
@@ -123,14 +160,20 @@ theorem joiner_run_decided_agree (ha : Agree R) (hb : Banded R)
     {V : R.View U} (A : Run P U V) (V' : R.View U')
     {V₀ : R.View U'} (hv : ViewAgreeAbove R V V₀ G)
     {W : R.View U'} {k : ℕ} {w v : Option BlockId}
-    (hW : R.Decided (slotsOf (S := S') (ht.toRebases.injective P.inj)
-            (fun m => pick' U' V' (fun j => A.vdct (d + j)) m)) W k w)
-    (hV : R.Decided (slotsOf P.inj A.assign) V (d + k) v) : w = v := by
+    (hk' : ∀ k₁ k₂, S'.slotRound k₁ = S'.slotRound k₂ →
+      pick' U' V' (fun j => A.vdct (d + j)) k₁
+        = pick' U' V' (fun j => A.vdct (d + j)) k₂ → k₁ = k₂)
+    (hW : R.Decided (slotsOfKeyed (S := S')
+            (fun m => pick' U' V' (fun j => A.vdct (d + j)) m) hk') W k w)
+    (hV : R.Decided (slotsOfKeyed A.assign A.keyed) V (d + k) v) : w = v := by
   have hassign : (fun m => pick' U' V' (fun j => A.vdct (d + j)) m)
       = fun m => A.assign (d + m) := by
     funext m; exact joiner_assign_agree hs ht.toRebasedAbove A V' m
-  rw [hassign] at hW
-  exact joiner_decided_agree ha hb ht P.inj A.assign hv hW hV
+  have heq : slotsOfKeyed (S := S') (fun m => pick' U' V' (fun j => A.vdct (d + j)) m) hk'
+      = slotsOfKeyed (S := S') (fun m => A.assign (d + m)) (ht.toRebases.keyed A.keyed) :=
+    slotsOfKeyed_congr (S := S') hassign
+  rw [heq] at hW
+  exact joiner_decided_agree (S := S) (S' := S') ha hb ht A.assign A.keyed hv hW hV
 
 /-- The constant policy is horizon-stable only at base slot `0`: even a
 rule that ignores verdicts must still be re-indexed to survive a cut. -/

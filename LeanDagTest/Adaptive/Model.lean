@@ -174,7 +174,7 @@ verdict of slot `k − 2` and nothing else. -/
 def demotePolicy : AdaptivePolicy (Fin 4) (Fin 24) Unit where
   W := 1
   W_pos := Nat.one_pos
-  inj := u7_inj
+  keyed := fun _ _ _ _ _ hr _ => u7_inj hr
   pick := fun _ _ v k => if k < 2 then 0 else if v (k - 2) = none then 1 else 0
   adapted := by
     intro U V₁ V₂ v w k hvw
@@ -198,6 +198,7 @@ def vd7 : ℕ → Option (Fin 24) :=
 def run7 : PartialRun demotePolicy U7 V7 2 where
   assign := fun k => demotePolicy.pick U7 V7 vd7 k
   vdct := vd7
+  keyed := demotePolicy.keyed U7 V7 vd7
   closed := by
     intro k hk
     have hk2 : k < 2 := by
@@ -207,13 +208,13 @@ def run7 : PartialRun demotePolicy U7 V7 2 where
     · have hB : demotePolicy.W * (epochOf demotePolicy.W 0 + 2) = 2 := rfl
       rw [hB]
       exact AnchoredRule.decidedBelow_of_decidedWithin coreLaws trivial
-        (S := slotsOf demotePolicy.inj (fun k => demotePolicy.pick U7 V7 vd7 k))
+        (S := slotsOfKeyed (fun k => demotePolicy.pick U7 V7 vd7 k) (demotePolicy.keyed U7 V7 vd7))
         (decidedWithin_congr (fun m hm => by interval_cases m <;> rfl)
           u7_decidedWithin_slot0)
     · have hB : demotePolicy.W * (epochOf demotePolicy.W 1 + 2) = 3 := rfl
       rw [hB]
       exact AnchoredRule.decidedBelow_of_decidedWithin coreLaws trivial
-        (S := slotsOf demotePolicy.inj (fun k => demotePolicy.pick U7 V7 vd7 k))
+        (S := slotsOfKeyed (fun k => demotePolicy.pick U7 V7 vd7 k) (demotePolicy.keyed U7 V7 vd7))
         (decidedWithin_congr (fun m hm => by interval_cases m <;> rfl)
           (u7_decidedWithin_slot1.mono (by omega)))
   coherent := fun _ _ => rfl
@@ -222,6 +223,7 @@ def run7 : PartialRun demotePolicy U7 V7 2 where
 def run7small : PartialRun demotePolicy U7 V7small 2 where
   assign := fun k => demotePolicy.pick U7 V7small vd7 k
   vdct := vd7
+  keyed := demotePolicy.keyed U7 V7small vd7
   closed := by
     intro k hk
     have hk2 : k < 2 := by
@@ -231,7 +233,7 @@ def run7small : PartialRun demotePolicy U7 V7small 2 where
     · have hB : demotePolicy.W * (epochOf demotePolicy.W 0 + 2) = 2 := rfl
       rw [hB]
       exact AnchoredRule.decidedBelow_of_decidedWithin coreLaws trivial
-        (S := slotsOf demotePolicy.inj (fun k => demotePolicy.pick U7 V7small vd7 k))
+        (S := slotsOfKeyed (fun k => demotePolicy.pick U7 V7small vd7 k) (demotePolicy.keyed U7 V7small vd7))
         (decidedWithin_congr (fun m hm => by interval_cases m <;> rfl)
         (AnchoredRule.DecidedWithin.indirectCommit_single rfl (fun _ _ h => h)
           (S := slotsOf u7_inj aBase)
@@ -244,7 +246,7 @@ def run7small : PartialRun demotePolicy U7 V7small 2 where
     · have hB : demotePolicy.W * (epochOf demotePolicy.W 1 + 2) = 3 := rfl
       rw [hB]
       exact AnchoredRule.decidedBelow_of_decidedWithin coreLaws trivial
-        (S := slotsOf demotePolicy.inj (fun k => demotePolicy.pick U7 V7small vd7 k))
+        (S := slotsOfKeyed (fun k => demotePolicy.pick U7 V7small vd7 k) (demotePolicy.keyed U7 V7small vd7))
         (decidedWithin_congr (fun m hm => by interval_cases m <;> rfl)
           ((DecidedWithin.directCommit (S := slotsOf u7_inj aBase) (B := 2)
             (by omega) (by decide) (by decide)).mono (by omega)))

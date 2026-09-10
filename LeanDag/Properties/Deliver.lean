@@ -42,7 +42,7 @@ theorem exists_coversUpto_decides (h : Banded R) {S : Slots Validator}
     ∃ N, ∀ V : R.View U, CoversUpto R V N → R.Decided S V k v := by
   obtain ⟨top, htop⟩ := h S U W k v hW
   refine ⟨top, fun V hcov => ?_⟩
-  exact htop 0 0 0 0 S U V k (by omega) (fun m m' hm => by
+  exact htop 0 0 0 0 S U V k (by omega) (fun m m' hm _ => by
       have : m = m' := by omega
       subst this; rfl)
     (fun m m' hm _ => by have : m = m' := by omega
