@@ -106,7 +106,8 @@ theorem frameRun_agree (hR : Agree R) (hW : 0 < W)
     (hadapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
       (∀ j, epochOf W j + 2 ≤ epochOf W k → v j = w j) →
       pick U V₁ v k = pick U V₂ w k)
-    (Rn Rn' : FrameRun (R := R) W pick U V H)
+    {V' : R.View U}
+    (Rn : FrameRun (R := R) W pick U V H) (Rn' : FrameRun (R := R) W pick U V' H)
     (hwd : ∀ r, r < Rn.F.roundOf (W * (H + 1)) →
       (∀ j, epochOf W j + 2 ≤ epochOf W (Rn.F.cum r) → Rn.vdct j = Rn'.vdct j) →
       Rn'.F.width r = Rn.F.width r) :
@@ -141,11 +142,11 @@ theorem frameRun_agree (hR : Agree R) (hW : 0 < W)
       have hi'' : i' < Rn'.F.width r' := by rw [hw r' hr']; exact hi'
       rw [Rn'.coherent r' i' hi'' (by rw [heq]; omega),
         Rn.coherent r' i' hi' (by omega), heq]
-      refine hadapted U V V Rn'.vdct Rn.vdct _ (fun j hj => ?_)
+      refine hadapted U V' V Rn'.vdct Rn.vdct _ (fun j hj => ?_)
       exact (ih (epochOf W j) (by omega) j rfl (by omega)).symm
     have d₁ := Rn.closed_at g hgH Rn'.F Rn'.asg Rn'.keyed hw ha
     have d₂ := Rn'.decided_self g hgH
-    exact hR _ V V g _ _ d₁ d₂
+    exact hR _ V V' g _ _ d₁ d₂
 
 
 /-- **The window fits in two epochs.** Every verdict a schedule reaches

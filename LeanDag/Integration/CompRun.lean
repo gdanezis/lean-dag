@@ -273,6 +273,48 @@ theorem start_succ_det {Rn Rn' : CompRun (R := R) W P upd U V K} {k : ℕ} (hk :
         (fun r hr => (hw r (by omega)).symm) (by omega)
     rw [← ha] at hcg hgt; omega
 
+/-- **A run read at another view.** The only clause a `CompRun` states of
+its view is `update`, so an update rule that does not read the view —
+Barnacle's `Anchored` — has the same runs at every view. -/
+def reView {V' : R.View U}
+    (hupd : ∀ (U : R.Universe) (V₁ V₂ : R.View U) (m b : ℕ) (A : BlockId),
+      upd m b U V₁ A = upd m b U V₂ A)
+    (Rn : CompRun (R := R) W P upd U V' K) : CompRun (R := R) W P upd U V K where
+  start := Rn.start
+  count := Rn.count
+  backoff := Rn.backoff
+  anchor := Rn.anchor
+  F := Rn.F
+  vdct := Rn.vdct
+  init := Rn.init
+  count_pos := Rn.count_pos
+  count_le := Rn.count_le
+  cnt_le := Rn.cnt_le
+  cnt_zero := Rn.cnt_zero
+  cnt_eq := Rn.cnt_eq
+  anchor_commits := Rn.anchor_commits
+  anchor_least := Rn.anchor_least
+  start_succ := Rn.start_succ
+  update := fun k hk A hA => (Rn.update k hk A hA).trans (hupd U V' V _ _ A)
+
+@[simp] theorem reView_F {V' : R.View U} (hupd) (Rn : CompRun (R := R) W P upd U V' K) :
+    (reView (V := V) hupd Rn).F = Rn.F := rfl
+
+@[simp] theorem reView_start {V' : R.View U} (hupd) (Rn : CompRun (R := R) W P upd U V' K) :
+    (reView (V := V) hupd Rn).start = Rn.start := rfl
+
+@[simp] theorem reView_count {V' : R.View U} (hupd) (Rn : CompRun (R := R) W P upd U V' K) :
+    (reView (V := V) hupd Rn).count = Rn.count := rfl
+
+@[simp] theorem reView_backoff {V' : R.View U} (hupd) (Rn : CompRun (R := R) W P upd U V' K) :
+    (reView (V := V) hupd Rn).backoff = Rn.backoff := rfl
+
+@[simp] theorem reView_anchor {V' : R.View U} (hupd) (Rn : CompRun (R := R) W P upd U V' K) :
+    (reView (V := V) hupd Rn).anchor = Rn.anchor := rfl
+
+@[simp] theorem reView_vdct {V' : R.View U} (hupd) (Rn : CompRun (R := R) W P upd U V' K) :
+    (reView (V := V) hupd Rn).vdct = Rn.vdct := rfl
+
 /-- **The configuration data is a function of the verdicts.** -/
 theorem config_det {Rn Rn' : CompRun (R := R) W P upd U V K} {kb : ℕ} (hkb : kb ≤ K)
     (hv : ∀ j, j < kb → ∀ g, g ≤ Rn.anchor j → Rn.vdct g = Rn'.vdct g) :
@@ -415,8 +457,11 @@ def toFrameRun (Rn : Composed (R := R) W P pick upd U V K H) : FrameRun (R := R)
 /-- **The widths are a function of the verdicts**, at every round the
 induction reads — `width_det` where a configuration holds the round, and
 `cnt_zero` at genesis, which no configuration's range covers. -/
-theorem hwd {Rn Rn' : Composed (R := R) W P pick upd U V K H} (hW : 0 < W)
+theorem hwd {V' : R.View U} {Rn : Composed (R := R) W P pick upd U V K H}
+    {Rn' : Composed (R := R) W P pick upd U V' K H} (hW : 0 < W)
     (hgap : P.gap = 2 * W)
+    (hupd : ∀ (U : R.Universe) (V₁ V₂ : R.View U) (m b : ℕ) (A : BlockId),
+      upd m b U V₁ A = upd m b U V₂ A)
     (hcover : ∀ r, 0 < r → r < Rn.F.roundOf (W * (H + 1)) →
       ∃ k, k < K ∧ Rn.start k < r ∧ r ≤ Rn.start (k + 1)) :
     ∀ r, r < Rn.F.roundOf (W * (H + 1)) →
@@ -426,7 +471,8 @@ theorem hwd {Rn Rn' : Composed (R := R) W P pick upd U V K H} (hW : 0 < W)
   rcases Nat.eq_zero_or_pos r with h0 | h0
   · subst h0; rw [Rn.cnt_zero, Rn'.cnt_zero]
   · obtain ⟨k, hk, hlo, hhi⟩ := hcover r h0 hr
-    exact CompRun.width_det (Rn := Rn.toCompRun) (Rn' := Rn'.toCompRun) hW hgap hk hlo hhi hv
+    exact CompRun.width_det (Rn := Rn.toCompRun)
+      (Rn' := CompRun.reView (V := V) hupd Rn'.toCompRun) hW hgap hk hlo hhi hv
 
 /-- **A run that reaches the horizon covers every round the induction
 reads.** The condition is on slots — the run's configurations hold at
@@ -458,12 +504,58 @@ theorem agree (hR : Properties.Agree R) (hW : 0 < W) (hgap : P.gap = 2 * W)
     (hadapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
       (∀ j, epochOf W j + 2 ≤ epochOf W k → v j = w j) →
       pick U V₁ v k = pick U V₂ w k)
-    (Rn Rn' : Composed (R := R) W P pick upd U V K H)
+    (hupd : ∀ (U : R.Universe) (V₁ V₂ : R.View U) (m b : ℕ) (A : BlockId),
+      upd m b U V₁ A = upd m b U V₂ A)
+    {V' : R.View U} (Rn : Composed (R := R) W P pick upd U V K H)
+    (Rn' : Composed (R := R) W P pick upd U V' K H)
     (hcover : ∀ r, 0 < r → r < Rn.F.roundOf (W * (H + 1)) →
       ∃ k, k < K ∧ Rn.start k < r ∧ r ≤ Rn.start (k + 1)) :
     ∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g :=
-  frameRun_agree hR hW hadapted Rn.toFrameRun Rn'.toFrameRun (hwd hW hgap hcover)
+  frameRun_agree hR hW hadapted Rn.toFrameRun Rn'.toFrameRun (hwd hW hgap hupd hcover)
 
+
+/-- **BN3 at a composed run.** Two composed runs over one universe, held
+by validators holding different views of it, agree on when each
+configuration starts, how many leaders it has and what its back-off is;
+on the anchor of every configuration they have closed; and on every
+verdict below the horizon.
+
+Barnacle states this of two runs of different heights and concludes up to
+their minimum. A `Composed` carries its height in its type, so this is
+stated at a common one, and the run's own horizon is what
+`cover_of_horizon` asks for. -/
+theorem agreement (hR : Properties.Agree R) (hW : 0 < W) (hgap : P.gap = 2 * W)
+    (hadapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
+      (∀ j, epochOf W j + 2 ≤ epochOf W k → v j = w j) →
+      pick U V₁ v k = pick U V₂ w k)
+    (hupd : ∀ (U : R.Universe) (V₁ V₂ : R.View U) (m b : ℕ) (A : BlockId),
+      upd m b U V₁ A = upd m b U V₂ A)
+    {V' : R.View U} (Rn : Composed (R := R) W P pick upd U V K H)
+    (Rn' : Composed (R := R) W P pick upd U V' K H)
+    (hK : 0 < K) (hhor : W * (H + 1) ≤ Rn.F.cum (Rn.start K)) :
+    (∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g) ∧
+      (∀ k, k ≤ K → Rn.start k = Rn'.start k ∧ Rn.count k = Rn'.count k ∧
+        Rn.backoff k = Rn'.backoff k) ∧
+      (∀ k, k < K → Rn.anchor k = Rn'.anchor k) ∧
+      (∀ k, k ≤ K → ∀ r, r ≤ Rn.start k → Rn'.F.width r = Rn.F.width r) := by
+  have hv := agree hR hW hgap hadapted hupd Rn Rn' (Rn.cover_of_horizon hK hhor)
+  -- Below a closed configuration's anchor every slot is in a closed epoch.
+  have hvb : ∀ j, j < K → ∀ g, g ≤ Rn.anchor j → Rn.vdct g = Rn'.vdct g := by
+    intro j hj g hg
+    refine hv g (lt_of_le_of_lt ?_ (Rn.anchor_closed j hj))
+    exact Nat.div_le_div_right hg
+  have hcfg := CompRun.config_det (Rn := Rn.toCompRun)
+    (Rn' := CompRun.reView (V := V) hupd Rn'.toCompRun) (le_refl K) hvb
+  refine ⟨hv, fun k hk => (hcfg k hk).1, fun k hk => ?_, fun k hk => (hcfg k hk).2⟩
+  obtain ⟨⟨hs, hc, _⟩, hlow⟩ := hcfg k (by omega)
+  have hthr := Rn.toCompRun.thr_lt_start_succ k hk
+  have hthr' := (CompRun.reView (V := V) hupd Rn'.toCompRun).thr_lt_start_succ k hk
+  have hwthr := CompRun.cnt_agree_upto (Rn := Rn.toCompRun)
+    (Rn' := CompRun.reView (V := V) hupd Rn'.toCompRun) hk hs hc hlow
+    (b := Rn.start k + P.interval + 1) (by omega) (by omega)
+  exact CompRun.anchor_det (Rn := Rn.toCompRun)
+    (Rn' := CompRun.reView (V := V) hupd Rn'.toCompRun) hk hs
+    (fun r hr => hwthr r (by omega)) (fun g hg _ => hvb k hk g hg)
 
 /-- **The genesis run.** One leader in every round, nothing decided, no
 configuration closed: every clause of a run of height zero is about a

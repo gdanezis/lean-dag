@@ -1,6 +1,7 @@
 import LeanDagTest.Mysticeti.Growth
 import LeanDag.Integration.CompRun
 import LeanDag.Adaptive.Liveness
+import LeanDag.Integration.Ledger
 /-!
 # A composed run past height zero
 
@@ -625,6 +626,37 @@ theorem mRun_commits_in_epoch (e : ℕ) (heH : e + 2 ≤ 5)
     MysticetiProperties.agree (by decide) mRun mPol rfl rfl mPol_placesRuns e heH hlive
 
 end Policy
+
+/-! ## The ledger at the witness
+
+`RangeClosed` is what the composed ledger asks of a configuration: its
+range lies in the epochs the run has decided. `mRun` shows why the clause
+is needed — configuration `0`'s range ends at round `7`, inside the five
+closed epochs, but configuration `1`'s ends at round `13`, past them.
+Barnacle owes no such clause: its runs decide their whole range by
+construction.
+-/
+
+/-- Configuration `0`'s range is decided: it ends at slot `7`, and `mRun`
+has closed ten. -/
+theorem mRun_rangeClosed_zero : mRun.RangeClosed 0 := by
+  change mF.cum 7 ≤ 2 * 5
+  rw [mF_cum_low (by omega)]; omega
+
+/-- Configuration `1`'s is not: it ends at slot `19`. The composed run
+reaches past the epochs it has closed, which is the case Barnacle's
+ledger never meets. -/
+theorem mRun_not_rangeClosed_one : ¬ mRun.RangeClosed 1 := by
+  change ¬ mF.cum 13 ≤ 2 * 5
+  rw [mF_cum_high _ (by omega)]; omega
+
+/-- **The ledger holds each block once**, on the data. -/
+theorem mRun_ledger_nodup : (mRun.ledgerUpto 1).Nodup :=
+  Composed.ledgerUpto_nodup MysticetiProperties.commitsCandidate (by decide) mRun
+    (by omega) (fun k hk => by
+      have : k = 0 := by omega
+      subst this
+      exact mRun_rangeClosed_zero)
 
 end Composition
 end LeanDagTest

@@ -520,6 +520,44 @@ hypothesis is `certLive`, the rule's liveness precondition, which every
 other liveness result in this development takes and which is not the
 composition's to supply.
 
+### 6.8 Barnacle's own results at the composed run
+
+Three of Barnacle's arcs never mention a run. `Aimd` — the control loop
+that is Barnacle's mechanism — is stated over the update rule and the
+parameters, as are `Healthy`'s window clauses, so they hold of a composed
+run already: `Composed.update` names the same `upd`. `Heads` is about the
+static rotation, which the composition replaces with the policy, and
+`placesRuns_const_of_headsRun` is where the two meet.
+
+`Composed.agreement` is BN3. Two composed runs over one universe, held by
+validators with *different views* of it, agree on when each configuration
+starts, how many leaders it has, its back-off, the anchor of every
+configuration they have closed, and every verdict below the horizon. The
+two-view form is what BN3 states and what the single-view `agree` did
+not; `frameRun_agree` needed no new idea for it, since `hadapted` and
+`Agree` are both view-generic already, and `CompRun.reView` carries a run
+across views because `update` is the only clause a `CompRun` states of
+one — Barnacle's `Anchored`, at the composition's update function.
+
+`Integration/Ledger.lean` is BN5. `rangeLedger` and `ledgerUpto` are
+Barnacle's, with the interval moved: the first slot of round `r` is
+`F.cum r` rather than `count k * r`, and `ledgerOf` is unchanged.
+`ledgerUpto_agree` is BN5a and follows from `agreement`;
+`ledgerUpto_prefix` is BN5b and asks nothing of the run;
+`ledgerUpto_nodup` is BN5c, from `Slots.keyed` within a range and
+disjoint rounds across ranges.
+
+`RangeClosed` is the one clause Barnacle does not owe. A Barnacle run
+decides its whole range by construction; a composed run decides an epoch
+at a time, and its last configuration may reach past the last epoch it
+has closed. `mRun` shows both cases: configuration `0`'s range ends at
+slot `7` and is decided, configuration `1`'s ends at slot `19` and is
+not.
+
+What is not ported is `Heads`, and `Validity`'s delivery step —
+`Composed.anchor_isCandidate` is what BN14 turns on and is proved, but
+the step from it to the delivered blocks is not.
+
 ## 7. Questions settled, and how
 
 **A frame gives every round a leader.** Admitting empty rounds was
