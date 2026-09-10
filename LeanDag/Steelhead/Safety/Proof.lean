@@ -8,7 +8,8 @@ certificate lemmas at the slot's wave, SH2 and SH5 are `decided_unique`
 at Steelhead's and Mahi-Mahi's laws, SH3 is the visibility lemma fed to
 the relation's single-rung commit and agreement against the direct
 commit, and SH4 is definitional up to `Nat.mod_one` and Mahi-Mahi's
-wave-three correspondence.
+wave-three correspondence, whose converse `decided_of_core_decided`
+mirrors it.
 -/
 
 namespace LeanDag
@@ -37,8 +38,8 @@ theorem holds : Statement := by
         (AnchoredRule.Decided.directCommit hL hc) hskip
       simp at this
   · exact ⟨fun _ => rfl, fun _ _ => funext fun r => by simp [periodic, Nat.mod_one]⟩
-  · intro V k v h
-    exact MahiMahi.core_decided_of_decided h
+  · intro V k v
+    exact ⟨MahiMahi.core_decided_of_decided, decided_of_core_decided⟩
   · intro coin V₁ V₂ r v₁ v₂ hwa h₁ h₂
     exact AnchoredRule.decided_unique (S := chainSlots coin) (MahiMahi.mahiMahiLaws (by omega))
       trivial h₁ V₂ v₂ h₂

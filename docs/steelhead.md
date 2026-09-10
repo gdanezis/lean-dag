@@ -111,7 +111,7 @@ from coverage into certification; the unpredictable-leader clause.
 | Adaptive section, `I ≥ 2 · maxPeriod` and `1 ≤ k ≤ maxPeriod` | SH10f, SH10g | two asynchronous rounds per interval at any `k ≥ 1` with `2k ≤ I`; the period stays in range when the initial period does and the update rule keeps it there |
 | Protocol section, "whenever either verdict of an asynchronous slot is direct, the two coincide" | SH5b | predicate for predicate, at a slot proposed at its own round and led by the coin |
 | Protocol section, "the successor waits at most `max(0, wa − ws − 1)` rounds", "delays never compound" | SH9c | arithmetic on the decision rounds; output timing itself is not modelled |
-| Theorem 5 (conservativity) | SH4 | in part: at a constant wavelength by `rfl`, period `1` by `Nat.mod_one`; the wave-three end is one inclusion, where the paper says "exactly" |
+| Theorem 5 (conservativity) | SH4 | at a constant wavelength by `rfl`, period `1` by `Nat.mod_one`, and at wave three the derivations are exactly the core's, both directions |
 | Lemma 3 (the replay cannot be starved) | its counting half, `card_goodAt_of_populated` and SH11a | `c_r ≥ n − f − b` under any scheduling; the bridge to the replay's score is not modelled, since the replay is not |
 | Theorem 3 (i), "a committed asynchronous slot does not by itself decide the synchronous slots below it" | SH8 | the argument of "Why the chain, and not the output" as a theorem, for every `2 ≤ ws ≤ k` rather than the one period it walks through (§4) |
 
@@ -140,7 +140,8 @@ of link (a certificate in the anchor's cone), no tie, and the wave offset
 `waveAt r = w r − 1`, so that an anchor sits at round `r + w r` or above.
 `Decided w U V k v` is the anchored relation at that data. At a constant
 `w` the rule *is* `mahiMahiAnchored w` by `rfl` (SH4); at the constant
-`3` every derivation is the core's (MM1d transported).
+`3` the derivations are exactly the core's (MM1d transported, and its
+mirror).
 
 The one change to the shared relation was to make `AnchoredRule.waveAt`
 a function of the slot's round. Every other rule sets a constant, and
@@ -174,7 +175,9 @@ rest:
   at `r + w r` or above, where SH1c places a certificate in its cone.
 - **SH4, conservativity**: `steelheadAnchored (fun _ => w) =
   mahiMahiAnchored w` and `periodic ws wa 1 = fun _ => wa`, by `rfl` and
-  `Nat.mod_one`; at the constant `3` every derivation is the core's.
+  `Nat.mod_one`; at the constant `3` the derivations are exactly the
+  core's, MM1d one way and its mirror the other, since the core's skip
+  is the slot-level blame Mahi-Mahi's is (`decided_of_core_decided`).
 - **SH5, chain agreement**: the chain verdicts (§4) agree across views,
   an instance of MM1c at the chain schedule.
 - **SH5b, the direct verdicts coincide**: at an asynchronous round whose
