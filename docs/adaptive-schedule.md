@@ -409,11 +409,21 @@ falls inside an epoch as soon as that epoch is `c₀` slots long, which is
 composed run and could be restated at a `FrameRun`, which would give both
 arcs one proof; that is a refactor and not a dependency.
 
-**6. The witness.** `ScheduleModel.lean` over `Ugrow`: a schedule whose
-epoch length and width both move, epochs at the floor of §6, and the
-degenerate case exhibited. Closed forms for `epochFrame`'s and
-`frameOf`'s cumulative functions will be wanted, as `mF_cum_high` is for
-the composed witness.
+**6. The witness.** `ScheduleModel.lean`. `sched` is `ofFixed` at epochs
+of `3, 4, 5` slots over rounds of `1, 2, 3`, which shows the clauses
+admit two frames that both move and are not aligned. `aSched` is the
+smaller point: a schedule that genuinely *reads* its verdicts in both
+frames — the epoch lengths and the widths turn on whether slot `0`
+committed — and the adaptedness clauses hold because slot `0` lies in
+epoch `0`, two below every epoch either function is consulted for. Its
+leaders are round-robin over the slots, so `pick_adapted` is `rfl` and
+what is exercised is the two clauses the arc adds. `aRun` inhabits
+`ScheduleRun` at height zero.
+
+What is still wanting is a run of height above zero over `Ugrow`, which
+needs the decision machinery `LeanDagTest/Integration/ComposedRun.lean`
+carries for the composed witness and closed forms for the two cumulative
+functions, as `mF_cum_high` is there.
 
 **7. The record.** `LeanDag.lean` and `LeanDagTest.lean` gain the
 imports; the report gains a subsection of §13 and Appendix A gains the
