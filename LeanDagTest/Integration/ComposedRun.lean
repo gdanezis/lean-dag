@@ -2,6 +2,10 @@ import LeanDagTest.Mysticeti.Growth
 import LeanDag.Integration.CompRun
 import LeanDag.Adaptive.Liveness
 import LeanDag.Integration.Ledger
+import LeanDag.Integration.Conservativity
+import LeanDag.Integration.Validity
+import LeanDagTest.Barnacle.Rules.MysticetiLive.Proof
+import LeanDag.Barnacle.Helpers.Delivery
 /-!
 # A composed run past height zero
 
@@ -195,7 +199,7 @@ next configuration begins `P.gap` rounds later, at round `10`. Epoch `0`
 is closed: each of its four slots is decided by the schedule below the
 round its window ends at. -/
 noncomputable def cRun :
-    Composed (R := gRule) W cP (fun _ _ _ _ => 1) (fun _ _ _ _ _ => (1, 0))
+    Composed (R := gRule) W cP (fun _ _ _ _ => 1) (fun m b _ _ _ => (m, b))
       (Ugrow N) (View.full (Ugrow N)) 1 1 where
   start := fun k => if k = 0 then 0 else 10
   count := fun _ => 1
@@ -657,6 +661,60 @@ theorem mRun_ledger_nodup : (mRun.ledgerUpto 1).Nodup :=
       have : k = 0 := by omega
       subst this
       exact mRun_rangeClosed_zero)
+
+/-! ## Conservativity and validity at the witnesses
+
+`cRun`'s update rule returns the count it was given and its assignment is
+the base leader function, so it is the case Barnacle's `Conservativity`
+is about: the mechanism where it does nothing. `mRun` is the case BN14 is
+about: a run with closed configurations over a good DAG.
+-/
+
+/-- A constant leader function is keyed at one leader a round — the only
+width at which it can be. -/
+theorem oneKeyed : Keyed (fun _ => (1 : Fin 4)) 1 := by
+  intro m hm hm1 κ₁ κ₂ h _
+  have hm' : m = 1 := by omega
+  subst hm'
+  simpa using h
+
+/-- **BN6a on the data**: `cRun`'s count never moves. -/
+theorem cRun_const_count : ∀ k, k ≤ 1 → cRun.count k = 1 ∧ cRun.backoff k = 0 :=
+  CompRun.const_count (fun _ _ _ _ _ => rfl) cRun.toCompRun
+
+/-- **BN6b on the data**: every verdict of `cRun`'s closed epoch is a
+verdict of `Sched 1`, the one-leader schedule the base development runs
+on. The composed run is the base protocol where neither mechanism moves. -/
+theorem cRun_const_decided {r : ℕ} (hr : r < 4) :
+    gRule.Decided (Sched (fun _ => (1 : Fin 4)) oneKeyed 1 Nat.one_pos (le_refl 1))
+      (View.full (Ugrow N)) r (cRun.vdct r) := by
+  have hidx : cRun.F.index r 0 = r := by
+    show cF.index r 0 = r
+    simp [Frame.index, constFrame_cum]
+  have hep : epochOf W (cRun.F.index r 0) < 1 := by rw [hidx]; simpa [epochOf] using hr
+  have hB : cRun.F.roundOf (W * (epochOf W (cRun.F.index r 0) + 2)) ≤ cRun.start 1 := by
+    rw [hidx, show epochOf W r = 0 from Nat.div_eq_of_lt hr]
+    show cF.roundOf 8 ≤ 10
+    rw [constFrame_roundOf]; omega
+  have h := Composed.const_decided (fun _ _ _ _ _ => rfl) cRun (by omega)
+    oneKeyed (le_refl 1) (fun _ _ _ => rfl) (r := r) (i := 0) Nat.one_pos hep hB
+  rwa [hidx] at h
+
+/-- **BN14 on the data**: every block of the good set two rounds below
+`mRun`'s anchors is in the history of the block that configuration
+commits. `Ugrow` is good at every height, and the delivery law is the
+core rule's. -/
+theorem mRun_delivered :
+    ∃ T : Finset (Fin 4), Fintype.card (Fin 4) ≤ T.card + Faults.f (Fin 4) ∧
+      ∀ b ∈ (Ugrow N).ids, ((Ugrow N).block b).creator ∈ T → 0 ≤ ((Ugrow N).block b).round →
+        ((Ugrow N).block b).round + 1 ≤ N →
+        ∀ k, k < 2 → ((Ugrow N).block b).round + 2 ≤ mF.roundOf (mRun.anchor k) →
+          ∃ A, mRun.vdct (mRun.anchor k) = some A ∧
+            b ∈ historyFrom (Ugrow N).block A :=
+  Composed.delivered (R := mysticetiLive) MysticetiProperties.commitsCandidate
+    (delivers_core _) mRun 0 N
+    ⟨(Correct : Finset (Fin 4)), ⟨Finset.Subset.refl _, card_correct⟩,
+      ugrow_synchronised N, fun _ _ hr => ugrow_populated hr⟩
 
 end Composition
 end LeanDagTest

@@ -78,6 +78,8 @@ import LeanDag.Integration.AdaptiveFrame
 import LeanDag.Integration.BarnacleFrame
 import LeanDag.Integration.CompRun
 import LeanDag.Integration.Ledger
+import LeanDag.Integration.Conservativity
+import LeanDag.Integration.Validity
 import LeanDag.Integration.Joiner
 import LeanDag.Integration.Retention
 import LeanDag.Integration.ReGenesis

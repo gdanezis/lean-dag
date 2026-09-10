@@ -554,9 +554,31 @@ has closed. `mRun` shows both cases: configuration `0`'s range ends at
 slot `7` and is decided, configuration `1`'s ends at slot `19` and is
 not.
 
-What is not ported is `Heads`, and `Validity`'s delivery step —
-`Composed.anchor_isCandidate` is what BN14 turns on and is proved, but
-the step from it to the delivered blocks is not.
+`Integration/Conservativity.lean` is BN6. `const_count` says the count
+never moves under the rule that returns what it was given; `const_width`
+carries that to the frame, every round the run reaches being one leader
+wide; and `const_decided` says the verdicts are the base protocol's.
+`Sched_eq_frame` is what makes the last an identity rather than a
+comparison — Barnacle's schedule at one leader a round is a one-slot
+frame's own schedule — and `DecidedFrameBelow` is what delivers it, the
+verdict being settled by every frame and assignment agreeing below the
+window's end.
+
+The composition adds a second way to do nothing, and `const_decided` asks
+for both: the count constant, and the assignment the base leader function
+rather than a reassignment. `cRun` is that case on the data.
+
+`Integration/Validity.lean` is BN14, and the composed run owes nothing
+extra for it. `anchor_isCandidate` gives the anchor's block its round,
+`anchor_closed` puts the anchor in an epoch the run has decided, and the
+delivery law is the rule's. The only thing that moves is how the anchor's
+round is read: Barnacle divides the slot by the count, a frame takes
+`F.roundOf`. `mRun_delivered` is it applied over `Ugrow`, which is good
+at every height.
+
+`Heads` is not ported and should not be: it is about a static rotation
+having runs of reliable leaders, which is what §6.7's `PlacesRuns`
+replaces.
 
 ## 7. Questions settled, and how
 
