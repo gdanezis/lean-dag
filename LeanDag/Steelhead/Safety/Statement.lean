@@ -21,7 +21,7 @@ whichever rule decided it and whichever anchor a view found
   rule decides the anchor, and no view skips it;
 * **SH4, conservativity** — Theorem 5: at a constant wavelength the rule
   *is* Mahi-Mahi's, at period one it is Mahi-Mahi's at `wa`, and at wave
-  three every derivation is the core's;
+  three the derivations are exactly the core's;
 * **SH5, chain agreement** — the chain verdicts agree across views: an
   instance of MM1c at the chain schedule, one slot per round led by the
   round's coin leader;
@@ -110,12 +110,13 @@ def RuleConservative : Prop :=
   (∀ ws wa : ℕ, periodic ws wa 1 = fun _ => wa)
 
 /-- **SH4, conservativity of the relation at wave three**: at the
-constant wavelength three every derivation is the core's (Mysticeti's),
-so `k = ∞` at `ws = 3` is Mysticeti. Whether anything commits is a
-liveness question, as in MM1d. -/
+constant wavelength three the derivations are exactly the core's
+(Mysticeti's), so `k = ∞` at `ws = 3` is Mysticeti, as the paper's
+Theorem 5 says. Whether anything commits is a liveness question, as in
+MM1d. -/
 def DecidedConservative (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ (V : View Validator BlockId Payload U) (k : ℕ) (v : Option BlockId),
-    Decided (fun _ => 3) U V k v → LeanDag.Decided U V k v
+    Decided (fun _ => 3) U V k v ↔ LeanDag.Decided U V k v
 
 /-- **SH5, chain agreement**: two views agree on the chain verdict of
 every round, under any coin. -/

@@ -9488,8 +9488,11 @@ direct commit in one view is committed by every view that finds the slot
 an anchor, whichever rule decides that anchor, and no view skips it
 (SH3, the handover, the one cross-rule law); at a constant wavelength
 the rule *is* Mahi-Mahi's, by `rfl`, the period-one function is the
-constant `wa`, and at the constant three every derivation is the core's
-(SH4); the chain verdicts of §24.2 agree across views (SH5, MM1c at
+constant `wa`, and at the constant three the derivations are exactly the
+core's, MM1d one way and its mirror `Steelhead.decided_of_core_decided`
+the other, since the core's skip is the slot-level blame Mahi-Mahi's is
+(SH4, the paper's Theorem 5 in both directions); the chain verdicts of
+§24.2 agree across views (SH5, MM1c at
 the chain schedule); and at an asynchronous round the coin leads, the
 output's direct commit and direct skip are the chain's predicates, so a
 direct derivation in either relation is one in the other (SH5b, the
@@ -10872,7 +10875,7 @@ reused.
 | SH1 | the certificate lemmas at the slot's own wave: a skipped slot has no certificate, two certified candidates coincide, a direct commit is certified in every block at `r + w r` or above | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
 | SH2 | agreement: two views deciding one slot reach the same verdict, whatever the waves of the slot and of the anchors | `Steelhead.steelheadLaws` *(Steelhead/Helpers/Decision)*, `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
 | SH3 | handover: a direct commit in one view is committed by every view that finds the slot an anchor, whichever rule decides it, and no view skips it | `Steelhead.certifiedIn_of_commit_at_anchor` *(Steelhead/Helpers/Decision)*, `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
-| SH4 | conservativity: at a constant wavelength the rule is Mahi-Mahi's, period one is the constant `wa`, and at wave three every derivation is the core's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
+| SH4 | conservativity: at a constant wavelength the rule is Mahi-Mahi's, period one is the constant `wa`, and at wave three the derivations are exactly the core's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.decided_of_core_decided` *(Steelhead/Helpers/Decision)* |
 | SH5 | chain agreement: the chain verdicts agree across views under any coin; at an asynchronous round the coin leads, the output's direct verdicts are the chain's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.chainDecided_unique` *(Steelhead/Helpers/Period)*, `Steelhead.direct_agrees_with_chain` *(Steelhead/Helpers/Decision)* |
 | SH6 | liveness under synchrony: a reliably led slot commits under coverage in every caught-up view; everything below a fair run is decided | `Steelhead.Liveness.holds`, `Steelhead.commitsOfSynchrony`, `Steelhead.allDecidedBelowOfSynchrony` *(Steelhead/Liveness/Proof, Steelhead/Helpers/Liveness)* |
 | SH7 | chain liveness: every chain verdict below a run of `wa` chain commits is settled, under the run clause, and under synchrony with no clause | `Steelhead.chainAllDecidedBelow`, `Steelhead.chainAllDecidedBelowOfSynchrony` *(Steelhead/Helpers/Liveness)* |
@@ -10890,7 +10893,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 316 definitions and structures the report names, in
+The 318 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -16421,7 +16424,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 479 theorems the body or Appendix A names, each
+The 484 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
