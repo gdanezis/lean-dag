@@ -5867,10 +5867,10 @@ the base prefix is assumed at more than one leader a round;
 `placesRuns_const_of_headsRun` discharges it at one, from §21.4's
 `HeadsRun`.
 
-The design record is `adaptive-rounds.md`. `adaptive-widths.md` records
-the alternative that was not built — the widths emitted by the policy
-itself, with no second mechanism to compose — and states what
-`Integration.frameRun_agree` would ask of it.
+The design record is `adaptive-rounds.md`. `adaptive-schedule.md`
+records the alternative that was not built — the epoch length, the widths
+and the leaders all emitted by the policy, with no second mechanism to
+compose — and states what `Integration.frameRun_agree` would ask of it.
 
 **I25 — witnesses.** `Ugrow` is the universe, its height a parameter,
 because a two-epoch window does not close inside the fixed models. `cRun`
