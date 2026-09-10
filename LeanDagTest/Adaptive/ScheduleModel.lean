@@ -416,6 +416,40 @@ theorem bRun_commits_in_epoch :
     (bSched_placesRunsIn (Ugrow Composition.N) (View.full (Ugrow Composition.N)))
     0 (by omega) bRun_certLive
 
+/-! ## Conservativity on the data
+
+`cSched` is the arc where neither frame moves: epochs of three slots,
+one leader a round, on the rotation. Its numbering is the identity and
+its safety statement is §13.3's.
+-/
+
+/-- The schedule that reads nothing and runs one leader a round. -/
+noncomputable def cSched : Schedule (mysticetiRule (Validator := Fin 4)
+    (BlockId := ℕ) (Payload := Unit)) :=
+  Schedule.ofFixed (constFrame 3 (by omega)) (constFrame 1 Nat.one_pos) 1
+    (fun _ => le_refl 1) (fun r _ => bPick r)
+    (fun r i j hi hj _ => by
+      have hi' : i < 1 := hi
+      have hj' : j < 1 := hj
+      omega)
+
+/-- **The numbering is the base one.** -/
+example (U : (mysticetiRule (Validator := Fin 4) (BlockId := ℕ) (Payload := Unit)).Universe)
+    (V : View (Fin 4) ℕ Unit U) (Rn : ScheduleRun cSched U V 0) (k : ℕ) :
+    Rn.sched.slotRound k = k := ScheduleRun.ofFixed_slotRound Rn k
+
+example (U : (mysticetiRule (Validator := Fin 4) (BlockId := ℕ) (Payload := Unit)).Universe)
+    (V : View (Fin 4) ℕ Unit U) (Rn : ScheduleRun cSched U V 0) (k : ℕ) :
+    Rn.sched.leader k = bPick k := ScheduleRun.ofFixed_leader Rn k
+
+/-- **And the safety statement is the fixed arc's**, at `epochOf 3` and
+with no frame in it. -/
+example (U : (mysticetiRule (Validator := Fin 4) (BlockId := ℕ) (Payload := Unit)).Universe)
+    (V V' : View (Fin 4) ℕ Unit U) (H : ℕ)
+    (Rn : ScheduleRun cSched U V H) (Rn' : ScheduleRun cSched U V' H) :
+    ∀ g, epochOf 3 g < H → Rn.vdct g = Rn'.vdct g :=
+  ScheduleRun.agree_const MysticetiProperties.agree (by omega) Rn Rn'
+
 end ScheduleModel
 
 end LeanDagTest

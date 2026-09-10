@@ -471,6 +471,13 @@ joining the labels the diagrams exclude, and `adaptive-schedule.md` joins
 the companion list. `deps.tsv`, `decls.json` and the four SVGs are
 regenerated.
 
+**Conservativity — done.** `ScheduleRun.agree_const` is the check §12's
+step 3 named: where the schedule reads no verdict, takes epochs of `W`
+slots and runs one leader a round, the numbering is the identity
+(`ofFixed_slotRound`), the leader of a slot is the assignment at it
+(`ofFixed_leader`), and safety concludes at `epochOf W` with no frame in
+the statement. `LeanDagTest.ScheduleModel.cSched` is it on the data.
+
 **Separable, and not required.** The sharpened descent of §6 — stated at
 the widths of the span rather than at `maxWidth` — is a change to
 `Properties/` that would lower the floor on `len`. It is worth having and

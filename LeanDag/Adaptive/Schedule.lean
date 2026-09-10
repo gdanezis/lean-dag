@@ -114,6 +114,12 @@ noncomputable def ofFixed (E F : Frame) (M : ℕ) (hM : ∀ r, F.width r ≤ M)
   widthOf_adapted := fun _ _ _ _ => rfl
   pick_adapted := fun _ _ _ _ _ _ _ => rfl
 
+@[simp] theorem ofFixed_epochFrame (E F : Frame) (M hM a hk) (v : ℕ → Option BlockId) :
+    (ofFixed (R := R) E F M hM a hk).epochFrame v = E := rfl
+
+@[simp] theorem ofFixed_frameOf (E F : Frame) (M hM a hk) (v : ℕ → Option BlockId) :
+    (ofFixed (R := R) E F M hM a hk).frameOf v = F := rfl
+
 @[simp] theorem ofFixed_len (E F : Frame) (M hM a hk) (v : ℕ → Option BlockId) (e : ℕ) :
     (ofFixed (R := R) E F M hM a hk).len v e = E.width e := rfl
 

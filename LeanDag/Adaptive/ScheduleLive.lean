@@ -122,6 +122,46 @@ theorem commits_in_epoch {Live : Slots Validator → ∀ {U : R.Universe}, R.Vie
   · exact lt_of_lt_of_le (roundOf_lt_iff.mpr hlt) (by omega)
   · rw [Rn.sched_leader]; exact hbT i hi
 
+/-! ## Conservativity
+
+Where the schedule reads no verdict, takes epochs of `W` slots and runs
+one leader a round, it is the schedule the fixed arc runs on: the slot
+numbering is the identity, the leader of a slot is the assignment at it,
+and the safety statement is that arc's, at `epochOf W`.
+-/
+
+/-- **One leader a round is the identity numbering.** -/
+theorem ofFixed_slotRound {E : Frame} {M : ℕ} {hM} {a : ℕ → ℕ → Validator} {hk}
+    (Rn : ScheduleRun (Schedule.ofFixed (R := R) E (constFrame 1 Nat.one_pos) M hM a hk)
+      U V H) (k : ℕ) : Rn.sched.slotRound k = k := by
+  show (Schedule.frameOf _ Rn.vdct).roundOf k = k
+  rw [Schedule.ofFixed_frameOf, constFrame_roundOf, Nat.div_one]
+
+/-- **And the leader of a slot is the assignment at it.** -/
+theorem ofFixed_leader {E : Frame} {M : ℕ} {hM} {a : ℕ → ℕ → Validator} {hk}
+    (Rn : ScheduleRun (Schedule.ofFixed (R := R) E (constFrame 1 Nat.one_pos) M hM a hk)
+      U V H) (k : ℕ) : Rn.sched.leader k = a k 0 := by
+  rw [Rn.sched_leader]
+  show a ((constFrame 1 Nat.one_pos).roundOf k)
+    (k - (constFrame 1 Nat.one_pos).cum ((constFrame 1 Nat.one_pos).roundOf k)) = a k 0
+  rw [constFrame_roundOf, constFrame_cum, Nat.div_one, Nat.mul_one, Nat.sub_self]
+
+/-- **Conservativity: the arc's safety is the fixed arc's.** At epochs of
+`W` slots the schedule's own epoch structure is `constFrame W`, so
+`agree` concludes what the report's §13.3 concludes, at `epochOf W`
+and with no mention of a frame. -/
+theorem agree_const (hR : Agree R) {W : ℕ} (hW : 0 < W) {M : ℕ} {hM}
+    {a : ℕ → ℕ → Validator} {hk} {V' : R.View U}
+    (Rn : ScheduleRun (Schedule.ofFixed (R := R) (constFrame W hW)
+      (constFrame 1 Nat.one_pos) M hM a hk) U V H)
+    (Rn' : ScheduleRun (Schedule.ofFixed (R := R) (constFrame W hW)
+      (constFrame 1 Nat.one_pos) M hM a hk) U V' H) :
+    ∀ g, epochOf W g < H → Rn.vdct g = Rn'.vdct g := by
+  intro g hg
+  refine Rn.agree hR Rn' g ?_
+  rw [Schedule.ofFixed_epochFrame, ← epochOf_eq_roundOf W hW]
+  exact hg
+
 /-- **The descent applies at a schedule's own frame.** The spanning
 clause asks the widths to be bounded, which `widthOf_le` is, and not to
 be equal. -/
