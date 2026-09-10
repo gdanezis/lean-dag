@@ -29,6 +29,7 @@ import LeanDagTest.Reactive.Catchup
 import LeanDagTest.Reactive.Collapse
 import LeanDagTest.Adaptive.Model
 import LeanDagTest.Integration.Model
+import LeanDagTest.Integration.Composed
 import LeanDagTest.Hybrid.Model
 import LeanDagTest.Hybrid.Tight
 import LeanDagTest.Hybrid.Checkpoint

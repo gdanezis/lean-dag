@@ -422,6 +422,24 @@ What is not restated is the ledger — `Barnacle/Ledger`'s account of the
 committed sequence — and the AIMD arc's own theorems about how the count
 moves. Neither is consumed by safety or liveness of the composition.
 
+### 6.6 Witnesses
+
+`LeanDagTest.Barnacle.run1g` is `run1` at `P.gap = 1`: configuration `0`
+still closes at the anchor of round `2`, but the count it sets takes
+effect after round `3`, so the range runs a round further and that round
+is decided too — by a direct skip, since `U7` commits nothing at it. A
+gap of two does not fit on `U7`, which has no skip at round `4`; that
+would want a taller universe.
+
+`LeanDagTest.Barnacle.compGenesis` is `Composed.genesis` at Mysticeti's
+rule, with the AIMD update and the arc's own leader function. The
+composed structure is therefore inhabited at a rule this development has,
+not only generically.
+
+Neither witness exercises a composed run past height zero. That wants a
+concrete frame, assignment and verdicts over a universe tall enough for
+two epochs, and it is the witness still missing.
+
 ## 7. Questions settled, and how
 
 **A frame gives every round a leader.** Admitting empty rounds was

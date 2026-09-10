@@ -362,6 +362,63 @@ Nothing here should ever acquire an axiom beyond the standard three. -/
 #print axioms LeanDag.Barnacle.roundRobin_keyed
 #print axioms run1
 
+
+/-- The parameters of `run1`, with a gap of one round between an anchor
+and the count it sets. -/
+def bnP1g : Params := ⟨1, 4, 96, 100, 1, by decide, by decide⟩
+
+example : bnP1g.gap = 1 := rfl
+
+/-- The same run, delayed. Configuration `0` still closes at the anchor
+of round `2`, but the count it sets takes effect after round `3`, so the
+range runs a round further and that round must be decided too — here by
+a direct skip, since `U7` commits nothing at it. -/
+def run1g : PartialRun bnRule bnP1g bnLeader bnWin
+    (Aimd.rule bnRule bnP1g bnLeader bnWin) U7 V7 1 where
+  start := fun k => if k = 0 then 0 else 3
+  count := fun _ => 1
+  backoff := fun k => if k = 0 then 0 else 1
+  anchor := fun _ => 2
+  vdct := vd1
+  init := ⟨rfl, rfl, rfl⟩
+  count_pos := fun _ => Nat.one_pos
+  count_le := fun _ => by decide
+  closed := by
+    intro k hk κ h1 h2
+    have hk0 : k = 0 := by omega
+    subst hk0
+    simp at h1 h2
+    have : κ = 1 ∨ κ = 2 ∨ κ = 3 := by omega
+    rcases this with rfl | rfl | rfl
+    · exact Decided.directCommit (S := bnSched1) (by decide) (by decide)
+    · exact Decided.directCommit (S := bnSched1) (by decide) (by decide)
+    · exact Decided.directSkip (S := bnSched1) (by decide)
+  anchor_commits := by
+    intro k hk
+    have hk0 : k = 0 := by omega
+    subst hk0
+    exact ⟨⟨10, rfl⟩, by decide⟩
+  anchor_least := by
+    intro k hk κ hκ h
+    have hk0 : k = 0 := by omega
+    subst hk0
+    simp only [if_true, Nat.div_one] at h
+    have hi : bnP1g.interval = 1 := rfl
+    omega
+  start_succ := by
+    intro k hk
+    have hk0 : k = 0 := by omega
+    subst hk0
+    rfl
+  update := by
+    intro k hk A hA
+    have hk0 : k = 0 := by omega
+    subst hk0
+    have hA' : A = 10 := by
+      simp [vd1] at hA; exact hA.symm
+    subst hA'
+    decide
+
 end Barnacle
 
 end LeanDagTest
