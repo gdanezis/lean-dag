@@ -272,6 +272,57 @@ theorem allDecidedBelowOfRun {w : ℕ → ℕ} {wa : ℕ} {V : View Validator Bl
     (spansEligible_of_le hwa hle hid) (Led := fun j => ∃ L, Decided w U V j (some L)) hrun
     fun j _ _ hj => hj
 
+/-- The period-one wavelength is `wa` at every round. -/
+theorem periodic_one {ws wa : ℕ} (r : ℕ) : periodic ws wa 1 r = wa := by
+  simp [periodic, Nat.mod_one]
+
+/-- **SH9b.** SH7a's argument at the output schedule: the clause names a run of `wa` committed
+leaders past `r`, each committed directly in a view holding its decision round, and the run
+decides everything below it (SH9). -/
+theorem allDecidedBelowAtPeriodOne {ws wa : ℕ} (hwa : 1 ≤ wa) {V : View Validator BlockId Payload U}
+    (hid : ∀ s, S.slotRound s = s) {c N : ℕ}
+    (hrun : MahiMahi.UnpredictableRunWithin (S := S) U wa c wa N) (hV : V.CoversUpto N) (r : ℕ)
+    (hr : MahiMahi.decisionRoundAt wa (r + c + wa - 1) ≤ N) :
+    ∃ b, r ≤ b ∧ ∀ i, i < b → ∃ v, Decided (periodic ws wa 1) U V i v := by
+  obtain ⟨k', hk1, hk2, hgood⟩ := hrun r (by
+    rw [MahiMahi.mahiMahiAnchored_decisionRound (S := S) hwa, hid]; exact hr)
+  refine ⟨k', hk1, allDecidedBelowOfRun (fun r => by rw [periodic_one]; exact hwa)
+    (fun r => le_of_eq (periodic_one r)) hid fun i hi => ?_⟩
+  obtain ⟨L, hL, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp (hgood i hi)
+  refine ⟨L, Decided.directCommit ⟨hL, hLr, hLc⟩ ?_⟩
+  change MahiMahi.DirectCommitIn U V (periodic ws wa 1 (S.slotRound (k' + i))) L
+    (S.slotRound (k' + i))
+  rw [periodic_one]
+  refine MahiMahiProperties.directCommitIn_of_coversUpto hdc (hV.mono ?_)
+  rw [hid]
+  unfold MahiMahi.decisionRoundAt at hr ⊢
+  omega
+
+/-- **SH9c.** Decision rounds at the periodic wavelength: `r + wa − 1` at an asynchronous round,
+`r + ws − 1` at a synchronous one; the rest is arithmetic. -/
+theorem asyncSlotCost {ws wa k : ℕ} (hid : ∀ s, S.slotRound s = s) (hws : 1 ≤ ws) (hwa : ws ≤ wa)
+    {r : ℕ} (hr : IsAsync k r) :
+    (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound (S := S) r =
+      (steelheadAnchored Validator BlockId Payload (fun _ => ws)).decisionRound (S := S) r +
+        (wa - ws) ∧
+    ∀ i, 1 ≤ i → i < k →
+      (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound (S := S) r ≤
+        (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound (S := S)
+          (r + i) + (wa - ws - i) := by
+  have hasync : periodic ws wa k r = wa := by unfold IsAsync at hr; simp [periodic, hr]
+  refine ⟨?_, fun i hi hik => ?_⟩
+  · unfold AnchoredRule.decisionRound
+    simp only [steelheadAnchored_waveAt, hid, hasync]
+    omega
+  · have hsync : periodic ws wa k (r + i) = ws := by
+      refine periodic_of_not_isAsync ?_
+      unfold IsAsync at hr ⊢
+      rw [Nat.add_mod, hr, zero_add, Nat.mod_mod, Nat.mod_eq_of_lt hik]
+      omega
+    unfold AnchoredRule.decisionRound
+    simp only [steelheadAnchored_waveAt, hid, hasync, hsync]
+    omega
+
 end Drain
 
 end Steelhead

@@ -14,8 +14,8 @@ namespace Steelhead
 namespace Liveness
 
 theorem holds : Statement := by
-  intro Validator BlockId Payload _ _ _ _ S U w wa
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  intro Validator BlockId Payload _ _ _ _ S U w ws wa k
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro T V R N k hw hT hcard hs hpop hR hN hV hlead
     exact commitsOfSynchrony hw hT hcard hs hpop hR hN hV hlead
   · intro T c hw hT hcard hspan fair R k
@@ -28,6 +28,10 @@ theorem holds : Statement := by
     exact stall hws hk hid hcert hskip hi h
   · intro V b hw hle hid hrun
     exact allDecidedBelowOfRun hw hle hid hrun
+  · intro V c N hwa hid hrun hV r hr
+    exact allDecidedBelowAtPeriodOne hwa hid hrun hV r hr
+  · intro hid hws hwa r hr
+    exact asyncSlotCost hid hws hwa hr
 
 end Liveness
 

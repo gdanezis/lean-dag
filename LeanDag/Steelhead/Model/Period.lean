@@ -37,6 +37,18 @@ period in force. Any deterministic function; the paper's counterfactual replay r
 anchor's causal history, which the block id determines within one universe. -/
 abbrev UpdateRule (BlockId : Type) := ℕ → BlockId → ℕ → ℕ
 
+/-- **The update rule resets on a stalled window**: the paper's premise for liveness under
+asynchrony, "the update rule maps a window in which no synchronous slot commits to `k = 1`". When
+no synchronous slot of interval `j` under period `k` has a certified candidate, the update at any
+anchor of `j` is `1`: a clause on `upd` against the record, as the unpredictable-leader clause is
+on the schedule. -/
+def ResetsOnStall [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload) (ws I : ℕ)
+    (upd : UpdateRule BlockId) : Prop :=
+  ∀ (j k : ℕ) (A : BlockId),
+    (∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j → ¬ IsAsync k (S.slotRound s) →
+      IsLeaderBlock U s L → MahiMahi.certificates U ws L (S.slotRound s) = ∅) →
+    upd j A k = 1
+
 /-- **The chain anchor of interval `j` under period `k`**, read from the view `V`: round `r` of
 the interval is asynchronous under `k` and chain-committed on `A`, and every asynchronous round of
 the interval below it is chain-skipped. -/

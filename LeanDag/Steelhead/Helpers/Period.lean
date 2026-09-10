@@ -232,6 +232,45 @@ theorem periodAt_of_clause (hwa : 1 ≤ wa) (hI : 0 < I) {upd : UpdateRule Block
     obtain ⟨k, hk⟩ := ih (horizon_mono hN)
     exact exists_periodAt_succ hk fun r hr _ => chain_all_of_clause hwa hI hrun hV hN r hr
 
+/-! ## SH10e, SH10f, SH10g -/
+
+/-- **SH10e.** The anchor step of the sequence, its update read off the clause. -/
+theorem periodAt_one_of_anchor [S : Slots Validator] {ws : ℕ} {upd : UpdateRule BlockId} {k₀ : ℕ}
+    {V : View Validator BlockId Payload U} {j k r : ℕ} {A : BlockId}
+    (hreset : ResetsOnStall U ws I upd)
+    (hcert : ∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+      ¬ IsAsync k (S.slotRound s) → IsLeaderBlock U s L →
+      MahiMahi.certificates U ws L (S.slotRound s) = ∅)
+    (hp : PeriodAt I wa coin upd k₀ U V j k) (hA : IntervalAnchor I wa coin U V j k r A) :
+    PeriodAt I wa coin upd k₀ U V (j + 1) 1 :=
+  hreset j k A hcert ▸ PeriodAt.anchor hp hA
+
+/-- **SH10f.** The first multiple of `k` at or above the interval's first round, and the next one:
+both lie in the interval, since it holds `I ≥ 2k` rounds. -/
+theorem two_async_rounds {j k : ℕ} (hk : 1 ≤ k) (hI : 2 * k ≤ I) :
+    ∃ r₁ r₂, r₁ < r₂ ∧ intervalOf I r₁ = j ∧ IsAsync k r₁ ∧ intervalOf I r₂ = j ∧ IsAsync k r₂ := by
+  obtain ⟨q, m, hm, hqm⟩ : ∃ q m, m < k ∧ k * q + m = j * I + k :=
+    ⟨(j * I + k) / k, (j * I + k) % k, Nat.mod_lt _ (by omega), Nat.div_add_mod _ _⟩
+  have hmul : (j + 1) * I = j * I + I := by rw [Nat.add_mul, Nat.one_mul]
+  have hsucc : k * q + k = k * (q + 1) := (Nat.mul_succ k q).symm
+  refine ⟨k * q, k * q + k, by omega, ?_, Nat.mul_mod_right k q, ?_, ?_⟩
+  · exact Nat.div_eq_of_lt_le (by omega) (by rw [hmul]; omega)
+  · exact Nat.div_eq_of_lt_le (by omega) (by rw [hmul]; omega)
+  · unfold IsAsync
+    rw [hsucc]
+    exact Nat.mul_mod_right k (q + 1)
+
+/-- **SH10g.** Induction on the derivation: the initial period is in range, and the update rule
+keeps it there. -/
+theorem periodAt_mem_range {K : ℕ} {upd : UpdateRule BlockId} {k₀ : ℕ}
+    {V : View Validator BlockId Payload U} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
+    (hupd : ∀ j A k, 1 ≤ k → k ≤ K → 1 ≤ upd j A k ∧ upd j A k ≤ K) {j k : ℕ}
+    (hp : PeriodAt I wa coin upd k₀ U V j k) : 1 ≤ k ∧ k ≤ K := by
+  induction hp with
+  | zero => exact ⟨h₀, hK⟩
+  | anchor _ _ ih => exact hupd _ _ _ ih.1 ih.2
+  | keep _ _ ih => exact ih
+
 end Steelhead
 
 end LeanDag

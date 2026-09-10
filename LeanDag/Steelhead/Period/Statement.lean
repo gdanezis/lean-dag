@@ -4,7 +4,7 @@ import LeanDag.MahiMahi.Model.Unpredictable
 # The period sequence — statement
 
 What the adaptive protocol's period does across views and over time
-(`steelhead.md` §5). Four claims:
+(`steelhead.md` §5). Seven claims:
 
 * **SH10a, agreement of the period** — Theorem 4: two views that derive
   a period for interval `j` derive the same one, under any update rule,
@@ -25,14 +25,31 @@ What the adaptive protocol's period does across views and over time
 * **SH10d, the period advances under the clause** — Theorem 3 (i): under
   the run form of the unpredictable-leader clause at the chain schedule,
   a view caught up to the horizon derives a period for every interval
-  whose rounds lie far enough below it, by SH7a and SH10c.
+  whose rounds lie far enough below it, by SH7a and SH10c;
+* **SH10e, the period reaches `1`**: Theorem 3 (i)'s last clause. Under
+  the paper's premise that the update rule maps a window without a
+  synchronous commit to `1` (`ResetsOnStall`, `Model/Period.lean`), and
+  with no synchronous slot of the interval holding a certified candidate
+  (SH8's adversary, within the interval), an interval that finds an
+  anchor hands the next interval period `1`. That an anchor exists is the
+  almost-sure half, stated with the coin;
+* **SH10f, two asynchronous rounds per interval**: the adaptive
+  section's structural fact behind `I ≥ 2 · maxPeriod`. At any period
+  `k ≥ 1` with `2 k ≤ I`, every interval holds two asynchronous rounds to
+  scan;
+* **SH10g, the period stays in range**: if the initial period lies in
+  `[1, K]` and the update rule keeps a period there, so does every
+  derived period.
 
 SH10a and SH10b assume `3 ≤ wa` (and `3 ≤ ws`), as SH5 and SH2 do, and
 SH10b a round `N` the record does not reach past; SH10c assumes nothing;
 SH10d assumes `1 ≤ wa`, as SH7a does, and a positive interval, without
-which every round lies in interval `0`. None of the four assumes
-`0 < k` of a period: SH10a to SH10c hold at every period, and SH10d
-constrains the interval `I` rather than the period.
+which every round lies in interval `0`; SH10e assumes nothing of the
+waves; SH10f and SH10g read no record. SH10a to SH10c and SH10e hold at
+every period, `0` included, and SH10d constrains the interval `I` rather
+than the period; SH10f asks `1 ≤ k`, since at `k = 0` only round `0` is
+asynchronous, and SH10g concludes `1 ≤ k` from the same bound on the
+initial period and the update rule.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -94,14 +111,43 @@ def PeriodOfClause (U : BlockUniverse Validator BlockId Payload) (I wa : ℕ) : 
       -- ... the view derives the next interval's period
       ∃ k, PeriodAt I wa coin upd k₀ U V (j + 1) k
 
+/-- **SH10e, the period reaches `1` after an anchored interval.** -/
+def PeriodOne (U : BlockUniverse Validator BlockId Payload) (ws I wa : ℕ) : Prop :=
+  ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
+    (V : View Validator BlockId Payload U) (j k r : ℕ) (A : BlockId),
+    -- the update rule resets on a window without a synchronous commit
+    ResetsOnStall U ws I upd →
+    -- no synchronous slot of the interval has a certified candidate (SH8's adversary, in the
+    -- interval)
+    (∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j → ¬ IsAsync k (S.slotRound s) →
+      IsLeaderBlock U s L → MahiMahi.certificates U ws L (S.slotRound s) = ∅) →
+    -- interval j runs at k and V finds it an anchor
+    PeriodAt I wa coin upd k₀ U V j k → IntervalAnchor I wa coin U V j k r A →
+    -- then interval j + 1 runs at period 1
+    PeriodAt I wa coin upd k₀ U V (j + 1) 1
+
+/-- **SH10f, every interval holds two asynchronous rounds.** -/
+def TwoAsyncRounds (I : ℕ) : Prop :=
+  ∀ j k, 1 ≤ k → 2 * k ≤ I →
+    ∃ r₁ r₂, r₁ < r₂ ∧ intervalOf I r₁ = j ∧ IsAsync k r₁ ∧ intervalOf I r₂ = j ∧ IsAsync k r₂
+
+/-- **SH10g, the period stays in range.** -/
+def PeriodInRange (U : BlockUniverse Validator BlockId Payload) (I wa K : ℕ) : Prop :=
+  ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
+    (V : View Validator BlockId Payload U) (j k : ℕ),
+    -- the initial period lies in [1, K], and the update rule keeps a period there
+    1 ≤ k₀ → k₀ ≤ K → (∀ j A k, 1 ≤ k → k ≤ K → 1 ≤ upd j A k ∧ upd j A k ≤ K) →
+    -- then so does every derived period
+    PeriodAt I wa coin upd k₀ U V j k → 1 ≤ k ∧ k ≤ K
+
 /-- The period sequence, over every fault configuration, schedule, block universe, interval,
-wavelength pair and update rule the model admits. -/
+wavelength pair, period bound and update rule the model admits. -/
 def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] [Slots Validator]
-    (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ),
+    (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ),
     PeriodAgreement U I wa ∧ AdaptiveAgreement U ws wa I ∧ ScanEnds U I wa ∧
-      PeriodOfClause U I wa
+      PeriodOfClause U I wa ∧ PeriodOne U ws I wa ∧ TwoAsyncRounds I ∧ PeriodInRange U I wa K
 
 end Period
 
