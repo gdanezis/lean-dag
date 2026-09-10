@@ -5867,6 +5867,11 @@ the base prefix is assumed at more than one leader a round;
 `placesRuns_const_of_headsRun` discharges it at one, from §21.4's
 `HeadsRun`.
 
+The design record is `adaptive-rounds.md`. `adaptive-widths.md` records
+the alternative that was not built — the widths emitted by the policy
+itself, with no second mechanism to compose — and states what
+`Integration.frameRun_agree` would ask of it.
+
 **I25 — witnesses.** `Ugrow` is the universe, its height a parameter,
 because a two-epoch window does not close inside the fixed models. `cRun`
 is a composed run of height one and the conservativity case; `mRun`
@@ -9733,7 +9738,8 @@ detail than a report admits: `spec.md` (safety), `liveness.md`
 (liveness), `pipelining-and-multi-leader.md` (the schedule
 generalisation), `chain-quality.md` (§7), `dos-equivocation-and-growth.md`
 (§8), `garbage.md` (§9), `odontoceti.md` (§10), `adaptive-leaders.md`
-(§13), `hybrid-plan.md` (§14), `target-properties.md` (§16, whose
+(§13), `hybrid-plan.md` (§14), `adaptive-rounds.md` (§16.8),
+`target-properties.md` (§16, whose
 opening part is the current statement of the properties), `mahi-mahi.md`
 (§17), `black-marlin.md` (§18), `minnow.md` (§19), `finwhale.md` (§20),
 `barnacle.md` (§21), `hydrozoan.md` (§22), `optimal-hydrozoan.md` (§23)
