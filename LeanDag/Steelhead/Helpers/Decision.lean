@@ -46,6 +46,23 @@ theorem certifiedIn_of_commit_at_anchor {w : ℕ → ℕ} (hw : ∀ r, 1 ≤ w r
     MahiMahi.CertifiedIn U (w (S.slotRound k)) A L (S.slotRound k) :=
   MahiMahi.certifiedIn_of_directCommitIn_at_anchor (hw _) h hA (eligible_iff_mahiMahi.mp helig)
 
+/-- **SH5b.** At an asynchronous round the periodic wavelength is `wa`, and at a slot proposed at
+its own round and led by the coin the slot's blame is the chain slot's. -/
+theorem direct_agrees_with_chain {ws wa k r : ℕ} {coin : ℕ → Validator}
+    {V : View Validator BlockId Payload U} {L : BlockId} (hid : S.slotRound r = r)
+    (hr : IsAsync k r) (hlead : S.leader r = coin r) :
+    ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Commit U V L r ↔
+      (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Commit U V L r) ∧
+    ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Skip U V S r ↔
+      (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Skip U V (chainSlots coin) r) := by
+  have hw : periodic ws wa k r = wa := by unfold IsAsync at hr; simp [periodic, hr]
+  constructor
+  · change MahiMahi.DirectCommitIn U V (periodic ws wa k r) L r ↔ MahiMahi.DirectCommitIn U V wa L r
+    rw [hw]
+  · change MahiMahi.DirectSkipIn U V (periodic ws wa k (S.slotRound r)) (S.leader r)
+      (S.slotRound r) ↔ MahiMahi.DirectSkipIn U V wa (coin r) r
+    rw [hid, hw, hlead]
+
 omit S in
 /-- The rung reads the schedule only through the slot's round. -/
 theorem linkCongr {w : ℕ → ℕ} : (steelheadAnchored Validator BlockId Payload w).LinkCongr :=

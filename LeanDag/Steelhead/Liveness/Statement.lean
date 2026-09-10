@@ -5,7 +5,7 @@ import LeanDag.MahiMahi.Model.Unpredictable
 
 What the rule decides under synchrony, what the chain decides under the
 unpredictable-leader clause, and what the output does *not* decide under
-the paper's asynchronous adversary (`steelhead.md` §4–6). Six claims:
+the paper's asynchronous adversary (`steelhead.md` §4–6). Eight claims:
 
 * **SH6a, a reliable leader commits under coverage** — Theorem 2's
   per-slot half: on a DAG a reliable quorum has synchronised and
@@ -37,11 +37,25 @@ the paper's asynchronous adversary (`steelhead.md` §4–6). Six claims:
   bounded by `wa` and one slot per round, `wa` consecutive committed
   slots decide every slot below them, whatever wave those slots carry.
   Once the period is `1` and Mahi-Mahi's run clause supplies the run,
-  the slots an earlier period left undecided are finished by it.
+  the slots an earlier period left undecided are finished by it;
+* **SH9b, at period one every slot is decided**: Theorem 3 (ii) as one
+  statement. At `periodic ws wa 1`, under the run clause at the output
+  schedule, past every round whose window decides below the horizon
+  there is a slot below which every slot is decided, in any view caught
+  up to the horizon, so the settled prefix and with it the ledger (SH13)
+  extend as far as the horizon and the clause reach;
+* **SH9c, the cost of an asynchronous slot**: the protocol section's
+  healthy-network arithmetic. An asynchronous slot decides `wa − ws`
+  rounds later than a synchronous slot would, and the synchronous slot
+  `i` rounds above it is decided at most `max(0, wa − ws − i)` rounds
+  before it, so the successor waits at most `wa − ws − 1` rounds for
+  causal ordering and the wait is nonincreasing in `i`: delays never
+  compound.
 
 SH6 assumes `3 ≤ w r` everywhere, as the safety claims do; SH7a assumes
 `1 ≤ wa`, as MM3c does, and SH7b `4 ≤ wa`, as MM5 does; SH8 assumes
-`2 ≤ ws ≤ k` and nothing of `wa`; SH9 assumes `1 ≤ w r ≤ wa`.
+`2 ≤ ws ≤ k` and nothing of `wa`; SH9 assumes `1 ≤ w r ≤ wa`; SH9b
+assumes `1 ≤ wa`, as SH7a does; SH9c assumes `1 ≤ ws ≤ wa`.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -158,20 +172,53 @@ def AllDecidedBelowOfRun (U : BlockUniverse Validator BlockId Payload) (w : ℕ 
     -- then every slot below b is decided in V
     ∀ i, i < b → ∃ v, Decided w U V i v
 
+/-- **SH9b, at period one every slot is decided.** -/
+def AllDecidedBelowAtPeriodOne (U : BlockUniverse Validator BlockId Payload) (ws wa : ℕ) :
+    Prop :=
+  ∀ (V : View Validator BlockId Payload U) (c N : ℕ),
+    1 ≤ wa →
+    -- one slot per round
+    (∀ s, S.slotRound s = s) →
+    -- the run form of the clause at the output schedule: in every window of c slots below
+    -- the horizon, wa consecutive slots whose leaders are committed candidates
+    MahiMahi.UnpredictableRunWithin (S := S) U wa c wa N →
+    -- the view holds every block up to the horizon
+    V.CoversUpto N →
+    -- then past every round r whose window decides below the horizon ...
+    ∀ r, MahiMahi.decisionRoundAt wa (r + c + wa - 1) ≤ N →
+      -- ... there is a slot b at or past r below which every slot is decided at period 1
+      ∃ b, r ≤ b ∧ ∀ i, i < b → ∃ v, Decided (periodic ws wa 1) U V i v
+
+/-- **SH9c, the cost of an asynchronous slot.** -/
+def AsyncSlotCost (ws wa k : ℕ) : Prop :=
+  -- one slot per round, the synchronous wave no longer than the asynchronous one
+  (∀ s, S.slotRound s = s) → 1 ≤ ws → ws ≤ wa →
+  ∀ r, IsAsync k r →
+    -- the asynchronous slot decides wa − ws rounds later than a synchronous slot there would ...
+    (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound r =
+      (steelheadAnchored Validator BlockId Payload (fun _ => ws)).decisionRound r + (wa - ws) ∧
+    -- ... and the synchronous slot i rounds above it is decided at most max(0, wa − ws − i)
+    -- rounds before it, so waits that long for it and no longer; the bound is nonincreasing in i
+    ∀ i, 1 ≤ i → i < k →
+      (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound r ≤
+        (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound (r + i) +
+          (wa - ws - i)
+
 /-- Liveness at a wavelength function, over every fault configuration,
-schedule, block universe, wavelength function and asynchronous wave the
-model admits. -/
+schedule, block universe, wavelength function, wavelength pair and period
+the model admits. -/
 def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] [Slots Validator]
-    (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) (wa : ℕ),
+    (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) (ws wa k : ℕ),
     CommitsOfSynchrony U w ∧
       AllDecidedBelowOfSynchrony (Validator := Validator) (BlockId := BlockId)
         (Payload := Payload) w ∧
       ChainAllDecidedBelow U wa ∧
       ChainAllDecidedBelowOfSynchrony (Validator := Validator) (BlockId := BlockId)
         (Payload := Payload) wa ∧
-      Stall U ∧ AllDecidedBelowOfRun U w wa
+      Stall U ∧ AllDecidedBelowOfRun U w wa ∧ AllDecidedBelowAtPeriodOne U ws wa ∧
+      AsyncSlotCost (Validator := Validator) (BlockId := BlockId) (Payload := Payload) ws wa k
 
 end Liveness
 

@@ -4,12 +4,16 @@ import Mathlib.Analysis.SpecificLimits.Basic
 # The coin — statement
 
 The probability half of liveness under asynchrony (`steelhead.md` §4),
-the paper's Theorem 3 (i) read through a uniform coin. Four claims:
+the paper's Theorem 3 (i) read through a uniform coin. Five claims:
 
 * **SH11a, the commit probability** — on a wave a quorum has populated,
   the coin of round `r` names a directly committed leader with
   probability at least `(n − f − |byzantine|) / n`, hence at least
   `1/3`: MM2 at `wa ≥ 5` under a uniform draw;
+* **SH11e, the commit probability at wave four**: at `wa ≥ 4` MM2
+  promises one committed correct candidate, so the coin names a
+  committed leader with probability at least `1/n`, the paper's
+  wavelength-four trade-off;
 * **SH11b, a good coin commits the chain slot** — in every view caught
   up to the decision round;
 * **SH11c, the tail** — over `m` consecutive populated waves with
@@ -45,6 +49,15 @@ def CommitProbability (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) :
     -- ... and so at least 1/3
     (3 : ℝ≥0∞)⁻¹ ≤ commitProb U wa r
 
+/-- **SH11e, the commit probability at wave four.** -/
+def CommitProbabilityFour (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
+  ∀ (T : Finset Validator) (r : ℕ),
+    -- four rounds, a quorum, and the wave populated where MM2's weaker form reads it
+    4 ≤ wa → quorumCard Validator ≤ T.card →
+    PopulatedOn U T (r + 2) → PopulatedOn U T (MahiMahi.decisionRoundAt wa r) →
+    -- then the coin names a committed leader with probability at least 1 / n
+    (Fintype.card Validator : ℝ≥0∞)⁻¹ ≤ commitProb U wa r
+
 /-- **SH11b, a good coin commits the chain slot.** -/
 def CommitOfCoin (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (V : View Validator BlockId Payload U) (r : ℕ),
@@ -77,8 +90,8 @@ def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId]
     (U : BlockUniverse Validator BlockId Payload) (wa : ℕ),
-    CommitProbability U wa ∧ CommitOfCoin U wa ∧ NoCommitTail U wa ∧
-      TailVanishes (Validator := Validator)
+    CommitProbability U wa ∧ CommitProbabilityFour U wa ∧ CommitOfCoin U wa ∧
+      NoCommitTail U wa ∧ TailVanishes (Validator := Validator)
 
 end Coin
 

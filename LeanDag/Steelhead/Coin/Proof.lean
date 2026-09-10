@@ -15,9 +15,11 @@ namespace Coin
 
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ _ U wa
-  refine ⟨?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · intro T r hwa hcard hpop₃ hpopd
     exact ⟨ratio_le_commitProb hwa hcard hpop₃ hpopd, third_le_commitProb hwa hcard hpop₃ hpopd⟩
+  · intro T r hwa hcard hpop₂ hpopd
+    exact inv_card_le_commitProb hwa hcard hpop₂ hpopd
   · intro coin V r h hV
     exact chainCommit_of_mem_goodAt h hV
   · intro T r₀ m hwa hcard hpop

@@ -77,6 +77,17 @@ theorem third_le_commitProb {U : BlockUniverse Validator BlockId Payload} {wa : 
     (3 : ℝ≥0∞)⁻¹ ≤ commitProb U wa r :=
   le_trans third_le_ratio (ratio_le_commitProb hwa hcard hpop₃ hpopd)
 
+/-- **SH11e.** MM2's wave-four form names one committed correct candidate, so `1 ≤ |goodAt|`. -/
+theorem inv_card_le_commitProb {U : BlockUniverse Validator BlockId Payload} {wa : ℕ}
+    (hwa : 4 ≤ wa) {T : Finset Validator} (hcard : quorumCard Validator ≤ T.card) {r : ℕ}
+    (hpop₂ : PopulatedOn U T (r + 2)) (hpopd : PopulatedOn U T (MahiMahi.decisionRoundAt wa r)) :
+    (Fintype.card Validator : ℝ≥0∞)⁻¹ ≤ commitProb U wa r := by
+  rw [commitProb_eq, ← one_div]
+  have h : 1 ≤ (MahiMahi.goodAt U wa r).card :=
+    Finset.card_pos.mpr
+      ((MahiMahi.goodNonempty hwa hcard hpop₂ hpopd).mono Finset.inter_subset_left)
+  exact ENNReal.div_le_div_right (by exact_mod_cast h) _
+
 /-! ## The coin and the chain -/
 
 /-- **SH11b.** A good coin's block is directly committed, and a view holding the decision round
