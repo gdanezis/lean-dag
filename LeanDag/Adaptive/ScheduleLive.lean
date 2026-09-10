@@ -71,6 +71,31 @@ def PlacesRunsIn (P : Schedule R) (U : R.Universe) (V : R.View U)
     ∃ b, (P.epochFrame v).cum (e + 1) ≤ b ∧ b + c ≤ (P.epochFrame v).cum (e + 2) ∧
       ∀ i, i < c → P.pick U V v (b + i) ∈ T
 
+/-- **The fairness clause carries the floor on an epoch.** A stretch of
+`c` slots must fall inside one epoch, so a schedule that satisfies
+`PlacesRunsIn` at `c` holds at least `c` slots in every epoch past the
+first. The floor is therefore a condition for liveness rather than a
+clause of a schedule: a schedule may choose epochs shorter than `c`, and
+what it forfeits by doing so is this clause, not its well-formedness. -/
+theorem len_floor_of_placesRunsIn {P : Schedule R} {U : R.Universe} {V : R.View U}
+    {T : Finset Validator} {c : ℕ} (h : PlacesRunsIn P U V T c)
+    (v : ℕ → Option BlockId) (e : ℕ) : c ≤ P.len v (e + 1) := by
+  obtain ⟨b, hb1, hb2, -⟩ := h v e
+  have hs : (P.epochFrame v).cum (e + 2)
+      = (P.epochFrame v).cum (e + 1) + P.len v (e + 1) := by
+    have he : e + 2 = (e + 1) + 1 := by omega
+    rw [he, Frame.cum_succ]
+  omega
+
+/-- **And the descent's span fixes it.** Where the stretch is long enough
+for the descent to use, every epoch past the first holds at least
+`maxWidth * (wave + 1)` slots. -/
+theorem descent_floor {P : Schedule R} {U : R.Universe} {V : R.View U}
+    {T : Finset Validator} {c wave : ℕ} (h : PlacesRunsIn P U V T c)
+    (hspan : P.maxWidth * (wave + 1) ≤ c) (v : ℕ → Option BlockId) (e : ℕ) :
+    P.maxWidth * (wave + 1) ≤ P.len v (e + 1) :=
+  le_trans hspan (len_floor_of_placesRunsIn h v e)
+
 namespace ScheduleRun
 
 /-- **Every epoch a run has closed carries `c` consecutive commits.**

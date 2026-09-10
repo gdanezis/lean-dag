@@ -4684,11 +4684,15 @@ consumed somewhere.
   else. This is `Policy.adapted` read of the other two functions, and it
   is what the safety induction consumes.
 
-Two further conditions are consequences rather than clauses. An epoch
-must hold at least `maxWidth * (wave + 1)` slots, since `PlacesRunsIn`
-asks its run of `c` reliable slots to fit inside one epoch and the
-descent asks `maxWidth * (wave + 1) ≤ c`; and at least `c₀`, the reach of
-the rotation, if the degenerate case is to discharge the fairness clause.
+Two further conditions are consequences rather than clauses, and the
+first is a theorem. An epoch must hold at least `maxWidth * (wave + 1)`
+slots, and that follows from the fairness clause rather than being asked
+of a schedule: `Adaptive.len_floor_of_placesRunsIn` says a stretch of `c`
+slots inside epoch `e + 1` is `c ≤ len v (e + 1)`, and
+`Adaptive.descent_floor` composes it with the descent's
+`maxWidth * (wave + 1) ≤ c`. A schedule choosing shorter epochs is not
+ill-formed; what it forfeits is liveness. The other is `c₀`, the reach of
+the rotation, needed if the degenerate case is to discharge the clause.
 An epoch of `len` slots at width `m` spans `len / m` rounds, so at the
 widest schedule the floor is `wave + 1` rounds and at one leader a round
 it is `len`.

@@ -100,49 +100,59 @@ frame in the same places.
 
 ## 4. The design
 
-`Adaptive.Policy` gains two functions and their clauses.
+`Adaptive.Schedule` carries three functions and six clauses.
 
 ```lean
-len : (U : R.Universe) → (ℕ → Option BlockId) → ℕ → ℕ
-widthOf : (U : R.Universe) → (ℕ → Option BlockId) → ℕ → ℕ
+len : (ℕ → Option BlockId) → ℕ → ℕ
+len_pos : ∀ v e, 0 < len v e
+widthOf : (ℕ → Option BlockId) → ℕ → ℕ
+widthOf_pos : ∀ v r, 0 < widthOf v r
+maxWidth : ℕ
+widthOf_le : ∀ v r, widthOf v r ≤ maxWidth
+pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator
+keyed : ∀ U V v r i j, i < widthOf v r → j < widthOf v r →
+  pick U V v ((Frame.mk (widthOf v) (widthOf_pos v)).index r i)
+    = pick U V v ((Frame.mk (widthOf v) (widthOf_pos v)).index r j) → i = j
+len_adapted : ∀ v w e,
+  (∀ j, (Frame.mk (len v) (len_pos v)).roundOf j + 2 ≤ e → w j = v j) →
+  len w e = len v e
+widthOf_adapted : ∀ v w r, … → widthOf w r = widthOf v r
+pick_adapted : ∀ U V₁ V₂ v w k, … → pick U V₁ w k = pick U V₂ v k
 ```
 
-`epochFrame U v : Frame` is built from `len` by strong recursion on the
-epoch: `len e` reads the verdicts of slots below `bd (e − 1)`, and
-`bd (e − 1)` is fixed by `len` at epochs strictly below `e − 1`.
-`frameOf U v : Frame` is built from `widthOf` by strong recursion on the
-round: `width r` reads `cum r`, which reads the widths of rounds below
-`r`. Both recursions are well founded, and each reads only values it has
-already produced.
+`epochFrame v` is `⟨len v, len_pos v⟩` and `frameOf v` is
+`⟨widthOf v, widthOf_pos v⟩`. Neither is a recursion: `len` and
+`widthOf` take the index directly, and it is the clauses that name the
+frames the indices are read against. The clauses write the constructor
+out because a field's type may refer to earlier fields but not to a
+definition made after the structure.
 
-Writing `E = epochFrame U v` and `F = frameOf U v`, the clauses are
+`FrameRun` gains two fields, mirroring `coherent`, and a `ScheduleRun`
+supplies them by construction: it carries verdicts and nothing else, so
+its epochs, widths and leaders are the schedule's readings of them.
 
-```lean
-len_pos : ∀ U v e, 0 < len U v e
-len_floor : ∀ U v e, maxWidth * (wave + 1) ≤ len U v e
-len_adapted : ∀ U v w e,
-  (∀ j, (epochFrame U v).roundOf j + 2 ≤ e → v j = w j) →
-  len U v e = len U w e
-len_base : ∀ U v e, e < 2 → len U v e = baseLen
+Three things this list does not have are worth stating, since each was
+considered and left out.
 
-widthOf_pos : ∀ U v r, 0 < widthOf U v r
-widthOf_le : ∀ U v r, widthOf U v r ≤ maxWidth
-widthOf_adapted : ∀ U v w r,
-  (∀ j, (epochFrame U v).roundOf j + 2 ≤ (epochFrame U v).roundOf (F.cum r) → v j = w j) →
-  widthOf U v r = widthOf U w r
-widthOf_base : ∀ U v r, (epochFrame U v).roundOf (F.cum r) < 2 → widthOf U v r = 1
-```
+**`len` and `widthOf` do not take the universe.** They read the verdicts
+and nothing else, which is the discipline §10 asks of an implementation
+and which the fixed arc's `Policy.adapted` permits rather than requires.
+`pick` still takes it, to match what `FrameRun` is parameterised by.
 
-`Policy.adapted` and `Policy.base_prefix` are restated at `E.roundOf` in
-place of `epochOf W`. `maxWidth` replaces `Params.maxLeaders` and is the
-policy's own bound rather than a parameter of another mechanism.
+**There is no `len_floor`.** An epoch must hold `maxWidth * (wave + 1)`
+slots for the fairness clause and the descent to be jointly satisfiable,
+but that is a condition for *liveness* rather than for well-formedness.
+`len_floor_of_placesRunsIn` proves it from `PlacesRunsIn`, a stretch of
+`c` slots inside epoch `e + 1` being `c ≤ len v (e + 1)`, and
+`descent_floor` is that composed with the descent's span. A schedule
+choosing shorter epochs is not ill-formed; what it forfeits is the
+clause.
 
-`FrameRun` gains two fields beside `coherent`:
-
-```lean
-epochs : ∀ e, e < H + 1 → E.width e = P.len U vdct e
-widths : ∀ r, E.roundOf (F.cum r) < H + 1 → F.width r = P.widthOf U vdct r
-```
+**There is no `len_base` or `widthOf_base`.** The fixed arc's
+`Policy.base_prefix` pins epochs `0` and `1` to the base schedule, and
+nothing in the development consumes it: it is discharged in every witness
+and read by no theorem. A schedule owes no counterpart until something
+asks for one.
 
 ## 5. The third determinism
 
@@ -184,9 +194,11 @@ are known to agree.
 
 ## 6. The floor on an epoch
 
-`PlacesRuns P T c` asks for `b` with `bd (e + 1) ≤ b` and
-`b + c ≤ bd (e + 2)`, so `c ≤ len (e + 1)`. The descent asks
-`maxWidth * (wave + 1) ≤ c`. Together, per epoch,
+`PlacesRunsIn P U V T c` asks for `b` with `bd (e + 1) ≤ b` and
+`b + c ≤ bd (e + 2)`, so `c ≤ len v (e + 1)`; that is
+`len_floor_of_placesRunsIn`. The descent asks
+`maxWidth * (wave + 1) ≤ c`, and `descent_floor` composes the two. Per
+epoch,
 
 ```
 len e ≥ max c₀ (maxWidth * (wave + 1))
