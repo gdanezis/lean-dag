@@ -46,47 +46,61 @@ object, is not needed: a `Slots` carries the widths in its `slotRound`.
 
 ## 2. What a configuration becomes
 
+The width function is the primitive, and the schedule derives from it.
+
 ```lean
 structure Config (Validator : Type) where
-  /-- The schedule the configuration's rounds run on: which validator
-  leads each slot, and how many slots each round holds. -/
-  sched : Slots Validator
+  /-- Slots per round. -/
+  width : ℕ → ℕ
+  width_pos : ∀ r, 0 < width r
+  /-- Who leads position `i` of round `r`. -/
+  lead : ℕ → ℕ → Validator
+  /-- Distinct positions of a round have distinct leaders. -/
+  keyed : ∀ r i j, i < width r → j < width r → lead r i = lead r j → i = j
   /-- Rounds from this configuration's start before the next
   reconfiguration is due. -/
   interval : ℕ
 ```
 
-Two fields and no proofs. What a configuration must satisfy is where the
-present arc puts it — a clause of the run, beside `count_pos` and
-`count_le`:
+with `cum r` the first slot of round `r`, `roundOf g` the round of slot
+`g`, and `sched : Slots Validator` built from the two — `slotRound` is
+`roundOf`, and the leader of slot `g` is `lead` at its round and
+position. `Config.keyed` is what `Slots.keyed` needs.
+
+**Why not emit a `Slots` and stop.** §1 says a varying-width schedule is
+already a `Slots`, and it is; but two places need the *first slot of a
+round*, which a `Slots` does not give without inverting `slotRound`. The
+ledger's range is `count k * (start k + 1)` — the first slot of the round
+after the start — and the window's measurement enumerates the slots of
+each round in the window as `m * (round − d) + l`. Both are `cum`. So the
+width function has to be in the interface, and the schedule is what comes
+out rather than what goes in.
+
+This is a frame and an assignment in one structure. What it is *not* is
+the reasoning layer that name once carried: no clause bounding a verdict
+by a round with the widths free, no congruence of one frame with another,
+no transport across a change of frame. A configuration has one schedule
+over its whole range, and `Properties.exists_roundLocal` is what carries
+a verdict across the boundary, so none of that is wanted here.
+
+**What a configuration must satisfy** goes where the present arc puts it,
+as a clause of the run beside `count_pos` and `count_le`:
 
 ```lean
 interval_pos : ∀ k, 0 < (cfg k).interval
-width_le : ∀ k κ, (cfg k).sched.slotRound κ
-  < (cfg k).sched.slotRound (κ + P.maxLeaders)
+width_le : ∀ k r, (cfg k).width r ≤ P.maxLeaders
 ```
 
-`width_le` says two slots `maxLeaders` apart cannot share a round, which
-is "at most `maxLeaders` slots to a round" stated without naming a width
-function. It is what `SpansEligibleAt` consumes, and it is `count_le` at
-a schedule rather than at a number.
+`width_le` is `count_le` with a round argument, and it is what the
+descent's spanning clause reads.
 
-`LeanDagTest.VaryingSchedule.vary` is the check §1 needs: rounds
-alternating one slot and two, a lawful `Slots`, and `vary_width_le` the
-bound at two.
+`Config.uniform getLeader hk m` is the present arc: `width` constantly
+`m`, `lead r i = getLeader (r + i)`. `uniform_sched` says its schedule is
+`Sched getLeader hk m`, and that identity is what makes step 2's check a
+rewrite rather than a re-proof.
 
-`UpdateRule` becomes
-
-```lean
-abbrev UpdateRule (R : BaseRule Validator BlockId Payload) : Type :=
-  Config Validator → ℕ → (U : R.Universe) → R.View U → BlockId →
-    Config Validator × ℕ
-```
-
-— from the configuration in force, the back-off, and the anchor's block,
-the next configuration and the next back-off. `Params.interval` and
-`Params.maxLeaders` move into `Config`, so what remains in `Params` is
-the threshold the AIMD rule reads.
+`LeanDagTest.VaryingSchedule.vary` remains the check of §1's claim about
+the class, and is not the shape a `Config` takes.
 
 ## 3. What the run becomes
 
@@ -189,9 +203,26 @@ what a configuration *is*, not when it starts.
    is `LeanDagTest.VaryingSchedule.vary` — rounds alternating one slot
    and two — and `vary_width_le` is the bound at two. The class admits
    what §1 claims it does, and `Config` itself is two fields.
-2. `UpdateRule` and `PartialRun` at `Config`, and the constant instance —
-   `Config` at a fixed rotation and a fixed count reproduces the present
-   arc. *Nothing new is proved; the check is that the arc still builds.*
+2. `Config` and the run, in five parts.
+
+   * **2a** `Model/Config.lean`: the structure, `cum`, `roundOf`,
+     `index`, `sched`, and the arithmetic those need — `cum_succ`,
+     `cum_mono`, `roundOf_cum`, `roundOf_index`, `pos_lt_width`,
+     `cum_le_iff_le_roundOf`. Nothing beyond what §2 and §3 read.
+   * **2b** `Config.uniform` and `uniform_sched`. The bridge to `Sched`,
+     and what makes the rest of this step a rewrite.
+   * **2c** `UpdateRule` at `Config`, `PartialRun` at `cfg`, with
+     `interval_pos` and `width_le` replacing `count_pos` and `count_le`.
+   * **2d** the arithmetic in `Helpers/Progress.lean` and
+     `Helpers/Ledger.lean`. Every `κ / count k` is a `roundOf` and every
+     `count k * r` a `cum`; `Progress` has eighteen of the first and the
+     ledger's range is the second.
+   * **2e** the check: an existing witness at `Config.uniform` proves
+     what it proved.
+
+   *Nothing new is proved in this step. If 2e needs an argument rather
+   than a rewrite, `uniform_sched` is wrong and the shape of §2 is
+   wrong with it.*
 3. BN3. The induction is §4's and should be short.
 4. Ledger, validity, conservativity.
 5. Liveness, and the fairness clause on the update rule.
@@ -214,8 +245,22 @@ even where it is shallow.
 
 **Emitting a schedule is a large surface.** The present rule returns two
 naturals and a validator can check the whole of it by inspection. A rule
-returning a `Slots` returns a function, and what it is allowed to return
-is bounded only by `Slots`' own clauses plus §5's fairness. Whether that
-is the right interface — as against emitting a width function and a
-rotation, and constructing the `Slots` — is the first design question the
-build will answer.
+returning a `Config` returns two functions, bounded by `Config`'s own
+clauses, `width_le`, and §5's fairness — and the last of those is
+assumed. What a rule may emit is therefore much wider than what it may
+emit today, and the arc says less about it.
+
+**The window's measurement is a rewrite, not an adaptation.** `expected`
+is `(interval − waveLength + 1) * m` — rounds times slots-per-round,
+which at a varying width is not a product but a sum, and `cum` is what
+computes it. `observed` enumerates `range (interval + 1) ×ˢ range m` and
+indexes a slot as `m * (round − d) + l`, an indexing that assumes uniform
+width throughout. Both become enumerations over `cum`, and
+`Model/Window.lean` is the file this plan rewrites rather than adapts.
+
+**`Heads` is about a rotation.** `LiveOnOfHeads` concludes
+`∀ m, R.LiveOn (Sched getLeader hk m) c₀` — a family over counts at one
+fixed leader function. Where the leaders are emitted there is no family
+and no fixed function, and what the arc should conclude instead is a
+property of whatever a rule emits. That changes what BN12 and BN13 claim
+and is not settled here.
