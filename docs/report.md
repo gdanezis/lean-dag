@@ -10522,7 +10522,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 315 definitions and structures the report names, in
+The 316 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -15939,6 +15939,18 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
 
 The filled block at gap round `k`: `v2`'s references at that round, plus the added self reference.
 
+#### `Decided`
+
+*abbrev, `Steelhead.Model.Decision.lean`*
+
+```lean
+abbrev Decided (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) : ℕ → Option BlockId → Prop :=
+  (steelheadAnchored Validator BlockId Payload w).Decided (S := S) U V
+```
+
+**The decision relation at the wavelength function `w`**: the anchored relation at Steelhead's data. `Decided w U V k (some L)`: a validator holding `V` may commit `L` at `k`; `Decided w U V k none`: it may skip the slot; *undecided* is the absence of any derivation. Under `periodic ws wa k` this is Algorithm 1 of the paper.
+
 #### `SynchronisedOn`
 
 *def, `Timed.Coverage.lean`*
@@ -16001,7 +16013,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 474 theorems the body or Appendix A names, each
+The 479 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -22274,6 +22286,65 @@ theorem committed_of_correct_block
 ```
 
 **RS5 — reactive inclusion.** The schedule fixes a `u`-led slot above any round `m` before an execution is named, and a sufficiently grown reactive execution commits it with a leader block whose cone contains `u`'s round-`m` block, so it lands in the agreed ledger.
+
+#### `exists_least`
+
+*theorem, `Steelhead.Helpers.Decision.lean`*
+
+```lean
+theorem exists_least {w : ℕ → ℕ} {S : Slots Validator}
+    {U : BlockUniverse Validator BlockId Payload} {A : BlockId} {i k : ℕ}
+    (_ : i < (steelheadAnchored Validator BlockId Payload w).rungs)
+    (h : ∃ L, IsLeaderBlock (S := S) U k L ∧
+      (steelheadAnchored Validator BlockId Payload w).Link i U A L S k) :
+    ∃ L, IsLeaderBlock (S := S) U k L ∧
+      (steelheadAnchored Validator BlockId Payload w).Link i U A L S k ∧
+      (steelheadAnchored Validator BlockId Payload w).Least (S := S) U A i k L
+```
+
+No tie: any linked candidate is the rung's choice.
+
+#### `selfParent`
+
+*theorem, `Steelhead.Properties.lean`*
+
+```lean
+theorem selfParent (w : ℕ → ℕ) : SelfParent (steelheadRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) w)
+```
+
+**P3′ at the carrier.**
+
+#### `agree`
+
+*theorem, `Steelhead.Properties.lean`*
+
+```lean
+theorem agree {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
+    Agree (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
+```
+
+**Two views decide alike.** SH2 under the property's name.
+
+#### `indirect`
+
+*theorem, `Steelhead.Properties.lean`*
+
+```lean
+theorem indirect {w : ℕ → ℕ} (hw : ∀ r, 1 ≤ w r) :
+    Indirect (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
+      (fun sr i j => sr i + w (sr i) ≤ sr j)
+```
+
+**The indirect rule as a property**, with eligibility at each slot's own wave and no tie to break.
+
+#### `holds`
+
+*theorem, `Steelhead.Safety.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
 
 #### `SynchronisedOn.mono`
 
