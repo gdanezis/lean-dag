@@ -59,6 +59,34 @@ def rule (score : Score R) : UpdateRule R :=
   fun C b U _V A =>
     if hA : A ∈ R.ids U then (score U (R.historyView U A hA) C, b) else (C, b)
 
+/-- **A permuting score**: relabel who leads by `σ`, leaving the widths
+and the interval where they were. The simplest reassignment there is,
+and the case D22 takes first — `Barnacle.headsRun_perm` says a permuted
+schedule keeps runs of heads at the same gap, so liveness follows for
+the whole family at once. A score that reads the anchor's history and
+chooses which permutation to apply is adaptive and still of this
+family. -/
+def Score.permute (σ : Equiv.Perm Validator) : Score R :=
+  fun _ _ C =>
+    { slotsAt := C.slotsAt
+      slotsAt_pos := C.slotsAt_pos
+      lead := fun r i => σ (C.lead r i)
+      keyed := fun r i j hi hj h => C.keyed r i j hi hj (σ.injective h)
+      interval := C.interval }
+
+@[simp] theorem Score.permute_slotsAt (σ : Equiv.Perm Validator) (U : R.Universe)
+    (V : R.View U) (C : Config Validator) :
+    (Score.permute (R := R) σ U V C).slotsAt = C.slotsAt := rfl
+
+@[simp] theorem Score.permute_interval (σ : Equiv.Perm Validator) (U : R.Universe)
+    (V : R.View U) (C : Config Validator) :
+    (Score.permute (R := R) σ U V C).interval = C.interval := rfl
+
+/-- The heads of a permuted configuration are the permuted heads. -/
+@[simp] theorem Score.permute_head (σ : Equiv.Perm Validator) (U : R.Universe)
+    (V : R.View U) (C : Config Validator) :
+    (Score.permute (R := R) σ U V C).head = fun ρ => σ (C.head ρ) := rfl
+
 /-! ## The conservativity anchor -/
 
 /-- The constant score: install the configuration in force. -/

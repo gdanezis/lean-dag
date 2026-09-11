@@ -881,23 +881,32 @@ threshold and did not. That was the whole of the port's friction.
 every height follow under the horizon. D22's permuting case is therefore
 closed; the re-weighting case is not.
 
-### Step 7 — witnesses (AL17)
+### Step 7 — witnesses (AL17). **Two of three built.**
 
 `LeanDagTest/Adaptive/`, instantiating at a rule with a carrier — the
 mechanism stays generic.
 
-- **The asynchronous segment.** A run whose anchor lies well past the
-  boundary: the ledger stops at the boundary, the rounds between carry a
-  verdict in both segments, and only the later one is output. This is the
-  case §7 says the present arc cannot express, and it is the reason for
-  the whole exercise.
-- **A permuting score that adapts**, with the second configuration's
-  heads a genuine permutation of the first's, and BN3's analogue applied
-  to two views.
+- ~~**The asynchronous segment.**~~ `LeanDagTest/Adaptive/Asynchronous.lean`.
+  Three segments on `Usk` at one leader a round and an interval of one.
+  Configuration `0`'s boundary is round `1`, but slot `2` skips, so its
+  anchor is slot `3` two rounds further up: it **decides** rounds `1`,
+  `2` and `3` and **outputs** round `1` alone. Block `15` is decided by
+  all three configurations and reaches the ledger only from the one whose
+  span contains round `3`. `anchor_least` is non-vacuous — slot `2` is
+  past the boundary, below the anchor, and a skip — and
+  `decided_and_not_output` is applied on the data. This is the case §7
+  says the fixpoint arc cannot express.
+- ~~**A permuting score that adapts.**~~ `Score.permute` is D22's family
+  in the library, with `permute_keeps` and `permute_head`; `swapScore` in
+  the witness reads the anchor's history and permutes when it holds a
+  particular block, so the reassignment is a function of the DAG. It
+  keeps the shape, it stays inside the family, and its leaders move off
+  the rotation on data.
 - **A refutation for the fixpoint arc**: an execution in which a slot
   needs an anchor more than two epochs above it, so that no
-  `Adaptive.Run` exists over it. This makes §7's vacuity concrete and is
-  the honest companion to AL9.
+  `Adaptive.Run` exists over it. **Not built.** Showing non-existence
+  needs an argument rather than a `decide`, and it is the honest
+  companion to AL9 rather than a check on this arc.
 
 ### Step 8 — the record
 

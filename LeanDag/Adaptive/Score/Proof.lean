@@ -48,6 +48,10 @@ theorem rule_keeps (score : Score R) (Q : Config Validator → Prop) :
   · exact hQ _ _ _ h
   · exact h
 
+/-- A permuting score keeps the shape, so AL11b applies to it. -/
+@[simp] theorem permute_keeps (σ : Equiv.Perm Validator) :
+    (Score.permute (R := R) σ).Keeps := fun _ _ _ => ⟨rfl, rfl⟩
+
 @[simp] theorem const_keeps : (Score.const R).Keeps := fun _ _ _ => ⟨rfl, rfl⟩
 
 /-- Under the constant score the rule is `constRule`, so AL15 is BN6's
