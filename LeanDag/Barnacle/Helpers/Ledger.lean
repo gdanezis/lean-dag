@@ -131,6 +131,26 @@ theorem rangeLedger_nodup (hR : Properties.CommitsCandidate R.toDagRule)
   · exact slot_unique_of_rangeLedger hR Rn hk h.1 h.2 h'.1 h'.2 ha ha'
   all_goals exact absurd ‹_› (by simp_all)
 
+/-- **The ledger stops at the frontier.** Every block the run has output
+by height `K'` sits at a round after `0` and at or below `start K'` — so
+nothing above the round the last closed configuration reached is in the
+ledger, whatever verdicts the run records above it. This is the
+checkable form of the range discipline the run structure describes: a
+configuration's schedule is extended above its range to name anchors,
+and nothing named there is output. -/
+theorem round_of_mem_ledgerUpto (hR : Properties.CommitsCandidate R.toDagRule)
+    (Rn : PartialRun R P upd C₀ U V K) {K' : ℕ} (hK' : K' ≤ K) {L : BlockId}
+    (h : L ∈ Rn.ledgerUpto K') :
+    Rn.start 0 < (R.block U L).round ∧ (R.block U L).round ≤ Rn.start K' := by
+  unfold PartialRun.ledgerUpto at h
+  rw [List.mem_flatMap] at h
+  obtain ⟨k, hk, hL⟩ := h
+  rw [List.mem_range] at hk
+  obtain ⟨hlo, hhi⟩ := round_of_mem_rangeLedger hR Rn (by omega) hL
+  have h0 := start_mono Rn (Nat.zero_le k) (by omega)
+  have h1 := start_mono Rn (show k + 1 ≤ K' by omega) (by omega)
+  omega
+
 /-- Two closed ranges' ledgers are disjoint: their blocks have rounds in
 disjoint intervals. -/
 theorem rangeLedger_disjoint (hR : Properties.CommitsCandidate R.toDagRule)

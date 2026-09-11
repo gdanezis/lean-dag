@@ -19,11 +19,12 @@
 > the plan as written.
 >
 > **§7 and §8 were added after reading the Hammerhead paper itself.**
-> They record what the paper does that this arc does not — the output is
-> truncated at each schedule's boundary, and the reputation score reads
-> parent edges rather than verdicts — and plan the segmented run that
-> would represent it. §1 to §6 describe what is built; §7 says what it
-> assumes of the network without saying so.
+> They record what the paper does that this arc does not — the
+> reputation score reads parent edges rather than verdicts, and a
+> schedule governs a bounded range of rounds — and plan the change. §1
+> to §6 describe what is built; §7 says what it assumes of the network
+> without saying so. §8 was rewritten once the Barnacle arc merged,
+> because most of what §7 asks for is that arc's run.
 
 This document is the design record for the **adaptive-leaders** arc,
 written before the development rather than after it: the definitions and
@@ -402,14 +403,18 @@ the whole of its delay.
 
 ### 7.2 What is missing, in three items
 
-1. **No truncation.** The arc's run is a global fixpoint over all slots;
-   there is no boundary past which a schedule's verdicts are not used,
-   and so the condition that every slot settle inside `2W` has nowhere
-   else to go.
-2. **The policy reads verdicts.** The two-epoch lag repairs a
-   circularity that a score over parent edges does not create. The lag
-   is a sound device for a strictly larger class of policies, and it is
-   not Hammerhead's device.
+1. **The policy reads verdicts, and that is the root.** The two-epoch
+   lag repairs a circularity that a score over parent edges does not
+   create, and the lag is what puts the `2W` window into `closed`. The
+   lag is a sound device for a strictly larger class of policies, and it
+   is not Hammerhead's device.
+2. **The run has no ranges.** One global `assign` and one `vdct` over all
+   slots leaves nowhere to say which rounds a schedule governs, which is
+   why the window has to be a condition on the execution rather than a
+   bound the mechanism enforces. Hammerhead's boundary and Barnacle's
+   range are the same device, and this arc has neither. §8.4 corrects an
+   earlier reading of this section that took the boundary to be the
+   root; it is a consequence of the first item.
 3. **The fixpoint is not the process.** One `assign : ℕ → Validator`
    admits no validator that is behind, and so no retroactive
    re-application. Proposition 1 and Lemma 1 are about validators
@@ -537,25 +542,32 @@ proof obligation:
    second makes §7's vacuity concrete and is the honest companion to
    AL9.
 
-### 8.4 Strand A belongs to both arcs
+### 8.4 The truncation is Barnacle's already
 
-§7 called the truncation of output at a schedule's boundary a gap in
-this arc. It is a gap in the Barnacle arc as well, and that arc's own
-record says so (`barnacle.md`, "The assumption a run makes without
-stating it"): `PartialRun.closed` records a configuration's verdicts as
-decided against `(cfg k).sched` extended to every round, which is not
-the schedule that runs once the configuration changes, and the note ends
-"the formalisation states the outcome and not the discipline".
-`Barnacle.cfg_local` is the recorded justification and has no consumer.
+§7 separated *naming* an anchor from *ordering* it, and read the Barnacle
+arc as lacking the second. That reading was wrong, and the correction is
+worth stating because it makes this plan smaller.
 
-The two arcs fail differently, which is worth keeping straight.
-`Adaptive.PartialRun.closed` asks for `DecidedBelow` at the window, which
-**asserts** insensitivity to leaders above the bound: under asynchrony it
-is unsatisfiable and AL3 has no instances. `Barnacle.PartialRun.closed`
-asks for plain `Decided` against the extended schedule, which is always
-satisfiable but need not be the derivation a validator performs.
-Vacuous against unfaithful; one repair for both, and it belongs wherever
-the run ends up living rather than in this arc alone.
+`Barnacle.PartialRun` truncates. Configuration `k` governs the rounds
+`(start k, start (k + 1)]` with `start (k + 1)` the anchor's own round,
+consecutive ranges abut, `rangeLedger k` reads exactly the range, and
+`round_of_mem_ledgerUpto` says the ledger to any height stops at that
+height's start round. The schedule is extended above the range to name
+anchors, which is what a validator does while it is still on `cfg k` and
+has not yet found the anchor that closes the range. Nothing above the
+range is output under `cfg k`.
+
+So there is no Strand A. What §7 diagnosed is Strand B alone, and it is
+this arc's alone: `Policy.pick` reads verdicts, which creates the
+circularity of §1, which forces the two-epoch lag, which forces
+`DecidedBelow` at `W · (epochOf k + 2)`. That last clause is what
+asynchrony falsifies, and it is not a truncation question. Deciding
+slots beyond an epoch in order to settle slots within it is exactly what
+the bound forbids and exactly what both Barnacle and Hammerhead do.
+
+A rule that reads the anchor's causal history rather than the verdicts
+has no circularity, needs no bound, and inherits the truncation from the
+run it is installed in.
 
 ### 8.5 What remains of the fixpoint arc
 
