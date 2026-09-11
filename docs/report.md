@@ -5368,6 +5368,62 @@ the score was entitled to read. It is gone: a configuration has no epoch
 numbering to misalign, `Config.chop` shifts every round by the same `G`,
 and the interval is carried across unchanged.
 
+**I20 — and the rest of the mechanisms, at any carrier.** I5 answers for
+one cut. The others, and the compositions of them, are
+`Adaptive/Helpers/Mechanisms.lean`, and none is stated at a protocol: a
+rule that reads its universes as block records has the cut, the fill and
+re-genesis already (§16.1), and what follows says only what each does to
+a configuration and to a run.
+
+*The mechanisms that renumber.* Cuts compose beneath a configuration —
+`Config.chop_chop` — so a validator that pruned twice holds the
+configuration of one that pruned once, exactly as `chop_chop` composes
+them beneath a universe. `truncates_chop_config` puts a single cut into a
+`Stack`, and `stack_chop_config`, `stack_chop_chop_config` and
+`stack_copyFill_chop_config` are the compositions: a validator that
+filled a gap and then pruned twice reads one `Rebased` of the
+configuration's own schedule, so `Stack.safe_and_live` covers the
+composite at a schedule the run itself chose. The core's fill is
+`SkipMsg.skipFill` rather than the record's, which is the one case
+assembled per rule (`stack_core_config`), for the reason `stack_core` is.
+The joiner is generic in the carrier too
+(`joiner_decided_agree_chop`, `joiner_run_decided_agree`), so I5 holds of
+every rule with a record carrier and not only of the core.
+
+*The mechanisms that only add blocks.* A fill and a re-genesis move no
+slot, so a segmented run does not move either: `SegRun.extend` carries
+the configurations, anchors, boundaries and verdicts across unchanged —
+`Persist` moving the decisions to the larger view — and
+`SegRun.extend_ledgerUpto` is `rfl`.
+
+> A recovery or a re-genesis changes nothing a validator has already
+> ordered, even when the schedule is derived from what it ordered.
+
+What does not come free is what the update rule *reads*:
+
+```lean
+def UpdStable (upd : UpdateRule R) : Prop :=
+  ∀ (U U' : R.Universe), Extends R.toDagRule U U' →
+    ∀ (V : R.View U) (V' : R.View U'), R.toDagRule.viewIds V ⊆ R.toDagRule.viewIds V' →
+      ∀ (C : Config Validator) (b : ℕ) (A : BlockId), A ∈ R.ids U →
+        upd C b U' V' A = upd C b U V A
+```
+
+This is `Anchored` (§13.3) across two universes rather than across two
+views of one, and it is asked only at anchors the smaller universe
+already holds, which is where a run ever applies the rule. A score meets
+it through `Score.Stable`: an extension preserves every block a reference
+reaches, so the anchor's history holds the same blocks either way, but
+the two are views of *different* universes and the type does not force
+the equality. `constRule` has it outright (`updStable_constRule`), and
+the permuting scores of AL11 and the constant score have `Score.Stable`
+(`Score.permute_stable`, `Score.const_stable`), so one score discharges
+this and horizon-stability together.
+
+> A score that read the *size* of the universe would install a different
+> configuration on a validator that had recovered a crashed peer than on
+> one that had not, and the two would fork.
+
 **I6 — the lag bounds the recoverable outage.** A `SkipMsg` requires
 its anchor in the universe, and `chop` retains the anchor exactly when
 the horizon has not passed the round at which the validator crashed.
@@ -9457,8 +9513,9 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Properties/Record.lean` | a carrier on the record (`DagRule.OnRecord`), with its invariant and view maps; every mechanism's witnesses, once |
 | `Properties/Arcs/Record.lean` | every verdict cell of the cut, the fill and re-genesis, once, at any carrier on the record |
 | `Common/Record/Invariant.lean` | what an invariant a carrier adds owes the mechanisms (`Invariant.Mechanised`) |
-| `Barnacle/Chop.lean` | a configuration across a cut: `Config.chop` and the schedule half of a truncation at it |
+| `Barnacle/Chop.lean` | a configuration across a cut: `Config.chop`, its composition, and the schedule half of a truncation at it |
 | `Adaptive/Helpers/Chop.lean` | the joiner across a cut: horizon-stability, and the leaders and verdicts it aligns |
+| `Adaptive/Helpers/Mechanisms.lean` | the arc across every mechanism at any record carrier: the stacks, and what a run and an update rule owe a mechanism that adds blocks |
 | `Hybrid/Faults.lean` | the hybrid model; the derived instance; `HonestNoEquiv`; the counting core |
 | `Hybrid/Rules.lean` | the rules at the admissible interval; the arithmetic core H2–H5 |
 | `Hybrid/Decision.lean` | Hybrid as an anchored rule at threshold `k`; its laws under `HonestNoEquiv` |
@@ -10298,7 +10355,7 @@ reused.
 | I1 | honest non-equivocation survives truncation and the fill | `honestNoEquiv_chop`, `honestNoEquiv_skipFill` *(Integration/Preservation)* |
 | I2 | coverage survives truncation, at a horizon offset | `synchronisedOn_chop` *(Integration/Coverage)* |
 | I4 | coverage under the fill: refuted for a set including the recovering validator, preserved otherwise, restored above the fill | `not_synchronisedOn_skipFill`, `synchronisedOn_skipFill_of_notMem`, `synchronisedOn_skipFill_above` *(Integration/Coverage)*, from `not_synchronisedOn_of_extends`, `synchronisedOn_of_extends` *(Timed/Extension)* |
-| I5 | the joiner across a cut: a configuration chopped, and what a score owes pruning | `Config.chop`, `Config.rebases_chop` *(Barnacle/Chop)*, `Adaptive.HorizonStable`, `Adaptive.joiner_config_agree`, `Adaptive.joiner_leader_agree`, `Adaptive.joiner_decided_agree` *(Adaptive/Helpers/Chop)*, at the core in *Integration/Joiner* |
+| I5 | the joiner across a cut: a configuration chopped, and what a score owes pruning | `Config.chop`, `Config.rebases_chop` *(Barnacle/Chop)*, `Adaptive.HorizonStable`, `Adaptive.joiner_config_agree`, `Adaptive.joiner_leader_agree`, `Adaptive.joiner_decided_agree` *(Adaptive/Helpers/Chop)*, `Adaptive.joiner_decided_agree_chop`, `Adaptive.joiner_run_decided_agree` at any record carrier *(Adaptive/Helpers/Mechanisms)*, at the core in *Integration/Joiner* |
 | I6 | anchor retention, and the lag bounds the outage | `anchor_pruned`, `chopMsg`, `outage_bounded_by_lag` *(Integration/Retention)* |
 | I7 | the headlines at the core: safety across any stack, liveness at the support | `MysticetiProperties.safety`, `MysticetiProperties.liveness`, `stack_core` *(MysticetiProperties, Integration/StackRules)* |
 | I8 | a severed chain cannot restart | `no_blocks_of_no_genesis`, `severed_of_pruned_anchor` *(Integration/Retention)* |
@@ -10313,6 +10370,7 @@ reused.
 | I17 | the budget needs a donor, not the author | `card_novelty_le_of_donor` *(Integration/Margin)* |
 | I18 | severance costs liveness margin: at most `f` at once | `notMem_of_no_blocks`, `card_severed_le` *(Integration/Margin)* |
 | I19 | a common-core target makes the fill transmission-free | `CommonAt`, `exists_commonAt`, `fill_refs_available` *(Integration/CommonTarget)* |
+| I20 | the segmented arc across every mechanism, at any record carrier: cuts compose beneath a configuration and stack with the fill; a fill and a re-genesis carry a whole run across and leave its ledger alone, under one obligation on the update rule | `Config.chop_chop`, `Config.chop_zero` *(Barnacle/Chop)*, `Adaptive.truncates_chop_config`, `stack_chop_config`, `stack_chop_chop_config`, `stack_copyFill_chop_config`, `Adaptive.UpdStable`, `Adaptive.Score.Stable`, `Adaptive.updStable_rule`, `Adaptive.updStable_constRule`, `Adaptive.SegRun.extend`, `Adaptive.SegRun.extend_ledgerUpto` *(Adaptive/Helpers/Mechanisms)*, `stack_core_config` *(Integration/Joiner)* |
 
 **FinWhale** (§20):
 
@@ -10394,7 +10452,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 320 definitions and structures the report names, in
+The 322 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -13870,6 +13928,53 @@ def GroundedProgress : Prop :=
 
 ### Not otherwise grouped
 
+#### `Score.Stable`
+
+*def, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+def Score.Stable (score : Score R) : Prop :=
+  ∀ (U U' : R.Universe) (he : Extends R.toDagRule U U') (A : BlockId)
+    (hA : A ∈ R.ids U) (C : Config Validator),
+      score U' (R.historyView U' A (he.subset A hA)) C = score U (R.historyView U A hA) C
+```
+
+**What a score owes the same mechanisms.** On the anchor's history, read in a universe and in an extension of it, the score returns one configuration. The counterpart of `HorizonStable` for the mechanisms that add blocks rather than remove them, and the reason it is an obligation and not a theorem is that the two histories are views of different universes: `Extends` makes them hold the same blocks, and a score reading only what a block says has the equality, but the type does not force it.
+
+#### `SegRun.extend`
+
+*def, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+def SegRun.extend {U U' : R.Universe} {V : R.View U} {V' : R.View U'} {K : ℕ}
+    (hp : Persist R.toDagRule) (hc : CommitsCandidate R.toDagRule)
+    (he : Extends R.toDagRule U U')
+    (hsub : R.toDagRule.viewIds V ⊆ R.toDagRule.viewIds V') (hu : UpdStable upd)
+    (Rn : SegRun R P upd C₀ U V K) : SegRun R P upd C₀ U' V' K where
+  start := Rn.start
+  cfg := Rn.cfg
+  backoff := Rn.backoff
+  anchor := Rn.anchor
+  vdct := Rn.vdct
+  init := Rn.init
+  bounds := Rn.bounds
+  closed := fun k hk κ h1 h2 => hp _ U U' he V V' hsub _ _ (Rn.closed k hk κ h1 h2)
+  anchor_commits := Rn.anchor_commits
+  anchor_least := Rn.anchor_least
+  start_succ := Rn.start_succ
+  update := fun k hk A hA => by
+    have hstart : Rn.start k < (Rn.cfg k).roundOf (Rn.anchor k) := by
+      have := Rn.start_succ k hk
+      have := (Rn.anchor_commits k hk).2
+      omega
+    have hd := Rn.closed k hk (Rn.anchor k) hstart le_rfl
+    rw [hA] at hd
+    rw [hu U U' he V V' hsub (Rn.cfg k) (Rn.backoff k) A (hc.mem hd)]
+    exact Rn.update k hk A hA
+```
+
+**A segmented run survives any mechanism that only adds blocks.** The configurations, anchors and verdicts are carried over unchanged — only the view the decisions are read on moves — so the run on the extended universe is the same run.
+
 #### `SegRun.zero`
 
 *def, `Adaptive.Helpers.Progress.lean`*
@@ -15866,7 +15971,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 477 theorems the body or Appendix A names, each
+The 488 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -17815,19 +17920,17 @@ theorem synchronisedOn_chop {T : Finset Validator} {Rs R' : ℕ}
 
 **Synchrony survives the cut, from the rebase** (I2).
 
-#### `joiner_decided_agree`
+#### `stack_core_config`
 
 *theorem, `Integration.Joiner.lean`*
 
 ```lean
-theorem joiner_decided_agree (C : Config Validator)
-    {W : View Validator BlockId Payload (chop U G)}
-    {V : View Validator BlockId Payload U} {k : ℕ} {w v : Option BlockId}
-    (hW : Decided (S := (C.chop G).sched) (chop U G) W k w)
-    (hV : Decided (S := C.sched) U V (C.cum G + k) v) : w = v
+theorem stack_core_config (sk : SkipMsg U) (C : Config Validator) :
+    Stack (MysticetiProperties.mysticetiRule (Payload := Payload)) U C.sched
+      (chop sk.skipFill G) (C.chop G).sched G (max (sk.r + 1) G) (C.cum G)
 ```
 
-**I5's verdict half**, at the core: the joiner and the network agree on every shared slot, from an arbitrary view of the truncation.
+**The core's recovery and its horizon, under a configuration.** A validator that filled a crashed peer's gap and then pruned below round `G` reads one `Rebased` of the configuration's own schedule, so `Stack.safe_and_live` covers the composite at an adaptive schedule. The core's fill is `SkipMsg.skipFill`, which is why this is not `Adaptive.stack_copyFill_chop_config`.
 
 #### `joiner_run_decided_agree`
 
@@ -17849,7 +17952,7 @@ theorem joiner_run_decided_agree
     w = v
 ```
 
-**I5, whole.** A joiner that recomputed its configuration from its own truncated view, under a horizon-stable score, derives the network's verdict at every slot both hold — and runs the network's leaders while doing it.
+**I5, whole, at the core**: a joiner that recomputed its configuration from its own truncated view, under a horizon-stable score, runs the network's leaders and derives the network's verdict at every slot both hold.
 
 #### `anchor_pruned`
 
@@ -20195,6 +20298,123 @@ theorem round_of_mem_ledgerUpto (hR : Properties.CommitsCandidate R.toDagRule)
 
 **The ledger stops at the frontier.** Every block the run has output by height `K'` sits at a round after `0` and at or below `start K'` — so nothing above the round the last closed configuration reached is in the ledger, whatever verdicts the run records above it. This is the checkable form of the range discipline the run structure describes: a configuration's schedule is extended above its range to name anchors, and nothing named there is output.
 
+#### `truncates_chop_config`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem truncates_chop_config (C : Config Validator) :
+    Truncates R U (c.chop U G) C.sched (C.chop G).sched G (C.cum G)
+```
+
+**The cut is a truncation at a configuration's own schedule.** The universe half is the carrier's, the schedule half is the configuration's, and no fixed slot numbering enters — which is what lets the cut be taken at a schedule whose rounds differ in width.
+
+#### `stack_chop_config`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem stack_chop_config (C : Config Validator) :
+    Stack R U C.sched (c.chop U G) (C.chop G).sched G G (C.cum G)
+```
+
+**A cut at a configuration is a stack step.**
+
+#### `stack_chop_chop_config`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem stack_chop_chop_config (C : Config Validator) (G₁ G₂ : ℕ) :
+    Stack R U C.sched (c.chop (c.chop U G₁) G₂) (C.chop (G₁ + G₂)).sched
+      (G₁ + G₂) (max G₁ (G₂ + G₁)) (C.cum G₁ + (C.chop G₁).cum G₂)
+```
+
+**Two cuts at a configuration are one stack**, at the configuration `Config.chop_chop` names: pruning to `G₁` and then to `G₂` leaves the configuration of a single cut at `G₁ + G₂`.
+
+#### `joiner_decided_agree_chop`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem joiner_decided_agree_chop (ha : Agree R) (hb : Banded R) (C : Config Validator)
+    {V : R.View U} {W : R.View (c.chop U G)} {k : ℕ} {w v : Option BlockId}
+    (hW : R.Decided (C.chop G).sched W k w)
+    (hV : R.Decided C.sched V (C.cum G + k) v) : w = v
+```
+
+**I5's verdict half, at any carrier**: the joiner and the network give one verdict to every slot both hold, from an arbitrary view of the truncation.
+
+#### `joiner_run_decided_agree`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem joiner_run_decided_agree (ha : Agree R) (hb : Banded R)
+    {score : (U : R.Universe) → R.View U → Config Validator → Config Validator}
+    (hs : HorizonStable score G) (C : Config Validator)
+    {V : R.View U} {V' : R.View (c.chop U G)} (hv : ViewAgreeAbove R V V' G)
+    {W : R.View (c.chop U G)} {k : ℕ} {w v : Option BlockId}
+    (hW : R.Decided (score (c.chop U G) V' (C.chop G)).sched W k w)
+    (hV : R.Decided (score U V C).sched V ((score U V C).cum G + k) v) : w = v
+```
+
+**I5, whole, at any carrier.** A joiner that recomputed its configuration from its own truncated view, under a horizon-stable score, runs the network's leaders and derives the network's verdict at every slot both hold: **pruning does not split the ledger, even when the schedule is derived from it.**
+
+#### `stack_copyFill_chop_config`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem stack_copyFill_chop_config (C : Config Validator) :
+    Stack R U C.sched (c.chop (c.copyFill U sk) G) (C.chop G).sched
+      G (max (sk.r + 1) G) (C.cum G)
+```
+
+**Fill then cut is a stack, at a configuration.** The composition asks nothing of the rule and nothing of the score: the steps are the witnesses the mechanisms already have, and `Stack.safe_and_live` reads the result at the adaptive schedule.
+
+#### `updStable_constRule`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem updStable_constRule : UpdStable (constRule R)
+```
+
+A rule that does not read the universe is stable. `constRule` is the case AL15 turns on.
+
+#### `Score.const_stable`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+@[simp] theorem Score.const_stable : (Score.const R).Stable
+```
+
+#### `Score.permute_stable`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+@[simp] theorem Score.permute_stable (σ : Equiv.Perm Validator) :
+    (Score.permute (R := R) σ).Stable
+```
+
+#### `SegRun.extend_ledgerUpto`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+@[simp] theorem SegRun.extend_ledgerUpto {U U' : R.Universe} {V : R.View U} {V' : R.View U'}
+    {K : ℕ} (hp : Persist R.toDagRule) (hc : CommitsCandidate R.toDagRule)
+    (he : Extends R.toDagRule U U')
+    (hsub : R.toDagRule.viewIds V ⊆ R.toDagRule.viewIds V') (hu : UpdStable upd)
+    (Rn : SegRun R P upd C₀ U V K) (K' : ℕ) :
+    (Rn.extend hp hc he hsub hu).ledgerUpto K' = Rn.ledgerUpto K'
+```
+
+**And it outputs the same ledger.** The mechanism adds blocks to the DAG and changes nothing a validator has already ordered — the claim a recovery or a re-genesis has to make, now at a schedule the run itself chose.
+
 #### `progress`
 
 *theorem, `Adaptive.Helpers.Progress.lean`*
@@ -20241,6 +20461,16 @@ theorem holds : Statement
 ```lean
 theorem holds : Statement
 ```
+
+#### `chop_chop`
+
+*theorem, `Barnacle.Chop.lean`*
+
+```lean
+theorem chop_chop (G₁ G₂ : ℕ) : (C.chop G₁).chop G₂ = C.chop (G₁ + G₂)
+```
+
+**Two cuts are one.** Chopping at `G₁` and then at `G₂` drops the first `G₁ + G₂` rounds, so a validator that has pruned twice holds the configuration of a validator that pruned once, and the cuts beneath a configuration compose the way `GC.chop_chop` composes them beneath a universe.
 
 #### `rebases_chop`
 

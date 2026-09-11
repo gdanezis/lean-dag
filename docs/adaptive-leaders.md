@@ -922,7 +922,30 @@ mechanism stays generic.
   needs an argument rather than a `decide`, and it is the honest
   companion to AL9 rather than a check on this arc.
 
-### Step 8 — the record
+### Step 8 — the mechanisms
+
+The arc composes with the cut, the fill and re-genesis at **any** carrier
+on the record (`Adaptive/Helpers/Mechanisms.lean`), not at a protocol.
+Cuts compose beneath a configuration (`Config.chop_chop`), a cut is a
+`Stack` step at a configuration (`stack_chop_config`), and fill-then-cut
+is one `Rebased` (`stack_copyFill_chop_config`), so `Stack.safe_and_live`
+reads at a schedule the run itself chose. The core's fill is
+`SkipMsg.skipFill` rather than the record's, which is why
+`stack_core_config` is assembled per rule.
+
+For the mechanisms that only add blocks the schedule does not move and
+neither does the run: `SegRun.extend` carries the configurations,
+anchors, boundaries and verdicts across, and `SegRun.extend_ledgerUpto`
+says the ledger is the same list. The one obligation is `UpdStable` —
+`Anchored` across two universes rather than two views of one, asked only
+at anchors the smaller universe holds. A score meets it through
+`Score.Stable`, which `Score.permute` and `Score.const` have.
+
+**D23.** `UpdStable` cannot be a field of `UpdateRule` for the reason
+`Anchored` is not: safety must hold for arbitrary rules, and this clause
+is owed only where a mechanism is composed in.
+
+### Step 9 — the record
 
 Report §13 gains the segmented arc and relabels the fixpoint one: AL3 is
 safety for policies that read verdicts, under a window condition

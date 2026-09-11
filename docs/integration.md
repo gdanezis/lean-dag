@@ -79,7 +79,7 @@ over a rule, or mechanisms composed with one another.
 | `OptimalHydrozoan/Record.lean` | Optimal-Hydrozoan | `OptimalHydrozoanProperties.onRecord`, under `BlockRecord.Any` (leader exclusion is a validity clause, preserved automatically) | the record's, through `OptimalHydrozoanProperties.onRecord` |
 | `ReactiveMechanisms.lean` | reactive Mysticeti | — | `live_chop_reactive`, `live_skipFill_reactive`, `live_addGenesis_reactive`, `decidedBelow_of_run_chop_reactive`: the reactive precondition across each mechanism, through `coreSupport` |
 | `StackRules.lean` | core, Nemo, FinWhale | — | `stack_core`, `stack_nemo`, `stack_finwhale`: fill then cut as a `Stack`; the headline `Properties.Safe` reads any of them |
-| `Joiner.lean` | the core | — | the adaptive schedule across a cut: `truncates_chop_config`, `joiner_run_decided_agree` |
+| `Joiner.lean` | the core | — | the adaptive schedule across the core's own fill: `stack_core_config`; `joiner_run_decided_agree` at the core's carrier |
 
 Every witness (`truncates_chop`, `sustains_chop`, `extends_fill`,
 `sustains_fill`, `extends_addGenesis`, `sustains_addGenesis`) and every

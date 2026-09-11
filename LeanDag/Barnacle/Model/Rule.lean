@@ -9,9 +9,10 @@ import LeanDag.Properties.Optional.Direct
 
 **A schedule mechanism** (`Schedules`), not a protocol: Barnacle
 varies **how many** leaders a round has, by the AIMD rule of
-`Model/Window.lean`, and leaves the DAG alone — no file of this arc
-mentions the cut, the fill or re-genesis. It reads a rule through the
-interface below and writes a `Slots`.
+`Model/Window.lean`, and leaves the DAG alone. It reads a rule through
+the interface below and writes a `Slots`. The one file of this arc that
+names a mechanism is `Chop.lean`, and it names only what a cut does to a
+configuration's numbering — no rule and no universe.
 
 The paper abstracts the protocol it runs on as four assumptions, A1–A4
 (`barnacle.md` §2): rounds and slots, causal completeness, a

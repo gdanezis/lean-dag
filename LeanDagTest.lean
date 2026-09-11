@@ -30,6 +30,7 @@ import LeanDagTest.Reactive.Catchup
 import LeanDagTest.Reactive.Collapse
 import LeanDagTest.Adaptive.Segmented
 import LeanDagTest.Adaptive.Asynchronous
+import LeanDagTest.Adaptive.Mechanisms
 import LeanDagTest.Integration.Model
 import LeanDagTest.Hybrid.Model
 import LeanDagTest.Hybrid.Tight

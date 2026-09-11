@@ -99,7 +99,11 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   (`Adaptive.Agreement.holds`). Liveness is the horizon of the timed arc
   with one more configuration supplied (`Adaptive.Progress.holds`), and
   what a reputation score owes the mechanism is four clauses and no more
-  (`Adaptive.Score.holds`).
+  (`Adaptive.Score.holds`). The arc composes with the other mechanisms at
+  any rule that reads its universes as block records, not per protocol:
+  cuts compose beneath a configuration and stack with a recovery, and a
+  fill or a re-genesis carries a whole run across and leaves its ledger
+  the same list.
 - **Hybrid fault tolerance** (`LeanDag/Hybrid/`): the two-round rule
   proved safe and live under **separate Byzantine and crash caps** —
   `fb` equivocators, `fc` honest validators that may halt — at
