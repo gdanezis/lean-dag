@@ -43,6 +43,39 @@ end HeadArith
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
+/-! ## Runs of heads transfer along a permutation
+
+A mechanism that reassigns who leads — as a reputation score does — emits
+a family of head functions rather than one. Where the family is the
+permutations of a schedule that has runs of heads, each member has them
+too, at the same gap: `HeadsRun` reads the head function only through
+membership in `T`, and a permutation moves `T` to a set of the same size.
+`roundRobin_headsRun` holds at every `T` meeting the committee bound, so
+every permuted rotation inherits it. -/
+
+/-- Runs of heads survive a permutation of the validators, at the same
+gap, once the good set is pulled back along it. -/
+theorem headsRun_perm {Validator : Type} [DecidableEq Validator]
+    {head : ℕ → Validator} {T : Finset Validator} {g c₀ : ℕ} (σ : Equiv.Perm Validator)
+    (h : HeadsRun head (T.map σ.symm.toEmbedding) g c₀) :
+    HeadsRun (fun ρ => σ (head ρ)) T g c₀ := by
+  intro r
+  obtain ⟨ρ, hlo, hhi, hled⟩ := h r
+  refine ⟨ρ, hlo, hhi, fun i hi => ?_⟩
+  obtain ⟨a, haT, ha⟩ := Finset.mem_map.1 (hled i hi)
+  simpa [← ha] using haT
+
+/-- **The form a mechanism uses.** A schedule whose heads run for *every*
+good set of the right size hands the same property to every permutation
+of itself, since a permutation preserves cardinality. -/
+theorem headsRun_perm_of_all {Validator : Type} [Fintype Validator] [DecidableEq Validator]
+    {head : ℕ → Validator} {g c₀ slack : ℕ} (σ : Equiv.Perm Validator)
+    (h : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun head T g c₀) :
+    ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun (fun ρ => σ (head ρ)) T g c₀ :=
+  fun T hT => headsRun_perm σ (h _ (by simpa using hT))
+
 section Heads
 
 variable {R : LiveRule Validator BlockId Payload} {slack : ℕ}
@@ -192,6 +225,20 @@ theorem liveOn_of_headsRun (hD : R.Descent slack) (hw : 0 < R.waveLength)
       · rw [Config_slotRound_head]; omega
       · rw [Config_slotRound_head]; omega
       · rw [Config_leader_head]; simpa using hled 0 hw
+
+/-- **A permuted schedule is live at the same gap.** A mechanism that
+reassigns who leads emits a family of head functions; where each is a
+permutation of one that has runs of heads, each is live with that
+schedule's gap, by `headsRun_perm_of_all`. This is what lets a liveness
+clause range over the configurations a reputation score can install
+rather than over one fixed schedule. -/
+theorem liveOn_of_permuted_heads (hD : R.Descent slack) (hw : 0 < R.waveLength)
+    {head : ℕ → Validator}
+    (hheads : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun head T R.waveLength c₀)
+    (σ : Equiv.Perm Validator) (hC : C.head = fun ρ => σ (head ρ)) :
+    R.LiveOn C.sched c₀ :=
+  liveOn_of_headsRun C hD hw (by rw [hC]; exact headsRun_perm_of_all σ hheads)
 
 #print axioms liveOn_of_headsRun
 

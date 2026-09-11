@@ -3,6 +3,8 @@ import LeanDag.Adaptive.Agreement.Proof
 import LeanDag.Adaptive.Ledger.Proof
 import LeanDag.Adaptive.Conservativity.Proof
 import LeanDag.Adaptive.Validity.Proof
+import LeanDag.Adaptive.Progress.Proof
+import LeanDag.Barnacle.Helpers.Heads
 /-!
 # The segmented arc, applied
 
@@ -80,6 +82,53 @@ example {RL : LiveRule Validator BlockId Payload}
     (C₀ : Config Validator) (slack : ℕ) :
     Validity.Delivered RL P (rule score) C₀ slack :=
   Validity.holds _ _ _ RL hc P (rule score) C₀ slack
+
+/-! ## AL16 at a permuting score
+
+The liveness clause ranges over the configurations the rule can emit, not
+over one fixed schedule. Take the clause to be "the heads are a
+permutation of `head`": a score that only permutes keeps it, and every
+configuration meeting it is live at `head`'s own gap, because runs of
+heads transfer along a permutation. -/
+
+section Liveness
+
+variable {RL : LiveRule Validator BlockId Payload} {slack c₀ : ℕ}
+
+/-- The clause: this configuration's heads are a permutation of `head`. -/
+def Permuted (head : ℕ → Validator) (C : Config Validator) : Prop :=
+  ∃ σ : Equiv.Perm Validator, C.head = fun ρ => σ (head ρ)
+
+/-- **The liveness hypothesis AL16b asks for, discharged.** Every
+configuration whose heads permute `head` is live at `head`'s gap. -/
+theorem liveOn_of_permuted (hD : RL.Descent slack) (hw : 0 < RL.waveLength)
+    {head : ℕ → Validator}
+    (hheads : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun head T RL.waveLength c₀) :
+    ∀ C : Config Validator, C.InBounds P → Permuted head C → RL.LiveOn C.sched c₀ := by
+  rintro C _ ⟨σ, hσ⟩
+  exact liveOn_of_permuted_heads C hD hw hheads σ hσ
+
+/-- **AL16b at a permuting score.** Runs of every height exist under the
+horizon, with the liveness clause discharged from runs of heads and the
+score's own preservation of the clause. -/
+example (ha : Properties.Agree RL.toBaseRule.toDagRule) (hD : RL.Descent slack)
+    (hw : 0 < RL.waveLength) {head : ℕ → Validator}
+    (hheads : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun head T RL.waveLength c₀)
+    (score : Score RL.toBaseRule) (hk : score.Keeps)
+    (hperm : ∀ (U : RL.Universe) (V : RL.View U) (C : Config Validator),
+      Permuted head C → Permuted head (score U V C))
+    (C₀ : Config Validator) (h₀ : C₀.InBounds P) (hQ₀ : Permuted head C₀)
+    (U : RL.Universe) (V : RL.View U) (Rnd N : ℕ) (hgood : RL.Good U Rnd N)
+    (hcov : RL.toBaseRule.CoversUpto U V N) (hRnd : Rnd ≤ 1)
+    (K : ℕ) (hK : horizon P RL c₀ K ≤ N) :
+    Nonempty (SegRun RL.toBaseRule P (rule score) C₀ U V K) :=
+  (Progress.holds _ _ _ RL ha P (rule score) (Score.rule_bounded P score hk) C₀
+    (Permuted head) (Score.rule_keeps score _ hperm) c₀).2
+    (liveOn_of_permuted hD hw hheads) h₀ hQ₀ U V Rnd N hgood hcov hRnd K hK
+
+end Liveness
 
 end Adaptive
 

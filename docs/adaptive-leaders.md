@@ -846,26 +846,40 @@ being the boundary; here `closed` reaches it by `le_rfl`, and the
 hypothesis on the author's block sits at the boundary, which
 `anchor_commits` puts strictly below the anchor's round.
 
-### Step 6 — liveness (AL16)
+### Step 6 — liveness (AL16). **Built.**
 
-Two independent pieces.
+Two independent pieces, and both came out as sized.
 
 **6a, the transfer lemma.** For a permutation `σ` of the validators,
 `σ ∘ head ρ ∈ T ↔ head ρ ∈ σ⁻¹ T` and `σ⁻¹ T` has `T`'s cardinality, so
 `HeadsRun head T g c₀` for every good set gives `HeadsRun (σ ∘ head) T g c₀`
 for every good set, at the same gap. `roundRobin_headsRun` then covers
-every permuted rotation. Short, and independent of steps 1 to 5.
+every permuted rotation. `Barnacle.headsRun_perm` and
+`headsRun_perm_of_all` are the two lemmas, and
+`liveOn_of_permuted_heads` reads them through `liveOn_of_headsRun`: a
+configuration whose heads permute a schedule with runs of heads is live
+at that schedule's own gap. They hold on `propext` and `Quot.sound`
+alone, and none of them mentions how the configuration was chosen.
 
-**6b, progress and every height**, from `Barnacle/Helpers/Progress.lean`.
-The construction changes where Barnacle's did not: the new segment starts
-at `start K + (cfg K).interval`, a round known before the anchor is
-found, and the anchor may lie above it by as much as the commit gap. The
-horizon keeps `horizon P R c K`'s shape, since liveness places a
-committed slot within `c` of any round.
+**6b, progress and every height.** `Adaptive.Progress.holds`, from
+`Barnacle/Helpers/Progress.lean`. The construction changes where
+Barnacle's did not: the new segment starts at
+`start K + (cfg K).interval`, a round known before the anchor is found,
+and the anchor lies above it by as much as the commit gap. The new
+boundary is reached **more tightly** than Barnacle's new start — by
+`maxInterval` rather than by `maxInterval + 1 + c` — so `horizon` is
+unchanged and bounds the same heights.
 
-`UpdKeeps upd Q` at `Q C := C.head ∈ 𝓗` for the head functions the score
-can emit, with 6a discharging `LiveOn` at each. D22 says to take `𝓗` the
-permuted rotations first.
+The three clauses whose statements mention `start (k + 1)` needed their
+conditionals reduced on both branches, where Barnacle's mentioned the
+threshold and did not. That was the whole of the port's friction.
+
+`LeanDagTest/Adaptive/Segmented.lean` assembles the two: with the clause
+`Permuted head C` — this configuration's heads are a permutation of
+`head` — `liveOn_of_permuted` discharges AL16b's liveness hypothesis from
+6a, `Score.rule_keeps` carries the clause through the rule, and runs of
+every height follow under the horizon. D22's permuting case is therefore
+closed; the re-weighting case is not.
 
 ### Step 7 — witnesses (AL17)
 

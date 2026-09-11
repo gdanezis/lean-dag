@@ -68,6 +68,9 @@ import LeanDag.Adaptive.Conservativity.Statement
 import LeanDag.Adaptive.Conservativity.Proof
 import LeanDag.Adaptive.Validity.Statement
 import LeanDag.Adaptive.Validity.Proof
+import LeanDag.Adaptive.Helpers.Progress
+import LeanDag.Adaptive.Progress.Statement
+import LeanDag.Adaptive.Progress.Proof
 import LeanDag.Adaptive.Joiner
 import LeanDag.Adaptive.Liveness
 import LeanDag.Adaptive.Growth
