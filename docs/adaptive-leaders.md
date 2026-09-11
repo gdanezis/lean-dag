@@ -705,7 +705,7 @@ Everything lands in `LeanDag/Adaptive/`, under the **AL** labels of
 report §13. `LeanDag/Adaptive/{Basic,Policy,Run,Liveness}.lean` — the
 fixpoint arc — are not touched; D20 keeps them and §9.8 relabels them.
 
-### Step 1 — the run, with two bounds (AL12)
+### Step 1 — the run, with two bounds (AL12). **Built.**
 
 `LeanDag/Adaptive/Model/Segment.lean`. `Barnacle.PartialRun` with three
 clauses changed:
@@ -729,11 +729,12 @@ The ledger range is a subset of the closed range, and the anchor lies in
 the closed range and above the ledger range. **Decisions to the anchor,
 output to the boundary.**
 
-*Done when* the structure compiles and `Config.InBounds` gives
-`start k < start (k + 1)` in one line — `interval` is positive, where
-Barnacle needed the anchor's threshold to see it.
+`Adaptive.SegRun` (`Adaptive/Model/Segment.lean`), with `rangeLedger`
+and `ledgerUpto` alongside it. It borrows Barnacle's vocabulary —
+`Config`, `UpdateRule`, `Anchored`, `Config.InBounds`, `ledgerOf` — and
+restates none of it.
 
-### Step 2 — safety, ported (AL13). **The step that decides the plan.**
+### Step 2 — safety, ported (AL13). **Built, and the plan holds.**
 
 `LeanDag/Adaptive/Helpers/Agreement.lean`, from
 `Barnacle/Helpers/Agreement.lean`. The argument traced on paper and
@@ -750,13 +751,20 @@ should transfer:
   `start k + (cfg k).interval`, so it follows from agreement on `start k`
   and `cfg k` without using the anchor at all.
 
-*Done when* `partialRunAgreement` holds with `Anchored` as its only
-clause on the rule, and the two runs agree on `start`, `cfg`, `backoff`,
-`anchor` and the verdicts of the closed range.
+The port went through as traced, and the stop condition did not fire:
+`anchor_agree` needs **no** hypothesis relating the two runs' anchors.
+`Adaptive.SegRunAgreement` is the statement, `Adaptive.holds` the proof,
+`Adaptive/Helpers/Agreement.lean` the induction, on the standard three
+axioms. `Anchored` is the only clause on the rule; there is no synchrony,
+no fairness and no window.
 
-*Stop if* `anchor_agree` needs a hypothesis relating the two runs'
-anchors that neither run supplies. That would mean the two bounds do not
-compose and D19 has to be reopened.
+Two places came out differently from Barnacle's, both as predicted.
+`vdct_agree` takes its range hypotheses per run, since each decides to
+its own anchor. `configAgree_succ` is shorter, and the reason is the boundary
+convention itself: the next boundary is `start k + (cfg k).interval`, so
+`start_succ_agree` follows from agreement on `start k` and `cfg k` and
+never mentions the anchor — where Barnacle's had to establish the
+anchors agreed before it could place the next start.
 
 ### Step 3 — the ledger (AL14)
 

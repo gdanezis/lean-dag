@@ -54,6 +54,10 @@ import LeanDag.Reactive.MysticetiProperties
 import LeanDag.Adaptive.Basic
 import LeanDag.Adaptive.Policy
 import LeanDag.Adaptive.Run
+import LeanDag.Adaptive.Model.Segment
+import LeanDag.Adaptive.Helpers.Agreement
+import LeanDag.Adaptive.Agreement.Statement
+import LeanDag.Adaptive.Agreement.Proof
 import LeanDag.Adaptive.Joiner
 import LeanDag.Adaptive.Liveness
 import LeanDag.Adaptive.Growth
