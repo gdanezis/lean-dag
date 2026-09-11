@@ -35,9 +35,10 @@ is what `UpdBounded` asks, the widths' positivity being a `Config` field
 and the interval's bounds being inherited from the configuration read. -/
 def RuleBounds (R : BaseRule Validator BlockId Payload) (P : Params)
     (lead : ℕ → ℕ → Validator) (hl : LeadKeyed lead P.maxLeaders) : Prop :=
-  ∀ (C : Config Validator) (backoff : ℕ) (U : R.Universe) (V : R.View U) (A : BlockId),
-    (∀ r, (rule R P lead hl C backoff U V A).1.slotsAt r ≤ P.maxLeaders) ∧
-      (rule R P lead hl C backoff U V A).1.interval = C.interval
+  ∀ (C : Config Validator) (backoff : ℕ) (U : R.Universe) (V : R.View U)
+    (v : ℕ → Option BlockId) (A : BlockId),
+    (∀ r, (rule R P lead hl C backoff U V v A).1.slotsAt r ≤ P.maxLeaders) ∧
+      (rule R P lead hl C backoff U V v A).1.interval = C.interval
 
 /-- **BN7b, healthy**: below the cap the count rises by one; at the cap
 it stays. -/
@@ -61,22 +62,23 @@ comparison holds and the unhealthy one when it fails, so "exactly when"
 is both directions. -/
 def Test (R : BaseRule Validator BlockId Payload) (P : Params)
     (lead : ℕ → ℕ → Validator) (hl : LeadKeyed lead P.maxLeaders) : Prop :=
-  ∀ (C : Config Validator) (backoff : ℕ) (U : R.Universe) (V : R.View U) (A : BlockId),
+  ∀ (C : Config Validator) (backoff : ℕ) (U : R.Universe) (V : R.View U)
+    (v : ℕ → Option BlockId) (A : BlockId),
     -- the leaders and the interval are the ones read, either way
-    (rule R P lead hl C backoff U V A).1.lead = lead ∧
-    (rule R P lead hl C backoff U V A).1.interval = C.interval ∧
+    (rule R P lead hl C backoff U V v A).1.lead = lead ∧
+    (rule R P lead hl C backoff U V v A).1.interval = C.interval ∧
     -- the comparison holds: the healthy width, and the back-off resets
     (P.num * expected R C (R.block U A).round ≤ P.den * observed R C U A →
-      (rule R P lead hl C backoff U V A).1.slotsAt =
+      (rule R P lead hl C backoff U V v A).1.slotsAt =
         fun _ => count P (C.slotsAt (R.block U A).round) backoff true) ∧
     (P.num * expected R C (R.block U A).round ≤ P.den * observed R C U A →
-      (rule R P lead hl C backoff U V A).2 = 0) ∧
+      (rule R P lead hl C backoff U V v A).2 = 0) ∧
     -- it fails: the unhealthy width, and the back-off steps on
     (¬ (P.num * expected R C (R.block U A).round ≤ P.den * observed R C U A) →
-      (rule R P lead hl C backoff U V A).1.slotsAt =
+      (rule R P lead hl C backoff U V v A).1.slotsAt =
         fun _ => count P (C.slotsAt (R.block U A).round) backoff false) ∧
     (¬ (P.num * expected R C (R.block U A).round ≤ P.den * observed R C U A) →
-      (rule R P lead hl C backoff U V A).2 = backoff + 1)
+      (rule R P lead hl C backoff U V v A).2 = backoff + 1)
 
 /-- **BN7e, the rule is anchored.** It does not read the view, so two
 validators holding the anchor take the same step — the condition BN3

@@ -945,7 +945,34 @@ at anchors the smaller universe holds. A score meets it through
 `Anchored` is not: safety must hold for arbitrary rules, and this clause
 is owed only where a mechanism is composed in.
 
-### Step 9 — the record
+### Step 9 — the verdict-reading policy
+
+§7's open question, settled. The fixpoint arc proved safety for policies
+reading committed verdicts only inside a two-epoch window; the segmented
+arc needs no window, and the reason is that the span is bounded at both
+ends *before* the rule is applied.
+
+`UpdateRule` gains a verdict argument, and `spanVdct` is what a run hands
+it: the verdicts of the range just closed, `none` outside. Both arcs'
+agreement inductions then carry `spanVdct_agree` — the two validators'
+copies are one *function* — so `Anchored` is unchanged in strength and a
+verdict-reading rule satisfies it by `rfl`. AL13 covers it with nothing
+added. `commitScore` is the witness: it reads no block and no view, only
+whether the span committed a particular slot, and the leaders move when
+it did.
+
+**D24.** The verdicts are an argument rather than something the rule
+derives from its own view. A rule deriving them would be reading a
+subjective object — decided in one view and not another — and `Anchored`
+would fail. Handing them over is what makes reading them free.
+
+**D25.** The argument goes on `Barnacle.UpdateRule` rather than on a
+parallel Adaptive rule type: one vocabulary for both arcs, and Barnacle's
+own AIMD rule ignores it. The two arcs differ only in the span's top —
+Barnacle's is the boundary, which is the anchor's round; the segmented
+arc's is the anchor's round, which lies above the boundary.
+
+### Step 10 — the record
 
 Report §13 gains the segmented arc and relabels the fixpoint one: AL3 is
 safety for policies that read verdicts, under a window condition

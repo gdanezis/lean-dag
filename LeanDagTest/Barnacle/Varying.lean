@@ -89,9 +89,9 @@ def varP : Params := ⟨4, 2, 96, 100, by decide⟩
 back-off; otherwise fall back to the genesis configuration. It reads the
 universe and the anchor and not the view, so it is `Anchored`. -/
 def varUpd : UpdateRule bnRule32 :=
-  fun _ b U _V A => if (bnRule32.block U A).round = 2 then (varC, b + 1) else (bnC1I1, 0)
+  fun _ b U _V _v A => if (bnRule32.block U A).round = 2 then (varC, b + 1) else (bnC1I1, 0)
 
-theorem varUpd_anchored : Anchored bnRule32 varUpd := fun _ _ _ _ _ _ => rfl
+theorem varUpd_anchored : Anchored bnRule32 varUpd := fun _ _ _ _ _ _ _ => rfl
 
 /-- The verdicts: range `0` commits slots `1` and `2` of the genesis
 schedule, range `1` slots `3` to `6` of `varC`'s. -/

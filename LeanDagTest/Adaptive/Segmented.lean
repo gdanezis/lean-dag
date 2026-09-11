@@ -117,8 +117,8 @@ example (ha : Properties.Agree RL.toBaseRule.toDagRule) (hD : RL.Descent slack)
     (hheads : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
       HeadsRun head T RL.waveLength c₀)
     (score : Score RL.toBaseRule) (hk : score.Keeps)
-    (hperm : ∀ (U : RL.Universe) (V : RL.View U) (C : Config Validator),
-      Permuted head C → Permuted head (score U V C))
+    (hperm : ∀ (U : RL.Universe) (V : RL.View U) (v : ℕ → Option BlockId)
+      (C : Config Validator), Permuted head C → Permuted head (score U V v C))
     (C₀ : Config Validator) (h₀ : C₀.InBounds P) (hQ₀ : Permuted head C₀)
     (U : RL.Universe) (V : RL.View U) (Rnd N : ℕ) (hgood : RL.Good U Rnd N)
     (hcov : RL.toBaseRule.CoversUpto U V N) (hRnd : Rnd ≤ 1)

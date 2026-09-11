@@ -52,7 +52,8 @@ def RuleBounded (R : BaseRule Validator BlockId Payload) (P : Params)
 /-- **AL11c, the rule keeps what the score keeps.** -/
 def RulePreserves (R : BaseRule Validator BlockId Payload) (score : Score R)
     (Q : Config Validator → Prop) : Prop :=
-  (∀ (U : R.Universe) (V : R.View U) (C : Config Validator), Q C → Q (score U V C)) →
+  (∀ (U : R.Universe) (V : R.View U) (v : ℕ → Option BlockId) (C : Config Validator),
+    Q C → Q (score U V v C)) →
     UpdKeeps (rule score) Q
 
 /-- **AL11d, the constant score is the constant rule.** -/

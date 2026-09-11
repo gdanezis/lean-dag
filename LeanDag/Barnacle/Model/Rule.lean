@@ -141,12 +141,30 @@ structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
 end BaseRule
 
 /-- **An update rule**: from the current configuration and back-off, the
-universe and the anchor block, the next configuration and back-off.
-Safety is stated for every such function (`barnacle.md` §1); the paper's
-AIMD rule is one instance (`Model/Window.lean`). -/
+universe, the verdicts of the range just closed and the anchor block, the
+next configuration and back-off. Safety is stated for every such function
+(`barnacle.md` §1); the paper's AIMD rule is one instance
+(`Model/Window.lean`), and a reputation rule reading the committed
+leaders of the range is another.
+
+The verdicts are an *argument* rather than something the rule digs out of
+the view, and that is the whole reason a rule may read them: a run hands
+over `spanVdct`, which two validators agree on before either applies the
+rule, so reading it costs no hypothesis. A rule deriving verdicts from
+its own view would be reading a subjective object and `Anchored` would
+fail. -/
 abbrev UpdateRule (R : BaseRule Validator BlockId Payload) : Type :=
-  Config Validator → ℕ → (U : R.Universe) → R.View U → BlockId →
+  Config Validator → ℕ → (U : R.Universe) → R.View U → (ℕ → Option BlockId) → BlockId →
     Config Validator × ℕ
+
+/-- **The verdicts of a closed range**, and nothing else: slot `κ`'s
+verdict where the round of `κ` lies in `(lo, hi]`, and `none` outside.
+What a run hands an update rule. Junking the outside is what makes the
+object agreed — a run constrains its verdicts only inside the range it
+closed. -/
+def spanVdct (C : Config Validator) (lo hi : ℕ) (v : ℕ → Option BlockId) :
+    ℕ → Option BlockId :=
+  fun κ => if lo < C.roundOf κ ∧ C.roundOf κ ≤ hi then v κ else none
 
 /-- **A rule a validator can run without disagreeing.** The step depends
 on the configuration, the back-off and the anchor, and on the *view* only through
@@ -163,8 +181,8 @@ whole and restricts identically. A rule computing from its own copy of
 that history satisfies this; the AIMD rule of `Model/Window.lean` does,
 by not reading the view at all. -/
 def Anchored (R : BaseRule Validator BlockId Payload) (upd : UpdateRule R) : Prop :=
-  ∀ (U : R.Universe) (V₁ V₂ : R.View U) (C : Config Validator) (b : ℕ) (A : BlockId),
-    upd C b U V₁ A = upd C b U V₂ A
+  ∀ (U : R.Universe) (V₁ V₂ : R.View U) (C : Config Validator) (b : ℕ)
+    (v : ℕ → Option BlockId) (A : BlockId), upd C b U V₁ v A = upd C b U V₂ v A
 
 end Barnacle
 

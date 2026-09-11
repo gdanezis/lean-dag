@@ -106,15 +106,16 @@ theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : U
     omega
   -- The next configuration, by the rule at the anchor block.
   let next : Config Validator × ℕ :=
-    (v a).elim (Rn.cfg K, Rn.backoff K) (fun A => upd (Rn.cfg K) (Rn.backoff K) U V A)
+    (v a).elim (Rn.cfg K, Rn.backoff K) (fun A => upd (Rn.cfg K) (Rn.backoff K) U V
+      (spanVdct (Rn.cfg K) (Rn.start K) ((Rn.cfg K).roundOf a) v) A)
   have hnext : next.1.InBounds P := by
     obtain ⟨_, A, hA⟩ := ha_spec
     simp only [next, hA, Option.elim_some]
-    exact hupd _ _ _ _ _ (Rn.bounds K)
+    exact hupd _ _ _ _ _ _ (Rn.bounds K)
   have hnexth : Q next.1 := by
     obtain ⟨_, A, hA⟩ := ha_spec
     simp only [next, hA, Option.elim_some]
-    exact hupdh _ _ _ _ _ hQK
+    exact hupdh _ _ _ _ _ _ hQK
   refine ⟨{
     start := fun k => if k ≤ K then Rn.start k else Rn.start K + (Rn.cfg K).interval
     cfg := fun k => if k ≤ K then Rn.cfg k else next.1
@@ -209,7 +210,7 @@ theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBound
     (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
     (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
     Nonempty (SegRun R.toBaseRule P upd C₀ U V (K + 1)) :=
-  let ⟨Rn', _⟩ := progress_exists (Q := fun _ => True) hR hupd (fun _ _ _ _ _ _ => trivial)
+  let ⟨Rn', _⟩ := progress_exists (Q := fun _ => True) hR hupd (fun _ _ _ _ _ _ _ => trivial)
     hcov Rn hlive trivial hgood hRnd hN
   ⟨Rn'⟩
 

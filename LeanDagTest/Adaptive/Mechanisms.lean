@@ -40,8 +40,8 @@ example : UpdStable (rule (Score.const R)) := updStable_rule Score.const_stable
 /-- The constant score is horizon-stable at every cut, so the same score
 discharges both obligations — the one for mechanisms that remove blocks
 and the one for mechanisms that add them. -/
-example (G : ℕ) :
-    HorizonStable (R := R.toDagRule) (fun U V C => Score.const R U V C) G :=
+example (G : ℕ) (v : ℕ → Option BlockId) :
+    HorizonStable (R := R.toDagRule) (fun U V C => Score.const R U V v C) G :=
   horizonStable_const G
 
 end Scores

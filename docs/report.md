@@ -4409,7 +4409,11 @@ def SegRunAgreement (R : BaseRule Validator BlockId Payload) (P : Params)
 The only clause on the rule is `Anchored` — that it does not read the
 view — and the only law of the protocol consumed is `Properties.Agree`.
 There is no synchrony, no fairness and no bound on how far a derivation
-reaches. The anchors need no hypothesis relating them: the lesser of two
+reaches. The verdict half of the conclusion is what lets a rule read the
+committed sequence: `update` hands it `Barnacle.spanVdct`, the span's
+verdicts junked outside the span, and `spanVdct_agree` turns the pointwise
+agreement above into equality of that one function, established *before*
+either validator applies the rule. The anchors need no hypothesis relating them: the lesser of two
 lies inside the other run's reach by `Config.roundOf_mono`, where that
 run's `anchor_least` makes it a skip and the first run's
 `anchor_commits` makes it a commit.
@@ -4426,20 +4430,30 @@ block that configuration commits.
 ### 13.3 The score, and what it owes
 
 A score reads the anchor's causal history **as a view**, the shape
-`Barnacle.observed` uses, and returns the configuration to install:
+`Barnacle.observed` uses, together with the verdicts of the span just
+closed, and returns the configuration to install:
 
 ```lean
 def rule (score : Score R) : UpdateRule R :=
-  fun C b U _V A =>
-    if hA : A ∈ R.ids U then (score U (R.historyView U A hA) C, b) else (C, b)
+  fun C b U _V v A =>
+    if hA : A ∈ R.ids U then (score U (R.historyView U A hA) v C, b) else (C, b)
 ```
 
-That is where the circularity of a verdict-reading policy goes. The
-score's input is the causal history of an agreed anchor, determined by
-the universe and that block alone, so the leader of a slot cannot depend
-on a verdict the leader affects — and `BaseRule.Laws.historyView_ids`
-with BN2 make the reading agreed across views by construction, with no
-clause of its own.
+Both inputs are agreed, and for different reasons. The history is the
+causal history of an agreed anchor, determined by the universe and that
+block alone: `BaseRule.Laws.historyView_ids` with BN2 make the reading
+agreed across views by construction. The verdicts are agreed because they
+are an *argument* — the run supplies `spanVdct`, and AL13's induction has
+already identified the two validators' copies when the rule is applied.
+
+That is where the circularity of a verdict-reading policy goes, and it is
+the reason the segmented arc needs no window where the fixpoint arc did.
+HammerHead's `UPDATESCHEDULE` scores the validators whose blocks voted
+for the leaders the epoch just *committed*, so a faithful score must see
+the committed sequence and not only the DAG. It may: the span is bounded
+below by the boundary and above by the anchor, and both ends are settled
+before the switch. What a score may never do is derive verdicts from its
+own view, which is subjective and would break `Anchored`.
 
 **AL11** is the four clauses a score owes: `RuleAnchored`, by `rfl`,
 which is all AL13 and AL14 ask; `RuleBounded`, from `Score.Keeps` — the
@@ -4531,15 +4545,20 @@ whose span contains round `3`. `anchor_least` is non-vacuous there — slot
 `Score.permute` and a score that reads the anchor's history and permutes
 on what it finds exhibit reassignment that is a function of the DAG.
 
-Two things remain. No concrete reputation rule is written and shown to
+`commitScore` is the verdict-reading case on data: it reads no block and
+no view, only whether the span just closed committed a particular slot,
+and it moves the leaders when it did. `commitScore_anchored` is `rfl`, so
+AL13 applies to it unchanged — **a policy reading the committed sequence
+is safe with no window, no synchrony and no fairness.** That is what the
+fixpoint arc could establish only inside a two-epoch window asynchrony
+can falsify (`adaptive-leaders.md` §7), and it is the whole gain of
+bounding the span at both ends.
+
+One thing remains. No concrete reputation rule is written and shown to
 cap accumulation, so AL16's liveness clause is discharged for the
 permuted rotations and not yet for a re-weighting rule; deriving the cap
 from HammerHead's own `|B| = |G| ≤ f` is arithmetic about that rule
-rather than about the mechanism. And whether a *verdict-reading* policy
-can be made safe without a synchrony assumption is not settled here: the
-arc this one replaced proved safety for such policies under a
-two-epoch window, and asynchrony can falsify that window
-(`adaptive-leaders.md` §7).
+rather than about the mechanism.
 
 ## 14. Hybrid fault tolerance: Byzantine and crash faults apart
 
@@ -10248,13 +10267,13 @@ reused.
 | Label | Statement | Lean |
 |:---|:---|:---|
 | AL10 | a verdict is local in the rounds as well as the leaders: every decided slot has a round below which any schedule agreeing on rounds and leaders decides it the same way, and a directly decided slot's is its own round plus a wave | `Properties.exists_roundLocal` *(Properties/Derived/FromBand)*, `AnchoredRule.banded_direct` *(Common/Anchored/Band)*, `Barnacle.cfg_local` *(Barnacle/Helpers/Schedule)* |
-| AL11 | what a reputation score owes: anchored, bounded from `Score.Keeps`, preserving whatever clause liveness names, and the constant score is the constant rule | `Score.rule_anchored`, `Score.rule_bounded`, `Score.rule_keeps`, `Score.rule_const`, `Score.holds` *(Adaptive/Score)* |
+| AL11 | what a reputation score owes: anchored, bounded from `Score.Keeps`, preserving whatever clause liveness names, and the constant score is the constant rule. A score reads the anchor's history **and** the verdicts of the span just closed, and owes nothing for the second | `Score.rule_anchored`, `Score.rule_bounded`, `Score.rule_keeps`, `Score.rule_const`, `Score.holds` *(Adaptive/Score)*, `SegRun.spanOf` *(Adaptive/Model/Segment)*, `Adaptive.spanVdct_agree` *(Adaptive/Helpers/Agreement)* |
 | AL12 | the segmented run: decisions to the anchor, output to the boundary | `Adaptive.SegRun`, `SegRun.rangeLedger`, `SegRun.ledgerUpto` *(Adaptive/Model/Segment)*, `decided_and_not_output`, `round_of_mem_ledgerUpto` *(Adaptive/Helpers/Ledger)* |
 | AL13 | safety: two segmented runs from one genesis configuration agree, for any anchored rule, with no window and no synchrony | `Adaptive.Agreement.SegRunAgreement`, `Adaptive.Agreement.holds` *(Adaptive/Agreement)*, `configAgree`, `anchor_agree` *(Adaptive/Helpers/Agreement)* |
 | AL14 | the segmented ledger: agreed, growing, without repetition | `Adaptive.Ledger.holds` *(Adaptive/Ledger)* |
 | AL15 | conservativity at the constant rule, and validity | `Adaptive.Conservativity.holds` *(Adaptive/Conservativity)*, `Adaptive.Validity.holds` *(Adaptive/Validity)* |
 | AL16 | liveness: one more configuration, and runs of every height under the horizon; runs of heads counted over positions, so a reassigning rule owes a cap on accumulation rather than a permutation | `Adaptive.Progress.holds` *(Adaptive/Progress)*, `Barnacle.headsRun_of_cycle`, `Barnacle.headsRun_of_cycle_weighted`, `Barnacle.headsRun_perm_of_all`, `Barnacle.liveOn_of_permuted_heads` *(Barnacle/Helpers/Heads)* |
-| AL17 | the asynchronous segment on data: an anchor two rounds past the boundary, the ledger stopping at it, and a score that reassigns | `segRun`, `swapScore` witnesses *(LeanDagTest/Adaptive/Asynchronous)* |
+| AL17 | the asynchronous segment on data: an anchor two rounds past the boundary, the ledger stopping at it, and two scores that reassign — one off the DAG, one off the committed sequence alone | `segRun`, `swapScore`, `commitScore`, `commitScore_anchored` witnesses *(LeanDagTest/Adaptive/Asynchronous)* |
 
 **Hybrid fault tolerance** (§14):
 
@@ -10396,7 +10415,7 @@ reused.
 | Label | Statement | Lean |
 |:---|:---|:---|
 | BN2 | the window is agreed: a view holding the anchor holds its history, and two views restrict it to one set | `Barnacle.Window.holds` *(Barnacle/Window/Proof)* |
-| BN3 | the configuration sequence is agreed, for any update rule: two runs to any heights agree on every configuration and verdict of their common ranges | `Barnacle.Agreement.holds` *(Barnacle/Agreement/Proof)* |
+| BN3 | the configuration sequence is agreed, for any update rule: two runs to any heights agree on every configuration and verdict of their common ranges, and so on the verdict function the rule is handed | `Barnacle.Agreement.holds` *(Barnacle/Agreement/Proof)*, `spanVdct`, `PartialRun.spanOf` *(Barnacle/Model)*, `spanVdct_agree` *(Barnacle/Helpers/Agreement)* |
 | BN5 | the ledger is agreed as far as both runs reach, grows by prefixes, and holds each block once | `Barnacle.Ledger.holds` *(Barnacle/Ledger/Proof)* |
 | BN6 | under the constant rule the count never moves and every verdict is a one-leader verdict | `Barnacle.Conservativity.holds` *(Barnacle/Conservativity/Proof)* |
 | BN7 | the AIMD rule keeps its count in range, steps as the paper says, is the integer test, and is anchored — it does not read the view, so two validators take one step | `Barnacle.Aimd.holds` *(Barnacle/Aimd/Proof)* |
@@ -10452,7 +10471,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 322 definitions and structures the report names, in
+The 325 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -12723,11 +12742,25 @@ structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
 
 ```lean
 abbrev UpdateRule (R : BaseRule Validator BlockId Payload) : Type :=
-  Config Validator → ℕ → (U : R.Universe) → R.View U → BlockId →
+  Config Validator → ℕ → (U : R.Universe) → R.View U → (ℕ → Option BlockId) → BlockId →
     Config Validator × ℕ
 ```
 
-**An update rule**: from the current configuration and back-off, the universe and the anchor block, the next configuration and back-off. Safety is stated for every such function (`barnacle.md` §1); the paper's AIMD rule is one instance (`Model/Window.lean`).
+**An update rule**: from the current configuration and back-off, the universe, the verdicts of the range just closed and the anchor block, the next configuration and back-off. Safety is stated for every such function (`barnacle.md` §1); the paper's AIMD rule is one instance (`Model/Window.lean`), and a reputation rule reading the committed leaders of the range is another.
+
+The verdicts are an *argument* rather than something the rule digs out of the view, and that is the whole reason a rule may read them: a run hands over `spanVdct`, which two validators agree on before either applies the rule, so reading it costs no hypothesis. A rule deriving verdicts from its own view would be reading a subjective object and `Anchored` would fail.
+
+#### `spanVdct`
+
+*def, `Barnacle.Model.Rule.lean`*
+
+```lean
+def spanVdct (C : Config Validator) (lo hi : ℕ) (v : ℕ → Option BlockId) :
+    ℕ → Option BlockId :=
+  fun κ => if lo < C.roundOf κ ∧ C.roundOf κ ≤ hi then v κ else none
+```
+
+**The verdicts of a closed range**, and nothing else: slot `κ`'s verdict where the round of `κ` lies in `(lo, hi]`, and `none` outside. What a run hands an update rule. Junking the outside is what makes the object agreed — a run constrains its verdicts only inside the range it closed.
 
 #### `Anchored`
 
@@ -12735,8 +12768,8 @@ abbrev UpdateRule (R : BaseRule Validator BlockId Payload) : Type :=
 
 ```lean
 def Anchored (R : BaseRule Validator BlockId Payload) (upd : UpdateRule R) : Prop :=
-  ∀ (U : R.Universe) (V₁ V₂ : R.View U) (C : Config Validator) (b : ℕ) (A : BlockId),
-    upd C b U V₁ A = upd C b U V₂ A
+  ∀ (U : R.Universe) (V₁ V₂ : R.View U) (C : Config Validator) (b : ℕ)
+    (v : ℕ → Option BlockId) (A : BlockId), upd C b U V₁ v A = upd C b U V₂ v A
 ```
 
 **A rule a validator can run without disagreeing.** The step depends on the configuration, the back-off and the anchor, and on the *view* only through what every view holding the anchor shares.
@@ -12792,7 +12825,7 @@ The upper bound is written `r + 1 − waveLength` rather than `r − waveLength 
 
 ```lean
 def constRule (R : BaseRule Validator BlockId Payload) : UpdateRule R :=
-  fun C b _ _ _ => (C, b)
+  fun C b _ _ _ _ => (C, b)
 ```
 
 The constant rule: reconfigure nothing. The conservativity anchor — under it the arc collapses onto the base development at one leader.
@@ -12835,7 +12868,8 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
   start_succ : ∀ k, k < K → start (k + 1) = (cfg k).roundOf (anchor k)
   /-- The next configuration is the rule's. -/
   update : ∀ k, k < K → ∀ A, vdct k (anchor k) = some A →
-    (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V A
+    (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V
+      (spanVdct (cfg k) (start k) (start (k + 1)) (vdct k)) A
 ```
 
 **A run closed up to height `K`.** Configurations `0, …, K` are determined, and the ranges of configurations below `K` are decided in full.
@@ -12845,6 +12879,18 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
 `(cfg k).sched` is nevertheless total, and names a leader at every round above the range as well as inside it. That is deliberate and it is what the algorithm does: a validator settles configuration `k`'s range while `cfg k` is still its active schedule at every round, reading slots above the range as anchors when an indirect decision needs them, and only then finds the anchor that closes the range and switches. So the extension is the schedule in force when those derivations are performed, and the anchors it names are agreed for the same reason the range's verdicts are. What is never done is to *output* a slot above the range under `cfg k`; that slot belongs to configuration `k + 1`'s range and is decided again, under `cfg (k + 1)`, for the ledger.
 
 `closed` is the paper's `TryDecide`: every slot of the range — the rounds after `start k`, through the anchor's round `start (k + 1)` — decided against the configuration's schedule. `anchor_commits` and `anchor_least` are `TryCommit`'s trigger: the anchor is the least committed slot whose round exceeds `start k + (cfg k).interval`. `update` is `UpdateLeaders`, for an arbitrary rule. `bounds` is a clause of the run because the rule is arbitrary; for the AIMD rule it is a theorem.
+
+#### `PartialRun.spanOf`
+
+*def, `Barnacle.Model.Run.lean`*
+
+```lean
+def PartialRun.spanOf {K : ℕ} (Rn : PartialRun R P upd C₀ U V K) (k : ℕ) :
+    ℕ → Option BlockId :=
+  spanVdct (Rn.cfg k) (Rn.start k) (Rn.start (k + 1)) (Rn.vdct k)
+```
+
+**The verdicts configuration `k`'s update rule is handed**: the range it decided, `(start k, start (k + 1)]`, and `none` outside. The `update` field names this function; `spanVdct_agree` is why two validators name one function.
 
 #### `ledgerOf`
 
@@ -13935,8 +13981,8 @@ def GroundedProgress : Prop :=
 ```lean
 def Score.Stable (score : Score R) : Prop :=
   ∀ (U U' : R.Universe) (he : Extends R.toDagRule U U') (A : BlockId)
-    (hA : A ∈ R.ids U) (C : Config Validator),
-      score U' (R.historyView U' A (he.subset A hA)) C = score U (R.historyView U A hA) C
+    (hA : A ∈ R.ids U) (v : ℕ → Option BlockId) (C : Config Validator),
+      score U' (R.historyView U' A (he.subset A hA)) v C = score U (R.historyView U A hA) v C
 ```
 
 **What a score owes the same mechanisms.** On the anchor's history, read in a universe and in an extension of it, the score returns one configuration. The counterpart of `HorizonStable` for the mechanisms that add blocks rather than remove them, and the reason it is an obligation and not a theorem is that the two histories are views of different universes: `Extends` makes them hold the same blocks, and a score reading only what a block says has the equality, but the type does not force it.
@@ -13969,7 +14015,7 @@ def SegRun.extend {U U' : R.Universe} {V : R.View U} {V' : R.View U'} {K : ℕ}
       omega
     have hd := Rn.closed k hk (Rn.anchor k) hstart le_rfl
     rw [hA] at hd
-    rw [hu U U' he V V' hsub (Rn.cfg k) (Rn.backoff k) A (hc.mem hd)]
+    rw [hu U U' he V V' hsub (Rn.cfg k) (Rn.backoff k) _ A (hc.mem hd)]
     exact Rn.update k hk A hA
 ```
 
@@ -14000,6 +14046,17 @@ def SegRun.zero (R : BaseRule Validator BlockId Payload) (P : Params)
 
 The height-`0` run: `init` only.
 
+#### `SegRun.spanOf`
+
+*def, `Adaptive.Model.Segment.lean`*
+
+```lean
+def SegRun.spanOf {K : ℕ} (Rn : SegRun R P upd C₀ U V K) (k : ℕ) : ℕ → Option BlockId :=
+  spanVdct (Rn.cfg k) (Rn.start k) ((Rn.cfg k).roundOf (Rn.anchor k)) (Rn.vdct k)
+```
+
+**The verdicts configuration `k`'s update rule is handed**: the span it decided, `(start k, roundOf (anchor k)]`, and `none` outside. The `update` field names this function; `spanVdct_agree` is why two validators name one function.
+
 #### `SegRun.rangeLedger`
 
 *def, `Adaptive.Model.Segment.lean`*
@@ -14029,8 +14086,8 @@ The ledger through configuration `K' − 1`.
 
 ```lean
 def Score.Keeps (score : Score R) : Prop :=
-  ∀ (U : R.Universe) (V : R.View U) (C : Config Validator),
-    (score U V C).slotsAt = C.slotsAt ∧ (score U V C).interval = C.interval
+  ∀ (U : R.Universe) (V : R.View U) (v : ℕ → Option BlockId) (C : Config Validator),
+    (score U V v C).slotsAt = C.slotsAt ∧ (score U V v C).interval = C.interval
 ```
 
 **What a score owes.** It changes who leads and leaves the shape alone: the same slots in every round, and the same interval to the next reconfiguration. Hammerhead's rule qualifies — it swaps validators between schedule positions — and an Aimd-style rule, which moves the widths, does not.
@@ -14041,7 +14098,7 @@ def Score.Keeps (score : Score R) : Prop :=
 
 ```lean
 def Score.permute (σ : Equiv.Perm Validator) : Score R :=
-  fun _ _ C =>
+  fun _ _ _ C =>
     { slotsAt := C.slotsAt
       slotsAt_pos := C.slotsAt_pos
       lead := fun r i => σ (C.lead r i)
@@ -14081,7 +14138,8 @@ def RuleBounded (R : BaseRule Validator BlockId Payload) (P : Params)
 ```lean
 def RulePreserves (R : BaseRule Validator BlockId Payload) (score : Score R)
     (Q : Config Validator → Prop) : Prop :=
-  (∀ (U : R.Universe) (V : R.View U) (C : Config Validator), Q C → Q (score U V C)) →
+  (∀ (U : R.Universe) (V : R.View U) (v : ℕ → Option BlockId) (C : Config Validator),
+    Q C → Q (score U V v C)) →
     UpdKeeps (rule score) Q
 ```
 
@@ -15971,7 +16029,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 488 theorems the body or Appendix A names, each
+The 490 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -19588,6 +19646,20 @@ theorem anchor_agree (hR : Properties.Agree R.toDagRule) (R₁ : PartialRun R P 
 
 The anchors agree: the lesser of two anchors is, in the other run, a committed slot past the threshold below its anchor.
 
+#### `spanVdct_agree`
+
+*theorem, `Barnacle.Helpers.Agreement.lean`*
+
+```lean
+theorem spanVdct_agree (hR : Properties.Agree R.toDagRule)
+    (R₁ : PartialRun R P upd C₀ U V₁ K₁) (R₂ : PartialRun R P upd C₀ U V₂ K₂)
+    {k : ℕ} (h : ConfigAgree R₁ R₂ k) (hk₁ : k < K₁) (hk₂ : k < K₂) :
+    spanVdct (R₁.cfg k) (R₁.start k) (R₁.start (k + 1)) (R₁.vdct k)
+      = spanVdct (R₂.cfg k) (R₂.start k) (R₂.start (k + 1)) (R₂.vdct k)
+```
+
+**The range's verdicts agree as a function.** What the runs hand the update rule is one object, so a rule reading the committed leaders of the range it just closed reads agreed data and needs no further hypothesis. Outside the range the two are `none` by construction, which is what makes the equality total: a run constrains its verdicts only inside the range.
+
 #### `configAgree`
 
 *theorem, `Barnacle.Helpers.Agreement.lean`*
@@ -20194,6 +20266,20 @@ theorem anchor_agree (hR : Properties.Agree R.toDagRule)
 ```
 
 The anchors agree: the lesser of two anchors is, in the other run, a committed slot past the boundary below its anchor.
+
+#### `spanVdct_agree`
+
+*theorem, `Adaptive.Helpers.Agreement.lean`*
+
+```lean
+theorem spanVdct_agree (hR : Properties.Agree R.toDagRule)
+    (R₁ : SegRun R P upd C₀ U V₁ K₁) (R₂ : SegRun R P upd C₀ U V₂ K₂)
+    {k : ℕ} (h : ConfigAgree R₁ R₂ k) (hk₁ : k < K₁) (hk₂ : k < K₂) :
+    spanVdct (R₁.cfg k) (R₁.start k) ((R₁.cfg k).roundOf (R₁.anchor k)) (R₁.vdct k)
+      = spanVdct (R₂.cfg k) (R₂.start k) ((R₂.cfg k).roundOf (R₂.anchor k)) (R₂.vdct k)
+```
+
+**The span's verdicts agree as a function.** What the two runs hand the update rule is one object, so a rule reading the committed leaders of the span it just closed reads agreed data and needs no further hypothesis. Outside the span both are `none` by construction, which is what makes the equality total: a run constrains its verdicts only inside the span it decided.
 
 #### `configAgree`
 

@@ -87,7 +87,8 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
   start_succ : ∀ k, k < K → start (k + 1) = (cfg k).roundOf (anchor k)
   /-- The next configuration is the rule's. -/
   update : ∀ k, k < K → ∀ A, vdct k (anchor k) = some A →
-    (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V A
+    (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V
+      (spanVdct (cfg k) (start k) (start (k + 1)) (vdct k)) A
 
 variable {R : BaseRule Validator BlockId Payload} {P : Params}
 variable {upd : UpdateRule R} {C₀ : Config Validator} {U : R.Universe} {V : R.View U}
@@ -98,6 +99,14 @@ abbrev PartialRun.sched {K : ℕ} (Rn : PartialRun R P upd C₀ U V K) (k : ℕ)
   (Rn.cfg k).sched
 
 /-! ## The ledger -/
+
+/-- **The verdicts configuration `k`'s update rule is handed**: the range
+it decided, `(start k, start (k + 1)]`, and `none` outside. The `update`
+field names this function; `spanVdct_agree` is why two validators name
+one function. -/
+def PartialRun.spanOf {K : ℕ} (Rn : PartialRun R P upd C₀ U V K) (k : ℕ) :
+    ℕ → Option BlockId :=
+  spanVdct (Rn.cfg k) (Rn.start k) (Rn.start (k + 1)) (Rn.vdct k)
 
 /-- The committed blocks of the slots `[lo, hi)`, in slot order. -/
 def ledgerOf (v : ℕ → Option BlockId) (lo hi : ℕ) : List BlockId :=

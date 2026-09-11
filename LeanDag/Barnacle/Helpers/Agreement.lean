@@ -65,6 +65,28 @@ theorem anchor_agree (hR : Properties.Agree R.toDagRule) (R₁ : PartialRun R P 
     rw [hA, hnone] at hv
     exact Option.some_ne_none A hv.symm
 
+/-- **The range's verdicts agree as a function.** What the runs hand the
+update rule is one object, so a rule reading the committed leaders of the
+range it just closed reads agreed data and needs no further hypothesis.
+Outside the range the two are `none` by construction, which is what makes
+the equality total: a run constrains its verdicts only inside the range. -/
+theorem spanVdct_agree (hR : Properties.Agree R.toDagRule)
+    (R₁ : PartialRun R P upd C₀ U V₁ K₁) (R₂ : PartialRun R P upd C₀ U V₂ K₂)
+    {k : ℕ} (h : ConfigAgree R₁ R₂ k) (hk₁ : k < K₁) (hk₂ : k < K₂) :
+    spanVdct (R₁.cfg k) (R₁.start k) (R₁.start (k + 1)) (R₁.vdct k)
+      = spanVdct (R₂.cfg k) (R₂.start k) (R₂.start (k + 1)) (R₂.vdct k) := by
+  have ha := anchor_agree hR R₁ R₂ h hk₁ hk₂
+  obtain ⟨hs, hc, _⟩ := h
+  have hs' : R₁.start (k + 1) = R₂.start (k + 1) := by
+    rw [R₁.start_succ k hk₁, R₂.start_succ k hk₂, ha, hc]
+  funext κ
+  simp only [spanVdct, hs, hc, hs']
+  split
+  · rename_i hk
+    exact vdct_agree hR R₁ R₂ hc hk₁ hk₂ (by rw [hs, hc]; exact hk.1)
+      (by rw [hs', hc]; exact hk.2) hk.1 hk.2
+  · rfl
+
 /-- Agreement at `k` carries to `k + 1`: the anchors agree, so the anchor
 blocks agree, so one update of one state yields one configuration. -/
 theorem configAgree_succ (hR : Properties.Agree R.toDagRule) (hanc : Anchored R upd)
@@ -81,8 +103,9 @@ theorem configAgree_succ (hR : Properties.Agree R.toDagRule) (hanc : Anchored R 
     exact hA
   have e₁ := R₁.update k hk₁ A hA
   have e₂ := R₂.update k hk₂ A hA₂
+  rw [spanVdct_agree hR R₁ R₂ ⟨hs, hc, hb⟩ hk₁ hk₂] at e₁
   rw [hc, hb] at e₁
-  have e := e₁.trans ((hanc U V₁ V₂ (R₂.cfg k) (R₂.backoff k) A).trans e₂.symm)
+  have e := e₁.trans ((hanc U V₁ V₂ (R₂.cfg k) (R₂.backoff k) _ A).trans e₂.symm)
   refine ⟨?_, (Prod.mk.inj e).1, (Prod.mk.inj e).2⟩
   rw [R₁.start_succ k hk₁, R₂.start_succ k hk₂, ha, hc]
 

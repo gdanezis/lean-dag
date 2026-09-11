@@ -143,13 +143,13 @@ def swap01 : Equiv.Perm (Fin 4) := Equiv.swap 0 1
 
 /-- Permute when the anchor's history holds block `10`, and leave the
 configuration alone otherwise. -/
-def swapScore : Score bnRule32 := fun U V C =>
-  if (10 : Fin 32) ∈ bnRule32.viewIds V then Score.permute swap01 U V C else C
+def swapScore : Score bnRule32 := fun U V v C =>
+  if (10 : Fin 32) ∈ bnRule32.viewIds V then Score.permute swap01 U V v C else C
 
 /-- It keeps the shape, so AL11b gives `UpdBounded` at every parameter
 set. -/
 theorem swapScore_keeps : swapScore.Keeps := by
-  intro U V C
+  intro U V v C
   unfold swapScore
   split <;> exact ⟨rfl, rfl⟩
 
@@ -158,8 +158,8 @@ example : UpdBounded bnPI1 (rule swapScore) := Score.rule_bounded bnPI1 swapScor
 /-- It stays inside D22's family, so `Permuted` is preserved and AL16b's
 liveness hypothesis is discharged by `liveOn_of_permuted`. -/
 theorem swapScore_permuted {head : ℕ → Fin 4} (U : bnRule32.Universe)
-    (V : bnRule32.View U) (C : Config (Fin 4)) (h : Permuted head C) :
-    Permuted head (swapScore U V C) := by
+    (V : bnRule32.View U) (v : ℕ → Option (Fin 32)) (C : Config (Fin 4))
+    (h : Permuted head C) : Permuted head (swapScore U V v C) := by
   obtain ⟨σ, hσ⟩ := h
   unfold swapScore
   split
@@ -168,12 +168,67 @@ theorem swapScore_permuted {head : ℕ → Fin 4} (U : bnRule32.Universe)
 
 -- It adapts: on the full view of `Usk` the leaders move off the rotation.
 example : bnC1I1.head 0 = 0 := by decide
-example : (swapScore Usk (View.full Usk) bnC1I1).head 0 = 1 := by decide
-example : (swapScore Usk (View.full Usk) bnC1I1).slotsAt 0 = bnC1I1.slotsAt 0 := rfl
-example : (swapScore Usk (View.full Usk) bnC1I1).interval = bnC1I1.interval := rfl
+example : (swapScore Usk (View.full Usk) (fun _ => none) bnC1I1).head 0 = 1 := by decide
+example : (swapScore Usk (View.full Usk) (fun _ => none) bnC1I1).slotsAt 0
+    = bnC1I1.slotsAt 0 := rfl
+example : (swapScore Usk (View.full Usk) (fun _ => none) bnC1I1).interval
+    = bnC1I1.interval := rfl
+
+/-! ## A score that reads the verdicts
+
+The question §13.7 left open. A policy reading the *committed sequence*
+rather than the DAG is what HammerHead's `UPDATESCHEDULE` is, and the
+fixpoint arc could prove it safe only inside a window asynchrony can
+falsify. In the segmented arc it needs nothing: the span's verdicts are
+an argument the run supplies, `Barnacle.spanVdct_agree` says the two
+validators supply one function, and `Anchored` therefore holds of a
+verdict-reading score by `rfl`. -/
+
+/-- **A verdict-reading score**: permute when the span just closed
+committed block `15` at slot `3`. It looks at no block and no view — only
+at the committed sequence. -/
+def commitScore : Score bnRule32 := fun U V v C =>
+  if v 3 = some (15 : Fin 32) then Score.permute swap01 U V v C else C
+
+/-- **AL13 covers it.** Nothing beyond `Anchored` is asked, and `Anchored`
+is `rfl`: the score reads its argument, not its view. So two validators
+running a verdict-reading policy adopt one configuration sequence, with
+no window, no synchrony and no fairness. -/
+theorem commitScore_anchored : Anchored bnRule32 (rule commitScore) :=
+  Score.rule_anchored commitScore
+
+example (U : bnRule32.Universe) (V₁ V₂ : bnRule32.View U) (K₁ K₂ : ℕ)
+    (Rn₁ : SegRun bnRule32 bnPI1 (rule commitScore) bnC1I1 U V₁ K₁)
+    (Rn₂ : SegRun bnRule32 bnPI1 (rule commitScore) bnC1I1 U V₂ K₂)
+    (k : ℕ) (hk : k ≤ min K₁ K₂) : Rn₁.cfg k = Rn₂.cfg k :=
+  (Agreement.holds (Fin 4) (Fin 32) Unit bnRule32 agree32 bnPI1 (rule commitScore) bnC1I1
+    commitScore_anchored U V₁ V₂ K₁ K₂ Rn₁ Rn₂ k hk).2.1
+
+/-- It keeps the shape and stays in D22's family, so AL11b and AL16b read
+at it exactly as they do at `swapScore`. -/
+theorem commitScore_keeps : commitScore.Keeps := by
+  intro U V v C
+  unfold commitScore
+  split <;> exact ⟨rfl, rfl⟩
+
+theorem commitScore_permuted {head : ℕ → Fin 4} (U : bnRule32.Universe)
+    (V : bnRule32.View U) (v : ℕ → Option (Fin 32)) (C : Config (Fin 4))
+    (h : Permuted head C) : Permuted head (commitScore U V v C) := by
+  obtain ⟨σ, hσ⟩ := h
+  unfold commitScore
+  split
+  · exact ⟨σ.trans swap01, by funext ρ; simp [Score.permute_head, hσ]⟩
+  · exact ⟨σ, hσ⟩
+
+-- And it is not vacuous: on `segRun`'s own first span, which commits
+-- block `15` at slot `3`, the leaders move; on the empty span they do not.
+example : segRun.spanOf 0 3 = some 15 := by decide
+example : (commitScore Usk (View.full Usk) (segRun.spanOf 0) bnC1I1).head 0 = 1 := by decide
+example : (commitScore Usk (View.full Usk) (fun _ => none) bnC1I1).head 0 = 0 := by decide
 
 #print axioms segRun
 #print axioms swapScore_permuted
+#print axioms commitScore_permuted
 
 end Adaptive
 

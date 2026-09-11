@@ -91,9 +91,9 @@ example : observed bnOdo bnCO3 Uodo 20 = 6 := by decide
 example : expected bnOdo bnCO1 3 = 2 := by decide
 example : expected bnOdo bnCO3 3 = 6 := by decide
 example : (Aimd.rule bnOdo bnPo bnLead6' bnLeadKeyed6' bnCO1 0 Uodo
-    (View.full Uodo) 20).1.slotsAt 0 = 2 := by decide
+    (View.full Uodo) (fun _ => none) 20).1.slotsAt 0 = 2 := by decide
 example : (Aimd.rule bnOdo bnPo bnLead6' bnLeadKeyed6' bnCO6 0 Uodo
-    (View.full Uodo) 20).1.slotsAt 0 = 6 := by decide
+    (View.full Uodo) (fun _ => none) 20).1.slotsAt 0 = 6 := by decide
 
 /-! ## Odontoceti's `Good` on `Uodo`, and its descent law -/
 
@@ -249,8 +249,8 @@ abbrev bnCN3 : Config (Fin 3) := bnCfgN 3 (by decide) (by decide)
 example : observed bnNemo bnCN1 Unemo 11 = 1 := by decide
 example : expected bnNemo bnCN1 4 = 2 := by decide
 example : (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo
-    (View.full Unemo) 11).1.slotsAt 0 = 1 ∧
-    (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo (View.full Unemo) 11).2 = 1 := by
+    (View.full Unemo) (fun _ => none) 11).1.slotsAt 0 = 1 ∧
+    (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo (View.full Unemo) (fun _ => none) 11).2 = 1 := by
   decide
 
 /-- **BN7d's unhealthy branch, through the theorem.** The one window in
@@ -259,19 +259,19 @@ takes the *other* step — the count at `count … false`, which at the floor
 is the floor, and the back-off moved on. The healthy branch is exercised
 on `Usun`; this is the direction that shows the test is a test. -/
 example : (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo
-      (View.full Unemo) 11).1.slotsAt = (fun _ => Aimd.count bnPn (bnCN1.slotsAt 4) 0 false) ∧
-    (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo (View.full Unemo) 11).2 = 0 + 1 :=
+      (View.full Unemo) (fun _ => none) 11).1.slotsAt = (fun _ => Aimd.count bnPn (bnCN1.slotsAt 4) 0 false) ∧
+    (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo (View.full Unemo) (fun _ => none) 11).2 = 0 + 1 :=
   let h := (Aimd.holds (Fin 3) (Fin 14) Unit bnNemo bnPn bnLead3 bnLeadKeyed3).2.2.2.1 bnCN1 0
-    Unemo (View.full Unemo) 11
+    Unemo (View.full Unemo) (fun _ => none) 11
   ⟨h.2.2.2.2.1 (by decide), h.2.2.2.2.2 (by decide)⟩
 
 /-- And it carries the leaders and the interval across either way. -/
 example : (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo
-      (View.full Unemo) 11).1.lead = bnLead3 ∧
+      (View.full Unemo) (fun _ => none) 11).1.lead = bnLead3 ∧
     (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo
-      (View.full Unemo) 11).1.interval = bnCN1.interval :=
+      (View.full Unemo) (fun _ => none) 11).1.interval = bnCN1.interval :=
   let h := (Aimd.holds (Fin 3) (Fin 14) Unit bnNemo bnPn bnLead3 bnLeadKeyed3).2.2.2.1 bnCN1 0
-    Unemo (View.full Unemo) 11
+    Unemo (View.full Unemo) (fun _ => none) 11
   ⟨h.1, h.2.1⟩
 -- At count `3` every validator leads every round: round `1` scores three
 -- slots, round `2` two (validator `2` has no block), round `3` none.

@@ -73,11 +73,12 @@ Three consequences shape the plan.
   agree — a rule reading its view freely could hand two correct
   validators different counts. `Anchored` is the condition that rules
   that out: the step must not depend on which view computes it. It needs
-  no further hypothesis, because the window a rule measures on is the
-  anchor's causal
-  history, which BN2 shows every view holding the anchor holds whole and
-  restricts identically; the AIMD rule satisfies it by not reading the
-  view at all (BN7e). Given that, the `(k+1)`-st count is a function of
+  no further hypothesis, because the two things a rule reads are already
+  agreed — the window it measures on is the anchor's causal history,
+  which BN2 shows every view holding the anchor holds whole and restricts
+  identically, and the verdicts of the range are an argument the run
+  supplies rather than something the rule digs out of a view. The AIMD
+  rule satisfies it by reading neither (BN7e). Given that, the `(k+1)`-st count is a function of
   the anchor block and the previous state; the anchor is the least
   committed slot past the threshold in a schedule both validators share;
   and the verdicts of the range are agreed by the base rule's own
@@ -323,13 +324,20 @@ def Aimd.count (P : Params) (m backoff : ℕ) (healthy : Bool) : ℕ :=
 /-- The paper's `UpdateLeaders`: the new count on the same leaders and
 the same interval. -/
 def Aimd.rule (R) (P) (lead) (hl) : UpdateRule R :=
-  fun C backoff U _V A => …
+  fun C backoff U _V _v A => …
 
 /-- Any deterministic function of the configuration, the back-off, the
-universe and the anchor. -/
+universe, the verdicts of the range just closed, and the anchor. -/
 abbrev UpdateRule (R : BaseRule …) :=
-  Config Validator → ℕ → (U : R.Universe) → R.View U → BlockId → Config Validator × ℕ
+  Config Validator → ℕ → (U : R.Universe) → R.View U → (ℕ → Option BlockId) → BlockId →
+    Config Validator × ℕ
 ```
+
+The verdict argument is what lets a rule score the leaders the range
+just committed. It costs no hypothesis because a run *hands it over*
+(`spanVdct`, the range's verdicts and `none` outside), and BN3's
+induction identifies the two validators' copies before either applies
+the rule (`spanVdct_agree`). The AIMD rule ignores it.
 
 The interval is a configuration's own, so a reconfiguration may change
 it; `Params` keeps only the caps a run is measured against. `Aimd.rule`

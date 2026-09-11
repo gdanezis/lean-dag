@@ -139,13 +139,13 @@ crashed peer than on one that had not. -/
 def UpdStable (upd : UpdateRule R) : Prop :=
   ∀ (U U' : R.Universe), Extends R.toDagRule U U' →
     ∀ (V : R.View U) (V' : R.View U'), R.toDagRule.viewIds V ⊆ R.toDagRule.viewIds V' →
-      ∀ (C : Config Validator) (b : ℕ) (A : BlockId), A ∈ R.ids U →
-        upd C b U' V' A = upd C b U V A
+      ∀ (C : Config Validator) (b : ℕ) (v : ℕ → Option BlockId) (A : BlockId), A ∈ R.ids U →
+        upd C b U' V' v A = upd C b U V v A
 
 /-- A rule that does not read the universe is stable. `constRule` is the
 case AL15 turns on. -/
 theorem updStable_constRule : UpdStable (constRule R) :=
-  fun _ _ _ _ _ _ _ _ _ _ => rfl
+  fun _ _ _ _ _ _ _ _ _ _ _ => rfl
 
 /-- **What a score owes the same mechanisms.** On the anchor's history,
 read in a universe and in an extension of it, the score returns one
@@ -157,27 +157,27 @@ score reading only what a block says has the equality, but the type does
 not force it. -/
 def Score.Stable (score : Score R) : Prop :=
   ∀ (U U' : R.Universe) (he : Extends R.toDagRule U U') (A : BlockId)
-    (hA : A ∈ R.ids U) (C : Config Validator),
-      score U' (R.historyView U' A (he.subset A hA)) C = score U (R.historyView U A hA) C
+    (hA : A ∈ R.ids U) (v : ℕ → Option BlockId) (C : Config Validator),
+      score U' (R.historyView U' A (he.subset A hA)) v C = score U (R.historyView U A hA) v C
 
 /-- **A stable score gives a stable rule.** -/
 theorem updStable_rule {score : Score R} (hs : score.Stable) : UpdStable (rule score) := by
-  intro U U' he V V' _ C b A hA
+  intro U U' he V V' _ C b v A hA
   simp only [rule, dif_pos hA, dif_pos (he.subset A hA)]
-  rw [hs U U' he A hA C]
+  rw [hs U U' he A hA v C]
 
 /-- A score that does not read the history is stable: the constant score
 and the permuting scores of AL11 are both of that shape. -/
 theorem Score.stable_of_ignores {f : Config Validator → Config Validator}
-    (score : Score R) (h : ∀ U V C, score U V C = f C) : score.Stable :=
-  fun _ _ _ _ _ C => by rw [h, h]
+    (score : Score R) (h : ∀ U V v C, score U V v C = f C) : score.Stable :=
+  fun _ _ _ _ _ _ C => by rw [h, h]
 
 @[simp] theorem Score.const_stable : (Score.const R).Stable :=
-  Score.stable_of_ignores _ (fun _ _ _ => rfl)
+  Score.stable_of_ignores _ (fun _ _ _ _ => rfl)
 
 @[simp] theorem Score.permute_stable (σ : Equiv.Perm Validator) :
     (Score.permute (R := R) σ).Stable :=
-  Score.stable_of_ignores _ (fun _ _ _ => rfl)
+  Score.stable_of_ignores _ (fun _ _ _ _ => rfl)
 
 variable {upd : UpdateRule R} {C₀ : Config Validator}
 
@@ -208,7 +208,7 @@ def SegRun.extend {U U' : R.Universe} {V : R.View U} {V' : R.View U'} {K : ℕ}
       omega
     have hd := Rn.closed k hk (Rn.anchor k) hstart le_rfl
     rw [hA] at hd
-    rw [hu U U' he V V' hsub (Rn.cfg k) (Rn.backoff k) A (hc.mem hd)]
+    rw [hu U U' he V V' hsub (Rn.cfg k) (Rn.backoff k) _ A (hc.mem hd)]
     exact Rn.update k hk A hA
 
 /-- **And it outputs the same ledger.** The mechanism adds blocks to the

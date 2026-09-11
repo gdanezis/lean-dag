@@ -46,7 +46,7 @@ adjusts is the width of the anchor's own round, which is the last round
 the window measured. -/
 def rule (R : BaseRule Validator BlockId Payload) (P : Params)
     (lead : ℕ → ℕ → Validator) (hl : LeadKeyed lead P.maxLeaders) : UpdateRule R :=
-  fun C backoff U _V A =>
+  fun C backoff U _V _v A =>
     let r := (R.block U A).round
     let healthy := decide (P.num * expected R C r ≤ P.den * observed R C U A)
     let m := count P (C.slotsAt r) backoff healthy

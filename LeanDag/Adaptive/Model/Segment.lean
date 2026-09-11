@@ -46,7 +46,10 @@ round, against configuration `k`'s schedule — the schedule in force
 throughout, since the anchor has not yet been found and the switch has
 not yet happened. `anchor_commits` and `anchor_least` make the anchor
 the least committed slot **past the boundary**, not past a threshold
-inside the span. `start_succ` fixes the next boundary from the current
+inside the span. `update` hands the rule the verdicts of the span it just
+closed — `spanVdct`, agreed between validators before either applies the
+rule — so a reputation rule may read the committed leaders of the span
+without a hypothesis. `start_succ` fixes the next boundary from the current
 one and the interval alone, so the boundaries are known before any
 commit. -/
 structure SegRun (R : BaseRule Validator BlockId Payload) (P : Params)
@@ -83,7 +86,8 @@ structure SegRun (R : BaseRule Validator BlockId Payload) (P : Params)
   start_succ : ∀ k, k < K → start (k + 1) = start k + (cfg k).interval
   /-- The next configuration is the rule's, at the anchor's block. -/
   update : ∀ k, k < K → ∀ A, vdct k (anchor k) = some A →
-    (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V A
+    (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V
+      (spanVdct (cfg k) (start k) ((cfg k).roundOf (anchor k)) (vdct k)) A
 
 variable {R : BaseRule Validator BlockId Payload} {P : Params}
 variable {upd : UpdateRule R} {C₀ : Config Validator} {U : R.Universe} {V : R.View U}
@@ -91,6 +95,13 @@ variable {upd : UpdateRule R} {C₀ : Config Validator} {U : R.Universe} {V : R.
 /-- The schedule of configuration `k`. -/
 abbrev SegRun.sched {K : ℕ} (Rn : SegRun R P upd C₀ U V K) (k : ℕ) : Slots Validator :=
   (Rn.cfg k).sched
+
+/-- **The verdicts configuration `k`'s update rule is handed**: the span
+it decided, `(start k, roundOf (anchor k)]`, and `none` outside. The
+`update` field names this function; `spanVdct_agree` is why two
+validators name one function. -/
+def SegRun.spanOf {K : ℕ} (Rn : SegRun R P upd C₀ U V K) (k : ℕ) : ℕ → Option BlockId :=
+  spanVdct (Rn.cfg k) (Rn.start k) ((Rn.cfg k).roundOf (Rn.anchor k)) (Rn.vdct k)
 
 /-- **The output of configuration `k`**: the committed blocks of the
 rounds it governs, `(start k, start (k + 1)]`, and not of the rounds
