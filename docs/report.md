@@ -9719,13 +9719,15 @@ view, the view derives the next period, the least chain-committed round
 being the anchor or every round chain-skipped; **SH10d**, under the run
 clause at the chain schedule a view caught up to the horizon derives a
 period for every interval whose rounds lie far enough below it, by SH7a
-at each interval and SH10c; **SH10e**, under Theorem 3's premise on the
-update rule, that a window in which no synchronous slot commits maps to
-`k = 1` (`ResetsOnStall`: when no synchronous slot of the interval has
-a certified candidate, the update at any anchor of it is `1`), and with
-no synchronous slot of the interval holding a certified candidate (SH8's
-adversary within the interval), an interval that finds an anchor hands
-the next interval period `1`. The anchor is a hypothesis, since nothing
+at each interval and SH10c; **SH10e**, under the failover the arc models
+in place of Theorem 3's premise on the update rule (§24.6):
+`ResetsOnNoOutput` asks the update to answer `1` at an anchor whose
+causal history, read at the wavelength the validator runs, shows no
+output of the interval, every slot of it committed there sitting above a
+slot the history leaves undecided; under it an interval that finds an
+anchor, and of which the view output nothing, hands the next interval
+period `1`, the view's verdicts carried into the anchor's history and
+back through the laws. The anchor is a hypothesis, since nothing
 deterministic forces one when `k > wa`; its existence is the almost-sure
 half of Theorem 3 (i), which §24.5 states only as a vanishing tail.
 **SH10f**, at any period `k ≥ 1` with `2k ≤ I` every interval holds two
@@ -9735,6 +9737,22 @@ keeps a period there, so does every derived period. The interval
 boundaries are
 fixed by `I`, so the round at which a period takes effect is common by
 construction; what SH10a adds is that the periods are.
+
+**SH14** (`Steelhead.output_liveness`) is output liveness under the
+failover, Theorem 3 (ii) and the asynchronous half of Definition 1's
+validity, deterministic given two events: in a view that derived every
+period up to a run's last round, if some interval past a slot's finds an
+anchor and above that interval the coin names a committed candidate at
+`wa` consecutive rounds that lead the output's slots there, then the slot
+is decided once the view holds the run's decision rounds. Were the slot
+undecided it would sit below every commit of every later interval, so
+SH10e fires at the anchored one and, by induction on the derivations,
+every interval up to the run runs at period `1`; the run's rounds then
+carry wave `wa`, its coins commit their candidates directly
+(`Steelhead.chainCommit_of_mem_goodAt`'s argument at the output
+schedule), and SH9 decides every slot below the run. That the coin
+supplies the anchor and the run almost surely is the half of Theorem 3
+the arc does not yet state.
 
 ### 24.5 The coin
 
@@ -9761,7 +9779,7 @@ the model's assumption.
 
 ### 24.6 Findings, and the carrier
 
-Three findings for the paper, recorded in `steelhead.md` §7. That the
+Five findings for the paper, recorded in `steelhead.md` §7. That the
 chain must be read at every round, not at the asynchronous rounds alone,
 for its relation to be independent of the period the scan is to fix, and
 that its run length is then `wa`, where reading it at the asynchronous
@@ -9769,11 +9787,23 @@ rounds alone would need a run spanning `⌈wa / k⌉ + 1` of them, a length
 the paper does not state. That the simulator's targeted-delay adversary
 yields a direct skip, which the anchor search passes over, so it cannot
 exhibit the stall, where an adversary delivering the leader block to
-exactly `f + 1` validators does. And that the stall's threshold is
+exactly `f + 1` validators does. That the stall's threshold is
 `k ≥ ws` rather than the `k ≥ 2` the proofs section states: at `ws = 3`
 and `k = 2` the synchronous slot's floor is itself asynchronous and
 commits directly, so no stretch below a commit holds a synchronous slot
-to stall, which is the condition SH8 carries as `2 ≤ ws ≤ k`.
+to stall, which is the condition SH8 carries as `2 ≤ ws ≤ k`. That
+Algorithm 2's selector can retain a stalled period: at parameters the
+implementation accepts, a DAG holding every synchronous slot at two votes
+and two blames while the asynchronous slots commit scores the period in
+force better than the alternatives by less than hysteresis demands, so
+the period never drops and the output never passes its second round, for
+every coin schedule; the arc models the failover of §24.4 in its place,
+which Algorithm 2 lacks and the paper's authors have agreed to add. And
+that Theorem 3's premise on the update rule is neither Algorithm 2's rule
+nor enough: one synchronous commit above the stuck slot per window keeps
+the period while the output stays stuck, and read literally the premise
+forbids every recovery from period `1`, where no synchronous slot exists
+to commit.
 
 Through the properties (§16), the rule has a carrier per wavelength
 function, `steelheadRule w`, and shows `Agree`, `CommitsCandidate`,
@@ -10940,10 +10970,11 @@ reused.
 | SH7 | chain liveness: every chain verdict below a run of `wa` chain commits is settled, under the run clause, and under synchrony with no clause | `Steelhead.chainAllDecidedBelow`, `Steelhead.chainAllDecidedBelowOfSynchrony` *(Steelhead/Helpers/Liveness)* |
 | SH8 | the stall: at every period `k ≥ ws`, with no synchronous candidate certified and no synchronous slot directly skipped, no slot of the residue class `k − 1` is ever decided | `Steelhead.stall` *(Steelhead/Helpers/Liveness)* |
 | SH9 | the drain: `wa` consecutive commits decide every slot below them at any wavelength function bounded by `wa`; at period `1` under the run clause, past every round some slot has everything below it decided; an asynchronous slot costs `wa − ws` rounds and its successor waits at most `wa − ws − 1` | `Steelhead.allDecidedBelowOfRun`, `Steelhead.allDecidedBelowAtPeriodOne`, `Steelhead.asyncSlotCost` *(Steelhead/Helpers/Liveness)* |
-| SH10 | the period: agreed across views under any update rule, so is the output at the adaptive wavelength over the intervals the record's rounds fall in; the scan ends once the chain verdicts are in, and under the clause it ends for every interval; an anchored interval whose synchronous slots hold no certified candidate hands the next one period `1` under the paper's premise on the update rule; every interval holds two asynchronous rounds, and the period stays in range | `Steelhead.Period.holds`, `Steelhead.periodAt_unique`, `Steelhead.adaptive_decided_unique`, `Steelhead.exists_periodAt_succ`, `Steelhead.periodAt_of_clause`, `Steelhead.periodAt_one_of_anchor`, `Steelhead.two_async_rounds`, `Steelhead.periodAt_mem_range` *(Steelhead/Period/Proof, Steelhead/Helpers/Period)* |
+| SH10 | the period: agreed across views under any update rule, so is the output at the adaptive wavelength over the intervals the record's rounds fall in; the scan ends once the chain verdicts are in, and under the clause it ends for every interval; an anchored interval the view did not output hands the next one period `1` under the failover; every interval holds two asynchronous rounds, and the period stays in range | `Steelhead.Period.holds`, `Steelhead.periodAt_unique`, `Steelhead.adaptive_decided_unique`, `Steelhead.exists_periodAt_succ`, `Steelhead.periodAt_of_clause`, `Steelhead.periodAt_one_of_anchor`, `Steelhead.two_async_rounds`, `Steelhead.periodAt_mem_range` *(Steelhead/Period/Proof, Steelhead/Helpers/Period)* |
 | SH11 | the coin: a chain slot commits with probability `|good| / n`, at least `(n − f − |byzantine|) / n` and so at least `1/3` at `wa ≥ 5`, at least `1/n` at `wa ≥ 4`; no round's coin naming a directly committed leader in `m` rounds, with probability at most `((f + |byzantine|) / n)^m`, which tends to zero | `Steelhead.Coin.holds`, `Steelhead.ratio_le_commitProb`, `Steelhead.third_le_commitProb`, `Steelhead.inv_card_le_commitProb`, `Steelhead.chainCommit_of_mem_goodAt`, `Steelhead.noCommitProb_le`, `Steelhead.tail_tendsto_zero` *(Steelhead/Coin/Proof, Steelhead/Helpers/Coin)* |
 | SH12 | on data: the anchor-floor counterexample, the period sequence at a concrete update rule, and the stall DAG with its asynchronous commit | `lowFloor_skip`, `sh8_period1`, `st20_stall` *(LeanDagTest/Steelhead/Model, LeanDagTest/Steelhead/Period, LeanDagTest/Steelhead/Stall)* |
 | SH13 | the ledger: the committed-leader sequence and the ledger of a settled prefix are agreed, the ledger is monotone, a block enters at one slot which both views name, and a committed block belongs to one slot | `Steelhead.Ledger.holds` *(Steelhead/Ledger/Proof)* |
+| SH14 | output liveness under the failover: a slot below an anchored interval is decided once a run of `wa` coin-led commits above that interval is in view, since the failover puts the period at `1` from the interval after the anchored one and the run decides everything below it | `Steelhead.output_liveness` *(Steelhead/Helpers/Period)* |
 
 
 ---
@@ -12616,20 +12647,21 @@ abbrev Decided (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
 
 **The decision relation at the wavelength function `w`**: the anchored relation at Steelhead's data. `Decided w U V k (some L)`: a validator holding `V` may commit `L` at `k`; `Decided w U V k none`: it may skip the slot; *undecided* is the absence of any derivation. Under `periodic ws wa k` this is Algorithm 1 of the paper.
 
-#### `ResetsOnStall`
+#### `ResetsOnNoOutput`
 
 *def, `Steelhead.Model.Period.lean`*
 
 ```lean
-def ResetsOnStall [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload) (ws I : ℕ)
-    (upd : UpdateRule BlockId) : Prop :=
-  ∀ (j k : ℕ) (A : BlockId),
-    (∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j → ¬ IsAsync k (S.slotRound s) →
-      IsLeaderBlock U s L → MahiMahi.certificates U ws L (S.slotRound s) = ∅) →
+def ResetsOnNoOutput [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload)
+    (w : ℕ → ℕ) (I : ℕ) (upd : UpdateRule BlockId) : Prop :=
+  ∀ (j k : ℕ) (A : BlockId) (hA : A ∈ U.ids),
+    (∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+      Decided w U (U.historyView A hA) s (some L) →
+      ∃ s', s' < s ∧ ∀ v, ¬ Decided w U (U.historyView A hA) s' v) →
     upd j A k = 1
 ```
 
-**The update rule resets on a stalled window**: the paper's premise for liveness under asynchrony, "the update rule maps a window in which no synchronous slot commits to `k = 1`". When no synchronous slot of interval `j` under period `k` has a certified candidate, the update at any anchor of `j` is `1`: a clause on `upd` against the record, as the unpredictable-leader clause is on the schedule.
+**The update rule fails over to period `1` when the interval was not output.** The clause the liveness argument reads off the update rule, in place of Theorem 3's premise that a window without a synchronous commit maps to `k = 1` (`steelhead.md` §7): in the anchor's causal history, read at the wavelength `w` the validator runs, every committed slot proposed in interval `j` lies above a slot that history leaves undecided, so the sequenced output gained nothing from the interval; then the update at that anchor is `1`. A clause on `upd` against the record, as the unpredictable-leader clause is on the schedule. At period `1` it fires only when nothing was output, so period `1` is not absorbing.
 
 ### Black Marlin: the three-round commit rule
 

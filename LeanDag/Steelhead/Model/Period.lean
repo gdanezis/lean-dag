@@ -37,16 +37,20 @@ period in force. Any deterministic function; the paper's counterfactual replay r
 anchor's causal history, which the block id determines within one universe. -/
 abbrev UpdateRule (BlockId : Type) := ℕ → BlockId → ℕ → ℕ
 
-/-- **The update rule resets on a stalled window**: the paper's premise for liveness under
-asynchrony, "the update rule maps a window in which no synchronous slot commits to `k = 1`". When
-no synchronous slot of interval `j` under period `k` has a certified candidate, the update at any
-anchor of `j` is `1`: a clause on `upd` against the record, as the unpredictable-leader clause is
-on the schedule. -/
-def ResetsOnStall [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload) (ws I : ℕ)
-    (upd : UpdateRule BlockId) : Prop :=
-  ∀ (j k : ℕ) (A : BlockId),
-    (∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j → ¬ IsAsync k (S.slotRound s) →
-      IsLeaderBlock U s L → MahiMahi.certificates U ws L (S.slotRound s) = ∅) →
+/-- **The update rule fails over to period `1` when the interval was not output.** The clause the
+liveness argument reads off the update rule, in place of Theorem 3's premise that a window without
+a synchronous commit maps to `k = 1` (`steelhead.md` §7): in the anchor's causal history, read at
+the wavelength `w` the validator runs, every committed slot proposed in interval `j` lies above a
+slot that history leaves undecided, so the sequenced output gained nothing from the interval; then
+the update at that anchor is `1`. A clause on `upd` against the record, as the unpredictable-leader
+clause is on the schedule. At period `1` it fires only when nothing was output, so period `1` is
+not absorbing. -/
+def ResetsOnNoOutput [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload)
+    (w : ℕ → ℕ) (I : ℕ) (upd : UpdateRule BlockId) : Prop :=
+  ∀ (j k : ℕ) (A : BlockId) (hA : A ∈ U.ids),
+    (∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+      Decided w U (U.historyView A hA) s (some L) →
+      ∃ s', s' < s ∧ ∀ v, ¬ Decided w U (U.historyView A hA) s' v) →
     upd j A k = 1
 
 /-- **The chain anchor of interval `j` under period `k`**, read from the view `V`: round `r` of

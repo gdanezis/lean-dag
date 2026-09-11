@@ -25,6 +25,8 @@ namespace LeanDagTest
 
 open LeanDag LeanDag.Steelhead
 
+attribute [local instance] shSlots
+
 set_option maxRecDepth 4096
 
 /-! ## The interval of a round
@@ -78,6 +80,34 @@ period `4`, it runs at `8`. -/
 theorem sh8_period1 :
     PeriodAt 4 5 shCoin shDouble 4 sh8 (View.full sh8) 1 8 :=
   PeriodAt.anchor PeriodAt.zero (sh8_anchor0 4)
+
+/-! ## The failover on data
+
+`ResetsOnNoOutput` asks the update rule to answer `1` at an anchor whose history shows no output
+of the interval. The constant rule `1` satisfies it outright. Its premise is not vacuous: block
+`28`, at round `7`, reaches the round-`4` certificates of block `1`, so slot `0` is committed in
+its history with nothing undecided below it, and the clause asks nothing of the update at that
+anchor. -/
+
+/-- The update rule that always answers `1`. -/
+def shOne : UpdateRule (Fin 32) := fun _ _ _ => 1
+
+example : ResetsOnNoOutput sh8 w4 4 shOne := fun _ _ _ _ _ => rfl
+
+/-- Slot `0` is committed in the history of block `28`, a round-`7` block that reaches the whole
+of round `4`. -/
+theorem sh8_slot0_in_history :
+    Steelhead.Decided (S := shSlots) w4 sh8 (sh8.historyView 28 (by decide)) 0 (some 1) :=
+  Decided.directCommit (by decide) (by decide)
+
+/-- So the failover's premise fails at that anchor: the committed slot `0` has no slot below it. -/
+example : ¬ (∀ (s : ℕ) (L : Fin 32), intervalOf 4 (shSlots.slotRound s) = 0 →
+    Steelhead.Decided (S := shSlots) w4 sh8 (sh8.historyView 28 (by decide)) s (some L) →
+    ∃ s', s' < s ∧
+      ∀ v, ¬ Steelhead.Decided (S := shSlots) w4 sh8 (sh8.historyView 28 (by decide)) s' v) :=
+  fun h => by
+    obtain ⟨s', hs', -⟩ := h 0 1 (by decide) sh8_slot0_in_history
+    exact Nat.not_lt_zero _ hs'
 
 /-! ## The set the coin measures
 

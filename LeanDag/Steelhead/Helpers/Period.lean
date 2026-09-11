@@ -232,18 +232,106 @@ theorem periodAt_of_clause (hwa : 1 ≤ wa) (hI : 0 < I) {upd : UpdateRule Block
     obtain ⟨k, hk⟩ := ih (horizon_mono hN)
     exact exists_periodAt_succ hk fun r hr _ => chain_all_of_clause hwa hI hrun hV hN r hr
 
+/-! ## The anchor's history, inside the view that found it
+
+The failover reads the anchor's causal history; the validator holds a view. The two agree on what
+the failover asks because the history lies inside the view: a chain-committed block is in the
+view that committed it, since a certificate the view holds references a vote referencing the
+candidate, and a view is closed under references. -/
+
+/-- A certificate held in a view puts the candidate it certifies in the view. -/
+theorem mem_ids_of_certificate_mem {w : ℕ} {V : View Validator BlockId Payload U} {L C : BlockId}
+    {r : ℕ} (hC : C ∈ MahiMahi.certificates U w L r) (hCV : C ∈ V.ids) : L ∈ V.ids := by
+  obtain ⟨-, -, hcar⟩ := mem_certificatesAt.mp hC
+  obtain ⟨v, hv⟩ := Finset.card_pos.mp
+    (lt_of_lt_of_le (MysticetiProperties.quorumCard_pos (Validator := Validator)) hcar)
+  obtain ⟨b, hb, -⟩ := mem_creatorsOf.mp hv
+  obtain ⟨hbref, hvote⟩ := mem_carriedVotes.mp hb
+  have hbV : b ∈ V.ids := V.complete C hCV b hbref
+  exact mem_of_reaches_of_closed V.complete hbV
+    ((mem_history_iff (V.subset_ids hbV)).mp (Finset.mem_filter.mp hvote.1).2.2)
+
+/-- A committed candidate of Mahi-Mahi's relation lies in the view that committed it, whichever
+route did: the direct route holds a certificate, the indirect one reaches a certificate from an
+anchor the view committed. -/
+theorem mem_ids_of_mahiMahi_decided {w : ℕ} {S : Slots Validator}
+    {V : View Validator BlockId Payload U} {k : ℕ} {v : Option BlockId}
+    (h : MahiMahi.Decided (S := S) w U V k v) : ∀ L, v = some L → L ∈ V.ids := by
+  induction h with
+  | @directCommit k L _ hc =>
+    intro L' hL'
+    obtain rfl := Option.some.inj hL'
+    obtain ⟨v, hv⟩ := Finset.card_pos.mp
+      (lt_of_lt_of_le (MysticetiProperties.quorumCard_pos (Validator := Validator)) hc)
+    obtain ⟨C, hC, hCV, -⟩ := mem_heldAuthors.mp hv
+    exact mem_ids_of_certificate_mem hC hCV
+  | directSkip _ => exact fun L h => by cases h
+  | @indirectCommit k j A L i _ _ _ _ _ _ _ hlink _ ihA _ =>
+    intro L' hL'
+    obtain rfl := Option.some.inj hL'
+    obtain ⟨C, hC, hre⟩ := hlink
+    exact mem_ids_of_certificate_mem hC (mem_of_reaches_of_closed V.complete (ihA A rfl) hre)
+  | indirectSkip _ _ _ _ _ _ _ => exact fun L h => by cases h
+
+/-- The anchor of an interval lies in the view that found it. -/
+theorem IntervalAnchor.mem_ids {V : View Validator BlockId Payload U} {j k r : ℕ} {A : BlockId}
+    (h : IntervalAnchor I wa coin U V j k r A) : A ∈ V.ids :=
+  mem_ids_of_mahiMahi_decided h.commit A rfl
+
+/-- The causal history of a block a view holds lies inside the view. -/
+theorem historyView_ids_subset {V : View Validator BlockId Payload U} {A : BlockId} (hA : A ∈ U.ids)
+    (hAV : A ∈ V.ids) : (U.historyView A hA).ids ⊆ V.ids :=
+  fun _ hi => mem_of_reaches_of_closed V.complete hAV ((mem_history_iff hA).mp hi)
+
 /-! ## SH10e, SH10f, SH10g -/
 
-/-- **SH10e.** The anchor step of the sequence, its update read off the clause. -/
-theorem periodAt_one_of_anchor [S : Slots Validator] {ws : ℕ} {upd : UpdateRule BlockId} {k₀ : ℕ}
-    {V : View Validator BlockId Payload U} {j k r : ℕ} {A : BlockId}
-    (hreset : ResetsOnStall U ws I upd)
-    (hcert : ∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
-      ¬ IsAsync k (S.slotRound s) → IsLeaderBlock U s L →
-      MahiMahi.certificates U ws L (S.slotRound s) = ∅)
-    (hp : PeriodAt I wa coin upd k₀ U V j k) (hA : IntervalAnchor I wa coin U V j k r A) :
+section Failover
+
+variable [S : Slots Validator] {ws : ℕ} {upd : UpdateRule BlockId} {k₀ : ℕ}
+  {V : View Validator BlockId Payload U} {per : ℕ → ℕ}
+
+/-- The adaptive wavelength is at least two rounds everywhere when both waves are: what the laws
+need to carry a verdict between views. -/
+theorem adaptiveWave_two_le (hws : 2 ≤ ws) (hwa : 2 ≤ wa) (r : ℕ) :
+    2 ≤ adaptiveWave ws wa I per r := by
+  unfold adaptiveWave periodic
+  split <;> omega
+
+/-- **The failover fires at an anchored interval the view did not output.** What the view
+commits of the interval, the anchor's history commits at most; what the history leaves undecided
+below it, the view may have decided, but the slot the view leaves undecided the history does too.
+So the failover's premise transfers from the view to the history, and the update is `1`. -/
+theorem upd_eq_one_of_anchor (hws : 2 ≤ ws) (hwa : 2 ≤ wa)
+    (hreset : ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd) {j k r : ℕ} {A : BlockId}
+    (hA : IntervalAnchor I wa coin U V j k r A)
+    (hout : ∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+      Decided (adaptiveWave ws wa I per) U V s (some L) →
+      ∃ s', s' < s ∧ ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s' v) :
+    upd j A k = 1 := by
+  have hAU : A ∈ U.ids :=
+    (AnchoredRule.isLeaderBlock_of_decided (S := chainSlots coin) hA.commit).1
+  have hsub := historyView_ids_subset hAU hA.mem_ids
+  have hmono : ∀ {t : ℕ} {v : Option BlockId},
+      Decided (adaptiveWave ws wa I per) U (U.historyView A hAU) t v →
+        Decided (adaptiveWave ws wa I per) U V t v :=
+    fun h => AnchoredRule.decided_mono (S := S)
+      (steelheadLaws (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
+        (adaptiveWave_two_le (I := I) (per := per) hws hwa)) trivial hsub h
+  refine hreset j k A hAU fun s L hs hd => ?_
+  obtain ⟨s', hlt, hund⟩ := hout s L hs (hmono hd)
+  exact ⟨s', hlt, fun v hv => hund v (hmono hv)⟩
+
+/-- **SH10e.** The anchor step of the sequence, its update read off the failover. -/
+theorem periodAt_one_of_anchor (hws : 2 ≤ ws) (hwa : 2 ≤ wa)
+    (hreset : ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd) {j k r : ℕ} {A : BlockId}
+    (hp : PeriodAt I wa coin upd k₀ U V j k) (hA : IntervalAnchor I wa coin U V j k r A)
+    (hout : ∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+      Decided (adaptiveWave ws wa I per) U V s (some L) →
+      ∃ s', s' < s ∧ ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s' v) :
     PeriodAt I wa coin upd k₀ U V (j + 1) 1 :=
-  hreset j k A hcert ▸ PeriodAt.anchor hp hA
+  upd_eq_one_of_anchor hws hwa hreset hA hout ▸ PeriodAt.anchor hp hA
+
+end Failover
 
 /-- **SH10f.** The first multiple of `k` at or above the interval's first round, and the next one:
 both lie in the interval, since it holds `I ≥ 2k` rounds. -/
@@ -270,6 +358,112 @@ theorem periodAt_mem_range {K : ℕ} {upd : UpdateRule BlockId} {k₀ : ℕ}
   | zero => exact ⟨h₀, hK⟩
   | anchor _ _ ih => exact hupd _ _ _ ih.1 ih.2
   | keep _ _ ih => exact ih
+
+/-! ## SH14 -/
+
+/-- The derivation of an interval's period ends in an anchor step or a keep step. -/
+theorem PeriodAt.succ_cases {upd : UpdateRule BlockId} {k₀ : ℕ}
+    {V : View Validator BlockId Payload U} {j k' : ℕ}
+    (h : PeriodAt I wa coin upd k₀ U V (j + 1) k') :
+    (∃ k r A, PeriodAt I wa coin upd k₀ U V j k ∧ IntervalAnchor I wa coin U V j k r A ∧
+        k' = upd j A k) ∨
+      ∃ k, PeriodAt I wa coin upd k₀ U V j k ∧ NoAnchor I wa coin U V j k ∧ k' = k := by
+  cases h with
+  | anchor hp hA => exact Or.inl ⟨_, _, _, hp, hA, rfl⟩
+  | keep hp hn => exact Or.inr ⟨_, hp, hn, rfl⟩
+
+/-- A round past `(j + 1) · I` lies in an interval past `j`. -/
+theorem le_intervalOf_of_lt {j b : ℕ} (hI : 0 < I) (h : (j + 1) * I < b) :
+    j + 1 ≤ intervalOf I b := by
+  unfold intervalOf
+  rw [Nat.le_div_iff_mul_le hI]
+  omega
+
+section Slots
+
+variable [S : Slots Validator] {ws : ℕ} {upd : UpdateRule BlockId} {k₀ : ℕ}
+  {V : View Validator BlockId Payload U} {per : ℕ → ℕ}
+
+/-- **SH14.** If the slot is undecided, it sits below every commit of every later interval, so
+the failover fires at the anchored one and the period is `1` from the next interval on, up to the
+run; the run's rounds then carry wave `wa`, its coins commit their candidates directly, and the
+drain (SH9) decides every slot below the run, the slot among them. -/
+theorem output_liveness (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa)
+    (hid : ∀ t, S.slotRound t = t) (hI : 0 < I)
+    (hreset : ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd) {b : ℕ}
+    (hper : ∀ j, j ≤ intervalOf I (b + wa - 1) → PeriodAt I wa coin upd k₀ U V j (per j))
+    {s j₁ r₁ : ℕ} {A : BlockId} (hs : intervalOf I s < j₁)
+    (hA : IntervalAnchor I wa coin U V j₁ (per j₁) r₁ A) (hb : (j₁ + 1) * I < b)
+    (hlead : ∀ i, i < wa → S.leader (b + i) = coin (b + i))
+    (hgood : ∀ i, i < wa → coin (b + i) ∈ MahiMahi.goodAt U wa (b + i))
+    (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa (b + wa - 1))) :
+    ∃ v, Decided (adaptiveWave ws wa I per) U V s v := by
+  classical
+  by_cases hdec : ∃ v, Decided (adaptiveWave ws wa I per) U V s v
+  · exact hdec
+  replace hdec : ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s v := fun v hv => hdec ⟨v, hv⟩
+  -- the slot sits below every slot of a later interval, so none of them is output while it waits
+  have hout : ∀ j, intervalOf I s < j → ∀ (t : ℕ) (L : BlockId),
+      intervalOf I (S.slotRound t) = j → Decided (adaptiveWave ws wa I per) U V t (some L) →
+      ∃ s', s' < t ∧ ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s' v := by
+    intro j hj t L ht _
+    refine ⟨s, ?_, hdec⟩
+    rw [hid] at ht
+    by_contra hts
+    have := intervalOf_mono (I := I) (Nat.le_of_not_lt hts)
+    omega
+  -- the run lies in intervals past the anchored one, all of them derived
+  have hbj : j₁ + 1 ≤ intervalOf I b := le_intervalOf_of_lt hI hb
+  have hbN : intervalOf I b ≤ intervalOf I (b + wa - 1) := intervalOf_mono (by omega)
+  -- the period is 1 from the interval after the anchored one up to the run's
+  have hone : ∀ n, j₁ + 1 + n ≤ intervalOf I (b + wa - 1) → per (j₁ + 1 + n) = 1 := by
+    intro n
+    induction n with
+    | zero =>
+      intro hn
+      exact periodAt_unique hwa (hper _ hn)
+        (periodAt_one_of_anchor hws (by omega) hreset (hper j₁ (by omega)) hA (hout j₁ hs))
+    | succ n ih =>
+      intro hn
+      have hprev := ih (by omega)
+      change per (j₁ + 1 + n + 1) = 1
+      rcases (hper (j₁ + 1 + n + 1) hn).succ_cases with ⟨k, r, A', hp, hA', hk⟩ | ⟨k, hp, _, hk⟩
+      · rw [hk]
+        exact upd_eq_one_of_anchor hws (by omega) hreset hA' (hout _ (by omega))
+      · rw [hk]
+        exact (periodAt_unique hwa hp (hper _ (by omega))).trans hprev
+  -- so the run's rounds carry wave wa
+  have hwave : ∀ i, i < wa → adaptiveWave ws wa I per (b + i) = wa := by
+    intro i hi
+    have hlo : j₁ + 1 ≤ intervalOf I (b + i) := le_trans hbj (intervalOf_mono (by omega))
+    have hhi : intervalOf I (b + i) ≤ intervalOf I (b + wa - 1) := intervalOf_mono (by omega)
+    have h1 := hone (intervalOf I (b + i) - (j₁ + 1)) (by omega)
+    rw [show j₁ + 1 + (intervalOf I (b + i) - (j₁ + 1)) = intervalOf I (b + i) by omega] at h1
+    unfold adaptiveWave
+    rw [h1]
+    exact periodic_one _
+  -- the run's candidates commit directly in a view holding their decision rounds
+  have hrun : ∀ i, i < wa → ∃ L, Decided (adaptiveWave ws wa I per) U V (b + i) (some L) := by
+    intro i hi
+    obtain ⟨L, hL, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp (hgood i hi)
+    refine ⟨L, Decided.directCommit ⟨hL, by rw [hid]; exact hLr, hLc.trans (hlead i hi).symm⟩ ?_⟩
+    change MahiMahi.DirectCommitIn U V (adaptiveWave ws wa I per (S.slotRound (b + i))) L
+      (S.slotRound (b + i))
+    rw [hid, hwave i hi]
+    refine MahiMahiProperties.directCommitIn_of_coversUpto hdc (hV.mono ?_)
+    unfold MahiMahi.decisionRoundAt
+    omega
+  -- and the drain decides everything below the run, the slot among it
+  have hsb : s < b := by
+    have h1 := le_of_intervalOf hI (rfl : intervalOf I s = intervalOf I s)
+    have h2 : (intervalOf I s + 1) * I ≤ j₁ * I := Nat.mul_le_mul_right I hs
+    have h3 : j₁ * I ≤ (j₁ + 1) * I := Nat.mul_le_mul_right I (by omega)
+    omega
+  exact allDecidedBelowOfRun
+    (fun r => Nat.le_of_succ_le (adaptiveWave_two_le (I := I) (per := per) hws (by omega) r))
+    (fun r => by unfold adaptiveWave periodic; split <;> omega) hid hrun s hsb
+
+end Slots
 
 end Steelhead
 

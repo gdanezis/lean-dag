@@ -4,7 +4,7 @@ import LeanDag.MahiMahi.Model.Unpredictable
 # The period sequence — statement
 
 What the adaptive protocol's period does across views and over time
-(`steelhead.md` §5). Seven claims:
+(`steelhead.md` §5). Eight claims:
 
 * **SH10a, agreement of the period** — Theorem 4: two views that derive
   a period for interval `j` derive the same one, under any update rule,
@@ -26,30 +26,43 @@ What the adaptive protocol's period does across views and over time
   the run form of the unpredictable-leader clause at the chain schedule,
   a view caught up to the horizon derives a period for every interval
   whose rounds lie far enough below it, by SH7a and SH10c;
-* **SH10e, the period reaches `1`**: Theorem 3 (i)'s last clause. Under
-  the paper's premise that the update rule maps a window without a
-  synchronous commit to `1` (`ResetsOnStall`, `Model/Period.lean`), and
-  with no synchronous slot of the interval holding a certified candidate
-  (SH8's adversary, within the interval), an interval that finds an
-  anchor hands the next interval period `1`. That an anchor exists is the
-  almost-sure half, stated with the coin;
+* **SH10e, the period reaches `1`**: Theorem 3 (i)'s last clause, under
+  the failover in place of the paper's premise on the update rule
+  (`ResetsOnNoOutput`, `Model/Period.lean`): an interval that finds an
+  anchor, and of which the view output nothing, since every slot of it
+  the view commits sits above one the view leaves undecided, hands the
+  next interval period `1`. That an anchor exists is the almost-sure
+  half, stated with the coin;
 * **SH10f, two asynchronous rounds per interval**: the adaptive
   section's structural fact behind `I ≥ 2 · maxPeriod`. At any period
   `k ≥ 1` with `2 k ≤ I`, every interval holds two asynchronous rounds to
   scan;
 * **SH10g, the period stays in range**: if the initial period lies in
   `[1, K]` and the update rule keeps a period there, so does every
-  derived period.
+  derived period;
+* **SH14, output liveness under the failover**: Theorem 3 (ii) and the
+  asynchronous half of Definition 1's validity, deterministic given two
+  events the coin supplies almost surely. Under the failover, in a view
+  that derived every period up to a run's last round, if some interval
+  past a slot's finds an anchor and above that interval the coin names a
+  committed candidate at `wa` consecutive rounds, which lead the output's
+  slots there, then the slot is decided once the view holds the run's
+  decision rounds. A slot the view leaves undecided sits below every
+  commit of every later interval, so the failover fires at each anchored
+  one and the period is `1` from the first, where the run decides
+  everything below it (SH9).
 
 SH10a and SH10b assume `3 ≤ wa` (and `3 ≤ ws`), as SH5 and SH2 do, and
 SH10b a round `N` the record does not reach past; SH10c assumes nothing;
 SH10d assumes `1 ≤ wa`, as SH7a does, and a positive interval, without
-which every round lies in interval `0`; SH10e assumes nothing of the
-waves; SH10f and SH10g read no record. SH10a to SH10c and SH10e hold at
-every period, `0` included, and SH10d constrains the interval `I` rather
-than the period; SH10f asks `1 ≤ k`, since at `k = 0` only round `0` is
-asynchronous, and SH10g concludes `1 ≤ k` from the same bound on the
-initial period and the update rule.
+which every round lies in interval `0`; SH10e assumes `2 ≤ ws` and
+`2 ≤ wa`, what the laws need to carry a verdict from the anchor's history
+into the view; SH10f and SH10g read no record; SH14 assumes `2 ≤ ws ≤ wa`
+and `3 ≤ wa`, as SH10a does, one slot per round and a positive interval.
+SH10a to SH10c and SH10e hold at every period, `0` included, and SH10d
+constrains the interval `I` rather than the period; SH10f asks `1 ≤ k`,
+since at `k = 0` only round `0` is asynchronous, and SH10g concludes
+`1 ≤ k` from the same bound on the initial period and the update rule.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -111,18 +124,20 @@ def PeriodOfClause (U : BlockUniverse Validator BlockId Payload) (I wa : ℕ) : 
       -- ... the view derives the next interval's period
       ∃ k, PeriodAt I wa coin upd k₀ U V (j + 1) k
 
-/-- **SH10e, the period reaches `1` after an anchored interval.** -/
-def PeriodOne (U : BlockUniverse Validator BlockId Payload) (ws I wa : ℕ) : Prop :=
+/-- **SH10e, the period reaches `1` after an interval that was not output.** -/
+def PeriodOne (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
-    (V : View Validator BlockId Payload U) (j k r : ℕ) (A : BlockId),
-    -- the update rule resets on a window without a synchronous commit
-    ResetsOnStall U ws I upd →
-    -- no synchronous slot of the interval has a certified candidate (SH8's adversary, in the
-    -- interval)
-    (∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j → ¬ IsAsync k (S.slotRound s) →
-      IsLeaderBlock U s L → MahiMahi.certificates U ws L (S.slotRound s) = ∅) →
-    -- interval j runs at k and V finds it an anchor
+    (V : View Validator BlockId Payload U) (per : ℕ → ℕ) (j k r : ℕ) (A : BlockId),
+    2 ≤ ws → 2 ≤ wa →
+    -- the update rule fails over at the wavelength the validator runs
+    ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd →
+    -- interval j runs at k and V finds it an anchor ...
     PeriodAt I wa coin upd k₀ U V j k → IntervalAnchor I wa coin U V j k r A →
+    -- ... and V output nothing of the interval: every slot of j it commits sits above one it
+    -- leaves undecided
+    (∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+      Decided (adaptiveWave ws wa I per) U V s (some L) →
+      ∃ s', s' < s ∧ ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s' v) →
     -- then interval j + 1 runs at period 1
     PeriodAt I wa coin upd k₀ U V (j + 1) 1
 
@@ -140,6 +155,29 @@ def PeriodInRange (U : BlockUniverse Validator BlockId Payload) (I wa K : ℕ) :
     -- then so does every derived period
     PeriodAt I wa coin upd k₀ U V j k → 1 ≤ k ∧ k ≤ K
 
+/-- **SH14, output liveness under the failover.** -/
+def OutputLiveness (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=
+  ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
+    (V : View Validator BlockId Payload U) (per : ℕ → ℕ) (s j₁ r₁ b : ℕ) (A : BlockId),
+    -- the synchronous wave is at least two rounds and no longer than the asynchronous one
+    2 ≤ ws → ws ≤ wa → 3 ≤ wa →
+    -- one slot per round, and a positive interval
+    (∀ t, S.slotRound t = t) → 0 < I →
+    -- the update rule fails over at the wavelength the validator runs
+    ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd →
+    -- V derived the period of every interval up to the run's last round
+    (∀ j, j ≤ intervalOf I (b + wa - 1) → PeriodAt I wa coin upd k₀ U V j (per j)) →
+    -- an interval past the slot's finds an anchor in V ...
+    intervalOf I s < j₁ → IntervalAnchor I wa coin U V j₁ (per j₁) r₁ A →
+    -- ... and above that interval the coin names a committed candidate at wa consecutive
+    -- rounds, which lead the output's slots there, in a view holding their decision rounds
+    (j₁ + 1) * I < b →
+    (∀ i, i < wa → S.leader (b + i) = coin (b + i)) →
+    (∀ i, i < wa → coin (b + i) ∈ MahiMahi.goodAt U wa (b + i)) →
+    V.CoversUpto (MahiMahi.decisionRoundAt wa (b + wa - 1)) →
+    -- then the slot is decided in V
+    ∃ v, Decided (adaptiveWave ws wa I per) U V s v
+
 /-- The period sequence, over every fault configuration, schedule, block universe, interval,
 wavelength pair, period bound and update rule the model admits. -/
 def Statement : Prop :=
@@ -147,7 +185,8 @@ def Statement : Prop :=
     [Faults Validator] [LinearOrder BlockId] [Slots Validator]
     (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ),
     PeriodAgreement U I wa ∧ AdaptiveAgreement U ws wa I ∧ ScanEnds U I wa ∧
-      PeriodOfClause U I wa ∧ PeriodOne U ws I wa ∧ TwoAsyncRounds I ∧ PeriodInRange U I wa K
+      PeriodOfClause U I wa ∧ PeriodOne U ws wa I ∧ TwoAsyncRounds I ∧
+      PeriodInRange U I wa K ∧ OutputLiveness U ws wa I
 
 end Period
 
