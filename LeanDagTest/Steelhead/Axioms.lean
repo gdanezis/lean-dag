@@ -1,5 +1,9 @@
 import LeanDag.Steelhead.Properties
 import LeanDag.Steelhead.Safety.Proof
+import LeanDag.Steelhead.Liveness.Proof
+import LeanDag.Steelhead.Period.Proof
+import LeanDag.Steelhead.Coin.Proof
+import LeanDag.Steelhead.Ledger.Proof
 /-!
 # Steelhead — axiom audit
 
@@ -9,5 +13,9 @@ bespoke axiom would show here before anywhere else.
 -/
 
 #print axioms LeanDag.Steelhead.Safety.holds
+#print axioms LeanDag.Steelhead.Liveness.holds
+#print axioms LeanDag.Steelhead.Period.holds
+#print axioms LeanDag.Steelhead.Coin.holds
+#print axioms LeanDag.Steelhead.Ledger.holds
 #print axioms LeanDag.SteelheadProperties.persist
 #print axioms LeanDag.SteelheadProperties.liveness

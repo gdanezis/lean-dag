@@ -5,7 +5,7 @@ import LeanDag.MahiMahi.Model.Rules
 
 The rules at the wavelength function `w` never disagree about a slot,
 whichever rule decided it and whichever anchor a view found
-(`steelhead.md` §3). Seven claims:
+(`steelhead.md` §3). Eight claims:
 
 * **SH1a, skip excludes certificates** — Lemma 1's skip half at the
   slot's own wave;
@@ -21,10 +21,14 @@ whichever rule decided it and whichever anchor a view found
   rule decides the anchor, and no view skips it;
 * **SH4, conservativity** — Theorem 5: at a constant wavelength the rule
   *is* Mahi-Mahi's, at period one it is Mahi-Mahi's at `wa`, and at wave
-  three every derivation is the core's;
+  three the derivations are exactly the core's;
 * **SH5, chain agreement** — the chain verdicts agree across views: an
   instance of MM1c at the chain schedule, one slot per round led by the
-  round's coin leader.
+  round's coin leader;
+* **SH5b, the direct verdicts coincide**: at an asynchronous round the
+  coin leads, the output's direct commit and direct skip are the chain's
+  predicates, so "whenever either verdict of an asynchronous slot is
+  direct, the two coincide" (the paper's protocol section).
 
 Each claim states the weakest bound its proof consumes: `1 ≤ w r` for
 the quorum intersection, `2 ≤ w r` for the rest, which is the bound the
@@ -106,12 +110,13 @@ def RuleConservative : Prop :=
   (∀ ws wa : ℕ, periodic ws wa 1 = fun _ => wa)
 
 /-- **SH4, conservativity of the relation at wave three**: at the
-constant wavelength three every derivation is the core's (Mysticeti's),
-so `k = ∞` at `ws = 3` is Mysticeti. Whether anything commits is a
-liveness question, as in MM1d. -/
+constant wavelength three the derivations are exactly the core's
+(Mysticeti's), so `k = ∞` at `ws = 3` is Mysticeti, as the paper's
+Theorem 5 says. Whether anything commits is a liveness question, as in
+MM1d. -/
 def DecidedConservative (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ (V : View Validator BlockId Payload U) (k : ℕ) (v : Option BlockId),
-    Decided (fun _ => 3) U V k v → LeanDag.Decided U V k v
+    Decided (fun _ => 3) U V k v ↔ LeanDag.Decided U V k v
 
 /-- **SH5, chain agreement**: two views agree on the chain verdict of
 every round, under any coin. -/
@@ -120,17 +125,32 @@ def ChainAgreement (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Pr
     (v₁ v₂ : Option BlockId),
     2 ≤ wa → ChainDecided wa coin U V₁ r v₁ → ChainDecided wa coin U V₂ r v₂ → v₁ = v₂
 
+/-- **SH5b, the direct verdicts coincide**: at an asynchronous round whose
+slot is proposed there and led by the coin, the output's direct commit
+and direct skip are the chain's, predicate for predicate, so a direct
+derivation in either relation is one in the other. -/
+def DirectAgreesWithChain (U : BlockUniverse Validator BlockId Payload) (ws wa : ℕ) : Prop :=
+  ∀ (coin : ℕ → Validator) (V : View Validator BlockId Payload U) (k r : ℕ) (L : BlockId),
+    -- slot r is proposed at round r, asynchronous, and the coin leads it
+    S.slotRound r = r → IsAsync k r → S.leader r = coin r →
+    -- the direct commit of L at r is the same predicate in both relations ...
+    ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Commit U V L r ↔
+      (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Commit U V L r) ∧
+    -- ... and so is the direct skip of the slot
+    ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Skip U V S r ↔
+      (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Skip U V (chainSlots coin) r)
+
 /-- Safety of the rule at a wavelength function, over every fault
-configuration, schedule, block universe and wavelength function the
-model admits. -/
+configuration, schedule, block universe, wavelength function and
+wavelength pair the model admits. -/
 def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] [Slots Validator]
-    (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) (wa : ℕ),
+    (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) (ws wa : ℕ),
     SkipExcludesCertificates U w ∧ CertificateUniqueness U w ∧ CertificateInHistory U w ∧
       Agreement U w ∧ Handover U w ∧
       RuleConservative (Validator := Validator) (BlockId := BlockId) (Payload := Payload) ∧
-      DecidedConservative U ∧ ChainAgreement U wa
+      DecidedConservative U ∧ ChainAgreement U wa ∧ DirectAgreesWithChain U ws wa
 
 end Safety
 
