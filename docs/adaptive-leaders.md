@@ -794,25 +794,39 @@ Two theorems Barnacle has no need of:
 - `output_lt_decided` — the span a segment decides reaches past the span
   it outputs, by at least one round.
 
-### Step 4 — the score (AL11)
+### Step 4 — the score (AL11). **Built.**
 
-`LeanDag/Adaptive/Model/Score.lean`, generic in the base rule as
-`Aimd.rule` is, naming no protocol:
+`LeanDag/Adaptive/Score/{Rule,Statement,Proof}.lean`, generic in the base
+rule as `Aimd.rule` is and naming no protocol; the instantiations are in
+the test tree.
 
 ```lean
-def rule (R : BaseRule Validator BlockId Payload)
-    (score : (U : R.Universe) → BlockId → Config Validator → Config Validator)
-    (hkeep : ∀ U A C, (score U A C).slotsAt = C.slotsAt ∧
-                      (score U A C).interval = C.interval) :
-    UpdateRule R :=
-  fun C b U _V A => (score U A C, b)
+def Score (R : BaseRule Validator BlockId Payload) : Type :=
+  (U : R.Universe) → R.View U → Config Validator → Config Validator
+
+def rule (score : Score R) : UpdateRule R :=
+  fun C b U _V A =>
+    if hA : A ∈ R.ids U then (score U (R.historyView U A hA) C, b) else (C, b)
 ```
 
-with three results: `Anchored` by `rfl`, `UpdBounded` from `hkeep`, and
-the history clause — `score U A C` reads `U` only through
-`historyFrom (R.block U) A`, which BN2 turns into agreement across views.
+The history clause needed no hypothesis in the end. A score reads the
+anchor's causal history **as a view**, the shape `Barnacle.observed`
+uses: `BaseRule.Laws.historyView_ids` pins that view to `historyFrom`,
+and BN2 says any two views holding the anchor restrict to it
+identically, so the reading is agreed by construction. What a score does
+owe is `Score.Keeps` — it moves the leaders and leaves the widths and
+the interval alone — and that one clause carries `UpdBounded`, since
+`Config.InBounds` mentions nothing else.
 
-*Done when* step 2's theorem applies to it with no further hypothesis.
+AL11 is the four clauses: `RuleAnchored` by `rfl`, `RuleBounded` from
+`Score.Keeps`, `RulePreserves` for whatever clause AL16 will name, and
+`ConstIsConst` — the constant score is `constRule`, so AL15 is BN6's
+statement at this arc's run. `Score.holds` proves them, on `propext` and
+`Quot.sound` alone.
+
+*Done*: `LeanDagTest/Adaptive/Segmented.lean` applies AL13 and AL14 at an
+arbitrary score, with `Score.rule_anchored` discharging their only clause
+on the rule.
 
 ### Step 5 — conservativity and validity (AL15)
 

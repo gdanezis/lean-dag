@@ -61,6 +61,9 @@ import LeanDag.Adaptive.Agreement.Proof
 import LeanDag.Adaptive.Helpers.Ledger
 import LeanDag.Adaptive.Ledger.Statement
 import LeanDag.Adaptive.Ledger.Proof
+import LeanDag.Adaptive.Score.Rule
+import LeanDag.Adaptive.Score.Statement
+import LeanDag.Adaptive.Score.Proof
 import LeanDag.Adaptive.Joiner
 import LeanDag.Adaptive.Liveness
 import LeanDag.Adaptive.Growth

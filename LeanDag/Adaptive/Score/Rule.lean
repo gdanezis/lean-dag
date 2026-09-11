@@ -1,0 +1,69 @@
+import LeanDag.Adaptive.Model.Segment
+import LeanDag.Barnacle.Model.Live
+/-!
+# The reputation score, as an update rule
+
+Hammerhead installs a configuration chosen from the committed anchor's
+causal history (`adaptive-leaders.md` §9): validators that voted for
+recent leaders gain slots, validators that did not lose them, and the
+shape of the schedule — how many slots each round has, how long until
+the next reconfiguration — is left alone.
+
+A `Score` reads the anchor's history **as a view**, which is the shape
+`Barnacle.observed` uses and the reason no separate clause is needed to
+say the score reads nothing else: `BaseRule.historyView` is pinned to
+`historyFrom` by `BaseRule.Laws.historyView_ids`, and BN2 says any two
+views holding the anchor hold its history whole and restrict to it
+identically. So a score's reading is agreed across validators by
+construction rather than by hypothesis.
+
+What a score does owe is `Score.Keeps`: it moves the leaders and leaves
+the widths and the interval where they were. That one clause carries
+`UpdBounded`, since `Config.InBounds` mentions only those two.
+
+This file is not under `Model/`, for the reason `Barnacle/Aimd/Rule.lean`
+is not: the rule is a definition, and the facts about it are theorems.
+-/
+
+namespace LeanDag
+
+namespace Adaptive
+
+open Barnacle
+
+variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
+variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
+
+/-- **A reputation score**: from the anchor's causal history, read as a
+view, and the configuration in force, the configuration to install. -/
+def Score (R : BaseRule Validator BlockId Payload) : Type :=
+  (U : R.Universe) → R.View U → Config Validator → Config Validator
+
+variable {R : BaseRule Validator BlockId Payload}
+
+/-- **What a score owes.** It changes who leads and leaves the shape
+alone: the same slots in every round, and the same interval to the next
+reconfiguration. Hammerhead's rule qualifies — it swaps validators
+between schedule positions — and an Aimd-style rule, which moves the
+widths, does not. -/
+def Score.Keeps (score : Score R) : Prop :=
+  ∀ (U : R.Universe) (V : R.View U) (C : Config Validator),
+    (score U V C).slotsAt = C.slotsAt ∧ (score U V C).interval = C.interval
+
+/-- **The score as an update rule.** At an anchor the universe holds, the
+next configuration is the score's on the anchor's history view;
+elsewhere the configuration stands. The view a validator happens to have
+is not read, which is `Anchored`, and the anchor is in the universe at
+every step a run takes, by `anchor_commits` and `CommitsCandidate`. -/
+def rule (score : Score R) : UpdateRule R :=
+  fun C b U _V A =>
+    if hA : A ∈ R.ids U then (score U (R.historyView U A hA) C, b) else (C, b)
+
+/-! ## The conservativity anchor -/
+
+/-- The constant score: install the configuration in force. -/
+def Score.const (R : BaseRule Validator BlockId Payload) : Score R := fun _ _ C => C
+
+end Adaptive
+
+end LeanDag
