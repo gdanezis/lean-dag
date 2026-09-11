@@ -11,6 +11,8 @@ namespace LeanDag
 
 namespace Adaptive
 
+namespace Agreement
+
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ R hR P upd C₀ hanc U V₁ V₂ K₁ K₂ R₁ R₂ k hkm
   obtain ⟨hs, hc, hb⟩ := configAgree hR hanc R₁ R₂ k hkm
@@ -19,6 +21,8 @@ theorem holds : Statement := by
   refine ⟨ha, fun κ h₁ h₂ => ?_⟩
   exact vdct_agree hR R₁ R₂ hc (by omega) (by omega) h₁ h₂
     (by rw [← hs, ← hc]; exact h₁) (by rw [← hc, ← ha]; exact h₂)
+
+end Agreement
 
 end Adaptive
 

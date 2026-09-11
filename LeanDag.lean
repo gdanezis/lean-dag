@@ -58,6 +58,9 @@ import LeanDag.Adaptive.Model.Segment
 import LeanDag.Adaptive.Helpers.Agreement
 import LeanDag.Adaptive.Agreement.Statement
 import LeanDag.Adaptive.Agreement.Proof
+import LeanDag.Adaptive.Helpers.Ledger
+import LeanDag.Adaptive.Ledger.Statement
+import LeanDag.Adaptive.Ledger.Proof
 import LeanDag.Adaptive.Joiner
 import LeanDag.Adaptive.Liveness
 import LeanDag.Adaptive.Growth

@@ -26,6 +26,8 @@ namespace LeanDag
 
 namespace Adaptive
 
+namespace Agreement
+
 open Barnacle
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
@@ -69,6 +71,8 @@ def Statement : Prop :=
     Properties.Agree R.toDagRule →
     ∀ (P : Params) (upd : UpdateRule R) (C₀ : Config Validator),
       SegRunAgreement R P upd C₀
+
+end Agreement
 
 end Adaptive
 

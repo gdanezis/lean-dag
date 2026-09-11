@@ -753,7 +753,8 @@ should transfer:
 
 The port went through as traced, and the stop condition did not fire:
 `anchor_agree` needs **no** hypothesis relating the two runs' anchors.
-`Adaptive.SegRunAgreement` is the statement, `Adaptive.holds` the proof,
+`Adaptive.Agreement.SegRunAgreement` is the statement,
+`Adaptive.Agreement.holds` the proof,
 `Adaptive/Helpers/Agreement.lean` the induction, on the standard three
 axioms. `Anchored` is the only clause on the rule; there is no synchrony,
 no fairness and no window.
@@ -766,7 +767,7 @@ convention itself: the next boundary is `start k + (cfg k).interval`, so
 never mentions the anchor — where Barnacle's had to establish the
 anchors agreed before it could place the next start.
 
-### Step 3 — the ledger (AL14)
+### Step 3 — the ledger (AL14). **Built.**
 
 `LeanDag/Adaptive/Helpers/Ledger.lean`, from Barnacle's. Agreed,
 growing, without repetition, plus `round_of_mem_ledgerUpto`. Disjointness
@@ -774,11 +775,24 @@ is easier than Barnacle's: consecutive ledger ranges are
 `(start k, start k + interval]` and abut by `start_succ`, so the rounds
 partition by construction rather than by an argument about anchors.
 
-Add one theorem Barnacle has no need of: **the rounds above a boundary
-carry two verdicts and only the later is output.** Segment `k` decides
-`(start (k + 1), roundOf (anchor k)]` and segment `k + 1` decides them
-again under its own configuration; `rangeLedger k` reads neither. Stating
-it makes the discard explicit rather than a consequence of index bounds.
+`Adaptive.Ledger.holds` proves the three parts, and
+`Adaptive/Helpers/Ledger.lean` carries the halves. `mem_ledgerOf` and
+`ledgerOf_congr` are about `ledgerOf` alone and are reused from the
+Barnacle arc rather than restated. `start_lt_succ` is the boundary
+convention rather than an argument about the anchor's threshold, and
+every use of `closed` widens its upper bound through `anchor_commits`,
+since the output range sits strictly below the anchor's round.
+
+Two theorems Barnacle has no need of:
+
+- `decided_and_not_output` — a slot of segment `k` at a round above the
+  boundary and at or below the anchor's **is decided** by `closed`, and
+  its index is at or above `rangeLedger k`'s upper end, so it is not
+  read. Its verdict is what the segment discards, and the round is
+  decided again under configuration `k + 1`. This is the
+  naming-and-ordering split of §7 as a statement.
+- `output_lt_decided` — the span a segment decides reaches past the span
+  it outputs, by at least one round.
 
 ### Step 4 — the score (AL11)
 
