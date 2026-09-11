@@ -1,4 +1,4 @@
-import LeanDag.Adaptive.Run
+import LeanDag.Adaptive.Fixpoint.Run
 import LeanDag.Properties.Extends
 import LeanDag.Properties.Derived.Persist
 /-!

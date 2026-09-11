@@ -1,4 +1,4 @@
-import LeanDag.Adaptive.Run
+import LeanDag.Adaptive.Fixpoint.Run
 import LeanDag.Properties.Compose
 /-!
 # The joiner: an adaptive schedule across a cut

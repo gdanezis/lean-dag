@@ -1,5 +1,5 @@
 import LeanDag.GC.ChopDecided
-import LeanDag.Adaptive.Joiner
+import LeanDag.Adaptive.Fixpoint.Joiner
 import LeanDag.Properties.Arcs.GC
 import LeanDag.Mysticeti.Record
 /-!

@@ -1,4 +1,4 @@
-import LeanDag.Adaptive.Basic
+import LeanDag.Adaptive.Fixpoint.Basic
 import LeanDag.Properties.Carrier
 /-!
 # The adaptive policy

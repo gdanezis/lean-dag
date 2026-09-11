@@ -1,4 +1,4 @@
-import LeanDag.Adaptive.Run
+import LeanDag.Adaptive.Fixpoint.Run
 import LeanDag.Properties.Commit
 import LeanDag.Properties.Derived.LeaderCommits
 import LeanDag.Properties.Derived.Descent

@@ -1,7 +1,7 @@
-import LeanDag.Adaptive.Basic
-import LeanDag.Adaptive.Run
-import LeanDag.Adaptive.Liveness
-import LeanDag.Adaptive.Growth
+import LeanDag.Adaptive.Fixpoint.Basic
+import LeanDag.Adaptive.Fixpoint.Run
+import LeanDag.Adaptive.Fixpoint.Liveness
+import LeanDag.Adaptive.Fixpoint.Growth
 import LeanDag.Mysticeti.Properties
 import LeanDag.Odontoceti.Properties
 import LeanDagTest.Mysticeti.Model

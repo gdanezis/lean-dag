@@ -1,4 +1,4 @@
-import LeanDag.Adaptive.Policy
+import LeanDag.Adaptive.Fixpoint.Policy
 import LeanDag.Properties.Derived.Bounded
 /-!
 # The adaptive run, and safety as uniqueness of the fixpoint
