@@ -64,6 +64,10 @@ import LeanDag.Adaptive.Ledger.Proof
 import LeanDag.Adaptive.Score.Rule
 import LeanDag.Adaptive.Score.Statement
 import LeanDag.Adaptive.Score.Proof
+import LeanDag.Adaptive.Conservativity.Statement
+import LeanDag.Adaptive.Conservativity.Proof
+import LeanDag.Adaptive.Validity.Statement
+import LeanDag.Adaptive.Validity.Proof
 import LeanDag.Adaptive.Joiner
 import LeanDag.Adaptive.Liveness
 import LeanDag.Adaptive.Growth

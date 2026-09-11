@@ -828,12 +828,23 @@ statement at this arc's run. `Score.holds` proves them, on `propext` and
 arbitrary score, with `Score.rule_anchored` discharging their only clause
 on the rule.
 
-### Step 5 — conservativity and validity (AL15)
+### Step 5 — conservativity and validity (AL15). **Built.**
 
-BN6's and BN14's shapes over the segmented run: a score returning the
-configuration it was given leaves every segment on the genesis
-configuration, and a good author's block below an anchor is in that
-anchor's history. Both are ports.
+`Adaptive.Conservativity.holds` gives AL15a and AL15b — under the
+constant rule every configuration a run determines is the genesis one
+with back-off zero, and every verdict of the decided span is a verdict of
+`C₀.sched`. `Score.rule_const` says the constant score *is* that rule, so
+a score that reassigns nothing leaves the arc where it found it.
+
+`Adaptive.Validity.holds` gives AL15c, BN14's statement at this run: a
+good author's block two rounds below a closed configuration's boundary is
+in the history of the block that configuration commits.
+
+Both are ports, and validity's proof came out one step shorter. Barnacle
+reaches the anchor by rewriting along `start_succ`, the anchor's round
+being the boundary; here `closed` reaches it by `le_rfl`, and the
+hypothesis on the author's block sits at the boundary, which
+`anchor_commits` puts strictly below the anchor's round.
 
 ### Step 6 — liveness (AL16)
 
