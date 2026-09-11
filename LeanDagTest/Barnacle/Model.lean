@@ -220,18 +220,23 @@ theorem u7_window_healthy :
   change i < 1 at hi
   interval_cases d <;> interval_cases i <;> decide
 
-/-- **BN12b applied**: the rule raises the count to `2` and resets the
-back-off, because the window is healthy — not because the arithmetic was
+/-- **BN12b applied**: every round of the next configuration is two slots
+wide, on the same leaders and at the same interval, and the back-off
+resets — because the window is healthy, not because the arithmetic was
 computed. -/
-example : Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) 20 =
-    (Config.uniform bnLead bnLeadKeyed (Aimd.count bnP (bnC1.slotsAt 5) 0 true)
-      (Aimd.count_pos bnP _ _ _) (Aimd.count_le bnP _ _ _) bnC1.interval, 0) :=
-  (Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
-      MysticetiProperties.commitsDirect).2.1 bnC1 U7 20 (by decide) 0 (View.full U7)
-    (by decide) (by decide) (by decide) u7_window_healthy
-
-/-- And that count is two. -/
-example : Aimd.count bnP (bnC1.slotsAt 5) 0 true = 2 := by decide
+example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) 20).1.slotsAt
+      = (fun _ => 2) ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) 20).1.lead = bnLead ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) 20).1.interval = 4 ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) 20).2 = 0 := by
+  obtain ⟨hw, hl, hi, hb⟩ :=
+    (Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
+        MysticetiProperties.commitsDirect).2.1 bnC1 U7 20 (by decide) 0 (View.full U7)
+      (by decide) (by decide) (by decide) u7_window_healthy
+  refine ⟨?_, hl, hi, hb⟩
+  rw [hw]
+  funext r
+  decide
 
 /-- And `observed` meets `expected` there, which is BN12a. -/
 example : expected bnRule bnC1 5 ≤ observed bnRule bnC1 U7 20 :=
@@ -259,8 +264,8 @@ count rises from two to three at an anchor whose window scores nothing. -/
 example : observed bnRule bnC2I1 U7 12 = 0 ∧
     (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC2I1 0 U7 (View.full U7) 12).1.slotsAt 0 = 3 := by
   refine ⟨by decide, ?_⟩
-  rw [((Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
-    MysticetiProperties.commitsDirect).2.2.2 bnC2I1 (by decide)).2 U7 (View.full U7) 12 0]
+  rw [(((Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
+    MysticetiProperties.commitsDirect).2.2.2 bnC2I1 (by decide)).2 U7 (View.full U7) 12 0).1]
   decide
 
 -- The interval BN12a asks for is exactly the one that avoids this.
@@ -388,21 +393,15 @@ def run1 : PartialRun bnRule bnPI1 bnUpd bnC1I1 U7 V7 1 where
   anchor := fun _ => 2
   vdct := vd1
   init := ⟨rfl, rfl, rfl⟩
-  slotsAt_le := by
-    intro k r
-    by_cases h : k = 0
-    · subst h; simp only [if_true]; exact (by decide : (1 : ℕ) ≤ 4)
-    · simp only [h, if_false]; exact Aimd.count_le bnPI1 _ _ _
-  interval_pos := by
+  bounds := by
     intro k
     by_cases h : k = 0
-    · subst h; exact (by decide)
-    · simp only [h, if_false]; exact (by decide)
-  interval_le := by
-    intro k
-    by_cases h : k = 0
-    · subst h; exact (by decide)
-    · simp only [h, if_false]; exact (by decide)
+    · subst h
+      exact ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), (by decide : (0 : ℕ) < 1),
+        (by decide : (1 : ℕ) ≤ 1)⟩
+    · simp only [h, if_false]
+      exact ⟨fun r => Aimd.count_le bnPI1 _ _ _, (by decide : (0 : ℕ) < 1),
+        (by decide : (1 : ℕ) ≤ 1)⟩
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega

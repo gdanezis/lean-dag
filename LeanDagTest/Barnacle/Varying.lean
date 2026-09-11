@@ -113,23 +113,16 @@ def varRun : PartialRun bnRule32 varP varUpd bnC1I1 Usun Vsun 2 where
   anchor := fun k => if k = 0 then 2 else 6
   vdct := vdVar
   init := ⟨rfl, rfl, rfl⟩
-  slotsAt_le := by
-    intro k r
+  bounds := by
+    intro k
     by_cases h : k = 1
-    · subst h; simp only [if_true]
+    · subst h
+      refine ⟨fun r => ?_, (by decide : (0 : ℕ) < 2), (by decide : (2 : ℕ) ≤ 2)⟩
       change varSlots r ≤ 4
       unfold varSlots; split <;> omega
-    · simp only [h, if_false]; exact (by decide : (1 : ℕ) ≤ 4)
-  interval_pos := by
-    intro k
-    by_cases h : k = 1
-    · subst h; exact (by decide : (0 : ℕ) < 2)
-    · simp only [h, if_false]; exact (by decide : (0 : ℕ) < 1)
-  interval_le := by
-    intro k
-    by_cases h : k = 1
-    · subst h; exact (by decide : (2 : ℕ) ≤ 2)
-    · simp only [h, if_false]; exact (by decide : (1 : ℕ) ≤ 2)
+    · simp only [h, if_false]
+      exact ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), (by decide : (0 : ℕ) < 1),
+        (by decide : (1 : ℕ) ≤ 2)⟩
   closed := by
     intro k hk κ h1 h2
     have hkk : k = 0 ∨ k = 1 := by omega
@@ -194,23 +187,16 @@ def varRun' : PartialRun bnRule32 varP varUpd bnC1I1 Usun Vsun' 2 where
   anchor := fun k => if k = 0 then 2 else 6
   vdct := vdVar
   init := ⟨rfl, rfl, rfl⟩
-  slotsAt_le := by
-    intro k r
+  bounds := by
+    intro k
     by_cases h : k = 1
-    · subst h; simp only [if_true]
+    · subst h
+      refine ⟨fun r => ?_, (by decide : (0 : ℕ) < 2), (by decide : (2 : ℕ) ≤ 2)⟩
       change varSlots r ≤ 4
       unfold varSlots; split <;> omega
-    · simp only [h, if_false]; exact (by decide : (1 : ℕ) ≤ 4)
-  interval_pos := by
-    intro k
-    by_cases h : k = 1
-    · subst h; exact (by decide : (0 : ℕ) < 2)
-    · simp only [h, if_false]; exact (by decide : (0 : ℕ) < 1)
-  interval_le := by
-    intro k
-    by_cases h : k = 1
-    · subst h; exact (by decide : (2 : ℕ) ≤ 2)
-    · simp only [h, if_false]; exact (by decide : (1 : ℕ) ≤ 2)
+    · simp only [h, if_false]
+      exact ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), (by decide : (0 : ℕ) < 1),
+        (by decide : (1 : ℕ) ≤ 2)⟩
   closed := by
     intro k hk κ h1 h2
     have hkk : k = 0 ∨ k = 1 := by omega

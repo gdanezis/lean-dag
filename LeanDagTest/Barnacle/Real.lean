@@ -54,8 +54,8 @@ abbrev realUpd : UpdateRule realRule.toBaseRule :=
   Aimd.rule realRule.toBaseRule bnP bnLead bnLeadKeyed
 
 theorem realUpd_bounded : UpdBounded bnP realUpd := by
-  intro C b U V A _ hpos hle
-  exact ⟨fun r => Aimd.count_le bnP _ _ _, hpos, hle⟩
+  intro C b U V A h
+  exact ⟨fun r => Aimd.count_le bnP _ _ _, h.2.1, h.2.2⟩
 
 /-- The rule emits the rotation's heads, whatever it reads. -/
 theorem realUpd_heads : UpdKeeps realUpd (fun C => C.head = bnLeader) := by
@@ -77,7 +77,7 @@ theorem real_runs (K : ℕ) :
   Live.runsExist_roundRobin (by omega) realRule MysticetiProperties.agree
     (MysticetiLive.descent (Fin 4) ℕ Unit) (Nat.succ_pos 2) (by decide) bnP realUpd
     realUpd_bounded realUpd_heads bnC1 bnC1_head
-    (fun _ => (by decide : (1 : ℕ) ≤ 4)) (by decide) (by decide)
+    ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), by decide, by decide⟩
     (Ugrow (11 * K + 9)) (realRule.full (Ugrow (11 * K + 9))) 0 (11 * K + 9)
     (ugrow_good _)
     (coversUpto_full (Mysticeti.holds (Fin 4) ℕ Unit).full_ids _ _) (by omega) K

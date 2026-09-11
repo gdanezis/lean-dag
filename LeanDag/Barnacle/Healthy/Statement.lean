@@ -58,9 +58,11 @@ def Raises (R : BaseRule Validator BlockId Payload) (P : Params)
     (backoff : ℕ) (V : R.View U),
     P.num ≤ P.den → R.waveLength ≤ C.interval → C.interval ≤ (R.block U A).round →
     WindowHealthy R C U A hA →
-    Aimd.rule R P lead hl C backoff U V A =
-      (Config.uniform lead hl (Aimd.count P (C.slotsAt (R.block U A).round) backoff true)
-        (Aimd.count_pos P _ _ _) (Aimd.count_le P _ _ _) C.interval, 0)
+    (Aimd.rule R P lead hl C backoff U V A).1.slotsAt =
+        (fun _ => Aimd.count P (C.slotsAt (R.block U A).round) backoff true) ∧
+      (Aimd.rule R P lead hl C backoff U V A).1.lead = lead ∧
+      (Aimd.rule R P lead hl C backoff U V A).1.interval = C.interval ∧
+      (Aimd.rule R P lead hl C backoff U V A).2 = 0
 
 /-- **BN12c, the count counts verdicts.** Every slot the window counts is
 a slot the protocol committed — `Properties.CommitsDirect`, without
@@ -86,9 +88,9 @@ def Vacuous (R : BaseRule Validator BlockId Payload) (P : Params)
   ∀ C : Config Validator, C.interval < R.waveLength →
     (∀ r, expected R C r = 0) ∧
     ∀ (U : R.Universe) (V : R.View U) (A : BlockId) (backoff : ℕ),
-      Aimd.rule R P lead hl C backoff U V A =
-        (Config.uniform lead hl (Aimd.count P (C.slotsAt (R.block U A).round) backoff true)
-          (Aimd.count_pos P _ _ _) (Aimd.count_le P _ _ _) C.interval, 0)
+      (Aimd.rule R P lead hl C backoff U V A).1.slotsAt =
+          (fun _ => Aimd.count P (C.slotsAt (R.block U A).round) backoff true) ∧
+        (Aimd.rule R P lead hl C backoff U V A).2 = 0
 
 /-- The count of a healthy window, the step it produces, and the
 interval below which there is no measurement. -/

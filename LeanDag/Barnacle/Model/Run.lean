@@ -32,9 +32,9 @@ rounds after `start k`, through the anchor's round `start (k + 1)` —
 decided against the configuration's schedule. `anchor_commits`
 and `anchor_least` are `TryCommit`'s trigger: the anchor is the least
 committed slot whose round exceeds `start k + (cfg k).interval`.
-`update` is `UpdateLeaders`, for an arbitrary rule. `slotsAt_le` and
-`interval_pos` are clauses of the run because the rule is arbitrary; for
-the AIMD rule they are theorems. -/
+`update` is `UpdateLeaders`, for an arbitrary rule. `bounds` is a clause
+of the run because the rule is arbitrary; for the AIMD rule it is a
+theorem. -/
 structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
     (upd : UpdateRule R) (C₀ : Config Validator) (U : R.Universe) (V : R.View U)
     (K : ℕ) where
@@ -51,12 +51,8 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
   vdct : ℕ → ℕ → Option BlockId
   /-- The run starts after round `0`, in the genesis configuration. -/
   init : start 0 = 0 ∧ cfg 0 = C₀ ∧ backoff 0 = 0
-  /-- No round of any configuration has more slots than the bound. -/
-  slotsAt_le : ∀ k r, (cfg k).slotsAt r ≤ P.maxLeaders
-  /-- Every configuration waits at least one round before reconfiguring. -/
-  interval_pos : ∀ k, 0 < (cfg k).interval
-  /-- No configuration waits longer than the bound. -/
-  interval_le : ∀ k, (cfg k).interval ≤ P.maxInterval
+  /-- Every configuration is within the parameters. -/
+  bounds : ∀ k, (cfg k).InBounds P
   /-- Every slot of the range — after `start k`, through the anchor's
   round — decided against the configuration's schedule (`TryDecide`). -/
   closed : ∀ k, k < K → ∀ κ, start k < (cfg k).roundOf κ →

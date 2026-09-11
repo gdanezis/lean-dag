@@ -25,9 +25,8 @@ variable {Q : Config Validator → Prop} {U : R.Universe}
 
 /-- The height-`0` run: `init` only. -/
 def PartialRun.zero (R : BaseRule Validator BlockId Payload) (P : Params)
-    (upd : UpdateRule R) (C₀ : Config Validator)
-    (hle : ∀ r, C₀.slotsAt r ≤ P.maxLeaders) (hpos : 0 < C₀.interval)
-    (hint : C₀.interval ≤ P.maxInterval) (U : R.Universe) (V : R.View U) :
+    (upd : UpdateRule R) (C₀ : Config Validator) (h₀ : C₀.InBounds P)
+    (U : R.Universe) (V : R.View U) :
     PartialRun R P upd C₀ U V 0 where
   start := fun _ => 0
   cfg := fun _ => C₀
@@ -35,9 +34,7 @@ def PartialRun.zero (R : BaseRule Validator BlockId Payload) (P : Params)
   anchor := fun _ => 0
   vdct := fun _ _ => none
   init := ⟨rfl, rfl, rfl⟩
-  slotsAt_le := fun _ => hle
-  interval_pos := fun _ => hpos
-  interval_le := fun _ => hint
+  bounds := fun _ => h₀
   closed := fun _ h => absurd h (Nat.not_lt_zero _)
   anchor_commits := fun _ h => absurd h (Nat.not_lt_zero _)
   anchor_least := fun _ h => absurd h (Nat.not_lt_zero _)
@@ -56,7 +53,7 @@ theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : U
     ∃ Rn' : PartialRun R.toBaseRule P upd C₀ U V (K + 1),
       Rn'.start (K + 1) ≤ Rn.start K + P.maxInterval + 1 + c ∧ Q (Rn'.cfg (K + 1)) := by
   obtain ⟨h1, h2⟩ := hlive U V Rnd N hgood hcov
-  have hIle := Rn.interval_le K
+  have hIle := (Rn.bounds K).2.2
   -- Clause 1 with the rounds read off the configuration.
   have h1' : ∀ κ, Rnd ≤ (Rn.cfg K).roundOf κ →
       (Rn.cfg K).roundOf κ + c + R.waveLength ≤ N → ∃ v, R.Decided (Rn.sched K) V κ v := by
@@ -96,11 +93,10 @@ theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : U
   -- The next configuration, by the rule at the anchor block.
   let next : Config Validator × ℕ :=
     (v a).elim (Rn.cfg K, Rn.backoff K) (fun A => upd (Rn.cfg K) (Rn.backoff K) U V A)
-  have hnext : (∀ r, next.1.slotsAt r ≤ P.maxLeaders) ∧ 0 < next.1.interval ∧
-      next.1.interval ≤ P.maxInterval := by
+  have hnext : next.1.InBounds P := by
     obtain ⟨_, A, hA⟩ := ha_spec
     simp only [next, hA, Option.elim_some]
-    exact hupd _ _ _ _ _ (Rn.slotsAt_le K) (Rn.interval_pos K) hIle
+    exact hupd _ _ _ _ _ (Rn.bounds K)
   have hnexth : Q next.1 := by
     obtain ⟨_, A, hA⟩ := ha_spec
     simp only [next, hA, Option.elim_some]
@@ -112,9 +108,7 @@ theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : U
     anchor := fun k => if k = K then a else Rn.anchor k
     vdct := fun k κ => if k = K then v κ else Rn.vdct k κ
     init := by simp only [Nat.zero_le, if_true]; exact Rn.init
-    slotsAt_le := ?_
-    interval_pos := ?_
-    interval_le := ?_
+    bounds := ?_
     closed := ?_
     anchor_commits := ?_
     anchor_least := ?_
@@ -122,16 +116,8 @@ theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : U
     update := ?_ }, ?_, ?_⟩
   · intro k
     by_cases hkK : k ≤ K
-    · simp only [hkK, if_true]; exact Rn.slotsAt_le k
-    · simp only [hkK, if_false]; exact hnext.1
-  · intro k
-    by_cases hkK : k ≤ K
-    · simp only [hkK, if_true]; exact Rn.interval_pos k
-    · simp only [hkK, if_false]; exact hnext.2.1
-  · intro k
-    by_cases hkK : k ≤ K
-    · simp only [hkK, if_true]; exact Rn.interval_le k
-    · simp only [hkK, if_false]; exact hnext.2.2
+    · simp only [hkK, if_true]; exact Rn.bounds k
+    · simp only [hkK, if_false]; exact hnext
   · -- closed
     intro k hkK1 κ hlo hhi
     by_cases hkK : k = K
@@ -212,38 +198,34 @@ theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBound
 /-- (D) -/
 theorem everyHeight_bound (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd)
     (hupdh : UpdKeeps upd Q) {c : ℕ}
-    (hlive : ∀ C : Config Validator, (∀ r, C.slotsAt r ≤ P.maxLeaders) →
-      0 < C.interval → C.interval ≤ P.maxInterval → Q C → R.LiveOn C.sched c)
-    (h₀ : ∀ r, C₀.slotsAt r ≤ P.maxLeaders) (h₀' : 0 < C₀.interval)
-    (h₀'' : C₀.interval ≤ P.maxInterval) (hQ₀ : Q C₀)
+    (hlive : ∀ C : Config Validator, C.InBounds P → Q C → R.LiveOn C.sched c)
+    (h₀ : C₀.InBounds P) (hQ₀ : Q C₀)
     {Rnd N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ 1) :
     ∀ K, horizon P R c K ≤ N →
       ∃ Rn : PartialRun R.toBaseRule P upd C₀ U V K,
         Rn.start K ≤ K * (P.maxInterval + 1 + c) ∧ Q (Rn.cfg K)
-  | 0, _ => ⟨PartialRun.zero _ P upd C₀ h₀ h₀' h₀'' U V, Nat.zero_le _, hQ₀⟩
+  | 0, _ => ⟨PartialRun.zero _ P upd C₀ h₀ U V, Nat.zero_le _, hQ₀⟩
   | K + 1, hN => by
     have hN' : (K + 1) * (P.maxInterval + 1 + c) + c + R.waveLength ≤ N := hN
     rw [Nat.succ_mul] at hN'
     have hhor : horizon P R c K ≤ N := by unfold horizon; omega
     obtain ⟨Rn, hstart, hhead⟩ :=
-      everyHeight_bound hR hupd hupdh hlive h₀ h₀' h₀'' hQ₀ hcov hgood hRnd K hhor
+      everyHeight_bound hR hupd hupdh hlive h₀ hQ₀ hcov hgood hRnd K hhor
     obtain ⟨Rn', hstart', hhead'⟩ := progress_exists hR hupd hupdh hcov Rn
-      (hlive (Rn.cfg K) (Rn.slotsAt_le K) (Rn.interval_pos K) (Rn.interval_le K) hhead) hhead
+      (hlive (Rn.cfg K) (Rn.bounds K) hhead) hhead
       hgood (by omega) (by omega)
     exact ⟨Rn', by rw [Nat.succ_mul]; omega, hhead'⟩
 
 theorem everyHeight (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd)
     (hupdh : UpdKeeps upd Q) {c : ℕ}
-    (hlive : ∀ C : Config Validator, (∀ r, C.slotsAt r ≤ P.maxLeaders) →
-      0 < C.interval → C.interval ≤ P.maxInterval → Q C → R.LiveOn C.sched c)
-    (h₀ : ∀ r, C₀.slotsAt r ≤ P.maxLeaders) (h₀' : 0 < C₀.interval)
-    (h₀'' : C₀.interval ≤ P.maxInterval) (hQ₀ : Q C₀)
+    (hlive : ∀ C : Config Validator, C.InBounds P → Q C → R.LiveOn C.sched c)
+    (h₀ : C₀.InBounds P) (hQ₀ : Q C₀)
     {Rnd N : ℕ} {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
     (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ 1) (K : ℕ)
     (hK : horizon P R c K ≤ N) :
     Nonempty (PartialRun R.toBaseRule P upd C₀ U V K) :=
-  let ⟨Rn, _⟩ := everyHeight_bound hR hupd hupdh hlive h₀ h₀' h₀'' hQ₀ hcov hgood hRnd K hK
+  let ⟨Rn, _⟩ := everyHeight_bound hR hupd hupdh hlive h₀ hQ₀ hcov hgood hRnd K hK
   ⟨Rn⟩
 
 end Progress

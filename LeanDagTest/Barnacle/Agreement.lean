@@ -110,21 +110,15 @@ def run2 : PartialRun bnRule32 bnP bnUpd32 bnC1 Usun Vsun 1 where
   anchor := fun _ => 5
   vdct := vd2
   init := ⟨rfl, rfl, rfl⟩
-  slotsAt_le := by
-    intro k r
-    by_cases h : k = 0
-    · subst h; simp only [if_true]; exact (by decide : (1 : ℕ) ≤ 4)
-    · simp only [h, if_false]; exact Aimd.count_le bnP _ _ _
-  interval_pos := by
+  bounds := by
     intro k
     by_cases h : k = 0
-    · subst h; simp only [if_true]; exact (by decide : (0 : ℕ) < 4)
-    · simp only [h, if_false]; exact (by decide : (0 : ℕ) < 4)
-  interval_le := by
-    intro k
-    by_cases h : k = 0
-    · subst h; simp only [if_true]; exact (by decide : (4 : ℕ) ≤ 4)
-    · simp only [h, if_false]; exact (by decide : (4 : ℕ) ≤ 4)
+    · subst h
+      exact ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), (by decide : (0 : ℕ) < 4),
+        (by decide : (4 : ℕ) ≤ 4)⟩
+    · simp only [h, if_false]
+      exact ⟨fun r => Aimd.count_le bnP _ _ _, (by decide : (0 : ℕ) < 4),
+        (by decide : (4 : ℕ) ≤ 4)⟩
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega
@@ -168,21 +162,15 @@ def run2' : PartialRun bnRule32 bnP bnUpd32 bnC1 Usun Vsun' 1 where
   anchor := fun _ => 5
   vdct := vd2
   init := ⟨rfl, rfl, rfl⟩
-  slotsAt_le := by
-    intro k r
-    by_cases h : k = 0
-    · subst h; simp only [if_true]; exact (by decide : (1 : ℕ) ≤ 4)
-    · simp only [h, if_false]; exact Aimd.count_le bnP _ _ _
-  interval_pos := by
+  bounds := by
     intro k
     by_cases h : k = 0
-    · subst h; simp only [if_true]; exact (by decide : (0 : ℕ) < 4)
-    · simp only [h, if_false]; exact (by decide : (0 : ℕ) < 4)
-  interval_le := by
-    intro k
-    by_cases h : k = 0
-    · subst h; simp only [if_true]; exact (by decide : (4 : ℕ) ≤ 4)
-    · simp only [h, if_false]; exact (by decide : (4 : ℕ) ≤ 4)
+    · subst h
+      exact ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), (by decide : (0 : ℕ) < 4),
+        (by decide : (4 : ℕ) ≤ 4)⟩
+    · simp only [h, if_false]
+      exact ⟨fun r => Aimd.count_le bnP _ _ _, (by decide : (0 : ℕ) < 4),
+        (by decide : (4 : ℕ) ≤ 4)⟩
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega
@@ -266,14 +254,18 @@ example : Aimd.count bnP 4 1 false = 4 - 2 ^ 1 :=
     (by decide) (by decide)
 example : Aimd.count bnP 1 3 false = 1 :=
   (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLead bnLeadKeyed).2.2.1.2.2 3
--- BN7d: at anchor `21` and count `2` the integer test passes, and the
--- rule takes the healthy step with the back-off reset.
-example : (bnUpd32 bnC2 0 Usun (View.full Usun) 21).1.slotsAt 5 =
-      Aimd.count bnP (bnC2.slotsAt 5) 0 true ∧
+-- BN7d: at anchor `21` and count `2` the integer test passes, so the
+-- rule takes the healthy step with the back-off reset; and the
+-- unhealthy branch of the same theorem is what a failing test gives.
+example : (bnUpd32 bnC2 0 Usun (View.full Usun) 21).1.slotsAt =
+      (fun _ => Aimd.count bnP (bnC2.slotsAt 5) 0 true) ∧
     (bnUpd32 bnC2 0 Usun (View.full Usun) 21).2 = 0 :=
-  (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLead bnLeadKeyed).2.2.2.1 bnC2 0 Usun
-    (View.full Usun) 21 (by decide)
+  let h := (Aimd.holds (Fin 4) (Fin 32) Unit bnRule32 bnP bnLead bnLeadKeyed).2.2.2.1 bnC2 0 Usun
+    (View.full Usun) 21
+  ⟨h.2.2.1 (by decide), h.2.2.2.1 (by decide)⟩
 example : (bnUpd32 bnC2 0 Usun (View.full Usun) 21).1.slotsAt 0 = 3 := by decide
+-- `Usun` is sunny at every count, so BN7d's other branch is exercised
+-- where a window does fail: on `Unemo` (`Instances.lean`).
 -- On `Usun` at anchor `21` the window is healthy at the cap too — eight
 -- slots score against the eight the four-wide scoring rounds offered —
 -- so the count stays at the cap and the back-off stays reset.
@@ -308,21 +300,15 @@ def run2x : PartialRun bnRule32 bnP bnUpd32 bnC1 Usun Vsun' 1 where
   anchor := fun _ => 5
   vdct := vd2x
   init := ⟨rfl, rfl, rfl⟩
-  slotsAt_le := by
-    intro k r
-    by_cases h : k = 0
-    · subst h; simp only [if_true]; exact (by decide : (1 : ℕ) ≤ 4)
-    · simp only [h, if_false]; exact Aimd.count_le bnP _ _ _
-  interval_pos := by
+  bounds := by
     intro k
     by_cases h : k = 0
-    · subst h; simp only [if_true]; exact (by decide : (0 : ℕ) < 4)
-    · simp only [h, if_false]; exact (by decide : (0 : ℕ) < 4)
-  interval_le := by
-    intro k
-    by_cases h : k = 0
-    · subst h; simp only [if_true]; exact (by decide : (4 : ℕ) ≤ 4)
-    · simp only [h, if_false]; exact (by decide : (4 : ℕ) ≤ 4)
+    · subst h
+      exact ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), (by decide : (0 : ℕ) < 4),
+        (by decide : (4 : ℕ) ≤ 4)⟩
+    · simp only [h, if_false]
+      exact ⟨fun r => Aimd.count_le bnP _ _ _, (by decide : (0 : ℕ) < 4),
+        (by decide : (4 : ℕ) ≤ 4)⟩
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega
@@ -385,9 +371,7 @@ def runP1 : PartialRun bnRule32 bnPI1 bnUpdC bnC1I1 Usun Vsun 2 where
   anchor := fun k => if k = 0 then 2 else 4
   vdct := vdP1
   init := ⟨rfl, rfl, rfl⟩
-  slotsAt_le := fun _ _ => (by decide : (1 : ℕ) ≤ 4)
-  interval_pos := fun _ => (by decide : (0 : ℕ) < 1)
-  interval_le := fun _ => (by decide : (1 : ℕ) ≤ 1)
+  bounds := fun _ => ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), by decide, by decide⟩
   closed := by
     intro k hk κ h1 h2
     have hkk : k = 0 ∨ k = 1 := by omega
@@ -435,9 +419,7 @@ def runP1' : PartialRun bnRule32 bnPI1 bnUpdC bnC1I1 Usun Vsun' 1 where
   anchor := fun _ => 2
   vdct := fun _ κ => if κ = 1 then some 5 else if κ = 2 then some 10 else none
   init := ⟨rfl, rfl, rfl⟩
-  slotsAt_le := fun _ _ => (by decide : (1 : ℕ) ≤ 4)
-  interval_pos := fun _ => (by decide : (0 : ℕ) < 1)
-  interval_le := fun _ => (by decide : (1 : ℕ) ≤ 1)
+  bounds := fun _ => ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), by decide, by decide⟩
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega
@@ -521,9 +503,7 @@ def run1c : PartialRun bnRule bnPI1 (constRule bnRule) bnC1I1 U7 V7 1 where
   anchor := fun _ => 2
   vdct := vd1
   init := ⟨rfl, rfl, rfl⟩
-  slotsAt_le := fun _ _ => (by decide : (1 : ℕ) ≤ 4)
-  interval_pos := fun _ => (by decide : (0 : ℕ) < 1)
-  interval_le := fun _ => (by decide : (1 : ℕ) ≤ 1)
+  bounds := fun _ => ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), by decide, by decide⟩
   closed := by
     intro k hk κ h1 h2
     have hk0 : k = 0 := by omega

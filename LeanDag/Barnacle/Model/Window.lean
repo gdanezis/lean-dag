@@ -43,6 +43,14 @@ structure Params where
   den : ℕ
   max_pos : 0 < maxLeaders
 
+/-- **A configuration within the parameters**: no round wider than
+`maxLeaders`, and an interval of at least one round and at most
+`maxInterval`. This is what a run asks of every configuration it reaches
+and what an update rule must preserve; the widths' positivity is a
+`Config` field and needs no clause. -/
+def Config.InBounds (P : Params) (C : Config Validator) : Prop :=
+  (∀ r, C.slotsAt r ≤ P.maxLeaders) ∧ 0 < C.interval ∧ C.interval ≤ P.maxInterval
+
 namespace BaseRule
 
 /-- Slot `κ` of schedule `S` has a candidate directly committed on view

@@ -51,10 +51,7 @@ AIMD rule. Positivity of the widths is a `Config` field and needs no
 clause. -/
 def UpdBounded {R : BaseRule Validator BlockId Payload} (P : Params)
     (upd : UpdateRule R) : Prop :=
-  ∀ C b U V A, (∀ r, C.slotsAt r ≤ P.maxLeaders) → 0 < C.interval →
-    C.interval ≤ P.maxInterval →
-    (∀ r, (upd C b U V A).1.slotsAt r ≤ P.maxLeaders) ∧
-      0 < (upd C b U V A).1.interval ∧ (upd C b U V A).1.interval ≤ P.maxInterval
+  ∀ C b U V A, C.InBounds P → (upd C b U V A).1.InBounds P
 
 /-- **What a good DAG delivers**: a `slack`-missing set of validators
 whose blocks, from `Rnd`, are reached by everything two rounds above

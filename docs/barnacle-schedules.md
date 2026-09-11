@@ -218,9 +218,8 @@ what a configuration *is*, not when it starts.
      those need. The file is not under `Model/`, which carries no
      theorems.
    * `Model/Rule.lean`, `Model/Run.lean`: `UpdateRule` emits a `Config`;
-     `PartialRun` carries `cfg` and a genesis `C₀`, with `slotsAt_le`,
-     `interval_pos` and `interval_le` replacing `count_pos` and
-     `count_le`.
+     `PartialRun` carries `cfg` and a genesis `C₀`, with
+     `Config.InBounds` replacing `count_pos` and `count_le`.
    * `Model/Window.lean` and `Aimd/Rule.lean`: the measurement and the
      step at a configuration. `Params` keeps `maxLeaders`,
      `maxInterval`, `num`, `den`.

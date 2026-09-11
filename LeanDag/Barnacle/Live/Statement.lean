@@ -29,7 +29,7 @@ under `N` is reached — on any view caught up to `N`, which is what a
 validator that has received everything up to the horizon holds. -/
 def RunsExist (R : LiveRule Validator BlockId Payload) (P : Params)
     (upd : UpdateRule R.toBaseRule) (C₀ : Config Validator) (c : ℕ) : Prop :=
-  (∀ r, C₀.slotsAt r ≤ P.maxLeaders) → 0 < C₀.interval → C₀.interval ≤ P.maxInterval →
+  C₀.InBounds P →
   ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good U Rnd N →
     R.toBaseRule.CoversUpto U V N → Rnd ≤ 1 →
     ∀ K, horizon P R c K ≤ N →

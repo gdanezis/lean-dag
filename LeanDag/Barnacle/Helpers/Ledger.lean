@@ -65,7 +65,7 @@ theorem start_lt_succ (Rn : PartialRun R P upd C₀ U V K) {k : ℕ} (hk : k < K
     Rn.start k < Rn.start (k + 1) := by
   rw [Rn.start_succ k hk]
   have := (Rn.anchor_commits k hk).2
-  have := Rn.interval_pos k
+  have := (Rn.bounds k).2.1
   omega
 
 /-- `start` is monotone over the determined configurations. -/

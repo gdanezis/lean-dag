@@ -57,7 +57,9 @@ theorem holds : Statement := by
     have hge : expected R C (R.block U A).round ≤ observed R C U A := hcount C U A hA hwi hint hH
     have htest : P.num * expected R C (R.block U A).round ≤ P.den * observed R C U A :=
       le_trans (Nat.mul_le_mul_right _ hnd) (Nat.mul_le_mul_left _ hge)
-    simp only [Aimd.rule, decide_eq_true htest, if_pos]
+    refine ⟨?_, rfl, rfl, ?_⟩
+    · simp only [Aimd.rule, decide_eq_true htest]; rfl
+    · simp only [Aimd.rule, decide_eq_true htest, if_pos]
   · -- BN12c: each counted slot is a commit verdict, by `CommitsDirect`.
     intro C U A hA hH d hlo hhi i hi
     obtain ⟨L, hLids, hLb, hdc⟩ := hH d hlo hhi i hi
@@ -74,7 +76,9 @@ theorem holds : Statement := by
     have htest : P.num * expected R C (R.block U A).round ≤ P.den * observed R C U A := by
       rw [hzero]
       omega
-    simp only [Aimd.rule, decide_eq_true htest, if_pos]
+    refine ⟨?_, ?_⟩
+    · simp only [Aimd.rule, decide_eq_true htest]; rfl
+    · simp only [Aimd.rule, decide_eq_true htest, if_pos]
 
 end Healthy
 

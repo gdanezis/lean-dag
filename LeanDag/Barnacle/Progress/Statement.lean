@@ -57,10 +57,8 @@ def EveryHeight (R : LiveRule Validator BlockId Payload) (P : Params)
   -- If the schedule of every configuration within the bounds that the rule
   -- can emit is live with gap `c`, and the genesis configuration is within
   -- the bounds and is one of them …
-  (∀ C : Config Validator, (∀ r, C.slotsAt r ≤ P.maxLeaders) → 0 < C.interval →
-    C.interval ≤ P.maxInterval → Q C → R.LiveOn C.sched c) →
-  (∀ r, C₀.slotsAt r ≤ P.maxLeaders) → 0 < C₀.interval → C₀.interval ≤ P.maxInterval →
-  Q C₀ →
+  (∀ C : Config Validator, C.InBounds P → Q C → R.LiveOn C.sched c) →
+  C₀.InBounds P → Q C₀ →
   -- … then on a DAG good from round `1` (or `0`) to `N` …
   ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ), R.Good U Rnd N →
     R.toBaseRule.CoversUpto U V N → Rnd ≤ 1 →

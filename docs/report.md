@@ -8116,9 +8116,12 @@ def observed (R : BaseRule Validator BlockId Payload)
 
 A run closed to height `K` (`PartialRun`) starts from a genesis
 configuration `C₀` and holds `K` configurations — start round,
-configuration, back-off, anchor — with every slot of each range decided
-against the configuration's schedule, the anchor the least committed
-slot past the threshold, and the next configuration the update rule's.
+configuration, back-off, anchor — each **within the parameters**
+(`Config.InBounds`: no round wider than `maxLeaders`, an interval of at
+least one round and at most `maxInterval`), with every slot of each
+range decided against the configuration's schedule, the anchor the least
+committed slot past the threshold, and the next configuration the update
+rule's.
 **BN3** — two runs over one universe from one genesis configuration,
 from any two views, to any two heights, agree:
 
@@ -10490,7 +10493,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 314 definitions and structures the report names, in
+The 315 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -12942,6 +12945,17 @@ structure Params where
 
 The mechanism's parameters: the caps on a configuration's widths and interval, and the health threshold `num / den`. The interval itself is a configuration's own, so a reconfiguration may change it; `maxInterval` is the bound a horizon is computed against.
 
+#### `Config.InBounds`
+
+*def, `Barnacle.Model.Window.lean`*
+
+```lean
+def Config.InBounds (P : Params) (C : Config Validator) : Prop :=
+  (∀ r, C.slotsAt r ≤ P.maxLeaders) ∧ 0 < C.interval ∧ C.interval ≤ P.maxInterval
+```
+
+**A configuration within the parameters**: no round wider than `maxLeaders`, and an interval of at least one round and at most `maxInterval`. This is what a run asks of every configuration it reaches and what an update rule must preserve; the widths' positivity is a `Config` field and needs no clause.
+
 #### `expected`
 
 *def, `Barnacle.Model.Window.lean`*
@@ -12976,12 +12990,8 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
   vdct : ℕ → ℕ → Option BlockId
   /-- The run starts after round `0`, in the genesis configuration. -/
   init : start 0 = 0 ∧ cfg 0 = C₀ ∧ backoff 0 = 0
-  /-- No round of any configuration has more slots than the bound. -/
-  slotsAt_le : ∀ k r, (cfg k).slotsAt r ≤ P.maxLeaders
-  /-- Every configuration waits at least one round before reconfiguring. -/
-  interval_pos : ∀ k, 0 < (cfg k).interval
-  /-- No configuration waits longer than the bound. -/
-  interval_le : ∀ k, (cfg k).interval ≤ P.maxInterval
+  /-- Every configuration is within the parameters. -/
+  bounds : ∀ k, (cfg k).InBounds P
   /-- Every slot of the range — after `start k`, through the anchor's
   round — decided against the configuration's schedule (`TryDecide`). -/
   closed : ∀ k, k < K → ∀ κ, start k < (cfg k).roundOf κ →
@@ -13002,7 +13012,7 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
 
 **A run closed up to height `K`.** Configurations `0, …, K` are determined, and the ranges of configurations below `K` are decided in full.
 
-`closed` is the paper's `TryDecide`: every slot of the range — the rounds after `start k`, through the anchor's round `start (k + 1)` — decided against the configuration's schedule. `anchor_commits` and `anchor_least` are `TryCommit`'s trigger: the anchor is the least committed slot whose round exceeds `start k + (cfg k).interval`. `update` is `UpdateLeaders`, for an arbitrary rule. `slotsAt_le` and `interval_pos` are clauses of the run because the rule is arbitrary; for the AIMD rule they are theorems.
+`closed` is the paper's `TryDecide`: every slot of the range — the rounds after `start k`, through the anchor's round `start (k + 1)` — decided against the configuration's schedule. `anchor_commits` and `anchor_least` are `TryCommit`'s trigger: the anchor is the least committed slot whose round exceeds `start k + (cfg k).interval`. `update` is `UpdateLeaders`, for an arbitrary rule. `bounds` is a clause of the run because the rule is arbitrary; for the AIMD rule it is a theorem.
 
 #### `LiveRule.LiveOn`
 

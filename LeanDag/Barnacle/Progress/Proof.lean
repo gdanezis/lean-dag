@@ -19,8 +19,8 @@ theorem holds : Statement := by
   refine ⟨?_, ?_⟩
   · intro U V Rnd N K hcov Rn hlive hgood hRnd hN
     exact progress hR hupd hcov Rn hlive hgood hRnd hN
-  · intro hlive h₀ h₀' h₀'' hQ₀ U V Rnd N hgood hcov hRnd K hK
-    exact everyHeight hR hupd hupdh hlive h₀ h₀' h₀'' hQ₀ hcov hgood hRnd K hK
+  · intro hlive h₀ hQ₀ U V Rnd N hgood hcov hRnd K hK
+    exact everyHeight hR hupd hupdh hlive h₀ hQ₀ hcov hgood hRnd K hK
 
 end Progress
 

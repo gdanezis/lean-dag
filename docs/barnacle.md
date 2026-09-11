@@ -378,9 +378,7 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
   anchor : ℕ → ℕ
   vdct : ℕ → ℕ → Option BlockId
   init : start 0 = 0 ∧ cfg 0 = C₀ ∧ backoff 0 = 0
-  slotsAt_le : ∀ k r, (cfg k).slotsAt r ≤ P.maxLeaders
-  interval_pos : ∀ k, 0 < (cfg k).interval
-  interval_le : ∀ k, (cfg k).interval ≤ P.maxInterval
+  bounds : ∀ k, (cfg k).InBounds P
   closed : ∀ k, k < K → ∀ κ, start k < (cfg k).roundOf κ →
     (cfg k).roundOf κ ≤ start (k + 1) → R.Decided (cfg k).sched V κ (vdct k κ)
   anchor_commits : ∀ k, k < K →
@@ -417,11 +415,14 @@ range's ledger is defined — and determines configuration `K`; safety
 is agreement of prefixes of any two heights (BN3), and liveness will be
 that prefixes of every height exist (BN8).
 
-`slotsAt_le`, `interval_pos` and `interval_le` are clauses of the run
-rather than consequences of the rule because the run is stated for an
-arbitrary `UpdateRule`; for `Aimd.rule` they are theorems (BN7) and the
-clauses are discharged. Positivity of the widths needs no clause: it is
-a `Config` field.
+`Config.InBounds P C` is "no round wider than `maxLeaders`, an interval
+of at least one round and at most `maxInterval`" — what a run asks of
+every configuration it reaches, what `UpdBounded` asks a rule to
+preserve, and what BN8b asks of the genesis configuration. It is a
+clause of the run rather than a consequence of the rule because the run
+is stated for an arbitrary `UpdateRule`; for `Aimd.rule` it is a theorem
+(BN7a). Positivity of the widths needs no clause: it is a `Config`
+field.
 
 Slots are numbered per configuration (D2): `vdct k` is a verdict
 function on `(cfg k).sched`, which is the object every base theorem

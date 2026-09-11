@@ -44,9 +44,15 @@ theorem holds : Statement := by
     have := hpow backoff
     show max 1 (min P.maxLeaders (1 - 2 ^ backoff)) = 1
     rw [Nat.max_def, Nat.min_def]; split_ifs <;> omega
-  · -- BN7d: the test.
-    intro C backoff U V A h
-    refine ⟨?_, ?_⟩ <;> simp only [rule, decide_eq_true h, if_pos, Config.uniform_slotsAt]
+  · -- BN7d: the test, in both directions.
+    intro C backoff U V A
+    refine ⟨rfl, rfl, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩
+    · simp only [rule, decide_eq_true h]
+      rfl
+    · simp only [rule, decide_eq_true h, if_pos]
+    · simp only [rule, decide_eq_false h]
+      rfl
+    · simp only [rule, decide_eq_false h, Bool.false_eq_true, if_neg, if_false]
   · -- BN7e: the rule ignores the view.
     intro _ _ _ _ _ _
     rfl

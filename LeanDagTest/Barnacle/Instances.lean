@@ -1,6 +1,7 @@
 import LeanDagTest.Barnacle.Model
 import LeanDagTest.Barnacle.Rules.Odontoceti.Proof
 import LeanDagTest.Barnacle.Rules.Nemo.Proof
+import LeanDag.Barnacle.Aimd.Proof
 import LeanDagTest.Nemo.Model
 import Mathlib.Tactic.FinCases
 import Mathlib.Tactic.IntervalCases
@@ -251,6 +252,27 @@ example : (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo
     (View.full Unemo) 11).1.slotsAt 0 = 1 ∧
     (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo (View.full Unemo) 11).2 = 1 := by
   decide
+
+/-- **BN7d's unhealthy branch, through the theorem.** The one window in
+this development that a good DAG fails: `100 · 1 < 96 · 2`, so the rule
+takes the *other* step — the count at `count … false`, which at the floor
+is the floor, and the back-off moved on. The healthy branch is exercised
+on `Usun`; this is the direction that shows the test is a test. -/
+example : (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo
+      (View.full Unemo) 11).1.slotsAt = (fun _ => Aimd.count bnPn (bnCN1.slotsAt 4) 0 false) ∧
+    (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo (View.full Unemo) 11).2 = 0 + 1 :=
+  let h := (Aimd.holds (Fin 3) (Fin 14) Unit bnNemo bnPn bnLead3 bnLeadKeyed3).2.2.2.1 bnCN1 0
+    Unemo (View.full Unemo) 11
+  ⟨h.2.2.2.2.1 (by decide), h.2.2.2.2.2 (by decide)⟩
+
+/-- And it carries the leaders and the interval across either way. -/
+example : (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo
+      (View.full Unemo) 11).1.lead = bnLead3 ∧
+    (Aimd.rule bnNemo bnPn bnLead3 bnLeadKeyed3 bnCN1 0 Unemo
+      (View.full Unemo) 11).1.interval = bnCN1.interval :=
+  let h := (Aimd.holds (Fin 3) (Fin 14) Unit bnNemo bnPn bnLead3 bnLeadKeyed3).2.2.2.1 bnCN1 0
+    Unemo (View.full Unemo) 11
+  ⟨h.1, h.2.1⟩
 -- At count `3` every validator leads every round: round `1` scores three
 -- slots, round `2` two (validator `2` has no block), round `3` none.
 example : observed bnNemo bnCN3 Unemo 11 = 5 := by decide
