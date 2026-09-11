@@ -246,7 +246,26 @@ example : ∀ d, bnRule.waveLength ≤ d → d ≤ bnC1.interval →
       ∃ L, bnRule.Decided bnC1.sched (bnRule.historyView U7 20 (by decide))
         (bnC1.index ((bnRule.block U7 20).round - d) i) (some L) :=
   (Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
-      MysticetiProperties.commitsDirect).2.2 bnC1 U7 20 (by decide) u7_window_healthy
+      MysticetiProperties.commitsDirect).2.2.1 bnC1 U7 20 (by decide) u7_window_healthy
+
+/-- **BN12d applied**: at an interval below one wave the measurement is
+empty at *every* anchor round, not only at the ones this universe has. -/
+example : ∀ r, expected bnRule bnC2I1 r = 0 :=
+  ((Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
+      MysticetiProperties.commitsDirect).2.2.2 bnC2I1 (by decide)).1
+
+/-- And the rule then takes the healthy step whatever the DAG did: the
+count rises from two to three at an anchor whose window scores nothing. -/
+example : observed bnRule bnC2I1 U7 12 = 0 ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC2I1 0 U7 (View.full U7) 12).1.slotsAt 0 = 3 := by
+  refine ⟨by decide, ?_⟩
+  rw [((Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
+    MysticetiProperties.commitsDirect).2.2.2 bnC2I1 (by decide)).2 U7 (View.full U7) 12 0]
+  decide
+
+-- The interval BN12a asks for is exactly the one that avoids this.
+example : bnRule.waveLength ≤ bnC1.interval ∧ ¬ (bnRule.waveLength ≤ bnC2I1.interval) := by
+  decide
 
 #print axioms LeanDag.Barnacle.Healthy.holds
 example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC4 0 U7 (View.full U7) 20).1.slotsAt 0 = 3 ∧

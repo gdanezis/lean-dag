@@ -76,9 +76,13 @@ def observed (R : BaseRule Validator BlockId Payload)
 /-- **The expected count** (`ExpectedCommits`): the slots offered by the
 rounds of the window old enough to have been decided — those from
 `r − C.interval` through `r − waveLength`, for the anchor's round `r`.
-At one width `m` this is the paper's `(interval − waveLength + 1) · m`. -/
+At one width `m` this is the paper's `(interval − waveLength + 1) · m`.
+
+The upper bound is written `r + 1 − waveLength` rather than
+`r − waveLength + 1`: below a wave from genesis there is no decided
+round, and the second form truncates to `1` and counts round `0`. -/
 def expected (R : BaseRule Validator BlockId Payload) (C : Config Validator) (r : ℕ) : ℕ :=
-  C.cum (r - R.waveLength + 1) - C.cum (r - C.interval)
+  C.cum (r + 1 - R.waveLength) - C.cum (r - C.interval)
 
 /-- The constant rule: reconfigure nothing. The conservativity anchor —
 under it the arc collapses onto the base development at one leader. -/

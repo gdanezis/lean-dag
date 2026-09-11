@@ -21,7 +21,7 @@ theorem holds : Statement := by
     intro C U A hA hwi hint hH
     set r := (R.block U A).round with hr
     -- the scoring slots, as an interval of slot indices
-    set W : Finset ℕ := Finset.Ico (C.cum (r - C.interval)) (C.cum (r - R.waveLength + 1))
+    set W : Finset ℕ := Finset.Ico (C.cum (r - C.interval)) (C.cum (r + 1 - R.waveLength))
       with hW
     have hcard : W.card = expected R C r := by
       rw [hW, Nat.card_Ico, expected]
@@ -32,7 +32,7 @@ theorem holds : Statement := by
       obtain ⟨hlo, hhi⟩ := hκ
       -- the round of `κ` lies in the scoring band
       have hd₁ : r - C.interval ≤ C.roundOf κ := (C.cum_le_iff_le_roundOf).1 hlo
-      have hd₂ : C.roundOf κ < r - R.waveLength + 1 := by
+      have hd₂ : C.roundOf κ < r + 1 - R.waveLength := by
         by_contra hcon
         exact absurd (C.cum_mono (Nat.le_of_not_lt hcon))
           (Nat.not_le.2 (lt_of_le_of_lt (C.cum_roundOf_le κ) hhi))
@@ -52,7 +52,7 @@ theorem holds : Statement := by
       rw [observed, dif_pos hA]
       exact Finset.card_le_card hsub
     omega
-  refine ⟨hcount, ?_, ?_⟩
+  refine ⟨hcount, ?_, ?_, ?_⟩
   · intro C U A hA backoff V hnd hwi hint hH
     have hge : expected R C (R.block U A).round ≤ observed R C U A := hcount C U A hA hwi hint hH
     have htest : P.num * expected R C (R.block U A).round ≤ P.den * observed R C U A :=
@@ -62,6 +62,19 @@ theorem holds : Statement := by
     intro C U A hA hH d hlo hhi i hi
     obtain ⟨L, hLids, hLb, hdc⟩ := hH d hlo hhi i hi
     exact ⟨L, hcd _ U _ _ L hLb hdc⟩
+  · -- BN12d: below one wave the scoring band is empty, so the test passes.
+    intro C hlt
+    have hzero : ∀ r, expected R C r = 0 := by
+      intro r
+      have : C.cum (r + 1 - R.waveLength) ≤ C.cum (r - C.interval) :=
+        C.cum_mono (by omega)
+      simp only [expected]
+      omega
+    refine ⟨hzero, fun U V A backoff => ?_⟩
+    have htest : P.num * expected R C (R.block U A).round ≤ P.den * observed R C U A := by
+      rw [hzero]
+      omega
+    simp only [Aimd.rule, decide_eq_true htest, if_pos]
 
 end Healthy
 

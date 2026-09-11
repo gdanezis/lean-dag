@@ -4425,12 +4425,13 @@ decides it the same way. `AnchoredRule.banded_direct` pins the bound for
 a directly decided slot at the slot's own round plus a wave, the
 derivation reading nothing above its own wave.
 
-`Barnacle.sched_local` is what that says of §21's mechanism, and it is an
+`Barnacle.cfg_local` is what that says of §21's mechanism, and it is an
 assumption that arc makes without stating: `PartialRun` records a
-configuration's verdicts as decided against the uniform schedule at that
-count extended to every round, which is not the schedule that runs once
-the count changes. A configuration's verdicts being settled within its
-own rounds is what makes it sound, and this is that statement.
+configuration's verdicts as decided against that configuration's
+schedule extended to every round, which is not the schedule that runs
+once the configuration changes. A configuration's verdicts being settled
+within its own rounds is what makes it sound, and this is that
+statement.
 
 ### 13.2 The policy and the run
 
@@ -8198,12 +8199,10 @@ determined by the evidence: a commit at round `r` rests on round
 `d ≥ waveLength − 1` for `r = ra − d`, and the round at
 `d = waveLength − 1` has the anchor as its only certifier and never
 scores. That leaves `waveLength ≤ d ≤ interval`, and `expected` is the
-number of slots those rounds offer — `cum (r − waveLength + 1) −
+number of slots those rounds offer — `cum (r + 1 − waveLength) −
 cum (r − interval)`, which at one width `m` is the paper's
-`(interval − waveLength + 1) · m`, and which is `0` when the interval is
-shorter than a wave, since then no round of the window is old enough to
-have been decided. So `expected` is exactly the count of a healthy
-window, and BN12a says the measurement reaches it. BN12b then reads the
+`(interval − waveLength + 1) · m`. So `expected` is exactly the count of
+a healthy window, and BN12a says the measurement reaches it. BN12b then reads the
 threshold: at `num ≤ den`, which every deployment satisfies, a healthy
 window raises the count by one and resets the back-off. What BN12 does
 not claim is that a *good DAG* makes a window healthy; that needs the
@@ -8211,6 +8210,16 @@ anchor's history to carry the good validators' blocks below it, a
 property of the base protocol rather than of the mechanism, and slots led
 outside the good set do not commit in any case, so the bound there is
 partial rather than `expected`.
+
+**BN12d is the complement, and it is a condition on deployments.** Below
+one wave there is no window round old enough to have been decided, so
+`expected` is zero at every anchor, the test `num · expected ≤ den ·
+observed` passes whatever the DAG did, and the rule raises the count and
+resets the back-off — always. The loop is open. Nothing in `PartialRun`
+forbids such an interval, and nothing should: safety and liveness are
+indifferent to it, and the run is parametric in the rule. What closes
+the loop is `waveLength ≤ interval`, which is the hypothesis BN12a
+already carries and which a deployment owes the measurement.
 
 **There is no total run.** Every configuration commits an anchor at its
 own round and a universe is finite, so a run with a configuration for
@@ -8394,6 +8403,11 @@ descent laws and its committee bound, and nothing further.
   prove: `expected` is exactly the count of a window whose scoring slots
   all commit, so a healthy window is read as healthy and the count rises
   (BN12). Without it the loop is safe and live but may be inert.
+- **The interval owes the wave a bound.** At `interval < waveLength` the
+  measurement is empty and the health test passes unconditionally
+  (BN12d), so the loop runs open and the count climbs to the cap
+  whatever the DAG does. The paper does not state the condition; the
+  formalisation proves what happens without it.
 - **There is no total run**; the sequence of configurations is the
   family of its prefixes.
 - **The safety law is consumed inside liveness**, at the anchor's slot.
@@ -10279,7 +10293,7 @@ reused.
 | AL6 | the adaptive ledger is agreed | `run_commitSeq_agree` *(Adaptive/Run)* |
 | AL7 | every rule showing the properties instantiates the mechanism: Mysticeti, Odontoceti, Hydrozoan and Nemo-Nemo, synchronous or reactive | `Adaptive.run_exists_of_support` *(Adaptive/Liveness)* |
 | AL8 | adaptivity on data: the verdict moves with the assignment | `demotePolicy` witnesses *(LeanDagTest/Adaptive/Model)* |
-| AL10 | a verdict is local in the rounds as well as the leaders: every decided slot has a round below which any schedule agreeing on rounds and leaders decides it the same way, and a directly decided slot's is its own round plus a wave | `Properties.exists_roundLocal` *(Properties/Derived/FromBand)*, `AnchoredRule.banded_direct` *(Common/Anchored/Band)*, `Barnacle.sched_local` *(Barnacle/Helpers/Schedule)* |
+| AL10 | a verdict is local in the rounds as well as the leaders: every decided slot has a round below which any schedule agreeing on rounds and leaders decides it the same way, and a directly decided slot's is its own round plus a wave | `Properties.exists_roundLocal` *(Properties/Derived/FromBand)*, `AnchoredRule.banded_direct` *(Common/Anchored/Band)*, `Barnacle.cfg_local` *(Barnacle/Helpers/Schedule)* |
 
 **Hybrid fault tolerance** (§14):
 
@@ -10476,7 +10490,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 313 definitions and structures the report names, in
+The 314 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -12934,10 +12948,12 @@ The mechanism's parameters: the caps on a configuration's widths and interval, a
 
 ```lean
 def expected (R : BaseRule Validator BlockId Payload) (C : Config Validator) (r : ℕ) : ℕ :=
-  C.cum (r - R.waveLength + 1) - C.cum (r - C.interval)
+  C.cum (r + 1 - R.waveLength) - C.cum (r - C.interval)
 ```
 
 **The expected count** (`ExpectedCommits`): the slots offered by the rounds of the window old enough to have been decided — those from `r − C.interval` through `r − waveLength`, for the anchor's round `r`. At one width `m` this is the paper's `(interval − waveLength + 1) · m`.
+
+The upper bound is written `r + 1 − waveLength` rather than `r − waveLength + 1`: below a wave from genesis there is no decided round, and the second form truncates to `1` and counts round `0`.
 
 #### `PartialRun`
 
@@ -14047,6 +14063,28 @@ def HorizonStable (P : Policy R) (G d : ℕ)
 ```
 
 **Horizon-stability**: a validator that pruned below `G` and re-indexed from `d` still computes the leaders everyone else is using.
+
+#### `Config`
+
+*structure, `Barnacle.Config.lean`*
+
+```lean
+structure Config (Validator : Type) where
+  /-- How many slots round `r` holds. A function of the round, so a
+  configuration's rounds need not agree. -/
+  slotsAt : ℕ → ℕ
+  slotsAt_pos : ∀ r, 0 < slotsAt r
+  /-- Who leads position `i` of round `r`. -/
+  lead : ℕ → ℕ → Validator
+  /-- Distinct positions of a round have distinct leaders, which is what
+  `Slots.keyed` asks of the schedule this gives. -/
+  keyed : ∀ r i j, i < slotsAt r → j < slotsAt r → lead r i = lead r j → i = j
+  /-- Rounds from the configuration's start before the next
+  reconfiguration is due. -/
+  interval : ℕ
+```
+
+**A configuration.** The schedule its rounds run on, given by the slots each round holds and the leader of each place, and the rounds it runs before the next reconfiguration is due.
 
 #### `Config.uniform`
 
@@ -15918,7 +15956,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 473 theorems the body or Appendix A names, each
+The 474 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -19665,6 +19703,19 @@ theorem not_committedAt_of_dead {k j : ℕ} (hj : j ≤ k) {l : BlockId}
 **A dead slot blocks every later leader.** If every vertex of the `j`-th leader slot lies outside `l`'s causal past, carries no quorum and cannot be skipped, then the second clause of `Φ*s` is unsatisfiable for `l`, whatever the recursion decides elsewhere.
 
 ### Barnacle: the adaptive leader count
+
+#### `Config.uniform_sched`
+
+*theorem, `Barnacle.Helpers.Schedule.lean`*
+
+```lean
+theorem Config.uniform_sched (getLeader : ℕ → Validator) {w : ℕ} (hw : 0 < w)
+    (hk : Keyed getLeader w) (m : ℕ) (hm : 0 < m) (hmax : m ≤ w) (I : ℕ) :
+    (Config.uniform (leadOf getLeader) (leadKeyed_of_keyed hw hk) m hm hmax I).sched
+      = Sched getLeader hk m hm hmax
+```
+
+**The bridge.** A uniform configuration's schedule is the schedule the arc ran on before configurations carried their leaders, so every clause stated at `Sched` is the same clause at a `Config`.
 
 #### `ofAnchored_laws`
 

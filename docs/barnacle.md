@@ -339,7 +339,14 @@ but the run does not require that of an arbitrary rule.
 Safety (§6) is stated for `UpdateRule`; the AIMD facts (BN7) are stated
 for `Aimd.rule`.
 
-**A note on `expected`.** The window has `interval + 1` rounds. A slot
+**A note on `expected`.** The upper end is written `r + 1 − waveLength`
+and not `r − waveLength + 1`: below a wave from genesis there is no
+decided round, and the second form truncates to `1` and counts round
+`0`. Below a wave the band is empty and `expected` is zero, so the health
+test passes unconditionally (BN12d) — `waveLength ≤ interval` is what a
+deployment owes the loop, and it is the hypothesis BN12a carries.
+
+The window has `interval + 1` rounds. A slot
 at round `r'` is decidable within it when `r' + w − 1 ≤ r`, which is
 `interval − w + 2` rounds, one more than the paper's formula. On the
 other hand the anchor's own round contributes one block to the window,
@@ -483,6 +490,10 @@ the height; above it a run holds no data — is the genesis configuration
 `C₀` with back-off `0`, and a run's verdicts are `Decided` verdicts of
 `C₀.sched`. At a genesis configuration uniform at one leader that
 schedule is `Sched 1`, so the arc collapses onto the base development.
+
+**BN12d (nothing to measure below a wave).** `C.interval <
+R.waveLength` makes `expected` zero at every anchor round and the rule's
+step the healthy one, whatever the universe and the anchor.
 
 **BN7 (the AIMD rule).** `Aimd.count` keeps the count in
 `[1, maxLeaders]`; an unhealthy window strictly decreases a count above
@@ -1048,7 +1059,7 @@ That is not the schedule that runs once the configuration changes, and an
 indirectly decided slot near the top of a configuration's range takes its
 anchor from a round the next configuration governs.
 
-`Barnacle.sched_local` is why the clause is nonetheless sound. Every slot
+`Barnacle.cfg_local` is why the clause is nonetheless sound. Every slot
 decided under one schedule has a round bound below which that schedule
 settles it, from `Properties.exists_roundLocal`; above the bound the
 schedule may be anything, and in particular it may be the one the next

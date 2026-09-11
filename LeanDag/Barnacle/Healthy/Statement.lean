@@ -14,6 +14,10 @@ committed on the anchor's history — and BN12 says such a window reaches
 the `expected` count, since the scoring rounds `waveLength ≤ d ≤
 C.interval` are exactly the rounds `expected` counts the slots of.
 
+**BN12d** is the complement: below one wave the measurement is empty and
+the test passes unconditionally, so `waveLength ≤ interval` is what a
+deployment owes the loop.
+
 **What this does not claim**: that a good DAG *makes* the window
 healthy. That needs the anchor's history to carry the good validators'
 blocks below it, a property of the base protocol rather than of the
@@ -70,13 +74,30 @@ def Sound (R : BaseRule Validator BlockId Payload) : Prop :=
         ∃ L, R.Decided C.sched (R.historyView U A hA)
           (C.index ((R.block U A).round - d) i) (some L)
 
-/-- The count of a healthy window, and the step it produces. -/
+/-- **BN12d, and below one wave there is nothing to measure.** A
+configuration whose interval is shorter than the rule's wave has no
+window round old enough to have been decided, so `expected` is zero at
+every anchor and the health test passes whatever the DAG did: the rule
+raises the count and resets the back-off, always. The loop is open, and
+a deployment that wants it closed must choose `waveLength ≤ interval` —
+which is the hypothesis BN12a carries. -/
+def Vacuous (R : BaseRule Validator BlockId Payload) (P : Params)
+    (lead : ℕ → ℕ → Validator) (hl : LeadKeyed lead P.maxLeaders) : Prop :=
+  ∀ C : Config Validator, C.interval < R.waveLength →
+    (∀ r, expected R C r = 0) ∧
+    ∀ (U : R.Universe) (V : R.View U) (A : BlockId) (backoff : ℕ),
+      Aimd.rule R P lead hl C backoff U V A =
+        (Config.uniform lead hl (Aimd.count P (C.slotsAt (R.block U A).round) backoff true)
+          (Aimd.count_pos P _ _ _) (Aimd.count_le P _ _ _) C.interval, 0)
+
+/-- The count of a healthy window, the step it produces, and the
+interval below which there is no measurement. -/
 def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [DecidableEq BlockId] (R : BaseRule Validator BlockId Payload) (P : Params)
     (lead : ℕ → ℕ → Validator) (hl : LeadKeyed lead P.maxLeaders),
     Properties.CommitsDirect R.toDagRule (fun {_} V => R.DirectCommitIn V) →
-    Counted R ∧ Raises R P lead hl ∧ Sound R
+    Counted R ∧ Raises R P lead hl ∧ Sound R ∧ Vacuous R P lead hl
 
 end Healthy
 
