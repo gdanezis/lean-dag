@@ -693,3 +693,166 @@ anchor's round.
   lemma. Build the permuting score first: it exercises the whole
   instantiation and yields a witness, and the re-weighting bound lands on
   top of it.
+
+## 9. Step by step
+
+Ordered by risk, not by dependency: step 2 is the one that can end the
+plan, and it comes as early as a structure to test it against allows.
+Each step names what it produces, what tells you it is done, and what
+would make you stop.
+
+Everything lands in `LeanDag/Adaptive/`, under the **AL** labels of
+report §13. `LeanDag/Adaptive/{Basic,Policy,Run,Liveness}.lean` — the
+fixpoint arc — are not touched; D20 keeps them and §9.8 relabels them.
+
+### Step 1 — the run, with two bounds (AL12)
+
+`LeanDag/Adaptive/Model/Segment.lean`. `Barnacle.PartialRun` with three
+clauses changed:
+
+```lean
+closed : ∀ k, k < K → ∀ κ, start k < (cfg k).roundOf κ →
+  (cfg k).roundOf κ ≤ (cfg k).roundOf (anchor k) →
+    R.Decided (cfg k).sched V κ (vdct k κ)
+start_succ : ∀ k, k < K → start (k + 1) = start k + (cfg k).interval
+anchor_commits : ∀ k, k < K → (∃ A, vdct k (anchor k) = some A) ∧
+  start (k + 1) < (cfg k).roundOf (anchor k)
+anchor_least : ∀ k, k < K → ∀ κ, κ < anchor k →
+  start (k + 1) < (cfg k).roundOf κ → vdct k κ = none
+```
+
+`init`, `bounds` and `update` keep Barnacle's shape, and `rangeLedger`
+keeps Barnacle's formula — `start (k + 1)` is now the boundary, so the
+same expression reads the boundary rather than the anchor's round.
+
+The ledger range is a subset of the closed range, and the anchor lies in
+the closed range and above the ledger range. **Decisions to the anchor,
+output to the boundary.**
+
+*Done when* the structure compiles and `Config.InBounds` gives
+`start k < start (k + 1)` in one line — `interval` is positive, where
+Barnacle needed the anchor's threshold to see it.
+
+### Step 2 — safety, ported (AL13). **The step that decides the plan.**
+
+`LeanDag/Adaptive/Helpers/Agreement.lean`, from
+`Barnacle/Helpers/Agreement.lean`. The argument traced on paper and
+should transfer:
+
+- `vdct_agree` needs both runs closed at the slot; the closed ranges now
+  end at each run's own anchor rather than at a shared top, so the
+  hypotheses are per-run.
+- `anchor_agree` takes the lesser of the two anchors, say `a₁ < a₂`.
+  Run 1 has it closed as its own anchor; run 2 has it closed because
+  `roundOf a₁ ≤ roundOf a₂` by `roundOf_mono`. It is past the boundary in
+  both, so run 2's `anchor_least` makes it `none` while run 1 commits it.
+- `configAgree_succ` is **shorter** than Barnacle's: `start (k + 1)` is
+  `start k + (cfg k).interval`, so it follows from agreement on `start k`
+  and `cfg k` without using the anchor at all.
+
+*Done when* `partialRunAgreement` holds with `Anchored` as its only
+clause on the rule, and the two runs agree on `start`, `cfg`, `backoff`,
+`anchor` and the verdicts of the closed range.
+
+*Stop if* `anchor_agree` needs a hypothesis relating the two runs'
+anchors that neither run supplies. That would mean the two bounds do not
+compose and D19 has to be reopened.
+
+### Step 3 — the ledger (AL14)
+
+`LeanDag/Adaptive/Helpers/Ledger.lean`, from Barnacle's. Agreed,
+growing, without repetition, plus `round_of_mem_ledgerUpto`. Disjointness
+is easier than Barnacle's: consecutive ledger ranges are
+`(start k, start k + interval]` and abut by `start_succ`, so the rounds
+partition by construction rather than by an argument about anchors.
+
+Add one theorem Barnacle has no need of: **the rounds above a boundary
+carry two verdicts and only the later is output.** Segment `k` decides
+`(start (k + 1), roundOf (anchor k)]` and segment `k + 1` decides them
+again under its own configuration; `rangeLedger k` reads neither. Stating
+it makes the discard explicit rather than a consequence of index bounds.
+
+### Step 4 — the score (AL11)
+
+`LeanDag/Adaptive/Model/Score.lean`, generic in the base rule as
+`Aimd.rule` is, naming no protocol:
+
+```lean
+def rule (R : BaseRule Validator BlockId Payload)
+    (score : (U : R.Universe) → BlockId → Config Validator → Config Validator)
+    (hkeep : ∀ U A C, (score U A C).slotsAt = C.slotsAt ∧
+                      (score U A C).interval = C.interval) :
+    UpdateRule R :=
+  fun C b U _V A => (score U A C, b)
+```
+
+with three results: `Anchored` by `rfl`, `UpdBounded` from `hkeep`, and
+the history clause — `score U A C` reads `U` only through
+`historyFrom (R.block U) A`, which BN2 turns into agreement across views.
+
+*Done when* step 2's theorem applies to it with no further hypothesis.
+
+### Step 5 — conservativity and validity (AL15)
+
+BN6's and BN14's shapes over the segmented run: a score returning the
+configuration it was given leaves every segment on the genesis
+configuration, and a good author's block below an anchor is in that
+anchor's history. Both are ports.
+
+### Step 6 — liveness (AL16)
+
+Two independent pieces.
+
+**6a, the transfer lemma.** For a permutation `σ` of the validators,
+`σ ∘ head ρ ∈ T ↔ head ρ ∈ σ⁻¹ T` and `σ⁻¹ T` has `T`'s cardinality, so
+`HeadsRun head T g c₀` for every good set gives `HeadsRun (σ ∘ head) T g c₀`
+for every good set, at the same gap. `roundRobin_headsRun` then covers
+every permuted rotation. Short, and independent of steps 1 to 5.
+
+**6b, progress and every height**, from `Barnacle/Helpers/Progress.lean`.
+The construction changes where Barnacle's did not: the new segment starts
+at `start K + (cfg K).interval`, a round known before the anchor is
+found, and the anchor may lie above it by as much as the commit gap. The
+horizon keeps `horizon P R c K`'s shape, since liveness places a
+committed slot within `c` of any round.
+
+`UpdKeeps upd Q` at `Q C := C.head ∈ 𝓗` for the head functions the score
+can emit, with 6a discharging `LiveOn` at each. D22 says to take `𝓗` the
+permuted rotations first.
+
+### Step 7 — witnesses (AL17)
+
+`LeanDagTest/Adaptive/`, instantiating at a rule with a carrier — the
+mechanism stays generic.
+
+- **The asynchronous segment.** A run whose anchor lies well past the
+  boundary: the ledger stops at the boundary, the rounds between carry a
+  verdict in both segments, and only the later one is output. This is the
+  case §7 says the present arc cannot express, and it is the reason for
+  the whole exercise.
+- **A permuting score that adapts**, with the second configuration's
+  heads a genuine permutation of the first's, and BN3's analogue applied
+  to two views.
+- **A refutation for the fixpoint arc**: an execution in which a slot
+  needs an anchor more than two epochs above it, so that no
+  `Adaptive.Run` exists over it. This makes §7's vacuity concrete and is
+  the honest companion to AL9.
+
+### Step 8 — the record
+
+Report §13 gains the segmented arc and relabels the fixpoint one: AL3 is
+safety for policies that read verdicts, under a window condition
+asynchrony can falsify, and the segmented arc is what holds without it.
+§7 and §8 of this document become the design record rather than a plan.
+
+### What is reused, and what is written
+
+Reused unchanged: `Config` and its arithmetic, `Config.InBounds`,
+`UpdateRule`, `Anchored`, `ledgerOf`, `Properties.Agree` as the only law
+safety consumes, and the whole heads machinery — `HeadsRun`,
+`liveOn_of_headsRun`, `roundRobin_headsRun` — which is stated at a
+`Config` and says nothing about how the configuration was chosen.
+
+Written: one structure, two ported proofs, one rule, one transfer lemma,
+and the witnesses. Steps 2 and 6b are the work; the rest is
+transcription.
