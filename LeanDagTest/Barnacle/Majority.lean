@@ -83,8 +83,14 @@ example : ¬ PopulatedOn U3 {0, 2} 8 := by decide
 
 abbrev rr3 : ℕ → Fin 3 := roundRobin 3 (by omega)
 theorem rr3_keyed : Keyed rr3 3 := roundRobin_keyed 3 (by omega)
-abbrev S1 : Slots (Fin 3) := Sched rr3 rr3_keyed 1 (by omega) (by omega)
-abbrev S3 : Slots (Fin 3) := Sched rr3 rr3_keyed 3 (by omega) (by omega)
+def rr3Lead : ℕ → ℕ → Fin 3 := leadOf rr3
+theorem rr3LeadKeyed : LeadKeyed rr3Lead 3 := leadKeyed_of_keyed (by omega) rr3_keyed
+abbrev C1 : Config (Fin 3) := Config.uniform rr3Lead rr3LeadKeyed 1 (by omega) (by omega) 3
+abbrev C3 : Config (Fin 3) := Config.uniform rr3Lead rr3LeadKeyed 3 (by omega) (by omega) 3
+theorem C1_head : C1.head = rr3 := by funext ρ; rfl
+theorem C3_head : C3.head = rr3 := by funext ρ; rfl
+abbrev S1 : Slots (Fin 3) := C1.sched
+abbrev S3 : Slots (Fin 3) := C3.sched
 abbrev N3 : BaseRule (Fin 3) (Fin 24) Unit := nemo
 
 /-- `Nemo.RoundRobinLive` applied at `n = 3`, count `1`, gap `4`, horizon `7`. -/
@@ -94,7 +100,7 @@ theorem live_m1 :
     (∀ r, 0 ≤ r → r + 4 + 2 ≤ 7 →
       ∃ κ, r ≤ S1.slotRound κ ∧ S1.slotRound κ ≤ r + 4 ∧
         ∃ L, N3.Decided S1 (View.full U3) κ (some L)) :=
-  Nemo.holds.2.2 3 (by omega) (Fin 24) Unit 3 rr3_keyed 1 (by omega) (by omega) U3
+  Nemo.holds.2.2 3 (by omega) (Fin 24) Unit C1 C1_head U3
     (View.full U3) 0 7 u3_good
     (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 24) Unit).full_ids U3 7)
 
@@ -104,7 +110,7 @@ theorem live_m3 :
     (∀ r, 0 ≤ r → r + 4 + 2 ≤ 7 →
       ∃ κ, r ≤ S3.slotRound κ ∧ S3.slotRound κ ≤ r + 4 ∧
         ∃ L, N3.Decided S3 (View.full U3) κ (some L)) :=
-  Nemo.holds.2.2 3 (by omega) (Fin 24) Unit 3 rr3_keyed 3 (by omega) (by omega) U3
+  Nemo.holds.2.2 3 (by omega) (Fin 24) Unit C3 C3_head U3
     (View.full U3) 0 7 u3_good
     (coversUpto_full (Nemo.holds.1 (Fin 3) (Fin 24) Unit).full_ids U3 7)
 
@@ -157,7 +163,7 @@ theorem promise_m1_r1 :
     ∃ κ, (κ = 2 ∨ κ = 3 ∨ κ = 5) ∧
       ∃ L, N3.Decided S1 (View.full U3) κ (some L) := by
   obtain ⟨κ, h1, h2, L, hL⟩ := live_m1.2 1 (by omega) (by omega)
-  simp only [Sched_slotRound, Nat.div_one] at h1 h2
+  simp only [Config.sched_slotRound, Config.uniform_roundOf, Nat.div_one] at h1 h2
   refine ⟨κ, ?_, L, hL⟩
   have hne1 : κ ≠ 1 := fun h => by
     subst h

@@ -3,14 +3,17 @@ import LeanDag.Barnacle.Model.Run
 # BN6 — conservativity
 
 Under the constant rule the arc collapses onto the base development at
-one leader (`barnacle.md` §6): every configuration has the initial
-count and back-off, and every verdict of a run is a verdict of the
-one-leader schedule `Sched 1`.
+whatever configuration the run began in (`barnacle.md` §6): every
+configuration is the genesis configuration `C₀`, and every verdict of a
+run is a verdict of `C₀.sched`. At a one-leader genesis configuration
+that schedule is the base development's own, by
+`Config.uniform_sched`.
 
-* **BN6a, the count never moves** — under `constRule`, `count k = 1` and
-  `backoff k = 0` at every configuration the run determines, `k ≤ K`.
+* **BN6a, the configuration never moves** — under `constRule`,
+  `cfg k = C₀` and `backoff k = 0` at every configuration the run
+  determines, `k ≤ K`.
 * **BN6b, the verdicts are the base verdicts** — every verdict of the run
-  is derived against `Sched 1`.
+  is derived against `C₀.sched`.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -24,40 +27,41 @@ namespace Conservativity
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
   {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
-/-- **BN6a, the count never moves** under the constant rule. -/
-def ConstCount (R : BaseRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders) : Prop :=
+/-- **BN6a, the configuration never moves** under the constant rule. -/
+def ConstConfig (R : BaseRule Validator BlockId Payload) (P : Params)
+    (C₀ : Config Validator) : Prop :=
   -- Any run — any universe, any view, any height — whose update rule is
-  -- `constRule`, the rule that returns the count and back-off it was given.
+  -- `constRule`, the rule that returns the configuration and back-off it
+  -- was given.
   ∀ (U : R.Universe) (V : R.View U) (K : ℕ)
-    (Rn : PartialRun R P getLeader hk (constRule R) U V K),
+    (Rn : PartialRun R P (constRule R) C₀ U V K),
     -- Every configuration the run determines — `0` to `K` — is the initial
-    -- one: one leader, no back-off. (Above `K` the run holds no data.)
-    ∀ k, k ≤ K → Rn.count k = 1 ∧ Rn.backoff k = 0
+    -- one. (Above `K` the run holds no data.)
+    ∀ k, k ≤ K → Rn.cfg k = C₀ ∧ Rn.backoff k = 0
 
 /-- **BN6b, the verdicts are the base verdicts**: every verdict of a run
-under the constant rule is a verdict of the one-leader schedule. -/
+under the constant rule is a verdict of the initial schedule. -/
 def ConstDecided (R : BaseRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders) : Prop :=
+    (C₀ : Config Validator) : Prop :=
   -- The same runs.
   ∀ (U : R.Universe) (V : R.View U) (K : ℕ)
-    (Rn : PartialRun R P getLeader hk (constRule R) U V K),
+    (Rn : PartialRun R P (constRule R) C₀ U V K),
     -- For every closed configuration `k` and every slot `κ` of its range —
-    -- at one leader per round slot `κ` *is* round `κ`, so the range is the
-    -- rounds after `start k`, up to the anchor —
-    ∀ k, k < K → ∀ κ, Rn.start k < κ → κ ≤ Rn.anchor k →
-      -- the run's verdict is a verdict of the one-leader schedule
-      -- `Sched 1`, the base development's own. (`Nat.one_pos` and
-      -- `P.max_pos` discharge `0 < 1` and `1 ≤ maxLeaders`.)
-      R.Decided (Sched getLeader hk 1 Nat.one_pos P.max_pos) V κ (Rn.vdct k κ)
+    -- the slots whose round lies after `start k` and at or before the
+    -- anchor's —
+    ∀ k, k < K → ∀ κ, Rn.start k < C₀.roundOf κ → C₀.roundOf κ ≤ Rn.start (k + 1) →
+      -- the run's verdict is a verdict of the initial schedule, which is
+      -- the base development's own whenever that configuration is uniform
+      -- at one leader.
+      R.Decided C₀.sched V κ (Rn.vdct k κ)
 
-/-- Conservativity, for every base rule, parameter set and keyed leader
-function. No law of the rule is consumed. -/
+/-- Conservativity, for every base rule and parameter set. No law of the
+rule is consumed. -/
 def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [DecidableEq BlockId] (R : BaseRule Validator BlockId Payload)
-    (P : Params) (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders),
-    ConstCount R P getLeader hk ∧ ConstDecided R P getLeader hk
+    [DecidableEq BlockId] (R : BaseRule Validator BlockId Payload) (P : Params)
+    (C₀ : Config Validator),
+    ConstConfig R P C₀ ∧ ConstDecided R P C₀
 
 end Conservativity
 

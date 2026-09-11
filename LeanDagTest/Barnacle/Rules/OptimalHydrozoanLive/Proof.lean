@@ -17,14 +17,14 @@ theorem descent : Descent := by
   exact LeanDag.OptimalHydrozoanProperties.descent
 
 theorem roundRobinLive : RoundRobinLive := by
-  intro n hn BlockId _ _ hb w hk m hm hmax
+  intro n hn BlockId _ _ hb C hC
   have hbound : (optimalHydrozoanLive (Replica := Fin n)
       (BlockId := BlockId)).waveLength
       * (LeanDag.Hydrozoan.Faults.f (Fin n) + LeanDag.Hydrozoan.Faults.c (Fin n)) + 1 ≤ n := by
     change 3 * (LeanDag.Hydrozoan.Faults.f (Fin n)
       + LeanDag.Hydrozoan.Faults.c (Fin n)) + 1 ≤ n
     exact hb
-  have h := liveOn_roundRobin hn _ (descent (Fin n) BlockId) (Nat.succ_pos 2) hbound hk m hm hmax
+  have h := liveOn_roundRobin hn _ (descent (Fin n) BlockId) (Nat.succ_pos 2) hbound C hC
   have hw3 : (optimalHydrozoanLive (Replica := Fin n)
       (BlockId := BlockId)).waveLength = 3 := rfl
   rw [hw3] at h

@@ -33,13 +33,12 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 rounds below the anchor of a configuration the run closed lies in the
 causal history of the block that configuration commits. -/
 def Delivered (R : LiveRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders)
-    (upd : UpdateRule R.toBaseRule) (slack : ℕ) : Prop :=
+    (upd : UpdateRule R.toBaseRule) (C₀ : Config Validator) (slack : ℕ) : Prop :=
   -- Given the base protocol's delivery law …
   R.Delivers slack →
   -- … on any run over a good DAG …
   ∀ (U : R.Universe) (V : R.View U) (K : ℕ)
-    (Rn : PartialRun R.toBaseRule P getLeader hk upd U V K) (Rnd N : ℕ),
+    (Rn : PartialRun R.toBaseRule P upd C₀ U V K) (Rnd N : ℕ),
     R.Good U Rnd N →
     -- … there is a good set, all but at most `slack` validators, …
     ∃ T : Finset Validator, Fintype.card Validator ≤ T.card + slack ∧
@@ -56,9 +55,8 @@ def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [DecidableEq BlockId] (R : LiveRule Validator BlockId Payload),
     Properties.CommitsCandidate R.toBaseRule.toDagRule →
-    ∀ (P : Params) (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders)
-      (upd : UpdateRule R.toBaseRule) (slack : ℕ),
-      Delivered R P getLeader hk upd slack
+    ∀ (P : Params) (upd : UpdateRule R.toBaseRule) (C₀ : Config Validator) (slack : ℕ),
+      Delivered R P upd C₀ slack
 
 end Validity
 

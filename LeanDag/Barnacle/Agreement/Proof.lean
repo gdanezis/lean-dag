@@ -14,7 +14,7 @@ namespace Barnacle
 namespace Agreement
 
 theorem holds : Statement := by
-  intro Validator BlockId Payload _ _ _ R hR P getLeader hk upd hanc U V₁ V₂ K₁ K₂ R₁ R₂ k hkm
+  intro Validator BlockId Payload _ _ _ R hR P upd C₀ hanc U V₁ V₂ K₁ K₂ R₁ R₂ k hkm
   obtain ⟨hs, hc, hb⟩ := configAgree hR hanc R₁ R₂ k hkm
   refine ⟨hs, hc, hb, fun hlt => ?_⟩
   have ha := anchor_agree hR R₁ R₂ ⟨hs, hc, hb⟩ (by omega) (by omega)

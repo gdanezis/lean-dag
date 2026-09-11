@@ -3,6 +3,7 @@ import LeanDagTest.Mysticeti.Growth
 import LeanDagTest.Mysticeti.Partial
 import LeanDagTest.Mysticeti.Pipelined
 import LeanDagTest.Common.WaveRobin
+import LeanDagTest.Common.VaryingSchedule
 import LeanDagTest.Mysticeti.Quantitative
 import LeanDagTest.DoS.Exposure
 import LeanDagTest.DoS.Acceptance
@@ -42,6 +43,7 @@ import LeanDagTest.MahiMahi.Liveness
 import LeanDagTest.BlackMarlin.Divergence
 import LeanDagTest.Barnacle.Model
 import LeanDagTest.Barnacle.Agreement
+import LeanDagTest.Barnacle.Varying
 import LeanDagTest.Barnacle.Progress
 import LeanDagTest.Barnacle.Heads
 import LeanDagTest.Barnacle.Instances

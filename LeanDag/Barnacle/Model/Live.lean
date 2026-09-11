@@ -44,11 +44,14 @@ def LiveRule.LiveOn (R : LiveRule Validator BlockId Payload) (S : Slots Validato
       ∃ κ, r ≤ S.slotRound κ ∧ S.slotRound κ ≤ r + c ∧
         ∃ L, R.Decided S V κ (some L))
 
-/-- An update rule keeps the count in `[1, maxLeaders]`, whatever it is
-given — what extending a run needs of it; BN7a for the AIMD rule. -/
-def UpdBounded {R : BaseRule Validator BlockId Payload} (P : Params) (upd : UpdateRule R) :
-    Prop :=
-  ∀ m b U V A, 0 < (upd m b U V A).1 ∧ (upd m b U V A).1 ≤ P.maxLeaders
+/-- **An update rule preserves what a run assumes of a configuration**:
+no round wider than `maxLeaders`, an interval that is positive and no
+larger than `maxInterval`. This is what extending a run needs of it; BN7a for the
+AIMD rule. Positivity of the widths is a `Config` field and needs no
+clause. -/
+def UpdBounded {R : BaseRule Validator BlockId Payload} (P : Params)
+    (upd : UpdateRule R) : Prop :=
+  ∀ C b U V A, C.InBounds P → (upd C b U V A).1.InBounds P
 
 /-- **What a good DAG delivers**: a `slack`-missing set of validators
 whose blocks, from `Rnd`, are reached by everything two rounds above
@@ -64,11 +67,21 @@ structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : �
         ∀ c ∈ R.ids U, (R.block U b).round + 2 ≤ (R.block U c).round →
           b ∈ historyFrom (R.block U) c
 
+/-- **What an update rule preserves.** From a configuration satisfying
+`Q` it writes one satisfying `Q` — the clause a liveness argument needs of a
+reconfiguration, and the reason such an argument need not hold of every
+configuration in the bounds. For the AIMD rule `Q` may be "the heads are
+`head`", which it meets by carrying its leader function across, or "one
+width throughout", which it meets by emitting `Config.uniform`. -/
+def UpdKeeps {R : BaseRule Validator BlockId Payload} (upd : UpdateRule R)
+    (Q : Config Validator → Prop) : Prop :=
+  ∀ C b U V A, Q C → Q (upd C b U V A).1
+
 /-- The horizon a run of height `K` needs, from a synchrony round at
-genesis: each anchor within `interval + 1 + c` rounds of the last, plus
-the gap and one wave to decide the final range. -/
+genesis: each anchor within `maxInterval + 1 + c` rounds of the last,
+plus the gap and one wave to decide the final range. -/
 def horizon (P : Params) (R : LiveRule Validator BlockId Payload) (c K : ℕ) : ℕ :=
-  K * (P.interval + 1 + c) + c + R.waveLength
+  K * (P.maxInterval + 1 + c) + c + R.waveLength
 
 end Barnacle
 

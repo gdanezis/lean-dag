@@ -3,7 +3,7 @@ import LeanDag.Barnacle.Model.Heads
 # BN9 — the heads descent
 
 The base protocol's liveness clause, `LiveOn`, discharged for the
-paper's own schedule at every leader count (`barnacle.md` §8):
+paper's own schedule at every configuration (`barnacle.md` §8):
 from the descent laws of a rule and a run of correct-led heads, a
 schedule is live with the run's gap; and round-robin has such runs by
 pigeonhole whenever the committee bound `waveLength · slack + 1 ≤ n`
@@ -13,11 +13,11 @@ holds — which for Mysticeti is `3f + 1 ≤ n`, its own.
   with a committed top decides everything a wave below the top.
 * **BN9b, heads decide** — `waveLength` consecutive good-led heads decide
   every slot up to a wave below the first and commit it.
-* **BN9c, live from heads** — a run of heads with gap `c₀` makes every
-  count's schedule live with gap `c₀`.
+* **BN9c, live from heads** — a run of heads with gap `c₀` makes a
+  configuration's schedule live with gap `c₀`.
 * **BN9d, round-robin has runs of heads** — the pigeonhole.
-* **BN9e, round-robin is live** — at every count, with gap
-  `n + waveLength − 1`.
+* **BN9e, round-robin is live** — at every configuration whose heads are
+  the rotation, with gap `n + waveLength − 1`.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -46,42 +46,41 @@ def StretchDescent (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop
     -- … decides every slot below `b`.
     ∀ i, i < b → ∃ v, R.Decided S V i v
 
-/-- **BN9b, heads decide**: under `Sched m`, `waveLength` consecutive
+/-- **BN9b, heads decide**: at a configuration, `waveLength` consecutive
 good-led heads from round `ρ` decide every slot at a round in
 `[ρ − waveLength, ρ)` and commit the head of `ρ`. -/
-def HeadsDecide (R : LiveRule Validator BlockId Payload) (slack : ℕ)
-    (getLeader : ℕ → Validator) {w : ℕ} (hk : Keyed getLeader w) : Prop :=
+def HeadsDecide (R : LiveRule Validator BlockId Payload) (slack : ℕ) : Prop :=
   R.Descent slack → 0 < R.waveLength →
   ∀ (U : R.Universe) (V : R.View U) (Rnd N : ℕ) (T : Finset Validator),
     -- Given what `goodLeaders` gives for `T` on `U` from `Rnd` to `N`, on
     -- any view caught up to `N`,
     (∀ (S : Slots Validator) (κ : ℕ), Rnd ≤ S.slotRound κ → S.slotRound κ + R.waveLength ≤ N →
       S.leader κ ∈ T → ∃ L, R.Decided S V κ (some L)) →
-    -- for every count `m` and every round `ρ` from `Rnd` whose `waveLength`
-    -- heads have their waves under `N` …
-    ∀ (m : ℕ) (hm : 0 < m) (hmax : m ≤ w) (ρ : ℕ), Rnd ≤ ρ →
+    -- for every configuration `C` and every round `ρ` from `Rnd` whose
+    -- `waveLength` heads have their waves under `N` …
+    ∀ (C : Config Validator) (ρ : ℕ), Rnd ≤ ρ →
       ρ + R.waveLength + R.waveLength ≤ N + 1 →
       -- … if the heads of rounds `ρ, …, ρ + waveLength − 1` are `T`-led …
-      (∀ i, i < R.waveLength → getLeader (ρ + i) ∈ T) →
+      (∀ i, i < R.waveLength → C.head (ρ + i) ∈ T) →
       -- … then every slot at a round below `ρ` and at most a wave below it
       -- is decided on that view …
-      (∀ κ, (Sched getLeader hk m hm hmax).slotRound κ < ρ →
-        ρ ≤ (Sched getLeader hk m hm hmax).slotRound κ + R.waveLength →
-        ∃ v, R.Decided (Sched getLeader hk m hm hmax) V κ v) ∧
-      -- … and the head of `ρ`, slot `m · ρ`, is committed.
-      ∃ L, R.Decided (Sched getLeader hk m hm hmax) V (m * ρ) (some L)
+      (∀ κ, C.sched.slotRound κ < ρ → ρ ≤ C.sched.slotRound κ + R.waveLength →
+        ∃ v, R.Decided C.sched V κ v) ∧
+      -- … and the head of `ρ`, slot `C.cum ρ`, is committed.
+      ∃ L, R.Decided C.sched V (C.cum ρ) (some L)
 
 /-- **BN9c, live from heads**: a run of good-led heads with gap `c₀`, for
-the good set of every good DAG, makes every count's schedule live with
-gap `c₀`. -/
+the good set of every good DAG, makes a configuration's schedule live
+with gap `c₀`. -/
 def LiveOnOfHeads (R : LiveRule Validator BlockId Payload) (slack : ℕ)
-    (getLeader : ℕ → Validator) {w : ℕ} (hk : Keyed getLeader w) (c₀ : ℕ) : Prop :=
+    (C : Config Validator) (c₀ : ℕ) : Prop :=
   R.Descent slack → 0 < R.waveLength →
-  -- If every set missing at most `slack` validators has a run of heads …
+  -- If every set missing at most `slack` validators has a run of the
+  -- configuration's heads …
   (∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
-    HeadsRun getLeader T R.waveLength c₀) →
-  -- … then every count's schedule is live with gap `c₀`.
-  ∀ (m : ℕ) (hm : 0 < m) (hmax : m ≤ w), R.LiveOn (Sched getLeader hk m hm hmax) c₀
+    HeadsRun C.head T R.waveLength c₀) →
+  -- … then the configuration's schedule is live with gap `c₀`.
+  R.LiveOn C.sched c₀
 
 /-- **BN9d, round-robin has runs of heads**: on `n` validators, for every
 set missing at most `slack`, when `g · slack + 1 ≤ n` — within
@@ -98,17 +97,16 @@ def LiveOnRoundRobin : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) (BlockId Payload : Type) [DecidableEq BlockId]
     (R : LiveRule (Fin n) BlockId Payload) (slack : ℕ), R.Descent slack →
     0 < R.waveLength → R.waveLength * slack + 1 ≤ n →
-    ∀ (w : ℕ) (hk : Keyed (roundRobin n hn) w) (m : ℕ) (hm : 0 < m) (hmax : m ≤ w),
-      R.LiveOn (Sched (roundRobin n hn) hk m hm hmax) (n + R.waveLength - 1)
+    ∀ C : Config (Fin n), C.head = roundRobin n hn →
+      R.LiveOn C.sched (n + R.waveLength - 1)
 
-/-- The heads descent, for every live rule with descent laws, every keyed
-leader function, and round-robin on every committee. -/
+/-- The heads descent, for every live rule with descent laws, every
+configuration, and round-robin on every committee. -/
 def Statement : Prop :=
   (∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [DecidableEq BlockId] (R : LiveRule Validator BlockId Payload) (slack : ℕ)
-    (getLeader : ℕ → Validator) (w : ℕ) (hk : Keyed getLeader w) (c₀ : ℕ),
-    StretchDescent R slack ∧ HeadsDecide R slack getLeader hk ∧
-      LiveOnOfHeads R slack getLeader hk c₀) ∧
+    (C : Config Validator) (c₀ : ℕ),
+    StretchDescent R slack ∧ HeadsDecide R slack ∧ LiveOnOfHeads R slack C c₀) ∧
   RoundRobinHeads ∧ LiveOnRoundRobin
 
 end Heads

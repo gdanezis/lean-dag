@@ -39,9 +39,9 @@ def RoundRobinLive : Prop :=
     [LeanDag.OptimalHydrozoan.OptimalFaults (Fin n)],
     3 * (LeanDag.Hydrozoan.Faults.f (Fin n)
       + LeanDag.Hydrozoan.Faults.c (Fin n)) + 1 ≤ n →
-    ∀ (w : ℕ) (hk : Keyed (roundRobin n hn) w) (m : ℕ) (hm : 0 < m) (hmax : m ≤ w),
+    ∀ (C : Config (Fin n)) (hC : C.head = roundRobin n hn),
     (optimalHydrozoanLive (Replica := Fin n) (BlockId := BlockId)).LiveOn
-      (Sched (roundRobin n hn) hk m hm hmax) (n + 2)
+      C.sched (n + 2)
 
 /-- The descent laws, and liveness under round-robin. -/
 def Statement : Prop := Descent ∧ RoundRobinLive

@@ -29,10 +29,11 @@ abbrev LiveRule.Descent (R : LiveRule Validator BlockId Payload) (slack : ℕ) :
   Properties.Descent R.toBaseRule.toDagRule R.Good R.waveLength slack
 
 /-- **A run of heads**: from every round `r`, within `c₀` rounds, `g`
-consecutive rounds whose heads — first slots, led by `getLeader` of the
-round — are led by members of `T`. -/
-def HeadsRun (getLeader : ℕ → Validator) (T : Finset Validator) (g c₀ : ℕ) : Prop :=
-  ∀ r, ∃ ρ, r ≤ ρ ∧ ρ + g ≤ r + c₀ ∧ ∀ i, i < g → getLeader (ρ + i) ∈ T
+consecutive rounds whose heads — first slots, led by `head` of the
+round — are led by members of `T`. A configuration's own head function
+is `Config.head`. -/
+def HeadsRun (head : ℕ → Validator) (T : Finset Validator) (g c₀ : ℕ) : Prop :=
+  ∀ r, ∃ ρ, r ≤ ρ ∧ ρ + g ≤ r + c₀ ∧ ∀ i, i < g → head (ρ + i) ∈ T
 
 end Barnacle
 

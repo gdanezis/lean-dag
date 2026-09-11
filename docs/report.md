@@ -4425,12 +4425,13 @@ decides it the same way. `AnchoredRule.banded_direct` pins the bound for
 a directly decided slot at the slot's own round plus a wave, the
 derivation reading nothing above its own wave.
 
-`Barnacle.sched_local` is what that says of §21's mechanism, and it is an
+`Barnacle.cfg_local` is what that says of §21's mechanism, and it is an
 assumption that arc makes without stating: `PartialRun` records a
-configuration's verdicts as decided against the uniform schedule at that
-count extended to every round, which is not the schedule that runs once
-the count changes. A configuration's verdicts being settled within its
-own rounds is what makes it sound, and this is that statement.
+configuration's verdicts as decided against that configuration's
+schedule extended to every round, which is not the schedule that runs
+once the configuration changes. A configuration's verdicts being settled
+within its own rounds is what makes it sound, and this is that
+statement.
 
 ### 13.2 The policy and the run
 
@@ -8087,46 +8088,54 @@ a good DAG, `Timed.Good` at the carrier and the rule's fault model — a
 quorum synchronised from `Rnd` and populating every round to `N` — and
 its descent laws are `descent_of_support` at the rule's support. So
 each of the eight instantiations below is its anchored rule, its fault
-model, its support and one committee inequality, and nothing else. The schedule of a
-configuration with `m` leaders is `Sched m`, the uniform pipelined
-schedule of §3 with slot `(r, l)` led by `getLeader (r + l)`, the
-paper's `GetLeader`, so that only which slots exist changes across
-configurations. The window count reads the anchor's history as a view
-and counts slots with a directly committed candidate (BN2 makes it a
-function of the universe and the anchor):
+model, its support and one committee inequality, and nothing else. A
+**configuration** (`Config`) is the data a reconfiguration installs: how
+many slots each round has, who leads each of them, and how many rounds
+until the next reconfiguration. Its `Slots` instance, `C.sched`, places
+slot `κ` at the round `C.roundOf κ` that the widths put it in, and
+nothing forces the widths to be equal from round to round. The paper's
+own configurations are the uniform ones, `Config.uniform`, whose
+schedule is `Sched m` — the pipelined schedule of §3 with slot `(r, l)`
+led by `getLeader (r + l)`, the paper's `GetLeader` — and
+`Config.uniform_sched` is that identity. The window count reads the
+anchor's history as a view and counts the slots of the interval's rounds
+with a directly committed candidate (BN2 makes it a function of the
+universe and the anchor):
 
 ```lean
-def observed (R : BaseRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders)
-    (U : R.Universe) (A : BlockId) (m : ℕ) (hm : 0 < m) (hmax : m ≤ P.maxLeaders) : ℕ :=
+def observed (R : BaseRule Validator BlockId Payload)
+    (C : Config Validator) (U : R.Universe) (A : BlockId) : ℕ :=
   if hA : A ∈ R.ids U then
-    ((Finset.range (P.interval + 1) ×ˢ Finset.range m).filter (fun dl : ℕ × ℕ =>
-      dl.1 ≤ (R.block U A).round ∧
-      R.SlotDirect (Sched getLeader hk m hm hmax) U (R.historyView U A hA)
-        (m * ((R.block U A).round - dl.1) + dl.2))).card
+    ((Finset.Ico (C.cum ((R.block U A).round - C.interval))
+        (C.cum ((R.block U A).round + 1))).filter
+      (fun κ => R.SlotDirect C.sched U (R.historyView U A hA) κ)).card
   else 0
 ```
 
 ### 21.2 Safety, for any update rule
 
-A run closed to height `K` (`PartialRun`) holds `K` configurations —
-start round, leader count, back-off, anchor — with every slot of each
-range decided against the configuration's schedule, the anchor the
-least committed slot past the threshold, and the next configuration
-the update rule's. **BN3** — two runs over one universe, from any two
-views, to any two heights, agree:
+A run closed to height `K` (`PartialRun`) starts from a genesis
+configuration `C₀` and holds `K` configurations — start round,
+configuration, back-off, anchor — each **within the parameters**
+(`Config.InBounds`: no round wider than `maxLeaders`, an interval of at
+least one round and at most `maxInterval`), with every slot of each
+range decided against the configuration's schedule, the anchor the least
+committed slot past the threshold, and the next configuration the update
+rule's.
+**BN3** — two runs over one universe from one genesis configuration,
+from any two views, to any two heights, agree:
 
 ```lean
 def PartialRunAgreement (R : BaseRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders) (upd : UpdateRule R) : Prop :=
+    (upd : UpdateRule R) (C₀ : Config Validator) : Prop :=
   Anchored R upd →
   ∀ (U : R.Universe) (V₁ V₂ : R.View U) (K₁ K₂ : ℕ)
-    (R₁ : PartialRun R P getLeader hk upd U V₁ K₁) (R₂ : PartialRun R P getLeader hk upd U V₂ K₂),
+    (R₁ : PartialRun R P upd C₀ U V₁ K₁) (R₂ : PartialRun R P upd C₀ U V₂ K₂),
     ∀ k, k ≤ min K₁ K₂ →
-      R₁.start k = R₂.start k ∧ R₁.count k = R₂.count k ∧ R₁.backoff k = R₂.backoff k ∧
+      R₁.start k = R₂.start k ∧ R₁.cfg k = R₂.cfg k ∧ R₁.backoff k = R₂.backoff k ∧
       (k < min K₁ K₂ →
         R₁.anchor k = R₂.anchor k ∧
-        ∀ κ, R₁.start k < κ / R₁.count k → κ / R₁.count k ≤ R₁.start (k + 1) →
+        ∀ κ, R₁.start k < (R₁.cfg k).roundOf κ → (R₁.cfg k).roundOf κ ≤ R₁.start (k + 1) →
           R₁.vdct k κ = R₂.vdct k κ)
 ```
 
@@ -8136,12 +8145,13 @@ well-posed. An update rule takes the validator's own view —
 
 ```lean
 abbrev UpdateRule (R : BaseRule Validator BlockId Payload) : Type :=
-  ℕ → ℕ → (U : R.Universe) → R.View U → BlockId → ℕ × ℕ
+  Config Validator → ℕ → (U : R.Universe) → R.View U → BlockId →
+    Config Validator × ℕ
 ```
 
 — which is what a validator has, and nothing then makes two of them
 agree: a rule reading its view freely could hand two correct validators
-different counts and break the configuration sequence outright.
+different configurations and break the sequence outright.
 `Anchored` rules that out, asking that the step not depend on which view
 computes it. It is no restriction in practice, and BN2 is why: the window
 a rule measures on is the anchor's causal history, which every view
@@ -8173,10 +8183,11 @@ from the core's persistence result (T3) and coverage; Nemo-Nemo does not, its ow
 a gap one descent closes, and the only thing between the crash rule and
 the same property.
 
-Under the constant rule the arc collapses onto the
-base development at one leader (**BN6**), and the AIMD rule keeps its
-count in `[1, maxLeaders]` and is the integer test the implementation
-runs (**BN7**).
+Under the constant rule the arc collapses onto the genesis
+configuration (**BN6**) — the base development itself when that
+configuration is uniform at one leader — and the AIMD rule keeps its
+count in `[1, maxLeaders]`, carries its leaders and its interval
+across, and is the integer test the implementation runs (**BN7**).
 
 Safety and liveness are unconditional in the count — BN3 holds for every
 update rule and BN8 at whatever count the run reaches — which is the
@@ -8190,9 +8201,11 @@ determined by the evidence: a commit at round `r` rests on round
 `r + waveLength − 1`, so the anchor at `ra` can carry it only from
 `d ≥ waveLength − 1` for `r = ra − d`, and the round at
 `d = waveLength − 1` has the anchor as its only certifier and never
-scores. That leaves `waveLength ≤ d ≤ interval`, which is `expected`
-divided by the count — so `expected` is exactly the count of a healthy
-window, and BN12a says the measurement reaches it. BN12b then reads the
+scores. That leaves `waveLength ≤ d ≤ interval`, and `expected` is the
+number of slots those rounds offer — `cum (r + 1 − waveLength) −
+cum (r − interval)`, which at one width `m` is the paper's
+`(interval − waveLength + 1) · m`. So `expected` is exactly the count of
+a healthy window, and BN12a says the measurement reaches it. BN12b then reads the
 threshold: at `num ≤ den`, which every deployment satisfies, a healthy
 window raises the count by one and resets the back-off. What BN12 does
 not claim is that a *good DAG* makes a window healthy; that needs the
@@ -8200,6 +8213,16 @@ anchor's history to carry the good validators' blocks below it, a
 property of the base protocol rather than of the mechanism, and slots led
 outside the good set do not commit in any case, so the bound there is
 partial rather than `expected`.
+
+**BN12d is the complement, and it is a condition on deployments.** Below
+one wave there is no window round old enough to have been decided, so
+`expected` is zero at every anchor, the test `num · expected ≤ den ·
+observed` passes whatever the DAG did, and the rule raises the count and
+resets the back-off — always. The loop is open. Nothing in `PartialRun`
+forbids such an interval, and nothing should: safety and liveness are
+indifferent to it, and the run is parametric in the rule. What closes
+the loop is `waveLength ≤ interval`, which is the hypothesis BN12a
+already carries and which a deployment owes the measurement.
 
 **There is no total run.** Every configuration commits an anchor at its
 own round and a universe is finite, so a run with a configuration for
@@ -8236,26 +8259,27 @@ whose own wave must fit under the horizon, so no rule decides every
 slot up to `N − waveLength`. **BN8** is the paper's Configuration
 Progress and Liveness in the only form a finite universe admits: a run
 whose current configuration lies past the synchrony round extends by
-one, needing the clause at its own count only. The run is on a
+one, needing the clause at its own configuration only. The run is on a
 validator's own view rather than on the universe — any view caught up to
 the horizon — so the statement is about what a validator reaches and not
 only about what exists —
 
 ```lean
 def ProgressStmt (R : LiveRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders)
-    (upd : UpdateRule R.toBaseRule) (c : ℕ) : Prop :=
+    (upd : UpdateRule R.toBaseRule) (C₀ : Config Validator) (c : ℕ) : Prop :=
   ∀ (U : R.Universe) (V : R.View U) (Rnd N K : ℕ),
     R.toBaseRule.CoversUpto U V N →
-    ∀ (Rn : PartialRun R.toBaseRule P getLeader hk upd U V K),
-    R.LiveOn (Sched getLeader hk (Rn.count K) (Rn.count_pos K) (Rn.count_le K)) c →
+    ∀ (Rn : PartialRun R.toBaseRule P upd C₀ U V K),
+    R.LiveOn (Rn.cfg K).sched c →
     R.Good U Rnd N → Rnd ≤ Rn.start K + 1 →
-    Rn.start K + P.interval + 1 + 2 * c + R.waveLength ≤ N →
-    Nonempty (PartialRun R.toBaseRule P getLeader hk upd U V (K + 1))
+    Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N →
+    Nonempty (PartialRun R.toBaseRule P upd C₀ U V (K + 1))
 ```
 
 — and from a synchrony round at genesis, runs of every height exist
-under the horizon `K · (interval + 1 + c) + c + waveLength`. The safety
+under the horizon `K · (maxInterval + 1 + c) + c + waveLength`, for
+`maxInterval` the bound a run's configurations keep their intervals
+under. The safety
 law is consumed inside the liveness proof: the verdict chosen for the
 anchor's slot and the commit the clause supplies for it are identified
 by `agree`.
@@ -8299,19 +8323,20 @@ lying a wave below it — with the good set missing at most `slack`
 validators;
 `indirect` is A3's indirect rule; the eligibility gap of every rule here
 is its wave length. A run of heads is the schedule clause, one for
-every count since the head of round `ρ` is led by `getLeader ρ`
-whatever the count:
+every configuration that leads its rounds' first slots the same way —
+`C.head ρ = C.lead ρ 0`, which the AIMD rule carries across
+unchanged:
 
 ```lean
-def HeadsRun (getLeader : ℕ → Validator) (T : Finset Validator) (g c₀ : ℕ) : Prop :=
-  ∀ r, ∃ ρ, r ≤ ρ ∧ ρ + g ≤ r + c₀ ∧ ∀ i, i < g → getLeader (ρ + i) ∈ T
+def HeadsRun (head : ℕ → Validator) (T : Finset Validator) (g c₀ : ℕ) : Prop :=
+  ∀ r, ∃ ρ, r ≤ ρ ∧ ρ + g ≤ r + c₀ ∧ ∀ i, i < g → head (ρ + i) ∈ T
 ```
 
 **BN9.** From the descent laws, a stretch of consecutive decided slots
 with a committed top decides everything a wave below it; `waveLength`
 consecutive good-led heads decide every slot up to a wave below the
-first and commit it; a run of heads with gap `c₀` makes every count's
-schedule live with gap `c₀`; and round-robin on `n` validators has such
+first and commit it; a run of heads with gap `c₀` makes the
+configuration's schedule live with gap `c₀`; and round-robin on `n` validators has such
 runs, with `c₀ = n + waveLength − 1`, for every good set missing at
 most `slack` whenever `waveLength · slack + 1 ≤ n` — by pigeonhole: if
 no window of `waveLength` consecutive residues lay inside the good
@@ -8330,16 +8355,16 @@ interface's `agree` has no slot for §14's one new hypothesis), its
 statements hold at every admissible indirect threshold, and its slack
 is `fb + fc` — the only place the mixed bound enters, through the
 reliable set being the fully-correct class at quorum `n − fb − fc` —
-and each is **live under round-robin at every leader count**:
-Mysticeti with gap `n + 2`, the two-round rules with gap `n + 1`. For
-Mysticeti:
+and each is **live under round-robin at every configuration whose heads
+are the rotation**: Mysticeti with gap `n + 2`, the two-round rules with
+gap `n + 1`. For Mysticeti:
 
 ```lean
 def RoundRobinLive : Prop :=
   ∀ (n : ℕ) (hn : 0 < n) [Faults (Fin n)] (BlockId Payload : Type) [DecidableEq BlockId]
-    (w : ℕ) (hk : Keyed (roundRobin n hn) w) (m : ℕ) (hm : 0 < m) (hmax : m ≤ w),
+    (C : Config (Fin n)) (hC : C.head = roundRobin n hn),
     (mysticetiLive (Validator := Fin n) (BlockId := BlockId) (Payload := Payload)).LiveOn
-      (Sched (roundRobin n hn) hk m hm hmax) (n + 2)
+      C.sched (n + 2)
 ```
 
 This is the paper's A4 for its own schedule, assumed there and proved
@@ -8369,10 +8394,11 @@ descent laws and its committee bound, and nothing further.
   `interval − waveLength + 2`; the anchor's own round holds one block,
   so the round a wave below it has a single certifier in the window and
   never scores, and the count is the paper's `interval − waveLength +
-  1`. Settled on data.
+  1`. Settled on data. Stated over a configuration it is the number of
+  slots those rounds offer, which needs no fixed width.
 - **A4 is not automatic under multiple leaders**, and holds for the
-  paper's schedule by the heads descent (§21.4), at every count, from
-  the committee bound alone.
+  paper's schedule by the heads descent (§21.4), at every configuration
+  whose heads are the rotation, from the committee bound alone.
 - **Safety holds for any update rule**, a stronger and simpler
   statement than the paper's for AIMD; and the paper's count over
   leader *blocks* equals a count over slots, by agreement.
@@ -8380,6 +8406,11 @@ descent laws and its committee bound, and nothing further.
   prove: `expected` is exactly the count of a window whose scoring slots
   all commit, so a healthy window is read as healthy and the count rises
   (BN12). Without it the loop is safe and live but may be inert.
+- **The interval owes the wave a bound.** At `interval < waveLength` the
+  measurement is empty and the health test passes unconditionally
+  (BN12d), so the loop runs open and the count climbs to the cap
+  whatever the DAG does. The paper does not state the condition; the
+  formalisation proves what happens without it.
 - **There is no total run**; the sequence of configurations is the
   family of its prefixes.
 - **The safety law is consumed inside liveness**, at the anchor's slot.
@@ -10265,7 +10296,7 @@ reused.
 | AL6 | the adaptive ledger is agreed | `run_commitSeq_agree` *(Adaptive/Run)* |
 | AL7 | every rule showing the properties instantiates the mechanism: Mysticeti, Odontoceti, Hydrozoan and Nemo-Nemo, synchronous or reactive | `Adaptive.run_exists_of_support` *(Adaptive/Liveness)* |
 | AL8 | adaptivity on data: the verdict moves with the assignment | `demotePolicy` witnesses *(LeanDagTest/Adaptive/Model)* |
-| AL10 | a verdict is local in the rounds as well as the leaders: every decided slot has a round below which any schedule agreeing on rounds and leaders decides it the same way, and a directly decided slot's is its own round plus a wave | `Properties.exists_roundLocal` *(Properties/Derived/FromBand)*, `AnchoredRule.banded_direct` *(Common/Anchored/Band)*, `Barnacle.sched_local` *(Barnacle/Helpers/Schedule)* |
+| AL10 | a verdict is local in the rounds as well as the leaders: every decided slot has a round below which any schedule agreeing on rounds and leaders decides it the same way, and a directly decided slot's is its own round plus a wave | `Properties.exists_roundLocal` *(Properties/Derived/FromBand)*, `AnchoredRule.banded_direct` *(Common/Anchored/Band)*, `Barnacle.cfg_local` *(Barnacle/Helpers/Schedule)* |
 
 **Hybrid fault tolerance** (§14):
 
@@ -10462,7 +10493,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 312 definitions and structures the report names, in
+The 315 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -12887,13 +12918,13 @@ structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
 
 ```lean
 def Anchored (R : BaseRule Validator BlockId Payload) (upd : UpdateRule R) : Prop :=
-  ∀ (U : R.Universe) (V₁ V₂ : R.View U) (m b : ℕ) (A : BlockId),
-    upd m b U V₁ A = upd m b U V₂ A
+  ∀ (U : R.Universe) (V₁ V₂ : R.View U) (C : Config Validator) (b : ℕ) (A : BlockId),
+    upd C b U V₁ A = upd C b U V₂ A
 ```
 
-**A rule a validator can run without disagreeing.** The step depends on the count, the back-off and the anchor, and on the *view* only through what every view holding the anchor shares.
+**A rule a validator can run without disagreeing.** The step depends on the configuration, the back-off and the anchor, and on the *view* only through what every view holding the anchor shares.
 
-The type above lets a rule read the view, which is what a validator actually has. Nothing then makes two validators agree, and nothing should: a rule reading its own view freely could return different counts to two correct validators and break the configuration sequence outright. `Anchored` is the condition that rules that out, and it is not a restriction in practice — the window a rule measures on is the anchor's causal history, which BN2 shows every view holding the anchor holds whole and restricts identically. A rule computing from its own copy of that history satisfies this; the AIMD rule of `Model/Window.lean` does, by not reading the view at all.
+The type above lets a rule read the view, which is what a validator actually has. Nothing then makes two validators agree, and nothing should: a rule reading its own view freely could return different configurations to two correct validators and break the configuration sequence outright. `Anchored` is the condition that rules that out, and it is not a restriction in practice — the window a rule measures on is the anchor's causal history, which BN2 shows every view holding the anchor holds whole and restricts identically. A rule computing from its own copy of that history satisfies this; the AIMD rule of `Model/Window.lean` does, by not reading the view at all.
 
 #### `Params`
 
@@ -12901,30 +12932,42 @@ The type above lets a rule read the view, which is what a validator actually has
 
 ```lean
 structure Params where
-  /-- Rounds between reconfigurations. -/
-  interval : ℕ
   /-- The upper bound on the leader count. -/
   maxLeaders : ℕ
+  /-- The upper bound on a configuration's interval. -/
+  maxInterval : ℕ
   /-- The threshold's numerator. -/
   num : ℕ
   /-- The threshold's denominator. -/
   den : ℕ
-  interval_pos : 0 < interval
   max_pos : 0 < maxLeaders
 ```
 
-The mechanism's parameters: the reconfiguration interval in rounds, the cap on the leader count, and the health threshold `num / den`.
+The mechanism's parameters: the caps on a configuration's widths and interval, and the health threshold `num / den`. The interval itself is a configuration's own, so a reconfiguration may change it; `maxInterval` is the bound a horizon is computed against.
+
+#### `Config.InBounds`
+
+*def, `Barnacle.Model.Window.lean`*
+
+```lean
+def Config.InBounds (P : Params) (C : Config Validator) : Prop :=
+  (∀ r, C.slotsAt r ≤ P.maxLeaders) ∧ 0 < C.interval ∧ C.interval ≤ P.maxInterval
+```
+
+**A configuration within the parameters**: no round wider than `maxLeaders`, and an interval of at least one round and at most `maxInterval`. This is what a run asks of every configuration it reaches and what an update rule must preserve; the widths' positivity is a `Config` field and needs no clause.
 
 #### `expected`
 
 *def, `Barnacle.Model.Window.lean`*
 
 ```lean
-def expected (R : BaseRule Validator BlockId Payload) (P : Params) (m : ℕ) : ℕ :=
-  (P.interval - R.waveLength + 1) * m
+def expected (R : BaseRule Validator BlockId Payload) (C : Config Validator) (r : ℕ) : ℕ :=
+  C.cum (r + 1 - R.waveLength) - C.cum (r - C.interval)
 ```
 
-**The expected count** (`ExpectedCommits`): `interval − waveLength + 1` rounds of `m` slots each, at count `m`; below `waveLength ≤ interval` the subtraction truncates.
+**The expected count** (`ExpectedCommits`): the slots offered by the rounds of the window old enough to have been decided — those from `r − C.interval` through `r − waveLength`, for the anchor's round `r`. At one width `m` this is the paper's `(interval − waveLength + 1) · m`.
+
+The upper bound is written `r + 1 − waveLength` rather than `r − waveLength + 1`: below a wave from genesis there is no decided round, and the second form truncates to `1` and counts round `0`.
 
 #### `PartialRun`
 
@@ -12932,43 +12975,44 @@ def expected (R : BaseRule Validator BlockId Payload) (P : Params) (m : ℕ) : �
 
 ```lean
 structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders)
-    (upd : UpdateRule R) (U : R.Universe) (V : R.View U) (K : ℕ) where
+    (upd : UpdateRule R) (C₀ : Config Validator) (U : R.Universe) (V : R.View U)
+    (K : ℕ) where
   /-- The round after which configuration `k` is in force. -/
   start : ℕ → ℕ
-  /-- The leader count of configuration `k`. -/
-  count : ℕ → ℕ
+  /-- Configuration `k`: its leaders, its slots per round, its interval. -/
+  cfg : ℕ → Config Validator
   /-- The back-off of configuration `k`. -/
   backoff : ℕ → ℕ
-  /-- The slot, in `Sched (count k)`, of the anchor that closes
+  /-- The slot, in `(cfg k).sched`, of the anchor that closes
   configuration `k`. -/
   anchor : ℕ → ℕ
-  /-- `vdct k κ`: the verdict of slot `κ` of `Sched (count k)`. -/
+  /-- `vdct k κ`: the verdict of slot `κ` of `(cfg k).sched`. -/
   vdct : ℕ → ℕ → Option BlockId
-  /-- The initial configuration: one leader after round `0`. -/
-  init : start 0 = 0 ∧ count 0 = 1 ∧ backoff 0 = 0
-  count_pos : ∀ k, 0 < count k
-  count_le : ∀ k, count k ≤ P.maxLeaders
+  /-- The run starts after round `0`, in the genesis configuration. -/
+  init : start 0 = 0 ∧ cfg 0 = C₀ ∧ backoff 0 = 0
+  /-- Every configuration is within the parameters. -/
+  bounds : ∀ k, (cfg k).InBounds P
   /-- Every slot of the range — after `start k`, through the anchor's
   round — decided against the configuration's schedule (`TryDecide`). -/
-  closed : ∀ k, k < K → ∀ κ, start k < κ / count k → κ / count k ≤ start (k + 1) →
-    R.Decided (Sched getLeader hk (count k) (count_pos k) (count_le k)) V κ (vdct k κ)
+  closed : ∀ k, k < K → ∀ κ, start k < (cfg k).roundOf κ →
+    (cfg k).roundOf κ ≤ start (k + 1) → R.Decided (cfg k).sched V κ (vdct k κ)
   /-- The anchor is committed, past the threshold … -/
   anchor_commits : ∀ k, k < K →
-    (∃ A, vdct k (anchor k) = some A) ∧ start k + P.interval < anchor k / count k
+    (∃ A, vdct k (anchor k) = some A) ∧
+      start k + (cfg k).interval < (cfg k).roundOf (anchor k)
   /-- … and is the least such slot. -/
   anchor_least : ∀ k, k < K → ∀ κ, κ < anchor k →
-    start k + P.interval < κ / count k → vdct k κ = none
+    start k + (cfg k).interval < (cfg k).roundOf κ → vdct k κ = none
   /-- The next configuration is in force after the anchor's round. -/
-  start_succ : ∀ k, k < K → start (k + 1) = anchor k / count k
+  start_succ : ∀ k, k < K → start (k + 1) = (cfg k).roundOf (anchor k)
   /-- The next configuration is the rule's. -/
   update : ∀ k, k < K → ∀ A, vdct k (anchor k) = some A →
-    (count (k + 1), backoff (k + 1)) = upd (count k) (backoff k) U V A
+    (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V A
 ```
 
 **A run closed up to height `K`.** Configurations `0, …, K` are determined, and the ranges of configurations below `K` are decided in full.
 
-`closed` is the paper's `TryDecide`: every slot of the range — the rounds after `start k`, through the anchor's round `start (k + 1)` — decided against the configuration's schedule. `anchor_commits` and `anchor_least` are `TryCommit`'s trigger: the anchor is the least committed slot whose round exceeds `start k + interval`. `update` is `UpdateLeaders`, for an arbitrary rule. `count_pos` and `count_le` are clauses of the run because the rule is arbitrary; for the AIMD rule they are theorems.
+`closed` is the paper's `TryDecide`: every slot of the range — the rounds after `start k`, through the anchor's round `start (k + 1)` — decided against the configuration's schedule. `anchor_commits` and `anchor_least` are `TryCommit`'s trigger: the anchor is the least committed slot whose round exceeds `start k + (cfg k).interval`. `update` is `UpdateLeaders`, for an arbitrary rule. `bounds` is a clause of the run because the rule is arbitrary; for the AIMD rule it is a theorem.
 
 #### `LiveRule.LiveOn`
 
@@ -14029,6 +14073,44 @@ def HorizonStable (P : Policy R) (G d : ℕ)
 ```
 
 **Horizon-stability**: a validator that pruned below `G` and re-indexed from `d` still computes the leaders everyone else is using.
+
+#### `Config`
+
+*structure, `Barnacle.Config.lean`*
+
+```lean
+structure Config (Validator : Type) where
+  /-- How many slots round `r` holds. A function of the round, so a
+  configuration's rounds need not agree. -/
+  slotsAt : ℕ → ℕ
+  slotsAt_pos : ∀ r, 0 < slotsAt r
+  /-- Who leads position `i` of round `r`. -/
+  lead : ℕ → ℕ → Validator
+  /-- Distinct positions of a round have distinct leaders, which is what
+  `Slots.keyed` asks of the schedule this gives. -/
+  keyed : ∀ r i j, i < slotsAt r → j < slotsAt r → lead r i = lead r j → i = j
+  /-- Rounds from the configuration's start before the next
+  reconfiguration is due. -/
+  interval : ℕ
+```
+
+**A configuration.** The schedule its rounds run on, given by the slots each round holds and the leader of each place, and the rounds it runs before the next reconfiguration is due.
+
+#### `Config.uniform`
+
+*def, `Barnacle.Config.lean`*
+
+```lean
+def Config.uniform (lead : ℕ → ℕ → Validator) {w : ℕ} (hl : LeadKeyed lead w)
+    (m : ℕ) (hm : 0 < m) (hmax : m ≤ w) (I : ℕ) : Config Validator where
+  slotsAt := fun _ => m
+  slotsAt_pos := fun _ => hm
+  lead := lead
+  keyed := fun r i j hi hj h => hl r i j (lt_of_lt_of_le hi hmax) (lt_of_lt_of_le hj hmax) h
+  interval := I
+```
+
+**A configuration whose every round is `m` slots wide.** The shape the paper's mechanism emits, where only the count varies.
 
 #### `commitSeq`
 
@@ -15884,7 +15966,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 473 theorems the body or Appendix A names, each
+The 474 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -19632,6 +19714,19 @@ theorem not_committedAt_of_dead {k j : ℕ} (hj : j ≤ k) {l : BlockId}
 
 ### Barnacle: the adaptive leader count
 
+#### `Config.uniform_sched`
+
+*theorem, `Barnacle.Helpers.Schedule.lean`*
+
+```lean
+theorem Config.uniform_sched (getLeader : ℕ → Validator) {w : ℕ} (hw : 0 < w)
+    (hk : Keyed getLeader w) (m : ℕ) (hm : 0 < m) (hmax : m ≤ w) (I : ℕ) :
+    (Config.uniform (leadOf getLeader) (leadKeyed_of_keyed hw hk) m hm hmax I).sched
+      = Sched getLeader hk m hm hmax
+```
+
+**The bridge.** A uniform configuration's schedule is the schedule the arc ran on before configurations carried their leaders, so every clause stated at `Sched` is the same clause at a `Config`.
+
 #### `ofAnchored_laws`
 
 *theorem, `Barnacle.Helpers.Anchored.lean`*
@@ -19648,13 +19743,14 @@ theorem ofAnchored_laws (hl : R.Laws) : (ofAnchored R).Laws where
 *theorem, `Barnacle.Helpers.Progress.lean`*
 
 ```lean
-theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd) {c K Rnd N : ℕ}
+theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd)
+    {c K Rnd N : ℕ}
     {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
-    (Rn : PartialRun R.toBaseRule P getLeader hk upd U V K)
-    (hlive : R.LiveOn (Sched getLeader hk (Rn.count K) (Rn.count_pos K) (Rn.count_le K)) c)
+    (Rn : PartialRun R.toBaseRule P upd C₀ U V K)
+    (hlive : R.LiveOn (Rn.cfg K).sched c)
     (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
-    (hN : Rn.start K + P.interval + 1 + 2 * c + R.waveLength ≤ N) :
-    Nonempty (PartialRun R.toBaseRule P getLeader hk upd U V (K + 1))
+    (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
+    Nonempty (PartialRun R.toBaseRule P upd C₀ U V (K + 1))
 ```
 
 #### `holds`

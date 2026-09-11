@@ -1,16 +1,21 @@
 import LeanDag.Barnacle.Model.Schedule
-import Mathlib.Data.Finset.Prod
+import Mathlib.Order.Interval.Finset.Nat
 
 /-!
 # Barnacle: the window, the count, and the AIMD rule
 
 The paper's Algorithm 3 (`barnacle.md` §4): from the committed anchor's
 causal history over the last `interval` rounds, count the slots the
-direct rule decides, compare with the number expected at the current
-leader count, and move the count up by one or down by `2^backoff`. The
-window is the anchor's history view (`BaseRule.historyView`); the
-threshold is the integer pair `(num, den)`, the paper's `0.96` being
-`(96, 100)`.
+direct rule decides, and compare with the number of slots those rounds
+offered. The window is the anchor's history view
+(`BaseRule.historyView`); the threshold is the integer pair
+`(num, den)`, the paper's `0.96` being `(96, 100)`. The AIMD step the
+comparison feeds is `Aimd/Rule.lean`, which carries the arithmetic its
+configuration needs and so cannot live here.
+
+Both counts are read off the configuration in force, which fixes the
+interval and the slots of each round, so neither depends on the rounds
+being of one width.
 
 **Trusted core of the arc: definitions only.** The `Decidable` instance
 is by `inferInstanceAs`.
@@ -23,19 +28,28 @@ namespace Barnacle
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
-/-- The mechanism's parameters: the reconfiguration interval in rounds,
-the cap on the leader count, and the health threshold `num / den`. -/
+/-- The mechanism's parameters: the caps on a configuration's widths and
+interval, and the health threshold `num / den`. The interval itself is a
+configuration's own, so a reconfiguration may change it; `maxInterval`
+is the bound a horizon is computed against. -/
 structure Params where
-  /-- Rounds between reconfigurations. -/
-  interval : ℕ
   /-- The upper bound on the leader count. -/
   maxLeaders : ℕ
+  /-- The upper bound on a configuration's interval. -/
+  maxInterval : ℕ
   /-- The threshold's numerator. -/
   num : ℕ
   /-- The threshold's denominator. -/
   den : ℕ
-  interval_pos : 0 < interval
   max_pos : 0 < maxLeaders
+
+/-- **A configuration within the parameters**: no round wider than
+`maxLeaders`, and an interval of at least one round and at most
+`maxInterval`. This is what a run asks of every configuration it reaches
+and what an update rule must preserve; the widths' positivity is a
+`Config` field and needs no clause. -/
+def Config.InBounds (P : Params) (C : Config Validator) : Prop :=
+  (∀ r, C.slotsAt r ≤ P.maxLeaders) ∧ 0 < C.interval ∧ C.interval ≤ P.maxInterval
 
 namespace BaseRule
 
@@ -54,55 +68,34 @@ instance instDecidableSlotDirect (R : BaseRule Validator BlockId Payload)
 end BaseRule
 
 /-- **The window count** (`CountDirectCommits`): the slots of the
-`interval + 1` rounds up to the anchor's, at count `m`, whose candidate
-is directly committed on the anchor's history view; zero when the
-anchor is absent. The `d ≤ round` guard keeps truncated subtraction from
-over-counting round `0`. -/
-def observed (R : BaseRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders)
-    (U : R.Universe) (A : BlockId) (m : ℕ) (hm : 0 < m) (hmax : m ≤ P.maxLeaders) : ℕ :=
+`C.interval + 1` rounds up to the anchor's whose candidate is directly
+committed on the anchor's history view; zero when the anchor is absent.
+Those are the slots `κ` with `C.cum (r − C.interval) ≤ κ < C.cum (r + 1)`
+for the anchor's round `r`, and the truncated subtraction is what stops
+the window at round `0`. -/
+def observed (R : BaseRule Validator BlockId Payload)
+    (C : Config Validator) (U : R.Universe) (A : BlockId) : ℕ :=
   if hA : A ∈ R.ids U then
-    ((Finset.range (P.interval + 1) ×ˢ Finset.range m).filter (fun dl : ℕ × ℕ =>
-      dl.1 ≤ (R.block U A).round ∧
-      R.SlotDirect (Sched getLeader hk m hm hmax) U (R.historyView U A hA)
-        (m * ((R.block U A).round - dl.1) + dl.2))).card
+    ((Finset.Ico (C.cum ((R.block U A).round - C.interval))
+        (C.cum ((R.block U A).round + 1))).filter
+      (fun κ => R.SlotDirect C.sched U (R.historyView U A hA) κ)).card
   else 0
 
-/-- **The expected count** (`ExpectedCommits`): `interval − waveLength +
-1` rounds of `m` slots each, at count `m`; below `waveLength ≤ interval`
-the subtraction truncates. -/
-def expected (R : BaseRule Validator BlockId Payload) (P : Params) (m : ℕ) : ℕ :=
-  (P.interval - R.waveLength + 1) * m
+/-- **The expected count** (`ExpectedCommits`): the slots offered by the
+rounds of the window old enough to have been decided — those from
+`r − C.interval` through `r − waveLength`, for the anchor's round `r`.
+At one width `m` this is the paper's `(interval − waveLength + 1) · m`.
 
-namespace Aimd
-
-/-- **Additive increase, multiplicative decrease.** A healthy window
-raises the count by one, capped at `maxLeaders`, and resets the back-off;
-an unhealthy one lowers it by `2^backoff`, floored at one, and doubles
-the next step. -/
-def update (P : Params) (m backoff : ℕ) (healthy : Bool) : ℕ × ℕ :=
-  if healthy then (min (m + 1) P.maxLeaders, 0)
-  else (max (m - 2 ^ backoff) 1, backoff + 1)
-
-/-- **The paper's `UpdateLeaders`** as an update rule: healthy when
-`den · observed ≥ num · expected`; total, returning the initial state
-outside `[1, maxLeaders]`, which no run reaches. -/
-def rule (R : BaseRule Validator BlockId Payload) (P : Params)
-    (getLeader : ℕ → Validator) (hk : Keyed getLeader P.maxLeaders) :
-    UpdateRule R :=
-  fun m backoff U _V A =>
-    if hm : 0 < m ∧ m ≤ P.maxLeaders then
-      update P m backoff
-        (decide (P.num * expected R P m ≤
-          P.den * observed R P getLeader hk U A m hm.1 hm.2))
-    else (1, 0)
-
-end Aimd
+The upper bound is written `r + 1 − waveLength` rather than
+`r − waveLength + 1`: below a wave from genesis there is no decided
+round, and the second form truncates to `1` and counts round `0`. -/
+def expected (R : BaseRule Validator BlockId Payload) (C : Config Validator) (r : ℕ) : ℕ :=
+  C.cum (r + 1 - R.waveLength) - C.cum (r - C.interval)
 
 /-- The constant rule: reconfigure nothing. The conservativity anchor —
 under it the arc collapses onto the base development at one leader. -/
 def constRule (R : BaseRule Validator BlockId Payload) : UpdateRule R :=
-  fun m b _ _ _ => (m, b)
+  fun C b _ _ _ => (C, b)
 
 end Barnacle
 

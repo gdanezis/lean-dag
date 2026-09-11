@@ -1,4 +1,5 @@
 import LeanDag.Barnacle.Model.Schedule
+import LeanDag.Barnacle.Config
 import LeanDag.Properties.Derived.FromBand
 import Mathlib.Data.Nat.ModEq
 
@@ -102,46 +103,70 @@ theorem Sched_leader (getLeader : ℕ → Validator) {w : ℕ} (hk : Keyed getLe
     (m : ℕ) (hm : 0 < m) (hmax : m ≤ w) (κ : ℕ) :
     (Sched getLeader hk m hm hmax).leader κ = getLeader (κ / m + κ % m) := rfl
 
-/-- Two schedules with equal counts are equal, whatever their proof
-arguments — the transport every agreement argument needs, since a run's
-count is a projection and cannot be substituted. -/
-theorem Sched_congr (getLeader : ℕ → Validator) {w : ℕ} (hk : Keyed getLeader w)
-    {m₁ m₂ : ℕ} (h : m₁ = m₂) (h₁ : 0 < m₁) (h₁' : m₁ ≤ w) (h₂ : 0 < m₂) (h₂' : m₂ ≤ w) :
-    Sched getLeader hk m₁ h₁ h₁' = Sched getLeader hk m₂ h₂ h₂' := by
-  subst h; rfl
-
-/-- **A configuration's verdicts do not depend on what the count becomes
-later.** Every slot decided under the schedule of count `m` has a round
-bound below which that count and its rotation settle it; above the bound
-the schedule may be anything, and in particular it may be the one the
-next configuration installs.
+/-- **A configuration's verdicts do not depend on what comes after it.**
+Every slot decided under a configuration's schedule has a round bound
+below which that configuration settles it; above the bound the schedule
+may be anything, and in particular it may be the one the next
+configuration installs.
 
 This is the assumption a Barnacle run makes and does not state.
 `PartialRun` records a configuration's verdicts as decided against
-`Sched getLeader hk (count k)` — the uniform schedule at that count,
-extended to every round — which is not the schedule that runs once the
-count changes. What makes that sound is that a configuration's verdicts
-are settled within its own rounds, and this is that statement, at
-`Properties.exists_roundLocal`. -/
-theorem sched_local [Fintype Validator] [DecidableEq Validator]
+`(cfg k).sched`, extended to every round, which is not the schedule that
+runs once the configuration changes. What makes that sound is that a
+configuration's verdicts are settled within its own rounds, and this is
+that statement, at `Properties.exists_roundLocal`. -/
+theorem cfg_local [Fintype Validator] [DecidableEq Validator]
     {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
     {R : Properties.DagRule Validator BlockId Payload} (hb : Properties.Banded R)
-    {getLeader : ℕ → Validator} {w : ℕ} {hk : Keyed getLeader w}
-    {m : ℕ} {hm : 0 < m} {hmax : m ≤ w}
-    {U : R.Universe} {V : R.View U} {g : ℕ} {v : Option BlockId}
-    (hd : R.Decided (Sched getLeader hk m hm hmax) V g v) :
-    ∃ B, g / m < B ∧
+    {C : Config Validator} {U : R.Universe} {V : R.View U} {g : ℕ} {v : Option BlockId}
+    (hd : R.Decided C.sched V g v) :
+    ∃ B, C.roundOf g < B ∧
       ∀ S' : Slots Validator,
-        (∀ κ, κ / m < B → S'.slotRound κ = κ / m) →
-        (∀ κ, κ / m < B → S'.leader κ = getLeader (κ / m + κ % m)) →
-        R.Decided S' V g v := by
-  obtain ⟨B, hB, hall⟩ := Properties.exists_roundLocal hb hd
-  rw [Sched_slotRound] at hB
-  refine ⟨B, hB, fun S' hround hlead => hall S' (fun κ hκ => ?_) (fun κ hκ => ?_)⟩
-  · rw [Sched_slotRound] at hκ
-    rw [hround κ hκ, Sched_slotRound]
-  · rw [Sched_slotRound] at hκ
-    rw [hlead κ hκ, Sched_leader]
+        (∀ κ, C.roundOf κ < B → S'.slotRound κ = C.roundOf κ) →
+        (∀ κ, C.roundOf κ < B → S'.leader κ = C.sched.leader κ) →
+        R.Decided S' V g v :=
+  Properties.exists_roundLocal hb hd
+
+/-! ## The present arc as a configuration -/
+
+/-- The paper's leader function as a configuration's: slot `i` of round
+`r` is led by `getLeader (r + i)`. -/
+def leadOf (getLeader : ℕ → Validator) : ℕ → ℕ → Validator := fun r i => getLeader (r + i)
+
+/-- `Keyed` gives the obligation a `Config` makes. -/
+theorem leadKeyed_of_keyed {getLeader : ℕ → Validator} {w : ℕ} (hw : 0 < w)
+    (hk : Keyed getLeader w) : LeadKeyed (leadOf getLeader) w := by
+  intro r i j hi hj h
+  have e1 : (i + r * w) / w = r := by
+    rw [Nat.add_mul_div_right _ _ hw, Nat.div_eq_of_lt hi]
+    omega
+  have e2 : (j + r * w) / w = r := by
+    rw [Nat.add_mul_div_right _ _ hw, Nat.div_eq_of_lt hj]
+    omega
+  have m1 : (i + r * w) % w = i := by
+    rw [Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hi]
+  have m2 : (j + r * w) % w = j := by
+    rw [Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hj]
+  have := hk w hw le_rfl (i + r * w) (j + r * w) (by rw [e1, e2])
+    (by rw [e1, e2, m1, m2]; exact h)
+  omega
+
+/-- **The bridge.** A uniform configuration's schedule is the schedule
+the arc ran on before configurations carried their leaders, so every
+clause stated at `Sched` is the same clause at a `Config`. -/
+theorem Config.uniform_sched (getLeader : ℕ → Validator) {w : ℕ} (hw : 0 < w)
+    (hk : Keyed getLeader w) (m : ℕ) (hm : 0 < m) (hmax : m ≤ w) (I : ℕ) :
+    (Config.uniform (leadOf getLeader) (leadKeyed_of_keyed hw hk) m hm hmax I).sched
+      = Sched getLeader hk m hm hmax := by
+  refine Slots.ext' (funext fun g => ?_) (funext fun g => ?_)
+  · rw [Config.sched_slotRound, Config.uniform_roundOf, Sched_slotRound]
+  · rw [Sched_leader, Config.sched_leader, Config.uniform_lead,
+      Config.uniform_roundOf, Config.uniform_cum]
+    show getLeader (g / m + (g - g / m * m)) = _
+    congr 1
+    have hdm := Nat.div_add_mod g m
+    have hc : g / m * m = m * (g / m) := Nat.mul_comm _ _
+    omega
 
 end Barnacle
 

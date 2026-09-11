@@ -4,8 +4,8 @@ import LeanDag.Barnacle.Helpers.Schedule
 # BN6 — proof
 
 Generated proof layer; not part of the audit surface. BN6a is an
-induction along `update` under the constant rule; BN6b transports each
-`closed` verdict to `Sched 1` by `Sched_congr`.
+induction along `update` under the constant rule; BN6b rewrites each
+`closed` verdict along it.
 -/
 
 namespace LeanDag
@@ -15,10 +15,10 @@ namespace Barnacle
 namespace Conservativity
 
 theorem holds : Statement := by
-  intro Validator BlockId Payload _ _ _ R P getLeader hk
+  intro Validator BlockId Payload _ _ _ R P C₀
   have hcount : ∀ (U : R.Universe) (V : R.View U) (K : ℕ)
-      (Rn : PartialRun R P getLeader hk (constRule R) U V K),
-      ∀ k, k ≤ K → Rn.count k = 1 ∧ Rn.backoff k = 0 := by
+      (Rn : PartialRun R P (constRule R) C₀ U V K),
+      ∀ k, k ≤ K → Rn.cfg k = C₀ ∧ Rn.backoff k = 0 := by
     intro U V K Rn k
     induction k with
     | zero => intro _; exact ⟨Rn.init.2.1, Rn.init.2.2⟩
@@ -33,9 +33,8 @@ theorem holds : Statement := by
   refine ⟨hcount, ?_⟩
   intro U V K Rn k hkK κ h1 h2
   obtain ⟨hc, _⟩ := hcount U V K Rn k (by omega)
-  have hd := Rn.closed k hkK κ (by rw [hc, Nat.div_one]; exact h1)
-    (by rw [hc, Nat.div_one, Rn.start_succ k hkK, hc, Nat.div_one]; exact h2)
-  rw [Sched_congr getLeader hk hc (Rn.count_pos k) (Rn.count_le k) Nat.one_pos P.max_pos] at hd
+  have hd := Rn.closed k hkK κ (by rw [hc]; exact h1) (by rw [hc]; exact h2)
+  rw [hc] at hd
   exact hd
 
 end Conservativity
