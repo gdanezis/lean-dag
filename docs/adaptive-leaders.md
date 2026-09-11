@@ -681,18 +681,32 @@ anchor's round.
   only in where the ledger stops want one structure with that bound as a
   parameter. Revisit once AL12 exists and the shape is known rather than
   guessed.
-- **D22 — does the score permute or re-weight?** A score that
-  post-composes a permutation on the rotation keeps every liveness
-  property with no further argument: `roundRobin_headsRun` holds for every good set of
-  the right cardinality, and `σ ∘ head (ρ) ∈ T ↔ head ρ ∈ σ⁻¹ T` with
-  `σ⁻¹ T` of the same cardinality, so runs of heads transfer by a short
-  lemma at the same gap. Hammerhead's own rule re-weights — it replaces a
-  validator from the low-scoring set `B` by one from the high-scoring set
-  `G`, so a demoted validator can lose every slot — and then runs of
-  heads need the paper's `|B| = |G| ≤ f`, which is its Leader-Utilization
-  lemma. Build the permuting score first: it exercises the whole
-  instantiation and yields a witness, and the re-weighting bound lands on
-  top of it.
+- **D22 — does the score permute or re-weight? Settled: either.** The
+  question was which family of head functions a score may emit, and it
+  turned on what runs of heads need. The answer is neither injectivity
+  nor permutation but a count of **positions**.
+
+  `Barnacle.headsRun_of_cycle` is the pigeonhole restated over the cycle
+  positions a good set misses rather than over the validators: a schedule
+  repeating every `n` rounds, at most `m` of whose positions have a head
+  outside `T`, has `g` consecutive good heads within `n + g − 1` rounds
+  whenever `g · m + 1 ≤ n`. `roundRobin_headsRun` is now a corollary — the
+  rotation's missed positions are its missed validators — and the
+  duplicated pigeonhole is gone.
+
+  `headsRun_of_cycle_weighted` is what a re-weighting rule needs: if the
+  good set misses at most `slack` validators and **no validator holds
+  more than `w` of the cycle's positions**, at most `slack · w` positions
+  are bad and the committee bound becomes `g · slack · w + 1 ≤ n`. At
+  `w = 1` — a permutation of the rotation — it is the round-robin bound
+  unchanged.
+
+  So the clause a reputation rule owes for liveness is not that it
+  permutes but that it caps accumulation. This is stronger than the
+  paper's `|B| = |G| ≤ f`, which bounds how many validators are demoted
+  rather than how many slots one may gather; deriving the cap from the
+  paper's rule is the remaining piece, and it is a fact about that rule
+  rather than about the mechanism.
 
 ## 9. Step by step
 
