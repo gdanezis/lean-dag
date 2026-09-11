@@ -51,10 +51,9 @@ import LeanDag.Reactive.Mysticeti
 import LeanDag.Reactive.Delivers
 import LeanDag.Reactive.Odontoceti
 import LeanDag.Reactive.MysticetiProperties
-import LeanDag.Adaptive.Fixpoint.Basic
-import LeanDag.Adaptive.Fixpoint.Policy
-import LeanDag.Adaptive.Fixpoint.Run
+import LeanDag.Barnacle.Chop
 import LeanDag.Adaptive.Model.Segment
+import LeanDag.Adaptive.Helpers.Chop
 import LeanDag.Adaptive.Helpers.Agreement
 import LeanDag.Adaptive.Agreement.Statement
 import LeanDag.Adaptive.Agreement.Proof
@@ -71,9 +70,6 @@ import LeanDag.Adaptive.Validity.Proof
 import LeanDag.Adaptive.Helpers.Progress
 import LeanDag.Adaptive.Progress.Statement
 import LeanDag.Adaptive.Progress.Proof
-import LeanDag.Adaptive.Fixpoint.Joiner
-import LeanDag.Adaptive.Fixpoint.Liveness
-import LeanDag.Adaptive.Fixpoint.Growth
 import LeanDag.Hybrid.Faults
 import LeanDag.Hybrid.Rules
 import LeanDag.Hybrid.Decision

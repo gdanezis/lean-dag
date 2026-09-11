@@ -28,7 +28,6 @@ import LeanDagTest.Mysticeti.Unbounded
 import LeanDagTest.Reactive.Model
 import LeanDagTest.Reactive.Catchup
 import LeanDagTest.Reactive.Collapse
-import LeanDagTest.Adaptive.Model
 import LeanDagTest.Adaptive.Segmented
 import LeanDagTest.Adaptive.Asynchronous
 import LeanDagTest.Integration.Model

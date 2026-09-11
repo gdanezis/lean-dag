@@ -194,7 +194,7 @@ prefix agreement for validators that have not decided equally far.
 **AL3 (safety: the fixpoint is unique).** `adaptiveRun_unique`: any two
 runs over the same universe — *whatever views they were derived from,
 and with no fairness or synchrony hypothesis at all* — have equal
-assignments and equal verdicts. Built as `Adaptive.run_agree`, whose two
+assignments and equal verdicts. Built as a uniqueness theorem whose two
 halves are the verdict and assignment statements directly, so the planned
 corollary is a projection.
 Proof plan, by strong induction on the epoch: the verdict prefixes
