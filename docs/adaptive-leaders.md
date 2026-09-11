@@ -420,119 +420,168 @@ the whole of its delay.
 None of this makes AL3 false. It makes AL3 a theorem about executions
 in which the network behaves, stated in a form that does not say so.
 
-## 8. Plan: the segmented adaptive run
+## 8. Plan: Hammerhead as a Barnacle configuration rule
 
-The shape to build is the one the Barnacle arc already runs on
-(`barnacle.md` §5): a sequence of segments, each with a schedule in
-force, a range closed against that schedule, and a trigger that installs
-the next. Two strands, independent of one another.
+*(Rewritten after the Barnacle arc merged. This section planned a
+segmented run of its own; the Barnacle arc builds that run, so most of
+what it planned is an instantiation.)*
 
-**Strand A — truncate the output at the boundary.** This is what makes
-the arc cover asynchronous executions.
+The Barnacle arc on `main` reconfigures by installing a `Config` —
+the slots of each round, the leader of each slot, and the interval to
+the next reconfiguration — chosen by a rule that reads the universe and
+an anchor. Hammerhead reconfigures by installing a leader assignment
+chosen by a rule that reads the universe and an anchor. They are the
+same mechanism with two statistics: Barnacle's counts direct commits to
+set the widths, Hammerhead's counts parent edges to set the leaders.
 
-**Strand B — score the DAG rather than the verdicts.** This is what
-removes the circularity, and with it the lag and the window.
+### 8.1 What is already common, and what is not
 
-Strand B alone gives an agreed schedule sequence with no condition on
-settling. Strand A is still needed after it, because two validators at
-different schedule stages would otherwise order the rounds past a
-boundary differently.
+`Barnacle.Config` mentions no protocol, and neither do the run, the
+update interface or the three safety results:
 
-### 8.1 Decisions to settle first
+| declaration | what it consumes |
+|:---|:---|
+| `Config`, `cum`, `roundOf`, `head`, `sched` | nothing but `Slots` |
+| `UpdateRule`, `Anchored` | `R.Universe`, `R.View` |
+| `PartialRun` | `R.Decided`, `R.Universe`, `R.View`, two numeric bounds |
+| BN3, BN5, BN6 | `R.toDagRule`, `Properties.Agree`, `CommitsCandidate` |
 
-- **D18 — the boundary's unit.** `epochOf W k = k / W` counts slots;
-  Hammerhead's `T` counts rounds. They agree at one leader per round and
-  not otherwise. Rounds are the recommendation: they match the paper,
-  they match `Barnacle.Config.interval`, and they keep the boundary
-  meaningful when the number of leaders per round varies.
-- **D19 — where a boundary sits.** Either every boundary is
-  `k · T` from genesis, fixed in advance, or each is `T` rounds after the
-  round at which the previous schedule was installed. The paper's line
-  30 reads the second; its footnote 3 suggests the count is of committed
-  leaders rather than rounds. The first is the recommendation: the
-  boundaries are then agreed before any commit, and the switch point is
-  the only thing the trigger determines.
-- **D20 — what becomes of the fixpoint arc.** `Adaptive.Run` proves
-  safety for verdict-reading policies under a window condition, which is
-  a real theorem about a larger class. The recommendation is to keep it
-  and to say what it is, rather than to delete or to rename it: the
-  segmented arc is Hammerhead, and the fixpoint arc is the
-  verdict-reading generalisation with the hypothesis that generality
-  costs.
+Every one of those is at `Properties.DagRule` level. The `BaseRule`
+extras — `full`, `historyView`, `waveLength`, `DirectCommitIn` — are
+consumed by the window, the AIMD rule and the liveness arc, not by the
+run or by agreement. So the run and its safety could be lifted to the
+common layer over a `DagRule` with `maxLeaders` and `maxInterval` as
+plain naturals, leaving Barnacle with `BaseRule`, `Params`, the window,
+AIMD and the heads descent.
 
-### 8.2 Steps
+**That lift is not proposed yet.** It is a move of about a thousand
+lines across five directories for the benefit of a second caller, and
+the second caller can be written without it. It becomes the right thing
+when a third mechanism arrives, or when either of the two frictions
+below starts to bite.
 
-1. **AL11 — the score.** Replace `pick`'s verdict argument with the
-   trigger anchor and the schedule in force:
+### 8.2 The minimal path, and what it accepts
 
-   ```lean
-   score : (U : R.Universe) → BlockId → (ℕ → Validator) → (ℕ → Validator)
+Write the Hammerhead score as a `Barnacle.UpdateRule`:
+
+```lean
+def hammerhead (score : (U : R.Universe) → BlockId → (ℕ → ℕ → Validator) → ℕ → ℕ → Validator)
+    (hk : …) : UpdateRule R :=
+  fun C b U _V A => (⟨C.slotsAt, C.slotsAt_pos, score U A C.lead, hk …, C.interval⟩, b)
+```
+
+— a rule that leaves the widths and the interval alone and moves the
+leaders. Then BN3 gives agreement of the schedule sequence and of the
+verdicts, BN5 the ledger, BN6 conservativity and BN14 validity, with no
+new induction. `Anchored` is the clause the score owes, and it is the
+same clause `Aimd.rule` discharges by not reading the view.
+
+Three frictions come with the minimal path, and none of them is a
+proof obligation:
+
+1. **The interface asks for more than the score needs.** `BaseRule`
+   carries `DirectCommitIn` and `waveLength`, which a Hammerhead score
+   does not read. Every rule of this development supplies them through
+   `ofAnchored`, so the cost is in the signature and not in the work.
+2. **`Params` carries `num` and `den`**, the AIMD threshold, which a
+   Hammerhead run leaves unused.
+3. **Pipelined bases only.** `Config.slotsAt_pos` puts at least one slot
+   in every round, and `roundOf` is `Nat.findGreatest` bounded by the
+   slot index, which is sound because `r ≤ cum r`. Allowing empty rounds
+   breaks that bound and leaves `roundOf` with no search range, so this
+   is not a clause to relax — it is what `Config` means. The
+   consequence: a `Config` cannot express `Slots.uniform 3 1`, the
+   three-round spacing that `LeanDagTest/Adaptive/Model.lean` uses on
+   `U7`. That witness stays with the fixpoint arc, where the base is an
+   arbitrary `Slots`.
+
+### 8.3 Steps
+
+1. **AL11 — the score.** A function
+   `(U : R.Universe) → BlockId → (ℕ → ℕ → Validator) → ℕ → ℕ → Validator`
+   from the universe, the trigger anchor and the leaders in force, with
+   two clauses: `Anchored`, which BN3 consumes, and the sharper reading
+   that `score U A prev` reads `U` only through
+   `historyFrom (R.block U) A` — the clause `BaseRule.Laws.historyView_ids`
+   states for the window and BN2 turns into agreement across views.
+   `Config.keyed` for the emitted leaders is the obligation
+   `Policy.keyed` and `Adaptive.PickKeyed` already record.
+2. ~~**AL12 — the segmented run.**~~ `Barnacle.PartialRun`.
+3. ~~**AL13 — safety.**~~ BN3 at the rule of AL11.
+4. ~~**AL14 — the ledger.**~~ BN5. ~~**AL15 — conservativity.**~~ BN6 at
+   `constRule`, and BN14 gives validity as well.
+5. **AL16 — liveness, and this is the work.** BN11 discharges the
+   liveness clause from runs of heads, but it asks
+   `UpdKeeps upd (fun C => C.head = head)` for **one fixed** head
+   function: the AIMD rule satisfies it by never moving the heads, and a
+   Hammerhead rule does nothing else. `Progress.Statement` is already
+   general in the clause `Q`, so the shape is
+
+   ```
+   Q C := C.head ∈ 𝓗
    ```
 
-   with one clause, the analogue of `Barnacle.Anchored` and of
-   `BaseRule.Laws.historyView_ids`: `score U A prev` reads `U` only
-   through `historyFrom (R.block U) A`. `Common/Causality.lean` already
-   has `historyFrom`, and the Barnacle arc already proves that two views
-   holding an anchor hold its history whole (BN2), so the clause is
-   discharged by machinery that exists.
+   for the set `𝓗` of head functions the score can emit, with the
+   liveness hypothesis becoming "every member of `𝓗` has runs of heads
+   for every good set". BN8b accepts that as a hypothesis today.
+   Discharging it for a concrete score is the paper's Lemmas 2 to 4 and
+   Leader-Utilization, and it is the one part of this plan that is not a
+   restatement. **Hammerhead is the missing instance of Barnacle's
+   `UpdKeeps`**, which the review of the Barnacle arc recorded as
+   supported and unwitnessed.
+6. **AL17 — the witnesses.** A run whose second configuration differs
+   from its first in the leaders alone, alongside `Varying.lean`'s run
+   that differs in the widths and the interval; and a refutation for the
+   fixpoint arc — an execution in which a slot needs an anchor more than
+   two epochs above it, so that no `Adaptive.Run` exists over it. The
+   second makes §7's vacuity concrete and is the honest companion to
+   AL9.
 
-2. **AL12 — the segmented run.** `Barnacle.PartialRun`'s shape at a
-   schedule rather than a `Config`:
+### 8.4 Strand A belongs to both arcs
 
-   ```lean
-   structure SegRun (P : Policy R) (U : R.Universe) (V : R.View U) (K : ℕ) where
-     start   : ℕ → ℕ                  -- the round segment k takes force after
-     sched   : ℕ → (ℕ → Validator)
-     trigger : ℕ → ℕ                  -- the slot of the anchor that closes it
-     vdct    : ℕ → ℕ → Option BlockId
-   ```
+§7 called the truncation of output at a schedule's boundary a gap in
+this arc. It is a gap in the Barnacle arc as well, and that arc's own
+record says so (`barnacle.md`, "The assumption a run makes without
+stating it"): `PartialRun.closed` records a configuration's verdicts as
+decided against `(cfg k).sched` extended to every round, which is not
+the schedule that runs once the configuration changes, and the note ends
+"the formalisation states the outcome and not the discipline".
+`Barnacle.cfg_local` is the recorded justification and has no consumer.
 
-   with `closed` bounding each segment's derivations by the segment's own
-   boundary, `trigger_commits` and `trigger_least` making the trigger the
-   least committed slot at or past it, `start_succ` fixing the next
-   boundary, and `update` installing `P.score` at the trigger's block.
-   The clause that does the work is that the ledger of segment `k` runs
-   to the **boundary**, not to the trigger: that is the truncation, and
-   it is the one thing `Adaptive.Run` has no room for.
+The two arcs fail differently, which is worth keeping straight.
+`Adaptive.PartialRun.closed` asks for `DecidedBelow` at the window, which
+**asserts** insensitivity to leaders above the bound: under asynchrony it
+is unsatisfiable and AL3 has no instances. `Barnacle.PartialRun.closed`
+asks for plain `Decided` against the extended schedule, which is always
+satisfiable but need not be the derivation a validator performs.
+Vacuous against unfaithful; one repair for both, and it belongs wherever
+the run ends up living rather than in this arc alone.
 
-3. **AL13 — safety.** Two segmented runs from one genesis schedule agree
-   on `start`, `sched`, `trigger` and on the verdicts of every closed
-   segment's range. The induction is `Barnacle.configAgree`'s, with
-   AL11's clause in the place of `Anchored`. Expect it to be short: the
-   Barnacle proof is about eighty lines and nothing in it is about
-   counting leaders.
+### 8.5 What remains of the fixpoint arc
 
-4. **AL14 — the ledger**, in BN5's three parts: agreed, growing,
-   without repetition.
+`Adaptive.Run` and AL3 are not superseded. They prove safety for
+policies that read **verdicts**, which is a strictly larger class than
+the scores Hammerhead admits, and the two-epoch lag is what makes that
+class tractable. The window condition of §7 is the price of the
+generality, and the arc should say so rather than carry it silently. Its
+`U7` witness at `slotRound k = 3k` also exercises a base that no `Config`
+can express, so the two arcs cover different schedules as well as
+different policies.
 
-5. **AL15 — conservativity.** A score that returns the schedule it was
-   given leaves every segment on the base schedule, and the verdicts are
-   base verdicts. BN6's shape.
+### 8.6 Decisions
 
-6. **AL16 — liveness.** BN8's shape: a segment closes when some slot
-   past its boundary commits, and runs of every height exist under a
-   horizon linear in the height. The window hypothesis of
-   `exists_partialRun` disappears; what replaces it is the base
-   protocol's own liveness at the segment's schedule, which is what the
-   Barnacle arc asks and discharges from a run of heads.
-
-7. **AL17 — the witnesses.** Two, and the second is the point of the
-   exercise.
-   - A run whose second schedule differs from its first, whose trigger
-     lies well past the boundary, and whose segment output stops at the
-     boundary — the asynchronous case the present arc cannot express.
-   - A refutation for the present arc: an execution in which a slot
-     needs an anchor more than two epochs above it, so that no
-     `Adaptive.Run` exists over it. This makes the vacuity concrete and
-     is the honest companion to AL9.
-
-### 8.3 What the plan retires
-
-- the window `DecidedBelow … (W · (epochOf k + 2))` as a condition on
-  executions;
-- `Policy.adapted`'s lag of two, for the Hammerhead policy class;
-- `exists_partialRun`'s per-height liveness hypothesis on `[W, W·(E+2))`.
-
-What it does not retire is §1's analysis. The circularity is real for
-any policy that reads verdicts, and the fixpoint arc remains the record
-of what such a policy costs.
+- **D18 — the boundary's unit.** Settled by the instantiation:
+  `Config.interval` counts rounds, as Hammerhead's `T` does.
+  `epochOf W k = k / W` counts slots and belongs to the fixpoint arc.
+- **D19 — where a boundary sits.** `Barnacle.PartialRun` places it at
+  `start k + (cfg k).interval`, and `start (k + 1)` at the anchor's own
+  round; Hammerhead places the next boundary at
+  `activeSchedule.initialRound + T`. The two agree once `start k` is
+  read as "the round after which configuration `k` is in force", and the
+  paper's footnote 3 leaves open whether `T` counts rounds or committed
+  leaders. Take Barnacle's, and record the paper's ambiguity.
+- **D20 — what becomes of the fixpoint arc.** Keep it, and label it as
+  §8.5 describes.
+- **D21 — when to lift the run to the common layer.** Not with this
+  arc. When a third mechanism wants it, or when §8.2's first two
+  frictions stop being cosmetic.

@@ -1086,3 +1086,29 @@ prefix when the switch is fixed, so an implementation would derive them
 with the next configuration above the boundary while `closed` asks for
 this one throughout. The paper starts the new configuration at the round after the
 pivot's, and a formalisation that keeps that has nothing to reconcile.
+
+### The discipline is not in the structure
+
+`Barnacle.cfg_local` records the justification and no proof consumes it.
+That is the honest reading: the clause is sound, and the soundness rests
+on a discipline of the implementation rather than on anything a
+`PartialRun` asserts.
+
+The Hammerhead paper faces the same question and answers it in the
+structure. Its `ORDERHISTORY` stops at the round a schedule expires,
+switches, and returns without ordering the trigger anchor or anything
+above it, so a verdict derived under one schedule reaches the ledger
+only for rounds below that schedule's expiry; its safety claim carries
+the boundary in the statement. The difference is that *naming* an anchor
+may run past the boundary under the expiring schedule — that is how the
+switch is detected, and every validator detects it at the same anchor —
+while *ordering* never does.
+
+Writing that into `PartialRun` means a segment whose output stops at
+`start k + (cfg k).interval` rather than at the anchor, with the slots
+between re-derived under the next configuration. It would retire the
+note above. It is not this arc's alone: the adaptive-leaders arc needs
+the same repair for a sharper reason — its run asks for `DecidedBelow` at
+a window, which asynchrony can make unsatisfiable, where this one asks
+for a `Decided` that is always satisfiable and may be unfaithful
+(`adaptive-leaders.md` §8.4).
