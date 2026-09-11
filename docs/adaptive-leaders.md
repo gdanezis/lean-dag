@@ -17,6 +17,13 @@
 > `Integration/AdaptiveOdontoceti.lean` as corollaries of the generic
 > theorems, the mechanism itself naming no protocol. §5's module plan is
 > the plan as written.
+>
+> **§7 and §8 were added after reading the Hammerhead paper itself.**
+> They record what the paper does that this arc does not — the output is
+> truncated at each schedule's boundary, and the reputation score reads
+> parent edges rather than verdicts — and plan the segmented run that
+> would represent it. §1 to §6 describe what is built; §7 says what it
+> assumes of the network without saying so.
 
 This document is the design record for the **adaptive-leaders** arc,
 written before the development rather than after it: the definitions and
@@ -303,3 +310,229 @@ an explicit hypothesis rather than a chosen constant.
 - **Changing `slotRound`.** Adaptivity here reassigns leader identity
   only; the round structure of the schedule stays fixed, as it does in
   Hammerhead.
+
+## 7. What the Hammerhead paper does that this arc does not
+
+*(Added September 2026, after reading `papers/hammerhead.pdf`
+— Tsimos, Kichidis, Sonnino and Kokoris-Kogias, *HammerHead:
+Score-based Dynamic Leader Selection*.)*
+
+§2's design pays for its stratification with a condition on executions.
+`Adaptive.PartialRun.closed` asks
+
+```lean
+closed : ∀ k, epochOf P.W k < E →
+  DecidedBelow R (slotsOfKeyed assign keyed) (P.W * (epochOf P.W k + 2)) V k (vdct k)
+```
+
+and `DecidedBelow R S B V k v` asks that the verdict of slot `k` be
+unchanged by any reassignment of the leaders at or above `B`. So every
+slot must settle without reading the schedule two epochs up. §4 sizes
+`W` against the eligibility gap, the run length `c` and the placement
+slack, and `Adaptive.exists_partialRun` carries liveness on the window
+`[W, W · (E + 2))` as a hypothesis at every height. Before GST the run
+length is unbounded, so no `W` satisfies it, and on such an execution no
+`Adaptive.Run` exists: AL3 is true and has no instances. The arc says
+nothing about what a validator should do when a slot has not settled in
+time, and the obvious thing — continue under the schedule in force —
+is what loses agreement.
+
+The paper has no such condition, and says why it does not need one.
+
+**The boundary is a round, not an event.** A schedule expires at
+`activeSchedule.initialRound + T`, fixed when the schedule is installed,
+whether or not anything commits in between.
+
+**Ordering stops at the boundary.** `ORDERHISTORY` (Algorithm 2, lines
+27–37) pops committed anchors in order and, at the first one whose round
+has reached the boundary, updates the schedule and **returns** — without
+ordering that anchor or anything above it:
+
+```
+30:   t ← activeSchedule.initialRound + T
+31:   if t ≤ anchor.round then
+32:     activeSchedule ← UPDATESCHEDULE(anchor)
+33:     return
+```
+
+A verdict derived under a schedule therefore reaches the ledger only for
+rounds strictly below that schedule's expiry. The safety claim is stated
+with the same bound: Claim 4 concludes that two honest parties order the
+same vertices in the same order between `max{r¹ᵢ, r¹ⱼ}` and
+`min{S, r²ᵢ, r²ⱼ}`, where `S` is the round of the next schedule change.
+
+**The switch is retroactive.** §III addresses exactly the case a slot
+fails to settle: validators "may not commit a leader immediately, but
+through recursion over the DAG and after an unbounded number of rounds
+before GST", and a validator that has been running a stale schedule
+"need[s] to retroactively apply the new schedule for the time-period in
+which they where operating under the previous schedule, while the new
+schedule was already active". The schedule may be stale for unboundedly
+long; the output never is.
+
+The invariant that makes this consistent is a separation the arc does
+not have. *Naming* an anchor may run past a schedule's boundary — that
+is how the switch is detected, and both parties do it under the same
+stale schedule, so they detect it at the same anchor. *Ordering* never
+runs past the boundary under an expiring schedule. Proposition 1 turns
+the first into agreement on the switch point, and Claim 4 turns the
+second into agreement on the output.
+
+### 7.1 The deeper difference: the score reads the DAG, not the verdicts
+
+`Policy.pick` takes `ℕ → Option BlockId` — the verdicts. That is the
+source of the circularity §1 describes, and the two-epoch lag is the
+repair.
+
+`UPDATESCHEDULE` (Algorithm 2, lines 38–42) reads no verdict. It walks
+the rounds of the trigger anchor's causal history and adds a point to
+each validator that *voted* for the previous round's leader under the
+schedule in force — a parent edge, not a decision. The reputation score
+is a function of two agreed objects: the causal history of an agreed
+anchor, and the schedule already installed. §VII draws the contrast
+with Shoal, which scores committed and skipped leaders and so does read
+verdicts.
+
+Because the score reads no verdict, the leader of a slot cannot depend
+on the verdict of a slot the leader affects, and the circularity of §1
+does not arise. Hammerhead needs no epoch lag: it excludes the trigger
+anchor's own sub-DAG from the score — "we calculate the reputation score
+up to but excluding the committed leader" — and that one exclusion is
+the whole of its delay.
+
+### 7.2 What is missing, in three items
+
+1. **No truncation.** The arc's run is a global fixpoint over all slots;
+   there is no boundary past which a schedule's verdicts are not used,
+   and so the condition that every slot settle inside `2W` has nowhere
+   else to go.
+2. **The policy reads verdicts.** The two-epoch lag repairs a
+   circularity that a score over parent edges does not create. The lag
+   is a sound device for a strictly larger class of policies, and it is
+   not Hammerhead's device.
+3. **The fixpoint is not the process.** One `assign : ℕ → Validator`
+   admits no validator that is behind, and so no retroactive
+   re-application. Proposition 1 and Lemma 1 are about validators
+   catching up through every intermediate schedule, "without skips";
+   the paper calls the schedule switch "the second and most critical
+   challenge", and it is the part this model cannot see.
+
+None of this makes AL3 false. It makes AL3 a theorem about executions
+in which the network behaves, stated in a form that does not say so.
+
+## 8. Plan: the segmented adaptive run
+
+The shape to build is the one the Barnacle arc already runs on
+(`barnacle.md` §5): a sequence of segments, each with a schedule in
+force, a range closed against that schedule, and a trigger that installs
+the next. Two strands, independent of one another.
+
+**Strand A — truncate the output at the boundary.** This is what makes
+the arc cover asynchronous executions.
+
+**Strand B — score the DAG rather than the verdicts.** This is what
+removes the circularity, and with it the lag and the window.
+
+Strand B alone gives an agreed schedule sequence with no condition on
+settling. Strand A is still needed after it, because two validators at
+different schedule stages would otherwise order the rounds past a
+boundary differently.
+
+### 8.1 Decisions to settle first
+
+- **D18 — the boundary's unit.** `epochOf W k = k / W` counts slots;
+  Hammerhead's `T` counts rounds. They agree at one leader per round and
+  not otherwise. Rounds are the recommendation: they match the paper,
+  they match `Barnacle.Config.interval`, and they keep the boundary
+  meaningful when the number of leaders per round varies.
+- **D19 — where a boundary sits.** Either every boundary is
+  `k · T` from genesis, fixed in advance, or each is `T` rounds after the
+  round at which the previous schedule was installed. The paper's line
+  30 reads the second; its footnote 3 suggests the count is of committed
+  leaders rather than rounds. The first is the recommendation: the
+  boundaries are then agreed before any commit, and the switch point is
+  the only thing the trigger determines.
+- **D20 — what becomes of the fixpoint arc.** `Adaptive.Run` proves
+  safety for verdict-reading policies under a window condition, which is
+  a real theorem about a larger class. The recommendation is to keep it
+  and to say what it is, rather than to delete or to rename it: the
+  segmented arc is Hammerhead, and the fixpoint arc is the
+  verdict-reading generalisation with the hypothesis that generality
+  costs.
+
+### 8.2 Steps
+
+1. **AL11 — the score.** Replace `pick`'s verdict argument with the
+   trigger anchor and the schedule in force:
+
+   ```lean
+   score : (U : R.Universe) → BlockId → (ℕ → Validator) → (ℕ → Validator)
+   ```
+
+   with one clause, the analogue of `Barnacle.Anchored` and of
+   `BaseRule.Laws.historyView_ids`: `score U A prev` reads `U` only
+   through `historyFrom (R.block U) A`. `Common/Causality.lean` already
+   has `historyFrom`, and the Barnacle arc already proves that two views
+   holding an anchor hold its history whole (BN2), so the clause is
+   discharged by machinery that exists.
+
+2. **AL12 — the segmented run.** `Barnacle.PartialRun`'s shape at a
+   schedule rather than a `Config`:
+
+   ```lean
+   structure SegRun (P : Policy R) (U : R.Universe) (V : R.View U) (K : ℕ) where
+     start   : ℕ → ℕ                  -- the round segment k takes force after
+     sched   : ℕ → (ℕ → Validator)
+     trigger : ℕ → ℕ                  -- the slot of the anchor that closes it
+     vdct    : ℕ → ℕ → Option BlockId
+   ```
+
+   with `closed` bounding each segment's derivations by the segment's own
+   boundary, `trigger_commits` and `trigger_least` making the trigger the
+   least committed slot at or past it, `start_succ` fixing the next
+   boundary, and `update` installing `P.score` at the trigger's block.
+   The clause that does the work is that the ledger of segment `k` runs
+   to the **boundary**, not to the trigger: that is the truncation, and
+   it is the one thing `Adaptive.Run` has no room for.
+
+3. **AL13 — safety.** Two segmented runs from one genesis schedule agree
+   on `start`, `sched`, `trigger` and on the verdicts of every closed
+   segment's range. The induction is `Barnacle.configAgree`'s, with
+   AL11's clause in the place of `Anchored`. Expect it to be short: the
+   Barnacle proof is about eighty lines and nothing in it is about
+   counting leaders.
+
+4. **AL14 — the ledger**, in BN5's three parts: agreed, growing,
+   without repetition.
+
+5. **AL15 — conservativity.** A score that returns the schedule it was
+   given leaves every segment on the base schedule, and the verdicts are
+   base verdicts. BN6's shape.
+
+6. **AL16 — liveness.** BN8's shape: a segment closes when some slot
+   past its boundary commits, and runs of every height exist under a
+   horizon linear in the height. The window hypothesis of
+   `exists_partialRun` disappears; what replaces it is the base
+   protocol's own liveness at the segment's schedule, which is what the
+   Barnacle arc asks and discharges from a run of heads.
+
+7. **AL17 — the witnesses.** Two, and the second is the point of the
+   exercise.
+   - A run whose second schedule differs from its first, whose trigger
+     lies well past the boundary, and whose segment output stops at the
+     boundary — the asynchronous case the present arc cannot express.
+   - A refutation for the present arc: an execution in which a slot
+     needs an anchor more than two epochs above it, so that no
+     `Adaptive.Run` exists over it. This makes the vacuity concrete and
+     is the honest companion to AL9.
+
+### 8.3 What the plan retires
+
+- the window `DecidedBelow … (W · (epochOf k + 2))` as a condition on
+  executions;
+- `Policy.adapted`'s lag of two, for the Hammerhead policy class;
+- `exists_partialRun`'s per-height liveness hypothesis on `[W, W·(E+2))`.
+
+What it does not retire is §1's analysis. The circularity is real for
+any policy that reads verdicts, and the fixpoint arc remains the record
+of what such a policy costs.
