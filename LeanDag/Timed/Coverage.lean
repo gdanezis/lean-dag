@@ -86,10 +86,10 @@ does not owe it. -/
 def OfCoverage (sp : Support R) (rel : Reliability Validator) : Prop :=
   ∀ (U : R.Universe) (T : Finset Validator), rel.IsQuorum T →
     ∀ (r : ℕ) (L : BlockId),
-    (∀ n, r ≤ n → n ≤ r + sp.wave → Properties.PopulatedOn R U T n) →
-    CoversToward R U T r sp.wave L →
+    (∀ n, r ≤ n → n ≤ r + sp.waveAt r → Properties.PopulatedOn R U T n) →
+    CoversToward R U T r (sp.waveAt r) L →
     L ∈ R.ids U → (R.block U L).round = r → (R.block U L).creator ∈ T →
-    ∀ c, c ∈ R.ids U → (R.block U c).creator ∈ T → (R.block U c).round = r + sp.wave →
+    ∀ c, c ∈ R.ids U → (R.block U c).creator ∈ T → (R.block U c).round = r + sp.waveAt r →
       sp.Certifies U c L
 
 /-- **For vote support**, coverage toward the candidate at its own round
@@ -110,7 +110,8 @@ theorem live_of_coverage (sp : Support R) {rel : Reliability Validator}
     (hq : rel.IsQuorum T) {Rnd N : ℕ} (hs : SynchronisedOn R U T Rnd)
     (hpop : ∀ r, Rnd ≤ r → r ≤ N → Properties.PopulatedOn R U T r)
     (S : Slots Validator) (V : R.View U) {lo K : ℕ} (hV : CoversUpto R V N)
-    (hRnd : Rnd ≤ S.slotRound lo) (hN : ∀ k, k < K → S.slotRound k + sp.wave ≤ N) :
+    (hRnd : Rnd ≤ S.slotRound lo)
+    (hN : ∀ k, k < K → S.slotRound k + sp.waveAt (S.slotRound k) ≤ N) :
     sp.live rel S V T lo K := by
   refine ⟨hq, N, hV, hN, ?_⟩
   intro k hlo hK hlead
@@ -130,12 +131,12 @@ theorem exists_decided_of_coverage (sp : Support R) {rel : Reliability Validator
     (hs : SynchronisedOn R U T Rnd)
     (hpop : ∀ r, Rnd ≤ r → r ≤ N → Properties.PopulatedOn R U T r)
     (S : Slots Validator) (V : R.View U) (k : ℕ) (hV : CoversUpto R V N)
-    (hRnd : Rnd ≤ S.slotRound k) (hN : S.slotRound k + sp.wave ≤ N)
+    (hRnd : Rnd ≤ S.slotRound k)
+    (hN : ∀ j, j ≤ k → S.slotRound j + sp.waveAt (S.slotRound j) ≤ N)
     (hlead : S.leader k ∈ T) :
     ∃ L, DecidedBelow R S (k + 1) V k (some L) :=
   sp.leaderCommits hlc S V T k (k + 1)
-    (live_of_coverage sp hcov hq hs hpop S V hV hRnd (fun j hj => by
-      have := S.mono (Nat.lt_succ_iff.mp hj); omega))
+    (live_of_coverage sp hcov hq hs hpop S V hV hRnd (fun j hj => hN j (Nat.lt_succ_iff.mp hj)))
     k le_rfl (Nat.lt_succ_self k) hlead
 
 /-- **Everything below a fair run is decided, on a covered DAG.** The
@@ -150,7 +151,8 @@ theorem decidedBelow_of_fairRun (sp : Support R) {rel : Reliability Validator}
     ∃ b, k ≤ b ∧ Rnd ≤ S.slotRound b ∧
       ∀ {U : R.Universe} (V : R.View U) (N : ℕ),
         SynchronisedOn R U T Rnd → (∀ r, Rnd ≤ r → r ≤ N → Properties.PopulatedOn R U T r) →
-        CoversUpto R V N → S.slotRound (b + c - 1) + sp.wave ≤ N →
+        CoversUpto R V N →
+        (∀ j, j < b + c → S.slotRound j + sp.waveAt (S.slotRound j) ≤ N) →
         ∀ i, i < b → ∃ v, DecidedBelow R S (b + c) V i v := by
   obtain ⟨k₀, hk₀⟩ := S.unbounded Rnd
   obtain ⟨b, hb, h⟩ := sp.decidedBelow_of_fairRun hlc hd fair (max k k₀)
@@ -158,9 +160,16 @@ theorem decidedBelow_of_fairRun (sp : Support R) {rel : Reliability Validator}
     le_trans hk₀ (S.mono (le_trans (le_max_right k k₀) hb))
   refine ⟨b, le_trans (le_max_left _ _) hb, hRb, ?_⟩
   intro U V N hs hpop hV hN i hi
-  refine h V (live_of_coverage sp hcov hq hs hpop S V hV hRb ?_) i hi
-  intro j hj
-  exact le_trans (Nat.add_le_add_right (S.mono (by omega)) _) hN
+  exact h V (live_of_coverage sp hcov hq hs hpop S V hV hRb hN) i hi
+
+/-- The per-slot bound `decidedBelow_of_fairRun` asks, from one bound at the run's top slot
+and a ceiling the wave never exceeds: what a rule with a constant wave has to hand. -/
+theorem slotBound_of_top (sp : Support R) {w : ℕ} (hw : ∀ r, sp.waveAt r ≤ w)
+    {S : Slots Validator} {b c N : ℕ} (hN : S.slotRound (b + c - 1) + w ≤ N) :
+    ∀ j, j < b + c → S.slotRound j + sp.waveAt (S.slotRound j) ≤ N := fun j hj => by
+  have := S.mono (show j ≤ b + c - 1 by omega)
+  have := hw (S.slotRound j)
+  omega
 
 /-! ## A good DAG -/
 
@@ -176,13 +185,13 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 /-- **The descent laws, from a support.** A rule whose support commits
 under coverage at a fault model, with the indirect rule at gap `g` and a
 goodness predicate that implies `Timed.Good`, has the descent laws at the
-model's slack. -/
+model's slack, provided the support's wave never exceeds the gap. -/
 theorem descent_of_support (R : Properties.DagRule Validator BlockId Payload)
     (Good : R.Universe → ℕ → ℕ → Prop) (g : ℕ)
     (sp : Properties.Support R) {rel : Reliability Validator}
     (hcov : OfCoverage sp rel) (hlc : sp.Commits rel)
     (hind : Properties.Indirect R (fun sr i j => sr i + g ≤ sr j))
-    (hwave : sp.wave ≤ g)
+    (hwave : ∀ r, sp.waveAt r ≤ g)
     (hgood : ∀ U Rnd N, Good U Rnd N → Timed.Good R rel U Rnd N) :
     Properties.Descent R Good g rel.slack where
   goodLeaders := by
@@ -191,7 +200,8 @@ theorem descent_of_support (R : Properties.DagRule Validator BlockId Payload)
     refine ⟨T, by have := hq.2; omega, ?_⟩
     intro S V κ hcovV hRnd hN hlead
     obtain ⟨L, hL⟩ := exists_decided_of_coverage sp hcov hlc hq hs hpop S V κ
-      (fun b hb hr => hcovV b hb hr) hRnd (by omega) hlead
+      (fun b hb hr => hcovV b hb hr) hRnd
+      (fun j hj => by have := hwave (S.slotRound j); have := S.mono hj; omega) hlead
     exact ⟨L, hL.2.1⟩
   indirect := by
     intro S U V i j A hij hj hmid

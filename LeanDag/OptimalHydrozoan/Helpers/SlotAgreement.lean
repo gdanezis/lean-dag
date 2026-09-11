@@ -422,7 +422,7 @@ theorem anchor_round_opt {k j : ℕ} {A : BlockId} (hA : IsLeaderBlock U j A)
     (helig : (optimalAnchored Replica BlockId).Eligible k j) :
     S.slotRound k + 3 ≤ (U.block A).round := by
   have := (optimalAnchored Replica BlockId).anchor_round_le hA helig
-  simp only [optimalAnchored_wave] at this
+  simp only [optimalAnchored_waveAt] at this
   omega
 
 /-- A slow commit in any view is certified at every candidate of an

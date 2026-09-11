@@ -23,7 +23,7 @@ variable (Validator BlockId Payload : Type*) [Fintype Validator] [DecidableEq Va
 /-- **FinWhale as an anchored rule.** -/
 def finWhaleAnchored :
     AnchoredRule Validator BlockId Payload ValidHere (Correct : Finset Validator) where
-  wave := 2
+  waveAt := fun _ => 2
   Commit := fun _ V L _ => DirectCommit V.toRecord L
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun _ V S k => DirectSkip S V.toRecord k

@@ -90,7 +90,7 @@ theorem decidedBelowRun {D : Dag Validator BlockId Payload} {S : Slots Validator
 /-- **FinWhale reads a band**: the relation's band at its band laws. -/
 theorem banded : Banded (finWhaleRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) :=
-  AnchoredRule.banded LeanDag.FinWhale.finWhaleBandLaws
+  AnchoredRule.banded LeanDag.FinWhale.finWhaleBandLaws (fun _ _ => rfl)
 
 /-- **The indirect rule, with its bound.** The relation's indirect
 property at the rung's choice, read at the three-round eligibility:
@@ -101,7 +101,7 @@ theorem indirect : Indirect
     (fun sr i j => sr i + 3 ≤ sr j) :=
   (AnchoredRule.indirect LeanDag.FinWhale.finWhaleLaws.link_congr
     fun hi h => LeanDag.FinWhale.exists_least hi h).congr
-    (fun _ _ _ => by simp only [LeanDag.FinWhale.finWhaleAnchored_wave])
+    (fun _ _ _ => by simp only [LeanDag.FinWhale.finWhaleAnchored_waveAt])
 
 /-! ## The pass a view runs
 
@@ -191,7 +191,7 @@ theorem spQuorum_le_quorumCard :
 /-- **FinWhale's support**: wavelength two, certification the slow path's. -/
 def fwSupport : Support (finWhaleRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) where
-  wave := 2
+  waveAt := fun _ => 2
   Certifies := fun D c l => LeanDag.FinWhale.SPCertificate D c l
 
 /-- **Law 1.** A certifier two rounds above the settling round keeps its
@@ -285,7 +285,7 @@ theorem descent :
         (Payload := Payload)) (coreReliability Validator))
       3 (coreReliability Validator).slack :=
   Timed.descent_of_support _ _ 3 fwSupport fwSupport_ofCoverage fwSupport_commits
-    indirect (by change 2 ≤ 3; omega) fun _ _ _ h => h
+    indirect (fun _ => by change 2 ≤ 3; omega) fun _ _ _ h => h
 
 /-! ## FinWhale's fast path
 

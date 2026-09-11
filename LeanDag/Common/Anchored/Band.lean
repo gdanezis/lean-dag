@@ -149,7 +149,7 @@ theorem indirect (hcongr : R.LinkCongr)
       (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
       ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
         R.Least (S := S) U A i k L) :
-    Indirect R.toDagRule (fun sr i j => sr i + R.wave + 1 ≤ sr j) := by
+    Indirect R.toDagRule (fun sr i j => sr i + R.waveAt (sr i) + 1 ≤ sr j) := by
   classical
   intro S U V i j A helig hj hmid
   have he : R.Eligible (S := S) i j := R.eligible_iff.mpr helig
@@ -205,7 +205,7 @@ theorem indirectVia {X : Type} {f : X → BlockRecord Validator BlockId Payload 
       (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
       ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
         R.Least (S := S) U A i k L) :
-    Indirect (R.toDagRuleVia f) (fun sr i j => sr i + R.wave + 1 ≤ sr j) :=
+    Indirect (R.toDagRuleVia f) (fun sr i j => sr i + R.waveAt (sr i) + 1 ≤ sr j) :=
   fun S U V i j A helig hj hmid => indirect hcongr hleast S (U := f U) V i j A helig hj hmid
 
 theorem indirectOn (hcongr : R.LinkCongr)
@@ -214,7 +214,7 @@ theorem indirectOn (hcongr : R.LinkCongr)
       (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
       ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
         R.Least (S := S) U A i k L) :
-    Indirect (R.toDagRuleOn I) (fun sr i j => sr i + R.wave + 1 ≤ sr j) :=
+    Indirect (R.toDagRuleOn I) (fun sr i j => sr i + R.waveAt (sr i) + 1 ≤ sr j) :=
   fun S U V i j A helig hj hmid => indirect hcongr hleast S (U := U.val) V i j A helig hj hmid
 
 /-! ## The band -/
@@ -579,7 +579,7 @@ structure BandLaws : Prop where
     {lo hi g g' : ℕ} {V : U.View} {V' : U'.View} {k k' : ℕ} {L : BlockId},
     AgreeBand R.toDagRule U U' lo hi g g' →
     S.slotRound k + g = S'.slotRound k' + g' → S.leader k = S'.leader k' →
-    lo = S.slotRound k + g → S.slotRound k + R.wave + g ≤ hi →
+    lo = S.slotRound k + g → S.slotRound k + R.waveAt (S.slotRound k) + g ≤ hi →
     (∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi → b ∈ V'.ids) →
     IsLeaderBlock (S := S) U k L →
     R.Commit U V L (S.slotRound k) → R.Commit U' V' L (S'.slotRound k')
@@ -587,7 +587,7 @@ structure BandLaws : Prop where
     {lo hi g g' : ℕ} {V : U.View} {V' : U'.View} {k k' : ℕ},
     AgreeBand R.toDagRule U U' lo hi g g' →
     S.slotRound k + g = S'.slotRound k' + g' → S.leader k = S'.leader k' →
-    lo = S.slotRound k + g → S.slotRound k + R.wave + g ≤ hi →
+    lo = S.slotRound k + g → S.slotRound k + R.waveAt (S.slotRound k) + g ≤ hi →
     (∀ b, b ∈ V.ids → lo ≤ (U.block b).round + g → (U.block b).round + g ≤ hi → b ∈ V'.ids) →
     R.Skip U V S k → R.Skip U' V' S' k'
   /-- An old anchor links what it linked, at every rung. -/
@@ -596,7 +596,7 @@ structure BandLaws : Prop where
     AgreeBand R.toDagRule U U' lo hi g g' → A ∈ U.ids →
     lo ≤ (U.block A).round + g → (U.block A).round + g ≤ hi →
     S.slotRound k + g = S'.slotRound k' + g' → S.leader k = S'.leader k' →
-    lo ≤ S.slotRound k + g → S.slotRound k + R.wave + g ≤ hi → i < R.rungs →
+    lo ≤ S.slotRound k + g → S.slotRound k + R.waveAt (S.slotRound k) + g ≤ hi → i < R.rungs →
     IsLeaderBlock (S := S) U k L →
     (R.Link i U' A L S' k' ↔ R.Link i U A L S k)
   /-- A candidate the band did not carry is linked from no old anchor. -/
@@ -605,7 +605,7 @@ structure BandLaws : Prop where
     AgreeBand R.toDagRule U U' lo hi g g' → A ∈ U.ids →
     lo ≤ (U.block A).round + g → (U.block A).round + g ≤ hi →
     S.slotRound k + g = S'.slotRound k' + g' → S.leader k = S'.leader k' →
-    lo ≤ S.slotRound k + g → S.slotRound k + R.wave + g ≤ hi → i < R.rungs →
+    lo ≤ S.slotRound k + g → S.slotRound k + R.waveAt (S.slotRound k) + g ≤ hi → i < R.rungs →
     IsLeaderBlock (S := S') U' k' L → L ∉ U.ids → ¬ R.Link i U' A L S' k'
 
 variable (hb : R.BandLaws)
@@ -615,7 +615,8 @@ include hb
 theorem rungEmpty_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A : BlockId} {k k' i : ℕ}
     (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
     (hkk : S.slotRound k + g = S'.slotRound k' + g') (hlk : S.leader k = S'.leader k')
-    (hlo : lo ≤ S.slotRound k + g) (hhi : S.slotRound k + R.wave + g ≤ hi) (hi : i < R.rungs)
+    (hlo : lo ≤ S.slotRound k + g) (hhi : S.slotRound k + R.waveAt (S.slotRound k) + g ≤ hi)
+    (hi : i < R.rungs)
     (he : R.RungEmpty (S := S) U A i k) : R.RungEmpty (S := S') U' A i k' := by
   intro L hL hlink
   by_cases hLo : L ∈ U.ids
@@ -627,7 +628,8 @@ theorem rungEmpty_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A : BlockId}
 theorem least_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A L : BlockId} {k k' i : ℕ}
     (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
     (hkk : S.slotRound k + g = S'.slotRound k' + g') (hlk : S.leader k = S'.leader k')
-    (hlo : lo ≤ S.slotRound k + g) (hhi : S.slotRound k + R.wave + g ≤ hi) (hi : i < R.rungs)
+    (hlo : lo ≤ S.slotRound k + g) (hhi : S.slotRound k + R.waveAt (S.slotRound k) + g ≤ hi)
+    (hi : i < R.rungs)
     (hm : R.Least (S := S) U A i k L) : R.Least (S := S') U' A i k' L := by
   intro L' hL' hlink
   by_cases hLo : L' ∈ U.ids
@@ -639,9 +641,9 @@ theorem least_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A L : BlockId} {
 derivation. The direct cases read the slot's wave and stop; the indirect
 cases read the anchor's derivation and the intermediates', and the top
 is the largest of those. -/
-theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
-    (hd : R.Decided (S := S) U V k v) :
-    ∃ top, S.slotRound k + R.wave ≤ top ∧
+theorem banded_aux (hw : ∀ r r', R.waveAt r = R.waveAt r') {V : U.View} {k : ℕ}
+    {v : Option BlockId} (hd : R.Decided (S := S) U V k v) :
+    ∃ top, S.slotRound k + R.waveAt (S.slotRound k) ≤ top ∧
       ∀ (g g' d d' : ℕ) (S' : Slots Validator)
         (U' : BlockRecord Validator BlockId Payload P honest) (V' : U'.View) (k' : ℕ),
         k + d' = k' + d →
@@ -655,7 +657,7 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
   classical
   induction hd with
   | @directCommit k L hL hc =>
-      refine ⟨S.slotRound k + R.wave, le_refl _, ?_⟩
+      refine ⟨S.slotRound k + R.waveAt (S.slotRound k), le_refl _, ?_⟩
       intro g g' d d' S' U' V' k' hkd hsch hlead hab hV
       have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd (by omega)
       have hlk : S.leader k = S'.leader k' := hlead k k' hkd (by omega)
@@ -664,7 +666,7 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
         (hb.commit_band hab hkk hlk rfl (by omega)
           (fun b hb h1 h2 => hV b hb (by omega) (by omega)) hL hc)
   | @directSkip k hs =>
-      refine ⟨S.slotRound k + R.wave, le_refl _, ?_⟩
+      refine ⟨S.slotRound k + R.waveAt (S.slotRound k), le_refl _, ?_⟩
       intro g g' d d' S' U' V' k' hkd hsch hlead hab hV
       have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd (by omega)
       have hlk : S.leader k = S'.leader k' := hlead k k' hkd (by omega)
@@ -687,21 +689,18 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
         exact le_trans (Finset.le_sup (Finset.mem_Ico.mpr ⟨by omega, h2⟩)) (le_max_right _ _)
       have htj : topj ≤ top := by rw [htop]; exact le_max_left _ _
       have helig' := R.eligible_iff.mp helig
-      have htopk : S.slotRound k + R.wave ≤ top := by omega
+      have htopk : S.slotRound k + R.waveAt (S.slotRound k) ≤ top := by omega
       refine ⟨top, htopk, ?_⟩
       intro g g' d d' S' U' V' k' hkd hsch hlead hab hV
       have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd (by omega)
       have hlk : S.leader k = S'.leader k' := hlead k k' hkd (by omega)
       have hjd : j + d' = (j - k + k') + d := by omega
-      have hjtop : S.slotRound j ≤ top := by omega
-      have hjj : S.slotRound j + g = S'.slotRound (j - k + k') + g' :=
-        hsch j _ hjd hjtop
+      have hjj : S.slotRound j + g = S'.slotRound (j - k + k') + g' := hsch j _ hjd (by omega)
       have hAhi : (U.block A).round + g ≤ top + g := by rw [hAL.2.1]; omega
       have hAlo : S.slotRound k + g ≤ (U.block A).round + g := by rw [hAL.2.1]; omega
       refine Decided.indirectCommit (S := S') (i := i) (by omega) (by
-          rw [R.eligible_iff]; omega)
-        (hjt g g' d d' S' U' V' (j - k + k') hjd
-          (fun m m' hm hbnd => hsch m m' hm (by omega))
+          rw [R.eligible_iff, hw (S'.slotRound k') (S.slotRound k)]; omega)
+        (hjt g g' d d' S' U' V' (j - k + k') hjd (fun m m' hm hbnd => hsch m m' hm (by omega))
           (fun m m' hm hb => hlead m m' hm (by omega))
           (hab.mono (by omega) (by omega))
           (fun b hb h1 h2 => hV b hb (by omega) (by omega))) ?_ hi ?_
@@ -712,8 +711,8 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
         have hij : i' - k' + k < j := by omega
         have helg : R.Eligible (S := S) k (i' - k' + k) := by
           have hii := hsch _ i' hi'd
-            (le_trans (S.mono (Nat.le_of_lt hij)) hjtop)
-          rw [R.eligible_iff (S := S')] at h3
+            (by have := S.mono (Nat.le_of_lt hij); omega)
+          rw [R.eligible_iff (S := S'), hw (S'.slotRound k') (S.slotRound k)] at h3
           rw [R.eligible_iff (S := S)]; omega
         have hk2 := hkey _ hki hij helg
         obtain ⟨htopi, hit⟩ := (ihmid _ hki hij helg).choose_spec
@@ -744,21 +743,18 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
         exact le_trans (Finset.le_sup (Finset.mem_Ico.mpr ⟨by omega, h2⟩)) (le_max_right _ _)
       have htj : topj ≤ top := by rw [htop]; exact le_max_left _ _
       have helig' := R.eligible_iff.mp helig
-      have htopk : S.slotRound k + R.wave ≤ top := by omega
+      have htopk : S.slotRound k + R.waveAt (S.slotRound k) ≤ top := by omega
       refine ⟨top, htopk, ?_⟩
       intro g g' d d' S' U' V' k' hkd hsch hlead hab hV
       have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd (by omega)
       have hlk : S.leader k = S'.leader k' := hlead k k' hkd (by omega)
       have hjd : j + d' = (j - k + k') + d := by omega
-      have hjtop : S.slotRound j ≤ top := by omega
-      have hjj : S.slotRound j + g = S'.slotRound (j - k + k') + g' :=
-        hsch j _ hjd hjtop
+      have hjj : S.slotRound j + g = S'.slotRound (j - k + k') + g' := hsch j _ hjd (by omega)
       have hAhi : (U.block A).round + g ≤ top + g := by rw [hAL.2.1]; omega
       have hAlo : S.slotRound k + g ≤ (U.block A).round + g := by rw [hAL.2.1]; omega
       refine Decided.indirectSkip (S := S') (by omega) (by
-          rw [R.eligible_iff]; omega)
-        (hjt g g' d d' S' U' V' (j - k + k') hjd
-          (fun m m' hm hbnd => hsch m m' hm (by omega))
+          rw [R.eligible_iff, hw (S'.slotRound k') (S.slotRound k)]; omega)
+        (hjt g g' d d' S' U' V' (j - k + k') hjd (fun m m' hm hbnd => hsch m m' hm (by omega))
           (fun m m' hm hb => hlead m m' hm (by omega))
           (hab.mono (by omega) (by omega))
           (fun b hb h1 h2 => hV b hb (by omega) (by omega))) ?_ ?_
@@ -768,8 +764,8 @@ theorem banded_aux {V : U.View} {k : ℕ} {v : Option BlockId}
         have hij : i' - k' + k < j := by omega
         have helg : R.Eligible (S := S) k (i' - k' + k) := by
           have hii := hsch _ i' hi'd
-            (le_trans (S.mono (Nat.le_of_lt hij)) hjtop)
-          rw [R.eligible_iff (S := S')] at h3
+            (by have := S.mono (Nat.le_of_lt hij); omega)
+          rw [R.eligible_iff (S := S'), hw (S'.slotRound k') (S.slotRound k)] at h3
           rw [R.eligible_iff (S := S)]; omega
         have hk2 := hkey _ hki hij helg
         obtain ⟨htopi, hit⟩ := (ihmid _ hki hij helg).choose_spec
@@ -796,13 +792,14 @@ theorem banded_direct {V : U.View} {k : ℕ} {v : Option BlockId}
     ∀ (g g' d d' : ℕ) (S' : Slots Validator)
       (U' : BlockRecord Validator BlockId Payload P honest) (V' : U'.View) (k' : ℕ),
       k + d' = k' + d →
-      (∀ m m', m + d' = m' + d → S.slotRound m ≤ S.slotRound k + R.wave →
+      (∀ m m', m + d' = m' + d → S.slotRound m ≤ S.slotRound k + R.waveAt (S.slotRound k) →
         S.slotRound m + g = S'.slotRound m' + g') →
-      (∀ m m', m + d' = m' + d → S.slotRound m ≤ S.slotRound k + R.wave →
+      (∀ m m', m + d' = m' + d → S.slotRound m ≤ S.slotRound k + R.waveAt (S.slotRound k) →
         S.leader m = S'.leader m') →
-      AgreeBand R.toDagRule U U' (S.slotRound k + g) (S.slotRound k + R.wave + g) g g' →
+      AgreeBand R.toDagRule U U' (S.slotRound k + g)
+        (S.slotRound k + R.waveAt (S.slotRound k) + g) g g' →
       (∀ b, b ∈ V.ids → S.slotRound k ≤ (U.block b).round →
-        (U.block b).round ≤ S.slotRound k + R.wave → b ∈ V'.ids) →
+        (U.block b).round ≤ S.slotRound k + R.waveAt (S.slotRound k) → b ∈ V'.ids) →
       R.Decided (S := S') U' V' k' v := by
   intro g g' d d' S' U' V' k' hkd hsch hlead hab hV
   have hkk : S.slotRound k + g = S'.slotRound k' + g' := hsch k k' hkd (by omega)
@@ -818,10 +815,12 @@ theorem banded_direct {V : U.View} {k : ℕ} {v : Option BlockId}
       (hb.skip_band hab hkk hlk rfl (by omega)
         (fun b hb h1 h2 => hV b hb (by omega) (by omega)) hs)
 
-/-- **An anchored rule is banded.** -/
-theorem banded : Banded R.toDagRule := by
+/-- **An anchored rule is banded**, when its wave is the same at every
+round: the band shifts rounds by a constant, which a wave that varies
+with the round does not survive. -/
+theorem banded (hw : ∀ r r', R.waveAt r = R.waveAt r') : Banded R.toDagRule := by
   intro S U V k v hd
-  obtain ⟨top, -, ht⟩ := banded_aux hb (S := S) hd
+  obtain ⟨top, -, ht⟩ := banded_aux hb hw (S := S) hd
   exact ⟨top, fun g g' d d' S' U' V' k' hkd hsch hlead hab hV =>
     ht g g' d d' S' U' V' k' hkd hsch hlead hab hV⟩
 
@@ -834,17 +833,130 @@ theorem agreeBand_of_via {X : Type} {f : X → BlockRecord Validator BlockId Pay
   ⟨h.mem, h.block, h.refs⟩
 
 /-- **The relation reads a band, through a projection.** -/
-theorem bandedVia {X : Type} {f : X → BlockRecord Validator BlockId Payload P honest} :
-    Banded (R.toDagRuleVia f) := by
+theorem bandedVia {X : Type} {f : X → BlockRecord Validator BlockId Payload P honest}
+    (hw : ∀ r r', R.waveAt r = R.waveAt r') : Banded (R.toDagRuleVia f) := by
   intro S U V k v hd
-  obtain ⟨top, -, ht⟩ := banded_aux hb (S := S) hd
+  obtain ⟨top, -, ht⟩ := banded_aux hb hw (S := S) hd
   exact ⟨top, fun g g' d d' S' U' V' k' hkd hsch hlead hab hV =>
     ht g g' d d' S' (f U') V' k' hkd hsch hlead (agreeBand_of_via hab) hV⟩
 
 /-- **The relation reads a band, under the invariant.** -/
-theorem bandedOn : Banded (R.toDagRuleOn I) := bandedVia hb
+theorem bandedOn (hw : ∀ r r', R.waveAt r = R.waveAt r') : Banded (R.toDagRuleOn I) :=
+  bandedVia hb hw
 
 end Band
+
+/-! ## Persistence, without the band's offsets
+
+An extension carries every band at offset zero and at every ceiling, so a
+verdict survives it with no bookkeeping of the band's top: the induction
+of `banded_aux` with every shift trivial. A rule whose wave varies with
+the round has no offset band (`docs/target-properties.md` §3.4b) but
+keeps this, since nothing here moves a round. -/
+
+/-- **What a rule owes an extension**: its direct commit, its direct skip
+and its link rungs carry into any extension of the record, at the same
+schedule and slot, and a candidate the extension added is linked at no
+rung. `BandLaws` at offset zero. -/
+structure ExtendLaws : Prop where
+  commit_ext : ∀ {S : Slots Validator} {U U' : BlockRecord Validator BlockId Payload P honest}
+    {V : U.View} {V' : U'.View} {k : ℕ} {L : BlockId},
+    Extends R.toDagRule U U' → (∀ b, b ∈ V.ids → b ∈ V'.ids) →
+    IsLeaderBlock (S := S) U k L →
+    R.Commit U V L (S.slotRound k) → R.Commit U' V' L (S.slotRound k)
+  skip_ext : ∀ {S : Slots Validator} {U U' : BlockRecord Validator BlockId Payload P honest}
+    {V : U.View} {V' : U'.View} {k : ℕ},
+    Extends R.toDagRule U U' → (∀ b, b ∈ V.ids → b ∈ V'.ids) →
+    R.Skip U V S k → R.Skip U' V' S k
+  /-- An old anchor links what it linked, at every rung. -/
+  link_ext : ∀ {S : Slots Validator} {U U' : BlockRecord Validator BlockId Payload P honest}
+    {A L : BlockId} {k i : ℕ},
+    Extends R.toDagRule U U' → A ∈ U.ids → i < R.rungs → IsLeaderBlock (S := S) U k L →
+    (R.Link i U' A L S k ↔ R.Link i U A L S k)
+  /-- A candidate the extension added is linked from no old anchor. -/
+  link_novel_ext : ∀ {S : Slots Validator} {U U' : BlockRecord Validator BlockId Payload P honest}
+    {A L : BlockId} {k i : ℕ},
+    Extends R.toDagRule U U' → A ∈ U.ids → i < R.rungs →
+    IsLeaderBlock (S := S) U' k L → L ∉ U.ids → ¬ R.Link i U' A L S k
+
+/-- The band laws at offset zero are the extension laws. -/
+theorem BandLaws.toExtendLaws (hb : R.BandLaws) : R.ExtendLaws where
+  commit_ext := fun {S U U' V V' k L} he hV hL hc =>
+    hb.commit_band (AgreeBand.of_extends he (S.slotRound k)
+        (S.slotRound k + R.waveAt (S.slotRound k)))
+      rfl rfl rfl (by omega) (fun b hb _ _ => hV b hb) hL hc
+  skip_ext := fun {S U U' V V' k} he hV hs =>
+    hb.skip_band (AgreeBand.of_extends he (S.slotRound k)
+        (S.slotRound k + R.waveAt (S.slotRound k)))
+      rfl rfl rfl (by omega) (fun b hb _ _ => hV b hb) hs
+  link_ext := fun {S U U' A L k i} he hA hi hL =>
+    hb.link_band (AgreeBand.of_extends he (min (S.slotRound k) (U.block A).round)
+        (max (S.slotRound k + R.waveAt (S.slotRound k)) (U.block A).round))
+      hA (by omega) (by omega) rfl rfl (by omega) (by omega) hi hL
+  link_novel_ext := fun {S U U' A L k i} he hA hi hL hLo =>
+    hb.link_novel (AgreeBand.of_extends he (min (S.slotRound k) (U.block A).round)
+        (max (S.slotRound k + R.waveAt (S.slotRound k)) (U.block A).round))
+      hA (by omega) (by omega) rfl rfl (by omega) (by omega) hi hL hLo
+
+section Extend
+
+variable {U U' : BlockRecord Validator BlockId Payload P honest} {S : Slots Validator}
+variable (hx : R.ExtendLaws)
+include hx
+
+omit hx in
+/-- A candidate of the extension that the old record holds is a candidate
+there too. -/
+theorem isLeaderBlock_of_extends_old (he : Extends R.toDagRule U U') {k : ℕ} {L : BlockId}
+    (hLo : L ∈ U.ids) (hL : IsLeaderBlock (S := S) U' k L) : IsLeaderBlock (S := S) U k L :=
+  have hb : U'.block L = U.block L := he.block L hLo
+  ⟨hLo, hb ▸ hL.2.1, hb ▸ hL.2.2⟩
+
+/-- Rung emptiness carries into an extension. -/
+theorem rungEmpty_ext (he : Extends R.toDagRule U U') {A : BlockId} {k i : ℕ}
+    (hA : A ∈ U.ids) (hi : i < R.rungs) (h : R.RungEmpty (S := S) U A i k) :
+    R.RungEmpty (S := S) U' A i k := by
+  intro L hL hlink
+  by_cases hLo : L ∈ U.ids
+  · have hL' := isLeaderBlock_of_extends_old he hLo hL
+    exact h L hL' ((hx.link_ext he hA hi hL').mp hlink)
+  · exact hx.link_novel_ext he hA hi hL hLo hlink
+
+/-- The tie-break's choice carries into an extension. -/
+theorem least_ext (he : Extends R.toDagRule U U') {A L : BlockId} {k i : ℕ}
+    (hA : A ∈ U.ids) (hi : i < R.rungs) (h : R.Least (S := S) U A i k L) :
+    R.Least (S := S) U' A i k L := by
+  intro L' hL' hlink
+  by_cases hLo : L' ∈ U.ids
+  · have hL'' := isLeaderBlock_of_extends_old he hLo hL'
+    exact h L' hL'' ((hx.link_ext he hA hi hL'').mp hlink)
+  · exact absurd hlink (hx.link_novel_ext he hA hi hL' hLo)
+
+/-- **A verdict survives an extension**, into any view holding the old
+view's blocks. -/
+theorem decided_of_extends (he : Extends R.toDagRule U U') {V : U.View} {V' : U'.View}
+    (hV : ∀ b, b ∈ V.ids → b ∈ V'.ids) {k : ℕ} {v : Option BlockId}
+    (hd : R.Decided (S := S) U V k v) : R.Decided (S := S) U' V' k v := by
+  induction hd with
+  | @directCommit k L hL hc =>
+      exact Decided.directCommit (he.isCandidate hL) (hx.commit_ext he hV hL hc)
+  | @directSkip k hs => exact Decided.directSkip (hx.skip_ext he hV hs)
+  | @indirectCommit k j A L i hkj helig hanchor hmid hi hemp hL hlink hmin ihj ihmid =>
+      have hAL : IsLeaderBlock (S := S) U j A := isLeaderBlock_of_decided hanchor
+      exact Decided.indirectCommit (i := i) hkj helig ihj ihmid hi
+        (fun i' hi' => rungEmpty_ext hx he hAL.1 (lt_trans hi' hi) (hemp i' hi'))
+        (he.isCandidate hL) ((hx.link_ext he hAL.1 hi hL).mpr hlink)
+        (least_ext hx he hAL.1 hi hmin)
+  | @indirectSkip k j A hkj helig hanchor hmid hnone ihj ihmid =>
+      have hAL : IsLeaderBlock (S := S) U j A := isLeaderBlock_of_decided hanchor
+      exact Decided.indirectSkip hkj helig ihj ihmid
+        (fun i hi => rungEmpty_ext hx he hAL.1 hi (hnone i hi))
+
+/-- **Persistence**, for every anchored rule with the extension laws. -/
+theorem persist : Persist R.toDagRule :=
+  fun S _ _ he _ _ hsub _ _ hd => decided_of_extends hx (S := S) he (fun _ hb => hsub hb) hd
+
+end Extend
 
 end AnchoredRule
 

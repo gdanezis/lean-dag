@@ -37,8 +37,10 @@ variable {R : DagRule Validator BlockId Payload}
 /-- **A rule's support shape**: how far above a candidate its certifiers
 sit, and what it means for one of them to certify it. -/
 structure Support (R : DagRule Validator BlockId Payload) where
-  /-- The wavelength: certifiers sit `wave` rounds above the candidate. -/
-  wave : ℕ
+  /-- The wavelength at a candidate's round: certifiers of a candidate proposed at `r` sit
+  `waveAt r` rounds above it. Constant for every rule in the tree; a rule whose wavelength
+  alternates with the round supplies a function of it. -/
+  waveAt : ℕ → ℕ
   /-- `Certifies U c L`: block `c` certifies candidate `L`. -/
   Certifies : R.Universe → BlockId → BlockId → Prop
 
@@ -50,7 +52,7 @@ variable (sp : Support R)
 wave above `r` certifies it. -/
 def certifiesAt (U : R.Universe) (T : Finset Validator) (r : ℕ) (L : BlockId) : Prop :=
   ∀ v ∈ T, ∀ c, c ∈ R.ids U → (R.block U c).creator = v →
-    (R.block U c).round = r + sp.wave → sp.Certifies U c L
+    (R.block U c).round = r + sp.waveAt r → sp.Certifies U c L
 
 end Support
 
@@ -80,8 +82,8 @@ across any `RebasedAbove`, a certifier whose whole window sits at or
 above the settling round certifies the same candidates. -/
 def Local : Prop :=
   ∀ {U U' : R.Universe} {G R₀ : ℕ}, RebasedAbove R U U' G R₀ →
-    ∀ c L, c ∈ R.ids U → R₀ + sp.wave ≤ (R.block U c).round →
-      L ∈ R.ids U → (R.block U L).round + sp.wave = (R.block U c).round →
+    ∀ c L, c ∈ R.ids U → R₀ + sp.waveAt (R.block U L).round ≤ (R.block U c).round →
+      L ∈ R.ids U → (R.block U L).round + sp.waveAt (R.block U L).round = (R.block U c).round →
       (sp.Certifies U' c L ↔ sp.Certifies U c L)
 
 /-- **Law 2 — certification commits.** A slot whose every candidate a
@@ -92,9 +94,9 @@ bound on `Certifies`. -/
 def Commits (rel : Reliability Validator) : Prop :=
   ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (T : Finset Validator) (k : ℕ),
     rel.IsQuorum T →
-    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.wave → PopulatedOn R U T n) →
+    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.slotRound k) → PopulatedOn R U T n) →
     (∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) L) →
-    CoversUpto R V (S.slotRound k + sp.wave) →
+    CoversUpto R V (S.slotRound k + sp.waveAt (S.slotRound k)) →
     S.leader k ∈ T →
     ∃ L, DecidedBelow R S (k + 1) V k (some L)
 
@@ -109,7 +111,7 @@ each rule owes only `Commits`. -/
 
 /-- **Vote support**: wavelength one, certification is reference. -/
 def voteSupport (R : DagRule Validator BlockId Payload) : Support R where
-  wave := 1
+  waveAt := fun _ => 1
   Certifies := fun U c L => L ∈ (R.block U c).refs
 
 /-- **Law 1 for vote support.** A block strictly above the settling

@@ -108,8 +108,10 @@ its certifiers sit, and what certifying is.
 
 ```lean
 structure Support (R : DagRule Validator BlockId Payload) where
-  /-- The wavelength: certifiers sit `wave` rounds above the candidate. -/
-  wave : ℕ
+  /-- The wavelength at a candidate's round: certifiers of a candidate proposed at `r` sit
+  `waveAt r` rounds above it. Constant for every rule in the tree; a rule whose wavelength
+  alternates with the round supplies a function of it. -/
+  waveAt : ℕ → ℕ
   /-- `Certifies U c L`: block `c` certifies candidate `L`. -/
   Certifies : R.Universe → BlockId → BlockId → Prop
 ```
@@ -121,8 +123,8 @@ old certifier is unchanged across any `RebasedAbove` (§0.6), which is
 ```lean
 def Local : Prop :=
   ∀ {U U' : R.Universe} {G R₀ : ℕ}, RebasedAbove R U U' G R₀ →
-    ∀ c L, c ∈ R.ids U → R₀ + sp.wave ≤ (R.block U c).round →
-      L ∈ R.ids U → (R.block U L).round + sp.wave = (R.block U c).round →
+    ∀ c L, c ∈ R.ids U → R₀ + sp.waveAt (R.block U L).round ≤ (R.block U c).round →
+      L ∈ R.ids U → (R.block U L).round + sp.waveAt (R.block U L).round = (R.block U c).round →
       (sp.Certifies U' c L ↔ sp.Certifies U c L)
 ```
 
@@ -135,9 +137,9 @@ the leaders at or above `k + 1`.
 def Commits (rel : Reliability Validator) : Prop :=
   ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (T : Finset Validator) (k : ℕ),
     rel.IsQuorum T →
-    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.wave → PopulatedOn R U T n) →
+    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.slotRound k) → PopulatedOn R U T n) →
     (∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) L) →
-    CoversUpto R V (S.slotRound k + sp.wave) →
+    CoversUpto R V (S.slotRound k + sp.waveAt (S.slotRound k)) →
     S.leader k ∈ T →
     ∃ L, DecidedBelow R S (k + 1) V k (some L)
 ```
@@ -197,7 +199,8 @@ theorem live_of_coverage (sp : Support R) {rel : Reliability Validator}
     (hq : rel.IsQuorum T) {Rnd N : ℕ} (hs : SynchronisedOn R U T Rnd)
     (hpop : ∀ r, Rnd ≤ r → r ≤ N → Properties.PopulatedOn R U T r)
     (S : Slots Validator) (V : R.View U) {lo K : ℕ} (hV : CoversUpto R V N)
-    (hRnd : Rnd ≤ S.slotRound lo) (hN : ∀ k, k < K → S.slotRound k + sp.wave ≤ N) :
+    (hRnd : Rnd ≤ S.slotRound lo)
+    (hN : ∀ k, k < K → S.slotRound k + sp.waveAt (S.slotRound k) ≤ N) :
     sp.live rel S V T lo K
 ```
 
@@ -733,7 +736,13 @@ four naturals through every band lemma of both protocols, paid once.
 **What could still fail it.** A rule that reads an *absolute* round — a
 genesis special case, a hardcoded first slot — has no offset band, and
 would have to state its own truncation property or exclude the bottom of
-the DAG from the offset. Neither protocol has such a rule today.
+the DAG from the offset. Neither protocol has such a rule today. The
+relation's own band theorem carries the condition as a hypothesis: an
+anchored rule's wave is a function of the slot's round (`waveAt`), and
+`AnchoredRule.banded` asks that it take the same value at every round,
+which every rule with a constant wave discharges by `rfl`. A rule whose
+wave alternates with the round reads an absolute round through it, and
+has no offset band from the relation.
 
 #### 3.4c Which rules can read a band with an offset
 
@@ -4448,7 +4457,7 @@ Every commit rule is an `AnchoredRule`, and `Barnacle.ofAnchored R`
 (`Barnacle/Model/Anchored.lean`) reads a base rule off one: `R.toDagRule`
 as the carrier, `View.full` and `BlockRecord.historyView` — the history
 as a view, once, in `Common/History.lean` — for the two views,
-`R.wave + 1` for the wave length, `R.Commit` for the direct predicate.
+`R.waveAt 0 + 1` for the wave length, `R.Commit` for the direct predicate.
 `ofAnchoredOn R I` is the same over the records satisfying an invariant,
 for Orcaella and Optimal-Hydrozoan. `ofAnchored_laws` proves the laws
 once, from the agreement, candidate and direct-commit properties of

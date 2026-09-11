@@ -58,7 +58,8 @@ section Rule
 
 variable [LinearOrder BlockId]
 
-@[simp] theorem hydrozoanAnchored_wave : (hydrozoanAnchored Replica BlockId).wave = 2 := rfl
+@[simp] theorem hydrozoanAnchored_waveAt (r : ℕ) :
+    (hydrozoanAnchored Replica BlockId).waveAt r = 2 := rfl
 
 @[simp] theorem hydrozoanAnchored_rungs : (hydrozoanAnchored Replica BlockId).rungs = 2 := rfl
 

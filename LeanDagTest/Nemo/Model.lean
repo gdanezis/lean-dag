@@ -172,6 +172,7 @@ theorem nemo_fairRun : FairRunOn (S := nemoSlots) (Live (Fin 3)) 2 := by
 -- The identity schedule spans at `c = 2`.
 example : (Nemo.nemoAnchored (Fin 3) (Fin 14) Unit).SpansEligible 2 :=
   (Nemo.nemoAnchored (Fin 3) (Fin 14) Unit).spansEligible_of_identity nemoSlots_slotRound
+    (fun _ => le_rfl)
 
 /-- **The headline applied.** Fairness and spanning discharged at the
 concrete schedule; growth and coverage left abstract, exactly as the
@@ -184,7 +185,8 @@ example (R k : ℕ) :
         ∀ i, i < b → ∃ v, Decided U (View.full U) i v := by
   obtain ⟨b, hk, hR, hrest⟩ :=
     Nemo.all_decided_below_of_fairRun_live (BlockId := Fin 14) (Payload := Unit)
-      (by omega) ((Nemo.nemoAnchored (Fin 3) (Fin 14) Unit).spansEligible_of_identity nemoSlots_slotRound) nemo_fairRun R k
+      (by omega) ((Nemo.nemoAnchored (Fin 3) (Fin 14) Unit).spansEligible_of_identity
+        nemoSlots_slotRound (fun _ => le_rfl)) nemo_fairRun R k
   exact ⟨b, hk, hR, fun U N hpop hs hN =>
     hrest U N (View.full U) hpop hs hN (View.coversUpto_full U N)⟩
 

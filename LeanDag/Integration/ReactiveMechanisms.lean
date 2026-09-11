@@ -48,7 +48,8 @@ theorem live_chop_reactive {G d : ℕ} (hd : G ≤ S.slotRound d)
       (U := chop U G) (V.chop G) T (lo - d) (K - d) :=
   MysticetiProperties.coreSupport.live_of_truncates MysticetiProperties.coreSupport_local
     (MysticetiProperties.truncates_chop hd) (MysticetiProperties.coreSupport_live_of_reactiveLive h) hlo hK
-    (fun _ hGN hc => coversUpto_of_truncates (MysticetiProperties.truncates_chop hd) MysticetiProperties.viewAgreeAbove_chop hGN hc)
+    (fun _ hGN hc => coversUpto_of_truncates (MysticetiProperties.truncates_chop hd)
+      MysticetiProperties.viewAgreeAbove_chop hGN hc) (fun _ _ => rfl)
 
 /-- **And the fill**, on any view of it caught up as far as the old one. -/
 theorem live_skipFill_reactive (sk : SkipMsg U) {V' : View Validator BlockId Payload sk.skipFill}
@@ -83,7 +84,8 @@ theorem decidedBelow_of_run_chop_reactive {G d c b : ℕ} (hd : G ≤ S.slotRoun
     MysticetiProperties.coreSupport_local MysticetiProperties.coreSupport_commits hc
     (MysticetiProperties.descends hc hspans) (MysticetiProperties.truncates_chop hd) (V.chop G)
     (MysticetiProperties.coreSupport_live_of_reactiveLive h)
-    (fun _ hGN hcov => coversUpto_of_truncates (MysticetiProperties.truncates_chop hd) MysticetiProperties.viewAgreeAbove_chop hGN hcov) hlead
+    (fun _ hGN hcov => coversUpto_of_truncates (MysticetiProperties.truncates_chop hd)
+      MysticetiProperties.viewAgreeAbove_chop hGN hcov) (fun _ _ => rfl) hlead
 
 end Integration
 

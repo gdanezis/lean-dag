@@ -18,7 +18,8 @@ open LeanDag.Hydrozoan
 variable {Replica BlockId : Type*} [Fintype Replica] [DecidableEq Replica]
   [DecidableEq BlockId] [O : OptimalFaults Replica]
 
-@[simp] theorem optimalAnchored_wave : (optimalAnchored Replica BlockId).wave = 2 := rfl
+@[simp] theorem optimalAnchored_waveAt (r : ℕ) :
+    (optimalAnchored Replica BlockId).waveAt r = 2 := rfl
 
 @[simp] theorem optimalAnchored_rungs : (optimalAnchored Replica BlockId).rungs = 2 := rfl
 

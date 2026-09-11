@@ -58,8 +58,8 @@ section Slots
 variable [S : Slots Validator]
 
 omit S in
-@[simp] theorem mahiMahiAnchored_wave (w : ℕ) :
-    (mahiMahiAnchored Validator BlockId Payload w).wave = w - 1 := rfl
+@[simp] theorem mahiMahiAnchored_waveAt (w r : ℕ) :
+    (mahiMahiAnchored Validator BlockId Payload w).waveAt r = w - 1 := rfl
 omit S in
 @[simp] theorem mahiMahiAnchored_rungs (w : ℕ) :
     (mahiMahiAnchored Validator BlockId Payload w).rungs = 1 := rfl
@@ -70,7 +70,7 @@ theorem mahiMahiAnchored_decisionRound {w : ℕ} (hw : 1 ≤ w) (k : ℕ) :
     (mahiMahiAnchored Validator BlockId Payload w).decisionRound k
       = decisionRoundAt w (S.slotRound k) := by
   unfold AnchoredRule.decisionRound decisionRoundAt
-  simp only [mahiMahiAnchored_wave]
+  simp only [mahiMahiAnchored_waveAt]
   omega
 
 /-- Two candidates of one slot with certificates coincide. -/
@@ -107,7 +107,7 @@ theorem certifiedIn_of_directCommitIn_at_anchor {w : ℕ} (hw : 1 ≤ w)
     CertifiedIn U w A L (S.slotRound k) :=
   certifiedIn_of_directCommit (directCommit_of_directCommitIn h) hA.1 (by
     have := (mahiMahiAnchored Validator BlockId Payload w).anchor_round_le hA helig
-    simp only [mahiMahiAnchored_wave] at this
+    simp only [mahiMahiAnchored_waveAt] at this
     unfold decisionRoundAt; omega)
 
 omit S in
@@ -155,7 +155,7 @@ theorem exists_least {w : ℕ} {S : Slots Validator} {U : BlockUniverse Validato
 theorem eligible_three_iff {k j : ℕ} :
     (mahiMahiAnchored Validator BlockId Payload 3).Eligible k j ↔
       (coreAnchored Validator BlockId Payload).Eligible k j := by
-  simp only [AnchoredRule.Eligible, eligibleAt_iff, mahiMahiAnchored_wave, coreAnchored_wave]
+  simp only [AnchoredRule.Eligible, eligibleAt_iff, mahiMahiAnchored_waveAt, coreAnchored_waveAt]
 
 omit S in
 theorem certifiedIn_three_iff {A L : BlockId} {r : ℕ} (hLr : (U.block L).round = r) :

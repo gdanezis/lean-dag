@@ -68,15 +68,17 @@ theorem decidedBelow_of_fairRun {rel : Reliability Validator} (hlc : sp.Commits 
 /-- **Certification survives every mechanism, from Law 1.** -/
 theorem certifiesAt_of_rebased (hloc : sp.Local) {U U' : R.Universe} {G R₀ : ℕ}
     (h : RebasedAbove R U U' G R₀) {T : Finset Validator} {r : ℕ} {L : BlockId}
-    (hr : R₀ ≤ r) (hG : G ≤ r) (hL : L ∈ R.ids U) (hLr : (R.block U L).round = r)
-    (hc : sp.certifiesAt U T r L) :
+    (hr : R₀ ≤ r) (hG : G ≤ r) (hw : sp.waveAt (r - G) = sp.waveAt r) (hL : L ∈ R.ids U)
+    (hLr : (R.block U L).round = r) (hc : sp.certifiesAt U T r L) :
     sp.certifiesAt U' T (r - G) L := by
   intro v hv c hc' hcc hcr
+  rw [hw] at hcr
   obtain ⟨hcU, hround⟩ := h.of_mem' hc' (by omega)
-  have hcrU : (R.block U c).round = r + sp.wave := by omega
+  have hcrU : (R.block U c).round = r + sp.waveAt r := by omega
   have hccU : (R.block U c).creator = v := by
     rw [← h.creator c hcU (by omega)]; exact hcc
-  exact (hloc h c L hcU (by omega) hL (by omega)).mpr (hc v hv c hcU hccU hcrU)
+  exact (hloc h c L hcU (by rw [hLr]; omega) hL (by rw [hLr]; omega)).mpr
+    (hc v hv c hcU hccU hcrU)
 
 /-- **A commit survives a sustaining mechanism**, at the same schedule. -/
 theorem exists_decided_of_sustains {rel : Reliability Validator}
@@ -84,9 +86,10 @@ theorem exists_decided_of_sustains {rel : Reliability Validator}
     {U U' : R.Universe} {R₀ : ℕ} (h : Sustains R U U' 0 R₀)
     (S : Slots Validator) (V' : R.View U') {T : Finset Validator} (k : ℕ) (hq : rel.IsQuorum T)
     (hR₀ : R₀ ≤ S.slotRound k)
-    (hpop : ∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.wave → PopulatedOn R U T n)
+    (hpop : ∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.slotRound k) →
+      PopulatedOn R U T n)
     (hcert : ∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) L)
-    (hV' : CoversUpto R V' (S.slotRound k + sp.wave)) (hlead : S.leader k ∈ T) :
+    (hV' : CoversUpto R V' (S.slotRound k + sp.waveAt (S.slotRound k))) (hlead : S.leader k ∈ T) :
     ∃ L, DecidedBelow R S (k + 1) V' k (some L) := by
   refine hlc S V' T k hq ?_ ?_ hV' hlead
   · intro n h1 h2
@@ -98,7 +101,7 @@ theorem exists_decided_of_sustains {rel : Reliability Validator}
     have hLc : (R.block U L).creator = S.leader k := by
       rw [← h.creator L hLU (by omega)]; exact hLc'
     have := sp.certifiesAt_of_rebased hloc h (T := T) (r := S.slotRound k) hR₀ (Nat.zero_le _)
-      hLU hLr (hcert L ⟨hLU, hLr, hLc⟩)
+      (by rw [Nat.sub_zero]) hLU hLr (hcert L ⟨hLU, hLr, hLc⟩)
     rwa [Nat.sub_zero] at this
 
 
@@ -135,7 +138,7 @@ theorem live_of_sustains {rel : Reliability Validator} (hloc : sp.Local)
     have hLc : (R.block U L).creator = S.leader k := by
       rw [← h.creator L hLU (by omega)]; exact hLc'
     have := sp.certifiesAt_of_rebased hloc h (T := T) (r := S.slotRound k) hRk (Nat.zero_le _)
-      hLU hLr (hcert L ⟨hLU, hLr, hLc⟩)
+      (by rw [Nat.sub_zero]) hLU hLr (hcert L ⟨hLU, hLr, hLc⟩)
     rwa [Nat.sub_zero] at this
 
 /-- **`live` survives the cut**, at the re-indexed schedule: slot `k`
@@ -146,7 +149,8 @@ theorem live_of_truncates {rel : Reliability Validator} (hloc : sp.Local)
     (h : Truncates R U U' S S' G d) {V : R.View U} {V' : R.View U'}
     {T : Finset Validator} {lo K : ℕ}
     (hlive : sp.live rel S V T lo K) (hlo : d ≤ lo) (hK : lo < K)
-    (hV' : ∀ N, G ≤ N → CoversUpto R V N → CoversUpto R V' (N - G)) :
+    (hV' : ∀ N, G ≤ N → CoversUpto R V N → CoversUpto R V' (N - G))
+    (hw : ∀ r, G ≤ r → sp.waveAt (r - G) = sp.waveAt r) :
     sp.live rel S' V' T (lo - d) (K - d) := by
   obtain ⟨hq, N, hcov, hN, hslot⟩ := hlive
   have hGN : G ≤ N := by
@@ -158,6 +162,9 @@ theorem live_of_truncates {rel : Reliability Validator} (hloc : sp.Local)
   · intro k' hk'
     have hs := h.slotRound k'
     have := hN (d + k') (by omega)
+    have hGk : G ≤ S.slotRound (d + k') := le_trans h.base (S.mono (Nat.le_add_right d k'))
+    have hsr : S'.slotRound k' = S.slotRound (d + k') - G := by omega
+    rw [hsr, hw _ hGk]
     omega
   · intro k' hlo' hK' hlead'
     have hs := h.slotRound k'
@@ -165,8 +172,10 @@ theorem live_of_truncates {rel : Reliability Validator} (hloc : sp.Local)
     have hlead : S.leader (d + k') ∈ T := by rw [← hl]; exact hlead'
     obtain ⟨hpop, hcert⟩ := hslot (d + k') (by omega) (by omega) hlead
     have hGk : G ≤ S.slotRound (d + k') := le_trans h.base (S.mono (Nat.le_add_right d k'))
+    have hsr : S'.slotRound k' = S.slotRound (d + k') - G := by omega
     refine ⟨?_, ?_⟩
     · intro n' h1 h2
+      rw [hsr, hw _ hGk] at h2
       have := h.toRebasedAbove.populatedOn_of (T := T) (r := n' + G) (by omega) (by omega)
         (hpop (n' + G) (by omega) (by omega))
       rwa [Nat.add_sub_cancel] at this
@@ -176,7 +185,7 @@ theorem live_of_truncates {rel : Reliability Validator} (hloc : sp.Local)
       have hLc : (R.block U L).creator = S.leader (d + k') := by
         rw [← h.creator L hLU (by omega), hLc']; exact hl
       have := sp.certifiesAt_of_rebased hloc h.toRebasedAbove (T := T)
-        (r := S.slotRound (d + k')) hGk hGk hLU hLr (hcert L ⟨hLU, hLr, hLc⟩)
+        (r := S.slotRound (d + k')) hGk hGk (hw _ hGk) hLU hLr (hcert L ⟨hLU, hLr, hLc⟩)
       have e : S.slotRound (d + k') - G = S'.slotRound k' := by omega
       rwa [e] at this
 
@@ -203,9 +212,10 @@ theorem decidedBelow_of_run_truncates {rel : Reliability Validator}
     {T : Finset Validator} {b : ℕ}
     (hlive : sp.live rel S V T (d + b) (d + b + c))
     (hV' : ∀ N, G ≤ N → CoversUpto R V N → CoversUpto R V' (N - G))
+    (hw : ∀ r, G ≤ r → sp.waveAt (r - G) = sp.waveAt r)
     (hlead : ∀ i, i < c → S'.leader (b + i) ∈ T) :
     ∀ i, i < b → ∃ v, DecidedBelow R S' (b + c) V' i v := by
-  have hl := sp.live_of_truncates hloc h hlive (Nat.le_add_right d b) (by omega) hV'
+  have hl := sp.live_of_truncates hloc h hlive (Nat.le_add_right d b) (by omega) hV' hw
   have e1 : d + b - d = b := by omega
   have e2 : d + b + c - d = b + c := by omega
   rw [e1, e2] at hl

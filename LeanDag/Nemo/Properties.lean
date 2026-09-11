@@ -86,18 +86,18 @@ carry is certified from no old anchor. -/
 theorem nemoBandLaws : (Nemo.nemoAnchored Validator BlockId Payload).BandLaws where
   commit_band := fun h hkk _ hlo hhi hV _ hc =>
     AnchoredRule.holdsAtLeast_votesFor_band h hV (by omega) (by omega)
-      (by simp only [Nemo.nemoAnchored_wave] at hhi; omega) hc
+      (by simp only [Nemo.nemoAnchored_waveAt] at hhi; omega) hc
   skip_band := fun _ _ _ _ _ _ h => h.elim
   link_band := fun h hA hAlo hAhi hkk _ hlo hhi _ _ =>
-    certifiedIn_band h hA hAlo hAhi hkk hlo (by simp only [Nemo.nemoAnchored_wave] at hhi; omega)
+    certifiedIn_band h hA hAlo hAhi hkk hlo (by simp only [Nemo.nemoAnchored_waveAt] at hhi; omega)
   link_novel := fun h hA hAlo hAhi hkk _ hlo hhi _ _ hL =>
     not_certifiedIn_band_novel h hA hAlo hAhi hkk hlo
-      (by simp only [Nemo.nemoAnchored_wave] at hhi; omega) hL
+      (by simp only [Nemo.nemoAnchored_waveAt] at hhi; omega) hL
 
 /-- **Nemo is banded**: the relation's band at Nemo's laws. -/
 theorem banded : Banded (nemoRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) :=
-  AnchoredRule.banded nemoBandLaws
+  AnchoredRule.banded nemoBandLaws (fun _ _ => rfl)
 
 /-! ## The liveness properties
 
@@ -137,7 +137,8 @@ theorem voteSupport_commits (hn : 0 < Fintype.card Validator) :
 to break. -/
 theorem indirect :
     Indirect (nemoRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-      (fun sr i j => sr i + (Nemo.nemoAnchored Validator BlockId Payload).wave + 1 ≤ sr j) :=
+      (fun sr i j => sr i + (Nemo.nemoAnchored Validator BlockId Payload).waveAt (sr i) + 1
+        ≤ sr j) :=
   AnchoredRule.indirect Nemo.nemoLaws.link_congr fun _ ⟨L, hL, hl⟩ => ⟨L, hL, hl, fun _ _ _ h => h⟩
 
 /-- **Nemo-Nemo has the descent laws** at the majority slack, at its
@@ -147,10 +148,10 @@ theorem descent [Nemo.CrashFaults Validator] :
       (Payload := Payload))
       (Timed.Good (nemoRule (Validator := Validator) (BlockId := BlockId)
         (Payload := Payload)) (nemoReliability Validator Nemo.CrashFaults.card_pos))
-      ((Nemo.nemoAnchored Validator BlockId Payload).wave + 1)
+      ((Nemo.nemoAnchored Validator BlockId Payload).waveAt 0 + 1)
       (nemoReliability Validator Nemo.CrashFaults.card_pos).slack :=
   Timed.descent_of_support _ _ _ (Properties.voteSupport _) (Timed.voteSupport_ofCoverage _)
-    (voteSupport_commits Nemo.CrashFaults.card_pos) indirect (by change 1 ≤ 1 + 1; omega)
+    (voteSupport_commits Nemo.CrashFaults.card_pos) indirect (fun _ => by change 1 ≤ 1 + 1; omega)
     fun _ _ _ h => h
 
 /-- **And a committed run decides everything below it**, from `Indirect`
@@ -204,7 +205,8 @@ theorem all_decided_below_of_fairRun {c : ℕ} (hc : 0 < c)
         change Fintype.card Validator - (Fintype.card Validator - majority Validator) ≤ T.card
         omega⟩ fair R s
   refine ⟨b, hb, hRb, fun U N V hpop hs hN hcov i hi => ?_⟩
-  obtain ⟨v, hv⟩ := h V N hs (fun r _ h2 => PopulatedOn.mono hT (hpop r h2)) hcov hN i hi
+  obtain ⟨v, hv⟩ := h V N hs (fun r _ h2 => PopulatedOn.mono hT (hpop r h2)) hcov
+    (Timed.slotBound_of_top _ (fun _ => le_rfl) hN) i hi
   exact ⟨v, hv.2.1⟩
 
 /-- **Liveness at `T := Live`** — the whole live class, which the tight

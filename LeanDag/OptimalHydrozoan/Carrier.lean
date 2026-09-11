@@ -81,7 +81,7 @@ theorem commitsDirect :
 laws, which are Hydrozoan's direct layer and rung `0` and Optimal's fast
 path and evidence rung. -/
 theorem banded : Banded (optimalRule (Replica := Replica) (BlockId := BlockId)) :=
-  AnchoredRule.bandedVia LeanDag.OptimalHydrozoan.optimalBandLaws
+  AnchoredRule.bandedVia LeanDag.OptimalHydrozoan.optimalBandLaws (fun _ _ => rfl)
 
 /-! ## The two liveness properties
 
@@ -111,7 +111,7 @@ Law 3 is Hydrozoan's slow commit wrapped in `DecidedOpt`. -/
 
 /-- **Optimal-Hydrozoan's support.** -/
 def optSupport : Support (optimalRule (Replica := Replica) (BlockId := BlockId)) where
-  wave := 2
+  waveAt := fun _ => 2
   Certifies := fun U C L => LeanDag.Hydrozoan.IsCertificate U.toBlockRecord C L
 
 /-- **Law 1**, Hydrozoan's at the underlying universe. -/
@@ -268,7 +268,7 @@ theorem indirect :
       (fun sr i j => sr i + 3 ≤ sr j) :=
   (AnchoredRule.indirectVia LeanDag.OptimalHydrozoan.SlotAgreement.optimalLaws.link_congr
     fun hi h => LeanDag.OptimalHydrozoan.exists_least hi h).congr
-    (fun _ _ _ => by simp only [LeanDag.OptimalHydrozoan.optimalAnchored_wave])
+    (fun _ _ _ => by simp only [LeanDag.OptimalHydrozoan.optimalAnchored_waveAt])
 
 /-- **Optimal-Hydrozoan has the descent laws** at the hybrid fault
 model's slack. -/
@@ -278,7 +278,7 @@ theorem descent :
         (LeanDag.Hydrozoan.hzReliability Replica))
       3 (LeanDag.Hydrozoan.hzReliability Replica).slack :=
   Timed.descent_of_support _ _ 3 optSupport optSupport_ofCoverage optSupport_commits
-    indirect (by change 2 ≤ 3; omega) fun _ _ _ h => h
+    indirect (fun _ => by change 2 ≤ 3; omega) fun _ _ _ h => h
 
 /-! ## The headlines -/
 
