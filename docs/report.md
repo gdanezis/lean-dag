@@ -921,8 +921,9 @@ def IsLeaderBlock (U) (k : ℕ) (L : BlockId) : Prop :=
 The class constrains the schedule only to be monotone, unbounded in round, and
 *keyed* — distinct slots differ in round or in leader. What safety actually
 requires of anchoring is per-pair **eligibility**: an anchor's proposal must
-clear the slot's decision round, `slotRound k + wave` for the rule's wave —
-two for the core, so `decisionRound k = slotRound k + 2` and the test is
+clear the slot's decision round, `slotRound k + waveAt (slotRound k)` for the
+rule's wave at the slot's round — two for the core at every round, so
+`decisionRound k = slotRound k + 2` and the test is
 Algorithm 3's filter `r_decision < s.round`. Under a three-round spacing,
 every later slot is eligible (`eligibleAt_of_lt_of_spacing`), so the general
 relation is conservative over it; and pipelined and multi-leader schedules —
@@ -950,13 +951,31 @@ computes it — a number of graded rungs, each a link from the anchor to
 a candidate, and a tie at each rung:
 
 ```lean
-structure AnchoredRule (Validator BlockId Payload) (P : Validity …) (honest : Finset Validator) where
-  wave : ℕ
-  Commit : (U : BlockRecord …) → U.View → BlockId → ℕ → Prop
-  decCommit : ∀ (U : BlockRecord …) (V : U.View) (L : BlockId) (r : ℕ), Decidable (Commit U V L r)
-  Skip : (U : BlockRecord …) → U.View → Slots Validator → ℕ → Prop
+structure AnchoredRule (Validator : Type*) (BlockId : Type*) (Payload : Type*)
+    (P : Validity Validator BlockId Payload) (honest : Finset Validator) where
+  /-- The rounds a slot's direct rules read above its proposal, less one, as
+  a function of the slot's round: an anchor of a slot proposed at round `r`
+  must sit strictly above `r + waveAt r`. Constant for every rule in the
+  tree; a rule whose wavelength alternates with the round supplies a
+  function of it. -/
+  waveAt : ℕ → ℕ
+  /-- The direct commit, judged from a view: `Commit U V L r` says the
+  candidate `L` proposed at round `r` is committed by what `V` holds. -/
+  Commit : (U : BlockRecord Validator BlockId Payload P honest) → U.View → BlockId → ℕ → Prop
+  /-- The direct commit is decidable: a validator computes it from its
+  view, and so does a witness. -/
+  decCommit : ∀ (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (L : BlockId)
+    (r : ℕ), Decidable (Commit U V L r)
+  /-- The direct skip of a slot, judged from a view. -/
+  Skip : (U : BlockRecord Validator BlockId Payload P honest) → U.View → Slots Validator → ℕ → Prop
+  /-- The number of rungs of the indirect test. -/
   rungs : ℕ
-  Link : ℕ → (U : BlockRecord …) → BlockId → BlockId → Slots Validator → ℕ → Prop
+  /-- Rung `i`: `Link i U A L r` says the anchor `A` links the candidate `L`
+  proposed at round `r`. -/
+  Link : ℕ → (U : BlockRecord Validator BlockId Payload P honest) → BlockId → BlockId →
+    Slots Validator → ℕ → Prop
+  /-- The tie-break at rung `i`: `tie i L' L` says `L'` is preferred to `L`.
+  Empty where the rung's link is unique per slot. -/
   tie : ℕ → BlockId → BlockId → Prop
 ```
 
@@ -964,9 +983,12 @@ The core is the instance at wave two with one rung, the certificate in
 the anchor's history, and no tie — a certified candidate is unique:
 
 ```lean
-def coreAnchored : AnchoredRule Validator BlockId Payload ValidWrt Correct where
-  wave := 2
+def coreAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
+    [DecidableEq Validator] [Faults Validator] [DecidableEq BlockId] :
+    AnchoredRule Validator BlockId Payload ValidWrt Correct where
+  waveAt := fun _ => 2
   Commit := fun U V L r => DirectCommitIn U V L r
+  decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => DirectSkipSlotIn (S := S) U V k
   rungs := 1
   Link := fun _ U A L S k => CertifiedIn U A L (S.slotRound k)
@@ -999,7 +1021,7 @@ own: Mahi-Mahi's per-candidate skip, FinWhale's evidence rules, the
 second rungs of Hydrozoan and Optimal-Hydrozoan.
 
 The relation itself is stated once, over any such record. `R.Eligible k j`
-is `EligibleAt R.wave k j`; `R.RungEmpty U A i k` says no candidate of `k`
+is `EligibleAt (R.waveAt (S.slotRound k)) k j`; `R.RungEmpty U A i k` says no candidate of `k`
 is linked at rung `i` from `A`; `R.Least U A i k L` says no linked
 candidate is preferred to `L` by the rung's tie:
 
@@ -3565,9 +3587,12 @@ relation is the shared one (§3.5) at Odontoceti's data — wave one, the
 thick link as the rung, and the identifier order as its tie:
 
 ```lean
-def odontocetiAnchored : AnchoredRule Validator BlockId Payload ValidWrt Correct where
-  wave := 1
+def odontocetiAnchored (Validator BlockId Payload : Type) [Fintype Validator]
+    [DecidableEq Validator] [Faults5 Validator] [LinearOrder BlockId] :
+    AnchoredRule Validator BlockId Payload ValidWrt Correct where
+  waveAt := fun _ => 1
   Commit := fun U V L r => Odontoceti.DirectCommitIn U V L r
+  decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => DirectSkipSlotIn (S := S) U V k
   rungs := 1
   Link := fun _ U A L S k => ThickLink U A L (S.slotRound k)
@@ -4542,12 +4567,11 @@ remains a joint condition exactly as P10 is.
 **AL5.**
 ```lean
 theorem run_exists_of_support (ha : Agree R) (hcom : sp.Commits rel)
-    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
-    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) wave c)
     (hruns : PlacesRuns P T c) (V : R.View U)
     (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
-      sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W
-        (P.W * (E + 2))) :
+      sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W (P.W * (E + 2))) :
     Nonempty (Run P U V)
 ```
 
@@ -5173,8 +5197,10 @@ certifies commits on a covered view.
 
 ```lean
 structure Support (R : DagRule Validator BlockId Payload) where
-  /-- The wavelength: certifiers sit `wave` rounds above the candidate. -/
-  wave : ℕ
+  /-- The wavelength at a candidate's round: certifiers of a candidate proposed at `r` sit
+  `waveAt r` rounds above it. Constant for every rule in the tree; a rule whose wavelength
+  alternates with the round supplies a function of it. -/
+  waveAt : ℕ → ℕ
   /-- `Certifies U c L`: block `c` certifies candidate `L`. -/
   Certifies : R.Universe → BlockId → BlockId → Prop
 ```
@@ -5183,9 +5209,9 @@ structure Support (R : DagRule Validator BlockId Payload) where
 def Commits (rel : Reliability Validator) : Prop :=
   ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (T : Finset Validator) (k : ℕ),
     rel.IsQuorum T →
-    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.wave → PopulatedOn R U T n) →
+    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.slotRound k) → PopulatedOn R U T n) →
     (∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) L) →
-    CoversUpto R V (S.slotRound k + sp.wave) →
+    CoversUpto R V (S.slotRound k + sp.waveAt (S.slotRound k)) →
     S.leader k ∈ T →
     ∃ L, DecidedBelow R S (k + 1) V k (some L)
 ```
@@ -5204,7 +5230,8 @@ theorem live_of_coverage (sp : Support R) {rel : Reliability Validator}
     (hq : rel.IsQuorum T) {Rnd N : ℕ} (hs : SynchronisedOn R U T Rnd)
     (hpop : ∀ r, Rnd ≤ r → r ≤ N → Properties.PopulatedOn R U T r)
     (S : Slots Validator) (V : R.View U) {lo K : ℕ} (hV : CoversUpto R V N)
-    (hRnd : Rnd ≤ S.slotRound lo) (hN : ∀ k, k < K → S.slotRound k + sp.wave ≤ N) :
+    (hRnd : Rnd ≤ S.slotRound lo)
+    (hN : ∀ k, k < K → S.slotRound k + sp.waveAt (S.slotRound k) ≤ N) :
     sp.live rel S V T lo K
 ```
 
@@ -8079,7 +8106,7 @@ one.
 development is an anchored rule (§3.2), and `ofAnchored R`
 (`Barnacle/Model/Anchored.lean`) reads a base rule off any anchored
 rule: the record as universe, `View.full` and `BlockRecord.historyView`
-for the two views, `R.wave + 1` for the wave length — the gap an anchor
+for the two views, `R.waveAt 0 + 1` for the wave length — the gap an anchor
 must clear — and `R.Commit` for the direct predicate; `ofAnchoredOn R I`
 is the same over the records satisfying an invariant, for Orcaella and
 Optimal-Hydrozoan. Its laws are proved once, `ofAnchored_laws`, from the
@@ -8573,9 +8600,11 @@ empty for every candidate, and the anchor is the nearest eligible
 committed slot with every eligible slot between skipped:
 
 ```lean
-def hydrozoanAnchored : AnchoredRule Replica BlockId Unit ValidWrt NonByzantine where
-  wave := 2
+def hydrozoanAnchored :
+    AnchoredRule Replica BlockId Unit ValidWrt (NonByzantine : Finset Replica) where
+  waveAt := fun _ => 2
   Commit := fun U V L r => FastCommitInView U V L r ∨ SlowCommitInView U V L r
+  decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderInView (S := S) U V k
   rungs := 2
   Link := fun i U A L S k =>
@@ -13065,7 +13094,7 @@ def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest) :
   toDagRule := R.toDagRule
   full := fun U => View.full U
   historyView := fun U A hA => U.historyView A hA
-  waveLength := R.wave + 1
+  waveLength := R.waveAt 0 + 1
   DirectCommitIn := fun {U} V L r => R.Commit U V L r
   decDirect := fun {U} V L r => R.decCommit U V L r
 ```
@@ -13083,7 +13112,7 @@ def ofAnchoredVia (R : AnchoredRule Validator BlockId Payload P honest) {X : Typ
   toDagRule := R.toDagRuleVia f
   full := fun U => View.full (f U)
   historyView := fun U A hA => (f U).historyView A hA
-  waveLength := R.wave + 1
+  waveLength := R.waveAt 0 + 1
   DirectCommitIn := fun {U} V L r => R.Commit (f U) V L r
   decDirect := fun {U} V L r => R.decCommit (f U) V L r
 ```
@@ -13312,7 +13341,7 @@ Rung 2's test: `q_weak` distinct creators of anchor-reachable votes for `L` at t
 ```lean
 def hydrozoanAnchored :
     AnchoredRule Replica BlockId Unit ValidWrt (NonByzantine : Finset Replica) where
-  wave := 2
+  waveAt := fun _ => 2
   Commit := fun U V L r => FastCommitInView U V L r ∨ SlowCommitInView U V L r
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderInView (S := S) U V k
@@ -13649,7 +13678,7 @@ def NoEvidenceQuorum (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (k : 
 def optimalAnchored :
     AnchoredRule Replica BlockId Unit LeanDag.Hydrozoan.ValidWrt
       (LeanDag.Hydrozoan.NonByzantine : Finset Replica) where
-  wave := 2
+  waveAt := fun _ => 2
   Commit := fun U V L r => FastCommitOptInView U V L r ∨ SlowCommitInView U V L r
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderOptInView (S := S) U V k
@@ -13933,7 +13962,7 @@ def NoEvidenceQuorum (U : LeanDag.Hydrozoan.BlockUniverse Replica BlockId) (k : 
 def optimalAnchored :
     AnchoredRule Replica BlockId Unit LeanDag.Hydrozoan.ValidWrt
       (LeanDag.Hydrozoan.NonByzantine : Finset Replica) where
-  wave := 2
+  waveAt := fun _ => 2
   Commit := fun U V L r => FastCommitOptInView U V L r ∨ SlowCommitInView U V L r
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderOptInView (S := S) U V k
@@ -14211,9 +14240,12 @@ def EligibleAt (wave k j : ℕ) : Prop := S.slotRound k + wave < S.slotRound j
 ```lean
 structure AnchoredRule (Validator : Type*) (BlockId : Type*) (Payload : Type*)
     (P : Validity Validator BlockId Payload) (honest : Finset Validator) where
-  /-- The rounds a slot's direct rules read above its proposal, less one:
-  an anchor must sit strictly above `slotRound k + wave`. -/
-  wave : ℕ
+  /-- The rounds a slot's direct rules read above its proposal, less one, as
+  a function of the slot's round: an anchor of a slot proposed at round `r`
+  must sit strictly above `r + waveAt r`. Constant for every rule in the
+  tree; a rule whose wavelength alternates with the round supplies a
+  function of it. -/
+  waveAt : ℕ → ℕ
   /-- The direct commit, judged from a view: `Commit U V L r` says the
   candidate `L` proposed at round `r` is committed by what `V` holds. -/
   Commit : (U : BlockRecord Validator BlockId Payload P honest) → U.View → BlockId → ℕ → Prop
@@ -14241,20 +14273,20 @@ structure AnchoredRule (Validator : Type*) (BlockId : Type*) (Payload : Type*)
 *abbrev, `Common.Anchored.lean`*
 
 ```lean
-abbrev Eligible (k j : ℕ) : Prop := EligibleAt (S := S) R.wave k j
+abbrev Eligible (k j : ℕ) : Prop := EligibleAt (S := S) (R.waveAt (S.slotRound k)) k j
 ```
 
-**`j` may anchor `k`**: eligibility at the rule's wave.
+**`j` may anchor `k`**: eligibility at the wave of `k`'s round.
 
 #### `SpansEligible`
 
 *abbrev, `Common.Anchored.lean`*
 
 ```lean
-abbrev SpansEligible (c : ℕ) : Prop := SpansEligibleAt (S := S) R.wave c
+abbrev SpansEligible (c : ℕ) : Prop := ∀ b i : ℕ, i < b → R.Eligible i (b + c - 1)
 ```
 
-**A run of `c` slots reaches past everything below it**, at the rule's wave.
+**A run of `c` slots reaches past everything below it**, each slot at the wave of its own round.
 
 #### `Decided`
 
@@ -15178,7 +15210,7 @@ noncomputable def chooseLeast [LinearOrder BlockId] (S : Slots Validator)
 
 ```lean
 def hzSupport : Support (rule (Replica := Replica) (BlockId := BlockId)) where
-  wave := 2
+  waveAt := fun _ => 2
   Certifies := fun U C L => LeanDag.Hydrozoan.IsCertificate U C L
 ```
 
@@ -15239,7 +15271,7 @@ abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
 def coreAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
     [DecidableEq Validator] [Faults Validator] [DecidableEq BlockId] :
     AnchoredRule Validator BlockId Payload ValidWrt Correct where
-  wave := 2
+  waveAt := fun _ => 2
   Commit := fun U V L r => DirectCommitIn U V L r
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => DirectSkipSlotIn (S := S) U V k
@@ -15377,7 +15409,7 @@ def EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
 
 ```lean
 def optSupport : Support (optimalRule (Replica := Replica) (BlockId := BlockId)) where
-  wave := 2
+  waveAt := fun _ => 2
   Certifies := fun U C L => LeanDag.Hydrozoan.IsCertificate U.toBlockRecord C L
 ```
 
@@ -15591,9 +15623,10 @@ def LeaderCommits (R : DagRule Validator BlockId Payload)
 def live (rel : Reliability Validator) (S : Slots Validator) {U : R.Universe}
     (V : R.View U) (T : Finset Validator) (lo K : ℕ) : Prop :=
   rel.IsQuorum T ∧
-    ∃ N, CoversUpto R V N ∧ (∀ k, k < K → S.slotRound k + sp.wave ≤ N) ∧
+    ∃ N, CoversUpto R V N ∧ (∀ k, k < K → S.slotRound k + sp.waveAt (S.slotRound k) ≤ N) ∧
       ∀ k, lo ≤ k → k < K → S.leader k ∈ T →
-        (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.wave → PopulatedOn R U T n) ∧
+        (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.slotRound k) →
+          PopulatedOn R U T n) ∧
         ∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) L
 ```
 
@@ -15793,8 +15826,10 @@ Re-genesis, at the carrier.
 
 ```lean
 structure Support (R : DagRule Validator BlockId Payload) where
-  /-- The wavelength: certifiers sit `wave` rounds above the candidate. -/
-  wave : ℕ
+  /-- The wavelength at a candidate's round: certifiers of a candidate proposed at `r` sit
+  `waveAt r` rounds above it. Constant for every rule in the tree; a rule whose wavelength
+  alternates with the round supplies a function of it. -/
+  waveAt : ℕ → ℕ
   /-- `Certifies U c L`: block `c` certifies candidate `L`. -/
   Certifies : R.Universe → BlockId → BlockId → Prop
 ```
@@ -15808,8 +15843,8 @@ structure Support (R : DagRule Validator BlockId Payload) where
 ```lean
 def Local : Prop :=
   ∀ {U U' : R.Universe} {G R₀ : ℕ}, RebasedAbove R U U' G R₀ →
-    ∀ c L, c ∈ R.ids U → R₀ + sp.wave ≤ (R.block U c).round →
-      L ∈ R.ids U → (R.block U L).round + sp.wave = (R.block U c).round →
+    ∀ c L, c ∈ R.ids U → R₀ + sp.waveAt (R.block U L).round ≤ (R.block U c).round →
+      L ∈ R.ids U → (R.block U L).round + sp.waveAt (R.block U L).round = (R.block U c).round →
       (sp.Certifies U' c L ↔ sp.Certifies U c L)
 ```
 
@@ -15823,9 +15858,9 @@ def Local : Prop :=
 def Commits (rel : Reliability Validator) : Prop :=
   ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (T : Finset Validator) (k : ℕ),
     rel.IsQuorum T →
-    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.wave → PopulatedOn R U T n) →
+    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.slotRound k) → PopulatedOn R U T n) →
     (∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) L) →
-    CoversUpto R V (S.slotRound k + sp.wave) →
+    CoversUpto R V (S.slotRound k + sp.waveAt (S.slotRound k)) →
     S.leader k ∈ T →
     ∃ L, DecidedBelow R S (k + 1) V k (some L)
 ```
@@ -15939,10 +15974,10 @@ def CoversToward (R : DagRule Validator BlockId Payload) (U : R.Universe)
 def OfCoverage (sp : Support R) (rel : Reliability Validator) : Prop :=
   ∀ (U : R.Universe) (T : Finset Validator), rel.IsQuorum T →
     ∀ (r : ℕ) (L : BlockId),
-    (∀ n, r ≤ n → n ≤ r + sp.wave → Properties.PopulatedOn R U T n) →
-    CoversToward R U T r sp.wave L →
+    (∀ n, r ≤ n → n ≤ r + sp.waveAt r → Properties.PopulatedOn R U T n) →
+    CoversToward R U T r (sp.waveAt r) L →
     L ∈ R.ids U → (R.block U L).round = r → (R.block U L).creator ∈ T →
-    ∀ c, c ∈ R.ids U → (R.block U c).creator ∈ T → (R.block U c).round = r + sp.wave →
+    ∀ c, c ∈ R.ids U → (R.block U c).creator ∈ T → (R.block U c).round = r + sp.waveAt r →
       sp.Certifies U c L
 ```
 
@@ -18583,8 +18618,8 @@ theorem exists_partialRun (hlc : LeaderCommits R Live)
 
 ```lean
 theorem epoch_closes_of_support (hcom : sp.Commits rel)
-    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
-    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) wave c)
     (V : R.View U) (v : ℕ → Option BlockId) (E : ℕ)
     (hruns : PlacesRuns P T c)
     (hlive : sp.live rel (slotsOfKeyed (fun m => P.pick U V v m) (P.keyed U V v)) V T P.W
@@ -18602,8 +18637,8 @@ theorem epoch_closes_of_support (hcom : sp.Commits rel)
 
 ```lean
 theorem exists_partialRun_of_support (hcom : sp.Commits rel)
-    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
-    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) wave c)
     (hruns : PlacesRuns P T c) (V : R.View U) (E : ℕ)
     (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
       sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W (P.W * (E' + 2))) :
@@ -18618,15 +18653,15 @@ theorem exists_partialRun_of_support (hcom : sp.Commits rel)
 
 ```lean
 theorem run_exists_of_support (ha : Agree R) (hcom : sp.Commits rel)
-    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
-    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) wave c)
     (hruns : PlacesRuns P T c) (V : R.View U)
     (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
       sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W (P.W * (E + 2))) :
     Nonempty (Run P U V)
 ```
 
-**The adaptive fixpoint exists**, from a support: safety's `Agree`, the support's Law 2, the indirect rule at the support's wave, and the precondition at every height.
+**The adaptive fixpoint exists**, from a support: safety's `Agree`, the support's Law 2, the indirect rule at a gap the base schedule spans, and the precondition at every height. The gap is the rule's own, not the support's: a wave that varies with the round has no single width, and what the descent reads is one bound the indirect rule holds at.
 
 ### Nemo-Nemo: crash-fault consensus in two rounds
 
@@ -20400,7 +20435,7 @@ theorem indirect (hcongr : R.LinkCongr)
       (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
       ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
         R.Least (S := S) U A i k L) :
-    Indirect R.toDagRule (fun sr i j => sr i + R.wave + 1 ≤ sr j)
+    Indirect R.toDagRule (fun sr i j => sr i + R.waveAt (sr i) + 1 ≤ sr j)
 ```
 
 **The indirect rule is a property.** Given the anchor, the verdict is determined by the rungs: the first rung holding a candidate commits the tie-break's choice, and no rung holding any skips. The verdict survives a reassignment of leaders elsewhere, since the case split reads only slot `i`'s candidates and the anchor's history. What it needs of the tie is that a nonempty rung has a choice, `hleast`.
@@ -20495,11 +20530,11 @@ Under a schedule whose consecutive slots are spaced past the wave, every later s
 *theorem, `Common.Anchored.lean`*
 
 ```lean
-theorem spansEligible_of_identity (hid : ∀ s, S.slotRound s = s) :
-    R.SpansEligible (R.wave + 1)
+theorem spansEligible_of_identity (hid : ∀ s, S.slotRound s = s) {w : ℕ}
+    (hw : ∀ r, R.waveAt r ≤ w) : R.SpansEligible (w + 1)
 ```
 
-Under an identity-round schedule, `wave + 1` consecutive slots span.
+Under an identity-round schedule, `w + 1` consecutive slots span, for any `w` the wave never exceeds.
 
 #### `Decided.indirectCommit_single`
 
@@ -21139,7 +21174,7 @@ theorem agree {k : ℕ} (hk : Hybrid.Admissible Validator k) :
 theorem indirect (kt : ℕ) :
     Indirect (hybridRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) kt)
       (fun sr i j =>
-        sr i + (Hybrid.hybridAnchored Validator BlockId Payload kt).wave + 1 ≤ sr j)
+        sr i + (Hybrid.hybridAnchored Validator BlockId Payload kt).waveAt (sr i) + 1 ≤ sr j)
 ```
 
 **H-A3 as a property**: the relation's indirect property, committing the least thick-linked candidate.
@@ -21501,7 +21536,8 @@ theorem agree : Agree (nemoRule (Validator := Validator) (BlockId := BlockId)
 ```lean
 theorem indirect :
     Indirect (nemoRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-      (fun sr i j => sr i + (Nemo.nemoAnchored Validator BlockId Payload).wave + 1 ≤ sr j)
+      (fun sr i j => sr i + (Nemo.nemoAnchored Validator BlockId Payload).waveAt (sr i) + 1
+        ≤ sr j)
 ```
 
 **A3 as a property**: the relation's indirect property, with no tie to break.
@@ -21604,8 +21640,8 @@ theorem agree : Agree (odontocetiRule (Validator := Validator) (BlockId := Block
 ```lean
 theorem indirect :
     Indirect (odontocetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-      (fun sr i j => sr i + (Odontoceti.odontocetiAnchored Validator BlockId Payload).wave + 1
-        ≤ sr j)
+      (fun sr i j => sr i +
+        (Odontoceti.odontocetiAnchored Validator BlockId Payload).waveAt (sr i) + 1 ≤ sr j)
 ```
 
 **O-A3 as a property**: the relation's indirect property, committing the least thick-linked candidate.
@@ -22027,7 +22063,7 @@ theorem Stack.rebased {U U' : R.Universe} {S S' : Slots Validator} {G R₀ d : �
 ```lean
 theorem Stack.safe_and_live (hb : Banded R) (ha : Agree R) (sp : Support R) (hloc : sp.Local)
     (st : Stack R U S U' S' G R₀ d) {V : R.View U} {V' : R.View U'}
-    (hv : ViewAgreeAbove R V V' R₀) :
+    (hv : ViewAgreeAbove R V V' R₀) (hw : ∀ r, G ≤ r → sp.waveAt (r - G) = sp.waveAt r) :
     (∀ (k : ℕ) (v : Option BlockId), R₀ ≤ S.slotRound (d + k) →
         (R.Decided S V (d + k) v ↔ R.Decided S' V' k v)) ∧
     (∀ (W : R.View U') (k : ℕ) (w v : Option BlockId), R₀ ≤ S.slotRound (d + k) →
@@ -22038,7 +22074,7 @@ theorem Stack.safe_and_live (hb : Banded R) (ha : Agree R) (sp : Support R) (hlo
         sp.live rel S' V' T (lo - d) (K - d))
 ```
 
-**Every stack of mechanisms keeps safety and liveness**, for any rule with `Banded`, `Agree` and a support. Above the composite settling round: verdicts transport to the composite's numbering, any view of the composite agrees with the original, and the liveness precondition carries. Nothing is assumed about which mechanisms are stacked or in what order.
+**Every stack of mechanisms keeps safety and liveness**, for any rule with `Banded`, `Agree` and a support. Above the composite settling round: verdicts transport to the composite's numbering, any view of the composite agrees with the original, and the liveness precondition carries. Nothing is assumed about which mechanisms are stacked or in what order, only that the support's wave is the same at a round and at its shift by the composite's `G`.
 
 #### `decided_of_rebased`
 
@@ -22260,13 +22296,13 @@ theorem descent_of_support (R : Properties.DagRule Validator BlockId Payload)
     (sp : Properties.Support R) {rel : Reliability Validator}
     (hcov : OfCoverage sp rel) (hlc : sp.Commits rel)
     (hind : Properties.Indirect R (fun sr i j => sr i + g ≤ sr j))
-    (hwave : sp.wave ≤ g)
+    (hwave : ∀ r, sp.waveAt r ≤ g)
     (hgood : ∀ U Rnd N, Good U Rnd N → Timed.Good R rel U Rnd N) :
     Properties.Descent R Good g rel.slack where
   goodLeaders
 ```
 
-**The descent laws, from a support.** A rule whose support commits under coverage at a fault model, with the indirect rule at gap `g` and a goodness predicate that implies `Timed.Good`, has the descent laws at the model's slack.
+**The descent laws, from a support.** A rule whose support commits under coverage at a fault model, with the indirect rule at gap `g` and a goodness predicate that implies `Timed.Good`, has the descent laws at the model's slack, provided the support's wave never exceeds the gap.
 
 #### `not_synchronisedOn_of_extends`
 

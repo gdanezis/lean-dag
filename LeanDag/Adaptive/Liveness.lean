@@ -255,12 +255,12 @@ precondition itself, which each execution model reaches its own way. -/
 
 section OfSupport
 
-variable {sp : Support R} {rel : Reliability Validator}
+variable {sp : Support R} {rel : Reliability Validator} {wave : ℕ}
 
 /-- **One epoch closes**, from a support. -/
 theorem epoch_closes_of_support (hcom : sp.Commits rel)
-    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
-    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) wave c)
     (V : R.View U) (v : ℕ → Option BlockId) (E : ℕ)
     (hruns : PlacesRuns P T c)
     (hlive : sp.live rel (slotsOfKeyed (fun m => P.pick U V v m) (P.keyed U V v)) V T P.W
@@ -272,8 +272,8 @@ theorem epoch_closes_of_support (hcom : sp.Commits rel)
 
 /-- **Partial runs exist at every height**, from a support. -/
 theorem exists_partialRun_of_support (hcom : sp.Commits rel)
-    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
-    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) wave c)
     (hruns : PlacesRuns P T c) (V : R.View U) (E : ℕ)
     (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
       sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W (P.W * (E' + 2))) :
@@ -281,11 +281,13 @@ theorem exists_partialRun_of_support (hcom : sp.Commits rel)
   exists_partialRun (sp.leaderCommits hcom) (fun a hk => descends_slotsOf hind hc hspans a hk) hruns V E hlive
 
 /-- **The adaptive fixpoint exists**, from a support: safety's `Agree`,
-the support's Law 2, the indirect rule at the support's wave, and the
-precondition at every height. -/
+the support's Law 2, the indirect rule at a gap the base schedule spans,
+and the precondition at every height. The gap is the rule's own, not the
+support's: a wave that varies with the round has no single width, and
+what the descent reads is one bound the indirect rule holds at. -/
 theorem run_exists_of_support (ha : Agree R) (hcom : sp.Commits rel)
-    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
-    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
+    (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
+    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) wave c)
     (hruns : PlacesRuns P T c) (V : R.View U)
     (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
       sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W (P.W * (E + 2))) :

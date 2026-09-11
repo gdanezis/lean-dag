@@ -317,7 +317,7 @@ example : ∃ L, IsLeaderBlock Uodo 2 L ∧
 /-- **O8 applied**: the pipelined identity schedule spans at `c = 2`. -/
 example : (Odontoceti.odontocetiAnchored (Fin 6) (Fin 36) Unit).SpansEligible 2 :=
   (Odontoceti.odontocetiAnchored (Fin 6) (Fin 36) Unit).spansEligible_of_identity
-    odoSlots_slotRound
+    odoSlots_slotRound (fun _ => le_rfl)
 
 /-- **O9 applied**: slots 3 and 4 of `Uskip` are a committed run of
 two, and every slot below is decided. -/

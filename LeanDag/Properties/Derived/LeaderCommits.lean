@@ -40,9 +40,10 @@ quorum-led slot of the window production and certification. -/
 def live (rel : Reliability Validator) (S : Slots Validator) {U : R.Universe}
     (V : R.View U) (T : Finset Validator) (lo K : ℕ) : Prop :=
   rel.IsQuorum T ∧
-    ∃ N, CoversUpto R V N ∧ (∀ k, k < K → S.slotRound k + sp.wave ≤ N) ∧
+    ∃ N, CoversUpto R V N ∧ (∀ k, k < K → S.slotRound k + sp.waveAt (S.slotRound k) ≤ N) ∧
       ∀ k, lo ≤ k → k < K → S.leader k ∈ T →
-        (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.wave → PopulatedOn R U T n) ∧
+        (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.slotRound k) →
+          PopulatedOn R U T n) ∧
         ∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) L
 
 /-- **`LeaderCommits`, from Law 3.** -/

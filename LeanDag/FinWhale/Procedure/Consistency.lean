@@ -33,8 +33,8 @@ section Rule
 
 variable [LinearOrder BlockId]
 
-@[simp] theorem finWhaleAnchored_wave :
-    (finWhaleAnchored Validator BlockId Payload).wave = 2 := rfl
+@[simp] theorem finWhaleAnchored_waveAt (r : ℕ) :
+    (finWhaleAnchored Validator BlockId Payload).waveAt r = 2 := rfl
 
 @[simp] theorem finWhaleAnchored_rungs :
     (finWhaleAnchored Validator BlockId Payload).rungs = 1 := rfl

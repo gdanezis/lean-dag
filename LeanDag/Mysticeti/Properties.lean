@@ -326,18 +326,19 @@ certified from no old anchor. -/
 theorem coreBandLaws : (coreAnchored Validator BlockId Payload).BandLaws where
   commit_band := fun h hkk _ hlo hhi hV _ hc =>
     AnchoredRule.holdsAtLeast_certificatesAt_band h hV (by omega) (by omega)
-      (by simp only [coreAnchored_wave] at hhi; omega)
-      (AnchoredRule.isVote_band_at h (by omega) (by simp only [coreAnchored_wave] at hhi; omega)) hc
+      (by simp only [coreAnchored_waveAt] at hhi; omega)
+      (AnchoredRule.isVote_band_at h (by omega)
+        (by simp only [coreAnchored_waveAt] at hhi; omega)) hc
   skip_band := fun h hkk hlk hlo hhi hV hs =>
     le_trans hs (Finset.card_le_card (AnchoredRule.slotBlamesIn_band h hkk hlk hlo.le
-      (by simp only [coreAnchored_wave] at hhi; omega) hV))
+      (by simp only [coreAnchored_waveAt] at hhi; omega) hV))
   link_band := fun h hA hAlo hAhi hkk _ hlo hhi _ _ =>
     AnchoredRule.linkedVia_certificatesAt_band h hA hAlo hAhi (by omega) (by omega)
-      (by simp only [coreAnchored_wave] at hhi; omega)
-      (AnchoredRule.isVote_band_at h (by omega) (by simp only [coreAnchored_wave] at hhi; omega))
+      (by simp only [coreAnchored_waveAt] at hhi; omega)
+      (AnchoredRule.isVote_band_at h (by omega) (by simp only [coreAnchored_waveAt] at hhi; omega))
   link_novel := by
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi _ _ hL
-    simp only [coreAnchored_wave] at hhi
+    simp only [coreAnchored_waveAt] at hhi
     exact AnchoredRule.not_linkedVia_certificatesAt_band_novel h hA hAlo hAhi
       (n := S.slotRound k + 2) (by omega) (by omega) (by omega)
       (AnchoredRule.not_isVote_band_novel h hL) quorumCard_pos
@@ -345,7 +346,7 @@ theorem coreBandLaws : (coreAnchored Validator BlockId Payload).BandLaws where
 /-- **The core reads a band.** -/
 theorem banded : Banded
     (mysticetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) :=
-  AnchoredRule.banded coreBandLaws
+  AnchoredRule.banded coreBandLaws (fun _ _ => rfl)
 
 /-- The carrier's coverage predicate is the core's, on the nose. -/
 theorem coversUpto_eq {U : BlockUniverse Validator BlockId Payload}
@@ -582,7 +583,7 @@ the candidate form a quorum. The three laws are `certifies_of_sustains`,
 /-- **The core's support**: wavelength two, certification the rule's own. -/
 def coreSupport : Support (mysticetiRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) where
-  wave := 2
+  waveAt := fun _ => 2
   Certifies := fun U c L => Certifies U c L
 
 /-- **Law 1.** A certifier two rounds above the settling round reads
@@ -657,7 +658,7 @@ theorem indirect :
     Indirect (mysticetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
       (fun sr i j => sr i + 3 ≤ sr j) :=
   (AnchoredRule.indirect coreLaws.link_congr fun hi h => exists_least hi h).congr
-    (fun _ _ _ => by simp only [coreAnchored_wave] <;> omega)
+    (fun _ _ _ => by simp only [coreAnchored_waveAt] <;> omega)
 
 /-- **Mysticeti has the descent laws** at the core fault model's slack:
 the support commits under coverage, and the indirect rule holds at the
@@ -669,7 +670,7 @@ theorem coreDescent :
         (Payload := Payload)) (coreReliability Validator))
       3 (coreReliability Validator).slack :=
   Timed.descent_of_support _ _ 3 coreSupport coreSupport_ofCoverage coreSupport_commits
-    indirect (by change 2 ≤ 3; omega) fun _ _ _ h => h
+    indirect (fun _ => by change 2 ≤ 3; omega) fun _ _ _ h => h
 
 /-- **L4's capstone form, from the properties.** The shape every
 consumer of direct liveness uses — synchrony from `R`, production to a
@@ -723,7 +724,7 @@ theorem descends {S : Slots Validator} {c : ℕ} (hc : 0 < c)
       (Payload := Payload)) S c :=
   Descends.of_indirect indirect hc (fun b i hi => by
     have := (coreAnchored Validator BlockId Payload).eligible_iff.mp (hspans b i hi)
-    simp only [coreAnchored_wave] at this; omega)
+    simp only [coreAnchored_waveAt] at this; omega)
 
 end Bounded
 
@@ -768,7 +769,8 @@ theorem all_decided_below_of_fairRun {c : ℕ} (hc : 0 < c)
   refine ⟨b, hb, hRb, fun U N hpop hs hN i hi => ?_⟩
   obtain ⟨v, hv⟩ := h (View.full U) N (MysticetiProperties.synchronisedOn_eq.mpr hs)
     (fun r h1 h2 => MysticetiProperties.populatedOn_ofCore (hpop r h1 h2))
-    (MysticetiProperties.coversUpto_eq.mpr (View.coversUpto_full U N)) hN i hi
+    (MysticetiProperties.coversUpto_eq.mpr (View.coversUpto_full U N))
+    (Timed.slotBound_of_top _ (fun _ => le_rfl) hN) i hi
   exact ⟨v, hv.2.1⟩
 
 /-- **L10 at `T := Correct`.** -/

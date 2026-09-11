@@ -60,7 +60,7 @@ not per candidate. -/
 def mahiMahiAnchored (Validator BlockId Payload : Type) [Fintype Validator]
     [DecidableEq Validator] [Faults Validator] [LinearOrder BlockId] (w : ℕ) :
     AnchoredRule Validator BlockId Payload ValidWrt Correct where
-  wave := w - 1
+  waveAt := fun _ => w - 1
   Commit := fun U V L r => MahiMahi.DirectCommitIn U V w L r
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => MahiMahi.DirectSkipIn U V w (S.leader k) (S.slotRound k)
