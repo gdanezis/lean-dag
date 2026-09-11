@@ -459,27 +459,36 @@ common layer over a `DagRule` with `maxLeaders` and `maxInterval` as
 plain naturals, leaving Barnacle with `BaseRule`, `Params`, the window,
 AIMD and the heads descent.
 
-**That lift is not proposed yet.** It is a move of about a thousand
-lines across five directories for the benefit of a second caller, and
-the second caller can be written without it. It becomes the right thing
-when a third mechanism arrives, or when either of the two frictions
-below starts to bite.
+**That lift is not proposed yet**, though D19 strengthens the case: the
+second caller wants the same run with the ledger bound moved, which is a
+parameter rather than a fork. It stays out of this arc until AL12 exists
+and the shape is known.
 
 ### 8.2 The minimal path, and what it accepts
 
-Write the Hammerhead score as a `Barnacle.UpdateRule`:
+Write the Hammerhead score as an update rule, generic in the base rule
+exactly as `Aimd.rule` is — the mechanism names no protocol, and the
+instantiations live in the test tree:
 
 ```lean
-def hammerhead (score : (U : R.Universe) → BlockId → (ℕ → ℕ → Validator) → ℕ → ℕ → Validator)
-    (hk : …) : UpdateRule R :=
-  fun C b U _V A => (⟨C.slotsAt, C.slotsAt_pos, score U A C.lead, hk …, C.interval⟩, b)
+def hammerhead (R : BaseRule Validator BlockId Payload)
+    (score : (U : R.Universe) → BlockId → Config Validator → Config Validator)
+    (hkeep : ∀ U A C, (score U A C).slotsAt = C.slotsAt ∧
+                      (score U A C).interval = C.interval) :
+    UpdateRule R :=
+  fun C b U _V A => (score U A C, b)
 ```
 
-— a rule that leaves the widths and the interval alone and moves the
-leaders. Then BN3 gives agreement of the schedule sequence and of the
-verdicts, BN5 the ledger, BN6 conservativity and BN14 validity, with no
-new induction. `Anchored` is the clause the score owes, and it is the
-same clause `Aimd.rule` discharges by not reading the view.
+The score returns a **`Config`**, not a leader function. `Config.keyed`
+asks that the leaders a round offers be distinct, and a reputation rule
+that promotes one validator into two slots of one round breaks it; the
+obligation is discharged where the configuration is produced rather than
+carried around loose. `hkeep` is then what makes `UpdBounded` the
+identity, since `Config.InBounds` mentions only the widths and the
+interval.
+
+`Anchored` is the clause the score owes BN3, and it is the same clause
+`Aimd.rule` discharges by not reading the view.
 
 Three frictions come with the minimal path, and none of them is a
 proof obligation:
@@ -511,10 +520,46 @@ proof obligation:
    states for the window and BN2 turns into agreement across views.
    `Config.keyed` for the emitted leaders is the obligation
    `Policy.keyed` and `Adaptive.PickKeyed` already record.
-2. ~~**AL12 — the segmented run.**~~ `Barnacle.PartialRun`.
-3. ~~**AL13 — safety.**~~ BN3 at the rule of AL11.
-4. ~~**AL14 — the ledger.**~~ BN5. ~~**AL15 — conservativity.**~~ BN6 at
-   `constRule`, and BN14 gives validity as well.
+2. **AL12 — the run, with two bounds.** D19 puts the boundary before the
+   trigger anchor, so `Barnacle.PartialRun`'s single bound does not
+   serve and this arc varies the structure:
+
+   ```lean
+   closed : ∀ k, k < K → ∀ κ, start k < (cfg k).roundOf κ →
+     (cfg k).roundOf κ ≤ (cfg k).roundOf (anchor k) →
+       R.Decided (cfg k).sched V κ (vdct k κ)          -- decide to the anchor
+   start_succ : ∀ k, k < K → start (k + 1) = start k + (cfg k).interval
+   anchor_commits : ∀ k, k < K →
+     (∃ A, vdct k (anchor k) = some A) ∧ start (k + 1) < (cfg k).roundOf (anchor k)
+   anchor_least : ∀ k, k < K → ∀ κ, κ < anchor k →
+     start (k + 1) < (cfg k).roundOf κ → vdct k κ = none
+   ```
+
+   with `rangeLedger k` reading the rounds `(start k, start (k + 1)]`
+   only — **output to the boundary, decisions to the anchor**. The rounds
+   between are decided again under `cfg (k + 1)`, which is Hammerhead's
+   retroactive re-derivation, and the `cfg k` verdicts there are what
+   the segment discards.
+
+   This is the naming-and-ordering split made structural, and it is what
+   §7 was reaching for before §8.4 established that Barnacle does not
+   need it.
+
+3. **AL13 — safety.** Barnacle's `configAgree` induction with one bound
+   moved. The anchor-agreement step already takes the lesser of two
+   anchors and contradicts the other run's `anchor_least`, and both
+   runs' `closed` reach their own anchors, so the argument does not
+   change shape. What has to be rechecked is that `vdct_agree` still
+   covers the lesser anchor's slot in both runs, which it does because
+   `closed` now runs to each run's own anchor rather than to a shared
+   range top. Expect a port of `Helpers/Agreement.lean`, about a hundred
+   lines, not a new proof.
+4. **AL14 — the ledger**, in BN5's three parts. Disjointness is easier
+   than Barnacle's: consecutive ledger ranges are
+   `(start k, start k + interval]` with `start (k + 1)` the same
+   quantity, so the rounds partition by construction.
+   **AL15 — conservativity**, BN6's shape at a score that returns the
+   configuration it was given, and validity in BN14's shape.
 5. **AL16 — liveness, and this is the work.** BN11 discharges the
    liveness clause from runs of heads, but it asks
    `UpdKeeps upd (fun C => C.head = head)` for **one fixed** head
@@ -557,8 +602,8 @@ anchors, which is what a validator does while it is still on `cfg k` and
 has not yet found the anchor that closes the range. Nothing above the
 range is output under `cfg k`.
 
-So there is no Strand A. What §7 diagnosed is Strand B alone, and it is
-this arc's alone: `Policy.pick` reads verdicts, which creates the
+So the Barnacle arc has no gap here. What §7 diagnosed is this arc's
+alone: `Policy.pick` reads verdicts, which creates the
 circularity of §1, which forces the two-epoch lag, which forces
 `DecidedBelow` at `W · (epochOf k + 2)`. That last clause is what
 asynchrony falsifies, and it is not a truncation question. Deciding
@@ -566,8 +611,8 @@ slots beyond an epoch in order to settle slots within it is exactly what
 the bound forbids and exactly what both Barnacle and Hammerhead do.
 
 A rule that reads the anchor's causal history rather than the verdicts
-has no circularity, needs no bound, and inherits the truncation from the
-run it is installed in.
+has no circularity and needs no such bound. It still needs a run with
+ranges, and D19 decides how those ranges end.
 
 ### 8.5 What remains of the fixpoint arc
 
@@ -580,20 +625,71 @@ generality, and the arc should say so rather than carry it silently. Its
 can express, so the two arcs cover different schedules as well as
 different policies.
 
+### 8.5b How much of Barnacle is still reused
+
+D19 costs the run structure and the safety induction, which is the part
+§8.2 said would be free. What survives unchanged is everything the run
+is built out of: `Config` and its arithmetic, `UpdateRule`, `Anchored`,
+`Config.InBounds`, `ledgerOf`, the `Slots` instance a configuration
+induces, `Properties.Agree` as the one law safety consumes, and — for
+AL16 — `HeadsRun`, `liveOn_of_headsRun` and `roundRobin_headsRun`, which
+are stated at a `Config` and say nothing about how the configuration was
+chosen.
+
+So the honest accounting is: the vocabulary is reused, the two proofs
+are ported. That is still far from the segmented run §8 first planned,
+and it is an argument for D21 — if a second caller needs the two-bound
+run, the run belongs in the common layer with the ledger bound as a
+parameter, and Barnacle's is the case where it coincides with the
+anchor's round.
+
 ### 8.6 Decisions
 
 - **D18 — the boundary's unit.** Settled by the instantiation:
   `Config.interval` counts rounds, as Hammerhead's `T` does.
   `epochOf W k = k / W` counts slots and belongs to the fixpoint arc.
-- **D19 — where a boundary sits.** `Barnacle.PartialRun` places it at
-  `start k + (cfg k).interval`, and `start (k + 1)` at the anchor's own
-  round; Hammerhead places the next boundary at
-  `activeSchedule.initialRound + T`. The two agree once `start k` is
-  read as "the round after which configuration `k` is in force", and the
-  paper's footnote 3 leaves open whether `T` counts rounds or committed
-  leaders. Take Barnacle's, and record the paper's ambiguity.
+- **D19 — where a boundary sits. Settled: take Hammerhead's.** The two
+  conventions are not interchangeable, and the choice decides whether
+  this arc instantiates `Barnacle.PartialRun` or varies it.
+
+  Barnacle sets `start (k + 1) = (cfg k).roundOf (anchor k)`: the
+  configuration governs **through the anchor's round**, so its range
+  stretches to wherever the anchor is found. Hammerhead fixes the
+  boundary at `initialRound + T` and does not order the trigger anchor at
+  all, re-deriving it and everything above under the next schedule.
+
+  The trade is output against work. Barnacle's ledger keeps growing to
+  the anchor however late it arrives, at the cost of a configuration
+  overrunning its nominal interval by an unbounded amount. Hammerhead's
+  output stops at the boundary — so a long asynchronous stretch stalls
+  the ledger — and the rounds between the boundary and the anchor are
+  decided twice, once under each schedule, with the first set discarded.
+  Hammerhead's is the conservative one, and it is the one this arc takes.
+
+  The consequence is structural, and §8.3 carries it: a run needs **two
+  bounds**, not one. Decisions are made under `cfg k` up to the anchor's
+  round, because that is how the anchor is found; output stops at
+  `start k + (cfg k).interval`. Barnacle's run collapses the two, and
+  that is why this arc varies the structure rather than instantiating it.
+
+  The paper's footnote 3 leaves open whether `T` counts rounds or
+  committed leaders; rounds is the reading here (D18).
 - **D20 — what becomes of the fixpoint arc.** Keep it, and label it as
   §8.5 describes.
 - **D21 — when to lift the run to the common layer.** Not with this
-  arc. When a third mechanism wants it, or when §8.2's first two
-  frictions stop being cosmetic.
+  arc, but D19 makes the case stronger than it was: two runs that differ
+  only in where the ledger stops want one structure with that bound as a
+  parameter. Revisit once AL12 exists and the shape is known rather than
+  guessed.
+- **D22 — does the score permute or re-weight?** A score that
+  post-composes a permutation on the rotation keeps every liveness
+  property with no further argument: `roundRobin_headsRun` holds for every good set of
+  the right cardinality, and `σ ∘ head (ρ) ∈ T ↔ head ρ ∈ σ⁻¹ T` with
+  `σ⁻¹ T` of the same cardinality, so runs of heads transfer by a short
+  lemma at the same gap. Hammerhead's own rule re-weights — it replaces a
+  validator from the low-scoring set `B` by one from the high-scoring set
+  `G`, so a demoted validator can lose every slot — and then runs of
+  heads need the paper's `|B| = |G| ≤ f`, which is its Leader-Utilization
+  lemma. Build the permuting score first: it exercises the whole
+  instantiation and yields a witness, and the re-weighting bound lands on
+  top of it.
