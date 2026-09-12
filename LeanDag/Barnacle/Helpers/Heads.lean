@@ -1,6 +1,7 @@
 import LeanDag.Barnacle.Model.Heads
 import LeanDag.Barnacle.Helpers.Schedule
 import Mathlib.Data.Finset.Prod
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # Heads helpers
@@ -42,6 +43,39 @@ end HeadArith
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
+
+/-! ## Runs of heads transfer along a permutation
+
+A mechanism that reassigns who leads — as a reputation score does — emits
+a family of head functions rather than one. Where the family is the
+permutations of a schedule that has runs of heads, each member has them
+too, at the same gap: `HeadsRun` reads the head function only through
+membership in `T`, and a permutation moves `T` to a set of the same size.
+`roundRobin_headsRun` holds at every `T` meeting the committee bound, so
+every permuted rotation inherits it. -/
+
+/-- Runs of heads survive a permutation of the validators, at the same
+gap, once the good set is pulled back along it. -/
+theorem headsRun_perm {Validator : Type} [DecidableEq Validator]
+    {head : ℕ → Validator} {T : Finset Validator} {g c₀ : ℕ} (σ : Equiv.Perm Validator)
+    (h : HeadsRun head (T.map σ.symm.toEmbedding) g c₀) :
+    HeadsRun (fun ρ => σ (head ρ)) T g c₀ := by
+  intro r
+  obtain ⟨ρ, hlo, hhi, hled⟩ := h r
+  refine ⟨ρ, hlo, hhi, fun i hi => ?_⟩
+  obtain ⟨a, haT, ha⟩ := Finset.mem_map.1 (hled i hi)
+  simpa [← ha] using haT
+
+/-- **The form a mechanism uses.** A schedule whose heads run for *every*
+good set of the right size hands the same property to every permutation
+of itself, since a permutation preserves cardinality. -/
+theorem headsRun_perm_of_all {Validator : Type} [Fintype Validator] [DecidableEq Validator]
+    {head : ℕ → Validator} {g c₀ slack : ℕ} (σ : Equiv.Perm Validator)
+    (h : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun head T g c₀) :
+    ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun (fun ρ => σ (head ρ)) T g c₀ :=
+  fun T hT => headsRun_perm σ (h _ (by simpa using hT))
 
 section Heads
 
@@ -193,48 +227,133 @@ theorem liveOn_of_headsRun (hD : R.Descent slack) (hw : 0 < R.waveLength)
       · rw [Config_slotRound_head]; omega
       · rw [Config_leader_head]; simpa using hled 0 hw
 
+/-- **A permuted schedule is live at the same gap.** A mechanism that
+reassigns who leads emits a family of head functions; where each is a
+permutation of one that has runs of heads, each is live with that
+schedule's gap, by `headsRun_perm_of_all`. This is what lets a liveness
+clause range over the configurations a reputation score can install
+rather than over one fixed schedule. -/
+theorem liveOn_of_permuted_heads (hD : R.Descent slack) (hw : 0 < R.waveLength)
+    {head : ℕ → Validator}
+    (hheads : ∀ T : Finset Validator, Fintype.card Validator ≤ T.card + slack →
+      HeadsRun head T R.waveLength c₀)
+    (σ : Equiv.Perm Validator) (hC : C.head = fun ρ => σ (head ρ)) :
+    R.LiveOn C.sched c₀ :=
+  liveOn_of_headsRun C hD hw (by rw [hC]; exact headsRun_perm_of_all σ hheads)
+
 #print axioms liveOn_of_headsRun
 
 end Heads
 
-/-- **The pigeonhole.** If no window of `g` consecutive residues starting
-in a cycle lay inside `T`, choosing for each start a residue outside `T`
-within its window would inject `Fin n` into `Fin g × Tᶜ`. -/
-theorem roundRobin_headsRun (n : ℕ) (hn : 0 < n) (T : Finset (Fin n)) (slack g : ℕ)
-    (hT : n ≤ T.card + slack) (hbound : g * slack + 1 ≤ n) :
-    HeadsRun (roundRobin n hn) T g (n + g - 1) := by
+/-- **The pigeonhole, over positions rather than validators.** A schedule
+that repeats every `n` rounds need not visit each validator once: a
+mechanism that reassigns slots leaves some validators with several and
+some with none. What the argument needs is not injectivity but that the
+rounds of a cycle whose head lies outside the good set are few — at most
+`m` of the `n`. Then from any round, within `n + g − 1` rounds, some `g`
+consecutive heads are all good.
+
+The injection is into `Fin g × Bad`, where `Bad` is the set of *cycle
+positions* the good set misses; the round-robin case recovers a position
+from its validator and is `roundRobin_headsRun`. -/
+theorem headsRun_of_cycle {Validator : Type} [DecidableEq Validator]
+    (n : ℕ) (hn : 0 < n) (head : ℕ → Validator) (hcyc : ∀ ρ, head ρ = head (ρ % n))
+    (T : Finset Validator) (m g : ℕ)
+    (hm : ((Finset.range n).filter (fun p => head p ∉ T)).card ≤ m)
+    (hbound : g * m + 1 ≤ n) :
+    HeadsRun head T g (n + g - 1) := by
+  classical
   intro r
   by_contra hcon
-  push Not at hcon
-  have hwin : ∀ x : Fin n, ∃ i, i < g ∧ roundRobin n hn (r + x + i) ∉ T := by
+  push_neg at hcon
+  have hwin : ∀ x : Fin n, ∃ i, i < g ∧ head (r + x + i) ∉ T := by
     intro x
     obtain ⟨i, hi, hiT⟩ := hcon (r + x) (by omega) (by omega)
     exact ⟨i, hi, hiT⟩
   choose k hk using hwin
-  let φ : Fin n → Fin g × Fin n := fun x => (⟨k x, (hk x).1⟩, roundRobin n hn (r + x + k x))
+  set Bad : Finset ℕ := (Finset.range n).filter (fun p => head p ∉ T) with hBad
+  let φ : Fin n → Fin g × ℕ := fun x => (⟨k x, (hk x).1⟩, (r + x + k x) % n)
   have hmaps : Set.MapsTo φ ↑(Finset.univ : Finset (Fin n))
-      ↑((Finset.univ : Finset (Fin g)) ×ˢ Tᶜ) := by
+      ↑((Finset.univ : Finset (Fin g)) ×ˢ Bad) := by
     intro x _
     simp only [Finset.coe_product, Set.mem_prod, Finset.mem_coe, Finset.mem_univ, true_and,
-      Finset.mem_compl]
-    exact (hk x).2
+      hBad, Finset.mem_filter, Finset.mem_range]
+    exact ⟨Nat.mod_lt _ hn, by rw [← hcyc]; exact (hk x).2⟩
   have hinj : Set.InjOn φ ↑(Finset.univ : Finset (Fin n)) := by
     intro x _ y _ hxy
     simp only [φ, Prod.mk.injEq, Fin.mk.injEq] at hxy
     obtain ⟨hkxy, hres⟩ := hxy
-    have hres' : (r + x + k x) % n = (r + y + k y) % n := congrArg Fin.val hres
-    rw [hkxy] at hres'
+    rw [hkxy] at hres
     have h2 : (↑x : ℕ) % n = ↑y % n :=
-      Nat.ModEq.add_left_cancel' r (Nat.ModEq.add_right_cancel' (k y) hres')
+      Nat.ModEq.add_left_cancel' r (Nat.ModEq.add_right_cancel' (k y) hres)
     rw [Nat.mod_eq_of_lt x.isLt, Nat.mod_eq_of_lt y.isLt] at h2
     exact Fin.ext h2
   have hcard := Finset.card_le_card_of_injOn φ hmaps hinj
-  rw [Finset.card_univ, Fintype.card_fin, Finset.card_product, Finset.card_univ, Fintype.card_fin,
-    Finset.card_compl, Fintype.card_fin] at hcard
-  have hcompl : n - T.card ≤ slack := by omega
-  have := Nat.mul_le_mul_left g hcompl
+  rw [Finset.card_univ, Fintype.card_fin, Finset.card_product, Finset.card_univ,
+    Fintype.card_fin] at hcard
+  have := Nat.mul_le_mul_left g hm
   omega
 
+/-- **A re-weighted schedule meets it, under a cap on accumulation.** A
+mechanism that moves slots between validators makes some hold several and
+some none. Counting positions, the good set misses at most `slack`
+validators and each holds at most `w` positions of the cycle, so at most
+`slack · w` positions are bad — and the committee bound becomes
+`g · slack · w + 1 ≤ n`. At `w = 1`, a schedule that is a permutation of
+the rotation, this is the round-robin bound unchanged.
+
+This is the clause a reputation rule owes for liveness: not that it
+permutes, but that no validator accumulates more than `w` of the cycle's
+positions. -/
+theorem headsRun_of_cycle_weighted {Validator : Type} [Fintype Validator]
+    [DecidableEq Validator] (n : ℕ) (hn : 0 < n) (head : ℕ → Validator)
+    (hcyc : ∀ ρ, head ρ = head (ρ % n)) (T : Finset Validator) (slack w g : ℕ)
+    (hT : Fintype.card Validator ≤ T.card + slack)
+    (hw : ∀ v : Validator, ((Finset.range n).filter (fun p => head p = v)).card ≤ w)
+    (hbound : g * (slack * w) + 1 ≤ n) :
+    HeadsRun head T g (n + g - 1) := by
+  classical
+  refine headsRun_of_cycle n hn head hcyc T (slack * w) g ?_ hbound
+  have hsub : (Finset.range n).filter (fun p => head p ∉ T) ⊆
+      Tᶜ.biUnion (fun v => (Finset.range n).filter (fun p => head p = v)) := by
+    intro p hp
+    simp only [Finset.mem_filter, Finset.mem_range] at hp
+    exact Finset.mem_biUnion.2 ⟨head p, Finset.mem_compl.2 hp.2,
+      Finset.mem_filter.2 ⟨Finset.mem_range.2 hp.1, rfl⟩⟩
+  calc ((Finset.range n).filter (fun p => head p ∉ T)).card
+      ≤ (Tᶜ.biUnion (fun v => (Finset.range n).filter (fun p => head p = v))).card :=
+        Finset.card_le_card hsub
+    _ ≤ ∑ v ∈ Tᶜ, ((Finset.range n).filter (fun p => head p = v)).card :=
+        Finset.card_biUnion_le
+    _ ≤ ∑ _v ∈ Tᶜ, w := Finset.sum_le_sum (fun v _ => hw v)
+    _ = Tᶜ.card * w := by simp
+    _ ≤ slack * w := Nat.mul_le_mul_right w (by rw [Finset.card_compl]; omega)
+
+/-- **Round-robin meets it.** The rotation visits each validator once a
+cycle, so the positions the good set misses are the validators it
+misses, at most `slack` of them; `headsRun_of_cycle` does the rest. -/
+theorem roundRobin_headsRun (n : ℕ) (hn : 0 < n) (T : Finset (Fin n)) (slack g : ℕ)
+    (hT : n ≤ T.card + slack) (hbound : g * slack + 1 ≤ n) :
+    HeadsRun (roundRobin n hn) T g (n + g - 1) := by
+  classical
+  refine headsRun_of_cycle n hn (roundRobin n hn) (fun ρ => ?_) T slack g ?_ hbound
+  · exact Fin.ext (by simp [roundRobin, Nat.mod_mod_of_dvd])
+  · have hmaps : Set.MapsTo (roundRobin n hn)
+        ↑((Finset.range n).filter (fun p => roundRobin n hn p ∉ T)) ↑(Tᶜ) := by
+      intro p hp
+      simp only [Finset.coe_filter, Set.mem_setOf_eq, Finset.mem_range] at hp
+      simpa using hp.2
+    have hinj : Set.InjOn (roundRobin n hn)
+        ↑((Finset.range n).filter (fun p => roundRobin n hn p ∉ T)) := by
+      intro a ha b hb hab
+      simp only [Finset.coe_filter, Set.mem_setOf_eq, Finset.mem_range] at ha hb
+      have h := congrArg Fin.val hab
+      simp only [roundRobin] at h
+      rw [Nat.mod_eq_of_lt ha.1, Nat.mod_eq_of_lt hb.1] at h
+      exact h
+    have hc := Finset.card_le_card_of_injOn _ hmaps hinj
+    rw [Finset.card_compl, Fintype.card_fin] at hc
+    omega
 
 /-- **Round-robin is live** at every count, with gap `n + waveLength − 1`. -/
 theorem liveOn_roundRobin {n : ℕ} (hn : 0 < n) {BlockId : Type} [DecidableEq BlockId]

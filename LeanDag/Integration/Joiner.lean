@@ -1,112 +1,73 @@
-import LeanDag.GC.ChopDecided
-import LeanDag.Adaptive.Joiner
+import LeanDag.Adaptive.Helpers.Mechanisms
 import LeanDag.Properties.Arcs.GC
 import LeanDag.Mysticeti.Record
 /-!
-# I5 — the joiner and the adaptive schedule, at the core
+# The adaptive schedule across the core's mechanisms
 
-`Adaptive/Joiner.lean` at the core's cut: the schedule half is
-`Slots.chop` read as a `Rebases` witness, the verdict half the generic
-cross-cut agreement at `truncates_chop`. Truncating an adaptive
-schedule and adapting a truncated one are definitionally equal, so
-`slotsChop_slotsOf_eq` closes by `rfl`.
+`Adaptive/Helpers/Mechanisms.lean` composes the segmented arc with the
+cut, the fill and re-genesis at **any** carrier on the record, so the
+core contributes nothing to those and they are read at the generic names
+through `MysticetiProperties.onRecord`. What is stated here is the one
+composite the generic file does not reach: the core's fill is
+`SkipMsg.skipFill`, its own and not `BlockRecord.copyFill`, so
+fill-then-cut at a configuration is assembled here the way `stack_core`
+assembles it at a fixed schedule.
+
+The claim the arc was built for — **pruning does not split the ledger,
+even when the schedule is derived from it** — is
+`Adaptive.joiner_run_decided_agree` at `MysticetiProperties.onRecord`,
+and the instantiation below is the exhibit.
 -/
 
 namespace LeanDag
 
 namespace Integration
 
-open Properties Adaptive
+open Properties Adaptive Barnacle
+open LeanDag.MysticetiProperties
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable [F : Faults Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {U : BlockUniverse Validator BlockId Payload}
-variable [S : Slots Validator] {G d : ℕ}
+variable {G : ℕ}
 
-/-! ## The schedule transformers commute -/
+/-- **The core's recovery and its horizon, under a configuration.** A
+validator that filled a crashed peer's gap and then pruned below round
+`G` reads one `Rebased` of the configuration's own schedule, so
+`Stack.safe_and_live` covers the composite at an adaptive schedule. The
+core's fill is `SkipMsg.skipFill`, which is why this is not
+`Adaptive.stack_copyFill_chop_config`. -/
+theorem stack_core_config (sk : SkipMsg U) (C : Config Validator) :
+    Stack (MysticetiProperties.mysticetiRule (Payload := Payload)) U C.sched
+      (chop sk.skipFill G) (C.chop G).sched G (max (sk.r + 1) G) (C.cum G) :=
+  have st : Stack (MysticetiProperties.mysticetiRule (Payload := Payload)) U C.sched
+      (MysticetiProperties.onRecord.chop sk.skipFill G) (C.chop G).sched G
+      (max (sk.r + 1) G) (C.cum G) := by
+    simpa using Stack.step
+      (Rebased.of_sustains (S := C.sched) (sustains_skipFill (Payload := Payload) sk))
+      (Adaptive.stack_chop_config MysticetiProperties.onRecord (U := sk.skipFill) (G := G) C)
+  st
 
-omit F in
-/-- Truncation preserves one-leader-per-round. -/
-theorem injective_slotRound_chop (hd : G ≤ S.slotRound d)
-    (hinj : Function.Injective S.slotRound) :
-    Function.Injective (S.chop G d hd).slotRound :=
-  (Properties.rebases_chop hd).injective hinj
-
-omit F in
-/-- **The transformers commute**, field by field: truncating an adaptive
-schedule and adapting a truncated one give the same rounds and the
-same leaders, provided the assignment used in the truncation is the
-original one shifted past the base slot. -/
-theorem slotsChop_slotsOf (hd : G ≤ S.slotRound d)
-    (hinj : Function.Injective S.slotRound) (a : ℕ → Validator)
-    (hd' : G ≤ (slotsOf hinj a).slotRound d) (k : ℕ) :
-    ((slotsOf hinj a).chop G d hd').slotRound k
-        = (slotsOf (S := S.chop G d hd)
-            (injective_slotRound_chop hd hinj) (fun m => a (d + m))).slotRound k
-      ∧ ((slotsOf hinj a).chop G d hd').leader k
-        = (slotsOf (S := S.chop G d hd)
-            (injective_slotRound_chop hd hinj) (fun m => a (d + m))).leader k :=
-  ⟨rfl, rfl⟩
-
-omit F in
-/-- **And as schedules.** Both sides are rebases of `slotsOf hinj a` by
-the same offset from the same base slot, so `Rebases.unique` would
-settle it; at the core the two constructions are definitionally equal. -/
-theorem slotsChop_slotsOf_eq (hd : G ≤ S.slotRound d)
-    (hinj : Function.Injective S.slotRound) (a : ℕ → Validator)
-    (hd' : G ≤ (slotsOf hinj a).slotRound d) :
-    (slotsOf hinj a).chop G d hd'
-      = slotsOf (S := S.chop G d hd) (injective_slotRound_chop hd hinj)
-          (fun m => a (d + m)) := rfl
-
-/-- **I5's verdict half**, at the core: the joiner and the network agree
-on every shared slot, from an arbitrary view of the truncation. -/
-theorem joiner_decided_agree (hd : G ≤ S.slotRound d)
-    (hinj : Function.Injective S.slotRound) (a : ℕ → Validator)
-    {W : View Validator BlockId Payload (chop U G)}
-    {V : View Validator BlockId Payload U} {k : ℕ} {w v : Option BlockId}
-    (hW : Decided (S := slotsOf (S := S.chop G d hd)
-            (injective_slotRound_chop hd hinj) (fun m => a (d + m)))
-          (chop U G) W k w)
-    (hV : Decided (S := slotsOf hinj a) U V (d + k) v) : w = v :=
-  Adaptive.joiner_decided_agree MysticetiProperties.agree MysticetiProperties.banded
-    (MysticetiProperties.truncates_chop hd) a (fun _ _ hr _ => hinj hr)
-    (MysticetiProperties.viewAgreeAbove_chop (V := V)) hW hV
-
-/-! ## The policy half, at the core -/
-
-section Policy
-
-variable {P : Adaptive.Policy (MysticetiProperties.mysticetiRule
-  (Validator := Validator) (BlockId := BlockId) (Payload := Payload))}
-variable {pick' : (U' : BlockUniverse Validator BlockId Payload) →
-      View Validator BlockId Payload U' → (ℕ → Option BlockId) → ℕ → Validator}
-
-/-! The assignment half of I5 — under a horizon-stable rule a joiner
-computes exactly the leaders the network is using — and the schedule
-half are `Adaptive.joiner_assign_agree` and `Adaptive.joiner_leader_agree`
-at the core's `MysticetiProperties.sustains_chop` and `truncates_chop`. -/
-
-/-- **I5, whole.** A joiner that computed its own schedule from its own
-truncated view, under a horizon-stable rule, agrees with the network's
-run on every shared slot: *pruning does not split the ledger, even when
-the schedule is derived from it.* -/
-theorem joiner_run_decided_agree (hd : G ≤ S.slotRound d)
-    (hs : HorizonStable P G d pick')
-    {V : View Validator BlockId Payload U} (R : Adaptive.Run P U V)
-    (V' : View Validator BlockId Payload (chop U G))
+/-- **I5, whole, at the core**: a joiner that recomputed its
+configuration from its own truncated view, under a horizon-stable score,
+runs the network's leaders and derives the network's verdict at every
+slot both hold. -/
+theorem joiner_run_decided_agree
+    {score : (U : BlockUniverse Validator BlockId Payload) →
+      View Validator BlockId Payload U → Config Validator → Config Validator}
+    (hs : Adaptive.HorizonStable
+      (R := MysticetiProperties.mysticetiRule (Payload := Payload)) score G)
+    (C : Config Validator)
+    {V : View Validator BlockId Payload U}
+    {V' : View Validator BlockId Payload (chop U G)}
+    (hv : ViewAgreeAbove (MysticetiProperties.mysticetiRule (Payload := Payload)) V V' G)
     {W : View Validator BlockId Payload (chop U G)} {k : ℕ} {w v : Option BlockId}
-    (hW : Decided (S := slotsOfKeyed (S := S.chop G d hd) (fun m => R.assign (d + m))
-            (Properties.Rebases.keyed (Validator := Validator)
-              (MysticetiProperties.truncates_chop (U := U) (G := G) hd).toRebases R.keyed))
-          (chop U G) W k w)
-    (hV : Decided (S := slotsOfKeyed R.assign R.keyed) U V (d + k) v) : w = v :=
-  Adaptive.joiner_decided_agree MysticetiProperties.agree MysticetiProperties.banded
-    (MysticetiProperties.truncates_chop hd) R.assign R.keyed
-    (MysticetiProperties.viewAgreeAbove_chop (V := V)) hW hV
-
-end Policy
+    (hW : Decided (S := (score (chop U G) V' (C.chop G)).sched) (chop U G) W k w)
+    (hV : Decided (S := (score U V C).sched) U V ((score U V C).cum G + k) v) :
+    w = v :=
+  Adaptive.joiner_run_decided_agree MysticetiProperties.onRecord
+    MysticetiProperties.agree MysticetiProperties.banded hs C hv hW hV
 
 end Integration
 

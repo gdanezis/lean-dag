@@ -89,9 +89,9 @@ def varP : Params := ⟨4, 2, 96, 100, by decide⟩
 back-off; otherwise fall back to the genesis configuration. It reads the
 universe and the anchor and not the view, so it is `Anchored`. -/
 def varUpd : UpdateRule bnRule32 :=
-  fun _ b U _V A => if (bnRule32.block U A).round = 2 then (varC, b + 1) else (bnC1I1, 0)
+  fun _ b U _V _v A => if (bnRule32.block U A).round = 2 then (varC, b + 1) else (bnC1I1, 0)
 
-theorem varUpd_anchored : Anchored bnRule32 varUpd := fun _ _ _ _ _ _ => rfl
+theorem varUpd_anchored : Anchored bnRule32 varUpd := fun _ _ _ _ _ _ _ => rfl
 
 /-- The verdicts: range `0` commits slots `1` and `2` of the genesis
 schedule, range `1` slots `3` to `6` of `varC`'s. -/
@@ -264,6 +264,27 @@ example : varRun.start 1 = 2 ∧ varRun.start 2 = 5 := ⟨rfl, rfl⟩
 -- round `4` is two wide.
 example : varRun.rangeLedger 1 = [12, 17, 18, 22] := by decide
 example : varRun.ledgerUpto 2 = [5, 10, 12, 17, 18, 22] := by decide
+
+/-! ### The schedule above a range names anchors, and nothing more
+
+`varC.sched` names a leader at every round, round `8` included, though
+`varC` governs only rounds `3` to `5`. Those names are what an indirect
+decision inside the range would anchor on; none of them is output. The
+ledger to height `2` stops at `start 2 = 5`, through the theorem rather
+than by reading the range bounds. -/
+
+example : varC.sched.leader (varC.cum 8) = 1 := by decide
+example : varRun.start 2 = 5 := rfl
+
+example : ∀ L ∈ varRun.ledgerUpto 2,
+    varRun.start 0 < (bnRule32.block Usun L).round ∧
+      (bnRule32.block Usun L).round ≤ varRun.start 2 :=
+  fun _ h => round_of_mem_ledgerUpto candidates32 varRun le_rfl h
+
+-- `Usun` has blocks above the frontier — round `6` is blocks `24` to
+-- `27` — and none of them is in the ledger.
+example : (bnRule32.block Usun 24).round = 6 := by decide
+example : (24 : Fin 32) ∉ varRun.ledgerUpto 2 := by decide
 
 /-! ## BN3 and BN5 on it
 

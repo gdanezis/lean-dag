@@ -202,8 +202,10 @@ example : Aimd.count bnP 1 3 false = 1 := by decide
 -- On `U7` at count `2` the window is unhealthy (`100 · 3 < 96 · 4`); at
 -- count `4` too (`100 · 5 < 96 · 8`); at count `1` it is healthy
 -- (`100 · 2 ≥ 96 · 2`).
-example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC2 0 U7 (View.full U7) 20).1.slotsAt 0 = 1 ∧
-    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC2 0 U7 (View.full U7) 20).2 = 1 := by decide
+example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC2 0 U7 (View.full U7)
+      (fun _ => none) 20).1.slotsAt 0 = 1 ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC2 0 U7 (View.full U7)
+      (fun _ => none) 20).2 = 1 := by decide
 
 /-! ## BN12 on data: a healthy window, and the step it forces
 
@@ -224,15 +226,15 @@ theorem u7_window_healthy :
 wide, on the same leaders and at the same interval, and the back-off
 resets — because the window is healthy, not because the arithmetic was
 computed. -/
-example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) 20).1.slotsAt
+example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) (fun _ => none) 20).1.slotsAt
       = (fun _ => 2) ∧
-    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) 20).1.lead = bnLead ∧
-    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) 20).1.interval = 4 ∧
-    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) 20).2 = 0 := by
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) (fun _ => none) 20).1.lead = bnLead ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) (fun _ => none) 20).1.interval = 4 ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 0 U7 (View.full U7) (fun _ => none) 20).2 = 0 := by
   obtain ⟨hw, hl, hi, hb⟩ :=
     (Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
         MysticetiProperties.commitsDirect).2.1 bnC1 U7 20 (by decide) 0 (View.full U7)
-      (by decide) (by decide) (by decide) u7_window_healthy
+      (fun _ => none) (by decide) (by decide) (by decide) u7_window_healthy
   refine ⟨?_, hl, hi, hb⟩
   rw [hw]
   funext r
@@ -262,10 +264,11 @@ example : ∀ r, expected bnRule bnC2I1 r = 0 :=
 /-- And the rule then takes the healthy step whatever the DAG did: the
 count rises from two to three at an anchor whose window scores nothing. -/
 example : observed bnRule bnC2I1 U7 12 = 0 ∧
-    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC2I1 0 U7 (View.full U7) 12).1.slotsAt 0 = 3 := by
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC2I1 0 U7 (View.full U7)
+      (fun _ => none) 12).1.slotsAt 0 = 3 := by
   refine ⟨by decide, ?_⟩
   rw [(((Healthy.holds (Fin 4) (Fin 24) Unit bnRule bnP bnLead bnLeadKeyed
-    MysticetiProperties.commitsDirect).2.2.2 bnC2I1 (by decide)).2 U7 (View.full U7) 12 0).1]
+    MysticetiProperties.commitsDirect).2.2.2 bnC2I1 (by decide)).2 U7 (View.full U7) (fun _ => none) 12 0).1]
   decide
 
 -- The interval BN12a asks for is exactly the one that avoids this.
@@ -273,18 +276,18 @@ example : bnRule.waveLength ≤ bnC1.interval ∧ ¬ (bnRule.waveLength ≤ bnC2
   decide
 
 #print axioms LeanDag.Barnacle.Healthy.holds
-example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC4 0 U7 (View.full U7) 20).1.slotsAt 0 = 3 ∧
-    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC4 0 U7 (View.full U7) 20).2 = 1 := by decide
+example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC4 0 U7 (View.full U7) (fun _ => none) 20).1.slotsAt 0 = 3 ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC4 0 U7 (View.full U7) (fun _ => none) 20).2 = 1 := by decide
 -- At the floor, an unhealthy window (anchor `12`, nothing scores at
 -- count `1`) leaves the count at one and moves the back-off on.
-example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 3 U7 (View.full U7) 12).1.slotsAt 0 = 1 ∧
-    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 3 U7 (View.full U7) 12).2 = 4 := by decide
+example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 3 U7 (View.full U7) (fun _ => none) 12).1.slotsAt 0 = 1 ∧
+    (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 3 U7 (View.full U7) (fun _ => none) 12).2 = 4 := by decide
 -- The emitted configuration carries the interval it was given.
-example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 3 U7 (View.full U7) 12).1.interval = 4 :=
-  rfl
+example : (Aimd.rule bnRule bnP bnLead bnLeadKeyed bnC1 3 U7 (View.full U7)
+    (fun _ => none) 12).1.interval = 4 := rfl
 
 -- The constant rule reconfigures nothing.
-example : constRule bnRule bnC2 3 U7 (View.full U7) 20 = (bnC2, 3) := rfl
+example : constRule bnRule bnC2 3 U7 (View.full U7) (fun _ => none) 20 = (bnC2, 3) := rfl
 
 -- The ledger of a slot interval: `lo` inclusive, `hi` exclusive, skips dropped.
 example : ledgerOf (fun k => if k = 3 then some (7 : Fin 24) else if k = 5 then some 9 else none)
@@ -323,9 +326,9 @@ example : observed bnRule6 bnC6_2 Uodo 20 = 2 := by decide
 example : observed bnRule6 bnC6_6 Uodo 20 = 6 := by decide
 example : expected bnRule6 bnC6_6 3 = 6 := by decide
 -- Healthy at every count: the count rises, and stays capped at six.
-example : (Aimd.rule bnRule6 bnP6 bnLead6 bnLeadKeyed6 bnC6_1 0 Uodo (View.full Uodo) 20).1.slotsAt
+example : (Aimd.rule bnRule6 bnP6 bnLead6 bnLeadKeyed6 bnC6_1 0 Uodo (View.full Uodo) (fun _ => none) 20).1.slotsAt
     0 = 2 := by decide
-example : (Aimd.rule bnRule6 bnP6 bnLead6 bnLeadKeyed6 bnC6_6 0 Uodo (View.full Uodo) 20).1.slotsAt
+example : (Aimd.rule bnRule6 bnP6 bnLead6 bnLeadKeyed6 bnC6_6 0 Uodo (View.full Uodo) (fun _ => none) 20).1.slotsAt
     0 = 6 := by decide
 
 /-! ## Slots against blocks: the equivocator of `U6`
@@ -379,12 +382,15 @@ abbrev bnC1I1 : Config (Fin 4) := bnCfg 1 1 (by decide) (by decide)
 /-- The rule the run follows. -/
 abbrev bnUpd : UpdateRule bnRule := Aimd.rule bnRule bnPI1 bnLead bnLeadKeyed
 
-/-- The configuration the anchor produces. -/
-abbrev bnCfg1' : Config (Fin 4) × ℕ := bnUpd bnC1I1 0 U7 V7 10
-
 /-- The verdicts of configuration `0`. -/
 def vd1 : ℕ → ℕ → Option (Fin 24) :=
   fun _ κ => if κ = 1 then some 5 else if κ = 2 then some 10 else none
+
+/-- The verdicts the rule is handed: configuration `0`'s range, `(0, 2]`. -/
+abbrev bnSpan1 : ℕ → Option (Fin 24) := spanVdct bnC1I1 0 2 (vd1 0)
+
+/-- The configuration the anchor produces. -/
+abbrev bnCfg1' : Config (Fin 4) × ℕ := bnUpd bnC1I1 0 U7 V7 bnSpan1 10
 
 def run1 : PartialRun bnRule bnPI1 bnUpd bnC1I1 U7 V7 1 where
   start := fun k => if k = 0 then 0 else 2

@@ -19,7 +19,7 @@ theorem holds : Statement := by
   have hmax := P.max_pos
   refine ⟨?_, ⟨?_, ?_⟩, ⟨?_, ?_, ?_⟩, ?_, ?_⟩
   · -- BN7a: bounds, and the interval is carried.
-    intro C backoff U V A
+    intro C backoff U V v A
     exact ⟨fun r => count_le P _ _ _, rfl⟩
   · -- BN7b: healthy, below the cap.
     intro m backoff h
@@ -45,7 +45,7 @@ theorem holds : Statement := by
     show max 1 (min P.maxLeaders (1 - 2 ^ backoff)) = 1
     rw [Nat.max_def, Nat.min_def]; split_ifs <;> omega
   · -- BN7d: the test, in both directions.
-    intro C backoff U V A
+    intro C backoff U V v A
     refine ⟨rfl, rfl, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩
     · simp only [rule, decide_eq_true h]
       rfl
@@ -54,7 +54,7 @@ theorem holds : Statement := by
       rfl
     · simp only [rule, decide_eq_false h, Bool.false_eq_true, if_neg, if_false]
   · -- BN7e: the rule ignores the view.
-    intro _ _ _ _ _ _
+    intro _ _ _ _ _ _ _
     rfl
 
 end Aimd

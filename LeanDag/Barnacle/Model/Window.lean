@@ -95,7 +95,7 @@ def expected (R : BaseRule Validator BlockId Payload) (C : Config Validator) (r 
 /-- The constant rule: reconfigure nothing. The conservativity anchor —
 under it the arc collapses onto the base development at one leader. -/
 def constRule (R : BaseRule Validator BlockId Payload) : UpdateRule R :=
-  fun C b _ _ _ => (C, b)
+  fun C b _ _ _ _ => (C, b)
 
 end Barnacle
 

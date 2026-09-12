@@ -27,6 +27,25 @@ variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 determined, and the ranges of configurations below `K` are decided in
 full.
 
+**The ranges partition the rounds, and the schedule above a range names
+anchors only.** Configuration `k` governs the rounds
+`(start k, start (k + 1)]`, and `start (k + 1)` is the anchor's own
+round, so consecutive ranges abut and no round belongs to two of them.
+`rangeLedger` reads exactly the range, and `round_of_mem_ledgerUpto`
+says the ledger to any height stops at that height's start round.
+
+`(cfg k).sched` is nevertheless total, and names a leader at every round
+above the range as well as inside it. That is deliberate and it is what
+the algorithm does: a validator settles configuration `k`'s range while
+`cfg k` is still its active schedule at every round, reading slots above
+the range as anchors when an indirect decision needs them, and only then
+finds the anchor that closes the range and switches. So the extension is
+the schedule in force when those derivations are performed, and the
+anchors it names are agreed for the same reason the range's verdicts
+are. What is never done is to *output* a slot above the range under
+`cfg k`; that slot belongs to configuration `k + 1`'s range and is
+decided again, under `cfg (k + 1)`, for the ledger.
+
 `closed` is the paper's `TryDecide`: every slot of the range — the
 rounds after `start k`, through the anchor's round `start (k + 1)` —
 decided against the configuration's schedule. `anchor_commits`
@@ -68,7 +87,8 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
   start_succ : ∀ k, k < K → start (k + 1) = (cfg k).roundOf (anchor k)
   /-- The next configuration is the rule's. -/
   update : ∀ k, k < K → ∀ A, vdct k (anchor k) = some A →
-    (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V A
+    (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V
+      (spanVdct (cfg k) (start k) (start (k + 1)) (vdct k)) A
 
 variable {R : BaseRule Validator BlockId Payload} {P : Params}
 variable {upd : UpdateRule R} {C₀ : Config Validator} {U : R.Universe} {V : R.View U}
@@ -79,6 +99,14 @@ abbrev PartialRun.sched {K : ℕ} (Rn : PartialRun R P upd C₀ U V K) (k : ℕ)
   (Rn.cfg k).sched
 
 /-! ## The ledger -/
+
+/-- **The verdicts configuration `k`'s update rule is handed**: the range
+it decided, `(start k, start (k + 1)]`, and `none` outside. The `update`
+field names this function; `spanVdct_agree` is why two validators name
+one function. -/
+def PartialRun.spanOf {K : ℕ} (Rn : PartialRun R P upd C₀ U V K) (k : ℕ) :
+    ℕ → Option BlockId :=
+  spanVdct (Rn.cfg k) (Rn.start k) (Rn.start (k + 1)) (Rn.vdct k)
 
 /-- The committed blocks of the slots `[lo, hi)`, in slot order. -/
 def ledgerOf (v : ℕ → Option BlockId) (lo hi : ℕ) : List BlockId :=

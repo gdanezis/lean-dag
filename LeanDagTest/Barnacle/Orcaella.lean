@@ -102,9 +102,9 @@ example : observed bnOrc orcC4 Ohyb4 10 = 6 := by decide
 example : expected bnOrc orcC1 3 = 2 := by decide
 example : expected bnOrc orcC4 3 = 8 := by decide
 example : (Aimd.rule bnOrc orcPo orcLead4 orcLeadKeyed4 orcC1 0 Ohyb4
-    (bnOrc.full Ohyb4) 10).1.slotsAt 0 = 2 := by decide
+    (bnOrc.full Ohyb4) (fun _ => none) 10).1.slotsAt 0 = 2 := by decide
 example : (Aimd.rule bnOrc orcPo orcLead4 orcLeadKeyed4 orcC4 0 Ohyb4
-    (bnOrc.full Ohyb4) 10).1.slotsAt 0 = 3 := by decide
+    (bnOrc.full Ohyb4) (fun _ => none) 10).1.slotsAt 0 = 3 := by decide
 
 /-! ## Orcaella's `Good` on `Ohyb4`, and its descent law -/
 

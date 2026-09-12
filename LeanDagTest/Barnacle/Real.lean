@@ -54,12 +54,12 @@ abbrev realUpd : UpdateRule realRule.toBaseRule :=
   Aimd.rule realRule.toBaseRule bnP bnLead bnLeadKeyed
 
 theorem realUpd_bounded : UpdBounded bnP realUpd := by
-  intro C b U V A h
+  intro C b U V v A h
   exact ⟨fun r => Aimd.count_le bnP _ _ _, h.2.1, h.2.2⟩
 
 /-- The rule emits the rotation's heads, whatever it reads. -/
 theorem realUpd_heads : UpdKeeps realUpd (fun C => C.head = bnLeader) := by
-  intro C b U V A _
+  intro C b U V v A _
   funext ρ
   rfl
 

@@ -17,6 +17,14 @@
 > `Integration/AdaptiveOdontoceti.lean` as corollaries of the generic
 > theorems, the mechanism itself naming no protocol. §5's module plan is
 > the plan as written.
+>
+> **§7 and §8 were added after reading the Hammerhead paper itself.**
+> They record what the paper does that this arc does not — the
+> reputation score reads parent edges rather than verdicts, and a
+> schedule governs a bounded range of rounds — and plan the change. §1
+> to §6 describe what is built; §7 says what it assumes of the network
+> without saying so. §8 was rewritten once the Barnacle arc merged,
+> because most of what §7 asks for is that arc's run.
 
 This document is the design record for the **adaptive-leaders** arc,
 written before the development rather than after it: the definitions and
@@ -186,7 +194,7 @@ prefix agreement for validators that have not decided equally far.
 **AL3 (safety: the fixpoint is unique).** `adaptiveRun_unique`: any two
 runs over the same universe — *whatever views they were derived from,
 and with no fairness or synchrony hypothesis at all* — have equal
-assignments and equal verdicts. Built as `Adaptive.run_agree`, whose two
+assignments and equal verdicts. Built as a uniqueness theorem whose two
 halves are the verdict and assignment statements directly, so the planned
 corollary is a projection.
 Proof plan, by strong induction on the epoch: the verdict prefixes
@@ -303,3 +311,776 @@ an explicit hypothesis rather than a chosen constant.
 - **Changing `slotRound`.** Adaptivity here reassigns leader identity
   only; the round structure of the schedule stays fixed, as it does in
   Hammerhead.
+
+## 7. What the Hammerhead paper does that this arc does not
+
+*(Added September 2026, after reading `papers/hammerhead.pdf`
+— Tsimos, Kichidis, Sonnino and Kokoris-Kogias, *HammerHead:
+Score-based Dynamic Leader Selection*.)*
+
+§2's design pays for its stratification with a condition on executions.
+`Adaptive.PartialRun.closed` asks
+
+```lean
+closed : ∀ k, epochOf P.W k < E →
+  DecidedBelow R (slotsOfKeyed assign keyed) (P.W * (epochOf P.W k + 2)) V k (vdct k)
+```
+
+and `DecidedBelow R S B V k v` asks that the verdict of slot `k` be
+unchanged by any reassignment of the leaders at or above `B`. So every
+slot must settle without reading the schedule two epochs up. §4 sizes
+`W` against the eligibility gap, the run length `c` and the placement
+slack, and `Adaptive.exists_partialRun` carries liveness on the window
+`[W, W · (E + 2))` as a hypothesis at every height. Before GST the run
+length is unbounded, so no `W` satisfies it, and on such an execution no
+`Adaptive.Run` exists: AL3 is true and has no instances. The arc says
+nothing about what a validator should do when a slot has not settled in
+time, and the obvious thing — continue under the schedule in force —
+is what loses agreement.
+
+The paper has no such condition, and says why it does not need one.
+
+**The boundary is a round, not an event.** A schedule expires at
+`activeSchedule.initialRound + T`, fixed when the schedule is installed,
+whether or not anything commits in between.
+
+**Ordering stops at the boundary.** `ORDERHISTORY` (Algorithm 2, lines
+27–37) pops committed anchors in order and, at the first one whose round
+has reached the boundary, updates the schedule and **returns** — without
+ordering that anchor or anything above it:
+
+```
+30:   t ← activeSchedule.initialRound + T
+31:   if t ≤ anchor.round then
+32:     activeSchedule ← UPDATESCHEDULE(anchor)
+33:     return
+```
+
+A verdict derived under a schedule therefore reaches the ledger only for
+rounds strictly below that schedule's expiry. The safety claim is stated
+with the same bound: Claim 4 concludes that two honest parties order the
+same vertices in the same order between `max{r¹ᵢ, r¹ⱼ}` and
+`min{S, r²ᵢ, r²ⱼ}`, where `S` is the round of the next schedule change.
+
+**The switch is retroactive.** §III addresses exactly the case a slot
+fails to settle: validators "may not commit a leader immediately, but
+through recursion over the DAG and after an unbounded number of rounds
+before GST", and a validator that has been running a stale schedule
+"need[s] to retroactively apply the new schedule for the time-period in
+which they where operating under the previous schedule, while the new
+schedule was already active". The schedule may be stale for unboundedly
+long; the output never is.
+
+The invariant that makes this consistent is a separation the arc does
+not have. *Naming* an anchor may run past a schedule's boundary — that
+is how the switch is detected, and both parties do it under the same
+stale schedule, so they detect it at the same anchor. *Ordering* never
+runs past the boundary under an expiring schedule. Proposition 1 turns
+the first into agreement on the switch point, and Claim 4 turns the
+second into agreement on the output.
+
+### 7.1 The deeper difference: the score reads the DAG, not the verdicts
+
+`Policy.pick` takes `ℕ → Option BlockId` — the verdicts. That is the
+source of the circularity §1 describes, and the two-epoch lag is the
+repair.
+
+`UPDATESCHEDULE` (Algorithm 2, lines 38–42) reads no verdict. It walks
+the rounds of the trigger anchor's causal history and adds a point to
+each validator that *voted* for the previous round's leader under the
+schedule in force — a parent edge, not a decision. The reputation score
+is a function of two agreed objects: the causal history of an agreed
+anchor, and the schedule already installed. §VII draws the contrast
+with Shoal, which scores committed and skipped leaders and so does read
+verdicts.
+
+Because the score reads no verdict, the leader of a slot cannot depend
+on the verdict of a slot the leader affects, and the circularity of §1
+does not arise. Hammerhead needs no epoch lag: it excludes the trigger
+anchor's own sub-DAG from the score — "we calculate the reputation score
+up to but excluding the committed leader" — and that one exclusion is
+the whole of its delay.
+
+### 7.2 What is missing, in three items
+
+1. **The policy reads verdicts, and that is the root.** The two-epoch
+   lag repairs a circularity that a score over parent edges does not
+   create, and the lag is what puts the `2W` window into `closed`. The
+   lag is a sound device for a strictly larger class of policies, and it
+   is not Hammerhead's device.
+2. **The run has no ranges.** One global `assign` and one `vdct` over all
+   slots leaves nowhere to say which rounds a schedule governs, which is
+   why the window has to be a condition on the execution rather than a
+   bound the mechanism enforces. Hammerhead's boundary and Barnacle's
+   range are the same device, and this arc has neither. §8.4 corrects an
+   earlier reading of this section that took the boundary to be the
+   root; it is a consequence of the first item.
+3. **The fixpoint is not the process.** One `assign : ℕ → Validator`
+   admits no validator that is behind, and so no retroactive
+   re-application. Proposition 1 and Lemma 1 are about validators
+   catching up through every intermediate schedule, "without skips";
+   the paper calls the schedule switch "the second and most critical
+   challenge", and it is the part this model cannot see.
+
+None of this makes AL3 false. It makes AL3 a theorem about executions
+in which the network behaves, stated in a form that does not say so.
+
+## 8. Plan: Hammerhead as a Barnacle configuration rule
+
+*(Rewritten after the Barnacle arc merged. This section planned a
+segmented run of its own; the Barnacle arc builds that run, so most of
+what it planned is an instantiation.)*
+
+The Barnacle arc on `main` reconfigures by installing a `Config` —
+the slots of each round, the leader of each slot, and the interval to
+the next reconfiguration — chosen by a rule that reads the universe and
+an anchor. Hammerhead reconfigures by installing a leader assignment
+chosen by a rule that reads the universe and an anchor. They are the
+same mechanism with two statistics: Barnacle's counts direct commits to
+set the widths, Hammerhead's counts parent edges to set the leaders.
+
+### 8.1 What is already common, and what is not
+
+`Barnacle.Config` mentions no protocol, and neither do the run, the
+update interface or the three safety results:
+
+| declaration | what it consumes |
+|:---|:---|
+| `Config`, `cum`, `roundOf`, `head`, `sched` | nothing but `Slots` |
+| `UpdateRule`, `Anchored` | `R.Universe`, `R.View` |
+| `PartialRun` | `R.Decided`, `R.Universe`, `R.View`, two numeric bounds |
+| BN3, BN5, BN6 | `R.toDagRule`, `Properties.Agree`, `CommitsCandidate` |
+
+Every one of those is at `Properties.DagRule` level. The `BaseRule`
+extras — `full`, `historyView`, `waveLength`, `DirectCommitIn` — are
+consumed by the window, the AIMD rule and the liveness arc, not by the
+run or by agreement. So the run and its safety could be lifted to the
+common layer over a `DagRule` with `maxLeaders` and `maxInterval` as
+plain naturals, leaving Barnacle with `BaseRule`, `Params`, the window,
+AIMD and the heads descent.
+
+**That lift is not proposed yet**, though D19 strengthens the case: the
+second caller wants the same run with the ledger bound moved, which is a
+parameter rather than a fork. It stays out of this arc until AL12 exists
+and the shape is known.
+
+### 8.2 The minimal path, and what it accepts
+
+Write the Hammerhead score as an update rule, generic in the base rule
+exactly as `Aimd.rule` is — the mechanism names no protocol, and the
+instantiations live in the test tree:
+
+```lean
+def hammerhead (R : BaseRule Validator BlockId Payload)
+    (score : (U : R.Universe) → BlockId → Config Validator → Config Validator)
+    (hkeep : ∀ U A C, (score U A C).slotsAt = C.slotsAt ∧
+                      (score U A C).interval = C.interval) :
+    UpdateRule R :=
+  fun C b U _V A => (score U A C, b)
+```
+
+The score returns a **`Config`**, not a leader function. `Config.keyed`
+asks that the leaders a round offers be distinct, and a reputation rule
+that promotes one validator into two slots of one round breaks it; the
+obligation is discharged where the configuration is produced rather than
+carried around loose. `hkeep` is then what makes `UpdBounded` the
+identity, since `Config.InBounds` mentions only the widths and the
+interval.
+
+`Anchored` is the clause the score owes BN3, and it is the same clause
+`Aimd.rule` discharges by not reading the view.
+
+Three frictions come with the minimal path, and none of them is a
+proof obligation:
+
+1. **The interface asks for more than the score needs.** `BaseRule`
+   carries `DirectCommitIn` and `waveLength`, which a Hammerhead score
+   does not read. Every rule of this development supplies them through
+   `ofAnchored`, so the cost is in the signature and not in the work.
+2. **`Params` carries `num` and `den`**, the AIMD threshold, which a
+   Hammerhead run leaves unused.
+3. **Pipelined bases only.** `Config.slotsAt_pos` puts at least one slot
+   in every round, and `roundOf` is `Nat.findGreatest` bounded by the
+   slot index, which is sound because `r ≤ cum r`. Allowing empty rounds
+   breaks that bound and leaves `roundOf` with no search range, so this
+   is not a clause to relax — it is what `Config` means. The
+   consequence: a `Config` cannot express `Slots.uniform 3 1`, the
+   three-round spacing that `LeanDagTest/Adaptive/Model.lean` uses on
+   `U7`. That witness stays with the fixpoint arc, where the base is an
+   arbitrary `Slots`.
+
+### 8.3 Steps
+
+1. **AL11 — the score.** A function
+   `(U : R.Universe) → BlockId → (ℕ → ℕ → Validator) → ℕ → ℕ → Validator`
+   from the universe, the trigger anchor and the leaders in force, with
+   two clauses: `Anchored`, which BN3 consumes, and the sharper reading
+   that `score U A prev` reads `U` only through
+   `historyFrom (R.block U) A` — the clause `BaseRule.Laws.historyView_ids`
+   states for the window and BN2 turns into agreement across views.
+   `Config.keyed` for the emitted leaders is the obligation
+   `Policy.keyed` and `Adaptive.PickKeyed` already record.
+2. **AL12 — the run, with two bounds.** D19 puts the boundary before the
+   trigger anchor, so `Barnacle.PartialRun`'s single bound does not
+   serve and this arc varies the structure:
+
+   ```lean
+   closed : ∀ k, k < K → ∀ κ, start k < (cfg k).roundOf κ →
+     (cfg k).roundOf κ ≤ (cfg k).roundOf (anchor k) →
+       R.Decided (cfg k).sched V κ (vdct k κ)          -- decide to the anchor
+   start_succ : ∀ k, k < K → start (k + 1) = start k + (cfg k).interval
+   anchor_commits : ∀ k, k < K →
+     (∃ A, vdct k (anchor k) = some A) ∧ start (k + 1) < (cfg k).roundOf (anchor k)
+   anchor_least : ∀ k, k < K → ∀ κ, κ < anchor k →
+     start (k + 1) < (cfg k).roundOf κ → vdct k κ = none
+   ```
+
+   with `rangeLedger k` reading the rounds `(start k, start (k + 1)]`
+   only — **output to the boundary, decisions to the anchor**. The rounds
+   between are decided again under `cfg (k + 1)`, which is Hammerhead's
+   retroactive re-derivation, and the `cfg k` verdicts there are what
+   the segment discards.
+
+   This is the naming-and-ordering split made structural, and it is what
+   §7 was reaching for before §8.4 established that Barnacle does not
+   need it.
+
+3. **AL13 — safety.** Barnacle's `configAgree` induction with one bound
+   moved. The anchor-agreement step already takes the lesser of two
+   anchors and contradicts the other run's `anchor_least`, and both
+   runs' `closed` reach their own anchors, so the argument does not
+   change shape. What has to be rechecked is that `vdct_agree` still
+   covers the lesser anchor's slot in both runs, which it does because
+   `closed` now runs to each run's own anchor rather than to a shared
+   range top. Expect a port of `Helpers/Agreement.lean`, about a hundred
+   lines, not a new proof.
+4. **AL14 — the ledger**, in BN5's three parts. Disjointness is easier
+   than Barnacle's: consecutive ledger ranges are
+   `(start k, start k + interval]` with `start (k + 1)` the same
+   quantity, so the rounds partition by construction.
+   **AL15 — conservativity**, BN6's shape at a score that returns the
+   configuration it was given, and validity in BN14's shape.
+5. **AL16 — liveness, and this is the work.** BN11 discharges the
+   liveness clause from runs of heads, but it asks
+   `UpdKeeps upd (fun C => C.head = head)` for **one fixed** head
+   function: the AIMD rule satisfies it by never moving the heads, and a
+   Hammerhead rule does nothing else. `Progress.Statement` is already
+   general in the clause `Q`, so the shape is
+
+   ```
+   Q C := C.head ∈ 𝓗
+   ```
+
+   for the set `𝓗` of head functions the score can emit, with the
+   liveness hypothesis becoming "every member of `𝓗` has runs of heads
+   for every good set". BN8b accepts that as a hypothesis today.
+   Discharging it for a concrete score is the paper's Lemmas 2 to 4 and
+   Leader-Utilization, and it is the one part of this plan that is not a
+   restatement. **Hammerhead is the missing instance of Barnacle's
+   `UpdKeeps`**, which the review of the Barnacle arc recorded as
+   supported and unwitnessed.
+6. **AL17 — the witnesses.** A run whose second configuration differs
+   from its first in the leaders alone, alongside `Varying.lean`'s run
+   that differs in the widths and the interval; and a refutation for the
+   fixpoint arc — an execution in which a slot needs an anchor more than
+   two epochs above it, so that no `Adaptive.Run` exists over it. The
+   second makes §7's vacuity concrete and is the honest companion to
+   AL9.
+
+### 8.4 The truncation is Barnacle's already
+
+§7 separated *naming* an anchor from *ordering* it, and read the Barnacle
+arc as lacking the second. That reading was wrong, and the correction is
+worth stating because it makes this plan smaller.
+
+`Barnacle.PartialRun` truncates. Configuration `k` governs the rounds
+`(start k, start (k + 1)]` with `start (k + 1)` the anchor's own round,
+consecutive ranges abut, `rangeLedger k` reads exactly the range, and
+`round_of_mem_ledgerUpto` says the ledger to any height stops at that
+height's start round. The schedule is extended above the range to name
+anchors, which is what a validator does while it is still on `cfg k` and
+has not yet found the anchor that closes the range. Nothing above the
+range is output under `cfg k`.
+
+So the Barnacle arc has no gap here. What §7 diagnosed is this arc's
+alone: `Policy.pick` reads verdicts, which creates the
+circularity of §1, which forces the two-epoch lag, which forces
+`DecidedBelow` at `W · (epochOf k + 2)`. That last clause is what
+asynchrony falsifies, and it is not a truncation question. Deciding
+slots beyond an epoch in order to settle slots within it is exactly what
+the bound forbids and exactly what both Barnacle and Hammerhead do.
+
+A rule that reads the anchor's causal history rather than the verdicts
+has no circularity and needs no such bound. It still needs a run with
+ranges, and D19 decides how those ranges end.
+
+### 8.5 What remains of the fixpoint arc
+
+`Adaptive.Run` and AL3 are not superseded. They prove safety for
+policies that read **verdicts**, which is a strictly larger class than
+the scores Hammerhead admits, and the two-epoch lag is what makes that
+class tractable. The window condition of §7 is the price of the
+generality, and the arc should say so rather than carry it silently. Its
+`U7` witness at `slotRound k = 3k` also exercises a base that no `Config`
+can express, so the two arcs cover different schedules as well as
+different policies.
+
+### 8.5b How much of Barnacle is still reused
+
+D19 costs the run structure and the safety induction, which is the part
+§8.2 said would be free. What survives unchanged is everything the run
+is built out of: `Config` and its arithmetic, `UpdateRule`, `Anchored`,
+`Config.InBounds`, `ledgerOf`, the `Slots` instance a configuration
+induces, `Properties.Agree` as the one law safety consumes, and — for
+AL16 — `HeadsRun`, `liveOn_of_headsRun` and `roundRobin_headsRun`, which
+are stated at a `Config` and say nothing about how the configuration was
+chosen.
+
+So the honest accounting is: the vocabulary is reused, the two proofs
+are ported. That is still far from the segmented run §8 first planned,
+and it is an argument for D21 — if a second caller needs the two-bound
+run, the run belongs in the common layer with the ledger bound as a
+parameter, and Barnacle's is the case where it coincides with the
+anchor's round.
+
+### 8.6 Decisions
+
+- **D18 — the boundary's unit.** Settled by the instantiation:
+  `Config.interval` counts rounds, as Hammerhead's `T` does.
+  `epochOf W k = k / W` counts slots and belongs to the fixpoint arc.
+- **D19 — where a boundary sits. Settled: take Hammerhead's.** The two
+  conventions are not interchangeable, and the choice decides whether
+  this arc instantiates `Barnacle.PartialRun` or varies it.
+
+  Barnacle sets `start (k + 1) = (cfg k).roundOf (anchor k)`: the
+  configuration governs **through the anchor's round**, so its range
+  stretches to wherever the anchor is found. Hammerhead fixes the
+  boundary at `initialRound + T` and does not order the trigger anchor at
+  all, re-deriving it and everything above under the next schedule.
+
+  The trade is output against work. Barnacle's ledger keeps growing to
+  the anchor however late it arrives, at the cost of a configuration
+  overrunning its nominal interval by an unbounded amount. Hammerhead's
+  output stops at the boundary — so a long asynchronous stretch stalls
+  the ledger — and the rounds between the boundary and the anchor are
+  decided twice, once under each schedule, with the first set discarded.
+  Hammerhead's is the conservative one, and it is the one this arc takes.
+
+  The consequence is structural, and §8.3 carries it: a run needs **two
+  bounds**, not one. Decisions are made under `cfg k` up to the anchor's
+  round, because that is how the anchor is found; output stops at
+  `start k + (cfg k).interval`. Barnacle's run collapses the two, and
+  that is why this arc varies the structure rather than instantiating it.
+
+  The paper's footnote 3 leaves open whether `T` counts rounds or
+  committed leaders; rounds is the reading here (D18).
+- **D20 — what becomes of the fixpoint arc.** Keep it, and label it as
+  §8.5 describes.
+- **D21 — when to lift the run to the common layer.** Not with this
+  arc, but D19 makes the case stronger than it was: two runs that differ
+  only in where the ledger stops want one structure with that bound as a
+  parameter. Revisit once AL12 exists and the shape is known rather than
+  guessed.
+- **D22 — does the score permute or re-weight? Settled: either.** The
+  question was which family of head functions a score may emit, and it
+  turned on what runs of heads need. The answer is neither injectivity
+  nor permutation but a count of **positions**.
+
+  `Barnacle.headsRun_of_cycle` is the pigeonhole restated over the cycle
+  positions a good set misses rather than over the validators: a schedule
+  repeating every `n` rounds, at most `m` of whose positions have a head
+  outside `T`, has `g` consecutive good heads within `n + g − 1` rounds
+  whenever `g · m + 1 ≤ n`. `roundRobin_headsRun` is now a corollary — the
+  rotation's missed positions are its missed validators — and the
+  duplicated pigeonhole is gone.
+
+  `headsRun_of_cycle_weighted` is what a re-weighting rule needs: if the
+  good set misses at most `slack` validators and **no validator holds
+  more than `w` of the cycle's positions**, at most `slack · w` positions
+  are bad and the committee bound becomes `g · slack · w + 1 ≤ n`. At
+  `w = 1` — a permutation of the rotation — it is the round-robin bound
+  unchanged.
+
+  So the clause a reputation rule owes for liveness is not that it
+  permutes but that it caps accumulation. This is stronger than the
+  paper's `|B| = |G| ≤ f`, which bounds how many validators are demoted
+  rather than how many slots one may gather; deriving the cap from the
+  paper's rule is the remaining piece, and it is a fact about that rule
+  rather than about the mechanism.
+
+## 9. Step by step
+
+Ordered by risk, not by dependency: step 2 is the one that can end the
+plan, and it comes as early as a structure to test it against allows.
+Each step names what it produces, what tells you it is done, and what
+would make you stop.
+
+Everything lands in `LeanDag/Adaptive/`, under the **AL** labels of
+report §13. `LeanDag/Adaptive/{Basic,Policy,Run,Liveness}.lean` — the
+fixpoint arc — are not touched; D20 keeps them and §9.8 relabels them.
+
+### Step 1 — the run, with two bounds (AL12). **Built.**
+
+`LeanDag/Adaptive/Model/Segment.lean`. `Barnacle.PartialRun` with three
+clauses changed:
+
+```lean
+closed : ∀ k, k < K → ∀ κ, start k < (cfg k).roundOf κ →
+  (cfg k).roundOf κ ≤ (cfg k).roundOf (anchor k) →
+    R.Decided (cfg k).sched V κ (vdct k κ)
+start_succ : ∀ k, k < K → start (k + 1) = start k + (cfg k).interval
+anchor_commits : ∀ k, k < K → (∃ A, vdct k (anchor k) = some A) ∧
+  start (k + 1) < (cfg k).roundOf (anchor k)
+anchor_least : ∀ k, k < K → ∀ κ, κ < anchor k →
+  start (k + 1) < (cfg k).roundOf κ → vdct k κ = none
+```
+
+`init`, `bounds` and `update` keep Barnacle's shape, and `rangeLedger`
+keeps Barnacle's formula — `start (k + 1)` is now the boundary, so the
+same expression reads the boundary rather than the anchor's round.
+
+The ledger range is a subset of the closed range, and the anchor lies in
+the closed range and above the ledger range. **Decisions to the anchor,
+output to the boundary.**
+
+`Adaptive.SegRun` (`Adaptive/Model/Segment.lean`), with `rangeLedger`
+and `ledgerUpto` alongside it. It borrows Barnacle's vocabulary —
+`Config`, `UpdateRule`, `Anchored`, `Config.InBounds`, `ledgerOf` — and
+restates none of it.
+
+### Step 2 — safety, ported (AL13). **Built, and the plan holds.**
+
+`LeanDag/Adaptive/Helpers/Agreement.lean`, from
+`Barnacle/Helpers/Agreement.lean`. The argument traced on paper and
+should transfer:
+
+- `vdct_agree` needs both runs closed at the slot; the closed ranges now
+  end at each run's own anchor rather than at a shared top, so the
+  hypotheses are per-run.
+- `anchor_agree` takes the lesser of the two anchors, say `a₁ < a₂`.
+  Run 1 has it closed as its own anchor; run 2 has it closed because
+  `roundOf a₁ ≤ roundOf a₂` by `roundOf_mono`. It is past the boundary in
+  both, so run 2's `anchor_least` makes it `none` while run 1 commits it.
+- `configAgree_succ` is **shorter** than Barnacle's: `start (k + 1)` is
+  `start k + (cfg k).interval`, so it follows from agreement on `start k`
+  and `cfg k` without using the anchor at all.
+
+The port went through as traced, and the stop condition did not fire:
+`anchor_agree` needs **no** hypothesis relating the two runs' anchors.
+`Adaptive.Agreement.SegRunAgreement` is the statement,
+`Adaptive.Agreement.holds` the proof,
+`Adaptive/Helpers/Agreement.lean` the induction, on the standard three
+axioms. `Anchored` is the only clause on the rule; there is no synchrony,
+no fairness and no window.
+
+Two places came out differently from Barnacle's, both as predicted.
+`vdct_agree` takes its range hypotheses per run, since each decides to
+its own anchor. `configAgree_succ` is shorter, and the reason is the boundary
+convention itself: the next boundary is `start k + (cfg k).interval`, so
+`start_succ_agree` follows from agreement on `start k` and `cfg k` and
+never mentions the anchor — where Barnacle's had to establish the
+anchors agreed before it could place the next start.
+
+### Step 3 — the ledger (AL14). **Built.**
+
+`LeanDag/Adaptive/Helpers/Ledger.lean`, from Barnacle's. Agreed,
+growing, without repetition, plus `round_of_mem_ledgerUpto`. Disjointness
+is easier than Barnacle's: consecutive ledger ranges are
+`(start k, start k + interval]` and abut by `start_succ`, so the rounds
+partition by construction rather than by an argument about anchors.
+
+`Adaptive.Ledger.holds` proves the three parts, and
+`Adaptive/Helpers/Ledger.lean` carries the halves. `mem_ledgerOf` and
+`ledgerOf_congr` are about `ledgerOf` alone and are reused from the
+Barnacle arc rather than restated. `start_lt_succ` is the boundary
+convention rather than an argument about the anchor's threshold, and
+every use of `closed` widens its upper bound through `anchor_commits`,
+since the output range sits strictly below the anchor's round.
+
+Two theorems Barnacle has no need of:
+
+- `decided_and_not_output` — a slot of segment `k` at a round above the
+  boundary and at or below the anchor's **is decided** by `closed`, and
+  its index is at or above `rangeLedger k`'s upper end, so it is not
+  read. Its verdict is what the segment discards, and the round is
+  decided again under configuration `k + 1`. This is the
+  naming-and-ordering split of §7 as a statement.
+
+### Step 4 — the score (AL11). **Built.**
+
+`LeanDag/Adaptive/Score/{Rule,Statement,Proof}.lean`, generic in the base
+rule as `Aimd.rule` is and naming no protocol; the instantiations are in
+the test tree.
+
+```lean
+def Score (R : BaseRule Validator BlockId Payload) : Type :=
+  (U : R.Universe) → R.View U → Config Validator → Config Validator
+
+def rule (score : Score R) : UpdateRule R :=
+  fun C b U _V A =>
+    if hA : A ∈ R.ids U then (score U (R.historyView U A hA) C, b) else (C, b)
+```
+
+The history clause needed no hypothesis in the end. A score reads the
+anchor's causal history **as a view**, the shape `Barnacle.observed`
+uses: `BaseRule.Laws.historyView_ids` pins that view to `historyFrom`,
+and BN2 says any two views holding the anchor restrict to it
+identically, so the reading is agreed by construction. What a score does
+owe is `Score.Keeps` — it moves the leaders and leaves the widths and
+the interval alone — and that one clause carries `UpdBounded`, since
+`Config.InBounds` mentions nothing else.
+
+AL11 is the four clauses: `RuleAnchored` by `rfl`, `RuleBounded` from
+`Score.Keeps`, `RulePreserves` for whatever clause AL16 will name, and
+`ConstScoreIsConstRule` — the constant score is `constRule`, so AL15 is BN6's
+statement at this arc's run. `Score.holds` proves them, on `propext` and
+`Quot.sound` alone.
+
+*Done*: `LeanDagTest/Adaptive/Segmented.lean` applies AL13 and AL14 at an
+arbitrary score, with `Score.rule_anchored` discharging their only clause
+on the rule.
+
+### Step 5 — conservativity and validity (AL15). **Built.**
+
+`Adaptive.Conservativity.holds` gives AL15a and AL15b — under the
+constant rule every configuration a run determines is the genesis one
+with back-off zero, and every verdict of the decided span is a verdict of
+`C₀.sched`. `Score.rule_const` says the constant score *is* that rule, so
+a score that reassigns nothing leaves the arc where it found it.
+
+`Adaptive.Validity.holds` gives AL15c, BN14's statement at this run: a
+good author's block two rounds below a closed configuration's boundary is
+in the history of the block that configuration commits.
+
+Both are ports, and validity's proof came out one step shorter. Barnacle
+reaches the anchor by rewriting along `start_succ`, the anchor's round
+being the boundary; here `closed` reaches it by `le_rfl`, and the
+hypothesis on the author's block sits at the boundary, which
+`anchor_commits` puts strictly below the anchor's round.
+
+### Step 6 — liveness (AL16). **Built.**
+
+Two independent pieces, and both came out as sized.
+
+**6a, the transfer lemma.** For a permutation `σ` of the validators,
+`σ ∘ head ρ ∈ T ↔ head ρ ∈ σ⁻¹ T` and `σ⁻¹ T` has `T`'s cardinality, so
+`HeadsRun head T g c₀` for every good set gives `HeadsRun (σ ∘ head) T g c₀`
+for every good set, at the same gap. `roundRobin_headsRun` then covers
+every permuted rotation. `Barnacle.headsRun_perm` and
+`headsRun_perm_of_all` are the two lemmas, and
+`liveOn_of_permuted_heads` reads them through `liveOn_of_headsRun`: a
+configuration whose heads permute a schedule with runs of heads is live
+at that schedule's own gap. They hold on `propext` and `Quot.sound`
+alone, and none of them mentions how the configuration was chosen.
+
+**6b, progress and every height.** `Adaptive.Progress.holds`, from
+`Barnacle/Helpers/Progress.lean`. The construction changes where
+Barnacle's did not: the new segment starts at
+`start K + (cfg K).interval`, a round known before the anchor is found,
+and the anchor lies above it by as much as the commit gap. The new
+boundary is reached **more tightly** than Barnacle's new start — by
+`maxInterval` rather than by `maxInterval + 1 + c` — so `horizon` is
+unchanged and bounds the same heights.
+
+The three clauses whose statements mention `start (k + 1)` needed their
+conditionals reduced on both branches, where Barnacle's mentioned the
+threshold and did not. That was the whole of the port's friction.
+
+`LeanDagTest/Adaptive/Segmented.lean` assembles the two: with the clause
+`Permuted head C` — this configuration's heads are a permutation of
+`head` — `liveOn_of_permuted` discharges AL16b's liveness hypothesis from
+6a, `Score.rule_keeps` carries the clause through the rule, and runs of
+every height follow under the horizon. D22's permuting case is therefore
+closed; the re-weighting case is not.
+
+### Step 7 — witnesses (AL17). **Two of three built.**
+
+`LeanDagTest/Adaptive/`, instantiating at a rule with a carrier — the
+mechanism stays generic.
+
+- ~~**The asynchronous segment.**~~ `LeanDagTest/Adaptive/Asynchronous.lean`.
+  Three segments on `Usk` at one leader a round and an interval of one.
+  Configuration `0`'s boundary is round `1`, but slot `2` skips, so its
+  anchor is slot `3` two rounds further up: it **decides** rounds `1`,
+  `2` and `3` and **outputs** round `1` alone. Block `15` is decided by
+  all three configurations and reaches the ledger only from the one whose
+  span contains round `3`. `anchor_least` is non-vacuous — slot `2` is
+  past the boundary, below the anchor, and a skip — and
+  `decided_and_not_output` is applied on the data. This is the case §7
+  says the fixpoint arc cannot express.
+- ~~**A permuting score that adapts.**~~ `Score.permute` is D22's family
+  in the library, with `permute_keeps` and `permute_head`; `swapScore` in
+  the witness reads the anchor's history and permutes when it holds a
+  particular block, so the reassignment is a function of the DAG. It
+  keeps the shape, it stays inside the family, and its leaders move off
+  the rotation on data.
+- **A refutation for the fixpoint arc**: an execution in which a slot
+  needs an anchor more than two epochs above it, so that no
+  `Adaptive.Run` exists over it. **Not built.** Showing non-existence
+  needs an argument rather than a `decide`, and it is the honest
+  companion to AL9 rather than a check on this arc.
+
+### Step 8 — the mechanisms
+
+The arc composes with the cut, the fill and re-genesis at **any** carrier
+on the record (`Adaptive/Helpers/Mechanisms.lean`), not at a protocol.
+Cuts compose beneath a configuration (`Config.chop_chop`), a cut is a
+`Stack` step at a configuration (`stack_chop_config`), and fill-then-cut
+is one `Rebased` (`stack_copyFill_chop_config`), so `Stack.safe_and_live`
+reads at a schedule the run itself chose. The core's fill is
+`SkipMsg.skipFill` rather than the record's, which is why
+`stack_core_config` is assembled per rule.
+
+For the mechanisms that only add blocks the schedule does not move and
+neither does the run: `SegRun.extend` carries the configurations,
+anchors, boundaries and verdicts across, and `SegRun.extend_ledgerUpto`
+says the ledger is the same list. The one obligation is `UpdStable` —
+`Anchored` across two universes rather than two views of one, asked only
+at anchors the smaller universe holds. A score meets it through
+`Score.Stable`, which `Score.permute` and `Score.const` have.
+
+**D23.** `UpdStable` cannot be a field of `UpdateRule` for the reason
+`Anchored` is not: safety must hold for arbitrary rules, and this clause
+is owed only where a mechanism is composed in.
+
+### Step 9 — the verdict-reading policy
+
+§7's open question, settled. The fixpoint arc proved safety for policies
+reading committed verdicts only inside a two-epoch window; the segmented
+arc needs no window, and the reason is that the span is bounded at both
+ends *before* the rule is applied.
+
+`UpdateRule` gains a verdict argument, and `spanVdct` is what a run hands
+it: the verdicts of the range the configuration **output**,
+`(start k, start (k + 1)]`, and `none` outside — not the wider span it
+decided while looking for its anchor, whose verdicts the ledger discards
+and whose top moves with the network. Both arcs'
+agreement inductions then carry `spanVdct_agree` — the two validators'
+copies are one *function* — so `Anchored` is unchanged in strength and a
+verdict-reading rule satisfies it by `rfl`. AL13 covers it with nothing
+added. `commitScore` is the witness: it reads no block and no view, only
+whether the span committed a particular slot, and the leaders move when
+it did.
+
+**D24.** The verdicts are an argument rather than something the rule
+derives from its own view. A rule deriving them would be reading a
+subjective object — decided in one view and not another — and `Anchored`
+would fail. Handing them over is what makes reading them free.
+
+**D25.** The argument goes on `Barnacle.UpdateRule` rather than on a
+parallel Adaptive rule type: one vocabulary for both arcs, and Barnacle's
+own AIMD rule ignores it. The two arcs differ only in the span's top —
+Barnacle's is the boundary, which is the anchor's round; the segmented
+arc's is the anchor's round, which lies above the boundary.
+
+### Step 10 — the review
+
+A pass over every definition and theorem of the arc, asking of each
+whether it says something a designer would act on. Four changes.
+
+**The two obligations had only degenerate witnesses.** `HorizonStable`
+and `Score.Stable` were discharged solely by scores that ignore the thing
+the obligation is about — the constant score, and permuting scores
+through a lemma that required the score to ignore its view. So the
+obligations looked demanding and were met by nothing that reassigns.
+Now: `horizonStable_relabel` — a score that relabels who leads commutes
+with dropping rounds below a horizon, at **every** cut, which is AL11's
+whole family; and `Score.stable_of_readsHistory` — a score reading the
+anchor's causal history is stable, because a mechanism that only adds
+blocks leaves the blocks an anchor reaches exactly as they were. That
+last needs `historyFrom_congr` (`Common/Causality.lean`): a causal
+history is a function of the blocks it names.
+
+**A prose claim the code did not support.** Three places said a score
+"reading a bounded window of rounds below its anchor" is horizon-stable.
+Nothing proved it, and it is not the right characterisation: what
+matters is whether the *choice* of reassignment is read from rounds the
+horizon removed, not the window's width.
+
+**`Score.stable_of_ignores` was one step short.** Its `f` could not
+depend on the verdicts, so it excluded exactly the verdict-reading score
+step 9 added. Generalised, and `commitScore_stable` follows.
+
+**Cruft removed.** `output_lt_decided` restated a structure field;
+`Config.chop_zero` said a horizon of zero prunes nothing. The Adaptive
+ledger's clauses were labelled BN5a–c, which are Barnacle's. `ProgressStmt`
+is named after the file it lives in, not after the property, and is now
+`ConfigProgress` in both arcs — the paper's own term. AL11d's clause is
+now `ConstScoreIsConstRule`, which says what it claims. `SegRun.spanOf`
+was disconnected from the `update` field it claimed to name;
+`update_spanOf` is the identification.
+
+### Step 11 — the second review
+
+**The score was reading verdicts the ledger discards.** `spanVdct`'s top
+was the anchor's round, so the rule saw the whole span the configuration
+*decided* — including the rounds above its boundary, whose verdicts are
+thrown away and re-derived under the next configuration against a
+different schedule. Safety was never at risk (both validators agree on
+them), but the score would reconfigure on a derivation the system
+discards, at a window whose top moves with the network. The top is now
+the boundary, so the rule sees exactly what the configuration output, at
+a window fixed before any commit. `segRun` witnesses the difference: it
+decides block `15` at slot `3`, `spanOf 0 3` is `none`, and `15` is not
+in `rangeLedger 0`.
+
+A side effect worth noting: both arcs now hand their rule the same
+window, `(start k, start (k + 1)]`. Barnacle's boundary *is* its anchor's
+round, so nothing changed there, and the two `spanVdct` calls are now
+identical in form.
+
+**`Score.Keeps` had no refutation.** AL11b derives `UpdBounded` from it
+and nothing showed the clause bites. `zeroIntervalScore` does: it moves
+the shape rather than the leaders, fails `Keeps`, and takes a
+configuration that was in bounds out of them.
+
+**D21, restated and now tractable.** With `spanVdct` aligned, the two
+arcs' runs differ in exactly two places: `closed`'s top (`start (k + 1)`
+against `roundOf (anchor k)`) and which of the two `start_succ` derives.
+Both are the shape *threshold `T` ≤ output `O` ≤ decisions `D`*, with
+`T = start k + interval` and `D = roundOf (anchor k)`; Barnacle takes
+`O = D`, this arc takes `O = T`. A common run with `O` as a field
+constrained by `T ≤ O ≤ D` subsumes both, and would retire seventeen
+theorem names that are currently proved twice — `configAgree`,
+`anchor_agree`, `vdct_agree`, `spanVdct_agree`, the four ledger lemmas,
+the four progress lemmas. The Progress helpers already differ by 55 lines
+out of 490. Not done: it rewrites Barnacle's arc, which is settled on
+`main`.
+
+### Step 12 — the headline
+
+What the arc guarantees was reachable only by composing two theorems by
+hand, and that composition lived in anonymous `example`s in the witness
+tree. A designer arriving with a score had nothing to cite.
+
+`Adaptive/Headline.lean` states it: `score_safe`, `score_ledger`,
+`score_live`. Each is a generic theorem with the score's own clause
+supplied — `Score.rule_anchored` for the first two, which is `rfl`, so
+**a reputation score is asked for nothing at all by safety**;
+`Score.rule_bounded` and `Score.rule_keeps` for the third. The step that
+removes a hypothesis is content, not a restatement, which is why these
+are named rather than left to the reader.
+
+Generality and usefulness pull in opposite directions here and the arc
+now serves both: the theorems are proved for an arbitrary `UpdateRule`,
+because that is what makes safety unconditional, and restated at a
+`Score`, because that is what a designer holds.
+
+### Step 13 — the record
+
+Report §13 gains the segmented arc and relabels the fixpoint one: AL3 is
+safety for policies that read verdicts, under a window condition
+asynchrony can falsify, and the segmented arc is what holds without it.
+§7 and §8 of this document become the design record rather than a plan.
+
+### What is reused, and what is written
+
+Reused unchanged: `Config` and its arithmetic, `Config.InBounds`,
+`UpdateRule`, `Anchored`, `ledgerOf`, `Properties.Agree` as the only law
+safety consumes, and the whole heads machinery — `HeadsRun`,
+`liveOn_of_headsRun`, `roundRobin_headsRun` — which is stated at a
+`Config` and says nothing about how the configuration was chosen.
+
+Written: one structure, two ported proofs, one rule, one transfer lemma,
+and the witnesses. Steps 2 and 6b are the work; the rest is
+transcription.

@@ -79,7 +79,7 @@ over a rule, or mechanisms composed with one another.
 | `OptimalHydrozoan/Record.lean` | Optimal-Hydrozoan | `OptimalHydrozoanProperties.onRecord`, under `BlockRecord.Any` (leader exclusion is a validity clause, preserved automatically) | the record's, through `OptimalHydrozoanProperties.onRecord` |
 | `ReactiveMechanisms.lean` | reactive Mysticeti | — | `live_chop_reactive`, `live_skipFill_reactive`, `live_addGenesis_reactive`, `decidedBelow_of_run_chop_reactive`: the reactive precondition across each mechanism, through `coreSupport` |
 | `StackRules.lean` | core, Nemo, FinWhale | — | `stack_core`, `stack_nemo`, `stack_finwhale`: fill then cut as a `Stack`; the headline `Properties.Safe` reads any of them |
-| `AdaptiveHydrozoan.lean`, `AdaptiveReactive.lean` | Hydrozoan; reactive Mysticeti | — | the adaptive leader mechanism (`Adaptive.run_agree`, `run_exists`) at those rules' properties |
+| `Joiner.lean` | the core | — | the adaptive schedule across the core's own fill: `stack_core_config`; `joiner_run_decided_agree` at the core's carrier |
 
 Every witness (`truncates_chop`, `sustains_chop`, `extends_fill`,
 `sustains_fill`, `extends_addGenesis`, `sustains_addGenesis`) and every
@@ -136,20 +136,23 @@ duration of its gap.
 
 ### 3.2 Where a horizon may be put (`Joiner.lean`, `Adaptive/Joiner.lean`, `Retention.lean`)
 
-**The joiner** (I5, `Adaptive/Joiner.lean`). A validator joining from a
-cut under an adaptive schedule computes the same leaders as the network
-exactly when the policy's rule is horizon-stable
-(`Adaptive.HorizonStable`, `Adaptive.joiner_assign_agree`), and its verdicts
-agree with the network's by cross-rebase agreement at the adaptive
-schedule (`Adaptive.joiner_run_decided_agree`, from `Agree` and
-`Banded`). Rebasing a schedule commutes with installing a shifted
-assignment (`Rebases.slotsOf`), so any rule's cut is a cut at the
-adaptive schedule (`Truncates.slotsOf`); the core's `Joiner.lean` is
-these at `truncates_chop`, where the two constructions are equal by
-`rfl` (`slotsChop_slotsOf_eq`). Epochs align only when the base slot is
-a multiple of the epoch width (`epochOf_add_of_dvd`): **a
-garbage-collection base slot must be a multiple of the adaptive epoch
-width.**
+**The joiner** (I5, `Adaptive/Helpers/Chop.lean`). A validator joining
+from a cut under an adaptive schedule computes the same configuration as
+the network exactly when the score is horizon-stable
+(`Adaptive.HorizonStable`, `Adaptive.joiner_config_agree`), and so runs
+the network's leaders on every round both hold
+(`Adaptive.joiner_leader_agree`). Its verdicts agree with the network's
+by cross-rebase agreement at that configuration's own schedule
+(`Adaptive.joiner_decided_agree`, from `Agree` and `Banded`). What makes
+the cut a truncation there is `Config.rebases_chop`: chopping a
+configuration at round `G` drops rounds by `G`, keeps the leaders, and
+bases at `C.cum G`, with no fixed slot-numbering instance in it — so the
+cut may be taken at a schedule whose rounds differ in width. The core's
+`Integration/Joiner.lean` is these at `truncates_chop`
+(`truncates_chop_config`, `joiner_run_decided_agree`). **A garbage
+collector and an adaptive score are compatible exactly when the score
+reads a window of rounds the horizon has not cut**; the constant score
+meets that at every cut (`horizonStable_const`).
 
 **The anchor** (I6, I8). A recovery message needs its anchor retained,
 and `chop` retains it exactly when the horizon has not passed the crash

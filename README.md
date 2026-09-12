@@ -88,16 +88,22 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   candidate is directly skipped rather than committed, and every verdict
   reached before the fill re-derives and agrees after it
   (`decided_fill_agree`).
-- **Adaptive leaders** (`LeanDag/Adaptive/`): a Hammerhead-style
+- **Adaptive leaders** (`LeanDag/Adaptive/`): a HammerHead-style
   schedule — the leaders ahead recomputed from the agreed prefix, to
-  favour validators observed live — proved safe and live for **both**
-  commit rules. Safety is unconditional: the schedule-and-verdict
-  fixpoint is unique under **no synchrony or fairness hypothesis**, for
-  arbitrary adapted policies (`adaptiveRun_agree`); liveness is its
-  existence under one clause — the policy keeps placing runs of
-  reliable leaders (`adaptiveRun_exists`); and the layer is
-  rule-agnostic, the two-round mirror consuming the same policy
-  objects.
+  favour validators observed live — proved safe and live for **any**
+  anchored rule. A configuration decides as far as the anchor that
+  closes its span and outputs only to the span's own boundary, and that
+  separation is what makes safety unconditional: two runs from one
+  genesis configuration agree under **no synchrony, fairness or window
+  hypothesis**, for arbitrary scores including adversarial ones
+  (`Adaptive.Agreement.holds`). Liveness is the horizon of the timed arc
+  with one more configuration supplied (`Adaptive.Progress.holds`), and
+  what a reputation score owes the mechanism is four clauses and no more
+  (`Adaptive.Score.holds`). The arc composes with the other mechanisms at
+  any rule that reads its universes as block records, not per protocol:
+  cuts compose beneath a configuration and stack with a recovery, and a
+  fill or a re-genesis carries a whole run across and leaves its ledger
+  the same list.
 - **Hybrid fault tolerance** (`LeanDag/Hybrid/`): the two-round rule
   proved safe and live under **separate Byzantine and crash caps** —
   `fb` equivocators, `fc` honest validators that may halt — at
@@ -422,7 +428,7 @@ them: the universe and the rule under `Model/`, what it shows in
 | [`docs/dos-equivocation-and-growth.md`](docs/dos-equivocation-and-growth.md) | equivocation, exposure, view growth, and the novelty budget |
 | [`docs/garbage.md`](docs/garbage.md) | the horizon: truncation, bounded storage, bootstrap without consensus |
 | [`docs/odontoceti.md`](docs/odontoceti.md) | the two-round protocol: the generalized thresholds, and the findings |
-| [`docs/adaptive-leaders.md`](docs/adaptive-leaders.md) | adaptive leader schedules: the design record, built and since generalised to `Adaptive.Policy` over any rule |
+| [`docs/adaptive-leaders.md`](docs/adaptive-leaders.md) | adaptive leader schedules: the design record, the findings against the HammerHead paper, and the segmented arc that replaced the fixpoint one |
 | [`docs/hybrid-plan.md`](docs/hybrid-plan.md) | hybrid fault tolerance: the design record, built, kept as the reasoning behind report §14 |
 | [`docs/mahi-mahi.md`](docs/mahi-mahi.md) | the asynchronous rule at wave `w`: the clause, and the statement/proof partition |
 | [`docs/black-marlin.md`](docs/black-marlin.md) | the three-round commit rule: the link clause, the run of two, what the reactive exit costs, agreement, the delivered order the descent computes, the sequence it outputs, where Agreement fails, and a repair |

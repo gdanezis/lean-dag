@@ -53,7 +53,7 @@ theorem holds : Statement := by
       exact Finset.card_le_card hsub
     omega
   refine ⟨hcount, ?_, ?_, ?_⟩
-  · intro C U A hA backoff V hnd hwi hint hH
+  · intro C U A hA backoff V v hnd hwi hint hH
     have hge : expected R C (R.block U A).round ≤ observed R C U A := hcount C U A hA hwi hint hH
     have htest : P.num * expected R C (R.block U A).round ≤ P.den * observed R C U A :=
       le_trans (Nat.mul_le_mul_right _ hnd) (Nat.mul_le_mul_left _ hge)
@@ -72,7 +72,7 @@ theorem holds : Statement := by
         C.cum_mono (by omega)
       simp only [expected]
       omega
-    refine ⟨hzero, fun U V A backoff => ?_⟩
+    refine ⟨hzero, fun U V v A backoff => ?_⟩
     have htest : P.num * expected R C (R.block U A).round ≤ P.den * observed R C U A := by
       rw [hzero]
       omega

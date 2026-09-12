@@ -86,8 +86,8 @@ antecedent, so that a timed and a reactive execution share it — and
 synchrony is kept out of the properties by construction. What is
 visible only from the composition is a set of deployment constraints no
 single account can state — a garbage-collection lag bounds the outage a
-one-message recovery can span, a horizon must fall on an epoch boundary
-of an adaptive schedule, and a validator pruned past its own history is
+one-message recovery can span, an adaptive schedule must read a window
+of rounds a horizon does not cut, and a validator pruned past its own history is
 a reader until it re-genesises, counting against the fault budget
 meanwhile.
 
@@ -259,14 +259,16 @@ proof effort with no corresponding proof content.
    (`JumpMsg.denote_eq_of_core` (SS10)) — round jumping at one message
    of constant size (§12.7).
 
-13. **Adaptive leaders** (§13): a Hammerhead-style schedule — the leaders
-   ahead recomputed from the agreed prefix — proved safe and live for both
-   commit rules. Safety is uniqueness of the schedule-and-verdict fixpoint,
-   with no synchrony or fairness hypothesis of any kind
-   (`run_agree` (AL3)); liveness is its existence under the one
-   clause that prices the policy (`run_exists_of_support` (AL5)); and the
-   layer is rule-agnostic, its two-round mirror consuming the policy
-   objects unchanged (AL7).
+13. **Adaptive leaders** (§13): a HammerHead-style schedule — the leaders
+   ahead recomputed from the agreed prefix — proved safe and live for any
+   anchored rule. A configuration decides as far as the anchor that closes
+   its span and outputs only to the span's boundary, and that separation is
+   what makes safety unconditional: two runs from one genesis configuration
+   agree with no window, no synchrony and no fairness hypothesis
+   (`Adaptive.Agreement.holds` (AL13)). Liveness is the horizon of §12 with
+   one more configuration supplied (`Adaptive.Progress.holds` (AL16)), and
+   what a reputation score owes the mechanism is four clauses and no more
+   (`Score.holds` (AL11)).
 
 14. **Hybrid fault tolerance** (§14): the two-round rule proved safe and
    live under `fb` Byzantine and `fc` crash-prone validators at
@@ -476,7 +478,7 @@ Odontoceti (`Odontoceti.odontocetiLaws`,
 (`ReactiveM.decided` (RS2), `Odontoceti.reactive_decided` (RS3),
 `ReactivePace.no_timeout_of_fast` (RS4)); safe-skip recovery
 (`decided_fill_agree_of_properties` (SS6)); adaptive leader schedules
-(`run_agree` (AL3), `run_exists_of_support` (AL5)); and hybrid
+(`Adaptive.Agreement.holds` (AL13), `Adaptive.Progress.holds` (AL16)); and hybrid
 fault tolerance (`Hybrid.hybridLaws` (H6),
 `hybrid_bound_necessary` (H10)); and crash-fault consensus
 (`Nemo.nemoLaws` (NN5), `Nemo.all_decided_below_of_fairRun`
@@ -4321,340 +4323,278 @@ by §12.6's longer route, whose fill spans at most the retained window.
 
 ---
 
-## 13. Adaptive leaders: the schedule as a fixpoint
+## 13. Adaptive leaders: a schedule the committed prefix chooses
 
-*(modules `LeanDag/Adaptive/`; the design record is `adaptive-leaders.md`)*
+*(modules `LeanDag/Adaptive/`; the design record is
+`adaptive-leaders.md`; the protocol is HammerHead [TKSK25], a
+reputation-based leader schedule for DAG-based consensus, and the
+mechanism runs over any rule with a carrier)*
 
-Deployed systems do not run the blind rotation the `Slots` instance
-models: Hammerhead-style implementations [Tsi+23] consult the agreed
-prefix after a commit and reassign the leaders ahead, demoting
-validators whose slots were skipped. The intuition for safety is this
-development's own agreement theorem — the verdict sequence is agreed
-(M6, M7), so any function of it is agreed, and every correct validator
-derives the same revised schedule. Turning the intuition into a proof
-meets a circularity the base development does not have. In the decision
-relation verdicts flow *downward*: a slot is decided indirectly by
-anchoring on a committed slot above it, arbitrarily far up. An adaptive
-schedule makes leader identity flow *upward*: the leaders of a high
-slot depend on verdicts below. Composed without restriction, the
-verdict of a slot may depend on the leader of its own anchor, whose
-identity depends on that verdict — and nothing rules out two
-*self-justifying* schedules, an agreement failure manufactured by the
-mechanism itself.
+A fixed schedule can name a crashed or Byzantine validator for ever,
+which is why fairness (P10) is an assumption and not a theorem.
+HammerHead makes the schedule a function of what the DAG already shows:
+on committing the leader that closes an epoch, validators score the
+validators whose blocks voted for recent leaders and install a schedule
+favouring the ones observed live and fast.
 
-The arc stratifies the dependency and proves the fixpoint forced:
-**safety is unconditional** — any two adaptive fixpoints agree, under
-no synchrony or fairness hypothesis, for arbitrary, even adversarial,
-adapted policies (AL3) — while **liveness prices the policy's
-choices** through one clause, the adaptive counterpart of the run
-fairness the fixed schedule assumes (AL5). Both hold for both commit
-rules: the adaptive layer is rule-agnostic, and its two-round mirror
-consumes the policy objects unchanged (AL7).
+Doing that on a DAG is not free. Validators commit in different orders
+and at different times, so the schedule a validator holds is a function
+of a subjective reading — and two validators holding different schedules
+is an agreement failure the mechanism itself manufactured. The arc's
+structural observation is the paper's: **a configuration governs a fixed
+span of rounds, decisions are taken under it as far as the anchor that
+closes the span, and output stops at the span's own boundary.** Naming an
+anchor may run past the boundary, because that is how the switch is
+detected and every validator detects it at the same anchor; ordering
+never does.
 
-### 13.1 Epochs, the lag, and the bounded relation
+**The three theorems.** The arc is stated for an arbitrary update rule,
+which is what makes safety unconditional — nothing about a score can
+break a theorem that never looks at one. A designer arrives with a score,
+though, so `Adaptive/Headline.lean` supplies the same results with the
+score's own clauses discharged (**AL18**):
 
-Slots are grouped into epochs of `W` consecutive slots
-(`epochOf W k := k / W`); the schedule of an epoch is a function of the
-verdicts of epochs at least two below it, and an epoch's verdicts must
-be derivable with anchors strictly below the start of the epoch two
-above. The dependency is then well-founded — each stage consults
-strictly earlier data than the stage above it produces — and the lag of
-two is the least that works: with lag one, the slots at the top of an
-epoch would have no eligible anchors inside their window. This mirrors
-what deployments do, applying reputation to leader selection after a
-pipeline delay.
+> **AL18a.** Two validators running *any* score over one DAG from one
+> genesis configuration adopt the same configuration at every height both
+> reach, the same anchor, and the same verdict at every slot of every
+> range both closed. **No synchrony, no fairness, no window, and no
+> clause on the score.**
+>
+> **AL18b.** And they read one ledger — agreed as far as both reach,
+> growing as a prefix of itself, holding no block twice.
+>
+> **AL18c.** And the sequence does not stop: under `Score.Keeps` and a
+> clause the score preserves whose configurations are live, a run of
+> every height exists once the DAG is good far enough up.
 
-The bound is carried by `Properties.DecidedBelow`
-(`Properties/Derived/Bounded.lean`), a definition on the rule's `Decided`
-that records every anchor below `B`, whose congruence
-`DecidedBelow.reschedule` is a theorem. The relation also states the bounded
-form explicitly (AL2, `LeanDag/Common/Anchored/Bounded.lean`), once for every
-rule, since a `Decided` derivation is a `Prop` and its anchors cannot be
-recovered from it:
+`Score.rule_anchored` is `rfl`, which is why the first two ask a score for
+nothing. AL18c is the only place a score is asked for anything, and the
+two clauses are what a designer supplies.
 
-```lean
-inductive DecidedWithin (U : BlockRecord …) (V : U.View) (B : ℕ) : ℕ → Option BlockId → Prop
-  …
-  | indirectCommit {k j : ℕ} {A L : BlockId} {i : ℕ} :
-      k < j → j < B → R.Eligible k j → DecidedWithin U V B j (some A) →
-      (∀ m, k < m → m < j → R.Eligible k m → DecidedWithin U V B m none) →
-      i < R.rungs → (∀ i', i' < i → R.RungEmpty U A i' k) →
-      IsLeaderBlock U k L → R.Link i U A L S k → R.Least U A i k L →
-      DecidedWithin U V B k (some L)
-  …
-```
+Results carry **AL**-labels. The arc reuses the Barnacle arc's
+vocabulary — `Config`, `UpdateRule`, `Anchored`, `Config.InBounds`,
+`ledgerOf` — and restates none of it; what differs is that a
+configuration's output stops at its boundary while its decisions reach
+its anchor, where Barnacle's boundary is the anchor's own round
+(§21, `adaptive-leaders.md` D19).
 
-Two structural facts carry the arc. The bound forgets to `Decided`
-(`DecidedWithin.toDecided`), so every safety theorem of the base
-development applies to bounded verdicts without restatement — agreement
-for the bounded relation *is* M6. And congruence
-(`DecidedBelow.reschedule` generically; `decidedWithin_congr_of_slotRound`
-for the explicit form, at the rule's laws `skip_congr` and
-`link_congr`): the relation reads the schedule's `leader` only at slots
-below `B` (only `IsLeaderBlock`, the skip and the links consult it, each
-at its own slot; the round structure is fixed), so two assignments
-agreeing below the bound derive exactly the same verdicts —
+### 13.1 The run, and its two bounds
+
+A segmented run closed to height `K` (`AL12`, `Adaptive.SegRun`) holds a
+start round, a configuration, a back-off and an anchor at each height,
+with the two bounds that make the mechanism asynchrony-tolerant:
 
 ```lean
-theorem decidedWithin_congr {hinj : Function.Injective S.slotRound}
-    {a₁ a₂ : ℕ → Validator} {V : View Validator BlockId Payload U} {B k : ℕ}
-    {v : Option BlockId} (ha : ∀ m, m < B → a₁ m = a₂ m)
-    (h : DecidedWithin (S := slotsOf hinj a₁) U V B k v) :
-    DecidedWithin (S := slotsOf hinj a₂) U V B k v
+  closed : ∀ k, k < K → ∀ κ, start k < (cfg k).roundOf κ →
+    (cfg k).roundOf κ ≤ (cfg k).roundOf (anchor k) →
+      R.Decided (cfg k).sched V κ (vdct k κ)
+  anchor_commits : ∀ k, k < K →
+    (∃ A, vdct k (anchor k) = some A) ∧ start (k + 1) < (cfg k).roundOf (anchor k)
+  start_succ : ∀ k, k < K → start (k + 1) = start k + (cfg k).interval
 ```
 
-— which is what permits judging an epoch against a schedule only
-partially determined. `slotsOfKeyed` (AL1) is the `Slots` instance a
-leader assignment induces over the base round structure, and its `keyed`
-clause is the policy's own: `Policy.keyed` asks that two slots of one
-round are led by different validators. One leader per round makes it a
-lemma, since the rounds separate the slots whatever the assignment does
-(`slotsOf`); under multi-leader rounds a reassignment could collide two
-slots of one round onto one validator, and the clause is genuinely
-owed. `Adaptive.PickKeyed` is that obligation stated at *every* count a
-count-varying mechanism may reach, and `pickKeyed_one` is the one-leader
-case, where it holds of any reassignment at all.
+`start_succ` fixes the next boundary from the current one and the
+interval alone, so the boundaries are known before any commit;
+`anchor_commits` puts the anchor strictly past the boundary, however far
+past; and `closed` decides everything up to it. `rangeLedger` reads the
+rounds `(start k, start (k + 1)]` and no others, so the rounds between
+the boundary and the anchor are decided by this configuration and output
+by a later one — `decided_and_not_output` is that statement, and
+`round_of_mem_ledgerUpto` says the ledger to any height stops at that
+height's start round.
 
-**AL10 — a verdict is local in the rounds, not only in the leaders.**
-`DecidedBelow` holds the round structure fixed and lets the leaders vary
-below a bound, which is what reassignment means. `Banded` gives the other
-half once its round clause is read below the band rather than everywhere,
-and `Properties.exists_roundLocal` is that half: every decided slot has a
-round below which *any* schedule agreeing on the rounds and the leaders
-decides it the same way. `AnchoredRule.banded_direct` pins the bound for
-a directly decided slot at the slot's own round plus a wave, the
-derivation reading nothing above its own wave.
+**The structure records what a validator has done, not how fast.** Its
+only existential is a commit the validator has witnessed. A validator
+that has closed two configurations has a height-`2` run; one that has
+closed none has `SegRun.zero`, which exists unconditionally.
 
-`Barnacle.cfg_local` is what that says of §21's mechanism, and it is an
-assumption that arc makes without stating: `PartialRun` records a
-configuration's verdicts as decided against that configuration's
-schedule extended to every round, which is not the schedule that runs
-once the configuration changes. A configuration's verdicts being settled
-within its own rounds is what makes it sound, and this is that
-statement.
+### 13.2 Safety, for any update rule
 
-### 13.2 The policy and the run
-
-`Adaptive.Policy` packages the reassignment rule with the clauses it
-owes. It reads a protocol's carrier only — universes and views — so it
-is stated over any `Properties.DagRule`, and the core's `AdaptivePolicy`
-is this structure at the core's carrier:
+**AL13.** Two runs over one universe from one genesis configuration —
+whatever views, whatever heights — agree on the configuration in force,
+on the anchor, and on every verdict each has decided:
 
 ```lean
-structure Policy (R : DagRule Validator BlockId Payload) [S : Slots Validator] where
-  W : ℕ
-  …
-  pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator
-  adapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
-    (∀ j, epochOf W j + 2 ≤ epochOf W k → v j = w j) →
-    pick U V₁ v k = pick U V₂ w k
-  base_prefix : ∀ (U : R.Universe) (V : R.View U) v k, epochOf W k < 2 →
-    pick U V v k = S.leader k
+def SegRunAgreement (R : BaseRule Validator BlockId Payload) (P : Params)
+    (upd : UpdateRule R) (C₀ : Config Validator) : Prop :=
+  Anchored R upd →
+  ∀ (U : R.Universe) (V₁ V₂ : R.View U) (K₁ K₂ : ℕ)
+    (R₁ : SegRun R P upd C₀ U V₁ K₁) (R₂ : SegRun R P upd C₀ U V₂ K₂),
+    ∀ k, k ≤ min K₁ K₂ →
+      R₁.start k = R₂.start k ∧ R₁.cfg k = R₂.cfg k ∧ R₁.backoff k = R₂.backoff k ∧
+      (k < min K₁ K₂ →
+        R₁.anchor k = R₂.anchor k ∧
+        ∀ κ, R₁.start k < (R₁.cfg k).roundOf κ →
+          (R₁.cfg k).roundOf κ ≤ (R₁.cfg k).roundOf (R₁.anchor k) →
+            R₁.vdct k κ = R₂.vdct k κ)
 ```
 
-`adapted` is the measurability clause and the heart of the safety
-argument: the leader of slot `k` is a function of the verdicts of
-epochs `≤ epochOf k − 2` and of nothing else — the view included.
-`pick` receives the universe and the validator's own view of it, so
-that a reputation rule may consult the committed blocks themselves —
-certification patterns, payload contents — and not merely the verdict
-vector. The view is what a validator actually has, and a rule reading
-it freely could hand two correct validators different leaders;
-`adapted` rules that out, and is no restriction in practice, since
-the committed prefix is what every view holding those verdicts holds
-whole.
-What a *deployed* validator may consult is its committed prefix only:
-as with the enforceability discussion of §4.7, the model states the
-mathematical condition and the implementation owes the discipline.
-Fairness is deliberately absent from the structure — safety must hold
-for policies that violate it.
+The only clause on the rule is `Anchored` — that it does not read the
+view — and the only law of the protocol consumed is `Properties.Agree`.
+There is no synchrony, no fairness and no bound on how far a derivation
+reaches. The verdict half of the conclusion is what lets a rule read the
+committed sequence: `update` hands it `Barnacle.spanVdct`, the span's
+verdicts junked outside the span, and `spanVdct_agree` turns the pointwise
+agreement above into equality of that one function, established *before*
+either validator applies the rule. The anchors need no hypothesis relating them: the lesser of two
+lies inside the other run's reach by `Config.roundOf_mono`, where that
+run's `anchor_least` makes it a skip and the first run's
+`anchor_commits` makes it a commit.
 
-The central object is a schedule-and-verdict pair coherent with the
-policy, every slot decided inside its epoch window against the schedule
-the policy computes from the verdicts themselves:
+**AL14** reads the ledger off it in the three parts M7 states: agreed
+across validators as far as both reach, growing, and holding each block
+once. Integrity's cross-range half is easier than Barnacle's, since
+consecutive output ranges abut by `start_succ` and so partition the
+rounds by construction. **AL15** is conservativity and validity — under
+the constant rule every configuration is the genesis one, and a good
+author's block two rounds below a boundary is in the history of the
+block that configuration commits.
+
+### 13.3 The score, and what it owes
+
+A score reads the anchor's causal history **as a view**, the shape
+`Barnacle.observed` uses, together with the verdicts of the span just
+closed, and returns the configuration to install:
 
 ```lean
-structure Run (P : Policy R) (U : R.Universe) (V : R.View U) where
-  /-- The leader assignment. -/
-  assign : ℕ → Validator
-  /-- The verdicts. -/
-  vdct : ℕ → Option BlockId
-  /-- Every slot is decided inside its epoch window. -/
-  closed : ∀ k, DecidedBelow R (slotsOfKeyed assign keyed)
-    (P.W * (epochOf P.W k + 2)) V k (vdct k)
-  /-- The assignment is the policy's, computed on this view, everywhere. -/
-  coherent : ∀ m, assign m = P.pick U V vdct m
+def rule (score : Score R) : UpdateRule R :=
+  fun C b U _V v A =>
+    if hA : A ∈ R.ids U then (score U (R.historyView U A hA) v C, b) else (C, b)
 ```
 
-Existence and uniqueness are deliberately separated, mirroring the
-base development's split between the `Decided` relation and
-`decided_unique`: **uniqueness is the safety theorem, existence is the
-liveness theorem.** A partial variant (`PartialRun`, closed up to an
-epoch height) states what a validator holds mid-execution.
+Both inputs are agreed, and for different reasons. The history is the
+causal history of an agreed anchor, determined by the universe and that
+block alone: `BaseRule.Laws.historyView_ids` with BN2 make the reading
+agreed across views by construction. The verdicts are agreed because they
+are an *argument* — the run supplies `spanVdct`, and AL13's induction has
+already identified the two validators' copies when the rule is applied.
 
-### 13.3 Safety: the fixpoint is unique
+The verdicts handed over are the configuration's **output**,
+`(start k, start (k + 1)]`, and not the whole span it decided
+(`SegRun.spanOf`). A configuration decides past its boundary to find its
+anchor, and those verdicts are discarded — the rounds are decided again
+under configuration `k + 1`, against a different schedule, and it is the
+later derivation that reaches the ledger. Handing them to the score would
+reconfigure the system on a derivation it throws away, at a window whose
+top is the anchor's round and so moves with the network; the boundary is
+fixed before any commit, so this window is too.
 
-**AL3.**
-```lean
-theorem run_agree {V₁ V₂ : R.View U} (A₁ : Run P U V₁) (A₂ : Run P U V₂) :
-    (∀ k, A₁.vdct k = A₂.vdct k) ∧ (∀ m, A₁.assign m = A₂.assign m)
-```
+That is where the circularity of a verdict-reading policy goes, and it is
+the reason the segmented arc needs no window where the fixpoint arc did.
+HammerHead's `UPDATESCHEDULE` scores the validators whose blocks voted
+for the leaders the epoch just *committed*, so a faithful score must see
+the committed sequence and not only the DAG. It may: the span is bounded
+below by the boundary and above by the anchor, and both ends are settled
+before the switch. What a score may never do is derive verdicts from its
+own view, which is subjective and would break `Anchored`.
 
-Two adaptive fixpoints over one universe — derived from *any* two
-views, under *no* synchrony or fairness hypothesis — hold the same
-verdicts and run the same schedule. The proof is a strong induction on
-epochs in which nothing about counting is ever re-proved: verdict
-agreement below an epoch forces the two assignments to agree through
-the epoch above it (`adapted`), which places both runs' derivations in
-the *same* `Slots` instance (`DecidedBelow.reschedule`), where agreement
-is the property `Agree`, which Mysticeti, Odontoceti, Hydrozoan and
-Nemo-Nemo each prove of their own rule. The induction is carried by the
-partial-run form (`partialRun_agree`), so validators that have not
-decided equally far agree on their common prefix. Two corollaries: the
-commit sequence read from any two runs is the same list
-(`run_commitSeq_agree`, AL6, the shape of M7), and under the constant
-policy a run's verdicts are ordinary `Decided` verdicts of the base
-schedule (`Policy.const_run_decided`, AL4) — the anchor demanded by the
-house rule that a new relation must instantiate to the old one.
+**AL11** is the four clauses a score owes: `RuleAnchored`, by `rfl`,
+which is all AL13 and AL14 ask; `RuleBounded`, from `Score.Keeps` — the
+score moves the leaders and leaves the widths and the interval where they
+were, and `Config.InBounds` mentions nothing else; `RulePreserves`, for
+whatever clause liveness names; and `ConstScoreIsConstRule`, the constant score
+being `constRule`.
 
-### 13.4 Liveness: the fixpoint exists
+### 13.4 Liveness, and reassignment
 
-Existence consumes the standard interface — `SynchronisedOn` and
-`Populated`, both untouched by reassignment, since neither mentions a
-leader — plus the one clause that prices the policy:
+**AL16** is BN8's shape at this run: a run past the synchrony round
+extends by one configuration, and from a synchrony round at genesis runs
+of every height exist under `Barnacle.horizon`. The new boundary is
+reached more tightly than Barnacle's new start — by `maxInterval` rather
+than `maxInterval + 1 + c` — so the horizon bounds the same heights.
 
-```lean
-def PlacesRuns {R : DagRule Validator BlockId Payload} (P : Policy R)
-    (T : Finset Validator) (c : ℕ) : Prop :=
-  ∀ (U : R.Universe) (V : R.View U) (v : ℕ → Option BlockId) (e : ℕ),
-    ∃ b, P.W * (e + 1) ≤ b ∧ b + c ≤ P.W * (e + 2) ∧
-      ∀ i, i < c → P.pick U V v (b + i) ∈ T
-```
+Its liveness hypothesis ranges over the configurations the rule can
+emit, and the machinery that discharges it is the Barnacle arc's, read
+over **positions** rather than validators. `headsRun_of_cycle` is the
+pigeonhole restated that way: a schedule repeating every `n` rounds, at
+most `m` of whose positions carry a head outside the good set, has `g`
+consecutive good heads within `n + g − 1` rounds whenever
+`g · m + 1 ≤ n`. `roundRobin_headsRun` is now its corollary, and
+`headsRun_of_cycle_weighted` is what a reassigning rule needs: if the
+good set misses at most `slack` validators and no validator holds more
+than `w` of the cycle's positions, the committee bound is
+`g · slack · w + 1 ≤ n`. At `w = 1` — a permutation of the rotation — it
+is the round-robin bound unchanged.
 
-Every assignment the policy can emit places, in each epoch past the
-base prefix, a run of `c` consecutive `T`-led slots — `FairRunOn`,
-relativised to the policy's outputs. Hammerhead's purpose lands on this
-clause: a policy that reacts to observed skips satisfies it by
-construction where a blind rotation satisfies it by assumption — but
-which validators are reliable is not the designer's to know, so it
-remains a joint condition exactly as P10 is.
+**So the clause a reputation rule owes for liveness is not that it
+permutes but that it caps accumulation.**
 
-**AL5.**
-```lean
-theorem run_exists_of_support (ha : Agree R) (hcom : sp.Commits rel)
-    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
-    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
-    (hruns : PlacesRuns P T c) (V : R.View U)
-    (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
-      sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W
-        (P.W * (E + 2))) :
-    Nonempty (Run P U V)
-```
+### 13.5 The joiner across a cut
 
-The statement is on a validator's own view, caught up to the horizon —
-`View.CoversUpto U V N`: `V` holds every block of `U` at a round up to
-`N` — which the full view is at every `N` (`View.coversUpto_full`), so
-the whole-universe reading is the special case; under eventual DAG
-synchrony (§2) every correct validator's view is caught up once
-delivery has reached the horizon. The construction consumes the derived `LeaderCommits` and `Descends` of
-the rule, and derives both from a support: Law 2 gives the first at
-`Support.live`, the indirect rule with `SpansEligible` the second
-(`descends_slotsOf`). Mysticeti, Odontoceti, Hydrozoan and Nemo-Nemo each
-supply a support with Law 2, so each instantiates the mechanism without a
-theorem of its own. It counts nothing anew: the run
-`PlacesRuns` puts in epoch `e + 1` commits directly (L4 at the induced
-instance, its certificates under the horizon and so in the view), the
-committed-run descent —
-restated with the anchors' bound carried through, the base proof
-already anchoring at or below the run's top — clears the epoch below
-it, and `exists_partialRun` stacks epochs under a finite horizon,
-re-reading the schedule off the verdicts so far at each stage. Partial
-runs at every height then glue into a total run along the diagonal,
-with `partialRun_agree` supplying the coherence that the
-stage-by-stage choices need not. A total run decides every slot there
-is, which is why the precondition is asked for at every height; the
-finite-horizon statement is `exists_partialRun`, which asks for it only
-below `E`, and it is the witnessable form.
+A validator that joins from a universe pruned below round `G` renumbers
+its slots from `C.cum G` and runs the same score on what it holds.
+`Config.chop` is that re-indexing and `Config.rebases_chop` is the
+schedule half of a truncation at the configuration's own schedule — an
+argument about `cum` rather than a definitional identity, which is what
+lets the cut be taken at a schedule whose rounds differ in width.
 
-The precondition itself is `coreSupport.live`, the support's own, and the
-theorem names no execution model. A synchronous caller supplies it from
-coverage through `Timed.live_of_coverage` — production at every round and
-a view caught up to every horizon — and a reactive one through
-`coreSupport_live_of_reactiveLive`, whose `SynchronisedOn` is false by
-design. The two were separate instantiations of the same construction
-until they were read at the socket both already reach.
-
-Hammerhead [Tsi+23] — the reputation-based schedule deployed in Sui
-mainnet since v1.9.1 — proves an analogous result by a different route.
-Validators may run different schedules concurrently there, and safety
-is recovered by proving the schedules necessarily *reconverge*, via
-quorum intersection between anchors committed under different
-schedules, interleaved with the base protocol's own liveness — its
-safety corollary is stated to follow from its liveness lemma directly.
-The account here separates the two questions instead: `DecidedWithin`'s
-bound makes divergence unstatable rather than something to reconverge
-from, so `run_agree` needs no synchrony assumption at all, and
-liveness is the independent question of whether the fixpoint the bound
-describes exists.
-
-### 13.5 Schedules and pruning
-
-A policy reading the committed prefix meets garbage collection, which
-prunes it. §16.4 states the two conditions that keep the two
-compatible: the policy must be **horizon-stable**, computing on a
-truncated prefix what it would compute on the full one, and a
-garbage-collection base slot must be a whole number of epochs.
-Otherwise two validators can agree on who leads every slot and still
-disagree about which verdicts the policy was entitled to read.
-
-### 13.6 The two-round mirror
-
-The Odontoceti development (AL7) exhibits that the layer is
-rule-agnostic. `AdaptivePolicy` and `PlacesRuns` are consumed as found
-— they are protocol-free — and only the decision relation is mirrored:
-`Odontoceti.DecidedWithin` carries the canonicity clause of the
-two-round indirect commit through the bound, and its congruence
-transports the clause in both directions, the candidate set reading
-the schedule only through `IsLeaderBlock`, which the protocols share.
-Per epoch, agreement is O5 through the embedding exactly as the
-three-round side used M6, and existence consumes O7 and the bounded
-two-round descent with its least-candidate selection — two populated
-rounds where Mysticeti needs three:
+What a score owes pruning is horizon-stability:
 
 ```lean
-theorem run_agree {V₁ V₂ : R.View U}
-    {V₁ V₂ : View Validator BlockId Payload U}
-    (R₁ : AdaptiveRun P U V₁) (R₂ : AdaptiveRun P U V₂) :
-    ∀ k, R₁.vdct k = R₂.vdct k
+def HorizonStable
+    (score : (U : R.Universe) → R.View U → Config Validator → Config Validator)
+    (G : ℕ) : Prop :=
+  ∀ (U U' : R.Universe) (V : R.View U) (V' : R.View U'), ViewAgreeAbove R V V' G →
+    ∀ C : Config Validator, score U' V' (C.chop G) = (score U V C).chop G
 ```
 
-`Faults5` supplies the `Faults` instance the shared policy layer
-expects, so nothing is restated on the way.
+A score that only reassigns leaders has it at every cut
+(`horizonStable_relabel`) — relabelling commutes with dropping rounds,
+because neither moves a round — and so does the score that installs what
+it was given. What the condition rules out is a score whose *choice* of
+reassignment is read from rounds the horizon has removed. **I5** (§16) is
+the consequence at the core:
+a joiner that recomputed its configuration from its own truncated view
+derives the network's verdict at every slot both hold, and runs the
+network's leaders while doing it — *pruning does not split the ledger,
+even when the schedule is derived from it.*
 
-### 13.7 The witness, and what remains
+### 13.6 A verdict is local in the rounds, not only in the leaders
 
-`demotePolicy` (AL8, §24) is genuinely adaptive at epoch length one —
-a slot whose verdict two below was a skip is handed to a fixed
-replacement — and the witness exhibits the phenomena the theorems govern:
-the same DAG under a reassigned leader commits a *different block* for
-a slot, on both rules; a skip two slots below moves a later slot's
-leader off the base rotation; two runs over distinct views are
-constructed and shown verdict- and schedule-identical by AL3; and the
-two-round indirect commit carries its canonicity clause through the
-bound on data. The runs are **partial**, closed to the height the
-witness universe supports: `U7` is finite, a skip asks for a quorum of
-blockers at the voting round, and no slot past the frontier has one —
-so a total run needs the populated-everywhere hypothesis AL5 carries,
-and the reassignment is read off `pick` rather than off a run.
+**AL10.** `DecidedBelow` holds the round structure fixed and lets the
+leaders vary below a bound, which is what reassignment means. `Banded`
+gives the other half once its round clause is read below the band rather
+than everywhere, and `Properties.exists_roundLocal` is that half: every
+decided slot has a round below which *any* schedule agreeing on the
+rounds and the leaders decides it the same way.
+`AnchoredRule.banded_direct` pins the bound for a directly decided slot
+at the slot's own round plus a wave, the derivation reading nothing above
+its own wave.
 
-One question from the design record remains open (AL9): whether the
-anchor bound is *necessary* — a model with two self-justifying runs
-under unbounded anchors would justify the stratification the way the
-`bound_is_necessary_pace` witness justified the convergence bound. The
-interaction between an anchor's leader and the verdict it anchors is
-delicate, and the answer may need more than four validators.
+No clause of a run consumes it. A configuration's verdicts are recorded
+against its own schedule extended above its span, and that extension is
+the schedule in force while those derivations are performed — the span is
+settled before the anchor that closes it is found. The locality is what a
+mechanism needs when it has to transport a verdict across a schedule it
+did not derive it under, which this arc does not do
+(`Barnacle.cfg_local`, §21).
 
----
+### 13.7 The witnesses, and what remains
+
+**AL17.** `Usk` is eight sunny rounds with one block referenced by its
+author alone, so slot `2` skips. At one leader a round and an interval of
+one, configuration `0`'s boundary is round `1` and its anchor is slot `3`
+two rounds further up: it decides rounds `1`, `2` and `3`, outputs round
+`1` alone, and block `15` reaches the ledger only from the configuration
+whose span contains round `3`. `anchor_least` is non-vacuous there — slot
+`2` lies past the boundary, below the anchor, and is a skip.
+`Score.permute` and a score that reads the anchor's history and permutes
+on what it finds exhibit reassignment that is a function of the DAG.
+
+`commitScore` is the verdict-reading case on data: it reads no block and
+no view, only whether the span just closed committed a particular slot,
+and it moves the leaders when it did. `commitScore_anchored` is `rfl`, so
+AL13 applies to it unchanged — **a policy reading the committed sequence
+is safe with no window, no synchrony and no fairness.** That is what the
+fixpoint arc could establish only inside a two-epoch window asynchrony
+can falsify (`adaptive-leaders.md` §7), and it is the whole gain of
+bounding the span at both ends.
+
+One thing remains. No concrete reputation rule is written and shown to
+cap accumulation, so AL16's liveness clause is discharged for the
+permuted rotations and not yet for a re-weighting rule; deriving the cap
+from HammerHead's own `|B| = |G| ≤ f` is arithmetic about that rule
+rather than about the mechanism.
 
 ## 14. Hybrid fault tolerance: Byzantine and crash faults apart
 
@@ -5425,48 +5365,127 @@ Three conditions constrain the placement of a garbage-collection
 horizon relative to the mechanisms running above it. None is visible
 from a single arc.
 
-**I5 — the joiner's two obligations.** §13's adaptive schedule is a
+**I5 — the joiner's obligation.** §13's adaptive schedule is a
 function of the committed verdicts, and §9 prunes verdicts below a
 horizon; a validator joining from the truncation may not hold what the
-policy reads. Both halves of the answer are generic
-(`Adaptive/Joiner.lean`). The schedule half is arithmetic on the
-relation a cut delivers: rebasing a schedule commutes with installing
-an assignment shifted past the base slot (`Rebases.slotsOf`), so a cut
-at the base schedule is a cut at the adaptive one
-(`Truncates.slotsOf`); at the core the two constructions are
-definitionally equal and `slotsChop_slotsOf_eq` closes by `rfl`. All
-the content lies in whether a joiner can *produce* that shifted
-assignment, which is
+score reads. Both halves of the answer are generic
+(`Adaptive/Helpers/Chop.lean`). The schedule half is arithmetic on the
+relation a cut delivers. A configuration chopped at `G` is the original
+with its first `G` rounds dropped (`Config.chop`), and
 
 ```lean
-def HorizonStable (P : Policy R) (G d : ℕ)
-    (pick' : (U' : R.Universe) → R.View U' → (ℕ → Option BlockId) → ℕ → Validator) : Prop :=
-  ∀ (U U' : R.Universe), RebasedAbove R U U' G G →
-    ∀ (V : R.View U) (V' : R.View U') (v : ℕ → Option BlockId) (k : ℕ),
-      pick' U' V' (fun m => v (d + m)) k = P.pick U V v (d + k)
+theorem rebases_chop : Properties.Rebases C.sched (C.chop G).sched G (C.cum G)
 ```
 
-Under it a joiner computes exactly the leaders the network is using
-(`Adaptive.joiner_assign_agree`), so the two run one schedule seen from two
-origins, and cross-cut agreement at that schedule, `Agree` and `Banded`
-through `decided_agree_rebased`, gives `joiner_run_decided_agree`:
-pruning does not split the ledger, even when the schedule is derived
-from it. The obligation is stated on the policy's *rule* rather than on
-a `Policy`, because a policy is indexed by its `Slots` instance and a
-joiner's inhabits a different type; the rule is the part that survives
-re-indexing. The cut enters only as `RebasedAbove R U U' G G`, the
-universe half of `Truncates`, since horizon-stability is about what the
-two validators hold and not about how their slots are numbered.
+says that is a rebasing at the configuration's *own* schedule: rounds
+fall by `G`, leaders are the same replicas, and the base slot is
+`C.cum G`. No fixed slot-numbering instance enters, which is what lets
+the cut be taken at a schedule whose rounds differ in width.
 
-A second obligation is independent of the policy. Horizon-stability
-aligns leaders, not *epochs*: a joiner's slot `k` is the network's
-`d + k`, so the numberings correspond only when the base slot is a
-whole number of epochs (`epochOf_add_of_dvd`), and the example beneath
-it shows the correspondence failing otherwise. **A
-garbage-collection base slot must be a multiple of the adaptive epoch
-width** — without it two validators can agree on who leads every slot
-and still disagree about which verdicts the policy was entitled to
-read.
+All the content lies in whether a joiner can *produce* that chopped
+configuration, which is
+
+```lean
+def HorizonStable
+    (score : (U : R.Universe) → R.View U → Config Validator → Config Validator)
+    (G : ℕ) : Prop :=
+  ∀ (U U' : R.Universe) (V : R.View U) (V' : R.View U'), ViewAgreeAbove R V V' G →
+    ∀ C : Config Validator, score U' V' (C.chop G) = (score U V C).chop G
+```
+
+Under it a joiner computes exactly the configuration the network
+installed, with the pruned rounds dropped (`joiner_config_agree`), and
+so runs the network's leaders on every round both hold
+(`joiner_leader_agree`). The verdict half needs nothing about
+adaptivity: `rebases_chop` makes the cut a truncation at that schedule,
+and cross-cut agreement holds at any schedule, so `Agree` and `Banded`
+through `decided_agree_rebased` give `joiner_decided_agree` and, at the
+core, `joiner_run_decided_agree`: **pruning does not split the ledger,
+even when the schedule is derived from it.**
+
+> A garbage collector and an adaptive score are compatible exactly when
+> the score reads a window of rounds the horizon has not cut.
+
+The obligation is stated on the bare score-shaped function over a
+`DagRule` rather than on `Score R`, because the cut re-indexes and a
+statement tied to the interface a score is installed through would have
+to be transported across the re-indexing; an `Adaptive.Score` has this
+shape at its rule's `toDagRule`. The cut enters only through
+`ViewAgreeAbove R V V' G`, since horizon-stability is about what the two
+validators hold and not about how their slots are numbered. The
+constant score meets it at every cut (`horizonStable_const`), which is
+AL15's conservativity across a truncation.
+
+The arc this one replaced carried a second, arithmetic obligation here —
+a cut had to fall on a whole number of epochs, or two validators could
+agree on who leads every slot and still disagree about which verdicts
+the score was entitled to read. It is gone: a configuration has no epoch
+numbering to misalign, `Config.chop` shifts every round by the same `G`,
+and the interval is carried across unchanged.
+
+**I20 — and the rest of the mechanisms, at any carrier.** I5 answers for
+one cut. The others, and the compositions of them, are
+`Adaptive/Helpers/Mechanisms.lean`, and none is stated at a protocol: a
+rule that reads its universes as block records has the cut, the fill and
+re-genesis already (§16.1), and what follows says only what each does to
+a configuration and to a run.
+
+*The mechanisms that renumber.* Cuts compose beneath a configuration —
+`Config.chop_chop` — so a validator that pruned twice holds the
+configuration of one that pruned once, exactly as `chop_chop` composes
+them beneath a universe. `truncates_chop_config` puts a single cut into a
+`Stack`, and `stack_chop_config`, `stack_chop_chop_config` and
+`stack_copyFill_chop_config` are the compositions: a validator that
+filled a gap and then pruned twice reads one `Rebased` of the
+configuration's own schedule, so `Stack.safe_and_live` covers the
+composite at a schedule the run itself chose. The core's fill is
+`SkipMsg.skipFill` rather than the record's, which is the one case
+assembled per rule (`stack_core_config`), for the reason `stack_core` is.
+The joiner is generic in the carrier too
+(`joiner_decided_agree_chop`, `joiner_run_decided_agree`), so I5 holds of
+every rule with a record carrier and not only of the core.
+
+*The mechanisms that only add blocks.* A fill and a re-genesis move no
+slot, so a segmented run does not move either: `SegRun.extend` carries
+the configurations, anchors, boundaries and verdicts across unchanged —
+`Persist` moving the decisions to the larger view — and
+`SegRun.extend_ledgerUpto` is `rfl`.
+
+> A recovery or a re-genesis changes nothing a validator has already
+> ordered, even when the schedule is derived from what it ordered.
+
+What does not come free is what the update rule *reads*:
+
+```lean
+def UpdStable (upd : UpdateRule R) : Prop :=
+  ∀ (U U' : R.Universe), Extends R.toDagRule U U' →
+    ∀ (V : R.View U) (V' : R.View U'), R.toDagRule.viewIds V ⊆ R.toDagRule.viewIds V' →
+      ∀ (C : Config Validator) (b : ℕ) (A : BlockId), A ∈ R.ids U →
+        upd C b U' V' A = upd C b U V A
+```
+
+This is `Anchored` (§13.3) across two universes rather than across two
+views of one, and it is asked only at anchors the smaller universe
+already holds, which is where a run ever applies the rule. A score meets
+it through `Score.Stable`, and the case that matters is the reputation
+rule: **a score that reads the anchor's causal history is stable**
+(`Score.stable_of_readsHistory`), because a mechanism that only adds
+blocks leaves the blocks an anchor reaches exactly as they were
+(`historyFrom_congr`). A score reading no DAG at all — the constant one,
+the permuting ones, or one of the committed sequence alone — is stable by
+`Score.stable_of_ignores`, and `constRule` has the rule-level condition
+outright (`updStable_constRule`). So one score discharges this and
+horizon-stability together.
+
+What fails it is a score consulting something an extension *does* change,
+the size of the universe being the plain example: it would install a
+different configuration on a validator that had recovered a crashed peer
+than on one that had not, and the two would fork.
+
+> A garbage collector constrains what a score may read *below* the
+> horizon; a recovery constrains what it may read *about the universe*.
+> A score of the anchor's causal history and the committed sequence
+> satisfies both, and that is what HammerHead's is.
 
 **I6 — the lag bounds the recoverable outage.** A `SkipMsg` requires
 its anchor in the universe, and `chop` retains the anchor exactly when
@@ -8265,7 +8284,7 @@ the horizon — so the statement is about what a validator reaches and not
 only about what exists —
 
 ```lean
-def ProgressStmt (R : LiveRule Validator BlockId Payload) (P : Params)
+def ConfigProgress (R : LiveRule Validator BlockId Payload) (P : Params)
     (upd : UpdateRule R.toBaseRule) (C₀ : Config Validator) (c : ℕ) : Prop :=
   ∀ (U : R.Universe) (V : R.View U) (Rnd N K : ℕ),
     R.toBaseRule.CoversUpto U V N →
@@ -9385,7 +9404,7 @@ every theorem above it vacuous, and vacuity is not otherwise detectable.
 | `Ucrash N`, `ucrashMsg` | `SkipMsg`: a crashed line, the message against it, and the fill (SS7) |
 | `Usun`, `Usk`, `U44`, `U3` | `PartialRun` with a rising count, a skipped slot past the threshold, the real `Good` with the theorems yielding verdicts, and a bare majority under attack (BN3, BN8, BN9, BN10) |
 | `ucrashJump` | `JumpMsg`: the compact core of `ucrashMsg`, elaborating to the same fill (SS11) |
-| `demotePolicy`, `run7` | a genuinely adapting policy and its total runs, at the core's carrier (AL8) |
+| `swapScore`, `segRun` | a score that reassigns from the anchor's history, and the three-segment run whose anchor sits two rounds past its boundary (AL17) |
 | `Uhyb4`, `Uhyb9` | `HybridFaults`, `HonestNoEquiv`: one crash at four validators; the tight hybrid committee (H9) |
 | `UtightA`, `UtightB` | the one-short committee: agreement refuted at every threshold (H10) |
 | `Unemo` | `CrashFaults` at the tight crash committee: three validators, one halted line, every decidable rule settled by `decide` (NN9) |
@@ -9432,11 +9451,13 @@ gap populated, the filled candidate skipped, and `decided_fill_of_persist` appli
 the full view. The jump message is witnessed on the same family (SS11):
 `ucrashJump` carries `ucrashMsg`'s four names and no line, its
 elaboration reproduces the hand-written line (`ucrashJump_line_eq`),
-and the two denotations agree (`ucrashJump_denote_eq`). Adaptive leaders are witnessed on `demotePolicy` (AL8): the
-same DAG under a reassigned leader commits a different block on both
-rules, a skip two slots below moves a later slot's leader off the base
-rotation, and two views' partial runs are constructed and shown
-identical by AL3.
+and the two denotations agree (`ucrashJump_denote_eq`). Adaptive leaders are witnessed on `Usk` (AL17): a three-segment run
+whose first configuration decides as far as an anchor two rounds past
+its own boundary, outputs the boundary round alone, and leaves a block
+decided under that configuration to reach the ledger only from the
+segment whose span contains its round — the separation of §13.1 on
+data rather than as a hypothesis, with `swapScore` supplying
+reassignment that is a function of the DAG.
 The hybrid model is witnessed at both of §14.7's committees (H9), and
 the one-short committee's two attack universes carry the tightness
 refutation (H10). The crash arc is witnessed on `Unemo` (NN9), §15.5's
@@ -9477,8 +9498,8 @@ no errors.
 `Odontoceti.all_decided_below_of_fairRun`, `chain_quality`,
 `committed_of_correct_block`, `decided_fill_of_persist` (SS5) and
 `decided_fill_agree_of_properties` (SS6), `SkipMsg.skipFill_eq_of_core` (SS9)
-and `JumpMsg.denote_eq_of_core` (SS10), `run_agree` (AL3) and
-`run_exists_of_support` (AL5), `Hybrid.hybridLaws` (H6),
+and `JumpMsg.denote_eq_of_core` (SS10), `Adaptive.Agreement.holds` (AL13) and
+`Adaptive.Progress.holds` (AL16), `Hybrid.hybridLaws` (H6),
 `HybridProperties.safety`, `hybrid_bound_necessary` (H10), `Nemo.nemoLaws`
 (NN5), `Nemo.outputAt_agree` (NN6) and
 `Nemo.all_decided_below_of_fairRun` (NN8), and
@@ -9548,15 +9569,17 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `SafeSkip/Basic.lean` | the core's fill as the record's, its self-referencing block valid; production restored |
 | `SafeSkip/Invariance.lean` | conservativity at the rule layer; verdict invariance; agreement across a recovery |
 | `SafeSkip/Jump.lean` | the self-parent function; the derived line; the jump message and its elaboration |
-| `Adaptive/Basic.lean` | epochs; the induced instance |
-| `Adaptive/Policy.lean` | the reassignment policy and its clauses |
-| `Adaptive/Run.lean` | the adaptive run; safety as uniqueness; conservativity; the agreed ledger |
-| `Adaptive/Liveness.lean` | the bounded descent; the fairness clause; existence |
+| `Adaptive/Model/Segment.lean` | the segmented run: decisions to the anchor, output to the boundary |
+| `Adaptive/Headline.lean` | the three theorems at a score, its clauses discharged |
+| `Adaptive/Score/` | what a reputation score owes: anchored, bounded, keeping liveness' clause |
+| `Adaptive/Agreement/`, `Adaptive/Ledger/` | safety for any anchored rule, with no window; the agreed ledger |
+| `Adaptive/Conservativity/`, `Adaptive/Validity/`, `Adaptive/Progress/` | the constant score; validity; liveness with one more configuration |
 | `Properties/Record.lean` | a carrier on the record (`DagRule.OnRecord`), with its invariant and view maps; every mechanism's witnesses, once |
 | `Properties/Arcs/Record.lean` | every verdict cell of the cut, the fill and re-genesis, once, at any carrier on the record |
 | `Common/Record/Invariant.lean` | what an invariant a carrier adds owes the mechanisms (`Invariant.Mechanised`) |
-| `Adaptive/Joiner.lean` | the joiner across a cut: horizon-stability, the schedule transformers commute, agreement at the adaptive schedule |
-| `Integration/AdaptiveMysticeti.lean`, `Integration/AdaptiveOdontoceti.lean` | the two rules as instances of the adaptive mechanism: their runs, agreement and existence as corollaries of the generic theorems |
+| `Barnacle/Chop.lean` | a configuration across a cut: `Config.chop`, its composition, and the schedule half of a truncation at it |
+| `Adaptive/Helpers/Chop.lean` | the joiner across a cut: horizon-stability, and the leaders and verdicts it aligns |
+| `Adaptive/Helpers/Mechanisms.lean` | the arc across every mechanism at any record carrier: the stacks, and what a run and an update rule owe a mechanism that adds blocks |
 | `Hybrid/Faults.lean` | the hybrid model; the derived instance; `HonestNoEquiv`; the counting core |
 | `Hybrid/Rules.lean` | the rules at the admissible interval; the arithmetic core H2–H5 |
 | `Hybrid/Decision.lean` | Hybrid as an anchored rule at threshold `k`; its laws under `HonestNoEquiv` |
@@ -10288,15 +10311,15 @@ reused.
 
 | Label | Statement | Lean |
 |:---|:---|:---|
-| AL1 | the induced instance at any number of leaders per round, and the distinctness clause the policy then owes, at every count a mechanism may reach | `slotsOfKeyed`, `slotsOf`, `slotsOf_base` *(Adaptive/Basic)*, `Adaptive.PickKeyed`, `pickKeyed_one` *(Adaptive/Policy)* |
-| AL2 | the bounded relation; the embedding and the congruence | `AnchoredRule.DecidedWithin`, `AnchoredRule.DecidedWithin.toDecided`, `AnchoredRule.decidedWithin_congr_of_slotRound` *(Anchored/Bounded)*; `decidedWithin_congr` *(Integration/AdaptiveMysticeti)* |
-| AL3 | safety: the fixpoint is unique, unconditionally, for any rule with `Agree` | `partialRun_agree`, `run_agree` *(Adaptive/Run)* |
-| AL4 | conservativity at the constant policy | `Policy.const_run_decided` *(Adaptive/Run)* |
-| AL5 | liveness: the fixpoint exists, one epoch at a time, for any rule with a support satisfying Law 2 | `epoch_closes_of_support`, `exists_partialRun_of_support`, `run_exists_of_support` *(Adaptive/Liveness)* |
-| AL6 | the adaptive ledger is agreed | `run_commitSeq_agree` *(Adaptive/Run)* |
-| AL7 | every rule showing the properties instantiates the mechanism: Mysticeti, Odontoceti, Hydrozoan and Nemo-Nemo, synchronous or reactive | `Adaptive.run_exists_of_support` *(Adaptive/Liveness)* |
-| AL8 | adaptivity on data: the verdict moves with the assignment | `demotePolicy` witnesses *(LeanDagTest/Adaptive/Model)* |
 | AL10 | a verdict is local in the rounds as well as the leaders: every decided slot has a round below which any schedule agreeing on rounds and leaders decides it the same way, and a directly decided slot's is its own round plus a wave | `Properties.exists_roundLocal` *(Properties/Derived/FromBand)*, `AnchoredRule.banded_direct` *(Common/Anchored/Band)*, `Barnacle.cfg_local` *(Barnacle/Helpers/Schedule)* |
+| AL11 | what a reputation score owes: anchored, bounded from `Score.Keeps`, preserving whatever clause liveness names, and the constant score is the constant rule. A score reads the anchor's history **and** the verdicts of the span just closed, and owes nothing for the second | `Score.rule_anchored`, `Score.rule_bounded`, `Score.rule_keeps`, `Score.rule_const`, `Score.holds` *(Adaptive/Score)*, `SegRun.spanOf` *(Adaptive/Model/Segment)*, `Adaptive.spanVdct_agree` *(Adaptive/Helpers/Agreement)* |
+| AL12 | the segmented run: decisions to the anchor, output to the boundary | `Adaptive.SegRun`, `SegRun.rangeLedger`, `SegRun.ledgerUpto` *(Adaptive/Model/Segment)*, `decided_and_not_output`, `round_of_mem_ledgerUpto` *(Adaptive/Helpers/Ledger)* |
+| AL13 | safety: two segmented runs from one genesis configuration agree, for any anchored rule, with no window and no synchrony | `Adaptive.Agreement.SegRunAgreement`, `Adaptive.Agreement.holds` *(Adaptive/Agreement)*, `configAgree`, `anchor_agree` *(Adaptive/Helpers/Agreement)* |
+| AL14 | the segmented ledger: agreed, growing, without repetition | `Adaptive.Ledger.holds` *(Adaptive/Ledger)* |
+| AL15 | conservativity at the constant rule, and validity | `Adaptive.Conservativity.holds` *(Adaptive/Conservativity)*, `Adaptive.Validity.holds` *(Adaptive/Validity)* |
+| AL16 | liveness: one more configuration, and runs of every height under the horizon; runs of heads counted over positions, so a reassigning rule owes a cap on accumulation rather than a permutation | `Adaptive.Progress.holds` *(Adaptive/Progress)*, `Barnacle.headsRun_of_cycle`, `Barnacle.headsRun_of_cycle_weighted`, `Barnacle.headsRun_perm_of_all`, `Barnacle.liveOn_of_permuted_heads` *(Barnacle/Helpers/Heads)* |
+| AL18 | the arc at a reputation score, its clauses discharged: safety and the ledger asking the score for nothing, liveness asking `Score.Keeps` and a preserved clause | `Adaptive.score_safe`, `Adaptive.score_ledger`, `Adaptive.score_live` *(Adaptive/Headline)* |
+| AL17 | the asynchronous segment on data: an anchor two rounds past the boundary, the ledger stopping at it, and two scores that reassign — one off the DAG, one off the committed sequence alone | `segRun`, `swapScore`, `commitScore`, `commitScore_anchored` witnesses *(LeanDagTest/Adaptive/Asynchronous)* |
 
 **Hybrid fault tolerance** (§14):
 
@@ -10397,7 +10420,7 @@ reused.
 | I1 | honest non-equivocation survives truncation and the fill | `honestNoEquiv_chop`, `honestNoEquiv_skipFill` *(Integration/Preservation)* |
 | I2 | coverage survives truncation, at a horizon offset | `synchronisedOn_chop` *(Integration/Coverage)* |
 | I4 | coverage under the fill: refuted for a set including the recovering validator, preserved otherwise, restored above the fill | `not_synchronisedOn_skipFill`, `synchronisedOn_skipFill_of_notMem`, `synchronisedOn_skipFill_above` *(Integration/Coverage)*, from `not_synchronisedOn_of_extends`, `synchronisedOn_of_extends` *(Timed/Extension)* |
-| I5 | the joiner: horizon-stability, and epoch alignment | `HorizonStable`, `joiner_run_decided_agree` *(Adaptive/Joiner)*, `epochOf_add_of_dvd` *(Adaptive/Basic)*, at the core in *Integration/Joiner* |
+| I5 | the joiner across a cut: a configuration chopped, what a score owes pruning, and a reassigning score meeting it at every cut | `Config.chop`, `Config.rebases_chop` *(Barnacle/Chop)*, `Adaptive.HorizonStable`, `Adaptive.joiner_config_agree`, `Adaptive.joiner_leader_agree`, `Adaptive.joiner_decided_agree`, `Adaptive.horizonStable_relabel` *(Adaptive/Helpers/Chop)*, `Adaptive.joiner_decided_agree_chop`, `Adaptive.joiner_run_decided_agree` at any record carrier *(Adaptive/Helpers/Mechanisms)*, at the core in *Integration/Joiner* |
 | I6 | anchor retention, and the lag bounds the outage | `anchor_pruned`, `chopMsg`, `outage_bounded_by_lag` *(Integration/Retention)* |
 | I7 | the headlines at the core: safety across any stack, liveness at the support | `MysticetiProperties.safety`, `MysticetiProperties.liveness`, `stack_core` *(MysticetiProperties, Integration/StackRules)* |
 | I8 | a severed chain cannot restart | `no_blocks_of_no_genesis`, `severed_of_pruned_anchor` *(Integration/Retention)* |
@@ -10412,6 +10435,7 @@ reused.
 | I17 | the budget needs a donor, not the author | `card_novelty_le_of_donor` *(Integration/Margin)* |
 | I18 | severance costs liveness margin: at most `f` at once | `notMem_of_no_blocks`, `card_severed_le` *(Integration/Margin)* |
 | I19 | a common-core target makes the fill transmission-free | `CommonAt`, `exists_commonAt`, `fill_refs_available` *(Integration/CommonTarget)* |
+| I20 | the segmented arc across every mechanism, at any record carrier: cuts compose beneath a configuration and stack with the fill; a fill and a re-genesis carry a whole run across and leave its ledger alone, under one obligation on the update rule | `Config.chop_chop` *(Barnacle/Chop)*, `Adaptive.truncates_chop_config`, `stack_chop_config`, `stack_chop_chop_config`, `stack_copyFill_chop_config`, `Adaptive.UpdStable`, `Adaptive.Score.Stable`, `Adaptive.updStable_rule`, `Adaptive.updStable_constRule`, `Score.stable_of_readsHistory`, `Score.stable_of_ignores`, `Adaptive.SegRun.extend`, `Adaptive.SegRun.extend_ledgerUpto` *(Adaptive/Helpers/Mechanisms)*, `historyFrom_congr` *(Common/Causality)*, `stack_core_config` *(Integration/Joiner)* |
 
 **FinWhale** (§20):
 
@@ -10437,7 +10461,7 @@ reused.
 | Label | Statement | Lean |
 |:---|:---|:---|
 | BN2 | the window is agreed: a view holding the anchor holds its history, and two views restrict it to one set | `Barnacle.Window.holds` *(Barnacle/Window/Proof)* |
-| BN3 | the configuration sequence is agreed, for any update rule: two runs to any heights agree on every configuration and verdict of their common ranges | `Barnacle.Agreement.holds` *(Barnacle/Agreement/Proof)* |
+| BN3 | the configuration sequence is agreed, for any update rule: two runs to any heights agree on every configuration and verdict of their common ranges, and so on the verdict function the rule is handed | `Barnacle.Agreement.holds` *(Barnacle/Agreement/Proof)*, `spanVdct`, `PartialRun.spanOf` *(Barnacle/Model)*, `spanVdct_agree` *(Barnacle/Helpers/Agreement)* |
 | BN5 | the ledger is agreed as far as both runs reach, grows by prefixes, and holds each block once | `Barnacle.Ledger.holds` *(Barnacle/Ledger/Proof)* |
 | BN6 | under the constant rule the count never moves and every verdict is a one-leader verdict | `Barnacle.Conservativity.holds` *(Barnacle/Conservativity/Proof)* |
 | BN7 | the AIMD rule keeps its count in range, steps as the paper says, is the integer test, and is anchored — it does not read the view, so two validators take one step | `Barnacle.Aimd.holds` *(Barnacle/Aimd/Proof)* |
@@ -10493,7 +10517,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 315 definitions and structures the report names, in
+The 325 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -11427,18 +11451,6 @@ abbrev Decided (U : BlockUniverse Validator BlockId Payload) (V : View Validator
 
 **The decision relation**: the anchored relation at Odontoceti's data.
 
-#### `DecidedWithin`
-
-*abbrev, `Odontoceti.Decision.lean`*
-
-```lean
-abbrev DecidedWithin (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (B : ℕ) : ℕ → Option BlockId → Prop :=
-  (odontocetiAnchored Validator BlockId Payload).DecidedWithin (S := S) U V B
-```
-
-**The bounded relation**, at Odontoceti's data.
-
 ### The reactive schedule
 
 #### `ReactivePace`
@@ -11939,137 +11951,6 @@ def _root_.LeanDag.Faults5.toHybrid [F : Faults5 Validator] :
 
 **Every pure-Byzantine committee is a crash-free hybrid committee.** The generalization direction of H8.
 
-### Adaptive leaders: the schedule as a fixpoint
-
-#### `slotsOfKeyed`
-
-*def, `Adaptive.Basic.lean`*
-
-```lean
-@[reducible] def slotsOfKeyed (a : ℕ → Validator)
-    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
-    Slots Validator where
-  slotRound := S.slotRound
-  leader := a
-  mono := S.mono
-  unbounded := S.unbounded
-  keyed := fun _ _ h => hk _ _ (congrArg Prod.fst h) (congrArg Prod.snd h)
-```
-
-**The induced instance, at any base schedule.** `Slots.keyed` asks that distinct slots differ in round or in leader; under one leader per round the rounds already separate them, which is `slotsOf` below. What the law actually needs is weaker and survives multiple leaders: distinct slots of *one* round get distinct validators.
-
-#### `slotsOf`
-
-*def, `Adaptive.Basic.lean`*
-
-```lean
-@[reducible] def slotsOf (hinj : Function.Injective S.slotRound) (a : ℕ → Validator) :
-    Slots Validator where
-  slotRound := S.slotRound
-  leader := a
-  mono := S.mono
-  unbounded := S.unbounded
-  keyed := fun _ _ h => hinj (congrArg Prod.fst h)
-```
-
-The `Slots` instance a leader assignment induces: the base round structure, the given leaders. `keyed` is where one-leader-per-round enters: with `slotRound` injective, distinct slots differ in round whatever the assignment names.
-
-#### `Policy`
-
-*structure, `Adaptive.Policy.lean`*
-
-```lean
-structure Policy (R : DagRule Validator BlockId Payload) [S : Slots Validator] where
-  /-- The epoch length, in slots. -/
-  W : ℕ
-  W_pos : 0 < W
-  /-- The reassignment rule: from the universe, the validator's view of
-  it and a verdict function, the leader of each slot. -/
-  pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator
-  /-- **The schedule law the reassignment owes.** `Slots.keyed` asks that
-  distinct slots differ in round or in leader. Under one leader per round
-  the rounds separate them whatever the policy does; under multiple
-  leaders a reassignment could collide two slots of one round onto one
-  validator, so the clause is genuinely owed — the obligation
-  `adaptive-leaders.md` §2 recorded and deferred. -/
-  keyed : ∀ (U : R.Universe) (V : R.View U) (v : ℕ → Option BlockId) (k₁ k₂ : ℕ),
-    S.slotRound k₁ = S.slotRound k₂ → pick U V v k₁ = pick U V v k₂ → k₁ = k₂
-  /-- **Adaptedness.** The leader of slot `k` reads the verdicts of
-  epochs `≤ epochOf k − 2` and nothing else — not the view either. -/
-  adapted : ∀ (U : R.Universe) (V₁ V₂ : R.View U) v w k,
-    (∀ j, epochOf W j + 2 ≤ epochOf W k → v j = w j) →
-    pick U V₁ v k = pick U V₂ w k
-  /-- Epochs `0` and `1` run the base schedule. -/
-  base_prefix : ∀ (U : R.Universe) (V : R.View U) v k, epochOf W k < 2 →
-    pick U V v k = S.leader k
-```
-
-A Hammerhead-style reassignment policy over a carrier: epoch length, the rule, and the clauses it owes. Fairness is deliberately not here: safety must hold for arbitrary, even adversarial, adapted policies.
-
-#### `PartialRun`
-
-*structure, `Adaptive.Run.lean`*
-
-```lean
-structure PartialRun (P : Policy R) (U : R.Universe) (V : R.View U) (E : ℕ) where
-  /-- The leader assignment. -/
-  assign : ℕ → Validator
-  /-- The verdicts. -/
-  vdct : ℕ → Option BlockId
-  /-- **The assignment is a lawful schedule.** Under one leader per
-  round the rounds separate slots whatever the assignment names, and
-  this is free; under multiple leaders a run must exhibit an assignment
-  that does not collide two slots of one round onto one validator. -/
-  keyed : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → assign k₁ = assign k₂ → k₁ = k₂
-  /-- Every slot of a closed epoch is decided inside its window: anchors
-  strictly below the start of epoch `e + 2`. -/
-  closed : ∀ k, epochOf P.W k < E →
-    DecidedBelow R (slotsOfKeyed assign keyed) (P.W * (epochOf P.W k + 2)) V k (vdct k)
-  /-- The assignment is the policy's, computed on this view, as far as
-  the derivations read it. -/
-  coherent : ∀ m, epochOf P.W m < E + 1 → assign m = P.pick U V vdct m
-```
-
-A run closed up to epoch height `E`: verdicts derived for every slot of epochs `< E`, the schedule coherent as far as those derivations read it (epochs `< E + 1`). What a validator holds mid-execution.
-
-#### `Run`
-
-*structure, `Adaptive.Run.lean`*
-
-```lean
-structure Run (P : Policy R) (U : R.Universe) (V : R.View U) where
-  /-- The leader assignment. -/
-  assign : ℕ → Validator
-  /-- The verdicts. -/
-  vdct : ℕ → Option BlockId
-  /-- **The assignment is a lawful schedule.** Under one leader per
-  round the rounds separate slots whatever the assignment names, and
-  this is free; under multiple leaders a run must exhibit an assignment
-  that does not collide two slots of one round onto one validator. -/
-  keyed : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → assign k₁ = assign k₂ → k₁ = k₂
-  /-- Every slot is decided inside its epoch window. -/
-  closed : ∀ k, DecidedBelow R (slotsOfKeyed assign keyed)
-    (P.W * (epochOf P.W k + 2)) V k (vdct k)
-  /-- The assignment is the policy's, computed on this view, everywhere. -/
-  coherent : ∀ m, assign m = P.pick U V vdct m
-```
-
-A total run: the adaptive fixpoint itself.
-
-#### `PlacesRuns`
-
-*def, `Adaptive.Liveness.lean`*
-
-```lean
-def PlacesRuns {R : DagRule Validator BlockId Payload} (P : Policy R)
-    (T : Finset Validator) (c : ℕ) : Prop :=
-  ∀ (U : R.Universe) (V : R.View U) (v : ℕ → Option BlockId) (e : ℕ),
-    ∃ b, P.W * (e + 1) ≤ b ∧ b + c ≤ P.W * (e + 2) ∧
-      ∀ i, i < c → P.pick U V v (b + i) ∈ T
-```
-
-**The adaptive fairness clause.** Every assignment the policy can emit places, in each epoch past the base prefix, a run of `c` consecutive `T`-led slots. The clause liveness prices and safety never sees: `run_agree` holds for policies that violate it.
-
 ### Nemo-Nemo: crash-fault consensus in two rounds
 
 #### `majority`
@@ -12354,17 +12235,6 @@ def maxAnchor (U : BlockUniverse Validator BlockId Payload) (s : Finset BlockId)
 ```
 
 **`maxAnchor(s)`**: the anchors of `s` at the highest round they reach. A set, as L21 reads it.
-
-#### `pick`
-
-*def, `BlackMarlin.Model.Descent.lean`*
-
-```lean
-def pick (s : Finset BlockId) : Option BlockId :=
-  if h : s.Nonempty then some (s.min' h) else none
-```
-
-The `≤`-least member of a set, as an `Option`.
 
 #### `flushRecord`
 
@@ -12912,14 +12782,40 @@ structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
 
 **The laws of a base rule.** The two view laws pin the view fields; the other three are the properties of `docs/target-properties.md` at the rule's carrier: `agree` is the safety half of A4, and the two candidate properties tie the direct predicate to the relation, which makes the window count a count of verdicts. A2 is carried by `BaseRule` itself, as `viewSound` and `viewComplete`; the liveness half of A4 is `LiveRule.LiveOn`.
 
+#### `UpdateRule`
+
+*abbrev, `Barnacle.Model.Rule.lean`*
+
+```lean
+abbrev UpdateRule (R : BaseRule Validator BlockId Payload) : Type :=
+  Config Validator → ℕ → (U : R.Universe) → R.View U → (ℕ → Option BlockId) → BlockId →
+    Config Validator × ℕ
+```
+
+**An update rule**: from the current configuration and back-off, the universe, the verdicts of the range just closed and the anchor block, the next configuration and back-off. Safety is stated for every such function (`barnacle.md` §1); the paper's AIMD rule is one instance (`Model/Window.lean`), and a reputation rule reading the committed leaders of the range is another.
+
+The verdicts are an *argument* rather than something the rule digs out of the view, and that is the whole reason a rule may read them: a run hands over `spanVdct`, which two validators agree on before either applies the rule, so reading it costs no hypothesis. A rule deriving verdicts from its own view would be reading a subjective object and `Anchored` would fail.
+
+#### `spanVdct`
+
+*def, `Barnacle.Model.Rule.lean`*
+
+```lean
+def spanVdct (C : Config Validator) (lo hi : ℕ) (v : ℕ → Option BlockId) :
+    ℕ → Option BlockId :=
+  fun κ => if lo < C.roundOf κ ∧ C.roundOf κ ≤ hi then v κ else none
+```
+
+**The verdicts of a closed range**, and nothing else: slot `κ`'s verdict where the round of `κ` lies in `(lo, hi]`, and `none` outside. What a run hands an update rule. Junking the outside is what makes the object agreed — a run constrains its verdicts only inside the range it closed.
+
 #### `Anchored`
 
 *def, `Barnacle.Model.Rule.lean`*
 
 ```lean
 def Anchored (R : BaseRule Validator BlockId Payload) (upd : UpdateRule R) : Prop :=
-  ∀ (U : R.Universe) (V₁ V₂ : R.View U) (C : Config Validator) (b : ℕ) (A : BlockId),
-    upd C b U V₁ A = upd C b U V₂ A
+  ∀ (U : R.Universe) (V₁ V₂ : R.View U) (C : Config Validator) (b : ℕ)
+    (v : ℕ → Option BlockId) (A : BlockId), upd C b U V₁ v A = upd C b U V₂ v A
 ```
 
 **A rule a validator can run without disagreeing.** The step depends on the configuration, the back-off and the anchor, and on the *view* only through what every view holding the anchor shares.
@@ -12969,6 +12865,17 @@ def expected (R : BaseRule Validator BlockId Payload) (C : Config Validator) (r 
 
 The upper bound is written `r + 1 − waveLength` rather than `r − waveLength + 1`: below a wave from genesis there is no decided round, and the second form truncates to `1` and counts round `0`.
 
+#### `constRule`
+
+*def, `Barnacle.Model.Window.lean`*
+
+```lean
+def constRule (R : BaseRule Validator BlockId Payload) : UpdateRule R :=
+  fun C b _ _ _ _ => (C, b)
+```
+
+The constant rule: reconfigure nothing. The conservativity anchor — under it the arc collapses onto the base development at one leader.
+
 #### `PartialRun`
 
 *structure, `Barnacle.Model.Run.lean`*
@@ -13007,12 +12914,53 @@ structure PartialRun (R : BaseRule Validator BlockId Payload) (P : Params)
   start_succ : ∀ k, k < K → start (k + 1) = (cfg k).roundOf (anchor k)
   /-- The next configuration is the rule's. -/
   update : ∀ k, k < K → ∀ A, vdct k (anchor k) = some A →
-    (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V A
+    (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V
+      (spanVdct (cfg k) (start k) (start (k + 1)) (vdct k)) A
 ```
 
 **A run closed up to height `K`.** Configurations `0, …, K` are determined, and the ranges of configurations below `K` are decided in full.
 
+**The ranges partition the rounds, and the schedule above a range names anchors only.** Configuration `k` governs the rounds `(start k, start (k + 1)]`, and `start (k + 1)` is the anchor's own round, so consecutive ranges abut and no round belongs to two of them. `rangeLedger` reads exactly the range, and `round_of_mem_ledgerUpto` says the ledger to any height stops at that height's start round.
+
+`(cfg k).sched` is nevertheless total, and names a leader at every round above the range as well as inside it. That is deliberate and it is what the algorithm does: a validator settles configuration `k`'s range while `cfg k` is still its active schedule at every round, reading slots above the range as anchors when an indirect decision needs them, and only then finds the anchor that closes the range and switches. So the extension is the schedule in force when those derivations are performed, and the anchors it names are agreed for the same reason the range's verdicts are. What is never done is to *output* a slot above the range under `cfg k`; that slot belongs to configuration `k + 1`'s range and is decided again, under `cfg (k + 1)`, for the ledger.
+
 `closed` is the paper's `TryDecide`: every slot of the range — the rounds after `start k`, through the anchor's round `start (k + 1)` — decided against the configuration's schedule. `anchor_commits` and `anchor_least` are `TryCommit`'s trigger: the anchor is the least committed slot whose round exceeds `start k + (cfg k).interval`. `update` is `UpdateLeaders`, for an arbitrary rule. `bounds` is a clause of the run because the rule is arbitrary; for the AIMD rule it is a theorem.
+
+#### `PartialRun.spanOf`
+
+*def, `Barnacle.Model.Run.lean`*
+
+```lean
+def PartialRun.spanOf {K : ℕ} (Rn : PartialRun R P upd C₀ U V K) (k : ℕ) :
+    ℕ → Option BlockId :=
+  spanVdct (Rn.cfg k) (Rn.start k) (Rn.start (k + 1)) (Rn.vdct k)
+```
+
+**The verdicts configuration `k`'s update rule is handed**: the range it decided, `(start k, start (k + 1)]`, and `none` outside. The `update` field names this function; `spanVdct_agree` is why two validators name one function.
+
+#### `ledgerOf`
+
+*def, `Barnacle.Model.Run.lean`*
+
+```lean
+def ledgerOf (v : ℕ → Option BlockId) (lo hi : ℕ) : List BlockId :=
+  (List.range' lo (hi - lo)).filterMap v
+```
+
+The committed blocks of the slots `[lo, hi)`, in slot order.
+
+#### `PartialRun.rangeLedger`
+
+*def, `Barnacle.Model.Run.lean`*
+
+```lean
+def PartialRun.rangeLedger {K : ℕ} (Rn : PartialRun R P upd C₀ U V K) (k : ℕ) :
+    List BlockId :=
+  ledgerOf (Rn.vdct k) ((Rn.cfg k).cum (Rn.start k + 1))
+    ((Rn.cfg k).cum (Rn.start (k + 1) + 1))
+```
+
+The ledger of configuration `k`: its range's committed blocks, from the first slot after `start k` to the last slot of round `start (k + 1)`. Meaningful for the closed configurations, `k < K`.
 
 #### `LiveRule.LiveOn`
 
@@ -13089,6 +13037,18 @@ def ofAnchoredVia (R : AnchoredRule Validator BlockId Payload P honest) {X : Typ
 ```
 
 **An anchored rule read through a projection, as a base rule**: the universes are any type projecting to records.
+
+#### `RuleAnchored`
+
+*def, `Barnacle.Aimd.Statement.lean`*
+
+```lean
+def RuleAnchored (R : BaseRule Validator BlockId Payload) (P : Params)
+    (lead : ℕ → ℕ → Validator) (hl : LeadKeyed lead P.maxLeaders) : Prop :=
+  Anchored R (rule R P lead hl)
+```
+
+**BN7e, the rule is anchored.** It does not read the view, so two validators holding the anchor take the same step — the condition BN3 asks of an update rule.
 
 ### Hydrozoan: the dual-path rule under hybrid faults
 
@@ -14060,19 +14020,204 @@ def GroundedProgress : Prop :=
 
 ### Not otherwise grouped
 
-#### `HorizonStable`
+#### `Score.Stable`
 
-*def, `Adaptive.Joiner.lean`*
+*def, `Adaptive.Helpers.Mechanisms.lean`*
 
 ```lean
-def HorizonStable (P : Policy R) (G d : ℕ)
-    (pick' : (U' : R.Universe) → R.View U' → (ℕ → Option BlockId) → ℕ → Validator) : Prop :=
-  ∀ (U U' : R.Universe), RebasedAbove R U U' G G →
-    ∀ (V : R.View U) (V' : R.View U') (v : ℕ → Option BlockId) (k : ℕ),
-      pick' U' V' (fun m => v (d + m)) k = P.pick U V v (d + k)
+def Score.Stable (score : Score R) : Prop :=
+  ∀ (U U' : R.Universe) (he : Extends R.toDagRule U U') (A : BlockId)
+    (hA : A ∈ R.ids U) (v : ℕ → Option BlockId) (C : Config Validator),
+      score U' (R.historyView U' A (he.subset A hA)) v C = score U (R.historyView U A hA) v C
 ```
 
-**Horizon-stability**: a validator that pruned below `G` and re-indexed from `d` still computes the leaders everyone else is using.
+**What a score owes the same mechanisms.** On the anchor's history, read in a universe and in an extension of it, the score returns one configuration. The counterpart of `HorizonStable` for the mechanisms that add blocks rather than remove them, and the reason it is an obligation and not a theorem is that the two histories are views of different universes: `Extends` makes them hold the same blocks, and a score reading only what a block says has the equality, but the type does not force it.
+
+#### `SegRun.extend`
+
+*def, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+def SegRun.extend {U U' : R.Universe} {V : R.View U} {V' : R.View U'} {K : ℕ}
+    (hp : Persist R.toDagRule) (hc : CommitsCandidate R.toDagRule)
+    (he : Extends R.toDagRule U U')
+    (hsub : R.toDagRule.viewIds V ⊆ R.toDagRule.viewIds V') (hu : UpdStable upd)
+    (Rn : SegRun R P upd C₀ U V K) : SegRun R P upd C₀ U' V' K where
+  start := Rn.start
+  cfg := Rn.cfg
+  backoff := Rn.backoff
+  anchor := Rn.anchor
+  vdct := Rn.vdct
+  init := Rn.init
+  bounds := Rn.bounds
+  closed := fun k hk κ h1 h2 => hp _ U U' he V V' hsub _ _ (Rn.closed k hk κ h1 h2)
+  anchor_commits := Rn.anchor_commits
+  anchor_least := Rn.anchor_least
+  start_succ := Rn.start_succ
+  update := fun k hk A hA => by
+    have hstart : Rn.start k < (Rn.cfg k).roundOf (Rn.anchor k) := by
+      have := Rn.start_succ k hk
+      have := (Rn.anchor_commits k hk).2
+      omega
+    have hd := Rn.closed k hk (Rn.anchor k) hstart le_rfl
+    rw [hA] at hd
+    rw [hu U U' he V V' hsub (Rn.cfg k) (Rn.backoff k) _ A (hc.mem hd)]
+    exact Rn.update k hk A hA
+```
+
+**A segmented run survives any mechanism that only adds blocks.** The configurations, anchors and verdicts are carried over unchanged — only the view the decisions are read on moves — so the run on the extended universe is the same run.
+
+#### `SegRun.zero`
+
+*def, `Adaptive.Helpers.Progress.lean`*
+
+```lean
+def SegRun.zero (R : BaseRule Validator BlockId Payload) (P : Params)
+    (upd : UpdateRule R) (C₀ : Config Validator) (h₀ : C₀.InBounds P)
+    (U : R.Universe) (V : R.View U) :
+    SegRun R P upd C₀ U V 0 where
+  start := fun _ => 0
+  cfg := fun _ => C₀
+  backoff := fun _ => 0
+  anchor := fun _ => 0
+  vdct := fun _ _ => none
+  init := ⟨rfl, rfl, rfl⟩
+  bounds := fun _ => h₀
+  closed := fun _ h => absurd h (Nat.not_lt_zero _)
+  anchor_commits := fun _ h => absurd h (Nat.not_lt_zero _)
+  anchor_least := fun _ h => absurd h (Nat.not_lt_zero _)
+  start_succ := fun _ h => absurd h (Nat.not_lt_zero _)
+  update := fun _ h => absurd h (Nat.not_lt_zero _)
+```
+
+The height-`0` run: `init` only.
+
+#### `SegRun.spanOf`
+
+*def, `Adaptive.Model.Segment.lean`*
+
+```lean
+def SegRun.spanOf {K : ℕ} (Rn : SegRun R P upd C₀ U V K) (k : ℕ) : ℕ → Option BlockId :=
+  spanVdct (Rn.cfg k) (Rn.start k) (Rn.start (k + 1)) (Rn.vdct k)
+```
+
+**The verdicts configuration `k`'s update rule is handed**: exactly what it *output*, `(start k, start (k + 1)]`, and `none` outside.
+
+Not the whole span it decided. A configuration decides past its boundary to find its anchor, and those verdicts are discarded — the rounds are decided again under configuration `k + 1`, against a different schedule, and it is the later derivation that reaches the ledger. A score reading them would reconfigure on a derivation the system throws away, and on a window whose top is the anchor's round and so moves with the network. The boundary is fixed before any commit, so this window is too.
+
+#### `SegRun.rangeLedger`
+
+*def, `Adaptive.Model.Segment.lean`*
+
+```lean
+def SegRun.rangeLedger {K : ℕ} (Rn : SegRun R P upd C₀ U V K) (k : ℕ) : List BlockId :=
+  ledgerOf (Rn.vdct k) ((Rn.cfg k).cum (Rn.start k + 1))
+    ((Rn.cfg k).cum (Rn.start (k + 1) + 1))
+```
+
+**The output of configuration `k`**: the committed blocks of the rounds it governs, `(start k, start (k + 1)]`, and not of the rounds between its boundary and its anchor. Those are decided again under configuration `k + 1`.
+
+#### `SegRun.ledgerUpto`
+
+*def, `Adaptive.Model.Segment.lean`*
+
+```lean
+def SegRun.ledgerUpto {K : ℕ} (Rn : SegRun R P upd C₀ U V K) (K' : ℕ) : List BlockId :=
+  (List.range K').flatMap Rn.rangeLedger
+```
+
+The ledger through configuration `K' − 1`.
+
+#### `Score.Keeps`
+
+*def, `Adaptive.Score.Rule.lean`*
+
+```lean
+def Score.Keeps (score : Score R) : Prop :=
+  ∀ (U : R.Universe) (V : R.View U) (v : ℕ → Option BlockId) (C : Config Validator),
+    (score U V v C).slotsAt = C.slotsAt ∧ (score U V v C).interval = C.interval
+```
+
+**What a score owes.** It changes who leads and leaves the shape alone: the same slots in every round, and the same interval to the next reconfiguration. Hammerhead's rule qualifies — it swaps validators between schedule positions — and an Aimd-style rule, which moves the widths, does not.
+
+#### `Score.permute`
+
+*def, `Adaptive.Score.Rule.lean`*
+
+```lean
+def Score.permute (σ : Equiv.Perm Validator) : Score R :=
+  fun _ _ _ C =>
+    { slotsAt := C.slotsAt
+      slotsAt_pos := C.slotsAt_pos
+      lead := fun r i => σ (C.lead r i)
+      keyed := fun r i j hi hj h => C.keyed r i j hi hj (σ.injective h)
+      interval := C.interval }
+```
+
+**A permuting score**: relabel who leads by `σ`, leaving the widths and the interval where they were. The simplest reassignment there is, and the case D22 takes first — `Barnacle.headsRun_perm` says a permuted schedule keeps runs of heads at the same gap, so liveness follows for the whole family at once. A score that reads the anchor's history and chooses which permutation to apply is adaptive and still of this family.
+
+#### `RuleAnchored`
+
+*def, `Adaptive.Score.Statement.lean`*
+
+```lean
+def RuleAnchored (R : BaseRule Validator BlockId Payload) (score : Score R) : Prop :=
+  Anchored R (rule score)
+```
+
+**AL11a, the rule is anchored.**
+
+#### `RuleBounded`
+
+*def, `Adaptive.Score.Statement.lean`*
+
+```lean
+def RuleBounded (R : BaseRule Validator BlockId Payload) (P : Params)
+    (score : Score R) : Prop :=
+  score.Keeps → UpdBounded P (rule score)
+```
+
+**AL11b, the rule keeps a configuration within the parameters**, from `Score.Keeps` and nothing else.
+
+#### `RulePreserves`
+
+*def, `Adaptive.Score.Statement.lean`*
+
+```lean
+def RulePreserves (R : BaseRule Validator BlockId Payload) (score : Score R)
+    (Q : Config Validator → Prop) : Prop :=
+  (∀ (U : R.Universe) (V : R.View U) (v : ℕ → Option BlockId) (C : Config Validator),
+    Q C → Q (score U V v C)) →
+    UpdKeeps (rule score) Q
+```
+
+**AL11c, the rule keeps what the score keeps.**
+
+#### `ConstScoreIsConstRule`
+
+*def, `Adaptive.Score.Statement.lean`*
+
+```lean
+def ConstScoreIsConstRule (R : BaseRule Validator BlockId Payload) : Prop :=
+  rule (Score.const R) = constRule R
+```
+
+**AL11d, the constant score is the constant rule.**
+
+#### `chop`
+
+*def, `Barnacle.Chop.lean`*
+
+```lean
+def chop : Config Validator where
+  slotsAt := fun r => C.slotsAt (G + r)
+  slotsAt_pos := fun r => C.slotsAt_pos (G + r)
+  lead := fun r i => C.lead (G + r) i
+  keyed := fun r i j hi hj h => C.keyed (G + r) i j hi hj h
+  interval := C.interval
+```
+
+**A configuration with its first `G` rounds dropped.** Round `r` of the result is round `G + r` of the original, with the same width and the same leaders; the interval is unchanged.
 
 #### `Config`
 
@@ -14095,6 +14240,16 @@ structure Config (Validator : Type) where
 ```
 
 **A configuration.** The schedule its rounds run on, given by the slots each round holds and the leader of each place, and the rounds it runs before the next reconfiguration is due.
+
+#### `cum`
+
+*def, `Barnacle.Config.lean`*
+
+```lean
+def cum (r : ℕ) : ℕ := ∑ r' ∈ Finset.range r, C.slotsAt r'
+```
+
+The slots at rounds below `r`, so `cum r` is the first slot of round `r`.
 
 #### `Config.uniform`
 
@@ -14161,38 +14316,6 @@ abbrev toDagRuleOn (I : BlockRecord Validator BlockId Payload P honest → Prop)
 ```
 
 **An anchored rule under an invariant, as a carrier**: the records satisfying `I` as universes.
-
-#### `DecidedWithin`
-
-*inductive, `Common.Anchored.Bounded.lean`*
-
-```lean
-inductive DecidedWithin (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
-    (B : ℕ) : ℕ → Option BlockId → Prop
-  /-- The direct rule commits a candidate outright. -/
-  | directCommit {k : ℕ} {L : BlockId} :
-      k < B → IsLeaderBlock U k L → R.Commit U V L (S.slotRound k) →
-      DecidedWithin U V B k (some L)
-  /-- The direct rule skips the slot. -/
-  | directSkip {k : ℕ} :
-      k < B → R.Skip U V S k → DecidedWithin U V B k none
-  /-- Anchored below the bound, the tie-break's choice at the first
-  nonempty rung is committed. -/
-  | indirectCommit {k j : ℕ} {A L : BlockId} {i : ℕ} :
-      k < j → j < B → R.Eligible k j → DecidedWithin U V B j (some A) →
-      (∀ m, k < m → m < j → R.Eligible k m → DecidedWithin U V B m none) →
-      i < R.rungs → (∀ i', i' < i → R.RungEmpty U A i' k) →
-      IsLeaderBlock U k L → R.Link i U A L S k → R.Least U A i k L →
-      DecidedWithin U V B k (some L)
-  /-- Anchored below the bound, every rung is empty. -/
-  | indirectSkip {k j : ℕ} {A : BlockId} :
-      k < j → j < B → R.Eligible k j → DecidedWithin U V B j (some A) →
-      (∀ m, k < m → m < j → R.Eligible k m → DecidedWithin U V B m none) →
-      (∀ i, i < R.rungs → R.RungEmpty U A i k) →
-      DecidedWithin U V B k none
-```
-
-**The bounded relation**: `Decided`, with every slot the derivation mentions strictly below `B`.
 
 #### `EligibleAt`
 
@@ -15273,18 +15396,6 @@ def mysticetiRule : DagRule Validator BlockId Payload :=
 
 **The core rule as a carrier.**
 
-#### `DecidedWithin`
-
-*abbrev, `Mysticeti.Properties.lean`*
-
-```lean
-abbrev DecidedWithin (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) (B : ℕ) : ℕ → Option BlockId → Prop :=
-  (coreAnchored Validator BlockId Payload).DecidedWithin (S := S) U V B
-```
-
-**The bounded decision relation**, at the core.
-
 #### `certLive`
 
 *def, `Mysticeti.Properties.lean`*
@@ -15966,7 +16077,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 474 theorems the body or Appendix A names, each
+The 492 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -16068,6 +16179,19 @@ theorem round_le_of_reaches (C : CausalStructure blk ids)
 ```
 
 **Causal history runs downward in rounds.**
+
+#### `historyFrom_congr`
+
+*theorem, `Common.Causality.lean`*
+
+```lean
+theorem historyFrom_congr {blk blk' : BlockId → Block Validator BlockId Payload}
+    {ids : Finset BlockId} (hcl : ∀ i ∈ ids, ∀ j ∈ (blk i).refs, j ∈ ids)
+    (hb : ∀ i ∈ ids, blk i = blk' i) {b : BlockId} (hbi : b ∈ ids) :
+    historyFrom blk b = historyFrom blk' b
+```
+
+**And so is the causal history itself.**
 
 #### `BlockRecord.causal`
 
@@ -17915,39 +18039,39 @@ theorem synchronisedOn_chop {T : Finset Validator} {Rs R' : ℕ}
 
 **Synchrony survives the cut, from the rebase** (I2).
 
-#### `slotsChop_slotsOf_eq`
+#### `stack_core_config`
 
 *theorem, `Integration.Joiner.lean`*
 
 ```lean
-theorem slotsChop_slotsOf_eq (hd : G ≤ S.slotRound d)
-    (hinj : Function.Injective S.slotRound) (a : ℕ → Validator)
-    (hd' : G ≤ (slotsOf hinj a).slotRound d) :
-    (slotsOf hinj a).chop G d hd'
-      = slotsOf (S := S.chop G d hd) (injective_slotRound_chop hd hinj)
-          (fun m => a (d + m))
+theorem stack_core_config (sk : SkipMsg U) (C : Config Validator) :
+    Stack (MysticetiProperties.mysticetiRule (Payload := Payload)) U C.sched
+      (chop sk.skipFill G) (C.chop G).sched G (max (sk.r + 1) G) (C.cum G)
 ```
 
-**And as schedules.** Both sides are rebases of `slotsOf hinj a` by the same offset from the same base slot, so `Rebases.unique` would settle it; at the core the two constructions are definitionally equal.
+**The core's recovery and its horizon, under a configuration.** A validator that filled a crashed peer's gap and then pruned below round `G` reads one `Rebased` of the configuration's own schedule, so `Stack.safe_and_live` covers the composite at an adaptive schedule. The core's fill is `SkipMsg.skipFill`, which is why this is not `Adaptive.stack_copyFill_chop_config`.
 
 #### `joiner_run_decided_agree`
 
 *theorem, `Integration.Joiner.lean`*
 
 ```lean
-theorem joiner_run_decided_agree (hd : G ≤ S.slotRound d)
-    (hs : HorizonStable P G d pick')
-    {V : View Validator BlockId Payload U} (R : Adaptive.Run P U V)
-    (V' : View Validator BlockId Payload (chop U G))
+theorem joiner_run_decided_agree
+    {score : (U : BlockUniverse Validator BlockId Payload) →
+      View Validator BlockId Payload U → Config Validator → Config Validator}
+    (hs : Adaptive.HorizonStable
+      (R := MysticetiProperties.mysticetiRule (Payload := Payload)) score G)
+    (C : Config Validator)
+    {V : View Validator BlockId Payload U}
+    {V' : View Validator BlockId Payload (chop U G)}
+    (hv : ViewAgreeAbove (MysticetiProperties.mysticetiRule (Payload := Payload)) V V' G)
     {W : View Validator BlockId Payload (chop U G)} {k : ℕ} {w v : Option BlockId}
-    (hW : Decided (S := slotsOfKeyed (S := S.chop G d hd) (fun m => R.assign (d + m))
-            (Properties.Rebases.keyed (Validator := Validator)
-              (MysticetiProperties.truncates_chop (U := U) (G := G) hd).toRebases R.keyed))
-          (chop U G) W k w)
-    (hV : Decided (S := slotsOfKeyed R.assign R.keyed) U V (d + k) v) : w = v
+    (hW : Decided (S := (score (chop U G) V' (C.chop G)).sched) (chop U G) W k w)
+    (hV : Decided (S := (score U V C).sched) U V ((score U V C).cum G + k) v) :
+    w = v
 ```
 
-**I5, whole.** A joiner that computed its own schedule from its own truncated view, under a horizon-stable rule, agrees with the network's run on every shared slot: *pruning does not split the ledger, even when the schedule is derived from it.*
+**I5, whole, at the core**: a joiner that recomputed its configuration from its own truncated view, under a horizon-stable score, runs the network's leaders and derives the network's verdict at every slot both hold.
 
 #### `anchor_pruned`
 
@@ -18460,173 +18584,6 @@ theorem toHybrid_toFaults [F : Faults5 Validator] :
 ```
 
 The two derived instances are equal, so a block universe over the `Faults5` development *is* one over its crash-free hybrid reading, with no transport.
-
-### Adaptive leaders: the schedule as a fixpoint
-
-#### `epochOf_add_of_dvd`
-
-*theorem, `Adaptive.Basic.lean`*
-
-```lean
-theorem epochOf_add_of_dvd {W d : ℕ} (hW : 0 < W) (hdvd : W ∣ d) (k : ℕ) :
-    epochOf W (d + k) = d / W + epochOf W k
-```
-
-**Epoch alignment.** When a base slot is a whole number of epochs, a numbering that starts there is the original shifted by a constant, and every epoch window corresponds. This is what a cut must respect under an adaptive schedule: a joiner's slot `k` is the network's `d + k`, so the two agree about which epoch a slot belongs to only when `d` falls on an epoch boundary.
-
-#### `slotsOf_base`
-
-*theorem, `Adaptive.Basic.lean`*
-
-```lean
-theorem slotsOf_base (hinj : Function.Injective S.slotRound) :
-    slotsOf hinj S.leader = S
-```
-
-The base schedule is its own induced instance — the anchor for conservativity: a constant policy reassigns nothing.
-
-#### `pickKeyed_one`
-
-*theorem, `Adaptive.Policy.lean`*
-
-```lean
-theorem pickKeyed_one
-    (pick : (U : R.Universe) → R.View U → (ℕ → Option BlockId) → ℕ → Validator) :
-    PickKeyed (R := R) 1 pick
-```
-
-At one leader per round it is free: `k₁ / 1 = k₂ / 1` already says the slots are equal.
-
-#### `partialRun_agree`
-
-*theorem, `Adaptive.Run.lean`*
-
-```lean
-theorem partialRun_agree {V₁ V₂ : R.View U} {E₁ E₂ : ℕ}
-    (A₁ : PartialRun P U V₁ E₁) (A₂ : PartialRun P U V₂ E₂) :
-    ∀ k, epochOf P.W k < min E₁ E₂ → A₁.vdct k = A₂.vdct k
-```
-
-**The master agreement lemma**: two partial runs over one universe, whatever views and heights, agree on the verdicts of their common epochs — the strong induction the module docstring describes.
-
-#### `run_agree`
-
-*theorem, `Adaptive.Run.lean`*
-
-```lean
-theorem run_agree {V₁ V₂ : R.View U} (A₁ : Run P U V₁) (A₂ : Run P U V₂) :
-    (∀ k, A₁.vdct k = A₂.vdct k) ∧ (∀ m, A₁.assign m = A₂.assign m)
-```
-
-**Safety: the adaptive fixpoint is unique.** Two total runs over one universe, from any two views and with no synchrony or fairness hypothesis, hold the same verdicts and run the same schedule.
-
-#### `run_commitSeq_agree`
-
-*theorem, `Adaptive.Run.lean`*
-
-```lean
-theorem run_commitSeq_agree (ha : Agree R) {V₁ V₂ : R.View U}
-    (A₁ : Run P U V₁) (A₂ : Run P U V₂) (n : ℕ) :
-    commitSeq A₁.vdct n = commitSeq A₂.vdct n
-```
-
-**AL6 — the adaptive ledger is agreed.** The commit sequence read off any two total runs is the same list, at every length.
-
-#### `Policy.const_run_decided`
-
-*theorem, `Adaptive.Run.lean`*
-
-```lean
-theorem Policy.const_run_decided
-    {W : ℕ} {hW : 0 < W} {hinj : Function.Injective S.slotRound} {V : R.View U}
-    (A : Run (Policy.const (R := R) W hW hinj) U V) (k : ℕ) :
-    R.Decided S V k (A.vdct k)
-```
-
-**Conservativity.** Under the constant policy a run's verdicts are ordinary `Decided` verdicts of the base schedule.
-
-#### `descends_slotsOf`
-
-*theorem, `Adaptive.Liveness.lean`*
-
-```lean
-theorem descends_slotsOf {R : DagRule Validator BlockId Payload} {wave : ℕ}
-    (hind : Indirect R (fun sr i j => sr i + wave + 1 ≤ sr j))
-    {c : ℕ} (hc : 0 < c) (hspans : SpansEligibleAt (S := S) wave c)
-    (a : ℕ → Validator)
-    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
-    Descends R (slotsOfKeyed a hk) c
-```
-
-**A rule's descent, at every induced schedule.** The indirect property is stated over the round structure alone, which reassignment fixes, so a spanning clause at the base schedule gives the descent at each induced one.
-
-#### `exists_partialRun`
-
-*theorem, `Adaptive.Liveness.lean`*
-
-```lean
-theorem exists_partialRun (hlc : LeaderCommits R Live)
-    (hd : ∀ (a : ℕ → Validator)
-      (h : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂),
-      Descends R (slotsOfKeyed a h) c)
-    (hruns : PlacesRuns P T c) (V : R.View U) (E : ℕ)
-    (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
-      Live (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W (P.W * (E' + 2))) :
-    Nonempty (PartialRun P U V E)
-```
-
-**Partial runs exist at every height**, by induction: each stage re-reads the schedule off the verdicts so far and closes one more epoch.
-
-#### `epoch_closes_of_support`
-
-*theorem, `Adaptive.Liveness.lean`*
-
-```lean
-theorem epoch_closes_of_support (hcom : sp.Commits rel)
-    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
-    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
-    (V : R.View U) (v : ℕ → Option BlockId) (E : ℕ)
-    (hruns : PlacesRuns P T c)
-    (hlive : sp.live rel (slotsOfKeyed (fun m => P.pick U V v m) (P.keyed U V v)) V T P.W
-      (P.W * (E + 2))) :
-    ∀ k, epochOf P.W k < E + 1 →
-      ∃ w, DecidedBelow R (slotsOfKeyed (fun m => P.pick U V v m) (P.keyed U V v))
-        (P.W * (E + 2)) V k w
-```
-
-**One epoch closes**, from a support.
-
-#### `exists_partialRun_of_support`
-
-*theorem, `Adaptive.Liveness.lean`*
-
-```lean
-theorem exists_partialRun_of_support (hcom : sp.Commits rel)
-    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
-    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
-    (hruns : PlacesRuns P T c) (V : R.View U) (E : ℕ)
-    (hlive : ∀ (E' : ℕ), E' < E → ∀ (A : PartialRun P U V E'),
-      sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W (P.W * (E' + 2))) :
-    Nonempty (PartialRun P U V E)
-```
-
-**Partial runs exist at every height**, from a support.
-
-#### `run_exists_of_support`
-
-*theorem, `Adaptive.Liveness.lean`*
-
-```lean
-theorem run_exists_of_support (ha : Agree R) (hcom : sp.Commits rel)
-    (hind : Indirect R (fun sr i j => sr i + sp.wave + 1 ≤ sr j))
-    (hc : 0 < c) (hspans : SpansEligibleAt (S := S) sp.wave c)
-    (hruns : PlacesRuns P T c) (V : R.View U)
-    (hlive : ∀ (E : ℕ) (A : PartialRun P U V E),
-      sp.live rel (slotsOfKeyed (fun m => P.pick U V A.vdct m) (P.keyed U V A.vdct)) V T P.W (P.W * (E + 2))) :
-    Nonempty (Run P U V)
-```
-
-**The adaptive fixpoint exists**, from a support: safety's `Agree`, the support's Law 2, the indirect rule at the support's wave, and the precondition at every height.
 
 ### Nemo-Nemo: crash-fault consensus in two rounds
 
@@ -19738,6 +19695,62 @@ theorem ofAnchored_laws (hl : R.Laws) : (ofAnchored R).Laws where
 
 **An anchored rule with its laws satisfies Barnacle's.**
 
+#### `anchor_agree`
+
+*theorem, `Barnacle.Helpers.Agreement.lean`*
+
+```lean
+theorem anchor_agree (hR : Properties.Agree R.toDagRule) (R₁ : PartialRun R P upd C₀ U V₁ K₁)
+    (R₂ : PartialRun R P upd C₀ U V₂ K₂) {k : ℕ} (h : ConfigAgree R₁ R₂ k)
+    (hk₁ : k < K₁) (hk₂ : k < K₂) : R₁.anchor k = R₂.anchor k
+```
+
+The anchors agree: the lesser of two anchors is, in the other run, a committed slot past the threshold below its anchor.
+
+#### `spanVdct_agree`
+
+*theorem, `Barnacle.Helpers.Agreement.lean`*
+
+```lean
+theorem spanVdct_agree (hR : Properties.Agree R.toDagRule)
+    (R₁ : PartialRun R P upd C₀ U V₁ K₁) (R₂ : PartialRun R P upd C₀ U V₂ K₂)
+    {k : ℕ} (h : ConfigAgree R₁ R₂ k) (hk₁ : k < K₁) (hk₂ : k < K₂) :
+    spanVdct (R₁.cfg k) (R₁.start k) (R₁.start (k + 1)) (R₁.vdct k)
+      = spanVdct (R₂.cfg k) (R₂.start k) (R₂.start (k + 1)) (R₂.vdct k)
+```
+
+**The range's verdicts agree as a function.** What the runs hand the update rule is one object, so a rule reading the committed leaders of the range it just closed reads agreed data and needs no further hypothesis. Outside the range the two are `none` by construction, which is what makes the equality total: a run constrains its verdicts only inside the range.
+
+#### `configAgree`
+
+*theorem, `Barnacle.Helpers.Agreement.lean`*
+
+```lean
+theorem configAgree (hR : Properties.Agree R.toDagRule) (hanc : Anchored R upd)
+    (R₁ : PartialRun R P upd C₀ U V₁ K₁)
+    (R₂ : PartialRun R P upd C₀ U V₂ K₂) :
+    ∀ k, k ≤ min K₁ K₂ → ConfigAgree R₁ R₂ k
+  | 0, _ => ⟨by rw [R₁.init.1, R₂.init.1], by rw [R₁.init.2.1, R₂.init.2.1],
+      by rw [R₁.init.2.2, R₂.init.2.2]⟩
+  | k + 1, h => configAgree_succ hR hanc R₁ R₂ (configAgree hR hanc R₁ R₂ k (by omega))
+      (by omega) (by omega)
+```
+
+**Configurations agree** up to the lower height, by induction.
+
+#### `round_of_mem_ledgerUpto`
+
+*theorem, `Barnacle.Helpers.Ledger.lean`*
+
+```lean
+theorem round_of_mem_ledgerUpto (hR : Properties.CommitsCandidate R.toDagRule)
+    (Rn : PartialRun R P upd C₀ U V K) {K' : ℕ} (hK' : K' ≤ K) {L : BlockId}
+    (h : L ∈ Rn.ledgerUpto K') :
+    Rn.start 0 < (R.block U L).round ∧ (R.block U L).round ≤ Rn.start K'
+```
+
+**The ledger stops at the frontier.** Every block the run has output by height `K'` sits at a round after `0` and at or below `start K'` — so nothing above the round the last closed configuration reached is in the ledger, whatever verdicts the run records above it. This is the checkable form of the range discipline the run structure describes: a configuration's schedule is extended above its range to name anchors, and nothing named there is output.
+
 #### `progress`
 
 *theorem, `Barnacle.Helpers.Progress.lean`*
@@ -19752,6 +19765,53 @@ theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBound
     (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
     Nonempty (PartialRun R.toBaseRule P upd C₀ U V (K + 1))
 ```
+
+#### `headsRun_of_cycle`
+
+*theorem, `Barnacle.Helpers.Heads.lean`*
+
+```lean
+theorem headsRun_of_cycle {Validator : Type} [DecidableEq Validator]
+    (n : ℕ) (hn : 0 < n) (head : ℕ → Validator) (hcyc : ∀ ρ, head ρ = head (ρ % n))
+    (T : Finset Validator) (m g : ℕ)
+    (hm : ((Finset.range n).filter (fun p => head p ∉ T)).card ≤ m)
+    (hbound : g * m + 1 ≤ n) :
+    HeadsRun head T g (n + g - 1)
+```
+
+**The pigeonhole, over positions rather than validators.** A schedule that repeats every `n` rounds need not visit each validator once: a mechanism that reassigns slots leaves some validators with several and some with none. What the argument needs is not injectivity but that the rounds of a cycle whose head lies outside the good set are few — at most `m` of the `n`. Then from any round, within `n + g − 1` rounds, some `g` consecutive heads are all good.
+
+The injection is into `Fin g × Bad`, where `Bad` is the set of *cycle positions* the good set misses; the round-robin case recovers a position from its validator and is `roundRobin_headsRun`.
+
+#### `headsRun_of_cycle_weighted`
+
+*theorem, `Barnacle.Helpers.Heads.lean`*
+
+```lean
+theorem headsRun_of_cycle_weighted {Validator : Type} [Fintype Validator]
+    [DecidableEq Validator] (n : ℕ) (hn : 0 < n) (head : ℕ → Validator)
+    (hcyc : ∀ ρ, head ρ = head (ρ % n)) (T : Finset Validator) (slack w g : ℕ)
+    (hT : Fintype.card Validator ≤ T.card + slack)
+    (hw : ∀ v : Validator, ((Finset.range n).filter (fun p => head p = v)).card ≤ w)
+    (hbound : g * (slack * w) + 1 ≤ n) :
+    HeadsRun head T g (n + g - 1)
+```
+
+**A re-weighted schedule meets it, under a cap on accumulation.** A mechanism that moves slots between validators makes some hold several and some none. Counting positions, the good set misses at most `slack` validators and each holds at most `w` positions of the cycle, so at most `slack · w` positions are bad — and the committee bound becomes `g · slack · w + 1 ≤ n`. At `w = 1`, a schedule that is a permutation of the rotation, this is the round-robin bound unchanged.
+
+This is the clause a reputation rule owes for liveness: not that it permutes, but that no validator accumulates more than `w` of the cycle's positions.
+
+#### `roundRobin_headsRun`
+
+*theorem, `Barnacle.Helpers.Heads.lean`*
+
+```lean
+theorem roundRobin_headsRun (n : ℕ) (hn : 0 < n) (T : Finset (Fin n)) (slack g : ℕ)
+    (hT : n ≤ T.card + slack) (hbound : g * slack + 1 ≤ n) :
+    HeadsRun (roundRobin n hn) T g (n + g - 1)
+```
+
+**Round-robin meets it.** The rotation visits each validator once a cycle, so the positions the good set misses are the validators it misses, at most `slack` of them; `headsRun_of_cycle` does the rest.
 
 #### `holds`
 
@@ -20239,97 +20299,367 @@ theorem holds : Statement
 
 ### Not otherwise grouped
 
-#### `Rebases.keyed`
+#### `holds`
 
-*theorem, `Adaptive.Joiner.lean`*
-
-```lean
-theorem Rebases.keyed {S S' : Slots Validator} {G d : ℕ} (h : Rebases S S' G d)
-    {a : ℕ → Validator}
-    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
-    ∀ k₁ k₂, S'.slotRound k₁ = S'.slotRound k₂ →
-      a (d + k₁) = a (d + k₂) → k₁ = k₂
-```
-
-A rebase preserves the schedule law: the rebased rounds are the original's, shifted, so slots sharing a rebased round shared one before, where the assignment already separated them.
-
-#### `Rebases.slotsOfKeyed`
-
-*theorem, `Adaptive.Joiner.lean`*
+*theorem, `Adaptive.Agreement.Proof.lean`*
 
 ```lean
-theorem Rebases.slotsOfKeyed {S S' : Slots Validator} {G d : ℕ} (h : Rebases S S' G d)
-    (a : ℕ → Validator)
-    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
-    Rebases (slotsOfKeyed (S := S) a hk)
-      (slotsOfKeyed (S := S') (fun m => a (d + m)) (h.keyed hk)) G d where
-  slotRound
+theorem holds : Statement
 ```
 
-**Rebasing commutes with adapting**, at a lawful assignment.
+#### `holds`
 
-#### `Truncates.slotsOfKeyed`
-
-*theorem, `Adaptive.Joiner.lean`*
+*theorem, `Adaptive.Conservativity.Proof.lean`*
 
 ```lean
-theorem Truncates.slotsOfKeyed {U U' : R.Universe} {S S' : Slots Validator} {G d : ℕ}
-    (h : Truncates R U U' S S' G d) (a : ℕ → Validator)
-    (hk : ∀ k₁ k₂, S.slotRound k₁ = S.slotRound k₂ → a k₁ = a k₂ → k₁ = k₂) :
-    Truncates R U U' (slotsOfKeyed (S := S) a hk)
-      (slotsOfKeyed (S := S') (fun m => a (d + m)) (h.toRebases.keyed hk)) G d
+theorem holds : Statement
 ```
 
-And so a cut at the base schedule is a cut at the adaptive one.
+#### `anchor_agree`
 
-#### `Rebases.slotsOf`
-
-*theorem, `Adaptive.Joiner.lean`*
+*theorem, `Adaptive.Helpers.Agreement.lean`*
 
 ```lean
-theorem Rebases.slotsOf {S S' : Slots Validator} {G d : ℕ} (h : Rebases S S' G d)
-    (hinj : Function.Injective S.slotRound) (a : ℕ → Validator) :
-    Rebases (slotsOf (S := S) hinj a)
-      (slotsOf (S := S') (h.injective hinj) (fun m => a (d + m))) G d where
-  slotRound
+theorem anchor_agree (hR : Properties.Agree R.toDagRule)
+    (R₁ : SegRun R P upd C₀ U V₁ K₁) (R₂ : SegRun R P upd C₀ U V₂ K₂)
+    {k : ℕ} (h : ConfigAgree R₁ R₂ k) (hk₁ : k < K₁) (hk₂ : k < K₂) :
+    R₁.anchor k = R₂.anchor k
 ```
 
-**Rebasing commutes with adapting.** Rebase a schedule and then install an assignment shifted past the base slot, or install the assignment first and rebase: the same rounds, the same leaders.
+The anchors agree: the lesser of two anchors is, in the other run, a committed slot past the boundary below its anchor.
 
-#### `Truncates.slotsOf`
+#### `spanVdct_agree`
 
-*theorem, `Adaptive.Joiner.lean`*
+*theorem, `Adaptive.Helpers.Agreement.lean`*
 
 ```lean
-theorem Truncates.slotsOf {U U' : R.Universe} {S S' : Slots Validator} {G d : ℕ}
-    (h : Truncates R U U' S S' G d) (hinj : Function.Injective S.slotRound)
-    (a : ℕ → Validator) :
-    Truncates R U U' (slotsOf (S := S) hinj a)
-      (slotsOf (S := S') (h.toRebases.injective hinj) (fun m => a (d + m))) G d
+theorem spanVdct_agree (hR : Properties.Agree R.toDagRule)
+    (R₁ : SegRun R P upd C₀ U V₁ K₁) (R₂ : SegRun R P upd C₀ U V₂ K₂)
+    {k : ℕ} (h : ConfigAgree R₁ R₂ k) (hk₁ : k < K₁) (hk₂ : k < K₂) :
+    spanVdct (R₁.cfg k) (R₁.start k) (R₁.start (k + 1)) (R₁.vdct k)
+      = spanVdct (R₂.cfg k) (R₂.start k) (R₂.start (k + 1)) (R₂.vdct k)
 ```
 
-And so a cut at the base schedule is a cut at the adaptive one.
+**The span's verdicts agree as a function.** What the two runs hand the update rule is one object, so a rule reading the committed leaders of the span it just closed reads agreed data and needs no further hypothesis. Outside the span both are `none` by construction, which is what makes the equality total: a run constrains its verdicts only inside the span it decided.
+
+#### `configAgree`
+
+*theorem, `Adaptive.Helpers.Agreement.lean`*
+
+```lean
+theorem configAgree (hR : Properties.Agree R.toDagRule) (hanc : Anchored R upd)
+    (R₁ : SegRun R P upd C₀ U V₁ K₁) (R₂ : SegRun R P upd C₀ U V₂ K₂) :
+    ∀ k, k ≤ min K₁ K₂ → ConfigAgree R₁ R₂ k
+  | 0, _ => ⟨by rw [R₁.init.1, R₂.init.1], by rw [R₁.init.2.1, R₂.init.2.1],
+      by rw [R₁.init.2.2, R₂.init.2.2]⟩
+  | k + 1, h => configAgree_succ hR hanc R₁ R₂ (configAgree hR hanc R₁ R₂ k (by omega))
+      (by omega) (by omega)
+```
+
+**Configurations agree** up to the lower height, by induction.
+
+#### `joiner_decided_agree`
+
+*theorem, `Adaptive.Helpers.Chop.lean`*
+
+```lean
+theorem joiner_decided_agree (ha : Agree R) (hb : Banded R)
+    {U U' : R.Universe} {G : ℕ} {C : Config Validator}
+    (ht : Truncates R U U' C.sched (C.chop G).sched G (C.cum G))
+    {V : R.View U} {V' : R.View U'} (hv : ViewAgreeAbove R V V' G)
+    {W : R.View U'} {k : ℕ} {w v : Option BlockId}
+    (hW : R.Decided (C.chop G).sched W k w)
+    (hV : R.Decided C.sched V (C.cum G + k) v) : w = v
+```
+
+**Across the cut the verdicts agree.** The joiner, deriving at the chopped configuration's schedule on any view of the truncation, and the network, deriving at the configuration's own, give one verdict to every shared slot.
+
+#### `joiner_config_agree`
+
+*theorem, `Adaptive.Helpers.Chop.lean`*
+
+```lean
+theorem joiner_config_agree
+    {score : (U : R.Universe) → R.View U → Config Validator → Config Validator}
+    {G : ℕ} (hs : HorizonStable score G)
+    {U U' : R.Universe} {V : R.View U} {V' : R.View U'}
+    (hv : ViewAgreeAbove R V V' G) (C : Config Validator) :
+    score U' V' (C.chop G) = (score U V C).chop G
+```
+
+**The joiner installs the network's configuration.** Under a horizon-stable score, what a joiner computes from its own truncated view is exactly what the network installed, with the pruned rounds dropped — so the two run the same leaders on every round both have.
+
+#### `joiner_leader_agree`
+
+*theorem, `Adaptive.Helpers.Chop.lean`*
+
+```lean
+theorem joiner_leader_agree
+    {score : (U : R.Universe) → R.View U → Config Validator → Config Validator}
+    {G : ℕ} (hs : HorizonStable score G)
+    {U U' : R.Universe} {V : R.View U} {V' : R.View U'}
+    (hv : ViewAgreeAbove R V V' G) (C : Config Validator) (k : ℕ) :
+    (score U' V' (C.chop G)).sched.leader k
+      = (score U V C).sched.leader ((score U V C).cum G + k)
+```
+
+And so the joiner's schedule is the network's, seen from the cut's own origin.
+
+#### `horizonStable_const`
+
+*theorem, `Adaptive.Helpers.Chop.lean`*
+
+```lean
+theorem horizonStable_const (G : ℕ) :
+    HorizonStable (R := R) (fun _ _ C => C) G
+```
+
+The score that installs what it was given is horizon-stable at every cut: what it was given was already chopped. `Adaptive.Score.const` is this one, and AL15's conservativity is its consequence.
+
+#### `horizonStable_relabel`
+
+*theorem, `Adaptive.Helpers.Chop.lean`*
+
+```lean
+theorem horizonStable_relabel (σ : Validator → Validator)
+    (hinj : ∀ (C : Config Validator) r i j, i < C.slotsAt r → j < C.slotsAt r →
+      σ (C.lead r i) = σ (C.lead r j) → i = j) (G : ℕ) :
+    HorizonStable (R := R)
+      (fun _ _ C =>
+        { slotsAt := C.slotsAt, slotsAt_pos := C.slotsAt_pos
+          lead := fun r i => σ (C.lead r i)
+          keyed := fun r i j hi hj h => hinj C r i j hi hj h
+          interval := C.interval }) G
+```
+
+**A score that only reassigns leaders is horizon-stable**, at every cut and with no condition on the cut. Relabelling who leads commutes with dropping the rounds below a horizon, because both act on the leader function pointwise and neither moves a round. This is the case the obligation exists for — `Score.permute` is AL11's reassignment family, so a joiner running a permuting score computes the network's leaders whatever the horizon.
+
+The condition bites for a score whose *choice* of reassignment is read off the DAG: it then has to make that choice from what survives the cut, which is what `ViewAgreeAbove` gives it above `G` and nothing gives it below.
+
+#### `decided_and_not_output`
+
+*theorem, `Adaptive.Helpers.Ledger.lean`*
+
+```lean
+theorem decided_and_not_output (Rn : SegRun R P upd C₀ U V K) {k : ℕ} (hk : k < K)
+    {κ : ℕ} (hlo : Rn.start (k + 1) < (Rn.cfg k).roundOf κ)
+    (hhi : (Rn.cfg k).roundOf κ ≤ (Rn.cfg k).roundOf (Rn.anchor k)) :
+    R.Decided (Rn.cfg k).sched V κ (Rn.vdct k κ) ∧
+      (Rn.cfg k).cum (Rn.start (k + 1) + 1) ≤ κ
+```
+
+**A round above the boundary is decided and not output.** Segment `k` decides every slot through the anchor's round, which lies strictly above the boundary `start (k + 1)`; the slots of those rounds are at or above `rangeLedger k`'s upper end, so none of them is read. Their verdicts are what the segment discards, and the rounds are decided again under configuration `k + 1`.
+
+This is the naming-and-ordering split of `adaptive-leaders.md` §7 as a statement: the configuration names leaders above its boundary, and the output stops there. Barnacle has no counterpart, its boundary being the anchor's own round.
+
+#### `round_of_mem_ledgerUpto`
+
+*theorem, `Adaptive.Helpers.Ledger.lean`*
+
+```lean
+theorem round_of_mem_ledgerUpto (hR : Properties.CommitsCandidate R.toDagRule)
+    (Rn : SegRun R P upd C₀ U V K) {K' : ℕ} (hK' : K' ≤ K) {L : BlockId}
+    (h : L ∈ Rn.ledgerUpto K') :
+    Rn.start 0 < (R.block U L).round ∧ (R.block U L).round ≤ Rn.start K'
+```
+
+**The ledger stops at the frontier.** Every block the run has output by height `K'` sits at a round after `0` and at or below `start K'` — so nothing above the round the last closed configuration reached is in the ledger, whatever verdicts the run records above it. This is the checkable form of the range discipline the run structure describes: a configuration's schedule is extended above its range to name anchors, and nothing named there is output.
+
+#### `truncates_chop_config`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem truncates_chop_config (C : Config Validator) :
+    Truncates R U (c.chop U G) C.sched (C.chop G).sched G (C.cum G)
+```
+
+**The cut is a truncation at a configuration's own schedule.** The universe half is the carrier's, the schedule half is the configuration's, and no fixed slot numbering enters — which is what lets the cut be taken at a schedule whose rounds differ in width.
+
+#### `stack_chop_config`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem stack_chop_config (C : Config Validator) :
+    Stack R U C.sched (c.chop U G) (C.chop G).sched G G (C.cum G)
+```
+
+**A cut at a configuration is a stack step.**
+
+#### `stack_chop_chop_config`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem stack_chop_chop_config (C : Config Validator) (G₁ G₂ : ℕ) :
+    Stack R U C.sched (c.chop (c.chop U G₁) G₂) (C.chop (G₁ + G₂)).sched
+      (G₁ + G₂) (max G₁ (G₂ + G₁)) (C.cum G₁ + (C.chop G₁).cum G₂)
+```
+
+**Two cuts at a configuration are one stack**, at the configuration `Config.chop_chop` names: pruning to `G₁` and then to `G₂` leaves the configuration of a single cut at `G₁ + G₂`.
+
+#### `joiner_decided_agree_chop`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem joiner_decided_agree_chop (ha : Agree R) (hb : Banded R) (C : Config Validator)
+    {V : R.View U} {W : R.View (c.chop U G)} {k : ℕ} {w v : Option BlockId}
+    (hW : R.Decided (C.chop G).sched W k w)
+    (hV : R.Decided C.sched V (C.cum G + k) v) : w = v
+```
+
+**I5's verdict half, at any carrier**: the joiner and the network give one verdict to every slot both hold, from an arbitrary view of the truncation.
 
 #### `joiner_run_decided_agree`
 
-*theorem, `Adaptive.Joiner.lean`*
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
 
 ```lean
 theorem joiner_run_decided_agree (ha : Agree R) (hb : Banded R)
-    (hs : HorizonStable P G d pick')
-    {U U' : R.Universe} (ht : Truncates R U U' S S' G d)
-    {V : R.View U} (A : Run P U V) (V' : R.View U')
-    {V₀ : R.View U'} (hv : ViewAgreeAbove R V V₀ G)
-    {W : R.View U'} {k : ℕ} {w v : Option BlockId}
-    (hk' : ∀ k₁ k₂, S'.slotRound k₁ = S'.slotRound k₂ →
-      pick' U' V' (fun j => A.vdct (d + j)) k₁
-        = pick' U' V' (fun j => A.vdct (d + j)) k₂ → k₁ = k₂)
-    (hW : R.Decided (slotsOfKeyed (S := S')
-            (fun m => pick' U' V' (fun j => A.vdct (d + j)) m) hk') W k w)
-    (hV : R.Decided (slotsOfKeyed A.assign A.keyed) V (d + k) v) : w = v
+    {score : (U : R.Universe) → R.View U → Config Validator → Config Validator}
+    (hs : HorizonStable score G) (C : Config Validator)
+    {V : R.View U} {V' : R.View (c.chop U G)} (hv : ViewAgreeAbove R V V' G)
+    {W : R.View (c.chop U G)} {k : ℕ} {w v : Option BlockId}
+    (hW : R.Decided (score (c.chop U G) V' (C.chop G)).sched W k w)
+    (hV : R.Decided (score U V C).sched V ((score U V C).cum G + k) v) : w = v
 ```
 
-**The joiner, whole**: under a horizon-stable rule, a joiner's own computed schedule agrees with the network's run on every shared slot.
+**I5, whole, at any carrier.** A joiner that recomputed its configuration from its own truncated view, under a horizon-stable score, runs the network's leaders and derives the network's verdict at every slot both hold: **pruning does not split the ledger, even when the schedule is derived from it.**
+
+#### `stack_copyFill_chop_config`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem stack_copyFill_chop_config (C : Config Validator) :
+    Stack R U C.sched (c.chop (c.copyFill U sk) G) (C.chop G).sched
+      G (max (sk.r + 1) G) (C.cum G)
+```
+
+**Fill then cut is a stack, at a configuration.** The composition asks nothing of the rule and nothing of the score: the steps are the witnesses the mechanisms already have, and `Stack.safe_and_live` reads the result at the adaptive schedule.
+
+#### `updStable_constRule`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem updStable_constRule : UpdStable (constRule R)
+```
+
+A rule that does not read the universe is stable. `constRule` is the case AL15 turns on.
+
+#### `Score.stable_of_ignores`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem Score.stable_of_ignores
+    {f : (ℕ → Option BlockId) → Config Validator → Config Validator}
+    (score : Score R) (h : ∀ U V v C, score U V v C = f v C) : score.Stable
+```
+
+A score that reads no DAG at all is stable: the constant score, the permuting scores of AL11, and any score of the committed sequence alone are of that shape.
+
+#### `Score.stable_of_readsHistory`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+theorem Score.stable_of_readsHistory (hL : R.Laws) (score : Score R)
+    (h : ∀ (U U' : R.Universe) (V : R.View U) (V' : R.View U'),
+      R.viewIds V = R.viewIds V' →
+      (∀ b ∈ R.viewIds V, R.block U b = R.block U' b) →
+      ∀ v C, score U V v C = score U' V' v C) : score.Stable
+```
+
+**A score that reads the anchor's history is stable.** The realistic case, and the one the obligation exists for: a reputation rule reads the blocks the anchor reaches, and a mechanism that only adds blocks leaves those exactly as they were (`historyFrom_congr`). So the rule installs one configuration on a validator that recovered a crashed peer and on one that did not, and `SegRun.extend` applies to it.
+
+The hypothesis is what "reads the history" means: the score's answer depends on the view only through the ids it holds and what those ids denote. A score consulting anything else about the universe — its size, say — does not qualify, and should not.
+
+#### `SegRun.extend_ledgerUpto`
+
+*theorem, `Adaptive.Helpers.Mechanisms.lean`*
+
+```lean
+@[simp] theorem SegRun.extend_ledgerUpto {U U' : R.Universe} {V : R.View U} {V' : R.View U'}
+    {K : ℕ} (hp : Persist R.toDagRule) (hc : CommitsCandidate R.toDagRule)
+    (he : Extends R.toDagRule U U')
+    (hsub : R.toDagRule.viewIds V ⊆ R.toDagRule.viewIds V') (hu : UpdStable upd)
+    (Rn : SegRun R P upd C₀ U V K) (K' : ℕ) :
+    (Rn.extend hp hc he hsub hu).ledgerUpto K' = Rn.ledgerUpto K'
+```
+
+**And it outputs the same ledger.** The mechanism adds blocks to the DAG and changes nothing a validator has already ordered — the claim a recovery or a re-genesis has to make, now at a schedule the run itself chose.
+
+#### `progress`
+
+*theorem, `Adaptive.Helpers.Progress.lean`*
+
+```lean
+theorem progress (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : UpdBounded P upd)
+    {c K Rnd N : ℕ}
+    {V : R.View U} (hcov : R.toBaseRule.CoversUpto U V N)
+    (Rn : SegRun R.toBaseRule P upd C₀ U V K)
+    (hlive : R.LiveOn (Rn.cfg K).sched c)
+    (hgood : R.Good U Rnd N) (hRnd : Rnd ≤ Rn.start K + 1)
+    (hN : Rn.start K + P.maxInterval + 1 + 2 * c + R.waveLength ≤ N) :
+    Nonempty (SegRun R.toBaseRule P upd C₀ U V (K + 1))
+```
+
+#### `holds`
+
+*theorem, `Adaptive.Ledger.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Adaptive.Progress.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Adaptive.Score.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Adaptive.Validity.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `chop_chop`
+
+*theorem, `Barnacle.Chop.lean`*
+
+```lean
+theorem chop_chop (G₁ G₂ : ℕ) : (C.chop G₁).chop G₂ = C.chop (G₁ + G₂)
+```
+
+**Two cuts are one.** Chopping at `G₁` and then at `G₂` drops the first `G₁ + G₂` rounds, so a validator that has pruned twice holds the configuration of a validator that pruned once, and the cuts beneath a configuration compose the way `GC.chop_chop` composes them beneath a universe.
+
+#### `rebases_chop`
+
+*theorem, `Barnacle.Chop.lean`*
+
+```lean
+theorem rebases_chop : Properties.Rebases C.sched (C.chop G).sched G (C.cum G) where
+  slotRound
+```
+
+**The schedule half of a truncation.** A cut at round `G`, numbered from the first slot of that round, rebases the configuration's schedule onto the chopped configuration's.
 
 #### `holds`
 
@@ -20416,19 +20746,6 @@ theorem agree (hl : R.Laws I) (hI : I S U) {V₁ V₂ : U.View} {B₁ B₂ k : �
 ```
 
 Two bounded verdicts agree — agreement, through the embedding.
-
-#### `decidedWithin_congr_of_slotRound`
-
-*theorem, `Common.Anchored.Bounded.lean`*
-
-```lean
-theorem decidedWithin_congr_of_slotRound (hl : R.Laws I) {S₁ S₂ : Slots Validator} (hI : I S₁ U)
-    (hround : S₁.slotRound = S₂.slotRound) {V : U.View} {B k : ℕ} {v : Option BlockId}
-    (ha : ∀ m, m < B → S₁.leader m = S₂.leader m)
-    (h : R.DecidedWithin (S := S₁) U V B k v) : R.DecidedWithin (S := S₂) U V B k v
-```
-
-**The bounded relation moves with the schedule**, for any two schedules naming the same rounds and the same leaders below the bound: the candidate set reads the schedule only through `IsLeaderBlock`, the direct skip only at its slot, and the links not at all.
 
 #### `decided_below_of_committed_run`
 
@@ -22125,6 +22442,18 @@ theorem SelfParent.reaches_of_creator (hsp : SelfParent R) {rel : Reliability Va
 
 **A reliable author's block reaches every earlier block of that author**: walk the self-parent chain down to the earlier block's round, where non-equivocation says the chain has arrived.
 
+#### `rebases_chop`
+
+*theorem, `Properties.Record.lean`*
+
+```lean
+theorem rebases_chop {S : Slots Validator} {G d : ℕ} (hd : G ≤ S.slotRound d) :
+    Rebases S (S.chop G d hd) G d where
+  slotRound
+```
+
+The core's cut rebases the schedule: a schedule fact with no universe in it.
+
 #### `sustains_chop`
 
 *theorem, `Properties.Record.lean`*
@@ -22199,20 +22528,6 @@ theorem sustains_addGenesis : Sustains R U (c.addGenesis U v g p hg hsev) 0 1 wh
 ```
 
 **And it sustains the carrier from round one.**
-
-#### `coreSupport_live_of_reactiveLive`
-
-*theorem, `Reactive.MysticetiProperties.lean`*
-
-```lean
-theorem coreSupport_live_of_reactiveLive {S : Slots Validator}
-    {U : BlockUniverse Validator BlockId Payload} {V : View Validator BlockId Payload U}
-    {T : Finset Validator} {lo K : ℕ} (h : reactiveLive S (U := U) V T lo K) :
-    (coreSupport (Validator := Validator) (BlockId := BlockId) (Payload := Payload)).live
-      (coreReliability Validator) S (U := U) V T lo K
-```
-
-**The reactive discipline reaches the core's support precondition** (`Properties/Support.lean`): a reactive execution past GST is a quorum certifying every candidate of every reliably-led slot in the window, which is `Support.live` and the socket every mechanism reads.
 
 #### `committed_of_correct_block`
 

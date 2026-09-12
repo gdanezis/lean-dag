@@ -256,7 +256,7 @@ theorem, once per mechanism:
 | garbage collection | `Truncates` | `LocalTruncate.of_banded`, `decided_agree_truncate` | `Support.live_of_truncates` |
 | crash recovery, re-genesis | `Extends`, `Sustains` | `Persist.of_banded`, `decided_agree_extends` | `Support.live_of_sustains` |
 | any stack of them | `Stack` | `Stack.safe_and_live` | the same |
-| adaptive leader schedule | — | `Adaptive.run_agree` | `Adaptive.run_exists` |
+| adaptive leader schedule | — | `Adaptive.Agreement.holds` | `Adaptive.Progress.holds` |
 | adaptive leader count | — | `Agree`, `CommitsCandidate`, `CommitsDirect` | `Descent`, built by `Timed.descent_of_support` |
 | prompt skip | `Extends` + `SkipsUnsupported` | `decided_none_of_novel` | — |
 | chain quality | — | `card_coveredAt_ge` | `committed_of_correct_block` |
@@ -1581,7 +1581,13 @@ reactive execution, whose clauses read the schedule; the adaptive
 fixpoint needs both, so the family below is stated separately and
 shares `Agree` with it.
 
-### 4.1 What the adaptive fixpoint consumes
+### 4.1 What the adaptive fixpoint consumed
+
+*The fixpoint arc this section records was deleted in September 2026 and
+replaced by the segmented arc of `adaptive-leaders.md` §8, which has no
+window and no fixpoint. The five properties it named are unchanged and
+are what the segmented arc consumes; the account below is why they are
+the five.*
 
 Read off the proof bodies of `Adaptive/Run.lean` and
 `Adaptive/Liveness.lean` before the generalisation, the fixpoint used
@@ -1629,8 +1635,8 @@ theorem:
   (`Properties/Derived/Descent.lean`, §11.2b), and what a protocol
   supplies for it is the round-structure hypothesis and `c`.
 
-`Adaptive/{Policy,Run,Liveness}.lean` are stated over `DagRule` and
-these, and name no protocol. `Adaptive.run_agree` uses `Agree` alone.
+`Adaptive/` is stated over `BaseRule` and these, and names no protocol.
+`Adaptive.Agreement.holds` uses `Agree` alone.
 
 ### 4.2 The staged precondition
 
@@ -1672,8 +1678,8 @@ model, not of the rule.
   was a corollary of the generic theorem at that rule's carrier, so the
   per-rule files are gone and the mechanism is read at the generic
   theorems directly. Hammerhead over reactive Mysticeti — the result the
-  bespoke development did not have — is `Adaptive.run_exists_of_support`
-  with `coreSupport_live_of_reactiveLive` supplying the precondition, and
+  bespoke development did not have — is `Adaptive.Progress.holds` with
+  `coreSupport_live_of_reactiveLive` supplying the precondition, and
   nothing else changed.
 
 ### 4.4 Commits, and growth
@@ -1738,12 +1744,12 @@ depends on.
 
 | | Needs | Result |
 |---|---|---|
-| safety | `Agree` | `Adaptive.run_agree` |
-| liveness | `Agree`, `LeaderCommits`, `Descends`, `PlacesRuns` | `Adaptive.run_exists` |
+| safety | `Agree` | `Adaptive.Agreement.holds` |
+| liveness | `LiveRule.LiveOn`, `Descent` | `Adaptive.Progress.holds` |
 
-Safety holds under no synchrony, fairness or population hypothesis, for
-any adapted policy including adversarial ones. Liveness adds the policy
-clause that prices reassignment.
+Safety holds under no synchrony, fairness, window or population
+hypothesis, for any anchored update rule including adversarial ones.
+Liveness adds the clause that prices reassignment.
 
 **And progress survives whatever a mechanism adds.**
 `Properties/Derived/Progress.lean` composes `LeaderCommits` with
@@ -1893,10 +1899,11 @@ LeanDag/Properties/
   Arcs/Quality.lean     chain quality, given fairness and self-reference  (planned)
   Compose.lean          RebasedAbove/Rebases/Truncates compose
 
-LeanDag/Adaptive/{Basic,Policy,Run,Liveness}.lean   the mechanism, over BoundedRule
-LeanDag/Adaptive/Growth.lean             the fixpoint under Extends (§4.4)
-LeanDag/Adaptive/Mysticeti.lean          the core instance; the old statements as corollaries
-LeanDag/Integration/AdaptiveReactive.lean   Hammerhead over reactive Mysticeti
+LeanDag/Adaptive/Model/Segment.lean      the segmented run, over BaseRule
+LeanDag/Adaptive/Score/                  what a reputation score owes
+LeanDag/Adaptive/{Agreement,Ledger,Conservativity,Validity,Progress}/  the arc
+LeanDag/Adaptive/Helpers/Chop.lean       the joiner across a cut
+LeanDag/Integration/Joiner.lean          the joiner at the core
 
 LeanDag/Hydrozoan/Properties/{Statement,Proof}.lean
 LeanDag/OptimalHydrozoan/Properties/{Statement,Proof}.lean
@@ -1910,9 +1917,8 @@ LeanDag/Reactive/MysticetiProperties.lean
 The adaptive mechanism has no `Arcs/` bridge file, unlike garbage
 collection and crash recovery: those mechanisms are stated over
 concrete universes and the bridge applies a property to them, whereas
-`Adaptive/{Policy,Run,Liveness}.lean` are themselves stated over
-`BoundedRule`, so the mechanism *is* the generic theorem and the bridge
-is the instance file.
+`Adaptive/` is itself stated over `BaseRule`, so the mechanism *is* the
+generic theorem and the bridge is the instance file.
 
 Conformance belongs with the protocol. For the six arcs in
 `check-arc-holes.py`'s `ARCS` the statement/proof partition applies, and
@@ -2186,7 +2192,7 @@ induction deleted (§11.4e): `decided_fillHZ`, `decided_chopHZ`,
 `directCommit_chop` for liveness, and the adaptive arc entire, AL3 and
 AL5 standing verbatim as corollaries. One result the bespoke
 development did not have: Hammerhead over reactive Mysticeti
-(`Adaptive.run_exists_of_support` and `Run.commits_of_support`, the
+(`Adaptive.Progress.holds` and `Run.commits_of_support`, the
 reactive bridge supplying the precondition).
 
 What part 2 does not yet deliver:

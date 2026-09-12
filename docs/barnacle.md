@@ -73,11 +73,12 @@ Three consequences shape the plan.
   agree — a rule reading its view freely could hand two correct
   validators different counts. `Anchored` is the condition that rules
   that out: the step must not depend on which view computes it. It needs
-  no further hypothesis, because the window a rule measures on is the
-  anchor's causal
-  history, which BN2 shows every view holding the anchor holds whole and
-  restricts identically; the AIMD rule satisfies it by not reading the
-  view at all (BN7e). Given that, the `(k+1)`-st count is a function of
+  no further hypothesis, because the two things a rule reads are already
+  agreed — the window it measures on is the anchor's causal history,
+  which BN2 shows every view holding the anchor holds whole and restricts
+  identically, and the verdicts of the range are an argument the run
+  supplies rather than something the rule digs out of a view. The AIMD
+  rule satisfies it by reading neither (BN7e). Given that, the `(k+1)`-st count is a function of
   the anchor block and the previous state; the anchor is the least
   committed slot past the threshold in a schedule both validators share;
   and the verdicts of the range are agreed by the base rule's own
@@ -323,13 +324,20 @@ def Aimd.count (P : Params) (m backoff : ℕ) (healthy : Bool) : ℕ :=
 /-- The paper's `UpdateLeaders`: the new count on the same leaders and
 the same interval. -/
 def Aimd.rule (R) (P) (lead) (hl) : UpdateRule R :=
-  fun C backoff U _V A => …
+  fun C backoff U _V _v A => …
 
 /-- Any deterministic function of the configuration, the back-off, the
-universe and the anchor. -/
+universe, the verdicts of the range just closed, and the anchor. -/
 abbrev UpdateRule (R : BaseRule …) :=
-  Config Validator → ℕ → (U : R.Universe) → R.View U → BlockId → Config Validator × ℕ
+  Config Validator → ℕ → (U : R.Universe) → R.View U → (ℕ → Option BlockId) → BlockId →
+    Config Validator × ℕ
 ```
+
+The verdict argument is what lets a rule score the leaders the range
+just committed. It costs no hypothesis because a run *hands it over*
+(`spanVdct`, the range's verdicts and `none` outside), and BN3's
+induction identifies the two validators' copies before either applies
+the rule (`spanVdct_agree`). The AIMD rule ignores it.
 
 The interval is a configuration's own, so a reconfiguration may change
 it; `Params` keeps only the caps a run is measured against. `Aimd.rule`
@@ -1052,31 +1060,39 @@ a height-`2` run installs it, decides its range against its schedule and
 finds its anchor under it. BN3 there identifies the configuration itself
 rather than a count.
 
-## The assumption a run makes without stating it
+## Why a configuration's schedule is extended above its range
 
-`PartialRun.closed` records a configuration's verdicts as decided against
-`(cfg k).sched` — that configuration's schedule, extended to every round.
-That is not the schedule that runs once the configuration changes, and an
-indirectly decided slot near the top of a configuration's range takes its
-anchor from a round the next configuration governs.
+`PartialRun.closed` records configuration `k`'s verdicts as decided
+against `(cfg k).sched`, and a `Slots` instance is total: it names a
+leader at every round, including rounds above `start (k + 1)` that
+configuration `k + 1` will govern. An indirectly decided slot near the
+top of the range may anchor on one of them.
 
-`Barnacle.cfg_local` is why the clause is nonetheless sound. Every slot
-decided under one schedule has a round bound below which that schedule
-settles it, from `Properties.exists_roundLocal`; above the bound the
-schedule may be anything, and in particular it may be the one the next
-configuration installs.
+**That is the algorithm, not a concession to the model.** A validator
+settles configuration `k`'s range while `cfg k` is still its active
+schedule at every round: it decides upward from `start k`, reading slots
+above the range as anchors when an indirect decision needs them, until
+it finds the first committed slot past the threshold. Only then is the
+anchor fixed, the range's top known, and the configuration switched. So
+the extension is the schedule in force when those derivations are
+performed, and it is agreed for the same reason the range's verdicts
+are: both validators are still on `cfg k`, and `Properties.Agree`
+settles any two derivations at one schedule.
 
-What makes the bound reachable is the protocol's own discipline rather
-than anything in the run. The paper's `TryCommit` walks the decision
-sequence in order **up to the first undecided slot**, and the pivot at
-which the count changes is a leader it has committed, so at the moment of
-the switch every slot below the pivot is decided — each of them derived
-while the configuration list still named this configuration at every
-round. Its
-`TryDecide` then stops at the committed prefix and never re-derives below
-it. The formalisation states the outcome and not the discipline; this
-note records the discipline, since without it the clause would be asking
-for a derivation no validator computes.
+What is never done is to **output** a slot above the range under
+`cfg k`. That slot belongs to the next configuration's range and is
+decided again, under `cfg (k + 1)`, for the ledger. The two uses do not
+collide: `rangeLedger k` reads exactly the range, and
+`round_of_mem_ledgerUpto` (`Helpers/Ledger.lean`) says the ledger to any
+height stops at that height's start round. `LeanDagTest/Barnacle/Varying.lean`
+exercises it — `varC.sched` names round `8`, `varC` governs rounds `3` to
+`5`, and no block above round `5` is in the ledger.
+
+`Barnacle.cfg_local` is **not** what makes this sound, and nothing
+consumes it. It says a verdict has a round bound below which its
+schedule settles it, which is what a mechanism needs if it has to
+transport a verdict across a schedule it did not derive it under. This
+arc never does that.
 
 One consequence for anything built on top. A mechanism that delays the
 next configuration past the pivot's round — starting it at the anchor's
@@ -1084,5 +1100,14 @@ round plus a gap rather than at the round after — puts slots *above* the
 pivot inside the configuration's range. Those are not in the committed
 prefix when the switch is fixed, so an implementation would derive them
 with the next configuration above the boundary while `closed` asks for
-this one throughout. The paper starts the new configuration at the round after the
-pivot's, and a formalisation that keeps that has nothing to reconcile.
+this one throughout. The paper starts the new configuration at the round
+after the pivot's, and a formalisation that keeps that has nothing to
+reconcile.
+
+Hammerhead takes the other convention and is consistent in it: its
+`ORDERHISTORY` stops at the first anchor whose round has reached the
+boundary, switches, and returns **without** ordering that anchor, which
+is then re-derived under the new schedule. Barnacle's configuration
+governs through the anchor's round inclusive, and the anchor was
+committed under `cfg k` before the switch. Either is sound; what is not
+is the gap variant above.

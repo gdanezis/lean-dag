@@ -51,7 +51,7 @@ AIMD rule. Positivity of the widths is a `Config` field and needs no
 clause. -/
 def UpdBounded {R : BaseRule Validator BlockId Payload} (P : Params)
     (upd : UpdateRule R) : Prop :=
-  ∀ C b U V A, C.InBounds P → (upd C b U V A).1.InBounds P
+  ∀ C b U V v A, C.InBounds P → (upd C b U V v A).1.InBounds P
 
 /-- **What a good DAG delivers**: a `slack`-missing set of validators
 whose blocks, from `Rnd`, are reached by everything two rounds above
@@ -75,7 +75,7 @@ configuration in the bounds. For the AIMD rule `Q` may be "the heads are
 width throughout", which it meets by emitting `Config.uniform`. -/
 def UpdKeeps {R : BaseRule Validator BlockId Payload} (upd : UpdateRule R)
     (Q : Config Validator → Prop) : Prop :=
-  ∀ C b U V A, Q C → Q (upd C b U V A).1
+  ∀ C b U V v A, Q C → Q (upd C b U V v A).1
 
 /-- The horizon a run of height `K` needs, from a synchrony round at
 genesis: each anchor within `maxInterval + 1 + c` rounds of the last,

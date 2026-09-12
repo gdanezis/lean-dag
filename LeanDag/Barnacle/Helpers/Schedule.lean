@@ -107,14 +107,16 @@ theorem Sched_leader (getLeader : ℕ → Validator) {w : ℕ} (hk : Keyed getLe
 Every slot decided under a configuration's schedule has a round bound
 below which that configuration settles it; above the bound the schedule
 may be anything, and in particular it may be the one the next
-configuration installs.
+configuration installs. `Properties.exists_roundLocal` at a `Config`.
 
-This is the assumption a Barnacle run makes and does not state.
-`PartialRun` records a configuration's verdicts as decided against
-`(cfg k).sched`, extended to every round, which is not the schedule that
-runs once the configuration changes. What makes that sound is that a
-configuration's verdicts are settled within its own rounds, and this is
-that statement, at `Properties.exists_roundLocal`. -/
+**No clause of `PartialRun` needs this, and nothing consumes it.** A run
+records configuration `k`'s verdicts as decided against `(cfg k).sched`
+extended above the range, and that extension is the schedule in force
+while those derivations are performed: the range is settled before the
+anchor that closes it is found, so `cfg k` names every round at that
+moment (`Model/Run.lean`). The locality below is a fact about the
+relation, useful to a mechanism that has to transport a verdict across a
+schedule it did not derive it under — which this arc does not do. -/
 theorem cfg_local [Fintype Validator] [DecidableEq Validator]
     {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
     {R : Properties.DagRule Validator BlockId Payload} (hb : Properties.Banded R)
