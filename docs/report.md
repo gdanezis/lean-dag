@@ -4446,6 +4446,16 @@ agreed across views by construction. The verdicts are agreed because they
 are an *argument* — the run supplies `spanVdct`, and AL13's induction has
 already identified the two validators' copies when the rule is applied.
 
+The verdicts handed over are the configuration's **output**,
+`(start k, start (k + 1)]`, and not the whole span it decided
+(`SegRun.spanOf`). A configuration decides past its boundary to find its
+anchor, and those verdicts are discarded — the rounds are decided again
+under configuration `k + 1`, against a different schedule, and it is the
+later derivation that reaches the ledger. Handing them to the score would
+reconfigure the system on a derivation it throws away, at a window whose
+top is the anchor's round and so moves with the network; the boundary is
+fixed before any commit, so this window is too.
+
 That is where the circularity of a verdict-reading policy goes, and it is
 the reason the segmented arc needs no window where the fixpoint arc did.
 HammerHead's `UPDATESCHEDULE` scores the validators whose blocks voted
@@ -10482,7 +10492,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 324 definitions and structures the report names, in
+The 325 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -14063,10 +14073,12 @@ The height-`0` run: `init` only.
 
 ```lean
 def SegRun.spanOf {K : ℕ} (Rn : SegRun R P upd C₀ U V K) (k : ℕ) : ℕ → Option BlockId :=
-  spanVdct (Rn.cfg k) (Rn.start k) ((Rn.cfg k).roundOf (Rn.anchor k)) (Rn.vdct k)
+  spanVdct (Rn.cfg k) (Rn.start k) (Rn.start (k + 1)) (Rn.vdct k)
 ```
 
-**The verdicts configuration `k`'s update rule is handed**: the span it decided, `(start k, roundOf (anchor k)]`, and `none` outside. The `update` field names this function; `spanVdct_agree` is why two validators name one function.
+**The verdicts configuration `k`'s update rule is handed**: exactly what it *output*, `(start k, start (k + 1)]`, and `none` outside.
+
+Not the whole span it decided. A configuration decides past its boundary to find its anchor, and those verdicts are discarded — the rounds are decided again under configuration `k + 1`, against a different schedule, and it is the later derivation that reaches the ledger. A score reading them would reconfigure on a derivation the system throws away, and on a window whose top is the anchor's round and so moves with the network. The boundary is fixed before any commit, so this window is too.
 
 #### `SegRun.rangeLedger`
 
@@ -14155,6 +14167,17 @@ def RulePreserves (R : BaseRule Validator BlockId Payload) (score : Score R)
 ```
 
 **AL11c, the rule keeps what the score keeps.**
+
+#### `ConstScoreIsConstRule`
+
+*def, `Adaptive.Score.Statement.lean`*
+
+```lean
+def ConstScoreIsConstRule (R : BaseRule Validator BlockId Payload) : Prop :=
+  rule (Score.const R) = constRule R
+```
+
+**AL11d, the constant score is the constant rule.**
 
 #### `chop`
 
@@ -20288,8 +20311,8 @@ The anchors agree: the lesser of two anchors is, in the other run, a committed s
 theorem spanVdct_agree (hR : Properties.Agree R.toDagRule)
     (R₁ : SegRun R P upd C₀ U V₁ K₁) (R₂ : SegRun R P upd C₀ U V₂ K₂)
     {k : ℕ} (h : ConfigAgree R₁ R₂ k) (hk₁ : k < K₁) (hk₂ : k < K₂) :
-    spanVdct (R₁.cfg k) (R₁.start k) ((R₁.cfg k).roundOf (R₁.anchor k)) (R₁.vdct k)
-      = spanVdct (R₂.cfg k) (R₂.start k) ((R₂.cfg k).roundOf (R₂.anchor k)) (R₂.vdct k)
+    spanVdct (R₁.cfg k) (R₁.start k) (R₁.start (k + 1)) (R₁.vdct k)
+      = spanVdct (R₂.cfg k) (R₂.start k) (R₂.start (k + 1)) (R₂.vdct k)
 ```
 
 **The span's verdicts agree as a function.** What the two runs hand the update rule is one object, so a rule reading the committed leaders of the span it just closed reads agreed data and needs no further hypothesis. Outside the span both are `none` by construction, which is what makes the equality total: a run constrains its verdicts only inside the span it decided.

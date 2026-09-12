@@ -128,8 +128,7 @@ theorem rangeLedger_nodup (hR : Properties.CommitsCandidate R.toDagRule)
   intro a a' b ha ha'
   simp only [Option.mem_def] at ha ha'
   split_ifs at ha ha' with h h'
-  · exact slot_unique_of_rangeLedger hR Rn hk h.1 h.2 h'.1 h'.2 ha ha'
-  all_goals exact absurd ‹_› (by simp_all)
+  exact slot_unique_of_rangeLedger hR Rn hk h.1 h.2 h'.1 h'.2 ha ha'
 
 /-- **The ledger stops at the frontier.** Every block the run has output
 by height `K'` sits at a round after `0` and at or below `start K'` — so

@@ -46,10 +46,10 @@ round, against configuration `k`'s schedule — the schedule in force
 throughout, since the anchor has not yet been found and the switch has
 not yet happened. `anchor_commits` and `anchor_least` make the anchor
 the least committed slot **past the boundary**, not past a threshold
-inside the span. `update` hands the rule the verdicts of the span it just
-closed — `spanVdct`, agreed between validators before either applies the
-rule — so a reputation rule may read the committed leaders of the span
-without a hypothesis. `start_succ` fixes the next boundary from the current
+inside the span. `update` hands the rule the verdicts of the range it just
+*output* — `spanVdct`, agreed between validators before either applies
+the rule — so a reputation rule may read the committed leaders of that
+range without a hypothesis, and reads nothing that the ledger discards. `start_succ` fixes the next boundary from the current
 one and the interval alone, so the boundaries are known before any
 commit. -/
 structure SegRun (R : BaseRule Validator BlockId Payload) (P : Params)
@@ -87,7 +87,7 @@ structure SegRun (R : BaseRule Validator BlockId Payload) (P : Params)
   /-- The next configuration is the rule's, at the anchor's block. -/
   update : ∀ k, k < K → ∀ A, vdct k (anchor k) = some A →
     (cfg (k + 1), backoff (k + 1)) = upd (cfg k) (backoff k) U V
-      (spanVdct (cfg k) (start k) ((cfg k).roundOf (anchor k)) (vdct k)) A
+      (spanVdct (cfg k) (start k) (start (k + 1)) (vdct k)) A
 
 variable {R : BaseRule Validator BlockId Payload} {P : Params}
 variable {upd : UpdateRule R} {C₀ : Config Validator} {U : R.Universe} {V : R.View U}
@@ -96,12 +96,18 @@ variable {upd : UpdateRule R} {C₀ : Config Validator} {U : R.Universe} {V : R.
 abbrev SegRun.sched {K : ℕ} (Rn : SegRun R P upd C₀ U V K) (k : ℕ) : Slots Validator :=
   (Rn.cfg k).sched
 
-/-- **The verdicts configuration `k`'s update rule is handed**: the span
-it decided, `(start k, roundOf (anchor k)]`, and `none` outside. The
-`update` field names this function; `spanVdct_agree` is why two
-validators name one function. -/
+/-- **The verdicts configuration `k`'s update rule is handed**: exactly
+what it *output*, `(start k, start (k + 1)]`, and `none` outside.
+
+Not the whole span it decided. A configuration decides past its boundary
+to find its anchor, and those verdicts are discarded — the rounds are
+decided again under configuration `k + 1`, against a different schedule,
+and it is the later derivation that reaches the ledger. A score reading
+them would reconfigure on a derivation the system throws away, and on a
+window whose top is the anchor's round and so moves with the network.
+The boundary is fixed before any commit, so this window is too. -/
 def SegRun.spanOf {K : ℕ} (Rn : SegRun R P upd C₀ U V K) (k : ℕ) : ℕ → Option BlockId :=
-  spanVdct (Rn.cfg k) (Rn.start k) ((Rn.cfg k).roundOf (Rn.anchor k)) (Rn.vdct k)
+  spanVdct (Rn.cfg k) (Rn.start k) (Rn.start (k + 1)) (Rn.vdct k)
 
 /-- **The output of configuration `k`**: the committed blocks of the
 rounds it governs, `(start k, start (k + 1)]`, and not of the rounds

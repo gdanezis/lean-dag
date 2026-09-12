@@ -189,7 +189,7 @@ verdict-reading score by `rfl`. -/
 committed block `15` at slot `3`. It looks at no block and no view — only
 at the committed sequence. -/
 def commitScore : Score bnRule32 := fun U V v C =>
-  if v 3 = some (15 : Fin 32) then Score.permute swap01 U V v C else C
+  if v 1 = some (5 : Fin 32) then Score.permute swap01 U V v C else C
 
 /-- **AL13 covers it.** Nothing beyond `Anchored` is asked, and `Anchored`
 is `rfl`: the score reads its argument, not its view. So two validators
@@ -226,7 +226,7 @@ alone reads no DAG, so a fill or a re-genesis leaves what it installs
 untouched — `SegRun.extend` applies, and the ledger does not move. -/
 theorem commitScore_stable : commitScore.Stable :=
   Score.stable_of_ignores _
-    (f := fun v C => if v 3 = some (15 : Fin 32) then
+    (f := fun v C => if v 1 = some (5 : Fin 32) then
       { slotsAt := C.slotsAt, slotsAt_pos := C.slotsAt_pos
         lead := fun r i => swap01 (C.lead r i)
         keyed := fun r i j hi hj h => C.keyed r i j hi hj (swap01.injective h)
@@ -235,11 +235,43 @@ theorem commitScore_stable : commitScore.Stable :=
 
 example : UpdStable (rule commitScore) := updStable_rule commitScore_stable
 
--- And it is not vacuous: on `segRun`'s own first span, which commits
--- block `15` at slot `3`, the leaders move; on the empty span they do not.
-example : segRun.spanOf 0 3 = some 15 := by decide
+-- It is not vacuous: segment `0` outputs block `5` at slot `1`, so the
+-- leaders move; on an empty range they do not.
+example : segRun.spanOf 0 1 = some 5 := by decide
 example : (commitScore Usk (View.full Usk) (segRun.spanOf 0) bnC1I1).head 0 = 1 := by decide
 example : (commitScore Usk (View.full Usk) (fun _ => none) bnC1I1).head 0 = 0 := by decide
+
+/-! ### What `Score.Keeps` is for
+
+AL11b derives `UpdBounded` from `Score.Keeps` alone. The clause is not
+decoration: a score that moves the shape rather than the leaders takes
+the configuration out of the parameters, and the run's `bounds` field
+then has no supply. -/
+
+/-- A score that reconfigures to a zero interval — no reconfiguration
+would ever be due again. -/
+def zeroIntervalScore : Score bnRule32 := fun _ _ _ C => { C with interval := 0 }
+
+/-- It does not keep the shape … -/
+example : ¬ zeroIntervalScore.Keeps :=
+  fun h => absurd ((h Usk (View.full Usk) (fun _ => none) bnC1I1).2) (by decide)
+
+/-- … and AL11b fails for it, at a configuration that was in bounds. -/
+example : ¬ UpdBounded bnPI1 (rule zeroIntervalScore) :=
+  fun h => absurd (h bnC1I1 0 Usk (View.full Usk) (fun _ => none) 5
+    ⟨fun _ => (by decide : (1 : ℕ) ≤ 4), by decide, by decide⟩).2.1 (by decide)
+
+/-! ### The rule sees the range, not the span
+
+Segment `0` **decides** slot `3` — that is how it finds its anchor — and
+`vdSeg` commits block `15` there. The rule is handed nothing about it:
+slot `3`'s round is `3`, and segment `0`'s range ends at round `1`. Its
+verdict is discarded and round `3` is decided again under a later
+configuration, so a score reading it would reconfigure on a derivation
+the ledger throws away, at a window whose top moves with the network. -/
+example : segRun.vdct 0 3 = some 15 := by decide
+example : segRun.spanOf 0 3 = none := by decide
+example : (15 : Fin 32) ∉ segRun.rangeLedger 0 := by decide
 
 #print axioms segRun
 #print axioms swapScore_permuted

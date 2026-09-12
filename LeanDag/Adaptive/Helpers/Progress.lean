@@ -107,7 +107,7 @@ theorem progress_exists (hR : Properties.Agree R.toBaseRule.toDagRule) (hupd : U
   -- The next configuration, by the rule at the anchor block.
   let next : Config Validator × ℕ :=
     (v a).elim (Rn.cfg K, Rn.backoff K) (fun A => upd (Rn.cfg K) (Rn.backoff K) U V
-      (spanVdct (Rn.cfg K) (Rn.start K) ((Rn.cfg K).roundOf a) v) A)
+      (spanVdct (Rn.cfg K) (Rn.start K) (Rn.start K + (Rn.cfg K).interval) v) A)
   have hnext : next.1.InBounds P := by
     obtain ⟨_, A, hA⟩ := ha_spec
     simp only [next, hA, Option.elim_some]

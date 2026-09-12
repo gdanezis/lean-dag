@@ -107,16 +107,20 @@ the span it decided. -/
 theorem spanVdct_agree (hR : Properties.Agree R.toDagRule)
     (R₁ : SegRun R P upd C₀ U V₁ K₁) (R₂ : SegRun R P upd C₀ U V₂ K₂)
     {k : ℕ} (h : ConfigAgree R₁ R₂ k) (hk₁ : k < K₁) (hk₂ : k < K₂) :
-    spanVdct (R₁.cfg k) (R₁.start k) ((R₁.cfg k).roundOf (R₁.anchor k)) (R₁.vdct k)
-      = spanVdct (R₂.cfg k) (R₂.start k) ((R₂.cfg k).roundOf (R₂.anchor k)) (R₂.vdct k) := by
+    spanVdct (R₁.cfg k) (R₁.start k) (R₁.start (k + 1)) (R₁.vdct k)
+      = spanVdct (R₂.cfg k) (R₂.start k) (R₂.start (k + 1)) (R₂.vdct k) := by
   have ha := anchor_agree hR R₁ R₂ h hk₁ hk₂
+  have hs' : R₁.start (k + 1) = R₂.start (k + 1) := start_succ_agree R₁ R₂ h hk₁ hk₂
   obtain ⟨hs, hc, _⟩ := h
   funext κ
-  simp only [spanVdct, hs, hc, ha]
+  simp only [spanVdct, hs, hc, hs']
   split
   · rename_i hk
-    exact vdct_agree hR R₁ R₂ hc hk₁ hk₂ (by rw [hs, hc]; exact hk.1)
-      (by rw [hc, ha]; exact hk.2) hk.1 hk.2
+    have hanc : R₂.start (k + 1) < (R₂.cfg k).roundOf (R₂.anchor k) :=
+      (R₂.anchor_commits k hk₂).2
+    refine vdct_agree hR R₁ R₂ hc hk₁ hk₂ ?_ ?_ hk.1 (by omega)
+    · rw [hs, hc]; exact hk.1
+    · rw [hc, ha]; omega
   · rfl
 
 /-- Agreement at `k` carries to `k + 1`: the anchors agree, so the anchor

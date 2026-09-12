@@ -951,7 +951,10 @@ arc needs no window, and the reason is that the span is bounded at both
 ends *before* the rule is applied.
 
 `UpdateRule` gains a verdict argument, and `spanVdct` is what a run hands
-it: the verdicts of the range just closed, `none` outside. Both arcs'
+it: the verdicts of the range the configuration **output**,
+`(start k, start (k + 1)]`, and `none` outside — not the wider span it
+decided while looking for its anchor, whose verdicts the ledger discards
+and whose top moves with the network. Both arcs'
 agreement inductions then carry `spanVdct_agree` — the two validators'
 copies are one *function* — so `Anchored` is unchanged in strength and a
 verdict-reading rule satisfies it by `rfl`. AL13 covers it with nothing
@@ -1007,7 +1010,44 @@ now `ConstScoreIsConstRule`, which says what it claims. `SegRun.spanOf`
 was disconnected from the `update` field it claimed to name;
 `update_spanOf` is the identification.
 
-### Step 11 — the record
+### Step 11 — the second review
+
+**The score was reading verdicts the ledger discards.** `spanVdct`'s top
+was the anchor's round, so the rule saw the whole span the configuration
+*decided* — including the rounds above its boundary, whose verdicts are
+thrown away and re-derived under the next configuration against a
+different schedule. Safety was never at risk (both validators agree on
+them), but the score would reconfigure on a derivation the system
+discards, at a window whose top moves with the network. The top is now
+the boundary, so the rule sees exactly what the configuration output, at
+a window fixed before any commit. `segRun` witnesses the difference: it
+decides block `15` at slot `3`, `spanOf 0 3` is `none`, and `15` is not
+in `rangeLedger 0`.
+
+A side effect worth noting: both arcs now hand their rule the same
+window, `(start k, start (k + 1)]`. Barnacle's boundary *is* its anchor's
+round, so nothing changed there, and the two `spanVdct` calls are now
+identical in form.
+
+**`Score.Keeps` had no refutation.** AL11b derives `UpdBounded` from it
+and nothing showed the clause bites. `zeroIntervalScore` does: it moves
+the shape rather than the leaders, fails `Keeps`, and takes a
+configuration that was in bounds out of them.
+
+**D21, restated and now tractable.** With `spanVdct` aligned, the two
+arcs' runs differ in exactly two places: `closed`'s top (`start (k + 1)`
+against `roundOf (anchor k)`) and which of the two `start_succ` derives.
+Both are the shape *threshold `T` ≤ output `O` ≤ decisions `D`*, with
+`T = start k + interval` and `D = roundOf (anchor k)`; Barnacle takes
+`O = D`, this arc takes `O = T`. A common run with `O` as a field
+constrained by `T ≤ O ≤ D` subsumes both, and would retire seventeen
+theorem names that are currently proved twice — `configAgree`,
+`anchor_agree`, `vdct_agree`, `spanVdct_agree`, the four ledger lemmas,
+the four progress lemmas. The Progress helpers already differ by 55 lines
+out of 490. Not done: it rewrites Barnacle's arc, which is settled on
+`main`.
+
+### Step 12 — the record
 
 Report §13 gains the segmented arc and relabels the fixpoint one: AL3 is
 safety for policies that read verdicts, under a window condition
