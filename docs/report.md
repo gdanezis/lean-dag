@@ -4348,6 +4348,29 @@ anchor may run past the boundary, because that is how the switch is
 detected and every validator detects it at the same anchor; ordering
 never does.
 
+**The three theorems.** The arc is stated for an arbitrary update rule,
+which is what makes safety unconditional — nothing about a score can
+break a theorem that never looks at one. A designer arrives with a score,
+though, so `Adaptive/Headline.lean` supplies the same results with the
+score's own clauses discharged (**AL18**):
+
+> **AL18a.** Two validators running *any* score over one DAG from one
+> genesis configuration adopt the same configuration at every height both
+> reach, the same anchor, and the same verdict at every slot of every
+> range both closed. **No synchrony, no fairness, no window, and no
+> clause on the score.**
+>
+> **AL18b.** And they read one ledger — agreed as far as both reach,
+> growing as a prefix of itself, holding no block twice.
+>
+> **AL18c.** And the sequence does not stop: under `Score.Keeps` and a
+> clause the score preserves whose configurations are live, a run of
+> every height exists once the DAG is good far enough up.
+
+`Score.rule_anchored` is `rfl`, which is why the first two ask a score for
+nothing. AL18c is the only place a score is asked for anything, and the
+two clauses are what a designer supplies.
+
 Results carry **AL**-labels. The arc reuses the Barnacle arc's
 vocabulary — `Config`, `UpdateRule`, `Anchored`, `Config.InBounds`,
 `ledgerOf` — and restates none of it; what differs is that a
@@ -9547,6 +9570,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `SafeSkip/Invariance.lean` | conservativity at the rule layer; verdict invariance; agreement across a recovery |
 | `SafeSkip/Jump.lean` | the self-parent function; the derived line; the jump message and its elaboration |
 | `Adaptive/Model/Segment.lean` | the segmented run: decisions to the anchor, output to the boundary |
+| `Adaptive/Headline.lean` | the three theorems at a score, its clauses discharged |
 | `Adaptive/Score/` | what a reputation score owes: anchored, bounded, keeping liveness' clause |
 | `Adaptive/Agreement/`, `Adaptive/Ledger/` | safety for any anchored rule, with no window; the agreed ledger |
 | `Adaptive/Conservativity/`, `Adaptive/Validity/`, `Adaptive/Progress/` | the constant score; validity; liveness with one more configuration |
@@ -10294,6 +10318,7 @@ reused.
 | AL14 | the segmented ledger: agreed, growing, without repetition | `Adaptive.Ledger.holds` *(Adaptive/Ledger)* |
 | AL15 | conservativity at the constant rule, and validity | `Adaptive.Conservativity.holds` *(Adaptive/Conservativity)*, `Adaptive.Validity.holds` *(Adaptive/Validity)* |
 | AL16 | liveness: one more configuration, and runs of every height under the horizon; runs of heads counted over positions, so a reassigning rule owes a cap on accumulation rather than a permutation | `Adaptive.Progress.holds` *(Adaptive/Progress)*, `Barnacle.headsRun_of_cycle`, `Barnacle.headsRun_of_cycle_weighted`, `Barnacle.headsRun_perm_of_all`, `Barnacle.liveOn_of_permuted_heads` *(Barnacle/Helpers/Heads)* |
+| AL18 | the arc at a reputation score, its clauses discharged: safety and the ledger asking the score for nothing, liveness asking `Score.Keeps` and a preserved clause | `Adaptive.score_safe`, `Adaptive.score_ledger`, `Adaptive.score_live` *(Adaptive/Headline)* |
 | AL17 | the asynchronous segment on data: an anchor two rounds past the boundary, the ledger stopping at it, and two scores that reassign — one off the DAG, one off the committed sequence alone | `segRun`, `swapScore`, `commitScore`, `commitScore_anchored` witnesses *(LeanDagTest/Adaptive/Asynchronous)* |
 
 **Hybrid fault tolerance** (§14):

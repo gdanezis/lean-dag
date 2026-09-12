@@ -1047,7 +1047,26 @@ the four progress lemmas. The Progress helpers already differ by 55 lines
 out of 490. Not done: it rewrites Barnacle's arc, which is settled on
 `main`.
 
-### Step 12 — the record
+### Step 12 — the headline
+
+What the arc guarantees was reachable only by composing two theorems by
+hand, and that composition lived in anonymous `example`s in the witness
+tree. A designer arriving with a score had nothing to cite.
+
+`Adaptive/Headline.lean` states it: `score_safe`, `score_ledger`,
+`score_live`. Each is a generic theorem with the score's own clause
+supplied — `Score.rule_anchored` for the first two, which is `rfl`, so
+**a reputation score is asked for nothing at all by safety**;
+`Score.rule_bounded` and `Score.rule_keeps` for the third. The step that
+removes a hypothesis is content, not a restatement, which is why these
+are named rather than left to the reader.
+
+Generality and usefulness pull in opposite directions here and the arc
+now serves both: the theorems are proved for an arbitrary `UpdateRule`,
+because that is what makes safety unconditional, and restated at a
+`Score`, because that is what a designer holds.
+
+### Step 13 — the record
 
 Report §13 gains the segmented arc and relabels the fixpoint one: AL3 is
 safety for policies that read verdicts, under a window condition

@@ -5,6 +5,7 @@ import LeanDag.Adaptive.Conservativity.Proof
 import LeanDag.Adaptive.Validity.Proof
 import LeanDag.Adaptive.Progress.Proof
 import LeanDag.Barnacle.Helpers.Heads
+import LeanDag.Adaptive.Headline
 /-!
 # The segmented arc, applied
 
@@ -28,27 +29,25 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {R : BaseRule Validator BlockId Payload} {P : Params}
 
-/-- **AL13 at any score.** Two runs over one universe from one genesis
-configuration agree on the configuration in force, and `AL11a` is what
-discharges agreement's only clause on the rule. -/
+/-- **AL18a on the two facts a designer reaches for**: one configuration
+in force, and one anchor closing it. -/
 example (ha : Properties.Agree R.toDagRule) (score : Score R) (C₀ : Config Validator)
     (U : R.Universe) (V₁ V₂ : R.View U) (K₁ K₂ : ℕ)
     (R₁ : SegRun R P (rule score) C₀ U V₁ K₁) (R₂ : SegRun R P (rule score) C₀ U V₂ K₂)
-    (k : ℕ) (hk : k ≤ min K₁ K₂) :
-    R₁.cfg k = R₂.cfg k :=
-  (Agreement.holds _ _ _ R ha P (rule score) C₀ (Score.rule_anchored score)
-    U V₁ V₂ K₁ K₂ R₁ R₂ k hk).2.1
+    (k : ℕ) (hk : k < min K₁ K₂) :
+    R₁.cfg k = R₂.cfg k ∧ R₁.anchor k = R₂.anchor k :=
+  let h := score_safe ha score C₀ U V₁ V₂ R₁ R₂ k (le_of_lt hk)
+  ⟨h.2.1, (h.2.2.2 hk).1⟩
 
-/-- **AL14 at any score.** The output is one list across two views, to
-every height both reach. -/
+/-- **AL18b**: the output is one list across two views, to every height
+both reach. -/
 example (ha : Properties.Agree R.toDagRule) (hc : Properties.CommitsCandidate R.toDagRule)
     (score : Score R) (C₀ : Config Validator)
     (U : R.Universe) (V₁ V₂ : R.View U) (K₁ K₂ : ℕ)
     (R₁ : SegRun R P (rule score) C₀ U V₁ K₁) (R₂ : SegRun R P (rule score) C₀ U V₂ K₂)
     (K : ℕ) (hK : K ≤ min K₁ K₂) :
     R₁.ledgerUpto K = R₂.ledgerUpto K :=
-  ((Ledger.holds _ _ _ R ha hc P (rule score) C₀ (Score.rule_anchored score)).1
-    U V₁ V₂ K₁ K₂ R₁ R₂).2 K hK
+  (score_ledger ha hc score C₀).1 U V₁ V₂ K₁ K₂ R₁ R₂ K hK
 
 /-- **AL11b at any score that keeps the shape.** The rule a run needs to
 stay within its parameters. -/
@@ -109,7 +108,7 @@ theorem liveOn_of_permuted (hD : RL.Descent slack) (hw : 0 < RL.waveLength)
   rintro C _ ⟨σ, hσ⟩
   exact liveOn_of_permuted_heads C hD hw hheads σ hσ
 
-/-- **AL16b at a permuting score.** Runs of every height exist under the
+/-- **AL18c at a permuting score.** Runs of every height exist under the
 horizon, with the liveness clause discharged from runs of heads and the
 score's own preservation of the clause. -/
 example (ha : Properties.Agree RL.toBaseRule.toDagRule) (hD : RL.Descent slack)
@@ -124,8 +123,7 @@ example (ha : Properties.Agree RL.toBaseRule.toDagRule) (hD : RL.Descent slack)
     (hcov : RL.toBaseRule.CoversUpto U V N) (hRnd : Rnd ≤ 1)
     (K : ℕ) (hK : horizon P RL c₀ K ≤ N) :
     Nonempty (SegRun RL.toBaseRule P (rule score) C₀ U V K) :=
-  (Progress.holds _ _ _ RL ha P (rule score) (Score.rule_bounded P score hk) C₀
-    (Permuted head) (Score.rule_keeps score _ hperm) c₀).2
+  (score_live ha score hk (Permuted head) hperm C₀ c₀).2
     (liveOn_of_permuted hD hw hheads) h₀ hQ₀ U V Rnd N hgood hcov hRnd K hK
 
 end Liveness

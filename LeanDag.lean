@@ -71,6 +71,7 @@ import LeanDag.Adaptive.Helpers.Progress
 import LeanDag.Adaptive.Progress.Statement
 import LeanDag.Adaptive.Progress.Proof
 import LeanDag.Adaptive.Helpers.Mechanisms
+import LeanDag.Adaptive.Headline
 import LeanDag.Hybrid.Faults
 import LeanDag.Hybrid.Rules
 import LeanDag.Hybrid.Decision
