@@ -75,10 +75,6 @@ universe. -/
 theorem chop_chop (G₁ G₂ : ℕ) : (C.chop G₁).chop G₂ = C.chop (G₁ + G₂) := by
   simp only [chop, Nat.add_assoc]
 
-/-- **Chopping at nothing is doing nothing.** -/
-@[simp] theorem chop_zero : C.chop 0 = C := by
-  simp only [chop, Nat.zero_add]
-
 /-- **The schedule half of a truncation.** A cut at round `G`, numbered
 from the first slot of that round, rebases the configuration's schedule
 onto the chopped configuration's. -/

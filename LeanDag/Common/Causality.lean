@@ -187,6 +187,29 @@ def historyFrom (blk : BlockId → Block Validator BlockId Payload) (b : BlockId
 theorem mem_historyFrom_self {b : BlockId} : b ∈ historyFrom blk b :=
   mem_historyUptoFrom_self
 
+/-- **A history is a function of the blocks it names.** Two block maps
+agreeing on a causally closed population give one causal history to every
+block of it. What a mechanism that *adds* blocks does not disturb: the
+blocks an anchor reaches are the same before and after, so anything read
+off them — a reputation score's window, say — is the same too. -/
+theorem historyUptoFrom_congr {blk blk' : BlockId → Block Validator BlockId Payload}
+    {ids : Finset BlockId} (hcl : ∀ i ∈ ids, ∀ j ∈ (blk i).refs, j ∈ ids)
+    (hb : ∀ i ∈ ids, blk i = blk' i) :
+    ∀ (n : ℕ) (b : BlockId), b ∈ ids → historyUptoFrom blk n b = historyUptoFrom blk' n b
+  | 0, _, _ => rfl
+  | n + 1, b, hbi => by
+      rw [historyUptoFrom_succ, historyUptoFrom_succ, ← hb b hbi]
+      exact congrArg (insert b) (Finset.biUnion_congr rfl
+        (fun j hj => historyUptoFrom_congr hcl hb n j (hcl b hbi j hj)))
+
+/-- **And so is the causal history itself.** -/
+theorem historyFrom_congr {blk blk' : BlockId → Block Validator BlockId Payload}
+    {ids : Finset BlockId} (hcl : ∀ i ∈ ids, ∀ j ∈ (blk i).refs, j ∈ ids)
+    (hb : ∀ i ∈ ids, blk i = blk' i) {b : BlockId} (hbi : b ∈ ids) :
+    historyFrom blk b = historyFrom blk' b := by
+  rw [historyFrom, historyFrom, ← hb b hbi]
+  exact historyUptoFrom_congr hcl hb _ b hbi
+
 namespace CausalStructure
 
 /-- **Completeness**, with the fuel accounted for. A path drops the round by

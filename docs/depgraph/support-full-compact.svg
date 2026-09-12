@@ -992,7 +992,7 @@
 <g><title>LeanDag.Barnacle.Aimd.holds — the AIMD rule keeps its count in range, steps as the paper says, is the integer test, and is anchored — it does not read the view, so two validators take one step</title>
 <rect x="134.0" y="1488.0" width="62" height="24" rx="5" fill="#fbe9d7" stroke="#b5652a" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="1500.0" text-anchor="middle">BN7</text></g>
-<g><title>LeanDag.Barnacle.Config.chop — the joiner across a cut: a configuration chopped, and what a score owes pruning</title>
+<g><title>LeanDag.Barnacle.Config.chop — the joiner across a cut: a configuration chopped, what a score owes pruning, and a reassigning score meeting it at every cut</title>
 <rect x="134.0" y="1521.0" width="62" height="24" rx="5" fill="#dbe7e0" stroke="#5f8a76" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="1533.0" text-anchor="middle">I5</text></g>
 <g><title>LeanDag.Barnacle.Config.chop_chop — the segmented arc across every mechanism, at any record carrier: cuts compose beneath a configuration and stack with the fill; a fill and a re-genesis carry a whole run across and leave its ledger alone, under one obligation on the update rule</title>

@@ -136,12 +136,6 @@ theorem decided_and_not_output (Rn : SegRun R P upd C₀ U V K) {k : ℕ} (hk : 
   refine ⟨Rn.closed k hk κ (by omega) hhi, ?_⟩
   exact (Config.cum_le_iff_le_roundOf (Rn.cfg k)).2 (by omega)
 
-/-- **The span a segment decides reaches past the span it outputs**, by
-at least one round: the anchor is strictly above the boundary. -/
-theorem output_lt_decided (Rn : SegRun R P upd C₀ U V K) {k : ℕ} (hk : k < K) :
-    Rn.start (k + 1) < (Rn.cfg k).roundOf (Rn.anchor k) :=
-  (Rn.anchor_commits k hk).2
-
 /-- **The ledger stops at the frontier.** Every block the run has output
 by height `K'` sits at a round after `0` and at or below `start K'` — so
 nothing above the round the last closed configuration reached is in the

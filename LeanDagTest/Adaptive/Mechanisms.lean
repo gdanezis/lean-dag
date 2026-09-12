@@ -44,6 +44,26 @@ example (G : ℕ) (v : ℕ → Option BlockId) :
     HorizonStable (R := R.toDagRule) (fun U V C => Score.const R U V v C) G :=
   horizonStable_const G
 
+/-- **And so is a permuting score**, which is the case worth having: it
+moves the leaders, and a joiner running it still computes the network's
+schedule whatever the horizon. Both obligations are discharged for
+AL11's reassignment family, not only for the score that does nothing. -/
+example (σ : Equiv.Perm Validator) (G : ℕ) (v : ℕ → Option BlockId) :
+    HorizonStable (R := R.toDagRule) (fun U V C => Score.permute (R := R) σ U V v C) G :=
+  horizonStable_relabel σ (fun C r i j hi hj h => C.keyed r i j hi hj (σ.injective h)) G
+
+/-- **A score that reads the anchor's history is stable.** The obligation
+`SegRun.extend` carries is met by the realistic rule and not only by the
+degenerate ones: a reputation score reads what the anchor reaches, and a
+fill or a re-genesis leaves that alone. -/
+example (hL : R.Laws) (score : Score R)
+    (h : ∀ (U U' : R.Universe) (V : R.View U) (V' : R.View U'),
+      R.viewIds V = R.viewIds V' →
+      (∀ b ∈ R.viewIds V, R.block U b = R.block U' b) →
+      ∀ v C, score U V v C = score U' V' v C) :
+    UpdStable (rule score) :=
+  updStable_rule (Score.stable_of_readsHistory hL score h)
+
 end Scores
 
 /-! ## The mechanisms that add blocks, at any carrier -/

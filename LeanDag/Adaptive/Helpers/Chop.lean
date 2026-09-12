@@ -14,8 +14,10 @@ before:
   own schedule, and cross-cut agreement holds at any schedule.
 * **the schedule** — `HorizonStable` is what a score owes: from views
   agreeing above the cut it returns the same configuration the network
-  installs, chopped. A score reading a bounded window of rounds below its
-  anchor has it whenever the cut lies below that window.
+  installs, chopped. A score that only reassigns leaders has it at every
+  cut (`horizonStable_relabel`), which is AL11's whole family; what the
+  condition rules out is a score whose *choice* of reassignment is read
+  from rounds the horizon has removed.
 
 The fixpoint arc stated the schedule half over a `pick` reading the whole
 verdict function, and re-indexed that function. Here the object being
@@ -69,9 +71,10 @@ variable {R : DagRule Validator BlockId Payload}
 /-- **Horizon-stability.** A score is horizon-stable at `G` when, from
 two views agreeing above `G`, it installs the same configuration on the
 cut that it installs on the whole — re-indexed by `Config.chop`. This is
-the condition that rules out scores incompatible with pruning, and a
-score reading a bounded window of rounds below its anchor meets it once
-the cut lies below that window. -/
+the condition that rules out scores incompatible with pruning: a score
+that only relabels who leads meets it at every cut, and one that reads
+the DAG to choose the relabelling meets it as long as it reads above the
+cut, where `ViewAgreeAbove` gives it the same answer. -/
 def HorizonStable
     (score : (U : R.Universe) → R.View U → Config Validator → Config Validator)
     (G : ℕ) : Prop :=
@@ -107,6 +110,29 @@ cut: what it was given was already chopped. `Adaptive.Score.const` is
 this one, and AL15's conservativity is its consequence. -/
 theorem horizonStable_const (G : ℕ) :
     HorizonStable (R := R) (fun _ _ C => C) G := fun _ _ _ _ _ _ => rfl
+
+/-- **A score that only reassigns leaders is horizon-stable**, at every
+cut and with no condition on the cut. Relabelling who leads commutes with
+dropping the rounds below a horizon, because both act on the leader
+function pointwise and neither moves a round. This is the case the
+obligation exists for — `Score.permute` is AL11's reassignment family, so
+a joiner running a permuting score computes the network's leaders whatever
+the horizon.
+
+The condition bites for a score whose *choice* of reassignment is read
+off the DAG: it then has to make that choice from what survives the cut,
+which is what `ViewAgreeAbove` gives it above `G` and nothing gives it
+below. -/
+theorem horizonStable_relabel (σ : Validator → Validator)
+    (hinj : ∀ (C : Config Validator) r i j, i < C.slotsAt r → j < C.slotsAt r →
+      σ (C.lead r i) = σ (C.lead r j) → i = j) (G : ℕ) :
+    HorizonStable (R := R)
+      (fun _ _ C =>
+        { slotsAt := C.slotsAt, slotsAt_pos := C.slotsAt_pos
+          lead := fun r i => σ (C.lead r i)
+          keyed := fun r i j hi hj h => hinj C r i j hi hj h
+          interval := C.interval }) G :=
+  fun _ _ _ _ _ _ => rfl
 
 end Schedule
 

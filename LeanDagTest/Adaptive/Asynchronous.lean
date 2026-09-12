@@ -2,6 +2,7 @@ import LeanDagTest.Barnacle.Progress
 import LeanDag.Adaptive.Ledger.Proof
 import LeanDag.Adaptive.Score.Proof
 import LeanDagTest.Adaptive.Segmented
+import LeanDag.Adaptive.Helpers.Mechanisms
 /-!
 # The segmented run on data: an anchor past the boundary
 
@@ -219,6 +220,20 @@ theorem commitScore_permuted {head : ℕ → Fin 4} (U : bnRule32.Universe)
   split
   · exact ⟨σ.trans swap01, by funext ρ; simp [Score.permute_head, hσ]⟩
   · exact ⟨σ, hσ⟩
+
+/-- **And it survives a recovery.** A score of the committed sequence
+alone reads no DAG, so a fill or a re-genesis leaves what it installs
+untouched — `SegRun.extend` applies, and the ledger does not move. -/
+theorem commitScore_stable : commitScore.Stable :=
+  Score.stable_of_ignores _
+    (f := fun v C => if v 3 = some (15 : Fin 32) then
+      { slotsAt := C.slotsAt, slotsAt_pos := C.slotsAt_pos
+        lead := fun r i => swap01 (C.lead r i)
+        keyed := fun r i j hi hj h => C.keyed r i j hi hj (swap01.injective h)
+        interval := C.interval } else C)
+    (fun U V v C => by unfold commitScore; split <;> rfl)
+
+example : UpdStable (rule commitScore) := updStable_rule commitScore_stable
 
 -- And it is not vacuous: on `segRun`'s own first span, which commits
 -- block `15` at slot `3`, the leaders move; on the empty span they do not.

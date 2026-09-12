@@ -89,6 +89,15 @@ theorem anchor_agree (hR : Properties.Agree R.toDagRule)
     rw [hA, hnone] at hv
     exact Option.some_ne_none A hv.symm
 
+/-- **The rule is applied to exactly that.** The accessor and the
+structure's own `update` field name one function, so a reader chasing
+what a reputation rule sees can read `spanOf` and stop. -/
+theorem SegRun.update_spanOf {K : ℕ} (Rn : SegRun R P upd C₀ U V K) (k : ℕ) (hk : k < K)
+    (A : BlockId) (hA : Rn.vdct k (Rn.anchor k) = some A) :
+    (Rn.cfg (k + 1), Rn.backoff (k + 1))
+      = upd (Rn.cfg k) (Rn.backoff k) U V (Rn.spanOf k) A :=
+  Rn.update k hk A hA
+
 /-- **The span's verdicts agree as a function.** What the two runs hand
 the update rule is one object, so a rule reading the committed leaders of
 the span it just closed reads agreed data and needs no further

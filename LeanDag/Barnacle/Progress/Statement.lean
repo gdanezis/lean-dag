@@ -31,7 +31,7 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 
 /-- **BN8a, progress**: a run past the synchrony round extends by one
 configuration. -/
-def ProgressStmt (R : LiveRule Validator BlockId Payload) (P : Params)
+def ConfigProgress (R : LiveRule Validator BlockId Payload) (P : Params)
     (upd : UpdateRule R.toBaseRule) (C₀ : Config Validator) (c : ℕ) : Prop :=
   -- A run of height `K` on any view of `U` caught up to the horizon —
   -- what a validator that has received everything up to `N` holds …
@@ -77,7 +77,7 @@ def Statement : Prop :=
     Properties.Agree R.toBaseRule.toDagRule →
     ∀ (P : Params) (upd : UpdateRule R.toBaseRule), UpdBounded P upd →
       ∀ (C₀ : Config Validator) (Q : Config Validator → Prop), UpdKeeps upd Q →
-        ∀ c : ℕ, ProgressStmt R P upd C₀ c ∧ EveryHeight R P upd C₀ Q c
+        ∀ c : ℕ, ConfigProgress R P upd C₀ c ∧ EveryHeight R P upd C₀ Q c
 
 end Progress
 

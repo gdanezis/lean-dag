@@ -56,7 +56,7 @@ theorem rule_keeps (score : Score R) (Q : Config Validator → Prop) :
 
 /-- Under the constant score the rule is `constRule`, so AL15 is BN6's
 statement at this arc's run. -/
-theorem rule_const : ConstIsConst R := by
+theorem rule_const : ConstScoreIsConstRule R := by
   funext C b U V v A
   simp only [rule, Score.const, constRule]
   split <;> rfl

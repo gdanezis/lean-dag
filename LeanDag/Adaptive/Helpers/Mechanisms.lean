@@ -166,11 +166,39 @@ theorem updStable_rule {score : Score R} (hs : score.Stable) : UpdStable (rule s
   simp only [rule, dif_pos hA, dif_pos (he.subset A hA)]
   rw [hs U U' he A hA v C]
 
-/-- A score that does not read the history is stable: the constant score
-and the permuting scores of AL11 are both of that shape. -/
-theorem Score.stable_of_ignores {f : Config Validator → Config Validator}
-    (score : Score R) (h : ∀ U V v C, score U V v C = f C) : score.Stable :=
+/-- A score that reads no DAG at all is stable: the constant score, the
+permuting scores of AL11, and any score of the committed sequence alone
+are of that shape. -/
+theorem Score.stable_of_ignores
+    {f : (ℕ → Option BlockId) → Config Validator → Config Validator}
+    (score : Score R) (h : ∀ U V v C, score U V v C = f v C) : score.Stable :=
   fun _ _ _ _ _ _ C => by rw [h, h]
+
+/-- **A score that reads the anchor's history is stable.** The realistic
+case, and the one the obligation exists for: a reputation rule reads the
+blocks the anchor reaches, and a mechanism that only adds blocks leaves
+those exactly as they were (`historyFrom_congr`). So the rule installs
+one configuration on a validator that recovered a crashed peer and on one
+that did not, and `SegRun.extend` applies to it.
+
+The hypothesis is what "reads the history" means: the score's answer
+depends on the view only through the ids it holds and what those ids
+denote. A score consulting anything else about the universe — its size,
+say — does not qualify, and should not. -/
+theorem Score.stable_of_readsHistory (hL : R.Laws) (score : Score R)
+    (h : ∀ (U U' : R.Universe) (V : R.View U) (V' : R.View U'),
+      R.viewIds V = R.viewIds V' →
+      (∀ b ∈ R.viewIds V, R.block U b = R.block U' b) →
+      ∀ v C, score U V v C = score U' V' v C) : score.Stable := by
+  intro U U' he A hA v C
+  have hcl := (R.toDagRule.causal U).complete
+  have hid : historyFrom (R.block U) A = historyFrom (R.block U') A :=
+    historyFrom_congr hcl (fun b hb => (he.block b hb).symm) hA
+  refine (h U U' _ _ ?_ ?_ v C).symm
+  · rw [hL.historyView_ids U A hA, hL.historyView_ids U' A (he.subset A hA), hid]
+  · intro b hb
+    rw [hL.historyView_ids U A hA] at hb
+    exact (he.block b (CausalStructure.history_subset_ids (R.toDagRule.causal U) hA hb)).symm
 
 @[simp] theorem Score.const_stable : (Score.const R).Stable :=
   Score.stable_of_ignores _ (fun _ _ _ _ => rfl)

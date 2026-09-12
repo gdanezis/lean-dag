@@ -4459,7 +4459,7 @@ own view, which is subjective and would break `Anchored`.
 which is all AL13 and AL14 ask; `RuleBounded`, from `Score.Keeps` — the
 score moves the leaders and leaves the widths and the interval where they
 were, and `Config.InBounds` mentions nothing else; `RulePreserves`, for
-whatever clause liveness names; and `ConstIsConst`, the constant score
+whatever clause liveness names; and `ConstScoreIsConstRule`, the constant score
 being `constRule`.
 
 ### 13.4 Liveness, and reassignment
@@ -4505,9 +4505,12 @@ def HorizonStable
     ∀ C : Config Validator, score U' V' (C.chop G) = (score U V C).chop G
 ```
 
-A score reading a bounded window of rounds below its anchor has it once
-the cut lies below that window, and the score that installs what it was
-given has it at every cut. **I5** (§16) is the consequence at the core:
+A score that only reassigns leaders has it at every cut
+(`horizonStable_relabel`) — relabelling commutes with dropping rounds,
+because neither moves a round — and so does the score that installs what
+it was given. What the condition rules out is a score whose *choice* of
+reassignment is read from rounds the horizon has removed. **I5** (§16) is
+the consequence at the core:
 a joiner that recomputed its configuration from its own truncated view
 derives the network's verdict at every slot both hold, and runs the
 network's leaders while doing it — *pruning does not split the ledger,
@@ -5431,17 +5434,25 @@ def UpdStable (upd : UpdateRule R) : Prop :=
 This is `Anchored` (§13.3) across two universes rather than across two
 views of one, and it is asked only at anchors the smaller universe
 already holds, which is where a run ever applies the rule. A score meets
-it through `Score.Stable`: an extension preserves every block a reference
-reaches, so the anchor's history holds the same blocks either way, but
-the two are views of *different* universes and the type does not force
-the equality. `constRule` has it outright (`updStable_constRule`), and
-the permuting scores of AL11 and the constant score have `Score.Stable`
-(`Score.permute_stable`, `Score.const_stable`), so one score discharges
-this and horizon-stability together.
+it through `Score.Stable`, and the case that matters is the reputation
+rule: **a score that reads the anchor's causal history is stable**
+(`Score.stable_of_readsHistory`), because a mechanism that only adds
+blocks leaves the blocks an anchor reaches exactly as they were
+(`historyFrom_congr`). A score reading no DAG at all — the constant one,
+the permuting ones, or one of the committed sequence alone — is stable by
+`Score.stable_of_ignores`, and `constRule` has the rule-level condition
+outright (`updStable_constRule`). So one score discharges this and
+horizon-stability together.
 
-> A score that read the *size* of the universe would install a different
-> configuration on a validator that had recovered a crashed peer than on
-> one that had not, and the two would fork.
+What fails it is a score consulting something an extension *does* change,
+the size of the universe being the plain example: it would install a
+different configuration on a validator that had recovered a crashed peer
+than on one that had not, and the two would fork.
+
+> A garbage collector constrains what a score may read *below* the
+> horizon; a recovery constrains what it may read *about the universe*.
+> A score of the anchor's causal history and the committed sequence
+> satisfies both, and that is what HammerHead's is.
 
 **I6 — the lag bounds the recoverable outage.** A `SkipMsg` requires
 its anchor in the universe, and `chop` retains the anchor exactly when
@@ -8240,7 +8251,7 @@ the horizon — so the statement is about what a validator reaches and not
 only about what exists —
 
 ```lean
-def ProgressStmt (R : LiveRule Validator BlockId Payload) (P : Params)
+def ConfigProgress (R : LiveRule Validator BlockId Payload) (P : Params)
     (upd : UpdateRule R.toBaseRule) (C₀ : Config Validator) (c : ℕ) : Prop :=
   ∀ (U : R.Universe) (V : R.View U) (Rnd N K : ℕ),
     R.toBaseRule.CoversUpto U V N →
@@ -10374,7 +10385,7 @@ reused.
 | I1 | honest non-equivocation survives truncation and the fill | `honestNoEquiv_chop`, `honestNoEquiv_skipFill` *(Integration/Preservation)* |
 | I2 | coverage survives truncation, at a horizon offset | `synchronisedOn_chop` *(Integration/Coverage)* |
 | I4 | coverage under the fill: refuted for a set including the recovering validator, preserved otherwise, restored above the fill | `not_synchronisedOn_skipFill`, `synchronisedOn_skipFill_of_notMem`, `synchronisedOn_skipFill_above` *(Integration/Coverage)*, from `not_synchronisedOn_of_extends`, `synchronisedOn_of_extends` *(Timed/Extension)* |
-| I5 | the joiner across a cut: a configuration chopped, and what a score owes pruning | `Config.chop`, `Config.rebases_chop` *(Barnacle/Chop)*, `Adaptive.HorizonStable`, `Adaptive.joiner_config_agree`, `Adaptive.joiner_leader_agree`, `Adaptive.joiner_decided_agree` *(Adaptive/Helpers/Chop)*, `Adaptive.joiner_decided_agree_chop`, `Adaptive.joiner_run_decided_agree` at any record carrier *(Adaptive/Helpers/Mechanisms)*, at the core in *Integration/Joiner* |
+| I5 | the joiner across a cut: a configuration chopped, what a score owes pruning, and a reassigning score meeting it at every cut | `Config.chop`, `Config.rebases_chop` *(Barnacle/Chop)*, `Adaptive.HorizonStable`, `Adaptive.joiner_config_agree`, `Adaptive.joiner_leader_agree`, `Adaptive.joiner_decided_agree`, `Adaptive.horizonStable_relabel` *(Adaptive/Helpers/Chop)*, `Adaptive.joiner_decided_agree_chop`, `Adaptive.joiner_run_decided_agree` at any record carrier *(Adaptive/Helpers/Mechanisms)*, at the core in *Integration/Joiner* |
 | I6 | anchor retention, and the lag bounds the outage | `anchor_pruned`, `chopMsg`, `outage_bounded_by_lag` *(Integration/Retention)* |
 | I7 | the headlines at the core: safety across any stack, liveness at the support | `MysticetiProperties.safety`, `MysticetiProperties.liveness`, `stack_core` *(MysticetiProperties, Integration/StackRules)* |
 | I8 | a severed chain cannot restart | `no_blocks_of_no_genesis`, `severed_of_pruned_anchor` *(Integration/Retention)* |
@@ -10389,7 +10400,7 @@ reused.
 | I17 | the budget needs a donor, not the author | `card_novelty_le_of_donor` *(Integration/Margin)* |
 | I18 | severance costs liveness margin: at most `f` at once | `notMem_of_no_blocks`, `card_severed_le` *(Integration/Margin)* |
 | I19 | a common-core target makes the fill transmission-free | `CommonAt`, `exists_commonAt`, `fill_refs_available` *(Integration/CommonTarget)* |
-| I20 | the segmented arc across every mechanism, at any record carrier: cuts compose beneath a configuration and stack with the fill; a fill and a re-genesis carry a whole run across and leave its ledger alone, under one obligation on the update rule | `Config.chop_chop`, `Config.chop_zero` *(Barnacle/Chop)*, `Adaptive.truncates_chop_config`, `stack_chop_config`, `stack_chop_chop_config`, `stack_copyFill_chop_config`, `Adaptive.UpdStable`, `Adaptive.Score.Stable`, `Adaptive.updStable_rule`, `Adaptive.updStable_constRule`, `Adaptive.SegRun.extend`, `Adaptive.SegRun.extend_ledgerUpto` *(Adaptive/Helpers/Mechanisms)*, `stack_core_config` *(Integration/Joiner)* |
+| I20 | the segmented arc across every mechanism, at any record carrier: cuts compose beneath a configuration and stack with the fill; a fill and a re-genesis carry a whole run across and leave its ledger alone, under one obligation on the update rule | `Config.chop_chop` *(Barnacle/Chop)*, `Adaptive.truncates_chop_config`, `stack_chop_config`, `stack_chop_chop_config`, `stack_copyFill_chop_config`, `Adaptive.UpdStable`, `Adaptive.Score.Stable`, `Adaptive.updStable_rule`, `Adaptive.updStable_constRule`, `Score.stable_of_readsHistory`, `Score.stable_of_ignores`, `Adaptive.SegRun.extend`, `Adaptive.SegRun.extend_ledgerUpto` *(Adaptive/Helpers/Mechanisms)*, `historyFrom_congr` *(Common/Causality)*, `stack_core_config` *(Integration/Joiner)* |
 
 **FinWhale** (§20):
 
@@ -10471,7 +10482,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 325 definitions and structures the report names, in
+The 324 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -14145,17 +14156,6 @@ def RulePreserves (R : BaseRule Validator BlockId Payload) (score : Score R)
 
 **AL11c, the rule keeps what the score keeps.**
 
-#### `ConstIsConst`
-
-*def, `Adaptive.Score.Statement.lean`*
-
-```lean
-def ConstIsConst (R : BaseRule Validator BlockId Payload) : Prop :=
-  rule (Score.const R) = constRule R
-```
-
-**AL11d, the constant score is the constant rule.**
-
 #### `chop`
 
 *def, `Barnacle.Chop.lean`*
@@ -16029,7 +16029,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 490 theorems the body or Appendix A names, each
+The 492 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -16131,6 +16131,19 @@ theorem round_le_of_reaches (C : CausalStructure blk ids)
 ```
 
 **Causal history runs downward in rounds.**
+
+#### `historyFrom_congr`
+
+*theorem, `Common.Causality.lean`*
+
+```lean
+theorem historyFrom_congr {blk blk' : BlockId → Block Validator BlockId Payload}
+    {ids : Finset BlockId} (hcl : ∀ i ∈ ids, ∀ j ∈ (blk i).refs, j ∈ ids)
+    (hb : ∀ i ∈ ids, blk i = blk' i) {b : BlockId} (hbi : b ∈ ids) :
+    historyFrom blk b = historyFrom blk' b
+```
+
+**And so is the causal history itself.**
 
 #### `BlockRecord.causal`
 
@@ -20355,6 +20368,26 @@ theorem horizonStable_const (G : ℕ) :
 
 The score that installs what it was given is horizon-stable at every cut: what it was given was already chopped. `Adaptive.Score.const` is this one, and AL15's conservativity is its consequence.
 
+#### `horizonStable_relabel`
+
+*theorem, `Adaptive.Helpers.Chop.lean`*
+
+```lean
+theorem horizonStable_relabel (σ : Validator → Validator)
+    (hinj : ∀ (C : Config Validator) r i j, i < C.slotsAt r → j < C.slotsAt r →
+      σ (C.lead r i) = σ (C.lead r j) → i = j) (G : ℕ) :
+    HorizonStable (R := R)
+      (fun _ _ C =>
+        { slotsAt := C.slotsAt, slotsAt_pos := C.slotsAt_pos
+          lead := fun r i => σ (C.lead r i)
+          keyed := fun r i j hi hj h => hinj C r i j hi hj h
+          interval := C.interval }) G
+```
+
+**A score that only reassigns leaders is horizon-stable**, at every cut and with no condition on the cut. Relabelling who leads commutes with dropping the rounds below a horizon, because both act on the leader function pointwise and neither moves a round. This is the case the obligation exists for — `Score.permute` is AL11's reassignment family, so a joiner running a permuting score computes the network's leaders whatever the horizon.
+
+The condition bites for a score whose *choice* of reassignment is read off the DAG: it then has to make that choice from what survives the cut, which is what `ViewAgreeAbove` gives it above `G` and nothing gives it below.
+
 #### `decided_and_not_output`
 
 *theorem, `Adaptive.Helpers.Ledger.lean`*
@@ -20469,22 +20502,33 @@ theorem updStable_constRule : UpdStable (constRule R)
 
 A rule that does not read the universe is stable. `constRule` is the case AL15 turns on.
 
-#### `Score.const_stable`
+#### `Score.stable_of_ignores`
 
 *theorem, `Adaptive.Helpers.Mechanisms.lean`*
 
 ```lean
-@[simp] theorem Score.const_stable : (Score.const R).Stable
+theorem Score.stable_of_ignores
+    {f : (ℕ → Option BlockId) → Config Validator → Config Validator}
+    (score : Score R) (h : ∀ U V v C, score U V v C = f v C) : score.Stable
 ```
 
-#### `Score.permute_stable`
+A score that reads no DAG at all is stable: the constant score, the permuting scores of AL11, and any score of the committed sequence alone are of that shape.
+
+#### `Score.stable_of_readsHistory`
 
 *theorem, `Adaptive.Helpers.Mechanisms.lean`*
 
 ```lean
-@[simp] theorem Score.permute_stable (σ : Equiv.Perm Validator) :
-    (Score.permute (R := R) σ).Stable
+theorem Score.stable_of_readsHistory (hL : R.Laws) (score : Score R)
+    (h : ∀ (U U' : R.Universe) (V : R.View U) (V' : R.View U'),
+      R.viewIds V = R.viewIds V' →
+      (∀ b ∈ R.viewIds V, R.block U b = R.block U' b) →
+      ∀ v C, score U V v C = score U' V' v C) : score.Stable
 ```
+
+**A score that reads the anchor's history is stable.** The realistic case, and the one the obligation exists for: a reputation rule reads the blocks the anchor reaches, and a mechanism that only adds blocks leaves those exactly as they were (`historyFrom_congr`). So the rule installs one configuration on a validator that recovered a crashed peer and on one that did not, and `SegRun.extend` applies to it.
+
+The hypothesis is what "reads the history" means: the score's answer depends on the view only through the ids it holds and what those ids denote. A score consulting anything else about the universe — its size, say — does not qualify, and should not.
 
 #### `SegRun.extend_ledgerUpto`
 

@@ -805,8 +805,6 @@ Two theorems Barnacle has no need of:
   read. Its verdict is what the segment discards, and the round is
   decided again under configuration `k + 1`. This is the
   naming-and-ordering split of §7 as a statement.
-- `output_lt_decided` — the span a segment decides reaches past the span
-  it outputs, by at least one round.
 
 ### Step 4 — the score (AL11). **Built.**
 
@@ -834,7 +832,7 @@ the interval alone — and that one clause carries `UpdBounded`, since
 
 AL11 is the four clauses: `RuleAnchored` by `rfl`, `RuleBounded` from
 `Score.Keeps`, `RulePreserves` for whatever clause AL16 will name, and
-`ConstIsConst` — the constant score is `constRule`, so AL15 is BN6's
+`ConstScoreIsConstRule` — the constant score is `constRule`, so AL15 is BN6's
 statement at this arc's run. `Score.holds` proves them, on `propext` and
 `Quot.sound` alone.
 
@@ -972,7 +970,44 @@ own AIMD rule ignores it. The two arcs differ only in the span's top —
 Barnacle's is the boundary, which is the anchor's round; the segmented
 arc's is the anchor's round, which lies above the boundary.
 
-### Step 10 — the record
+### Step 10 — the review
+
+A pass over every definition and theorem of the arc, asking of each
+whether it says something a designer would act on. Four changes.
+
+**The two obligations had only degenerate witnesses.** `HorizonStable`
+and `Score.Stable` were discharged solely by scores that ignore the thing
+the obligation is about — the constant score, and permuting scores
+through a lemma that required the score to ignore its view. So the
+obligations looked demanding and were met by nothing that reassigns.
+Now: `horizonStable_relabel` — a score that relabels who leads commutes
+with dropping rounds below a horizon, at **every** cut, which is AL11's
+whole family; and `Score.stable_of_readsHistory` — a score reading the
+anchor's causal history is stable, because a mechanism that only adds
+blocks leaves the blocks an anchor reaches exactly as they were. That
+last needs `historyFrom_congr` (`Common/Causality.lean`): a causal
+history is a function of the blocks it names.
+
+**A prose claim the code did not support.** Three places said a score
+"reading a bounded window of rounds below its anchor" is horizon-stable.
+Nothing proved it, and it is not the right characterisation: what
+matters is whether the *choice* of reassignment is read from rounds the
+horizon removed, not the window's width.
+
+**`Score.stable_of_ignores` was one step short.** Its `f` could not
+depend on the verdicts, so it excluded exactly the verdict-reading score
+step 9 added. Generalised, and `commitScore_stable` follows.
+
+**Cruft removed.** `output_lt_decided` restated a structure field;
+`Config.chop_zero` said a horizon of zero prunes nothing. The Adaptive
+ledger's clauses were labelled BN5a–c, which are Barnacle's. `ProgressStmt`
+is named after the file it lives in, not after the property, and is now
+`ConfigProgress` in both arcs — the paper's own term. AL11d's clause is
+now `ConstScoreIsConstRule`, which says what it claims. `SegRun.spanOf`
+was disconnected from the `update` field it claimed to name;
+`update_spanOf` is the identification.
+
+### Step 11 — the record
 
 Report §13 gains the segmented arc and relabels the fixpoint one: AL3 is
 safety for policies that read verdicts, under a window condition

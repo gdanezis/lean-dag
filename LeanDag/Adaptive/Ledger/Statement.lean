@@ -35,7 +35,7 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 identify a committed block's slot — both properties, in place of the
 seven-clause `R.Laws`. -/
 
-/-- **BN5a, the ledger is agreed**: two runs over one universe read the
+/-- **AL14a, the ledger is agreed**: two runs over one universe read the
 same committed sequence from every range both have closed, hence the
 same list to every height both reach. -/
 def SegLedgerAgreement (R : BaseRule Validator BlockId Payload) (P : Params)
@@ -51,7 +51,7 @@ def SegLedgerAgreement (R : BaseRule Validator BlockId Payload) (P : Params)
       -- concatenated — is one list.
       ∀ K, K ≤ min K₁ K₂ → R₁.ledgerUpto K = R₂.ledgerUpto K
 
-/-- **BN5b, the ledger grows**: to a lower height it is a prefix of itself
+/-- **AL14b, the ledger grows**: to a lower height it is a prefix of itself
 to a higher one — nothing committed is ever reordered or withdrawn. -/
 def SegLedgerPrefix (R : BaseRule Validator BlockId Payload) (P : Params)
     (upd : UpdateRule R) (C₀ : Config Validator) : Prop :=
@@ -61,7 +61,7 @@ def SegLedgerPrefix (R : BaseRule Validator BlockId Payload) (P : Params)
     -- higher one: later ranges only append.
     (K₁ K₂ : ℕ), K₁ ≤ K₂ → Rn.ledgerUpto K₁ <+: Rn.ledgerUpto K₂
 
-/-- **BN5c, integrity**: no block appears twice in the ledger, to any
+/-- **AL14c, integrity**: no block appears twice in the ledger, to any
 height the run reaches. -/
 def SegLedgerNodup (R : BaseRule Validator BlockId Payload) (P : Params)
     (upd : UpdateRule R) (C₀ : Config Validator) : Prop :=

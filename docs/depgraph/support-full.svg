@@ -1172,7 +1172,7 @@
 <rect x="294.0" y="2156.0" width="158" height="36" rx="5" fill="#fbe9d7" stroke="#b5652a" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="2168.0" text-anchor="middle">BN7</text>
 <text class="nm" x="373.0" y="2182.0" text-anchor="middle">holds</text></g>
-<g><title>LeanDag.Barnacle.Config.chop — the joiner across a cut: a configuration chopped, and what a score owes pruning</title>
+<g><title>LeanDag.Barnacle.Config.chop — the joiner across a cut: a configuration chopped, what a score owes pruning, and a reassigning score meeting it at every cut</title>
 <rect x="294.0" y="2204.0" width="158" height="36" rx="5" fill="#dbe7e0" stroke="#5f8a76" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="2216.0" text-anchor="middle">I5</text>
 <text class="nm" x="373.0" y="2230.0" text-anchor="middle">chop</text></g>

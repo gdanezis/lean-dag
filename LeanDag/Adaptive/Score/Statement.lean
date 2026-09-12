@@ -57,7 +57,7 @@ def RulePreserves (R : BaseRule Validator BlockId Payload) (score : Score R)
     UpdKeeps (rule score) Q
 
 /-- **AL11d, the constant score is the constant rule.** -/
-def ConstIsConst (R : BaseRule Validator BlockId Payload) : Prop :=
+def ConstScoreIsConstRule (R : BaseRule Validator BlockId Payload) : Prop :=
   rule (Score.const R) = constRule R
 
 /-- What a score owes, for every base rule, parameter set, score and
@@ -67,7 +67,7 @@ def Statement : Prop :=
     [DecidableEq BlockId] (R : BaseRule Validator BlockId Payload) (P : Params)
     (score : Score R) (Q : Config Validator → Prop),
     RuleAnchored R score ∧ RuleBounded R P score ∧ RulePreserves R score Q ∧
-      ConstIsConst R
+      ConstScoreIsConstRule R
 
 end Score
 
