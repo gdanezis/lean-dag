@@ -86,6 +86,121 @@ theorem allDecidedBelowOfSynchrony {w : ℕ → ℕ} (hw : ∀ r, 3 ≤ w r) {T 
   obtain ⟨v, hv⟩ := h V N hs hpop hV hN i hi
   exact ⟨v, hv.2.1⟩
 
+/-! ## SH6c, SH6e -/
+
+/-- **SH6c.** Every reliable block at the vote round blames a slot whose leader has no block at
+the slot's round, since no candidate lies in any cone, and a view holding that round holds a
+quorum of them. -/
+theorem skipsCrashed {U : BlockUniverse Validator BlockId Payload} {w : ℕ → ℕ}
+    {T : Finset Validator} {V : View Validator BlockId Payload U} {k : ℕ}
+    (hcard : quorumCard Validator ≤ T.card)
+    (hcrash : ∀ L ∈ U.ids, (U.block L).round = S.slotRound k → (U.block L).creator ≠ S.leader k)
+    (hpop : PopulatedOn U T (MahiMahi.votingRound (w (S.slotRound k)) (S.slotRound k)))
+    (hV : V.CoversUpto (MahiMahi.votingRound (w (S.slotRound k)) (S.slotRound k))) :
+    Decided w U V k none := by
+  refine Decided.directSkip ?_
+  change MahiMahi.DirectSkipIn U V (w (S.slotRound k)) (S.leader k) (S.slotRound k)
+  unfold MahiMahi.DirectSkipIn HoldsAtLeast
+  refine le_trans hcard (Finset.card_le_card fun v hv => ?_)
+  obtain ⟨q, hq, hqc, hqr⟩ := hpop v hv
+  refine mem_heldAuthors.mpr ⟨q, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hq, hqr⟩, ?_⟩,
+    hV q hq (le_of_eq hqr), hqc⟩
+  unfold MahiMahi.Blames
+  refine Finset.eq_empty_of_forall_notMem fun L hL => ?_
+  obtain ⟨hLids, hLr, hLc, -⟩ := MahiMahi.mem_candidatesAt.mp hL
+  exact hcrash L hLids hLr hLc
+
+omit S in
+/-- A block reaching the only block of its author at a round votes for it: `Votes` asks for the
+least candidate of that author and round in the cone, and there is one. -/
+theorem votes_of_reaches_of_unique {U : BlockUniverse Validator BlockId Payload} {q L : BlockId}
+    (hq : q ∈ U.ids) (hL : L ∈ U.ids)
+    (huniq : ∀ L' ∈ U.ids, (U.block L').round = (U.block L).round →
+      (U.block L').creator = (U.block L).creator → L' = L)
+    (h : Reaches U q L) : MahiMahi.Votes U q L := by
+  refine ⟨MahiMahi.mem_candidatesAt.mpr ⟨hL, rfl, rfl, (mem_history_iff hq).mpr h⟩, ?_⟩
+  intro L' hL' hlt
+  obtain ⟨hL'ids, hL'r, hL'c, -⟩ := MahiMahi.mem_candidatesAt.mp hL'
+  rw [huniq L' hL'ids hL'r hL'c] at hlt
+  exact lt_irrefl _ hlt
+
+omit S [LinearOrder BlockId] in
+/-- Under synchrony from `R`, a block one reliable round-`R` block references lies in the cone of
+every reliable block at the rounds past `R` the reliable set populates: each reliable block
+references every reliable block one round down, one of which reaches it. -/
+theorem reaches_of_synchronised_of_ref {U : BlockUniverse Validator BlockId Payload}
+    {T : Finset Validator} {R N : ℕ} {L q : BlockId} (hcard : quorumCard Validator ≤ T.card)
+    (hs : SynchronisedOn U T R) (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
+    (hq : q ∈ U.ids) (hqr : (U.block q).round = R) (hqT : (U.block q).creator ∈ T)
+    (hqL : L ∈ (U.block q).refs) :
+    ∀ c ∈ U.ids, R + 1 ≤ (U.block c).round → (U.block c).round ≤ N →
+      (U.block c).creator ∈ T → Reaches U c L := by
+  suffices H : ∀ m, R + 1 ≤ m → m ≤ N → ∀ c ∈ U.ids, (U.block c).round = m →
+      (U.block c).creator ∈ T → Reaches U c L by
+    intro c hc h1 h2 hcT
+    exact H _ h1 h2 c hc rfl hcT
+  intro m hm
+  induction m, hm using Nat.le_induction with
+  | base =>
+    intro _ c hc hcr hcT
+    exact Reaches.trans (Reaches.single (hs R le_rfl c hc hcr hcT q hq hqr hqT))
+      (Reaches.single hqL)
+  | succ m hRm ih =>
+    intro hmN c hc hcr hcT
+    obtain ⟨v, hv⟩ := MahiMahi.nonempty_of_quorum hcard
+    obtain ⟨b, hb, hbc, hbr⟩ := hpop m (by omega) (by omega) v hv
+    exact Reaches.trans (Reaches.single (hs m (by omega) c hc hcr hcT b hb hbr (hbc ▸ hv)))
+      (ih (by omega) b hb hbr (hbc ▸ hv))
+
+/-- **SH6e.** Synchrony carries the candidate into every reliable cone from two rounds up; the
+reliable voters vote for it, the leader's only block at its round; every reliable block at the
+decision round references all of them and so certifies; and a view holding the decision round
+holds those certificates. -/
+theorem commitsOfDissemination {U : BlockUniverse Validator BlockId Payload} {w : ℕ → ℕ}
+    {T : Finset Validator} {V : View Validator BlockId Payload U} {k : ℕ} {L q : BlockId}
+    (hw : 4 ≤ w (S.slotRound k)) (hcard : quorumCard Validator ≤ T.card)
+    (hL : IsLeaderBlock U k L)
+    (huniq : ∀ L' ∈ U.ids, (U.block L').round = S.slotRound k →
+      (U.block L').creator = S.leader k → L' = L)
+    (hq : q ∈ U.ids) (hqr : (U.block q).round = S.slotRound k + 1) (hqT : (U.block q).creator ∈ T)
+    (hqL : L ∈ (U.block q).refs) (hs : SynchronisedOn U T (S.slotRound k + 1))
+    (hpop : ∀ r, S.slotRound k + 1 ≤ r →
+      r ≤ MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k) → PopulatedOn U T r)
+    (hV : V.CoversUpto (MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k))) :
+    Decided w U V k (some L) := by
+  have hreach := reaches_of_synchronised_of_ref hcard hs hpop hq hqr hqT hqL
+  have huniq' : ∀ L' ∈ U.ids, (U.block L').round = (U.block L).round →
+      (U.block L').creator = (U.block L).creator → L' = L :=
+    fun L' h1 h2 h3 => huniq L' h1 (h2.trans hL.2.1) (h3.trans hL.2.2)
+  -- every reliable block at the decision round certifies L
+  have hcert : ∀ C ∈ U.ids,
+      (U.block C).round = MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k) →
+      (U.block C).creator ∈ T →
+      C ∈ MahiMahi.certificates U (w (S.slotRound k)) L (S.slotRound k) := by
+    intro C hC hCr hCT
+    refine mem_certificatesAt.mpr ⟨hC, hCr, ?_⟩
+    unfold CarriesVotes
+    refine le_trans hcard (Finset.card_le_card fun v hv => ?_)
+    obtain ⟨b, hb, hbc, hbr⟩ := hpop (MahiMahi.votingRound (w (S.slotRound k)) (S.slotRound k))
+      (by unfold MahiMahi.votingRound; omega)
+      (by unfold MahiMahi.votingRound MahiMahi.decisionRoundAt; omega) v hv
+    refine mem_creatorsOf.mpr ⟨b, mem_carriedVotes.mpr ⟨?_, ?_⟩, hbc⟩
+    · refine hs (MahiMahi.votingRound (w (S.slotRound k)) (S.slotRound k))
+        (by unfold MahiMahi.votingRound; omega) C hC ?_ hCT b hb hbr (hbc ▸ hv)
+      rw [hCr]
+      unfold MahiMahi.votingRound MahiMahi.decisionRoundAt
+      omega
+    · refine votes_of_reaches_of_unique hb hL.1 huniq' (hreach b hb ?_ ?_ (hbc ▸ hv))
+      · rw [hbr]; unfold MahiMahi.votingRound; omega
+      · rw [hbr]; unfold MahiMahi.votingRound MahiMahi.decisionRoundAt; omega
+  -- so L is directly committed, and the view holds the certificates
+  have hdc : MahiMahi.DirectCommit U (w (S.slotRound k)) L (S.slotRound k) := by
+    unfold MahiMahi.DirectCommit
+    refine le_trans hcard (Finset.card_le_card fun v hv => ?_)
+    obtain ⟨C, hC, hCc, hCr⟩ := hpop _ (by unfold MahiMahi.decisionRoundAt; omega) le_rfl v hv
+    exact mem_creatorsOf.mpr ⟨C, hcert C hC hCr (hCc ▸ hv), hCc⟩
+  exact Decided.directCommit hL (MahiMahiProperties.directCommitIn_of_coversUpto hdc hV)
+
 end Slots
 
 /-! ## SH7 — the chain -/

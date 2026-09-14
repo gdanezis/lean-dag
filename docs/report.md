@@ -9670,9 +9670,22 @@ whichever wave the slot's round carries; **SH6b**
 (`Steelhead.allDecidedBelowOfSynchrony`), past any slot the schedule
 offers a run of reliably led slots spanning eligibility, and everything
 below the run is decided once the DAG is covered through its decision
-rounds. At one slot per round a run of `wa` slots spans. The paper's
-Theorem 2 also bounds the latency of a Byzantine-led asynchronous slot by
-the number of Byzantine validators, and assumes bounded leader timeouts;
+rounds. At one slot per round a run of `wa` slots spans. Two clauses of
+Theorem 2 need no timed model. **SH6c** (`Steelhead.skipsCrashed`): a
+slot whose leader has no block at its round is directly skipped in every
+view holding its vote round, once a quorum populates that round, since
+no cone holds a candidate and every block of the round blames. **SH6e**
+(`Steelhead.commitsOfDissemination`), the paper's "partial dissemination
+alone does not defer": a candidate that one reliable block references
+one round up, its leader's only block at that round, is directly
+committed in every view holding its decision round, once the quorum is
+synchronised from that round and populates the wave, at `4 ≤ w r`;
+synchrony carries the candidate into every reliable cone from two rounds
+up, the reliable voters vote for it, and every reliable block at the
+decision round references all of them and so certifies. The leader may
+be Byzantine, so long as it did not equivocate. The paper's Theorem 2
+also bounds the latency of a Byzantine-led asynchronous slot by the
+number of Byzantine validators, and assumes bounded leader timeouts;
 neither the bound nor the pacing is modelled.
 
 ### 24.4 The period
@@ -11005,7 +11018,7 @@ reused.
 | SH3 | handover: a direct commit in one view is committed by every view that finds the slot an anchor, whichever rule decides it, and no view skips it | `Steelhead.certifiedIn_of_commit_at_anchor` *(Steelhead/Helpers/Decision)*, `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
 | SH4 | conservativity: at a constant wavelength the rule is Mahi-Mahi's, period one is the constant `wa`, and at wave three the derivations are exactly the core's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.decided_of_core_decided` *(Steelhead/Helpers/Decision)* |
 | SH5 | chain agreement: the chain verdicts agree across views under any coin; at an asynchronous round the coin leads, the output's direct verdicts are the chain's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.chainDecided_unique` *(Steelhead/Helpers/Period)*, `Steelhead.direct_agrees_with_chain` *(Steelhead/Helpers/Decision)* |
-| SH6 | liveness under synchrony: a reliably led slot commits under coverage in every caught-up view; everything below a fair run is decided | `Steelhead.Liveness.holds`, `Steelhead.commitsOfSynchrony`, `Steelhead.allDecidedBelowOfSynchrony` *(Steelhead/Liveness/Proof, Steelhead/Helpers/Liveness)* |
+| SH6 | liveness under synchrony: a reliably led slot commits under coverage in every caught-up view; everything below a fair run is decided; a slot whose leader has no block is skipped once a quorum blames it; a candidate one reliable block references one round up commits under synchrony, its leader reliable or not | `Steelhead.Liveness.holds`, `Steelhead.commitsOfSynchrony`, `Steelhead.allDecidedBelowOfSynchrony`, `Steelhead.skipsCrashed`, `Steelhead.commitsOfDissemination` *(Steelhead/Liveness/Proof, Steelhead/Helpers/Liveness)* |
 | SH7 | chain liveness: every chain verdict below a run of `wa` chain commits is settled, under the run clause, under synchrony with no clause, and below any one run of `wa` good coins | `Steelhead.chainAllDecidedBelow`, `Steelhead.chainAllDecidedBelowOfSynchrony`, `Steelhead.chainAllDecidedBelowOfRun` *(Steelhead/Helpers/Liveness)* |
 | SH8 | the stall: at every period `k ≥ ws`, with no synchronous candidate certified and no synchronous slot directly skipped, no slot of the residue class `k − 1` is ever decided | `Steelhead.stall` *(Steelhead/Helpers/Liveness)* |
 | SH9 | the drain: `wa` consecutive commits decide every slot below them at any wavelength function bounded by `wa`; at period `1` under the run clause, past every round some slot has everything below it decided; an asynchronous slot costs `wa − ws` rounds and its successor waits at most `wa − ws − 1` | `Steelhead.allDecidedBelowOfRun`, `Steelhead.allDecidedBelowAtPeriodOne`, `Steelhead.asyncSlotCost` *(Steelhead/Helpers/Liveness)* |

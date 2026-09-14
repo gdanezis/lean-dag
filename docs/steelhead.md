@@ -56,8 +56,11 @@ from coverage into certification; the unpredictable-leader clause.
   Corollary 1, Theorem 5, the agreement half of Theorem 4, and the
   protocol section's remark on direct verdicts.
 - **SH6, liveness under synchrony** (§6): a reliably led slot commits
-  under coverage, and everything below a fair run is decided. The
-  paper's Theorem 2, for the decision relation.
+  under coverage, everything below a fair run is decided, a slot whose
+  leader has no block is skipped once a quorum blames it (SH6c), and a
+  candidate one reliable block references one round up commits under
+  synchrony whether or not its leader is reliable (SH6e). The paper's
+  Theorem 2, for the decision relation.
 - **SH7, chain liveness** (§4): under Mahi-Mahi's run clause at the
   chain schedule every chain verdict below a run is settled, under
   synchrony without the clause, and below any one run of `wa` good coins
@@ -123,7 +126,7 @@ from coverage into certification; the unpredictable-leader clause.
 | Corollary 1 (handover) | SH3 | stated against the relation's anchor search |
 | Theorem 1 (agreement) | SH2 | `AnchoredRule.decided_unique` at Steelhead's laws |
 | Corollary 2 (total order and integrity) | SH13 | in part: the relation's own ledger theorems at Steelhead's laws, over a settled prefix. Ordering the blocks a single commit releases is declined development-wide (report §1.4, §5.6) |
-| Theorem 2 (liveness under partial synchrony) | SH6a, SH6b | in part: the honest-leader direct commit, and everything below a fair run. The crashed-leader skip from `n − f` blames, the Byzantine-equivocation anchor bound and the `O(wa + b)` ordering bound are not formalised; timeouts and pacing are not modelled |
+| Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e | in part: the honest-leader direct commit, everything below a fair run, the crashed-leader skip from `n − f` blames, and the remark that partial dissemination does not defer, for a leader that did not equivocate. The Byzantine-equivocation anchor bound and the `O(wa + b)` ordering bound are not formalised; timeouts and pacing are not modelled |
 | Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the chain settles under Mahi-Mahi's run clause and below any one run of `wa` good coins, a period is derived for each interval, an anchored interval the view did not output hands the next one period `1` under the failover, which the arc models in place of the paper's premise on the update rule (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15's tail |
 | Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b, SH14c, SH15 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval past the slot and one run of `wa` good coins above it; SH14b reads both off the run clause at the chain schedule, SH14c off two runs of the coin; SH15 bounds the probability that the two runs fail among `M` blocks of coins by `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero. The "with probability `1`" is that tail, as a finite record admits it; the growth of the ledger from the settled prefix is SH13 |
 | Theorem 4 (agreement of the period) | SH10a, SH10b | for any deterministic update rule |
@@ -498,7 +501,19 @@ through it, at whichever wave the slot's round carries; **SH6b**, past
 any slot the schedule offers a run of `c` reliably led slots spanning
 eligibility, and everything below the run is decided once the DAG is
 covered through its decision rounds. At one slot per round `c = wa`
-spans.
+spans. Two clauses of Theorem 2 need no timed model: **SH6c**, a slot
+whose leader has no block at its round is directly skipped in every view
+holding its vote round, once a quorum populates that round, since no
+cone holds a candidate and every block of the round blames; and
+**SH6e**, the paper's "partial dissemination alone does not defer": a
+candidate that one reliable block references one round up, its leader's
+only block at that round, is directly committed in every view holding
+its decision round, once the quorum is synchronised from that round and
+populates the wave, at `4 ≤ w r`. Synchrony carries the candidate into
+every reliable cone from two rounds up, the reliable voters vote for it,
+every reliable block at the decision round references all of them and
+so certifies. The leader may be Byzantine, so long as it did not
+equivocate; neither clause asks the quorum to be correct.
 
 ## 7. Findings for the paper
 
