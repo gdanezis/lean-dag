@@ -130,6 +130,12 @@ from coverage into certification; the unpredictable-leader clause.
   committed reliable leader two rounds up after GST, and two blocks
   enter at the same slots in every view, so in the same order. The
   liveness half is SH6b, SH14b and SH15.
+- **SH18, the replay** (§5): Algorithm 2 as data, the window's evidence
+  read from the anchor's causal history, the three passes and the
+  hysteretic selection; the selection stays among the candidates and
+  never worsens the score, the window's evidence is consistent, and
+  Lemma 3's count holds on the window once a quorum has populated the
+  boost and decision rounds within it.
 
 ### 0.1 Correspondence with the paper
 
@@ -149,7 +155,7 @@ from coverage into certification; the unpredictable-leader clause.
 | Protocol section, "whenever either verdict of an asynchronous slot is direct, the two coincide" | SH5b | predicate for predicate, at a slot proposed at its own round and led by the coin |
 | Protocol section, "the successor waits at most `max(0, wa − ws − 1)` rounds", "delays never compound" | SH9c | arithmetic on the decision rounds; output timing itself is not modelled |
 | Theorem 5 (conservativity) | SH4 | at a constant wavelength by `rfl`, period `1` by `Nat.mod_one`, and at wave three the derivations are exactly the core's, both directions |
-| Lemma 3 (the replay cannot be starved) | its counting half, `card_goodAt_of_populated` and SH11a | `c_r ≥ n − f − b` under any scheduling; the bridge to the replay's score is not modelled, since the replay is not |
+| Lemma 3 (the replay cannot be starved) | SH11a, SH18d | `c_r ≥ n − f − b` on the DAG under any scheduling (SH11a), and on the window once a quorum has populated the boost and decision rounds within it (SH18d), which is what "populated" must mean for the replay, whose evidence is the window's (§7, finding 7). The replay's asynchronous term averages over the `n` candidates, so at least that fraction of them decide at the decision round; the arithmetic of the score's passes is not proved |
 | Theorem 3 (i), "a committed asynchronous slot does not by itself decide the synchronous slots below it" | SH8 | the argument of "Why the chain, and not the output" as a theorem, for every `2 ≤ ws ≤ k` rather than the one period it walks through (§4) |
 
 ## 1. The wavelength function
@@ -527,13 +533,41 @@ one clause at a time (SH14) take this schedule as their instance (SH15).
   Two runs at named places, each of a fixed positive probability: the
   form SH15 draws from the coin.
 
-What is not modelled: the replay itself, the canary rounds and the
-probes, hysteresis, and the gating rule that a validator evaluates the
-slots of an interval only once the preceding scan has ended. The
-relational form covers the last: a validator with no derivation for
+**The replay** (`Model/Replay.lean`, `Replay/Statement.lean`). Algorithm
+2 as data: `ofAnchor U A I` reads the window's evidence off the anchor's
+causal history over the last `I` rounds, per proposal round, wave and
+candidate author, counting distinct validators (a candidate is committed
+when a quorum certify it within the window, skipped when a quorum of the
+window's vote-round blocks blame the author's slot, certified when the
+window holds one certificate); `score` is `REPLAY(W, k')`'s three passes
+over that evidence, in exact rationals, the probes of the canary rounds
+(`probeRate`) standing in for the unprobed synchronous slots; `select`
+is the hysteretic selection, ties keeping the current period and then
+favouring the larger candidate; `anchorUpdate` is the whole as an
+`UpdateRule`. **SH18a, b** (`select_mem`, `select_score_le`): the
+selection stays among the candidates and never worsens the score.
+**SH18c** (`certified_of_commits`, `not_certified_of_skips`): in the
+window's evidence a committed candidate is certified and a skipped one
+is not, at `2 ≤ w`. **SH18d** (`window_count`): Lemma 3's count on the
+window: at a round the window retains whose boost round and decision
+round a quorum has populated *within the anchor's history*, at least
+`n − f − b` authors are marked committed at wave `wa`, MM2 read on the
+history as a record of its own, whose votes and certificates are the
+universe's restricted to it (`candidatesAt_toRecord`,
+`certificates_toRecord`). The replay's asynchronous term averages over
+the `n` candidates, so at least that fraction decide at the decision
+round; the arithmetic of the passes is not proved. The hypothesis that
+the quorum's blocks lie in the window is §7's finding 7.
+
+What is not modelled: the gating rule that a validator evaluates the
+slots of an interval only once the preceding scan has ended, which the
+relational form covers, since a validator with no derivation for
 interval `j + 1` has no wavelength for its rounds and decides nothing
-there. The failover is a clause on the update rule, not a model of the
-arithmetic Algorithm 2 would wrap it around.
+there; and the replay's expected rounds as expectations of a stochastic
+execution, which the paper itself calls an approximation. The failover
+is a clause on the update rule (`ResetsOnNoOutput`) and the wrapper
+`failover` that satisfies it; wrapped around `anchorUpdate` it is the
+rule the authors agreed to.
 
 ## 6. Properties, and the carrier
 
@@ -645,6 +679,19 @@ equivocate; neither clause asks the quorum to be correct.
    in the theorem already says of the asynchronous slots, not
    deterministically; the deterministic part of Theorem 2 is the
    synchronous slots' (SH6a) and the crashed leaders' (SH6c).
+7. **Lemma 3 counts on the DAG, the replay reads the window.** The
+   lemma's proof applies the counting lemma to every candidate at once;
+   the counting lemma counts the certificates the DAG holds, and the
+   replay counts those the window holds, the anchor's causal history
+   over the last `I` rounds. The history holds a quorum's worth of blocks
+   at every round, by quorum references, but not necessarily one quorum's
+   blocks at both the boost round and the decision round, which the
+   counting lemma reads; under asynchrony an anchor's references may omit
+   any `f` validators' blocks at each round. SH18d states the lemma for
+   the window under the hypothesis that a quorum has populated both
+   rounds within the anchor's history, which synchrony from below the
+   window gives and which the paper's "whose wave rounds are populated"
+   should be read to mean.
 
 ## 8. Witnesses (`LeanDagTest/Steelhead/`), SH12
 
@@ -678,6 +725,8 @@ LeanDag/Steelhead/
   Model/Coin.lean           commitProb, noCommitProb, blockRound, coinOfBlocks, blocksHorizon,
                             undecidedProb
   Model/Compose.lean        compose
+  Model/Replay.lean         Evidence, Config, Timing, windowIds, ofAnchor, probeRate, timings,
+                            firstCommits, score, prefer, best, select, update, anchorUpdate
   Safety/Statement.lean     SH1–SH5        Safety/Proof.lean
   Liveness/Statement.lean   SH6–SH9        Liveness/Proof.lean
   Period/Statement.lean     SH10, SH14     Period/Proof.lean
@@ -685,6 +734,7 @@ LeanDag/Steelhead/
   Ledger/Statement.lean     SH13           Ledger/Proof.lean
   Interface/Statement.lean  SH16           Interface/Proof.lean
   Broadcast/Statement.lean  SH17           Broadcast/Proof.lean
+  Replay/Statement.lean     SH18           Replay/Proof.lean
   Helpers/*.lean            the lemma layers
   Properties.lean           the carrier, its properties and support
 LeanDagTest/Steelhead/

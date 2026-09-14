@@ -6,6 +6,7 @@ import LeanDag.Steelhead.Coin.Proof
 import LeanDag.Steelhead.Ledger.Proof
 import LeanDag.Steelhead.Interface.Proof
 import LeanDag.Steelhead.Broadcast.Proof
+import LeanDag.Steelhead.Replay.Proof
 /-!
 # Steelhead — axiom audit
 
@@ -21,5 +22,6 @@ bespoke axiom would show here before anywhere else.
 #print axioms LeanDag.Steelhead.Ledger.holds
 #print axioms LeanDag.Steelhead.Interface.holds
 #print axioms LeanDag.Steelhead.Broadcast.holds
+#print axioms LeanDag.Steelhead.Replay.holds
 #print axioms LeanDag.SteelheadProperties.persist
 #print axioms LeanDag.SteelheadProperties.liveness

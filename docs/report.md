@@ -9790,6 +9790,28 @@ interval and `upd`'s own answer elsewhere, and satisfies
 `ResetsOnNoOutput` by construction, whatever `upd` is, so the paper's
 replay with the agreed failover is a rule the claims below apply to.
 
+**The replay** (SH18, `Steelhead.Replay.holds`). Algorithm 2 as data:
+`ofAnchor` reads the window's evidence off the anchor's causal history
+over the last `I` rounds, per proposal round, wave and candidate author,
+counting distinct validators; `score` is the three passes of
+`REPLAY(W, k')` over that evidence in exact rationals, the canary probes
+standing in for the unprobed synchronous slots; `select` the hysteretic
+selection, ties keeping the current period and then favouring the larger
+candidate; `anchorUpdate` the whole as an update rule. The selection
+stays among the candidates and never worsens the score
+(`Steelhead.Replay.select_mem`, `Steelhead.Replay.select_score_le`); in
+the window's evidence a committed candidate is certified and a skipped
+one is not (`Steelhead.Replay.certified_of_commits`,
+`Steelhead.Replay.not_certified_of_skips`); and Lemma 3's count holds on
+the window (`Steelhead.Replay.window_count`): at a round the window
+retains whose boost round and decision round a quorum has populated
+within the anchor's history, at least `n − f − |byzantine|` authors are
+marked committed at wave `wa`, the counting lemma read on the history as
+a record of its own, whose votes and certificates are the universe's
+restricted to it. That the quorum's blocks must lie in the window is
+§24.6's seventh finding; the arithmetic of the score's passes is not
+proved.
+
 **SH14** (`Steelhead.output_liveness`) is output liveness under the
 failover, Theorem 3 (ii) and the asynchronous half of Definition 1's
 validity, deterministic given two events: in a view that derived every
@@ -9866,7 +9888,7 @@ that the blocks' waves be populated.
 
 ### 24.6 Findings, and the carrier
 
-Six findings for the paper, recorded in `steelhead.md` §7. That the
+Seven findings for the paper, recorded in `steelhead.md` §7. That the
 chain must be read at every round, not at the asynchronous rounds alone,
 for its relation to be independent of the period the scan is to fix, and
 that its run length is then `wa`, where reading it at the asynchronous
@@ -9896,6 +9918,12 @@ absent validator through any horizon with positive probability, and on
 a reliable-only DAG populated and synchronised from round `0` no settled
 prefix then outputs a block (`positive_no_output`, SH12); the bound
 holds with probability tending to one (§24.5), not deterministically.
+And that Lemma 3 counts on the DAG while the replay reads the window:
+the counting lemma counts the certificates the DAG holds, the replay
+those the anchor's causal history holds, which need not include one
+quorum's blocks at both the boost round and the decision round under
+asynchrony; SH18d states the lemma for the window under that
+hypothesis, which synchrony from below the window supplies.
 
 Through the properties (§16), the rule has a carrier per wavelength
 function, `steelheadRule w`, and shows `Agree`, `CommitsCandidate`,
@@ -11070,6 +11098,7 @@ reused.
 | SH15 | the tail of the output: over the coins of `M` blocks of `K` rounds opening the intervals after a slot's, the slot stays undecided under the failover with probability at most `2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, which tends to zero | `Steelhead.undecidedProb_le`, `Steelhead.no_good_block_prob_le`, `Steelhead.undecided_tail_tendsto_zero` *(Steelhead/Helpers/Coin)* |
 | SH16 | the interface composes: a family of rules whose laws hold, agreeing on rungs and ties, composes into a rule whose laws hold and whose verdicts agree across views; Steelhead's rule is the composite of Mahi-Mahi's at each round's wave | `Steelhead.Interface.holds`, `Steelhead.compose_laws`, `Steelhead.compose_decided_unique`, `Steelhead.steelheadAnchored_eq_compose` *(Steelhead/Interface/Proof, Steelhead/Helpers/Compose)* |
 | SH17 | atomic broadcast over settled prefixes: a delivered block is delivered by every view whose settled prefix is as long, is a block of the record entering at one slot, a reliable block is delivered with the first committed reliable leader two rounds up under synchrony, and two blocks enter at the same slots in every view | `Steelhead.Broadcast.holds` *(Steelhead/Broadcast/Proof)* |
+| SH18 | the replay: the selection stays among the candidates and never worsens the score; a committed candidate of the window is certified and a skipped one is not; at a round of the window whose boost and decision rounds a quorum has populated within the anchor's history, at least `n − f − |byzantine|` authors are marked committed | `Steelhead.Replay.holds`, `Steelhead.Replay.select_mem`, `Steelhead.Replay.select_score_le`, `Steelhead.Replay.certified_of_commits`, `Steelhead.Replay.not_certified_of_skips`, `Steelhead.Replay.window_count` *(Steelhead/Replay/Proof, Steelhead/Helpers/Replay)* |
 
 
 ---
@@ -15977,6 +16006,20 @@ noncomputable def chooseLeast [LinearOrder BlockId] (S : Slots Validator)
 
 **The deterministic rule, exhibited**: the least candidate in the identifier order, sound and total by construction, and a function of the anchor and the round alone, so two validators holding the same anchor make the same choice.
 
+#### `select`
+
+*def, `Hybrid.Checkpoint.RecoveryProofs.lean`*
+
+```lean
+noncomputable def select (receiver : Validator) :
+    CheckpointData Value :=
+  if hs : (R.validated receiver).Nonempty then
+    Classical.choose (exists_highest hs)
+  else epochGenesis M E epoch
+```
+
+Concrete highest-checkpoint selection. Classical choice implements the human-reviewed `IsSelected` semantics from `RecoverySpec.lean`.
+
 #### `hzSupport`
 
 *def, `Hydrozoan.Helpers.Commit.lean`*
@@ -16722,6 +16765,85 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
 ```
 
 The filled block at gap round `k`: `v2`'s references at that round, plus the added self reference.
+
+#### `Config`
+
+*structure, `Steelhead.Model.Replay.lean`*
+
+```lean
+structure Config (Validator : Type) where
+  /-- The synchronous wave. -/
+  ws : ℕ
+  /-- The asynchronous wave. -/
+  wa : ℕ
+  /-- The canary spacing. -/
+  canary : ℕ
+  /-- The known-leader schedule. -/
+  known : ℕ → Validator
+```
+
+**The replay's parameters**: the two waves, the canary spacing and the known-leader schedule, read at every round whether or not it ran synchronously.
+
+#### `ofAnchor`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def ofAnchor (U : BlockUniverse Validator BlockId Payload) (A : BlockId) (I : ℕ) :
+    Evidence Validator :=
+  let ids := windowIds U A I
+  let candidates := fun r a => (blocksAt U r).filter fun L => (U.block L).creator = a ∧ L ∈ ids
+  let certs := fun r w L => MahiMahi.certificates U w L r ∩ ids
+  { bottom := max 1 ((U.block A).round + 1 - I)
+    top := (U.block A).round
+    commits := fun r w a => decide (∃ L ∈ candidates r a,
+      quorumCard Validator ≤ (creatorsOf U.block (certs r w L)).card)
+    skips := fun r w a => decide (quorumCard Validator ≤
+      (creatorsOf U.block (((blocksAt U (MahiMahi.votingRound w r)).filter
+        fun q => MahiMahi.Blames U q a r) ∩ ids)).card)
+    certified := fun r w a => decide (∃ L ∈ candidates r a, certs r w L ≠ ∅) }
+```
+
+**The evidence of an anchor's window**: a candidate is a block of the author at the round inside the window; it is committed when a quorum of distinct validators certify it within the window, skipped when a quorum of the window's vote-round blocks blame the author's slot, and certified when the window holds one certificate for it. The votes are Mahi-Mahi's, so an equivocator's blocks are arbitrated as the rule arbitrates them.
+
+#### `score`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def score (E : Evidence Validator) (C : Config Validator) (period : ℕ) : ℚ :=
+  let ts := timings E C period
+  let first := firstCommits E ts
+  ((rounds E).foldl (fun (state : ℚ × ℚ) r =>
+    let gate := if E.bottom < r then max state.1 (ts (r - 1)).decision else state.1
+    (gate, state.2 + max (first r) gate - r)) (E.bottom, 0)).2
+```
+
+**Pass three, the score**: the sum over the window of each round's delay to output, the output gated by every lower slot's decision.
+
+#### `select`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def select (candidates : List ℕ) (scores : ℕ → ℚ) (current : ℕ) (epsilon : ℚ) : ℕ :=
+  let winner := best candidates scores current
+  if scores winner < (1 - epsilon) * scores current then winner else current
+```
+
+**The hysteretic selection**: the best candidate if it improves on the current period by the factor `1 − ε`, the current period otherwise.
+
+#### `anchorUpdate`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def anchorUpdate (U : BlockUniverse Validator BlockId Payload) (I : ℕ) (C : Config Validator)
+    (candidates : List ℕ) (epsilon : ℚ) : UpdateRule BlockId :=
+  fun _ A current => update (ofAnchor U A I) C candidates current epsilon
+```
+
+**Algorithm 2 as an update rule**: the replay of the anchor's window.
 
 #### `SynchronisedOn`
 
@@ -23376,6 +23498,14 @@ theorem holds : Statement
 #### `holds`
 
 *theorem, `Steelhead.Interface.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Steelhead.Replay.Proof.lean`*
 
 ```lean
 theorem holds : Statement
