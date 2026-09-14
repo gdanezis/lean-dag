@@ -53,6 +53,19 @@ def ResetsOnNoOutput [S : Slots Validator] (U : BlockUniverse Validator BlockId 
       ∃ s', s' < s ∧ ∀ v, ¬ Decided w U (U.historyView A hA) s' v) →
     upd j A k = 1
 
+open scoped Classical in
+/-- **The failover wrapped around an update rule**: `1` at an anchor whose causal history, read at
+the wavelength `w`, shows no output of the interval, the rule's own answer elsewhere. The rule it
+wraps is any function, the paper's replay among them; the test is a proposition on verdicts, so
+the wrapper is classical. It satisfies `ResetsOnNoOutput` outright (SH10h). -/
+noncomputable def failover [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload)
+    (w : ℕ → ℕ) (I : ℕ) (upd : UpdateRule BlockId) : UpdateRule BlockId :=
+  fun j A k =>
+    if ∃ hA : A ∈ U.ids, ∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+        Decided w U (U.historyView A hA) s (some L) →
+        ∃ s', s' < s ∧ ∀ v, ¬ Decided w U (U.historyView A hA) s' v
+    then 1 else upd j A k
+
 /-- **The chain anchor of interval `j` under period `k`**, read from the view `V`: round `r` of
 the interval is asynchronous under `k` and chain-committed on `A`, and every asynchronous round of
 the interval below it is chain-skipped. -/

@@ -359,6 +359,13 @@ theorem periodAt_mem_range {K : ℕ} {upd : UpdateRule BlockId} {k₀ : ℕ}
   | anchor _ _ ih => exact hupd _ _ _ ih.1 ih.2
   | keep _ _ ih => exact ih
 
+/-- **SH10h.** The wrapper answers `1` exactly where the clause asks it to. -/
+theorem failover_resets [S : Slots Validator] (w : ℕ → ℕ) (upd : UpdateRule BlockId) :
+    ResetsOnNoOutput U w I (failover U w I upd) := by
+  intro j k A hA hout
+  unfold failover
+  rw [if_pos ⟨hA, hout⟩]
+
 /-! ## SH14 -/
 
 /-- The derivation of an interval's period ends in an anchor step or a keep step. -/

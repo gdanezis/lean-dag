@@ -4,7 +4,7 @@ import LeanDag.MahiMahi.Model.Unpredictable
 # The period sequence — statement
 
 What the adaptive protocol's period does across views and over time
-(`steelhead.md` §5). Ten claims:
+(`steelhead.md` §5). Eleven claims:
 
 * **SH10a, agreement of the period** — Theorem 4: two views that derive
   a period for interval `j` derive the same one, under any update rule,
@@ -40,6 +40,10 @@ What the adaptive protocol's period does across views and over time
 * **SH10g, the period stays in range**: if the initial period lies in
   `[1, K]` and the update rule keeps a period there, so does every
   derived period;
+* **SH10h, the failover satisfies its clause**: any update rule wrapped
+  in the failover (`failover`, `Model/Period.lean`) resets on an
+  interval that was not output, by construction, so the paper's replay
+  with the agreed failover is a rule the liveness claims apply to;
 * **SH14, output liveness under the failover**: Theorem 3 (ii) and the
   asynchronous half of Definition 1's validity, deterministic given two
   events the coin supplies almost surely. Under the failover, with the
@@ -176,6 +180,10 @@ def PeriodInRange (U : BlockUniverse Validator BlockId Payload) (I wa K : ℕ) :
     -- then so does every derived period
     PeriodAt I wa coin upd k₀ U V j k → 1 ≤ k ∧ k ≤ K
 
+/-- **SH10h, the failover satisfies its clause.** -/
+def FailoverResets (U : BlockUniverse Validator BlockId Payload) (I : ℕ) : Prop :=
+  ∀ (w : ℕ → ℕ) (upd : UpdateRule BlockId), ResetsOnNoOutput U w I (failover U w I upd)
+
 /-- **SH14, output liveness under the failover.** -/
 def OutputLiveness (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
@@ -252,8 +260,8 @@ def Statement : Prop :=
     (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ),
     PeriodAgreement U I wa ∧ AdaptiveAgreement U ws wa I ∧ ScanEnds U I wa ∧
       PeriodOfClause U I wa ∧ PeriodOne U ws wa I ∧ TwoAsyncRounds I ∧
-      PeriodInRange U I wa K ∧ OutputLiveness U ws wa I ∧ AllDecided U ws wa I K ∧
-      OutputLivenessOfRuns U ws wa I K
+      PeriodInRange U I wa K ∧ FailoverResets U I ∧ OutputLiveness U ws wa I ∧
+      AllDecided U ws wa I K ∧ OutputLivenessOfRuns U ws wa I K
 
 end Period
 

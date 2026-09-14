@@ -82,8 +82,9 @@ from coverage into certification; the unpredictable-leader clause.
   ends for every interval; under the failover an anchored interval the
   view did not output hands the next one period `1` (SH10e); every
   interval holds two asynchronous rounds and the period stays in its
-  range (SH10f, SH10g). Theorem 4, the period half of Theorem 3 (i), and
-  the adaptive section's structural claims.
+  range (SH10f, SH10g); and the failover wrapped around any update rule
+  satisfies its clause (SH10h). Theorem 4, the period half of
+  Theorem 3 (i), and the adaptive section's structural claims.
 - **SH11, the coin** (§4): with a uniform coin the chain slot of a
   round commits with probability `|good| / n`, at least `(n − f − b) / n`
   by MM2 at `wa ≥ 5` and so at least `1/3`, and at least `1/n` at
@@ -480,6 +481,13 @@ one clause at a time (SH14) take this schedule as their instance (SH15).
   paper's reason for `I ≥ 2 · maxPeriod`; and if the initial period lies
   in `[1, K]` and the update rule keeps a period there, so does every
   derived period.
+- **SH10h, the failover satisfies its clause**: `failover U w I upd`
+  (`Model/Period.lean`) answers `1` at an anchor whose causal history,
+  read at `w`, shows no output of the interval, and `upd`'s own answer
+  elsewhere; it satisfies `ResetsOnNoOutput` by construction, whatever
+  `upd` is, so the paper's replay with the agreed failover is a rule the
+  liveness claims apply to. The wrapper is classical, its test being a
+  proposition on verdicts.
 - **SH14, output liveness under the failover**: in a view that derived
   every period up to a run's last round, if some interval past a slot's
   finds an anchor, and above that interval the coin names a committed
@@ -665,8 +673,8 @@ LeanDag/Steelhead/
   Model/Wavelength.lean     periodic, IsAsync
   Model/Decision.lean       steelheadAnchored, Decided
   Model/Chain.lean          chainSlots, ChainDecided
-  Model/Period.lean         intervalOf, ResetsOnNoOutput, IntervalAnchor, NoAnchor, PeriodAt,
-                            adaptiveWave, adaptiveSlots
+  Model/Period.lean         intervalOf, ResetsOnNoOutput, failover, IntervalAnchor, NoAnchor,
+                            PeriodAt, adaptiveWave, adaptiveSlots
   Model/Coin.lean           commitProb, noCommitProb, blockRound, coinOfBlocks, blocksHorizon,
                             undecidedProb
   Model/Compose.lean        compose

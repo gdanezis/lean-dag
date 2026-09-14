@@ -15,7 +15,7 @@ namespace Period
 
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ _ S U ws wa I K
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro coin upd k₀ V₁ V₂ j k₁ k₂ hwa h₁ h₂
     exact periodAt_unique hwa h₁ h₂
   · intro coin upd k₀ N V₁ V₂ per₁ per₂ k v₁ v₂ hws hwa hN hk h₁ h₂ d₁ d₂
@@ -30,6 +30,8 @@ theorem holds : Statement := by
     exact two_async_rounds hk hI
   · intro coin upd k₀ V j k h₀ hK hupd hp
     exact periodAt_mem_range h₀ hK hupd hp
+  · intro w upd
+    exact failover_resets w upd
   · intro coin upd k₀ V per s j₁ r₁ b A hws hle hwa hid hI hreset hper hlead hs hA hb hgood hV
     exact output_liveness hws hle hwa hid hI hreset hper hlead hs hA hb hgood hV
   · intro coin upd k₀ V per c N hws hle hwa hid hI hlead h₀ hK hupd hwaK hcK hreset hrun hV hper
