@@ -9750,9 +9750,17 @@ SH10e fires at the anchored one and, by induction on the derivations,
 every interval up to the run runs at period `1`; the run's rounds then
 carry wave `wa`, its coins commit their candidates directly
 (`Steelhead.chainCommit_of_mem_goodAt`'s argument at the output
-schedule), and SH9 decides every slot below the run. That the coin
-supplies the anchor and the run almost surely is the half of Theorem 3
-the arc does not yet state.
+schedule), and SH9 decides every slot below the run. **SH14b**
+(`Steelhead.all_decided`) reads both events off Mahi-Mahi's run clause
+at the chain schedule with runs of `K` good coins, `K` the bound the
+periods stay within: a run of `K` consecutive rounds inside the interval
+after the slot's holds a multiple of the period in force, so an
+asynchronous round the view chain-commits directly, and with every chain
+verdict of the interval settled by SH7a the interval has its anchor; the
+run in the next interval is the one SH14 needs. Every slot two intervals
+and a window below the horizon is then decided. That the coin supplies
+runs of `K` almost surely is the half of Theorem 3 the arc does not yet
+state.
 
 ### 24.5 The coin
 
@@ -10974,7 +10982,7 @@ reused.
 | SH11 | the coin: a chain slot commits with probability `|good| / n`, at least `(n − f − |byzantine|) / n` and so at least `1/3` at `wa ≥ 5`, at least `1/n` at `wa ≥ 4`; no round's coin naming a directly committed leader in `m` rounds, with probability at most `((f + |byzantine|) / n)^m`, which tends to zero | `Steelhead.Coin.holds`, `Steelhead.ratio_le_commitProb`, `Steelhead.third_le_commitProb`, `Steelhead.inv_card_le_commitProb`, `Steelhead.chainCommit_of_mem_goodAt`, `Steelhead.noCommitProb_le`, `Steelhead.tail_tendsto_zero` *(Steelhead/Coin/Proof, Steelhead/Helpers/Coin)* |
 | SH12 | on data: the anchor-floor counterexample, the period sequence at a concrete update rule, and the stall DAG with its asynchronous commit | `lowFloor_skip`, `sh8_period1`, `st20_stall` *(LeanDagTest/Steelhead/Model, LeanDagTest/Steelhead/Period, LeanDagTest/Steelhead/Stall)* |
 | SH13 | the ledger: the committed-leader sequence and the ledger of a settled prefix are agreed, the ledger is monotone, a block enters at one slot which both views name, and a committed block belongs to one slot | `Steelhead.Ledger.holds` *(Steelhead/Ledger/Proof)* |
-| SH14 | output liveness under the failover: a slot below an anchored interval is decided once a run of `wa` coin-led commits above that interval is in view, since the failover puts the period at `1` from the interval after the anchored one and the run decides everything below it | `Steelhead.output_liveness` *(Steelhead/Helpers/Period)* |
+| SH14 | output liveness under the failover: a slot below an anchored interval is decided once a run of `wa` coin-led commits above that interval is in view, since the failover puts the period at `1` from the interval after the anchored one and the run decides everything below it; under the run clause with runs of `K` good coins every slot far enough below the horizon is decided | `Steelhead.output_liveness`, `Steelhead.all_decided` *(Steelhead/Helpers/Period)* |
 
 
 ---
@@ -19406,6 +19414,24 @@ theorem exists_least {w : ℕ → ℕ} {S : Slots Validator}
 ```
 
 No tie: any linked candidate is the rung's choice.
+
+#### `all_decided`
+
+*theorem, `Steelhead.Helpers.Period.lean`*
+
+```lean
+theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : ∀ t, S.slotRound t = t)
+    (hI : 0 < I) (hlead : ∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r)
+    {K c N : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
+    (hupd : ∀ j A k, 1 ≤ k → k ≤ K → 1 ≤ upd j A k ∧ upd j A k ≤ K)
+    (hwaK : wa ≤ K) (hcK : c + K ≤ I) (hreset : ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd)
+    (hrun : MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c K N)
+    (hV : V.CoversUpto N) (hper : ∀ j, j ≤ intervalOf I N → PeriodAt I wa coin upd k₀ U V j (per j))
+    (s : ℕ) (hN : MahiMahi.decisionRoundAt wa ((intervalOf I s + 2) * I + c + K) ≤ N) :
+    ∃ v, Decided (adaptiveWave ws wa I per) U V s v
+```
+
+**SH14b.** The run of `K` inside the interval after the slot's hits an asynchronous round, whose chain commit gives the interval its anchor once SH7a has settled every chain verdict there; the run in the next interval is the one SH14 needs.
 
 #### `selfParent`
 

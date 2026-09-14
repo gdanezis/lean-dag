@@ -102,7 +102,10 @@ from coverage into certification; the unpredictable-leader clause.
   anchored one and the period is `1` from the first, where the run
   decides everything below it. Theorem 3 (ii) and the asynchronous half
   of Definition 1's validity, deterministic given the anchor and the run,
-  the two events the coin supplies almost surely.
+  the two events the coin supplies almost surely; SH14b reads both off
+  Mahi-Mahi's run clause at the chain schedule with runs of `K` good
+  coins, `K` the bound on the period, and concludes that every slot far
+  enough below the horizon is decided.
 
 ### 0.1 Correspondence with the paper
 
@@ -115,7 +118,7 @@ from coverage into certification; the unpredictable-leader clause.
 | Corollary 2 (total order and integrity) | SH13 | in part: the relation's own ledger theorems at Steelhead's laws, over a settled prefix. Ordering the blocks a single commit releases is declined development-wide (report §1.4, §5.6) |
 | Theorem 2 (liveness under partial synchrony) | SH6a, SH6b | in part: the honest-leader direct commit, and everything below a fair run. The crashed-leader skip from `n − f` blames, the Byzantine-equivocation anchor bound and the `O(wa + b)` ordering bound are not formalised; timeouts and pacing are not modelled |
 | Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH10c, SH10d, SH10e, SH11 | in part: the chain settles under Mahi-Mahi's run clause, a period is derived for each interval, an anchored interval the view did not output hands the next one period `1` under the failover, which the arc models in place of the paper's premise on the update rule (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. Nothing yet derives the run clause or the anchor's existence from the coin: the "with probability `1`" is stated only as the vanishing tail SH11c/d |
-| Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval past the slot and one run of `wa` good coins above it; the clause, the anchor and the run are what the coin is to supply |
+| Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval past the slot and one run of `wa` good coins above it; SH14b reads both off the run clause at the chain schedule with runs of `K` good coins, and decides every slot far enough below the horizon. The clause is what the coin is to supply |
 | Theorem 4 (agreement of the period) | SH10a, SH10b | for any deterministic update rule |
 | Adaptive section, `I ≥ 2 · maxPeriod` and `1 ≤ k ≤ maxPeriod` | SH10f, SH10g | two asynchronous rounds per interval at any `k ≥ 1` with `2k ≤ I`; the period stays in range when the initial period does and the update rule keeps it there |
 | Protocol section, "whenever either verdict of an asynchronous slot is direct, the two coincide" | SH5b | predicate for predicate, at a slot proposed at its own round and led by the coin |
@@ -400,6 +403,20 @@ validator that derived `per` runs the output relation at.
   Theorem 3 (ii) and the asynchronous half of Definition 1's validity,
   deterministic given the anchor and the run; that the coin supplies both
   almost surely is the remaining half of Theorem 3.
+- **SH14b, every slot is decided under the clauses**: SH14 with its two
+  events read off Mahi-Mahi's run clause at the chain schedule, with runs
+  of `K` good coins, `K` the bound the periods stay within (SH10g's
+  premise), `wa ≤ K` and a window plus a run fitting in an interval
+  (`c + K ≤ I`). A run of `K` consecutive rounds inside the interval
+  after the slot's holds a multiple of whatever period is in force, so an
+  asynchronous round with a good coin, which the view chain-commits
+  directly; SH7a settles every chain verdict of the interval, so that
+  round or a lower chain-committed one is the anchor. The run in the next
+  interval is the one SH14 needs. Every slot whose interval lies two
+  intervals and a window below the horizon is then decided, in a view
+  caught up to the horizon that derived every period below it. The clause
+  with runs of `K` in every window is the deterministic stand-in for what
+  the coin gives almost surely, as SH7a's is.
 
 What is not modelled: the replay itself, the canary rounds and the
 probes, hysteresis, and the gating rule that a validator evaluates the
