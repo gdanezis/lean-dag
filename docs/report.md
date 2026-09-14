@@ -9770,11 +9770,18 @@ at each interval and SH10c; **SH10e**, under the failover the arc models
 in place of Theorem 3's premise on the update rule (§24.6):
 `ResetsOnNoOutput` asks the update to answer `1` at an anchor whose
 causal history, read at the wavelength the validator runs, shows no
-output of the interval, every slot of it committed there sitting above a
-slot the history leaves undecided; under it an interval that finds an
-anchor, and of which the view output nothing, hands the next interval
-period `1`, the view's verdicts carried into the anchor's history and
-back through the laws. The anchor is a hypothesis, since nothing
+output of the window, the last `I` rounds up to the anchor's, every slot
+of it committed there sitting above a slot the history leaves undecided;
+under it an interval whose anchor's window the view did not output hands
+the next interval period `1`, the view's verdicts carried into the
+anchor's history and back through the laws. The test reads the window
+and not the anchor's own interval: a history holds no decision round of
+the slots within a wave below its block, so an anchor at the start of
+its interval shows nothing of that interval whatever was output, and a
+test on the interval would fire at every anchored interval of a healthy
+network at period `1`; on the window a healthy network commits the
+lowest slots with everything below them decided, so period `1` is not
+absorbing. The anchor is a hypothesis, since nothing
 deterministic forces one when `k > wa`; its existence is the almost-sure
 half of Theorem 3 (i), which §24.5 states only as a vanishing tail.
 **SH10f**, at any period `k ≥ 1` with `2k ≤ I` every interval holds two
@@ -9786,7 +9793,7 @@ fixed by `I`, so the round at which a period takes effect is common by
 construction; what SH10a adds is that the periods are. **SH10h**
 (`Steelhead.failover_resets`): `failover U w I upd` answers `1` at an
 anchor whose causal history, read at `w`, shows no output of the
-interval and `upd`'s own answer elsewhere, and satisfies
+window and `upd`'s own answer elsewhere, and satisfies
 `ResetsOnNoOutput` by construction, whatever `upd` is, so the paper's
 replay with the agreed failover is a rule the claims below apply to.
 
@@ -9809,35 +9816,37 @@ within the anchor's history, at least `n − f − |byzantine|` authors are
 marked committed at wave `wa`, the counting lemma read on the history as
 a record of its own, whose votes and certificates are the universe's
 restricted to it. That the quorum's blocks must lie in the window is
-§24.6's seventh finding; the arithmetic of the score's passes is not
+§24.6's sixth finding; the arithmetic of the score's passes is not
 proved.
 
 **SH14** (`Steelhead.output_liveness`) is output liveness under the
 failover, Theorem 3 (ii) and the asynchronous half of Definition 1's
 validity, deterministic given two events: in a view that derived every
-period up to a run's last round, if some interval past a slot's finds an
-anchor and above that interval the coin names a committed candidate at
-`wa` consecutive rounds that lead the output's slots there, then the slot
-is decided once the view holds the run's decision rounds. Were the slot
-undecided it would sit below every commit of every later interval, so
-SH10e fires at the anchored one and, by induction on the derivations,
-every interval up to the run runs at period `1`; the run's rounds then
-carry wave `wa`, its coins commit their candidates directly
-(`Steelhead.chainCommit_of_mem_goodAt`'s argument at the output
-schedule), and SH9 decides every slot below the run. **SH14b**
-(`Steelhead.all_decided`) reads both events off Mahi-Mahi's run clause
-at the chain schedule with runs of `K` good coins, `K` the bound the
-periods stay within: a run of `K` consecutive rounds inside the interval
-after the slot's holds a multiple of the period in force, so an
-asynchronous round the view chain-commits directly, and with every chain
-verdict of the interval settled by SH7a the interval has its anchor; the
-run in the next interval is the one SH14 needs. Every slot two intervals
-and a window below the horizon is then decided. **SH14c**
-(`Steelhead.output_liveness_of_runs`) names the two events as runs of
-the coin alone, `K` good coins opening an interval past the slot's and
-`wa` good coins above that interval, which settle every chain verdict
-below them by SH7c; two runs at named places, each of a fixed positive
-probability, which is what §24.5 draws from the coin.
+period up to a run's last round, if some interval at least two past a
+slot's finds an anchor and above that interval the coin names a
+committed candidate at `wa` consecutive rounds that lead the output's
+slots there, then the slot is decided once the view holds the run's
+decision rounds. The window of an anchor two intervals up lies wholly
+above the slot, so were the slot undecided it would sit below every
+commit of every such window, SH10e fires at the anchored interval and,
+by induction on the derivations, every interval up to the run runs at
+period `1`; the run's rounds then carry wave `wa`, its coins commit
+their candidates directly (`Steelhead.chainCommit_of_mem_goodAt`'s
+argument at the output schedule), and SH9 decides every slot below the
+run. **SH14b** (`Steelhead.all_decided`) reads both events off
+Mahi-Mahi's run clause at the chain schedule with runs of `K` good
+coins, `K` the bound the periods stay within: a run of `K` consecutive
+rounds inside the second interval after the slot's holds a multiple of
+the period in force, so an asynchronous round the view chain-commits
+directly, and with every chain verdict of the interval settled by SH7a
+the interval has its anchor; the run in the next interval is the one
+SH14 needs. Every slot three intervals and a window below the horizon
+is then decided. **SH14c** (`Steelhead.output_liveness_of_runs`) names
+the two events as runs of the coin alone, `K` good coins opening an
+interval at least two past the slot's and `wa` good coins above that
+interval, which settle every chain verdict below them by SH7c; two runs
+at named places, each of a fixed positive probability, which is what
+§24.5 draws from the coin.
 
 ### 24.5 The coin
 
@@ -9867,15 +9876,22 @@ which is finite and populates finitely many rounds; what a finite record
 admits is a probability that tends to zero with the horizon, uniformly
 over records populated through it, the form SH11c/d take. **SH15a**
 (`Steelhead.undecidedProb_le`) draws the coins of `M` blocks of `K`
-rounds, block `j` opening the `j`-th interval past a slot's
+rounds, block `j` opening the interval `j + 2` past a slot's
 (`blockRound`, read back into a coin map by `coinOfBlocks`), uniformly
 and independently, and bounds the probability `undecidedProb` that some
-view holding the horizon, having derived its periods under the failover,
-leaves the slot undecided at the adaptive wavelength and schedule
-(`adaptiveSlots`, the coin at the rounds the periods make asynchronous)
-by `2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, at `2 ≤ ws ≤ wa`,
+view holding the horizon, at a period sequence matching every period it
+derives and at which the update rule fails over, has not derived the
+period of the slot's interval or leaves the slot undecided at the
+adaptive wavelength and schedule (`adaptiveSlots`, the coin at the
+rounds the periods make asynchronous) by
+`2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, at `2 ≤ ws ≤ wa`,
 `5 ≤ wa ≤ K ≤ I`, periods kept in `[1, K]`, and the blocks' waves
-populated where MM2 reads them: a good block in each half of the `M`
+populated where MM2 reads them. A sequence matching what the view
+derives is arbitrary where the scan has stalled, so a slot counts as
+decided only under every completion of the derived periods, and a scan
+that never reaches the slot's interval counts as a failure. A good
+block in each half of the `M` settles every chain verdict up to the
+later block, so the periods are derived that far (SH7c, SH10c), and
 decides the slot by SH14c, so the failure set lies in the union of the
 two halves' no-good-block sets, each a product whose every block of the
 half misses its all-good maps, of which MM2 counts at least
@@ -9896,11 +9912,7 @@ rounds alone would need a run spanning `⌈wa / k⌉ + 1` of them, a length
 the paper does not state. That the simulator's targeted-delay adversary
 yields a direct skip, which the anchor search passes over, so it cannot
 exhibit the stall, where an adversary delivering the leader block to
-exactly `f + 1` validators does. That the stall's threshold is
-`k ≥ ws` rather than the `k ≥ 2` the proofs section states: at `ws = 3`
-and `k = 2` the synchronous slot's floor is itself asynchronous and
-commits directly, so no stretch below a commit holds a synchronous slot
-to stall, which is the condition SH8 carries as `2 ≤ ws ≤ k`. That
+exactly `f + 1` validators does. That
 Algorithm 2's selector can retain a stalled period: at parameters the
 implementation accepts, a DAG holding every synchronous slot at two votes
 and two blames while the asynchronous slots commit scores the period in
@@ -9923,7 +9935,17 @@ the counting lemma counts the certificates the DAG holds, the replay
 those the anchor's causal history holds, which need not include one
 quorum's blocks at both the boost round and the decision round under
 asynchrony; SH18d states the lemma for the window under that
-hypothesis, which synchrony from below the window supplies.
+hypothesis, which synchrony from below the window supplies. And that an
+equivocating Byzantine leader at the floor is the anchor: the search
+stops at the first commit-or-undecided slot at or above the floor, and a
+slot whose leader equivocates is undecided, so it waits there whatever
+commits above, where Theorem 2 has the slot decided "once the first
+honest-led slot above its floor commits, at most `b` slots higher"; on
+thirty blocks at wave `3` validator `0` leads slots `0` and `3` and
+equivocates at both, the honest-led slot `4` commits and slot `0` stays
+undecided (`bf30_slot0_undecided`, SH12). The chain of floors advances
+a wave a hop and the same validator may lead every hop, so what decides
+such a slot is a run of reliably led slots above its floor (SH6b).
 
 Through the properties (§16), the rule has a carrier per wavelength
 function, `steelheadRule w`, and shows `Agree`, `CommitsCandidate`,
@@ -11107,7 +11129,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 327 definitions and structures the report names, in
+The 341 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -12771,6 +12793,16 @@ abbrev Decided (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
 
 **The decision relation at the wavelength function `w`**: the anchored relation at Steelhead's data. `Decided w U V k (some L)`: a validator holding `V` may commit `L` at `k`; `Decided w U V k none`: it may skip the slot; *undecided* is the absence of any derivation. Under `periodic ws wa k` this is Algorithm 1 of the paper.
 
+#### `UpdateRule`
+
+*abbrev, `Steelhead.Model.Period.lean`*
+
+```lean
+abbrev UpdateRule (BlockId : Type) := ℕ → BlockId → ℕ → ℕ
+```
+
+**The update rule**: the next period from the interval index, the anchor block and the period in force. Any deterministic function; the paper's counterfactual replay reads the anchor's causal history, which the block id determines within one universe.
+
 #### `ResetsOnNoOutput`
 
 *def, `Steelhead.Model.Period.lean`*
@@ -12779,13 +12811,13 @@ abbrev Decided (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
 def ResetsOnNoOutput [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload)
     (w : ℕ → ℕ) (I : ℕ) (upd : UpdateRule BlockId) : Prop :=
   ∀ (j k : ℕ) (A : BlockId) (hA : A ∈ U.ids),
-    (∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+    (∀ (s : ℕ) (L : BlockId), windowBottom U A I ≤ S.slotRound s →
       Decided w U (U.historyView A hA) s (some L) →
       ∃ s', s' < s ∧ ∀ v, ¬ Decided w U (U.historyView A hA) s' v) →
     upd j A k = 1
 ```
 
-**The update rule fails over to period `1` when the interval was not output.** The clause the liveness argument reads off the update rule, in place of Theorem 3's premise that a window without a synchronous commit maps to `k = 1` (`steelhead.md` §7): in the anchor's causal history, read at the wavelength `w` the validator runs, every committed slot proposed in interval `j` lies above a slot that history leaves undecided, so the sequenced output gained nothing from the interval; then the update at that anchor is `1`. A clause on `upd` against the record, as the unpredictable-leader clause is on the schedule. At period `1` it fires only when nothing was output, so period `1` is not absorbing.
+**The update rule fails over to period `1` when the window was not output.** The clause the liveness argument reads off the update rule, in place of Theorem 3's premise that a window without a synchronous commit maps to `k = 1` (`steelhead.md` §7): in the anchor's causal history, read at the wavelength `w` the validator runs, every committed slot of the window lies above a slot that history leaves undecided, so the sequenced output gained nothing from the window; then the update at that anchor is `1`. A clause on `upd` against the record, as the unpredictable-leader clause is on the schedule. The test reads the window, not the anchor's own interval: a history holds no decision round of the slots within a wave below its block, so an anchor at the start of its interval shows nothing of that interval whatever was output, and a test on the interval would fire at every anchored interval of a healthy network at period `1`. On the window a healthy network commits the lowest slots with everything below them decided, the clause is silent, and the rule's own answer stands: period `1` is not absorbing.
 
 #### `adaptiveSlots`
 
@@ -12803,10 +12835,10 @@ abbrev adaptiveSlots (coin known : ℕ → Validator) (I : ℕ) (per : ℕ → �
 *def, `Steelhead.Model.Coin.lean`*
 
 ```lean
-def blockRound (I j₀ j i : ℕ) : ℕ := (j₀ + 1 + j) * I + 1 + i
+def blockRound (I j₀ j i : ℕ) : ℕ := (j₀ + 2 + j) * I + 1 + i
 ```
 
-**Round `i` of block `j`**: block `j` opens interval `j₀ + 1 + j`, so its round `i` is the `(i + 1)`-th round of that interval.
+**Round `i` of block `j`**: block `j` opens interval `j₀ + 2 + j`, so its round `i` is the `(i + 1)`-th round of that interval. The blocks start two intervals past `j₀` so that the window of an anchor in any of them lies wholly above interval `j₀`.
 
 #### `coinOfBlocks`
 
@@ -12816,13 +12848,13 @@ def blockRound (I j₀ j i : ℕ) : ℕ := (j₀ + 1 + j) * I + 1 + i
 def coinOfBlocks {M K : ℕ} (I j₀ : ℕ) (g : Fin M → Fin K → Validator) (d : Validator) :
     ℕ → Validator :=
   fun r =>
-    if h : (j₀ + 1) * I + 1 ≤ r ∧ (r - ((j₀ + 1) * I + 1)) / I < M ∧
-        (r - ((j₀ + 1) * I + 1)) % I < K then
-      g ⟨(r - ((j₀ + 1) * I + 1)) / I, h.2.1⟩ ⟨(r - ((j₀ + 1) * I + 1)) % I, h.2.2⟩
+    if h : (j₀ + 2) * I + 1 ≤ r ∧ (r - ((j₀ + 2) * I + 1)) / I < M ∧
+        (r - ((j₀ + 2) * I + 1)) % I < K then
+      g ⟨(r - ((j₀ + 2) * I + 1)) / I, h.2.1⟩ ⟨(r - ((j₀ + 2) * I + 1)) % I, h.2.2⟩
     else d
 ```
 
-**The coins of `M` blocks of `K` rounds**, block `j` opening interval `j₀ + 1 + j`, read as a coin map: round `i` of block `j` draws `g j i`, and every other round draws `d`, which no event below reads. At `K ≤ I` the blocks are disjoint and the map reads them back exactly.
+**The coins of `M` blocks of `K` rounds**, block `j` opening interval `j₀ + 2 + j`, read as a coin map: round `i` of block `j` draws `g j i`, and every other round draws `d`, which no event below reads. At `K ≤ I` the blocks are disjoint and the map reads them back exactly.
 
 #### `undecidedProb`
 
@@ -12837,13 +12869,14 @@ noncomputable def undecidedProb (U : BlockUniverse Validator BlockId Payload) (w
       ResetsOnNoOutput (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per) U
         (adaptiveWave ws wa I per) I upd →
       V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-      (∀ j, j ≤ intervalOf I (blocksHorizon I wa (intervalOf I s) M) →
-        PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V j (per j)) →
+      (∀ j k, PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V j k → per j = k) →
+      PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V (intervalOf I s)
+        (per (intervalOf I s)) ∧
       ∃ v, Decided (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
         (adaptiveWave ws wa I per) U V s v}
 ```
 
-**The probability that slot `s` stays undecided**, over the uniform independent coins of `M` blocks of `K` rounds opening the intervals after the slot's: the measure of the coin maps under which some view holding the horizon, having derived its periods under the failover, leaves `s` undecided at the adaptive wavelength and schedule. The coins outside the blocks draw `d`.
+**The probability that slot `s` stays undecided**, over the uniform independent coins of `M` blocks of `K` rounds opening the intervals from the second after the slot's: the measure of the coin maps under which some view holding the horizon, at some period sequence that matches every period the view derives and at which the update rule fails over, either has not derived the period of the slot's interval or leaves `s` undecided at the adaptive wavelength and schedule. A sequence matching what the view derives is arbitrary where the scan has stalled, so a slot that counts as decided is decided under every such completion, from derived periods alone, and a scan that never reaches the slot's interval counts as a failure. The coins outside the blocks draw `d`.
 
 ### Black Marlin: the three-round commit rule
 
@@ -16794,7 +16827,7 @@ def ofAnchor (U : BlockUniverse Validator BlockId Payload) (A : BlockId) (I : �
   let ids := windowIds U A I
   let candidates := fun r a => (blocksAt U r).filter fun L => (U.block L).creator = a ∧ L ∈ ids
   let certs := fun r w L => MahiMahi.certificates U w L r ∩ ids
-  { bottom := max 1 ((U.block A).round + 1 - I)
+  { bottom := windowBottom U A I
     top := (U.block A).round
     commits := fun r w a => decide (∃ L ∈ candidates r a,
       quorumCard Validator ≤ (creatorsOf U.block (certs r w L)).card)
@@ -16832,6 +16865,18 @@ def select (candidates : List ℕ) (scores : ℕ → ℚ) (current : ℕ) (epsil
 ```
 
 **The hysteretic selection**: the best candidate if it improves on the current period by the factor `1 − ε`, the current period otherwise.
+
+#### `update`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def update (E : Evidence Validator) (C : Config Validator) (candidates : List ℕ) (current : ℕ)
+    (epsilon : ℚ) : ℕ :=
+  select candidates (score E C) current epsilon
+```
+
+**Algorithm 2 on one window**: the selection among the candidates by the replay's scores.
 
 #### `anchorUpdate`
 
@@ -16907,7 +16952,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 494 theorems the body or Appendix A names, each
+The 503 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -19694,11 +19739,11 @@ theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : �
     (hwaK : wa ≤ K) (hcK : c + K ≤ I) (hreset : ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd)
     (hrun : MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c K N)
     (hV : V.CoversUpto N) (hper : ∀ j, j ≤ intervalOf I N → PeriodAt I wa coin upd k₀ U V j (per j))
-    (s : ℕ) (hN : MahiMahi.decisionRoundAt wa ((intervalOf I s + 2) * I + c + K) ≤ N) :
+    (s : ℕ) (hN : MahiMahi.decisionRoundAt wa ((intervalOf I s + 3) * I + c + K) ≤ N) :
     ∃ v, Decided (adaptiveWave ws wa I per) U V s v
 ```
 
-**SH14b.** The run of `K` inside the interval after the slot's hits an asynchronous round, whose chain commit gives the interval its anchor once SH7a has settled every chain verdict there; the run in the next interval is the one SH14 needs.
+**SH14b.** The run of `K` inside the second interval after the slot's hits an asynchronous round, whose chain commit gives the interval its anchor once SH7a has settled every chain verdict there; the run in the next interval is the one SH14 needs.
 
 #### `selfParent`
 

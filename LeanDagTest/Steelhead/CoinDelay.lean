@@ -12,7 +12,7 @@ probability `n^-(N + 1) > 0` for every horizon `N`. On the DAG in which the thre
 validators reference one another at every round and validator `0` never proposes, no slot below
 the horizon then commits, so no settled prefix outputs a block, although every reliable round is
 populated and synchronised from round `0` and the reliable round-`1` block exists at every
-nontrivial horizon (`steelhead.md` §7, finding 6). The bound holds in expectation, or with
+nontrivial horizon (`steelhead.md` §7, finding 5). The bound holds in expectation, or with
 probability tending to one (SH15), not for every coin sequence.
 
 The DAG is the family `Uomit 0 N` of `LeanDagTest/Mysticeti/Unbounded.lean` with the absent

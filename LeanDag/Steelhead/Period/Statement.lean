@@ -29,10 +29,10 @@ What the adaptive protocol's period does across views and over time
 * **SH10e, the period reaches `1`**: Theorem 3 (i)'s last clause, under
   the failover in place of the paper's premise on the update rule
   (`ResetsOnNoOutput`, `Model/Period.lean`): an interval that finds an
-  anchor, and of which the view output nothing, since every slot of it
-  the view commits sits above one the view leaves undecided, hands the
-  next interval period `1`. That an anchor exists is the almost-sure
-  half, stated with the coin;
+  anchor whose window the view did not output, since every slot of the
+  window the view commits sits above one the view leaves undecided,
+  hands the next interval period `1`. That an anchor exists is the
+  almost-sure half, stated with the coin;
 * **SH10f, two asynchronous rounds per interval**: the adaptive
   section's structural fact behind `I ≥ 2 · maxPeriod`. At any period
   `k ≥ 1` with `2 k ≤ I`, every interval holds two asynchronous rounds to
@@ -49,29 +49,31 @@ What the adaptive protocol's period does across views and over time
   events the coin supplies almost surely. Under the failover, with the
   coin leading every round the derived period makes asynchronous, in a
   view that derived every period up to a run's last round, if some
-  interval past a slot's finds an anchor and above that interval the coin
-  names a committed candidate at `wa` consecutive rounds, then the slot
-  is decided once the view holds the run's decision rounds. A slot the
-  view leaves undecided sits below every commit of every later interval,
-  so the failover fires at each anchored one and the period is `1` from
-  the first, where the run decides everything below it (SH9);
+  interval at least two past a slot's finds an anchor and above that
+  interval the coin names a committed candidate at `wa` consecutive
+  rounds, then the slot is decided once the view holds the run's decision
+  rounds. The window of an anchor two intervals up lies wholly above the
+  slot, so a slot the view leaves undecided sits below every commit of
+  every such window, the failover fires at each anchored one and the
+  period is `1` from the first, where the run decides everything below
+  it (SH9);
 * **SH14b, every slot is decided under the clauses**: SH14 with its two
   events read off Mahi-Mahi's run clause at the chain schedule, with runs
   of `K` good coins, `K` the bound the periods stay within (SH10g). A run
-  of `K` consecutive rounds inside the interval after the slot's hits an
-  asynchronous round under whatever period is in force, whose chain
-  commit, every chain verdict of the interval settled by SH7a, gives the
-  interval its anchor; the run in the next interval is the one SH14
-  needs. Every slot two intervals and a window below the horizon is then
-  decided, in a view caught up to the horizon that derived every period
-  below it;
+  of `K` consecutive rounds inside the second interval after the slot's
+  hits an asynchronous round under whatever period is in force, whose
+  chain commit, every chain verdict of the interval settled by SH7a,
+  gives the interval its anchor; the run in the next interval is the one
+  SH14 needs. Every slot three intervals and a window below the horizon
+  is then decided, in a view caught up to the horizon that derived every
+  period below it;
 * **SH14c, output liveness from two good runs**: SH14 with its two
   events named as runs of the coin alone: `K` good coins opening an
-  interval past the slot's hit an asynchronous round under whatever
-  period is in force, and `wa` good coins above that interval settle
-  every chain verdict below them (SH7c), so the interval has its anchor
-  and the run is SH14's. The form the coin's almost-sure half consumes
-  (SH15): two runs at named places, each of a fixed positive
+  interval at least two past the slot's hit an asynchronous round under
+  whatever period is in force, and `wa` good coins above that interval
+  settle every chain verdict below them (SH7c), so the interval has its
+  anchor and the run is SH14's. The form the coin's almost-sure half
+  consumes (SH15): two runs at named places, each of a fixed positive
   probability.
 
 SH10a and SH10b assume `3 ≤ wa` (and `3 ≤ ws`), as SH5 and SH2 do, and
@@ -149,7 +151,7 @@ def PeriodOfClause (U : BlockUniverse Validator BlockId Payload) (I wa : ℕ) : 
       -- ... the view derives the next interval's period
       ∃ k, PeriodAt I wa coin upd k₀ U V (j + 1) k
 
-/-- **SH10e, the period reaches `1` after an interval that was not output.** -/
+/-- **SH10e, the period reaches `1` after an anchor whose window was not output.** -/
 def PeriodOne (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
     (V : View Validator BlockId Payload U) (per : ℕ → ℕ) (j k r : ℕ) (A : BlockId),
@@ -158,9 +160,9 @@ def PeriodOne (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Pr
     ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd →
     -- interval j runs at k and V finds it an anchor ...
     PeriodAt I wa coin upd k₀ U V j k → IntervalAnchor I wa coin U V j k r A →
-    -- ... and V output nothing of the interval: every slot of j it commits sits above one it
-    -- leaves undecided
-    (∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+    -- ... and V output nothing of the anchor's window: every slot of the window it commits sits
+    -- above one it leaves undecided
+    (∀ (s : ℕ) (L : BlockId), windowBottom U A I ≤ S.slotRound s →
       Decided (adaptiveWave ws wa I per) U V s (some L) →
       ∃ s', s' < s ∧ ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s' v) →
     -- then interval j + 1 runs at period 1
@@ -198,8 +200,9 @@ def OutputLiveness (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ)
     (∀ j, j ≤ intervalOf I (b + wa - 1) → PeriodAt I wa coin upd k₀ U V j (per j)) →
     -- the coin leads every round the derived period makes asynchronous
     (∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r) →
-    -- an interval past the slot's finds an anchor in V ...
-    intervalOf I s < j₁ → IntervalAnchor I wa coin U V j₁ (per j₁) r₁ A →
+    -- an interval at least two past the slot's, so that its anchor's window lies wholly above
+    -- the slot, finds an anchor in V ...
+    intervalOf I s + 1 < j₁ → IntervalAnchor I wa coin U V j₁ (per j₁) r₁ A →
     -- ... and above that interval the coin names a committed candidate at wa consecutive
     -- rounds, in a view holding their decision rounds
     (j₁ + 1) * I < b →
@@ -225,8 +228,8 @@ def AllDecided (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ) :
     MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c K N →
     -- the view holds every block up to the horizon and derived every period below it
     V.CoversUpto N → (∀ j, j ≤ intervalOf I N → PeriodAt I wa coin upd k₀ U V j (per j)) →
-    -- then every slot two intervals and a window below the horizon is decided
-    ∀ s, MahiMahi.decisionRoundAt wa ((intervalOf I s + 2) * I + c + K) ≤ N →
+    -- then every slot three intervals and a window below the horizon is decided
+    ∀ s, MahiMahi.decisionRoundAt wa ((intervalOf I s + 3) * I + c + K) ≤ N →
       ∃ v, Decided (adaptiveWave ws wa I per) U V s v
 
 /-- **SH14c, output liveness from two good runs.** -/
@@ -242,8 +245,8 @@ def OutputLivenessOfRuns (U : BlockUniverse Validator BlockId Payload) (ws wa I 
     ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd →
     -- V derived the period of every interval up to the run's last round
     (∀ j', j' ≤ intervalOf I (b + wa - 1) → PeriodAt I wa coin upd k₀ U V j' (per j')) →
-    -- past the slot's interval, interval j opens with K good coins ...
-    intervalOf I s < j →
+    -- at least two intervals past the slot's, interval j opens with K good coins ...
+    intervalOf I s + 1 < j →
     (∀ i, i < K → coin (j * I + 1 + i) ∈ MahiMahi.goodAt U wa (j * I + 1 + i)) →
     -- ... and above interval j the coin names a committed candidate at wa consecutive rounds,
     -- in a view holding their decision rounds

@@ -297,14 +297,14 @@ theorem adaptiveWave_two_le (hws : 2 ≤ ws) (hwa : 2 ≤ wa) (r : ℕ) :
   unfold adaptiveWave periodic
   split <;> omega
 
-/-- **The failover fires at an anchored interval the view did not output.** What the view
-commits of the interval, the anchor's history commits at most; what the history leaves undecided
+/-- **The failover fires at an anchor whose window the view did not output.** What the view
+commits of the window, the anchor's history commits at most; what the history leaves undecided
 below it, the view may have decided, but the slot the view leaves undecided the history does too.
 So the failover's premise transfers from the view to the history, and the update is `1`. -/
 theorem upd_eq_one_of_anchor (hws : 2 ≤ ws) (hwa : 2 ≤ wa)
     (hreset : ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd) {j k r : ℕ} {A : BlockId}
     (hA : IntervalAnchor I wa coin U V j k r A)
-    (hout : ∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+    (hout : ∀ (s : ℕ) (L : BlockId), windowBottom U A I ≤ S.slotRound s →
       Decided (adaptiveWave ws wa I per) U V s (some L) →
       ∃ s', s' < s ∧ ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s' v) :
     upd j A k = 1 := by
@@ -325,13 +325,36 @@ theorem upd_eq_one_of_anchor (hws : 2 ≤ ws) (hwa : 2 ≤ wa)
 theorem periodAt_one_of_anchor (hws : 2 ≤ ws) (hwa : 2 ≤ wa)
     (hreset : ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd) {j k r : ℕ} {A : BlockId}
     (hp : PeriodAt I wa coin upd k₀ U V j k) (hA : IntervalAnchor I wa coin U V j k r A)
-    (hout : ∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+    (hout : ∀ (s : ℕ) (L : BlockId), windowBottom U A I ≤ S.slotRound s →
       Decided (adaptiveWave ws wa I per) U V s (some L) →
       ∃ s', s' < s ∧ ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s' v) :
     PeriodAt I wa coin upd k₀ U V (j + 1) 1 :=
   upd_eq_one_of_anchor hws hwa hreset hA hout ▸ PeriodAt.anchor hp hA
 
 end Failover
+
+/-- A round of an interval past the first lies above the interval's first round less one. -/
+theorem mul_add_one_le_of_intervalOf {j r : ℕ} (hI : 0 < I) (hj : 1 ≤ j)
+    (h : intervalOf I r = j) : j * I + 1 ≤ r := by
+  unfold intervalOf at h
+  have := (Nat.le_div_iff_mul_le hI).mp (le_of_eq h.symm)
+  have : 0 < j * I := Nat.mul_pos hj hI
+  omega
+
+/-- **The periods are derivable as far as the chain verdicts are settled**: once every round of
+the intervals up to `n` has a chain verdict in a view, the view derives a period for every
+interval up to `n + 1`, SH10c at each step. -/
+theorem exists_periodAt_of_settled {upd : UpdateRule BlockId} {k₀ : ℕ}
+    {V : View Validator BlockId Payload U} {n : ℕ}
+    (hall : ∀ r, intervalOf I r ≤ n → ∃ v, ChainDecided wa coin U V r v) :
+    ∀ j, j ≤ n + 1 → ∃ k, PeriodAt I wa coin upd k₀ U V j k := by
+  intro j
+  induction j with
+  | zero => exact fun _ => ⟨k₀, PeriodAt.zero⟩
+  | succ j ih =>
+    intro hj
+    obtain ⟨k, hk⟩ := ih (by omega)
+    exact exists_periodAt_succ hk fun r hr _ => hall r (by omega)
 
 /-- **SH10f.** The first multiple of `k` at or above the interval's first round, and the next one:
 both lie in the interval, since it holds `I ≥ 2k` rounds. -/
@@ -391,16 +414,17 @@ section Slots
 variable [S : Slots Validator] {ws : ℕ} {upd : UpdateRule BlockId} {k₀ : ℕ}
   {V : View Validator BlockId Payload U} {per : ℕ → ℕ}
 
-/-- **SH14.** If the slot is undecided, it sits below every commit of every later interval, so
-the failover fires at the anchored one and the period is `1` from the next interval on, up to the
-run; the run's rounds then carry wave `wa`, its coins commit their candidates directly, and the
-drain (SH9) decides every slot below the run, the slot among them. -/
+/-- **SH14.** If the slot is undecided, it sits below every commit of the window of every anchor
+two or more intervals up, so the failover fires at the anchored interval and the period is `1`
+from the next interval on, up to the run; the run's rounds then carry wave `wa`, its coins commit
+their candidates directly, and the drain (SH9) decides every slot below the run, the slot among
+them. -/
 theorem output_liveness (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa)
     (hid : ∀ t, S.slotRound t = t) (hI : 0 < I)
     (hreset : ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd) {b : ℕ}
     (hper : ∀ j, j ≤ intervalOf I (b + wa - 1) → PeriodAt I wa coin upd k₀ U V j (per j))
     (hlead : ∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r)
-    {s j₁ r₁ : ℕ} {A : BlockId} (hs : intervalOf I s < j₁)
+    {s j₁ r₁ : ℕ} {A : BlockId} (hs : intervalOf I s + 1 < j₁)
     (hA : IntervalAnchor I wa coin U V j₁ (per j₁) r₁ A) (hb : (j₁ + 1) * I < b)
     (hgood : ∀ i, i < wa → coin (b + i) ∈ MahiMahi.goodAt U wa (b + i))
     (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa (b + wa - 1))) :
@@ -409,15 +433,23 @@ theorem output_liveness (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa)
   by_cases hdec : ∃ v, Decided (adaptiveWave ws wa I per) U V s v
   · exact hdec
   replace hdec : ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s v := fun v hv => hdec ⟨v, hv⟩
-  -- the slot sits below every slot of a later interval, so none of them is output while it waits
-  have hout : ∀ j, intervalOf I s < j → ∀ (t : ℕ) (L : BlockId),
-      intervalOf I (S.slotRound t) = j → Decided (adaptiveWave ws wa I per) U V t (some L) →
+  have hsI := le_of_intervalOf hI (rfl : intervalOf I s = intervalOf I s)
+  -- the slot sits below the window of any anchor two or more intervals up, so no slot of that
+  -- window is output while it waits
+  have hout : ∀ j, intervalOf I s + 1 < j → ∀ {k r : ℕ} {A : BlockId},
+      IntervalAnchor I wa coin U V j k r A → ∀ (t : ℕ) (L : BlockId),
+      windowBottom U A I ≤ S.slotRound t → Decided (adaptiveWave ws wa I per) U V t (some L) →
       ∃ s', s' < t ∧ ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s' v := by
-    intro j hj t L ht _
+    intro j hj k r A hA t L ht _
     refine ⟨s, ?_, hdec⟩
     rw [hid] at ht
-    by_contra hts
-    have := intervalOf_mono (I := I) (Nat.le_of_not_lt hts)
+    have hAr : (U.block A).round = r :=
+      (AnchoredRule.isLeaderBlock_of_decided (S := chainSlots coin) hA.commit).2.1
+    have hr : j * I + 1 ≤ r := mul_add_one_le_of_intervalOf hI (by omega) hA.mem
+    have ht' : (U.block A).round + 1 - I ≤ t := le_trans (le_max_right _ _) ht
+    have h2 : (intervalOf I s + 1) * I ≤ (j - 1) * I := Nat.mul_le_mul_right I (by omega)
+    have h3 : j * I = (j - 1) * I + I := by
+      rw [← Nat.succ_mul, Nat.succ_eq_add_one, Nat.sub_add_cancel (by omega : 1 ≤ j)]
     omega
   -- the run lies in intervals past the anchored one, all of them derived
   have hbj : j₁ + 1 ≤ intervalOf I b := le_intervalOf_of_lt hI hb
@@ -429,14 +461,14 @@ theorem output_liveness (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa)
     | zero =>
       intro hn
       exact periodAt_unique hwa (hper _ hn)
-        (periodAt_one_of_anchor hws (by omega) hreset (hper j₁ (by omega)) hA (hout j₁ hs))
+        (periodAt_one_of_anchor hws (by omega) hreset (hper j₁ (by omega)) hA (hout j₁ hs hA))
     | succ n ih =>
       intro hn
       have hprev := ih (by omega)
       change per (j₁ + 1 + n + 1) = 1
       rcases (hper (j₁ + 1 + n + 1) hn).succ_cases with ⟨k, r, A', hp, hA', hk⟩ | ⟨k, hp, _, hk⟩
       · rw [hk]
-        exact upd_eq_one_of_anchor hws (by omega) hreset hA' (hout _ (by omega))
+        exact upd_eq_one_of_anchor hws (by omega) hreset hA' (hout _ (by omega) hA')
       · rw [hk]
         exact (periodAt_unique hwa hp (hper _ (by omega))).trans hprev
   -- so the run's rounds run at period 1: asynchronous, at wave wa, led by the coin
@@ -469,8 +501,7 @@ theorem output_liveness (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa)
     omega
   -- and the drain decides everything below the run, the slot among it
   have hsb : s < b := by
-    have h1 := le_of_intervalOf hI (rfl : intervalOf I s = intervalOf I s)
-    have h2 : (intervalOf I s + 1) * I ≤ j₁ * I := Nat.mul_le_mul_right I hs
+    have h2 : (intervalOf I s + 1) * I ≤ j₁ * I := Nat.mul_le_mul_right I (by omega)
     have h3 : j₁ * I ≤ (j₁ + 1) * I := Nat.mul_le_mul_right I (by omega)
     omega
   exact allDecidedBelowOfRun
@@ -534,9 +565,9 @@ theorem IntervalAnchor.of_committed {V : View Validator BlockId Payload U} {j k 
   | none => exact hv
   | some B => exact absurd ⟨hmem', hasync', B, hv⟩ (Nat.find_min hex hlt)
 
-/-- **SH14b.** The run of `K` inside the interval after the slot's hits an asynchronous round,
-whose chain commit gives the interval its anchor once SH7a has settled every chain verdict there;
-the run in the next interval is the one SH14 needs. -/
+/-- **SH14b.** The run of `K` inside the second interval after the slot's hits an asynchronous
+round, whose chain commit gives the interval its anchor once SH7a has settled every chain verdict
+there; the run in the next interval is the one SH14 needs. -/
 theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : ∀ t, S.slotRound t = t)
     (hI : 0 < I) (hlead : ∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r)
     {K c N : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
@@ -544,33 +575,34 @@ theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : �
     (hwaK : wa ≤ K) (hcK : c + K ≤ I) (hreset : ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd)
     (hrun : MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c K N)
     (hV : V.CoversUpto N) (hper : ∀ j, j ≤ intervalOf I N → PeriodAt I wa coin upd k₀ U V j (per j))
-    (s : ℕ) (hN : MahiMahi.decisionRoundAt wa ((intervalOf I s + 2) * I + c + K) ≤ N) :
+    (s : ℕ) (hN : MahiMahi.decisionRoundAt wa ((intervalOf I s + 3) * I + c + K) ≤ N) :
     ∃ v, Decided (adaptiveWave ws wa I per) U V s v := by
-  have hmul1 : (intervalOf I s + 1) * I = intervalOf I s * I + I := by
-    rw [Nat.add_mul, Nat.one_mul]
   have hmul2 : (intervalOf I s + 2) * I = intervalOf I s * I + I + I := by
     rw [Nat.add_mul, Nat.two_mul, ← Nat.add_assoc]
-  have hmul3 : (intervalOf I s + 1 + 1) * I = (intervalOf I s + 2) * I := rfl
+  have hmul3 : (intervalOf I s + 3) * I = intervalOf I s * I + I + I + I := by
+    rw [Nat.add_mul, show (3 : ℕ) * I = I + I + I by omega, ← Nat.add_assoc, ← Nat.add_assoc]
+  have hmul4 : (intervalOf I s + 2 + 1) * I = (intervalOf I s + 3) * I := rfl
+  have hmul5 : (intervalOf I s + 1 + 1) * I = (intervalOf I s + 2) * I := rfl
   unfold MahiMahi.decisionRoundAt at hN
-  -- every chain verdict of the interval after the slot's is settled
+  -- every chain verdict of the second interval after the slot's is settled
   have hall := chain_all_of_clause (by omega) hI
     (unpredictableRunWithin_of_le (by omega) hwaK (by omega) hrun)
-    (hV.mono (Nat.sub_le _ _)) (j := intervalOf I s + 1) (by
+    (hV.mono (Nat.sub_le _ _)) (j := intervalOf I s + 2) (by
       unfold MahiMahi.decisionRoundAt
       omega)
   -- a run of K good coins inside that interval hits one of its asynchronous rounds
-  obtain ⟨k', hk1, hk2, hg⟩ := hrun ((intervalOf I s + 1) * I + 1) (by
+  obtain ⟨k', hk1, hk2, hg⟩ := hrun ((intervalOf I s + 2) * I + 1) (by
     rw [MahiMahi.mahiMahiAnchored_decisionRound (S := chainSlots coin) (by omega)]
-    change MahiMahi.decisionRoundAt wa ((intervalOf I s + 1) * I + 1 + c + K - 1) ≤ N
+    change MahiMahi.decisionRoundAt wa ((intervalOf I s + 2) * I + 1 + c + K - 1) ≤ N
     unfold MahiMahi.decisionRoundAt
     omega)
-  have hrange := periodAt_mem_range h₀ hK hupd (hper (intervalOf I s + 1) (by
-    refine le_trans ?_ (intervalOf_mono (I := I) (show (intervalOf I s + 2) * I + c + K ≤ N by
+  have hrange := periodAt_mem_range h₀ hK hupd (hper (intervalOf I s + 2) (by
+    refine le_trans ?_ (intervalOf_mono (I := I) (show (intervalOf I s + 3) * I + c + K ≤ N by
       omega))
     exact le_intervalOf_of_lt hI (by omega)))
   obtain ⟨i, hi, hasync⟩ := exists_isAsync_of_le (b := k') hrange.1 hrange.2
-  have hmem : intervalOf I (k' + i) = intervalOf I s + 1 :=
-    intervalOf_eq_of_lt_le (by omega) (by omega)
+  have hmem : intervalOf I (k' + i) = intervalOf I s + 2 :=
+    intervalOf_eq_of_mul_lt_le (by omega) (by omega)
   -- whose coin's candidate the view chain-commits directly
   obtain ⟨L, hLU, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp (hg i hi)
   have hL : ChainDecided wa coin U V (k' + i) (some L) :=
@@ -582,9 +614,9 @@ theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : �
   obtain ⟨r₁, A, hA⟩ := IntervalAnchor.of_committed (fun r hr _ => hall r hr)
     ⟨k' + i, hmem, hasync, L, hL⟩
   -- the run of K in the next interval starts the run of wa SH14 needs
-  obtain ⟨b, hb1, hb2, hgb⟩ := hrun ((intervalOf I s + 2) * I + 1) (by
+  obtain ⟨b, hb1, hb2, hgb⟩ := hrun ((intervalOf I s + 3) * I + 1) (by
     rw [MahiMahi.mahiMahiAnchored_decisionRound (S := chainSlots coin) (by omega)]
-    change MahiMahi.decisionRoundAt wa ((intervalOf I s + 2) * I + 1 + c + K - 1) ≤ N
+    change MahiMahi.decisionRoundAt wa ((intervalOf I s + 3) * I + 1 + c + K - 1) ≤ N
     unfold MahiMahi.decisionRoundAt
     omega)
   refine output_liveness hws hle hwa hid hI hreset (b := b) (fun j hj => hper j ?_) hlead
@@ -604,7 +636,7 @@ theorem output_liveness_of_runs (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ 
     (hK : k₀ ≤ K) (hupd : ∀ j A k, 1 ≤ k → k ≤ K → 1 ≤ upd j A k ∧ upd j A k ≤ K) (hKI : K ≤ I)
     (hreset : ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd) {b : ℕ}
     (hper : ∀ j', j' ≤ intervalOf I (b + wa - 1) → PeriodAt I wa coin upd k₀ U V j' (per j'))
-    {s j : ℕ} (hs : intervalOf I s < j)
+    {s j : ℕ} (hs : intervalOf I s + 1 < j)
     (hgood : ∀ i, i < K → coin (j * I + 1 + i) ∈ MahiMahi.goodAt U wa (j * I + 1 + i))
     (hb : (j + 1) * I < b) (hgoodb : ∀ i, i < wa → coin (b + i) ∈ MahiMahi.goodAt U wa (b + i))
     (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa (b + wa - 1))) :

@@ -187,9 +187,9 @@ theorem coinOfBlocks_blockRound {M K I j₀ : ℕ} (hKI : K ≤ I) (g : Fin M �
     (d : Validator) (j : Fin M) (i : Fin K) :
     coinOfBlocks I j₀ g d (blockRound I j₀ j i) = g j i := by
   have hI : 0 < I := by have := i.isLt; omega
-  have hmul : (j₀ + 1 + j) * I = (j₀ + 1) * I + I * j := by
+  have hmul : (j₀ + 2 + j) * I = (j₀ + 2) * I + I * j := by
     rw [Nat.add_mul, Nat.mul_comm (j : ℕ) I]
-  have hsub : blockRound I j₀ j i - ((j₀ + 1) * I + 1) = I * j + i := by
+  have hsub : blockRound I j₀ j i - ((j₀ + 2) * I + 1) = I * j + i := by
     unfold blockRound
     omega
   have hdiv : (I * j + i) / I = j := by
@@ -267,8 +267,9 @@ theorem badBlockBound_le_one (K : ℕ) : Coin.badBlockBound Validator K ≤ 1 :=
     ← Nat.cast_pow, Nat.cast_le]
   exact Nat.sub_le _ _
 
-/-- A good block in each half decides the slot: the earlier one anchors its interval, the later one
-is the run above it (SH14c). -/
+/-- A good block in each half settles every chain verdict up to the later one, so the periods are
+derived that far, and decides the slot: the earlier block anchors its interval, the later one is
+the run above it (SH14c). -/
 theorem decided_of_good_blocks {U : BlockUniverse Validator BlockId Payload} {ws wa I K : ℕ}
     (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I)
     {upd : UpdateRule BlockId} {k₀ : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
@@ -281,40 +282,64 @@ theorem decided_of_good_blocks {U : BlockUniverse Validator BlockId Payload} {ws
       (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per) U
       (adaptiveWave ws wa I per) I upd)
     (hV : V.CoversUpto (blocksHorizon I wa (intervalOf I s) M))
-    (hper : ∀ j, j ≤ intervalOf I (blocksHorizon I wa (intervalOf I s) M) →
-      PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V j (per j)) :
-    ∃ v, Decided (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
-      (adaptiveWave ws wa I per) U V s v := by
+    (hmatch : ∀ j k, PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V j k →
+      per j = k) :
+    PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V (intervalOf I s)
+        (per (intervalOf I s)) ∧
+      ∃ v, Decided (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
+        (adaptiveWave ws wa I per) U V s v := by
   have hI : 0 < I := by omega
-  have h1 : (intervalOf I s + 1 + j₂) * I ≤ (intervalOf I s + M) * I :=
+  have h1 : (intervalOf I s + 2 + j₂) * I ≤ (intervalOf I s + 1 + M) * I :=
     Nat.mul_le_mul_right I (by have := j₂.isLt; omega)
-  have hb0 : blockRound I (intervalOf I s) j₂ 0 + wa - 1 ≤
-      blocksHorizon I wa (intervalOf I s) M := by
-    unfold blockRound blocksHorizon MahiMahi.decisionRoundAt
-    omega
   have hb : MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j₂ 0 + wa - 1) ≤
       blocksHorizon I wa (intervalOf I s) M := by
     unfold blockRound blocksHorizon MahiMahi.decisionRoundAt
     omega
+  -- the later block's coins, read back from the block map
+  have hgoodb : ∀ i, i < wa → coinOfBlocks I (intervalOf I s) g d
+      (blockRound I (intervalOf I s) j₂ 0 + i) ∈
+        MahiMahi.goodAt U wa (blockRound I (intervalOf I s) j₂ 0 + i) := by
+    intro i hi
+    have := coinOfBlocks_blockRound (j₀ := intervalOf I s) hKI g d j₂ ⟨i, by omega⟩
+    simp only [blockRound] at this
+    rw [show blockRound I (intervalOf I s) j₂ 0 + i = (intervalOf I s + 2 + j₂) * I + 1 + i by
+      unfold blockRound; omega, this]
+    exact hg₂ ⟨i, by omega⟩
+  -- its run settles every chain verdict below it, so the periods are derived up to its interval
+  have hall := chainAllDecidedBelowOfRun (by omega) hgoodb (hV.mono hb)
+  have hint : intervalOf I (blockRound I (intervalOf I s) j₂ 0 + wa - 1) =
+      intervalOf I s + 2 + j₂ := by
+    have hmul : (intervalOf I s + 2 + j₂ + 1) * I = (intervalOf I s + 2 + j₂) * I + I := by
+      rw [Nat.add_mul, Nat.one_mul]
+    exact intervalOf_eq_of_mul_lt_le (by unfold blockRound; omega) (by unfold blockRound; omega)
+  have hper : ∀ j', j' ≤ intervalOf I (blockRound I (intervalOf I s) j₂ 0 + wa - 1) →
+      PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V j' (per j') := by
+    intro j' hj'
+    rw [hint] at hj'
+    have hex : ∀ j, j ≤ intervalOf I s + 1 + j₂ + 1 →
+        ∃ k, PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V j k :=
+      exists_periodAt_of_settled fun r hr => hall r (by
+        have := le_of_intervalOf hI (rfl : intervalOf I r = intervalOf I r)
+        have := Nat.mul_le_mul_right I (show intervalOf I r + 1 ≤ intervalOf I s + 2 + j₂ by omega)
+        unfold blockRound
+        omega)
+    obtain ⟨k, hk⟩ := hex j' (by omega)
+    rw [hmatch j' k hk]
+    exact hk
+  refine ⟨hper _ (by rw [hint]; omega), ?_⟩
   refine output_liveness_of_runs
     (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
     hws hle hwa (fun _ => rfl) hI (fun r h => if_pos h) h₀ hK hupd hKI hreset
-    (b := blockRound I (intervalOf I s) j₂ 0)
-    (fun j' hj' => hper j' (le_trans hj' (intervalOf_mono hb0)))
-    (j := intervalOf I s + 1 + j₁) (by omega) (fun i hi => ?_) ?_ (fun i hi => ?_) (hV.mono hb)
+    (b := blockRound I (intervalOf I s) j₂ 0) hper
+    (j := intervalOf I s + 2 + j₁) (by omega) (fun i hi => ?_) ?_ hgoodb (hV.mono hb)
   · have := coinOfBlocks_blockRound (j₀ := intervalOf I s) hKI g d j₁ ⟨i, hi⟩
     simp only [blockRound] at this
     rw [this]
     exact hg₁ ⟨i, hi⟩
   · unfold blockRound
-    have : (intervalOf I s + 1 + j₁ + 1) * I ≤ (intervalOf I s + 1 + j₂) * I :=
+    have : (intervalOf I s + 2 + j₁ + 1) * I ≤ (intervalOf I s + 2 + j₂) * I :=
       Nat.mul_le_mul_right I (by omega)
     omega
-  · have := coinOfBlocks_blockRound (j₀ := intervalOf I s) hKI g d j₂ ⟨i, by omega⟩
-    simp only [blockRound] at this
-    rw [show blockRound I (intervalOf I s) j₂ 0 + i = (intervalOf I s + 1 + j₂) * I + 1 + i by
-      unfold blockRound; omega, this]
-    exact hg₂ ⟨i, by omega⟩
 
 /-- **SH15a.** The failure set lies in the union of the two halves' no-good-block sets, each of
 which the counting bounds. -/
@@ -341,8 +366,10 @@ theorem undecidedProb_le {U : BlockUniverse Validator BlockId Payload} {ws wa I 
         ResetsOnNoOutput (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per) U
           (adaptiveWave ws wa I per) I upd →
         V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-        (∀ j, j ≤ intervalOf I (blocksHorizon I wa (intervalOf I s) M) →
-          PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V j (per j)) →
+        (∀ j k, PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V j k →
+          per j = k) →
+        PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V (intervalOf I s)
+          (per (intervalOf I s)) ∧
         ∃ v, Decided (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
           (adaptiveWave ws wa I per) U V s v} ⊆
       {g | ∀ j ∈ H₁, ∃ i, g j i ∉ G j i} ∪ {g | ∀ j ∈ H₂, ∃ i, g j i ∉ G j i} := by
@@ -362,8 +389,8 @@ theorem undecidedProb_le {U : BlockUniverse Validator BlockId Payload} {ws wa I 
     rw [hH₁, Finset.mem_filter] at hj₁
     rw [hH₂, Finset.mem_filter] at hj₂
     have hlt : j₁ < j₂ := Fin.lt_def.mpr (by omega)
-    exact hg fun V per hreset hV hper => decided_of_good_blocks hws hle (by omega) hwaK hKI h₀ hK
-      hupd hlt hg₁ hg₂ V per hreset hV hper
+    exact hg fun V per hreset hV hmatch => decided_of_good_blocks hws hle (by omega) hwaK hKI h₀
+      hK hupd hlt hg₁ hg₂ V per hreset hV hmatch
   -- each half holds at least M / 2 blocks
   have hcard₁ : M / 2 ≤ H₁.card := by
     rw [← Finset.card_range (M / 2), ← Finset.card_image_of_injective H₁ Fin.val_injective]

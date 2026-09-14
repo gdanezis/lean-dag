@@ -160,8 +160,7 @@ theorem certificates_toRecord {V : View Validator BlockId Payload U} {w : ℕ} {
 the window's evidence marks: their certificates are the universe's within the history, at a
 round the window retains. -/
 theorem window_count {wa I : ℕ} {A : BlockId} (hA : A ∈ U.ids) {T : Finset Validator} {r : ℕ}
-    (hwa : 5 ≤ wa) (hcard : quorumCard Validator ≤ T.card)
-    (hr : max 1 ((U.block A).round + 1 - I) ≤ r)
+    (hwa : 5 ≤ wa) (hcard : quorumCard Validator ≤ T.card) (hr : windowBottom U A I ≤ r)
     (hpop3 : PopulatedOn (U.historyView A hA).toRecord T (r + 3))
     (hpopd : PopulatedOn (U.historyView A hA).toRecord T (MahiMahi.decisionRoundAt wa r)) :
     Fintype.card Validator - F.f - F.byzantine.card ≤
@@ -188,8 +187,7 @@ theorem window_count {wa I : ℕ} {A : BlockId} (hA : A ∈ U.ids) {T : Finset V
   change C ∈ history U A at hCW
   refine Finset.mem_filter.mpr ⟨hCW, ?_, round_le_of_mem_history hA hCW⟩
   rw [(mem_certificatesAt.mp hCU).2.1]
-  unfold MahiMahi.decisionRoundAt
-  omega
+  exact le_trans hr (by unfold MahiMahi.decisionRoundAt; omega)
 
 end Replay
 

@@ -74,7 +74,7 @@ variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Val
 def windowIds (U : BlockUniverse Validator BlockId Payload) (A : BlockId) (I : ℕ) :
     Finset BlockId :=
   (history U A).filter fun b =>
-    max 1 ((U.block A).round + 1 - I) ≤ (U.block b).round ∧ (U.block b).round ≤ (U.block A).round
+    windowBottom U A I ≤ (U.block b).round ∧ (U.block b).round ≤ (U.block A).round
 
 /-- **The evidence of an anchor's window**: a candidate is a block of the author at the round
 inside the window; it is committed when a quorum of distinct validators certify it within the
@@ -86,7 +86,7 @@ def ofAnchor (U : BlockUniverse Validator BlockId Payload) (A : BlockId) (I : �
   let ids := windowIds U A I
   let candidates := fun r a => (blocksAt U r).filter fun L => (U.block L).creator = a ∧ L ∈ ids
   let certs := fun r w L => MahiMahi.certificates U w L r ∩ ids
-  { bottom := max 1 ((U.block A).round + 1 - I)
+  { bottom := windowBottom U A I
     top := (U.block A).round
     commits := fun r w a => decide (∃ L ∈ candidates r a,
       quorumCard Validator ≤ (creatorsOf U.block (certs r w L)).card)

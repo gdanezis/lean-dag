@@ -24,12 +24,17 @@ the paper's Theorem 3 read through a uniform coin. Seven claims:
 * **SH15a, the output is live but for a vanishing probability** —
   Theorem 3's "with probability `1`", in the form a finite record
   admits: over the uniform independent coins of `M` blocks of `K` rounds,
-  one opening each interval after a slot's, the slot stays undecided in
-  some view holding the horizon that derived its periods under the
-  failover with probability at most `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`.
-  Two good blocks in different halves decide the slot (SH14c), and each
-  half holds no good block with the probability the counting lemma
-  bounds block by block;
+  one opening each interval from the second after a slot's, some view
+  holding the horizon, at a period sequence matching what it derives and
+  at which the update rule fails over, has not derived the period of the
+  slot's interval or leaves the slot undecided, with probability at most
+  `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`. Two good blocks in different
+  halves settle every chain verdict up to the later one, so the periods
+  are derived that far, and decide the slot (SH14c); each half holds no
+  good block with the probability the counting lemma bounds block by
+  block. A scan that never reaches the slot's interval counts as a
+  failure, and a slot counts as decided only under every completion of
+  the derived periods;
 * **SH15b, that tail vanishes** — the bound tends to zero as the number
   of blocks grows, since `n − f − b ≥ 1`.
 

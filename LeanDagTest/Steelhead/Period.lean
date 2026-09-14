@@ -84,30 +84,41 @@ theorem sh8_period1 :
 /-! ## The failover on data
 
 `ResetsOnNoOutput` asks the update rule to answer `1` at an anchor whose history shows no output
-of the interval. The constant rule `1` satisfies it outright. Its premise is not vacuous: block
-`28`, at round `7`, reaches the round-`4` certificates of block `1`, so slot `0` is committed in
-its history with nothing undecided below it, and the clause asks nothing of the update at that
-anchor. -/
+of its window, the last `I` rounds up to the anchor's and none below round `1`. The constant rule
+`1` satisfies it outright. Its premise is not vacuous: at `I = 8` the window of block `28`, a
+round-`7` block reaching the whole of rounds `0` to `6`, starts at round `1`, and slot `1` is
+committed in its history with slot `0` below it committed too, so the clause asks nothing of the
+update there. The window of interval `0`'s anchor, block `2` at round `0`, is empty at any `I`. -/
 
 /-- The update rule that always answers `1`. -/
 def shOne : UpdateRule (Fin 32) := fun _ _ _ => 1
 
 example : ResetsOnNoOutput sh8 w4 4 shOne := fun _ _ _ _ _ => rfl
 
-/-- Slot `0` is committed in the history of block `28`, a round-`7` block that reaches the whole
-of round `4`. -/
+example : windowBottom sh8 28 8 = 1 := by decide
+example : windowBottom sh8 28 4 = 4 := by decide
+example : windowBottom sh8 2 4 = 1 := by decide
+
+/-- Slots `0` and `1` are committed in the history of block `28`, a round-`7` block that reaches
+the whole of rounds `4` and `3`. -/
 theorem sh8_slot0_in_history :
     Steelhead.Decided (S := shSlots) w4 sh8 (sh8.historyView 28 (by decide)) 0 (some 1) :=
   Decided.directCommit (by decide) (by decide)
 
-/-- So the failover's premise fails at that anchor: the committed slot `0` has no slot below it. -/
-example : ¬ (∀ (s : ℕ) (L : Fin 32), intervalOf 4 (shSlots.slotRound s) = 0 →
+theorem sh8_slot1_in_history :
+    Steelhead.Decided (S := shSlots) w4 sh8 (sh8.historyView 28 (by decide)) 1 (some 6) :=
+  Decided.directCommit (by decide) (by decide)
+
+/-- So the failover's premise fails at that block with `I = 8`: the committed slot `1` has only
+slot `0` below it, which is committed. -/
+example : ¬ (∀ (s : ℕ) (L : Fin 32), windowBottom sh8 28 8 ≤ shSlots.slotRound s →
     Steelhead.Decided (S := shSlots) w4 sh8 (sh8.historyView 28 (by decide)) s (some L) →
     ∃ s', s' < s ∧
       ∀ v, ¬ Steelhead.Decided (S := shSlots) w4 sh8 (sh8.historyView 28 (by decide)) s' v) :=
   fun h => by
-    obtain ⟨s', hs', -⟩ := h 0 1 (by decide) sh8_slot0_in_history
-    exact Nat.not_lt_zero _ hs'
+    obtain ⟨s', hs', hund⟩ := h 1 6 (by decide) sh8_slot1_in_history
+    obtain rfl : s' = 0 := by omega
+    exact hund _ sh8_slot0_in_history
 
 /-! ## The adaptive schedule, and the coins of blocks
 
@@ -115,7 +126,7 @@ example : ¬ (∀ (s : ℕ) (L : Fin 32), intervalOf 4 (shSlots.slotRound s) = 0
 elsewhere: round `1` sits in interval `0` at period `4`, so its leader is the known one; round `4`
 is asynchronous there, and from round `5` on every round is, at period `1`. `coinOfBlocks` reads a
 block map back at the rounds of its blocks: at `I = 4`, `K = 2` and `j₀ = 0`, block `0` opens
-interval `1` at rounds `5` and `6`, block `1` interval `2` at rounds `9` and `10`. -/
+interval `2` at rounds `9` and `10`, block `1` interval `3` at rounds `13` and `14`. -/
 
 /-- A known schedule: validator `0` everywhere. -/
 def shKnown : ℕ → Fin 4 := fun _ => 0
@@ -129,13 +140,13 @@ example : (adaptiveSlots shCoin shKnown 4 shPer).slotRound 7 = 7 := rfl
 and `0`. -/
 def shBlocks : Fin 2 → Fin 2 → Fin 4 := ![![1, 2], ![3, 0]]
 
-example : blockRound 4 0 0 0 = 5 := by decide
-example : blockRound 4 0 1 1 = 10 := by decide
-example : coinOfBlocks 4 0 shBlocks 0 5 = 1 := by decide
-example : coinOfBlocks 4 0 shBlocks 0 6 = 2 := by decide
-example : coinOfBlocks 4 0 shBlocks 0 10 = 0 := by decide
--- Round `7` lies in no block, so the map draws the default.
-example : coinOfBlocks 4 0 shBlocks 3 7 = 3 := by decide
+example : blockRound 4 0 0 0 = 9 := by decide
+example : blockRound 4 0 1 1 = 14 := by decide
+example : coinOfBlocks 4 0 shBlocks 0 9 = 1 := by decide
+example : coinOfBlocks 4 0 shBlocks 0 10 = 2 := by decide
+example : coinOfBlocks 4 0 shBlocks 0 14 = 0 := by decide
+-- Round `11` lies in no block, so the map draws the default.
+example : coinOfBlocks 4 0 shBlocks 3 11 = 3 := by decide
 
 /-! ## The set the coin measures
 

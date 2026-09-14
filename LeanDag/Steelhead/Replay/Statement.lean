@@ -68,7 +68,7 @@ def WindowCount (U : BlockUniverse Validator BlockId Payload) (wa I : ℕ) : Pro
   ∀ (A : BlockId) (hA : A ∈ U.ids) (T : Finset Validator) (r : ℕ),
     5 ≤ wa → quorumCard Validator ≤ T.card →
     -- the round lies in the window
-    max 1 ((U.block A).round + 1 - I) ≤ r →
+    windowBottom U A I ≤ r →
     -- T's blocks at the boost round and at the decision round lie in the anchor's history
     PopulatedOn (U.historyView A hA).toRecord T (r + 3) →
     PopulatedOn (U.historyView A hA).toRecord T (MahiMahi.decisionRoundAt wa r) →

@@ -37,31 +37,40 @@ period in force. Any deterministic function; the paper's counterfactual replay r
 anchor's causal history, which the block id determines within one universe. -/
 abbrev UpdateRule (BlockId : Type) := ℕ → BlockId → ℕ → ℕ
 
-/-- **The update rule fails over to period `1` when the interval was not output.** The clause the
+/-- **The first round of an anchor's window**: the window is the anchor's causal history over the
+last `I` rounds, round `0` excluded, so it starts at `round A + 1 − I` and no lower than `1`. -/
+def windowBottom (U : BlockUniverse Validator BlockId Payload) (A : BlockId) (I : ℕ) : ℕ :=
+  max 1 ((U.block A).round + 1 - I)
+
+/-- **The update rule fails over to period `1` when the window was not output.** The clause the
 liveness argument reads off the update rule, in place of Theorem 3's premise that a window without
 a synchronous commit maps to `k = 1` (`steelhead.md` §7): in the anchor's causal history, read at
-the wavelength `w` the validator runs, every committed slot proposed in interval `j` lies above a
-slot that history leaves undecided, so the sequenced output gained nothing from the interval; then
-the update at that anchor is `1`. A clause on `upd` against the record, as the unpredictable-leader
-clause is on the schedule. At period `1` it fires only when nothing was output, so period `1` is
-not absorbing. -/
+the wavelength `w` the validator runs, every committed slot of the window lies above a slot that
+history leaves undecided, so the sequenced output gained nothing from the window; then the update
+at that anchor is `1`. A clause on `upd` against the record, as the unpredictable-leader clause is
+on the schedule. The test reads the window, not the anchor's own interval: a history holds no
+decision round of the slots within a wave below its block, so an anchor at the start of its
+interval shows nothing of that interval whatever was output, and a test on the interval would fire
+at every anchored interval of a healthy network at period `1`. On the window a healthy network
+commits the lowest slots with everything below them decided, the clause is silent, and the rule's
+own answer stands: period `1` is not absorbing. -/
 def ResetsOnNoOutput [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload)
     (w : ℕ → ℕ) (I : ℕ) (upd : UpdateRule BlockId) : Prop :=
   ∀ (j k : ℕ) (A : BlockId) (hA : A ∈ U.ids),
-    (∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+    (∀ (s : ℕ) (L : BlockId), windowBottom U A I ≤ S.slotRound s →
       Decided w U (U.historyView A hA) s (some L) →
       ∃ s', s' < s ∧ ∀ v, ¬ Decided w U (U.historyView A hA) s' v) →
     upd j A k = 1
 
 open scoped Classical in
 /-- **The failover wrapped around an update rule**: `1` at an anchor whose causal history, read at
-the wavelength `w`, shows no output of the interval, the rule's own answer elsewhere. The rule it
+the wavelength `w`, shows no output of the window, the rule's own answer elsewhere. The rule it
 wraps is any function, the paper's replay among them; the test is a proposition on verdicts, so
 the wrapper is classical. It satisfies `ResetsOnNoOutput` outright (SH10h). -/
 noncomputable def failover [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload)
     (w : ℕ → ℕ) (I : ℕ) (upd : UpdateRule BlockId) : UpdateRule BlockId :=
   fun j A k =>
-    if ∃ hA : A ∈ U.ids, ∀ (s : ℕ) (L : BlockId), intervalOf I (S.slotRound s) = j →
+    if ∃ hA : A ∈ U.ids, ∀ (s : ℕ) (L : BlockId), windowBottom U A I ≤ S.slotRound s →
         Decided w U (U.historyView A hA) s (some L) →
         ∃ s', s' < s ∧ ∀ v, ¬ Decided w U (U.historyView A hA) s' v
     then 1 else upd j A k

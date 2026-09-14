@@ -209,13 +209,15 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   intervals the record's own rounds fall in, and so are the ledger of a
   settled prefix and the slot each block enters at. **The output is
   live under the failover** the paper's authors agreed to, period `1`
-  at an anchor whose history shows no output of its interval: a slot
-  below an anchored interval is decided once a run of `wa` good coins
-  above it is in view, and over the coins of `M` blocks of `K` rounds
-  the slot stays undecided with probability at most
-  `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which vanishes, the form
-  "with probability one" takes on a finite record. A crashed leader is
-  skipped, partial dissemination does not defer, any family of rules
+  at an anchor whose history shows no output of its window: a slot two
+  intervals below an anchored one is decided once a run of `wa` good
+  coins above it is in view, and over the coins of `M` blocks of `K`
+  rounds a validator's scan stalls below the slot or leaves it undecided
+  with probability at most `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`,
+  which vanishes, the form "with probability one" takes on a finite
+  record. A crashed leader is skipped, partial dissemination does not
+  defer, an equivocating Byzantine leader at a slot's floor is its
+  anchor and holds it undecided on data, any family of rules
   whose laws hold composes into one whose laws hold (Steelhead's rule
   the composite of Mahi-Mahi's at each round's wave, by definition),
   Definition 1 holds clause by clause over settled prefixes, and
