@@ -116,15 +116,29 @@ from coverage into certification; the unpredictable-leader clause.
   enough below the horizon is decided; SH14c names them as two runs of
   the coin alone, `K` good coins opening an interval past the slot's and
   `wa` above it, the form SH15 draws.
+- **SH16, the interface composes** (§3): any family of rules whose laws
+  hold, one per round, agreeing on rung count and tie-break, composes
+  into a rule whose laws hold, so its verdicts agree across views; and
+  Steelhead's rule is the composite of Mahi-Mahi's read at each round's
+  wave, by definition. The paper's Theorem 1 at the interface level, SH2
+  its instance.
+- **SH17, atomic broadcast** (§3): Definition 1 clause by clause over
+  settled prefixes: a delivered block is delivered by every view whose
+  settled prefix is as long, a delivered block is a block of the record
+  entering at one slot, a reliable block is delivered with the first
+  committed reliable leader two rounds up after GST, and two blocks
+  enter at the same slots in every view, so in the same order. The
+  liveness half is SH6b, SH14b and SH15.
 
 ### 0.1 Correspondence with the paper
 
 | paper | here | remark |
 | :--- | :--- | :--- |
+| Definition 1 (atomic broadcast) | SH17, with SH6b, SH14b, SH15 | agreement, integrity and total order over settled prefixes, validity after GST with the first committed reliable leader two rounds up; the "eventually" is SH6b under synchrony and SH14b/SH15 under asynchrony, where the delivery of a reliable block to the coin's leaders is the substrate's and is stated as `SynchronisedOn` only. The order of the blocks one commit releases is not modelled |
 | Lemma 1 (certificate uniqueness; a skipped block is never certified) | SH1a, SH1b | Mahi-Mahi's lemmas at the slot's wave |
 | Lemma 2 (quorum intersection across the wave) | SH1c | at `r + w r`, whatever the block's own wave |
 | Corollary 1 (handover) | SH3 | stated against the relation's anchor search |
-| Theorem 1 (agreement) | SH2 | `AnchoredRule.decided_unique` at Steelhead's laws |
+| Theorem 1 (agreement) | SH2, SH16 | `AnchoredRule.decided_unique` at Steelhead's laws; at the interface level, any family of rules whose laws hold composes into one whose laws hold, and Steelhead is the composite of Mahi-Mahi's rule at each round's wave |
 | Corollary 2 (total order and integrity) | SH13 | in part: the relation's own ledger theorems at Steelhead's laws, over a settled prefix. Ordering the blocks a single commit releases is declined development-wide (report §1.4, §5.6) |
 | Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e | in part: the honest-leader direct commit, everything below a fair run, the crashed-leader skip from `n − f` blames, and the remark that partial dissemination does not defer, for a leader that did not equivocate. The Byzantine-equivocation anchor bound and the `O(wa + b)` ordering bound are not formalised; timeouts and pacing are not modelled |
 | Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the chain settles under Mahi-Mahi's run clause and below any one run of `wa` good coins, a period is derived for each interval, an anchored interval the view did not output hands the next one period `1` under the failover, which the arc models in place of the paper's premise on the update rule (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15's tail |
@@ -209,6 +223,22 @@ rest:
   asynchronous slot is direct, the two coincide"; only the indirect
   verdicts may differ, and §4 says why.
 
+**The interface.** Theorem 1 is stated for any two rules of the
+interface. `compose rules` (`Model/Compose.lean`) is the composite of a
+family of anchored rules, one per round: the slot proposed at round `r`
+takes its wave offset, direct predicates and rungs of link from
+`rules r`, and the rung count and tie-break, which the relation reads
+without a slot, from the rule of round `0`. **SH16**
+(`Interface/Statement.lean`): if every rule of the family satisfies
+`AnchoredRule.Laws` and the family agrees on rungs and ties, the
+composite does (SH16a), each law at a slot being the slot's rule's, the
+anchor's rule never entering; the composite's verdicts then agree across
+views (SH16b); and `steelheadAnchored w` is the composite of Mahi-Mahi's
+rule read at `w r`, by definition (SH16c), so SH2 is an instance. The
+laws are clauses A2 and A3 in the relation's terms; a pair the paper's
+discharge table leaves open is outside the theorem until they are
+discharged.
+
 **The ledger.** Agreement is about one slot; the output layer reads
 verdicts off in slot order, and what it owes is the paper's Corollary 2.
 **SH13** (`Ledger/Statement.lean`) states it: over a prefix each view has
@@ -220,6 +250,24 @@ ledger theorem at `steelheadLaws`, or a fact of `Common/Ledger.lean` that
 reads no rule at all, so the arc adds no argument here. The claims are
 order and integrity, not progress: they are conditional on a settled
 prefix, which under the stall (§4) is short.
+
+**Atomic broadcast.** Definition 1's four clauses, as **SH17**
+(`Broadcast/Statement.lean`) reads them off settled prefixes: agreement,
+a block one view delivers over a settled prefix every view delivers over
+any settled prefix at least as long (SH13b and SH13c); integrity, a
+delivered block is a block of the record, so one its author proposed,
+and enters the ledger at one slot (SH13d); validity, a reliable block at
+round `r` lies in the cone of every reliable block from round `r + 2`
+under synchrony from `r`, so it is delivered with the first committed
+reliable leader there once the prefix below is settled
+(`reaches_of_synchronisedOn`); and total order, two blocks enter at the
+same slots in every view that settled them, so in the same order
+(SH13d). The "eventually" of agreement and validity is the liveness
+half: SH6a and SH6b under synchrony, SH14b and SH15 under asynchrony,
+where a reliable block reaches the coin's committed leaders by the
+substrate's delivery, which the model states as `SynchronisedOn` and
+not otherwise. The order of the blocks one commit releases is a
+tie-break the development does not assume (report §1.4).
 
 **Why the floor is the slot's own wave.** An asynchronous slot at round
 `r` with `wa = 5` has its certificates at `r + 4`. A block at `r + 1`
@@ -603,11 +651,14 @@ LeanDag/Steelhead/
                             adaptiveWave, adaptiveSlots
   Model/Coin.lean           commitProb, noCommitProb, blockRound, coinOfBlocks, blocksHorizon,
                             undecidedProb
+  Model/Compose.lean        compose
   Safety/Statement.lean     SH1–SH5        Safety/Proof.lean
   Liveness/Statement.lean   SH6–SH9        Liveness/Proof.lean
   Period/Statement.lean     SH10, SH14     Period/Proof.lean
   Coin/Statement.lean       SH11, SH15     Coin/Proof.lean
   Ledger/Statement.lean     SH13           Ledger/Proof.lean
+  Interface/Statement.lean  SH16           Interface/Proof.lean
+  Broadcast/Statement.lean  SH17           Broadcast/Proof.lean
   Helpers/*.lean            the lemma layers
   Properties.lean           the carrier, its properties and support
 LeanDagTest/Steelhead/

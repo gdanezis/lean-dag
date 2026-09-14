@@ -9552,6 +9552,20 @@ paper's interface asks `w(r) ≥ 2`; for the
 vote-and-certify pattern of the `3f + 1` pair three is the bound, since
 at two rounds the voting round is the proposal round.
 
+**The interface** (SH16). Theorem 1 is stated for any two rules of the
+interface. `compose rules` is the composite of a family of anchored
+rules, one per round: the slot proposed at round `r` takes its wave
+offset, direct predicates and rungs of link from `rules r`, and the rung
+count and tie-break, which the relation reads without a slot, from the
+rule of round `0`. **SH16** (`Steelhead.Interface.holds`): if every rule
+of the family satisfies `AnchoredRule.Laws` and the family agrees on
+rungs and ties, the composite does (`Steelhead.compose_laws`), each law
+at a slot being the slot's rule's, the anchor's rule never entering; its
+verdicts then agree across views (`Steelhead.compose_decided_unique`);
+and `steelheadAnchored w` is the composite of Mahi-Mahi's rule read at
+`w r`, by definition (`Steelhead.steelheadAnchored_eq_compose`), so SH2
+is an instance.
+
 **The ledger** (SH13). Agreement settles one slot; the output layer
 reads verdicts off in slot order, which is round order, and what it owes
 is the paper's Corollary 2. Over a prefix each view has settled, the
@@ -9563,6 +9577,22 @@ one slot. Each conjunct is the anchored relation's own ledger theorem
 reads no rule at all. The claims are order and integrity, not progress:
 they are conditional on a settled prefix, which under §24.2's stall is
 short.
+
+**Atomic broadcast** (SH17, `Steelhead.Broadcast.holds`). Definition 1's
+four clauses read off settled prefixes: agreement, a block one view
+delivers over a settled prefix every view delivers over any settled
+prefix at least as long; integrity, a delivered block is a block of the
+record, so one its author proposed, and enters the ledger at one slot;
+validity, a reliable block at round `r` lies in the cone of every
+reliable block from round `r + 2` under synchrony from `r`, so it is
+delivered with the first committed reliable leader there once the prefix
+below is settled; and total order, two blocks enter at the same slots in
+every view that settled them, so in the same order. The "eventually" of
+agreement and validity is the liveness half, SH6a and SH6b under
+synchrony and SH14b and SH15 under asynchrony, where a reliable block
+reaches the coin's committed leaders by the substrate's delivery, stated
+as `SynchronisedOn` and not otherwise; the order of the blocks one
+commit releases is a tie-break the development does not assume (§1.4).
 
 ### 24.2 The chain verdict, the stall, and the drain
 
@@ -11024,10 +11054,12 @@ reused.
 | SH9 | the drain: `wa` consecutive commits decide every slot below them at any wavelength function bounded by `wa`; at period `1` under the run clause, past every round some slot has everything below it decided; an asynchronous slot costs `wa − ws` rounds and its successor waits at most `wa − ws − 1` | `Steelhead.allDecidedBelowOfRun`, `Steelhead.allDecidedBelowAtPeriodOne`, `Steelhead.asyncSlotCost` *(Steelhead/Helpers/Liveness)* |
 | SH10 | the period: agreed across views under any update rule, so is the output at the adaptive wavelength over the intervals the record's rounds fall in; the scan ends once the chain verdicts are in, and under the clause it ends for every interval; an anchored interval the view did not output hands the next one period `1` under the failover; every interval holds two asynchronous rounds, and the period stays in range | `Steelhead.Period.holds`, `Steelhead.periodAt_unique`, `Steelhead.adaptive_decided_unique`, `Steelhead.exists_periodAt_succ`, `Steelhead.periodAt_of_clause`, `Steelhead.periodAt_one_of_anchor`, `Steelhead.two_async_rounds`, `Steelhead.periodAt_mem_range` *(Steelhead/Period/Proof, Steelhead/Helpers/Period)* |
 | SH11 | the coin: a chain slot commits with probability `|good| / n`, at least `(n − f − |byzantine|) / n` and so at least `1/3` at `wa ≥ 5`, at least `1/n` at `wa ≥ 4`; no round's coin naming a directly committed leader in `m` rounds, with probability at most `((f + |byzantine|) / n)^m`, which tends to zero | `Steelhead.Coin.holds`, `Steelhead.ratio_le_commitProb`, `Steelhead.third_le_commitProb`, `Steelhead.inv_card_le_commitProb`, `Steelhead.chainCommit_of_mem_goodAt`, `Steelhead.noCommitProb_le`, `Steelhead.tail_tendsto_zero` *(Steelhead/Coin/Proof, Steelhead/Helpers/Coin)* |
-| SH15 | the tail of the output: over the coins of `M` blocks of `K` rounds opening the intervals after a slot's, the slot stays undecided under the failover with probability at most `2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, which tends to zero | `Steelhead.undecidedProb_le`, `Steelhead.no_good_block_prob_le`, `Steelhead.undecided_tail_tendsto_zero` *(Steelhead/Helpers/Coin)* |
 | SH12 | on data: the anchor-floor counterexample, the period sequence at a concrete update rule, and the stall DAG with its asynchronous commit | `lowFloor_skip`, `sh8_period1`, `st20_stall` *(LeanDagTest/Steelhead/Model, LeanDagTest/Steelhead/Period, LeanDagTest/Steelhead/Stall)* |
 | SH13 | the ledger: the committed-leader sequence and the ledger of a settled prefix are agreed, the ledger is monotone, a block enters at one slot which both views name, and a committed block belongs to one slot | `Steelhead.Ledger.holds` *(Steelhead/Ledger/Proof)* |
 | SH14 | output liveness under the failover: a slot below an anchored interval is decided once a run of `wa` coin-led commits above that interval is in view, since the failover puts the period at `1` from the interval after the anchored one and the run decides everything below it; under the run clause with runs of `K` good coins every slot far enough below the horizon is decided, and two runs of the coin, `K` good coins opening an interval past the slot's and `wa` above it, decide it | `Steelhead.output_liveness`, `Steelhead.all_decided`, `Steelhead.output_liveness_of_runs` *(Steelhead/Helpers/Period)* |
+| SH15 | the tail of the output: over the coins of `M` blocks of `K` rounds opening the intervals after a slot's, the slot stays undecided under the failover with probability at most `2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, which tends to zero | `Steelhead.undecidedProb_le`, `Steelhead.no_good_block_prob_le`, `Steelhead.undecided_tail_tendsto_zero` *(Steelhead/Helpers/Coin)* |
+| SH16 | the interface composes: a family of rules whose laws hold, agreeing on rungs and ties, composes into a rule whose laws hold and whose verdicts agree across views; Steelhead's rule is the composite of Mahi-Mahi's at each round's wave | `Steelhead.Interface.holds`, `Steelhead.compose_laws`, `Steelhead.compose_decided_unique`, `Steelhead.steelheadAnchored_eq_compose` *(Steelhead/Interface/Proof, Steelhead/Helpers/Compose)* |
+| SH17 | atomic broadcast over settled prefixes: a delivered block is delivered by every view whose settled prefix is as long, is a block of the record entering at one slot, a reliable block is delivered with the first committed reliable leader two rounds up under synchrony, and two blocks enter at the same slots in every view | `Steelhead.Broadcast.holds` *(Steelhead/Broadcast/Proof)* |
 
 
 ---
@@ -23322,6 +23354,22 @@ theorem committed_of_correct_block
 ```
 
 **RS5 — reactive inclusion.** The schedule fixes a `u`-led slot above any round `m` before an execution is named, and a sufficiently grown reactive execution commits it with a leader block whose cone contains `u`'s round-`m` block, so it lands in the agreed ledger.
+
+#### `holds`
+
+*theorem, `Steelhead.Broadcast.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Steelhead.Interface.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
 
 #### `SynchronisedOn.mono`
 
