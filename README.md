@@ -207,8 +207,22 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   relation over fixed intervals and is agreed under any deterministic
   update rule, so the output at the adaptive wavelength is too, over the
   intervals the record's own rounds fall in, and so are the ledger of a
-  settled prefix and the slot each block enters at. The arc is under
-  the statement/proof partition and imports nothing of Barnacle.
+  settled prefix and the slot each block enters at. **The output is
+  live under the failover** the paper's authors agreed to, period `1`
+  at an anchor whose history shows no output of its interval: a slot
+  below an anchored interval is decided once a run of `wa` good coins
+  above it is in view, and over the coins of `M` blocks of `K` rounds
+  the slot stays undecided with probability at most
+  `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which vanishes, the form
+  "with probability one" takes on a finite record. A crashed leader is
+  skipped, partial dissemination does not defer, any family of rules
+  whose laws hold composes into one whose laws hold (Steelhead's rule
+  the composite of Mahi-Mahi's at each round's wave, by definition),
+  Definition 1 holds clause by clause over settled prefixes, and
+  Algorithm 2's replay is data whose selection stays among the
+  candidates and whose window counts the counting lemma's candidates
+  once a quorum has populated it. The arc is under the statement/proof
+  partition and imports nothing of Barnacle.
 - **Black Marlin** (`LeanDag/BlackMarlin/`): the three-round commit rule
   of a partially synchronous protocol (DISC 2025) that uses neither
   reliable broadcast nor a common coin and elects an anchor in **every
