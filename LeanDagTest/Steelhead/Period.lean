@@ -109,6 +109,34 @@ example : ¬ (∀ (s : ℕ) (L : Fin 32), intervalOf 4 (shSlots.slotRound s) = 0
     obtain ⟨s', hs', -⟩ := h 0 1 (by decide) sh8_slot0_in_history
     exact Nat.not_lt_zero _ hs'
 
+/-! ## The adaptive schedule, and the coins of blocks
+
+`adaptiveSlots` names the coin at the rounds `shPer` makes asynchronous and the known schedule
+elsewhere: round `1` sits in interval `0` at period `4`, so its leader is the known one; round `4`
+is asynchronous there, and from round `5` on every round is, at period `1`. `coinOfBlocks` reads a
+block map back at the rounds of its blocks: at `I = 4`, `K = 2` and `j₀ = 0`, block `0` opens
+interval `1` at rounds `5` and `6`, block `1` interval `2` at rounds `9` and `10`. -/
+
+/-- A known schedule: validator `0` everywhere. -/
+def shKnown : ℕ → Fin 4 := fun _ => 0
+
+example : (adaptiveSlots shCoin shKnown 4 shPer).leader 1 = shKnown 1 := by decide
+example : (adaptiveSlots shCoin shKnown 4 shPer).leader 4 = shCoin 4 := by decide
+example : (adaptiveSlots shCoin shKnown 4 shPer).leader 7 = shCoin 7 := by decide
+example : (adaptiveSlots shCoin shKnown 4 shPer).slotRound 7 = 7 := rfl
+
+/-- Two blocks of two coins: block `0` names validators `1` and `2`, block `1` validators `3`
+and `0`. -/
+def shBlocks : Fin 2 → Fin 2 → Fin 4 := ![![1, 2], ![3, 0]]
+
+example : blockRound 4 0 0 0 = 5 := by decide
+example : blockRound 4 0 1 1 = 10 := by decide
+example : coinOfBlocks 4 0 shBlocks 0 5 = 1 := by decide
+example : coinOfBlocks 4 0 shBlocks 0 6 = 2 := by decide
+example : coinOfBlocks 4 0 shBlocks 0 10 = 0 := by decide
+-- Round `7` lies in no block, so the map draws the default.
+example : coinOfBlocks 4 0 shBlocks 3 7 = 3 := by decide
+
 /-! ## The set the coin measures
 
 `commitProb` is the uniform measure of `goodAt`, the validators whose

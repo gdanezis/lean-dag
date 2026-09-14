@@ -96,6 +96,13 @@ sequence `per`. What a validator that derived `per` runs the output relation at.
 def adaptiveWave (ws wa I : ℕ) (per : ℕ → ℕ) : ℕ → ℕ :=
   fun r => periodic ws wa (per (intervalOf I r)) r
 
+/-- **The adaptive schedule**: one slot per round, led by the coin at the rounds the period
+sequence `per` makes asynchronous and by the known schedule `known` elsewhere. What a validator
+that derived `per` runs the output relation on; the liveness claims that relate a schedule to the
+coin one clause at a time (SH14) take this one as their instance. -/
+abbrev adaptiveSlots (coin known : ℕ → Validator) (I : ℕ) (per : ℕ → ℕ) : Slots Validator :=
+  Slots.identity fun r => if IsAsync (per (intervalOf I r)) r then coin r else known r
+
 end Steelhead
 
 end LeanDag

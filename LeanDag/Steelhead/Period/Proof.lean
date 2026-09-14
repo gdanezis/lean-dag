@@ -15,7 +15,7 @@ namespace Period
 
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ _ S U ws wa I K
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro coin upd k₀ V₁ V₂ j k₁ k₂ hwa h₁ h₂
     exact periodAt_unique hwa h₁ h₂
   · intro coin upd k₀ N V₁ V₂ per₁ per₂ k v₁ v₂ hws hwa hN hk h₁ h₂ d₁ d₂
@@ -35,6 +35,10 @@ theorem holds : Statement := by
   · intro coin upd k₀ V per c N hws hle hwa hid hI hlead h₀ hK hupd hwaK hcK hreset hrun hV hper
       s hN
     exact all_decided hws hle hwa hid hI hlead h₀ hK hupd hwaK hcK hreset hrun hV hper s hN
+  · intro coin upd k₀ V per s j b hws hle hwa hid hI hlead h₀ hK hupd hKI hreset hper hs hgood hb
+      hgoodb hV
+    exact output_liveness_of_runs hws hle hwa hid hI hlead h₀ hK hupd hKI hreset hper hs hgood hb
+      hgoodb hV
 
 end Period
 

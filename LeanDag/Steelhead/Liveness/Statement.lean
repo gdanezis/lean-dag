@@ -5,7 +5,7 @@ import LeanDag.MahiMahi.Model.Unpredictable
 
 What the rule decides under synchrony, what the chain decides under the
 unpredictable-leader clause, and what the output does *not* decide under
-the paper's asynchronous adversary (`steelhead.md` §4–6). Eight claims:
+the paper's asynchronous adversary (`steelhead.md` §4–6). Nine claims:
 
 * **SH6a, a reliable leader commits under coverage** — Theorem 2's
   per-slot half: on a DAG a reliable quorum has synchronised and
@@ -23,6 +23,11 @@ the paper's asynchronous adversary (`steelhead.md` §4–6). Eight claims:
   any round the coin names reliable leaders at `wa` consecutive rounds,
   and once the DAG is covered through that run's decision rounds every
   chain verdict below it is settled, with no clause;
+* **SH7c, one run settles the chain below it** — the step SH7a takes
+  once per round, on its own: `wa` consecutive rounds whose coins name
+  committed candidates settle every chain verdict below the first, in
+  any view holding their decision rounds. The form the coin's almost-sure
+  half consumes (SH15), which asks for one run, not one in every window;
 * **SH8, the stall** — at a period `k ≥ ws` and one slot per round, if
   no synchronous candidate is ever certified and no synchronous slot is
   directly skipped, then no slot at a round `≡ k − 1 (mod k)` is ever
@@ -52,8 +57,8 @@ the paper's asynchronous adversary (`steelhead.md` §4–6). Eight claims:
   causal ordering and the wait is nonincreasing in `i`: delays never
   compound.
 
-SH6 assumes `3 ≤ w r` everywhere, as the safety claims do; SH7a assumes
-`1 ≤ wa`, as MM3c does, and SH7b `4 ≤ wa`, as MM5 does; SH8 assumes
+SH6 assumes `3 ≤ w r` everywhere, as the safety claims do; SH7a and SH7c
+assume `1 ≤ wa`, as MM3c does, and SH7b `4 ≤ wa`, as MM5 does; SH8 assumes
 `2 ≤ ws ≤ k` and nothing of `wa`; SH9 assumes `1 ≤ w r ≤ wa`; SH9b
 assumes `1 ≤ wa`, as SH7a does; SH9c assumes `1 ≤ ws ≤ wa`.
 
@@ -144,6 +149,17 @@ def ChainAllDecidedBelowOfSynchrony (wa : ℕ) : Prop :=
         V.CoversUpto N → MahiMahi.decisionRoundAt wa (b + wa - 1) ≤ N →
         ∀ i, i < b → ∃ v, ChainDecided wa coin U V i v
 
+/-- **SH7c, one run settles the chain below it.** -/
+def ChainAllDecidedBelowOfRun (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
+  ∀ (coin : ℕ → Validator) (V : View Validator BlockId Payload U) (b : ℕ),
+    1 ≤ wa →
+    -- wa consecutive rounds from b whose coins name committed candidates ...
+    (∀ i, i < wa → coin (b + i) ∈ MahiMahi.goodAt U wa (b + i)) →
+    -- ... in a view holding their decision rounds
+    V.CoversUpto (MahiMahi.decisionRoundAt wa (b + wa - 1)) →
+    -- then every chain verdict below b is settled
+    ∀ i, i < b → ∃ v, ChainDecided wa coin U V i v
+
 /-- **SH8, the stall.** -/
 def Stall (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ (V : View Validator BlockId Payload U) (ws wa k : ℕ),
@@ -217,6 +233,7 @@ def Statement : Prop :=
       ChainAllDecidedBelow U wa ∧
       ChainAllDecidedBelowOfSynchrony (Validator := Validator) (BlockId := BlockId)
         (Payload := Payload) wa ∧
+      ChainAllDecidedBelowOfRun U wa ∧
       Stall U ∧ AllDecidedBelowOfRun U w wa ∧ AllDecidedBelowAtPeriodOne U ws wa ∧
       AsyncSlotCost (Validator := Validator) (BlockId := BlockId) (Payload := Payload) ws wa k
 

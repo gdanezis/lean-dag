@@ -98,8 +98,26 @@ theorem chainSpansEligible {wa : ℕ} (hwa : 1 ≤ wa) (coin : ℕ → Validator
     (S := chainSlots coin) (fun _ => rfl) (w := wa - 1) (fun _ => le_rfl)
   rwa [Nat.sub_add_cancel hwa] at this
 
-/-- **SH7a.** MM3c at the chain schedule, in any view caught up to the horizon: the run's
+/-- **SH7c.** The core's descent below a run of direct commits, at the chain schedule: the run's
 commits are direct, and a view holding their decision rounds holds their certificates. -/
+theorem chainAllDecidedBelowOfRun {U : BlockUniverse Validator BlockId Payload} {wa : ℕ}
+    (hwa : 1 ≤ wa) {coin : ℕ → Validator} {V : View Validator BlockId Payload U} {b : ℕ}
+    (hgood : ∀ i, i < wa → coin (b + i) ∈ MahiMahi.goodAt U wa (b + i))
+    (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa (b + wa - 1))) :
+    ∀ i, i < b → ∃ v, ChainDecided wa coin U V i v := by
+  refine AnchoredRule.decided_below_of_run (S := chainSlots coin)
+    (fun hi h => MahiMahi.exists_least (S := chainSlots coin) hi h) hwa
+    (chainSpansEligible hwa coin) (Led := fun j => coin j ∈ MahiMahi.goodAt U wa j) hgood
+    fun j _ hj2 hj => ?_
+  obtain ⟨L, hL, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp hj
+  refine ⟨L, MahiMahi.Decided.directCommit (S := chainSlots coin) ⟨hL, hLr, hLc⟩
+    (MahiMahiProperties.directCommitIn_of_coversUpto hdc (hV.mono ?_))⟩
+  change MahiMahi.decisionRoundAt wa j ≤ MahiMahi.decisionRoundAt wa (b + wa - 1)
+  unfold MahiMahi.decisionRoundAt
+  omega
+
+/-- **SH7a.** MM3c at the chain schedule, in any view caught up to the horizon: the clause names
+a run past `r`, and SH7c settles everything below it. -/
 theorem chainAllDecidedBelow {U : BlockUniverse Validator BlockId Payload} {wa : ℕ}
     (hwa : 1 ≤ wa) {coin : ℕ → Validator} {V : View Validator BlockId Payload U} {c N : ℕ}
     (hrun : MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c wa N)
@@ -107,14 +125,7 @@ theorem chainAllDecidedBelow {U : BlockUniverse Validator BlockId Payload} {wa :
     ∃ b, r ≤ b ∧ ∀ i, i < b → ∃ v, ChainDecided wa coin U V i v := by
   obtain ⟨k', hk1, hk2, hgood⟩ := hrun r (by
     rw [MahiMahi.mahiMahiAnchored_decisionRound (S := chainSlots coin) hwa]; exact hr)
-  refine ⟨k', hk1, AnchoredRule.decided_below_of_run (S := chainSlots coin)
-    (fun hi h => MahiMahi.exists_least (S := chainSlots coin) hi h) hwa
-    (chainSpansEligible hwa coin) (Led := fun j => coin j ∈ MahiMahi.goodAt U wa j) hgood
-    fun j _ hj2 hj => ?_⟩
-  obtain ⟨L, hL, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp hj
-  refine ⟨L, MahiMahi.Decided.directCommit (S := chainSlots coin) ⟨hL, hLr, hLc⟩
-    (MahiMahiProperties.directCommitIn_of_coversUpto hdc (hV.mono ?_))⟩
-  change MahiMahi.decisionRoundAt wa j ≤ N
+  refine ⟨k', hk1, chainAllDecidedBelowOfRun hwa hgood (hV.mono ?_)⟩
   unfold MahiMahi.decisionRoundAt at hr ⊢
   omega
 

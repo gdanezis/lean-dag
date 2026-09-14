@@ -4,7 +4,7 @@ import Mathlib.Analysis.SpecificLimits.Basic
 # The coin — statement
 
 The probability half of liveness under asynchrony (`steelhead.md` §4),
-the paper's Theorem 3 (i) read through a uniform coin. Five claims:
+the paper's Theorem 3 read through a uniform coin. Seven claims:
 
 * **SH11a, the commit probability** — on a wave a quorum has populated,
   the coin of round `r` names a directly committed leader with
@@ -20,7 +20,23 @@ the paper's Theorem 3 (i) read through a uniform coin. Five claims:
   independent coins, no round's coin names a directly committed leader
   with probability at most `((f + |byzantine|) / n)^m`;
 * **SH11d, the tail vanishes** — that bound tends to zero, since
-  `f + |byzantine| ≤ 2f < n`.
+  `f + |byzantine| ≤ 2f < n`;
+* **SH15a, the output is live but for a vanishing probability** —
+  Theorem 3's "with probability `1`", in the form a finite record
+  admits: over the uniform independent coins of `M` blocks of `K` rounds,
+  one opening each interval after a slot's, the slot stays undecided in
+  some view holding the horizon that derived its periods under the
+  failover with probability at most `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`.
+  Two good blocks in different halves decide the slot (SH14c), and each
+  half holds no good block with the probability the counting lemma
+  bounds block by block;
+* **SH15b, that tail vanishes** — the bound tends to zero as the number
+  of blocks grows, since `n − f − b ≥ 1`.
+
+The blocks' coins are drawn after the record is fixed, as SH11c's are:
+the adversary that shapes the DAG does not see them, which is the coin's
+unpredictability. What SH15a leaves to the network is what SH14c asks of
+it, that the waves of the blocks be populated.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -84,14 +100,42 @@ def TailVanishes : Prop :=
   Tendsto (fun m : ℕ => (((F.f + F.byzantine.card : ℕ) : ℝ≥0∞) / Fintype.card Validator) ^ m)
     atTop (𝓝 0)
 
-/-- The coin, over every fault configuration, block universe and asynchronous wave the model
-admits. -/
+/-- **The chance that a block of `K` coins holds a bad one**: `(n^K − (n − f − b)^K) / n^K`, the
+bound SH15 states its tail in. -/
+noncomputable def badBlockBound (Validator : Type) [Fintype Validator] [DecidableEq Validator]
+    [F : Faults Validator] (K : ℕ) : ℝ≥0∞ :=
+  ((Fintype.card Validator ^ K - (Fintype.card Validator - F.f - F.byzantine.card) ^ K : ℕ) :
+    ℝ≥0∞) / (Fintype.card Validator : ℝ≥0∞) ^ K
+
+/-- **SH15a, the output is live but for a vanishing probability.** -/
+def UndecidedTail (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ) : Prop :=
+  ∀ (T : Finset Validator) (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator)
+    (d : Validator) (s M : ℕ),
+    -- the waves, a quorum, a period bound a run of wa fits in, blocks of K rounds that fit in an
+    -- interval
+    2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → quorumCard Validator ≤ T.card →
+    -- the periods stay in [1, K]
+    1 ≤ k₀ → k₀ ≤ K → (∀ j A k, 1 ≤ k → k ≤ K → 1 ≤ upd j A k ∧ upd j A k ≤ K) →
+    -- the waves of the M blocks are populated where MM2 reads them
+    (∀ (j : Fin M) (i : Fin K), PopulatedOn U T (blockRound I (intervalOf I s) j i + 3) ∧
+      PopulatedOn U T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) →
+    -- then the slot stays undecided with probability at most twice the chance that each of M/2
+    -- blocks holds a bad coin
+    undecidedProb U ws wa I K upd k₀ known d s M ≤ 2 * badBlockBound Validator K ^ (M / 2)
+
+/-- **SH15b, the tail vanishes.** -/
+def UndecidedTailVanishes (K : ℕ) : Prop :=
+  Tendsto (fun M : ℕ => 2 * badBlockBound Validator K ^ (M / 2)) atTop (𝓝 0)
+
+/-- The coin, over every fault configuration, block universe, asynchronous wave, interval and
+period bound the model admits. -/
 def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId]
-    (U : BlockUniverse Validator BlockId Payload) (wa : ℕ),
+    (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ),
     CommitProbability U wa ∧ CommitProbabilityFour U wa ∧ CommitOfCoin U wa ∧
-      NoCommitTail U wa ∧ TailVanishes (Validator := Validator)
+      NoCommitTail U wa ∧ TailVanishes (Validator := Validator) ∧
+      UndecidedTail U ws wa I K ∧ UndecidedTailVanishes (Validator := Validator) K
 
 end Coin
 

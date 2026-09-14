@@ -4,7 +4,7 @@ import LeanDag.MahiMahi.Model.Unpredictable
 # The period sequence — statement
 
 What the adaptive protocol's period does across views and over time
-(`steelhead.md` §5). Nine claims:
+(`steelhead.md` §5). Ten claims:
 
 * **SH10a, agreement of the period** — Theorem 4: two views that derive
   a period for interval `j` derive the same one, under any update rule,
@@ -60,7 +60,15 @@ What the adaptive protocol's period does across views and over time
   interval its anchor; the run in the next interval is the one SH14
   needs. Every slot two intervals and a window below the horizon is then
   decided, in a view caught up to the horizon that derived every period
-  below it.
+  below it;
+* **SH14c, output liveness from two good runs**: SH14 with its two
+  events named as runs of the coin alone: `K` good coins opening an
+  interval past the slot's hit an asynchronous round under whatever
+  period is in force, and `wa` good coins above that interval settle
+  every chain verdict below them (SH7c), so the interval has its anchor
+  and the run is SH14's. The form the coin's almost-sure half consumes
+  (SH15): two runs at named places, each of a fixed positive
+  probability.
 
 SH10a and SH10b assume `3 ≤ wa` (and `3 ≤ ws`), as SH5 and SH2 do, and
 SH10b a round `N` the record does not reach past; SH10c assumes nothing;
@@ -70,7 +78,8 @@ which every round lies in interval `0`; SH10e assumes `2 ≤ ws` and
 into the view; SH10f and SH10g read no record; SH14 assumes `2 ≤ ws ≤ wa`
 and `3 ≤ wa`, as SH10a does, one slot per round and a positive interval;
 SH14b adds `wa ≤ K`, so that a run of `K` holds a run of `wa`, and
-`c + K ≤ I`, so that a window and a run fit inside an interval.
+`c + K ≤ I`, so that a window and a run fit inside an interval; SH14c
+asks `K ≤ I`, so that a block of `K` rounds fits.
 SH10a to SH10c and SH10e hold at every period, `0` included, and SH10d
 constrains the interval `I` rather than the period; SH10f asks `1 ≤ k`,
 since at `k = 0` only round `0` is asynchronous, and SH10g concludes
@@ -212,6 +221,29 @@ def AllDecided (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ) :
     ∀ s, MahiMahi.decisionRoundAt wa ((intervalOf I s + 2) * I + c + K) ≤ N →
       ∃ v, Decided (adaptiveWave ws wa I per) U V s v
 
+/-- **SH14c, output liveness from two good runs.** -/
+def OutputLivenessOfRuns (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ) : Prop :=
+  ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
+    (V : View Validator BlockId Payload U) (per : ℕ → ℕ) (s j b : ℕ),
+    2 ≤ ws → ws ≤ wa → 3 ≤ wa → (∀ t, S.slotRound t = t) → 0 < I →
+    -- the coin leads every round the derived period makes asynchronous
+    (∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r) →
+    -- the periods stay in [1, K], and K rounds fit in an interval
+    1 ≤ k₀ → k₀ ≤ K → (∀ j A k, 1 ≤ k → k ≤ K → 1 ≤ upd j A k ∧ upd j A k ≤ K) → K ≤ I →
+    -- the update rule fails over at the wavelength the validator runs
+    ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd →
+    -- V derived the period of every interval up to the run's last round
+    (∀ j', j' ≤ intervalOf I (b + wa - 1) → PeriodAt I wa coin upd k₀ U V j' (per j')) →
+    -- past the slot's interval, interval j opens with K good coins ...
+    intervalOf I s < j →
+    (∀ i, i < K → coin (j * I + 1 + i) ∈ MahiMahi.goodAt U wa (j * I + 1 + i)) →
+    -- ... and above interval j the coin names a committed candidate at wa consecutive rounds,
+    -- in a view holding their decision rounds
+    (j + 1) * I < b → (∀ i, i < wa → coin (b + i) ∈ MahiMahi.goodAt U wa (b + i)) →
+    V.CoversUpto (MahiMahi.decisionRoundAt wa (b + wa - 1)) →
+    -- then the slot is decided in V
+    ∃ v, Decided (adaptiveWave ws wa I per) U V s v
+
 /-- The period sequence, over every fault configuration, schedule, block universe, interval,
 wavelength pair, period bound and update rule the model admits. -/
 def Statement : Prop :=
@@ -220,7 +252,8 @@ def Statement : Prop :=
     (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ),
     PeriodAgreement U I wa ∧ AdaptiveAgreement U ws wa I ∧ ScanEnds U I wa ∧
       PeriodOfClause U I wa ∧ PeriodOne U ws wa I ∧ TwoAsyncRounds I ∧
-      PeriodInRange U I wa K ∧ OutputLiveness U ws wa I ∧ AllDecided U ws wa I K
+      PeriodInRange U I wa K ∧ OutputLiveness U ws wa I ∧ AllDecided U ws wa I K ∧
+      OutputLivenessOfRuns U ws wa I K
 
 end Period
 
