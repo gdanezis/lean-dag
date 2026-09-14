@@ -45,6 +45,7 @@ import LeanDagTest.MahiMahi.Liveness
 import LeanDagTest.Steelhead.Model
 import LeanDagTest.Steelhead.Period
 import LeanDagTest.Steelhead.Stall
+import LeanDagTest.Steelhead.CoinDelay
 import LeanDagTest.Steelhead.Axioms
 import LeanDagTest.BlackMarlin.Divergence
 import LeanDagTest.Barnacle.Model

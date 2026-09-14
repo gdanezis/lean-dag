@@ -156,6 +156,29 @@ theorem tail_tendsto_zero :
   rwa [show Fintype.card Validator - (Fintype.card Validator - F.f - F.byzantine.card) =
     F.f + F.byzantine.card by omega] at h
 
+/-! ## One validator, many coins -/
+
+/-- **One validator leads `m` coins in a row** with probability `n^-m`: the constant map is one
+leader map among `n^m`. -/
+theorem constant_coin_probability (v : Validator) (m : ℕ) :
+    (PMF.uniformOfFintype (Fin m → Validator)).toOuterMeasure {coins | ∀ i, coins i = v} =
+      ((Fintype.card Validator : ℝ≥0∞) ^ m)⁻¹ := by
+  classical
+  have hset : ({coins | ∀ i, coins i = v} : Set (Fin m → Validator)) =
+      ↑({fun _ => v} : Finset (Fin m → Validator)) := by
+    ext coins
+    simp only [Finset.coe_singleton, Set.mem_setOf_eq, Set.mem_singleton_iff]
+    exact ⟨fun h => funext h, fun h i => congrFun h i⟩
+  rw [hset, uniform_prob_mem]
+  simp [Fintype.card_fin]
+
+/-- So no bound on the rounds a validator leads holds for every coin sequence: the streak has
+positive probability at every finite length, however small. -/
+theorem constant_coin_probability_pos (v : Validator) (m : ℕ) :
+    0 < (PMF.uniformOfFintype (Fin m → Validator)).toOuterMeasure {coins | ∀ i, coins i = v} := by
+  rw [constant_coin_probability]
+  exact ENNReal.inv_pos.mpr (ENNReal.pow_ne_top (by simp))
+
 /-! ## Blocks of coins -/
 
 omit [Fintype Validator] [DecidableEq Validator] F in

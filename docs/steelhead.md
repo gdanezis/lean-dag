@@ -140,7 +140,7 @@ from coverage into certification; the unpredictable-leader clause.
 | Corollary 1 (handover) | SH3 | stated against the relation's anchor search |
 | Theorem 1 (agreement) | SH2, SH16 | `AnchoredRule.decided_unique` at Steelhead's laws; at the interface level, any family of rules whose laws hold composes into one whose laws hold, and Steelhead is the composite of Mahi-Mahi's rule at each round's wave |
 | Corollary 2 (total order and integrity) | SH13 | in part: the relation's own ledger theorems at Steelhead's laws, over a settled prefix. Ordering the blocks a single commit releases is declined development-wide (report §1.4, §5.6) |
-| Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e | in part: the honest-leader direct commit, everything below a fair run, the crashed-leader skip from `n − f` blames, and the remark that partial dissemination does not defer, for a leader that did not equivocate. The Byzantine-equivocation anchor bound and the `O(wa + b)` ordering bound are not formalised; timeouts and pacing are not modelled |
+| Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e | in part: the honest-leader direct commit, everything below a fair run, the crashed-leader skip from `n − f` blames, and the remark that partial dissemination does not defer, for a leader that did not equivocate. The Byzantine-equivocation anchor bound is not formalised; the `O(wa + b)` ordering bound fails for some coin sequences at period `1` (§7, finding 6) and is stated only as SH15's tail; timeouts and pacing are not modelled |
 | Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the chain settles under Mahi-Mahi's run clause and below any one run of `wa` good coins, a period is derived for each interval, an anchored interval the view did not output hands the next one period `1` under the failover, which the arc models in place of the paper's premise on the update rule (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15's tail |
 | Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b, SH14c, SH15 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval past the slot and one run of `wa` good coins above it; SH14b reads both off the run clause at the chain schedule, SH14c off two runs of the coin; SH15 bounds the probability that the two runs fail among `M` blocks of coins by `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero. The "with probability `1`" is that tail, as a finite record admits it; the growth of the ledger from the settled prefix is SH13 |
 | Theorem 4 (agreement of the period) | SH10a, SH10b | for any deterministic update rule |
@@ -622,6 +622,21 @@ equivocate; neither clause asks the quorum to be correct.
    commit above a stuck slot can satisfy; the same holds of a count of
    commits over a replay window, which never sees the stuck slot below
    the window.
+6. **Theorem 2's `O(wa + b)` bound does not hold for every coin
+   sequence.** The theorem orders every honest block within `O(wa + b)`
+   rounds of its creation after GST. At period `1` every slot is the
+   coin's, and a uniform coin names the one absent validator at `N + 1`
+   rounds in a row with probability `n^-(N + 1) > 0`, for every horizon
+   `N`; on a DAG whose three reliable validators reference one another
+   at every round while validator `0` never proposes, no slot below the
+   horizon then commits and no settled prefix outputs a block, although
+   every reliable round is populated and synchronised from round `0`
+   and the reliable round-`1` block exists (`LeanDagTest/Steelhead/
+   CoinDelay.lean`, `positive_no_output`). The bound holds in expectation
+   or with probability tending to one (SH15), as the sentence before it
+   in the theorem already says of the asynchronous slots, not
+   deterministically; the deterministic part of Theorem 2 is the
+   synchronous slots' (SH6a) and the crashed leaders' (SH6c).
 
 ## 8. Witnesses (`LeanDagTest/Steelhead/`), SH12
 
@@ -636,7 +651,10 @@ the interval, the adaptive schedule naming the known leader at a
 synchronous round and the coin at the asynchronous ones, and a block map
 read back at the rounds of its blocks (§5). `Stall.lean`: the adversary's shape on valid
 data, the asynchronous commit beside it, and the stalled slot by SH8
-(§4). `Axioms.lean`: the five headline theorems, the carrier's
+(§4). `CoinDelay.lean`: the reliable-only DAG at every horizon, populated
+and synchronised from round `0`, on which the coins naming the absent
+validator through the horizon, a set of positive probability, leave
+every settled prefix of every view empty (§7, finding 6). `Axioms.lean`: the five headline theorems, the carrier's
 persistence and its liveness headline depend on the standard axioms
 only.
 
