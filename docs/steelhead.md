@@ -106,9 +106,10 @@ from coverage into certification; the unpredictable-leader clause.
 - **SH12, on data** (§8): the anchor-floor counterexample, the stall DAG
   with its asynchronous commit beside it, the period sequence at a
   concrete update rule, the coin streak that outputs nothing through any
-  horizon, the Byzantine floor, and Algorithm 2's replay on a healthy
+  horizon, the Byzantine floor, Algorithm 2's replay on a healthy
   window, on a startup window and on a complete window too short for a
-  wave.
+  wave, and the rotating stall Algorithm 2 retains through every
+  horizon.
 - **SH13, the ledger** (§3): the committed-leader sequence and the
   ledger of a settled prefix are agreed across views, the ledger is
   monotone, and a block enters at one slot, which both views name. The
@@ -650,7 +651,16 @@ canary spacing coprime to a candidate period of at least two, which odd
 spacings and powers of two are, a window holding two canary rounds whose
 decision round it retains holds a probe for the candidate, since two
 consecutive multiples of the spacing cannot both be multiples of the
-period, at `1 ≤ ws`.
+period, at `1 ≤ ws`. What the selection can see of a window whatever
+its evidence (`score_le_sum_top`, `sum_floor_le_score`): every score
+lies between the sum of a commit floor's excess over the round and the
+sum of the delays to the window's top, so at waves `3` and `5` with a
+probe at every round, where periods `1` and `2` commit no round below
+two or three rounds up (`halfFloor`), they score at least half of what
+period `4` can on a window of at most eight rounds, and hysteresis `1/2`
+keeps period `4` at every anchor of an eight-round interval
+(`anchorUpdate_half_retains`), which is finding 3 through every horizon
+(§8, `RotatingStall.lean`).
 
 What is not modelled: the gating rule that a validator evaluates the
 slots of an interval only once the preceding scan has ended, which the
@@ -738,10 +748,14 @@ validator (§7, finding 7).
    the failover of §5 in place of the selector's own reset: an interval
    that was not output hands the next one period `1`, whatever the
    scores. Algorithm 2 has no such clause; the paper's authors have
-   agreed to add one. `ReplayStartup.lean` and `ReplayShortWindow.lean`
-   (§8) show the retention on tied windows on data; the stall through
-   every horizon, and a Rust reproduction through 256 rounds, are held
-   outside this PR.
+   agreed to add one. `RotatingStall.lean` (§8) proves it through every
+   horizon: on that family every period Algorithm 2 derives at hysteresis
+   `1/2` is `4`, since the window of an anchor spans at most eight rounds,
+   on which periods `1` and `2` score at least half of what period `4`
+   can, and at period `4` slot `3` is never decided, so no block above
+   round `2` is ever output. `ReplayStartup.lean` and
+   `ReplayShortWindow.lean` show the retention on tied windows; a Rust
+   reproduction through 256 rounds is held outside this PR.
 4. **Theorem 3's premise on the update rule is neither Algorithm 2's
    rule nor enough.** The theorem assumes that a window in which no
    synchronous slot commits maps to `k = 1`. Algorithm 2 keeps the period
@@ -851,8 +865,21 @@ and `1/10` (§7, findings 3 and 4). `ReplayShortWindow.lean`: eleven such
 rounds at `I = 4`, `maxPeriod = 2`, where a complete window holds two
 asynchronous rounds and no wave of `5`; both candidates score `6` and
 Algorithm 2 keeps period `2` at every hysteresis (§7, finding 8).
-`Axioms.lean`: the eight headline theorems, the carrier's persistence
-and its liveness headline depend on the standard axioms only.
+`RotatingStall.lean`: the family `rtDag N` at every horizon `N`, the
+known leader rotating and every synchronous slot at two votes and two
+blames, on which every period Algorithm 2 derives at interval `8`,
+candidates `[1, 2, 4]`, a probe at every round and hysteresis `1/2` is
+`4` (`rt_periods_four`, from `anchorUpdate_half_retains`: periods `1`
+and `2` score at least half of what period `4` can on a window of at
+most eight rounds), at period `4` slot `3` is never decided in any view
+for any coin (`rt_stall`, SH8), at any period sequence that is `4` on
+the intervals the record reaches the adaptive output never decides it
+either (`rt_adaptive_stall`, by `decided_congr`), no settled prefix has
+more than three slots and no block above round `2` is ever in the ledger
+(`rt_no_output_above_two`), while validator `1`'s honest round-`3` block
+exists (§7, finding 3). `Axioms.lean`: the eight headline theorems, the
+carrier's persistence and its liveness headline depend on the standard
+axioms only.
 
 ## 9. Layout
 

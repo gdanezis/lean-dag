@@ -231,10 +231,12 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   commit probability on the window, whose probes succeed only on
   certificate quorums the DAG holds and exist whenever the canary is
   coprime to the candidate, and whose failover keeps the period in range;
-  on data it recovers from period `1` on a healthy window and keeps its
+  on data it recovers from period `1` on a healthy window, keeps its
   period on a startup window and on a complete window too short for a
-  wave, which the paper's interval bound admits. The arc is under the
-  statement/proof partition and imports nothing of Barnacle.
+  wave, which the paper's interval bound admits, and retains a stalled
+  period through every horizon, no block above round `2` ever output.
+  The arc is under the statement/proof partition and imports nothing of
+  Barnacle.
 - **Black Marlin** (`LeanDag/BlackMarlin/`): the three-round commit rule
   of a partially synchronous protocol (DISC 2025) that uses neither
   reliable broadcast nor a common coin and elects an anchor in **every

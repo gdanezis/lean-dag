@@ -1,5 +1,6 @@
 import LeanDag.Steelhead.Replay.Statement
 import LeanDag.Steelhead.Helpers.Coin
+import Mathlib.Tactic.IntervalCases
 /-!
 # Helpers — the replay
 
@@ -539,6 +540,292 @@ theorem async_term_bound {E : Evidence Validator} {C : Config Validator} {period
   refine roundTiming_async_commit_le hws hlt hr hdec (fun j hj hjt => ?_) hcons
   rw [dif_pos hj]
   exact (hbound j hjt).mono hj.le
+
+/-! ## The score, bounded
+
+What the selection can see of a window whatever its evidence: every score lies between the sum
+of a commit floor's excess over the round and the sum of the delays to the top, so that a
+hysteresis wide enough keeps the period on any window of bounded span. -/
+
+omit [Fintype Validator] [DecidableEq Validator] F [LinearOrder BlockId] in
+/-- The first commit at or above a round respects any monotone floor the commits respect, the
+window's top standing in past the window. -/
+theorem le_firstCommitAt {E : Evidence Validator} {ts : ℕ → Timing} {floor : ℕ → ℕ}
+    (hmono : ∀ a b, a ≤ b → floor a ≤ floor b)
+    (hts : ∀ j, j ≤ E.top → ((min (floor j) E.top : ℕ) : ℚ) ≤ (ts j).commit) :
+    ∀ r, ((min (floor r) E.top : ℕ) : ℚ) ≤ firstCommitAt E ts r := by
+  suffices H : ∀ n r, E.top + 1 - r ≤ n →
+      ((min (floor r) E.top : ℕ) : ℚ) ≤ firstCommitAt E ts r from fun r => H _ r le_rfl
+  intro n
+  induction n with
+  | zero =>
+    intro r hn
+    rw [firstCommitAt, dif_neg (by omega)]
+    exact_mod_cast Nat.min_le_right _ _
+  | succ n ih =>
+    intro r hn
+    rw [firstCommitAt]
+    split_ifs with h
+    · refine le_min (hts r h) (le_trans ?_ (ih (r + 1) (by omega)))
+      exact_mod_cast min_le_min_right E.top (hmono r (r + 1) (by omega))
+    · exact_mod_cast Nat.min_le_right _ _
+
+omit [Fintype Validator] [DecidableEq Validator] F [LinearOrder BlockId] in
+/-- The first commit at or above a round is at most the window's top, once every commit is. -/
+theorem firstCommitAt_le_top {E : Evidence Validator} {ts : ℕ → Timing}
+    (hts : ∀ j, j ≤ E.top → (ts j).commit ≤ E.top) (r : ℕ) : firstCommitAt E ts r ≤ E.top := by
+  rw [firstCommitAt]
+  split_ifs with h
+  · exact le_trans (min_le_left _ _) (hts r h)
+  · exact le_rfl
+
+omit [Fintype Validator] [DecidableEq Validator] F [LinearOrder BlockId] in
+/-- The gate is at most the window's top, once every decision is and the window is nonempty. -/
+theorem gateAt_le_top {E : Evidence Validator} {ts : ℕ → Timing} (hw : E.bottom ≤ E.top)
+    (hts : ∀ j, j ≤ E.top → (ts j).decision ≤ E.top) :
+    ∀ r, r ≤ E.top + 1 → gateAt E ts r ≤ E.top := by
+  intro r
+  induction r with
+  | zero =>
+    intro _
+    rw [gateAt, dif_neg (by omega)]
+    exact_mod_cast hw
+  | succ r ih =>
+    intro hr
+    rw [gateAt]
+    split_ifs with h
+    · simp only [Nat.add_sub_cancel]
+      exact max_le (ih (by omega)) (hts r (by omega))
+    · exact_mod_cast hw
+
+/-- **The score is at most the sum of the delays to the top**, on a nonempty window at waves of
+at least two rounds. -/
+theorem score_le_sum_top {E : Evidence Validator} {C : Config Validator} {period : ℕ}
+    (hws : 2 ≤ C.ws) (hwa : 2 ≤ C.wa) (hw : E.bottom ≤ E.top) :
+    score E C period ≤ ((rounds E).map fun (r : ℕ) => (E.top : ℚ) - (r : ℚ)).sum := by
+  have hb := bounded_timingAt (E := E) (period := period) (probeRate_fst_le E C period) hws hwa
+  have hscore : score E C period = ((rounds E).map fun r =>
+      max (firstCommitAt E (timingAt E C period (probeRate E C period)) r)
+        (gateAt E (timingAt E C period (probeRate E C period)) r) - (r : ℚ)).sum := rfl
+  rw [hscore]
+  refine List.sum_le_sum fun r hr => ?_
+  have h1 := firstCommitAt_le_top (E := E) (fun j hj => (hb j hj).2.2) r
+  have h2 := gateAt_le_top hw (fun j hj => le_trans (hb j hj).2.1 (hb j hj).2.2) r
+    (by have := (mem_rounds.mp hr).2; omega)
+  have := max_le h1 h2
+  linarith
+
+omit [DecidableEq Validator] F in
+/-- **The score is at least the sum of a commit floor's excess over the round**, once every commit
+of the window respects the floor, a monotone function of the round. -/
+theorem sum_floor_le_score {E : Evidence Validator} {C : Config Validator} {period : ℕ}
+    {floor : ℕ → ℕ} (hmono : ∀ a b, a ≤ b → floor a ≤ floor b)
+    (hts : ∀ j, j ≤ E.top → ((min (floor j) E.top : ℕ) : ℚ) ≤
+      (timingAt E C period (probeRate E C period) j).commit) :
+    ((rounds E).map fun r => ((min (floor r) E.top : ℕ) : ℚ) - r).sum ≤ score E C period := by
+  have hscore : score E C period = ((rounds E).map fun r =>
+      max (firstCommitAt E (timingAt E C period (probeRate E C period)) r)
+        (gateAt E (timingAt E C period (probeRate E C period)) r) - (r : ℚ)).sum := rfl
+  rw [hscore]
+  refine List.sum_le_sum fun r _ => ?_
+  have h1 := le_firstCommitAt hmono hts r
+  have h2 := le_max_left (firstCommitAt E (timingAt E C period (probeRate E C period)) r)
+    (gateAt E (timingAt E C period (probeRate E C period)) r)
+  linarith
+
+/-- The score is nonnegative: every commit lies at or above its round. -/
+theorem score_nonneg {E : Evidence Validator} {C : Config Validator} {period : ℕ}
+    (hws : 2 ≤ C.ws) (hwa : 2 ≤ C.wa) : 0 ≤ score E C period := by
+  have hb := bounded_timingAt (E := E) (period := period) (probeRate_fst_le E C period) hws hwa
+  refine le_trans (List.sum_nonneg fun x hx => ?_)
+    (sum_floor_le_score (floor := fun r => r) (fun _ _ h => h) fun j hj => ?_)
+  · obtain ⟨r, hr, rfl⟩ := List.mem_map.mp hx
+    simp only [Nat.min_eq_left (mem_rounds.mp hr).2, sub_self, le_refl]
+  · simp only [Nat.min_eq_left hj]
+    exact le_trans (hb j hj).1 (hb j hj).2.1
+
+omit [DecidableEq Validator] F [LinearOrder BlockId] in
+/-- An empty window scores zero at every period. -/
+theorem score_empty {E : Evidence Validator} (C : Config Validator) (period : ℕ)
+    (hw : E.top < E.bottom) : score E C period = 0 := by
+  unfold score rounds
+  simp [show E.top + 1 - E.bottom = 0 by omega]
+
+/-- **The selection keeps the current period when no candidate improves on it** by the factor
+hysteresis demands. -/
+theorem select_eq_current_of_no_improvement (candidates : List ℕ) (scores : ℕ → ℚ) (current : ℕ)
+    (epsilon : ℚ) (hc : current ∈ candidates)
+    (h : ∀ k ∈ candidates, ¬ scores k < (1 - epsilon) * scores current) :
+    select candidates scores current epsilon = current := by
+  dsimp only [select]
+  rw [if_neg (h _ (best_mem candidates scores current hc))]
+
+/-! ## Half hysteresis retains period four
+
+At waves `3` and `5` with a probe at every round, periods `1` and `2` commit no round below two
+rounds up at an odd round of period `2` and three rounds up otherwise, so their scores are at
+least half of what period `4` can score on a window of at most eight rounds, and hysteresis `1/2`
+never moves. -/
+
+/-- **The half floor**: the commit floor periods `1` and `2` share at waves `3` and `5`. -/
+def halfFloor (r : ℕ) : ℕ := r + 3 - r % 2
+
+omit [Fintype Validator] [DecidableEq Validator] F [LinearOrder BlockId] in
+theorem halfFloor_mono {a b : ℕ} (h : a ≤ b) : halfFloor a ≤ halfFloor b := by
+  unfold halfFloor
+  omega
+
+/-- At period `1` or `2`, waves `3` and `5` and canary `1`, a round's commit lies at or above its
+half floor or at the top, when the timings above it are bounded. -/
+theorem halfFloor_le_roundTiming_commit {E : Evidence Validator} {C : Config Validator}
+    {period : ℕ} {probes : ℕ × ℕ} {higher : ℕ → Timing} {r : ℕ} (hws : C.ws = 3) (hwa : C.wa = 5)
+    (hcan : C.canary = 1) (hp : period = 1 ∨ period = 2)
+    (hh : ∀ j, r < j → j ≤ E.top → Bounded E j (higher j)) :
+    ((min (halfFloor r) E.top : ℕ) : ℚ) ≤ (roundTiming E C period probes higher r).commit := by
+  unfold roundTiming
+  dsimp only
+  have hwave : (if r % period = 0 then C.wa else C.ws) = 5 ∨
+      ((if r % period = 0 then C.wa else C.ws) = 3 ∧ r % 2 = 1) := by
+    rcases hp with rfl | rfl
+    · left
+      simp [hwa, Nat.mod_one]
+    · by_cases h : r % 2 = 0
+      · left
+        rw [if_pos h, hwa]
+      · right
+        rw [if_neg h, hws]
+        omega
+  generalize (if r % period = 0 then C.wa else C.ws) = wave at hwave ⊢
+  have hfloor : halfFloor r ≤ r + wave - 1 := by
+    unfold halfFloor
+    rcases hwave with h | ⟨h, h2⟩ <;> omega
+  have hne : (if wave = C.ws then ({C.known r} : Finset Validator) else Finset.univ).Nonempty := by
+    split_ifs
+    · exact Finset.singleton_nonempty _
+    · exact Finset.univ_nonempty
+  generalize (if wave = C.ws then ({C.known r} : Finset Validator) else Finset.univ) = authors
+    at hne ⊢
+  split_ifs with hclip hprobe
+  · simp only [clipped]
+    exact_mod_cast Nat.min_le_right _ _
+  · exact absurd hprobe.2.1 (by rw [hcan, Nat.mod_one]; simp)
+  · have hmin : min (halfFloor r) E.top = halfFloor r := Nat.min_eq_left (by omega)
+    rw [hmin]
+    -- the anchor commits at or above its own round, which lies a wave up
+    have hanchor : ((halfFloor r : ℕ) : ℚ) ≤ ((((rounds E).find? fun j =>
+        r + wave ≤ j && decide ((higher j).commit < E.top)).map higher).getD
+          (clipped E.top)).commit := by
+      cases hfind : (rounds E).find? fun j => r + wave ≤ j && decide ((higher j).commit < E.top)
+        with
+      | none =>
+        simp only [Option.map_none, Option.getD_none, clipped]
+        exact_mod_cast (show halfFloor r ≤ E.top by omega)
+      | some j =>
+        have hj := mem_rounds.mp (List.mem_of_find?_eq_some hfind)
+        have hp := List.find?_some hfind
+        simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
+        have hb := hh j (by omega) hj.2
+        simp only [Option.map_some, Option.getD_some]
+        exact le_trans (by exact_mod_cast (show halfFloor r ≤ j by omega)) (le_trans hb.1 hb.2.1)
+    refine le_mean hne fun v _ => ?_
+    unfold candidateTiming
+    split_ifs with h1 h2 h3
+    · dsimp only
+      exact_mod_cast (show halfFloor r ≤ E.top by omega)
+    · dsimp only
+      have h : ((halfFloor r : ℕ) : ℚ) ≤ ((r + wave - 1 : ℕ) : ℚ) := by exact_mod_cast hfloor
+      rw [Nat.cast_sub (by omega), Nat.cast_add, Nat.cast_one] at h
+      exact h
+    · exact hanchor
+    · dsimp only
+      exact_mod_cast (show halfFloor r ≤ E.top by omega)
+
+/-- At period `1` or `2`, waves `3` and `5` and canary `1`, every round's commit lies at or above
+its half floor or at the top. -/
+theorem halfFloor_le_timingAt_commit {E : Evidence Validator} {C : Config Validator} {period : ℕ}
+    (hws : C.ws = 3) (hwa : C.wa = 5) (hcan : C.canary = 1) (hp : period = 1 ∨ period = 2) :
+    ∀ r, r ≤ E.top → ((min (halfFloor r) E.top : ℕ) : ℚ) ≤
+      (timingAt E C period (probeRate E C period) r).commit := by
+  intro r hr
+  have hb := bounded_timingAt (E := E) (C := C) (period := period) (probeRate_fst_le E C period)
+    (by omega) (by omega)
+  rw [timingAt]
+  split_ifs with hin
+  · refine halfFloor_le_roundTiming_commit hws hwa hcan hp fun j hj hjt => ?_
+    rw [dif_pos hj]
+    exact hb j hjt
+  · simp only [clipped]
+    exact_mod_cast Nat.min_le_right _ _
+
+omit [Fintype Validator] [DecidableEq Validator] F [LinearOrder BlockId] in
+/-- On a window of at most eight rounds, the half floor's excess over the round sums to at least
+half the delays to the top. -/
+theorem half_floor_sum {E : Evidence Validator} (hw : E.bottom ≤ E.top)
+    (hspan : E.top ≤ E.bottom + 7) :
+    (1 / 2 : ℚ) * ((rounds E).map fun (r : ℕ) => (E.top : ℚ) - (r : ℚ)).sum ≤
+      ((rounds E).map fun r => ((min (halfFloor r) E.top : ℕ) : ℚ) - r).sum := by
+  unfold rounds
+  obtain ⟨d, hd⟩ := Nat.exists_eq_add_of_le hw
+  have hd7 : d ≤ 7 := by omega
+  rw [hd, show E.bottom + d + 1 - E.bottom = d + 1 by omega]
+  simp only [List.map_map, Function.comp_def]
+  have hup : ∀ i : ℕ, ((E.bottom + d : ℕ) : ℚ) - ((E.bottom + i : ℕ) : ℚ) = (d : ℚ) - i := by
+    intro i
+    push_cast
+    ring
+  have hlo : ∀ i : ℕ, ((min (halfFloor (E.bottom + i)) (E.bottom + d) : ℕ) : ℚ) -
+      ((E.bottom + i : ℕ) : ℚ) = ((min (i + 3 - (E.bottom + i) % 2) d : ℕ) : ℚ) - i := by
+    intro i
+    have he : min (halfFloor (E.bottom + i)) (E.bottom + d) =
+        E.bottom + min (i + 3 - (E.bottom + i) % 2) d := by
+      unfold halfFloor
+      omega
+    rw [he]
+    push_cast
+    ring
+  simp_rw [hup, hlo]
+  have hb : E.bottom % 2 = 0 ∨ E.bottom % 2 = 1 := by omega
+  rcases hb with hb | hb <;> interval_cases d <;>
+    norm_num [List.range_succ, Nat.add_mod, hb]
+
+/-- **Half hysteresis retains period four** on any window of at most eight rounds at waves `3`
+and `5` with a probe at every round, whatever the window's evidence: periods `1` and `2` score at
+least half of what period `4` can. -/
+theorem update_half_retains {E : Evidence Validator} {C : Config Validator} (hws : C.ws = 3)
+    (hwa : C.wa = 5) (hcan : C.canary = 1) (hw : E.bottom ≤ E.top)
+    (hspan : E.top ≤ E.bottom + 7) : update E C [1, 2, 4] 4 (1 / 2) = 4 := by
+  apply select_eq_current_of_no_improvement _ _ _ _ (by simp)
+  intro k hk
+  have hu := score_le_sum_top (E := E) (C := C) (period := 4) (by omega) (by omega) hw
+  have hz := score_nonneg (E := E) (C := C) (period := 4) (by omega) (by omega)
+  have hhalf := half_floor_sum (E := E) hw hspan
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
+  rcases hk with rfl | rfl | rfl
+  · have hl := sum_floor_le_score (E := E) (C := C) (period := 1) (floor := halfFloor)
+      (fun _ _ h => halfFloor_mono h) (halfFloor_le_timingAt_commit hws hwa hcan (Or.inl rfl))
+    norm_num
+    linarith
+  · have hl := sum_floor_le_score (E := E) (C := C) (period := 2) (floor := halfFloor)
+      (fun _ _ h => halfFloor_mono h) (halfFloor_le_timingAt_commit hws hwa hcan (Or.inr rfl))
+    norm_num
+    linarith
+  · norm_num
+    linarith
+
+/-- **Half hysteresis retains period four at every anchor** of an eight-round interval, the
+startup windows included: the window of an anchor spans at most eight rounds, and an empty one
+scores zero at every period. -/
+theorem anchorUpdate_half_retains (U : BlockUniverse Validator BlockId Payload)
+    (C : Config Validator) (hws : C.ws = 3) (hwa : C.wa = 5) (hcan : C.canary = 1) (j : ℕ)
+    (A : BlockId) : anchorUpdate U 8 C [1, 2, 4] (1 / 2) j A 4 = 4 := by
+  change update (ofAnchor U A 8) C [1, 2, 4] 4 (1 / 2) = 4
+  by_cases hw : (ofAnchor U A 8).bottom ≤ (ofAnchor U A 8).top
+  · exact update_half_retains hws hwa hcan hw
+      (by change (U.block A).round ≤ max 1 ((U.block A).round + 1 - 8) + 7; omega)
+  · apply select_eq_current_of_no_improvement _ _ _ _ (by simp)
+    intro k _
+    rw [score_empty _ _ (by omega), score_empty _ _ (by omega)]
+    norm_num
 
 end Replay
 
