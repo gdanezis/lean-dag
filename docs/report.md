@@ -9816,8 +9816,22 @@ within the anchor's history, at least `n − f − |byzantine|` authors are
 marked committed at wave `wa`, the counting lemma read on the history as
 a record of its own, whose votes and certificates are the universe's
 restricted to it. That the quorum's blocks must lie in the window is
-§24.6's sixth finding; the arithmetic of the score's passes is not
-proved.
+§24.6's sixth finding. The passes are recursions on the round index:
+every round's expected decision lies at or above the round, its expected
+commit at or above its decision, and both at or below the window's top
+(`Steelhead.Replay.bounded_timingAt`, SH18e); at an asynchronous round
+of the window whose committed candidates are not skipped, the replay's
+commit term is at most the mean over the `n` candidates of the decision
+round for the committed ones, at least `n − f − |byzantine|` of them by
+SH18d, and the window's top for the rest, the rule's own value on the
+same data
+(`Steelhead.Replay.async_term_bound`, SH18f, Lemma 3's second sentence);
+and a candidate the window marks committed is directly committed on the
+DAG (`Steelhead.Replay.commits_sound`, SH18g), so a probe's success is a
+certificate quorum the DAG holds and the adversary can lower the
+synchronous term's estimate but never raise it. SH18e and SH18f ask
+`2 ≤ ws < wa`, since the algorithm reads an asynchronous round as an
+unprobed synchronous one when the waves coincide.
 
 **SH14** (`Steelhead.output_liveness`) is output liveness under the
 failover, Theorem 3 (ii) and the asynchronous half of Definition 1's
@@ -16845,14 +16859,11 @@ def ofAnchor (U : BlockUniverse Validator BlockId Payload) (A : BlockId) (I : �
 
 ```lean
 def score (E : Evidence Validator) (C : Config Validator) (period : ℕ) : ℚ :=
-  let ts := timings E C period
-  let first := firstCommits E ts
-  ((rounds E).foldl (fun (state : ℚ × ℚ) r =>
-    let gate := if E.bottom < r then max state.1 (ts (r - 1)).decision else state.1
-    (gate, state.2 + max (first r) gate - r)) (E.bottom, 0)).2
+  let ts := timingAt E C period (probeRate E C period)
+  ((rounds E).map fun r => max (firstCommitAt E ts r) (gateAt E ts r) - r).sum
 ```
 
-**Pass three, the score**: the sum over the window of each round's delay to output, the output gated by every lower slot's decision.
+**The score**: the sum over the window of each round's delay to output, a round output when the first commit at or above it is expected and no earlier than every lower slot's decision.
 
 #### `select`
 

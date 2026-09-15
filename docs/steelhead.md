@@ -135,9 +135,11 @@ from coverage into certification; the unpredictable-leader clause.
 - **SH18, the replay** (§5): Algorithm 2 as data, the window's evidence
   read from the anchor's causal history, the three passes and the
   hysteretic selection; the selection stays among the candidates and
-  never worsens the score, the window's evidence is consistent, and
-  Lemma 3's count holds on the window once a quorum has populated the
-  boost and decision rounds within it.
+  never worsens the score, the window's evidence is consistent, Lemma
+  3's count holds on the window once a quorum has populated the boost
+  and decision rounds within it, every timing lies between its round and
+  the window's top, the asynchronous term is at most the rule's own
+  value on the same data, and a window commit is a commit on the DAG.
 
 ### 0.1 Correspondence with the paper
 
@@ -157,7 +159,7 @@ from coverage into certification; the unpredictable-leader clause.
 | Protocol section, "whenever either verdict of an asynchronous slot is direct, the two coincide" | SH5b | predicate for predicate, at a slot proposed at its own round and led by the coin |
 | Protocol section, "the successor waits at most `max(0, wa − ws − 1)` rounds", "delays never compound" | SH9c | arithmetic on the decision rounds; output timing itself is not modelled |
 | Theorem 5 (conservativity) | SH4 | at a constant wavelength by `rfl`, period `1` by `Nat.mod_one`, and at wave three the derivations are exactly the core's, both directions |
-| Lemma 3 (the replay cannot be starved) | SH11a, SH18d | `c_r ≥ n − f − b` on the DAG under any scheduling (SH11a), and on the window once a quorum has populated the boost and decision rounds within it (SH18d), which is what "populated" must mean for the replay, whose evidence is the window's (§7, finding 6). The replay's asynchronous term averages over the `n` candidates, so at least that fraction of them decide at the decision round; the arithmetic of the score's passes is not proved |
+| Lemma 3 (the replay cannot be starved) | SH11a, SH18d, SH18f, SH18g | `c_r ≥ n − f − b` on the DAG under any scheduling (SH11a), and on the window once a quorum has populated the boost and decision rounds within it (SH18d), which is what "populated" must mean for the replay, whose evidence is the window's (§7, finding 6); the replay's asynchronous term is at most the mean of the decision round over the `c_r` committed candidates and the window's top over the rest, the rule's own value on the same data (SH18f); a probe's success is a certificate quorum the DAG holds, so the adversary lowers the synchronous term's estimate but never raises it (SH18g). Both at `2 ≤ ws < wa` |
 | Theorem 3 (i), "a committed asynchronous slot does not by itself decide the synchronous slots below it" | SH8 | the argument of "Why the chain, and not the output" as a theorem, for every `2 ≤ ws ≤ k` rather than the one period it walks through (§4) |
 
 ## 1. The wavelength function
@@ -571,10 +573,29 @@ round a quorum has populated *within the anchor's history*, at least
 `n − f − b` authors are marked committed at wave `wa`, MM2 read on the
 history as a record of its own, whose votes and certificates are the
 universe's restricted to it (`candidatesAt_toRecord`,
-`certificates_toRecord`). The replay's asynchronous term averages over
-the `n` candidates, so at least that fraction decide at the decision
-round; the arithmetic of the passes is not proved. The hypothesis that
-the quorum's blocks lie in the window is §7's finding 6.
+`certificates_toRecord`). The hypothesis that the quorum's blocks lie in
+the window is §7's finding 6. The passes are recursions on the round
+index, as Algorithm 2 walks them: `timingAt` from the top of the window
+down, `firstCommitAt` the earliest expected commit at or above a round,
+`gateAt` the latest expected decision below it. **SH18e**
+(`bounded_timingAt`): every round's expected decision lies at or above
+the round, its expected commit at or above its decision, and both at or
+below the window's top, so the top is the penalty an unresolved outcome
+pays and no more. **SH18f** (`async_term_bound`), Lemma 3's second
+sentence: at an asynchronous round of the window whose committed
+candidates are not skipped (SH18c), the replay's commit term is at most
+the mean over the `n` candidates of the decision round for the `c_r`
+committed ones and the window's top for the rest, which is what the
+asynchronous rule attains on the same data under a uniform coin, and
+which SH18d bounds below `c_r ≥ n − f − b` under any scheduling.
+**SH18g** (`commits_sound`): a candidate the window marks committed is
+directly committed on the DAG, so a probe's success is a certificate
+quorum the DAG holds: the adversary can suppress the probes' evidence of
+the synchronous rule, never manufacture it, the paper's "lower but never
+raise". SH18e and SH18f ask `2 ≤ ws < wa`, so that a decision round lies
+at or above its slot and an asynchronous round is not read as an
+unprobed synchronous one, which the algorithm does when the waves
+coincide.
 
 What is not modelled: the gating rule that a validator evaluates the
 slots of an interval only once the preceding scan has ended, which the
@@ -755,8 +776,9 @@ LeanDag/Steelhead/
   Model/Coin.lean           commitProb, noCommitProb, blockRound, coinOfBlocks, blocksHorizon,
                             undecidedProb
   Model/Compose.lean        compose
-  Model/Replay.lean         Evidence, Config, Timing, windowIds, ofAnchor, probeRate, timings,
-                            firstCommits, score, prefer, best, select, update, anchorUpdate
+  Model/Replay.lean         Evidence, Config, Timing, windowIds, ofAnchor, committedCount,
+                            probeRate, timingAt, firstCommitAt, gateAt, score, prefer, best,
+                            select, update, anchorUpdate
   Safety/Statement.lean     SH1–SH5        Safety/Proof.lean
   Liveness/Statement.lean   SH6–SH9        Liveness/Proof.lean
   Period/Statement.lean     SH10, SH14     Period/Proof.lean

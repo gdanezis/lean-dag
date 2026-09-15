@@ -6,23 +6,25 @@ import Mathlib.Data.Rat.BigOperators
 
 The paper's Algorithm 2 as data: the evidence a window holds, read from
 the anchor's causal history over the last `I` rounds (`ofAnchor`); the
-three passes of `REPLAY(W, k')` over that evidence, each slot decided by
-its own wave, a synchronous slot exactly where the window holds its
+three passes of `REPLAY(W, k')` over that evidence, each a recursion on
+the round index as the algorithm walks it, each slot decided by its own
+wave, a synchronous slot exactly where the window holds its
 certificates and by the probes' rate elsewhere, an asynchronous slot
-averaged over the `n` candidate leaders, a round output when the first
-slot at or above it commits and no earlier than every lower slot's
-decision (`score`); and the hysteretic selection among the candidate
-periods, ties keeping the current period and then favouring the larger
-candidate (`select`). Exact rationals stand in for the expectations, as
-the algorithm's pseudo-code has them. `anchorUpdate` is the whole as an
-`UpdateRule`; the failover the liveness claims consume wraps it
-(`failover`, `Model/Period.lean`).
+averaged over the `n` candidate leaders (`timingAt`), a round output
+when the first slot at or above it commits (`firstCommitAt`) and no
+earlier than every lower slot's decision (`gateAt`, `score`); and the
+hysteretic selection among the candidate periods, ties keeping the
+current period and then favouring the larger candidate (`select`).
+Exact rationals stand in for the expectations, as the algorithm's
+pseudo-code has them. `anchorUpdate` is the whole as an `UpdateRule`;
+the failover the liveness claims consume wraps it (`failover`,
+`Model/Period.lean`).
 
 Evidence is indexed by proposal round, wave and candidate author, and
 counts distinct validators, so that an equivocator is one author
-however many blocks it made. A missing anchor and the recurrences'
-initial values read the window's top, the common penalty for an
-unresolved outcome, as the algorithm has it.
+however many blocks it made. A missing anchor, a round outside the
+window and the recurrences' initial values read the window's top, the
+common penalty for an unresolved outcome, as the algorithm has it.
 
 **Definitions only**, as in the other model files.
 -/
@@ -99,6 +101,11 @@ def ofAnchor (U : BlockUniverse Validator BlockId Payload) (A : BlockId) (I : �
 def rounds (E : Evidence Validator) : List ℕ :=
   (List.range (E.top + 1 - E.bottom)).map (E.bottom + ·)
 
+/-- **The committed candidates of a round**: the authors the evidence marks committed at the wave,
+the paper's `c_r`. -/
+def committedCount (E : Evidence Validator) (r w : ℕ) : ℕ :=
+  (Finset.univ.filter fun a => E.commits r w a = true).card
+
 /-- **The probes of a candidate period**: the canary rounds it replays as synchronous slots
 whose decision round the window holds, and how many of them hold a quorum of certificates for
 the known leader. -/
@@ -140,28 +147,37 @@ def roundTiming (E : Evidence Validator) (C : Config Validator) (period : ℕ) (
     ⟨(authors.sum fun v => (timing v).decision) / authors.card,
       (authors.sum fun v => (timing v).commit) / authors.card⟩
 
-/-- **Pass one**: the timings, from the top of the window down. -/
-def timings (E : Evidence Validator) (C : Config Validator) (period : ℕ) : ℕ → Timing :=
-  let probes := probeRate E C period
-  (rounds E).reverse.foldl (fun higher r =>
-    let value := roundTiming E C period probes higher r
-    fun j => if j = r then value else higher j) (fun _ => clipped E.top)
+/-- **Pass one, from the top of the window down**: the timing of round `r` from the timings of the
+rounds above it, which are `clipped E.top` outside the window; a round outside the window has that
+timing itself. -/
+def timingAt (E : Evidence Validator) (C : Config Validator) (period : ℕ) (probes : ℕ × ℕ) :
+    ℕ → Timing
+  | r =>
+    if _h : E.bottom ≤ r ∧ r ≤ E.top then
+      roundTiming E C period probes
+        (fun j => if _hj : r < j then timingAt E C period probes j else clipped E.top) r
+    else clipped E.top
+termination_by r => E.top + 1 - r
+decreasing_by all_goals omega
 
-/-- **Pass two**: the earliest expected commit at or above each round. -/
-def firstCommits (E : Evidence Validator) (ts : ℕ → Timing) : ℕ → ℚ :=
-  ((rounds E).reverse.foldl (fun (state : ℚ × (ℕ → ℚ)) r =>
-    let first := min (ts r).commit state.1
-    (first, fun j => if j = r then first else state.2 j))
-    (E.top, fun _ => E.top)).2
+/-- **Pass two**: the earliest expected commit at or above a round, the window's top past it. -/
+def firstCommitAt (E : Evidence Validator) (ts : ℕ → Timing) : ℕ → ℚ
+  | r => if h : r ≤ E.top then min (ts r).commit (firstCommitAt E ts (r + 1)) else E.top
+termination_by r => E.top + 1 - r
+decreasing_by all_goals omega
 
-/-- **Pass three, the score**: the sum over the window of each round's delay to output, the
-output gated by every lower slot's decision. -/
+/-- **Pass three's gate**: the latest expected decision below a round, the window's bottom at its
+first round, so that a round's output waits for every lower slot's decision. -/
+def gateAt (E : Evidence Validator) (ts : ℕ → Timing) : ℕ → ℚ
+  | r => if h : E.bottom < r then max (gateAt E ts (r - 1)) (ts (r - 1)).decision else E.bottom
+termination_by r => r
+decreasing_by all_goals omega
+
+/-- **The score**: the sum over the window of each round's delay to output, a round output when
+the first commit at or above it is expected and no earlier than every lower slot's decision. -/
 def score (E : Evidence Validator) (C : Config Validator) (period : ℕ) : ℚ :=
-  let ts := timings E C period
-  let first := firstCommits E ts
-  ((rounds E).foldl (fun (state : ℚ × ℚ) r =>
-    let gate := if E.bottom < r then max state.1 (ts (r - 1)).decision else state.1
-    (gate, state.2 + max (first r) gate - r)) (E.bottom, 0)).2
+  let ts := timingAt E C period (probeRate E C period)
+  ((rounds E).map fun r => max (firstCommitAt E ts r) (gateAt E ts r) - r).sum
 
 /-- **The preference between two candidates**: the smaller score; at a tie the current period,
 then the larger candidate. -/

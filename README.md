@@ -222,8 +222,10 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   the composite of Mahi-Mahi's at each round's wave, by definition),
   Definition 1 holds clause by clause over settled prefixes, and
   Algorithm 2's replay is data whose selection stays among the
-  candidates and whose window counts the counting lemma's candidates
-  once a quorum has populated it. The arc is under the statement/proof
+  candidates, whose window counts the counting lemma's candidates once
+  a quorum has populated it, whose asynchronous term is at most the
+  rule's own value on the same data, and whose probes succeed only on
+  certificate quorums the DAG holds. The arc is under the statement/proof
   partition and imports nothing of Barnacle.
 - **Black Marlin** (`LeanDag/BlackMarlin/`): the three-round commit rule
   of a partially synchronous protocol (DISC 2025) that uses neither
