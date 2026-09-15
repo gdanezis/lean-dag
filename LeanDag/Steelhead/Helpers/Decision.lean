@@ -46,6 +46,64 @@ theorem certifiedIn_of_commit_at_anchor {w : ℕ → ℕ} (hw : ∀ r, 1 ≤ w r
     MahiMahi.CertifiedIn U (w (S.slotRound k)) A L (S.slotRound k) :=
   MahiMahi.certifiedIn_of_directCommitIn_at_anchor (hw _) h hA (eligible_iff_mahiMahi.mp helig)
 
+/-- **SH5b.** At an asynchronous round the periodic wavelength is `wa`, and at a slot proposed at
+its own round and led by the coin the slot's blame is the chain slot's. -/
+theorem direct_agrees_with_chain {ws wa k r : ℕ} {coin : ℕ → Validator}
+    {V : View Validator BlockId Payload U} {L : BlockId} (hid : S.slotRound r = r)
+    (hr : IsAsync k r) (hlead : S.leader r = coin r) :
+    ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Commit U V L r ↔
+      (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Commit U V L r) ∧
+    ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Skip U V S r ↔
+      (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Skip U V (chainSlots coin) r) := by
+  have hw : periodic ws wa k r = wa := by unfold IsAsync at hr; simp [periodic, hr]
+  constructor
+  · change MahiMahi.DirectCommitIn U V (periodic ws wa k r) L r ↔ MahiMahi.DirectCommitIn U V wa L r
+    rw [hw]
+  · change MahiMahi.DirectSkipIn U V (periodic ws wa k (S.slotRound r)) (S.leader r)
+      (S.slotRound r) ↔ MahiMahi.DirectSkipIn U V wa (coin r) r
+    rw [hid, hw, hlead]
+
+/-! ## Wave three is exactly the core's relation -/
+
+/-- **The core's slot-level blame is a blame of the slot at wave three.** A round-`r` block of
+the leader in a voting-round block's cone is one of its references, which the core's blamer
+excludes; the two rules agree on what a blame is, so the count transfers verbatim, as it does the
+other way in MM1d. -/
+theorem directSkipIn_of_core_directSkipSlotIn {V : View Validator BlockId Payload U} {k : ℕ}
+    (h : LeanDag.DirectSkipSlotIn U V k) :
+    MahiMahi.DirectSkipIn U V 3 (S.leader k) (S.slotRound k) := by
+  refine le_trans h (Finset.card_le_card (Finset.image_subset_image ?_))
+  intro q hq
+  rw [Finset.mem_inter, LeanDag.slotBlamers, Finset.mem_filter] at hq
+  rw [MahiMahi.votingRound_three, Finset.mem_inter, Finset.mem_filter]
+  obtain ⟨⟨hqb, hqblame⟩, hqV⟩ := hq
+  refine ⟨⟨hqb, ?_⟩, hqV⟩
+  rw [MahiMahi.Blames, Finset.eq_empty_iff_forall_notMem]
+  intro b hb
+  obtain ⟨hbid, hbr, hbc, hbh⟩ := MahiMahi.mem_candidatesAt.mp hb
+  obtain ⟨hqid, hqr⟩ := mem_blocksAt.mp hqb
+  exact hqblame b (mem_refs_of_mem_history_of_round_succ hqid hbh (by rw [hbr, hqr]))
+    ⟨hbid, hbr, hbc⟩
+
+/-- **SH4, the converse.** At wave three every derivation of the core's relation is one of
+Steelhead's: the mirror of MM1d's `core_decided_of_decided`, with the skip case above. -/
+theorem decided_of_core_decided {V : View Validator BlockId Payload U} {k : ℕ}
+    {v : Option BlockId} (h : LeanDag.Decided U V k v) : Decided (fun _ => 3) U V k v := by
+  induction h with
+  | @directCommit k L hL h =>
+    exact Decided.directCommit hL ((MahiMahi.directCommitIn_three_iff hL.2.1).mpr h)
+  | @directSkip k hskip =>
+    exact Decided.directSkip (directSkipIn_of_core_directSkipSlotIn hskip)
+  | @indirectCommit k j A L i hkj helig hj hmid _ _ hL hcert _ ihj ihmid =>
+    exact AnchoredRule.Decided.indirectCommit_single rfl (fun _ _ h => h) hkj
+      (MahiMahi.eligible_three_iff.mpr helig) ihj
+      (fun i h1 h2 he => ihmid i h1 h2 (MahiMahi.eligible_three_iff.mp he)) hL
+      ((MahiMahi.certifiedIn_three_iff hL.2.1).mpr hcert)
+  | @indirectSkip k j A hkj helig hj hmid hnone ihj ihmid =>
+    exact AnchoredRule.Decided.indirectSkip_single rfl hkj (MahiMahi.eligible_three_iff.mpr helig)
+      ihj (fun i h1 h2 he => ihmid i h1 h2 (MahiMahi.eligible_three_iff.mp he))
+      (fun L hL hc => hnone 0 Nat.one_pos L hL ((MahiMahi.certifiedIn_three_iff hL.2.1).mp hc))
+
 omit S in
 /-- The rung reads the schedule only through the slot's round. -/
 theorem linkCongr {w : ℕ → ℕ} : (steelheadAnchored Validator BlockId Payload w).LinkCongr :=

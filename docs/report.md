@@ -185,7 +185,7 @@ proof effort with no corresponding proof content.
    refinement into LiDO-DAG. What is claimed is the *form* of the account —
    theirs is operational, quantified over traces and instants; here liveness is
    stated as a condition on the DAG, and the dependence on time is
-   confined below a `Prop`-valued interface (§6.7, §27).
+   confined below a `Prop`-valued interface (§6.7, §28).
 
 4. **A derivation** of the structural property from **view convergence**
    (§6.9), together with the protocol's build rules, and nothing beyond
@@ -201,7 +201,7 @@ proof effort with no corresponding proof content.
    coverage and production alike; every other condition is a clause of the
    protocol, which a designer controls. In particular reference coverage
    is derived rather than assumed, and the one point at which a network parameter
-   constrains the specification is the wait threshold of §26.1.
+   constrains the specification is the wait threshold of §27.1.
 
 6. **Quantitative forms** (§6.10): the round from which coverage holds, given
    explicitly; a bound on the slot at which the next commit occurs; and an
@@ -433,6 +433,22 @@ Hydrozoan's skip is opportunistic, and not otherwise
 exhibits a universe satisfying the rule, which the good case implies
 (OH8).
 
+**Steelhead runs two rules at one wavelength function** (§24): the
+core's rule at `ws = 3` and Mahi-Mahi's at `wa` on one DAG, every round
+given the wavelength its slot reads, with the anchor floor read at the
+slot's own wavelength. Safety is agreement across views and routes
+whatever the waves of a slot and of its anchor
+(`Steelhead.Safety.holds` (SH2)), and the handover of a direct commit
+under one rule to an anchor decided by the other (SH3). A committed
+asynchronous slot does not decide the synchronous slots below it: under
+the paper's own adversary the output stalls at every period `k ≥ ws`
+(`Steelhead.stall` (SH8)), which is why the protocol drives its
+period from a second verdict on the asynchronous slots, the Mahi-Mahi
+arc at the identity schedule (SH5, SH7). The period sequence is agreed
+under any update rule (`Steelhead.Period.holds` (SH10)), and the coin's
+commit probability is the counting lemma read through a uniform draw
+(SH11).
+
 ### 1.4 Scope and non-goals
 
 The development is deliberately bounded in four respects; one feature
@@ -460,7 +476,7 @@ often assumed to be one.
   are shown agreed; totally ordering the blocks released by a single commit
   requires a tie-break which the development declines to assume (§5.6).
 - **No wall-clock latency.** The wait bound of §6.11 is a duration, but the total
-  elapsed time to a commit is not derived (§26.6).
+  elapsed time to a commit is not derived (§27.6).
 
 ### 1.5 Organisation
 
@@ -489,7 +505,7 @@ fault tolerance (`Hybrid.hybridLaws` (H6),
 (`MysticetiProperties.safety`, `MysticetiProperties.liveness` (I7)) and
 collects the deployment conditions their composition reveals.
 
-§§17–23 analyse seven protocols of the family against this development:
+§§17–24 analyse eight protocols of the family against this development:
 Mahi-Mahi's asynchronous rule at wave `w` (`MahiMahi.Safety.holds`
 (MM1)), Black Marlin's three-round rule, refuted on data (BMO11, BMT4),
 Minnow's minimal rule, FinWhale's two-round fast path
@@ -498,7 +514,9 @@ count (`Barnacle.Agreement.holds` (BN3), `Barnacle.Heads.holds` (BN9)),
 and Hydrozoan's dual-path rule under hybrid faults
 (`Hydrozoan.SlotAgreement.holds` (HZ3), `Hydrozoan.Grounding.holds` (HZ8)), and
 its Optimal variant's fast path at Hydrangea's bound
-(`OptimalHydrozoan.SlotAgreement.holds` (OH3), `OptimalHydrozoan.DirectLiveness.holds` (OH5)).
+(`OptimalHydrozoan.SlotAgreement.holds` (OH3), `OptimalHydrozoan.DirectLiveness.holds` (OH5)),
+and Steelhead's two rules at one wavelength function
+(`Steelhead.Safety.holds` (SH2), `Steelhead.stall` (SH8)).
 
 **The development has four kinds of arc, and the source says which each
 is.** A **commit rule** carries a universe, a decision relation, the
@@ -518,9 +536,9 @@ and the other three consume, and what pairs two kinds at once — a
 schedule over a rule, or two transforms composed — is the integration
 layer.
 
-§24 exhibits the witness models. §25 describes the mechanisation, §26
+§25 exhibits the witness models. §26 describes the mechanisation, §27
 discusses the formulation, the lessons of the extensions, and the
-limitations, §27 surveys related work, and §28 concludes. Appendix A indexes every
+limitations, §28 surveys related work, and §29 concludes. Appendix A indexes every
 principal statement against its Lean name and module. Throughout, displayed
 Lean is drawn from the source; binders are occasionally elided for layout,
 and `…` marks an elision.
@@ -1068,7 +1086,7 @@ lives: a validator cannot tell "the leader published nothing" from "the
 leader's block has not reached me", and a skip taken on absence can be
 overturned by a block that arrives afterwards, the two verdicts then
 sitting in different universes where §5's uniqueness theorem does not
-compare them (`ugrow_commits_recur`, §24, exhibits the pattern). Where a
+compare them (`ugrow_commits_recur`, §25, exhibits the pattern). Where a
 candidate exists the two forms agree, since a block referencing no
 candidate references not that one (`directSkipIn_of_directSkipSlotIn`),
 so M1 and M3 and the whole of §5 apply to the counted form; where none
@@ -1151,8 +1169,8 @@ computing base (§4.3). Assumed.
 
 Logically all of these are antecedents: each is a field of a structure or class,
 and every theorem quantifying over a block universe or over the relevant
-instances carries it. None is an axiom in the sense of §25, and their joint
-satisfiability is a proof obligation discharged by exhibition (§24) rather than
+instances carries it. None is an axiom in the sense of §26, and their joint
+satisfiability is a proof obligation discharged by exhibition (§25) rather than
 something the logic must be trusted for. The distinction drawn here is
 epistemic, not logical, and it is what determines where the trust boundary of
 the system actually falls.
@@ -1207,7 +1225,7 @@ P10 is a joint condition rather than a pure specification: the schedule is the
 designer's, but which validators are reliable is not. Round-robin discharges it
 whenever the reliable set is of quorum size, since at most `f` of every `n`
 consecutive leaders then lie outside it; `rrSlots` witnesses this with a window
-of `f + 1` (§24).
+of `f + 1` (§25).
 
 **P8 deserves the most emphasis of any clause here**, and is easily mistaken for
 a routine one. It states that a correct validator holding a quorum at round `r`
@@ -1268,7 +1286,7 @@ the model constrains it, `Correct` being a set complement (§2.1).
 P9 is the clause whose *sufficiency* is not under the designer's control: the
 timeout may be chosen freely, but whether the chosen value is long enough
 depends on the network. §6.10 determines the threshold it must meet — the
-constant `2Δ + proc` — and §26.1 discusses the consequences.
+constant `2Δ + proc` — and §27.1 discusses the consequences.
 
 P11 is the second pacemaker rule, and the counterpart of `advances`: where
 P8 forces a validator forward on a *quorum*, P11 forces it forward on a
@@ -1353,7 +1371,7 @@ differences matter more than they appear to.
 
 `held v n` is what `v` had in hand *at the moment it built its
 round-`(n+1)` block* — not what it eventually receives. That build-time
-index is the essential modelling device (§26.1): a block's references are
+index is the essential modelling device (§27.1): a block's references are
 frozen at construction, so what bears on the DAG's shape is what was held
 when the builder acted. `View.ids` is a finite set of identifiers with no
 index of either kind, which is why no formulation is stated over it.
@@ -1415,7 +1433,7 @@ rather than inside it.
 #### Where they are consumed
 
 Neither role is discharged where its name suggests, and the extracted
-support graph (§25) makes the pattern checkable rather than asserted.
+support graph (§26) makes the pattern checkable rather than asserted.
 
 Production is consumed as a `PopulatedOn` hypothesis: L6, the
 committed-run results, the quantitative results and the capstones of
@@ -1464,7 +1482,7 @@ together with clauses of the protocol:
 | Production | N2 (`converges`) with P8 and genesis | `ViewPace.populatedOn` (V17) |
 
 It is stated as a hypothesis of L4 and L6 in order to keep those arguments free
-of temporal notions (§6.8), and supplied to them by the results above. §26
+of temporal notions (§6.8), and supplied to them by the results above. §27
 discusses the formulation.
 
 **What "derived" does and does not mean here.** Coverage is derived
@@ -1899,7 +1917,7 @@ enter it within the processing bound.
 Reference coverage is not among them. It is not a clause a validator could
 execute, since it refers to `Correct`, which no validator can observe; it is
 what (a) and (b) *produce* against a synchronous network, and it is derived
-accordingly (§4.4, §26.2).
+accordingly (§4.4, §27.2).
 
 The chapter is organised around two interface predicates, and every
 result above them consumes them as hypotheses rather than reaching for a
@@ -1942,7 +1960,7 @@ structure Delivery (U) where
 
 The indexing of `held` is essential: `held v n` denotes what `v` had in hand *at
 the moment it built its round-`(n+1)` block*, not what `v` eventually receives.
-This is the build-time index which a view cannot supply (§26.1). Between holding
+This is the build-time index which a view cannot supply (§27.1). Between holding
 and referencing sits **acceptance** — at most one block per author, correct
 blocks always taken — which is deliberately where the protocol may refuse:
 the DoS arc's novelty budget (§8) is a rule about `accepted`, and the
@@ -1957,7 +1975,7 @@ are stated over it, `EventuallyDelivers` (§6.4) feeds their post-`R`
 increments, and P7's untimed incarnation is its `includes` clause. The
 liveness development never reads it — production and coverage come from
 the timed route of §6.9, whose `holds` is indexed by *time* rather than by
-round, which is exactly the index this structure cannot supply (§26.1).
+round, which is exactly the index this structure cannot supply (§27.1).
 
 ### 6.3 Progress, and the horizon
 
@@ -2046,7 +2064,7 @@ The predicate is antitone in `T` (`SynchronisedOn.mono`), which allows results
 established at `T := Correct` to be supplied to the quorum-relative statements of
 §6.6.
 
-The condition is derived, not assumed (§4.4); §26 discusses its formulation.
+The condition is derived, not assumed (§4.4); §27 discusses its formulation.
 
 ### 6.5 Monotonicity and propagation
 
@@ -2221,7 +2239,7 @@ incremental bounds. Neither is consumed by any liveness result.
 
 ### 6.8 The layering
 
-![**The core account: what supports what.** Every arrow is extracted from the compiled Lean environment — `A → B` means `A` is used in the proof of `B`, directly or through unlabelled lemmas, with arrows implied by longer paths removed. Assumptions occupy the left column; each further column is one step from them. A box with no incoming arrow depends only on definitions and unlabelled lemmas; L4 is the notable case, taking its quorum as a hypothesis rather than from the fault model. §25 describes the extraction; a version carrying each result's Lean name is in `docs/depgraph/`.](depgraph/support-core-compact.svg)
+![**The core account: what supports what.** Every arrow is extracted from the compiled Lean environment — `A → B` means `A` is used in the proof of `B`, directly or through unlabelled lemmas, with arrows implied by longer paths removed. Assumptions occupy the left column; each further column is one step from them. A box with no incoming arrow depends only on definitions and unlabelled lemmas; L4 is the notable case, taking its quorum as a hypothesis rather than from the fault model. §26 describes the extraction; a version carrying each result's Lean name is in `docs/depgraph/`.](depgraph/support-core-compact.svg)
 
 No theorem above `SynchronisedOn` mentions time, and no theorem below it
 mentions certificates. The diagram also locates the trust boundary: the
@@ -2673,7 +2691,7 @@ already is, and the adversary's whole freedom is the single layer it may
 build the instant a quorum forms beneath it —
 `PaceCore.round_le_top_succ`: no valid block's round exceeds some
 reliable `top` by more than one. On the running witness the floor is met
-with equality (§24).
+with equality (§25).
 
 The clause itself is asserted only from `gst` (§4.1), so what it demands
 coincides with what the clamped author-blind rule delivers: pre-GST it
@@ -2885,7 +2903,7 @@ each with a round-`δ` block in `ledgerSet`. No synchrony, no delivery
 model, no populated rounds appear in any hypothesis.
 
 **The boundary, witnessed.** Aggregate coverage is *not* individual
-inclusion. The witness model `Ucens` (CQ8) (§24) runs six rounds in which
+inclusion. The witness model `Ucens` (CQ8) (§25) runs six rounds in which
 three validators reference only each other and commit with the full
 certificate pattern, while a fourth — correct, building validly, never
 referenced — is the missing author of **every** layer of **every**
@@ -3032,7 +3050,7 @@ theorem creators_refs_eq_correct (hdos : DoSValid U) (hb : b ∈ U.ids)
 and the commit chain still operates over
 them: the witness model `Uexcl` carries a
 direct commit whose three rounds all lie after the exclusion of its
-equivocator (§24). Nor does exclusion depend on favourable circumstances:
+equivocator (§25). Nor does exclusion depend on favourable circumstances:
 *density* establishes that a
 cone can be selectively blind to at most `f` correct authors per round, even
 below Byzantine blocks, because the quorum clause forces every layer of
@@ -3065,7 +3083,7 @@ theorem card_history_le' (hdos : DoSValid U) (hb : b ∈ U.ids) :
 ```
 
 The exponential constant is not an artefact of the proof: a matching family of
-witnesses (`Udouble` (C5), §24) realises `2^(e−2)` growth from `e` equivocators,
+witnesses (`Udouble` (C5), §25) realises `2^(e−2)` growth from `e` equivocators,
 so any bound obtainable from reference-validity conditions alone carries a
 constant exponential in `f`. This is the assessment of the exposure
 mechanism as a *storage* defence: it is the right accountability layer — it
@@ -3202,7 +3220,7 @@ exclusion terminates it. On data,
 the budget is satisfiable at its exact constant: the witness schedule
 `Dtwin` satisfies `UniformBudget 3` with its costliest acceptance costing
 exactly `3`, and `ByzBudget 0` — nothing Byzantine accepted after the
-genesis round (§24).
+genesis round (§25).
 
 How should the parameter `T` be set? Any `T ≥ 1` admits every correct block
 post-`R` (the sandwich's `f·κ + 1` with `κ = 0` would be the correct-only
@@ -3273,7 +3291,7 @@ limitations**: an equivocation whose witnessing pair falls strictly below
 the cut is forgiven — in `chop U G` its author is no longer exposed — while
 a pair *at* the cut survives into the base layer. §9.5 prices the
 forgiveness; the witness file exhibits it on data, an exposure present in
-the full universe and absent from its truncation (§24).
+the full universe and absent from its truncation (§25).
 
 ### 9.2 Verdicts survive the cut
 
@@ -3407,7 +3425,7 @@ correct store, the store rides into its keeper's next block
 (`viewUpto_subset_history` (B7), §8.4), and the backbone carries that block into
 every correct round-`t` cone — a cone *is* an attestation. The lag is tight
 on data: at `t = m + 1` the witness exhibits an accepted equivocation half
-missing from the base (§24). Consequently the joiner's assembly — base as
+missing from the base (§25). Consequently the joiner's assembly — base as
 genesis layer plus a correct peer's window strictly above the cut — is a
 bona-fide view of the truncation (`joinView`; downward closure is the
 content: window references above the cut stay in the window, references *at*
@@ -3505,7 +3523,7 @@ continues to apply to the same types. The stronger bound is consumed in
 exactly two proofs (O2 and O4′ below) — the two-round rule's *direct* safety
 already holds at `3f+1`. The witness file proves the reuse claim as a
 computation: a quorum-5 universe over six validators satisfies the untouched
-`BlockUniverse` by `decide` (§24). 
+`BlockUniverse` by `decide` (§25). 
 
 ### 10.2 The rule layer, and the arithmetic core
 
@@ -3634,7 +3652,7 @@ from both passing the test at one anchor. The counting that would be needed
 valid six-validator universe, a Byzantine leader's two round-0 twins each
 gather exactly three supporters (disjoint correct pairs plus the
 equivocator's own split), and a round-3 block sees all of round 1 — **both
-twins pass `ThickLink` against it**, by `decide` (`utwin6_both_pass` (O11), §24).
+twins pass `ThickLink` against it**, by `decide` (`utwin6_both_pass` (O11), §25).
 An indirect rule that commits "some passing candidate" therefore admits
 derivations committing either twin: agreement is *refutable*.
 
@@ -3881,7 +3899,7 @@ processing per round.
 
 ### 11.4 The witness
 
-`ugrowReactive` (§24) runs the Mysticeti structure on the round-robin
+`ugrowReactive` (§25) runs the Mysticeti structure on the round-robin
 schedule at build spacing `6` inside a timeout of `9 = 2Δ + proc` — the
 drift-free backoff met with equality: every fallback branch untaken, the
 commit, the latency bound and the strictly-inside-deadline conclusion
@@ -4191,7 +4209,7 @@ theorem decided_fill_agree_of_properties [S : Slots Validator] (sk : SkipMsg U)
 
 ### 12.4 The witness
 
-`Ucrash N` (SS7, §24) is the round-robin family with validator `3`
+`Ucrash N` (SS7, §25) is the round-robin family with validator `3`
 crashed after its genesis block: three validators run full lines whose
 references omit the absent author, and `3` owns exactly one block. The
 message `ucrashMsg` targets validator `1`'s line, and the development's
@@ -4800,7 +4818,7 @@ no liveness argument counts an equivocator — and every statement holds
 at *every* threshold `k`: only agreement prices the interval. And the
 tight committee has no slack: at `n = 5·fb + 3·fc + 1` the correct
 class numbers exactly `q`, so the reliable set must be all of it — the
-hybrid analogue of §24's remark that at `f = 1` every correct
+hybrid analogue of §25's remark that at `f = 1` every correct
 validator is needed for a quorum.
 
 ### 14.5 Conservativity
@@ -4845,7 +4863,7 @@ least sufficient committee.
 
 ### 14.7 The witnesses
 
-`Uhyb4` (H9, §24) is the arc's principal witness: `fb = 0, fc = 1,
+`Uhyb4` (H9, §25) is the arc's principal witness: `fb = 0, fc = 1,
 n = 4` — the classical `3f + 1` committee with two-round finality when
 the single tolerated fault is a crash. Validator `3` halts after its
 genesis block; the survivors run three rounds at quorum `3`, slots
@@ -5023,7 +5041,7 @@ pairwise non-adjacent on a cycle of `2f + 1`.
 
 ### 15.5 The witness
 
-`Unemo` (NN9, §24) is the arc on data: three validators at the tight
+`Unemo` (NN9, §25) is the arc on data: three validators at the tight
 committee, fourteen blocks, validator `2` authoring rounds 0–1 and
 then halting, the live pair carrying the DAG to round 5 with the
 parent quorum at exactly `majority` from round 3 on. Slots 0, 1, 3
@@ -5370,7 +5388,7 @@ block references a fresh identifier*; coverage asks the opposite, that
 every reliable block at round `n+1` reference every reliable block at
 round `n`. One fact, two consequences: the fill can manufacture neither
 a commit nor coverage. The hypotheses are exhibited satisfiable on
-`Ucrash` (§24), so the refutation is not vacuous.
+`Ucrash` (§25), so the refutation is not vacuous.
 
 **It is preserved for any reliable set that excludes the recovering
 validator** (`synchronisedOn_skipFill_of_notMem`, from
@@ -8508,7 +8526,7 @@ skip it. `LiveOn` cannot be decided in general — it quantifies over
 every good DAG — and a *test rule* whose `Good` pins one universe makes
 it finite, so that Progress is applied on data and produces the healthy
 step. With BN11 the clause is a theorem rather than a hypothesis, so the
-**real** rule with its **real** `Good` runs on data too: the grown family `Ugrow` of §24 is good at every height by lemmas proved once (`ugrow_good`), and
+**real** rule with its **real** `Good` runs on data too: the grown family `Ugrow` of §25 is good at every height by lemmas proved once (`ugrow_good`), and
 `real_runs` gives a run of every height `K` on it, at the horizon that
 height costs — `11K + 9` rounds at a four-round interval and Mysticeti's
 gap of `n + 2`. The family stops at its horizon, so the cost is exact,
@@ -9442,7 +9460,594 @@ on any execution meeting `optSupport`'s `live`. The inclusion half of
 liveness is absent, as for Hydrozoan, because the model carries no
 self-parent clause.
 
-## 24. Satisfiability
+## 24. Steelhead: two rules at one wavelength function
+
+*(modules `LeanDag/Steelhead/`; the design record is `steelhead.md`;
+the protocol is Steelhead [Son+26], Mysticeti's rule (§3) and
+Mahi-Mahi's (§17) run on one DAG, the mode of each round chosen by a
+period that a deterministic update rule adapts)*
+
+Steelhead gives every round a wavelength: the rounds a slot proposed
+there reads to decide, `ws = 3` for a synchronous slot with a known
+leader and `wa ∈ {4, 5}` for an asynchronous slot with a coin-elected
+one. The protocol's wavelength function is periodic, `wa` at every
+`k`-th round and `ws` elsewhere, and the period `k` is adapted at fixed
+intervals by replaying the last interval under every candidate period.
+Which rounds are asynchronous is a function of the round number alone,
+so the mode is an interpretation of the DAG and touches no block; the
+one change to the decision rule is the anchor floor, which an undecided
+slot reads at its own wavelength. The paper claims that the composition
+is safe for any two rules meeting an interface, live under partial
+synchrony, live under asynchrony through a second verdict on the
+asynchronous slots that drives the period, and that the period sequence
+is agreed. This chapter settles those claims for the `3f + 1` pair on
+the unmodified DAG layer, and proves as a theorem the argument that
+makes the second verdict necessary: at every period `k ≥ ws`, a
+committed asynchronous slot does not by itself decide the synchronous
+slots below it, and the output stalls (§24.2). Results carry
+**SH**-labels.
+
+### 24.1 The rule at a wavelength function, and safety
+
+```lean
+def periodic (ws wa k : ℕ) : ℕ → ℕ := fun r => if r % k = 0 then wa else ws
+```
+
+is the paper's `w(r)`; every result is stated at an arbitrary
+`w : ℕ → ℕ`, of which the period is one source. The rule is one anchored
+rule (§3.5) whose data at a slot proposed at round `r` are Mahi-Mahi's
+at wave `w r`, with the wave offset read at the slot's round:
+
+```lean
+def steelheadAnchored (Validator BlockId Payload : Type) [Fintype Validator]
+    [DecidableEq Validator] [Faults Validator] [LinearOrder BlockId] (w : ℕ → ℕ) :
+    AnchoredRule Validator BlockId Payload ValidWrt Correct where
+  waveAt := fun r => w r - 1
+  Commit := fun U V L r => MahiMahi.DirectCommitIn U V (w r) L r
+  decCommit := fun _ _ _ _ => inferInstance
+  Skip := fun U V S k => MahiMahi.DirectSkipIn U V (w (S.slotRound k)) (S.leader k) (S.slotRound k)
+  rungs := 1
+  Link := fun _ U A L S k => MahiMahi.CertifiedIn U (w (S.slotRound k)) A L (S.slotRound k)
+  tie := fun _ _ _ => False
+```
+
+The relation's `waveAt` field became a function of the slot's round for
+this rule; every other rule sets a constant. An anchor of a slot at
+round `r` therefore sits at round `r + w r` or above, at the slot's own
+wavelength. **Why the floor is the slot's own wave.** An asynchronous
+slot at round `r` with `wa = 5` has its certificates at `r + 4`; a
+synchronous anchor at `r + 3` sees none of them, so a floor read from
+the synchronous wave would let one validator skip through such an
+anchor what another directly committed. The witness `lowFloor` (SH12)
+exhibits it on an eight-round DAG at period four: the rule with every
+floor read from the synchronous wave derives both a commit and a skip of
+slot `0` from the one full view.
+
+**SH1–SH5** (`Steelhead.Safety.holds`), each claim at the weakest bound
+its proof consumes on the rounds it reads, `1 ≤ w r` for SH1c and
+`2 ≤ w r` for the rest: a directly skipped slot has no certificate for any
+candidate and two certified candidates of one author and round coincide
+(SH1a, SH1b, Mahi-Mahi's lemmas at the slot's wave); a directly
+committed candidate at `r` is certified in the cone of every block at
+round `r + w r` or above, whatever wave that block's own slot carries
+(SH1c); two views deciding one slot reach the same verdict by any routes,
+whether the slot's wave is `ws` or `wa` and whether the anchor's is
+(SH2, the relation's agreement at `steelheadLaws`: every law of
+`AnchoredRule.Laws` speaks of one slot and its anchors, and at that slot
+the rule is Mahi-Mahi's at the slot's wave, eligibility included); a
+direct commit in one view is committed by every view that finds the slot
+an anchor, whichever rule decides that anchor, and no view skips it
+(SH3, the handover, the one cross-rule law); at a constant wavelength
+the rule *is* Mahi-Mahi's, by `rfl`, the period-one function is the
+constant `wa`, and at the constant three the derivations are exactly the
+core's, MM1d one way and its mirror `Steelhead.decided_of_core_decided`
+the other, since the core's skip is the slot-level blame Mahi-Mahi's is
+(SH4, the paper's Theorem 5 in both directions); the chain verdicts of
+§24.2 agree across views (SH5, MM1c at
+the chain schedule); and at an asynchronous round the coin leads, the
+output's direct commit and direct skip are the chain's predicates, so a
+direct derivation in either relation is one in the other (SH5b, the
+protocol section's remark that only indirect verdicts may differ). The
+paper's interface asks `w(r) ≥ 2`; for the
+vote-and-certify pattern of the `3f + 1` pair three is the bound, since
+at two rounds the voting round is the proposal round.
+
+**The interface** (SH16). Theorem 1 is stated for any two rules of the
+interface. `compose rules` is the composite of a family of anchored
+rules, one per round: the slot proposed at round `r` takes its wave
+offset, direct predicates and rungs of link from `rules r`, and the rung
+count and tie-break, which the relation reads without a slot, from the
+rule of round `0`. **SH16** (`Steelhead.Interface.holds`): if every rule
+of the family satisfies `AnchoredRule.Laws` and the family agrees on
+rungs and ties, the composite does (`Steelhead.compose_laws`), each law
+at a slot being the slot's rule's, the anchor's rule never entering; its
+verdicts then agree across views (`Steelhead.compose_decided_unique`);
+and `steelheadAnchored w` is the composite of Mahi-Mahi's rule read at
+`w r`, by definition (`Steelhead.steelheadAnchored_eq_compose`), so SH2
+is an instance.
+
+**The ledger** (SH13). Agreement settles one slot; the output layer
+reads verdicts off in slot order, which is round order, and what it owes
+is the paper's Corollary 2. Over a prefix each view has settled, the
+committed-leader sequences coincide, so do the ledgers they deliver, the
+ledger only grows as further slots settle, a block enters at one slot and
+both views name the same one, and a committed block is the candidate of
+one slot. Each conjunct is the anchored relation's own ledger theorem
+(§3.5) at `steelheadLaws`, or a fact of `LeanDag/Common/Ledger.lean` that
+reads no rule at all. The claims are order and integrity, not progress:
+they are conditional on a settled prefix, which under §24.2's stall is
+short.
+
+**Atomic broadcast** (SH17, `Steelhead.Broadcast.holds`). Definition 1's
+four clauses read off settled prefixes: agreement, a block one view
+delivers over a settled prefix every view delivers over any settled
+prefix at least as long; integrity, a delivered block is a block of the
+record, so one its author proposed, and enters the ledger at one slot;
+validity, a reliable block at round `r` lies in the cone of every
+reliable block from round `r + 2` under synchrony from `r`, so it is
+delivered with the first committed reliable leader there once the prefix
+below is settled; and total order, two blocks enter at the same slots in
+every view that settled them, so in the same order. The "eventually" of
+agreement and validity is the liveness half, SH6a and SH6b under
+synchrony, SH14b under the clause and SH15c almost surely under
+asynchrony, where a reliable block
+reaches the coin's committed leaders by the substrate's delivery, stated
+as `SynchronisedOn` and not otherwise; the order of the blocks one
+commit releases is a tie-break the development does not assume (§1.4).
+
+### 24.2 The chain verdict, the stall, and the drain
+
+A direct commit reaches a slot below it only through a decided stretch:
+from the lower slot's floor up to the commit every slot must be decided,
+because the anchor search stops at an undecided one. At every period
+`k ≥ ws` that stretch holds a synchronous slot, which the adversary
+keeps undecided at no cost, so the output stalls while the asynchronous
+slots commit on schedule. This is the paper's "Why the chain, and not
+the output", and SH8 below is it as a theorem, for every period rather
+than the one that paragraph walks through. A synchronous
+slot at round `r` anchors at the earliest commit-or-undecided slot at
+round `r + ws` or above, passing over skips, and an undecided anchor
+leaves it undecided. Under the paper's own adversary, the leader block
+delivered to exactly `f + 1` validators before the vote, a synchronous
+slot has `f + 1` votes and `n − f − 1` blames, neither a quorum: it is
+never directly decided and never certified, so no anchor commits it and
+none skips it. A slot of the residue class `k − 1` then waits on the
+class-`(k − 1)` slot one period up, which waits on the next, and the
+chain never closes, while the asynchronous slots at `0, k, 2k, …` commit
+and nothing above the first of them is ever output.
+
+```lean
+def Stall (U : BlockUniverse Validator BlockId Payload) : Prop :=
+  ∀ (V : View Validator BlockId Payload U) (ws wa k : ℕ),
+    2 ≤ ws → ws ≤ k →
+    (∀ s, S.slotRound s = s) →
+    (∀ (j : ℕ) (L : BlockId), ¬ IsAsync k j → IsLeaderBlock U j L →
+      MahiMahi.certificates U ws L j = ∅) →
+    (∀ j, ¬ IsAsync k j → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j) →
+    ∀ i, i % k = k - 1 → ∀ v, ¬ Decided (periodic ws wa k) U V i v
+```
+
+**SH8** (`Steelhead.stall`) holds for every `2 ≤ ws ≤ k` and every
+`wa`, by induction on the derivation: a class-`(k − 1)` slot's direct
+verdicts are excluded by hypothesis, a synchronous anchor never commits
+without a certificate, and an asynchronous anchor lies a full period
+above, so the class-`(k − 1)` slot between must be skipped, which is the
+claim one period up. The witness `st20` (SH12) shows the adversary's
+shape on valid data at four validators: every synchronous slot's
+candidate has exactly two votes, the asynchronous slot commits directly,
+and slot `3` is undecided in every view by SH8. For `ws = 3` only
+`k = 1` and `k = 2` are live; every larger candidate the paper's update
+rule can select, `4` up to its maximum of `64`, stalls.
+
+**The chain verdict.** The paper keeps the output relation and
+adds, for the asynchronous slots, a second verdict that drives the
+period update alone: the asynchronous rule with anchors restricted to
+asynchronous slots, so that no known-leader slot lies on the chain and
+nothing the adversary holds undecided blocks it. The arc reads the chain
+at *every* round with that round's coin leader, as the reference
+implementation does: `chainSlots coin = Slots.identity coin`, and
+`ChainDecided wa coin` is `MahiMahi.Decided wa` at that schedule.
+Reading the asynchronous rounds alone, as the paper's text says, would
+make the chain depend on the period at rounds above the interval under
+scan, whose period the scan is to fix. The chain is therefore the
+Mahi-Mahi arc at a new schedule, and every result about it is
+Mahi-Mahi's. **SH7a** (`Steelhead.chainAllDecidedBelow`): under the run
+form of the unpredictable-leader clause (§17.3) at the chain schedule,
+every chain verdict below a run is settled, the spanning hypothesis of
+MM3c discharged by the identity rounds, so a run of `wa` chain commits
+suffices. **SH7b** (`Steelhead.chainAllDecidedBelowOfSynchrony`): under
+synchrony, with the coin naming reliable leaders at `wa` consecutive
+rounds past any round, the same with no clause, the core's L10 at
+Mahi-Mahi's support. **SH7c** (`Steelhead.chainAllDecidedBelowOfRun`):
+the step SH7a takes once per round, on its own, one run of `wa` good
+coins settling every chain verdict below it in any view holding its
+decision rounds; the form the coin's tail (§24.5) consumes, which asks
+for one run rather than one in every window.
+
+**The drain.** Once the period is `1` every slot is asynchronous, and a
+run of `wa` consecutive commits decides every slot below it, including
+the slots an earlier period left undecided. **SH9**
+(`Steelhead.allDecidedBelowOfRun`) states this at any wavelength
+function with `1 ≤ w r ≤ wa` and one slot per round, by the relation's
+descent below a committed run (§3.5), the spanning hypothesis discharged
+by the identity rounds at the largest wave. **SH9b**
+(`Steelhead.allDecidedBelowAtPeriodOne`) is Theorem 3 (ii) as one
+statement: at `periodic ws wa 1`, under the run clause at the output
+schedule, past every round whose window decides below the horizon there
+is a slot below which every slot is decided, in any view caught up to
+the horizon, so the settled prefix and with it the ledger (SH13) extend
+as far as the horizon and the clause reach; the proof is SH7a's at the
+output schedule, since at period `1` the rule is Mahi-Mahi's at `wa`
+(SH4). **SH9c** (`Steelhead.asyncSlotCost`) is the protocol section's
+healthy-network arithmetic on decision rounds: an asynchronous slot
+decides `wa − ws` rounds later than a synchronous slot there would, and
+the synchronous slot `i` rounds above it, for `1 ≤ i < k`, is decided at
+most `max(0, wa − ws − i)` rounds before it, so the successor waits at
+most `wa − ws − 1` rounds for causal ordering and the wait is
+nonincreasing in `i`: delays never compound.
+
+### 24.3 Liveness under synchrony
+
+`shSupport w` (§16) is Mahi-Mahi's certificate with the certifiers
+`w r − 1` rounds above a candidate proposed at `r`; its `Local` and
+`Commits` laws hold at two rounds and above and the timed model's
+`OfCoverage` bridge at three, the wave-three case by the core's
+argument and the higher waves
+by Mahi-Mahi's. **SH6** (`Steelhead.Liveness.holds`) is the timed model
+at this support: **SH6a** (`Steelhead.commitsOfSynchrony`), a reliably
+led slot commits in every view caught up to its decision round on a DAG
+a reliable quorum has synchronised and populated through it, by the
+direct rule, at whichever wave the slot's round carries; **SH6b**
+(`Steelhead.allDecidedBelowOfSynchrony`), past any slot the schedule
+offers a run of reliably led slots spanning eligibility, and everything
+below the run is decided once the DAG is covered through its decision
+rounds. At one slot per round a run of `wa` slots spans. Two clauses of
+Theorem 2 need no timed model. **SH6c** (`Steelhead.skipsCrashed`): a
+slot whose leader has no block at its round is directly skipped in every
+view holding its vote round, once a quorum populates that round, since
+no cone holds a candidate and every block of the round blames. **SH6e**
+(`Steelhead.commitsOfDissemination`), the paper's "partial dissemination
+alone does not defer": a candidate that one reliable block references
+one round up, its leader's only block at that round, is directly
+committed in every view holding its decision round, once the quorum is
+synchronised from that round and populates the wave, at `4 ≤ w r`;
+synchrony carries the candidate into every reliable cone from two rounds
+up, the reliable voters vote for it, and every reliable block at the
+decision round references all of them and so certifies. The leader may
+be Byzantine, so long as it did not equivocate. **SH6f**
+(`Steelhead.decidedOfReliableAboveFloor`), Theorem 2's Byzantine-led
+clause as the anchor rule has it: at one slot per round, a slot is
+decided once every slot from its floor up to some reliably led slot is
+decided, whatever led them, since that slot commits directly and the
+least commit at or above the floor is the anchor, every slot between a
+skip the search passes over. The paper's bound on that clause by the
+number of Byzantine validators is refuted (§24.6), and its bounded
+leader timeouts are not modelled: `SynchronisedOn` stands for the
+paper's A4 and its pacing.
+
+### 24.4 The period
+
+The adaptive protocol groups rounds into intervals of `I` rounds, the
+`j`-th covering rounds `j·I + 1` to `(j + 1)·I`, and decides each
+interval under one period. The period of interval `j + 1` is fixed by
+the scan of interval `j`: its **anchor** is a round of the interval,
+asynchronous under the interval's period, whose chain verdict is a
+commit, every asynchronous round of the interval below it chain-skipped;
+an interval without an anchor keeps the period; a validator whose scan
+meets a chain-undecided round waits. The next period is a deterministic
+function of the anchor block and the current period, the paper's replay
+being one such function. The arc states the configuration-sequence
+model afresh, importing nothing of Barnacle (§21), as a relation:
+
+```lean
+inductive PeriodAt (I wa : ℕ) (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
+    (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
+    (out : BlockId → Finset BlockId) : ℕ → ℕ → Prop
+  | zero : PeriodAt I wa coin upd k₀ U V out 0 k₀
+  | anchor {j k r : ℕ} {A : BlockId} :
+      PeriodAt I wa coin upd k₀ U V out j k → IntervalAnchor I wa coin U V j k r A →
+      PeriodAt I wa coin upd k₀ U V out (j + 1) (upd j A (out A) k)
+  | keep {j k : ℕ} :
+      PeriodAt I wa coin upd k₀ U V out j k → NoAnchor I wa coin U V j k →
+      PeriodAt I wa coin upd k₀ U V out (j + 1) k
+```
+
+Waiting is the absence of a derivation, and `adaptiveWave ws wa I per`
+is the wavelength function a validator that derived the sequence `per`
+runs the output relation at. The update rule is handed what the anchor's
+window output beside the anchor, as Barnacle's rule is handed its
+range's verdicts (§21): `windowOutput` is the set of leaders the
+anchor's causal history, read at a wavelength, commits at slots of the
+window, the last `I` rounds up to the anchor's, with every slot below
+them decided, and `adaptiveOutput` reads it at the wavelength of the
+sequence the validator derived, which is what the claims below hand
+`PeriodAt`. **SH10** (`Steelhead.Period.holds`):
+**SH10a**, two views deriving a period for interval `j` derive the same
+one, under any update rule and any common handover, at `3 ≤ wa` and
+with no synchrony, fairness or view hypothesis, by induction on the
+derivation, since a lower anchor in one view is a chain-skipped round in
+the other and SH5 forbids it;
+**SH10b**, two validators that derived the period of every interval the
+record's rounds fall in, and decided a slot proposed among them at their
+own adaptive wavelengths, agree on the verdict: the sequences coincide
+there by strong induction on the interval, since the anchors of the
+intervals below lie in the record and their windows are read at rounds
+below their own, where the sequences already agree, so the two
+validators hand the rule one output at each of them
+(`Steelhead.windowOutput_congr`) and SH10a gives one period; a verdict
+reads the wavelength only at the rounds of the slots its derivation
+names (`Steelhead.decided_congr`), and SH2 applies to the one function.
+The bound is what makes the claim inhabited: a
+record holds finitely many blocks, so no chain verdict and no period is
+derivable above its top round, and asking for the whole sequence would
+leave the claim to periods that reach `0`. **SH10c**,
+once every asynchronous round of an interval has a chain verdict in a
+view, the view derives the next period, the least chain-committed round
+being the anchor or every round chain-skipped; **SH10d**, under the run
+clause at the chain schedule a view caught up to the horizon derives a
+period for every interval whose rounds lie far enough below it, by SH7a
+at each interval and SH10c; **SH10e**, under the failover the arc models
+in place of Theorem 3's premise on the update rule (§24.6):
+`ResetsOnNoOutput` asks the update to answer `1` when handed an empty
+output, a clause on the rule alone; under it an interval whose anchor's
+window the view did not output, every slot of it the view commits
+sitting above a slot the view leaves undecided, hands the next interval
+period `1`, since the view's verdicts carry into the anchor's history
+through the laws, so the history commits no leader of the window with
+everything below it decided and the output handed over is empty. The
+output reads the window and not the anchor's own interval: a history
+holds no decision round of the slots within a wave below its block, so
+an anchor at the start of its interval shows nothing of that interval
+whatever was output, and a test on the interval would find every
+anchored interval of a healthy network empty at period `1`; on the
+window a healthy network commits the lowest slots with everything below
+them decided, so the output is nonempty and period `1` is not
+absorbing. The anchor is a hypothesis, since nothing
+deterministic forces one when `k > wa`; its existence is the almost-sure
+half of Theorem 3 (i), which §24.5 states only as a vanishing tail.
+**SH10f**, at any period `k ≥ 1` with `2k ≤ I` every interval holds two
+asynchronous rounds, the paper's reason for `I ≥ 2 · maxPeriod`;
+**SH10g**, if the initial period lies in `[1, K]` and the update rule
+keeps a period there, so does every derived period. The interval
+boundaries are
+fixed by `I`, so the round at which a period takes effect is common by
+construction; what SH10a adds is that the periods are. **SH10h**
+(`Steelhead.failover_resets`): `failover upd` answers `1` when handed
+an empty output and `upd`'s own answer elsewhere, and satisfies
+`ResetsOnNoOutput` by construction, whatever `upd` is, so the paper's
+replay with the agreed failover is a rule the claims below apply to.
+
+**The replay** (SH18, `Steelhead.Replay.holds`). Algorithm 2 as data:
+`ofAnchor` reads the window's evidence off the anchor's causal history
+over the last `I` rounds, per proposal round, wave and candidate author,
+counting distinct validators; `score` is the three passes of
+`REPLAY(W, k')` over that evidence in exact rationals, the canary probes
+standing in for the unprobed synchronous slots; `select` the hysteretic
+selection, ties keeping the current period and then favouring the larger
+candidate; `anchorUpdate` the whole as an update rule. The selection
+stays among the candidates and never worsens the score
+(`Steelhead.Replay.select_mem`, `Steelhead.Replay.select_score_le`); in
+the window's evidence a committed candidate is certified and a skipped
+one is not (`Steelhead.Replay.certified_of_commits`,
+`Steelhead.Replay.not_certified_of_skips`); and Lemma 3's count holds on
+the window (`Steelhead.Replay.window_count`): at a round the window
+retains whose boost round and decision round a quorum has populated
+within the anchor's history, at least `n − f − |byzantine|` authors are
+marked committed at wave `wa`, the counting lemma read on the history as
+a record of its own, whose votes and certificates are the universe's
+restricted to it. That the quorum's blocks must lie in the window is
+§24.6's sixth finding. The passes are recursions on the round index:
+every round's expected decision lies at or above the round, its expected
+commit at or above its decision, and both at or below the window's top
+(`Steelhead.Replay.bounded_timingAt`, SH18e); at an asynchronous round
+of the window whose committed candidates are not skipped, the replay's
+commit term is at most the mean over the `n` candidates of the decision
+round for the committed ones, at least `n − f − |byzantine|` of them by
+SH18d, and the window's top for the rest, the rule's own value on the
+same data
+(`Steelhead.Replay.async_term_bound`, SH18f, Lemma 3's second sentence);
+and a candidate the window marks committed is directly committed on the
+DAG (`Steelhead.Replay.commits_sound`, SH18g), so a probe's success is a
+certificate quorum the DAG holds and the adversary can lower the
+synchronous term's estimate but never raise it. SH18e and SH18f ask
+`2 ≤ ws < wa`, since the algorithm reads an asynchronous round as an
+unprobed synchronous one when the waves coincide. Three claims read the
+algorithm's parameters. With candidates in `[1, K]` the failover wrapped
+around `anchorUpdate` answers a period in `[1, K]` at every anchor and
+whatever output it is handed
+(`Steelhead.Replay.failover_anchorUpdate_range`, SH18h), `1` when it
+resets and otherwise the selection's answer, which is the current period
+or a candidate: the range hypothesis SH10g, SH14 and SH15 place on the
+update rule, discharged for the paper's rule. At a round the window
+retains, the share of the `n` candidates the window marks committed is
+the probability that a uniform coin names a directly committed leader on
+the anchor's history read as a record
+(`Steelhead.Replay.commitWeight_eq_commitProb`, SH18i), the adaptive
+section's "exact in expectation" in the part that is a theorem; the
+anchor's term is the approximation the paper admits. And at a canary
+spacing coprime to a candidate period of at least two, which odd
+spacings and powers of two are, a window holding two canary rounds whose
+decision round it retains holds a probe for the candidate
+(`Steelhead.Replay.probe_exists`, SH18j), since two consecutive multiples
+of the spacing cannot both be multiples of the period.
+
+**SH14** (`Steelhead.output_liveness`) is output liveness under the
+failover, Theorem 3 (ii) and the asynchronous half of Definition 1's
+validity, deterministic given two events: in a view that derived every
+period up to a run's last round, if some interval at least two past a
+slot's finds an anchor and above that interval the coin names a
+committed candidate at `wa` consecutive rounds that lead the output's
+slots there, then the slot is decided once the view holds the run's
+decision rounds. The window of an anchor two intervals up lies wholly
+above the slot, so were the slot undecided it would sit below every
+commit of every such window, SH10e fires at the anchored interval and,
+by induction on the derivations, every interval up to the run runs at
+period `1`; the run's rounds then carry wave `wa`, its coins commit
+their candidates directly (`Steelhead.chainCommit_of_mem_goodAt`'s
+argument at the output schedule), and SH9 decides every slot below the
+run. **SH14b** (`Steelhead.all_decided`) reads both events off
+Mahi-Mahi's run clause at the chain schedule with runs of `K` good
+coins, `K` the bound the periods stay within: a run of `K` consecutive
+rounds inside the second interval after the slot's holds a multiple of
+the period in force, so an asynchronous round the view chain-commits
+directly, and with every chain verdict of the interval settled by SH7a
+the interval has its anchor; the run in the next interval is the one
+SH14 needs. Every slot three intervals and a window below the horizon
+is then decided. **SH14c** (`Steelhead.output_liveness_of_runs`) names
+the two events as runs of the coin alone, `K` good coins opening an
+interval at least two past the slot's and `wa` good coins above that
+interval, which settle every chain verdict below them by SH7c; two runs
+at named places, each of a fixed positive probability, which is what
+§24.5 draws from the coin.
+
+### 24.5 The coin
+
+The clause states the coin's effect; the probability that the effect
+obtains is the counting lemma (§17.2) read through a uniform draw. With
+the coin of a round modelled as `PMF.uniformOfFintype Validator`, the
+chain slot of round `r` commits directly exactly when the coin lands in
+`goodAt U wa r` (`Steelhead.chainCommit_of_mem_goodAt`, in every view
+holding the decision round), so with probability `commitProb U wa r =
+|goodAt U wa r| / n`, which MM2 bounds below by `(n − f − |byzantine|) / n`
+at `wa ≥ 5` on any populated wave under any scheduling
+(`Steelhead.ratio_le_commitProb`), and that is at least `1/3` at
+`n ≥ 3f + 1` (`Steelhead.third_le_commitProb`); at `wa ≥ 4` MM2 promises
+one committed correct candidate, so the bound is `1/n`
+(`Steelhead.inv_card_le_commitProb`, SH11e), the paper's wavelength-four
+trade-off. Over `m` rounds with
+independent coins, the uniform distribution over the leader maps, the
+probability `noCommitProb U wa r₀ m` that no round's coin names a
+directly committed leader is at
+most `((f + |byzantine|) / n)^m` (`Steelhead.noCommitProb_le`), which
+tends to zero (`Steelhead.tail_tendsto_zero`); together **SH11**
+(`Steelhead.Coin.holds`). The independence of the coins across rounds is
+the model's assumption.
+
+Theorem 3's "with probability `1`" cannot be stated on a fixed record,
+which is finite and populates finitely many rounds; what a finite record
+admits is a probability that tends to zero with the horizon, uniformly
+over records populated through it, the form SH11c/d take. **SH15a**
+(`Steelhead.undecidedProb_le`) draws the coins of `M` blocks of `K`
+rounds, block `j` opening the interval `j + 2` past a slot's
+(`blockRound`, read back into a coin map by `coinOfBlocks`), uniformly
+and independently, and bounds the probability `undecidedProb` that some
+view holding the horizon, at a period sequence matching every period it
+derives and at which the update rule fails over, has not derived the
+period of the slot's interval or leaves the slot undecided at the
+adaptive wavelength and schedule (`adaptiveSlots`, the coin at the
+rounds the periods make asynchronous) by
+`2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, at `2 ≤ ws ≤ wa`,
+`5 ≤ wa ≤ K ≤ I`, periods kept in `[1, K]`, and the blocks' waves
+populated where MM2 reads them. A sequence matching what the view
+derives is arbitrary where the scan has stalled, so a slot counts as
+decided only under every completion of the derived periods, and a scan
+that never reaches the slot's interval counts as a failure. A good
+block in each half of the `M` settles every chain verdict up to the
+later block, so the periods are derived that far (SH7c, SH10c), and
+decides the slot by SH14c, so the failure set lies in the union of the
+two halves' no-good-block sets, each a product whose every block of the
+half misses its all-good maps, of which MM2 counts at least
+`(n − f − |byzantine|)^K` out of `n^K`
+(`Steelhead.no_good_block_prob_le`). **SH15b**
+(`Steelhead.undecided_tail_tendsto_zero`): the bound vanishes as `M`
+grows, since `n − f − |byzantine| ≥ 1`. The blocks' coins are drawn after
+the record is fixed, as SH11c's are; what the network must supply is
+that the blocks' waves be populated.
+
+What one finite record cannot say, a sequence of them can. `coinMeasure`
+draws the coin of every round at once, as Mathlib's infinite product of
+the uniform distribution over the validators on whatever discrete
+measurable structure they carry; on the rounds of finitely many blocks it is the
+uniform block map (`Steelhead.coinMeasure_blockCoins_mem`: one block map
+is a box on the blocks' rounds, of measure `n^(−MK)`, and a set of maps
+the disjoint union of its members' boxes). **SH15c**
+(`Steelhead.decidedAlmostSurely`) takes a sequence of records, the
+`m`-th holding the waves of `m` blocks populated where MM2 reads them,
+each with its own update rule kept in `[1, K]`, and concludes that for
+almost every coin some record decides the slot in every view holding its
+horizon, in SH15a's sense: the coins under which no record decides it
+lie, for every `m`, among those under which the `m`-th leaves it
+undecided, a set of measure at most SH15a's bound read through the
+process (`Steelhead.undecided_coin_le`), which vanishes, so they are
+null. The records are any sequence, the prefixes of one execution among
+them, since the argument reads each on its own; they are fixed before
+the coin is drawn, as SH15a's one record is. This is Theorem 3's "with
+probability `1`" as the paper states it.
+
+### 24.6 Findings, and the carrier
+
+Eight findings for the paper, recorded in `steelhead.md` §7. That the
+chain must be read at every round, not at the asynchronous rounds alone,
+for its relation to be independent of the period the scan is to fix, and
+that its run length is then `wa`, where reading it at the asynchronous
+rounds alone would need a run spanning `⌈wa / k⌉ + 1` of them, a length
+the paper does not state. That the simulator's targeted-delay adversary
+yields a direct skip, which the anchor search passes over, so it cannot
+exhibit the stall, where an adversary delivering the leader block to
+exactly `f + 1` validators does. That
+Algorithm 2's selector can retain a stalled period: at parameters the
+implementation accepts, a DAG holding every synchronous slot at two votes
+and two blames while the asynchronous slots commit scores the period in
+force better than the alternatives by less than hysteresis demands, so
+the period never drops and the output never passes its second round, for
+every coin schedule, at every horizon (`rt_periods_four`,
+`rt_adaptive_stall`, `rt_no_output_above_two`, SH12: periods `1` and `2`
+score at least half of what period `4` can on any window of at most
+eight rounds, `Steelhead.Replay.anchorUpdate_half_retains`); the arc
+models the failover of §24.4 in its place, which Algorithm 2 lacks and
+the paper's authors have agreed to add. And
+that Theorem 3's premise on the update rule is neither Algorithm 2's rule
+nor enough: one synchronous commit above the stuck slot per window keeps
+the period while the output stays stuck, and read literally the premise
+forbids every recovery from period `1`, where no synchronous slot exists
+to commit. And that Theorem 2's `O(wa + b)` ordering bound does not hold
+for every coin sequence: at period `1` a uniform coin names the one
+absent validator through any horizon with positive probability, and on
+a reliable-only DAG populated and synchronised from round `0` no settled
+prefix then outputs a block (`positive_no_output`, SH12); the bound
+holds with probability tending to one, and the ordering almost surely
+over a sequence of records (§24.5), not deterministically.
+And that Lemma 3 counts on the DAG while the replay reads the window:
+the counting lemma counts the certificates the DAG holds, the replay
+those the anchor's causal history holds, which need not include one
+quorum's blocks at both the boost round and the decision round under
+asynchrony; SH18d states the lemma for the window under that
+hypothesis, which synchrony from below the window supplies. And that an
+equivocating Byzantine leader at the floor is the anchor: the search
+stops at the first commit-or-undecided slot at or above the floor, and a
+slot whose leader equivocates is undecided, so it waits there whatever
+commits above, where Theorem 2 has the slot decided "once the first
+honest-led slot above its floor commits, at most `b` slots higher"; on
+thirty blocks at wave `3` validator `0` leads slots `0` and `3` and
+equivocates at both, the honest-led slot `4` commits and slot `0` stays
+undecided (`bf30_slot0_undecided`, SH12). The chain of floors advances
+a wave a hop and the same validator may lead every hop, so what decides
+such a slot is a run of reliably led slots above its floor (SH6b). And
+that `I ≥ 2 · maxPeriod` does not make a window hold a wave: at `I = 4`,
+`maxPeriod = 2` and `wa = 5` every window holds two asynchronous rounds
+and the decision round of neither, so the replay resolves no
+asynchronous slot, both candidates tie at a complete window and the
+period never moves at any hysteresis (`rw44_keeps_two`, SH12); the bound
+the replay needs is `I ≥ max(2 · maxPeriod, wa)`. On data the replay
+also recovers from period `1` on a healthy window (`rpWindow_recovers`)
+and keeps period `4` on a startup window whose every candidate ties
+(`rs36_keeps_four`), the retention of finding three.
+
+Through the properties (§16), the rule has a carrier per wavelength
+function, `steelheadRule w`, and shows `Agree`, `CommitsCandidate`,
+`CommitsDirect`, `Indirect`, `Quorate`, `SelfParent`, `NoEquiv`,
+`Persist` and `Descends`, and a support with its two laws and the timed
+model's coverage bridge; the liveness headline follows. `Banded`,
+`LocalTruncate` and the `Safe` headline are not claimed: the band
+rebases every round by a constant, and a wave that alternates with the
+round reads an absolute round (`target-properties.md` §3.4c).
+Persistence and view monotonicity,
+which the band derives but which need no offset, are proved through the
+extension laws.
+
+---
+
+## 25. Satisfiability
 
 Every structure carrying conditions is exhibited satisfiable by a concrete model
 over four validators at `f = 1`. This is a substantive component of the
@@ -9543,11 +10148,11 @@ rather than an unsatisfiable hypothesis.
 
 ---
 
-## 25. Mechanisation
+## 26. Mechanisation
 
 The development comprises approximately 68,000 lines of Lean 4 (v4.32.2)
 against Mathlib, of which some 46,000 constitute the library and 22,000
-the models of §24 and the witness files of the arcs. A full build reports
+the models of §25 and the witness files of the arcs. A full build reports
 no errors.
 
 **Axiom audit.** Every principal result — among them
@@ -9608,7 +10213,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Mysticeti/ViewPace.lean` | the route (§6.9): the structure, V1, V4, coverage, production, the spine, and the quantitative results L8a, L9, L11 |
 | `Mysticeti/Quantitative.lean` | the rated hypotheses; L8b |
 
-**The arcs** (§§7–23). All but `Integration/` consume the core read-only; §16 weakens one hypothesis of §12, for the reason given there:
+**The arcs** (§§7–24). All but `Integration/` consume the core read-only; §16 weakens one hypothesis of §12, for the reason given there:
 
 | Module | Contents |
 |:---|:---|
@@ -9703,10 +10308,14 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `OptimalHydrozoan/Model/DirectRules.lean`, `OptimalHydrozoan/Model/IndirectRules.lean`, `OptimalHydrozoan/Model/Decided.lean` | fast evidence, the no-evidence skip, the evidence rung; Optimal-Hydrozoan as a two-rung anchored rule with no tie |
 | `OptimalHydrozoan/ThresholdArithmetic/`, `OptimalHydrozoan/DirectSafety/`, `OptimalHydrozoan/SlotAgreement/`, `OptimalHydrozoan/PrefixAgreement/`, `OptimalHydrozoan/DirectLiveness/`, `OptimalHydrozoan/IndirectLiveness/`, `OptimalHydrozoan/EventualDecision/`, `OptimalHydrozoan/Grounding/` | the eight statements and their proofs (OH1–OH8) |
 | `OptimalHydrozoan/Helpers/` | the generated lemma layer |
+| `Steelhead/Model/Wavelength.lean`, `Steelhead/Model/Decision.lean`, `Steelhead/Model/Chain.lean` | the periodic wavelength function and its asynchronous rounds; the rule at a wavelength function as an anchored rule; the chain verdict at the identity schedule under a coin |
+| `Steelhead/Model/Period.lean`, `Steelhead/Model/Coin.lean` | the intervals and the period sequence at an update rule; the commit and no-commit probabilities of a uniform coin |
+| `Steelhead/Safety/`, `Steelhead/Liveness/`, `Steelhead/Period/`, `Steelhead/Coin/`, `Steelhead/Ledger/` | the five statements and their proofs (SH1–SH11, SH13) |
+| `Steelhead/Helpers/` | the generated lemma layer; `Properties.lean`, the carrier, its properties and support |
 | `Quality/Coverage.lean` | per-commit and ledger coverage (CQ1–CQ3) at the core, over `Arcs.coveredAt` |
 | `Quality/Inclusion.lean` | post-`R` inclusion (CQ5, CQ6) |
 | `Quality/Capstone.lean` | the windowed bounds and `chain_quality` (CQ7) |
-| `LeanDagTest/` | the models of §24 and the witness files of every arc |
+| `LeanDagTest/` | the models of §25 and the witness files of every arc |
 
 **The support graph, extracted.** The dependency structure of the
 development is not documented by hand: `scripts/DepGraph.lean` walks
@@ -9759,13 +10368,13 @@ and `bespoke-links.md` (the audit of what a mechanism reads), with
 
 ---
 
-## 26. Discussion
+## 27. Discussion
 
 The first four subsections concern the core account's central design
-choice — where the synchrony assumption lives; §26.5 draws the lessons of
-the extensions; §26.6 records what remains open.
+choice — where the synchrony assumption lives; §27.5 draws the lessons of
+the extensions; §27.6 records what remains open.
 
-### 26.1 Locating the synchrony assumption
+### 27.1 Locating the synchrony assumption
 
 The synchrony assumption may be stated in terms of views:
 
@@ -9826,7 +10435,7 @@ is `2Δ`.
 Because Δ is not known to an implementation, no constant can be fixed in
 advance. A backoff is the specification's response — a search for a sufficient
 constant, written into the algorithm — and its only relevant property is that
-the search terminates (§26.2).
+the search terminates (§27.2).
 
 **The network guarantee must be indexed to the moment of building.** A block's
 references are fixed at its construction, so what bears on the derivation is not
@@ -9839,7 +10448,7 @@ for liveness, indexed by the instant, with `built` ordering the two. The
 requirement is the index, not the vehicle. This is an observation about formalisation, and it is the
 reason `SynchronisedOn` is stated on `refs`.
 
-### 26.2 Why coverage is derived rather than specified
+### 27.2 Why coverage is derived rather than specified
 
 Reference coverage could not have been made a clause of the protocol, which is
 the deeper reason it appears as a derived property. `SynchronisedOn` refers to
@@ -9866,7 +10475,7 @@ from some round onwards — with no condition on shape, rate, or driving
 signal. §6.10 carries this to its conclusion: with Δ known, a constant
 timeout of `2Δ + proc` suffices and the loop disappears.
 
-### 26.3 Consequences of the abstraction
+### 27.3 Consequences of the abstraction
 
 1. The consensus argument is purely combinatorial, involving round indices and
    finite-set cardinalities. Under a message-level assumption every statement
@@ -9878,7 +10487,7 @@ timeout of `2Δ + proc` suffices and the loop disappears.
 4. The condition composes with the safety development, mentioning only `U.ids`,
    `U.block` and `refs` — the vocabulary that development already employs.
 
-### 26.4 Costs
+### 27.4 Costs
 
 Δ does not appear above the interface. Introducing it would require views indexed
 by an instant and every statement quantified over instants, for no proof content.
@@ -9891,7 +10500,7 @@ chain must terminate at a network assumption; what the reformulation achieves
 is to place that assumption where it belongs — on the network, as one clause
 over views — and to keep it out of every statement above.
 
-### 26.5 Lessons from the extensions
+### 27.5 Lessons from the extensions
 
 Three lessons generalise beyond the particular arcs.
 
@@ -9937,13 +10546,13 @@ behind the canonicity gap fits in six validators and twenty-five blocks;
 what was needed to find it was not scale but the obligation to state the
 indirect rule precisely enough to fail to prove it.
 
-### 26.6 Limitations
+### 27.6 Limitations
 
 The quantitative bounds are established (§6.10). The following remain open.
 
 **The backoff loop.** `Rated` and the threshold of R4 are stipulated as clauses
 of the specification; no realistic adaptive scheme is shown to satisfy them, and
-the feedback mechanism of §26.2 is not modelled. Moreover
+the feedback mechanism of §27.2 is not modelled. Moreover
 `ViewPace.timeout : ℕ → ℕ` is indexed by round and common to the reliable set, so
 that a per-validator backoff — in which validators increase their timeouts at
 different moments — cannot be expressed, let alone shown to converge. This
@@ -10007,7 +10616,7 @@ much they say.
 
 ---
 
-## 27. Related work
+## 28. Related work
 
 **Hybrid fault models.** Orcaella [KS26] derives the tight committee
 `n ≥ 5f + 3c + 1` for two-round commitment under separate Byzantine
@@ -10112,11 +10721,11 @@ pacemaker by refinement. The account here is structural, and no theorem above
 dependence of liveness on the round-jumping clause surfaces as a named hypothesis
 of a single lemma rather than as a condition inside a transition relation. The
 cost is that the theorems of [QXS26] cannot be stated here at all, "within
-bounded time" not being expressible in this vocabulary (§26.6).
+bounded time" not being expressible in this vocabulary (§27.6).
 
 ---
 
-## 28. Conclusion
+## 29. Conclusion
 
 This report has given a machine-checked account of uncertified DAG consensus
 organised around one idea: state the liveness condition on the object the
@@ -10144,7 +10753,7 @@ without consensus, and — in the one place the formalization diverged from a
 published argument by necessity — the observation that Odontoceti's
 agreement rests on a canonical candidate order that its paper never states.
 
-What remains open is catalogued in §26.6: the backoff dynamics, wall-clock
+What remains open is catalogued in §27.6: the backoff dynamics, wall-clock
 latency, block-level total order, and liveness below the growth clause.
 Beyond those, two directions suggest themselves. The commit-free,
 evidence-based horizon rule sketched in the garbage-collection document
@@ -10176,6 +10785,7 @@ written against — the cost of adding one is the band and the support, and ever
 - [QXS25] L. Qiu, J. Xiao, J.-Y. Shin, Z. Shao. *LiDO-DAG: A Framework for Verifying Safety and Liveness of DAG-Based Consensus Protocols.* PACMPL 9(PLDI), Article 203, 2025. doi:10.1145/3729306.
 - [QXS26] L. Qiu, J. Xiao, Z. Shao. *Mechanized Safety and Liveness Proofs for the Mysticeti Consensus Protocol under the LiDO-DAG Framework.* IEEE S&P 2026, 149–168.
 - [SGSK22] A. Spiegelman, N. Giridharan, A. Sonnino, L. Kokoris-Kogias. *Bullshark: DAG BFT Protocols Made Practical.* CCS 2022.
+- [Son+26] A. Sonnino et al. *Steelhead: Dual-Mode DAG Consensus Without Mode Switching.* Draft, 2026.
 - [SSKN25] N. Shrestha, R. Shrothrium, A. Kate, K. Nayak. *Sailfish: Towards Improving the Latency of DAG-based BFT.* IEEE S&P 2025. ePrint 2024/472.
 - [Tsi+23] G. Tsimos, A. Kichidis, A. Sonnino, L. Kokoris-Kogias. *HammerHead: Leader Reputation for Dynamic Scheduling.* arXiv:2309.12713.
 - [Van25] P. Vander Vos. *Odontoceti: Ultra-Fast DAG Consensus with Two Round Commitment.* MSc thesis, arXiv:2510.01216.
@@ -10192,13 +10802,13 @@ the consumption map of §4.8 and the support diagrams of §6.10 refer to
 results through them. The series are alphabetic by area: T and M for
 the safety core, L for liveness, V for the view-convergence family, CU
 for catch-up, RS for the reactive schedule, SS for safe skip, AL for adaptive
-leaders, H for the hybrid fault model, I for integration, MM for Mahi-Mahi, BM, BML, BMR, BMA, BMD, BME, BMO and BMP for Black Marlin, FW for FinWhale, BN for Barnacle, HZ for Hydrozoan, OH for Optimal-Hydrozoan, HI for the Hydrozoan integration, CQ for chain
+leaders, H for the hybrid fault model, I for integration, SH for Steelhead, MM for Mahi-Mahi, BM, BML, BMR, BMA, BMD, BME, BMO and BMP for Black Marlin, FW for FinWhale, BN for Barnacle, HZ for Hydrozoan, OH for Optimal-Hydrozoan, HI for the Hydrozoan integration, CQ for chain
 quality, C, D,
 B and E for the denial-of-service arc, G for garbage collection, O for
 Odontoceti; P, N and R name clauses of the trust boundary rather than
 results. Labels resolving to witness models rather than library
 theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, H9, H10, BN13) are
-excluded from the diagrams, which show the library; so are MM4, BM8, BML6, BMR7, BMA5, BMD7, BME6, BMO10, BMO11 and BMP14. Two labels are
+excluded from the diagrams, which show the library; so are MM4, BM8, BML6, BMR7, BMA5, BMD7, BME6, BMO10, BMO11, BMP14, SH1, SH4, SH11 and SH12. Two labels are
 absent from the Barnacle rows below and are named here rather than left
 to be noticed: **BN1**, that `Sched m` is a lawful `Slots` instance at
 every count, is a fact about the schedule that the design record carries
@@ -10575,13 +11185,37 @@ reused.
 | HI9 | verdicts survive the copy fill for both rules, with no quorum hypothesis; exclusion survives it as a clause of validity | `DagRule.OnRecord.decided_agree_copyFill` at the two instances; `ValidOpt.copyStable` *(Properties/Arcs/Record, OptimalHydrozoan/Model/Universe)* |
 | HI10 | what a deployment gets: the headlines at both rules | `Hydrozoan.Properties.safety`, `Hydrozoan.Properties.progress`, `OptimalHydrozoanProperties.safety`, `OptimalHydrozoanProperties.progress` *(Hydrozoan/Properties/Proof, OptimalHydrozoan/Carrier)* |
 
+**Steelhead** (§24):
+
+| Label | Statement | Lean |
+|:---|:---|:---|
+| SH1 | the certificate lemmas at the slot's own wave: a skipped slot has no certificate, two certified candidates coincide, a direct commit is certified in every block at `r + w r` or above | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
+| SH2 | agreement: two views deciding one slot reach the same verdict, whatever the waves of the slot and of the anchors | `Steelhead.steelheadLaws` *(Steelhead/Helpers/Decision)*, `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
+| SH3 | handover: a direct commit in one view is committed by every view that finds the slot an anchor, whichever rule decides it, and no view skips it | `Steelhead.certifiedIn_of_commit_at_anchor` *(Steelhead/Helpers/Decision)*, `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
+| SH4 | conservativity: at a constant wavelength the rule is Mahi-Mahi's, period one is the constant `wa`, and at wave three the derivations are exactly the core's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.decided_of_core_decided` *(Steelhead/Helpers/Decision)* |
+| SH5 | chain agreement: the chain verdicts agree across views under any coin; at an asynchronous round the coin leads, the output's direct verdicts are the chain's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.chainDecided_unique` *(Steelhead/Helpers/Period)*, `Steelhead.direct_agrees_with_chain` *(Steelhead/Helpers/Decision)* |
+| SH6 | liveness under synchrony: a reliably led slot commits under coverage in every caught-up view, by the direct rule; everything below a fair run is decided; a slot whose leader has no block is skipped once a quorum blames it; a candidate one reliable block references one round up commits under synchrony, its leader reliable or not; a slot is decided once every slot from its floor up to some reliably led slot is decided | `Steelhead.Liveness.holds`, `Steelhead.commitsOfSynchrony`, `Steelhead.allDecidedBelowOfSynchrony`, `Steelhead.skipsCrashed`, `Steelhead.commitsOfDissemination`, `Steelhead.decidedOfReliableAboveFloor` *(Steelhead/Liveness/Proof, Steelhead/Helpers/Liveness)* |
+| SH7 | chain liveness: every chain verdict below a run of `wa` chain commits is settled, under the run clause, under synchrony with no clause, and below any one run of `wa` good coins | `Steelhead.chainAllDecidedBelow`, `Steelhead.chainAllDecidedBelowOfSynchrony`, `Steelhead.chainAllDecidedBelowOfRun` *(Steelhead/Helpers/Liveness)* |
+| SH8 | the stall: at every period `k ≥ ws`, with no synchronous candidate certified and no synchronous slot directly skipped, no slot of the residue class `k − 1` is ever decided | `Steelhead.stall` *(Steelhead/Helpers/Liveness)* |
+| SH9 | the drain: `wa` consecutive commits decide every slot below them at any wavelength function bounded by `wa`; at period `1` under the run clause, past every round some slot has everything below it decided; an asynchronous slot costs `wa − ws` rounds and its successor waits at most `wa − ws − 1` | `Steelhead.allDecidedBelowOfRun`, `Steelhead.allDecidedBelowAtPeriodOne`, `Steelhead.asyncSlotCost` *(Steelhead/Helpers/Liveness)* |
+| SH10 | the period: agreed across views under any update rule, so is the output at the adaptive wavelength over the intervals the record's rounds fall in; the scan ends once the chain verdicts are in, and under the clause it ends for every interval; an anchored interval the view did not output hands the next one period `1` under the failover; every interval holds two asynchronous rounds, and the period stays in range; the failover wrapped around any rule satisfies its clause | `Steelhead.Period.holds`, `Steelhead.periodAt_unique`, `Steelhead.adaptive_decided_unique`, `Steelhead.exists_periodAt_succ`, `Steelhead.periodAt_of_clause`, `Steelhead.periodAt_one_of_anchor`, `Steelhead.two_async_rounds`, `Steelhead.periodAt_mem_range`, `Steelhead.failover_resets` *(Steelhead/Period/Proof, Steelhead/Helpers/Period)* |
+| SH11 | the coin: a chain slot commits with probability `|good| / n`, at least `(n − f − |byzantine|) / n` and so at least `1/3` at `wa ≥ 5`, at least `1/n` at `wa ≥ 4`; no round's coin naming a directly committed leader in `m` rounds, with probability at most `((f + |byzantine|) / n)^m`, which tends to zero | `Steelhead.Coin.holds`, `Steelhead.ratio_le_commitProb`, `Steelhead.third_le_commitProb`, `Steelhead.inv_card_le_commitProb`, `Steelhead.chainCommit_of_mem_goodAt`, `Steelhead.noCommitProb_le`, `Steelhead.tail_tendsto_zero` *(Steelhead/Coin/Proof, Steelhead/Helpers/Coin)* |
+| SH12 | on data: the anchor-floor counterexample, the period sequence at a concrete update rule, the stall DAG with its asynchronous commit, the coin streak that outputs nothing through any horizon, the Byzantine floor, and Algorithm 2 recovering from period `1` on a healthy window, keeping period `4` on a startup window and period `2` at every hysteresis on a complete window too short for a wave, and retaining period `4` through every horizon of the rotating stall, where no block above round `2` is ever output | `lowFloor_skip`, `sh8_period1`, `st20_stall`, `positive_no_output`, `bf30_slot0_undecided`, `rpWindow_recovers`, `rs36_keeps_four`, `rw44_keeps_two`, `rt_periods_four`, `rt_adaptive_stall`, `rt_no_output_above_two` *(LeanDagTest/Steelhead/Model, LeanDagTest/Steelhead/Period, LeanDagTest/Steelhead/Stall, LeanDagTest/Steelhead/CoinDelay, LeanDagTest/Steelhead/ByzantineFloor, LeanDagTest/Steelhead/Replay, LeanDagTest/Steelhead/ReplayStartup, LeanDagTest/Steelhead/ReplayShortWindow, LeanDagTest/Steelhead/RotatingStall)* |
+| SH13 | the ledger: the committed-leader sequence and the ledger of a settled prefix are agreed, the ledger is monotone, a block enters at one slot which both views name, and a committed block belongs to one slot | `Steelhead.Ledger.holds` *(Steelhead/Ledger/Proof)* |
+| SH14 | output liveness under the failover: a slot below an anchored interval is decided once a run of `wa` coin-led commits above that interval is in view, since the failover puts the period at `1` from the interval after the anchored one and the run decides everything below it; under the run clause with runs of `K` good coins every slot far enough below the horizon is decided, and two runs of the coin, `K` good coins opening an interval past the slot's and `wa` above it, decide it | `Steelhead.output_liveness`, `Steelhead.all_decided`, `Steelhead.output_liveness_of_runs` *(Steelhead/Helpers/Period)* |
+| SH15 | the tail of the output: over the coins of `M` blocks of `K` rounds opening the intervals after a slot's, the slot stays undecided under the failover with probability at most `2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, which tends to zero; and over a sequence of records with the coin drawn as a process, for almost every coin some record decides the slot in every view holding its horizon | `Steelhead.undecidedProb_le`, `Steelhead.no_good_block_prob_le`, `Steelhead.undecided_tail_tendsto_zero`, `Steelhead.decidedAlmostSurely`, `Steelhead.coinMeasure_blockCoins_mem` *(Steelhead/Helpers/Coin)* |
+| SH16 | the interface composes: a family of rules whose laws hold, agreeing on rungs and ties, composes into a rule whose laws hold and whose verdicts agree across views; Steelhead's rule is the composite of Mahi-Mahi's at each round's wave | `Steelhead.Interface.holds`, `Steelhead.compose_laws`, `Steelhead.compose_decided_unique`, `Steelhead.steelheadAnchored_eq_compose` *(Steelhead/Interface/Proof, Steelhead/Helpers/Compose)* |
+| SH17 | atomic broadcast over settled prefixes: a delivered block is delivered by every view whose settled prefix is as long, is a block of the record entering at one slot, a reliable block is delivered with the first committed reliable leader two rounds up under synchrony, and two blocks enter at the same slots in every view | `Steelhead.Broadcast.holds` *(Steelhead/Broadcast/Proof)* |
+| SH18 | the replay: the selection stays among the candidates and never worsens the score; a committed candidate of the window is certified and a skipped one is not; at a round of the window whose boost and decision rounds a quorum has populated within the anchor's history, at least `n − f − |byzantine|` authors are marked committed; the failover of Algorithm 2 keeps the period in range; the window's commit weight is the rule's commit probability on the window read as a record; a coprime canary always probes | `Steelhead.Replay.holds`, `Steelhead.Replay.select_mem`, `Steelhead.Replay.select_score_le`, `Steelhead.Replay.certified_of_commits`, `Steelhead.Replay.not_certified_of_skips`, `Steelhead.Replay.window_count`, `Steelhead.Replay.failover_anchorUpdate_range`, `Steelhead.Replay.commitWeight_eq_commitProb`, `Steelhead.Replay.probe_exists` *(Steelhead/Replay/Proof, Steelhead/Helpers/Replay)* |
+
+
 ---
 
 <!-- BEGIN GENERATED REFERENCE -->
 
 ## Appendix B. The definition reference
 
-The 327 definitions and structures the report names, in
+The 345 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -12230,6 +12864,161 @@ def UnpredictableRunWithin (U : BlockUniverse Validator BlockId Payload)
 ```
 
 **The run form.** In every window of `c` slots below the horizon, a run of `d` consecutive slots whose leaders are all committed candidates. The bound reads the last slot of the latest possible run, `k + c + d − 1`, so that small universes are not vacuously covered.
+
+### Steelhead: two rules at one wavelength function
+
+#### `Decided`
+
+*abbrev, `Steelhead.Model.Decision.lean`*
+
+```lean
+abbrev Decided (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) : ℕ → Option BlockId → Prop :=
+  (steelheadAnchored Validator BlockId Payload w).Decided (S := S) U V
+```
+
+**The decision relation at the wavelength function `w`**: the anchored relation at Steelhead's data. `Decided w U V k (some L)`: a validator holding `V` may commit `L` at `k`; `Decided w U V k none`: it may skip the slot; *undecided* is the absence of any derivation. Under `periodic ws wa k` this is Algorithm 1 of the paper.
+
+#### `UpdateRule`
+
+*abbrev, `Steelhead.Model.Period.lean`*
+
+```lean
+abbrev UpdateRule (BlockId : Type) := ℕ → BlockId → Finset BlockId → ℕ → ℕ
+```
+
+**The update rule**: the next period from the interval index, the anchor block, the leaders the anchor's window output, and the period in force. Any deterministic function; the paper's counterfactual replay reads the anchor's causal history, which the block id determines within one universe, and its failover reads the output.
+
+#### `windowOutput`
+
+*def, `Steelhead.Model.Period.lean`*
+
+```lean
+noncomputable def windowOutput [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload)
+    (w : ℕ → ℕ) (I : ℕ) (A : BlockId) (hA : A ∈ U.ids) : Finset BlockId :=
+  (history U A).filter fun L => ∃ s, windowBottom U A I ≤ S.slotRound s ∧
+    Decided w U (U.historyView A hA) s (some L) ∧
+    ∀ s' < s, ∃ v, Decided w U (U.historyView A hA) s' v
+```
+
+**What the anchor's window output**, read in the anchor's causal history at the wavelength `w`: the leaders that history commits at slots of the window with every slot below them decided, which is what the sequenced output releases. What the validator that scanned the anchor hands the update rule beside the anchor, as the paper's Algorithm 2 hands its replay the window's verdicts. The test reads the window, not the anchor's own interval: a history holds no decision round of the slots within a wave below its block, so an anchor at the start of its interval shows nothing of that interval whatever was output, and a test on the interval would find every anchored interval of a healthy network empty at period `1`. The test is a proposition on verdicts, so the filter is classical.
+
+#### `ResetsOnNoOutput`
+
+*def, `Steelhead.Model.Period.lean`*
+
+```lean
+def ResetsOnNoOutput (upd : UpdateRule BlockId) : Prop :=
+  ∀ (j : ℕ) (A : BlockId) (k : ℕ), upd j A ∅ k = 1
+```
+
+**The update rule fails over to period `1` when handed an empty output.** The clause the liveness argument reads off the update rule, in place of Theorem 3's premise that a window without a synchronous commit maps to `k = 1` (`steelhead.md` §7). A clause on `upd` alone: the output it is handed is the model's (`windowOutput`), not the rule's own reading of the history, so the rule has no verdict of its own to disagree with. On the window a healthy network commits the lowest slots with everything below them decided, the output is nonempty, and the rule's own answer stands: period `1` is not absorbing.
+
+#### `PeriodAt`
+
+*inductive, `Steelhead.Model.Period.lean`*
+
+```lean
+inductive PeriodAt (I wa : ℕ) (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
+    (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
+    (out : BlockId → Finset BlockId) : ℕ → ℕ → Prop
+  /-- The first interval runs at the initial period. -/
+  | zero : PeriodAt I wa coin upd k₀ U V out 0 k₀
+  /-- An interval with an anchor hands the next interval the updated period. -/
+  | anchor {j k r : ℕ} {A : BlockId} :
+      PeriodAt I wa coin upd k₀ U V out j k → IntervalAnchor I wa coin U V j k r A →
+      PeriodAt I wa coin upd k₀ U V out (j + 1) (upd j A (out A) k)
+  /-- An interval without an anchor keeps the period. -/
+  | keep {j k : ℕ} :
+      PeriodAt I wa coin upd k₀ U V out j k → NoAnchor I wa coin U V j k →
+      PeriodAt I wa coin upd k₀ U V out (j + 1) k
+```
+
+**The period sequence**, as a validator holding `V` derives it, handing the update rule the output `out A` of each anchor `A`: `PeriodAt … j k` says interval `j` is decided under period `k`. Interval `0` runs at `k₀`; interval `j + 1` runs at the update of interval `j`'s anchor, or at `j`'s period when `j` has none. *Waiting* is the absence of a derivation. The output is a parameter, so that the agreement claims hold for any handover; the liveness claims instantiate it with what the anchor's window output at the validator's own wavelength (`adaptiveOutput`).
+
+#### `adaptiveOutput`
+
+*def, `Steelhead.Model.Period.lean`*
+
+```lean
+noncomputable def adaptiveOutput [S : Slots Validator] (ws wa I : ℕ) (per : ℕ → ℕ)
+    (U : BlockUniverse Validator BlockId Payload) : BlockId → Finset BlockId :=
+  fun A => if hA : A ∈ U.ids then windowOutput U (adaptiveWave ws wa I per) I A hA else ∅
+```
+
+**The output a validator hands the update rule**: what each anchor's window output in the anchor's causal history, read at the adaptive wavelength of the period sequence `per` the validator derived and on the schedule it runs; empty for a block outside the record. What the liveness claims instantiate `PeriodAt`'s `out` with.
+
+#### `adaptiveSlots`
+
+*abbrev, `Steelhead.Model.Period.lean`*
+
+```lean
+abbrev adaptiveSlots (coin known : ℕ → Validator) (I : ℕ) (per : ℕ → ℕ) : Slots Validator :=
+  Slots.identity fun r => if IsAsync (per (intervalOf I r)) r then coin r else known r
+```
+
+**The adaptive schedule**: one slot per round, led by the coin at the rounds the period sequence `per` makes asynchronous and by the known schedule `known` elsewhere. What a validator that derived `per` runs the output relation on; the liveness claims that relate a schedule to the coin one clause at a time (SH14) take this one as their instance.
+
+#### `blockRound`
+
+*def, `Steelhead.Model.Coin.lean`*
+
+```lean
+def blockRound (I j₀ j i : ℕ) : ℕ := (j₀ + 2 + j) * I + 1 + i
+```
+
+**Round `i` of block `j`**: block `j` opens interval `j₀ + 2 + j`, so its round `i` is the `(i + 1)`-th round of that interval. The blocks start two intervals past `j₀` so that the window of an anchor in any of them lies wholly above interval `j₀`.
+
+#### `coinOfBlocks`
+
+*def, `Steelhead.Model.Coin.lean`*
+
+```lean
+def coinOfBlocks {M K : ℕ} (I j₀ : ℕ) (g : Fin M → Fin K → Validator) (d : Validator) :
+    ℕ → Validator :=
+  fun r =>
+    if h : (j₀ + 2) * I + 1 ≤ r ∧ (r - ((j₀ + 2) * I + 1)) / I < M ∧
+        (r - ((j₀ + 2) * I + 1)) % I < K then
+      g ⟨(r - ((j₀ + 2) * I + 1)) / I, h.2.1⟩ ⟨(r - ((j₀ + 2) * I + 1)) % I, h.2.2⟩
+    else d
+```
+
+**The coins of `M` blocks of `K` rounds**, block `j` opening interval `j₀ + 2 + j`, read as a coin map: round `i` of block `j` draws `g j i`, and every other round draws `d`, which no event below reads. At `K ≤ I` the blocks are disjoint and the map reads them back exactly.
+
+#### `undecidedProb`
+
+*def, `Steelhead.Model.Coin.lean`*
+
+```lean
+noncomputable def undecidedProb (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ)
+    (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (d : Validator) (s M : ℕ) :
+    ℝ≥0∞ :=
+  (PMF.uniformOfFintype (Fin M → Fin K → Validator)).toOuterMeasure
+    {g | ¬ ∀ (V : View Validator BlockId Payload U) (per : ℕ → ℕ),
+      V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
+      (∀ j k, PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V
+        (adaptiveOutput (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
+          ws wa I per U) j k → per j = k) →
+      PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V
+        (adaptiveOutput (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
+          ws wa I per U) (intervalOf I s) (per (intervalOf I s)) ∧
+      ∃ v, Decided (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
+        (adaptiveWave ws wa I per) U V s v}
+```
+
+**The probability that slot `s` stays undecided**, over the uniform independent coins of `M` blocks of `K` rounds opening the intervals from the second after the slot's: the measure of the coin maps under which some view holding the horizon, at some period sequence that matches every period the view derives when it hands the update rule what each anchor's window output at that sequence's wavelength and schedule, either has not derived the period of the slot's interval or leaves `s` undecided at that wavelength and schedule. A sequence matching what the view derives is arbitrary where the scan has stalled, so a slot that counts as decided is decided under every such completion, from derived periods alone, and a scan that never reaches the slot's interval counts as a failure. The coins outside the blocks draw `d`.
+
+#### `coinMeasure`
+
+*def, `Steelhead.Model.Coin.lean`*
+
+```lean
+noncomputable def coinMeasure (Validator : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [MeasurableSpace Validator] : MeasureTheory.Measure (ℕ → Validator) :=
+  MeasureTheory.Measure.infinitePi fun _ : ℕ => (PMF.uniformOfFintype Validator).toMeasure
+```
+
+**The coin as a process**: an independent uniform draw at every round, the infinite product of the uniform distribution over the validators on the measurable structure they carry. The measure the almost-sure claim (SH15c) reads its events through; on finitely many rounds it agrees with the uniform distribution over the leader maps of those rounds.
 
 ### Black Marlin: the three-round commit rule
 
@@ -15392,6 +16181,20 @@ noncomputable def chooseLeast [LinearOrder BlockId] (S : Slots Validator)
 
 **The deterministic rule, exhibited**: the least candidate in the identifier order, sound and total by construction, and a function of the anchor and the round alone, so two validators holding the same anchor make the same choice.
 
+#### `select`
+
+*def, `Hybrid.Checkpoint.RecoveryProofs.lean`*
+
+```lean
+noncomputable def select (receiver : Validator) :
+    CheckpointData Value :=
+  if hs : (R.validated receiver).Nonempty then
+    Classical.choose (exists_highest hs)
+  else epochGenesis M E epoch
+```
+
+Concrete highest-checkpoint selection. Classical choice implements the human-reviewed `IsSelected` semantics from `RecoverySpec.lean`.
+
 #### `hzSupport`
 
 *def, `Hydrozoan.Helpers.Commit.lean`*
@@ -15602,6 +16405,29 @@ def Agree (R : DagRule Validator BlockId Payload) : Prop :=
 ```
 
 **Agreement.** Under one schedule and over one universe, any two views' verdicts at a slot coincide.
+
+#### `Safe`
+
+*def, `Properties.Arcs.Headline.lean`*
+
+```lean
+def Safe (R : DagRule Validator BlockId Payload) : Prop :=
+  (∀ {U U' : R.Universe} {S S' : Slots Validator} {G R₀ d : ℕ}, Stack R U S U' S' G R₀ d →
+    ∀ {V : R.View U} {V' : R.View U'}, ViewAgreeAbove R V V' R₀ →
+      (∀ (k : ℕ) (v : Option BlockId), R₀ ≤ S.slotRound (d + k) →
+          (R.Decided S V (d + k) v ↔ R.Decided S' V' k v)) ∧
+      (∀ (W : R.View U') (k : ℕ) (w v : Option BlockId), R₀ ≤ S.slotRound (d + k) →
+          R.Decided S' W k w → R.Decided S V (d + k) v → w = v) ∧
+      (∀ (W : R.View U') (k : ℕ) (L : BlockId), R.Decided S' W k (some L) →
+          R.IsCandidate S' U' k L) ∧
+      (∀ (W : R.View U') (k k' : ℕ) (L : BlockId), R.Decided S' W k (some L) →
+          R.Decided S' W k' (some L) → k = k')) ∧
+  (∀ {U U' : R.Universe}, Extends R U U' → ∀ (S : Slots Validator)
+    {V : R.View U} {V' W : R.View U'}, R.viewIds V ⊆ R.viewIds V' →
+      ∀ (k : ℕ) (v w : Option BlockId), R.Decided S V k v → R.Decided S W k w → v = w)
+```
+
+**Safety, across any stack of mechanisms**, and at every slot across an extension.
 
 #### `Stack`
 
@@ -16115,17 +16941,93 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
 
 The filled block at gap round `k`: `v2`'s references at that round, plus the added self reference.
 
-#### `Decided`
+#### `Config`
 
-*abbrev, `Steelhead.Model.Decision.lean`*
+*structure, `Steelhead.Model.Replay.lean`*
 
 ```lean
-abbrev Decided (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
-    (V : View Validator BlockId Payload U) : ℕ → Option BlockId → Prop :=
-  (steelheadAnchored Validator BlockId Payload w).Decided (S := S) U V
+structure Config (Validator : Type) where
+  /-- The synchronous wave. -/
+  ws : ℕ
+  /-- The asynchronous wave. -/
+  wa : ℕ
+  /-- The canary spacing. -/
+  canary : ℕ
+  /-- The known-leader schedule. -/
+  known : ℕ → Validator
 ```
 
-**The decision relation at the wavelength function `w`**: the anchored relation at Steelhead's data. `Decided w U V k (some L)`: a validator holding `V` may commit `L` at `k`; `Decided w U V k none`: it may skip the slot; *undecided* is the absence of any derivation. Under `periodic ws wa k` this is Algorithm 1 of the paper.
+**The replay's parameters**: the two waves, the canary spacing and the known-leader schedule, read at every round whether or not it ran synchronously.
+
+#### `ofAnchor`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def ofAnchor (U : BlockUniverse Validator BlockId Payload) (A : BlockId) (I : ℕ) :
+    Evidence Validator :=
+  let ids := windowIds U A I
+  let candidates := fun r a => (blocksAt U r).filter fun L => (U.block L).creator = a ∧ L ∈ ids
+  let certs := fun r w L => MahiMahi.certificates U w L r ∩ ids
+  { bottom := windowBottom U A I
+    top := (U.block A).round
+    commits := fun r w a => decide (∃ L ∈ candidates r a,
+      quorumCard Validator ≤ (creatorsOf U.block (certs r w L)).card)
+    skips := fun r w a => decide (quorumCard Validator ≤
+      (creatorsOf U.block (((blocksAt U (MahiMahi.votingRound w r)).filter
+        fun q => MahiMahi.Blames U q a r) ∩ ids)).card)
+    certified := fun r w a => decide (∃ L ∈ candidates r a, certs r w L ≠ ∅) }
+```
+
+**The evidence of an anchor's window**: a candidate is a block of the author at the round inside the window; it is committed when a quorum of distinct validators certify it within the window, skipped when a quorum of the window's vote-round blocks blame the author's slot, and certified when the window holds one certificate for it. The votes are Mahi-Mahi's, so an equivocator's blocks are arbitrated as the rule arbitrates them.
+
+#### `score`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def score (E : Evidence Validator) (C : Config Validator) (period : ℕ) : ℚ :=
+  let ts := timingAt E C period (probeRate E C period)
+  ((rounds E).map fun r => max (firstCommitAt E ts r) (gateAt E ts r) - r).sum
+```
+
+**The score**: the sum over the window of each round's delay to output, a round output when the first commit at or above it is expected and no earlier than every lower slot's decision.
+
+#### `select`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def select (candidates : List ℕ) (scores : ℕ → ℚ) (current : ℕ) (epsilon : ℚ) : ℕ :=
+  let winner := best candidates scores current
+  if scores winner < (1 - epsilon) * scores current then winner else current
+```
+
+**The hysteretic selection**: the best candidate if it improves on the current period by the factor `1 − ε`, the current period otherwise.
+
+#### `update`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def update (E : Evidence Validator) (C : Config Validator) (candidates : List ℕ) (current : ℕ)
+    (epsilon : ℚ) : ℕ :=
+  select candidates (score E C) current epsilon
+```
+
+**Algorithm 2 on one window**: the selection among the candidates by the replay's scores.
+
+#### `anchorUpdate`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def anchorUpdate (U : BlockUniverse Validator BlockId Payload) (I : ℕ) (C : Config Validator)
+    (candidates : List ℕ) (epsilon : ℚ) : UpdateRule BlockId :=
+  fun _ A _ current => update (ofAnchor U A I) C candidates current epsilon
+```
+
+**Algorithm 2 as an update rule**: the replay of the anchor's window.
 
 #### `SynchronisedOn`
 
@@ -16189,7 +17091,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 494 theorems the body or Appendix A names, each
+The 503 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -18928,6 +19830,131 @@ theorem holds : Statement
 #### `holds`
 
 *theorem, `MahiMahi.Synchrony.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+### Steelhead: two rules at one wavelength function
+
+#### `steelheadLaws`
+
+*theorem, `Steelhead.Helpers.Decision.lean`*
+
+```lean
+theorem steelheadLaws {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
+    (steelheadAnchored Validator BlockId Payload w).Laws where
+  commit_unique
+```
+
+**Steelhead's laws** at a wavelength function of at least two rounds everywhere: Mahi-Mahi's laws, each at the wave of the slot it concerns.
+
+#### `exists_least`
+
+*theorem, `Steelhead.Helpers.Decision.lean`*
+
+```lean
+theorem exists_least {w : ℕ → ℕ} {S : Slots Validator}
+    {U : BlockUniverse Validator BlockId Payload} {A : BlockId} {i k : ℕ}
+    (_ : i < (steelheadAnchored Validator BlockId Payload w).rungs)
+    (h : ∃ L, IsLeaderBlock (S := S) U k L ∧
+      (steelheadAnchored Validator BlockId Payload w).Link i U A L S k) :
+    ∃ L, IsLeaderBlock (S := S) U k L ∧
+      (steelheadAnchored Validator BlockId Payload w).Link i U A L S k ∧
+      (steelheadAnchored Validator BlockId Payload w).Least (S := S) U A i k L
+```
+
+No tie: any linked candidate is the rung's choice.
+
+#### `all_decided`
+
+*theorem, `Steelhead.Helpers.Period.lean`*
+
+```lean
+theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : ∀ t, S.slotRound t = t)
+    (hI : 0 < I) (hlead : ∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r)
+    {K c N : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
+    (hupd : ∀ j A out k, 1 ≤ k → k ≤ K → 1 ≤ upd j A out k ∧ upd j A out k ≤ K)
+    (hwaK : wa ≤ K) (hcK : c + K ≤ I) (hreset : ResetsOnNoOutput upd)
+    (hrun : MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c K N)
+    (hV : V.CoversUpto N)
+    (hper : ∀ j, j ≤ intervalOf I N →
+      PeriodAt I wa coin upd k₀ U V (adaptiveOutput ws wa I per U) j (per j))
+    (s : ℕ) (hN : MahiMahi.decisionRoundAt wa ((intervalOf I s + 3) * I + c + K) ≤ N) :
+    ∃ v, Decided (adaptiveWave ws wa I per) U V s v
+```
+
+**SH14b.** The run of `K` inside the second interval after the slot's hits an asynchronous round, whose chain commit gives the interval its anchor once SH7a has settled every chain verdict there; the run in the next interval is the one SH14 needs.
+
+#### `selfParent`
+
+*theorem, `Steelhead.Properties.lean`*
+
+```lean
+theorem selfParent (w : ℕ → ℕ) : SelfParent (steelheadRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) w)
+```
+
+**P3′ at the carrier.**
+
+#### `agree`
+
+*theorem, `Steelhead.Properties.lean`*
+
+```lean
+theorem agree {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
+    Agree (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
+```
+
+**Two views decide alike.** SH2 under the property's name.
+
+#### `indirect`
+
+*theorem, `Steelhead.Properties.lean`*
+
+```lean
+theorem indirect {w : ℕ → ℕ} (hw : ∀ r, 1 ≤ w r) :
+    Indirect (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
+      (fun sr i j => sr i + w (sr i) ≤ sr j)
+```
+
+**The indirect rule as a property**, with eligibility at each slot's own wave and no tie to break.
+
+#### `holds`
+
+*theorem, `Steelhead.Safety.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Steelhead.Liveness.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Steelhead.Period.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Steelhead.Coin.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Steelhead.Ledger.Proof.lean`*
 
 ```lean
 theorem holds : Statement
@@ -22646,60 +23673,25 @@ theorem committed_of_correct_block
 
 **RS5 — reactive inclusion.** The schedule fixes a `u`-led slot above any round `m` before an execution is named, and a sufficiently grown reactive execution commits it with a leader block whose cone contains `u`'s round-`m` block, so it lands in the agreed ledger.
 
-#### `exists_least`
+#### `holds`
 
-*theorem, `Steelhead.Helpers.Decision.lean`*
-
-```lean
-theorem exists_least {w : ℕ → ℕ} {S : Slots Validator}
-    {U : BlockUniverse Validator BlockId Payload} {A : BlockId} {i k : ℕ}
-    (_ : i < (steelheadAnchored Validator BlockId Payload w).rungs)
-    (h : ∃ L, IsLeaderBlock (S := S) U k L ∧
-      (steelheadAnchored Validator BlockId Payload w).Link i U A L S k) :
-    ∃ L, IsLeaderBlock (S := S) U k L ∧
-      (steelheadAnchored Validator BlockId Payload w).Link i U A L S k ∧
-      (steelheadAnchored Validator BlockId Payload w).Least (S := S) U A i k L
-```
-
-No tie: any linked candidate is the rung's choice.
-
-#### `selfParent`
-
-*theorem, `Steelhead.Properties.lean`*
+*theorem, `Steelhead.Broadcast.Proof.lean`*
 
 ```lean
-theorem selfParent (w : ℕ → ℕ) : SelfParent (steelheadRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload) w)
+theorem holds : Statement
 ```
-
-**P3′ at the carrier.**
-
-#### `agree`
-
-*theorem, `Steelhead.Properties.lean`*
-
-```lean
-theorem agree {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
-    Agree (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
-```
-
-**Two views decide alike.** SH2 under the property's name.
-
-#### `indirect`
-
-*theorem, `Steelhead.Properties.lean`*
-
-```lean
-theorem indirect {w : ℕ → ℕ} (hw : ∀ r, 1 ≤ w r) :
-    Indirect (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
-      (fun sr i j => sr i + w (sr i) ≤ sr j)
-```
-
-**The indirect rule as a property**, with eligibility at each slot's own wave and no tie to break.
 
 #### `holds`
 
-*theorem, `Steelhead.Safety.Proof.lean`*
+*theorem, `Steelhead.Interface.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Steelhead.Replay.Proof.lean`*
 
 ```lean
 theorem holds : Statement

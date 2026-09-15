@@ -57,6 +57,7 @@ def series_group(label):
     if label.startswith('BN'): return 'bn'
     if label.startswith('HZ'): return 'hydrozoan'
     if label.startswith('OH'): return 'optimal'
+    if label.startswith('SH'): return 'steelhead'
     if label.startswith('H'): return 'hybrid'
     if label.startswith('I'): return 'integration'
     if label.startswith('E'): return 'dos'
@@ -84,6 +85,7 @@ GROUP_FILL = {
     'hydrozoan': ('#dfeee8', '#3d7a66'),
     'optimal': ('#e6f0e2', '#5a8a3d'),
     'integration': ('#dbe7e0', '#5f8a76'),
+    'steelhead': ('#e7e2f3', '#6a5aa8'),
 }
 GROUP_TITLE = {
     'fault': 'fault model (§4.2)', 'protocol': 'protocol clauses (§4.1)',
@@ -100,6 +102,7 @@ GROUP_TITLE = {
     'hydrozoan': 'Hydrozoan (§22)',
     'optimal': 'Optimal-Hydrozoan (§23)',
     'integration': 'integration (§16)',
+    'steelhead': 'Steelhead (§24)',
 }
 
 # ---------------------------------------------------------------- input
