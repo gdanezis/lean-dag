@@ -56,11 +56,13 @@ from coverage into certification; the unpredictable-leader clause.
   Corollary 1, Theorem 5, the agreement half of Theorem 4, and the
   protocol section's remark on direct verdicts.
 - **SH6, liveness under synchrony** (§6): a reliably led slot commits
-  under coverage, everything below a fair run is decided, a slot whose
-  leader has no block is skipped once a quorum blames it (SH6c), and a
-  candidate one reliable block references one round up commits under
-  synchrony whether or not its leader is reliable (SH6e). The paper's
-  Theorem 2, for the decision relation.
+  under coverage, by the direct rule, everything below a fair run is
+  decided, a slot whose leader has no block is skipped once a quorum
+  blames it (SH6c), a candidate one reliable block references one round
+  up commits under synchrony whether or not its leader is reliable
+  (SH6e), and a slot is decided once every slot from its floor up to
+  some reliably led slot is decided (SH6f). The paper's Theorem 2, for
+  the decision relation.
 - **SH7, chain liveness** (§4): under Mahi-Mahi's run clause at the
   chain schedule every chain verdict below a run is settled, under
   synchrony without the clause, and below any one run of `wa` good coins
@@ -96,7 +98,11 @@ from coverage into certification; the unpredictable-leader clause.
   opening each interval from the second after a slot's, a view's scan
   stalls below the slot's interval or leaves the slot undecided under
   the failover with probability at most
-  `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero.
+  `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero; and
+  over a sequence of records, with the coin drawn as a process, the
+  infinite product of the uniform distribution, for almost every coin
+  some record decides the slot in every view holding its horizon
+  (SH15c), Theorem 3's "with probability `1`" itself.
 - **SH12, on data** (§8): the anchor-floor counterexample, the stall DAG
   with its asynchronous commit beside it, and the period sequence at a
   concrete update rule.
@@ -139,23 +145,30 @@ from coverage into certification; the unpredictable-leader clause.
   3's count holds on the window once a quorum has populated the boost
   and decision rounds within it, every timing lies between its round and
   the window's top, the asynchronous term is at most the rule's own
-  value on the same data, and a window commit is a commit on the DAG.
+  value on the same data, and a window commit is a commit on the DAG;
+  the failover of Algorithm 2 keeps the period in range (SH18h), the
+  share of the candidates the window marks committed is the rule's
+  commit probability on the window read as a record (SH18i), and a
+  canary spacing coprime to a candidate period gives a probe in any
+  window holding two canary rounds (SH18j).
 
 ### 0.1 Correspondence with the paper
 
 | paper | here | remark |
 | :--- | :--- | :--- |
-| Definition 1 (atomic broadcast) | SH17, with SH6b, SH14b, SH15 | agreement, integrity and total order over settled prefixes, validity after GST with the first committed reliable leader two rounds up; the "eventually" is SH6b under synchrony and SH14b/SH15 under asynchrony, where the delivery of a reliable block to the coin's leaders is the substrate's and is stated as `SynchronisedOn` only. The order of the blocks one commit releases is not modelled |
+| Definition 1 (atomic broadcast) | SH17, with SH6b, SH14b, SH15c | agreement, integrity and total order over settled prefixes, validity after GST with the first committed reliable leader two rounds up; the "eventually" is SH6b under synchrony, SH14b under the clause and SH15c almost surely under asynchrony, where the delivery of a reliable block to the coin's leaders is the substrate's and is stated as `SynchronisedOn` only. The order of the blocks one commit releases is not modelled |
 | Lemma 1 (certificate uniqueness; a skipped block is never certified) | SH1a, SH1b | Mahi-Mahi's lemmas at the slot's wave |
 | Lemma 2 (quorum intersection across the wave) | SH1c | at `r + w r`, whatever the block's own wave |
 | Corollary 1 (handover) | SH3 | stated against the relation's anchor search |
 | Theorem 1 (agreement) | SH2, SH16 | `AnchoredRule.decided_unique` at Steelhead's laws; at the interface level, any family of rules whose laws hold composes into one whose laws hold, and Steelhead is the composite of Mahi-Mahi's rule at each round's wave |
 | Corollary 2 (total order and integrity) | SH13 | in part: the relation's own ledger theorems at Steelhead's laws, over a settled prefix. Ordering the blocks a single commit releases is declined development-wide (report §1.4, §5.6) |
-| Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e | in part: the honest-leader direct commit, everything below a fair run, the crashed-leader skip from `n − f` blames, and the remark that partial dissemination does not defer, for a leader that did not equivocate. The Byzantine-equivocation anchor bound is refuted on data, an equivocating leader at the floor being the anchor (§7, finding 7), and what decides such a slot is a run of reliably led slots above its floor (SH6b); the `O(wa + b)` ordering bound fails for some coin sequences at period `1` (§7, finding 5) and is stated only as SH15's tail; timeouts and pacing are not modelled |
-| Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the chain settles under Mahi-Mahi's run clause and below any one run of `wa` good coins, a period is derived for each interval, an anchor whose window the view did not output hands the next interval period `1` under the failover, which the arc models in place of the paper's premise on the update rule (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15's tail |
-| Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b, SH14c, SH15 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval at least two past the slot's and one run of `wa` good coins above it; SH14b reads both off the run clause at the chain schedule, SH14c off two runs of the coin; SH15 bounds the probability that some view has not derived the slot's period or leaves it undecided, over `M` blocks of coins, by `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero. The "with probability `1`" is that tail, as a finite record admits it; the growth of the ledger from the settled prefix is SH13 |
+| Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e, SH6f | in part: the honest-leader commit by the direct rule, everything below a fair run, the crashed-leader skip from `n − f` blames, the remark that partial dissemination does not defer, for a leader that did not equivocate, and the anchor clause as the rule has it, a slot decided once every slot from its floor up to some reliably led slot is decided (SH6f). The bound on that clause, "once the first honest-led slot above its floor commits, at most `b` slots higher", is refuted on data, an equivocating leader at the floor being the anchor (§7, finding 7); the `O(wa + b)` ordering bound fails for some coin sequences at period `1` (§7, finding 5) and holds only as SH15's tail; timeouts and pacing are not modelled, `SynchronisedOn` standing for the paper's A4 and its pacing |
+| Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the chain settles under Mahi-Mahi's run clause and below any one run of `wa` good coins, a period is derived for each interval, an anchor whose window the view did not output hands the next interval period `1` under the failover, which the arc models in place of the paper's premise on the update rule (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15c over a sequence of records, SH15a's tail on one |
+| Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b, SH14c, SH15 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval at least two past the slot's and one run of `wa` good coins above it; SH14b reads both off the run clause at the chain schedule, SH14c off two runs of the coin; SH15a bounds the probability that some view has not derived the slot's period or leaves it undecided, over `M` blocks of coins, by `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero (SH15b); and SH15c states the "with probability `1`" itself, over a sequence of records with the coin drawn as a process: for almost every coin some record decides the slot in every view holding its horizon. The growth of the ledger from the settled prefix is SH13 |
 | Theorem 4 (agreement of the period) | SH10a, SH10b | for any deterministic update rule |
-| Adaptive section, `I ≥ 2 · maxPeriod` and `1 ≤ k ≤ maxPeriod` | SH10f, SH10g | two asynchronous rounds per interval at any `k ≥ 1` with `2k ≤ I`; the period stays in range when the initial period does and the update rule keeps it there |
+| Adaptive section, `I ≥ 2 · maxPeriod` and `1 ≤ k ≤ maxPeriod` | SH10f, SH10g, SH18h | two asynchronous rounds per interval at any `k ≥ 1` with `2k ≤ I`; the period stays in range when the initial period does and the update rule keeps it there, which the failover wrapped around Algorithm 2's replay does whenever the candidates lie in `[1, K]` (SH18h) |
+| Adaptive section, "the replay is exact in expectation" | SH18i | in the part that is a theorem: at a round the window retains, the share of the `n` candidates the window marks committed is the probability that a uniform coin names a directly committed leader on the anchor's history read as a record, the paper's `c_r / n`, at `1 ≤ wa`. The anchor's term is the approximation the paper admits |
+| Protocol section, "setting the canary odd ensures it is coprime to candidate periods, guaranteeing periodic probes" | SH18j | at a canary spacing coprime to a candidate period of at least two, a window holding two canary rounds whose decision round it retains holds a probe for the candidate, since two consecutive multiples of the spacing cannot both be multiples of the period |
 | Protocol section, "whenever either verdict of an asynchronous slot is direct, the two coincide" | SH5b | predicate for predicate, at a slot proposed at its own round and led by the coin |
 | Protocol section, "the successor waits at most `max(0, wa − ws − 1)` rounds", "delays never compound" | SH9c | arithmetic on the decision rounds; output timing itself is not modelled |
 | Theorem 5 (conservativity) | SH4 | at a constant wavelength by `rfl`, period `1` by `Nat.mod_one`, and at wave three the derivations are exactly the core's, both directions |
@@ -274,7 +287,8 @@ reliable leader there once the prefix below is settled
 (`reaches_of_synchronisedOn`); and total order, two blocks enter at the
 same slots in every view that settled them, so in the same order
 (SH13d). The "eventually" of agreement and validity is the liveness
-half: SH6a and SH6b under synchrony, SH14b and SH15 under asynchrony,
+half: SH6a and SH6b under synchrony, SH14b under the clause and SH15c
+almost surely under asynchrony,
 where a reliable block reaches the coin's committed leaders by the
 substrate's delivery, which the model states as `SynchronisedOn` and
 not otherwise. The order of the blocks one commit releases is a
@@ -399,6 +413,27 @@ since `n − f − b ≥ 1`. The blocks' coins are drawn after the record is
 fixed, as SH11c's are: the adversary that shapes the DAG does not see
 them, which is the coin's unpredictability; what the network must supply
 is that the blocks' waves be populated.
+
+**The coin as a process** (`coinMeasure`, SH15c). What one finite record
+cannot say, a sequence of them can. `coinMeasure` is
+`Measure.infinitePi` of the uniform distribution over the validators, on
+whatever discrete measurable structure they carry, so the coin of every
+round is drawn at once and independently; on the rounds of finitely many
+blocks it is the uniform block map (`coinMeasure_blockCoins_mem`: one
+block map is a box on the blocks' rounds, of measure `n^(−MK)`, and a
+set of maps the disjoint union of its members' boxes). **SH15c**
+(`decidedAlmostSurely`) takes a sequence of records, the `m`-th holding
+the waves of `m` blocks populated where MM2 reads them, each with its
+own update rule kept in `[1, K]`, and concludes that for almost every
+coin some record decides the slot in every view holding its horizon, in
+SH15a's sense. The coins under which no record decides it lie, for every
+`m`, among those under which the `m`-th leaves it undecided, a set of
+measure at most SH15a's bound read through the process
+(`undecided_coin_le`), which vanishes (SH15b); so they are null, by
+monotonicity alone. The records are any sequence, the prefixes of one
+execution among them, since the argument reads each on its own; they are
+fixed before the coin is drawn, as SH15a's one record is. This is
+Theorem 3's "with probability `1`" as the paper states it.
 
 **The drain.** Once the period is `1` every slot is asynchronous, and a
 run of `wa` consecutive commits decides every slot below it, including
@@ -595,7 +630,24 @@ the synchronous rule, never manufacture it, the paper's "lower but never
 raise". SH18e and SH18f ask `2 ≤ ws < wa`, so that a decision round lies
 at or above its slot and an asynchronous round is not read as an
 unprobed synchronous one, which the algorithm does when the waves
-coincide.
+coincide. **SH18h** (`failover_anchorUpdate_range`): with candidates in
+`[1, K]` the failover wrapped around `anchorUpdate` answers a period in
+`[1, K]` at every anchor, `1` when it resets and otherwise the
+selection's answer, which is the current period or a candidate
+(`select_eq_or_mem`); the range hypothesis SH10g, SH14b, SH14c and SH15
+place on the update rule, discharged for the paper's rule. **SH18i**
+(`commitWeight_eq_commitProb`), the adaptive section's "exact in
+expectation" in the part that is a theorem: at a round the window
+retains, `committedCount / n` is `commitProb` on the anchor's history
+read as a record, since the window marks committed exactly the authors
+whose block that record directly commits (`committedCount_eq_card_goodAt`),
+at `1 ≤ wa`; the anchor's term is the approximation the paper admits.
+**SH18j** (`probe_exists`), the protocol section's canary claim: at a
+canary spacing coprime to a candidate period of at least two, which odd
+spacings and powers of two are, a window holding two canary rounds whose
+decision round it retains holds a probe for the candidate, since two
+consecutive multiples of the spacing cannot both be multiples of the
+period, at `1 ≤ ws`.
 
 What is not modelled: the gating rule that a validator evaluates the
 slots of an interval only once the preceding scan has ended, which the
@@ -625,7 +677,8 @@ claimed (§2).
 **SH6** (`Liveness/Statement.lean`) is the timed model at this support:
 **SH6a**, a reliably led slot commits in every view caught up to its
 decision round on a DAG a reliable quorum has synchronised and populated
-through it, at whichever wave the slot's round carries; **SH6b**, past
+through it, by the direct rule, at whichever wave the slot's round
+carries; **SH6b**, past
 any slot the schedule offers a run of `c` reliably led slots spanning
 eligibility, and everything below the run is decided once the DAG is
 covered through its decision rounds. At one slot per round `c = wa`
@@ -641,7 +694,15 @@ populates the wave, at `4 ≤ w r`. Synchrony carries the candidate into
 every reliable cone from two rounds up, the reliable voters vote for it,
 every reliable block at the decision round references all of them and
 so certifies. The leader may be Byzantine, so long as it did not
-equivocate; neither clause asks the quorum to be correct.
+equivocate; neither clause asks the quorum to be correct. **SH6f**,
+Theorem 2's Byzantine-led clause as the anchor rule has it: at one slot
+per round, a slot is decided once every slot from its floor up to some
+reliably led slot is decided, whatever led them. The reliably led slot
+commits directly (SH6a), so the least commit at or above the floor is
+the anchor, and every slot between, decided but not committed, is a
+skip the search passes over (`indirect`). What the hypothesis excludes
+is an undecided slot at the floor, one led by an equivocating Byzantine
+validator (§7, finding 7).
 
 ## 7. Findings for the paper
 
@@ -705,10 +766,11 @@ equivocate; neither clause asks the quorum to be correct.
    every reliable round is populated and synchronised from round `0`
    and the reliable round-`1` block exists (`LeanDagTest/Steelhead/
    CoinDelay.lean`, `positive_no_output`). The bound holds in expectation
-   or with probability tending to one (SH15), as the sentence before it
-   in the theorem already says of the asynchronous slots, not
-   deterministically; the deterministic part of Theorem 2 is the
-   synchronous slots' (SH6a) and the crashed leaders' (SH6c).
+   or with probability tending to one (SH15), and the ordering itself
+   almost surely (SH15c), as the sentence before it in the theorem
+   already says of the asynchronous slots, not deterministically; the
+   deterministic part of Theorem 2 is the synchronous slots' (SH6a) and
+   the crashed leaders' (SH6c).
 6. **Lemma 3 counts on the DAG, the replay reads the window.** The
    lemma's proof applies the counting lemma to every candidate at once;
    the counting lemma counts the certificates the DAG holds, and the
@@ -736,8 +798,9 @@ equivocate; neither clause asks the quorum to be correct.
    slot `0` is undecided in the full view. The chain of floors advances
    one wave a hop and the same Byzantine validator may lead every hop,
    with probability `b / n` each under the coin, so what decides such a
-   slot is a run of reliably led slots above its floor (SH6b, SH9), and
-   no bound in `b` alone holds.
+   slot is a run of reliably led slots above its floor (SH6b, SH9), or
+   one reliably led slot above the floor with every slot between
+   decided (SH6f), and no bound in `b` alone holds.
 
 ## 8. Witnesses (`LeanDagTest/Steelhead/`), SH12
 
@@ -774,7 +837,7 @@ LeanDag/Steelhead/
   Model/Period.lean         intervalOf, ResetsOnNoOutput, failover, IntervalAnchor, NoAnchor,
                             PeriodAt, adaptiveWave, adaptiveSlots
   Model/Coin.lean           commitProb, noCommitProb, blockRound, coinOfBlocks, blocksHorizon,
-                            undecidedProb
+                            undecidedProb, coinMeasure
   Model/Compose.lean        compose
   Model/Replay.lean         Evidence, Config, Timing, windowIds, ofAnchor, committedCount,
                             probeRate, timingAt, firstCommitAt, gateAt, score, prefer, best,

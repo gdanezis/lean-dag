@@ -1,22 +1,26 @@
 import LeanDag.Steelhead.Model.Period
 import LeanDag.MahiMahi.Model.Good
 import Mathlib.Probability.Distributions.Uniform
+import Mathlib.Probability.ProductMeasure
 /-!
 # Steelhead — the coin
 
 The coin of an asynchronous round, modelled as a distribution rather
 than by its effect (`steelhead.md` §4): uniform over the validators,
 and independent across rounds, which is the uniform distribution over
-the leader maps of `m` rounds. Events are read through
-`PMF.toOuterMeasure`, so no measurable structure on the validators is
-assumed. The chain slot of round `r` commits directly exactly when the
-coin lands in `goodAt U wa r`, the validators whose round-`r` block the
-DAG directly commits; the quantities below are the probabilities
-the counting lemma bounds in `Coin/Statement.lean`: of one good coin, of
-`m` bad ones in a row, and of a slot of the adaptive output staying
-undecided over the coins of `M` blocks of `K` rounds, one block opening
-each interval from the second after the slot's, the first whose anchor's
-window lies wholly above the slot.
+the leader maps of `m` rounds. Events on finitely many rounds are read
+through `PMF.toOuterMeasure`, so no measurable structure on the
+validators is assumed; the coin as a process over every round
+(`coinMeasure`) is the infinite product of the uniform distribution, on
+whatever discrete measurable structure the validators carry. The chain
+slot of round `r` commits directly exactly when the coin lands in
+`goodAt U wa r`, the validators whose round-`r` block the DAG directly
+commits; the quantities below are the probabilities the counting lemma
+bounds in `Coin/Statement.lean`: of one good coin, of `m` bad ones in a
+row, and of a slot of the adaptive output staying undecided over the
+coins of `M` blocks of `K` rounds, one block opening each interval from
+the second after the slot's, the first whose anchor's window lies wholly
+above the slot.
 
 **Definitions only**, as in the other model files.
 -/
@@ -90,6 +94,14 @@ noncomputable def undecidedProb (U : BlockUniverse Validator BlockId Payload) (w
         (per (intervalOf I s)) ∧
       ∃ v, Decided (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
         (adaptiveWave ws wa I per) U V s v}
+
+/-- **The coin as a process**: an independent uniform draw at every round, the infinite product
+of the uniform distribution over the validators on the measurable structure they carry. The
+measure the almost-sure claim (SH15c) reads its events through; on finitely many rounds it agrees
+with the uniform distribution over the leader maps of those rounds. -/
+noncomputable def coinMeasure (Validator : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [MeasurableSpace Validator] : MeasureTheory.Measure (ℕ → Validator) :=
+  MeasureTheory.Measure.infinitePi fun _ : ℕ => (PMF.uniformOfFintype Validator).toMeasure
 
 end Steelhead
 

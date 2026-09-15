@@ -1,9 +1,10 @@
 import LeanDag.Steelhead.Model.Replay
+import LeanDag.Steelhead.Model.Coin
 /-!
 # The replay — statement
 
 What Algorithm 2's replay and selection do (`steelhead.md` §5), the
-paper's Lemma 3 among it. Seven claims:
+paper's Lemma 3 among it. Ten claims:
 
 * **SH18a, the selection stays among the candidates** — Algorithm 2
   answers a candidate period whenever the current period is one, so the
@@ -35,7 +36,26 @@ paper's Lemma 3 among it. Seven claims:
   window marks committed is directly committed on the DAG, so a probe's
   success is a certificate quorum the DAG holds: the adversary can
   suppress the probes' evidence of the synchronous rule, never
-  manufacture it, the paper's "lower but never raise".
+  manufacture it, the paper's "lower but never raise";
+* **SH18h, the failover of Algorithm 2 keeps the range** — with
+  candidates in `[1, K]`, the failover wrapped around the replay's
+  selection answers a period in `[1, K]` at every anchor, whether it
+  resets, keeps the current period or picks a candidate: the range
+  hypothesis SH10g, SH14b, SH14c and SH15 place on the update rule,
+  discharged for the paper's rule;
+* **SH18i, the replay's commit weight is the rule's commit
+  probability** — the adaptive section's "exact in expectation", in the
+  part that is a theorem: at a round of the window, the share of the `n`
+  candidates the window marks committed is the probability that a
+  uniform coin names a directly committed leader on the anchor's causal
+  history read as a record of its own, `c_r / n`. The anchor's term is
+  the approximation the paper admits, and not claimed;
+* **SH18j, a probe exists** — the protocol section's "setting the canary
+  odd ensures it is coprime to candidate periods, guaranteeing periodic
+  probes": at a canary spacing coprime to a candidate period of at
+  least two, a window holding two canary rounds whose decision round it
+  retains holds a probe for that candidate, since two consecutive
+  multiples of the spacing cannot both be multiples of the period.
 
 SH18d asks the quorum's blocks to lie in the window, not merely in the
 DAG: the counting lemma counts certificates among the blocks a record
@@ -47,6 +67,9 @@ it is what the paper's "populated" must mean for the lemma to apply to
 the window (§7). SH18e and SH18f ask `2 ≤ ws` and `ws < wa`, the waves
 of the `3f + 1` pair, so that a round's decision round lies at or above
 it and an asynchronous round is not read as an unprobed synchronous one.
+SH18i asks `1 ≤ wa` and SH18j `1 ≤ ws`, so that a round's decision round
+lies at or above it: the certificates of a round the window retains then
+lie in the window, and a probe's in the range the window resolves.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -56,6 +79,8 @@ namespace LeanDag
 namespace Steelhead
 
 namespace Replay
+
+open scoped ENNReal
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
   [F : Faults Validator] {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
@@ -123,6 +148,36 @@ def CommitsSound (U : BlockUniverse Validator BlockId Payload) : Prop :=
     (ofAnchor U A I).commits r w a = true →
     ∃ L ∈ blocksAt U r, (U.block L).creator = a ∧ MahiMahi.DirectCommit U w L r
 
+/-- **SH18h, the failover of Algorithm 2 keeps the range.** -/
+def FailoverInRange (U : BlockUniverse Validator BlockId Payload) (I : ℕ) : Prop :=
+  ∀ [Slots Validator] (w : ℕ → ℕ) (C : Config Validator) (candidates : List ℕ) (epsilon : ℚ)
+    (K j k : ℕ) (A : BlockId),
+    -- the candidates lie in [1, K], as does the current period
+    1 ≤ K → (∀ c ∈ candidates, 1 ≤ c ∧ c ≤ K) → 1 ≤ k → k ≤ K →
+    -- then so does the failover's answer at any anchor
+    1 ≤ failover U w I (anchorUpdate U I C candidates epsilon) j A k ∧
+      failover U w I (anchorUpdate U I C candidates epsilon) j A k ≤ K
+
+/-- **SH18i, the replay's commit weight is the rule's commit probability.** -/
+def CommitWeightExact (U : BlockUniverse Validator BlockId Payload) (wa I : ℕ) : Prop :=
+  ∀ (A : BlockId) (hA : A ∈ U.ids) (r : ℕ),
+    -- a wave of at least one round, and the round lies in the window
+    1 ≤ wa → windowBottom U A I ≤ r →
+    -- then the share of the candidates the window marks committed is the probability that the
+    -- coin names a committed leader on the anchor's history read as a record
+    (committedCount (ofAnchor U A I) r wa : ℝ≥0∞) / Fintype.card Validator =
+      commitProb (U.historyView A hA).toRecord wa r
+
+/-- **SH18j, a probe exists.** -/
+def ProbeExists : Prop :=
+  ∀ (E : Evidence Validator) (C : Config Validator) (period : ℕ),
+    -- the canary spacing is coprime to the candidate period, which is at least two
+    Nat.Coprime C.canary period → 2 ≤ period → 1 ≤ C.ws →
+    -- and the window holds two canary rounds whose decision round it retains
+    E.bottom + 2 * C.canary + C.ws ≤ E.top + 2 →
+    -- then the candidate has a probe
+    0 < (probeRate E C period).2
+
 /-- The replay, over every fault configuration, block universe, asynchronous wave and interval
 the model admits. -/
 def Statement : Prop :=
@@ -131,7 +186,8 @@ def Statement : Prop :=
     (wa I : ℕ),
     SelectionValid ∧ SelectionNonIncreasing ∧ EvidenceConsistent U ∧ WindowCount U wa I ∧
       TimingBounded (Validator := Validator) ∧ AsyncTermBound (Validator := Validator) ∧
-      CommitsSound U
+      CommitsSound U ∧ FailoverInRange U I ∧ CommitWeightExact U wa I ∧
+      ProbeExists (Validator := Validator)
 
 end Replay
 

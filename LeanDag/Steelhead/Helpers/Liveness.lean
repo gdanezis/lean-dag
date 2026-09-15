@@ -53,7 +53,8 @@ theorem descends {w : ℕ → ℕ} (hw : ∀ r, 1 ≤ w r) {c : ℕ}
       change S.slotRound i + w (S.slotRound i) ≤ S.slotRound (b + c - 1)
       omega) V b hrun i hi
 
-/-- **SH6a.** The bridge, then Law 3, at the slot's own wave. -/
+/-- **SH6a.** The bridge certifies the slot's candidate from every reliable block at its decision
+round, which is the direct commit, in the view and at the slot's own wave. -/
 theorem commitsOfSynchrony {U : BlockUniverse Validator BlockId Payload} {w : ℕ → ℕ}
     (hw : ∀ r, 3 ≤ w r) {T : Finset Validator} {V : View Validator BlockId Payload U}
     {R N k : ℕ} (hT : T ⊆ (Correct : Finset Validator)) (hcard : quorumCard Validator ≤ T.card)
@@ -61,11 +62,16 @@ theorem commitsOfSynchrony {U : BlockUniverse Validator BlockId Payload} {w : �
     (hR : R ≤ S.slotRound k)
     (hN : ∀ j, j ≤ k → (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N)
     (hV : V.CoversUpto N) (hlead : S.leader k ∈ T) :
-    ∃ L, IsLeaderBlock U k L ∧ Decided w U V k (some L) := by
-  obtain ⟨L, hL⟩ := Timed.exists_decided_of_coverage (shSupport w) (shSupport_ofCoverage hw)
-    (shSupport_commits fun r => by have := hw r; omega) (isQuorum_core hT hcard) hs hpop S V k
-    hV hR hN hlead
-  exact ⟨L, AnchoredRule.isLeaderBlock_of_decided hL.2.1, hL.2.1⟩
+    ∃ L, IsLeaderBlock U k L ∧
+      MahiMahi.DirectCommitIn U V (w (S.slotRound k)) L (S.slotRound k) ∧
+      Decided w U V k (some L) := by
+  obtain ⟨-, -, -, -, h⟩ := Timed.live_of_coverage (shSupport w) (shSupport_ofCoverage hw)
+    (isQuorum_core hT hcard) hs hpop S V (lo := k) (K := k + 1) hV hR
+    (fun j hj => hN j (Nat.lt_succ_iff.mp hj))
+  obtain ⟨hpopk, hcert⟩ := h k le_rfl (Nat.lt_succ_self k) hlead
+  obtain ⟨L, hL, hin⟩ := shSupport_directCommitIn (fun r => by have := hw r; omega) S V
+    hcard hpopk hcert (fun b hb hbr => hV b hb (le_trans hbr (hN k le_rfl))) hlead
+  exact ⟨L, hL, hin, Decided.directCommit hL hin⟩
 
 /-- **SH6b.** The timed descent below a fair run, at Steelhead's support. -/
 theorem allDecidedBelowOfSynchrony {w : ℕ → ℕ} (hw : ∀ r, 3 ≤ w r) {T : Finset Validator}
@@ -85,6 +91,40 @@ theorem allDecidedBelowOfSynchrony {w : ℕ → ℕ} (hw : ∀ r, 3 ≤ w r) {T 
   refine ⟨b, hb, hRb, fun U V N hs hpop hV hN i hi => ?_⟩
   obtain ⟨v, hv⟩ := h V N hs hpop hV hN i hi
   exact ⟨v, hv.2.1⟩
+
+/-- **SH6f.** The least committed slot at or above the floor is the anchor: the reliably led slot
+commits directly (SH6a), so there is one, and every eligible slot below it is decided but not
+committed, a skip. The indirect rule then decides the slot. -/
+theorem decidedOfReliableAboveFloor {U : BlockUniverse Validator BlockId Payload} {w : ℕ → ℕ}
+    (hw : ∀ r, 3 ≤ w r) (hid : ∀ t, S.slotRound t = t) {T : Finset Validator}
+    {V : View Validator BlockId Payload U} {R N k a : ℕ} (hT : T ⊆ (Correct : Finset Validator))
+    (hcard : quorumCard Validator ≤ T.card) (hs : SynchronisedOn U T R)
+    (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) (hR : R ≤ k) (hka : k + w k ≤ a)
+    (hlead : S.leader a ∈ T) (hdec : ∀ j, k + w k ≤ j → j < a → ∃ v, Decided w U V j v)
+    (hN : ∀ j, j ≤ a → (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N)
+    (hV : V.CoversUpto N) : ∃ v, Decided w U V k v := by
+  classical
+  -- the reliably led slot commits
+  obtain ⟨A, -, -, hA⟩ := commitsOfSynchrony hw hT hcard hs hpop (by rw [hid]; omega) hN hV hlead
+  -- the least committed slot at or above the floor
+  have hex : ∃ j, k + w k ≤ j ∧ ∃ A, Decided w U V j (some A) := ⟨a, hka, A, hA⟩
+  obtain ⟨hkj, A', hA'⟩ : k + w k ≤ Nat.find hex ∧ ∃ A, Decided w U V (Nat.find hex) (some A) :=
+    Nat.find_spec hex
+  have hja : Nat.find hex ≤ a := Nat.find_le ⟨hka, A, hA⟩
+  -- every eligible slot between the floor and it is decided but not committed, so skipped
+  have hmid : ∀ i', k < i' → i' < Nat.find hex →
+      (fun sr i j => sr i + w (sr i) ≤ sr j) S.slotRound k i' → Decided w U V i' none := by
+    intro i' _ hi'j helig
+    simp only [hid] at helig
+    have hnc : ¬ ∃ C, Decided w U V i' (some C) := fun hc => Nat.find_min hex hi'j ⟨helig, hc⟩
+    obtain ⟨v, hv⟩ := hdec i' helig (by omega)
+    cases v with
+    | none => exact hv
+    | some C => exact absurd ⟨C, hv⟩ hnc
+  obtain ⟨v, hv⟩ := indirect (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
+    (fun r => by have := hw r; omega) S V k (Nat.find hex) A' (by simp only [hid]; exact hkj) hA'
+    hmid
+  exact ⟨v, hv S rfl rfl hA' hmid⟩
 
 /-! ## SH6c, SH6e -/
 

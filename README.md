@@ -192,7 +192,9 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   vote-and-certify pattern of the `3f + 1` pair has a round to put a
   certificate in. A witness on data settles why an undecided slot reads
   the floor at its own wave and not at its anchor's. Live under
-  synchrony at the slot's own wave. **A committed asynchronous slot does
+  synchrony at the slot's own wave, by the direct rule, and a slot is
+  decided once every slot from its floor up to a reliably led one is
+  decided. **A committed asynchronous slot does
   not decide the synchronous slots below it**: a direct commit reaches a
   lower slot only through a decided stretch, and at every period
   `k ≥ ws` that stretch holds a synchronous slot the adversary keeps
@@ -214,19 +216,23 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   coins above it is in view, and over the coins of `M` blocks of `K`
   rounds a validator's scan stalls below the slot or leaves it undecided
   with probability at most `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`,
-  which vanishes, the form "with probability one" takes on a finite
-  record. A crashed leader is skipped, partial dissemination does not
-  defer, an equivocating Byzantine leader at a slot's floor is its
-  anchor and holds it undecided on data, any family of rules
-  whose laws hold composes into one whose laws hold (Steelhead's rule
+  which vanishes, and over a sequence of records with the coin drawn as
+  a process the slot is decided almost surely, "with probability one"
+  as the paper states it. A crashed leader is skipped, partial
+  dissemination does not defer, an equivocating Byzantine leader at a
+  slot's floor is its anchor and holds it undecided on data, any family
+  of rules whose laws hold composes into one whose laws hold (Steelhead's rule
   the composite of Mahi-Mahi's at each round's wave, by definition),
   Definition 1 holds clause by clause over settled prefixes, and
   Algorithm 2's replay is data whose selection stays among the
   candidates, whose window counts the counting lemma's candidates once
   a quorum has populated it, whose asynchronous term is at most the
-  rule's own value on the same data, and whose probes succeed only on
-  certificate quorums the DAG holds. The arc is under the statement/proof
-  partition and imports nothing of Barnacle.
+  rule's own value on the same data, whose commit weight is the rule's
+  commit probability on the window, whose probes succeed only on
+  certificate quorums the DAG holds and exist whenever the canary is
+  coprime to the candidate, and whose failover keeps the period in range.
+  The arc is under the statement/proof partition and imports nothing of
+  Barnacle.
 - **Black Marlin** (`LeanDag/BlackMarlin/`): the three-round commit rule
   of a partially synchronous protocol (DISC 2025) that uses neither
   reliable broadcast nor a common coin and elects an anchor in **every

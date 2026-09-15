@@ -9589,7 +9589,8 @@ delivered with the first committed reliable leader there once the prefix
 below is settled; and total order, two blocks enter at the same slots in
 every view that settled them, so in the same order. The "eventually" of
 agreement and validity is the liveness half, SH6a and SH6b under
-synchrony and SH14b and SH15 under asynchrony, where a reliable block
+synchrony, SH14b under the clause and SH15c almost surely under
+asynchrony, where a reliable block
 reaches the coin's committed leaders by the substrate's delivery, stated
 as `SynchronisedOn` and not otherwise; the order of the blocks one
 commit releases is a tie-break the development does not assume (§1.4).
@@ -9695,8 +9696,8 @@ argument and the higher waves
 by Mahi-Mahi's. **SH6** (`Steelhead.Liveness.holds`) is the timed model
 at this support: **SH6a** (`Steelhead.commitsOfSynchrony`), a reliably
 led slot commits in every view caught up to its decision round on a DAG
-a reliable quorum has synchronised and populated through it, at
-whichever wave the slot's round carries; **SH6b**
+a reliable quorum has synchronised and populated through it, by the
+direct rule, at whichever wave the slot's round carries; **SH6b**
 (`Steelhead.allDecidedBelowOfSynchrony`), past any slot the schedule
 offers a run of reliably led slots spanning eligibility, and everything
 below the run is decided once the DAG is covered through its decision
@@ -9713,10 +9714,16 @@ synchronised from that round and populates the wave, at `4 ≤ w r`;
 synchrony carries the candidate into every reliable cone from two rounds
 up, the reliable voters vote for it, and every reliable block at the
 decision round references all of them and so certifies. The leader may
-be Byzantine, so long as it did not equivocate. The paper's Theorem 2
-also bounds the latency of a Byzantine-led asynchronous slot by the
-number of Byzantine validators, and assumes bounded leader timeouts;
-neither the bound nor the pacing is modelled.
+be Byzantine, so long as it did not equivocate. **SH6f**
+(`Steelhead.decidedOfReliableAboveFloor`), Theorem 2's Byzantine-led
+clause as the anchor rule has it: at one slot per round, a slot is
+decided once every slot from its floor up to some reliably led slot is
+decided, whatever led them, since that slot commits directly and the
+least commit at or above the floor is the anchor, every slot between a
+skip the search passes over. The paper's bound on that clause by the
+number of Byzantine validators is refuted (§24.6), and its bounded
+leader timeouts are not modelled: `SynchronisedOn` stands for the
+paper's A4 and its pacing.
 
 ### 24.4 The period
 
@@ -9831,7 +9838,24 @@ DAG (`Steelhead.Replay.commits_sound`, SH18g), so a probe's success is a
 certificate quorum the DAG holds and the adversary can lower the
 synchronous term's estimate but never raise it. SH18e and SH18f ask
 `2 ≤ ws < wa`, since the algorithm reads an asynchronous round as an
-unprobed synchronous one when the waves coincide.
+unprobed synchronous one when the waves coincide. Three claims read the
+algorithm's parameters. With candidates in `[1, K]` the failover wrapped
+around `anchorUpdate` answers a period in `[1, K]` at every anchor
+(`Steelhead.Replay.failover_anchorUpdate_range`, SH18h), `1` when it
+resets and otherwise the selection's answer, which is the current period
+or a candidate: the range hypothesis SH10g, SH14 and SH15 place on the
+update rule, discharged for the paper's rule. At a round the window
+retains, the share of the `n` candidates the window marks committed is
+the probability that a uniform coin names a directly committed leader on
+the anchor's history read as a record
+(`Steelhead.Replay.commitWeight_eq_commitProb`, SH18i), the adaptive
+section's "exact in expectation" in the part that is a theorem; the
+anchor's term is the approximation the paper admits. And at a canary
+spacing coprime to a candidate period of at least two, which odd
+spacings and powers of two are, a window holding two canary rounds whose
+decision round it retains holds a probe for the candidate
+(`Steelhead.Replay.probe_exists`, SH18j), since two consecutive multiples
+of the spacing cannot both be multiples of the period.
 
 **SH14** (`Steelhead.output_liveness`) is output liveness under the
 failover, Theorem 3 (ii) and the asynchronous half of Definition 1's
@@ -9916,6 +9940,26 @@ grows, since `n − f − |byzantine| ≥ 1`. The blocks' coins are drawn after
 the record is fixed, as SH11c's are; what the network must supply is
 that the blocks' waves be populated.
 
+What one finite record cannot say, a sequence of them can. `coinMeasure`
+draws the coin of every round at once, as Mathlib's infinite product of
+the uniform distribution over the validators on whatever discrete
+measurable structure they carry; on the rounds of finitely many blocks it is the
+uniform block map (`Steelhead.coinMeasure_blockCoins_mem`: one block map
+is a box on the blocks' rounds, of measure `n^(−MK)`, and a set of maps
+the disjoint union of its members' boxes). **SH15c**
+(`Steelhead.decidedAlmostSurely`) takes a sequence of records, the
+`m`-th holding the waves of `m` blocks populated where MM2 reads them,
+each with its own update rule kept in `[1, K]`, and concludes that for
+almost every coin some record decides the slot in every view holding its
+horizon, in SH15a's sense: the coins under which no record decides it
+lie, for every `m`, among those under which the `m`-th leaves it
+undecided, a set of measure at most SH15a's bound read through the
+process (`Steelhead.undecided_coin_le`), which vanishes, so they are
+null. The records are any sequence, the prefixes of one execution among
+them, since the argument reads each on its own; they are fixed before
+the coin is drawn, as SH15a's one record is. This is Theorem 3's "with
+probability `1`" as the paper states it.
+
 ### 24.6 Findings, and the carrier
 
 Seven findings for the paper, recorded in `steelhead.md` §7. That the
@@ -9943,7 +9987,8 @@ for every coin sequence: at period `1` a uniform coin names the one
 absent validator through any horizon with positive probability, and on
 a reliable-only DAG populated and synchronised from round `0` no settled
 prefix then outputs a block (`positive_no_output`, SH12); the bound
-holds with probability tending to one (§24.5), not deterministically.
+holds with probability tending to one, and the ordering almost surely
+over a sequence of records (§24.5), not deterministically.
 And that Lemma 3 counts on the DAG while the replay reads the window:
 the counting lemma counts the certificates the DAG holds, the replay
 those the anchor's causal history holds, which need not include one
@@ -11122,7 +11167,7 @@ reused.
 | SH3 | handover: a direct commit in one view is committed by every view that finds the slot an anchor, whichever rule decides it, and no view skips it | `Steelhead.certifiedIn_of_commit_at_anchor` *(Steelhead/Helpers/Decision)*, `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
 | SH4 | conservativity: at a constant wavelength the rule is Mahi-Mahi's, period one is the constant `wa`, and at wave three the derivations are exactly the core's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.decided_of_core_decided` *(Steelhead/Helpers/Decision)* |
 | SH5 | chain agreement: the chain verdicts agree across views under any coin; at an asynchronous round the coin leads, the output's direct verdicts are the chain's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.chainDecided_unique` *(Steelhead/Helpers/Period)*, `Steelhead.direct_agrees_with_chain` *(Steelhead/Helpers/Decision)* |
-| SH6 | liveness under synchrony: a reliably led slot commits under coverage in every caught-up view; everything below a fair run is decided; a slot whose leader has no block is skipped once a quorum blames it; a candidate one reliable block references one round up commits under synchrony, its leader reliable or not | `Steelhead.Liveness.holds`, `Steelhead.commitsOfSynchrony`, `Steelhead.allDecidedBelowOfSynchrony`, `Steelhead.skipsCrashed`, `Steelhead.commitsOfDissemination` *(Steelhead/Liveness/Proof, Steelhead/Helpers/Liveness)* |
+| SH6 | liveness under synchrony: a reliably led slot commits under coverage in every caught-up view, by the direct rule; everything below a fair run is decided; a slot whose leader has no block is skipped once a quorum blames it; a candidate one reliable block references one round up commits under synchrony, its leader reliable or not; a slot is decided once every slot from its floor up to some reliably led slot is decided | `Steelhead.Liveness.holds`, `Steelhead.commitsOfSynchrony`, `Steelhead.allDecidedBelowOfSynchrony`, `Steelhead.skipsCrashed`, `Steelhead.commitsOfDissemination`, `Steelhead.decidedOfReliableAboveFloor` *(Steelhead/Liveness/Proof, Steelhead/Helpers/Liveness)* |
 | SH7 | chain liveness: every chain verdict below a run of `wa` chain commits is settled, under the run clause, under synchrony with no clause, and below any one run of `wa` good coins | `Steelhead.chainAllDecidedBelow`, `Steelhead.chainAllDecidedBelowOfSynchrony`, `Steelhead.chainAllDecidedBelowOfRun` *(Steelhead/Helpers/Liveness)* |
 | SH8 | the stall: at every period `k ≥ ws`, with no synchronous candidate certified and no synchronous slot directly skipped, no slot of the residue class `k − 1` is ever decided | `Steelhead.stall` *(Steelhead/Helpers/Liveness)* |
 | SH9 | the drain: `wa` consecutive commits decide every slot below them at any wavelength function bounded by `wa`; at period `1` under the run clause, past every round some slot has everything below it decided; an asynchronous slot costs `wa − ws` rounds and its successor waits at most `wa − ws − 1` | `Steelhead.allDecidedBelowOfRun`, `Steelhead.allDecidedBelowAtPeriodOne`, `Steelhead.asyncSlotCost` *(Steelhead/Helpers/Liveness)* |
@@ -11131,10 +11176,10 @@ reused.
 | SH12 | on data: the anchor-floor counterexample, the period sequence at a concrete update rule, the stall DAG with its asynchronous commit, and the coin streak that outputs nothing through any horizon | `lowFloor_skip`, `sh8_period1`, `st20_stall`, `positive_no_output` *(LeanDagTest/Steelhead/Model, LeanDagTest/Steelhead/Period, LeanDagTest/Steelhead/Stall, LeanDagTest/Steelhead/CoinDelay)* |
 | SH13 | the ledger: the committed-leader sequence and the ledger of a settled prefix are agreed, the ledger is monotone, a block enters at one slot which both views name, and a committed block belongs to one slot | `Steelhead.Ledger.holds` *(Steelhead/Ledger/Proof)* |
 | SH14 | output liveness under the failover: a slot below an anchored interval is decided once a run of `wa` coin-led commits above that interval is in view, since the failover puts the period at `1` from the interval after the anchored one and the run decides everything below it; under the run clause with runs of `K` good coins every slot far enough below the horizon is decided, and two runs of the coin, `K` good coins opening an interval past the slot's and `wa` above it, decide it | `Steelhead.output_liveness`, `Steelhead.all_decided`, `Steelhead.output_liveness_of_runs` *(Steelhead/Helpers/Period)* |
-| SH15 | the tail of the output: over the coins of `M` blocks of `K` rounds opening the intervals after a slot's, the slot stays undecided under the failover with probability at most `2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, which tends to zero | `Steelhead.undecidedProb_le`, `Steelhead.no_good_block_prob_le`, `Steelhead.undecided_tail_tendsto_zero` *(Steelhead/Helpers/Coin)* |
+| SH15 | the tail of the output: over the coins of `M` blocks of `K` rounds opening the intervals after a slot's, the slot stays undecided under the failover with probability at most `2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, which tends to zero; and over a sequence of records with the coin drawn as a process, for almost every coin some record decides the slot in every view holding its horizon | `Steelhead.undecidedProb_le`, `Steelhead.no_good_block_prob_le`, `Steelhead.undecided_tail_tendsto_zero`, `Steelhead.decidedAlmostSurely`, `Steelhead.coinMeasure_blockCoins_mem` *(Steelhead/Helpers/Coin)* |
 | SH16 | the interface composes: a family of rules whose laws hold, agreeing on rungs and ties, composes into a rule whose laws hold and whose verdicts agree across views; Steelhead's rule is the composite of Mahi-Mahi's at each round's wave | `Steelhead.Interface.holds`, `Steelhead.compose_laws`, `Steelhead.compose_decided_unique`, `Steelhead.steelheadAnchored_eq_compose` *(Steelhead/Interface/Proof, Steelhead/Helpers/Compose)* |
 | SH17 | atomic broadcast over settled prefixes: a delivered block is delivered by every view whose settled prefix is as long, is a block of the record entering at one slot, a reliable block is delivered with the first committed reliable leader two rounds up under synchrony, and two blocks enter at the same slots in every view | `Steelhead.Broadcast.holds` *(Steelhead/Broadcast/Proof)* |
-| SH18 | the replay: the selection stays among the candidates and never worsens the score; a committed candidate of the window is certified and a skipped one is not; at a round of the window whose boost and decision rounds a quorum has populated within the anchor's history, at least `n − f − |byzantine|` authors are marked committed | `Steelhead.Replay.holds`, `Steelhead.Replay.select_mem`, `Steelhead.Replay.select_score_le`, `Steelhead.Replay.certified_of_commits`, `Steelhead.Replay.not_certified_of_skips`, `Steelhead.Replay.window_count` *(Steelhead/Replay/Proof, Steelhead/Helpers/Replay)* |
+| SH18 | the replay: the selection stays among the candidates and never worsens the score; a committed candidate of the window is certified and a skipped one is not; at a round of the window whose boost and decision rounds a quorum has populated within the anchor's history, at least `n − f − |byzantine|` authors are marked committed; the failover of Algorithm 2 keeps the period in range; the window's commit weight is the rule's commit probability on the window read as a record; a coprime canary always probes | `Steelhead.Replay.holds`, `Steelhead.Replay.select_mem`, `Steelhead.Replay.select_score_le`, `Steelhead.Replay.certified_of_commits`, `Steelhead.Replay.not_certified_of_skips`, `Steelhead.Replay.window_count`, `Steelhead.Replay.failover_anchorUpdate_range`, `Steelhead.Replay.commitWeight_eq_commitProb`, `Steelhead.Replay.probe_exists` *(Steelhead/Replay/Proof, Steelhead/Helpers/Replay)* |
 
 
 ---
@@ -11143,7 +11188,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 341 definitions and structures the report names, in
+The 342 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -12891,6 +12936,18 @@ noncomputable def undecidedProb (U : BlockUniverse Validator BlockId Payload) (w
 ```
 
 **The probability that slot `s` stays undecided**, over the uniform independent coins of `M` blocks of `K` rounds opening the intervals from the second after the slot's: the measure of the coin maps under which some view holding the horizon, at some period sequence that matches every period the view derives and at which the update rule fails over, either has not derived the period of the slot's interval or leaves `s` undecided at the adaptive wavelength and schedule. A sequence matching what the view derives is arbitrary where the scan has stalled, so a slot that counts as decided is decided under every such completion, from derived periods alone, and a scan that never reaches the slot's interval counts as a failure. The coins outside the blocks draw `d`.
+
+#### `coinMeasure`
+
+*def, `Steelhead.Model.Coin.lean`*
+
+```lean
+noncomputable def coinMeasure (Validator : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [MeasurableSpace Validator] : MeasureTheory.Measure (ℕ → Validator) :=
+  MeasureTheory.Measure.infinitePi fun _ : ℕ => (PMF.uniformOfFintype Validator).toMeasure
+```
+
+**The coin as a process**: an independent uniform draw at every round, the infinite product of the uniform distribution over the validators on the measurable structure they carry. The measure the almost-sure claim (SH15c) reads its events through; on finitely many rounds it agrees with the uniform distribution over the leader maps of those rounds.
 
 ### Black Marlin: the three-round commit rule
 

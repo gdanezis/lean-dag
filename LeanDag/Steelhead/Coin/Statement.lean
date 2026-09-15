@@ -4,7 +4,7 @@ import Mathlib.Analysis.SpecificLimits.Basic
 # The coin — statement
 
 The probability half of liveness under asynchrony (`steelhead.md` §4),
-the paper's Theorem 3 read through a uniform coin. Seven claims:
+the paper's Theorem 3 read through a uniform coin. Eight claims:
 
 * **SH11a, the commit probability** — on a wave a quorum has populated,
   the coin of round `r` names a directly committed leader with
@@ -36,12 +36,23 @@ the paper's Theorem 3 read through a uniform coin. Seven claims:
   failure, and a slot counts as decided only under every completion of
   the derived periods;
 * **SH15b, that tail vanishes** — the bound tends to zero as the number
-  of blocks grows, since `n − f − b ≥ 1`.
+  of blocks grows, since `n − f − b ≥ 1`;
+* **SH15c, the slot is decided almost surely** — Theorem 3's "with
+  probability `1`" itself, over a sequence of finite records, the `m`-th
+  holding the waves of `m` blocks, and the coin drawn as a process
+  (`coinMeasure`, the infinite product of the uniform distribution): for
+  almost every coin some record decides the slot in every view holding
+  its horizon, in SH15a's sense. The coins under which no record decides
+  it lie, for every `m`, among those under which the `m`-th leaves it
+  undecided, a set of measure at most SH15a's bound, which vanishes
+  (SH15b); so they are null. The records are any sequence, the prefixes
+  of one execution among them, since the argument reads each on its own.
 
-The blocks' coins are drawn after the record is fixed, as SH11c's are:
-the adversary that shapes the DAG does not see them, which is the coin's
-unpredictability. What SH15a leaves to the network is what SH14c asks of
-it, that the waves of the blocks be populated.
+The blocks' coins are drawn after the record is fixed, as SH11c's are,
+and the records of SH15c before the process: the adversary that shapes
+the DAG does not see them, which is the coin's unpredictability. What
+SH15a leaves to the network is what SH14c asks of it, that the waves of
+the blocks be populated.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -52,7 +63,7 @@ namespace Steelhead
 
 namespace Coin
 
-open Filter Topology
+open Filter Topology MeasureTheory
 open scoped ENNReal
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
@@ -132,6 +143,31 @@ def UndecidedTail (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ
 def UndecidedTailVanishes (K : ℕ) : Prop :=
   Tendsto (fun M : ℕ => 2 * badBlockBound Validator K ^ (M / 2)) atTop (𝓝 0)
 
+/-- **SH15c, the slot is decided almost surely.** -/
+def DecidedAlmostSurely (ws wa I K : ℕ) : Prop :=
+  ∀ [MeasurableSpace Validator] [MeasurableSingletonClass Validator]
+    (U : ℕ → BlockUniverse Validator BlockId Payload) (T : Finset Validator)
+    (upd : ℕ → UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (s : ℕ),
+    -- the waves, a quorum, a period bound a run of wa fits in, blocks of K rounds that fit in an
+    -- interval
+    2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → quorumCard Validator ≤ T.card →
+    -- the periods stay in [1, K] under every record's update rule
+    1 ≤ k₀ → k₀ ≤ K → (∀ m j A k, 1 ≤ k → k ≤ K → 1 ≤ upd m j A k ∧ upd m j A k ≤ K) →
+    -- record m holds the waves of m blocks, populated where MM2 reads them
+    (∀ (m : ℕ) (j : Fin m) (i : Fin K),
+      PopulatedOn (U m) T (blockRound I (intervalOf I s) j i + 3) ∧
+      PopulatedOn (U m) T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) →
+    -- then for almost every coin some record decides s in every view holding its horizon, at
+    -- every period sequence matching what the view derives and at which the rule fails over
+    ∀ᵐ coin ∂(coinMeasure Validator), ∃ m,
+      ∀ (V : View Validator BlockId Payload (U m)) (per : ℕ → ℕ),
+        ResetsOnNoOutput (S := adaptiveSlots coin known I per) (U m) (adaptiveWave ws wa I per) I
+          (upd m) →
+        V.CoversUpto (blocksHorizon I wa (intervalOf I s) m) →
+        (∀ j k, PeriodAt I wa coin (upd m) k₀ (U m) V j k → per j = k) →
+        PeriodAt I wa coin (upd m) k₀ (U m) V (intervalOf I s) (per (intervalOf I s)) ∧
+        ∃ v, Decided (S := adaptiveSlots coin known I per) (adaptiveWave ws wa I per) (U m) V s v
+
 /-- The coin, over every fault configuration, block universe, asynchronous wave, interval and
 period bound the model admits. -/
 def Statement : Prop :=
@@ -140,7 +176,9 @@ def Statement : Prop :=
     (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ),
     CommitProbability U wa ∧ CommitProbabilityFour U wa ∧ CommitOfCoin U wa ∧
       NoCommitTail U wa ∧ TailVanishes (Validator := Validator) ∧
-      UndecidedTail U ws wa I K ∧ UndecidedTailVanishes (Validator := Validator) K
+      UndecidedTail U ws wa I K ∧ UndecidedTailVanishes (Validator := Validator) K ∧
+      DecidedAlmostSurely (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
+        ws wa I K
 
 end Coin
 

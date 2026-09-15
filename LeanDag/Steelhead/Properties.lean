@@ -203,25 +203,25 @@ theorem shSupport_ofCoverage {w : ℕ → ℕ} (hw : ∀ r, 3 ≤ w r) :
     rw [h3] at hcr hpop hct
     exact certifies_three_of_coverage hcard hpop hct hL hLr hLc hc hcc hcr
 
-/-- **Law 3**: a quorum's certificates at the slot's decision round are
-the direct commit, which a view caught up to that round sees. -/
-theorem shSupport_commits {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
-    Support.Commits (R := steelheadRule (Validator := Validator) (BlockId := BlockId)
-      (Payload := Payload) w) (shSupport w) (coreReliability Validator) := by
-  intro S U V T k hq hpop hcert hcov hlead
-  letI : Slots Validator := S
+/-- **A quorum's certificates at the slot's decision round are a direct
+commit**, in a view caught up to that round: the leader's block at the
+slot's round is the candidate, and every reliable block at the decision
+round certifies it. Law 3's core, which SH6a reads on its own. -/
+theorem shSupport_directCommitIn {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) (S : Slots Validator)
+    {U : BlockUniverse Validator BlockId Payload} (V : View Validator BlockId Payload U)
+    {T : Finset Validator} {k : ℕ} (hcard : quorumCard Validator ≤ T.card)
+    (hpop : ∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + (w (S.slotRound k) - 1) →
+      PopulatedOn U T n)
+    (hcert : ∀ L, IsLeaderBlock U k L → ∀ v ∈ T, ∀ c, c ∈ U.ids → (U.block c).creator = v →
+      (U.block c).round = S.slotRound k + (w (S.slotRound k) - 1) → MahiMahi.Certifies U c L)
+    (hcov : V.CoversUpto (S.slotRound k + (w (S.slotRound k) - 1))) (hlead : S.leader k ∈ T) :
+    ∃ L, IsLeaderBlock U k L ∧
+      MahiMahi.DirectCommitIn U V (w (S.slotRound k)) L (S.slotRound k) := by
   have hw' := hw (S.slotRound k)
-  have hcard : quorumCard Validator ≤ T.card := by
-    have h2 := hq.2
-    change Fintype.card Validator - Faults.f Validator ≤ T.card at h2
-    exact h2
   have hdr : MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k)
       = S.slotRound k + (w (S.slotRound k) - 1) := by
     unfold MahiMahi.decisionRoundAt; omega
-  obtain ⟨L, hLmem, hLc, hLr⟩ := hpop (S.slotRound k) le_rfl
-    (by change S.slotRound k ≤ S.slotRound k + (w (S.slotRound k) - 1); omega) (S.leader k) hlead
-  have hLr' : (BlockRecord.block U L).round = S.slotRound k := hLr
-  have hLc' : (BlockRecord.block U L).creator = S.leader k := hLc
+  obtain ⟨L, hLmem, hLc, hLr⟩ := hpop (S.slotRound k) le_rfl (by omega) (S.leader k) hlead
   have hdc : MahiMahi.DirectCommit U (w (S.slotRound k)) L (S.slotRound k) := by
     unfold MahiMahi.DirectCommit
     refine le_trans hcard (Finset.card_le_card ?_)
@@ -234,8 +234,22 @@ theorem shSupport_commits {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
     rw [mem_creatorsOf]
     exact ⟨C, mem_certificatesAt.mpr
       ⟨hC, hCr', hcert L ⟨hLmem, hLr, hLc⟩ v hv C hC hCc hCr⟩, hCc⟩
-  have hin : MahiMahi.DirectCommitIn U V (w (S.slotRound k)) L (S.slotRound k) :=
-    MahiMahiProperties.directCommitIn_of_coversUpto hdc (by rw [hdr]; exact hcov)
+  exact ⟨L, ⟨hLmem, hLr, hLc⟩,
+    MahiMahiProperties.directCommitIn_of_coversUpto hdc (by rw [hdr]; exact hcov)⟩
+
+/-- **Law 3**: a quorum's certificates at the slot's decision round are
+the direct commit, which a view caught up to that round sees. -/
+theorem shSupport_commits {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
+    Support.Commits (R := steelheadRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload) w) (shSupport w) (coreReliability Validator) := by
+  intro S U V T k hq hpop hcert hcov hlead
+  letI : Slots Validator := S
+  have hcard : quorumCard Validator ≤ T.card := by
+    have h2 := hq.2
+    change Fintype.card Validator - Faults.f Validator ≤ T.card at h2
+    exact h2
+  obtain ⟨L, ⟨hLmem, hLr', hLc'⟩, hin⟩ :=
+    shSupport_directCommitIn hw S V hcard hpop hcert hcov hlead
   refine ⟨L, by omega, Steelhead.Decided.directCommit ⟨hLmem, hLr', hLc'⟩ hin, ?_⟩
   intro S' hround hlead'
   refine Steelhead.Decided.directCommit (S := S') ⟨hLmem, ?_, ?_⟩ ?_

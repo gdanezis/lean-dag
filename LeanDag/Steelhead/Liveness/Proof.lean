@@ -15,7 +15,7 @@ namespace Liveness
 
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ _ S U w ws wa k
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro T V R N k hw hT hcard hs hpop hR hN hV hlead
     exact commitsOfSynchrony hw hT hcard hs hpop hR hN hV hlead
   · intro T c hw hT hcard hspan fair R k
@@ -24,6 +24,8 @@ theorem holds : Statement := by
     exact skipsCrashed hcard hcrash hpop hV
   · intro T V k L q hw hcard hL huniq hq hqr hqT hqL hs hpop hV
     exact commitsOfDissemination hw hcard hL huniq hq hqr hqT hqL hs hpop hV
+  · intro T V R N k a hw hid hT hcard hs hpop hR hka hlead hdec hN hV
+    exact decidedOfReliableAboveFloor hw hid hT hcard hs hpop hR hka hlead hdec hN hV
   · intro coin V c N hwa hrun hV r hr
     exact chainAllDecidedBelow hwa hrun hV r hr
   · intro coin T hwa hT hcard fair R k

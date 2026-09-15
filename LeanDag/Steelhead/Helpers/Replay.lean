@@ -17,6 +17,8 @@ namespace Steelhead
 
 namespace Replay
 
+open scoped ENNReal
+
 /-! ## The selection -/
 
 /-- A step of the selection fold keeps the incumbent among the allowed candidates. -/
@@ -75,10 +77,37 @@ theorem select_score_le (candidates : List ℕ) (scores : ℕ → ℚ) (current 
   · exact fold_score_le candidates scores current current
   · exact le_rfl
 
-/-! ## The evidence -/
+/-- The selection answers the current period or a candidate: the fold starts from the current
+period and only ever moves to a candidate. -/
+theorem select_eq_or_mem (candidates : List ℕ) (scores : ℕ → ℚ) (current : ℕ) (epsilon : ℚ) :
+    select candidates scores current epsilon = current ∨
+      select candidates scores current epsilon ∈ candidates := by
+  dsimp only [select]
+  split
+  · exact List.mem_cons.mp (fold_mem (current :: candidates) candidates scores current current
+      (by simp) fun x hx => by simp [hx])
+  · exact Or.inl rfl
 
 variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Validator]
   [F : Faults Validator] [LinearOrder BlockId]
+
+/-- **SH18h.** The failover answers `1`, or the selection's answer, which is the current period or
+a candidate. -/
+theorem failover_anchorUpdate_range [S : Slots Validator]
+    {U : BlockUniverse Validator BlockId Payload} {I : ℕ} (w : ℕ → ℕ) (C : Config Validator)
+    (candidates : List ℕ) (epsilon : ℚ) {K j k : ℕ} (A : BlockId) (hK : 1 ≤ K)
+    (hc : ∀ c ∈ candidates, 1 ≤ c ∧ c ≤ K) (h1 : 1 ≤ k) (hk : k ≤ K) :
+    1 ≤ failover U w I (anchorUpdate U I C candidates epsilon) j A k ∧
+      failover U w I (anchorUpdate U I C candidates epsilon) j A k ≤ K := by
+  unfold failover
+  split
+  · exact ⟨le_rfl, hK⟩
+  · simp only [anchorUpdate, update]
+    rcases select_eq_or_mem candidates (score (ofAnchor U A I) C) k epsilon with h | h
+    · rw [h]; exact ⟨h1, hk⟩
+    · exact hc _ h
+
+/-! ## The evidence -/
 
 /-- A quorum of certificates within the window is at least one. -/
 theorem certified_of_commits (U : BlockUniverse Validator BlockId Payload) (A : BlockId)
@@ -201,6 +230,56 @@ theorem commits_sound {A : BlockId} {I r w : ℕ} {a : Validator}
   unfold MahiMahi.DirectCommit
   exact le_trans hc (Finset.card_le_card (Finset.image_subset_image Finset.inter_subset_left))
 
+/-- The window marks committed exactly the authors whose round-`r` block the anchor's history,
+read as a record, directly commits: a candidate at a round the window retains lies in the history,
+and its certificates within the window are its certificates within the history, whose round the
+window retains too. -/
+theorem committedCount_eq_card_goodAt {wa I : ℕ} (hwa : 1 ≤ wa) {A : BlockId} (hA : A ∈ U.ids)
+    {r : ℕ} (hr : windowBottom U A I ≤ r) :
+    committedCount (ofAnchor U A I) r wa =
+      (MahiMahi.goodAt (U.historyView A hA).toRecord wa r).card := by
+  unfold committedCount
+  congr 1
+  ext a
+  rw [Finset.mem_filter, MahiMahi.mem_goodAt]
+  simp only [Finset.mem_univ, true_and, ofAnchor, decide_eq_true_eq,
+    BlockRecord.View.toRecord_ids, BlockRecord.View.toRecord_block]
+  constructor
+  · rintro ⟨L, hL, hc⟩
+    obtain ⟨hLr, hLa, hLw⟩ := Finset.mem_filter.mp hL
+    obtain ⟨-, hLround⟩ := mem_blocksAt.mp hLr
+    obtain ⟨hLh, -, -⟩ := Finset.mem_filter.mp hLw
+    refine ⟨L, hLh, hLround, hLa, ?_⟩
+    unfold MahiMahi.DirectCommit
+    rw [certificates_toRecord]
+    refine le_trans hc (Finset.card_le_card (Finset.image_subset_image ?_))
+    intro C hC
+    obtain ⟨hCU, hCw⟩ := Finset.mem_inter.mp hC
+    exact Finset.mem_inter.mpr ⟨hCU, (Finset.mem_filter.mp hCw).1⟩
+  · rintro ⟨L, hLh, hLround, hLa, hdc⟩
+    change L ∈ history U A at hLh
+    have hLw : L ∈ windowIds U A I :=
+      Finset.mem_filter.mpr ⟨hLh, by rw [hLround]; exact hr, round_le_of_mem_history hA hLh⟩
+    refine ⟨L, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨history_subset_ids hA hLh, hLround⟩, hLa,
+      hLw⟩, ?_⟩
+    unfold MahiMahi.DirectCommit at hdc
+    rw [certificates_toRecord] at hdc
+    refine le_trans hdc (Finset.card_le_card (Finset.image_subset_image ?_))
+    intro C hC
+    obtain ⟨hCU, hCh⟩ := Finset.mem_inter.mp hC
+    change C ∈ history U A at hCh
+    refine Finset.mem_inter.mpr
+      ⟨hCU, Finset.mem_filter.mpr ⟨hCh, ?_, round_le_of_mem_history hA hCh⟩⟩
+    rw [(mem_certificatesAt.mp hCU).2.1]
+    exact le_trans hr (by unfold MahiMahi.decisionRoundAt; omega)
+
+/-- **SH18i.** The count, over `n`, is the uniform coin's measure of the committed set. -/
+theorem commitWeight_eq_commitProb {wa I : ℕ} (hwa : 1 ≤ wa) {A : BlockId} (hA : A ∈ U.ids)
+    {r : ℕ} (hr : windowBottom U A I ≤ r) :
+    (committedCount (ofAnchor U A I) r wa : ℝ≥0∞) / Fintype.card Validator =
+      commitProb (U.historyView A hA).toRecord wa r := by
+  rw [committedCount_eq_card_goodAt hwa hA hr, commitProb_eq]
+
 /-! ## The passes -/
 
 omit [Fintype Validator] [DecidableEq Validator] F [LinearOrder BlockId] in
@@ -220,6 +299,42 @@ omit [Fintype Validator] [DecidableEq Validator] F [LinearOrder BlockId] in
 theorem probeRate_fst_le (E : Evidence Validator) (C : Config Validator) (period : ℕ) :
     (probeRate E C period).1 ≤ (probeRate E C period).2 :=
   List.length_filter_le _ _
+
+omit [Fintype Validator] [DecidableEq Validator] F [LinearOrder BlockId] in
+/-- **SH18j.** The first multiple of the canary spacing at or above the window's bottom and the
+next one both lie in the probe range, and the period, coprime to the spacing, divides at most one
+of them. -/
+theorem probe_exists {E : Evidence Validator} {C : Config Validator} {period : ℕ}
+    (hcop : Nat.Coprime C.canary period) (hp : 2 ≤ period) (hws : 1 ≤ C.ws)
+    (hwin : E.bottom + 2 * C.canary + C.ws ≤ E.top + 2) :
+    0 < (probeRate E C period).2 := by
+  have hc : 1 ≤ C.canary := by
+    rcases Nat.eq_zero_or_pos C.canary with h | h
+    · rw [h, Nat.coprime_zero_left] at hcop; omega
+    · exact h
+  -- the first multiple of the canary at or above the bottom
+  set q := (E.bottom + C.canary - 1) / C.canary with hq
+  have hdm := Nat.div_add_mod (E.bottom + C.canary - 1) C.canary
+  have hml := Nat.mod_lt (E.bottom + C.canary - 1) (by omega : 0 < C.canary)
+  rw [← hq] at hdm
+  have hlo : E.bottom ≤ C.canary * q := by omega
+  have hhi : C.canary * q < E.bottom + C.canary := by omega
+  -- it or the next multiple is a probe
+  have key : ∃ r, E.bottom ≤ r ∧ r + C.ws - 1 ≤ E.top ∧ r % C.canary = 0 ∧ r % period ≠ 0 := by
+    by_cases h₁ : C.canary * q % period = 0
+    · refine ⟨C.canary * q + C.canary, by omega, by omega, ?_, ?_⟩
+      · rw [← Nat.mul_succ]; exact Nat.mul_mod_right _ _
+      · intro h₂
+        have hd : period ∣ C.canary :=
+          (Nat.dvd_add_right (Nat.dvd_of_mod_eq_zero h₁)).mp (Nat.dvd_of_mod_eq_zero h₂)
+        have := Nat.Coprime.eq_one_of_dvd hcop.symm hd
+        omega
+    · exact ⟨C.canary * q, hlo, by omega, Nat.mul_mod_right _ _, h₁⟩
+  obtain ⟨r, hr₁, hr₂, hr₃, hr₄⟩ := key
+  refine List.length_pos_of_mem (a := r) ?_
+  rw [List.mem_filter, mem_rounds]
+  refine ⟨⟨hr₁, by omega⟩, ?_⟩
+  simp [hr₂, hr₃, hr₄]
 
 omit [Fintype Validator] [DecidableEq Validator] F [LinearOrder BlockId] in
 /-- A mean over a nonempty set is at least a common lower bound of its terms. -/

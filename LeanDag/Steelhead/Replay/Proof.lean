@@ -15,7 +15,7 @@ namespace Replay
 
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ _ U wa I
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro candidates scores current epsilon hc
     exact select_mem candidates scores current epsilon hc
   · intro candidates scores current epsilon
@@ -30,6 +30,12 @@ theorem holds : Statement := by
     exact async_term_bound hws hlt hb hr hdec hcons
   · intro A I r w a h
     exact commits_sound h
+  · intro S w C candidates epsilon K j k A hK hc h1 hk
+    exact failover_anchorUpdate_range w C candidates epsilon A hK hc h1 hk
+  · intro A hA r hwa hr
+    exact commitWeight_eq_commitProb hwa hA hr
+  · intro E C period hcop hp hws hwin
+    exact probe_exists hcop hp hws hwin
 
 end Replay
 

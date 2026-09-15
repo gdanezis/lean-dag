@@ -5,13 +5,13 @@ import LeanDag.MahiMahi.Model.Unpredictable
 
 What the rule decides under synchrony, what the chain decides under the
 unpredictable-leader clause, and what the output does *not* decide under
-the paper's asynchronous adversary (`steelhead.md` §4–6). Eleven claims:
+the paper's asynchronous adversary (`steelhead.md` §4–6). Twelve claims:
 
 * **SH6a, a reliable leader commits under coverage** — Theorem 2's
   per-slot half: on a DAG a reliable quorum has synchronised and
   populated through the slot's decision round, a reliably led slot
-  commits in every view caught up to that round, at whichever wave the
-  slot's round carries;
+  commits in every view caught up to that round, by the direct rule, at
+  whichever wave the slot's round carries;
 * **SH6b, everything below a fair run is decided** — the core's L10 at
   the wavelength function: past any slot the schedule offers a run of
   reliably led slots, and once the DAG is covered through the run's
@@ -27,6 +27,14 @@ the paper's asynchronous adversary (`steelhead.md` §4–6). Eleven claims:
   holding its decision round, once the quorum is synchronised from that
   round and populates the wave. The leader need not be reliable: it may
   be Byzantine, so long as it did not equivocate;
+* **SH6f, a reliable slot above the floor decides the slot** — Theorem
+  2's Byzantine-led clause, as the anchor rule has it: under synchrony a
+  slot is decided once every slot from its floor up to some reliably led
+  slot is decided, whatever led them. The reliably led slot commits
+  directly (SH6a), so the earliest commit at or above the floor is the
+  anchor, and every slot between, decided but not committed, is a skip
+  the search passes over. An undecided slot at the floor, one led by an
+  equivocating Byzantine validator, is what the hypothesis excludes;
 * **SH7a, chain liveness** — MM3c at the chain schedule: a run of `wa`
   consecutive chain commits, which the clause promises in every window,
   decides every chain verdict below it;
@@ -68,12 +76,12 @@ the paper's asynchronous adversary (`steelhead.md` §4–6). Eleven claims:
   causal ordering and the wait is nonincreasing in `i`: delays never
   compound.
 
-SH6a and SH6b assume `3 ≤ w r` everywhere, as the safety claims do; SH6c
-assumes nothing of the wave, and SH6e `4 ≤ w r` at the slot's round, so
-that the vote round lies two rounds up, where synchrony has carried the
-candidate. Neither asks the quorum to be correct: SH6c reads blames,
-which need no vote, and SH6e reads votes for a candidate its leader did
-not equivocate on. SH7a and SH7c
+SH6a, SH6b and SH6f assume `3 ≤ w r` everywhere, as the safety claims
+do, and SH6f one slot per round; SH6c assumes nothing of the wave, and
+SH6e `4 ≤ w r` at the slot's round, so that the vote round lies two
+rounds up, where synchrony has carried the candidate. Neither asks the
+quorum to be correct: SH6c reads blames, which need no vote, and SH6e
+reads votes for a candidate its leader did not equivocate on. SH7a and SH7c
 assume `1 ≤ wa`, as MM3c does, and SH7b `4 ≤ wa`, as MM5 does; SH8 assumes
 `2 ≤ ws ≤ k` and nothing of `wa`; SH9 assumes `1 ≤ w r ≤ wa`; SH9b
 assumes `1 ≤ wa`, as SH7a does; SH9c assumes `1 ≤ ws ≤ wa`.
@@ -106,8 +114,9 @@ def CommitsOfSynchrony (U : BlockUniverse Validator BlockId Payload) (w : ℕ �
     V.CoversUpto N →
     -- and the slot's leader is reliable
     S.leader k ∈ T →
-    -- then the slot commits its candidate in that view
-    ∃ L, IsLeaderBlock U k L ∧ Decided w U V k (some L)
+    -- then the slot commits its candidate in that view, by the direct rule
+    ∃ L, IsLeaderBlock U k L ∧
+      MahiMahi.DirectCommitIn U V (w (S.slotRound k)) L (S.slotRound k) ∧ Decided w U V k (some L)
 
 /-- **SH6b, everything below a fair run is decided.** The run is named by
 the schedule alone, before any DAG is mentioned, so the horizon cannot
@@ -166,6 +175,29 @@ def CommitsOfDissemination (U : BlockUniverse Validator BlockId Payload) (w : �
     V.CoversUpto (MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k)) →
     -- then the slot commits its candidate in that view
     Decided w U V k (some L)
+
+/-- **SH6f, a reliable slot above the floor decides the slot.** -/
+def DecidedOfReliableAboveFloor (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) :
+    Prop :=
+  ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (R N k a : ℕ),
+    (∀ r, 3 ≤ w r) →
+    -- one slot per round
+    (∀ t, S.slotRound t = t) →
+    -- T is a reliable set: correct, and a quorum
+    T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
+    -- T is synchronised from R and populates every round from R to the horizon N
+    SynchronisedOn U T R → (∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) →
+    -- the slot lies at or past R
+    R ≤ k →
+    -- slot a lies at or above k's floor and is reliably led
+    k + w k ≤ a → S.leader a ∈ T →
+    -- every slot from the floor up to a is decided in V
+    (∀ j, k + w k ≤ j → j < a → ∃ v, Decided w U V j v) →
+    -- every slot up to a decides at or below N, which the view holds
+    (∀ j, j ≤ a → (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N) →
+    V.CoversUpto N →
+    -- then the slot is decided in V
+    ∃ v, Decided w U V k v
 
 /-- **SH7a, chain liveness.** -/
 def ChainAllDecidedBelow (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
@@ -281,7 +313,7 @@ def Statement : Prop :=
     CommitsOfSynchrony U w ∧
       AllDecidedBelowOfSynchrony (Validator := Validator) (BlockId := BlockId)
         (Payload := Payload) w ∧
-      SkipsCrashed U w ∧ CommitsOfDissemination U w ∧
+      SkipsCrashed U w ∧ CommitsOfDissemination U w ∧ DecidedOfReliableAboveFloor U w ∧
       ChainAllDecidedBelow U wa ∧
       ChainAllDecidedBelowOfSynchrony (Validator := Validator) (BlockId := BlockId)
         (Payload := Payload) wa ∧
