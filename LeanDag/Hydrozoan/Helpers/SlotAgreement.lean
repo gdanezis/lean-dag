@@ -325,7 +325,7 @@ theorem anchor_round {k j : ℕ} {A : BlockId} (hA : IsLeaderBlock U j A)
     (helig : (hydrozoanAnchored Replica BlockId).Eligible k j) :
     S.slotRound k + 3 ≤ (U.block A).round := by
   have := (hydrozoanAnchored Replica BlockId).anchor_round_le hA helig
-  simp only [hydrozoanAnchored_wave] at this
+  simp only [hydrozoanAnchored_waveAt] at this
   omega
 
 /-- A slow commit in any view is certified at every candidate of an

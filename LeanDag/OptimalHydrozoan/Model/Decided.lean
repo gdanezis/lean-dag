@@ -29,7 +29,7 @@ commit the Optimal fast path or Hydrozoan's slow path, two rungs
 def optimalAnchored :
     AnchoredRule Replica BlockId Unit LeanDag.Hydrozoan.ValidWrt
       (LeanDag.Hydrozoan.NonByzantine : Finset Replica) where
-  wave := 2
+  waveAt := fun _ => 2
   Commit := fun U V L r => FastCommitOptInView U V L r ∨ SlowCommitInView U V L r
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderOptInView (S := S) U V k

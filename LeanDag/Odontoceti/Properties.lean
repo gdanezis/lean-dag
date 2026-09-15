@@ -66,20 +66,20 @@ theorem odontocetiBandLaws :
     (Odontoceti.odontocetiAnchored Validator BlockId Payload).BandLaws where
   commit_band := fun h hkk _ hlo hhi hV _ hc =>
     AnchoredRule.holdsAtLeast_votesFor_band h hV (by omega) (by omega)
-      (by simp only [Odontoceti.odontocetiAnchored_wave] at hhi; omega) hc
+      (by simp only [Odontoceti.odontocetiAnchored_waveAt] at hhi; omega) hc
   skip_band := fun h hkk hlk hlo hhi hV hs =>
     le_trans hs (Finset.card_le_card (AnchoredRule.slotBlamesIn_band h hkk hlk hlo.le
-      (by simp only [Odontoceti.odontocetiAnchored_wave] at hhi; omega) hV))
+      (by simp only [Odontoceti.odontocetiAnchored_waveAt] at hhi; omega) hV))
   link_band := by
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi _ _
-    simp only [Odontoceti.odontocetiAnchored_wave] at hhi
+    simp only [Odontoceti.odontocetiAnchored_waveAt] at hhi
     show Odontoceti.ThickLink U' A L (S'.slotRound k') ↔ Odontoceti.ThickLink U A L (S.slotRound k)
     unfold Odontoceti.ThickLink coneLink
     rw [AnchoredRule.coneSupporters_band h hA hAlo hAhi (n := S.slotRound k + 1) (by omega) (by omega)
       (by omega)]
   link_novel := by
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi _ _ hL ht
-    simp only [Odontoceti.odontocetiAnchored_wave] at hhi
+    simp only [Odontoceti.odontocetiAnchored_waveAt] at hhi
     change Odontoceti.ThickLink U' A L (S'.slotRound k') at ht
     unfold Odontoceti.ThickLink coneLink at ht
     rw [AnchoredRule.coneSupporters_band_novel h hA hAlo hAhi (n := S.slotRound k + 1)
@@ -90,7 +90,7 @@ theorem odontocetiBandLaws :
 /-- **Odontoceti is banded**: the relation's band at its laws. -/
 theorem banded : Banded
     (odontocetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) :=
-  AnchoredRule.banded odontocetiBandLaws
+  AnchoredRule.banded odontocetiBandLaws (fun _ _ => rfl)
 
 /-- **Odontoceti skips an unsupported slot from a correct quorum.**
 
@@ -153,8 +153,8 @@ theorem voteSupport_commits :
 the least thick-linked candidate. -/
 theorem indirect :
     Indirect (odontocetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-      (fun sr i j => sr i + (Odontoceti.odontocetiAnchored Validator BlockId Payload).wave + 1
-        ≤ sr j) :=
+      (fun sr i j => sr i +
+        (Odontoceti.odontocetiAnchored Validator BlockId Payload).waveAt (sr i) + 1 ≤ sr j) :=
   AnchoredRule.indirect Odontoceti.odontocetiLaws.link_congr fun hi h => Odontoceti.exists_least hi h
 
 /-- **Odontoceti has the descent laws** at the core fault model's slack,
@@ -164,10 +164,10 @@ theorem descent :
       (Payload := Payload))
       (Timed.Good (odontocetiRule (Validator := Validator) (BlockId := BlockId)
         (Payload := Payload)) (coreReliability Validator))
-      ((Odontoceti.odontocetiAnchored Validator BlockId Payload).wave + 1)
+      ((Odontoceti.odontocetiAnchored Validator BlockId Payload).waveAt 0 + 1)
       (coreReliability Validator).slack :=
   Timed.descent_of_support _ _ _ (Properties.voteSupport _) (Timed.voteSupport_ofCoverage _)
-    voteSupport_commits indirect (by change 1 ≤ 1 + 1; omega) fun _ _ _ h => h
+    voteSupport_commits indirect (fun _ => by change 1 ≤ 1 + 1; omega) fun _ _ _ h => h
 
 /-- **And a committed run decides everything below it.** Was a downward
 induction carrying the bound by hand; it is now `Descends.of_indirect`,
@@ -221,7 +221,7 @@ theorem all_decided_below_of_fairRun {c : ℕ} (hc : 0 < c)
       (OdontocetiProperties.descends hc hspan) (T := T)
       ⟨hT, by change Fintype.card Validator - Faults.f Validator ≤ T.card; exact hcard⟩ fair R k
   refine ⟨b, hb, hRb, fun U N V hpop hs hN hcov i hi => ?_⟩
-  obtain ⟨v, hv⟩ := h V N hs hpop hcov hN i hi
+  obtain ⟨v, hv⟩ := h V N hs hpop hcov (Timed.slotBound_of_top _ (fun _ => le_rfl) hN) i hi
   exact ⟨v, hv.2.1⟩
 
 /-- **O10 at `T := Correct`.** -/

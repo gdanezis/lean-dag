@@ -48,7 +48,7 @@ stake, so skips only ever arrive via an anchor — and one rung, a vote in
 the anchor's cone, with no tie to break since a slot has one candidate. -/
 def nemoAnchored (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [DecidableEq BlockId] : AnchoredRule Validator BlockId Payload ValidWrt Finset.univ where
-  wave := 1
+  waveAt := fun _ => 1
   Commit := fun U V L r => Nemo.DirectCommitIn U V L r
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun _ _ _ _ => False
@@ -57,7 +57,8 @@ def nemoAnchored (Validator BlockId Payload : Type) [Fintype Validator] [Decidab
   tie := fun _ _ _ => False
 
 omit S in
-@[simp] theorem nemoAnchored_wave : (nemoAnchored Validator BlockId Payload).wave = 1 := rfl
+@[simp] theorem nemoAnchored_waveAt (r : ℕ) :
+    (nemoAnchored Validator BlockId Payload).waveAt r = 1 := rfl
 omit S in
 @[simp] theorem nemoAnchored_rungs : (nemoAnchored Validator BlockId Payload).rungs = 1 := rfl
 
@@ -95,7 +96,7 @@ theorem certifiedIn_of_directCommitIn_at_anchor
   certifiedIn_of_directCommit (directCommit_of_directCommitIn h) hA.1
     (by
       have := (nemoAnchored Validator BlockId Payload).anchor_round_le hA helig
-      simp only [nemoAnchored_wave] at this; omega)
+      simp only [nemoAnchored_waveAt] at this; omega)
 
 omit S in
 /-- **Nemo's laws**, every commit-against-commit case by candidate

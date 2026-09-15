@@ -109,11 +109,17 @@ theorem unpredictableWithin_of_synchronisedOn {w : ℕ} {T : Finset Validator} {
   have hmono : S.slotRound k' ≤ S.slotRound (k + c) := S.mono (by omega)
   have hd : (mahiMahiAnchored Validator BlockId Payload w).decisionRound k' ≤ N := by
     unfold AnchoredRule.decisionRound at hk ⊢
-    simp only [mahiMahiAnchored_wave] at hk ⊢
+    simp only [mahiMahiAnchored_waveAt] at hk ⊢
     omega
   refine good_of_synchronisedOn hw hT hcard hs (Nat.zero_le _) ?_ ?_ (hpop _ hd) hlead
-  · exact hpop _ (by unfold AnchoredRule.decisionRound at hd; simp only [mahiMahiAnchored_wave] at hd; omega)
-  · exact hpop _ (by unfold AnchoredRule.decisionRound at hd; simp only [mahiMahiAnchored_wave] at hd; omega)
+  · exact hpop _ (by
+      unfold AnchoredRule.decisionRound at hd
+      simp only [mahiMahiAnchored_waveAt] at hd
+      omega)
+  · exact hpop _ (by
+      unfold AnchoredRule.decisionRound at hd
+      simp only [mahiMahiAnchored_waveAt] at hd
+      omega)
 
 end Slots
 

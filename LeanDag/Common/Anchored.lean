@@ -10,10 +10,11 @@ looks to the nearest eligible committed **anchor** above and asks what
 its causal history says through one or more graded **rungs** of link,
 the first rung with a linked candidate winning, a tie-break naming the
 least where several qualify. Only the data varies per rule — the wave
-offset, the direct predicates, the rungs and their ties — and `Laws`,
-eight facts each rule proves under its own name, is what yields
-agreement across views, monotonicity in the view, and the ledger's
-agreement, proved once here.
+offset, read at the slot's round so that one rule may decide different
+rounds at different waves, the direct predicates, the rungs and their
+ties — and `Laws`, eight facts each rule proves under its own name, is
+what yields agreement across views, monotonicity in the view, and the
+ledger's agreement, proved once here.
 -/
 
 namespace LeanDag
@@ -84,9 +85,12 @@ end EligibleAt
 /-- **An anchored rule**: what a leader-based decision rule supplies. -/
 structure AnchoredRule (Validator : Type*) (BlockId : Type*) (Payload : Type*)
     (P : Validity Validator BlockId Payload) (honest : Finset Validator) where
-  /-- The rounds a slot's direct rules read above its proposal, less one:
-  an anchor must sit strictly above `slotRound k + wave`. -/
-  wave : ℕ
+  /-- The rounds a slot's direct rules read above its proposal, less one, as
+  a function of the slot's round: an anchor of a slot proposed at round `r`
+  must sit strictly above `r + waveAt r`. Constant for every rule in the
+  tree; a rule whose wavelength alternates with the round supplies a
+  function of it. -/
+  waveAt : ℕ → ℕ
   /-- The direct commit, judged from a view: `Commit U V L r` says the
   candidate `L` proposed at round `r` is committed by what `V` holds. -/
   Commit : (U : BlockRecord Validator BlockId Payload P honest) → U.View → BlockId → ℕ → Prop
@@ -120,37 +124,40 @@ variable [S : Slots Validator]
 /-! ## Eligibility -/
 
 /-- The round at which a slot's direct verdict is settled. -/
-def decisionRound (k : ℕ) : ℕ := S.slotRound k + R.wave
+def decisionRound (k : ℕ) : ℕ := S.slotRound k + R.waveAt (S.slotRound k)
 
-/-- **`j` may anchor `k`**: eligibility at the rule's wave. -/
-abbrev Eligible (k j : ℕ) : Prop := EligibleAt (S := S) R.wave k j
+/-- **`j` may anchor `k`**: eligibility at the wave of `k`'s round. -/
+abbrev Eligible (k j : ℕ) : Prop := EligibleAt (S := S) (R.waveAt (S.slotRound k)) k j
 
 theorem eligible_iff {k j : ℕ} :
-    R.Eligible k j ↔ S.slotRound k + R.wave + 1 ≤ S.slotRound j :=
+    R.Eligible k j ↔ S.slotRound k + R.waveAt (S.slotRound k) + 1 ≤ S.slotRound j :=
   eligibleAt_iff
 
 /-- An eligible anchor is a later slot. -/
 theorem lt_of_eligible {k j : ℕ} (h : R.Eligible k j) : k < j := lt_of_eligibleAt h
 
 /-- Every slot has an eligible anchor somewhere. -/
-theorem exists_eligible (k : ℕ) : ∃ j, R.Eligible k j := exists_eligibleAt R.wave k
+theorem exists_eligible (k : ℕ) : ∃ j, R.Eligible k j := exists_eligibleAt _ k
 
-/-- **A run of `c` slots reaches past everything below it**, at the
-rule's wave. -/
-abbrev SpansEligible (c : ℕ) : Prop := SpansEligibleAt (S := S) R.wave c
+/-- **A run of `c` slots reaches past everything below it**, each slot at
+the wave of its own round. -/
+abbrev SpansEligible (c : ℕ) : Prop := ∀ b i : ℕ, i < b → R.Eligible i (b + c - 1)
 
-/-- Under an identity-round schedule, `wave + 1` consecutive slots span. -/
-theorem spansEligible_of_identity (hid : ∀ s, S.slotRound s = s) :
-    R.SpansEligible (R.wave + 1) := by
+/-- Under an identity-round schedule, `w + 1` consecutive slots span, for
+any `w` the wave never exceeds. -/
+theorem spansEligible_of_identity (hid : ∀ s, S.slotRound s = s) {w : ℕ}
+    (hw : ∀ r, R.waveAt r ≤ w) : R.SpansEligible (w + 1) := by
   intro b i hi
-  rw [eligibleAt_iff, hid, hid]
+  have := hw i
+  rw [eligible_iff, hid, hid]
   omega
 
 variable {U : BlockRecord Validator BlockId Payload P honest}
 
 /-- The anchor's round clears the slot's decision round. -/
 theorem anchor_round_le {k j : ℕ} {A : BlockId} (hA : IsLeaderBlock U j A)
-    (helig : R.Eligible k j) : S.slotRound k + R.wave + 1 ≤ (U.block A).round := by
+    (helig : R.Eligible k j) :
+    S.slotRound k + R.waveAt (S.slotRound k) + 1 ≤ (U.block A).round := by
   rw [hA.2.1]
   exact R.eligible_iff.mp helig
 

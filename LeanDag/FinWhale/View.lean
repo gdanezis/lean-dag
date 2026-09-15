@@ -527,7 +527,7 @@ theorem finWhaleLaws [LinearOrder BlockId] :
     refine ⟨0, Nat.one_pos, indirectCommit_of_directCommit hA.1 ?_ (mem_slotBlocks.2 hL)
       (directCommit_restrict h)⟩
     have := (finWhaleAnchored Validator BlockId Payload).anchor_round_le hA helig
-    simp only [finWhaleAnchored_wave] at this
+    simp only [finWhaleAnchored_waveAt] at this
     omega
   commit_link_unique := by
     intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ hlink _

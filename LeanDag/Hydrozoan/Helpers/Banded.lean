@@ -177,18 +177,18 @@ omit S in
 theorem hydrozoanBandLaws : (hydrozoanAnchored Replica BlockId).BandLaws where
   commit_band := by
     intro S S' U U' lo hi g g' V V' k k' L h hkk hlk hlo hhi hV _ hc
-    simp only [hydrozoanAnchored_wave] at hhi
+    simp only [hydrozoanAnchored_waveAt] at hhi
     rcases hc with hc | hc
     · exact Or.inl (AnchoredRule.holdsAtLeast_votesFor_band h hV (by omega) (by omega) (by omega) hc)
     · exact Or.inr (AnchoredRule.holdsAtLeast_certificatesAt_band h hV (by omega) (by omega)
         (by omega) (AnchoredRule.isVote_band_at h (by omega) (by omega)) hc)
   skip_band := by
     intro S S' U U' lo hi g g' V V' k k' h hkk hlk hlo hhi hV hs
-    simp only [hydrozoanAnchored_wave] at hhi
+    simp only [hydrozoanAnchored_waveAt] at hhi
     exact AnchoredRule.holdsAtLeast_slotBlamers_band h hkk hlk hlo.le (by omega) hV hs
   link_band := by
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi hi hL
-    simp only [hydrozoanAnchored_wave] at hhi
+    simp only [hydrozoanAnchored_waveAt] at hhi
     rcases i with _ | _ | i
     · exact AnchoredRule.linkedVia_certificatesAt_band h hA hAlo hAhi (by omega) (by omega)
         (by omega) (AnchoredRule.isVote_band_at h (by omega) (by omega))
@@ -197,7 +197,7 @@ theorem hydrozoanBandLaws : (hydrozoanAnchored Replica BlockId).BandLaws where
     · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega)
   link_novel := by
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ hlo hhi hi _ hLo
-    simp only [hydrozoanAnchored_wave] at hhi
+    simp only [hydrozoanAnchored_waveAt] at hhi
     rcases i with _ | _ | i
     · exact AnchoredRule.not_linkedVia_certificatesAt_band_novel h hA hAlo hAhi
         (n := S.slotRound k + 2) (by omega) (by omega) (by omega)
@@ -208,7 +208,7 @@ theorem hydrozoanBandLaws : (hydrozoanAnchored Replica BlockId).BandLaws where
 omit S in
 /-- **Hydrozoan reads a band**: the relation's band at its laws. -/
 theorem banded : Banded (rule (Replica := Replica) (BlockId := BlockId)) :=
-  AnchoredRule.banded hydrozoanBandLaws
+  AnchoredRule.banded hydrozoanBandLaws (fun _ _ => rfl)
 
 end Laws
 

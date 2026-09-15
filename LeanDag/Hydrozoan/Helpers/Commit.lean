@@ -81,7 +81,7 @@ theorem slowCommit_of_certifiesAt {U : LeanDag.Hydrozoan.BlockUniverse Replica B
 
 /-- **Hydrozoan's support**: wavelength two, certification the rule's own. -/
 def hzSupport : Support (rule (Replica := Replica) (BlockId := BlockId)) where
-  wave := 2
+  waveAt := fun _ => 2
   Certifies := fun U C L => LeanDag.Hydrozoan.IsCertificate U C L
 
 /-- **Law 1.** A certifier two rounds above the settling round keeps its
@@ -267,7 +267,7 @@ theorem indirect :
     Indirect (rule (Replica := Replica) (BlockId := BlockId))
       (fun sr i j => sr i + 3 ≤ sr j) :=
   (AnchoredRule.indirect SlotAgreement.hydrozoanLaws.link_congr fun hi h => exists_least hi h).congr
-    (fun _ _ _ => by simp only [hydrozoanAnchored_wave])
+    (fun _ _ _ => by simp only [hydrozoanAnchored_waveAt])
 
 /-- **Hydrozoan has the descent laws** at the hybrid fault model's slack. -/
 theorem descent :
@@ -275,7 +275,7 @@ theorem descent :
       (Timed.Good (rule (Replica := Replica) (BlockId := BlockId)) (hzReliability Replica))
       3 (hzReliability Replica).slack :=
   Timed.descent_of_support _ _ 3 hzSupport hzSupport_ofCoverage hzSupport_commits
-    indirect (by change 2 ≤ 3; omega) fun _ _ _ h => h
+    indirect (fun _ => by change 2 ≤ 3; omega) fun _ _ _ h => h
 
 /-- **The descent as a property.** Was two lemmas — the graded rule at a
 bound and a downward induction over the run; both are now
@@ -285,7 +285,7 @@ theorem descends {S : LeanDag.Slots Replica} {c : ℕ} (hc : 0 < c)
     Descends (rule (Replica := Replica) (BlockId := BlockId)) S c :=
   Descends.of_indirect indirect hc (fun b i hi => by
     have := (hydrozoanAnchored Replica BlockId).eligible_iff.mp (hspans b i hi)
-    simp only [hydrozoanAnchored_wave] at this
+    simp only [hydrozoanAnchored_waveAt] at this
     omega)
 
 /-- **A commit names the slot's candidate.** -/

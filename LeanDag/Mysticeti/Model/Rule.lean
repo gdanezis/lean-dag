@@ -86,7 +86,7 @@ abbrev DirectSkipSlotIn (U : BlockUniverse Validator BlockId Payload)
 def coreAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
     [DecidableEq Validator] [Faults Validator] [DecidableEq BlockId] :
     AnchoredRule Validator BlockId Payload ValidWrt Correct where
-  wave := 2
+  waveAt := fun _ => 2
   Commit := fun U V L r => DirectCommitIn U V L r
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => DirectSkipSlotIn (S := S) U V k

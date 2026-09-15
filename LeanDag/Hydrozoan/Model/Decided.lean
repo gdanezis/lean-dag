@@ -27,7 +27,7 @@ slotBlames in view; two rungs, the anchor-linked certificate and then the
 weak quorum, the second tie-broken by the order. -/
 def hydrozoanAnchored :
     AnchoredRule Replica BlockId Unit ValidWrt (NonByzantine : Finset Replica) where
-  wave := 2
+  waveAt := fun _ => 2
   Commit := fun U V L r => FastCommitInView U V L r ∨ SlowCommitInView U V L r
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderInView (S := S) U V k

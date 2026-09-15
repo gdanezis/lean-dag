@@ -31,7 +31,7 @@ number is an estimate of lines removed it is marked as such.
 ## 1. The rule cards
 
 Each instance of `AnchoredRule` (`Common/Anchored.lean:141`) is six
-fields: `wave`, `Commit`, `Skip`, `rungs`, `Link`, `tie`, plus the record
+fields: `waveAt`, `Commit`, `Skip`, `rungs`, `Link`, `tie`, plus the record
 it reads and the invariant `I` its laws need. The table gives the eight
 instances in those terms. Thresholds: `n − f` is `quorumCard`; Hybrid's
 `q = n − (fb + fc)`; Hydrozoan's `p, q, qFast, qCert, qSlow, qWeak` are
@@ -355,7 +355,7 @@ instantiations (1466 lines over 22 files) repeat five parts:
 non-trivial `Laws` fields over any `AnchoredRule` with `Laws`, and
 `Band.lean:120` gives `Indirect`. So `Barnacle.ofAnchored (R) (hl) (hleast) (sp : Support) …`
 produces `BaseRule` (with `full := View.full`, `historyView` from the
-record's `CausalStructure`, `waveLength := R.wave + 1`, which matches
+record's `CausalStructure`, `waveLength := R.waveAt 0 + 1`, which matches
 `LiveRule.elig` at `Barnacle/Helpers/Descent.lean:46`), `BaseRule.Laws`
 and `LiveRule.Descent` for every rule at once. Each `Statement.lean`
 shrinks to the carrier, the `Support` and one inequality; each
@@ -453,7 +453,7 @@ lemmas that are themselves copied: `supportersIn_band` verbatim at
 `Common/Anchored/Band.lean:273` and re-proved at
 `Mysticeti/Properties.lean:398` and `Hybrid/Properties.lean:154` because
 the Common one is stated at `quorumCard` only. The incantation
-`simp only [<rule>Anchored_wave] at hhi; omega` appears nineteen times.
+`simp only [<rule>Anchored_waveAt] at hhi; omega` appears nineteen times.
 
 With §1.1's combinators, `commit_mono`, `skip_mono`, `skip_congr`,
 `link_congr`, `commit_band`, `skip_band`, `link_band` and `link_novel`

@@ -352,7 +352,7 @@ omit S in
 theorem optimalBandLaws : (optimalAnchored Replica BlockId).BandLaws where
   commit_band := by
     intro S S' U U' lo hi g g' V V' k k' L h hkk hlk hlo hhi hV _ hc
-    simp only [optimalAnchored_wave] at hhi
+    simp only [optimalAnchored_waveAt] at hhi
     rcases hc with hc | hc
     · exact Or.inl (fastCommitOptInView_bnd h (fun b hb h1 h2 => hV b hb (by omega) (by omega))
         (n := S.slotRound k) (n' := S'.slotRound k') (by omega) (by omega) (by omega) hc)
@@ -360,12 +360,12 @@ theorem optimalBandLaws : (optimalAnchored Replica BlockId).BandLaws where
         (by omega) (AnchoredRule.isVote_band_at h (by omega) (by omega)) hc)
   skip_band := by
     intro S S' U U' lo hi g g' V V' k k' h hkk hlk hlo hhi hV hs
-    simp only [optimalAnchored_wave] at hhi
+    simp only [optimalAnchored_waveAt] at hhi
     exact skippedLeaderOptInView_bnd h (fun b hb h1 h2 => hV b hb (by omega) (by omega))
       hkk hlk (by omega) (by omega) hs
   link_band := by
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk hlk hlo hhi hi _
-    simp only [optimalAnchored_wave] at hhi
+    simp only [optimalAnchored_waveAt] at hhi
     rcases i with _ | _ | i
     · exact AnchoredRule.linkedVia_certificatesAt_band h hA hAlo hAhi (by omega) (by omega)
         (by omega) (AnchoredRule.isVote_band_at h (by omega) (by omega))
@@ -374,7 +374,7 @@ theorem optimalBandLaws : (optimalAnchored Replica BlockId).BandLaws where
     · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega)
   link_novel := by
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk hlk hlo hhi hi _ hLo
-    simp only [optimalAnchored_wave] at hhi
+    simp only [optimalAnchored_waveAt] at hhi
     rcases i with _ | _ | i
     · exact AnchoredRule.not_linkedVia_certificatesAt_band_novel h hA hAlo hAhi
         (n := S.slotRound k + 2) (by omega) (by omega) (by omega)

@@ -111,7 +111,7 @@ omit S in
 def odontocetiAnchored (Validator BlockId Payload : Type) [Fintype Validator]
     [DecidableEq Validator] [Faults5 Validator] [LinearOrder BlockId] :
     AnchoredRule Validator BlockId Payload ValidWrt Correct where
-  wave := 1
+  waveAt := fun _ => 1
   Commit := fun U V L r => Odontoceti.DirectCommitIn U V L r
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S k => DirectSkipSlotIn (S := S) U V k
@@ -120,8 +120,8 @@ def odontocetiAnchored (Validator BlockId Payload : Type) [Fintype Validator]
   tie := fun _ L L' => L < L'
 
 omit S in
-@[simp] theorem odontocetiAnchored_wave :
-    (odontocetiAnchored Validator BlockId Payload).wave = 1 := rfl
+@[simp] theorem odontocetiAnchored_waveAt (r : ℕ) :
+    (odontocetiAnchored Validator BlockId Payload).waveAt r = 1 := rfl
 omit S in
 @[simp] theorem odontocetiAnchored_rungs :
     (odontocetiAnchored Validator BlockId Payload).rungs = 1 := rfl
@@ -164,7 +164,7 @@ theorem odontocetiLaws : (odontocetiAnchored Validator BlockId Payload).Laws whe
     not_directSkipIn_of_directCommitIn h (directSkipIn_of_directSkipSlotIn hskip hL)
   commit_link := fun _ _ h hA helig => ⟨0, Nat.one_pos, thickLink_of_directCommitIn h hA.1 (by
     have := (odontocetiAnchored Validator BlockId Payload).anchor_round_le hA helig
-    simp only [odontocetiAnchored_wave] at this; omega)⟩
+    simp only [odontocetiAnchored_waveAt] at this; omega)⟩
   commit_link_unique := by
     intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ hlink _
     exact eq_of_directCommitIn_of_thickLink hL₁ hL₂ h hlink

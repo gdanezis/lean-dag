@@ -7,7 +7,9 @@ import LeanDag.Timed.Coverage
 
 `ofAnchored R` is the base rule of an anchored rule: the record as
 universe, `View.full` and `BlockRecord.historyView` for the two views,
-`R.wave + 1` for the wave length — the gap an anchor must clear — and
+`R.waveAt 0 + 1` for the wave length — the gap an anchor must clear, read
+at round `0` since a base rule has one wave length, which is faithful for a
+rule whose wave is constant, as every rule Barnacle instantiates is — and
 `R.Commit` for the direct predicate. `ofAnchoredVia R f` is the same over
 any type projecting to records, and `ofAnchoredOn R I` over the records
 satisfying an invariant `I`. `liveOfAnchored R rel` adds
@@ -32,7 +34,7 @@ def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest) :
   toDagRule := R.toDagRule
   full := fun U => View.full U
   historyView := fun U A hA => U.historyView A hA
-  waveLength := R.wave + 1
+  waveLength := R.waveAt 0 + 1
   DirectCommitIn := fun {U} V L r => R.Commit U V L r
   decDirect := fun {U} V L r => R.decCommit U V L r
 
@@ -44,7 +46,7 @@ def ofAnchoredVia (R : AnchoredRule Validator BlockId Payload P honest) {X : Typ
   toDagRule := R.toDagRuleVia f
   full := fun U => View.full (f U)
   historyView := fun U A hA => (f U).historyView A hA
-  waveLength := R.wave + 1
+  waveLength := R.waveAt 0 + 1
   DirectCommitIn := fun {U} V L r => R.Commit (f U) V L r
   decDirect := fun {U} V L r => R.decCommit (f U) V L r
 

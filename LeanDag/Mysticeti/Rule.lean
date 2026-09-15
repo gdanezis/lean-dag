@@ -248,9 +248,8 @@ direct commit, the slot-level direct skip, and one rung of link with no
 tie, since two certificates at one slot name the same candidate (M5′). -/
 
 omit S in
-omit S in
-@[simp] theorem coreAnchored_wave :
-    (coreAnchored Validator BlockId Payload).wave = 2 := rfl
+@[simp] theorem coreAnchored_waveAt (r : ℕ) :
+    (coreAnchored Validator BlockId Payload).waveAt r = 2 := rfl
 omit S in
 @[simp] theorem coreAnchored_rungs :
     (coreAnchored Validator BlockId Payload).rungs = 1 := rfl

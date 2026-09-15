@@ -127,7 +127,7 @@ omit S in
 def hybridAnchored (Validator BlockId Payload : Type) [Fintype Validator]
     [DecidableEq Validator] [HybridFaults Validator] [LinearOrder BlockId] (k : ℕ) :
     AnchoredRule Validator BlockId Payload ValidWrt Correct where
-  wave := 1
+  waveAt := fun _ => 1
   Commit := fun U V L r => Hybrid.DirectCommitIn U V L r
   decCommit := fun _ _ _ _ => inferInstance
   Skip := fun U V S s => Hybrid.DirectSkipSlotIn (S := S) U V s
@@ -136,8 +136,8 @@ def hybridAnchored (Validator BlockId Payload : Type) [Fintype Validator]
   tie := fun _ L L' => L < L'
 
 omit S in
-@[simp] theorem hybridAnchored_wave (k : ℕ) :
-    (hybridAnchored Validator BlockId Payload k).wave = 1 := rfl
+@[simp] theorem hybridAnchored_waveAt (k r : ℕ) :
+    (hybridAnchored Validator BlockId Payload k).waveAt r = 1 := rfl
 omit S in
 @[simp] theorem hybridAnchored_rungs (k : ℕ) :
     (hybridAnchored Validator BlockId Payload k).rungs = 1 := rfl
@@ -176,7 +176,7 @@ theorem hybridLaws {k : ℕ} (hk : Admissible Validator k) :
   commit_link := fun hne _ h hA helig => ⟨0, Nat.one_pos,
     thickLink_of_directCommitIn hne hk.2 h hA.1 (by
       have := (hybridAnchored Validator BlockId Payload k).anchor_round_le hA helig
-      simp only [hybridAnchored_wave] at this; omega)⟩
+      simp only [hybridAnchored_waveAt] at this; omega)⟩
   commit_link_unique := by
     intro S U V k j i L₁ L₂ A hne hL₁ hL₂ h _ _ _ _ hlink _
     exact eq_of_directCommitIn_of_thickLink hne hk.1 hL₁ hL₂ h hlink

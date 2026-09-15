@@ -234,25 +234,25 @@ theorem mahiMahiBandLaws (hw : 2 ≤ w) :
     (MahiMahi.mahiMahiAnchored Validator BlockId Payload w).BandLaws where
   commit_band := fun h hkk _ hlo hhi hV hL hc =>
     directCommitIn_band h hw hV hL.1 hL.2.1 hkk (by omega)
-      (by simp only [MahiMahi.mahiMahiAnchored_wave] at hhi; omega) hc
+      (by simp only [MahiMahi.mahiMahiAnchored_waveAt] at hhi; omega) hc
   skip_band := fun h hkk hlk hlo hhi hV hs => by
     show MahiMahi.DirectSkipIn _ _ _ _ _
     rw [← hlk]
     exact directSkipIn_band h hw hV hkk (by omega)
-      (by simp only [MahiMahi.mahiMahiAnchored_wave] at hhi; omega) hs
+      (by simp only [MahiMahi.mahiMahiAnchored_waveAt] at hhi; omega) hs
   link_band := fun h hA hAlo hAhi hkk _ hlo hhi _ hL =>
     certifiedIn_band h hw hA hAlo hAhi hL.1 hL.2.1 hkk hlo
-      (by simp only [MahiMahi.mahiMahiAnchored_wave] at hhi; omega)
+      (by simp only [MahiMahi.mahiMahiAnchored_waveAt] at hhi; omega)
   link_novel := fun h hA hAlo hAhi hkk _ hlo hhi _ hL hLo =>
     not_certifiedIn_band_novel h hw hA hAlo hAhi hLo hL.2.1 hkk hlo
-      (by simp only [MahiMahi.mahiMahiAnchored_wave] at hhi; omega)
+      (by simp only [MahiMahi.mahiMahiAnchored_waveAt] at hhi; omega)
 
 /-- **Mahi-Mahi reads a band**, at every width its rules are stated
 for. -/
 theorem banded (hw : 2 ≤ w) :
     Banded (mahiMahiRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) w) :=
-  AnchoredRule.banded (mahiMahiBandLaws hw)
+  AnchoredRule.banded (mahiMahiBandLaws hw) (fun _ _ => rfl)
 
 /-! ## The two liveness properties
 
@@ -293,7 +293,7 @@ own `certifies_of_refs_reach` do the rest. -/
 round, certification the rule's own. -/
 def mmSupport (w : ℕ) : Support (mahiMahiRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload) w) where
-  wave := w - 1
+  waveAt := fun _ => w - 1
   Certifies := fun U C L => MahiMahi.Certifies U C L
 
 /-- **Law 1**: `certifies_band` at the band a `RebasedAbove` is. -/
@@ -385,7 +385,7 @@ theorem indirect {w : ℕ} (hw : 1 ≤ w) :
   (AnchoredRule.indirect ((MahiMahi.mahiMahiAnchored Validator BlockId Payload w).linkCongr_of_round
     (fun _ U A L r => MahiMahi.CertifiedIn U w A L r) fun _ _ _ _ _ _ => rfl)
     fun hi h => MahiMahi.exists_least hi h).congr
-    (fun _ _ _ => by simp only [MahiMahi.mahiMahiAnchored_wave]; omega)
+    (fun _ _ _ => by simp only [MahiMahi.mahiMahiAnchored_waveAt]; omega)
 
 /-- **Mahi-Mahi has the descent laws** at the core fault model's slack,
 at its `w`-round wave. -/
@@ -400,7 +400,7 @@ theorem descent {w : ℕ} (hw : 4 ≤ w) :
     ((indirect (by omega)).congr fun sr i j => by
       change sr i + w ≤ sr j ↔ sr i + (w - 1 + 1) ≤ sr j
       omega)
-    (by change w - 1 ≤ w - 1 + 1; omega) fun _ _ _ h => h
+    (fun _ => by change w - 1 ≤ w - 1 + 1; omega) fun _ _ _ h => h
 
 /-! ## The headlines -/
 
