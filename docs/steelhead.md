@@ -502,10 +502,14 @@ one clause at a time (SH14) take this schedule as their instance (SH15).
   validators that derived the period of every interval the record's
   rounds fall in, and decided a slot proposed among them at their own
   adaptive wavelengths, agree on the verdict. The sequences coincide
-  there by SH10a; a verdict reads the wavelength only at the rounds of
-  the slots its derivation names, all of them at or below the round of
-  the anchor block it rests on (`decided_congr`); and SH2 applies to the
-  one function. The bound is not a convenience: a record holds finitely
+  there by strong induction on the interval: the anchors of the
+  intervals below lie in the record, their windows are read at rounds
+  below their own, where the sequences already agree, so the two views
+  hand the rule the same output at each of them (`windowOutput_congr`)
+  and SH10a gives the same period; a verdict reads the wavelength only
+  at the rounds of the slots its derivation names, all of them at or
+  below the round of the anchor block it rests on (`decided_congr`);
+  and SH2 applies to the one function. The bound is not a convenience: a record holds finitely
   many blocks, so above its top round no chain verdict is derivable and
   no period beyond it either, and a claim asking for the *whole*
   sequence would hold only where the period reaches `0`, which is
@@ -519,37 +523,45 @@ one clause at a time (SH14) take this schedule as their instance (SH15).
   derives a period for every interval whose rounds lie far enough below
   it, by SH7a at each interval and SH10c.
 - **SH10e, the period reaches `1`**: under the failover, which the arc
-  models in place of Theorem 3's premise on the update rule (§7).
-  `ResetsOnNoOutput` (`Model/Period.lean`) asks the update to answer `1`
-  at an anchor whose causal history, read at the wavelength the validator
-  runs, shows no output of the window, the last `I` rounds up to the
-  anchor's (`windowBottom`): every slot of the window committed there
-  sits above a slot the history leaves undecided. Under it, an interval
-  whose anchor's window the view did not output hands the next interval
-  period `1`; the view's verdicts carry into the anchor's history and
-  back through the laws, which is why the claim asks `2 ≤ ws` and
-  `2 ≤ wa`. The anchor is a hypothesis: nothing deterministic forces one
-  when `k > wa`, and its existence is the almost-sure half (§0.1). The
-  test reads the window and not the anchor's own interval: a history
-  holds no decision round of the slots within a wave below its block, so
-  an anchor at the start of its interval shows nothing of that interval
-  whatever was output, and a test on the interval would fire at every
-  anchored interval of a healthy network at period `1`. On the window a
-  healthy network commits the lowest slots with everything below them
-  decided, so the clause is silent and period `1` is not absorbing,
-  where the paper's premise read literally forces `upd j A 1 = 1` (§7).
+  models in place of Theorem 3's premise on the update rule (§7). The
+  update rule is handed what the anchor's window output beside the
+  anchor itself, as Barnacle's rule is handed its range's verdicts
+  (§21): `windowOutput` (`Model/Period.lean`) is the set of leaders the
+  anchor's causal history, read at a wavelength, commits at slots of the
+  window, the last `I` rounds up to the anchor's (`windowBottom`), with
+  every slot below them decided; `adaptiveOutput` reads it at the
+  wavelength of the sequence the validator derived, and is what the
+  theorems hand `PeriodAt`. `ResetsOnNoOutput` then asks the update to
+  answer `1` when handed an empty output, a clause on the rule alone.
+  Under it, an interval whose anchor's window the view did not output,
+  every slot of the window the view commits sitting above one it leaves
+  undecided, hands the next interval period `1`: the view's verdicts
+  carry into the anchor's history through the laws, which is why the
+  claim asks `2 ≤ ws` and `2 ≤ wa`, so the history commits no leader of
+  the window with everything below it decided, the output handed over
+  is empty, and the rule answers `1`. The anchor is a hypothesis:
+  nothing deterministic forces one when `k > wa`, and its existence is
+  the almost-sure half (§0.1). The output reads the window and not the
+  anchor's own interval: a history holds no decision round of the slots
+  within a wave below its block, so an anchor at the start of its
+  interval shows nothing of that interval whatever was output, and a
+  test on the interval would find every anchored interval of a healthy
+  network empty at period `1`. On the window a healthy network commits
+  the lowest slots with everything below them decided, so the output is
+  nonempty and period `1` is not absorbing, where the paper's premise
+  read literally forces `upd j A 1 = 1` (§7).
 - **SH10f, SH10g, the shape of the adaptive run**: at any period `k ≥ 1`
   with `2k ≤ I`, every interval holds two asynchronous rounds, the
   paper's reason for `I ≥ 2 · maxPeriod`; and if the initial period lies
   in `[1, K]` and the update rule keeps a period there, so does every
   derived period.
-- **SH10h, the failover satisfies its clause**: `failover U w I upd`
-  (`Model/Period.lean`) answers `1` at an anchor whose causal history,
-  read at `w`, shows no output of the interval, and `upd`'s own answer
-  elsewhere; it satisfies `ResetsOnNoOutput` by construction, whatever
-  `upd` is, so the paper's replay with the agreed failover is a rule the
-  liveness claims apply to. The wrapper is classical, its test being a
-  proposition on verdicts.
+- **SH10h, the failover satisfies its clause**: `failover upd`
+  (`Model/Period.lean`) answers `1` when handed an empty output and
+  `upd`'s own answer elsewhere; it satisfies `ResetsOnNoOutput` by
+  construction, whatever `upd` is, so the paper's replay with the agreed
+  failover is a rule the liveness claims apply to. The rule reads no
+  verdict itself: what it is handed is the model's output, so the test
+  is one equality on a finite set.
 - **SH14, output liveness under the failover**: in a view that derived
   every period up to a run's last round, if some interval at least two
   past a slot's finds an anchor, and above that interval the coin names
@@ -636,8 +648,9 @@ at or above its slot and an asynchronous round is not read as an
 unprobed synchronous one, which the algorithm does when the waves
 coincide. **SH18h** (`failover_anchorUpdate_range`): with candidates in
 `[1, K]` the failover wrapped around `anchorUpdate` answers a period in
-`[1, K]` at every anchor, `1` when it resets and otherwise the
-selection's answer, which is the current period or a candidate
+`[1, K]` at every anchor and whatever output it is handed, `1` when it
+resets and otherwise the selection's answer, which is the current period
+or a candidate
 (`select_eq_or_mem`); the range hypothesis SH10g, SH14b, SH14c and SH15
 place on the update rule, discharged for the paper's rule. **SH18i**
 (`commitWeight_eq_commitProb`), the adaptive section's "exact in
@@ -670,7 +683,11 @@ there; and the replay's expected rounds as expectations of a stochastic
 execution, which the paper itself calls an approximation. The failover
 is a clause on the update rule (`ResetsOnNoOutput`) and the wrapper
 `failover` that satisfies it; wrapped around `anchorUpdate` it is the
-rule the authors agreed to.
+rule the authors agreed to. The rule is handed what the window output
+(`windowOutput`) and reads no verdict itself, the handover Barnacle's
+`UpdateRule` makes with its range verdicts (§21): the agreement claims
+hold for any handover, the liveness claims for the one the validator
+makes at its own wavelength (`adaptiveOutput`).
 
 ## 6. Properties, and the carrier
 
@@ -766,7 +783,7 @@ validator (§7, finding 7).
    the stuck one commit in every window keeps the period while the
    output stays stuck. Read literally it also forces `upd j A 1 = 1`,
    since at period `1` no synchronous slot exists to commit, so it
-   forbids every recovery from period `1`. The failover reads the
+   forbids every recovery from period `1`. The failover is handed the
    sequenced output of the window in the anchor's history instead (§5),
    which no commit above a stuck slot can satisfy; a count of commits
    over the window, which never sees the stuck slot below it, cannot
@@ -839,9 +856,10 @@ rules at each slot's own wave, the anchor route for the asynchronous slot
 through a synchronous one, the chain on data, and the anchor-floor
 counterexample (§3). `Period.lean`: the period sequence derived over two
 intervals at a concrete doubling update rule, which pins `intervalOf`'s
-boundary convention, the failover's premise on data, satisfied by
-the constant rule `1` and refuted at a block whose history has output
-its window, the adaptive schedule naming the known leader at a
+boundary convention, the failover's clause on data, satisfied by the
+constant rule `1`, and the window's output nonempty at a block whose
+history has output its window, where the failover keeps the rule's own
+answer, the adaptive schedule naming the known leader at a
 synchronous round and the coin at the asynchronous ones, and a block map
 read back at the rounds of its blocks (§5). `Stall.lean`: the adversary's shape on valid
 data, the asynchronous commit beside it, and the stalled slot by SH8
@@ -888,8 +906,8 @@ LeanDag/Steelhead/
   Model/Wavelength.lean     periodic, IsAsync
   Model/Decision.lean       steelheadAnchored, Decided
   Model/Chain.lean          chainSlots, ChainDecided
-  Model/Period.lean         intervalOf, ResetsOnNoOutput, failover, IntervalAnchor, NoAnchor,
-                            PeriodAt, adaptiveWave, adaptiveSlots
+  Model/Period.lean         intervalOf, windowOutput, ResetsOnNoOutput, failover, IntervalAnchor,
+                            NoAnchor, PeriodAt, adaptiveWave, adaptiveSlots, adaptiveOutput
   Model/Coin.lean           commitProb, noCommitProb, blockRound, coinOfBlocks, blocksHorizon,
                             undecidedProb, coinMeasure
   Model/Compose.lean        compose

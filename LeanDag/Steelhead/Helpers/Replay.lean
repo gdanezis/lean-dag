@@ -94,12 +94,12 @@ variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Val
 
 /-- **SH18h.** The failover answers `1`, or the selection's answer, which is the current period or
 a candidate. -/
-theorem failover_anchorUpdate_range [S : Slots Validator]
-    {U : BlockUniverse Validator BlockId Payload} {I : ℕ} (w : ℕ → ℕ) (C : Config Validator)
-    (candidates : List ℕ) (epsilon : ℚ) {K j k : ℕ} (A : BlockId) (hK : 1 ≤ K)
-    (hc : ∀ c ∈ candidates, 1 ≤ c ∧ c ≤ K) (h1 : 1 ≤ k) (hk : k ≤ K) :
-    1 ≤ failover U w I (anchorUpdate U I C candidates epsilon) j A k ∧
-      failover U w I (anchorUpdate U I C candidates epsilon) j A k ≤ K := by
+theorem failover_anchorUpdate_range {U : BlockUniverse Validator BlockId Payload} {I : ℕ}
+    (C : Config Validator) (candidates : List ℕ) (epsilon : ℚ) {K j k : ℕ} (A : BlockId)
+    (out : Finset BlockId) (hK : 1 ≤ K) (hc : ∀ c ∈ candidates, 1 ≤ c ∧ c ≤ K) (h1 : 1 ≤ k)
+    (hk : k ≤ K) :
+    1 ≤ failover (anchorUpdate U I C candidates epsilon) j A out k ∧
+      failover (anchorUpdate U I C candidates epsilon) j A out k ≤ K := by
   unfold failover
   split
   · exact ⟨le_rfl, hK⟩
@@ -817,7 +817,8 @@ startup windows included: the window of an anchor spans at most eight rounds, an
 scores zero at every period. -/
 theorem anchorUpdate_half_retains (U : BlockUniverse Validator BlockId Payload)
     (C : Config Validator) (hws : C.ws = 3) (hwa : C.wa = 5) (hcan : C.canary = 1) (j : ℕ)
-    (A : BlockId) : anchorUpdate U 8 C [1, 2, 4] (1 / 2) j A 4 = 4 := by
+    (A : BlockId) (out : Finset BlockId) :
+    anchorUpdate U 8 C [1, 2, 4] (1 / 2) j A out 4 = 4 := by
   change update (ofAnchor U A 8) C [1, 2, 4] 4 (1 / 2) = 4
   by_cases hw : (ofAnchor U A 8).bottom ≤ (ofAnchor U A 8).top
   · exact update_half_retains hws hwa hcan hw

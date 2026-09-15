@@ -30,8 +30,8 @@ theorem holds : Statement := by
     exact async_term_bound hws hlt hb hr hdec hcons
   · intro A I r w a h
     exact commits_sound h
-  · intro S w C candidates epsilon K j k A hK hc h1 hk
-    exact failover_anchorUpdate_range w C candidates epsilon A hK hc h1 hk
+  · intro C candidates epsilon K j k A out hK hc h1 hk
+    exact failover_anchorUpdate_range C candidates epsilon A out hK hc h1 hk
   · intro A hA r hwa hr
     exact commitWeight_eq_commitProb hwa hA hr
   · intro E C period hcop hp hws hwin

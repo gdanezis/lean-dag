@@ -60,10 +60,11 @@ example : adaptiveWave 3 5 4 shPer 6 = 5 := by decide
 `sh8_chain0` (`Model.lean`) is a chain commit at round `0`, which is
 asynchronous under every period and the lowest round of interval `0`, so
 it is that interval's anchor whatever the period in force. Any update
-rule then fixes interval `1`'s period; this one doubles it. -/
+rule then fixes interval `1`'s period; this one doubles it, whatever
+output it is handed. -/
 
 /-- An update rule: double the period at every interval. -/
-def shDouble : UpdateRule (Fin 32) := fun _ _ k => 2 * k
+def shDouble : UpdateRule (Fin 32) := fun _ _ _ k => 2 * k
 
 /-- Interval `0`'s anchor is the chain commit at round `0`: it lies in the
 interval, is asynchronous, and no asynchronous round of the interval sits
@@ -76,24 +77,28 @@ theorem sh8_anchor0 (k : ℕ) :
   below := fun _ _ _ h => absurd h (Nat.not_lt_zero _)
 
 /-- Interval `1` runs at the update of interval `0`'s anchor: starting at
-period `4`, it runs at `8`. -/
-theorem sh8_period1 :
-    PeriodAt 4 5 shCoin shDouble 4 sh8 (View.full sh8) 1 8 :=
+period `4`, it runs at `8`, whatever the anchor's window output. -/
+theorem sh8_period1 (out : Fin 32 → Finset (Fin 32)) :
+    PeriodAt 4 5 shCoin shDouble 4 sh8 (View.full sh8) out 1 8 :=
   PeriodAt.anchor PeriodAt.zero (sh8_anchor0 4)
 
 /-! ## The failover on data
 
-`ResetsOnNoOutput` asks the update rule to answer `1` at an anchor whose history shows no output
-of its window, the last `I` rounds up to the anchor's and none below round `1`. The constant rule
-`1` satisfies it outright. Its premise is not vacuous: at `I = 8` the window of block `28`, a
-round-`7` block reaching the whole of rounds `0` to `6`, starts at round `1`, and slot `1` is
-committed in its history with slot `0` below it committed too, so the clause asks nothing of the
-update there. The window of interval `0`'s anchor, block `2` at round `0`, is empty at any `I`. -/
+`ResetsOnNoOutput` asks the update rule to answer `1` when handed an empty output. The constant
+rule `1` satisfies it outright, and so does any rule wrapped in `failover`. What the rule is
+handed is `windowOutput`, the leaders the anchor's history commits at slots of its window, the
+last `I` rounds up to the anchor's and none below round `1`, with every slot below decided. It is
+not always empty: at `I = 8` the window of block `28`, a round-`7` block reaching the whole of
+rounds `0` to `6`, starts at round `1`, and slot `1` is committed in its history with slot `0`
+below it committed too, so its leader `6` is output and the failover keeps the rule's own answer
+there. -/
 
 /-- The update rule that always answers `1`. -/
-def shOne : UpdateRule (Fin 32) := fun _ _ _ => 1
+def shOne : UpdateRule (Fin 32) := fun _ _ _ _ => 1
 
-example : ResetsOnNoOutput sh8 w4 4 shOne := fun _ _ _ _ _ => rfl
+example : ResetsOnNoOutput shOne := fun _ _ _ => rfl
+
+example : failover shDouble 0 28 ∅ 4 = 1 := rfl
 
 example : windowBottom sh8 28 8 = 1 := by decide
 example : windowBottom sh8 28 4 = 4 := by decide
@@ -109,16 +114,19 @@ theorem sh8_slot1_in_history :
     Steelhead.Decided (S := shSlots) w4 sh8 (sh8.historyView 28 (by decide)) 1 (some 6) :=
   Decided.directCommit (by decide) (by decide)
 
-/-- So the failover's premise fails at that block with `I = 8`: the committed slot `1` has only
-slot `0` below it, which is committed. -/
-example : ¬ (∀ (s : ℕ) (L : Fin 32), windowBottom sh8 28 8 ≤ shSlots.slotRound s →
-    Steelhead.Decided (S := shSlots) w4 sh8 (sh8.historyView 28 (by decide)) s (some L) →
-    ∃ s', s' < s ∧
-      ∀ v, ¬ Steelhead.Decided (S := shSlots) w4 sh8 (sh8.historyView 28 (by decide)) s' v) :=
-  fun h => by
-    obtain ⟨s', hs', hund⟩ := h 1 6 (by decide) sh8_slot1_in_history
-    obtain rfl : s' = 0 := by omega
-    exact hund _ sh8_slot0_in_history
+/-- So the window of that block is output at `I = 8`: the committed slot `1` has only slot `0`
+below it, which is committed, and its leader `6` is in the output. -/
+theorem sh8_window28_output :
+    (6 : Fin 32) ∈ windowOutput (S := shSlots) sh8 w4 8 28 (by decide) := by
+  classical
+  unfold windowOutput
+  refine Finset.mem_filter.mpr ⟨by decide, 1, by decide, sh8_slot1_in_history, fun s' hs' => ?_⟩
+  obtain rfl : s' = 0 := by omega
+  exact ⟨some 1, sh8_slot0_in_history⟩
+
+/-- The failover handed that output keeps the rule's own answer. -/
+example : failover shDouble 0 28 (windowOutput (S := shSlots) sh8 w4 8 28 (by decide)) 4 = 8 :=
+  if_neg (Finset.ne_empty_of_mem sh8_window28_output)
 
 /-! ## The adaptive schedule, and the coins of blocks
 

@@ -24,10 +24,11 @@ the paper's Theorem 3 read through a uniform coin. Eight claims:
 * **SH15a, the output is live but for a vanishing probability** —
   Theorem 3's "with probability `1`", in the form a finite record
   admits: over the uniform independent coins of `M` blocks of `K` rounds,
-  one opening each interval from the second after a slot's, some view
-  holding the horizon, at a period sequence matching what it derives and
-  at which the update rule fails over, has not derived the period of the
-  slot's interval or leaves the slot undecided, with probability at most
+  one opening each interval from the second after a slot's, under an
+  update rule that fails over on an empty output, some view holding the
+  horizon, at a period sequence matching what it derives when it hands
+  the rule what each anchor's window output, has not derived the period
+  of the slot's interval or leaves the slot undecided, with probability at most
   `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`. Two good blocks in different
   halves settle every chain verdict up to the later one, so the periods
   are derived that far, and decide the slot (SH14c); each half holds no
@@ -130,8 +131,10 @@ def UndecidedTail (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ
     -- the waves, a quorum, a period bound a run of wa fits in, blocks of K rounds that fit in an
     -- interval
     2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → quorumCard Validator ≤ T.card →
-    -- the periods stay in [1, K]
-    1 ≤ k₀ → k₀ ≤ K → (∀ j A k, 1 ≤ k → k ≤ K → 1 ≤ upd j A k ∧ upd j A k ≤ K) →
+    -- the periods stay in [1, K], and the update rule fails over on an empty output
+    1 ≤ k₀ → k₀ ≤ K →
+    (∀ j A out k, 1 ≤ k → k ≤ K → 1 ≤ upd j A out k ∧ upd j A out k ≤ K) →
+    ResetsOnNoOutput upd →
     -- the waves of the M blocks are populated where MM2 reads them
     (∀ (j : Fin M) (i : Fin K), PopulatedOn U T (blockRound I (intervalOf I s) j i + 3) ∧
       PopulatedOn U T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) →
@@ -151,21 +154,27 @@ def DecidedAlmostSurely (ws wa I K : ℕ) : Prop :=
     -- the waves, a quorum, a period bound a run of wa fits in, blocks of K rounds that fit in an
     -- interval
     2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → quorumCard Validator ≤ T.card →
-    -- the periods stay in [1, K] under every record's update rule
-    1 ≤ k₀ → k₀ ≤ K → (∀ m j A k, 1 ≤ k → k ≤ K → 1 ≤ upd m j A k ∧ upd m j A k ≤ K) →
+    -- the periods stay in [1, K] under every record's update rule, which fails over on an empty
+    -- output
+    1 ≤ k₀ → k₀ ≤ K →
+    (∀ m j A out k, 1 ≤ k → k ≤ K → 1 ≤ upd m j A out k ∧ upd m j A out k ≤ K) →
+    (∀ m, ResetsOnNoOutput (upd m)) →
     -- record m holds the waves of m blocks, populated where MM2 reads them
     (∀ (m : ℕ) (j : Fin m) (i : Fin K),
       PopulatedOn (U m) T (blockRound I (intervalOf I s) j i + 3) ∧
       PopulatedOn (U m) T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) →
     -- then for almost every coin some record decides s in every view holding its horizon, at
-    -- every period sequence matching what the view derives and at which the rule fails over
+    -- every period sequence matching what the view derives when it hands the rule what each
+    -- anchor's window output at that sequence's wavelength and schedule
     ∀ᵐ coin ∂(coinMeasure Validator), ∃ m,
       ∀ (V : View Validator BlockId Payload (U m)) (per : ℕ → ℕ),
-        ResetsOnNoOutput (S := adaptiveSlots coin known I per) (U m) (adaptiveWave ws wa I per) I
-          (upd m) →
         V.CoversUpto (blocksHorizon I wa (intervalOf I s) m) →
-        (∀ j k, PeriodAt I wa coin (upd m) k₀ (U m) V j k → per j = k) →
-        PeriodAt I wa coin (upd m) k₀ (U m) V (intervalOf I s) (per (intervalOf I s)) ∧
+        (∀ j k, PeriodAt I wa coin (upd m) k₀ (U m) V
+          (adaptiveOutput (S := adaptiveSlots coin known I per) ws wa I per (U m)) j k →
+          per j = k) →
+        PeriodAt I wa coin (upd m) k₀ (U m) V
+          (adaptiveOutput (S := adaptiveSlots coin known I per) ws wa I per (U m))
+          (intervalOf I s) (per (intervalOf I s)) ∧
         ∃ v, Decided (S := adaptiveSlots coin known I per) (adaptiveWave ws wa I per) (U m) V s v
 
 /-- The coin, over every fault configuration, block universe, asynchronous wave, interval and

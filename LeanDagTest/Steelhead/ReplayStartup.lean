@@ -79,8 +79,8 @@ theorem rsWindow_tied_scores : ∀ k ∈ ([1, 2, 4] : List ℕ), score rsWindow 
 
 /-- **Algorithm 2 keeps period `4`** at the anchor, at hysteresis `0` and at `1/10`. -/
 theorem rs36_keeps_four :
-    anchorUpdate rs36 8 rsConfig [1, 2, 4] 0 0 16 4 = 4 ∧
-      anchorUpdate rs36 8 rsConfig [1, 2, 4] (1 / 10) 0 16 4 = 4 := by decide +kernel
+    anchorUpdate rs36 8 rsConfig [1, 2, 4] 0 0 16 ∅ 4 = 4 ∧
+      anchorUpdate rs36 8 rsConfig [1, 2, 4] (1 / 10) 0 16 ∅ 4 = 4 := by decide +kernel
 
 #print axioms rs36
 #print axioms rs36_sync_undecided

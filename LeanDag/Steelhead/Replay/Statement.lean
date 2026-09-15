@@ -150,13 +150,13 @@ def CommitsSound (U : BlockUniverse Validator BlockId Payload) : Prop :=
 
 /-- **SH18h, the failover of Algorithm 2 keeps the range.** -/
 def FailoverInRange (U : BlockUniverse Validator BlockId Payload) (I : ℕ) : Prop :=
-  ∀ [Slots Validator] (w : ℕ → ℕ) (C : Config Validator) (candidates : List ℕ) (epsilon : ℚ)
-    (K j k : ℕ) (A : BlockId),
+  ∀ (C : Config Validator) (candidates : List ℕ) (epsilon : ℚ) (K j k : ℕ) (A : BlockId)
+    (out : Finset BlockId),
     -- the candidates lie in [1, K], as does the current period
     1 ≤ K → (∀ c ∈ candidates, 1 ≤ c ∧ c ≤ K) → 1 ≤ k → k ≤ K →
-    -- then so does the failover's answer at any anchor
-    1 ≤ failover U w I (anchorUpdate U I C candidates epsilon) j A k ∧
-      failover U w I (anchorUpdate U I C candidates epsilon) j A k ≤ K
+    -- then so does the failover's answer at any anchor, whatever output it is handed
+    1 ≤ failover (anchorUpdate U I C candidates epsilon) j A out k ∧
+      failover (anchorUpdate U I C candidates epsilon) j A out k ≤ K
 
 /-- **SH18i, the replay's commit weight is the rule's commit probability.** -/
 def CommitWeightExact (U : BlockUniverse Validator BlockId Payload) (wa I : ℕ) : Prop :=

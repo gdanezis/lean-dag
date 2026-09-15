@@ -252,14 +252,16 @@ theorem rt_stall (N : ℕ) (coin : ℕ → Fin 4) (V : View (Fin 4) ℕ Unit (rt
     (fun _ => rfl) (rt_hcert N coin per hper) (rt_hskip N coin V per hper) (by decide) h
 
 /-- **Every period Algorithm 2 derives is `4`**, at hysteresis `1/2`, in every view of every
-horizon and for every coin: the window of an anchor spans at most eight rounds. -/
+horizon, for every coin and whatever output is handed over: the window of an anchor spans at most
+eight rounds. -/
 theorem rt_periods_four (N : ℕ) (coin : ℕ → Fin 4) (V : View (Fin 4) ℕ Unit (rtDag N))
-    {j k : ℕ} (h : PeriodAt 8 5 coin (rtUpd N) 4 (rtDag N) V j k) : k = 4 := by
+    (out : ℕ → Finset ℕ) {j k : ℕ} (h : PeriodAt 8 5 coin (rtUpd N) 4 (rtDag N) V out j k) :
+    k = 4 := by
   induction h with
   | zero => rfl
   | anchor _ _ ih =>
     rw [ih]
-    exact anchorUpdate_half_retains (rtDag N) rtConfig rfl rfl rfl _ _
+    exact anchorUpdate_half_retains (rtDag N) rtConfig rfl rfl rfl _ _ _
   | keep _ _ ih => exact ih
 
 /-- **The adaptive output never decides slot `3`** at any period sequence that is `4` on the
@@ -272,7 +274,7 @@ theorem rt_adaptive_stall (N : ℕ) (hN : 3 ≤ N) (coin : ℕ → Fin 4)
   intro h
   refine rt_stall N coin V per hper v
     (decided_congr (S := adaptiveSlots coin rtKnown 8 per) (w₂ := periodic 3 5 4) (N := N)
-      (fun b hb => rt_round_le hb) ?_ h hN)
+      (fun b hb => rt_round_le (V.subset_ids hb)) ?_ h hN)
   intro r hr
   unfold adaptiveWave
   rw [hper (intervalOf 8 r) (Nat.div_le_div_right (by omega))]

@@ -9741,30 +9741,43 @@ model afresh, importing nothing of Barnacle (§21), as a relation:
 
 ```lean
 inductive PeriodAt (I wa : ℕ) (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
-    (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U) :
-    ℕ → ℕ → Prop
-  | zero : PeriodAt I wa coin upd k₀ U V 0 k₀
+    (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
+    (out : BlockId → Finset BlockId) : ℕ → ℕ → Prop
+  | zero : PeriodAt I wa coin upd k₀ U V out 0 k₀
   | anchor {j k r : ℕ} {A : BlockId} :
-      PeriodAt I wa coin upd k₀ U V j k → IntervalAnchor I wa coin U V j k r A →
-      PeriodAt I wa coin upd k₀ U V (j + 1) (upd j A k)
+      PeriodAt I wa coin upd k₀ U V out j k → IntervalAnchor I wa coin U V j k r A →
+      PeriodAt I wa coin upd k₀ U V out (j + 1) (upd j A (out A) k)
   | keep {j k : ℕ} :
-      PeriodAt I wa coin upd k₀ U V j k → NoAnchor I wa coin U V j k →
-      PeriodAt I wa coin upd k₀ U V (j + 1) k
+      PeriodAt I wa coin upd k₀ U V out j k → NoAnchor I wa coin U V j k →
+      PeriodAt I wa coin upd k₀ U V out (j + 1) k
 ```
 
 Waiting is the absence of a derivation, and `adaptiveWave ws wa I per`
 is the wavelength function a validator that derived the sequence `per`
-runs the output relation at. **SH10** (`Steelhead.Period.holds`):
+runs the output relation at. The update rule is handed what the anchor's
+window output beside the anchor, as Barnacle's rule is handed its
+range's verdicts (§21): `windowOutput` is the set of leaders the
+anchor's causal history, read at a wavelength, commits at slots of the
+window, the last `I` rounds up to the anchor's, with every slot below
+them decided, and `adaptiveOutput` reads it at the wavelength of the
+sequence the validator derived, which is what the claims below hand
+`PeriodAt`. **SH10** (`Steelhead.Period.holds`):
 **SH10a**, two views deriving a period for interval `j` derive the same
-one, under any update rule, at `3 ≤ wa` and with no synchrony, fairness
-or view hypothesis, by induction on the derivation, since a lower anchor
-in one view is a chain-skipped round in the other and SH5 forbids it;
+one, under any update rule and any common handover, at `3 ≤ wa` and
+with no synchrony, fairness or view hypothesis, by induction on the
+derivation, since a lower anchor in one view is a chain-skipped round in
+the other and SH5 forbids it;
 **SH10b**, two validators that derived the period of every interval the
 record's rounds fall in, and decided a slot proposed among them at their
 own adaptive wavelengths, agree on the verdict: the sequences coincide
-there by SH10a, a verdict reads the wavelength only at the rounds of the
-slots its derivation names (`Steelhead.decided_congr`), and SH2 applies
-to the one function. The bound is what makes the claim inhabited: a
+there by strong induction on the interval, since the anchors of the
+intervals below lie in the record and their windows are read at rounds
+below their own, where the sequences already agree, so the two
+validators hand the rule one output at each of them
+(`Steelhead.windowOutput_congr`) and SH10a gives one period; a verdict
+reads the wavelength only at the rounds of the slots its derivation
+names (`Steelhead.decided_congr`), and SH2 applies to the one function.
+The bound is what makes the claim inhabited: a
 record holds finitely many blocks, so no chain verdict and no period is
 derivable above its top round, and asking for the whole sequence would
 leave the claim to periods that reach `0`. **SH10c**,
@@ -9775,19 +9788,20 @@ clause at the chain schedule a view caught up to the horizon derives a
 period for every interval whose rounds lie far enough below it, by SH7a
 at each interval and SH10c; **SH10e**, under the failover the arc models
 in place of Theorem 3's premise on the update rule (§24.6):
-`ResetsOnNoOutput` asks the update to answer `1` at an anchor whose
-causal history, read at the wavelength the validator runs, shows no
-output of the window, the last `I` rounds up to the anchor's, every slot
-of it committed there sitting above a slot the history leaves undecided;
-under it an interval whose anchor's window the view did not output hands
-the next interval period `1`, the view's verdicts carried into the
-anchor's history and back through the laws. The test reads the window
-and not the anchor's own interval: a history holds no decision round of
-the slots within a wave below its block, so an anchor at the start of
-its interval shows nothing of that interval whatever was output, and a
-test on the interval would fire at every anchored interval of a healthy
-network at period `1`; on the window a healthy network commits the
-lowest slots with everything below them decided, so period `1` is not
+`ResetsOnNoOutput` asks the update to answer `1` when handed an empty
+output, a clause on the rule alone; under it an interval whose anchor's
+window the view did not output, every slot of it the view commits
+sitting above a slot the view leaves undecided, hands the next interval
+period `1`, since the view's verdicts carry into the anchor's history
+through the laws, so the history commits no leader of the window with
+everything below it decided and the output handed over is empty. The
+output reads the window and not the anchor's own interval: a history
+holds no decision round of the slots within a wave below its block, so
+an anchor at the start of its interval shows nothing of that interval
+whatever was output, and a test on the interval would find every
+anchored interval of a healthy network empty at period `1`; on the
+window a healthy network commits the lowest slots with everything below
+them decided, so the output is nonempty and period `1` is not
 absorbing. The anchor is a hypothesis, since nothing
 deterministic forces one when `k > wa`; its existence is the almost-sure
 half of Theorem 3 (i), which §24.5 states only as a vanishing tail.
@@ -9798,9 +9812,8 @@ keeps a period there, so does every derived period. The interval
 boundaries are
 fixed by `I`, so the round at which a period takes effect is common by
 construction; what SH10a adds is that the periods are. **SH10h**
-(`Steelhead.failover_resets`): `failover U w I upd` answers `1` at an
-anchor whose causal history, read at `w`, shows no output of the
-window and `upd`'s own answer elsewhere, and satisfies
+(`Steelhead.failover_resets`): `failover upd` answers `1` when handed
+an empty output and `upd`'s own answer elsewhere, and satisfies
 `ResetsOnNoOutput` by construction, whatever `upd` is, so the paper's
 replay with the agreed failover is a rule the claims below apply to.
 
@@ -9840,7 +9853,8 @@ synchronous term's estimate but never raise it. SH18e and SH18f ask
 `2 ≤ ws < wa`, since the algorithm reads an asynchronous round as an
 unprobed synchronous one when the waves coincide. Three claims read the
 algorithm's parameters. With candidates in `[1, K]` the failover wrapped
-around `anchorUpdate` answers a period in `[1, K]` at every anchor
+around `anchorUpdate` answers a period in `[1, K]` at every anchor and
+whatever output it is handed
 (`Steelhead.Replay.failover_anchorUpdate_range`, SH18h), `1` when it
 resets and otherwise the selection's answer, which is the current period
 or a candidate: the range hypothesis SH10g, SH14 and SH15 place on the
@@ -11201,7 +11215,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 342 definitions and structures the report names, in
+The 345 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -12870,26 +12884,69 @@ abbrev Decided (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
 *abbrev, `Steelhead.Model.Period.lean`*
 
 ```lean
-abbrev UpdateRule (BlockId : Type) := ℕ → BlockId → ℕ → ℕ
+abbrev UpdateRule (BlockId : Type) := ℕ → BlockId → Finset BlockId → ℕ → ℕ
 ```
 
-**The update rule**: the next period from the interval index, the anchor block and the period in force. Any deterministic function; the paper's counterfactual replay reads the anchor's causal history, which the block id determines within one universe.
+**The update rule**: the next period from the interval index, the anchor block, the leaders the anchor's window output, and the period in force. Any deterministic function; the paper's counterfactual replay reads the anchor's causal history, which the block id determines within one universe, and its failover reads the output.
+
+#### `windowOutput`
+
+*def, `Steelhead.Model.Period.lean`*
+
+```lean
+noncomputable def windowOutput [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload)
+    (w : ℕ → ℕ) (I : ℕ) (A : BlockId) (hA : A ∈ U.ids) : Finset BlockId :=
+  (history U A).filter fun L => ∃ s, windowBottom U A I ≤ S.slotRound s ∧
+    Decided w U (U.historyView A hA) s (some L) ∧
+    ∀ s' < s, ∃ v, Decided w U (U.historyView A hA) s' v
+```
+
+**What the anchor's window output**, read in the anchor's causal history at the wavelength `w`: the leaders that history commits at slots of the window with every slot below them decided, which is what the sequenced output releases. What the validator that scanned the anchor hands the update rule beside the anchor, as the paper's Algorithm 2 hands its replay the window's verdicts. The test reads the window, not the anchor's own interval: a history holds no decision round of the slots within a wave below its block, so an anchor at the start of its interval shows nothing of that interval whatever was output, and a test on the interval would find every anchored interval of a healthy network empty at period `1`. The test is a proposition on verdicts, so the filter is classical.
 
 #### `ResetsOnNoOutput`
 
 *def, `Steelhead.Model.Period.lean`*
 
 ```lean
-def ResetsOnNoOutput [S : Slots Validator] (U : BlockUniverse Validator BlockId Payload)
-    (w : ℕ → ℕ) (I : ℕ) (upd : UpdateRule BlockId) : Prop :=
-  ∀ (j k : ℕ) (A : BlockId) (hA : A ∈ U.ids),
-    (∀ (s : ℕ) (L : BlockId), windowBottom U A I ≤ S.slotRound s →
-      Decided w U (U.historyView A hA) s (some L) →
-      ∃ s', s' < s ∧ ∀ v, ¬ Decided w U (U.historyView A hA) s' v) →
-    upd j A k = 1
+def ResetsOnNoOutput (upd : UpdateRule BlockId) : Prop :=
+  ∀ (j : ℕ) (A : BlockId) (k : ℕ), upd j A ∅ k = 1
 ```
 
-**The update rule fails over to period `1` when the window was not output.** The clause the liveness argument reads off the update rule, in place of Theorem 3's premise that a window without a synchronous commit maps to `k = 1` (`steelhead.md` §7): in the anchor's causal history, read at the wavelength `w` the validator runs, every committed slot of the window lies above a slot that history leaves undecided, so the sequenced output gained nothing from the window; then the update at that anchor is `1`. A clause on `upd` against the record, as the unpredictable-leader clause is on the schedule. The test reads the window, not the anchor's own interval: a history holds no decision round of the slots within a wave below its block, so an anchor at the start of its interval shows nothing of that interval whatever was output, and a test on the interval would fire at every anchored interval of a healthy network at period `1`. On the window a healthy network commits the lowest slots with everything below them decided, the clause is silent, and the rule's own answer stands: period `1` is not absorbing.
+**The update rule fails over to period `1` when handed an empty output.** The clause the liveness argument reads off the update rule, in place of Theorem 3's premise that a window without a synchronous commit maps to `k = 1` (`steelhead.md` §7). A clause on `upd` alone: the output it is handed is the model's (`windowOutput`), not the rule's own reading of the history, so the rule has no verdict of its own to disagree with. On the window a healthy network commits the lowest slots with everything below them decided, the output is nonempty, and the rule's own answer stands: period `1` is not absorbing.
+
+#### `PeriodAt`
+
+*inductive, `Steelhead.Model.Period.lean`*
+
+```lean
+inductive PeriodAt (I wa : ℕ) (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
+    (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
+    (out : BlockId → Finset BlockId) : ℕ → ℕ → Prop
+  /-- The first interval runs at the initial period. -/
+  | zero : PeriodAt I wa coin upd k₀ U V out 0 k₀
+  /-- An interval with an anchor hands the next interval the updated period. -/
+  | anchor {j k r : ℕ} {A : BlockId} :
+      PeriodAt I wa coin upd k₀ U V out j k → IntervalAnchor I wa coin U V j k r A →
+      PeriodAt I wa coin upd k₀ U V out (j + 1) (upd j A (out A) k)
+  /-- An interval without an anchor keeps the period. -/
+  | keep {j k : ℕ} :
+      PeriodAt I wa coin upd k₀ U V out j k → NoAnchor I wa coin U V j k →
+      PeriodAt I wa coin upd k₀ U V out (j + 1) k
+```
+
+**The period sequence**, as a validator holding `V` derives it, handing the update rule the output `out A` of each anchor `A`: `PeriodAt … j k` says interval `j` is decided under period `k`. Interval `0` runs at `k₀`; interval `j + 1` runs at the update of interval `j`'s anchor, or at `j`'s period when `j` has none. *Waiting* is the absence of a derivation. The output is a parameter, so that the agreement claims hold for any handover; the liveness claims instantiate it with what the anchor's window output at the validator's own wavelength (`adaptiveOutput`).
+
+#### `adaptiveOutput`
+
+*def, `Steelhead.Model.Period.lean`*
+
+```lean
+noncomputable def adaptiveOutput [S : Slots Validator] (ws wa I : ℕ) (per : ℕ → ℕ)
+    (U : BlockUniverse Validator BlockId Payload) : BlockId → Finset BlockId :=
+  fun A => if hA : A ∈ U.ids then windowOutput U (adaptiveWave ws wa I per) I A hA else ∅
+```
+
+**The output a validator hands the update rule**: what each anchor's window output in the anchor's causal history, read at the adaptive wavelength of the period sequence `per` the validator derived and on the schedule it runs; empty for a block outside the record. What the liveness claims instantiate `PeriodAt`'s `out` with.
 
 #### `adaptiveSlots`
 
@@ -12938,17 +12995,18 @@ noncomputable def undecidedProb (U : BlockUniverse Validator BlockId Payload) (w
     ℝ≥0∞ :=
   (PMF.uniformOfFintype (Fin M → Fin K → Validator)).toOuterMeasure
     {g | ¬ ∀ (V : View Validator BlockId Payload U) (per : ℕ → ℕ),
-      ResetsOnNoOutput (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per) U
-        (adaptiveWave ws wa I per) I upd →
       V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-      (∀ j k, PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V j k → per j = k) →
-      PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V (intervalOf I s)
-        (per (intervalOf I s)) ∧
+      (∀ j k, PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V
+        (adaptiveOutput (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
+          ws wa I per U) j k → per j = k) →
+      PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V
+        (adaptiveOutput (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
+          ws wa I per U) (intervalOf I s) (per (intervalOf I s)) ∧
       ∃ v, Decided (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
         (adaptiveWave ws wa I per) U V s v}
 ```
 
-**The probability that slot `s` stays undecided**, over the uniform independent coins of `M` blocks of `K` rounds opening the intervals from the second after the slot's: the measure of the coin maps under which some view holding the horizon, at some period sequence that matches every period the view derives and at which the update rule fails over, either has not derived the period of the slot's interval or leaves `s` undecided at the adaptive wavelength and schedule. A sequence matching what the view derives is arbitrary where the scan has stalled, so a slot that counts as decided is decided under every such completion, from derived periods alone, and a scan that never reaches the slot's interval counts as a failure. The coins outside the blocks draw `d`.
+**The probability that slot `s` stays undecided**, over the uniform independent coins of `M` blocks of `K` rounds opening the intervals from the second after the slot's: the measure of the coin maps under which some view holding the horizon, at some period sequence that matches every period the view derives when it hands the update rule what each anchor's window output at that sequence's wavelength and schedule, either has not derived the period of the slot's interval or leaves `s` undecided at that wavelength and schedule. A sequence matching what the view derives is arbitrary where the scan has stalled, so a slot that counts as decided is decided under every such completion, from derived periods alone, and a scan that never reaches the slot's interval counts as a failure. The coins outside the blocks draw `d`.
 
 #### `coinMeasure`
 
@@ -16966,7 +17024,7 @@ def update (E : Evidence Validator) (C : Config Validator) (candidates : List �
 ```lean
 def anchorUpdate (U : BlockUniverse Validator BlockId Payload) (I : ℕ) (C : Config Validator)
     (candidates : List ℕ) (epsilon : ℚ) : UpdateRule BlockId :=
-  fun _ A current => update (ofAnchor U A I) C candidates current epsilon
+  fun _ A _ current => update (ofAnchor U A I) C candidates current epsilon
 ```
 
 **Algorithm 2 as an update rule**: the replay of the anchor's window.
@@ -19816,10 +19874,12 @@ No tie: any linked candidate is the rung's choice.
 theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : ∀ t, S.slotRound t = t)
     (hI : 0 < I) (hlead : ∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r)
     {K c N : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
-    (hupd : ∀ j A k, 1 ≤ k → k ≤ K → 1 ≤ upd j A k ∧ upd j A k ≤ K)
-    (hwaK : wa ≤ K) (hcK : c + K ≤ I) (hreset : ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd)
+    (hupd : ∀ j A out k, 1 ≤ k → k ≤ K → 1 ≤ upd j A out k ∧ upd j A out k ≤ K)
+    (hwaK : wa ≤ K) (hcK : c + K ≤ I) (hreset : ResetsOnNoOutput upd)
     (hrun : MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c K N)
-    (hV : V.CoversUpto N) (hper : ∀ j, j ≤ intervalOf I N → PeriodAt I wa coin upd k₀ U V j (per j))
+    (hV : V.CoversUpto N)
+    (hper : ∀ j, j ≤ intervalOf I N →
+      PeriodAt I wa coin upd k₀ U V (adaptiveOutput ws wa I per U) j (per j))
     (s : ℕ) (hN : MahiMahi.decisionRoundAt wa ((intervalOf I s + 3) * I + c + K) ≤ N) :
     ∃ v, Decided (adaptiveWave ws wa I per) U V s v
 ```

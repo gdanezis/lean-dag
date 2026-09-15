@@ -76,22 +76,24 @@ def blocksHorizon (I wa j₀ M : ℕ) : ℕ := MahiMahi.decisionRoundAt wa ((j�
 /-- **The probability that slot `s` stays undecided**, over the uniform independent coins of `M`
 blocks of `K` rounds opening the intervals from the second after the slot's: the measure of the
 coin maps under which some view holding the horizon, at some period sequence that matches every
-period the view derives and at which the update rule fails over, either has not derived the period
-of the slot's interval or leaves `s` undecided at the adaptive wavelength and schedule. A sequence
-matching what the view derives is arbitrary where the scan has stalled, so a slot that counts as
-decided is decided under every such completion, from derived periods alone, and a scan that never
-reaches the slot's interval counts as a failure. The coins outside the blocks draw `d`. -/
+period the view derives when it hands the update rule what each anchor's window output at that
+sequence's wavelength and schedule, either has not derived the period of the slot's interval or
+leaves `s` undecided at that wavelength and schedule. A sequence matching what the view derives is
+arbitrary where the scan has stalled, so a slot that counts as decided is decided under every such
+completion, from derived periods alone, and a scan that never reaches the slot's interval counts
+as a failure. The coins outside the blocks draw `d`. -/
 noncomputable def undecidedProb (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ)
     (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (d : Validator) (s M : ℕ) :
     ℝ≥0∞ :=
   (PMF.uniformOfFintype (Fin M → Fin K → Validator)).toOuterMeasure
     {g | ¬ ∀ (V : View Validator BlockId Payload U) (per : ℕ → ℕ),
-      ResetsOnNoOutput (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per) U
-        (adaptiveWave ws wa I per) I upd →
       V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-      (∀ j k, PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V j k → per j = k) →
-      PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V (intervalOf I s)
-        (per (intervalOf I s)) ∧
+      (∀ j k, PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V
+        (adaptiveOutput (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
+          ws wa I per U) j k → per j = k) →
+      PeriodAt I wa (coinOfBlocks I (intervalOf I s) g d) upd k₀ U V
+        (adaptiveOutput (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
+          ws wa I per U) (intervalOf I s) (per (intervalOf I s)) ∧
       ∃ v, Decided (S := adaptiveSlots (coinOfBlocks I (intervalOf I s) g d) known I per)
         (adaptiveWave ws wa I per) U V s v}
 

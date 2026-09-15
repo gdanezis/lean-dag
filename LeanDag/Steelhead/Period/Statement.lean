@@ -31,8 +31,9 @@ What the adaptive protocol's period does across views and over time
   (`ResetsOnNoOutput`, `Model/Period.lean`): an interval that finds an
   anchor whose window the view did not output, since every slot of the
   window the view commits sits above one the view leaves undecided,
-  hands the next interval period `1`. That an anchor exists is the
-  almost-sure half, stated with the coin;
+  hands the next interval period `1`, because what the validator hands
+  the rule as the window's output (`adaptiveOutput`) is then empty. That
+  an anchor exists is the almost-sure half, stated with the coin;
 * **SH10f, two asynchronous rounds per interval**: the adaptive
   section's structural fact behind `I ≥ 2 · maxPeriod`. At any period
   `k ≥ 1` with `2 k ≤ I`, every interval holds two asynchronous rounds to
@@ -41,9 +42,9 @@ What the adaptive protocol's period does across views and over time
   `[1, K]` and the update rule keeps a period there, so does every
   derived period;
 * **SH10h, the failover satisfies its clause**: any update rule wrapped
-  in the failover (`failover`, `Model/Period.lean`) resets on an
-  interval that was not output, by construction, so the paper's replay
-  with the agreed failover is a rule the liveness claims apply to;
+  in the failover (`failover`, `Model/Period.lean`) answers `1` to an
+  empty output, by construction, so the paper's replay with the agreed
+  failover is a rule the liveness claims apply to;
 * **SH14, output liveness under the failover**: Theorem 3 (ii) and the
   asynchronous half of Definition 1's validity, deterministic given two
   events the coin supplies almost surely. Under the failover, with the
@@ -76,8 +77,13 @@ What the adaptive protocol's period does across views and over time
   consumes (SH15): two runs at named places, each of a fixed positive
   probability.
 
-SH10a and SH10b assume `3 ≤ wa` (and `3 ≤ ws`), as SH5 and SH2 do, and
-SH10b a round `N` the record does not reach past; SH10c assumes nothing;
+SH10a, SH10c, SH10d and SH10g hold for whatever output the validators
+hand the rule, SH10a for the same handover on both sides; SH10b, SH10e
+and SH14 to SH14c hand it what the window output at the validator's own
+wavelength. SH10a and SH10b assume `3 ≤ wa` (and `3 ≤ ws`), as SH5 and
+SH2 do, and SH10b a round `N` the record does not reach past, below
+which the windows of the anchors lie and the two handovers agree; SH10c
+assumes nothing;
 SH10d assumes `1 ≤ wa`, as SH7a does, and a positive interval, without
 which every round lies in interval `0`; SH10e assumes `2 ≤ ws` and
 `2 ≤ wa`, what the laws need to carry a verdict from the anchor's history
@@ -107,9 +113,9 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 /-- **SH10a, agreement of the period.** -/
 def PeriodAgreement (U : BlockUniverse Validator BlockId Payload) (I wa : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
-    (V₁ V₂ : View Validator BlockId Payload U) (j k₁ k₂ : ℕ),
+    (V₁ V₂ : View Validator BlockId Payload U) (out : BlockId → Finset BlockId) (j k₁ k₂ : ℕ),
     3 ≤ wa →
-    PeriodAt I wa coin upd k₀ U V₁ j k₁ → PeriodAt I wa coin upd k₀ U V₂ j k₂ → k₁ = k₂
+    PeriodAt I wa coin upd k₀ U V₁ out j k₁ → PeriodAt I wa coin upd k₀ U V₂ out j k₂ → k₁ = k₂
 
 /-- **SH10b, agreement of the output under the adaptive wavelength.** -/
 def AdaptiveAgreement (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=
@@ -119,9 +125,12 @@ def AdaptiveAgreement (U : BlockUniverse Validator BlockId Payload) (ws wa I : �
     3 ≤ ws → 3 ≤ wa →
     -- the record reaches no higher than round N, and the slot is proposed at or below it
     (∀ b ∈ U.ids, (U.block b).round ≤ N) → S.slotRound k ≤ N →
-    -- each view derived the period of every interval those rounds fall in
-    (∀ j, j ≤ intervalOf I N → PeriodAt I wa coin upd k₀ U V₁ j (per₁ j)) →
-    (∀ j, j ≤ intervalOf I N → PeriodAt I wa coin upd k₀ U V₂ j (per₂ j)) →
+    -- each view derived the period of every interval those rounds fall in, handing the rule
+    -- what each anchor's window output at its own wavelength
+    (∀ j, j ≤ intervalOf I N →
+      PeriodAt I wa coin upd k₀ U V₁ (adaptiveOutput ws wa I per₁ U) j (per₁ j)) →
+    (∀ j, j ≤ intervalOf I N →
+      PeriodAt I wa coin upd k₀ U V₂ (adaptiveOutput ws wa I per₂ U) j (per₂ j)) →
     -- and decided slot k at its own adaptive wavelength
     Decided (adaptiveWave ws wa I per₁) U V₁ k v₁ →
     Decided (adaptiveWave ws wa I per₂) U V₂ k v₂ →
@@ -130,17 +139,17 @@ def AdaptiveAgreement (U : BlockUniverse Validator BlockId Payload) (ws wa I : �
 /-- **SH10c, the scan ends.** -/
 def ScanEnds (U : BlockUniverse Validator BlockId Payload) (I wa : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
-    (V : View Validator BlockId Payload U) (j k : ℕ),
-    PeriodAt I wa coin upd k₀ U V j k →
+    (V : View Validator BlockId Payload U) (out : BlockId → Finset BlockId) (j k : ℕ),
+    PeriodAt I wa coin upd k₀ U V out j k →
     -- every asynchronous round of the interval has a chain verdict in V
     (∀ r, intervalOf I r = j → IsAsync k r → ∃ v, ChainDecided wa coin U V r v) →
     -- then V derives the next interval's period
-    ∃ k', PeriodAt I wa coin upd k₀ U V (j + 1) k'
+    ∃ k', PeriodAt I wa coin upd k₀ U V out (j + 1) k'
 
 /-- **SH10d, the period advances under the clause.** -/
 def PeriodOfClause (U : BlockUniverse Validator BlockId Payload) (I wa : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
-    (V : View Validator BlockId Payload U) (c N : ℕ),
+    (V : View Validator BlockId Payload U) (out : BlockId → Finset BlockId) (c N : ℕ),
     1 ≤ wa → 0 < I →
     -- the run form of the clause at the chain schedule
     MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c wa N →
@@ -149,24 +158,26 @@ def PeriodOfClause (U : BlockUniverse Validator BlockId Payload) (I wa : ℕ) : 
     -- for every interval whose window decides below the horizon ...
     ∀ j, MahiMahi.decisionRoundAt wa ((j + 1) * I + 1 + c + wa - 1) ≤ N →
       -- ... the view derives the next interval's period
-      ∃ k, PeriodAt I wa coin upd k₀ U V (j + 1) k
+      ∃ k, PeriodAt I wa coin upd k₀ U V out (j + 1) k
 
 /-- **SH10e, the period reaches `1` after an anchor whose window was not output.** -/
 def PeriodOne (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
     (V : View Validator BlockId Payload U) (per : ℕ → ℕ) (j k r : ℕ) (A : BlockId),
     2 ≤ ws → 2 ≤ wa →
-    -- the update rule fails over at the wavelength the validator runs
-    ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd →
-    -- interval j runs at k and V finds it an anchor ...
-    PeriodAt I wa coin upd k₀ U V j k → IntervalAnchor I wa coin U V j k r A →
+    -- the update rule fails over on an empty output
+    ResetsOnNoOutput upd →
+    -- interval j runs at k, the rule handed what each anchor's window output at the wavelength
+    -- the validator runs, and V finds it an anchor ...
+    PeriodAt I wa coin upd k₀ U V (adaptiveOutput ws wa I per U) j k →
+    IntervalAnchor I wa coin U V j k r A →
     -- ... and V output nothing of the anchor's window: every slot of the window it commits sits
     -- above one it leaves undecided
     (∀ (s : ℕ) (L : BlockId), windowBottom U A I ≤ S.slotRound s →
       Decided (adaptiveWave ws wa I per) U V s (some L) →
       ∃ s', s' < s ∧ ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s' v) →
     -- then interval j + 1 runs at period 1
-    PeriodAt I wa coin upd k₀ U V (j + 1) 1
+    PeriodAt I wa coin upd k₀ U V (adaptiveOutput ws wa I per U) (j + 1) 1
 
 /-- **SH10f, every interval holds two asynchronous rounds.** -/
 def TwoAsyncRounds (I : ℕ) : Prop :=
@@ -176,15 +187,17 @@ def TwoAsyncRounds (I : ℕ) : Prop :=
 /-- **SH10g, the period stays in range.** -/
 def PeriodInRange (U : BlockUniverse Validator BlockId Payload) (I wa K : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
-    (V : View Validator BlockId Payload U) (j k : ℕ),
-    -- the initial period lies in [1, K], and the update rule keeps a period there
-    1 ≤ k₀ → k₀ ≤ K → (∀ j A k, 1 ≤ k → k ≤ K → 1 ≤ upd j A k ∧ upd j A k ≤ K) →
+    (V : View Validator BlockId Payload U) (out : BlockId → Finset BlockId) (j k : ℕ),
+    -- the initial period lies in [1, K], and the update rule keeps a period there, whatever
+    -- output it is handed
+    1 ≤ k₀ → k₀ ≤ K →
+    (∀ j A out k, 1 ≤ k → k ≤ K → 1 ≤ upd j A out k ∧ upd j A out k ≤ K) →
     -- then so does every derived period
-    PeriodAt I wa coin upd k₀ U V j k → 1 ≤ k ∧ k ≤ K
+    PeriodAt I wa coin upd k₀ U V out j k → 1 ≤ k ∧ k ≤ K
 
 /-- **SH10h, the failover satisfies its clause.** -/
-def FailoverResets (U : BlockUniverse Validator BlockId Payload) (I : ℕ) : Prop :=
-  ∀ (w : ℕ → ℕ) (upd : UpdateRule BlockId), ResetsOnNoOutput U w I (failover U w I upd)
+def FailoverResets (BlockId : Type) [LinearOrder BlockId] : Prop :=
+  ∀ upd : UpdateRule BlockId, ResetsOnNoOutput (failover upd)
 
 /-- **SH14, output liveness under the failover.** -/
 def OutputLiveness (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=
@@ -194,10 +207,12 @@ def OutputLiveness (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ)
     2 ≤ ws → ws ≤ wa → 3 ≤ wa →
     -- one slot per round, and a positive interval
     (∀ t, S.slotRound t = t) → 0 < I →
-    -- the update rule fails over at the wavelength the validator runs
-    ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd →
-    -- V derived the period of every interval up to the run's last round
-    (∀ j, j ≤ intervalOf I (b + wa - 1) → PeriodAt I wa coin upd k₀ U V j (per j)) →
+    -- the update rule fails over on an empty output
+    ResetsOnNoOutput upd →
+    -- V derived the period of every interval up to the run's last round, handing the rule what
+    -- each anchor's window output at the wavelength it runs
+    (∀ j, j ≤ intervalOf I (b + wa - 1) →
+      PeriodAt I wa coin upd k₀ U V (adaptiveOutput ws wa I per U) j (per j)) →
     -- the coin leads every round the derived period makes asynchronous
     (∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r) →
     -- an interval at least two past the slot's, so that its anchor's window lies wholly above
@@ -219,15 +234,19 @@ def AllDecided (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ) :
     -- the coin leads every round the derived period makes asynchronous
     (∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r) →
     -- the periods stay in [1, K], and a window of c rounds plus a run of K fit in an interval
-    1 ≤ k₀ → k₀ ≤ K → (∀ j A k, 1 ≤ k → k ≤ K → 1 ≤ upd j A k ∧ upd j A k ≤ K) →
+    1 ≤ k₀ → k₀ ≤ K →
+    (∀ j A out k, 1 ≤ k → k ≤ K → 1 ≤ upd j A out k ∧ upd j A out k ≤ K) →
     wa ≤ K → c + K ≤ I →
-    -- the update rule fails over at the wavelength the validator runs
-    ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd →
+    -- the update rule fails over on an empty output
+    ResetsOnNoOutput upd →
     -- the run form of the clause at the chain schedule, with runs of K good coins: one hits
     -- an asynchronous round of any interval under any period in force
     MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c K N →
-    -- the view holds every block up to the horizon and derived every period below it
-    V.CoversUpto N → (∀ j, j ≤ intervalOf I N → PeriodAt I wa coin upd k₀ U V j (per j)) →
+    -- the view holds every block up to the horizon and derived every period below it, handing
+    -- the rule what each anchor's window output at the wavelength it runs
+    V.CoversUpto N →
+    (∀ j, j ≤ intervalOf I N →
+      PeriodAt I wa coin upd k₀ U V (adaptiveOutput ws wa I per U) j (per j)) →
     -- then every slot three intervals and a window below the horizon is decided
     ∀ s, MahiMahi.decisionRoundAt wa ((intervalOf I s + 3) * I + c + K) ≤ N →
       ∃ v, Decided (adaptiveWave ws wa I per) U V s v
@@ -240,11 +259,14 @@ def OutputLivenessOfRuns (U : BlockUniverse Validator BlockId Payload) (ws wa I 
     -- the coin leads every round the derived period makes asynchronous
     (∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r) →
     -- the periods stay in [1, K], and K rounds fit in an interval
-    1 ≤ k₀ → k₀ ≤ K → (∀ j A k, 1 ≤ k → k ≤ K → 1 ≤ upd j A k ∧ upd j A k ≤ K) → K ≤ I →
-    -- the update rule fails over at the wavelength the validator runs
-    ResetsOnNoOutput U (adaptiveWave ws wa I per) I upd →
-    -- V derived the period of every interval up to the run's last round
-    (∀ j', j' ≤ intervalOf I (b + wa - 1) → PeriodAt I wa coin upd k₀ U V j' (per j')) →
+    1 ≤ k₀ → k₀ ≤ K →
+    (∀ j A out k, 1 ≤ k → k ≤ K → 1 ≤ upd j A out k ∧ upd j A out k ≤ K) → K ≤ I →
+    -- the update rule fails over on an empty output
+    ResetsOnNoOutput upd →
+    -- V derived the period of every interval up to the run's last round, handing the rule what
+    -- each anchor's window output at the wavelength it runs
+    (∀ j', j' ≤ intervalOf I (b + wa - 1) →
+      PeriodAt I wa coin upd k₀ U V (adaptiveOutput ws wa I per U) j' (per j')) →
     -- at least two intervals past the slot's, interval j opens with K good coins ...
     intervalOf I s + 1 < j →
     (∀ i, i < K → coin (j * I + 1 + i) ∈ MahiMahi.goodAt U wa (j * I + 1 + i)) →
@@ -263,7 +285,7 @@ def Statement : Prop :=
     (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ),
     PeriodAgreement U I wa ∧ AdaptiveAgreement U ws wa I ∧ ScanEnds U I wa ∧
       PeriodOfClause U I wa ∧ PeriodOne U ws wa I ∧ TwoAsyncRounds I ∧
-      PeriodInRange U I wa K ∧ FailoverResets U I ∧ OutputLiveness U ws wa I ∧
+      PeriodInRange U I wa K ∧ FailoverResets BlockId ∧ OutputLiveness U ws wa I ∧
       AllDecided U ws wa I K ∧ OutputLivenessOfRuns U ws wa I K
 
 end Period

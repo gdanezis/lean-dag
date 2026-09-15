@@ -25,11 +25,11 @@ theorem holds : Statement := by
   · intro T r₀ m hwa hcard hpop
     exact noCommitProb_le hwa hcard hpop
   · exact tail_tendsto_zero
-  · intro T upd k₀ known d s M hws hle hwa hwaK hKI hcard h₀ hK hupd hpop
-    exact undecidedProb_le hws hle hwa hwaK hKI hcard h₀ hK hupd hpop
+  · intro T upd k₀ known d s M hws hle hwa hwaK hKI hcard h₀ hK hupd hreset hpop
+    exact undecidedProb_le hws hle hwa hwaK hKI hcard h₀ hK hupd hreset hpop
   · exact undecided_tail_tendsto_zero
-  · intro _ _ U T upd k₀ known s hws hle hwa hwaK hKI hcard h₀ hK hupd hpop
-    exact decidedAlmostSurely hws hle hwa hwaK hKI hcard h₀ hK hupd hpop
+  · intro _ _ U T upd k₀ known s hws hle hwa hwaK hKI hcard h₀ hK hupd hreset hpop
+    exact decidedAlmostSurely hws hle hwa hwaK hKI hcard h₀ hK hupd hreset hpop
 
 end Coin
 

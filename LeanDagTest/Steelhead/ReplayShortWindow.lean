@@ -54,7 +54,7 @@ four rounds. -/
 def rwWindow : Evidence (Fin 4) := ofAnchor rw44 25 4
 
 /-- The startup window, of the anchor at round `2`, keeps period `2`. -/
-theorem rw44_startup_keeps_two : anchorUpdate rw44 4 rwConfig [1, 2] (1 / 10) 0 9 2 = 2 := by
+theorem rw44_startup_keeps_two : anchorUpdate rw44 4 rwConfig [1, 2] (1 / 10) 0 9 ∅ 2 = 2 := by
   decide +kernel
 
 /-- The complete window is rounds `3` to `6`, two of them asynchronous under period `2`. -/
@@ -83,7 +83,7 @@ theorem rwWindow_scores : score rwWindow rwConfig 1 = 6 ∧ score rwWindow rwCon
 /-- **Algorithm 2 keeps period `2` at every hysteresis**: the best candidate scores what the
 current period scores, and no `ε ≥ 0` makes `6 < (1 − ε) · 6`. -/
 theorem rw44_keeps_two (epsilon : ℚ) (he : 0 ≤ epsilon) :
-    anchorUpdate rw44 4 rwConfig [1, 2] epsilon 1 25 2 = 2 := by
+    anchorUpdate rw44 4 rwConfig [1, 2] epsilon 1 25 ∅ 2 = 2 := by
   change select [1, 2] (score rwWindow rwConfig) 2 epsilon = 2
   have hmem := best_mem [1, 2] (score rwWindow rwConfig) 2 (by simp)
   have hbest : score rwWindow rwConfig (best [1, 2] (score rwWindow rwConfig) 2) = 6 := by

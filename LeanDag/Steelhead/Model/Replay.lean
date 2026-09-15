@@ -205,7 +205,7 @@ def update (E : Evidence Validator) (C : Config Validator) (candidates : List �
 /-- **Algorithm 2 as an update rule**: the replay of the anchor's window. -/
 def anchorUpdate (U : BlockUniverse Validator BlockId Payload) (I : ℕ) (C : Config Validator)
     (candidates : List ℕ) (epsilon : ℚ) : UpdateRule BlockId :=
-  fun _ A current => update (ofAnchor U A I) C candidates current epsilon
+  fun _ A _ current => update (ofAnchor U A I) C candidates current epsilon
 
 end Replay
 
