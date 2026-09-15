@@ -47,6 +47,9 @@ import LeanDagTest.Steelhead.Period
 import LeanDagTest.Steelhead.Stall
 import LeanDagTest.Steelhead.CoinDelay
 import LeanDagTest.Steelhead.ByzantineFloor
+import LeanDagTest.Steelhead.Replay
+import LeanDagTest.Steelhead.ReplayStartup
+import LeanDagTest.Steelhead.ReplayShortWindow
 import LeanDagTest.Steelhead.Axioms
 import LeanDagTest.BlackMarlin.Divergence
 import LeanDagTest.Barnacle.Model

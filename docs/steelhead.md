@@ -104,8 +104,11 @@ from coverage into certification; the unpredictable-leader clause.
   some record decides the slot in every view holding its horizon
   (SH15c), Theorem 3's "with probability `1`" itself.
 - **SH12, on data** (§8): the anchor-floor counterexample, the stall DAG
-  with its asynchronous commit beside it, and the period sequence at a
-  concrete update rule.
+  with its asynchronous commit beside it, the period sequence at a
+  concrete update rule, the coin streak that outputs nothing through any
+  horizon, the Byzantine floor, and Algorithm 2's replay on a healthy
+  window, on a startup window and on a complete window too short for a
+  wave.
 - **SH13, the ledger** (§3): the committed-leader sequence and the
   ledger of a settled prefix are agreed across views, the ledger is
   monotone, and a block enters at one slot, which both views name. The
@@ -166,7 +169,7 @@ from coverage into certification; the unpredictable-leader clause.
 | Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the chain settles under Mahi-Mahi's run clause and below any one run of `wa` good coins, a period is derived for each interval, an anchor whose window the view did not output hands the next interval period `1` under the failover, which the arc models in place of the paper's premise on the update rule (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15c over a sequence of records, SH15a's tail on one |
 | Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b, SH14c, SH15 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval at least two past the slot's and one run of `wa` good coins above it; SH14b reads both off the run clause at the chain schedule, SH14c off two runs of the coin; SH15a bounds the probability that some view has not derived the slot's period or leaves it undecided, over `M` blocks of coins, by `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero (SH15b); and SH15c states the "with probability `1`" itself, over a sequence of records with the coin drawn as a process: for almost every coin some record decides the slot in every view holding its horizon. The growth of the ledger from the settled prefix is SH13 |
 | Theorem 4 (agreement of the period) | SH10a, SH10b | for any deterministic update rule |
-| Adaptive section, `I ≥ 2 · maxPeriod` and `1 ≤ k ≤ maxPeriod` | SH10f, SH10g, SH18h | two asynchronous rounds per interval at any `k ≥ 1` with `2k ≤ I`; the period stays in range when the initial period does and the update rule keeps it there, which the failover wrapped around Algorithm 2's replay does whenever the candidates lie in `[1, K]` (SH18h) |
+| Adaptive section, `I ≥ 2 · maxPeriod` and `1 ≤ k ≤ maxPeriod` | SH10f, SH10g, SH18h | two asynchronous rounds per interval at any `k ≥ 1` with `2k ≤ I`; the period stays in range when the initial period does and the update rule keeps it there, which the failover wrapped around Algorithm 2's replay does whenever the candidates lie in `[1, K]` (SH18h). The bound admits `I < wa`, where no window holds the decision round of one of its asynchronous slots (§7, finding 8) |
 | Adaptive section, "the replay is exact in expectation" | SH18i | in the part that is a theorem: at a round the window retains, the share of the `n` candidates the window marks committed is the probability that a uniform coin names a directly committed leader on the anchor's history read as a record, the paper's `c_r / n`, at `1 ≤ wa`. The anchor's term is the approximation the paper admits |
 | Protocol section, "setting the canary odd ensures it is coprime to candidate periods, guaranteeing periodic probes" | SH18j | at a canary spacing coprime to a candidate period of at least two, a window holding two canary rounds whose decision round it retains holds a probe for the candidate, since two consecutive multiples of the spacing cannot both be multiples of the period |
 | Protocol section, "whenever either verdict of an asynchronous slot is direct, the two coincide" | SH5b | predicate for predicate, at a slot proposed at its own round and led by the coin |
@@ -735,8 +738,10 @@ validator (§7, finding 7).
    the failover of §5 in place of the selector's own reset: an interval
    that was not output hands the next one period `1`, whatever the
    scores. Algorithm 2 has no such clause; the paper's authors have
-   agreed to add one. The Lean witness of the stall and a Rust
-   reproduction through 256 rounds are held outside this PR.
+   agreed to add one. `ReplayStartup.lean` and `ReplayShortWindow.lean`
+   (§8) show the retention on tied windows on data; the stall through
+   every horizon, and a Rust reproduction through 256 rounds, are held
+   outside this PR.
 4. **Theorem 3's premise on the update rule is neither Algorithm 2's
    rule nor enough.** The theorem assumes that a window in which no
    synchronous slot commits maps to `k = 1`. Algorithm 2 keeps the period
@@ -801,6 +806,17 @@ validator (§7, finding 7).
    slot is a run of reliably led slots above its floor (SH6b, SH9), or
    one reliably led slot above the floor with every slot between
    decided (SH6f), and no bound in `b` alone holds.
+8. **`I ≥ 2 · maxPeriod` does not make a window hold a wave.** The
+   adaptive section bounds the interval so that every window holds two
+   asynchronous slots, and asks nothing else of it. At `I = 4`,
+   `maxPeriod = 2` and `wa = 5` the bound holds, every window of four
+   rounds holds two asynchronous rounds, and none holds the decision
+   round of either, so the replay resolves no asynchronous slot at any
+   candidate and pays the window's top for each: on `rw44` (§8) both
+   candidates tie at a complete window and the period never moves, at
+   any hysteresis. The bound the replay needs is
+   `I ≥ max(2 · maxPeriod, wa)`; the campaigns' `I = 128` satisfies it,
+   the paper's constraint does not state it.
 
 ## 8. Witnesses (`LeanDagTest/Steelhead/`), SH12
 
@@ -823,9 +839,20 @@ every settled prefix of every view empty (§7, finding 5).
 leads slots `0` and `3` and equivocates at both, so that each has two
 votes each way and neither quorum; the honest-led slot `4` commits
 directly and slot `0` stays undecided, its anchor search waiting on the
-undecided floor (§7, finding 7). `Axioms.lean`: the eight headline
-theorems, the carrier's persistence and its liveness headline depend on
-the standard axioms only.
+undecided floor (§7, finding 7). `Replay.lean`: Algorithm 2 on the
+window of `sh8`'s round-`7` block, where period `1` scores `18` and
+period `8` scores `11`, so the replay recovers from period `1` at
+hysteresis `1/10` and stays there at `1/2`, and the selection's ties on
+data (§5). `ReplayStartup.lean`: nine rounds with every synchronous slot
+at two votes and two blames, whose first anchor's window holds one
+asynchronous round and no synchronous commit, certificate or skip; every
+candidate scores `6` and Algorithm 2 keeps period `4` at hysteresis `0`
+and `1/10` (§7, findings 3 and 4). `ReplayShortWindow.lean`: eleven such
+rounds at `I = 4`, `maxPeriod = 2`, where a complete window holds two
+asynchronous rounds and no wave of `5`; both candidates score `6` and
+Algorithm 2 keeps period `2` at every hysteresis (§7, finding 8).
+`Axioms.lean`: the eight headline theorems, the carrier's persistence
+and its liveness headline depend on the standard axioms only.
 
 ## 9. Layout
 

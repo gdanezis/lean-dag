@@ -9962,7 +9962,7 @@ probability `1`" as the paper states it.
 
 ### 24.6 Findings, and the carrier
 
-Seven findings for the paper, recorded in `steelhead.md` §7. That the
+Eight findings for the paper, recorded in `steelhead.md` §7. That the
 chain must be read at every round, not at the asynchronous rounds alone,
 for its relation to be independent of the period the scan is to fix, and
 that its run length is then `wa`, where reading it at the asynchronous
@@ -10004,7 +10004,16 @@ thirty blocks at wave `3` validator `0` leads slots `0` and `3` and
 equivocates at both, the honest-led slot `4` commits and slot `0` stays
 undecided (`bf30_slot0_undecided`, SH12). The chain of floors advances
 a wave a hop and the same validator may lead every hop, so what decides
-such a slot is a run of reliably led slots above its floor (SH6b).
+such a slot is a run of reliably led slots above its floor (SH6b). And
+that `I ≥ 2 · maxPeriod` does not make a window hold a wave: at `I = 4`,
+`maxPeriod = 2` and `wa = 5` every window holds two asynchronous rounds
+and the decision round of neither, so the replay resolves no
+asynchronous slot, both candidates tie at a complete window and the
+period never moves at any hysteresis (`rw44_keeps_two`, SH12); the bound
+the replay needs is `I ≥ max(2 · maxPeriod, wa)`. On data the replay
+also recovers from period `1` on a healthy window (`rpWindow_recovers`)
+and keeps period `4` on a startup window whose every candidate ties
+(`rs36_keeps_four`), the retention of finding three.
 
 Through the properties (§16), the rule has a carrier per wavelength
 function, `steelheadRule w`, and shows `Agree`, `CommitsCandidate`,
@@ -11173,7 +11182,7 @@ reused.
 | SH9 | the drain: `wa` consecutive commits decide every slot below them at any wavelength function bounded by `wa`; at period `1` under the run clause, past every round some slot has everything below it decided; an asynchronous slot costs `wa − ws` rounds and its successor waits at most `wa − ws − 1` | `Steelhead.allDecidedBelowOfRun`, `Steelhead.allDecidedBelowAtPeriodOne`, `Steelhead.asyncSlotCost` *(Steelhead/Helpers/Liveness)* |
 | SH10 | the period: agreed across views under any update rule, so is the output at the adaptive wavelength over the intervals the record's rounds fall in; the scan ends once the chain verdicts are in, and under the clause it ends for every interval; an anchored interval the view did not output hands the next one period `1` under the failover; every interval holds two asynchronous rounds, and the period stays in range; the failover wrapped around any rule satisfies its clause | `Steelhead.Period.holds`, `Steelhead.periodAt_unique`, `Steelhead.adaptive_decided_unique`, `Steelhead.exists_periodAt_succ`, `Steelhead.periodAt_of_clause`, `Steelhead.periodAt_one_of_anchor`, `Steelhead.two_async_rounds`, `Steelhead.periodAt_mem_range`, `Steelhead.failover_resets` *(Steelhead/Period/Proof, Steelhead/Helpers/Period)* |
 | SH11 | the coin: a chain slot commits with probability `|good| / n`, at least `(n − f − |byzantine|) / n` and so at least `1/3` at `wa ≥ 5`, at least `1/n` at `wa ≥ 4`; no round's coin naming a directly committed leader in `m` rounds, with probability at most `((f + |byzantine|) / n)^m`, which tends to zero | `Steelhead.Coin.holds`, `Steelhead.ratio_le_commitProb`, `Steelhead.third_le_commitProb`, `Steelhead.inv_card_le_commitProb`, `Steelhead.chainCommit_of_mem_goodAt`, `Steelhead.noCommitProb_le`, `Steelhead.tail_tendsto_zero` *(Steelhead/Coin/Proof, Steelhead/Helpers/Coin)* |
-| SH12 | on data: the anchor-floor counterexample, the period sequence at a concrete update rule, the stall DAG with its asynchronous commit, and the coin streak that outputs nothing through any horizon | `lowFloor_skip`, `sh8_period1`, `st20_stall`, `positive_no_output` *(LeanDagTest/Steelhead/Model, LeanDagTest/Steelhead/Period, LeanDagTest/Steelhead/Stall, LeanDagTest/Steelhead/CoinDelay)* |
+| SH12 | on data: the anchor-floor counterexample, the period sequence at a concrete update rule, the stall DAG with its asynchronous commit, the coin streak that outputs nothing through any horizon, the Byzantine floor, and Algorithm 2 recovering from period `1` on a healthy window, keeping period `4` on a startup window and period `2` at every hysteresis on a complete window too short for a wave | `lowFloor_skip`, `sh8_period1`, `st20_stall`, `positive_no_output`, `bf30_slot0_undecided`, `rpWindow_recovers`, `rs36_keeps_four`, `rw44_keeps_two` *(LeanDagTest/Steelhead/Model, LeanDagTest/Steelhead/Period, LeanDagTest/Steelhead/Stall, LeanDagTest/Steelhead/CoinDelay, LeanDagTest/Steelhead/ByzantineFloor, LeanDagTest/Steelhead/Replay, LeanDagTest/Steelhead/ReplayStartup, LeanDagTest/Steelhead/ReplayShortWindow)* |
 | SH13 | the ledger: the committed-leader sequence and the ledger of a settled prefix are agreed, the ledger is monotone, a block enters at one slot which both views name, and a committed block belongs to one slot | `Steelhead.Ledger.holds` *(Steelhead/Ledger/Proof)* |
 | SH14 | output liveness under the failover: a slot below an anchored interval is decided once a run of `wa` coin-led commits above that interval is in view, since the failover puts the period at `1` from the interval after the anchored one and the run decides everything below it; under the run clause with runs of `K` good coins every slot far enough below the horizon is decided, and two runs of the coin, `K` good coins opening an interval past the slot's and `wa` above it, decide it | `Steelhead.output_liveness`, `Steelhead.all_decided`, `Steelhead.output_liveness_of_runs` *(Steelhead/Helpers/Period)* |
 | SH15 | the tail of the output: over the coins of `M` blocks of `K` rounds opening the intervals after a slot's, the slot stays undecided under the failover with probability at most `2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, which tends to zero; and over a sequence of records with the coin drawn as a process, for almost every coin some record decides the slot in every view holding its horizon | `Steelhead.undecidedProb_le`, `Steelhead.no_good_block_prob_le`, `Steelhead.undecided_tail_tendsto_zero`, `Steelhead.decidedAlmostSurely`, `Steelhead.coinMeasure_blockCoins_mem` *(Steelhead/Helpers/Coin)* |
