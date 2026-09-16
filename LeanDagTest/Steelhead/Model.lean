@@ -1,5 +1,6 @@
 import LeanDagTest.Mysticeti.Model
 import LeanDag.Steelhead.Model.Chain
+import LeanDag.Steelhead.Model.Compose
 import Mathlib.Tactic.IntervalCases
 /-!
 # Steelhead witnesses — the rule at a wavelength function on data
@@ -81,6 +82,9 @@ def sh8 : BlockUniverse (Fin 4) (Fin 32) Unit where
 /-- The rule at the period-four wavelength on this universe. -/
 abbrev sh : AnchoredRule (Fin 4) (Fin 32) Unit ValidWrt Correct :=
   steelheadAnchored (Fin 4) (Fin 32) Unit w4
+
+-- The rule is the composite of Mahi-Mahi's rule at each round's wave, by definition (SH16c).
+example : sh = compose fun r => MahiMahi.mahiMahiAnchored (Fin 4) (Fin 32) Unit (w4 r) := rfl
 
 /-! ### Eligibility at each slot's own floor -/
 
