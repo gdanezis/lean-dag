@@ -46,6 +46,13 @@ scoped instance nonempty_of_faults : Nonempty Validator :=
 noncomputable def commitProb (U : BlockUniverse Validator BlockId Payload) (wa r : ℕ) : ℝ≥0∞ :=
   (PMF.uniformOfFintype Validator).toOuterMeasure ↑(MahiMahi.goodAt U wa r)
 
+/-- **The probability that every coin of the `m` rounds from `r₀` names a committed leader**, the
+coins independent: the measure, under the uniform distribution over the leader maps, of the maps
+that hit every round's committed set. The run of consecutive commits a wave asks for. -/
+noncomputable def runProb (U : BlockUniverse Validator BlockId Payload) (wa r₀ m : ℕ) : ℝ≥0∞ :=
+  (PMF.uniformOfFintype (Fin m → Validator)).toOuterMeasure
+    {coins | ∀ i : Fin m, coins i ∈ MahiMahi.goodAt U wa (r₀ + i)}
+
 /-- **The probability that no coin of the `m` rounds from `r₀` names a committed leader**, the
 coins independent: the measure, under the uniform distribution over the leader maps, of the maps
 that miss every round's committed set. -/
@@ -53,6 +60,45 @@ noncomputable def noCommitProb (U : BlockUniverse Validator BlockId Payload) (wa
     ℝ≥0∞ :=
   (PMF.uniformOfFintype (Fin m → Validator)).toOuterMeasure
     {coins | ∀ i : Fin m, coins i ∉ MahiMahi.goodAt U wa (r₀ + i)}
+
+/-- **The coins of `K` rounds read as a coin map**: round `r` below `K` draws `g r`, every round
+at or above `K` the fixed `d`, which no event below reads. -/
+def coinOfRounds {K : ℕ} (g : Fin K → Validator) (d : Validator) : ℕ → Validator :=
+  fun r => if h : r < K then g ⟨r, h⟩ else d
+
+/-- **A strategy answers only the draws already made**, in the form the floor chain reads: the
+committed set of a round is fixed by the coins of the rounds below it, and so is the skip verdict
+of every slot whose whole wave lies below that round. The second clause is what makes a landing a
+function of the coins drawn before the floor above it: the adversary must commit to which slots
+the view skips before the coin of the round it hops from is drawn. -/
+def NonAnticipatingChain {K : ℕ}
+    (σ : (Fin K → Validator) → BlockUniverse Validator BlockId Payload)
+    (V : ∀ g, View Validator BlockId Payload (σ g)) (w : ℕ → ℕ) (wa : ℕ) (d : Validator) : Prop :=
+  ∀ g g' (r : ℕ), (∀ s : Fin K, (s : ℕ) < r → g s = g' s) →
+    MahiMahi.goodAt (σ g) wa r = MahiMahi.goodAt (σ g') wa r ∧
+      ∀ s, s + w s ≤ r →
+        (Decided (S := chainSlots (coinOfRounds g d)) w (σ g) (V g) s none ↔
+          Decided (S := chainSlots (coinOfRounds g' d)) w (σ g') (V g') s none)
+
+/-- **The landings of the floor chain under a coin-shaped universe**: the chain from `k₀` read in
+the view the strategy gives for the draw `g`, at the schedule that draw elects. -/
+noncomputable def chainLandings {K : ℕ}
+    (σ : (Fin K → Validator) → BlockUniverse Validator BlockId Payload)
+    (V : ∀ g, View Validator BlockId Payload (σ g)) (w : ℕ → ℕ) (d : Validator) (k₀ : ℕ)
+    (g : Fin K → Validator) : ℕ → ℕ :=
+  floorChain (S := chainSlots (coinOfRounds g d)) w (σ g) (V g) k₀
+
+/-- **The probability that the floor chain's first `h` landings are all led from outside their
+round's committed set**, over the uniform coins of `K` rounds against a strategy: Theorem 2's
+"each hop of that search onto a Byzantine-led slot" as one event over the whole chain. -/
+noncomputable def badChainProb {K : ℕ}
+    (σ : (Fin K → Validator) → BlockUniverse Validator BlockId Payload)
+    (V : ∀ g, View Validator BlockId Payload (σ g)) (w : ℕ → ℕ) (wa : ℕ) (d : Validator)
+    (k₀ h : ℕ) : ℝ≥0∞ :=
+  (PMF.uniformOfFintype (Fin K → Validator)).toOuterMeasure
+    {g | ∀ i, i < h →
+      coinOfRounds g d (chainLandings σ V w d k₀ g (i + 1)) ∉
+        MahiMahi.goodAt (σ g) wa (chainLandings σ V w d k₀ g (i + 1))}
 
 /-- **Round `i` of block `j`**: block `j` opens interval `j₀ + 2 + j`, so its round `i` is the
 `(i + 1)`-th round of that interval. The blocks start two intervals past `j₀` so that the window

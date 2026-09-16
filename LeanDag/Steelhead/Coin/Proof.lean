@@ -15,11 +15,13 @@ namespace Coin
 
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ _ U ws wa I K
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro T r hwa hcard hpop₃ hpopd
     exact ⟨ratio_le_commitProb hwa hcard hpop₃ hpopd, third_le_commitProb hwa hcard hpop₃ hpopd⟩
   · intro T r hwa hcard hpop₂ hpopd
     exact inv_card_le_commitProb hwa hcard hpop₂ hpopd
+  · intro T r₀ m hwa hcard hpop
+    exact runProb_ge hwa hcard hpop
   · intro coin V r h hV
     exact chainCommit_of_mem_goodAt h hV
   · intro T r₀ m hwa hcard hpop
@@ -36,6 +38,8 @@ theorem holds : Statement := by
     exact decidedAlmostSurely hws hle hwa hwaK hKI hcard h₁ hpop
   · intro _ _ σ T upd k₀ known s hws hle hwa hwaK hKI hcard h₁ hσ hpop
     exact decidedAlmostSurely_adaptive hws hle hwa hwaK hKI hcard h₁ hσ hpop
+  · intro w c k₀ h d σ V hw hwa hna hV hcard hland hK
+    exact badChainProb_le hw hwa hna hV hcard hland hK
 
 end Coin
 

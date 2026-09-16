@@ -4,7 +4,8 @@ import Mathlib.Analysis.SpecificLimits.Basic
 # The coin — statement
 
 The probability half of liveness under asynchrony (`steelhead.md` §4),
-the paper's Theorem 3 read through a uniform coin. Eleven claims:
+the paper's Theorem 3 read through a uniform coin, and the per-hop
+clause of its Theorem 2. Thirteen claims:
 
 * **SH11a, the commit probability** — on a wave a quorum has populated,
   the coin of round `r` names a directly committed leader with
@@ -14,6 +15,13 @@ the paper's Theorem 3 read through a uniform coin. Eleven claims:
   promises one committed correct candidate, so the coin names a
   committed leader with probability at least `1/n`, the paper's
   wavelength-four trade-off;
+* **SH11g, the run probability** — the positive form the paper's
+  Theorem 3 (ii) states: over `m` consecutive populated waves with
+  independent coins, every round's coin names a directly committed
+  leader with probability at least `((n − f − b) / n)^m`, which at
+  `m = wa` is the run a window is asked to hold. The complementary
+  bound is SH11c, and neither implies the other: SH11c bounds the
+  chance that no round commits;
 * **SH11b, a good coin commits the chain slot** — in every view caught
   up to the decision round;
 * **SH11c, the tail** — over `m` consecutive populated waves with
@@ -61,6 +69,20 @@ the paper's Theorem 3 read through a uniform coin. Eleven claims:
   undecided, a set of measure at most SH15a's bound, which vanishes
   (SH15b); so they are null. The records are any sequence, the prefixes
   of one execution among them, since the argument reads each on its own;
+* **SH11h, the floor chain's landings under the coin** — Theorem 2's
+  per-hop clause, "each hop of that search onto a Byzantine-led slot
+  having probability at most `b/n` under the coin", as one event over
+  the whole chain: at period one, against a strategy that answers only
+  the draws already made, the first `h` landings are all led from
+  outside their round's committed set with probability at most
+  `((n − c) / n)^h`. A landing is led from outside only if the coin at
+  the floor it hopped from was, since a committed candidate's slot is
+  never skipped and the search would have stopped there; those floors
+  climb, and each is fixed with its good set by the coins drawn below
+  it, so the count peels one floor at a time. The landings themselves
+  are not a filtration: whether a slot is skipped is settled by its own
+  wave, which is why the strategy must fix the skips of a slot before
+  the coin of the round above its wave is drawn;
 * **SH15e, almost surely against an adaptive adversary** — SH15c where
   the `m`-th record is a strategy's own answer to the coins of its `m`
   blocks: for almost every coin some strategy's record settles the slot,
@@ -110,6 +132,18 @@ def CommitProbabilityFour (U : BlockUniverse Validator BlockId Payload) (wa : �
     -- then the coin names a committed leader with probability at least 1 / n
     (Fintype.card Validator : ℝ≥0∞)⁻¹ ≤ commitProb U wa r
 
+/-- **SH11g, the run probability.** -/
+def RunProbability (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
+  ∀ (T : Finset Validator) (r₀ m : ℕ),
+    -- five rounds, a quorum, and each of the m waves from r₀ populated where MM2 reads it
+    5 ≤ wa → quorumCard Validator ≤ T.card →
+    (∀ i : Fin m, PopulatedOn U T (r₀ + i + 3) ∧
+      PopulatedOn U T (MahiMahi.decisionRoundAt wa (r₀ + i))) →
+    -- then every one of those rounds names a committed leader with probability at least
+    -- ((n − f − b) / n)^m, which at m = wa is the run the paper asks a window for
+    ((((Fintype.card Validator - F.f - F.byzantine.card : ℕ) : ℝ≥0∞) /
+      Fintype.card Validator) ^ m) ≤ runProb U wa r₀ m
+
 /-- **SH11b, a good coin commits the chain slot.** -/
 def CommitOfCoin (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (V : View Validator BlockId Payload U) (r : ℕ),
@@ -158,6 +192,30 @@ def UndecidedTail (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ
     -- then the slot stays undecided with probability at most twice the chance that each of M/2
     -- blocks holds a bad coin
     undecidedProb U ws wa I K upd k₀ known d s M ≤ 2 * badBlockBound Validator K ^ (M / 2)
+
+/-- **SH11h, the floor chain's landings under the coin.** Theorem 2's per-hop clause. -/
+def BadChainBound (wa K : ℕ) : Prop :=
+  ∀ (w : ℕ → ℕ) (c k₀ h : ℕ) (d : Validator)
+    (σ : (Fin K → Validator) → BlockUniverse Validator BlockId Payload)
+    (V : ∀ g, View Validator BlockId Payload (σ g)),
+    -- period one, where every slot is the coin's, at a wave the chain rule reads
+    (∀ r, w r = wa) → 3 ≤ wa →
+    -- the strategy answers only the draws already made
+    NonAnticipatingChain σ V w wa d →
+    -- every view holds the decision rounds the chain reads, so a committed candidate's slot is
+    -- decided there and the search never skips it
+    (∀ g r, V g |>.CoversUpto (MahiMahi.decisionRoundAt wa r)) →
+    -- every round's committed set holds at least c candidates, as MM2 gives on a populated wave
+    (∀ g r, c ≤ (MahiMahi.goodAt (σ g) wa r).card) →
+    -- the chain's landings are landings, not the fallback of `floorLanding`
+    (∀ g i, i < h → ¬ Decided (S := chainSlots (coinOfRounds g d)) w (σ g) (V g)
+      (chainLandings σ V w d k₀ g (i + 1)) none) →
+    -- the chain stays inside the rounds the coins cover
+    (∀ g i, i ≤ h → chainLandings σ V w d k₀ g i + wa < K) →
+    -- then every one of the first h landings is led from outside its round's committed set with
+    -- probability at most ((n − c) / n)^h, the paper's b/n a hop
+    badChainProb σ V w wa d k₀ h ≤
+      (((Fintype.card Validator - c : ℕ) : ℝ≥0∞) / Fintype.card Validator) ^ h
 
 /-- **SH11f, the adaptive block bound.** -/
 def AdaptiveBlockBound (K : ℕ) : Prop :=
@@ -248,7 +306,8 @@ def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId]
     (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ),
-    CommitProbability U wa ∧ CommitProbabilityFour U wa ∧ CommitOfCoin U wa ∧
+    CommitProbability U wa ∧ CommitProbabilityFour U wa ∧ RunProbability U wa ∧
+      CommitOfCoin U wa ∧
       NoCommitTail U wa ∧ TailVanishes (Validator := Validator) ∧
       AdaptiveBlockBound (Validator := Validator) K ∧
       UndecidedTail U ws wa I K ∧
@@ -258,7 +317,8 @@ def Statement : Prop :=
       DecidedAlmostSurely (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
         ws wa I K ∧
       DecidedAlmostSurelyAgainst (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
-        ws wa I K
+        ws wa I K ∧
+      BadChainBound (Validator := Validator) (BlockId := BlockId) (Payload := Payload) wa K
 
 end Coin
 
