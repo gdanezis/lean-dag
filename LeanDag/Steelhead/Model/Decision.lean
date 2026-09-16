@@ -77,6 +77,13 @@ namespace Decided
 export AnchoredRule.Decided (directCommit directSkip indirectCommit indirectSkip)
 end Decided
 
+/-- **A hop of the floor chain**: from slot `x`, the anchor search passes over every slot the view
+skips and stops at the first slot at or above `x`'s floor that it does not, which is `y`. One slot
+per round, as Theorem 2 reads the chain. -/
+def FloorHop (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) (x y : ℕ) : Prop :=
+  x + w x ≤ y ∧ (∀ j, x + w x ≤ j → j < y → Decided w U V j none) ∧ ¬ Decided w U V y none
+
 instance {V : View Validator BlockId Payload U} (w : ℕ → ℕ) (L : BlockId) (r κ : ℕ) :
     Decidable ((steelheadAnchored Validator BlockId Payload w).Commit U V L r κ) :=
   inferInstanceAs (Decidable (MahiMahi.DirectCommitIn U V (w κ) L r))
