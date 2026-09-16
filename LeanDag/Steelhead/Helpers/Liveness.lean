@@ -148,6 +148,221 @@ theorem roundRobin_near {n : ℕ} (hn : 0 < n) {T : Finset (Fin n)} (hT : T.None
     Fintype.card_fin] at hcard
   omega
 
+/-! ## SH6i — the hop count -/
+
+/-- The offset that carries a round to the next round of residue `k`, within one cycle. -/
+theorem mod_add_offset {n : ℕ} (hn : 0 < n) (a k : ℕ) (hk : k < n) :
+    (a + (k + n - a % n) % n) % n = k := by
+  have hs : a % n < n := Nat.mod_lt _ hn
+  rcases Nat.lt_or_ge k (a % n) with h | h
+  · rw [Nat.mod_eq_of_lt (show k + n - a % n < n by omega), Nat.add_mod,
+      show a % n + (k + n - a % n) % n = a % n + (k + n - a % n) from by
+        rw [Nat.mod_eq_of_lt (show k + n - a % n < n by omega)],
+      show a % n + (k + n - a % n) = k + n by omega, Nat.add_mod_right, Nat.mod_eq_of_lt hk]
+  · rw [show k + n - a % n = k - a % n + n by omega, Nat.add_mod_right,
+      Nat.mod_eq_of_lt (show k - a % n < n by omega), Nat.add_mod,
+      show a % n + (k - a % n) % n = k from by
+        rw [Nat.mod_eq_of_lt (show k - a % n < n by omega)]; omega,
+      Nat.mod_eq_of_lt hk]
+
+/-- A round between two landings of a chain lies in one of its hops. -/
+theorem exists_hop_index {x : ℕ → ℕ} {i j t : ℕ} (hij : i < j) (ht : x i ≤ t) (htj : t < x j) :
+    ∃ k, i ≤ k ∧ k < j ∧ x k ≤ t ∧ t < x (k + 1) := by
+  have aux : ∀ d i', j = i' + d → 0 < d → x i' ≤ t →
+      ∃ k, i' ≤ k ∧ k < j ∧ x k ≤ t ∧ t < x (k + 1) := by
+    intro d
+    induction d with
+    | zero => intro _ _ hd; omega
+    | succ d ih =>
+      intro i' hji hd hi'
+      rcases Nat.lt_or_ge t (x (i' + 1)) with hlt | hge
+      · exact ⟨i', le_rfl, by omega, hi', hlt⟩
+      · have hd' : 0 < d := by
+          rcases Nat.eq_zero_or_pos d with rfl | hpos
+          · exact absurd htj (by rw [show j = i' + 1 by omega]; omega)
+          · exact hpos
+        obtain ⟨k, hk1, hk2, hk3, hk4⟩ := ih (i' + 1) (by omega) hd' hge
+        exact ⟨k, by omega, hk2, hk3, hk4⟩
+  exact aux (j - i) i (by omega) (by omega) ht
+
+omit F in
+/-- **The count that bounds the floor chain (SH6i).** A chain that advances by at least `ws`
+rounds a hop, whose landings are led from outside `T` and whose rounds from a landing's floor up
+to the next landing are too, cannot have two landings at one residue: between two such landings
+lies a whole number of cycles, each holding `T.card` reliably led rounds, and every one of them
+must fall in the `ws − 1` rounds a hop leaves free, which forces `n ≤ ws · (n − T.card)`. -/
+theorem roundRobin_hop_bound {n ws m : ℕ} (hn : 0 < n) (hws : 1 ≤ ws) {T : Finset Validator}
+    {lead : Fin n → Validator} (hbij : Function.Bijective lead) {sched : ℕ → Validator}
+    (hsched : ∀ t, sched t = lead ⟨t % n, Nat.mod_lt t hn⟩) (hm : m = n - T.card)
+    (hlt : ws * m < n) {x : ℕ → ℕ} (hstep : ∀ i, i < m → x i + ws ≤ x (i + 1))
+    (hbad : ∀ i, i ≤ m → sched (x i) ∉ T)
+    (hmid : ∀ i, i < m → ∀ t, x i + ws ≤ t → t < x (i + 1) → sched t ∉ T) : False := by
+  classical
+  set e : Fin n ≃ Validator := Equiv.ofBijective lead hbij with he
+  have hcard : Fintype.card Validator = n := by
+    have := Fintype.card_of_bijective hbij
+    simpa using this.symm
+  have hTcard : T.card ≤ n := by
+    have := Finset.card_le_univ T
+    rwa [hcard] at this
+  -- the chain advances by `ws` a hop
+  have hgrow : ∀ d i, i + d ≤ m → x i + d * ws ≤ x (i + d) := by
+    intro d
+    induction d with
+    | zero => intro i _; simp
+    | succ d ih =>
+      intro i hi
+      have h1 : x i + d * ws ≤ x (i + d) := ih i (by omega)
+      have h2 : x (i + d) + ws ≤ x (i + d + 1) := hstep (i + d) (by omega)
+      rw [show i + (d + 1) = i + d + 1 by omega, Nat.succ_mul]
+      omega
+  -- the residues the landings may take are the `m` the reliable set leaves free
+  set Bad : Finset (Fin n) := Finset.univ.filter fun k => lead k ∉ T with hBad
+  have hgoodcard : (Finset.univ.filter fun k : Fin n => lead k ∈ T).card = T.card := by
+    refine Finset.card_bij (fun k _ => lead k) (fun k hk => (Finset.mem_filter.mp hk).2)
+      (fun a _ b _ hab => hbij.1 hab) fun v hv => ?_
+    obtain ⟨k, hk⟩ := hbij.2 v
+    exact ⟨k, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hk ▸ hv⟩, hk⟩
+  have hBadcard : Bad.card = m := by
+    have hsplit : Bad.card + (Finset.univ.filter fun k : Fin n => lead k ∈ T).card =
+        (Finset.univ : Finset (Fin n)).card := by
+      rw [hBad, Nat.add_comm]
+      exact Finset.card_filter_add_card_filter_not (s := Finset.univ)
+        (p := fun k : Fin n => lead k ∈ T)
+    rw [Finset.card_univ, Fintype.card_fin] at hsplit
+    omega
+  have hbad' : ∀ i, i ≤ m → lead ⟨x i % n, Nat.mod_lt _ hn⟩ ∉ T := by
+    intro i hi
+    have := hbad i hi
+    rwa [hsched] at this
+  -- two of the `m + 1` landings share a residue, and between them the count fails
+  have key : ∀ i j, i < j → j ≤ m → x i % n = x j % n → False := by
+    intro i j hij hjm hres
+    have hab : x i + (j - i) * ws ≤ x j := by
+      have := hgrow (j - i) i (by omega)
+      rwa [show i + (j - i) = j by omega] at this
+    have hdpos : 1 * 1 ≤ (j - i) * ws := Nat.mul_le_mul (by omega) hws
+    have hltab : x i < x j := by omega
+    obtain ⟨q, hq⟩ : ∃ q, x j - x i = n * q := by
+      refine ⟨x j / n - x i / n, ?_⟩
+      have h1 := Nat.div_add_mod (x i) n
+      have h2 := Nat.div_add_mod (x j) n
+      have h3 : n * (x i / n) ≤ n * (x j / n) :=
+        Nat.mul_le_mul_left n (Nat.div_le_div_right (le_of_lt hltab))
+      rw [Nat.mul_sub]
+      omega
+    have hq1 : 1 ≤ q := by
+      rcases Nat.eq_zero_or_pos q with rfl | h
+      · omega
+      · exact h
+    set Led : Finset ℕ := (Finset.Ico (x i) (x j)).filter fun t => sched t ∈ T with hLed
+    -- every cycle of the span holds one round of each reliable validator's residue
+    have hlow : T.card * q ≤ Led.card := by
+      have hcardprod : (T ×ˢ Finset.range q).card = T.card * q := by
+        rw [Finset.card_product, Finset.card_range]
+      rw [← hcardprod]
+      refine Finset.card_le_card_of_injOn
+        (fun p : Validator × ℕ => x i + (↑(e.symm p.1) + n - x i % n) % n + n * p.2) ?_ ?_
+      · rintro ⟨v, c⟩ hp
+        obtain ⟨hv, hc⟩ := Finset.mem_product.mp hp
+        have hcq : c < q := Finset.mem_range.mp hc
+        have hstepn : n * (c + 1) ≤ n * q := Nat.mul_le_mul_left n (by omega)
+        rw [Nat.mul_succ] at hstepn
+        obtain ⟨off, hoffeq, hoff⟩ :
+            ∃ off, (↑(e.symm v) + n - x i % n) % n = off ∧ off < n :=
+          ⟨_, rfl, Nat.mod_lt _ hn⟩
+        change x i + (↑(e.symm v) + n - x i % n) % n + n * c ∈ Led
+        refine Finset.mem_filter.mpr ⟨Finset.mem_Ico.mpr ⟨by rw [hoffeq]; omega, ?_⟩, ?_⟩
+        · rw [hoffeq]
+          omega
+        · have hmod : (x i + (↑(e.symm v) + n - x i % n) % n + n * c) % n = ↑(e.symm v) := by
+            rw [Nat.add_mul_mod_self_left]
+            exact mod_add_offset hn _ _ (e.symm v).isLt
+          rw [hsched]
+          have : (⟨(x i + (↑(e.symm v) + n - x i % n) % n + n * c) % n, Nat.mod_lt _ hn⟩ :
+              Fin n) = e.symm v := Fin.ext hmod
+          rw [this]
+          have : lead (e.symm v) = v := e.apply_symm_apply v
+          rw [this]
+          exact hv
+      · rintro ⟨v, c⟩ hp ⟨v', c'⟩ hp' hff
+        have hmod : (↑(e.symm v) : ℕ) = ↑(e.symm v') := by
+          have h1 : (x i + (↑(e.symm v) + n - x i % n) % n + n * c) % n = ↑(e.symm v) := by
+            rw [Nat.add_mul_mod_self_left]
+            exact mod_add_offset hn _ _ (e.symm v).isLt
+          have h2 : (x i + (↑(e.symm v') + n - x i % n) % n + n * c') % n = ↑(e.symm v') := by
+            rw [Nat.add_mul_mod_self_left]
+            exact mod_add_offset hn _ _ (e.symm v').isLt
+          rw [← h1, ← h2]
+          exact congrArg (· % n) hff
+        have hvv : v = v' := by
+          have : e.symm v = e.symm v' := Fin.ext hmod
+          simpa using congrArg e this
+        subst hvv
+        have hcc : n * c = n * c' := by
+          have := hff
+          simp only at this
+          omega
+        have : c = c' := Nat.eq_of_mul_eq_mul_left hn hcc
+        subst this
+        rfl
+    -- and each of those rounds falls in the rounds one hop leaves free
+    have hup : Led.card ≤ (j - i) * (ws - 1) := by
+      have hsub : Led ⊆ (Finset.Ico i j).biUnion fun k => Finset.Ioo (x k) (x k + ws) := by
+        intro t ht
+        obtain ⟨htIco, htT⟩ := Finset.mem_filter.mp ht
+        obtain ⟨ht1, ht2⟩ := Finset.mem_Ico.mp htIco
+        obtain ⟨k, hk1, hk2, hk3, hk4⟩ := exists_hop_index hij ht1 ht2
+        refine Finset.mem_biUnion.mpr ⟨k, Finset.mem_Ico.mpr ⟨hk1, hk2⟩,
+          Finset.mem_Ioo.mpr ⟨?_, ?_⟩⟩
+        · rcases Nat.eq_or_lt_of_le hk3 with heq | hlt'
+          · exact absurd (heq ▸ htT) (hbad k (by omega))
+          · exact hlt'
+        · by_contra hge
+          exact hmid k (by omega) t (by omega) hk4 htT
+      refine le_trans (Finset.card_le_card hsub) (le_trans Finset.card_biUnion_le ?_)
+      calc ∑ k ∈ Finset.Ico i j, (Finset.Ioo (x k) (x k + ws)).card
+          ≤ ∑ _k ∈ Finset.Ico i j, (ws - 1) :=
+            Finset.sum_le_sum fun k _ => by rw [Nat.card_Ioo]; omega
+        _ = (j - i) * (ws - 1) := by rw [Finset.sum_const, Nat.card_Ico, smul_eq_mul]
+    -- the two counts meet only at `n ≤ ws · (n − T.card)`
+    have hdn : (j - i) * ws ≤ n * q := by omega
+    have h1 : ws * (T.card * q) ≤ ws * ((j - i) * (ws - 1)) :=
+      Nat.mul_le_mul_left ws (le_trans hlow hup)
+    have h2 : ws * ((j - i) * (ws - 1)) = ((j - i) * ws) * (ws - 1) := by
+      rw [Nat.mul_comm ws ((j - i) * (ws - 1)), Nat.mul_assoc, Nat.mul_comm (ws - 1) ws,
+        ← Nat.mul_assoc]
+    have h3 : ((j - i) * ws) * (ws - 1) ≤ (n * q) * (ws - 1) :=
+      Nat.mul_le_mul_right (ws - 1) hdn
+    have h4 : q * (ws * T.card) ≤ q * (n * (ws - 1)) := by
+      have hleft : ws * (T.card * q) = q * (ws * T.card) := by
+        rw [Nat.mul_comm T.card q, ← Nat.mul_assoc, Nat.mul_comm ws q, Nat.mul_assoc]
+      have hright : (n * q) * (ws - 1) = q * (n * (ws - 1)) := by
+        rw [Nat.mul_comm n q, Nat.mul_assoc]
+      rw [← hleft, ← hright]
+      exact le_trans h1 (le_trans (le_of_eq h2) h3)
+    have h5 : ws * T.card ≤ n * (ws - 1) := Nat.le_of_mul_le_mul_left h4 (by omega)
+    have h6 : n * (ws - 1) = n * ws - n := by
+      rw [Nat.mul_sub, Nat.mul_one]
+    have h7 : ws * m = ws * n - ws * T.card := by
+      rw [hm, Nat.mul_sub]
+    have h8 : ws * n = n * ws := Nat.mul_comm ws n
+    have h9 : ws * T.card ≤ ws * n := Nat.mul_le_mul_left ws hTcard
+    have h10 : n ≤ n * ws := Nat.le_mul_of_pos_right n (by omega)
+    omega
+  obtain ⟨i, hi, j, hj, hne, heq⟩ :=
+    Finset.exists_ne_map_eq_of_card_lt_of_maps_to (s := Finset.range (m + 1)) (t := Bad)
+      (f := fun i => (⟨x i % n, Nat.mod_lt _ hn⟩ : Fin n))
+      (by rw [Finset.card_range, hBadcard]; omega)
+      fun i hi => Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+        hbad' i (by have := Finset.mem_range.mp hi; omega)⟩
+  have hi' := Finset.mem_range.mp hi
+  have hj' := Finset.mem_range.mp hj
+  have hres : x i % n = x j % n := congrArg Fin.val heq
+  rcases Nat.lt_or_ge i j with h | h
+  · exact key i j h (by omega) hres
+  · exact key j i (by omega) (by omega) hres.symm
+
 section Slots
 
 variable [S : Slots Validator]
@@ -293,6 +508,58 @@ theorem floorChainDecides {U : BlockUniverse Validator BlockId Payload} {w : ℕ
       | none => exact absurd hv hhop0.2.2
       | some A => exact ⟨A, rfl⟩
     exact decidedOfCommitAboveFloor hw hid hhop0.1 hv hhop0.2.1
+
+/-- **SH6i.** A reliably led landing commits (SH6a), and a view decides a slot one way, so a
+skipped round is never reliably led. If none of the first `n − |T|` landings were reliably led,
+neither would be any round from a landing's floor up to the next landing, those being the skips
+the hop passes over, and `roundRobin_hop_bound` would contradict `ws · (n − |T|) < n`. -/
+theorem floorChainReachesReliable {U : BlockUniverse Validator BlockId Payload} {w : ℕ → ℕ}
+    {ws n : ℕ} (hn : 0 < n) (hwr : ∀ r, w r = ws) (hws : 3 ≤ ws) (hid : ∀ t, S.slotRound t = t)
+    {T : Finset Validator} {V : View Validator BlockId Payload U} {R N : ℕ}
+    (hT : T ⊆ (Correct : Finset Validator)) (hcard : quorumCard Validator ≤ T.card)
+    (hs : SynchronisedOn U T R) (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
+    (hV : V.CoversUpto N) {lead : Fin n → Validator} (hbij : Function.Bijective lead)
+    (hsched : ∀ t, S.leader t = lead ⟨t % n, Nat.mod_lt t hn⟩) (hlt : ws * (n - T.card) < n)
+    {x : ℕ → ℕ} (hR : R ≤ x 0) (hhop : ∀ i, i < n - T.card → FloorHop w U V (x i) (x (i + 1)))
+    (hN : ∀ j, j ≤ x (n - T.card) →
+      (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N) :
+    ∃ i, i ≤ n - T.card ∧ S.leader (x i) ∈ T := by
+  classical
+  have hw3 : ∀ r, 3 ≤ w r := fun r => by rw [hwr r]; exact hws
+  by_contra hcon
+  have hno : ∀ i, i ≤ n - T.card → S.leader (x i) ∉ T := fun i hi hmem => hcon ⟨i, hi, hmem⟩
+  have hstep : ∀ i, i < n - T.card → x i + ws ≤ x (i + 1) := by
+    intro i hi
+    have := (hhop i hi).1
+    rwa [hwr] at this
+  -- the chain climbs, so every round it visits lies between its first and last landing
+  have hgrow : ∀ d i, i + d ≤ n - T.card → x i ≤ x (i + d) := by
+    intro d
+    induction d with
+    | zero => intro i _; simp
+    | succ d ih =>
+      intro i hi
+      have h1 := ih i (by omega)
+      have h2 := hstep (i + d) (by omega)
+      rw [show i + (d + 1) = i + d + 1 by omega]
+      omega
+  have hmono : ∀ a b, a ≤ b → b ≤ n - T.card → x a ≤ x b := by
+    intro a b hab hb
+    have := hgrow (b - a) a (by omega)
+    rwa [show a + (b - a) = b by omega] at this
+  -- a skipped round is not reliably led: SH6a would commit it, and a view decides one way
+  have hnotT : ∀ t, x 0 ≤ t → t ≤ x (n - T.card) → Decided w U V t none → S.leader t ∉ T := by
+    intro t ht0 htm hskip hmem
+    obtain ⟨L, -, -, hcommit⟩ := commitsOfSynchrony hw3 hT hcard hs hpop
+      (by rw [hid]; omega) (fun j hj => hN j (by omega)) hV hmem
+    have hagree := AnchoredRule.decided_agree
+      (steelheadLaws (fun r => by have := hw3 r; omega)) trivial hcommit hskip
+    simp at hagree
+  exact roundRobin_hop_bound hn (by omega) hbij hsched rfl hlt hstep hno
+    fun i hi t ht1 ht2 =>
+      hnotT t (le_trans (hmono 0 i (by omega) (by omega)) (by omega))
+        (le_trans (le_of_lt ht2) (hmono (i + 1) (n - T.card) (by omega) le_rfl))
+        ((hhop i hi).2.1 t (by rw [hwr]; omega) ht2)
 
 /-! ## SH6c, SH6e -/
 

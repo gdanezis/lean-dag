@@ -15,7 +15,7 @@ namespace Liveness
 
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ _ S U w ws wa k
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro T V R N k hw hT hcard hs hpop hR hN hV hlead
     exact commitsOfSynchrony hw hT hcard hs hpop hR hN hV hlead
   · intro T c hw hT hcard hspan fair R k
@@ -30,6 +30,8 @@ theorem holds : Statement := by
     exact floorChainDecides hw hid hT hcard hs hpop hV h x hR hhop hlead hN
   · intro n hn T
     exact ⟨fun _ hlt => roundRobin_fairRun hn hlt, fun hT r => roundRobin_near hn hT r⟩
+  · intro T V R N ws n hn lead x hwr hws hid hT hcard hs hpop hV hbij hsched hlt hR hhop hN
+    exact floorChainReachesReliable hn hwr hws hid hT hcard hs hpop hV hbij hsched hlt hR hhop hN
   · intro coin V c N hwa hrun hV r hr
     exact chainAllDecidedBelow hwa hrun hV r hr
   · intro coin T hwa hT hcard fair R k

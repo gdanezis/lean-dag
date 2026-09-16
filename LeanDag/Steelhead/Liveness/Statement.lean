@@ -5,7 +5,7 @@ import LeanDag.MahiMahi.Model.Unpredictable
 
 What the rule decides under synchrony, what the chain decides under the
 unpredictable-leader clause, and what the output does *not* decide under
-the paper's asynchronous adversary (`steelhead.md` §4–6). Fourteen
+the paper's asynchronous adversary (`steelhead.md` §4–6). Fifteen
 claims:
 
 * **SH6a, a reliable leader commits under coverage** — Theorem 2's
@@ -59,6 +59,18 @@ claims:
   rounds, which with SH6f is Theorem 2's Byzantine-led clause as a round
   count: the floor chain reaches a reliably led slot at most `w + b + c`
   rounds above the floor, where the paper counts `b` hops;
+* **SH6i, the floor chain reaches a reliably led landing** — Theorem 2's
+  hop count: at the round-robin schedule and the constant synchronous
+  wave, if `ws · (n − |T|) < n` then one of the chain's first `n − |T|`
+  landings is reliably led, which with SH6g decides the slot the chain
+  started from within that many hops. Two landings at one residue would
+  bound a whole number of cycles, each holding `|T|` reliably led rounds,
+  and every one of those would have to fall in the `ws − 1` rounds a hop
+  leaves free, since a reliably led round commits (SH6a) and a view
+  decides a slot one way, so it is never one of the skips the hop passes
+  over; counting the two against each other gives `n ≤ ws · (n − |T|)`.
+  So the landings' residues are distinct and only `n − |T|` are left
+  free;
 * **SH7a, chain liveness** — MM3c at the chain schedule: a run of `wa`
   consecutive chain commits, which the clause promises in every window,
   decides every chain verdict below it;
@@ -102,7 +114,8 @@ claims:
 
 SH6a, SH6b, SH6f and SH6g assume `3 ≤ w r` everywhere, as the safety
 claims do, and SH6f and SH6g one slot per round; SH6h reads no DAG at
-all, only the schedule; SH6c assumes nothing of the wave, and
+all, only the schedule, and SH6i, which reads both, fixes the wave at
+the constant `ws` the round-robin count needs; SH6c assumes nothing of the wave, and
 SH6e `4 ≤ w r` at the slot's round, so that the vote round lies two
 rounds up, where synchrony has carried the candidate. Neither asks the
 quorum to be correct: SH6c reads blames, which need no vote, and SH6e
@@ -255,6 +268,27 @@ def RoundRobinFairRun : Prop :=
     (T.Nonempty → ∀ r, ∃ a, r ≤ a ∧ a ≤ r + (n - T.card) ∧
       (⟨a % n, Nat.mod_lt a hn⟩ : Fin n) ∈ T)
 
+/-- **SH6i, the floor chain reaches a reliably led landing.** -/
+def FloorChainReachesReliable (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
+  ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (R N ws n : ℕ) (hn : 0 < n)
+    (lead : Fin n → Validator) (x : ℕ → ℕ),
+    -- the constant synchronous wave and one slot per round, as Theorem 2 reads the chain
+    (∀ r, w r = ws) → 3 ≤ ws → (∀ t, S.slotRound t = t) →
+    -- T is a reliable set: correct, and a quorum
+    T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
+    -- T is synchronised from R and populates every round from R to the horizon N
+    SynchronisedOn U T R → (∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) → V.CoversUpto N →
+    -- the schedule is the implementation's, one validator a round in rotation
+    Function.Bijective lead → (∀ t, S.leader t = lead ⟨t % n, Nat.mod_lt t hn⟩) →
+    -- the validators outside T are few enough for the synchronous wave
+    ws * (n - T.card) < n →
+    -- the chain starts at or past R, hops that many times, and decides at or below the horizon
+    R ≤ x 0 → (∀ i, i < n - T.card → FloorHop w U V (x i) (x (i + 1))) →
+    (∀ j, j ≤ x (n - T.card) →
+      (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N) →
+    -- then one of those landings is reliably led, so the chain reaches one within n − |T| hops
+    ∃ i, i ≤ n - T.card ∧ S.leader (x i) ∈ T
+
 /-- **SH7a, chain liveness.** -/
 def ChainAllDecidedBelow (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (V : View Validator BlockId Payload U) (c N : ℕ),
@@ -370,7 +404,7 @@ def Statement : Prop :=
       AllDecidedBelowOfSynchrony (Validator := Validator) (BlockId := BlockId)
         (Payload := Payload) w ∧
       SkipsCrashed U w ∧ CommitsOfDissemination U w ∧ DecidedOfReliableAboveFloor U w ∧
-      FloorChainDecides U w ∧ RoundRobinFairRun ∧
+      FloorChainDecides U w ∧ RoundRobinFairRun ∧ FloorChainReachesReliable U w ∧
       ChainAllDecidedBelow U wa ∧
       ChainAllDecidedBelowOfSynchrony (Validator := Validator) (BlockId := BlockId)
         (Payload := Payload) wa ∧
