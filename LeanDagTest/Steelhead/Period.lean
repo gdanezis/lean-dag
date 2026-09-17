@@ -10,13 +10,15 @@ before anything is proved from them (`steelhead.md` §5).
 
 * **the interval boundaries**, which `intervalOf`'s docstring asserts and
   no theorem pins: rounds `j·I + 1` to `(j + 1)·I` form interval `j`, and
-  round `0` falls in interval `0` beside them;
+  the arithmetic leaves round `0` in interval `0` beside them, where the
+  scan never reads it;
 * **the adaptive wavelength** at a concrete period sequence, reading each
   round's wavelength from its own interval's period;
 * **a two-interval period derivation** on the universe of `Model.lean`:
   interval `0` runs at the initial period with the agreed output at slot
-  `1`, its anchor is the chain commit at round `0`, and interval `1` runs
-  at that anchor's update, over whose history the agreed output advances;
+  `1`, its anchor is the chain commit at round `1`, the first round the
+  scan reads, and interval `1` runs at that anchor's update, over whose
+  history the agreed output advances;
 * **the committed set the coin measures**, on the same universe.
 
 `commitProb` and `noCommitProb` are `noncomputable` measures, so they are
@@ -34,7 +36,8 @@ set_option maxRecDepth 4096
 /-! ## The interval of a round
 
 At `I = 4`: interval `0` is rounds `1` to `4`, interval `1` rounds `5` to
-`8`, and round `0` sits in interval `0`. -/
+`8`, and the arithmetic puts round `0` in interval `0`, which no scan
+reads: `IntervalAnchor` and `NoAnchor` ask for rounds `1` and above. -/
 
 example : intervalOf 4 0 = 0 := by decide
 example : intervalOf 4 1 = 0 := by decide
@@ -59,22 +62,28 @@ example : adaptiveWave 3 5 4 shPer 6 = 5 := by decide
 
 /-! ## The period sequence on data
 
-`sh8_chain0` (`Model.lean`) is a chain commit at round `0`, the lowest
-round of interval `0`, so it is that interval's anchor whatever the
-period in force. The scan then advances the agreed output over the
-anchor's causal history and hands interval `1` the update rule's answer,
-here the doubled period; the failover cannot fire at an anchor of round
-`0`, which lies below every last commit plus `I`. -/
+Round `1`, the first round the scan reads, chain-commits block `7`
+(`sh8_chain1`), so it is interval `0`'s anchor whatever the period in
+force. The scan then advances the agreed output over the anchor's causal
+history and hands interval `1` the update rule's answer, here the doubled
+period; the failover cannot fire at an anchor of round `1`, which lies
+below every last commit plus `I`. -/
 
 /-- An update rule: double the period at every interval. -/
 def shDouble : UpdateRule (Fin 32) := fun _ k => 2 * k
 
-/-- Interval `0`'s anchor is the chain commit at round `0`: it lies in the
-interval, and no round of the interval sits below it. -/
-theorem sh8_anchor0 : IntervalAnchor 4 5 shCoin sh8 (View.full sh8) 0 0 2 where
+/-- Round `1` chain-commits validator `3`'s block `7`: the coin names `3` there, and the whole of
+round `5` certifies the block. -/
+theorem sh8_chain1 : ChainDecided 5 shCoin sh8 (View.full sh8) 1 (some 7) :=
+  AnchoredRule.Decided.directCommit (S := chainSlots shCoin) (by decide) (by decide)
+
+/-- Interval `0`'s anchor is the chain commit at round `1`: it lies in the
+interval, and no scanned round of the interval sits below it. -/
+theorem sh8_anchor1 : IntervalAnchor 4 5 shCoin sh8 (View.full sh8) 0 1 7 where
+  pos := le_rfl
   mem := by decide
-  commit := sh8_chain0
-  below := fun _ _ h => absurd h (Nat.not_lt_zero _)
+  commit := sh8_chain1
+  below := fun _ h1 _ h => absurd (lt_of_le_of_lt h1 h) (lt_irrefl _)
 
 /-- Every wavelength of `w4` is at least two rounds, which the agreed output's advance asks. -/
 theorem w4_ge_two (r : ℕ) : 2 ≤ w4 r := by
@@ -86,8 +95,8 @@ period `4`, it runs at `8`, wherever the agreed output stops. -/
 theorem sh8_period1 : ∃ next' last',
     PeriodAt 4 5 shCoin shDouble 4 sh8 (View.full sh8) w4 1 ⟨8, next', last'⟩ := by
   obtain ⟨next', last', hadv⟩ :=
-    AgreedAdvance.exists (U := sh8) (w := w4) w4_ge_two (A := 2) (by decide) 1 0
-  exact ⟨next', last', PeriodAt.anchor PeriodAt.zero sh8_anchor0 hadv⟩
+    AgreedAdvance.exists (U := sh8) (w := w4) w4_ge_two (A := 7) (by decide) 1 0
+  exact ⟨next', last', PeriodAt.anchor PeriodAt.zero sh8_anchor1 hadv⟩
 
 /-! ## The window, and the agreed output on data
 

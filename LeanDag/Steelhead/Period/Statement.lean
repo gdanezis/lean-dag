@@ -78,7 +78,11 @@ What the adaptive protocol's period does across views and over time
   SH14's. The form the coin's almost-sure half consumes (SH15): two
   events at named places, each of a fixed positive probability.
 
-SH10a, SH10c, SH10d and SH10g hold for whatever wavelength the agreed
+The scan reads rounds `1` and above, as `complete_scans` starts at the
+interval's first round: round `0`, which `intervalOf` leaves in interval
+`0`, is never an anchor and is asked for no verdict, so SH10c's premise
+and the anchor predicates exclude it. SH10a, SH10c, SH10d and SH10g hold
+for whatever wavelength the agreed
 output is read at, SH10a for the same wavelength on both sides; SH10b,
 SH10i, SH10j and SH14 to SH14c read it at the adaptive wavelength of the
 validator's own sequence. SH10j and SH14 to SH14c speak of slots at
@@ -145,8 +149,8 @@ def ScanEnds (U : BlockUniverse Validator BlockId Payload) (I wa : ℕ) : Prop :
     (V : View Validator BlockId Payload U) (w : ℕ → ℕ) (j : ℕ) (st : ScanState),
     (∀ r, 2 ≤ w r) →
     PeriodAt I wa coin upd k₀ U V w j st →
-    -- every round of the interval has a chain verdict in V
-    (∀ r, intervalOf I r = j → ∃ v, ChainDecided wa coin U V r v) →
+    -- every scanned round of the interval has a chain verdict in V
+    (∀ r, 1 ≤ r → intervalOf I r = j → ∃ v, ChainDecided wa coin U V r v) →
     -- then V derives the next interval's state
     ∃ st', PeriodAt I wa coin upd k₀ U V w (j + 1) st'
 

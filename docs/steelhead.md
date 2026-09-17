@@ -552,13 +552,15 @@ rounds only; output timing is not modelled.
 
 `Model/Period.lean` states the configuration-sequence model on its own,
 importing nothing of Barnacle. Rounds `j·I + 1` to `(j + 1)·I` form
-interval `j` (`intervalOf I r = (r − 1) / I`, round `0` in interval `0`),
-each decided under one period. The **anchor** of interval `j` is the
-interval's earliest round whose chain verdict is a commit, every round of
-the interval below it chain-skipped (`IntervalAnchor`); **no anchor** is
-every round of the interval chain-skipped (`NoAnchor`). The chain is read
-at every round, so the anchor does not depend on the period in force, as
-`complete_scans` reads it. The state a scan carries is the period, the
+interval `j` (`intervalOf I r = (r − 1) / I`; the arithmetic leaves round
+`0` in interval `0`, which no scan reads), each decided under one period.
+The **anchor** of interval `j` is the interval's earliest round at `1` or
+above whose chain verdict is a commit, every scanned round of the
+interval below it chain-skipped (`IntervalAnchor`); **no anchor** is every
+scanned round of the interval chain-skipped (`NoAnchor`). The chain is
+read at every round, so the anchor does not depend on the period in
+force, as `complete_scans` reads it, starting at the interval's first
+round. The state a scan carries is the period, the
 agreed output's next slot and the round of its last committed leader
 (`ScanState`, the implementation's `period_schedule`, `agreed_next` and
 `agreed_last_commit_round`). The sequence is a relation,
@@ -1089,7 +1091,7 @@ naming validator `2` at every round, on which every round chain-commits
 (`rt_chain_commit`, from the DAG's structure: everyone reaches that
 validator's block by two rounds up, so the whole of round `r + 3` votes
 for it and the whole of round `r + 4` certifies it), interval `0`'s
-anchor is round `0` and interval `1`'s round `9`, whose history commits
+anchor is round `1` and interval `1`'s round `9`, whose history commits
 nothing at round `1` or above since slot `3` is undecided in the history
 of every anchor up to round `17` (SH8 asked at the slots such a history
 can decide, `stall_of_pred`) and the synchronous slots below it never

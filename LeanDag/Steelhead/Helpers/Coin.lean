@@ -961,7 +961,7 @@ theorem decided_of_good_blocks {U : BlockUniverse Validator BlockId Payload} {ws
     have hex : ∀ j, j ≤ intervalOf I s + 1 + j₂ + 1 →
         ∃ st, PeriodAt (S := adaptiveSlots coin known I per) I wa coin upd k₀ U V
           (adaptiveWave ws wa I per) j st :=
-      exists_periodAt_of_settled (S := adaptiveSlots coin known I per) hw2 fun r hr => hall r (by
+      exists_periodAt_of_settled (S := adaptiveSlots coin known I per) hw2 fun r _ hr => hall r (by
         have := le_of_intervalOf hI (rfl : intervalOf I r = intervalOf I r)
         have := Nat.mul_le_mul_right I (show intervalOf I r + 1 ≤ intervalOf I s + 2 + j₂ by omega)
         unfold blockRound

@@ -42,16 +42,16 @@ theorem IntervalAnchor.unique (hwa : 3 ≤ wa) {V₁ V₂ : View Validator Block
     {j r₁ r₂ : ℕ} {A₁ A₂ : BlockId} (h₁ : IntervalAnchor I wa coin U V₁ j r₁ A₁)
     (h₂ : IntervalAnchor I wa coin U V₂ j r₂ A₂) : r₁ = r₂ ∧ A₁ = A₂ := by
   rcases lt_trichotomy r₁ r₂ with h | h | h
-  · exact absurd (h₂.below r₁ h₁.mem h) (fun hn => h₁.not_none hwa hn)
+  · exact absurd (h₂.below r₁ h₁.pos h₁.mem h) (fun hn => h₁.not_none hwa hn)
   · subst h
     exact ⟨rfl, Option.some.inj (chainDecided_unique hwa h₁.commit h₂.commit)⟩
-  · exact absurd (h₁.below r₂ h₂.mem h) (fun hn => h₂.not_none hwa hn)
+  · exact absurd (h₁.below r₂ h₂.pos h₂.mem h) (fun hn => h₂.not_none hwa hn)
 
 /-- An anchor in one view excludes no anchor in another. -/
 theorem IntervalAnchor.not_noAnchor (hwa : 3 ≤ wa) {V₁ V₂ : View Validator BlockId Payload U}
     {j r : ℕ} {A : BlockId} (h : IntervalAnchor I wa coin U V₁ j r A)
     (hn : NoAnchor I wa coin U V₂ j) : False :=
-  h.not_none hwa (hn r h.mem)
+  h.not_none hwa (hn r h.pos h.mem)
 
 /-- The anchor's block lies in the record. -/
 theorem IntervalAnchor.mem_ids_U {V : View Validator BlockId Payload U} {j r : ℕ} {A : BlockId}
@@ -512,37 +512,37 @@ theorem adaptive_decided_unique {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) {up
 /-! ## SH10c, SH10d -/
 
 omit S in
-/-- **An interval with a chain-committed round has an anchor** once every round of it has a chain
-verdict: the least chain-committed one. -/
+/-- **An interval with a chain-committed round has an anchor** once every scanned round of it has
+a chain verdict: the least chain-committed one. -/
 theorem IntervalAnchor.of_committed {V : View Validator BlockId Payload U} {j : ℕ}
-    (hall : ∀ r, intervalOf I r = j → ∃ v, ChainDecided wa coin U V r v)
-    (hex : ∃ r, intervalOf I r = j ∧ ∃ A, ChainDecided wa coin U V r (some A)) :
+    (hall : ∀ r, 1 ≤ r → intervalOf I r = j → ∃ v, ChainDecided wa coin U V r v)
+    (hex : ∃ r, 1 ≤ r ∧ intervalOf I r = j ∧ ∃ A, ChainDecided wa coin U V r (some A)) :
     ∃ r A, IntervalAnchor I wa coin U V j r A := by
   classical
-  obtain ⟨hmem, A, hA⟩ := Nat.find_spec hex
-  refine ⟨_, A, hmem, hA, fun r' hmem' hlt => ?_⟩
-  obtain ⟨v, hv⟩ := hall r' hmem'
+  obtain ⟨hpos, hmem, A, hA⟩ := Nat.find_spec hex
+  refine ⟨_, A, hpos, hmem, hA, fun r' hpos' hmem' hlt => ?_⟩
+  obtain ⟨v, hv⟩ := hall r' hpos' hmem'
   cases v with
   | none => exact hv
-  | some B => exact absurd ⟨hmem', B, hv⟩ (Nat.find_min hex hlt)
+  | some B => exact absurd ⟨hpos', hmem', B, hv⟩ (Nat.find_min hex hlt)
 
 /-- **SH10c.** The least chain-committed round of the interval is the anchor, over whose history
-the agreed output advances, or there is none and every round is chain-skipped. -/
+the agreed output advances, or there is none and every scanned round is chain-skipped. -/
 theorem exists_periodAt_succ {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) {upd : UpdateRule BlockId} {k₀ : ℕ}
     {V : View Validator BlockId Payload U} {j : ℕ} {st : ScanState}
     (hp : PeriodAt I wa coin upd k₀ U V w j st)
-    (hall : ∀ r, intervalOf I r = j → ∃ v, ChainDecided wa coin U V r v) :
+    (hall : ∀ r, 1 ≤ r → intervalOf I r = j → ∃ v, ChainDecided wa coin U V r v) :
     ∃ st', PeriodAt I wa coin upd k₀ U V w (j + 1) st' := by
   classical
-  by_cases hex : ∃ r, intervalOf I r = j ∧ ∃ A, ChainDecided wa coin U V r (some A)
+  by_cases hex : ∃ r, 1 ≤ r ∧ intervalOf I r = j ∧ ∃ A, ChainDecided wa coin U V r (some A)
   · obtain ⟨r, A, hA⟩ := IntervalAnchor.of_committed hall hex
     obtain ⟨next', last', hadv⟩ := AgreedAdvance.exists hw hA.mem_ids_U st.next st.lastCommit
     exact ⟨_, PeriodAt.anchor hp hA hadv⟩
-  · refine ⟨st, PeriodAt.keep hp fun r hmem => ?_⟩
-    obtain ⟨v, hv⟩ := hall r hmem
+  · refine ⟨st, PeriodAt.keep hp fun r hpos hmem => ?_⟩
+    obtain ⟨v, hv⟩ := hall r hpos hmem
     cases v with
     | none => exact hv
-    | some B => exact absurd ⟨r, hmem, B, hv⟩ hex
+    | some B => exact absurd ⟨r, hpos, hmem, B, hv⟩ hex
 
 omit S in
 /-- A round of interval `j` lies at or below `(j + 1) · I`. -/
@@ -580,11 +580,11 @@ theorem periodAt_of_clause (hwa : 1 ≤ wa) (hI : 0 < I) {w : ℕ → ℕ} (hw :
     ∃ st, PeriodAt I wa coin upd k₀ U V w (j + 1) st := by
   induction j with
   | zero =>
-    exact exists_periodAt_succ hw PeriodAt.zero fun r hr =>
+    exact exists_periodAt_succ hw PeriodAt.zero fun r _ hr =>
       chain_all_of_clause hwa hI hrun hV hN r hr
   | succ j ih =>
     obtain ⟨st, hst⟩ := ih (horizon_mono hN)
-    exact exists_periodAt_succ hw hst fun r hr => chain_all_of_clause hwa hI hrun hV hN r hr
+    exact exists_periodAt_succ hw hst fun r _ hr => chain_all_of_clause hwa hI hrun hV hN r hr
 
 /-! ## SH10e, SH10f, SH10g -/
 
@@ -607,12 +607,12 @@ theorem mul_add_one_le_of_intervalOf {j r : ℕ} (hI : 0 < I) (hj : 1 ≤ j)
   have : 0 < j * I := Nat.mul_pos hj hI
   omega
 
-/-- **The states are derivable as far as the chain verdicts are settled**: once every round of
-the intervals up to `n` has a chain verdict in a view, the view derives a state for every
-interval up to `n + 1`, SH10c at each step. -/
+/-- **The states are derivable as far as the chain verdicts are settled**: once every scanned
+round of the intervals up to `n` has a chain verdict in a view, the view derives a state for
+every interval up to `n + 1`, SH10c at each step. -/
 theorem exists_periodAt_of_settled {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) {upd : UpdateRule BlockId}
     {k₀ : ℕ} {V : View Validator BlockId Payload U} {n : ℕ}
-    (hall : ∀ r, intervalOf I r ≤ n → ∃ v, ChainDecided wa coin U V r v) :
+    (hall : ∀ r, 1 ≤ r → intervalOf I r ≤ n → ∃ v, ChainDecided wa coin U V r v) :
     ∀ j, j ≤ n + 1 → ∃ st, PeriodAt I wa coin upd k₀ U V w j st := by
   intro j
   induction j with
@@ -620,7 +620,7 @@ theorem exists_periodAt_of_settled {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) {up
   | succ j ih =>
     intro hj
     obtain ⟨st, hst⟩ := ih (by omega)
-    exact exists_periodAt_succ hw hst fun r hr => hall r (by omega)
+    exact exists_periodAt_succ hw hst fun r hpos hr => hall r hpos (by omega)
 
 omit S in
 /-- **SH10f.** The first multiple of `k` at or above the interval's first round, and the next one:
@@ -940,7 +940,8 @@ theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : �
     unfold MahiMahi.decisionRoundAt
     omega
   obtain ⟨L, hL⟩ := chainCommit_of_good (V := V) hg0 hV hk'N
-  obtain ⟨r₁, A, hA⟩ := IntervalAnchor.of_committed hall ⟨k', hmem, L, hL⟩
+  obtain ⟨r₁, A, hA⟩ :=
+    IntervalAnchor.of_committed (fun r _ hr => hall r hr) ⟨k', by omega, hmem, L, hL⟩
   -- the run of K in the next interval starts the run of wa SH14 needs
   obtain ⟨b, hb1, hb2, hgb⟩ := hrun ((intervalOf I s + 3) * I + 1) (by
     rw [MahiMahi.mahiMahiAnchored_decisionRound (S := chainSlots coin) (by omega)]
@@ -977,7 +978,8 @@ theorem output_liveness_of_runs (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ 
     unfold MahiMahi.decisionRoundAt
     omega)
   obtain ⟨r₁, A, hA⟩ := IntervalAnchor.of_committed
-    (fun r hr => hall r (by have := le_of_intervalOf hI hr; omega)) ⟨j * I + 1, hmem, L, hL⟩
+    (fun r _ hr => hall r (by have := le_of_intervalOf hI hr; omega))
+    ⟨j * I + 1, by omega, hmem, L, hL⟩
   exact output_liveness hws hle hwa hid hI hper hlead h₁ hs hA hb hgoodb hV
 
 end Slots

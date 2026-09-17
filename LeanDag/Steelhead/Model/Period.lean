@@ -35,7 +35,9 @@ variable [F : Faults Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 
 /-- **The interval of a round**: rounds `j·I + 1` to `(j + 1)·I` form interval `j`, as the
-paper numbers them; round `0` falls in interval `0`. -/
+paper numbers them. The arithmetic leaves round `0` in interval `0`; the scan never reads it,
+which the anchor predicates below state, as `complete_scans` starts at the interval's first
+round. -/
 def intervalOf (I r : ℕ) : ℕ := (r - 1) / I
 
 /-- **The update rule**: the next period from the anchor block and the period in force. Any
@@ -49,23 +51,26 @@ rounds `round A − I` and above, round `0` excluded, as `collect_window` takes 
 def windowBottom (U : BlockUniverse Validator BlockId Payload) (A : BlockId) (I : ℕ) : ℕ :=
   max 1 ((U.block A).round - I)
 
-/-- **The chain anchor of interval `j`**, read from the view `V`: round `r` of the interval is
-chain-committed on `A`, and every round of the interval below it is chain-skipped. Every round
-carries a chain verdict, so the anchor does not depend on the period in force. -/
+/-- **The chain anchor of interval `j`**, read from the view `V`: round `r` of the interval, at
+round `1` or above, is chain-committed on `A`, and every round of the interval below it, round
+`0` excluded, is chain-skipped. Every round carries a chain verdict, so the anchor does not depend
+on the period in force. -/
 structure IntervalAnchor (I wa : ℕ) (coin : ℕ → Validator)
     (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
     (j r : ℕ) (A : BlockId) : Prop where
-  /-- The anchor lies in the interval. -/
+  /-- The anchor is a scanned round, round `0` never being one. -/
+  pos : 1 ≤ r
+  /-- It lies in the interval. -/
   mem : intervalOf I r = j
   /-- Its chain verdict is a commit. -/
   commit : ChainDecided wa coin U V r (some A)
-  /-- Every round of the interval below it is chain-skipped. -/
-  below : ∀ r', intervalOf I r' = j → r' < r → ChainDecided wa coin U V r' none
+  /-- Every scanned round of the interval below it is chain-skipped. -/
+  below : ∀ r', 1 ≤ r' → intervalOf I r' = j → r' < r → ChainDecided wa coin U V r' none
 
-/-- **No anchor**: every round of the interval is chain-skipped. -/
+/-- **No anchor**: every scanned round of the interval, round `0` excluded, is chain-skipped. -/
 def NoAnchor (I wa : ℕ) (coin : ℕ → Validator) (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (j : ℕ) : Prop :=
-  ∀ r, intervalOf I r = j → ChainDecided wa coin U V r none
+  ∀ r, 1 ≤ r → intervalOf I r = j → ChainDecided wa coin U V r none
 
 /-- **The state a scan carries**: the period in force at the interval, the agreed output's next
 slot, and the round of its last committed leader, `0` before any. The implementation's

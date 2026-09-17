@@ -10,7 +10,8 @@ of `RotatingStall.lean`, with the coin naming validator `2` at every round and t
   known leader's blocks, so the whole of round `r + 3` votes for it and the whole of round `r + 4`
   certifies it;
 * **the failover fires at interval `1`** (`rt_failover`, SH10e on data): interval `0`'s anchor is
-  round `0`, whose history decides nothing above it; interval `1`'s is round `9`, whose history
+  round `1`, whose history decides nothing at round `1` or above; interval `1`'s is round `9`,
+  whose history
   commits no slot at round `1` or above, the synchronous slots having no certificate (SH8's
   hypotheses, asked at the slots the history can decide) and slot `3` being undecided there, so
   the agreed output's last commit stays at `0` and `0 + 8 < 9`: interval `2` runs at period `1`
@@ -172,21 +173,15 @@ theorem rt_chain_decided (N r : ℕ) (hr : r + 4 ≤ N) :
 
 /-! ## The anchors -/
 
-/-- Interval `0`'s anchor is the chain commit at round `0`, block `2`. -/
-theorem rt_anchor0 (N : ℕ) (hN : 4 ≤ N) :
-    IntervalAnchor 8 5 rtCoin (rtDag N) (View.full (rtDag N)) 0 0 2 where
-  mem := by decide
-  commit := rt_chain_decided N 0 (by omega)
-  below := fun _ _ h => absurd h (Nat.not_lt_zero _)
-
-/-- Interval `j ≥ 1`'s anchor is the chain commit at its first round `8j + 1`. -/
-theorem rt_anchor (N j : ℕ) (hj : 0 < j) (hN : 8 * j + 5 ≤ N) :
+/-- Interval `j`'s anchor is the chain commit at its first round `8j + 1`. -/
+theorem rt_anchor (N j : ℕ) (hN : 8 * j + 5 ≤ N) :
     IntervalAnchor 8 5 rtCoin (rtDag N) (View.full (rtDag N)) j (8 * j + 1)
       (4 * (8 * j + 1) + 2) where
+  pos := by omega
   mem := by unfold intervalOf; omega
   commit := rt_chain_decided N (8 * j + 1) (by omega)
   below := by
-    intro r' hr' hlt
+    intro r' hpos hr' hlt
     unfold intervalOf at hr'
     omega
 
@@ -277,17 +272,18 @@ theorem rt_sync_no_commit_history {N A : ℕ} (hA : A ∈ (rtDag N).ids)
 
 /-! ## The advances -/
 
-/-- The advance over interval `0`'s anchor stays put: a round-`0` block's history decides nothing
-at round `1` or above. -/
-theorem rt_advance0 {N : ℕ} (h2 : 2 ∈ (rtDag N).ids) {next' last' : ℕ}
-    (h : AgreedAdvance (S := rtSlots) (rtDag N) rtW 2 h2 1 next' 0 last') :
+/-- The advance over interval `0`'s anchor stays put: a round-`1` block's history decides nothing
+at round `1` or above, every wave being three rounds or more. -/
+theorem rt_advance0 {N : ℕ} (h6 : 6 ∈ (rtDag N).ids) {next' last' : ℕ}
+    (h : AgreedAdvance (S := rtSlots) (rtDag N) rtW 6 h6 1 next' 0 last') :
     next' = 1 ∧ last' = 0 := by
   have hnone : ∀ s v, 1 ≤ s →
-      ¬ Decided (S := rtSlots) rtW (rtDag N) ((rtDag N).historyView 2 h2) s v := by
+      ¬ Decided (S := rtSlots) rtW (rtDag N) ((rtDag N).historyView 6 h6) s v := by
     intro s v hs hd
-    have := slotRound_le_of_decided_historyView (S := rtSlots)
-      (fun r => by have := rtW_ge_three r; omega) h2 hd
-    change s ≤ 2 / 4 at this
+    have := voteRound_le_of_decided_historyView (S := rtSlots)
+      (fun r => by have := rtW_ge_three r; omega) h6 hd
+    change s + rtW s - 2 ≤ 6 / 4 at this
+    have := rtW_ge_three s
     omega
   have hnext : next' = 1 := by
     rcases Nat.lt_or_ge 1 next' with hlt | hge
@@ -329,16 +325,17 @@ theorem rt_failover (N : ℕ) (hN : 13 ≤ N) :
         PeriodAt (S := rtSlots) 8 5 rtCoin (rtUpd N) 4 (rtDag N) (View.full (rtDag N)) rtW 2
           ⟨1, next', 0⟩ := by
   have hw2 : ∀ r, 2 ≤ rtW r := fun r => by have := rtW_ge_three r; omega
-  have h2 : 2 ∈ (rtDag N).ids := rt_mem_ids (by omega)
+  have h6 : 6 ∈ (rtDag N).ids := rt_mem_ids (by omega)
   have h38 : 38 ∈ (rtDag N).ids := rt_mem_ids (by omega)
-  -- interval 0: the anchor at round 0, over whose history the advance stays put
-  obtain ⟨n₀, l₀, hadv₀⟩ := AgreedAdvance.exists (S := rtSlots) (U := rtDag N) (w := rtW) hw2 h2 1 0
-  obtain ⟨rfl, rfl⟩ := rt_advance0 h2 hadv₀
+  -- interval 0: the anchor at round 1, over whose history the advance stays put
+  obtain ⟨n₀, l₀, hadv₀⟩ := AgreedAdvance.exists (S := rtSlots) (U := rtDag N) (w := rtW) hw2 h6 1 0
+  obtain ⟨rfl, rfl⟩ := rt_advance0 h6 hadv₀
   have hp1 : PeriodAt (S := rtSlots) 8 5 rtCoin (rtUpd N) 4 (rtDag N) (View.full (rtDag N)) rtW 1
       ⟨4, 1, 0⟩ := by
     have hp : PeriodAt (S := rtSlots) 8 5 rtCoin (rtUpd N) 4 (rtDag N) (View.full (rtDag N)) rtW 1
-        ⟨if 0 + 8 < 0 then 1 else rtUpd N 2 (⟨4, 1, 0⟩ : ScanState).period, 1, 0⟩ :=
-      PeriodAt.anchor PeriodAt.zero (rt_anchor0 N (by omega)) hadv₀
+        ⟨if 0 + 8 < 8 * 0 + 1 then 1 else rtUpd N (4 * (8 * 0 + 1) + 2)
+          (⟨4, 1, 0⟩ : ScanState).period, 1, 0⟩ :=
+      PeriodAt.anchor PeriodAt.zero (rt_anchor N 0 (by omega)) hadv₀
     simpa [rt_update_four] using hp
   -- interval 1: the anchor at round 9, over whose history the advance consumes no commit
   obtain ⟨n₁, l₁, hadv₁⟩ :=
@@ -346,7 +343,7 @@ theorem rt_failover (N : ℕ) (hN : 13 ≤ N) :
   obtain ⟨hn₁, hn₃, rfl⟩ := rt_advance_stalled h38 (by change 38 / 4 ≤ 17; omega) le_rfl (by omega)
     hadv₁
   exact ⟨hp1, n₁, hn₁, hn₃,
-    periodAt_one_of_anchor hp1 (rt_anchor N 1 (by omega) (by omega)) hadv₁ (by omega)⟩
+    periodAt_one_of_anchor hp1 (rt_anchor N 1 (by omega)) hadv₁ (by omega)⟩
 
 /-! ## The stalled slot is decided -/
 
@@ -365,7 +362,7 @@ theorem rt_recovers (N : ℕ) (hN : 33 ≤ N) :
   obtain ⟨n₃, l₃, hadv₃⟩ :=
     AgreedAdvance.exists (S := rtSlots) (U := rtDag N) (w := rtW) hw2 h70 n₂ 0
   obtain ⟨-, -, rfl⟩ := rt_advance_stalled h70 (by change 70 / 4 ≤ 17; omega) hn₂ hn₂' hadv₃
-  have hp3 := periodAt_one_of_anchor hp2 (rt_anchor N 2 (by omega) (by omega)) hadv₃ (by omega)
+  have hp3 := periodAt_one_of_anchor hp2 (rt_anchor N 2 (by omega)) hadv₃ (by omega)
   have hstates : ∀ j, j ≤ 3 → ∃ st,
       PeriodAt (S := rtSlots) 8 5 rtCoin (rtUpd N) 4 (rtDag N) (View.full (rtDag N)) rtW j st ∧
         rtPer j = st.period := by
@@ -379,7 +376,7 @@ theorem rt_recovers (N : ℕ) (hN : 33 ≤ N) :
   -- SH14: the anchored interval 2 lies two past slot 3's, and the coin runs at rounds 25 to 29
   refine output_liveness (S := rtSlots) (by decide) (by decide) (by decide) (fun _ => rfl)
     (by decide) (b := 25) (fun j hj => hstates j (by unfold intervalOf at hj; omega)) ?_
-    (s := 3) (by decide) (by decide) (rt_anchor N 2 (by omega) (by omega)) (by decide) ?_
+    (s := 3) (by decide) (by decide) (rt_anchor N 2 (by omega)) (by decide) ?_
     (View.coversUpto_full _ _)
   · intro r hr
     change (if IsAsync (rtPer (intervalOf 8 r)) r then rtCoin r else rtKnown r) = rtCoin r
