@@ -564,7 +564,7 @@ theorem badChainProb_le {K : ℕ}
     {V : ∀ g, View Validator BlockId Payload (σ g)} {w : ℕ → ℕ} {wa c k₀ h : ℕ} {d : Validator}
     (hw : ∀ r, w r = wa) (hwa : 3 ≤ wa) (hna : NonAnticipatingChain σ V w wa d)
     (hV : ∀ g r, (V g).CoversUpto (MahiMahi.decisionRoundAt wa r))
-    (hcard : ∀ g r, c ≤ (MahiMahi.goodAt (σ g) wa r).card)
+    (hcard : ∀ g (r : ℕ), r < K → c ≤ (MahiMahi.goodAt (σ g) wa r).card)
     (hland : ∀ g i, i < h → ¬ Decided (S := chainSlots (coinOfRounds g d)) w (σ g) (V g)
       (chainLandings σ V w d k₀ g (i + 1)) none)
     (hK : ∀ g i, i ≤ h → chainLandings σ V w d k₀ g i + wa < K) :
@@ -627,7 +627,7 @@ theorem badChainProb_le {K : ℕ}
   have hc' : ∀ i, i < h + 1 → ∀ g, c ≤ (good i g).card := by
     intro i _ g
     rw [hgooddef]
-    exact hcard g _
+    exact hcard g _ (t i g).isLt
   have hcount := bad_stops_card t good hstop hgood hmono hc' h (by omega)
   -- a landing led from outside the committed set means the floor's own coin was
   have hsub : {g : Fin K → Validator | ∀ i, i < h →

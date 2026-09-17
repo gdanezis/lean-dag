@@ -205,8 +205,9 @@ def BadChainBound (wa K : ℕ) : Prop :=
     -- every view holds the decision rounds the chain reads, so a committed candidate's slot is
     -- decided there and the search never skips it
     (∀ g r, V g |>.CoversUpto (MahiMahi.decisionRoundAt wa r)) →
-    -- every round's committed set holds at least c candidates, as MM2 gives on a populated wave
-    (∀ g r, c ≤ (MahiMahi.goodAt (σ g) wa r).card) →
+    -- the committed set of every round the coins cover holds at least c candidates, as MM2 gives
+    -- on a populated wave; above K a finite record commits nothing, so the bound stops there
+    (∀ g (r : ℕ), r < K → c ≤ (MahiMahi.goodAt (σ g) wa r).card) →
     -- the chain's landings are landings, not the fallback of `floorLanding`
     (∀ g i, i < h → ¬ Decided (S := chainSlots (coinOfRounds g d)) w (σ g) (V g)
       (chainLandings σ V w d k₀ g (i + 1)) none) →
