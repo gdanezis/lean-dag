@@ -237,6 +237,68 @@ theorem decided_congr_of_decided {w₁ w₂ : ℕ → ℕ} {V : View Validator B
     change MahiMahi.CertifiedIn U (w₁ (S.slotRound k)) A L' (S.slotRound k)
     rw [hk]; exact hl
 
+omit S in
+/-- **A verdict reads the schedule only at the slots its derivation names**: the slot's own and,
+above it, the anchor's and the eligible slots skipped on the way, each proposed at or below the
+round of a block the view holds. Two schedules that agree on the round of every slot and on the
+leader of every slot proposed at or below a bound `N` on the view's blocks give the same verdict
+at a slot proposed at or below `N`. -/
+theorem decided_congr_slots {S₁ S₂ : Slots Validator} {w : ℕ → ℕ} {N : ℕ}
+    {V : View Validator BlockId Payload U} (hN : ∀ b ∈ V.ids, (U.block b).round ≤ N)
+    (hround : ∀ t, S₁.slotRound t = S₂.slotRound t)
+    (hlead : ∀ t, S₁.slotRound t ≤ N → S₁.leader t = S₂.leader t) {k : ℕ} {v : Option BlockId}
+    (h : Decided (S := S₁) w U V k v) : S₁.slotRound k ≤ N → Decided (S := S₂) w U V k v := by
+  -- the anchor of an indirect step is a block the view committed, so its round is under the
+  -- bound too
+  have hanchor : ∀ {j : ℕ} {A : BlockId}, Decided (S := S₁) w U V j (some A) →
+      S₁.slotRound j ≤ N := by
+    intro j A hj
+    have := hN A (mem_ids_of_decided (S := S₁) hj A rfl)
+    rw [(AnchoredRule.isLeaderBlock_of_decided (S := S₁) hj).2.1] at this
+    exact this
+  have hleader : ∀ {k : ℕ} {L : BlockId}, S₁.slotRound k ≤ N →
+      (IsLeaderBlock (S := S₁) U k L ↔ IsLeaderBlock (S := S₂) U k L) := by
+    intro k L hk
+    change (L ∈ U.ids ∧ (U.block L).round = S₁.slotRound k ∧ (U.block L).creator = S₁.leader k) ↔
+      (L ∈ U.ids ∧ (U.block L).round = S₂.slotRound k ∧ (U.block L).creator = S₂.leader k)
+    rw [hround k, hlead k hk]
+  have helig : ∀ {k m : ℕ},
+      ((steelheadAnchored Validator BlockId Payload w).Eligible (S := S₁) k m ↔
+        (steelheadAnchored Validator BlockId Payload w).Eligible (S := S₂) k m) := by
+    intro k m
+    rw [AnchoredRule.eligible_iff (S := S₁), AnchoredRule.eligible_iff (S := S₂), hround k,
+      hround m]
+  induction h with
+  | @directCommit k L hL hc =>
+    intro hk
+    refine Decided.directCommit (S := S₂) ((hleader hk).mp hL) ?_
+    rw [← hround k]; exact hc
+  | @directSkip k hs =>
+    intro hk
+    refine Decided.directSkip (S := S₂) ?_
+    change MahiMahi.DirectSkipIn U V (w (S₂.slotRound k)) (S₂.leader k) (S₂.slotRound k)
+    rw [← hround k, ← hlead k hk]; exact hs
+  | @indirectCommit k j A L i hkj he hj hmid hi hemp hL hlink _ ihj ihmid =>
+    intro hk
+    have hjN := hanchor hj
+    refine Decided.indirectCommit (S := S₂) hkj (helig.mp he) (ihj hjN)
+      (fun m h1 h2 h3 => ihmid m h1 h2 (helig.mpr h3) (le_trans (S₁.mono h2.le) hjN)) hi
+      (fun i' hi' L' hL' hl => ?_) ((hleader hk).mp hL) ?_ (fun _ _ _ h => h)
+    · refine hemp i' hi' L' ((hleader hk).mpr hL') ?_
+      change MahiMahi.CertifiedIn U (w (S₁.slotRound k)) A L' (S₁.slotRound k)
+      rw [hround k]; exact hl
+    · change MahiMahi.CertifiedIn U (w (S₂.slotRound k)) A L (S₂.slotRound k)
+      rw [← hround k]; exact hlink
+  | @indirectSkip k j A hkj he hj hmid hnone ihj ihmid =>
+    intro hk
+    have hjN := hanchor hj
+    refine Decided.indirectSkip (S := S₂) hkj (helig.mp he) (ihj hjN)
+      (fun m h1 h2 h3 => ihmid m h1 h2 (helig.mpr h3) (le_trans (S₁.mono h2.le) hjN))
+      (fun i hi L' hL' hl => ?_)
+    refine hnone i hi L' ((hleader hk).mpr hL') ?_
+    change MahiMahi.CertifiedIn U (w (S₁.slotRound k)) A L' (S₁.slotRound k)
+    rw [hround k]; exact hl
+
 /-! ## The agreed output over an anchor's history -/
 
 /-- **No verdict of an anchor's history lies above the anchor's round**: a direct commit holds a
@@ -386,40 +448,41 @@ theorem AgreedAdvance.congr {w₁ w₂ : ℕ → ℕ} (hw₁ : ∀ r, 2 ≤ w₁
     fun v hv => h.stuck v (bwd hv), h.last_ge, fun s L hs₁ hs₂ hd => h.last_le s L hs₁ hs₂ (bwd hd),
     h.last_mem.imp id fun ⟨s, L, hs₁, hs₂, hd, hs⟩ => ⟨s, L, hs₁, hs₂, fwd hd, hs⟩⟩
 
+omit S in
+/-- **The advance reads the schedule at or below the anchor's round only**, as it reads the
+wavelength: two schedules agreeing on every slot's round and on the leaders of the slots proposed
+at or below the anchor's round give one advance. -/
+theorem AgreedAdvance.congr_slots {S₁ S₂ : Slots Validator} {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r)
+    {A : BlockId} (hA : A ∈ U.ids) (hround : ∀ t, S₁.slotRound t = S₂.slotRound t)
+    (hlead : ∀ t, S₁.slotRound t ≤ (U.block A).round → S₁.leader t = S₂.leader t)
+    {next next' last last' : ℕ} (h : AgreedAdvance (S := S₁) U w A hA next next' last last') :
+    AgreedAdvance (S := S₂) U w A hA next next' last last' := by
+  have hN : ∀ b ∈ (U.historyView A hA).ids, (U.block b).round ≤ (U.block A).round :=
+    fun b hb => round_le_of_mem_history hA hb
+  have fwd : ∀ {s : ℕ} {v : Option BlockId},
+      Decided (S := S₁) w U (U.historyView A hA) s v →
+        Decided (S := S₂) w U (U.historyView A hA) s v :=
+    fun hd => decided_congr_slots (S₁ := S₁) (S₂ := S₂) hN hround hlead hd
+      (slotRound_le_of_decided_historyView (S := S₁) hw hA hd)
+  have bwd : ∀ {s : ℕ} {v : Option BlockId},
+      Decided (S := S₂) w U (U.historyView A hA) s v →
+        Decided (S := S₁) w U (U.historyView A hA) s v :=
+    fun hd => decided_congr_slots (S₁ := S₂) (S₂ := S₁) hN (fun t => (hround t).symm)
+      (fun t ht => (hlead t (by rw [hround t]; exact ht)).symm) hd
+      (slotRound_le_of_decided_historyView (S := S₂) hw hA hd)
+  exact ⟨AgreedAdvance.le (S := S₁) h,
+    fun s hs₁ hs₂ => (AgreedAdvance.decided (S := S₁) h s hs₁ hs₂).imp fun _ hv => fwd hv,
+    fun v hv => AgreedAdvance.stuck (S := S₁) h v (bwd hv), AgreedAdvance.last_ge (S := S₁) h,
+    fun s L hs₁ hs₂ hd => by
+      rw [← hround s]; exact AgreedAdvance.last_le (S := S₁) h s L hs₁ hs₂ (bwd hd),
+    (AgreedAdvance.last_mem (S := S₁) h).imp id fun ⟨s, L, hs₁, hs₂, hd, hs⟩ =>
+      ⟨s, L, hs₁, hs₂, fwd hd, by rw [← hround s]; exact hs⟩⟩
+
 /-! ## SH10a, SH10b -/
 
-/-- **Agreement of the state under two wavelengths** that agree up to the round of every anchor
-one of the views finds below the interval: induction on the derivation; the anchor is common, the
-advances over its history agree, so does the failover's test and the update. -/
-theorem periodAt_unique_of_w (hwa : 3 ≤ wa) {upd : UpdateRule BlockId} {k₀ : ℕ}
-    {V₁ V₂ : View Validator BlockId Payload U} {w₁ w₂ : ℕ → ℕ} (hw₁ : ∀ r, 2 ≤ w₁ r)
-    (hw₂ : ∀ r, 2 ≤ w₂ r) {j : ℕ} {st₁ st₂ : ScanState}
-    (h₁ : PeriodAt I wa coin upd k₀ U V₁ w₁ j st₁) (h₂ : PeriodAt I wa coin upd k₀ U V₂ w₂ j st₂)
-    (hw : ∀ j' r A, j' < j → IntervalAnchor I wa coin U V₁ j' r A →
-      ∀ ρ, ρ ≤ r → w₁ ρ = w₂ ρ) :
-    st₁ = st₂ := by
-  induction h₁ generalizing st₂ with
-  | zero => cases h₂; rfl
-  | @anchor j r next' last' st A hA hp ha hadv ih =>
-    cases h₂ with
-    | @anchor _ r₂ next₂ last₂ st₂ A₂ hA₂ hp' ha' hadv' =>
-      obtain rfl := ih hp' fun j' r A hj => hw j' r A (by omega)
-      obtain ⟨rfl, rfl⟩ := ha.unique hwa ha'
-      have hadv₂ := hadv.congr hw₁ hw₂ hA (fun ρ hρ => hw j r A (by omega) ha ρ (by
-        rw [ha.round_eq] at hρ; exact hρ))
-      obtain ⟨rfl, rfl⟩ := hadv₂.unique hadv'
-      rfl
-    | keep hp' hn =>
-      obtain rfl := ih hp' fun j' r A hj => hw j' r A (by omega)
-      exact (ha.not_noAnchor hwa hn).elim
-  | keep hp hn ih =>
-    cases h₂ with
-    | anchor hp' ha' _ =>
-      obtain rfl := ih hp' fun j' r A hj => hw j' r A (by omega)
-      exact (ha'.not_noAnchor hwa hn).elim
-    | keep hp' _ => exact ih hp' fun j' r A hj => hw j' r A (by omega)
-
-/-- **SH10a.** Both views read the agreed output at one wavelength. -/
+/-- **SH10a.** Both views read the agreed output at one wavelength and on one schedule:
+induction on the derivation; the anchor is common, the advances over its history agree, so do
+the failover's test and the update. -/
 theorem periodAt_unique (hwa : 3 ≤ wa) {upd : UpdateRule BlockId} {k₀ : ℕ}
     {V₁ V₂ : View Validator BlockId Payload U} {w : ℕ → ℕ} {j : ℕ} {st₁ st₂ : ScanState}
     (h₁ : PeriodAt I wa coin upd k₀ U V₁ w j st₁) (h₂ : PeriodAt I wa coin upd k₀ U V₂ w j st₂) :
@@ -460,54 +523,108 @@ theorem adaptiveWave_congr {ws : ℕ} {per₁ per₂ : ℕ → ℕ} {N : ℕ}
   unfold adaptiveWave
   rw [h _ (intervalOf_mono hr)]
 
+omit S in
+/-- **The state of an interval reads the period sequence below that interval only**: the anchor
+of interval `j` lies in interval `j`, its history holds verdicts at rounds at or below the
+anchor's, and both the adaptive wavelength and the adaptive schedule at such a round are fixed by
+the period of the round's interval, at or below `j`. Two sequences agreeing below an interval
+give one derivation of its state, each at its own wavelength and on its own schedule. -/
+theorem periodAt_congr_per {ws : ℕ} (hws : 2 ≤ ws) (hwa : 2 ≤ wa) {known : ℕ → Validator}
+    {upd : UpdateRule BlockId} {k₀ : ℕ} {V : View Validator BlockId Payload U}
+    {per₁ per₂ : ℕ → ℕ} {j : ℕ} {st : ScanState}
+    (hp : PeriodAt (S := adaptiveSlots coin known I per₁) I wa coin upd k₀ U V
+      (adaptiveWave ws wa I per₁) j st)
+    (h : ∀ i, i < j → per₁ i = per₂ i) :
+    PeriodAt (S := adaptiveSlots coin known I per₂) I wa coin upd k₀ U V
+      (adaptiveWave ws wa I per₂) j st := by
+  have hw2 : ∀ (per : ℕ → ℕ) (r : ℕ), 2 ≤ adaptiveWave ws wa I per r := fun per r => by
+    unfold adaptiveWave periodic
+    split <;> omega
+  induction hp with
+  | zero => exact PeriodAt.zero (S := adaptiveSlots coin known I per₂)
+  | @anchor j r next' last' st A hA hp ha hadv ih =>
+    -- the sequences agree up to the anchor's interval, hence at every round up to its own
+    have hagree : ∀ i, i ≤ intervalOf I r → per₁ i = per₂ i := by
+      intro i hi
+      rw [ha.mem] at hi
+      exact h i (by omega)
+    have hw : ∀ ρ, ρ ≤ (U.block A).round →
+        adaptiveWave ws wa I per₁ ρ = adaptiveWave ws wa I per₂ ρ :=
+      fun ρ hρ => adaptiveWave_congr (ws := ws) hagree (by rw [ha.round_eq] at hρ; exact hρ)
+    have hlead : ∀ t, (adaptiveSlots coin known I per₁).slotRound t ≤ (U.block A).round →
+        (adaptiveSlots coin known I per₁).leader t =
+          (adaptiveSlots coin known I per₂).leader t := by
+      intro t ht
+      change (if IsAsync (per₁ (intervalOf I t)) t then coin t else known t) =
+        (if IsAsync (per₂ (intervalOf I t)) t then coin t else known t)
+      rw [hagree (intervalOf I t) (intervalOf_mono (by rw [ha.round_eq] at ht; exact ht))]
+    have hadv' := AgreedAdvance.congr (S := adaptiveSlots coin known I per₁) (hw2 per₁)
+      (hw2 per₂) hA hw hadv
+    exact PeriodAt.anchor (S := adaptiveSlots coin known I per₂) (ih fun i hi => h i (by omega))
+      ha (AgreedAdvance.congr_slots (S₁ := adaptiveSlots coin known I per₁)
+        (S₂ := adaptiveSlots coin known I per₂) (hw2 per₂) hA (fun _ => rfl) hlead hadv')
+  | @keep j st hp hn ih =>
+    exact PeriodAt.keep (S := adaptiveSlots coin known I per₂) (ih fun i hi => h i (by omega)) hn
+
+omit S in
 /-- **SH10b, the sequences.** Two views that derived the state of every interval below `N`'s,
-each reading its agreed output at its own adaptive wavelength, derived the same periods there, by
-strong induction on the interval: the anchors of the intervals below an interval lie in the
-record, their histories are read at rounds below their own, where the sequences already agree, so
-the two views advance the agreed output alike at every one of them and derive the same state. -/
-theorem adaptive_periods_agree {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) {upd : UpdateRule BlockId}
-    {k₀ N : ℕ} {V₁ V₂ : View Validator BlockId Payload U} {per₁ per₂ : ℕ → ℕ}
+each reading its agreed output at its own adaptive wavelength and on its own adaptive schedule,
+derived the same periods there, by strong induction on the interval: the sequences agree below
+an interval, so the second view's derivation of its state is one at the first sequence's
+wavelength and schedule (`periodAt_congr_per`), and SH10a makes the two states one. -/
+theorem adaptive_periods_agree {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) {known : ℕ → Validator}
+    {upd : UpdateRule BlockId} {k₀ N : ℕ} {V₁ V₂ : View Validator BlockId Payload U}
+    {per₁ per₂ : ℕ → ℕ}
     (h₁ : ∀ j, j ≤ intervalOf I N → ∃ st,
-      PeriodAt I wa coin upd k₀ U V₁ (adaptiveWave ws wa I per₁) j st ∧ per₁ j = st.period)
+      PeriodAt (S := adaptiveSlots coin known I per₁) I wa coin upd k₀ U V₁
+        (adaptiveWave ws wa I per₁) j st ∧ per₁ j = st.period)
     (h₂ : ∀ j, j ≤ intervalOf I N → ∃ st,
-      PeriodAt I wa coin upd k₀ U V₂ (adaptiveWave ws wa I per₂) j st ∧ per₂ j = st.period) :
+      PeriodAt (S := adaptiveSlots coin known I per₂) I wa coin upd k₀ U V₂
+        (adaptiveWave ws wa I per₂) j st ∧ per₂ j = st.period) :
     ∀ j, j ≤ intervalOf I N → per₁ j = per₂ j := by
-  have hw₁ : ∀ r, 2 ≤ adaptiveWave ws wa I per₁ r :=
-    fun r => by have := adaptiveWave_ge (I := I) hws hwa per₁ r; omega
-  have hw₂ : ∀ r, 2 ≤ adaptiveWave ws wa I per₂ r :=
-    fun r => by have := adaptiveWave_ge (I := I) hws hwa per₂ r; omega
   intro j
   induction j using Nat.strong_induction_on with
   | _ j ih =>
   intro hj
   obtain ⟨st₁, hp₁, he₁⟩ := h₁ j hj
   obtain ⟨st₂, hp₂, he₂⟩ := h₂ j hj
+  have hp₂' := periodAt_congr_per (by omega) (by omega) hp₂ fun i hi => (ih i hi (by omega)).symm
   rw [he₁, he₂]
-  refine congrArg ScanState.period
-    (periodAt_unique_of_w hwa hw₁ hw₂ hp₁ hp₂ fun j' r A hj' hA ρ hρ => ?_)
-  refine adaptiveWave_congr (ws := ws) (N := r) (fun j'' hj'' => ?_) hρ
-  rw [hA.mem] at hj''
-  exact ih j'' (by omega) (by omega)
+  exact congrArg ScanState.period
+    (periodAt_unique (S := adaptiveSlots coin known I per₁) hwa hp₁ hp₂')
 
-/-- **SH10b, the verdicts.** The two views run one wavelength function on every round their
-derivations read, since the sequences agree below `N`'s interval (`adaptive_periods_agree`), and
-SH2 applies to it. -/
-theorem adaptive_decided_unique {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) {upd : UpdateRule BlockId}
-    {k₀ N : ℕ} {V₁ V₂ : View Validator BlockId Payload U} {per₁ per₂ : ℕ → ℕ}
-    (hN : ∀ b ∈ U.ids, (U.block b).round ≤ N) {k : ℕ} (hk : S.slotRound k ≤ N)
+omit S in
+/-- **SH10b, the verdicts.** The sequences agree below `N`'s interval (`adaptive_periods_agree`),
+so the second view's verdict is one at the first sequence's wavelength and on its schedule, both
+read at rounds at or below `N` only, and SH2 applies. -/
+theorem adaptive_decided_unique {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) {known : ℕ → Validator}
+    {upd : UpdateRule BlockId} {k₀ N : ℕ} {V₁ V₂ : View Validator BlockId Payload U}
+    {per₁ per₂ : ℕ → ℕ} (hN : ∀ b ∈ U.ids, (U.block b).round ≤ N) {k : ℕ} (hk : k ≤ N)
     (h₁ : ∀ j, j ≤ intervalOf I N → ∃ st,
-      PeriodAt I wa coin upd k₀ U V₁ (adaptiveWave ws wa I per₁) j st ∧ per₁ j = st.period)
+      PeriodAt (S := adaptiveSlots coin known I per₁) I wa coin upd k₀ U V₁
+        (adaptiveWave ws wa I per₁) j st ∧ per₁ j = st.period)
     (h₂ : ∀ j, j ≤ intervalOf I N → ∃ st,
-      PeriodAt I wa coin upd k₀ U V₂ (adaptiveWave ws wa I per₂) j st ∧ per₂ j = st.period)
+      PeriodAt (S := adaptiveSlots coin known I per₂) I wa coin upd k₀ U V₂
+        (adaptiveWave ws wa I per₂) j st ∧ per₂ j = st.period)
     {v₁ v₂ : Option BlockId}
-    (d₁ : Decided (adaptiveWave ws wa I per₁) U V₁ k v₁)
-    (d₂ : Decided (adaptiveWave ws wa I per₂) U V₂ k v₂) : v₁ = v₂ := by
+    (d₁ : Decided (S := adaptiveSlots coin known I per₁) (adaptiveWave ws wa I per₁) U V₁ k v₁)
+    (d₂ : Decided (S := adaptiveSlots coin known I per₂) (adaptiveWave ws wa I per₂) U V₂ k v₂) :
+    v₁ = v₂ := by
   have hper := adaptive_periods_agree hws hwa h₁ h₂
-  have d₁' := decided_congr (fun b hb => hN b (V₁.subset_ids hb))
-    (fun r hr => adaptiveWave_congr (ws := ws) hper hr) d₁ hk
-  exact AnchoredRule.decided_unique
-    (steelheadLaws fun r => by have := adaptiveWave_ge (I := I) hws hwa per₂ r; omega) trivial d₁'
-    V₂ v₂ d₂
+  have hNV : ∀ b ∈ V₂.ids, (U.block b).round ≤ N := fun b hb => hN b (V₂.subset_ids hb)
+  -- the wavelength first, then the schedule
+  have d₂w : Decided (S := adaptiveSlots coin known I per₂) (adaptiveWave ws wa I per₁) U V₂ k v₂ :=
+    decided_congr (S := adaptiveSlots coin known I per₂) hNV
+      (fun r hr => (adaptiveWave_congr (ws := ws) hper hr).symm) d₂ hk
+  have d₂' : Decided (S := adaptiveSlots coin known I per₁) (adaptiveWave ws wa I per₁) U V₂ k v₂ :=
+    decided_congr_slots (S₁ := adaptiveSlots coin known I per₂)
+      (S₂ := adaptiveSlots coin known I per₁) hNV (fun _ => rfl) (fun t ht => by
+        change (if IsAsync (per₂ (intervalOf I t)) t then coin t else known t) =
+          (if IsAsync (per₁ (intervalOf I t)) t then coin t else known t)
+        rw [hper (intervalOf I t) (intervalOf_mono ht)]) d₂w hk
+  exact AnchoredRule.decided_unique (S := adaptiveSlots coin known I per₁)
+    (steelheadLaws fun r => by have := adaptiveWave_ge (I := I) hws hwa per₁ r; omega) trivial d₁
+    V₂ v₂ d₂'
 
 /-! ## SH10c, SH10d -/
 

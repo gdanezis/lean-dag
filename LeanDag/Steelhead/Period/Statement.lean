@@ -13,13 +13,16 @@ What the adaptive protocol's period does across views and over time
 * **SH10b, agreement of the output under the adaptive wavelength** — the
   consequence the paper draws, and Theorem 4 as each validator reads it:
   two validators running the output relation at their own derived period
-  sequences derive the same sequence and never disagree on a slot, since
-  the sequences coincide by strong induction on the interval and SH2
-  applies at the common wavelength. The periods are asked for below the record's top round and
-  no further: a record holds finitely many blocks, so above its top
-  round no chain verdict is derivable and no period beyond it is either,
-  and a claim quantified over the whole sequence would hold only where
-  the period reaches `0`;
+  sequences, each on the schedule its own sequence names, the coin at the
+  rounds it makes asynchronous and the known leader elsewhere
+  (`adaptiveSlots`), derive the same sequence and never disagree on a
+  slot, since the sequences coincide by strong induction on the interval,
+  the state of an interval reading the sequence below that interval only,
+  and SH2 applies at the common wavelength and schedule. The periods are
+  asked for below the record's top round and no further: a record holds
+  finitely many blocks, so above its top round no chain verdict is
+  derivable and no period beyond it is either, and a claim quantified
+  over the whole sequence would hold only where the period reaches `0`;
 * **SH10c, the scan ends** — once every round of an interval has a chain
   verdict in a view, that view derives the next interval's state: either
   the least chain-committed round is the anchor, or every round is
@@ -128,21 +131,24 @@ def PeriodAgreement (U : BlockUniverse Validator BlockId Payload) (I wa : ℕ) :
 
 /-- **SH10b, agreement of the output under the adaptive wavelength.** -/
 def AdaptiveAgreement (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=
-  ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ N : ℕ)
+  ∀ (coin known : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ N : ℕ)
     (V₁ V₂ : View Validator BlockId Payload U) (per₁ per₂ : ℕ → ℕ) (k : ℕ)
     (v₁ v₂ : Option BlockId),
     3 ≤ ws → 3 ≤ wa →
     -- the record reaches no higher than round N, and the slot is proposed at or below it
-    (∀ b ∈ U.ids, (U.block b).round ≤ N) → S.slotRound k ≤ N →
+    (∀ b ∈ U.ids, (U.block b).round ≤ N) → k ≤ N →
     -- each view derived the state of every interval those rounds fall in, reading its agreed
-    -- output at its own adaptive wavelength
+    -- output at its own adaptive wavelength and on its own adaptive schedule, the coin at the
+    -- rounds its own sequence makes asynchronous and the known leader elsewhere
     (∀ j, j ≤ intervalOf I N → ∃ st,
-      PeriodAt I wa coin upd k₀ U V₁ (adaptiveWave ws wa I per₁) j st ∧ per₁ j = st.period) →
+      PeriodAt (S := adaptiveSlots coin known I per₁) I wa coin upd k₀ U V₁
+        (adaptiveWave ws wa I per₁) j st ∧ per₁ j = st.period) →
     (∀ j, j ≤ intervalOf I N → ∃ st,
-      PeriodAt I wa coin upd k₀ U V₂ (adaptiveWave ws wa I per₂) j st ∧ per₂ j = st.period) →
-    -- and decided slot k at its own adaptive wavelength
-    Decided (adaptiveWave ws wa I per₁) U V₁ k v₁ →
-    Decided (adaptiveWave ws wa I per₂) U V₂ k v₂ →
+      PeriodAt (S := adaptiveSlots coin known I per₂) I wa coin upd k₀ U V₂
+        (adaptiveWave ws wa I per₂) j st ∧ per₂ j = st.period) →
+    -- and decided slot k at its own adaptive wavelength, on its own adaptive schedule
+    Decided (S := adaptiveSlots coin known I per₁) (adaptiveWave ws wa I per₁) U V₁ k v₁ →
+    Decided (S := adaptiveSlots coin known I per₂) (adaptiveWave ws wa I per₂) U V₂ k v₂ →
     -- then the two derived sequences agree on those intervals, and so do the verdicts
     (∀ j, j ≤ intervalOf I N → per₁ j = per₂ j) ∧ v₁ = v₂
 

@@ -1429,6 +1429,44 @@ theorem decidedAlmostSurely [MeasurableSpace Validator] [MeasurableSingletonClas
   simp only [Set.mem_setOf_eq, not_exists] at h ⊢
   exact h m
 
+/-! ## SH15f, a matching sequence exists -/
+
+/-- **The period sequence a view derives**, interval by interval: the period of the state the
+view derives for interval `j` at the sequence built below `j`, and `0` where it derives none. The
+state of an interval reads the sequence below that interval only (`periodAt_congr_per`), so every
+derivation at the whole sequence is one at the sequence built so far. -/
+noncomputable def matchingPer (I wa : ℕ) (coin known : ℕ → Validator) (upd : UpdateRule BlockId)
+    (k₀ ws : ℕ) (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) : ℕ → ℕ
+  | j =>
+    let prev : ℕ → ℕ :=
+      fun i => if _hi : i < j then matchingPer I wa coin known upd k₀ ws U V i else 0
+    open Classical in
+    if h : ∃ st, PeriodAt (S := adaptiveSlots coin known I prev) I wa coin upd k₀ U V
+        (adaptiveWave ws wa I prev) j st then (Classical.choose h).period else 0
+termination_by j => j
+
+/-- **SH15f.** A derivation at the sequence built by `matchingPer` reads the sequence below its
+interval only, so it is a derivation at the sequence built so far, whose state the construction
+read off; SH10a makes the two states one. -/
+theorem matchingPer_matches {I wa : ℕ} {ws : ℕ} (hws : 2 ≤ ws) (hwa : 3 ≤ wa)
+    {coin known : ℕ → Validator} {upd : UpdateRule BlockId} {k₀ : ℕ}
+    {U : BlockUniverse Validator BlockId Payload} {V : View Validator BlockId Payload U} :
+    Matches I wa coin known upd k₀ ws U V (matchingPer I wa coin known upd k₀ ws U V) := by
+  intro j st hst
+  rw [matchingPer]
+  set prev : ℕ → ℕ :=
+    fun i => if _hi : i < j then matchingPer I wa coin known upd k₀ ws U V i else 0 with hprev
+  have hagree : ∀ i, i < j → matchingPer I wa coin known upd k₀ ws U V i = prev i := by
+    intro i hi
+    simp only [hprev, dif_pos hi]
+  have hst' := periodAt_congr_per hws (by omega) hst hagree
+  have hex : ∃ st, PeriodAt (S := adaptiveSlots coin known I prev) I wa coin upd k₀ U V
+      (adaptiveWave ws wa I prev) j st := ⟨st, hst'⟩
+  rw [dif_pos hex]
+  exact congrArg ScanState.period
+    (periodAt_unique (S := adaptiveSlots coin known I prev) hwa (Classical.choose_spec hex) hst')
+
 end Steelhead
 
 end LeanDag

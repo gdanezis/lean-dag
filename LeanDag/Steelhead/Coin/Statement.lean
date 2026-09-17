@@ -86,7 +86,14 @@ clause of its Theorem 2. Thirteen claims:
 * **SH15e, almost surely against an adaptive adversary** — SH15c where
   the `m`-th record is a strategy's own answer to the coins of its `m`
   blocks: for almost every coin some strategy's record settles the slot,
-  by SH15d at each `m`.
+  by SH15d at each `m`;
+* **SH15f, a matching sequence exists** — SH15a, SH15c, SH15d and SH15e
+  quantify over the period sequences matching what a view derives, and
+  one always does: the sequence built interval by interval from the
+  states the view derives at the sequence built so far, since the state
+  of an interval reads the sequence below that interval only (the
+  congruence behind SH10b). So none of those claims is empty for want of
+  a sequence.
 
 The blocks' coins are drawn after the record is fixed, as SH11c's are,
 and the records of SH15c before the process: the adversary that shapes
@@ -301,6 +308,15 @@ def DecidedAlmostSurelyAgainst (ws wa I K : ℕ) : Prop :=
         Settles I wa coin known (upd m) k₀ ws (σ m (blockCoins I (intervalOf I s) m K coin))
           V per s
 
+/-- **SH15f, a matching sequence exists.** -/
+def MatchesExists (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=
+  ∀ (coin known : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
+    (V : View Validator BlockId Payload U),
+    2 ≤ ws → 3 ≤ wa →
+    -- then some period sequence is the one the view derives, at every interval it derives a
+    -- state for
+    ∃ per, Matches I wa coin known upd k₀ ws U V per
+
 /-- The coin, over every fault configuration, block universe, asynchronous wave, interval and
 period bound the model admits. -/
 def Statement : Prop :=
@@ -319,7 +335,8 @@ def Statement : Prop :=
         ws wa I K ∧
       DecidedAlmostSurelyAgainst (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
         ws wa I K ∧
-      BadChainBound (Validator := Validator) (BlockId := BlockId) (Payload := Payload) wa K
+      BadChainBound (Validator := Validator) (BlockId := BlockId) (Payload := Payload) wa K ∧
+      MatchesExists U ws wa I
 
 end Coin
 
