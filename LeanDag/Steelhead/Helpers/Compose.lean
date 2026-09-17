@@ -1,11 +1,15 @@
 import LeanDag.Steelhead.Interface.Statement
+import LeanDag.Steelhead.Helpers.Liveness
 /-!
 # Helpers — the composite
 
 Generated lemma infrastructure for `Interface/Statement.lean`; not part
 of the audit surface. Each law of the composite is the law of the slot's
 own rule, once the composite's rung count and tie-break are rewritten to
-that rule's, which the family's agreement on them allows.
+that rule's, which the family's agreement on them allows. The periodic
+class reads its bounds off the two waves, its spanning off the identity
+rounds, and its laws off the ones `Properties.lean` proves at any
+wavelength function of two rounds or more.
 -/
 
 namespace LeanDag
@@ -82,6 +86,61 @@ theorem steelheadAnchored_eq_compose {Validator BlockId Payload : Type} [Fintype
     steelheadAnchored Validator BlockId Payload w =
       compose fun r => MahiMahi.mahiMahiAnchored Validator BlockId Payload (w r) :=
   rfl
+
+/-! ## SH19, the periodic class -/
+
+/-- The periodic wave is at least the smaller of the two waves. -/
+theorem periodic_two_le {ws wa k : ℕ} (hws : 2 ≤ ws) (hwa : 2 ≤ wa) (r : ℕ) :
+    2 ≤ periodic ws wa k r := by
+  unfold periodic
+  split <;> omega
+
+/-- The periodic wave is at least three once both waves are. -/
+theorem periodic_three_le {ws wa k : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) (r : ℕ) :
+    3 ≤ periodic ws wa k r := by
+  unfold periodic
+  split <;> omega
+
+/-- The periodic wave is at most the larger of the two waves. -/
+theorem periodic_le_max (ws wa k r : ℕ) : periodic ws wa k r ≤ max ws wa := by
+  unfold periodic
+  split
+  · exact le_max_right _ _
+  · exact le_max_left _ _
+
+section PeriodicClass
+
+variable {Validator : Type} [Fintype Validator] [DecidableEq Validator] [Faults Validator]
+  {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
+
+/-- **The periodic wave varies with the round**: at two distinct waves and a period of two or
+more, round `0` is asynchronous and round `1` is not, so their wave offsets differ. -/
+theorem periodic_waveAt_not_const {ws wa k : ℕ} (hws : 2 ≤ ws) (hwa : 2 ≤ wa) (hne : ws ≠ wa)
+    (hk : 2 ≤ k) :
+    ¬ ∀ r r', (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).waveAt r =
+      (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).waveAt r' := by
+  intro h
+  have h01 := h 0 1
+  simp only [steelheadAnchored_waveAt, periodic, Nat.zero_mod, Nat.one_mod_eq_zero_iff,
+    ite_true] at h01
+  rw [if_neg (show ¬ k = 1 by omega)] at h01
+  omega
+
+/-- **SH19.** The bounds are the waves', the spanning is `spansEligible_of_le`, and the laws are
+`Properties.lean`'s at the periodic wavelength. -/
+theorem periodicClass : Interface.PeriodicClass Validator BlockId Payload := by
+  intro ws wa k hws hwa
+  refine ⟨periodic_two_le hws hwa, periodic_le_max ws wa k, ?_,
+    fun hne hk => periodic_waveAt_not_const hws hwa hne hk,
+    SteelheadProperties.agree (periodic_two_le hws hwa),
+    SteelheadProperties.steelheadExtendLaws (periodic_two_le hws hwa),
+    SteelheadProperties.shSupport_local (periodic_two_le hws hwa),
+    SteelheadProperties.shSupport_commits (periodic_two_le hws hwa),
+    fun hws3 hwa3 => SteelheadProperties.shSupport_ofCoverage (periodic_three_le hws3 hwa3)⟩
+  intro S hid
+  exact spansEligible_of_le (S := S) (by omega) (periodic_le_max ws wa k) hid
+
+end PeriodicClass
 
 end Steelhead
 

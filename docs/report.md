@@ -9564,7 +9564,14 @@ at a slot being the slot's rule's, the anchor's rule never entering; its
 verdicts then agree across views (`Steelhead.compose_decided_unique`);
 and `steelheadAnchored w` is the composite of Mahi-Mahi's rule read at
 `w r`, by definition (`Steelhead.steelheadAnchored_eq_compose`), so SH2
-is an instance.
+is an instance. **SH19** (`Steelhead.periodicClass`) is the periodic
+class: the paper's dial `periodic ws wa k` is a wavelength function the
+arc's results take, every round's wave at least two and at most
+`max ws wa`, so an identity-round schedule spans at that wave and
+agreement, the extension laws and the support's laws hold at it at every
+period; and at `ws ≠ wa` and `k ≥ 2` no constant wave equals it
+(`Steelhead.periodic_waveAt_not_const`), so the wave the core's `waveAt`
+admits as a function of the round is on record as one that varies.
 
 **The ledger** (SH13). Agreement settles one slot; the output layer
 reads verdicts off in slot order, which is round order, and what it owes
@@ -11327,6 +11334,7 @@ reused.
 | SH16 | the interface composes: a family of rules whose laws hold, agreeing on rungs and ties, composes into a rule whose laws hold and whose verdicts agree across views; Steelhead's rule is the composite of Mahi-Mahi's at each round's wave | `Steelhead.Interface.holds`, `Steelhead.compose_laws`, `Steelhead.compose_decided_unique`, `Steelhead.steelheadAnchored_eq_compose` *(Steelhead/Interface/Proof, Steelhead/Helpers/Compose)* |
 | SH17 | atomic broadcast over settled prefixes: a delivered block is delivered by every view whose settled prefix is as long, is a block of the record entering at one slot, a reliable block is delivered with the first committed reliable leader two rounds up under synchrony and, under asynchrony, with the first committed slot above the round by which the reliable validators have referenced it, and two blocks enter at the same slots in every view | `Steelhead.Broadcast.holds`, `Steelhead.reaches_of_eventualReference` *(Steelhead/Broadcast/Proof, Steelhead/Helpers/Broadcast)* |
 | SH18 | the replay: the selection stays among the candidates and never worsens the score; a committed candidate of the window is certified and a skipped one is not; at a round of the window whose boost and decision rounds a quorum has populated within the anchor's history, at least `n − f − |byzantine|` authors are marked committed; Algorithm 2 keeps the period in range; the window's commit weight is the rule's commit probability on the window read as a record; a coprime canary always probes | `Steelhead.Replay.holds`, `Steelhead.Replay.select_mem`, `Steelhead.Replay.select_score_le`, `Steelhead.Replay.certified_of_commits`, `Steelhead.Replay.not_certified_of_skips`, `Steelhead.Replay.window_count`, `Steelhead.Replay.anchorUpdate_range`, `Steelhead.Replay.commitWeight_eq_commitProb`, `Steelhead.Replay.probe_exists` *(Steelhead/Replay/Proof, Steelhead/Helpers/Replay)* |
+| SH19 | the periodic class: the paper's dial `periodic ws wa k` is a wavelength function the arc's results take, every round's wave at least two and at most `max ws wa`, so an identity-round schedule spans at that wave and agreement, the extension laws and the support's laws hold at it at every period; and at `ws ≠ wa` and `k ≥ 2` no constant wave equals it | `Steelhead.Interface.holds`, `Steelhead.periodicClass`, `Steelhead.periodic_two_le`, `Steelhead.periodic_le_max`, `Steelhead.periodic_waveAt_not_const` *(Steelhead/Interface/Proof, Steelhead/Helpers/Compose)* |
 
 
 ---

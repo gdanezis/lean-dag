@@ -182,13 +182,20 @@ from coverage into certification; the unpredictable-leader clause.
   never worsens the score, the window's evidence is consistent, Lemma
   3's count holds on the window once a quorum has populated the boost
   and decision rounds within it, every timing lies between its round and
-  the window's top, the asynchronous term is at most the rule's own
-  value on the same data, and a window commit is a commit on the DAG;
+  the window's top, the asynchronous term is bounded by the committed
+  count, and a window commit is a commit on the DAG;
   Algorithm 2 keeps the period in range (SH18h), the
   share of the candidates the window marks committed is the rule's
   commit probability on the window read as a record (SH18i), and a
   canary spacing coprime to a candidate period gives a probe in any
   window holding two canary rounds (SH18j).
+- **SH19, the periodic class** (§3): the paper's dial, `wa` at every
+  `k`-th round and `ws` elsewhere, is a wavelength function the results
+  above take, every round's wave between two and the larger wave, so
+  that an identity-round schedule spans at that wave and agreement, the
+  extension laws and the support's laws hold at it at every period; and
+  at two distinct waves and a period of two or more no constant wave
+  equals it, so a wave that varies with the round is on record.
 
 ### 0.1 Correspondence with the paper
 
@@ -210,6 +217,7 @@ from coverage into certification; the unpredictable-leader clause.
 | Protocol section, "whenever either verdict of an asynchronous slot is direct, the two coincide" | SH5b | predicate for predicate, at a slot proposed at its own round and led by the coin |
 | Protocol section, "the successor waits at most `max(0, wa − ws − 1)` rounds", "delays never compound" | SH9c | arithmetic on the decision rounds; output timing itself is not modelled |
 | Theorem 5 (conservativity) | SH4 | at a constant wavelength by `rfl`, period `1` by `Nat.mod_one`, and at wave three the derivations are exactly the core's, both directions |
+| Protocol section, the dial `w(r) = wa` at every `k`-th round and `ws` elsewhere | SH19 | the periodic wavelength satisfies every hypothesis the results place on a wavelength function, `2 ≤ w r ≤ max ws wa`, so the laws hold at every period, and it varies with the round at `ws ≠ wa`, `k ≥ 2`: the wave the core's `waveAt` admits as a function of the round is not a constant in disguise |
 | Lemma 3 (the replay cannot be starved) | SH11a, SH18d, SH18f, SH18g | `c_r ≥ n − f − b` on the DAG under any scheduling (SH11a), and on the window once a quorum has populated the boost and decision rounds within it (SH18d), which is what "populated" must mean for the replay, whose evidence is the window's (§7, finding 6); the replay's asynchronous term is at most the mean of the decision round over the `c_r` committed candidates and the window's top over the rest (SH18f), a bound and not a comparison with the rule's own latency, which is not modelled; a probe's success is a certificate quorum the DAG holds, so the adversary cannot forge one (SH18g), while the probes' rate is extended to the unprobed synchronous slots and a scheduler serving the canary rounds alone raises that estimate (§7, finding 10). Both at `2 ≤ ws < wa` |
 | Theorem 3 (i), "a committed asynchronous slot does not by itself decide the synchronous slots below it" | SH8 | the argument of "Why the chain, and not the output" as a theorem, for every `2 ≤ ws ≤ k` rather than the one period it walks through (§4) |
 
@@ -299,7 +307,17 @@ views (SH16b); and `steelheadAnchored w` is the composite of Mahi-Mahi's
 rule read at `w r`, by definition (SH16c), so SH2 is an instance. The
 laws are clauses A2 and A3 in the relation's terms; a pair the paper's
 discharge table leaves open is outside the theorem until they are
-discharged.
+discharged. **SH19** (`Interface/Statement.lean`) states the periodic
+class: `periodic ws wa k`, the paper's dial, is a wavelength function the
+results of this arc take, every round's wave at least two and at most
+`max ws wa`, so an identity-round schedule spans at that wave
+(`spansEligible_of_le`), and agreement, the extension laws persistence
+rests on, the support's locality and commit laws, and its coverage law
+at waves of three hold at it (`Properties.lean`'s theorems at that
+function); and at `ws ≠ wa` and `k ≥ 2` no constant wave equals it,
+rounds `0` and `1` reading different offsets, so what `waveAt` being a
+function of the round admits is a wave that varies, on record beside the
+constant-wave rules of the tree.
 
 **The ledger.** Agreement is about one slot; the output layer reads
 verdicts off in slot order, and what it owes is the paper's Corollary 2.
@@ -1224,7 +1242,7 @@ LeanDag/Steelhead/
   Period/Statement.lean     SH10, SH14     Period/Proof.lean
   Coin/Statement.lean       SH11, SH15     Coin/Proof.lean
   Ledger/Statement.lean     SH13           Ledger/Proof.lean
-  Interface/Statement.lean  SH16           Interface/Proof.lean
+  Interface/Statement.lean  SH16, SH19     Interface/Proof.lean
   Broadcast/Statement.lean  SH17           Broadcast/Proof.lean
   Replay/Statement.lean     SH18           Replay/Proof.lean
   Helpers/*.lean            the lemma layers

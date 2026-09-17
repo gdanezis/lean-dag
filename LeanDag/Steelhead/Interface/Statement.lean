@@ -1,12 +1,15 @@
 import LeanDag.Steelhead.Model.Compose
 import LeanDag.Steelhead.Model.Decision
+import LeanDag.Steelhead.Properties
 /-!
 # The interface composes — statement
 
 The paper's Theorem 1 at the interface level (`steelhead.md` §3): any
 family of rules whose laws hold composes into a rule whose laws hold,
 so that its verdicts agree across views, and Steelhead is one such
-composite. Three claims:
+composite; and the periodic wavelength, the paper's dial, is a
+wavelength function the laws' hypotheses admit and one that varies.
+Four claims:
 
 * **SH16a, the laws compose** — if every rule of a family satisfies the
   anchored relation's laws, and the family agrees on its rung count and
@@ -17,7 +20,18 @@ composite. Three claims:
   views at the composite's laws, for any two views and routes;
 * **SH16c, Steelhead is a composite** — `steelheadAnchored w` is the
   composite of Mahi-Mahi's rule read at `w r`, by definition, so SH2 is
-  an instance of SH16b.
+  an instance of SH16b;
+* **SH19, the periodic class** — the paper's dial `w(r) = wa` at every
+  `k`-th round and `ws` elsewhere (`periodic`), for any two waves of
+  two rounds or more, is a wavelength function the results above take:
+  every round's wave is at least two and at most the larger wave, so an
+  identity-round schedule spans at that wave; agreement, the extension
+  laws persistence rests on, and the support's locality, coverage and
+  commit laws hold at it, the same way they hold at any wavelength
+  function of two rounds or more, coverage asking three; and at
+  `ws ≠ wa` and `k ≥ 2` no constant wave
+  equals it, so what `waveAt` being a function of the round admits is a
+  wave that varies, not a constant in disguise.
 
 The laws are the paper's clauses A2 and A3 in the relation's terms, at
 each rule's own wave: what the intersection law and the exclusion of
@@ -64,12 +78,42 @@ def SteelheadComposes (Validator BlockId Payload : Type) [Fintype Validator]
     steelheadAnchored Validator BlockId Payload w =
       compose fun r => MahiMahi.mahiMahiAnchored Validator BlockId Payload (w r)
 
+/-- **SH19, the periodic class.** -/
+def PeriodicClass (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Faults Validator] [LinearOrder BlockId] : Prop :=
+  ∀ ws wa k : ℕ, 2 ≤ ws → 2 ≤ wa →
+    -- every round's wave is at least two and at most the larger wave ...
+    (∀ r, 2 ≤ periodic ws wa k r) ∧ (∀ r, periodic ws wa k r ≤ max ws wa) ∧
+    -- ... so an identity-round schedule spans at that wave
+    (∀ [S : Slots Validator], (∀ s, S.slotRound s = s) →
+      (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).SpansEligible (S := S)
+        (max ws wa)) ∧
+    -- the wave varies: at two distinct waves and a period of two or more, no constant equals it
+    (ws ≠ wa → 2 ≤ k → ¬ ∀ r r',
+      (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).waveAt r =
+        (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).waveAt r') ∧
+    -- and the laws hold at it: agreement, the extension laws persistence rests on, the support's
+    -- locality and commits, and its coverage law at waves of three or more
+    Properties.Agree (SteelheadProperties.steelheadRule (Validator := Validator)
+      (BlockId := BlockId) (Payload := Payload) (periodic ws wa k)) ∧
+    (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).ExtendLaws ∧
+    Properties.Support.Local (R := SteelheadProperties.steelheadRule (Validator := Validator)
+      (BlockId := BlockId) (Payload := Payload) (periodic ws wa k))
+      (SteelheadProperties.shSupport (periodic ws wa k)) ∧
+    Properties.Support.Commits (R := SteelheadProperties.steelheadRule (Validator := Validator)
+      (BlockId := BlockId) (Payload := Payload) (periodic ws wa k))
+      (SteelheadProperties.shSupport (periodic ws wa k)) (coreReliability Validator) ∧
+    (3 ≤ ws → 3 ≤ wa →
+      Timed.OfCoverage (R := SteelheadProperties.steelheadRule (Validator := Validator)
+        (BlockId := BlockId) (Payload := Payload) (periodic ws wa k))
+        (SteelheadProperties.shSupport (periodic ws wa k)) (coreReliability Validator))
+
 /-- The interface, over every fault configuration and block universe the model admits. -/
 def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] (U : BlockUniverse Validator BlockId Payload),
     LawsCompose Validator BlockId Payload ∧ ComposeAgreement U ∧
-      SteelheadComposes Validator BlockId Payload
+      SteelheadComposes Validator BlockId Payload ∧ PeriodicClass Validator BlockId Payload
 
 end Interface
 
