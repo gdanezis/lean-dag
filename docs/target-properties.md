@@ -778,8 +778,13 @@ themselves (`bandLaws_not_banded`). That rule's wave repeats every two
 rounds, so periodicity does not rescue the hypothesis either
 (`periodic_bandLaws_not_banded`): `Banded` quantifies its two offsets
 over every pair, and a periodic wave survives only the pairs whose
-difference is a multiple of the period. What the band yields with no
-offset
+difference is a multiple of the period. Those pairs are `BandedAt p`,
+which `bandedAt` proves from a wave repeating every `p` rounds and which
+`Banded` is at `p = 1` (`bandedAt_one_iff`). It yields the rebase
+results at cuts by a whole number of periods, `decided_of_rebased_at`
+and `LocalTruncateAt`, and no more: the same rule has the band at its
+period and not at every offset (`bandedAt_not_banded`). What the band
+yields with no offset
 survives the varying wave all the same, through the extension laws
 (`altRule_persist`, `floorRule_persist`), and eligibility spans at a
 bound on the wave in place of a constant (`altRule_spansEligible`).

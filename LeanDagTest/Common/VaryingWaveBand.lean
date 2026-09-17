@@ -193,6 +193,27 @@ theorem periodic_bandLaws_not_banded :
       (∀ r, R.waveAt (r + 2) = R.waveAt r) ∧ R.BandLaws ∧ ¬ Banded R.toDagRule :=
   ⟨floorRule, floorRule_waveAt_periodic, floorRule_bandLaws, floorRule_not_banded⟩
 
+/-! ## What the period does give -/
+
+/-- The wave is invariant under a shift by any whole number of periods. -/
+theorem floorRule_waveAt_shift (r t : ℕ) : floorRule.waveAt (r + t * 2) = floorRule.waveAt r := by
+  change altWave (r + t * 2) = altWave r
+  unfold altWave
+  rw [Nat.add_mul_mod_self_right]
+
+/-- **The rule that refutes `Banded` still reads a band at its own period.** `BandedAt 2` where
+`Banded` fails, so the offsets a periodic wave survives are exactly what the hypothesis may be
+weakened to, and no further. -/
+theorem floorRule_bandedAt_two : BandedAt 2 floorRule.toDagRule :=
+  AnchoredRule.bandedAt floorRule_bandLaws floorRule_waveAt_shift
+
+/-- **Periodicity yields a restricted band and nothing more**: the same rule has the band at its
+period and not at every offset. -/
+theorem bandedAt_not_banded :
+    ∃ R : AnchoredRule (Fin 4) (Fin 20) Unit ValidWrt (Correct : Finset (Fin 4)),
+      BandedAt 2 R.toDagRule ∧ ¬ Banded R.toDagRule :=
+  ⟨floorRule, floorRule_bandedAt_two, floorRule_not_banded⟩
+
 /-! ## Axioms
 
 Nothing here should ever acquire an axiom beyond the standard three. -/
@@ -202,6 +223,8 @@ Nothing here should ever acquire an axiom beyond the standard three. -/
 #print axioms floorRule_not_banded
 #print axioms bandLaws_not_banded
 #print axioms periodic_bandLaws_not_banded
+#print axioms floorRule_bandedAt_two
+#print axioms bandedAt_not_banded
 
 end VaryingWaveBand
 
