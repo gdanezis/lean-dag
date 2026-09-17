@@ -9756,9 +9756,21 @@ those free rounds, which gives `n ≤ ws · (n − |T|)`; so at
 `ws · (n − |T|) < n` the landings' residues are distinct and the chain
 reaches a reliably led landing within `n − |T|` hops, which with SH6g
 decides the slot it started from. The paper's bound on the Byzantine-led
-clause holds at that schedule and not on an arbitrary one (§24.6); its
-bounded leader timeouts are not modelled: `SynchronisedOn` stands for the
-paper's A4 and its pacing.
+clause holds at that schedule and not on an arbitrary one (§24.6).
+
+Where SH6a's hypothesis comes from is **SH6j** and **SH6k**, the two
+execution disciplines of §6. The reactive one
+(`Steelhead.reactive_commits`, on `ReactiveS`) is the core's
+`ReactivePace` plus one clause: at a wave of four rounds or more the
+votes of the round above the candidate reach the certifiers through the
+DAG, and only at the wave of three must a certifier reference them
+itself (`cert_or_wait`). `SynchronisedOn` is false by design in a
+reactive execution and appears in neither clause. The timed one
+(`Steelhead.timed_commits`) discharges `SynchronisedOn` from a
+`ViewPace` whose timeout grows at a rate that clears the delay, by the
+core's `synchronisedOn_of_rate` at `max (2Δ + proc, gst)`; it is worth
+what that structure is worth. Neither bounds a wall-clock latency, the
+round being the model's only unit.
 
 ### 24.4 The period
 
@@ -11277,7 +11289,7 @@ reused.
 | SH3 | handover: a direct commit in one view is committed by every view that finds the slot an anchor, whichever rule decides it, and no view skips it | `Steelhead.certifiedIn_of_commit_at_anchor` *(Steelhead/Helpers/Decision)*, `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
 | SH4 | conservativity: at a constant wavelength the rule is Mahi-Mahi's, period one is the constant `wa`, and at wave three the derivations are exactly the core's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.decided_of_core_decided` *(Steelhead/Helpers/Decision)* |
 | SH5 | chain agreement: the chain verdicts agree across views under any coin; at an asynchronous round the coin leads, the output's direct verdicts are the chain's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.chainDecided_unique` *(Steelhead/Helpers/Period)*, `Steelhead.direct_agrees_with_chain` *(Steelhead/Helpers/Decision)* |
-| SH6 | liveness under synchrony: a reliably led slot commits under coverage in every caught-up view, by the direct rule; everything below a fair run is decided; a slot whose leader has no block is skipped once a quorum blames it; a candidate one reliable block references one round up commits under synchrony, its leader reliable or not; a slot is decided once every slot from its floor up to some reliably led slot is decided, or once the chain of floors above it reaches a reliably led landing; and the round-robin schedule leads `c` consecutive rounds reliably past every round at `c · (n − |T|) < n`, and one reliable round within `n − |T|` of every round, and the chain of floors reaches a reliably led landing within `n − |T|` hops at `ws · (n − |T|) < n` | `Steelhead.Liveness.holds`, `Steelhead.commitsOfSynchrony`, `Steelhead.allDecidedBelowOfSynchrony`, `Steelhead.skipsCrashed`, `Steelhead.commitsOfDissemination`, `Steelhead.decidedOfReliableAboveFloor`, `Steelhead.floorChainDecides`, `Steelhead.roundRobin_fairRun`, `Steelhead.roundRobin_near`, `Steelhead.floorChainReachesReliable`, `Steelhead.roundRobin_hop_bound` *(Steelhead/Liveness/Proof, Steelhead/Helpers/Liveness)* |
+| SH6 | liveness under synchrony: a reliably led slot commits under coverage in every caught-up view, by the direct rule; everything below a fair run is decided; a slot whose leader has no block is skipped once a quorum blames it; a candidate one reliable block references one round up commits under synchrony, its leader reliable or not; a slot is decided once every slot from its floor up to some reliably led slot is decided, or once the chain of floors above it reaches a reliably led landing; and the round-robin schedule leads `c` consecutive rounds reliably past every round at `c · (n − |T|) < n`, and one reliable round within `n − |T|` of every round, and the chain of floors reaches a reliably led landing within `n − |T|` hops at `ws · (n − |T|) < n`; and a reliably led slot commits under either execution discipline, the reactive schedule's two waits and the timed schedule's rated timeout | `Steelhead.Liveness.holds`, `Steelhead.commitsOfSynchrony`, `Steelhead.allDecidedBelowOfSynchrony`, `Steelhead.skipsCrashed`, `Steelhead.commitsOfDissemination`, `Steelhead.decidedOfReliableAboveFloor`, `Steelhead.floorChainDecides`, `Steelhead.roundRobin_fairRun`, `Steelhead.roundRobin_near`, `Steelhead.floorChainReachesReliable`, `Steelhead.roundRobin_hop_bound`, `Steelhead.reactive_commits`, `Steelhead.reactive_certifies`, `Steelhead.timed_commits` *(Steelhead/Liveness/Proof, Steelhead/Helpers/Liveness, Steelhead/Helpers/Reactive)* |
 | SH7 | chain liveness: every chain verdict below a run of `wa` chain commits is settled, under the run clause, under synchrony with no clause, and below any one run of `wa` good coins | `Steelhead.chainAllDecidedBelow`, `Steelhead.chainAllDecidedBelowOfSynchrony`, `Steelhead.chainAllDecidedBelowOfRun` *(Steelhead/Helpers/Liveness)* |
 | SH8 | the stall: at every period `k ≥ ws`, with no synchronous candidate certified and no synchronous slot directly skipped, no slot of the residue class `k − 1` is ever decided | `Steelhead.stall` *(Steelhead/Helpers/Liveness)* |
 | SH9 | the drain: `wa` consecutive commits decide every slot below them at any wavelength function bounded by `wa`; at period `1` under the run clause, past every round some slot has everything below it decided; an asynchronous slot costs `wa − ws` rounds and its successor waits at most `wa − ws − 1` | `Steelhead.allDecidedBelowOfRun`, `Steelhead.allDecidedBelowAtPeriodOne`, `Steelhead.asyncSlotCost` *(Steelhead/Helpers/Liveness)* |
@@ -11298,7 +11310,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 342 definitions and structures the report names, in
+The 343 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -16986,6 +16998,28 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
 
 The filled block at gap round `k`: `v2`'s references at that round, plus the added self reference.
 
+#### `ReactiveS`
+
+*structure, `Steelhead.Model.Reactive.lean`*
+
+```lean
+structure ReactiveS (U : BlockUniverse Validator BlockId Payload) (T : Finset Validator) (N : ℕ)
+    (w : ℕ → ℕ) extends ReactivePace U T N where
+  /-- **The certificate wait, at the wave of three.** -/
+  cert_or_wait : ∀ v ∈ T, ∀ k : ℕ, w (S.slotRound k) = 3 → S.slotRound k + 2 ≤ N →
+    S.leader k ∈ T → ∀ L, IsLeaderBlock U k L →
+    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + 2 →
+    MahiMahi.Certifies U c L ∨
+      (built v (S.slotRound k + 1) + timeout (S.slotRound k + 1)
+          ≤ built v (S.slotRound k + 2) ∧
+        ∀ b ∈ U.ids, (U.block b).creator ∈ T →
+          (U.block b).round = S.slotRound k + 1 →
+          b ∈ holds v (built v (S.slotRound k + 2)) →
+          L ∈ (U.block b).refs → b ∈ (U.block c).refs)
+```
+
+**Steelhead's reactive schedule** at the wavelength function `w`: the core's reactive pace, plus the certificate wait at the wave of three. At two rounds above a reliable leader, any `T`-authored block either already certifies, or its builder waited the full timeout and references every reliable vote it holds. Above wave three the clause says nothing: reachability carries the votes, so the discipline is the core's own.
+
 #### `Config`
 
 *structure, `Steelhead.Model.Replay.lean`*
@@ -17138,7 +17172,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 503 theorems the body or Appendix A names, each
+The 504 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -18155,6 +18189,19 @@ theorem ViewPace.exists_honest_floor (vp : ViewPace U T N)
 ```
 
 **The honest floor** (CU5): a valid block of round `n + 1` certifies that some reliable validator reached round `n` having genuinely waited out all `n` timeouts, so the author-blind catch-up a deployment runs never pulls a validator past where a reliable peer already is.
+
+#### `synchronisedOn_of_rate`
+
+*theorem, `Mysticeti.ViewPace.lean`*
+
+```lean
+theorem synchronisedOn_of_rate (vp : ViewPace U T N)
+    (hcard : quorumCard Validator ≤ T.card)
+    (hrate : Rated vp.timeout) :
+    SynchronisedOn U T (max (2 * vp.delay + vp.proc) vp.gst)
+```
+
+**Q3 on this route** — coverage from an explicit round, under a rated backoff: `R = max (2Δ + proc) gst`, each summand what it looks like. The rated timeout clears the constant threshold from the round named by the threshold itself, and no start spread or base round appears.
 
 #### `decided_of_wait`
 

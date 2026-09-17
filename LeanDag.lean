@@ -326,8 +326,10 @@ import LeanDag.Steelhead.Safety.Statement
 import LeanDag.Steelhead.Helpers.Decision
 import LeanDag.Steelhead.Safety.Proof
 import LeanDag.Steelhead.Properties
+import LeanDag.Steelhead.Model.Reactive
 import LeanDag.Steelhead.Liveness.Statement
 import LeanDag.Steelhead.Helpers.Liveness
+import LeanDag.Steelhead.Helpers.Reactive
 import LeanDag.Steelhead.Liveness.Proof
 import LeanDag.Steelhead.Model.Period
 import LeanDag.Steelhead.Period.Statement

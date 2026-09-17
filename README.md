@@ -245,7 +245,9 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   of floors decides the slot it starts from once it reaches a reliably
   led landing, the round-robin schedule the implementation runs leads
   three consecutive rounds reliably past every round at `n = 3f + 1` and
-  brings the chain to such a landing within `n − |T|` hops,
+  brings the chain to such a landing within `n − |T|` hops, a reliably
+  led slot commits under either execution discipline, the reactive
+  schedule's waits and the timed schedule's rated timeout,
   a block the reliable validators have referenced is delivered by the
   first committed slot above, whoever led it, any family
   of rules whose laws hold composes into one whose laws hold (Steelhead's rule

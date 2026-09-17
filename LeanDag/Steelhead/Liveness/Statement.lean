@@ -1,11 +1,12 @@
 import LeanDag.Steelhead.Model.Chain
+import LeanDag.Steelhead.Model.Reactive
 import LeanDag.MahiMahi.Model.Unpredictable
 /-!
 # Liveness at a wavelength function — statement
 
 What the rule decides under synchrony, what the chain decides under the
 unpredictable-leader clause, and what the output does *not* decide under
-the paper's asynchronous adversary (`steelhead.md` §4–6). Fifteen
+the paper's asynchronous adversary (`steelhead.md` §4–6). Seventeen
 claims:
 
 * **SH6a, a reliable leader commits under coverage** — Theorem 2's
@@ -71,6 +72,22 @@ claims:
   over; counting the two against each other gives `n ≤ ws · (n − |T|)`.
   So the landings' residues are distinct and only `n − |T|` are left
   free;
+* **SH6j, a reliable leader commits under the reactive discipline** —
+  SH6a with the execution discipline named rather than assumed: a
+  reactive schedule never waits past its timeout, and at the round above
+  a reliable leader a block either votes or its builder waited the
+  timeout out and votes for what it holds. At a wave of four rounds or
+  more that is all it takes, the votes reaching the certifiers through
+  the DAG; at the wave of three a certifier must reference the votes
+  themselves, which is `ReactiveS`'s one added clause. `SynchronisedOn`
+  appears nowhere: a reactive builder omits what has not arrived, so it
+  is false by design in such an execution;
+* **SH6k, a reliable leader commits under the timed discipline** — the
+  other route to SH6a's hypothesis: a `ViewPace` whose timeout grows at
+  a rate that clears the delay synchronises the reliable set from
+  `max (2Δ + proc, gst)`, and SH6a takes it from there. The claim is
+  worth exactly what the core's `ViewPace` is, which is a question about
+  that structure and not about this arc;
 * **SH7a, chain liveness** — MM3c at the chain schedule: a run of `wa`
   consecutive chain commits, which the clause promises in every window,
   decides every chain verdict below it;
@@ -289,6 +306,38 @@ def FloorChainReachesReliable (U : BlockUniverse Validator BlockId Payload) (w :
     -- then one of those landings is reliably led, so the chain reaches one within n − |T| hops
     ∃ i, i ≤ n - T.card ∧ S.leader (x i) ∈ T
 
+/-- **SH6j, a reliable leader commits under the reactive discipline.** -/
+def CommitsOfReactivePace (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
+  ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (N R k : ℕ)
+    (rs : ReactiveS U T N w),
+    (∀ r, 3 ≤ w r) →
+    -- T is a reliable set: correct, and a quorum
+    T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
+    -- the reactive schedule is past GST from R, where its timeout clears the delay
+    rs.gst ≤ R → (∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) →
+    -- the slot lies at or past R, its decision round within the schedule's horizon
+    R ≤ S.slotRound k → S.slotRound k + (w (S.slotRound k) - 1) ≤ N →
+    -- and the view holds that round
+    V.CoversUpto (S.slotRound k + (w (S.slotRound k) - 1)) →
+    -- then a reliably led slot commits its candidate in that view, by the direct rule
+    S.leader k ∈ T → ∃ L, IsLeaderBlock U k L ∧ Decided w U V k (some L)
+
+/-- **SH6k, a reliable leader commits under the timed discipline.** -/
+def CommitsOfViewPace (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
+  ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (N k : ℕ)
+    (vp : ViewPace U T N),
+    (∀ r, 3 ≤ w r) →
+    T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
+    -- the timeout grows at a rate that clears the delay, which is what the core's Q3 asks
+    Rated vp.timeout →
+    -- the slot lies at or past the round the rate names, and decides below the horizon N'
+    ∀ N' : ℕ, max (2 * vp.delay + vp.proc) vp.gst ≤ S.slotRound k →
+      (∀ r, max (2 * vp.delay + vp.proc) vp.gst ≤ r → r ≤ N' → PopulatedOn U T r) →
+      (∀ j, j ≤ k →
+        (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N') →
+      V.CoversUpto N' → S.leader k ∈ T →
+      ∃ L, IsLeaderBlock U k L ∧ Decided w U V k (some L)
+
 /-- **SH7a, chain liveness.** -/
 def ChainAllDecidedBelow (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (V : View Validator BlockId Payload U) (c N : ℕ),
@@ -405,6 +454,7 @@ def Statement : Prop :=
         (Payload := Payload) w ∧
       SkipsCrashed U w ∧ CommitsOfDissemination U w ∧ DecidedOfReliableAboveFloor U w ∧
       FloorChainDecides U w ∧ RoundRobinFairRun ∧ FloorChainReachesReliable U w ∧
+      CommitsOfReactivePace U w ∧ CommitsOfViewPace U w ∧
       ChainAllDecidedBelow U wa ∧
       ChainAllDecidedBelowOfSynchrony (Validator := Validator) (BlockId := BlockId)
         (Payload := Payload) wa ∧
