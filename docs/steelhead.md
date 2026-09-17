@@ -40,8 +40,8 @@ run on the causal history of an agreed event, the interval's chain anchor
 (§5).
 
 **What is reused.** The DAG core; the anchored decision relation
-(`Common/Anchored.lean`), whose `waveAt` field became a function of the
-slot's round for this arc; Mahi-Mahi's direct rules, certificate, link
+(`Common/Anchored.lean`), whose `waveAt` field is a function of the
+slot's round; Mahi-Mahi's direct rules, certificate, link
 and laws at every wave; the counting lemma MM2; the timed model's bridge
 from coverage into certification; the unpredictable-leader clause.
 
@@ -197,7 +197,7 @@ from coverage into certification; the unpredictable-leader clause.
 | Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e, SH6f, SH6g, SH6h, SH6i, SH6j, SH6k | in part: the honest-leader commit by the direct rule, everything below a fair run, the crashed-leader skip from `n − f` blames, the remark that partial dissemination does not defer, for a leader that did not equivocate, and the anchor clause as the rule has it, a slot decided once every slot from its floor up to some reliably led slot is decided (SH6f) or once the chain of floors reaches a reliably led landing (SH6g). The bound on that clause, "once the first honest-led slot above its floor commits, at most `b` slots higher", is refuted on data, an equivocating leader at the floor being the anchor (§7, finding 7); what holds at the implementation's round-robin schedule is the hop count itself, a reliably led landing within `n − |T|` hops once `ws · (n − |T|) < n` (SH6i), and a round count, one reliable leader within `n − |T|` rounds and a reliable run of three past every round at `n = 3f + 1` (SH6h), which also discharges SH6b's fairness hypothesis there. The per-hop probability the theorem states for the coin's slots is SH11h, over a strategy that answers only the draws already made. The `O(wa + b)` ordering bound fails for some coin sequences at period `1` (§7, finding 5) and holds only as SH15's tail. SH6a's hypothesis is reached from either execution discipline, the reactive one (SH6j) and the timed one (SH6k); what neither bounds is a wall-clock latency, since a round is the only unit the model carries |
 | Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the chain settles under Mahi-Mahi's run clause and below any one run of `wa` good coins, a period is derived for each interval, an anchor below which the agreed output committed nothing for `I` rounds hands the next interval period `1`, the failover the implementation applies before the rule is consulted (`apply_period_update`) and the paper's premise on the update rule is not (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15c over a sequence of records, SH15a's tail on one |
 | Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b, SH14c, SH15 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval at least two past the slot's and one run of `wa` good coins above it; SH14b reads both off the run clause at the chain schedule, SH14c off two runs of the coin; SH15a bounds the probability that some view has not derived the slot's period or leaves it undecided, over `M` blocks of coins, by `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero (SH15b); and SH15c states the "with probability `1`" itself, over a sequence of records with the coin drawn as a process: for almost every coin some record decides the slot in every view holding its horizon. SH15d and SH15e are the same two against an adversary that answers the draws already made, by the adaptive block bound SH11f. The growth of the ledger from the settled prefix is SH13 |
-| Theorem 4 (agreement of the period) | SH10a, SH10b | for any deterministic update rule |
+| Theorem 4 (agreement of the period) | SH10a, SH10b | for any deterministic update rule; SH10a at one wavelength on both sides, SH10b at each validator's own derived wavelength, where the sequences agree below the record's top interval and the verdicts with them |
 | Adaptive section, `I ≥ 2 · maxPeriod` and `1 ≤ k ≤ maxPeriod` | SH10f, SH10g, SH10k, SH18h | two asynchronous rounds per interval at any `k ≥ 1` with `2k ≤ I`; the period stays in range when the initial period does and the update rule keeps it there, the failover's `1` included, which Algorithm 2's replay does whenever the candidates lie in `[1, K]` (SH18h). The bound admits `I < maxPeriod + wa − 2`, where a window of `I + 1` rounds holds the decision round of none of its asynchronous slots at some anchors and of one at others (SH10k; §7, finding 8) |
 | Adaptive section, "the replay is exact in expectation" | SH18i | in the part that is a theorem: at a round the window retains, the share of the `n` candidates the window marks committed is the probability that a uniform coin names a directly committed leader on the anchor's history read as a record, the paper's `c_r / n`, at `1 ≤ wa`. The anchor's term is the approximation the paper admits |
 | Protocol section, "setting the canary odd ensures it is coprime to candidate periods, guaranteeing periodic probes" | SH18j | at a canary spacing coprime to a candidate period of at least two, a window holding two canary rounds whose decision round it retains holds a probe for the candidate, since two consecutive multiples of the spacing cannot both be multiples of the period |
@@ -235,8 +235,8 @@ of link (a certificate in the anchor's cone), no tie, and the wave offset
 `3` the derivations are exactly the core's (MM1d transported, and its
 mirror).
 
-The one change to the shared relation was to make `AnchoredRule.waveAt`
-a function of the slot's round. Every other rule sets a constant, and
+The shared relation reads `AnchoredRule.waveAt` as a function of the
+slot's round. Every other rule sets a constant, and
 `Banded` (the offset band) requires one: the band rebases every round by
 a constant, and a wave that alternates with the round reads an absolute
 round. Steelhead has no band, no `LocalTruncate` and no `Safe` headline
@@ -549,7 +549,7 @@ rounds only; output timing is not modelled.
 
 ## 5. The period
 
-`Model/Period.lean` states the configuration-sequence model afresh,
+`Model/Period.lean` states the configuration-sequence model on its own,
 importing nothing of Barnacle. Rounds `j·I + 1` to `(j + 1)·I` form
 interval `j` (`intervalOf I r = (r − 1) / I`, round `0` in interval `0`),
 each decided under one period. The **anchor** of interval `j` is the
@@ -598,8 +598,8 @@ one clause at a time (SH14) take this schedule as their instance (SH15).
 - **SH10b, agreement of the output under the adaptive wavelength**: two
   validators that derived the state of every interval the record's
   rounds fall in, and decided a slot proposed among them at their own
-  adaptive wavelengths, agree on the verdict. The sequences coincide
-  there by strong induction on the interval: the anchors of the
+  adaptive wavelengths, derived the same periods there and agree on the
+  verdict. The sequences coincide by strong induction on the interval: the anchors of the
   intervals below lie in the record, their histories are read at rounds
   below their own, where the sequences already agree, so the two views
   advance the agreed output alike (`AgreedAdvance.congr`)
@@ -917,8 +917,7 @@ asynchronous wave it does not (§7, finding 7).
    on which periods `1` and `2` score at least half of what period `4`
    can, and at period `4` slot `3` is never decided, so no block above
    round `2` is ever output. `ReplayStartup.lean` and
-   `ReplayShortWindow.lean` show the retention on tied windows; a Rust
-   reproduction through 256 rounds is held outside this PR.
+   `ReplayShortWindow.lean` show the retention on tied windows.
 4. **Theorem 3's premise on the update rule is neither Algorithm 2's
    rule nor enough.** The theorem assumes that a window in which no
    synchronous slot commits maps to `k = 1`. Algorithm 2 keeps the period

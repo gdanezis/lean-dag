@@ -1295,7 +1295,7 @@ theorem coinMeasure_blockCoins_mem [MeasurableSpace Validator] [MeasurableSingle
     exact MeasurableSet.pi B.countable_toSet (hmt g)
 
 /-- **The failure set of one record under the process**: the coins under which some view holding
-the record's horizon, at some period sequence matching what it derives under the handover, has not
+the record's horizon, at some period sequence matching what it derives, has not
 derived the slot's period or leaves the slot undecided have measure at most SH15a's bound, by the
 same inclusion read through the process. -/
 theorem undecided_coin_le [MeasurableSpace Validator] [MeasurableSingletonClass Validator]

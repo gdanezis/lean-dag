@@ -9828,8 +9828,8 @@ over an anchor's history is unique, no verdict of that history lying
 above the anchor's round;
 **SH10b**, two validators that derived the state of every interval the
 record's rounds fall in, and decided a slot proposed among them at their
-own adaptive wavelengths, agree on the verdict: the sequences coincide
-there by strong induction on the interval, since the anchors of the
+own adaptive wavelengths, derived the same periods there and agree on
+the verdict: the sequences coincide by strong induction on the interval, since the anchors of the
 intervals below lie in the record and their histories are read at rounds
 below their own, where the sequences already agree, so the two
 validators advance the agreed output alike
@@ -10404,8 +10404,8 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `OptimalHydrozoan/ThresholdArithmetic/`, `OptimalHydrozoan/DirectSafety/`, `OptimalHydrozoan/SlotAgreement/`, `OptimalHydrozoan/PrefixAgreement/`, `OptimalHydrozoan/DirectLiveness/`, `OptimalHydrozoan/IndirectLiveness/`, `OptimalHydrozoan/EventualDecision/`, `OptimalHydrozoan/Grounding/` | the eight statements and their proofs (OH1–OH8) |
 | `OptimalHydrozoan/Helpers/` | the generated lemma layer |
 | `Steelhead/Model/Wavelength.lean`, `Steelhead/Model/Decision.lean`, `Steelhead/Model/Chain.lean` | the periodic wavelength function and its asynchronous rounds; the rule at a wavelength function as an anchored rule; the chain verdict at the identity schedule under a coin |
-| `Steelhead/Model/Period.lean`, `Steelhead/Model/Coin.lean` | the intervals and the period sequence at an update rule; the commit and no-commit probabilities of a uniform coin |
-| `Steelhead/Safety/`, `Steelhead/Liveness/`, `Steelhead/Period/`, `Steelhead/Coin/`, `Steelhead/Ledger/` | the five statements and their proofs (SH1–SH11, SH13) |
+| `Steelhead/Model/Period.lean`, `Steelhead/Model/Coin.lean`, `Steelhead/Model/Replay.lean`, `Steelhead/Model/Compose.lean`, `Steelhead/Model/Reactive.lean` | the intervals, the scan's state and the period sequence at an update rule; the coin's probabilities and the adaptive adversary; Algorithm 2 as data; the composite of one rule per round; the reactive schedule with its certificate wait |
+| `Steelhead/Safety/`, `Steelhead/Liveness/`, `Steelhead/Period/`, `Steelhead/Coin/`, `Steelhead/Ledger/`, `Steelhead/Interface/`, `Steelhead/Broadcast/`, `Steelhead/Replay/` | the eight statements and their proofs (SH1–SH18) |
 | `Steelhead/Helpers/` | the generated lemma layer; `Properties.lean`, the carrier, its properties and support |
 | `Quality/Coverage.lean` | per-commit and ledger coverage (CQ1–CQ3) at the core, over `Arcs.coveredAt` |
 | `Quality/Inclusion.lean` | post-`R` inclusion (CQ5, CQ6) |
@@ -13074,6 +13074,118 @@ noncomputable def coinMeasure (Validator : Type) [Fintype Validator] [DecidableE
 ```
 
 **The coin as a process**: an independent uniform draw at every round, the infinite product of the uniform distribution over the validators on the measurable structure they carry. The measure the almost-sure claim (SH15c) reads its events through; on finitely many rounds it agrees with the uniform distribution over the leader maps of those rounds.
+
+#### `Config`
+
+*structure, `Steelhead.Model.Replay.lean`*
+
+```lean
+structure Config (Validator : Type) where
+  /-- The synchronous wave. -/
+  ws : ℕ
+  /-- The asynchronous wave. -/
+  wa : ℕ
+  /-- The canary spacing, `none` when the canary is off. -/
+  canary : Option ℕ
+  /-- The known-leader schedule. -/
+  known : ℕ → Validator
+```
+
+**The replay's parameters**: the two waves, the canary spacing, none when no round carries the canary wait, and the known-leader schedule, read at every round whether or not it ran synchronously.
+
+#### `ofAnchor`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def ofAnchor (U : BlockUniverse Validator BlockId Payload) (A : BlockId) (I : ℕ) :
+    Evidence Validator :=
+  let ids := windowIds U A I
+  let candidates := fun r a => (blocksAt U r).filter fun L => (U.block L).creator = a ∧ L ∈ ids
+  let certs := fun r w L => MahiMahi.certificates U w L r ∩ ids
+  { bottom := windowBottom U A I
+    top := (U.block A).round
+    commits := fun r w a => decide (∃ L ∈ candidates r a,
+      quorumCard Validator ≤ (creatorsOf U.block (certs r w L)).card)
+    skips := fun r w a => decide (quorumCard Validator ≤
+      (creatorsOf U.block (((blocksAt U (MahiMahi.votingRound w r)).filter
+        fun q => MahiMahi.Blames U q a r) ∩ ids)).card)
+    certified := fun r w a => decide (∃ L ∈ candidates r a, certs r w L ≠ ∅) }
+```
+
+**The evidence of an anchor's window**: a candidate is a block of the author at the round inside the window; it is committed when a quorum of distinct validators certify it within the window, skipped when a quorum of the window's vote-round blocks blame the author's slot, and certified when the window holds one certificate for it. The votes are Mahi-Mahi's, so an equivocator's blocks are arbitrated as the rule arbitrates them.
+
+#### `score`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def score (E : Evidence Validator) (C : Config Validator) (period : ℕ) : ℚ :=
+  let ts := timingAt E C period (probeRate E C period)
+  ((rounds E).map fun r => max (firstCommitAt E ts r) (gateAt E ts r) - r).sum
+```
+
+**The score**: the sum over the window of each round's delay to output, a round output when the first commit at or above it is expected and no earlier than every lower slot's decision.
+
+#### `select`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def select (candidates : List ℕ) (scores : ℕ → ℚ) (current : ℕ) (epsilon : ℚ) : ℕ :=
+  let winner := best candidates scores current
+  if current ∈ candidates then
+    if scores winner < (1 - epsilon) * scores current then winner else current
+  else winner
+```
+
+**The hysteretic selection**: the best candidate if it improves on the current period by the factor `1 − ε`, the current period otherwise; the best candidate outright when the current period is not a candidate, as `choose_period` has it, though the implementation never reaches that case.
+
+#### `update`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def update (E : Evidence Validator) (C : Config Validator) (candidates : List ℕ) (current : ℕ)
+    (epsilon : ℚ) : ℕ :=
+  select candidates (score E C) current epsilon
+```
+
+**Algorithm 2 on one window**: the selection among the candidates by the replay's scores.
+
+#### `anchorUpdate`
+
+*def, `Steelhead.Model.Replay.lean`*
+
+```lean
+def anchorUpdate (U : BlockUniverse Validator BlockId Payload) (I : ℕ) (C : Config Validator)
+    (candidates : List ℕ) (epsilon : ℚ) : UpdateRule BlockId :=
+  fun A current => update (ofAnchor U A I) C candidates current epsilon
+```
+
+**Algorithm 2 as an update rule**: the replay of the anchor's window.
+
+#### `ReactiveS`
+
+*structure, `Steelhead.Model.Reactive.lean`*
+
+```lean
+structure ReactiveS (U : BlockUniverse Validator BlockId Payload) (T : Finset Validator) (N : ℕ)
+    (w : ℕ → ℕ) extends ReactivePace U T N where
+  /-- **The certificate wait, at the wave of three.** -/
+  cert_or_wait : ∀ v ∈ T, ∀ k : ℕ, w (S.slotRound k) = 3 → S.slotRound k + 2 ≤ N →
+    S.leader k ∈ T → ∀ L, IsLeaderBlock U k L →
+    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + 2 →
+    MahiMahi.Certifies U c L ∨
+      (built v (S.slotRound k + 1) + timeout (S.slotRound k + 1)
+          ≤ built v (S.slotRound k + 2) ∧
+        ∀ b ∈ U.ids, (U.block b).creator ∈ T →
+          (U.block b).round = S.slotRound k + 1 →
+          b ∈ holds v (built v (S.slotRound k + 2)) →
+          L ∈ (U.block b).refs → b ∈ (U.block c).refs)
+```
+
+**Steelhead's reactive schedule** at the wavelength function `w`: the core's reactive pace, plus the certificate wait at the wave of three. At two rounds above a reliable leader, any `T`-authored block either already certifies, or its builder waited the full timeout and references every reliable vote it holds. Above wave three the clause says nothing: reachability carries the votes, so the discipline is the core's own.
 
 ### Black Marlin: the three-round commit rule
 
@@ -16998,118 +17110,6 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
 
 The filled block at gap round `k`: `v2`'s references at that round, plus the added self reference.
 
-#### `ReactiveS`
-
-*structure, `Steelhead.Model.Reactive.lean`*
-
-```lean
-structure ReactiveS (U : BlockUniverse Validator BlockId Payload) (T : Finset Validator) (N : ℕ)
-    (w : ℕ → ℕ) extends ReactivePace U T N where
-  /-- **The certificate wait, at the wave of three.** -/
-  cert_or_wait : ∀ v ∈ T, ∀ k : ℕ, w (S.slotRound k) = 3 → S.slotRound k + 2 ≤ N →
-    S.leader k ∈ T → ∀ L, IsLeaderBlock U k L →
-    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + 2 →
-    MahiMahi.Certifies U c L ∨
-      (built v (S.slotRound k + 1) + timeout (S.slotRound k + 1)
-          ≤ built v (S.slotRound k + 2) ∧
-        ∀ b ∈ U.ids, (U.block b).creator ∈ T →
-          (U.block b).round = S.slotRound k + 1 →
-          b ∈ holds v (built v (S.slotRound k + 2)) →
-          L ∈ (U.block b).refs → b ∈ (U.block c).refs)
-```
-
-**Steelhead's reactive schedule** at the wavelength function `w`: the core's reactive pace, plus the certificate wait at the wave of three. At two rounds above a reliable leader, any `T`-authored block either already certifies, or its builder waited the full timeout and references every reliable vote it holds. Above wave three the clause says nothing: reachability carries the votes, so the discipline is the core's own.
-
-#### `Config`
-
-*structure, `Steelhead.Model.Replay.lean`*
-
-```lean
-structure Config (Validator : Type) where
-  /-- The synchronous wave. -/
-  ws : ℕ
-  /-- The asynchronous wave. -/
-  wa : ℕ
-  /-- The canary spacing, `none` when the canary is off. -/
-  canary : Option ℕ
-  /-- The known-leader schedule. -/
-  known : ℕ → Validator
-```
-
-**The replay's parameters**: the two waves, the canary spacing, none when no round carries the canary wait, and the known-leader schedule, read at every round whether or not it ran synchronously.
-
-#### `ofAnchor`
-
-*def, `Steelhead.Model.Replay.lean`*
-
-```lean
-def ofAnchor (U : BlockUniverse Validator BlockId Payload) (A : BlockId) (I : ℕ) :
-    Evidence Validator :=
-  let ids := windowIds U A I
-  let candidates := fun r a => (blocksAt U r).filter fun L => (U.block L).creator = a ∧ L ∈ ids
-  let certs := fun r w L => MahiMahi.certificates U w L r ∩ ids
-  { bottom := windowBottom U A I
-    top := (U.block A).round
-    commits := fun r w a => decide (∃ L ∈ candidates r a,
-      quorumCard Validator ≤ (creatorsOf U.block (certs r w L)).card)
-    skips := fun r w a => decide (quorumCard Validator ≤
-      (creatorsOf U.block (((blocksAt U (MahiMahi.votingRound w r)).filter
-        fun q => MahiMahi.Blames U q a r) ∩ ids)).card)
-    certified := fun r w a => decide (∃ L ∈ candidates r a, certs r w L ≠ ∅) }
-```
-
-**The evidence of an anchor's window**: a candidate is a block of the author at the round inside the window; it is committed when a quorum of distinct validators certify it within the window, skipped when a quorum of the window's vote-round blocks blame the author's slot, and certified when the window holds one certificate for it. The votes are Mahi-Mahi's, so an equivocator's blocks are arbitrated as the rule arbitrates them.
-
-#### `score`
-
-*def, `Steelhead.Model.Replay.lean`*
-
-```lean
-def score (E : Evidence Validator) (C : Config Validator) (period : ℕ) : ℚ :=
-  let ts := timingAt E C period (probeRate E C period)
-  ((rounds E).map fun r => max (firstCommitAt E ts r) (gateAt E ts r) - r).sum
-```
-
-**The score**: the sum over the window of each round's delay to output, a round output when the first commit at or above it is expected and no earlier than every lower slot's decision.
-
-#### `select`
-
-*def, `Steelhead.Model.Replay.lean`*
-
-```lean
-def select (candidates : List ℕ) (scores : ℕ → ℚ) (current : ℕ) (epsilon : ℚ) : ℕ :=
-  let winner := best candidates scores current
-  if current ∈ candidates then
-    if scores winner < (1 - epsilon) * scores current then winner else current
-  else winner
-```
-
-**The hysteretic selection**: the best candidate if it improves on the current period by the factor `1 − ε`, the current period otherwise; the best candidate outright when the current period is not a candidate, as `choose_period` has it, though the implementation never reaches that case.
-
-#### `update`
-
-*def, `Steelhead.Model.Replay.lean`*
-
-```lean
-def update (E : Evidence Validator) (C : Config Validator) (candidates : List ℕ) (current : ℕ)
-    (epsilon : ℚ) : ℕ :=
-  select candidates (score E C) current epsilon
-```
-
-**Algorithm 2 on one window**: the selection among the candidates by the replay's scores.
-
-#### `anchorUpdate`
-
-*def, `Steelhead.Model.Replay.lean`*
-
-```lean
-def anchorUpdate (U : BlockUniverse Validator BlockId Payload) (I : ℕ) (C : Config Validator)
-    (candidates : List ℕ) (epsilon : ℚ) : UpdateRule BlockId :=
-  fun A current => update (ofAnchor U A I) C candidates current epsilon
-```
-
-**Algorithm 2 as an update rule**: the replay of the anchor's window.
-
 #### `SynchronisedOn`
 
 *def, `Timed.Coverage.lean`*
@@ -20048,6 +20048,30 @@ theorem holds : Statement
 #### `holds`
 
 *theorem, `Steelhead.Ledger.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Steelhead.Interface.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Steelhead.Broadcast.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Steelhead.Replay.Proof.lean`*
 
 ```lean
 theorem holds : Statement
@@ -23767,30 +23791,6 @@ theorem committed_of_correct_block
 ```
 
 **RS5 — reactive inclusion.** The schedule fixes a `u`-led slot above any round `m` before an execution is named, and a sufficiently grown reactive execution commits it with a leader block whose cone contains `u`'s round-`m` block, so it lands in the agreed ledger.
-
-#### `holds`
-
-*theorem, `Steelhead.Broadcast.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `Steelhead.Interface.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
-
-#### `holds`
-
-*theorem, `Steelhead.Replay.Proof.lean`*
-
-```lean
-theorem holds : Statement
-```
 
 #### `SynchronisedOn.mono`
 
