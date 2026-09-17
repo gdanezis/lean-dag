@@ -82,9 +82,12 @@ ALLOW = {
     "LinearizeSubDags", "ExposesEquivocation", "ExpectedCommits",
     # Prose names for a clause or a hypothesis, not declarations.
     "leaderClause", "noEvidence", "hN",
-    # Names of the reference implementation (the `mysticeti` repository, Rust)
-    # that the Mahi-Mahi arc's docstrings quote.
+    # Names of the reference implementation (the `mysticeti` repository, Rust) that the Mahi-Mahi
+    # and Steelhead arcs' docstrings quote.
     "enough_leader_blame", "is_certificate", "try_indirect_decide",
+    "advance_agreed_output", "agreed_last_commit_round", "agreed_next", "assert_agreed_prefix",
+    "apply_period_update", "choose_period", "collect_window", "complete_scans",
+    "compute_chain", "period_schedule",
     # Core Lean names the Barnacle statements name in comments.
     "Nat.one_pos",
     # The paper's threshold names and the core names the Hydrozoan
