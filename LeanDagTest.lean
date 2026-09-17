@@ -4,6 +4,7 @@ import LeanDagTest.Mysticeti.Partial
 import LeanDagTest.Mysticeti.Pipelined
 import LeanDagTest.Common.WaveRobin
 import LeanDagTest.Common.VaryingSchedule
+import LeanDagTest.Common.VaryingWave
 import LeanDagTest.Mysticeti.Quantitative
 import LeanDagTest.DoS.Exposure
 import LeanDagTest.DoS.Acceptance
