@@ -231,6 +231,45 @@ def Banded (R : DagRule Validator BlockId Payload) : Prop :=
           (R.block U b).round ≤ top → b ∈ R.viewIds V') →
         R.Decided S' V' k' v
 
+/-- **Two offsets a whole number of periods apart.** The relation a rule whose
+wave repeats every `p` rounds preserves. Stated as a shift rather than through
+`%`, so that it needs no modular arithmetic and so that `p = 1` admits every
+pair. -/
+def OffsetsApart (p g g' : ℕ) : Prop := ∃ t, g + t * p = g' ∨ g' + t * p = g
+
+/-- At period one every pair of offsets qualifies. -/
+theorem offsetsApart_one (g g' : ℕ) : OffsetsApart 1 g g' :=
+  ⟨max g g' - min g g', by omega⟩
+
+/-- **Every verdict reads a band of rounds, at offsets a period apart.**
+`Banded` restricted to the shifts that a wave of period `p` survives. A
+constant wave has every offset available and gives `Banded`, which is this at
+`p = 1`; a wave that repeats every `p` rounds gives only this, and the two are
+genuinely different (`LeanDagTest/Common/VaryingWaveBand.lean`). -/
+def BandedAt (p : ℕ) (R : DagRule Validator BlockId Payload) : Prop :=
+  ∀ (S : Slots Validator) (U : R.Universe) (V : R.View U) (k : ℕ) (v : Option BlockId),
+    R.Decided S V k v →
+      ∃ top : ℕ, ∀ (g g' d d' : ℕ) (S' : Slots Validator) (U' : R.Universe)
+        (V' : R.View U') (k' : ℕ),
+        OffsetsApart p g g' →
+        k + d' = k' + d →
+        (∀ m m', m + d' = m' + d → S.slotRound m ≤ top →
+          S.slotRound m + g = S'.slotRound m' + g') →
+        (∀ m m', m + d' = m' + d → S.slotRound m ≤ top → S.leader m = S'.leader m') →
+        AgreeBand R U U' (S.slotRound k + g) (top + g) g g' →
+        (∀ b, b ∈ R.viewIds V → S.slotRound k ≤ (R.block U b).round →
+          (R.block U b).round ≤ top → b ∈ R.viewIds V') →
+        R.Decided S' V' k' v
+
+/-- **The band at period one is the band.** -/
+theorem bandedAt_one_iff : BandedAt 1 R ↔ Banded R :=
+  ⟨fun h S U V k v hd =>
+      let ⟨top, ht⟩ := h S U V k v hd
+      ⟨top, fun g g' d d' S' U' V' k' => ht g g' d d' S' U' V' k' (offsetsApart_one g g')⟩,
+    fun h S U V k v hd =>
+      let ⟨top, ht⟩ := h S U V k v hd
+      ⟨top, fun g g' d d' S' U' V' k' _ => ht g g' d d' S' U' V' k'⟩⟩
+
 end Properties
 
 end LeanDag
