@@ -9744,10 +9744,20 @@ of `n − |T| + 1` rounds leads that many distinct validators, so one
 reliable leader sits within `n − |T|` rounds of every round. At `c = 3`
 and `n = 3f + 1` every correct quorum qualifies, which discharges SH6b's
 fairness hypothesis there; at `c = wa` it does not, so the asynchronous
-rounds rest on the coin. The paper's bound on the Byzantine-led clause
-by the number of Byzantine validators is refuted (§24.6), and what holds
-at the round-robin schedule is the round count SH6h gives; its bounded
-leader timeouts are not modelled: `SynchronisedOn` stands for the
+rounds rest on the coin. **SH6i**
+(`Steelhead.floorChainReachesReliable`) counts the hops themselves, which
+is how the paper states the clause: a reliably led round commits (SH6a)
+and a view decides a slot one way, so it is never one of the skips a hop
+passes over, and if no landing were reliably led the only rounds left
+free would be the `ws − 1` between a landing and its own floor. Two
+landings at one residue would bound a whole number of cycles, each
+holding `|T|` reliably led rounds, all of which would have to fall in
+those free rounds, which gives `n ≤ ws · (n − |T|)`; so at
+`ws · (n − |T|) < n` the landings' residues are distinct and the chain
+reaches a reliably led landing within `n − |T|` hops, which with SH6g
+decides the slot it started from. The paper's bound on the Byzantine-led
+clause holds at that schedule and not on an arbitrary one (§24.6); its
+bounded leader timeouts are not modelled: `SynchronisedOn` stands for the
 paper's A4 and its pacing.
 
 ### 24.4 The period
@@ -9951,8 +9961,21 @@ independent coins, the uniform distribution over the leader maps, the
 probability `noCommitProb U wa r₀ m` that no round's coin names a
 directly committed leader is at
 most `((f + |byzantine|) / n)^m` (`Steelhead.noCommitProb_le`), which
-tends to zero (`Steelhead.tail_tendsto_zero`); together **SH11**
-(`Steelhead.Coin.holds`). The independence of the coins across rounds is
+tends to zero (`Steelhead.tail_tendsto_zero`), and the probability
+`runProb U wa r₀ m` that every one of them does is at least
+`((n − f − |byzantine|) / n)^m` (`Steelhead.runProb_ge`), which at
+`m = wa` is the `p^{wa}` the paper's Theorem 3 (ii) states per attempt;
+that is not the complement of the tail, since the tail bounds the chance
+that no round commits. Theorem 2's per-hop clause is measured here too
+(`Steelhead.badChainProb_le`): against a strategy that answers only the
+draws already made, the floor chain's first `h` landings are all led
+from outside their round's committed set with probability at most
+`((n − c) / n)^h`. The landings are not a filtration of the draw, since
+a slot's skip is settled by its own wave; the floors a hop leaves from
+are, and a landing is led from outside only if the coin at its floor
+was, so the count peels one floor at a time
+(`Steelhead.stop_step_card`, `Steelhead.bad_stops_card`). Together
+**SH11** (`Steelhead.Coin.holds`). The independence of the coins across rounds is
 the model's assumption.
 
 Theorem 3's "with probability `1`" cannot be stated on a fixed record,
@@ -10073,8 +10096,14 @@ honest-led slot above its floor commits, at most `b` slots higher"; on
 thirty blocks at wave `3` validator `0` leads slots `0` and `3` and
 equivocates at both, the honest-led slot `4` commits and slot `0` stays
 undecided (`bf30_slot0_undecided`, SH12). The chain of floors advances
-a wave a hop and the same validator may lead every hop, so what decides
-such a slot is a run of reliably led slots above its floor (SH6b). And
+a wave a hop and the same validator may lead every hop, which the same
+universe shows: its chain hops from slot `0` to slot `3` to slot `6`
+and validator `0` leads all three (`bf30_floor_hops`, SH12), so what
+decides such a slot is a run of reliably led slots above its floor
+(SH6b), and what bounds the chain is the schedule, not the rule: at the
+round-robin schedule the hop count does hold (SH6i), and at `n = 4` that
+schedule leads three consecutive rounds from a correct quorum past every
+round and never four (`rr_fairRun_three`, SH12). And
 that `I ≥ 2 · maxPeriod` does not make a window hold a wave: at `I = 4`,
 `maxPeriod = 2` and `wa = 5` a window of `I + 1` rounds holds the
 decision round of an asynchronous slot at one anchor and of none at the
@@ -11248,13 +11277,13 @@ reused.
 | SH3 | handover: a direct commit in one view is committed by every view that finds the slot an anchor, whichever rule decides it, and no view skips it | `Steelhead.certifiedIn_of_commit_at_anchor` *(Steelhead/Helpers/Decision)*, `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
 | SH4 | conservativity: at a constant wavelength the rule is Mahi-Mahi's, period one is the constant `wa`, and at wave three the derivations are exactly the core's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.decided_of_core_decided` *(Steelhead/Helpers/Decision)* |
 | SH5 | chain agreement: the chain verdicts agree across views under any coin; at an asynchronous round the coin leads, the output's direct verdicts are the chain's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.chainDecided_unique` *(Steelhead/Helpers/Period)*, `Steelhead.direct_agrees_with_chain` *(Steelhead/Helpers/Decision)* |
-| SH6 | liveness under synchrony: a reliably led slot commits under coverage in every caught-up view, by the direct rule; everything below a fair run is decided; a slot whose leader has no block is skipped once a quorum blames it; a candidate one reliable block references one round up commits under synchrony, its leader reliable or not; a slot is decided once every slot from its floor up to some reliably led slot is decided, or once the chain of floors above it reaches a reliably led landing; and the round-robin schedule leads `c` consecutive rounds reliably past every round at `c · (n − |T|) < n`, and one reliable round within `n − |T|` of every round | `Steelhead.Liveness.holds`, `Steelhead.commitsOfSynchrony`, `Steelhead.allDecidedBelowOfSynchrony`, `Steelhead.skipsCrashed`, `Steelhead.commitsOfDissemination`, `Steelhead.decidedOfReliableAboveFloor`, `Steelhead.floorChainDecides`, `Steelhead.roundRobin_fairRun`, `Steelhead.roundRobin_near` *(Steelhead/Liveness/Proof, Steelhead/Helpers/Liveness)* |
+| SH6 | liveness under synchrony: a reliably led slot commits under coverage in every caught-up view, by the direct rule; everything below a fair run is decided; a slot whose leader has no block is skipped once a quorum blames it; a candidate one reliable block references one round up commits under synchrony, its leader reliable or not; a slot is decided once every slot from its floor up to some reliably led slot is decided, or once the chain of floors above it reaches a reliably led landing; and the round-robin schedule leads `c` consecutive rounds reliably past every round at `c · (n − |T|) < n`, and one reliable round within `n − |T|` of every round, and the chain of floors reaches a reliably led landing within `n − |T|` hops at `ws · (n − |T|) < n` | `Steelhead.Liveness.holds`, `Steelhead.commitsOfSynchrony`, `Steelhead.allDecidedBelowOfSynchrony`, `Steelhead.skipsCrashed`, `Steelhead.commitsOfDissemination`, `Steelhead.decidedOfReliableAboveFloor`, `Steelhead.floorChainDecides`, `Steelhead.roundRobin_fairRun`, `Steelhead.roundRobin_near`, `Steelhead.floorChainReachesReliable`, `Steelhead.roundRobin_hop_bound` *(Steelhead/Liveness/Proof, Steelhead/Helpers/Liveness)* |
 | SH7 | chain liveness: every chain verdict below a run of `wa` chain commits is settled, under the run clause, under synchrony with no clause, and below any one run of `wa` good coins | `Steelhead.chainAllDecidedBelow`, `Steelhead.chainAllDecidedBelowOfSynchrony`, `Steelhead.chainAllDecidedBelowOfRun` *(Steelhead/Helpers/Liveness)* |
 | SH8 | the stall: at every period `k ≥ ws`, with no synchronous candidate certified and no synchronous slot directly skipped, no slot of the residue class `k − 1` is ever decided | `Steelhead.stall` *(Steelhead/Helpers/Liveness)* |
 | SH9 | the drain: `wa` consecutive commits decide every slot below them at any wavelength function bounded by `wa`; at period `1` under the run clause, past every round some slot has everything below it decided; an asynchronous slot costs `wa − ws` rounds and its successor waits at most `wa − ws − 1` | `Steelhead.allDecidedBelowOfRun`, `Steelhead.allDecidedBelowAtPeriodOne`, `Steelhead.asyncSlotCost` *(Steelhead/Helpers/Liveness)* |
 | SH10 | the scan's state: agreed across views under any update rule, so is the output at the adaptive wavelength over the intervals the record's rounds fall in; the scan ends once the chain verdicts are in, and under the clause it ends for every interval; an anchor below which the agreed output committed nothing for `I` rounds hands the next interval period `1`; every interval holds two asynchronous rounds, and the period stays in range; the agreed output is a prefix of the view's own and stalls below an undecided slot; a window of `I + 1` rounds resolves an asynchronous slot of every candidate at `I ≥ K + wa − 2` | `Steelhead.Period.holds`, `Steelhead.periodAt_unique`, `Steelhead.adaptive_decided_unique`, `Steelhead.exists_periodAt_succ`, `Steelhead.periodAt_of_clause`, `Steelhead.periodAt_one_of_anchor`, `Steelhead.two_async_rounds`, `Steelhead.periodAt_mem_range`, `Steelhead.decided_of_lt_next`, `Steelhead.stalled_below_undecided`, `Steelhead.window_resolves` *(Steelhead/Period/Proof, Steelhead/Helpers/Period)* |
-| SH11 | the coin: a chain slot commits with probability `|good| / n`, at least `(n − f − |byzantine|) / n` and so at least `1/3` at `wa ≥ 5`, at least `1/n` at `wa ≥ 4`; no round's coin naming a directly committed leader in `m` rounds, with probability at most `((f + |byzantine|) / n)^m`, which tends to zero; and the block bound holds for good sets that read the coins already drawn, which the count reaches by peeling the last block | `Steelhead.Coin.holds`, `Steelhead.ratio_le_commitProb`, `Steelhead.third_le_commitProb`, `Steelhead.inv_card_le_commitProb`, `Steelhead.chainCommit_of_mem_goodAt`, `Steelhead.noCommitProb_le`, `Steelhead.tail_tendsto_zero`, `Steelhead.card_all_bad_le`, `Steelhead.no_good_block_prob_le_adaptive` *(Steelhead/Coin/Proof, Steelhead/Helpers/Coin)* |
-| SH12 | on data: the anchor-floor counterexample, the period sequence at a concrete update rule, the stall DAG with its asynchronous commit, the coin streak that outputs nothing through any horizon, the Byzantine floor, and Algorithm 2 recovering from period `1` on a healthy window, keeping period `4` on a startup window and period `2` at every hysteresis on a complete window too short for a wave, and answering period `4` at every anchor of the rotating stall, where no block above round `2` is ever output | `lowFloor_skip`, `sh8_period1`, `st20_stall`, `positive_no_output`, `bf30_slot0_undecided`, `rpWindow_recovers`, `rs36_keeps_four`, `rw44_keeps_two`, `rt_update_four`, `rt_adaptive_stall`, `rt_no_output_above_two` *(LeanDagTest/Steelhead/Model, LeanDagTest/Steelhead/Period, LeanDagTest/Steelhead/Stall, LeanDagTest/Steelhead/CoinDelay, LeanDagTest/Steelhead/ByzantineFloor, LeanDagTest/Steelhead/Replay, LeanDagTest/Steelhead/ReplayStartup, LeanDagTest/Steelhead/ReplayShortWindow, LeanDagTest/Steelhead/RotatingStall)* |
+| SH11 | the coin: a chain slot commits with probability `|good| / n`, at least `(n − f − |byzantine|) / n` and so at least `1/3` at `wa ≥ 5`, at least `1/n` at `wa ≥ 4`; no round's coin naming a directly committed leader in `m` rounds, with probability at most `((f + |byzantine|) / n)^m`, which tends to zero; every one of them naming one with probability at least `((n − f − |byzantine|) / n)^m`, the paper's `p^{wa}` at `m = wa`; the block bound holds for good sets that read the coins already drawn, which the count reaches by peeling the last block; and the floor chain's first `h` landings are all led from outside their round's committed set with probability at most `((n − c) / n)^h` against a strategy that answers only the draws already made | `Steelhead.Coin.holds`, `Steelhead.ratio_le_commitProb`, `Steelhead.third_le_commitProb`, `Steelhead.inv_card_le_commitProb`, `Steelhead.chainCommit_of_mem_goodAt`, `Steelhead.noCommitProb_le`, `Steelhead.runProb_ge`, `Steelhead.badChainProb_le`, `Steelhead.stop_step_card`, `Steelhead.bad_stops_card`, `Steelhead.tail_tendsto_zero`, `Steelhead.card_all_bad_le`, `Steelhead.no_good_block_prob_le_adaptive` *(Steelhead/Coin/Proof, Steelhead/Helpers/Coin)* |
+| SH12 | on data: the anchor-floor counterexample, the period sequence at a concrete update rule, the stall DAG with its asynchronous commit, the coin streak that outputs nothing through any horizon, the Byzantine floor with the two hops of its floor chain and the round-robin schedule that bounds such a chain, the good sets an adaptive adversary answers with, a Byzantine validator's block delivered by a commit no reliable leader carried, and Algorithm 2 recovering from period `1` on a healthy window, keeping period `4` on a startup window and period `2` at every hysteresis on a complete window too short for a wave, and answering period `4` at every anchor of the rotating stall, where no block above round `2` is ever output | `lowFloor_skip`, `sh8_period1`, `st20_stall`, `positive_no_output`, `bf30_slot0_undecided`, `bf30_floor_hops`, `rr_fairRun_three`, `ac_bound`, `sh8_ledger_zero`, `rpWindow_recovers`, `rs36_keeps_four`, `rw44_keeps_two`, `rt_update_four`, `rt_adaptive_stall`, `rt_no_output_above_two` *(LeanDagTest/Steelhead/Model, LeanDagTest/Steelhead/Period, LeanDagTest/Steelhead/Stall, LeanDagTest/Steelhead/CoinDelay, LeanDagTest/Steelhead/AdaptiveCoin, LeanDagTest/Steelhead/ByzantineFloor, LeanDagTest/Steelhead/Replay, LeanDagTest/Steelhead/ReplayStartup, LeanDagTest/Steelhead/ReplayShortWindow, LeanDagTest/Steelhead/RotatingStall)* |
 | SH13 | the ledger: the committed-leader sequence and the ledger of a settled prefix are agreed, the ledger is monotone, a block enters at one slot which both views name, and a committed block belongs to one slot | `Steelhead.Ledger.holds` *(Steelhead/Ledger/Proof)* |
 | SH14 | output liveness under the failover: a slot below an anchored interval is decided once a run of `wa` coin-led commits above that interval is in view, since the agreed output waits below the slot and the failover then puts the period at `1` from the interval after the anchored one, where the run decides everything below it; under the run clause with runs of `K` good coins every slot far enough below the horizon is decided, and two runs of the coin, `K` good coins opening an interval past the slot's and `wa` above it, decide it | `Steelhead.output_liveness`, `Steelhead.all_decided`, `Steelhead.output_liveness_of_runs` *(Steelhead/Helpers/Period)* |
 | SH15 | the tail of the output: over the coins of `M` blocks of `K` rounds opening the intervals after a slot's, the slot stays undecided under the failover with probability at most `2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, which tends to zero; and over a sequence of records with the coin drawn as a process, for almost every coin some record decides the slot in every view holding its horizon; both against an adversary that answers the draws already made | `Steelhead.undecidedProb_le`, `Steelhead.no_good_block_prob_le`, `Steelhead.undecided_tail_tendsto_zero`, `Steelhead.decidedAlmostSurely`, `Steelhead.coinMeasure_blockCoins_mem`, `Steelhead.undecidedProb_le_adaptive`, `Steelhead.decidedAlmostSurely_adaptive` *(Steelhead/Helpers/Coin)* |

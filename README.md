@@ -244,7 +244,8 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   slot's floor is its anchor and holds it undecided on data, the chain
   of floors decides the slot it starts from once it reaches a reliably
   led landing, the round-robin schedule the implementation runs leads
-  three consecutive rounds reliably past every round at `n = 3f + 1`,
+  three consecutive rounds reliably past every round at `n = 3f + 1` and
+  brings the chain to such a landing within `n − |T|` hops,
   a block the reliable validators have referenced is delivered by the
   first committed slot above, whoever led it, any family
   of rules whose laws hold composes into one whose laws hold (Steelhead's rule
