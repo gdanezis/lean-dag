@@ -5,11 +5,13 @@ import Mathlib.Order.Interval.Finset.Nat
 # Steelhead witnesses: a complete window too short for a wave
 
 The adaptive section bounds the interval by `I ≥ 2 · maxPeriod`, so that every window holds two
-asynchronous slots. The window is the anchor's causal history at the rounds `round A − I` and
-above, `I + 1` rounds, so it holds the decision round of an asynchronous slot of period `k'` only
-when `I ≥ k' + w_a − 2`; at `I = 4`, `maxPeriod = 2` and `w_a = 5` the paper's bound holds and
-this one does not, and whether the window resolves anything then turns on where the anchor falls
-(`steelhead.md` §7). One universe, `rw44`: eleven rounds `0..10` shaped as `rs36` is, every
+asynchronous slots, and by `I ≥ maxPeriod + w_a − 2`, so that a window holds the decision round
+of an asynchronous slot of every candidate. The window is the anchor's causal history at the
+rounds `round A − I` and above, `I + 1` rounds, so it holds the decision round of an asynchronous
+slot of period `k'` only when `I ≥ k' + w_a − 2`; at `I = 4`, `maxPeriod = 2` and `w_a = 5` the
+first bound holds and the second does not, and whether the window resolves anything then turns
+on where the anchor falls (`steelhead.md` §7). One universe, `rw44`: eleven rounds `0..10` shaped
+as `rs36` is, every
 synchronous slot at two votes and two blames. With candidates `[1, 2]`, the waves `3` and `5`,
 the canary `7` and the known leader `(r + 1) mod 4`:
 

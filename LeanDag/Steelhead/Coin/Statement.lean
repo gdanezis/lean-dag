@@ -5,7 +5,7 @@ import Mathlib.Analysis.SpecificLimits.Basic
 
 The probability half of liveness under asynchrony (`steelhead.md` §4),
 the paper's Theorem 3 read through a uniform coin, and the
-asynchronous-floor clause of its Theorem 2. Fourteen claims:
+asynchronous-floor clause of its Theorem 2. Fifteen claims:
 
 * **SH11a, the commit probability** — on a wave a quorum has populated,
   the coin of round `r` names a directly committed leader with
@@ -93,6 +93,11 @@ asynchronous-floor clause of its Theorem 2. Fourteen claims:
   the `m`-th record is a strategy's own answer to the coins of its `m`
   blocks: for almost every coin some strategy's record settles the slot,
   by SH15d at each `m`;
+* **SH15g, every slot is decided almost surely** — SH15c for all slots
+  at once, Theorem 3's "every slot is decided": each slot has its own
+  sequence of records, and the slots are countably many, so the null
+  sets of SH15c add up to one. What one execution supplies is a prefix
+  for every slot and every `m`;
 * **SH15f, a matching sequence exists** — SH15a, SH15c, SH15d and SH15e
   quantify over the period sequences matching what a view derives, and
   one always does: the sequence built interval by interval from the
@@ -306,6 +311,27 @@ def DecidedAlmostSurelyAgainst (ws wa I K : ℕ) : Prop :=
         Settles I wa coin known (upd m) k₀ ws (σ m (blockCoins I (intervalOf I s) m K coin))
           V per s
 
+/-- **SH15g, every slot is decided almost surely.** -/
+def AllDecidedAlmostSurely (ws wa I K : ℕ) : Prop :=
+  ∀ [MeasurableSpace Validator] [MeasurableSingletonClass Validator]
+    (U : ℕ → ℕ → BlockUniverse Validator BlockId Payload) (T : Finset Validator)
+    (upd : ℕ → ℕ → UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator),
+    -- the waves, a quorum, a period bound a run of wa fits in, blocks of K rounds that fit in an
+    -- interval
+    2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → quorumCard Validator ≤ T.card →
+    -- for every slot, record m of the slot's sequence holds the waves of m blocks above the
+    -- slot's interval, populated where MM2 reads them
+    (∀ (s m : ℕ) (j : Fin m) (i : Fin K),
+      PopulatedOn (U s m) T (blockRound I (intervalOf I s) j i + 3) ∧
+      PopulatedOn (U s m) T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) →
+    -- then for almost every coin, every slot at round one or above is decided by some record of
+    -- its sequence, in every view holding that record's horizon
+    ∀ᵐ coin ∂(coinMeasure Validator), ∀ s, 1 ≤ s → ∃ m,
+      ∀ (V : View Validator BlockId Payload (U s m)) (per : ℕ → ℕ),
+        V.CoversUpto (blocksHorizon I wa (intervalOf I s) m) →
+        Matches I wa coin known (upd s m) k₀ ws (U s m) V per →
+        Settles I wa coin known (upd s m) k₀ ws (U s m) V per s
+
 /-- **SH15f, a matching sequence exists.** -/
 def MatchesExists (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=
   ∀ (coin known : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
@@ -333,7 +359,10 @@ def Statement : Prop :=
         ws wa I K ∧
       DecidedAlmostSurelyAgainst (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
         ws wa I K ∧
-      UndecidedAtPeriodOne U ws wa ∧ MatchesExists U ws wa I
+      UndecidedAtPeriodOne U ws wa ∧
+      AllDecidedAlmostSurely (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
+        ws wa I K ∧
+      MatchesExists U ws wa I
 
 end Coin
 

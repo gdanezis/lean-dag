@@ -122,10 +122,13 @@ from coverage into certification; the unpredictable-leader clause.
   over a sequence of records, with the coin drawn as a process, the
   infinite product of the uniform distribution, for almost every coin
   some record decides the slot in every view holding its horizon
-  (SH15c), Theorem 3's "with probability `1`" itself. Both hold against
+  (SH15c), Theorem 3's "with probability `1`" itself, and every slot at
+  once, each with its own sequence of records (SH15g). Both hold against
   an adversary that builds its record from the draws already made
-  (SH11f, SH15d, SH15e): what it may not read is a block's own coins
-  before fixing what that block's rounds commit.
+  (SH11f, SH15d, SH15e), keeping at every round a floor of committed
+  candidates, fixed by the coins drawn before that round, that the
+  round's own coin cannot shrink; and a period sequence matching what a
+  view derives, which those claims quantify over, always exists (SH15f).
 - **SH12, on data** (§8): the anchor-floor counterexample, the stall DAG
   with its asynchronous commit beside it, the period sequence at a
   concrete update rule, the coin streak that outputs nothing through any
@@ -167,11 +170,12 @@ from coverage into certification; the unpredictable-leader clause.
   entering at one slot, a reliable block is delivered with the first
   committed reliable leader two rounds up after GST, and two blocks
   enter at the same slots in every view, so in the same order. Under
-  asynchrony the delivery rests on the reference rule instead: a block
-  every reliable validator has referenced by round `ρ` lies in the cone
-  of every block above `ρ`, so the first committed slot there delivers
-  it whoever led it (SH17e). The
-  liveness half is SH6b, SH14b and SH15.
+  asynchrony the delivery rests on the reference rule's consequence
+  instead: a block every reliable validator has referenced by round `ρ`
+  lies in the cone of every block above `ρ`, so the first committed slot
+  there delivers it whoever led it (SH17e); that such a round exists is
+  the reference rule's doing, which the substrate, its references one
+  round back, does not model. The liveness half is SH6b, SH14b and SH15.
 - **SH18, the replay** (§5): Algorithm 2 as data, the window's evidence
   read from the anchor's causal history, the three passes and the
   hysteretic selection; the selection stays among the candidates and
@@ -190,7 +194,7 @@ from coverage into certification; the unpredictable-leader clause.
 
 | paper | here | remark |
 | :--- | :--- | :--- |
-| Definition 1 (atomic broadcast) | SH17, with SH6b, SH14b, SH15c | agreement, integrity and total order over settled prefixes, validity after GST with the first committed reliable leader two rounds up (SH17c) or, under asynchrony, with the first committed slot above the round by which the reliable validators have referenced the block, whoever led it (SH17e, the reference rule of A1); the "eventually" is SH6b under synchrony, SH14b under the clause and SH15c almost surely under asynchrony. The order of the blocks one commit releases is not modelled |
+| Definition 1 (atomic broadcast) | SH17, with SH6b, SH14b, SH15c | agreement, integrity and total order over settled prefixes, validity after GST with the first committed reliable leader two rounds up (SH17c) or, under asynchrony, with the first committed slot above the round by which the reliable validators have referenced the block, whoever led it (SH17e); that A1's reference rule yields such a round is taken as a hypothesis, the substrate's references sitting one round back (§7, finding 11); the "eventually" is SH6b under synchrony, SH14b under the clause and SH15c almost surely under asynchrony. The order of the blocks one commit releases is not modelled |
 | Lemma 1 (certificate uniqueness; a skipped block is never certified) | SH1a, SH1b | Mahi-Mahi's lemmas at the slot's wave |
 | Lemma 2 (quorum intersection across the wave) | SH1c | at `r + w r`, whatever the block's own wave |
 | Corollary 1 (handover) | SH3 | stated against the relation's anchor search |
@@ -198,15 +202,15 @@ from coverage into certification; the unpredictable-leader clause.
 | Corollary 2 (total order and integrity) | SH13 | in part: the relation's own ledger theorems at Steelhead's laws, over a settled prefix. Ordering the blocks a single commit releases is declined development-wide (report §1.4, §5.6) |
 | Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e, SH6f, SH6g, SH6h, SH6i, SH6l, SH6j, SH6k | in part: the honest-leader commit by the direct rule, everything below a fair run, the crashed-leader skip from `n − f` blames, the remark that partial dissemination does not defer, for a leader that did not equivocate, and the anchor clause as the rule has it, a slot decided once every slot from its floor up to some reliably led slot is decided (SH6f) or once the chain of floors reaches a reliably led landing (SH6g). The bound on that clause, "once the first honest-led slot above its floor commits, at most `b` slots higher", is refuted on data, an equivocating leader at the floor being the anchor (§7, finding 7); what holds at the implementation's round-robin schedule is the hop count itself, a reliably led landing within `n − |T|` hops once `ws · (n − |T|) < n` (SH6i), within the paper's `b` hops once every other validator outside `T` has crashed (SH6l), and a round count, one reliable leader within `n − |T|` rounds and a reliable run of three past every round at `n = 3f + 1` (SH6h), which also discharges SH6b's fairness hypothesis there. No per-hop probability holds for the coin's slots, a landing of the search reading coins above it (`HopBound.lean`; §7, finding 9); what holds is SH11h, the tail below runs of `wa` good coins at period one, which is the expectation the paper states. The `O(wa + b)` ordering bound fails for some coin sequences at period `1` (§7, finding 5) and holds only as SH15's tail. SH6a's hypothesis is reached from either execution discipline, the reactive one (SH6j) and the timed one (SH6k); what neither bounds is a wall-clock latency, since a round is the only unit the model carries |
 | Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the chain settles under Mahi-Mahi's run clause and below any one run of `wa` good coins, a period is derived for each interval, an anchor below which the agreed output committed nothing for `I` rounds hands the next interval period `1`, the failover the implementation applies before the rule is consulted (`apply_period_update`) and the paper's premise on the update rule is not (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15c over a sequence of records, SH15a's tail on one |
-| Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b, SH14c, SH15 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval at least two past the slot's and one run of `wa` good coins above it; SH14b reads both off the run clause at the chain schedule, SH14c off two runs of the coin; SH15a bounds the probability that some view has not derived the slot's period or leaves it undecided, over `M` blocks of coins, by `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero (SH15b); and SH15c states the "with probability `1`" itself, over a sequence of records with the coin drawn as a process: for almost every coin some record decides the slot in every view holding its horizon. SH15d and SH15e are the same two against an adversary that answers the draws already made, by the adaptive block bound SH11f. The growth of the ledger from the settled prefix is SH13 |
-| Theorem 4 (agreement of the period) | SH10a, SH10b | for any deterministic update rule; SH10a at one wavelength on both sides, SH10b at each validator's own derived wavelength, where the sequences agree below the record's top interval and the verdicts with them |
+| Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b, SH14c, SH15 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval at least two past the slot's and one run of `wa` good coins above it; SH14b reads both off the run clause at the chain schedule, SH14c off two runs of the coin; SH15a bounds the probability that some view has not derived the slot's period or leaves it undecided, over `M` blocks of coins, by `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero (SH15b); and SH15c states the "with probability `1`" itself, over a sequence of records with the coin drawn as a process: for almost every coin some record decides the slot in every view holding its horizon, and SH15g every slot at once, each with its own sequence of records. SH15d and SH15e are the same two against an adversary that answers the draws already made and keeps a floor of committed candidates per round, by the adaptive block bound SH11f; SH15f gives the period sequence those claims quantify over. The growth of the ledger from the settled prefix is SH13 |
+| Theorem 4 (agreement of the period) | SH10a, SH10b | for any deterministic update rule; SH10a at one wavelength and schedule on both sides, SH10b at each validator's own derived wavelength and on the schedule its own sequence names, where the sequences agree below the record's top interval and the verdicts with them |
 | Adaptive section, `I ≥ 2 · maxPeriod` and `1 ≤ k ≤ maxPeriod` | SH10f, SH10g, SH10k, SH18h | two asynchronous rounds per interval at any `k ≥ 1` with `2k ≤ I`; the period stays in range when the initial period does and the update rule keeps it there, the failover's `1` included, which Algorithm 2's replay does whenever the candidates lie in `[1, K]` (SH18h). The bound admits `I < maxPeriod + wa − 2`, where a window of `I + 1` rounds holds the decision round of none of its asynchronous slots at some anchors and of one at others (SH10k; §7, finding 8) |
 | Adaptive section, "the replay is exact in expectation" | SH18i | in the part that is a theorem: at a round the window retains, the share of the `n` candidates the window marks committed is the probability that a uniform coin names a directly committed leader on the anchor's history read as a record, the paper's `c_r / n`, at `1 ≤ wa`. The anchor's term is the approximation the paper admits |
 | Protocol section, "setting the canary odd ensures it is coprime to candidate periods, guaranteeing periodic probes" | SH18j | at a canary spacing coprime to a candidate period of at least two, a window holding two canary rounds whose decision round it retains holds a probe for the candidate, since two consecutive multiples of the spacing cannot both be multiples of the period |
 | Protocol section, "whenever either verdict of an asynchronous slot is direct, the two coincide" | SH5b | predicate for predicate, at a slot proposed at its own round and led by the coin |
 | Protocol section, "the successor waits at most `max(0, wa − ws − 1)` rounds", "delays never compound" | SH9c | arithmetic on the decision rounds; output timing itself is not modelled |
 | Theorem 5 (conservativity) | SH4 | at a constant wavelength by `rfl`, period `1` by `Nat.mod_one`, and at wave three the derivations are exactly the core's, both directions |
-| Lemma 3 (the replay cannot be starved) | SH11a, SH18d, SH18f, SH18g | `c_r ≥ n − f − b` on the DAG under any scheduling (SH11a), and on the window once a quorum has populated the boost and decision rounds within it (SH18d), which is what "populated" must mean for the replay, whose evidence is the window's (§7, finding 6); the replay's asynchronous term is at most the mean of the decision round over the `c_r` committed candidates and the window's top over the rest, the rule's own value on the same data (SH18f); a probe's success is a certificate quorum the DAG holds, so the adversary lowers the synchronous term's estimate but never raises it (SH18g). Both at `2 ≤ ws < wa` |
+| Lemma 3 (the replay cannot be starved) | SH11a, SH18d, SH18f, SH18g | `c_r ≥ n − f − b` on the DAG under any scheduling (SH11a), and on the window once a quorum has populated the boost and decision rounds within it (SH18d), which is what "populated" must mean for the replay, whose evidence is the window's (§7, finding 6); the replay's asynchronous term is at most the mean of the decision round over the `c_r` committed candidates and the window's top over the rest (SH18f), a bound and not a comparison with the rule's own latency, which is not modelled; a probe's success is a certificate quorum the DAG holds, so the adversary cannot forge one (SH18g), while the probes' rate is extended to the unprobed synchronous slots and a scheduler serving the canary rounds alone raises that estimate (§7, finding 10). Both at `2 ≤ ws < wa` |
 | Theorem 3 (i), "a committed asynchronous slot does not by itself decide the synchronous slots below it" | SH8 | the argument of "Why the chain, and not the output" as a theorem, for every `2 ≤ ws ≤ k` rather than the one period it walks through (§4) |
 
 ## 1. The wavelength function
@@ -320,16 +324,20 @@ under synchrony from `r`, so it is delivered with the first committed
 reliable leader there once the prefix below is settled
 (`reaches_of_synchronisedOn`); and total order, two blocks enter at the
 same slots in every view that settled them, so in the same order
-(SH13d). Validity under asynchrony reads the reference rule instead of
-synchrony (**SH17e**): with the clause `Core::try_new_block` implements,
-where a block references every block its author holds that its own
-parent does not already cover, a block every reliable validator has
+(SH13d). Validity under asynchrony reads the reference rule's consequence
+instead of synchrony (**SH17e**): a block every reliable validator has
 referenced by round `ρ` lies in the cone of every block above `ρ`, its
 author reliable or not, since a quorum of references meets the reliable
 set; so the first committed slot above `ρ` delivers it, whichever leader
-the coin named. Without that clause a block delayed past its own round is
-never referenced and validity fails under asynchrony, which is why the
-paper's A1 states it (§7). The "eventually" of agreement and validity is
+the coin named. That such a round exists for every block the reliable
+validators receive is what the clause `Core::try_new_block` implements
+gives, a block referencing every block its author holds that its own
+parent does not already cover; the substrate's references sit one round
+back (`ValidWrt.predecessor`), so the rule and the round it yields lie
+outside the model and the claim takes the round as its hypothesis (§7,
+finding 11). Without the rule a block delayed past its own round is never
+referenced and validity fails under asynchrony, which is why the paper's
+A1 states it. The "eventually" of agreement and validity is
 the liveness half: SH6a and SH6b under synchrony, SH14b under the clause
 and SH15c almost surely under asynchrony. The order of the blocks one
 commit releases is a tie-break the development does not assume
@@ -528,7 +536,15 @@ measure at most SH15a's bound read through the process
 monotonicity alone. The records are any sequence, the prefixes of one
 execution among them, since the argument reads each on its own; they are
 fixed before the coin is drawn, as SH15a's one record is. This is
-Theorem 3's "with probability `1`" as the paper states it.
+Theorem 3's "with probability `1`" as the paper states it, for one slot;
+**SH15g** (`allDecidedAlmostSurely`) is every slot at once, each with
+its own sequence of records, since the slots are countably many and the
+null sets add up. **SH15f** (`matchingPer_matches`) supplies the period
+sequence these claims quantify over: `matchingPer` is built interval by
+interval from the states the view derives at the sequence built so far,
+which the state of an interval reading the sequence below it alone
+(`periodAt_congr_per`, SH10b's congruence) makes the one every
+derivation at it agrees with.
 
 **The drain.** Once the period is `1` every slot is asynchronous, and a
 run of `wa` consecutive commits decides every slot below it, including
@@ -593,7 +609,9 @@ validator that derived `per` runs the output relation at, and
 `adaptiveSlots coin known I per` the schedule it runs it on: one slot per
 round, the coin at the rounds `per` makes asynchronous and the known
 schedule `known` elsewhere. The claims that relate a schedule to the coin
-one clause at a time (SH14) take this schedule as their instance (SH15).
+one clause at a time (SH14) take this schedule as their instance (SH15),
+and a sequence matching what a view derives on it always exists
+(`matchingPer`, SH15f).
 
 `Period/Statement.lean`:
 
@@ -609,9 +627,13 @@ one clause at a time (SH14) take this schedule as their instance (SH15).
   and the new last commit the highest commit consumed.
 - **SH10b, agreement of the output under the adaptive wavelength**: two
   validators that derived the state of every interval the record's
-  rounds fall in, and decided a slot proposed among them at their own
-  adaptive wavelengths, derived the same periods there and agree on the
-  verdict. The sequences coincide by strong induction on the interval: the anchors of the
+  rounds fall in, each on the schedule its own sequence names
+  (`adaptiveSlots`), and decided a slot proposed among them at their own
+  adaptive wavelengths and schedules, derived the same periods there and
+  agree on the verdict. The sequences coincide by strong induction on
+  the interval, the state of an interval reading the sequence below that
+  interval only (`periodAt_congr_per`, which transports a derivation
+  across the wavelength and the schedule): the anchors of the
   intervals below lie in the record, their histories are read at rounds
   below their own, where the sequences already agree, so the two views
   advance the agreed output alike (`AgreedAdvance.congr`)
@@ -739,17 +761,24 @@ down, `firstCommitAt` the earliest expected commit at or above a round,
 the round, its expected commit at or above its decision, and both at or
 below the window's top, so the top is the penalty an unresolved outcome
 pays and no more. **SH18f** (`async_term_bound`), Lemma 3's second
-sentence: at an asynchronous round of the window whose committed
-candidates are not skipped (SH18c), the replay's commit term is at most
-the mean over the `n` candidates of the decision round for the `c_r`
-committed ones and the window's top for the rest, which is what the
-asynchronous rule attains on the same data under a uniform coin, and
-which SH18d bounds below `c_r ≥ n − f − b` under any scheduling.
-**SH18g** (`commits_sound`): a candidate the window marks committed is
-directly committed on the DAG, so a probe's success is a certificate
-quorum the DAG holds: the adversary can suppress the probes' evidence of
-the synchronous rule, never manufacture it, the paper's "lower but never
-raise". SH18e and SH18f ask `2 ≤ ws < wa`, so that a decision round lies
+sentence in the form that is a theorem: at an asynchronous round of the
+window whose committed candidates are not skipped (SH18c), the replay's
+commit term is at most the mean over the `n` candidates of the decision
+round for the `c_r` committed ones and the window's top for the rest,
+which SH18d bounds below `c_r ≥ n − f − b` under any scheduling. The
+bound charges every candidate without a direct commit the window's top;
+the asynchronous rule's own latency on the same data is not modelled,
+and the lemma's "at most the value the asynchronous rule attains" and
+its selector corollary are not claimed (§7, finding 10). **SH18g**
+(`commits_sound`): a candidate the window marks committed is directly
+committed on the DAG, so a probe's success is a certificate quorum the
+DAG holds: the adversary can suppress the probes' evidence of the
+synchronous rule, never manufacture it. What this does not give is the
+paper's "lower but never raise" of the synchronous term: the replay
+extends the probes' rate to the unprobed synchronous slots, and a
+scheduler that serves the canary rounds' leaders alone raises that
+estimate above what those slots hold (§7, finding 10). SH18e and SH18f
+ask `2 ≤ ws < wa`, so that a decision round lies
 at or above its slot and an asynchronous round is not read as an
 unprobed synchronous one, which the algorithm does when the waves
 coincide. **SH18h** (`anchorUpdate_range`): with candidates in
@@ -1056,6 +1085,31 @@ either, which Theorem 2's undecided slot is not.
    decided, so the search outlasts `M` blocks with probability at most
    `((n^wa − (n − f − b)^wa) / n^wa)^M`, which is the expectation the
    paper states in place of the per-hop clause.
+10. **Lemma 3's comparison and its selector corollary are not what the
+    replay's bound gives.** SH18f bounds the replay's asynchronous term
+    by the mean of the decision round over the committed candidates and
+    the window's top over the rest; the asynchronous rule's own latency
+    on the same data has no definition in the model, so "at most the
+    value the asynchronous rule attains" and "an adversary cannot make
+    the replay prefer the synchronous rule" are not theorems, and the
+    second is false as stated for the synchronous term: SH18g says a
+    probe's success is a certificate quorum the DAG holds, and the replay
+    extends the probes' rate to every unprobed synchronous slot, so a
+    scheduler that serves the canary rounds' known leaders and starves
+    the others makes every probe succeed while no unprobed slot holds a
+    certificate, and the estimate of the synchronous rule rises above
+    what those slots would achieve. The failover bounds what that costs,
+    the period alone, not liveness.
+11. **A1's reference rule lies outside the substrate.** The rule
+    `Core::try_new_block` implements references every held block the
+    author's parent does not cover, which puts a block delayed past its
+    own round into later blocks; the substrate's references sit one
+    round back (`ValidWrt.predecessor`), so that rule cannot be stated
+    on it and SH17e takes its consequence, a round by which every
+    reliable validator has referenced the block, as a hypothesis. The
+    rule also feeds the rule's own verdicts, a late reference carrying a
+    certificate into an anchor's history, so a faithful substrate is a
+    core change, not an arc's.
 
 ## 8. Witnesses (`LeanDagTest/Steelhead/`), SH12
 

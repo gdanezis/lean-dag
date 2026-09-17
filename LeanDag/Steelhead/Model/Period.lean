@@ -13,10 +13,11 @@ the absence of a derivation; an interval without an anchor keeps the
 period. At an anchored interval the validator first extends the
 **agreed output**, the output rule read on the anchor's causal history
 and continued from where the previous anchor's left it
-(`advance_agreed_output`), and falls over to period `1` when that output
-committed no slot within the last `I` rounds below the anchor
-(`apply_period_update`); otherwise the next period is the update rule's
-answer, the replay of the anchor's window.
+(`advance_agreed_output`), and falls over to period `1` when the anchor
+lies more than `I` rounds above the round of that output's last commit,
+round `0` before any (`apply_period_update`, whose test gives the first
+interval's anchors no failover); otherwise the next period is the update
+rule's answer, the replay of the anchor's window.
 
 **Definitions only.** The update rule is any function of the anchor
 block and the current period: the paper's replay is one, and every
@@ -122,8 +123,8 @@ inductive PeriodAt (I wa : ℕ) (coin : ℕ → Validator) (upd : UpdateRule Blo
   /-- The first interval runs at the initial period, the agreed output at slot `1`. -/
   | zero : PeriodAt I wa coin upd k₀ U V w 0 ⟨k₀, 1, 0⟩
   /-- An interval with an anchor advances the agreed output over the anchor's history and hands
-  the next interval period `1` when that output committed nothing within `I` rounds below the
-  anchor, and the update rule's answer otherwise. -/
+  the next interval period `1` when the anchor lies more than `I` rounds above the round of that
+  output's last commit, round `0` before any, and the update rule's answer otherwise. -/
   | anchor {j r next' last' : ℕ} {st : ScanState} {A : BlockId} {hA : A ∈ U.ids} :
       PeriodAt I wa coin upd k₀ U V w j st → IntervalAnchor I wa coin U V j r A →
       AgreedAdvance U w A hA st.next next' st.lastCommit last' →

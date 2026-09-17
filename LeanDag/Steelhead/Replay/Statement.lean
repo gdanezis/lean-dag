@@ -25,18 +25,24 @@ paper's Lemma 3 among it. Ten claims:
   lies at or above the round, its expected commit at or above its
   decision, and both at or below the window's top, so the window's top
   is the penalty an unresolved outcome pays and no more;
-* **SH18f, the asynchronous term is at most the rule's own value** —
-  Lemma 3's second sentence: at an asynchronous round of the window whose
-  committed candidates are not skipped, the replay's commit term is at
-  most the mean over the `n` candidates of the decision round for the
-  `c_r` committed ones and the window's top for the rest, which is what
-  the asynchronous rule attains on the same data under a uniform coin;
-  with SH18d, `c_r ≥ n − f − b` bounds the term under any scheduling;
+* **SH18f, the asynchronous term is bounded by the committed count** —
+  Lemma 3's second sentence in the form that is a theorem: at an
+  asynchronous round of the window whose committed candidates are not
+  skipped, the replay's commit term is at most the mean over the `n`
+  candidates of the decision round for the `c_r` committed ones and the
+  window's top for the rest; with SH18d, `c_r ≥ n − f − b` bounds the
+  term under any scheduling. The bound charges every candidate without
+  a direct commit the window's top; the asynchronous rule's own latency
+  on the same data is not modelled, and no comparison with it is
+  claimed;
 * **SH18g, a window commit is a commit on the DAG** — a candidate the
   window marks committed is directly committed on the DAG, so a probe's
   success is a certificate quorum the DAG holds: the adversary can
   suppress the probes' evidence of the synchronous rule, never
-  manufacture it, the paper's "lower but never raise";
+  manufacture it. What this does not give is a bound on the synchronous
+  term itself: the replay extends the probes' rate to the unprobed
+  synchronous slots, and a scheduler that serves the canary rounds'
+  leaders alone raises that estimate above what those slots hold;
 * **SH18h, Algorithm 2 keeps the range** — with candidates in `[1, K]`,
   the replay's selection answers a period in `[1, K]` at every anchor,
   whether it keeps the current period or picks a candidate: the range

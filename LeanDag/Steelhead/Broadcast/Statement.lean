@@ -27,15 +27,18 @@ claims:
   the substrate's, which the model states as `SynchronisedOn` and not
   otherwise;
 * **SH17e, validity under asynchrony** — the same clause read off the
-  reference rule the implementation runs rather than off synchrony: a
-  block every reliable validator has referenced by round `ρ`, which
-  `Core::try_new_block` gives once the block has been received, since it
-  references every held block its own parent does not already cover,
-  lies in the cone of *every* block above `ρ`, its author reliable or
-  not, because a quorum of references meets the reliable set. So the
-  first committed slot above `ρ` delivers it, whichever leader the coin
-  named. Without that clause on the reference rule a block delayed past
-  its own round is never referenced and validity fails under asynchrony;
+  consequence of the reference rule the implementation runs rather than
+  off synchrony: a block every reliable validator has referenced by
+  round `ρ` lies in the cone of *every* block above `ρ`, its author
+  reliable or not, because a quorum of references meets the reliable
+  set. So the first committed slot above `ρ` delivers it, whichever
+  leader the coin named. That such a round exists for every block the
+  reliable validators receive is what `Core::try_new_block`'s reference
+  rule gives, a block referencing every held block its own parent does
+  not cover; the substrate's references sit one round back, so that rule
+  and the round it yields lie outside the model, and the claim takes the
+  round as its hypothesis. Without the rule a block delayed past its
+  own round is never referenced and validity fails under asynchrony;
 * **SH17d, total order** — "if an honest validator commits `b` before
   `b'`, no honest validator commits `b'` before `b`": the slots at which
   two blocks enter the ledger are the same in every view that settled

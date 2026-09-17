@@ -1222,6 +1222,28 @@ theorem decidedAlmostSurely [MeasurableSpace Validator] [MeasurableSingletonClas
   simp only [Set.mem_setOf_eq, not_exists] at h ⊢
   exact h m
 
+/-- **SH15g.** The slots are countably many, so the null sets of SH15c, one per slot and its
+sequence of records, add up to a null set. -/
+theorem allDecidedAlmostSurely [MeasurableSpace Validator] [MeasurableSingletonClass Validator]
+    {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 5 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I)
+    {U : ℕ → ℕ → BlockUniverse Validator BlockId Payload} {T : Finset Validator}
+    (hcard : quorumCard Validator ≤ T.card) {upd : ℕ → ℕ → UpdateRule BlockId} {k₀ : ℕ}
+    {known : ℕ → Validator}
+    (hpop : ∀ (s m : ℕ) (j : Fin m) (i : Fin K),
+      PopulatedOn (U s m) T (blockRound I (intervalOf I s) j i + 3) ∧
+      PopulatedOn (U s m) T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) :
+    ∀ᵐ coin ∂(coinMeasure Validator), ∀ s, 1 ≤ s → ∃ m,
+      ∀ (V : View Validator BlockId Payload (U s m)) (per : ℕ → ℕ),
+        V.CoversUpto (blocksHorizon I wa (intervalOf I s) m) →
+        Matches I wa coin known (upd s m) k₀ ws (U s m) V per →
+        Settles I wa coin known (upd s m) k₀ ws (U s m) V per s := by
+  rw [MeasureTheory.ae_all_iff]
+  intro s
+  by_cases h₁ : 1 ≤ s
+  · exact (decidedAlmostSurely hws hle hwa hwaK hKI hcard (U := U s) (upd := upd s) (k₀ := k₀)
+      (known := known) h₁ (hpop s)).mono fun _ h _ => h
+  · exact Filter.Eventually.of_forall fun _ hs => absurd hs h₁
+
 /-! ## SH15f, a matching sequence exists -/
 
 /-- **The period sequence a view derives**, interval by interval: the period of the state the

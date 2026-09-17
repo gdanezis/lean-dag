@@ -22,9 +22,11 @@ and `5`, a probe at every round and hysteresis `1/2`, the parameters the impleme
   settled prefix of the adaptive output has more than three slots, and no block above round `2`
   is ever in the ledger, while validator `1`'s round-`3` block, an honest one, exists.
 
-The period sequence is asked to be `4` on the intervals the record's rounds fall in, which is
-what a validator derives; a derivation for slot `3` reads no wavelength above the record's top
-round (`decided_congr`).
+The period sequence is asked to be `4` on the intervals the record's rounds fall in, the
+replay's answer at every anchor; the failover derives `1` from interval `2` on instead
+(`Failover.lean`), so this is the schedule of the replay alone, and what it shows is that the
+replay does not resolve the stall by itself. A derivation for slot `3` reads no wavelength
+above the record's top round (`decided_congr`).
 -/
 
 namespace LeanDagTest
@@ -260,8 +262,8 @@ theorem rt_update_four (N A : ℕ) : rtUpd N A 4 = 4 :=
   anchorUpdate_half_retains (rtDag N) rtConfig rfl rfl rfl A
 
 /-- **The adaptive output never decides slot `3`** at any period sequence that is `4` on the
-intervals the record reaches, which is every sequence a validator derives: a derivation for slot
-`3` reads no wavelength above the record's top round. -/
+intervals the record reaches, the replay's answer at every anchor and not the failover's: a
+derivation for slot `3` reads no wavelength above the record's top round. -/
 theorem rt_adaptive_stall (N : ℕ) (hN : 3 ≤ N) (coin : ℕ → Fin 4)
     (V : View (Fin 4) ℕ Unit (rtDag N)) (per : ℕ → ℕ)
     (hper : ∀ j, j ≤ intervalOf 8 N → per j = 4) (v : Option ℕ) :

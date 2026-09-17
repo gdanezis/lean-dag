@@ -4,9 +4,10 @@ import Mathlib.Order.Interval.Finset.Nat
 /-!
 # Steelhead witnesses: the replay on a startup window
 
-Theorem 3 of the paper assumes that the update rule maps a window in which no synchronous slot
-commits to period `1`, and Algorithm 2 is meant to be that rule (`steelhead.md` §7, findings 3
-and 4). One universe, `rs36`: nine rounds `0..8` of the committee of the other witnesses, in
+Algorithm 2's replay does not by itself map a window in which no synchronous slot commits to
+period `1`, which is why the failover tests the agreed output before the replay runs
+(`steelhead.md` §7, findings 3 and 4). One universe, `rs36`: nine rounds `0..8` of the committee
+of the other witnesses, in
 which round `m`'s blocks by validators `m mod 4` and `(m + 3) mod 4` reference every block of
 round `m − 1` while the other two omit the block of validator `m mod 4`, the known leader
 `(r + 1) mod 4` of round `r = m − 1`; so every synchronous slot has two votes and two blames,
