@@ -245,8 +245,9 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   of floors decides the slot it starts from once it reaches a reliably
   led landing, the round-robin schedule the implementation runs leads
   three consecutive rounds reliably past every round at `n = 3f + 1` and
-  brings the chain to such a landing within `n − |T|` hops, a reliably
-  led slot commits under either execution discipline, the reactive
+  brings the chain to such a landing within `n − |T|` hops, and within
+  `b` once the other validators outside the reliable set have crashed, a
+  reliably led slot commits under either execution discipline, the reactive
   schedule's waits and the timed schedule's rated timeout,
   a block the reliable validators have referenced is delivered by the
   first committed slot above, whoever led it, any family
@@ -264,7 +265,8 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   period on a startup window and on a complete window too short for a
   wave, which the paper's interval bound admits, and answers a stalled
   period at every anchor of the rotating stall, where no block above
-  round `2` is ever output.
+  round `2` is ever output until the scan's failover hands the period
+  to `1` and a run of the coin decides the stalled slot.
   The arc is under the statement/proof partition.
 - **Black Marlin** (`LeanDag/BlackMarlin/`): the three-round commit rule
   of a partially synchronous protocol (DISC 2025) that uses neither
