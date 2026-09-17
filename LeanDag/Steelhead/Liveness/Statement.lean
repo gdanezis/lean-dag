@@ -72,6 +72,17 @@ claims:
   over; counting the two against each other gives `n ≤ ws · (n − |T|)`.
   So the landings' residues are distinct and only `n − |T|` are left
   free;
+* **SH6l, the floor chain reaches a reliably led landing within `b`
+  hops** — Theorem 2's count as the paper states it, `b` the Byzantine
+  validators: SH6i once every validator outside `T` that is not
+  Byzantine has crashed, having no block from the synchronised round on.
+  A crashed leader's slot is directly skipped once the reliable set
+  populates its vote round (SH6c), and a landing is a slot the view does
+  not skip, so every landing led from outside `T` is Byzantine-led; the
+  landings' residues are distinct (SH6i's count), and the Byzantine
+  validators hold only `b` of them, so one of the first `b + 1` landings
+  is reliably led. The chain's own start is asked not to be skipped
+  either, which an undecided slot is not;
 * **SH6j, a reliable leader commits under the reactive discipline** —
   SH6a with the execution discipline named rather than assumed: a
   reactive schedule never waits past its timeout, and at the round above
@@ -131,7 +142,7 @@ claims:
 
 SH6a, SH6b, SH6f and SH6g assume `3 ≤ w r` everywhere, as the safety
 claims do, and SH6f and SH6g one slot per round; SH6h reads no DAG at
-all, only the schedule, and SH6i, which reads both, fixes the wave at
+all, only the schedule, and SH6i and SH6l, which read both, fix the wave at
 the constant `ws` the round-robin count needs; SH6c assumes nothing of the wave, and
 SH6e `4 ≤ w r` at the slot's round, so that the vote round lies two
 rounds up, where synchrony has carried the candidate. Neither asks the
@@ -306,6 +317,33 @@ def FloorChainReachesReliable (U : BlockUniverse Validator BlockId Payload) (w :
     -- then one of those landings is reliably led, so the chain reaches one within n − |T| hops
     ∃ i, i ≤ n - T.card ∧ S.leader (x i) ∈ T
 
+/-- **SH6l, the floor chain reaches a reliably led landing within `b` hops.** -/
+def FloorChainReachesReliableWithinByzantine (U : BlockUniverse Validator BlockId Payload)
+    (w : ℕ → ℕ) : Prop :=
+  ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (R N ws n : ℕ) (hn : 0 < n)
+    (lead : Fin n → Validator) (x : ℕ → ℕ),
+    -- the constant synchronous wave and one slot per round, as Theorem 2 reads the chain
+    (∀ r, w r = ws) → 3 ≤ ws → (∀ t, S.slotRound t = t) →
+    -- T is a reliable set: correct, and a quorum
+    T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
+    -- T is synchronised from R and populates every round from R to the horizon N
+    SynchronisedOn U T R → (∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) → V.CoversUpto N →
+    -- every validator outside T that is not Byzantine has crashed: it has no block from R on
+    (∀ v, v ∉ T → v ∉ F.byzantine →
+      ∀ L ∈ U.ids, R ≤ (U.block L).round → (U.block L).creator ≠ v) →
+    -- the schedule is the implementation's, one validator a round in rotation
+    Function.Bijective lead → (∀ t, S.leader t = lead ⟨t % n, Nat.mod_lt t hn⟩) →
+    -- the validators outside T are few enough for the synchronous wave
+    ws * (n - T.card) < n →
+    -- the chain starts at or past R at a slot the view does not skip, hops once per Byzantine
+    -- validator, and decides at or below the horizon
+    R ≤ x 0 → ¬ Decided w U V (x 0) none →
+    (∀ i, i < F.byzantine.card → FloorHop w U V (x i) (x (i + 1))) →
+    (∀ j, j ≤ x F.byzantine.card →
+      (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N) →
+    -- then one of those landings is reliably led, so the chain reaches one within b hops
+    ∃ i, i ≤ F.byzantine.card ∧ S.leader (x i) ∈ T
+
 /-- **SH6j, a reliable leader commits under the reactive discipline.** -/
 def CommitsOfReactivePace (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
   ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (N R k : ℕ)
@@ -454,6 +492,7 @@ def Statement : Prop :=
         (Payload := Payload) w ∧
       SkipsCrashed U w ∧ CommitsOfDissemination U w ∧ DecidedOfReliableAboveFloor U w ∧
       FloorChainDecides U w ∧ RoundRobinFairRun ∧ FloorChainReachesReliable U w ∧
+      FloorChainReachesReliableWithinByzantine U w ∧
       CommitsOfReactivePace U w ∧ CommitsOfViewPace U w ∧
       ChainAllDecidedBelow U wa ∧
       ChainAllDecidedBelowOfSynchrony (Validator := Validator) (BlockId := BlockId)

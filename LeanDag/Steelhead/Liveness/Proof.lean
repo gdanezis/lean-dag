@@ -16,7 +16,7 @@ namespace Liveness
 
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ _ S U w ws wa k
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro T V R N k hw hT hcard hs hpop hR hN hV hlead
     exact commitsOfSynchrony hw hT hcard hs hpop hR hN hV hlead
   · intro T c hw hT hcard hspan fair R k
@@ -33,6 +33,10 @@ theorem holds : Statement := by
     exact ⟨fun _ hlt => roundRobin_fairRun hn hlt, fun hT r => roundRobin_near hn hT r⟩
   · intro T V R N ws n hn lead x hwr hws hid hT hcard hs hpop hV hbij hsched hlt hR hhop hN
     exact floorChainReachesReliable hn hwr hws hid hT hcard hs hpop hV hbij hsched hlt hR hhop hN
+  · intro T V R N ws n hn lead x hwr hws hid hT hcard hs hpop hV hcrash hbij hsched hlt hR hstart
+      hhop hN
+    exact floorChainReachesReliableWithinByzantine hn hwr hws hid hT hcard hs hpop hV hcrash hbij
+      hsched hlt hR hstart hhop hN
   · intro T V N R k rs hw hT hcard hgst hto hR hN hV hlead
     exact reactive_commits rs hw hT hcard hgst hto hR hN hV hlead
   · intro T V N k vp hw hT hcard hrate N' hR hpop hN hV hlead
