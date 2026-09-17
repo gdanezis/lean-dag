@@ -200,6 +200,81 @@ theorem bf30_slot0_undecided (v : Option (Fin 30)) :
     · exact bf30_slot3_undecided none
         (hmid 3 (by omega) hlt ((bf30_eligible_iff _ _).mpr le_rfl))
 
+/-! ## The chain of floors on data, and the schedule that bounds it -/
+
+/-- **Slot `6` is undecided**: its certificate round is missing, round `7` holds no blame, and
+any anchor lies at round `9` or above, where nothing commits. -/
+theorem bf30_slot6_undecided (v : Option (Fin 30)) :
+    ¬ Steelhead.Decided w3 bf30 (View.full bf30) 6 v := by
+  intro h
+  cases h with
+  | directCommit hL hc => exact bf30_slot6_direct _ hL hc
+  | directSkip hs => exact absurd hs (by decide)
+  | indirectCommit hkj he hj' _ _ _ _ _ _ =>
+    exact bf30_not_commit_above (by have := (bf30_eligible_iff _ _).mp he; omega) _ hj'
+  | indirectSkip hkj he hj' _ _ =>
+    exact bf30_not_commit_above (by have := (bf30_eligible_iff _ _).mp he; omega) _ hj'
+
+/-- **Two hops of the floor chain** (SH6g's `FloorHop`): the anchor search leaves slot `0` at its
+floor `3`, which the view does not skip, and leaves slot `3` at its floor `6`, which it does not
+skip either. Nothing lies between a slot and its floor at the constant wave `3`, so neither hop
+passes over a skipped slot. -/
+theorem bf30_floor_hops :
+    Steelhead.FloorHop w3 bf30 (View.full bf30) 0 3 ∧
+      Steelhead.FloorHop w3 bf30 (View.full bf30) 3 6 := by
+  have hw : ∀ r, w3 r = 3 := fun _ => rfl
+  exact ⟨⟨by have := hw 0; omega, fun _ h1 h2 => absurd h2 (by have := hw 0; omega),
+      bf30_slot3_undecided none⟩,
+    ⟨by have := hw 3; omega, fun _ h1 h2 => absurd h2 (by have := hw 3; omega),
+      bf30_slot6_undecided none⟩⟩
+
+/-- **Every landing is led by the Byzantine validator**, so SH6g's last hypothesis, a reliably led
+landing, fails at each hop. That is the whole distance between this universe and SH6g's
+conclusion: the chain exists and hops twice, and slot `0` is still undecided. -/
+theorem bf30_landings_byzantine :
+    bfSlots.leader 3 = 0 ∧ bfSlots.leader 6 = 0 ∧ (0 : Fin 4) ∉ (Correct : Finset (Fin 4)) := by
+  decide
+
+/-! ### The round-robin schedule (SH6h)
+
+What bounds the chain is the schedule, and `RoundRobinFairRun` reads no DAG at all. At `n = 4`
+with the reliable set `{1, 2, 3}` its side condition `c · (n − |T|) < n` holds up to `c = 3` and
+fails at `c = 4`, and so does the run itself: every four consecutive rounds hold one led by
+validator `0`. The synchronous wave `3` clears the bound at the `3f + 1` committee and the
+asynchronous wave `4` does not, which is why the asynchronous rounds rest on the coin. -/
+
+/-- The implementation's known schedule at `n = 4`: round `r` is led by `r mod 4`. -/
+abbrev rrSchedule : Slots (Fin 4) := Slots.identity fun r => ⟨r % 4, Nat.mod_lt r (by omega)⟩
+
+/-- The reliable set of the witness committee, a quorum of three. -/
+abbrev rrT : Finset (Fin 4) := {1, 2, 3}
+
+-- The side condition of SH6h's first half at the synchronous wave, and its failure at wave `4`.
+example : 3 * (4 - rrT.card) < 4 := by decide
+example : ¬ (4 * (4 - rrT.card) < 4) := by decide
+
+/-- **Three consecutive rounds led by the reliable set**, past every round: rounds `4m + 1` to
+`4m + 3`. This is SH6h's first half on data, at the `c` the synchronous wave asks for. -/
+theorem rr_fairRun_three : FairRunOn (S := rrSchedule) rrT 3 := by
+  have hmem : ∀ m : Fin 4, m.val ≠ 0 → m ∈ rrT := by decide
+  intro k
+  refine ⟨4 * k + 1, by omega, fun i hi => hmem _ ?_⟩
+  change (4 * k + 1 + i) % 4 ≠ 0
+  omega
+
+/-- **No four consecutive rounds are**: one of any four rounds is `0 mod 4`, validator `0`'s.
+The bound `c · (n − |T|) < n` is tight here, so the asynchronous wave is not covered. -/
+theorem rr_not_fairRun_four : ¬ FairRunOn (S := rrSchedule) rrT 4 := by
+  intro h
+  obtain ⟨k', _, hk⟩ := h 0
+  have h0 := hk ((4 - k' % 4) % 4) (by omega)
+  have hz : rrSchedule.leader (k' + (4 - k' % 4) % 4) = (0 : Fin 4) := by
+    apply Fin.ext
+    change (k' + (4 - k' % 4) % 4) % 4 = 0
+    omega
+  rw [hz] at h0
+  exact absurd h0 (by decide)
+
 /-! ## Axioms
 
 Nothing here should ever acquire an axiom beyond the standard three. -/
@@ -207,5 +282,7 @@ Nothing here should ever acquire an axiom beyond the standard three. -/
 #print axioms bf30
 #print axioms bf30_slot4
 #print axioms bf30_slot0_undecided
+#print axioms bf30_floor_hops
+#print axioms rr_fairRun_three
 
 end LeanDagTest

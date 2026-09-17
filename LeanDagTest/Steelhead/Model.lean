@@ -1,6 +1,7 @@
 import LeanDagTest.Mysticeti.Model
 import LeanDag.Steelhead.Model.Chain
 import LeanDag.Steelhead.Model.Compose
+import LeanDag.Common.Ledger
 import Mathlib.Tactic.IntervalCases
 /-!
 # Steelhead witnesses — the rule at a wavelength function on data
@@ -212,6 +213,46 @@ example : IsLeaderBlock (S := chainSlots shCoin) sh8 0 2 := by decide
 theorem sh8_chain0 : ChainDecided 5 shCoin sh8 (View.full sh8) 0 (some 2) :=
   AnchoredRule.Decided.directCommit (S := chainSlots shCoin) (by decide) (by decide)
 
+/-! ## Validity from the reference clause (SH17e)
+
+A1's second clause has every author reference every block it holds that its previous block did
+not, so a block the reliable validators have all referenced by some round lies in the causal
+history of every block above that round. Here that block is validator `0`'s round-`0` block,
+the Byzantine one, which leads no slot below `3`: it is delivered all the same. -/
+
+/-- The verdicts of the first three slots: their direct commits. -/
+def shOut : ℕ → Option (Fin 32) :=
+  fun k => if k = 0 then some 1 else if k = 1 then some 6 else if k = 2 then some 11 else none
+
+-- Slot `2`'s candidate is block `11` (round `2`, author `3`), certified by the whole of round `4`.
+theorem sh8_slot2 : Steelhead.Decided w4 sh8 (View.full sh8) 2 (some 11) :=
+  Decided.directCommit (by decide) (by decide)
+
+/-- The view settles every slot below `3`, which is what a ledger prefix asks for. -/
+theorem sh8_settled_below_three (k : ℕ) (hk : k < 3) :
+    Steelhead.Decided w4 sh8 (View.full sh8) k (shOut k) := by
+  interval_cases k
+  · exact sh8_slot0
+  · exact sh8_slot1
+  · exact sh8_slot2
+
+-- Block `0` is the Byzantine validator's, and no slot below `3` is led by it.
+example : (sh8.block 0).creator = 0 ∧ (0 : Fin 4) ∉ (Correct : Finset (Fin 4)) := by decide
+example : shSlots.leader 0 ≠ 0 ∧ shSlots.leader 1 ≠ 0 ∧ shSlots.leader 2 ≠ 0 := by decide
+
+-- Every reliable validator's round-`1` block references it: the reference clause at `ρ = 1`.
+example : ∀ q : Fin 32, (sh8.block q).round = 1 →
+    (sh8.block q).creator ∈ (Correct : Finset (Fin 4)) → (0 : Fin 32) ∈ (sh8.block q).refs := by
+  decide
+
+/-- **The Byzantine validator's block is delivered**: slot `2` commits at round `2`, above the
+round whose blocks all reference block `0`, so block `0` is in the settled prefix's ledger,
+whoever led the slot that carried it. SH17e's conclusion on data. -/
+theorem sh8_ledger_zero : (0 : Fin 32) ∈ ledgerSet sh8 shOut 3 :=
+  ⟨2, by omega, 11, rfl,
+    (Reaches.single (by decide : (4 : Fin 32) ∈ (sh8.block 11).refs)).trans
+      (Reaches.single (by decide : (0 : Fin 32) ∈ (sh8.block 4).refs))⟩
+
 /-! ## Axioms
 
 Nothing here should ever acquire an axiom beyond the standard three. -/
@@ -219,5 +260,6 @@ Nothing here should ever acquire an axiom beyond the standard three. -/
 #print axioms sh8
 #print axioms lowFloor_skip
 #print axioms sh8_slot0_indirect
+#print axioms sh8_ledger_zero
 
 end LeanDagTest

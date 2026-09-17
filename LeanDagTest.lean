@@ -49,6 +49,7 @@ import LeanDagTest.Steelhead.Model
 import LeanDagTest.Steelhead.Period
 import LeanDagTest.Steelhead.Stall
 import LeanDagTest.Steelhead.CoinDelay
+import LeanDagTest.Steelhead.AdaptiveCoin
 import LeanDagTest.Steelhead.ByzantineFloor
 import LeanDagTest.Steelhead.Replay
 import LeanDagTest.Steelhead.ReplayStartup
