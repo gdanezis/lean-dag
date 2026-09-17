@@ -22452,7 +22452,7 @@ theorem decided_of_rebased (h : Banded R) (hr : Rebased R U U' S S' G R₀ d)
     R.Decided S V (d + k) v ↔ R.Decided S' V' k v
 ```
 
-**A verdict above the settling round transports across any rebase**, to the rebased numbering, on views that agree above the settling round. An `↔`, as `LocalTruncate` is.
+**A verdict above the settling round transports across any rebase**, at a rule whose band needs no period. `decided_of_rebased_at` at period one, where every rebase is by a whole number of periods.
 
 #### `decided_agree_rebased`
 
@@ -22509,7 +22509,7 @@ theorem Persist.of_banded (h : Banded R) : Persist R
 theorem LocalTruncate.of_banded (h : Banded R) : LocalTruncate R
 ```
 
-**Truncation invariance falls out of the band** — `decided_of_rebased` at a cut, whose settling round is its horizon.
+**Truncation invariance falls out of the band**: `LocalTruncateAt` at period one, where every cut is by a whole number of periods.
 
 #### `SelfParent.reaches_of_creator`
 

@@ -180,10 +180,12 @@ carries the settling round separately. -/
 
 variable {U U' : R.Universe} {S S' : Slots Validator} {G R₀ d : ℕ}
 
-/-- **A verdict above the settling round transports across any rebase**,
-to the rebased numbering, on views that agree above the settling round.
-An `↔`, as `LocalTruncate` is. -/
-theorem decided_of_rebased (h : Banded R) (hr : Rebased R U U' S S' G R₀ d)
+/-- **A verdict transports across a rebase by a whole number of periods**, to
+the rebased numbering, on views that agree above the settling round. An `↔`,
+as `LocalTruncate` is. The shift `G` is what the band's two offsets differ by,
+so a rule whose wave repeats every `p` rounds needs `p` to divide it. -/
+theorem decided_of_rebased_at {p : ℕ} (h : BandedAt p R) (hp : ∃ t, t * p = G)
+    (hr : Rebased R U U' S S' G R₀ d)
     {V : R.View U} {V' : R.View U'} (hv : ViewAgreeAbove R V V' R₀)
     (k : ℕ) (hk : R₀ ≤ S.slotRound (d + k)) (v : Option BlockId) :
     R.Decided S V (d + k) v ↔ R.Decided S' V' k v := by
@@ -191,7 +193,8 @@ theorem decided_of_rebased (h : Banded R) (hr : Rebased R U U' S S' G R₀ d)
   constructor
   · intro hdec
     obtain ⟨top, htop⟩ := h S U V (d + k) v hdec
-    refine htop 0 G d 0 S' U' V' k (by omega) ?_ ?_ ?_ ?_
+    obtain ⟨t, ht⟩ := hp
+    refine htop 0 G d 0 S' U' V' k ⟨t, Or.inl (by omega)⟩ (by omega) ?_ ?_ ?_ ?_
     · intro m m' hm
       have hmm : m = m' + d := by omega
       subst hmm
@@ -220,7 +223,8 @@ theorem decided_of_rebased (h : Banded R) (hr : Rebased R U U' S S' G R₀ d)
       exact (hv b (R.viewSound V hbV) (by omega)).mp hbV
   · intro hdec
     obtain ⟨top, htop⟩ := h S' U' V' k v hdec
-    refine htop G 0 0 d S U V (d + k) (by omega) ?_ ?_ ?_ ?_
+    obtain ⟨t, ht⟩ := hp
+    refine htop G 0 0 d S U V (d + k) ⟨t, Or.inr (by omega)⟩ (by omega) ?_ ?_ ?_ ?_
     · intro m m' hm
       have hmm : m' = m + d := by omega
       subst hmm
@@ -252,12 +256,30 @@ theorem decided_of_rebased (h : Banded R) (hr : Rebased R U U' S S' G R₀ d)
       obtain ⟨hbU, hround⟩ := hr.of_mem' hbU' (by omega)
       exact (hv b hbU (by omega)).mpr hbV
 
+/-- **A verdict above the settling round transports across any rebase**, at a
+rule whose band needs no period. `decided_of_rebased_at` at period one, where
+every rebase is by a whole number of periods. -/
+theorem decided_of_rebased (h : Banded R) (hr : Rebased R U U' S S' G R₀ d)
+    {V : R.View U} {V' : R.View U'} (hv : ViewAgreeAbove R V V' R₀)
+    (k : ℕ) (hk : R₀ ≤ S.slotRound (d + k)) (v : Option BlockId) :
+    R.Decided S V (d + k) v ↔ R.Decided S' V' k v :=
+  decided_of_rebased_at (bandedAt_one_iff.mpr h) ⟨G, by omega⟩ hr hv k hk v
+
+/-- **Cross-rebase agreement at a period**, from any view of the rebased
+universe. -/
+theorem decided_agree_rebased_at {p : ℕ} (ha : Agree R) (hb : BandedAt p R)
+    (hp : ∃ t, t * p = G)
+    (hr : Rebased R U U' S S' G R₀ d) {V : R.View U} {V' : R.View U'}
+    (hv : ViewAgreeAbove R V V' R₀) {W : R.View U'} {k : ℕ} (hk : R₀ ≤ S.slotRound (d + k))
+    {w v : Option BlockId} (hW : R.Decided S' W k w) (hV : R.Decided S V (d + k) v) : w = v :=
+  ha S' W V' k w v hW ((decided_of_rebased_at hb hp hr hv k hk v).mp hV)
+
 /-- **Cross-rebase agreement**, from any view of the rebased universe. -/
 theorem decided_agree_rebased (ha : Agree R) (hb : Banded R)
     (hr : Rebased R U U' S S' G R₀ d) {V : R.View U} {V' : R.View U'}
     (hv : ViewAgreeAbove R V V' R₀) {W : R.View U'} {k : ℕ} (hk : R₀ ≤ S.slotRound (d + k))
     {w v : Option BlockId} (hW : R.Decided S' W k w) (hV : R.Decided S V (d + k) v) : w = v :=
-  ha S' W V' k w v hW ((decided_of_rebased hb hr hv k hk v).mp hV)
+  decided_agree_rebased_at ha (bandedAt_one_iff.mpr hb) ⟨G, by omega⟩ hr hv hk hW hV
 
 end Properties
 
