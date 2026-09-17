@@ -378,11 +378,38 @@ theorem adaptiveWave_congr {ws : ℕ} {per₁ per₂ : ℕ → ℕ} {N : ℕ}
   unfold adaptiveWave
   rw [h _ (intervalOf_mono hr)]
 
-/-- **SH10b.** The sequences coincide below the record's top interval, by strong induction: the
-anchors of the intervals below an interval lie in the record, their histories are read at rounds
-below their own, where the sequences already agree, so the two views advance the agreed output
-alike at every one of them and derive the same state. The two views then run one wavelength
-function on every round their derivations read, and SH2 applies to it. -/
+/-- **SH10b, the sequences.** Two views that derived the state of every interval below `N`'s,
+each reading its agreed output at its own adaptive wavelength, derived the same periods there, by
+strong induction on the interval: the anchors of the intervals below an interval lie in the
+record, their histories are read at rounds below their own, where the sequences already agree, so
+the two views advance the agreed output alike at every one of them and derive the same state. -/
+theorem adaptive_periods_agree {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) {upd : UpdateRule BlockId}
+    {k₀ N : ℕ} {V₁ V₂ : View Validator BlockId Payload U} {per₁ per₂ : ℕ → ℕ}
+    (h₁ : ∀ j, j ≤ intervalOf I N → ∃ st,
+      PeriodAt I wa coin upd k₀ U V₁ (adaptiveWave ws wa I per₁) j st ∧ per₁ j = st.period)
+    (h₂ : ∀ j, j ≤ intervalOf I N → ∃ st,
+      PeriodAt I wa coin upd k₀ U V₂ (adaptiveWave ws wa I per₂) j st ∧ per₂ j = st.period) :
+    ∀ j, j ≤ intervalOf I N → per₁ j = per₂ j := by
+  have hw₁ : ∀ r, 2 ≤ adaptiveWave ws wa I per₁ r :=
+    fun r => by have := adaptiveWave_ge (I := I) hws hwa per₁ r; omega
+  have hw₂ : ∀ r, 2 ≤ adaptiveWave ws wa I per₂ r :=
+    fun r => by have := adaptiveWave_ge (I := I) hws hwa per₂ r; omega
+  intro j
+  induction j using Nat.strong_induction_on with
+  | _ j ih =>
+  intro hj
+  obtain ⟨st₁, hp₁, he₁⟩ := h₁ j hj
+  obtain ⟨st₂, hp₂, he₂⟩ := h₂ j hj
+  rw [he₁, he₂]
+  refine congrArg ScanState.period
+    (periodAt_unique_of_w hwa hw₁ hw₂ hp₁ hp₂ fun j' r A hj' hA ρ hρ => ?_)
+  refine adaptiveWave_congr (ws := ws) (N := r) (fun j'' hj'' => ?_) hρ
+  rw [hA.mem] at hj''
+  exact ih j'' (by omega) (by omega)
+
+/-- **SH10b, the verdicts.** The two views run one wavelength function on every round their
+derivations read, since the sequences agree below `N`'s interval (`adaptive_periods_agree`), and
+SH2 applies to it. -/
 theorem adaptive_decided_unique {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) {upd : UpdateRule BlockId}
     {k₀ N : ℕ} {V₁ V₂ : View Validator BlockId Payload U} {per₁ per₂ : ℕ → ℕ}
     (hN : ∀ b ∈ U.ids, (U.block b).round ≤ N) {k : ℕ} (hk : S.slotRound k ≤ N)
@@ -393,23 +420,7 @@ theorem adaptive_decided_unique {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) {up
     {v₁ v₂ : Option BlockId}
     (d₁ : Decided (adaptiveWave ws wa I per₁) U V₁ k v₁)
     (d₂ : Decided (adaptiveWave ws wa I per₂) U V₂ k v₂) : v₁ = v₂ := by
-  have hw₁ : ∀ r, 2 ≤ adaptiveWave ws wa I per₁ r :=
-    fun r => by have := adaptiveWave_ge (I := I) hws hwa per₁ r; omega
-  have hw₂ : ∀ r, 2 ≤ adaptiveWave ws wa I per₂ r :=
-    fun r => by have := adaptiveWave_ge (I := I) hws hwa per₂ r; omega
-  have hper : ∀ j, j ≤ intervalOf I N → per₁ j = per₂ j := by
-    intro j
-    induction j using Nat.strong_induction_on with
-    | _ j ih =>
-    intro hj
-    obtain ⟨st₁, hp₁, he₁⟩ := h₁ j hj
-    obtain ⟨st₂, hp₂, he₂⟩ := h₂ j hj
-    rw [he₁, he₂]
-    refine congrArg ScanState.period
-      (periodAt_unique_of_w hwa hw₁ hw₂ hp₁ hp₂ fun j' r A hj' hA ρ hρ => ?_)
-    refine adaptiveWave_congr (ws := ws) (N := r) (fun j'' hj'' => ?_) hρ
-    rw [hA.mem] at hj''
-    exact ih j'' (by omega) (by omega)
+  have hper := adaptive_periods_agree hws hwa h₁ h₂
   have d₁' := decided_congr (fun b hb => hN b (V₁.subset_ids hb))
     (fun r hr => adaptiveWave_congr (ws := ws) hper hr) d₁ hk
   exact AnchoredRule.decided_unique

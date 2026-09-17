@@ -19,7 +19,7 @@ theorem holds : Statement := by
   · intro coin upd k₀ V₁ V₂ w j st₁ st₂ hwa h₁ h₂
     exact periodAt_unique hwa h₁ h₂
   · intro coin upd k₀ N V₁ V₂ per₁ per₂ k v₁ v₂ hws hwa hN hk h₁ h₂ d₁ d₂
-    exact adaptive_decided_unique hws hwa hN hk h₁ h₂ d₁ d₂
+    exact ⟨adaptive_periods_agree hws hwa h₁ h₂, adaptive_decided_unique hws hwa hN hk h₁ h₂ d₁ d₂⟩
   · intro coin upd k₀ V w j st hw hp hall
     exact exists_periodAt_succ hw hp hall
   · intro coin upd k₀ V w c N hwa hI hw hrun hV j hN

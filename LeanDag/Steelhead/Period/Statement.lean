@@ -11,10 +11,11 @@ What the adaptive protocol's period does across views and over time
   and last commit alike, under any update rule, with no synchrony,
   fairness or view hypothesis;
 * **SH10b, agreement of the output under the adaptive wavelength** — the
-  consequence the paper draws: two validators running the output
-  relation at their own derived period sequences never disagree on a
-  slot, since the sequences coincide and SH2 applies at the common
-  wavelength. The periods are asked for below the record's top round and
+  consequence the paper draws, and Theorem 4 as each validator reads it:
+  two validators running the output relation at their own derived period
+  sequences derive the same sequence and never disagree on a slot, since
+  the sequences coincide by strong induction on the interval and SH2
+  applies at the common wavelength. The periods are asked for below the record's top round and
   no further: a record holds finitely many blocks, so above its top
   round no chain verdict is derivable and no period beyond it is either,
   and a claim quantified over the whole sequence would hold only where
@@ -135,7 +136,8 @@ def AdaptiveAgreement (U : BlockUniverse Validator BlockId Payload) (ws wa I : �
     -- and decided slot k at its own adaptive wavelength
     Decided (adaptiveWave ws wa I per₁) U V₁ k v₁ →
     Decided (adaptiveWave ws wa I per₂) U V₂ k v₂ →
-    v₁ = v₂
+    -- then the two derived sequences agree on those intervals, and so do the verdicts
+    (∀ j, j ≤ intervalOf I N → per₁ j = per₂ j) ∧ v₁ = v₂
 
 /-- **SH10c, the scan ends.** -/
 def ScanEnds (U : BlockUniverse Validator BlockId Payload) (I wa : ℕ) : Prop :=
