@@ -37,8 +37,8 @@ theorem holds : Statement := by
       hhop hN
     exact floorChainReachesReliableWithinByzantine hn hwr hws hid hT hcard hs hpop hV hcrash hbij
       hsched hlt hR hstart hhop hN
-  · intro T V N R k rs hw hT hcard hgst hto hR hN hV hlead
-    exact reactive_commits rs hw hT hcard hgst hto hR hN hV hlead
+  · intro T V N R k waits rs hw hT hcard hgst hto hR hwait hN hV hlead
+    exact reactive_commits rs hw hT hcard hgst hto hR hwait hN hV hlead
   · intro T V N k vp hw hT hcard hrate N' hR hpop hN hV hlead
     exact timed_commits vp hw hT hcard hrate hR hpop hN hV hlead
   · intro coin V c N hwa hrun hV r hr

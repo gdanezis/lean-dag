@@ -9766,11 +9766,14 @@ schedule and not on an arbitrary one (§24.6).
 
 Where SH6a's hypothesis comes from is **SH6j** and **SH6k**, the two
 execution disciplines of §6. The reactive one
-(`Steelhead.reactive_commits`, on `ReactiveS`) is the core's
-`ReactivePace` plus one clause: at a wave of four rounds or more the
-votes of the round above the candidate reach the certifiers through the
-DAG, and only at the wave of three must a certifier reference them
-itself (`cert_or_wait`). `SynchronisedOn` is false by design in a
+(`Steelhead.reactive_commits`, on `ReactiveS`) is the core's reactive
+pace with its leader wait asked at the rounds that carry it, the
+synchronous slots and the canary rounds, since nobody waits for the
+hidden leader of an asynchronous slot, plus one clause: at a wave of
+four rounds or more the votes of the round above the candidate reach the
+certifiers through the DAG, and only at the wave of three must a
+certifier reference them itself (`cert_or_wait`), a wait the paper's
+pacing does not state. `SynchronisedOn` is false by design in a
 reactive execution and appears in neither clause. The timed one
 (`Steelhead.timed_commits`) discharges `SynchronisedOn` from a
 `ViewPace` whose timeout grows at a rate that clears the delay, by the

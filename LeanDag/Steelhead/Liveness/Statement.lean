@@ -86,13 +86,17 @@ claims:
 * **SH6j, a reliable leader commits under the reactive discipline** —
   SH6a with the execution discipline named rather than assumed: a
   reactive schedule never waits past its timeout, and at the round above
-  a reliable leader a block either votes or its builder waited the
-  timeout out and votes for what it holds. At a wave of four rounds or
-  more that is all it takes, the votes reaching the certifiers through
-  the DAG; at the wave of three a certifier must reference the votes
-  themselves, which is `ReactiveS`'s one added clause. `SynchronisedOn`
-  appears nowhere: a reactive builder omits what has not arrived, so it
-  is false by design in such an execution;
+  a reliable leader of a round that carries the leader wait, a
+  synchronous slot or a canary round, a block either votes or its
+  builder waited the timeout out and votes for what it holds. The wait
+  is asked at those rounds alone, since nobody waits for the hidden
+  leader of an asynchronous slot, and the claim is stated for a slot at
+  such a round. At a wave of four rounds or more that is all it takes,
+  the votes reaching the certifiers through the DAG; at the wave of
+  three a certifier must reference the votes themselves, which is
+  `ReactiveS`'s one added clause, a wait the paper's pacing does not
+  state. `SynchronisedOn` appears nowhere: a reactive builder omits what
+  has not arrived, so it is false by design in such an execution;
 * **SH6k, a reliable leader commits under the timed discipline** — the
   other route to SH6a's hypothesis: a `ViewPace` whose timeout grows at
   a rate that clears the delay synchronises the reliable set from
@@ -347,14 +351,15 @@ def FloorChainReachesReliableWithinByzantine (U : BlockUniverse Validator BlockI
 /-- **SH6j, a reliable leader commits under the reactive discipline.** -/
 def CommitsOfReactivePace (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
   ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (N R k : ℕ)
-    (rs : ReactiveS U T N w),
+    (waits : ℕ → Prop) (rs : ReactiveS U T N w waits),
     (∀ r, 3 ≤ w r) →
     -- T is a reliable set: correct, and a quorum
     T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
     -- the reactive schedule is past GST from R, where its timeout clears the delay
     rs.gst ≤ R → (∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) →
-    -- the slot lies at or past R, its decision round within the schedule's horizon
-    R ≤ S.slotRound k → S.slotRound k + (w (S.slotRound k) - 1) ≤ N →
+    -- the slot lies at or past R, its round carries the leader wait, a synchronous slot or a
+    -- canary round, and its decision round lies within the schedule's horizon
+    R ≤ S.slotRound k → waits (S.slotRound k) → S.slotRound k + (w (S.slotRound k) - 1) ≤ N →
     -- and the view holds that round
     V.CoversUpto (S.slotRound k + (w (S.slotRound k) - 1)) →
     -- then a reliably led slot commits its candidate in that view, by the direct rule

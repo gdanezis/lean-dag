@@ -862,16 +862,23 @@ rounds above the floor.
 **SH6j and SH6k** say where SH6a's hypothesis comes from, and they are
 the two execution disciplines the repository already carries. The
 reactive one (`ReactiveS`, `Model/Reactive.lean`) is the core's
-`ReactivePace` plus one clause: time advances with rounds, a builder
-never waits past its timeout, and at the round above a reliable leader a
-block either votes or its builder waited the timeout out and votes for
-any leader block it holds. At a wave of four rounds or more that is
-enough, since the vote round then sits two rounds or more below the
-certifiers and the votes reach them through the DAG; at the wave of
-three the certify round is the vote round's successor, so a certifier
-must reference the votes itself, and `cert_or_wait` is that wait, stated
-at wave three alone. `SynchronisedOn` is false by design in such an
-execution, and appears in neither clause. The timed one (SH6k) instead
+reactive pace with its leader wait asked at the rounds that carry it
+(`waits`, the synchronous slots and the canary rounds, since nobody
+waits for the hidden leader of an asynchronous slot, which the core's
+`ReactivePace` would ask at every reliably led slot), plus one clause:
+time advances with rounds, a builder never waits past its timeout, and
+at the round above a reliable leader of a waiting round a block either
+votes or its builder waited the timeout out and votes for any leader
+block it holds. At a wave of four rounds or more that is enough, since
+the vote round then sits two rounds or more below the certifiers and the
+votes reach them through the DAG; at the wave of three the certify round
+is the vote round's successor, so a certifier must reference the votes
+itself, and `cert_or_wait` is that wait, stated at wave three alone and
+at the waiting rounds; the paper's pacing states the leader wait and not
+this one, which is what the wave of three needs of an execution. SH6j is
+stated for a slot at a waiting round. `SynchronisedOn` is false by
+design in such an execution, and appears in neither clause. The timed
+one (SH6k) instead
 discharges `SynchronisedOn` from a `ViewPace` whose timeout grows at a
 rate that clears the delay, which the core proves as
 `synchronisedOn_of_rate` at `max (2Δ + proc, gst)`; it says nothing new
