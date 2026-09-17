@@ -55,6 +55,7 @@ import LeanDagTest.Steelhead.Replay
 import LeanDagTest.Steelhead.ReplayStartup
 import LeanDagTest.Steelhead.ReplayShortWindow
 import LeanDagTest.Steelhead.RotatingStall
+import LeanDagTest.Steelhead.Failover
 import LeanDagTest.Steelhead.Axioms
 import LeanDagTest.BlackMarlin.Divergence
 import LeanDagTest.Barnacle.Model

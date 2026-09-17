@@ -195,6 +195,48 @@ theorem decided_congr {w₁ w₂ : ℕ → ℕ} {N : ℕ} {V : View Validator Bl
     change MahiMahi.CertifiedIn U (w₁ (S.slotRound k)) A L' (S.slotRound k)
     rw [hw _ hk]; exact hl
 
+/-- **A verdict reads the wavelength only at the slots the view decides**: its own, the anchor's
+and the skipped slots between, each of them decided in the view. Two wavelength functions that
+agree at every slot the view decides under the first give the same verdicts. -/
+theorem decided_congr_of_decided {w₁ w₂ : ℕ → ℕ} {V : View Validator BlockId Payload U}
+    (hw : ∀ (r : ℕ) (v : Option BlockId), Decided w₁ U V r v →
+      w₁ (S.slotRound r) = w₂ (S.slotRound r))
+    {k : ℕ} {v : Option BlockId} (h : Decided w₁ U V k v) : Decided w₂ U V k v := by
+  have helig : ∀ {k m : ℕ}, w₁ (S.slotRound k) = w₂ (S.slotRound k) →
+      ((steelheadAnchored Validator BlockId Payload w₂).Eligible k m ↔
+        (steelheadAnchored Validator BlockId Payload w₁).Eligible k m) := by
+    intro k m hk
+    rw [AnchoredRule.eligible_iff, AnchoredRule.eligible_iff]
+    simp only [steelheadAnchored_waveAt, hk]
+  induction h with
+  | @directCommit k L hL hc =>
+    have hk := hw k _ (Decided.directCommit hL hc)
+    refine Decided.directCommit hL ?_
+    change MahiMahi.DirectCommitIn U V (w₂ (S.slotRound k)) L (S.slotRound k)
+    rw [← hk]; exact hc
+  | @directSkip k hs =>
+    have hk := hw k _ (Decided.directSkip hs)
+    refine Decided.directSkip ?_
+    change MahiMahi.DirectSkipIn U V (w₂ (S.slotRound k)) (S.leader k) (S.slotRound k)
+    rw [← hk]; exact hs
+  | @indirectCommit k j A L i hkj he hj hmid hi hemp hL hlink hleast ihj ihmid =>
+    have hk := hw k _ (Decided.indirectCommit hkj he hj hmid hi hemp hL hlink hleast)
+    refine Decided.indirectCommit hkj ((helig hk).mpr he) ihj
+      (fun m h1 h2 h3 => ihmid m h1 h2 ((helig hk).mp h3)) hi
+      (fun i' hi' L' hL' hl => ?_) hL ?_ (fun _ _ _ h => h)
+    · refine hemp i' hi' L' hL' ?_
+      change MahiMahi.CertifiedIn U (w₁ (S.slotRound k)) A L' (S.slotRound k)
+      rw [hk]; exact hl
+    · change MahiMahi.CertifiedIn U (w₂ (S.slotRound k)) A L (S.slotRound k)
+      rw [← hk]; exact hlink
+  | @indirectSkip k j A hkj he hj hmid hnone ihj ihmid =>
+    have hk := hw k _ (Decided.indirectSkip hkj he hj hmid hnone)
+    refine Decided.indirectSkip hkj ((helig hk).mpr he) ihj
+      (fun m h1 h2 h3 => ihmid m h1 h2 ((helig hk).mp h3)) (fun i hi L' hL' hl => ?_)
+    refine hnone i hi L' hL' ?_
+    change MahiMahi.CertifiedIn U (w₁ (S.slotRound k)) A L' (S.slotRound k)
+    rw [hk]; exact hl
+
 /-! ## The agreed output over an anchor's history -/
 
 /-- **No verdict of an anchor's history lies above the anchor's round**: a direct commit holds a
@@ -225,6 +267,46 @@ theorem slotRound_le_of_decided_historyView {w : ℕ → ℕ} (hw : ∀ r, 2 ≤
     omega
   | @indirectCommit k j _ _ _ hkj _ _ _ _ _ _ _ _ ihj _ => exact le_trans (S.mono hkj.le) ihj
   | @indirectSkip k j _ hkj _ _ _ _ ihj _ => exact le_trans (S.mono hkj.le) ihj
+
+/-- **No verdict of an anchor's history has its vote round above the anchor's**: a direct commit
+holds a certificate of the history at the slot's decision round, a direct skip a blame at its vote
+round, and an indirect verdict rests on an anchor at or above the slot's floor, whose own vote
+round is bounded in turn. -/
+theorem voteRound_le_of_decided_historyView {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) {A : BlockId}
+    (hA : A ∈ U.ids) {s : ℕ} {v : Option BlockId}
+    (h : Decided w U (U.historyView A hA) s v) :
+    S.slotRound s + w (S.slotRound s) - 2 ≤ (U.block A).round := by
+  induction h with
+  | @directCommit k L _ hc =>
+    obtain ⟨v, hv⟩ := Finset.card_pos.mp
+      (lt_of_lt_of_le (MysticetiProperties.quorumCard_pos (Validator := Validator)) hc)
+    obtain ⟨C, hC, hCV, -⟩ := mem_heldAuthors.mp hv
+    have hCr := (mem_certificatesAt.mp hC).2.1
+    have hCA := round_le_of_mem_history hA hCV
+    have := hw (S.slotRound k)
+    unfold MahiMahi.decisionRoundAt at hCr
+    omega
+  | @directSkip k hs =>
+    obtain ⟨v, hv⟩ := Finset.card_pos.mp
+      (lt_of_lt_of_le (MysticetiProperties.quorumCard_pos (Validator := Validator)) hs)
+    obtain ⟨q, hq, hqV, -⟩ := mem_heldAuthors.mp hv
+    have hqr := (mem_blocksAt.mp (Finset.mem_filter.mp hq).1).2
+    have hqA := round_le_of_mem_history hA hqV
+    have := hw (S.slotRound k)
+    unfold MahiMahi.votingRound at hqr
+    omega
+  | @indirectCommit k j _ _ _ _ he _ _ _ _ _ _ _ ihj _ =>
+    rw [AnchoredRule.eligible_iff] at he
+    simp only [steelheadAnchored_waveAt] at he
+    have := hw (S.slotRound k)
+    have := hw (S.slotRound j)
+    omega
+  | @indirectSkip k j _ _ he _ _ _ ihj _ =>
+    rw [AnchoredRule.eligible_iff] at he
+    simp only [steelheadAnchored_waveAt] at he
+    have := hw (S.slotRound k)
+    have := hw (S.slotRound j)
+    omega
 
 /-- **The advance is unique**: the new cursor is the least undecided slot at or past the old one,
 and the last commit is the old one or the highest commit consumed. -/

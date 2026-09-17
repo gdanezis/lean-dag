@@ -905,12 +905,12 @@ theorem periodic_of_not_isAsync {r : ℕ} (h : ¬ IsAsync k r) : periodic ws wa 
 theorem not_isAsync_of_mod {i : ℕ} (hk : 2 ≤ k) (hi : i % k = k - 1) : ¬ IsAsync k i := by
   unfold IsAsync; omega
 
-/-- **A synchronous slot never commits** when no synchronous candidate is
+/-- **A synchronous slot never commits** when no synchronous candidate of the slots `Q` names is
 certified: the direct commit and the link both need a certificate. -/
-theorem not_commit_sync (hid : ∀ s, S.slotRound s = s)
-    (hcert : ∀ (j : ℕ) (L : BlockId), ¬ IsAsync k j → IsLeaderBlock U j L →
+theorem not_commit_sync_of_pred (hid : ∀ s, S.slotRound s = s) {Q : ℕ → Prop}
+    (hcert : ∀ (j : ℕ) (L : BlockId), Q j → ¬ IsAsync k j → IsLeaderBlock U j L →
       MahiMahi.certificates U ws L j = ∅)
-    {j : ℕ} {A : BlockId} (hj : ¬ IsAsync k j)
+    {j : ℕ} {A : BlockId} (hQ : Q j) (hj : ¬ IsAsync k j)
     (h : Decided (periodic ws wa k) U V j (some A)) : False := by
   have hne : (MahiMahi.certificates U ws A j).Nonempty := by
     cases h with
@@ -923,8 +923,17 @@ theorem not_commit_sync (hid : ∀ s, S.slotRound s = s)
       change MahiMahi.CertifiedIn U (periodic ws wa k (S.slotRound j)) _ A (S.slotRound j) at hlink
       rw [hid, periodic_of_not_isAsync hj] at hlink
       exact MahiMahi.certificates_nonempty_of_certifiedIn hlink
-  rw [hcert j A hj (AnchoredRule.isLeaderBlock_of_decided h)] at hne
+  rw [hcert j A hQ hj (AnchoredRule.isLeaderBlock_of_decided h)] at hne
   exact Finset.not_nonempty_empty hne
+
+/-- **A synchronous slot never commits** when no synchronous candidate is
+certified: the direct commit and the link both need a certificate. -/
+theorem not_commit_sync (hid : ∀ s, S.slotRound s = s)
+    (hcert : ∀ (j : ℕ) (L : BlockId), ¬ IsAsync k j → IsLeaderBlock U j L →
+      MahiMahi.certificates U ws L j = ∅)
+    {j : ℕ} {A : BlockId} (hj : ¬ IsAsync k j)
+    (h : Decided (periodic ws wa k) U V j (some A)) : False :=
+  not_commit_sync_of_pred hid (Q := fun _ => True) (fun j L _ => hcert j L) trivial hj h
 
 /-- An asynchronous round above `i + 1`, where `i ≡ k − 1`, lies a full
 period above `i`: the arithmetic `omega` cannot do at a variable modulus. -/
@@ -943,15 +952,17 @@ theorem add_period_le_of_isAsync {i j : ℕ} (hk : 2 ≤ k) (hi : i % k = k - 1)
   rw [Nat.mul_add] at this
   omega
 
-/-- **SH8.** Induction on the derivation: a class-`(k − 1)` slot's direct
-verdicts are excluded outright, a synchronous anchor never commits, and an
-asynchronous anchor leaves the class-`(k − 1)` slot one period up as an
-eligible slot between, which must be skipped, which is the claim one
-period up. -/
-theorem stall (hws : 2 ≤ ws) (hk : ws ≤ k) (hid : ∀ s, S.slotRound s = s)
-    (hcert : ∀ (j : ℕ) (L : BlockId), ¬ IsAsync k j → IsLeaderBlock U j L →
+/-- **SH8, at the slots a view can decide.** Induction on the derivation: a class-`(k − 1)`
+slot's direct verdicts are excluded outright, a synchronous anchor never commits, and an
+asynchronous anchor leaves the class-`(k − 1)` slot one period up as an eligible slot between,
+which must be skipped, which is the claim one period up. The certificate and skip hypotheses are
+asked at the slots `Q` names, which every slot a derivation in `V` mentions satisfies; on a view
+that reaches no further than some round, that is the slots below it. -/
+theorem stall_of_pred (hws : 2 ≤ ws) (hk : ws ≤ k) (hid : ∀ s, S.slotRound s = s) {Q : ℕ → Prop}
+    (hQ : ∀ (j : ℕ) (v : Option BlockId), Decided (periodic ws wa k) U V j v → Q j)
+    (hcert : ∀ (j : ℕ) (L : BlockId), Q j → ¬ IsAsync k j → IsLeaderBlock U j L →
       MahiMahi.certificates U ws L j = ∅)
-    (hskip : ∀ j, ¬ IsAsync k j → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j)
+    (hskip : ∀ j, Q j → ¬ IsAsync k j → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j)
     {i : ℕ} (hi : i % k = k - 1) {v : Option BlockId}
     (h : Decided (periodic ws wa k) U V i v) : False := by
   have hk2 : 2 ≤ k := le_trans hws hk
@@ -970,26 +981,38 @@ theorem stall (hws : 2 ≤ ws) (hk : ws ≤ k) (hid : ∀ s, S.slotRound s = s)
   induction h with
   | @directCommit j L hL hc =>
     intro hi
-    exact not_commit_sync hid hcert (not_isAsync_of_mod hk2 hi) (Decided.directCommit hL hc)
+    exact not_commit_sync_of_pred hid hcert (hQ j _ (Decided.directCommit hL hc))
+      (not_isAsync_of_mod hk2 hi) (Decided.directCommit hL hc)
   | @directSkip j hs =>
     intro hi
     have hj := not_isAsync_of_mod hk2 hi
+    have hQj := hQ j none (Decided.directSkip hs)
     change MahiMahi.DirectSkipIn U V (periodic ws wa k (S.slotRound j)) (S.leader j)
       (S.slotRound j) at hs
     rw [hid, periodic_of_not_isAsync hj] at hs
-    exact hskip j hj hs
+    exact hskip j hQj hj hs
   | @indirectCommit i j A L _ hkj helig hj hmid _ _ _ _ _ _ ihmid =>
     intro hi
     by_cases hasync : IsAsync k j
     · obtain ⟨h1, h2, h3⟩ := hmid_of_async hi hasync helig
       exact ihmid (i + k) h1 h2 h3 (by rw [Nat.add_mod_right]; exact hi)
-    · exact not_commit_sync hid hcert hasync hj
+    · exact not_commit_sync_of_pred hid hcert (hQ j _ hj) hasync hj
   | @indirectSkip i j A hkj helig hj hmid _ _ ihmid =>
     intro hi
     by_cases hasync : IsAsync k j
     · obtain ⟨h1, h2, h3⟩ := hmid_of_async hi hasync helig
       exact ihmid (i + k) h1 h2 h3 (by rw [Nat.add_mod_right]; exact hi)
-    · exact not_commit_sync hid hcert hasync hj
+    · exact not_commit_sync_of_pred hid hcert (hQ j _ hj) hasync hj
+
+/-- **SH8.** `stall_of_pred` with nothing asked of the slots. -/
+theorem stall (hws : 2 ≤ ws) (hk : ws ≤ k) (hid : ∀ s, S.slotRound s = s)
+    (hcert : ∀ (j : ℕ) (L : BlockId), ¬ IsAsync k j → IsLeaderBlock U j L →
+      MahiMahi.certificates U ws L j = ∅)
+    (hskip : ∀ j, ¬ IsAsync k j → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j)
+    {i : ℕ} (hi : i % k = k - 1) {v : Option BlockId}
+    (h : Decided (periodic ws wa k) U V i v) : False :=
+  stall_of_pred hws hk hid (Q := fun _ => True) (fun _ _ _ => trivial) (fun j L _ => hcert j L)
+    (fun j _ => hskip j) hi h
 
 end Stall
 
