@@ -51,6 +51,7 @@ import LeanDagTest.Steelhead.Stall
 import LeanDagTest.Steelhead.CoinDelay
 import LeanDagTest.Steelhead.AdaptiveCoin
 import LeanDagTest.Steelhead.ByzantineFloor
+import LeanDagTest.Steelhead.HopBound
 import LeanDagTest.Steelhead.Replay
 import LeanDagTest.Steelhead.ReplayStartup
 import LeanDagTest.Steelhead.ReplayShortWindow
