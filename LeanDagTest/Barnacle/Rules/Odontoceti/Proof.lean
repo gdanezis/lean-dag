@@ -22,7 +22,7 @@ theorem descent : Descent := by
 theorem holds : Statement := by
   refine ⟨?_, descent, ?_⟩
   · intro Validator BlockId Payload _ _ _ _
-    exact ofAnchored_laws LeanDag.Odontoceti.odontocetiLaws
+    exact ofAnchored_laws (fun _ => rfl) LeanDag.Odontoceti.odontocetiLaws
   · intro n hn F BlockId Payload _ C hC
     have hbound : (odontocetiLive (Validator := Fin n) (BlockId := BlockId)
         (Payload := Payload)).waveLength * F.f + 1 ≤ n := by

@@ -17,7 +17,8 @@ variable {P : Validity Validator BlockId Payload} {honest : Finset Validator} [P
 variable {R : AnchoredRule Validator BlockId Payload P honest}
 
 /-- **An anchored rule with its laws satisfies Barnacle's.** -/
-theorem ofAnchored_laws (hl : R.Laws) : (ofAnchored R).Laws where
+theorem ofAnchored_laws (hw : ∀ r, R.waveAt r = R.waveAt 0) (hl : R.Laws) :
+    (ofAnchored R hw).Laws where
   full_ids := fun _ => rfl
   historyView_ids := fun _ _ _ => rfl
   agree := AnchoredRule.agree hl
@@ -28,7 +29,8 @@ theorem ofAnchored_laws (hl : R.Laws) : (ofAnchored R).Laws where
 at every schedule. -/
 theorem ofAnchoredVia_laws {X : Type} {f : X → BlockRecord Validator BlockId Payload P honest}
     {J : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
-    (hl : R.Laws J) (hJ : ∀ S U, J S (f U)) : (ofAnchoredVia R f).Laws where
+    (hw : ∀ r, R.waveAt r = R.waveAt 0) (hl : R.Laws J) (hJ : ∀ S U, J S (f U)) :
+    (ofAnchoredVia R f hw).Laws where
   full_ids := fun _ => rfl
   historyView_ids := fun _ _ _ => rfl
   agree := AnchoredRule.agreeVia hl hJ
@@ -38,8 +40,9 @@ theorem ofAnchoredVia_laws {X : Type} {f : X → BlockRecord Validator BlockId P
 /-- **And under an invariant** that implies the laws' own at every schedule. -/
 theorem ofAnchoredOn_laws {I : BlockRecord Validator BlockId Payload P honest → Prop}
     {J : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
-    (hl : R.Laws J) (hJ : ∀ S U, I U → J S U) : (ofAnchoredOn R I).Laws :=
-  ofAnchoredVia_laws hl fun S U => hJ S U.val U.property
+    (hw : ∀ r, R.waveAt r = R.waveAt 0) (hl : R.Laws J) (hJ : ∀ S U, I U → J S U) :
+    (ofAnchoredOn R I hw).Laws :=
+  ofAnchoredVia_laws hw hl fun S U => hJ S U.val U.property
 
 end Barnacle
 

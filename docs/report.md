@@ -13139,7 +13139,8 @@ structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : �
 *def, `Barnacle.Model.Anchored.lean`*
 
 ```lean
-def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest) :
+def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest)
+    (_hw : ∀ r, R.waveAt r = R.waveAt 0) :
     BaseRule Validator BlockId Payload where
   toDagRule := R.toDagRule
   full := fun U => View.full U
@@ -13149,7 +13150,7 @@ def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest) :
   decDirect := fun {U} V L r => R.decCommit U V L r
 ```
 
-**An anchored rule as a base rule.**
+**An anchored rule as a base rule**, at a wave the rule reads alike at every round.
 
 #### `ofAnchoredVia`
 
@@ -13157,7 +13158,8 @@ def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest) :
 
 ```lean
 def ofAnchoredVia (R : AnchoredRule Validator BlockId Payload P honest) {X : Type}
-    (f : X → BlockRecord Validator BlockId Payload P honest) :
+    (f : X → BlockRecord Validator BlockId Payload P honest)
+    (_hw : ∀ r, R.waveAt r = R.waveAt 0) :
     BaseRule Validator BlockId Payload where
   toDagRule := R.toDagRuleVia f
   full := fun U => View.full (f U)
@@ -19791,7 +19793,8 @@ theorem Config.uniform_sched (getLeader : ℕ → Validator) {w : ℕ} (hw : 0 <
 *theorem, `Barnacle.Helpers.Anchored.lean`*
 
 ```lean
-theorem ofAnchored_laws (hl : R.Laws) : (ofAnchored R).Laws where
+theorem ofAnchored_laws (hw : ∀ r, R.waveAt r = R.waveAt 0) (hl : R.Laws) :
+    (ofAnchored R hw).Laws where
   full_ids
 ```
 
@@ -20765,8 +20768,9 @@ theorem coversUpto_full (hfull : ∀ U : R.Universe, R.viewIds (R.full U) = R.id
 
 ```lean
 theorem delivers_core [F : Faults Validator]
-    (R : AnchoredRule Validator BlockId Payload ValidWrt (Correct : Finset Validator)) :
-    (liveOfAnchored R (coreReliability Validator)).Delivers F.f where
+    (R : AnchoredRule Validator BlockId Payload ValidWrt (Correct : Finset Validator))
+    (hw : ∀ r, R.waveAt r = R.waveAt 0) :
+    (liveOfAnchored R hw (coreReliability Validator)).Delivers F.f where
   reaches
 ```
 

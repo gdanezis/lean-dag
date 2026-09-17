@@ -18,7 +18,8 @@ variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
 /-- **Mysticeti as a live rule**, at the core's fault model. -/
 def mysticetiLive [Faults Validator] : LiveRule Validator BlockId Payload :=
-  liveOfAnchored (coreAnchored Validator BlockId Payload) (coreReliability Validator)
+  liveOfAnchored (coreAnchored Validator BlockId Payload) (fun _ => rfl)
+    (coreReliability Validator)
 
 namespace MysticetiLive
 

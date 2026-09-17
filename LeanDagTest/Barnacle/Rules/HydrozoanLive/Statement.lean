@@ -20,7 +20,7 @@ variable {BlockId : Type} [LinearOrder BlockId]
 
 /-- **Hydrozoan as a live rule**, at its fault model. -/
 def hydrozoanLive [LeanDag.Hydrozoan.Faults Replica] : LiveRule Replica BlockId Unit :=
-  liveOfAnchored (LeanDag.Hydrozoan.hydrozoanAnchored Replica BlockId)
+  liveOfAnchored (LeanDag.Hydrozoan.hydrozoanAnchored Replica BlockId) (fun _ => rfl)
     (LeanDag.Hydrozoan.hzReliability Replica)
 
 namespace HydrozoanLive

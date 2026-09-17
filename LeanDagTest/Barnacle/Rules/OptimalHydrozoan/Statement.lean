@@ -22,7 +22,7 @@ records. -/
 def optimalHydrozoan [LeanDag.OptimalHydrozoan.OptimalFaults Replica] :
     BaseRule Replica BlockId Unit :=
   ofAnchoredVia (LeanDag.OptimalHydrozoan.optimalAnchored Replica BlockId)
-    LeanDag.OptimalHydrozoan.OptUniverse.toBlockRecord
+    LeanDag.OptimalHydrozoan.OptUniverse.toBlockRecord (fun _ => rfl)
 
 namespace OptimalHydrozoan
 

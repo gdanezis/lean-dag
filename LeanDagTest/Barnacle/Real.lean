@@ -121,7 +121,7 @@ theorem real_delivers (K : ℕ) :
   obtain ⟨T, hcard, hT⟩ :=
     Validity.holds (Fin 4) ℕ Unit realRule
       MysticetiProperties.commitsCandidate bnP _ realUpd bnC1
-      (Faults.f (Fin 4)) (delivers_core _) (Ugrow (11 * K + 9))
+      (Faults.f (Fin 4)) (delivers_core _ (fun _ => rfl)) (Ugrow (11 * K + 9))
       (realRule.full (Ugrow (11 * K + 9))) K (real_runs K).some 0 (11 * K + 9)
       (ugrow_good _)
   exact ⟨T, hcard, fun b hb hbT hN k hk hround => hT b hb hbT (Nat.zero_le _) hN k hk hround⟩

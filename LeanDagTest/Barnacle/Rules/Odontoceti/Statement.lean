@@ -20,11 +20,11 @@ variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 
 /-- **Odontoceti as a base rule**: its anchored rule. -/
 def odontoceti [Faults5 Validator] : BaseRule Validator BlockId Payload :=
-  ofAnchored (Odontoceti.odontocetiAnchored Validator BlockId Payload)
+  ofAnchored (Odontoceti.odontocetiAnchored Validator BlockId Payload) (fun _ => rfl)
 
 /-- **Odontoceti as a live rule**, at the core's fault model. -/
 def odontocetiLive [Faults5 Validator] : LiveRule Validator BlockId Payload :=
-  liveOfAnchored (Odontoceti.odontocetiAnchored Validator BlockId Payload)
+  liveOfAnchored (Odontoceti.odontocetiAnchored Validator BlockId Payload) (fun _ => rfl)
     (coreReliability Validator)
 
 namespace Odontoceti

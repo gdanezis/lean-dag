@@ -17,7 +17,7 @@ variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
 /-- **Mysticeti as a base rule**: the core's anchored rule. -/
 def mysticeti [Faults Validator] : BaseRule Validator BlockId Payload :=
-  ofAnchored (coreAnchored Validator BlockId Payload)
+  ofAnchored (coreAnchored Validator BlockId Payload) (fun _ => rfl)
 
 namespace Mysticeti
 

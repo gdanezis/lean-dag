@@ -14,7 +14,7 @@ namespace OptimalHydrozoan
 
 theorem holds : Laws := by
   intro Replica BlockId _ _ _ _
-  exact ofAnchoredVia_laws LeanDag.OptimalHydrozoan.SlotAgreement.optimalLaws
+  exact ofAnchoredVia_laws (fun _ => rfl) LeanDag.OptimalHydrozoan.SlotAgreement.optimalLaws
     (fun S U => LeanDag.OptimalHydrozoan.OptUniverse.leader_excluded (S := S) U)
 
 end OptimalHydrozoan

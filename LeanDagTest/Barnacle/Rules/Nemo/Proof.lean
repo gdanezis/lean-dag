@@ -28,7 +28,7 @@ theorem majority_bound (n : ℕ) (hn : 0 < n) :
 theorem holds : Statement := by
   refine ⟨?_, descent, ?_⟩
   · intro Validator BlockId Payload _ _ _
-    exact ofAnchored_laws LeanDag.Nemo.nemoLaws
+    exact ofAnchored_laws (fun _ => rfl) LeanDag.Nemo.nemoLaws
   · intro n hn C BlockId Payload _ C hC
     have hbound : (nemoLive (Validator := Fin n) (BlockId := BlockId)
         (Payload := Payload)).waveLength * (Fintype.card (Fin n) - LeanDag.Nemo.majority (Fin n))

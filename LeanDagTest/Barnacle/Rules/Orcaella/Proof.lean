@@ -22,7 +22,7 @@ theorem descent : Descent := by
 theorem holds : Statement := by
   refine ⟨?_, descent, ?_⟩
   · intro Validator BlockId Payload _ _ _ _ k hk
-    exact ofAnchoredOn_laws (Hybrid.hybridLaws hk) (fun _ _ h => h)
+    exact ofAnchoredOn_laws (fun _ => rfl) (Hybrid.hybridLaws hk) (fun _ _ h => h)
   · intro n hn H BlockId Payload _ k hadm C hC
     have hbound : (orcaellaLive (Validator := Fin n) (BlockId := BlockId)
         (Payload := Payload) k).waveLength * (H.fb + H.fc) + 1 ≤ n := by

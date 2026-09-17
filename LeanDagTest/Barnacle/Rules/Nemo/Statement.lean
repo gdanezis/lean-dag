@@ -22,11 +22,11 @@ variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 
 /-- **Nemo-Nemo as a base rule**, with no fault class. -/
 def nemo : BaseRule Validator BlockId Payload :=
-  ofAnchored (Nemo.nemoAnchored Validator BlockId Payload)
+  ofAnchored (Nemo.nemoAnchored Validator BlockId Payload) (fun _ => rfl)
 
 /-- **Nemo-Nemo as a live rule**, at Nemo's fault model. -/
 def nemoLive [Nemo.CrashFaults Validator] : LiveRule Validator BlockId Payload :=
-  liveOfAnchored (Nemo.nemoAnchored Validator BlockId Payload)
+  liveOfAnchored (Nemo.nemoAnchored Validator BlockId Payload) (fun _ => rfl)
     (NemoProperties.nemoReliability Validator Nemo.CrashFaults.card_pos)
 
 namespace Nemo

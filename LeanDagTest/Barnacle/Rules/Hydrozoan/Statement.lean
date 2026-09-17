@@ -23,7 +23,7 @@ variable {BlockId : Type} [LinearOrder BlockId]
 
 /-- **Hydrozoan as a base rule**: its anchored rule, over its own record. -/
 def hydrozoan [LeanDag.Hydrozoan.Faults Replica] : BaseRule Replica BlockId Unit :=
-  ofAnchored (LeanDag.Hydrozoan.hydrozoanAnchored Replica BlockId)
+  ofAnchored (LeanDag.Hydrozoan.hydrozoanAnchored Replica BlockId) (fun _ => rfl)
 
 namespace Hydrozoan
 

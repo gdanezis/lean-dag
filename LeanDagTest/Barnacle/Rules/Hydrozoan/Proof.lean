@@ -15,7 +15,7 @@ namespace Hydrozoan
 
 theorem holds : Laws := by
   intro Replica BlockId _ _ _ _
-  exact ofAnchored_laws LeanDag.Hydrozoan.SlotAgreement.hydrozoanLaws
+  exact ofAnchored_laws (fun _ => rfl) LeanDag.Hydrozoan.SlotAgreement.hydrozoanLaws
 
 end Hydrozoan
 

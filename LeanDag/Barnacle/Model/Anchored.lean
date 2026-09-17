@@ -5,14 +5,18 @@ import LeanDag.Timed.Coverage
 /-!
 # An anchored rule is a Barnacle rule
 
-`ofAnchored R` is the base rule of an anchored rule: the record as
+`ofAnchored R hw` is the base rule of an anchored rule: the record as
 universe, `View.full` and `BlockRecord.historyView` for the two views,
-`R.waveAt 0 + 1` for the wave length — the gap an anchor must clear, read
-at round `0` since a base rule has one wave length, which is faithful for a
-rule whose wave is constant, as every rule Barnacle instantiates is — and
-`R.Commit` for the direct predicate. `ofAnchoredVia R f` is the same over
-any type projecting to records, and `ofAnchoredOn R I` over the records
-satisfying an invariant `I`. `liveOfAnchored R rel` adds
+`R.waveAt 0 + 1` for the wave length (the gap an anchor must clear), and
+`R.Commit` for the direct predicate. A base rule has one wave length,
+where a rule reads its own at every round, so the wave is read at round
+`0` and `hw : ∀ r, R.waveAt r = R.waveAt 0` is what makes that read the
+rule's wave everywhere. Every rule registered here closes it by `rfl`; a
+rule whose wave varies with the round cannot pass through, and is not
+banded either (`LeanDagTest/Common/VaryingWave.lean`).
+`ofAnchoredVia R f hw` is the same over any type projecting to records,
+and `ofAnchoredOn R I hw` over the records satisfying an invariant `I`.
+`liveOfAnchored R hw rel` adds
 `Timed.Good` at the fault model `rel` as the notion of a good DAG.
 `Good` stays a field of `LiveRule` so that a rule may pin another
 notion, as the witnesses of `LeanDagTest/Barnacle/Progress.lean` do.
@@ -28,8 +32,10 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {P : Validity Validator BlockId Payload} {honest : Finset Validator} [P.Mechanised]
 
-/-- **An anchored rule as a base rule.** -/
-def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest) :
+/-- **An anchored rule as a base rule**, at a wave the rule reads alike
+at every round. -/
+def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest)
+    (_hw : ∀ r, R.waveAt r = R.waveAt 0) :
     BaseRule Validator BlockId Payload where
   toDagRule := R.toDagRule
   full := fun U => View.full U
@@ -41,7 +47,8 @@ def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest) :
 /-- **An anchored rule read through a projection, as a base rule**: the
 universes are any type projecting to records. -/
 def ofAnchoredVia (R : AnchoredRule Validator BlockId Payload P honest) {X : Type}
-    (f : X → BlockRecord Validator BlockId Payload P honest) :
+    (f : X → BlockRecord Validator BlockId Payload P honest)
+    (_hw : ∀ r, R.waveAt r = R.waveAt 0) :
     BaseRule Validator BlockId Payload where
   toDagRule := R.toDagRuleVia f
   full := fun U => View.full (f U)
@@ -52,27 +59,31 @@ def ofAnchoredVia (R : AnchoredRule Validator BlockId Payload P honest) {X : Typ
 
 /-- **An anchored rule under an invariant, as a base rule.** -/
 abbrev ofAnchoredOn (R : AnchoredRule Validator BlockId Payload P honest)
-    (I : BlockRecord Validator BlockId Payload P honest → Prop) :
+    (I : BlockRecord Validator BlockId Payload P honest → Prop)
+    (hw : ∀ r, R.waveAt r = R.waveAt 0) :
     BaseRule Validator BlockId Payload :=
-  ofAnchoredVia R (fun U : {U : BlockRecord Validator BlockId Payload P honest // I U} => U.val)
+  ofAnchoredVia R (fun U : {U : BlockRecord Validator BlockId Payload P honest // I U} => U.val) hw
 
 /-- **An anchored rule as a live rule**, at a fault model. -/
 def liveOfAnchored (R : AnchoredRule Validator BlockId Payload P honest)
-    (rel : Reliability Validator) : LiveRule Validator BlockId Payload :=
-  { ofAnchored R with Good := Timed.Good R.toDagRule rel }
+    (hw : ∀ r, R.waveAt r = R.waveAt 0) (rel : Reliability Validator) :
+    LiveRule Validator BlockId Payload :=
+  { ofAnchored R hw with Good := Timed.Good R.toDagRule rel }
 
 /-- **An anchored rule read through a projection, as a live rule.** -/
 def liveOfAnchoredVia (R : AnchoredRule Validator BlockId Payload P honest) {X : Type}
-    (f : X → BlockRecord Validator BlockId Payload P honest) (rel : Reliability Validator) :
+    (f : X → BlockRecord Validator BlockId Payload P honest)
+    (hw : ∀ r, R.waveAt r = R.waveAt 0) (rel : Reliability Validator) :
     LiveRule Validator BlockId Payload :=
-  { ofAnchoredVia R f with Good := Timed.Good (R.toDagRuleVia f) rel }
+  { ofAnchoredVia R f hw with Good := Timed.Good (R.toDagRuleVia f) rel }
 
 /-- **An anchored rule under an invariant, as a live rule.** -/
 abbrev liveOfAnchoredOn (R : AnchoredRule Validator BlockId Payload P honest)
-    (I : BlockRecord Validator BlockId Payload P honest → Prop) (rel : Reliability Validator) :
+    (I : BlockRecord Validator BlockId Payload P honest → Prop)
+    (hw : ∀ r, R.waveAt r = R.waveAt 0) (rel : Reliability Validator) :
     LiveRule Validator BlockId Payload :=
   liveOfAnchoredVia R (fun U : {U : BlockRecord Validator BlockId Payload P honest // I U} => U.val)
-    rel
+    hw rel
 
 end Barnacle
 

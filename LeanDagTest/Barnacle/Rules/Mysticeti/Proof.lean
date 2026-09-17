@@ -14,7 +14,7 @@ namespace Mysticeti
 
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ _
-  exact ofAnchored_laws coreLaws
+  exact ofAnchored_laws (fun _ => rfl) coreLaws
 
 end Mysticeti
 

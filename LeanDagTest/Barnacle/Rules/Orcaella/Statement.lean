@@ -23,12 +23,12 @@ variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 
 /-- **Orcaella as a base rule**, at indirect threshold `k`. -/
 def orcaella [HybridFaults Validator] (k : ℕ) : BaseRule Validator BlockId Payload :=
-  ofAnchoredOn (Hybrid.hybridAnchored Validator BlockId Payload k) HonestNoEquiv
+  ofAnchoredOn (Hybrid.hybridAnchored Validator BlockId Payload k) HonestNoEquiv (fun _ => rfl)
 
 /-- **Orcaella as a live rule**, at the derived fault model. -/
 def orcaellaLive [HybridFaults Validator] (k : ℕ) : LiveRule Validator BlockId Payload :=
   liveOfAnchoredOn (Hybrid.hybridAnchored Validator BlockId Payload k) HonestNoEquiv
-    (coreReliability Validator)
+    (fun _ => rfl) (coreReliability Validator)
 
 namespace Orcaella
 
