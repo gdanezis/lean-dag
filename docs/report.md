@@ -10052,14 +10052,18 @@ probability `1`" as the paper states it.
 
 A record fixed before the draw is more than the argument needs. A
 **strategy** answers the coins of the `M` blocks with a record, and is
-non-anticipating (`Steelhead.NonAnticipating`) when the committed set of
-a block's rounds is fixed by the blocks below it: the adversary shapes
-the whole DAG from the draws already revealed, and only a block's own
-coins are hidden from what that block decides. **SH11f**
+non-anticipating with a floor (`Steelhead.NonAnticipating`) when at
+every round of the blocks the floor names candidates the record commits
+directly, fixed by the coins drawn before that round, those of the
+blocks below and of the block's own earlier rounds: the adversary shapes
+the whole DAG from the draws already revealed, may commit more once a
+round's coin is out, and may not shrink the floor with it; the claims
+read the floor's size, at least `n − f − b`, and nothing else. **SH11f**
 (`Steelhead.no_good_block_prob_le_adaptive`) is the block bound for such
 a family, at the same value as the fixed one: the count peels the last
-block, whose good set the earlier ones fix
-(`Steelhead.card_all_bad_le`), where the box argument of SH15a cannot
+block, whose bad set the earlier ones fix
+(`Steelhead.card_all_bad_le`), and inside a block the last round
+(`Steelhead.card_all_good_ge`), where the box argument of SH15a cannot
 reach, the failure event being no product once the good sets read the
 draw. **SH15d** (`Steelhead.undecidedProb_le_adaptive`) is then SH15a
 against a strategy and **SH15e**

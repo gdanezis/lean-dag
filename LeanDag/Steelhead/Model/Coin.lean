@@ -159,17 +159,21 @@ noncomputable def undecidedProb (U : BlockUniverse Validator BlockId Payload) (w
       Matches I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per →
       Settles I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per s}
 
-/-- **A non-anticipating strategy**: a record built from the coins of `M` blocks of `K` rounds
-whose committed set at a block's rounds is fixed by the blocks below that one. The adversary may
-shape the whole DAG from the draws already revealed, and the claims below ask nothing else of it;
-a strategy whose blocks up to a block's decision rounds are fixed by the earlier coins satisfies
-it, which is what "the adversary does not see the coin before it is used" means on a DAG. -/
+/-- **A non-anticipating strategy, with the floor `G`**: a record built from the coins of `M`
+blocks of `K` rounds, and at every round of a block a set of candidates the record commits
+directly, fixed by the coins drawn before that round, those of the blocks below and of the
+block's own earlier rounds. The adversary may shape the whole DAG from the draws already
+revealed, and may commit more candidates once a round's coin is out, as Byzantine certifiers
+that learn it from the honest shares can; what it may not do is take a candidate out of the
+floor after the draw. The claims below read the floor's size and nothing else of the record, so
+what "the adversary does not see the coin before it is used" means on a DAG is a floor of the
+counting lemma's size that the coin cannot shrink. -/
 def NonAnticipating {M K : ℕ}
-    (σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload) (wa I j₀ : ℕ) :
-    Prop :=
-  ∀ g g' (j : Fin M), (∀ j' : Fin M, j' < j → g j' = g' j') → ∀ i : Fin K,
-    MahiMahi.goodAt (σ g) wa (blockRound I j₀ j i) =
-      MahiMahi.goodAt (σ g') wa (blockRound I j₀ j i)
+    (σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload)
+    (G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator) (wa I j₀ : ℕ) : Prop :=
+  (∀ g (j : Fin M) (i : Fin K), G g j i ⊆ MahiMahi.goodAt (σ g) wa (blockRound I j₀ j i)) ∧
+    ∀ g g' (j : Fin M) (i : Fin K), (∀ j' : Fin M, j' < j → g j' = g' j') →
+      (∀ i' : Fin K, i' < i → g j i' = g' j i') → G g j i = G g' j i
 
 /-- **The probability that slot `s` stays undecided against a strategy**: `undecidedProb` with
 the record the adversary builds from the coins in place of a fixed one. The event reads the

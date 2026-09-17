@@ -116,6 +116,105 @@ theorem card_all_bad_le {α : Type} [Fintype α] [DecidableEq α] :
             Nat.mul_le_mul_right _ (ih (fun j => q j.castSucc) B' hna' fun p j => hq _ _)
         _ = ∏ j, q j := (Fin.prod_univ_castSucc q).symm
 
+/-- **The all-good count, as a lower bound.** With every round's good set of at least `c` values
+and fixed by the rounds below it, at least `c ^ K` maps have every round good: peel the last
+round, whose good set the earlier ones fix, so every good prefix extends in at least `c` ways, and
+distinct prefixes extend to distinct maps. -/
+theorem card_all_good_ge {α : Type} [Fintype α] [DecidableEq α] [Nonempty α] :
+    ∀ (K c : ℕ) (G : (Fin K → α) → Fin K → Finset α),
+      (∀ t t' (i : Fin K), (∀ i' : Fin K, i' < i → t i' = t' i') → G t i = G t' i) →
+      (∀ t i, c ≤ (G t i).card) →
+      c ^ K ≤ (Finset.univ.filter fun t : Fin K → α => ∀ i, t i ∈ G t i).card := by
+  intro K
+  induction K with
+  | zero =>
+    intro c G _ _
+    rw [pow_zero]
+    exact Finset.card_pos.mpr ⟨fun i => i.elim0,
+      Finset.mem_filter.mpr ⟨Finset.mem_univ _, fun i => i.elim0⟩⟩
+  | succ K ih =>
+    intro c G hna hc
+    classical
+    obtain ⟨a₀⟩ := (inferInstance : Nonempty α)
+    -- the good set of a round below the last reads only the rounds below it, so it is the
+    -- prefixes' own family
+    set G' : (Fin K → α) → Fin K → Finset α := fun p j => G (Fin.snoc p a₀) j.castSucc with hG'
+    have hcast : ∀ (p : Fin K → α) (a : α) (j' : Fin (K + 1)) (hj' : j'.val < K),
+        (Fin.snoc p a : Fin (K + 1) → α) j' = p ⟨j'.val, hj'⟩ := by
+      intro p a j'
+      induction j' using Fin.lastCases with
+      | last => intro h; exact absurd h (by simp)
+      | cast i =>
+        intro _
+        have h : (Fin.snoc p a : Fin (K + 1) → α) (Fin.castSucc i) = p i := by simp
+        exact h
+    have hna' : ∀ p p' (j : Fin K), (∀ j' : Fin K, j' < j → p j' = p' j') → G' p j = G' p' j := by
+      intro p p' j hagree
+      refine hna _ _ _ fun j' hj' => ?_
+      have hlt : j'.val < K := by
+        have : j'.val < (Fin.castSucc j).val := hj'
+        simp only [Fin.val_castSucc] at this
+        omega
+      rw [hcast p a₀ j' hlt, hcast p' a₀ j' hlt]
+      exact hagree ⟨j'.val, hlt⟩ (by simpa [Fin.lt_def] using hj')
+    -- every good prefix extends by every value of the last round's good set
+    have hsub : (Finset.univ.filter fun p : Fin K → α => ∀ j, p j ∈ G' p j).biUnion
+          (fun p => (G (Fin.snoc p a₀) (Fin.last K)).image
+            fun a : α => (Fin.snoc p a : Fin (K + 1) → α)) ⊆
+        Finset.univ.filter fun t : Fin (K + 1) → α => ∀ i, t i ∈ G t i := by
+      intro t ht
+      obtain ⟨p, hp, ht⟩ := Finset.mem_biUnion.mp ht
+      obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp ht
+      have hpg := (Finset.mem_filter.mp hp).2
+      refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, fun i => ?_⟩
+      -- the good set of any round of the extension is the one read with `a₀` in the last slot
+      have hG : G (Fin.snoc p a) i = G (Fin.snoc p a₀) i := by
+        refine hna _ _ _ fun i' hi' => ?_
+        have hlt : i'.val < K := by
+          have : i'.val < i.val := hi'
+          have := i.isLt
+          omega
+        rw [hcast p a i' hlt, hcast p a₀ i' hlt]
+      rw [hG]
+      induction i using Fin.lastCases with
+      | last => rw [Fin.snoc_last]; exact ha
+      | cast j => rw [Fin.snoc_castSucc]; exact hpg j
+    -- distinct prefixes extend to distinct maps
+    have hdisj : ∀ p ∈ (Finset.univ.filter fun p : Fin K → α => ∀ j, p j ∈ G' p j),
+        ∀ p' ∈ (Finset.univ.filter fun p : Fin K → α => ∀ j, p j ∈ G' p j), p ≠ p' →
+        Disjoint ((G (Fin.snoc p a₀) (Fin.last K)).image
+            fun a : α => (Fin.snoc p a : Fin (K + 1) → α))
+          ((G (Fin.snoc p' a₀) (Fin.last K)).image
+            fun a : α => (Fin.snoc p' a : Fin (K + 1) → α)) := by
+      intro p _ p' _ hne
+      rw [Finset.disjoint_left]
+      intro t ht ht'
+      obtain ⟨a, -, rfl⟩ := Finset.mem_image.mp ht
+      obtain ⟨a', -, heq⟩ := Finset.mem_image.mp ht'
+      apply hne
+      have := congrArg Fin.init heq
+      simpa [Fin.init_snoc] using this.symm
+    have hinj : ∀ p : Fin K → α,
+        Function.Injective fun a : α => (Fin.snoc p a : Fin (K + 1) → α) := by
+      intro p a b h
+      simpa using congrArg (fun t : Fin (K + 1) → α => t (Fin.last K)) h
+    calc c ^ (K + 1) = c ^ K * c := pow_succ c K
+      _ ≤ (Finset.univ.filter fun p : Fin K → α => ∀ j, p j ∈ G' p j).card * c :=
+          Nat.mul_le_mul_right c (ih c G' hna' fun p j => hc _ _)
+      _ = ∑ _p ∈ Finset.univ.filter fun p : Fin K → α => ∀ j, p j ∈ G' p j, c := by
+          rw [Finset.sum_const, smul_eq_mul]
+      _ ≤ ∑ p ∈ Finset.univ.filter fun p : Fin K → α => ∀ j, p j ∈ G' p j,
+            ((G (Fin.snoc p a₀) (Fin.last K)).image
+              fun a : α => (Fin.snoc p a : Fin (K + 1) → α)).card := by
+          refine Finset.sum_le_sum fun p _ => ?_
+          rw [Finset.card_image_of_injective _ (hinj p)]
+          exact hc _ _
+      _ = ((Finset.univ.filter fun p : Fin K → α => ∀ j, p j ∈ G' p j).biUnion
+            fun p => (G (Fin.snoc p a₀) (Fin.last K)).image
+              fun a : α => (Fin.snoc p a : Fin (K + 1) → α)).card :=
+          (Finset.card_biUnion hdisj).symm
+      _ ≤ _ := Finset.card_le_card hsub
+
 /-! ## One coin -/
 
 /-- A uniform draw lands in `G` with probability `|G| / |α|`. -/
@@ -811,12 +910,15 @@ theorem no_good_block_prob_le {M K c : ℕ} (H : Finset (Fin M))
             Nat.cast_pow, ENNReal.div_self hn hnt]
     _ = _ := by rw [Finset.prod_ite_mem, Finset.univ_inter, Finset.prod_const]
 
-/-- **SH11f, the adaptive block bound.** The bound the fixed family gets, for bad sets that read
-the blocks below their own: the count is the peeling count, and the densities multiply as before.
-An adversary that shapes the DAG from the coins already drawn gains nothing. -/
+/-- **SH11f, the adaptive block bound.** The bound the fixed family gets, for good sets that read
+the coins drawn before their own round: the count peels the last block, whose bad set the earlier
+blocks fix once that block's own rounds are written into the draw, and inside a block the last
+round (`card_all_good_ge`), and the densities multiply as before. An adversary that shapes the DAG
+from the coins already drawn gains nothing. -/
 theorem no_good_block_prob_le_adaptive {M K c : ℕ} (H : Finset (Fin M))
     (G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator)
-    (hna : ∀ g g' (j : Fin M), (∀ j' : Fin M, j' < j → g j' = g' j') → ∀ i, G g j i = G g' j i)
+    (hna : ∀ g g' (j : Fin M) (i : Fin K), (∀ j' : Fin M, j' < j → g j' = g' j') →
+      (∀ i' : Fin K, i' < i → g j i' = g' j i') → G g j i = G g' j i)
     (hc : ∀ g j i, c ≤ (G g j i).card) :
     (PMF.uniformOfFintype (Fin M → Fin K → Validator)).toOuterMeasure
         {g | ∀ j ∈ H, ∃ i, g j i ∉ G g j i} ≤
@@ -828,8 +930,13 @@ theorem no_good_block_prob_le_adaptive {M K c : ℕ} (H : Finset (Fin M))
     exact pow_ne_zero _ (by exact_mod_cast (by omega : Fintype.card Validator ≠ 0))
   have hnt : (Fintype.card Validator : ℝ≥0∞) ^ K ≠ ⊤ :=
     ENNReal.pow_ne_top (ENNReal.natCast_ne_top _)
+  -- the bad set of a block, given the blocks below it: the maps of its rounds that are not good
+  -- throughout, each read with that block written into the draw
   set B : (Fin M → Fin K → Validator) → Fin M → Finset (Fin K → Validator) :=
-    fun g j => if j ∈ H then (Fintype.piFinset (G g j))ᶜ else Finset.univ with hB
+    fun g j => if j ∈ H then
+      (Finset.univ.filter fun t : Fin K → Validator =>
+        ∀ i, t i ∈ G (Function.update g j t) j i)ᶜ
+    else Finset.univ with hB
   set q : Fin M → ℕ := fun j =>
     if j ∈ H then Fintype.card Validator ^ K - c ^ K else Fintype.card Validator ^ K with hq
   -- the event is the one the peeling count reads
@@ -842,9 +949,9 @@ theorem no_good_block_prob_le_adaptive {M K c : ℕ} (H : Finset (Fin M))
       by_cases hj : j ∈ H
       · rw [hB]
         dsimp only
-        rw [if_pos hj, Finset.mem_compl, Fintype.mem_piFinset]
+        rw [if_pos hj, Finset.mem_compl, Finset.mem_filter, Function.update_eq_self]
         obtain ⟨i, hi⟩ := h j hj
-        exact fun hall => hi (hall i)
+        exact fun hall => hi (hall.2 i)
       · rw [hB]
         dsimp only
         rw [if_neg hj]
@@ -853,8 +960,8 @@ theorem no_good_block_prob_le_adaptive {M K c : ℕ} (H : Finset (Fin M))
       have hjB := h.2 j
       rw [hB] at hjB
       dsimp only at hjB
-      rw [if_pos hj, Finset.mem_compl, Fintype.mem_piFinset] at hjB
-      exact not_forall.mp hjB
+      rw [if_pos hj, Finset.mem_compl, Finset.mem_filter, Function.update_eq_self] at hjB
+      exact not_forall.mp fun hall => hjB ⟨Finset.mem_univ _, hall⟩
   -- the bad sets read the blocks below their own, and each is small
   have hnaB : ∀ g g' (j : Fin M), (∀ j' : Fin M, j' < j → g j' = g' j') → B g j = B g' j := by
     intro g g' j hagree
@@ -862,18 +969,28 @@ theorem no_good_block_prob_le_adaptive {M K c : ℕ} (H : Finset (Fin M))
     dsimp only
     by_cases hj : j ∈ H
     · rw [if_pos hj, if_pos hj]
-      have hG : G g j = G g' j := funext fun i => hna g g' j hagree i
-      rw [hG]
+      congr 1
+      refine Finset.filter_congr fun t _ => ?_
+      have hG : ∀ i, G (Function.update g j t) j i = G (Function.update g' j t) j i := by
+        intro i
+        refine hna _ _ _ _ (fun j' hj' => ?_) (fun i' _ => ?_)
+        · rw [Function.update_of_ne (ne_of_lt hj'), Function.update_of_ne (ne_of_lt hj')]
+          exact hagree j' hj'
+        · rw [Function.update_self, Function.update_self]
+      simp only [hG]
     · rw [if_neg hj, if_neg hj]
   have hqB : ∀ g j, (B g j).card ≤ q j := by
     intro g j
     rw [hB, hq]
     dsimp only
     by_cases hj : j ∈ H
-    · rw [if_pos hj, if_pos hj, Finset.card_compl, Fintype.card_piFinset, Fintype.card_fun,
-        Fintype.card_fin]
-      have h := Finset.pow_card_le_prod Finset.univ (fun i => (G g j i).card) c fun i _ => hc g j i
-      rw [Finset.card_univ, Fintype.card_fin] at h
+    · rw [if_pos hj, if_pos hj, Finset.card_compl, Fintype.card_fun, Fintype.card_fin]
+      have h := card_all_good_ge K c (fun t i => G (Function.update g j t) j i)
+        (fun t t' i hagree => hna _ _ _ _
+          (fun j' hj' => by rw [Function.update_of_ne (ne_of_lt hj'),
+            Function.update_of_ne (ne_of_lt hj')])
+          (fun i' hi' => by rw [Function.update_self, Function.update_self]; exact hagree i' hi'))
+        (fun t i => hc _ _ _)
       omega
     · rw [if_neg hj, if_neg hj, Finset.card_univ, Fintype.card_fun, Fintype.card_fin]
   have hcount := card_all_bad_le (α := Fin K → Validator) M q B hnaB hqB
@@ -1069,7 +1186,8 @@ theorem bad_halves_prob_le {M K : ℕ} (G : Fin M → Fin K → Finset Validator
 /-- **Both halves hold a bad coin against a strategy**, at the same bound: SH11f at each half. -/
 theorem bad_halves_prob_le_adaptive {M K : ℕ}
     (G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator)
-    (hna : ∀ g g' (j : Fin M), (∀ j' : Fin M, j' < j → g j' = g' j') → ∀ i, G g j i = G g' j i)
+    (hna : ∀ g g' (j : Fin M) (i : Fin K), (∀ j' : Fin M, j' < j → g j' = g' j') →
+      (∀ i' : Fin K, i' < i → g j i' = g' j i') → G g j i = G g' j i)
     (hc : ∀ g j i, Fintype.card Validator - F.f - F.byzantine.card ≤ (G g j i).card) :
     (PMF.uniformOfFintype (Fin M → Fin K → Validator)).toOuterMeasure
         ({g | ∀ j ∈ lowerHalf M, ∃ i, g j i ∉ G g j i} ∪
@@ -1093,50 +1211,48 @@ theorem bad_halves_prob_le_adaptive {M K : ℕ}
     _ = 2 * Coin.badBlockBound Validator K ^ (M / 2) := (two_mul _).symm
 
 /-- A block map with a good block in each half settles the slot against a strategy, so the
-failure set lies in the union of the two halves' no-good-block sets. -/
+failure set lies in the union of the two halves' no-good-block sets, read at any floor of the
+committed sets. -/
 theorem failure_subset_halves_adaptive {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle : ws ≤ wa)
     (hwa : 3 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I) {upd : UpdateRule BlockId} {k₀ : ℕ}
     {known : ℕ → Validator} {d : Validator} {s M : ℕ}
-    {σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload} (h₁ : 1 ≤ s) :
+    {σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload}
+    {G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator}
+    (hG : ∀ g (j : Fin M) (i : Fin K),
+      G g j i ⊆ MahiMahi.goodAt (σ g) wa (blockRound I (intervalOf I s) j i))
+    (h₁ : 1 ≤ s) :
     {g : Fin M → Fin K → Validator | ¬ ∀ (V : View Validator BlockId Payload (σ g))
         (per : ℕ → ℕ),
         V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
         Matches I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per →
         Settles I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per s} ⊆
-      {g | ∀ j ∈ lowerHalf M, ∃ i : Fin K,
-          g j i ∉ MahiMahi.goodAt (σ g) wa (blockRound I (intervalOf I s) j i)} ∪
-        {g | ∀ j ∈ upperHalf M, ∃ i : Fin K,
-          g j i ∉ MahiMahi.goodAt (σ g) wa (blockRound I (intervalOf I s) j i)} := by
+      {g | ∀ j ∈ lowerHalf M, ∃ i : Fin K, g j i ∉ G g j i} ∪
+        {g | ∀ j ∈ upperHalf M, ∃ i : Fin K, g j i ∉ G g j i} := by
   intro g hg
   by_contra hcon
   obtain ⟨j₁, j₂, hlt, hg₁, hg₂⟩ :=
-    exists_good_blocks_of_not (G := fun j i => MahiMahi.goodAt (σ g) wa
-        (blockRound I (intervalOf I s) j i))
-      (fun h => hcon (Or.inl h)) fun h => hcon (Or.inr h)
+    exists_good_blocks_of_not (G := G g) (fun h => hcon (Or.inl h)) fun h => hcon (Or.inr h)
   exact hg fun V per hV hmatch => decided_of_good_blocks hws hle hwa hwaK hKI h₁ hlt
-    (fun i => by rw [coinOfBlocks_blockRound hKI]; exact hg₁ i)
-    (fun i => by rw [coinOfBlocks_blockRound hKI]; exact hg₂ i) V per hV hmatch
+    (fun i => by rw [coinOfBlocks_blockRound hKI]; exact hG g j₁ i (hg₁ i))
+    (fun i => by rw [coinOfBlocks_blockRound hKI]; exact hG g j₂ i (hg₂ i)) V per hV hmatch
 
 /-- **SH15d.** The failure set against a strategy lies in the union of the two halves'
-no-good-block sets, which SH11f bounds for a strategy that reads only the draws already made:
-the blocks' committed sets move with the record, and the argument of SH15a is unchanged. -/
+no-good-block sets at the strategy's floor, which SH11f bounds once the floor reads only the draws
+already made and holds the counting lemma's share: the blocks' committed sets move with the
+record, and the argument of SH15a is unchanged. -/
 theorem undecidedProb_le_adaptive {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 5 ≤ wa)
-    (hwaK : wa ≤ K) (hKI : K ≤ I) {T : Finset Validator}
-    (hcard : quorumCard Validator ≤ T.card) {upd : UpdateRule BlockId} {k₀ : ℕ}
+    (hwaK : wa ≤ K) (hKI : K ≤ I) {upd : UpdateRule BlockId} {k₀ : ℕ}
     {known : ℕ → Validator} {d : Validator} {s M : ℕ}
-    {σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload} (h₁ : 1 ≤ s)
-    (hσ : NonAnticipating σ wa I (intervalOf I s))
-    (hpop : ∀ g (j : Fin M) (i : Fin K),
-      PopulatedOn (σ g) T (blockRound I (intervalOf I s) j i + 3) ∧
-      PopulatedOn (σ g) T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) :
+    {σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload}
+    {G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator} (h₁ : 1 ≤ s)
+    (hσ : NonAnticipating σ G wa I (intervalOf I s))
+    (hc : ∀ g j i, Fintype.card Validator - F.f - F.byzantine.card ≤ (G g j i).card) :
     undecidedProbAgainst σ ws wa I upd k₀ known d s ≤
       2 * Coin.badBlockBound Validator K ^ (M / 2) :=
   le_trans
     (MeasureTheory.measure_mono
-      (failure_subset_halves_adaptive hws hle (by omega) hwaK hKI h₁))
-    (bad_halves_prob_le_adaptive
-      (fun g j i => MahiMahi.goodAt (σ g) wa (blockRound I (intervalOf I s) j i)) hσ
-      fun g j i => card_goodAt_of_populated hwa hcard (hpop g j i).1 (hpop g j i).2)
+      (failure_subset_halves_adaptive hws hle (by omega) hwaK hKI hσ.1 h₁))
+    (bad_halves_prob_le_adaptive G hσ.2 hc)
 
 /-- **SH15a.** The failure set lies in the union of the two halves' no-good-block sets, each of
 which the counting bounds. -/
@@ -1333,14 +1449,12 @@ theorem undecided_coin_le [MeasurableSpace Validator] [MeasurableSingletonClass 
 through the coins of the blocks, with the record the strategy builds from them. -/
 theorem undecided_coin_le_adaptive [MeasurableSpace Validator]
     [MeasurableSingletonClass Validator] {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle : ws ≤ wa)
-    (hwa : 5 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I) {T : Finset Validator}
-    (hcard : quorumCard Validator ≤ T.card) {upd : UpdateRule BlockId} {k₀ : ℕ}
+    (hwa : 5 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I) {upd : UpdateRule BlockId} {k₀ : ℕ}
     {known : ℕ → Validator} {s M : ℕ}
-    {σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload} (h₁ : 1 ≤ s)
-    (hσ : NonAnticipating σ wa I (intervalOf I s))
-    (hpop : ∀ (g : Fin M → Fin K → Validator) (j : Fin M) (i : Fin K),
-      PopulatedOn (σ g) T (blockRound I (intervalOf I s) j i + 3) ∧
-      PopulatedOn (σ g) T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) :
+    {σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload}
+    {G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator} (h₁ : 1 ≤ s)
+    (hσ : NonAnticipating σ G wa I (intervalOf I s))
+    (hc : ∀ g j i, Fintype.card Validator - F.f - F.byzantine.card ≤ (G g j i).card) :
     coinMeasure Validator {coin |
         ¬ ∀ (V : View Validator BlockId Payload (σ (blockCoins I (intervalOf I s) M K coin)))
           (per : ℕ → ℕ),
@@ -1355,37 +1469,32 @@ theorem undecided_coin_le_adaptive [MeasurableSpace Validator]
         Matches I wa coin known upd k₀ ws (σ (blockCoins I (intervalOf I s) M K coin)) V per →
         Settles I wa coin known upd k₀ ws (σ (blockCoins I (intervalOf I s) M K coin)) V per s} ⊆
       {coin | blockCoins I (intervalOf I s) M K coin ∈
-        ({g | ∀ j ∈ lowerHalf M, ∃ i : Fin K,
-            g j i ∉ MahiMahi.goodAt (σ g) wa (blockRound I (intervalOf I s) j i)} ∪
-          {g | ∀ j ∈ upperHalf M, ∃ i : Fin K,
-            g j i ∉ MahiMahi.goodAt (σ g) wa (blockRound I (intervalOf I s) j i)})} := by
+        ({g | ∀ j ∈ lowerHalf M, ∃ i : Fin K, g j i ∉ G g j i} ∪
+          {g | ∀ j ∈ upperHalf M, ∃ i : Fin K, g j i ∉ G g j i})} := by
     intro coin hcoin
     by_contra hcon
     obtain ⟨j₁, j₂, hlt, hg₁, hg₂⟩ :=
-      exists_good_blocks_of_not (G := fun j i => MahiMahi.goodAt
-          (σ (blockCoins I (intervalOf I s) M K coin)) wa (blockRound I (intervalOf I s) j i))
+      exists_good_blocks_of_not (G := G (blockCoins I (intervalOf I s) M K coin))
         (fun h => hcon (Or.inl h)) fun h => hcon (Or.inr h)
     exact hcoin fun V per hV hmatch => decided_of_good_blocks hws hle (by omega) hwaK hKI
-      h₁ hlt hg₁ hg₂ V per hV hmatch
+      h₁ hlt (fun i => hσ.1 _ j₁ i (hg₁ i)) (fun i => hσ.1 _ j₂ i (hg₂ i)) V per hV hmatch
   exact le_trans (MeasureTheory.measure_mono hsub)
     (le_of_eq_of_le (coinMeasure_blockCoins_mem hKI _)
-      (bad_halves_prob_le_adaptive
-        (fun g j i => MahiMahi.goodAt (σ g) wa (blockRound I (intervalOf I s) j i)) hσ
-        fun g j i => card_goodAt_of_populated hwa hcard (hpop g j i).1 (hpop g j i).2))
+      (bad_halves_prob_le_adaptive G hσ.2 hc))
 
 /-- **SH15e.** The almost-sure claim against an adversary that answers the draws already made:
-the records of the sequence are the strategies' answers to the coins of their own blocks, and the
-argument of SH15c is unchanged, since the failure set of each record is SH15d's. -/
+the records of the sequence are the strategies' answers to the coins of their own blocks, each
+with its floor, and the argument of SH15c is unchanged, since the failure set of each record is
+SH15d's. -/
 theorem decidedAlmostSurely_adaptive [MeasurableSpace Validator]
     [MeasurableSingletonClass Validator] {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle : ws ≤ wa)
     (hwa : 5 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I)
     {σ : ∀ m : ℕ, (Fin m → Fin K → Validator) → BlockUniverse Validator BlockId Payload}
-    {T : Finset Validator} (hcard : quorumCard Validator ≤ T.card) {upd : ℕ → UpdateRule BlockId}
-    {k₀ : ℕ} {known : ℕ → Validator} {s : ℕ} (h₁ : 1 ≤ s)
-    (hσ : ∀ m, NonAnticipating (σ m) wa I (intervalOf I s))
-    (hpop : ∀ (m : ℕ) (g : Fin m → Fin K → Validator) (j : Fin m) (i : Fin K),
-      PopulatedOn (σ m g) T (blockRound I (intervalOf I s) j i + 3) ∧
-      PopulatedOn (σ m g) T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) :
+    {G : ∀ m : ℕ, (Fin m → Fin K → Validator) → Fin m → Fin K → Finset Validator}
+    {upd : ℕ → UpdateRule BlockId} {k₀ : ℕ} {known : ℕ → Validator} {s : ℕ} (h₁ : 1 ≤ s)
+    (hσ : ∀ m, NonAnticipating (σ m) (G m) wa I (intervalOf I s))
+    (hc : ∀ (m : ℕ) (g : Fin m → Fin K → Validator) (j : Fin m) (i : Fin K),
+      Fintype.card Validator - F.f - F.byzantine.card ≤ (G m g j i).card) :
     ∀ᵐ coin ∂(coinMeasure Validator), ∃ m,
       ∀ (V : View Validator BlockId Payload (σ m (blockCoins I (intervalOf I s) m K coin)))
         (per : ℕ → ℕ),
@@ -1399,8 +1508,8 @@ theorem decidedAlmostSurely_adaptive [MeasurableSpace Validator]
     (ge_of_tendsto' (undecided_tail_tendsto_zero (Validator := Validator) (K := K)) fun m => ?_)
     zero_le
   refine le_trans (MeasureTheory.measure_mono fun coin h => ?_)
-    (undecided_coin_le_adaptive hws hle hwa hwaK hKI hcard (upd := upd m) (k₀ := k₀)
-      (known := known) h₁ (hσ m) (hpop m))
+    (undecided_coin_le_adaptive hws hle hwa hwaK hKI (upd := upd m) (k₀ := k₀)
+      (known := known) h₁ (hσ m) (hc m))
   simp only [Set.mem_setOf_eq, not_exists] at h ⊢
   exact h m
 

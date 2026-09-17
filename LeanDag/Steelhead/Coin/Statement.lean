@@ -30,13 +30,15 @@ clause of its Theorem 2. Thirteen claims:
 * **SH11d, the tail vanishes** — that bound tends to zero, since
   `f + |byzantine| ≤ 2f < n`;
 * **SH11f, the adaptive block bound** — the same bound for good sets
-  that read the coins already drawn: if the good set of a block's rounds
-  is fixed by the blocks below it and holds at least `c` validators,
-  then every block of a set holds a bad coin with probability at most
+  that read the coins already drawn: if the good set of every round is
+  fixed by the coins drawn before it, those of the blocks below and of
+  the block's earlier rounds, and holds at least `c` validators, then
+  every block of a set holds a bad coin with probability at most
   `((n^K − c^K) / n^K)` to the size of that set, as for a fixed family.
-  The count peels the last block, whose good set the earlier ones fix,
-  so the argument is a count over a finite type with no conditioning to
-  state;
+  The count peels the last block, whose bad set the earlier ones fix,
+  and inside a block the last round, whose good set the earlier rounds
+  fix, so the argument is a count over a finite type with no
+  conditioning to state;
 * **SH15a, the output is live but for a vanishing probability** —
   Theorem 3's "with probability `1`", in the form a finite record
   admits: over the uniform independent coins of `M` blocks of `K` rounds,
@@ -55,8 +57,14 @@ clause of its Theorem 2. Thirteen claims:
   record is the adversary's own answer to the coins already drawn
   (`NonAnticipating`, `undecidedProbAgainst`): at every block map the
   event reads the record that map produced, and the bound is unchanged,
-  by SH11f. What the adversary may not do is read a block's own coins
-  before fixing the committed set of that block's rounds;
+  by SH11f. The adversary names, at every round of the blocks, a floor
+  of candidates its record commits directly, fixed by the coins drawn
+  before that round and holding the counting lemma's `n − f − b`; it
+  may commit more once the coin is out, and what it may not do is take a
+  candidate out of the floor after the draw. The floor's size is a
+  hypothesis: the counting lemma gives it for the record as built, and
+  that the round's own coin leaves it is what A5's reveal timing
+  supplies, which the model does not state;
 * **SH15b, that tail vanishes** — the bound tends to zero as the number
   of blocks grows, since `n − f − b ≥ 1`;
 * **SH15c, the slot is decided almost surely** — Theorem 3's "with
@@ -97,11 +105,12 @@ clause of its Theorem 2. Thirteen claims:
 
 The blocks' coins are drawn after the record is fixed, as SH11c's are,
 and the records of SH15c before the process: the adversary that shapes
-the DAG does not see them, which is the coin's unpredictability. SH11f
-and SH15d weaken that to what the argument needs, an adversary that
-answers the draws already made. What
-SH15a leaves to the network is what SH14c asks of it, that the waves of
-the blocks be populated.
+the DAG does not see them, which is the coin's unpredictability. SH11f,
+SH15d and SH15e weaken that to what the argument needs, an adversary
+that answers the draws already made and keeps a floor of committed
+candidates the next draw cannot shrink. What SH15a leaves to the network
+is what SH14c asks of it, that the waves of the blocks be populated; what
+SH15d and SH15e leave to it is the floor's size.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -229,8 +238,10 @@ def BadChainBound (wa K : ℕ) : Prop :=
 def AdaptiveBlockBound (K : ℕ) : Prop :=
   ∀ (M c : ℕ) (H : Finset (Fin M))
     (G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator),
-    -- the good sets read only the coins of the blocks below their own ...
-    (∀ g g' (j : Fin M), (∀ j' : Fin M, j' < j → g j' = g' j') → ∀ i, G g j i = G g' j i) →
+    -- the good sets read only the coins drawn before their own round, those of the blocks below
+    -- and of the block's earlier rounds ...
+    (∀ g g' (j : Fin M) (i : Fin K), (∀ j' : Fin M, j' < j → g j' = g' j') →
+      (∀ i' : Fin K, i' < i → g j i' = g' j i') → G g j i = G g' j i) →
     -- ... and each holds at least c validators
     (∀ g j i, c ≤ (G g j i).card) →
     -- then every block of H holds a bad coin with at most the fixed family's probability
@@ -241,18 +252,17 @@ def AdaptiveBlockBound (K : ℕ) : Prop :=
 
 /-- **SH15d, the tail against an adaptive adversary.** -/
 def UndecidedTailAgainst (ws wa I K : ℕ) : Prop :=
-  ∀ (T : Finset Validator) (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator)
-    (d : Validator) (s M : ℕ)
-    (σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload),
-    -- the waves, a quorum, a period bound a run of wa fits in, blocks of K rounds that fit in an
-    -- interval, and a slot at round one or above
-    2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → quorumCard Validator ≤ T.card → 1 ≤ s →
-    -- the adversary builds its record from the coins of the blocks below each block ...
-    NonAnticipating σ wa I (intervalOf I s) →
-    -- ... and every record it builds has the M blocks' waves populated where MM2 reads them
-    (∀ (g : Fin M → Fin K → Validator) (j : Fin M) (i : Fin K),
-      PopulatedOn (σ g) T (blockRound I (intervalOf I s) j i + 3) ∧
-      PopulatedOn (σ g) T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) →
+  ∀ (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (d : Validator) (s M : ℕ)
+    (σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload)
+    (G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator),
+    -- the waves, a period bound a run of wa fits in, blocks of K rounds that fit in an interval,
+    -- and a slot at round one or above
+    2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → 1 ≤ s →
+    -- the adversary builds its record from the coins already drawn, with a floor of committed
+    -- candidates at every round of the blocks that the round's own coin cannot shrink ...
+    NonAnticipating σ G wa I (intervalOf I s) →
+    -- ... and the floor holds at least n − f − b validators, the counting lemma's share
+    (∀ g j i, Fintype.card Validator - F.f - F.byzantine.card ≤ (G g j i).card) →
     -- then the slot stays undecided with the probability SH15a gives against a fixed record
     undecidedProbAgainst σ ws wa I upd k₀ known d s ≤ 2 * badBlockBound Validator K ^ (M / 2)
 
@@ -286,17 +296,16 @@ def DecidedAlmostSurely (ws wa I K : ℕ) : Prop :=
 def DecidedAlmostSurelyAgainst (ws wa I K : ℕ) : Prop :=
   ∀ [MeasurableSpace Validator] [MeasurableSingletonClass Validator]
     (σ : ∀ m : ℕ, (Fin m → Fin K → Validator) → BlockUniverse Validator BlockId Payload)
-    (T : Finset Validator) (upd : ℕ → UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator)
-    (s : ℕ),
-    -- the waves, a quorum, a period bound a run of wa fits in, blocks of K rounds that fit in an
-    -- interval, and a slot at round one or above
-    2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → quorumCard Validator ≤ T.card → 1 ≤ s →
-    -- every strategy of the sequence answers the draws already made ...
-    (∀ m, NonAnticipating (σ m) wa I (intervalOf I s)) →
-    -- ... and every record it builds holds the m blocks' waves populated where MM2 reads them
+    (G : ∀ m : ℕ, (Fin m → Fin K → Validator) → Fin m → Fin K → Finset Validator)
+    (upd : ℕ → UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (s : ℕ),
+    -- the waves, a period bound a run of wa fits in, blocks of K rounds that fit in an interval,
+    -- and a slot at round one or above
+    2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → 1 ≤ s →
+    -- every strategy of the sequence answers the draws already made, with its floor ...
+    (∀ m, NonAnticipating (σ m) (G m) wa I (intervalOf I s)) →
+    -- ... and every floor holds at least n − f − b validators
     (∀ (m : ℕ) (g : Fin m → Fin K → Validator) (j : Fin m) (i : Fin K),
-      PopulatedOn (σ m g) T (blockRound I (intervalOf I s) j i + 3) ∧
-      PopulatedOn (σ m g) T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) →
+      Fintype.card Validator - F.f - F.byzantine.card ≤ (G m g j i).card) →
     -- then for almost every coin some strategy's own record decides s in every view holding its
     -- horizon, at every period sequence matching what the view derives
     ∀ᵐ coin ∂(coinMeasure Validator), ∃ m,

@@ -31,13 +31,13 @@ theorem holds : Statement := by
     exact no_good_block_prob_le_adaptive H G hna hc
   · intro T upd k₀ known d s M hws hle hwa hwaK hKI hcard h₁ hpop
     exact undecidedProb_le hws hle hwa hwaK hKI hcard h₁ hpop
-  · intro T upd k₀ known d s M σ hws hle hwa hwaK hKI hcard h₁ hσ hpop
-    exact undecidedProb_le_adaptive hws hle hwa hwaK hKI hcard h₁ hσ hpop
+  · intro upd k₀ known d s M σ G hws hle hwa hwaK hKI h₁ hσ hc
+    exact undecidedProb_le_adaptive hws hle hwa hwaK hKI h₁ hσ hc
   · exact undecided_tail_tendsto_zero
   · intro _ _ U T upd k₀ known s hws hle hwa hwaK hKI hcard h₁ hpop
     exact decidedAlmostSurely hws hle hwa hwaK hKI hcard h₁ hpop
-  · intro _ _ σ T upd k₀ known s hws hle hwa hwaK hKI hcard h₁ hσ hpop
-    exact decidedAlmostSurely_adaptive hws hle hwa hwaK hKI hcard h₁ hσ hpop
+  · intro _ _ σ G upd k₀ known s hws hle hwa hwaK hKI h₁ hσ hc
+    exact decidedAlmostSurely_adaptive hws hle hwa hwaK hKI h₁ hσ hc
   · intro w c k₀ h d σ V hw hwa hna hV hcard hland hK
     exact badChainProb_le hw hwa hna hV hcard hland hK
   · intro coin known upd k₀ V hws hwa

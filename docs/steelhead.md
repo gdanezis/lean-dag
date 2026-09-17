@@ -483,22 +483,31 @@ is that the blocks' waves be populated.
 **The adaptive adversary** (`NonAnticipating`, SH11f, SH15d). A record
 fixed before the draw is more than the argument needs. A **strategy**
 `σ` answers the coins of the `M` blocks with a record, and is
-*non-anticipating* when the committed set of a block's rounds is fixed
-by the blocks below that one: the adversary shapes the whole DAG from
-the draws already revealed, and only a block's own coins are hidden from
-the blocks it decides. **SH11f** (`no_good_block_prob_le_adaptive`) is
-the block bound for such a family: peel the last block, whose good set
-the earlier ones fix, so the count over the maps whose every block of a
-set is bad is at most the product of the per-block counts
-(`card_all_bad_le`), exactly the bound the fixed family gets. The box
+*non-anticipating with the floor `G`* when at every round of the blocks
+`G` names a set of candidates the record commits directly, fixed by the
+coins drawn before that round, those of the blocks below and of the
+block's own earlier rounds: the adversary shapes the whole DAG from the
+draws already revealed, may commit more candidates once a round's coin
+is out, as Byzantine certifiers that learn it from the honest shares can,
+and may not take a candidate out of the floor after the draw. The
+claims read the floor's size, at least `n − f − b`, and nothing else of
+the record; that the counting lemma's share survives the round's own
+draw is what A5's reveal timing supplies, which the model does not
+state. **SH11f** (`no_good_block_prob_le_adaptive`) is the block bound
+for such a family: peel the last block, whose bad set the earlier ones
+fix once its own rounds are written into the draw, so the count over the
+maps whose every block of a set is bad is at most the product of the
+per-block counts (`card_all_bad_le`), and inside a block peel the last
+round, so at least `c^K` of a block's maps are good throughout
+(`card_all_good_ge`), exactly the bound the fixed family gets. The box
 argument cannot reach this, since the failure event is no longer a
 product once the good sets read the draw. **SH15d**
 (`undecidedProb_le_adaptive`) is SH15a against a strategy, at the same
-bound and by the same inclusion, and **SH15e**
+bound and by the same inclusion read at the floor, and **SH15e**
 (`decidedAlmostSurely_adaptive`) is SH15c over a sequence of strategies,
-the `m`-th answering the coins of its own `m` blocks. What the adversary
-may not do is read a block's coins before fixing what that block's
-rounds commit, which is what an unpredictable coin means on a DAG.
+the `m`-th answering the coins of its own `m` blocks with its own floor.
+What the adversary may not do is shrink the floor of a round with that
+round's coin, which is what an unpredictable coin means on a DAG.
 
 **The coin as a process** (`coinMeasure`, SH15c). What one finite record
 cannot say, a sequence of them can. `coinMeasure` is
