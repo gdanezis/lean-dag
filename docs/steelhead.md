@@ -109,10 +109,11 @@ from coverage into certification; the unpredictable-leader clause.
   tends to zero, and the probability that every one of them does is at
   least `((n − f − b) / n)^m`, the paper's `p^{wa}` per attempt at
   `m = wa` (SH11g). The probability half of Theorem 3 (i), in Mathlib's
-  `PMF`. Theorem 2's per-hop clause is here too: against a strategy that
-  answers only the draws already made, the floor chain's first `h`
-  landings are all led from outside their round's committed set with
-  probability at most `((n − c) / n)^h` (SH11h). And Theorem 3's "with probability `1`" in the form a finite
+  `PMF`. Theorem 2's asynchronous-floor clause is here too: at period
+  one a slot below `M` consecutive blocks of `wa` coins stays undecided
+  with probability at most `((n^wa − (n − f − b)^wa) / n^wa)^M`, the
+  drain below a block of good coins (SH11h); no bound per hop of the
+  search holds (§7, finding 9). And Theorem 3's "with probability `1`" in the form a finite
   record admits (SH15): over the coins of `M` blocks of `K` rounds, one
   opening each interval from the second after a slot's, a view's scan
   stalls below the slot's interval or leaves the slot undecided under
@@ -195,7 +196,7 @@ from coverage into certification; the unpredictable-leader clause.
 | Corollary 1 (handover) | SH3 | stated against the relation's anchor search |
 | Theorem 1 (agreement) | SH2, SH16 | `AnchoredRule.decided_unique` at Steelhead's laws; at the interface level, any family of rules whose laws hold composes into one whose laws hold, and Steelhead is the composite of Mahi-Mahi's rule at each round's wave |
 | Corollary 2 (total order and integrity) | SH13 | in part: the relation's own ledger theorems at Steelhead's laws, over a settled prefix. Ordering the blocks a single commit releases is declined development-wide (report §1.4, §5.6) |
-| Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e, SH6f, SH6g, SH6h, SH6i, SH6l, SH6j, SH6k | in part: the honest-leader commit by the direct rule, everything below a fair run, the crashed-leader skip from `n − f` blames, the remark that partial dissemination does not defer, for a leader that did not equivocate, and the anchor clause as the rule has it, a slot decided once every slot from its floor up to some reliably led slot is decided (SH6f) or once the chain of floors reaches a reliably led landing (SH6g). The bound on that clause, "once the first honest-led slot above its floor commits, at most `b` slots higher", is refuted on data, an equivocating leader at the floor being the anchor (§7, finding 7); what holds at the implementation's round-robin schedule is the hop count itself, a reliably led landing within `n − |T|` hops once `ws · (n − |T|) < n` (SH6i), within the paper's `b` hops once every other validator outside `T` has crashed (SH6l), and a round count, one reliable leader within `n − |T|` rounds and a reliable run of three past every round at `n = 3f + 1` (SH6h), which also discharges SH6b's fairness hypothesis there. The per-hop probability the theorem states for the coin's slots is SH11h, over a strategy that answers only the draws already made. The `O(wa + b)` ordering bound fails for some coin sequences at period `1` (§7, finding 5) and holds only as SH15's tail. SH6a's hypothesis is reached from either execution discipline, the reactive one (SH6j) and the timed one (SH6k); what neither bounds is a wall-clock latency, since a round is the only unit the model carries |
+| Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e, SH6f, SH6g, SH6h, SH6i, SH6l, SH6j, SH6k | in part: the honest-leader commit by the direct rule, everything below a fair run, the crashed-leader skip from `n − f` blames, the remark that partial dissemination does not defer, for a leader that did not equivocate, and the anchor clause as the rule has it, a slot decided once every slot from its floor up to some reliably led slot is decided (SH6f) or once the chain of floors reaches a reliably led landing (SH6g). The bound on that clause, "once the first honest-led slot above its floor commits, at most `b` slots higher", is refuted on data, an equivocating leader at the floor being the anchor (§7, finding 7); what holds at the implementation's round-robin schedule is the hop count itself, a reliably led landing within `n − |T|` hops once `ws · (n − |T|) < n` (SH6i), within the paper's `b` hops once every other validator outside `T` has crashed (SH6l), and a round count, one reliable leader within `n − |T|` rounds and a reliable run of three past every round at `n = 3f + 1` (SH6h), which also discharges SH6b's fairness hypothesis there. No per-hop probability holds for the coin's slots, a landing of the search reading coins above it (`HopBound.lean`; §7, finding 9); what holds is SH11h, the tail below runs of `wa` good coins at period one, which is the expectation the paper states. The `O(wa + b)` ordering bound fails for some coin sequences at period `1` (§7, finding 5) and holds only as SH15's tail. SH6a's hypothesis is reached from either execution discipline, the reactive one (SH6j) and the timed one (SH6k); what neither bounds is a wall-clock latency, since a round is the only unit the model carries |
 | Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the chain settles under Mahi-Mahi's run clause and below any one run of `wa` good coins, a period is derived for each interval, an anchor below which the agreed output committed nothing for `I` rounds hands the next interval period `1`, the failover the implementation applies before the rule is consulted (`apply_period_update`) and the paper's premise on the update rule is not (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15c over a sequence of records, SH15a's tail on one |
 | Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b, SH14c, SH15 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval at least two past the slot's and one run of `wa` good coins above it; SH14b reads both off the run clause at the chain schedule, SH14c off two runs of the coin; SH15a bounds the probability that some view has not derived the slot's period or leaves it undecided, over `M` blocks of coins, by `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero (SH15b); and SH15c states the "with probability `1`" itself, over a sequence of records with the coin drawn as a process: for almost every coin some record decides the slot in every view holding its horizon. SH15d and SH15e are the same two against an adversary that answers the draws already made, by the adaptive block bound SH11f. The growth of the ledger from the settled prefix is SH13 |
 | Theorem 4 (agreement of the period) | SH10a, SH10b | for any deterministic update rule; SH10a at one wavelength on both sides, SH10b at each validator's own derived wavelength, where the sequences agree below the record's top interval and the verdicts with them |
@@ -428,23 +429,22 @@ SH11a, SH11e, SH11g, SH11b, SH11c and SH11d over `commitProb`,
 `runProb` and `noCommitProb`, three of the quantities `Model/Coin.lean`
 defines.
 
-**The chain's landings under the coin** (`badChainProb`, SH11h). Theorem
-2 bounds each hop of the anchor search onto a Byzantine-led slot by
-`b/n`. The landings are not a filtration of the draw: whether a slot is
-skipped is settled by its own wave, so a landing depends on coins above
-it, and conditioning on a landing biases the coin there. What is a
-stopping time is the floor a hop leaves from, and a landing is led from
-outside the round's committed set only if the coin at that floor was,
-since a committed candidate's slot is never skipped and the search would
-have stopped there. The floors climb by a wave a hop, and
-`NonAnticipatingChain` asks the strategy to fix the committed set of a
-round, and the skip verdict of every slot whose wave lies below it,
-before the round's coin is drawn; the count then peels one floor at a
-time, pairing each bad draw with a good value there, and gives
-`((n − c) / n)^h` over `h` hops (`stop_step_card`, `bad_stops_card`,
-`badChainProb_le`). The claim is stated at period one, where every slot
-is the coin's; at a mixed schedule a hop may land on a known leader,
-which no coin governs.
+**The search under the coin** (`coinOfBlocksFrom`, SH11h). Theorem 2
+bounds the anchor search above an asynchronous floor. What holds is the
+run form: at period one every slot below a block of `wa` coin rounds
+naming committed candidates is decided, by the drain (SH9), so over `M`
+consecutive blocks of `wa` coins above a slot it stays undecided with
+probability at most `((n^wa − (n − f − b)^wa) / n^wa)^M`, the chance
+that every block holds a bad coin, which the fixed-record block count
+gives (`undecidedAtPeriodOne_le`, `no_good_block_prob_le`), the paper's
+`(1 − p^{wa})^M` after `M` attempts. No bound per hop of the search
+holds: a landing of the search is not a function of the coins below it,
+since the coin that commits an anchor above a pending slot both skips
+that slot and shifts the landing, and `HopBound.lean` (§8) exhibits two
+landings led by the one Byzantine validator with probability `19/256`,
+above `(b/n)^2 = 1/16` (§7, finding 9). The claim is stated at period
+one, where every slot is the coin's; at a mixed schedule a hop may land
+on a known leader, which no coin governs.
 
 **The tail of the output** (`undecidedProb`, SH15). Theorem 3's "with
 probability `1`" cannot be stated on a fixed record, which is finite and
@@ -1034,6 +1034,21 @@ either, which Theorem 2's undecided slot is not.
    the replay needs is `I ≥ max(2 · maxPeriod, maxPeriod + wa − 2)`
    (SH10k); the campaigns' `I = 128` satisfies it,
    the paper's constraint does not state it.
+9. **No per-hop bound holds for the anchor search under the coin.**
+   Theorem 2 bounded each hop of the search onto a Byzantine-led slot by
+   `b/n`. A landing of the search is not a function of the coins below
+   it: whether a pending slot is skipped turns on a commit above it, and
+   the coin that commits that anchor both skips the slot, shifting the
+   landing up by one, and leads the next landing. On thirty-six blocks
+   at wave `3` with validator `0` Byzantine (`HopBound.lean`, §8), the
+   coins `(3, 6) = (0, 0)` land the search on slots `3` and `6`, and the
+   coins `3 = 0`, `6 ≠ 0`, `(4, 7) = (0, 0)` on slots `4` and `7`; the two
+   patterns are disjoint, both Byzantine-led twice, and together have
+   probability `19/256`, above `(b/n)^2 = 1/16`. What holds is the run
+   form (SH11h): at period one a slot below a block of `wa` good coins is
+   decided, so the search outlasts `M` blocks with probability at most
+   `((n^wa − (n − f − b)^wa) / n^wa)^M`, which is the expectation the
+   paper states in place of the per-hop clause.
 
 ## 8. Witnesses (`LeanDagTest/Steelhead/`), SH12
 
@@ -1070,7 +1085,16 @@ validator leads, so that SH6g's reliably led landing is the one thing
 missing; and the round-robin schedule of SH6h at `n = 4`, which leads
 three consecutive rounds from a correct quorum past every round and
 never four, so that the side condition `c · (n − |T|) < n` is tight at
-the committee the implementation runs. `Replay.lean`: Algorithm 2 on the
+the committee the implementation runs. `HopBound.lean`: nine rounds at
+wave `3` on which validator `0`'s blocks of rounds `3`, `4` and `6` carry
+two votes and two blames each, so that under the chain schedule of an
+arbitrary coin the first two landings of the search from slot `0` are
+both led by validator `0` under two disjoint coin patterns, rounds `3`
+and `6` drawing `0`, or round `3` drawing `0`, round `6` an honest
+validator whose commit skips slot `3`, and rounds `4` and `7` drawing
+`0`; their union has probability `19/256` under the uniform coin of nine
+rounds, above the `(b/n)^2 = 1/16` of two hops at `b/n` each
+(`hb36_hop_bound_fails`; §7, finding 9). `Replay.lean`: Algorithm 2 on the
 window of `sh8`'s round-`7` block, where period `1` scores `18` and
 period `8` scores `11`, so the replay recovers from period `1` at
 hysteresis `1/10` and stays there at `1/2`, and the selection's ties on
@@ -1128,7 +1152,7 @@ LeanDag/Steelhead/
   Model/Coin.lean           commitProb, runProb, noCommitProb, blockRound, coinOfBlocks,
                             blockCoins, blocksHorizon, Matches, Settles, undecidedProb,
                             NonAnticipating, undecidedProbAgainst, coinOfRounds,
-                            NonAnticipatingChain, chainLandings, badChainProb, coinMeasure
+                            coinOfBlocksFrom, coinMeasure
   Model/Reactive.lean       ReactiveS
   Model/Compose.lean        compose
   Model/Replay.lean         Evidence, Config, Timing, windowIds, ofAnchor, committedCount,
@@ -1146,8 +1170,8 @@ LeanDag/Steelhead/
   Properties.lean           the carrier, its properties and support
 LeanDagTest/Steelhead/
   Model.lean  Period.lean  Stall.lean  CoinDelay.lean  AdaptiveCoin.lean  ByzantineFloor.lean
-  Replay.lean  ReplayStartup.lean  ReplayShortWindow.lean  RotatingStall.lean  Failover.lean
-  Axioms.lean
+  HopBound.lean  Replay.lean  ReplayStartup.lean  ReplayShortWindow.lean  RotatingStall.lean
+  Failover.lean  Axioms.lean
 ```
 
 `scripts/check-arc-holes.py` enforces the partition: `Statement.lean`

@@ -38,8 +38,8 @@ theorem holds : Statement := by
     exact decidedAlmostSurely hws hle hwa hwaK hKI hcard h₁ hpop
   · intro _ _ σ G upd k₀ known s hws hle hwa hwaK hKI h₁ hσ hc
     exact decidedAlmostSurely_adaptive hws hle hwa hwaK hKI h₁ hσ hc
-  · intro w c k₀ h d σ V hw hwa hna hV hcard hland hK
-    exact badChainProb_le hw hwa hna hV hcard hland hK
+  · intro T V d s b M hwa hcard hs hpop hV
+    exact undecidedAtPeriodOne_le hwa hcard hs hpop hV
   · intro coin known upd k₀ V hws hwa
     exact ⟨_, matchingPer_matches hws hwa⟩
 

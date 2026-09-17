@@ -4,8 +4,8 @@ import Mathlib.Analysis.SpecificLimits.Basic
 # The coin — statement
 
 The probability half of liveness under asynchrony (`steelhead.md` §4),
-the paper's Theorem 3 read through a uniform coin, and the per-hop
-clause of its Theorem 2. Thirteen claims:
+the paper's Theorem 3 read through a uniform coin, and the
+asynchronous-floor clause of its Theorem 2. Fourteen claims:
 
 * **SH11a, the commit probability** — on a wave a quorum has populated,
   the coin of round `r` names a directly committed leader with
@@ -77,20 +77,18 @@ clause of its Theorem 2. Thirteen claims:
   undecided, a set of measure at most SH15a's bound, which vanishes
   (SH15b); so they are null. The records are any sequence, the prefixes
   of one execution among them, since the argument reads each on its own;
-* **SH11h, the floor chain's landings under the coin** — Theorem 2's
-  per-hop clause, "each hop of that search onto a Byzantine-led slot
-  having probability at most `b/n` under the coin", as one event over
-  the whole chain: at period one, against a strategy that answers only
-  the draws already made, the first `h` landings are all led from
-  outside their round's committed set with probability at most
-  `((n − c) / n)^h`. A landing is led from outside only if the coin at
-  the floor it hopped from was, since a committed candidate's slot is
-  never skipped and the search would have stopped there; those floors
-  climb, and each is fixed with its good set by the coins drawn below
-  it, so the count peels one floor at a time. The landings themselves
-  are not a filtration: whether a slot is skipped is settled by its own
-  wave, which is why the strategy must fix the skips of a slot before
-  the coin of the round above its wave is drawn;
+* **SH11h, the search under the coin** — Theorem 2's asynchronous-floor
+  clause in the form that holds: at period one a slot below a block of
+  `wa` coin rounds naming committed candidates is decided, by the drain
+  (SH9), so over `M` consecutive blocks of `wa` coins above the slot it
+  stays undecided with probability at most
+  `((n^wa − (n − f − b)^wa) / n^wa)^M`, the chance that every block holds
+  a bad coin, the paper's `(1 − p^{wa})^M` after `M` attempts. No bound
+  per hop of the anchor search holds: a landing of the search is not a
+  function of the coins below it, since the coin that commits an anchor
+  above a pending slot both skips that slot and leads the next landing,
+  and `LeanDagTest/Steelhead/HopBound.lean` exhibits two landings led by
+  the one Byzantine validator with probability above `(b/n)^2`;
 * **SH15e, almost surely against an adaptive adversary** — SH15c where
   the `m`-th record is a strategy's own answer to the coins of its `m`
   blocks: for almost every coin some strategy's record settles the slot,
@@ -209,30 +207,21 @@ def UndecidedTail (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ
     -- blocks holds a bad coin
     undecidedProb U ws wa I K upd k₀ known d s M ≤ 2 * badBlockBound Validator K ^ (M / 2)
 
-/-- **SH11h, the floor chain's landings under the coin.** Theorem 2's per-hop clause. -/
-def BadChainBound (wa K : ℕ) : Prop :=
-  ∀ (w : ℕ → ℕ) (c k₀ h : ℕ) (d : Validator)
-    (σ : (Fin K → Validator) → BlockUniverse Validator BlockId Payload)
-    (V : ∀ g, View Validator BlockId Payload (σ g)),
-    -- period one, where every slot is the coin's, at a wave the chain rule reads
-    (∀ r, w r = wa) → 3 ≤ wa →
-    -- the strategy answers only the draws already made
-    NonAnticipatingChain σ V w wa d →
-    -- every view holds the decision rounds the chain reads, so a committed candidate's slot is
-    -- decided there and the search never skips it
-    (∀ g r, V g |>.CoversUpto (MahiMahi.decisionRoundAt wa r)) →
-    -- the committed set of every round the coins cover holds at least c candidates, as MM2 gives
-    -- on a populated wave; above K a finite record commits nothing, so the bound stops there
-    (∀ g (r : ℕ), r < K → c ≤ (MahiMahi.goodAt (σ g) wa r).card) →
-    -- the chain's landings are landings, not the fallback of `floorLanding`
-    (∀ g i, i < h → ¬ Decided (S := chainSlots (coinOfRounds g d)) w (σ g) (V g)
-      (chainLandings σ V w d k₀ g (i + 1)) none) →
-    -- the chain stays inside the rounds the coins cover
-    (∀ g i, i ≤ h → chainLandings σ V w d k₀ g i + wa < K) →
-    -- then every one of the first h landings is led from outside its round's committed set with
-    -- probability at most ((n − c) / n)^h, the paper's b/n a hop
-    badChainProb σ V w wa d k₀ h ≤
-      (((Fintype.card Validator - c : ℕ) : ℝ≥0∞) / Fintype.card Validator) ^ h
+/-- **SH11h, the search under the coin.** Theorem 2's asynchronous-floor clause at period one. -/
+def UndecidedAtPeriodOne (U : BlockUniverse Validator BlockId Payload) (ws wa : ℕ) : Prop :=
+  ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (d : Validator) (s b M : ℕ),
+    -- five rounds, a quorum, and the slot below the blocks
+    5 ≤ wa → quorumCard Validator ≤ T.card → s < b →
+    -- the waves of the M blocks of wa rounds from b are populated where MM2 reads them
+    (∀ (j : Fin M) (i : Fin wa), PopulatedOn U T (b + j * wa + i + 3) ∧
+      PopulatedOn U T (MahiMahi.decisionRoundAt wa (b + j * wa + i))) →
+    -- and the view holds the last block's decision rounds
+    V.CoversUpto (MahiMahi.decisionRoundAt wa (b + M * wa - 1)) →
+    -- then the slot stays undecided at period one, on the chain schedule of those coins, with
+    -- probability at most the chance that every one of the M blocks holds a bad coin
+    (PMF.uniformOfFintype (Fin M → Fin wa → Validator)).toOuterMeasure
+        {g | ∀ v, ¬ Decided (S := chainSlots (coinOfBlocksFrom b g d)) (periodic ws wa 1) U V s v}
+      ≤ badBlockBound Validator wa ^ M
 
 /-- **SH11f, the adaptive block bound.** -/
 def AdaptiveBlockBound (K : ℕ) : Prop :=
@@ -344,8 +333,7 @@ def Statement : Prop :=
         ws wa I K ∧
       DecidedAlmostSurelyAgainst (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
         ws wa I K ∧
-      BadChainBound (Validator := Validator) (BlockId := BlockId) (Payload := Payload) wa K ∧
-      MatchesExists U ws wa I
+      UndecidedAtPeriodOne U ws wa ∧ MatchesExists U ws wa I
 
 end Coin
 

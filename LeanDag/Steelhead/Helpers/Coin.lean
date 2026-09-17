@@ -387,395 +387,6 @@ theorem floorLanding_least [S : Slots Validator] {w : ℕ → ℕ}
   rw [floorLanding, dif_pos hex]
   exact Nat.find_le ⟨hy, hyskip⟩
 
-/-- **Two draws whose skip verdicts agree up to a landing find the same landing.** -/
-theorem floorLanding_congr {w : ℕ → ℕ} {U U' : BlockUniverse Validator BlockId Payload}
-    {S S' : Slots Validator} {V : View Validator BlockId Payload U}
-    {V' : View Validator BlockId Payload U'} {k : ℕ}
-    (h : ¬ Decided (S := S) w U V (floorLanding (S := S) w U V k) none)
-    (h' : ¬ Decided (S := S') w U' V' (floorLanding (S := S') w U' V' k) none)
-    (hskip : ∀ s, s ≤ floorLanding (S := S) w U V k →
-      (Decided (S := S) w U V s none ↔ Decided (S := S') w U' V' s none)) :
-    floorLanding (S := S') w U' V' k = floorLanding (S := S) w U V k := by
-  refine Nat.le_antisymm ?_ ?_
-  · exact floorLanding_least (S := S') h' _ (floor_le_floorLanding (S := S))
-      fun hd => h ((hskip _ le_rfl).mpr hd)
-  · by_cases hle : floorLanding (S := S') w U' V' k ≤ floorLanding (S := S) w U V k
-    · exact floorLanding_least (S := S) h _ (floor_le_floorLanding (S := S'))
-        fun hd => h' ((hskip _ hle).mp hd)
-    · omega
-
-/-- **The chain's landings are fixed by the coins drawn below them.** A strategy that answers
-only the draws already made gives two draws agreeing below a landing's own floor the same
-landings up to it: every skip verdict the search reads sits at a slot whose wave lies below that
-floor, which is what `NonAnticipatingChain`'s second clause fixes. -/
-theorem chainLandings_congr {K : ℕ}
-    {σ : (Fin K → Validator) → BlockUniverse Validator BlockId Payload}
-    {V : ∀ g, View Validator BlockId Payload (σ g)} {w : ℕ → ℕ} {wa : ℕ} {d : Validator}
-    {k₀ m : ℕ} (hna : NonAnticipatingChain σ V w wa d) (hw : ∀ r, w r = wa)
-    (hland : ∀ (g : Fin K → Validator) (i : ℕ), i < m →
-      ¬ Decided (S := chainSlots (coinOfRounds g d)) w (σ g) (V g)
-        (chainLandings σ V w d k₀ g (i + 1)) none)
-    (g g' : Fin K → Validator) :
-    ∀ i, i ≤ m → (∀ s : Fin K, (s : ℕ) < chainLandings σ V w d k₀ g i + wa → g s = g' s) →
-      chainLandings σ V w d k₀ g' i = chainLandings σ V w d k₀ g i := by
-  intro i
-  induction i with
-  | zero => intro _ _; rfl
-  | succ i ih =>
-    intro hi hagree
-    have hge : chainLandings σ V w d k₀ g i + wa ≤ chainLandings σ V w d k₀ g (i + 1) := by
-      have h := floor_le_floorLanding (S := chainSlots (coinOfRounds g d)) (w := w) (U := σ g)
-        (V := V g) (k := chainLandings σ V w d k₀ g i)
-      rwa [hw] at h
-    have hih : chainLandings σ V w d k₀ g' i = chainLandings σ V w d k₀ g i :=
-      ih (by omega) fun s hs => hagree s (by omega)
-    have hskip : ∀ s, s ≤ chainLandings σ V w d k₀ g (i + 1) →
-        (Decided (S := chainSlots (coinOfRounds g d)) w (σ g) (V g) s none ↔
-          Decided (S := chainSlots (coinOfRounds g' d)) w (σ g') (V g') s none) := by
-      intro s hs
-      refine (hna g g' (chainLandings σ V w d k₀ g (i + 1) + wa) hagree).2 s ?_
-      rw [hw]
-      omega
-    have h := hland g i (by omega)
-    have h' := hland g' i (by omega)
-    change floorLanding (S := chainSlots (coinOfRounds g' d)) w (σ g') (V g')
-      (chainLandings σ V w d k₀ g' i) = _
-    rw [hih]
-    refine floorLanding_congr (S := chainSlots (coinOfRounds g d))
-      (S' := chainSlots (coinOfRounds g' d)) h ?_ hskip
-    rw [← hih]
-    exact h'
-
-/-! ## The stopping-time count -/
-
-/-- **One stop of a run.** If the round a run stops at, the good set there, and whether the run
-has already gone badly are all fixed by the coins below that round, and the good set holds at
-least `c` of the `n` values, then the runs that also go badly at this stop are at most an
-`(n − c) / n` fraction of those that went badly before it. Pairing each bad run with a good value
-at its stop lands in the runs that go well there, and each of those has at most `n − c` bad
-preimages, which is the peeling the chain's landings need. -/
-theorem stop_step_card {K c : ℕ} (t : (Fin K → Validator) → Fin K)
-    (good : (Fin K → Validator) → Finset Validator) (P : (Fin K → Validator) → Prop)
-    [DecidablePred P]
-    (hstop : ∀ g g', (∀ s : Fin K, s < t g → g s = g' s) → t g' = t g)
-    (hgood : ∀ g g', (∀ s : Fin K, s < t g → g s = g' s) → good g' = good g)
-    (hP : ∀ g g', (∀ s : Fin K, s < t g → g s = g' s) → (P g ↔ P g'))
-    (hc : ∀ g, c ≤ (good g).card) :
-    Fintype.card Validator * (Finset.univ.filter fun g => P g ∧ g (t g) ∉ good g).card ≤
-      (Fintype.card Validator - c) * (Finset.univ.filter P).card := by
-  classical
-  set n := Fintype.card Validator with hn
-  set B : Finset (Fin K → Validator) := Finset.univ.filter fun g => P g ∧ g (t g) ∉ good g with hB
-  set A : Finset (Fin K → Validator) := Finset.univ.filter P with hA
-  -- updating a run at its own stop leaves everything the stop reads unchanged
-  have hbelow : ∀ (g : Fin K → Validator) (v : Validator) (s : Fin K), s < t g →
-      g s = Function.update g (t g) v s := by
-    intro g v s hs
-    rw [Function.update_of_ne (by exact fun h => absurd (h ▸ hs) (lt_irrefl _))]
-  have hstop' : ∀ g v, t (Function.update g (t g) v) = t g :=
-    fun g v => hstop g _ fun s hs => hbelow g v s hs
-  have hgood' : ∀ g v, good (Function.update g (t g) v) = good g :=
-    fun g v => hgood g _ fun s hs => hbelow g v s hs
-  have hP' : ∀ g v, P g ↔ P (Function.update g (t g) v) :=
-    fun g v => hP g _ fun s hs => hbelow g v s hs
-  -- the pairs: a bad run and a good value at its stop
-  set S : Finset ((Fin K → Validator) × Validator) :=
-    B.biUnion fun g => (good g).map ⟨fun v => (g, v), fun _ _ h => (Prod.mk.injEq _ _ _ _ ▸ h).2⟩
-    with hS
-  have hSdisj : ∀ g ∈ B, ∀ g' ∈ B, g ≠ g' →
-      Disjoint ((good g).map ⟨fun v => (g, v), fun _ _ h => (Prod.mk.injEq _ _ _ _ ▸ h).2⟩)
-        ((good g').map ⟨fun v => (g', v), fun _ _ h => (Prod.mk.injEq _ _ _ _ ▸ h).2⟩) := by
-    intro g _ g' _ hne
-    refine Finset.disjoint_left.mpr fun p hp hp' => hne ?_
-    obtain ⟨v, -, rfl⟩ := Finset.mem_map.mp hp
-    obtain ⟨v', -, hv'⟩ := Finset.mem_map.mp hp'
-    exact ((Prod.mk.injEq _ _ _ _ ▸ hv').1).symm
-  have hScard : c * B.card ≤ S.card := by
-    rw [hS, Finset.card_biUnion hSdisj]
-    calc c * B.card = ∑ _g ∈ B, c := by rw [Finset.sum_const, smul_eq_mul, Nat.mul_comm]
-      _ ≤ ∑ g ∈ B, ((good g).map
-            ⟨fun v => (g, v), fun _ _ h => (Prod.mk.injEq _ _ _ _ ▸ h).2⟩).card :=
-        Finset.sum_le_sum fun g _ => by rw [Finset.card_map]; exact hc g
-  -- the pairing lands in the runs that go well at the stop
-  have hmem_S : ∀ p : (Fin K → Validator) × Validator, p ∈ S →
-      p.1 ∈ B ∧ p.2 ∈ good p.1 := by
-    rintro ⟨g, v⟩ hp
-    obtain ⟨g', hg', hpg⟩ := Finset.mem_biUnion.mp hp
-    obtain ⟨v', hv', hvp⟩ := Finset.mem_map.mp hpg
-    have hvp' : (g', v') = (g, v) := hvp
-    obtain ⟨rfl, rfl⟩ : g' = g ∧ v' = v := by
-      have := hvp'
-      rw [Prod.mk.injEq] at this
-      exact this
-    exact ⟨hg', hv'⟩
-  have hmaps : ∀ p ∈ S, Function.update p.1 (t p.1) p.2 ∈ A \ B := by
-    intro p hp
-    obtain ⟨hp1, hp2⟩ := hmem_S p hp
-    obtain ⟨-, hPg, -⟩ := Finset.mem_filter.mp hp1
-    refine Finset.mem_sdiff.mpr ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩, ?_⟩
-    · exact (hP' p.1 p.2).mp hPg
-    · intro hmem
-      obtain ⟨-, -, hbad⟩ := Finset.mem_filter.mp hmem
-      rw [hstop' p.1 p.2, hgood' p.1 p.2, Function.update_self] at hbad
-      exact hbad hp2
-  have hfib : ∀ y ∈ S.image (fun p => Function.update p.1 (t p.1) p.2),
-      (S.filter fun p => Function.update p.1 (t p.1) p.2 = y).card ≤ n - c := by
-    intro y hy
-    -- every preimage stops where `y` does, has `y`'s good set there, and is bad there
-    have hpre : ∀ p ∈ S.filter fun p => Function.update p.1 (t p.1) p.2 = y,
-        t p.1 = t y ∧ good p.1 = good y ∧ p.1 (t p.1) ∉ good p.1 ∧
-          Function.update p.1 (t p.1) p.2 = y := by
-      intro p hp
-      obtain ⟨hpS, hpy⟩ := Finset.mem_filter.mp hp
-      obtain ⟨hp1, -⟩ := hmem_S p hpS
-      obtain ⟨-, -, hbad⟩ := Finset.mem_filter.mp hp1
-      exact ⟨by rw [← hpy, hstop' p.1 p.2], by rw [← hpy, hgood' p.1 p.2], hbad, hpy⟩
-    refine le_trans (Finset.card_le_card_of_injOn (fun p => p.1 (t y))
-      (t := (good y)ᶜ) ?_ ?_) ?_
-    · intro p hp
-      obtain ⟨h1, h2, h3, -⟩ := hpre p hp
-      refine Finset.mem_compl.mpr ?_
-      rw [← h2, ← h1]
-      exact h3
-    · intro p hp p' hp' heq
-      obtain ⟨h1, -, -, hy⟩ := hpre p (Finset.mem_coe.mp hp)
-      obtain ⟨h1', -, -, hy'⟩ := hpre p' (Finset.mem_coe.mp hp')
-      have hfst : p.1 = p'.1 := by
-        funext s
-        rcases eq_or_ne s (t y) with rfl | hs
-        · exact heq
-        · have e1 : p.1 s = y s := by
-            rw [← hy, Function.update_of_ne (by rw [h1]; exact hs)]
-          have e2 : p'.1 s = y s := by
-            rw [← hy', Function.update_of_ne (by rw [h1']; exact hs)]
-          rw [e1, e2]
-      have hsnd : p.2 = p'.2 := by
-        have e1 : y (t y) = p.2 := by
-          rw [← hy, hstop' p.1 p.2, Function.update_self]
-        have e2 : y (t y) = p'.2 := by
-          rw [← hy', hstop' p'.1 p'.2, Function.update_self]
-        rw [← e1, ← e2]
-      exact Prod.ext hfst hsnd
-    · rw [Finset.card_compl, hn]
-      exact Nat.sub_le_sub_left (hc y) _
-  have hSle : S.card ≤ (n - c) * (S.image fun p => Function.update p.1 (t p.1) p.2).card :=
-    Finset.card_le_mul_card_image _ _ hfib
-  have himg : (S.image fun p => Function.update p.1 (t p.1) p.2).card ≤ (A \ B).card :=
-    Finset.card_le_card fun y hy => by
-      obtain ⟨p, hp, rfl⟩ := Finset.mem_image.mp hy
-      exact hmaps p hp
-  have hBA : B ⊆ A := fun g hg => by
-    obtain ⟨-, hPg, -⟩ := Finset.mem_filter.mp hg
-    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hPg⟩
-  have hsdiff : (A \ B).card = A.card - B.card := by
-    rw [Finset.card_sdiff, Finset.inter_eq_left.mpr hBA]
-  have hBcard : B.card ≤ A.card := Finset.card_le_card hBA
-  have hcn : c ≤ n := by
-    have := hc (fun _ => Classical.arbitrary Validator)
-    exact le_trans this (by rw [hn]; exact Finset.card_le_univ _)
-  calc n * B.card = c * B.card + (n - c) * B.card := by
-        rw [← Nat.add_mul, show c + (n - c) = n by omega]
-    _ ≤ (n - c) * (A.card - B.card) + (n - c) * B.card := by
-        have := le_trans hScard (le_trans hSle (Nat.mul_le_mul_left _ (hsdiff ▸ himg)))
-        omega
-    _ = (n - c) * A.card := by rw [← Nat.mul_add, show A.card - B.card + B.card = A.card by omega]
-
-/-- **The peeling over a run of stops.** Stops that climb, each fixed with its good set by the
-coins below it, leave at most an `((n − c) / n)` fraction of the draws bad at every one of them. -/
-theorem bad_stops_card {K c m : ℕ} (t : ℕ → (Fin K → Validator) → Fin K)
-    (good : ℕ → (Fin K → Validator) → Finset Validator)
-    (hstop : ∀ i, i < m → ∀ g g', (∀ s : Fin K, s < t i g → g s = g' s) → t i g' = t i g)
-    (hgood : ∀ i, i < m → ∀ g g', (∀ s : Fin K, s < t i g → g s = g' s) → good i g' = good i g)
-    (hmono : ∀ i, i < m → ∀ j g, j < i → t j g < t i g)
-    (hc : ∀ i, i < m → ∀ g, c ≤ (good i g).card) :
-    ∀ h, h ≤ m → Fintype.card Validator ^ h *
-        (Finset.univ.filter fun g => ∀ j, j < h → g (t j g) ∉ good j g).card ≤
-      (Fintype.card Validator - c) ^ h * Fintype.card Validator ^ K := by
-  classical
-  intro h
-  induction h with
-  | zero =>
-    intro _
-    simp only [Nat.pow_zero, Nat.not_lt_zero, IsEmpty.forall_iff, implies_true,
-      Finset.filter_true_of_mem, Finset.card_univ, Nat.one_mul]
-    rw [Fintype.card_fun, Fintype.card_fin]
-  | succ h ih =>
-    intro hm
-    -- the draws bad at the first h + 1 stops are those bad at the first h and at the (h + 1)-th
-    have hfilter : (Finset.univ.filter fun g => ∀ j, j < h + 1 → g (t j g) ∉ good j g) =
-        Finset.univ.filter fun g =>
-          (∀ j, j < h → g (t j g) ∉ good j g) ∧ g (t h g) ∉ good h g := by
-      refine Finset.filter_congr fun g _ => ?_
-      constructor
-      · exact fun hg => ⟨fun j hj => hg j (by omega), hg h (by omega)⟩
-      · exact fun hg j hj => by
-          rcases Nat.lt_or_ge j h with hlt | hge
-          · exact hg.1 j hlt
-          · rw [show j = h by omega]; exact hg.2
-    have hP : ∀ g g', (∀ s : Fin K, s < t h g → g s = g' s) →
-        ((∀ j, j < h → g (t j g) ∉ good j g) ↔ ∀ j, j < h → g' (t j g') ∉ good j g') := by
-      intro g g' hag
-      have hj : ∀ j, j < h → t j g' = t j g ∧ good j g' = good j g ∧ g (t j g) = g' (t j g) := by
-        intro j hjh
-        have hbelow : ∀ s : Fin K, s < t j g → g s = g' s := fun s hs =>
-          hag s (lt_trans hs (hmono h (by omega) j g hjh))
-        exact ⟨hstop j (by omega) g g' hbelow, hgood j (by omega) g g' hbelow,
-          hag _ (hmono h (by omega) j g hjh)⟩
-      constructor
-      · intro hg j hjh
-        obtain ⟨h1, h2, h3⟩ := hj j hjh
-        rw [h1, h2, ← h3]
-        exact hg j hjh
-      · intro hg j hjh
-        obtain ⟨h1, h2, h3⟩ := hj j hjh
-        have := hg j hjh
-        rw [h1, h2, ← h3] at this
-        exact this
-    have hstep := stop_step_card (t h) (good h) (fun g => ∀ j, j < h → g (t j g) ∉ good j g)
-      (hstop h (by omega)) (hgood h (by omega)) hP (hc h (by omega))
-    rw [hfilter]
-    calc Fintype.card Validator ^ (h + 1) *
-          (Finset.univ.filter fun g =>
-            (∀ j, j < h → g (t j g) ∉ good j g) ∧ g (t h g) ∉ good h g).card
-        = Fintype.card Validator ^ h * (Fintype.card Validator *
-            (Finset.univ.filter fun g =>
-              (∀ j, j < h → g (t j g) ∉ good j g) ∧ g (t h g) ∉ good h g).card) := by
-          rw [← Nat.mul_assoc, Nat.pow_succ]
-      _ ≤ Fintype.card Validator ^ h * ((Fintype.card Validator - c) *
-            (Finset.univ.filter fun g => ∀ j, j < h → g (t j g) ∉ good j g).card) :=
-          Nat.mul_le_mul_left _ hstep
-      _ = (Fintype.card Validator - c) * (Fintype.card Validator ^ h *
-            (Finset.univ.filter fun g => ∀ j, j < h → g (t j g) ∉ good j g).card) := by
-          rw [← Nat.mul_assoc, ← Nat.mul_assoc, Nat.mul_comm (Fintype.card Validator ^ h)]
-      _ ≤ (Fintype.card Validator - c) *
-            ((Fintype.card Validator - c) ^ h * Fintype.card Validator ^ K) :=
-          Nat.mul_le_mul_left _ (ih (by omega))
-      _ = (Fintype.card Validator - c) ^ (h + 1) * Fintype.card Validator ^ K := by
-          rw [← Nat.mul_assoc, Nat.mul_comm (Fintype.card Validator - c)
-            ((Fintype.card Validator - c) ^ h), ← Nat.pow_succ]
-
-/-- **SH11h.** The chain's landings, hop by hop. A landing is led from outside the round's
-committed set only if the coin at the floor it hopped from was, since a committed candidate's slot
-is not skipped and the search would have stopped there; those floors climb and each is fixed, with
-its good set, by the coins drawn below it, so the peeling applies and the bound multiplies out. -/
-theorem badChainProb_le {K : ℕ}
-    {σ : (Fin K → Validator) → BlockUniverse Validator BlockId Payload}
-    {V : ∀ g, View Validator BlockId Payload (σ g)} {w : ℕ → ℕ} {wa c k₀ h : ℕ} {d : Validator}
-    (hw : ∀ r, w r = wa) (hwa : 3 ≤ wa) (hna : NonAnticipatingChain σ V w wa d)
-    (hV : ∀ g r, (V g).CoversUpto (MahiMahi.decisionRoundAt wa r))
-    (hcard : ∀ g (r : ℕ), r < K → c ≤ (MahiMahi.goodAt (σ g) wa r).card)
-    (hland : ∀ g i, i < h → ¬ Decided (S := chainSlots (coinOfRounds g d)) w (σ g) (V g)
-      (chainLandings σ V w d k₀ g (i + 1)) none)
-    (hK : ∀ g i, i ≤ h → chainLandings σ V w d k₀ g i + wa < K) :
-    badChainProb σ V w wa d k₀ h ≤
-      (((Fintype.card Validator - c : ℕ) : ℝ≥0∞) / Fintype.card Validator) ^ h := by
-  classical
-  have hK0 : 0 < K := by have := hK (fun _ => d) 0 (by omega); omega
-  have hwconst : w = fun _ => wa := funext hw
-  -- the chain climbs by a wave a hop
-  have hclimb : ∀ (g : Fin K → Validator) i,
-      chainLandings σ V w d k₀ g i + wa ≤ chainLandings σ V w d k₀ g (i + 1) := by
-    intro g i
-    have hl := floor_le_floorLanding (S := chainSlots (coinOfRounds g d)) (w := w) (U := σ g)
-      (V := V g) (k := chainLandings σ V w d k₀ g i)
-    rwa [hw] at hl
-  have hmono' : ∀ (g : Fin K → Validator) a b, a < b →
-      chainLandings σ V w d k₀ g a < chainLandings σ V w d k₀ g b := by
-    intro g a b hab
-    induction b with
-    | zero => omega
-    | succ b ih =>
-      rcases Nat.lt_or_ge a b with hlt | hge
-      · have := ih hlt
-        have := hclimb g b
-        omega
-      · have : a = b := by omega
-        subst this
-        have := hclimb g a
-        omega
-  -- the stops: the floor each hop leaves from
-  set t : ℕ → (Fin K → Validator) → Fin K := fun i g =>
-    if hlt : chainLandings σ V w d k₀ g i + wa < K then ⟨_, hlt⟩ else ⟨0, hK0⟩ with ht
-  set good : ℕ → (Fin K → Validator) → Finset Validator := fun i g =>
-    MahiMahi.goodAt (σ g) wa (t i g) with hgooddef
-  have htval : ∀ i g, i ≤ h → (t i g : ℕ) = chainLandings σ V w d k₀ g i + wa := by
-    intro i g hi
-    rw [ht]
-    simp only [dif_pos (hK g i hi)]
-  -- each stop, and its good set, is fixed by the coins drawn below it
-  have hstop : ∀ i, i < h + 1 → ∀ g g', (∀ s : Fin K, s < t i g → g s = g' s) → t i g' = t i g := by
-    intro i hi g g' hag
-    have hlands : chainLandings σ V w d k₀ g' i = chainLandings σ V w d k₀ g i :=
-      chainLandings_congr hna hw (m := h) hland g g' i (by omega) fun s hs =>
-        hag s (by rw [Fin.lt_def, htval i g (by omega)]; exact hs)
-    refine Fin.ext ?_
-    rw [htval i g' (by omega), htval i g (by omega), hlands]
-  have hgood : ∀ i, i < h + 1 → ∀ g g', (∀ s : Fin K, s < t i g → g s = g' s) →
-      good i g' = good i g := by
-    intro i hi g g' hag
-    have hteq := hstop i hi g g' hag
-    have := (hna g g' (t i g) fun s hs => hag s hs).1
-    rw [hgooddef]
-    simp only
-    rw [hteq, ← this]
-  have hmono : ∀ i, i < h + 1 → ∀ j g, j < i → t j g < t i g := by
-    intro i hi j g hji
-    rw [Fin.lt_def, htval j g (by omega), htval i g (by omega)]
-    have := hmono' g j i hji
-    omega
-  have hc' : ∀ i, i < h + 1 → ∀ g, c ≤ (good i g).card := by
-    intro i _ g
-    rw [hgooddef]
-    exact hcard g _ (t i g).isLt
-  have hcount := bad_stops_card t good hstop hgood hmono hc' h (by omega)
-  -- a landing led from outside the committed set means the floor's own coin was
-  have hsub : {g : Fin K → Validator | ∀ i, i < h →
-      coinOfRounds g d (chainLandings σ V w d k₀ g (i + 1)) ∉
-        MahiMahi.goodAt (σ g) wa (chainLandings σ V w d k₀ g (i + 1))} ⊆
-      ↑(Finset.univ.filter fun g => ∀ j, j < h → g (t j g) ∉ good j g) := by
-    intro g hg
-    refine Finset.mem_coe.mpr (Finset.mem_filter.mpr ⟨Finset.mem_univ _, fun j hj hmem => ?_⟩)
-    have hfloor : (t j g : ℕ) = chainLandings σ V w d k₀ g j + wa := htval j g (by omega)
-    have hmem' : coinOfRounds g d (t j g : ℕ) ∈ MahiMahi.goodAt (σ g) wa (t j g : ℕ) := by
-      rw [coinOfRounds]
-      simp only [dif_pos (t j g).isLt, Fin.eta]
-      rw [hgooddef] at hmem
-      exact hmem
-    have hnotskip : ¬ Decided (S := chainSlots (coinOfRounds g d)) w (σ g) (V g)
-        (chainLandings σ V w d k₀ g j + w (chainLandings σ V w d k₀ g j)) none := by
-      rw [hw, ← hfloor, hwconst]
-      exact not_skip_of_mem_goodAt (by omega) hmem' (hV g (t j g : ℕ))
-    have hlandeq : chainLandings σ V w d k₀ g (j + 1) = (t j g : ℕ) := by
-      rw [hfloor, ← hw (chainLandings σ V w d k₀ g j)]
-      exact floorLanding_eq_floor (S := chainSlots (coinOfRounds g d)) hnotskip
-    exact (hlandeq ▸ hg j hj) hmem'
-  -- and the peeling bounds those draws
-  have hn0 : (Fintype.card Validator : ℝ≥0∞) ≠ 0 := by
-    have hpos : 0 < Fintype.card Validator := Fintype.card_pos
-    have : Fintype.card Validator ≠ 0 := by omega
-    exact_mod_cast this
-  have hntop : (Fintype.card Validator : ℝ≥0∞) ≠ ⊤ := ENNReal.natCast_ne_top _
-  calc badChainProb σ V w wa d k₀ h
-      ≤ (PMF.uniformOfFintype (Fin K → Validator)).toOuterMeasure
-          ↑(Finset.univ.filter fun g => ∀ j, j < h → g (t j g) ∉ good j g) :=
-        MeasureTheory.measure_mono hsub
-    _ = ((Finset.univ.filter fun g => ∀ j, j < h → g (t j g) ∉ good j g).card : ℝ≥0∞) /
-          (Fintype.card (Fin K → Validator) : ℝ≥0∞) := uniform_prob_mem _
-    _ = ((Finset.univ.filter fun g => ∀ j, j < h → g (t j g) ∉ good j g).card : ℝ≥0∞) /
-          (Fintype.card Validator : ℝ≥0∞) ^ K := by
-        rw [Fintype.card_fun, Fintype.card_fin, Nat.cast_pow]
-    _ = ((Fintype.card Validator : ℝ≥0∞) ^ h *
-          ((Finset.univ.filter fun g => ∀ j, j < h → g (t j g) ∉ good j g).card : ℝ≥0∞)) /
-          ((Fintype.card Validator : ℝ≥0∞) ^ h * (Fintype.card Validator : ℝ≥0∞) ^ K) :=
-        (ENNReal.mul_div_mul_left _ _ (pow_ne_zero _ hn0) (ENNReal.pow_ne_top hntop)).symm
-    _ ≤ (((Fintype.card Validator - c : ℕ) : ℝ≥0∞) ^ h * (Fintype.card Validator : ℝ≥0∞) ^ K) /
-          ((Fintype.card Validator : ℝ≥0∞) ^ h * (Fintype.card Validator : ℝ≥0∞) ^ K) :=
-        ENNReal.div_le_div_right (by exact_mod_cast hcount) _
-    _ = ((Fintype.card Validator - c : ℕ) : ℝ≥0∞) ^ h / (Fintype.card Validator : ℝ≥0∞) ^ h :=
-        ENNReal.mul_div_mul_right _ _ (pow_ne_zero _ hn0) (ENNReal.pow_ne_top hntop)
-    _ = (((Fintype.card Validator - c : ℕ) : ℝ≥0∞) / Fintype.card Validator) ^ h := by
-        rw [div_eq_mul_inv, div_eq_mul_inv, mul_pow, ← ENNReal.inv_pow]
-
 /-- **SH11c.** -/
 theorem noCommitProb_le {U : BlockUniverse Validator BlockId Payload} {wa : ℕ} (hwa : 5 ≤ wa)
     {T : Finset Validator} (hcard : quorumCard Validator ≤ T.card) {r₀ m : ℕ}
@@ -909,6 +520,79 @@ theorem no_good_block_prob_le {M K c : ℕ} (H : Finset (Fin M))
         · rw [if_neg hj, if_neg hj, Finset.card_univ, Fintype.card_fun, Fintype.card_fin,
             Nat.cast_pow, ENNReal.div_self hn hnt]
     _ = _ := by rw [Finset.prod_ite_mem, Finset.univ_inter, Finset.prod_const]
+
+/-! ## The search under the coin -/
+
+omit [Fintype Validator] [DecidableEq Validator] F in
+/-- The block map reads its own coins back at the blocks' rounds. -/
+theorem coinOfBlocksFrom_read {M K b : ℕ} (hK : 0 < K) (g : Fin M → Fin K → Validator)
+    (d : Validator) (j : Fin M) (i : Fin K) : coinOfBlocksFrom b g d (b + j * K + i) = g j i := by
+  unfold coinOfBlocksFrom
+  have hsub : b + j * K + i - b = j * K + i := by omega
+  have h1 : (b + j * K + i - b) / K = j := by
+    rw [hsub, Nat.mul_comm, Nat.mul_add_div hK, Nat.div_eq_of_lt i.isLt, Nat.add_zero]
+  have h2 : (b + j * K + i - b) % K = i := by
+    rw [hsub, Nat.mul_comm, Nat.mul_add_mod, Nat.mod_eq_of_lt i.isLt]
+  rw [dif_pos ⟨by omega, by rw [h1]; exact j.isLt, by rw [h2]; exact i.isLt⟩]
+  exact congrArg₂ g (Fin.ext h1) (Fin.ext h2)
+
+/-- **SH11h.** Below a block of `wa` coins naming committed candidates every slot is decided, by
+the drain (SH9), so the slot stays undecided only if every one of the `M` blocks holds a bad coin,
+which the block count bounds at a fixed record (`no_good_block_prob_le`). -/
+theorem undecidedAtPeriodOne_le {U : BlockUniverse Validator BlockId Payload} {ws wa : ℕ}
+    (hwa : 5 ≤ wa) {T : Finset Validator} (hcard : quorumCard Validator ≤ T.card)
+    {V : View Validator BlockId Payload U} {d : Validator} {s b M : ℕ} (hs : s < b)
+    (hpop : ∀ (j : Fin M) (i : Fin wa), PopulatedOn U T (b + j * wa + i + 3) ∧
+      PopulatedOn U T (MahiMahi.decisionRoundAt wa (b + j * wa + i)))
+    (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa (b + M * wa - 1))) :
+    (PMF.uniformOfFintype (Fin M → Fin wa → Validator)).toOuterMeasure
+        {g | ∀ v, ¬ Decided (S := chainSlots (coinOfBlocksFrom b g d)) (periodic ws wa 1) U V s v}
+      ≤ Coin.badBlockBound Validator wa ^ M := by
+  classical
+  set G : Fin M → Fin wa → Finset Validator :=
+    fun j i => MahiMahi.goodAt U wa (b + j * wa + i) with hG
+  have hc : ∀ j i, Fintype.card Validator - F.f - F.byzantine.card ≤ (G j i).card :=
+    fun j i => card_goodAt_of_populated hwa hcard (hpop j i).1 (hpop j i).2
+  -- a block good throughout is a run of direct commits, and the drain decides the slot below it
+  have hsub : {g : Fin M → Fin wa → Validator | ∀ v,
+        ¬ Decided (S := chainSlots (coinOfBlocksFrom b g d)) (periodic ws wa 1) U V s v} ⊆
+      {g | ∀ j ∈ (Finset.univ : Finset (Fin M)), ∃ i, g j i ∉ G j i} := by
+    intro g hg
+    by_contra hcon
+    obtain ⟨j, hj⟩ : ∃ j : Fin M, ∀ i, g j i ∈ G j i := by
+      by_contra hall
+      refine hcon fun j _ => ?_
+      by_contra hj
+      exact hall ⟨j, fun i => by
+        by_contra hi
+        exact hj ⟨i, hi⟩⟩
+    have hjM : (j + 1) * wa ≤ M * wa := Nat.mul_le_mul_right wa j.isLt
+    rw [Nat.add_mul, Nat.one_mul] at hjM
+    have hrun : ∀ i, i < wa → ∃ L, Decided (S := chainSlots (coinOfBlocksFrom b g d))
+        (periodic ws wa 1) U V (b + j * wa + i) (some L) := by
+      intro i hi
+      have hread : coinOfBlocksFrom b g d (b + j * wa + i) = g j ⟨i, hi⟩ :=
+        coinOfBlocksFrom_read (by omega) g d j ⟨i, hi⟩
+      have hgood : coinOfBlocksFrom b g d (b + j * wa + i) ∈
+          MahiMahi.goodAt U wa (b + j * wa + i) := by
+        rw [hread]
+        exact hj ⟨i, hi⟩
+      obtain ⟨L, hLU, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp hgood
+      refine ⟨L, Decided.directCommit (S := chainSlots (coinOfBlocksFrom b g d))
+        ⟨hLU, hLr, hLc⟩ ?_⟩
+      change MahiMahi.DirectCommitIn U V (periodic ws wa 1 (b + j * wa + i)) L (b + j * wa + i)
+      rw [periodic_one]
+      refine MahiMahiProperties.directCommitIn_of_coversUpto hdc (hV.mono ?_)
+      unfold MahiMahi.decisionRoundAt
+      omega
+    obtain ⟨v, hv⟩ := allDecidedBelowOfRun (S := chainSlots (coinOfBlocksFrom b g d))
+      (fun r => by rw [periodic_one]; omega) (fun r => le_of_eq (periodic_one r)) (fun _ => rfl)
+      hrun s (by omega)
+    exact hg v hv
+  calc _ ≤ _ := MeasureTheory.measure_mono hsub
+    _ ≤ Coin.badBlockBound Validator wa ^ (Finset.univ : Finset (Fin M)).card :=
+        no_good_block_prob_le _ G hc
+    _ = _ := by rw [Finset.card_univ, Fintype.card_fin]
 
 /-- **SH11f, the adaptive block bound.** The bound the fixed family gets, for good sets that read
 the coins drawn before their own round: the count peels the last block, whose bad set the earlier
