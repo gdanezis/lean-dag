@@ -47,9 +47,12 @@ What the adaptive protocol's period does across views and over time
   leaves undecided is never consumed, so the agreed output's cursor and
   last commit stay at or below it, in every state the view derives;
 * **SH10k, a window resolves an asynchronous slot of every candidate**:
-  at `I ≥ K + wa − 2`, the window of an anchor at or above round `I`
-  holds, for every period in `[1, K]`, an asynchronous round whose
-  decision round it retains; `I ≥ 2K` alone does not give this;
+  at `I ≥ K + wa − 2`, the window of an anchor above round `I`, the
+  `I + 1` rounds from `round A − I` up as `windowBottom` has it, holds,
+  for every period in `[1, K]`, an asynchronous round whose decision
+  round it retains; `I ≥ 2K` alone does not give this, and neither does
+  an anchor at round `I` itself, whose window starts at round `1` and is
+  one round short;
 * **SH14, output liveness under the failover**: Theorem 3 (ii) and the
   asynchronous half of Definition 1's validity, deterministic given two
   events the coin supplies almost surely. With the coin leading every
@@ -219,8 +222,12 @@ def StalledBelowUndecided (U : BlockUniverse Validator BlockId Payload) (I wa : 
 
 /-- **SH10k, a window resolves an asynchronous slot of every candidate.** -/
 def WindowResolves (I wa K : ℕ) : Prop :=
-  ∀ k top, 1 ≤ k → k ≤ K → 1 ≤ wa → K + wa - 2 ≤ I → I ≤ top →
-    ∃ r, top - I ≤ r ∧ r + wa - 1 ≤ top ∧ IsAsync k r
+  ∀ k top, 1 ≤ k → k ≤ K → 1 ≤ wa → K + wa - 2 ≤ I →
+    -- the anchor lies above round I, so its window holds the full I + 1 rounds
+    I < top →
+    -- then the window, from max 1 (top − I) to top as `windowBottom` has it, holds an
+    -- asynchronous round of period k whose decision round it retains
+    ∃ r, max 1 (top - I) ≤ r ∧ r + wa - 1 ≤ top ∧ IsAsync k r
 
 /-- **SH14, output liveness under the failover.** -/
 def OutputLiveness (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=

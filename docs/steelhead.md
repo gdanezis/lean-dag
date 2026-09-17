@@ -648,10 +648,12 @@ one clause at a time (SH14) take this schedule as their instance (SH15).
   test below a stuck slot, and both speak of slots at round one or above,
   the agreed output starting at slot `1` as the implementation's does.
 - **SH10k, a window resolves an asynchronous slot of every candidate**:
-  the window holds `I + 1` rounds, `round A − I` to `round A`, so an
-  asynchronous round of period `k` has its decision round inside it when
-  `I ≥ k + wa − 2`; at `I ≥ 2K` alone the window resolves a slot at some
-  anchors and none at others (§7, finding 8).
+  above round `I` the window holds `I + 1` rounds, `round A − I` to
+  `round A` (`windowBottom`), so an asynchronous round of period `k` has
+  its decision round inside it when `I ≥ k + wa − 2`; at `I ≥ 2K` alone
+  the window resolves a slot at some anchors and none at others (§7,
+  finding 8), and an anchor at round `I` itself, whose window starts at
+  round `1` and is one round short, resolves none at `I = K + wa − 2`.
 - **SH14, output liveness under the failover**: in a view that derived
   every state up to a run's last round, if some interval at least two
   past a slot's finds an anchor, and above that interval the coin names

@@ -711,11 +711,11 @@ theorem stalled_below_undecided {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r)
   | keep _ _ ih => exact ih
 
 omit S in
-/-- **SH10k.** The rounds from `top − I` to `top − wa + 1` number at least `k`, so one of them is a
-multiple of `k`. -/
+/-- **SH10k.** Above round `I` the window starts at `top − I`, and the rounds from there to
+`top − wa + 1` number at least `k`, so one of them is a multiple of `k`. -/
 theorem window_resolves {K k top : ℕ} (hk : 1 ≤ k) (hK : k ≤ K) (hwa : 1 ≤ wa)
-    (hI : K + wa - 2 ≤ I) (htop : I ≤ top) :
-    ∃ r, top - I ≤ r ∧ r + wa - 1 ≤ top ∧ IsAsync k r := by
+    (hI : K + wa - 2 ≤ I) (htop : I < top) :
+    ∃ r, max 1 (top - I) ≤ r ∧ r + wa - 1 ≤ top ∧ IsAsync k r := by
   obtain ⟨q, m, hm, hqm⟩ : ∃ q m, m < k ∧ k * q + m = top - I + k - 1 :=
     ⟨(top - I + k - 1) / k, (top - I + k - 1) % k, Nat.mod_lt _ (by omega), Nat.div_add_mod _ _⟩
   exact ⟨k * q, by omega, by omega, Nat.mul_mod_right k q⟩

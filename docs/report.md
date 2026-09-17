@@ -9874,9 +9874,11 @@ since the anchors' histories lie inside that view, which is what
 a slot the view leaves undecided is never consumed, so the cursor and
 the last commit stay at or below it in every state the view derives,
 which is what puts the failover's test below a stuck slot; **SH10k**, at
-`I ≥ K + wa − 2` the window of an anchor at or above round `I` holds,
-for every period in `[1, K]`, an asynchronous round whose decision round
-it retains, where `I ≥ 2K` alone does not (§24.6).
+`I ≥ K + wa − 2` the window of an anchor above round `I`, the `I + 1`
+rounds from `round A − I` up, holds, for every period in `[1, K]`, an
+asynchronous round whose decision round it retains, where `I ≥ 2K` alone
+does not, and neither does the one-round-shorter window of an anchor at
+round `I` (§24.6).
 
 **The replay** (SH18, `Steelhead.Replay.holds`). Algorithm 2 as data:
 `ofAnchor` reads the window's evidence off the anchor's causal history
