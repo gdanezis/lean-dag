@@ -108,6 +108,23 @@ example : sh.Commit sh8 (View.full sh8) 6 1 := by decide
 example : ¬ sh.Skip sh8 (View.full sh8) shSlots 0 := by decide
 example : ¬ sh.Skip sh8 (View.full sh8) shSlots 1 := by decide
 
+/-! ### What the lower bounds admit
+
+The safety claims ask `2 ≤ w r`, and at that wave the voting round is the
+slot's own, `r + 2 - 2 = r`. No block of a round references another of
+it, so the only vote a candidate collects is its own block's: nothing is
+certified, a quorum blames the slot, and the rule at that wave skips
+everything. The bound is what the proofs consume; the content starts at
+three. -/
+
+example : MahiMahi.certificates sh8 2 1 0 = ∅ := by decide
+example : ¬ MahiMahi.DirectCommit sh8 2 1 0 := by decide
+example : MahiMahi.DirectSkip sh8 2 (1 : Fin 4) 0 := by decide
+
+-- At wave one the voting round is below the slot's, and nothing is
+-- certified there either.
+example : ¬ MahiMahi.DirectCommit sh8 1 1 0 := by decide
+
 /-! ### The decision relation -/
 
 theorem sh8_slot0 : Steelhead.Decided w4 sh8 (View.full sh8) 0 (some 1) :=
