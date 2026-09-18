@@ -55,6 +55,13 @@ def certifiesAt (U : R.Universe) (T : Finset Validator) (r κ : ℕ) (L : BlockI
   ∀ v ∈ T, ∀ c, c ∈ R.ids U → (R.block U c).creator = v →
     (R.block U c).round = r + sp.waveAt κ → sp.Certifies U c L
 
+/-- Decidable on concrete data whose certification is, so a model can
+settle it by `decide`. -/
+instance decidableCertifiesAt [∀ U c L, Decidable (sp.Certifies U c L)] (U : R.Universe)
+    (T : Finset Validator) (r κ : ℕ) (L : BlockId) : Decidable (sp.certifiesAt U T r κ L) :=
+  inferInstanceAs (Decidable (∀ v ∈ T, ∀ c ∈ R.ids U, (R.block U c).creator = v →
+    (R.block U c).round = r + sp.waveAt κ → sp.Certifies U c L))
+
 end Support
 
 /-- **A `RebasedAbove` is a band from its settling round up to any
@@ -114,6 +121,11 @@ each rule owes only `Commits`. -/
 def voteSupport (R : DagRule Validator BlockId Payload) : Support R where
   waveAt := fun _ => 1
   Certifies := fun U c L => L ∈ (R.block U c).refs
+
+/-- Referencing is decidable, so vote certification is. -/
+instance decidableVoteCertifies (U : R.Universe) (c L : BlockId) :
+    Decidable ((voteSupport R).Certifies U c L) :=
+  inferInstanceAs (Decidable (L ∈ (R.block U c).refs))
 
 /-- **Law 1 for vote support.** A block strictly above the settling
 round keeps its references. -/

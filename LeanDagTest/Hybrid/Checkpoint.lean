@@ -1,4 +1,5 @@
-import LeanDag.Hybrid.Checkpoint.RecoveryProofs
+import LeanDag.Checkpoint.RecoveryProofs
+import LeanDag.Integration.HybridCheckpoint
 /-!
 # Adversarial checkpoint and recovery witnesses
 
@@ -11,7 +12,7 @@ epoch then certifies the strict extension `[0,1,2]`.
 
 namespace LeanDagTest
 
-open LeanDag LeanDag.Hybrid LeanDag.Hybrid.Checkpoint
+open LeanDag LeanDag.Hybrid LeanDag.Checkpoint LeanDag.Integration
 
 instance checkpointFaults : HybridFaults (Fin 9) where
   fb := 1
@@ -24,13 +25,16 @@ instance checkpointFaults : HybridFaults (Fin 9) where
   card_validators := by decide
 
 /-- One Byzantine and one AbC validator may violate signing rules. -/
-def checkpointFlexible : FlexibleFaults (Fin 9) ℕ where
+def checkpointFlexible : FlexibleFaults (Fin 9) where
   fabc := 1
   abc := {1}
   disjoint_byzantine := by decide
   disjoint_crash := by decide
   card_abc := by decide
   resilient := by decide
+
+/-- The signing faults the flexible model instantiates. -/
+def checkpointSigning : SigningFaults (Fin 9) := checkpointFlexible.signing
 
 /-- The initial checkpoint. -/
 def genesisCheckpoint : CheckpointData ℕ :=
@@ -80,11 +84,11 @@ def checkpointRecorded (_ : Fin 9) (checkpoint : CheckpointData ℕ) : Prop :=
 than `0` and `1`, which is the side condition every emission clause
 below discharges. -/
 private theorem reliable_not_faulty {v : Fin 9}
-    (hv : v ∈ checkpointFlexible.ReliableSigner) :
+    (hv : v ∈ checkpointSigning.reliableSigner) :
     v ∉ ({0, 1} : Finset (Fin 9)) := by
   have hv' :
       v ≠ 1 ∧ v ∉ checkpointFaults.byzantine := by
-    simpa [checkpointFlexible, FlexibleFaults.ReliableSigner] using hv
+    simpa [checkpointSigning, checkpointFlexible, FlexibleFaults.signing] using hv
   have h0 : v ≠ 0 := by
     have hb := hv'.2
     change v ∉ ({0} : Finset (Fin 9)) at hb
@@ -93,7 +97,7 @@ private theorem reliable_not_faulty {v : Fin 9}
 
 /-- The concrete protocol execution, including the genesis adopted after
 the recovery epoch. -/
-def checkpointExecution : checkpointFlexible.Execution ℕ where
+def checkpointExecution : checkpointSigning.Execution ℕ where
   genesis := fun epoch => if epoch = 0 then [] else [0, 1]
   localHistory := checkpointLocal
   emitted := checkpointEmitted
@@ -130,7 +134,7 @@ def checkpointExecution : checkpointFlexible.Execution ℕ where
 
 /-- Seven senders form the lower, deliberately unrecorded certificate. -/
 def checkpointOneQC :
-    FlexibleFaults.Execution.CheckpointQC checkpointFlexible checkpointExecution
+    SigningFaults.Execution.CheckpointQC checkpointSigning checkpointExecution
       checkpointOne where
   signers := {0, 1, 2, 3, 4, 5, 6}
   quorum := by decide
@@ -141,7 +145,7 @@ def checkpointOneQC :
 
 /-- Seven senders form the finalized height-two certificate. -/
 def checkpointTwoQC :
-    FlexibleFaults.Execution.CheckpointQC checkpointFlexible checkpointExecution
+    SigningFaults.Execution.CheckpointQC checkpointSigning checkpointExecution
       checkpointTwo where
   signers := {0, 1, 2, 3, 4, 5, 6}
   quorum := by decide
@@ -153,7 +157,7 @@ def checkpointTwoQC :
 /-- A competing signer set certifies the same canonical height-two
 checkpoint, exercising quorum intersection rather than identical sets. -/
 def checkpointTwoAltQC :
-    FlexibleFaults.Execution.CheckpointQC checkpointFlexible checkpointExecution
+    SigningFaults.Execution.CheckpointQC checkpointSigning checkpointExecution
       checkpointTwo where
   signers := {0, 1, 2, 3, 4, 7, 8}
   quorum := by decide
@@ -165,12 +169,12 @@ def checkpointTwoAltQC :
 /-- Certified height binding is derived from a reliable quorum signer;
 it is not imposed on Byzantine or AbC emissions. -/
 example : checkpointTwo.history.length = checkpointTwo.height :=
-  FlexibleFaults.Execution.checkpointQC_height_bound checkpointFlexible
+  SigningFaults.Execution.checkpointQC_height_bound checkpointSigning
     checkpointExecution checkpointTwoQC
 
 /-- The next epoch certifies a strict extension of the recovered state. -/
 def checkpointThreeQC :
-    FlexibleFaults.Execution.CheckpointQC checkpointFlexible checkpointExecution
+    SigningFaults.Execution.CheckpointQC checkpointSigning checkpointExecution
       checkpointThree where
   signers := {0, 1, 2, 3, 4, 5, 6}
   quorum := by decide
@@ -182,7 +186,7 @@ def checkpointThreeQC :
 /-- The second quorum consists of concrete messages whose senders have
 recorded `checkpointTwoQC`. -/
 def checkpointFinality :
-    FlexibleFaults.Execution.FinalityQC checkpointFlexible checkpointExecution
+    SigningFaults.Execution.FinalityQC checkpointSigning checkpointExecution
       checkpointTwo where
   checkpointQC := checkpointTwoQC
   witnesses := {0, 1, 2, 3, 4, 5, 6}
@@ -220,10 +224,10 @@ example : ¬ checkpointExecution.emitted ⟨2, forkTwo⟩ := by
 /-- Any attempted fork certificate conflicts with the canonical QC and
 is therefore impossible: quorum intersection supplies a reliable signer. -/
 example
-    (forkQC : FlexibleFaults.Execution.CheckpointQC checkpointFlexible
+    (forkQC : SigningFaults.Execution.CheckpointQC checkpointSigning
       checkpointExecution forkTwo) : False := by
   have heq :=
-    FlexibleFaults.Execution.checkpointQC_eq_of_same_height checkpointFlexible
+    SigningFaults.Execution.checkpointQC_eq_of_same_height checkpointSigning
       checkpointExecution forkQC checkpointTwoQC rfl rfl
   have hne : forkTwo ≠ checkpointTwo := by decide
   exact hne heq
@@ -231,8 +235,8 @@ example
 /-- The two nonidentical concrete quorums intersect in a reliable signer. -/
 example :
     ∃ v ∈ checkpointTwoQC.signers ∩ checkpointTwoAltQC.signers,
-      v ∈ checkpointFlexible.ReliableSigner :=
-  checkpointFlexible.exists_reliableSigner_mem_inter
+      v ∈ checkpointSigning.reliableSigner :=
+  checkpointSigning.exists_reliableSigner_mem_inter
     checkpointTwoQC.quorum checkpointTwoAltQC.quorum
 
 /-- The two certified heights have a strict, non-reflexive prefix. -/
@@ -243,28 +247,28 @@ example :
 
 /-- Concrete lower certificate payload, including every signer. -/
 def checkpointOnePayload :
-    FlexibleFaults.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
+    SigningFaults.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
   checkpoint := checkpointOne
   signers := checkpointOneQC.signers
 
 /-- Concrete finalized certificate payload. -/
 def checkpointTwoPayload :
-    FlexibleFaults.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
+    SigningFaults.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
   checkpoint := checkpointTwo
   signers := checkpointTwoQC.signers
 
 /-- Malformed recovery payload: Byzantine and AbC signers emitted this
 fork, but the payload falsely claims five additional reliable signers. -/
 def invalidForkPayload :
-    FlexibleFaults.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
+    SigningFaults.Execution.CertificatePayload (Validator := Fin 9) (Value := ℕ) where
   checkpoint := forkTwo
   signers := {0, 1, 2, 3, 4, 5, 6}
 
 /-- Both canonical wire certificates pass explicit local verification. -/
 example :
-    FlexibleFaults.Execution.CertificatePayload.Valid checkpointFlexible checkpointExecution
+    SigningFaults.Execution.CertificatePayload.Valid checkpointSigning checkpointExecution
         checkpointOnePayload ∧
-      FlexibleFaults.Execution.CertificatePayload.Valid checkpointFlexible checkpointExecution
+      SigningFaults.Execution.CertificatePayload.Valid checkpointSigning checkpointExecution
         checkpointTwoPayload := by
   constructor
   · constructor
@@ -280,7 +284,7 @@ example :
 
 /-- The explicit verifier rejects the concrete fork payload. -/
 theorem invalid_fork_payload_rejected :
-    ¬FlexibleFaults.Execution.validateCertificate checkpointFlexible checkpointExecution
+    ¬SigningFaults.Execution.validateCertificate checkpointSigning checkpointExecution
       0 invalidForkPayload := by
   intro hvalid
   have hem := hvalid.2.2 (2 : Fin 9) (by simp [invalidForkPayload])
@@ -290,7 +294,7 @@ theorem invalid_fork_payload_rejected :
 /-- Broadcast transports only authenticated inputs; no validity or
 storage predicate occurs in this channel contract. -/
 def checkpointBroadcast :
-    FlexibleFaults.Execution.AuthenticatedBroadcast checkpointFlexible where
+    SigningFaults.Execution.AuthenticatedBroadcast (Value := ℕ) checkpointSigning where
   input := fun sender payload =>
     payload = checkpointOnePayload ∨ payload = checkpointTwoPayload ∨
       (sender = 0 ∧ payload = invalidForkPayload)
@@ -305,7 +309,7 @@ def checkpointBroadcast :
 two delivered payloads accepted by explicit validation.  The malformed
 Byzantine payload is delivered but excluded. -/
 def checkpointRecovery :
-    FlexibleFaults.Execution.RecoveryRound checkpointFlexible checkpointExecution
+    SigningFaults.Execution.RecoveryRound checkpointSigning checkpointExecution
       checkpointBroadcast 0 where
   validated := fun _ => {checkpointOne, checkpointTwo}
   submits_recorded := by
@@ -360,7 +364,7 @@ example :
 /-- A later recovery round may retain old records without treating them
 as certificates for the new closing epoch. -/
 def emptyRecoveryBroadcast :
-    FlexibleFaults.Execution.AuthenticatedBroadcast checkpointFlexible where
+    SigningFaults.Execution.AuthenticatedBroadcast (Value := ℕ) checkpointSigning where
   input := fun _ _ => False
   delivered := fun _ _ _ => False
   integrity := by simp
@@ -371,7 +375,7 @@ def emptyRecoveryBroadcast :
 epoch-0 checkpoint, while an epoch-1 round has no current-epoch input.
 The stale record does not make the round contract inconsistent. -/
 def retainedRecordRecovery :
-    FlexibleFaults.Execution.RecoveryRound checkpointFlexible checkpointExecution
+    SigningFaults.Execution.RecoveryRound checkpointSigning checkpointExecution
       emptyRecoveryBroadcast 1 where
   validated := fun _ => ∅
   submits_recorded := by
@@ -386,34 +390,34 @@ def retainedRecordRecovery :
 /-- Empty recovery selects the canonical checkpoint induced by the
 closing epoch's execution genesis, not caller-supplied data. -/
 example :
-    FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible checkpointExecution
+    SigningFaults.Execution.RecoveryRound.select checkpointSigning checkpointExecution
       retainedRecordRecovery 2 =
-        FlexibleFaults.Execution.epochGenesis checkpointFlexible checkpointExecution 1 := by
-  simp [FlexibleFaults.Execution.RecoveryRound.select, retainedRecordRecovery]
+        SigningFaults.Execution.epochGenesis checkpointSigning checkpointExecution 1 := by
+  simp [SigningFaults.Execution.RecoveryRound.select, retainedRecordRecovery]
 
 /-- Recovery really selects the higher certificate. -/
 theorem concrete_selection_eq :
-    FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible checkpointExecution
+    SigningFaults.Execution.RecoveryRound.select checkpointSigning checkpointExecution
       checkpointRecovery 2 = checkpointTwo := by
   have hs : (checkpointRecovery.validated 2).Nonempty :=
     ⟨checkpointOne, by simp [checkpointRecovery]⟩
   have hm :
-      FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible
+      SigningFaults.Execution.RecoveryRound.select checkpointSigning
           checkpointExecution checkpointRecovery 2 ∈
         checkpointRecovery.validated 2 :=
-    FlexibleFaults.Execution.RecoveryRound.select_mem
-      checkpointFlexible checkpointExecution checkpointRecovery
+    SigningFaults.Execution.RecoveryRound.select_mem
+      checkpointSigning checkpointExecution checkpointRecovery
         (receiver := (2 : Fin 9)) hs
-  apply FlexibleFaults.Execution.RecoveryRound.eq_of_validated_height
-    checkpointFlexible checkpointExecution checkpointRecovery
+  apply SigningFaults.Execution.RecoveryRound.eq_of_validated_height
+    checkpointSigning checkpointExecution checkpointRecovery
   · exact hm
   · simp [checkpointRecovery]
   · apply Nat.le_antisymm
     · have hcases :
-          FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible
+          SigningFaults.Execution.RecoveryRound.select checkpointSigning
                 checkpointExecution checkpointRecovery 2 =
               checkpointOne ∨
-            FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible
+            SigningFaults.Execution.RecoveryRound.select checkpointSigning
                 checkpointExecution checkpointRecovery 2 =
               checkpointTwo := by
           simpa only [checkpointRecovery, Finset.mem_insert,
@@ -421,21 +425,21 @@ theorem concrete_selection_eq :
       rcases hcases with hcase | hcase
       · simp [hcase, checkpointOne, checkpointTwo]
       · simp [hcase]
-    · exact FlexibleFaults.Execution.RecoveryRound.height_le_select
-        checkpointFlexible checkpointExecution checkpointRecovery hs
+    · exact SigningFaults.Execution.RecoveryRound.height_le_select
+        checkpointSigning checkpointExecution checkpointRecovery hs
           (by simp [checkpointRecovery])
 
 /-- The concrete epoch transition adopts the recovery selection as the
 next genesis. -/
 noncomputable def checkpointTransition :
-    FlexibleFaults.Execution.RecoveryRound.EpochTransition checkpointFlexible
+    SigningFaults.Execution.RecoveryRound.EpochTransition checkpointSigning
       checkpointExecution checkpointRecovery 2 where
   receiver_correct := by decide
   selected :=
-    FlexibleFaults.Execution.RecoveryRound.select checkpointFlexible
+    SigningFaults.Execution.RecoveryRound.select checkpointSigning
       checkpointExecution checkpointRecovery 2
   selection :=
-    FlexibleFaults.Execution.RecoveryRound.select_isSelected checkpointFlexible
+    SigningFaults.Execution.RecoveryRound.select_isSelected checkpointSigning
       checkpointExecution checkpointRecovery 2
   next_epoch := 1
   next_epoch_eq := rfl
@@ -447,21 +451,21 @@ noncomputable def checkpointTransition :
 strictly extends it in the next epoch. -/
 theorem concrete_recovery_extends :
     checkpointTwo.history <+: checkpointThree.history :=
-  FlexibleFaults.Execution.RecoveryRound.finalized_prefix_next_checkpoint
-    checkpointFlexible checkpointExecution checkpointRecovery
+  SigningFaults.Execution.RecoveryRound.finalized_prefix_next_checkpoint
+    checkpointSigning checkpointExecution checkpointRecovery
       checkpointTransition checkpointFinality rfl checkpointThreeQC rfl
 
 example : checkpointTwo.history ≠ checkpointThree.history := by decide
 
-#print axioms LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.checkpointQC_eq_of_same_height
-#print axioms LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.checkpointQC_prefix
-#print axioms LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.finalityQC_compatible
-#print axioms LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.validateCertificate_sound
-#print axioms LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.RecoveryRound.validated_sound
+#print axioms LeanDag.Checkpoint.SigningFaults.Execution.checkpointQC_eq_of_same_height
+#print axioms LeanDag.Checkpoint.SigningFaults.Execution.checkpointQC_prefix
+#print axioms LeanDag.Checkpoint.SigningFaults.Execution.finalityQC_compatible
+#print axioms LeanDag.Checkpoint.SigningFaults.Execution.validateCertificate_sound
+#print axioms LeanDag.Checkpoint.SigningFaults.Execution.RecoveryRound.validated_sound
 #print axioms
-  LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.RecoveryRound.recovery_preserves_finality
+  LeanDag.Checkpoint.SigningFaults.Execution.RecoveryRound.recovery_preserves_finality
 #print axioms
-  LeanDag.Hybrid.Checkpoint.FlexibleFaults.Execution.RecoveryRound.finalized_prefix_next_checkpoint
+  LeanDag.Checkpoint.SigningFaults.Execution.RecoveryRound.finalized_prefix_next_checkpoint
 #print axioms concrete_recovery_extends
 
 end LeanDagTest

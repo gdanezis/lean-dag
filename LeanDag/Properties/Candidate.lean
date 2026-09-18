@@ -28,6 +28,12 @@ def DagRule.IsCandidate (R : DagRule Validator BlockId Payload)
   L ∈ R.ids U ∧ (R.block U L).round = S.slotRound k ∧
     (R.block U L).creator = S.leader k
 
+/-- Decidable on concrete data, so a model can settle it by `decide`. -/
+instance DagRule.decidableIsCandidate (S : Slots Validator) (U : R.Universe) (k : ℕ)
+    (L : BlockId) : Decidable (R.IsCandidate S U k L) :=
+  inferInstanceAs (Decidable (L ∈ R.ids U ∧ (R.block U L).round = S.slotRound k ∧
+    (R.block U L).creator = S.leader k))
+
 /-- Decidable on concrete data, so a witness can settle it by `decide`. -/
 instance instDecidableIsCandidate (R : DagRule Validator BlockId Payload) (S : Slots Validator)
     (U : R.Universe) (k : ℕ) (L : BlockId) : Decidable (R.IsCandidate S U k L) :=

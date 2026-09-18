@@ -1,4 +1,4 @@
-import LeanDag.Hybrid.Rules
+import Mathlib.Data.Fintype.Card
 /-!
 # Human-reviewed base specification for resilient checkpoints
 
@@ -10,13 +10,22 @@ match an implementation or paper. Checkpoint signatures come from
 per-validator protocol state, and histories are compared by equality —
 the minimal abstraction of collision-resistant content binding, with no
 cryptographic conclusion assumed.
+
+The fault model is a parameter, as `Reliability` is for density:
+`SigningFaults` is what the counting needs, a quorum threshold, the
+validators whose signing state is enforced, those of them that stay
+available, and two bounds. Which validators are Byzantine, crashed or
+alive-but-corrupt is the business of the protocol supplying the
+instance; `Integration/HybridCheckpoint.lean` builds one from the
+hybrid classes and the paper's resilience bound. Forked histories are
+permitted inputs: this layer neither derives a fork from a DAG rule nor
+reads one.
 -/
 
-namespace LeanDag.Hybrid.Checkpoint
+namespace LeanDag.Checkpoint
 
 variable {Validator Value : Type*}
 variable [Fintype Validator] [DecidableEq Validator]
-variable [H : HybridFaults Validator]
 
 /-- A history is the content committed by a checkpoint state root. -/
 abbrev History (Value : Type*) := List Value
@@ -39,44 +48,30 @@ structure ChkProp (Validator Value : Type*) where
   checkpoint : CheckpointData Value
   deriving DecidableEq
 
-/-- The flexible fault model: the imported `HybridFaults` classes plus
-alive-but-corrupt validators. `H` supplies the Byzantine/crash classes
-and bounds, this structure adds the AbC class and the stronger
-checkpoint resilience bound; `abc = ∅` recovers the base hybrid model
-without removing crash faults. The disjointness fields are unused by
-current safety derivations, whose cardinality arguments use union upper
-bounds valid even if classes overlap. -/
-structure FlexibleFaults (Validator Value : Type*) [Fintype Validator]
-    [DecidableEq Validator] [H : HybridFaults Validator] where
-  /-- Alive-but-corrupt fault bound. -/
-  fabc : ℕ
-  /-- Validators that may violate the normal signing rules. -/
-  abc : Finset Validator
-  /-- Paper-faithfulness condition: Byzantine and AbC are distinct.
-  This condition is not required by the current safety derivations. -/
-  disjoint_byzantine : Disjoint H.byzantine abc
-  /-- Paper-faithfulness condition: crash-prone and AbC are distinct.
-  This condition is not required by the current safety derivations. -/
-  disjoint_crash : Disjoint H.crash abc
-  /-- The actual AbC population respects its bound. -/
-  card_abc : abc.card ≤ fabc
-  /-- The resilient quorum-intersection bound. -/
-  resilient :
-    fabc + 3 * H.fb + 2 * H.fc < Fintype.card Validator
+/-- What the signing counts need of a fault model, with no commitment to
+which model: the quorum threshold of both phases, the validators whose
+signing state is enforced, those of them that remain available, and the
+two bounds that let a quorum reach one of each. -/
+structure SigningFaults (Validator : Type*) [Fintype Validator]
+    [DecidableEq Validator] where
+  /-- The quorum threshold of both signing phases. -/
+  q : ℕ
+  /-- Validators whose checkpoint protocol state is enforced. -/
+  reliableSigner : Finset Validator
+  /-- Reliable signers that also remain available during recovery.
+  Membership identifies eligible recovery participants; it does not by
+  itself imply that checkpoint recovery occurs. -/
+  recoveryCorrect : Finset Validator
+  /-- Availability is asked only of reliable signers. -/
+  recoveryCorrect_subset : recoveryCorrect ⊆ reliableSigner
+  /-- Two quorums overlap outside the unreliable validators. -/
+  intersect : Fintype.card Validator + reliableSignerᶜ.card < 2 * q
+  /-- A quorum holds a recovery-correct validator. -/
+  reach : recoveryCorrectᶜ.card < q
 
-namespace FlexibleFaults
+namespace SigningFaults
 
-variable (M : FlexibleFaults Validator Value)
-
-/-- Validators whose checkpoint protocol state is enforced. -/
-def ReliableSigner : Finset Validator :=
-  (H.byzantine ∪ M.abc)ᶜ
-
-/-- Reliable signers that also remain available during recovery.
-Membership identifies eligible recovery participants; it does not by
-itself imply that checkpoint recovery occurs. -/
-def RecoveryCorrect : Finset Validator :=
-  M.ReliableSigner \ H.crash
+variable (M : SigningFaults Validator)
 
 /-- A protocol execution exposes local checkpoint state, emitted
 messages, and recorded certificates — required execution invariants,
@@ -93,23 +88,23 @@ structure Execution (Value : Type*) where
   recorded : Validator → CheckpointData Value → Prop
   /-- Every reliable proposal extends the genesis adopted for its epoch. -/
   genesis_prefix :
-    ∀ {m}, emitted m → m.sender ∈ M.ReliableSigner →
+    ∀ {m}, emitted m → m.sender ∈ M.reliableSigner →
       (genesis m.checkpoint.epoch).IsPrefix m.checkpoint.history
   /-- Reliable local state evolves only by history extension within an
   epoch. -/
   local_extension :
-    ∀ {v e h₁ h₂}, v ∈ M.ReliableSigner → h₁ ≤ h₂ →
+    ∀ {v e h₁ h₂}, v ∈ M.reliableSigner → h₁ ≤ h₂ →
       (localHistory v e h₁).IsPrefix (localHistory v e h₂)
   /-- A reliable sender emits only the checkpoint proposal represented
   by its unique local state at that `(epoch,height)`. -/
   emitted_from_state :
-    ∀ {m}, emitted m → m.sender ∈ M.ReliableSigner →
+    ∀ {m}, emitted m → m.sender ∈ M.reliableSigner →
       m.checkpoint.history =
         localHistory m.sender m.checkpoint.epoch m.checkpoint.height
   /-- A reliable validator's local history is indexed by its actual
-  global height. Byzantine and AbC emissions remain unconstrained. -/
+  global height. Unreliable emissions remain unconstrained. -/
   local_height :
-    ∀ {m}, emitted m → m.sender ∈ M.ReliableSigner →
+    ∀ {m}, emitted m → m.sender ∈ M.reliableSigner →
       (localHistory m.sender m.checkpoint.epoch
         m.checkpoint.height).length = m.checkpoint.height
 
@@ -122,8 +117,8 @@ variable (E : M.Execution Value)
 structure CheckpointQC (checkpoint : CheckpointData Value) where
   /-- Distinct authenticated senders. -/
   signers : Finset Validator
-  /-- The checkpoint phase uses the hybrid quorum. -/
-  quorum : Hybrid.q Validator ≤ signers.card
+  /-- The checkpoint phase uses the signing quorum. -/
+  quorum : M.q ≤ signers.card
   /-- Every signer emitted a proposal for this exact checkpoint. -/
   messages :
     ∀ v ∈ signers, E.emitted ⟨v, checkpoint⟩
@@ -145,7 +140,7 @@ every signer-indexed authenticated proposal contained in the payload;
 this predicate is local protocol logic, not a broadcast assumption. -/
 def Valid (payload : CertificatePayload (Validator := Validator)
     (Value := Value)) : Prop :=
-  Hybrid.q Validator ≤ payload.signers.card ∧
+  M.q ≤ payload.signers.card ∧
     ∀ v ∈ payload.signers,
       E.emitted ⟨v, payload.checkpoint⟩
 
@@ -156,42 +151,41 @@ concrete first-phase certificate for exactly `checkpoint`, retained in
 the message object so later proofs can inspect it directly. For a
 recovery-correct sender, `recorded` requires durable storage as part of
 supplying the witness, so a finality quorum yields an honest, available
-resubmitter during recovery; other sender classes make no such
-promise. -/
+resubmitter during recovery; other senders make no such promise. -/
 structure ChkWitness (checkpoint : CheckpointData Value) where
   /-- Authenticated validator claiming to have validated the certificate. -/
   sender : Validator
   /-- The concrete first-phase certificate received by the sender. Its
   dependent type binds the witness to this exact `checkpoint`. -/
-  certificate : FlexibleFaults.Execution.CheckpointQC M E checkpoint
+  certificate : SigningFaults.Execution.CheckpointQC M E checkpoint
   /-- If the sender follows recovery and remains available, it stored
   the checkpoint before witnessing it. No condition is imposed when the
-  sender is outside `RecoveryCorrect`. -/
+  sender is outside `recoveryCorrect`. -/
   recorded :
-    sender ∈ M.RecoveryCorrect → E.recorded sender checkpoint
+    sender ∈ M.recoveryCorrect → E.recorded sender checkpoint
 
 /-- A finality certificate supplies a quorum of authenticated witnesses
 for one checkpoint, rather than an arbitrary possession predicate. -/
 structure FinalityQC (checkpoint : CheckpointData Value) where
   /-- A concrete first-phase certificate for the finalized content. -/
-  checkpointQC : FlexibleFaults.Execution.CheckpointQC M E checkpoint
+  checkpointQC : SigningFaults.Execution.CheckpointQC M E checkpoint
   /-- Distinct witness senders. -/
   witnesses : Finset Validator
-  /-- The witness phase uses the hybrid quorum. -/
-  quorum : Hybrid.q Validator ≤ witnesses.card
+  /-- The witness phase uses the signing quorum. -/
+  quorum : M.q ≤ witnesses.card
   /-- Every listed sender is represented by a concrete validated witness. -/
   messages :
-    ∀ v ∈ witnesses, FlexibleFaults.Execution.ChkWitness M E checkpoint
+    ∀ v ∈ witnesses, SigningFaults.Execution.ChkWitness M E checkpoint
   /-- Witness authentication binds each message to its listed sender. -/
   sender_eq : ∀ v (hv : v ∈ witnesses), (messages v hv).sender = v
 
 end Execution
 
-end FlexibleFaults
+end SigningFaults
 
 /-- Two checkpoint histories are consistent when either extends the
 other. -/
 def Compatible (x y : History Value) : Prop :=
   x.IsPrefix y ∨ y.IsPrefix x
 
-end LeanDag.Hybrid.Checkpoint
+end LeanDag.Checkpoint

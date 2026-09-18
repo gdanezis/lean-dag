@@ -1,25 +1,24 @@
-import LeanDag.Hybrid.Checkpoint.BaseSpec
+import LeanDag.Checkpoint.BaseSpec
 /-!
 # Human-reviewed recovery specification
 
 Every declaration here is part of the trusted recovery model; human
 reviewers must check the broadcast contract, validation predicate,
 handler-state obligations, selection semantics and epoch-transition
-requirements. `RecoveryCorrect` membership alone is not a recovery
+requirements. `recoveryCorrect` membership alone is not a recovery
 protocol — the specification also requires correct submission,
 authenticated broadcast, local validation, deterministic selection, and
 adoption of the selected history as the next epoch's genesis.
 -/
 
-namespace LeanDag.Hybrid.Checkpoint
+namespace LeanDag.Checkpoint
 
 variable {Validator Value : Type*}
 variable [Fintype Validator] [DecidableEq Validator]
-variable [H : HybridFaults Validator]
 
-namespace FlexibleFaults
+namespace SigningFaults
 
-variable (M : FlexibleFaults Validator Value)
+variable (M : SigningFaults Validator)
 
 namespace Execution
 
@@ -40,14 +39,14 @@ structure AuthenticatedBroadcast where
       delivered receiver sender payload → input sender payload
   /-- Correct recipients agree on every authenticated delivery. -/
   agreement :
-    ∀ {v w}, v ∈ M.RecoveryCorrect → w ∈ M.RecoveryCorrect →
+    ∀ {v w}, v ∈ M.recoveryCorrect → w ∈ M.recoveryCorrect →
       ∀ sender payload,
         delivered v sender payload ↔ delivered w sender payload
   /-- An actual input from a correct sender reaches every correct
   recipient. -/
   delivery :
     ∀ {sender receiver payload},
-      sender ∈ M.RecoveryCorrect → receiver ∈ M.RecoveryCorrect →
+      sender ∈ M.recoveryCorrect → receiver ∈ M.recoveryCorrect →
       input sender payload → delivered receiver sender payload
 
 /-- Explicit local validation for a delivered recovery payload. The
@@ -77,7 +76,7 @@ structure RecoveryRound (B : AuthenticatedBroadcast M) (epoch : ℕ) where
   validity together, which is what makes a recorded checkpoint
   certified, the reading `recorded_certified` extracts. -/
   submits_recorded :
-    ∀ {sender checkpoint}, sender ∈ M.RecoveryCorrect →
+    ∀ {sender checkpoint}, sender ∈ M.recoveryCorrect →
       E.recorded sender checkpoint →
       checkpoint.epoch = epoch →
       ∃ payload, payload.checkpoint = checkpoint ∧
@@ -119,7 +118,7 @@ def IsSelected (receiver : Validator)
 `IsSelected` as the genesis used by the next epoch's signing state. -/
 structure EpochTransition (receiver : Validator) where
   /-- The receiver follows the recovery protocol. -/
-  receiver_correct : receiver ∈ M.RecoveryCorrect
+  receiver_correct : receiver ∈ M.recoveryCorrect
   /-- Checkpoint chosen according to the recovery selection semantics. -/
   selected : CheckpointData Value
   /-- The chosen checkpoint is highest, or genesis when none validates. -/
@@ -136,6 +135,6 @@ end RecoveryRound
 
 end Execution
 
-end FlexibleFaults
+end SigningFaults
 
-end LeanDag.Hybrid.Checkpoint
+end LeanDag.Checkpoint
