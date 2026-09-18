@@ -1071,6 +1071,17 @@ either, which Theorem 2's undecided slot is not.
    rounds of every round with a reliable run of three past every round
    (SH6h). What the paper should say is that the bound is the schedule's,
    not the decision rule's.
+   The paper counts `b` hops, which its fault model supports: a leader
+   that never proposes draws `n − f` blames and is skipped, so the chain
+   lands only on leaders that proposed and only the equivocators among
+   them block it, and two landings of one leader would need a full cycle
+   of the schedule between them, which `ws · f < n` leaves too few faulty
+   leaders to fill. The arc proves `n − |T|` because its model carries a
+   reliable set and no crash class, so a validator outside `T` that
+   proposes nothing is not distinguished from one that equivocates; SH6l
+   supplies the `b` count under the hypothesis that the others have
+   crashed. The distance between the two is a model change, not a missing
+   argument.
 8. **`I ≥ 2 · maxPeriod` does not make a window hold a wave.** The
    adaptive section bounds the interval so that every window holds two
    asynchronous slots, and asks nothing else of it. A window holds
