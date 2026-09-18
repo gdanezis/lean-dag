@@ -30,6 +30,42 @@ theorem wavelength_periodicKind (ws wa p r : ℕ) :
   unfold wavelength periodicKind periodic
   by_cases h : r % p = 0 <;> simp [h]
 
+/-- The synchronous kind reads `ws`. -/
+@[simp] theorem wavelength_zero (ws wa : ℕ) : wavelength ws wa 0 = ws := rfl
+
+/-- The asynchronous kind reads `wa`. -/
+@[simp] theorem wavelength_one (ws wa : ℕ) : wavelength ws wa 1 = wa := rfl
+
+/-- The pair's wave is at least the smaller of the two waves, at every kind. -/
+theorem wavelength_two_le {ws wa : ℕ} (hws : 2 ≤ ws) (hwa : 2 ≤ wa) (κ : ℕ) :
+    2 ≤ wavelength ws wa κ := by
+  unfold wavelength
+  split <;> omega
+
+/-- The pair's wave is at least three once both waves are. -/
+theorem wavelength_three_le {ws wa : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) (κ : ℕ) :
+    3 ≤ wavelength ws wa κ := by
+  unfold wavelength
+  split <;> omega
+
+/-- The pair's wave is at most the larger of the two waves. -/
+theorem wavelength_le_max (ws wa κ : ℕ) : wavelength ws wa κ ≤ max ws wa := by
+  unfold wavelength
+  split
+  · exact le_max_left _ _
+  · exact le_max_right _ _
+
+/-- The pair's wave is at most `wa` once `ws` is. -/
+theorem wavelength_le {ws wa : ℕ} (h : ws ≤ wa) (κ : ℕ) : wavelength ws wa κ ≤ wa := by
+  unfold wavelength
+  split <;> omega
+
+/-- A periodic schedule assigns the kinds `0` and `1` and no other. -/
+theorem periodicKind_eq_zero_of_ne_one {p r : ℕ} (h : periodicKind p r ≠ 1) :
+    periodicKind p r = 0 := by
+  unfold periodicKind at h ⊢
+  split <;> simp_all
+
 /-- A periodic schedule gives kind `1` to exactly the asynchronous
 rounds. -/
 theorem periodicKind_eq_one_iff {p r : ℕ} : periodicKind p r = 1 ↔ IsAsync p r := by

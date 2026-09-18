@@ -36,12 +36,12 @@ theorem holds : Statement := by
     exact stalled_below_undecided hw hid hp h₁ hund
   · intro k top hk hK hwa hI htop
     exact window_resolves hk hK hwa hI htop
-  · intro coin upd k₀ V per s j₁ r₁ b A hws hle hwa hid hI hper hlead h₁ hs hA hb hgood hV
-    exact output_liveness hws hle hwa hid hI hper hlead h₁ hs hA hb hgood hV
-  · intro coin upd k₀ V per c N hws hle hwa hid hI hlead hwaK hcK hrun hV hper s h₁ hN
-    exact all_decided hws hle hwa hid hI hlead hwaK hcK hrun hV hper s h₁ hN
-  · intro coin upd k₀ V per s j b hws hle hwa hid hI hlead hper h₁ hs hgood hb hgoodb hV
-    exact output_liveness_of_runs hws hle hwa hid hI hlead hper h₁ hs hgood hb hgoodb hV
+  · intro coin upd k₀ V per s j₁ r₁ b A hws hle hwa hid hkind hI hper hlead h₁ hs hA hb hgood hV
+    exact output_liveness hws hle hwa hid hkind hI hper hlead h₁ hs hA hb hgood hV
+  · intro coin upd k₀ V per c N hws hle hwa hid hkind hI hlead hwaK hcK hrun hV hper s h₁ hN
+    exact all_decided hws hle hwa hid hkind hI hlead hwaK hcK hrun hV hper s h₁ hN
+  · intro coin upd k₀ V per s j b hws hle hwa hid hkind hI hlead hper h₁ hs hgood hb hgoodb hV
+    exact output_liveness_of_runs hws hle hwa hid hkind hI hlead hper h₁ hs hgood hb hgoodb hV
 
 end Period
 

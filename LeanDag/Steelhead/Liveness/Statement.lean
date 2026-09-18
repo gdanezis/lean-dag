@@ -13,7 +13,7 @@ claims:
   per-slot half: on a DAG a reliable quorum has synchronised and
   populated through the slot's decision round, a reliably led slot
   commits in every view caught up to that round, by the direct rule, at
-  whichever wave the slot's round carries;
+  whichever wave the slot's kind carries;
 * **SH6b, everything below a fair run is decided** — the core's L10 at
   the wavelength function: past any slot the schedule offers a run of
   reliably led slots, and once the DAG is covered through the run's
@@ -131,7 +131,8 @@ claims:
   Once the period is `1` and Mahi-Mahi's run clause supplies the run,
   the slots an earlier period left undecided are finished by it;
 * **SH9b, at period one every slot is decided**: Theorem 3 (ii) as one
-  statement. At `periodic ws wa 1`, under the run clause at the output
+  statement. With every slot of the asynchronous kind, as period one
+  has it, under the run clause at the output
   schedule, past every round whose window decides below the horizon
   there is a slot below which every slot is decided, in any view caught
   up to the horizon, so the settled prefix and with it the ledger (SH13)
@@ -144,17 +145,20 @@ claims:
   causal ordering and the wait is nonincreasing in `i`: delays never
   compound.
 
-SH6a, SH6b, SH6f and SH6g assume `3 ≤ w r` everywhere, as the safety
+SH6a, SH6b, SH6f and SH6g assume `3 ≤ w κ` everywhere, as the safety
 claims do, and SH6f and SH6g one slot per round; SH6h reads no DAG at
 all, only the schedule, and SH6i and SH6l, which read both, fix the wave at
 the constant `ws` the round-robin count needs; SH6c assumes nothing of the wave, and
-SH6e `4 ≤ w r` at the slot's round, so that the vote round lies two
+SH6e `4 ≤ w κ` at the slot's kind, so that the vote round lies two
 rounds up, where synchrony has carried the candidate. Neither asks the
 quorum to be correct: SH6c reads blames, which need no vote, and SH6e
 reads votes for a candidate its leader did not equivocate on. SH7a and SH7c
 assume `1 ≤ wa`, as MM3c does, and SH7b `4 ≤ wa`, as MM5 does; SH8 assumes
-`2 ≤ ws ≤ k` and nothing of `wa`; SH9 assumes `1 ≤ w r ≤ wa`; SH9b
-assumes `1 ≤ wa`, as SH7a does; SH9c assumes `1 ≤ ws ≤ wa`.
+`2 ≤ ws ≤ k` and nothing of `wa`; SH9 assumes `1 ≤ w κ ≤ wa`; SH9b
+assumes `1 ≤ wa`, as SH7a does; SH9c assumes `1 ≤ ws ≤ wa`. SH8, SH9b
+and SH9c read the period through the schedule's kinds, `periodicKind k`
+at the slot's round, every slot asynchronous at period one; the paper's
+`w(r)` is that reading at `wavelength ws wa` (SH4).
 
 Statements only; the proofs live in `Proof.lean`.
 -/
@@ -172,7 +176,7 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 /-- **SH6a, a reliable leader commits under coverage.** -/
 def CommitsOfSynchrony (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
   ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (R N k : ℕ),
-    (∀ r, 3 ≤ w r) →
+    (∀ κ, 3 ≤ w κ) →
     -- T is a reliable set: correct, and a quorum
     T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
     -- T is synchronised from R and populates every round from R to the horizon N
@@ -186,14 +190,14 @@ def CommitsOfSynchrony (U : BlockUniverse Validator BlockId Payload) (w : ℕ �
     S.leader k ∈ T →
     -- then the slot commits its candidate in that view, by the direct rule
     ∃ L, IsLeaderBlock U k L ∧
-      MahiMahi.DirectCommitIn U V (w (S.slotRound k)) L (S.slotRound k) ∧ Decided w U V k (some L)
+      MahiMahi.DirectCommitIn U V (w (S.kind k)) L (S.slotRound k) ∧ Decided w U V k (some L)
 
 /-- **SH6b, everything below a fair run is decided.** The run is named by
 the schedule alone, before any DAG is mentioned, so the horizon cannot
 cap how far fairness reaches. -/
 def AllDecidedBelowOfSynchrony (w : ℕ → ℕ) : Prop :=
   ∀ (T : Finset Validator) (c : ℕ),
-    (∀ r, 3 ≤ w r) →
+    (∀ κ, 3 ≤ w κ) →
     T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
     -- a run of c slots spans eligibility, each slot at the wave of its own round
     (steelheadAnchored Validator BlockId Payload w).SpansEligible c →
@@ -219,15 +223,15 @@ def SkipsCrashed (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ)
     -- the leader has no block at the slot's round
     (∀ L ∈ U.ids, (U.block L).round = S.slotRound k → (U.block L).creator ≠ S.leader k) →
     -- T populates the vote round, which the view holds
-    PopulatedOn U T (MahiMahi.votingRound (w (S.slotRound k)) (S.slotRound k)) →
-    V.CoversUpto (MahiMahi.votingRound (w (S.slotRound k)) (S.slotRound k)) →
+    PopulatedOn U T (MahiMahi.votingRound (w (S.kind k)) (S.slotRound k)) →
+    V.CoversUpto (MahiMahi.votingRound (w (S.kind k)) (S.slotRound k)) →
     -- then the slot is skipped in that view
     Decided w U V k none
 
 /-- **SH6e, partial dissemination does not defer.** -/
 def CommitsOfDissemination (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
   ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (k : ℕ) (L q : BlockId),
-    4 ≤ w (S.slotRound k) →
+    4 ≤ w (S.kind k) →
     -- T is a quorum
     quorumCard Validator ≤ T.card →
     -- L is the slot's candidate, and its leader's only block at the slot's round
@@ -240,9 +244,9 @@ def CommitsOfDissemination (U : BlockUniverse Validator BlockId Payload) (w : �
     -- ... T is synchronised from that round and populates it through the decision round ...
     SynchronisedOn U T (S.slotRound k + 1) →
     (∀ r, S.slotRound k + 1 ≤ r →
-      r ≤ MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k) → PopulatedOn U T r) →
+      r ≤ MahiMahi.decisionRoundAt (w (S.kind k)) (S.slotRound k) → PopulatedOn U T r) →
     -- ... and the view holds the decision round
-    V.CoversUpto (MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k)) →
+    V.CoversUpto (MahiMahi.decisionRoundAt (w (S.kind k)) (S.slotRound k)) →
     -- then the slot commits its candidate in that view
     Decided w U V k (some L)
 
@@ -250,7 +254,7 @@ def CommitsOfDissemination (U : BlockUniverse Validator BlockId Payload) (w : �
 def DecidedOfReliableAboveFloor (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) :
     Prop :=
   ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (R N k a : ℕ),
-    (∀ r, 3 ≤ w r) →
+    (∀ κ, 3 ≤ w κ) →
     -- one slot per round
     (∀ t, S.slotRound t = t) →
     -- T is a reliable set: correct, and a quorum
@@ -259,10 +263,10 @@ def DecidedOfReliableAboveFloor (U : BlockUniverse Validator BlockId Payload) (w
     SynchronisedOn U T R → (∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) →
     -- the slot lies at or past R
     R ≤ k →
-    -- slot a lies at or above k's floor and is reliably led
-    k + w k ≤ a → S.leader a ∈ T →
+    -- slot a lies at or above k's floor, read at k's kind, and is reliably led
+    k + w (S.kind k) ≤ a → S.leader a ∈ T →
     -- every slot from the floor up to a is decided in V
-    (∀ j, k + w k ≤ j → j < a → ∃ v, Decided w U V j v) →
+    (∀ j, k + w (S.kind k) ≤ j → j < a → ∃ v, Decided w U V j v) →
     -- every slot up to a decides at or below N, which the view holds
     (∀ j, j ≤ a → (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N) →
     V.CoversUpto N →
@@ -272,7 +276,7 @@ def DecidedOfReliableAboveFloor (U : BlockUniverse Validator BlockId Payload) (w
 /-- **SH6g, the floor chain decides.** -/
 def FloorChainDecides (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
   ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (R N h : ℕ) (x : ℕ → ℕ),
-    (∀ r, 3 ≤ w r) →
+    (∀ κ, 3 ≤ w κ) →
     -- one slot per round, as Theorem 2 reads the chain
     (∀ t, S.slotRound t = t) →
     -- T is a reliable set: correct, and a quorum
@@ -305,7 +309,7 @@ def FloorChainReachesReliable (U : BlockUniverse Validator BlockId Payload) (w :
   ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (R N ws n : ℕ) (hn : 0 < n)
     (lead : Fin n → Validator) (x : ℕ → ℕ),
     -- the constant synchronous wave and one slot per round, as Theorem 2 reads the chain
-    (∀ r, w r = ws) → 3 ≤ ws → (∀ t, S.slotRound t = t) →
+    (∀ κ, w κ = ws) → 3 ≤ ws → (∀ t, S.slotRound t = t) →
     -- T is a reliable set: correct, and a quorum
     T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
     -- T is synchronised from R and populates every round from R to the horizon N
@@ -327,7 +331,7 @@ def FloorChainReachesReliableWithinByzantine (U : BlockUniverse Validator BlockI
   ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (R N ws n : ℕ) (hn : 0 < n)
     (lead : Fin n → Validator) (x : ℕ → ℕ),
     -- the constant synchronous wave and one slot per round, as Theorem 2 reads the chain
-    (∀ r, w r = ws) → 3 ≤ ws → (∀ t, S.slotRound t = t) →
+    (∀ κ, w κ = ws) → 3 ≤ ws → (∀ t, S.slotRound t = t) →
     -- T is a reliable set: correct, and a quorum
     T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
     -- T is synchronised from R and populates every round from R to the horizon N
@@ -352,16 +356,16 @@ def FloorChainReachesReliableWithinByzantine (U : BlockUniverse Validator BlockI
 def CommitsOfReactivePace (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
   ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (N R k : ℕ)
     (waits : ℕ → Prop) (rs : ReactiveS U T N w waits),
-    (∀ r, 3 ≤ w r) →
+    (∀ κ, 3 ≤ w κ) →
     -- T is a reliable set: correct, and a quorum
     T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
     -- the reactive schedule is past GST from R, where its timeout clears the delay
     rs.gst ≤ R → (∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) →
     -- the slot lies at or past R, its round carries the leader wait, a synchronous slot or a
     -- canary round, and its decision round lies within the schedule's horizon
-    R ≤ S.slotRound k → waits (S.slotRound k) → S.slotRound k + (w (S.slotRound k) - 1) ≤ N →
+    R ≤ S.slotRound k → waits (S.slotRound k) → S.slotRound k + (w (S.kind k) - 1) ≤ N →
     -- and the view holds that round
-    V.CoversUpto (S.slotRound k + (w (S.slotRound k) - 1)) →
+    V.CoversUpto (S.slotRound k + (w (S.kind k) - 1)) →
     -- then a reliably led slot commits its candidate in that view, by the direct rule
     S.leader k ∈ T → ∃ L, IsLeaderBlock U k L ∧ Decided w U V k (some L)
 
@@ -369,7 +373,7 @@ def CommitsOfReactivePace (U : BlockUniverse Validator BlockId Payload) (w : ℕ
 def CommitsOfViewPace (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
   ∀ (T : Finset Validator) (V : View Validator BlockId Payload U) (N k : ℕ)
     (vp : ViewPace U T N),
-    (∀ r, 3 ≤ w r) →
+    (∀ κ, 3 ≤ w κ) →
     T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
     -- the timeout grows at a rate that clears the delay, which is what the core's Q3 asks
     Rated vp.timeout →
@@ -430,22 +434,22 @@ def Stall (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ (V : View Validator BlockId Payload U) (ws wa k : ℕ),
     -- a synchronous wave of at least two rounds, no longer than the period
     2 ≤ ws → ws ≤ k →
-    -- one slot per round
-    (∀ s, S.slotRound s = s) →
+    -- one slot per round, of the kind the period assigns its round
+    (∀ s, S.slotRound s = s) → (∀ s, S.kind s = periodicKind k s) →
     -- no synchronous candidate is ever certified ...
-    (∀ (j : ℕ) (L : BlockId), ¬ IsAsync k j → IsLeaderBlock U j L →
+    (∀ (j : ℕ) (L : BlockId), S.kind j = 0 → IsLeaderBlock U j L →
       MahiMahi.certificates U ws L j = ∅) →
     -- ... and no synchronous slot is directly skipped in V
-    (∀ j, ¬ IsAsync k j → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j) →
+    (∀ j, S.kind j = 0 → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j) →
     -- then no slot at a round ≡ k − 1 (mod k) is ever decided in V
-    ∀ i, i % k = k - 1 → ∀ v, ¬ Decided (periodic ws wa k) U V i v
+    ∀ i, i % k = k - 1 → ∀ v, ¬ Decided (wavelength ws wa) U V i v
 
 /-- **SH9, the drain.** -/
 def AllDecidedBelowOfRun (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) (wa : ℕ) :
     Prop :=
   ∀ (V : View Validator BlockId Payload U) (b : ℕ),
     -- every wave lies between one round and wa
-    (∀ r, 1 ≤ w r) → (∀ r, w r ≤ wa) →
+    (∀ κ, 1 ≤ w κ) → (∀ κ, w κ ≤ wa) →
     -- one slot per round
     (∀ s, S.slotRound s = s) →
     -- wa consecutive slots from b are committed in V
@@ -458,8 +462,8 @@ def AllDecidedBelowAtPeriodOne (U : BlockUniverse Validator BlockId Payload) (ws
     Prop :=
   ∀ (V : View Validator BlockId Payload U) (c N : ℕ),
     1 ≤ wa →
-    -- one slot per round
-    (∀ s, S.slotRound s = s) →
+    -- one slot per round, every slot of the asynchronous kind, as period one has it
+    (∀ s, S.slotRound s = s) → (∀ s, S.kind s = 1) →
     -- the run form of the clause at the output schedule: in every window of c slots below
     -- the horizon, wa consecutive slots whose leaders are committed candidates
     MahiMahi.UnpredictableRunWithin (S := S) U wa c wa N →
@@ -468,21 +472,22 @@ def AllDecidedBelowAtPeriodOne (U : BlockUniverse Validator BlockId Payload) (ws
     -- then past every round r whose window decides below the horizon ...
     ∀ r, MahiMahi.decisionRoundAt wa (r + c + wa - 1) ≤ N →
       -- ... there is a slot b at or past r below which every slot is decided at period 1
-      ∃ b, r ≤ b ∧ ∀ i, i < b → ∃ v, Decided (periodic ws wa 1) U V i v
+      ∃ b, r ≤ b ∧ ∀ i, i < b → ∃ v, Decided (wavelength ws wa) U V i v
 
 /-- **SH9c, the cost of an asynchronous slot.** -/
 def AsyncSlotCost (ws wa k : ℕ) : Prop :=
-  -- one slot per round, the synchronous wave no longer than the asynchronous one
-  (∀ s, S.slotRound s = s) → 1 ≤ ws → ws ≤ wa →
-  ∀ r, IsAsync k r →
+  -- one slot per round, of the kind the period assigns its round, the synchronous wave no longer
+  -- than the asynchronous one
+  (∀ s, S.slotRound s = s) → (∀ s, S.kind s = periodicKind k s) → 1 ≤ ws → ws ≤ wa →
+  ∀ r, S.kind r = 1 →
     -- the asynchronous slot decides wa − ws rounds later than a synchronous slot there would ...
-    (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound r =
+    (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).decisionRound r =
       (steelheadAnchored Validator BlockId Payload (fun _ => ws)).decisionRound r + (wa - ws) ∧
     -- ... and the synchronous slot i rounds above it is decided at most max(0, wa − ws − i)
     -- rounds before it, so waits that long for it and no longer; the bound is nonincreasing in i
     ∀ i, 1 ≤ i → i < k →
-      (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound r ≤
-        (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound (r + i) +
+      (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).decisionRound r ≤
+        (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).decisionRound (r + i) +
           (wa - ws - i)
 
 /-- Liveness at a wavelength function, over every fault configuration,

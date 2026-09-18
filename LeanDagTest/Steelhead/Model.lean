@@ -84,8 +84,8 @@ def sh8 : BlockUniverse (Fin 4) (Fin 32) Unit where
 abbrev sh : AnchoredRule (Fin 4) (Fin 32) Unit ValidWrt Correct :=
   steelheadAnchored (Fin 4) (Fin 32) Unit w4
 
--- The rule is the composite of Mahi-Mahi's rule at each round's wave, by definition (SH16c).
-example : sh = compose fun r => MahiMahi.mahiMahiAnchored (Fin 4) (Fin 32) Unit (w4 r) := rfl
+-- The rule is the composite of Mahi-Mahi's rule at each kind's wave, by definition (SH16c).
+example : sh = compose fun κ => MahiMahi.mahiMahiAnchored (Fin 4) (Fin 32) Unit (w4 κ) := rfl
 
 /-! ### Eligibility at each slot's own floor -/
 

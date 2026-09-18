@@ -222,10 +222,11 @@ def UndecidedAtPeriodOne (U : BlockUniverse Validator BlockId Payload) (ws wa : 
       PopulatedOn U T (MahiMahi.decisionRoundAt wa (b + j * wa + i))) →
     -- and the view holds the last block's decision rounds
     V.CoversUpto (MahiMahi.decisionRoundAt wa (b + M * wa - 1)) →
-    -- then the slot stays undecided at period one, on the chain schedule of those coins, with
-    -- probability at most the chance that every one of the M blocks holds a bad coin
+    -- then the slot stays undecided at period one, on the chain schedule of those coins, every
+    -- slot of the asynchronous kind, with probability at most the chance that every one of the M
+    -- blocks holds a bad coin
     (PMF.uniformOfFintype (Fin M → Fin wa → Validator)).toOuterMeasure
-        {g | ∀ v, ¬ Decided (S := chainSlots (coinOfBlocksFrom b g d)) (periodic ws wa 1) U V s v}
+        {g | ∀ v, ¬ Decided (S := chainSlots (coinOfBlocksFrom b g d)) (wavelength ws wa) U V s v}
       ≤ badBlockBound Validator wa ^ M
 
 /-- **SH11f, the adaptive block bound.** -/

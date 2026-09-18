@@ -434,8 +434,8 @@ exhibits a universe satisfying the rule, which the good case implies
 (OH8).
 
 **Steelhead runs two rules at one wavelength function** (§24): the
-core's rule at `ws = 3` and Mahi-Mahi's at `wa` on one DAG, every round
-given the wavelength its slot reads, with the anchor floor read at the
+core's rule at `ws = 3` and Mahi-Mahi's at `wa` on one DAG, every slot
+given a kind and reading the wavelength of that kind, with the anchor floor read at the
 slot's own wavelength. Safety is agreement across views and routes
 whatever the waves of a slot and of its anchor
 (`Steelhead.Safety.holds` (SH2)), and the handover of a direct commit
@@ -5118,17 +5118,21 @@ def Banded (R : DagRule Validator BlockId Payload) : Prop :=
         k + d' = k' + d →
         (∀ m m', m + d' = m' + d → S.slotRound m + g = S'.slotRound m' + g') →
         (∀ m m', m + d' = m' + d → S.slotRound m ≤ top → S.leader m = S'.leader m') →
+        (∀ m m', m + d' = m' + d → S.slotRound m ≤ top → S.kind m = S'.kind m') →
         AgreeBand R U U' (S.slotRound k + g) (top + g) g g' →
         (∀ b, b ∈ R.viewIds V → S.slotRound k ≤ (R.block U b).round →
           (R.block U b).round ≤ top → b ∈ R.viewIds V') →
         R.Decided S' V' k' v
 ```
 
-`Agree`: two views of one universe under one schedule do not disagree,
-skips included. `CommitsCandidate`: a commit names the slot's candidate.
-`Indirect`: an eligible committed anchor with every eligible slot
-between skipped decides the slot, and the verdict survives reassignment
-of the other leaders.
+A schedule assigns each slot a kind beside its round and its leader,
+and a rule whose wave varies reads it at the slot's kind; the band asks
+the two schedules to agree on the kinds as on the leaders, and a rebase
+carries both. `Agree`: two views of one universe under one schedule do
+not disagree, skips included. `CommitsCandidate`: a commit names the
+slot's candidate. `Indirect`: an eligible committed anchor with every
+eligible slot between skipped decides the slot, and the verdict survives
+reassignment of the other leaders and kinds.
 
 ```lean
 def Agree (R : DagRule Validator BlockId Payload) : Prop :=
@@ -5144,13 +5148,14 @@ def CommitsCandidate (R : DagRule Validator BlockId Payload) : Prop :=
 
 ```lean
 def Indirect (R : DagRule Validator BlockId Payload)
-    (Elig : (ℕ → ℕ) → ℕ → ℕ → Prop) : Prop :=
+    (Elig : Slots Validator → ℕ → ℕ → Prop) : Prop :=
   ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (i j : ℕ) (A : BlockId),
-    Elig S.slotRound i j → R.Decided S V j (some A) →
-    (∀ i', i < i' → i' < j → Elig S.slotRound i i' → R.Decided S V i' none) →
+    Elig S i j → R.Decided S V j (some A) →
+    (∀ i', i < i' → i' < j → Elig S i i' → R.Decided S V i' none) →
     ∃ v, ∀ S' : Slots Validator, S'.slotRound = S.slotRound → S'.leader i = S.leader i →
+      S'.kind i = S.kind i →
       R.Decided S' V j (some A) →
-      (∀ i', i < i' → i' < j → Elig S.slotRound i i' → R.Decided S' V i' none) →
+      (∀ i', i < i' → i' < j → Elig S i i' → R.Decided S' V i' none) →
       R.Decided S' V i v
 ```
 
@@ -5174,9 +5179,9 @@ structure Support (R : DagRule Validator BlockId Payload) where
 def Commits (rel : Reliability Validator) : Prop :=
   ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (T : Finset Validator) (k : ℕ),
     rel.IsQuorum T →
-    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.slotRound k) → PopulatedOn R U T n) →
-    (∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) L) →
-    CoversUpto R V (S.slotRound k + sp.waveAt (S.slotRound k)) →
+    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.kind k) → PopulatedOn R U T n) →
+    (∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) (S.kind k) L) →
+    CoversUpto R V (S.slotRound k + sp.waveAt (S.kind k)) →
     S.leader k ∈ T →
     ∃ L, DecidedBelow R S (k + 1) V k (some L)
 ```
@@ -5196,7 +5201,7 @@ theorem live_of_coverage (sp : Support R) {rel : Reliability Validator}
     (hpop : ∀ r, Rnd ≤ r → r ≤ N → Properties.PopulatedOn R U T r)
     (S : Slots Validator) (V : R.View U) {lo K : ℕ} (hV : CoversUpto R V N)
     (hRnd : Rnd ≤ S.slotRound lo)
-    (hN : ∀ k, k < K → S.slotRound k + sp.waveAt (S.slotRound k) ≤ N) :
+    (hN : ∀ k, k < K → S.slotRound k + sp.waveAt (S.kind k) ≤ N) :
     sp.live rel S V T lo K
 ```
 
@@ -5315,15 +5320,15 @@ self-parent clause at the carrier, show `safety` and `progress`.
 
 `scripts/audit-conformance.py` and `scripts/audit-mechanisms.py` read
 the dependency graph and print what each rule shows and which mechanism
-cells exist. As of this writing: nine carriers over nine rules show the
-four properties and a support; every cell of cut, fill, re-genesis,
-adaptive leaders, prompt skip (where the rule skips) and chain quality
-is an instance, and liveness across each mechanism and across any stack
-is derived from the rule's support and its witnesses. `audit-bespoke.py`
-checks the other direction — no mechanism reaches a protocol's verdicts
-except through the properties — and reports no bespoke links. Black
-Marlin has no carrier, commits by round with no slot-indexed relation,
-and is out of scope by decision.
+cells exist. As of this writing: nine carriers over eleven rules, of
+which ten show the four properties and a support; every cell of cut,
+fill, re-genesis, adaptive leaders, prompt skip (where the rule skips)
+and chain quality is an instance, and liveness across each mechanism
+and across any stack is derived from the rule's support and its
+witnesses. `audit-bespoke.py` checks the other direction — no mechanism
+reaches a protocol's verdicts except through the properties — and
+reports no bespoke links. Black Marlin has no carrier, commits by round
+with no slot-indexed relation, and is out of scope by decision.
 
 **Every cut, fill and re-genesis is one construction.** A rule's
 universe is the block record (§2.3) at its own validity, and
@@ -9467,13 +9472,14 @@ the protocol is Steelhead [Son+26], Mysticeti's rule (§3) and
 Mahi-Mahi's (§17) run on one DAG, the mode of each round chosen by a
 period that a deterministic update rule adapts)*
 
-Steelhead gives every round a wavelength: the rounds a slot proposed
-there reads to decide, `ws = 3` for a synchronous slot with a known
-leader and `wa ∈ {4, 5}` for an asynchronous slot with a coin-elected
-one. The protocol's wavelength function is periodic, `wa` at every
+Steelhead gives every slot a kind and every kind a wavelength: the
+rounds a slot reads to decide, `ws = 3` for a synchronous slot with a
+known leader and `wa ∈ {4, 5}` for an asynchronous slot with a
+coin-elected one. The protocol's wavelength is periodic, `wa` at every
 `k`-th round and `ws` elsewhere, and the period `k` is adapted at fixed
 intervals by replaying the last interval under every candidate period.
-Which rounds are asynchronous is a function of the round number alone,
+Which slots are asynchronous is a fact about the schedule, which
+assigns the kind beside the slot's round and leader (§3.5, `Slots.kind`),
 so the mode is an interpretation of the DAG and touches no block; the
 one change to the decision rule is the anchor floor, which an undecided
 slot reads at its own wavelength. The paper claims that the composition
@@ -9490,30 +9496,40 @@ slots below it, and the output stalls (§24.2). Results carry
 ### 24.1 The rule at a wavelength function, and safety
 
 ```lean
-def periodic (ws wa k : ℕ) : ℕ → ℕ := fun r => if r % k = 0 then wa else ws
+def wavelength (ws wa : ℕ) : ℕ → ℕ := fun κ => if κ = 0 then ws else wa
 ```
 
-is the paper's `w(r)`; every result is stated at an arbitrary
-`w : ℕ → ℕ`, of which the period is one source. The rule is one anchored
-rule (§3.5) whose data at a slot proposed at round `r` are Mahi-Mahi's
-at wave `w r`, with the wave offset read at the slot's round:
+is the wave of a kind, `ws` at the synchronous kind `0` and `wa` at the
+asynchronous kind `1`, and
+
+```lean
+def periodicKind (p : ℕ) : ℕ → ℕ := fun r => if r % p = 0 then 1 else 0
+```
+
+the kind of a round under the period `p`; the paper's `w(r)` is the two
+read together, an identity SH4 carries. Every result is stated at an
+arbitrary `w : ℕ → ℕ`, of which the pair is one source, and a claim
+about the period takes the schedule's kinds as a hypothesis. The rule is
+one anchored rule (§3.5) whose data at a slot of kind `κ` proposed at
+round `r` are Mahi-Mahi's at wave `w κ`, with the wave offset read at
+the slot's kind:
 
 ```lean
 def steelheadAnchored (Validator BlockId Payload : Type) [Fintype Validator]
     [DecidableEq Validator] [Faults Validator] [LinearOrder BlockId] (w : ℕ → ℕ) :
     AnchoredRule Validator BlockId Payload ValidWrt Correct where
-  waveAt := fun r => w r - 1
-  Commit := fun U V L r => MahiMahi.DirectCommitIn U V (w r) L r
-  decCommit := fun _ _ _ _ => inferInstance
-  Skip := fun U V S k => MahiMahi.DirectSkipIn U V (w (S.slotRound k)) (S.leader k) (S.slotRound k)
+  waveAt := fun κ => w κ - 1
+  Commit := fun U V L r κ => MahiMahi.DirectCommitIn U V (w κ) L r
+  decCommit := fun _ _ _ _ _ => inferInstance
+  Skip := fun U V S k => MahiMahi.DirectSkipIn U V (w (S.kind k)) (S.leader k) (S.slotRound k)
   rungs := 1
-  Link := fun _ U A L S k => MahiMahi.CertifiedIn U (w (S.slotRound k)) A L (S.slotRound k)
+  Link := fun _ U A L S k => MahiMahi.CertifiedIn U (w (S.kind k)) A L (S.slotRound k)
   tie := fun _ _ _ => False
 ```
 
-The relation's `waveAt` field became a function of the slot's round for
-this rule; every other rule sets a constant. An anchor of a slot at
-round `r` therefore sits at round `r + w r` or above, at the slot's own
+The relation's `waveAt` field is a function of the slot's kind, which
+every other rule leaves constant. An anchor of a slot of kind `κ` at
+round `r` therefore sits at round `r + w κ` or above, at the slot's own
 wavelength. **Why the floor is the slot's own wave.** An asynchronous
 slot at round `r` with `wa = 5` has its certificates at `r + 4`; a
 synchronous anchor at `r + 3` sees none of them, so a floor read from
@@ -9524,12 +9540,12 @@ floor read from the synchronous wave derives both a commit and a skip of
 slot `0` from the one full view.
 
 **SH1–SH5** (`Steelhead.Safety.holds`), each claim at the weakest bound
-its proof consumes on the rounds it reads, `1 ≤ w r` for SH1c and
-`2 ≤ w r` for the rest: a directly skipped slot has no certificate for any
+its proof consumes on the kinds it reads, `1 ≤ w κ` for SH1c and
+`2 ≤ w κ` for the rest: a directly skipped slot has no certificate for any
 candidate and two certified candidates of one author and round coincide
 (SH1a, SH1b, Mahi-Mahi's lemmas at the slot's wave); a directly
-committed candidate at `r` is certified in the cone of every block at
-round `r + w r` or above, whatever wave that block's own slot carries
+committed candidate of kind `κ` at `r` is certified in the cone of every
+block at round `r + w κ` or above, whatever wave that block's own slot carries
 (SH1c); two views deciding one slot reach the same verdict by any routes,
 whether the slot's wave is `ws` or `wa` and whether the anchor's is
 (SH2, the relation's agreement at `steelheadLaws`: every law of
@@ -9538,8 +9554,9 @@ the rule is Mahi-Mahi's at the slot's wave, eligibility included); a
 direct commit in one view is committed by every view that finds the slot
 an anchor, whichever rule decides that anchor, and no view skips it
 (SH3, the handover, the one cross-rule law); at a constant wavelength
-the rule *is* Mahi-Mahi's, by `rfl`, the period-one function is the
-constant `wa`, and at the constant three the derivations are exactly the
+the rule *is* Mahi-Mahi's, by `rfl`, the pair read at a period's kinds
+is the paper's `w(r)`, period one makes every slot asynchronous, and at
+the constant three the derivations are exactly the
 core's, MM1d one way and its mirror `Steelhead.decided_of_core_decided`
 the other, since the core's skip is the slot-level blame Mahi-Mahi's is
 (SH4, the paper's Theorem 5 in both directions); the chain verdicts of
@@ -9554,24 +9571,26 @@ at two rounds the voting round is the proposal round.
 
 **The interface** (SH16). Theorem 1 is stated for any two rules of the
 interface. `compose rules` is the composite of a family of anchored
-rules, one per round: the slot proposed at round `r` takes its wave
-offset, direct predicates and rungs of link from `rules r`, and the rung
-count and tie-break, which the relation reads without a slot, from the
-rule of round `0`. **SH16** (`Steelhead.Interface.holds`): if every rule
-of the family satisfies `AnchoredRule.Laws` and the family agrees on
-rungs and ties, the composite does (`Steelhead.compose_laws`), each law
-at a slot being the slot's rule's, the anchor's rule never entering; its
-verdicts then agree across views (`Steelhead.compose_decided_unique`);
-and `steelheadAnchored w` is the composite of Mahi-Mahi's rule read at
-`w r`, by definition (`Steelhead.steelheadAnchored_eq_compose`), so SH2
+rules, one per kind: a slot of kind `κ` takes its wave offset, direct
+predicates and rungs of link from `rules κ`, and the rung count and
+tie-break, which the relation reads without a slot, from the rule of
+kind `0`. **SH16** (`Steelhead.Interface.holds`): if every rule of the
+family satisfies `AnchoredRule.Laws` and the family agrees on rungs and
+ties, the composite does (`Steelhead.compose_laws`), each law at a slot
+being the slot's rule's, the anchor's rule never entering; its verdicts
+then agree across views (`Steelhead.compose_decided_unique`); and
+`steelheadAnchored w` is the composite of Mahi-Mahi's rule read at
+`w κ`, by definition (`Steelhead.steelheadAnchored_eq_compose`), so SH2
 is an instance. **SH19** (`Steelhead.periodicClass`) is the periodic
-class: the paper's dial `periodic ws wa k` is a wavelength function the
-arc's results take, every round's wave at least two and at most
-`max ws wa`, so an identity-round schedule spans at that wave and
-agreement, the extension laws and the support's laws hold at it at every
-period; and at `ws ≠ wa` and `k ≥ 2` no constant wave equals it
-(`Steelhead.periodic_waveAt_not_const`), so the wave the core's `waveAt`
-admits as a function of the round is on record as one that varies.
+class: the pair `wavelength ws wa`, the paper's dial read at the kinds a
+period assigns, is a wavelength function the arc's results take, every
+kind's wave at least two and at most `max ws wa`, so an identity-round
+schedule spans at that wave and agreement, the extension laws and the
+support's laws hold at it; and at `ws ≠ wa` the two kinds read two wave
+offsets (`Steelhead.wavelength_waveAt_ne`), both of which a period of two
+or more assigns (`Steelhead.periodicKind_not_const`), so the wave the
+core's `waveAt` admits as a function of the kind is on record as one
+that varies.
 
 **The ledger** (SH13). Agreement settles one slot; the output layer
 reads verdicts off in slot order, which is round order, and what it owes
@@ -9638,15 +9657,16 @@ and nothing above the first of them is ever output.
 def Stall (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ (V : View Validator BlockId Payload U) (ws wa k : ℕ),
     2 ≤ ws → ws ≤ k →
-    (∀ s, S.slotRound s = s) →
-    (∀ (j : ℕ) (L : BlockId), ¬ IsAsync k j → IsLeaderBlock U j L →
+    (∀ s, S.slotRound s = s) → (∀ s, S.kind s = periodicKind k s) →
+    (∀ (j : ℕ) (L : BlockId), S.kind j = 0 → IsLeaderBlock U j L →
       MahiMahi.certificates U ws L j = ∅) →
-    (∀ j, ¬ IsAsync k j → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j) →
-    ∀ i, i % k = k - 1 → ∀ v, ¬ Decided (periodic ws wa k) U V i v
+    (∀ j, S.kind j = 0 → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j) →
+    ∀ i, i % k = k - 1 → ∀ v, ¬ Decided (wavelength ws wa) U V i v
 ```
 
 **SH8** (`Steelhead.stall`) holds for every `2 ≤ ws ≤ k` and every
-`wa`, by induction on the derivation: a class-`(k − 1)` slot's direct
+`wa`, on a schedule whose kinds are the period's, by induction on the
+derivation: a class-`(k − 1)` slot's direct
 verdicts are excluded by hypothesis, a synchronous anchor never commits
 without a certificate, and an asynchronous anchor lies a full period
 above, so the class-`(k − 1)` slot between must be skipped, which is the
@@ -9686,11 +9706,12 @@ for one run rather than one in every window.
 run of `wa` consecutive commits decides every slot below it, including
 the slots an earlier period left undecided. **SH9**
 (`Steelhead.allDecidedBelowOfRun`) states this at any wavelength
-function with `1 ≤ w r ≤ wa` and one slot per round, by the relation's
+function with `1 ≤ w κ ≤ wa` and one slot per round, by the relation's
 descent below a committed run (§3.5), the spanning hypothesis discharged
 by the identity rounds at the largest wave. **SH9b**
 (`Steelhead.allDecidedBelowAtPeriodOne`) is Theorem 3 (ii) as one
-statement: at `periodic ws wa 1`, under the run clause at the output
+statement: with every slot of the asynchronous kind, as period one has
+it, under the run clause at the output
 schedule, past every round whose window decides below the horizon there
 is a slot below which every slot is decided, in any view caught up to
 the horizon, so the settled prefix and with it the ledger (SH13) extend
@@ -9707,7 +9728,7 @@ nonincreasing in `i`: delays never compound.
 ### 24.3 Liveness under synchrony
 
 `shSupport w` (§16) is Mahi-Mahi's certificate with the certifiers
-`w r − 1` rounds above a candidate proposed at `r`; its `Local` and
+`w κ − 1` rounds above a candidate of kind `κ`; its `Local` and
 `Commits` laws hold at two rounds and above and the timed model's
 `OfCoverage` bridge at three, the wave-three case by the core's
 argument and the higher waves
@@ -9715,7 +9736,7 @@ by Mahi-Mahi's. **SH6** (`Steelhead.Liveness.holds`) is the timed model
 at this support: **SH6a** (`Steelhead.commitsOfSynchrony`), a reliably
 led slot commits in every view caught up to its decision round on a DAG
 a reliable quorum has synchronised and populated through it, by the
-direct rule, at whichever wave the slot's round carries; **SH6b**
+direct rule, at whichever wave the slot's kind carries; **SH6b**
 (`Steelhead.allDecidedBelowOfSynchrony`), past any slot the schedule
 offers a run of reliably led slots spanning eligibility, and everything
 below the run is decided once the DAG is covered through its decision
@@ -9728,7 +9749,7 @@ no cone holds a candidate and every block of the round blames. **SH6e**
 alone does not defer": a candidate that one reliable block references
 one round up, its leader's only block at that round, is directly
 committed in every view holding its decision round, once the quorum is
-synchronised from that round and populates the wave, at `4 ≤ w r`;
+synchronised from that round and populates the wave, at `4 ≤ w κ`;
 synchrony carries the candidate into every reliable cone from two rounds
 up, the reliable voters vote for it, and every reliable block at the
 decision round references all of them and so certifies. The leader may
@@ -9829,9 +9850,11 @@ inductive PeriodAt (I wa : ℕ) (coin : ℕ → Validator) (upd : UpdateRule Blo
       PeriodAt I wa coin upd k₀ U V w (j + 1) st
 ```
 
-Waiting is the absence of a derivation, and `adaptiveWave ws wa I per`
-is the wavelength function a validator that derived the sequence `per`
-runs the output relation at. `AgreedAdvance` is the extension the
+Waiting is the absence of a derivation, and `adaptiveSlots coin known I
+per` is the schedule a validator that derived the sequence `per` runs
+the output relation on, every round of the kind its interval's period
+assigns (`adaptiveKind I per`), the coin leading the asynchronous ones
+and the known schedule the rest. `AgreedAdvance` is the extension the
 implementation performs at each anchor: the cursor moves up to the least
 slot the anchor's history leaves undecided, and the last commit to the
 round of the highest leader committed on the way. The wavelength it is
@@ -9846,15 +9869,15 @@ chain-skipped round in the other and SH5 forbids it, and the advance
 over an anchor's history is unique, no verdict of that history lying
 above the anchor's round;
 **SH10b**, two validators that derived the state of every interval the
-record's rounds fall in, and decided a slot proposed among them at their
-own adaptive wavelengths, derived the same periods there and agree on
+record's rounds fall in, and decided a slot proposed among them on their
+own adaptive schedules, derived the same periods there and agree on
 the verdict: the sequences coincide by strong induction on the interval, since the anchors of the
 intervals below lie in the record and their histories are read at rounds
-below their own, where the sequences already agree, so the two
-validators advance the agreed output alike
-(`Steelhead.AgreedAdvance.congr`) and SH10a gives one state; a verdict
-reads the wavelength only at the rounds of the slots its derivation
-names (`Steelhead.decided_congr`), and SH2 applies to the one function.
+below their own, where the sequences and so the schedules' kinds and
+leaders already agree, so the two validators advance the agreed output
+alike (`Steelhead.AgreedAdvance.congr_slots`) and SH10a gives one state;
+a verdict reads the schedule only at the slots its derivation names
+(`Steelhead.decided_congr_slots`), and SH2 applies on the one schedule.
 The bound is what makes the claim inhabited: a
 record holds finitely many blocks, so no chain verdict and no period is
 derivable above its top round, and asking for the whole sequence would
@@ -10106,7 +10129,7 @@ scores the period in force better than the alternatives by less than
 hysteresis demands, so the selector answers period `4` at every anchor
 and no settled prefix of the output passes round `2`, for
 every coin schedule, at every horizon (`rt_update_four`,
-`rt_adaptive_stall`, `rt_no_output_above_two`, SH12: periods `1` and `2`
+`rt_stall`, `rt_no_output_above_two`, SH12: periods `1` and `2`
 score at least half of what period `4` can on any window of at most
 nine rounds, `Steelhead.Replay.anchorUpdate_half_retains`). What leaves
 such a period is the scan's failover (§24.4), which the implementation
@@ -10165,12 +10188,11 @@ function, `steelheadRule w`, and shows `Agree`, `CommitsCandidate`,
 `CommitsDirect`, `Indirect`, `Quorate`, `SelfParent`, `NoEquiv`,
 `Persist` and `Descends`, and a support with its two laws and the timed
 model's coverage bridge; the liveness headline follows. `Banded`,
-`LocalTruncate` and the `Safe` headline are not claimed: the band
-rebases every round by a constant, and a wave that alternates with the
-round reads an absolute round (`target-properties.md` §3.4c).
-Persistence and view monotonicity,
-which the band derives but which need no offset, are proved through the
-extension laws.
+`LocalTruncate` and the `Safe` headline hold at every wavelength
+function of two rounds or more: the band rebases every round by a
+constant, under which a wave read from the round number would move,
+while the wave read at the slot's kind, which a rebase carries with the
+slot's leader, does not (`target-properties.md` §3.4c, `docs/kinds.md`).
 
 ---
 
@@ -10435,8 +10457,8 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `OptimalHydrozoan/Model/DirectRules.lean`, `OptimalHydrozoan/Model/IndirectRules.lean`, `OptimalHydrozoan/Model/Decided.lean` | fast evidence, the no-evidence skip, the evidence rung; Optimal-Hydrozoan as a two-rung anchored rule with no tie |
 | `OptimalHydrozoan/ThresholdArithmetic/`, `OptimalHydrozoan/DirectSafety/`, `OptimalHydrozoan/SlotAgreement/`, `OptimalHydrozoan/PrefixAgreement/`, `OptimalHydrozoan/DirectLiveness/`, `OptimalHydrozoan/IndirectLiveness/`, `OptimalHydrozoan/EventualDecision/`, `OptimalHydrozoan/Grounding/` | the eight statements and their proofs (OH1–OH8) |
 | `OptimalHydrozoan/Helpers/` | the generated lemma layer |
-| `Steelhead/Model/Wavelength.lean`, `Steelhead/Model/Decision.lean`, `Steelhead/Model/Chain.lean` | the periodic wavelength function and its asynchronous rounds; the rule at a wavelength function as an anchored rule; the chain verdict at the identity schedule under a coin |
-| `Steelhead/Model/Period.lean`, `Steelhead/Model/Coin.lean`, `Steelhead/Model/Replay.lean`, `Steelhead/Model/Compose.lean`, `Steelhead/Model/Reactive.lean` | the intervals, the scan's state and the period sequence at an update rule; the coin's probabilities and the adaptive adversary; Algorithm 2 as data; the composite of one rule per round; the reactive schedule with its certificate wait |
+| `Steelhead/Model/Wavelength.lean`, `Steelhead/Model/Decision.lean`, `Steelhead/Model/Chain.lean` | the wavelength of a kind and the kinds of a period; the rule at a wavelength function as an anchored rule; the chain verdict at the identity schedule under a coin |
+| `Steelhead/Model/Period.lean`, `Steelhead/Model/Coin.lean`, `Steelhead/Model/Replay.lean`, `Steelhead/Model/Compose.lean`, `Steelhead/Model/Reactive.lean` | the intervals, the scan's state and the period sequence at an update rule; the coin's probabilities and the adaptive adversary; Algorithm 2 as data; the composite of one rule per kind; the reactive schedule with its certificate wait |
 | `Steelhead/Safety/`, `Steelhead/Liveness/`, `Steelhead/Period/`, `Steelhead/Coin/`, `Steelhead/Ledger/`, `Steelhead/Interface/`, `Steelhead/Broadcast/`, `Steelhead/Replay/` | the eight statements and their proofs (SH1–SH18) |
 | `Steelhead/Helpers/` | the generated lemma layer; `Properties.lean`, the carrier, its properties and support |
 | `Quality/Coverage.lean` | per-commit and ledger coverage (CQ1–CQ3) at the core, over `Arcs.coveredAt` |
@@ -11316,7 +11338,7 @@ reused.
 
 | Label | Statement | Lean |
 |:---|:---|:---|
-| SH1 | the certificate lemmas at the slot's own wave: a skipped slot has no certificate, two certified candidates coincide, a direct commit is certified in every block at `r + w r` or above | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
+| SH1 | the certificate lemmas at the slot's own wave: a skipped slot has no certificate, two certified candidates coincide, a direct commit is certified in every block at `r + w κ` or above | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
 | SH2 | agreement: two views deciding one slot reach the same verdict, whatever the waves of the slot and of the anchors | `Steelhead.steelheadLaws` *(Steelhead/Helpers/Decision)*, `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
 | SH3 | handover: a direct commit in one view is committed by every view that finds the slot an anchor, whichever rule decides it, and no view skips it | `Steelhead.certifiedIn_of_commit_at_anchor` *(Steelhead/Helpers/Decision)*, `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)* |
 | SH4 | conservativity: at a constant wavelength the rule is Mahi-Mahi's, period one is the constant `wa`, and at wave three the derivations are exactly the core's | `Steelhead.Safety.holds` *(Steelhead/Safety/Proof)*, `Steelhead.decided_of_core_decided` *(Steelhead/Helpers/Decision)* |
@@ -11327,14 +11349,14 @@ reused.
 | SH9 | the drain: `wa` consecutive commits decide every slot below them at any wavelength function bounded by `wa`; at period `1` under the run clause, past every round some slot has everything below it decided; an asynchronous slot costs `wa − ws` rounds and its successor waits at most `wa − ws − 1` | `Steelhead.allDecidedBelowOfRun`, `Steelhead.allDecidedBelowAtPeriodOne`, `Steelhead.asyncSlotCost` *(Steelhead/Helpers/Liveness)* |
 | SH10 | the scan's state: agreed across views under any update rule, so is the output at the adaptive wavelength over the intervals the record's rounds fall in; the scan ends once the chain verdicts are in, and under the clause it ends for every interval; an anchor below which the agreed output committed nothing for `I` rounds hands the next interval period `1`; every interval holds two asynchronous rounds, and the period stays in range; the agreed output is a prefix of the view's own and stalls below an undecided slot; a window of `I + 1` rounds resolves an asynchronous slot of every candidate at `I ≥ K + wa − 2` | `Steelhead.Period.holds`, `Steelhead.periodAt_unique`, `Steelhead.adaptive_decided_unique`, `Steelhead.exists_periodAt_succ`, `Steelhead.periodAt_of_clause`, `Steelhead.periodAt_one_of_anchor`, `Steelhead.two_async_rounds`, `Steelhead.periodAt_mem_range`, `Steelhead.decided_of_lt_next`, `Steelhead.stalled_below_undecided`, `Steelhead.window_resolves` *(Steelhead/Period/Proof, Steelhead/Helpers/Period)* |
 | SH11 | the coin: a chain slot commits with probability `|good| / n`, at least `(n − f − |byzantine|) / n` and so at least `1/3` at `wa ≥ 5`, at least `1/n` at `wa ≥ 4`; no round's coin naming a directly committed leader in `m` rounds, with probability at most `((f + |byzantine|) / n)^m`, which tends to zero; every one of them naming one with probability at least `((n − f − |byzantine|) / n)^m`, the paper's `p^{wa}` at `m = wa`; the block bound holds for good sets that read the coins drawn before their own round, which the count reaches by peeling the last block and, inside it, the last round; and a slot below `M` consecutive blocks of `wa` coins stays undecided at period one with probability at most `((n^wa − (n − f − |byzantine|)^wa) / n^wa)^M` | `Steelhead.Coin.holds`, `Steelhead.ratio_le_commitProb`, `Steelhead.third_le_commitProb`, `Steelhead.inv_card_le_commitProb`, `Steelhead.chainCommit_of_mem_goodAt`, `Steelhead.noCommitProb_le`, `Steelhead.runProb_ge`, `Steelhead.undecidedAtPeriodOne_le`, `Steelhead.tail_tendsto_zero`, `Steelhead.card_all_bad_le`, `Steelhead.card_all_good_ge`, `Steelhead.no_good_block_prob_le_adaptive` *(Steelhead/Coin/Proof, Steelhead/Helpers/Coin)* |
-| SH12 | on data: the anchor-floor counterexample, the period sequence at a concrete update rule, the stall DAG with its asynchronous commit, the coin streak that outputs nothing through any horizon, the Byzantine floor with the two hops of its floor chain and the round-robin schedule that bounds such a chain, the good sets an adaptive adversary answers with, a Byzantine validator's block delivered by a commit no reliable leader carried, and Algorithm 2 recovering from period `1` on a healthy window, keeping period `4` on a startup window and period `2` at every hysteresis on a complete window too short for a wave, and answering period `4` at every anchor of the rotating stall, where no block above round `2` is ever output; and, on that family under a coin that chain-commits every round, the failover handing the third interval period `1` and the stalled slot decided once the coin runs | `lowFloor_skip`, `sh8_period1`, `st20_stall`, `positive_no_output`, `bf30_slot0_undecided`, `bf30_floor_hops`, `rr_fairRun_three`, `ac_bound`, `sh8_ledger_zero`, `rpWindow_recovers`, `rs36_keeps_four`, `rw44_keeps_two`, `rt_update_four`, `rt_adaptive_stall`, `rt_no_output_above_two`, `rt_chain_commit`, `rt_failover`, `rt_recovers` *(LeanDagTest/Steelhead/Model, LeanDagTest/Steelhead/Period, LeanDagTest/Steelhead/Stall, LeanDagTest/Steelhead/CoinDelay, LeanDagTest/Steelhead/AdaptiveCoin, LeanDagTest/Steelhead/ByzantineFloor, LeanDagTest/Steelhead/Replay, LeanDagTest/Steelhead/ReplayStartup, LeanDagTest/Steelhead/ReplayShortWindow, LeanDagTest/Steelhead/RotatingStall, LeanDagTest/Steelhead/Failover)* |
+| SH12 | on data: the anchor-floor counterexample, the period sequence at a concrete update rule, the stall DAG with its asynchronous commit, the coin streak that outputs nothing through any horizon, the Byzantine floor with the two hops of its floor chain and the round-robin schedule that bounds such a chain, the good sets an adaptive adversary answers with, a Byzantine validator's block delivered by a commit no reliable leader carried, and Algorithm 2 recovering from period `1` on a healthy window, keeping period `4` on a startup window and period `2` at every hysteresis on a complete window too short for a wave, and answering period `4` at every anchor of the rotating stall, where no block above round `2` is ever output; and, on that family under a coin that chain-commits every round, the failover handing the third interval period `1` and the stalled slot decided once the coin runs | `lowFloor_skip`, `sh8_period1`, `st20_stall`, `positive_no_output`, `bf30_slot0_undecided`, `bf30_floor_hops`, `rr_fairRun_three`, `ac_bound`, `sh8_ledger_zero`, `rpWindow_recovers`, `rs36_keeps_four`, `rw44_keeps_two`, `rt_update_four`, `rt_stall`, `rt_no_output_above_two`, `rt_chain_commit`, `rt_failover`, `rt_recovers` *(LeanDagTest/Steelhead/Model, LeanDagTest/Steelhead/Period, LeanDagTest/Steelhead/Stall, LeanDagTest/Steelhead/CoinDelay, LeanDagTest/Steelhead/AdaptiveCoin, LeanDagTest/Steelhead/ByzantineFloor, LeanDagTest/Steelhead/Replay, LeanDagTest/Steelhead/ReplayStartup, LeanDagTest/Steelhead/ReplayShortWindow, LeanDagTest/Steelhead/RotatingStall, LeanDagTest/Steelhead/Failover)* |
 | SH13 | the ledger: the committed-leader sequence and the ledger of a settled prefix are agreed, the ledger is monotone, a block enters at one slot which both views name, and a committed block belongs to one slot | `Steelhead.Ledger.holds` *(Steelhead/Ledger/Proof)* |
 | SH14 | output liveness under the failover: a slot below an anchored interval is decided once a run of `wa` coin-led commits above that interval is in view, since the agreed output waits below the slot and the failover then puts the period at `1` from the interval after the anchored one, where the run decides everything below it; under the run clause with runs of `K` good coins every slot far enough below the horizon is decided, and two runs of the coin, `K` good coins opening an interval past the slot's and `wa` above it, decide it | `Steelhead.output_liveness`, `Steelhead.all_decided`, `Steelhead.output_liveness_of_runs` *(Steelhead/Helpers/Period)* |
 | SH15 | the tail of the output: over the coins of `M` blocks of `K` rounds opening the intervals after a slot's, the slot stays undecided under the failover with probability at most `2 · ((n^K − (n − f − |byzantine|)^K) / n^K)^(M/2)`, which tends to zero; and over a sequence of records with the coin drawn as a process, for almost every coin some record decides the slot in every view holding its horizon, and every slot at once, each with its own sequence of records; both against an adversary that answers the draws already made and keeps a floor of committed candidates per round; and a period sequence matching what a view derives exists | `Steelhead.undecidedProb_le`, `Steelhead.no_good_block_prob_le`, `Steelhead.undecided_tail_tendsto_zero`, `Steelhead.decidedAlmostSurely`, `Steelhead.allDecidedAlmostSurely`, `Steelhead.coinMeasure_blockCoins_mem`, `Steelhead.undecidedProb_le_adaptive`, `Steelhead.decidedAlmostSurely_adaptive`, `Steelhead.matchingPer_matches` *(Steelhead/Helpers/Coin)* |
-| SH16 | the interface composes: a family of rules whose laws hold, agreeing on rungs and ties, composes into a rule whose laws hold and whose verdicts agree across views; Steelhead's rule is the composite of Mahi-Mahi's at each round's wave | `Steelhead.Interface.holds`, `Steelhead.compose_laws`, `Steelhead.compose_decided_unique`, `Steelhead.steelheadAnchored_eq_compose` *(Steelhead/Interface/Proof, Steelhead/Helpers/Compose)* |
+| SH16 | the interface composes: a family of rules whose laws hold, agreeing on rungs and ties, composes into a rule whose laws hold and whose verdicts agree across views; Steelhead's rule is the composite of Mahi-Mahi's at each kind's wave | `Steelhead.Interface.holds`, `Steelhead.compose_laws`, `Steelhead.compose_decided_unique`, `Steelhead.steelheadAnchored_eq_compose` *(Steelhead/Interface/Proof, Steelhead/Helpers/Compose)* |
 | SH17 | atomic broadcast over settled prefixes: a delivered block is delivered by every view whose settled prefix is as long, is a block of the record entering at one slot, a reliable block is delivered with the first committed reliable leader two rounds up under synchrony and, under asynchrony, with the first committed slot above the round by which the reliable validators have referenced it, and two blocks enter at the same slots in every view | `Steelhead.Broadcast.holds`, `Steelhead.reaches_of_eventualReference` *(Steelhead/Broadcast/Proof, Steelhead/Helpers/Broadcast)* |
 | SH18 | the replay: the selection stays among the candidates and never worsens the score; a committed candidate of the window is certified and a skipped one is not; at a round of the window whose boost and decision rounds a quorum has populated within the anchor's history, at least `n − f − |byzantine|` authors are marked committed; Algorithm 2 keeps the period in range; the window's commit weight is the rule's commit probability on the window read as a record; a coprime canary always probes | `Steelhead.Replay.holds`, `Steelhead.Replay.select_mem`, `Steelhead.Replay.select_score_le`, `Steelhead.Replay.certified_of_commits`, `Steelhead.Replay.not_certified_of_skips`, `Steelhead.Replay.window_count`, `Steelhead.Replay.anchorUpdate_range`, `Steelhead.Replay.commitWeight_eq_commitProb`, `Steelhead.Replay.probe_exists` *(Steelhead/Replay/Proof, Steelhead/Helpers/Replay)* |
-| SH19 | the periodic class: the paper's dial `periodic ws wa k` is a wavelength function the arc's results take, every round's wave at least two and at most `max ws wa`, so an identity-round schedule spans at that wave and agreement, the extension laws and the support's laws hold at it at every period; and at `ws ≠ wa` and `k ≥ 2` no constant wave equals it | `Steelhead.Interface.holds`, `Steelhead.periodicClass`, `Steelhead.periodic_two_le`, `Steelhead.periodic_le_max`, `Steelhead.periodic_waveAt_not_const` *(Steelhead/Interface/Proof, Steelhead/Helpers/Compose)* |
+| SH19 | the periodic class: the pair `wavelength ws wa`, the paper's dial read at the kinds a period assigns, is a wavelength function the arc's results take, every kind's wave at least two and at most `max ws wa`, so an identity-round schedule spans at that wave and agreement, the extension laws and the support's laws hold at it; and at `ws ≠ wa` the two kinds read two waves, both of which a period `k ≥ 2` assigns | `Steelhead.Interface.holds`, `Steelhead.periodicClass`, `Steelhead.wavelength_two_le`, `Steelhead.wavelength_le_max`, `Steelhead.wavelength_waveAt_ne`, `Steelhead.periodicKind_not_const` *(Steelhead/Interface/Proof, Steelhead/Helpers/Compose, Steelhead/Helpers/Decision)* |
 
 
 ---
@@ -12111,6 +12133,7 @@ def Slots.chop (S : Slots Validator) (G d : ℕ) (hd : G ≤ S.slotRound d) :
     Slots Validator where
   slotRound k := S.slotRound (d + k) - G
   leader k := S.leader (d + k)
+  kind k := S.kind (d + k)
   mono _ _ h := Nat.sub_le_sub_right (S.mono (Nat.add_le_add_left h d)) G
   unbounded := by
     intro n
@@ -13005,7 +13028,7 @@ abbrev Decided (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
   (steelheadAnchored Validator BlockId Payload w).Decided (S := S) U V
 ```
 
-**The decision relation at the wavelength function `w`**: the anchored relation at Steelhead's data. `Decided w U V k (some L)`: a validator holding `V` may commit `L` at `k`; `Decided w U V k none`: it may skip the slot; *undecided* is the absence of any derivation. Under `periodic ws wa k` this is Algorithm 1 of the paper.
+**The decision relation at the wavelength function `w`**: the anchored relation at Steelhead's data. `Decided w U V k (some L)`: a validator holding `V` may commit `L` at `k`; `Decided w U V k none`: it may skip the slot; *undecided* is the absence of any derivation. At `w = wavelength ws wa` under a schedule whose kinds are `periodicKind p` this is Algorithm 1 of the paper.
 
 #### `UpdateRule`
 
@@ -13048,10 +13071,11 @@ structure AgreedAdvance (U : BlockUniverse Validator BlockId Payload) (w : ℕ �
 
 ```lean
 abbrev adaptiveSlots (coin known : ℕ → Validator) (I : ℕ) (per : ℕ → ℕ) : Slots Validator :=
-  Slots.identity fun r => if IsAsync (per (intervalOf I r)) r then coin r else known r
+  { Slots.identity (fun r => if adaptiveKind I per r = 1 then coin r else known r) with
+    kind := adaptiveKind I per }
 ```
 
-**The adaptive schedule**: one slot per round, led by the coin at the rounds the period sequence `per` makes asynchronous and by the known schedule `known` elsewhere. What a validator that derived `per` runs the output relation on; the liveness claims that relate a schedule to the coin one clause at a time (SH14) take this one as their instance.
+**The adaptive schedule**: one slot per round, of the adaptive kind, led by the coin at the rounds the period sequence `per` makes asynchronous and by the known schedule `known` elsewhere. What a validator that derived `per` runs the output relation on; the liveness claims that relate a schedule to the coin one clause at a time (SH14) take this one as their instance.
 
 #### `blockRound`
 
@@ -13220,7 +13244,7 @@ structure ReactiveS (U : BlockUniverse Validator BlockId Payload) (T : Finset Va
       (built v (S.slotRound k) + timeout (S.slotRound k) ≤ built v (S.slotRound k + 1) ∧
         (L ∈ holds v (built v (S.slotRound k + 1)) → L ∈ (U.block c).refs))
   /-- **The certificate wait, at the wave of three and the rounds that carry the leader wait.** -/
-  cert_or_wait : ∀ v ∈ T, ∀ k : ℕ, waits (S.slotRound k) → w (S.slotRound k) = 3 →
+  cert_or_wait : ∀ v ∈ T, ∀ k : ℕ, waits (S.slotRound k) → w (S.kind k) = 3 →
     S.slotRound k + 2 ≤ N → S.leader k ∈ T → ∀ L, IsLeaderBlock U k L →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + 2 →
     MahiMahi.Certifies U c L ∨
@@ -13805,11 +13829,11 @@ structure BaseRule (Validator : Type) [Fintype Validator] [DecidableEq Validator
   waveLength : ℕ
   /-- **A3.** The direct commit predicate, as judged from a view: block `L`
   proposed at round `r` is directly committed. -/
-  DirectCommitIn : ∀ {U : Universe}, View U → BlockId → ℕ → Prop
+  DirectCommitIn : ∀ {U : Universe}, View U → BlockId → ℕ → ℕ → Prop
   /-- The direct predicate is decidable, so a validator — and a witness —
   can compute the window count. -/
-  decDirect : ∀ {U : Universe} (V : View U) (L : BlockId) (r : ℕ),
-    Decidable (DirectCommitIn V L r)
+  decDirect : ∀ {U : Universe} (V : View U) (L : BlockId) (r κ : ℕ),
+    Decidable (DirectCommitIn V L r κ)
 ```
 
 **The base protocol, as the paper assumes it — the data.** A universe of blocks with its views, the direct decision predicate, and a decision relation parametric in the schedule. The laws these must satisfy are `BaseRule.Laws` below, a proposition each instantiation is proved to meet in its own `Statement`/`Proof` pair.
@@ -13842,7 +13866,8 @@ structure Laws (R : BaseRule Validator BlockId Payload) : Prop where
   /-- **A4, safety.** For a fixed schedule, verdicts agree across views. -/
   agree : Properties.Agree R.toDagRule
   /-- A directly committed candidate of a slot is a commit verdict. -/
-  commitsDirect : Properties.CommitsDirect R.toDagRule (fun {U} V L r => R.DirectCommitIn V L r)
+  commitsDirect : Properties.CommitsDirect R.toDagRule
+    (fun {U} V L r κ => R.DirectCommitIn V L r κ)
   /-- A committed block is a candidate of its slot. -/
   candidates : Properties.CommitsCandidate R.toDagRule
 ```
@@ -14143,14 +14168,14 @@ structure LiveRule.Delivers (R : LiveRule Validator BlockId Payload) (slack : �
 
 ```lean
 def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest)
-    (_hw : ∀ r, R.waveAt r = R.waveAt 0) :
+    (_hw : ∀ κ, R.waveAt κ = R.waveAt 0) :
     BaseRule Validator BlockId Payload where
   toDagRule := R.toDagRule
   full := fun U => View.full U
   historyView := fun U A hA => U.historyView A hA
   waveLength := R.waveAt 0 + 1
-  DirectCommitIn := fun {U} V L r => R.Commit U V L r
-  decDirect := fun {U} V L r => R.decCommit U V L r
+  DirectCommitIn := fun {U} V L r κ => R.Commit U V L r κ
+  decDirect := fun {U} V L r κ => R.decCommit U V L r κ
 ```
 
 **An anchored rule as a base rule**, at a wave the rule reads alike at every round.
@@ -14162,14 +14187,14 @@ def ofAnchored (R : AnchoredRule Validator BlockId Payload P honest)
 ```lean
 def ofAnchoredVia (R : AnchoredRule Validator BlockId Payload P honest) {X : Type}
     (f : X → BlockRecord Validator BlockId Payload P honest)
-    (_hw : ∀ r, R.waveAt r = R.waveAt 0) :
+    (_hw : ∀ κ, R.waveAt κ = R.waveAt 0) :
     BaseRule Validator BlockId Payload where
   toDagRule := R.toDagRuleVia f
   full := fun U => View.full (f U)
   historyView := fun U A hA => (f U).historyView A hA
   waveLength := R.waveAt 0 + 1
-  DirectCommitIn := fun {U} V L r => R.Commit (f U) V L r
-  decDirect := fun {U} V L r => R.decCommit (f U) V L r
+  DirectCommitIn := fun {U} V L r κ => R.Commit (f U) V L r κ
+  decDirect := fun {U} V L r κ => R.decCommit (f U) V L r κ
 ```
 
 **An anchored rule read through a projection, as a base rule**: the universes are any type projecting to records.
@@ -14434,8 +14459,8 @@ Rung 2's test: `q_weak` distinct creators of anchor-reachable votes for `L` at t
 def hydrozoanAnchored :
     AnchoredRule Replica BlockId Unit ValidWrt (NonByzantine : Finset Replica) where
   waveAt := fun _ => 2
-  Commit := fun U V L r => FastCommitInView U V L r ∨ SlowCommitInView U V L r
-  decCommit := fun _ _ _ _ => inferInstance
+  Commit := fun U V L r _ => FastCommitInView U V L r ∨ SlowCommitInView U V L r
+  decCommit := fun _ _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderInView (S := S) U V k
   rungs := 2
   Link := fun i U A L S k =>
@@ -14771,8 +14796,8 @@ def optimalAnchored :
     AnchoredRule Replica BlockId Unit LeanDag.Hydrozoan.ValidWrt
       (LeanDag.Hydrozoan.NonByzantine : Finset Replica) where
   waveAt := fun _ => 2
-  Commit := fun U V L r => FastCommitOptInView U V L r ∨ SlowCommitInView U V L r
-  decCommit := fun _ _ _ _ => inferInstance
+  Commit := fun U V L r _ => FastCommitOptInView U V L r ∨ SlowCommitInView U V L r
+  decCommit := fun _ _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderOptInView (S := S) U V k
   rungs := 2
   Link := fun i U A L S k =>
@@ -15055,8 +15080,8 @@ def optimalAnchored :
     AnchoredRule Replica BlockId Unit LeanDag.Hydrozoan.ValidWrt
       (LeanDag.Hydrozoan.NonByzantine : Finset Replica) where
   waveAt := fun _ => 2
-  Commit := fun U V L r => FastCommitOptInView U V L r ∨ SlowCommitInView U V L r
-  decCommit := fun _ _ _ _ => inferInstance
+  Commit := fun U V L r _ => FastCommitOptInView U V L r ∨ SlowCommitInView U V L r
+  decCommit := fun _ _ _ _ _ => inferInstance
   Skip := fun U V S k => SkippedLeaderOptInView (S := S) U V k
   rungs := 2
   Link := fun i U A L S k =>
@@ -15434,18 +15459,20 @@ def EligibleAt (wave k j : ℕ) : Prop := S.slotRound k + wave < S.slotRound j
 structure AnchoredRule (Validator : Type*) (BlockId : Type*) (Payload : Type*)
     (P : Validity Validator BlockId Payload) (honest : Finset Validator) where
   /-- The rounds a slot's direct rules read above its proposal, less one, as
-  a function of the slot's round: an anchor of a slot proposed at round `r`
-  must sit strictly above `r + waveAt r`. Constant for every rule in the
-  tree; a rule whose wavelength alternates with the round supplies a
-  function of it. -/
+  a function of the slot's kind (`Slots.kind`): an anchor of a slot of kind
+  `κ` proposed at round `r` must sit strictly above `r + waveAt κ`. Constant
+  for every rule in the tree; a rule whose wavelength varies reads it from
+  the kind the schedule assigns, which a rebase carries with the leader. -/
   waveAt : ℕ → ℕ
-  /-- The direct commit, judged from a view: `Commit U V L r` says the
-  candidate `L` proposed at round `r` is committed by what `V` holds. -/
-  Commit : (U : BlockRecord Validator BlockId Payload P honest) → U.View → BlockId → ℕ → Prop
+  /-- The direct commit, judged from a view: `Commit U V L r κ` says the
+  candidate `L` proposed at round `r`, at a slot of kind `κ`, is committed
+  by what `V` holds. A rule with one wave ignores `κ`; a rule whose wave
+  varies reads it there, as `Skip` and `Link` read `S.kind k`. -/
+  Commit : (U : BlockRecord Validator BlockId Payload P honest) → U.View → BlockId → ℕ → ℕ → Prop
   /-- The direct commit is decidable: a validator computes it from its
   view, and so does a witness. -/
   decCommit : ∀ (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (L : BlockId)
-    (r : ℕ), Decidable (Commit U V L r)
+    (r κ : ℕ), Decidable (Commit U V L r κ)
   /-- The direct skip of a slot, judged from a view. -/
   Skip : (U : BlockRecord Validator BlockId Payload P honest) → U.View → Slots Validator → ℕ → Prop
   /-- The number of rungs of the indirect test. -/
@@ -15466,10 +15493,10 @@ structure AnchoredRule (Validator : Type*) (BlockId : Type*) (Payload : Type*)
 *abbrev, `Common.Anchored.lean`*
 
 ```lean
-abbrev Eligible (k j : ℕ) : Prop := EligibleAt (S := S) (R.waveAt (S.slotRound k)) k j
+abbrev Eligible (k j : ℕ) : Prop := EligibleAt (S := S) (R.waveAt (S.kind k)) k j
 ```
 
-**`j` may anchor `k`**: eligibility at the wave of `k`'s round.
+**`j` may anchor `k`**: eligibility at the wave of `k`'s kind.
 
 #### `SpansEligible`
 
@@ -15479,7 +15506,7 @@ abbrev Eligible (k j : ℕ) : Prop := EligibleAt (S := S) (R.waveAt (S.slotRound
 abbrev SpansEligible (c : ℕ) : Prop := ∀ b i : ℕ, i < b → R.Eligible i (b + c - 1)
 ```
 
-**A run of `c` slots reaches past everything below it**, each slot at the wave of its own round.
+**A run of `c` slots reaches past everything below it**, each slot at the wave of its own kind.
 
 #### `Decided`
 
@@ -15490,7 +15517,7 @@ inductive Decided (U : BlockRecord Validator BlockId Payload P honest) (V : U.Vi
     ℕ → Option BlockId → Prop
   /-- The direct rule commits a candidate outright. -/
   | directCommit {k : ℕ} {L : BlockId} :
-      IsLeaderBlock U k L → R.Commit U V L (S.slotRound k) →
+      IsLeaderBlock U k L → R.Commit U V L (S.slotRound k) (S.kind k) →
       Decided U V k (some L)
   /-- The direct rule skips the slot. -/
   | directSkip {k : ℕ} :
@@ -15526,16 +15553,18 @@ structure Laws (I : Slots Validator → BlockRecord Validator BlockId Payload P 
   commit_unique : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {V₁ V₂ : U.View} {k : ℕ} {L₁ L₂ : BlockId},
     I S U → IsLeaderBlock U k L₁ → IsLeaderBlock U k L₂ →
-    R.Commit U V₁ L₁ (S.slotRound k) → R.Commit U V₂ L₂ (S.slotRound k) → L₁ = L₂
+    R.Commit U V₁ L₁ (S.slotRound k) (S.kind k) →
+    R.Commit U V₂ L₂ (S.slotRound k) (S.kind k) → L₁ = L₂
   /-- A direct commit and a direct skip of one slot cannot both hold. -/
   commit_skip : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {V₁ V₂ : U.View} {k : ℕ} {L : BlockId},
-    I S U → IsLeaderBlock U k L → R.Commit U V₁ L (S.slotRound k) → R.Skip U V₂ S k → False
+    I S U → IsLeaderBlock U k L → R.Commit U V₁ L (S.slotRound k) (S.kind k) →
+    R.Skip U V₂ S k → False
   /-- **Visibility.** A direct commit is linked, at some rung, from any
   candidate anchor of any eligible slot. -/
   commit_link : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {V : U.View} {k j : ℕ} {L A : BlockId},
-    I S U → IsLeaderBlock U k L → R.Commit U V L (S.slotRound k) →
+    I S U → IsLeaderBlock U k L → R.Commit U V L (S.slotRound k) (S.kind k) →
     IsLeaderBlock U j A → R.Eligible k j →
     ∃ i, i < R.rungs ∧ R.Link i U A L S k
   /-- A direct commit and the tie-break's choice at any rung, from any
@@ -15543,7 +15572,8 @@ structure Laws (I : Slots Validator → BlockRecord Validator BlockId Payload P 
   commit_link_unique : ∀ {S : Slots Validator}
     {U : BlockRecord Validator BlockId Payload P honest}
     {V : U.View} {k j i : ℕ} {L₁ L₂ A : BlockId},
-    I S U → IsLeaderBlock U k L₁ → IsLeaderBlock U k L₂ → R.Commit U V L₁ (S.slotRound k) →
+    I S U → IsLeaderBlock U k L₁ → IsLeaderBlock U k L₂ →
+    R.Commit U V L₁ (S.slotRound k) (S.kind k) →
     IsLeaderBlock U j A → R.Eligible k j → i < R.rungs →
     (∀ i', i' < i → R.RungEmpty U A i' k) →
     R.Link i U A L₂ S k → R.Least U A i k L₂ → L₁ = L₂
@@ -15560,15 +15590,15 @@ structure Laws (I : Slots Validator → BlockRecord Validator BlockId Payload P 
     R.Least U A i k L₁ → R.Least U A i k L₂ → L₁ = L₂
   /-- A larger view can only see more of a direct commit. -/
   commit_mono : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
-    {V V' : U.View} {L : BlockId} {r : ℕ},
-    I S U → V.ids ⊆ V'.ids → R.Commit U V L r → R.Commit U V' L r
+    {V V' : U.View} {L : BlockId} {r κ : ℕ},
+    I S U → V.ids ⊆ V'.ids → R.Commit U V L r κ → R.Commit U V' L r κ
   /-- And of a direct skip. -/
   skip_mono : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {V V' : U.View} {k : ℕ}, I S U → V.ids ⊆ V'.ids → R.Skip U V S k → R.Skip U V' S k
   /-- The direct skip reads the schedule only at its own slot. -/
   skip_congr : ∀ {S₁ S₂ : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {V : U.View} {k : ℕ}, I S₁ U → S₁.slotRound k = S₂.slotRound k → S₁.leader k = S₂.leader k →
-    R.Skip U V S₁ k → R.Skip U V S₂ k
+    S₁.kind k = S₂.kind k → R.Skip U V S₁ k → R.Skip U V S₂ k
   /-- And so does every rung's link. -/
   link_congr : R.LinkCongr
 ```
@@ -16027,6 +16057,10 @@ class Slots (Validator : Type*) where
   unbounded : ∀ n, ∃ k, n ≤ slotRound k
   /-- Distinct slots differ in round or in leader. -/
   keyed : Function.Injective (fun k => (slotRound k, leader k))
+  /-- The decision kind of slot `k`: what a rule whose wave varies reads
+  its wave from. One kind, `0`, unless a schedule says otherwise, and a
+  rebase carries it with the leader. -/
+  kind : ℕ → ℕ := fun _ => 0
 ```
 
 The leader schedule: which validator proposes at which round, as a sequence of slots. Slots need not be three rounds apart — under pipelining they are one round apart, and under multiple leaders per round they share one — so `slotRound` need only be monotone, and the separation M4's commit half needs is required instead at `Eligible` below. `unbounded` is assumed, not derivable from `mono` alone. `keyed` is a real condition once several leaders share a round: without it one block would be the candidate for two slots, and the ledger would deliver it twice.
@@ -16113,8 +16147,12 @@ def uniformSingle (p : ℕ) (hp : 0 < p) (elect : ℕ → Validator) : Slots Val
 *def, `Common.Slots.lean`*
 
 ```lean
-def Slots.identity {Validator : Type*} (leader : ℕ → Validator) : Slots Validator :=
-  ⟨id, leader, fun _ _ h => h, fun n => ⟨n, le_rfl⟩, fun _ _ h => congrArg Prod.fst h⟩
+def Slots.identity {Validator : Type*} (leader : ℕ → Validator) : Slots Validator where
+  slotRound := id
+  leader := leader
+  mono := fun _ _ h => h
+  unbounded := fun n => ⟨n, le_rfl⟩
+  keyed := fun _ _ h => congrArg Prod.fst h
 ```
 
 **The identity schedule** with a given leader map: one slot per round. The three laws are immediate.
@@ -16479,8 +16517,8 @@ def coreAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
     [DecidableEq Validator] [Faults Validator] [DecidableEq BlockId] :
     AnchoredRule Validator BlockId Payload ValidWrt Correct where
   waveAt := fun _ => 2
-  Commit := fun U V L r => DirectCommitIn U V L r
-  decCommit := fun _ _ _ _ => inferInstance
+  Commit := fun U V L r _ => DirectCommitIn U V L r
+  decCommit := fun _ _ _ _ _ => inferInstance
   Skip := fun U V S k => DirectSkipSlotIn (S := S) U V k
   rungs := 1
   Link := fun _ U A L S k => CertifiedIn U A L (S.slotRound k)
@@ -16674,6 +16712,7 @@ def Banded (R : DagRule Validator BlockId Payload) : Prop :=
         (∀ m m', m + d' = m' + d → S.slotRound m ≤ top →
           S.slotRound m + g = S'.slotRound m' + g') →
         (∀ m m', m + d' = m' + d → S.slotRound m ≤ top → S.leader m = S'.leader m') →
+        (∀ m m', m + d' = m' + d → S.slotRound m ≤ top → S.kind m = S'.kind m') →
         AgreeBand R U U' (S.slotRound k + g) (top + g) g g' →
         (∀ b, b ∈ R.viewIds V → S.slotRound k ≤ (R.block U b).round →
           (R.block U b).round ≤ top → b ∈ R.viewIds V') →
@@ -16691,7 +16730,8 @@ def DecidedBelow (R : DagRule Validator BlockId Payload) (S : Slots Validator) (
     {U : R.Universe} (V : R.View U) (k : ℕ) (v : Option BlockId) : Prop :=
   k < B ∧ R.Decided S V k v ∧
     ∀ S' : Slots Validator, S'.slotRound = S.slotRound →
-      (∀ m, m < B → S'.leader m = S.leader m) → R.Decided S' V k v
+      (∀ m, m < B → S'.leader m = S.leader m) →
+      (∀ m, m < B → S'.kind m = S.kind m) → R.Decided S' V k v
 ```
 
 **A verdict decided below `B`**: the slot sits below the bound, the verdict holds, and it is unchanged by any reassignment of the leaders at or above the bound. The round structure is held fixed, which is what reassignment means.
@@ -16775,13 +16815,14 @@ structure RebasedAbove (R : DagRule Validator BlockId Payload)
 
 ```lean
 def Indirect (R : DagRule Validator BlockId Payload)
-    (Elig : (ℕ → ℕ) → ℕ → ℕ → Prop) : Prop :=
+    (Elig : Slots Validator → ℕ → ℕ → Prop) : Prop :=
   ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (i j : ℕ) (A : BlockId),
-    Elig S.slotRound i j → R.Decided S V j (some A) →
-    (∀ i', i < i' → i' < j → Elig S.slotRound i i' → R.Decided S V i' none) →
+    Elig S i j → R.Decided S V j (some A) →
+    (∀ i', i < i' → i' < j → Elig S i i' → R.Decided S V i' none) →
     ∃ v, ∀ S' : Slots Validator, S'.slotRound = S.slotRound → S'.leader i = S.leader i →
+      S'.kind i = S.kind i →
       R.Decided S' V j (some A) →
-      (∀ i', i < i' → i' < j → Elig S.slotRound i i' → R.Decided S' V i' none) →
+      (∀ i', i < i' → i' < j → Elig S i i' → R.Decided S' V i' none) →
       R.Decided S' V i v
 ```
 
@@ -16841,11 +16882,11 @@ def LeaderCommits (R : DagRule Validator BlockId Payload)
 def live (rel : Reliability Validator) (S : Slots Validator) {U : R.Universe}
     (V : R.View U) (T : Finset Validator) (lo K : ℕ) : Prop :=
   rel.IsQuorum T ∧
-    ∃ N, CoversUpto R V N ∧ (∀ k, k < K → S.slotRound k + sp.waveAt (S.slotRound k) ≤ N) ∧
+    ∃ N, CoversUpto R V N ∧ (∀ k, k < K → S.slotRound k + sp.waveAt (S.kind k) ≤ N) ∧
       ∀ k, lo ≤ k → k < K → S.leader k ∈ T →
-        (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.slotRound k) →
+        (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.kind k) →
           PopulatedOn R U T n) ∧
-        ∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) L
+        ∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) (S.kind k) L
 ```
 
 **The liveness precondition, in support terms.** A quorum, a horizon the view is caught up to with the window a wave under it, and at every quorum-led slot of the window production and certification.
@@ -16903,9 +16944,9 @@ structure Extends (R : DagRule Validator BlockId Payload) (U U' : R.Universe) : 
 
 ```lean
 def CommitsDirect (R : DagRule Validator BlockId Payload)
-    (Direct : ∀ {U : R.Universe}, R.View U → BlockId → ℕ → Prop) : Prop :=
+    (Direct : ∀ {U : R.Universe}, R.View U → BlockId → ℕ → ℕ → Prop) : Prop :=
   ∀ (S : Slots Validator) (U : R.Universe) (V : R.View U) (k : ℕ) (L : BlockId),
-    R.IsCandidate S U k L → Direct V L (S.slotRound k) → R.Decided S V k (some L)
+    R.IsCandidate S U k L → Direct V L (S.slotRound k) (S.kind k) → R.Decided S V k (some L)
 ```
 
 **A direct commit is a verdict.** The converse of `CommitsCandidate`, parameterised by the rule's own direct-commit predicate — what counts as *direct* is the rule's business and not the carrier's, which is why `Direct` is an argument rather than a field.
@@ -17044,9 +17085,10 @@ Re-genesis, at the carrier.
 
 ```lean
 structure Support (R : DagRule Validator BlockId Payload) where
-  /-- The wavelength at a candidate's round: certifiers of a candidate proposed at `r` sit
-  `waveAt r` rounds above it. Constant for every rule in the tree; a rule whose wavelength
-  alternates with the round supplies a function of it. -/
+  /-- The wavelength at a slot's kind: certifiers of a candidate of a slot of kind `κ` sit
+  `waveAt κ` rounds above it. Constant for every rule in the tree; a rule whose wavelength
+  varies reads it from the kind the schedule assigns the slot, as the rule's own `waveAt`
+  does. -/
   waveAt : ℕ → ℕ
   /-- `Certifies U c L`: block `c` certifies candidate `L`. -/
   Certifies : R.Universe → BlockId → BlockId → Prop
@@ -17061,8 +17103,8 @@ structure Support (R : DagRule Validator BlockId Payload) where
 ```lean
 def Local : Prop :=
   ∀ {U U' : R.Universe} {G R₀ : ℕ}, RebasedAbove R U U' G R₀ →
-    ∀ c L, c ∈ R.ids U → R₀ + sp.waveAt (R.block U L).round ≤ (R.block U c).round →
-      L ∈ R.ids U → (R.block U L).round + sp.waveAt (R.block U L).round = (R.block U c).round →
+    ∀ c L κ, c ∈ R.ids U → R₀ + sp.waveAt κ ≤ (R.block U c).round →
+      L ∈ R.ids U → (R.block U L).round + sp.waveAt κ = (R.block U c).round →
       (sp.Certifies U' c L ↔ sp.Certifies U c L)
 ```
 
@@ -17076,9 +17118,9 @@ def Local : Prop :=
 def Commits (rel : Reliability Validator) : Prop :=
   ∀ (S : Slots Validator) {U : R.Universe} (V : R.View U) (T : Finset Validator) (k : ℕ),
     rel.IsQuorum T →
-    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.slotRound k) → PopulatedOn R U T n) →
-    (∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) L) →
-    CoversUpto R V (S.slotRound k + sp.waveAt (S.slotRound k)) →
+    (∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + sp.waveAt (S.kind k) → PopulatedOn R U T n) →
+    (∀ L, R.IsCandidate S U k L → sp.certifiesAt U T (S.slotRound k) (S.kind k) L) →
+    CoversUpto R V (S.slotRound k + sp.waveAt (S.kind k)) →
     S.leader k ∈ T →
     ∃ L, DecidedBelow R S (k + 1) V k (some L)
 ```
@@ -17191,11 +17233,11 @@ def CoversToward (R : DagRule Validator BlockId Payload) (U : R.Universe)
 ```lean
 def OfCoverage (sp : Support R) (rel : Reliability Validator) : Prop :=
   ∀ (U : R.Universe) (T : Finset Validator), rel.IsQuorum T →
-    ∀ (r : ℕ) (L : BlockId),
-    (∀ n, r ≤ n → n ≤ r + sp.waveAt r → Properties.PopulatedOn R U T n) →
-    CoversToward R U T r (sp.waveAt r) L →
+    ∀ (r κ : ℕ) (L : BlockId),
+    (∀ n, r ≤ n → n ≤ r + sp.waveAt κ → Properties.PopulatedOn R U T n) →
+    CoversToward R U T r (sp.waveAt κ) L →
     L ∈ R.ids U → (R.block U L).round = r → (R.block U L).creator ∈ T →
-    ∀ c, c ∈ R.ids U → (R.block U c).creator ∈ T → (R.block U c).round = r + sp.waveAt r →
+    ∀ c, c ∈ R.ids U → (R.block U c).creator ∈ T → (R.block U c).round = r + sp.waveAt κ →
       sp.Certifies U c L
 ```
 
@@ -17219,7 +17261,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 506 theorems the body or Appendix A names, each
+The 507 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -19983,7 +20025,7 @@ theorem holds : Statement
 *theorem, `Steelhead.Helpers.Decision.lean`*
 
 ```lean
-theorem steelheadLaws {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
+theorem steelheadLaws {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
     (steelheadAnchored Validator BlockId Payload w).Laws where
   commit_unique
 ```
@@ -20013,15 +20055,16 @@ No tie: any linked candidate is the rung's choice.
 
 ```lean
 theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : ∀ t, S.slotRound t = t)
-    (hI : 0 < I) (hlead : ∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r)
+    (hkind : ∀ t, S.kind t = adaptiveKind I per t) (hI : 0 < I)
+    (hlead : ∀ r, S.kind r = 1 → S.leader r = coin r)
     {K c N : ℕ} (hwaK : wa ≤ K) (hcK : c + K ≤ I)
     (hrun : MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c K N)
     (hV : V.CoversUpto N)
     (hper : ∀ j, j ≤ intervalOf I N → ∃ st,
-      PeriodAt I wa coin upd k₀ U V (adaptiveWave ws wa I per) j st ∧ per j = st.period)
+      PeriodAt I wa coin upd k₀ U V (wavelength ws wa) j st ∧ per j = st.period)
     (s : ℕ) (h₁ : 1 ≤ s)
     (hN : MahiMahi.decisionRoundAt wa ((intervalOf I s + 3) * I + c + K) ≤ N) :
-    ∃ v, Decided (adaptiveWave ws wa I per) U V s v
+    ∃ v, Decided (wavelength ws wa) U V s v
 ```
 
 **SH14b.** The run of `K` inside the second interval after the slot's chain-commits its first round, which gives the interval its anchor once SH7a has settled every chain verdict there; the run in the next interval is the one SH14 needs.
@@ -20063,7 +20106,7 @@ theorem selfParent (w : ℕ → ℕ) : SelfParent (steelheadRule (Validator := V
 *theorem, `Steelhead.Properties.lean`*
 
 ```lean
-theorem agree {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
+theorem agree {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
     Agree (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
 ```
 
@@ -20074,12 +20117,24 @@ theorem agree {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
 *theorem, `Steelhead.Properties.lean`*
 
 ```lean
-theorem indirect {w : ℕ → ℕ} (hw : ∀ r, 1 ≤ w r) :
+theorem indirect {w : ℕ → ℕ} (hw : ∀ κ, 1 ≤ w κ) :
     Indirect (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
-      (fun sr i j => sr i + w (sr i) ≤ sr j)
+      (fun S i j => S.slotRound i + w (S.kind i) ≤ S.slotRound j)
 ```
 
-**The indirect rule as a property**, with eligibility at each slot's own wave and no tie to break.
+**The indirect rule as a property**, with eligibility at the wave of each slot's own kind and no tie to break.
+
+#### `safety`
+
+*theorem, `Steelhead.Properties.lean`*
+
+```lean
+theorem safety {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
+    Properties.Safe (steelheadRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload) w)
+```
+
+**The safety headline**: the band and agreement, at every wavelength function of at least two rounds.
 
 #### `holds`
 
@@ -21015,7 +21070,7 @@ theorem Config.uniform_sched (getLeader : ℕ → Validator) {w : ℕ} (hw : 0 <
 *theorem, `Barnacle.Helpers.Anchored.lean`*
 
 ```lean
-theorem ofAnchored_laws (hw : ∀ r, R.waveAt r = R.waveAt 0) (hl : R.Laws) :
+theorem ofAnchored_laws (hw : ∀ κ, R.waveAt κ = R.waveAt 0) (hl : R.Laws) :
     (ofAnchored R hw).Laws where
   full_ids
 ```
@@ -21991,7 +22046,7 @@ theorem coversUpto_full (hfull : ∀ U : R.Universe, R.viewIds (R.full U) = R.id
 ```lean
 theorem delivers_core [F : Faults Validator]
     (R : AnchoredRule Validator BlockId Payload ValidWrt (Correct : Finset Validator))
-    (hw : ∀ r, R.waveAt r = R.waveAt 0) :
+    (hw : ∀ κ, R.waveAt κ = R.waveAt 0) :
     (liveOfAnchored R hw (coreReliability Validator)).Delivers F.f where
   reaches
 ```
@@ -22035,7 +22090,8 @@ theorem indirect (hcongr : R.LinkCongr)
       (∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k) →
       ∃ L, IsLeaderBlock (S := S) U k L ∧ R.Link i U A L S k ∧
         R.Least (S := S) U A i k L) :
-    Indirect R.toDagRule (fun sr i j => sr i + R.waveAt (sr i) + 1 ≤ sr j)
+    Indirect R.toDagRule
+      (fun S i j => S.slotRound i + R.waveAt (S.kind i) + 1 ≤ S.slotRound j)
 ```
 
 **The indirect rule is a property.** Given the anchor, the verdict is determined by the rungs: the first rung holding a candidate commits the tie-break's choice, and no rung holding any skips. The verdict survives a reassignment of leaders elsewhere, since the case split reads only slot `i`'s candidates and the anchor's history. What it needs of the tie is that a nonempty rung has a choice, `hleast`.
@@ -22118,7 +22174,7 @@ Under a schedule whose consecutive slots are spaced past the wave, every later s
 
 ```lean
 theorem spansEligible_of_identity (hid : ∀ s, S.slotRound s = s) {w : ℕ}
-    (hw : ∀ r, R.waveAt r ≤ w) : R.SpansEligible (w + 1)
+    (hw : ∀ κ, R.waveAt κ ≤ w) : R.SpansEligible (w + 1)
 ```
 
 Under an identity-round schedule, `w + 1` consecutive slots span, for any `w` the wave never exceeds.
@@ -22410,7 +22466,7 @@ theorem agree : Agree (finWhaleRule (Validator := Validator) (BlockId := BlockId
 ```lean
 theorem indirect : Indirect
     (finWhaleRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-    (fun sr i j => sr i + 3 ≤ sr j)
+    (fun S i j => S.slotRound i + 3 ≤ S.slotRound j)
 ```
 
 **The indirect rule, with its bound.** The relation's indirect property at the rung's choice, read at the three-round eligibility: every rule FinWhale applies at a slot reads the schedule at that slot alone, which is the relation's `link_congr`.
@@ -22760,8 +22816,9 @@ theorem agree {k : ℕ} (hk : Hybrid.Admissible Validator k) :
 ```lean
 theorem indirect (kt : ℕ) :
     Indirect (hybridRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) kt)
-      (fun sr i j =>
-        sr i + (Hybrid.hybridAnchored Validator BlockId Payload kt).waveAt (sr i) + 1 ≤ sr j)
+      (fun S i j => S.slotRound i +
+        (Hybrid.hybridAnchored Validator BlockId Payload kt).waveAt (S.kind i) + 1 ≤
+          S.slotRound j)
 ```
 
 **H-A3 as a property**: the relation's indirect property, committing the least thick-linked candidate.
@@ -22823,7 +22880,7 @@ theorem agree : Agree (rule (Replica := Replica) (BlockId := BlockId))
 ```lean
 theorem indirect :
     Indirect (rule (Replica := Replica) (BlockId := BlockId))
-      (fun sr i j => sr i + 3 ≤ sr j)
+      (fun S i j => S.slotRound i + 3 ≤ S.slotRound j)
 ```
 
 **HZ6 as a property.** The relation's indirect property at the graded rule's rung choices, read at the three-round eligibility.
@@ -22925,7 +22982,7 @@ theorem agree {w : ℕ} (hw : 2 ≤ w) :
 ```lean
 theorem indirect {w : ℕ} (hw : 1 ≤ w) :
     Indirect (mahiMahiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
-      (fun sr i j => sr i + w ≤ sr j)
+      (fun S i j => S.slotRound i + w ≤ S.slotRound j)
 ```
 
 **MM-A3 as a property**: the relation's indirect property, with no tie to break — two certificates at one slot name the same candidate.
@@ -22981,7 +23038,7 @@ theorem certLive_of_coreLive {S : Slots Validator}
 ```lean
 theorem indirect :
     Indirect (mysticetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-      (fun sr i j => sr i + 3 ≤ sr j)
+      (fun S i j => S.slotRound i + 3 ≤ S.slotRound j)
 ```
 
 **A3 as a property**: the relation's indirect property at the core, with no tie to break, read at the three-round eligibility.
@@ -23123,8 +23180,8 @@ theorem agree : Agree (nemoRule (Validator := Validator) (BlockId := BlockId)
 ```lean
 theorem indirect :
     Indirect (nemoRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-      (fun sr i j => sr i + (Nemo.nemoAnchored Validator BlockId Payload).waveAt (sr i) + 1
-        ≤ sr j)
+      (fun S i j => S.slotRound i +
+        (Nemo.nemoAnchored Validator BlockId Payload).waveAt (S.kind i) + 1 ≤ S.slotRound j)
 ```
 
 **A3 as a property**: the relation's indirect property, with no tie to break.
@@ -23227,8 +23284,9 @@ theorem agree : Agree (odontocetiRule (Validator := Validator) (BlockId := Block
 ```lean
 theorem indirect :
     Indirect (odontocetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-      (fun sr i j => sr i +
-        (Odontoceti.odontocetiAnchored Validator BlockId Payload).waveAt (sr i) + 1 ≤ sr j)
+      (fun S i j => S.slotRound i +
+        (Odontoceti.odontocetiAnchored Validator BlockId Payload).waveAt (S.kind i) + 1 ≤
+          S.slotRound j)
 ```
 
 **O-A3 as a property**: the relation's indirect property, committing the least thick-linked candidate.
@@ -23279,7 +23337,7 @@ theorem agree : Agree (optimalRule (Replica := Replica) (BlockId := BlockId))
 ```lean
 theorem indirect :
     Indirect (optimalRule (Replica := Replica) (BlockId := BlockId))
-      (fun sr i j => sr i + 3 ≤ sr j)
+      (fun S i j => S.slotRound i + 3 ≤ S.slotRound j)
 ```
 
 **The graded rule is total, at a bound**: the relation's indirect property at the rule's rung choices, read at the three-round eligibility. Every clause reads slot `k`'s own candidates and the anchor's history, and none moves when the leaders of other slots are reassigned — the relation's `link_congr`.
@@ -23650,7 +23708,7 @@ theorem Stack.rebased {U U' : R.Universe} {S S' : Slots Validator} {G R₀ d : �
 ```lean
 theorem Stack.safe_and_live (hb : Banded R) (ha : Agree R) (sp : Support R) (hloc : sp.Local)
     (st : Stack R U S U' S' G R₀ d) {V : R.View U} {V' : R.View U'}
-    (hv : ViewAgreeAbove R V V' R₀) (hw : ∀ r, G ≤ r → sp.waveAt (r - G) = sp.waveAt r) :
+    (hv : ViewAgreeAbove R V V' R₀) :
     (∀ (k : ℕ) (v : Option BlockId), R₀ ≤ S.slotRound (d + k) →
         (R.Decided S V (d + k) v ↔ R.Decided S' V' k v)) ∧
     (∀ (W : R.View U') (k : ℕ) (w v : Option BlockId), R₀ ≤ S.slotRound (d + k) →
@@ -23661,7 +23719,7 @@ theorem Stack.safe_and_live (hb : Banded R) (ha : Agree R) (sp : Support R) (hlo
         sp.live rel S' V' T (lo - d) (K - d))
 ```
 
-**Every stack of mechanisms keeps safety and liveness**, for any rule with `Banded`, `Agree` and a support. Above the composite settling round: verdicts transport to the composite's numbering, any view of the composite agrees with the original, and the liveness precondition carries. Nothing is assumed about which mechanisms are stacked or in what order, only that the support's wave is the same at a round and at its shift by the composite's `G`.
+**Every stack of mechanisms keeps safety and liveness**, for any rule with `Banded`, `Agree` and a support. Above the composite settling round: verdicts transport to the composite's numbering, any view of the composite agrees with the original, and the liveness precondition carries. Nothing is assumed about which mechanisms are stacked or in what order: the composite carries each slot's kind, and with it the wave the support reads there.
 
 #### `decided_of_rebased`
 
@@ -23707,7 +23765,7 @@ Two bounded verdicts agree, at any bounds — `Agree` through the first componen
 
 ```lean
 theorem Descends.of_indirect (hind : Indirect R Elig) {S : Slots Validator} {c : ℕ}
-    (hc : 0 < c) (hspans : ∀ b i, i < b → Elig S.slotRound i (b + c - 1)) :
+    (hc : 0 < c) (hspans : ∀ b i, i < b → Elig S i (b + c - 1)) :
     Descends R S c
 ```
 
@@ -23880,8 +23938,8 @@ theorem descent_of_support (R : Properties.DagRule Validator BlockId Payload)
     (Good : R.Universe → ℕ → ℕ → Prop) (g : ℕ)
     (sp : Properties.Support R) {rel : Reliability Validator}
     (hcov : OfCoverage sp rel) (hlc : sp.Commits rel)
-    (hind : Properties.Indirect R (fun sr i j => sr i + g ≤ sr j))
-    (hwave : ∀ r, sp.waveAt r ≤ g)
+    (hind : Properties.Indirect R (fun S i j => S.slotRound i + g ≤ S.slotRound j))
+    (hwave : ∀ κ, sp.waveAt κ ≤ g)
     (hgood : ∀ U Rnd N, Good U Rnd N → Timed.Good R rel U Rnd N) :
     Properties.Descent R Good g rel.slack where
   goodLeaders

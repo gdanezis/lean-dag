@@ -19,19 +19,20 @@ Four claims:
 * **SH16b, the composite agrees** — the relation's agreement across
   views at the composite's laws, for any two views and routes;
 * **SH16c, Steelhead is a composite** — `steelheadAnchored w` is the
-  composite of Mahi-Mahi's rule read at `w r`, by definition, so SH2 is
+  composite of Mahi-Mahi's rule read at `w κ`, by definition, so SH2 is
   an instance of SH16b;
 * **SH19, the periodic class** — the paper's dial `w(r) = wa` at every
-  `k`-th round and `ws` elsewhere (`periodic`), for any two waves of
-  two rounds or more, is a wavelength function the results above take:
-  every round's wave is at least two and at most the larger wave, so an
+  `k`-th round and `ws` elsewhere, read as `wavelength ws wa` at the
+  kinds `periodicKind k` assigns (SH4), for any two waves of two rounds
+  or more, is a wavelength function the results above take: every
+  kind's wave is at least two and at most the larger wave, so an
   identity-round schedule spans at that wave; agreement, the extension
   laws persistence rests on, and the support's locality, coverage and
   commit laws hold at it, the same way they hold at any wavelength
   function of two rounds or more, coverage asking three; and at
-  `ws ≠ wa` and `k ≥ 2` no constant wave
-  equals it, so what `waveAt` being a function of the round admits is a
-  wave that varies, not a constant in disguise.
+  `ws ≠ wa` the two kinds read two waves, which a period of two or more
+  both assigns, so what `waveAt` being a function of the kind admits is
+  a wave that varies, not a constant in disguise.
 
 The laws are the paper's clauses A2 and A3 in the relation's terms, at
 each rule's own wave: what the intersection law and the exclusion of
@@ -76,37 +77,40 @@ def SteelheadComposes (Validator BlockId Payload : Type) [Fintype Validator]
     [DecidableEq Validator] [Faults Validator] [LinearOrder BlockId] : Prop :=
   ∀ w : ℕ → ℕ,
     steelheadAnchored Validator BlockId Payload w =
-      compose fun r => MahiMahi.mahiMahiAnchored Validator BlockId Payload (w r)
+      compose fun κ => MahiMahi.mahiMahiAnchored Validator BlockId Payload (w κ)
 
 /-- **SH19, the periodic class.** -/
 def PeriodicClass (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] : Prop :=
   ∀ ws wa k : ℕ, 2 ≤ ws → 2 ≤ wa →
-    -- every round's wave is at least two and at most the larger wave ...
-    (∀ r, 2 ≤ periodic ws wa k r) ∧ (∀ r, periodic ws wa k r ≤ max ws wa) ∧
+    -- every kind's wave is at least two and at most the larger wave ...
+    (∀ κ, 2 ≤ wavelength ws wa κ) ∧ (∀ κ, wavelength ws wa κ ≤ max ws wa) ∧
     -- ... so an identity-round schedule spans at that wave
     (∀ [S : Slots Validator], (∀ s, S.slotRound s = s) →
-      (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).SpansEligible (S := S)
+      (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).SpansEligible (S := S)
         (max ws wa)) ∧
-    -- the wave varies: at two distinct waves and a period of two or more, no constant equals it
-    (ws ≠ wa → 2 ≤ k → ¬ ∀ r r',
-      (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).waveAt r =
-        (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).waveAt r') ∧
+    -- the wave varies: at two distinct waves the two kinds read two wave offsets ...
+    (ws ≠ wa →
+      (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).waveAt 0 ≠
+        (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).waveAt 1) ∧
+    -- ... and a period of two or more assigns both kinds, so no constant wave reads as the
+    -- paper's dial does
+    (2 ≤ k → ∃ r r', periodicKind k r ≠ periodicKind k r') ∧
     -- and the laws hold at it: agreement, the extension laws persistence rests on, the support's
     -- locality and commits, and its coverage law at waves of three or more
     Properties.Agree (SteelheadProperties.steelheadRule (Validator := Validator)
-      (BlockId := BlockId) (Payload := Payload) (periodic ws wa k)) ∧
-    (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).ExtendLaws ∧
+      (BlockId := BlockId) (Payload := Payload) (wavelength ws wa)) ∧
+    (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).ExtendLaws ∧
     Properties.Support.Local (R := SteelheadProperties.steelheadRule (Validator := Validator)
-      (BlockId := BlockId) (Payload := Payload) (periodic ws wa k))
-      (SteelheadProperties.shSupport (periodic ws wa k)) ∧
+      (BlockId := BlockId) (Payload := Payload) (wavelength ws wa))
+      (SteelheadProperties.shSupport (wavelength ws wa)) ∧
     Properties.Support.Commits (R := SteelheadProperties.steelheadRule (Validator := Validator)
-      (BlockId := BlockId) (Payload := Payload) (periodic ws wa k))
-      (SteelheadProperties.shSupport (periodic ws wa k)) (coreReliability Validator) ∧
+      (BlockId := BlockId) (Payload := Payload) (wavelength ws wa))
+      (SteelheadProperties.shSupport (wavelength ws wa)) (coreReliability Validator) ∧
     (3 ≤ ws → 3 ≤ wa →
       Timed.OfCoverage (R := SteelheadProperties.steelheadRule (Validator := Validator)
-        (BlockId := BlockId) (Payload := Payload) (periodic ws wa k))
-        (SteelheadProperties.shSupport (periodic ws wa k)) (coreReliability Validator))
+        (BlockId := BlockId) (Payload := Payload) (wavelength ws wa))
+        (SteelheadProperties.shSupport (wavelength ws wa)) (coreReliability Validator))
 
 /-- The interface, over every fault configuration and block universe the model admits. -/
 def Statement : Prop :=

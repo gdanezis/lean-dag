@@ -102,22 +102,22 @@ def blockCoins (I j₀ M K : ℕ) (coin : ℕ → Validator) : Fin M → Fin K �
 def blocksHorizon (I wa j₀ M : ℕ) : ℕ := MahiMahi.decisionRoundAt wa ((j₀ + 1 + M) * I + wa)
 
 /-- **A period sequence matches what a view derives**: at every interval the view derives a state
-for, reading its agreed output at the sequence's own adaptive wavelength and running the schedule
-the sequence names, the sequence's period is the state's. Arbitrary where the scan has stalled. -/
+for, reading its agreed output on the schedule the sequence names, whose kinds are the
+sequence's own, the sequence's period is the state's. Arbitrary where the scan has stalled. -/
 def Matches (I wa : ℕ) (coin known : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ ws : ℕ)
     (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
     (per : ℕ → ℕ) : Prop :=
   ∀ j st, PeriodAt (S := adaptiveSlots coin known I per) I wa coin upd k₀ U V
-    (adaptiveWave ws wa I per) j st → per j = st.period
+    (wavelength ws wa) j st → per j = st.period
 
 /-- **A view settles a slot at a matching sequence**: it derives the state of the slot's interval,
-and decides the slot at the sequence's wavelength and schedule. -/
+and decides the slot on the sequence's schedule. -/
 def Settles (I wa : ℕ) (coin known : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ ws : ℕ)
     (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
     (per : ℕ → ℕ) (s : ℕ) : Prop :=
   (∃ st, PeriodAt (S := adaptiveSlots coin known I per) I wa coin upd k₀ U V
-    (adaptiveWave ws wa I per) (intervalOf I s) st) ∧
-  ∃ v, Decided (S := adaptiveSlots coin known I per) (adaptiveWave ws wa I per) U V s v
+    (wavelength ws wa) (intervalOf I s) st) ∧
+  ∃ v, Decided (S := adaptiveSlots coin known I per) (wavelength ws wa) U V s v
 
 /-- **The probability that slot `s` stays undecided**, over the uniform independent coins of `M`
 blocks of `K` rounds opening the intervals from the second after the slot's: the measure of the

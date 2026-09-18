@@ -20,7 +20,7 @@ verdict assignment `g` over a settled prefix of slots:
 * **SH13e, a committed block belongs to one slot** — the integrity half:
   without it one block could be delivered by two slots.
 
-SH13a to SH13d assume `2 ≤ w r`, what Steelhead's laws need, and a
+SH13a to SH13d assume `2 ≤ w κ`, what Steelhead's laws need, and a
 settled prefix; SH13e assumes neither, since a commit names its slot
 whatever the wave. They are order and integrity, not progress: under the
 stall (SH8) the prefix is short, and that is a liveness question.
@@ -41,7 +41,7 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 /-- **SH13a to SH13d, the output of a settled prefix.** -/
 def Output (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
   ∀ (V₁ V₂ : View Validator BlockId Payload U) (n : ℕ) (g₁ g₂ : ℕ → Option BlockId),
-    (∀ r, 2 ≤ w r) →
+    (∀ κ, 2 ≤ w κ) →
     -- each view settled every slot below n, g its verdicts there
     (∀ k, k < n → Decided w U V₁ k (g₁ k)) →
     (∀ k, k < n → Decided w U V₂ k (g₂ k)) →

@@ -139,14 +139,15 @@ section Slots
 
 variable [S : Slots Validator]
 
-/-- **A verdict reads the wavelength only at the rounds of the slots its derivation names.**
-Those are the slot's own round and, above it, the rounds of the anchor the derivation rests on
-and of the eligible slots it skipped on the way, every one of them at or below the round of a
-block the anchor's candidate is. The hypothesis below is coarser than that: agreement at every
-round at or below a bound `N` on the rounds of the view's blocks, under which a slot proposed at
-or below `N` decides alike. -/
+/-- **A verdict reads the wavelength only at the kinds of the slots its derivation names.**
+Those are the slot itself and, above it, the anchor the derivation rests on and the eligible
+slots it skipped on the way, every one of them proposed at or below the round of a block the
+anchor's candidate is. The hypothesis below is coarser than that: agreement at the kind of every
+slot proposed at or below a bound `N` on the rounds of the view's blocks, under which a slot
+proposed at or below `N` decides alike. -/
 theorem decided_congr {w₁ w₂ : ℕ → ℕ} {N : ℕ} {V : View Validator BlockId Payload U}
-    (hN : ∀ b ∈ V.ids, (U.block b).round ≤ N) (hw : ∀ r, r ≤ N → w₁ r = w₂ r) {k : ℕ}
+    (hN : ∀ b ∈ V.ids, (U.block b).round ≤ N)
+    (hw : ∀ k, S.slotRound k ≤ N → w₁ (S.kind k) = w₂ (S.kind k)) {k : ℕ}
     {v : Option BlockId} (h : Decided w₁ U V k v) :
     S.slotRound k ≤ N → Decided w₂ U V k v := by
   -- the anchor of an indirect step is a block the view committed, so its round is under the
@@ -156,7 +157,7 @@ theorem decided_congr {w₁ w₂ : ℕ → ℕ} {N : ℕ} {V : View Validator Bl
     have := hN A (mem_ids_of_decided hj A rfl)
     rw [(AnchoredRule.isLeaderBlock_of_decided hj).2.1] at this
     exact this
-  -- eligibility reads the wave at the slot's own round, which the bound covers
+  -- eligibility reads the wave at the slot's own kind, which the bound covers
   have helig : ∀ {k m : ℕ}, S.slotRound k ≤ N →
       ((steelheadAnchored Validator BlockId Payload w₂).Eligible k m ↔
         (steelheadAnchored Validator BlockId Payload w₁).Eligible k m) := by
@@ -167,12 +168,12 @@ theorem decided_congr {w₁ w₂ : ℕ → ℕ} {N : ℕ} {V : View Validator Bl
   | @directCommit k L hL hc =>
     intro hk
     refine Decided.directCommit hL ?_
-    change MahiMahi.DirectCommitIn U V (w₂ (S.slotRound k)) L (S.slotRound k)
+    change MahiMahi.DirectCommitIn U V (w₂ (S.kind k)) L (S.slotRound k)
     rw [← hw _ hk]; exact hc
   | @directSkip k hs =>
     intro hk
     refine Decided.directSkip ?_
-    change MahiMahi.DirectSkipIn U V (w₂ (S.slotRound k)) (S.leader k) (S.slotRound k)
+    change MahiMahi.DirectSkipIn U V (w₂ (S.kind k)) (S.leader k) (S.slotRound k)
     rw [← hw _ hk]; exact hs
   | @indirectCommit k j A L i hkj he hj hmid hi hemp hL hlink _ ihj ihmid =>
     intro hk
@@ -181,9 +182,9 @@ theorem decided_congr {w₁ w₂ : ℕ → ℕ} {N : ℕ} {V : View Validator Bl
       (fun m h1 h2 h3 => ihmid m h1 h2 ((helig hk).mp h3)
         (le_trans (S.mono h2.le) hjN)) hi (fun i' hi' L' hL' hl => ?_) hL ?_ (fun _ _ _ h => h)
     · refine hemp i' hi' L' hL' ?_
-      change MahiMahi.CertifiedIn U (w₁ (S.slotRound k)) A L' (S.slotRound k)
+      change MahiMahi.CertifiedIn U (w₁ (S.kind k)) A L' (S.slotRound k)
       rw [hw _ hk]; exact hl
-    · change MahiMahi.CertifiedIn U (w₂ (S.slotRound k)) A L (S.slotRound k)
+    · change MahiMahi.CertifiedIn U (w₂ (S.kind k)) A L (S.slotRound k)
       rw [← hw _ hk]; exact hlink
   | @indirectSkip k j A hkj he hj hmid hnone ihj ihmid =>
     intro hk
@@ -192,17 +193,16 @@ theorem decided_congr {w₁ w₂ : ℕ → ℕ} {N : ℕ} {V : View Validator Bl
       (fun m h1 h2 h3 => ihmid m h1 h2 ((helig hk).mp h3)
         (le_trans (S.mono h2.le) hjN)) (fun i hi L' hL' hl => ?_)
     refine hnone i hi L' hL' ?_
-    change MahiMahi.CertifiedIn U (w₁ (S.slotRound k)) A L' (S.slotRound k)
+    change MahiMahi.CertifiedIn U (w₁ (S.kind k)) A L' (S.slotRound k)
     rw [hw _ hk]; exact hl
 
 /-- **A verdict reads the wavelength only at the slots the view decides**: its own, the anchor's
 and the skipped slots between, each of them decided in the view. Two wavelength functions that
-agree at every slot the view decides under the first give the same verdicts. -/
+agree at the kind of every slot the view decides under the first give the same verdicts. -/
 theorem decided_congr_of_decided {w₁ w₂ : ℕ → ℕ} {V : View Validator BlockId Payload U}
-    (hw : ∀ (r : ℕ) (v : Option BlockId), Decided w₁ U V r v →
-      w₁ (S.slotRound r) = w₂ (S.slotRound r))
+    (hw : ∀ (r : ℕ) (v : Option BlockId), Decided w₁ U V r v → w₁ (S.kind r) = w₂ (S.kind r))
     {k : ℕ} {v : Option BlockId} (h : Decided w₁ U V k v) : Decided w₂ U V k v := by
-  have helig : ∀ {k m : ℕ}, w₁ (S.slotRound k) = w₂ (S.slotRound k) →
+  have helig : ∀ {k m : ℕ}, w₁ (S.kind k) = w₂ (S.kind k) →
       ((steelheadAnchored Validator BlockId Payload w₂).Eligible k m ↔
         (steelheadAnchored Validator BlockId Payload w₁).Eligible k m) := by
     intro k m hk
@@ -212,12 +212,12 @@ theorem decided_congr_of_decided {w₁ w₂ : ℕ → ℕ} {V : View Validator B
   | @directCommit k L hL hc =>
     have hk := hw k _ (Decided.directCommit hL hc)
     refine Decided.directCommit hL ?_
-    change MahiMahi.DirectCommitIn U V (w₂ (S.slotRound k)) L (S.slotRound k)
+    change MahiMahi.DirectCommitIn U V (w₂ (S.kind k)) L (S.slotRound k)
     rw [← hk]; exact hc
   | @directSkip k hs =>
     have hk := hw k _ (Decided.directSkip hs)
     refine Decided.directSkip ?_
-    change MahiMahi.DirectSkipIn U V (w₂ (S.slotRound k)) (S.leader k) (S.slotRound k)
+    change MahiMahi.DirectSkipIn U V (w₂ (S.kind k)) (S.leader k) (S.slotRound k)
     rw [← hk]; exact hs
   | @indirectCommit k j A L i hkj he hj hmid hi hemp hL hlink hleast ihj ihmid =>
     have hk := hw k _ (Decided.indirectCommit hkj he hj hmid hi hemp hL hlink hleast)
@@ -225,28 +225,29 @@ theorem decided_congr_of_decided {w₁ w₂ : ℕ → ℕ} {V : View Validator B
       (fun m h1 h2 h3 => ihmid m h1 h2 ((helig hk).mp h3)) hi
       (fun i' hi' L' hL' hl => ?_) hL ?_ (fun _ _ _ h => h)
     · refine hemp i' hi' L' hL' ?_
-      change MahiMahi.CertifiedIn U (w₁ (S.slotRound k)) A L' (S.slotRound k)
+      change MahiMahi.CertifiedIn U (w₁ (S.kind k)) A L' (S.slotRound k)
       rw [hk]; exact hl
-    · change MahiMahi.CertifiedIn U (w₂ (S.slotRound k)) A L (S.slotRound k)
+    · change MahiMahi.CertifiedIn U (w₂ (S.kind k)) A L (S.slotRound k)
       rw [← hk]; exact hlink
   | @indirectSkip k j A hkj he hj hmid hnone ihj ihmid =>
     have hk := hw k _ (Decided.indirectSkip hkj he hj hmid hnone)
     refine Decided.indirectSkip hkj ((helig hk).mpr he) ihj
       (fun m h1 h2 h3 => ihmid m h1 h2 ((helig hk).mp h3)) (fun i hi L' hL' hl => ?_)
     refine hnone i hi L' hL' ?_
-    change MahiMahi.CertifiedIn U (w₁ (S.slotRound k)) A L' (S.slotRound k)
+    change MahiMahi.CertifiedIn U (w₁ (S.kind k)) A L' (S.slotRound k)
     rw [hk]; exact hl
 
 omit S in
 /-- **A verdict reads the schedule only at the slots its derivation names**: the slot's own and,
 above it, the anchor's and the eligible slots skipped on the way, each proposed at or below the
 round of a block the view holds. Two schedules that agree on the round of every slot and on the
-leader of every slot proposed at or below a bound `N` on the view's blocks give the same verdict
-at a slot proposed at or below `N`. -/
+leader and the kind of every slot proposed at or below a bound `N` on the view's blocks give the
+same verdict at a slot proposed at or below `N`. -/
 theorem decided_congr_slots {S₁ S₂ : Slots Validator} {w : ℕ → ℕ} {N : ℕ}
     {V : View Validator BlockId Payload U} (hN : ∀ b ∈ V.ids, (U.block b).round ≤ N)
     (hround : ∀ t, S₁.slotRound t = S₂.slotRound t)
-    (hlead : ∀ t, S₁.slotRound t ≤ N → S₁.leader t = S₂.leader t) {k : ℕ} {v : Option BlockId}
+    (hlead : ∀ t, S₁.slotRound t ≤ N → S₁.leader t = S₂.leader t)
+    (hkind : ∀ t, S₁.slotRound t ≤ N → S₁.kind t = S₂.kind t) {k : ℕ} {v : Option BlockId}
     (h : Decided (S := S₁) w U V k v) : S₁.slotRound k ≤ N → Decided (S := S₂) w U V k v := by
   -- the anchor of an indirect step is a block the view committed, so its round is under the
   -- bound too
@@ -262,60 +263,60 @@ theorem decided_congr_slots {S₁ S₂ : Slots Validator} {w : ℕ → ℕ} {N :
     change (L ∈ U.ids ∧ (U.block L).round = S₁.slotRound k ∧ (U.block L).creator = S₁.leader k) ↔
       (L ∈ U.ids ∧ (U.block L).round = S₂.slotRound k ∧ (U.block L).creator = S₂.leader k)
     rw [hround k, hlead k hk]
-  have helig : ∀ {k m : ℕ},
+  have helig : ∀ {k m : ℕ}, S₁.slotRound k ≤ N →
       ((steelheadAnchored Validator BlockId Payload w).Eligible (S := S₁) k m ↔
         (steelheadAnchored Validator BlockId Payload w).Eligible (S := S₂) k m) := by
-    intro k m
-    rw [AnchoredRule.eligible_iff (S := S₁), AnchoredRule.eligible_iff (S := S₂), hround k,
-      hround m]
+    intro k m hk
+    rw [AnchoredRule.eligible_iff (S := S₁), AnchoredRule.eligible_iff (S := S₂), hkind k hk,
+      hround k, hround m]
   induction h with
   | @directCommit k L hL hc =>
     intro hk
     refine Decided.directCommit (S := S₂) ((hleader hk).mp hL) ?_
-    rw [← hround k]; exact hc
+    rw [← hround k, ← hkind k hk]; exact hc
   | @directSkip k hs =>
     intro hk
     refine Decided.directSkip (S := S₂) ?_
-    change MahiMahi.DirectSkipIn U V (w (S₂.slotRound k)) (S₂.leader k) (S₂.slotRound k)
-    rw [← hround k, ← hlead k hk]; exact hs
+    change MahiMahi.DirectSkipIn U V (w (S₂.kind k)) (S₂.leader k) (S₂.slotRound k)
+    rw [← hround k, ← hlead k hk, ← hkind k hk]; exact hs
   | @indirectCommit k j A L i hkj he hj hmid hi hemp hL hlink _ ihj ihmid =>
     intro hk
     have hjN := hanchor hj
-    refine Decided.indirectCommit (S := S₂) hkj (helig.mp he) (ihj hjN)
-      (fun m h1 h2 h3 => ihmid m h1 h2 (helig.mpr h3) (le_trans (S₁.mono h2.le) hjN)) hi
+    refine Decided.indirectCommit (S := S₂) hkj ((helig hk).mp he) (ihj hjN)
+      (fun m h1 h2 h3 => ihmid m h1 h2 ((helig hk).mpr h3) (le_trans (S₁.mono h2.le) hjN)) hi
       (fun i' hi' L' hL' hl => ?_) ((hleader hk).mp hL) ?_ (fun _ _ _ h => h)
     · refine hemp i' hi' L' ((hleader hk).mpr hL') ?_
-      change MahiMahi.CertifiedIn U (w (S₁.slotRound k)) A L' (S₁.slotRound k)
-      rw [hround k]; exact hl
-    · change MahiMahi.CertifiedIn U (w (S₂.slotRound k)) A L (S₂.slotRound k)
-      rw [← hround k]; exact hlink
+      change MahiMahi.CertifiedIn U (w (S₁.kind k)) A L' (S₁.slotRound k)
+      rw [hround k, hkind k hk]; exact hl
+    · change MahiMahi.CertifiedIn U (w (S₂.kind k)) A L (S₂.slotRound k)
+      rw [← hround k, ← hkind k hk]; exact hlink
   | @indirectSkip k j A hkj he hj hmid hnone ihj ihmid =>
     intro hk
     have hjN := hanchor hj
-    refine Decided.indirectSkip (S := S₂) hkj (helig.mp he) (ihj hjN)
-      (fun m h1 h2 h3 => ihmid m h1 h2 (helig.mpr h3) (le_trans (S₁.mono h2.le) hjN))
+    refine Decided.indirectSkip (S := S₂) hkj ((helig hk).mp he) (ihj hjN)
+      (fun m h1 h2 h3 => ihmid m h1 h2 ((helig hk).mpr h3) (le_trans (S₁.mono h2.le) hjN))
       (fun i hi L' hL' hl => ?_)
     refine hnone i hi L' ((hleader hk).mpr hL') ?_
-    change MahiMahi.CertifiedIn U (w (S₁.slotRound k)) A L' (S₁.slotRound k)
-    rw [hround k]; exact hl
+    change MahiMahi.CertifiedIn U (w (S₁.kind k)) A L' (S₁.slotRound k)
+    rw [hround k, hkind k hk]; exact hl
 
 /-! ## The agreed output over an anchor's history -/
 
-/-- **No verdict of an anchor's history lies above the anchor's round**: a direct commit holds a
-certificate of the history at the slot's decision round, a direct skip a blame at its vote round,
-both at or above the slot's round and at or below the anchor's; an indirect verdict rests on an
-anchor of the history at a higher slot. -/
-theorem slotRound_le_of_decided_historyView {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) {A : BlockId}
-    (hA : A ∈ U.ids) {s : ℕ} {v : Option BlockId}
-    (h : Decided w U (U.historyView A hA) s v) : S.slotRound s ≤ (U.block A).round := by
+/-- **No verdict of a view lies above the rounds of its blocks**: a direct commit holds a
+certificate of the view at the slot's decision round, a direct skip a blame at its vote round,
+both at or above the slot's round and at or below the bound; an indirect verdict rests on an
+anchor of the view at a higher slot. -/
+theorem slotRound_le_of_decided {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ)
+    {V : View Validator BlockId Payload U} {N : ℕ} (hN : ∀ b ∈ V.ids, (U.block b).round ≤ N)
+    {s : ℕ} {v : Option BlockId} (h : Decided w U V s v) : S.slotRound s ≤ N := by
   induction h with
   | @directCommit k L _ hc =>
     obtain ⟨v, hv⟩ := Finset.card_pos.mp
       (lt_of_lt_of_le (MysticetiProperties.quorumCard_pos (Validator := Validator)) hc)
     obtain ⟨C, hC, hCV, -⟩ := mem_heldAuthors.mp hv
     have hCr := (mem_certificatesAt.mp hC).2.1
-    have hCA := round_le_of_mem_history hA hCV
-    have := hw (S.slotRound k)
+    have hCA := hN C hCV
+    have := hw (S.kind k)
     unfold MahiMahi.decisionRoundAt at hCr
     omega
   | @directSkip k hs =>
@@ -323,12 +324,19 @@ theorem slotRound_le_of_decided_historyView {w : ℕ → ℕ} (hw : ∀ r, 2 ≤
       (lt_of_lt_of_le (MysticetiProperties.quorumCard_pos (Validator := Validator)) hs)
     obtain ⟨q, hq, hqV, -⟩ := mem_heldAuthors.mp hv
     have hqr := (mem_blocksAt.mp (Finset.mem_filter.mp hq).1).2
-    have hqA := round_le_of_mem_history hA hqV
-    have := hw (S.slotRound k)
+    have hqA := hN q hqV
+    have := hw (S.kind k)
     unfold MahiMahi.votingRound at hqr
     omega
   | @indirectCommit k j _ _ _ hkj _ _ _ _ _ _ _ _ ihj _ => exact le_trans (S.mono hkj.le) ihj
   | @indirectSkip k j _ hkj _ _ _ _ ihj _ => exact le_trans (S.mono hkj.le) ihj
+
+/-- **No verdict of an anchor's history lies above the anchor's round**: the history holds no
+block above it. -/
+theorem slotRound_le_of_decided_historyView {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) {A : BlockId}
+    (hA : A ∈ U.ids) {s : ℕ} {v : Option BlockId}
+    (h : Decided w U (U.historyView A hA) s v) : S.slotRound s ≤ (U.block A).round :=
+  slotRound_le_of_decided hw (fun _ hb => round_le_of_mem_history hA hb) h
 
 /-- **No verdict of an anchor's history has its vote round above the anchor's**: a direct commit
 holds a certificate of the history at the slot's decision round, a direct skip a blame at its vote
@@ -337,7 +345,7 @@ round is bounded in turn. -/
 theorem voteRound_le_of_decided_historyView {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) {A : BlockId}
     (hA : A ∈ U.ids) {s : ℕ} {v : Option BlockId}
     (h : Decided w U (U.historyView A hA) s v) :
-    S.slotRound s + w (S.slotRound s) - 2 ≤ (U.block A).round := by
+    S.slotRound s + w (S.kind s) - 2 ≤ (U.block A).round := by
   induction h with
   | @directCommit k L _ hc =>
     obtain ⟨v, hv⟩ := Finset.card_pos.mp
@@ -345,7 +353,7 @@ theorem voteRound_le_of_decided_historyView {w : ℕ → ℕ} (hw : ∀ r, 2 ≤
     obtain ⟨C, hC, hCV, -⟩ := mem_heldAuthors.mp hv
     have hCr := (mem_certificatesAt.mp hC).2.1
     have hCA := round_le_of_mem_history hA hCV
-    have := hw (S.slotRound k)
+    have := hw (S.kind k)
     unfold MahiMahi.decisionRoundAt at hCr
     omega
   | @directSkip k hs =>
@@ -354,20 +362,20 @@ theorem voteRound_le_of_decided_historyView {w : ℕ → ℕ} (hw : ∀ r, 2 ≤
     obtain ⟨q, hq, hqV, -⟩ := mem_heldAuthors.mp hv
     have hqr := (mem_blocksAt.mp (Finset.mem_filter.mp hq).1).2
     have hqA := round_le_of_mem_history hA hqV
-    have := hw (S.slotRound k)
+    have := hw (S.kind k)
     unfold MahiMahi.votingRound at hqr
     omega
   | @indirectCommit k j _ _ _ _ he _ _ _ _ _ _ _ ihj _ =>
     rw [AnchoredRule.eligible_iff] at he
     simp only [steelheadAnchored_waveAt] at he
-    have := hw (S.slotRound k)
-    have := hw (S.slotRound j)
+    have := hw (S.kind k)
+    have := hw (S.kind j)
     omega
   | @indirectSkip k j _ _ he _ _ _ ihj _ =>
     rw [AnchoredRule.eligible_iff] at he
     simp only [steelheadAnchored_waveAt] at he
-    have := hw (S.slotRound k)
-    have := hw (S.slotRound j)
+    have := hw (S.kind k)
+    have := hw (S.kind j)
     omega
 
 /-- **The advance is unique**: the new cursor is the least undecided slot at or past the old one,
@@ -428,33 +436,15 @@ theorem AgreedAdvance.exists {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) {A : Bloc
       exact ⟨s, L, (Finset.mem_Ico.mp hs').1, (Finset.mem_Ico.mp hs').2, hd,
         by rw [max_eq_right (not_le.mp hle).le, hsup]⟩
 
-/-- **The advance reads the wavelength at or below the anchor's round only**: every verdict it
-reads is at a slot of the anchor's history, or refuted there, and the history holds no block above
-the anchor's round; so two wavelength functions agreeing up to that round give one advance. -/
-theorem AgreedAdvance.congr {w₁ w₂ : ℕ → ℕ} (hw₁ : ∀ r, 2 ≤ w₁ r) (hw₂ : ∀ r, 2 ≤ w₂ r)
-    {A : BlockId} (hA : A ∈ U.ids) (hw : ∀ r, r ≤ (U.block A).round → w₁ r = w₂ r)
-    {next next' last last' : ℕ} (h : AgreedAdvance U w₁ A hA next next' last last') :
-    AgreedAdvance U w₂ A hA next next' last last' := by
-  have hN : ∀ b ∈ (U.historyView A hA).ids, (U.block b).round ≤ (U.block A).round :=
-    fun b hb => round_le_of_mem_history hA hb
-  have fwd : ∀ {s : ℕ} {v : Option BlockId}, Decided w₁ U (U.historyView A hA) s v →
-      Decided w₂ U (U.historyView A hA) s v :=
-    fun hd => decided_congr hN hw hd (slotRound_le_of_decided_historyView hw₁ hA hd)
-  have bwd : ∀ {s : ℕ} {v : Option BlockId}, Decided w₂ U (U.historyView A hA) s v →
-      Decided w₁ U (U.historyView A hA) s v :=
-    fun hd => decided_congr hN (fun r hr => (hw r hr).symm) hd
-      (slotRound_le_of_decided_historyView hw₂ hA hd)
-  exact ⟨h.le, fun s hs₁ hs₂ => (h.decided s hs₁ hs₂).imp fun _ hv => fwd hv,
-    fun v hv => h.stuck v (bwd hv), h.last_ge, fun s L hs₁ hs₂ hd => h.last_le s L hs₁ hs₂ (bwd hd),
-    h.last_mem.imp id fun ⟨s, L, hs₁, hs₂, hd, hs⟩ => ⟨s, L, hs₁, hs₂, fwd hd, hs⟩⟩
-
 omit S in
-/-- **The advance reads the schedule at or below the anchor's round only**, as it reads the
-wavelength: two schedules agreeing on every slot's round and on the leaders of the slots proposed
-at or below the anchor's round give one advance. -/
-theorem AgreedAdvance.congr_slots {S₁ S₂ : Slots Validator} {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r)
+/-- **The advance reads the schedule at or below the anchor's round only**: every verdict it
+reads is at a slot of the anchor's history, or refuted there, and the history holds no block above
+the anchor's round; so two schedules agreeing on every slot's round and on the leaders and kinds
+of the slots proposed at or below the anchor's round give one advance. -/
+theorem AgreedAdvance.congr_slots {S₁ S₂ : Slots Validator} {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ)
     {A : BlockId} (hA : A ∈ U.ids) (hround : ∀ t, S₁.slotRound t = S₂.slotRound t)
     (hlead : ∀ t, S₁.slotRound t ≤ (U.block A).round → S₁.leader t = S₂.leader t)
+    (hkind : ∀ t, S₁.slotRound t ≤ (U.block A).round → S₁.kind t = S₂.kind t)
     {next next' last last' : ℕ} (h : AgreedAdvance (S := S₁) U w A hA next next' last last') :
     AgreedAdvance (S := S₂) U w A hA next next' last last' := by
   have hN : ∀ b ∈ (U.historyView A hA).ids, (U.block b).round ≤ (U.block A).round :=
@@ -462,13 +452,14 @@ theorem AgreedAdvance.congr_slots {S₁ S₂ : Slots Validator} {w : ℕ → ℕ
   have fwd : ∀ {s : ℕ} {v : Option BlockId},
       Decided (S := S₁) w U (U.historyView A hA) s v →
         Decided (S := S₂) w U (U.historyView A hA) s v :=
-    fun hd => decided_congr_slots (S₁ := S₁) (S₂ := S₂) hN hround hlead hd
+    fun hd => decided_congr_slots (S₁ := S₁) (S₂ := S₂) hN hround hlead hkind hd
       (slotRound_le_of_decided_historyView (S := S₁) hw hA hd)
   have bwd : ∀ {s : ℕ} {v : Option BlockId},
       Decided (S := S₂) w U (U.historyView A hA) s v →
         Decided (S := S₁) w U (U.historyView A hA) s v :=
     fun hd => decided_congr_slots (S₁ := S₂) (S₂ := S₁) hN (fun t => (hround t).symm)
-      (fun t ht => (hlead t (by rw [hround t]; exact ht)).symm) hd
+      (fun t ht => (hlead t (by rw [hround t]; exact ht)).symm)
+      (fun t ht => (hkind t (by rw [hround t]; exact ht)).symm) hd
       (slotRound_le_of_decided_historyView (S := S₂) hw hA hd)
   exact ⟨AgreedAdvance.le (S := S₁) h,
     fun s hs₁ hs₂ => (AgreedAdvance.decided (S := S₁) h s hs₁ hs₂).imp fun _ hv => fwd hv,
@@ -506,40 +497,31 @@ theorem periodAt_unique (hwa : 3 ≤ wa) {upd : UpdateRule BlockId} {k₀ : ℕ}
       exact (ha'.not_noAnchor hwa hn).elim
     | keep hp' _ => exact ih hp'
 
-/-- The adaptive wavelength is at least three rounds everywhere when both waves are. -/
-theorem adaptiveWave_ge {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) (per : ℕ → ℕ) (r : ℕ) :
-    3 ≤ adaptiveWave ws wa I per r := by
-  unfold adaptiveWave periodic
-  split <;> omega
-
 /-- Intervals run in round order, so a round below `N` lies in an interval below `N`'s. -/
 theorem intervalOf_mono {r N : ℕ} (h : r ≤ N) : intervalOf I r ≤ intervalOf I N :=
   Nat.div_le_div_right (Nat.sub_le_sub_right h 1)
 
-/-- Two period sequences agreeing below `N`'s interval give one wavelength below `N`. -/
-theorem adaptiveWave_congr {ws : ℕ} {per₁ per₂ : ℕ → ℕ} {N : ℕ}
+/-- Two period sequences agreeing below `N`'s interval give one kind below `N`. -/
+theorem adaptiveKind_congr {per₁ per₂ : ℕ → ℕ} {N : ℕ}
     (h : ∀ j, j ≤ intervalOf I N → per₁ j = per₂ j) {r : ℕ} (hr : r ≤ N) :
-    adaptiveWave ws wa I per₁ r = adaptiveWave ws wa I per₂ r := by
-  unfold adaptiveWave
+    adaptiveKind I per₁ r = adaptiveKind I per₂ r := by
+  unfold adaptiveKind
   rw [h _ (intervalOf_mono hr)]
 
 omit S in
 /-- **The state of an interval reads the period sequence below that interval only**: the anchor
 of interval `j` lies in interval `j`, its history holds verdicts at rounds at or below the
-anchor's, and both the adaptive wavelength and the adaptive schedule at such a round are fixed by
-the period of the round's interval, at or below `j`. Two sequences agreeing below an interval
-give one derivation of its state, each at its own wavelength and on its own schedule. -/
+anchor's, and the adaptive schedule's kind and leader at such a round are fixed by the period of
+the round's interval, at or below `j`. Two sequences agreeing below an interval give one
+derivation of its state, each on its own schedule. -/
 theorem periodAt_congr_per {ws : ℕ} (hws : 2 ≤ ws) (hwa : 2 ≤ wa) {known : ℕ → Validator}
     {upd : UpdateRule BlockId} {k₀ : ℕ} {V : View Validator BlockId Payload U}
     {per₁ per₂ : ℕ → ℕ} {j : ℕ} {st : ScanState}
     (hp : PeriodAt (S := adaptiveSlots coin known I per₁) I wa coin upd k₀ U V
-      (adaptiveWave ws wa I per₁) j st)
+      (wavelength ws wa) j st)
     (h : ∀ i, i < j → per₁ i = per₂ i) :
     PeriodAt (S := adaptiveSlots coin known I per₂) I wa coin upd k₀ U V
-      (adaptiveWave ws wa I per₂) j st := by
-  have hw2 : ∀ (per : ℕ → ℕ) (r : ℕ), 2 ≤ adaptiveWave ws wa I per r := fun per r => by
-    unfold adaptiveWave periodic
-    split <;> omega
+      (wavelength ws wa) j st := by
   induction hp with
   | zero => exact PeriodAt.zero (S := adaptiveSlots coin known I per₂)
   | @anchor j r next' last' st A hA hp ha hadv ih =>
@@ -548,39 +530,40 @@ theorem periodAt_congr_per {ws : ℕ} (hws : 2 ≤ ws) (hwa : 2 ≤ wa) {known :
       intro i hi
       rw [ha.mem] at hi
       exact h i (by omega)
-    have hw : ∀ ρ, ρ ≤ (U.block A).round →
-        adaptiveWave ws wa I per₁ ρ = adaptiveWave ws wa I per₂ ρ :=
-      fun ρ hρ => adaptiveWave_congr (ws := ws) hagree (by rw [ha.round_eq] at hρ; exact hρ)
+    have hkind' : ∀ t, t ≤ (U.block A).round → adaptiveKind I per₁ t = adaptiveKind I per₂ t :=
+      fun t ht => adaptiveKind_congr hagree (r := t) (by rw [ha.round_eq] at ht; exact ht)
+    have hkind : ∀ t, (adaptiveSlots coin known I per₁).slotRound t ≤ (U.block A).round →
+        (adaptiveSlots coin known I per₁).kind t = (adaptiveSlots coin known I per₂).kind t :=
+      fun t ht => hkind' t ht
     have hlead : ∀ t, (adaptiveSlots coin known I per₁).slotRound t ≤ (U.block A).round →
         (adaptiveSlots coin known I per₁).leader t =
           (adaptiveSlots coin known I per₂).leader t := by
       intro t ht
-      change (if IsAsync (per₁ (intervalOf I t)) t then coin t else known t) =
-        (if IsAsync (per₂ (intervalOf I t)) t then coin t else known t)
-      rw [hagree (intervalOf I t) (intervalOf_mono (by rw [ha.round_eq] at ht; exact ht))]
-    have hadv' := AgreedAdvance.congr (S := adaptiveSlots coin known I per₁) (hw2 per₁)
-      (hw2 per₂) hA hw hadv
+      change (if adaptiveKind I per₁ t = 1 then coin t else known t) =
+        (if adaptiveKind I per₂ t = 1 then coin t else known t)
+      rw [hkind' t ht]
     exact PeriodAt.anchor (S := adaptiveSlots coin known I per₂) (ih fun i hi => h i (by omega))
       ha (AgreedAdvance.congr_slots (S₁ := adaptiveSlots coin known I per₁)
-        (S₂ := adaptiveSlots coin known I per₂) (hw2 per₂) hA (fun _ => rfl) hlead hadv')
+        (S₂ := adaptiveSlots coin known I per₂) (wavelength_two_le hws hwa) hA (fun _ => rfl)
+        hlead hkind hadv)
   | @keep j st hp hn ih =>
     exact PeriodAt.keep (S := adaptiveSlots coin known I per₂) (ih fun i hi => h i (by omega)) hn
 
 omit S in
 /-- **SH10b, the sequences.** Two views that derived the state of every interval below `N`'s,
-each reading its agreed output at its own adaptive wavelength and on its own adaptive schedule,
-derived the same periods there, by strong induction on the interval: the sequences agree below
-an interval, so the second view's derivation of its state is one at the first sequence's
-wavelength and schedule (`periodAt_congr_per`), and SH10a makes the two states one. -/
+each reading its agreed output on its own adaptive schedule, derived the same periods there, by
+strong induction on the interval: the sequences agree below an interval, so the second view's
+derivation of its state is one on the first sequence's schedule (`periodAt_congr_per`), and
+SH10a makes the two states one. -/
 theorem adaptive_periods_agree {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) {known : ℕ → Validator}
     {upd : UpdateRule BlockId} {k₀ N : ℕ} {V₁ V₂ : View Validator BlockId Payload U}
     {per₁ per₂ : ℕ → ℕ}
     (h₁ : ∀ j, j ≤ intervalOf I N → ∃ st,
       PeriodAt (S := adaptiveSlots coin known I per₁) I wa coin upd k₀ U V₁
-        (adaptiveWave ws wa I per₁) j st ∧ per₁ j = st.period)
+        (wavelength ws wa) j st ∧ per₁ j = st.period)
     (h₂ : ∀ j, j ≤ intervalOf I N → ∃ st,
       PeriodAt (S := adaptiveSlots coin known I per₂) I wa coin upd k₀ U V₂
-        (adaptiveWave ws wa I per₂) j st ∧ per₂ j = st.period) :
+        (wavelength ws wa) j st ∧ per₂ j = st.period) :
     ∀ j, j ≤ intervalOf I N → per₁ j = per₂ j := by
   intro j
   induction j using Nat.strong_induction_on with
@@ -595,36 +578,36 @@ theorem adaptive_periods_agree {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) {kno
 
 omit S in
 /-- **SH10b, the verdicts.** The sequences agree below `N`'s interval (`adaptive_periods_agree`),
-so the second view's verdict is one at the first sequence's wavelength and on its schedule, both
+so the second view's verdict is one on the first sequence's schedule, whose kinds and leaders are
 read at rounds at or below `N` only, and SH2 applies. -/
 theorem adaptive_decided_unique {ws : ℕ} (hws : 3 ≤ ws) (hwa : 3 ≤ wa) {known : ℕ → Validator}
     {upd : UpdateRule BlockId} {k₀ N : ℕ} {V₁ V₂ : View Validator BlockId Payload U}
     {per₁ per₂ : ℕ → ℕ} (hN : ∀ b ∈ U.ids, (U.block b).round ≤ N) {k : ℕ} (hk : k ≤ N)
     (h₁ : ∀ j, j ≤ intervalOf I N → ∃ st,
       PeriodAt (S := adaptiveSlots coin known I per₁) I wa coin upd k₀ U V₁
-        (adaptiveWave ws wa I per₁) j st ∧ per₁ j = st.period)
+        (wavelength ws wa) j st ∧ per₁ j = st.period)
     (h₂ : ∀ j, j ≤ intervalOf I N → ∃ st,
       PeriodAt (S := adaptiveSlots coin known I per₂) I wa coin upd k₀ U V₂
-        (adaptiveWave ws wa I per₂) j st ∧ per₂ j = st.period)
+        (wavelength ws wa) j st ∧ per₂ j = st.period)
     {v₁ v₂ : Option BlockId}
-    (d₁ : Decided (S := adaptiveSlots coin known I per₁) (adaptiveWave ws wa I per₁) U V₁ k v₁)
-    (d₂ : Decided (S := adaptiveSlots coin known I per₂) (adaptiveWave ws wa I per₂) U V₂ k v₂) :
+    (d₁ : Decided (S := adaptiveSlots coin known I per₁) (wavelength ws wa) U V₁ k v₁)
+    (d₂ : Decided (S := adaptiveSlots coin known I per₂) (wavelength ws wa) U V₂ k v₂) :
     v₁ = v₂ := by
   have hper := adaptive_periods_agree hws hwa h₁ h₂
   have hNV : ∀ b ∈ V₂.ids, (U.block b).round ≤ N := fun b hb => hN b (V₂.subset_ids hb)
-  -- the wavelength first, then the schedule
-  have d₂w : Decided (S := adaptiveSlots coin known I per₂) (adaptiveWave ws wa I per₁) U V₂ k v₂ :=
-    decided_congr (S := adaptiveSlots coin known I per₂) hNV
-      (fun r hr => (adaptiveWave_congr (ws := ws) hper hr).symm) d₂ hk
-  have d₂' : Decided (S := adaptiveSlots coin known I per₁) (adaptiveWave ws wa I per₁) U V₂ k v₂ :=
+  have hkind' : ∀ t, t ≤ N → adaptiveKind I per₂ t = adaptiveKind I per₁ t :=
+    fun t ht => (adaptiveKind_congr hper (r := t) ht).symm
+  have hkind : ∀ t, (adaptiveSlots coin known I per₂).slotRound t ≤ N →
+      (adaptiveSlots coin known I per₂).kind t = (adaptiveSlots coin known I per₁).kind t :=
+    fun t ht => hkind' t ht
+  have d₂' : Decided (S := adaptiveSlots coin known I per₁) (wavelength ws wa) U V₂ k v₂ :=
     decided_congr_slots (S₁ := adaptiveSlots coin known I per₂)
       (S₂ := adaptiveSlots coin known I per₁) hNV (fun _ => rfl) (fun t ht => by
-        change (if IsAsync (per₂ (intervalOf I t)) t then coin t else known t) =
-          (if IsAsync (per₁ (intervalOf I t)) t then coin t else known t)
-        rw [hper (intervalOf I t) (intervalOf_mono ht)]) d₂w hk
+        change (if adaptiveKind I per₂ t = 1 then coin t else known t) =
+          (if adaptiveKind I per₁ t = 1 then coin t else known t)
+        rw [hkind' t ht]) hkind d₂ hk
   exact AnchoredRule.decided_unique (S := adaptiveSlots coin known I per₁)
-    (steelheadLaws fun r => by have := adaptiveWave_ge (I := I) hws hwa per₁ r; omega) trivial d₁
-    V₂ v₂ d₂'
+    (steelheadLaws (wavelength_two_le (by omega) (by omega))) trivial d₁ V₂ v₂ d₂'
 
 /-! ## SH10c, SH10d -/
 
@@ -875,22 +858,15 @@ theorem lt_of_anchor_far {V : View Validator BlockId Payload U} (hI : 0 < I) {s 
 variable {ws : ℕ} {upd : UpdateRule BlockId} {k₀ : ℕ} {V : View Validator BlockId Payload U}
   {per : ℕ → ℕ}
 
-/-- The adaptive wavelength is at least two rounds everywhere when both waves are: what the laws
-need to carry a verdict between views. -/
-theorem adaptiveWave_two_le (hws : 2 ≤ ws) (hwa : 2 ≤ wa) (r : ℕ) :
-    2 ≤ adaptiveWave ws wa I per r := by
-  unfold adaptiveWave periodic
-  split <;> omega
-
 /-- **The failover fires at every anchor more than `I` rounds above an undecided slot**: the state
 the interval was derived under is stalled below the slot (SH10j), the advance stays there, so the
 last commit lies below the slot and the test holds. -/
 theorem period_eq_one_of_anchor_far (hws : 2 ≤ ws) (hwa : 3 ≤ wa)
     (hid : ∀ t, S.slotRound t = t) (hI : 0 < I) {s j : ℕ} (h₁ : 1 ≤ s)
-    (hund : ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s v) (hj : intervalOf I s + 1 < j)
-    {st' : ScanState} (hp' : PeriodAt I wa coin upd k₀ U V (adaptiveWave ws wa I per) (j + 1) st')
+    (hund : ∀ v, ¬ Decided (wavelength ws wa) U V s v) (hj : intervalOf I s + 1 < j)
+    {st' : ScanState} (hp' : PeriodAt I wa coin upd k₀ U V (wavelength ws wa) (j + 1) st')
     {r : ℕ} {A : BlockId} (hA : IntervalAnchor I wa coin U V j r A) : st'.period = 1 := by
-  have hw2 : ∀ r, 2 ≤ adaptiveWave ws wa I per r := adaptiveWave_two_le hws (by omega)
+  have hw2 : ∀ κ, 2 ≤ wavelength ws wa κ := wavelength_two_le hws (by omega)
   rcases hp'.succ_cases with ⟨st, r', A', next', last', hA', hp, hA'', hadv, rfl⟩ |
     ⟨st, hp, hn, rfl⟩
   · dsimp only
@@ -906,19 +882,20 @@ interval and at every anchored interval after it, and the period is `1` from the
 up to the run; the run's rounds then carry wave `wa`, its coins commit their candidates directly,
 and the drain (SH9) decides every slot below the run, the slot among them. -/
 theorem output_liveness (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa)
-    (hid : ∀ t, S.slotRound t = t) (hI : 0 < I) {b : ℕ}
+    (hid : ∀ t, S.slotRound t = t) (hkind : ∀ t, S.kind t = adaptiveKind I per t) (hI : 0 < I)
+    {b : ℕ}
     (hper : ∀ j, j ≤ intervalOf I (b + wa - 1) → ∃ st,
-      PeriodAt I wa coin upd k₀ U V (adaptiveWave ws wa I per) j st ∧ per j = st.period)
-    (hlead : ∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r)
+      PeriodAt I wa coin upd k₀ U V (wavelength ws wa) j st ∧ per j = st.period)
+    (hlead : ∀ r, S.kind r = 1 → S.leader r = coin r)
     {s j₁ r₁ : ℕ} {A : BlockId} (h₁ : 1 ≤ s) (hs : intervalOf I s + 1 < j₁)
     (hA : IntervalAnchor I wa coin U V j₁ r₁ A) (hb : (j₁ + 1) * I < b)
     (hgood : ∀ i, i < wa → coin (b + i) ∈ MahiMahi.goodAt U wa (b + i))
     (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa (b + wa - 1))) :
-    ∃ v, Decided (adaptiveWave ws wa I per) U V s v := by
+    ∃ v, Decided (wavelength ws wa) U V s v := by
   classical
-  by_cases hdec : ∃ v, Decided (adaptiveWave ws wa I per) U V s v
+  by_cases hdec : ∃ v, Decided (wavelength ws wa) U V s v
   · exact hdec
-  replace hdec : ∀ v, ¬ Decided (adaptiveWave ws wa I per) U V s v := fun v hv => hdec ⟨v, hv⟩
+  replace hdec : ∀ v, ¬ Decided (wavelength ws wa) U V s v := fun v hv => hdec ⟨v, hv⟩
   -- the run lies in intervals past the anchored one, all of them derived
   have hbj : j₁ + 1 ≤ intervalOf I b := le_intervalOf_of_lt hI hb
   have hbN : intervalOf I b ≤ intervalOf I (b + wa - 1) := intervalOf_mono (by omega)
@@ -951,24 +928,20 @@ theorem output_liveness (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa)
     have hhi : intervalOf I (b + i) ≤ intervalOf I (b + wa - 1) := intervalOf_mono (by omega)
     have h1 := hone (intervalOf I (b + i) - (j₁ + 1)) (by omega)
     rwa [show j₁ + 1 + (intervalOf I (b + i) - (j₁ + 1)) = intervalOf I (b + i) by omega] at h1
-  have hwave : ∀ i, i < wa → adaptiveWave ws wa I per (b + i) = wa := by
+  have hasync : ∀ i, i < wa → S.kind (b + i) = 1 := by
     intro i hi
-    unfold adaptiveWave
-    rw [hper1 i hi]
-    exact periodic_one _
-  have hlead' : ∀ i, i < wa → S.leader (b + i) = coin (b + i) := by
-    intro i hi
-    refine hlead (b + i) ?_
-    rw [hper1 i hi]
-    exact Nat.mod_one _
+    rw [hkind]
+    unfold adaptiveKind
+    rw [hper1 i hi, periodicKind_one]
+  have hlead' : ∀ i, i < wa → S.leader (b + i) = coin (b + i) :=
+    fun i hi => hlead (b + i) (hasync i hi)
   -- the run's candidates commit directly in a view holding their decision rounds
-  have hrun : ∀ i, i < wa → ∃ L, Decided (adaptiveWave ws wa I per) U V (b + i) (some L) := by
+  have hrun : ∀ i, i < wa → ∃ L, Decided (wavelength ws wa) U V (b + i) (some L) := by
     intro i hi
     obtain ⟨L, hL, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp (hgood i hi)
     refine ⟨L, Decided.directCommit ⟨hL, by rw [hid]; exact hLr, hLc.trans (hlead' i hi).symm⟩ ?_⟩
-    change MahiMahi.DirectCommitIn U V (adaptiveWave ws wa I per (S.slotRound (b + i))) L
-      (S.slotRound (b + i))
-    rw [hid, hwave i hi]
+    change MahiMahi.DirectCommitIn U V (wavelength ws wa (S.kind (b + i))) L (S.slotRound (b + i))
+    rw [hid, hasync i hi, wavelength_one]
     refine MahiMahiProperties.directCommitIn_of_coversUpto hdc (hV.mono ?_)
     unfold MahiMahi.decisionRoundAt
     omega
@@ -979,8 +952,8 @@ theorem output_liveness (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa)
     have h3 : j₁ * I ≤ (j₁ + 1) * I := Nat.mul_le_mul_right I (by omega)
     omega
   exact allDecidedBelowOfRun
-    (fun r => Nat.le_of_succ_le (adaptiveWave_two_le (I := I) (per := per) hws (by omega) r))
-    (fun r => by unfold adaptiveWave periodic; split <;> omega) hid hrun s hsb
+    (fun t => Nat.le_of_succ_le (wavelength_two_le hws (by omega) (S.kind t)))
+    (fun t => wavelength_le hle (S.kind t)) hid hrun s hsb
 
 /-! ## SH14b -/
 
@@ -1022,15 +995,16 @@ theorem chainCommit_of_good {V : View Validator BlockId Payload U} {r N : ℕ}
 round, which gives the interval its anchor once SH7a has settled every chain verdict there; the
 run in the next interval is the one SH14 needs. -/
 theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : ∀ t, S.slotRound t = t)
-    (hI : 0 < I) (hlead : ∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r)
+    (hkind : ∀ t, S.kind t = adaptiveKind I per t) (hI : 0 < I)
+    (hlead : ∀ r, S.kind r = 1 → S.leader r = coin r)
     {K c N : ℕ} (hwaK : wa ≤ K) (hcK : c + K ≤ I)
     (hrun : MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c K N)
     (hV : V.CoversUpto N)
     (hper : ∀ j, j ≤ intervalOf I N → ∃ st,
-      PeriodAt I wa coin upd k₀ U V (adaptiveWave ws wa I per) j st ∧ per j = st.period)
+      PeriodAt I wa coin upd k₀ U V (wavelength ws wa) j st ∧ per j = st.period)
     (s : ℕ) (h₁ : 1 ≤ s)
     (hN : MahiMahi.decisionRoundAt wa ((intervalOf I s + 3) * I + c + K) ≤ N) :
-    ∃ v, Decided (adaptiveWave ws wa I per) U V s v := by
+    ∃ v, Decided (wavelength ws wa) U V s v := by
   have hmul2 : (intervalOf I s + 2) * I = intervalOf I s * I + I + I := by
     rw [Nat.add_mul, Nat.two_mul, ← Nat.add_assoc]
   have hmul3 : (intervalOf I s + 3) * I = intervalOf I s * I + I + I + I := by
@@ -1065,7 +1039,7 @@ theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : �
     change MahiMahi.decisionRoundAt wa ((intervalOf I s + 3) * I + 1 + c + K - 1) ≤ N
     unfold MahiMahi.decisionRoundAt
     omega)
-  refine output_liveness hws hle hwa hid hI (b := b) (fun j hj => hper j ?_) hlead h₁
+  refine output_liveness hws hle hwa hid hkind hI (b := b) (fun j hj => hper j ?_) hlead h₁
     (by omega) hA (by omega) (fun i hi => hgb i (by omega)) (hV.mono (by
       unfold MahiMahi.decisionRoundAt
       omega))
@@ -1077,15 +1051,15 @@ theorem all_decided (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hid : �
 coins above the interval settle every chain verdict below them (SH7c), so interval `j` has its
 anchor, and they are the run SH14 needs. -/
 theorem output_liveness_of_runs (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa)
-    (hid : ∀ t, S.slotRound t = t) (hI : 0 < I)
-    (hlead : ∀ r, IsAsync (per (intervalOf I r)) r → S.leader r = coin r) {b : ℕ}
+    (hid : ∀ t, S.slotRound t = t) (hkind : ∀ t, S.kind t = adaptiveKind I per t) (hI : 0 < I)
+    (hlead : ∀ r, S.kind r = 1 → S.leader r = coin r) {b : ℕ}
     (hper : ∀ j', j' ≤ intervalOf I (b + wa - 1) → ∃ st,
-      PeriodAt I wa coin upd k₀ U V (adaptiveWave ws wa I per) j' st ∧ per j' = st.period)
+      PeriodAt I wa coin upd k₀ U V (wavelength ws wa) j' st ∧ per j' = st.period)
     {s j : ℕ} (h₁ : 1 ≤ s) (hs : intervalOf I s + 1 < j)
     (hgood : coin (j * I + 1) ∈ MahiMahi.goodAt U wa (j * I + 1))
     (hb : (j + 1) * I < b) (hgoodb : ∀ i, i < wa → coin (b + i) ∈ MahiMahi.goodAt U wa (b + i))
     (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa (b + wa - 1))) :
-    ∃ v, Decided (adaptiveWave ws wa I per) U V s v := by
+    ∃ v, Decided (wavelength ws wa) U V s v := by
   have hmul : (j + 1) * I = j * I + I := by rw [Nat.add_mul, Nat.one_mul]
   -- the run above settles every chain verdict of interval j
   have hall := chainAllDecidedBelowOfRun (by omega) hgoodb hV
@@ -1097,7 +1071,7 @@ theorem output_liveness_of_runs (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ 
   obtain ⟨r₁, A, hA⟩ := IntervalAnchor.of_committed
     (fun r _ hr => hall r (by have := le_of_intervalOf hI hr; omega))
     ⟨j * I + 1, by omega, hmem, L, hL⟩
-  exact output_liveness hws hle hwa hid hI hper hlead h₁ hs hA hb hgoodb hV
+  exact output_liveness hws hle hwa hid hkind hI hper hlead h₁ hs hA hb hgoodb hV
 
 end Slots
 

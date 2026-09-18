@@ -19,7 +19,7 @@ of `RotatingStall.lean`, with the coin naming validator `2` at every round and t
 * **the stalled slot is decided** (`rt_recovers`, SH14 on data): the scan derives the periods `4`,
   `4`, `1`, `1` over the first four intervals, interval `2` finds its anchor at round `17`, the
   coin names a committed candidate at rounds `25` to `29`, and a view holding round `33` decides
-  slot `3` at the adaptive wavelength of that sequence.
+  slot `3` on the schedule whose kinds that sequence names.
 
 The horizon `N` is a parameter throughout: the chain commit is proved from the DAG's structure,
 not by evaluation, which a wave of five on a hundred blocks does not admit.
@@ -43,8 +43,8 @@ abbrev rtSlots : Slots (Fin 4) := adaptiveSlots rtCoin rtKnown 8 rtPer
 -- `h.decided` from synthesising the sibling files' global one.
 attribute [local instance] rtSlots
 
-/-- Its adaptive wavelength. -/
-abbrev rtW : ℕ → ℕ := adaptiveWave 3 5 8 rtPer
+/-- The wavelength of the pair, read at that schedule's kinds. -/
+abbrev rtW : ℕ → ℕ := wavelength 3 5
 
 /-! ## Every round chain-commits -/
 
@@ -188,39 +188,40 @@ theorem rt_anchor (N j : ℕ) (hN : 8 * j + 5 ≤ N) :
 /-! ## The stall inside an anchor's history
 
 Every verdict of the history of an anchor at round `17` or below lies at a slot below round `17`,
-where the adaptive wavelength of `rtPer` is the periodic one at period `4` and the schedule names
-the known leader at the synchronous rounds; SH8 then applies with its hypotheses asked at those
-slots alone, and no synchronous slot there commits. -/
+where the schedule of `rtPer` carries the kinds of period `4` and names the known leader at the
+synchronous rounds; SH8 then applies with its hypotheses asked at those slots alone, and no
+synchronous slot there commits. -/
 
-/-- Below round `17` the adaptive wavelength is the periodic one at period `4`. -/
-theorem rtW_eq_periodic {r : ℕ} (hr : r ≤ 16) : rtW r = periodic 3 5 4 r := by
+/-- Below round `17` the schedule assigns the kinds of period `4`. -/
+theorem rtSlots_kind {r : ℕ} (hr : r ≤ 16) : rtSlots.kind r = periodicKind 4 r := by
   have h : rtPer (intervalOf 8 r) = 4 := by
     unfold rtPer intervalOf
     rw [if_pos (by omega)]
-  change periodic 3 5 (rtPer (intervalOf 8 r)) r = periodic 3 5 4 r
+  change periodicKind (rtPer (intervalOf 8 r)) r = periodicKind 4 r
   rw [h]
 
+/-- A synchronous slot below round `17` sits at a round that is not a multiple of `4`. -/
+theorem rt_not_async16 {r : ℕ} (hr : r ≤ 16) (hk : rtSlots.kind r = 0) : ¬ IsAsync 4 r := by
+  intro ha
+  rw [rtSlots_kind hr, periodicKind_eq_one_iff.mpr ha] at hk
+  exact absurd hk (by decide)
+
 /-- Every wavelength of `rtW` is at least three rounds. -/
-theorem rtW_ge_three (r : ℕ) : 3 ≤ rtW r := by
-  unfold rtW adaptiveWave periodic
-  split <;> omega
+theorem rtW_ge_three (κ : ℕ) : 3 ≤ rtW κ := wavelength_three_le (by decide) (by decide) κ
 
 /-- Below round `17` the schedule names the known leader at a synchronous round. -/
 theorem rtSlots_leader_sync {r : ℕ} (hr : r ≤ 16) (hs : ¬ IsAsync 4 r) :
     rtSlots.leader r = rtKnown r := by
-  have h : rtPer (intervalOf 8 r) = 4 := by
-    unfold rtPer intervalOf
-    rw [if_pos (by omega)]
-  change (if IsAsync (rtPer (intervalOf 8 r)) r then rtCoin r else rtKnown r) = rtKnown r
-  rw [h, if_neg hs]
+  change (if adaptiveKind 8 rtPer r = 1 then rtCoin r else rtKnown r) = rtKnown r
+  rw [if_neg (fun h => hs (periodicKind_eq_one_iff.mp (by rw [← rtSlots_kind hr]; exact h)))]
 
 /-- No synchronous candidate below round `17` is certified, on the schedule of `rtPer`. -/
-theorem rt_hcert16 (N : ℕ) : ∀ (j : ℕ) (L : ℕ), j ≤ 16 → ¬ IsAsync 4 j →
+theorem rt_hcert16 (N : ℕ) : ∀ (j : ℕ) (L : ℕ), j ≤ 16 → rtSlots.kind j = 0 →
     IsLeaderBlock (S := rtSlots) (rtDag N) j L → MahiMahi.certificates (rtDag N) 3 L j = ∅ := by
-  intro j L hj hs hL
+  intro j L hj hk hL
   have hround : L / 4 = j := hL.2.1
   have hc := hL.2.2
-  rw [rtSlots_leader_sync hj hs] at hc
+  rw [rtSlots_leader_sync hj (rt_not_async16 hj hk)] at hc
   have hcv : L % 4 = j % 4 := congrArg Fin.val hc
   have : L = 4 * j + j % 4 := by omega
   rw [this]
@@ -228,47 +229,43 @@ theorem rt_hcert16 (N : ℕ) : ∀ (j : ℕ) (L : ℕ), j ≤ 16 → ¬ IsAsync 
 
 /-- No synchronous slot below round `17` is directly skipped in any view, on the schedule of
 `rtPer`. -/
-theorem rt_hskip16 (N : ℕ) (V : View (Fin 4) ℕ Unit (rtDag N)) : ∀ j, j ≤ 16 → ¬ IsAsync 4 j →
-    ¬ MahiMahi.DirectSkipIn (rtDag N) V 3 (rtSlots.leader j) j := by
-  intro j hj hs
+theorem rt_hskip16 (N : ℕ) (V : View (Fin 4) ℕ Unit (rtDag N)) : ∀ j, j ≤ 16 →
+    rtSlots.kind j = 0 → ¬ MahiMahi.DirectSkipIn (rtDag N) V 3 (rtSlots.leader j) j := by
+  intro j hj hk
+  have hs := rt_not_async16 hj hk
   rw [rtSlots_leader_sync hj hs]
   exact rt_no_skip N j hs V
 
 /-- Every verdict of the history of an anchor at round `17` or below lies at a slot below round
-`17`, at either wavelength. -/
+`17`, at any wavelength function of three rounds or more. -/
 theorem rt_history_slot_le {N A : ℕ} (hA : A ∈ (rtDag N).ids)
-    (hρ : ((rtDag N).block A).round ≤ 17) {w : ℕ → ℕ} (hw : ∀ r, 3 ≤ w r) {j : ℕ}
+    (hρ : ((rtDag N).block A).round ≤ 17) {w : ℕ → ℕ} (hw : ∀ κ, 3 ≤ w κ) {j : ℕ}
     {v : Option ℕ} (hd : Decided (S := rtSlots) w (rtDag N) ((rtDag N).historyView A hA) j v) :
     j ≤ 16 := by
-  have := voteRound_le_of_decided_historyView (S := rtSlots) (fun r => by have := hw r; omega)
+  have := voteRound_le_of_decided_historyView (S := rtSlots) (fun κ => by have := hw κ; omega)
     hA hd
-  change j + w j - 2 ≤ ((rtDag N).block A).round at this
-  have := hw j
+  change j + w (rtSlots.kind j) - 2 ≤ ((rtDag N).block A).round at this
+  have := hw (rtSlots.kind j)
   omega
 
 /-- **Slot `3` is undecided in the history of every anchor at round `17` or below.** -/
 theorem rt_stall_history {N A : ℕ} (hA : A ∈ (rtDag N).ids)
     (hρ : ((rtDag N).block A).round ≤ 17) (v : Option ℕ) :
-    ¬ Decided (S := rtSlots) rtW (rtDag N) ((rtDag N).historyView A hA) 3 v := by
-  intro hd
-  have hd' : Decided (S := rtSlots) (periodic 3 5 4) (rtDag N) ((rtDag N).historyView A hA) 3 v :=
-    decided_congr_of_decided
-      (fun r u hr => rtW_eq_periodic (rt_history_slot_le hA hρ rtW_ge_three hr)) hd
-  exact stall_of_pred (S := rtSlots) (by decide) (by decide) (fun _ => rfl) (Q := fun j => j ≤ 16)
-    (fun j u hj => rt_history_slot_le hA hρ (fun r => by unfold periodic; split <;> omega) hj)
-    (rt_hcert16 N) (rt_hskip16 N _) (by decide) hd'
+    ¬ Decided (S := rtSlots) rtW (rtDag N) ((rtDag N).historyView A hA) 3 v :=
+  fun hd => stall_of_pred (S := rtSlots) (by decide) (by decide) (fun _ => rfl)
+    (Q := fun j => j ≤ 16) (fun j hj => rtSlots_kind hj)
+    (fun j u hj => rt_history_slot_le hA hρ rtW_ge_three hj)
+    (rt_hcert16 N) (rt_hskip16 N _) (by decide) hd
 
 /-- **No synchronous slot below round `17` commits in such a history.** -/
-theorem rt_sync_no_commit_history {N A : ℕ} (hA : A ∈ (rtDag N).ids)
-    (hρ : ((rtDag N).block A).round ≤ 17) {s : ℕ} (hs : s ≤ 16) (hsync : ¬ IsAsync 4 s) (L : ℕ) :
-    ¬ Decided (S := rtSlots) rtW (rtDag N) ((rtDag N).historyView A hA) s (some L) := by
-  intro hd
-  have hd' : Decided (S := rtSlots) (periodic 3 5 4) (rtDag N) ((rtDag N).historyView A hA) s
-      (some L) :=
-    decided_congr_of_decided
-      (fun r u hr => rtW_eq_periodic (rt_history_slot_le hA hρ rtW_ge_three hr)) hd
-  exact not_commit_sync_of_pred (S := rtSlots) (fun _ => rfl) (Q := fun j => j ≤ 16) (rt_hcert16 N)
-    hs hsync hd'
+theorem rt_sync_no_commit_history {N A : ℕ} (hA : A ∈ (rtDag N).ids) {s : ℕ} (hs : s ≤ 16)
+    (hsync : ¬ IsAsync 4 s) (L : ℕ) :
+    ¬ Decided (S := rtSlots) rtW (rtDag N) ((rtDag N).historyView A hA) s (some L) :=
+  fun hd => not_commit_sync_of_pred (S := rtSlots) (fun _ => rfl) (Q := fun j => j ≤ 16)
+    (rt_hcert16 N) hs
+    (by
+      rw [rtSlots_kind hs]
+      exact periodicKind_eq_zero_of_ne_one fun h => hsync (periodicKind_eq_one_iff.mp h)) hd
 
 /-! ## The advances -/
 
@@ -281,9 +278,9 @@ theorem rt_advance0 {N : ℕ} (h6 : 6 ∈ (rtDag N).ids) {next' last' : ℕ}
       ¬ Decided (S := rtSlots) rtW (rtDag N) ((rtDag N).historyView 6 h6) s v := by
     intro s v hs hd
     have := voteRound_le_of_decided_historyView (S := rtSlots)
-      (fun r => by have := rtW_ge_three r; omega) h6 hd
-    change s + rtW s - 2 ≤ 6 / 4 at this
-    have := rtW_ge_three s
+      (fun κ => by have := rtW_ge_three κ; omega) h6 hd
+    change s + rtW (rtSlots.kind s) - 2 ≤ 6 / 4 at this
+    have := rtW_ge_three (rtSlots.kind s)
     omega
   have hnext : next' = 1 := by
     rcases Nat.lt_or_ge 1 next' with hlt | hge
@@ -311,7 +308,7 @@ theorem rt_advance_stalled {N A : ℕ} (hA : A ∈ (rtDag N).ids)
   refine ⟨le_trans h1 h.le, hn, ?_⟩
   rcases h.last_mem with hl | ⟨s, L, hs1, hs2, hd, -⟩
   · exact hl
-  · exact absurd hd (rt_sync_no_commit_history hA hρ (by omega) (by unfold IsAsync; omega) L)
+  · exact absurd hd (rt_sync_no_commit_history hA (by omega) (by unfold IsAsync; omega) L)
 
 /-! ## The failover fires -/
 
@@ -324,7 +321,7 @@ theorem rt_failover (N : ℕ) (hN : 13 ≤ N) :
       ∃ next', 1 ≤ next' ∧ next' ≤ 3 ∧
         PeriodAt (S := rtSlots) 8 5 rtCoin (rtUpd N) 4 (rtDag N) (View.full (rtDag N)) rtW 2
           ⟨1, next', 0⟩ := by
-  have hw2 : ∀ r, 2 ≤ rtW r := fun r => by have := rtW_ge_three r; omega
+  have hw2 : ∀ κ, 2 ≤ rtW κ := fun κ => by have := rtW_ge_three κ; omega
   have h6 : 6 ∈ (rtDag N).ids := rt_mem_ids (by omega)
   have h38 : 38 ∈ (rtDag N).ids := rt_mem_ids (by omega)
   -- interval 0: the anchor at round 1, over whose history the advance stays put
@@ -355,7 +352,7 @@ theorem rt_recovers (N : ℕ) (hN : 33 ≤ N) :
       PeriodAt (S := rtSlots) 8 5 rtCoin (rtUpd N) 4 (rtDag N) (View.full (rtDag N)) rtW j st ∧
         rtPer j = st.period) ∧
       ∃ v, Decided (S := rtSlots) rtW (rtDag N) (View.full (rtDag N)) 3 v := by
-  have hw2 : ∀ r, 2 ≤ rtW r := fun r => by have := rtW_ge_three r; omega
+  have hw2 : ∀ κ, 2 ≤ rtW κ := fun κ => by have := rtW_ge_three κ; omega
   have h70 : 70 ∈ (rtDag N).ids := rt_mem_ids (by omega)
   obtain ⟨hp1, n₂, hn₂, hn₂', hp2⟩ := rt_failover N (by omega)
   -- interval 2: the anchor at round 17, over whose history the advance consumes no commit
@@ -375,12 +372,12 @@ theorem rt_recovers (N : ℕ) (hN : 33 ≤ N) :
   refine ⟨hstates, ?_⟩
   -- SH14: the anchored interval 2 lies two past slot 3's, and the coin runs at rounds 25 to 29
   refine output_liveness (S := rtSlots) (by decide) (by decide) (by decide) (fun _ => rfl)
-    (by decide) (b := 25) (fun j hj => hstates j (by unfold intervalOf at hj; omega)) ?_
-    (s := 3) (by decide) (by decide) (rt_anchor N 2 (by omega)) (by decide) ?_
+    (fun _ => rfl) (by decide) (b := 25) (fun j hj => hstates j (by unfold intervalOf at hj; omega))
+    ?_ (s := 3) (by decide) (by decide) (rt_anchor N 2 (by omega)) (by decide) ?_
     (View.coversUpto_full _ _)
   · intro r hr
-    change (if IsAsync (rtPer (intervalOf 8 r)) r then rtCoin r else rtKnown r) = rtCoin r
-    rw [if_pos hr]
+    change (if adaptiveKind 8 rtPer r = 1 then rtCoin r else rtKnown r) = rtCoin r
+    exact if_pos (show adaptiveKind 8 rtPer r = 1 from hr)
   · intro i hi
     exact MahiMahi.mem_goodAt.mpr ⟨4 * (25 + i) + 2, rt_mem_ids (by omega),
       by change (4 * (25 + i) + 2) / 4 = 25 + i; omega,

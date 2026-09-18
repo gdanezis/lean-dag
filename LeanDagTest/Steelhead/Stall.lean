@@ -39,13 +39,14 @@ open LeanDag LeanDag.Steelhead
 
 set_option maxRecDepth 4096
 
-/-- One slot per round, led by `(k + 1) % 4`. -/
+/-- One slot per round, led by `(k + 1) % 4`, every fourth round of the asynchronous kind. -/
 local instance stSlots : Slots (Fin 4) :=
-  Slots.uniformSingle 1 (by omega) (fun k => ⟨(k + 1) % 4, by omega⟩)
+  { Slots.uniformSingle 1 (by omega) (fun k => ⟨(k + 1) % 4, by omega⟩) with
+    kind := fun k => periodicKind 4 k }
 
-/-- The period-four wavelength of the 3f+1 pair: `5` at rounds `0` and
-`4`, `3` elsewhere. -/
-abbrev wst : ℕ → ℕ := periodic 3 5 4
+/-- The wavelength of the 3f+1 pair: `5` at the asynchronous kind, so at rounds `0` and `4`,
+`3` elsewhere. -/
+abbrev wst : ℕ → ℕ := wavelength 3 5
 
 /-! ## `st20`: five rounds, each leader block delivered to `f + 1` -/
 
@@ -132,7 +133,7 @@ theorem st20_slot0 : Steelhead.Decided wst st20 (View.full st20) 0 (some 1) :=
 
 /-- No synchronous candidate is certified: on data through round `4`, and
 vacuously above, where no block sits. -/
-theorem st20_hcert : ∀ (j : ℕ) (L : Fin 20), ¬ IsAsync 4 j → IsLeaderBlock st20 j L →
+theorem st20_hcert : ∀ (j : ℕ) (L : Fin 20), stSlots.kind j = 0 → IsLeaderBlock st20 j L →
     MahiMahi.certificates st20 3 L j = ∅ := by
   intro j L hj hL
   rcases Nat.lt_or_ge 4 j with h4 | h4
@@ -145,7 +146,7 @@ theorem st20_hcert : ∀ (j : ℕ) (L : Fin 20), ¬ IsAsync 4 j → IsLeaderBloc
 
 /-- No synchronous slot is directly skipped in the full view: on data
 through round `4`, and above it no voting round has a block. -/
-theorem st20_hskip : ∀ j, ¬ IsAsync 4 j →
+theorem st20_hskip : ∀ j, stSlots.kind j = 0 →
     ¬ MahiMahi.DirectSkipIn st20 (View.full st20) 3 (stSlots.leader j) j := by
   intro j hj h
   rcases Nat.lt_or_ge 4 j with h4 | h4
@@ -158,7 +159,7 @@ theorem st20_hskip : ∀ j, ¬ IsAsync 4 j →
     interval_cases j <;> decide
 
 /-- A view holds fewer blamers than the full view. -/
-theorem st20_hskip_view (V : View (Fin 4) (Fin 20) Unit st20) : ∀ j, ¬ IsAsync 4 j →
+theorem st20_hskip_view (V : View (Fin 4) (Fin 20) Unit st20) : ∀ j, stSlots.kind j = 0 →
     ¬ MahiMahi.DirectSkipIn st20 V 3 (stSlots.leader j) j :=
   fun j hj h => st20_hskip j hj (h.mono (by rw [View.full_ids]; exact V.subset_ids))
 
@@ -168,7 +169,9 @@ theorem st20_hskip_view (V : View (Fin 4) (Fin 20) Unit st20) : ∀ j, ¬ IsAsyn
 asynchronous slots `0` and `4` do. -/
 theorem st20_stall_view (V : View (Fin 4) (Fin 20) Unit st20) (v : Option (Fin 20)) :
     ¬ Steelhead.Decided wst st20 V 3 v :=
-  fun h => Steelhead.stall (by decide) (by decide) (fun _ => by simp) st20_hcert
+  fun h => Steelhead.stall (by decide) (by decide) (fun s => by change 1 * (s / 1) = s; simp)
+    (fun _ => rfl)
+    st20_hcert
     (st20_hskip_view V) (by decide) h
 
 /-- The stall in the full view. -/

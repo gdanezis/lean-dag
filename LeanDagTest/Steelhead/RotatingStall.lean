@@ -25,8 +25,8 @@ and `5`, a probe at every round and hysteresis `1/2`, the parameters the impleme
 The period sequence is asked to be `4` on the intervals the record's rounds fall in, the
 replay's answer at every anchor; the failover derives `1` from interval `2` on instead
 (`Failover.lean`), so this is the schedule of the replay alone, and what it shows is that the
-replay does not resolve the stall by itself. A derivation for slot `3` reads no wavelength
-above the record's top round (`decided_congr`).
+replay does not resolve the stall by itself. A derivation for slot `3` names no slot above the
+record's top round (`slotRound_le_of_decided`), so SH8's hypotheses are asked below it.
 -/
 
 namespace LeanDagTest
@@ -203,6 +203,21 @@ theorem rt_no_skip_above {N j : ℕ} (hj : N < j) (V : View (Fin 4) ℕ Unit (rt
   rw [hempty] at hs
   simp [heldAuthors, creatorsOf] at hs
 
+/-- Below the horizon the adaptive schedule assigns the kinds of period `4`. -/
+theorem rt_kind {N : ℕ} {coin : ℕ → Fin 4} {per : ℕ → ℕ}
+    (hper : ∀ j, j ≤ intervalOf 8 N → per j = 4) {r : ℕ} (hr : r ≤ N) :
+    (adaptiveSlots coin rtKnown 8 per).kind r = periodicKind 4 r := by
+  change periodicKind (per (intervalOf 8 r)) r = periodicKind 4 r
+  rw [hper (intervalOf 8 r) (Nat.div_le_div_right (by omega))]
+
+/-- A synchronous slot below the horizon sits at a round that is not a multiple of `4`. -/
+theorem rt_not_async {N : ℕ} {coin : ℕ → Fin 4} {per : ℕ → ℕ}
+    (hper : ∀ j, j ≤ intervalOf 8 N → per j = 4) {r : ℕ} (hr : r ≤ N)
+    (hk : (adaptiveSlots coin rtKnown 8 per).kind r = 0) : ¬ IsAsync 4 r := by
+  intro ha
+  rw [rt_kind hper hr, periodicKind_eq_one_iff.mpr ha] at hk
+  exact absurd hk (by decide)
+
 /-- The known leader's candidate at a synchronous round is its block `4r + (r mod 4)`, on the
 adaptive schedule whose period is `4` at every interval the record reaches. -/
 theorem rt_known_candidate {N : ℕ} {coin : ℕ → Fin 4} {per : ℕ → ℕ}
@@ -215,44 +230,54 @@ theorem rt_known_candidate {N : ℕ} {coin : ℕ → Fin 4} {per : ℕ → ℕ}
     omega
   have hc := hL.2.2
   change ((rtDag N).block L).creator =
-    (if IsAsync (per (intervalOf 8 r)) r then coin r else rtKnown r) at hc
-  rw [hper (intervalOf 8 r) (Nat.div_le_div_right (by omega)), if_neg hr] at hc
+    (if adaptiveKind 8 per r = 1 then coin r else rtKnown r) at hc
+  rw [if_neg (fun h => hr (periodicKind_eq_one_iff.mp
+    (by rw [← rt_kind (coin := coin) hper hrN]; exact h)))] at hc
   have hround : L / 4 = r := hL.2.1
   have hcv : L % 4 = r % 4 := congrArg Fin.val hc
   omega
 
-/-- No synchronous candidate is certified, on the adaptive schedule at period `4`. -/
+/-- No synchronous candidate below the horizon is certified, on the adaptive schedule at period
+`4`. -/
 theorem rt_hcert (N : ℕ) (coin : ℕ → Fin 4) (per : ℕ → ℕ)
     (hper : ∀ j, j ≤ intervalOf 8 N → per j = 4) :
-    ∀ (j : ℕ) (L : ℕ), ¬ IsAsync 4 j →
+    ∀ (j : ℕ) (L : ℕ), j ≤ N → (adaptiveSlots coin rtKnown 8 per).kind j = 0 →
       IsLeaderBlock (S := adaptiveSlots coin rtKnown 8 per) (rtDag N) j L →
       MahiMahi.certificates (rtDag N) 3 L j = ∅ := by
-  intro j L hj hL
-  rw [rt_known_candidate hper hj hL]
+  intro j L hjN hk hL
+  rw [rt_known_candidate hper (rt_not_async hper hjN hk) hL]
   exact rt_certificates_empty N j
 
-/-- No synchronous slot is directly skipped in any view, on the adaptive schedule at period `4`. -/
+/-- No synchronous slot below the horizon is directly skipped in any view, on the adaptive
+schedule at period `4`. -/
 theorem rt_hskip (N : ℕ) (coin : ℕ → Fin 4) (V : View (Fin 4) ℕ Unit (rtDag N)) (per : ℕ → ℕ)
     (hper : ∀ j, j ≤ intervalOf 8 N → per j = 4) :
-    ∀ j, ¬ IsAsync 4 j → ¬ MahiMahi.DirectSkipIn (rtDag N) V 3
-      ((adaptiveSlots coin rtKnown 8 per).leader j) j := by
-  intro j hj
-  by_cases hjN : j ≤ N
-  · change ¬ MahiMahi.DirectSkipIn (rtDag N) V 3
-      (if IsAsync (per (intervalOf 8 j)) j then coin j else rtKnown j) j
-    rw [hper (intervalOf 8 j) (Nat.div_le_div_right (by omega)), if_neg hj]
-    exact rt_no_skip N j hj V
-  · exact rt_no_skip_above (by omega) V _
+    ∀ j, j ≤ N → (adaptiveSlots coin rtKnown 8 per).kind j = 0 →
+      ¬ MahiMahi.DirectSkipIn (rtDag N) V 3 ((adaptiveSlots coin rtKnown 8 per).leader j) j := by
+  intro j hjN hk
+  have hj := rt_not_async hper hjN hk
+  change ¬ MahiMahi.DirectSkipIn (rtDag N) V 3
+    (if adaptiveKind 8 per j = 1 then coin j else rtKnown j) j
+  rw [if_neg (fun h => hj (periodicKind_eq_one_iff.mp
+    (by rw [← rt_kind (coin := coin) hper hjN]; exact h)))]
+  exact rt_no_skip N j hj V
 
 /-! ## The stall, and the period -/
 
 /-- **At period `4` slot `3` is never decided**, in any view, for any coin, on the adaptive
-schedule whose period is `4` at every interval the record reaches: SH8 on `rtDag N`. -/
+schedule whose period is `4` at every interval the record reaches: SH8 on `rtDag N`, its
+hypotheses asked at the slots below the horizon, which are the slots a view can decide. -/
 theorem rt_stall (N : ℕ) (coin : ℕ → Fin 4) (V : View (Fin 4) ℕ Unit (rtDag N)) (per : ℕ → ℕ)
     (hper : ∀ j, j ≤ intervalOf 8 N → per j = 4) (v : Option ℕ) :
-    ¬ Decided (S := adaptiveSlots coin rtKnown 8 per) (periodic 3 5 4) (rtDag N) V 3 v :=
-  fun h => Steelhead.stall (S := adaptiveSlots coin rtKnown 8 per) (by decide) (by decide)
-    (fun _ => rfl) (rt_hcert N coin per hper) (rt_hskip N coin V per hper) (by decide) h
+    ¬ Decided (S := adaptiveSlots coin rtKnown 8 per) (wavelength 3 5) (rtDag N) V 3 v :=
+  fun h => Steelhead.stall_of_pred (S := adaptiveSlots coin rtKnown 8 per) (by decide) (by decide)
+    (fun _ => rfl) (Q := fun j => j ≤ N) (fun j hj => rt_kind hper hj)
+    (fun j _ hd => by
+      have hjN := slotRound_le_of_decided (S := adaptiveSlots coin rtKnown 8 per)
+        (wavelength_two_le (ws := 3) (wa := 5) (by decide) (by decide))
+        (fun b hb => rt_round_le (V.subset_ids hb)) hd
+      exact hjN)
+    (rt_hcert N coin per hper) (rt_hskip N coin V per hper) (by decide) h
 
 /-- **Algorithm 2 answers period `4` at every anchor** of `rtDag N`, at hysteresis `1/2` and
 whatever the anchor block: the window of an anchor spans at most nine rounds, on which periods
@@ -261,41 +286,26 @@ its failover, not through the replay. -/
 theorem rt_update_four (N A : ℕ) : rtUpd N A 4 = 4 :=
   anchorUpdate_half_retains (rtDag N) rtConfig rfl rfl rfl A
 
-/-- **The adaptive output never decides slot `3`** at any period sequence that is `4` on the
-intervals the record reaches, the replay's answer at every anchor and not the failover's: a
-derivation for slot `3` reads no wavelength above the record's top round. -/
-theorem rt_adaptive_stall (N : ℕ) (hN : 3 ≤ N) (coin : ℕ → Fin 4)
-    (V : View (Fin 4) ℕ Unit (rtDag N)) (per : ℕ → ℕ)
-    (hper : ∀ j, j ≤ intervalOf 8 N → per j = 4) (v : Option ℕ) :
-    ¬ Decided (S := adaptiveSlots coin rtKnown 8 per) (adaptiveWave 3 5 8 per) (rtDag N) V 3 v := by
-  intro h
-  refine rt_stall N coin V per hper v
-    (decided_congr (S := adaptiveSlots coin rtKnown 8 per) (w₂ := periodic 3 5 4) (N := N)
-      (fun b hb => rt_round_le (V.subset_ids hb)) ?_ h hN)
-  intro r hr
-  unfold adaptiveWave
-  rw [hper (intervalOf 8 r) (Nat.div_le_div_right (by omega))]
-
 /-- **No settled prefix of the adaptive output has more than three slots.** -/
-theorem rt_prefix_le_three (N : ℕ) (hN : 3 ≤ N) (coin : ℕ → Fin 4)
+theorem rt_prefix_le_three (N : ℕ) (coin : ℕ → Fin 4)
     (V : View (Fin 4) ℕ Unit (rtDag N)) (per : ℕ → ℕ)
     (hper : ∀ j, j ≤ intervalOf 8 N → per j = 4) (g : ℕ → Option ℕ) (n : ℕ)
-    (hg : ∀ r, r < n → Decided (S := adaptiveSlots coin rtKnown 8 per) (adaptiveWave 3 5 8 per)
+    (hg : ∀ r, r < n → Decided (S := adaptiveSlots coin rtKnown 8 per) (wavelength 3 5)
       (rtDag N) V r (g r)) :
     n ≤ 3 := by
   by_contra hn
-  exact rt_adaptive_stall N hN coin V per hper (g 3) (hg 3 (by omega))
+  exact rt_stall N coin V per hper (g 3) (hg 3 (by omega))
 
 /-- **No block above round `2` is ever output**: the ledger of a settled prefix holds the
 histories of committed leaders at slots `0` to `2`, whose rounds are at most `2`. -/
-theorem rt_no_output_above_two (N : ℕ) (hN : 3 ≤ N) (coin : ℕ → Fin 4)
+theorem rt_no_output_above_two (N : ℕ) (coin : ℕ → Fin 4)
     (V : View (Fin 4) ℕ Unit (rtDag N)) (per : ℕ → ℕ)
     (hper : ∀ j, j ≤ intervalOf 8 N → per j = 4) (g : ℕ → Option ℕ) (n : ℕ)
     (hg : ∀ r, r < n →
-      Decided (S := adaptiveSlots coin rtKnown 8 per) (adaptiveWave 3 5 8 per) (rtDag N) V r (g r))
+      Decided (S := adaptiveSlots coin rtKnown 8 per) (wavelength 3 5) (rtDag N) V r (g r))
     {b : ℕ} (hb : b ∈ ledgerSet (rtDag N) g n) : ((rtDag N).block b).round ≤ 2 := by
   obtain ⟨k, hk, L, hL, hr⟩ := hb
-  have hn := rt_prefix_le_three N hN coin V per hper g n hg
+  have hn := rt_prefix_le_three N coin V per hper g n hg
   have hd := hg k (by omega)
   rw [hL] at hd
   have hlead := AnchoredRule.isLeaderBlock_of_decided (S := adaptiveSlots coin rtKnown 8 per) hd
@@ -316,7 +326,7 @@ theorem rt_honest_block (N : ℕ) (hN : 3 ≤ N) :
 
 #print axioms rtDag
 #print axioms rt_update_four
-#print axioms rt_adaptive_stall
+#print axioms rt_stall
 #print axioms rt_no_output_above_two
 
 end LeanDagTest

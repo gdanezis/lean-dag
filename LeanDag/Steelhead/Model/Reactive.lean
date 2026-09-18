@@ -55,7 +55,7 @@ structure ReactiveS (U : BlockUniverse Validator BlockId Payload) (T : Finset Va
       (built v (S.slotRound k) + timeout (S.slotRound k) ≤ built v (S.slotRound k + 1) ∧
         (L ∈ holds v (built v (S.slotRound k + 1)) → L ∈ (U.block c).refs))
   /-- **The certificate wait, at the wave of three and the rounds that carry the leader wait.** -/
-  cert_or_wait : ∀ v ∈ T, ∀ k : ℕ, waits (S.slotRound k) → w (S.slotRound k) = 3 →
+  cert_or_wait : ∀ v ∈ T, ∀ k : ℕ, waits (S.slotRound k) → w (S.kind k) = 3 →
     S.slotRound k + 2 ≤ N → S.leader k ∈ T → ∀ L, IsLeaderBlock U k L →
     ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + 2 →
     MahiMahi.Certifies U c L ∨

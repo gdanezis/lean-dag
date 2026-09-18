@@ -38,11 +38,13 @@ variable [F : Faults Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 
 /-- **The chain schedule**: one slot per round, led by `coin r`, the
-coin-elected leader of round `r`. The coin is modelled by its effect, as
-in the Mahi-Mahi arc: `coin` is any map, and the unpredictability clause
-of the liveness statements is what a coin revealed after the votes makes
-true. -/
-abbrev chainSlots (coin : ℕ → Validator) : Slots Validator := Slots.identity coin
+coin-elected leader of round `r`, every slot of the asynchronous kind,
+since the chain is the asynchronous rule read at every round. The coin
+is modelled by its effect, as in the Mahi-Mahi arc: `coin` is any map,
+and the unpredictability clause of the liveness statements is what a
+coin revealed after the votes makes true. -/
+abbrev chainSlots (coin : ℕ → Validator) : Slots Validator :=
+  { Slots.identity coin with kind := fun _ => 1 }
 
 /-- **The chain verdict** at wave `wa` under the coin `coin`: Mahi-Mahi's
 relation at the chain schedule. `ChainDecided wa coin U V r v` is the

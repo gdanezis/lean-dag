@@ -89,22 +89,22 @@ round above the candidate reach the certifier through the DAG; at the wave of th
 certifier references them itself. -/
 theorem reactive_certifies {U : BlockUniverse Validator BlockId Payload} {w : ℕ → ℕ}
     {waits : ℕ → Prop} {T : Finset Validator} {N R k : ℕ} (rs : ReactiveS U T N w waits)
-    (hw : ∀ r, 3 ≤ w r) (hT : T ⊆ (Correct : Finset Validator))
+    (hw : ∀ κ, 3 ≤ w κ) (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card) (hgst : rs.gst ≤ R)
     (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) (hR : R ≤ S.slotRound k)
-    (hwait : waits (S.slotRound k)) (hN : S.slotRound k + (w (S.slotRound k) - 1) ≤ N)
+    (hwait : waits (S.slotRound k)) (hN : S.slotRound k + (w (S.kind k) - 1) ≤ N)
     (hlead : S.leader k ∈ T) {L : BlockId} (hL : IsLeaderBlock U k L) {v : Validator} (hv : v ∈ T)
     {c : BlockId} (hc : c ∈ U.ids) (hcc : (U.block c).creator = v)
-    (hcr : (U.block c).round = S.slotRound k + (w (S.slotRound k) - 1)) :
+    (hcr : (U.block c).round = S.slotRound k + (w (S.kind k) - 1)) :
     MahiMahi.Certifies U c L := by
-  have hw3 := hw (S.slotRound k)
+  have hw3 := hw (S.kind k)
   have hLc : (U.block L).creator ∈ T := hL.2.2 ▸ hlead
   have hvotes := rs.votes hcard hgst hto hR hwait (by omega) hlead hL
   have hpop1 : PopulatedOn U T (S.slotRound k + 1) :=
     rs.toPaceCore.populatedOn hcard (S.slotRound k + 1) (by omega)
-  rcases Nat.lt_or_ge (w (S.slotRound k)) 4 with hlt | hge
+  rcases Nat.lt_or_ge (w (S.kind k)) 4 with hlt | hge
   · -- the wave of three: the certifier references the votes, or waited and holds them all
-    have hw3' : w (S.slotRound k) = 3 := by omega
+    have hw3' : w (S.kind k) = 3 := by omega
     have hcr2 : (U.block c).round = S.slotRound k + 2 := by rw [hcr, hw3']
     rcases rs.cert_or_wait v hv k hwait hw3' (by omega) hlead L hL c hc hcc hcr2 with
       hcert | hwaited
@@ -133,7 +133,7 @@ theorem reactive_certifies {U : BlockUniverse Validator BlockId Payload} {w : �
   · -- a wave of four or more: the votes reach the certifier through the DAG
     have hreach := MahiMahi.reaches_of_votes hT hcard hpop1 hL.1 hL.2.1 hLc
       fun q hq hqr hqc => hvotes _ hqc q hq rfl hqr
-    refine MahiMahi.certifies_of_refs_reach (w := w (S.slotRound k)) (r := S.slotRound k)
+    refine MahiMahi.certifies_of_refs_reach (w := w (S.kind k)) (r := S.slotRound k)
       (by omega) hc (by unfold MahiMahi.decisionRoundAt; omega) hL.1 (hT hLc) ?_
     intro q hq
     have hqids := U.complete c hc q hq
@@ -145,11 +145,11 @@ rule under the reactive discipline, in every view holding its decision round:
 `shSupport_directCommitIn` at the certifiers above. -/
 theorem reactive_commits {U : BlockUniverse Validator BlockId Payload} {w : ℕ → ℕ}
     {waits : ℕ → Prop} {T : Finset Validator} {V : View Validator BlockId Payload U} {N R k : ℕ}
-    (rs : ReactiveS U T N w waits) (hw : ∀ r, 3 ≤ w r) (hT : T ⊆ (Correct : Finset Validator))
+    (rs : ReactiveS U T N w waits) (hw : ∀ κ, 3 ≤ w κ) (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card) (hgst : rs.gst ≤ R)
     (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) (hR : R ≤ S.slotRound k)
-    (hwait : waits (S.slotRound k)) (hN : S.slotRound k + (w (S.slotRound k) - 1) ≤ N)
-    (hV : V.CoversUpto (S.slotRound k + (w (S.slotRound k) - 1))) (hlead : S.leader k ∈ T) :
+    (hwait : waits (S.slotRound k)) (hN : S.slotRound k + (w (S.kind k) - 1) ≤ N)
+    (hV : V.CoversUpto (S.slotRound k + (w (S.kind k) - 1))) (hlead : S.leader k ∈ T) :
     ∃ L, IsLeaderBlock U k L ∧ Decided w U V k (some L) := by
   obtain ⟨L, hL, hin⟩ :=
     SteelheadProperties.shSupport_directCommitIn (fun r => by have := hw r; omega) S V hcard
@@ -165,7 +165,7 @@ there. The claim is only as strong as `ViewPace` is inhabited, which is a questi
 structure and not about this arc. -/
 theorem timed_commits {U : BlockUniverse Validator BlockId Payload} {w : ℕ → ℕ}
     {T : Finset Validator} {V : View Validator BlockId Payload U} {N N' k : ℕ}
-    (vp : ViewPace U T N) (hw : ∀ r, 3 ≤ w r) (hT : T ⊆ (Correct : Finset Validator))
+    (vp : ViewPace U T N) (hw : ∀ κ, 3 ≤ w κ) (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card) (hrate : Rated vp.timeout)
     (hR : max (2 * vp.delay + vp.proc) vp.gst ≤ S.slotRound k)
     (hpop : ∀ r, max (2 * vp.delay + vp.proc) vp.gst ≤ r → r ≤ N' → PopulatedOn U T r)

@@ -167,8 +167,6 @@
 <path d="M304.0,1054.5 C327.0,1054.5 327.0,1665.0 350.0,1665.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M412.0,1071.0 C435.0,1071.0 435.0,1714.5 458.0,1714.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M196.0,1500.0 C165.0,1500.0 165.0,2886.0 134.0,2886.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
-<path d="M196.0,1500.0 C165.0,1500.0 165.0,2853.0 134.0,2853.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
-<path d="M196.0,1500.0 C327.0,1500.0 327.0,1483.5 458.0,1483.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M304.0,1483.5 C381.0,1483.5 381.0,1945.5 458.0,1945.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M304.0,1483.5 C327.0,1483.5 327.0,2358.0 350.0,2358.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M304.0,1483.5 C381.0,1483.5 381.0,1879.5 458.0,1879.5" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
@@ -1161,7 +1159,7 @@
 <g><title>LeanDag.Steelhead.Broadcast.holds — atomic broadcast over settled prefixes: a delivered block is delivered by every view whose settled prefix is as long, is a block of the record entering at one slot, a reliable block is delivered with the first committed reliable leader two rounds up under synchrony and, under asynchrony, with the first committed slot above the round by which the reliable validators have referenced it, and two blocks enter at the same slots in every view</title>
 <rect x="458.0" y="1438.5" width="62" height="24" rx="5" fill="#e7e2f3" stroke="#6a5aa8" stroke-width="1.2"/>
 <text class="lbl" x="489.0" y="1450.5" text-anchor="middle">SH17</text></g>
-<g><title>LeanDag.Steelhead.Interface.holds — the periodic class: the paper&#x27;s dial `periodic ws wa k` is a wavelength function the arc&#x27;s results take, every round&#x27;s wave at least two and at most `max ws wa`, so an identity-round schedule spans at that wave and agreement, the extension laws and the support&#x27;s laws hold at it at every period; and at `ws ≠ wa` and `k ≥ 2` no constant wave equals it</title>
+<g><title>LeanDag.Steelhead.Interface.holds — the periodic class: the pair `wavelength ws wa`, the paper&#x27;s dial read at the kinds a period assigns, is a wavelength function the arc&#x27;s results take, every kind&#x27;s wave at least two and at most `max ws wa`, so an identity-round schedule spans at that wave and agreement, the extension laws and the support&#x27;s laws hold at it; and at `ws ≠ wa` the two kinds read two waves, both of which a period `k ≥ 2` assigns</title>
 <rect x="458.0" y="1471.5" width="62" height="24" rx="5" fill="#e7e2f3" stroke="#6a5aa8" stroke-width="1.2"/>
 <text class="lbl" x="489.0" y="1483.5" text-anchor="middle">SH19</text></g>
 <g><title>LeanDag.Steelhead.Ledger.holds — the ledger: the committed-leader sequence and the ledger of a settled prefix are agreed, the ledger is monotone, a block enters at one slot which both views name, and a committed block belongs to one slot</title>

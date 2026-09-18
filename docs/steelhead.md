@@ -28,20 +28,23 @@ Mahi-Mahi arc read-only, under the statement/proof partition of
 **The protocol.** Mysticeti decides a slot proposed at round `r` from
 rounds `r + 1` (votes) and `r + 2` (certificates); Mahi-Mahi from rounds
 `r + wa − 2` and `r + wa − 1`, with the leader named by a coin read at
-the decision round. Steelhead runs both on one DAG: a wavelength function
-`w : ℕ → ℕ` gives every round the number of rounds its slot reads, and
-the protocol's `w` is periodic, `wa` at every `k`-th round and `ws`
-elsewhere. Which rounds are asynchronous is a function of the round
-number alone, so the mode is an interpretation of the DAG and touches no
-block. The one rule change is the anchor floor: an undecided slot at
-round `r` searches for its anchor from round `r + w r`, at its own
-wavelength (§3). The period `k` is adapted by a deterministic update rule
-run on the causal history of an agreed event, the interval's chain anchor
-(§5).
+the decision round. Steelhead runs both on one DAG: every slot has a
+**kind**, `0` synchronous and `1` asynchronous, assigned by the schedule
+(`Slots.kind`, `docs/kinds.md`), and a wavelength function `w : ℕ → ℕ`
+gives every kind the number of rounds its slots read; the pair's is
+`wavelength ws wa`, and the protocol's schedule assigns the kinds
+`periodicKind k`, asynchronous at every `k`-th round, so that the paper's
+`w(r)` is the two read together (SH4). Which slots are asynchronous is a
+fact about the schedule, so the mode is an interpretation of the DAG and
+touches no block. The one rule change is the anchor floor: an undecided
+slot of kind `κ` at round `r` searches for its anchor from round
+`r + w κ`, at its own wavelength (§3). The period `k` is adapted by a
+deterministic update rule run on the causal history of an agreed event,
+the interval's chain anchor (§5).
 
 **What is reused.** The DAG core; the anchored decision relation
 (`Common/Anchored.lean`), whose `waveAt` field is a function of the
-slot's round; Mahi-Mahi's direct rules, certificate, link
+slot's kind; Mahi-Mahi's direct rules, certificate, link
 and laws at every wave; the counting lemma MM2; the timed model's bridge
 from coverage into certification; the unpredictable-leader clause.
 
@@ -190,12 +193,13 @@ from coverage into certification; the unpredictable-leader clause.
   canary spacing coprime to a candidate period gives a probe in any
   window holding two canary rounds (SH18j).
 - **SH19, the periodic class** (§3): the paper's dial, `wa` at every
-  `k`-th round and `ws` elsewhere, is a wavelength function the results
-  above take, every round's wave between two and the larger wave, so
-  that an identity-round schedule spans at that wave and agreement, the
-  extension laws and the support's laws hold at it at every period; and
-  at two distinct waves and a period of two or more no constant wave
-  equals it, so a wave that varies with the round is on record.
+  `k`-th round and `ws` elsewhere, read as the pair's wavelength at the
+  kinds a period assigns, is a wavelength function the results above
+  take, every kind's wave between two and the larger wave, so that an
+  identity-round schedule spans at that wave and agreement, the
+  extension laws and the support's laws hold at it; and at two distinct
+  waves the two kinds read two waves, which a period of two or more
+  both assigns, so a wave that varies is on record.
 
 ### 0.1 Correspondence with the paper
 
@@ -203,9 +207,9 @@ from coverage into certification; the unpredictable-leader clause.
 | :--- | :--- | :--- |
 | Definition 1 (atomic broadcast) | SH17, with SH6b, SH14b, SH15c | agreement, integrity and total order over settled prefixes, validity after GST with the first committed reliable leader two rounds up (SH17c) or, under asynchrony, with the first committed slot above the round by which the reliable validators have referenced the block, whoever led it (SH17e); that A1's reference rule yields such a round is taken as a hypothesis, the substrate's references sitting one round back (§7, finding 11); the "eventually" is SH6b under synchrony, SH14b under the clause and SH15c almost surely under asynchrony. The order of the blocks one commit releases is not modelled |
 | Lemma 1 (certificate uniqueness; a skipped block is never certified) | SH1a, SH1b | Mahi-Mahi's lemmas at the slot's wave |
-| Lemma 2 (quorum intersection across the wave) | SH1c | at `r + w r`, whatever the block's own wave |
+| Lemma 2 (quorum intersection across the wave) | SH1c | at `r + w κ` for a slot of kind `κ`, whatever the block's own wave |
 | Corollary 1 (handover) | SH3 | stated against the relation's anchor search |
-| Theorem 1 (agreement) | SH2, SH16 | `AnchoredRule.decided_unique` at Steelhead's laws; at the interface level, any family of rules whose laws hold composes into one whose laws hold, and Steelhead is the composite of Mahi-Mahi's rule at each round's wave |
+| Theorem 1 (agreement) | SH2, SH16 | `AnchoredRule.decided_unique` at Steelhead's laws; at the interface level, any family of rules whose laws hold composes into one whose laws hold, and Steelhead is the composite of Mahi-Mahi's rule at each kind's wave |
 | Corollary 2 (total order and integrity) | SH13 | in part: the relation's own ledger theorems at Steelhead's laws, over a settled prefix. Ordering the blocks a single commit releases is declined development-wide (report §1.4, §5.6) |
 | Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e, SH6f, SH6g, SH6h, SH6i, SH6l, SH6j, SH6k | in part: the honest-leader commit by the direct rule, everything below a fair run, the crashed-leader skip from `n − f` blames, the remark that partial dissemination does not defer, for a leader that did not equivocate, and the anchor clause as the rule has it, a slot decided once every slot from its floor up to some reliably led slot is decided (SH6f) or once the chain of floors reaches a reliably led landing (SH6g). The bound on that clause, "once the first honest-led slot above its floor commits, at most `b` slots higher", is refuted on data, an equivocating leader at the floor being the anchor (§7, finding 7); what holds at the implementation's round-robin schedule is the hop count itself, a reliably led landing within `n − |T|` hops once `ws · (n − |T|) < n` (SH6i), within the paper's `b` hops once every other validator outside `T` has crashed (SH6l), and a round count, one reliable leader within `n − |T|` rounds and a reliable run of three past every round at `n = 3f + 1` (SH6h), which also discharges SH6b's fairness hypothesis there. No per-hop probability holds for the coin's slots, a landing of the search reading coins above it (`HopBound.lean`; §7, finding 9); what holds is SH11h, the tail below runs of `wa` good coins at period one, which is the expectation the paper states. The `O(wa + b)` ordering bound fails for some coin sequences at period `1` (§7, finding 5) and holds only as SH15's tail. SH6a's hypothesis is reached from either execution discipline, the reactive one (SH6j) and the timed one (SH6k); what neither bounds is a wall-clock latency, since a round is the only unit the model carries |
 | Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the chain settles under Mahi-Mahi's run clause and below any one run of `wa` good coins, a period is derived for each interval, an anchor below which the agreed output committed nothing for `I` rounds hands the next interval period `1`, the failover the implementation applies before the rule is consulted (`apply_period_update`) and the paper's premise on the update rule is not (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15c over a sequence of records, SH15a's tail on one |
@@ -217,59 +221,69 @@ from coverage into certification; the unpredictable-leader clause.
 | Protocol section, "whenever either verdict of an asynchronous slot is direct, the two coincide" | SH5b | predicate for predicate, at a slot proposed at its own round and led by the coin |
 | Protocol section, "the successor waits at most `max(0, wa − ws − 1)` rounds", "delays never compound" | SH9c | arithmetic on the decision rounds; output timing itself is not modelled |
 | Theorem 5 (conservativity) | SH4 | at a constant wavelength by `rfl`, period `1` by `Nat.mod_one`, and at wave three the derivations are exactly the core's, both directions |
-| Protocol section, the dial `w(r) = wa` at every `k`-th round and `ws` elsewhere | SH19 | the periodic wavelength satisfies every hypothesis the results place on a wavelength function, `2 ≤ w r ≤ max ws wa`, so the laws hold at every period, and it varies with the round at `ws ≠ wa`, `k ≥ 2`: the wave the core's `waveAt` admits as a function of the round is not a constant in disguise |
+| Protocol section, the dial `w(r) = wa` at every `k`-th round and `ws` elsewhere | SH19 | the pair's wavelength satisfies every hypothesis the results place on a wavelength function, `2 ≤ w κ ≤ max ws wa`, so the laws hold at every period, and at `ws ≠ wa` the two kinds read two waves, both of which a period `k ≥ 2` assigns: the wave the core's `waveAt` admits as a function of the kind is not a constant in disguise |
 | Lemma 3 (the replay cannot be starved) | SH11a, SH18d, SH18f, SH18g | `c_r ≥ n − f − b` on the DAG under any scheduling (SH11a), and on the window once a quorum has populated the boost and decision rounds within it (SH18d), which is what "populated" must mean for the replay, whose evidence is the window's (§7, finding 6); the replay's asynchronous term is at most the mean of the decision round over the `c_r` committed candidates and the window's top over the rest (SH18f), a bound and not a comparison with the rule's own latency, which is not modelled; a probe's success is a certificate quorum the DAG holds, so the adversary cannot forge one (SH18g), while the probes' rate is extended to the unprobed synchronous slots and a scheduler serving the canary rounds alone raises that estimate (§7, finding 10). Both at `2 ≤ ws < wa` |
 | Theorem 3 (i), "a committed asynchronous slot does not by itself decide the synchronous slots below it" | SH8 | the argument of "Why the chain, and not the output" as a theorem, for every `2 ≤ ws ≤ k` rather than the one period it walks through (§4) |
 
 ## 1. The wavelength function
 
-`periodic ws wa k` is the paper's `w(r) = wa if r mod k = 0 else ws`
-(`Model/Wavelength.lean`), and `IsAsync k r` names the asynchronous
-rounds. At `k = 1` the function is the constant `wa` (`Nat.mod_one`), at
-`k = ∞` the constant `ws`, so both ends of the dial are one rule at one
-wave. Lean's `r % 0 = r` makes only round `0` asynchronous at `k = 0`; no
-result excludes that period and none needs to, since SH8 reads `2 ≤ k`
-off its own `2 ≤ ws ≤ k` and SH10 holds at every period.
+The paper's `w(r) = wa if r mod k = 0 else ws` splits in two
+(`Model/Wavelength.lean`): `wavelength ws wa : ℕ → ℕ` is the wave of a
+kind, `ws` at the synchronous kind `0` and `wa` at the asynchronous kind
+`1`, and `periodicKind k : ℕ → ℕ` is the kind of a round, `1` at every
+`k`-th round and `0` elsewhere. A schedule sets `kind s = periodicKind k
+(slotRound s)`, and `IsAsync k r` names the asynchronous rounds. The
+formula itself is kept as `periodic ws wa k`, and SH4 carries the
+identity `wavelength ws wa (periodicKind k r) = periodic ws wa k r`. At
+`k = 1` every slot is asynchronous and the pair reads the constant `wa`
+(`periodicKind_one`); a schedule that assigns no kinds leaves every slot
+at `Slots.kind`'s default `0`, so the pair reads the constant `ws`, and
+both ends of the dial are one rule at one wave. Lean's `r % 0 = r` makes
+only round `0` asynchronous at `k = 0`; no result excludes that period
+and none needs to, since SH8 reads `2 ≤ k` off its own `2 ≤ ws ≤ k` and
+SH10 holds at every period.
 
-Every result is stated at an arbitrary `w : ℕ → ℕ`, not at `periodic`:
-the rule consumes a wavelength function, and the period is one way of
+Every result is stated at an arbitrary `w : ℕ → ℕ`, not at the pair's:
+the rule consumes a wavelength function, and the pair is one way of
 producing one. What the results assume of `w` is a lower bound at every
-round, `2 ≤ w r` for safety and `3 ≤ w r` for liveness, and for the
-drain an upper bound `wa`.
+kind, `2 ≤ w κ` for safety and `3 ≤ w κ` for liveness, and for the drain
+an upper bound `wa`. A claim about the period takes the schedule's kinds
+as a hypothesis, `∀ s, S.kind s = periodicKind k s`, or names the
+adaptive schedule that carries them (§5).
 
 ## 2. The rule at a wavelength function
 
 `steelheadAnchored w` (`Model/Decision.lean`) is one anchored rule whose
-data at a slot proposed at round `r` are Mahi-Mahi's at wave `w r`: the
-certificate-quorum direct commit, the slot blame as direct skip, one rung
-of link (a certificate in the anchor's cone), no tie, and the wave offset
-`waveAt r = w r − 1`, so that an anchor sits at round `r + w r` or above.
-`Decided w U V k v` is the anchored relation at that data. At a constant
-`w` the rule *is* `mahiMahiAnchored w` by `rfl` (SH4); at the constant
-`3` the derivations are exactly the core's (MM1d transported, and its
-mirror).
+data at a slot of kind `κ` proposed at round `r` are Mahi-Mahi's at wave
+`w κ`: the certificate-quorum direct commit, the slot blame as direct
+skip, one rung of link (a certificate in the anchor's cone), no tie, and
+the wave offset `waveAt κ = w κ − 1`, so that an anchor sits at round
+`r + w κ` or above. `Decided w U V k v` is the anchored relation at that
+data. At a constant `w` the rule *is* `mahiMahiAnchored w` by `rfl`
+(SH4); at the constant `3` the derivations are exactly the core's (MM1d
+transported, and its mirror).
 
-The shared relation reads `AnchoredRule.waveAt` as a function of the
-slot's round. Every other rule sets a constant, and
-`Banded` (the offset band) requires one: the band rebases every round by
-a constant, and a wave that alternates with the round reads an absolute
-round. Steelhead has no band, no `LocalTruncate` and no `Safe` headline
-(`target-properties.md` §3.4c); what the band derives that needs no
-offset, persistence and view monotonicity, is proved through the
-extension laws (§6).
+The shared relation reads `AnchoredRule.waveAt` at the slot's kind, which
+the schedule assigns beside the slot's round and leader and which a
+rebase carries with them (`docs/kinds.md`). That is what gives the rule a
+band: `Banded` rebases every round by a constant, under which a wave read
+from the round number would move, while a wave read from the kind does
+not. Steelhead is therefore banded, truncation-local and safe under the
+`2 ≤ w κ` its laws already ask (`target-properties.md` §3.4c, §6), and
+persistence follows from the band at offset zero.
 
 ## 3. Safety, and the anchor floor
 
 `Safety/Statement.lean`, each claim at the weakest bound its proof
-consumes on the rounds read, `1 ≤ w r` for SH1c and `2 ≤ w r` for the
+consumes on the kinds read, `1 ≤ w κ` for SH1c and `2 ≤ w κ` for the
 rest:
 
 - **SH1a, SH1b, SH1c** are Mahi-Mahi's certificate lemmas at the slot's
   own wave: a directly skipped slot has no certificate for any
   candidate, two certified candidates of one author and round coincide,
-  and a directly committed candidate at `r` is certified in the cone of
-  every block at round `r + w r` or above, whatever wave that block's
-  own slot carries.
+  and a directly committed candidate of kind `κ` at `r` is certified in
+  the cone of every block at round `r + w κ` or above, whatever wave that
+  block's own slot carries.
 - **SH2, agreement**: two views deciding one slot reach the same verdict
   by any routes, whether the slot's wave is `ws` or `wa` and whether the
   anchor's is. The relation's agreement at `steelheadLaws`: every law of
@@ -278,12 +292,14 @@ rest:
 - **SH3, handover**: a direct commit in one view is committed by every
   view that finds the slot an anchor, whichever rule decides that anchor,
   and no view skips it. This is the one cross-rule law: the anchor lies
-  at `r + w r` or above, where SH1c places a certificate in its cone.
+  at `r + w κ` or above, where SH1c places a certificate in its cone.
 - **SH4, conservativity**: `steelheadAnchored (fun _ => w) =
-  mahiMahiAnchored w` and `periodic ws wa 1 = fun _ => wa`, by `rfl` and
-  `Nat.mod_one`; at the constant `3` the derivations are exactly the
-  core's, MM1d one way and its mirror the other, since the core's skip
-  is the slot-level blame Mahi-Mahi's is (`decided_of_core_decided`).
+  mahiMahiAnchored w` by `rfl`, `wavelength ws wa (periodicKind k r) =
+  periodic ws wa k r` at every round, and `periodicKind 1 = fun _ => 1`
+  by `Nat.mod_one`, so at period one the pair reads `wa` everywhere; at
+  the constant `3` the derivations are exactly the core's, MM1d one way
+  and its mirror the other, since the core's skip is the slot-level
+  blame Mahi-Mahi's is (`decided_of_core_decided`).
 - **SH5, chain agreement**: the chain verdicts (§4) agree across views,
   an instance of MM1c at the chain schedule.
 - **SH5b, the direct verdicts coincide**: at an asynchronous round whose
@@ -295,28 +311,29 @@ rest:
 
 **The interface.** Theorem 1 is stated for any two rules of the
 interface. `compose rules` (`Model/Compose.lean`) is the composite of a
-family of anchored rules, one per round: the slot proposed at round `r`
+family of anchored rules, one per kind: a slot of kind `κ`
 takes its wave offset, direct predicates and rungs of link from
-`rules r`, and the rung count and tie-break, which the relation reads
-without a slot, from the rule of round `0`. **SH16**
+`rules κ`, and the rung count and tie-break, which the relation reads
+without a slot, from the rule of kind `0`. **SH16**
 (`Interface/Statement.lean`): if every rule of the family satisfies
 `AnchoredRule.Laws` and the family agrees on rungs and ties, the
 composite does (SH16a), each law at a slot being the slot's rule's, the
 anchor's rule never entering; the composite's verdicts then agree across
 views (SH16b); and `steelheadAnchored w` is the composite of Mahi-Mahi's
-rule read at `w r`, by definition (SH16c), so SH2 is an instance. The
+rule read at `w κ`, by definition (SH16c), so SH2 is an instance. The
 laws are clauses A2 and A3 in the relation's terms; a pair the paper's
 discharge table leaves open is outside the theorem until they are
 discharged. **SH19** (`Interface/Statement.lean`) states the periodic
-class: `periodic ws wa k`, the paper's dial, is a wavelength function the
-results of this arc take, every round's wave at least two and at most
-`max ws wa`, so an identity-round schedule spans at that wave
-(`spansEligible_of_le`), and agreement, the extension laws persistence
-rests on, the support's locality and commit laws, and its coverage law
-at waves of three hold at it (`Properties.lean`'s theorems at that
-function); and at `ws ≠ wa` and `k ≥ 2` no constant wave equals it,
-rounds `0` and `1` reading different offsets, so what `waveAt` being a
-function of the round admits is a wave that varies, on record beside the
+class: `wavelength ws wa`, the paper's dial read at the kinds a period
+assigns, is a wavelength function the results of this arc take, every
+kind's wave at least two and at most `max ws wa`, so an identity-round
+schedule spans at that wave (`spansEligible_of_le`), and agreement, the
+extension laws persistence rests on, the support's locality and commit
+laws, and its coverage law at waves of three hold at it
+(`Properties.lean`'s theorems at that function); and at `ws ≠ wa` the two
+kinds read different offsets, both of which a period of two or more
+assigns, rounds `0` and `1` carrying one each, so what `waveAt` being a
+function of the kind admits is a wave that varies, on record beside the
 constant-wave rules of the tree.
 
 **The ledger.** Agreement is about one slot; the output layer reads
@@ -568,10 +585,11 @@ derivation at it agrees with.
 run of `wa` consecutive commits decides every slot below it, including
 the slots an earlier period left undecided: **SH9**
 (`AllDecidedBelowOfRun`) states this at any wavelength function with
-`1 ≤ w r ≤ wa` and one slot per round, by the relation's descent below a
+`1 ≤ w κ ≤ wa` and one slot per round, by the relation's descent below a
 committed run, the spanning hypothesis discharged by the identity rounds
 at the largest wave. **SH9b** (`AllDecidedBelowAtPeriodOne`) is Theorem
-3 (ii) as one statement: at `periodic ws wa 1`, under the run clause at
+3 (ii) as one statement: with every slot of the asynchronous kind, as
+period one has it, under the run clause at
 the output schedule, past every round whose window decides below the
 horizon there is a slot below which every slot is decided, in any view
 caught up to the horizon, so the settled prefix and with it the ledger
@@ -622,14 +640,14 @@ the anchor block and the current period; the paper's replay reads
 the anchor's causal history, which the block id determines within one
 universe. The wavelength the agreed output is read at is a parameter, so
 that the agreement claims hold for any reading.
-`adaptiveWave ws wa I per` is the wavelength function a
-validator that derived `per` runs the output relation at, and
-`adaptiveSlots coin known I per` the schedule it runs it on: one slot per
-round, the coin at the rounds `per` makes asynchronous and the known
-schedule `known` elsewhere. The claims that relate a schedule to the coin
-one clause at a time (SH14) take this schedule as their instance (SH15),
-and a sequence matching what a view derives on it always exists
-(`matchingPer`, SH15f).
+`adaptiveKind I per` is the kind of each round at the period of its
+interval, and `adaptiveSlots coin known I per` the schedule a validator
+that derived `per` runs the output relation on: one slot per round, of
+that kind, the coin at the rounds `per` makes asynchronous and the known
+schedule `known` elsewhere, the wave read at `wavelength ws wa`. The
+claims that relate a schedule to the coin one clause at a time (SH14)
+take this schedule as their instance (SH15), and a sequence matching what
+a view derives on it always exists (`matchingPer`, SH15f).
 
 `Period/Statement.lean`:
 
@@ -643,22 +661,22 @@ and a sequence matching what a view derives on it always exists
   unique, since no verdict of that history lies above the anchor's round,
   so the new cursor is the least undecided slot at or past the old one
   and the new last commit the highest commit consumed.
-- **SH10b, agreement of the output under the adaptive wavelength**: two
+- **SH10b, agreement of the output under the adaptive kinds**: two
   validators that derived the state of every interval the record's
   rounds fall in, each on the schedule its own sequence names
-  (`adaptiveSlots`), and decided a slot proposed among them at their own
-  adaptive wavelengths and schedules, derived the same periods there and
-  agree on the verdict. The sequences coincide by strong induction on
-  the interval, the state of an interval reading the sequence below that
-  interval only (`periodAt_congr_per`, which transports a derivation
-  across the wavelength and the schedule): the anchors of the
-  intervals below lie in the record, their histories are read at rounds
-  below their own, where the sequences already agree, so the two views
-  advance the agreed output alike (`AgreedAdvance.congr`)
-  and SH10a gives the same state; a verdict reads the wavelength only
-  at the rounds of the slots its derivation names, all of them at or
-  below the round of the anchor block it rests on (`decided_congr`);
-  and SH2 applies to the one function. The bound is not a convenience: a record holds finitely
+  (`adaptiveSlots`), and decided a slot proposed among them on their own
+  schedules, derived the same periods there and agree on the verdict.
+  The sequences coincide by strong induction on the interval, the state
+  of an interval reading the sequence below that interval only
+  (`periodAt_congr_per`, which transports a derivation across the
+  schedule): the anchors of the intervals below lie in the record, their
+  histories are read at rounds below their own, where the sequences
+  already agree and so the schedules' kinds and leaders, so the two
+  views advance the agreed output alike (`AgreedAdvance.congr_slots`) and
+  SH10a gives the same state; a verdict reads the schedule only at the
+  slots its derivation names, all of them proposed at or below the round
+  of the anchor block it rests on (`decided_congr_slots`); and SH2
+  applies on the one schedule. The bound is not a convenience: a record holds finitely
   many blocks, so above its top round no chain verdict is derivable and
   no period beyond it either, and a claim asking for the *whole*
   sequence would hold only where the period reaches `0`, which is
@@ -690,7 +708,7 @@ and a sequence matching what a view derives on it always exists
 - **SH10i, SH10j, the agreed output**: every slot the agreed output
   consumed is decided in the view that derived it, since the anchors'
   histories lie inside that view and the laws carry a verdict out of a
-  history (`2 ≤ w r`), which is what `assert_agreed_prefix` checks in the
+  history (`2 ≤ w κ`), which is what `assert_agreed_prefix` checks in the
   implementation's tests; and a slot the view leaves undecided is never
   consumed, so the cursor and the last commit stay at or below it in
   every state the view derives. The second is what puts the failover's
@@ -850,17 +868,18 @@ range's verdicts (§21).
 `Persist` at every `w` of at least two rounds, each Mahi-Mahi's fact at
 the wave of the slot it concerns, and `Descends` from `Indirect` under
 `SpansEligible` at each slot's own wave. `shSupport w` is Mahi-Mahi's
-certificate with the certifiers `w r − 1` rounds above a candidate
-proposed at `r`; its `Local` and `Commits` laws hold at two rounds and
-above, its `OfCoverage` law at three, the wave-three case by the core's
+certificate with the certifiers `w κ − 1` rounds above a candidate of
+kind `κ`; its `Local` and `Commits` laws hold at two rounds and above,
+its `OfCoverage` law at three, the wave-three case by the core's
 argument and the higher waves by Mahi-Mahi's. The liveness headline
-`Support.Lives` follows. `Banded`, `LocalTruncate` and `Safe` are not
-claimed (§2).
+`Support.Lives` follows. `Banded`, `LocalTruncate` and the `Safe`
+headline hold at every `w` of at least two rounds, since the wave is
+read at the kind (§2).
 
 **SH6** (`Liveness/Statement.lean`) is the timed model at this support:
 **SH6a**, a reliably led slot commits in every view caught up to its
 decision round on a DAG a reliable quorum has synchronised and populated
-through it, by the direct rule, at whichever wave the slot's round
+through it, by the direct rule, at whichever wave the slot's kind
 carries; **SH6b**, past
 any slot the schedule offers a run of `c` reliably led slots spanning
 eligibility, and everything below the run is decided once the DAG is
@@ -873,7 +892,7 @@ cone holds a candidate and every block of the round blames; and
 candidate that one reliable block references one round up, its leader's
 only block at that round, is directly committed in every view holding
 its decision round, once the quorum is synchronised from that round and
-populates the wave, at `4 ≤ w r`. Synchrony carries the candidate into
+populates the wave, at `4 ≤ w κ`. Synchrony carries the candidate into
 every reliable cone from two rounds up, the reliable voters vote for it,
 every reliable block at the decision round references all of them and
 so certifies. The leader may be Byzantine, so long as it did not
@@ -1206,9 +1225,10 @@ answers period `4` at every anchor (`rt_update_four`, from
 `anchorUpdate_half_retains`: periods `1`
 and `2` score at least half of what period `4` can on a window of at
 most nine rounds), at period `4` slot `3` is never decided in any view
-for any coin (`rt_stall`, SH8), at any period sequence that is `4` on
-the intervals the record reaches the adaptive output never decides it
-either (`rt_adaptive_stall`, by `decided_congr`), no settled prefix has
+for any coin, on the adaptive schedule of any period sequence that is
+`4` on the intervals the record reaches (`rt_stall`, SH8 with its
+hypotheses asked below the horizon, which is where every slot a view
+decides lies, `slotRound_le_of_decided`), no settled prefix has
 more than three slots and no block above round `2` is ever in the ledger
 (`rt_no_output_above_two`), while validator `1`'s honest round-`3` block
 exists (§7, finding 3). `Failover.lean`: the same family with the coin
@@ -1234,11 +1254,11 @@ axioms only.
 
 ```
 LeanDag/Steelhead/
-  Model/Wavelength.lean     periodic, IsAsync
+  Model/Wavelength.lean     wavelength, periodicKind, periodic, IsAsync
   Model/Decision.lean       steelheadAnchored, Decided, FloorHop, floorLanding, floorChain
   Model/Chain.lean          chainSlots, ChainDecided
   Model/Period.lean         intervalOf, UpdateRule, windowBottom, IntervalAnchor, NoAnchor,
-                            ScanState, AgreedAdvance, PeriodAt, adaptiveWave, adaptiveSlots
+                            ScanState, AgreedAdvance, PeriodAt, adaptiveKind, adaptiveSlots
   Model/Coin.lean           commitProb, runProb, noCommitProb, blockRound, coinOfBlocks,
                             blockCoins, blocksHorizon, Matches, Settles, undecidedProb,
                             NonAnticipating, undecidedProbAgainst, coinOfRounds,

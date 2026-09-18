@@ -123,7 +123,7 @@ example : ∀ L : Fin 36, (hb36.block L).round = 6 → (hb36.block L).creator �
 certificate, and round `4` holds two blames. -/
 theorem hb36_slot3_direct :
     (∀ L : Fin 36, (hb36.block L).round = 3 → (hb36.block L).creator = 0 →
-      ¬ (steelheadAnchored (Fin 4) (Fin 36) Unit w3).Commit hb36 (View.full hb36) L 3) ∧
+      ¬ (steelheadAnchored (Fin 4) (Fin 36) Unit w3).Commit hb36 (View.full hb36) L 3 1) ∧
     ¬ MahiMahi.DirectSkipIn hb36 (View.full hb36) 3 0 3 := by
   decide
 
@@ -131,7 +131,7 @@ theorem hb36_slot3_direct :
 certificate, and round `5` holds two blames. -/
 theorem hb36_slot4_direct :
     (∀ L : Fin 36, (hb36.block L).round = 4 → (hb36.block L).creator = 0 →
-      ¬ (steelheadAnchored (Fin 4) (Fin 36) Unit w3).Commit hb36 (View.full hb36) L 4) ∧
+      ¬ (steelheadAnchored (Fin 4) (Fin 36) Unit w3).Commit hb36 (View.full hb36) L 4 1) ∧
     ¬ MahiMahi.DirectSkipIn hb36 (View.full hb36) 3 0 4 := by
   decide
 
@@ -139,7 +139,7 @@ theorem hb36_slot4_direct :
 certificate, and round `7` holds two blames. -/
 theorem hb36_slot6_direct :
     (∀ L : Fin 36, (hb36.block L).round = 6 → (hb36.block L).creator = 0 →
-      ¬ (steelheadAnchored (Fin 4) (Fin 36) Unit w3).Commit hb36 (View.full hb36) L 6) ∧
+      ¬ (steelheadAnchored (Fin 4) (Fin 36) Unit w3).Commit hb36 (View.full hb36) L 6 1) ∧
     ¬ MahiMahi.DirectSkipIn hb36 (View.full hb36) 3 0 6 := by
   decide
 
@@ -147,7 +147,7 @@ theorem hb36_slot6_direct :
 `9` to certify block `28`, and round `8` holds no blame. -/
 theorem hb36_slot7_direct :
     (∀ L : Fin 36, (hb36.block L).round = 7 → (hb36.block L).creator = 0 →
-      ¬ (steelheadAnchored (Fin 4) (Fin 36) Unit w3).Commit hb36 (View.full hb36) L 7) ∧
+      ¬ (steelheadAnchored (Fin 4) (Fin 36) Unit w3).Commit hb36 (View.full hb36) L 7 1) ∧
     ¬ MahiMahi.DirectSkipIn hb36 (View.full hb36) 3 0 7 := by
   decide
 
@@ -155,7 +155,7 @@ theorem hb36_slot7_direct :
 `24 + u` is certified by the whole of round `8`. -/
 theorem hb36_slot6_commit : ∀ u : Fin 4, u ≠ 0 → ∃ L : Fin 36, (hb36.block L).round = 6 ∧
     (hb36.block L).creator = u ∧
-    (steelheadAnchored (Fin 4) (Fin 36) Unit w3).Commit hb36 (View.full hb36) L 6 := by
+    (steelheadAnchored (Fin 4) (Fin 36) Unit w3).Commit hb36 (View.full hb36) L 6 1 := by
   decide
 
 /-- **Validator `0`'s candidate for slot `3` is certified nowhere**: block `12`'s certificate
@@ -331,14 +331,15 @@ theorem hb36_landings_second {coin : ℕ → Fin 4} (h3 : coin 3 = 0) (h6 : coin
     floorChain (S := chainSlots coin) w3 hb36 (View.full hb36) 0 1 = 4 ∧
       floorChain (S := chainSlots coin) w3 hb36 (View.full hb36) 0 2 = 7 := by
   classical
-  have hw : w3 0 = 3 := rfl
-  have hex : ∃ y, 0 + w3 0 ≤ y ∧
+  have hex : ∃ y, 0 + w3 ((chainSlots coin).kind 0) ≤ y ∧
       ¬ Steelhead.Decided (S := chainSlots coin) w3 hb36 (View.full hb36) y none :=
-    ⟨4, by omega, hb36_slot4_undecided h4 h7 none⟩
+    ⟨4, by change 0 + 3 ≤ 4; omega, hb36_slot4_undecided h4 h7 none⟩
   have l1 : floorLanding (S := chainSlots coin) w3 hb36 (View.full hb36) 0 = 4 := by
     unfold floorLanding
     rw [dif_pos hex, Nat.find_eq_iff]
-    refine ⟨⟨by omega, hb36_slot4_undecided h4 h7 none⟩, fun n hn ⟨hn3, hskip⟩ => ?_⟩
+    refine ⟨⟨by change 0 + 3 ≤ 4; omega, hb36_slot4_undecided h4 h7 none⟩,
+      fun n hn ⟨hn3, hskip⟩ => ?_⟩
+    change 0 + 3 ≤ n at hn3
     obtain rfl : n = 3 := by omega
     exact hskip (hb36_slot3_skipped h3 h6)
   refine ⟨l1, ?_⟩

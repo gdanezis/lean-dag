@@ -168,8 +168,6 @@
 <path d="M706.0,1526.0 C754.0,1526.0 754.0,2414.0 802.0,2414.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M960.0,1550.0 C1008.0,1550.0 1008.0,2486.0 1056.0,2486.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M452.0,2174.0 C373.0,2174.0 373.0,4190.0 294.0,4190.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
-<path d="M452.0,2174.0 C373.0,2174.0 373.0,4142.0 294.0,4142.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
-<path d="M452.0,2174.0 C754.0,2174.0 754.0,2150.0 1056.0,2150.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M706.0,2150.0 C881.0,2150.0 881.0,2822.0 1056.0,2822.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M706.0,2150.0 C754.0,2150.0 754.0,3422.0 802.0,3422.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M706.0,2150.0 C881.0,2150.0 881.0,2726.0 1056.0,2726.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
@@ -1386,7 +1384,7 @@
 <rect x="1056.0" y="2084.0" width="158" height="36" rx="5" fill="#e7e2f3" stroke="#6a5aa8" stroke-width="1.2"/>
 <text class="lbl" x="1135.0" y="2096.0" text-anchor="middle">SH17</text>
 <text class="nm" x="1135.0" y="2110.0" text-anchor="middle">holds</text></g>
-<g><title>LeanDag.Steelhead.Interface.holds — the periodic class: the paper&#x27;s dial `periodic ws wa k` is a wavelength function the arc&#x27;s results take, every round&#x27;s wave at least two and at most `max ws wa`, so an identity-round schedule spans at that wave and agreement, the extension laws and the support&#x27;s laws hold at it at every period; and at `ws ≠ wa` and `k ≥ 2` no constant wave equals it</title>
+<g><title>LeanDag.Steelhead.Interface.holds — the periodic class: the pair `wavelength ws wa`, the paper&#x27;s dial read at the kinds a period assigns, is a wavelength function the arc&#x27;s results take, every kind&#x27;s wave at least two and at most `max ws wa`, so an identity-round schedule spans at that wave and agreement, the extension laws and the support&#x27;s laws hold at it; and at `ws ≠ wa` the two kinds read two waves, both of which a period `k ≥ 2` assigns</title>
 <rect x="1056.0" y="2132.0" width="158" height="36" rx="5" fill="#e7e2f3" stroke="#6a5aa8" stroke-width="1.2"/>
 <text class="lbl" x="1135.0" y="2144.0" text-anchor="middle">SH19</text>
 <text class="nm" x="1135.0" y="2158.0" text-anchor="middle">holds</text></g>

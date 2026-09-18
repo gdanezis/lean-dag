@@ -46,19 +46,22 @@ example : intervalOf 4 5 = 1 := by decide
 example : intervalOf 4 8 = 1 := by decide
 example : intervalOf 4 9 = 2 := by decide
 
-/-! ## The adaptive wavelength
+/-! ## The adaptive kinds
 
 A period sequence that runs interval `0` at period `4` and every later
-interval at period `1`. Rounds `1` to `4` then read `periodic 3 5 4` and
-rounds `5` onward `periodic 3 5 1`, which is the constant `5`. -/
+interval at period `1`. Rounds `1` to `4` then carry the kinds of
+`periodicKind 4` and rounds `5` onward those of `periodicKind 1`, which
+is the asynchronous kind everywhere, so the pair reads `5` there. -/
 
 /-- Interval `0` at period `4`, the rest at period `1`. -/
 def shPer : ℕ → ℕ := fun j => if j = 0 then 4 else 1
 
-example : adaptiveWave 3 5 4 shPer 1 = 3 := by decide
-example : adaptiveWave 3 5 4 shPer 4 = 5 := by decide
-example : adaptiveWave 3 5 4 shPer 5 = 5 := by decide
-example : adaptiveWave 3 5 4 shPer 6 = 5 := by decide
+example : adaptiveKind 4 shPer 1 = 0 := by decide
+example : adaptiveKind 4 shPer 4 = 1 := by decide
+example : adaptiveKind 4 shPer 5 = 1 := by decide
+example : adaptiveKind 4 shPer 6 = 1 := by decide
+example : wavelength 3 5 (adaptiveKind 4 shPer 1) = 3 := by decide
+example : wavelength 3 5 (adaptiveKind 4 shPer 6) = 5 := by decide
 
 /-! ## The period sequence on data
 
@@ -86,8 +89,8 @@ theorem sh8_anchor1 : IntervalAnchor 4 5 shCoin sh8 (View.full sh8) 0 1 7 where
   below := fun _ h1 _ h => absurd (lt_of_le_of_lt h1 h) (lt_irrefl _)
 
 /-- Every wavelength of `w4` is at least two rounds, which the agreed output's advance asks. -/
-theorem w4_ge_two (r : ℕ) : 2 ≤ w4 r := by
-  unfold w4 periodic
+theorem w4_ge_two (κ : ℕ) : 2 ≤ w4 κ := by
+  unfold w4 wavelength
   split <;> omega
 
 /-- Interval `1` runs at the update of interval `0`'s anchor: starting at
@@ -131,7 +134,7 @@ theorem sh8_advance28 {next' last' : ℕ}
     · obtain rfl : next' = 1 := by have := h.le; omega
       exact absurd sh8_slot1_in_history (h.stuck _)
     · exact hge
-  exact ⟨hnext, by simpa using h.last_le 1 6 le_rfl (by omega) sh8_slot1_in_history⟩
+  exact ⟨hnext, h.last_le 1 6 le_rfl (by omega) sh8_slot1_in_history⟩
 
 /-! ## The adaptive schedule, and the coins of blocks
 

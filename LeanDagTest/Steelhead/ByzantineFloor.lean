@@ -111,14 +111,14 @@ example : MahiMahi.certificates bf30 3 29 3 = ∅ := by decide
 /-- Neither candidate of slot `0` is directly committed, and the slot is not directly skipped. -/
 theorem bf30_slot0_direct :
     (∀ L, IsLeaderBlock bf30 0 L →
-      ¬ (steelheadAnchored (Fin 4) (Fin 30) Unit w3).Commit bf30 (View.full bf30) L 0) ∧
+      ¬ (steelheadAnchored (Fin 4) (Fin 30) Unit w3).Commit bf30 (View.full bf30) L 0 0) ∧
     ¬ (steelheadAnchored (Fin 4) (Fin 30) Unit w3).Skip bf30 (View.full bf30) bfSlots 0 := by
   decide
 
 /-- Neither candidate of slot `3` is directly committed, and the slot is not directly skipped. -/
 theorem bf30_slot3_direct :
     (∀ L, IsLeaderBlock bf30 3 L →
-      ¬ (steelheadAnchored (Fin 4) (Fin 30) Unit w3).Commit bf30 (View.full bf30) L 3) ∧
+      ¬ (steelheadAnchored (Fin 4) (Fin 30) Unit w3).Commit bf30 (View.full bf30) L 3 0) ∧
     ¬ (steelheadAnchored (Fin 4) (Fin 30) Unit w3).Skip bf30 (View.full bf30) bfSlots 3 := by
   decide
 
@@ -135,7 +135,7 @@ theorem bf30_slot4 : Steelhead.Decided w3 bf30 (View.full bf30) 4 (some 17) :=
 
 /-- Slot `6`'s candidate is block `24`, whose certificate round the universe lacks. -/
 theorem bf30_slot6_direct : ∀ L, IsLeaderBlock bf30 6 L →
-    ¬ (steelheadAnchored (Fin 4) (Fin 30) Unit w3).Commit bf30 (View.full bf30) L 6 := by
+    ¬ (steelheadAnchored (Fin 4) (Fin 30) Unit w3).Commit bf30 (View.full bf30) L 6 0 := by
   decide
 
 /-- Eligibility at the constant wave: an anchor of slot `k` is a slot at round `k + 3` or above. -/
@@ -222,10 +222,9 @@ passes over a skipped slot. -/
 theorem bf30_floor_hops :
     Steelhead.FloorHop w3 bf30 (View.full bf30) 0 3 ∧
       Steelhead.FloorHop w3 bf30 (View.full bf30) 3 6 := by
-  have hw : ∀ r, w3 r = 3 := fun _ => rfl
-  exact ⟨⟨by have := hw 0; omega, fun _ h1 h2 => absurd h2 (by have := hw 0; omega),
+  exact ⟨⟨by decide, fun _ h1 h2 => absurd h2 (by change 0 + 3 ≤ _ at h1; omega),
       bf30_slot3_undecided none⟩,
-    ⟨by have := hw 3; omega, fun _ h1 h2 => absurd h2 (by have := hw 3; omega),
+    ⟨by decide, fun _ h1 h2 => absurd h2 (by change 3 + 3 ≤ _ at h1; omega),
       bf30_slot6_undecided none⟩⟩
 
 /-- **Every landing is led by the Byzantine validator**, so SH6g's last hypothesis, a reliably led

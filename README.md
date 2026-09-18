@@ -252,7 +252,7 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   a block the reliable validators have referenced is delivered by the
   first committed slot above, whoever led it, any family
   of rules whose laws hold composes into one whose laws hold (Steelhead's rule
-  the composite of Mahi-Mahi's at each round's wave, by definition),
+  the composite of Mahi-Mahi's at each kind's wave, by definition),
   Definition 1 holds clause by clause over settled prefixes, and
   Algorithm 2's replay is data whose selection stays among the
   candidates, whose window counts the counting lemma's candidates once

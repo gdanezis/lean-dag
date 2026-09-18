@@ -47,14 +47,14 @@ theorem holds : Statement := by
     exact chainAllDecidedBelowOfSynchrony hwa coin hT hcard fair R k
   · intro coin V b hwa hgood hV
     exact chainAllDecidedBelowOfRun hwa hgood hV
-  · intro V ws wa k hws hk hid hcert hskip i hi v h
-    exact stall hws hk hid hcert hskip hi h
+  · intro V ws wa k hws hk hid hkind hcert hskip i hi v h
+    exact stall hws hk hid hkind hcert hskip hi h
   · intro V b hw hle hid hrun
-    exact allDecidedBelowOfRun hw hle hid hrun
-  · intro V c N hwa hid hrun hV r hr
-    exact allDecidedBelowAtPeriodOne hwa hid hrun hV r hr
-  · intro hid hws hwa r hr
-    exact asyncSlotCost hid hws hwa hr
+    exact allDecidedBelowOfRun (fun s => hw (S.kind s)) (fun s => hle (S.kind s)) hid hrun
+  · intro V c N hwa hid hone hrun hV r hr
+    exact allDecidedBelowAtPeriodOne hwa hid hone hrun hV r hr
+  · intro hid hkind hws hwa r hr
+    exact asyncSlotCost hid hkind hws hwa hr
 
 end Liveness
 

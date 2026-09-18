@@ -116,7 +116,7 @@ runs at `k₀` with the agreed output at slot `1` and no commit; interval `j + 1
 failover's or the update rule's answer when `j` has an anchor, the agreed output advanced over the
 anchor's history, and at `j`'s state when `j` has none. *Waiting* is the absence of a derivation.
 The wavelength is a parameter, so that the agreement claims hold for any reading; the liveness
-claims instantiate it with the adaptive wavelength of the sequence the validator derives. -/
+claims instantiate it with the pair's, on the schedule whose kinds the derived sequence names. -/
 inductive PeriodAt (I wa : ℕ) (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
     (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
     (w : ℕ → ℕ) : ℕ → ScanState → Prop
@@ -137,17 +137,19 @@ inductive PeriodAt (I wa : ℕ) (coin : ℕ → Validator) (upd : UpdateRule Blo
 
 end Slots
 
-/-- **The adaptive wavelength**: the periodic wavelength of each round's interval, for a period
-sequence `per`. What a validator that derived `per` runs the output relation at. -/
-def adaptiveWave (ws wa I : ℕ) (per : ℕ → ℕ) : ℕ → ℕ :=
-  fun r => periodic ws wa (per (intervalOf I r)) r
+/-- **The adaptive kind**: the periodic kind of each round at the period of its interval, for a
+period sequence `per`. The kinds a validator that derived `per` runs the output relation on, at
+the wavelength `wavelength ws wa` of the pair. -/
+def adaptiveKind (I : ℕ) (per : ℕ → ℕ) : ℕ → ℕ :=
+  fun r => periodicKind (per (intervalOf I r)) r
 
-/-- **The adaptive schedule**: one slot per round, led by the coin at the rounds the period
-sequence `per` makes asynchronous and by the known schedule `known` elsewhere. What a validator
-that derived `per` runs the output relation on; the liveness claims that relate a schedule to the
-coin one clause at a time (SH14) take this one as their instance. -/
+/-- **The adaptive schedule**: one slot per round, of the adaptive kind, led by the coin at the
+rounds the period sequence `per` makes asynchronous and by the known schedule `known` elsewhere.
+What a validator that derived `per` runs the output relation on; the liveness claims that relate
+a schedule to the coin one clause at a time (SH14) take this one as their instance. -/
 abbrev adaptiveSlots (coin known : ℕ → Validator) (I : ℕ) (per : ℕ → ℕ) : Slots Validator :=
-  Slots.identity fun r => if IsAsync (per (intervalOf I r)) r then coin r else known r
+  { Slots.identity (fun r => if adaptiveKind I per r = 1 then coin r else known r) with
+    kind := adaptiveKind I per }
 
 end Steelhead
 

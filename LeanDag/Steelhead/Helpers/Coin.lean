@@ -357,18 +357,18 @@ theorem not_skip_of_mem_goodAt {U : BlockUniverse Validator BlockId Payload} {wa
 /-- **The hop stops at the floor** when the view does not skip the slot there. -/
 theorem floorLanding_eq_floor [S : Slots Validator] {w : ℕ → ℕ}
     {U : BlockUniverse Validator BlockId Payload} {V : View Validator BlockId Payload U} {k : ℕ}
-    (h : ¬ Decided w U V (k + w k) none) : floorLanding w U V k = k + w k := by
+    (h : ¬ Decided w U V (k + w (S.kind k)) none) : floorLanding w U V k = k + w (S.kind k) := by
   classical
-  have hex : ∃ y, k + w k ≤ y ∧ ¬ Decided w U V y none := ⟨_, le_rfl, h⟩
+  have hex : ∃ y, k + w (S.kind k) ≤ y ∧ ¬ Decided w U V y none := ⟨_, le_rfl, h⟩
   rw [floorLanding, dif_pos hex]
   exact Nat.le_antisymm (Nat.find_le ⟨le_rfl, h⟩) (Nat.find_spec hex).1
 
 /-- **The hop never lands below the floor.** -/
 theorem floor_le_floorLanding [S : Slots Validator] {w : ℕ → ℕ}
     {U : BlockUniverse Validator BlockId Payload} {V : View Validator BlockId Payload U} {k : ℕ} :
-    k + w k ≤ floorLanding w U V k := by
+    k + w (S.kind k) ≤ floorLanding w U V k := by
   classical
-  by_cases hex : ∃ y, k + w k ≤ y ∧ ¬ Decided w U V y none
+  by_cases hex : ∃ y, k + w (S.kind k) ≤ y ∧ ¬ Decided w U V y none
   · rw [floorLanding, dif_pos hex]
     exact (Nat.find_spec hex).1
   · rw [floorLanding, dif_neg hex]
@@ -378,9 +378,9 @@ theorem floor_le_floorLanding [S : Slots Validator] {w : ℕ → ℕ}
 theorem floorLanding_least [S : Slots Validator] {w : ℕ → ℕ}
     {U : BlockUniverse Validator BlockId Payload} {V : View Validator BlockId Payload U} {k : ℕ}
     (h : ¬ Decided w U V (floorLanding w U V k) none) :
-    ∀ y, k + w k ≤ y → ¬ Decided w U V y none → floorLanding w U V k ≤ y := by
+    ∀ y, k + w (S.kind k) ≤ y → ¬ Decided w U V y none → floorLanding w U V k ≤ y := by
   classical
-  have hex : ∃ y, k + w k ≤ y ∧ ¬ Decided w U V y none := by
+  have hex : ∃ y, k + w (S.kind k) ≤ y ∧ ¬ Decided w U V y none := by
     by_contra hno
     exact h (by rw [floorLanding, dif_neg hno] at h ⊢; exact absurd ⟨_, le_rfl, h⟩ hno)
   intro y hy hyskip
@@ -546,7 +546,7 @@ theorem undecidedAtPeriodOne_le {U : BlockUniverse Validator BlockId Payload} {w
       PopulatedOn U T (MahiMahi.decisionRoundAt wa (b + j * wa + i)))
     (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa (b + M * wa - 1))) :
     (PMF.uniformOfFintype (Fin M → Fin wa → Validator)).toOuterMeasure
-        {g | ∀ v, ¬ Decided (S := chainSlots (coinOfBlocksFrom b g d)) (periodic ws wa 1) U V s v}
+        {g | ∀ v, ¬ Decided (S := chainSlots (coinOfBlocksFrom b g d)) (wavelength ws wa) U V s v}
       ≤ Coin.badBlockBound Validator wa ^ M := by
   classical
   set G : Fin M → Fin wa → Finset Validator :=
@@ -555,7 +555,7 @@ theorem undecidedAtPeriodOne_le {U : BlockUniverse Validator BlockId Payload} {w
     fun j i => card_goodAt_of_populated hwa hcard (hpop j i).1 (hpop j i).2
   -- a block good throughout is a run of direct commits, and the drain decides the slot below it
   have hsub : {g : Fin M → Fin wa → Validator | ∀ v,
-        ¬ Decided (S := chainSlots (coinOfBlocksFrom b g d)) (periodic ws wa 1) U V s v} ⊆
+        ¬ Decided (S := chainSlots (coinOfBlocksFrom b g d)) (wavelength ws wa) U V s v} ⊆
       {g | ∀ j ∈ (Finset.univ : Finset (Fin M)), ∃ i, g j i ∉ G j i} := by
     intro g hg
     by_contra hcon
@@ -569,7 +569,7 @@ theorem undecidedAtPeriodOne_le {U : BlockUniverse Validator BlockId Payload} {w
     have hjM : (j + 1) * wa ≤ M * wa := Nat.mul_le_mul_right wa j.isLt
     rw [Nat.add_mul, Nat.one_mul] at hjM
     have hrun : ∀ i, i < wa → ∃ L, Decided (S := chainSlots (coinOfBlocksFrom b g d))
-        (periodic ws wa 1) U V (b + j * wa + i) (some L) := by
+        (wavelength ws wa) U V (b + j * wa + i) (some L) := by
       intro i hi
       have hread : coinOfBlocksFrom b g d (b + j * wa + i) = g j ⟨i, hi⟩ :=
         coinOfBlocksFrom_read (by omega) g d j ⟨i, hi⟩
@@ -580,14 +580,14 @@ theorem undecidedAtPeriodOne_le {U : BlockUniverse Validator BlockId Payload} {w
       obtain ⟨L, hLU, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp hgood
       refine ⟨L, Decided.directCommit (S := chainSlots (coinOfBlocksFrom b g d))
         ⟨hLU, hLr, hLc⟩ ?_⟩
-      change MahiMahi.DirectCommitIn U V (periodic ws wa 1 (b + j * wa + i)) L (b + j * wa + i)
-      rw [periodic_one]
+      change MahiMahi.DirectCommitIn U V (wavelength ws wa 1) L (b + j * wa + i)
+      rw [wavelength_one]
       refine MahiMahiProperties.directCommitIn_of_coversUpto hdc (hV.mono ?_)
       unfold MahiMahi.decisionRoundAt
       omega
     obtain ⟨v, hv⟩ := allDecidedBelowOfRun (S := chainSlots (coinOfBlocksFrom b g d))
-      (fun r => by rw [periodic_one]; omega) (fun r => le_of_eq (periodic_one r)) (fun _ => rfl)
-      hrun s (by omega)
+      (fun _ => by change 1 ≤ wa; omega) (fun _ => le_of_eq rfl) (fun _ => rfl) hrun s
+      (by omega)
     exact hg v hv
   calc _ ≤ _ := MeasureTheory.measure_mono hsub
     _ ≤ Coin.badBlockBound Validator wa ^ (Finset.univ : Finset (Fin M)).card :=
@@ -752,16 +752,15 @@ theorem decided_of_good_blocks {U : BlockUniverse Validator BlockId Payload} {ws
     have hmul : (intervalOf I s + 2 + j₂ + 1) * I = (intervalOf I s + 2 + j₂) * I + I := by
       rw [Nat.add_mul, Nat.one_mul]
     exact intervalOf_eq_of_mul_lt_le (by unfold blockRound; omega) (by unfold blockRound; omega)
-  have hw2 : ∀ r, 2 ≤ adaptiveWave ws wa I per r :=
-    adaptiveWave_two_le (I := I) (per := per) hws (by omega)
+  have hw2 : ∀ κ, 2 ≤ wavelength ws wa κ := wavelength_two_le hws (by omega)
   have hper : ∀ j', j' ≤ intervalOf I (blockRound I (intervalOf I s) j₂ 0 + wa - 1) → ∃ st,
       PeriodAt (S := adaptiveSlots coin known I per) I wa coin upd k₀ U V
-        (adaptiveWave ws wa I per) j' st ∧ per j' = st.period := by
+        (wavelength ws wa) j' st ∧ per j' = st.period := by
     intro j' hj'
     rw [hint] at hj'
     have hex : ∀ j, j ≤ intervalOf I s + 1 + j₂ + 1 →
         ∃ st, PeriodAt (S := adaptiveSlots coin known I per) I wa coin upd k₀ U V
-          (adaptiveWave ws wa I per) j st :=
+          (wavelength ws wa) j st :=
       exists_periodAt_of_settled (S := adaptiveSlots coin known I per) hw2 fun r _ hr => hall r (by
         have := le_of_intervalOf hI (rfl : intervalOf I r = intervalOf I r)
         have := Nat.mul_le_mul_right I (show intervalOf I r + 1 ≤ intervalOf I s + 2 + j₂ by omega)
@@ -772,7 +771,7 @@ theorem decided_of_good_blocks {U : BlockUniverse Validator BlockId Payload} {ws
   unfold Settles
   refine ⟨(hper _ (by rw [hint]; omega)).imp fun st h => h.1, ?_⟩
   refine output_liveness_of_runs (S := adaptiveSlots coin known I per)
-    hws hle hwa (fun _ => rfl) hI (fun r h => if_pos h)
+    hws hle hwa (fun _ => rfl) (fun _ => rfl) hI (fun r h => if_pos h)
     (b := blockRound I (intervalOf I s) j₂ 0) hper h₁
     (j := intervalOf I s + 2 + j₁) (by omega) ?_ ?_ hgoodb (hV.mono hb)
   · have := hg₁ ⟨0, by omega⟩
@@ -1258,7 +1257,7 @@ noncomputable def matchingPer (I wa : ℕ) (coin known : ℕ → Validator) (upd
       fun i => if _hi : i < j then matchingPer I wa coin known upd k₀ ws U V i else 0
     open Classical in
     if h : ∃ st, PeriodAt (S := adaptiveSlots coin known I prev) I wa coin upd k₀ U V
-        (adaptiveWave ws wa I prev) j st then (Classical.choose h).period else 0
+        (wavelength ws wa) j st then (Classical.choose h).period else 0
 termination_by j => j
 
 /-- **SH15f.** A derivation at the sequence built by `matchingPer` reads the sequence below its
@@ -1277,7 +1276,7 @@ theorem matchingPer_matches {I wa : ℕ} {ws : ℕ} (hws : 2 ≤ ws) (hwa : 3 �
     simp only [hprev, dif_pos hi]
   have hst' := periodAt_congr_per hws (by omega) hst hagree
   have hex : ∃ st, PeriodAt (S := adaptiveSlots coin known I prev) I wa coin upd k₀ U V
-      (adaptiveWave ws wa I prev) j st := ⟨st, hst'⟩
+      (wavelength ws wa) j st := ⟨st, hst'⟩
   rw [dif_pos hex]
   exact congrArg ScanState.period
     (periodAt_unique (S := adaptiveSlots coin known I prev) hwa (Classical.choose_spec hex) hst')

@@ -446,8 +446,8 @@ theorem descends {w : ℕ → ℕ} (hw : ∀ r, 1 ≤ w r) {c : ℕ}
     (Payload := Payload) hw) hc (fun b i hi => by
       have := (steelheadAnchored Validator BlockId Payload w).eligible_iff.mp (hspan b i hi)
       simp only [steelheadAnchored_waveAt] at this
-      have := hw (S.slotRound i)
-      change S.slotRound i + w (S.slotRound i) ≤ S.slotRound (b + c - 1)
+      have := hw (S.kind i)
+      change S.slotRound i + w (S.kind i) ≤ S.slotRound (b + c - 1)
       omega) V b hrun i hi
 
 /-- **SH6a.** The bridge certifies the slot's candidate from every reliable block at its decision
@@ -460,7 +460,7 @@ theorem commitsOfSynchrony {U : BlockUniverse Validator BlockId Payload} {w : �
     (hN : ∀ j, j ≤ k → (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N)
     (hV : V.CoversUpto N) (hlead : S.leader k ∈ T) :
     ∃ L, IsLeaderBlock U k L ∧
-      MahiMahi.DirectCommitIn U V (w (S.slotRound k)) L (S.slotRound k) ∧
+      MahiMahi.DirectCommitIn U V (w (S.kind k)) L (S.slotRound k) ∧
       Decided w U V k (some L) := by
   obtain ⟨-, -, -, -, h⟩ := Timed.live_of_coverage (shSupport w) (shSupport_ofCoverage hw)
     (isQuorum_core hT hcard) hs hpop S V (lo := k) (K := k + 1) hV hR
@@ -496,21 +496,23 @@ theorem decidedOfReliableAboveFloor {U : BlockUniverse Validator BlockId Payload
     (hw : ∀ r, 3 ≤ w r) (hid : ∀ t, S.slotRound t = t) {T : Finset Validator}
     {V : View Validator BlockId Payload U} {R N k a : ℕ} (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card) (hs : SynchronisedOn U T R)
-    (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) (hR : R ≤ k) (hka : k + w k ≤ a)
-    (hlead : S.leader a ∈ T) (hdec : ∀ j, k + w k ≤ j → j < a → ∃ v, Decided w U V j v)
+    (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) (hR : R ≤ k) (hka : k + w (S.kind k) ≤ a)
+    (hlead : S.leader a ∈ T)
+    (hdec : ∀ j, k + w (S.kind k) ≤ j → j < a → ∃ v, Decided w U V j v)
     (hN : ∀ j, j ≤ a → (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N)
     (hV : V.CoversUpto N) : ∃ v, Decided w U V k v := by
   classical
   -- the reliably led slot commits
   obtain ⟨A, -, -, hA⟩ := commitsOfSynchrony hw hT hcard hs hpop (by rw [hid]; omega) hN hV hlead
   -- the least committed slot at or above the floor
-  have hex : ∃ j, k + w k ≤ j ∧ ∃ A, Decided w U V j (some A) := ⟨a, hka, A, hA⟩
-  obtain ⟨hkj, A', hA'⟩ : k + w k ≤ Nat.find hex ∧ ∃ A, Decided w U V (Nat.find hex) (some A) :=
+  have hex : ∃ j, k + w (S.kind k) ≤ j ∧ ∃ A, Decided w U V j (some A) := ⟨a, hka, A, hA⟩
+  obtain ⟨hkj, A', hA'⟩ :
+      k + w (S.kind k) ≤ Nat.find hex ∧ ∃ A, Decided w U V (Nat.find hex) (some A) :=
     Nat.find_spec hex
   have hja : Nat.find hex ≤ a := Nat.find_le ⟨hka, A, hA⟩
   -- every eligible slot between the floor and it is decided but not committed, so skipped
   have hmid : ∀ i', k < i' → i' < Nat.find hex →
-      (fun sr i j => sr i + w (sr i) ≤ sr j) S.slotRound k i' → Decided w U V i' none := by
+      S.slotRound k + w (S.kind k) ≤ S.slotRound i' → Decided w U V i' none := by
     intro i' _ hi'j helig
     simp only [hid] at helig
     have hnc : ¬ ∃ C, Decided w U V i' (some C) := fun hc => Nat.find_min hex hi'j ⟨helig, hc⟩
@@ -519,9 +521,9 @@ theorem decidedOfReliableAboveFloor {U : BlockUniverse Validator BlockId Payload
     | none => exact hv
     | some C => exact absurd ⟨C, hv⟩ hnc
   obtain ⟨v, hv⟩ := indirect (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
-    (fun r => by have := hw r; omega) S V k (Nat.find hex) A' (by simp only [hid]; exact hkj) hA'
+    (fun κ => by have := hw κ; omega) S V k (Nat.find hex) A' (by simp only [hid]; exact hkj) hA'
     hmid
-  exact ⟨v, hv S rfl rfl hA' hmid⟩
+  exact ⟨v, hv S rfl rfl rfl hA' hmid⟩
 
 /-! ## SH6g — the floor chain -/
 
@@ -529,17 +531,18 @@ theorem decidedOfReliableAboveFloor {U : BlockUniverse Validator BlockId Payload
 decides the slot: the indirect rule reads the commit as the anchor and passes over the skips. -/
 theorem decidedOfCommitAboveFloor {U : BlockUniverse Validator BlockId Payload} {w : ℕ → ℕ}
     (hw : ∀ r, 3 ≤ w r) (hid : ∀ t, S.slotRound t = t)
-    {V : View Validator BlockId Payload U} {k a : ℕ} {A : BlockId} (hka : k + w k ≤ a)
-    (hA : Decided w U V a (some A)) (hmid : ∀ j, k + w k ≤ j → j < a → Decided w U V j none) :
+    {V : View Validator BlockId Payload U} {k a : ℕ} {A : BlockId} (hka : k + w (S.kind k) ≤ a)
+    (hA : Decided w U V a (some A))
+    (hmid : ∀ j, k + w (S.kind k) ≤ j → j < a → Decided w U V j none) :
     ∃ v, Decided w U V k v := by
   have hmid' : ∀ i', k < i' → i' < a →
-      (fun sr i j => sr i + w (sr i) ≤ sr j) S.slotRound k i' → Decided w U V i' none := by
+      S.slotRound k + w (S.kind k) ≤ S.slotRound i' → Decided w U V i' none := by
     intro i' _ hi' helig
     simp only [hid] at helig
     exact hmid i' helig hi'
   obtain ⟨v, hv⟩ := indirect (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
-    (fun r => by have := hw r; omega) S V k a A (by simp only [hid]; exact hka) hA hmid'
-  exact ⟨v, hv S rfl rfl hA hmid'⟩
+    (fun κ => by have := hw κ; omega) S V k a A (by simp only [hid]; exact hka) hA hmid'
+  exact ⟨v, hv S rfl rfl rfl hA hmid'⟩
 
 /-- **SH6g.** Downward induction on the chain: the last landing is reliably led, so it commits
 directly (SH6a); a landing whose successor commits is decided, the slots between them being the
@@ -564,7 +567,7 @@ theorem floorChainDecides {U : BlockUniverse Validator BlockId Payload} {w : ℕ
   | succ h ih =>
     intro x hR hhop hlead hN
     have hhop0 : FloorHop w U V (x 0) (x 1) := hhop 0 (by omega)
-    have hR1 : R ≤ x 1 := le_trans hR (by have := hhop0.1; have := hw (x 0); omega)
+    have hR1 : R ≤ x 1 := le_trans hR (by have := hhop0.1; have := hw (S.kind (x 0)); omega)
     obtain ⟨v, hv⟩ := ih (fun i => x (i + 1)) hR1 (fun i hi => hhop (i + 1) (by omega)) hlead hN
     obtain ⟨A, rfl⟩ : ∃ A, v = some A := by
       cases v with
@@ -577,7 +580,7 @@ skipped round is never reliably led. If none of the first `n − |T|` landings w
 neither would be any round from a landing's floor up to the next landing, those being the skips
 the hop passes over, and `roundRobin_hop_bound` would contradict `ws · (n − |T|) < n`. -/
 theorem floorChainReachesReliable {U : BlockUniverse Validator BlockId Payload} {w : ℕ → ℕ}
-    {ws n : ℕ} (hn : 0 < n) (hwr : ∀ r, w r = ws) (hws : 3 ≤ ws) (hid : ∀ t, S.slotRound t = t)
+    {ws n : ℕ} (hn : 0 < n) (hwr : ∀ κ, w κ = ws) (hws : 3 ≤ ws) (hid : ∀ t, S.slotRound t = t)
     {T : Finset Validator} {V : View Validator BlockId Payload U} {R N : ℕ}
     (hT : T ⊆ (Correct : Finset Validator)) (hcard : quorumCard Validator ≤ T.card)
     (hs : SynchronisedOn U T R) (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
@@ -588,7 +591,7 @@ theorem floorChainReachesReliable {U : BlockUniverse Validator BlockId Payload} 
       (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N) :
     ∃ i, i ≤ n - T.card ∧ S.leader (x i) ∈ T := by
   classical
-  have hw3 : ∀ r, 3 ≤ w r := fun r => by rw [hwr r]; exact hws
+  have hw3 : ∀ κ, 3 ≤ w κ := fun κ => by rw [hwr κ]; exact hws
   by_contra hcon
   have hno : ∀ i, i ≤ n - T.card → S.leader (x i) ∉ T := fun i hi hmem => hcon ⟨i, hi, hmem⟩
   have hstep : ∀ i, i < n - T.card → x i + ws ≤ x (i + 1) := by
@@ -633,11 +636,11 @@ theorem skipsCrashed {U : BlockUniverse Validator BlockId Payload} {w : ℕ → 
     {T : Finset Validator} {V : View Validator BlockId Payload U} {k : ℕ}
     (hcard : quorumCard Validator ≤ T.card)
     (hcrash : ∀ L ∈ U.ids, (U.block L).round = S.slotRound k → (U.block L).creator ≠ S.leader k)
-    (hpop : PopulatedOn U T (MahiMahi.votingRound (w (S.slotRound k)) (S.slotRound k)))
-    (hV : V.CoversUpto (MahiMahi.votingRound (w (S.slotRound k)) (S.slotRound k))) :
+    (hpop : PopulatedOn U T (MahiMahi.votingRound (w (S.kind k)) (S.slotRound k)))
+    (hV : V.CoversUpto (MahiMahi.votingRound (w (S.kind k)) (S.slotRound k))) :
     Decided w U V k none := by
   refine Decided.directSkip ?_
-  change MahiMahi.DirectSkipIn U V (w (S.slotRound k)) (S.leader k) (S.slotRound k)
+  change MahiMahi.DirectSkipIn U V (w (S.kind k)) (S.leader k) (S.slotRound k)
   unfold MahiMahi.DirectSkipIn HoldsAtLeast
   refine le_trans hcard (Finset.card_le_card fun v hv => ?_)
   obtain ⟨q, hq, hqc, hqr⟩ := hpop v hv
@@ -654,7 +657,7 @@ landing led from outside `T` is Byzantine-led, the skips between landings are no
 (SH6a and one verdict per slot, as in SH6i), and `roundRobin_byzantine_hop_bound` bounds the
 chain by the Byzantine validators. -/
 theorem floorChainReachesReliableWithinByzantine {U : BlockUniverse Validator BlockId Payload}
-    {w : ℕ → ℕ} {ws n : ℕ} (hn : 0 < n) (hwr : ∀ r, w r = ws) (hws : 3 ≤ ws)
+    {w : ℕ → ℕ} {ws n : ℕ} (hn : 0 < n) (hwr : ∀ κ, w κ = ws) (hws : 3 ≤ ws)
     (hid : ∀ t, S.slotRound t = t) {T : Finset Validator} {V : View Validator BlockId Payload U}
     {R N : ℕ} (hT : T ⊆ (Correct : Finset Validator)) (hcard : quorumCard Validator ≤ T.card)
     (hs : SynchronisedOn U T R) (hpop : ∀ r, R ≤ r → r ≤ N → PopulatedOn U T r)
@@ -669,7 +672,7 @@ theorem floorChainReachesReliableWithinByzantine {U : BlockUniverse Validator Bl
       (steelheadAnchored Validator BlockId Payload w).decisionRound j ≤ N) :
     ∃ i, i ≤ F.byzantine.card ∧ S.leader (x i) ∈ T := by
   classical
-  have hw3 : ∀ r, 3 ≤ w r := fun r => by rw [hwr r]; exact hws
+  have hw3 : ∀ κ, 3 ≤ w κ := fun κ => by rw [hwr κ]; exact hws
   by_contra hcon
   have hno : ∀ i, i ≤ F.byzantine.card → S.leader (x i) ∉ T :=
     fun i hi hmem => hcon ⟨i, hi, hmem⟩
@@ -706,8 +709,8 @@ theorem floorChainReachesReliableWithinByzantine {U : BlockUniverse Validator Bl
     have hRi : R ≤ x i := le_trans hR (hmono 0 i (by omega) hi)
     have hdec := hN (x i) (hmono i _ hi le_rfl)
     simp only [AnchoredRule.decisionRound, steelheadAnchored_waveAt, hid, hwr] at hdec
-    have hvote : R ≤ MahiMahi.votingRound (w (S.slotRound (x i))) (S.slotRound (x i)) ∧
-        MahiMahi.votingRound (w (S.slotRound (x i))) (S.slotRound (x i)) ≤ N := by
+    have hvote : R ≤ MahiMahi.votingRound (w (S.kind (x i))) (S.slotRound (x i)) ∧
+        MahiMahi.votingRound (w (S.kind (x i))) (S.slotRound (x i)) ≤ N := by
       unfold MahiMahi.votingRound
       rw [hid, hwr]
       omega
@@ -778,15 +781,15 @@ decision round references all of them and so certifies; and a view holding the d
 holds those certificates. -/
 theorem commitsOfDissemination {U : BlockUniverse Validator BlockId Payload} {w : ℕ → ℕ}
     {T : Finset Validator} {V : View Validator BlockId Payload U} {k : ℕ} {L q : BlockId}
-    (hw : 4 ≤ w (S.slotRound k)) (hcard : quorumCard Validator ≤ T.card)
+    (hw : 4 ≤ w (S.kind k)) (hcard : quorumCard Validator ≤ T.card)
     (hL : IsLeaderBlock U k L)
     (huniq : ∀ L' ∈ U.ids, (U.block L').round = S.slotRound k →
       (U.block L').creator = S.leader k → L' = L)
     (hq : q ∈ U.ids) (hqr : (U.block q).round = S.slotRound k + 1) (hqT : (U.block q).creator ∈ T)
     (hqL : L ∈ (U.block q).refs) (hs : SynchronisedOn U T (S.slotRound k + 1))
     (hpop : ∀ r, S.slotRound k + 1 ≤ r →
-      r ≤ MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k) → PopulatedOn U T r)
-    (hV : V.CoversUpto (MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k))) :
+      r ≤ MahiMahi.decisionRoundAt (w (S.kind k)) (S.slotRound k) → PopulatedOn U T r)
+    (hV : V.CoversUpto (MahiMahi.decisionRoundAt (w (S.kind k)) (S.slotRound k))) :
     Decided w U V k (some L) := by
   have hreach := reaches_of_synchronised_of_ref hcard hs hpop hq hqr hqT hqL
   have huniq' : ∀ L' ∈ U.ids, (U.block L').round = (U.block L).round →
@@ -794,18 +797,18 @@ theorem commitsOfDissemination {U : BlockUniverse Validator BlockId Payload} {w 
     fun L' h1 h2 h3 => huniq L' h1 (h2.trans hL.2.1) (h3.trans hL.2.2)
   -- every reliable block at the decision round certifies L
   have hcert : ∀ C ∈ U.ids,
-      (U.block C).round = MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k) →
+      (U.block C).round = MahiMahi.decisionRoundAt (w (S.kind k)) (S.slotRound k) →
       (U.block C).creator ∈ T →
-      C ∈ MahiMahi.certificates U (w (S.slotRound k)) L (S.slotRound k) := by
+      C ∈ MahiMahi.certificates U (w (S.kind k)) L (S.slotRound k) := by
     intro C hC hCr hCT
     refine mem_certificatesAt.mpr ⟨hC, hCr, ?_⟩
     unfold CarriesVotes
     refine le_trans hcard (Finset.card_le_card fun v hv => ?_)
-    obtain ⟨b, hb, hbc, hbr⟩ := hpop (MahiMahi.votingRound (w (S.slotRound k)) (S.slotRound k))
+    obtain ⟨b, hb, hbc, hbr⟩ := hpop (MahiMahi.votingRound (w (S.kind k)) (S.slotRound k))
       (by unfold MahiMahi.votingRound; omega)
       (by unfold MahiMahi.votingRound MahiMahi.decisionRoundAt; omega) v hv
     refine mem_creatorsOf.mpr ⟨b, mem_carriedVotes.mpr ⟨?_, ?_⟩, hbc⟩
-    · refine hs (MahiMahi.votingRound (w (S.slotRound k)) (S.slotRound k))
+    · refine hs (MahiMahi.votingRound (w (S.kind k)) (S.slotRound k))
         (by unfold MahiMahi.votingRound; omega) C hC ?_ hCT b hb hbr (hbc ▸ hv)
       rw [hCr]
       unfold MahiMahi.votingRound MahiMahi.decisionRoundAt
@@ -814,7 +817,7 @@ theorem commitsOfDissemination {U : BlockUniverse Validator BlockId Payload} {w 
       · rw [hbr]; unfold MahiMahi.votingRound; omega
       · rw [hbr]; unfold MahiMahi.votingRound MahiMahi.decisionRoundAt; omega
   -- so L is directly committed, and the view holds the certificates
-  have hdc : MahiMahi.DirectCommit U (w (S.slotRound k)) L (S.slotRound k) := by
+  have hdc : MahiMahi.DirectCommit U (w (S.kind k)) L (S.slotRound k) := by
     unfold MahiMahi.DirectCommit
     refine le_trans hcard (Finset.card_le_card fun v hv => ?_)
     obtain ⟨C, hC, hCc, hCr⟩ := hpop _ (by unfold MahiMahi.decisionRoundAt; omega) le_rfl v hv
@@ -896,32 +899,29 @@ section Stall
 variable [S : Slots Validator] {U : BlockUniverse Validator BlockId Payload}
   {V : View Validator BlockId Payload U} {ws wa k : ℕ}
 
-/-- The wavelength at a synchronous round is `ws`. -/
-theorem periodic_of_not_isAsync {r : ℕ} (h : ¬ IsAsync k r) : periodic ws wa k r = ws := by
-  unfold IsAsync at h
-  simp [periodic, h]
-
-/-- The residue class `k − 1` is synchronous, at `2 ≤ k`. -/
-theorem not_isAsync_of_mod {i : ℕ} (hk : 2 ≤ k) (hi : i % k = k - 1) : ¬ IsAsync k i := by
-  unfold IsAsync; omega
+omit [Fintype Validator] [DecidableEq Validator] F in
+/-- Under a periodic schedule an asynchronous slot's round is a multiple of the period. -/
+theorem isAsync_of_kind (hkind : ∀ s, S.kind s = periodicKind k s) {j : ℕ} (h : S.kind j = 1) :
+    IsAsync k j :=
+  periodicKind_eq_one_iff.mp (hkind j ▸ h)
 
 /-- **A synchronous slot never commits** when no synchronous candidate of the slots `Q` names is
 certified: the direct commit and the link both need a certificate. -/
 theorem not_commit_sync_of_pred (hid : ∀ s, S.slotRound s = s) {Q : ℕ → Prop}
-    (hcert : ∀ (j : ℕ) (L : BlockId), Q j → ¬ IsAsync k j → IsLeaderBlock U j L →
+    (hcert : ∀ (j : ℕ) (L : BlockId), Q j → S.kind j = 0 → IsLeaderBlock U j L →
       MahiMahi.certificates U ws L j = ∅)
-    {j : ℕ} {A : BlockId} (hQ : Q j) (hj : ¬ IsAsync k j)
-    (h : Decided (periodic ws wa k) U V j (some A)) : False := by
+    {j : ℕ} {A : BlockId} (hQ : Q j) (hj : S.kind j = 0)
+    (h : Decided (wavelength ws wa) U V j (some A)) : False := by
   have hne : (MahiMahi.certificates U ws A j).Nonempty := by
     cases h with
     | directCommit hL hc =>
-      change MahiMahi.DirectCommitIn U V (periodic ws wa k (S.slotRound j)) A (S.slotRound j) at hc
-      rw [hid, periodic_of_not_isAsync hj] at hc
+      change MahiMahi.DirectCommitIn U V (wavelength ws wa (S.kind j)) A (S.slotRound j) at hc
+      rw [hid, hj, wavelength_zero] at hc
       exact MahiMahi.certificates_nonempty_of_directCommit
         (MahiMahi.directCommit_of_directCommitIn hc)
     | indirectCommit _ _ _ _ _ _ _ hlink _ =>
-      change MahiMahi.CertifiedIn U (periodic ws wa k (S.slotRound j)) _ A (S.slotRound j) at hlink
-      rw [hid, periodic_of_not_isAsync hj] at hlink
+      change MahiMahi.CertifiedIn U (wavelength ws wa (S.kind j)) _ A (S.slotRound j) at hlink
+      rw [hid, hj, wavelength_zero] at hlink
       exact MahiMahi.certificates_nonempty_of_certifiedIn hlink
   rw [hcert j A hQ hj (AnchoredRule.isLeaderBlock_of_decided h)] at hne
   exact Finset.not_nonempty_empty hne
@@ -929,10 +929,10 @@ theorem not_commit_sync_of_pred (hid : ∀ s, S.slotRound s = s) {Q : ℕ → Pr
 /-- **A synchronous slot never commits** when no synchronous candidate is
 certified: the direct commit and the link both need a certificate. -/
 theorem not_commit_sync (hid : ∀ s, S.slotRound s = s)
-    (hcert : ∀ (j : ℕ) (L : BlockId), ¬ IsAsync k j → IsLeaderBlock U j L →
+    (hcert : ∀ (j : ℕ) (L : BlockId), S.kind j = 0 → IsLeaderBlock U j L →
       MahiMahi.certificates U ws L j = ∅)
-    {j : ℕ} {A : BlockId} (hj : ¬ IsAsync k j)
-    (h : Decided (periodic ws wa k) U V j (some A)) : False :=
+    {j : ℕ} {A : BlockId} (hj : S.kind j = 0)
+    (h : Decided (wavelength ws wa) U V j (some A)) : False :=
   not_commit_sync_of_pred hid (Q := fun _ => True) (fun j L _ => hcert j L) trivial hj h
 
 /-- An asynchronous round above `i + 1`, where `i ≡ k − 1`, lies a full
@@ -959,60 +959,74 @@ which must be skipped, which is the claim one period up. The certificate and ski
 asked at the slots `Q` names, which every slot a derivation in `V` mentions satisfies; on a view
 that reaches no further than some round, that is the slots below it. -/
 theorem stall_of_pred (hws : 2 ≤ ws) (hk : ws ≤ k) (hid : ∀ s, S.slotRound s = s) {Q : ℕ → Prop}
-    (hQ : ∀ (j : ℕ) (v : Option BlockId), Decided (periodic ws wa k) U V j v → Q j)
-    (hcert : ∀ (j : ℕ) (L : BlockId), Q j → ¬ IsAsync k j → IsLeaderBlock U j L →
+    (hkind : ∀ s, Q s → S.kind s = periodicKind k s)
+    (hQ : ∀ (j : ℕ) (v : Option BlockId), Decided (wavelength ws wa) U V j v → Q j)
+    (hcert : ∀ (j : ℕ) (L : BlockId), Q j → S.kind j = 0 → IsLeaderBlock U j L →
       MahiMahi.certificates U ws L j = ∅)
-    (hskip : ∀ j, Q j → ¬ IsAsync k j → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j)
+    (hskip : ∀ j, Q j → S.kind j = 0 → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j)
     {i : ℕ} (hi : i % k = k - 1) {v : Option BlockId}
-    (h : Decided (periodic ws wa k) U V i v) : False := by
+    (h : Decided (wavelength ws wa) U V i v) : False := by
   have hk2 : 2 ≤ k := le_trans hws hk
+  -- a class-(k − 1) slot the view names is synchronous
+  have hsync_of_mod : ∀ {i : ℕ}, Q i → i % k = k - 1 → S.kind i = 0 := by
+    intro i hQi hi
+    rw [hkind i hQi]
+    unfold periodicKind
+    rw [if_neg]
+    omega
   -- the middle slot of an asynchronous anchor's search is one period up
-  have hmid_of_async : ∀ {i j : ℕ}, i % k = k - 1 → IsAsync k j →
-      (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Eligible i j →
+  have hmid_of_async : ∀ {i j : ℕ}, Q i → Q j → i % k = k - 1 → S.kind j = 1 →
+      (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).Eligible i j →
       i < i + k ∧ i + k < j ∧
-        (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Eligible i (i + k) := by
-    intro i j hi hj helig
-    have hsync := not_isAsync_of_mod hk2 hi
+        (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).Eligible i (i + k) := by
+    intro i j hQi hQj hi hj helig
+    have hsync := hsync_of_mod hQi hi
+    have hasync : IsAsync k j := periodicKind_eq_one_iff.mp (hkind j hQj ▸ hj)
     rw [AnchoredRule.eligible_iff] at helig ⊢
-    simp only [steelheadAnchored_waveAt, hid, periodic_of_not_isAsync hsync] at helig ⊢
-    have := add_period_le_of_isAsync hk2 hi hj (by omega)
+    simp only [steelheadAnchored_waveAt, hid, hsync, wavelength_zero] at helig ⊢
+    have := add_period_le_of_isAsync hk2 hi hasync (by omega)
     omega
   revert hi
   induction h with
   | @directCommit j L hL hc =>
     intro hi
-    exact not_commit_sync_of_pred hid hcert (hQ j _ (Decided.directCommit hL hc))
-      (not_isAsync_of_mod hk2 hi) (Decided.directCommit hL hc)
+    have hQj := hQ j _ (Decided.directCommit hL hc)
+    exact not_commit_sync_of_pred hid hcert hQj (hsync_of_mod hQj hi) (Decided.directCommit hL hc)
   | @directSkip j hs =>
     intro hi
-    have hj := not_isAsync_of_mod hk2 hi
     have hQj := hQ j none (Decided.directSkip hs)
-    change MahiMahi.DirectSkipIn U V (periodic ws wa k (S.slotRound j)) (S.leader j)
+    have hj := hsync_of_mod hQj hi
+    change MahiMahi.DirectSkipIn U V (wavelength ws wa (S.kind j)) (S.leader j)
       (S.slotRound j) at hs
-    rw [hid, periodic_of_not_isAsync hj] at hs
+    rw [hid, hj, wavelength_zero] at hs
     exact hskip j hQj hj hs
-  | @indirectCommit i j A L _ hkj helig hj hmid _ _ _ _ _ _ ihmid =>
+  | @indirectCommit i j A L _ hkj helig hj hmid hi' hemp hL hlink hleast _ ihmid =>
     intro hi
-    by_cases hasync : IsAsync k j
-    · obtain ⟨h1, h2, h3⟩ := hmid_of_async hi hasync helig
+    have hQi := hQ i _ (Decided.indirectCommit hkj helig hj hmid hi' hemp hL hlink hleast)
+    by_cases hasync : S.kind j = 1
+    · obtain ⟨h1, h2, h3⟩ := hmid_of_async hQi (hQ j _ hj) hi hasync helig
       exact ihmid (i + k) h1 h2 h3 (by rw [Nat.add_mod_right]; exact hi)
-    · exact not_commit_sync_of_pred hid hcert (hQ j _ hj) hasync hj
-  | @indirectSkip i j A hkj helig hj hmid _ _ ihmid =>
+    · exact not_commit_sync_of_pred hid hcert (hQ j _ hj)
+        (by rw [hkind j (hQ j _ hj)] at hasync ⊢; exact periodicKind_eq_zero_of_ne_one hasync) hj
+  | @indirectSkip i j A hkj helig hj hmid hnone _ ihmid =>
     intro hi
-    by_cases hasync : IsAsync k j
-    · obtain ⟨h1, h2, h3⟩ := hmid_of_async hi hasync helig
+    have hQi := hQ i _ (Decided.indirectSkip hkj helig hj hmid hnone)
+    by_cases hasync : S.kind j = 1
+    · obtain ⟨h1, h2, h3⟩ := hmid_of_async hQi (hQ j _ hj) hi hasync helig
       exact ihmid (i + k) h1 h2 h3 (by rw [Nat.add_mod_right]; exact hi)
-    · exact not_commit_sync_of_pred hid hcert (hQ j _ hj) hasync hj
+    · exact not_commit_sync_of_pred hid hcert (hQ j _ hj)
+        (by rw [hkind j (hQ j _ hj)] at hasync ⊢; exact periodicKind_eq_zero_of_ne_one hasync) hj
 
 /-- **SH8.** `stall_of_pred` with nothing asked of the slots. -/
 theorem stall (hws : 2 ≤ ws) (hk : ws ≤ k) (hid : ∀ s, S.slotRound s = s)
-    (hcert : ∀ (j : ℕ) (L : BlockId), ¬ IsAsync k j → IsLeaderBlock U j L →
+    (hkind : ∀ s, S.kind s = periodicKind k s)
+    (hcert : ∀ (j : ℕ) (L : BlockId), S.kind j = 0 → IsLeaderBlock U j L →
       MahiMahi.certificates U ws L j = ∅)
-    (hskip : ∀ j, ¬ IsAsync k j → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j)
+    (hskip : ∀ j, S.kind j = 0 → ¬ MahiMahi.DirectSkipIn U V ws (S.leader j) j)
     {i : ℕ} (hi : i % k = k - 1) {v : Option BlockId}
-    (h : Decided (periodic ws wa k) U V i v) : False :=
-  stall_of_pred hws hk hid (Q := fun _ => True) (fun _ _ _ => trivial) (fun j L _ => hcert j L)
-    (fun j _ => hskip j) hi h
+    (h : Decided (wavelength ws wa) U V i v) : False :=
+  stall_of_pred hws hk hid (Q := fun _ => True) (fun s _ => hkind s) (fun _ _ _ => trivial)
+    (fun j L _ => hcert j L) (fun j _ => hskip j) hi h
 
 end Stall
 
@@ -1022,18 +1036,20 @@ section Drain
 
 variable [S : Slots Validator] {U : BlockUniverse Validator BlockId Payload}
 
-/-- At one slot per round, `wa` consecutive slots span eligibility at every wavelength function
-bounded by `wa`. -/
-theorem spansEligible_of_le {w : ℕ → ℕ} {wa : ℕ} (hwa : 1 ≤ wa) (hle : ∀ r, w r ≤ wa)
+/-- At one slot per round, `wa` consecutive slots span eligibility whenever the wave of every
+slot's kind is at most `wa`. -/
+theorem spansEligible_of_le {w : ℕ → ℕ} {wa : ℕ} (hwa : 1 ≤ wa) (hle : ∀ s, w (S.kind s) ≤ wa)
     (hid : ∀ s, S.slotRound s = s) :
     (steelheadAnchored Validator BlockId Payload w).SpansEligible (S := S) wa := by
-  have := (steelheadAnchored Validator BlockId Payload w).spansEligible_of_identity (S := S) hid
-    (w := wa - 1) (fun r => by simp only [steelheadAnchored_waveAt]; have := hle r; omega)
-  rwa [Nat.sub_add_cancel hwa] at this
+  intro b i hi
+  have := hle i
+  rw [AnchoredRule.eligible_iff, hid, hid]
+  simp only [steelheadAnchored_waveAt]
+  omega
 
 /-- **SH9.** The relation's descent below a committed run, at each slot's own wave. -/
 theorem allDecidedBelowOfRun {w : ℕ → ℕ} {wa : ℕ} {V : View Validator BlockId Payload U} {b : ℕ}
-    (hw : ∀ r, 1 ≤ w r) (hle : ∀ r, w r ≤ wa) (hid : ∀ s, S.slotRound s = s)
+    (hw : ∀ s, 1 ≤ w (S.kind s)) (hle : ∀ s, w (S.kind s) ≤ wa) (hid : ∀ s, S.slotRound s = s)
     (hrun : ∀ i, i < wa → ∃ L, Decided w U V (b + i) (some L)) :
     ∀ i, i < b → ∃ v, Decided w U V i v := by
   have hwa : 1 ≤ wa := le_trans (hw 0) (hle 0)
@@ -1041,55 +1057,54 @@ theorem allDecidedBelowOfRun {w : ℕ → ℕ} {wa : ℕ} {V : View Validator Bl
     (spansEligible_of_le hwa hle hid) (Led := fun j => ∃ L, Decided w U V j (some L)) hrun
     fun j _ _ hj => hj
 
-/-- The period-one wavelength is `wa` at every round. -/
-theorem periodic_one {ws wa : ℕ} (r : ℕ) : periodic ws wa 1 r = wa := by
-  simp [periodic, Nat.mod_one]
-
 /-- **SH9b.** SH7a's argument at the output schedule: the clause names a run of `wa` committed
 leaders past `r`, each committed directly in a view holding its decision round, and the run
 decides everything below it (SH9). -/
 theorem allDecidedBelowAtPeriodOne {ws wa : ℕ} (hwa : 1 ≤ wa) {V : View Validator BlockId Payload U}
-    (hid : ∀ s, S.slotRound s = s) {c N : ℕ}
+    (hid : ∀ s, S.slotRound s = s) (hone : ∀ s, S.kind s = 1) {c N : ℕ}
     (hrun : MahiMahi.UnpredictableRunWithin (S := S) U wa c wa N) (hV : V.CoversUpto N) (r : ℕ)
     (hr : MahiMahi.decisionRoundAt wa (r + c + wa - 1) ≤ N) :
-    ∃ b, r ≤ b ∧ ∀ i, i < b → ∃ v, Decided (periodic ws wa 1) U V i v := by
+    ∃ b, r ≤ b ∧ ∀ i, i < b → ∃ v, Decided (wavelength ws wa) U V i v := by
   obtain ⟨k', hk1, hk2, hgood⟩ := hrun r (by
     rw [MahiMahi.mahiMahiAnchored_decisionRound (S := S) hwa, hid]; exact hr)
-  refine ⟨k', hk1, allDecidedBelowOfRun (fun r => by rw [periodic_one]; exact hwa)
-    (fun r => le_of_eq (periodic_one r)) hid fun i hi => ?_⟩
+  refine ⟨k', hk1, allDecidedBelowOfRun (fun s => by rw [hone, wavelength_one]; exact hwa)
+    (fun s => by rw [hone, wavelength_one]) hid fun i hi => ?_⟩
   obtain ⟨L, hL, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp (hgood i hi)
   refine ⟨L, Decided.directCommit ⟨hL, hLr, hLc⟩ ?_⟩
-  change MahiMahi.DirectCommitIn U V (periodic ws wa 1 (S.slotRound (k' + i))) L
+  change MahiMahi.DirectCommitIn U V (wavelength ws wa (S.kind (k' + i))) L
     (S.slotRound (k' + i))
-  rw [periodic_one]
+  rw [hone, wavelength_one]
   refine MahiMahiProperties.directCommitIn_of_coversUpto hdc (hV.mono ?_)
   rw [hid]
   unfold MahiMahi.decisionRoundAt at hr ⊢
   omega
 
-/-- **SH9c.** Decision rounds at the periodic wavelength: `r + wa − 1` at an asynchronous round,
+/-- **SH9c.** Decision rounds at the periodic kinds: `r + wa − 1` at an asynchronous slot,
 `r + ws − 1` at a synchronous one; the rest is arithmetic. -/
-theorem asyncSlotCost {ws wa k : ℕ} (hid : ∀ s, S.slotRound s = s) (hws : 1 ≤ ws) (hwa : ws ≤ wa)
-    {r : ℕ} (hr : IsAsync k r) :
-    (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound (S := S) r =
+theorem asyncSlotCost {ws wa k : ℕ} (hid : ∀ s, S.slotRound s = s)
+    (hkind : ∀ s, S.kind s = periodicKind k s) (hws : 1 ≤ ws) (hwa : ws ≤ wa)
+    {r : ℕ} (hr : S.kind r = 1) :
+    (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).decisionRound (S := S) r =
       (steelheadAnchored Validator BlockId Payload (fun _ => ws)).decisionRound (S := S) r +
         (wa - ws) ∧
     ∀ i, 1 ≤ i → i < k →
-      (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound (S := S) r ≤
-        (steelheadAnchored Validator BlockId Payload (periodic ws wa k)).decisionRound (S := S)
+      (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).decisionRound (S := S) r ≤
+        (steelheadAnchored Validator BlockId Payload (wavelength ws wa)).decisionRound (S := S)
           (r + i) + (wa - ws - i) := by
-  have hasync : periodic ws wa k r = wa := by unfold IsAsync at hr; simp [periodic, hr]
   refine ⟨?_, fun i hi hik => ?_⟩
   · unfold AnchoredRule.decisionRound
-    simp only [steelheadAnchored_waveAt, hid, hasync]
+    simp only [steelheadAnchored_waveAt, hid, hr, wavelength_one]
     omega
-  · have hsync : periodic ws wa k (r + i) = ws := by
-      refine periodic_of_not_isAsync ?_
-      unfold IsAsync at hr ⊢
-      rw [Nat.add_mod, hr, zero_add, Nat.mod_mod, Nat.mod_eq_of_lt hik]
+  · have hasync : IsAsync k r := isAsync_of_kind hkind hr
+    have hsync : S.kind (r + i) = 0 := by
+      rw [hkind]
+      unfold periodicKind
+      rw [if_neg]
+      unfold IsAsync at hasync
+      rw [Nat.add_mod, hasync, zero_add, Nat.mod_mod, Nat.mod_eq_of_lt hik]
       omega
     unfold AnchoredRule.decisionRound
-    simp only [steelheadAnchored_waveAt, hid, hasync, hsync]
+    simp only [steelheadAnchored_waveAt, hid, hr, hsync, wavelength_zero, wavelength_one]
     omega
 
 end Drain

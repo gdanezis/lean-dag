@@ -78,20 +78,22 @@ export AnchoredRule.Decided (directCommit directSkip indirectCommit indirectSkip
 end Decided
 
 /-- **A hop of the floor chain**: from slot `x`, the anchor search passes over every slot the view
-skips and stops at the first slot at or above `x`'s floor that it does not, which is `y`. One slot
-per round, as Theorem 2 reads the chain. -/
+skips and stops at the first slot at or above `x`'s floor, `x + w κ` at `x`'s kind `κ`, that it
+does not, which is `y`. One slot per round, as Theorem 2 reads the chain. -/
 def FloorHop (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (x y : ℕ) : Prop :=
-  x + w x ≤ y ∧ (∀ j, x + w x ≤ j → j < y → Decided w U V j none) ∧ ¬ Decided w U V y none
+  x + w (S.kind x) ≤ y ∧ (∀ j, x + w (S.kind x) ≤ j → j < y → Decided w U V j none) ∧
+    ¬ Decided w U V y none
 
 /-- **The landing of a hop**: the least slot at or above `k`'s floor that the view does not skip,
-which is where the anchor search stops. `k + w k` where the view skips every slot above the floor,
-a case a finite universe never reaches above its top, since nothing up there is decided at all;
-the claims that read the chain carry the landing's own `¬ Decided` and so never see it. -/
+which is where the anchor search stops. The floor itself where the view skips every slot above
+it, a case a finite universe never reaches above its top, since nothing up there is decided at
+all; the claims that read the chain carry the landing's own `¬ Decided` and so never see it. -/
 noncomputable def floorLanding (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) (k : ℕ) : ℕ :=
   open Classical in
-  if h : ∃ y, k + w k ≤ y ∧ ¬ Decided w U V y none then Nat.find h else k + w k
+  if h : ∃ y, k + w (S.kind k) ≤ y ∧ ¬ Decided w U V y none then Nat.find h
+  else k + w (S.kind k)
 
 /-- **The floor chain from a slot**: hop to the landing, and again from there. A function of the
 view, so that under a coin-shaped universe it is a function of the coin, which is what a bound on

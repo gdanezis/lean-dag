@@ -45,7 +45,7 @@ claims:
   them, so their order is. Within one slot the order of the blocks a
   commit releases is a tie-break the development does not assume.
 
-SH17a and SH17d assume `2 ≤ w r`, what the laws need; SH17b assumes
+SH17a and SH17d assume `2 ≤ w κ`, what the laws need; SH17b assumes
 nothing of the wave; SH17c and SH17e read no wave, since a committed
 leader's cone is what they read.
 
@@ -66,7 +66,7 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 def Agreement (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
   ∀ (V₁ V₂ : View Validator BlockId Payload U) (n m : ℕ) (g₁ g₂ : ℕ → Option BlockId)
     (b : BlockId),
-    (∀ r, 2 ≤ w r) →
+    (∀ κ, 2 ≤ w κ) →
     -- V₁ settled every slot below n, V₂ every slot below m ≥ n
     (∀ k, k < n → Decided w U V₁ k (g₁ k)) → (∀ k, k < m → Decided w U V₂ k (g₂ k)) → n ≤ m →
     -- a block V₁ delivers, V₂ delivers
@@ -116,7 +116,7 @@ def ValidityOfEventualReference (U : BlockUniverse Validator BlockId Payload) (w
 def TotalOrder (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : Prop :=
   ∀ (V₁ V₂ : View Validator BlockId Payload U) (n : ℕ) (g₁ g₂ : ℕ → Option BlockId)
     (b b' : BlockId) (k k' : ℕ),
-    (∀ r, 2 ≤ w r) →
+    (∀ κ, 2 ≤ w κ) →
     -- both views settled every slot below n
     (∀ i, i < n → Decided w U V₁ i (g₁ i)) → (∀ i, i < n → Decided w U V₂ i (g₂ i)) →
     -- V₁ outputs b at slot k and b' at the later slot k', below n
