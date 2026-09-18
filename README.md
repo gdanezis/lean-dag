@@ -210,8 +210,64 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   Reading the wave at the kind rather than at the round is what leaves
   the rule banded, so safety and truncation-locality come with it. A
   witness on data settles why an undecided slot reads the floor at its
-  own wave and not at its anchor's. The arc is under the statement/proof
-  partition.
+  own wave and not at its anchor's. Live under
+  synchrony at the slot's own wave, by the direct rule, and a slot is
+  decided once every slot from its floor up to a reliably led one is
+  decided. **A committed asynchronous slot does
+  not decide the synchronous slots below it**: a direct commit reaches a
+  lower slot only through a decided stretch, and at every period
+  `k ≥ ws` that stretch holds a synchronous slot the adversary keeps
+  undecided, the leader block delivered to exactly `f + 1` validators so
+  that neither quorum forms, on data at `n = 4`. The protocol therefore
+  drives its period from a second verdict, read at the control slots,
+  the coin rounds of each scan, after the reference implementation: the
+  Mahi-Mahi arc at a per-scan sub-schedule under a coin map, agreed per
+  scan, live under Mahi-Mahi's clause with a run of `wa` control slots,
+  and committing with the counting lemma's probability under a
+  uniform coin (`PMF`). The period sequence is stated afresh as a
+  relation over fixed intervals and is agreed under any deterministic
+  update rule, so the output at the adaptive wavelength is too, over the
+  intervals the record's own rounds fall in, and so are the ledger of a
+  settled prefix and the slot each block enters at. **The output is
+  live under the failover** the implementation applies, period `1`
+  at an anchor more than `I` rounds above the agreed output's last
+  commit: a slot two
+  intervals below an anchored one is decided once a run of `wa` good
+  coins above it is in view, and over the coins of `M` blocks of `K`
+  rounds a validator's scan stalls below the slot or leaves it undecided
+  with probability at most `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`,
+  which vanishes, and over a sequence of records with the coin drawn as
+  a process the slot is decided almost surely, "with probability one"
+  as the paper states it, both against an adversary that builds its
+  record from the draws already made. A crashed leader is skipped, partial
+  dissemination does not defer, an equivocating Byzantine leader at a
+  slot's floor is its anchor and holds it undecided on data, the chain
+  of floors decides the slot it starts from once it reaches a reliably
+  led landing, the round-robin schedule the implementation runs leads
+  three consecutive rounds reliably past every round at `n = 3f + 1` and
+  brings the chain to such a landing within `n − |T|` hops, and within
+  `b` once the other validators outside the reliable set have crashed, a
+  reliably led slot commits under either execution discipline, the reactive
+  schedule's waits and the timed schedule's rated timeout,
+  a block the reliable validators have referenced is delivered by the
+  first committed slot above, whoever led it, any family
+  of rules whose laws hold composes into one whose laws hold (Steelhead's rule
+  the composite of Mahi-Mahi's at each kind's wave, by definition),
+  Definition 1 holds clause by clause over settled prefixes, and
+  Algorithm 2's replay is data whose selection stays among the
+  candidates, whose window counts the counting lemma's candidates once
+  a quorum has populated it, whose asynchronous term is at most the
+  rule's own value on the same data, whose commit weight is the rule's
+  commit probability on the window, whose probes succeed only on
+  certificate quorums the DAG holds and exist whenever the canary is
+  coprime to the candidate, and which keeps the period in range;
+  on data it recovers from period `1` on a healthy window, keeps its
+  period on a startup window and on a complete window too short for a
+  wave, which the paper's interval bound admits, and answers a stalled
+  period at every anchor of the rotating stall, where no block above
+  round `2` is ever output until the scan's failover hands the period
+  to `1` and a run of the coin decides the stalled slot.
+  The arc is under the statement/proof partition.
 - **Black Marlin** (`LeanDag/BlackMarlin/`): the three-round commit rule
   of a partially synchronous protocol (DISC 2025) that uses neither
   reliable broadcast nor a common coin and elects an anchor in **every
@@ -469,6 +525,7 @@ them: the universe and the rule under `Model/`, what it shows in
 | [`docs/barnacle.md`](docs/barnacle.md) | the adaptive leader count: the interface A1–A4, the configuration-sequence model and why it needs no fixpoint, the liveness clause and its margin, the heads descent, the four instantiations, and the findings |
 | [`docs/hydrozoan.md`](docs/hydrozoan.md) | the dual-path rule under hybrid faults: the thresholds and their table, the two-case consistency argument as one statement, the slow path as the guaranteed one, the liveness package and its grounding, and the findings |
 | [`docs/optimal-hydrozoan.md`](docs/optimal-hydrozoan.md) | the fast path at Hydrangea's bound: the validity rule and per-block fast evidence, the seam that consumes the rule once, the skip as a liveness claim and FinWhale's attack on it, and the always-fast parametrisation |
+| [`docs/steelhead.md`](docs/steelhead.md) | two rules at one wavelength function: the anchor floor, the stall and the chain verdict, the drain, the period sequence and its agreement, the coin, and the findings for the paper |
 | [`docs/target-properties.md`](docs/target-properties.md) | the properties: what a rule shows and what it gets, the definitions displayed verbatim, the one-carrier-per-rule discipline, the audits, and the record of the passes that reached them |
 | [`docs/integration.md`](docs/integration.md) | the mechanisms at every rule: the cut and fill cells and the relation they witness, and the standing facts no property states — coverage under the fill, horizon placement, re-genesis, the exposure check, the storage budgets — with the deployment conditions they yield |
 | [`docs/hydrozoan-integration.md`](docs/hydrozoan-integration.md) | Hydrozoan and Optimal-Hydrozoan through the properties: the carriers and supports, the Barnacle instantiations and the committee bound round-robin needs, the schedule-free leader-exclusion clause, the native cut and fill |
