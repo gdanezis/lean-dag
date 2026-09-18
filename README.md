@@ -194,6 +194,22 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   implementation's slot blame. The arc is built under a
   statement/proof partition: definitions and statements are the audited
   surface, proofs are generated, and a checker enforces the split.
+- **Steelhead** (`LeanDag/Steelhead/`): two rules on one DAG, the
+  core's at `ws = 3` and Mahi-Mahi's at `wa`, every round given the
+  **wavelength** its slot reads and an undecided slot anchoring at its
+  own, `r + w(r)`. The two are one rule read at two wavelengths: at
+  three Mahi-Mahi's relation is the core's, slot for slot, which is why
+  the arc carries a single family of predicates for the `3f + 1` pair.
+  Verdicts agree across views and routes and across
+  the two rules, a direct commit under one handed over to an anchor
+  decided by the other, at every wavelength function of at least two
+  rounds, which is what the proofs consume. Three is the wave at which
+  the vote-and-certify pattern of the `3f + 1` pair first has a round to
+  put a certificate in: at two the vote round is the slot's own, so no
+  candidate is certified and every slot is directly skipped. A witness
+  on data settles why an undecided slot reads the floor at its own wave
+  and not at its anchor's. The arc is under the statement/proof
+  partition and imports nothing of Barnacle.
 - **Black Marlin** (`LeanDag/BlackMarlin/`): the three-round commit rule
   of a partially synchronous protocol (DISC 2025) that uses neither
   reliable broadcast nor a common coin and elects an anchor in **every
@@ -407,7 +423,9 @@ them: the universe and the rule under `Model/`, what it shows in
   count over an interface for the four base rules, `Hydrozoan/` — the
   dual-path rule under hybrid faults, with its own fault model and
   universe, and `OptimalHydrozoan/` — its fast path at Hydrangea's
-  bound, a peer arc importing the first, all under a statement/proof
+  bound, a peer arc importing the first, and `Steelhead/` — two rules
+  at one wavelength function, with the chain verdict and the period
+  sequence, all under a statement/proof
   partition (`Model/`, `<Result>/Statement.lean`,
   `<Result>/Proof.lean`); `Network/` — the composed
   denial-of-service capstones; `Integration/` — how the arcs compose).
