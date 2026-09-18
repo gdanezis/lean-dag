@@ -5302,15 +5302,15 @@ self-parent clause at the carrier, show `safety` and `progress`.
 
 `scripts/audit-conformance.py` and `scripts/audit-mechanisms.py` read
 the dependency graph and print what each rule shows and which mechanism
-cells exist. As of this writing: nine carriers over nine rules show the
-four properties and a support; every cell of cut, fill, re-genesis,
-adaptive leaders, prompt skip (where the rule skips) and chain quality
-is an instance, and liveness across each mechanism and across any stack
-is derived from the rule's support and its witnesses. `audit-bespoke.py`
-checks the other direction — no mechanism reaches a protocol's verdicts
-except through the properties — and reports no bespoke links. Black
-Marlin has no carrier, commits by round with no slot-indexed relation,
-and is out of scope by decision.
+cells exist. As of this writing: nine carriers over eleven rules, of
+which nine show the four properties and a support; every cell of cut,
+fill, re-genesis, adaptive leaders, prompt skip (where the rule skips)
+and chain quality is an instance, and liveness across each mechanism
+and across any stack is derived from the rule's support and its
+witnesses. `audit-bespoke.py` checks the other direction — no mechanism
+reaches a protocol's verdicts except through the properties — and
+reports no bespoke links. Black Marlin has no carrier, commits by round
+with no slot-indexed relation, and is out of scope by decision.
 
 **Every cut, fill and re-genesis is one construction.** A rule's
 universe is the block record (§2.3) at its own validity, and

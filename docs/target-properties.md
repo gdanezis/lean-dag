@@ -3198,7 +3198,7 @@ learns which execution model produced the certificates. That is what
 from coverage in which bridge they take to `Support.live`, and in
 nothing after it.
 
-**All nine rules with a carrier now have a `Support`**, and the
+**All ten rules with a carrier now have a `Support`**, and the
 conformance table reads `supp yes` across the board.
 
 | rule | support | Law 1 | Law 2 | Law 3 |
@@ -3210,6 +3210,7 @@ conformance table reads `supp yes` across the board.
 | Optimal-Hydrozoan | `optSupport`, Hydrozoan's at `U.val` | Hydrozoan's | Hydrozoan's | Hydrozoan's slow commit in `DecidedOpt` |
 | FinWhale | `fwSupport`, wave 2 (slow path) | parents and grandparents kept | `spCommitBy_of_synchronisedOn` cut down | the SP-commit on the view, through the pass |
 | Mahi-Mahi | `mmSupport w`, wave `w − 1` | `certifies_band` at the band a `RebasedAbove` is | see below | the cone certificates, in view |
+| Steelhead | `shSupport w`, wave `w r − 1` at a slot proposed at `r` | Mahi-Mahi's `certifies_band` at the candidate's own wave | the core's argument at wave three, Mahi-Mahi's above it | Mahi-Mahi's, at the slot's own decision round |
 
 **Mahi-Mahi was the test of `CoversToward`, and it passed without
 change to the predicate.** Its certifier sits `w − 1` rounds up and

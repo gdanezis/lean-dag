@@ -424,9 +424,8 @@ them: the universe and the rule under `Model/`, what it shows in
   dual-path rule under hybrid faults, with its own fault model and
   universe, and `OptimalHydrozoan/` — its fast path at Hydrangea's
   bound, a peer arc importing the first, and `Steelhead/` — two rules
-  at one wavelength function, with the chain verdict and the period
-  sequence, all under a statement/proof
-  partition (`Model/`, `<Result>/Statement.lean`,
+  at one wavelength function, with the chain verdict, all under a
+  statement/proof partition (`Model/`, `<Result>/Statement.lean`,
   `<Result>/Proof.lean`); `Network/` — the composed
   denial-of-service capstones; `Integration/` — how the arcs compose).
 - `LeanDag.lean` — root import file.
