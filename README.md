@@ -195,20 +195,22 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   statement/proof partition: definitions and statements are the audited
   surface, proofs are generated, and a checker enforces the split.
 - **Steelhead** (`LeanDag/Steelhead/`): two rules on one DAG, the
-  core's at `ws = 3` and Mahi-Mahi's at `wa`, every round given the
-  **wavelength** its slot reads and an undecided slot anchoring at its
-  own, `r + w(r)`. The two are one rule read at two wavelengths: at
-  three Mahi-Mahi's relation is the core's, slot for slot, which is why
-  the arc carries a single family of predicates for the `3f + 1` pair.
-  Verdicts agree across views and routes and across
-  the two rules, a direct commit under one handed over to an anchor
-  decided by the other, at every wavelength function of at least two
-  rounds, which is what the proofs consume. Three is the wave at which
-  the vote-and-certify pattern of the `3f + 1` pair first has a round to
-  put a certificate in: at two the vote round is the slot's own, so no
-  candidate is certified and every slot is directly skipped. A witness
-  on data settles why an undecided slot reads the floor at its own wave
-  and not at its anchor's. The arc is under the statement/proof
+  core's at `ws = 3` and Mahi-Mahi's at `wa`, every slot given a **kind**
+  by the schedule and reading the **wavelength** of that kind, an
+  undecided slot anchoring at its own, `r + w(κ)`. The two are one rule
+  read at two wavelengths: at three Mahi-Mahi's relation is the core's,
+  slot for slot, which is why the arc carries a single family of
+  predicates for the `3f + 1` pair. Verdicts agree across views and
+  routes and across the two rules, a direct commit under one handed over
+  to an anchor decided by the other, at every wavelength function of at
+  least two rounds, which is what the proofs consume. Three is the wave
+  at which the vote-and-certify pattern of the `3f + 1` pair first has a
+  round to put a certificate in: at two the vote round is the slot's own,
+  so no candidate is certified and every slot is directly skipped.
+  Reading the wave at the kind rather than at the round is what leaves
+  the rule banded, so safety and truncation-locality come with it. A
+  witness on data settles why an undecided slot reads the floor at its
+  own wave and not at its anchor's. The arc is under the statement/proof
   partition and imports nothing of Barnacle.
 - **Black Marlin** (`LeanDag/BlackMarlin/`): the three-round commit rule
   of a partially synchronous protocol (DISC 2025) that uses neither

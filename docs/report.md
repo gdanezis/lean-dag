@@ -5303,7 +5303,7 @@ self-parent clause at the carrier, show `safety` and `progress`.
 `scripts/audit-conformance.py` and `scripts/audit-mechanisms.py` read
 the dependency graph and print what each rule shows and which mechanism
 cells exist. As of this writing: nine carriers over eleven rules, of
-which nine show the four properties and a support; every cell of cut,
+which ten show the four properties and a support; every cell of cut,
 fill, re-genesis, adaptive leaders, prompt skip (where the rule skips)
 and chain quality is an instance, and liveness across each mechanism
 and across any stack is derived from the rule's support and its
@@ -16151,7 +16151,7 @@ abbrev Decided (w : ℕ → ℕ) (U : BlockUniverse Validator BlockId Payload)
   (steelheadAnchored Validator BlockId Payload w).Decided (S := S) U V
 ```
 
-**The decision relation at the wavelength function `w`**: the anchored relation at Steelhead's data. `Decided w U V k (some L)`: a validator holding `V` may commit `L` at `k`; `Decided w U V k none`: it may skip the slot; *undecided* is the absence of any derivation. Under `periodic ws wa k` this is Algorithm 1 of the paper.
+**The decision relation at the wavelength function `w`**: the anchored relation at Steelhead's data. `Decided w U V k (some L)`: a validator holding `V` may commit `L` at `k`; `Decided w U V k none`: it may skip the slot; *undecided* is the absence of any derivation. At `w = wavelength ws wa` under a schedule whose kinds are `periodicKind p` this is Algorithm 1 of the paper.
 
 #### `SynchronisedOn`
 
@@ -16215,7 +16215,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 494 theorems the body or Appendix A names, each
+The 495 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -22710,7 +22710,7 @@ theorem selfParent (w : ℕ → ℕ) : SelfParent (steelheadRule (Validator := V
 *theorem, `Steelhead.Properties.lean`*
 
 ```lean
-theorem agree {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
+theorem agree {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
     Agree (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
 ```
 
@@ -22721,12 +22721,24 @@ theorem agree {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
 *theorem, `Steelhead.Properties.lean`*
 
 ```lean
-theorem indirect {w : ℕ → ℕ} (hw : ∀ r, 1 ≤ w r) :
+theorem indirect {w : ℕ → ℕ} (hw : ∀ κ, 1 ≤ w κ) :
     Indirect (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
-      (fun sr i j => sr i + w (sr i) ≤ sr j)
+      (fun S i j => S.slotRound i + w (S.kind i) ≤ S.slotRound j)
 ```
 
-**The indirect rule as a property**, with eligibility at each slot's own wave and no tie to break.
+**The indirect rule as a property**, with eligibility at the wave of each slot's own kind and no tie to break.
+
+#### `safety`
+
+*theorem, `Steelhead.Properties.lean`*
+
+```lean
+theorem safety {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
+    Properties.Safe (steelheadRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload) w)
+```
+
+**The safety headline**: the band and agreement, at every wavelength function of at least two rounds.
 
 #### `holds`
 

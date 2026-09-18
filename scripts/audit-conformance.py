@@ -44,7 +44,7 @@ RULES = [
     ("Hybrid / Orcaella",  ["HybridProperties.hybridRule"], "one carrier per threshold"),
     ("FinWhale",           ["FinWhaleProperties.finWhaleRule"],  "band transported one rule at a time (Band.lean)"),
     ("Steelhead",          ["SteelheadProperties.steelheadRule"],
-                           "one carrier per wavelength function; no offset band (§3.4c)"),
+                           "one carrier per wavelength function; the wave is read at the kind"),
     ("Black Marlin",       [], "no carrier; commits by round, no slot-indexed relation"),
 ]
 

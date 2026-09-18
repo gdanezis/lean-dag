@@ -42,14 +42,11 @@ RULES = {
     "Steelhead": ["LeanDag.Steelhead.Decided"],
 }
 
-# Findings §3.4c records. A new one must be understood and written down
-# before it is added here. Steelhead's wavelength is a function of the
-# absolute round by design; its rule has no offset band and claims none.
+# Findings §3.4c records. A new one must be understood and written down before it is added here.
 ALLOW = {
     ("LeanDag.MahiMahi.Model.Rules", "votingRound"),
     ("LeanDag.MahiMahi.Model.Rules", "decisionRoundAt"),
     ("LeanDag.MahiMahi.Model.Decision", "decisionRound"),
-    ("LeanDag.Steelhead.Model.Decision", "steelheadAnchored"),
 }
 
 COMMENT = re.compile(r"/--.*?-/|--[^\n]*", re.S)
