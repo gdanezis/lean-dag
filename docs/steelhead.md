@@ -156,11 +156,11 @@ from coverage into certification; the unpredictable-leader clause.
   (ii) and the asynchronous half
   of Definition 1's validity, deterministic given the anchor and the run,
   the two events the coin supplies almost surely; SH14b reads both off
-  Mahi-Mahi's run clause at the chain schedule with runs of `K` good
-  coins, `K` the bound on the period, and concludes that every slot far
-  enough below the horizon is decided; SH14c names them as two runs of
-  the coin alone, `K` good coins opening an interval past the slot's and
-  `wa` above it, the form SH15 draws.
+  Mahi-Mahi's run clause at every control schedule the period can name
+  and concludes that every slot far enough below the horizon is decided;
+  SH14c names them as two events of the coin alone, a good coin at the
+  first control round of an interval past the slot's and `wa` good coins
+  above it, the form SH15 draws.
 - **SH16, the interface composes** (§3): any family of rules whose laws
   hold, one per round, agreeing on rung count and tie-break, composes
   into a rule whose laws hold, so its verdicts agree across views; and
@@ -212,9 +212,9 @@ from coverage into certification; the unpredictable-leader clause.
 | Theorem 1 (agreement) | SH2, SH16 | `AnchoredRule.decided_unique` at Steelhead's laws; at the interface level, any family of rules whose laws hold composes into one whose laws hold, and Steelhead is the composite of Mahi-Mahi's rule at each kind's wave |
 | Corollary 2 (total order and integrity) | SH13 | in part: the relation's own ledger theorems at Steelhead's laws, over a settled prefix. Ordering the blocks a single commit releases is declined development-wide (report §1.4, §5.6) |
 | Theorem 2 (liveness under partial synchrony) | SH6a, SH6b, SH6c, SH6e, SH6f, SH6g, SH6h, SH6i, SH6l, SH6j, SH6k | in part: the honest-leader commit by the direct rule, everything below a fair run, the crashed-leader skip from `n − f` blames, the remark that partial dissemination does not defer, for a leader that did not equivocate, and the anchor clause as the rule has it, a slot decided once every slot from its floor up to some reliably led slot is decided (SH6f) or once the chain of floors reaches a reliably led landing (SH6g). The bound on that clause, "once the first honest-led slot above its floor commits, at most `b` slots higher", is refuted on data, an equivocating leader at the floor being the anchor (§7, finding 7); what holds at the implementation's round-robin schedule is the hop count itself, a reliably led landing within `n − |T|` hops once `ws · (n − |T|) < n` (SH6i), within the paper's `b` hops once every other validator outside `T` has crashed (SH6l), and a round count, one reliable leader within `n − |T|` rounds and a reliable run of three past every round at `n = 3f + 1` (SH6h), which also discharges SH6b's fairness hypothesis there. No per-hop probability holds for the coin's slots, a landing of the search reading coins above it (`HopBound.lean`; §7, finding 9); what holds is SH11h, the tail below runs of `wa` good coins at period one, which is the expectation the paper states. The `O(wa + b)` ordering bound fails for some coin sequences at period `1` (§7, finding 5) and holds only as SH15's tail. SH6a's hypothesis is reached from either execution discipline, the reactive one (SH6j) and the timed one (SH6k); what neither bounds is a wall-clock latency, since a round is the only unit the model carries |
-| Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the chain settles under Mahi-Mahi's run clause and below any one run of `wa` good coins, a period is derived for each interval, an anchor below which the agreed output committed nothing for `I` rounds hands the next interval period `1`, the failover the implementation applies before the rule is consulted (`apply_period_update`) and the paper's premise on the update rule is not (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15c over a sequence of records, SH15a's tail on one |
-| Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b, SH14c, SH15 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval at least two past the slot's and one run of `wa` good coins above it; SH14b reads both off the run clause at the chain schedule, SH14c off two runs of the coin; SH15a bounds the probability that some view has not derived the slot's period or leaves it undecided, over `M` blocks of coins, by `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`, which tends to zero (SH15b); and SH15c states the "with probability `1`" itself, over a sequence of records with the coin drawn as a process: for almost every coin some record decides the slot in every view holding its horizon, and SH15g every slot at once, each with its own sequence of records. SH15d and SH15e are the same two against an adversary that answers the draws already made and keeps a floor of committed candidates per round, by the adaptive block bound SH11f; SH15f gives the period sequence those claims quantify over. The growth of the ledger from the settled prefix is SH13 |
-| Theorem 4 (agreement of the period) | SH10a, SH10b | for any deterministic update rule; SH10a at one wavelength and schedule on both sides, SH10b at each validator's own derived wavelength and on the schedule its own sequence names, where the sequences agree below the record's top interval and the verdicts with them |
+| Theorem 3 (i) (the chain resolves, the period reaches `1`) | SH7a, SH7c, SH10c, SH10d, SH10e, SH11 | the control verdicts of a scan settle under Mahi-Mahi's run clause at that scan's schedule and below any one run of `wa` good control slots, a period is derived for each interval, an anchor below which the agreed output committed nothing for `I` rounds hands the next interval period `1`, the failover the implementation applies before the rule is consulted (`apply_period_update`) and the paper's premise on the update rule is not (§7), and the coin is modelled by its effect and as a `PMF`, at `wa ≥ 5` and at `wa ≥ 4`. The "with probability `1`" is SH15c over a sequence of records, SH15a's tail on one |
+| Theorem 3 (ii) (at period `1` the ledger grows) | SH9, SH9b, SH14, SH14b, SH14c, SH15 | SH9b at period `1` under the run clause at the output schedule and below its horizon; SH14 for the adaptive output under the failover, given one anchored interval at least two past the slot's and one run of `wa` good coins above it; SH14b reads both off the run clause at every control schedule the period can name, SH14c off a good coin at an interval's first control round and a run above it; SH15a bounds the probability that some view has not derived the slot's period or leaves it undecided, over `M` blocks of `wa · K` coins, by `2 · ((n^(wa·K) − (n − f − b)^(wa·K)) / n^(wa·K))^(M/2)`, which tends to zero (SH15b); and SH15c states the "with probability `1`" itself, over a sequence of records with the coin drawn as a process: for almost every coin some record decides the slot in every view holding its horizon, and SH15g every slot at once, each with its own sequence of records. SH15d and SH15e are the same two against an adversary that answers the draws already made and keeps a floor of committed candidates per round, by the adaptive block bound SH11f; SH15f gives the period sequence those claims quantify over. The growth of the ledger from the settled prefix is SH13 |
+| Theorem 4 (agreement of the period) | SH10a, SH10b, SH10l, SH10m | for any deterministic update rule, per scan: the control slots of a scan are a function of the interval's period, the period bound and the boundary (SH10l) and their verdicts agree across views (SH10m); SH10a at one wavelength and schedule on both sides, SH10b at each validator's own derived wavelength and on the schedule its own sequence names, where the sequences agree below the record's top interval and the verdicts with them |
 | Adaptive section, `I ≥ 2 · maxPeriod` and `1 ≤ k ≤ maxPeriod` | SH10f, SH10g, SH10k, SH18h | two asynchronous rounds per interval at any `k ≥ 1` with `2k ≤ I`; the period stays in range when the initial period does and the update rule keeps it there, the failover's `1` included, which Algorithm 2's replay does whenever the candidates lie in `[1, K]` (SH18h). The bound admits `I < maxPeriod + wa − 2`, where a window of `I + 1` rounds holds the decision round of none of its asynchronous slots at some anchors and of one at others (SH10k; §7, finding 8) |
 | Adaptive section, "the replay is exact in expectation" | SH18i | in the part that is a theorem: at a round the window retains, the share of the `n` candidates the window marks committed is the probability that a uniform coin names a directly committed leader on the anchor's history read as a record, the paper's `c_r / n`, at `1 ≤ wa`. The anchor's term is the approximation the paper admits |
 | Protocol section, "setting the canary odd ensures it is coprime to candidate periods, guaranteeing periodic probes" | SH18j | at a canary spacing coprime to a candidate period of at least two, a window holding two canary rounds whose decision round it retains holds a probe for the candidate, since two consecutive multiples of the spacing cannot both be multiples of the period |
@@ -426,26 +426,38 @@ directly, and slot `3` is undecided by SH8. For `ws = 3` only `k = 1`
 and `k = 2` are live; every larger candidate the paper's update rule can
 select, `4` up to its maximum of `64`, stalls.
 
-**The chain verdict.** The paper keeps the output relation and
-adds, for the asynchronous slots, a second verdict that drives the
-period update alone: the asynchronous rule with anchors restricted to
-asynchronous slots, so that no known-leader slot lies on the chain and
-nothing the adversary holds undecided blocks it. The arc reads the chain
-at *every* round, with that round's coin leader, as the reference
-implementation does (`committer.rs`, `compute_chain`): `chainSlots coin
-= Slots.identity coin` and `ChainDecided wa coin = MahiMahi.Decided wa`
-at that schedule (`Model/Chain.lean`). Reading only the asynchronous
-rounds would make the chain depend on the period, which its own
-verdicts are meant to fix (§7). The chain is therefore an instance of
-the Mahi-Mahi arc at a new schedule, and every result about it is
-Mahi-Mahi's: agreement (SH5), liveness under the run clause (**SH7a**,
-MM3c with the spanning hypothesis discharged by the identity rounds, so
-a run of `wa` chain commits suffices), liveness under synchrony
-without any clause (**SH7b**, the core's L10 at Mahi-Mahi's support),
-and the step SH7a takes once per round on its own (**SH7c**): one run of
-`wa` good coins settles every chain verdict below it, in any view holding
-its decision rounds. SH7c is the form the coin's tail (SH15) consumes,
-which asks for one run rather than one in every window.
+**The control verdict.** The paper keeps the output relation and
+adds, on the **control slots**, a second verdict that drives the period
+update alone: the asynchronous rule with anchors restricted to control
+slots, so that no known-leader slot lies on the chain and nothing the
+adversary holds undecided blocks it. A control slot is a round that
+carries a coin, fixed by rule and per scan, as the reference
+implementation reads it (`committer.rs`, `is_control_round`,
+`compute_chain`): for the scan of interval `j` at period `k`, the
+multiples of `k` up to the boundary `(j + 1) · I` and the multiples of
+the period bound `K` above it, where the next period is not yet known
+(the implementation's candidate periods all divide `K`, so those rounds
+are asynchronous whatever the scan fixes; the arc's update rule is any
+function and the coin a map on every round, so no claim needs that).
+`controlSlots coin I K j k` enumerates those rounds in order, each led by
+its coin, every slot asynchronous (`controlRound I K j k i` is slot `i`'s
+round), and `ControlDecided I K wa coin j k = MahiMahi.Decided wa` at
+that schedule (`Model/Chain.lean`). A round without a coin reads in the
+implementation as a skip, which the anchor search and the scan pass over
+exactly as they pass over a round that is no slot, so the control
+reading is the Mahi-Mahi arc at a sub-schedule and every result about it
+is Mahi-Mahi's: agreement per scan (SH10m), liveness under the run
+clause (**SH7a**, MM3c at any schedule whose rounds strictly increase,
+the spanning hypothesis discharged because consecutive slots lie at least
+one round apart, so a run of `wa` consecutive control slots suffices),
+liveness under synchrony without any clause (**SH7b**, the core's L10 at
+Mahi-Mahi's support, at any such schedule), and the step SH7a takes once
+per slot on its own (**SH7c**, at the coin schedule `chainSlots coin`,
+one slot per round led by the coin, which is also the output schedule at
+period `1`): one run of `wa` good coins settles every verdict below it,
+in any view holding its decision rounds. Each scan has its own control
+set, so a round above the boundary may read differently in the next
+scan; no claim compares verdicts across scans.
 
 **The coin** (`Model/Coin.lean`, `Coin/Statement.lean`). The clause
 states the coin's effect; the probability that the effect obtains is
@@ -506,17 +518,22 @@ view derives is arbitrary where the scan has stalled, so a slot counts
 as decided only under every completion of the derived periods, and a
 scan that never reaches the slot's interval counts as a failure.
 **SH15a** (`undecidedProb_le`) bounds it by
-`2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)` at `2 ≤ ws ≤ wa`, `5 ≤ wa ≤ K
-≤ I`, a slot at round one or above, under any update rule, and the
-blocks' waves populated where MM2
-reads them: a good block in each half of the `M` settles every chain
-verdict up to the later block, so the periods are derived that far
-(SH7c, SH10c), and decides the slot by SH14c, the earlier one anchoring
-its interval and the later one the run above it, so the failure set lies
-in the union of the two halves' no-good-block sets, and each of those is
-a product whose every block of the half misses its all-good maps, of
-which MM2 counts at least `(n − f − b)^K` out of `n^K`
-(`no_good_block_prob_le`). **SH15b**
+`2 · ((n^(wa·K) − (n − f − b)^(wa·K)) / n^(wa·K))^(M/2)` at
+`2 ≤ ws ≤ wa`, `5 ≤ wa`, blocks of `wa · K` rounds that fit in an
+interval (`wa · K ≤ I`), a slot at round one or above, under any update
+rule keeping the period in `[1, K]`, and the blocks' waves populated
+where MM2 reads them: the later good block of a pair holds `wa`
+consecutive multiples of `K`, the control slots every scan below its
+interval reads above its boundary, so it settles those scans (SH7a at
+each scan's schedule) and the periods are derived that far (SH10c); the
+earlier good block's first `K` rounds hold the first control round of
+its interval at whatever period the view derived, so its coin anchors
+that interval; and the later block's first `wa` rounds are the run
+above it; so a good block in each half of the `M` decides the slot by
+SH14c, and the failure set lies in the union of the two halves'
+no-good-block sets, each a product whose every block of the half misses
+its all-good maps, of which MM2 counts at least `(n − f − b)^(wa·K)` out
+of `n^(wa·K)` (`no_good_block_prob_le`). **SH15b**
 (`undecided_tail_tendsto_zero`) is that the bound vanishes as `M` grows,
 since `n − f − b ≥ 1`. The blocks' coins are drawn after the record is
 fixed, as SH11c's are: the adversary that shapes the DAG does not see
@@ -615,26 +632,30 @@ rounds only; output timing is not modelled.
 importing nothing of Barnacle. Rounds `j·I + 1` to `(j + 1)·I` form
 interval `j` (`intervalOf I r = (r − 1) / I`; the arithmetic leaves round
 `0` in interval `0`, which no scan reads), each decided under one period.
-The **anchor** of interval `j` is the interval's earliest round at `1` or
-above whose chain verdict is a commit, every scanned round of the
-interval below it chain-skipped (`IntervalAnchor`); **no anchor** is every
-scanned round of the interval chain-skipped (`NoAnchor`). The chain is
-read at every round, so the anchor does not depend on the period in
-force, as `complete_scans` reads it, starting at the interval's first
-round. The state a scan carries is the period, the
-agreed output's next slot and the round of its last committed leader
-(`ScanState`, the implementation's `period_schedule`, `agreed_next` and
-`agreed_last_commit_round`). The sequence is a relation,
-`PeriodAt I wa coin upd k₀ U V w j st`: interval `0` runs at
+The **anchor** of interval `j` under period `k` is the interval's earliest
+control slot at round `1` or above whose control verdict is a commit,
+every control slot of the interval below it skipped
+(`IntervalAnchor I K wa coin U V j k i A`, slot `i` of
+`controlSlots coin I K j k`); **no anchor** is every scanned control slot
+of the interval skipped (`NoAnchor`), an interval without a control slot
+among them. The control slots depend on `k`, the period in force at the
+interval, which the scan carries and reads them at, as `complete_scans`
+does, starting at the interval's first round. The state a scan carries
+is the period, the agreed output's next slot and the round of its last
+committed leader (`ScanState`, the implementation's `period_schedule`,
+`agreed_next` and `agreed_last_commit_round`). The sequence is a
+relation, `PeriodAt I K wa coin upd k₀ U V w j st`: interval `0` runs at
 `⟨k₀, 1, 0⟩`; an anchored interval advances the agreed output over the
 anchor's causal history (`AgreedAdvance`, the implementation's
 `advance_agreed_output`: the cursor moves to the least slot that history
 leaves undecided, the last commit to the round of the highest leader
 committed on the way) and hands interval `j + 1` period `1` when that
 commit lies more than `I` rounds below the anchor's round
-(`apply_period_update`) and the update rule's answer otherwise; an
-interval with no anchor keeps the state. A validator whose scan meets a
-chain-undecided round waits, which is the absence of a derivation. The
+(`apply_period_update`), its own period when it is interval `0`, the
+warm-up, whose window holds the start-up rounds, and the update rule's
+answer otherwise; an interval with no anchor keeps the state. A
+validator whose scan meets an undecided control slot waits, which is the
+absence of a derivation. The
 update rule `upd : BlockId → ℕ → ℕ` is any function of
 the anchor block and the current period; the paper's replay reads
 the anchor's causal history, which the block id determines within one
@@ -654,10 +675,11 @@ a view derives on it always exists (`matchingPer`, SH15f).
 - **SH10a, agreement of the state**: two views deriving a state for
   interval `j` derive the same one, period, cursor and last commit
   alike, at `3 ≤ wa`, under any update rule.
-  Induction on the derivation: the anchor is unique across views, since
-  a lower anchor in one view is a chain-skipped round in the other and
-  SH5 forbids it, and an anchor in one view against none in the other
-  is the same contradiction; and the advance over an anchor's history is
+  Induction on the derivation: the periods agree, so the scans read one
+  control schedule; the anchor is unique across views, since a lower
+  anchor in one view is a skipped control slot of that schedule in the
+  other and SH10m forbids it, and an anchor in one view against none in
+  the other is the same contradiction; and the advance over an anchor's history is
   unique, since no verdict of that history lies above the anchor's round,
   so the new cursor is the least undecided slot at or past the old one
   and the new last commit the highest commit consumed.
@@ -681,14 +703,17 @@ a view derives on it always exists (`matchingPer`, SH15f).
   no period beyond it either, and a claim asking for the *whole*
   sequence would hold only where the period reaches `0`, which is
   Mysticeti at every round but the first.
-- **SH10c, the scan ends**: once every round of the
-  interval has a chain verdict in a view, the view derives the next
-  state: the least chain-committed round is the anchor, or every round
-  is chain-skipped.
+- **SH10c, the scan ends**: once every control slot of the interval,
+  at the interval's period, has a verdict in a view, the view derives
+  the next state: the least committed control slot is the anchor, or
+  every one is skipped.
 - **SH10d, the period advances under the clause**: under Mahi-Mahi's
-  run clause at the chain schedule, a view caught up to the horizon
-  derives a state for every interval whose rounds lie far enough below
-  it, by SH7a at each interval and SH10c.
+  run clause at every control schedule a period in range names, with
+  the period kept in range (SH10g's hypotheses, since the control set
+  is a function of the period), a view caught up to the horizon derives
+  a state for every interval whose control slots, and `c + wa` control
+  slots above its boundary, decide below it, by SH7a at the interval's
+  own schedule and SH10c.
 - **SH10e, the period reaches `1`**: the failover, as
   `apply_period_update` applies it. An interval that finds an anchor
   at round `r` below which the agreed output, advanced over the anchor's
@@ -704,7 +729,7 @@ a view derives on it always exists (`matchingPer`, SH15f).
   with `2k ≤ I`, every interval holds two asynchronous rounds, the
   paper's reason for `I ≥ 2 · maxPeriod`; and if the initial period lies
   in `[1, K]` and the update rule keeps a period there, so does every
-  derived period, the failover's `1` included.
+  derived period, the failover's `1` and the warm-up's included.
 - **SH10i, SH10j, the agreed output**: every slot the agreed output
   consumed is decided in the view that derived it, since the anchors'
   histories lie inside that view and the laws carry a verdict out of a
@@ -721,9 +746,23 @@ a view derives on it always exists (`matchingPer`, SH15f).
   the window resolves a slot at some anchors and none at others (§7,
   finding 8), and an anchor at round `I` itself, whose window starts at
   round `1` and is one round short, resolves none at `I = K + wa − 2`.
+- **SH10l, the control schedule enumerates the control rounds**: the
+  rounds of `controlSlots coin I K j k` are exactly the multiples of `k`
+  up to the boundary and the multiples of `K` above it, the
+  implementation's `is_control_round` for the scan of interval `j`.
+- **SH10m, control verdicts agree per scan**: two views agree on the
+  control verdict of every slot of one scan's schedule, under any coin,
+  MM1c at that schedule; verdicts of different scans are never compared.
+- **SH10n, the first interval keeps its period**: the warm-up of
+  `apply_period_update`, at a positive interval: at an anchor of
+  interval `0` the next interval runs at the initial period, the agreed
+  output advanced all the same. The failover cannot fire there, the
+  anchor lying at round `I` or below and the output's last commit at
+  `0` or above.
 - **SH14, output liveness under the failover**: in a view that derived
   every state up to a run's last round, if some interval at least two
-  past a slot's finds an anchor, and above that interval the coin names
+  past a slot's finds an anchor under the period the view derived for
+  it, and above that interval the coin names
   a committed candidate at `wa` consecutive rounds that lead the output's
   slots there, then the slot is decided once the view holds the run's
   decision rounds. An anchor two intervals up lies more than `I` rounds
@@ -738,32 +777,33 @@ a view derives on it always exists (`matchingPer`, SH15f).
   Theorem 3 (ii) and the asynchronous half of Definition 1's validity,
   deterministic given the anchor and the run; that the coin supplies both
   almost surely is the remaining half of Theorem 3.
-- **SH14b, every slot is decided under the clauses**: SH14 with its two
-  events read off Mahi-Mahi's run clause at the chain schedule, with runs
-  of `K` good coins, `K` the bound the periods stay within (SH10g's
-  premise), `wa ≤ K` and a window plus a run fitting in an interval
-  (`c + K ≤ I`). A run of `K` consecutive rounds inside the second
-  interval after the slot's holds a multiple of whatever period is in
-  force, so an asynchronous round with a good coin, which the view
-  chain-commits directly; SH7a settles every chain verdict of the
-  interval, so that round or a lower chain-committed one is the anchor.
-  The run in the next interval is the one SH14 needs. Every slot whose
+- **SH14b, every slot is decided under the clause**: SH14 with its two
+  events read off Mahi-Mahi's run clause at every control schedule a
+  period in range names, the period kept in range (SH10g's premise) and
+  `c + wa` control slots fitting in an interval at every period up to
+  `K` (`(c + wa) · K ≤ I`). At the second interval after the slot's, the
+  clause at the interval's own schedule places a run of `wa` good
+  control slots inside it: the run's first slot commits directly and the
+  run settles every control slot below it (SH7a), so the interval has an
+  anchor at or below that slot. At period `1` the control schedule of
+  the next interval is every round up to its boundary, so the clause at
+  that schedule places the run of rounds SH14 needs. Every slot whose
   interval lies three intervals and a window below the horizon is then
-  decided, in a view
-  caught up to the horizon that derived every state below it. The clause
-  with runs of `K` in every window is the deterministic stand-in for what
-  the coin gives almost surely, as SH7a's is.
-- **SH14c, output liveness from two good runs**: SH14 with its two
-  events named as runs of the coin alone. `K` good coins opening an
-  interval at least two past the slot's hit an asynchronous round under whatever
-  period is in force, which the view chain-commits directly; `wa` good
-  coins above that interval settle every chain verdict below them
-  (SH7c), so the interval has its anchor, and they are the run SH14
-  needs. At `K ≤ I`, so that a block of `K` rounds fits in an interval.
-  Two runs at named places, each of a fixed positive probability: the
-  form SH15 draws from the coin. No liveness claim here asks the period
-  to stay in range: every round carries a chain verdict, so an
-  interval's anchor exists whatever period is in force.
+  decided, in a view caught up to the horizon that derived every state
+  below it. The clause family, one schedule per candidate period, is the
+  deterministic stand-in for what the coin gives almost surely, as
+  SH7a's is.
+- **SH14c, output liveness from a good coin and a good run**: SH14 with
+  its two events named by the coin alone. The first control round of an
+  interval at least two past the slot's, at the period the view derived
+  for it (`firstControlRound I j k`, in the interval once `1 ≤ k ≤ I`),
+  has no control slot of the interval below it, so a good coin there
+  commits the first control slot and the interval has its anchor with
+  nothing to settle; `wa` good coins above that interval are the run
+  SH14 needs. Two events at named places, each of a fixed positive
+  probability: the form SH15 draws from the coin, a block of `K` good
+  coins from the interval's first round covering its first control round
+  at every period up to `K`.
 
 **The replay** (`Model/Replay.lean`, `Replay/Statement.lean`). Algorithm
 2 as data: `ofAnchor U A I` reads the window's evidence off the anchor's
@@ -821,7 +861,7 @@ coincide. **SH18h** (`anchorUpdate_range`): with candidates in
 `[1, K]` and a current period there, `anchorUpdate` answers a period in
 `[1, K]` at every anchor, the current period or a candidate
 (`select_eq_or_mem`), and the failover's `1` is the scan's own (SH10e)
-and lies in the range too; the range hypothesis SH10g, SH14b, SH14c and
+and lies in the range too; the range hypothesis SH10g, SH10d, SH14b and
 SH15 place on the update rule, discharged for the paper's rule. **SH18i**
 (`commitWeight_eq_commitProb`), the adaptive section's "exact in
 expectation" in the part that is a theorem: at a round the window
@@ -981,15 +1021,23 @@ either, which Theorem 2's undecided slot is not.
 
 ## 7. Findings for the paper
 
-1. **The chain must be read at every round.** Reading the chain at the
-   asynchronous rounds alone, as the protocol section says, makes the
-   chain relation depend on the period at rounds above the interval
-   under scan, whose period the scan is to fix; the reference
-   implementation reads every round, and the arc follows it. The chain's
-   own liveness is then Mahi-Mahi's at the identity schedule, with a run
-   of `wa` commits; read at the asynchronous rounds alone the run would
-   have to span `⌈wa / k⌉ + 1` of them, a length the paper does not
-   state.
+1. **The control set is a function of the period, the bound and the
+   boundary, and the claims are per scan.** A control set read from the
+   view, or from the period above the interval under scan, which the
+   scan is to fix, would let two views enumerate different control slots
+   and break Theorem 4; the reference implementation fixes it by rule
+   (`is_control_round`), with the multiples of `maxPeriod` above the
+   boundary, and the arc follows it, so that a round above the boundary
+   may carry one verdict in the scan of interval `j` and another in that
+   of `j + 1`. The control liveness is then Mahi-Mahi's at the scan's
+   sub-schedule with a run of `wa` consecutive control slots, whatever
+   their spacing (SH7a at any schedule whose rounds strictly increase);
+   the paper's Theorem 3 (i) states the commit probability per control
+   slot and leaves the run unstated. The probabilistic tail (SH15) then
+   needs blocks of `wa · K` rounds, which hold the `wa` consecutive
+   multiples of `K` every scan below reads, in place of blocks of `K`,
+   and `I ≥ wa · maxPeriod` in place of `I ≥ 2 · maxPeriod` for those
+   blocks to fit in an interval; the paper states no such bound.
 2. **The simulator's adversary does not exhibit the stall.** Delaying
    the leader's messages to everyone yields a direct skip, which the
    anchor search passes over. The adversary that delivers the leader
@@ -1232,21 +1280,23 @@ decides lies, `slotRound_le_of_decided`), no settled prefix has
 more than three slots and no block above round `2` is ever in the ledger
 (`rt_no_output_above_two`), while validator `1`'s honest round-`3` block
 exists (§7, finding 3). `Failover.lean`: the same family with the coin
-naming validator `2` at every round, on which every round chain-commits
-(`rt_chain_commit`, from the DAG's structure: everyone reaches that
-validator's block by two rounds up, so the whole of round `r + 3` votes
-for it and the whole of round `r + 4` certifies it), interval `0`'s
-anchor is round `1` and interval `1`'s round `9`, whose history commits
-nothing at round `1` or above since slot `3` is undecided in the history
-of every anchor up to round `17` (SH8 asked at the slots such a history
-can decide, `stall_of_pred`) and the synchronous slots below it never
+naming validator `2` at every round and the period bound `4`, on which
+every control slot commits (`rt_control_decided`, from the DAG's
+structure: everyone reaches that validator's block by two rounds up, so
+the whole of round `r + 3` votes for it and the whole of round `r + 4`
+certifies it), interval `0`'s anchor is its first control round at
+period `4`, round `4`, and the warm-up keeps period `4` (SH10n on data);
+interval `1`'s anchor is round `12`, whose history commits nothing at
+round `1` or above since slot `3` is undecided in the history of every
+anchor up to round `17` (SH8 asked at the slots such a history can
+decide, `stall_of_pred`) and the synchronous slots below it never
 commit, so the agreed output's last commit stays at `0` and the failover
 hands interval `2` period `1` while the replay answers `4`
 (`rt_failover`, SH10e on data); and once interval `2` finds its anchor at
-round `17` and the coin names committed candidates at rounds `25` to
-`29`, a view holding round `33` decides slot `3` at the adaptive
-wavelength of the sequence `4, 4, 1, 1` it derives (`rt_recovers`, SH14
-on data). `Axioms.lean`: the eight headline theorems, the
+round `17`, its first control round at period `1`, and the coin names
+committed candidates at rounds `25` to `29`, a view holding round `33`
+decides slot `3` at the adaptive wavelength of the sequence `4, 4, 1, 1`
+it derives (`rt_recovers`, SH14 on data). `Axioms.lean`: the eight headline theorems, the
 carrier's persistence and its liveness headline depend on the standard
 axioms only.
 
@@ -1256,7 +1306,8 @@ axioms only.
 LeanDag/Steelhead/
   Model/Wavelength.lean     wavelength, periodicKind, periodic, IsAsync
   Model/Decision.lean       steelheadAnchored, Decided, FloorHop, floorLanding, floorChain
-  Model/Chain.lean          chainSlots, ChainDecided
+  Model/Chain.lean          chainSlots, ChainDecided, controlRound, firstControlRound,
+                            controlSlots, ControlDecided
   Model/Period.lean         intervalOf, UpdateRule, windowBottom, IntervalAnchor, NoAnchor,
                             ScanState, AgreedAdvance, PeriodAt, adaptiveKind, adaptiveSlots
   Model/Coin.lean           commitProb, runProb, noCommitProb, blockRound, coinOfBlocks,

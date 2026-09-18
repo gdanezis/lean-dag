@@ -219,11 +219,11 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   `k ≥ ws` that stretch holds a synchronous slot the adversary keeps
   undecided, the leader block delivered to exactly `f + 1` validators so
   that neither quorum forms, on data at `n = 4`. The protocol therefore
-  drives its period from a second verdict, which the paper puts on the
-  asynchronous slots and the arc reads at every round after the
-  reference implementation: the Mahi-Mahi arc at the identity schedule
-  under a coin map, agreed, live under Mahi-Mahi's clause with a run of
-  `wa`, and committing with the counting lemma's probability under a
+  drives its period from a second verdict, read at the control slots,
+  the coin rounds of each scan, after the reference implementation: the
+  Mahi-Mahi arc at a per-scan sub-schedule under a coin map, agreed per
+  scan, live under Mahi-Mahi's clause with a run of `wa` control slots,
+  and committing with the counting lemma's probability under a
   uniform coin (`PMF`). The period sequence is stated afresh as a
   relation over fixed intervals and is agreed under any deterministic
   update rule, so the output at the adaptive wavelength is too, over the
