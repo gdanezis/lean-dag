@@ -50,12 +50,12 @@ constant `w` this is `mahiMahiAnchored` by definition (SH4). -/
 def steelheadAnchored (Validator BlockId Payload : Type) [Fintype Validator]
     [DecidableEq Validator] [Faults Validator] [LinearOrder BlockId] (w : ℕ → ℕ) :
     AnchoredRule Validator BlockId Payload ValidWrt Correct where
-  waveAt := fun r => w r - 1
-  Commit := fun U V L r => MahiMahi.DirectCommitIn U V (w r) L r
-  decCommit := fun _ _ _ _ => inferInstance
-  Skip := fun U V S k => MahiMahi.DirectSkipIn U V (w (S.slotRound k)) (S.leader k) (S.slotRound k)
+  waveAt := fun κ => w κ - 1
+  Commit := fun U V L r κ => MahiMahi.DirectCommitIn U V (w κ) L r
+  decCommit := fun _ _ _ _ _ => inferInstance
+  Skip := fun U V S k => MahiMahi.DirectSkipIn U V (w (S.kind k)) (S.leader k) (S.slotRound k)
   rungs := 1
-  Link := fun _ U A L S k => MahiMahi.CertifiedIn U (w (S.slotRound k)) A L (S.slotRound k)
+  Link := fun _ U A L S k => MahiMahi.CertifiedIn U (w (S.kind k)) A L (S.slotRound k)
   tie := fun _ _ _ => False
 
 section Slots
@@ -75,14 +75,14 @@ namespace Decided
 export AnchoredRule.Decided (directCommit directSkip indirectCommit indirectSkip)
 end Decided
 
-instance {V : View Validator BlockId Payload U} (w : ℕ → ℕ) (L : BlockId) (r : ℕ) :
-    Decidable ((steelheadAnchored Validator BlockId Payload w).Commit U V L r) :=
-  inferInstanceAs (Decidable (MahiMahi.DirectCommitIn U V (w r) L r))
+instance {V : View Validator BlockId Payload U} (w : ℕ → ℕ) (L : BlockId) (r κ : ℕ) :
+    Decidable ((steelheadAnchored Validator BlockId Payload w).Commit U V L r κ) :=
+  inferInstanceAs (Decidable (MahiMahi.DirectCommitIn U V (w κ) L r))
 
 instance {V : View Validator BlockId Payload U} (w : ℕ → ℕ) (k : ℕ) :
     Decidable ((steelheadAnchored Validator BlockId Payload w).Skip U V S k) :=
   inferInstanceAs
-    (Decidable (MahiMahi.DirectSkipIn U V (w (S.slotRound k)) (S.leader k) (S.slotRound k)))
+    (Decidable (MahiMahi.DirectSkipIn U V (w (S.kind k)) (S.leader k) (S.slotRound k)))
 
 end Slots
 

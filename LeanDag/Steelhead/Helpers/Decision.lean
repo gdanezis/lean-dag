@@ -7,7 +7,7 @@ Generated lemma infrastructure for `Model/Decision.lean`; not part of the
 audit surface. Steelhead's laws are Mahi-Mahi's, each applied at the wave
 of the slot the law is about: every law of `AnchoredRule.Laws` speaks of
 one slot `k` and its anchors, and at slot `k` the rule *is* Mahi-Mahi's
-at wave `w (S.slotRound k)`, eligibility included.
+at wave `w (S.kind k)`, eligibility included.
 -/
 
 namespace LeanDag
@@ -33,35 +33,37 @@ variable [S : Slots Validator]
 wave. -/
 theorem eligible_iff_mahiMahi {w : ℕ → ℕ} {k j : ℕ} :
     (steelheadAnchored Validator BlockId Payload w).Eligible k j ↔
-      (MahiMahi.mahiMahiAnchored Validator BlockId Payload (w (S.slotRound k))).Eligible k j :=
+      (MahiMahi.mahiMahiAnchored Validator BlockId Payload (w (S.kind k))).Eligible k j :=
   Iff.rfl
 
 /-- A direct commit at slot `k` is certified in the cone of any candidate
 anchor of any slot eligible for `k`, at `k`'s wave. -/
 theorem certifiedIn_of_commit_at_anchor {w : ℕ → ℕ} (hw : ∀ r, 1 ≤ w r)
     {V : View Validator BlockId Payload U} {k j : ℕ} {L A : BlockId}
-    (h : (steelheadAnchored Validator BlockId Payload w).Commit U V L (S.slotRound k))
+    (h : (steelheadAnchored Validator BlockId Payload w).Commit U V L (S.slotRound k) (S.kind k))
     (hA : IsLeaderBlock U j A)
     (helig : (steelheadAnchored Validator BlockId Payload w).Eligible k j) :
-    MahiMahi.CertifiedIn U (w (S.slotRound k)) A L (S.slotRound k) :=
+    MahiMahi.CertifiedIn U (w (S.kind k)) A L (S.slotRound k) :=
   MahiMahi.certifiedIn_of_directCommitIn_at_anchor (hw _) h hA (eligible_iff_mahiMahi.mp helig)
 
 /-- **SH5b.** At an asynchronous round the periodic wavelength is `wa`, and at a slot proposed at
-its own round and led by the coin the slot's blame is the chain slot's. -/
+its own round, of its own round's kind, and led by the coin the slot's blame is the chain
+slot's. -/
 theorem direct_agrees_with_chain {ws wa k r : ℕ} {coin : ℕ → Validator}
     {V : View Validator BlockId Payload U} {L : BlockId} (hid : S.slotRound r = r)
-    (hr : IsAsync k r) (hlead : S.leader r = coin r) :
-    ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Commit U V L r ↔
-      (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Commit U V L r) ∧
+    (hkind : S.kind r = r) (hr : IsAsync k r) (hlead : S.leader r = coin r) :
+    ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Commit U V L r (S.kind r) ↔
+      (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Commit U V L r (S.kind r)) ∧
     ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Skip U V S r ↔
       (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Skip U V (chainSlots coin) r) := by
   have hw : periodic ws wa k r = wa := by unfold IsAsync at hr; simp [periodic, hr]
   constructor
-  · change MahiMahi.DirectCommitIn U V (periodic ws wa k r) L r ↔ MahiMahi.DirectCommitIn U V wa L r
-    rw [hw]
-  · change MahiMahi.DirectSkipIn U V (periodic ws wa k (S.slotRound r)) (S.leader r)
+  · change MahiMahi.DirectCommitIn U V (periodic ws wa k (S.kind r)) L r ↔
+      MahiMahi.DirectCommitIn U V wa L r
+    rw [hkind, hw]
+  · change MahiMahi.DirectSkipIn U V (periodic ws wa k (S.kind r)) (S.leader r)
       (S.slotRound r) ↔ MahiMahi.DirectSkipIn U V wa (coin r) r
-    rw [hid, hw, hlead]
+    rw [hid, hkind, hw, hlead]
 
 /-! ## Wave three is exactly the core's relation -/
 
@@ -105,9 +107,9 @@ theorem decided_of_core_decided {V : View Validator BlockId Payload U} {k : ℕ}
       (fun L hL hc => hnone 0 Nat.one_pos L hL ((MahiMahi.certifiedIn_three_iff hL.2.1).mp hc))
 
 omit S in
-/-- The rung reads the schedule only through the slot's round. -/
+/-- The rung reads the schedule only through the slot's round and kind. -/
 theorem linkCongr {w : ℕ → ℕ} : (steelheadAnchored Validator BlockId Payload w).LinkCongr :=
-  AnchoredRule.linkCongr_of_round _ (fun _ U A L r => MahiMahi.CertifiedIn U (w r) A L r)
+  AnchoredRule.linkCongr_of_round_kind _ (fun _ U A L r κ => MahiMahi.CertifiedIn U (w κ) A L r)
     (fun _ _ _ _ _ _ => rfl)
 
 omit S in
@@ -141,9 +143,9 @@ theorem steelheadLaws {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
       (MahiMahi.certificates_nonempty_of_certifiedIn hl₂)
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun _ hround hk h => by
+  skip_congr := fun _ hround hk hkind h => by
     change MahiMahi.DirectSkipIn _ _ _ _ _
-    rw [← hround, ← hk]; exact h
+    rw [← hround, ← hk, ← hkind]; exact h
   link_congr := linkCongr
 
 omit S in

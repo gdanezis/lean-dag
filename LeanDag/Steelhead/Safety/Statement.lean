@@ -109,7 +109,7 @@ def Handover (U : BlockUniverse Validator BlockId Payload) (w : ℕ → ℕ) : P
     (∀ r, 2 ≤ w r) →
     -- L is slot k's candidate, directly committed in V₁
     IsLeaderBlock U k L →
-    (steelheadAnchored Validator BlockId Payload w).Commit U V₁ L (S.slotRound k) →
+    (steelheadAnchored Validator BlockId Payload w).Commit U V₁ L (S.slotRound k) (S.kind k) →
     -- then any anchor V₂ finds for k commits L ...
     (∀ (j : ℕ) (A : BlockId),
       k < j → (steelheadAnchored Validator BlockId Payload w).Eligible k j →
@@ -150,11 +150,11 @@ and direct skip are the chain's, predicate for predicate, so a direct
 derivation in either relation is one in the other. -/
 def DirectAgreesWithChain (U : BlockUniverse Validator BlockId Payload) (ws wa : ℕ) : Prop :=
   ∀ (coin : ℕ → Validator) (V : View Validator BlockId Payload U) (k r : ℕ) (L : BlockId),
-    -- slot r is proposed at round r, asynchronous, and the coin leads it
-    S.slotRound r = r → IsAsync k r → S.leader r = coin r →
+    -- slot r is proposed at round r, of kind r, asynchronous, and the coin leads it
+    S.slotRound r = r → S.kind r = r → IsAsync k r → S.leader r = coin r →
     -- the direct commit of L at r is the same predicate in both relations ...
-    ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Commit U V L r ↔
-      (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Commit U V L r) ∧
+    ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Commit U V L r (S.kind r) ↔
+      (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Commit U V L r (S.kind r)) ∧
     -- ... and so is the direct skip of the slot
     ((steelheadAnchored Validator BlockId Payload (periodic ws wa k)).Skip U V S r ↔
       (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).Skip U V (chainSlots coin) r)

@@ -1,5 +1,7 @@
 import LeanDag.Steelhead.Helpers.Decision
 import LeanDag.MahiMahi.Properties
+import LeanDag.Properties.Derived.Truncate
+import LeanDag.Properties.Arcs.Headline
 /-!
 # Steelhead as a carrier, and the properties its rule gives
 
@@ -69,7 +71,7 @@ predicate. -/
 theorem commitsDirect (w : ℕ → ℕ) :
     CommitsDirect (steelheadRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) w)
-      (fun {U} V L r => MahiMahi.DirectCommitIn U V (w r) L r) :=
+      (fun {U} V L r κ => MahiMahi.DirectCommitIn U V (w κ) L r) :=
   AnchoredRule.commitsDirect
 
 open Classical in
@@ -77,12 +79,12 @@ open Classical in
 own wave and no tie to break. -/
 theorem indirect {w : ℕ → ℕ} (hw : ∀ r, 1 ≤ w r) :
     Indirect (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w)
-      (fun sr i j => sr i + w (sr i) ≤ sr j) := by
+      (fun S i j => S.slotRound i + w (S.kind i) ≤ S.slotRound j) := by
   have h := AnchoredRule.indirect (R := steelheadAnchored Validator BlockId Payload w)
     (Steelhead.linkCongr (w := w)) (fun hi h => Steelhead.exists_least hi h)
   refine h.congr ?_
-  intro sr i j
-  have := hw (sr i)
+  intro S i j
+  have := hw (S.kind i)
   simp only [steelheadAnchored_waveAt]
   omega
 
@@ -103,16 +105,16 @@ zero, at the wave of the slot. -/
 theorem steelheadExtendLaws {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
     (steelheadAnchored Validator BlockId Payload w).ExtendLaws where
   commit_ext := fun {S _ _ _ _ k _} he hV hL hc =>
-    (MahiMahiProperties.mahiMahiBandLaws (hw (S.slotRound k))).toExtendLaws.commit_ext
+    (MahiMahiProperties.mahiMahiBandLaws (hw (S.kind k))).toExtendLaws.commit_ext
       (extends_mm _ he) hV hL hc
   skip_ext := fun {S _ _ _ _ k} he hV hs =>
-    (MahiMahiProperties.mahiMahiBandLaws (hw (S.slotRound k))).toExtendLaws.skip_ext
+    (MahiMahiProperties.mahiMahiBandLaws (hw (S.kind k))).toExtendLaws.skip_ext
       (extends_mm _ he) hV hs
   link_ext := fun {S _ _ _ _ k _} he hA hi hL =>
-    (MahiMahiProperties.mahiMahiBandLaws (hw (S.slotRound k))).toExtendLaws.link_ext
+    (MahiMahiProperties.mahiMahiBandLaws (hw (S.kind k))).toExtendLaws.link_ext
       (extends_mm _ he) hA hi hL
   link_novel_ext := fun {S _ _ _ _ k _} he hA hi hL hLo =>
-    (MahiMahiProperties.mahiMahiBandLaws (hw (S.slotRound k))).toExtendLaws.link_novel_ext
+    (MahiMahiProperties.mahiMahiBandLaws (hw (S.kind k))).toExtendLaws.link_novel_ext
       (extends_mm _ he) hA hi hL hLo
 
 /-- **Persistence**: a verdict survives an extension of the record, into
@@ -144,12 +146,11 @@ theorem agreeBand_mm {w : ℕ → ℕ} {U U' : BlockUniverse Validator BlockId P
 theorem shSupport_local {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
     Support.Local (R := steelheadRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) w) (shSupport w) := by
-  intro U U' G R₀ h c L hc hcr hL hLr
-  have hw' := hw (BlockRecord.block U L).round
-  change R₀ + (w (BlockRecord.block U L).round - 1) ≤ (BlockRecord.block U c).round at hcr
-  change (BlockRecord.block U L).round + (w (BlockRecord.block U L).round - 1)
-    = (BlockRecord.block U c).round at hLr
-  exact MahiMahiProperties.certifies_band (w := w (BlockRecord.block U L).round)
+  intro U U' G R₀ h c L κ hc hcr hL hLr
+  have hw' := hw κ
+  change R₀ + (w κ - 1) ≤ (BlockRecord.block U c).round at hcr
+  change (BlockRecord.block U L).round + (w κ - 1) = (BlockRecord.block U c).round at hLr
+  exact MahiMahiProperties.certifies_band (w := w κ)
     (agreeBand_mm _ (agreeBand_of_rebasedAbove h (BlockRecord.block U c).round R₀ le_rfl))
     hc (by omega) (by omega) hL (by omega) (by omega)
 
@@ -187,18 +188,18 @@ rounds: the core's argument at three, Mahi-Mahi's above. -/
 theorem shSupport_ofCoverage {w : ℕ → ℕ} (hw : ∀ r, 3 ≤ w r) :
     Timed.OfCoverage (R := steelheadRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) w) (shSupport w) (coreReliability Validator) := by
-  intro U T hq r L hpop hct hL hLr hLc c hc hcc hcr
-  by_cases h4 : 4 ≤ w r
-  · exact MahiMahiProperties.mmSupport_ofCoverage (w := w r) h4 U T hq r L hpop hct hL hLr hLc
+  intro U T hq r κ L hpop hct hL hLr hLc c hc hcc hcr
+  by_cases h4 : 4 ≤ w κ
+  · exact MahiMahiProperties.mmSupport_ofCoverage (w := w κ) h4 U T hq r κ L hpop hct hL hLr hLc
       c hc hcc hcr
-  · have h3 : w r = 3 := by have := hw r; omega
+  · have h3 : w κ = 3 := by have := hw κ; omega
     have hcard : quorumCard Validator ≤ T.card := by
       have h2 := hq.2
       change Fintype.card Validator - Faults.f Validator ≤ T.card at h2
       exact h2
-    change (BlockRecord.block U c).round = r + (w r - 1) at hcr
-    change ∀ n, r ≤ n → n ≤ r + (w r - 1) → _ at hpop
-    change Timed.CoversToward _ U T r (w r - 1) L at hct
+    change (BlockRecord.block U c).round = r + (w κ - 1) at hcr
+    change ∀ n, r ≤ n → n ≤ r + (w κ - 1) → _ at hpop
+    change Timed.CoversToward _ U T r (w κ - 1) L at hct
     rw [h3] at hcr hpop hct
     exact certifies_three_of_coverage hcard hpop hct hL hLr hLc hc hcc hcr
 
@@ -210,26 +211,26 @@ argument reads it without the law around it. -/
 theorem shSupport_directCommitIn {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) (S : Slots Validator)
     {U : BlockUniverse Validator BlockId Payload} (V : View Validator BlockId Payload U)
     {T : Finset Validator} {k : ℕ} (hcard : quorumCard Validator ≤ T.card)
-    (hpop : ∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + (w (S.slotRound k) - 1) →
+    (hpop : ∀ n, S.slotRound k ≤ n → n ≤ S.slotRound k + (w (S.kind k) - 1) →
       PopulatedOn U T n)
     (hcert : ∀ L, IsLeaderBlock U k L → ∀ v ∈ T, ∀ c, c ∈ U.ids → (U.block c).creator = v →
-      (U.block c).round = S.slotRound k + (w (S.slotRound k) - 1) → MahiMahi.Certifies U c L)
-    (hcov : V.CoversUpto (S.slotRound k + (w (S.slotRound k) - 1))) (hlead : S.leader k ∈ T) :
+      (U.block c).round = S.slotRound k + (w (S.kind k) - 1) → MahiMahi.Certifies U c L)
+    (hcov : V.CoversUpto (S.slotRound k + (w (S.kind k) - 1))) (hlead : S.leader k ∈ T) :
     ∃ L, IsLeaderBlock U k L ∧
-      MahiMahi.DirectCommitIn U V (w (S.slotRound k)) L (S.slotRound k) := by
-  have hw' := hw (S.slotRound k)
-  have hdr : MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k)
-      = S.slotRound k + (w (S.slotRound k) - 1) := by
+      MahiMahi.DirectCommitIn U V (w (S.kind k)) L (S.slotRound k) := by
+  have hw' := hw (S.kind k)
+  have hdr : MahiMahi.decisionRoundAt (w (S.kind k)) (S.slotRound k)
+      = S.slotRound k + (w (S.kind k) - 1) := by
     unfold MahiMahi.decisionRoundAt; omega
   obtain ⟨L, hLmem, hLc, hLr⟩ := hpop (S.slotRound k) le_rfl (by omega) (S.leader k) hlead
-  have hdc : MahiMahi.DirectCommit U (w (S.slotRound k)) L (S.slotRound k) := by
+  have hdc : MahiMahi.DirectCommit U (w (S.kind k)) L (S.slotRound k) := by
     unfold MahiMahi.DirectCommit
     refine le_trans hcard (Finset.card_le_card ?_)
     intro v hv
-    obtain ⟨C, hC, hCc, hCr⟩ := hpop (S.slotRound k + (w (S.slotRound k) - 1)) (by omega) le_rfl
+    obtain ⟨C, hC, hCc, hCr⟩ := hpop (S.slotRound k + (w (S.kind k) - 1)) (by omega) le_rfl
       v hv
     have hCr' : (BlockRecord.block U C).round
-        = MahiMahi.decisionRoundAt (w (S.slotRound k)) (S.slotRound k) := by
+        = MahiMahi.decisionRoundAt (w (S.kind k)) (S.slotRound k) := by
       rw [hdr]; exact hCr
     rw [mem_creatorsOf]
     exact ⟨C, mem_certificatesAt.mpr
@@ -251,12 +252,62 @@ theorem shSupport_commits {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
   obtain ⟨L, ⟨hLmem, hLr', hLc'⟩, hin⟩ :=
     shSupport_directCommitIn hw S V hcard hpop hcert hcov hlead
   refine ⟨L, by omega, Steelhead.Decided.directCommit ⟨hLmem, hLr', hLc'⟩ hin, ?_⟩
-  intro S' hround hlead'
+  intro S' hround hlead' hkind'
   refine Steelhead.Decided.directCommit (S := S') ⟨hLmem, ?_, ?_⟩ ?_
   · rw [hround]; exact hLr'
   · rw [hlead' k (by omega)]; exact hLc'
-  · change MahiMahi.DirectCommitIn U V (w (S'.slotRound k)) L (S'.slotRound k)
-    rw [hround]; exact hin
+  · change MahiMahi.DirectCommitIn U V (w (S'.kind k)) L (S'.slotRound k)
+    rw [hround, hkind' k (by omega)]; exact hin
+
+/-! ## The band
+
+Mahi-Mahi's band laws at the wave of the slot each law concerns: the
+band's two schedules agree on the slot's kind, so on the wave the rule
+reads there, and each predicate is Mahi-Mahi's at that one wave. -/
+
+/-- **What Steelhead owes the band**: Mahi-Mahi's band laws at the wave
+of the slot's kind, which the band carries. -/
+theorem steelheadBandLaws {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
+    (steelheadAnchored Validator BlockId Payload w).BandLaws where
+  commit_band := fun {S S' _ _ _ _ _ _ _ _ k k' _} hab hkk hlk hkind hlo hhi hV hL hc => by
+    have h := (MahiMahiProperties.mahiMahiBandLaws (hw (S.kind k))).commit_band
+      (agreeBand_mm _ hab) hkk hlk hkind hlo hhi hV hL hc
+    change MahiMahi.DirectCommitIn _ _ (w (S'.kind k')) _ _
+    rw [← hkind]; exact h
+  skip_band := fun {S S' _ _ _ _ _ _ _ _ k k'} hab hkk hlk hkind hlo hhi hV hs => by
+    have h := (MahiMahiProperties.mahiMahiBandLaws (hw (S.kind k))).skip_band
+      (agreeBand_mm _ hab) hkk hlk hkind hlo hhi hV hs
+    change MahiMahi.DirectSkipIn _ _ (w (S'.kind k')) _ _
+    rw [← hkind]; exact h
+  link_band := fun {S S' _ _ _ _ _ _ _ _ k k' i} hab hA hAlo hAhi hkk hlk hkind hlo hhi hi hL => by
+    have h := (MahiMahiProperties.mahiMahiBandLaws (hw (S.kind k))).link_band
+      (agreeBand_mm _ hab) hA hAlo hAhi hkk hlk hkind hlo hhi hi hL
+    change MahiMahi.CertifiedIn _ (w (S'.kind k')) _ _ _ ↔ MahiMahi.CertifiedIn _ (w (S.kind k)) _ _ _
+    rw [← hkind]; exact h
+  link_novel := fun {S S' _ _ _ _ _ _ _ _ k k' i} hab hA hAlo hAhi hkk hlk hkind hlo hhi hi hL hLo =>
+    by
+    have h := (MahiMahiProperties.mahiMahiBandLaws (hw (S.kind k))).link_novel
+      (agreeBand_mm _ hab) hA hAlo hAhi hkk hlk hkind hlo hhi hi hL hLo
+    change ¬ MahiMahi.CertifiedIn _ (w (S'.kind k')) _ _ _
+    rw [← hkind]; exact h
+
+/-- **Steelhead is banded**, at a wavelength function of at least two
+rounds everywhere: the band laws and nothing else. -/
+theorem banded {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
+    Banded (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w) :=
+  AnchoredRule.banded (steelheadBandLaws hw)
+
+/-- **Truncation invariance**, from the band. -/
+theorem localTruncate {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
+    LocalTruncate (steelheadRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload) w) :=
+  LocalTruncate.of_banded (banded hw)
+
+/-- **The safety headline**, from the band, agreement and the candidate. -/
+theorem safety {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) :
+    Properties.Safe (steelheadRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload) w) :=
+  Properties.safety (banded hw) (agree hw) (commitsCandidate w)
 
 /-! ## The liveness headline -/
 

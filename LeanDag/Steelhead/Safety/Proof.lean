@@ -43,8 +43,8 @@ theorem holds : Statement := by
   · intro coin V₁ V₂ r v₁ v₂ hwa h₁ h₂
     exact AnchoredRule.decided_unique (S := chainSlots coin) (MahiMahi.mahiMahiLaws (by omega))
       trivial h₁ V₂ v₂ h₂
-  · intro coin V k r L hid hr hlead
-    exact direct_agrees_with_chain hid hr hlead
+  · intro coin V k r L hid hkind hr hlead
+    exact direct_agrees_with_chain hid hkind hr hlead
 
 end Safety
 

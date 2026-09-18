@@ -37,9 +37,11 @@ open LeanDag LeanDag.Steelhead
 
 set_option maxRecDepth 4096
 
-/-- One slot per round, led by `(k + 1) % 4`. -/
+/-- One slot per round, led by `(k + 1) % 4`, of kind its round: the
+wavelength function reads the round through the kind, and a rebase
+carries it. -/
 local instance shSlots : Slots (Fin 4) :=
-  Slots.uniformSingle 1 (by omega) (fun k => ⟨(k + 1) % 4, by omega⟩)
+  { Slots.uniformSingle 1 (by omega) (fun k => ⟨(k + 1) % 4, by omega⟩) with kind := fun k => k }
 
 /-- The period-four wavelength of the 3f+1 pair: `5` at rounds
 `0, 4, 8, …`, `3` elsewhere. -/
@@ -96,13 +98,13 @@ example : ¬ sh.Eligible 1 3 := by decide
 example : IsLeaderBlock sh8 0 1 := by decide
 example : MahiMahi.certificates sh8 5 1 0 = {16, 17, 18, 19} := by decide
 example : MahiMahi.DirectCommit sh8 5 1 0 := by decide
-example : sh.Commit sh8 (View.full sh8) 1 0 := by decide
+example : sh.Commit sh8 (View.full sh8) 1 0 0 := by decide
 
 -- Slot `1`'s candidate is block `6` (round `1`, author `2`); at wave `3`
 -- its certificates are the whole of round `3`.
 example : IsLeaderBlock sh8 1 6 := by decide
 example : MahiMahi.certificates sh8 3 6 1 = {12, 13, 14, 15} := by decide
-example : sh.Commit sh8 (View.full sh8) 6 1 := by decide
+example : sh.Commit sh8 (View.full sh8) 6 1 1 := by decide
 
 -- No slot is directly skipped: every voting round votes.
 example : ¬ sh.Skip sh8 (View.full sh8) shSlots 0 := by decide
