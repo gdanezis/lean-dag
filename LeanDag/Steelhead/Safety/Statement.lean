@@ -5,7 +5,15 @@ import LeanDag.MahiMahi.Model.Rules
 
 The rules at the wavelength function `w` never disagree about a slot,
 whichever rule decided it and whichever anchor a view found
-(`steelhead.md` §3). Eight claims, which `Statement` bundles as nine,
+(`steelhead.md` §3).
+
+The pair is the `3f + 1` one, Mysticeti at `ws = 3` and Mahi-Mahi at
+`wa`, and every claim below is about its vote-and-certify pattern at a
+wavelength function. A pair with other quorums or another evidence
+pattern, BlueBottle's two-round rule among them, is not this rule at
+another wave, and the paper's clauses for it stay open.
+
+Eight claims, which `Statement` bundles as nine,
 since SH4 is one claim about the rule and one about the relation:
 
 * **SH1a, skip excludes certificates** — Lemma 1's skip half at the
@@ -22,7 +30,9 @@ since SH4 is one claim about the rule and one about the relation:
   rule decides the anchor, and no view skips it;
 * **SH4, conservativity** — Theorem 5: at a constant wavelength the rule
   *is* Mahi-Mahi's, at period one it is Mahi-Mahi's at `wa`, and at wave
-  three the derivations are exactly the core's;
+  three the derivations are exactly the core's in both directions, so
+  Mysticeti enters this development as Mahi-Mahi at three and not as a
+  second rule;
 * **SH5, chain agreement** — the chain verdicts agree across views: an
   instance of MM1c at the chain schedule, one slot per round led by the
   round's coin leader;

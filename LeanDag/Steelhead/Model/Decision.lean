@@ -10,6 +10,15 @@ The Mahi-Mahi rule with the wave read at the slot's round
 "collapses to a wavelength function" — and the anchored relation's
 `waveAt` field is what lets one rule carry it.
 
+**One family of predicates, not two.** The pair instantiated here is
+Mysticeti at `ws = 3` and Mahi-Mahi at `wa`, and at wavelength three
+Mahi-Mahi's relation is the core's, slot for slot and verdict for
+verdict (`Safety/Statement.lean`, SH4, an `↔`: MM1d one way and
+`decided_of_core_decided` the other). The two rules of the paper are
+therefore one predicate family read at two numbers, which is why every
+law is Mahi-Mahi's at the wave of the slot it concerns and no law
+compares two rules.
+
 **Definitions only**, as in the Mahi-Mahi model files this one imports
 read-only. The direct predicates, the certificate, and the indirect test
 are Mahi-Mahi's at wave `w r`; nothing is restated.
