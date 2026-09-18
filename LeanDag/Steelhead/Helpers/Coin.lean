@@ -286,12 +286,15 @@ theorem inv_card_le_commitProb {U : BlockUniverse Validator BlockId Payload} {wa
 /-- **SH11b.** A good coin's block is directly committed, and a view holding the decision round
 holds its certificates. -/
 theorem chainCommit_of_mem_goodAt {U : BlockUniverse Validator BlockId Payload} {wa : ℕ}
-    {coin : ℕ → Validator} {V : View Validator BlockId Payload U} {r : ℕ}
-    (h : coin r ∈ MahiMahi.goodAt U wa r) (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa r)) :
-    ∃ L, IsLeaderBlock (S := chainSlots coin) U r L ∧ ChainDecided wa coin U V r (some L) := by
+    {S' : Slots Validator} {coin : ℕ → Validator} {V : View Validator BlockId Payload U} {i r : ℕ}
+    (hr : S'.slotRound i = r) (hlead : S'.leader i = coin r) (h : coin r ∈ MahiMahi.goodAt U wa r)
+    (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa r)) :
+    ∃ L, IsLeaderBlock (S := S') U i L ∧ MahiMahi.Decided (S := S') wa U V i (some L) := by
   obtain ⟨L, hL, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp h
-  exact ⟨L, ⟨hL, hLr, hLc⟩, MahiMahi.Decided.directCommit (S := chainSlots coin) ⟨hL, hLr, hLc⟩
-    (MahiMahiProperties.directCommitIn_of_coversUpto hdc hV)⟩
+  subst hr
+  refine ⟨L, ⟨hL, hLr, hLc.trans hlead.symm⟩, MahiMahi.Decided.directCommit (S := S')
+    ⟨hL, hLr, hLc.trans hlead.symm⟩ ?_⟩
+  exact MahiMahiProperties.directCommitIn_of_coversUpto hdc hV
 
 /-! ## Many coins -/
 
@@ -349,7 +352,7 @@ theorem not_skip_of_mem_goodAt {U : BlockUniverse Validator BlockId Payload} {wa
     (h : coin r ∈ MahiMahi.goodAt U wa r) (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa r)) :
     ¬ MahiMahi.Decided (S := chainSlots coin) wa U V r none := by
   intro hskip
-  obtain ⟨L, -, hdec⟩ := chainCommit_of_mem_goodAt h hV
+  obtain ⟨L, -, hdec⟩ := chainCommit_of_mem_goodAt (S' := chainSlots coin) rfl rfl h hV
   have := AnchoredRule.decided_agree (S := chainSlots coin) (MahiMahi.mahiMahiLaws hwa) trivial
     hdec hskip
   simp at this
@@ -713,74 +716,146 @@ theorem badBlockBound_le_one (K : ℕ) : Coin.badBlockBound Validator K ≤ 1 :=
     ← Nat.cast_pow, Nat.cast_le]
   exact Nat.sub_le _ _
 
-/-- A good block in each half settles every chain verdict up to the later one, so the states are
-derived that far, and decides the slot: the earlier block's first coin anchors its interval, the
-later block is the run above it (SH14c). Stated for any coin map whose values on the two blocks
-are good. -/
+omit [Fintype Validator] [DecidableEq Validator] F in
+/-- The `u`-th multiple of `K` above `r` lies above `r` and within `(u + 1) · K` of it. -/
+theorem mul_div_add_bounds {r K u : ℕ} (hK : 0 < K) :
+    r < (r / K + 1 + u) * K ∧ (r / K + 1 + u) * K ≤ r + (u + 1) * K := by
+  have h1 := Nat.lt_div_mul_add (a := r) hK
+  have h2 := Nat.div_mul_le_self r K
+  have h3 : (r / K + 1 + u) * K = r / K * K + (u + 1) * K := by
+    rw [Nat.add_assoc, Nat.add_mul, Nat.add_comm 1 u]
+  have h4 : K ≤ (u + 1) * K := Nat.le_mul_of_pos_left K (by omega)
+  have := Nat.zero_le (r / K)
+  constructor <;> omega
+
+/-- A good block in each half decides the slot: the later block holds `wa` consecutive multiples
+of `K`, the control slots every scan below its interval reads above its boundary, so it settles
+every scan up to its interval (SH7a at each scan's schedule) and the states are derived that far;
+the earlier block's first `K` rounds hold the first control round of its interval at the period
+the view derived, so its coin anchors that interval; and the later block's first `wa` rounds are
+the run above it (SH14c). Stated for any coin map whose values on the two blocks are good. -/
 theorem decided_of_good_blocks {U : BlockUniverse Validator BlockId Payload} {ws wa I K : ℕ}
-    (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I)
-    {upd : UpdateRule BlockId} {k₀ : ℕ} {known coin : ℕ → Validator}
+    [NeZero K] (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 3 ≤ wa) (hKI : wa * K ≤ I)
+    {upd : UpdateRule BlockId} {k₀ : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
+    (hupd : ∀ A k, 1 ≤ k → k ≤ K → 1 ≤ upd A k ∧ upd A k ≤ K) {known coin : ℕ → Validator}
     {s M : ℕ} (h₁ : 1 ≤ s) {j₁ j₂ : Fin M} (hj : j₁ < j₂)
-    (hg₁ : ∀ i : Fin K, coin (blockRound I (intervalOf I s) j₁ i) ∈
+    (hg₁ : ∀ i : Fin (wa * K), coin (blockRound I (intervalOf I s) j₁ i) ∈
       MahiMahi.goodAt U wa (blockRound I (intervalOf I s) j₁ i))
-    (hg₂ : ∀ i : Fin K, coin (blockRound I (intervalOf I s) j₂ i) ∈
+    (hg₂ : ∀ i : Fin (wa * K), coin (blockRound I (intervalOf I s) j₂ i) ∈
       MahiMahi.goodAt U wa (blockRound I (intervalOf I s) j₂ i))
     (V : View Validator BlockId Payload U) (per : ℕ → ℕ)
-    (hV : V.CoversUpto (blocksHorizon I wa (intervalOf I s) M))
-    (hmatch : Matches I wa coin known upd k₀ ws U V per) :
-    Settles I wa coin known upd k₀ ws U V per s := by
+    (hV : V.CoversUpto (blocksHorizon I wa K (intervalOf I s) M))
+    (hmatch : Matches I K wa coin known upd k₀ ws U V per) :
+    Settles I K wa coin known upd k₀ ws U V per s := by
+  have hKpos : 0 < K := pos_of_neZero
+  have hwaK : wa ≤ wa * K := Nat.le_mul_of_pos_right wa hKpos
+  have hKwa : K ≤ wa * K := Nat.le_mul_of_pos_left K (by omega)
   have hI : 0 < I := by omega
-  have h1 : (intervalOf I s + 2 + j₂) * I ≤ (intervalOf I s + 1 + M) * I :=
-    Nat.mul_le_mul_right I (by have := j₂.isLt; omega)
-  have hb : MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j₂ 0 + wa - 1) ≤
-      blocksHorizon I wa (intervalOf I s) M := by
-    unfold blockRound blocksHorizon MahiMahi.decisionRoundAt
-    omega
-  -- the later block's coins
-  have hgoodb : ∀ i, i < wa → coin (blockRound I (intervalOf I s) j₂ 0 + i) ∈
-      MahiMahi.goodAt U wa (blockRound I (intervalOf I s) j₂ 0 + i) := by
-    intro i hi
-    have := hg₂ ⟨i, by omega⟩
-    simp only [blockRound] at this
-    rw [show blockRound I (intervalOf I s) j₂ 0 + i = (intervalOf I s + 2 + j₂) * I + 1 + i by
-      unfold blockRound; omega]
-    exact this
-  -- its run settles every chain verdict below it, so the states are derived up to its interval
-  have hall := chainAllDecidedBelowOfRun (by omega) hgoodb (hV.mono hb)
-  have hint : intervalOf I (blockRound I (intervalOf I s) j₂ 0 + wa - 1) =
-      intervalOf I s + 2 + j₂ := by
-    have hmul : (intervalOf I s + 2 + j₂ + 1) * I = (intervalOf I s + 2 + j₂) * I + I := by
-      rw [Nat.add_mul, Nat.one_mul]
-    exact intervalOf_eq_of_mul_lt_le (by unfold blockRound; omega) (by unfold blockRound; omega)
   have hw2 : ∀ κ, 2 ≤ wavelength ws wa κ := wavelength_two_le hws (by omega)
-  have hper : ∀ j', j' ≤ intervalOf I (blockRound I (intervalOf I s) j₂ 0 + wa - 1) → ∃ st,
-      PeriodAt (S := adaptiveSlots coin known I per) I wa coin upd k₀ U V
+  obtain ⟨j₀, hj₀⟩ : ∃ j₀, j₀ = intervalOf I s := ⟨_, rfl⟩
+  obtain ⟨m₁, hm₁⟩ : ∃ m₁, m₁ = j₀ + 2 + j₁ := ⟨_, rfl⟩
+  obtain ⟨m₂, hm₂⟩ : ∃ m₂, m₂ = j₀ + 2 + j₂ := ⟨_, rfl⟩
+  have hm₁I : (j₀ + 2 + j₁) * I = m₁ * I := by rw [hm₁]
+  have hm₂I : (j₀ + 2 + j₂) * I = m₂ * I := by rw [hm₂]
+  have hm₂M : m₂ * I ≤ (j₀ + 1 + M) * I := Nat.mul_le_mul_right I (by have := j₂.isLt; omega)
+  have hm₂1 : (m₂ + 1) * I = m₂ * I + I := by rw [Nat.add_mul, Nat.one_mul]
+  have hm₁1 : (m₁ + 1) * I = m₁ * I + I := by rw [Nat.add_mul, Nat.one_mul]
+  rw [← hj₀] at hV hg₁ hg₂
+  unfold blocksHorizon at hV
+  -- the later block's rounds are good
+  have hgood₂ : ∀ r, m₂ * I < r → r ≤ m₂ * I + wa * K → coin r ∈ MahiMahi.goodAt U wa r := by
+    intro r hlo hhi
+    have := hg₂ ⟨r - (m₂ * I + 1), by omega⟩
+    simp only [blockRound] at this
+    rwa [show (j₀ + 2 + (j₂ : ℕ)) * I + 1 + (r - (m₂ * I + 1)) = r by omega] at this
+  -- the group: the wa multiples of K inside the later block
+  obtain ⟨g₀, hg₀⟩ : ∃ g₀, g₀ = m₂ * I / K + 1 := ⟨_, rfl⟩
+  have hgroup : ∀ u, u < wa → m₂ * I < (g₀ + u) * K ∧ (g₀ + u) * K ≤ m₂ * I + wa * K := by
+    intro u hu
+    obtain ⟨h1, h2⟩ := mul_div_add_bounds (r := m₂ * I) (u := u) hKpos
+    rw [hg₀]
+    refine ⟨h1, le_trans h2 (Nat.add_le_add_left (Nat.mul_le_mul_right K (by omega)) _)⟩
+  have hgroup_good : ∀ u, u < wa → coin ((g₀ + u) * K) ∈ MahiMahi.goodAt U wa ((g₀ + u) * K) :=
+    fun u hu => hgood₂ _ (hgroup u hu).1 (hgroup u hu).2
+  -- every scan below the later block's interval is settled at every period: the group is a run
+  -- of consecutive control slots above the scan's boundary
+  have hsettle : ∀ j', j' < m₂ → ∀ k i, 1 ≤ controlRound I K j' k i →
+      intervalOf I (controlRound I K j' k i) = j' →
+      ∃ v, ControlDecided I K wa coin j' k U V i v := by
+    intro j' hj' k i _ hmem
+    have hb' : (j' + 1) * I ≤ m₂ * I := Nat.mul_le_mul_right I (by omega)
+    have hgK : (j' + 1) * I / K < g₀ := by
+      rw [hg₀]
+      exact Nat.lt_succ_of_le (Nat.div_le_div_right hb')
+    have hq₁ := Nat.zero_le ((j' + 1) * I / k)
+    have hq₂ := Nat.zero_le ((j' + 1) * I / K)
+    obtain ⟨base, hbase⟩ : ∃ base, base = (j' + 1) * I / k + (g₀ - (j' + 1) * I / K) := ⟨_, rfl⟩
+    have hcr : ∀ u, controlRound I K j' k (base + u) = (g₀ + u) * K := by
+      intro u
+      rw [controlRound_of_gt (by omega)]
+      congr 1
+      omega
+    have hgood : ∀ u, u < wa →
+        (controlSlots coin I K j' k).leader (base + u) ∈
+          MahiMahi.good (S := controlSlots coin I K j' k) U wa (base + u) := by
+      intro u hu
+      rw [controlSlots_leader, MahiMahi.good, controlSlots_slotRound, hcr]
+      exact hgroup_good u hu
+    have hcov : MahiMahi.decisionRoundAt wa
+        ((controlSlots coin I K j' k).slotRound (base + wa - 1)) ≤
+          MahiMahi.decisionRoundAt wa ((j₀ + 1 + M) * I + wa * K) := by
+      rw [controlSlots_slotRound, show base + wa - 1 = base + (wa - 1) by omega, hcr]
+      have := (hgroup (wa - 1) (by omega)).2
+      unfold MahiMahi.decisionRoundAt
+      omega
+    have hall := allDecidedBelowOfGoodRun (by omega)
+      (controlRound_strictMono (I := I) (K := K) j' k) hgood (hV.mono hcov)
+    exact hall i (by have := le_boundary_of_intervalOf hI hmem; omega)
+  -- so the states are derived up to the later block's interval
+  have hstates : ∀ j, j ≤ m₂ → ∃ st,
+      PeriodAt (S := adaptiveSlots coin known I per) I K wa coin upd k₀ U V
+        (wavelength ws wa) j st := by
+    intro j hj
+    exact exists_periodAt_of_settled (S := adaptiveSlots coin known I per) (n := m₂ - 1) hw2
+      (fun j' hj' k i hpos hmem => hsettle j' (by omega) k i hpos hmem) j (by omega)
+  -- the run: the later block's first wa rounds
+  obtain ⟨b, hb⟩ : ∃ b, b = m₂ * I + 1 := ⟨_, rfl⟩
+  have hint : intervalOf I (b + wa - 1) = m₂ :=
+    intervalOf_eq_of_mul_lt_le (by omega) (by omega)
+  have hper : ∀ j', j' ≤ intervalOf I (b + wa - 1) → ∃ st,
+      PeriodAt (S := adaptiveSlots coin known I per) I K wa coin upd k₀ U V
         (wavelength ws wa) j' st ∧ per j' = st.period := by
     intro j' hj'
     rw [hint] at hj'
-    have hex : ∀ j, j ≤ intervalOf I s + 1 + j₂ + 1 →
-        ∃ st, PeriodAt (S := adaptiveSlots coin known I per) I wa coin upd k₀ U V
-          (wavelength ws wa) j st :=
-      exists_periodAt_of_settled (S := adaptiveSlots coin known I per) hw2 fun r _ hr => hall r (by
-        have := le_of_intervalOf hI (rfl : intervalOf I r = intervalOf I r)
-        have := Nat.mul_le_mul_right I (show intervalOf I r + 1 ≤ intervalOf I s + 2 + j₂ by omega)
-        unfold blockRound
-        omega)
-    obtain ⟨st, hst⟩ := hex j' (by omega)
-    exact ⟨st, hst, hmatch j' st hst⟩
+    exact (hstates j' hj').imp fun st hst => ⟨hst, hmatch j' st hst⟩
+  have hgoodb : ∀ u, u < wa → coin (b + u) ∈ MahiMahi.goodAt U wa (b + u) :=
+    fun u hu => hgood₂ _ (by omega) (by omega)
+  -- the earlier block's interval runs at a period from 1 to I, and the coin at its first control
+  -- round is good, that round lying among the block's first K rounds
+  obtain ⟨st₁, hp₁, he₁⟩ := hper m₁ (by rw [hint]; omega)
+  obtain ⟨hk1, hk2⟩ := periodAt_mem_range (S := adaptiveSlots coin known I per) h₀ hK hupd hp₁
+  rw [← he₁] at hk1 hk2
+  have hkI : per m₁ ≤ I := le_trans hk2 (le_trans hKwa hKI)
+  have hfirst : coin (firstControlRound I m₁ (per m₁)) ∈
+      MahiMahi.goodAt U wa (firstControlRound I m₁ (per m₁)) := by
+    obtain ⟨-, -, hmem, -⟩ := firstControlRound_eq (I := I) (K := K) (j := m₁) hk1 hkI
+    have hlo : m₁ * I + 1 ≤ firstControlRound I m₁ (per m₁) :=
+      mul_add_one_le_of_intervalOf hI (by omega) hmem
+    have hhi : firstControlRound I m₁ (per m₁) ≤ m₁ * I + per m₁ := by
+      unfold firstControlRound
+      rw [Nat.add_mul, Nat.one_mul]
+      exact Nat.add_le_add_right (Nat.div_mul_le_self _ _) _
+    have := hg₁ ⟨firstControlRound I m₁ (per m₁) - (m₁ * I + 1), by omega⟩
+    simp only [blockRound] at this
+    rwa [show (j₀ + 2 + (j₁ : ℕ)) * I + 1 + (firstControlRound I m₁ (per m₁) - (m₁ * I + 1)) =
+      firstControlRound I m₁ (per m₁) by omega] at this
   unfold Settles
-  refine ⟨(hper _ (by rw [hint]; omega)).imp fun st h => h.1, ?_⟩
-  refine output_liveness_of_runs (S := adaptiveSlots coin known I per)
-    hws hle hwa (fun _ => rfl) (fun _ => rfl) hI (fun r h => if_pos h)
-    (b := blockRound I (intervalOf I s) j₂ 0) hper h₁
-    (j := intervalOf I s + 2 + j₁) (by omega) ?_ ?_ hgoodb (hV.mono hb)
-  · have := hg₁ ⟨0, by omega⟩
-    simp only [blockRound, Nat.add_zero] at this
-    exact this
-  · unfold blockRound
-    have : (intervalOf I s + 2 + j₁ + 1) * I ≤ (intervalOf I s + 2 + j₂) * I :=
-      Nat.mul_le_mul_right I (by omega)
-    omega
+  rw [← hj₀]
+  refine ⟨hstates j₀ (by omega), ?_⟩
+  exact output_liveness_of_runs (S := adaptiveSlots coin known I per) hws hle hwa (fun _ => rfl)
+    (fun _ => rfl) hI (fun r h => if_pos h) hper h₁ (j := m₁) (by omega) hk1 hkI hfirst
+    (by have := Nat.mul_le_mul_right I (show m₁ + 1 ≤ m₂ by omega); omega) hgoodb
+    (hV.mono (by unfold MahiMahi.decisionRoundAt; omega))
 
 /-- The lower half of `M` blocks. -/
 def lowerHalf (M : ℕ) : Finset (Fin M) := Finset.univ.filter fun j => (j : ℕ) < M / 2
@@ -896,26 +971,27 @@ theorem bad_halves_prob_le_adaptive {M K : ℕ}
 /-- A block map with a good block in each half settles the slot against a strategy, so the
 failure set lies in the union of the two halves' no-good-block sets, read at any floor of the
 committed sets. -/
-theorem failure_subset_halves_adaptive {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle : ws ≤ wa)
-    (hwa : 3 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I) {upd : UpdateRule BlockId} {k₀ : ℕ}
+theorem failure_subset_halves_adaptive {ws wa I K : ℕ} [NeZero K] (hws : 2 ≤ ws) (hle : ws ≤ wa)
+    (hwa : 3 ≤ wa) (hKI : wa * K ≤ I) {upd : UpdateRule BlockId} {k₀ : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
+    (hupd : ∀ A k, 1 ≤ k → k ≤ K → 1 ≤ upd A k ∧ upd A k ≤ K)
     {known : ℕ → Validator} {d : Validator} {s M : ℕ}
-    {σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload}
-    {G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator}
-    (hG : ∀ g (j : Fin M) (i : Fin K),
+    {σ : (Fin M → Fin (wa * K) → Validator) → BlockUniverse Validator BlockId Payload}
+    {G : (Fin M → Fin (wa * K) → Validator) → Fin M → Fin (wa * K) → Finset Validator}
+    (hG : ∀ g (j : Fin M) (i : Fin (wa * K)),
       G g j i ⊆ MahiMahi.goodAt (σ g) wa (blockRound I (intervalOf I s) j i))
     (h₁ : 1 ≤ s) :
-    {g : Fin M → Fin K → Validator | ¬ ∀ (V : View Validator BlockId Payload (σ g))
+    {g : Fin M → Fin (wa * K) → Validator | ¬ ∀ (V : View Validator BlockId Payload (σ g))
         (per : ℕ → ℕ),
-        V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-        Matches I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per →
-        Settles I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per s} ⊆
-      {g | ∀ j ∈ lowerHalf M, ∃ i : Fin K, g j i ∉ G g j i} ∪
-        {g | ∀ j ∈ upperHalf M, ∃ i : Fin K, g j i ∉ G g j i} := by
+        V.CoversUpto (blocksHorizon I wa K (intervalOf I s) M) →
+        Matches I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per →
+        Settles I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per s} ⊆
+      {g | ∀ j ∈ lowerHalf M, ∃ i : Fin (wa * K), g j i ∉ G g j i} ∪
+        {g | ∀ j ∈ upperHalf M, ∃ i : Fin (wa * K), g j i ∉ G g j i} := by
   intro g hg
   by_contra hcon
   obtain ⟨j₁, j₂, hlt, hg₁, hg₂⟩ :=
     exists_good_blocks_of_not (G := G g) (fun h => hcon (Or.inl h)) fun h => hcon (Or.inr h)
-  exact hg fun V per hV hmatch => decided_of_good_blocks hws hle hwa hwaK hKI h₁ hlt
+  exact hg fun V per hV hmatch => decided_of_good_blocks hws hle hwa hKI h₀ hK hupd h₁ hlt
     (fun i => by rw [coinOfBlocks_blockRound hKI]; exact hG g j₁ i (hg₁ i))
     (fun i => by rw [coinOfBlocks_blockRound hKI]; exact hG g j₂ i (hg₂ i)) V per hV hmatch
 
@@ -923,48 +999,51 @@ theorem failure_subset_halves_adaptive {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle :
 no-good-block sets at the strategy's floor, which SH11f bounds once the floor reads only the draws
 already made and holds the counting lemma's share: the blocks' committed sets move with the
 record, and the argument of SH15a is unchanged. -/
-theorem undecidedProb_le_adaptive {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 5 ≤ wa)
-    (hwaK : wa ≤ K) (hKI : K ≤ I) {upd : UpdateRule BlockId} {k₀ : ℕ}
+theorem undecidedProb_le_adaptive {ws wa I K : ℕ} [NeZero K] (hws : 2 ≤ ws) (hle : ws ≤ wa)
+    (hwa : 5 ≤ wa) (hKI : wa * K ≤ I) {upd : UpdateRule BlockId} {k₀ : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
+    (hupd : ∀ A k, 1 ≤ k → k ≤ K → 1 ≤ upd A k ∧ upd A k ≤ K)
     {known : ℕ → Validator} {d : Validator} {s M : ℕ}
-    {σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload}
-    {G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator} (h₁ : 1 ≤ s)
+    {σ : (Fin M → Fin (wa * K) → Validator) → BlockUniverse Validator BlockId Payload}
+    {G : (Fin M → Fin (wa * K) → Validator) → Fin M → Fin (wa * K) → Finset Validator} (h₁ : 1 ≤ s)
     (hσ : NonAnticipating σ G wa I (intervalOf I s))
     (hc : ∀ g j i, Fintype.card Validator - F.f - F.byzantine.card ≤ (G g j i).card) :
-    undecidedProbAgainst σ ws wa I upd k₀ known d s ≤
-      2 * Coin.badBlockBound Validator K ^ (M / 2) :=
+    undecidedProbAgainst ws wa I σ upd k₀ known d s ≤
+      2 * Coin.badBlockBound Validator (wa * K) ^ (M / 2) :=
   le_trans
     (MeasureTheory.measure_mono
-      (failure_subset_halves_adaptive hws hle (by omega) hwaK hKI hσ.1 h₁))
+      (failure_subset_halves_adaptive hws hle (by omega) hKI h₀ hK hupd hσ.1 h₁))
     (bad_halves_prob_le_adaptive G hσ.2 hc)
 
 /-- **SH15a.** The failure set lies in the union of the two halves' no-good-block sets, each of
 which the counting bounds. -/
-theorem undecidedProb_le {U : BlockUniverse Validator BlockId Payload} {ws wa I K : ℕ}
-    (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 5 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I)
+theorem undecidedProb_le {U : BlockUniverse Validator BlockId Payload} {ws wa I K : ℕ} [NeZero K]
+    (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 5 ≤ wa) (hKI : wa * K ≤ I)
     {T : Finset Validator} (hcard : quorumCard Validator ≤ T.card) {upd : UpdateRule BlockId}
-    {k₀ : ℕ} {known : ℕ → Validator} {d : Validator} {s M : ℕ} (h₁ : 1 ≤ s)
-    (hpop : ∀ (j : Fin M) (i : Fin K), PopulatedOn U T (blockRound I (intervalOf I s) j i + 3) ∧
+    {k₀ : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
+    (hupd : ∀ A k, 1 ≤ k → k ≤ K → 1 ≤ upd A k ∧ upd A k ≤ K)
+    {known : ℕ → Validator} {d : Validator} {s M : ℕ} (h₁ : 1 ≤ s)
+    (hpop : ∀ (j : Fin M) (i : Fin (wa * K)), PopulatedOn U T (blockRound I (intervalOf I s) j i + 3) ∧
       PopulatedOn U T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) :
     undecidedProb U ws wa I K upd k₀ known d s M ≤
-      2 * Coin.badBlockBound Validator K ^ (M / 2) := by
+      2 * Coin.badBlockBound Validator (wa * K) ^ (M / 2) := by
   classical
-  set G : Fin M → Fin K → Finset Validator :=
+  set G : Fin M → Fin (wa * K) → Finset Validator :=
     fun j i => MahiMahi.goodAt U wa (blockRound I (intervalOf I s) j i) with hG
   have hc : ∀ j i, Fintype.card Validator - F.f - F.byzantine.card ≤ (G j i).card :=
     fun j i => card_goodAt_of_populated hwa hcard (hpop j i).1 (hpop j i).2
   -- a good block in each half decides the slot, so failing needs a bad half
-  have hsub : {g : Fin M → Fin K → Validator | ¬ ∀ (V : View Validator BlockId Payload U)
+  have hsub : {g : Fin M → Fin (wa * K) → Validator | ¬ ∀ (V : View Validator BlockId Payload U)
         (per : ℕ → ℕ),
-        V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-        Matches I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per →
-        Settles I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per s} ⊆
+        V.CoversUpto (blocksHorizon I wa K (intervalOf I s) M) →
+        Matches I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per →
+        Settles I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per s} ⊆
       {g | ∀ j ∈ lowerHalf M, ∃ i, g j i ∉ G j i} ∪
         {g | ∀ j ∈ upperHalf M, ∃ i, g j i ∉ G j i} := by
     intro g hg
     by_contra hcon
     obtain ⟨j₁, j₂, hlt, hg₁, hg₂⟩ := exists_good_blocks hcon
-    exact hg fun V per hV hmatch => decided_of_good_blocks hws hle (by omega) hwaK hKI h₁ hlt
-      (fun i => by rw [coinOfBlocks_blockRound hKI]; exact hg₁ i)
+    exact hg fun V per hV hmatch => decided_of_good_blocks hws hle (by omega) hKI h₀ hK hupd h₁
+      hlt (fun i => by rw [coinOfBlocks_blockRound hKI]; exact hg₁ i)
       (fun i => by rw [coinOfBlocks_blockRound hKI]; exact hg₂ i) V per hV hmatch
   exact le_trans (MeasureTheory.measure_mono hsub) (bad_halves_prob_le G hc)
 
@@ -1098,32 +1177,34 @@ the record's horizon, at some period sequence matching what it derives, has not
 derived the slot's period or leaves the slot undecided have measure at most SH15a's bound, by the
 same inclusion read through the process. -/
 theorem undecided_coin_le [MeasurableSpace Validator] [MeasurableSingletonClass Validator]
-    {U : BlockUniverse Validator BlockId Payload} {ws wa I K : ℕ}
-    (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 5 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I)
+    {U : BlockUniverse Validator BlockId Payload} {ws wa I K : ℕ} [NeZero K]
+    (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 5 ≤ wa) (hKI : wa * K ≤ I)
     {T : Finset Validator} (hcard : quorumCard Validator ≤ T.card) {upd : UpdateRule BlockId}
-    {k₀ : ℕ} {known : ℕ → Validator} {s M : ℕ} (h₁ : 1 ≤ s)
-    (hpop : ∀ (j : Fin M) (i : Fin K), PopulatedOn U T (blockRound I (intervalOf I s) j i + 3) ∧
+    {k₀ : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
+    (hupd : ∀ A k, 1 ≤ k → k ≤ K → 1 ≤ upd A k ∧ upd A k ≤ K)
+    {known : ℕ → Validator} {s M : ℕ} (h₁ : 1 ≤ s)
+    (hpop : ∀ (j : Fin M) (i : Fin (wa * K)), PopulatedOn U T (blockRound I (intervalOf I s) j i + 3) ∧
       PopulatedOn U T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) :
     coinMeasure Validator {coin | ¬ ∀ (V : View Validator BlockId Payload U) (per : ℕ → ℕ),
-        V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-        Matches I wa coin known upd k₀ ws U V per → Settles I wa coin known upd k₀ ws U V per s} ≤
-      2 * Coin.badBlockBound Validator K ^ (M / 2) := by
+        V.CoversUpto (blocksHorizon I wa K (intervalOf I s) M) →
+        Matches I K wa coin known upd k₀ ws U V per → Settles I K wa coin known upd k₀ ws U V per s} ≤
+      2 * Coin.badBlockBound Validator (wa * K) ^ (M / 2) := by
   classical
-  set G : Fin M → Fin K → Finset Validator :=
+  set G : Fin M → Fin (wa * K) → Finset Validator :=
     fun j i => MahiMahi.goodAt U wa (blockRound I (intervalOf I s) j i) with hG
   have hc : ∀ j i, Fintype.card Validator - F.f - F.byzantine.card ≤ (G j i).card :=
     fun j i => card_goodAt_of_populated hwa hcard (hpop j i).1 (hpop j i).2
   -- a good block in each half decides the slot, so failing needs a bad half
   have hsub : {coin : ℕ → Validator | ¬ ∀ (V : View Validator BlockId Payload U) (per : ℕ → ℕ),
-        V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-        Matches I wa coin known upd k₀ ws U V per → Settles I wa coin known upd k₀ ws U V per s} ⊆
-      {coin | blockCoins I (intervalOf I s) M K coin ∈
+        V.CoversUpto (blocksHorizon I wa K (intervalOf I s) M) →
+        Matches I K wa coin known upd k₀ ws U V per → Settles I K wa coin known upd k₀ ws U V per s} ⊆
+      {coin | blockCoins I (intervalOf I s) M (wa * K) coin ∈
         {g | ∀ j ∈ lowerHalf M, ∃ i, g j i ∉ G j i} ∪
           {g | ∀ j ∈ upperHalf M, ∃ i, g j i ∉ G j i}} := by
     intro coin hcoin
     by_contra hcon
     obtain ⟨j₁, j₂, hlt, hg₁, hg₂⟩ := exists_good_blocks hcon
-    exact hcoin fun V per hV hmatch => decided_of_good_blocks hws hle (by omega) hwaK hKI
+    exact hcoin fun V per hV hmatch => decided_of_good_blocks hws hle (by omega) hKI h₀ hK hupd
       h₁ hlt hg₁ hg₂ V per hV hmatch
   exact le_trans (MeasureTheory.measure_mono hsub)
     (le_of_eq_of_le (coinMeasure_blockCoins_mem hKI _) (bad_halves_prob_le G hc))
@@ -1131,35 +1212,36 @@ theorem undecided_coin_le [MeasurableSpace Validator] [MeasurableSingletonClass 
 /-- **The failure set of a strategy under the process**: the same inclusion as SH15a's, read
 through the coins of the blocks, with the record the strategy builds from them. -/
 theorem undecided_coin_le_adaptive [MeasurableSpace Validator]
-    [MeasurableSingletonClass Validator] {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle : ws ≤ wa)
-    (hwa : 5 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I) {upd : UpdateRule BlockId} {k₀ : ℕ}
+    [MeasurableSingletonClass Validator] {ws wa I K : ℕ} [NeZero K] (hws : 2 ≤ ws) (hle : ws ≤ wa)
+    (hwa : 5 ≤ wa) (hKI : wa * K ≤ I) {upd : UpdateRule BlockId} {k₀ : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
+    (hupd : ∀ A k, 1 ≤ k → k ≤ K → 1 ≤ upd A k ∧ upd A k ≤ K)
     {known : ℕ → Validator} {s M : ℕ}
-    {σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload}
-    {G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator} (h₁ : 1 ≤ s)
+    {σ : (Fin M → Fin (wa * K) → Validator) → BlockUniverse Validator BlockId Payload}
+    {G : (Fin M → Fin (wa * K) → Validator) → Fin M → Fin (wa * K) → Finset Validator} (h₁ : 1 ≤ s)
     (hσ : NonAnticipating σ G wa I (intervalOf I s))
     (hc : ∀ g j i, Fintype.card Validator - F.f - F.byzantine.card ≤ (G g j i).card) :
     coinMeasure Validator {coin |
-        ¬ ∀ (V : View Validator BlockId Payload (σ (blockCoins I (intervalOf I s) M K coin)))
+        ¬ ∀ (V : View Validator BlockId Payload (σ (blockCoins I (intervalOf I s) M (wa * K) coin)))
           (per : ℕ → ℕ),
-        V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-        Matches I wa coin known upd k₀ ws (σ (blockCoins I (intervalOf I s) M K coin)) V per →
-        Settles I wa coin known upd k₀ ws (σ (blockCoins I (intervalOf I s) M K coin)) V per s} ≤
-      2 * Coin.badBlockBound Validator K ^ (M / 2) := by
+        V.CoversUpto (blocksHorizon I wa K (intervalOf I s) M) →
+        Matches I K wa coin known upd k₀ ws (σ (blockCoins I (intervalOf I s) M (wa * K) coin)) V per →
+        Settles I K wa coin known upd k₀ ws (σ (blockCoins I (intervalOf I s) M (wa * K) coin)) V per s} ≤
+      2 * Coin.badBlockBound Validator (wa * K) ^ (M / 2) := by
   have hsub : {coin : ℕ → Validator |
-        ¬ ∀ (V : View Validator BlockId Payload (σ (blockCoins I (intervalOf I s) M K coin)))
+        ¬ ∀ (V : View Validator BlockId Payload (σ (blockCoins I (intervalOf I s) M (wa * K) coin)))
           (per : ℕ → ℕ),
-        V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-        Matches I wa coin known upd k₀ ws (σ (blockCoins I (intervalOf I s) M K coin)) V per →
-        Settles I wa coin known upd k₀ ws (σ (blockCoins I (intervalOf I s) M K coin)) V per s} ⊆
-      {coin | blockCoins I (intervalOf I s) M K coin ∈
-        ({g | ∀ j ∈ lowerHalf M, ∃ i : Fin K, g j i ∉ G g j i} ∪
-          {g | ∀ j ∈ upperHalf M, ∃ i : Fin K, g j i ∉ G g j i})} := by
+        V.CoversUpto (blocksHorizon I wa K (intervalOf I s) M) →
+        Matches I K wa coin known upd k₀ ws (σ (blockCoins I (intervalOf I s) M (wa * K) coin)) V per →
+        Settles I K wa coin known upd k₀ ws (σ (blockCoins I (intervalOf I s) M (wa * K) coin)) V per s} ⊆
+      {coin | blockCoins I (intervalOf I s) M (wa * K) coin ∈
+        ({g | ∀ j ∈ lowerHalf M, ∃ i : Fin (wa * K), g j i ∉ G g j i} ∪
+          {g | ∀ j ∈ upperHalf M, ∃ i : Fin (wa * K), g j i ∉ G g j i})} := by
     intro coin hcoin
     by_contra hcon
     obtain ⟨j₁, j₂, hlt, hg₁, hg₂⟩ :=
-      exists_good_blocks_of_not (G := G (blockCoins I (intervalOf I s) M K coin))
+      exists_good_blocks_of_not (G := G (blockCoins I (intervalOf I s) M (wa * K) coin))
         (fun h => hcon (Or.inl h)) fun h => hcon (Or.inr h)
-    exact hcoin fun V per hV hmatch => decided_of_good_blocks hws hle (by omega) hwaK hKI
+    exact hcoin fun V per hV hmatch => decided_of_good_blocks hws hle (by omega) hKI h₀ hK hupd
       h₁ hlt (fun i => hσ.1 _ j₁ i (hg₁ i)) (fun i => hσ.1 _ j₂ i (hg₂ i)) V per hV hmatch
   exact le_trans (MeasureTheory.measure_mono hsub)
     (le_of_eq_of_le (coinMeasure_blockCoins_mem hKI _)
@@ -1170,28 +1252,30 @@ the records of the sequence are the strategies' answers to the coins of their ow
 with its floor, and the argument of SH15c is unchanged, since the failure set of each record is
 SH15d's. -/
 theorem decidedAlmostSurely_adaptive [MeasurableSpace Validator]
-    [MeasurableSingletonClass Validator] {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle : ws ≤ wa)
-    (hwa : 5 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I)
-    {σ : ∀ m : ℕ, (Fin m → Fin K → Validator) → BlockUniverse Validator BlockId Payload}
-    {G : ∀ m : ℕ, (Fin m → Fin K → Validator) → Fin m → Fin K → Finset Validator}
-    {upd : ℕ → UpdateRule BlockId} {k₀ : ℕ} {known : ℕ → Validator} {s : ℕ} (h₁ : 1 ≤ s)
+    [MeasurableSingletonClass Validator] {ws wa I K : ℕ} [NeZero K] (hws : 2 ≤ ws) (hle : ws ≤ wa)
+    (hwa : 5 ≤ wa) (hKI : wa * K ≤ I)
+    {σ : ∀ m : ℕ, (Fin m → Fin (wa * K) → Validator) → BlockUniverse Validator BlockId Payload}
+    {G : ∀ m : ℕ, (Fin m → Fin (wa * K) → Validator) → Fin m → Fin (wa * K) → Finset Validator}
+    {upd : ℕ → UpdateRule BlockId} {k₀ : ℕ} (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
+    (hupd : ∀ m A k, 1 ≤ k → k ≤ K → 1 ≤ upd m A k ∧ upd m A k ≤ K)
+    {known : ℕ → Validator} {s : ℕ} (h₁ : 1 ≤ s)
     (hσ : ∀ m, NonAnticipating (σ m) (G m) wa I (intervalOf I s))
-    (hc : ∀ (m : ℕ) (g : Fin m → Fin K → Validator) (j : Fin m) (i : Fin K),
+    (hc : ∀ (m : ℕ) (g : Fin m → Fin (wa * K) → Validator) (j : Fin m) (i : Fin (wa * K)),
       Fintype.card Validator - F.f - F.byzantine.card ≤ (G m g j i).card) :
     ∀ᵐ coin ∂(coinMeasure Validator), ∃ m,
-      ∀ (V : View Validator BlockId Payload (σ m (blockCoins I (intervalOf I s) m K coin)))
+      ∀ (V : View Validator BlockId Payload (σ m (blockCoins I (intervalOf I s) m (wa * K) coin)))
         (per : ℕ → ℕ),
-        V.CoversUpto (blocksHorizon I wa (intervalOf I s) m) →
-        Matches I wa coin known (upd m) k₀ ws (σ m (blockCoins I (intervalOf I s) m K coin))
+        V.CoversUpto (blocksHorizon I wa K (intervalOf I s) m) →
+        Matches I K wa coin known (upd m) k₀ ws (σ m (blockCoins I (intervalOf I s) m (wa * K) coin))
           V per →
-        Settles I wa coin known (upd m) k₀ ws (σ m (blockCoins I (intervalOf I s) m K coin))
+        Settles I K wa coin known (upd m) k₀ ws (σ m (blockCoins I (intervalOf I s) m (wa * K) coin))
           V per s := by
   rw [MeasureTheory.ae_iff]
   refine le_antisymm
-    (ge_of_tendsto' (undecided_tail_tendsto_zero (Validator := Validator) (K := K)) fun m => ?_)
+    (ge_of_tendsto' (undecided_tail_tendsto_zero (Validator := Validator) (K := wa * K)) fun m => ?_)
     zero_le
   refine le_trans (MeasureTheory.measure_mono fun coin h => ?_)
-    (undecided_coin_le_adaptive hws hle hwa hwaK hKI (upd := upd m) (k₀ := k₀)
+    (undecided_coin_le_adaptive hws hle hwa hKI (upd := upd m) (k₀ := k₀) h₀ hK (hupd m)
       (known := known) h₁ (hσ m) (hc m))
   simp only [Set.mem_setOf_eq, not_exists] at h ⊢
   exact h m
@@ -1199,48 +1283,51 @@ theorem decidedAlmostSurely_adaptive [MeasurableSpace Validator]
 /-- **SH15c.** The coins under which no record decides the slot lie, for every `m`, among those
 under which the `m`-th leaves it undecided, a set of vanishing measure. -/
 theorem decidedAlmostSurely [MeasurableSpace Validator] [MeasurableSingletonClass Validator]
-    {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 5 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I)
+    {ws wa I K : ℕ} [NeZero K] (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 5 ≤ wa) (hKI : wa * K ≤ I)
     {U : ℕ → BlockUniverse Validator BlockId Payload} {T : Finset Validator}
     (hcard : quorumCard Validator ≤ T.card) {upd : ℕ → UpdateRule BlockId} {k₀ : ℕ}
+    (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K) (hupd : ∀ m A k, 1 ≤ k → k ≤ K → 1 ≤ upd m A k ∧ upd m A k ≤ K)
     {known : ℕ → Validator} {s : ℕ} (h₁ : 1 ≤ s)
-    (hpop : ∀ (m : ℕ) (j : Fin m) (i : Fin K),
+    (hpop : ∀ (m : ℕ) (j : Fin m) (i : Fin (wa * K)),
       PopulatedOn (U m) T (blockRound I (intervalOf I s) j i + 3) ∧
       PopulatedOn (U m) T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) :
     ∀ᵐ coin ∂(coinMeasure Validator), ∃ m,
       ∀ (V : View Validator BlockId Payload (U m)) (per : ℕ → ℕ),
-        V.CoversUpto (blocksHorizon I wa (intervalOf I s) m) →
-        Matches I wa coin known (upd m) k₀ ws (U m) V per →
-        Settles I wa coin known (upd m) k₀ ws (U m) V per s := by
+        V.CoversUpto (blocksHorizon I wa K (intervalOf I s) m) →
+        Matches I K wa coin known (upd m) k₀ ws (U m) V per →
+        Settles I K wa coin known (upd m) k₀ ws (U m) V per s := by
   rw [MeasureTheory.ae_iff]
   refine le_antisymm
-    (ge_of_tendsto' (undecided_tail_tendsto_zero (Validator := Validator) (K := K)) fun m => ?_)
+    (ge_of_tendsto' (undecided_tail_tendsto_zero (Validator := Validator) (K := wa * K)) fun m => ?_)
     zero_le
   refine le_trans (MeasureTheory.measure_mono fun coin h => ?_)
-    (undecided_coin_le hws hle hwa hwaK hKI hcard (upd := upd m) (k₀ := k₀) (known := known) h₁
-      (hpop m))
+    (undecided_coin_le hws hle hwa hKI hcard (upd := upd m) (k₀ := k₀) h₀ hK (hupd m)
+      (known := known) h₁ (hpop m))
   simp only [Set.mem_setOf_eq, not_exists] at h ⊢
   exact h m
 
 /-- **SH15g.** The slots are countably many, so the null sets of SH15c, one per slot and its
 sequence of records, add up to a null set. -/
 theorem allDecidedAlmostSurely [MeasurableSpace Validator] [MeasurableSingletonClass Validator]
-    {ws wa I K : ℕ} (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 5 ≤ wa) (hwaK : wa ≤ K) (hKI : K ≤ I)
+    {ws wa I K : ℕ} [NeZero K] (hws : 2 ≤ ws) (hle : ws ≤ wa) (hwa : 5 ≤ wa) (hKI : wa * K ≤ I)
     {U : ℕ → ℕ → BlockUniverse Validator BlockId Payload} {T : Finset Validator}
     (hcard : quorumCard Validator ≤ T.card) {upd : ℕ → ℕ → UpdateRule BlockId} {k₀ : ℕ}
+    (h₀ : 1 ≤ k₀) (hK : k₀ ≤ K)
+    (hupd : ∀ s m A k, 1 ≤ k → k ≤ K → 1 ≤ upd s m A k ∧ upd s m A k ≤ K)
     {known : ℕ → Validator}
-    (hpop : ∀ (s m : ℕ) (j : Fin m) (i : Fin K),
+    (hpop : ∀ (s m : ℕ) (j : Fin m) (i : Fin (wa * K)),
       PopulatedOn (U s m) T (blockRound I (intervalOf I s) j i + 3) ∧
       PopulatedOn (U s m) T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) :
     ∀ᵐ coin ∂(coinMeasure Validator), ∀ s, 1 ≤ s → ∃ m,
       ∀ (V : View Validator BlockId Payload (U s m)) (per : ℕ → ℕ),
-        V.CoversUpto (blocksHorizon I wa (intervalOf I s) m) →
-        Matches I wa coin known (upd s m) k₀ ws (U s m) V per →
-        Settles I wa coin known (upd s m) k₀ ws (U s m) V per s := by
+        V.CoversUpto (blocksHorizon I wa K (intervalOf I s) m) →
+        Matches I K wa coin known (upd s m) k₀ ws (U s m) V per →
+        Settles I K wa coin known (upd s m) k₀ ws (U s m) V per s := by
   rw [MeasureTheory.ae_all_iff]
   intro s
   by_cases h₁ : 1 ≤ s
-  · exact (decidedAlmostSurely hws hle hwa hwaK hKI hcard (U := U s) (upd := upd s) (k₀ := k₀)
-      (known := known) h₁ (hpop s)).mono fun _ h _ => h
+  · exact (decidedAlmostSurely hws hle hwa hKI hcard (U := U s) (upd := upd s) (k₀ := k₀) h₀ hK
+      (hupd s) (known := known) h₁ (hpop s)).mono fun _ h _ => h
   · exact Filter.Eventually.of_forall fun _ hs => absurd hs h₁
 
 /-! ## SH15f, a matching sequence exists -/
@@ -1249,33 +1336,33 @@ theorem allDecidedAlmostSurely [MeasurableSpace Validator] [MeasurableSingletonC
 view derives for interval `j` at the sequence built below `j`, and `0` where it derives none. The
 state of an interval reads the sequence below that interval only (`periodAt_congr_per`), so every
 derivation at the whole sequence is one at the sequence built so far. -/
-noncomputable def matchingPer (I wa : ℕ) (coin known : ℕ → Validator) (upd : UpdateRule BlockId)
-    (k₀ ws : ℕ) (U : BlockUniverse Validator BlockId Payload)
+noncomputable def matchingPer (I K wa : ℕ) [NeZero K] (coin known : ℕ → Validator)
+    (upd : UpdateRule BlockId) (k₀ ws : ℕ) (U : BlockUniverse Validator BlockId Payload)
     (V : View Validator BlockId Payload U) : ℕ → ℕ
   | j =>
     let prev : ℕ → ℕ :=
-      fun i => if _hi : i < j then matchingPer I wa coin known upd k₀ ws U V i else 0
+      fun i => if _hi : i < j then matchingPer I K wa coin known upd k₀ ws U V i else 0
     open Classical in
-    if h : ∃ st, PeriodAt (S := adaptiveSlots coin known I prev) I wa coin upd k₀ U V
+    if h : ∃ st, PeriodAt (S := adaptiveSlots coin known I prev) I K wa coin upd k₀ U V
         (wavelength ws wa) j st then (Classical.choose h).period else 0
 termination_by j => j
 
 /-- **SH15f.** A derivation at the sequence built by `matchingPer` reads the sequence below its
 interval only, so it is a derivation at the sequence built so far, whose state the construction
 read off; SH10a makes the two states one. -/
-theorem matchingPer_matches {I wa : ℕ} {ws : ℕ} (hws : 2 ≤ ws) (hwa : 3 ≤ wa)
+theorem matchingPer_matches {I K wa : ℕ} [NeZero K] {ws : ℕ} (hws : 2 ≤ ws) (hwa : 3 ≤ wa)
     {coin known : ℕ → Validator} {upd : UpdateRule BlockId} {k₀ : ℕ}
     {U : BlockUniverse Validator BlockId Payload} {V : View Validator BlockId Payload U} :
-    Matches I wa coin known upd k₀ ws U V (matchingPer I wa coin known upd k₀ ws U V) := by
+    Matches I K wa coin known upd k₀ ws U V (matchingPer I K wa coin known upd k₀ ws U V) := by
   intro j st hst
   rw [matchingPer]
   set prev : ℕ → ℕ :=
-    fun i => if _hi : i < j then matchingPer I wa coin known upd k₀ ws U V i else 0 with hprev
-  have hagree : ∀ i, i < j → matchingPer I wa coin known upd k₀ ws U V i = prev i := by
+    fun i => if _hi : i < j then matchingPer I K wa coin known upd k₀ ws U V i else 0 with hprev
+  have hagree : ∀ i, i < j → matchingPer I K wa coin known upd k₀ ws U V i = prev i := by
     intro i hi
     simp only [hprev, dif_pos hi]
   have hst' := periodAt_congr_per hws (by omega) hst hagree
-  have hex : ∃ st, PeriodAt (S := adaptiveSlots coin known I prev) I wa coin upd k₀ U V
+  have hex : ∃ st, PeriodAt (S := adaptiveSlots coin known I prev) I K wa coin upd k₀ U V
       (wavelength ws wa) j st := ⟨st, hst'⟩
   rw [dif_pos hex]
   exact congrArg ScanState.period

@@ -132,7 +132,8 @@ SH10j assume `2 ≤ w κ`, what the laws need to carry a verdict from the
 anchor's history into the view and to keep a verdict off the slots above
 the anchor; SH10d assumes `1 ≤ wa`, as SH7a does, `2 ≤ w κ`, a positive
 interval, without which every round lies in interval `0`, and the period
-in range, SH10g's hypotheses; SH10e, SH10g, SH10l and SH10n read no
+in range, SH10g's hypotheses; SH10n assumes a positive interval too, so
+that interval `0` ends at round `I`; SH10e, SH10g and SH10l read no
 record; SH14 assumes `2 ≤ ws ≤ wa` and `3 ≤ wa`, as SH10a does, one slot
 per round and a positive interval; SH14b adds the period in range and
 `(c + wa) · K ≤ I`, so that a window and a run of control slots fit
@@ -300,8 +301,9 @@ def WarmUp (U : BlockUniverse Validator BlockId Payload) (I K wa : ℕ) [NeZero 
   ∀ (coin : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
     (V : View Validator BlockId Payload U) (w : ℕ → ℕ) (i next' last' : ℕ) (st : ScanState)
     (A : BlockId) (hA : A ∈ U.ids),
-    -- interval 0 runs at st, V finds it an anchor at control slot i, and the agreed output
-    -- advances over the anchor's history ...
+    -- the interval is positive, interval 0 runs at st, V finds it an anchor at control slot i, and
+    -- the agreed output advances over the anchor's history ...
+    0 < I →
     PeriodAt I K wa coin upd k₀ U V w 0 st → IntervalAnchor I K wa coin U V 0 st.period i A →
     AgreedAdvance U w A hA st.next next' st.lastCommit last' →
     -- ... then interval 1 runs at the same period, the output advanced

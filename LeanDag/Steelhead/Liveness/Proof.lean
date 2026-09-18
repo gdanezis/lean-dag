@@ -41,10 +41,10 @@ theorem holds : Statement := by
     exact reactive_commits rs hw hT hcard hgst hto hR hwait hN hV hlead
   · intro T V N k vp hw hT hcard hrate N' hR hpop hN hV hlead
     exact timed_commits vp hw hT hcard hrate hR hpop hN hV hlead
-  · intro coin V c N hwa hrun hV r hr
-    exact chainAllDecidedBelow hwa hrun hV r hr
-  · intro coin T hwa hT hcard fair R k
-    exact chainAllDecidedBelowOfSynchrony hwa coin hT hcard fair R k
+  · intro S' V c N hwa hmono hrun hV k hk
+    exact chainAllDecidedBelow hwa hmono hrun hV k hk
+  · intro S' T hwa hT hcard hmono fair R k
+    exact chainAllDecidedBelowOfSynchrony hwa hmono hT hcard fair R k
   · intro coin V b hwa hgood hV
     exact chainAllDecidedBelowOfRun hwa hgood hV
   · intro V ws wa k hws hk hid hkind hcert hskip i hi v h

@@ -826,68 +826,97 @@ theorem commitsOfDissemination {U : BlockUniverse Validator BlockId Payload} {w 
 
 end Slots
 
-/-! ## SH7 — the chain -/
+/-! ## SH7 — the chain
 
-/-- At the identity schedule a run of `wa` slots spans, at wave `wa`. -/
-theorem chainSpansEligible {wa : ℕ} (hwa : 1 ≤ wa) (coin : ℕ → Validator) :
-    (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).SpansEligible
-      (S := chainSlots coin) wa := by
-  have := (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).spansEligible_of_identity
-    (S := chainSlots coin) (fun _ => rfl) (w := wa - 1) (fun _ => le_rfl)
-  rwa [Nat.sub_add_cancel hwa] at this
+Stated at any schedule whose rounds strictly increase: the coin schedule and every control
+schedule. Consecutive slots of such a schedule lie at least one round apart, so `wa` of them span
+the wave, which is all the descent asks. -/
 
-/-- **SH7c.** The core's descent below a run of direct commits, at the chain schedule: the run's
-commits are direct, and a view holding their decision rounds holds their certificates. -/
+/-- A strictly increasing schedule puts slot `m` at least `m − i` rounds above slot `i`. -/
+theorem slotRound_add_le_of_strictMono {S' : Slots Validator} (hmono : StrictMono S'.slotRound)
+    {i m : ℕ} (h : i ≤ m) : S'.slotRound i + (m - i) ≤ S'.slotRound m := by
+  have := hmono.add_le_nat (m - i) i
+  rw [Nat.sub_add_cancel h] at this
+  omega
+
+/-- At a strictly increasing schedule a run of `wa` slots spans, at wave `wa`. -/
+theorem spansEligible_of_strictMono {wa : ℕ} (hwa : 1 ≤ wa) {S' : Slots Validator}
+    (hmono : StrictMono S'.slotRound) :
+    (MahiMahi.mahiMahiAnchored Validator BlockId Payload wa).SpansEligible (S := S') wa := by
+  intro b i hi
+  rw [AnchoredRule.eligible_iff]
+  simp only [MahiMahi.mahiMahiAnchored_waveAt]
+  have := slotRound_add_le_of_strictMono hmono (show i ≤ b + wa - 1 by omega)
+  omega
+
+/-- **SH7c, at any strictly increasing schedule.** The core's descent below a run of direct
+commits: the run's slots are led by committed candidates, so they commit directly, and a view
+holding their decision rounds holds their certificates. -/
+theorem allDecidedBelowOfGoodRun {U : BlockUniverse Validator BlockId Payload} {wa : ℕ}
+    (hwa : 1 ≤ wa) {S' : Slots Validator} (hmono : StrictMono S'.slotRound)
+    {V : View Validator BlockId Payload U} {b : ℕ}
+    (hgood : ∀ i, i < wa → S'.leader (b + i) ∈ MahiMahi.good (S := S') U wa (b + i))
+    (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa (S'.slotRound (b + wa - 1)))) :
+    ∀ i, i < b → ∃ v, MahiMahi.Decided (S := S') wa U V i v := by
+  refine AnchoredRule.decided_below_of_run (S := S')
+    (fun hi h => MahiMahi.exists_least (S := S') hi h) hwa
+    (spansEligible_of_strictMono hwa hmono)
+    (Led := fun j => S'.leader j ∈ MahiMahi.good (S := S') U wa j) hgood
+    fun j _ hj2 hj => ?_
+  obtain ⟨L, hL, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp hj
+  refine ⟨L, MahiMahi.Decided.directCommit (S := S') ⟨hL, hLr, hLc⟩
+    (MahiMahiProperties.directCommitIn_of_coversUpto hdc (hV.mono ?_))⟩
+  have := S'.mono hj2
+  unfold MahiMahi.decisionRoundAt
+  omega
+
+/-- **SH7c.** The descent at the coin schedule, the run named by rounds. -/
 theorem chainAllDecidedBelowOfRun {U : BlockUniverse Validator BlockId Payload} {wa : ℕ}
     (hwa : 1 ≤ wa) {coin : ℕ → Validator} {V : View Validator BlockId Payload U} {b : ℕ}
     (hgood : ∀ i, i < wa → coin (b + i) ∈ MahiMahi.goodAt U wa (b + i))
     (hV : V.CoversUpto (MahiMahi.decisionRoundAt wa (b + wa - 1))) :
-    ∀ i, i < b → ∃ v, ChainDecided wa coin U V i v := by
-  refine AnchoredRule.decided_below_of_run (S := chainSlots coin)
-    (fun hi h => MahiMahi.exists_least (S := chainSlots coin) hi h) hwa
-    (chainSpansEligible hwa coin) (Led := fun j => coin j ∈ MahiMahi.goodAt U wa j) hgood
-    fun j _ hj2 hj => ?_
-  obtain ⟨L, hL, hLr, hLc, hdc⟩ := MahiMahi.mem_goodAt.mp hj
-  refine ⟨L, MahiMahi.Decided.directCommit (S := chainSlots coin) ⟨hL, hLr, hLc⟩
-    (MahiMahiProperties.directCommitIn_of_coversUpto hdc (hV.mono ?_))⟩
-  change MahiMahi.decisionRoundAt wa j ≤ MahiMahi.decisionRoundAt wa (b + wa - 1)
-  unfold MahiMahi.decisionRoundAt
-  omega
+    ∀ i, i < b → ∃ v, ChainDecided wa coin U V i v :=
+  allDecidedBelowOfGoodRun hwa (S' := chainSlots coin) strictMono_id hgood hV
 
-/-- **SH7a.** MM3c at the chain schedule, in any view caught up to the horizon: the clause names
-a run past `r`, and SH7c settles everything below it. -/
+/-- **SH7a.** MM3c at a strictly increasing schedule, in any view caught up to the horizon: the
+clause names a run past `k`, and SH7c settles everything below it. -/
 theorem chainAllDecidedBelow {U : BlockUniverse Validator BlockId Payload} {wa : ℕ}
-    (hwa : 1 ≤ wa) {coin : ℕ → Validator} {V : View Validator BlockId Payload U} {c N : ℕ}
-    (hrun : MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c wa N)
-    (hV : V.CoversUpto N) (r : ℕ) (hr : MahiMahi.decisionRoundAt wa (r + c + wa - 1) ≤ N) :
-    ∃ b, r ≤ b ∧ ∀ i, i < b → ∃ v, ChainDecided wa coin U V i v := by
-  obtain ⟨k', hk1, hk2, hgood⟩ := hrun r (by
-    rw [MahiMahi.mahiMahiAnchored_decisionRound (S := chainSlots coin) hwa]; exact hr)
-  refine ⟨k', hk1, chainAllDecidedBelowOfRun hwa hgood (hV.mono ?_)⟩
-  unfold MahiMahi.decisionRoundAt at hr ⊢
+    (hwa : 1 ≤ wa) {S' : Slots Validator} (hmono : StrictMono S'.slotRound)
+    {V : View Validator BlockId Payload U} {c N : ℕ}
+    (hrun : MahiMahi.UnpredictableRunWithin (S := S') U wa c wa N) (hV : V.CoversUpto N) (k : ℕ)
+    (hk : MahiMahi.decisionRoundAt wa (S'.slotRound (k + c + wa - 1)) ≤ N) :
+    ∃ b, k ≤ b ∧ ∀ i, i < b → ∃ v, MahiMahi.Decided (S := S') wa U V i v := by
+  obtain ⟨k', hk1, hk2, hgood⟩ := hrun k (by
+    rw [MahiMahi.mahiMahiAnchored_decisionRound (S := S') hwa]; exact hk)
+  refine ⟨k', hk1, allDecidedBelowOfGoodRun hwa hmono hgood (hV.mono ?_)⟩
+  have := S'.mono (show k' + wa - 1 ≤ k + c + wa - 1 by omega)
+  unfold MahiMahi.decisionRoundAt at hk ⊢
   omega
 
-/-- **SH7b.** The timed descent at Mahi-Mahi's support, at the chain schedule. -/
-theorem chainAllDecidedBelowOfSynchrony {wa : ℕ} (hwa : 4 ≤ wa) (coin : ℕ → Validator)
-    {T : Finset Validator} (hT : T ⊆ (Correct : Finset Validator))
-    (hcard : quorumCard Validator ≤ T.card) (fair : FairRunOn (S := chainSlots coin) T wa)
-    (R k : ℕ) :
-    ∃ b, k ≤ b ∧ R ≤ b ∧
+/-- **SH7b.** The timed descent at Mahi-Mahi's support, at a strictly increasing schedule. -/
+theorem chainAllDecidedBelowOfSynchrony {wa : ℕ} (hwa : 4 ≤ wa) {S' : Slots Validator}
+    (hmono : StrictMono S'.slotRound) {T : Finset Validator}
+    (hT : T ⊆ (Correct : Finset Validator)) (hcard : quorumCard Validator ≤ T.card)
+    (fair : FairRunOn (S := S') T wa) (R k : ℕ) :
+    ∃ b, k ≤ b ∧ R ≤ S'.slotRound b ∧
       ∀ (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
         (N : ℕ),
         SynchronisedOn U T R → (∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) →
-        V.CoversUpto N → MahiMahi.decisionRoundAt wa (b + wa - 1) ≤ N →
-        ∀ i, i < b → ∃ v, ChainDecided wa coin U V i v := by
+        V.CoversUpto N → MahiMahi.decisionRoundAt wa (S'.slotRound (b + wa - 1)) ≤ N →
+        ∀ i, i < b → ∃ v, MahiMahi.Decided (S := S') wa U V i v := by
   have hd : Descends (MahiMahiProperties.mahiMahiRule (Validator := Validator) (BlockId := BlockId)
-      (Payload := Payload) wa) (chainSlots coin) wa :=
-    Descends.of_indirect (MahiMahiProperties.indirect (by omega)) (by omega)
-      (fun b i hi => by change i + wa ≤ b + wa - 1; omega)
+      (Payload := Payload) wa) S' wa :=
+    Descends.of_indirect (MahiMahiProperties.indirect (by omega)) (by omega) fun b i hi => by
+      change S'.slotRound i + wa ≤ S'.slotRound (b + wa - 1)
+      have := slotRound_add_le_of_strictMono hmono (show i ≤ b + wa - 1 by omega)
+      omega
   obtain ⟨b, hb, hRb, h⟩ := Timed.decidedBelow_of_fairRun (MahiMahiProperties.mmSupport wa)
     (MahiMahiProperties.mmSupport_ofCoverage hwa) (MahiMahiProperties.mmSupport_commits (by omega))
     hd (isQuorum_core hT hcard) fair R k
   refine ⟨b, hb, hRb, fun U V N hs hpop hV hN i hi => ?_⟩
   obtain ⟨v, hv⟩ := h V N hs hpop hV (fun j hj => by
-    change j + (wa - 1) ≤ N
+    change S'.slotRound j + (wa - 1) ≤ N
+    have := S'.mono (show j ≤ b + wa - 1 by omega)
     unfold MahiMahi.decisionRoundAt at hN
     omega) i hi
   exact ⟨v, hv.2.1⟩

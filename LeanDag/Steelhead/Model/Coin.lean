@@ -19,9 +19,12 @@ commits; the quantities below are the probabilities the counting lemma
 bounds in `Coin/Statement.lean`: of one good coin, of `m` bad ones in a
 row, of a slot below `M` consecutive blocks of `wa` coins staying
 undecided at period one, and of a slot of the adaptive output staying
-undecided over the coins of `M` blocks of `K` rounds, one block opening
-each interval from the second after the slot's, the first whose anchor's
-window lies wholly above the slot.
+undecided over the coins of `M` blocks of `wa · K` rounds, one block
+opening each interval from the second after the slot's, the first whose
+anchor's window lies wholly above the slot. A block of `wa · K` rounds
+holds `wa` consecutive multiples of `K`, the control slots every scan
+below it reads above its boundary, and its first `K` rounds hold the
+first control round of the interval it opens at every period up to `K`.
 
 **Definitions only**, as in the other model files.
 -/
@@ -98,8 +101,10 @@ def coinOfBlocks {M K : ℕ} (I j₀ : ℕ) (g : Fin M → Fin K → Validator) 
 def blockCoins (I j₀ M K : ℕ) (coin : ℕ → Validator) : Fin M → Fin K → Validator :=
   fun j i => coin (blockRound I j₀ j i)
 
-/-- **The horizon the blocks need**: the decision round of the last block's `wa`-th round. -/
-def blocksHorizon (I wa j₀ M : ℕ) : ℕ := MahiMahi.decisionRoundAt wa ((j₀ + 1 + M) * I + wa)
+/-- **The horizon the blocks need**: the decision round of the last block's last round, the
+blocks being `wa · K` rounds long. -/
+def blocksHorizon (I wa K j₀ M : ℕ) : ℕ :=
+  MahiMahi.decisionRoundAt wa ((j₀ + 1 + M) * I + wa * K)
 
 /-- **A period sequence matches what a view derives**: at every interval the view derives a state
 for, reading its agreed output on the schedule the sequence names, whose kinds are the
@@ -120,7 +125,7 @@ def Settles (I K wa : ℕ) [NeZero K] (coin known : ℕ → Validator) (upd : Up
   ∃ v, Decided (S := adaptiveSlots coin known I per) (wavelength ws wa) U V s v
 
 /-- **The probability that slot `s` stays undecided**, over the uniform independent coins of `M`
-blocks of `K` rounds opening the intervals from the second after the slot's: the measure of the
+blocks of `wa · K` rounds opening the intervals from the second after the slot's: the measure of the
 coin maps under which some view holding the horizon, at some period sequence matching what it
 derives, either has not derived the state of the slot's interval or leaves `s` undecided at that
 sequence's wavelength and schedule. A sequence matching what the view derives is arbitrary where
@@ -130,9 +135,9 @@ The coins outside the blocks draw `d`. -/
 noncomputable def undecidedProb (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ)
     [NeZero K] (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (d : Validator)
     (s M : ℕ) : ℝ≥0∞ :=
-  (PMF.uniformOfFintype (Fin M → Fin K → Validator)).toOuterMeasure
+  (PMF.uniformOfFintype (Fin M → Fin (wa * K) → Validator)).toOuterMeasure
     {g | ¬ ∀ (V : View Validator BlockId Payload U) (per : ℕ → ℕ),
-      V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
+      V.CoversUpto (blocksHorizon I wa K (intervalOf I s) M) →
       Matches I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per →
       Settles I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per s}
 
@@ -155,13 +160,13 @@ def NonAnticipating {M K : ℕ}
 /-- **The probability that slot `s` stays undecided against a strategy**: `undecidedProb` with
 the record the adversary builds from the coins in place of a fixed one. The event reads the
 strategy's own record at each block map, so the blocks' committed sets move with the draw. -/
-noncomputable def undecidedProbAgainst {M K : ℕ} [NeZero K]
-    (σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload) (ws wa I : ℕ)
+noncomputable def undecidedProbAgainst (ws wa I : ℕ) {M K : ℕ} [NeZero K]
+    (σ : (Fin M → Fin (wa * K) → Validator) → BlockUniverse Validator BlockId Payload)
     (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (d : Validator) (s : ℕ) :
     ℝ≥0∞ :=
-  (PMF.uniformOfFintype (Fin M → Fin K → Validator)).toOuterMeasure
+  (PMF.uniformOfFintype (Fin M → Fin (wa * K) → Validator)).toOuterMeasure
     {g | ¬ ∀ (V : View Validator BlockId Payload (σ g)) (per : ℕ → ℕ),
-      V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
+      V.CoversUpto (blocksHorizon I wa K (intervalOf I s) M) →
       Matches I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per →
       Settles I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per s}
 
