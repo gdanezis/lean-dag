@@ -22,9 +22,6 @@ variable {U : BlockUniverse Validator BlockId Payload}
 @[simp] theorem steelheadAnchored_waveAt (w : ℕ → ℕ) (r : ℕ) :
     (steelheadAnchored Validator BlockId Payload w).waveAt r = w r - 1 := rfl
 
-@[simp] theorem steelheadAnchored_rungs (w : ℕ → ℕ) :
-    (steelheadAnchored Validator BlockId Payload w).rungs = 1 := rfl
-
 section Slots
 
 variable [S : Slots Validator]
