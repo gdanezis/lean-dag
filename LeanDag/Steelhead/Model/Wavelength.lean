@@ -9,6 +9,13 @@ Which is which is a function of the round number alone — the period
 `k` makes every `k`-th round asynchronous — so the mode is an
 interpretation of the DAG and touches no block.
 
+**The mode is the wavelength alone.** The two modes also elect their
+leaders differently, and that difference is not in the rule: the
+relation reads the schedule's leader at every round whatever the
+round's wavelength, and a claim that needs the coin's leader at an
+asynchronous round takes it as a hypothesis (`Safety/Statement.lean`,
+SH5b). Agreement therefore holds at every schedule.
+
 **Definitions only.** The rule that consumes a wavelength function is in
 `Decision.lean`; the results about it are stated in
 `<Result>/Statement.lean` files and proved in their `Proof.lean`.
@@ -27,8 +34,8 @@ namespace Steelhead
 /-- **The periodic wavelength**: `wa` at every `k`-th round, `ws` at the
 others. The paper's `w(r) = wa if r mod k = 0 else ws`. At `k = 0` Lean's
 `r % 0 = r` makes only round `0` asynchronous. No result excludes that
-period and none needs to: SH8 reads `2 ≤ k` off its own `2 ≤ ws ≤ k`,
-and the period results hold at every period. -/
+period and none needs to: the claims take the wavelength function
+itself, and one that needs a bound on `k` states it. -/
 def periodic (ws wa k : ℕ) : ℕ → ℕ := fun r => if r % k = 0 then wa else ws
 
 /-- A round is **asynchronous** under the period `k` when it is a multiple
