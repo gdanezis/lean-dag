@@ -104,18 +104,18 @@ def blocksHorizon (I wa j₀ M : ℕ) : ℕ := MahiMahi.decisionRoundAt wa ((j�
 /-- **A period sequence matches what a view derives**: at every interval the view derives a state
 for, reading its agreed output on the schedule the sequence names, whose kinds are the
 sequence's own, the sequence's period is the state's. Arbitrary where the scan has stalled. -/
-def Matches (I wa : ℕ) (coin known : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ ws : ℕ)
-    (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
-    (per : ℕ → ℕ) : Prop :=
-  ∀ j st, PeriodAt (S := adaptiveSlots coin known I per) I wa coin upd k₀ U V
+def Matches (I K wa : ℕ) [NeZero K] (coin known : ℕ → Validator) (upd : UpdateRule BlockId)
+    (k₀ ws : ℕ) (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) (per : ℕ → ℕ) : Prop :=
+  ∀ j st, PeriodAt (S := adaptiveSlots coin known I per) I K wa coin upd k₀ U V
     (wavelength ws wa) j st → per j = st.period
 
 /-- **A view settles a slot at a matching sequence**: it derives the state of the slot's interval,
 and decides the slot on the sequence's schedule. -/
-def Settles (I wa : ℕ) (coin known : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ ws : ℕ)
-    (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
-    (per : ℕ → ℕ) (s : ℕ) : Prop :=
-  (∃ st, PeriodAt (S := adaptiveSlots coin known I per) I wa coin upd k₀ U V
+def Settles (I K wa : ℕ) [NeZero K] (coin known : ℕ → Validator) (upd : UpdateRule BlockId)
+    (k₀ ws : ℕ) (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) (per : ℕ → ℕ) (s : ℕ) : Prop :=
+  (∃ st, PeriodAt (S := adaptiveSlots coin known I per) I K wa coin upd k₀ U V
     (wavelength ws wa) (intervalOf I s) st) ∧
   ∃ v, Decided (S := adaptiveSlots coin known I per) (wavelength ws wa) U V s v
 
@@ -128,13 +128,13 @@ the scan has stalled, so a slot that counts as decided is decided under every su
 from derived periods alone, and a scan that never reaches the slot's interval counts as a failure.
 The coins outside the blocks draw `d`. -/
 noncomputable def undecidedProb (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ)
-    (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (d : Validator) (s M : ℕ) :
-    ℝ≥0∞ :=
+    [NeZero K] (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (d : Validator)
+    (s M : ℕ) : ℝ≥0∞ :=
   (PMF.uniformOfFintype (Fin M → Fin K → Validator)).toOuterMeasure
     {g | ¬ ∀ (V : View Validator BlockId Payload U) (per : ℕ → ℕ),
       V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-      Matches I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per →
-      Settles I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per s}
+      Matches I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per →
+      Settles I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws U V per s}
 
 /-- **A non-anticipating strategy, with the floor `G`**: a record built from the coins of `M`
 blocks of `K` rounds, and at every round of a block a set of candidates the record commits
@@ -155,15 +155,15 @@ def NonAnticipating {M K : ℕ}
 /-- **The probability that slot `s` stays undecided against a strategy**: `undecidedProb` with
 the record the adversary builds from the coins in place of a fixed one. The event reads the
 strategy's own record at each block map, so the blocks' committed sets move with the draw. -/
-noncomputable def undecidedProbAgainst {M K : ℕ}
+noncomputable def undecidedProbAgainst {M K : ℕ} [NeZero K]
     (σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload) (ws wa I : ℕ)
     (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (d : Validator) (s : ℕ) :
     ℝ≥0∞ :=
   (PMF.uniformOfFintype (Fin M → Fin K → Validator)).toOuterMeasure
     {g | ¬ ∀ (V : View Validator BlockId Payload (σ g)) (per : ℕ → ℕ),
       V.CoversUpto (blocksHorizon I wa (intervalOf I s) M) →
-      Matches I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per →
-      Settles I wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per s}
+      Matches I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per →
+      Settles I K wa (coinOfBlocks I (intervalOf I s) g d) known upd k₀ ws (σ g) V per s}
 
 /-- **The coin as a process**: an independent uniform draw at every round, the infinite product
 of the uniform distribution over the validators on the measurable structure they carry. The

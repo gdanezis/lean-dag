@@ -22,7 +22,9 @@ asynchronous-floor clause of its Theorem 2. Fifteen claims:
   `m = wa` is the run a window is asked to hold. The complementary
   bound is SH11c, and neither implies the other: SH11c bounds the
   chance that no round commits;
-* **SH11b, a good coin commits the chain slot** — in every view caught
+* **SH11b, a good coin commits the chain slot** — at any schedule
+  whose slot is proposed at the coin's round and led by it, the coin
+  schedule and every control schedule among them, in every view caught
   up to the decision round;
 * **SH11c, the tail** — over `m` consecutive populated waves with
   independent coins, no round's coin names a directly committed leader
@@ -47,12 +49,14 @@ asynchronous-floor clause of its Theorem 2. Fifteen claims:
   period sequence matching what it derives, has not derived the state of
   the slot's interval or leaves the slot undecided,
   with probability at most `2 · ((n^K − (n − f − b)^K) / n^K)^(M/2)`.
-  Two good blocks in different halves settle every chain verdict up to
-  the later one, so the states are derived that far, and decide the slot
-  (SH14c); each half holds no good block with the probability the
-  counting lemma bounds block by block. A scan that never reaches the
-  slot's interval counts as a failure, and a slot counts as decided only
-  under every completion of the derived periods;
+  With the period kept in `[1, K]`, a good block covers the first
+  control round of the interval it opens, at whatever period the view
+  derived for it, so two good blocks in different halves anchor the
+  earlier one's interval and settle the output up to the later one, and
+  decide the slot (SH14c); each half holds no good block with the
+  probability the counting lemma bounds block by block. A scan that
+  never reaches the slot's interval counts as a failure, and a slot
+  counts as decided only under every completion of the derived periods;
 * **SH15d, the tail against an adaptive adversary** — SH15a where the
   record is the adversary's own answer to the coins already drawn
   (`NonAnticipating`, `undecidedProbAgainst`): at every block map the
@@ -165,13 +169,16 @@ def RunProbability (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Pr
 
 /-- **SH11b, a good coin commits the chain slot.** -/
 def CommitOfCoin (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
-  ∀ (coin : ℕ → Validator) (V : View Validator BlockId Payload U) (r : ℕ),
+  ∀ (S' : Slots Validator) (coin : ℕ → Validator) (V : View Validator BlockId Payload U)
+    (i r : ℕ),
+    -- slot i of the schedule is proposed at round r and led by that round's coin
+    S'.slotRound i = r → S'.leader i = coin r →
     -- the coin of round r names a committed leader
     coin r ∈ MahiMahi.goodAt U wa r →
     -- and the view holds the decision round
     V.CoversUpto (MahiMahi.decisionRoundAt wa r) →
-    -- then the chain slot of round r commits its candidate in that view
-    ∃ L, IsLeaderBlock (S := chainSlots coin) U r L ∧ ChainDecided wa coin U V r (some L)
+    -- then the slot commits its candidate in that view
+    ∃ L, IsLeaderBlock (S := S') U i L ∧ MahiMahi.Decided (S := S') wa U V i (some L)
 
 /-- **SH11c, the tail.** -/
 def NoCommitTail (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
@@ -197,7 +204,8 @@ noncomputable def badBlockBound (Validator : Type) [Fintype Validator] [Decidabl
     ℝ≥0∞) / (Fintype.card Validator : ℝ≥0∞) ^ K
 
 /-- **SH15a, the output is live but for a vanishing probability.** -/
-def UndecidedTail (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ) : Prop :=
+def UndecidedTail (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ) [NeZero K] :
+    Prop :=
   ∀ (T : Finset Validator) (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator)
     (d : Validator) (s M : ℕ),
     -- the waves, a quorum, a period bound a run of wa fits in, blocks of K rounds that fit in an
@@ -205,6 +213,9 @@ def UndecidedTail (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ
     2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → quorumCard Validator ≤ T.card →
     -- the slot lies at round one or above
     1 ≤ s →
+    -- the initial period lies in [1, K], and the update rule keeps a period there, so that a
+    -- block of K rounds from an interval's first round covers its first control round
+    1 ≤ k₀ → k₀ ≤ K → (∀ A k, 1 ≤ k → k ≤ K → 1 ≤ upd A k ∧ upd A k ≤ K) →
     -- the waves of the M blocks are populated where MM2 reads them
     (∀ (j : Fin M) (i : Fin K), PopulatedOn U T (blockRound I (intervalOf I s) j i + 3) ∧
       PopulatedOn U T (MahiMahi.decisionRoundAt wa (blockRound I (intervalOf I s) j i))) →
@@ -246,13 +257,15 @@ def AdaptiveBlockBound (K : ℕ) : Prop :=
         (Fintype.card Validator : ℝ≥0∞) ^ K) ^ H.card)
 
 /-- **SH15d, the tail against an adaptive adversary.** -/
-def UndecidedTailAgainst (ws wa I K : ℕ) : Prop :=
+def UndecidedTailAgainst (ws wa I K : ℕ) [NeZero K] : Prop :=
   ∀ (upd : UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (d : Validator) (s M : ℕ)
     (σ : (Fin M → Fin K → Validator) → BlockUniverse Validator BlockId Payload)
     (G : (Fin M → Fin K → Validator) → Fin M → Fin K → Finset Validator),
     -- the waves, a period bound a run of wa fits in, blocks of K rounds that fit in an interval,
     -- and a slot at round one or above
     2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → 1 ≤ s →
+    -- the initial period lies in [1, K], and the update rule keeps a period there
+    1 ≤ k₀ → k₀ ≤ K → (∀ A k, 1 ≤ k → k ≤ K → 1 ≤ upd A k ∧ upd A k ≤ K) →
     -- the adversary builds its record from the coins already drawn, with a floor of committed
     -- candidates at every round of the blocks that the round's own coin cannot shrink ...
     NonAnticipating σ G wa I (intervalOf I s) →
@@ -266,7 +279,7 @@ def UndecidedTailVanishes (K : ℕ) : Prop :=
   Tendsto (fun M : ℕ => 2 * badBlockBound Validator K ^ (M / 2)) atTop (𝓝 0)
 
 /-- **SH15c, the slot is decided almost surely.** -/
-def DecidedAlmostSurely (ws wa I K : ℕ) : Prop :=
+def DecidedAlmostSurely (ws wa I K : ℕ) [NeZero K] : Prop :=
   ∀ [MeasurableSpace Validator] [MeasurableSingletonClass Validator]
     (U : ℕ → BlockUniverse Validator BlockId Payload) (T : Finset Validator)
     (upd : ℕ → UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator) (s : ℕ),
@@ -275,6 +288,8 @@ def DecidedAlmostSurely (ws wa I K : ℕ) : Prop :=
     2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → quorumCard Validator ≤ T.card →
     -- the slot lies at round one or above
     1 ≤ s →
+    -- the initial period lies in [1, K], and every update rule keeps a period there
+    1 ≤ k₀ → k₀ ≤ K → (∀ m A k, 1 ≤ k → k ≤ K → 1 ≤ upd m A k ∧ upd m A k ≤ K) →
     -- record m holds the waves of m blocks, populated where MM2 reads them
     (∀ (m : ℕ) (j : Fin m) (i : Fin K),
       PopulatedOn (U m) T (blockRound I (intervalOf I s) j i + 3) ∧
@@ -284,11 +299,11 @@ def DecidedAlmostSurely (ws wa I K : ℕ) : Prop :=
     ∀ᵐ coin ∂(coinMeasure Validator), ∃ m,
       ∀ (V : View Validator BlockId Payload (U m)) (per : ℕ → ℕ),
         V.CoversUpto (blocksHorizon I wa (intervalOf I s) m) →
-        Matches I wa coin known (upd m) k₀ ws (U m) V per →
-        Settles I wa coin known (upd m) k₀ ws (U m) V per s
+        Matches I K wa coin known (upd m) k₀ ws (U m) V per →
+        Settles I K wa coin known (upd m) k₀ ws (U m) V per s
 
 /-- **SH15e, almost surely against an adaptive adversary.** -/
-def DecidedAlmostSurelyAgainst (ws wa I K : ℕ) : Prop :=
+def DecidedAlmostSurelyAgainst (ws wa I K : ℕ) [NeZero K] : Prop :=
   ∀ [MeasurableSpace Validator] [MeasurableSingletonClass Validator]
     (σ : ∀ m : ℕ, (Fin m → Fin K → Validator) → BlockUniverse Validator BlockId Payload)
     (G : ∀ m : ℕ, (Fin m → Fin K → Validator) → Fin m → Fin K → Finset Validator)
@@ -296,6 +311,8 @@ def DecidedAlmostSurelyAgainst (ws wa I K : ℕ) : Prop :=
     -- the waves, a period bound a run of wa fits in, blocks of K rounds that fit in an interval,
     -- and a slot at round one or above
     2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → 1 ≤ s →
+    -- the initial period lies in [1, K], and every update rule keeps a period there
+    1 ≤ k₀ → k₀ ≤ K → (∀ m A k, 1 ≤ k → k ≤ K → 1 ≤ upd m A k ∧ upd m A k ≤ K) →
     -- every strategy of the sequence answers the draws already made, with its floor ...
     (∀ m, NonAnticipating (σ m) (G m) wa I (intervalOf I s)) →
     -- ... and every floor holds at least n − f − b validators
@@ -307,19 +324,21 @@ def DecidedAlmostSurelyAgainst (ws wa I K : ℕ) : Prop :=
       ∀ (V : View Validator BlockId Payload (σ m (blockCoins I (intervalOf I s) m K coin)))
         (per : ℕ → ℕ),
         V.CoversUpto (blocksHorizon I wa (intervalOf I s) m) →
-        Matches I wa coin known (upd m) k₀ ws (σ m (blockCoins I (intervalOf I s) m K coin))
+        Matches I K wa coin known (upd m) k₀ ws (σ m (blockCoins I (intervalOf I s) m K coin))
           V per →
-        Settles I wa coin known (upd m) k₀ ws (σ m (blockCoins I (intervalOf I s) m K coin))
+        Settles I K wa coin known (upd m) k₀ ws (σ m (blockCoins I (intervalOf I s) m K coin))
           V per s
 
 /-- **SH15g, every slot is decided almost surely.** -/
-def AllDecidedAlmostSurely (ws wa I K : ℕ) : Prop :=
+def AllDecidedAlmostSurely (ws wa I K : ℕ) [NeZero K] : Prop :=
   ∀ [MeasurableSpace Validator] [MeasurableSingletonClass Validator]
     (U : ℕ → ℕ → BlockUniverse Validator BlockId Payload) (T : Finset Validator)
     (upd : ℕ → ℕ → UpdateRule BlockId) (k₀ : ℕ) (known : ℕ → Validator),
     -- the waves, a quorum, a period bound a run of wa fits in, blocks of K rounds that fit in an
     -- interval
     2 ≤ ws → ws ≤ wa → 5 ≤ wa → wa ≤ K → K ≤ I → quorumCard Validator ≤ T.card →
+    -- the initial period lies in [1, K], and every update rule keeps a period there
+    1 ≤ k₀ → k₀ ≤ K → (∀ s m A k, 1 ≤ k → k ≤ K → 1 ≤ upd s m A k ∧ upd s m A k ≤ K) →
     -- for every slot, record m of the slot's sequence holds the waves of m blocks above the
     -- slot's interval, populated where MM2 reads them
     (∀ (s m : ℕ) (j : Fin m) (i : Fin K),
@@ -330,24 +349,25 @@ def AllDecidedAlmostSurely (ws wa I K : ℕ) : Prop :=
     ∀ᵐ coin ∂(coinMeasure Validator), ∀ s, 1 ≤ s → ∃ m,
       ∀ (V : View Validator BlockId Payload (U s m)) (per : ℕ → ℕ),
         V.CoversUpto (blocksHorizon I wa (intervalOf I s) m) →
-        Matches I wa coin known (upd s m) k₀ ws (U s m) V per →
-        Settles I wa coin known (upd s m) k₀ ws (U s m) V per s
+        Matches I K wa coin known (upd s m) k₀ ws (U s m) V per →
+        Settles I K wa coin known (upd s m) k₀ ws (U s m) V per s
 
 /-- **SH15f, a matching sequence exists.** -/
-def MatchesExists (U : BlockUniverse Validator BlockId Payload) (ws wa I : ℕ) : Prop :=
+def MatchesExists (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ) [NeZero K] :
+    Prop :=
   ∀ (coin known : ℕ → Validator) (upd : UpdateRule BlockId) (k₀ : ℕ)
     (V : View Validator BlockId Payload U),
     2 ≤ ws → 3 ≤ wa →
     -- then some period sequence is the one the view derives, at every interval it derives a
     -- state for
-    ∃ per, Matches I wa coin known upd k₀ ws U V per
+    ∃ per, Matches I K wa coin known upd k₀ ws U V per
 
 /-- The coin, over every fault configuration, block universe, asynchronous wave, interval and
-period bound the model admits. -/
+positive period bound the model admits. -/
 def Statement : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId]
-    (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ),
+    (U : BlockUniverse Validator BlockId Payload) (ws wa I K : ℕ) [NeZero K],
     CommitProbability U wa ∧ CommitProbabilityFour U wa ∧ RunProbability U wa ∧
       CommitOfCoin U wa ∧
       NoCommitTail U wa ∧ TailVanishes (Validator := Validator) ∧
@@ -363,7 +383,7 @@ def Statement : Prop :=
       UndecidedAtPeriodOne U ws wa ∧
       AllDecidedAlmostSurely (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
         ws wa I K ∧
-      MatchesExists U ws wa I
+      MatchesExists U ws wa I K
 
 end Coin
 

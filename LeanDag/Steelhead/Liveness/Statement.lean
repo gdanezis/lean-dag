@@ -103,13 +103,16 @@ claims:
   `max (2Δ + proc, gst)`, and SH6a takes it from there. The claim is
   worth exactly what the core's `ViewPace` is, which is a question about
   that structure and not about this arc;
-* **SH7a, chain liveness** — MM3c at the chain schedule: a run of `wa`
-  consecutive chain commits, which the clause promises in every window,
-  decides every chain verdict below it;
-* **SH7b, the chain under synchrony** — L10 at the chain schedule: past
-  any round the coin names reliable leaders at `wa` consecutive rounds,
+* **SH7a, chain liveness** — MM3c at any schedule whose rounds strictly
+  increase, the coin schedule and every control schedule among them: a
+  run of `wa` consecutive commits, which the clause promises in every
+  window, decides every verdict below it. Consecutive slots lie at least
+  one round apart, so `wa` of them span the wave, which is all the
+  descent asks of a schedule;
+* **SH7b, the chain under synchrony** — L10 at any such schedule: past
+  any slot the coin names reliable leaders at `wa` consecutive slots,
   and once the DAG is covered through that run's decision rounds every
-  chain verdict below it is settled, with no clause;
+  verdict below it is settled, with no clause;
 * **SH7c, one run settles the chain below it** — the step SH7a takes
   once per round, on its own: `wa` consecutive rounds whose coins name
   committed candidates settle every chain verdict below the first, in
@@ -387,36 +390,39 @@ def CommitsOfViewPace (U : BlockUniverse Validator BlockId Payload) (w : ℕ →
 
 /-- **SH7a, chain liveness.** -/
 def ChainAllDecidedBelow (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
-  ∀ (coin : ℕ → Validator) (V : View Validator BlockId Payload U) (c N : ℕ),
+  ∀ (S' : Slots Validator) (V : View Validator BlockId Payload U) (c N : ℕ),
     1 ≤ wa →
-    -- the run form of the clause at the chain schedule: in every window of c
-    -- rounds below the horizon, wa consecutive rounds whose coin leaders are
-    -- committed candidates
-    MahiMahi.UnpredictableRunWithin (S := chainSlots coin) U wa c wa N →
+    -- the schedule's rounds strictly increase, as the coin schedule's and every control
+    -- schedule's do
+    StrictMono S'.slotRound →
+    -- the run form of the clause at that schedule: in every window of c slots below the
+    -- horizon, wa consecutive slots whose leaders are committed candidates
+    MahiMahi.UnpredictableRunWithin (S := S') U wa c wa N →
     -- the view holds every block up to the horizon
     V.CoversUpto N →
-    -- then past every round r whose window decides below the horizon ...
-    ∀ r, MahiMahi.decisionRoundAt wa (r + c + wa - 1) ≤ N →
-      -- ... there is a round b at or past r below which every chain verdict is settled
-      ∃ b, r ≤ b ∧ ∀ i, i < b → ∃ v, ChainDecided wa coin U V i v
+    -- then past every slot k whose window decides below the horizon ...
+    ∀ k, MahiMahi.decisionRoundAt wa (S'.slotRound (k + c + wa - 1)) ≤ N →
+      -- ... there is a slot b at or past k below which every verdict is settled
+      ∃ b, k ≤ b ∧ ∀ i, i < b → ∃ v, MahiMahi.Decided (S := S') wa U V i v
 
 /-- **SH7b, the chain under synchrony.** The run is named by the coin
 alone, so the horizon cannot cap how far it reaches. -/
 def ChainAllDecidedBelowOfSynchrony (wa : ℕ) : Prop :=
-  ∀ (coin : ℕ → Validator) (T : Finset Validator),
+  ∀ (S' : Slots Validator) (T : Finset Validator),
     4 ≤ wa →
     T ⊆ (Correct : Finset Validator) → quorumCard Validator ≤ T.card →
-    -- past any round the coin names T-leaders at wa consecutive rounds
-    FairRunOn (S := chainSlots coin) T wa →
-    -- then past any round k and any round R there is a round b ...
-    ∀ (R k : ℕ), ∃ b, k ≤ b ∧ R ≤ b ∧
-      -- ... below which every chain verdict is settled, on any DAG T has
-      -- synchronised from R and populated through the run's decision round
+    -- the schedule's rounds strictly increase, and past any slot it names T-leaders at wa
+    -- consecutive slots
+    StrictMono S'.slotRound → FairRunOn (S := S') T wa →
+    -- then past any slot k and any round R there is a slot b ...
+    ∀ (R k : ℕ), ∃ b, k ≤ b ∧ R ≤ S'.slotRound b ∧
+      -- ... below which every verdict is settled, on any DAG T has synchronised from R and
+      -- populated through the run's decision round
       ∀ (U : BlockUniverse Validator BlockId Payload) (V : View Validator BlockId Payload U)
         (N : ℕ),
         SynchronisedOn U T R → (∀ r, R ≤ r → r ≤ N → PopulatedOn U T r) →
-        V.CoversUpto N → MahiMahi.decisionRoundAt wa (b + wa - 1) ≤ N →
-        ∀ i, i < b → ∃ v, ChainDecided wa coin U V i v
+        V.CoversUpto N → MahiMahi.decisionRoundAt wa (S'.slotRound (b + wa - 1)) ≤ N →
+        ∀ i, i < b → ∃ v, MahiMahi.Decided (S := S') wa U V i v
 
 /-- **SH7c, one run settles the chain below it.** -/
 def ChainAllDecidedBelowOfRun (U : BlockUniverse Validator BlockId Payload) (wa : ℕ) : Prop :=
