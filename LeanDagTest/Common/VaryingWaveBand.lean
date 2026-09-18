@@ -205,7 +205,7 @@ theorem floorRule_waveAt_shift (r t : ℕ) : floorRule.waveAt (r + t * 2) = floo
 `Banded` fails, so the offsets a periodic wave survives are exactly what the hypothesis may be
 weakened to, and no further. -/
 theorem floorRule_bandedAt_two : BandedAt 2 floorRule.toDagRule :=
-  AnchoredRule.bandedAt floorRule_bandLaws floorRule_waveAt_shift
+  AnchoredRule.bandedAt floorRule_bandLaws.toBandLawsAt floorRule_waveAt_shift
 
 /-- **Periodicity yields a restricted band and nothing more**: the same rule has the band at its
 period and not at every offset. -/

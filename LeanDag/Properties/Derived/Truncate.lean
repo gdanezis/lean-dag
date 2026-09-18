@@ -46,7 +46,7 @@ def LocalTruncateAt (p : ℕ) (R : DagRule Validator BlockId Payload) : Prop :=
 period**: `decided_of_rebased_at` at a cut, whose settling round is its
 horizon. -/
 theorem LocalTruncateAt.of_bandedAt {p : ℕ} (h : BandedAt p R) : LocalTruncateAt p R :=
-  fun S S' U U' G d hp ht V V' hv k v =>
+  fun S _S' _U _U' _G d hp ht _V _V' hv k v =>
     decided_of_rebased_at h hp (Rebased.of_truncates ht) hv k
       (le_trans ht.base (S.mono (Nat.le_add_right d k))) v
 
