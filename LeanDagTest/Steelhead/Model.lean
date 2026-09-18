@@ -7,16 +7,16 @@ import Mathlib.Tactic.IntervalCases
 Every definition of `LeanDag/Steelhead/Model/` settled by `decide` on a
 four-validator universe before anything is proved from it
 (`steelhead.md` §8). One universe, `sh8`: eight fully connected rounds
-under the period-four wavelength `periodic 3 5 4`, so round `0` and
-round `4` are asynchronous slots at wave `5` and the rest synchronous
-at wave `3`. On it:
+whose schedule gives every fourth round the asynchronous kind, so slot
+`0` and slot `4` read the wave `5` of kind `1` and the rest the wave `3`
+of kind `0`. On it:
 
 * the wavelength arithmetic and the per-slot eligibility floors;
 * the direct rules at each slot's own wave, and the anchor route for
   the asynchronous slot `0` through the synchronous slot `5`, which is
   the first slot at or above round `0 + 5`;
 * **the anchor-floor counterexample** of `steelhead.md` §3: with the
-  floor read from the synchronous wave instead of the slot's own, the
+  floor read from the synchronous wave whatever the slot's kind, the
   relation derives both a commit and a skip of slot `0` from the one
   full view. The synchronous slot `3` is then an eligible anchor, its
   block's history stops at round `3`, and the certificates of round `4`
@@ -28,7 +28,8 @@ at wave `3`. On it:
 The committee is the standard witness one, validator `0` Byzantine and
 `f = 1` (`LeanDagTest/Mysticeti/Model.lean`), so the quorum is `3`. The
 schedule is local to this file, slot `k` at round `k` led by
-`(k + 1) % 4`, so that slot `0`'s leader is a correct validator.
+`(k + 1) % 4`, so that slot `0`'s leader is a correct validator, and
+kinded by `periodicKind 4`.
 -/
 
 namespace LeanDagTest
@@ -37,23 +38,28 @@ open LeanDag LeanDag.Steelhead
 
 set_option maxRecDepth 4096
 
-/-- One slot per round, led by `(k + 1) % 4`. -/
+/-- One slot per round, led by `(k + 1) % 4`, with every fourth round of
+the asynchronous kind. -/
 local instance shSlots : Slots (Fin 4) :=
-  Slots.uniformSingle 1 (by omega) (fun k => ⟨(k + 1) % 4, by omega⟩)
+  { Slots.uniformSingle 1 (by omega) (fun k => ⟨(k + 1) % 4, by omega⟩) with
+    kind := fun k => periodicKind 4 k }
 
-/-- The period-four wavelength of the 3f+1 pair: `5` at rounds
-`0, 4, 8, …`, `3` elsewhere. -/
-abbrev w4 : ℕ → ℕ := periodic 3 5 4
+/-- The wavelength of the 3f+1 pair: `3` at the synchronous kind `0` and
+`5` at the asynchronous kind `1`. -/
+abbrev w4 : ℕ → ℕ := wavelength 3 5
 
-/-! ## The wavelength function -/
+/-! ## The wavelength function, and the kinds the schedule assigns -/
 
-example : w4 0 = 5 := by decide
-example : w4 1 = 3 := by decide
-example : w4 3 = 3 := by decide
-example : w4 4 = 5 := by decide
+example : w4 0 = 3 := by decide
+example : w4 1 = 5 := by decide
+example : shSlots.kind 0 = 1 := by decide
+example : shSlots.kind 1 = 0 := by decide
+example : shSlots.kind 3 = 0 := by decide
+example : shSlots.kind 4 = 1 := by decide
 example : IsAsync 4 8 := by decide
 example : ¬ IsAsync 4 6 := by decide
-example : periodic 3 5 1 7 = 5 := by decide
+example : periodicKind 1 7 = 1 := by decide
+example : w4 (periodicKind 4 7) = 3 := by decide
 
 /-! ## `sh8` — eight rounds, everyone referencing the whole round below -/
 
@@ -79,9 +85,10 @@ abbrev sh : AnchoredRule (Fin 4) (Fin 32) Unit ValidWrt Correct :=
 /-! ### Eligibility at each slot's own floor -/
 
 -- The asynchronous slot `0` anchors at round `5` or above; the synchronous
--- slot `1` at round `4` or above.
-example : sh.waveAt 0 = 4 := by decide
-example : sh.waveAt 1 = 2 := by decide
+-- slot `1` at round `4` or above. The wave is read at the kind: `2` above a
+-- synchronous slot, `4` above an asynchronous one.
+example : sh.waveAt 0 = 2 := by decide
+example : sh.waveAt 1 = 4 := by decide
 example : sh.decisionRound 0 = 4 := by decide
 example : sh.decisionRound 1 = 3 := by decide
 example : sh.Eligible 0 5 := by decide
@@ -96,13 +103,13 @@ example : ¬ sh.Eligible 1 3 := by decide
 example : IsLeaderBlock sh8 0 1 := by decide
 example : MahiMahi.certificates sh8 5 1 0 = {16, 17, 18, 19} := by decide
 example : MahiMahi.DirectCommit sh8 5 1 0 := by decide
-example : sh.Commit sh8 (View.full sh8) 1 0 := by decide
+example : sh.Commit sh8 (View.full sh8) 1 0 (shSlots.kind 0) := by decide
 
 -- Slot `1`'s candidate is block `6` (round `1`, author `2`); at wave `3`
 -- its certificates are the whole of round `3`.
 example : IsLeaderBlock sh8 1 6 := by decide
 example : MahiMahi.certificates sh8 3 6 1 = {12, 13, 14, 15} := by decide
-example : sh.Commit sh8 (View.full sh8) 6 1 := by decide
+example : sh.Commit sh8 (View.full sh8) 6 1 (shSlots.kind 1) := by decide
 
 -- No slot is directly skipped: every voting round votes.
 example : ¬ sh.Skip sh8 (View.full sh8) shSlots 0 := by decide
@@ -110,7 +117,7 @@ example : ¬ sh.Skip sh8 (View.full sh8) shSlots 1 := by decide
 
 /-! ### What the lower bounds admit
 
-The safety claims ask `2 ≤ w r`, and at that wave the voting round is the
+The safety claims ask `2 ≤ w κ`, and at that wave the voting round is the
 slot's own, `r + 2 - 2 = r`. No block of a round references another of
 it, so the only vote a candidate collects is its own block's: nothing is
 certified, a quorum blames the slot, and the rule at that wave skips
@@ -150,11 +157,11 @@ theorem sh8_slot0_indirect : Steelhead.Decided w4 sh8 (View.full sh8) 0 (some 1)
 /-! ## The anchor-floor counterexample
 
 `lowFloor` is Steelhead with every slot's floor read from the
-synchronous wave: an anchor two rounds up, wherever the slot's own
-certificates sit. It is the rule the paper's "r + w(anchor)" reading
-would give. -/
+synchronous wave whatever its kind: an anchor two rounds up, wherever
+the slot's own certificates sit. It is the rule the paper's
+"r + w(anchor)" reading would give. -/
 
-/-- Steelhead's data at the synchronous floor for every slot. -/
+/-- Steelhead's data at the synchronous floor for every kind. -/
 def lowFloor : AnchoredRule (Fin 4) (Fin 32) Unit ValidWrt Correct :=
   { sh with waveAt := fun _ => 2 }
 

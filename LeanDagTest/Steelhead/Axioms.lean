@@ -9,5 +9,7 @@ bespoke axiom would show here before anywhere else.
 -/
 
 #print axioms LeanDag.Steelhead.Safety.holds
+#print axioms LeanDag.SteelheadProperties.banded
+#print axioms LeanDag.SteelheadProperties.safety
 #print axioms LeanDag.SteelheadProperties.persist
 #print axioms LeanDag.SteelheadProperties.liveness
