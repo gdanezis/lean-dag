@@ -87,9 +87,9 @@ theorem optimalLaws :
     · exact Or.inl (HoldsAtLeast.mono hsub h)
     · exact Or.inr (HoldsAtLeast.mono hsub h)
   skip_mono := fun _ hsub h => skippedLeaderOptInView_mono hsub h
-  skip_congr := fun _ hround hk h => skippedLeaderOptInView_congr hround hk h
+  skip_congr := fun _ hround hk _ h => skippedLeaderOptInView_congr hround hk h
   link_congr := by
-    intro S₁ S₂ U A L i k hround hk h
+    intro S₁ S₂ U A L i k hround hk _ h
     rcases i with _ | i
     · change LeanDag.Hydrozoan.CertifiedIn U A L (S₁.slotRound k) at h
       change LeanDag.Hydrozoan.CertifiedIn U A L (S₂.slotRound k)

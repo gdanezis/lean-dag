@@ -84,7 +84,7 @@ theorem hydrozoanLaws : (hydrozoanAnchored Replica BlockId).Laws where
     · exact Or.inl (HoldsAtLeast.mono hsub h)
     · exact Or.inr (HoldsAtLeast.mono hsub h)
   skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun _ hround hk h => blameSkip_congr hround hk h
+  skip_congr := fun _ hround hk _ h => blameSkip_congr hround hk h
   link_congr := (hydrozoanAnchored Replica BlockId).linkCongr_of_round
     (fun i U A L r => match i with | 0 => CertifiedIn U A L r | _ => WeakLinked U A L r)
     fun i _ _ _ _ _ => by rcases i with _ | i <;> rfl

@@ -14577,7 +14577,7 @@ structure Laws (I : Slots Validator → BlockRecord Validator BlockId Payload P 
   /-- The direct skip reads the schedule only at its own slot. -/
   skip_congr : ∀ {S₁ S₂ : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {V : U.View} {k : ℕ}, I S₁ U → S₁.slotRound k = S₂.slotRound k → S₁.leader k = S₂.leader k →
-    R.Skip U V S₁ k → R.Skip U V S₂ k
+    S₁.kind k = S₂.kind k → R.Skip U V S₁ k → R.Skip U V S₂ k
   /-- And so does every rung's link. -/
   link_congr : R.LinkCongr
 ```

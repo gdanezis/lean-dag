@@ -133,7 +133,7 @@ theorem mahiMahiLaws {w : ℕ} (hw : 2 ≤ w) :
       (certificates_nonempty_of_certifiedIn hl₂)
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun _ hround hk h => by
+  skip_congr := fun _ hround hk _ h => by
     show DirectSkipIn _ _ _ _ _
     rw [← hround, ← hk]; exact h
   link_congr := (mahiMahiAnchored Validator BlockId Payload w).linkCongr_of_round

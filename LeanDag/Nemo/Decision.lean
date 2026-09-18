@@ -111,7 +111,7 @@ theorem nemoLaws : (nemoAnchored Validator BlockId Payload).Laws where
   link_unique := fun _ hL₁ hL₂ _ _ _ _ _ _ _ _ => isLeaderBlock_unique_of_honest (Finset.mem_univ _) hL₁ hL₂
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_mono := fun _ _ h => h
-  skip_congr := fun _ _ _ h => h
+  skip_congr := fun _ _ _ _ h => h
   link_congr := (nemoAnchored Validator BlockId Payload).linkCongr_of_round
     (fun _ U A L r => Nemo.CertifiedIn U A L r) fun _ _ _ _ _ _ => rfl
 

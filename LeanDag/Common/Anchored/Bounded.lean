@@ -184,7 +184,7 @@ theorem decidedWithin_congr_of_slotRound (hl : R.Laws I) {S₁ S₂ : Slots Vali
   | @directSkip k hk hall =>
       exact DecidedWithin.directSkip (S := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩) hk
         (hl.skip_congr hI (S₁ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩)
-          (S₂ := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩) rfl (ha k hk) hall)
+          (S₂ := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩) rfl (ha k hk) (hkind k hk) hall)
   | @indirectCommit k j A L i hkj hj helig _ _ hi hemp hL hlink hmin ihj ihmid =>
       refine DecidedWithin.indirectCommit (S := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩) hkj hj
         ((hel (by omega)).mp helig) ihj (fun m h1 h2 h3 => ihmid m h1 h2 ((hel (by omega)).mpr h3))
@@ -192,17 +192,20 @@ theorem decidedWithin_congr_of_slotRound (hl : R.Laws I) {S₁ S₂ : Slots Vali
         (isLeaderBlock_congr (S₁ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩)
           (S₂ := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩) rfl (ha k (by omega)) hL)
         (hl.link_congr (S₁ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩)
-          (S₂ := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩) rfl (ha k (by omega)) hlink) ?_
+          (S₂ := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩) rfl (ha k (by omega))
+          (hkind k (by omega)) hlink) ?_
       · intro i' hi' L' hL' hlink'
         exact hemp i' hi' L' (isLeaderBlock_congr (S₁ := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩)
           (S₂ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩) rfl (ha k (by omega)).symm hL')
           (hl.link_congr (S₁ := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩)
-            (S₂ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩) rfl (ha k (by omega)).symm hlink')
+            (S₂ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩) rfl (ha k (by omega)).symm
+            (hkind k (by omega)).symm hlink')
       · intro L' hL' hlink'
         exact hmin L' (isLeaderBlock_congr (S₁ := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩)
           (S₂ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩) rfl (ha k (by omega)).symm hL')
           (hl.link_congr (S₁ := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩)
-            (S₂ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩) rfl (ha k (by omega)).symm hlink')
+            (S₂ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩) rfl (ha k (by omega)).symm
+            (hkind k (by omega)).symm hlink')
   | @indirectSkip k j A hkj hj helig _ _ hnone ihj ihmid =>
       refine DecidedWithin.indirectSkip (S := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩) hkj hj
         ((hel (by omega)).mp helig) ihj (fun m h1 h2 h3 => ihmid m h1 h2 ((hel (by omega)).mpr h3))
@@ -211,7 +214,8 @@ theorem decidedWithin_congr_of_slotRound (hl : R.Laws I) {S₁ S₂ : Slots Vali
       exact hnone i hi L (isLeaderBlock_congr (S₁ := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩)
         (S₂ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩) rfl (ha k (by omega)).symm hL)
         (hl.link_congr (S₁ := ⟨sr, ld', hmono', hunb', hkeyed', kd'⟩)
-          (S₂ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩) rfl (ha k (by omega)).symm hlink)
+          (S₂ := ⟨sr, ld, hmono, hunb, hkeyed, kd⟩) rfl (ha k (by omega)).symm
+          (hkind k (by omega)).symm hlink)
 
 /-! ## The tie-break's choice -/
 

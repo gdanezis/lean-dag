@@ -541,8 +541,8 @@ theorem finWhaleLaws [LinearOrder BlockId] :
       (not_lt.mp (show ¬ L₁ < L₂ from hm₂ L₁ hL₁ hl₁))
   commit_mono := fun _ hsub h => directCommit_mono hsub h
   skip_mono := fun _ hsub h => directSkip_mono hsub h
-  skip_congr := fun _ hround hk h => (directSkip_congr hround hk).1 h
-  link_congr := fun hround hk h => (indirectCommit_congr hround hk).1 h
+  skip_congr := fun _ hround hk _ h => (directSkip_congr hround hk).1 h
+  link_congr := fun hround hk _ h => (indirectCommit_congr hround hk).1 h
 
 end FinWhale
 

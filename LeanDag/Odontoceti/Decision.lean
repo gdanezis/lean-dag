@@ -176,7 +176,7 @@ theorem odontocetiLaws : (odontocetiAnchored Validator BlockId Payload).Laws whe
       (not_lt.mp (show ¬ L₁ < L₂ from hm₂ L₁ hL₁ hl₁))
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun _ hround hk h => blameSkip_congr hround hk h
+  skip_congr := fun _ hround hk _ h => blameSkip_congr hround hk h
   link_congr := (odontocetiAnchored Validator BlockId Payload).linkCongr_of_round
     (fun _ U A L r => ThickLink U A L r) fun _ _ _ _ _ _ => rfl
 

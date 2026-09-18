@@ -249,11 +249,12 @@ def DecidedBelowRun (U : BlockRecord Validator BlockId Payload P honest) : Prop 
 /-! ## What a rule owes -/
 
 omit S in
-/-- **A rung's link reads the schedule only at its own slot.** -/
+/-- **A rung's link reads the schedule only at its own slot**: its round,
+its leader and its kind. -/
 abbrev LinkCongr : Prop :=
   ∀ {S₁ S₂ : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {A L : BlockId} {i k : ℕ}, S₁.slotRound k = S₂.slotRound k → S₁.leader k = S₂.leader k →
-    R.Link i U A L S₁ k → R.Link i U A L S₂ k
+    S₁.kind k = S₂.kind k → R.Link i U A L S₁ k → R.Link i U A L S₂ k
 
 omit S in
 /-- A link that reads the schedule only through the slot's round is
@@ -262,9 +263,22 @@ theorem linkCongr_of_round
     (f : ℕ → (U : BlockRecord Validator BlockId Payload P honest) → BlockId → BlockId → ℕ → Prop)
     (h : ∀ i U A L (S : Slots Validator) k, R.Link i U A L S k = f i U A L (S.slotRound k)) :
     R.LinkCongr := by
-  intro S₁ S₂ U A L i k hround _ hl
+  intro S₁ S₂ U A L i k hround _ _ hl
   rw [h] at hl ⊢
   rwa [← hround]
+
+omit S in
+/-- A link that reads the schedule only through the slot's round and kind
+is congruent. -/
+theorem linkCongr_of_round_kind
+    (f : ℕ → (U : BlockRecord Validator BlockId Payload P honest) → BlockId → BlockId → ℕ → ℕ →
+      Prop)
+    (h : ∀ i U A L (S : Slots Validator) k,
+      R.Link i U A L S k = f i U A L (S.slotRound k) (S.kind k)) :
+    R.LinkCongr := by
+  intro S₁ S₂ U A L i k hround _ hkind hl
+  rw [h] at hl ⊢
+  rwa [← hround, ← hkind]
 
 /-- **The laws of an anchored rule** — what the direct predicates and the
 rungs must satisfy for agreement, on the records satisfying an invariant
@@ -321,7 +335,7 @@ structure Laws (I : Slots Validator → BlockRecord Validator BlockId Payload P 
   /-- The direct skip reads the schedule only at its own slot. -/
   skip_congr : ∀ {S₁ S₂ : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {V : U.View} {k : ℕ}, I S₁ U → S₁.slotRound k = S₂.slotRound k → S₁.leader k = S₂.leader k →
-    R.Skip U V S₁ k → R.Skip U V S₂ k
+    S₁.kind k = S₂.kind k → R.Skip U V S₁ k → R.Skip U V S₂ k
   /-- And so does every rung's link. -/
   link_congr : R.LinkCongr
 

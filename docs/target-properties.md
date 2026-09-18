@@ -4769,6 +4769,13 @@ predicate reads the wave of the round, stays a non-example, now of the
 right thing: a rule that reads its wave from the round rather than the
 kind.
 
+**The congruences follow.** `Laws.skip_congr` and `LinkCongr` said the
+direct skip and a rung read the schedule only at the slot's round and
+leader; they say kind too, `linkCongr_of_round_kind` discharges the
+link's for a rule that reads round and kind, and every existing rule's
+proof ignores the new premise. Without it a rule whose `Skip` or `Link`
+reads `S.kind k` could prove no `Laws`.
+
 **The support follows.** `Support.waveAt` is a function of the kind
 too: `certifiesAt U T r κ L` asks for certifiers at `r + waveAt κ`,
 `Commits` and `live` read `waveAt (S.kind k)`, `Local` and `OfCoverage`

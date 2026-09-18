@@ -182,12 +182,12 @@ theorem indirect (hcongr : R.LinkCongr)
       (fun i' h1 h2 h3 => hmid' i' h1 h2
         (R.eligible_iff (S := S) |>.mp ((heq S' hround hkind i').mp h3)))
       hr₀.1 ?_ ((hcand S' hround hlead L).mpr hL)
-      (hcongr (S₁ := S) (S₂ := S') (congrFun hround i).symm hlead.symm hlink) ?_
+      (hcongr (S₁ := S) (S₂ := S') (congrFun hround i).symm hlead.symm hkind.symm hlink) ?_
     · intro r' hr' L' hL' hlink'
-      have hlink' := hcongr (S₁ := S') (S₂ := S) (congrFun hround i) hlead hlink'
+      have hlink' := hcongr (S₁ := S') (S₂ := S) (congrFun hround i) hlead hkind hlink'
       exact hmin r' hr' ⟨L', (hcand S' hround hlead L').mp hL', hlink'⟩
     · intro L' hL' hlink'
-      have hlink' := hcongr (S₁ := S') (S₂ := S) (congrFun hround i) hlead hlink'
+      have hlink' := hcongr (S₁ := S') (S₂ := S) (congrFun hround i) hlead hkind hlink'
       exact hLmin L' ((hcand S' hround hlead L').mp hL') hlink'
   · push Not at hc
     refine ⟨none, fun S' hround hlead hkind hj' hmid' => ?_⟩
@@ -196,7 +196,7 @@ theorem indirect (hcongr : R.LinkCongr)
         (R.eligible_iff (S := S) |>.mp ((heq S' hround hkind i').mp h3)))
       ?_
     intro r hr L hL hlink
-    have hlink := hcongr (S₁ := S') (S₂ := S) (congrFun hround i) hlead hlink
+    have hlink := hcongr (S₁ := S') (S₂ := S) (congrFun hround i) hlead hkind hlink
     exact hc r hr L ((hcand S' hround hlead L).mp hL) hlink
 
 /-- The indirect property under the invariant: the same case split, at
