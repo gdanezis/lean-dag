@@ -157,8 +157,8 @@ theorem sh8_slot0_indirect : Steelhead.Decided w4 sh8 (View.full sh8) 0 (some 1)
 /-! ## The anchor-floor counterexample
 
 `lowFloor` is Steelhead with every slot's floor read from the
-synchronous wave whatever its kind: an anchor two rounds up, wherever
-the slot's own certificates sit. It is the rule the paper's
+synchronous wave whatever its kind: an anchor at `r + 3` or above,
+wherever the slot's own certificates sit. It is the rule the paper's
 "r + w(anchor)" reading would give. -/
 
 /-- Steelhead's data at the synchronous floor for every kind. -/
