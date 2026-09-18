@@ -200,11 +200,13 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   own, `r + w(r)`. Verdicts agree across views and routes and across
   the two rules, a direct commit under one handed over to an anchor
   decided by the other, at every wavelength function of at least two
-  rounds; the certificate lemmas ask for three, the wave at which the
-  vote-and-certify pattern of the `3f + 1` pair has a round to put a
-  certificate in. A witness on data settles why an undecided slot reads
-  the floor at its own wave and not at its anchor's. The arc is under
-  the statement/proof partition and imports nothing of Barnacle.
+  rounds, which is what the proofs consume. Three is the wave at which
+  the vote-and-certify pattern of the `3f + 1` pair first has a round to
+  put a certificate in: at two the vote round is the slot's own, so no
+  candidate is certified and every slot is directly skipped. A witness
+  on data settles why an undecided slot reads the floor at its own wave
+  and not at its anchor's. The arc is under the statement/proof
+  partition and imports nothing of Barnacle.
 - **Black Marlin** (`LeanDag/BlackMarlin/`): the three-round commit rule
   of a partially synchronous protocol (DISC 2025) that uses neither
   reliable broadcast nor a common coin and elects an anchor in **every

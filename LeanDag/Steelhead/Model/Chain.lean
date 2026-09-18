@@ -5,14 +5,15 @@ import LeanDag.Steelhead.Model.Decision
 A committed asynchronous slot does not decide the synchronous slots
 below it: the anchor search of Algorithm 1 stops at an undecided slot,
 and under asynchrony an adversary who knows the leader keeps every
-synchronous slot undecided at no cost (`steelhead.md` §4, the witness is
-`LeanDagTest/Steelhead/Stall.lean`). So the interval's anchor, the
-agreed event the period update reads, cannot come from the output. It
+synchronous slot undecided at no cost (`steelhead.md` §4, whose witness
+arrives with the period). So the interval's anchor, the agreed event the
+period update reads, cannot come from the output. It
 comes from the **chain verdict**: the asynchronous rule read on *every*
 round with that round's coin leader, anchored on chain commits only, so
 that no known-leader slot lies on the chain and nothing the adversary
 can hold undecided blocks it. Chain verdicts are never sequenced or
-output; they drive the period update (`Period.lean`).
+output; they drive the period update, which the next development of the
+arc states.
 
 **The chain is the Mahi-Mahi arc at the identity schedule.** One slot
 per round, the round's coin leader as the slot's leader, wave `wa`: the

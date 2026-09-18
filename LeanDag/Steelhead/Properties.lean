@@ -14,11 +14,10 @@ Mahi-Mahi's fact at the wave of the slot it concerns. `Support` holds
 with Mahi-Mahi's certificate and the wave read at the candidate's round;
 its `Local` and `Commits` laws at two rounds and above, the timed
 model's `OfCoverage` bridge at three and above, the wave-three case by
-the core's argument and the higher waves by Mahi-Mahi's. `Descends` is
-proved outright in `Helpers/Liveness.lean`, under `SpansEligible c` at
-each slot's own wave, rather than derived. `Banded` does not hold: a
-wave that alternates with the round reads an absolute round, and the
-band's offset does not preserve it (`docs/target-properties.md` §3.4c).
+the core's argument and the higher waves by Mahi-Mahi's. `Banded` does
+not hold: a wave that alternates with the round reads an absolute round,
+and the band's offset does not preserve it
+(`docs/target-properties.md` §3.4c).
 What the band derives that needs no offset, persistence and view
 monotonicity, is proved here through the extension laws; `LocalTruncate`
 and the `Safe` headline, which rebase by an arbitrary offset, are not
@@ -206,7 +205,8 @@ theorem shSupport_ofCoverage {w : ℕ → ℕ} (hw : ∀ r, 3 ≤ w r) :
 /-- **A quorum's certificates at the slot's decision round are a direct
 commit**, in a view caught up to that round: the leader's block at the
 slot's round is the candidate, and every reliable block at the decision
-round certifies it. Law 3's core, which SH6a reads on its own. -/
+round certifies it. Law 3's core, stated on its own so that a liveness
+argument reads it without the law around it. -/
 theorem shSupport_directCommitIn {w : ℕ → ℕ} (hw : ∀ r, 2 ≤ w r) (S : Slots Validator)
     {U : BlockUniverse Validator BlockId Payload} (V : View Validator BlockId Payload U)
     {T : Finset Validator} {k : ℕ} (hcard : quorumCard Validator ≤ T.card)

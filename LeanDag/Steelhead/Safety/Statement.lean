@@ -5,7 +5,8 @@ import LeanDag.MahiMahi.Model.Rules
 
 The rules at the wavelength function `w` never disagree about a slot,
 whichever rule decided it and whichever anchor a view found
-(`steelhead.md` §3). Eight claims:
+(`steelhead.md` §3). Eight claims, which `Statement` bundles as nine,
+since SH4 is one claim about the rule and one about the relation:
 
 * **SH1a, skip excludes certificates** — Lemma 1's skip half at the
   slot's own wave;
@@ -36,6 +37,14 @@ paper's interface states. Mahi-Mahi states MM1a-c at `3 ≤ w`, the bound
 below which the 3f+1 pair's vote-and-certify pattern has nowhere to put
 a certificate. These are claims about the decision relation rather than
 about that pattern, so they are stated at what they use.
+
+**What the lower bounds admit.** At `w r = 2` the vote round is the
+slot's own round, `r + w r - 2 = r`, which no other block of that round
+references: no candidate is certified, a quorum blames every slot, and
+the rule at that wave skips everything. The claims below hold there, and
+hold of nothing that commits. Three is the first wave at which the
+`3f + 1` pair decides both ways, which is why the paper's interface asks
+`2 ≤ w r` of a generic rule of the family and its instances ask more.
 
 Statements only; the proofs live in `Proof.lean`.
 -/
