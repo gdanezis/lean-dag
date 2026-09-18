@@ -51,7 +51,7 @@ FULLVIEW_ALLOW = {
 }
 ROOT = Path(__file__).resolve().parent.parent
 ARCS = ["Mysticeti", "MahiMahi", "BlackMarlin", "FinWhale", "Barnacle", "Hydrozoan",
-        "OptimalHydrozoan"]
+        "OptimalHydrozoan", "Steelhead"]
 SOURCES = [f"{top}/{arc}" for arc in ARCS for top in ("LeanDag", "LeanDagTest")]
 DERIVED = ROOT / "LeanDag/Properties/Derived"
 PROPERTIES = ROOT / "LeanDag/Properties"

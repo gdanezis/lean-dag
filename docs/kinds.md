@@ -6,9 +6,9 @@ otherwise, and every rule in the tree at the time of writing has one
 wave and never reads it. This note is for the first rule that does. It
 records what the kind is, where the common layer reads it, what a rule
 whose wave varies has to write, and what it then has — each point
-checked on a port of the Steelhead rule (#21), which is the worked
-example throughout (`docs/target-properties.md` §11.43 records the
-change to the common layer itself).
+checked on the Steelhead rule (#21), which is the worked example
+throughout (`docs/target-properties.md` §11.43 records the change to
+the common layer itself).
 
 ## 1. What the kind is, and why it is the schedule's
 
@@ -55,9 +55,9 @@ and the reassignment clauses of `DecidedBelow`, `Indirect` and
 
 ## 3. What a varying-wave rule writes
 
-The port of Steelhead touched six files, `+125 −70` lines, and every
-edit is one of the following. `w : ℕ → ℕ` is the rule's wavelength
-function, now of the kind.
+Steelhead writes it in six files under `LeanDag/Steelhead/` and its two
+witnesses, and every edit is one of the following. `w : ℕ → ℕ` is the
+rule's wavelength function, of the kind.
 
 **The model** (`Steelhead/Model/Decision.lean`). Read `w` at the kind in
 each of the four places of §2:
@@ -76,18 +76,23 @@ becomes `w (S.kind k)`; every `R.Commit U V L (S.slotRound k)` becomes
 `R.Commit U V L (S.slotRound k) (S.kind k)`. `skip_congr` receives the
 kind agreement as a premise and rewrites with it; `link_congr` is
 `linkCongr_of_round_kind`, which takes the link as a function of the
-round and the kind. A claim that names a round's mode — Steelhead's
-SH5b, that at an asynchronous round the direct predicates are the
-chain's — asks that the slot's kind be its round, `S.kind r = r`, beside
-`S.slotRound r = r`.
+round and the kind. A claim that names a slot's mode — Steelhead's
+SH5b, that at an asynchronous slot the direct predicates are the
+chain's — asks that the slot carry the asynchronous kind,
+`S.kind r = 1`, beside `S.slotRound r = r`.
 
 **The properties** (`Steelhead/Properties.lean`). `CommitsDirect`'s
 predicate takes the kind, `fun V L r κ => …`; `Indirect`'s eligibility
 takes the schedule, `fun S i j => S.slotRound i + w (S.kind i) ≤ S.slotRound j`;
-the extension laws are the underlying rule's at `hw (S.kind k)`;
 `Local` and `OfCoverage` take one more binder, the kind, in place of
 reading the candidate's round; `Commits` takes one more `intro` for the
-kinds the reassignment clause holds fixed.
+kinds the reassignment clause holds fixed. The extension laws are no
+longer written at all: they are the band laws below, at offset zero.
+
+**The statements** (`Steelhead/Safety/Statement.lean`). A claim about
+the wave takes the kind beside the round rather than reading the wave
+at the round, and a claim about a slot's direct commit hands it
+`(S.kind k)`.
 
 **The band, which is new.** The rule's band laws are the underlying
 one-wave rule's, at the wave of the slot's kind, the band's kind
@@ -113,8 +118,8 @@ theorem safety        (hw) : Properties.Safe (steelheadRule w) :=
   Properties.safety (banded hw) (agree hw) (commitsCandidate w)
 ```
 
-These are the three claims `Steelhead/Properties.lean` on #21 says the
-rule cannot make. Every consumer of `Banded` — `Stack.safe_and_live`,
+These are the three claims the arc could not make while its wave was
+read from the round. Every consumer of `Banded` — `Stack.safe_and_live`,
 the `Record.lean` cells, the GC theorems, the joiner — applies to the
 rule unchanged, and `Stack.safe_and_live`'s liveness clause carries the
 support's precondition across any stack with no condition on the
@@ -126,32 +131,37 @@ schedule says the kinds:
 
 ```lean
 local instance shSlots : Slots (Fin 4) :=
-  { Slots.uniformSingle 1 (by omega) (fun k => ⟨(k + 1) % 4, by omega⟩) with kind := fun k => k }
+  { Slots.uniformSingle 1 (by omega) (fun k => ⟨(k + 1) % 4, by omega⟩) with
+    kind := fun k => periodicKind 4 k }
 ```
 
 and each `sh.Commit sh8 V L r` gains the slot's kind as a last argument.
 Every `decide` then settles as before.
 
-## 4. How to spell the schedule's kind
+## 4. How Steelhead spells the schedule's kind
 
-Two spellings serve Steelhead, and the choice is the rule's.
+**The kind is the mode**, and nothing else: `0` for a synchronous slot,
+`1` for an asynchronous one. `Model/Wavelength.lean` names the two
+halves of the paper's formula, `wavelength ws wa : ℕ → ℕ` for the wave
+of a kind and `periodicKind p : ℕ → ℕ` for the kind of a round, keeps
+`periodic ws wa p` as the paper's `w(r)`, and SH4 carries the identity
+between them, `wavelength ws wa (periodicKind p r) = periodic ws wa p r`.
+A schedule sets `kind k = periodicKind p (S.slotRound k)`, and `IsAsync
+p r` becomes `S.kind r = 1`. Kind `0` is what `Slots.kind` assigns when
+a schedule says nothing, so a schedule with no kinds reads `ws`
+everywhere and the rule is Mahi-Mahi's at that wave.
 
-* **The kind is the round**, `kind := fun k => S.slotRound k`, and
-  `w := periodic ws wa p` reads the round through it. This is the
-  scratch port: the smallest diff, `periodic` untouched, SH5b's premise
-  `S.kind r = r`. A rebase by `G` carries the kinds, so a chopped
-  validator's slot `k` still reads `w` at the global round `S.slotRound (d + k)`,
-  as it should: the mode of a round is a fact about the run, not about
-  a validator's local numbering.
-* **The kind is the residue**, `kind := fun k => S.slotRound k % p`,
-  and `w κ := if κ = 0 then wa else ws`. This says what the mode is —
-  asynchronous or not — rather than which round, and `IsAsync p r`
-  becomes `S.kind r = 0`. Same theorems, and the kind space is `Fin p`
-  in all but name.
+Another varying-wave rule need not follow this. **The kind is the
+round**, `kind := fun k => S.slotRound k` with `w := periodic ws wa p`
+reading the round through it, works just as well and is the smaller
+diff. A rebase by `G` carries the kinds either way, so a chopped
+validator's slot `k` still reads `w` at the global round
+`S.slotRound (d + k)`, as it should: a slot's mode is a fact about the
+run, not about a validator's local numbering.
 
-Either way, nothing in the rule's proofs depends on periodicity: the
-laws hold at any `w` with `2 ≤ w κ`, and a wave that is not periodic —
-an epoch's worth of one mode, then another — is a schedule that says so.
+Nothing in the rule's proofs depends on periodicity: the laws hold at
+any `w` with `2 ≤ w κ`, and a wave that is not periodic — an epoch's
+worth of one mode, then another — is a schedule that says so.
 
 ## 5. What a kinded rule does not have
 

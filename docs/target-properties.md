@@ -362,9 +362,10 @@ Rules whose model has no self-parent clause show `Progresses` alone.
 
 ### 0.8 The rules
 
-Nine carriers over nine rules show the four properties and a support,
-and every mechanism cell is an instance or derived
-(`scripts/audit-conformance.py`, `scripts/audit-mechanisms.py`):
+Nine carriers over eleven rules, of which ten show the four properties
+and a support, and every mechanism cell is an instance or derived
+(`scripts/audit-conformance.py`, `scripts/audit-mechanisms.py`).
+Black Marlin has no carrier:
 
 | rule | support | optional shown | headline |
 |---|---|---|---|
@@ -376,6 +377,7 @@ and every mechanism cell is an instance or derived
 | FinWhale | `fwSupport`, and a fast path | direct, quorate, no-equiv | `safety`, `progress` |
 | Hydrozoan | `hzSupport`, and a fast path | direct, skip, quorate | `safety`, `progress` |
 | Optimal-Hydrozoan | `optSupport`, and a fast path | direct, quorate | `safety`, `progress` |
+| Steelhead | `shSupport w`, per wavelength function | direct, quorate, self-parent, no-equiv | `safety`, `liveness` |
 | Black Marlin | no carrier: commits by round, no slot-indexed relation | | |
 
 Nemo's model drops the self-parent clause by design and Hydrozoan's
@@ -806,6 +808,7 @@ eligibility spans at a bound on the wave in place of a constant
 | Optimal-Hydrozoan | `slotRound k`, `+1`, `+2` | reachable |
 | Mahi-Mahi | `slotRound k + w - 1`, `r + w - 2` | proved, under `2 ≤ w` (§3.16) |
 | FinWhale | ~~`leader (round b - 2)`~~ **fixed** | the read is gone, and the band followed (§3.13) |
+| Steelhead | `slotRound k + w (kind k) - 1` | proved, under `2 ≤ w κ` (§11.43) |
 
 **Mahi-Mahi's wave rounds truncate.** `votingRound w r = r + w - 2`,
 `decisionRoundAt w r = r + w - 1` and `decisionRound w k = slotRound k +
@@ -818,6 +821,22 @@ carrier instance is per-width and its band is conditional, `Banded
 unconditional. `Banded R` is a predicate on the rule alone, so the width
 has to be fixed before the property is stated rather than appear inside
 it.
+
+**Steelhead reads its wave at the slot's kind.** The paper's wavelength
+is a function of the round number, `w(r) = wa if r mod p = 0 else ws`,
+and a rule reading it there would have no band: a rebase shifts every
+round by a constant `g`, under which `r % p` and `(r + g) % p` differ.
+The arc splits that formula in two. The schedule says which slots are
+asynchronous, `kind k = periodicKind p (slotRound k)`, and the rule reads
+`wavelength ws wa` at that kind: `waveAt κ = w κ − 1` in
+`steelheadAnchored`, and the same in `shSupport`. The two spellings agree
+at every round (`wavelength_periodicKind`, SH4), and since a rebase
+carries a slot's kind the rule reads a band at any offset, so `Banded`,
+`LocalTruncate`, `Persist` and the `Safe` headline all hold under the
+`2 ≤ w κ` its laws already ask (`LeanDag/Steelhead/Properties.lean`).
+`scripts/audit-rounds.py` reports the rule clean: its one truncated
+subtraction is of a kind, not of a round, and the modulus sits in
+`periodicKind`, which the relation does not reach.
 
 **FinWhale indexed its leader by an absolute round**, and no longer
 does. `ExposesEquivocation D b` read `D.leader ((D.block b).round - 2)`:
@@ -2157,7 +2176,7 @@ one relation (§11.4d). Chain quality has no property of its own (§5).
 
 ### 11.2 Against part 2: two protocols, every mechanism
 
-**Ten decision rules, eight carriers.** `scripts/audit-conformance.py`
+**Eleven decision rules, nine carriers.** `scripts/audit-conformance.py`
 recomputes this from `docs/decls.json`: a rule shows a property when
 some theorem concludes it at one of the rule's carriers, or when its
 conformance `Statement` lists it.
@@ -2173,6 +2192,7 @@ conformance `Statement` lists it.
 | Hybrid / Orcaella | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Mahi-Mahi | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
 | FinWhale | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| Steelhead | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
 | Black Marlin | — | — | — | — | — | — | — |
 
 \* optional (`Properties/Optional/`): owed when a mechanism counts the
@@ -3174,7 +3194,7 @@ learns which execution model produced the certificates. That is what
 from coverage in which bridge they take to `Support.live`, and in
 nothing after it.
 
-**All nine rules with a carrier now have a `Support`**, and the
+**All ten rules with a carrier now have a `Support`**, and the
 conformance table reads `supp yes` across the board.
 
 | rule | support | Law 1 | Law 2 | Law 3 |
@@ -3186,6 +3206,7 @@ conformance table reads `supp yes` across the board.
 | Optimal-Hydrozoan | `optSupport`, Hydrozoan's at `U.val` | Hydrozoan's | Hydrozoan's | Hydrozoan's slow commit in `DecidedOpt` |
 | FinWhale | `fwSupport`, wave 2 (slow path) | parents and grandparents kept | `spCommitBy_of_synchronisedOn` cut down | the SP-commit on the view, through the pass |
 | Mahi-Mahi | `mmSupport w`, wave `w − 1` | `certifies_band` at the band a `RebasedAbove` is | see below | the cone certificates, in view |
+| Steelhead | `shSupport w`, wave `w κ − 1` at a slot of kind `κ` | Mahi-Mahi's `certifies_band` at the candidate's own wave | the core's argument at wave three, Mahi-Mahi's above it | Mahi-Mahi's, at the slot's own decision round |
 
 **Mahi-Mahi was the test of `CoversToward`, and it passed without
 change to the predicate.** Its certifier sits `w − 1` rounds up and
@@ -4764,8 +4785,8 @@ nothing of the wave. The seven rules' support laws take one more
 binder each.
 
 **How a rule uses it** is `docs/kinds.md`: where the common layer reads
-the kind, the six files a varying-wave rule edits, checked on a port of
-Steelhead (#21) that then has `banded`, `localTruncate` and `safety`,
+the kind, the six files a varying-wave rule edits, checked on Steelhead
+(#21), which has `banded`, `localTruncate` and `safety` because of it,
 and the two spellings of a schedule's kind.
 
 **What did not change.** Barnacle's
@@ -4773,11 +4794,11 @@ and the two spellings of a schedule's kind.
 one wave length, `LiveRule.Descent` reads one gap at every schedule its
 `indirect` quantifies over, and `Descent.indirect` is not monotone in
 the gap, so a bound would not do and a varying wave cannot pass through
-until the descent laws take a gap per kind. No rule in the tree sets a
-kind; Steelhead's `periodic ws wa k`, a function of `r % k`, is a
-schedule whose kind is `r % k` and a rule whose `waveAt`, `Commit`,
-`Skip` and `Link` read `w` at the kind, and needs neither a period nor
-a constancy hypothesis.
+until the descent laws take a gap per kind. Steelhead is the one rule in
+the tree that sets a kind: its schedule marks the asynchronous slots,
+`kind k = periodicKind p (slotRound k)`, and its `waveAt`, `Commit`,
+`Skip` and `Link` read `wavelength ws wa` there, so it needs neither a
+period nor a constancy hypothesis.
 
 ### 11.5 Next steps, in order
 
