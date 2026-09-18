@@ -211,7 +211,7 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   the rule banded, so safety and truncation-locality come with it. A
   witness on data settles why an undecided slot reads the floor at its
   own wave and not at its anchor's. The arc is under the statement/proof
-  partition and imports nothing of Barnacle.
+  partition.
 - **Black Marlin** (`LeanDag/BlackMarlin/`): the three-round commit rule
   of a partially synchronous protocol (DISC 2025) that uses neither
   reliable broadcast nor a common coin and elects an anchor in **every
