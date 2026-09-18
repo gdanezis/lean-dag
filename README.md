@@ -197,7 +197,10 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
 - **Steelhead** (`LeanDag/Steelhead/`): two rules on one DAG, the
   core's at `ws = 3` and Mahi-Mahi's at `wa`, every round given the
   **wavelength** its slot reads and an undecided slot anchoring at its
-  own, `r + w(r)`. Verdicts agree across views and routes and across
+  own, `r + w(r)`. The two are one rule read at two wavelengths: at
+  three Mahi-Mahi's relation is the core's, slot for slot, which is why
+  the arc carries a single family of predicates for the `3f + 1` pair.
+  Verdicts agree across views and routes and across
   the two rules, a direct commit under one handed over to an anchor
   decided by the other, at every wavelength function of at least two
   rounds, which is what the proofs consume. Three is the wave at which
