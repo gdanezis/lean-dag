@@ -15,10 +15,11 @@ before anything is proved from them (`steelhead.md` §5).
 * **the adaptive wavelength** at a concrete period sequence, reading each
   round's wavelength from its own interval's period;
 * **a two-interval period derivation** on the universe of `Model.lean`:
-  interval `0` runs at the initial period with the agreed output at slot
-  `1`, its anchor is the chain commit at round `1`, the first round the
-  scan reads, and interval `1` runs at that anchor's update, over whose
-  history the agreed output advances;
+  interval `0` runs at the initial period `1` with the agreed output at
+  slot `1`, its anchor is the control commit at round `1`, the first
+  control slot of that period at round `1` or above, and interval `1`
+  keeps the period, the first interval being a warm-up, over whose
+  anchor's history the agreed output advances;
 * **the committed set the coin measures**, on the same universe.
 
 `commitProb` and `noCommitProb` are `noncomputable` measures, so they are
@@ -65,41 +66,44 @@ example : wavelength 3 5 (adaptiveKind 4 shPer 6) = 5 := by decide
 
 /-! ## The period sequence on data
 
-Round `1`, the first round the scan reads, chain-commits block `7`
-(`sh8_chain1`), so it is interval `0`'s anchor whatever the period in
-force. The scan then advances the agreed output over the anchor's causal
-history and hands interval `1` the update rule's answer, here the doubled
-period; the failover cannot fire at an anchor of round `1`, which lies
-below every last commit plus `I`. -/
+At period `1` every round up to the boundary is a control round, and slot `1` of the control
+schedule is round `1`, the first the scan reads; it control-commits block `7` (`sh8_control1`),
+so it is interval `0`'s anchor. The scan then advances the agreed output over the anchor's
+causal history and keeps the period for interval `1`, the warm-up, whatever the update rule
+answers, here the doubled period; the failover cannot fire at an anchor of round `1`, which lies
+below every last commit plus `I`. The period bound is `4`. -/
 
 /-- An update rule: double the period at every interval. -/
 def shDouble : UpdateRule (Fin 32) := fun _ k => 2 * k
 
-/-- Round `1` chain-commits validator `3`'s block `7`: the coin names `3` there, and the whole of
-round `5` certifies the block. -/
-theorem sh8_chain1 : ChainDecided 5 shCoin sh8 (View.full sh8) 1 (some 7) :=
-  AnchoredRule.Decided.directCommit (S := chainSlots shCoin) (by decide) (by decide)
+/-- Slot `1` of the scan of interval `0` at period `1` is round `1`, and it control-commits
+validator `3`'s block `7`: the coin names `3` there, and the whole of round `5` certifies the
+block. -/
+theorem sh8_control1 : ControlDecided 4 4 5 shCoin 0 1 sh8 (View.full sh8) 1 (some 7) :=
+  AnchoredRule.Decided.directCommit (S := controlSlots shCoin 4 4 0 1) (by decide) (by decide)
 
-/-- Interval `0`'s anchor is the chain commit at round `1`: it lies in the
-interval, and no scanned round of the interval sits below it. -/
-theorem sh8_anchor1 : IntervalAnchor 4 5 shCoin sh8 (View.full sh8) 0 1 7 where
-  pos := le_rfl
+/-- Interval `0`'s anchor is the control commit at slot `1`, round `1`: it lies in the interval,
+and the only control slot below it is round `0`, which the scan never reads. -/
+theorem sh8_anchor1 : IntervalAnchor 4 4 5 shCoin sh8 (View.full sh8) 0 1 1 7 where
+  pos := by decide
   mem := by decide
-  commit := sh8_chain1
-  below := fun _ h1 _ h => absurd (lt_of_le_of_lt h1 h) (lt_irrefl _)
+  commit := sh8_control1
+  below := fun i' h1 _ h => by
+    interval_cases i'
+    exact absurd h1 (by decide)
 
 /-- Every wavelength of `w4` is at least two rounds, which the agreed output's advance asks. -/
 theorem w4_ge_two (κ : ℕ) : 2 ≤ w4 κ := by
   unfold w4 wavelength
   split <;> omega
 
-/-- Interval `1` runs at the update of interval `0`'s anchor: starting at
-period `4`, it runs at `8`, wherever the agreed output stops. -/
+/-- Interval `1` keeps interval `0`'s period `1`, the warm-up, though the update rule would
+double it, wherever the agreed output stops (SH10n on data). -/
 theorem sh8_period1 : ∃ next' last',
-    PeriodAt 4 5 shCoin shDouble 4 sh8 (View.full sh8) w4 1 ⟨8, next', last'⟩ := by
+    PeriodAt 4 4 5 shCoin shDouble 1 sh8 (View.full sh8) w4 1 ⟨1, next', last'⟩ := by
   obtain ⟨next', last', hadv⟩ :=
     AgreedAdvance.exists (U := sh8) (w := w4) w4_ge_two (A := 7) (by decide) 1 0
-  exact ⟨next', last', PeriodAt.anchor PeriodAt.zero sh8_anchor1 hadv⟩
+  exact ⟨next', last', periodAt_warmUp (by decide) PeriodAt.zero sh8_anchor1 hadv⟩
 
 /-! ## The window, and the agreed output on data
 
