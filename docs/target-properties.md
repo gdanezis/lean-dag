@@ -4779,6 +4779,79 @@ schedule whose kind is `r % k` and a rule whose `waveAt`, `Commit`,
 `Skip` and `Link` read `w` at the kind, and needs neither a period nor
 a constancy hypothesis.
 
+### 11.44 The checkpoint layer as a mechanism
+
+`Hybrid/Checkpoint/` was written against Hybrid: its fault model
+extended `HybridFaults` with an AbC class, its quorum was `Hybrid.q`,
+and its commit bridge read `Hybrid.Decided`, `Hybrid.hybridLaws` and
+`Hybrid.decided_of_leader_mem`. Nothing in it needed Hybrid. The
+counting lemmas need a threshold and two bounds; the bridge needs a
+verdict relation with agreement and a way to reach verdicts from
+production. Both are what `Properties/` already names.
+
+**What moved.** The six modules are `LeanDag/Checkpoint/`, namespace
+`LeanDag.Checkpoint`, importing nothing under `Hybrid/`. The layering
+rule of `Properties/Carrier.lean` applies to them as to garbage
+collection: a mechanism reads `DagRule` and the properties, and a
+protocol's instance lives under `Integration/`.
+
+**The fault model is a parameter.** `SigningFaults` is to the signing
+counts what `Reliability` is to density: the quorum threshold `q`, the
+`reliableSigner` set whose state is enforced, the `recoveryCorrect` set
+that also stays available, and two bounds, `n + |reliableSignerᶜ| < 2q`
+so that two quorums meet outside the unreliable validators and
+`|recoveryCorrectᶜ| < q` so that a quorum holds an available one. The
+three `exists_*_mem*` lemmas of `SafetyProofs.lean` are those two
+bounds; the derivations above them are unchanged. The paper's
+three-class `FlexibleFaults` is `Integration/HybridCheckpoint.lean`,
+and its `signing` instance is the resilience bound
+`fabc + 3·fb + 2·fc < n` read at `q = n − fb − fc`.
+
+**The bridge reads the properties.** `SigningRule` is over a `DagRule`,
+a schedule and a universe; `proposes` is stated at `R.Decided`.
+`CommitCertified`, `CommitFinalized` and `CommitCheckpointUnique` take
+`Agree R`, which is what `AnchoredRule.decided_agree` at Hybrid's laws
+was doing. `LiveCommitFinalized` takes a `Support` with `Commits rel`
+and `CommitsCandidate`, its wave read at the slot's kind (§11.43),
+and its hypotheses are the law's: production
+across the wave, certification of every candidate, views caught up to
+the wave, a quorum-member leader. `SynchronisedOn` is gone from the
+statement, as §11.16 requires of a mechanism. The `noAbC` field became
+`quorum : M.q ≤ M.recoveryCorrect.card`, the fact it was there to
+supply; Hybrid discharges it and `rel.IsQuorum` from `abc = ∅` in
+`FlexibleFaults.quorum_of_noAbC` and `isQuorum_of_noAbC`.
+
+**The schedule mechanism composes with the bridge as it is.** A
+Barnacle validator decides each configuration's slots against that
+configuration's schedule, at either boundary, and looked to need a
+`SigningRule` with a schedule per validator. It does not:
+`Barnacle.configAgree` makes every run's configuration `c` one
+configuration, `anchor_agree` its range and `vdct_agree` its verdict,
+so each validator's own `closed` clause is the settled-on-its-own-view
+hypothesis of `CommitFinalized` at the configuration's schedule.
+`Integration/BarnacleCheckpoint.lean` is that fact, twenty lines,
+reading `Agree` and nothing of the checkpoint layer beyond
+`commitFinalized`, and covering the segmented adaptive run since it is
+Barnacle's at a boundary. Slots restart per configuration, so the lemma
+is per configuration with that configuration's VM; a rebase-invariant
+slot index, which the DAG-transforming mechanisms would need too, is
+left for the block-content step, which puts proposals where a rebase
+moves them.
+
+**What the properties lacked.** `Properties.PopulatedOn`,
+`DagRule.IsCandidate` and `Support.certifiesAt` had no `Decidable`
+instances, so a concrete model could not settle the bridge's hypotheses
+by `decide` as it settles the record's. They have them now, the last
+under decidable certification, which `voteSupport` supplies.
+
+**The tests follow.** `LeanDagTest/Hybrid/CheckpointCommit.lean` runs
+the generic bridge at `hybridRule 4` over `Uhyb9` and `Usync9`, with
+`HybridProperties.agree`, `commitsCandidate` and `voteSupport_commits`
+as the properties; the `Usync9` liveness witness discharges
+`certifiesAt` by `decide` where it discharged `SynchronisedOn`.
+`LeanDagTest/Hybrid/Checkpoint.lean` instantiates `FlexibleFaults` as
+before and runs the safety and recovery layer at its `signing`.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

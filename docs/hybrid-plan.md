@@ -27,21 +27,24 @@ onto the existing Odontoceti development at `c = 0`. Results carry
 **H**-labels; everything lives in `LeanDag/Hybrid/` with `decide`
 witnesses in `LeanDagTest/Hybrid/Model.lean`, consuming the core read-only.
 
-The DAG theorems below do not depend on checkpoint signatures. The core
-`Hybrid/Checkpoint/` safety model uses `FlexibleFaults`, which keeps the
-hybrid Byzantine and crash classes and adds alive-but-corrupt signers.
-It takes possibly forked per-validator histories and messages as
+The DAG theorems below do not depend on checkpoint signatures. The
+checkpoint layer is a mechanism at `LeanDag/Checkpoint/` and names no
+protocol: `SigningFaults` is what its counting needs of a fault model,
+and it takes possibly forked per-validator histories and messages as
 execution input, then proves resilient finality safety and
-highest-checkpoint recovery. The additive `CommitSpec.lean` bridge
-covers the secure-base case at `abc = ∅`: deterministic execution maps a
-Hybrid commit to one checkpoint, and a `SigningRule` states the protocol
-as rules over a run: a correct online validator proposes the checkpoint
-of every slot it settles on its own view and witnesses certificates for
-its own proposals. `CommitProofs.lean` derives the quorum from the
-inherited fault bound, ties the proposals to a commit through
-`Hybrid.decided_agree`, and composes with `Hybrid.decided_of_leader_mem` to
-finalize a correctly led slot from DAG production and coverage. It does
-not derive AbC-induced DAG forks or an implementation of the rules.
+highest-checkpoint recovery. The additive `CommitSpec.lean` bridge reads
+a `DagRule` and its properties: deterministic execution maps a commit to
+one checkpoint, and a `SigningRule` states the protocol as rules over a
+run: a correct online validator proposes the checkpoint of every slot it
+settles on its own view and witnesses certificates for its own
+proposals. `CommitProofs.lean` ties the proposals to a commit through
+`Properties.Agree` and composes with a `Support`'s `Commits` law to
+finalize a correctly led slot from production and certification.
+Hybrid's instance is `Integration/HybridCheckpoint.lean`: the paper's
+`FlexibleFaults`, the hybrid classes plus alive-but-corrupt signers, is
+one `SigningFaults`, and at `abc = ∅` the online correct validators are
+a quorum of the signing threshold and of the core reliability. Nothing
+derives AbC-induced DAG forks or an implementation of the rules.
 
 ## 1. What the hybrid model splits
 
@@ -281,15 +284,17 @@ on it.
 | `Hybrid/Decision.lean` | the decision relation with canonicity; H5, H6 |
 | `Hybrid/Liveness.lean` | H7 over the `T`-relativised interface |
 | `Hybrid/Conservativity.lean` | H8, the `fc = 0` collapse |
-| `Hybrid/Checkpoint/BaseSpec.lean` | **human review:** AbC classes, execution assumptions, proposal and certificate objects |
-| `Hybrid/Checkpoint/RecoverySpec.lean` | **human review:** broadcast, validation, selection, and epoch-transition contracts |
-| `Hybrid/Checkpoint/SafetyProofs.lean` | **Lean-checked:** quorum, uniqueness, prefix consistency, and recorder derivations |
-| `Hybrid/Checkpoint/RecoveryProofs.lean` | **Lean-checked:** concrete selection, agreement, and preservation derivations |
-| `Hybrid/Checkpoint/CommitSpec.lean` | **human review:** deterministic execution, the signing rule, and the bridge's claims as `Prop`s |
-| `Hybrid/Checkpoint/CommitProofs.lean` | **Lean-checked:** proofs of those claims; no statements of its own |
+| `Checkpoint/BaseSpec.lean` | **human review:** `SigningFaults`, execution assumptions, proposal and certificate objects |
+| `Checkpoint/RecoverySpec.lean` | **human review:** broadcast, validation, selection, and epoch-transition contracts |
+| `Checkpoint/SafetyProofs.lean` | **Lean-checked:** quorum, uniqueness, prefix consistency, and recorder derivations |
+| `Checkpoint/RecoveryProofs.lean` | **Lean-checked:** concrete selection, agreement, and preservation derivations |
+| `Checkpoint/CommitSpec.lean` | **human review:** deterministic execution, the signing rule over a `DagRule`, and the bridge's claims as `Prop`s |
+| `Checkpoint/CommitProofs.lean` | **Lean-checked:** proofs of those claims from `Agree` and `Support.Commits`; no statements of its own |
+| `Integration/HybridCheckpoint.lean` | `FlexibleFaults`, the AbC classes over `HybridFaults`, as a `SigningFaults`; the `abc = ∅` quorum facts |
+| `Integration/BarnacleCheckpoint.lean` | `commitFinalized_barnacle`: one Barnacle `Run` per validator, at any boundary, finalizes what any of them commits in a configuration, by `configAgree`, `anchor_agree` and `vdct_agree` |
 | `LeanDagTest/Hybrid/Model.lean` | H9: the `n = 4` crash model and the `n = 9` hybrid model |
 | `LeanDagTest/Hybrid/Checkpoint.lean` | concrete checkpoint certificate, finality certificate and recovery output |
-| `LeanDagTest/Hybrid/CheckpointCommit.lean` | `Uhyb9`: a Byzantine-led commit carried through both signing phases, with a Byzantine fork attempt that gets no certificate; `Usync9`: a correct-led slot finalized from production and coverage alone |
+| `LeanDagTest/Hybrid/CheckpointCommit.lean` | `Uhyb9`: a Byzantine-led commit carried through both signing phases at `hybridRule`, with a Byzantine fork attempt that gets no certificate; `Usync9`: a correct-led slot finalized from production and certification alone |
 
 ## 6. Out of scope
 
@@ -317,9 +322,9 @@ on it.
   is to carry the proposal as block content: `emitted` becomes block
   authorship, `proposes` follows from a content rule plus `PopulatedOn`,
   and a round-later block referencing `q` proposals is the witness,
-  derived from `SynchronisedOn` as in `directCommit_of_leader_mem`.
-  This constructs the `Execution` from `(U, vm)` and proves its
-  invariants instead of assuming them.
+  derived from the support's certification as `Commits` is. This
+  constructs the `Execution` from `(U, vm)` and proves its invariants
+  instead of assuming them.
 - **DAG rejoin after recovery.** Safe Skip addresses a crash-prone
   validator that returns (report §12). The checkpoint subarc proves the
   recovered prefix safe; composing it with the subsequent DAG fill is

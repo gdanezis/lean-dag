@@ -115,28 +115,36 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   also proved **necessary**: one validator short, one view derives
   conflicting verdicts at every threshold
   (`hybrid_bound_necessary`).
-- **Resilient checkpoints** (`LeanDag/Hybrid/Checkpoint/`): explicit
+- **Resilient checkpoints** (`LeanDag/Checkpoint/`): explicit
   epoch-, height-, and history-bearing proposal messages are
-  emitted from append-only per-validator protocol state. The
-  `FlexibleFaults` model keeps the hybrid Byzantine and crash classes
-  and adds alive-but-corrupt signers; the standalone safety layer
-  accepts forked histories as execution inputs. `CommitSpec.lean` adds
-  the secure-base bridge at `abc = ∅`: a deterministic VM maps each
-  Hybrid commit to one checkpoint, and a `SigningRule` states the
-  protocol as two rules, sign what you commit on your own view and
-  witness what you proposed. `CommitProofs.lean` derives the quorum
-  from the inherited fault bound, ties every online correct validator's
-  proposal to a given commit through `Hybrid.decided_agree`, and
-  composes with `Hybrid.decided_of_leader_mem` so that DAG production
-  and coverage alone yield a finalized checkpoint for a correctly led
-  slot.
+  emitted from append-only per-validator protocol state. The layer is
+  a mechanism in the sense of `Properties/`: it names no protocol.
+  `SigningFaults` is what its counting needs of a fault model, a quorum
+  threshold, the reliable signers, the recovery-correct validators and
+  two bounds, as `Reliability` is for density; the standalone safety
+  layer accepts forked histories as execution inputs. `CommitSpec.lean`
+  is the bridge from any `DagRule`: a deterministic VM maps each commit
+  to one checkpoint, and a `SigningRule` states the protocol as two
+  rules, sign what you commit on your own view and witness what you
+  proposed. `CommitProofs.lean` ties every online correct validator's
+  proposal to a given commit through `Properties.Agree`, and composes
+  with a `Support`'s `Commits` law so that production and certification
+  alone yield a finalized checkpoint for a correctly led slot. Hybrid's
+  instance is `Integration/HybridCheckpoint.lean`: the paper's
+  `FlexibleFaults`, the hybrid classes plus alive-but-corrupt signers at
+  `fabc < n − 3·fb − 2·fc`, is one `SigningFaults`, and at `abc = ∅` the
+  online correct validators are a quorum of both the signing threshold
+  and the core reliability. The bridge composes with the schedule
+  mechanism through its own agreement theorems: one Barnacle `Run` per
+  validator, at any boundary, so the segmented adaptive run too,
+  finalizes what any of them commits in a configuration
+  (`Integration/BarnacleCheckpoint.lean`, by `configAgree`).
   The `*Spec.lean` files are the human-review trust boundary.
   `CommitSpec.lean` also states its theorems as `Prop`-valued claims, so
   `CommitProofs.lean` needs no reading; the safety and recovery pairs
   still keep theorem statements in their `*Proofs.lean` files, where
   the statements, not the bodies, require review.
-  Conditional on those inputs, at
-  `fabc < n - 3·fb - 2·fc`, quorum intersection derives same-height
+  Conditional on those inputs, quorum intersection derives same-height
   uniqueness and within-epoch prefix consistency; checkpoint safety is
   intentionally scoped to one epoch. Concrete witness messages prove
   that finality leaves a recovery-correct recorder. Recovery broadcasts
@@ -476,7 +484,7 @@ them: the universe and the rule under `Model/`, what it shows in
   Hydrangea's bound.
 
 - [Lefteris Kokoris-Kogias](https://github.com/LefKok) — the resilient
-  checkpoint arc (`LeanDag/Hybrid/Checkpoint/`,
+  checkpoint arc (`LeanDag/Checkpoint/`,
   [#4](https://github.com/gdanezis/lean-dag/pull/4)): the
   assume-guarantee model of epoch-bearing proposals over append-only
   validator state, same-height uniqueness and within-epoch prefix
