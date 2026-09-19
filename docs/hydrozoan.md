@@ -90,7 +90,8 @@ Three consequences shape the arc.
 | after GST | `Model/Liveness.lean` — `PopulatedOn`, `SynchronisedOn`, `View.full`, `View.CoversUpto` |
 | `lem:thresholds` (the slack-cap table) | `ThresholdArithmetic/` (HZ1) |
 | slot safety, the two-case consistency argument | `DirectSafety/` (HZ2), `SlotAgreement/` (HZ3) |
-| `ExtendCommitSeq`, `LinearizeSubDags`, prefix consistency | `PrefixAgreement/` (HZ4) |
+| `ExtendCommitSeq`, prefix consistency | `PrefixAgreement/` (HZ4) |
+| `LinearizeSubDags` and its delivered set `H`; Integrity, Total Order | `Delivery/` (HZ9), over `Common/Dedup.lean` |
 | liveness | `DirectLiveness/` (HZ5), `IndirectLiveness/` (HZ6), `EventualDecision/` (HZ7), `Grounding/` (HZ8) |
 
 Names follow the paper's: `qFast` for $q_{\mathit{fast}}$ and so on;
@@ -281,6 +282,25 @@ prefix, and ledgers inherit the prefix for the abstracted linearizer;
 `DecidesBelow` demands a derivation for every slot below the horizon,
 so the claims speak exactly where replicas have produced output.
 
+**HZ9 — delivery** (`Delivery/`). `ledger` is memoryless: each leader
+is flattened on its own, so a block in two leaders' histories appears
+twice. The paper's `LinearizeSubDags` keeps a persistent set `H` and
+outputs a block only if its key is new; `delivered` is that — `ledger`
+filtered by `dedupBy` (`Common/Dedup.lean`), which keeps the first
+occurrence of each key. Mathlib's `List.dedup` keeps the last and would
+not do: only first-occurrence filtering is stable under extending the
+list. Three claims, for **every key and every per-leader listing**: no
+key is delivered twice (Integrity); across views and horizons the
+shorter delivered sequence is a prefix of the longer (Total Order); and
+the filter is faithful — a subsequence of the ledger that loses no key —
+so neither claim is about an empty list. The paper's key is
+`authorRound U.block`; a block's own id is the key of an implementation
+that deduplicates on block references. The two differ exactly on
+equivocations, and the witness on `U5` shows it: of replica 0's two
+round-1 blocks the id key delivers both, the paper's key one. Added
+after the freeze as a result of its own (issue #36), leaving HZ4's
+statement as it was.
+
 ## 7. Liveness
 
 Safety assumed nothing of the network. Liveness is exactly as strong as
@@ -457,7 +477,8 @@ LeanDagTest/Hydrozoan/  witness models; audited
 
 Results: `ThresholdArithmetic` (HZ1), `DirectSafety` (HZ2),
 `SlotAgreement` (HZ3), `PrefixAgreement` (HZ4), `DirectLiveness` (HZ5),
-`IndirectLiveness` (HZ6), `EventualDecision` (HZ7), `Grounding` (HZ8).
+`IndirectLiveness` (HZ6), `EventualDecision` (HZ7), `Grounding` (HZ8),
+`Delivery` (HZ9).
 Auxiliary predicates a claim needs but the core should not carry
 (`SpansEligible`, `FairRunOn`, `commitSeq`) are defined in the
 `Statement.lean` that needs them, on the audited side.
@@ -517,7 +538,9 @@ two, and where two are in scope a table names its instance explicitly.
 - **Two docstring gaps, recorded and left.** `PrefixAgreement`'s ledger
   claim says "for any linearizer whatsoever" where the abstraction is a
   memoryless per-leader function, while the paper's `LinearizeSubDags`
-  is stateful; and `GroundedProgress` does not constrain its universe's
+  is stateful (since closed by `Delivery`, HZ9, which states Integrity
+  and the prefix claim of the stateful filter; the docstring stands as
+  frozen); and `GroundedProgress` does not constrain its universe's
   authors, so a universe in which every faulty replica behaves
   satisfies it — the proof uses the correct-authored universe, but the
   statement does not say so. Both are fixed in the `OptimalHydrozoan`
@@ -556,6 +579,7 @@ namespaces re-homed under `LeanDag.Hydrozoan` and no other change.
 | 7 | `PrefixAgreement/` (HZ4); the axioms tripwire |
 | 8–10 | `Model/Liveness.lean`; `DirectLiveness/`, `IndirectLiveness/`, `EventualDecision/` (HZ5–HZ7); the liveness hardening batch |
 | 11 | `Grounding/` (HZ8) |
+| 13 | `Common/Dedup.lean`; `Delivery/` (HZ9); the equivocating-twins delivery witness on `U5` |
 | 12 | this record; report §22; the reference pipeline |
 
 Each phase ran as statements → review → freeze → proofs → witnesses →

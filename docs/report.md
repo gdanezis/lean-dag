@@ -10554,6 +10554,7 @@ reused.
 | HZ6 | the graded rule is total below an anchor, and a committed run decides every slot beneath it | `Hydrozoan.IndirectLiveness.holds` *(Hydrozoan/IndirectLiveness/Proof)* |
 | HZ7 | a synchronised, populated, correct-led run decides everything below it, and fairness places runs past every slot and round | `Hydrozoan.EventualDecision.holds` *(Hydrozoan/EventualDecision/Proof)* |
 | HZ8 | the wave-aligned rotation is fair with no premise, the hypothesis package is realizable at every horizon, and progress is achievable | `Hydrozoan.Grounding.holds` *(Hydrozoan/Grounding/Proof)* |
+| HZ9 | the delivered sequence — the ledger filtered by first occurrence of a key, the paper's set `H` — holds no key twice, is a prefix across views and horizons, and loses no key, for every key and every per-leader listing | `Hydrozoan.Delivery.holds` *(Hydrozoan/Delivery/Proof)* |
 
 **Optimal-Hydrozoan** (§23):
 
@@ -10567,6 +10568,7 @@ reused.
 | OH6 | the graded rule with the evidence rung is total below an anchor, and a committed run decides every slot beneath it | `OptimalHydrozoan.IndirectLiveness.holds` *(OptimalHydrozoan/IndirectLiveness/Proof)* |
 | OH7 | a synchronised, populated, correct-led run decides everything below it, and fairness places runs past every slot and round | `OptimalHydrozoan.EventualDecision.holds` *(OptimalHydrozoan/EventualDecision/Proof)* |
 | OH8 | the wave-aligned rotation is fair with no premise, the hypothesis package is realizable at every horizon under every schedule by an `OptUniverse`, and progress is achievable by a correct-authored universe | `OptimalHydrozoan.Grounding.holds` *(OptimalHydrozoan/Grounding/Proof)* |
+| OH9 | the delivered sequence holds no key twice, is a prefix across views and horizons, and loses no key, for every key and every per-leader listing | `OptimalHydrozoan.Delivery.holds` *(OptimalHydrozoan/Delivery/Proof)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 

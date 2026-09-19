@@ -92,6 +92,7 @@ Three consequences shape the arc.
 | `lem:opt-thresholds` (`optimal-proof.tex`) | `ThresholdArithmetic/` (OH1) |
 | `lem:opt-direct-decision`, `lem:opt-indirect-decision`, `lem:opt-commit-excludes-direct-skip` | `DirectSafety/` (OH2), `SlotAgreement/` (OH3) |
 | prefix consistency | `PrefixAgreement/` (OH4) |
+| `LinearizeSubDags` with its set `H`; Integrity, Total Order | `Delivery/` (OH9) |
 | the Liveness paragraph | `DirectLiveness/` (OH5), `IndirectLiveness/` (OH6), `EventualDecision/` (OH7), `Grounding/` (OH8) |
 
 Every Hydrozoan name the arc reuses — `q`, `qCert`, `qSlow`, `Correct`,
@@ -238,6 +239,11 @@ non-Byzantine author.
 linearizer abstraction's limit honestly: the paper's *LinearizeSubDags*
 is stateful, the claim covers memoryless per-leader linearizers.
 
+**OH9 — delivery** (`Delivery/`): the stateful filter. Hydrozoan's
+`delivered`, `Integrity` and `Faithful` speak of lists alone and are
+reused as they are; delivered prefix consistency is re-stated over
+`DecidedOpt`. See `hydrozoan.md`, HZ9.
+
 ## 5. Liveness
 
 **OH5 — direct liveness** (`DirectLiveness/`). `CommitLiveness` is
@@ -371,7 +377,8 @@ LeanDagTest/OptimalHydrozoan/  witness models; audited
 
 Results: `ThresholdArithmetic` (OH1), `DirectSafety` (OH2),
 `SlotAgreement` (OH3), `PrefixAgreement` (OH4), `DirectLiveness` (OH5),
-`IndirectLiveness` (OH6), `EventualDecision` (OH7), `Grounding` (OH8).
+`IndirectLiveness` (OH6), `EventualDecision` (OH7), `Grounding` (OH8),
+`Delivery` (OH9).
 
 **Relation to the Hydrozoan arc.** Read-only, by construction (D1):
 `OptUniverse` extends `BlockUniverse`, every rule predicate is applied
@@ -414,6 +421,7 @@ re-homed under `LeanDag.OptimalHydrozoan` and no other change.
 | OL2 | `IndirectLiveness/` (OH6) |
 | OL3 | `EventualDecision/` (OH7); the steady-state universes |
 | OL4 | `Grounding/` (OH8); the quorum-separating and sub-quorum witnesses |
+| O8 | `Delivery/` (OH9); the delivery witness on `OD` |
 | OL5 | this record; report §23; the reference pipeline |
 
 Each phase ran as statements → review → freeze → proofs → witnesses →

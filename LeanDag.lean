@@ -13,6 +13,8 @@ import LeanDag.Common.BlockDag
 import LeanDag.Common.CausalHistory
 import LeanDag.Common.Support
 import LeanDag.Common.Ledger
+import LeanDag.Common.Dedup
+import LeanDag.Common.DedupLemmas
 import LeanDag.Common.Persistence
 import LeanDag.Common.CommonCore
 import LeanDag.Mysticeti.Model.Validity
@@ -278,6 +280,8 @@ import LeanDag.Hydrozoan.SlotAgreement.Statement
 import LeanDag.Hydrozoan.SlotAgreement.Proof
 import LeanDag.Hydrozoan.PrefixAgreement.Statement
 import LeanDag.Hydrozoan.PrefixAgreement.Proof
+import LeanDag.Hydrozoan.Delivery.Statement
+import LeanDag.Hydrozoan.Delivery.Proof
 import LeanDag.Hydrozoan.Helpers.DirectLiveness
 import LeanDag.Hydrozoan.DirectLiveness.Statement
 import LeanDag.Hydrozoan.DirectLiveness.Proof
@@ -309,6 +313,8 @@ import LeanDag.OptimalHydrozoan.Helpers.SlotAgreement
 import LeanDag.OptimalHydrozoan.SlotAgreement.Proof
 import LeanDag.OptimalHydrozoan.PrefixAgreement.Statement
 import LeanDag.OptimalHydrozoan.PrefixAgreement.Proof
+import LeanDag.OptimalHydrozoan.Delivery.Statement
+import LeanDag.OptimalHydrozoan.Delivery.Proof
 import LeanDag.OptimalHydrozoan.Helpers.DirectLiveness
 import LeanDag.OptimalHydrozoan.DirectLiveness.Statement
 import LeanDag.OptimalHydrozoan.DirectLiveness.Proof

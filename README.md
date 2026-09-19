@@ -298,7 +298,10 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   verdicts across views and routes, from six threshold inequalities
   that hold for every fault configuration the class admits — no cap on
   the slack is needed, though the Hydrangea paper states one — and
-  prefix consistency of the committed sequences. Liveness above a
+  prefix consistency of the committed sequences, and of the delivered
+  sequence — the ledger filtered through the linearizer's persistent
+  set, for any deduplication key — with Integrity: no key delivered
+  twice. Liveness above a
   structural rendering of synchrony routes through the slow path, the
   only one a quorum of correct replicas is sure to reach; the fast
   path and the direct skip are stated as performance facts outside the

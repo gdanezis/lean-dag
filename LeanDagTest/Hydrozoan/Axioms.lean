@@ -2,6 +2,7 @@ import LeanDag.Hydrozoan.ThresholdArithmetic.Proof
 import LeanDag.Hydrozoan.DirectSafety.Proof
 import LeanDag.Hydrozoan.SlotAgreement.Proof
 import LeanDag.Hydrozoan.PrefixAgreement.Proof
+import LeanDag.Hydrozoan.Delivery.Proof
 import LeanDag.Hydrozoan.DirectLiveness.Proof
 import LeanDag.Hydrozoan.IndirectLiveness.Proof
 import LeanDag.Hydrozoan.EventualDecision.Proof
@@ -43,6 +44,12 @@ info: 'LeanDag.Hydrozoan.PrefixAgreement.holds' depends on axioms: [propext, Cla
 -/
 #guard_msgs in
 #print axioms LeanDag.Hydrozoan.PrefixAgreement.holds
+
+/--
+info: 'LeanDag.Hydrozoan.Delivery.holds' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms LeanDag.Hydrozoan.Delivery.holds
 
 /--
 info: 'LeanDag.Hydrozoan.DirectLiveness.holds' depends on axioms: [propext, Classical.choice, Quot.sound]

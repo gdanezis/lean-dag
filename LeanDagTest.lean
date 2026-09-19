@@ -78,6 +78,7 @@ import LeanDagTest.Hydrozoan.Decided
 import LeanDagTest.Hydrozoan.DirectSafety
 import LeanDagTest.Hydrozoan.SlotAgreement
 import LeanDagTest.Hydrozoan.PrefixAgreement
+import LeanDagTest.Hydrozoan.Delivery
 import LeanDagTest.Hydrozoan.Liveness
 import LeanDagTest.Hydrozoan.DirectLiveness
 import LeanDagTest.Hydrozoan.IndirectLiveness
@@ -92,6 +93,7 @@ import LeanDagTest.OptimalHydrozoan.Decided
 import LeanDagTest.OptimalHydrozoan.DirectSafety
 import LeanDagTest.OptimalHydrozoan.SlotAgreement
 import LeanDagTest.OptimalHydrozoan.PrefixAgreement
+import LeanDagTest.OptimalHydrozoan.Delivery
 import LeanDagTest.OptimalHydrozoan.DirectLiveness
 import LeanDagTest.OptimalHydrozoan.IndirectLiveness
 import LeanDagTest.OptimalHydrozoan.EventualDecision
