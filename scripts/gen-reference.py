@@ -188,8 +188,15 @@ def cited(root):
     return qualified, bare
 
 
+# Arcs recorded in their own design record only: the report has no chapter
+# for them, so a bare name it cites is never one of theirs.
+UNREPORTED = ("LeanDag.RedSnapper.",)
+
+
 def is_cited(d, qualified, bare):
     """Whether a declaration is one the report names."""
+    if d["module"].startswith(UNREPORTED):
+        return False
     full = d["name"]
     short = full.rsplit(".", 1)[-1]
     if short in bare:

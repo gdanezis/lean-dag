@@ -339,6 +339,39 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   A peer arc importing the Hydrozoan arc read-only, and the second
   developed in `asonnino/mysticeti`.
 
+- **RedSnapper** (`LeanDag/RedSnapper/`): the owned-object fast path of
+  the RedSnapper paper ("Snapper"), at both of its committees, over an
+  uncertified DAG whose consensus is a black-box sequence of committed
+  anchors. Validators publish a *stance* per object version in the
+  blocks they already produce; transaction, skip and unlock
+  certificates are read from the DAG; at `n ≥ 3f + 1` the univalent
+  conflicts are decided from the DAG and the bivalent one at an anchor,
+  while at `n ≥ 5f + 1` a validator revokes an earlier vote on
+  `2f + 1` opposing stances, a common coin coordinates the moves, and a
+  freeze-and-count election at an anchor bounds the resolution. Owned
+  and mixed transactions compete on their owned input; a certified
+  owned one is final on observation, a certified mixed one at a
+  committed anchor. The revocation arithmetic is stated once, protocol-independently, as the
+  seam both protocols consume: the threshold `n + f − C + 1`, tight for
+  `f ≤ C ≤ n`, is *exposed* by every quorum exactly when `n ≥ 5f + 1`.
+  Safety at `3f + 1` consumes only stance monotonicity, verdicts agree
+  across views and routes, and uncontested and contested liveness close
+  under the structural synchrony, at both committees. The `5f + 1` layer's headline is that its
+  safety needs no `5f + 1`: every certificate exclusion closes at
+  `n ≥ 3f + 1`, and the wide committee is consumed exactly where the
+  paper's own seam says — exposure, the frozen set's overlap with a
+  hidden commit, and the coin round's universal movability, each gate
+  refuted by witness at the small committee. The coin is modelled as
+  its output, with the success probability as a cardinality — at least
+  `2f + 1` good targets, fixed measurably before a post-round draw —
+  and the recovery election's min-hash tie-break is a linear-order
+  parameter that provably carries no safety weight. Thirty-four findings
+  for the paper, among them the corrected trichotomy of conflict
+  resolution, the algorithm-versus-lemma-text refutation form, and that
+  the literal `4f + 1` threshold hides an *upper* bound on `n` that
+  parameterising by `n − f` removes — witnessed at `n = 7`. The arc consumes nothing from the
+  core; its record is `docs/red-snapper.md`.
+
 Every definition is exercised on concrete models by `decide` before
 anything is proved from it, and every principal result depends on
 exactly Lean's three standard axioms (`propext`, `Classical.choice`,
@@ -412,7 +445,9 @@ them: the universe and the rule under `Model/`, what it shows in
   count over an interface for the four base rules, `Hydrozoan/` — the
   dual-path rule under hybrid faults, with its own fault model and
   universe, and `OptimalHydrozoan/` — its fast path at Hydrangea's
-  bound, a peer arc importing the first, all under a statement/proof
+  bound, a peer arc importing the first, and `RedSnapper/` — the
+  owned-object fast path at `3f + 1` and `5f + 1`, with its own model
+  of stances over an uncertified DAG, all under a statement/proof
   partition (`Model/`, `<Result>/Statement.lean`,
   `<Result>/Proof.lean`); `Network/` — the composed
   denial-of-service capstones; `Integration/` — how the arcs compose).
@@ -455,6 +490,7 @@ them: the universe and the rule under `Model/`, what it shows in
 | [`docs/barnacle.md`](docs/barnacle.md) | the adaptive leader count: the interface A1–A4, the configuration-sequence model and why it needs no fixpoint, the liveness clause and its margin, the heads descent, the four instantiations, and the findings |
 | [`docs/hydrozoan.md`](docs/hydrozoan.md) | the dual-path rule under hybrid faults: the thresholds and their table, the two-case consistency argument as one statement, the slow path as the guaranteed one, the liveness package and its grounding, and the findings |
 | [`docs/optimal-hydrozoan.md`](docs/optimal-hydrozoan.md) | the fast path at Hydrangea's bound: the validity rule and per-block fast evidence, the seam that consumes the rule once, the skip as a liveness claim and FinWhale's attack on it, and the always-fast parametrisation |
+| [`docs/red-snapper.md`](docs/red-snapper.md) | the owned-object fast path of the Snapper paper at `3f + 1` and `5f + 1`: stances over an uncertified DAG, the revocation arithmetic, certificate exclusion and verdict agreement, the freeze-and-count recovery with owned and mixed candidates, liveness at both committees, and the findings for the paper |
 | [`docs/target-properties.md`](docs/target-properties.md) | the properties: what a rule shows and what it gets, the definitions displayed verbatim, the one-carrier-per-rule discipline, the audits, and the record of the passes that reached them |
 | [`docs/integration.md`](docs/integration.md) | the mechanisms at every rule: the cut and fill cells and the relation they witness, and the standing facts no property states — coverage under the fill, horizon placement, re-genesis, the exposure check, the storage budgets — with the deployment conditions they yield |
 | [`docs/hydrozoan-integration.md`](docs/hydrozoan-integration.md) | Hydrozoan and Optimal-Hydrozoan through the properties: the carriers and supports, the Barnacle instantiations and the committee bound round-robin needs, the schedule-free leader-exclusion clause, the native cut and fill |
@@ -478,7 +514,9 @@ them: the universe and the rule under `Model/`, what it shows in
   liveness through the slow path — and its Optimal variant
   (`LeanDag/OptimalHydrozoan/`,
   [#9](https://github.com/gdanezis/lean-dag/pull/9)), the fast path at
-  Hydrangea's bound.
+  Hydrangea's bound — and the RedSnapper arc (`LeanDag/RedSnapper/`,
+  [#14](https://github.com/gdanezis/lean-dag/pull/14)), the
+  owned-object fast path at `3f + 1` and `5f + 1`.
 
 - [Lefteris Kokoris-Kogias](https://github.com/LefKok) — the resilient
   checkpoint arc (`LeanDag/Hybrid/Checkpoint/`,
