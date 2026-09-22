@@ -2,6 +2,7 @@ import LeanDag.Bluestreak.Liveness
 import LeanDag.Common.Anchored.Band
 import LeanDag.Properties.Optional.SelfParent
 import LeanDag.Properties.Support
+import LeanDag.Properties.Arcs.Headline
 /-!
 # Bluestreak as a carrier
 
@@ -11,13 +12,18 @@ the laws hold at every schedule. What the arc shows: agreement, that a
 commit names the slot's candidate, that a direct commit is a verdict,
 the indirect rule, and a support whose certifier is a claim.
 
+Both headlines follow: safety across any stack, and progress with
+inclusion at the support.
+
 Two of the optional properties are **not** shown, and neither is an
 omission. `Quorate` asks that every block reference a quorum, which is
 what a sparse DAG is designed not to do, so chain quality does not
 apply to it. And the record cells of `Properties/Arcs/Record.lean` need
 the invariant to survive the cut, which it does not: the cut drops the
 blocks a retained claim names, and with them the votes that back it
-(`LeanDagTest/Bluestreak/Model.lean`).
+(`LeanDagTest/Bluestreak/Model.lean`). Referenceability must be read
+bounded — two rounds, a claim's reach — for a pruning validator to
+satisfy it at all; `docs/report.md` §24.9 states what that takes.
 -/
 
 namespace LeanDag
@@ -313,6 +319,23 @@ theorem banded : Banded (bluestreakRule (Validator := Validator) (BlockId := Blo
     (Payload := Payload)) :=
   AnchoredRule.bandedOn (hb := bluestreakBandLaws)
     (AnchoredRule.anchorsOn_of_laws bluestreakLaws) fun _ _ h => h
+
+/-! ## The headlines -/
+
+/-- **Safety, across any stack of mechanisms**: the generic theorem at
+the three properties, which holds of the arc whether or not it collects
+a cell to build a stack with. -/
+theorem safety : Properties.Safe (bluestreakRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload)) :=
+  Properties.safety banded agree commitsCandidate
+
+/-- **Liveness, at the claim support**: progress below a reliable run,
+and every reliable author's block entering the ledger through a slot it
+leads. -/
+theorem liveness : Properties.Support.Lives (R := bluestreakRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload)) bluestreakSupport
+    (bluestreakReliability Validator) :=
+  Properties.Support.liveness commits commitsCandidate selfParent noEquiv
 
 end BluestreakProperties
 

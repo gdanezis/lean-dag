@@ -45,8 +45,8 @@ RULES = [
     ("Hybrid / Orcaella",  ["HybridProperties.hybridRule"], "one carrier per threshold"),
     ("Bluestreak",         ["BluestreakProperties.bluestreakRule"],
                            "no `Quorate`: a sparse block references two blocks, so chain "
-                           "quality does not apply; no record cells, since the cut drops "
-                           "the evidence a retained claim names"),
+                           "quality does not apply; no record cells, since the cut orphans "
+                           "the claims its retained blocks carry"),
     ("FinWhale",           ["FinWhaleProperties.finWhaleRule"],  "band transported one rule at a time (Band.lean)"),
     ("Steelhead",          ["SteelheadProperties.steelheadRule"],
                            "one carrier per wavelength function; the wave is read at the kind"),

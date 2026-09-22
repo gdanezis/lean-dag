@@ -5043,8 +5043,38 @@ blocks a retained claim names along with the votes that back it. The
 deployment reading is a horizon constraint: prune no higher than two
 rounds below the claims the retained blocks carry.
 
-**Measure.** The library and tests stand at 72,992 lines; the arc is
-1,089 lines of library, and the common-layer change across `Anchored.lean`
+**What is left, and why.** Two clauses of the model stand in for block
+data the record does not own, and each is where a mechanism stops.
+
+*The format.* `ValidWrt` drops the receivers' format check, since it
+reads a block's role and a validity predicate cannot see which slot a
+block sits in. `certified_quorate` stands in for it, which makes it an
+assumption: nothing bounds how many blocks a block may reference, so at
+`n = 4`, `f = 1` one extra block referencing an ordinary block certifies
+it while it is sparse and the clause is false — and the copy fill does
+the same thing without any adversary, since the recovering validator's
+first block references its author's last pre-crash block. The repair is
+to give the block its own role: a tag in the block data, validity
+reading *tagged ⇒ quorate* and *untagged ⇒ every reference is the
+author's own or a tagged block*, and the rule reading the tag where a
+validator would have checked it. `certified_quorate` then goes, the
+escape closes, and `selfFill` — a chain of blocks each referencing only
+its predecessor, which a sparse format admits and `copyFill` is the
+wrong recovery for — discharges the fill.
+
+*The claim.* `honest_backed` is irreducibly non-local (it is about the
+claimed block's voters, outside the claimer's cone), and the cut breaks
+it: the retained blocks at the two lowest rounds claim leaders the cut
+dropped. The protocol reading is in `docs/report.md` §24.9 —
+referenceability is stated unbounded and must be read bounded, two
+rounds deep. Carrying that into the model means the record owning the
+claim and the cut blanking what it orphans, which the band must then
+relate: `AgreeBand` compares references strictly above the floor because
+a reference reaches one round, and a claim clause would compare claims
+from two above the floor for the same reason.
+
+**Measure.** The library and tests stand at 73,015 lines; the arc is
+1,112 lines of library, and the common-layer change across `Anchored.lean`
 and `Anchored/Band.lean` is `+62 −34`.
 
 ### 11.5 Next steps, in order
