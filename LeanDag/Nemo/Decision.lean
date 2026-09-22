@@ -106,9 +106,9 @@ theorem nemoLaws : (nemoAnchored Validator BlockId Payload).Laws where
   commit_skip := fun _ _ _ h => h.elim
   commit_link := fun _ _ h hA helig => ⟨0, Nat.one_pos,
     Nemo.certifiedIn_of_directCommitIn_at_anchor (show Nemo.DirectCommitIn _ _ _ _ from h) hA helig⟩
-  commit_link_unique := fun _ hL₁ hL₂ _ _ _ _ _ _ _ => isLeaderBlock_unique_of_honest (Finset.mem_univ _) hL₁ hL₂
-  skip_link := fun _ h _ _ => h.elim
-  link_unique := fun _ hL₁ hL₂ _ _ _ _ _ _ _ _ => isLeaderBlock_unique_of_honest (Finset.mem_univ _) hL₁ hL₂
+  commit_link_unique := fun _ hL₁ hL₂ _ _ _ _ _ _ _ _ => isLeaderBlock_unique_of_honest (Finset.mem_univ _) hL₁ hL₂
+  skip_link := fun _ h _ _ _ => h.elim
+  link_unique := fun _ hL₁ hL₂ _ _ _ _ _ _ _ _ _ => isLeaderBlock_unique_of_honest (Finset.mem_univ _) hL₁ hL₂
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
   skip_mono := fun _ _ h => h
   skip_congr := fun _ _ _ _ h => h

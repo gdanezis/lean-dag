@@ -46,7 +46,7 @@ theorem hydrozoanLaws : (hydrozoanAnchored Replica BlockId).Laws where
     · exact ⟨1, Nat.one_lt_two, weakLinked_of_fastCommitInView_at_anchor h hA helig⟩
     · exact ⟨0, Nat.zero_lt_two, certifiedIn_of_slowCommitInView_at_anchor h hA helig⟩
   commit_link_unique := by
-    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h hA helig hi hemp hlink _
+    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h hA _ helig hi hemp hlink _
     have hc : (U.block L₁).creator = (U.block L₂).creator := by rw [hL₁.2.2, hL₂.2.2]
     rcases i with _ | _ | i
     · rcases h with h | h
@@ -64,14 +64,14 @@ theorem hydrozoanLaws : (hydrozoanAnchored Replica BlockId).Laws where
           (certifiedIn_of_slowCommitInView_at_anchor h hA helig)).elim
     · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega)
   skip_link := by
-    intro S U V k i L A _ hskip hL hi
+    intro S U V k i L A _ hskip hL hi _
     have hsk := skippedLeader_of_skippedLeaderInView hskip
     rcases i with _ | _ | i
     · exact not_certifiedIn_of_skipped hL hsk
     · exact not_weakLinked_of_skipped hL hsk
     · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega)
   link_unique := by
-    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ hi _ hl₁ hl₂ hm₁ hm₂
+    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ hi _ hl₁ hl₂ hm₁ hm₂
     rcases i with _ | _ | i
     · exact eq_of_certificates_nonempty (by rw [hL₁.2.2, hL₂.2.2])
         (certificates_nonempty_of_certifiedIn hl₁) (certificates_nonempty_of_certifiedIn hl₂)

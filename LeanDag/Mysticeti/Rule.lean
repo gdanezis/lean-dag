@@ -340,14 +340,14 @@ theorem coreLaws : (coreAnchored Validator BlockId Payload).Laws where
   commit_link := fun _ _ h hA helig => ⟨0, Nat.one_pos,
     certifiedIn_of_directCommitIn h hA.1 hA.2.1 helig⟩
   commit_link_unique := by
-    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ hlink _
+    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ _ hlink _
     exact eq_of_hasCertificate hL₁ hL₂
       (certificates_nonempty_of_directCommit (directCommit_of_directCommitIn h))
       (certificates_nonempty_of_certifiedIn hlink)
-  skip_link := fun _ hskip hL _ =>
+  skip_link := fun _ hskip hL _ _ =>
     not_certifiedIn_of_directSkipIn (directSkipIn_of_directSkipSlotIn hskip hL)
   link_unique := by
-    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ hl₁ hl₂ _ _
+    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ _ hl₁ hl₂ _ _
     exact eq_of_hasCertificate hL₁ hL₂ (certificates_nonempty_of_certifiedIn hl₁)
       (certificates_nonempty_of_certifiedIn hl₂)
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h

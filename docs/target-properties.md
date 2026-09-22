@@ -4883,6 +4883,67 @@ configuration `2`, which outputs it, and from configuration `0`, which
 decides it above its boundary and does not output it. A Byzantine
 validator proposes a forked checkpoint, and the fork has no certificate.
 
+### 11.44 Bluestreak, and what a committed anchor is
+
+Bluestreak (report §24) is the core's rule with the certificate replaced
+by a *claim*: a round-`(r + 2)` block names the leader block it saw
+certified, and the `n − f` votes that back the claim need not lie in
+the claiming block's causal history. Three things did not fit and were
+settled as follows; the fourth is a change to the common layer.
+
+**The claim is a map.** `Block` has no claim field and `Payload` is
+opaque; `Bluestreak.ClaimMap` fixes `claim : BlockId → Option BlockId`
+once per development, as `Slots` fixes the schedule. Views share the
+map as they share `U.block`.
+
+**Validity is role-dependent and outside the quorate family.** A
+non-leader block carries at most two references, so
+`Bluestreak.ValidWrt` is `ValidAt 0 (distinct.and selfParent)` and not
+`Quorate`; the leader's quorum depends on the schedule, which a
+`Validity` does not read, and sits in the laws' invariant
+`Disciplined` beside the trace of the referenceability discipline —
+every claim an honest block reaches is certified. The paper's
+references to blocks of earlier rounds are not modelled: a reference
+sits one round below, so the universe stays a `CausalStructure` and
+`Mechanised`, at the cost of the round a payload enters, not whether
+it does. `reaches_of_honest_support` — the quorum descent every other
+rule's visibility law uses — is unavailable with no quorum below the
+anchor; the self-chain descent `exists_reaches_self` (self-parent and
+non-equivocation) replaces it.
+
+**The laws quantified over anchors that are never committed.**
+`skip_link`, `link_unique` and `commit_link_unique` held of any leader
+block of an eligible slot. A Byzantine leader block whose history holds
+an unbacked claim links the claimed candidate while a quorum omits it
+(`LeanDagTest/Bluestreak/Model.lean`, `U2`), so under a claim-based
+link the laws were false and `decided_unique` true, the paper's proof
+anchoring on committed leaders only (its B.2–B.4). `AnchoredRule` now
+has `Anchor : U → BlockId → Prop`, `True` by default; `Laws` has
+`anchor_commit` and `anchor_link`, `trivial` at the default, and the
+three laws take `R.Anchor U A`; `anchor_of_decided` is Corollary B.4
+once for every rule, and `decided_unique` supplies it at its three
+uses. The nine instances changed by a binder in each of the three laws. Bluestreak's
+`Anchor` is `Certified`.
+
+**The skip is per-candidate.** The paper's slot skip is a quorum of
+voting-round blocks and, for each proposal held, a quorum omitting it
+— the quantifier form §3.5 of the report sets aside, sound here
+because of the count, and equal to the form quantified over the
+universe's candidates. It is strictly stronger than the core's
+`DirectSkipSlotIn` (`U3`: two twins, three omit each, two omit both),
+and safe by the same intersection per candidate.
+
+**What is not there.** Liveness under the pull pacemaker, which is a
+reactive builder with a claim-on-quorum clause at `r + 2`, and whose
+synchrony condition must be stated on what a builder held rather than
+on what its block references; the derivation of `Disciplined` from the
+build discipline in the pacing layer; and the properties, blocked by
+the schedule dependence of `leader_quorum`.
+
+**Measure.** The library and tests stand at 71,700 lines; the arc is
+341 lines of library and 195 of witnesses, and the common-layer change
+is `+48 −15`.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition
