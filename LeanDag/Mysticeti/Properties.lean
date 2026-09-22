@@ -802,8 +802,8 @@ theorem safety : Properties.Safe (mysticetiRule (Validator := Validator) (BlockI
 
 /-- **Liveness**, at the core's support: certification is the only
 antecedent, so the timed and the reactive execution share it. -/
-theorem liveness : Properties.Support.Lives (coreSupport (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload)) (coreReliability Validator) :=
+theorem liveness : Properties.Support.Lives (R := mysticetiRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload)) coreSupport (coreReliability Validator) :=
   Properties.Support.liveness coreSupport_commits commitsCandidate selfParent noEquiv
 
 end MysticetiProperties
