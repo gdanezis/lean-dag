@@ -1,4 +1,4 @@
-import LeanDag.Bluestreak.Safety
+import LeanDag.Bluestreak.Liveness
 
 /-!
 # Bluestreak on concrete sparse DAGs
@@ -93,6 +93,11 @@ theorem U1_slot0 : Decided U1 (View.full U1) 0 (some 0) :=
   AnchoredRule.Decided.indirectCommit_single rfl (fun _ _ h => h) (by omega) (by decide) U1_slot3
     (fun m _ _ h => absurd (show 0 + 2 < m from h) (by omega))
     (by decide) ⟨8, by decide, Reaches.single (by decide)⟩
+
+/-- The claims a direct commit counts: slot 1's candidate is claimed by
+every block of `{0, 1, 3}` at round 3, slot 0's is not at round 2. -/
+example : ClaimsAt U1 {0, 1, 3} 1 5 := by decide
+example : ¬ ClaimsAt U1 {0, 1, 3} 0 0 := by decide
 
 /-- Agreement at the witness: whatever another view derives for slot 0, it
 is `some 0`. -/

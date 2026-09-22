@@ -24,14 +24,18 @@ namespace LeanDag
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable [F : Faults Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
-variable {U : BlockUniverse Validator BlockId Payload}
 variable [S : Slots Validator]
 variable {T : Finset Validator} {D N R : ℕ} {k : ℕ} {L : BlockId}
 
-/-- The reactive schedule and network layer, shared by both protocols:
-`PaceCore` with `deadline`, `built_lt`, `vote_or_wait` and `prompt_vote`
-in place of `ViewPace`'s full-timeout floor. -/
-structure ReactivePace (U : BlockUniverse Validator BlockId Payload)
+section Core
+
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
+variable {U : BlockRecord Validator BlockId Payload P honest}
+
+/-- **The reactive timing**, at any record: `PaceCore` with the ceiling
+and the round-advance clause in place of `ViewPace`'s full-timeout
+floor. What a reactive discipline's wait clauses are stated over. -/
+structure ReactiveCore (U : BlockRecord Validator BlockId Payload P honest)
     (T : Finset Validator) (N : ℕ) extends PaceCore U T N where
   /-- Time advances with rounds — the only lower bound a reactive
   schedule keeps, over the rounds `v` reached. -/
@@ -39,30 +43,10 @@ structure ReactivePace (U : BlockUniverse Validator BlockId Payload)
   /-- **The reactive ceiling.** A validator never waits past the
   timeout; it may build any time before it. -/
   deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
-  /-- **The leader wait.** At the round above a reliable leader, any
-  `T`-authored block either votes (the reactive exit), or its builder
-  waited the full timeout and votes for any leader block it holds (the
-  fallback). -/
-  vote_or_wait : ∀ v ∈ T, ∀ k : ℕ, S.slotRound k + 1 ≤ N → S.leader k ∈ T →
-    ∀ L, IsLeaderBlock U k L →
-    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + 1 →
-    L ∈ (U.block c).refs ∨
-      (built v (S.slotRound k) + timeout (S.slotRound k)
-          ≤ built v (S.slotRound k + 1) ∧
-        (L ∈ holds v (built v (S.slotRound k + 1)) → L ∈ (U.block c).refs))
-  /-- **The reactive exit is prompt.** Once a validator past its round
-  entry holds the leader and every reliable round-`r` block, it builds
-  within `proc`. Consumed only by the fast-path results. -/
-  prompt_vote : ∀ v ∈ T, ∀ k : ℕ, S.slotRound k + 1 ≤ N → S.leader k ∈ T →
-    ∀ L, IsLeaderBlock U k L → ∀ t, built v (S.slotRound k) ≤ t →
-    L ∈ holds v t →
-    (∀ b ∈ U.ids, (U.block b).creator ∈ T → (U.block b).round = S.slotRound k →
-      b ∈ holds v t) →
-    built v (S.slotRound k + 1) ≤ t + proc
 
-namespace ReactivePace
+namespace ReactiveCore
 
-variable (rc : ReactivePace U T N)
+variable (rc : ReactiveCore U T N)
 
 omit [DecidableEq BlockId] in
 /-- Rounds advance real time, over the rounds a validator reached. -/
@@ -94,6 +78,41 @@ theorem driftOn_of_catchup
     (hcard : quorumCard Validator ≤ T.card) (hgst : rc.gst ≤ R) :
     DriftOn rc.built T R (rc.delay + rc.proc) N :=
   rc.toPaceCore.driftOn_of_catchup hcard hgst (fun u hu => rc.le_built hu)
+
+end ReactiveCore
+
+end Core
+
+variable {U : BlockUniverse Validator BlockId Payload}
+
+/-- The reactive schedule and network layer, shared by both protocols:
+`ReactiveCore` with `vote_or_wait` and `prompt_vote`. -/
+structure ReactivePace (U : BlockUniverse Validator BlockId Payload)
+    (T : Finset Validator) (N : ℕ) extends ReactiveCore U T N where
+  /-- **The leader wait.** At the round above a reliable leader, any
+  `T`-authored block either votes (the reactive exit), or its builder
+  waited the full timeout and votes for any leader block it holds (the
+  fallback). -/
+  vote_or_wait : ∀ v ∈ T, ∀ k : ℕ, S.slotRound k + 1 ≤ N → S.leader k ∈ T →
+    ∀ L, IsLeaderBlock U k L →
+    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + 1 →
+    L ∈ (U.block c).refs ∨
+      (built v (S.slotRound k) + timeout (S.slotRound k)
+          ≤ built v (S.slotRound k + 1) ∧
+        (L ∈ holds v (built v (S.slotRound k + 1)) → L ∈ (U.block c).refs))
+  /-- **The reactive exit is prompt.** Once a validator past its round
+  entry holds the leader and every reliable round-`r` block, it builds
+  within `proc`. Consumed only by the fast-path results. -/
+  prompt_vote : ∀ v ∈ T, ∀ k : ℕ, S.slotRound k + 1 ≤ N → S.leader k ∈ T →
+    ∀ L, IsLeaderBlock U k L → ∀ t, built v (S.slotRound k) ≤ t →
+    L ∈ holds v t →
+    (∀ b ∈ U.ids, (U.block b).creator ∈ T → (U.block b).round = S.slotRound k →
+      b ∈ holds v t) →
+    built v (S.slotRound k + 1) ≤ t + proc
+
+namespace ReactivePace
+
+variable (rc : ReactivePace U T N)
 
 /-- **Every reliable vote block votes.** Past GST, with the timeout
 clearing `2Δ + proc`, every `T`-authored block at the round above a

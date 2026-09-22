@@ -4944,6 +4944,63 @@ the schedule dependence of `leader_quorum`.
 341 lines of library and 195 of witnesses, and the common-layer change
 is `+48 −15`.
 
+### 11.45 Bluestreak's liveness: claims, and the pacemaker as the discipline
+
+The second step of the Bluestreak arc (report §24.6–24.8). Three things
+were settled.
+
+**The structural condition is on claims.** `SynchronisedOn` — every
+`T` block references every `T` block below — is false of a sparse DAG
+by construction, and the rule does not count references. `ClaimsAt U T
+r L` (every `T` block at `r + 2` claims `L`) and `ClaimsOn U T R` are
+what `decided_of_leader_mem` consumes, with production as before. The
+descent is the relation's `decided_below_of_run` with no tie at three
+consecutive `T`-led slots, which `spansEligible_of_identity` gives at
+wave two; `all_decided_below_of_fairRun` composes it with
+`Slots.exists_run_past`.
+
+**The trunk is now generic.** `PaceCore` was stated at
+`BlockUniverse` by the accident of its file's variables; its fields and
+its theorems (`reached`, `populatedOn`, `viewAt`, `holds_roundBlocks`,
+the drift collapse) read only a block record, and now take one, with
+`[P.Mechanised]` where `history` is used. `decided_local_of_certifiesAt`
+stays the core's. `ReactivePace` is split: `ReactiveCore` (the ceiling,
+`built_lt`, and `le_built`, `slotRound_le_top`, `driftOn_of_catchup`)
+at any record, and `ReactivePace` the core's two wait clauses over it.
+FinWhale's witness reaches the trunk through one more projection;
+nothing else changed.
+
+**The pacemaker is the discipline.** `ReactiveB` extends `ReactiveCore`
+with the leader quorum, two discipline clauses on every correct
+validator — references only what was `Referenceable` from its holdings
+at the build, claims only what its holdings `BackedIn` — and two wait
+clauses with "referenceable" for the core's "held". The discipline
+clauses derive `Disciplined` outright (`ReactiveB.disciplined`), so on an
+execution the safety laws need no invariant; and referenceability
+travels (`referenceable_of_converges`): a reliable block is referenceable
+at its author's build and referenceability is monotone in holdings, so
+convergence carries it. The paper's Lemma C.3 (timely referenceability)
+is this with `converges` in place of pull recovery. `votes` and
+`claimsAt` are the core's arithmetic at `2·delay + proc`, one round
+further; `decided_local` is V18's shape.
+
+**The witness.** `Usparse N` is the sparse DAG at every horizon on the
+round-robin layout, with `spReactive N` a `ReactiveB` at the core's
+constants (spacing `6`, timeout `9`), every wait clause on its exit, and
+the discipline by `backedIn_of_reaches_sp`: a claim in a held block's
+cone names the leader two rounds below the claimer, whose round above
+has arrived in full. `usparse_disciplined`, `sp_decided_local` and
+`sp_slot0` (the run at slots `1, 2, 3` deciding the Byzantine-led slot
+`0`) instantiate the three results.
+
+**Not modelled.** Pull recovery (advance messages, the self-contained
+response), and Lemma C.8's payload validity, which under one-round
+references is a leader referencing the round below.
+
+**Measure.** The library and tests stand at 72,557 lines; the arc is
+734 lines of library and 631 of witnesses; the trunk change is
+`+80 −54`.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

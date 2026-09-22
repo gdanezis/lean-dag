@@ -456,8 +456,12 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   more of the anchored relation — what a committed anchor is known to
   be — because the rule's own laws fail of an uncommitted anchor, on
   data; and its per-candidate skip is strictly stronger than the core's
-  slot blame, on data. Safety only: liveness under the pull pacemaker
-  is the next step.
+  slot blame, on data. Liveness is stated on claims, not references,
+  and the pull pacemaker is a reactive schedule whose referencing
+  discipline is exactly the invariant safety assumes
+  (`Bluestreak.ReactiveB.disciplined`): every reliable validator decides
+  a reliable-led slot on its own view (`Bluestreak.ReactiveB.decided_local`),
+  and a sparse DAG grown to every horizon witnesses the schedule.
 
 Every definition is exercised on concrete models by `decide` before
 anything is proved from it, and every principal result depends on
