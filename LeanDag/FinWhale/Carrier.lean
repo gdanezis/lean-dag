@@ -357,8 +357,9 @@ theorem safety : Properties.Safe (finWhaleRule (Validator := Validator) (BlockId
     (Payload := Payload)) :=
   Properties.safety banded agree commitsCandidate
 
-theorem progress : Properties.Support.Progresses (fwSupport (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload)) (coreReliability Validator) :=
+theorem progress : Properties.Support.Progresses
+    (R := finWhaleRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
+    fwSupport (coreReliability Validator) :=
   Properties.Support.progress fwSupport_commits
 
 end FinWhaleProperties

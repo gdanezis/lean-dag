@@ -23807,8 +23807,9 @@ theorem safety : Properties.Safe (finWhaleRule (Validator := Validator) (BlockId
 *theorem, `FinWhale.Carrier.lean`*
 
 ```lean
-theorem progress : Properties.Support.Progresses (fwSupport (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload)) (coreReliability Validator)
+theorem progress : Properties.Support.Progresses
+    (R := finWhaleRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
+    fwSupport (coreReliability Validator)
 ```
 
 #### `exists_least`
@@ -24226,7 +24227,7 @@ theorem safety : LeanDag.Properties.Safe (rule (Replica := Replica) (BlockId := 
 
 ```lean
 theorem progress : LeanDag.Properties.Support.Progresses
-    (hzSupport (Replica := Replica) (BlockId := BlockId)) (hzReliability Replica)
+    (R := rule (Replica := Replica) (BlockId := BlockId)) hzSupport (hzReliability Replica)
 ```
 
 #### `holds`
@@ -24713,7 +24714,8 @@ theorem safety :
 
 ```lean
 theorem progress : Properties.Support.Progresses
-    (optSupport (Replica := Replica) (BlockId := BlockId)) (LeanDag.Hydrozoan.hzReliability Replica)
+    (R := optimalRule (Replica := Replica) (BlockId := BlockId)) optSupport
+    (LeanDag.Hydrozoan.hzReliability Replica)
 ```
 
 #### `holds`

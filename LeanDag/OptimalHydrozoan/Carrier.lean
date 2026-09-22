@@ -288,7 +288,8 @@ theorem safety :
   Properties.safety banded agree commitsCandidate
 
 theorem progress : Properties.Support.Progresses
-    (optSupport (Replica := Replica) (BlockId := BlockId)) (LeanDag.Hydrozoan.hzReliability Replica) :=
+    (R := optimalRule (Replica := Replica) (BlockId := BlockId)) optSupport
+    (LeanDag.Hydrozoan.hzReliability Replica) :=
   Properties.Support.progress optSupport_commits
 
 end OptimalHydrozoanProperties
