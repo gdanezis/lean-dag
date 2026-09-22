@@ -5001,6 +5001,52 @@ references is a leader referencing the round below.
 734 lines of library and 631 of witnesses; the trunk change is
 `+80 −54`.
 
+### 11.46 Bluestreak's carrier: what safety reads of the block format
+
+The third step of the Bluestreak arc (report §24.9). The obstacle was
+`Disciplined.leader_quorum`, a clause quantified over the *slots* of a
+schedule, where a carrier's `Agree` quantifies over every schedule the
+rule may be read under. Strengthening it to every block is false of a
+sparse DAG. What the safety proof actually consumes is the quorum of
+the block it anchors on, and an anchor is certified, so the clause
+became `certified_quorate : ∀ A ∈ U.ids, Certified U A → Quorate U A` —
+schedule-free, satisfied by the protocol because a non-leader block is
+referenced by at most its own successor and the next leader block. With
+that, `Disciplined` reads the record alone, `toDagRuleOn Disciplined` is
+a carrier, and `agreeOn` applies.
+
+**The band needed the same key.** `BandLaws.link_novel` says a
+candidate the band did not carry is linked from no old anchor. For
+every other rule the link is a *reference*, and an old block's
+references are old. Bluestreak's link is a *name*, so an old block may
+claim a block only the wider universe holds. The anchor rules it out:
+`Anchor U A` is now `Certified U A ∧ Backed U A` — `Backed` being "every
+claim in `A`'s cone is certified", which `backed_of_certified` derives
+from the invariant — and a certified candidate has a quorum of voters,
+which are old blocks referencing it. So `link_novel` takes
+`R.Anchor U A`, and `banded_aux` reads it through a new
+`AnchoredRule.AnchorsOn I`: on the records `I` admits, a committed block
+is an anchor. `anchorsOn_of_laws` gives it from a rule's laws; the eight
+existing rules pass `fun _ _ => trivial`, with no laws and no invariant,
+so their `banded` gains one argument and no proof. `commit_link` took
+the anchor too, which it can, since `decided_unique` applies it only at
+a committed anchor.
+
+**What the arc collects.** All five required properties (`Banded`,
+`Agree`, `CommitsCandidate`, `Indirect`, `Support`), `CommitsDirect`,
+`SelfParent`, `NoEquiv`, and the four derived. Not `Quorate` — a sparse
+block references two blocks, so chain quality does not apply and the
+arc claims none. Not the record cells: `Invariant.Mechanised` asks the
+invariant to survive the cut, and it does not, on data
+(`¬ Disciplined (BlockRecord.chop U1 2)`), because the cut drops the
+blocks a retained claim names along with the votes that back it. The
+deployment reading is a horizon constraint: prune no higher than two
+rounds below the claims the retained blocks carry.
+
+**Measure.** The library and tests stand at 72,992 lines; the arc is
+1,089 lines of library, and the common-layer change across `Anchored.lean`
+and `Anchored/Band.lean` is `+62 −34`.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

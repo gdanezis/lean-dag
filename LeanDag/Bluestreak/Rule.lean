@@ -13,7 +13,9 @@ votes it carries. The claim's justification lies outside the claiming
 block's causal history, so an honest validator builds only on
 *referenceable* blocks, those whose every inherited claim it can prove
 from its own view; `Disciplined` is the trace of that discipline on the
-record, and `Certified` is what a committed anchor is known to be.
+record, and `Certified` is what a committed anchor is known to be. Both
+clauses of `Disciplined` read the record alone, which is what lets the
+arc meet the properties of `Properties/`.
 -/
 
 namespace LeanDag
@@ -34,7 +36,8 @@ variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
 
 /-- Bluestreak's validity: references one round below with distinct
 creators, and a self-parent. No quorum, since a non-leader block carries
-at most two references; the leader's quorum is `Disciplined.leader_quorum`. -/
+at most two references; what safety asks of a leader block's quorum is
+`Disciplined.certified_quorate`. -/
 abbrev ValidWrt : Validity Validator BlockId Payload :=
   ValidAt 0 (Clause.distinct.and Clause.selfParent)
 
@@ -57,6 +60,14 @@ def Certified (U : Universe Validator BlockId Payload) (L : BlockId) : Prop :=
   quorumCard Validator ≤ (supporters U L ((U.block L).round + 1)).card
 
 instance (L : BlockId) : Decidable (Certified U L) := inferInstanceAs (Decidable (_ ≤ _))
+
+/-- `L` is quorate: a non-genesis `L` references `n − f` distinct
+creators. What a receiver checks of a leader block, read at one block
+rather than at a slot. -/
+def Quorate (U : Universe Validator BlockId Payload) (L : BlockId) : Prop :=
+  0 < (U.block L).round → quorumCard Validator ≤ (creators U.block (U.block L)).card
+
+instance (L : BlockId) : Decidable (Quorate U L) := inferInstanceAs (Decidable (_ → _ ≤ _))
 
 /-- `B` claims `L` certified: by its claim field, or by carrying `n − f`
 votes for `L` among its references. -/
@@ -86,6 +97,11 @@ abbrev DirectSkipIn [S : Slots Validator] (U : Universe Validator BlockId Payloa
     ∀ L ∈ leaderBlocksAt U k,
       HoldsAtLeast U V (quorumCard Validator) (omissionsOf U L (S.slotRound k + 1))
 
+/-- `A`'s cone carries only backed claims: what an honest validator
+checks before building on `A`, and what a certified block satisfies. -/
+def Backed [ClaimMap BlockId] (U : Universe Validator BlockId Payload) (A : BlockId) : Prop :=
+  ∀ X, Reaches U A X → ∀ L, claim X = some L → Certified U L
+
 /-- The indirect link: a claim for `L` lies in the anchor's causal history. -/
 abbrev ClaimedIn [ClaimMap BlockId] (U : Universe Validator BlockId Payload) (A L : BlockId) :
     Prop :=
@@ -93,13 +109,15 @@ abbrev ClaimedIn [ClaimMap BlockId] (U : Universe Validator BlockId Payload) (A 
 
 /-! ## The discipline -/
 
-/-- **What a Bluestreak universe owes beyond its record**: every leader
-block references a quorum, and every claim an honest block inherits is
-certified — the honest validators build on referenceable blocks only. -/
-structure Disciplined [S : Slots Validator] [ClaimMap BlockId]
-    (U : Universe Validator BlockId Payload) : Prop where
-  leader_quorum : ∀ k L, IsLeaderBlock U k L → 0 < (U.block L).round →
-    quorumCard Validator ≤ (creators U.block (U.block L)).card
+/-- **What a Bluestreak universe owes beyond its record**: a certified
+block is quorate — what the receivers' format check on leader blocks
+leaves of itself where safety reads it — and every claim an honest
+block inherits, for a candidate the universe holds, is certified: the
+honest validators build on referenceable blocks only. Both clauses read
+the record alone, so a universe is disciplined or not with no schedule
+in sight. -/
+structure Disciplined [ClaimMap BlockId] (U : Universe Validator BlockId Payload) : Prop where
+  certified_quorate : ∀ A ∈ U.ids, Certified U A → Quorate U A
   honest_backed : ∀ B ∈ U.ids, (U.block B).creator ∈ (Correct : Finset Validator) →
     ∀ X, Reaches U B X → ∀ L, claim X = some L → Certified U L
 
@@ -107,7 +125,8 @@ structure Disciplined [S : Slots Validator] [ClaimMap BlockId]
 
 /-- **Bluestreak as an anchored rule**: wave two, commit by claims, skip by
 per-candidate omission, one rung — a claim in the anchor's cone — with no
-tie, and certification as what an anchor is. -/
+tie, and an anchor a certified block whose cone carries only backed
+claims. -/
 def bluestreakAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
     [DecidableEq Validator] [DecidableEq BlockId] [Faults Validator] [ClaimMap BlockId] :
     AnchoredRule Validator BlockId Payload ValidWrt (Correct : Finset Validator) where
@@ -118,7 +137,7 @@ def bluestreakAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
   rungs := 1
   Link := fun _ U A L _ _ => ClaimedIn U A L
   tie := fun _ _ _ => False
-  Anchor := Certified
+  Anchor := fun U A => Certified U A ∧ Backed U A
 
 variable [ClaimMap BlockId]
 

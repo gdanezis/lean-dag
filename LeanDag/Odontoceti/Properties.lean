@@ -78,7 +78,7 @@ theorem odontocetiBandLaws :
     rw [AnchoredRule.coneSupporters_band h hA hAlo hAhi (n := S.slotRound k + 1) (by omega) (by omega)
       (by omega)]
   link_novel := by
-    intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ _ hlo hhi _ _ hL ht
+    intro S S' U U' lo hi g g' A L k k' i h hA _ hAlo hAhi hkk _ _ hlo hhi _ _ hL ht
     simp only [Odontoceti.odontocetiAnchored_waveAt] at hhi
     change Odontoceti.ThickLink U' A L (S'.slotRound k') at ht
     unfold Odontoceti.ThickLink coneLink at ht
@@ -90,7 +90,7 @@ theorem odontocetiBandLaws :
 /-- **Odontoceti is banded**: the relation's band at its laws. -/
 theorem banded : Banded
     (odontocetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) :=
-  AnchoredRule.banded odontocetiBandLaws
+  AnchoredRule.banded odontocetiBandLaws fun _ _ => trivial
 
 /-- **Odontoceti skips an unsupported slot from a correct quorum.**
 

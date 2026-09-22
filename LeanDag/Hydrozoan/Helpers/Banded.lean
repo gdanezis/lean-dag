@@ -196,7 +196,7 @@ theorem hydrozoanBandLaws : (hydrozoanAnchored Replica BlockId).BandLaws where
         fun h' => weakLinked_bnd h hA hAlo hAhi hkk (by omega) (by omega) h'⟩
     · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega)
   link_novel := by
-    intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ _ hlo hhi hi _ hLo
+    intro S S' U U' lo hi g g' A L k k' i h hA _ hAlo hAhi hkk _ _ hlo hhi hi _ hLo
     simp only [hydrozoanAnchored_waveAt] at hhi
     rcases i with _ | _ | i
     · exact AnchoredRule.not_linkedVia_certificatesAt_band_novel h hA hAlo hAhi
@@ -208,7 +208,7 @@ theorem hydrozoanBandLaws : (hydrozoanAnchored Replica BlockId).BandLaws where
 omit S in
 /-- **Hydrozoan reads a band**: the relation's band at its laws. -/
 theorem banded : Banded (rule (Replica := Replica) (BlockId := BlockId)) :=
-  AnchoredRule.banded hydrozoanBandLaws
+  AnchoredRule.banded hydrozoanBandLaws fun _ _ => trivial
 
 end Laws
 

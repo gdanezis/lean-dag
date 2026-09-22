@@ -173,7 +173,7 @@ theorem hybridLaws {k : ℕ} (hk : Admissible Validator k) :
   commit_unique := fun hne hL₁ hL₂ h₁ h₂ => eq_of_directCommitIn hne hL₁ hL₂ h₁ h₂
   commit_skip := fun hne hL h hskip =>
     not_directSkipIn_of_directCommitIn hne h (directSkipIn_of_directSkipSlotIn hskip hL)
-  commit_link := fun hne _ h hA helig => ⟨0, Nat.one_pos,
+  commit_link := fun hne _ h hA _ helig => ⟨0, Nat.one_pos,
     thickLink_of_directCommitIn hne hk.2 h hA.1 (by
       have := (hybridAnchored Validator BlockId Payload k).anchor_round_le hA helig
       simp only [hybridAnchored_waveAt] at this; omega)⟩

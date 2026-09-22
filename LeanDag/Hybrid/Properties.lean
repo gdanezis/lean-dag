@@ -58,7 +58,7 @@ theorem hybridBandLaws {kt : ℕ} (hpos : 0 < kt) :
     rw [AnchoredRule.coneSupporters_band h hA hAlo hAhi (n := S.slotRound k + 1) (by omega) (by omega)
       (by omega)]
   link_novel := by
-    intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ _ hlo hhi _ _ hL ht
+    intro S S' U U' lo hi g g' A L k k' i h hA _ hAlo hAhi hkk _ _ hlo hhi _ _ hL ht
     simp only [Hybrid.hybridAnchored_waveAt] at hhi
     change Hybrid.ThickLink kt U' A L (S'.slotRound k') at ht
     unfold Hybrid.ThickLink coneLink at ht
@@ -71,7 +71,8 @@ under `HonestNoEquiv`. -/
 theorem banded {kt : ℕ} (hpos : 0 < kt) :
     Banded (hybridRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) kt) :=
-  AnchoredRule.bandedOn (hybridBandLaws hpos)
+  AnchoredRule.bandedOn (hybridBandLaws hpos) (J := fun _ _ => True) (fun _ _ => trivial)
+    fun _ _ _ => trivial
 
 /-! ## The two liveness properties, and the skip -/
 

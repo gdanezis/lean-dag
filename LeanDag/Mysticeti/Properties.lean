@@ -337,7 +337,7 @@ theorem coreBandLaws : (coreAnchored Validator BlockId Payload).BandLaws where
       (by simp only [coreAnchored_waveAt] at hhi; omega)
       (AnchoredRule.isVote_band_at h (by omega) (by simp only [coreAnchored_waveAt] at hhi; omega))
   link_novel := by
-    intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ _ hlo hhi _ _ hL
+    intro S S' U U' lo hi g g' A L k k' i h hA _ hAlo hAhi hkk _ _ hlo hhi _ _ hL
     simp only [coreAnchored_waveAt] at hhi
     exact AnchoredRule.not_linkedVia_certificatesAt_band_novel h hA hAlo hAhi
       (n := S.slotRound k + 2) (by omega) (by omega) (by omega)
@@ -346,7 +346,7 @@ theorem coreBandLaws : (coreAnchored Validator BlockId Payload).BandLaws where
 /-- **The core reads a band.** -/
 theorem banded : Banded
     (mysticetiRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) :=
-  AnchoredRule.banded coreBandLaws
+  AnchoredRule.banded coreBandLaws fun _ _ => trivial
 
 /-- The carrier's coverage predicate is the core's, on the nose. -/
 theorem coversUpto_eq {U : BlockUniverse Validator BlockId Payload}

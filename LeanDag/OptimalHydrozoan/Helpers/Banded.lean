@@ -373,7 +373,7 @@ theorem optimalBandLaws : (optimalAnchored Replica BlockId).BandLaws where
         fun h' => evidenceLinked_bnd h hkk hlk (by omega) (by omega) hA hAlo hAhi h'⟩
     · exact absurd hi (by change ¬ (i + 1 + 1 < 2); omega)
   link_novel := by
-    intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk hlk _ hlo hhi hi _ hLo
+    intro S S' U U' lo hi g g' A L k k' i h hA _ hAlo hAhi hkk hlk _ hlo hhi hi _ hLo
     simp only [optimalAnchored_waveAt] at hhi
     rcases i with _ | _ | i
     · exact AnchoredRule.not_linkedVia_certificatesAt_band_novel h hA hAlo hAhi

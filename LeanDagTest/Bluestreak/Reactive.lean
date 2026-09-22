@@ -251,6 +251,50 @@ theorem backedIn_of_reaches_sp {N : ℕ} {v : Fin 4} {j Y L t : ℕ} (hj : j < 4
   rw [show Y / 4 - 2 = (Y / 4 - 1) - 1 by omega]
   exact backedIn_leaderId v (by omega) (by omega) (by omega)
 
+/-- **Only leader blocks are certified.** A block of round `r+1`
+references a block of round `r` by another author only if it is the
+round's leader block, so a non-leader block is referenced by at most
+its own author and that leader: two authors, short of the quorum. -/
+theorem usparse_certified_quorate (N : ℕ) :
+    ∀ A ∈ (Usparse N).ids, Certified (Usparse N) A → Quorate (Usparse N) A := by
+  intro A _ hcert h0
+  simp only [usparse_block, spBlock_round] at h0
+  by_cases hlead : A % 4 = (A / 4) % 4
+  · have hA : A = leaderId (A / 4) := by unfold leaderId; omega
+    have hq : quorumCard (Fin 4) = 3 := rfl
+    rw [hq]
+    have hrefs : spRefs A = Finset.Ico (4 * (A / 4) - 4) (4 * (A / 4)) := by
+      conv_lhs => rw [hA]
+      exact spRefs_leader h0
+    unfold creators
+    simp only [usparse_block, spBlock_refs, hrefs]
+    rw [card_creators_Ico h0]
+    omega
+  · exfalso
+    have hsub : supporters (Usparse N) A (((Usparse N).block A).round + 1) ⊆
+        {⟨A % 4, by omega⟩, ⟨(A / 4 + 1) % 4, by omega⟩} := by
+      intro w hw
+      obtain ⟨b, hb, hbr, hbv, hbc⟩ := mem_supporters.mp hw
+      simp only [usparse_block, spBlock_round] at hbr
+      simp only [usparse_block, spBlock_refs] at hbv
+      obtain ⟨-, hcase⟩ := mem_spRefs.mp hbv
+      have hbw : (w : ℕ) = b % 4 := by
+        have := congrArg (fun (x : Fin 4) => (x : ℕ)) hbc
+        simpa [usparse_block] using this.symm
+      rcases hcase with ⟨hbl, -, -⟩ | ⟨-, hself | hAlead⟩
+      · refine Finset.mem_insert.mpr (Or.inr (Finset.mem_singleton.mpr (Fin.ext ?_)))
+        simp only [hbw]; omega
+      · refine Finset.mem_insert.mpr (Or.inl (Fin.ext ?_))
+        simp only [hbw]; omega
+      · exact absurd (show A % 4 = (A / 4) % 4 by unfold leaderId at hAlead; omega) hlead
+    have := Finset.card_le_card hsub
+    have h2 : ({⟨A % 4, by omega⟩, ⟨(A / 4 + 1) % 4, by omega⟩} : Finset (Fin 4)).card ≤ 2 :=
+      le_trans (Finset.card_insert_le _ _) (by simp)
+    have hq : quorumCard (Fin 4) = 3 := rfl
+    unfold Certified at hcert
+    rw [hq] at hcert
+    omega
+
 /-- The reactive witness: `Usparse` at spacing `6` inside a timeout of
 `9`. -/
 def spReactive (N : ℕ) : ReactiveB (Usparse N) {1, 2, 3} N where
@@ -321,17 +365,7 @@ def spReactive (N : ℕ) : ReactiveB (Usparse N) {1, 2, 3} N where
     rcases hheld.2 with h | ⟨_, h⟩ <;> omega
   built_lt _ _ _ _ := by omega
   deadline _ _ _ _ := by omega
-  leader_quorum k L hL h0 := by
-    have hL' := eq_leaderId_of_isLeaderBlock (usparse_block N) hL
-    subst hL'
-    simp only [usparse_block, spBlock_round] at h0
-    have hk : 0 < k := by unfold leaderId at h0; omega
-    have hq : quorumCard (Fin 4) = 3 := rfl
-    rw [hq]
-    unfold creators
-    simp only [usparse_block, spBlock_refs, spRefs_leader hk]
-    rw [card_creators_Ico hk]
-    omega
+  certified_quorate := usparse_certified_quorate N
   refs_referenceable v hv n b hb hbc hbr j hj := by
     rw [correct_eq] at hv
     obtain ⟨h1, h3⟩ := mem_T_bounds' hv

@@ -1,4 +1,5 @@
 import LeanDag.Bluestreak.Liveness
+import LeanDag.Common.Record.Chop
 
 /-!
 # Bluestreak on concrete sparse DAGs
@@ -70,7 +71,7 @@ def U1 : Universe (Fin 4) (Fin 24) Unit where
   no_equivocation := by decide
 
 theorem U1_disciplined : Disciplined U1 :=
-  Disciplined.of_decide (fun _ => rfl) (by decide) (by decide)
+  Disciplined.of_decide (U := U1) (by decide) (by decide)
 
 -- Slot 0's candidate is certified, claimed twice, and omitted once: undecided directly.
 example : Certified U1 0 := by decide
@@ -106,6 +107,19 @@ example (V : U1.View) (v : Option (Fin 24)) (h : Decided U1 V 0 v) : v = some 0 
 
 end U1
 
+/-- **The cut does not preserve the discipline.** `U1` chopped at the
+horizon `2` keeps block `8`, whose claim names the genesis leader `0`
+the cut dropped; the evidence for the claim is gone with it, so the
+chopped record is not disciplined and the record cells of
+`Properties/Arcs/Record.lean` are not available to the arc. -/
+example : ¬ Disciplined (BlockRecord.chop U1 2) := by
+  intro h
+  have h8 : (8 : Fin 24) ∈ (BlockRecord.chop U1 2).ids := by decide
+  have hc : ((BlockRecord.chop U1 2).block 8).creator ∈ (Correct : Finset (Fin 4)) := by decide
+  have := h.honest_backed 8 h8 hc 8 Reaches.refl 0 (by decide)
+  revert this
+  decide
+
 /-! ## `U2`: a Byzantine anchor candidate with an unbacked claim -/
 
 section U2
@@ -138,8 +152,8 @@ def U2 : Universe (Fin 4) (Fin 16) Unit where
   valid := by decide
   no_equivocation := by decide
 
-theorem U2_disciplined : Disciplined (S := bsSlots) U2 :=
-  Disciplined.of_decide (fun _ => rfl) (by decide) (by decide)
+theorem U2_disciplined : Disciplined U2 :=
+  Disciplined.of_decide (U := U2) (by decide) (by decide)
 
 /-- Slot 0 is directly skipped, the eligible candidate anchor `15` links
 `0` through `11`, and `15` is not certified: without `Anchor U A`, the
@@ -185,8 +199,8 @@ def U3 : Universe (Fin 4) (Fin 17) Unit where
   valid := by decide
   no_equivocation := by decide
 
-theorem U3_disciplined : Disciplined (S := bsSlots) U3 :=
-  Disciplined.of_decide (fun _ => rfl) (by decide) (by decide)
+theorem U3_disciplined : Disciplined U3 :=
+  Disciplined.of_decide (U := U3) (by decide) (by decide)
 
 /-- Slot 2 has two candidates, `10` and `16`; three round-3 blocks omit
 each, so Bluestreak skips it, and two omit both, so the core would not. -/

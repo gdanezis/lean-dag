@@ -337,7 +337,7 @@ uniqueness; the crossings are M1, the visibility lemma and M3. -/
 theorem coreLaws : (coreAnchored Validator BlockId Payload).Laws where
   commit_unique := fun _ hL₁ hL₂ h₁ h₂ => eq_of_directCommitIn hL₁ hL₂ h₁ h₂
   commit_skip := fun _ hL h hskip => not_directSkip_of_directCommitIn hL h hskip
-  commit_link := fun _ _ h hA helig => ⟨0, Nat.one_pos,
+  commit_link := fun _ _ h hA _ helig => ⟨0, Nat.one_pos,
     certifiedIn_of_directCommitIn h hA.1 hA.2.1 helig⟩
   commit_link_unique := by
     intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ _ hlink _

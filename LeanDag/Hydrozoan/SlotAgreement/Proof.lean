@@ -41,7 +41,7 @@ theorem hydrozoanLaws : (hydrozoanAnchored Replica BlockId).Laws where
     · exact not_skippedLeader_of_fastCommit hL (fastCommit_of_fastCommitInView h) hsk
     · exact not_skippedLeader_of_slowCommit hL (slowCommit_of_slowCommitInView h) hsk
   commit_link := by
-    intro S U V k j L A _ hL h hA helig
+    intro S U V k j L A _ hL h hA _ helig
     rcases h with h | h
     · exact ⟨1, Nat.one_lt_two, weakLinked_of_fastCommitInView_at_anchor h hA helig⟩
     · exact ⟨0, Nat.zero_lt_two, certifiedIn_of_slowCommitInView_at_anchor h hA helig⟩

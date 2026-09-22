@@ -8,7 +8,7 @@ leader block is *referenceable* — held, with every claim in its causal
 history backed by held votes — and a round-`(r + 2)` block once a quorum
 of referenceable votes is held, the timeout as fallback. `ReactiveB` is
 `ReactiveCore` with those two wait clauses, the referencing discipline
-of correct validators, and the leader quorum. What it yields: the
+of correct validators, and the format check on certified blocks. What it yields: the
 discipline the safety laws assume, the claims the liveness theorems
 consume, and every reliable validator deciding a reliable-led slot on
 its own view. The step the core does not have is timely
@@ -55,14 +55,14 @@ theorem certified_of_backedIn {h : Finset BlockId} (hb : BackedIn U h L) : Certi
 
 /-! ## The schedule -/
 
-/-- **Bluestreak's reactive schedule**: the reactive timing, the leader
-quorum, the referencing discipline of correct validators, and the two
-wait clauses of the pull pacemaker. -/
+/-- **Bluestreak's reactive schedule**: the reactive timing, the format
+check safety reads, the referencing discipline of correct validators,
+and the two wait clauses of the pull pacemaker. -/
 structure ReactiveB (U : Universe Validator BlockId Payload) (T : Finset Validator) (N : ℕ)
     extends ReactiveCore U T N where
-  /-- A leader block references a quorum, as its receivers check. -/
-  leader_quorum : ∀ k L, IsLeaderBlock U k L → 0 < (U.block L).round →
-    quorumCard Validator ≤ (creators U.block (U.block L)).card
+  /-- A certified block is quorate: what the receivers' format check on
+  leader blocks leaves where safety reads it. -/
+  certified_quorate : ∀ A ∈ U.ids, Certified U A → Quorate U A
   /-- A correct validator references only what was referenceable from
   its holdings when it built. -/
   refs_referenceable : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
@@ -117,7 +117,7 @@ theorem backedIn_of_reaches {v : Validator} (hv : v ∈ (Correct : Finset Valida
 
 /-- **The discipline holds of the execution.** -/
 theorem disciplined (rb : ReactiveB U T N) : Disciplined U where
-  leader_quorum := rb.leader_quorum
+  certified_quorate := rb.certified_quorate
   honest_backed := fun B hB hc _ hBX _ hcl =>
     certified_of_backedIn (rb.backedIn_of_reaches hc hB rfl hBX hcl)
 

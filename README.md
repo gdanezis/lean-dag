@@ -461,7 +461,14 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   discipline is exactly the invariant safety assumes
   (`Bluestreak.ReactiveB.disciplined`): every reliable validator decides
   a reliable-led slot on its own view (`Bluestreak.ReactiveB.decided_local`),
-  and a sparse DAG grown to every horizon witnesses the schedule.
+  and a sparse DAG grown to every horizon witnesses the schedule. The
+  arc shows the five properties over the disciplined records, once what
+  safety reads of the block format is stated per block — a *certified*
+  block is quorate — rather than per slot; the band's novelty clause
+  then reads the anchor, since a claim names its candidate where every
+  other rule's evidence references it. Chain quality does not apply to
+  a two-reference block, and the cut does not preserve the discipline:
+  pruning drops the blocks a retained claim names.
 
 Every definition is exercised on concrete models by `decide` before
 anything is proved from it, and every principal result depends on

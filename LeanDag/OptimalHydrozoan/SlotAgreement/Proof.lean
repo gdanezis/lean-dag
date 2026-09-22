@@ -43,7 +43,7 @@ theorem optimalLaws :
     · exact Nat.not_le.mpr (DirectSafety.blames_lt_of_slowCommit hL
         (slowCommit_of_slowCommitInView h)) hb
   commit_link := by
-    intro S U V k j L A hI hL h hA helig
+    intro S U V k j L A hI hL h hA _ helig
     rcases h with h | h
     · exact ⟨1, Nat.one_lt_two,
         evidenceLinked_of_fastCommitOptInView_at_anchor hI hL h hA helig⟩

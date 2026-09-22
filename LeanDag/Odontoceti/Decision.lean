@@ -162,7 +162,7 @@ theorem odontocetiLaws : (odontocetiAnchored Validator BlockId Payload).Laws whe
   commit_unique := fun _ hL₁ hL₂ h₁ h₂ => eq_of_directCommitIn hL₁ hL₂ h₁ h₂
   commit_skip := fun _ hL h hskip =>
     not_directSkipIn_of_directCommitIn h (directSkipIn_of_directSkipSlotIn hskip hL)
-  commit_link := fun _ _ h hA helig => ⟨0, Nat.one_pos, thickLink_of_directCommitIn h hA.1 (by
+  commit_link := fun _ _ h hA _ helig => ⟨0, Nat.one_pos, thickLink_of_directCommitIn h hA.1 (by
     have := (odontocetiAnchored Validator BlockId Payload).anchor_round_le hA helig
     simp only [odontocetiAnchored_waveAt] at this; omega)⟩
   commit_link_unique := by

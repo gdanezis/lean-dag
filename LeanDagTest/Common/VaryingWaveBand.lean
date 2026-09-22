@@ -99,7 +99,8 @@ theorem floorRule_bandLaws : floorRule.BandLaws where
       exact ⟨fun h => ⟨hlt, h.2⟩, fun h => ⟨by omega, h.2⟩⟩
     · exact ⟨fun h => absurd (by omega : S.slotRound k < (U.block A).round) hlt,
         fun h => absurd h.1 hlt⟩
-  link_novel := fun {S S' U U' lo hi g g' A L k k' i} hab hA hAlo hAhi hsch _ _ hklo _ _ _ hLo => by
+  link_novel := fun {S S' U U' lo hi g g' A L k k' i} hab hA _ hAlo hAhi hsch _ _ hklo _ _ _
+      hLo => by
     obtain ⟨hr, -⟩ := AnchoredRule.band_block hab hA hAlo hAhi
     rintro ⟨hlt, hmem⟩
     have hlt' : S.slotRound k < (U.block A).round := by omega
@@ -108,7 +109,7 @@ theorem floorRule_bandLaws : floorRule.BandLaws where
 
 /-- **Persistence**, through the extension laws the band laws contain. -/
 theorem floorRule_persist : Persist floorRule.toDagRule :=
-  AnchoredRule.persist floorRule_bandLaws.toExtendLaws
+  AnchoredRule.persist floorRule_bandLaws.toExtendLaws fun _ _ => trivial
 
 /-! ## The verdict, and its absence a round down -/
 
@@ -179,7 +180,7 @@ theorem floor_agreeBand (top : ℕ) : AgreeBand floorRule.toDagRule av4 av3 1 to
 /-- **The rule is banded**: the band laws are all `banded` asks, the wave being read from the
 kind. -/
 theorem floorRule_banded : Banded floorRule.toDagRule :=
-  AnchoredRule.banded floorRule_bandLaws
+  AnchoredRule.banded floorRule_bandLaws fun _ _ => trivial
 
 /-! ## A rule whose direct commit reads the wave of the kind
 
@@ -219,11 +220,11 @@ theorem kindRule_bandLaws : kindRule.BandLaws where
     · rw [AnchoredRule.band_refs hab (V.subset_ids hcV) (by omega) (by omega)]; exact hcL
   skip_band := fun _ _ _ _ _ _ _ hs => hs.elim
   link_band := fun _ _ _ _ _ _ _ _ _ hi _ => absurd hi (Nat.not_lt_zero _)
-  link_novel := fun _ _ _ _ _ _ _ _ _ hi _ _ => absurd hi (Nat.not_lt_zero _)
+  link_novel := fun _ _ _ _ _ _ _ _ _ _ hi _ _ => absurd hi (Nat.not_lt_zero _)
 
 /-- **And is banded**, its wave varying with the kind and read inside its direct commit. -/
 theorem kindRule_banded : Banded kindRule.toDagRule :=
-  AnchoredRule.banded kindRule_bandLaws
+  AnchoredRule.banded kindRule_bandLaws fun _ _ => trivial
 
 /-- **The frame that recomputes its kinds is not a rebase of the lower frame**: it changes slot
 `0`'s kind, which a rebase carries. The two verdicts above disagree, and the band's schedule

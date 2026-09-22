@@ -496,7 +496,7 @@ theorem finWhaleBandLaws [LinearOrder BlockId] :
     · exact Band.indirectCommit_iff h hkk hlk hlo (by omega) hA hAlo hAhi L
     · exact absurd hi (by change ¬ (i + 1 < 1); omega)
   link_novel := by
-    intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk hlk _ hlo hhi hi _ hLo hlink
+    intro S S' U U' lo hi g g' A L k k' i h hA _ hAlo hAhi hkk hlk _ hlo hhi hi _ hLo hlink
     simp only [finWhaleAnchored_waveAt] at hhi
     rcases i with _ | i
     · exact hLo (mem_slotBlocks.1

@@ -523,7 +523,7 @@ theorem finWhaleLaws [LinearOrder BlockId] :
   commit_skip := fun _ hL h hskip =>
     no_directSkip_of_commit_view (mem_slotBlocks.2 hL) (directCommit_restrict h) hskip
   commit_link := by
-    intro S U V k j L A _ hL h hA helig
+    intro S U V k j L A _ hL h hA _ helig
     refine ⟨0, Nat.one_pos, indirectCommit_of_directCommit hA.1 ?_ (mem_slotBlocks.2 hL)
       (directCommit_restrict h)⟩
     have := (finWhaleAnchored Validator BlockId Payload).anchor_round_le hA helig

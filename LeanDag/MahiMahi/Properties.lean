@@ -243,7 +243,7 @@ theorem mahiMahiBandLaws (hw : 2 ≤ w) :
   link_band := fun h hA hAlo hAhi hkk _ _ hlo hhi _ hL =>
     certifiedIn_band h hw hA hAlo hAhi hL.1 hL.2.1 hkk hlo
       (by simp only [MahiMahi.mahiMahiAnchored_waveAt] at hhi; omega)
-  link_novel := fun h hA hAlo hAhi hkk _ _ hlo hhi _ hL hLo =>
+  link_novel := fun h hA _ hAlo hAhi hkk _ _ hlo hhi _ hL hLo =>
     not_certifiedIn_band_novel h hw hA hAlo hAhi hLo hL.2.1 hkk hlo
       (by simp only [MahiMahi.mahiMahiAnchored_waveAt] at hhi; omega)
 
@@ -252,7 +252,7 @@ for. -/
 theorem banded (hw : 2 ≤ w) :
     Banded (mahiMahiRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) w) :=
-  AnchoredRule.banded (mahiMahiBandLaws hw)
+  AnchoredRule.banded (mahiMahiBandLaws hw) fun _ _ => trivial
 
 /-! ## The two liveness properties
 

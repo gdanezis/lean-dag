@@ -90,7 +90,7 @@ theorem decidedBelowRun {D : Dag Validator BlockId Payload} {S : Slots Validator
 /-- **FinWhale reads a band**: the relation's band at its band laws. -/
 theorem banded : Banded (finWhaleRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) :=
-  AnchoredRule.banded LeanDag.FinWhale.finWhaleBandLaws
+  AnchoredRule.banded LeanDag.FinWhale.finWhaleBandLaws fun _ _ => trivial
 
 /-- **The indirect rule, with its bound.** The relation's indirect
 property at the rung's choice, read at the three-round eligibility:

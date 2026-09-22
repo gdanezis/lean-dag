@@ -610,19 +610,33 @@ structure BandLaws : Prop where
   /-- A candidate the band did not carry is linked from no old anchor. -/
   link_novel : ∀ {S S' : Slots Validator} {U U' : BlockRecord Validator BlockId Payload P honest}
     {lo hi g g' : ℕ} {A L : BlockId} {k k' i : ℕ},
-    AgreeBand R.toDagRule U U' lo hi g g' → A ∈ U.ids →
+    AgreeBand R.toDagRule U U' lo hi g g' → A ∈ U.ids → R.Anchor U A →
     lo ≤ (U.block A).round + g → (U.block A).round + g ≤ hi →
     S.slotRound k + g = S'.slotRound k' + g' → S.leader k = S'.leader k' →
     S.kind k = S'.kind k' →
     lo ≤ S.slotRound k + g → S.slotRound k + R.waveAt (S.kind k) + g ≤ hi → i < R.rungs →
     IsLeaderBlock (S := S') U' k' L → L ∉ U.ids → ¬ R.Link i U' A L S' k'
 
+/-- **What the band's novelty clause reads**: on the records satisfying
+`I`, a committed block is an anchor. `AnchoredRule.anchor_of_decided`
+supplies it from a rule's laws; a rule whose rungs need nothing of the
+anchor supplies `fun _ _ => trivial`. -/
+abbrev AnchorsOn (I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop) :
+    Prop :=
+  ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest} {V : U.View}
+    {k : ℕ} {A : BlockId}, I S U → R.Decided (S := S) U V k (some A) → R.Anchor U A
+
+/-- A rule's laws give it. -/
+theorem anchorsOn_of_laws {I : Slots Validator → BlockRecord Validator BlockId Payload P honest →
+    Prop} (hl : R.Laws I) : R.AnchorsOn I :=
+  fun hI hd => anchor_of_decided hl hI hd _ rfl
+
 variable (hb : R.BandLaws)
 include hb
 
 /-- Rung emptiness carries across the band. -/
 theorem rungEmpty_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A : BlockId} {k k' i : ℕ}
-    (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
+    (hA : A ∈ U.ids) (hanc : R.Anchor U A) (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
     (hkk : S.slotRound k + g = S'.slotRound k' + g') (hlk : S.leader k = S'.leader k')
     (hkk' : S.kind k = S'.kind k')
     (hlo : lo ≤ S.slotRound k + g) (hhi : S.slotRound k + R.waveAt (S.kind k) + g ≤ hi)
@@ -632,11 +646,11 @@ theorem rungEmpty_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A : BlockId}
   by_cases hLo : L ∈ U.ids
   · have hL' := isLeaderBlock_band_old h hkk hlk hlo (by omega) hLo hL
     exact he L hL' ((hb.link_band h hA hAlo hAhi hkk hlk hkk' hlo hhi hi hL').mp hlink)
-  · exact hb.link_novel h hA hAlo hAhi hkk hlk hkk' hlo hhi hi hL hLo hlink
+  · exact hb.link_novel h hA hanc hAlo hAhi hkk hlk hkk' hlo hhi hi hL hLo hlink
 
 /-- The tie-break's choice carries across the band. -/
 theorem least_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A L : BlockId} {k k' i : ℕ}
-    (hA : A ∈ U.ids) (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
+    (hA : A ∈ U.ids) (hanc : R.Anchor U A) (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
     (hkk : S.slotRound k + g = S'.slotRound k' + g') (hlk : S.leader k = S'.leader k')
     (hkk' : S.kind k = S'.kind k')
     (hlo : lo ≤ S.slotRound k + g) (hhi : S.slotRound k + R.waveAt (S.kind k) + g ≤ hi)
@@ -646,13 +660,14 @@ theorem least_band (h : AgreeBand R.toDagRule U U' lo hi g g') {A L : BlockId} {
   by_cases hLo : L' ∈ U.ids
   · have hL'' := isLeaderBlock_band_old h hkk hlk hlo (by omega) hLo hL'
     exact hm L' hL'' ((hb.link_band h hA hAlo hAhi hkk hlk hkk' hlo hhi hi hL'').mp hlink)
-  · exact absurd hlink (hb.link_novel h hA hAlo hAhi hkk hlk hkk' hlo hhi hi hL' hLo)
+  · exact absurd hlink (hb.link_novel h hA hanc hAlo hAhi hkk hlk hkk' hlo hhi hi hL' hLo)
 
 /-- **Every verdict reads a band of rounds.** One induction over the
 derivation. The direct cases read the slot's wave and stop; the indirect
 cases read the anchor's derivation and the intermediates', and the top
 is the largest of those. -/
-theorem banded_aux {V : U.View} {k : ℕ}
+theorem banded_aux {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+    (ha : R.AnchorsOn I) (hI : I S U) {V : U.View} {k : ℕ}
     {v : Option BlockId} (hd : R.Decided (S := S) U V k v) :
     ∃ top, S.slotRound k + R.waveAt (S.kind k) ≤ top ∧
       ∀ (g g' d d' : ℕ) (S' : Slots Validator)
@@ -740,10 +755,12 @@ theorem banded_aux {V : U.View} {k : ℕ}
           (hab.mono (by omega) (by omega))
           (fun b hb ha1 ha2 => hV b hb (by omega) (by omega))
       · intro i' hi'
-        exact rungEmpty_band hb hab hAL.1 hAlo hAhi hkk hlk hkk' (by omega) (by omega)
+        exact rungEmpty_band hb hab hAL.1 (ha (S := S) hI hanchor)
+          hAlo hAhi hkk hlk hkk' (by omega) (by omega)
           (lt_trans hi' hi) (hemp i' hi')
       · exact (hb.link_band hab hAL.1 hAlo hAhi hkk hlk hkk' (by omega) (by omega) hi hL).mpr hlink
-      · exact least_band hb hab hAL.1 hAlo hAhi hkk hlk hkk' (by omega) (by omega) hi hmin
+      · exact least_band hb hab hAL.1 (ha (S := S) hI hanchor)
+          hAlo hAhi hkk hlk hkk' (by omega) (by omega) hi hmin
   | @indirectSkip k j A hkj helig hanchor hmid hnone ihj ihmid =>
       obtain ⟨topj, htopj, hjt⟩ := ihj
       set f : ℕ → ℕ := fun m =>
@@ -796,7 +813,8 @@ theorem banded_aux {V : U.View} {k : ℕ}
           (hab.mono (by omega) (by omega))
           (fun b hb ha1 ha2 => hV b hb (by omega) (by omega))
       · intro i hi
-        exact rungEmpty_band hb hab hAL.1 hAlo hAhi hkk hlk hkk' (by omega) (by omega) hi
+        exact rungEmpty_band hb hab hAL.1 (ha (S := S) hI hanchor)
+          hAlo hAhi hkk hlk hkk' (by omega) (by omega) hi
           (hnone i hi)
 
 /-- **A directly decided slot's band is tight**: its top is exactly the
@@ -842,9 +860,9 @@ theorem banded_direct {V : U.View} {k : ℕ} {v : Option BlockId}
 which the band's schedule agreement carries with the leader, so a wave
 that varies is no obstacle: the schedule says which wave each slot has,
 and a rebase keeps what the schedule says. -/
-theorem banded : Banded R.toDagRule := by
+theorem banded (ha : R.AnchorsOn (fun _ _ => True)) : Banded R.toDagRule := by
   intro S U V k v hd
-  obtain ⟨top, -, ht⟩ := banded_aux hb (S := S) hd
+  obtain ⟨top, -, ht⟩ := banded_aux hb (I := fun _ _ => True) ha trivial (S := S) hd
   exact ⟨top, ht⟩
 
 omit hb in
@@ -856,16 +874,18 @@ theorem agreeBand_of_via {X : Type} {f : X → BlockRecord Validator BlockId Pay
   ⟨h.mem, h.block, h.refs⟩
 
 /-- **The relation reads a band, through a projection.** -/
-theorem bandedVia {X : Type} {f : X → BlockRecord Validator BlockId Payload P honest} :
-    Banded (R.toDagRuleVia f) := by
+theorem bandedVia {X : Type} {f : X → BlockRecord Validator BlockId Payload P honest}
+    {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+    (ha : R.AnchorsOn I) (hI : ∀ S U, I S (f U)) : Banded (R.toDagRuleVia f) := by
   intro S U V k v hd
-  obtain ⟨top, -, ht⟩ := banded_aux hb (S := S) hd
+  obtain ⟨top, -, ht⟩ := banded_aux hb ha (hI S U) (S := S) hd
   exact ⟨top, fun g g' d d' S' U' V' k' hkd hsch hlead hkind hab hV =>
     ht g g' d d' S' (f U') V' k' hkd hsch hlead hkind (agreeBand_of_via hab) hV⟩
 
 /-- **The relation reads a band, under the invariant.** -/
-theorem bandedOn : Banded (R.toDagRuleOn I) :=
-  bandedVia hb
+theorem bandedOn {J : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+    (ha : R.AnchorsOn J) (hJ : ∀ S U, I U → J S U) : Banded (R.toDagRuleOn I) :=
+  bandedVia hb ha fun S U => hJ S U.val U.property
 
 end Band
 
@@ -897,7 +917,7 @@ structure ExtendLaws : Prop where
   /-- A candidate the extension added is linked from no old anchor. -/
   link_novel_ext : ∀ {S : Slots Validator} {U U' : BlockRecord Validator BlockId Payload P honest}
     {A L : BlockId} {k i : ℕ},
-    Extends R.toDagRule U U' → A ∈ U.ids → i < R.rungs →
+    Extends R.toDagRule U U' → A ∈ U.ids → R.Anchor U A → i < R.rungs →
     IsLeaderBlock (S := S) U' k L → L ∉ U.ids → ¬ R.Link i U' A L S k
 
 /-- The band laws at offset zero are the extension laws. -/
@@ -914,10 +934,10 @@ theorem BandLaws.toExtendLaws (hb : R.BandLaws) : R.ExtendLaws where
     hb.link_band (AgreeBand.of_extends he (min (S.slotRound k) (U.block A).round)
         (max (S.slotRound k + R.waveAt (S.kind k)) (U.block A).round))
       hA (by omega) (by omega) rfl rfl rfl (by omega) (by omega) hi hL
-  link_novel_ext := fun {S U U' A L k i} he hA hi hL hLo =>
+  link_novel_ext := fun {S U U' A L k i} he hA hanc hi hL hLo =>
     hb.link_novel (AgreeBand.of_extends he (min (S.slotRound k) (U.block A).round)
         (max (S.slotRound k + R.waveAt (S.kind k)) (U.block A).round))
-      hA (by omega) (by omega) rfl rfl rfl (by omega) (by omega) hi hL hLo
+      hA hanc (by omega) (by omega) rfl rfl rfl (by omega) (by omega) hi hL hLo
 
 section Extend
 
@@ -935,28 +955,31 @@ theorem isLeaderBlock_of_extends_old (he : Extends R.toDagRule U U') {k : ℕ} {
 
 /-- Rung emptiness carries into an extension. -/
 theorem rungEmpty_ext (he : Extends R.toDagRule U U') {A : BlockId} {k i : ℕ}
-    (hA : A ∈ U.ids) (hi : i < R.rungs) (h : R.RungEmpty (S := S) U A i k) :
+    (hA : A ∈ U.ids) (hanc : R.Anchor U A) (hi : i < R.rungs)
+    (h : R.RungEmpty (S := S) U A i k) :
     R.RungEmpty (S := S) U' A i k := by
   intro L hL hlink
   by_cases hLo : L ∈ U.ids
   · have hL' := isLeaderBlock_of_extends_old he hLo hL
     exact h L hL' ((hx.link_ext he hA hi hL').mp hlink)
-  · exact hx.link_novel_ext he hA hi hL hLo hlink
+  · exact hx.link_novel_ext he hA hanc hi hL hLo hlink
 
 /-- The tie-break's choice carries into an extension. -/
 theorem least_ext (he : Extends R.toDagRule U U') {A L : BlockId} {k i : ℕ}
-    (hA : A ∈ U.ids) (hi : i < R.rungs) (h : R.Least (S := S) U A i k L) :
+    (hA : A ∈ U.ids) (hanc : R.Anchor U A) (hi : i < R.rungs)
+    (h : R.Least (S := S) U A i k L) :
     R.Least (S := S) U' A i k L := by
   intro L' hL' hlink
   by_cases hLo : L' ∈ U.ids
   · have hL'' := isLeaderBlock_of_extends_old he hLo hL'
     exact h L' hL'' ((hx.link_ext he hA hi hL'').mp hlink)
-  · exact absurd hlink (hx.link_novel_ext he hA hi hL' hLo)
+  · exact absurd hlink (hx.link_novel_ext he hA hanc hi hL' hLo)
 
 /-- **A verdict survives an extension**, into any view holding the old
 view's blocks. -/
-theorem decided_of_extends (he : Extends R.toDagRule U U') {V : U.View} {V' : U'.View}
-    (hV : ∀ b, b ∈ V.ids → b ∈ V'.ids) {k : ℕ} {v : Option BlockId}
+theorem decided_of_extends {I : Slots Validator → BlockRecord Validator BlockId Payload P honest →
+      Prop} (ha : R.AnchorsOn I) (hI : I S U) (he : Extends R.toDagRule U U') {V : U.View}
+    {V' : U'.View} (hV : ∀ b, b ∈ V.ids → b ∈ V'.ids) {k : ℕ} {v : Option BlockId}
     (hd : R.Decided (S := S) U V k v) : R.Decided (S := S) U' V' k v := by
   induction hd with
   | @directCommit k L hL hc =>
@@ -964,18 +987,21 @@ theorem decided_of_extends (he : Extends R.toDagRule U U') {V : U.View} {V' : U'
   | @directSkip k hs => exact Decided.directSkip (hx.skip_ext he hV hs)
   | @indirectCommit k j A L i hkj helig hanchor hmid hi hemp hL hlink hmin ihj ihmid =>
       have hAL : IsLeaderBlock (S := S) U j A := isLeaderBlock_of_decided hanchor
+      have hanc := ha hI hanchor
       exact Decided.indirectCommit (i := i) hkj helig ihj ihmid hi
-        (fun i' hi' => rungEmpty_ext hx he hAL.1 (lt_trans hi' hi) (hemp i' hi'))
+        (fun i' hi' => rungEmpty_ext hx he hAL.1 hanc (lt_trans hi' hi) (hemp i' hi'))
         (he.isCandidate hL) ((hx.link_ext he hAL.1 hi hL).mpr hlink)
-        (least_ext hx he hAL.1 hi hmin)
+        (least_ext hx he hAL.1 hanc hi hmin)
   | @indirectSkip k j A hkj helig hanchor hmid hnone ihj ihmid =>
       have hAL : IsLeaderBlock (S := S) U j A := isLeaderBlock_of_decided hanchor
       exact Decided.indirectSkip hkj helig ihj ihmid
-        (fun i hi => rungEmpty_ext hx he hAL.1 hi (hnone i hi))
+        (fun i hi => rungEmpty_ext hx he hAL.1 (ha (S := S) hI hanchor) hi
+          (hnone i hi))
 
 /-- **Persistence**, for every anchored rule with the extension laws. -/
-theorem persist : Persist R.toDagRule :=
-  fun S _ _ he _ _ hsub _ _ hd => decided_of_extends hx (S := S) he (fun _ hb => hsub hb) hd
+theorem persist (ha : R.AnchorsOn (fun _ _ => True)) : Persist R.toDagRule :=
+  fun S _ _ he _ _ hsub _ _ hd =>
+    decided_of_extends hx (I := fun _ _ => True) ha trivial (S := S) he (fun _ hb => hsub hb) hd
 
 end Extend
 

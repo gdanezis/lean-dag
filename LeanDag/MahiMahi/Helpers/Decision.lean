@@ -118,7 +118,7 @@ theorem mahiMahiLaws {w : ℕ} (hw : 2 ≤ w) :
     (mahiMahiAnchored Validator BlockId Payload w).Laws where
   commit_unique := fun _ hL₁ hL₂ h₁ h₂ => eq_of_directCommitIn hw hL₁ hL₂ h₁ h₂
   commit_skip := fun _ hL h hskip => not_directSkipIn_of_directCommitIn hw hL h hskip
-  commit_link := fun _ _ h hA helig => ⟨0, Nat.one_pos,
+  commit_link := fun _ _ h hA _ helig => ⟨0, Nat.one_pos,
     certifiedIn_of_directCommitIn_at_anchor (by omega) h hA helig⟩
   commit_link_unique := by
     intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ _ hlink _
