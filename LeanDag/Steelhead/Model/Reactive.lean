@@ -17,8 +17,8 @@ wave of four rounds or more the vote round sits two rounds or more above the can
 quorum of votes reaches the certifiers through the DAG and nothing further is asked of the
 schedule. At the wave of three the certify round is the vote round's successor, and a certifier
 must reference the votes themselves: `cert_or_wait` is that wait, stated only at wave three and at
-the rounds that carry the leader wait. The paper's pacing states the leader wait alone; the
-certificate wait is this model's, and what the wave of three needs of an execution.
+the rounds that carry the leader wait. The paper's pacing states both waits, the certificate
+wait as Mysticeti's vote wait, which is what the wave of three needs of an execution.
 
 **Definitions only**, as in the other model files.
 -/

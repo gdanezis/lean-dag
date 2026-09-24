@@ -9874,8 +9874,8 @@ synchronous slots and the canary rounds, since nobody waits for the
 hidden leader of an asynchronous slot, plus one clause: at a wave of
 four rounds or more the votes of the round above the candidate reach the
 certifiers through the DAG, and only at the wave of three must a
-certifier reference them itself (`cert_or_wait`), a wait the paper's
-pacing does not state. `SynchronisedOn` is false by design in a
+certifier reference them itself (`cert_or_wait`), the vote wait the
+paper's pacing states. `SynchronisedOn` is false by design in a
 reactive execution and appears in neither clause. The timed one
 (`Steelhead.MahiMahiPair.timed_commits`) discharges `SynchronisedOn` from a
 `ViewPace` whose timeout grows at a rate that clears the delay, by the
