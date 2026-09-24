@@ -23,7 +23,7 @@ the invariant to survive the cut, which it does not: the cut drops the
 blocks a retained claim names, and with them the votes that back it
 (`LeanDagTest/Bluestreak/Model.lean`). Referenceability must be read
 bounded — two rounds, a claim's reach — for a pruning validator to
-satisfy it at all; `docs/report.md` §24.9 states what that takes.
+satisfy it at all; `docs/report.md` §26.9 states what that takes.
 -/
 
 namespace LeanDag

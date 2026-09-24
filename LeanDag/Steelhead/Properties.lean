@@ -128,9 +128,9 @@ theorem steelheadBandLaws {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
       MahiMahi.CertifiedIn U (w (S.kind k)) A L (S.slotRound k)
     rw [← hkind]; exact h
   link_novel := by
-    intro S S' U U' lo hi g g' A L k k' i hab hA hAlo hAhi hkk hlk hkind hlo hhi hi' hL hLo
+    intro S S' U U' lo hi g g' A L k k' i hab hA _ hAlo hAhi hkk hlk hkind hlo hhi hi' hL hLo
     have h := (MahiMahiProperties.mahiMahiBandLaws (hw (S.kind k))).link_novel
-      (agreeBand_mm _ hab) hA hAlo hAhi hkk hlk hkind hlo hhi hi' hL hLo
+      (agreeBand_mm _ hab) hA trivial hAlo hAhi hkk hlk hkind hlo hhi hi' hL hLo
     change ¬ MahiMahi.CertifiedIn U' (w (S'.kind k')) A L (S'.slotRound k')
     rw [← hkind]; exact h
 
@@ -139,7 +139,7 @@ stated for. -/
 theorem banded {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
     Banded (steelheadRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) w) :=
-  AnchoredRule.banded (steelheadBandLaws hw)
+  AnchoredRule.banded (steelheadBandLaws hw) fun _ _ => trivial
 
 /-- **Truncation is local**: below a horizon the verdicts of a pruned
 record are the full one's. -/
@@ -157,7 +157,7 @@ theorem steelheadExtendLaws {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
 any larger view. -/
 theorem persist {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
     Persist (steelheadRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload) w) :=
-  AnchoredRule.persist (steelheadExtendLaws hw)
+  AnchoredRule.persist (steelheadExtendLaws hw) fun _ _ => trivial
 
 /-- **The safety headline**: the band and agreement, at every wavelength
 function of at least two rounds. -/

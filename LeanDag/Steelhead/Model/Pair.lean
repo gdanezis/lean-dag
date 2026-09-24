@@ -63,19 +63,19 @@ def blueBottlePairAnchored (Validator BlockId Payload : Type) [Fintype Validator
   compose (blueBottlePair Validator BlockId Payload)
 
 /-- **The `3f + 1` pair as a pair of rules**: Mahi-Mahi's rule at `ws` and at `wa`, which agree on
-the rung count and the tie-break by definition. Its composite is `steelheadAnchored (wavelength ws
-wa)`. -/
+the rung count, the tie-break and the anchor by definition. Its composite is
+`steelheadAnchored (wavelength ws wa)`. -/
 def mmPair (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] (ws wa : ℕ) : RulePair Validator BlockId Payload :=
   ⟨MahiMahi.mahiMahiAnchored Validator BlockId Payload ws,
-    MahiMahi.mahiMahiAnchored Validator BlockId Payload wa, rfl, rfl⟩
+    MahiMahi.mahiMahiAnchored Validator BlockId Payload wa, rfl, rfl, rfl⟩
 
 /-- **The `5f + 1` pair as a pair of rules**: Odontoceti and Async BlueBottle, which agree on the
-rung count and the tie-break by definition. Its rules are `blueBottlePair`. -/
+rung count, the tie-break and the anchor by definition. Its rules are `blueBottlePair`. -/
 def bbPair (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults5 Validator] [LinearOrder BlockId] : RulePair Validator BlockId Payload :=
   ⟨Odontoceti.odontocetiAnchored Validator BlockId Payload,
-    AsyncBlueBottle.asyncBlueBottleAnchored Validator BlockId Payload, rfl, rfl⟩
+    AsyncBlueBottle.asyncBlueBottleAnchored Validator BlockId Payload, rfl, rfl, rfl⟩
 
 end Steelhead
 

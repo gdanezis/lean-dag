@@ -6,8 +6,9 @@ import LeanDag.Steelhead.Model.Wavelength
 The paper states Theorem 3 for two rules of an interface, a synchronous
 rule `R_s` with a known leader and an asynchronous rule `R_a` with a hidden
 one, composed by the kind of the slot. `RulePair` is that pair as data: two
-anchored rules on one committee that agree on the rung count and the
-tie-break, the two data the anchored relation reads without a slot, so that
+anchored rules on one committee that agree on the rung count, the
+tie-break and the anchor, the data the anchored relation reads without a
+slot, so that
 a composite of the two runs one anchor search. `rules` assigns the
 synchronous rule to kind `0`, what `Slots.kind` assigns when a schedule says
 nothing, and the asynchronous rule to every other kind, as `wavelength ws wa`
@@ -33,7 +34,7 @@ variable [F : Faults Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 
 /-- **A pair of rules**: the synchronous and the asynchronous rule of the interface, agreeing on
-the rung count and the tie-break. -/
+the rung count, the tie-break and the anchor. -/
 structure RulePair (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] where
   /-- The synchronous rule, `R_s`. -/
@@ -44,6 +45,8 @@ structure RulePair (Validator BlockId Payload : Type) [Fintype Validator] [Decid
   rungs_eq : async.rungs = sync.rungs
   /-- Both break ties the same way. -/
   tie_eq : async.tie = sync.tie
+  /-- Both know the same of a committed anchor. -/
+  anchor_eq : async.Anchor = sync.Anchor
 
 namespace RulePair
 

@@ -10,8 +10,8 @@ by, the anchor search reads the slot's own rule, so the verdicts agree
 across views. Two claims:
 
 * **SH16a, the laws compose** — if every rule of a family satisfies the
-  anchored relation's laws, and the family agrees on its rung count and
-  tie-break, the composite satisfies them: each law of the composite at
+  anchored relation's laws, and the family agrees on its rung count,
+  tie-break and anchor, the composite satisfies them: each law of the composite at
   a slot is the law of the slot's own rule, since the composite reads
   every datum of a slot from that rule, the anchor's rule never entering;
 * **SH16b, the composite agrees** — the relation's agreement across
@@ -20,8 +20,8 @@ across views. Two claims:
 The laws are the paper's clauses A2 and A3 in the relation's terms, at
 each rule's own wave: what the intersection law and the exclusion of
 certificates by a skip must give for the anchor search to agree. A rule
-of the interface that fails them, or a pair that disagrees on rungs or
-ties, is outside Theorem 1.
+of the interface that fails them, or a pair that disagrees on rungs,
+ties or anchors, is outside Theorem 1.
 
 The two pairs the paper instantiates are stated in the sibling
 directories, at the families `Model/Pair.lean` names: `MahiMahiPair/`
@@ -45,9 +45,10 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 def LawsCompose (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Faults Validator] [LinearOrder BlockId] : Prop :=
   ∀ (rules : ℕ → AnchoredRule Validator BlockId Payload ValidWrt Correct),
-    -- every rule of the family satisfies the laws, and the family agrees on rungs and ties
+    -- every rule of the family satisfies the laws, and the family agrees on rungs, ties and
+    -- anchors
     (∀ r, (rules r).Laws) → (∀ r, (rules r).rungs = (rules 0).rungs) →
-    (∀ r, (rules r).tie = (rules 0).tie) →
+    (∀ r, (rules r).tie = (rules 0).tie) → (∀ r, (rules r).Anchor = (rules 0).Anchor) →
     -- then so does the composite
     (compose rules).Laws
 
@@ -56,7 +57,7 @@ def ComposeAgreement (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ (rules : ℕ → AnchoredRule Validator BlockId Payload ValidWrt Correct) [S : Slots Validator]
     (V₁ V₂ : View Validator BlockId Payload U) (k : ℕ) (v₁ v₂ : Option BlockId),
     (∀ r, (rules r).Laws) → (∀ r, (rules r).rungs = (rules 0).rungs) →
-    (∀ r, (rules r).tie = (rules 0).tie) →
+    (∀ r, (rules r).tie = (rules 0).tie) → (∀ r, (rules r).Anchor = (rules 0).Anchor) →
     (compose rules).Decided (S := S) U V₁ k v₁ → (compose rules).Decided (S := S) U V₂ k v₂ →
     v₁ = v₂
 

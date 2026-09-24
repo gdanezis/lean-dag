@@ -4883,9 +4883,9 @@ configuration `2`, which outputs it, and from configuration `0`, which
 decides it above its boundary and does not output it. A Byzantine
 validator proposes a forked checkpoint, and the fork has no certificate.
 
-### 11.44 Bluestreak, and what a committed anchor is
+### 11.45 Bluestreak, and what a committed anchor is
 
-Bluestreak (report §24) is the core's rule with the certificate replaced
+Bluestreak (report §26) is the core's rule with the certificate replaced
 by a *claim*: a round-`(r + 2)` block names the leader block it saw
 certified, and the `n − f` votes that back the claim need not lie in
 the claiming block's causal history. Three things did not fit and were
@@ -4923,7 +4923,13 @@ has `Anchor : U → BlockId → Prop`, `True` by default; `Laws` has
 three laws take `R.Anchor U A`; `anchor_of_decided` is Corollary B.4
 once for every rule, and `decided_unique` supplies it at its three
 uses. The nine instances changed by a binder in each of the three laws. Bluestreak's
-`Anchor` is `Certified`.
+`Anchor` is `Certified`. Steelhead and Async BlueBottle, which landed
+after this record, change the same way. Steelhead's composite of a
+family of rules (SH16) reads the anchor from the rule of kind `0`, as it
+reads the rung count and tie-break, so `LawsCompose`,
+`ComposeAgreement` and `RulePair` ask the family to agree on it; both
+pairs agree by `rfl`, and the composite's `anchor_commit` and
+`anchor_link` are the slot's rule's through that agreement.
 
 **The skip is per-candidate.** The paper's slot skip is a quorum of
 voting-round blocks and, for each proposal held, a quorum omitting it
@@ -4944,9 +4950,9 @@ the schedule dependence of `leader_quorum`.
 341 lines of library and 195 of witnesses, and the common-layer change
 is `+48 −15`.
 
-### 11.45 Bluestreak's liveness: claims, and the pacemaker as the discipline
+### 11.46 Bluestreak's liveness: claims, and the pacemaker as the discipline
 
-The second step of the Bluestreak arc (report §24.6–24.8). Three things
+The second step of the Bluestreak arc (report §26.6–26.8). Three things
 were settled.
 
 **The structural condition is on claims.** `SynchronisedOn` — every
@@ -5001,9 +5007,9 @@ references is a leader referencing the round below.
 734 lines of library and 631 of witnesses; the trunk change is
 `+80 −54`.
 
-### 11.46 Bluestreak's carrier: what safety reads of the block format
+### 11.47 Bluestreak's carrier: what safety reads of the block format
 
-The third step of the Bluestreak arc (report §24.9). The obstacle was
+The third step of the Bluestreak arc (report §26.9). The obstacle was
 `Disciplined.leader_quorum`, a clause quantified over the *slots* of a
 schedule, where a carrier's `Agree` quantifies over every schedule the
 rule may be read under. Strengthening it to every block is false of a
@@ -5065,7 +5071,7 @@ wrong recovery for — discharges the fill.
 *The claim.* `honest_backed` is irreducibly non-local (it is about the
 claimed block's voters, outside the claimer's cone), and the cut breaks
 it: the retained blocks at the two lowest rounds claim leaders the cut
-dropped. The protocol reading is in `docs/report.md` §24.9 —
+dropped. The protocol reading is in `docs/report.md` §26.9 —
 referenceability is stated unbounded and must be read bounded, two
 rounds deep. Carrying that into the model means the record owning the
 claim and the cut blanking what it orphans, which the band must then

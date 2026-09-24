@@ -14,7 +14,7 @@ cites one of its own creator's (P3′). The first three are what a
 quorum-based DAG rule needs. The fourth is a choice this protocol
 makes and another need not: a block DAG can be run without self
 references, and this development shows as much — P3′ is consumed by no
-safety or liveness result (report §27), only by the garbage-collection
+safety or liveness result (report §28), only by the garbage-collection
 and denial-of-service arcs, which use it to bound a validator's own
 history.
 

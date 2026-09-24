@@ -117,14 +117,14 @@ two tie-break choices equal by antisymmetry. -/
 theorem asyncBlueBottleLaws : (asyncBlueBottleAnchored Validator BlockId Payload).Laws where
   commit_unique := fun _ hL₁ hL₂ h₁ h₂ => eq_of_directCommitIn hL₁ hL₂ h₁ h₂
   commit_skip := fun _ hL h hskip => not_directSkipIn_of_directCommitIn hL h hskip
-  commit_link := fun _ _ h hA helig =>
+  commit_link := fun _ _ h hA _ helig =>
     ⟨0, Nat.one_pos, weakLink_of_directCommitIn_at_anchor h hA helig⟩
   commit_link_unique := by
-    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ hlink _
+    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ _ hlink _
     exact eq_of_directCommitIn_of_weakLink hL₁ hL₂ h hlink
-  skip_link := fun _ hskip hL _ => not_weakLink_of_directSkipIn hskip hL _
+  skip_link := fun _ hskip hL _ _ => not_weakLink_of_directSkipIn hskip hL _
   link_unique := by
-    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ hl₁ hl₂ hm₁ hm₂
+    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ _ hl₁ hl₂ hm₁ hm₂
     exact le_antisymm (not_lt.mp (show ¬ L₂ < L₁ from hm₁ L₂ hL₂ hl₂))
       (not_lt.mp (show ¬ L₁ < L₂ from hm₂ L₁ hL₁ hl₁))
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h

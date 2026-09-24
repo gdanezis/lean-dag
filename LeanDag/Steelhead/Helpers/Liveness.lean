@@ -1464,6 +1464,14 @@ theorem RulePair.rules_tie (p : RulePair Validator BlockId Payload) (κ : ℕ) :
   · rfl
   · exact p.tie_eq
 
+/-- The rules of a pair agree on the anchor. -/
+theorem RulePair.rules_anchor (p : RulePair Validator BlockId Payload) (κ : ℕ) :
+    (p.rules κ).Anchor = (p.rules 0).Anchor := by
+  unfold RulePair.rules
+  split
+  · rfl
+  · exact p.anchor_eq
+
 section Pair
 
 variable [S : Slots Validator] {U : BlockUniverse Validator BlockId Payload}

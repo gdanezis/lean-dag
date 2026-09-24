@@ -52,6 +52,12 @@ theorem pair_tie (κ : ℕ) :
       (blueBottlePair Validator BlockId Payload 0).tie := by
   unfold blueBottlePair; split <;> rfl
 
+/-- Both halves know the same of a committed anchor: nothing. -/
+theorem pair_anchor (κ : ℕ) :
+    (blueBottlePair Validator BlockId Payload κ).Anchor =
+      (blueBottlePair Validator BlockId Payload 0).Anchor := by
+  unfold blueBottlePair; split <;> rfl
+
 /-- **SH-BB16d.** -/
 theorem pairAgreesOnRungsAndTie : PairAgreesOnRungsAndTie Validator BlockId Payload :=
   ⟨pair_rungs, pair_tie⟩
@@ -70,7 +76,7 @@ theorem steelheadAt_bbPair :
 
 /-- **The `5f + 1` pair's laws**, by SH16a at the family. -/
 theorem blueBottlePairLaws : (blueBottlePairAnchored Validator BlockId Payload).Laws :=
-  compose_laws _ halvesLawful pair_rungs pair_tie
+  compose_laws _ halvesLawful pair_rungs pair_tie pair_anchor
 
 /-- **SH-BB16b.** -/
 theorem pairAgreement [S : Slots Validator] : PairAgreement (S := S) U :=
@@ -118,7 +124,8 @@ theorem pairHandover : PairHandover (S := S) U := by
   intro V₁ V₂ k L hL hc
   refine ⟨fun j A hkj helig hj hmid => ?_, fun hskip => ?_⟩
   · obtain ⟨i, hi, hlink⟩ :=
-      blueBottlePairLaws.commit_link trivial hL hc (AnchoredRule.isLeaderBlock_of_decided hj) helig
+      blueBottlePairLaws.commit_link trivial hL hc (AnchoredRule.isLeaderBlock_of_decided hj)
+        trivial helig
     have hi0 : i = 0 := by simpa using hi
     subst hi0
     exact AnchoredRule.Decided.indirectCommit (i := 0) hkj helig hj hmid (by simp)

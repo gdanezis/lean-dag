@@ -198,7 +198,7 @@ from coverage into certification; the unpredictable-leader clause.
   first control round of an interval past the slot's and `wa` good coins
   above it, the form SH-MM15 draws.
 - **SH16, the interface composes** (§3): any family of rules whose laws
-  hold, one per round, agreeing on rung count and tie-break, composes
+  hold, one per round, agreeing on rung count, tie-break and anchor, composes
   into a rule whose laws hold, so its verdicts agree across views; and
   Steelhead's rule is the composite of Mahi-Mahi's read at each round's
   wave, by definition. The paper's Theorem 1 at the interface level, SH-MM2
@@ -385,10 +385,10 @@ rest:
 interface. `compose rules` (`Model/Compose.lean`) is the composite of a
 family of anchored rules, one per kind: a slot of kind `κ`
 takes its wave offset, direct predicates and rungs of link from
-`rules κ`, and the rung count and tie-break, which the relation reads
-without a slot, from the rule of kind `0`. **SH16a** and **SH16b**
+`rules κ`, and the rung count, tie-break and anchor, which the relation
+reads without a slot, from the rule of kind `0`. **SH16a** and **SH16b**
 (`Interface/Statement.lean`): if every rule of the family satisfies
-`AnchoredRule.Laws` and the family agrees on rungs and ties, the
+`AnchoredRule.Laws` and the family agrees on rungs, ties and anchors, the
 composite does (SH16a), each law at a slot being the slot's rule's, the
 anchor's rule never entering; the composite's verdicts then agree across
 views (SH16b). The laws are clauses A2 and A3 in the relation's terms.
@@ -1806,7 +1806,7 @@ statement reads a rule `R` only through `R.Laws` and these:
   hypothesis `Pop U T r` holds.
 
 **A pair** (`Model/RulePair.lean`) is a synchronous and an asynchronous
-rule that agree on the rung count and the tie-break;
+rule that agree on the rung count, the tie-break and the anchor;
 `RulePair.rules p` reads the first at kind `0` and the second elsewhere,
 and `steelheadAt p` is their composite. `RulePair.Lawful` bundles both
 rules' laws, view laws and tie-break choices. Theorems 1 and 2, the
