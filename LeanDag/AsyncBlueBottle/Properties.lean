@@ -197,14 +197,14 @@ theorem asyncBlueBottleBandLaws :
     unfold AsyncBlueBottle.WeakLink
     rw [coneSupporters_band h hA hAlo hAhi hL.1 (by rw [hL.2.1]; exact hlo)
       (by rw [hL.2.1]; omega) hkk hlo (by omega)]
-  link_novel := fun h hA hAlo hAhi hkk _ _ hlo hhi _ hL hLo => by
+  link_novel := fun h hA _ hAlo hAhi hkk _ _ hlo hhi _ hL hLo => by
     simp only [AsyncBlueBottle.asyncBlueBottleAnchored_waveAt] at hhi
     exact not_weakLink_band_novel h hA hAlo hAhi hLo hL.2.1 hkk hlo (by omega)
 
 /-- **Async BlueBottle reads a band.** -/
 theorem banded : Banded (asyncBlueBottleRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) :=
-  AnchoredRule.banded asyncBlueBottleBandLaws
+  AnchoredRule.banded asyncBlueBottleBandLaws fun _ _ => trivial
 
 /-! ## The two liveness properties
 

@@ -26,7 +26,6 @@ namespace LeanDag
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable [F : Faults Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
-variable {U : BlockUniverse Validator BlockId Payload}
 variable {T : Finset Validator} {N : ℕ}
 
 /-- Drift over a build schedule alone: `T`-validators are never more than
@@ -99,6 +98,11 @@ theorem convergesWithin_iff_bounded
 
 end Factoring
 
+section Trunk
+
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
+variable {U : BlockRecord Validator BlockId Payload P honest}
+
 /-- **The shared trunk of every pacing discipline**, over a partial
 build schedule. `top v` is the highest round `v` reached: `v`'s blocks
 are exactly the rounds `0` through `top v`. The trunk carries the
@@ -107,7 +111,7 @@ schedule data, the views, `converges`, and the pacemaker's two rules —
 `ViewPace` extends it with the full-timeout floor (P9) and global
 referencing (P7), the reactive schedule with the deadline and vote
 clauses instead. -/
-structure PaceCore (U : BlockUniverse Validator BlockId Payload)
+structure PaceCore (U : BlockRecord Validator BlockId Payload P honest)
     (T : Finset Validator) (N : ℕ) where
   /-- The highest round `v` reached. Rounds above it were never built. -/
   top : Validator → ℕ
@@ -219,8 +223,7 @@ what `v` holds at `t` — a legitimate `View`, closure discharged by
 transitivity of `Reaches`. The bridge between the pacing line's
 time-indexed `holds` and the commit rules' `View`, letting liveness be
 stated about a validator's own view rather than the full universe. -/
-def viewAt (pc : PaceCore U T N) (v : Validator) (t : ℕ) :
-    View Validator BlockId Payload U where
+def viewAt [P.Mechanised] (pc : PaceCore U T N) (v : Validator) (t : ℕ) : U.View where
   ids := (pc.holds v t).biUnion (history U)
   subset_ids := by
     intro i hi
@@ -236,7 +239,7 @@ def viewAt (pc : PaceCore U T N) (v : Validator) (t : ℕ) :
 
 /-- **Closure, iterated**: a held block's whole causal cone is held. The
 step is `holds_closed`; the induction runs along the reachability chain. -/
-theorem history_subset_holds (pc : PaceCore U T N) {v : Validator} (hv : v ∈ T)
+theorem history_subset_holds [P.Mechanised] (pc : PaceCore U T N) {v : Validator} (hv : v ∈ T)
     {t : ℕ} {b : BlockId} (hb : b ∈ pc.holds v t) :
     history U b ⊆ pc.holds v t := by
   intro i hi
@@ -247,7 +250,7 @@ theorem history_subset_holds (pc : PaceCore U T N) {v : Validator} (hv : v ∈ T
   | tail _ hstep ih => exact pc.holds_closed v hv t _ ih _ hstep
 
 /-- What a validator holds is in the view it generates. -/
-theorem mem_viewAt (pc : PaceCore U T N) {v : Validator} {t : ℕ} {b : BlockId}
+theorem mem_viewAt [P.Mechanised] (pc : PaceCore U T N) {v : Validator} {t : ℕ} {b : BlockId}
     (hb : b ∈ pc.holds v t) : b ∈ (pc.viewAt v t).ids :=
   Finset.mem_biUnion.mpr ⟨b, hb, mem_history_self⟩
 
@@ -255,7 +258,7 @@ theorem mem_viewAt (pc : PaceCore U T N) {v : Validator} {t : ℕ} {b : BlockId}
 closure `viewAt` adds nothing: a reliable validator's view is its
 holdings, and the local liveness statement is about blocks it actually
 has. -/
-theorem viewAt_ids (pc : PaceCore U T N) {v : Validator} (hv : v ∈ T) (t : ℕ) :
+theorem viewAt_ids [P.Mechanised] (pc : PaceCore U T N) {v : Validator} (hv : v ∈ T) (t : ℕ) :
     (pc.viewAt v t).ids = pc.holds v t := by
   refine Finset.Subset.antisymm (fun i hi => ?_) (fun b hb => pc.mem_viewAt hb)
   obtain ⟨a, ha, hia⟩ := Finset.mem_biUnion.mp hi
@@ -276,26 +279,6 @@ theorem holds_roundBlocks (pc : PaceCore U T N) {n : ℕ} (hn : n ≤ N)
     pc.built_le_latest _ hbT n hn
   exact pc.converges v hv _ hbT (pc.latest n)
     (le_trans (hg _ hbT) hle) (pc.holds_mono _ _ _ hle hown)
-
-/-- **The local commit argument, stated once.** Given a leader block, a
-quorum-sized `T` whose decision-round blocks all certify it, and
-post-GST builds, every reliable validator decides the slot on its own
-view: the counting of `directCommit_of_certifiesAt` run inside
-`viewAt v t` rather than the universe. -/
-theorem decided_local_of_certifiesAt [S : Slots Validator] {k : ℕ} {L : BlockId}
-    (pc : PaceCore U T N) (hcard : quorumCard Validator ≤ T.card)
-    (hN : S.slotRound k + 2 ≤ N)
-    (hg : ∀ u ∈ T, pc.gst ≤ pc.built u (S.slotRound k + 2))
-    (hL : IsLeaderBlock U k L) (hcert : CertifiesAt U T (S.slotRound k) L) :
-    ∀ v ∈ T,
-      Decided U (pc.viewAt v (pc.latest (S.slotRound k + 2) + pc.delay)) k (some L) := by
-  have hpop2 := pc.populatedOn hcard (S.slotRound k + 2) hN
-  intro v hv
-  refine Decided.directCommit hL (le_trans hcard (Finset.card_le_card ?_))
-  intro u hu
-  obtain ⟨c, hc, hcc, hcr⟩ := hpop2 u hu
-  refine mem_heldAuthors.mpr ⟨c, mem_certificatesAt.mpr ⟨hc, hcr, hcert u hu c hc hcc hcr⟩, ?_, hcc⟩
-  exact pc.mem_viewAt (pc.holds_roundBlocks hN hg v hv c hc (hcc ▸ hu) hcr)
 
 omit [DecidableEq BlockId] in
 /-- **Drift collapses, from any starting value.** At any round whose
@@ -330,6 +313,30 @@ theorem driftOn_of_catchup {R : ℕ}
   exact le_trans (le_trans hgst hRn) (hle u hu n (htop u hu))
 
 end PaceCore
+
+end Trunk
+
+variable {U : BlockUniverse Validator BlockId Payload}
+
+/-- **The local commit argument, stated once.** Given a leader block, a
+quorum-sized `T` whose decision-round blocks all certify it, and
+post-GST builds, every reliable validator decides the slot on its own
+view: the counting of `directCommit_of_certifiesAt` run inside
+`viewAt v t` rather than the universe. -/
+theorem PaceCore.decided_local_of_certifiesAt [S : Slots Validator] {k : ℕ} {L : BlockId}
+    (pc : PaceCore U T N) (hcard : quorumCard Validator ≤ T.card)
+    (hN : S.slotRound k + 2 ≤ N)
+    (hg : ∀ u ∈ T, pc.gst ≤ pc.built u (S.slotRound k + 2))
+    (hL : IsLeaderBlock U k L) (hcert : CertifiesAt U T (S.slotRound k) L) :
+    ∀ v ∈ T,
+      Decided U (pc.viewAt v (pc.latest (S.slotRound k + 2) + pc.delay)) k (some L) := by
+  have hpop2 := pc.populatedOn hcard (S.slotRound k + 2) hN
+  intro v hv
+  refine Decided.directCommit hL (le_trans hcard (Finset.card_le_card ?_))
+  intro u hu
+  obtain ⟨c, hc, hcc, hcr⟩ := hpop2 u hu
+  refine mem_heldAuthors.mpr ⟨c, mem_certificatesAt.mpr ⟨hc, hcr, hcert u hu c hc hcc hcr⟩, ?_, hcc⟩
+  exact pc.mem_viewAt (pc.holds_roundBlocks hN hg v hv c hc (hcc ▸ hu) hcr)
 
 /-- The full-timeout discipline: `PaceCore` with P9 (the waiting floor)
 and the global referencing clause P7. The structure the coverage

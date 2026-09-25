@@ -209,10 +209,11 @@ theorem altRule_extendLaws : altRule.ExtendLaws where
     exact ⟨c, hV c hcV, by rw [hblk]; exact hcr, by rw [hblk]; exact hcL⟩
   skip_ext := fun _ _ hs => hs.elim
   link_ext := fun _ _ _ _ => Iff.rfl
-  link_novel_ext := fun _ _ _ _ _ hlink => hlink.elim
+  link_novel_ext := fun _ _ _ _ _ _ hlink => hlink.elim
 
 /-- **A verdict survives an extension**, at the varying wave. -/
-theorem altRule_persist : Persist altRule.toDagRule := AnchoredRule.persist altRule_extendLaws
+theorem altRule_persist : Persist altRule.toDagRule :=
+  AnchoredRule.persist altRule_extendLaws fun _ _ => trivial
 
 /-- **Eligibility spans at the bound**: two consecutive slots reach past everything below them,
 the wave never exceeding one. A bound is what a varying wave supplies where a constant wave

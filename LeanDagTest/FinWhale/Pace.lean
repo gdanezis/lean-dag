@@ -164,7 +164,9 @@ theorem ugrow_certifies {N r : ℕ} {c L : ℕ} (hc : c ∈ (Ugrow N).ids)
 the development's own reactive witness, read at its own schedule; the
 structure below rebuilds only the schedule-dependent clauses. -/
 def fwPaceCore (N : ℕ) : PaceCore (Ugrow N) {1, 2, 3} N :=
-  ReactivePace.toPaceCore (S := rrSlots) (ReactiveM.toReactivePace (S := rrSlots) (ugrowReactive N))
+  ReactiveCore.toPaceCore
+    (ReactivePace.toReactiveCore (S := rrSlots)
+      (ReactiveM.toReactivePace (S := rrSlots) (ugrowReactive N)))
 
 @[simp] theorem fwPaceCore_built (N : ℕ) (v : Fin 4) (n : ℕ) :
     (fwPaceCore N).built v n = (v : ℕ) + 6 * n := rfl

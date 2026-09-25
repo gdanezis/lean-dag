@@ -90,14 +90,14 @@ theorem nemoBandLaws : (Nemo.nemoAnchored Validator BlockId Payload).BandLaws wh
   skip_band := fun _ _ _ _ _ _ _ h => h.elim
   link_band := fun h hA hAlo hAhi hkk _ _ hlo hhi _ _ =>
     certifiedIn_band h hA hAlo hAhi hkk hlo (by simp only [Nemo.nemoAnchored_waveAt] at hhi; omega)
-  link_novel := fun h hA hAlo hAhi hkk _ _ hlo hhi _ _ hL =>
+  link_novel := fun h hA _ hAlo hAhi hkk _ _ hlo hhi _ _ hL =>
     not_certifiedIn_band_novel h hA hAlo hAhi hkk hlo
       (by simp only [Nemo.nemoAnchored_waveAt] at hhi; omega) hL
 
 /-- **Nemo is banded**: the relation's band at Nemo's laws. -/
 theorem banded : Banded (nemoRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) :=
-  AnchoredRule.banded nemoBandLaws
+  AnchoredRule.banded nemoBandLaws fun _ _ => trivial
 
 /-! ## The liveness properties
 

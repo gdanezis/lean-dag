@@ -16,10 +16,10 @@ namespace Interface
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ _ U
   refine ⟨?_, ?_⟩
-  · intro rules hl hr ht
-    exact compose_laws rules hl hr ht
-  · intro rules S V₁ V₂ k v₁ v₂ hl hr ht h₁ h₂
-    exact compose_decided_unique rules hl hr ht h₁ h₂
+  · intro rules hl hr ht ha
+    exact compose_laws rules hl hr ht ha
+  · intro rules S V₁ V₂ k v₁ v₂ hl hr ht ha h₁ h₂
+    exact compose_decided_unique rules hl hr ht ha h₁ h₂
 
 end Interface
 

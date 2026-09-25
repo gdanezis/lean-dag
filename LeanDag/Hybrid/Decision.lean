@@ -173,17 +173,17 @@ theorem hybridLaws {k : ℕ} (hk : Admissible Validator k) :
   commit_unique := fun hne hL₁ hL₂ h₁ h₂ => eq_of_directCommitIn hne hL₁ hL₂ h₁ h₂
   commit_skip := fun hne hL h hskip =>
     not_directSkipIn_of_directCommitIn hne h (directSkipIn_of_directSkipSlotIn hskip hL)
-  commit_link := fun hne _ h hA helig => ⟨0, Nat.one_pos,
+  commit_link := fun hne _ h hA _ helig => ⟨0, Nat.one_pos,
     thickLink_of_directCommitIn hne hk.2 h hA.1 (by
       have := (hybridAnchored Validator BlockId Payload k).anchor_round_le hA helig
       simp only [hybridAnchored_waveAt] at this; omega)⟩
   commit_link_unique := by
-    intro S U V k j i L₁ L₂ A hne hL₁ hL₂ h _ _ _ _ hlink _
+    intro S U V k j i L₁ L₂ A hne hL₁ hL₂ h _ _ _ _ _ hlink _
     exact eq_of_directCommitIn_of_thickLink hne hk.1 hL₁ hL₂ h hlink
-  skip_link := fun hne hskip hL _ =>
+  skip_link := fun hne hskip hL _ _ =>
     not_thickLink_of_directSkipIn hne hk.1 (directSkipIn_of_directSkipSlotIn hskip hL) _
   link_unique := by
-    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ hl₁ hl₂ hm₁ hm₂
+    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ _ hl₁ hl₂ hm₁ hm₂
     exact le_antisymm (not_lt.mp (show ¬ L₂ < L₁ from hm₁ L₂ hL₂ hl₂))
       (not_lt.mp (show ¬ L₁ < L₂ from hm₂ L₁ hL₁ hl₁))
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h

@@ -81,7 +81,8 @@ theorem commitsDirect :
 laws, which are Hydrozoan's direct layer and rung `0` and Optimal's fast
 path and evidence rung. -/
 theorem banded : Banded (optimalRule (Replica := Replica) (BlockId := BlockId)) :=
-  AnchoredRule.bandedVia LeanDag.OptimalHydrozoan.optimalBandLaws
+  AnchoredRule.bandedVia LeanDag.OptimalHydrozoan.optimalBandLaws (I := fun _ _ => True)
+    (fun _ _ => trivial) fun _ _ => trivial
 
 /-! ## The two liveness properties
 
@@ -287,7 +288,8 @@ theorem safety :
   Properties.safety banded agree commitsCandidate
 
 theorem progress : Properties.Support.Progresses
-    (optSupport (Replica := Replica) (BlockId := BlockId)) (LeanDag.Hydrozoan.hzReliability Replica) :=
+    (R := optimalRule (Replica := Replica) (BlockId := BlockId)) optSupport
+    (LeanDag.Hydrozoan.hzReliability Replica) :=
   Properties.Support.progress optSupport_commits
 
 end OptimalHydrozoanProperties

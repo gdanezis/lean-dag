@@ -1007,7 +1007,7 @@ omit S in
 /-- **The composite of a lawful pair is lawful**: `compose_laws` at the pair's rules. -/
 theorem steelheadAt_laws (hs : p.sync.Laws) (ha : p.async.Laws) : (steelheadAt p).Laws :=
   compose_laws p.rules (fun κ => by unfold RulePair.rules; split; exacts [hs, ha])
-    (RulePair.rules_rungs p) (RulePair.rules_tie p)
+    (RulePair.rules_rungs p) (RulePair.rules_tie p) (RulePair.rules_anchor p)
 
 omit S in
 /-- **The composite of a pair has a tie-break choice** once both rules do. -/

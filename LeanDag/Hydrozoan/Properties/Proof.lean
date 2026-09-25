@@ -45,7 +45,7 @@ theorem safety : LeanDag.Properties.Safe (rule (Replica := Replica) (BlockId := 
   LeanDag.Properties.safety banded agree commitsCandidate
 
 theorem progress : LeanDag.Properties.Support.Progresses
-    (hzSupport (Replica := Replica) (BlockId := BlockId)) (hzReliability Replica) :=
+    (R := rule (Replica := Replica) (BlockId := BlockId)) hzSupport (hzReliability Replica) :=
   LeanDag.Properties.Support.progress hzSupport_commits
 
 end Properties

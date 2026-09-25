@@ -8,8 +8,9 @@ decided by, the anchor search reads the slot's own rule. The composite
 of a family of anchored rules, one per kind, does exactly that: every
 datum of a slot, its wave offset, its direct predicates and its rungs of
 link, is the datum of the rule of the slot's kind, which the schedule
-assigns (`docs/kinds.md`), while the number of rungs and the tie-break,
-which the relation reads without a slot, are the family's common ones.
+assigns (`docs/kinds.md`), while the number of rungs, the tie-break and
+what an anchor is, which the relation reads without a slot, are the
+family's common ones.
 `steelheadAnchored w` is this composite at Mahi-Mahi's rule read at
 `w κ` (`Interface/Statement.lean`, SH-MM16c).
 
@@ -24,8 +25,9 @@ variable {Validator : Type*} {BlockId : Type*} {Payload : Type*}
 variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
 
 /-- **The composite of a family of rules**, one per kind: a slot of kind `κ` is decided by
-`rules κ`, whose wave offset, direct predicates and rungs it takes; the rung count and the
-tie-break are read from the rule of kind `0`, the family being asked to agree on them. -/
+`rules κ`, whose wave offset, direct predicates and rungs it takes; the rung count, the
+tie-break and the anchor are read from the rule of kind `0`, the family being asked to agree on
+them. -/
 def compose (rules : ℕ → AnchoredRule Validator BlockId Payload P honest) :
     AnchoredRule Validator BlockId Payload P honest where
   waveAt := fun κ => (rules κ).waveAt κ
@@ -35,6 +37,7 @@ def compose (rules : ℕ → AnchoredRule Validator BlockId Payload P honest) :
   rungs := (rules 0).rungs
   Link := fun i U A L S k => (rules (S.kind k)).Link i U A L S k
   tie := (rules 0).tie
+  Anchor := (rules 0).Anchor
 
 end Steelhead
 

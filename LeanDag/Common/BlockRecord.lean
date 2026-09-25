@@ -292,6 +292,11 @@ instance : CopyStable (distinct (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) where
   copy := fun _ _ _ h => h
 
+instance [DecidableEq Validator] [DecidableEq BlockId]
+    (blk : BlockId → Block Validator BlockId Payload) (b : Block Validator BlockId Payload) :
+    Decidable (distinct blk b) :=
+  inferInstanceAs (Decidable (∀ i ∈ b.refs, ∀ j ∈ b.refs, _ → _))
+
 /-- **Leader exclusion**: for every validator, either the parents are
 consistent about it — no two of their references are distinct blocks by
 it — or no parent is by it. A block that has watched a validator
@@ -378,9 +383,19 @@ instance : Mechanised (selfParent (Validator := Validator) (BlockId := BlockId)
     obtain ⟨j, hj, hjc⟩ := h (by change 0 < b.round - G at hr; omega)
     exact ⟨j, hj, by rw [chopBlk_creator]; exact hjc⟩
 
+instance [DecidableEq Validator]
+    (blk : BlockId → Block Validator BlockId Payload) (b : Block Validator BlockId Payload) :
+    Decidable (selfParent blk b) :=
+  inferInstanceAs (Decidable (_ → ∃ i ∈ b.refs, _))
+
 /-- Two clauses together. -/
 def and (C D : Clause Validator BlockId Payload) : Clause Validator BlockId Payload :=
   fun blk b => C blk b ∧ D blk b
+
+instance {C D : Clause Validator BlockId Payload}
+    (blk : BlockId → Block Validator BlockId Payload) (b : Block Validator BlockId Payload)
+    [Decidable (C blk b)] [Decidable (D blk b)] : Decidable (and C D blk b) :=
+  inferInstanceAs (Decidable (_ ∧ _))
 
 instance {C D : Clause Validator BlockId Payload} [Mechanised C] [Mechanised D] :
     Mechanised (and C D) where
@@ -399,6 +414,15 @@ end Clause
 section ValidAtMechanised
 
 variable [DecidableEq Validator] {q : ℕ} {C : Clause Validator BlockId Payload}
+
+/-- The family is decidable on concrete data whenever its clause is. -/
+instance ValidAt.decidable [DecidableEq BlockId]
+    (blk : BlockId → Block Validator BlockId Payload) (b : Block Validator BlockId Payload)
+    [Decidable (C blk b)] : Decidable (ValidAt q C blk b) :=
+  decidable_of_iff
+    ((∀ i ∈ b.refs, (blk i).round + 1 = b.round) ∧
+      (0 < b.round → q ≤ (creators blk b).card) ∧ C blk b)
+    ⟨fun h => ⟨h.1, h.2.1, h.2.2⟩, fun h => ⟨h.predecessor, h.quorum, h.clause⟩⟩
 
 /-- **The family is mechanised** whenever its clause is. -/
 instance ValidAt.mechanised [Clause.Mechanised C] :

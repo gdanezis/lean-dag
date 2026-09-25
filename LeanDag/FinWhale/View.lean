@@ -523,20 +523,20 @@ theorem finWhaleLaws [LinearOrder BlockId] :
   commit_skip := fun _ hL h hskip =>
     no_directSkip_of_commit_view (mem_slotBlocks.2 hL) (directCommit_restrict h) hskip
   commit_link := by
-    intro S U V k j L A _ hL h hA helig
+    intro S U V k j L A _ hL h hA _ helig
     refine ⟨0, Nat.one_pos, indirectCommit_of_directCommit hA.1 ?_ (mem_slotBlocks.2 hL)
       (directCommit_restrict h)⟩
     have := (finWhaleAnchored Validator BlockId Payload).anchor_round_le hA helig
     simp only [finWhaleAnchored_waveAt] at this
     omega
   commit_link_unique := by
-    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ hlink _
+    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ _ hlink _
     by_contra hne
     exact no_indirectCommit_of_directCommit hL₁.1 hL₂.1 (mem_slotBlocks.2 hL₁)
       ⟨hne, by rw [hL₁.2.1, hL₂.2.1], by rw [hL₁.2.2, hL₂.2.2]⟩ (directCommit_restrict h) hlink
-  skip_link := fun _ hskip _ _ => no_indirectCommit_of_directSkip_view hskip
+  skip_link := fun _ hskip _ _ _ => no_indirectCommit_of_directSkip_view hskip
   link_unique := by
-    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ hl₁ hl₂ hm₁ hm₂
+    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ _ hl₁ hl₂ hm₁ hm₂
     exact le_antisymm (not_lt.mp (show ¬ L₂ < L₁ from hm₁ L₂ hL₂ hl₂))
       (not_lt.mp (show ¬ L₁ < L₂ from hm₂ L₁ hL₁ hl₁))
   commit_mono := fun _ hsub h => directCommit_mono hsub h

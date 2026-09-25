@@ -37,6 +37,7 @@ RULES = {
     "Async BlueBottle": ["LeanDag.AsyncBlueBottle.Decided"],
     "Hybrid": ["LeanDag.Hybrid.Decided"],
     "Optimal-Hydrozoan": ["LeanDag.OptimalHydrozoan.DecidedOpt"],
+    "Bluestreak": ["LeanDag.Bluestreak.Decided"],
     "FinWhale": ["LeanDag.FinWhale.DirectCommit", "LeanDag.FinWhale.DirectSkip",
                  "LeanDag.FinWhale.IndirectCommit", "LeanDag.FinWhale.SPCommit",
                  "LeanDag.FinWhale.SPSkip", "LeanDag.FinWhale.FastCommit"],

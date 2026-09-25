@@ -177,20 +177,20 @@ theorem steelheadLaws {w : ℕ → ℕ} (hw : ∀ κ, 2 ≤ w κ) :
     intro S U V₁ V₂ k L _ hL h hskip
     exact MahiMahi.not_directSkipIn_of_directCommitIn (hw _) hL h hskip
   commit_link := by
-    intro S U V k j L A _ _ h hA helig
+    intro S U V k j L A _ _ h hA _ helig
     exact ⟨0, Nat.one_pos, certifiedIn_of_commit_at_anchor (fun κ => by have := hw κ; omega)
       h hA helig⟩
   commit_link_unique := by
-    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ hlink _
+    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ _ hlink _
     exact MahiMahi.eq_of_hasCertificate (hw _) hL₁ hL₂
       (MahiMahi.certificates_nonempty_of_directCommit (MahiMahi.directCommit_of_directCommitIn h))
       (MahiMahi.certificates_nonempty_of_certifiedIn hlink)
   skip_link := by
-    intro S U V k i L A _ hskip hL _
+    intro S U V k i L A _ hskip hL _ _
     exact MahiMahi.not_certifiedIn_of_directSkip (hw _) (MahiMahi.directSkip_of_directSkipIn hskip)
       hL.2.2 hL.2.1
   link_unique := by
-    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ hl₁ hl₂ _ _
+    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ _ hl₁ hl₂ _ _
     exact MahiMahi.eq_of_hasCertificate (hw _) hL₁ hL₂
       (MahiMahi.certificates_nonempty_of_certifiedIn hl₁)
       (MahiMahi.certificates_nonempty_of_certifiedIn hl₂)

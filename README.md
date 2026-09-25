@@ -444,6 +444,35 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   A peer arc importing the Hydrozoan arc read-only, and the second
   developed in `asonnino/mysticeti`.
 
+- **Bluestreak** (`LeanDag/Bluestreak/`): the sparse uncertified DAG
+  (IACR ePrint 2026/898), whose non-leader blocks carry two references
+  and whose round-`r+2` blocks *claim* the leader certified — by a
+  field, or for a leader block by the votes it carries — with the
+  `n − f` votes backing a claim outside the claiming block's causal
+  history. The rule is the core's with claims for certificates, proved
+  safe at `n ≥ 3f+1` under the trace the protocol's referenceability
+  discipline leaves on the record: every claim an honest block reaches
+  is certified (`Bluestreak.bluestreakLaws`). Stating it took one field
+  more of the anchored relation — what a committed anchor is known to
+  be — because the rule's own laws fail of an uncommitted anchor, on
+  data; and its per-candidate skip is strictly stronger than the core's
+  slot blame, on data. Liveness is stated on claims, not references,
+  and the pull pacemaker is a reactive schedule whose referencing
+  discipline is exactly the invariant safety assumes
+  (`Bluestreak.ReactiveB.disciplined`): every reliable validator decides
+  a reliable-led slot on its own view (`Bluestreak.ReactiveB.decided_local`),
+  and a sparse DAG grown to every horizon witnesses the schedule. The
+  arc shows the five properties over the disciplined records, the block
+  format being assumed of certified blocks rather than checked per slot,
+  since a validity predicate cannot read which slot a block sits in;
+  the band's novelty clause then reads the anchor, because a claim names
+  its candidate where every other rule's evidence references it. Chain
+  quality does not apply to a two-reference block. And garbage
+  collection is a protocol question here: referenceability asks that
+  every claim in a block's history be provable, which a validator that
+  prunes cannot do, so the rule must be read bounded — two rounds, a
+  claim's reach — and the cut then forgets the claims it orphans.
+
 Every definition is exercised on concrete models by `decide` before
 anything is proved from it, and every principal result depends on
 exactly Lean's three standard axioms (`propext`, `Classical.choice`,
@@ -471,7 +500,7 @@ and its entry file says which:
 
 | kind | what it varies | arcs |
 |---|---|---|
-| **commit rule** | the decision relation | `Mysticeti/` (the core), `Odontoceti/`, `Nemo/`, `Hybrid/`, `MahiMahi/`, `AsyncBlueBottle/`, `Hydrozoan/`, `OptimalHydrozoan/`, `FinWhale/`, and the two refuted rules `BlackMarlin/` and `Minnow/` |
+| **commit rule** | the decision relation | `Mysticeti/` (the core), `Odontoceti/`, `Nemo/`, `Hybrid/`, `MahiMahi/`, `AsyncBlueBottle/`, `Hydrozoan/`, `OptimalHydrozoan/`, `FinWhale/`, `Bluestreak/`, and the two refuted rules `BlackMarlin/` and `Minnow/` |
 | **universe transform** | the DAG, owing a witness that it does so lawfully | `GC/` (the cut), `SafeSkip/` (the fill), re-genesis |
 | **schedule mechanism** | the `Slots` a rule runs on, and no universe at all | `Barnacle/` (how many leaders a round has), `Adaptive/` (which validators lead), `Reactive/` (when a validator builds), `Timed/` (the full-timeout baseline) |
 | **analysis** | nothing — it measures a DAG rather than deciding on one | `DoS/`, `Quality/`, `Network/` |

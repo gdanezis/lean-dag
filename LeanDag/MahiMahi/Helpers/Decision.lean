@@ -118,17 +118,17 @@ theorem mahiMahiLaws {w : ℕ} (hw : 2 ≤ w) :
     (mahiMahiAnchored Validator BlockId Payload w).Laws where
   commit_unique := fun _ hL₁ hL₂ h₁ h₂ => eq_of_directCommitIn hw hL₁ hL₂ h₁ h₂
   commit_skip := fun _ hL h hskip => not_directSkipIn_of_directCommitIn hw hL h hskip
-  commit_link := fun _ _ h hA helig => ⟨0, Nat.one_pos,
+  commit_link := fun _ _ h hA _ helig => ⟨0, Nat.one_pos,
     certifiedIn_of_directCommitIn_at_anchor (by omega) h hA helig⟩
   commit_link_unique := by
-    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ hlink _
+    intro S U V k j i L₁ L₂ A _ hL₁ hL₂ h _ _ _ _ _ hlink _
     exact eq_of_hasCertificate hw hL₁ hL₂
       (certificates_nonempty_of_directCommit (directCommit_of_directCommitIn h))
       (certificates_nonempty_of_certifiedIn hlink)
-  skip_link := fun _ hskip hL _ =>
+  skip_link := fun _ hskip hL _ _ =>
     not_certifiedIn_of_directSkip hw (directSkip_of_directSkipIn hskip) hL.2.2 hL.2.1
   link_unique := by
-    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ hl₁ hl₂ _ _
+    intro S U k j i L₁ L₂ A _ hL₁ hL₂ _ _ _ _ _ hl₁ hl₂ _ _
     exact eq_of_hasCertificate hw hL₁ hL₂ (certificates_nonempty_of_certifiedIn hl₁)
       (certificates_nonempty_of_certifiedIn hl₂)
   commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h

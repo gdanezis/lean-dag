@@ -90,7 +90,7 @@ theorem decidedBelowRun {D : Dag Validator BlockId Payload} {S : Slots Validator
 /-- **FinWhale reads a band**: the relation's band at its band laws. -/
 theorem banded : Banded (finWhaleRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) :=
-  AnchoredRule.banded LeanDag.FinWhale.finWhaleBandLaws
+  AnchoredRule.banded LeanDag.FinWhale.finWhaleBandLaws fun _ _ => trivial
 
 /-- **The indirect rule, with its bound.** The relation's indirect
 property at the rung's choice, read at the three-round eligibility:
@@ -357,8 +357,9 @@ theorem safety : Properties.Safe (finWhaleRule (Validator := Validator) (BlockId
     (Payload := Payload)) :=
   Properties.safety banded agree commitsCandidate
 
-theorem progress : Properties.Support.Progresses (fwSupport (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload)) (coreReliability Validator) :=
+theorem progress : Properties.Support.Progresses
+    (R := finWhaleRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
+    fwSupport (coreReliability Validator) :=
   Properties.Support.progress fwSupport_commits
 
 end FinWhaleProperties

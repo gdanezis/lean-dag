@@ -111,6 +111,11 @@ structure AnchoredRule (Validator : Type*) (BlockId : Type*) (Payload : Type*)
   /-- The tie-break at rung `i`: `tie i L' L` says `L'` is preferred to `L`.
   Empty where the rung's link is unique per slot. -/
   tie : ℕ → BlockId → BlockId → Prop
+  /-- What a committed anchor is known to be, read on the record: the
+  laws that read an anchor assume it, and `anchor_commit` and
+  `anchor_link` make every committed block one. `True` for a rule whose
+  rungs need nothing of the anchor. -/
+  Anchor : (U : BlockRecord Validator BlockId Payload P honest) → BlockId → Prop := fun _ _ => True
 
 namespace AnchoredRule
 
@@ -298,30 +303,33 @@ structure Laws (I : Slots Validator → BlockRecord Validator BlockId Payload P 
     I S U → IsLeaderBlock U k L → R.Commit U V₁ L (S.slotRound k) (S.kind k) →
     R.Skip U V₂ S k → False
   /-- **Visibility.** A direct commit is linked, at some rung, from any
-  candidate anchor of any eligible slot. -/
+  anchor of any eligible slot. -/
   commit_link : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {V : U.View} {k j : ℕ} {L A : BlockId},
     I S U → IsLeaderBlock U k L → R.Commit U V L (S.slotRound k) (S.kind k) →
-    IsLeaderBlock U j A → R.Eligible k j →
+    IsLeaderBlock U j A → R.Anchor U A → R.Eligible k j →
     ∃ i, i < R.rungs ∧ R.Link i U A L S k
   /-- A direct commit and the tie-break's choice at any rung, from any
-  candidate anchor of any eligible slot, are one block. -/
+  anchor of any eligible slot, are one block. -/
   commit_link_unique : ∀ {S : Slots Validator}
     {U : BlockRecord Validator BlockId Payload P honest}
     {V : U.View} {k j i : ℕ} {L₁ L₂ A : BlockId},
     I S U → IsLeaderBlock U k L₁ → IsLeaderBlock U k L₂ →
     R.Commit U V L₁ (S.slotRound k) (S.kind k) →
-    IsLeaderBlock U j A → R.Eligible k j → i < R.rungs →
+    IsLeaderBlock U j A → R.Anchor U A → R.Eligible k j → i < R.rungs →
     (∀ i', i' < i → R.RungEmpty U A i' k) →
     R.Link i U A L₂ S k → R.Least U A i k L₂ → L₁ = L₂
-  /-- A direct skip excludes every link for the slot's candidates. -/
+  /-- A direct skip excludes every link for the slot's candidates from an
+  anchor. -/
   skip_link : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {V : U.View} {k i : ℕ} {L A : BlockId},
-    I S U → R.Skip U V S k → IsLeaderBlock U k L → i < R.rungs → ¬ R.Link i U A L S k
+    I S U → R.Skip U V S k → IsLeaderBlock U k L → i < R.rungs → R.Anchor U A →
+    ¬ R.Link i U A L S k
   /-- Two tie-break choices at one rung, from one anchor, are one block. -/
   link_unique : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
     {k j i : ℕ} {L₁ L₂ A : BlockId},
-    I S U → IsLeaderBlock U k L₁ → IsLeaderBlock U k L₂ → IsLeaderBlock U j A → R.Eligible k j →
+    I S U → IsLeaderBlock U k L₁ → IsLeaderBlock U k L₂ → IsLeaderBlock U j A → R.Anchor U A →
+    R.Eligible k j →
     i < R.rungs → (∀ i', i' < i → R.RungEmpty U A i' k) →
     R.Link i U A L₁ S k → R.Link i U A L₂ S k →
     R.Least U A i k L₁ → R.Least U A i k L₂ → L₁ = L₂
@@ -338,6 +346,17 @@ structure Laws (I : Slots Validator → BlockRecord Validator BlockId Payload P 
     S₁.kind k = S₂.kind k → R.Skip U V S₁ k → R.Skip U V S₂ k
   /-- And so does every rung's link. -/
   link_congr : R.LinkCongr
+  /-- A direct commit is an anchor. -/
+  anchor_commit : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
+    {V : U.View} {k : ℕ} {L : BlockId},
+    I S U → IsLeaderBlock U k L → R.Commit U V L (S.slotRound k) (S.kind k) → R.Anchor U L :=
+    by intros; trivial
+  /-- A candidate linked from an anchor is an anchor. -/
+  anchor_link : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
+    {k j i : ℕ} {A L : BlockId},
+    I S U → IsLeaderBlock U j A → R.Anchor U A → R.Eligible k j → IsLeaderBlock U k L →
+    i < R.rungs → R.Link i U A L S k → R.Anchor U L :=
+    by intros; trivial
 
 variable {R} {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
 
@@ -356,6 +375,18 @@ in slot order, so without this a single block could be delivered twice. -/
 theorem slot_eq_of_decided_commit {V₁ V₂ : U.View} {k₁ k₂ : ℕ} {L : BlockId}
     (h₁ : R.Decided U V₁ k₁ (some L)) (h₂ : R.Decided U V₂ k₂ (some L)) : k₁ = k₂ :=
   slot_eq_of_isLeaderBlock (isLeaderBlock_of_decided h₁) (isLeaderBlock_of_decided h₂)
+
+/-- **Every committed block is an anchor**: directly by `anchor_commit`,
+indirectly by `anchor_link` from the anchor that committed it. -/
+theorem anchor_of_decided (hl : R.Laws I) (hI : I S U) {V : U.View} {k : ℕ} {v : Option BlockId}
+    (h : R.Decided U V k v) : ∀ A, v = some A → R.Anchor U A := by
+  induction h with
+  | directCommit hL hc => intro A hA; cases hA; exact hl.anchor_commit hI hL hc
+  | directSkip _ => intro A hA; cases hA
+  | @indirectCommit k j A' L i _ helig hj _ hi _ hL hlink _ ih _ =>
+    intro A hA; cases hA
+    exact hl.anchor_link hI (isLeaderBlock_of_decided hj) (ih A' rfl) helig hL hi hlink
+  | indirectSkip _ _ _ _ _ => intro A hA; cases hA
 
 /-- **The anchor comparison.** Two indirect decisions for one slot each
 name an anchor and the premise that every eligible slot between it and
@@ -381,7 +412,7 @@ one rung by `link_unique`, and at different rungs the higher rung's
 emptiness premise contradicts the lower rung's link. -/
 theorem eq_of_indirect (hl : R.Laws I) (hI : I S U) {k j i₁ i₂ : ℕ} {L₁ L₂ A : BlockId}
     (hL₁ : IsLeaderBlock U k L₁) (hL₂ : IsLeaderBlock U k L₂)
-    (hA : IsLeaderBlock U j A) (helig : R.Eligible k j)
+    (hA : IsLeaderBlock U j A) (hanc : R.Anchor U A) (helig : R.Eligible k j)
     (hi₁ : i₁ < R.rungs) (hemp₁ : ∀ i', i' < i₁ → R.RungEmpty U A i' k)
     (hlink₁ : R.Link i₁ U A L₁ S k) (hmin₁ : R.Least U A i₁ k L₁)
     (hi₂ : i₂ < R.rungs) (hemp₂ : ∀ i', i' < i₂ → R.RungEmpty U A i' k)
@@ -389,7 +420,7 @@ theorem eq_of_indirect (hl : R.Laws I) (hI : I S U) {k j i₁ i₂ : ℕ} {L₁ 
     L₁ = L₂ := by
   rcases lt_trichotomy i₁ i₂ with hlt | rfl | hgt
   · exact absurd hlink₁ (hemp₂ i₁ hlt L₁ hL₁)
-  · exact hl.link_unique hI hL₁ hL₂ hA helig hi₁ hemp₁ hlink₁ hlink₂ hmin₁ hmin₂
+  · exact hl.link_unique hI hL₁ hL₂ hA hanc helig hi₁ hemp₁ hlink₁ hlink₂ hmin₁ hmin₂
   · exact absurd hlink₂ (hemp₁ i₂ hgt L₂ hL₂)
 
 /-- **Agreement.** No two validators reach conflicting decisions for a
@@ -406,29 +437,32 @@ theorem decided_unique (hl : R.Laws I) (hI : I S U) {V₁ : U.View} {k : ℕ} {v
     | directCommit hL₂ h₂ => exact congrArg some (hl.commit_unique hI hL hL₂ h h₂)
     | directSkip hskip => exact absurd (hl.commit_skip hI hL h hskip) not_false
     | @indirectCommit _ j A L₂ i _ helig hj _ hi hemp hL₂ hlink hmin =>
-      exact congrArg some (hl.commit_link_unique hI hL hL₂ h (isLeaderBlock_of_decided hj) helig
-        hi hemp hlink hmin)
+      exact congrArg some (hl.commit_link_unique hI hL hL₂ h (isLeaderBlock_of_decided hj)
+        (anchor_of_decided hl hI hj A rfl) helig hi hemp hlink hmin)
     | @indirectSkip _ j A _ helig hj _ hnone =>
-      obtain ⟨i, hi, hlink⟩ := hl.commit_link hI hL h (isLeaderBlock_of_decided hj) helig
+      obtain ⟨i, hi, hlink⟩ := hl.commit_link hI hL h (isLeaderBlock_of_decided hj)
+        (anchor_of_decided hl hI hj A rfl) helig
       exact absurd hlink (hnone i hi L hL)
   | @directSkip k hskip =>
     intro V₂ v₂ h₂
     cases h₂ with
     | directCommit hL₂ h₂ => exact absurd (hl.commit_skip hI hL₂ h₂ hskip) not_false
     | directSkip _ => rfl
-    | indirectCommit _ _ _ _ hi _ hL₂ hlink _ => exact absurd hlink (hl.skip_link hI hskip hL₂ hi)
+    | indirectCommit _ _ hj _ hi _ hL₂ hlink _ =>
+      exact absurd hlink (hl.skip_link hI hskip hL₂ hi (anchor_of_decided hl hI hj _ rfl))
     | indirectSkip _ _ _ _ _ => rfl
   | @indirectCommit k j A L i hkj helig hj hmid hi hemp hL hlink hmin ihj ihmid =>
     intro V₂ v₂ h₂
     cases h₂ with
     | directCommit hL₂ h₂ =>
-      exact congrArg some (hl.commit_link_unique hI hL₂ hL h₂ (isLeaderBlock_of_decided hj) helig
-        hi hemp hlink hmin).symm
-    | directSkip hskip₂ => exact absurd hlink (hl.skip_link hI hskip₂ hL hi)
+      exact congrArg some (hl.commit_link_unique hI hL₂ hL h₂ (isLeaderBlock_of_decided hj)
+        (anchor_of_decided hl hI hj A rfl) helig hi hemp hlink hmin).symm
+    | directSkip hskip₂ =>
+      exact absurd hlink (hl.skip_link hI hskip₂ hL hi (anchor_of_decided hl hI hj A rfl))
     | @indirectCommit _ j₂ A₂ L₂ i₂ hkj₂ helig₂ hj₂ hmid₂ hi₂ hemp₂ hL₂ hlink₂ hmin₂ =>
       obtain ⟨rfl, rfl⟩ := anchor_eq hkj helig hkj₂ helig₂ hj₂ hmid₂ ihj ihmid
-      exact congrArg some (eq_of_indirect hl hI hL hL₂ (isLeaderBlock_of_decided hj) helig
-        hi hemp hlink hmin hi₂ hemp₂ hlink₂ hmin₂)
+      exact congrArg some (eq_of_indirect hl hI hL hL₂ (isLeaderBlock_of_decided hj)
+        (anchor_of_decided hl hI hj A rfl) helig hi hemp hlink hmin hi₂ hemp₂ hlink₂ hmin₂)
     | @indirectSkip _ j₂ A₂ hkj₂ helig₂ hj₂ hmid₂ hnone₂ =>
       obtain ⟨rfl, rfl⟩ := anchor_eq hkj helig hkj₂ helig₂ hj₂ hmid₂ ihj ihmid
       exact absurd hlink (hnone₂ i hi L hL)
@@ -436,7 +470,8 @@ theorem decided_unique (hl : R.Laws I) (hI : I S U) {V₁ : U.View} {k : ℕ} {v
     intro V₂ v₂ h₂
     cases h₂ with
     | directCommit hL₂ h₂ =>
-      obtain ⟨i, hi, hlink⟩ := hl.commit_link hI hL₂ h₂ (isLeaderBlock_of_decided hj) helig
+      obtain ⟨i, hi, hlink⟩ := hl.commit_link hI hL₂ h₂ (isLeaderBlock_of_decided hj)
+        (anchor_of_decided hl hI hj A rfl) helig
       exact absurd hlink (hnone i hi _ hL₂)
     | directSkip _ => rfl
     | @indirectCommit _ j₂ A₂ L₂ i₂ hkj₂ helig₂ hj₂ hmid₂ hi₂ _ hL₂ hlink₂ _ =>
