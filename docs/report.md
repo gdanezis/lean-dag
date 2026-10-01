@@ -4061,21 +4061,31 @@ re-derives after it, so recovery cannot disturb a decision (SS5, SS6).
 ### 12.1 The message and its denotation
 
 `SkipMsg` packages the message's content with the hypotheses its
-receiver verifies against its own DAG:
+receiver verifies against its own DAG. What every fill reads is the
+gap — the recovering validator, its last block, the target round, and
+fresh identifiers:
 
 ```lean
-structure SkipData (ids : Finset BlockId)
+structure GapData (ids : Finset BlockId)
     (blk : BlockId → Block Validator BlockId Payload) where
   v1 : Validator
   B1 : BlockId
-  v2 : Validator
   r : ℕ
-  line : ℕ → BlockId
   fresh : ℕ → BlockId
   idx : BlockId → ℕ
   …
   hgap : ∀ b ∈ ids, (blk b).creator = v1 →
     (blk B1).round < (blk b).round → (blk b).round ≤ r → False
+```
+
+and the core's message adds a donor:
+
+```lean
+structure SkipData (ids : Finset BlockId)
+    (blk : BlockId → Block Validator BlockId Payload) extends GapData ids blk where
+  v2 : Validator
+  line : ℕ → BlockId
+  …
 ```
 
 `SkipMsg U` abbreviates `SkipData U.ids U.block`. The message is stated
@@ -4128,7 +4138,7 @@ unchanged:
 **SS1.**
 ```lean
 def skipFill : BlockUniverse Validator BlockId Payload :=
-  BlockRecord.fill U sk (sk.selfBlocks U.complete) (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2)
+  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete) (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2)
 ```
 
 The fill is built once at the block record (§2.3): `BlockRecord.fill`
@@ -13829,7 +13839,7 @@ abbrev SkipMsg (U : BlockUniverse Validator BlockId Payload) :=
 
 ```lean
 def skipFill : BlockUniverse Validator BlockId Payload :=
-  BlockRecord.fill U sk (sk.selfBlocks U.complete) (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2)
+  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete) (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2)
 ```
 
 **The denotation.** `U`, extended with one filled block per gap round; every old block looked up unchanged. The block record's fill under the self-referencing reading, with `fillBlock_valid` as the one obligation.
@@ -17285,7 +17295,7 @@ def onRecord :
 
 ```lean
 def fill (U : (bluestreakRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload)).Universe) (sk : SkipData U.val.ids U.val.block) {p : Payload}
+    (Payload := Payload)).Universe) (sk : GapData U.val.ids U.val.block) {p : Payload}
     (hp : Format.leader (BlockId := BlockId) p = false)
     (hc : Format.claim (BlockId := BlockId) p = none) :
     (bluestreakRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload)).Universe :=
@@ -17968,7 +17978,7 @@ def View.chop (V : U.View) (G : ℕ) : (U.chop G).View where
 *def, `Common.Record.Fill.lean`*
 
 ```lean
-def fill (U : BlockRecord Validator BlockId Payload P honest) (sk : SkipData U.ids U.block)
+def fill (U : BlockRecord Validator BlockId Payload P honest) (sk : GapData U.ids U.block)
     (B : sk.Blocks) (hB : ∀ k, sk.r0 < k → k ≤ sk.r → P (sk.fillMap B) (B.blk k)) :
     BlockRecord Validator BlockId Payload P honest where
   ids := U.ids ∪ sk.freshIds
@@ -17976,37 +17986,37 @@ def fill (U : BlockRecord Validator BlockId Payload P honest) (sk : SkipData U.i
   complete := by
     intro i hi j hj
     rcases Finset.mem_union.mp hi with ho | hf
-    · rw [SkipData.fillMap_old ho] at hj
+    · rw [GapData.fillMap_old ho] at hj
       exact Finset.mem_union_left _ (U.complete i ho j hj)
     · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf
-      rw [SkipData.fillMap_fresh] at hj
+      rw [GapData.fillMap_fresh] at hj
       exact B.refs_mem k hk1 hk2 j hj
   valid := by
     intro i hi
     rcases Finset.mem_union.mp hi with ho | hf
-    · rw [SkipData.fillMap_old ho]
+    · rw [GapData.fillMap_old ho]
       exact Validity.Mechanised.reads U.block (sk.fillMap B) U.ids (U.block i) U.complete
-        (U.complete i ho) (fun j hj => SkipData.fillMap_old hj) (U.valid i ho)
+        (U.complete i ho) (fun j hj => GapData.fillMap_old hj) (U.valid i ho)
     · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf
-      rw [SkipData.fillMap_fresh]
+      rw [GapData.fillMap_fresh]
       exact hB k hk1 hk2
   no_equivocation := by
     intro i hi j hj hic hcc hrr
     rcases Finset.mem_union.mp hi with ho | hf <;>
       rcases Finset.mem_union.mp hj with ho' | hf'
-    · simp only [SkipData.fillMap_old ho, SkipData.fillMap_old ho'] at hic hcc hrr
+    · simp only [GapData.fillMap_old ho, GapData.fillMap_old ho'] at hic hcc hrr
       exact U.no_equivocation i ho j ho' hic hcc hrr
     · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf'
-      simp only [SkipData.fillMap_old ho, SkipData.fillMap_fresh, B.creator, B.round] at hcc hrr
+      simp only [GapData.fillMap_old ho, GapData.fillMap_fresh, B.creator, B.round] at hcc hrr
       exact (sk.hgap i ho hcc (by change (U.block sk.B1).round < k at hk1; omega)
         (by omega)).elim
     · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf
-      simp only [SkipData.fillMap_old ho', SkipData.fillMap_fresh, B.creator, B.round] at hcc hrr
+      simp only [GapData.fillMap_old ho', GapData.fillMap_fresh, B.creator, B.round] at hcc hrr
       exact (sk.hgap j ho' hcc.symm (by change (U.block sk.B1).round < k at hk1; omega)
         (by omega)).elim
     · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf
       obtain ⟨l, hl1, hl2, rfl⟩ := sk.mem_freshIds.mp hf'
-      simp only [SkipData.fillMap_fresh, B.round] at hrr
+      simp only [GapData.fillMap_fresh, B.round] at hrr
       rw [hrr]
 ```
 
@@ -18626,8 +18636,8 @@ def fill (U : (HybridProperties.hybridRule (Validator := Validator)
     (BlockId := BlockId) (Payload := Payload) kt).Universe) (sk : SkipMsg U.val) :
     (HybridProperties.hybridRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) kt).Universe :=
-  onRecord.fill U sk (sk.selfBlocks U.val.complete)
-    (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2) (honestNoEquiv_fill sk _ _ U.property)
+  onRecord.fill U sk.toGapData (sk.selfBlocks U.val.complete)
+    (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2) (honestNoEquiv_fill sk.toGapData _ _ U.property)
 ```
 
 **The fill, at Hybrid's carrier**: the core's self-referencing fill through `onRecord`, with `honestNoEquiv_fill` as the invariant.
@@ -19401,7 +19411,7 @@ The cut, at the carrier.
 *def, `Properties.Record.lean`*
 
 ```lean
-def fill (U : R.Universe) (sk : SkipData (c.toRec U).ids (c.toRec U).block) (B : sk.Blocks)
+def fill (U : R.Universe) (sk : GapData (c.toRec U).ids (c.toRec U).block) (B : sk.Blocks)
     (hB : ∀ k, sk.r0 < k → k ≤ sk.r → P (sk.fillMap B) (B.blk k))
     (hI : I (BlockRecord.fill (c.toRec U) sk B hB)) : R.Universe :=
   c.ofRec (BlockRecord.fill (c.toRec U) sk B hB) hI

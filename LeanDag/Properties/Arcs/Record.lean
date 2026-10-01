@@ -51,7 +51,7 @@ theorem decided_agree_chop (ha : Agree R) (hb : Banded R) (hd : G ≤ S.slotRoun
 
 /-! ## The fill -/
 
-variable {sk : SkipData (c.toRec U).ids (c.toRec U).block} {B : sk.Blocks}
+variable {sk : GapData (c.toRec U).ids (c.toRec U).block} {B : sk.Blocks}
 variable {hB : ∀ k, sk.r0 < k → k ≤ sk.r → P (sk.fillMap B) (B.blk k)}
 variable {hI : I (BlockRecord.fill (c.toRec U) sk B hB)}
 

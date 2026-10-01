@@ -135,7 +135,7 @@ end Genesis
 
 section Chain
 
-variable (sk : SkipData U.ids U.block) {p : Payload}
+variable (sk : GapData U.ids U.block) {p : Payload}
   (hp : Format.leader (BlockId := BlockId) p = false)
 
 /-- The self reference of a filled block: `v1`'s block of the round
@@ -144,9 +144,9 @@ theorem prev_chain {k : ℕ} (hk1 : sk.r0 < k) :
     (sk.fillMap (sk.chainBlocks p) (sk.prev k)).round = k - 1 ∧
       (sk.fillMap (sk.chainBlocks p) (sk.prev k)).creator = sk.v1 := by
   by_cases hb : k = sk.r0 + 1
-  · simp only [SkipData.prev, if_pos hb, SkipData.fillMap_old sk.hB1]
+  · simp only [GapData.prev, if_pos hb, GapData.fillMap_old sk.hB1]
     exact ⟨by have : sk.r0 = (U.block sk.B1).round := rfl; omega, sk.hB1c⟩
-  · simp only [SkipData.prev, if_neg hb, SkipData.fillMap_fresh, SkipData.chainBlocks_blk]
+  · simp only [GapData.prev, if_neg hb, GapData.fillMap_fresh, GapData.chainBlocks_blk]
     exact ⟨rfl, rfl⟩
 
 include hp in
@@ -157,15 +157,15 @@ theorem chainBlock_valid {k : ℕ} (hk1 : sk.r0 < k) :
   have hpr := prev_chain sk (p := p) hk1
   refine ⟨fun j hj => ?_, fun _ => Nat.zero_le _, ⟨⟨fun j hj l hl _ => ?_, fun _ => ?_⟩,
     fun ht => ?_, fun _ j hj => ?_⟩⟩
-  · simp only [SkipData.chainBlock, Finset.mem_singleton] at hj
+  · simp only [GapData.chainBlock, Finset.mem_singleton] at hj
     subst hj
     show _ + 1 = k
     omega
-  · simp only [SkipData.chainBlock, Finset.mem_singleton] at hj hl
+  · simp only [GapData.chainBlock, Finset.mem_singleton] at hj hl
     rw [hj, hl]
   · exact ⟨sk.prev k, Finset.mem_singleton_self _, hpr.2⟩
-  · exact absurd ht (by simp only [SkipData.chainBlock, hp]; decide)
-  · simp only [SkipData.chainBlock, Finset.mem_singleton] at hj
+  · exact absurd ht (by simp only [GapData.chainBlock, hp]; decide)
+  · simp only [GapData.chainBlock, Finset.mem_singleton] at hj
     subst hj
     exact Or.inl hpr.2
 
@@ -204,12 +204,12 @@ theorem reaches_B1_of_reaches_chainFill {b X : BlockId} (hb : b ∈ sk.freshIds)
         exact (hyB hyU).trans (Reaches.single hstep)
       · obtain ⟨k, hk1, -, rfl⟩ := sk.mem_freshIds.mp hyF
         rw [chainFill, BlockRecord.fill_block_fresh] at hstep
-        simp only [SkipData.chainBlocks_blk, SkipData.chainBlock, Finset.mem_singleton] at hstep
+        simp only [GapData.chainBlocks_blk, GapData.chainBlock, Finset.mem_singleton] at hstep
         by_cases hkb : k = sk.r0 + 1
-        · simp only [SkipData.prev, if_pos hkb] at hstep
+        · simp only [GapData.prev, if_pos hkb] at hstep
           subst hstep
           exact Reaches.refl
-        · simp only [SkipData.prev, if_neg hkb] at hstep
+        · simp only [GapData.prev, if_neg hkb] at hstep
           subst hstep
           exact absurd hz (sk.hfresh_new _)
 
@@ -239,7 +239,7 @@ theorem disciplined_chainFill (hI : Disciplined U)
       · obtain ⟨k, -, -, rfl⟩ := sk.mem_freshIds.mp hXF
         change Format.claim ((chainFill sk hp).block (sk.fresh k)).payload = some L at hcl
         rw [chainFill, BlockRecord.fill_block_fresh] at hcl
-        simp only [SkipData.chainBlocks_blk, SkipData.chainBlock, hc] at hcl
+        simp only [GapData.chainBlocks_blk, GapData.chainBlock, hc] at hcl
         exact absurd hcl (by simp)
     -- an honest block of `U` whose cone holds `X`
     obtain ⟨B', hB', hcB', hr⟩ : ∃ B' ∈ U.ids,
@@ -300,7 +300,7 @@ def onRecord :
 /-- **The fill, at Bluestreak's carrier**: the chain fill through
 `onRecord`, with `disciplined_chainFill` as the invariant. -/
 def fill (U : (bluestreakRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload)).Universe) (sk : SkipData U.val.ids U.val.block) {p : Payload}
+    (Payload := Payload)).Universe) (sk : GapData U.val.ids U.val.block) {p : Payload}
     (hp : Format.leader (BlockId := BlockId) p = false)
     (hc : Format.claim (BlockId := BlockId) p = none) :
     (bluestreakRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload)).Universe :=

@@ -142,12 +142,12 @@ theorem viewAgreeAbove_chop {U : R.Universe} {V : R.View U} :
 
 /-- The fill, at the carrier, under a reading of the filled blocks and
 with the invariant supplied. -/
-def fill (U : R.Universe) (sk : SkipData (c.toRec U).ids (c.toRec U).block) (B : sk.Blocks)
+def fill (U : R.Universe) (sk : GapData (c.toRec U).ids (c.toRec U).block) (B : sk.Blocks)
     (hB : ∀ k, sk.r0 < k → k ≤ sk.r → P (sk.fillMap B) (B.blk k))
     (hI : I (BlockRecord.fill (c.toRec U) sk B hB)) : R.Universe :=
   c.ofRec (BlockRecord.fill (c.toRec U) sk B hB) hI
 
-variable {U : R.Universe} {sk : SkipData (c.toRec U).ids (c.toRec U).block} {B : sk.Blocks}
+variable {U : R.Universe} {sk : GapData (c.toRec U).ids (c.toRec U).block} {B : sk.Blocks}
 variable {hB : ∀ k, sk.r0 < k → k ≤ sk.r → P (sk.fillMap B) (B.blk k)}
 variable {hI : I (BlockRecord.fill (c.toRec U) sk B hB)}
 
@@ -160,7 +160,7 @@ theorem block_fill : R.block (c.fill U sk B hB hI) = sk.fillMap B := by
 theorem block_fill_old {b : BlockId} (hb : b ∈ R.ids U) :
     R.block (c.fill U sk B hB hI) b = R.block U b := by
   rw [c.block_fill, ← c.block_to]
-  exact SkipData.fillMap_old (c.mem_toRec.mpr hb)
+  exact GapData.fillMap_old (c.mem_toRec.mpr hb)
 
 /-- **The fill is an extension of the carrier.** -/
 theorem extends_fill : Extends R U (c.fill U sk B hB hI) where
@@ -181,7 +181,7 @@ theorem sustains_fill : Sustains R U (c.fill U sk B hB hI) 0 (sk.r + 1) where
         rcases Finset.mem_union.mp hb with ho | hf
         · exact c.mem_toRec.mp ho
         · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf
-          rw [c.block_fill, SkipData.fillMap_fresh, B.round] at hr
+          rw [c.block_fill, GapData.fillMap_fresh, B.round] at hr
           omega
       exact ⟨hbU, by rw [c.block_fill_old hbU] at hr; omega⟩
   round := fun b hb _ => by rw [c.block_fill_old hb]; omega
@@ -213,7 +213,7 @@ def copyFill (U : R.Universe) (sk : SkipData (c.toRec U).ids (c.toRec U).block) 
   c.ofRec (BlockRecord.copyFill (c.toRec U) sk) (Invariant.Mechanised.copyFill sk (c.inv U))
 
 theorem copyFill_eq (U : R.Universe) (sk : SkipData (c.toRec U).ids (c.toRec U).block) :
-    c.copyFill U sk = c.fill U sk (sk.copyBlocks (c.toRec U).complete)
+    c.copyFill U sk = c.fill U sk.toGapData (sk.copyBlocks (c.toRec U).complete)
       (fun _ hk1 hk2 => BlockRecord.copyBlock_valid (c.toRec U) sk hk1 hk2)
       (Invariant.Mechanised.copyFill sk (c.inv U)) := rfl
 

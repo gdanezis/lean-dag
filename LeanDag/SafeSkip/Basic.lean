@@ -68,7 +68,7 @@ theorem hB1uniq_of_correct {v1 : Validator} {B1 : BlockId}
 
 namespace SkipMsg
 
-open SkipData
+open GapData SkipData
 
 variable (sk : SkipMsg U)
 
@@ -164,7 +164,7 @@ round; every old block looked up unchanged. The block record's fill
 under the self-referencing reading, with `fillBlock_valid` as the one
 obligation. -/
 def skipFill : BlockUniverse Validator BlockId Payload :=
-  BlockRecord.fill U sk (sk.selfBlocks U.complete) (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2)
+  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete) (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2)
 
 /-- Old blocks read unchanged: every store, view and certificate built
 on `U` sees the same data in the extension. -/
@@ -172,7 +172,7 @@ on `U` sees the same data in the extension. -/
     sk.skipFill.block b = U.block b := if_pos hb
 
 @[simp] theorem skipFill_block_fresh {k : ℕ} :
-    sk.skipFill.block (sk.fresh k) = sk.fillBlock k := SkipData.fillMap_fresh
+    sk.skipFill.block (sk.fresh k) = sk.fillBlock k := GapData.fillMap_fresh
 
 theorem ids_subset_skipFill : U.ids ⊆ sk.skipFill.ids :=
   Finset.subset_union_left
