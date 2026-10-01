@@ -17,8 +17,8 @@ inclusion at the support.
 
 `Quorate` is **not** shown: it asks that every block reference a
 quorum, which is what a sparse DAG is designed not to do, so chain
-quality does not apply to it. The cut and re-genesis are
-`Bluestreak/Record.lean`'s.
+quality does not apply to it. The cut, re-genesis and the chain fill
+are `Bluestreak/Record.lean`'s.
 -/
 
 namespace LeanDag
@@ -28,7 +28,7 @@ namespace BluestreakProperties
 open LeanDag.Properties LeanDag.Bluestreak
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
-variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type} [ClaimMap BlockId]
+variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type} [Format BlockId Payload]
 
 /-- **Bluestreak as a carrier**: the disciplined records as universes. -/
 def bluestreakRule : DagRule Validator BlockId Payload :=
@@ -57,10 +57,11 @@ theorem commitsCandidate : CommitsCandidate
     (bluestreakRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) :=
   AnchoredRule.commitsCandidateOn
 
-/-- **A direct commit is a verdict**, at Bluestreak's own claim count. -/
+/-- **A direct commit is a verdict**, at Bluestreak's own claim count
+for a tagged candidate. -/
 theorem commitsDirect : CommitsDirect
     (bluestreakRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
-    (fun {U} V L _ _ => DirectCommitIn U.val V L) :=
+    (fun {U} V L _ _ => DirectCommitIn U.val V L ∧ Tagged U.val L) :=
   AnchoredRule.commitsDirectOn
 
 /-- **The indirect rule.** One rung with no tie, so the choice at a
@@ -91,7 +92,7 @@ the self-parent clause of Bluestreak's validity, which is what the
 sparse chain is. -/
 theorem selfParent : SelfParent (bluestreakRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) :=
-  fun U b hb hr => (U.val.valid b hb).clause.2 hr
+  fun U b hb hr => (U.val.valid b hb).clause.1.2 hr
 
 /-! ## The support: a claim is the certificate -/
 
@@ -100,7 +101,7 @@ candidate, and to certify is to claim. -/
 def bluestreakSupport : Support (bluestreakRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) where
   waveAt := fun _ => 2
-  Certifies := fun U C L => Claims U.val C L
+  Certifies := fun U C L => Claims U.val C L ∧ Tagged U.val L
 
 /-- **Certification commits.** A quorum of claimers at the decision
 round of a `T`-led slot, on a view caught up to it, is a verdict —
@@ -115,16 +116,18 @@ theorem commits : (bluestreakSupport (Validator := Validator) (BlockId := BlockI
   obtain ⟨L, hLm, hLc, hLr⟩ := hpop (S.slotRound k) le_rfl (by omega) (S.leader k) hlead
   have hL : IsLeaderBlock U.val k L := ⟨hLm, hLr, hLc⟩
   have hclaims : ClaimsAt U.val T (S.slotRound k) L :=
-    fun v hv c hc hcc hcr => hcert L hL v hv c hc hcc hcr
+    fun v hv c hc hcc hcr => (hcert L hL v hv c hc hcc hcr).1
+  obtain ⟨c, hc, hcc, hcr⟩ := hpop (S.slotRound k + 2) (by omega) le_rfl (S.leader k) hlead
+  have htag : Tagged U.val L := (hcert L hL _ hlead c hc hcc hcr).2
   have hdec : Decided U.val V k (some L) :=
     Decided.directCommit hL
-      (directCommitIn_of_claimsAt (by exact hq.2) hL (hpop _ (by omega) le_rfl) hclaims
-        (by exact hcov))
+      ⟨directCommitIn_of_claimsAt (by exact hq.2) hL (hpop _ (by omega) le_rfl) hclaims
+        (by exact hcov), htag⟩
   exact ⟨L, Nat.lt_succ_self k, hdec, fun S' hround hlead' hkind => by
     have hround' : S'.slotRound k = S.slotRound k := congrFun hround k
     have hL' : IsLeaderBlock (S := S') U.val k L :=
       ⟨hLm, by rw [hround']; exact hLr, by rw [hlead' k (Nat.lt_succ_self k)]; exact hLc⟩
-    refine Decided.directCommit (S := S') hL' ?_
+    refine Decided.directCommit (S := S') hL' ⟨?_, htag⟩
     exact directCommitIn_of_claimsAt (S := S') (by exact hq.2) hL'
       (by rw [hround']; exact hpop _ (by omega) le_rfl)
       (by rw [hround']; exact hclaims) (by rw [hround']; exact hcov)⟩
@@ -146,7 +149,16 @@ theorem supportLocal : (bluestreakSupport (Validator := Validator) (BlockId := B
   have hvote := AnchoredRule.isVote_band_at hband (L := L) (n := (U.val.block C).round)
     (by omega) le_rfl C hC rfl
   have hcv := AnchoredRule.carriesVotes_band hband (t := quorumCard Validator) hC hCb le_rfl hvote
-  exact ⟨fun h => h.imp id hcv.mp, fun h => h.imp id hcv.mpr⟩
+  have hcl : claimOf U'.val C = claimOf U.val C :=
+    congrArg Format.claim (hre.payload C hC (by simp only [bluestreakRule_block]; omega))
+  have ht : Tagged U'.val L ↔ Tagged U.val L := by
+    unfold Tagged
+    rw [show (U'.val.block L).payload = (U.val.block L).payload from
+      hre.payload L hL (by simp only [bluestreakRule_block]; omega)]
+  change (Claims U'.val C L ∧ Tagged U'.val L) ↔ (Claims U.val C L ∧ Tagged U.val L)
+  unfold Claims
+  rw [hcl]
+  exact ⟨fun h => ⟨h.1.imp id hcv.mp, ht.mp h.2⟩, fun h => ⟨h.1.imp id hcv.mpr, ht.mpr h.2⟩⟩
 
 /-! ## The band
 
@@ -161,14 +173,28 @@ quorum of voters, which the band's old blocks would have to be. -/
 
 variable {U U' : Universe Validator BlockId Payload} {lo hi g g' : ℕ}
 
+/-- A block in the band carries the claim it carried. -/
+theorem claimOf_band
+    (h : AgreeBand (bluestreakAnchored Validator BlockId Payload).toDagRule U U' lo hi g g')
+    {C : BlockId} (hC : C ∈ U.ids) (h1 : lo ≤ (U.block C).round + g)
+    (h2 : (U.block C).round + g ≤ hi) : claimOf U' C = claimOf U C :=
+  congrArg Format.claim (h.payload C hC h1 h2)
+
+/-- And the role it had. -/
+theorem tagged_band
+    (h : AgreeBand (bluestreakAnchored Validator BlockId Payload).toDagRule U U' lo hi g g')
+    {L : BlockId} (hL : L ∈ U.ids) (h1 : lo ≤ (U.block L).round + g)
+    (h2 : (U.block L).round + g ≤ hi) : Tagged U' L ↔ Tagged U L := by
+  unfold Tagged
+  rw [show (U'.block L).payload = (U.block L).payload from h.payload L hL h1 h2]
+
 /-- A claimer of `L` sits two rounds above it. -/
 theorem mem_claimers_round {L C : BlockId} (hC : C ∈ claimers U L) :
     C ∈ U.ids ∧ (U.block C).round = (U.block L).round + 2 :=
   mem_blocksAt.mp (Finset.mem_filter.mp hC).1
 
-/-- **The claimers of an in-band candidate transport.** The claim field
-is the same map, and the votes a claiming block carries are the votes it
-carried. -/
+/-- **The claimers of an in-band candidate transport.** A claiming
+block carries the claim and the votes it carried. -/
 theorem claimers_band
     (h : AgreeBand (bluestreakAnchored Validator BlockId Payload).toDagRule U U' lo hi g g')
     {L : BlockId} (hL : L ∈ U.ids) (hlo : lo ≤ (U.block L).round + g)
@@ -181,7 +207,7 @@ theorem claimers_band
   · have := (AnchoredRule.band_block h hCU (by omega) (by omega)).1
     omega
   · rcases (Finset.mem_filter.mp hC).2 with hcl | hcl
-    · exact Or.inl hcl
+    · exact Or.inl (by rw [claimOf_band h hCU (by omega) (by omega)]; exact hcl)
     · exact Or.inr ((AnchoredRule.carriesVotes_band h hCU (by omega) (by omega)
         (AnchoredRule.isVote_band_at h (n := (U.block C).round) (by omega) (by omega)
           C hCU rfl)).mpr hcl)
@@ -199,7 +225,7 @@ theorem mem_claimers_of_band
   have hCr : (U.block C).round = (U.block L).round + 2 := by omega
   refine Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hCU, hCr⟩, ?_⟩
   rcases (Finset.mem_filter.mp hC).2 with hcl | hcl
-  · exact Or.inl hcl
+  · exact Or.inl (by rw [← claimOf_band h hCU (by omega) (by omega)]; exact hcl)
   · exact Or.inr ((AnchoredRule.carriesVotes_band h hCU (by omega) (by omega)
       (AnchoredRule.isVote_band_at h (n := (U.block C).round) (by omega) (by omega)
         C hCU rfl)).mp hcl)
@@ -230,7 +256,9 @@ theorem not_claimedIn_novel
     have := U.round_of_mem_refs hCU hb
     exact hLnov (U.complete b hbU L ((AnchoredRule.isVote_band h hbU (by omega) (by omega)).mp hv))
   -- so it is the claim field, which the discipline backs at the anchor's honest voter
-  have hcl : claim C = some L := ((Finset.mem_filter.mp hC).2).resolve_right hnotVotes
+  have hcl : claimOf U C = some L := by
+    rw [← claimOf_band h hCU (by omega) (by omega)]
+    exact ((Finset.mem_filter.mp hC).2).resolve_right hnotVotes
   have hcert := (hanc C hreU L hcl (by omega)).2
   -- a certified candidate has a voter in `U`, and a voter references it
   obtain ⟨w, hw, -⟩ := exists_correct_of_card (S := supporters U L ((U.block L).round + 1))
@@ -246,11 +274,11 @@ theorem bluestreakBandLaws : (bluestreakAnchored Validator BlockId Payload).Band
   commit_band := by
     intro S S' U U' lo hi g g' V V' k k' L h hkk _ _ hlo hhi hV hL hc
     simp only [bluestreakAnchored_waveAt] at hhi
-    refine AnchoredRule.holdsAtLeast_band h hV (fun C hC => ?_) (claimers_band h hL.1 ?_ ?_) hc
+    refine ⟨AnchoredRule.holdsAtLeast_band h hV (fun C hC => ?_) (claimers_band h hL.1 ?_ ?_) hc.1,
+      (tagged_band h hL.1 ?_ ?_).mpr hc.2⟩
     · obtain ⟨hCU, hCr⟩ := mem_claimers_round hC
       exact ⟨hCU, by rw [hCr, hL.2.1]; omega, by rw [hCr, hL.2.1]; omega⟩
-    · rw [hL.2.1]; omega
-    · rw [hL.2.1]; omega
+    all_goals rw [hL.2.1]; omega
   skip_band := by
     intro S S' U U' lo hi g g' V V' k k' h hkk hlk _ hlo hhi hV hs
     simp only [bluestreakAnchored_waveAt] at hhi
@@ -287,27 +315,29 @@ theorem bluestreakBandLaws : (bluestreakAnchored Validator BlockId Payload).Band
   link_band := by
     intro S S' U U' lo hi g g' A L k k' i h hA hAlo hAhi hkk _ _ hlo hhi _ hL
     simp only [bluestreakAnchored_waveAt] at hhi
+    have ht := tagged_band h hL.1 (by rw [hL.2.1]; omega) (by rw [hL.2.1]; omega)
     constructor
-    · rintro ⟨C, hC, hre⟩
+    · rintro ⟨⟨C, hC, hre⟩, htU'⟩
       obtain ⟨-, hCr'⟩ := mem_claimers_round hC
       have hCrR : ((bluestreakAnchored Validator BlockId Payload).toDagRule.block U' C).round
           = (U'.block L).round + 2 := hCr'
       have hLb := (AnchoredRule.band_block h hL.1 (by rw [hL.2.1]; omega)
         (by rw [hL.2.1]; omega)).1
       obtain ⟨hCU, hreU, hCeq⟩ := AgreeBand.reaches_old h hA hAlo hAhi hre (by omega)
-      exact ⟨C, mem_claimers_of_band h hL.1 hCU (by rw [hL.2.1]; omega)
-        (by rw [hL.2.1]; omega) hCeq hC, hreU⟩
-    · rintro ⟨C, hC, hre⟩
+      exact ⟨⟨C, mem_claimers_of_band h hL.1 hCU (by rw [hL.2.1]; omega)
+        (by rw [hL.2.1]; omega) hCeq hC, hreU⟩, ht.mp htU'⟩
+    · rintro ⟨⟨C, hC, hre⟩, htU⟩
       obtain ⟨hCU, hCr⟩ := mem_claimers_round hC
       have hLr : (U.block L).round = S.slotRound k := hL.2.1
       have hCin : lo ≤ (U.block C).round + g := by omega
-      exact ⟨C, claimers_band h hL.1 (by omega) (by omega) hC,
-        AgreeBand.reaches_of h hA hAhi hre hCin⟩
+      exact ⟨⟨C, claimers_band h hL.1 (by omega) (by omega) hC,
+        AgreeBand.reaches_of h hA hAhi hre hCin⟩, ht.mpr htU⟩
   link_novel := by
     intro S S' U U' lo hi g g' A L k k' i h hA hanc hAlo hAhi hkk _ _ hlo hhi _ hL hLo
     simp only [bluestreakAnchored_waveAt] at hhi
     have hLr : (U'.block L).round = S'.slotRound k' := hL.2.1
-    exact not_claimedIn_novel h hA hanc.2 hAlo hAhi hLo (by omega) (by omega) (by omega)
+    exact fun hl => not_claimedIn_novel h hA hanc.2.1 hAlo hAhi hLo (by omega) (by omega)
+      (by omega) hl.1
 
 /-- **Bluestreak reads a band**, over the disciplined universes. -/
 theorem banded : Banded (bluestreakRule (Validator := Validator) (BlockId := BlockId)

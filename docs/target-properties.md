@@ -5149,6 +5149,57 @@ report says what that covers. The claim stays an ambient map, so the
 position check is an assumption on honest validators rather than a
 validity clause.
 
+### 11.49 Bluestreak's block format: the role and the claim in the payload
+
+The second of §11.47's open clauses, and the fill. `certified_quorate`
+stood in for the receivers' format check, which reads a block's role,
+and the claim was an ambient map the mechanisms could not act on. Both
+are now the block's own data: `Format BlockId Payload` reads a leader
+tag and a claim from the payload, and `ClaimMap` is gone.
+
+**Validity checks the format.** `roleClause`: a tagged block above round
+zero references `n − f` distinct creators, and an untagged block
+references only its own author's blocks and tagged blocks. It reads the
+block and its references, so it is `Clause.Mechanised` (the cut keeps
+payloads). The claim's position stays in the discipline, since the
+claimed block is not a reference.
+
+**The rule reads the tag.** `Commit` and `Link` ask the candidate to be
+tagged, and `Anchor` is `Certified ∧ Backed ∧ Tagged`. Visibility reads
+the anchor's quorum from validity (`quorate_of_tagged`, BS20) instead of
+from `certified_quorate`, which is removed: `Disciplined` is
+`honest_backed` alone. The `n = 4` escape of §11.47 — an ordinary block
+certified while sparse — is no longer a failure of anything, since a
+certified untagged block is never committed or linked. The tag must
+cross the band, which is why the band compares payloads (the previous
+step, `+37 −7` over twelve files, every witness a shared constructor).
+
+**Liveness needs the tag of a reliable leader.** `ClaimsOn` asks the
+candidate to be tagged as well as claimed, the support's `Certifies` is
+`Claims ∧ Tagged`, and `ReactiveB` replaces its `certified_quorate`
+field by `leader_tagged`: a correct validator tags its block at a slot
+it leads.
+
+**The chain fill.** `SkipData.chainBlock` keeps only the self reference
+and takes its payload from the caller rather than the donor, since a
+rule may read its payload. Cloning the donor's payload would copy its
+role and its claims. For Bluestreak the filled blocks are untagged and
+claim nothing; each is valid by the format, and
+`disciplined_chainFill` (BS19) shows the discipline survives: old cones
+are unchanged and certification only grows, and a filled block's cone
+is the chain and `B1`'s, honest when `v1` is correct. `fill` at the
+carrier gives the fill cells through `onRecord`. The `B1` vote that
+§11.48 had to assume away certifies nothing the rule reads.
+
+**What changed in the tests.** The models run on the bare payload
+`Bool × Option BlockId`; every block is tagged exactly when its author
+leads its round, and the format holds by `decide`. `usparse_certified_quorate`
+is gone, replaced by `leader_tagged` in `spReactive`.
+
+**Measure.** The Bluestreak side is `+444 −230` across the arc, its
+tests and `SafeSkip/Data.lean` (the chain reading). No other rule
+changes.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

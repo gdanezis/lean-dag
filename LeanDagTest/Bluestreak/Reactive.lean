@@ -35,6 +35,9 @@ theorem spSlots_leader_val (k : ℕ) : (spSlots.leader k).val = k % 4 := rfl
 /-- The leader block of round `r`. -/
 def leaderId (r : ℕ) : ℕ := 4 * r + r % 4
 
+@[simp] theorem leaderId_div (r : ℕ) : leaderId r / 4 = r := by unfold leaderId; omega
+@[simp] theorem leaderId_mod (r : ℕ) : leaderId r % 4 = r % 4 := by unfold leaderId; omega
+
 /-- Block `b`'s references: the whole round below for a leader block,
 the author's previous block and the previous leader block otherwise. -/
 def spRefs (b : ℕ) : Finset ℕ :=
@@ -42,22 +45,21 @@ def spRefs (b : ℕ) : Finset ℕ :=
   else if b % 4 = (b / 4) % 4 then Finset.Ico (4 * (b / 4) - 4) (4 * (b / 4))
   else {4 * (b / 4) - 4 + b % 4, leaderId (b / 4 - 1)}
 
-def spBlock (b : ℕ) : Block (Fin 4) ℕ Unit where
+/-- Non-leader blocks two rounds above a leader claim it. -/
+def spClaim (b : ℕ) : Option ℕ :=
+  if 2 ≤ b / 4 ∧ b % 4 ≠ (b / 4) % 4 then some (leaderId (b / 4 - 2)) else none
+
+def spBlock (b : ℕ) : Block (Fin 4) ℕ (Bool × Option ℕ) where
   round := b / 4
   creator := ⟨b % 4, by omega⟩
   refs := spRefs b
-  payload := ()
+  payload := (decide (b % 4 = (b / 4) % 4), spClaim b)
 
 @[simp] theorem spBlock_round (b : ℕ) : (spBlock b).round = b / 4 := rfl
 @[simp] theorem spBlock_creator_val (b : ℕ) : ((spBlock b).creator : ℕ) = b % 4 := rfl
 @[simp] theorem spBlock_refs (b : ℕ) : (spBlock b).refs = spRefs b := rfl
-
-/-- Non-leader blocks two rounds above a leader claim it. -/
-instance spClaims : ClaimMap ℕ where
-  claim b := if 2 ≤ b / 4 ∧ b % 4 ≠ (b / 4) % 4 then some (leaderId (b / 4 - 2)) else none
-
-theorem spClaims_eq (b : ℕ) :
-    claim b = if 2 ≤ b / 4 ∧ b % 4 ≠ (b / 4) % 4 then some (leaderId (b / 4 - 2)) else none := rfl
+@[simp] theorem spBlock_leader (b : ℕ) :
+    Format.leader (BlockId := ℕ) (spBlock b).payload = decide (b % 4 = (b / 4) % 4) := rfl
 
 /-! ## The references, arithmetically -/
 
@@ -122,7 +124,7 @@ theorem card_creators_Ico {r : ℕ} (hr : 0 < r) :
 
 /-- A candidate of slot `k` is the leader block of round `k`. -/
 theorem eq_leaderId_of_isLeaderBlock {k L : ℕ}
-    {U : Universe (Fin 4) ℕ Unit} (hblk : U.block = spBlock) (hL : IsLeaderBlock U k L) :
+    {U : Universe (Fin 4) ℕ (Bool × Option ℕ)} (hblk : U.block = spBlock) (hL : IsLeaderBlock U k L) :
     L = leaderId k := by
   obtain ⟨-, hr, hc⟩ := hL
   rw [hblk] at hr hc
@@ -144,7 +146,7 @@ theorem leader_mem_T {k : ℕ} (hk : k % 4 ≠ 0) :
 
 /-! ## The universe -/
 
-def Usparse (N : ℕ) : Universe (Fin 4) ℕ Unit where
+def Usparse (N : ℕ) : Universe (Fin 4) ℕ (Bool × Option ℕ) where
   ids := Finset.range (4 * (N + 1))
   block := spBlock
   complete := by
@@ -154,7 +156,8 @@ def Usparse (N : ℕ) : Universe (Fin 4) ℕ Unit where
     omega
   valid := by
     intro i _
-    refine ⟨fun j hj => ?_, fun _ => Nat.zero_le _, fun j hj l hl hjl => ?_, fun h => ?_⟩
+    refine ⟨fun j hj => ?_, fun _ => Nat.zero_le _, ⟨fun j hj l hl hjl => ?_, fun h => ?_⟩,
+      fun ht h0 => ?_, fun hf j hj => ?_⟩
     · have := spRefs_bounds hj
       simp only [spBlock_round]; omega
     · have := spRefs_bounds hj
@@ -172,6 +175,26 @@ def Usparse (N : ℕ) : Universe (Fin 4) ℕ Unit where
         · left; exact ⟨hl, by omega, by omega⟩
         · right; exact ⟨hl, Or.inl rfl⟩
       · apply Fin.ext; simp only [spBlock_creator_val]; omega
+    · -- a leader block references the whole round below
+      simp only [spBlock_leader, decide_eq_true_eq] at ht
+      simp only [spBlock_round] at h0
+      have hi : i = leaderId (i / 4) := by unfold leaderId; omega
+      have hrefs : spRefs i = Finset.Ico (4 * (i / 4) - 4) (4 * (i / 4)) := by
+        conv_lhs => rw [hi]
+        exact spRefs_leader h0
+      have hq : quorumCard (Fin 4) = 3 := rfl
+      rw [hq]
+      unfold creators
+      simp only [spBlock_refs, hrefs]
+      rw [card_creators_Ico h0]
+      omega
+    · -- an ordinary block references its own block and the leader block below
+      simp only [spBlock_leader, decide_eq_false_iff_not] at hf
+      simp only [spBlock_refs] at hj
+      rcases (mem_spRefs.mp hj).2 with ⟨hl, -, -⟩ | ⟨-, rfl | rfl⟩
+      · exact absurd hl hf
+      · left; apply Fin.ext; simp only [spBlock_creator_val]; omega
+      · right; simp only [spBlock_leader, decide_eq_true_eq, leaderId_div, leaderId_mod]
   no_equivocation := by
     intro i _ j _ _ hc hr
     have : i % 4 = j % 4 := by
@@ -223,9 +246,10 @@ theorem backedIn_leaderId {N m t : ℕ} (v : Fin 4) (hm : 1 ≤ m) (hmN : m ≤ 
 
 /-- A claim names the leader two rounds below the claimer, and only from
 round two. -/
-theorem claim_spec {b L : ℕ} (h : claim b = some L) :
+theorem claim_spec {N b L : ℕ} (h : claimOf (Usparse N) b = some L) :
     2 ≤ b / 4 ∧ L = leaderId (b / 4 - 2) := by
-  rw [spClaims_eq] at h
+  change spClaim b = some L at h
+  unfold spClaim at h
   split_ifs at h with hb
   exact ⟨hb.1, (Option.some.inj h).symm⟩
 
@@ -252,50 +276,6 @@ theorem backedIn_of_reaches_sp {N : ℕ} {v : Fin 4} {j Y t : ℕ} (hj : j < 4 *
   refine ⟨by simp only [usparse_block, spBlock_round]; unfold leaderId; omega, ?_⟩
   rw [show Y / 4 - 2 = (Y / 4 - 1) - 1 by omega]
   exact backedIn_leaderId v (by omega) (by omega) (by omega)
-
-/-- **Only leader blocks are certified.** A block of round `r+1`
-references a block of round `r` by another author only if it is the
-round's leader block, so a non-leader block is referenced by at most
-its own author and that leader: two authors, short of the quorum. -/
-theorem usparse_certified_quorate (N : ℕ) :
-    ∀ A ∈ (Usparse N).ids, Certified (Usparse N) A → Quorate (Usparse N) A := by
-  intro A _ hcert h0
-  simp only [usparse_block, spBlock_round] at h0
-  by_cases hlead : A % 4 = (A / 4) % 4
-  · have hA : A = leaderId (A / 4) := by unfold leaderId; omega
-    have hq : quorumCard (Fin 4) = 3 := rfl
-    rw [hq]
-    have hrefs : spRefs A = Finset.Ico (4 * (A / 4) - 4) (4 * (A / 4)) := by
-      conv_lhs => rw [hA]
-      exact spRefs_leader h0
-    unfold creators
-    simp only [usparse_block, spBlock_refs, hrefs]
-    rw [card_creators_Ico h0]
-    omega
-  · exfalso
-    have hsub : supporters (Usparse N) A (((Usparse N).block A).round + 1) ⊆
-        {⟨A % 4, by omega⟩, ⟨(A / 4 + 1) % 4, by omega⟩} := by
-      intro w hw
-      obtain ⟨b, hb, hbr, hbv, hbc⟩ := mem_supporters.mp hw
-      simp only [usparse_block, spBlock_round] at hbr
-      simp only [usparse_block, spBlock_refs] at hbv
-      obtain ⟨-, hcase⟩ := mem_spRefs.mp hbv
-      have hbw : (w : ℕ) = b % 4 := by
-        have := congrArg (fun (x : Fin 4) => (x : ℕ)) hbc
-        simpa [usparse_block] using this.symm
-      rcases hcase with ⟨hbl, -, -⟩ | ⟨-, hself | hAlead⟩
-      · refine Finset.mem_insert.mpr (Or.inr (Finset.mem_singleton.mpr (Fin.ext ?_)))
-        simp only [hbw]; omega
-      · refine Finset.mem_insert.mpr (Or.inl (Fin.ext ?_))
-        simp only [hbw]; omega
-      · exact absurd (show A % 4 = (A / 4) % 4 by unfold leaderId at hAlead; omega) hlead
-    have := Finset.card_le_card hsub
-    have h2 : ({⟨A % 4, by omega⟩, ⟨(A / 4 + 1) % 4, by omega⟩} : Finset (Fin 4)).card ≤ 2 :=
-      le_trans (Finset.card_insert_le _ _) (by simp)
-    have hq : quorumCard (Fin 4) = 3 := rfl
-    unfold Certified at hcert
-    rw [hq] at hcert
-    omega
 
 /-- The reactive witness: `Usparse` at spacing `6` inside a timeout of
 `9`. -/
@@ -367,7 +347,11 @@ def spReactive (N : ℕ) : ReactiveB (Usparse N) {1, 2, 3} N where
     rcases hheld.2 with h | ⟨_, h⟩ <;> omega
   built_lt _ _ _ _ := by omega
   deadline _ _ _ _ := by omega
-  certified_quorate := usparse_certified_quorate N
+  leader_tagged k _ L hL := by
+    have hL' := eq_leaderId_of_isLeaderBlock (usparse_block N) hL
+    subst hL'
+    change Format.leader (BlockId := ℕ) (spBlock (leaderId k)).payload = true
+    simp only [spBlock_leader, decide_eq_true_eq, leaderId_div, leaderId_mod]
   refs_referenceable v hv n b hb hbc hbr j hj := by
     rw [correct_eq] at hv
     obtain ⟨h1, h3⟩ := mem_T_bounds' hv
@@ -421,7 +405,9 @@ def spReactive (N : ℕ) : ReactiveB (Usparse N) {1, 2, 3} N where
       rw [hcv, show (Usparse N).block = spBlock from rfl, card_creators_Ico (by omega)]
       omega
     · left
-      rw [spClaims_eq, if_pos ⟨by omega, hlead⟩]
+      change spClaim c = _
+      unfold spClaim
+      rw [if_pos ⟨by omega, hlead⟩]
       congr 2
       omega
 
@@ -438,8 +424,8 @@ theorem sp_fairRun : FairRunOn (S := spSlots) ({1, 2, 3} : Finset (Fin 4)) 3 := 
 
 /-- The identity schedule spans at three, at wave two. -/
 theorem sp_spans :
-    (bluestreakAnchored (Fin 4) ℕ Unit).SpansEligible (S := spSlots) 3 :=
-  (bluestreakAnchored (Fin 4) ℕ Unit).spansEligible_of_identity (fun _ => rfl) fun _ => le_rfl
+    (bluestreakAnchored (Fin 4) ℕ (Bool × Option ℕ)).SpansEligible (S := spSlots) 3 :=
+  (bluestreakAnchored (Fin 4) ℕ (Bool × Option ℕ)).spansEligible_of_identity (fun _ => rfl) fun _ => le_rfl
 
 /-- **Reactive liveness, instantiated**: every `T`-led slot within the
 horizon is committed, on the full view and on every reliable

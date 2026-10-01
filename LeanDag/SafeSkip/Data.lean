@@ -12,8 +12,10 @@ rather than a universe, since the data of a fill is shared across rules
 and only the invariants a universe carries differ. `fillBlock` adds a
 self reference to `v1`'s block of the round below, which the core's
 self-parent clause demands; `copyBlock` carries the donor's references
-verbatim, for a rule without that clause. `Blocks` is what a reading
-owes the record for the fill to close (`Record/Fill.lean`).
+verbatim, for a rule without that clause; `chainBlock` keeps only the
+self reference, for a sparse rule, with a payload the rule supplies.
+`Blocks` is what a reading owes the record for the fill to close
+(`Record/Fill.lean`).
 -/
 
 namespace LeanDag
@@ -95,6 +97,15 @@ def copyBlock (k : ℕ) : Block Validator BlockId Payload where
   refs := (blk (sk.line k)).refs
   payload := (blk (sk.line k)).payload
 
+/-- The filled block **as a chain**: only the self reference, and a
+payload the caller supplies rather than the donor's, since a rule may
+read its payload. -/
+def chainBlock (p : Payload) (k : ℕ) : Block Validator BlockId Payload where
+  round := k
+  creator := sk.v1
+  refs := {sk.prev k}
+  payload := p
+
 /-- The gap rounds, as a `Finset`. -/
 def gap : Finset ℕ := (Finset.range (sk.r + 1)).filter (fun k => sk.r0 < k)
 
@@ -159,6 +170,22 @@ def selfBlocks (hc : ∀ i ∈ ids, ∀ j ∈ (blk i).refs, j ∈ ids) : sk.Bloc
       · simp only [prev, if_neg hb]
         exact Finset.mem_union_right _ (sk.mem_freshIds.mpr ⟨k - 1, by omega, by omega, rfl⟩)
     · exact Finset.mem_union_left _ (hc _ (sk.hline_mem k (sk.r0_le_of_lt hk1) hk2) j hj)
+
+/-- The chain reading: `v1`'s block of the round below, and nothing else. -/
+def chainBlocks (p : Payload) : sk.Blocks where
+  blk := sk.chainBlock p
+  round := fun _ => rfl
+  creator := fun _ => rfl
+  refs_mem := fun k hk1 hk2 j hj => by
+    simp only [chainBlock, Finset.mem_singleton] at hj
+    subst hj
+    by_cases hb : k = sk.r0 + 1
+    · simp only [prev, if_pos hb]
+      exact Finset.mem_union_left _ sk.hB1
+    · simp only [prev, if_neg hb]
+      exact Finset.mem_union_right _ (sk.mem_freshIds.mpr ⟨k - 1, by omega, by omega, rfl⟩)
+
+@[simp] theorem chainBlocks_blk (p : Payload) : (sk.chainBlocks p).blk = sk.chainBlock p := rfl
 
 @[simp] theorem copyBlocks_blk (hc : ∀ i ∈ ids, ∀ j ∈ (blk i).refs, j ∈ ids) :
     (sk.copyBlocks hc).blk = sk.copyBlock := rfl

@@ -1,14 +1,15 @@
 import LeanDag.Bluestreak.Carrier
 import LeanDag.Properties.Arcs.Record
 /-!
-# Bluestreak: the discipline survives the cut and re-genesis
+# Bluestreak: the discipline across the cut, re-genesis and the chain fill
 
 A retained block's claim names a block two rounds below, at or above
 the horizon once the claimer is two rounds above it; the claimed
 block's voters sit one round above it, strictly above the horizon,
 where the cut keeps every reference. The retained blocks of the two
 lowest rounds claim blocks the cut dropped, and those claims are read
-by no slot.
+by no slot. The chain fill's blocks are ordinary and claim nothing, so
+they add no claim to any cone.
 -/
 
 namespace LeanDag
@@ -19,7 +20,7 @@ open BlockRecord
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
-variable {U : Universe Validator BlockId Payload} [ClaimMap BlockId] {G : ℕ}
+variable [Format BlockId Payload] {U : Universe Validator BlockId Payload} {G : ℕ}
 
 /-- A path of the cut is a path of the record. -/
 theorem reaches_of_reaches_chop {b i : BlockId} (h : Reaches (U.chop G) b i) : Reaches U b i := by
@@ -47,18 +48,10 @@ theorem certified_chop_iff {L : BlockId} (hL : G ≤ (U.block L).round) :
 
 /-- **The discipline survives the cut.** -/
 theorem disciplined_chop (hI : Disciplined U) : Disciplined (U.chop G) where
-  certified_quorate := by
-    intro A hA hc h0
-    rw [mem_chop_ids] at hA
-    simp only [chop_block, chopBlk_round] at h0
-    have hq := hI.certified_quorate A hA.1 ((certified_chop_iff hA.2).mp hc) (by omega)
-    simp only [creators, chop_block, chopBlk_refs_of_lt (show G < (U.block A).round by omega),
-      creatorsOf_chopBlk]
-    exact hq
   honest_backed := by
     intro B hB hc X hBX L hcl h2
     rw [mem_chop_ids] at hB
-    simp only [chop_block, chopBlk_creator, chopBlk_round] at hc h2 ⊢
+    simp only [claimOf, chop_block, chopBlk_creator, chopBlk_round, chopBlk_payload] at hc hcl h2 ⊢
     obtain ⟨hr, hcert⟩ := hI.honest_backed B hB.1 hc X (reaches_of_reaches_chop hBX) L hcl
       (by omega)
     exact ⟨by omega, (certified_chop_iff (by omega)).mpr hcert⟩
@@ -117,19 +110,6 @@ zero with no references, so it votes for nothing and carries no read
 claim. -/
 theorem disciplined_addGenesis (hI : Disciplined U) :
     Disciplined (U.addGenesis v g p hg hsev) where
-  certified_quorate := by
-    intro A hA hc h0
-    rcases Finset.mem_insert.mp hA with rfl | hA
-    · rw [addGenesis_block_new] at h0; exact absurd h0 (Nat.lt_irrefl 0)
-    · rw [addGenesis_block_old hA] at h0
-      have hq := hI.certified_quorate A hA ((certified_addGenesis_iff hA).mp hc) h0
-      have hcr : creators (U.addGenesis v g p hg hsev).block
-          ((U.addGenesis v g p hg hsev).block A) = creators U.block (U.block A) := by
-        rw [addGenesis_block_old hA]
-        unfold creators creatorsOf
-        exact Finset.image_congr fun j hj => by
-          rw [addGenesis_block_old (U.complete A hA j hj)]
-      rw [hcr]; exact hq
   honest_backed := by
     intro B hB hc X hBX L hcl h2
     rcases Finset.mem_insert.mp hB with rfl | hB
@@ -142,13 +122,144 @@ theorem disciplined_addGenesis (hI : Disciplined U) :
       rw [addGenesis_block_new] at h2; exact absurd h2 (by simp)
     · rw [addGenesis_block_old hB] at hc
       obtain ⟨hr, hX⟩ := reaches_of_reaches_addGenesis hB hBX
-      rw [addGenesis_block_old hX] at h2 ⊢
+      simp only [claimOf] at hcl
+      rw [addGenesis_block_old hX] at h2 hcl ⊢
       obtain ⟨hrL, hcert⟩ := hI.honest_backed B hB hc X hr L hcl h2
       have hL := mem_of_certified hcert
       rw [addGenesis_block_old hL]
       exact ⟨hrL, (certified_addGenesis_iff hL).mpr hcert⟩
 
 end Genesis
+
+/-! ## The chain fill -/
+
+section Chain
+
+variable (sk : SkipData U.ids U.block) {p : Payload}
+  (hp : Format.leader (BlockId := BlockId) p = false)
+
+/-- The self reference of a filled block: `v1`'s block of the round
+below, under the extended map. -/
+theorem prev_chain {k : ℕ} (hk1 : sk.r0 < k) :
+    (sk.fillMap (sk.chainBlocks p) (sk.prev k)).round = k - 1 ∧
+      (sk.fillMap (sk.chainBlocks p) (sk.prev k)).creator = sk.v1 := by
+  by_cases hb : k = sk.r0 + 1
+  · simp only [SkipData.prev, if_pos hb, SkipData.fillMap_old sk.hB1]
+    exact ⟨by have : sk.r0 = (U.block sk.B1).round := rfl; omega, sk.hB1c⟩
+  · simp only [SkipData.prev, if_neg hb, SkipData.fillMap_fresh, SkipData.chainBlocks_blk]
+    exact ⟨rfl, rfl⟩
+
+include hp in
+/-- **A chain block is valid**: one reference, to its author's block of
+the round below, and an ordinary block's format. -/
+theorem chainBlock_valid {k : ℕ} (hk1 : sk.r0 < k) :
+    ValidWrt (sk.fillMap (sk.chainBlocks p)) (sk.chainBlock p k) := by
+  have hpr := prev_chain sk (p := p) hk1
+  refine ⟨fun j hj => ?_, fun _ => Nat.zero_le _, ⟨⟨fun j hj l hl _ => ?_, fun _ => ?_⟩,
+    fun ht => ?_, fun _ j hj => ?_⟩⟩
+  · simp only [SkipData.chainBlock, Finset.mem_singleton] at hj
+    subst hj
+    show _ + 1 = k
+    omega
+  · simp only [SkipData.chainBlock, Finset.mem_singleton] at hj hl
+    rw [hj, hl]
+  · exact ⟨sk.prev k, Finset.mem_singleton_self _, hpr.2⟩
+  · exact absurd ht (by simp only [SkipData.chainBlock, hp]; decide)
+  · simp only [SkipData.chainBlock, Finset.mem_singleton] at hj
+    subst hj
+    exact Or.inl hpr.2
+
+/-- **The chain fill**: `U` with `v1`'s gap filled by a chain of ordinary
+blocks carrying the payload `p`. -/
+def chainFill : Universe Validator BlockId Payload :=
+  BlockRecord.fill U sk (sk.chainBlocks p) (fun _ hk1 _ => chainBlock_valid sk hp hk1)
+
+/-- A path from an old block stays among the old blocks. -/
+theorem reaches_of_reaches_chainFill {b X : BlockId} (hb : b ∈ U.ids)
+    (h : Reaches (chainFill sk hp) b X) : Reaches U b X ∧ X ∈ U.ids := by
+  induction h with
+  | refl => exact ⟨Reaches.refl, hb⟩
+  | tail _ hstep ih =>
+      obtain ⟨hr, hy⟩ := ih
+      change _ ∈ ((chainFill sk hp).block _).refs at hstep
+      rw [chainFill, BlockRecord.fill_block_old hy] at hstep
+      exact ⟨hr.trans (Reaches.single hstep), U.complete _ hy _ hstep⟩
+
+/-- A path from a filled block reaches old blocks only through `B1`. -/
+theorem reaches_B1_of_reaches_chainFill {b X : BlockId} (hb : b ∈ sk.freshIds)
+    (h : Reaches (chainFill sk hp) b X) :
+    X ∈ (chainFill sk hp).ids ∧ (X ∈ U.ids → Reaches U sk.B1 X) := by
+  induction h with
+  | refl =>
+      refine ⟨Finset.mem_union_right _ hb, fun hbU => ?_⟩
+      obtain ⟨k, -, -, rfl⟩ := sk.mem_freshIds.mp hb
+      exact absurd hbU (sk.hfresh_new k)
+  | tail _ hstep ih =>
+      rename_i y z _
+      obtain ⟨hy, hyB⟩ := ih
+      change z ∈ ((chainFill sk hp).block y).refs at hstep
+      refine ⟨(chainFill sk hp).complete y hy z hstep, fun hz => ?_⟩
+      rcases Finset.mem_union.mp hy with hyU | hyF
+      · rw [chainFill, BlockRecord.fill_block_old hyU] at hstep
+        exact (hyB hyU).trans (Reaches.single hstep)
+      · obtain ⟨k, hk1, -, rfl⟩ := sk.mem_freshIds.mp hyF
+        rw [chainFill, BlockRecord.fill_block_fresh] at hstep
+        simp only [SkipData.chainBlocks_blk, SkipData.chainBlock, Finset.mem_singleton] at hstep
+        by_cases hkb : k = sk.r0 + 1
+        · simp only [SkipData.prev, if_pos hkb] at hstep
+          subst hstep
+          exact Reaches.refl
+        · simp only [SkipData.prev, if_neg hkb] at hstep
+          subst hstep
+          exact absurd hz (sk.hfresh_new _)
+
+/-- An old block's certification survives the fill: its voters remain. -/
+theorem certified_chainFill {L : BlockId} (hL : L ∈ U.ids) (h : Certified U L) :
+    Certified (chainFill sk hp) L := by
+  unfold Certified at h ⊢
+  rw [chainFill, BlockRecord.fill_block_old hL]
+  refine le_trans h (Finset.card_le_card fun w hw => ?_)
+  obtain ⟨q, hq, hqr, hqL, hqw⟩ := mem_supporters.mp hw
+  exact mem_supporters.mpr ⟨q, Finset.mem_union_left _ hq,
+    by rw [BlockRecord.fill_block_old hq]; exact hqr,
+    by rw [BlockRecord.fill_block_old hq]; exact hqL,
+    by rw [BlockRecord.fill_block_old hq]; exact hqw⟩
+
+/-- **The discipline survives the chain fill**, when the filled blocks
+claim nothing: an old block's cone is unchanged, and a filled block's
+cone is the chain and `B1`'s. -/
+theorem disciplined_chainFill (hI : Disciplined U)
+    (hc : Format.claim (BlockId := BlockId) p = none) : Disciplined (chainFill sk hp) where
+  honest_backed := by
+    intro B hB hcB X hBX L hcl h2
+    have hXf : X ∈ (chainFill sk hp).ids := mem_ids_of_reaches hB hBX
+    have hX : X ∈ U.ids := by
+      rcases Finset.mem_union.mp hXf with hXU | hXF
+      · exact hXU
+      · obtain ⟨k, -, -, rfl⟩ := sk.mem_freshIds.mp hXF
+        change Format.claim ((chainFill sk hp).block (sk.fresh k)).payload = some L at hcl
+        rw [chainFill, BlockRecord.fill_block_fresh] at hcl
+        simp only [SkipData.chainBlocks_blk, SkipData.chainBlock, hc] at hcl
+        exact absurd hcl (by simp)
+    -- an honest block of `U` whose cone holds `X`
+    obtain ⟨B', hB', hcB', hr⟩ : ∃ B' ∈ U.ids,
+        (U.block B').creator ∈ (Correct : Finset Validator) ∧ Reaches U B' X := by
+      rcases Finset.mem_union.mp hB with hBU | hBF
+      · rw [chainFill, BlockRecord.fill_block_old hBU] at hcB
+        exact ⟨B, hBU, hcB, (reaches_of_reaches_chainFill sk hp hBU hBX).1⟩
+      · obtain ⟨k, -, -, hk⟩ := sk.mem_freshIds.mp hBF
+        have hv1 : sk.v1 ∈ (Correct : Finset Validator) := by
+          rw [hk, chainFill, BlockRecord.fill_block_fresh] at hcB; exact hcB
+        exact ⟨sk.B1, sk.hB1, by rw [sk.hB1c]; exact hv1,
+          (reaches_B1_of_reaches_chainFill sk hp hBF hBX).2 hX⟩
+    have hold : (chainFill sk hp).block X = U.block X := BlockRecord.fill_block_old hX
+    simp only [claimOf, hold] at hcl h2 ⊢
+    obtain ⟨hrL, hcert⟩ := hI.honest_backed B' hB' hcB' X hr L hcl h2
+    have hL := mem_of_certified hcert
+    rw [show (chainFill sk hp).block L = U.block L from BlockRecord.fill_block_old hL]
+    exact ⟨hrL, certified_chainFill sk hp hL hcert⟩
+
+end Chain
 
 instance : Invariant.Chops (Disciplined (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) where
@@ -165,7 +276,7 @@ namespace BluestreakProperties
 open LeanDag.Properties LeanDag.Bluestreak
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
-variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type} [ClaimMap BlockId]
+variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type} [Format BlockId Payload]
 
 /-- **Bluestreak's carrier, on the record**: the identity maps, under
 `Disciplined`. -/
@@ -185,6 +296,16 @@ def onRecord :
   ofView := fun V => V
   viewIds_to := fun _ => rfl
   viewIds_of := fun _ => rfl
+
+/-- **The fill, at Bluestreak's carrier**: the chain fill through
+`onRecord`, with `disciplined_chainFill` as the invariant. -/
+def fill (U : (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)).Universe) (sk : SkipData U.val.ids U.val.block) {p : Payload}
+    (hp : Format.leader (BlockId := BlockId) p = false)
+    (hc : Format.claim (BlockId := BlockId) p = none) :
+    (bluestreakRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload)).Universe :=
+  onRecord.fill U sk (sk.chainBlocks p) (fun _ hk1 _ => chainBlock_valid sk hp hk1)
+    (disciplined_chainFill sk hp U.property hc)
 
 end BluestreakProperties
 
