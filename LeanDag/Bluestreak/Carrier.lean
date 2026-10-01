@@ -15,15 +15,10 @@ the indirect rule, and a support whose certifier is a claim.
 Both headlines follow: safety across any stack, and progress with
 inclusion at the support.
 
-Two of the optional properties are **not** shown, and neither is an
-omission. `Quorate` asks that every block reference a quorum, which is
-what a sparse DAG is designed not to do, so chain quality does not
-apply to it. And the record cells of `Properties/Arcs/Record.lean` need
-the invariant to survive the cut, which it does not: the cut drops the
-blocks a retained claim names, and with them the votes that back it
-(`LeanDagTest/Bluestreak/Model.lean`). Referenceability must be read
-bounded — two rounds, a claim's reach — for a pruning validator to
-satisfy it at all; `docs/report.md` §26.9 states what that takes.
+`Quorate` is **not** shown: it asks that every block reference a
+quorum, which is what a sparse DAG is designed not to do, so chain
+quality does not apply to it. The cut and re-genesis are
+`Bluestreak/Record.lean`'s.
 -/
 
 namespace LeanDag
@@ -217,7 +212,7 @@ theorem not_claimedIn_novel
     (h : AgreeBand (bluestreakAnchored Validator BlockId Payload).toDagRule U U' lo hi g g')
     {A L : BlockId} (hA : A ∈ U.ids) (hanc : Backed U A)
     (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
-    (hLnov : L ∉ U.ids) (hLlo : lo ≤ (U'.block L).round + g')
+    (hLnov : L ∉ U.ids) (hLlo : lo ≤ (U'.block L).round + g') (hLg : g ≤ (U'.block L).round + g')
     (hLhi : (U'.block L).round + 2 + g' ≤ hi) : ¬ ClaimedIn U' A L := by
   rintro ⟨C, hC, hre⟩
   obtain ⟨-, hCr'⟩ := mem_claimers_round hC
@@ -236,7 +231,7 @@ theorem not_claimedIn_novel
     exact hLnov (U.complete b hbU L ((AnchoredRule.isVote_band h hbU (by omega) (by omega)).mp hv))
   -- so it is the claim field, which the discipline backs at the anchor's honest voter
   have hcl : claim C = some L := ((Finset.mem_filter.mp hC).2).resolve_right hnotVotes
-  have hcert := hanc C hreU L hcl
+  have hcert := (hanc C hreU L hcl (by omega)).2
   -- a certified candidate has a voter in `U`, and a voter references it
   obtain ⟨w, hw, -⟩ := exists_correct_of_card (S := supporters U L ((U.block L).round + 1))
     (by have := F.card_validators; change quorumCard Validator ≤ _ at hcert; omega)
@@ -312,7 +307,7 @@ theorem bluestreakBandLaws : (bluestreakAnchored Validator BlockId Payload).Band
     intro S S' U U' lo hi g g' A L k k' i h hA hanc hAlo hAhi hkk _ _ hlo hhi _ hL hLo
     simp only [bluestreakAnchored_waveAt] at hhi
     have hLr : (U'.block L).round = S'.slotRound k' := hL.2.1
-    exact not_claimedIn_novel h hA hanc.2 hAlo hAhi hLo (by omega) (by omega)
+    exact not_claimedIn_novel h hA hanc.2 hAlo hAhi hLo (by omega) (by omega) (by omega)
 
 /-- **Bluestreak reads a band**, over the disciplined universes. -/
 theorem banded : Banded (bluestreakRule (Validator := Validator) (BlockId := BlockId)

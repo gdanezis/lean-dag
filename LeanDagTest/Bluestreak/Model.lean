@@ -107,18 +107,12 @@ example (V : U1.View) (v : Option (Fin 24)) (h : Decided U1 V 0 v) : v = some 0 
 
 end U1
 
-/-- **The cut does not preserve the discipline.** `U1` chopped at the
-horizon `2` keeps block `8`, whose claim names the genesis leader `0`
-the cut dropped; the evidence for the claim is gone with it, so the
-chopped record is not disciplined and the record cells of
-`Properties/Arcs/Record.lean` are not available to the arc. -/
-example : ¬ Disciplined (BlockRecord.chop U1 2) := by
-  intro h
-  have h8 : (8 : Fin 24) ∈ (BlockRecord.chop U1 2).ids := by decide
-  have hc : ((BlockRecord.chop U1 2).block 8).creator ∈ (Correct : Finset (Fin 4)) := by decide
-  have := h.honest_backed 8 h8 hc 8 Reaches.refl 0 (by decide)
-  revert this
-  decide
+/-- **The cut keeps the discipline.** `U1` chopped at the horizon `2`
+keeps block `8`, whose claim names the genesis leader `0` the cut
+dropped; `8` sits at the new round `0`, where a claim is read by no
+slot. -/
+example : Disciplined (BlockRecord.chop U1 2) :=
+  Disciplined.of_decide (by decide) (by decide)
 
 /-! ## `U2`: a Byzantine anchor candidate with an unbacked claim -/
 

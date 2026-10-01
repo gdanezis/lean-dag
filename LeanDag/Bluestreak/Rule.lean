@@ -97,10 +97,18 @@ abbrev DirectSkipIn [S : Slots Validator] (U : Universe Validator BlockId Payloa
     ∀ L ∈ leaderBlocksAt U k,
       HoldsAtLeast U V (quorumCard Validator) (omissionsOf U L (S.slotRound k + 1))
 
+/-- `X`'s claim is backed: from round two up, it names a certified block
+two rounds below. A claim at rounds `0` and `1` names a block below the
+record and is read by no slot. -/
+def BackedClaim [ClaimMap BlockId] (U : Universe Validator BlockId Payload) (X : BlockId) :
+    Prop :=
+  ∀ L, claim X = some L → 2 ≤ (U.block X).round →
+    (U.block L).round + 2 = (U.block X).round ∧ Certified U L
+
 /-- `A`'s cone carries only backed claims: what an honest validator
 checks before building on `A`, and what a certified block satisfies. -/
 def Backed [ClaimMap BlockId] (U : Universe Validator BlockId Payload) (A : BlockId) : Prop :=
-  ∀ X, Reaches U A X → ∀ L, claim X = some L → Certified U L
+  ∀ X, Reaches U A X → BackedClaim U X
 
 /-- The indirect link: a claim for `L` lies in the anchor's causal history. -/
 abbrev ClaimedIn [ClaimMap BlockId] (U : Universe Validator BlockId Payload) (A L : BlockId) :
@@ -112,14 +120,15 @@ abbrev ClaimedIn [ClaimMap BlockId] (U : Universe Validator BlockId Payload) (A 
 /-- **What a Bluestreak universe owes beyond its record**: a certified
 block is quorate — what the receivers' format check on leader blocks
 leaves of itself where safety reads it — and every claim an honest
-block inherits, for a candidate the universe holds, is certified: the
-honest validators build on referenceable blocks only. Both clauses read
+block inherits from round two up names a certified block two rounds
+below: the honest validators build on referenceable blocks only. Both
+clauses read
 the record alone, so a universe is disciplined or not with no schedule
 in sight. -/
 structure Disciplined [ClaimMap BlockId] (U : Universe Validator BlockId Payload) : Prop where
   certified_quorate : ∀ A ∈ U.ids, Certified U A → Quorate U A
   honest_backed : ∀ B ∈ U.ids, (U.block B).creator ∈ (Correct : Finset Validator) →
-    ∀ X, Reaches U B X → ∀ L, claim X = some L → Certified U L
+    ∀ X, Reaches U B X → BackedClaim U X
 
 /-! ## The relation -/
 

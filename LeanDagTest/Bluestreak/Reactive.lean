@@ -238,9 +238,10 @@ theorem correct_eq : (Correct : Finset (Fin 4)) = {1, 2, 3} := by decide
 
 /-- **A claim reached from a held block is backed** by the time the round
 after the claimer's round has arrived. -/
-theorem backedIn_of_reaches_sp {N : ℕ} {v : Fin 4} {j Y L t : ℕ} (hj : j < 4 * (N + 1))
-    (hjY : Reaches (Usparse N) j Y) (hcl : claim Y = some L) (ht : 6 * (j / 4) ≤ t + 1) :
-    BackedIn (Usparse N) (spHolds N v t) L := by
+theorem backedIn_of_reaches_sp {N : ℕ} {v : Fin 4} {j Y t : ℕ} (hj : j < 4 * (N + 1))
+    (hjY : Reaches (Usparse N) j Y) (ht : 6 * (j / 4) ≤ t + 1) :
+    BackedClaimIn (Usparse N) (spHolds N v t) Y := by
+  intro L hcl _
   have hYi : Y ∈ (Usparse N).ids :=
     mem_ids_of_reaches (by simpa [usparse_ids] using hj) hjY
   have hYr : ((Usparse N).block Y).round ≤ ((Usparse N).block j).round :=
@@ -248,6 +249,7 @@ theorem backedIn_of_reaches_sp {N : ℕ} {v : Fin 4} {j Y L t : ℕ} (hj : j < 4
   simp only [usparse_block, spBlock_round] at hYr
   simp only [usparse_ids, Finset.mem_range] at hYi
   obtain ⟨h2, rfl⟩ := claim_spec hcl
+  refine ⟨by simp only [usparse_block, spBlock_round]; unfold leaderId; omega, ?_⟩
   rw [show Y / 4 - 2 = (Y / 4 - 1) - 1 by omega]
   exact backedIn_leaderId v (by omega) (by omega) (by omega)
 
@@ -376,13 +378,13 @@ def spReactive (N : ℕ) : ReactiveB (Usparse N) {1, 2, 3} N where
     refine ⟨?_, fun Y hjY L hcl => ?_⟩
     · rw [mem_spHolds]
       exact ⟨by omega, Or.inl (by omega)⟩
-    · exact backedIn_of_reaches_sp (by omega) hjY hcl (by omega)
-  claim_held v hv n b hb hbc hbr L hcl := by
+    · exact backedIn_of_reaches_sp (by omega) hjY (by omega) L hcl
+  claim_held v hv n b hb hbc hbr := by
     rw [correct_eq] at hv
     obtain ⟨h1, h3⟩ := mem_T_bounds' hv
     simp only [usparse_ids, Finset.mem_range] at hb
     simp only [usparse_block, spBlock_round] at hbr
-    exact backedIn_of_reaches_sp hb Reaches.refl hcl (by omega)
+    exact backedIn_of_reaches_sp hb Reaches.refl (by omega)
   vote_or_wait v hv k hN _ L hL c hc hcc hcr := by
     left
     have hL' := eq_leaderId_of_isLeaderBlock (usparse_block N) hL

@@ -854,6 +854,17 @@ indexed by slot (`docs/porting-plan.md`); what this removes is the
 smaller of the two blockers, and the one that was in the rule rather
 than in its formalisation.
 
+**Bluestreak's anchor reads a literal round, and its verdicts do not.**
+`BackedClaim` asks `2 ≤ (U.block X).round`, exempting the claims of the
+two lowest rounds (§11.48). The audit reaches it because
+`Bluestreak.Decided` is `bluestreakAnchored`'s relation and the
+structure carries `Anchor := Certified U A ∧ Backed U A`; but
+`AnchoredRule.Decided` reads `Commit`, `Skip`, `Link`, `Least`,
+`RungEmpty` and `Eligible`, never `Anchor`. The anchor is read by the
+laws, and by the band only as a hypothesis on one universe in
+`link_novel`, never compared across two. `BluestreakProperties.banded`
+is proved, so the read is recorded rather than removed.
+
 **A third difference, which is not a defect.** Odontoceti, Nemo,
 Mahi-Mahi and Hybrid define causal history by a depth bound taken from a
 block's own round: `historyFrom blk b = historyUptoFrom blk ((blk b).round
@@ -5082,6 +5093,58 @@ from two above the floor for the same reason.
 **Measure.** The library and tests stand at 73,015 lines; the arc is
 1,112 lines of library, and the common-layer change across `Anchored.lean`
 and `Anchored/Band.lean` is `+62 −34`.
+
+### 11.48 Bluestreak's cut and re-genesis: the discipline read bounded
+
+The step after §11.47, and the first of its two open clauses. The cut
+broke `honest_backed` because the clause asked every claim in an honest
+cone to be certified, including the claims of the two lowest retained
+rounds, which name blocks the cut dropped. The clause now reads one
+claim at a time, through `BackedClaim`: a claim from round two up names
+a certified block exactly two rounds below, and a claim at rounds `0`
+and `1` is exempt. `Backed`, the anchor's half, reads the same
+predicate.
+
+**Why the position is in the conclusion.** Two weaker forms fail.
+Asking only for held candidates (`L ∈ U.ids`) breaks the band:
+`not_claimedIn_novel` reads the anchor's backing exactly at a candidate
+`U` does not hold. Making a misplaced claim exempt rather than
+forbidden — `round L + 2 = round X` as a premise — fails both ways,
+since at an absent `L` the record's block map is arbitrary, in the band
+and after the cut alike. And without the position at all, a claim from
+`G + 5` naming a certified block at `G − 3` survives the cut with
+nothing certified behind it. So the position is what an honest
+validator checks of an inherited claim: `Referenceable` reads
+`BackedClaimIn`, and `claim_held` asks the same of a correct
+validator's own claim. No verdict reads a claim in any other position,
+since `claimers` keeps only blocks at `round L + 2`; liveness compiled
+unchanged.
+
+**What the arc collects.** `disciplined_chop` and
+`disciplined_addGenesis` (`Bluestreak/Record.lean`), with `onRecord`,
+give every verdict cell of the cut and re-genesis. The novelty lemma
+takes one more hypothesis, that the candidate sits at or above `U`'s
+frame zero, which `link_novel` discharges from the slot alignment. The
+witness `¬ Disciplined (BlockRecord.chop U1 2)` is now the positive
+`Disciplined (BlockRecord.chop U1 2)`. `audit-rounds.py` flags the
+`2 ≤` as a literal round read; §3.4c records why the verdicts do not
+read it.
+
+**The common layer.** `Invariant.Mechanised` asked every invariant to
+survive all three mechanisms at once. It is now `Invariant.Chops` and
+`Invariant.Regenesis` extended by the copy fill, and the cells of each
+mechanism read only their own class; every existing instance is
+unchanged. The diff is `+34 −13` across `Common/Record/Invariant.lean`,
+`Properties/Record.lean` and `Properties/Arcs/Record.lean`.
+
+**What is left.** The fill: the copy fill's first block references its
+author's last pre-crash block, which can certify an ordinary block
+while it stays sparse, so `certified_quorate` fails. That is §11.47's
+format clause, unchanged by this step. `audit-mechanisms.py` counts the
+fill cell as an instance because the carrier is on the record; the
+report says what that covers. The claim stays an ambient map, so the
+position check is an assumption on honest validators rather than a
+validity clause.
 
 ### 11.5 Next steps, in order
 

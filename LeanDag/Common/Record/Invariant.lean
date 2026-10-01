@@ -23,18 +23,27 @@ variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
 /-- The trivial invariant. -/
 def Any (_ : BlockRecord Validator BlockId Payload P honest) : Prop := True
 
-/-- **What an invariant owes the mechanisms.** -/
-class Invariant.Mechanised [P.Mechanised]
+/-- **What an invariant owes the cut.** -/
+class Invariant.Chops [P.Mechanised]
     (I : BlockRecord Validator BlockId Payload P honest → Prop) : Prop where
   /-- It survives the cut. -/
   chop : ∀ {W : BlockRecord Validator BlockId Payload P honest} (G : ℕ), I W → I (W.chop G)
-  /-- It survives the copy fill. -/
-  copyFill : ∀ [P.CopyStable] {W : BlockRecord Validator BlockId Payload P honest}
-    (sk : SkipData W.ids W.block), I W → I (BlockRecord.copyFill W sk)
+
+/-- **What an invariant owes re-genesis.** -/
+class Invariant.Regenesis [P.Mechanised]
+    (I : BlockRecord Validator BlockId Payload P honest → Prop) : Prop where
   /-- It survives re-genesis. -/
   addGenesis : ∀ {W : BlockRecord Validator BlockId Payload P honest} (v : Validator)
     (g : BlockId) (p : Payload) (hg : g ∉ W.ids) (hsev : ∀ b ∈ W.ids, (W.block b).creator ≠ v),
     I W → I (W.addGenesis v g p hg hsev)
+
+/-- **What an invariant owes the mechanisms.** -/
+class Invariant.Mechanised [P.Mechanised]
+    (I : BlockRecord Validator BlockId Payload P honest → Prop) : Prop
+    extends Invariant.Chops I, Invariant.Regenesis I where
+  /-- It survives the copy fill. -/
+  copyFill : ∀ [P.CopyStable] {W : BlockRecord Validator BlockId Payload P honest}
+    (sk : SkipData W.ids W.block), I W → I (BlockRecord.copyFill W sk)
 
 instance [P.Mechanised] : Invariant.Mechanised (Any (P := P) (honest := honest)) where
   chop := fun _ _ => True.intro

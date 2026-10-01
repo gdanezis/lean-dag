@@ -49,6 +49,7 @@ ALLOW = {
     ("LeanDag.MahiMahi.Model.Rules", "votingRound"),
     ("LeanDag.MahiMahi.Model.Rules", "decisionRoundAt"),
     ("LeanDag.MahiMahi.Model.Decision", "decisionRound"),
+    ("LeanDag.Bluestreak.Rule", "BackedClaim"),
 }
 
 COMMENT = re.compile(r"/--.*?-/|--[^\n]*", re.S)

@@ -5374,10 +5374,12 @@ the dependency graph and print what each rule shows and which mechanism
 cells exist. As of this writing: eleven carriers over thirteen rules, of
 which twelve show the five properties and a support. The cells of cut,
 fill, re-genesis, prompt skip (where the rule skips) and chain quality
-are instances except six, which the audit lists as open, the rule
+are instances except three, which the audit lists as open, the rule
 showing what the mechanism asks and no instance being written:
-Bluestreak's cut, fill and re-genesis (§26.9), and Steelhead's fill,
-re-genesis and chain quality. The adaptive-leaders cell is open for
+Steelhead's fill, re-genesis and chain quality. Bluestreak's fill cell
+is an instance in the audit's sense only: its carrier is on the record,
+so a fill that kept the discipline would carry every verdict, but the
+copy fill does not keep it (§26.9). The adaptive-leaders cell is open for
 every rule. Liveness across each mechanism the rule has a witness for,
 and across any stack, is derived from the rule's support and its
 witnesses. `audit-bespoke.py` checks the other direction — no mechanism
@@ -5397,7 +5399,12 @@ the ids and block map agreeing, and `truncates_chop`, `sustains_chop`,
 FinWhale and Hydrozoan have the identity maps; Orcaella and Optimal-Hydrozoan read as records under their
 one further invariant, `HonestNoEquiv` and leader exclusion, each shown
 to survive the cut, the copy fill and re-genesis once
-(`Invariant.Mechanised`). The verdict cells are proved once too:
+(`Invariant.Mechanised`). That class is the union of what each
+mechanism asks, so a carrier whose invariant survives only some of them
+states those: `Invariant.Chops` for the cut, `Invariant.Regenesis` for
+re-genesis, and the cells of each read only their own. Bluestreak's
+universes are its records under `Disciplined`, which survives the cut
+and re-genesis and not the copy fill. The verdict cells are proved once too:
 `Properties/Arcs/Record.lean` gives transport and agreement across the
 cut, the fill and re-genesis at any carrier on the record with `Banded`
 and `Agree`. A rule's mechanism cell is therefore its `OnRecord`
@@ -10905,14 +10912,31 @@ adversary.
 
 **The discipline.** An honest validator references only referenceable
 blocks, and claims only what it has seen certified. On the record this
-is one clause: every claim in an honest block's causal history is
-certified. Beside it sits the format check, in the form safety reads:
+is one clause on every claim in an honest block's causal history:
+
+```lean
+def BackedClaim [ClaimMap BlockId] (U : Universe Validator BlockId Payload) (X : BlockId) :
+    Prop :=
+  ∀ L, claim X = some L → 2 ≤ (U.block X).round →
+    (U.block L).round + 2 = (U.block X).round ∧ Certified U L
+```
+
+A claim at round `r ≥ 2` names a certified block at `r − 2`. A claim at
+rounds `0` and `1` names a block below the record, is read by no slot,
+and is exempt; this is the bounded reading of referenceability (§26.9).
+The position `r − 2` is part of the conclusion, not a premise: it is
+what an honest validator checks of an inherited claim, and it is
+checkable, since backing the claim already needs the claimed block's
+votes. No verdict reads a claim in any other position, since `claimers`
+keeps only blocks at `round L + 2`, so the check excludes only blocks
+whose claims the rule ignores. Beside the clause sits the format check,
+in the form safety reads:
 
 ```lean
 structure Disciplined [ClaimMap BlockId] (U : Universe Validator BlockId Payload) : Prop where
   certified_quorate : ∀ A ∈ U.ids, Certified U A → Quorate U A
   honest_backed : ∀ B ∈ U.ids, (U.block B).creator ∈ (Correct : Finset Validator) →
-    ∀ X, Reaches U B X → ∀ L, claim X = some L → Certified U L
+    ∀ X, Reaches U B X → BackedClaim U X
 ```
 
 `certified_quorate` is where the arc parts from the protocol's own
@@ -11011,8 +11035,9 @@ def bluestreakAnchored (Validator BlockId Payload : Type*) [Fintype Validator]
   Anchor := fun U A => Certified U A ∧ Backed U A
 ```
 
-`Backed U A` says every claim in `A`'s causal history is certified —
-what an honest validator proves before building on `A`.
+`Backed U A` says every claim in `A`'s causal history is backed
+(`BackedClaim`) — what an honest validator proves before building on
+`A`.
 
 ### 26.3 What an anchor is
 
@@ -11228,9 +11253,16 @@ def BackedIn (U : Universe Validator BlockId Payload) (h : Finset BlockId) (L : 
 ```
 
 ```lean
+def BackedClaimIn (U : Universe Validator BlockId Payload) (h : Finset BlockId) (Y : BlockId) :
+    Prop :=
+  ∀ L, claim Y = some L → 2 ≤ (U.block Y).round →
+    (U.block L).round + 2 = (U.block Y).round ∧ BackedIn U h L
+```
+
+```lean
 def Referenceable (U : Universe Validator BlockId Payload) (h : Finset BlockId) (X : BlockId) :
     Prop :=
-  X ∈ h ∧ ∀ Y, Reaches U X Y → ∀ L, claim Y = some L → BackedIn U h L
+  X ∈ h ∧ ∀ Y, Reaches U X Y → BackedClaimIn U h Y
 ```
 
 Both are monotone in the holdings. The schedule is `ReactiveB`, which
@@ -11239,8 +11271,8 @@ is now stated at any block record, and the core's `ReactivePace` is its
 wait clauses over `ReactiveCore` — with five clauses: the leader quorum
 its receivers check; two discipline clauses on every correct validator,
 that it references only what was referenceable from its holdings when
-it built (`refs_referenceable`) and claims only what its holdings backed
-(`claim_held`); and two wait clauses on `T`, `vote_or_wait` with
+it built (`refs_referenceable`) and claims only a block two rounds below
+that its holdings backed (`claim_held`); and two wait clauses on `T`, `vote_or_wait` with
 "referenceable" for the core's "held", and `claim_or_wait`, whose
 fallback claims once a quorum of referenceable votes is held.
 
@@ -11352,9 +11384,9 @@ arc both headline results with no further proof (**BS17**): safety —
 agreement across any extension, and across any stack of cuts, fills and
 re-genesis — and liveness, progress below a reliable run together with
 inclusion, every reliable author's block entering the ledger through a
-slot it leads. The stack half is stated over stacks the arc cannot yet
-build, for the reason below; the extension half and the whole of
-liveness apply as they stand.
+slot it leads. The arc builds the stacks of cuts and re-genesis; a
+stack with a fill needs a fill that keeps the discipline, which the
+copy fill does not (below).
 
 **The band, and what it took.** `Banded` is the one that reads
 Bluestreak's difference from every rule before it. Its novelty clause
@@ -11394,21 +11426,11 @@ theorem banded : Banded (bluestreakRule (Validator := Validator) (BlockId := Blo
 reference `n − f` distinct creators, which is what a sparse DAG is
 built not to do, so chain quality (§7) does not apply: with two
 references a block carries no coverage guarantee, and the arc claims
-none. And the record cells of §16 — the cut, the fill, re-genesis —
-need `Disciplined` to survive those transforms, which the cut does not:
+none.
 
-**BS16.**
-
-```lean
-example : ¬ Disciplined (BlockRecord.chop U1 2)
-```
-
-Block `8` of `U1` survives a cut at the horizon `2` and claims the
-genesis leader `0`, which the cut drops together with the votes that
-back it.
-
-The reading is about the protocol, and it is the sharpest thing the
-composition shows. Referenceability (§26.7) asks that *every* claim in a
+**The record cells.** The cells of §16 — the cut, the fill, re-genesis —
+need `Disciplined` to survive those transforms, and the reading that
+lets it survive the cut is about the protocol. Referenceability (§26.7) asks that *every* claim in a
 block's causal history be provable from the validator's current DAG, and
 garbage collection deletes exactly the evidence that asks for. A
 validator that cuts at round `G` retains blocks at rounds `G` and
@@ -11429,11 +11451,44 @@ rounds deep, for the protocol to admit garbage collection at all** —
 and the bounded rule decides every live slot identically, since the two
 differ only on claims no live slot reads.
 
-The arc does not carry that reading, because the claim is an ambient
-map rather than the record's data, so the cut cannot act on it: the
-record maintains what it can see, and it cannot see a claim.
-`docs/target-properties.md` §11.47 records what giving it the claim
-would take.
+`BackedClaim` (§26.1) is that reading. A cut at `G` leaves the claims of
+rounds `G` and `G + 1` at the new rounds `0` and `1`, where they are
+exempt; a retained claim from higher up names a block at `G` or above,
+whose voters sit strictly above the horizon, where the cut keeps every
+reference. So the discipline survives the cut:
+
+**BS16.**
+
+```lean
+theorem disciplined_chop (hI : Disciplined U) : Disciplined (U.chop G)
+```
+
+`U1` cut at the horizon `2` is the instance: block `8` survives at the
+new round `0` and claims the genesis leader `0` the cut dropped, which
+the exemption admits. The position of a claim is what the proof needs
+of the format: a claim from round `G + 5` naming a certified block at
+`G − 3` would leave its retained claimer with nothing certified behind
+it.
+
+Re-genesis adds a reference-free block at round zero, which votes for
+nothing and whose claim, whatever the ambient map says, is exempt:
+
+**BS18.**
+
+```lean
+theorem disciplined_addGenesis (hI : Disciplined U) :
+    Disciplined (U.addGenesis v g p hg hsev)
+```
+
+The two are instances of `Invariant.Chops` and `Invariant.Regenesis`,
+and with `onRecord` (`Bluestreak/Record.lean`) every verdict cell of the
+cut and re-genesis is `Properties/Arcs/Record.lean`'s. The copy fill is
+not: its first block references its author's last block before the
+crash, which can certify an ordinary block while that block stays
+sparse, and `certified_quorate` fails — the format limitation of §26.1.
+The claim itself remains an ambient map rather than the record's data;
+`docs/target-properties.md` §11.47 records what giving the record the
+claim and the block its role would take.
 
 ### 26.10 What is and is not in the arc
 
@@ -11447,7 +11502,7 @@ per-slot, with `U3` the universe that tells them apart. And
 referenceability is stated unbounded where it must be read bounded, two
 rounds deep, for the protocol to admit garbage collection at all
 (§26.9) — a claim's reach is what decides both what a cut may forget
-and what it must keep.
+and what it must keep, and read so, the discipline survives the cut.
 
 Beside them sits one fact about the formalisation: the structural
 condition a sparse DAG can meet is on claims, not on references, and
@@ -11458,8 +11513,8 @@ What the arc does not contain: the paper's pull recovery, which the
 trunk's `converges` stands in for; the payload validity of its Lemma
 C.8, which under one-round references reduces to a leader referencing
 the round below; the block format, which is an assumption here rather
-than a validity clause (§26.1); and the mechanism cells, for the reason
-BS16 gives.
+than a validity clause (§26.1); and the fill cell, which the format
+limitation closes (§26.9).
 
 ---
 
@@ -11662,7 +11717,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Adaptive/Score/` | what a reputation score owes: anchored, bounded, keeping liveness' clause |
 | `Properties/Record.lean` | a carrier on the record (`DagRule.OnRecord`), with its invariant and view maps; every mechanism's witnesses, once |
 | `Properties/Arcs/Record.lean` | every verdict cell of the cut, the fill and re-genesis, once, at any carrier on the record |
-| `Common/Record/Invariant.lean` | what an invariant a carrier adds owes the mechanisms (`Invariant.Mechanised`) |
+| `Common/Record/Invariant.lean` | what an invariant a carrier adds owes the cut (`Invariant.Chops`), re-genesis (`Invariant.Regenesis`) and all the mechanisms (`Invariant.Mechanised`) |
 | `Barnacle/Chop.lean` | a configuration across a cut: `Config.chop`, its composition, and the schedule half of a truncation at it |
 | `Adaptive/Helpers/Chop.lean` | the joiner across a cut: horizon-stability, and the leaders and verdicts it aligns |
 | `Adaptive/Helpers/Mechanisms.lean` | the arc across every mechanism at any record carrier: the stacks, and what a run and an update rule owe a mechanism that adds blocks |
@@ -11740,6 +11795,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Bluestreak/Liveness.lean` | the claims a direct commit needs (`ClaimsAt`, `ClaimsOn`); the commit of a `T`-led slot and the descent below a run (BS8, BS9) |
 | `Bluestreak/Reactive.lean` | referenceability from holdings; the pull pacemaker as `ReactiveB` over `ReactiveCore`; the discipline derived, timely referenceability, and local liveness (BS10–BS12) |
 | `Bluestreak/Carrier.lean` | the carrier over the disciplined records, the five properties, the claim as a support, the band with its novelty clause, and the two headlines (BS15, BS17) |
+| `Bluestreak/Record.lean` | the discipline across the cut and re-genesis, and the carrier on the record (BS16, BS18) |
 | `Quality/Coverage.lean` | per-commit and ledger coverage (CQ1–CQ3) at the core, over `Arcs.coveredAt` |
 | `Quality/Inclusion.lean` | post-`R` inclusion (CQ5, CQ6) |
 | `Quality/Capstone.lean` | the windowed bounds and `chain_quality` (CQ7) |
@@ -12236,7 +12292,7 @@ quality, C, D,
 B and E for the denial-of-service arc, G for garbage collection, O for
 Odontoceti; P, N and R name clauses of the trust boundary rather than
 results. Labels resolving to witness models rather than library
-theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, H9, H10, BN13, BS6, BS13, BS16) are
+theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, H9, H10, BN13, BS6, BS13) are
 excluded from the diagrams, which show the library; so are MM4, ABB11, ABB12, BM8, BML6, BMR7, BMA5, BMD7, BME6, BMO10, BMO11, BMP14, SH2, SH12, SH-MM1, SH-MM4 and SH-MM16. Two labels are
 absent from the Barnacle rows below and are named here rather than left
 to be noticed: **BN1**, that `Sched m` is a lawful `Slots` instance at
@@ -12645,8 +12701,9 @@ reused.
 | BS13 | the sparse DAG at every horizon under the reactive schedule, every wait clause on its exit; the discipline, the local decision and the descent instantiated | `Usparse`, `spReactive` witnesses *(LeanDagTest/Bluestreak/Reactive)* |
 | BS14 | the band's novelty clause reads the anchor, and the band induction reads it through `AnchorsOn`: on the records an invariant admits, a committed block is an anchor | `AnchoredRule.AnchorsOn`, `AnchoredRule.anchorsOn_of_laws` *(Common/Anchored/Band)* |
 | BS15 | the disciplined records are a carrier showing the five properties and a support whose certifier is a claim | `BluestreakProperties.banded`, `agree`, `commitsCandidate`, `indirect`, `commits` *(Bluestreak/Carrier)* |
-| BS16 | the cut does not preserve the discipline: it drops the blocks a retained claim names, so referenceability must be read bounded for the protocol to admit garbage collection | `¬ Disciplined (BlockRecord.chop U1 2)` witness *(LeanDagTest/Bluestreak/Model)* |
+| BS16 | the discipline survives the cut: a retained claim from round two up names a retained block, and the bottom two rounds' claims are exempt — referenceability read bounded | `Bluestreak.disciplined_chop` *(Bluestreak/Record)* |
 | BS17 | the two headlines: safety across any extension and any stack, and progress with inclusion at the claim support | `BluestreakProperties.safety`, `BluestreakProperties.liveness` *(Bluestreak/Carrier)* |
+| BS18 | the discipline survives re-genesis: the new block votes for nothing and its claim is exempt | `Bluestreak.disciplined_addGenesis` *(Bluestreak/Record)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -12721,7 +12778,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 380 definitions and structures the report names, in
+The 394 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -14918,6 +14975,30 @@ def abbSupport : Support (asyncBlueBottleRule (Validator := Validator) (BlockId 
 ```
 
 **Async BlueBottle's support**: certifiers at the decision round, certification the cone vote.
+
+#### `onRecord`
+
+*def, `AsyncBlueBottle.Record.lean`*
+
+```lean
+def onRecord :
+    (AsyncBlueBottleProperties.asyncBlueBottleRule (Validator := Validator) (BlockId := B)
+      (Payload := Payload)).OnRecord ValidWrt (Correct : Finset Validator) BlockRecord.Any where
+  toRec := fun U => U
+  inv := fun _ => True.intro
+  ofRec := fun W _ => W
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => V
+  ofView := fun V => V
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**Async BlueBottle's carrier, read as block records.**
 
 ### Black Marlin: the three-round commit rule
 
@@ -17125,7 +17206,7 @@ structure ReactiveB (U : Universe Validator BlockId Payload) (T : Finset Validat
   built. -/
   claim_held : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = v → (U.block b).round = n →
-    ∀ L, claim b = some L → BackedIn U (holds v (built v n)) L
+    BackedClaimIn U (holds v (built v n)) b
   /-- **The leader wait.** At the round above a reliable leader, any
   `T`-authored block either votes, or its builder waited the full
   timeout and votes for the leader block if it is then referenceable. -/
@@ -17150,6 +17231,31 @@ structure ReactiveB (U : Universe Validator BlockId Payload) (T : Finset Validat
 ```
 
 **Bluestreak's reactive schedule**: the reactive timing, the format check safety reads, the referencing discipline of correct validators, and the two wait clauses of the pull pacemaker.
+
+#### `onRecord`
+
+*def, `Bluestreak.Record.lean`*
+
+```lean
+def onRecord :
+    (bluestreakRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload)).OnRecord
+      Bluestreak.ValidWrt (Correct : Finset Validator)
+      (Disciplined (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) where
+  toRec := fun U => U.val
+  inv := fun U => U.property
+  ofRec := fun W h => ⟨W, h⟩
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => V
+  ofView := fun V => V
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**Bluestreak's carrier, on the record**: the identity maps, under `Disciplined`.
 
 #### `ValidWrt`
 
@@ -17184,6 +17290,18 @@ def Claims [ClaimMap BlockId] (U : Universe Validator BlockId Payload) (B L : Bl
 
 `B` claims `L` certified: by its claim field, or by carrying `n − f` votes for `L` among its references.
 
+#### `claimers`
+
+*def, `Bluestreak.Rule.lean`*
+
+```lean
+def claimers [ClaimMap BlockId] (U : Universe Validator BlockId Payload) (L : BlockId) :
+    Finset BlockId :=
+  (blocksAt U ((U.block L).round + 2)).filter fun B => Claims U B L
+```
+
+The blocks two rounds above `L` that claim it certified.
+
 #### `DirectCommitIn`
 
 *abbrev, `Bluestreak.Rule.lean`*
@@ -17210,6 +17328,19 @@ abbrev DirectSkipIn [S : Slots Validator] (U : Universe Validator BlockId Payloa
 
 Direct skip: the view holds `n − f` voting-round blocks, and for every candidate of the slot `n − f` of them omit it.
 
+#### `BackedClaim`
+
+*def, `Bluestreak.Rule.lean`*
+
+```lean
+def BackedClaim [ClaimMap BlockId] (U : Universe Validator BlockId Payload) (X : BlockId) :
+    Prop :=
+  ∀ L, claim X = some L → 2 ≤ (U.block X).round →
+    (U.block L).round + 2 = (U.block X).round ∧ Certified U L
+```
+
+`X`'s claim is backed: from round two up, it names a certified block two rounds below. A claim at rounds `0` and `1` names a block below the record and is read by no slot.
+
 #### `Disciplined`
 
 *structure, `Bluestreak.Rule.lean`*
@@ -17218,10 +17349,10 @@ Direct skip: the view holds `n − f` voting-round blocks, and for every candida
 structure Disciplined [ClaimMap BlockId] (U : Universe Validator BlockId Payload) : Prop where
   certified_quorate : ∀ A ∈ U.ids, Certified U A → Quorate U A
   honest_backed : ∀ B ∈ U.ids, (U.block B).creator ∈ (Correct : Finset Validator) →
-    ∀ X, Reaches U B X → ∀ L, claim X = some L → Certified U L
+    ∀ X, Reaches U B X → BackedClaim U X
 ```
 
-**What a Bluestreak universe owes beyond its record**: a certified block is quorate — what the receivers' format check on leader blocks leaves of itself where safety reads it — and every claim an honest block inherits, for a candidate the universe holds, is certified: the honest validators build on referenceable blocks only. Both clauses read the record alone, so a universe is disciplined or not with no schedule in sight.
+**What a Bluestreak universe owes beyond its record**: a certified block is quorate — what the receivers' format check on leader blocks leaves of itself where safety reads it — and every claim an honest block inherits from round two up names a certified block two rounds below: the honest validators build on referenceable blocks only. Both clauses read the record alone, so a universe is disciplined or not with no schedule in sight.
 
 #### `Decided`
 
@@ -17837,22 +17968,45 @@ def addGenesis (U : BlockRecord Validator BlockId Payload P honest) (v : Validat
 
 **Re-genesis.**
 
+#### `Invariant.Chops`
+
+*class, `Common.Record.Invariant.lean`*
+
+```lean
+class Invariant.Chops [P.Mechanised]
+    (I : BlockRecord Validator BlockId Payload P honest → Prop) : Prop where
+  /-- It survives the cut. -/
+  chop : ∀ {W : BlockRecord Validator BlockId Payload P honest} (G : ℕ), I W → I (W.chop G)
+```
+
+**What an invariant owes the cut.**
+
+#### `Invariant.Regenesis`
+
+*class, `Common.Record.Invariant.lean`*
+
+```lean
+class Invariant.Regenesis [P.Mechanised]
+    (I : BlockRecord Validator BlockId Payload P honest → Prop) : Prop where
+  /-- It survives re-genesis. -/
+  addGenesis : ∀ {W : BlockRecord Validator BlockId Payload P honest} (v : Validator)
+    (g : BlockId) (p : Payload) (hg : g ∉ W.ids) (hsev : ∀ b ∈ W.ids, (W.block b).creator ≠ v),
+    I W → I (W.addGenesis v g p hg hsev)
+```
+
+**What an invariant owes re-genesis.**
+
 #### `Invariant.Mechanised`
 
 *class, `Common.Record.Invariant.lean`*
 
 ```lean
 class Invariant.Mechanised [P.Mechanised]
-    (I : BlockRecord Validator BlockId Payload P honest → Prop) : Prop where
-  /-- It survives the cut. -/
-  chop : ∀ {W : BlockRecord Validator BlockId Payload P honest} (G : ℕ), I W → I (W.chop G)
+    (I : BlockRecord Validator BlockId Payload P honest → Prop) : Prop
+    extends Invariant.Chops I, Invariant.Regenesis I where
   /-- It survives the copy fill. -/
   copyFill : ∀ [P.CopyStable] {W : BlockRecord Validator BlockId Payload P honest}
     (sk : SkipData W.ids W.block), I W → I (BlockRecord.copyFill W sk)
-  /-- It survives re-genesis. -/
-  addGenesis : ∀ {W : BlockRecord Validator BlockId Payload P honest} (v : Validator)
-    (g : BlockId) (p : Payload) (hg : g ∉ W.ids) (hsev : ∀ b ∈ W.ids, (W.block b).creator ≠ v),
-    I W → I (W.addGenesis v g p hg hsev)
 ```
 
 **What an invariant owes the mechanisms.**
@@ -18328,6 +18482,55 @@ noncomputable def chooseLeast [LinearOrder BlockId] (S : Slots Validator)
 
 **The deterministic rule, exhibited**: the least candidate in the identifier order, sound and total by construction, and a function of the anchor and the round alone, so two validators holding the same anchor make the same choice.
 
+#### `onRecord`
+
+*def, `FinWhale.Record.lean`*
+
+```lean
+def onRecord :
+    (FinWhaleProperties.finWhaleRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).OnRecord ValidHere (Correct : Finset Validator)
+      BlockRecord.Any where
+  toRec := fun D => D
+  inv := fun _ => True.intro
+  ofRec := fun W _ => W
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => V
+  ofView := fun V => V
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**FinWhale's carrier, on the record**: the identity on universes, repacking on views.
+
+#### `onRecord`
+
+*def, `Hybrid.Record.lean`*
+
+```lean
+def onRecord :
+    (HybridProperties.hybridRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload) kt).OnRecord ValidWrt (Correct : Finset Validator) HonestNoEquiv where
+  toRec := fun U => U.val
+  inv := fun U => U.property
+  ofRec := fun W h => ⟨W, h⟩
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => V
+  ofView := fun V => V
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**Hybrid's carrier, on the record**: the identity maps, under `HonestNoEquiv`.
+
 #### `hzSupport`
 
 *def, `Hydrozoan.Helpers.Commit.lean`*
@@ -18339,6 +18542,53 @@ def hzSupport : Support (rule (Replica := Replica) (BlockId := BlockId)) where
 ```
 
 **Hydrozoan's support**: wavelength two, certification the rule's own.
+
+#### `onRecord`
+
+*def, `Hydrozoan.Helpers.Record.lean`*
+
+```lean
+def onRecord : (rule (Replica := Replica) (BlockId := BlockId)).OnRecord ValidWrt
+    (NonByzantine : Finset Replica) BlockRecord.Any where
+  toRec := fun U => U
+  inv := fun _ => True.intro
+  ofRec := fun W _ => W
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => V
+  ofView := fun V => V
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**The carrier, on the record**: every map the identity.
+
+#### `onRecord`
+
+*def, `MahiMahi.Record.lean`*
+
+```lean
+def onRecord (w : ℕ) :
+    (MahiMahiProperties.mahiMahiRule (Validator := Validator) (BlockId := B)
+      (Payload := Payload) w).OnRecord ValidWrt (Correct : Finset Validator) BlockRecord.Any where
+  toRec := fun U => U
+  inv := fun _ => True.intro
+  ofRec := fun W _ => W
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => V
+  ofView := fun V => V
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**Mahi-Mahi's carrier, read as block records**, at each wave width.
 
 #### `CertifiedIn`
 
@@ -18445,6 +18695,55 @@ def certLive (S : Slots Validator) {U : BlockUniverse Validator BlockId Payload}
 
 **The core's precondition, in what its commit rule counts.** A quorum, a horizon the view is caught up to with every slot two rounds under it, production at the propose and certificate rounds, and `T` certifying every candidate of every `T`-led slot in the window.
 
+#### `onRecord`
+
+*def, `Mysticeti.Record.lean`*
+
+```lean
+def onRecord :
+    (MysticetiProperties.mysticetiRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).OnRecord ValidWrt (Correct : Finset Validator) BlockRecord.Any where
+  toRec := fun U => U
+  inv := fun _ => True.intro
+  ofRec := fun W _ => W
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => V
+  ofView := fun V => V
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**The core's carrier, read as block records**: both maps are the identity.
+
+#### `onRecord`
+
+*def, `Nemo.Record.lean`*
+
+```lean
+def onRecord :
+    (NemoProperties.nemoRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).OnRecord Nemo.ValidWrt (Finset.univ : Finset Validator)
+      BlockRecord.Any where
+  toRec := fun U => U
+  inv := fun _ => True.intro
+  ofRec := fun W _ => W
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => V
+  ofView := fun V => V
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**Nemo's carrier, on the record**: every map the identity.
+
 #### `Populated`
 
 *abbrev, `Network.Delivery.lean`*
@@ -18515,6 +18814,30 @@ def EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
 
 **The network assumption**: after `R`, correct blocks reach correct validators in time to be built on. This is eventual DAG synchrony proper — pure delivery, no protocol content.
 
+#### `onRecord`
+
+*def, `Odontoceti.Record.lean`*
+
+```lean
+def onRecord :
+    (OdontocetiProperties.odontocetiRule (Validator := Validator) (BlockId := B)
+      (Payload := Payload)).OnRecord ValidWrt (Correct : Finset Validator) BlockRecord.Any where
+  toRec := fun U => U
+  inv := fun _ => True.intro
+  ofRec := fun W _ => W
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => V
+  ofView := fun V => V
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**Odontoceti's carrier, read as block records**: the core's, at its fault model.
+
 #### `optSupport`
 
 *def, `OptimalHydrozoan.Carrier.lean`*
@@ -18526,6 +18849,31 @@ def optSupport : Support (optimalRule (Replica := Replica) (BlockId := BlockId))
 ```
 
 **Optimal-Hydrozoan's support.**
+
+#### `onRecord`
+
+*def, `OptimalHydrozoan.Record.lean`*
+
+```lean
+def onRecord :
+    (OptimalHydrozoanProperties.optimalRule (Replica := Replica)
+      (BlockId := BlockId)).OnRecord LeanDag.OptimalHydrozoan.ValidOpt
+      (LeanDag.Hydrozoan.NonByzantine : Finset Replica) BlockRecord.Any where
+  toRec := fun U => U
+  inv := fun _ => True.intro
+  ofRec := fun W _ => W
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => ⟨V.ids, V.subset_ids, V.complete⟩
+  ofView := fun V => ⟨V.ids, V.subset_ids, V.complete⟩
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**Optimal-Hydrozoan's carrier, on the record**: every map the identity, the views read at the projection.
 
 #### `Agree`
 
@@ -18939,7 +19287,7 @@ structure DagRule.OnRecord (R : DagRule Validator BlockId Payload)
 
 ```lean
 def chop (U : R.Universe) (G : ℕ) : R.Universe :=
-  c.ofRec ((c.toRec U).chop G) (Invariant.Mechanised.chop G (c.inv U))
+  c.ofRec ((c.toRec U).chop G) (Invariant.Chops.chop G (c.inv U))
 ```
 
 The cut, at the carrier.
@@ -18953,7 +19301,7 @@ def addGenesis (U : R.Universe) (v : Validator) (g : BlockId) (p : Payload)
     (hg : g ∉ (c.toRec U).ids) (hsev : ∀ b ∈ (c.toRec U).ids, ((c.toRec U).block b).creator ≠ v) :
     R.Universe :=
   c.ofRec (BlockRecord.addGenesis (c.toRec U) v g p hg hsev)
-    (Invariant.Mechanised.addGenesis v g p hg hsev (c.inv U))
+    (Invariant.Regenesis.addGenesis v g p hg hsev (c.inv U))
 ```
 
 Re-genesis, at the carrier.
@@ -24501,7 +24849,7 @@ theorem not_claimedIn_novel
     (h : AgreeBand (bluestreakAnchored Validator BlockId Payload).toDagRule U U' lo hi g g')
     {A L : BlockId} (hA : A ∈ U.ids) (hanc : Backed U A)
     (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi)
-    (hLnov : L ∉ U.ids) (hLlo : lo ≤ (U'.block L).round + g')
+    (hLnov : L ∉ U.ids) (hLlo : lo ≤ (U'.block L).round + g') (hLg : g ≤ (U'.block L).round + g')
     (hLhi : (U'.block L).round + 2 + g' ≤ hi) : ¬ ClaimedIn U' A L
 ```
 
@@ -24693,7 +25041,8 @@ theorem not_holds_omissions_of_certified {V : U.View} {L : BlockId} {r : ℕ}
 theorem Disciplined.of_decide
     (hq : ∀ A ∈ U.ids, Certified U A → Quorate U A)
     (hb : ∀ B ∈ U.ids, (U.block B).creator ∈ (Correct : Finset Validator) →
-      ∀ X ∈ history U B, ∀ L, claim X = some L → Certified U L) :
+      ∀ X ∈ history U B, ∀ L, claim X = some L → 2 ≤ (U.block X).round →
+        (U.block L).round + 2 = (U.block X).round ∧ Certified U L) :
     Disciplined U where
   certified_quorate
 ```

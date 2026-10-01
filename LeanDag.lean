@@ -441,3 +441,4 @@ import LeanDag.Bluestreak.Safety
 import LeanDag.Bluestreak.Liveness
 import LeanDag.Bluestreak.Reactive
 import LeanDag.Bluestreak.Carrier
+import LeanDag.Bluestreak.Record

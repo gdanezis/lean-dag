@@ -40,7 +40,7 @@ theorem certified_of_claimers_of_honest (hI : Disciplined U)
   obtain ⟨hXm, hcl⟩ := Finset.mem_filter.mp hX
   obtain ⟨hXi, hXr⟩ := mem_blocksAt.mp hXm
   rcases hcl with hcl | hcl
-  · exact hI.honest_backed B hB hc X hBX L hcl
+  · exact (hI.honest_backed B hB hc X hBX L hcl (by omega)).2
   · exact certified_of_carriesVotes hXi hXr hcl
 
 /-- **B.2.** A directly committed candidate is certified. -/
@@ -58,12 +58,12 @@ correct voter, which built on it only after proving every claim in its
 history. -/
 theorem backed_of_certified (hI : Disciplined U) {A : BlockId} (hA : Certified U A) :
     Backed U A := by
-  intro X hAX L hcl
+  intro X hAX
   obtain ⟨v, hv, hvc⟩ := exists_correct_of_card
     (S := supporters U A ((U.block A).round + 1))
     (by have := F.card_validators; change quorumCard Validator ≤ _ at hA; omega)
   obtain ⟨b, hb, -, hbA, hbv⟩ := mem_supporters.mp hv
-  exact hI.honest_backed b hb (hbv ▸ hvc) X ((Reaches.single hbA).trans hAX) L hcl
+  exact hI.honest_backed b hb (hbv ▸ hvc) X ((Reaches.single hbA).trans hAX)
 
 /-- **B.3.** A candidate claimed in a certified anchor's cone is
 certified: an honest voter for the anchor holds the claim in its cone. -/
@@ -73,7 +73,7 @@ theorem certified_of_claimedIn (hI : Disciplined U) {A L : BlockId}
   obtain ⟨hXm, hcl⟩ := Finset.mem_filter.mp hX
   obtain ⟨hXi, hXr⟩ := mem_blocksAt.mp hXm
   rcases hcl with hcl | hcl
-  · exact backed_of_certified hI hA X hAX L hcl
+  · exact (backed_of_certified hI hA X hAX L hcl (by omega)).2
   · exact certified_of_carriesVotes hXi hXr hcl
 
 /-! ## Two certified candidates, and certification against omission -/
@@ -150,11 +150,12 @@ off `history` rather than through `Reaches`. -/
 theorem Disciplined.of_decide
     (hq : ∀ A ∈ U.ids, Certified U A → Quorate U A)
     (hb : ∀ B ∈ U.ids, (U.block B).creator ∈ (Correct : Finset Validator) →
-      ∀ X ∈ history U B, ∀ L, claim X = some L → Certified U L) :
+      ∀ X ∈ history U B, ∀ L, claim X = some L → 2 ≤ (U.block X).round →
+        (U.block L).round + 2 = (U.block X).round ∧ Certified U L) :
     Disciplined U where
   certified_quorate := hq
-  honest_backed := fun B hB hc X hBX L hcl =>
-    hb B hB hc X ((mem_history_iff hB).mpr hBX) L hcl
+  honest_backed := fun B hB hc X hBX =>
+    hb B hB hc X ((mem_history_iff hB).mpr hBX)
 
 /-! ## The laws -/
 
