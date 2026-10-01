@@ -174,6 +174,7 @@ theorem floor_agreeBand (top : ℕ) : AgreeBand floorRule.toDagRule av4 av3 1 to
       · exact av3_lt b h1
     exact av_block_shift_down b hb
   refs := fun b _ hlo _ => av_refs_shift_down b hlo
+  payload := fun _ _ _ _ => rfl
 
 /-! ## The band, and what the two frames are to each other -/
 
@@ -245,6 +246,7 @@ theorem av_rebasedAbove : RebasedAbove floorRule.toDagRule av4 av3 1 1 where
   round := by decide
   creator := by decide
   refs := by decide
+  payload := by decide
 
 /-- **With the kinds carried, the two frames decide slot `0` alike**: `decided_of_rebased` at
 `floorRule_banded`, for every verdict. -/

@@ -236,6 +236,9 @@ structure RebasedAbove (R : DagRule Validator BlockId Payload)
   /-- And, strictly above, the same references. -/
   refs : ∀ b, b ∈ R.ids U → R₀ < (R.block U b).round →
     (R.block U' b).refs = (R.block U b).refs
+  /-- And the same payload. -/
+  payload : ∀ b, b ∈ R.ids U → R₀ ≤ (R.block U b).round →
+    (R.block U' b).payload = (R.block U b).payload
 ```
 
 A truncation is a `Truncates`, this relation at `R₀ = G` together with

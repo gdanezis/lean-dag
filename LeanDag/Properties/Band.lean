@@ -29,7 +29,7 @@ variable {R : DagRule Validator BlockId Payload}
 
 /-- **`U'` carries `U`'s band, up to a shift.** Every block `U` holds
 whose round lies in `[lo, hi]` once `g` is added is a block of `U'`, at
-the round the shift names and with the same author, and above the floor
+the round the shift names and with the same author and payload, and above the floor
 with the same references. The two offsets `g, g'` put both universes in
 one frame of rounds; at `g = g' = 0` this is agreement on the nose, and
 at `g = 0, g' = G` it is a truncation by `G`. Membership is
@@ -52,6 +52,9 @@ structure AgreeBand (R : DagRule Validator BlockId Payload) (U U' : R.Universe)
   /-- Strictly above the floor, its references too. -/
   refs : ∀ b, b ∈ R.ids U → lo < (R.block U b).round + g →
     (R.block U b).round + g ≤ hi → (R.block U' b).refs = (R.block U b).refs
+  /-- And its payload. -/
+  payload : ∀ b, b ∈ R.ids U → lo ≤ (R.block U b).round + g →
+    (R.block U b).round + g ≤ hi → (R.block U' b).payload = (R.block U b).payload
 
 namespace AgreeBand
 
@@ -60,6 +63,7 @@ theorem refl {U : R.Universe} {lo hi g : ℕ} : AgreeBand R U U lo hi g g where
   mem := fun _ hb _ _ => hb
   block := fun _ _ _ => ⟨rfl, rfl⟩
   refs := fun _ _ _ _ => rfl
+  payload := fun _ _ _ _ => rfl
 
 /-- An extension carries every band, since it moves nothing. -/
 theorem of_extends {U U' : R.Universe} (he : Extends R U U') (lo hi : ℕ) :
@@ -67,6 +71,7 @@ theorem of_extends {U U' : R.Universe} (he : Extends R U U') (lo hi : ℕ) :
   mem := fun b hb _ _ => he.subset b hb
   block := fun b hb _ => by rw [he.block b hb]; exact ⟨rfl, rfl⟩
   refs := fun b hb _ _ => by rw [he.block b hb]
+  payload := fun b hb _ _ => by rw [he.block b hb]
 
 /-- Agreement above a round carries every band whose floor is at or
 above it. -/
@@ -81,6 +86,7 @@ theorem of_agreeAbove {U U' : R.Universe} {r lo hi : ℕ} (h : AgreeAbove R U U'
     have hr := h.round b hb hU
     exact ⟨by omega, h.creator b hb hU⟩
   refs := fun b hb hlo _ => h.refs b hb (by omega)
+  payload := fun b hb hlo _ => h.payload b hb (by omega)
 
 /-- Agreement on a band gives agreement on any narrower one. -/
 theorem mono {U U' : R.Universe} {lo hi lo' hi' g g' : ℕ} (h : AgreeBand R U U' lo hi g g')
@@ -92,6 +98,7 @@ theorem mono {U U' : R.Universe} {lo hi lo' hi' g g' : ℕ} (h : AgreeBand R U U
     · exact Or.inl ⟨by omega, by omega⟩
     · exact Or.inr ⟨hm, by omega, by omega⟩
   refs := fun b hb h1 h2 => h.refs b hb (by omega) (by omega)
+  payload := fun b hb h1 h2 => h.payload b hb (by omega) (by omega)
 
 variable {U U' : R.Universe} {lo hi g g' : ℕ}
 

@@ -141,7 +141,7 @@ theorem supportLocal : (bluestreakSupport (Validator := Validator) (BlockId := B
   simp only [bluestreakRule_block] at hCr hLr
   have hab := agreeBand_of_rebasedAbove hre ((U.val.block C).round) R₀ le_rfl
   have hband : AgreeBand (bluestreakAnchored Validator BlockId Payload).toDagRule
-      U.val U'.val R₀ ((U.val.block C).round) 0 G := ⟨hab.mem, hab.block, hab.refs⟩
+      U.val U'.val R₀ ((U.val.block C).round) 0 G := ⟨hab.mem, hab.block, hab.refs, hab.payload⟩
   have hCb : R₀ < (U.val.block C).round + 0 := by simp only [Nat.add_zero]; omega
   have hvote := AnchoredRule.isVote_band_at hband (L := L) (n := (U.val.block C).round)
     (by omega) le_rfl C hC rfl

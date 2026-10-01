@@ -59,6 +59,11 @@ theorem trans {U U' U'' : R.Universe} {G₁ R₁ G₂ R₂ : ℕ}
     have hro := h.round b hb (le_of_lt (lt_of_le_of_lt (le_max_left _ _) hr))
     rw [h'.refs b h1.1 (by have := le_max_right R₁ (R₂ + G₁); omega)]
     exact h.refs b hb (lt_of_le_of_lt (le_max_left _ _) hr)
+  payload := fun b hb hr => by
+    have h1 := (h.mem b).mp ⟨hb, le_trans (le_max_left _ _) hr⟩
+    have hro := h.round b hb (le_trans (le_max_left _ _) hr)
+    rw [h'.payload b h1.1 (by have := le_max_right R₁ (R₂ + G₁); omega)]
+    exact h.payload b hb (le_trans (le_max_left _ _) hr)
 
 /-- A mechanism that rebases from a round rebases from any later one,
 which is what lets two settling rounds be compared at all. -/
@@ -75,6 +80,7 @@ theorem mono {U U' : R.Universe} {G R₀ R₁ : ℕ}
   round := fun b hb hr => h.round b hb (le_trans hR hr)
   creator := fun b hb hr => h.creator b hb (le_trans hR hr)
   refs := fun b hb hr => h.refs b hb (lt_of_le_of_lt hR hr)
+  payload := fun b hb hr => h.payload b hb (le_trans hR hr)
 
 /-- Doing nothing rebases by nothing, from round zero. -/
 theorem refl {U : R.Universe} : RebasedAbove R U U 0 0 where
@@ -82,6 +88,7 @@ theorem refl {U : R.Universe} : RebasedAbove R U U 0 0 where
   round := fun _ _ _ => rfl
   creator := fun _ _ _ => rfl
   refs := fun _ _ _ => rfl
+  payload := fun _ _ _ => rfl
 
 end RebasedAbove
 
@@ -217,7 +224,7 @@ theorem decided_of_rebased (h : Banded R) (hr : Rebased R U U' S S' G R₀ d)
       have hc : m' + d = d + m' := by omega
       rw [hc]
       exact (hr.kind m').symm
-    · refine ⟨?_, ?_, ?_⟩
+    · refine ⟨?_, ?_, ?_, ?_⟩
       · intro b hb h1 h2
         exact ((hr.mem b).mp ⟨hb, by omega⟩).1
       · intro b hb hband
@@ -228,6 +235,8 @@ theorem decided_of_rebased (h : Banded R) (hr : Rebased R U U' S S' G R₀ d)
         exact ⟨by have := hr.round b hb hR; omega, hr.creator b hb hR⟩
       · intro b hb h1 h2
         exact hr.refs b hb (by omega)
+      · intro b hb h1 h2
+        exact hr.payload b hb (by omega)
     · intro b hbV h1 h2
       exact (hv b (R.viewSound V hbV) (by omega)).mp hbV
   · intro hdec
@@ -252,7 +261,7 @@ theorem decided_of_rebased (h : Banded R) (hr : Rebased R U U' S S' G R₀ d)
       have hc : m + d = d + m := by omega
       rw [hc]
       exact hr.kind m
-    · refine ⟨?_, ?_, ?_⟩
+    · refine ⟨?_, ?_, ?_, ?_⟩
       · intro b hb h1 h2
         exact (hr.of_mem' hb (by omega)).1
       · intro b hb hband
@@ -265,6 +274,9 @@ theorem decided_of_rebased (h : Banded R) (hr : Rebased R U U' S S' G R₀ d)
       · intro b hb h1 h2
         obtain ⟨hbU, hround⟩ := hr.of_mem' hb (by omega)
         exact (hr.refs b hbU (by omega)).symm
+      · intro b hb h1 h2
+        obtain ⟨hbU, hround⟩ := hr.of_mem' hb (by omega)
+        exact (hr.payload b hbU (by omega)).symm
     · intro b hbV h1 h2
       have hbU' : b ∈ R.ids U' := R.viewSound V' hbV
       obtain ⟨hbU, hround⟩ := hr.of_mem' hbU' (by omega)

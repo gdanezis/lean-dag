@@ -114,6 +114,7 @@ theorem sustains_chop (U : R.Universe) : Sustains R U (c.chop U G) G G where
   round := fun b _ hr => by rw [c.block_chop, chopBlk_round]; omega
   creator := fun b _ _ => by rw [c.block_chop, chopBlk_creator]
   refs := fun b _ hr => by rw [c.block_chop, chopBlk_refs_of_lt hr]
+  payload := fun b _ _ => by rw [c.block_chop, chopBlk_payload]
 
 /-- **The cut is a truncation of the carrier.** -/
 theorem truncates_chop (U : R.Universe) (hd : G ≤ S.slotRound d) :
@@ -186,6 +187,7 @@ theorem sustains_fill : Sustains R U (c.fill U sk B hB hI) 0 (sk.r + 1) where
   round := fun b hb _ => by rw [c.block_fill_old hb]; omega
   creator := fun b hb _ => by rw [c.block_fill_old hb]
   refs := fun b hb _ => by rw [c.block_fill_old hb]
+  payload := fun b hb _ => by rw [c.block_fill_old hb]
 
 /-- The pre-crash view, read in the fill. -/
 def liftView (V : R.View U) : R.View (c.fill U sk B hB hI) :=
@@ -288,6 +290,7 @@ theorem sustains_addGenesis : Sustains R U (c.addGenesis U v g p hg hsev) 0 1 wh
       · exact ⟨ho, by rw [c.block_addGenesis_old ho] at hr; omega⟩
   round := fun b hb _ => by rw [c.block_addGenesis_old hb]; omega
   creator := fun b hb _ => by rw [c.block_addGenesis_old hb]
+  payload := fun b hb _ => by rw [c.block_addGenesis_old hb]
   refs := fun b hb _ => by rw [c.block_addGenesis_old hb]
 
 end Genesis

@@ -120,7 +120,7 @@ theorem optSupport_local [LinearOrder BlockId] :
     Support.Local (R := optimalRule (Replica := Replica) (BlockId := BlockId)) optSupport := by
   intro U U' G R₀ h c L κ hc hcr hL hLr
   exact LeanDag.Hydrozoan.hzSupport_local (U := U.toBlockRecord) (U' := U'.toBlockRecord)
-    ⟨h.mem, h.round, h.creator, h.refs⟩ c L κ hc hcr hL hLr
+    ⟨h.mem, h.round, h.creator, h.refs, h.payload⟩ c L κ hc hcr hL hLr
 
 /-- **Law 2**, Hydrozoan's at the underlying universe. -/
 theorem optSupport_ofCoverage :

@@ -78,6 +78,7 @@ theorem agreeBand_of_rebasedAbove {U U' : R.Universe} {G R₀ : ℕ}
       · have := (h.of_mem' hb' (by omega)).2; omega
     exact ⟨by have := h.round b hb hR; omega, h.creator b hb hR⟩
   refs := fun b hb h1 _ => h.refs b hb (by omega)
+  payload := fun b hb h1 _ => h.payload b hb (by omega)
 
 namespace Support
 
