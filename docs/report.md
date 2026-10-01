@@ -11520,6 +11520,15 @@ reads it, since a candidate is committed only if tagged. `fill` is the
 chain fill at the carrier, and the verdict cells of the fill are
 `Properties/Arcs/Record.lean`'s at it.
 
+`Ucr` (`LeanDagTest/Bluestreak/Recovery.lean`, **BS21**) is the witness:
+four validators, the Byzantine `0`, and `3` silent from round `2`, so
+round `3`, which it leads, has no candidate. Its message `rcGap` names
+`3`, its block `7` and the round `3`, with fresh ids `100 + k`; the fill
+adds `102` and `103`, each referencing the one below. The discipline
+holds before and after, slot `2` is committed in both, and slot `3` is
+skipped in both, its candidate after the fill being the untagged `103`,
+which no round-`4` block references.
+
 ### 26.10 What is and is not in the arc
 
 The arc is safety, liveness and the properties. Its findings for the
@@ -11577,6 +11586,7 @@ every theorem above it vacuous, and vacuity is not otherwise detectable.
 | `Unemo` | `CrashFaults` at the tight crash committee: three validators, one halted line, every decidable rule settled by `decide` (NN9) |
 | `skTight` | the fill of `Ucrash` at which coverage is refuted (I4) |
 | `Ucut`, `Uregen`, `urecover` | the severed validator, its re-genesis, and the catch-up message over it |
+| `Ucr`, `rcGap`, `Ufill` | Bluestreak's `GapData` and the chain fill: a validator silent through its own leader slot, its one-message recovery, the discipline kept, and both verdicts unchanged (BS21) |
 
 Three of the models are tight, which is what renders the constants meaningful.
 
@@ -12322,7 +12332,7 @@ quality, C, D,
 B and E for the denial-of-service arc, G for garbage collection, O for
 Odontoceti; P, N and R name clauses of the trust boundary rather than
 results. Labels resolving to witness models rather than library
-theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, H9, H10, BN13, BS6, BS13) are
+theorems (V10–V12, CU1, CU4, C5, CQ8, O11, SS7, SS11, AL8, H9, H10, BN13, BS6, BS13, BS21) are
 excluded from the diagrams, which show the library; so are MM4, ABB11, ABB12, BM8, BML6, BMR7, BMA5, BMD7, BME6, BMO10, BMO11, BMP14, SH2, SH12, SH-MM1, SH-MM4 and SH-MM16. Two labels are
 absent from the Barnacle rows below and are named here rather than left
 to be noticed: **BN1**, that `Sched m` is a lawful `Slots` instance at
@@ -12736,6 +12746,7 @@ reused.
 | BS18 | the discipline survives re-genesis: the new block votes for nothing and its claim is exempt | `Bluestreak.disciplined_addGenesis` *(Bluestreak/Record)* |
 | BS19 | the discipline survives the chain fill, whose blocks reference only their author's previous block and claim nothing | `Bluestreak.disciplined_chainFill` *(Bluestreak/Record)* |
 | BS20 | a tagged block is quorate, by the format validity checks: what the visibility law reads of an anchor | `Bluestreak.quorate_of_tagged` *(Bluestreak/Rule)* |
+| BS21 | a validator silent through its own leader slot recovers in one message; the discipline holds after, a committed slot stays committed and its own slot stays skipped | `Ucr`, `rcGap`, `Ufill` witnesses *(LeanDagTest/Bluestreak/Recovery)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -12810,7 +12821,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 398 definitions and structures the report names, in
+The 399 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19528,6 +19539,33 @@ structure Truncates (R : DagRule Validator BlockId Payload) (U U' : R.Universe)
 ```
 
 **`U'` is `U` pruned below `G` and renumbered from slot `d`.** `mem` keeps only what lies at or above the horizon, and `refs` compares references strictly above it, so the retained bottom layer may lose what pointed below it. Both are `RebasedAbove`'s, at `R₀ = G`; what this structure adds is the schedule half.
+
+#### `GapData`
+
+*structure, `SafeSkip.Data.lean`*
+
+```lean
+structure GapData (ids : Finset BlockId)
+    (blk : BlockId → Block Validator BlockId Payload) where
+  /-- The recovering validator. -/
+  v1 : Validator
+  /-- Its last block before the crash. -/
+  B1 : BlockId
+  /-- The target round. -/
+  r : ℕ
+  /-- Fresh ids for the filled blocks, and their decoder. -/
+  fresh : ℕ → BlockId
+  idx : BlockId → ℕ
+  hB1 : B1 ∈ ids
+  hB1c : (blk B1).creator = v1
+  hfresh_new : ∀ k, fresh k ∉ ids
+  hidx : ∀ k, idx (fresh k) = k
+  /-- The crash: `v1` authored nothing in the gap. -/
+  hgap : ∀ b ∈ ids, (blk b).creator = v1 →
+    (blk B1).round < (blk b).round → (blk b).round ≤ r → False
+```
+
+**What every fill reads of a Safe Skip message**: the recovering validator, its last block before the crash, the target round, and the freshness data an implementation supplies. `hgap` is the crash itself, `v1` authoring nothing strictly between `B1` and `r`.
 
 #### `r0`
 
