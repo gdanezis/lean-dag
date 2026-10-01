@@ -1,6 +1,7 @@
 import LeanDag.Bluestreak.Liveness
 import LeanDag.Common.Anchored.Band
 import LeanDag.Properties.Optional.SelfParent
+import LeanDag.Properties.Optional.Skip
 import LeanDag.Properties.Support
 import LeanDag.Properties.Arcs.Headline
 /-!
@@ -93,6 +94,25 @@ sparse chain is. -/
 theorem selfParent : SelfParent (bluestreakRule (Validator := Validator) (BlockId := BlockId)
     (Payload := Payload)) :=
   fun U b hb hr => (U.val.valid b hb).clause.1.2 hr
+
+/-- **A slot a quorum does not support is skipped**: the quorum's blocks
+one round up are a quorum of that round, and each omits every candidate,
+so the per-candidate skip fires. -/
+theorem skipsUnsupported : SkipsUnsupported
+    (bluestreakRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
+    (fun T => quorumCard Validator ≤ T.card) := by
+  intro S U V T k hq hpres huns
+  have held : ∀ s : Finset BlockId, (∀ c ∈ V.ids, (U.val.block c).creator ∈ T →
+      (U.val.block c).round = S.slotRound k + 1 → c ∈ s) →
+      HoldsAtLeast U.val V (quorumCard Validator) s := by
+    intro s hs
+    refine le_trans hq (Finset.card_le_card fun v hv => ?_)
+    obtain ⟨c, hcV, hcc, hcr⟩ := hpres v hv
+    exact Finset.mem_image.mpr ⟨c, Finset.mem_inter.mpr ⟨hs c hcV (hcc ▸ hv) hcr, hcV⟩, hcc⟩
+  refine Decided.directSkip ⟨held _ fun c hcV _ hcr => mem_blocksAt.mpr ⟨V.subset_ids hcV, hcr⟩,
+    fun L hL => held _ fun c hcV hcT hcr => ?_⟩
+  exact mem_omissionsOf.mpr ⟨V.subset_ids hcV, hcr,
+    huns c hcV hcT hcr L (mem_leaderBlocksAt.mp hL)⟩
 
 /-! ## The support: a claim is the certificate -/
 

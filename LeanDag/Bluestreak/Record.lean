@@ -307,6 +307,43 @@ def fill (U : (bluestreakRule (Validator := Validator) (BlockId := BlockId)
   onRecord.fill U sk (sk.chainBlocks p) (fun _ hk1 _ => chainBlock_valid sk hp hk1)
     (disciplined_chainFill sk hp U.property hc)
 
+/-- **The fill cannot conjure a commit for the recovering validator's
+own slot**: a slot `v1` leads inside its gap is skipped on any view of
+the fill where a quorum without `v1` is present one round up. Its only
+candidate is the filled block, which no old block references. -/
+theorem decided_none_fresh {S : Slots Validator}
+    {U : (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).Universe} (sk : GapData U.val.ids U.val.block) {p : Payload}
+    (hp : Format.leader (BlockId := BlockId) p = false)
+    (hc : Format.claim (BlockId := BlockId) p = none) {T : Finset Validator} {k : ℕ}
+    (hq : quorumCard Validator ≤ T.card) (hv1T : sk.v1 ∉ T) (hlead : S.leader k = sk.v1)
+    (hk1 : sk.r0 < S.slotRound k) (hk2 : S.slotRound k ≤ sk.r)
+    {V' : (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).View (fill U sk hp hc)}
+    (hpres : PresentAt (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)) V' T (S.slotRound k + 1)) :
+    (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).Decided S V' k none := by
+  have hold : ∀ b ∈ U.val.ids, (fill U sk hp hc).val.block b = U.val.block b :=
+    fun _ hb => GapData.fillMap_old (B := sk.chainBlocks p) hb
+  have hids : (fill U sk hp hc).val.ids = U.val.ids ∪ sk.freshIds := rfl
+  refine Arcs.decided_none_of_novel skipsUnsupported onRecord.extends_fill S hq hpres
+    (fun L hL hLU => ?_) (fun c hcV hcT _ => ?_)
+  · obtain ⟨-, hLr, hLc⟩ := hL
+    change ((fill U sk hp hc).val.block L).round = _ at hLr
+    change ((fill U sk hp hc).val.block L).creator = _ at hLc
+    rw [hold L hLU] at hLr hLc
+    exact sk.hgap L hLU (hLc.trans hlead) (by rw [hLr]; exact hk1) (by rw [hLr]; exact hk2)
+  · have hcF := (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).viewSound V' hcV
+    simp only [bluestreakRule_ids, bluestreakRule_block, hids] at hcF hcT
+    rcases Finset.mem_union.mp hcF with hcU | hcN
+    · exact hcU
+    · obtain ⟨j, -, -, rfl⟩ := sk.mem_freshIds.mp hcN
+      change ((sk.fillMap (sk.chainBlocks p)) (sk.fresh j)).creator ∈ T at hcT
+      rw [GapData.fillMap_fresh] at hcT
+      exact absurd hcT hv1T
+
 end BluestreakProperties
 
 end LeanDag

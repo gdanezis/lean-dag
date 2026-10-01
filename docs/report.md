@@ -11385,7 +11385,8 @@ def bluestreakSupport : Support (bluestreakRule (Validator := Validator) (BlockI
 references, and the tag the candidate's payload, all inside the band,
 which compares payloads) and `Commits` (BS8 under the property's
 name).
-`NoEquiv` and `SelfParent` are the record's clauses. The four derived
+`NoEquiv` and `SelfParent` are the record's clauses, and
+`SkipsUnsupported` is the per-candidate skip's (below). The four derived
 properties — `Persist`, `LocalTruncate`, `LeaderCommits` and `Descends`
 — follow with no further proof.
 
@@ -11528,6 +11529,36 @@ adds `102` and `103`, each referencing the one below. The discipline
 holds before and after, slot `2` is committed in both, and slot `3` is
 skipped in both, its candidate after the fill being the untagged `103`,
 which no round-`4` block references.
+
+**The prompt skip.** That last fact holds of every recovery. Bluestreak
+skips a slot that a present quorum does not support, since each of the
+quorum's blocks one round up omits every candidate and the
+per-candidate skip asks no more (`skipsUnsupported`). After the chain
+fill, a slot the recovering validator leads inside its gap has only the
+filled block as its candidate, which no old block references, so it is
+skipped on any view where a quorum without `v1` is present one round up:
+
+**BS22.**
+
+```lean
+theorem decided_none_fresh {S : Slots Validator}
+    {U : (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).Universe} (sk : GapData U.val.ids U.val.block) {p : Payload}
+    (hp : Format.leader (BlockId := BlockId) p = false)
+    (hc : Format.claim (BlockId := BlockId) p = none) {T : Finset Validator} {k : ℕ}
+    (hq : quorumCard Validator ≤ T.card) (hv1T : sk.v1 ∉ T) (hlead : S.leader k = sk.v1)
+    (hk1 : sk.r0 < S.slotRound k) (hk2 : S.slotRound k ≤ sk.r)
+    {V' : (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).View (fill U sk hp hc)}
+    (hpres : PresentAt (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)) V' T (S.slotRound k + 1)) :
+    (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).Decided S V' k none
+```
+
+`v1` is excluded from `T` because its own next filled block references
+the filled candidate. The fill therefore cannot conjure a commit for a
+slot the network has passed, and `Ucr` is the instance.
 
 ### 26.10 What is and is not in the arc
 
@@ -11835,7 +11866,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Bluestreak/Liveness.lean` | the claims a direct commit needs (`ClaimsAt`, `ClaimsOn`); the commit of a `T`-led slot and the descent below a run (BS8, BS9) |
 | `Bluestreak/Reactive.lean` | referenceability from holdings; the pull pacemaker as `ReactiveB` over `ReactiveCore`; the discipline derived, timely referenceability, and local liveness (BS10–BS12) |
 | `Bluestreak/Carrier.lean` | the carrier over the disciplined records, the five properties, the claim as a support, the band with its novelty clause, and the two headlines (BS15, BS17) |
-| `Bluestreak/Record.lean` | the discipline across the cut, re-genesis and the chain fill, and the carrier on the record (BS16, BS18, BS19) |
+| `Bluestreak/Record.lean` | the discipline across the cut, re-genesis and the chain fill, the carrier on the record, and the prompt skip after the fill (BS16, BS18, BS19, BS22) |
 | `Quality/Coverage.lean` | per-commit and ledger coverage (CQ1–CQ3) at the core, over `Arcs.coveredAt` |
 | `Quality/Inclusion.lean` | post-`R` inclusion (CQ5, CQ6) |
 | `Quality/Capstone.lean` | the windowed bounds and `chain_quality` (CQ7) |
@@ -12747,6 +12778,7 @@ reused.
 | BS19 | the discipline survives the chain fill, whose blocks reference only their author's previous block and claim nothing | `Bluestreak.disciplined_chainFill` *(Bluestreak/Record)* |
 | BS20 | a tagged block is quorate, by the format validity checks: what the visibility law reads of an anchor | `Bluestreak.quorate_of_tagged` *(Bluestreak/Rule)* |
 | BS21 | a validator silent through its own leader slot recovers in one message; the discipline holds after, a committed slot stays committed and its own slot stays skipped | `Ucr`, `rcGap`, `Ufill` witnesses *(LeanDagTest/Bluestreak/Recovery)* |
+| BS22 | a slot a present quorum does not support is skipped, and after the chain fill a slot the recovering validator leads in its gap is skipped on any view where a quorum without it is present | `BluestreakProperties.skipsUnsupported`, `BluestreakProperties.decided_none_fresh` *(Bluestreak/Carrier, Bluestreak/Record)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -19653,7 +19685,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 594 theorems the body or Appendix A names, each
+The 600 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -24994,6 +25026,18 @@ theorem selfParent : SelfParent (bluestreakRule (Validator := Validator) (BlockI
 
 **Every non-genesis block references a block of its own author**: the self-parent clause of Bluestreak's validity, which is what the sparse chain is.
 
+#### `skipsUnsupported`
+
+*theorem, `Bluestreak.Carrier.lean`*
+
+```lean
+theorem skipsUnsupported : SkipsUnsupported
+    (bluestreakRule (Validator := Validator) (BlockId := BlockId) (Payload := Payload))
+    (fun T => quorumCard Validator ≤ T.card)
+```
+
+**A slot a quorum does not support is skipped**: the quorum's blocks one round up are a quorum of that round, and each omits every candidate, so the per-candidate skip fires.
+
 #### `commits`
 
 *theorem, `Bluestreak.Carrier.lean`*
@@ -25161,6 +25205,28 @@ theorem chainBlock_valid {k : ℕ} (hk1 : sk.r0 < k) :
 ```
 
 **A chain block is valid**: one reference, to its author's block of the round below, and an ordinary block's format.
+
+#### `decided_none_fresh`
+
+*theorem, `Bluestreak.Record.lean`*
+
+```lean
+theorem decided_none_fresh {S : Slots Validator}
+    {U : (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).Universe} (sk : GapData U.val.ids U.val.block) {p : Payload}
+    (hp : Format.leader (BlockId := BlockId) p = false)
+    (hc : Format.claim (BlockId := BlockId) p = none) {T : Finset Validator} {k : ℕ}
+    (hq : quorumCard Validator ≤ T.card) (hv1T : sk.v1 ∉ T) (hlead : S.leader k = sk.v1)
+    (hk1 : sk.r0 < S.slotRound k) (hk2 : S.slotRound k ≤ sk.r)
+    {V' : (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).View (fill U sk hp hc)}
+    (hpres : PresentAt (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)) V' T (S.slotRound k + 1)) :
+    (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)).Decided S V' k none
+```
+
+**The fill cannot conjure a commit for the recovering validator's own slot**: a slot `v1` leads inside its gap is skipped on any view of the fill where a quorum without `v1` is present one round up. Its only candidate is the filled block, which no old block references.
 
 #### `quorate_of_tagged`
 
@@ -26061,6 +26127,18 @@ theorem commitsCandidate (k : ℕ) : CommitsCandidate
 
 **A commit names the slot's candidate.**
 
+#### `skipsUnsupported`
+
+*theorem, `Hybrid.Properties.lean`*
+
+```lean
+theorem skipsUnsupported (kt : ℕ) :
+    SkipsUnsupported (hybridRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload) kt) (fun T => Hybrid.q Validator ≤ T.card)
+```
+
+**Hybrid skips an unsupported slot from a hybrid quorum.** The liveness half of the slot-level repair: a set meeting the hybrid quorum whose voting-round blocks reference no candidate skips the slot, with no anchor and no synchrony needed — confirming the repaired rule is still reachable, not merely tightened.
+
 #### `indirect`
 
 *theorem, `Hybrid.Properties.lean`*
@@ -26155,6 +26233,18 @@ theorem commitsCandidate :
 ```
 
 **A commit names the slot's candidate.**
+
+#### `skipsUnsupported`
+
+*theorem, `Hydrozoan.Helpers.Skippability.lean`*
+
+```lean
+theorem skipsUnsupported :
+    Properties.SkipsUnsupported (rule (Replica := Replica) (BlockId := BlockId))
+      (fun T => LeanDag.Hydrozoan.qFast Replica ≤ T.card)
+```
+
+**`SkipsUnsupported` at the carrier**, at the grade `qFast ≤ |T|`.
 
 #### `holds`
 
@@ -26337,6 +26427,18 @@ theorem commitsCandidate : CommitsCandidate
 ```
 
 **A commit names the slot's candidate.** `isLeaderBlock_of_decided` under the property's name — one of seven such lemmas across the protocols, and the reason `Properties/Candidate.lean` exists.
+
+#### `skipsUnsupported`
+
+*theorem, `Mysticeti.Properties.lean`*
+
+```lean
+theorem skipsUnsupported :
+    SkipsUnsupported (mysticetiRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)) (fun T => quorumCard Validator ≤ T.card)
+```
+
+**The core skips an unsupported slot from a correct quorum.**
 
 #### `agree`
 
@@ -26629,6 +26731,22 @@ theorem commitsCandidate : CommitsCandidate
 ```
 
 **A commit names the slot's candidate.**
+
+#### `skipsUnsupported`
+
+*theorem, `Odontoceti.Properties.lean`*
+
+```lean
+theorem skipsUnsupported :
+    SkipsUnsupported (odontocetiRule (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)) (fun T => quorumCard Validator ≤ T.card)
+```
+
+**Odontoceti skips an unsupported slot from a correct quorum.**
+
+The liveness half of the repair. Making the skip a count of blockers rather than a vacuous quantification made it strictly harder to satisfy, and a rule no quorum can ever trigger would be sound and useless. This says the repaired rule is still reachable: a correct quorum whose voting-round blocks reference no candidate skips the slot, without waiting for an anchor.
+
+The count is the core's, so the argument is too — `subset_blamers` applies unchanged, the two carriers projecting identically.
 
 #### `indirect`
 

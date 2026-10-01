@@ -5200,6 +5200,37 @@ is gone, replaced by `leader_tagged` in `spReactive`.
 tests and `SafeSkip/Data.lean` (the chain reading). No other rule
 changes.
 
+### 11.50 Bluestreak's Safe Skip: the gap alone, witnessed, and prompt
+
+Three steps after §11.49.
+
+**The gap is its own structure.** `GapData` carries what every fill
+reads — `v1`, `B1`, the target round, fresh ids and `hgap` — and
+`SkipData` extends it with the donor's line and `hB1uniq`, which only
+the donor's boundary argument reads. `BlockRecord.fill`,
+`OnRecord.fill`, `Blocks`, `fillMap`, `prev` and the chain reading take
+`GapData`; the core's readings and the copy fill keep `SkipData`, and
+their call sites pass `sk.toGapData` (eight of them). Field access
+through the parent needed no change. Bluestreak's recovery message is
+now `(v1, B1, r)` with its fresh ids, and names no donor.
+
+**The witness.** `Ucr` (BS21): `3` silent from round `2` through its
+own leader slot; `rcGap` is `(3, 7, 3)` with fresh ids `100 + k`, which
+needs `ℕ` ids, since `hidx` asks the supply to be injective on all of
+`ℕ`. Validity with the format, the discipline before and after, both
+verdicts before and after, and the carrier's `decided_fill` at the
+witness all close by `decide` or by the generic theorems.
+
+**The prompt skip.** `skipsUnsupported`: a present quorum supporting no
+candidate is a quorum of the voting round omitting each, which is the
+per-candidate skip. `decided_none_fresh` (BS22) is
+`decided_none_of_novel` at the chain fill: the candidate of a slot `v1`
+leads in its gap is the filled block, novel by `hgap`, and a quorum
+without `v1` holds only old blocks one round up, since every filled
+block is `v1`'s. `v1` must be excluded because its own next filled
+block references the candidate. The audit's prompt-skip cell is now
+collected; Bluestreak's open cell is adaptive leaders alone.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

@@ -1,4 +1,5 @@
 import LeanDag.Bluestreak.Record
+import Mathlib.Tactic.FinCases
 
 /-!
 # Bluestreak recovering from a crash, in one message
@@ -124,6 +125,27 @@ example {k : ℕ} {v : Option ℕ} (h : Decided Ucr (View.full Ucr) k v) :
         (hI := disciplined_chainFill rcGap rc_leader Ucr_disciplined rfl)
         (U := ⟨Ucr, Ucr_disciplined⟩) (View.full Ucr)) k v :=
   BluestreakProperties.onRecord.decided_fill BluestreakProperties.banded h
+
+/-- **The prompt skip at the witness**: on the full view of the
+carrier's fill, the quorum `{0, 1, 2}` is present at round `4`, so
+slot `3`, which the recovering `3` leads inside its gap, is skipped. -/
+example : (BluestreakProperties.bluestreakRule (Validator := Fin 4) (BlockId := ℕ)
+    (Payload := Bool × Option ℕ)).Decided rcSlots
+    (U := BluestreakProperties.fill ⟨Ucr, Ucr_disciplined⟩ rcGap rc_leader rfl)
+    (View.full (BluestreakProperties.fill ⟨Ucr, Ucr_disciplined⟩ rcGap rc_leader rfl).val) 3
+    none := by
+  refine BluestreakProperties.decided_none_fresh (S := rcSlots) (U := ⟨Ucr, Ucr_disciplined⟩)
+    (k := 3) (T := {0, 1, 2}) rcGap rc_leader rfl ?_ ?_ ?_ ?_ ?_ ?_
+  · decide
+  · decide
+  · rfl
+  · show 1 < 3; omega
+  · show 3 ≤ 3; omega
+  intro v hv
+  fin_cases hv
+  · exact ⟨16, by decide, by decide, by decide⟩
+  · exact ⟨17, by decide, by decide, by decide⟩
+  · exact ⟨18, by decide, by decide, by decide⟩
 
 end Recovery
 
