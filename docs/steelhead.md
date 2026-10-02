@@ -1181,8 +1181,8 @@ the vote round then sits two rounds or more below the certifiers and the
 votes reach them through the DAG; at the wave of three the certify round
 is the vote round's successor, so a certifier must reference the votes
 itself, and `cert_or_wait` is that wait, stated at wave three alone and
-at the waiting rounds; the paper's pacing states the leader wait and not
-this one, which is what the wave of three needs of an execution. SH-MM6k is
+at the waiting rounds; the paper's pacing states it too, as Mysticeti's
+vote wait, and it is what the wave of three needs of an execution. SH-MM6k is
 stated for a slot at a waiting round. `SynchronisedOn` is false by
 design in such an execution, and appears in neither clause. The timed
 one (SH-MM6l) instead

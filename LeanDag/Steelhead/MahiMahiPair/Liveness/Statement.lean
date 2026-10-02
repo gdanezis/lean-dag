@@ -152,8 +152,8 @@ claims:
   such a round. At a wave of four rounds or more that is all it takes,
   the votes reaching the certifiers through the DAG; at the wave of
   three a certifier must reference the votes themselves, which is
-  `ReactiveS`'s one added clause, a wait the paper's pacing does not
-  state. `SynchronisedOn` appears nowhere: a reactive builder omits what
+  `ReactiveS`'s one added clause, the vote wait the paper's pacing
+  states, and `LeanDagTest/Steelhead/Reactive.lean` inhabits the structure. `SynchronisedOn` appears nowhere: a reactive builder omits what
   has not arrived, so it is false by design in such an execution;
 * **SH-MM6l, a reliable leader commits under the timed discipline** — the
   other route to SH-MM6a's hypothesis: a `ViewPace` whose timeout grows at
