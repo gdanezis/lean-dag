@@ -31,7 +31,7 @@ theorem reaches_B1_of_fill (sk : SkipMsg U) :
   refine Reaches.single ?_
   show sk.B1 ∈ (sk.skipFill.block (sk.fresh (sk.r0 + 1))).refs
   rw [sk.skipFill_block_fresh]
-  simp only [SkipData.fillBlock, SkipData.prev, if_pos rfl]
+  simp only [SkipData.fillBlock, GapData.prev, if_pos rfl]
   exact Finset.mem_insert_self _ _
 
 /-- **The cone grows.** Everything the anchor reaches, the first filled
@@ -146,13 +146,13 @@ theorem fill_cone_subset (sk : SkipMsg U)
         subst hj
         by_cases hb : k = sk.r0 + 1
         · -- boundary: the anchor, whose cone the donor covers
-          rw [SkipData.prev, if_pos hb] at hji
+          rw [GapData.prev, if_pos hb] at hji
           obtain ⟨hio, hiU⟩ := (sk.reaches_fill_old sk.hB1).mp hji
           refine Or.inr (history_subset_of_reaches hlm
             ((mem_history_iff hlm).mp (hcov k hk1 hk2)) ?_)
           exact (mem_history_iff sk.hB1).mpr hiU
         · -- inside the gap: the previous filled block, by induction
-          rw [SkipData.prev, if_neg hb] at hji
+          rw [GapData.prev, if_neg hb] at hji
           rcases ih (k - 1) (by omega) (by omega) (by omega) i hji with h | h
           · exact Or.inl h
           · refine Or.inr (history_subset_of_reaches hlm ?_ h)
@@ -216,8 +216,8 @@ theorem dosValid_skipFill_of_covered (hdos : DoSValid U)
       subst hip
       have hpv : (sk.skipFill.block (sk.prev k)).creator = sk.v1 := by
         by_cases hb : k = sk.r0 + 1
-        · rw [SkipData.prev, if_pos hb, sk.skipFill_block_old sk.hB1]; exact sk.hB1c
-        · rw [SkipData.prev, if_neg hb, sk.skipFill_block_fresh]; rfl
+        · rw [GapData.prev, if_pos hb, sk.skipFill_block_old sk.hB1]; exact sk.hB1c
+        · rw [GapData.prev, if_neg hb, sk.skipFill_block_fresh]; rfl
       rw [hpv] at hxc hyc
       exact hne (hv1ne x hxU y hyU hxc hyc hr)
     · -- a donor citation: `DoSValid U` at the donor block

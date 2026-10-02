@@ -102,7 +102,7 @@ theorem agreeBand_mm {w : ℕ → ℕ} {U U' : BlockUniverse Validator BlockId P
     {lo hi g g' : ℕ} (w' : ℕ)
     (h : AgreeBand (steelheadAnchored Validator BlockId Payload w).toDagRule U U' lo hi g g') :
     AgreeBand (MahiMahi.mahiMahiAnchored Validator BlockId Payload w').toDagRule U U' lo hi g g' :=
-  ⟨h.mem, h.block, h.refs⟩
+  ⟨h.mem, h.block, h.refs, h.payload⟩
 
 /-- **What Steelhead owes the band**: Mahi-Mahi's band laws, each at the
 wave of the kind the law's slot has. -/

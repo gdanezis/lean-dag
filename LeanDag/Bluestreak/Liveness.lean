@@ -4,9 +4,9 @@ import LeanDag.Common.Anchored.Bounded
 /-!
 # Bluestreak: liveness above the claims
 
-What a direct commit needs of the DAG, stated without time: the
-`T`-authored blocks two rounds above a `T`-led slot claim its
-candidate. Reference coverage is not available — a non-leader block
+What a direct commit needs of the DAG, stated without time: a `T`-led
+slot's candidate is tagged, and the `T`-authored blocks two rounds above
+it claim it. Reference coverage is not available — a non-leader block
 references two blocks — and is not needed: claims are what the rule
 counts. A quorum-sized `T` then commits every `T`-led slot directly on
 any view caught up to the decision round, three consecutive `T`-led
@@ -21,7 +21,7 @@ namespace Bluestreak
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
-variable {U : Universe Validator BlockId Payload} [ClaimMap BlockId]
+variable [Format BlockId Payload] {U : Universe Validator BlockId Payload}
 variable {T : Finset Validator} {R : ℕ} {L : BlockId}
 
 /-- Every `T`-authored block at round `r + 2` claims `L`. -/
@@ -34,11 +34,11 @@ instance (T : Finset Validator) (r : ℕ) (L : BlockId) : Decidable (ClaimsAt U 
 
 variable [S : Slots Validator] {k : ℕ}
 
-/-- From round `R` on, every `T`-led slot's candidate is claimed by every
-`T`-authored block two rounds above it. -/
+/-- From round `R` on, every `T`-led slot's candidate is tagged and
+claimed by every `T`-authored block two rounds above it. -/
 def ClaimsOn (U : Universe Validator BlockId Payload) (T : Finset Validator) (R : ℕ) : Prop :=
   ∀ k, R ≤ S.slotRound k → S.leader k ∈ T → ∀ L, IsLeaderBlock U k L →
-    ClaimsAt U T (S.slotRound k) L
+    Tagged U L ∧ ClaimsAt U T (S.slotRound k) L
 
 /-! ## A `T`-led slot commits directly -/
 
@@ -76,7 +76,8 @@ theorem decided_of_leader_mem (hcard : quorumCard Validator ≤ T.card)
   obtain ⟨L, hLm, hLc, hLr⟩ := hpop0 (S.leader k) hlead
   have hL : IsLeaderBlock U k L := ⟨hLm, hLr, hLc⟩
   exact ⟨L, hL, Decided.directCommit hL
-    (directCommitIn_of_claimsAt hcard hL hpop2 (hcl k hR hlead L hL) hcov)⟩
+    ⟨directCommitIn_of_claimsAt hcard hL hpop2 (hcl k hR hlead L hL).2 hcov,
+      (hcl k hR hlead L hL).1⟩⟩
 
 /-! ## A run of three decides everything below -/
 

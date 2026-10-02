@@ -36,7 +36,7 @@ abbrev skTight : SkipMsg (Ucrash 2) := ucrashMsg 2 1 (by omega)
 -- The fill's parameters, on data: the gap is the single round `1`.
 example : skTight.v1 = 3 := rfl
 example : skTight.r = 1 := rfl
-example : skTight.r0 = 0 := by simp [SkipData.r0, ucrashMsg]
+example : skTight.r0 = 0 := by simp [GapData.r0, ucrashMsg]
 
 /-- Block `8` is validator `0`'s round-`2` block — old, reliable, and
 sitting directly above the filled round. -/
@@ -51,7 +51,7 @@ the fill cannot conjure a commit. -/
 theorem ucrash_not_synchronisedOn :
     ¬ SynchronisedOn skTight.skipFill (Finset.univ : Finset (Fin 4)) 0 :=
   not_synchronisedOn_skipFill skTight (k := 1) (b := 8)
-    (hv1 := Finset.mem_univ _) (hk1 := by simp [SkipData.r0, ucrashMsg])
+    (hv1 := Finset.mem_univ _) (hk1 := by simp [GapData.r0, ucrashMsg])
     (hk2 := le_refl _) (hk := Nat.zero_le _)
     (hb := by decide) (hbround := by decide) (hbc := Finset.mem_univ _)
 

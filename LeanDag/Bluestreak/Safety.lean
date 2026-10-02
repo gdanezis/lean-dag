@@ -21,7 +21,7 @@ namespace Bluestreak
 
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
-variable {U : Universe Validator BlockId Payload} [ClaimMap BlockId]
+variable [Format BlockId Payload] {U : Universe Validator BlockId Payload}
 
 /-! ## Claims and certification -/
 
@@ -40,7 +40,7 @@ theorem certified_of_claimers_of_honest (hI : Disciplined U)
   obtain ⟨hXm, hcl⟩ := Finset.mem_filter.mp hX
   obtain ⟨hXi, hXr⟩ := mem_blocksAt.mp hXm
   rcases hcl with hcl | hcl
-  · exact hI.honest_backed B hB hc X hBX L hcl
+  · exact (hI.honest_backed B hB hc X hBX L hcl (by omega)).2
   · exact certified_of_carriesVotes hXi hXr hcl
 
 /-- **B.2.** A directly committed candidate is certified. -/
@@ -58,12 +58,12 @@ correct voter, which built on it only after proving every claim in its
 history. -/
 theorem backed_of_certified (hI : Disciplined U) {A : BlockId} (hA : Certified U A) :
     Backed U A := by
-  intro X hAX L hcl
+  intro X hAX
   obtain ⟨v, hv, hvc⟩ := exists_correct_of_card
     (S := supporters U A ((U.block A).round + 1))
     (by have := F.card_validators; change quorumCard Validator ≤ _ at hA; omega)
   obtain ⟨b, hb, -, hbA, hbv⟩ := mem_supporters.mp hv
-  exact hI.honest_backed b hb (hbv ▸ hvc) X ((Reaches.single hbA).trans hAX) L hcl
+  exact hI.honest_backed b hb (hbv ▸ hvc) X ((Reaches.single hbA).trans hAX)
 
 /-- **B.3.** A candidate claimed in a certified anchor's cone is
 certified: an honest voter for the anchor holds the claim in its cone. -/
@@ -73,7 +73,7 @@ theorem certified_of_claimedIn (hI : Disciplined U) {A L : BlockId}
   obtain ⟨hXm, hcl⟩ := Finset.mem_filter.mp hX
   obtain ⟨hXi, hXr⟩ := mem_blocksAt.mp hXm
   rcases hcl with hcl | hcl
-  · exact backed_of_certified hI hA X hAX L hcl
+  · exact (backed_of_certified hI hA X hAX L hcl (by omega)).2
   · exact certified_of_carriesVotes hXi hXr hcl
 
 /-! ## Two certified candidates, and certification against omission -/
@@ -111,7 +111,7 @@ theorem exists_reaches_self {b : BlockId} (hb : b ∈ U.ids) {t : ℕ}
   induction hd : (U.block b).round - t generalizing b with
   | zero => exact ⟨b, hb, rfl, by omega, Reaches.refl⟩
   | succ d ih =>
-    obtain ⟨i, hi, hic⟩ := (U.valid b hb).clause.2 (by omega)
+    obtain ⟨i, hi, hic⟩ := (U.valid b hb).clause.1.2 (by omega)
     have hir := U.round_of_mem_refs hb hi
     obtain ⟨c, hc, hcc, hcr, hreach⟩ := ih (U.complete b hb i hi) (by omega) (by omega)
     exact ⟨c, hc, hcc.trans hic, hcr, (Reaches.single hi).trans hreach⟩
@@ -120,14 +120,14 @@ theorem exists_reaches_self {b : BlockId} (hb : b ∈ U.ids) {t : ℕ}
 every candidate anchor of an eligible slot: the anchor's quorum of
 references and the quorum of claimers share an honest validator, whose
 self-chain descends from the referenced block to its claim. -/
-theorem claimedIn_of_directCommitIn_at_anchor [S : Slots Validator] (hI : Disciplined U)
+theorem claimedIn_of_directCommitIn_at_anchor [S : Slots Validator]
     {V : U.View} {k j : ℕ} {L A : BlockId} (h : DirectCommitIn U V L)
-    (hL : IsLeaderBlock U k L) (hA : IsLeaderBlock U j A) (hanc : Certified U A)
+    (hL : IsLeaderBlock U k L) (hA : IsLeaderBlock U j A) (hAt : Tagged U A)
     (helig : (bluestreakAnchored Validator BlockId Payload).Eligible k j) :
     ClaimedIn U A L := by
   have hround := (bluestreakAnchored Validator BlockId Payload).anchor_round_le hA helig
   simp only [bluestreakAnchored_waveAt] at hround
-  have hq := hI.certified_quorate A hA.1 hanc (by omega)
+  have hq := quorate_of_tagged hA.1 hAt (by omega)
   obtain ⟨v, hv, hvc⟩ := exists_correct_mem_creators_inter hq
     (le_trans h (Finset.card_le_card heldAuthors_subset))
   obtain ⟨a, ha, hav⟩ := mem_creatorsOf.mp (Finset.mem_inter.mp hv).1
@@ -148,13 +148,12 @@ theorem claimedIn_of_directCommitIn_at_anchor [S : Slots Validator] (hI : Discip
 /-- `Disciplined` in the form a concrete model decides: the cone read
 off `history` rather than through `Reaches`. -/
 theorem Disciplined.of_decide
-    (hq : ∀ A ∈ U.ids, Certified U A → Quorate U A)
     (hb : ∀ B ∈ U.ids, (U.block B).creator ∈ (Correct : Finset Validator) →
-      ∀ X ∈ history U B, ∀ L, claim X = some L → Certified U L) :
+      ∀ X ∈ history U B, ∀ L, claimOf U X = some L → 2 ≤ (U.block X).round →
+        (U.block L).round + 2 = (U.block X).round ∧ Certified U L) :
     Disciplined U where
-  certified_quorate := hq
-  honest_backed := fun B hB hc X hBX L hcl =>
-    hb B hB hc X ((mem_history_iff hB).mpr hBX) L hcl
+  honest_backed := fun B hB hc X hBX =>
+    hb B hB hc X ((mem_history_iff hB).mpr hBX)
 
 /-! ## The laws -/
 
@@ -169,22 +168,23 @@ theorem bluestreakLaws :
     (bluestreakAnchored Validator BlockId Payload).Laws
       (Invariant (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) where
   commit_unique := fun hI hL₁ hL₂ h₁ h₂ =>
-    eq_of_certified hL₁ hL₂ (certified_of_directCommitIn hI h₁) (certified_of_directCommitIn hI h₂)
+    eq_of_certified hL₁ hL₂ (certified_of_directCommitIn hI h₁.1)
+      (certified_of_directCommitIn hI h₂.1)
   commit_skip := fun hI hL h hskip =>
-    not_holds_omissions_of_certified hL.2.1 (certified_of_directCommitIn hI h)
+    not_holds_omissions_of_certified hL.2.1 (certified_of_directCommitIn hI h.1)
       (hskip.2 _ (mem_leaderBlocksAt.mpr hL))
   commit_link := fun hI hL h hA hanc helig => ⟨0, Nat.one_pos,
-    claimedIn_of_directCommitIn_at_anchor hI h hL hA hanc.1 helig⟩
+    claimedIn_of_directCommitIn_at_anchor h.1 hL hA hanc.2.2 helig, h.2⟩
   commit_link_unique := fun hI hL₁ hL₂ h _ hanc _ _ _ hlink _ =>
-    eq_of_certified hL₁ hL₂ (certified_of_directCommitIn hI h)
-      (certified_of_claimedIn hI hanc.1 hlink)
+    eq_of_certified hL₁ hL₂ (certified_of_directCommitIn hI h.1)
+      (certified_of_claimedIn hI hanc.1 hlink.1)
   skip_link := fun hI hskip hL _ hanc hlink =>
-    not_holds_omissions_of_certified hL.2.1 (certified_of_claimedIn hI hanc.1 hlink)
+    not_holds_omissions_of_certified hL.2.1 (certified_of_claimedIn hI hanc.1 hlink.1)
       (hskip.2 _ (mem_leaderBlocksAt.mpr hL))
   link_unique := fun hI hL₁ hL₂ _ hanc _ _ _ hl₁ hl₂ _ _ =>
-    eq_of_certified hL₁ hL₂ (certified_of_claimedIn hI hanc.1 hl₁)
-      (certified_of_claimedIn hI hanc.1 hl₂)
-  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
+    eq_of_certified hL₁ hL₂ (certified_of_claimedIn hI hanc.1 hl₁.1)
+      (certified_of_claimedIn hI hanc.1 hl₂.1)
+  commit_mono := fun _ hsub h => ⟨HoldsAtLeast.mono hsub h.1, h.2⟩
   skip_mono := fun _ hsub h =>
     ⟨HoldsAtLeast.mono hsub h.1, fun L hL => HoldsAtLeast.mono hsub (h.2 L hL)⟩
   skip_congr := by
@@ -196,13 +196,13 @@ theorem bluestreakLaws :
     rw [← hround, ← hlb]
     exact h
   link_congr := (bluestreakAnchored Validator BlockId Payload).linkCongr_of_round
-    (fun _ U A L _ => ClaimedIn U A L) fun _ _ _ _ _ _ => rfl
+    (fun _ U A L _ => ClaimedIn U A L ∧ Tagged U L) fun _ _ _ _ _ _ => rfl
   anchor_commit := fun hI _ h =>
-    have hc := certified_of_directCommitIn hI h
-    ⟨hc, backed_of_certified hI hc⟩
+    have hc := certified_of_directCommitIn hI h.1
+    ⟨hc, backed_of_certified hI hc, h.2⟩
   anchor_link := fun hI _ hanc _ _ _ hlink =>
-    have hc := certified_of_claimedIn hI hanc.1 hlink
-    ⟨hc, backed_of_certified hI hc⟩
+    have hc := certified_of_claimedIn hI hanc.1 hlink.1
+    ⟨hc, backed_of_certified hI hc, hlink.2⟩
 
 end Bluestreak
 

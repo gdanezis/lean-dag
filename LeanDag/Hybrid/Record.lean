@@ -51,8 +51,8 @@ def fill (U : (HybridProperties.hybridRule (Validator := Validator)
     (BlockId := BlockId) (Payload := Payload) kt).Universe) (sk : SkipMsg U.val) :
     (HybridProperties.hybridRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) kt).Universe :=
-  onRecord.fill U sk (sk.selfBlocks U.val.complete)
-    (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2) (honestNoEquiv_fill sk _ _ U.property)
+  onRecord.fill U sk.toGapData (sk.selfBlocks U.val.complete)
+    (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2) (honestNoEquiv_fill sk.toGapData _ _ U.property)
 
 /-- **The fill is an extension of Hybrid's carrier.** -/
 theorem extends_fill (sk : SkipMsg U.val) :

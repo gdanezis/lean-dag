@@ -28,7 +28,7 @@ variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
 variable {R : DagRule Validator BlockId Payload}
 variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
 variable {I : BlockRecord Validator BlockId Payload P honest → Prop}
-variable (c : R.OnRecord P honest I) [P.Mechanised] [Invariant.Mechanised I]
+variable (c : R.OnRecord P honest I) [P.Mechanised] [Invariant.Chops I]
 variable {S : Slots Validator} {U : R.Universe} {G d : ℕ}
 
 /-! ## The cut -/
@@ -51,7 +51,7 @@ theorem decided_agree_chop (ha : Agree R) (hb : Banded R) (hd : G ≤ S.slotRoun
 
 /-! ## The fill -/
 
-variable {sk : SkipData (c.toRec U).ids (c.toRec U).block} {B : sk.Blocks}
+variable {sk : GapData (c.toRec U).ids (c.toRec U).block} {B : sk.Blocks}
 variable {hB : ∀ k, sk.r0 < k → k ≤ sk.r → P (sk.fillMap B) (B.blk k)}
 variable {hI : I (BlockRecord.fill (c.toRec U) sk B hB)}
 
@@ -71,7 +71,7 @@ theorem decided_agree_fill (ha : Agree R) (hb : Banded R) {V : R.View U}
 
 section Copy
 
-variable [P.CopyStable]
+variable [P.CopyStable] [Invariant.Mechanised I]
 
 /-- **Verdicts survive the copy fill.** -/
 theorem decided_copyFill (hb : Banded R) (sk : SkipData (c.toRec U).ids (c.toRec U).block)
@@ -99,6 +99,10 @@ end Copy
 
 /-! ## Re-genesis -/
 
+section Genesis
+
+variable [Invariant.Regenesis I]
+
 variable {v : Validator} {g : BlockId} {p : Payload}
 variable {hg : g ∉ (c.toRec U).ids} {hsev : ∀ b ∈ (c.toRec U).ids, ((c.toRec U).block b).creator ≠ v}
 
@@ -114,6 +118,8 @@ theorem decided_agree_addGenesis (ha : Agree R) (hb : Banded R) {V : R.View U}
     {k : ℕ} {u u' : Option BlockId} (h : R.Decided S V k u) (h' : R.Decided S V'' k u') :
     u = u' :=
   Arcs.decided_agree_extends ha (Persist.of_banded hb) c.extends_addGenesis (V' := V') hsub h h'
+
+end Genesis
 
 end DagRule.OnRecord
 

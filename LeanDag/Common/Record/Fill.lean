@@ -24,7 +24,7 @@ variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
 variable [P.Mechanised]
 
 /-- **The fill.** -/
-def fill (U : BlockRecord Validator BlockId Payload P honest) (sk : SkipData U.ids U.block)
+def fill (U : BlockRecord Validator BlockId Payload P honest) (sk : GapData U.ids U.block)
     (B : sk.Blocks) (hB : ∀ k, sk.r0 < k → k ≤ sk.r → P (sk.fillMap B) (B.blk k)) :
     BlockRecord Validator BlockId Payload P honest where
   ids := U.ids ∪ sk.freshIds
@@ -32,47 +32,47 @@ def fill (U : BlockRecord Validator BlockId Payload P honest) (sk : SkipData U.i
   complete := by
     intro i hi j hj
     rcases Finset.mem_union.mp hi with ho | hf
-    · rw [SkipData.fillMap_old ho] at hj
+    · rw [GapData.fillMap_old ho] at hj
       exact Finset.mem_union_left _ (U.complete i ho j hj)
     · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf
-      rw [SkipData.fillMap_fresh] at hj
+      rw [GapData.fillMap_fresh] at hj
       exact B.refs_mem k hk1 hk2 j hj
   valid := by
     intro i hi
     rcases Finset.mem_union.mp hi with ho | hf
-    · rw [SkipData.fillMap_old ho]
+    · rw [GapData.fillMap_old ho]
       exact Validity.Mechanised.reads U.block (sk.fillMap B) U.ids (U.block i) U.complete
-        (U.complete i ho) (fun j hj => SkipData.fillMap_old hj) (U.valid i ho)
+        (U.complete i ho) (fun j hj => GapData.fillMap_old hj) (U.valid i ho)
     · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf
-      rw [SkipData.fillMap_fresh]
+      rw [GapData.fillMap_fresh]
       exact hB k hk1 hk2
   no_equivocation := by
     intro i hi j hj hic hcc hrr
     rcases Finset.mem_union.mp hi with ho | hf <;>
       rcases Finset.mem_union.mp hj with ho' | hf'
-    · simp only [SkipData.fillMap_old ho, SkipData.fillMap_old ho'] at hic hcc hrr
+    · simp only [GapData.fillMap_old ho, GapData.fillMap_old ho'] at hic hcc hrr
       exact U.no_equivocation i ho j ho' hic hcc hrr
     · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf'
-      simp only [SkipData.fillMap_old ho, SkipData.fillMap_fresh, B.creator, B.round] at hcc hrr
+      simp only [GapData.fillMap_old ho, GapData.fillMap_fresh, B.creator, B.round] at hcc hrr
       exact (sk.hgap i ho hcc (by change (U.block sk.B1).round < k at hk1; omega)
         (by omega)).elim
     · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf
-      simp only [SkipData.fillMap_old ho', SkipData.fillMap_fresh, B.creator, B.round] at hcc hrr
+      simp only [GapData.fillMap_old ho', GapData.fillMap_fresh, B.creator, B.round] at hcc hrr
       exact (sk.hgap j ho' hcc.symm (by change (U.block sk.B1).round < k at hk1; omega)
         (by omega)).elim
     · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf
       obtain ⟨l, hl1, hl2, rfl⟩ := sk.mem_freshIds.mp hf'
-      simp only [SkipData.fillMap_fresh, B.round] at hrr
+      simp only [GapData.fillMap_fresh, B.round] at hrr
       rw [hrr]
 
-variable {U : BlockRecord Validator BlockId Payload P honest} {sk : SkipData U.ids U.block}
+variable {U : BlockRecord Validator BlockId Payload P honest} {sk : GapData U.ids U.block}
 variable {B : sk.Blocks} {hB : ∀ k, sk.r0 < k → k ≤ sk.r → P (sk.fillMap B) (B.blk k)}
 
 @[simp] theorem fill_block_old {b : BlockId} (hb : b ∈ U.ids) :
     (fill U sk B hB).block b = U.block b := if_pos hb
 
 @[simp] theorem fill_block_fresh {k : ℕ} :
-    (fill U sk B hB).block (sk.fresh k) = B.blk k := SkipData.fillMap_fresh
+    (fill U sk B hB).block (sk.fresh k) = B.blk k := GapData.fillMap_fresh
 
 theorem fill_block : (fill U sk B hB).block = sk.fillMap B := rfl
 
@@ -98,7 +98,7 @@ def View.lift (V : U.View) : (fill U sk B hB).View where
 
 section Copy
 
-variable [P.CopyStable]
+variable [P.CopyStable] {sk : SkipData U.ids U.block}
 
 /-- **A copied block is valid** wherever the predicate does not read the
 author: it is the donor's block re-authored, judged under a map that
@@ -113,19 +113,19 @@ theorem copyBlock_valid (U : BlockRecord Validator BlockId Payload P honest)
     unfold SkipData.copyBlock; simp only [hlr]
   rw [e]
   exact Validity.Mechanised.reads U.block _ U.ids _ U.complete (U.complete _ hlm)
-    (fun j hj => SkipData.fillMap_old hj) hv
+    (fun j hj => GapData.fillMap_old hj) hv
 
 /-- **The copy fill**: the fill under the copy reading, its obligation
 discharged. -/
 def copyFill (U : BlockRecord Validator BlockId Payload P honest)
     (sk : SkipData U.ids U.block) : BlockRecord Validator BlockId Payload P honest :=
-  fill U sk (sk.copyBlocks U.complete) (fun _ hk1 hk2 => copyBlock_valid U sk hk1 hk2)
+  fill U sk.toGapData (sk.copyBlocks U.complete) (fun _ hk1 hk2 => copyBlock_valid U sk hk1 hk2)
 
 @[simp] theorem copyFill_block_old {b : BlockId} (hb : b ∈ U.ids) :
     (copyFill U sk).block b = U.block b := if_pos hb
 
 @[simp] theorem copyFill_block_fresh {k : ℕ} :
-    (copyFill U sk).block (sk.fresh k) = sk.copyBlock k := SkipData.fillMap_fresh
+    (copyFill U sk).block (sk.fresh k) = sk.copyBlock k := GapData.fillMap_fresh
 
 theorem copyFill_ids : (copyFill U sk).ids = U.ids ∪ sk.freshIds := rfl
 

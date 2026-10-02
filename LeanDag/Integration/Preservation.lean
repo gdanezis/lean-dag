@@ -65,7 +65,7 @@ variable [H : HybridFaults Validator]
 variable {U : BlockUniverse Validator BlockId Payload}
 
 /-- **I3.** Any fill preserves honest non-equivocation. -/
-theorem honestNoEquiv_fill (sk : SkipMsg U) (B : sk.Blocks)
+theorem honestNoEquiv_fill (sk : GapData U.ids U.block) (B : sk.Blocks)
     (hB : ∀ k, sk.r0 < k → k ≤ sk.r → ValidWrt (sk.fillMap B) (B.blk k))
     (hne : HonestNoEquiv U) : HonestNoEquiv (BlockRecord.fill U sk B hB) := by
   intro i hi j hj hib hij hround
@@ -92,7 +92,7 @@ theorem honestNoEquiv_fill (sk : SkipMsg U) (B : sk.Blocks)
 /-- The Safe Skip fill in particular. -/
 theorem honestNoEquiv_skipFill (sk : SkipMsg U) (hne : HonestNoEquiv U) :
     HonestNoEquiv sk.skipFill :=
-  honestNoEquiv_fill sk _ _ hne
+  honestNoEquiv_fill sk.toGapData _ _ hne
 
 /-- **Re-genesis cannot make an honest validator equivocate**: the new
 block's author has no other block. -/
@@ -119,7 +119,7 @@ instance honestNoEquiv.mechanised :
     BlockRecord.Invariant.Mechanised
       (HonestNoEquiv (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) where
   chop := fun _ h => honestNoEquiv_chop h
-  copyFill := fun sk h => honestNoEquiv_fill sk _ _ h
+  copyFill := fun sk h => honestNoEquiv_fill sk.toGapData _ _ h
   addGenesis := fun _ _ _ _ _ h => honestNoEquiv_addGenesis h
 
 end Fill

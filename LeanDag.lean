@@ -441,6 +441,7 @@ import LeanDag.Bluestreak.Safety
 import LeanDag.Bluestreak.Liveness
 import LeanDag.Bluestreak.Reactive
 import LeanDag.Bluestreak.Carrier
+import LeanDag.Bluestreak.Record
 import LeanDag.RedSnapper.Model.Faults
 import LeanDag.RedSnapper.Model.Revocation
 import LeanDag.RedSnapper.Revocation.Statement

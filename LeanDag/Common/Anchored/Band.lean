@@ -305,6 +305,7 @@ theorem agreeBand_view (h : AgreeBand R.toDagRule U U' lo hi g g') {V : U.View} 
   block := fun b hb hor => h.block b (V.subset_ids hb)
     (hor.imp id (fun ⟨hb', h1, h2⟩ => ⟨V'.subset_ids hb', h1, h2⟩))
   refs := fun b hb h1 h2 => h.refs b (V.subset_ids hb) h1 h2
+  payload := fun b hb h1 h2 => h.payload b (V.subset_ids hb) h1 h2
 
 /-! ### Votes, certificates and links across the band
 
@@ -871,7 +872,7 @@ theorem agreeBand_of_via {X : Type} {f : X → BlockRecord Validator BlockId Pay
     {U U' : X} {lo hi g g' : ℕ}
     (h : AgreeBand (R.toDagRuleVia f) U U' lo hi g g') :
     AgreeBand R.toDagRule (f U) (f U') lo hi g g' :=
-  ⟨h.mem, h.block, h.refs⟩
+  ⟨h.mem, h.block, h.refs, h.payload⟩
 
 /-- **The relation reads a band, through a projection.** -/
 theorem bandedVia {X : Type} {f : X → BlockRecord Validator BlockId Payload P honest}

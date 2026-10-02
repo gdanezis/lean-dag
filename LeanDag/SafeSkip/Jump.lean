@@ -241,7 +241,7 @@ theorem SkipMsg.skipFill_eq_of_core [DecidableEq BlockId] (sk₁ sk₂ : SkipMsg
     sk₁.skipFill.ids = sk₂.skipFill.ids
       ∧ ∀ b ∈ sk₁.skipFill.ids, sk₁.skipFill.block b = sk₂.skipFill.block b := by
   have hr0 : sk₁.r0 = sk₂.r0 := by
-    unfold SkipData.r0
+    unfold GapData.r0
     rw [hB1]
   have hv1 : sk₁.v1 = sk₂.v1 := sk₁.v1_eq_of_B1 sk₂ hB1
   -- the lines agree on the interval, both being the derived chain
@@ -250,10 +250,10 @@ theorem SkipMsg.skipFill_eq_of_core [DecidableEq BlockId] (sk₁ sk₂ : SkipMsg
     rw [sk₁.line_eq_lineOf k h1 h2,
       sk₂.line_eq_lineOf k (by omega) (by omega), htop]
   have hgap : sk₁.gap = sk₂.gap := by
-    unfold SkipData.gap
+    unfold GapData.gap
     rw [hr, hr0]
   have hfreshIds : sk₁.freshIds = sk₂.freshIds := by
-    unfold SkipData.freshIds
+    unfold GapData.freshIds
     rw [hgap, hfresh]
   have hids : sk₁.skipFill.ids = sk₂.skipFill.ids := by
     change U.ids ∪ sk₁.freshIds = U.ids ∪ sk₂.freshIds
@@ -265,7 +265,7 @@ theorem SkipMsg.skipFill_eq_of_core [DecidableEq BlockId] (sk₁ sk₂ : SkipMsg
   · obtain ⟨k, hk1, hk2, rfl⟩ := sk₁.mem_freshIds.mp hf
     have hfk : sk₁.fresh k = sk₂.fresh k := by rw [hfresh]
     have hfill : sk₁.fillBlock k = sk₂.fillBlock k := by
-      unfold SkipData.fillBlock SkipData.prev
+      unfold SkipData.fillBlock GapData.prev
       rw [hline k (by omega) hk2, hv1, hr0, hB1, hfresh]
     calc sk₁.skipFill.block (sk₁.fresh k)
         = sk₁.fillBlock k := sk₁.skipFill_block_fresh

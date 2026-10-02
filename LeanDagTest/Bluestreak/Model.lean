@@ -26,10 +26,16 @@ open LeanDag LeanDag.Bluestreak
 
 instance bsSlots : Slots (Fin 4) := Slots.identity fun k => ⟨k % 4, Nat.mod_lt _ (by omega)⟩
 
-/-- A block from its round, creator and references, over any id type. -/
+/-- A block from its round, creator and references, over any id type:
+tagged a leader block when its creator leads its round, with no claim. -/
 def bsBlock {N : ℕ} (r : ℕ) (v : ℕ) (hv : v < 4) (refs : Finset (Fin N)) :
-    Block (Fin 4) (Fin N) Unit :=
-  { round := r, creator := ⟨v, hv⟩, refs := refs, payload := () }
+    Block (Fin 4) (Fin N) (Bool × Option (Fin N)) :=
+  { round := r, creator := ⟨v, hv⟩, refs := refs, payload := (decide (v = r % 4), none) }
+
+/-- The block with its claim set. -/
+def withClaim {N : ℕ} (b : Block (Fin 4) (Fin N) (Bool × Option (Fin N)))
+    (c : Option (Fin N)) : Block (Fin 4) (Fin N) (Bool × Option (Fin N)) :=
+  { b with payload := (b.payload.1, c) }
 
 /-! ## `U1`: direct commits and an indirect commit -/
 
@@ -41,7 +47,7 @@ instance bsFaults1 : Faults (Fin 4) where
   card_validators := by decide
   card_byzantine := by decide
 
-def blk1 : Fin 24 → Block (Fin 4) (Fin 24) Unit := fun i => match (i : ℕ) with
+def raw1 : Fin 24 → Block (Fin 4) (Fin 24) (Bool × Option (Fin 24)) := fun i => match (i : ℕ) with
   | 0 => bsBlock 0 0 (by omega) ∅ | 1 => bsBlock 0 1 (by omega) ∅
   | 2 => bsBlock 0 2 (by omega) ∅ | 3 => bsBlock 0 3 (by omega) ∅
   | 4 => bsBlock 1 0 (by omega) {0} | 5 => bsBlock 1 1 (by omega) {0, 1, 2, 3}
@@ -58,12 +64,13 @@ def blk1 : Fin 24 → Block (Fin 4) (Fin 24) Unit := fun i => match (i : ℕ) wi
 
 /-- The explicit claims: `8` for the genesis leader `0`; `12`, `13` for
 `5`; `17`, `19` for `10`; `20`, `23` for `15`. -/
-instance claims1 : ClaimMap (Fin 24) where
-  claim
-    | 8 => some 0 | 12 => some 5 | 13 => some 5 | 17 => some 10 | 19 => some 10
-    | 20 => some 15 | 23 => some 15 | _ => none
+def claim1 : Fin 24 → Option (Fin 24)
+  | 8 => some 0 | 12 => some 5 | 13 => some 5 | 17 => some 10 | 19 => some 10
+  | 20 => some 15 | 23 => some 15 | _ => none
 
-def U1 : Universe (Fin 4) (Fin 24) Unit where
+def blk1 (i : Fin 24) : Block (Fin 4) (Fin 24) (Bool × Option (Fin 24)) := withClaim (raw1 i) (claim1 i)
+
+def U1 : Universe (Fin 4) (Fin 24) (Bool × Option (Fin 24)) where
   ids := Finset.univ
   block := blk1
   complete := by decide
@@ -71,7 +78,7 @@ def U1 : Universe (Fin 4) (Fin 24) Unit where
   no_equivocation := by decide
 
 theorem U1_disciplined : Disciplined U1 :=
-  Disciplined.of_decide (U := U1) (by decide) (by decide)
+  Disciplined.of_decide (U := U1) (by decide)
 
 -- Slot 0's candidate is certified, claimed twice, and omitted once: undecided directly.
 example : Certified U1 0 := by decide
@@ -93,7 +100,7 @@ theorem U1_slot3 : Decided U1 (View.full U1) 3 (some 15) :=
 theorem U1_slot0 : Decided U1 (View.full U1) 0 (some 0) :=
   AnchoredRule.Decided.indirectCommit_single rfl (fun _ _ h => h) (by omega) (by decide) U1_slot3
     (fun m _ _ h => absurd (show 0 + 2 < m from h) (by omega))
-    (by decide) ⟨8, by decide, Reaches.single (by decide)⟩
+    (by decide) ⟨⟨8, by decide, Reaches.single (by decide)⟩, by decide⟩
 
 /-- The claims a direct commit counts: slot 1's candidate is claimed by
 every block of `{0, 1, 3}` at round 3, slot 0's is not at round 2. -/
@@ -107,18 +114,12 @@ example (V : U1.View) (v : Option (Fin 24)) (h : Decided U1 V 0 v) : v = some 0 
 
 end U1
 
-/-- **The cut does not preserve the discipline.** `U1` chopped at the
-horizon `2` keeps block `8`, whose claim names the genesis leader `0`
-the cut dropped; the evidence for the claim is gone with it, so the
-chopped record is not disciplined and the record cells of
-`Properties/Arcs/Record.lean` are not available to the arc. -/
-example : ¬ Disciplined (BlockRecord.chop U1 2) := by
-  intro h
-  have h8 : (8 : Fin 24) ∈ (BlockRecord.chop U1 2).ids := by decide
-  have hc : ((BlockRecord.chop U1 2).block 8).creator ∈ (Correct : Finset (Fin 4)) := by decide
-  have := h.honest_backed 8 h8 hc 8 Reaches.refl 0 (by decide)
-  revert this
-  decide
+/-- **The cut keeps the discipline.** `U1` chopped at the horizon `2`
+keeps block `8`, whose claim names the genesis leader `0` the cut
+dropped; `8` sits at the new round `0`, where a claim is read by no
+slot. -/
+example : Disciplined (BlockRecord.chop U1 2) :=
+  Disciplined.of_decide (by decide)
 
 /-! ## `U2`: a Byzantine anchor candidate with an unbacked claim -/
 
@@ -130,7 +131,7 @@ instance bsFaults2 : Faults (Fin 4) where
   card_validators := by decide
   card_byzantine := by decide
 
-def blk2 : Fin 16 → Block (Fin 4) (Fin 16) Unit := fun i => match (i : ℕ) with
+def raw2 : Fin 16 → Block (Fin 4) (Fin 16) (Bool × Option (Fin 16)) := fun i => match (i : ℕ) with
   | 0 => bsBlock 0 0 (by omega) ∅ | 1 => bsBlock 0 1 (by omega) ∅
   | 2 => bsBlock 0 2 (by omega) ∅ | 3 => bsBlock 0 3 (by omega) ∅
   | 4 => bsBlock 1 0 (by omega) {0} | 5 => bsBlock 1 1 (by omega) {1, 2, 3}
@@ -142,10 +143,12 @@ def blk2 : Fin 16 → Block (Fin 4) (Fin 16) Unit := fun i => match (i : ℕ) wi
   | _ => bsBlock 0 0 (by omega) ∅
 
 /-- The Byzantine `11` claims `0` certified; `0` has one vote. -/
-instance claims2 : ClaimMap (Fin 16) where
-  claim | 11 => some 0 | _ => none
+def claim2 : Fin 16 → Option (Fin 16)
+  | 11 => some 0 | _ => none
 
-def U2 : Universe (Fin 4) (Fin 16) Unit where
+def blk2 (i : Fin 16) : Block (Fin 4) (Fin 16) (Bool × Option (Fin 16)) := withClaim (raw2 i) (claim2 i)
+
+def U2 : Universe (Fin 4) (Fin 16) (Bool × Option (Fin 16)) where
   ids := Finset.univ
   block := blk2
   complete := by decide
@@ -153,14 +156,14 @@ def U2 : Universe (Fin 4) (Fin 16) Unit where
   no_equivocation := by decide
 
 theorem U2_disciplined : Disciplined U2 :=
-  Disciplined.of_decide (U := U2) (by decide) (by decide)
+  Disciplined.of_decide (U := U2) (by decide)
 
 /-- Slot 0 is directly skipped, the eligible candidate anchor `15` links
 `0` through `11`, and `15` is not certified: without `Anchor U A`, the
 skip law would ask the impossible. -/
 example : DirectSkipIn (S := bsSlots) U2 (View.full U2) 0 := by decide
 example : IsLeaderBlock (S := bsSlots) U2 3 15 ∧
-    (bluestreakAnchored (Fin 4) (Fin 16) Unit).Eligible (S := bsSlots) 0 3 := by decide
+    (bluestreakAnchored (Fin 4) (Fin 16) (Bool × Option (Fin 16))).Eligible (S := bsSlots) 0 3 := by decide
 example : ClaimedIn U2 15 0 := ⟨11, by decide, Reaches.single (by decide)⟩
 example : ¬ Certified U2 15 := by decide
 example : ¬ Certified U2 0 := by decide
@@ -177,7 +180,7 @@ instance bsFaults3 : Faults (Fin 4) where
   card_validators := by decide
   card_byzantine := by decide
 
-def blk3 : Fin 17 → Block (Fin 4) (Fin 17) Unit := fun i => match (i : ℕ) with
+def blk3 : Fin 17 → Block (Fin 4) (Fin 17) (Bool × Option (Fin 17)) := fun i => match (i : ℕ) with
   | 0 => bsBlock 0 0 (by omega) ∅ | 1 => bsBlock 0 1 (by omega) ∅
   | 2 => bsBlock 0 2 (by omega) ∅ | 3 => bsBlock 0 3 (by omega) ∅
   | 4 => bsBlock 1 0 (by omega) {0} | 5 => bsBlock 1 1 (by omega) {0, 1, 2, 3}
@@ -189,10 +192,7 @@ def blk3 : Fin 17 → Block (Fin 4) (Fin 17) Unit := fun i => match (i : ℕ) wi
   | 16 => bsBlock 2 2 (by omega) {4, 5, 6, 7}
   | _ => bsBlock 0 0 (by omega) ∅
 
-instance claims3 : ClaimMap (Fin 17) where
-  claim _ := none
-
-def U3 : Universe (Fin 4) (Fin 17) Unit where
+def U3 : Universe (Fin 4) (Fin 17) (Bool × Option (Fin 17)) where
   ids := Finset.univ
   block := blk3
   complete := by decide
@@ -200,7 +200,7 @@ def U3 : Universe (Fin 4) (Fin 17) Unit where
   no_equivocation := by decide
 
 theorem U3_disciplined : Disciplined U3 :=
-  Disciplined.of_decide (U := U3) (by decide) (by decide)
+  Disciplined.of_decide (U := U3) (by decide)
 
 /-- Slot 2 has two candidates, `10` and `16`; three round-3 blocks omit
 each, so Bluestreak skips it, and two omit both, so the core would not. -/

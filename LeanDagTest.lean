@@ -128,6 +128,7 @@ import LeanDagTest.OptimalHydrozoan.Grounding
 import LeanDagTest.OptimalHydrozoan.Axioms
 import LeanDagTest.Bluestreak.Model
 import LeanDagTest.Bluestreak.Reactive
+import LeanDagTest.Bluestreak.Recovery
 import LeanDagTest.RedSnapper.Model
 import LeanDagTest.RedSnapper.Revocation
 import LeanDagTest.RedSnapper.Axioms

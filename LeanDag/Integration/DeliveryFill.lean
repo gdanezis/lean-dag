@@ -124,7 +124,7 @@ theorem not_refsAccepted_skipFillD (hne : sk.r0 < sk.r)
   -- the anchor is cited by the fill, and was accepted by nobody in the gap
   have hB1mem : sk.B1 ∈ (sk.skipFill.block (sk.fresh (sk.r0 + 1))).refs := by
     rw [sk.skipFill_block_fresh]
-    simp only [SkipData.fillBlock, SkipData.prev]
+    simp only [SkipData.fillBlock, GapData.prev]
     exact Finset.mem_insert_self _ _
   have hin : sk.B1 ∈ D.accepted sk.v1 sk.r0 := hsub hB1mem
   rw [hdown sk.r0 (le_refl _) hne] at hin

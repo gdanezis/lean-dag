@@ -175,7 +175,7 @@ theorem ucrash_populated (N r : ℕ) (hr : r ≤ N) {k : ℕ}
     (hk1 : 0 < k) (hk2 : k ≤ r) :
     PopulatedOn (ucrashMsg N r hr).skipFill (insert 3 {1, 2}) k := by
   have hr0 : (ucrashMsg N r hr).r0 = 0 := by
-    simp [SkipData.r0, ucrashMsg]
+    simp [GapData.r0, ucrashMsg]
   refine SkipMsg.skipFill_populatedOn _ ?_ (by omega) hk2
   intro v hv
   have hv12 : (v : ℕ) = 1 ∨ (v : ℕ) = 2 := by
@@ -294,7 +294,7 @@ The derived chain below the target is exactly the `4k + 1` line
 `ucrashMsg` spells out. -/
 theorem ucrashJump_line_eq (N r : ℕ) (hr : r ≤ N) {k : ℕ} (hk : k ≤ r) :
     (ucrashJump N r hr).toSkipMsg.line k = 4 * k + 1 := by
-  have hr0 : (ucrashMsg N r hr).r0 = 0 := by simp [SkipData.r0, ucrashMsg]
+  have hr0 : (ucrashMsg N r hr).r0 = 0 := by simp [GapData.r0, ucrashMsg]
   have h := ((ucrashMsg N r hr).line_eq_lineOf k (by omega) hk).symm
   exact h
 

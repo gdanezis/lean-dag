@@ -72,7 +72,7 @@ open BlockRecord
 variable {R : DagRule Validator BlockId Payload}
 variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
 variable {I : BlockRecord Validator BlockId Payload P honest → Prop}
-variable (c : R.OnRecord P honest I) [P.Mechanised] [Invariant.Mechanised I]
+variable (c : R.OnRecord P honest I) [P.Mechanised] [Invariant.Chops I]
 
 /-- Membership, read through the record. -/
 theorem mem_toRec {U : R.Universe} {b : BlockId} : b ∈ (c.toRec U).ids ↔ b ∈ R.ids U := by
@@ -82,7 +82,7 @@ theorem mem_toRec {U : R.Universe} {b : BlockId} : b ∈ (c.toRec U).ids ↔ b �
 
 /-- The cut, at the carrier. -/
 def chop (U : R.Universe) (G : ℕ) : R.Universe :=
-  c.ofRec ((c.toRec U).chop G) (Invariant.Mechanised.chop G (c.inv U))
+  c.ofRec ((c.toRec U).chop G) (Invariant.Chops.chop G (c.inv U))
 
 variable {G d : ℕ} {S : Slots Validator}
 
@@ -99,7 +99,7 @@ construction that starts on the record side — a joiner assembling a view
 out of what it fetched — be read as the rule's. -/
 theorem chop_ofRec (W : BlockRecord Validator BlockId Payload P honest) (h : I W) :
     c.chop (c.ofRec W h) G = c.ofRec (W.chop G)
-      (by rw [← c.toRec_ofRec W h]; exact Invariant.Mechanised.chop G (c.inv _)) := by
+      (by rw [← c.toRec_ofRec W h]; exact Invariant.Chops.chop G (c.inv _)) := by
   unfold DagRule.OnRecord.chop
   congr 1
   · rw [c.toRec_ofRec W h]
@@ -114,6 +114,7 @@ theorem sustains_chop (U : R.Universe) : Sustains R U (c.chop U G) G G where
   round := fun b _ hr => by rw [c.block_chop, chopBlk_round]; omega
   creator := fun b _ _ => by rw [c.block_chop, chopBlk_creator]
   refs := fun b _ hr => by rw [c.block_chop, chopBlk_refs_of_lt hr]
+  payload := fun b _ _ => by rw [c.block_chop, chopBlk_payload]
 
 /-- **The cut is a truncation of the carrier.** -/
 theorem truncates_chop (U : R.Universe) (hd : G ≤ S.slotRound d) :
@@ -126,7 +127,7 @@ def chopView {U : R.Universe} (V : R.View U) (G : ℕ) : R.View (c.chop U G) :=
 
 theorem viewIds_chopView {U : R.Universe} (V : R.View U) :
     R.viewIds (c.chopView V G) = (R.viewIds V).filter fun i => G ≤ (R.block U i).round := by
-  have h := c.viewIds_of (h := Invariant.Mechanised.chop G (c.inv U)) ((c.toView V).chop G)
+  have h := c.viewIds_of (h := Invariant.Chops.chop G (c.inv U)) ((c.toView V).chop G)
   rw [BlockRecord.View.chop_ids, c.viewIds_to, c.block_to] at h
   exact h
 
@@ -141,12 +142,12 @@ theorem viewAgreeAbove_chop {U : R.Universe} {V : R.View U} :
 
 /-- The fill, at the carrier, under a reading of the filled blocks and
 with the invariant supplied. -/
-def fill (U : R.Universe) (sk : SkipData (c.toRec U).ids (c.toRec U).block) (B : sk.Blocks)
+def fill (U : R.Universe) (sk : GapData (c.toRec U).ids (c.toRec U).block) (B : sk.Blocks)
     (hB : ∀ k, sk.r0 < k → k ≤ sk.r → P (sk.fillMap B) (B.blk k))
     (hI : I (BlockRecord.fill (c.toRec U) sk B hB)) : R.Universe :=
   c.ofRec (BlockRecord.fill (c.toRec U) sk B hB) hI
 
-variable {U : R.Universe} {sk : SkipData (c.toRec U).ids (c.toRec U).block} {B : sk.Blocks}
+variable {U : R.Universe} {sk : GapData (c.toRec U).ids (c.toRec U).block} {B : sk.Blocks}
 variable {hB : ∀ k, sk.r0 < k → k ≤ sk.r → P (sk.fillMap B) (B.blk k)}
 variable {hI : I (BlockRecord.fill (c.toRec U) sk B hB)}
 
@@ -159,7 +160,7 @@ theorem block_fill : R.block (c.fill U sk B hB hI) = sk.fillMap B := by
 theorem block_fill_old {b : BlockId} (hb : b ∈ R.ids U) :
     R.block (c.fill U sk B hB hI) b = R.block U b := by
   rw [c.block_fill, ← c.block_to]
-  exact SkipData.fillMap_old (c.mem_toRec.mpr hb)
+  exact GapData.fillMap_old (c.mem_toRec.mpr hb)
 
 /-- **The fill is an extension of the carrier.** -/
 theorem extends_fill : Extends R U (c.fill U sk B hB hI) where
@@ -180,12 +181,13 @@ theorem sustains_fill : Sustains R U (c.fill U sk B hB hI) 0 (sk.r + 1) where
         rcases Finset.mem_union.mp hb with ho | hf
         · exact c.mem_toRec.mp ho
         · obtain ⟨k, hk1, hk2, rfl⟩ := sk.mem_freshIds.mp hf
-          rw [c.block_fill, SkipData.fillMap_fresh, B.round] at hr
+          rw [c.block_fill, GapData.fillMap_fresh, B.round] at hr
           omega
       exact ⟨hbU, by rw [c.block_fill_old hbU] at hr; omega⟩
   round := fun b hb _ => by rw [c.block_fill_old hb]; omega
   creator := fun b hb _ => by rw [c.block_fill_old hb]
   refs := fun b hb _ => by rw [c.block_fill_old hb]
+  payload := fun b hb _ => by rw [c.block_fill_old hb]
 
 /-- The pre-crash view, read in the fill. -/
 def liftView (V : R.View U) : R.View (c.fill U sk B hB hI) :=
@@ -203,7 +205,7 @@ theorem viewIds_subset_liftView (V : R.View U) :
 
 section Copy
 
-variable [P.CopyStable]
+variable [P.CopyStable] [Invariant.Mechanised I]
 
 /-- The copy fill, at a carrier whose validity does not read the author. -/
 def copyFill (U : R.Universe) (sk : SkipData (c.toRec U).ids (c.toRec U).block) :
@@ -211,7 +213,7 @@ def copyFill (U : R.Universe) (sk : SkipData (c.toRec U).ids (c.toRec U).block) 
   c.ofRec (BlockRecord.copyFill (c.toRec U) sk) (Invariant.Mechanised.copyFill sk (c.inv U))
 
 theorem copyFill_eq (U : R.Universe) (sk : SkipData (c.toRec U).ids (c.toRec U).block) :
-    c.copyFill U sk = c.fill U sk (sk.copyBlocks (c.toRec U).complete)
+    c.copyFill U sk = c.fill U sk.toGapData (sk.copyBlocks (c.toRec U).complete)
       (fun _ hk1 hk2 => BlockRecord.copyBlock_valid (c.toRec U) sk hk1 hk2)
       (Invariant.Mechanised.copyFill sk (c.inv U)) := rfl
 
@@ -241,12 +243,16 @@ end Copy
 
 /-! ## Re-genesis -/
 
+section Genesis
+
+variable [Invariant.Regenesis I]
+
 /-- Re-genesis, at the carrier. -/
 def addGenesis (U : R.Universe) (v : Validator) (g : BlockId) (p : Payload)
     (hg : g ∉ (c.toRec U).ids) (hsev : ∀ b ∈ (c.toRec U).ids, ((c.toRec U).block b).creator ≠ v) :
     R.Universe :=
   c.ofRec (BlockRecord.addGenesis (c.toRec U) v g p hg hsev)
-    (Invariant.Mechanised.addGenesis v g p hg hsev (c.inv U))
+    (Invariant.Regenesis.addGenesis v g p hg hsev (c.inv U))
 
 variable {v : Validator} {g : BlockId} {p : Payload}
 variable {hg : g ∉ (c.toRec U).ids} {hsev : ∀ b ∈ (c.toRec U).ids, ((c.toRec U).block b).creator ≠ v}
@@ -284,7 +290,10 @@ theorem sustains_addGenesis : Sustains R U (c.addGenesis U v g p hg hsev) 0 1 wh
       · exact ⟨ho, by rw [c.block_addGenesis_old ho] at hr; omega⟩
   round := fun b hb _ => by rw [c.block_addGenesis_old hb]; omega
   creator := fun b hb _ => by rw [c.block_addGenesis_old hb]
+  payload := fun b hb _ => by rw [c.block_addGenesis_old hb]
   refs := fun b hb _ => by rw [c.block_addGenesis_old hb]
+
+end Genesis
 
 end DagRule.OnRecord
 

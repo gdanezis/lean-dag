@@ -158,6 +158,7 @@ theorem alt_agreeBand (top : ℕ) : AgreeBand altRule.toDagRule av3 av4 1 (top +
   mem := fun b _ _ _ => Finset.mem_univ b
   block := fun b hb _ => av_block_shift b hb
   refs := fun b hb hlo _ => av_refs_shift b hb hlo
+  payload := fun _ _ _ _ => rfl
 
 /-- **The rule has no band laws.** Its direct commit reads a block at `r + altWave r`, and the two
 frames put that read at different rounds: the same band that carries slot `0`'s candidate carries

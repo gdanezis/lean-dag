@@ -161,7 +161,7 @@ to connect the two. -/
 lower, as it sees every round. -/
 theorem chopMsg_r0 (sk : SkipMsg U) (hG : G ≤ (U.block sk.B1).round)
     (hGr : G ≤ sk.r) : (chopMsg sk hG hGr).r0 = sk.r0 - G := by
-  simp only [SkipData.r0, chopMsg_B1, chop_block, chopBlk_round]
+  simp only [GapData.r0, chopMsg_B1, chop_block, chopBlk_round]
 
 /-! ## The deployment reading: §9 keeps a validator's horizon trailing
 its current round by a lag `Λ`, and composing that with the retention
@@ -174,7 +174,7 @@ recovery from outages of up to `Λ` rounds, and no more. -/
 theorem outage_bounded_by_lag (sk : SkipMsg U) {Λ : ℕ}
     (hlag : G + Λ = sk.r) (hr : sk.r0 ≤ sk.r) :
     G ≤ sk.r0 ↔ sk.r - sk.r0 ≤ Λ := by
-  unfold SkipData.r0 at *
+  unfold GapData.r0 at *
   omega
 
 end Integration

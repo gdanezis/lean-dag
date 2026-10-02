@@ -236,6 +236,9 @@ structure RebasedAbove (R : DagRule Validator BlockId Payload)
   /-- And, strictly above, the same references. -/
   refs : ∀ b, b ∈ R.ids U → R₀ < (R.block U b).round →
     (R.block U' b).refs = (R.block U b).refs
+  /-- And the same payload. -/
+  payload : ∀ b, b ∈ R.ids U → R₀ ≤ (R.block U b).round →
+    (R.block U' b).payload = (R.block U b).payload
 ```
 
 A truncation is a `Truncates`, this relation at `R₀ = G` together with
@@ -853,6 +856,17 @@ The band still needs the schedule out of the `Dag` and the verdicts
 indexed by slot (`docs/porting-plan.md`); what this removes is the
 smaller of the two blockers, and the one that was in the rule rather
 than in its formalisation.
+
+**Bluestreak's anchor reads a literal round, and its verdicts do not.**
+`BackedClaim` asks `2 ≤ (U.block X).round`, exempting the claims of the
+two lowest rounds (§11.48). The audit reaches it because
+`Bluestreak.Decided` is `bluestreakAnchored`'s relation and the
+structure carries `Anchor := Certified U A ∧ Backed U A`; but
+`AnchoredRule.Decided` reads `Commit`, `Skip`, `Link`, `Least`,
+`RungEmpty` and `Eligible`, never `Anchor`. The anchor is read by the
+laws, and by the band only as a hypothesis on one universe in
+`link_novel`, never compared across two. `BluestreakProperties.banded`
+is proved, so the read is recorded rather than removed.
 
 **A third difference, which is not a defect.** Odontoceti, Nemo,
 Mahi-Mahi and Hybrid define causal history by a depth bound taken from a
@@ -5082,6 +5096,140 @@ from two above the floor for the same reason.
 **Measure.** The library and tests stand at 73,015 lines; the arc is
 1,112 lines of library, and the common-layer change across `Anchored.lean`
 and `Anchored/Band.lean` is `+62 −34`.
+
+### 11.48 Bluestreak's cut and re-genesis: the discipline read bounded
+
+The step after §11.47, and the first of its two open clauses. The cut
+broke `honest_backed` because the clause asked every claim in an honest
+cone to be certified, including the claims of the two lowest retained
+rounds, which name blocks the cut dropped. The clause now reads one
+claim at a time, through `BackedClaim`: a claim from round two up names
+a certified block exactly two rounds below, and a claim at rounds `0`
+and `1` is exempt. `Backed`, the anchor's half, reads the same
+predicate.
+
+**Why the position is in the conclusion.** Two weaker forms fail.
+Asking only for held candidates (`L ∈ U.ids`) breaks the band:
+`not_claimedIn_novel` reads the anchor's backing exactly at a candidate
+`U` does not hold. Making a misplaced claim exempt rather than
+forbidden — `round L + 2 = round X` as a premise — fails both ways,
+since at an absent `L` the record's block map is arbitrary, in the band
+and after the cut alike. And without the position at all, a claim from
+`G + 5` naming a certified block at `G − 3` survives the cut with
+nothing certified behind it. So the position is what an honest
+validator checks of an inherited claim: `Referenceable` reads
+`BackedClaimIn`, and `claim_held` asks the same of a correct
+validator's own claim. No verdict reads a claim in any other position,
+since `claimers` keeps only blocks at `round L + 2`; liveness compiled
+unchanged.
+
+**What the arc collects.** `disciplined_chop` and
+`disciplined_addGenesis` (`Bluestreak/Record.lean`), with `onRecord`,
+give every verdict cell of the cut and re-genesis. The novelty lemma
+takes one more hypothesis, that the candidate sits at or above `U`'s
+frame zero, which `link_novel` discharges from the slot alignment. The
+witness `¬ Disciplined (BlockRecord.chop U1 2)` is now the positive
+`Disciplined (BlockRecord.chop U1 2)`. `audit-rounds.py` flags the
+`2 ≤` as a literal round read; §3.4c records why the verdicts do not
+read it.
+
+**The common layer.** `Invariant.Mechanised` asked every invariant to
+survive all three mechanisms at once. It is now `Invariant.Chops` and
+`Invariant.Regenesis` extended by the copy fill, and the cells of each
+mechanism read only their own class; every existing instance is
+unchanged. The diff is `+34 −13` across `Common/Record/Invariant.lean`,
+`Properties/Record.lean` and `Properties/Arcs/Record.lean`.
+
+**What is left.** The fill: the copy fill's first block references its
+author's last pre-crash block, which can certify an ordinary block
+while it stays sparse, so `certified_quorate` fails. That is §11.47's
+format clause, unchanged by this step. `audit-mechanisms.py` counts the
+fill cell as an instance because the carrier is on the record; the
+report says what that covers. The claim stays an ambient map, so the
+position check is an assumption on honest validators rather than a
+validity clause.
+
+### 11.49 Bluestreak's block format: the role and the claim in the payload
+
+The second of §11.47's open clauses, and the fill. `certified_quorate`
+stood in for the receivers' format check, which reads a block's role,
+and the claim was an ambient map the mechanisms could not act on. Both
+are now the block's own data: `Format BlockId Payload` reads a leader
+tag and a claim from the payload, and `ClaimMap` is gone.
+
+**Validity checks the format.** `roleClause`: a tagged block above round
+zero references `n − f` distinct creators, and an untagged block
+references only its own author's blocks and tagged blocks. It reads the
+block and its references, so it is `Clause.Mechanised` (the cut keeps
+payloads). The claim's position stays in the discipline, since the
+claimed block is not a reference.
+
+**The rule reads the tag.** `Commit` and `Link` ask the candidate to be
+tagged, and `Anchor` is `Certified ∧ Backed ∧ Tagged`. Visibility reads
+the anchor's quorum from validity (`quorate_of_tagged`, BS20) instead of
+from `certified_quorate`, which is removed: `Disciplined` is
+`honest_backed` alone. The `n = 4` escape of §11.47 — an ordinary block
+certified while sparse — is no longer a failure of anything, since a
+certified untagged block is never committed or linked. The tag must
+cross the band, which is why the band compares payloads (the previous
+step, `+37 −7` over twelve files, every witness a shared constructor).
+
+**Liveness needs the tag of a reliable leader.** `ClaimsOn` asks the
+candidate to be tagged as well as claimed, the support's `Certifies` is
+`Claims ∧ Tagged`, and `ReactiveB` replaces its `certified_quorate`
+field by `leader_tagged`: a correct validator tags its block at a slot
+it leads.
+
+**The chain fill.** `SkipData.chainBlock` keeps only the self reference
+and takes its payload from the caller rather than the donor, since a
+rule may read its payload. Cloning the donor's payload would copy its
+role and its claims. For Bluestreak the filled blocks are untagged and
+claim nothing; each is valid by the format, and
+`disciplined_chainFill` (BS19) shows the discipline survives: old cones
+are unchanged and certification only grows, and a filled block's cone
+is the chain and `B1`'s, honest when `v1` is correct. `fill` at the
+carrier gives the fill cells through `onRecord`. The `B1` vote that
+§11.48 had to assume away certifies nothing the rule reads.
+
+**What changed in the tests.** The models run on the bare payload
+`Bool × Option BlockId`; every block is tagged exactly when its author
+leads its round, and the format holds by `decide`. `usparse_certified_quorate`
+is gone, replaced by `leader_tagged` in `spReactive`.
+
+**Measure.** The Bluestreak side is `+444 −230` across the arc, its
+tests and `SafeSkip/Data.lean` (the chain reading). No other rule
+changes.
+
+### 11.50 Bluestreak's Safe Skip: the gap alone, witnessed, and prompt
+
+Three steps after §11.49.
+
+**The gap is its own structure.** `GapData` carries what every fill
+reads — `v1`, `B1`, the target round, fresh ids and `hgap` — and
+`SkipData` extends it with the donor's line and `hB1uniq`, which only
+the donor's boundary argument reads. `BlockRecord.fill`,
+`OnRecord.fill`, `Blocks`, `fillMap`, `prev` and the chain reading take
+`GapData`; the core's readings and the copy fill keep `SkipData`, and
+their call sites pass `sk.toGapData` (eight of them). Field access
+through the parent needed no change. Bluestreak's recovery message is
+now `(v1, B1, r)` with its fresh ids, and names no donor.
+
+**The witness.** `Ucr` (BS21): `3` silent from round `2` through its
+own leader slot; `rcGap` is `(3, 7, 3)` with fresh ids `100 + k`, which
+needs `ℕ` ids, since `hidx` asks the supply to be injective on all of
+`ℕ`. Validity with the format, the discipline before and after, both
+verdicts before and after, and the carrier's `decided_fill` at the
+witness all close by `decide` or by the generic theorems.
+
+**The prompt skip.** `skipsUnsupported`: a present quorum supporting no
+candidate is a quorum of the voting round omitting each, which is the
+per-candidate skip. `decided_none_fresh` (BS22) is
+`decided_none_of_novel` at the chain fill: the candidate of a slot `v1`
+leads in its gap is the filled block, novel by `hgap`, and a quorum
+without `v1` holds only old blocks one round up, since every filled
+block is `v1`'s. `v1` must be excluded because its own next filled
+block references the candidate. The audit's prompt-skip cell is now
+collected; Bluestreak's open cell is adaptive leaders alone.
 
 ### 11.5 Next steps, in order
 

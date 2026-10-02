@@ -170,7 +170,7 @@ stands in for one that voted, and need not vote as it did. -/
 theorem sustains_skipFill (sk : SkipMsg U) :
     Sustains (MysticetiProperties.mysticetiRule (Payload := Payload))
       U sk.skipFill 0 (sk.r + 1) :=
-  MysticetiProperties.onRecord.sustains_fill (U := U) (sk := sk) (B := sk.selfBlocks U.complete)
+  MysticetiProperties.onRecord.sustains_fill (U := U) (sk := sk.toGapData) (B := sk.selfBlocks U.complete)
     (hB := fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2) (hI := True.intro)
 
 /-! ### The filled slot is decided, and SS3 falls out

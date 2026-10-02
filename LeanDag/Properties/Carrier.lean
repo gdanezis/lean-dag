@@ -58,7 +58,8 @@ structure DagRule (Validator : Type) [Fintype Validator] [DecidableEq Validator]
 /-- **One DAG is another above a round, rebased.** At and above `R₀`
 the two universes hold the same blocks, at rounds `G` apart, with the
 same authors; strictly above `R₀`, the same references too. Nothing is
-said below `R₀`, where a mechanism does its work. One relation serves a
+said below `R₀`, where a mechanism does its work. Payloads are compared
+from `R₀` up, since no mechanism strips them. One relation serves a
 truncation (`R₀ = G`), a fill or extension (no rebasing), and plain
 agreement (the zero offset, `AgreeAbove`). References are compared
 strictly above `R₀`: a truncation empties its bottom layer's
@@ -79,6 +80,9 @@ structure RebasedAbove (R : DagRule Validator BlockId Payload)
   /-- And, strictly above, the same references. -/
   refs : ∀ b, b ∈ R.ids U → R₀ < (R.block U b).round →
     (R.block U' b).refs = (R.block U b).refs
+  /-- And the same payload. -/
+  payload : ∀ b, b ∈ R.ids U → R₀ ≤ (R.block U b).round →
+    (R.block U' b).payload = (R.block U b).payload
 
 /-- **Two universes agree above a round**: `RebasedAbove` at no
 offset. -/

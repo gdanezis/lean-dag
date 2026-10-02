@@ -39,7 +39,7 @@ theorem agreeBand_mm
     (h : AgreeBand (AsyncBlueBottle.asyncBlueBottleAnchored Validator BlockId Payload).toDagRule
       U U' lo hi g g') :
     AgreeBand (MahiMahi.mahiMahiAnchored Validator BlockId Payload 3).toDagRule U U' lo hi g g' :=
-  ⟨h.mem, h.block, h.refs⟩
+  ⟨h.mem, h.block, h.refs, h.payload⟩
 
 /-- **The voters for a candidate are the voters they were**: each reads a
 cone the band settles. -/

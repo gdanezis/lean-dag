@@ -23,7 +23,7 @@ namespace Bluestreak
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
-variable {U : Universe Validator BlockId Payload} [ClaimMap BlockId]
+variable [Format BlockId Payload] {U : Universe Validator BlockId Payload}
 variable [S : Slots Validator]
 variable {T : Finset Validator} {N R : ℕ} {k : ℕ} {L : BlockId}
 
@@ -35,11 +35,18 @@ def BackedIn (U : Universe Validator BlockId Payload) (h : Finset BlockId) (L : 
     Prop :=
   quorumCard Validator ≤ (creatorsOf U.block (votesFor U L ((U.block L).round + 1) ∩ h)).card
 
+/-- `Y`'s claim is backed within the holdings `h`: from round two up, it
+names a block two rounds below, backed within `h`. -/
+def BackedClaimIn (U : Universe Validator BlockId Payload) (h : Finset BlockId) (Y : BlockId) :
+    Prop :=
+  ∀ L, claimOf U Y = some L → 2 ≤ (U.block Y).round →
+    (U.block L).round + 2 = (U.block Y).round ∧ BackedIn U h L
+
 /-- `X` is referenceable from the holdings `h`: held, with every claim in
 its causal history backed within `h`. -/
 def Referenceable (U : Universe Validator BlockId Payload) (h : Finset BlockId) (X : BlockId) :
     Prop :=
-  X ∈ h ∧ ∀ Y, Reaches U X Y → ∀ L, claim Y = some L → BackedIn U h L
+  X ∈ h ∧ ∀ Y, Reaches U X Y → BackedClaimIn U h Y
 
 theorem BackedIn.mono {h h' : Finset BlockId} (hh : h ⊆ h') (hb : BackedIn U h L) :
     BackedIn U h' L :=
@@ -47,7 +54,7 @@ theorem BackedIn.mono {h h' : Finset BlockId} (hh : h ⊆ h') (hb : BackedIn U h
 
 theorem Referenceable.mono {h h' : Finset BlockId} (hh : h ⊆ h') {X : BlockId}
     (hr : Referenceable U h X) : Referenceable U h' X :=
-  ⟨hh hr.1, fun Y hY L hL => (hr.2 Y hY L hL).mono hh⟩
+  ⟨hh hr.1, fun Y hY L hL h2 => ⟨(hr.2 Y hY L hL h2).1, (hr.2 Y hY L hL h2).2.mono hh⟩⟩
 
 /-- Backed within holdings of the record is certified. -/
 theorem certified_of_backedIn {h : Finset BlockId} (hb : BackedIn U h L) : Certified U L :=
@@ -55,14 +62,14 @@ theorem certified_of_backedIn {h : Finset BlockId} (hb : BackedIn U h L) : Certi
 
 /-! ## The schedule -/
 
-/-- **Bluestreak's reactive schedule**: the reactive timing, the format
-check safety reads, the referencing discipline of correct validators,
-and the two wait clauses of the pull pacemaker. -/
+/-- **Bluestreak's reactive schedule**: the reactive timing, the tagging
+and referencing discipline of correct validators, and the two wait
+clauses of the pull pacemaker. -/
 structure ReactiveB (U : Universe Validator BlockId Payload) (T : Finset Validator) (N : ℕ)
     extends ReactiveCore U T N where
-  /-- A certified block is quorate: what the receivers' format check on
-  leader blocks leaves where safety reads it. -/
-  certified_quorate : ∀ A ∈ U.ids, Certified U A → Quorate U A
+  /-- A correct validator tags its block at a slot it leads. -/
+  leader_tagged : ∀ k, S.leader k ∈ (Correct : Finset Validator) →
+    ∀ L, IsLeaderBlock U k L → Tagged U L
   /-- A correct validator references only what was referenceable from
   its holdings when it built. -/
   refs_referenceable : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
@@ -72,7 +79,7 @@ structure ReactiveB (U : Universe Validator BlockId Payload) (T : Finset Validat
   built. -/
   claim_held : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = v → (U.block b).round = n →
-    ∀ L, claim b = some L → BackedIn U (holds v (built v n)) L
+    BackedClaimIn U (holds v (built v n)) b
   /-- **The leader wait.** At the round above a reliable leader, any
   `T`-authored block either votes, or its builder waited the full
   timeout and votes for the leader block if it is then referenceable. -/
@@ -106,20 +113,20 @@ holdings at build time: the block's own claim by `claim_held`, an
 inherited one by `refs_referenceable`. -/
 theorem backedIn_of_reaches {v : Validator} (hv : v ∈ (Correct : Finset Validator))
     {b X : BlockId} (hb : b ∈ U.ids) (hbc : (U.block b).creator = v)
-    (hbX : Reaches U b X) (hcl : claim X = some L) :
-    BackedIn U (rb.holds v (rb.built v (U.block b).round)) L := by
+    (hbX : Reaches U b X) :
+    BackedClaimIn U (rb.holds v (rb.built v (U.block b).round)) X := by
   rcases hbX.cases_head with rfl | ⟨j, hj, hjX⟩
-  · exact rb.claim_held v hv _ b hb hbc rfl L hcl
+  · exact rb.claim_held v hv _ b hb hbc rfl
   · have hr := U.round_of_mem_refs hb hj
     have := rb.refs_referenceable v hv ((U.block j).round) b hb hbc hr.symm j hj
     rw [← hr]
-    exact this.2 X hjX L hcl
+    exact this.2 X hjX
 
 /-- **The discipline holds of the execution.** -/
 theorem disciplined (rb : ReactiveB U T N) : Disciplined U where
-  certified_quorate := rb.certified_quorate
-  honest_backed := fun B hB hc _ hBX _ hcl =>
-    certified_of_backedIn (rb.backedIn_of_reaches hc hB rfl hBX hcl)
+  honest_backed := fun B hB hc _ hBX _ hcl h2 =>
+    have h := rb.backedIn_of_reaches hc hB rfl hBX _ hcl h2
+    ⟨h.1, certified_of_backedIn h.2⟩
 
 /-! ## Timely referenceability -/
 
@@ -129,7 +136,7 @@ theorem referenceable_own (hT : T ⊆ (Correct : Finset Validator)) {u : Validat
     {b : BlockId} (hb : b ∈ U.ids) (hbc : (U.block b).creator = u) (hN : (U.block b).round ≤ N) :
     Referenceable U (rb.holds u (rb.built u (U.block b).round)) b :=
   ⟨rb.holds_own u hu _ hN b hb hbc rfl,
-    fun X hbX L hcl => rb.backedIn_of_reaches (hT hu) hb hbc hbX hcl⟩
+    fun X hbX => rb.backedIn_of_reaches (hT hu) hb hbc hbX⟩
 
 /-- **A reliable block is referenceable wherever it has arrived**: its
 author's holdings at the build, which back every claim in its cone,
@@ -213,7 +220,8 @@ theorem claimsOn (hT : T ⊆ (Correct : Finset Validator))
     (hcard : quorumCard Validator ≤ T.card) (hgst : rb.gst ≤ R)
     (hto : ∀ n, R ≤ n → 2 * rb.delay + rb.proc ≤ rb.timeout n) :
     ClaimsOn U T R := by
-  intro k hR hlead L hL v hv c hc hcc hcr
+  intro k hR hlead L hL
+  refine ⟨rb.leader_tagged k (hT hlead) L hL, fun v hv c hc hcc hcr => ?_⟩
   by_cases hN : S.slotRound k + 2 ≤ N
   · exact rb.claimsAt hT hcard hgst hto hR hN hlead hL v hv c hc hcc hcr
   · have := rb.rounds_le c hc; omega
@@ -243,7 +251,7 @@ theorem decided_local (hT : T ⊆ (Correct : Finset Validator))
   obtain ⟨L, hLm, hLc, hLr⟩ :=
     rb.toPaceCore.populatedOn hcard (S.slotRound k) (by omega) (S.leader k) hlead
   have hL : IsLeaderBlock U k L := ⟨hLm, hLr, hLc⟩
-  refine ⟨L, hL, fun v hv => Decided.directCommit hL ?_⟩
+  refine ⟨L, hL, fun v hv => Decided.directCommit hL ⟨?_, rb.leader_tagged k (hT hlead) L hL⟩⟩
   refine directCommitIn_of_claimsAt_held hcard hL (rb.toPaceCore.populatedOn hcard _ hN)
     (rb.claimsAt hT hcard hgst hto hR hN hlead hL) fun c hc hcT hcr => ?_
   exact rb.mem_viewAt (rb.holds_roundBlocks hN
