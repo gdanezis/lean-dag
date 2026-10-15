@@ -10468,6 +10468,11 @@ function of two rounds or more: the band rebases every round by a
 constant, under which a wave read from the round number would move,
 while the wave read at the slot's kind, which a rebase carries with the
 slot's leader, does not (`target-properties.md` §3.4c, `docs/kinds.md`).
+The universe is the core's, so the carrier reads as records with every
+map the identity (`SteelheadProperties.onRecord`), and every verdict cell
+of the cut, the copy fill and re-genesis is `Properties/Arcs/Record.lean`
+at that instance; chain quality is the arc at `Quorate` and
+`CommitsCandidate` (`steelhead_card_correct_le_two_mul`).
 
 ### 24.7 The mistimed leader timeout
 

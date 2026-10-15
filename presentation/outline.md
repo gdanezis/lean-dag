@@ -1979,8 +1979,8 @@ correct creators counted, 2 of 3.
 **Notes.** `card_coveredAt_ge_of_decided`
 (LeanDag/Properties/Arcs/Quality.lean:96); `mem_history_of_decided_commit`
 (:150); `committed_of_correct_block` (:195); `chain_quality` (:223). Coverage
-instances: LeanDagTest/Quality/Generic.lean. Steelhead's coverage instance is
-not written; its inclusion is in `liveness`
+instances: LeanDagTest/Quality/Generic.lean (Steelhead's is
+`steelhead_card_correct_le_two_mul`); its inclusion is in `liveness`
 (LeanDag/Steelhead/Properties.lean:301).
 
 ### Slide 73 — Coverage does not give inclusion
@@ -2321,15 +2321,15 @@ composite settles at round 15.
 > From Banded, Agree and Law 1: across any stack, verdicts above the settling
 > round are preserved, views agree, and the liveness precondition is
 > preserved.
-> The cut, fill and re-genesis are each built once, and serve ten of the
-> eleven rules.
+> The cut, fill and re-genesis are each built once, and serve all eleven
+> rules.
 
 **Figure.** A grid rules × mechanisms (cut, fill, re-genesis, prompt skip,
-coverage, inclusion), ✓ / — / open.
+coverage, inclusion), ✓ / —.
 
 **Notes.** `Stack.safe_and_live` (Stack.lean:109). `onRecord` instances for
 Nemo, Mysticeti, Odontoceti, Hybrid, FinWhale, Hydrozoan, Optimal-Hydrozoan,
-Bluestreak, Mahi-Mahi, Async BlueBottle; none for Steelhead.
+Bluestreak, Mahi-Mahi, Async BlueBottle, Steelhead.
 
 ## IV.8 Adaptive leaders (slides 88–90)
 
@@ -2510,7 +2510,6 @@ under `MoveDiscipline`). Witnesses `ULive`, `UTri`
 **Text.**
 > - Adaptive leaders are proved generically; no rule has its own instance yet,
 >   and no score that moves more than one slot per validator is shown live.
-> - Steelhead: fill, re-genesis, and the coverage half of chain quality.
 > - Barbouni (proposed): change the schedule only at verdicts already decided.
 > - Checkpoints: the broadcast algorithm is assumed, not modelled.
 
@@ -2519,9 +2518,9 @@ under `MoveDiscipline`). Witnesses `ULive`, `UTri`
 **Notes.** Generic adaptive liveness: `liveOfAnchored`
 (LeanDag/Barnacle/Model/Anchored.lean:70); `Timed.descent_of_support`
 (LeanDag/Timed/Coverage.lean:189), applied at 9 rules. `swapScore` and
-`commitScore` are live as permutations (`liveOn_of_permuted`). Steelhead has
-no `onRecord`. `AuthenticatedBroadcast` (LeanDag/Checkpoint/RecoverySpec.lean:29)
-is an assumed contract. (informal) Barbouni is in `docs/barbouni.md` only.
+`commitScore` are live as permutations (`liveOn_of_permuted`).
+`AuthenticatedBroadcast` (LeanDag/Checkpoint/RecoverySpec.lean:29) is an
+assumed contract. (informal) Barbouni is in `docs/barbouni.md` only.
 
 ### Slide 96 — The development
 
