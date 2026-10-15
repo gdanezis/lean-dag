@@ -78,20 +78,20 @@
           <tr><td>Bluestreak</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td></tr>
           <tr><td>Mahi-Mahi</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td></tr>
           <tr><td>Async BlueBottle</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td></tr>
-          <tr><td>Steelhead</td><td class="yes">✓</td><td class="no">open</td><td class="no">open</td><td class="no">—</td><td class="no">open</td><td class="yes">✓</td></tr>
+          <tr><td>Steelhead</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td></tr>
         </tbody>
       </table>
-      <figcaption class="caption">Mechanisms proved per rule: ✓ proved; — not shown; open: listed as open work (slide 89).</figcaption>
+      <figcaption class="caption">Mechanisms proved per rule: ✓ proved; — not shown.</figcaption>
     </figure>
   </div>
-  <!-- Evidence: <p><code>Stack.safe_and_live</code> (Stack.lean:109). <code>onRecord</code> instances for Nemo, Mysticeti, Odontoceti, Hybrid, FinWhale, Hydrozoan, Optimal-Hydrozoan, Bluestreak, Mahi-Mahi, Async BlueBottle; none for Steelhead. Steelhead's cut cell is its own <code>localTruncate</code> (LeanDag/Steelhead/Properties.lean:146).</p> <p>Grid sources: prompt skip where SkipsUnsupported holds (slides 60, 76: Mysticeti, Odontoceti, Hybrid, Hydrozoan, Bluestreak); coverage for every rule except Bluestreak, Steelhead's instance not written (slide 67; LeanDagTest/Quality/Generic.lean); inclusion for the seven rules with SelfParent and NoEquiv (slides 60, 67; Steelhead's in <code>liveness</code>, LeanDag/Steelhead/Properties.lean:301).</p> -->
+  <!-- Evidence: <p><code>Stack.safe_and_live</code> (Stack.lean:109). <code>onRecord</code> instances for Nemo, Mysticeti, Odontoceti, Hybrid, FinWhale, Hydrozoan, Optimal-Hydrozoan, Bluestreak, Mahi-Mahi, Async BlueBottle, Steelhead (<code>SteelheadProperties.onRecord</code>, LeanDag/Steelhead/Record.lean).</p> <p>Grid sources: prompt skip where SkipsUnsupported holds (slides 60, 76: Mysticeti, Odontoceti, Hybrid, Hydrozoan, Bluestreak); coverage for every rule except Bluestreak (slide 67; LeanDagTest/Quality/Generic.lean, Steelhead: <code>steelhead_card_correct_le_two_mul</code>); inclusion for the seven rules with SelfParent and NoEquiv (slides 60, 67; Steelhead's in <code>liveness</code>, LeanDag/Steelhead/Properties.lean:301).</p> -->
   <aside class="notes">
     <ul>
       <li>For any rule with Banded, Agree and a support, every stack of cuts, fills and re-geneses preserves safety and liveness above the composite settling round; this is proved in Lean.</li>
       <li>A stack is a finite sequence of mechanisms. The theorem has three conclusions: a verdict at a slot above the settling round is the same before and after the stack, at the renumbered slot; any view of the result agrees with the original view on those verdicts; and the liveness precondition of the support carries over to the renumbered slots.</li>
-      <li>The table has one row per rule and one column per mechanism: ✓ means proved for that rule, — means not shown, and “open” means listed as open work on slide 89.</li>
-      <li>The cut, the fill and the re-genesis are each built once, on a common record of the DAG, and ten of the eleven rules provide that record. Steelhead does not: its cut is its own construction, and its fill and re-genesis are open.</li>
-      <li>The prompt skip is ticked for the five rules with SkipsUnsupported. Coverage and inclusion are the two halves of chain quality (slide 67): coverage is shown for every rule except Bluestreak and is open for Steelhead, and inclusion is ticked for the seven rules with SelfParent and NoEquiv.</li>
+      <li>The table has one row per rule and one column per mechanism: ✓ means proved for that rule, and — means not shown.</li>
+      <li>The cut, the fill and the re-genesis are each built once, on a common record of the DAG; every rule reads its universes as that record, so each gets all three by one instance and no new proof.</li>
+      <li>The prompt skip is ticked for the five rules with SkipsUnsupported. Coverage and inclusion are the two halves of chain quality (slide 67): coverage is shown for every rule except Bluestreak, and inclusion is ticked for the seven rules with SelfParent and NoEquiv.</li>
       <li>The next slides turn to a mechanism that changes the leader schedule itself.</li>
     </ul>
   </aside>
@@ -379,18 +379,16 @@
     <div class="text">
       <ul>
         <li>Adaptive leaders are proved generically; no rule has its own instance yet, and no concrete score that gives one validator several positions of the cycle is shown live.</li>
-        <li>Steelhead: fill, re-genesis, and the coverage half of chain quality.</li>
         <li>Barbouni (proposed): change the schedule only at verdicts already decided.</li>
         <li>Checkpoints: the broadcast algorithm is assumed, not modelled.</li>
       </ul>
     </div>
   </div>
-  <!-- Evidence: <p>Generic adaptive liveness: <code>liveOfAnchored</code> (LeanDag/Barnacle/Model/Anchored.lean:70); <code>Timed.descent_of_support</code> (LeanDag/Timed/Coverage.lean:189), applied at 9 rules. <code>swapScore</code> and <code>commitScore</code> are live as permutations (<code>liveOn_of_permuted</code>). Steelhead has no <code>onRecord</code>. <code>AuthenticatedBroadcast</code> (LeanDag/Checkpoint/RecoverySpec.lean:29) is an assumed contract. (informal) Barbouni is in <code>docs/barbouni.md</code> only.</p> -->
+  <!-- Evidence: <p>Generic adaptive liveness: <code>liveOfAnchored</code> (LeanDag/Barnacle/Model/Anchored.lean:70); <code>Timed.descent_of_support</code> (LeanDag/Timed/Coverage.lean:189), applied at 9 rules. <code>swapScore</code> and <code>commitScore</code> are live as permutations (<code>liveOn_of_permuted</code>). <code>AuthenticatedBroadcast</code> (LeanDag/Checkpoint/RecoverySpec.lean:29) is an assumed contract. (informal) Barbouni is in <code>docs/barbouni.md</code> only.</p> -->
   <aside class="notes">
     <ul>
       <li>This slide lists what the development does not yet prove.</li>
       <li>Adaptive leaders: safety and liveness are proved for any rule with the required properties, but no rule has its own adaptive instance. The two concrete scores in the deck are shown live because each produces a permutation of the rotation; a score that gives one validator several positions of the cycle is not shown live.</li>
-      <li>Steelhead lacks the common record that the cut, fill and re-genesis are built on; its fill, re-genesis and the coverage half of chain quality are open.</li>
       <li>Barbouni is a proposal, described in the documentation only: it would change the schedule only at verdicts already decided. Nothing about it is proved.</li>
       <li>Checkpoints: the authenticated broadcast at an epoch change is an assumed contract, not a modelled algorithm.</li>
     </ul>
@@ -473,7 +471,7 @@
       <li>Middle column: four properties, Banded, Agree, CommitsCandidate and Indirect, and a support per rule with Law 1 and Law 2.</li>
       <li>Right column: each mechanism is proved once against those properties; the pacemaker is per rule, and Red Snapper uses only the anchors.</li>
       <li>Safety holds with no network assumption; liveness follows from view convergence.</li>
-      <li>Open: adaptive-leader instances for particular rules, Steelhead's fill, re-genesis and coverage, Barbouni, and a model of the checkpoint broadcast (slide 89).</li>
+      <li>Open: adaptive-leader instances for particular rules, Barbouni, and a model of the checkpoint broadcast (slide 89).</li>
     </ul>
   </aside>
 </section>

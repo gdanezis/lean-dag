@@ -7,6 +7,7 @@ import LeanDag.Hybrid.Carrier
 import LeanDag.OptimalHydrozoan.Carrier
 import LeanDag.MahiMahi.Carrier
 import LeanDag.AsyncBlueBottle.Carrier
+import LeanDag.Steelhead.Properties
 /-!
 # Chain quality for a second and third rule
 
@@ -31,10 +32,11 @@ configuration, and CQ2 takes the extra condition as a hypothesis for
 exactly this reason. Optimal-Hydrozoan is the same universe and the
 same fault model, so it lands the same way.
 
-**Odontoceti**, **Hybrid** and **Async BlueBottle** take the whole of
-it, all three being the core's `BlockUniverse` at their own committees. **Nemo** takes it at a
-different shape again: crash-only, nobody equivocates, so the reliable
-set is everyone and the slack is what a majority may miss.
+**Odontoceti**, **Hybrid**, **Async BlueBottle** and **Steelhead** take the
+whole of it, all four being the core's `BlockUniverse` at their own
+committees. **Nemo** takes it at a different shape again: crash-only,
+nobody equivocates, so the reliable set is everyone and the slack is what
+a majority may miss.
 
 `scripts/audit-mechanisms.py` is what asked for these: the properties
 were there and nobody had collected them.
@@ -246,6 +248,32 @@ theorem asyncBlueBottle_card_correct_le_two_mul (S : Slots Validator)
 
 end AsyncBlueBottle
 
+section Steelhead
+
+variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
+variable [F : Faults Validator]
+variable {B : Type} [LinearOrder B] {Payload : Type}
+
+/-- **CQ2 for Steelhead**, at every wavelength function: its universe is
+the core's, so the fault model is the core's and the arc applies whole. -/
+theorem steelhead_card_correct_le_two_mul (w : ℕ → ℕ) (S : Slots Validator)
+    {U : BlockUniverse Validator B Payload}
+    {V : LeanDag.View Validator B Payload U} {k : ℕ} {L : B} {δ : ℕ}
+    (h : (LeanDag.SteelheadProperties.steelheadRule (Payload := Payload) w).Decided
+      S V k (some L))
+    (hδ : δ < (U.block L).round) :
+    (Correct : Finset Validator).card ≤
+      2 * (coveredAt (LeanDag.SteelheadProperties.steelheadRule (Payload := Payload) w)
+        (coreReliability Validator) U L δ).card :=
+  card_correct_le_two_mul_coveredAt_of_decided (LeanDag.SteelheadProperties.quorate w)
+    (LeanDag.SteelheadProperties.commitsCandidate w)
+    (by
+      simp only [coreReliability_correct, coreReliability_slack]
+      have := two_f_add_one_le_card_correct (Validator := Validator)
+      omega) h hδ
+
+end Steelhead
+
 #print axioms LeanDagTest.finWhale_card_coveredAt_ge_of_decided
 #print axioms LeanDagTest.finWhale_card_correct_le_two_mul
 #print axioms LeanDagTest.hydrozoan_card_coveredAt_ge_of_decided
@@ -255,5 +283,6 @@ end AsyncBlueBottle
 #print axioms LeanDagTest.optimal_card_coveredAt_ge_of_decided
 #print axioms LeanDagTest.mahiMahi_card_correct_le_two_mul
 #print axioms LeanDagTest.asyncBlueBottle_card_correct_le_two_mul
+#print axioms LeanDagTest.steelhead_card_correct_le_two_mul
 
 end LeanDagTest
