@@ -1,11 +1,13 @@
 import LeanDag.Scheme.Equiv.Statement
 import LeanDag.Scheme.Helpers.Variants
+import LeanDag.Scheme.Helpers.Buffered
 /-!
 # The scheme's rows as carriers — proof
 
 Each row reads what its rule reads (`Helpers/Rows.lean`,
-`Helpers/Variants.lean`), so the decision relations are equal
-(`ReadAlike.decided_iff`) and so are the carriers (`toDagRule_eq`).
+`Helpers/Variants.lean`, `Helpers/Buffered.lean`), so the decision
+relations are equal (`ReadAlike.decided_iff`) and so are the carriers
+(`toDagRule_eq`).
 -/
 
 namespace LeanDag
@@ -36,8 +38,24 @@ theorem nemoNemoRow : NemoNemoRow := by
   have h := toDagRule_eq fun S U V k v => (readAlike_nemo (S := S) σ U hn).decided_iff
   exact ⟨h, h ▸ AnchoredRule.agree nemoBlameLaws⟩
 
+theorem mahiMahiRow : MahiMahiRow := by
+  intro Validator BlockId Payload _ _ F _ w hw
+  exact toDagRule_eq fun S U V k v => (readAlike_mahiMahi (S := S) hw U).decided_iff
+
+theorem blueBottleAsyncRow : BlueBottleAsyncRow := by
+  intro Validator BlockId Payload _ _ F _
+  exact toDagRule_eq fun S U V k v => (readAlike_blueBottleAsync (S := S) U).decided_iff
+
+theorem cordialMinersAsyncRow : CordialMinersAsyncRow := by
+  intro Validator BlockId Payload _ _ F _
+  have h := toDagRule_eq fun S U V k v => (readAlike_cordialAsync (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) (S := S) U).decided_iff
+  exact ⟨h, h ▸ AnchoredRule.agree (cordialAsyncLaws (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload) (w := 5) (by omega))⟩
+
 theorem holds : Statement :=
-  ⟨mysticetiRow, blueBottlePSRow, orcaellaRow, cordialMinersPSRow, nemoNemoRow⟩
+  ⟨mysticetiRow, blueBottlePSRow, orcaellaRow, cordialMinersPSRow, nemoNemoRow,
+    mahiMahiRow, blueBottleAsyncRow, cordialMinersAsyncRow⟩
 
 end Equiv
 

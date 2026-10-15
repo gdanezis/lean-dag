@@ -513,11 +513,13 @@ import LeanDag.RedSnapper.Five.Termination.Proof
 import LeanDag.Scheme.Model.Params
 import LeanDag.Scheme.Model.Rule
 import LeanDag.Scheme.Model.Variants
+import LeanDag.Scheme.Model.LeastSel
 import LeanDag.Scheme.Table.Statement
 import LeanDag.Scheme.Table.Proof
 import LeanDag.Scheme.Helpers.Transfer
 import LeanDag.Scheme.Helpers.Votes
 import LeanDag.Scheme.Helpers.Rows
 import LeanDag.Scheme.Helpers.Variants
+import LeanDag.Scheme.Helpers.Buffered
 import LeanDag.Scheme.Equiv.Statement
 import LeanDag.Scheme.Equiv.Proof

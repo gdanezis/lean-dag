@@ -554,8 +554,9 @@ Async BlueBottle's two-round rule at a three-round wave
 Bluestreak's claims in place of certificates
 (`Bluestreak.bluestreakLaws` (BS5), `Bluestreak.ReactiveB.decided_local` (BS12)).
 §27 states the unified decider of the Mysticeti codebase as a rule,
-checks its table (`Scheme.Table.holds` (SC1)), and reads five of its
-rows as rules of this development (`Scheme.Equiv.holds` (SC4–SC6)).
+checks its table (`Scheme.Table.holds` (SC1)), and reads eight of its
+rows as rules of this development, three of them at the least vote
+(`Scheme.Equiv.holds` (SC4–SC6, SC9)).
 
 **The development has four kinds of arc, and the source says which each
 is.** A **commit rule** carries a universe, a decision relation, the
@@ -11605,8 +11606,10 @@ protocol of its table, which differ only in six parameters: the wave
 length, whether a vote is its own certificate, and the commit, skip,
 certificate and link thresholds. This section states the decider as an
 anchored rule (§3), checks the claims its table makes as arithmetic, and
-proves that at five of its rows the decider is a rule already in this
+proves that at eight of its rows the decider is a rule already in this
 development, or a rule that differs from one only in its direct skip.
+Three of the eight have buffer rounds and are read at one vote-selection
+rule, the least vote.
 No rule of §§3–26 is changed. A **SC**-label marks each result.
 
 ### 27.1 The parameters and what the table claims
@@ -11648,8 +11651,9 @@ references in their stored order and returns the first block of the slot
 it meets. The block record keeps references as a set, so the vote is a
 `Scheme.VoteSel`: any rule that returns a block of the slot in the
 voter's history when the history holds one, and nothing otherwise. Every
-result below holds at every such rule; `leastSel`, which votes for the
-least block of the slot in the history, is one (SC7).
+result of §27.4 holds at every such rule; `Scheme.leastSel`, which votes
+for the least block of the slot in the history, is one (SC7), and the
+rows of §27.5 are read at it.
 
 ### 27.3 Two rules that read alike decide alike
 
@@ -11707,17 +11711,47 @@ vote for the candidate exists for a commit or a link to read
 history, so the rule requires its anchor to be a block of the record,
 which every committed block is.
 
-### 27.5 What the arc does not contain
+### 27.5 Three rows with buffer rounds, at the least vote
 
-The rows whose vote round lies further above the candidate — Mahi-Mahi,
-Blue Bottle Async, Cordial Miners Async and the asynchronous derived
-rows — are not read here. There a voter's history can hold both twins of
-an equivocating leader, and the scheme's first block in reference order
-and this development's least block can be different votes, so their
-verdicts can differ on such a record. The design record argues that
-safety needs only that the vote be unique and computed from the block
-(`mahi-mahi.md` §2); a proof would state the laws for every
-vote-selection rule. The derived rows Hybrid Mysticeti, Async Orcaella,
+When the vote round lies more than one round above the candidate, a
+voter's history can hold both twins of an equivocating leader, and two
+vote-selection rules can name different twins. Two facts hold at every
+such round (SC8). Every vote-selection rule blames a slot exactly when
+the voter's history holds no block of it (`Scheme.sel_eq_none_iff_blames`),
+which is Mahi-Mahi's blame; and the least vote is Mahi-Mahi's vote
+(`Scheme.leastSel_votes_iff`). At the least vote, the decider's
+certificate, blame and link sets at these rows are therefore Mahi-Mahi's
+and Async BlueBottle's, and `Scheme.Equiv.holds` (SC9) takes three rows:
+
+| Row | Is | Condition |
+|:---|:---|:---|
+| Mahi-Mahi at wave `w` | `MahiMahiProperties.mahiMahiRule w` | `w ≥ 3` |
+| Blue Bottle Async | `AsyncBlueBottleProperties.asyncBlueBottleRule` | none |
+| Cordial Miners Async | Mahi-Mahi at wave five with no direct skip, `cordialAsyncAnchored 5` | none |
+
+The thresholds, fault bounds and wave lengths of the first two rows are
+those of the rules: `n − f` for the direct commit, the direct skip and
+the certificate, at `n ≥ 3f + 1` for Mahi-Mahi and `n ≥ 5f + 1` for
+Async BlueBottle, with Async BlueBottle's indirect threshold `n − 3f`.
+Mahi-Mahi has no tie-break; there two linked candidates of one slot are
+one block by certificate uniqueness, so the scheme's least choice is the
+one linked candidate. On the core's universe the leader's vote-round
+block holds, through its self-parent chain, a block of the leader at the
+candidate's round (`exists_self_ancestor`), so it never blames its slot
+and `n` blames never occur at any wave: Cordial Miners Async is
+Mahi-Mahi's rule with no direct skip, which has Mahi-Mahi's laws
+(`Scheme.cordialAsyncLaws`).
+
+### 27.6 What the arc does not contain
+
+The rows of §27.5 are read at the least vote only. At the scheme's own
+vote, the first block of the slot in reference order, their verdicts can
+differ from the least vote's on a record holding both twins. Mahi-Mahi's
+safety proof uses its vote through three facts: a block votes for at
+most one block of a slot, a vote lies in the voter's history, and a vote
+is not a blame. Every vote-selection rule has the three, so the laws are
+expected to hold at every such rule; that is argued here and not proved.
+The derived rows Hybrid Mysticeti, Async Orcaella,
 Async Nemo-Nemo and Hybrid Mahi-Mahi have their inequalities checked
 (SC1) and no laws. The commit loop *TryDecide*, which scans slots
 downward and outputs the longest decided prefix, is read through
@@ -12009,10 +12043,10 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Quality/Inclusion.lean` | post-`R` inclusion (CQ5, CQ6) |
 | `Quality/Capstone.lean` | the windowed bounds and `chain_quality` (CQ7) |
 | `LeanDagTest/` | the models of §28 and the witness files of every arc |
-| `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, and the two rule variants its rows name |
+| `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, the least vote `leastSel`, and the three rule variants its rows name |
 | `Scheme/Table/` | the table's inequalities and the claims of its reading paragraph, SC1 |
-| `Scheme/Helpers/` | two rules that read alike decide alike (SC2); votes one round up (SC3); the rows' readings and the variants' laws |
-| `Scheme/Equiv/` | five rows as carriers, SC4–SC6 |
+| `Scheme/Helpers/` | two rules that read alike decide alike (SC2); votes one round up (SC3); votes further up (SC8); the rows' readings and the variants' laws |
+| `Scheme/Equiv/` | eight rows as carriers, SC4–SC6 and SC9 |
 
 **The support graph, extracted.** The dependency structure of the
 development is not documented by hand: `scripts/DepGraph.lean` walks
@@ -12932,7 +12966,9 @@ reused.
 | SC4 | the Mysticeti, Blue Bottle PS and Orcaella rows are the core's, Odontoceti's and Hybrid's carriers, Orcaella at `n = 5f + 3c + 1` | `Scheme.Equiv.mysticetiRow`, `Scheme.Equiv.blueBottlePSRow`, `Scheme.Equiv.orcaellaRow` *(Scheme/Equiv)* |
 | SC5 | Cordial Miners PS is the core with no direct skip, with the core's laws | `Scheme.cordialLaws`, `Scheme.Equiv.cordialMinersPSRow` *(Scheme/Equiv)* |
 | SC6 | Nemo-Nemo at `n = 2c + 1` is Nemo with a direct skip on a blame from every validator, with Nemo's laws | `Scheme.nemoBlameLaws`, `Scheme.Equiv.nemoNemoRow` *(Scheme/Equiv)* |
-| SC7 | a vote-selection rule exists: the least block of the slot in the voter's history | `leastSel` *(LeanDagTest/Scheme/LeastSel)* |
+| SC7 | a vote-selection rule exists: the least block of the slot in the voter's history | `Scheme.leastSel` *(Scheme/Model/LeastSel)* |
+| SC8 | below the voter, every vote-selection rule blames as Mahi-Mahi blames, and the least vote is Mahi-Mahi's vote | `Scheme.sel_eq_none_iff_blames`, `Scheme.leastSel_votes_iff` *(Scheme/Helpers/Buffered)* |
+| SC9 | at the least vote, the Mahi-Mahi row at `w ≥ 3` is Mahi-Mahi's carrier, the Blue Bottle Async row is Async BlueBottle's, and the Cordial Miners Async row is Mahi-Mahi at wave five with no direct skip, with Mahi-Mahi's laws | `Scheme.Equiv.mahiMahiRow`, `Scheme.Equiv.blueBottleAsyncRow`, `Scheme.Equiv.cordialMinersAsyncRow`, `Scheme.cordialAsyncLaws` *(Scheme/Equiv)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -13007,7 +13043,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 404 definitions and structures the report names, in
+The 405 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19777,6 +19813,38 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
 
 The filled block at gap round `k`: `v2`'s references at that round, plus the added self reference.
 
+#### `leastSel`
+
+*def, `Scheme.Model.LeastSel.lean`*
+
+```lean
+def leastSel : VoteSel Validator BlockId Payload P honest where
+  sel U b a r := if h : (slotIn U b a r).Nonempty then some ((slotIn U b a r).min' h) else none
+  below U b a r hr := by
+    have : slotIn U b a r = ∅ := if_pos hr
+    simp only [this, Finset.not_nonempty_empty, dite_false]
+  sound U b a r x hx := by
+    by_cases hs : (slotIn U b a r).Nonempty
+    · rw [dif_pos hs, Option.some.injEq] at hx
+      have hm := Finset.min'_mem _ hs
+      rw [hx] at hm
+      by_cases hr : (U.block b).round ≤ r
+      · simp [slotIn, hr] at hm
+      · simp only [slotIn, hr, if_false, Finset.mem_filter] at hm
+        exact ⟨hm.1, hm.2.1, hm.2.2⟩
+    · rw [dif_neg hs] at hx
+      exact absurd hx (by simp)
+  complete U b a r hr hsel x hx hc hxr := by
+    have hmem : x ∈ slotIn U b a r := by
+      simp only [slotIn, show ¬ (U.block b).round ≤ r by omega, if_false, Finset.mem_filter]
+      exact ⟨hx, hc, hxr⟩
+    have hne : (slotIn U b a r).Nonempty := ⟨x, hmem⟩
+    rw [dif_pos hne] at hsel
+    exact absurd hsel (by simp)
+```
+
+**The least block of the slot in the voter's history.**
+
 #### `Params`
 
 *structure, `Scheme.Model.Params.lean`*
@@ -19919,7 +19987,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 603 theorems the body or Appendix A names, each
+The 604 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -21077,6 +21145,19 @@ theorem creators_refs_eq_correct (hdos : DoSValid U) {b : BlockId} (hb : b ∈ U
 ```
 
 **D15a at the bound.** Once a block has caught the whole fault budget, its references are exactly the correct validators.
+
+#### `exists_self_ancestor`
+
+*theorem, `DoS.SelfParent.lean`*
+
+```lean
+theorem exists_self_ancestor {b : BlockId} (hb : b ∈ U.ids) {t : ℕ}
+    (ht : t ≤ (U.block b).round) :
+    ∃ i ∈ history U b,
+      (U.block i).creator = (U.block b).creator ∧ (U.block i).round = t
+```
+
+**D20 (chains reach the ground).** A block's history holds a block by its own author at every round below it.
 
 #### `card_missingAt_le`
 

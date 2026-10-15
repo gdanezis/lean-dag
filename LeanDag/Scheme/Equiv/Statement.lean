@@ -1,9 +1,12 @@
 import LeanDag.Scheme.Model.Rule
 import LeanDag.Scheme.Model.Variants
+import LeanDag.Scheme.Model.LeastSel
 import LeanDag.Mysticeti.Properties
 import LeanDag.Odontoceti.Carrier
 import LeanDag.Hybrid.Carrier
 import LeanDag.Nemo.Carrier
+import LeanDag.MahiMahi.Carrier
+import LeanDag.AsyncBlueBottle.Carrier
 /-!
 # The scheme's rows as carriers — statement
 
@@ -18,6 +21,13 @@ a row's parameters is a carrier of this development:
   direct skip, and two views decide alike.
 * **Nemo-Nemo** at `n = 2c + 1` is `nemoBlameAnchored`, Nemo's rule with a
   direct skip on a blame from every validator, and two views decide alike.
+
+At the least vote, the rows with buffer rounds are carriers too:
+
+* **Mahi-Mahi** at wave `w ≥ 3` is `mahiMahiRule w`, and **Blue Bottle
+  Async** is `asyncBlueBottleRule`.
+* **Cordial Miners Async** is `cordialAsyncAnchored 5`, Mahi-Mahi's rule
+  at wave five with no direct skip, and two views decide alike.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -80,9 +90,45 @@ def NemoNemoRow : Prop :=
       (nemoBlameAnchored Validator BlockId Payload).toDagRule ∧
     Agree (schemeAnchored (Params.nemoNemo (Fintype.card Validator) c) σ).toDagRule
 
-/-- The five rows, together. -/
+/-- **The Mahi-Mahi row is Mahi-Mahi's carrier** at wave `w ≥ 3`, at the
+least vote. -/
+def MahiMahiRow : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [F : Faults Validator] [LinearOrder BlockId] (w : ℕ), 3 ≤ w →
+    (schemeAnchored (Params.mahiMahi w (Fintype.card Validator) F.f)
+        (leastSel (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
+          (P := ValidWrt) (honest := Correct))).toDagRule =
+      MahiMahiProperties.mahiMahiRule (Validator := Validator) (BlockId := BlockId)
+        (Payload := Payload) w
+
+/-- **The Blue Bottle Async row is Async BlueBottle's carrier**, at the
+least vote. -/
+def BlueBottleAsyncRow : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [F : Faults5 Validator] [LinearOrder BlockId],
+    (schemeAnchored (Params.blueBottleAsync (Fintype.card Validator) F.f)
+        (leastSel (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
+          (P := ValidWrt) (honest := Correct))).toDagRule =
+      AsyncBlueBottleProperties.asyncBlueBottleRule (Validator := Validator)
+        (BlockId := BlockId) (Payload := Payload)
+
+/-- **The Cordial Miners Async row is Mahi-Mahi's rule at wave five with no
+direct skip**, at the least vote, and two views decide alike. -/
+def CordialMinersAsyncRow : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [F : Faults Validator] [LinearOrder BlockId],
+    (schemeAnchored (Params.cordialMinersAsync (Fintype.card Validator) F.f)
+        (leastSel (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
+          (P := ValidWrt) (honest := Correct))).toDagRule =
+      (cordialAsyncAnchored Validator BlockId Payload 5).toDagRule ∧
+    Agree (schemeAnchored (Params.cordialMinersAsync (Fintype.card Validator) F.f)
+        (leastSel (Validator := Validator) (BlockId := BlockId) (Payload := Payload)
+          (P := ValidWrt) (honest := Correct))).toDagRule
+
+/-- The eight rows, together. -/
 def Statement : Prop :=
-  MysticetiRow ∧ BlueBottlePSRow ∧ OrcaellaRow ∧ CordialMinersPSRow ∧ NemoNemoRow
+  MysticetiRow ∧ BlueBottlePSRow ∧ OrcaellaRow ∧ CordialMinersPSRow ∧ NemoNemoRow ∧
+    MahiMahiRow ∧ BlueBottleAsyncRow ∧ CordialMinersAsyncRow
 
 end Equiv
 

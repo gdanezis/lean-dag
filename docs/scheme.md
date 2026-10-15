@@ -29,6 +29,12 @@ are the evidence.
   `hybridRule (n − 3f − 2c)`; Cordial Miners PS and Nemo-Nemo are the
   variants of §4, each with laws and agreement. Every theorem of those
   carriers holds of the decider at those parameters.
+* **Three rows with buffer rounds are rules of the development at the
+  least vote** (`Scheme.Equiv.holds`): Mahi-Mahi at `w ≥ 3` is
+  `mahiMahiRule w`, Blue Bottle Async is `asyncBlueBottleRule`, and
+  Cordial Miners Async is `cordialAsyncAnchored 5`, Mahi-Mahi at wave five
+  with no direct skip, with Mahi-Mahi's laws. Their thresholds, fault
+  bounds and wave lengths are the rules'.
 
 **What the table claims and does not hold, or holds otherwise.**
 
@@ -59,13 +65,16 @@ are the evidence.
    The scheme's vote is the first block of the slot met in reference
    order; this development's is the least block in the voter's history.
    One round above the candidate both are the reference (`Scheme.votes_iff`),
-   which is why five rows match. With buffer rounds a voter's history can
-   hold both twins of an equivocating leader and the two votes can differ,
-   so Mahi-Mahi, Blue Bottle Async and Cordial Miners Async are not read as
-   this development's rules. Safety is expected to need only a unique vote
-   computed from the block (`mahi-mahi.md` §2); that is argued, not proved.
+   which is why five rows match at every vote. With buffer rounds a
+   voter's history can hold both twins of an equivocating leader and the
+   two votes can differ, so Mahi-Mahi, Blue Bottle Async and Cordial
+   Miners Async are read at the least vote only. Every vote blames as
+   Mahi-Mahi blames (`Scheme.sel_eq_none_iff_blames`), and Mahi-Mahi's
+   safety uses its vote only through uniqueness, membership in the
+   history and exclusion of a blame, which every vote has; safety at every
+   vote is therefore expected, and is argued, not proved.
 
-**Open.** The buffer-round rows at every vote-selection rule; the laws of
+**Open.** The buffer-round rows at votes other than the least; the laws of
 the derived rows (Hybrid Mysticeti, Async Orcaella, Async Nemo-Nemo,
 Hybrid Mahi-Mahi), whose inequalities only are checked; and the commit
 loop `TryDecide` as an algorithm.
@@ -119,10 +128,11 @@ slot met walking the voter's references in stored order. The block
 record keeps references as a `Finset`, so the vote is a parameter,
 `Scheme.VoteSel`: a selection returning a block of the slot from the
 voter's history below it when there is one, and none otherwise. Every
-claim is stated at every `VoteSel`; `LeanDagTest/Scheme/LeastSel.lean`
-builds one, the least block in the history.
+claim of the rows one round up is stated at every `VoteSel`;
+`Scheme.leastSel` is one, the least block in the history and Mahi-Mahi's
+vote, and the rows with buffer rounds are read at it (§5).
 
-## 4. Two rules the rows name
+## 4. Three rules the rows name
 
 The table writes "no direct skip" as a skip threshold of `n`.
 
@@ -131,6 +141,11 @@ The table writes "no direct skip" as a skip threshold of `n`.
   never blames its own slot and `n` blames never occur. The row is
   `cordialAnchored`, the core with no direct skip; it has the core's laws
   (`cordialLaws`).
+* **Cordial Miners Async.** The leader's vote-round block reaches a
+  block of the leader at the candidate's round through its self-parent
+  chain (`exists_self_ancestor`), so `n` blames never occur at any wave.
+  The row is `cordialAsyncAnchored 5`, Mahi-Mahi's rule at wave five with
+  no direct skip; it has Mahi-Mahi's laws (`cordialAsyncLaws`).
 * **Nemo-Nemo.** Nemo's validity has no self-parent clause, so `n`
   blames occur when every vote-round block omits the leader's block. The
   row is `nemoBlameAnchored`, Nemo's rule with that direct skip; it has
@@ -163,8 +178,21 @@ Mysticeti has no tie-break; the scheme's least choice there is the one
 linked candidate, by `coreLaws.link_unique`. Orcaella's skip threshold
 `4f + 2c + 1` equals Hybrid's `n − f − c` only at the bound.
 
-**Open.** The rows with buffer rounds (Mahi-Mahi, Blue Bottle Async,
-Cordial Miners Async and the asynchronous derived rows), where the
-scheme's first-in-order vote and the development's least vote can name
-different twins; the laws of the derived rows; and the commit loop
-`TryDecide` as an algorithm.
+At the least vote, the rows with buffer rounds (`Helpers/Buffered.lean`):
+
+| Row | Carrier | Condition |
+|:---|:---|:---|
+| Mahi-Mahi | `mahiMahiRule w` | `w ≥ 3` |
+| Blue Bottle Async | `asyncBlueBottleRule` | none |
+| Cordial Miners Async | `cordialAsyncAnchored 5`, with `Agree` | none |
+
+Below the voter, any `VoteSel` returns nothing exactly when Mahi-Mahi's
+`Blames` holds (`sel_eq_none_iff_blames`), and `leastSel` votes exactly
+as Mahi-Mahi's `Votes` (`leastSel_votes_iff`). Mahi-Mahi has no
+tie-break; two linked candidates are one block by
+`MahiMahi.eq_of_hasCertificate`.
+
+**Open.** The rows with buffer rounds at votes other than the least,
+where the scheme's first-in-order vote and the least vote can name
+different twins; the asynchronous derived rows; the laws of the derived
+rows; and the commit loop `TryDecide` as an algorithm.
