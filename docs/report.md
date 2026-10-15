@@ -186,7 +186,7 @@ proof effort with no corresponding proof content.
    refinement into LiDO-DAG. What is claimed is the *form* of the account —
    theirs is operational, quantified over traces and instants; here liveness is
    stated as a condition on the DAG, and the dependence on time is
-   confined below a `Prop`-valued interface (§6.7, §30).
+   confined below a `Prop`-valued interface (§6.7, §31).
 
 4. **A derivation** of the structural property from **view convergence**
    (§6.9), together with the protocol's build rules, and nothing beyond
@@ -202,7 +202,7 @@ proof effort with no corresponding proof content.
    coverage and production alike; every other condition is a clause of the
    protocol, which a designer controls. In particular reference coverage
    is derived rather than assumed, and the one point at which a network parameter
-   constrains the specification is the wait threshold of §29.1.
+   constrains the specification is the wait threshold of §30.1.
 
 6. **Quantitative forms** (§6.10): the round from which coverage holds, given
    explicitly; a bound on the slot at which the next commit occurs; and an
@@ -508,7 +508,7 @@ often assumed to be one.
   are shown agreed; totally ordering the blocks released by a single commit
   requires a tie-break which the development declines to assume (§5.6).
 - **No wall-clock latency.** The wait bound of §6.11 is a duration, but the total
-  elapsed time to a commit is not derived (§29.6).
+  elapsed time to a commit is not derived (§30.6).
 
 ### 1.5 Organisation
 
@@ -553,6 +553,9 @@ Async BlueBottle's two-round rule at a three-round wave
 (`AsyncBlueBottle.Safety.holds` (ABB1), `AsyncBlueBottle.Liveness.holds` (ABB9)), and
 Bluestreak's claims in place of certificates
 (`Bluestreak.bluestreakLaws` (BS5), `Bluestreak.ReactiveB.decided_local` (BS12)).
+§27 states the unified decider of the Mysticeti codebase as a rule,
+checks its table (`Scheme.Table.holds` (SC1)), and reads five of its
+rows as rules of this development (`Scheme.Equiv.holds` (SC4–SC6)).
 
 **The development has four kinds of arc, and the source says which each
 is.** A **commit rule** carries a universe, a decision relation, the
@@ -572,9 +575,9 @@ and the other three consume, and what pairs two kinds at once — a
 schedule over a rule, or two transforms composed — is the integration
 layer.
 
-§27 exhibits the witness models. §28 describes the mechanisation, §29
+§28 exhibits the witness models. §29 describes the mechanisation, §30
 discusses the formulation, the lessons of the extensions, and the
-limitations, §30 surveys related work, and §31 concludes. Appendix A indexes every
+limitations, §31 surveys related work, and §32 concludes. Appendix A indexes every
 principal statement against its Lean name and module. Throughout, displayed
 Lean is drawn from the source; binders are occasionally elided for layout,
 and `…` marks an elision.
@@ -1128,7 +1131,7 @@ lives: a validator cannot tell "the leader published nothing" from "the
 leader's block has not reached me", and a skip taken on absence can be
 overturned by a block that arrives afterwards, the two verdicts then
 sitting in different universes where §5's uniqueness theorem does not
-compare them (`ugrow_commits_recur`, §27, exhibits the pattern). Where a
+compare them (`ugrow_commits_recur`, §28, exhibits the pattern). Where a
 candidate exists the two forms agree, since a block referencing no
 candidate references not that one (`directSkipIn_of_directSkipSlotIn`),
 so M1 and M3 and the whole of §5 apply to the counted form; where none
@@ -1211,8 +1214,8 @@ computing base (§4.3). Assumed.
 
 Logically all of these are antecedents: each is a field of a structure or class,
 and every theorem quantifying over a block universe or over the relevant
-instances carries it. None is an axiom in the sense of §28, and their joint
-satisfiability is a proof obligation discharged by exhibition (§27) rather than
+instances carries it. None is an axiom in the sense of §29, and their joint
+satisfiability is a proof obligation discharged by exhibition (§28) rather than
 something the logic must be trusted for. The distinction drawn here is
 epistemic, not logical, and it is what determines where the trust boundary of
 the system actually falls.
@@ -1267,7 +1270,7 @@ P10 is a joint condition rather than a pure specification: the schedule is the
 designer's, but which validators are reliable is not. Round-robin discharges it
 whenever the reliable set is of quorum size, since at most `f` of every `n`
 consecutive leaders then lie outside it; `rrSlots` witnesses this with a window
-of `f + 1` (§27).
+of `f + 1` (§28).
 
 **P8 deserves the most emphasis of any clause here**, and is easily mistaken for
 a routine one. It states that a correct validator holding a quorum at round `r`
@@ -1328,7 +1331,7 @@ the model constrains it, `Correct` being a set complement (§2.1).
 P9 is the clause whose *sufficiency* is not under the designer's control: the
 timeout may be chosen freely, but whether the chosen value is long enough
 depends on the network. §6.10 determines the threshold it must meet — the
-constant `2Δ + proc` — and §29.1 discusses the consequences.
+constant `2Δ + proc` — and §30.1 discusses the consequences.
 
 P11 is the second pacemaker rule, and the counterpart of `advances`: where
 P8 forces a validator forward on a *quorum*, P11 forces it forward on a
@@ -1413,7 +1416,7 @@ differences matter more than they appear to.
 
 `held v n` is what `v` had in hand *at the moment it built its
 round-`(n+1)` block* — not what it eventually receives. That build-time
-index is the essential modelling device (§29.1): a block's references are
+index is the essential modelling device (§30.1): a block's references are
 frozen at construction, so what bears on the DAG's shape is what was held
 when the builder acted. `View.ids` is a finite set of identifiers with no
 index of either kind, which is why no formulation is stated over it.
@@ -1475,7 +1478,7 @@ rather than inside it.
 #### Where they are consumed
 
 Neither role is discharged where its name suggests, and the extracted
-support graph (§28) makes the pattern checkable rather than asserted.
+support graph (§29) makes the pattern checkable rather than asserted.
 
 Production is consumed as a `PopulatedOn` hypothesis: L6, the
 committed-run results, the quantitative results and the capstones of
@@ -1524,7 +1527,7 @@ together with clauses of the protocol:
 | Production | N2 (`converges`) with P8 and genesis | `ViewPace.populatedOn` (V17) |
 
 It is stated as a hypothesis of L4 and L6 in order to keep those arguments free
-of temporal notions (§6.8), and supplied to them by the results above. §29
+of temporal notions (§6.8), and supplied to them by the results above. §30
 discusses the formulation.
 
 **What "derived" does and does not mean here.** Coverage is derived
@@ -1959,7 +1962,7 @@ enter it within the processing bound.
 Reference coverage is not among them. It is not a clause a validator could
 execute, since it refers to `Correct`, which no validator can observe; it is
 what (a) and (b) *produce* against a synchronous network, and it is derived
-accordingly (§4.4, §29.2).
+accordingly (§4.4, §30.2).
 
 The chapter is organised around two interface predicates, and every
 result above them consumes them as hypotheses rather than reaching for a
@@ -2002,7 +2005,7 @@ structure Delivery (U) where
 
 The indexing of `held` is essential: `held v n` denotes what `v` had in hand *at
 the moment it built its round-`(n+1)` block*, not what `v` eventually receives.
-This is the build-time index which a view cannot supply (§29.1). Between holding
+This is the build-time index which a view cannot supply (§30.1). Between holding
 and referencing sits **acceptance** — at most one block per author, correct
 blocks always taken — which is deliberately where the protocol may refuse:
 the DoS arc's novelty budget (§8) is a rule about `accepted`, and the
@@ -2017,7 +2020,7 @@ are stated over it, `EventuallyDelivers` (§6.4) feeds their post-`R`
 increments, and P7's untimed incarnation is its `includes` clause. The
 liveness development never reads it — production and coverage come from
 the timed route of §6.9, whose `holds` is indexed by *time* rather than by
-round, which is exactly the index this structure cannot supply (§29.1).
+round, which is exactly the index this structure cannot supply (§30.1).
 
 ### 6.3 Progress, and the horizon
 
@@ -2106,7 +2109,7 @@ The predicate is antitone in `T` (`SynchronisedOn.mono`), which allows results
 established at `T := Correct` to be supplied to the quorum-relative statements of
 §6.6.
 
-The condition is derived, not assumed (§4.4); §29 discusses its formulation.
+The condition is derived, not assumed (§4.4); §30 discusses its formulation.
 
 ### 6.5 Monotonicity and propagation
 
@@ -2281,7 +2284,7 @@ incremental bounds. Neither is consumed by any liveness result.
 
 ### 6.8 The layering
 
-![**The core account: what supports what.** Every arrow is extracted from the compiled Lean environment — `A → B` means `A` is used in the proof of `B`, directly or through unlabelled lemmas, with arrows implied by longer paths removed. Assumptions occupy the left column; each further column is one step from them. A box with no incoming arrow depends only on definitions and unlabelled lemmas; L4 is the notable case, taking its quorum as a hypothesis rather than from the fault model. §28 describes the extraction; a version carrying each result's Lean name is in `docs/depgraph/`.](depgraph/support-core-compact.svg)
+![**The core account: what supports what.** Every arrow is extracted from the compiled Lean environment — `A → B` means `A` is used in the proof of `B`, directly or through unlabelled lemmas, with arrows implied by longer paths removed. Assumptions occupy the left column; each further column is one step from them. A box with no incoming arrow depends only on definitions and unlabelled lemmas; L4 is the notable case, taking its quorum as a hypothesis rather than from the fault model. §29 describes the extraction; a version carrying each result's Lean name is in `docs/depgraph/`.](depgraph/support-core-compact.svg)
 
 No theorem above `SynchronisedOn` mentions time, and no theorem below it
 mentions certificates. The diagram also locates the trust boundary: the
@@ -2733,7 +2736,7 @@ already is, and the adversary's whole freedom is the single layer it may
 build the instant a quorum forms beneath it —
 `PaceCore.round_le_top_succ`: no valid block's round exceeds some
 reliable `top` by more than one. On the running witness the floor is met
-with equality (§27).
+with equality (§28).
 
 The clause itself is asserted only from `gst` (§4.1), so what it demands
 coincides with what the clamped author-blind rule delivers: pre-GST it
@@ -2945,7 +2948,7 @@ each with a round-`δ` block in `ledgerSet`. No synchrony, no delivery
 model, no populated rounds appear in any hypothesis.
 
 **The boundary, witnessed.** Aggregate coverage is *not* individual
-inclusion. The witness model `Ucens` (CQ8) (§27) runs six rounds in which
+inclusion. The witness model `Ucens` (CQ8) (§28) runs six rounds in which
 three validators reference only each other and commit with the full
 certificate pattern, while a fourth — correct, building validly, never
 referenced — is the missing author of **every** layer of **every**
@@ -3092,7 +3095,7 @@ theorem creators_refs_eq_correct (hdos : DoSValid U) (hb : b ∈ U.ids)
 and the commit chain still operates over
 them: the witness model `Uexcl` carries a
 direct commit whose three rounds all lie after the exclusion of its
-equivocator (§27). Nor does exclusion depend on favourable circumstances:
+equivocator (§28). Nor does exclusion depend on favourable circumstances:
 *density* establishes that a
 cone can be selectively blind to at most `f` correct authors per round, even
 below Byzantine blocks, because the quorum clause forces every layer of
@@ -3125,7 +3128,7 @@ theorem card_history_le' (hdos : DoSValid U) (hb : b ∈ U.ids) :
 ```
 
 The exponential constant is not an artefact of the proof: a matching family of
-witnesses (`Udouble` (C5), §27) realises `2^(e−2)` growth from `e` equivocators,
+witnesses (`Udouble` (C5), §28) realises `2^(e−2)` growth from `e` equivocators,
 so any bound obtainable from reference-validity conditions alone carries a
 constant exponential in `f`. This is the assessment of the exposure
 mechanism as a *storage* defence: it is the right accountability layer — it
@@ -3262,7 +3265,7 @@ exclusion terminates it. On data,
 the budget is satisfiable at its exact constant: the witness schedule
 `Dtwin` satisfies `UniformBudget 3` with its costliest acceptance costing
 exactly `3`, and `ByzBudget 0` — nothing Byzantine accepted after the
-genesis round (§27).
+genesis round (§28).
 
 How should the parameter `T` be set? Any `T ≥ 1` admits every correct block
 post-`R` (the sandwich's `f·κ + 1` with `κ = 0` would be the correct-only
@@ -3333,7 +3336,7 @@ limitations**: an equivocation whose witnessing pair falls strictly below
 the cut is forgiven — in `chop U G` its author is no longer exposed — while
 a pair *at* the cut survives into the base layer. §9.5 prices the
 forgiveness; the witness file exhibits it on data, an exposure present in
-the full universe and absent from its truncation (§27).
+the full universe and absent from its truncation (§28).
 
 ### 9.2 Verdicts survive the cut
 
@@ -3467,7 +3470,7 @@ correct store, the store rides into its keeper's next block
 (`viewUpto_subset_history` (B7), §8.4), and the backbone carries that block into
 every correct round-`t` cone — a cone *is* an attestation. The lag is tight
 on data: at `t = m + 1` the witness exhibits an accepted equivocation half
-missing from the base (§27). Consequently the joiner's assembly — base as
+missing from the base (§28). Consequently the joiner's assembly — base as
 genesis layer plus a correct peer's window strictly above the cut — is a
 bona-fide view of the truncation (`joinView`; downward closure is the
 content: window references above the cut stay in the window, references *at*
@@ -3565,7 +3568,7 @@ continues to apply to the same types. The stronger bound is consumed in
 exactly two proofs (O2 and O4′ below) — the two-round rule's *direct* safety
 already holds at `3f+1`. The witness file proves the reuse claim as a
 computation: a quorum-5 universe over six validators satisfies the untouched
-`BlockUniverse` by `decide` (§27). 
+`BlockUniverse` by `decide` (§28). 
 
 ### 10.2 The rule layer, and the arithmetic core
 
@@ -3694,7 +3697,7 @@ from both passing the test at one anchor. The counting that would be needed
 valid six-validator universe, a Byzantine leader's two round-0 twins each
 gather exactly three supporters (disjoint correct pairs plus the
 equivocator's own split), and a round-3 block sees all of round 1 — **both
-twins pass `ThickLink` against it**, by `decide` (`utwin6_both_pass` (O11), §27).
+twins pass `ThickLink` against it**, by `decide` (`utwin6_both_pass` (O11), §28).
 An indirect rule that commits "some passing candidate" therefore admits
 derivations committing either twin: agreement is *refutable*.
 
@@ -3949,7 +3952,7 @@ processing per round.
 
 ### 11.4 The witness
 
-`ugrowReactive` (§27) runs the Mysticeti structure on the round-robin
+`ugrowReactive` (§28) runs the Mysticeti structure on the round-robin
 schedule at build spacing `6` inside a timeout of `9 = 2Δ + proc` — the
 drift-free backoff met with equality: every fallback branch untaken, the
 commit, the latency bound and the strictly-inside-deadline conclusion
@@ -4269,7 +4272,7 @@ theorem decided_fill_agree_of_properties [S : Slots Validator] (sk : SkipMsg U)
 
 ### 12.4 The witness
 
-`Ucrash N` (SS7, §27) is the round-robin family with validator `3`
+`Ucrash N` (SS7, §28) is the round-robin family with validator `3`
 crashed after its genesis block: three validators run full lines whose
 references omit the absent author, and `3` owns exactly one block. The
 message `ucrashMsg` targets validator `1`'s line, and the development's
@@ -4878,7 +4881,7 @@ no liveness argument counts an equivocator — and every statement holds
 at *every* threshold `k`: only agreement prices the interval. And the
 tight committee has no slack: at `n = 5·fb + 3·fc + 1` the correct
 class numbers exactly `q`, so the reliable set must be all of it — the
-hybrid analogue of §27's remark that at `f = 1` every correct
+hybrid analogue of §28's remark that at `f = 1` every correct
 validator is needed for a quorum.
 
 ### 14.5 Conservativity
@@ -4923,7 +4926,7 @@ least sufficient committee.
 
 ### 14.7 The witnesses
 
-`Uhyb4` (H9, §27) is the arc's principal witness: `fb = 0, fc = 1,
+`Uhyb4` (H9, §28) is the arc's principal witness: `fb = 0, fc = 1,
 n = 4` — the classical `3f + 1` committee with two-round finality when
 the single tolerated fault is a crash. Validator `3` halts after its
 genesis block; the survivors run three rounds at quorum `3`, slots
@@ -5101,7 +5104,7 @@ pairwise non-adjacent on a cycle of `2f + 1`.
 
 ### 15.5 The witness
 
-`Unemo` (NN9, §27) is the arc on data: three validators at the tight
+`Unemo` (NN9, §28) is the arc on data: three validators at the tight
 committee, fourteen blocks, validator `2` authoring rounds 0–1 and
 then halting, the live pair carrying the DAG to round 5 with the
 parent quorum at exactly `majority` from round 3 on. Slots 0, 1, 3
@@ -5464,7 +5467,7 @@ block references a fresh identifier*; coverage asks the opposite, that
 every reliable block at round `n+1` reference every reliable block at
 round `n`. One fact, two consequences: the fill can manufacture neither
 a commit nor coverage. The hypotheses are exhibited satisfiable on
-`Ucrash` (§27), so the refutation is not vacuous.
+`Ucrash` (§28), so the refutation is not vacuous.
 
 **It is preserved for any reliable set that excludes the recovering
 validator** (`synchronisedOn_skipFill_of_notMem`, from
@@ -8606,7 +8609,7 @@ skip it. `LiveOn` cannot be decided in general — it quantifies over
 every good DAG — and a *test rule* whose `Good` pins one universe makes
 it finite, so that Progress is applied on data and produces the healthy
 step. With BN11 the clause is a theorem rather than a hypothesis, so the
-**real** rule with its **real** `Good` runs on data too: the grown family `Ugrow` of §27 is good at every height by lemmas proved once (`ugrow_good`), and
+**real** rule with its **real** `Good` runs on data too: the grown family `Ugrow` of §28 is good at every height by lemmas proved once (`ugrow_good`), and
 `real_runs` gives a run of every height `K` on it, at the horizon that
 height costs — `11K + 9` rounds at a four-round interval and Mysticeti's
 gap of `n + 2`. The family stops at its horizon, so the cost is exact,
@@ -10812,7 +10815,7 @@ wave length never entering, and under coverage from the start the clause
 is derived from `FairWithin`
 (`AsyncBlueBottle.unpredictableWithin_of_synchronisedOn`).
 
-On data (§27): the fully connected universe satisfies both forms of the
+On data (§28): the fully connected universe satisfies both forms of the
 clause under round-robin; the aiming pattern `aim6` — the leader's block
 present and kept out of every cone but its own — is directly skipped
 with exactly five blamers, satisfies `FairScheduleOn Correct` and
@@ -11591,7 +11594,138 @@ block is not among the claimer's references.
 
 ---
 
-## 27. Satisfiability
+## 27. The unified decider: one parameterised rule, read against the rules
+
+*(modules `LeanDag/Scheme/`; the design record is `scheme.md`; the
+object is a unified decider for the single-tier rules of the Mysticeti
+codebase, given as pseudocode with a table of parameters)*
+
+The decider runs one commit loop and one set of decision rules for every
+protocol of its table, which differ only in six parameters: the wave
+length, whether a vote is its own certificate, and the commit, skip,
+certificate and link thresholds. This section states the decider as an
+anchored rule (§3), checks the claims its table makes as arithmetic, and
+proves that at five of its rows the decider is a rule already in this
+development, or a rule that differs from one only in its direct skip.
+No rule of §§3–26 is changed. A **SC**-label marks each result.
+
+### 27.1 The parameters and what the table claims
+
+A row is a `Scheme.Params` built from the committee size `n`, the
+Byzantine bound `f` and the crash bound `c`. The table reduces the safety
+of each family to three inequalities, with `q` the number of
+previous-round blocks a block references: `Params.TwoRound` for the
+rules whose vote is its own certificate and `Params.ThreeRound` for the
+rules that certify by votes, and `Params.Live` bounds every threshold by
+`n − f − c`. `Scheme.Table.holds` (SC1) checks every claim of the
+table's reading paragraph. Every published row with a direct skip meets
+its family's inequalities and the liveness bound; Cordial Miners, whose
+skip threshold is `n`, meets the inequalities and the bound on the other
+two thresholds; the derived rows meet what their published counterpart
+meets; and Orcaella meets its inequalities at every `n ≥ 5f + 3c + 1`,
+not only at that committee. The inequalities with the liveness bound
+force `n ≥ 5f + 3c + 1` for two rounds and `n ≥ 3f + 2c + 1` for three,
+and at those committees they force Orcaella's and Hybrid Mysticeti's
+thresholds, and at `c = 0` Mysticeti's.
+
+One claim does not hold as stated. The table names Nemo-Nemo as the
+two-round solution at `f = 0`, but Nemo-Nemo's row fails the second
+inequality, which asks `n + 1` of commit plus link: at `n = 2c + 1` the
+row gives `c + 2`. The two-round solution at `f = 0` is Orcaella's
+`n = 3c + 1`. The second inequality protects a direct commit against an
+indirect decision on an equivocating twin, which a crash-only model has
+no use for, so Nemo-Nemo's committee rests on that model, not on the
+inequalities.
+
+### 27.2 The rule, and the vote
+
+`Scheme.schemeAnchored` is the decider's Algorithm 2 as an anchored rule
+at one rung: the direct commit counts certifying blocks of the decision
+round, the direct skip counts blames at the vote round, the rung counts
+certifying blocks in the anchor's history, and the least identifier
+breaks a tie between twins. The scheme's vote, *VotedBlock*, walks a block's
+references in their stored order and returns the first block of the slot
+it meets. The block record keeps references as a set, so the vote is a
+`Scheme.VoteSel`: any rule that returns a block of the slot in the
+voter's history when the history holds one, and nothing otherwise. Every
+result below holds at every such rule; `leastSel`, which votes for the
+least block of the slot in the history, is one (SC7).
+
+### 27.3 Two rules that read alike decide alike
+
+`Scheme.ReadAlike` collects what `Decided` reads of a rule: its wave and
+rungs, its direct commit at a candidate of the slot, its direct skip, its
+rung at a candidate and an anchor of an eligible slot, and its
+tie-break's choice among linked candidates. `ReadAlike.decided_iff`
+(SC2) proves by induction on the relation that two rules agreeing on
+these decide every slot alike, and `Scheme.toDagRule_eq` that their
+carriers are then equal. Every property, mechanism and headline stated
+over a carrier therefore holds at one rule exactly when it holds at the
+other.
+
+At a vote round one round above the candidate, the history of a voter at
+the candidate's round is its reference set (§2), and the references name
+distinct authors. Every vote-selection rule then votes for a candidate
+exactly when the voter references it (`Scheme.votes_iff`), and blames a
+slot exactly when the voter references no candidate of it
+(`Scheme.blamersAt_eq`), so the decider's certificate and blame sets are
+the sets the rules of this development count (SC3).
+
+### 27.4 Five rows
+
+`Scheme.Equiv.holds` (SC4–SC6) takes each row whose vote round is one
+round above the candidate:
+
+| Row | Is | Condition |
+|:---|:---|:---|
+| Mysticeti | `MysticetiProperties.mysticetiRule` | none |
+| Blue Bottle PS | `OdontocetiProperties.odontocetiRule` | none |
+| Orcaella | `HybridProperties.hybridRule` at `k = n − 3f − 2c` | `n = 5f + 3c + 1` |
+| Cordial Miners PS | the core with no direct skip, `cordialAnchored` | none |
+| Nemo-Nemo | Nemo with a direct skip on a blame from every validator, `nemoBlameAnchored` | `n = 2c + 1` |
+
+The first three rows are carriers of this development, so the decider at
+those parameters has every theorem those carriers have (SC4). Mysticeti
+has no tie-break; there the scheme's least choice is the one linked
+candidate, by the core's `link_unique`. Orcaella's row gives the skip a
+threshold of `4f + 2c + 1` and Hybrid's rule `n − f − c`; they are equal
+only at the bound, and above it the row is a different rule, whose
+inequalities hold (SC1) but whose laws are not proved here.
+
+The table writes a rule with no direct skip as a skip threshold of `n`.
+On the core's universe a block references a block of its own author one
+round down, so the leader's own vote-round block never blames its slot
+and `n` blames never occur: Cordial Miners PS is the core with no direct
+skip, which has the core's laws (`Scheme.cordialLaws`, SC5). Nemo's
+validity has no self-parent clause, so there `n` blames occur when every
+vote-round block, the leader's included, omits the leader's block. The
+scheme's Nemo-Nemo is then Nemo's rule with one more direct skip, which
+lean-dag's Nemo-Nemo leaves to the indirect rule. The skip is safe: every
+validator has a blaming block and none has two blocks at a round, so no
+vote for the candidate exists for a commit or a link to read
+(`Scheme.nemoBlameLaws`, SC6). Its rung reads a vote in the anchor's
+history, so the rule requires its anchor to be a block of the record,
+which every committed block is.
+
+### 27.5 What the arc does not contain
+
+The rows whose vote round lies further above the candidate — Mahi-Mahi,
+Blue Bottle Async, Cordial Miners Async and the asynchronous derived
+rows — are not read here. There a voter's history can hold both twins of
+an equivocating leader, and the scheme's first block in reference order
+and this development's least block can be different votes, so their
+verdicts can differ on such a record. The design record argues that
+safety needs only that the vote be unique and computed from the block
+(`mahi-mahi.md` §2); a proof would state the laws for every
+vote-selection rule. The derived rows Hybrid Mysticeti, Async Orcaella,
+Async Nemo-Nemo and Hybrid Mahi-Mahi have their inequalities checked
+(SC1) and no laws. The commit loop *TryDecide*, which scans slots
+downward and outputs the longest decided prefix, is read through
+`Decided` and is not stated as an algorithm.
+
+---
+
+## 28. Satisfiability
 
 Every structure carrying conditions is exhibited satisfiable by a concrete model
 over four validators at `f = 1`. This is a substantive component of the
@@ -11694,11 +11828,11 @@ rather than an unsatisfiable hypothesis.
 
 ---
 
-## 28. Mechanisation
+## 29. Mechanisation
 
 The development comprises approximately 97,000 lines of Lean 4 (v4.32.2)
 against Mathlib, of which some 68,500 constitute the library and 29,000
-the models of §27 and the witness files of the arcs. A full build reports
+the models of §28 and the witness files of the arcs. A full build reports
 no errors.
 
 **Axiom audit.** Every principal result — among them
@@ -11760,7 +11894,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Mysticeti/ViewPace.lean` | the route (§6.9): the trunk `PaceCore` at any block record, V1, V4, coverage, production, the spine, and the quantitative results L8a, L9, L11 |
 | `Mysticeti/Quantitative.lean` | the rated hypotheses; L8b |
 
-**The arcs** (§§7–26). All but `Integration/` consume the core read-only; §16 weakens one hypothesis of §12, for the reason given there:
+**The arcs** (§§7–27). All but `Integration/` consume the core read-only; §16 weakens one hypothesis of §12, for the reason given there:
 
 | Module | Contents |
 |:---|:---|
@@ -11874,7 +12008,11 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Quality/Coverage.lean` | per-commit and ledger coverage (CQ1–CQ3) at the core, over `Arcs.coveredAt` |
 | `Quality/Inclusion.lean` | post-`R` inclusion (CQ5, CQ6) |
 | `Quality/Capstone.lean` | the windowed bounds and `chain_quality` (CQ7) |
-| `LeanDagTest/` | the models of §27 and the witness files of every arc |
+| `LeanDagTest/` | the models of §28 and the witness files of every arc |
+| `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, and the two rule variants its rows name |
+| `Scheme/Table/` | the table's inequalities and the claims of its reading paragraph, SC1 |
+| `Scheme/Helpers/` | two rules that read alike decide alike (SC2); votes one round up (SC3); the rows' readings and the variants' laws |
+| `Scheme/Equiv/` | five rows as carriers, SC4–SC6 |
 
 **The support graph, extracted.** The dependency structure of the
 development is not documented by hand: `scripts/DepGraph.lean` walks
@@ -11927,13 +12065,13 @@ mechanism reads), with `related.md` surveying the surrounding literature. Every 
 
 ---
 
-## 29. Discussion
+## 30. Discussion
 
 The first four subsections concern the core account's central design
-choice — where the synchrony assumption lives; §29.5 draws the lessons of
-the extensions; §29.6 records what remains open.
+choice — where the synchrony assumption lives; §30.5 draws the lessons of
+the extensions; §30.6 records what remains open.
 
-### 29.1 Locating the synchrony assumption
+### 30.1 Locating the synchrony assumption
 
 The synchrony assumption may be stated in terms of views:
 
@@ -11994,7 +12132,7 @@ is `2Δ`.
 Because Δ is not known to an implementation, no constant can be fixed in
 advance. A backoff is the specification's response — a search for a sufficient
 constant, written into the algorithm — and its only relevant property is that
-the search terminates (§29.2).
+the search terminates (§30.2).
 
 **The network guarantee must be indexed to the moment of building.** A block's
 references are fixed at its construction, so what bears on the derivation is not
@@ -12007,7 +12145,7 @@ for liveness, indexed by the instant, with `built` ordering the two. The
 requirement is the index, not the vehicle. This is an observation about formalisation, and it is the
 reason `SynchronisedOn` is stated on `refs`.
 
-### 29.2 Why coverage is derived rather than specified
+### 30.2 Why coverage is derived rather than specified
 
 Reference coverage could not have been made a clause of the protocol, which is
 the deeper reason it appears as a derived property. `SynchronisedOn` refers to
@@ -12034,7 +12172,7 @@ from some round onwards — with no condition on shape, rate, or driving
 signal. §6.10 carries this to its conclusion: with Δ known, a constant
 timeout of `2Δ + proc` suffices and the loop disappears.
 
-### 29.3 Consequences of the abstraction
+### 30.3 Consequences of the abstraction
 
 1. The consensus argument is purely combinatorial, involving round indices and
    finite-set cardinalities. Under a message-level assumption every statement
@@ -12046,7 +12184,7 @@ timeout of `2Δ + proc` suffices and the loop disappears.
 4. The condition composes with the safety development, mentioning only `U.ids`,
    `U.block` and `refs` — the vocabulary that development already employs.
 
-### 29.4 Costs
+### 30.4 Costs
 
 Δ does not appear above the interface. Introducing it would require views indexed
 by an instant and every statement quantified over instants, for no proof content.
@@ -12059,7 +12197,7 @@ chain must terminate at a network assumption; what the reformulation achieves
 is to place that assumption where it belongs — on the network, as one clause
 over views — and to keep it out of every statement above.
 
-### 29.5 Lessons from the extensions
+### 30.5 Lessons from the extensions
 
 Three lessons generalise beyond the particular arcs.
 
@@ -12105,13 +12243,13 @@ behind the canonicity gap fits in six validators and twenty-five blocks;
 what was needed to find it was not scale but the obligation to state the
 indirect rule precisely enough to fail to prove it.
 
-### 29.6 Limitations
+### 30.6 Limitations
 
 The quantitative bounds are established (§6.10). The following remain open.
 
 **The backoff loop.** `Rated` and the threshold of R4 are stipulated as clauses
 of the specification; no realistic adaptive scheme is shown to satisfy them, and
-the feedback mechanism of §29.2 is not modelled. Moreover
+the feedback mechanism of §30.2 is not modelled. Moreover
 `ViewPace.timeout : ℕ → ℕ` is indexed by round and common to the reliable set, so
 that a per-validator backoff — in which validators increase their timeouts at
 different moments — cannot be expressed, let alone shown to converge. This
@@ -12175,7 +12313,7 @@ much they say.
 
 ---
 
-## 30. Related work
+## 31. Related work
 
 **Hybrid fault models.** Orcaella [KS26] derives the tight committee
 `n ≥ 5f + 3c + 1` for two-round commitment under separate Byzantine
@@ -12280,11 +12418,11 @@ pacemaker by refinement. The account here is structural, and no theorem above
 dependence of liveness on the round-jumping clause surfaces as a named hypothesis
 of a single lemma rather than as a condition inside a transition relation. The
 cost is that the theorems of [QXS26] cannot be stated here at all, "within
-bounded time" not being expressible in this vocabulary (§29.6).
+bounded time" not being expressible in this vocabulary (§30.6).
 
 ---
 
-## 31. Conclusion
+## 32. Conclusion
 
 This report has given a machine-checked account of uncertified DAG consensus
 organised around one idea: state the liveness condition on the object the
@@ -12312,7 +12450,7 @@ without consensus, and — in the one place the formalization diverged from a
 published argument by necessity — the observation that Odontoceti's
 agreement rests on a canonical candidate order that its paper never states.
 
-What remains open is catalogued in §29.6: the backoff dynamics, wall-clock
+What remains open is catalogued in §30.6: the backoff dynamics, wall-clock
 latency, block-level total order, and liveness below the growth clause.
 Beyond those, two directions suggest themselves. The commit-free,
 evidence-based horizon rule sketched in the garbage-collection document
@@ -12362,7 +12500,7 @@ the consumption map of §4.8 and the support diagrams of §6.10 refer to
 results through them. The series are alphabetic by area: T and M for
 the safety core, L for liveness, V for the view-convergence family, CU
 for catch-up, RS for the reactive schedule, SS for safe skip, AL for adaptive
-leaders, H for the hybrid fault model, I for integration, SH for Steelhead (SH-MM and SH-BB for its two pairs), MM for Mahi-Mahi, ABB for Async BlueBottle, BM, BML, BMR, BMA, BMD, BME, BMO and BMP for Black Marlin, FW for FinWhale, BN for Barnacle, HZ for Hydrozoan, OH for Optimal-Hydrozoan, HI for the Hydrozoan integration, BS for Bluestreak, CQ for chain
+leaders, H for the hybrid fault model, I for integration, SH for Steelhead (SH-MM and SH-BB for its two pairs), MM for Mahi-Mahi, ABB for Async BlueBottle, BM, BML, BMR, BMA, BMD, BME, BMO and BMP for Black Marlin, FW for FinWhale, BN for Barnacle, HZ for Hydrozoan, OH for Optimal-Hydrozoan, HI for the Hydrozoan integration, BS for Bluestreak, SC for the unified decider, CQ for chain
 quality, C, D,
 B and E for the denial-of-service arc, G for garbage collection, O for
 Odontoceti; P, N and R name clauses of the trust boundary rather than
@@ -12784,6 +12922,18 @@ reused.
 | BS21 | a validator silent through its own leader slot recovers in one message; the discipline holds after, a committed slot stays committed and its own slot stays skipped | `Ucr`, `rcGap`, `Ufill` witnesses *(LeanDagTest/Bluestreak/Recovery)* |
 | BS22 | a slot a present quorum does not support is skipped, and after the chain fill a slot the recovering validator leads in its gap is skipped on any view where a quorum without it is present | `BluestreakProperties.skipsUnsupported`, `BluestreakProperties.decided_none_fresh` *(Bluestreak/Carrier, Bluestreak/Record)* |
 
+### The unified decider (§27)
+
+| Label | Statement | Lean *(module)* |
+|:---|:---|:---|
+| SC1 | every row meets its family's inequalities and the liveness bound (Cordial Miners but its skip); the inequalities force `n ≥ 5f + 3c + 1` and `n ≥ 3f + 2c + 1` and, there, Orcaella's and Hybrid Mysticeti's thresholds; Nemo-Nemo's row fails the second two-round inequality | `Scheme.Table.holds` *(Scheme/Table)* |
+| SC2 | two anchored rules that read alike decide alike, and have one carrier | `Scheme.ReadAlike.decided_iff`, `Scheme.toDagRule_eq` *(Scheme/Helpers/Transfer)* |
+| SC3 | one round up, a vote is a reference and a blame is a reference to no candidate | `Scheme.votes_iff`, `Scheme.blamersAt_eq` *(Scheme/Helpers/Votes)* |
+| SC4 | the Mysticeti, Blue Bottle PS and Orcaella rows are the core's, Odontoceti's and Hybrid's carriers, Orcaella at `n = 5f + 3c + 1` | `Scheme.Equiv.mysticetiRow`, `Scheme.Equiv.blueBottlePSRow`, `Scheme.Equiv.orcaellaRow` *(Scheme/Equiv)* |
+| SC5 | Cordial Miners PS is the core with no direct skip, with the core's laws | `Scheme.cordialLaws`, `Scheme.Equiv.cordialMinersPSRow` *(Scheme/Equiv)* |
+| SC6 | Nemo-Nemo at `n = 2c + 1` is Nemo with a direct skip on a blame from every validator, with Nemo's laws | `Scheme.nemoBlameLaws`, `Scheme.Equiv.nemoNemoRow` *(Scheme/Equiv)* |
+| SC7 | a vote-selection rule exists: the least block of the slot in the voter's history | `leastSel` *(LeanDagTest/Scheme/LeastSel)* |
+
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
 | Label | Statement | Lean |
@@ -12857,7 +13007,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 399 definitions and structures the report names, in
+The 404 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19627,6 +19777,86 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
 
 The filled block at gap round `k`: `v2`'s references at that round, plus the added self reference.
 
+#### `Params`
+
+*structure, `Scheme.Model.Params.lean`*
+
+```lean
+structure Params where
+  /-- Rounds per wave: propose, buffer rounds, vote, decision. -/
+  waveLength : ℕ
+  /-- A vote is a certificate, and the vote round is the decision round. -/
+  voteIsCert : Bool
+  /-- Certificates a direct commit needs. -/
+  commitThreshold : ℕ
+  /-- Blames a direct skip needs. -/
+  skipThreshold : ℕ
+  /-- Votes a certificate needs. -/
+  certThreshold : ℕ
+  /-- Certificates in the anchor's history an indirect commit needs. -/
+  linkSize : ℕ
+```
+
+**The parameters of one decider.** `waveLength` rounds per wave; when `voteIsCert` a vote is its own certificate; thresholds count distinct authors.
+
+#### `Live`
+
+*def, `Scheme.Model.Params.lean`*
+
+```lean
+def Live (p : Params) (n f c : ℕ) : Prop :=
+  p.commitThreshold ≤ n - f - c ∧ p.skipThreshold ≤ n - f - c ∧ p.certThreshold ≤ n - f - c
+```
+
+**Liveness**: every threshold is reachable by the correct validators.
+
+#### `schemeAnchored`
+
+*def, `Scheme.Model.Rule.lean`*
+
+```lean
+def schemeAnchored : AnchoredRule Validator BlockId Payload P honest where
+  waveAt := fun _ => p.waveLength - 1
+  Commit := fun U V L r _ => HoldsAtLeast U V p.commitThreshold (certsAt p σ U L r)
+  decCommit := fun _ _ _ _ _ => inferInstance
+  Skip := fun U V _ k => HoldsAtLeast U V p.skipThreshold (blamersAt p σ U k)
+  rungs := 1
+  Link := fun _ U A L S k =>
+    p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
+      (fun C => C ∈ history U A))).card
+  tie := fun _ L L' => L < L'
+```
+
+**The decider as an anchored rule** (Algorithm 2): the supported-leader test is the direct commit, the skipped-leader test the direct skip, the certified-link test the single rung, and the least identifier breaks ties.
+
+#### `cordialAnchored`
+
+*def, `Scheme.Model.Variants.lean`*
+
+```lean
+def cordialAnchored (Validator BlockId Payload : Type) [Fintype Validator]
+    [DecidableEq Validator] [Faults Validator] [DecidableEq BlockId] :
+    AnchoredRule Validator BlockId Payload ValidWrt Correct :=
+  { coreAnchored Validator BlockId Payload with Skip := fun _ _ _ _ => False }
+```
+
+**Cordial Miners PS**: the core's rule with no direct skip.
+
+#### `nemoBlameAnchored`
+
+*def, `Scheme.Model.Variants.lean`*
+
+```lean
+def nemoBlameAnchored (Validator BlockId Payload : Type) [Fintype Validator]
+    [DecidableEq Validator] [DecidableEq BlockId] :
+    AnchoredRule Validator BlockId Payload Nemo.ValidWrt Finset.univ :=
+  { Nemo.nemoAnchored Validator BlockId Payload with
+    Skip := fun U V _ k => HoldsAtLeast U V (Fintype.card Validator) (slotBlamers U k)
+    Anchor := fun U A => A ∈ U.ids }
+```
+
+**The scheme's Nemo-Nemo**: Nemo's rule, skipping a slot directly when every validator's vote-round block references no candidate of it.
+
 #### `SynchronisedOn`
 
 *def, `Timed.Coverage.lean`*
@@ -19689,7 +19919,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 600 theorems the body or Appendix A names, each
+The 603 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -27435,6 +27665,31 @@ theorem committed_of_correct_block
 ```
 
 **RS5 — reactive inclusion.** The schedule fixes a `u`-led slot above any round `m` before an execution is named, and a sufficiently grown reactive execution commits it with a leader block whose cone contains `u`'s round-`m` block, so it lands in the agreed ledger.
+
+#### `holds`
+
+*theorem, `Scheme.Equiv.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `decided`
+
+*theorem, `Scheme.Helpers.Transfer.lean`*
+
+```lean
+theorem decided (h : ReadAlike R₁ R₂ U) {V : U.View} {k : ℕ} {v : Option BlockId}
+    (hd : R₁.Decided U V k v) : R₂.Decided U V k v
+```
+
+#### `holds`
+
+*theorem, `Scheme.Table.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
 
 #### `holds`
 
