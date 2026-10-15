@@ -5385,9 +5385,9 @@ the dependency graph and print what each rule shows and which mechanism
 cells exist. As of this writing: eleven carriers over thirteen rules, of
 which twelve show the five properties and a support. The cells of cut,
 fill, re-genesis, prompt skip (where the rule skips) and chain quality
-are instances except three, which the audit lists as open, the rule
-showing what the mechanism asks and no instance being written:
-Steelhead's fill, re-genesis and chain quality. Bluestreak's fill is its
+are instances at every rule that shows what the mechanism asks; the cut,
+the fill and re-genesis come from each carrier's `OnRecord` instance
+(Steelhead's is `SteelheadProperties.onRecord`). Bluestreak's fill is its
 chain fill (§26.9). The adaptive-leaders cell is open for
 every rule. Liveness across each mechanism the rule has a witness for,
 and across any stack, is derived from the rule's support and its
@@ -10468,6 +10468,11 @@ function of two rounds or more: the band rebases every round by a
 constant, under which a wave read from the round number would move,
 while the wave read at the slot's kind, which a rebase carries with the
 slot's leader, does not (`target-properties.md` §3.4c, `docs/kinds.md`).
+The universe is the core's, so the carrier reads as records with every
+map the identity (`SteelheadProperties.onRecord`), and every verdict cell
+of the cut, the copy fill and re-genesis is `Properties/Arcs/Record.lean`
+at that instance; chain quality is the arc at `Quorate` and
+`CommitsCandidate` (`steelhead_card_correct_le_two_mul`).
 
 ### 24.7 The mistimed leader timeout
 
@@ -12857,7 +12862,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 399 definitions and structures the report names, in
+The 400 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19626,6 +19631,30 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
 ```
 
 The filled block at gap round `k`: `v2`'s references at that round, plus the added self reference.
+
+#### `onRecord`
+
+*def, `Steelhead.Record.lean`*
+
+```lean
+def onRecord (w : ℕ → ℕ) :
+    (steelheadRule (Validator := Validator) (BlockId := B) (Payload := Payload) w).OnRecord
+      ValidWrt (Correct : Finset Validator) BlockRecord.Any where
+  toRec := fun U => U
+  inv := fun _ => True.intro
+  ofRec := fun W _ => W
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => V
+  ofView := fun V => V
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**Steelhead's carrier, read as block records**, at each wavelength function.
 
 #### `SynchronisedOn`
 

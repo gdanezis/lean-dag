@@ -365,6 +365,7 @@ import LeanDag.Steelhead.MahiMahiPair.Safety.Proof
 import LeanDag.Steelhead.BlueBottlePair.Safety.Statement
 import LeanDag.Steelhead.BlueBottlePair.Safety.Proof
 import LeanDag.Steelhead.Properties
+import LeanDag.Steelhead.Record
 import LeanDag.Steelhead.Model.Reactive
 import LeanDag.Steelhead.Model.Clauses
 import LeanDag.Steelhead.Liveness.Statement
