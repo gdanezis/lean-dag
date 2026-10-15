@@ -8,6 +8,68 @@ Bottle PS and Async, Orcaella, Nemo-Nemo, and four derived rows). The arc
 lives in `LeanDag/Scheme/` and changes no rule of the development; the
 report's account is §27.
 
+## 0. Key findings
+
+Each finding is machine-checked unless marked otherwise; the Lean names
+are the evidence.
+
+**What holds.**
+
+* **The table's arithmetic.** Every published row meets its family's
+  inequalities and the liveness bound (Cordial Miners except its skip
+  threshold `n`); the derived rows meet what their published counterparts
+  meet; Orcaella meets its inequalities at every `n ≥ 5f + 3c + 1`. The
+  inequalities with the liveness bound force `n ≥ 5f + 3c + 1` (two
+  rounds) and `n ≥ 3f + 2c + 1` (three rounds), and at those committees
+  force Orcaella's and Hybrid Mysticeti's thresholds, and Mysticeti's at
+  `c = 0` (`Scheme.Table.holds`).
+* **Five rows are rules of the development**, at every vote-selection
+  rule (`Scheme.Equiv.holds`): Mysticeti is `mysticetiRule`, Blue Bottle
+  PS is `odontocetiRule`, Orcaella at `n = 5f + 3c + 1` is
+  `hybridRule (n − 3f − 2c)`; Cordial Miners PS and Nemo-Nemo are the
+  variants of §4, each with laws and agreement. Every theorem of those
+  carriers holds of the decider at those parameters.
+
+**What the table claims and does not hold, or holds otherwise.**
+
+1. **Nemo-Nemo is no solution of the two-round inequalities.** At
+   `f = 0`, `n = 2c + 1` and `c ≥ 1`, its commit plus link is `c + 2`,
+   below `n + 1 = 2c + 2` (`Table.NemoNotTwoRound`). The table's "Nemo-Nemo
+   at `f = 0`" does not follow from the inequalities; their solution at
+   `f = 0` is Orcaella's `n = 3c + 1`. The inequality that fails guards
+   against equivocating twins, which a crash-only model excludes, so
+   Nemo-Nemo is safe for a reason the table does not state.
+2. **The scheme's Nemo-Nemo is not this development's Nemo-Nemo.** Nemo's
+   validity has no self-parent clause, so a skip threshold of `n` is met
+   when every vote-round block, the leader's included, omits the leader's
+   block; the scheme then skips directly, where Nemo waits for an anchor.
+   The extra skip is safe (`Scheme.nemoBlameLaws`). That the threshold can
+   be met follows from the validity definition; no witness DAG exhibits it.
+3. **Cordial Miners' "no direct skip" holds unconditionally.** The table's
+   footnote says a skip threshold of `n` never triggers under faults. On
+   the core's universe every block references its author's previous block,
+   so the leader never blames its own slot and `n` blames never occur
+   (`Scheme.not_holdsAtLeast_card_slotBlamers`). Cordial Miners PS is the
+   core with no direct skip, with the core's laws (`Scheme.cordialLaws`).
+4. **Orcaella above its bound is a different rule.** Its fixed skip
+   threshold `4f + 2c + 1` equals Hybrid's `n − f − c` only at
+   `n = 5f + 3c + 1`. Above it the inequalities hold, but the row reads
+   differently from Hybrid and its laws are not proved.
+5. **The vote is a parameter, and decides the rows with buffer rounds.**
+   The scheme's vote is the first block of the slot met in reference
+   order; this development's is the least block in the voter's history.
+   One round above the candidate both are the reference (`Scheme.votes_iff`),
+   which is why five rows match. With buffer rounds a voter's history can
+   hold both twins of an equivocating leader and the two votes can differ,
+   so Mahi-Mahi, Blue Bottle Async and Cordial Miners Async are not read as
+   this development's rules. Safety is expected to need only a unique vote
+   computed from the block (`mahi-mahi.md` §2); that is argued, not proved.
+
+**Open.** The buffer-round rows at every vote-selection rule; the laws of
+the derived rows (Hybrid Mysticeti, Async Orcaella, Async Nemo-Nemo,
+Hybrid Mahi-Mahi), whose inequalities only are checked; and the commit
+loop `TryDecide` as an algorithm.
+
 ## 1. The parameters
 
 `Scheme.Params` has the six parameters of the table: `waveLength`,
