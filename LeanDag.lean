@@ -518,6 +518,7 @@ import LeanDag.Scheme.Model.VotedBlock
 import LeanDag.Scheme.Model.TryDecide
 import LeanDag.Scheme.Model.Local
 import LeanDag.Scheme.Model.Hydrozoan
+import LeanDag.Scheme.Model.Async
 import LeanDag.Scheme.Table.Statement
 import LeanDag.Scheme.Table.Proof
 import LeanDag.Scheme.Helpers.Transfer
@@ -535,6 +536,8 @@ import LeanDag.Scheme.Helpers.Restart
 import LeanDag.Scheme.Helpers.Order
 import LeanDag.Scheme.Helpers.Ledger
 import LeanDag.Scheme.Helpers.Hydrozoan
+import LeanDag.Scheme.Helpers.Async
+import LeanDag.Scheme.Helpers.AsyncCoin
 import LeanDag.Scheme.Equiv.Statement
 import LeanDag.Scheme.Equiv.Proof
 import LeanDag.Scheme.Safety.Statement
@@ -547,3 +550,5 @@ import LeanDag.Scheme.Record
 import LeanDag.Scheme.Properties
 import LeanDag.Scheme.HybridRow.Statement
 import LeanDag.Scheme.HybridRow.Proof
+import LeanDag.Scheme.Async.Statement
+import LeanDag.Scheme.Async.Proof

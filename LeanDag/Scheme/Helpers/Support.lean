@@ -88,19 +88,29 @@ theorem reaches_of_coversToward {U : (schemeRule p σ Hon).Universe} {T : Finset
           (show (U.val.block a).creator ∈ T by rw [hac']; exact hLc) har hreach
       exact Relation.ReflTransGen.head hab hreach
 
+omit [Fintype Validator] in
+/-- **A candidate in a voter's history is the voter's vote**, when its author
+does not equivocate. -/
+theorem votes_of_reaches_record {U : BlockRecord Validator BlockId Payload P honest}
+    {H : Finset Validator} (hne : U.NoEquivOn H) {b L : BlockId}
+    (hb : b ∈ U.ids) (hL : L ∈ U.ids) (hLc : (U.block L).creator ∈ H)
+    (hlt : (U.block L).round < (U.block b).round) (hre : ReachesFrom U.block b L) :
+    σ.Votes U b L := by
+  have hLh : L ∈ history U b := (mem_history_iff hb).mpr hre
+  unfold VoteSel.Votes
+  cases hs : σ.sel U b (U.block L).creator (U.block L).round with
+  | none => exact absurd rfl (σ.complete U b _ _ hb hlt hs L hLh rfl)
+  | some x =>
+    obtain ⟨hx, hxc, hxr⟩ := σ.sound U b _ _ x hs
+    have hxU := history_subset_ids hb hx
+    rw [hne x hxU L hL (by rw [hxc]; exact hLc) hxc hxr]
+
 /-- **An honest candidate in a voter's history is the voter's vote.** -/
 theorem votes_of_reaches {U : (schemeRule p σ Hon).Universe} {b L : BlockId}
     (hb : b ∈ U.val.ids) (hL : L ∈ U.val.ids) (hLc : (U.val.block L).creator ∈ Hon)
     (hlt : (U.val.block L).round < (U.val.block b).round) (hre : ReachesFrom U.val.block b L) :
-    σ.Votes U.val b L := by
-  have hLh : L ∈ history U.val b := (mem_history_iff hb).mpr hre
-  unfold VoteSel.Votes
-  cases hs : σ.sel U.val b (U.val.block L).creator (U.val.block L).round with
-  | none => exact absurd rfl (σ.complete U.val b _ _ hb hlt hs L hLh rfl)
-  | some x =>
-    obtain ⟨hx, hxc, hxr⟩ := σ.sound U.val b _ _ x hs
-    have hxU := history_subset_ids hb hx
-    rw [U.property x hxU L hL (by rw [hxc]; exact hLc) hxc hxr]
+    σ.Votes U.val b L :=
+  votes_of_reaches_record U.property hb hL hLc hlt hre
 
 /-- **Law 3: coverage certifies**, at a reliable set inside `Hon` and a
 certificate threshold the quorum meets. -/
