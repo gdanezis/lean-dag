@@ -561,7 +561,9 @@ three are not the development's rules, and two views still decide alike
 (`Scheme.Safety.holds` (SC10, SC11)). The table's inequalities give
 agreement at every row that meets them (`Scheme.Sufficiency.holds`
 (SC12)), and where nobody equivocates fewer of them suffice, which
-covers Nemo-Nemo and Async Nemo-Nemo (SC22). The scheme's commit loop computes the relation: it outputs only verdicts
+covers Nemo-Nemo and Async Nemo-Nemo (SC22). Hybrid Mysticeti is
+Hydrozoan without its fast path, and lives at Hydrozoan's fault model
+(SC23). The scheme's commit loop computes the relation: it outputs only verdicts
 the relation derives, every derived verdict once it scans far enough,
 and two validators' outputs are prefix-comparable (`Scheme.Loop.holds`
 (SC13–SC15)); calls restarting after the last decision output on growing
@@ -11966,7 +11968,40 @@ carrier is in the test library; in the conformance and mechanism audits
 the family shows every obligation and every mechanism but adaptive
 leaders.
 
-### 27.10 What the arc does not contain
+### 27.10 Hybrid Mysticeti against Hydrozoan
+
+Hydrozoan (§22) is the development's rule under the hybrid fault model,
+`n ≥ 3f + 2c + k + 1`, and an anchored rule like the scheme. Its slow
+path is the Hybrid Mysticeti row's direct commit: `q_slow = 2f + c + 1`
+certificates of `q_cert = (n + f)/2 + 1` votes, at a wave of two. What
+it has beyond the row serves its fast path: the fast commit, a weak rung
+of `q_weak` linked votes that finds a fast commit through an anchor, and
+a skip threshold `q_fast` that excludes one. `Scheme.hydrozoanSlowAnchored`
+is Hydrozoan without them, on Hydrozoan's universe: the slow commit, a
+skip on `⌊(n + f + 1)/2⌋` blames and the certificate rung alone.
+
+SC23: the row is Hydrozoan without its fast path, and lives at
+Hydrozoan's fault model. On Hydrozoan's universe the row decides as
+`hydrozoanSlowAnchored` at every vote (`Scheme.hydrozoanSlow_eq`): one
+round up a vote is a reference, the thresholds are Hydrozoan's, and the
+scheme's least-id tie-break never fires, since two candidates of a slot
+with certificates are one block at `2·q_cert > n + f`. The row meets its
+inequalities at every `n ≥ 3f + 2c + 1` with `q = n − f − c`
+(`Scheme.Table.hybridAnyCommittee`), so its carrier is safe there. Under
+Hydrozoan's fault model, slack `f + c`, which admits `n = 3f + 2c + 1`,
+the commit and certificate thresholds are within reach of the correct
+replicas, so the support commits and covers: progress
+(`Scheme.HybridRow.onHydrozoan`). Hydrozoan's validity has no self-parent
+clause, so inclusion, which reads one, is not available there, as for
+Hydrozoan itself; on records that also ask self-reference
+(`Scheme.HybridValid`) the carrier lives, progress and inclusion
+(`Scheme.HybridRow.withSelfParent`). The row's skip threshold is within
+the liveness bound exactly at `n ≥ 3f + 2c + 1`, so a correct quorum
+alone skips a slot, where Hydrozoan's skip at `q_fast > q` is
+opportunistic. At six replicas, one Byzantine and one crashed, every
+threshold of the row is `4 = q` and Hydrozoan's `q_fast` is `6`.
+
+### 27.11 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -11975,9 +12010,9 @@ properties of §27.9 hold of the family at every vote. The commit loop *TryDecid
 loop is sound, its restart on one view holds (SC19), and its order
 and ledger reading hold (SC20, SC21); its completeness, its resumption
 on a larger view and the nesting of ledgers are not stated. The asynchronous rows' liveness by the coin is proved rule by
-rule only, and the family's `Lives` is stated on the core's universes,
-which at `f = fb + fc` exclude Hybrid Mysticeti's committee
-`3f + 2c + 1` when `c ≥ 1`. Stake weights, the coin-elected leader and
+rule only. The family's `Lives` is stated on the core's universes, and
+Hybrid Mysticeti's, at its committee `3f + 2c + 1`, at Hydrozoan's fault
+model (SC23); Hybrid Mahi-Mahi's there is not stated. Stake weights, the coin-elected leader and
 the scheme's buffer-round argument are not formalised. `scheme.md` §9
 lists these with a plan.
 
@@ -13210,6 +13245,7 @@ reused.
 | SC20 | the scheme's loop over rounds and leader indices, both downward, outputs `tryDecide` between the corresponding slots, and under `Slots.uniform` each pair is its slot's round and leader index; at the rows of SC12, its restart at the round of the last decision, dropping the slots already output, resumes it on a larger view | `Scheme.schemeOrder_slots`, `Scheme.schemeTryDecide_eq`, `Scheme.schemeOrder_uniform`, `Scheme.schemeTryDecide_restartRound`, `Scheme.Loop.order`, `Scheme.Loop.orderUniform`, `Scheme.Loop.restartRound` *(Scheme/Loop, Scheme/Helpers/Order)* |
 | SC21 | the output from slot `0` is `commitSeq` and `ledgerSet` of the loop's assignment, every slot below its length decided with that verdict; at the rows of SC12 two validators' ledgers are nested | `Scheme.tryDecide_eq_map`, `Scheme.ledger_read`, `Scheme.ledger_agree`, `Scheme.Loop.ledger`, `Scheme.Loop.ledgerAgree` *(Scheme/Loop, Scheme/Helpers/Ledger)* |
 | SC22 | where nobody equivocates, the two-round inequalities without `n + f + 1 ≤ commit + link` and the three-round ones without `n + f + 1 ≤ 2·cert` give agreement at every vote; Nemo-Nemo and Async Nemo-Nemo meet them at `n = 2c + 1` and agree; with `q = n − c` they need `n ≥ 2c + 1`, and `3c + 1` for a two-round row with a direct skip within the liveness bound | `Scheme.eq_of_noEquiv_all`, `Scheme.twoRoundCrashLaws`, `Scheme.threeRoundCrashLaws`, `Scheme.Table.crashWeaker`, `Scheme.Table.crashRows`, `Scheme.Table.crashBound`, `Scheme.Sufficiency.twoRoundCrashAgree`, `Scheme.Sufficiency.threeRoundCrashAgree`, `Scheme.Sufficiency.nemoRowsAgree` *(Scheme/Helpers/Sufficiency, Scheme/Table, Scheme/Sufficiency)* |
+| SC23 | on Hydrozoan's universe the Hybrid Mysticeti row decides as Hydrozoan without its fast path, at every vote; it meets its inequalities at every `n ≥ 3f + 2c + 1`, and its carrier is safe and progresses under Hydrozoan's fault model, and with self-reference lives | `Scheme.readAlike_hydrozoanSlow`, `Scheme.hydrozoanSlow_eq`, `Scheme.Table.hybridAnyCommittee`, `Scheme.HybridRow.slowRow`, `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent` *(Scheme/Helpers/Hydrozoan, Scheme/HybridRow)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -13284,7 +13320,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 420 definitions and structures the report names, in
+The 421 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -20132,6 +20168,24 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
 
 The filled block at gap round `k`: `v2`'s references at that round, plus the added self reference.
 
+#### `hydrozoanSlowAnchored`
+
+*def, `Scheme.Model.Hydrozoan.lean`*
+
+```lean
+def hydrozoanSlowAnchored :
+    AnchoredRule Replica BlockId Unit Hydrozoan.ValidWrt (Hydrozoan.NonByzantine : Finset Replica) where
+  waveAt := fun _ => 2
+  Commit := fun U V L r _ => Hydrozoan.SlowCommitInView U V L r
+  decCommit := fun _ _ _ _ _ => inferInstance
+  Skip := fun U V S k => blameSkip (S := S) ((Fintype.card Replica + F.f + 1) / 2) U V k
+  rungs := 1
+  Link := fun _ U A L S k => Hydrozoan.CertifiedIn U A L (S.slotRound k)
+  tie := fun _ _ _ => False
+```
+
+**Hydrozoan without its fast path**: wave two; the slow commit in view; a skip on `⌊(n + f + 1)/2⌋` blames in view; one rung, the anchor-linked certificate, with no tie-break.
+
 #### `leastSel`
 
 *def, `Scheme.Model.LeastSel.lean`*
@@ -20453,7 +20507,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 618 theorems the body or Appendix A names, each
+The 619 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28255,6 +28309,14 @@ theorem decided (h : ReadAlike R₁ R₂ U) {V : U.View} {k : ℕ} {v : Option B
     (hd : R₁.Decided U V k v) : R₂.Decided U V k v
 ```
 
+#### `holds`
+
+*theorem, `Scheme.HybridRow.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
 #### `complete`
 
 *theorem, `Scheme.Loop.Proof.lean`*
@@ -28316,11 +28378,11 @@ theorem skipsUnsupported (hv : p.voteOffset = 1) :
 *theorem, `Scheme.Properties.lean`*
 
 ```lean
-theorem selfParent [Faults Validator] {σ : VoteSel Validator BlockId Payload ValidWrt Correct} :
+theorem selfParent (hP : ∀ blk b, P blk b → Clause.selfParent blk b) :
     SelfParent (schemeRule p σ Hon)
 ```
 
-**Every block references its author's previous block**, on the core's universes.
+**Every block references its author's previous block**, on records whose validity asks it.
 
 #### `agree`
 

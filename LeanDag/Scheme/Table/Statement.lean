@@ -22,6 +22,8 @@ scheme, and `n − f − c` where the scheme solves for its rows.
 * `CrashWeaker`, `CrashRows`: at `f = 0` the inequalities imply those
   where nobody equivocates (`TwoRoundCrash`, `ThreeRoundCrash`), and
   Nemo-Nemo and Async Nemo-Nemo meet the two-round ones at `n = 2c + 1`.
+* `HybridAnyCommittee`: Hybrid Mysticeti meets its inequalities and the
+  liveness bounds at every `n ≥ 3f + 2c + 1`, with `q = n − f − c`.
 * `CrashBound`: where nobody equivocates, a two-round row needs
   `n ≥ 2c + 1`, and `n ≥ 3c + 1` with a direct skip within the liveness
   bound, where Orcaella's thresholds at `f = 0` are forced; a three-round
@@ -96,6 +98,12 @@ def ThreeRoundBound : Prop :=
           p.skipThreshold = (mysticeti n f).skipThreshold ∧
           p.certThreshold = (mysticeti n f).certThreshold))
 
+/-- **Hybrid Mysticeti holds at every committee from its bound up**, with
+`q = n − f − c`: its three-round inequalities and the liveness bounds. -/
+def HybridAnyCommittee : Prop :=
+  ∀ n f c : ℕ, 3 * f + 2 * c + 1 ≤ n →
+    ThreeRound (hybridMysticeti n f c) n f (n - f - c) ∧ Live (hybridMysticeti n f c) n f c
+
 /-- **At `f = 0` the inequalities imply those where nobody equivocates.** -/
 def CrashWeaker : Prop :=
   ∀ (p : Params) (n q : ℕ),
@@ -150,7 +158,7 @@ def NemoNotTwoRound : Prop :=
 /-- The table's claims, together. -/
 def Statement : Prop :=
   RowsHold ∧ TwoRoundBound ∧ ThreeRoundBound ∧ NemoNotTwoRound ∧ CrashWeaker ∧ CrashRows ∧
-    CrashBound
+    CrashBound ∧ HybridAnyCommittee
 
 end Table
 

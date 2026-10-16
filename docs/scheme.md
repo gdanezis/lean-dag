@@ -63,6 +63,12 @@ are the evidence.
   direct, indirect, quorate, non-equivocating, self-parent; safe at every
   row meeting its inequalities; and a support with its three laws, so it
   lives on the core's universes at every vote.
+* **Hybrid Mysticeti is Hydrozoan without its fast path** (§10). On
+  Hydrozoan's universe the row decides as Hydrozoan's slow commit with a
+  skip on `⌊(n + f + 1)/2⌋` blames and the certificate rung alone. Under
+  Hydrozoan's fault model, which admits `n = 3f + 2c + 1`, its carrier is
+  safe and progresses, and on records that also ask self-reference it
+  lives.
 
 **What the table claims and does not hold, or holds otherwise.**
 
@@ -113,7 +119,8 @@ are the evidence.
    Mysticeti's committee.** `HybridFaults` asks `n ≥ 3(fb + fc) + 1`,
    above `3f + 2c + 1` when `c ≥ 1`. The sufficiency theorems are stated
    over the record's quorum `q` and a non-equivocating set instead, so
-   crash faults enter only through `q`.
+   crash faults enter only through `q`. Hydrozoan's fault model admits
+   the committee, and the row lives there (§10).
 
 **Open.** The asynchronous liveness, and the gaps to the concrete
 algorithms; §9.2–§9.4 list them with a plan.
@@ -526,11 +533,9 @@ every vote.
   asynchronous Nemo in the development to compare Async Nemo-Nemo with.
 * **Orcaella above its bound** is a rule other than Hybrid's, with every
   property of §9.1, and has no reference algorithm.
-* **Cordial Miners and the derived rows** have no earlier formalisation
-  to compare with. Hybrid Mysticeti's thresholds are Hydrozoan's slow
-  path (`qSlow = 2f + c + 1`, `qCert = (n + f + 2)/2`); Hydrozoan keeps a
-  fast path at every `k`, so the comparison is with a variant of
-  Hydrozoan with no fast path, which is not written.
+* **Cordial Miners and the derived rows** other than Hybrid Mysticeti
+  have no earlier formalisation to compare with. Hybrid Mysticeti is
+  Hydrozoan without its fast path (§10).
 * **Stake.** The scheme counts stake; the arc counts one unit per
   validator.
 * **The asynchronous leader.** The asynchronous rows elect the leader by
@@ -540,11 +545,11 @@ every vote.
 * **The buffer rounds.** The scheme's paragraph on how many buffer rounds
   an asynchronous row needs (one at `n = 5f + 1`, more at `n = 3f + 1`)
   is not formalised.
-* **The hybrid fault model.** `Lives` is stated on the core's universes,
-  where a `Faults` instance asks `n ≥ 3f + 1` of the slack `f`. Hybrid
-  rows live there at `f = fb + fc` when `n ≥ 3(fb + fc) + 1`, which
-  excludes Hybrid Mysticeti's committee `3f + 2c + 1` at `c ≥ 1`; its
-  safety (§7) is stated over the record's quorum and holds there.
+* **The hybrid fault model.** The family's `Lives` is stated on the
+  core's universes, where a `Faults` instance asks `n ≥ 3f + 1` of the
+  slack `f`; that excludes Hybrid Mysticeti's committee `3f + 2c + 1` at
+  `c ≥ 1`. Hybrid Mysticeti lives at Hydrozoan's fault model, which
+  admits it (§10); Hybrid Mahi-Mahi's liveness there is not stated.
 
 ### 9.3 Liveness
 
@@ -552,7 +557,9 @@ The partially synchronous liveness is the family's: `Lives` (progress
 and inclusion) on the core's universes at every row with
 `commit ≤ n − f`, at every vote, and the three support laws, `OfCoverage`
 at `cert ≤ n − slack`. The table's liveness bounds (`Params.Live`) are
-the hypotheses these read. The asynchronous rows are live with
+the hypotheses these read. Hybrid Mysticeti progresses on Hydrozoan's
+universe under Hydrozoan's fault model (slack `f + c`), and with
+self-reference lives (§10). The asynchronous rows are live with
 probability one by the coin and the buffer rounds; the development
 proves this rule by rule (Mahi-Mahi, Async BlueBottle), and a statement
 for the family, with the scheme's buffer-round argument, is not written.
@@ -561,6 +568,67 @@ for the family, with the scheme's buffer-round argument, is not written.
 
 1. The asynchronous liveness for the family, with the buffer-round
    argument.
-2. A variant of Hydrozoan with no fast path, compared with Hybrid
-   Mysticeti; `Lives` over a fault model admitting `n = 3f + 2c + 1`.
-3. Stake weights.
+2. Stake weights.
+
+## 10. Hybrid Mysticeti against Hydrozoan
+
+Hydrozoan (`hydrozoan.md`) is the development's rule under the hybrid
+fault model: `n ≥ 3f + 2c + k + 1` replicas, at most `f` Byzantine, at
+most `c` crashed. Both it and the scheme are anchored rules, and they
+read alike part by part:
+
+| Part | Hybrid Mysticeti row | Hydrozoan |
+|:---|:---|:---|
+| Anchor eligibility | `waveLength − 1 = 2` | `2` |
+| Vote | `σ.Votes`, one round up: a reference | a reference (`IsVote`) |
+| Certificate | `⌈(n + f + 1)/2⌉` votes | `q_cert = (n + f)/2 + 1`, the same |
+| Direct commit | `2f + c + 1` certificates | the fast path or the slow path, `q_slow = 2f + c + 1` certificates |
+| Direct skip | `⌊(n + f + 1)/2⌋` blames | `q_fast = n − ⌊(c + k)/2⌋` blames |
+| Rungs | a certificate in the anchor's history | that, then `q_weak` linked votes |
+| Tie-break | least id | none at the certificate rung |
+
+Hydrozoan's weak rung finds a fast commit, which may leave no
+certificate, through an anchor, and its skip threshold `q_fast` excludes
+a fast commit. Without the fast path neither is needed.
+
+`Scheme/Model/Hydrozoan.lean` defines `hydrozoanSlowAnchored`, Hydrozoan
+without its fast path on Hydrozoan's universe: the slow commit in view,
+a skip on `⌊(n + f + 1)/2⌋` blames, and the certificate rung alone.
+`Scheme/HybridRow/Statement.lean` states, and `Proof.lean` proves, at
+every vote-selection rule:
+
+* **The row is Hydrozoan without its fast path** (`SlowRow`, from
+  `readAlike_hydrozoanSlow`): one round up a vote is a reference
+  (`certsAt_eq_certificatesAt`, `blamersAt_eq`), the thresholds are
+  Hydrozoan's, and the scheme's tie-break never fires, since two
+  candidates of a slot with certificates are one block
+  (`eq_of_certs_three`, at `2·q_cert > n + f`).
+* **On Hydrozoan's universe the carrier is safe and progresses**
+  (`OnHydrozoan`), at a local vote. The row meets its inequalities at
+  every `n ≥ 3f + 2c + 1` with `q = n − f − c`
+  (`Table.HybridAnyCommittee`), so it is covered, and safe. Under
+  Hydrozoan's fault model `hzReliability`, whose slack is `f + c`, the
+  commit and certificate thresholds are reachable by the correct
+  replicas, so the support commits (`familySupport_commits`), which is
+  progress, and its coverage law holds (`familySupport_ofCoverage`).
+* **With self-reference the carrier lives** (`WithSelfParent`): on
+  records at `HybridValid`, Hydrozoan's validity with every block
+  referencing its author's previous block, `SelfParent` holds
+  (`Scheme.selfParent`, now stated for any validity that asks it), and
+  with it inclusion: progress and inclusion together.
+
+Hydrozoan's validity has no self-parent clause, which is why Hydrozoan's
+own liveness is progress only, and the same holds of the row on
+Hydrozoan's universe. A side finding: the row's skip threshold
+`⌊(n + f + 1)/2⌋` is at most `n − f − c` exactly when
+`n ≥ 3f + 2c + 1`, so the correct replicas alone skip a slot, where
+Hydrozoan's `q_fast` exceeds `q`.
+
+`LeanDagTest/Scheme/HybridRow.lean` takes six replicas, one Byzantine and
+one crashed: `n = 3f + 2c + 1` at `f = c = 1`, which Hydrozoan's fault
+model admits and the core's excludes. Every threshold of the row is
+`4 = q`, Hydrozoan's `q_fast` is `6`, and the statements hold at the
+least vote.
+
+Nothing in `LeanDag/Hydrozoan/` changes; the arc is read, not edited.
+

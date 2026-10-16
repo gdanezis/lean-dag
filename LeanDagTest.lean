@@ -159,3 +159,4 @@ import LeanDagTest.RedSnapper.Termination
 import LeanDagTest.Scheme.LeastSel
 import LeanDagTest.Scheme.VotedBlock
 import LeanDagTest.Scheme.TryDecide
+import LeanDagTest.Scheme.HybridRow

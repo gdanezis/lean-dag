@@ -21,7 +21,7 @@ properties the mechanisms read, for the whole family:
   anchors;
 * **`CommitsCandidate`**, **`CommitsDirect`** and **`Indirect`** at every
   row and vote; **`SkipsUnsupported`** at a vote round one above the slot;
-* **`Quorate`**, **`NoEquiv`** and, on the core's universes,
+* **`Quorate`**, **`NoEquiv`** and, on records whose validity asks it,
   **`SelfParent`**, from validity and the invariant;
 * **`Agree`** and **`Safe`** at every row meeting its inequalities;
 * the support `familySupport` with its three laws (**`Local`**,
@@ -92,11 +92,11 @@ theorem noEquiv {rel : Reliability Validator} (hsub : rel.correct ⊆ Hon) :
     NoEquiv (schemeRule p σ Hon) rel :=
   fun U b c hb hc hbc heq hr => U.property b hb c hc (hsub hbc) heq hr
 
-/-- **Every block references its author's previous block**, on the core's
-universes. -/
-theorem selfParent [Faults Validator] {σ : VoteSel Validator BlockId Payload ValidWrt Correct} :
+/-- **Every block references its author's previous block**, on records
+whose validity asks it. -/
+theorem selfParent (hP : ∀ blk b, P blk b → Clause.selfParent blk b) :
     SelfParent (schemeRule p σ Hon) :=
-  fun U b hb hr => (U.val.valid b hb).self_parent hr
+  fun U b hb hr => hP _ _ (U.val.valid b hb) hr
 
 /-- **Two views decide alike** at every row meeting its inequalities, on
 records with quorum `q` where validators outside `Hon`, at most `f`, may
@@ -124,7 +124,8 @@ theorem lives [F : Faults Validator] {σ : VoteSel Validator BlockId Payload Val
     (hsub : (Correct : Finset Validator) ⊆ Hon)
     (hlive : p.commitThreshold ≤ Fintype.card Validator - F.f) :
     Support.Lives (R := schemeRule p σ Hon) (familySupport p σ Hon) (coreReliability Validator) :=
-  Support.liveness (familySupport_commits hlive) commitsCandidate selfParent (noEquiv hsub)
+  Support.liveness (familySupport_commits hlive) commitsCandidate
+    (selfParent fun _ _ h => h.self_parent) (noEquiv hsub)
 
 end Scheme
 

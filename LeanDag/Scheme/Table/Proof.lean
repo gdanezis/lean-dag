@@ -67,8 +67,14 @@ theorem crashBound : CrashBound := by
     obtain ⟨l1, l2, l3⟩ := hl
     exact ⟨by omega, by omega, by omega⟩
 
+theorem hybridAnyCommittee : HybridAnyCommittee := by
+  intro n f c hn
+  simp only [ThreeRound, Live, hybridMysticeti]
+  refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_, ?_⟩ <;> omega
+
 theorem holds : Statement :=
-  ⟨rowsHold, twoRoundBound, threeRoundBound, nemoNotTwoRound, crashWeaker, crashRows, crashBound⟩
+  ⟨rowsHold, twoRoundBound, threeRoundBound, nemoNotTwoRound, crashWeaker, crashRows, crashBound,
+    hybridAnyCommittee⟩
 
 end Table
 
