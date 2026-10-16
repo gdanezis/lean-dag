@@ -1,6 +1,7 @@
 import LeanDag.Scheme.Equiv.Proof
 import LeanDag.Scheme.Table.Proof
 import LeanDag.Scheme.Safety.Proof
+import LeanDag.Scheme.Sufficiency.Proof
 /-!
 # A vote-selection rule exists
 
@@ -26,6 +27,15 @@ example [F : Faults Validator] :
         (Payload := Payload) :=
   Equiv.mysticetiRow Validator BlockId Payload leastSel
 
+/-- The three-round theorem on the core universe, at the Mysticeti row and
+any vote: its hypotheses are met. -/
+example [F : Faults Validator] (σ : VoteSel Validator BlockId Payload ValidWrt Correct) :
+    Properties.Agree ((schemeAnchored (Params.mysticeti (Fintype.card Validator) F.f) σ).toDagRuleOn
+      (fun U => U.NoEquivOn Correct)) :=
+  Sufficiency.threeRoundAgree Validator BlockId Payload ValidWrt (quorumCard Validator) Correct
+    Correct F.f _ σ card_compl_correct_le (Nat.sub_le _ _) rfl (show 3 ≤ 3 by omega) rfl
+    (by have := F.card_validators; simp only [Params.ThreeRound, Params.mysticeti]; omega)
+
 end Scheme
 
 end LeanDagTest
@@ -34,3 +44,4 @@ end LeanDagTest
 #print axioms LeanDag.Scheme.Equiv.holds
 #print axioms LeanDag.Scheme.leastSel
 #print axioms LeanDag.Scheme.Safety.holds
+#print axioms LeanDag.Scheme.Sufficiency.holds

@@ -35,6 +35,15 @@ are the evidence.
   Cordial Miners Async is `cordialAsyncAnchored 5`, Mahi-Mahi at wave five
   with no direct skip, with Mahi-Mahi's laws. Their thresholds, fault
   bounds and wave lengths are the rules'.
+* **The table's inequalities suffice for agreement**
+  (`Scheme.Sufficiency.holds`, §7). On any record whose blocks reference
+  `q` distinct authors one round down and where at most `f` validators
+  may equivocate, every two-round row meeting `TwoRound n f q` and every
+  three-round row with a link of one certificate meeting
+  `ThreeRound n f q` decides alike from two views, at every vote. The
+  derived rows follow: Hybrid Mysticeti and Hybrid Mahi-Mahi at
+  `n = 3f + 2c + 1`, and Orcaella and Async Orcaella at every
+  `n ≥ 5f + 3c + 1`.
 
 **What the table claims and does not hold, or holds otherwise.**
 
@@ -59,8 +68,9 @@ are the evidence.
    core with no direct skip, with the core's laws (`Scheme.cordialLaws`).
 4. **Orcaella above its bound is a different rule.** Its fixed skip
    threshold `4f + 2c + 1` equals Hybrid's `n − f − c` only at
-   `n = 5f + 3c + 1`. Above it the inequalities hold, but the row reads
-   differently from Hybrid and its laws are not proved.
+   `n = 5f + 3c + 1`. Above it the row reads differently from Hybrid;
+   it meets the two-round inequalities, so it is safe
+   (`Scheme.Sufficiency.holds`).
 5. **The vote changes the rules with buffer rounds, not their safety.**
    The scheme's vote, `VotedBlock`, is the first block of the slot met in
    a depth-first search of the parents in their stored order; this
@@ -78,10 +88,15 @@ are the evidence.
    (`Scheme.Safety.holds`). The proofs read the vote through two facts: a
    block selects at most one block of a slot, and a block that selects a
    block of a slot does not blame it.
+6. **The hybrid fault model of `LeanDag/Hybrid` does not contain Hybrid
+   Mysticeti's committee.** `HybridFaults` asks `n ≥ 3(fb + fc) + 1`,
+   above `3f + 2c + 1` when `c ≥ 1`. The sufficiency theorems are stated
+   over the record's quorum `q` and a non-equivocating set instead, so
+   crash faults enter only through `q`.
 
-**Open.** The buffer-round rows' liveness at votes other than the least;
-the laws of the derived rows (Hybrid Mysticeti, Async Orcaella, Async Nemo-Nemo,
-Hybrid Mahi-Mahi), whose inequalities only are checked; and the commit
+**Open.** Liveness of every row not equal to a rule of this development,
+and of the buffer-round rows at votes other than the least; Async
+Nemo-Nemo's safety, which the inequalities do not give; and the commit
 loop `TryDecide` as an algorithm.
 
 ## 1. The parameters
@@ -214,24 +229,43 @@ and the commit loop `TryDecide` as an algorithm.
   lists every parent (`VotedBlockIsVote`). The search walks references as
   `historyUpto` does; at a block of the record a reference lies one round
   down, so pruning at the slot's round loses no block of the slot.
-* **Mahi-Mahi-shaped rows have the laws at every vote**
-  (`quorumRowLaws`). A row is Mahi-Mahi-shaped (`Params.QuorumRow`) when
-  votes are certified one round later, the wave is at least three, the
-  commit and certificate thresholds are `n − f`, the link is one
-  certificate, and the skip threshold is at least `n − f`: Mahi-Mahi at
-  `w ≥ 3`, Cordial Miners Async, and also Mysticeti and Cordial Miners PS.
-  Two certificates for twins share a correct voter, whose one block
-  selects one twin; a certificate and `n − f` blames share a voter that
-  both selects and blames; and a direct commit's `n − f` certificates are
-  reached from every block above the decision round.
-* **The Blue Bottle Async row has the laws at every vote**
-  (`blueBottleAsyncLaws`), at `n ≥ 5f + 1`, by Async BlueBottle's
-  counting: the supporters of two twins, or of a candidate and of the
-  slot's blames, number at most `n + f`, and `n − f` and `n − 3f`
-  supporters overlap in a correct author.
+* **The three rows have the laws at every vote.** Mahi-Mahi at `w ≥ 3`
+  and Cordial Miners Async meet the three-round inequalities, and Blue
+  Bottle Async at `n ≥ 5f + 1` the two-round ones, at `q = n − f`; on the
+  core's universe the correct validators never equivocate, so §7 gives
+  the laws.
 
 Each row's carrier then has `Agree` (`MahiMahiAgree`,
 `CordialMinersAsyncAgree`, `BlueBottleAsyncAgree`). The properties of
 Mahi-Mahi and Async BlueBottle beyond agreement, liveness among them,
 are proved of those rules, and transfer to the rows only at the least
 vote (§5).
+
+## 7. The table's inequalities suffice
+
+`Scheme/Sufficiency/Statement.lean` states, and `Proof.lean` proves, at
+every vote-selection rule, on records whose blocks reference `q` distinct
+authors one round down (`Validity.Quorate q`) and whose validators
+outside a set `Hon` of all but `f` never equivocate:
+
+* **Two rounds** (`TwoRoundAgree`, from `twoRoundLaws`): a row whose vote
+  is its certificate, with a wave of at least two, meeting
+  `TwoRound n f q`, agrees.
+* **Three rounds** (`ThreeRoundAgree`, from `threeRoundLaws`): a row that
+  certifies votes one round later, with a wave of at least three and a
+  link of one certificate, meeting `ThreeRound n f q`, agrees.
+* **The derived rows** (`HybridRowsAgree`, `OrcaellaRowsAgree`): Hybrid
+  Mysticeti and Hybrid Mahi-Mahi at `n = 3f + 2c + 1`, `q = 2f + c + 1`,
+  and Orcaella and Async Orcaella at every `n ≥ 5f + 3c + 1`,
+  `q = n − f − c`, by `Table.holds`.
+
+Every step is one of two counts. Two sets of same-round blocks whose
+authors number more than `n + f` together share a block
+(`exists_common_block`), and that block selects at most one block of a
+slot and does not blame a slot it selects in: this gives each inequality
+of the form `n + f + 1 ≤ a + b`. A block above `c` authors'
+decision-round blocks holds at least `c + q − n − f` of them in its
+history (`card_inHistory_ge`): this gives visibility, the inequality
+with `q`. In the two-round family the third inequality and `q ≤ n` give
+`commit ≥ link + f`, which the cases of two direct commits, and of a
+direct commit and a direct skip, need.

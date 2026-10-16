@@ -100,15 +100,6 @@ def ThreeRound (p : Params) (n f q : ℕ) : Prop :=
 def Live (p : Params) (n f c : ℕ) : Prop :=
   p.commitThreshold ≤ n - f - c ∧ p.skipThreshold ≤ n - f - c ∧ p.certThreshold ≤ n - f - c
 
-/-- **A Mahi-Mahi-shaped row**: votes certified at a later round, a wave of
-at least three, `n − f` certificates for a direct commit, `n − f` votes for
-a certificate, one certificate for a link, and at least `n − f` blames for
-a direct skip. Mysticeti, Mahi-Mahi and both Cordial Miners rows are such
-rows. -/
-def QuorumRow (p : Params) (n f : ℕ) : Prop :=
-  p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.commitThreshold = n - f ∧
-    p.certThreshold = n - f ∧ p.linkSize = 1 ∧ n - f ≤ p.skipThreshold
-
 end Params
 
 end Scheme

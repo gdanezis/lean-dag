@@ -22,6 +22,15 @@ variable {P : Validity Validator BlockId Payload} {honest : Finset Validator} [P
 variable {U : BlockRecord Validator BlockId Payload P honest}
 variable (σ : VoteSel Validator BlockId Payload P honest)
 
+omit [P.Mechanised] in
+/-- **A block votes for at most one block of a slot.** -/
+theorem VoteSel.eq_of_votes {q L₁ L₂ : BlockId} (h₁ : σ.Votes U q L₁) (h₂ : σ.Votes U q L₂)
+    (hc : (U.block L₁).creator = (U.block L₂).creator)
+    (hr : (U.block L₁).round = (U.block L₂).round) : L₁ = L₂ := by
+  unfold VoteSel.Votes at h₁ h₂
+  rw [hc, hr, h₂] at h₁
+  exact (Option.some.inj h₁).symm
+
 /-- The references of `b` name distinct authors. -/
 def DistinctRefs (U : BlockRecord Validator BlockId Payload P honest) (b : BlockId) : Prop :=
   ∀ i ∈ (U.block b).refs, ∀ j ∈ (U.block b).refs, (U.block i).creator = (U.block j).creator →

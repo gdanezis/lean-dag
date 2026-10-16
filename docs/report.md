@@ -558,7 +558,9 @@ checks its table (`Scheme.Table.holds` (SC1)), and reads eight of its
 rows as rules of this development, three of them at the least vote
 (`Scheme.Equiv.holds` (SC4–SC6, SC9)); at the scheme's own vote those
 three are not the development's rules, and two views still decide alike
-(`Scheme.Safety.holds` (SC10, SC11)).
+(`Scheme.Safety.holds` (SC10, SC11)). The table's inequalities give
+agreement at every row that meets them (`Scheme.Sufficiency.holds`
+(SC12)).
 
 **The development has four kinds of arc, and the source says which each
 is.** A **commit rule** carries a universe, a decision relation, the
@@ -11758,28 +11760,65 @@ names one, and the search with the parents in descending order names the
 other. At the scheme's own vote the three rows of §27.5 are therefore not
 Mahi-Mahi's and Async BlueBottle's rules.
 
-They are still safe at every vote-selection rule (SC11). The proofs read
-the vote through two facts: a block selects at most one block of a slot,
-and a block that selects a block of a slot does not blame it. For a
-Mahi-Mahi-shaped row, with votes certified one round later, a wave of at
-least three, commit and certificate thresholds `n − f`, a link of one
-certificate, and a skip threshold of at least `n − f`
-(`Params.QuorumRow`), two certificates for twins share a correct voter,
-whose one block selects one twin; a certificate and `n − f` blames share
-a voter that both selects and blames; and every block above the decision
-round reaches one of a direct commit's certificates
-(`Scheme.quorumRowLaws`). Mahi-Mahi at `w ≥ 3` and Cordial Miners Async
-are such rows. The Blue Bottle Async row takes Async BlueBottle's
-counting at `n ≥ 5f + 1` (`Scheme.blueBottleAsyncLaws`). Each row's
-carrier then has `Agree`.
+They are still safe at every vote-selection rule (SC11). On the core's
+universe the correct validators never equivocate and every block
+references `n − f` authors, and each of the three rows meets its family's
+inequalities at `q = n − f`, so the theorems of §27.7 give its laws and
+its carrier has `Agree`.
 
-### 27.7 What the arc does not contain
+### 27.7 The table's inequalities suffice
+
+The table derives each row's thresholds from inequalities in `n`, `f`
+and `q`. SC12 proves that the inequalities give agreement, for every row
+and every vote-selection rule. A record is read through three numbers:
+`n` validators, blocks that reference `q` distinct authors one round down
+(`Validity.Quorate q`), and a set `Hon` of validators that never
+equivocate, with at most `f` validators outside it. The rule's carrier
+is taken over the records where `Hon` does not equivocate. Crash faults
+enter only through `q`.
+
+* **Two rounds.** A row whose vote is its certificate, with a wave of at
+  least two and `Params.TwoRound n f q`, has the anchored laws
+  (`Scheme.twoRoundLaws`). Two sets of same-round blocks whose authors
+  number more than `n + f` together share a block, since an author of
+  `Hon` common to both has one block at the round. A shared block
+  selects at most one block of a slot and does not blame a slot it
+  selects in. The first inequality, `n + f + 1 ≤ skip + link`, then
+  excludes a direct skip and a link; the second,
+  `n + f + 1 ≤ commit + link`, a direct commit and a link to its twin;
+  and the third, `link + n + f ≤ commit + q`, with `q ≤ n`, gives
+  `commit ≥ link + f`, which excludes two direct commits and a direct
+  commit with a direct skip. The third inequality is also visibility:
+  a block `d + 1` rounds above `c` authors' decision-round blocks holds
+  at least `c + q − n − f` of their authors in its history
+  (`Scheme.card_inHistory_ge`), so every anchor holds `link` votes for a
+  directly committed candidate.
+* **Three rounds.** A row that certifies votes one round later, with a
+  wave of at least three, a link of one certificate and
+  `Params.ThreeRound n f q`, has the anchored laws
+  (`Scheme.threeRoundLaws`). `n + f + 1 ≤ 2·cert` makes two certificates
+  share a voter, so certificates for twins do not both exist;
+  `n + f + 1 ≤ skip + cert` makes a certificate and a direct skip share a
+  voter; and `n + f + 1 ≤ commit + q` puts a certificate of every direct
+  commit in every anchor's history.
+
+The derived rows follow from the arithmetic of SC1. Hybrid Mysticeti and
+Hybrid Mahi-Mahi at `w ≥ 3` agree at `n = 3f + 2c + 1` and
+`q = 2f + c + 1`, and Orcaella and Async Orcaella agree at every
+`n ≥ 5f + 3c + 1` and `q = n − f − c`. Orcaella above its bound is a rule
+other than Hybrid's (§27.4), and is safe. The statements quantify over
+the record's validity, not over the hybrid fault model of §14: that
+model's base bound `n ≥ 3(fb + fc) + 1` excludes Hybrid Mysticeti's
+committee `3f + 2c + 1` whenever `c ≥ 1`. Nemo-Nemo and Async Nemo-Nemo
+fail the second two-round inequality (SC1) and are outside SC12; their
+safety rests on the crash model, which §27.4 uses for Nemo-Nemo.
+
+### 27.8 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle beyond agreement,
-liveness among them, reach the rows of §27.5 only at the least vote.
-The derived rows Hybrid Mysticeti, Async Orcaella,
-Async Nemo-Nemo and Hybrid Mahi-Mahi have their inequalities checked
-(SC1) and no laws. The commit loop *TryDecide*, which scans slots
+liveness among them, reach the rows of §27.5 only at the least vote, and
+no row has a liveness result from SC12. The derived rows' safety is
+SC12's; Async Nemo-Nemo's is not proved. The commit loop *TryDecide*, which scans slots
 downward and outputs the longest decided prefix, is read through
 `Decided` and is not stated as an algorithm.
 
@@ -12071,9 +12110,10 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `LeanDagTest/` | the models of §28 and the witness files of every arc |
 | `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, the least vote `leastSel`, the scheme's vote `votedBlock`, and the three rule variants its rows name |
 | `Scheme/Table/` | the table's inequalities and the claims of its reading paragraph, SC1 |
-| `Scheme/Helpers/` | two rules that read alike decide alike (SC2); votes one round up (SC3); votes further up (SC8); the rows' readings and the variants' laws; the laws at every vote and the scheme's search (SC10–SC11) |
+| `Scheme/Helpers/` | two rules that read alike decide alike (SC2); votes one round up (SC3); votes further up (SC8); the rows' readings and the variants' laws; the scheme's search (SC10); the laws from the inequalities (SC12) |
 | `Scheme/Equiv/` | eight rows as carriers, SC4–SC6 and SC9 |
 | `Scheme/Safety/` | the scheme's vote is a vote-selection rule, and three rows with buffer rounds agree at every vote, SC10–SC11 |
+| `Scheme/Sufficiency/` | the table's inequalities give agreement at every vote, and the derived rows agree, SC12 |
 
 **The support graph, extracted.** The dependency structure of the
 development is not documented by hand: `scripts/DepGraph.lean` walks
@@ -12997,7 +13037,8 @@ reused.
 | SC8 | below the voter, every vote-selection rule blames as Mahi-Mahi blames, and the least vote is Mahi-Mahi's vote | `Scheme.sel_eq_none_iff_blames`, `Scheme.leastSel_votes_iff` *(Scheme/Helpers/Buffered)* |
 | SC9 | at the least vote, the Mahi-Mahi row at `w ≥ 3` is Mahi-Mahi's carrier, the Blue Bottle Async row is Async BlueBottle's, and the Cordial Miners Async row is Mahi-Mahi at wave five with no direct skip, with Mahi-Mahi's laws | `Scheme.Equiv.mahiMahiRow`, `Scheme.Equiv.blueBottleAsyncRow`, `Scheme.Equiv.cordialMinersAsyncRow`, `Scheme.cordialAsyncLaws` *(Scheme/Equiv)* |
 | SC10 | the scheme's vote, a depth-first search of the parents in any order listing them all, is a vote-selection rule | `Scheme.Safety.votedBlockIsVote`, `Scheme.votedBlockSel` *(Scheme/Safety, Scheme/Helpers/VotedBlock)* |
-| SC11 | at every vote-selection rule, the Mahi-Mahi row at `w ≥ 3`, the Cordial Miners Async row and the Blue Bottle Async row have the anchored laws, and two views decide alike | `Scheme.quorumRowLaws`, `Scheme.blueBottleAsyncLaws`, `Scheme.Safety.holds` *(Scheme/Safety)* |
+| SC11 | at every vote-selection rule, the Mahi-Mahi row at `w ≥ 3`, the Cordial Miners Async row and the Blue Bottle Async row have the anchored laws, and two views decide alike | `Scheme.Safety.holds` *(Scheme/Safety)* |
+| SC12 | on records with quorum `q` and at most `f` validators that may equivocate, every two-round row meeting `TwoRound n f q` and every three-round row with a link of one certificate meeting `ThreeRound n f q` has the anchored laws and agrees, at every vote; Hybrid Mysticeti, Hybrid Mahi-Mahi, Orcaella at every `n ≥ 5f + 3c + 1` and Async Orcaella agree | `Scheme.twoRoundLaws`, `Scheme.threeRoundLaws`, `Scheme.Sufficiency.holds` *(Scheme/Sufficiency, Scheme/Helpers/Sufficiency)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -20029,7 +20070,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 605 theorems the body or Appendix A names, each
+The 606 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -27809,6 +27850,14 @@ theorem decided (h : ReadAlike R₁ R₂ U) {V : U.View} {k : ℕ} {v : Option B
 #### `holds`
 
 *theorem, `Scheme.Safety.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
+
+#### `holds`
+
+*theorem, `Scheme.Sufficiency.Proof.lean`*
 
 ```lean
 theorem holds : Statement
