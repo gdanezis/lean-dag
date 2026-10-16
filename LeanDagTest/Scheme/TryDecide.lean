@@ -11,7 +11,8 @@ The scheme's schedule with one leader per round and pipelining is
 the Mahi-Mahi row of wave four commits slots `0`, `1` and `2` directly,
 as Mahi-Mahi does, and leaves slots `3`–`5` undecided: their decision
 rounds lie past round `5`. On Mysticeti's `U7` it commits slot `0`
-indirectly.
+indirectly. Successive calls, each restarting after the last decision
+output, output the same.
 -/
 
 namespace LeanDagTest
@@ -42,6 +43,17 @@ example : tryDecide mm4 σL full4 (View.full full4) 0 5 = [(0, some 0), (1, some
 example : tryDecide mm4 σV full4 (View.full full4) 0 5 = [(0, some 0), (1, some 5), (2, some 10)] := by
   decide
 
+/-- Restarting at slot `1` repeats the tail of the output. -/
+example : tryDecide mm4 σL full4 (View.full full4) 1 5 = [(1, some 5), (2, some 10)] := by
+  decide
+
+/-- Three calls scanning to slots `1`, `3` and `5`, each restarting after the
+last decision output: the first outputs slots `0` and `1`, the second slot
+`2`, the third nothing. -/
+example : consumed mm4 σL full4 0 (fun _ => View.full full4) (fun t => 2 * t + 1) 3 =
+    [(0, some 0), (1, some 5), (2, some 10)] := by
+  decide
+
 end Pipelined
 
 /-! ## An indirect commit: Mysticeti's `U7`
@@ -60,6 +72,12 @@ example : tryDirect myst σL U7 V7 0 = none := by decide
 example : tryDecide myst σL U7 V7 0 1 = [(0, some 0), (1, some 12)] := by decide
 
 example : tryDecide myst σV U7 V7 0 1 = [(0, some 0), (1, some 12)] := by decide
+
+/-- A call scanning to slot `0` outputs nothing, since slot `0` waits on
+slot `1`; the next call, scanning to slot `1`, outputs both. -/
+example : consumed myst σL U7 0 (fun _ => V7) (fun t => t) 1 = [] ∧
+    consumed myst σL U7 0 (fun _ => V7) (fun t => t) 2 = [(0, some 0), (1, some 12)] := by
+  decide
 
 end Scheme
 

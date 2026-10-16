@@ -563,7 +563,8 @@ agreement at every row that meets them (`Scheme.Sufficiency.holds`
 (SC12)). The scheme's commit loop computes the relation: it outputs only verdicts
 the relation derives, every derived verdict once it scans far enough,
 and two validators' outputs are prefix-comparable (`Scheme.Loop.holds`
-(SC13–SC15)). As a carrier the family shows every property the
+(SC13–SC15)); calls restarting after the last decision output on growing
+views output what one call outputs (SC19). As a carrier the family shows every property the
 mechanisms read, banded at a local vote and live at every vote on the
 core's universes (SC16–SC18).
 
@@ -11856,12 +11857,32 @@ derived one, by soundness and the uniqueness of verdicts; when the loop
 makes none, its walk passes the slots the derivation skips, meets the
 anchor the derivation names, and finds there the derivation's candidate,
 which the tie-break makes the least linked one the view holds. The loop
-therefore computes the relation. On Mahi-Mahi's
+therefore computes the relation.
+
+SC19: the restart is idempotent. The scan lists each slot with the
+loop's decision for it, which reads only the slots above it
+(`Scheme.scan_eq_map`), so a call from a slot `lo'` inside the output
+from `lo` outputs that output without its first `lo' − lo` entries
+(`Scheme.tryDecide_restart`), at every row and vote. A decision the scan
+makes is a derivation bounded by the scan's last slot, a bounded
+derivation holds on every larger view
+(`AnchoredRule.DecidedWithin.view_mono`), and at the rows of SC12 the
+loop decides it at every larger scan (`Scheme.decisionAt_mono`). The
+output on a view, followed by the output on a larger view, scanned at
+least as far, from the slot after it, is therefore the output on the
+larger view (`Scheme.tryDecide_resume`), and by induction the decisions
+output by `t + 1` calls on growing views, each restarting after the last
+decision output, are the output of one call on the last view
+(`Scheme.consumed_eq`). The scheme restarts at the round of the last
+consumed decision; with several leaders per round that round's consumed
+slots are output again, and `tryDecide_restart` says they are output
+alike. On Mahi-Mahi's
 `full4` the loop at the Mahi-Mahi row of wave four commits slots `0`–`2`
 directly at both the least vote and the scheme's own, and on
 Mysticeti's `U7` it commits slot `0` indirectly through slot `1`'s block
 `12`, as the hand-built derivation in `LeanDagTest/Mysticeti/Model.lean`
-does.
+does. On `U7` a call scanning to slot `0` outputs nothing, since slot `0`
+waits on slot `1`, and the next call, scanning to slot `1`, outputs both.
 
 ### 27.9 The family as a carrier
 
@@ -11905,9 +11926,8 @@ those rules alone reach the rows of §27.5 at the least vote only; the
 properties of §27.9 hold of the family at every vote. Async Nemo-Nemo's
 safety is not proved. The commit loop *TryDecide* is read through
 `Decided` (SC13, SC15) on the rows of SC12; at a row outside them the
-loop is sound and its completeness is not stated. The loop's restart at
-the round of the last consumed decision, which the scheme calls
-idempotent, is not stated, and its output is not connected to the
+loop is sound and its restart on one view holds (SC19); its
+completeness and its resumption on a larger view are not stated. The loop's output is not connected to the
 ledger. The asynchronous rows' liveness by the coin is proved rule by
 rule only, and the family's `Lives` is stated on the core's universes,
 which at `f = fb + fc` exclude Hybrid Mysticeti's committee
@@ -13140,6 +13160,7 @@ reused.
 | SC16 | the least vote and the scheme's vote are local | `Scheme.leastSel_local`, `Scheme.votedBlockSel_local` *(Scheme/Helpers/Local)* |
 | SC17 | at a local vote, a wave of at least two and positive thresholds, the family's carrier is banded; at every row and vote it shows `CommitsCandidate`, `CommitsDirect`, `Indirect`, `Quorate`, `NoEquiv` (and `SelfParent` on the core's universes); at every row meeting its inequalities it agrees and is safe | `Scheme.schemeBandLaws`, `Scheme.banded`, `Scheme.indirect`, `Scheme.agree`, `Scheme.safety` *(Scheme/Properties)* |
 | SC18 | the family's support has its three laws, and the carrier lives on the core's universes at every vote | `Scheme.familySupport_local`, `Scheme.familySupport_commits`, `Scheme.familySupport_ofCoverage`, `Scheme.lives` *(Scheme/Helpers/Support, Scheme/Properties)* |
+| SC19 | a call restarting inside an earlier output repeats its tail; at the rows of SC12, calls on growing views, each restarting after the last decision output, output what one call on the last view outputs | `Scheme.tryDecide_restart`, `Scheme.decisionAt_mono`, `Scheme.tryDecide_resume`, `Scheme.consumed_eq`, `Scheme.Loop.restart`, `Scheme.Loop.resume`, `Scheme.Loop.repeated` *(Scheme/Loop, Scheme/Helpers/Restart)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -20383,7 +20404,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 616 theorems the body or Appendix A names, each
+The 617 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28163,6 +28184,18 @@ theorem votes_band (hσ : σ.Local) (h : AgreeBand R.toDagRule U U' lo hi g g') 
 ```
 
 A vote, across a band.
+
+#### `tryDecide_restart`
+
+*theorem, `Scheme.Helpers.Restart.lean`*
+
+```lean
+theorem tryDecide_restart {lo lo' N : ℕ} (hlo : lo ≤ lo')
+    (hlo' : lo' ≤ lo + (tryDecide p σ U V lo N).length) :
+    tryDecide p σ U V lo' N = (tryDecide p σ U V lo N).drop (lo' - lo)
+```
+
+**Restarting inside the output repeats its tail.**
 
 #### `decided`
 

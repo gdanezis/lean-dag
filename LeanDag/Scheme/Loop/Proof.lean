@@ -1,11 +1,12 @@
 import LeanDag.Scheme.Loop.Statement
-import LeanDag.Scheme.Helpers.TryDecide
+import LeanDag.Scheme.Helpers.Restart
 /-!
 # The commit loop — proof
 
 Soundness by induction down the scan, completeness by induction on a
 bounded derivation (`Helpers/TryDecide.lean`); prefix comparability and
-completeness use the laws of `Helpers/Sufficiency.lean`.
+completeness use the laws of `Helpers/Sufficiency.lean`; the restart is
+`Helpers/Restart.lean`.
 -/
 
 namespace LeanDag
@@ -55,7 +56,24 @@ theorem outputComplete : OutputComplete := by
   obtain ⟨hl, hcm, hc, hlaws⟩ := family σ hHon hq hfam
   exact tryDecide_eventually hl hcm hc hlaws hne hlok hall
 
-theorem holds : Statement := ⟨sound, prefixComparable, complete, outputComplete⟩
+theorem restart : Restart := by
+  intro Validator BlockId Payload _ _ _ P honest p σ S U V lo lo' N hlo hlo'
+  exact tryDecide_restart hlo hlo'
+
+theorem resume : Resume := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ S U V₁ V₂ lo N₁ N₂
+    hHon hq hne hfam hsub hN
+  obtain ⟨hl, hcm, hc, hlaws⟩ := family σ hHon hq hfam
+  exact tryDecide_resume hl hcm hc hlaws hne hsub hN
+
+theorem repeated : Repeated := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ S U lo W N
+    hHon hq hne hfam hW hN
+  obtain ⟨hl, hcm, hc, hlaws⟩ := family σ hHon hq hfam
+  exact consumed_eq hl hcm hc hlaws hne hW hN
+
+theorem holds : Statement :=
+  ⟨sound, prefixComparable, complete, outputComplete, restart, resume, repeated⟩
 
 end Loop
 

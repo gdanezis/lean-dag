@@ -50,6 +50,9 @@ are the evidence.
   with positive link and certificate thresholds. At the rows the
   inequalities cover it outputs every derived verdict once its scan
   reaches far enough, and two validators' outputs are prefix-comparable.
+  Restarting is idempotent: calls on growing views, each restarting
+  after the last decision output, output what one call on the last view
+  outputs.
 * **The family shows every property the mechanisms read** (§9): banded at
   a local vote, which the least vote and `VotedBlock` are; candidate,
   direct, indirect, quorate, non-equivocating, self-parent; safe at every
@@ -325,7 +328,35 @@ Mahi-Mahi row of wave four it commits slots `0`–`2` directly at the
 least vote and at `VotedBlock`, and on Mysticeti's `U7` it commits slot
 `0` indirectly through slot `1`.
 
-**Open.** The restart at the round of the last consumed decision.
+**The restart** (`Restart`, `Resume`, `Repeated`; `Helpers/Restart.lean`).
+The scheme's *TryDecide* takes `r_last`, the round of the last consumed
+decision, and calls itself idempotent. Stated at slot granularity:
+
+* **Restarting inside the output repeats its tail** (`Restart`, from
+  `tryDecide_restart`), at every row and vote: for `lo ≤ lo'` within the
+  output from `lo`, `tryDecide lo' N` is that output without its first
+  `lo' − lo` entries. The scan lists each slot with the loop's decision
+  for it (`scan_eq_map`), and a slot's decision reads only the slots
+  above it, so where the scan stops at the bottom changes nothing above.
+* **Resuming on a larger view** (`Resume`, from `tryDecide_resume`), at
+  the rows of §7: the output on `V₁` to slot `N₁`, followed by the output
+  on `V₂ ⊇ V₁` to `N₂ ≥ N₁` from the slot after it, is the output on `V₂`
+  from `lo`. A decision the scan makes is a derivation bounded by
+  `N₁ + 1` (`SoundAt` carries the bound); a bounded derivation holds on
+  every larger view (`DecidedWithin.view_mono`); and completeness at the
+  bound decides it at `N₂` (`decisionAt_mono`).
+* **Successive calls output what one call outputs** (`Repeated`, from
+  `consumed_eq`): `consumed lo W N t` lists the decisions of `t` calls on
+  views `W 0 ⊆ W 1 ⊆ …` scanned to `N 0 ≤ N 1 ≤ …`, each restarting after
+  the last decision output, and after `t + 1` calls it is
+  `tryDecide (W t) lo (N t)`.
+
+The scheme restarts at the *round* of `r_last`, not the slot after it.
+With several leaders per round, or with pipelining, the slots of that
+round already consumed are output again; `Restart` says they are output
+alike, so the caller drops them by slot. The tests restart `full4` at
+slot `1`, run three calls on it, and on `U7` show a first call that
+outputs nothing because slot `0` waits on slot `1`.
 
 ## 9. The family as a carrier, and what remains
 
@@ -408,10 +439,10 @@ every vote.
 * **The schedule mapping.** That the scheme's scan over rounds and leader
   indices, both downward, is slot order reversed under
   `Slots.uniform p m` is argued in §8, not stated in Lean.
-* **The commit loop.** The restart at the round of the last consumed
-  decision (`r_last`) is not stated, and the loop's output is not
-  connected to the ledger (`commitSeq`, `ledgerSet` in
-  `Common/Ledger.lean`).
+* **The commit loop.** The loop's output is not connected to the ledger
+  (`commitSeq`, `ledgerSet` in `Common/Ledger.lean`). The restart is
+  stated at slot granularity (§8); the scheme's round granularity is
+  covered by `Restart` but not stated as such.
 * **The buffer rounds.** The scheme's paragraph on how many buffer rounds
   an asynchronous row needs (one at `n = 5f + 1`, more at `n = 3f + 1`)
   is not formalised.
@@ -436,7 +467,7 @@ for the family, with the scheme's buffer-round argument, is not written.
 
 1. The asynchronous liveness for the family, with the buffer-round
    argument.
-2. The schedule mapping in Lean, and the loop's restart and ledger.
+2. The schedule mapping in Lean, and the loop's ledger.
 3. A variant of Hydrozoan with no fast path, compared with Hybrid
    Mysticeti; `Lives` over a fault model admitting `n = 3f + 2c + 1`.
 4. Stake weights.

@@ -21,6 +21,8 @@ indices downward, which is slot order reversed.
 * `scan N m`: the decisions of the `m` slots `N + 1 − m, …, N`, oldest
   first, each slot decided from the decisions above it.
 * `tryDecide lo N`: the longest prefix of decided slots from `lo`.
+* `consumed`: the decisions output by successive calls on growing views,
+  each restarting after the last decision output.
 
 Definitions only; the claims are `Scheme/Loop/Statement.lean`.
 -/
@@ -86,6 +88,14 @@ oldest first. -/
 def tryDecide (lo N : ℕ) : List (ℕ × Option BlockId) :=
   ((scan p σ U V N (N + 1 - lo)).takeWhile (fun e => e.2.isSome)).map
     (fun e => (e.1, e.2.join))
+
+/-- The decisions the loop has output after `t` calls on the views `W 0, W 1, …`:
+call `t` scans to slot `N t` on `W t` and restarts at the slot after the
+last decision output so far, the scheme's `r_last`. -/
+def consumed (lo : ℕ) (W : ℕ → U.View) (N : ℕ → ℕ) : ℕ → List (ℕ × Option BlockId)
+  | 0 => []
+  | t + 1 => consumed lo W N t ++
+      tryDecide p σ U (W t) (lo + (consumed lo W N t).length) (N t)
 
 end Scheme
 

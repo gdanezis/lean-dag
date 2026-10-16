@@ -99,21 +99,22 @@ theorem mem_view_of_link (hl : 1 ≤ p.linkSize) (hc : p.voteIsCert = false → 
     obtain ⟨b, hb, hbL⟩ := exists_vote_of_carriesVotes (hc (by simpa using hv)) hcert
     exact history_subset_view (V.complete C hCV b hb) (σ.sound U b _ _ L hbL).1
 
-/-- A slot's decision is sound, and a commit names a candidate the view
-holds. -/
+/-- A slot's decision is derived below the bound `B`, and a commit names a
+candidate the view holds. -/
 def SoundAt (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
-    (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (k : ℕ)
+    (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (B k : ℕ)
     (s : Option (Option BlockId)) : Prop :=
-  ∀ v, s = some v → (schemeAnchored p σ).Decided U V k v ∧ ∀ A, v = some A → A ∈ candidatesIn U V k
+  ∀ v, s = some v → (schemeAnchored p σ).DecidedWithin U V B k v ∧
+    ∀ A, v = some A → A ∈ candidatesIn U V k
 
 omit [Fintype Validator] in
-theorem tryDirect_sound {k : ℕ} : SoundAt p σ U V k (tryDirect p σ U V k) := by
+theorem tryDirect_sound {B k : ℕ} (hk : k < B) : SoundAt p σ U V B k (tryDirect p σ U V k) := by
   intro v hv
   unfold tryDirect at hv
   split at hv
   · rename_i hs
     cases hv
-    exact ⟨.directSkip hs, fun _ h => by cases h⟩
+    exact ⟨.directSkip hk hs, fun _ h => by cases h⟩
   · cases hL : leastOf ((candidatesIn U V k).filter
         (fun L => (schemeAnchored p σ).Commit U V L (S.slotRound k) (S.kind k))) with
     | none => rw [hL] at hv; cases hv
@@ -122,31 +123,33 @@ theorem tryDirect_sound {k : ℕ} : SoundAt p σ U V k (tryDirect p σ U V k) :=
       cases hv
       obtain ⟨hmem, -⟩ := leastOf_eq_some hL
       obtain ⟨hc, hcommit⟩ := Finset.mem_filter.mp hmem
-      exact ⟨.directCommit (isLeaderBlock_of_mem_candidatesIn hc) hcommit,
+      exact ⟨.directCommit hk (isLeaderBlock_of_mem_candidatesIn hc) hcommit,
         fun A h => by cases h; exact hc⟩
 
 omit [Fintype Validator] in
 /-- **The walk over the later slots is sound.** The slots of the list are
-consecutive from `a`, each sound, and every eligible slot between `k`
-and `a` is skipped. -/
+consecutive from `a` and below `B`, each sound, and every eligible slot
+between `k` and `a` is skipped. -/
 theorem tryIndirect_sound (hl : 1 ≤ p.linkSize)
-    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold) {k : ℕ} :
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold) {B k : ℕ} :
     ∀ (l : List (ℕ × Option (Option BlockId))) (a : ℕ),
-      l.map Prod.fst = List.range' a l.length → k < a →
-      (∀ e ∈ l, SoundAt p σ U V e.1 e.2) →
+      l.map Prod.fst = List.range' a l.length → k < a → a + l.length ≤ B →
+      (∀ e ∈ l, SoundAt p σ U V B e.1 e.2) →
       (∀ m, k < m → m < a → (schemeAnchored p σ).Eligible k m →
-        (schemeAnchored p σ).Decided U V m none) →
-      SoundAt p σ U V k (tryIndirect p σ U V k l) := by
+        (schemeAnchored p σ).DecidedWithin U V B m none) →
+      SoundAt p σ U V B k (tryIndirect p σ U V k l) := by
   intro l
   induction l with
-  | nil => intro a _ _ _ _ v hv; cases hv
+  | nil => intro a _ _ _ _ _ v hv; cases hv
   | cons e rest ih =>
     obtain ⟨j, s⟩ := e
-    intro a hrange hka hsound hmid v hv
+    intro a hrange hka haB hsound hmid v hv
     simp only [List.map_cons, List.length_cons, List.range'_succ, List.cons.injEq] at hrange
     obtain ⟨rfl, hrest⟩ := hrange
     have hsj := hsound (j, s) (List.mem_cons_self ..)
-    have hrest_sound : ∀ e ∈ rest, SoundAt p σ U V e.1 e.2 :=
+    have hjB : j < B := by simp only [List.length_cons] at haB; omega
+    have haB' : j + 1 + rest.length ≤ B := by simp only [List.length_cons] at haB; omega
+    have hrest_sound : ∀ e ∈ rest, SoundAt p σ U V B e.1 e.2 :=
       fun e he => hsound e (List.mem_cons_of_mem _ he)
     have helig_iff : (schemeAnchored p σ).Eligible k j ↔
         S.slotRound k + (p.waveLength - 1) + 1 ≤ S.slotRound j :=
@@ -157,7 +160,7 @@ theorem tryIndirect_sound (hl : 1 ≤ p.linkSize)
       have helig' := helig_iff.mpr helig
       rcases s with _ | _ | A
       · simp at hv
-      · exact ih (j + 1) hrest (by omega) hrest_sound (fun m h1 h2 hm => by
+      · exact ih (j + 1) hrest (by omega) haB' hrest_sound (fun m h1 h2 hm => by
           rcases Nat.lt_succ_iff_lt_or_eq.mp h2 with h2 | rfl
           · exact hmid m h1 h2 hm
           · exact (hsj none rfl).1) v hv
@@ -169,7 +172,7 @@ theorem tryIndirect_sound (hl : 1 ≤ p.linkSize)
             (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
               (fun C => C ∈ history U A))).card)) with
         | none =>
-          refine ⟨.indirectSkip (by omega) helig' hdA hmid (fun i hi L hL' hlink => ?_),
+          refine ⟨.indirectSkip (by omega) hjB helig' hdA hmid (fun i hi L hL' hlink => ?_),
             fun _ h => by cases h⟩
           have hLV := mem_view_of_link hl hc hAV hlink
           have hmem : L ∈ (candidatesIn U V k).filter (fun L => p.linkSize ≤
@@ -181,7 +184,7 @@ theorem tryIndirect_sound (hl : 1 ≤ p.linkSize)
         | some L =>
           obtain ⟨hmem, hmin⟩ := leastOf_eq_some hL
           obtain ⟨hLc, hlink⟩ := Finset.mem_filter.mp hmem
-          refine ⟨.indirectCommit (i := 0) (by omega) helig' hdA hmid Nat.one_pos
+          refine ⟨.indirectCommit (i := 0) (by omega) hjB helig' hdA hmid Nat.one_pos
             (fun _ h => absurd h (Nat.not_lt_zero _)) (isLeaderBlock_of_mem_candidatesIn hLc)
             hlink (fun L' hL' hlink' hlt => ?_), fun _ h => by cases h; exact hLc⟩
           have hL'V := mem_view_of_link hl hc hAV hlink'
@@ -189,17 +192,17 @@ theorem tryIndirect_sound (hl : 1 ≤ p.linkSize)
             ⟨mem_candidatesIn.mpr ⟨hL'V, hL'.2.2, hL'.2.1⟩, hlink'⟩)
           exact absurd hlt (not_lt.mpr this)
     · rename_i hne
-      exact ih (j + 1) hrest (by omega) hrest_sound (fun m h1 h2 hm => by
+      exact ih (j + 1) hrest (by omega) haB' hrest_sound (fun m h1 h2 hm => by
         rcases Nat.lt_succ_iff_lt_or_eq.mp h2 with h2 | rfl
         · exact hmid m h1 h2 hm
         · exact absurd (helig_iff.mp hm) hne) v hv
 
 omit [Fintype Validator] in
-/-- **The scan is sound**, and its slots are `N + 1 − m, …, N`. -/
+/-- **The scan is sound**, below `N + 1`, and its slots are `N + 1 − m, …, N`. -/
 theorem scan_sound (hl : 1 ≤ p.linkSize) (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
     (N : ℕ) : ∀ m, m ≤ N + 1 →
       (scan p σ U V N m).map Prod.fst = List.range' (N + 1 - m) m ∧
-      ∀ e ∈ scan p σ U V N m, SoundAt p σ U V e.1 e.2 := by
+      ∀ e ∈ scan p σ U V N m, SoundAt p σ U V (N + 1) e.1 e.2 := by
   intro m
   induction m with
   | zero => intro _; simp [scan]
@@ -221,11 +224,11 @@ theorem scan_sound (hl : 1 ≤ p.linkSize) (hc : p.voteIsCert = false → 1 ≤ 
           rw [hd] at hv
           simp only [Option.some.injEq] at hv
           subst hv
-          exact tryDirect_sound w hd
+          exact tryDirect_sound (by omega) w hd
         | none =>
           rw [hd] at hv
           exact tryIndirect_sound hl hc _ (N - m + 1) (by rw [hrange, hlen]; congr 1; omega)
-            (by omega) hsound (fun m' h1 h2 _ => absurd h2 (by omega)) v hv
+            (by omega) (by rw [hlen]; omega) hsound (fun m' h1 h2 _ => absurd h2 (by omega)) v hv
       · exact hsound e he
 
 omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] S in
@@ -259,7 +262,6 @@ theorem mem_takeWhile' {β : Type} {q : β → Bool} :
       · exact ⟨List.mem_cons_of_mem _ (ih h).1, (ih h).2⟩
     · simp at h
 
-omit [Fintype Validator] in
 /-- **`TryDecide` outputs only derivable verdicts**, at consecutive slots
 from `lo`. -/
 theorem tryDecide_sound (hl : 1 ≤ p.linkSize) (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
@@ -282,7 +284,7 @@ theorem tryDecide_sound (hl : 1 ≤ p.linkSize) (hc : p.voteIsCert = false → 1
     obtain ⟨e', he', rfl⟩ := List.mem_map.mp he
     obtain ⟨hmem, hsome⟩ := mem_takeWhile' he'
     obtain ⟨v, hv⟩ := Option.isSome_iff_exists.mp hsome
-    have := (hsound e' hmem v hv).1
+    have := (hsound e' hmem v hv).1.toDecided
     simpa [hv] using this
 
 omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] S in
@@ -309,7 +311,6 @@ theorem prefix_or_prefix {β : Type} :
       · exact Or.inl (List.prefix_cons_inj _ |>.mpr h)
       · exact Or.inr (List.prefix_cons_inj _ |>.mpr h)
 
-omit [Fintype Validator] in
 /-- **Two validators' outputs are prefix-comparable** when the rule has
 its laws: every common slot carries one verdict. -/
 theorem tryDecide_prefix (hl : 1 ≤ p.linkSize) (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
@@ -401,7 +402,8 @@ theorem decisionAt_complete (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThresho
   -- A direct decision, when there is one, is the derived one.
   have hdirect : ∀ {k w v}, (schemeAnchored p σ).Decided U V k v →
       tryDirect p σ U V k = some w → w = v := fun {k w v} hd hw =>
-    AnchoredRule.decided_unique hlaws hI (tryDirect_sound w hw).1 V v hd
+    AnchoredRule.decided_unique hlaws hI
+      (tryDirect_sound (Nat.lt_succ_self k) w hw).1.toDecided V v hd
   -- The scan below slot `k` lists slots `k + 1, …, N`.
   have hscan : ∀ k, k ≤ N →
       (scan p σ U V N (N - k)).map Prod.fst = List.range' (k + 1) (N - k) ∧
