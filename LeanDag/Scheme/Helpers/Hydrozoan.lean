@@ -114,21 +114,22 @@ theorem hydrozoanSlow_eq
 
 end Slow
 
-/-- The row's commit threshold is within Hydrozoan's fault model. -/
-theorem hybridMysticeti_commit_le :
-    (Params.hybridMysticeti (Fintype.card Replica) F.f F.c).commitThreshold ≤
-      Fintype.card Replica - (Hydrozoan.hzReliability Replica).slack := by
-  have := F.card_replicas
-  show 2 * F.f + F.c + 1 ≤ Fintype.card Replica - (F.f + F.c)
-  omega
+omit [LinearOrder BlockId] in
+/-- A threshold within `q = n − f − c` is within Hydrozoan's fault model. -/
+theorem le_q_slack {t : ℕ} (h : t ≤ Hydrozoan.q Replica) :
+    t ≤ Fintype.card Replica - (Hydrozoan.hzReliability Replica).slack := by
+  show t ≤ Fintype.card Replica - (F.f + F.c)
+  unfold Hydrozoan.q at h; omega
 
-/-- The row's certificate threshold is within Hydrozoan's fault model. -/
-theorem hybridMysticeti_cert_le :
-    (Params.hybridMysticeti (Fintype.card Replica) F.f F.c).certThreshold ≤
-      Fintype.card Replica - (Hydrozoan.hzReliability Replica).slack := by
-  have := F.card_replicas
-  show (Fintype.card Replica + F.f + 2) / 2 ≤ Fintype.card Replica - (F.f + F.c)
-  omega
+/-- A covered row has a wave of at least two, and of three where votes are
+certified a round later. -/
+theorem covered_waves {p : Params} {n f q : ℕ} (h : p.Covered n f q) :
+    2 ≤ p.waveLength ∧ (p.voteIsCert = false → 3 ≤ p.waveLength) := by
+  rcases h with ⟨hv, hw, -⟩ | ⟨hv, hw, -⟩ | ⟨hv, hw, -⟩ | ⟨hv, hw, -⟩
+  · exact ⟨hw, fun h => absurd (hv.symm.trans h) (by simp)⟩
+  · exact ⟨by omega, fun _ => hw⟩
+  · exact ⟨hw, fun h => absurd (hv.symm.trans h) (by simp)⟩
+  · exact ⟨by omega, fun _ => hw⟩
 
 end Scheme
 

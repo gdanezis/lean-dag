@@ -4,6 +4,7 @@ import LeanDag.Scheme.Safety.Proof
 import LeanDag.Scheme.Sufficiency.Proof
 import LeanDag.Scheme.Loop.Proof
 import LeanDag.Scheme.Record
+import LeanDag.Scheme.Rows.Proof
 /-!
 # A vote-selection rule exists
 
@@ -62,6 +63,7 @@ end LeanDagTest
 #print axioms LeanDag.Scheme.Sufficiency.holds
 #print axioms LeanDag.Scheme.Sufficiency.nemoRowsAgree
 #print axioms LeanDag.Scheme.Loop.holds
+#print axioms LeanDag.Scheme.Rows.holds
 #print axioms LeanDag.Scheme.banded
 #print axioms LeanDag.Scheme.safety
 #print axioms LeanDag.Scheme.lives

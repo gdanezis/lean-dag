@@ -552,3 +552,5 @@ import LeanDag.Scheme.HybridRow.Statement
 import LeanDag.Scheme.HybridRow.Proof
 import LeanDag.Scheme.Async.Statement
 import LeanDag.Scheme.Async.Proof
+import LeanDag.Scheme.Rows.Statement
+import LeanDag.Scheme.Rows.Proof

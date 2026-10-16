@@ -49,7 +49,8 @@ vote. -/
 example : Properties.Safe (schemeRule (Params.hybridMysticeti (Fintype.card (Fin 6)) 1 1)
       (leastSel (Validator := Fin 6) (BlockId := Fin 20) (Payload := Unit) (P := HybridValid)
         (honest := Hydrozoan.NonByzantine)) Hydrozoan.NonByzantine) :=
-  (HybridRow.withSelfParent (Fin 6) (Fin 20) leastSel leastSel_local).1
+  (HybridRow.withSelfParent (Fin 6) (Fin 20) _ leastSel leastSel_local hybridMysticeti_covered
+    (by decide)).1
 
 end Scheme
 

@@ -10,6 +10,8 @@ through its observable consequence on the schedule and the record:
 * `goodAt p σ U r`: the validators whose round-`r` block the record's
   certificates commit: `commit` authors of decision-round blocks certify
   it; `good` the same at a slot's round;
+* `Params.AsyncReady`: the arithmetic a row meets for the count at `b`
+  buffer rounds;
 * `UnpredictableWithin`: in every window of `c` slots whose decision
   rounds lie below the horizon `N`, the schedule names a good leader;
   `UnpredictableRunWithin`, a run of `d` good leaders.
@@ -20,6 +22,14 @@ Definitions only; the claims are `Scheme/Async/Statement.lean`.
 namespace LeanDag
 
 namespace Scheme
+
+/-- **Ready for the asynchronous count**, at `b` buffer rounds: two quorums
+of `q` overlap past `f` (the common core), the vote round is `b + 1` above
+the proposal, certificates fit in `q` where votes are certified a round
+later, and the commit threshold is within `q`. -/
+def Params.AsyncReady (p : Params) (n f q b : ℕ) : Prop :=
+  n + f + 1 ≤ 2 * q ∧ p.voteOffset = b + 1 ∧ 2 ≤ p.waveLength ∧
+    (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) ∧ p.commitThreshold ≤ q
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}

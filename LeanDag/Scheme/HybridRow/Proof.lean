@@ -21,18 +21,18 @@ theorem slowRow : SlowRow := by
   exact hydrozoanSlow_eq σ
 
 theorem onHydrozoan : OnHydrozoan := by
-  intro Replica BlockId _ _ _ F σ hσ
+  intro Replica BlockId _ _ _ F p σ hσ hcov hcm hcert
   have hq : Hydrozoan.q Replica ≤ Fintype.card Replica := by unfold Hydrozoan.q; omega
-  exact ⟨Scheme.safety hσ card_compl_nonByzantine hq hybridMysticeti_covered,
-    Support.progress (familySupport_commits hybridMysticeti_commit_le),
-    familySupport_ofCoverage correct_subset_nonByzantine (show 2 ≤ 3 by omega)
-      (fun _ => show 3 ≤ 3 by omega) hybridMysticeti_cert_le⟩
+  obtain ⟨hw, hw3⟩ := covered_waves hcov
+  exact ⟨Scheme.safety hσ card_compl_nonByzantine hq hcov,
+    Support.progress (familySupport_commits (le_q_slack hcm)),
+    familySupport_ofCoverage correct_subset_nonByzantine hw hw3 (le_q_slack hcert)⟩
 
 theorem withSelfParent : WithSelfParent := by
-  intro Replica BlockId _ _ _ F σ hσ
+  intro Replica BlockId _ _ _ F p σ hσ hcov hcm
   have hq : Hydrozoan.q Replica ≤ Fintype.card Replica := by unfold Hydrozoan.q; omega
-  exact ⟨Scheme.safety hσ card_compl_nonByzantine hq hybridMysticeti_covered,
-    Support.liveness (familySupport_commits hybridMysticeti_commit_le) commitsCandidate
+  exact ⟨Scheme.safety hσ card_compl_nonByzantine hq hcov,
+    Support.liveness (familySupport_commits (le_q_slack hcm)) commitsCandidate
       (selfParent fun _ _ h => h.clause.2) (noEquiv correct_subset_nonByzantine)⟩
 
 theorem holds : Statement := ⟨slowRow, onHydrozoan, withSelfParent⟩
