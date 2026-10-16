@@ -83,7 +83,9 @@ are the evidence.
   self-reference; the asynchronous rows ready for the count.
 * **The family runs reactively** (§13): building on votes and
   certificates as they arrive, with the timeout only as a fallback, every
-  reliably-led slot commits past GST; Reactive Mysticeti is an instance.
+  reliably-led slot commits past GST, at every reliability whose quorum
+  meets the thresholds, the hybrid committees included; Reactive
+  Mysticeti is an instance.
 
 **What the table claims and does not hold, or holds otherwise.**
 
@@ -570,8 +572,8 @@ every vote.
   `c ≥ 1`. Every covered row lives at Hydrozoan's fault model, which
   admits it (§10), with self-reference: Hybrid Mysticeti, Hybrid
   Mahi-Mahi, Orcaella, Async Orcaella, Nemo-Nemo and Async Nemo-Nemo
-  (§12). The reactive run (§13) reads the core's quorum `n − f` and
-  reaches only the committees the core's fault model admits.
+  (§12), and every covered row whose thresholds are within `q` commits
+  run reactively (§13), the pacemaker advancing on `q` round authors.
 
 ### 9.3 Liveness
 
@@ -756,8 +758,12 @@ they lack is a comparison with an implementation.
 A responsive validator builds as soon as what the rule counts has
 arrived, with the timeout only as a fallback. The reactive timing is the
 development's (`ReactiveCore`, `Reactive/Basic.lean`);
-`Scheme/Model/Reactive.lean` defines `SchemeReactive`, which adds the
-family's wait clauses, one per round of the wave:
+`Scheme/Model/Reactive.lean` defines `SchemeReactive`, at a quorum `q`,
+which adds the pacemaker's progress rule at `q` and the family's wait
+clauses, one per round of the wave:
+
+* **advance at `q`** (`advancesAt`): a reliable validator holding `q`
+  distinct round-`n` authors gets past round `n`;
 
 * **reach or wait**, at each round from the one above the proposal to the
   vote round: a reliable block already reaches the slot's leader block, or
@@ -769,12 +775,30 @@ family's wait clauses, one per round of the wave:
   that it holds.
 
 At the Mysticeti row these are Reactive Mysticeti's `vote_or_wait` and
-`cert_or_wait`. `Scheme/Reactive/Statement.lean` states, and `Proof.lean`
-proves, at every row and vote, past GST with the timeout clearing
-`2Δ + proc`:
+`cert_or_wait`.
+
+The development's pacing trunk (`PaceCore`) advances on the core's quorum
+`n − f`, read off a `Faults` instance, which asks `n ≥ 3f + 1`. Reading
+the hybrid fault bound `f + c` into it fails exactly at the hybrid
+committees (`3(f + c) + 1 > 3f + 2c + 1` at `c ≥ 1`, and
+`3c + 1 > 2c + 1`). `SchemeReactive` therefore reads the trunk at a fault
+model with no faults (`noFaults`), where every committee is admitted and
+the trunk's own progress clause is implied by `advancesAt`, and carries
+the quorum `q` in `advancesAt`. With the reliable set `q` strong every
+reliable validator reaches every round below the horizon
+(`SchemeReactive.reached`, the trunk's induction at `q`), so every round
+is populated (`SchemeReactive.populated`) and drift collapses past GST
+(`SchemeReactive.driftOn`, from the trunk's `drift_collapse`). The
+precondition `reactiveLive` is stated at a reliability `rel`, pacing at
+`q = n − rel.slack`: the core's `n − f`, Hydrozoan's `n − f − c`, Nemo's
+majority.
+
+`Scheme/Reactive/Statement.lean` states, and `Proof.lean` proves, at every
+row and vote, past GST with the timeout clearing `2Δ + proc`:
 
 * **every reliable decision-round block certifies** a reliably-led slot's
-  leader block (`Certifies`). A reliable block that waited holds every
+  leader block (`Certifies`), when the reliable set is `q` strong and the
+  certificate threshold within `q`. A reliable block that waited holds every
   reliable block of the round below (`SchemeReactive.arrives`: built at
   most `Δ + proc` later, arriving `Δ` after); round by round from the
   proposal every reliable block reaches the leader block, on the exit by
@@ -784,18 +808,22 @@ proves, at every row and vote, past GST with the timeout clearing
   certificate or its fallback referencing every reliable vote;
 * **the reactive precondition is the family support's**
   (`Live`, `live_of_reactiveLive`), so **a reliably-led slot commits**
-  (`Commits`, the generic `LeaderCommits`) wherever the commit threshold
-  is within the quorum;
+  (`Commits`, the generic `LeaderCommits`) at every reliability whose
+  quorum meets the commit and certificate thresholds;
 * **Reactive Mysticeti is an instance** (`OfMysticeti`, `ofReactiveM`):
   every Reactive Mysticeti execution with a correct reliable set is the
-  family run reactively at the Mysticeti row, at every vote.
+  family run reactively at the Mysticeti row, at every vote, pacing at
+  `n − f`.
 
 `LeanDagTest/Scheme/Reactive.lean` converts the Reactive Mysticeti witness
 `ugrowReactive`, in which no validator ever waits a timeout, shows it meets
 the family's reactive precondition, and commits a reliably-led slot.
+`LeanDagTest/Scheme/ReactiveHybrid.lean` runs the Hybrid Mysticeti row
+reactively at three replicas, none Byzantine and one crashed
+(`f = 0, c = 1`, `q = 2`), a committee the core's fault model excludes:
+the two live replicas build at spacing `6` inside a timeout of `9`, the
+execution meets the reactive precondition at Hydrozoan's reliability, and
+a reliably-led slot commits.
 
-The pacing reads the core's quorum `n − f`, so the rows run reactively are
-those the core's fault model admits, `n ≥ 3f + 1` with crash faults
-counted in `f`: every row but Hybrid Mysticeti, Hybrid Mahi-Mahi and
-Nemo-Nemo at their committees. Inclusion under the reactive run
-(Reactive Mysticeti's RS5) is not stated for the family.
+Inclusion under the reactive run (Reactive Mysticeti's RS5) is not stated
+for the family.

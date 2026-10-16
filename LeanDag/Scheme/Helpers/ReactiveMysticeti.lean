@@ -9,7 +9,8 @@ family's reach-or-wait clause is Reactive Mysticeti's `vote_or_wait` (a
 reference to the leader block, or a wait and a reference to it if held),
 and one round up a vote is a reference (`votes_iff`), so certify-or-wait
 is its `cert_or_wait`. Every Reactive Mysticeti execution is therefore one
-of the family (`ofReactiveM`), at every vote.
+of the family (`ofReactiveM`), at every vote, pacing at the core's quorum
+`n − f`.
 -/
 
 namespace LeanDag
@@ -17,6 +18,7 @@ namespace LeanDag
 namespace Scheme
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
+  [Nonempty Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type} [S : Slots Validator]
 variable {U : BlockUniverse Validator BlockId Payload} {T : Finset Validator} {N : ℕ}
 
@@ -37,8 +39,15 @@ theorem isCert_mysticeti_iff (σ : VoteSel Validator BlockId Payload ValidWrt Co
 Mysticeti row, when its reliable set is correct. -/
 def ofReactiveM (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
     (hT : T ⊆ (Correct : Finset Validator)) (rm : ReactiveM U T N) :
-    SchemeReactive (Params.mysticeti (Fintype.card Validator) F.f) σ U T N where
-  toReactiveCore := rm.toReactiveCore
+    SchemeReactive (quorumCard Validator) (Params.mysticeti (Fintype.card Validator) F.f) σ U T N
+    where
+  toReactiveCore :=
+    have hadv := rm.advances
+    let rc := rm.toReactiveCore
+    letI : Faults Validator := noFaults
+    { rc with
+      advances := fun v hv n hn t h => hadv v hv n hn t (le_trans (Nat.sub_le _ _) h) }
+  advancesAt := rm.advances
   reach_or_wait := fun v hv k hN hlead L hL m hm c hc hcc hcr => by
     have hvo : (Params.mysticeti (Fintype.card Validator) F.f).voteOffset = 1 := by
       simp [Params.voteOffset, Params.mysticeti]

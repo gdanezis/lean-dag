@@ -519,6 +519,7 @@ import LeanDag.Scheme.Model.TryDecide
 import LeanDag.Scheme.Model.Local
 import LeanDag.Scheme.Model.Hydrozoan
 import LeanDag.Scheme.Model.Async
+import LeanDag.Scheme.Model.NoFaults
 import LeanDag.Scheme.Model.Reactive
 import LeanDag.Scheme.Table.Statement
 import LeanDag.Scheme.Table.Proof

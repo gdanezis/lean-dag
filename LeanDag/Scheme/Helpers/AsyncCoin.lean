@@ -1,5 +1,6 @@
 import LeanDag.Scheme.Helpers.Async
 import LeanDag.Steelhead.Helpers.Coin
+import LeanDag.Scheme.Model.NoFaults
 /-!
 # The asynchronous rows: the coin
 
@@ -7,8 +8,8 @@ A uniform coin, independent across rounds, read as Steelhead reads it
 (`Steelhead/Model/Coin.lean`): it lands in a set with the set's density,
 `m` independent coins all miss sets of at least `c` validators with
 probability at most `((n − c)/n)^m`, which tends to zero. Steelhead's
-counts ask its fault model only for a validator, so a fault model with no
-faults is supplied inside the proofs here and appears in no statement.
+counts ask its fault model only for a validator, so `noFaults` is supplied
+inside the proofs here and appears in no statement.
 -/
 
 namespace LeanDag
@@ -19,13 +20,6 @@ open Filter Topology
 open scoped ENNReal
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator] [Nonempty Validator]
-
-/-- A fault model with no faults, for Steelhead's counts. -/
-def noFaults : Faults Validator where
-  f := 0
-  byzantine := ∅
-  card_validators := by have := Fintype.card_pos (α := Validator); omega
-  card_byzantine := by simp
 
 /-- **The coin lands in a set of at least `c` validators with probability at
 least `c / n`.** -/

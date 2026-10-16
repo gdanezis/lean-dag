@@ -565,7 +565,8 @@ covers Nemo-Nemo and Async Nemo-Nemo (SC22). Hybrid Mysticeti is
 Hydrozoan without its fast path, and lives at Hydrozoan's fault model
 (SC23). The asynchronous rows are live under the coin, for the whole
 family (SC24). Every row is safe and live (SC25), and the family run
-reactively commits every reliably-led slot (SC26). The scheme's commit loop computes the relation: it outputs only verdicts
+reactively commits every reliably-led slot, at the hybrid committees too
+(SC26). The scheme's commit loop computes the relation: it outputs only verdicts
 the relation derives, every derived verdict once it scans far enough,
 and two validators' outputs are prefix-comparable (`Scheme.Loop.holds`
 (SC13–SC15)); calls restarting after the last decision output on growing
@@ -12067,11 +12068,19 @@ vote round a reliable block reaches the slot's leader block or waited and
 references the leader's block of the round below if held; at the
 decision round, where votes are certified a round later, it certifies or
 waited and references every reliable vote it holds. At the Mysticeti row
-these are Reactive Mysticeti's clauses.
+these are Reactive Mysticeti's clauses. The pacemaker advances on a
+quorum `q` of round authors (`Scheme.SchemeReactive.advancesAt`), with the trunk read at a fault
+model with no faults (`Scheme.noFaults`): the trunk's `Faults` instance
+asks `n ≥ 3f + 1`, which the hybrid committees do not meet at `f + c`.
 
 SC26: the family, run reactively, commits every reliably-led slot past
-GST with the timeout clearing `2Δ + proc`, at every row and vote. A
-reliable block that waited holds every reliable block of the round below
+GST with the timeout clearing `2Δ + proc`, at every row and vote, and at
+every reliability whose quorum `q = n − slack` meets the commit and
+certificate thresholds. With the reliable set `q` strong every reliable
+validator reaches every round below the horizon
+(`Scheme.SchemeReactive.reached`), so rounds are populated and drift
+collapses (`Scheme.SchemeReactive.populated`,
+`Scheme.SchemeReactive.driftOn`). A reliable block that waited holds every reliable block of the round below
 (`Scheme.SchemeReactive.arrives`); round by round every reliable block
 reaches the leader block (`Scheme.SchemeReactive.reaches`), every
 reliable vote-round block votes, and every reliable decision-round block
@@ -12080,9 +12089,10 @@ support's liveness precondition (`Scheme.live_of_reactiveLive`), and the
 generic `LeaderCommits` follows (`Scheme.leaderCommits_reactive`). Every
 Reactive Mysticeti execution with a correct reliable set is an instance
 at the Mysticeti row (`Scheme.ofReactiveM`), and the Reactive Mysticeti
-witness, converted, commits a reliably-led slot. The pacing reads the
-core's quorum `n − f`, so the hybrid committees `3f + 2c + 1` and `2c + 1`
-are not run reactively.
+witness, converted, commits a reliably-led slot. At three replicas, one
+crashed (`f = 0, c = 1`, `q = 2`), a committee the core's fault model
+excludes, a reactive execution of the Hybrid Mysticeti row meets the
+precondition at Hydrozoan's reliability and commits a reliably-led slot.
 
 ### 27.14 What the arc does not contain
 
@@ -12099,8 +12109,7 @@ probability for `K` leaders, and the general construction behind "a third
 buffer round adds nothing", shown on a witness. The family's `Lives` is stated on the core's universes, and
 Hybrid Mysticeti's, at its committee `3f + 2c + 1`, at Hydrozoan's fault
 model (SC23), as is every covered row's with self-reference (SC25). The
-reactive run (SC26) reaches only the committees the core's fault model
-admits, and its inclusion is not stated. Stake weights and the coin's
+reactive run's inclusion (SC26) is not stated. Stake weights and the coin's
 construction are not formalised. `scheme.md` §9
 lists these with a plan.
 
@@ -13336,7 +13345,7 @@ reused.
 | SC23 | on Hydrozoan's universe the Hybrid Mysticeti row decides as Hydrozoan without its fast path, at every vote; it meets its inequalities at every `n ≥ 3f + 2c + 1`, and its carrier is safe and progresses under Hydrozoan's fault model, and with self-reference lives | `Scheme.readAlike_hydrozoanSlow`, `Scheme.hydrozoanSlow_eq`, `Scheme.Table.hybridAnyCommittee`, `Scheme.HybridRow.slowRow`, `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent` *(Scheme/Helpers/Hydrozoan, Scheme/HybridRow)* |
 | SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; a safe block is good; one buffer round gives an honest good validator and the double count, two give `q − f`; leaders outnumbering the rest include a good one; under the coin clause a good leader commits, windows commit and slots below a run are decided; a uniform coin names a good leader with probability bounded below, and its misses vanish | `Scheme.exists_commonCore`, `Scheme.mem_goodAt_of_safe`, `Scheme.goodAt_nonempty`, `Scheme.card_goodAt_count`, `Scheme.le_card_goodAt`, `Scheme.exists_good_leader`, `Scheme.goodCommits`, `Scheme.commitsWithin`, `Scheme.allDecidedBelow`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Async)* |
 | SC25 | every row safe and live: Cordial Miners on the core's universes; Orcaella, Async Orcaella, Hybrid Mysticeti, Hybrid Mahi-Mahi, Nemo-Nemo and Async Nemo-Nemo under the hybrid fault model with self-reference; the asynchronous rows ready for the count | `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent`, `Scheme.Rows.coreRows`, `Scheme.Rows.hybridRows`, `Scheme.Rows.asyncRows`, `Scheme.Rows.holds` *(Scheme/HybridRow, Scheme/Rows)* |
-| SC26 | the family run reactively: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition, so a reliably-led slot commits; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.reaches`, `Scheme.SchemeReactive.votes`, `Scheme.SchemeReactive.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
+| SC26 | the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.reached`, `Scheme.SchemeReactive.populated`, `Scheme.SchemeReactive.driftOn`, `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.reaches`, `Scheme.SchemeReactive.votes`, `Scheme.SchemeReactive.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -20555,18 +20564,19 @@ def votedBlock (ord : BlockId → Finset BlockId → List BlockId)
 ```lean
 def Live : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [F : Faults Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (honest : Finset Validator) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
-    (S : Slots Validator) (U : (schemeRule p σ Hon).Universe) (V : (schemeRule p σ Hon).View U)
-    (T : Finset Validator) (lo K : ℕ),
+    (rel : Reliability Validator) (S : Slots Validator) (U : (schemeRule p σ Hon).Universe)
+    (V : (schemeRule p σ Hon).View U) (T : Finset Validator) (lo K : ℕ),
     2 ≤ p.waveLength →
-    (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ quorumCard Validator) →
-    reactiveLive p σ Hon S V T lo K →
-    (familySupport p σ Hon).live (coreReliability Validator) S V T lo K
+    (p.voteIsCert = false →
+      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack) →
+    reactiveLive p σ Hon rel S V T lo K →
+    (familySupport p σ Hon).live rel S V T lo K
 ```
 
-**The reactive precondition is the family support's.**
+**The reactive precondition is the family support's**, at every reliability.
 
 #### `Commits`
 
@@ -20575,17 +20585,19 @@ def Live : Prop :=
 ```lean
 def Commits : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [F : Faults Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (honest : Finset Validator) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator),
+    (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
+    (rel : Reliability Validator),
     2 ≤ p.waveLength →
-    (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ quorumCard Validator) →
-    p.commitThreshold ≤ quorumCard Validator →
+    (p.voteIsCert = false →
+      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack) →
+    p.commitThreshold ≤ Fintype.card Validator - rel.slack →
     LeaderCommits (schemeRule p σ Hon)
-      (fun S {U} V T lo K => reactiveLive p σ Hon S (U := U) V T lo K)
+      (fun S {U} V T lo K => reactiveLive p σ Hon rel S (U := U) V T lo K)
 ```
 
-**Run reactively, a reliably-led slot commits**, at a commit threshold the quorum meets.
+**Run reactively, a reliably-led slot commits**, at every reliability whose quorum meets the commit and certificate thresholds.
 
 #### `onRecord`
 
@@ -20673,7 +20685,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 625 theorems the body or Appendix A names, each
+The 626 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28462,12 +28474,22 @@ theorem votes_band (hσ : σ.Local) (h : AgreeBand R.toDagRule U U' lo hi g g') 
 
 A vote, across a band.
 
+#### `reached`
+
+*theorem, `Scheme.Helpers.Reactive.lean`*
+
+```lean
+theorem reached (hq : q ≤ T.card) : ∀ n ≤ N, ∀ v ∈ T, n ≤ rs.top v
+```
+
+**Every reliable validator reaches every round below the horizon**, when the reliable set is `q` strong.
+
 #### `votes`
 
 *theorem, `Scheme.Helpers.Reactive.lean`*
 
 ```lean
-theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) (hcard : quorumCard Validator ≤ T.card)
+theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) (hq : q ≤ T.card)
     (hgst : rs.gst ≤ R) (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ}
     {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ N)
     (hlead : S.leader k ∈ T) (hL : IsLeaderBlock U k L) :

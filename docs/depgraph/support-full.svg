@@ -345,9 +345,8 @@
 <path d="M960.0,2534.0 C1008.0,2534.0 1008.0,3590.0 1056.0,3590.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M452.0,1838.0 C373.0,1838.0 373.0,1934.0 294.0,1934.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M452.0,1838.0 C500.0,1838.0 500.0,5342.0 548.0,5342.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
-<path d="M452.0,1838.0 C373.0,1838.0 373.0,398.0 294.0,398.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M452.0,1838.0 C373.0,1838.0 373.0,254.0 294.0,254.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
-<path d="M452.0,1838.0 C373.0,1838.0 373.0,5390.0 294.0,5390.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
+<path d="M452.0,1838.0 C373.0,1838.0 373.0,398.0 294.0,398.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M452.0,590.0 C373.0,590.0 373.0,542.0 294.0,542.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M452.0,590.0 C373.0,590.0 373.0,5534.0 294.0,5534.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
 <path d="M452.0,590.0 C500.0,590.0 500.0,3758.0 548.0,3758.0" fill="none" stroke="#8894a4" stroke-width="1" opacity="0.5" marker-end="url(#a)"/>
@@ -1105,10 +1104,10 @@
 <rect x="294.0" y="5324.0" width="158" height="36" rx="5" fill="#d9eef2" stroke="#4f8a98" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="5336.0" text-anchor="middle">RS4</text>
 <text class="nm" x="373.0" y="5350.0" text-anchor="middle">built_succ_le_of_fast</text></g>
-<g><title>LeanDag.Scheme.SchemeReactive.arrives — the family run reactively: a reliable block reaches the leader block round by round, votes and certifies; that is the family support&#x27;s precondition, so a reliably-led slot commits; Reactive Mysticeti is an instance</title>
+<g><title>LeanDag.Scheme.SchemeReactive.reached — the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support&#x27;s precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; Reactive Mysticeti is an instance</title>
 <rect x="294.0" y="5372.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="5384.0" text-anchor="middle">SC26</text>
-<text class="nm" x="373.0" y="5398.0" text-anchor="middle">arrives</text></g>
+<text class="nm" x="373.0" y="5398.0" text-anchor="middle">reached</text></g>
 <g><title>LeanDag.Scheme.decided_none_of_novel — the prompt skip: a novel slot is skipped, and conflicts with no verdict</title>
 <rect x="294.0" y="5420.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="5432.0" text-anchor="middle">TP9</text>
