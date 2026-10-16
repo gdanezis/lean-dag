@@ -515,6 +515,7 @@ import LeanDag.Scheme.Model.Rule
 import LeanDag.Scheme.Model.Variants
 import LeanDag.Scheme.Model.LeastSel
 import LeanDag.Scheme.Model.VotedBlock
+import LeanDag.Scheme.Model.TryDecide
 import LeanDag.Scheme.Table.Statement
 import LeanDag.Scheme.Table.Proof
 import LeanDag.Scheme.Helpers.Transfer
@@ -524,9 +525,12 @@ import LeanDag.Scheme.Helpers.Variants
 import LeanDag.Scheme.Helpers.Buffered
 import LeanDag.Scheme.Helpers.VotedBlock
 import LeanDag.Scheme.Helpers.Sufficiency
+import LeanDag.Scheme.Helpers.TryDecide
 import LeanDag.Scheme.Equiv.Statement
 import LeanDag.Scheme.Equiv.Proof
 import LeanDag.Scheme.Safety.Statement
 import LeanDag.Scheme.Safety.Proof
 import LeanDag.Scheme.Sufficiency.Statement
 import LeanDag.Scheme.Sufficiency.Proof
+import LeanDag.Scheme.Loop.Statement
+import LeanDag.Scheme.Loop.Proof

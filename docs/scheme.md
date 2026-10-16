@@ -44,6 +44,12 @@ are the evidence.
   derived rows follow: Hybrid Mysticeti and Hybrid Mahi-Mahi at
   `n = 3f + 2c + 1`, and Orcaella and Async Orcaella at every
   `n ≥ 5f + 3c + 1`.
+* **The commit loop outputs only what the relation derives**
+  (`Scheme.Loop.holds`, §8). `tryDecide`, the scheme's `TryDecide` as a
+  function of a view, outputs verdicts `Decided` derives from that view,
+  at consecutive slots, at every row and vote with positive link and
+  certificate thresholds; at the rows the inequalities cover, two
+  validators' outputs are prefix-comparable.
 
 **What the table claims and does not hold, or holds otherwise.**
 
@@ -97,7 +103,8 @@ are the evidence.
 **Open.** Liveness of every row not equal to a rule of this development,
 and of the buffer-round rows at votes other than the least; Async
 Nemo-Nemo's safety, which the inequalities do not give; and the commit
-loop `TryDecide` as an algorithm.
+loop's completeness (that it outputs every verdict the relation derives)
+and its restart at the last consumed decision.
 
 ## 1. The parameters
 
@@ -218,8 +225,8 @@ as Mahi-Mahi's `Votes` (`leastSel_votes_iff`). Mahi-Mahi has no
 tie-break; two linked candidates are one block by
 `MahiMahi.eq_of_hasCertificate`.
 
-**Open.** The asynchronous derived rows; the laws of the derived rows;
-and the commit loop `TryDecide` as an algorithm.
+**Open.** The asynchronous derived rows; the laws of the derived rows
+(both settled by §7 but for Async Nemo-Nemo).
 
 ## 6. The rows with buffer rounds at every vote
 
@@ -269,3 +276,45 @@ history (`card_inHistory_ge`): this gives visibility, the inequality
 with `q`. In the two-round family the third inequality and `q ≤ n` give
 `commit ≥ link + f`, which the cases of two direct commits, and of a
 direct commit and a direct skip, need.
+
+## 8. The commit loop
+
+`Scheme/Model/TryDecide.lean` writes the scheme's loop as functions of a
+validator's view `V`. A decision is an `Option (Option BlockId)`:
+undecided (`⊥`), a skip, or a commit.
+
+* `tryDirect k`: skip if the slot's blames reach the skip threshold,
+  else commit the least candidate whose certificates reach the commit
+  threshold. The scheme tries the candidates in an unstated order and
+  notes that at most one qualifies; the laws make the order immaterial.
+* `tryIndirect k later`: walk the later slots' decisions in slot order,
+  past the ineligible ones; stop undecided at an undecided eligible slot,
+  pass over skipped ones, and at the first committed one commit the
+  least linked candidate the view holds, or skip.
+* `scan N m`: the decisions of slots `N + 1 − m, …, N`, each from the
+  decisions above it, the scheme's list `S`.
+* `tryDecide lo N`: the longest decided prefix from slot `lo`.
+
+The scheme's schedule is `Slots.uniform p m`: `m` leaders every `p`
+rounds, `p = 1` with pipelining and `p = waveLength` without. Slot
+`j·m + l` is round `p·j` with leader index `l`, so the scheme's scan,
+rounds downward and leader indices downward, is slot order reversed.
+
+`Scheme/Loop/Statement.lean` states, and `Proof.lean` proves:
+
+* **Soundness** (`Sound`, from `tryDecide_sound`): at positive link and
+  certificate thresholds, every output is a derivation of `Decided` from
+  the same view, at consecutive slots from `lo`. A candidate linked from
+  an anchor the view holds lies in the view, so the least linked
+  candidate the view holds is the tie-break's choice.
+* **Prefix comparability** (`PrefixComparable`, from `tryDecide_prefix`):
+  at every row of §7, two validators' outputs are prefix-comparable.
+
+`LeanDagTest/Scheme/TryDecide.lean` runs the loop: on `full4` at the
+Mahi-Mahi row of wave four it commits slots `0`–`2` directly at the
+least vote and at `VotedBlock`, and on Mysticeti's `U7` it commits slot
+`0` indirectly through slot `1`.
+
+**Open.** Completeness, that the loop outputs every verdict the
+relation derives once it scans high enough; and the restart at the
+round of the last consumed decision.

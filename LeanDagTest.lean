@@ -158,3 +158,4 @@ import LeanDagTest.RedSnapper.FiveRoutes
 import LeanDagTest.RedSnapper.Termination
 import LeanDagTest.Scheme.LeastSel
 import LeanDagTest.Scheme.VotedBlock
+import LeanDagTest.Scheme.TryDecide

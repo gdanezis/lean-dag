@@ -560,7 +560,9 @@ rows as rules of this development, three of them at the least vote
 three are not the development's rules, and two views still decide alike
 (`Scheme.Safety.holds` (SC10, SC11)). The table's inequalities give
 agreement at every row that meets them (`Scheme.Sufficiency.holds`
-(SC12)).
+(SC12)). The scheme's commit loop outputs only verdicts the relation
+derives, and two validators' outputs are prefix-comparable
+(`Scheme.Loop.holds` (SC13, SC14)).
 
 **The development has four kinds of arc, and the source says which each
 is.** A **commit rule** carries a universe, a decision relation, the
@@ -11813,14 +11815,52 @@ committee `3f + 2c + 1` whenever `c ≥ 1`. Nemo-Nemo and Async Nemo-Nemo
 fail the second two-round inequality (SC1) and are outside SC12; their
 safety rests on the crash model, which §27.4 uses for Nemo-Nemo.
 
-### 27.8 What the arc does not contain
+### 27.8 The commit loop
+
+`Scheme.tryDecide` is the scheme's *TryDecide* as a function of a
+validator's view: `tryDirect` skips on enough blames and otherwise
+commits the least candidate with enough certificates; `tryIndirect` walks
+the decisions of the later slots in slot order, passes over the
+ineligible ones and the skipped ones, stops undecided at an undecided
+eligible slot, and at the first committed one, the anchor, commits the
+least linked candidate the view holds or skips; `scan` decides the slots
+from the top down, each from the decisions above it; and `tryDecide`
+returns the longest decided prefix from a slot `lo`. The scheme's
+schedule is `Slots.uniform p m`: `m` leaders every `p` rounds, `p = 1`
+with pipelining and `p` the wave length without, so slot `j·m + l` is
+round `p·j` with leader index `l`, and the scheme's scan over rounds and
+leader indices, both downward, is slot order reversed.
+
+SC13: every verdict the loop outputs is derivable by `Decided` from the
+same view, at consecutive slots from `lo`, at every row and every
+vote-selection rule whose link and certificate thresholds are positive
+(`Scheme.tryDecide_sound`). The direct decisions are the direct
+constructors. The walk over the later slots supplies the nearest
+eligible committed anchor and the skipped eligible slots between. A
+candidate linked from an anchor the view holds lies in the view, since a
+certificate in the anchor's history carries a vote whose history holds
+the candidate, so the least linked candidate the view holds is the
+tie-break's choice, and an empty set of them is an empty rung. SC14:
+at every row of SC12, two validators' outputs are prefix-comparable,
+since two derivations for one slot name one verdict. On Mahi-Mahi's
+`full4` the loop at the Mahi-Mahi row of wave four commits slots `0`–`2`
+directly at both the least vote and the scheme's own, and on
+Mysticeti's `U7` it commits slot `0` indirectly through slot `1`'s block
+`12`, as the hand-built derivation in `LeanDagTest/Mysticeti/Model.lean`
+does.
+
+### 27.9 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle beyond agreement,
 liveness among them, reach the rows of §27.5 only at the least vote, and
 no row has a liveness result from SC12. The derived rows' safety is
 SC12's; Async Nemo-Nemo's is not proved. The commit loop *TryDecide*, which scans slots
 downward and outputs the longest decided prefix, is read through
-`Decided` and is not stated as an algorithm.
+`Decided` in one direction only: the loop outputs nothing the relation
+does not derive (SC13), and that it outputs every verdict the relation
+derives when it scans high enough is not proved. The loop's restart at
+the round of the last consumed decision, which the scheme calls
+idempotent, is not stated.
 
 ---
 
@@ -12114,6 +12154,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Scheme/Equiv/` | eight rows as carriers, SC4–SC6 and SC9 |
 | `Scheme/Safety/` | the scheme's vote is a vote-selection rule, and three rows with buffer rounds agree at every vote, SC10–SC11 |
 | `Scheme/Sufficiency/` | the table's inequalities give agreement at every vote, and the derived rows agree, SC12 |
+| `Scheme/Loop/` | the commit loop outputs only derivable verdicts, and two validators' outputs are prefix-comparable, SC13–SC14 |
 
 **The support graph, extracted.** The dependency structure of the
 development is not documented by hand: `scripts/DepGraph.lean` walks
@@ -13039,6 +13080,8 @@ reused.
 | SC10 | the scheme's vote, a depth-first search of the parents in any order listing them all, is a vote-selection rule | `Scheme.Safety.votedBlockIsVote`, `Scheme.votedBlockSel` *(Scheme/Safety, Scheme/Helpers/VotedBlock)* |
 | SC11 | at every vote-selection rule, the Mahi-Mahi row at `w ≥ 3`, the Cordial Miners Async row and the Blue Bottle Async row have the anchored laws, and two views decide alike | `Scheme.Safety.holds` *(Scheme/Safety)* |
 | SC12 | on records with quorum `q` and at most `f` validators that may equivocate, every two-round row meeting `TwoRound n f q` and every three-round row with a link of one certificate meeting `ThreeRound n f q` has the anchored laws and agrees, at every vote; Hybrid Mysticeti, Hybrid Mahi-Mahi, Orcaella at every `n ≥ 5f + 3c + 1` and Async Orcaella agree | `Scheme.twoRoundLaws`, `Scheme.threeRoundLaws`, `Scheme.Sufficiency.holds` *(Scheme/Sufficiency, Scheme/Helpers/Sufficiency)* |
+| SC13 | the commit loop outputs only verdicts `Decided` derives from the same view, at consecutive slots, at positive link and certificate thresholds | `Scheme.tryDecide_sound`, `Scheme.Loop.sound` *(Scheme/Loop)* |
+| SC14 | at the rows of SC12, two validators' loop outputs are prefix-comparable | `Scheme.tryDecide_prefix`, `Scheme.Loop.prefixComparable` *(Scheme/Loop)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -13113,7 +13156,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 406 definitions and structures the report names, in
+The 410 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19967,6 +20010,64 @@ def schemeAnchored : AnchoredRule Validator BlockId Payload P honest where
 
 **The decider as an anchored rule** (Algorithm 2): the supported-leader test is the direct commit, the skipped-leader test the direct skip, the certified-link test the single rung, and the least identifier breaks ties.
 
+#### `tryDirect`
+
+*def, `Scheme.Model.TryDecide.lean`*
+
+```lean
+def tryDirect (k : ℕ) : Option (Option BlockId) :=
+  if HoldsAtLeast U V p.skipThreshold (blamersAt p σ U k) then some none
+  else (leastOf ((candidatesIn U V k).filter
+    (fun L => (schemeAnchored p σ).Commit U V L (S.slotRound k) (S.kind k)))).map some
+```
+
+**The scheme's *TryDirectDecide*.**
+
+#### `tryIndirect`
+
+*def, `Scheme.Model.TryDecide.lean`*
+
+```lean
+def tryIndirect (k : ℕ) : List (ℕ × Option (Option BlockId)) → Option (Option BlockId)
+  | [] => none
+  | (j, s) :: rest =>
+    if S.slotRound k + (p.waveLength - 1) + 1 ≤ S.slotRound j then
+      match s with
+      | none => none
+      | some none => tryIndirect k rest
+      | some (some A) =>
+        some (leastOf ((candidatesIn U V k).filter
+          (fun L => p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
+            (fun C => C ∈ history U A))).card)))
+    else tryIndirect k rest
+```
+
+**The scheme's *TryIndirectDecide***, over the decisions of the later slots, oldest first.
+
+#### `scan`
+
+*def, `Scheme.Model.TryDecide.lean`*
+
+```lean
+def scan (N : ℕ) : ℕ → List (ℕ × Option (Option BlockId))
+  | 0 => []
+  | m + 1 => (N - m, decideSlot p σ U V (N - m) (scan N m)) :: scan N m
+```
+
+The decisions of the slots `N + 1 − m, …, N`, oldest first: the scheme's list `S` after `m` steps of its downward scan.
+
+#### `tryDecide`
+
+*def, `Scheme.Model.TryDecide.lean`*
+
+```lean
+def tryDecide (lo N : ℕ) : List (ℕ × Option BlockId) :=
+  ((scan p σ U V N (N + 1 - lo)).takeWhile (fun e => e.2.isSome)).map
+    (fun e => (e.1, e.2.join))
+```
+
+**The scheme's *TryDecide***: the longest prefix of decided slots from `lo` to `N`, oldest first.
+
 #### `cordialAnchored`
 
 *def, `Scheme.Model.Variants.lean`*
@@ -20070,7 +20171,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 606 theorems the body or Appendix A names, each
+The 607 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -27845,6 +27946,14 @@ theorem holds : Statement
 ```lean
 theorem decided (h : ReadAlike R₁ R₂ U) {V : U.View} {k : ℕ} {v : Option BlockId}
     (hd : R₁.Decided U V k v) : R₂.Decided U V k v
+```
+
+#### `holds`
+
+*theorem, `Scheme.Loop.Proof.lean`*
+
+```lean
+theorem holds : Statement
 ```
 
 #### `holds`
