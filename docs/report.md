@@ -11873,6 +11873,18 @@ loop is sound and its completeness is not stated. The loop's restart at
 the round of the last consumed decision, which the scheme calls
 idempotent, is not stated.
 
+The family `schemeAnchored p σ` shows `Agree` (SC12) and no other
+property of the interface: `Banded`, `Support` and an `OnRecord`
+instance are not written, so no mechanism applies to it except
+through a row equal to a rule of the development (SC4–SC9). `Banded`
+asks that a vote survive a round shift of the record, which a
+`VoteSel` does not promise; a locality condition on `VoteSel`, which
+`leastSel` and `votedBlockSel` meet, is the missing hypothesis. A
+`Support` from the liveness bounds `Params.Live` would give the partially
+synchronous rows liveness at every vote; the asynchronous rows' liveness
+by the coin is proved rule by rule only. `scheme.md` §9 lists these and
+the gaps to the concrete algorithms.
+
 ---
 
 ## 28. Satisfiability
