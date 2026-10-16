@@ -12,7 +12,7 @@ the Mahi-Mahi row of wave four commits slots `0`, `1` and `2` directly,
 as Mahi-Mahi does, and leaves slots `3`–`5` undecided: their decision
 rounds lie past round `5`. On Mysticeti's `U7` it commits slot `0`
 indirectly. Successive calls, each restarting after the last decision
-output, output the same.
+output, output the same, and so does the scheme's loop in its own order.
 -/
 
 namespace LeanDagTest
@@ -20,6 +20,10 @@ namespace LeanDagTest
 namespace Scheme
 
 open LeanDag LeanDag.Scheme
+
+/-- Two leaders per round, pipelined, rounds `2` down to `1`: the scheme
+visits slots `5, 4, 3, 2`. -/
+example : (schemeOrder 1 2 1 2).map (fun rl => slotOf 1 2 rl.1 rl.2) = [5, 4, 3, 2] := by decide
 
 section Pipelined
 
@@ -47,6 +51,12 @@ example : tryDecide mm4 σV full4 (View.full full4) 0 5 = [(0, some 0), (1, some
 example : tryDecide mm4 σL full4 (View.full full4) 1 5 = [(1, some 5), (2, some 10)] := by
   decide
 
+/-- The scheme's loop in its own order, rounds `5` down to `0` with
+pipelining, outputs the same. -/
+example : schemeTryDecide mm4 σL full4 (View.full full4) 1 1 0 5 =
+    [(0, some 0), (1, some 5), (2, some 10)] := by
+  decide
+
 /-- Three calls scanning to slots `1`, `3` and `5`, each restarting after the
 last decision output: the first outputs slots `0` and `1`, the second slot
 `2`, the third nothing. -/
@@ -72,6 +82,16 @@ example : tryDirect myst σL U7 V7 0 = none := by decide
 example : tryDecide myst σL U7 V7 0 1 = [(0, some 0), (1, some 12)] := by decide
 
 example : tryDecide myst σV U7 V7 0 1 = [(0, some 0), (1, some 12)] := by decide
+
+/-- The scheme's loop in its own order, rounds `5` down to `0` without
+pipelining, visits rounds `3` and `0` and outputs the same; restarted at
+round `3` it outputs slot `1` again. -/
+example : schemeTryDecide myst σL U7 V7 3 1 0 5 = [(0, some 0), (1, some 12)] ∧
+    schemeTryDecide myst σL U7 V7 3 1 3 5 = [(1, some 12)] := by
+  decide
+
+/-- The ledger reads the committed blocks `0` and `12` off the output. -/
+example : commitSeq (loopAssign myst σL U7 V7 1) 2 = [0, 12] := by decide
 
 /-- A call scanning to slot `0` outputs nothing, since slot `0` waits on
 slot `1`; the next call, scanning to slot `1`, outputs both. -/

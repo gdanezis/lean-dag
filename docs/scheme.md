@@ -52,7 +52,9 @@ are the evidence.
   reaches far enough, and two validators' outputs are prefix-comparable.
   Restarting is idempotent: calls on growing views, each restarting
   after the last decision output, output what one call on the last view
-  outputs.
+  outputs. The scheme's loop in its own order, over rounds and leader
+  indices, is `tryDecide` under `Slots.uniform`, and its output from
+  slot `0` is the ledger, nested between validators.
 * **The family shows every property the mechanisms read** (§9): banded at
   a local vote, which the least vote and `VotedBlock` are; candidate,
   direct, indirect, quorate, non-equivocating, self-parent; safe at every
@@ -302,7 +304,8 @@ undecided (`⊥`), a skip, or a commit.
 The scheme's schedule is `Slots.uniform p m`: `m` leaders every `p`
 rounds, `p = 1` with pipelining and `p = waveLength` without. Slot
 `j·m + l` is round `p·j` with leader index `l`, so the scheme's scan,
-rounds downward and leader indices downward, is slot order reversed.
+rounds downward and leader indices downward, is slot order reversed
+(`Order`, `OrderUniform` below).
 
 `Scheme/Loop/Statement.lean` states, and `Proof.lean` proves:
 
@@ -357,6 +360,51 @@ round already consumed are output again; `Restart` says they are output
 alike, so the caller drops them by slot. The tests restart `full4` at
 slot `1`, run three calls on it, and on `U7` show a first call that
 outputs nothing because slot `0` waits on slot `1`.
+
+**The scheme's order** (`Order`, `OrderUniform`; `Helpers/Order.lean`).
+`schemeOrder per m rLast rHigh` lists the pairs of round and leader index
+the scheme visits: the rounds from `rHigh` down to `rLast` with a wave
+offset, every `per`-th one, and in each the leader indices from `m − 1`
+down to `0`. `schemeTryDecide` is the scheme's loop over that list,
+transcribed: decide the pair's slot `slotOf per m r l = (r / per)·m + l`
+from the decisions already made, put it in front, and return the longest
+decided prefix.
+
+* **The pairs are their slots' rounds and leader indices**
+  (`OrderUniform`, from `schemeOrder_uniform`): under
+  `Slots.uniform per m`, slot `slotOf per m r l` is proposed at round `r`
+  and has leader index `l`.
+* **The scheme's loop is `tryDecide`** (`Order`, from
+  `schemeTryDecide_eq`), at every row and vote: over rounds
+  `rLast, …, rHigh` it outputs `tryDecide` from slot `⌈rLast/per⌉·m` to
+  slot `⌈(rHigh+1)/per⌉·m − 1`. The slots it visits are those, downward
+  (`schemeOrder_slots`, by induction on the rounds: a round with a wave
+  offset adds its `m` slots on top), and deciding them in turn from the
+  top is the scan (`foldr_range'`).
+
+The scheme's restart at round `r_last` is therefore `tryDecide` from the
+first slot of that round, and `Restart` applies to it.
+
+**The ledger** (`Ledger`, `LedgerAgree`; `Helpers/Ledger.lean`). The
+loop's assignment `loopAssign N k` is slot `k`'s committed block, if any;
+the output lists its slots with it (`tryDecide_eq_map`).
+
+* **The output from slot `0` is the ledger** (`Ledger`, from
+  `ledger_read`), at positive link and certificate thresholds: its
+  committed blocks are `commitSeq (loopAssign N)` over its length, the
+  blocks they reach are `ledgerSet` over its length, and every slot
+  below its length is decided by the relation with the assignment's
+  verdict, so the agreement theorems of `Common/Anchored.lean`
+  (`commitSeq_agree`, `ledgerSet_agree`, `outputAt_agree`) read it.
+* **Two validators' ledgers are nested** (`LedgerAgree`, from
+  `ledger_agree`), at the rows of §7: their commit sequences are
+  prefix-comparable and one ledger contains the other.
+
+With `Repeated`, the ledger after `t + 1` calls on growing views is the
+ledger of one call on the last view. The tests run the scheme's loop in
+its own order on `full4` and `U7`, restart it at round `3` on `U7`, read
+the committed blocks `0` and `12` off `U7`'s output, and list the slots
+`5, 4, 3, 2` for two leaders per round over rounds `2` down to `1`.
 
 ## 9. The family as a carrier, and what remains
 
@@ -436,13 +484,6 @@ every vote.
   a coin opened at the decision round. The arc reads a fixed schedule;
   the coin is modelled in the Mahi-Mahi and Async BlueBottle arcs
   (`Unpredictable`), not here.
-* **The schedule mapping.** That the scheme's scan over rounds and leader
-  indices, both downward, is slot order reversed under
-  `Slots.uniform p m` is argued in §8, not stated in Lean.
-* **The commit loop.** The loop's output is not connected to the ledger
-  (`commitSeq`, `ledgerSet` in `Common/Ledger.lean`). The restart is
-  stated at slot granularity (§8); the scheme's round granularity is
-  covered by `Restart` but not stated as such.
 * **The buffer rounds.** The scheme's paragraph on how many buffer rounds
   an asynchronous row needs (one at `n = 5f + 1`, more at `n = 3f + 1`)
   is not formalised.
@@ -467,7 +508,6 @@ for the family, with the scheme's buffer-round argument, is not written.
 
 1. The asynchronous liveness for the family, with the buffer-round
    argument.
-2. The schedule mapping in Lean, and the loop's ledger.
-3. A variant of Hydrozoan with no fast path, compared with Hybrid
+2. A variant of Hydrozoan with no fast path, compared with Hybrid
    Mysticeti; `Lives` over a fault model admitting `n = 3f + 2c + 1`.
-4. Stake weights.
+3. Stake weights.

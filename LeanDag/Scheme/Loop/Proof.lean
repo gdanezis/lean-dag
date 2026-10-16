@@ -1,12 +1,14 @@
 import LeanDag.Scheme.Loop.Statement
-import LeanDag.Scheme.Helpers.Restart
+import LeanDag.Scheme.Helpers.Order
+import LeanDag.Scheme.Helpers.Ledger
 /-!
 # The commit loop — proof
 
 Soundness by induction down the scan, completeness by induction on a
 bounded derivation (`Helpers/TryDecide.lean`); prefix comparability and
-completeness use the laws of `Helpers/Sufficiency.lean`; the restart is
-`Helpers/Restart.lean`.
+completeness use the laws of `Helpers/Sufficiency.lean`; the restart,
+the order and the ledger are `Helpers/Restart.lean`, `Helpers/Order.lean`
+and `Helpers/Ledger.lean`.
 -/
 
 namespace LeanDag
@@ -72,8 +74,27 @@ theorem repeated : Repeated := by
   obtain ⟨hl, hcm, hc, hlaws⟩ := family σ hHon hq hfam
   exact consumed_eq hl hcm hc hlaws hne hW hN
 
+theorem order : Order := by
+  intro Validator BlockId Payload _ _ _ P honest p σ S U V per m rLast rHigh hp hm h
+  exact schemeTryDecide_eq hp hm h
+
+theorem orderUniform : OrderUniform := by
+  intro Validator per m rLast rHigh hp hm elect hblock
+  exact schemeOrder_uniform hp hm
+
+theorem ledger : Ledger := by
+  intro Validator BlockId Payload _ _ _ P honest p σ S U V N hl hc
+  exact ledger_read hl hc N
+
+theorem ledgerAgree : LedgerAgree := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ S U V₁ V₂ N₁ N₂
+    hHon hq hne hfam
+  obtain ⟨hl, -, hc, hlaws⟩ := family σ hHon hq hfam
+  exact ledger_agree hl hc hlaws hne V₁ V₂ N₁ N₂
+
 theorem holds : Statement :=
-  ⟨sound, prefixComparable, complete, outputComplete, restart, resume, repeated⟩
+  ⟨sound, prefixComparable, complete, outputComplete, restart, resume, repeated, order,
+    orderUniform, ledger, ledgerAgree⟩
 
 end Loop
 

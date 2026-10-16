@@ -564,7 +564,8 @@ agreement at every row that meets them (`Scheme.Sufficiency.holds`
 the relation derives, every derived verdict once it scans far enough,
 and two validators' outputs are prefix-comparable (`Scheme.Loop.holds`
 (SC13–SC15)); calls restarting after the last decision output on growing
-views output what one call outputs (SC19). As a carrier the family shows every property the
+views output what one call outputs (SC19); the scheme's loop in its own
+order is `tryDecide` (SC20), and its output is the ledger (SC21). As a carrier the family shows every property the
 mechanisms read, banded at a local vote and live at every vote on the
 core's universes (SC16–SC18).
 
@@ -11876,13 +11877,36 @@ decision output, are the output of one call on the last view
 (`Scheme.consumed_eq`). The scheme restarts at the round of the last
 consumed decision; with several leaders per round that round's consumed
 slots are output again, and `tryDecide_restart` says they are output
-alike. On Mahi-Mahi's
+alike.
+
+SC20: the scheme's order is slot order reversed. `Scheme.schemeOrder`
+lists the pairs of round and leader index the scheme's loop visits, the
+rounds from *rHigh* down to *rLast* every `per`-th and the leader indices
+from `m − 1` down to `0` in each, and `Scheme.schemeTryDecide` is the
+loop over that list as the scheme writes it. Under `Slots.uniform per m`
+the pair `(r, l)` is the slot `(r / per)·m + l`, proposed at round `r`
+with leader index `l` (`Scheme.schemeOrder_uniform`); the slots visited
+are those from `⌈rLast/per⌉·m` to `⌈(rHigh+1)/per⌉·m − 1`, downward
+(`Scheme.schemeOrder_slots`); and the loop outputs `tryDecide` between
+those slots, at every row and vote (`Scheme.schemeTryDecide_eq`).
+
+SC21: the output is the ledger. The output from slot `0` lists its slots
+with the loop's assignment `Scheme.loopAssign`; its committed blocks are
+`commitSeq` of the assignment over its length, the blocks they reach are
+`ledgerSet`, and every slot below its length is decided by the relation
+with the assignment's verdict, so the ledger agreement theorems
+(`AnchoredRule.commitSeq_agree`, `AnchoredRule.ledgerSet_agree`) read it
+(`Scheme.ledger_read`). At the rows of SC12 two validators' commit
+sequences are prefix-comparable and one ledger contains the other
+(`Scheme.ledger_agree`). On Mahi-Mahi's
 `full4` the loop at the Mahi-Mahi row of wave four commits slots `0`–`2`
 directly at both the least vote and the scheme's own, and on
 Mysticeti's `U7` it commits slot `0` indirectly through slot `1`'s block
 `12`, as the hand-built derivation in `LeanDagTest/Mysticeti/Model.lean`
 does. On `U7` a call scanning to slot `0` outputs nothing, since slot `0`
 waits on slot `1`, and the next call, scanning to slot `1`, outputs both.
+The scheme's loop in its own order outputs the same on both, and the
+ledger reads blocks `0` and `12` off `U7`'s output.
 
 ### 27.9 The family as a carrier
 
@@ -11926,9 +11950,9 @@ those rules alone reach the rows of §27.5 at the least vote only; the
 properties of §27.9 hold of the family at every vote. Async Nemo-Nemo's
 safety is not proved. The commit loop *TryDecide* is read through
 `Decided` (SC13, SC15) on the rows of SC12; at a row outside them the
-loop is sound and its restart on one view holds (SC19); its
-completeness and its resumption on a larger view are not stated. The loop's output is not connected to the
-ledger. The asynchronous rows' liveness by the coin is proved rule by
+loop is sound, its restart on one view holds (SC19), and its order
+and ledger reading hold (SC20, SC21); its completeness, its resumption
+on a larger view and the nesting of ledgers are not stated. The asynchronous rows' liveness by the coin is proved rule by
 rule only, and the family's `Lives` is stated on the core's universes,
 which at `f = fb + fc` exclude Hybrid Mysticeti's committee
 `3f + 2c + 1` when `c ≥ 1`. Stake weights, the coin-elected leader and
@@ -13161,6 +13185,8 @@ reused.
 | SC17 | at a local vote, a wave of at least two and positive thresholds, the family's carrier is banded; at every row and vote it shows `CommitsCandidate`, `CommitsDirect`, `Indirect`, `Quorate`, `NoEquiv` (and `SelfParent` on the core's universes); at every row meeting its inequalities it agrees and is safe | `Scheme.schemeBandLaws`, `Scheme.banded`, `Scheme.indirect`, `Scheme.agree`, `Scheme.safety` *(Scheme/Properties)* |
 | SC18 | the family's support has its three laws, and the carrier lives on the core's universes at every vote | `Scheme.familySupport_local`, `Scheme.familySupport_commits`, `Scheme.familySupport_ofCoverage`, `Scheme.lives` *(Scheme/Helpers/Support, Scheme/Properties)* |
 | SC19 | a call restarting inside an earlier output repeats its tail; at the rows of SC12, calls on growing views, each restarting after the last decision output, output what one call on the last view outputs | `Scheme.tryDecide_restart`, `Scheme.decisionAt_mono`, `Scheme.tryDecide_resume`, `Scheme.consumed_eq`, `Scheme.Loop.restart`, `Scheme.Loop.resume`, `Scheme.Loop.repeated` *(Scheme/Loop, Scheme/Helpers/Restart)* |
+| SC20 | the scheme's loop over rounds and leader indices, both downward, outputs `tryDecide` between the corresponding slots, and under `Slots.uniform` each pair is its slot's round and leader index | `Scheme.schemeOrder_slots`, `Scheme.schemeTryDecide_eq`, `Scheme.schemeOrder_uniform`, `Scheme.Loop.order`, `Scheme.Loop.orderUniform` *(Scheme/Loop, Scheme/Helpers/Order)* |
+| SC21 | the output from slot `0` is `commitSeq` and `ledgerSet` of the loop's assignment, every slot below its length decided with that verdict; at the rows of SC12 two validators' ledgers are nested | `Scheme.tryDecide_eq_map`, `Scheme.ledger_read`, `Scheme.ledger_agree`, `Scheme.Loop.ledger`, `Scheme.Loop.ledgerAgree` *(Scheme/Loop, Scheme/Helpers/Ledger)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -20404,7 +20430,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 617 theorems the body or Appendix A names, each
+The 618 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28212,6 +28238,14 @@ theorem decided (h : ReadAlike R₁ R₂ U) {V : U.View} {k : ℕ} {v : Option B
 
 ```lean
 theorem complete : Complete
+```
+
+#### `ledger`
+
+*theorem, `Scheme.Loop.Proof.lean`*
+
+```lean
+theorem ledger : Ledger
 ```
 
 #### `holds`

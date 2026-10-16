@@ -23,6 +23,10 @@ indices downward, which is slot order reversed.
 * `tryDecide lo N`: the longest prefix of decided slots from `lo`.
 * `consumed`: the decisions output by successive calls on growing views,
   each restarting after the last decision output.
+* `loopAssign`: the slot-to-block assignment the loop's decisions give,
+  which the ledger (`commitSeq`, `ledgerSet`) reads.
+* `schemeOrder`, `schemeTryDecide`: the scheme's loop in its own order,
+  over rounds and leader indices, both downward.
 
 Definitions only; the claims are `Scheme/Loop/Statement.lean`.
 -/
@@ -88,6 +92,30 @@ oldest first. -/
 def tryDecide (lo N : ℕ) : List (ℕ × Option BlockId) :=
   ((scan p σ U V N (N + 1 - lo)).takeWhile (fun e => e.2.isSome)).map
     (fun e => (e.1, e.2.join))
+
+/-- The loop's assignment, scanning to slot `N`: slot `k`'s committed block,
+if any. -/
+def loopAssign (N k : ℕ) : Option BlockId :=
+  (decisionAt p σ U V N k).join
+
+/-- The pairs of round and leader index the scheme's *TryDecide* visits, in
+its order: the rounds from `rHigh` down to `rLast` that carry a wave
+offset, every `per`-th round (`per = 1` with pipelining, the wave length
+without), and at each the leader indices from `m − 1` down to `0`. -/
+def schemeOrder (per m rLast rHigh : ℕ) : List (ℕ × ℕ) :=
+  ((List.range' rLast (rHigh + 1 - rLast)).reverse.filter (fun r => r % per = 0)).flatMap
+    (fun r => (List.range m).reverse.map (fun l => (r, l)))
+
+/-- The slot of round `r` and leader index `l` in `Slots.uniform per m`. -/
+def slotOf (per m r l : ℕ) : ℕ := r / per * m + l
+
+/-- **The scheme's *TryDecide* in its own order**: visit `schemeOrder`,
+decide each slot from the decisions already made and put it in front,
+and return the longest decided prefix. -/
+def schemeTryDecide (per m rLast rHigh : ℕ) : List (ℕ × Option BlockId) :=
+  ((((schemeOrder per m rLast rHigh).foldl (fun Sd rl =>
+      (slotOf per m rl.1 rl.2, decideSlot p σ U V (slotOf per m rl.1 rl.2) Sd) :: Sd) []).takeWhile
+    (fun e => e.2.isSome)).map (fun e => (e.1, e.2.join)))
 
 /-- The decisions the loop has output after `t` calls on the views `W 0, W 1, …`:
 call `t` scans to slot `N t` on `W t` and restarts at the slot after the
