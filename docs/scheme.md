@@ -44,12 +44,12 @@ are the evidence.
   derived rows follow: Hybrid Mysticeti and Hybrid Mahi-Mahi at
   `n = 3f + 2c + 1`, and Orcaella and Async Orcaella at every
   `n ≥ 5f + 3c + 1`.
-* **The commit loop outputs only what the relation derives**
-  (`Scheme.Loop.holds`, §8). `tryDecide`, the scheme's `TryDecide` as a
-  function of a view, outputs verdicts `Decided` derives from that view,
-  at consecutive slots, at every row and vote with positive link and
-  certificate thresholds; at the rows the inequalities cover, two
-  validators' outputs are prefix-comparable.
+* **The commit loop computes the relation** (`Scheme.Loop.holds`, §8).
+  `tryDecide`, the scheme's `TryDecide` as a function of a view, outputs
+  only verdicts `Decided` derives from that view, at every row and vote
+  with positive link and certificate thresholds. At the rows the
+  inequalities cover it outputs every derived verdict once its scan
+  reaches far enough, and two validators' outputs are prefix-comparable.
 
 **What the table claims and does not hold, or holds otherwise.**
 
@@ -103,8 +103,7 @@ are the evidence.
 **Open.** Liveness of every row not equal to a rule of this development,
 and of the buffer-round rows at votes other than the least; Async
 Nemo-Nemo's safety, which the inequalities do not give; and the commit
-loop's completeness (that it outputs every verdict the relation derives)
-and its restart at the last consumed decision.
+loop's restart at the last consumed decision.
 
 ## 1. The parameters
 
@@ -309,12 +308,19 @@ rounds downward and leader indices downward, is slot order reversed.
   candidate the view holds is the tie-break's choice.
 * **Prefix comparability** (`PrefixComparable`, from `tryDecide_prefix`):
   at every row of §7, two validators' outputs are prefix-comparable.
+* **Completeness** (`Complete`, `OutputComplete`, from
+  `decisionAt_complete` and `tryDecide_eventually`): at every row of §7,
+  a verdict `Decided` derives is the loop's decision for its slot once
+  the scan passes the derivation's largest slot, and `tryDecide` outputs
+  it once every slot from `lo` up to it is decided. By induction on a
+  bounded derivation (`DecidedWithin`): a direct decision the loop makes
+  is the derived one by soundness and uniqueness; otherwise the walk
+  passes the skipped slots, meets the derivation's anchor, and the
+  tie-break makes the derivation's candidate the least linked one.
 
 `LeanDagTest/Scheme/TryDecide.lean` runs the loop: on `full4` at the
 Mahi-Mahi row of wave four it commits slots `0`–`2` directly at the
 least vote and at `VotedBlock`, and on Mysticeti's `U7` it commits slot
 `0` indirectly through slot `1`.
 
-**Open.** Completeness, that the loop outputs every verdict the
-relation derives once it scans high enough; and the restart at the
-round of the last consumed decision.
+**Open.** The restart at the round of the last consumed decision.

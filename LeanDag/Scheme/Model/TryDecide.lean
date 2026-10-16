@@ -77,6 +77,10 @@ def scan (N : ℕ) : ℕ → List (ℕ × Option (Option BlockId))
   | 0 => []
   | m + 1 => (N - m, decideSlot p σ U V (N - m) (scan N m)) :: scan N m
 
+/-- The loop's decision for slot `k`, scanning to slot `N`. -/
+def decisionAt (N k : ℕ) : Option (Option BlockId) :=
+  decideSlot p σ U V k (scan p σ U V N (N - k))
+
 /-- **The scheme's *TryDecide***: the longest prefix of decided slots from `lo` to `N`,
 oldest first. -/
 def tryDecide (lo N : ℕ) : List (ℕ × Option BlockId) :=

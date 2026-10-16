@@ -560,9 +560,10 @@ rows as rules of this development, three of them at the least vote
 three are not the development's rules, and two views still decide alike
 (`Scheme.Safety.holds` (SC10, SC11)). The table's inequalities give
 agreement at every row that meets them (`Scheme.Sufficiency.holds`
-(SC12)). The scheme's commit loop outputs only verdicts the relation
-derives, and two validators' outputs are prefix-comparable
-(`Scheme.Loop.holds` (SC13, SC14)).
+(SC12)). The scheme's commit loop computes the relation: it outputs only verdicts
+the relation derives, every derived verdict once it scans far enough,
+and two validators' outputs are prefix-comparable (`Scheme.Loop.holds`
+(SC13–SC15)).
 
 **The development has four kinds of arc, and the source says which each
 is.** A **commit rule** carries a universe, a decision relation, the
@@ -11842,7 +11843,18 @@ certificate in the anchor's history carries a vote whose history holds
 the candidate, so the least linked candidate the view holds is the
 tie-break's choice, and an empty set of them is an empty rung. SC14:
 at every row of SC12, two validators' outputs are prefix-comparable,
-since two derivations for one slot name one verdict. On Mahi-Mahi's
+since two derivations for one slot name one verdict. SC15: at those
+rows the loop is also complete. A verdict `Decided` derives is the
+loop's decision for its slot once the scan reaches past the derivation's
+largest slot (`Scheme.decisionAt_eventually`), and once every slot from
+`lo` to `k` has a derived verdict, `tryDecide` outputs slot `k`'s
+(`Scheme.tryDecide_eventually`). The proof is by induction on a bounded
+derivation (`DecidedWithin`). A direct decision the loop makes is the
+derived one, by soundness and the uniqueness of verdicts; when the loop
+makes none, its walk passes the slots the derivation skips, meets the
+anchor the derivation names, and finds there the derivation's candidate,
+which the tie-break makes the least linked one the view holds. The loop
+therefore computes the relation. On Mahi-Mahi's
 `full4` the loop at the Mahi-Mahi row of wave four commits slots `0`–`2`
 directly at both the least vote and the scheme's own, and on
 Mysticeti's `U7` it commits slot `0` indirectly through slot `1`'s block
@@ -11856,9 +11868,8 @@ liveness among them, reach the rows of §27.5 only at the least vote, and
 no row has a liveness result from SC12. The derived rows' safety is
 SC12's; Async Nemo-Nemo's is not proved. The commit loop *TryDecide*, which scans slots
 downward and outputs the longest decided prefix, is read through
-`Decided` in one direction only: the loop outputs nothing the relation
-does not derive (SC13), and that it outputs every verdict the relation
-derives when it scans high enough is not proved. The loop's restart at
+`Decided` (SC13, SC15) on the rows of SC12; at a row outside them the
+loop is sound and its completeness is not stated. The loop's restart at
 the round of the last consumed decision, which the scheme calls
 idempotent, is not stated.
 
@@ -12154,7 +12165,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Scheme/Equiv/` | eight rows as carriers, SC4–SC6 and SC9 |
 | `Scheme/Safety/` | the scheme's vote is a vote-selection rule, and three rows with buffer rounds agree at every vote, SC10–SC11 |
 | `Scheme/Sufficiency/` | the table's inequalities give agreement at every vote, and the derived rows agree, SC12 |
-| `Scheme/Loop/` | the commit loop outputs only derivable verdicts, and two validators' outputs are prefix-comparable, SC13–SC14 |
+| `Scheme/Loop/` | the commit loop outputs exactly the derivable verdicts, and two validators' outputs are prefix-comparable, SC13–SC15 |
 
 **The support graph, extracted.** The dependency structure of the
 development is not documented by hand: `scripts/DepGraph.lean` walks
@@ -13082,6 +13093,7 @@ reused.
 | SC12 | on records with quorum `q` and at most `f` validators that may equivocate, every two-round row meeting `TwoRound n f q` and every three-round row with a link of one certificate meeting `ThreeRound n f q` has the anchored laws and agrees, at every vote; Hybrid Mysticeti, Hybrid Mahi-Mahi, Orcaella at every `n ≥ 5f + 3c + 1` and Async Orcaella agree | `Scheme.twoRoundLaws`, `Scheme.threeRoundLaws`, `Scheme.Sufficiency.holds` *(Scheme/Sufficiency, Scheme/Helpers/Sufficiency)* |
 | SC13 | the commit loop outputs only verdicts `Decided` derives from the same view, at consecutive slots, at positive link and certificate thresholds | `Scheme.tryDecide_sound`, `Scheme.Loop.sound` *(Scheme/Loop)* |
 | SC14 | at the rows of SC12, two validators' loop outputs are prefix-comparable | `Scheme.tryDecide_prefix`, `Scheme.Loop.prefixComparable` *(Scheme/Loop)* |
+| SC15 | at the rows of SC12, the loop decides every verdict `Decided` derives once its scan reaches far enough, and outputs it once every slot from `lo` is decided | `Scheme.decisionAt_complete`, `Scheme.tryDecide_eventually`, `Scheme.Loop.complete`, `Scheme.Loop.outputComplete` *(Scheme/Loop)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -13156,7 +13168,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 410 definitions and structures the report names, in
+The 414 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -14089,6 +14101,18 @@ abbrev Decided (U : BlockUniverse Validator BlockId Payload) (V : View Validator
 ```
 
 **The decision relation**: the anchored relation at Odontoceti's data.
+
+#### `DecidedWithin`
+
+*abbrev, `Odontoceti.Decision.lean`*
+
+```lean
+abbrev DecidedWithin (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) (B : ℕ) : ℕ → Option BlockId → Prop :=
+  (odontocetiAnchored Validator BlockId Payload).DecidedWithin (S := S) U V B
+```
+
+**The bounded relation**, at Odontoceti's data.
 
 ### The reactive schedule
 
@@ -15290,6 +15314,18 @@ abbrev Decided (U : BlockUniverse Validator BlockId Payload)
 ```
 
 **The decision relation**: the anchored relation at Async BlueBottle's data. `Decided U V k (some L)`: a validator holding `V` may commit `L` at `k`; `Decided U V k none`: it may skip the slot; *undecided* is the absence of any derivation.
+
+#### `DecidedWithin`
+
+*abbrev, `AsyncBlueBottle.Model.Decision.lean`*
+
+```lean
+abbrev DecidedWithin (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) (B : ℕ) : ℕ → Option BlockId → Prop :=
+  (asyncBlueBottleAnchored Validator BlockId Payload).DecidedWithin (S := S) U V B
+```
+
+**The bounded relation**, at Async BlueBottle's data.
 
 #### `goodAt`
 
@@ -17828,6 +17864,38 @@ abbrev AnchorsOn (I : Slots Validator → BlockRecord Validator BlockId Payload 
 
 **What the band's novelty clause reads**: on the records satisfying `I`, a committed block is an anchor. `AnchoredRule.anchor_of_decided` supplies it from a rule's laws; a rule whose rungs need nothing of the anchor supplies `fun _ _ => trivial`.
 
+#### `DecidedWithin`
+
+*inductive, `Common.Anchored.Bounded.lean`*
+
+```lean
+inductive DecidedWithin (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
+    (B : ℕ) : ℕ → Option BlockId → Prop
+  /-- The direct rule commits a candidate outright. -/
+  | directCommit {k : ℕ} {L : BlockId} :
+      k < B → IsLeaderBlock U k L → R.Commit U V L (S.slotRound k) (S.kind k) →
+      DecidedWithin U V B k (some L)
+  /-- The direct rule skips the slot. -/
+  | directSkip {k : ℕ} :
+      k < B → R.Skip U V S k → DecidedWithin U V B k none
+  /-- Anchored below the bound, the tie-break's choice at the first
+  nonempty rung is committed. -/
+  | indirectCommit {k j : ℕ} {A L : BlockId} {i : ℕ} :
+      k < j → j < B → R.Eligible k j → DecidedWithin U V B j (some A) →
+      (∀ m, k < m → m < j → R.Eligible k m → DecidedWithin U V B m none) →
+      i < R.rungs → (∀ i', i' < i → R.RungEmpty U A i' k) →
+      IsLeaderBlock U k L → R.Link i U A L S k → R.Least U A i k L →
+      DecidedWithin U V B k (some L)
+  /-- Anchored below the bound, every rung is empty. -/
+  | indirectSkip {k j : ℕ} {A : BlockId} :
+      k < j → j < B → R.Eligible k j → DecidedWithin U V B j (some A) →
+      (∀ m, k < m → m < j → R.Eligible k m → DecidedWithin U V B m none) →
+      (∀ i, i < R.rungs → R.RungEmpty U A i k) →
+      DecidedWithin U V B k none
+```
+
+**The bounded relation**: `Decided`, with every slot the derivation mentions strictly below `B`.
+
 #### `EligibleAt`
 
 *def, `Common.Anchored.lean`*
@@ -19136,6 +19204,18 @@ def mysticetiRule : DagRule Validator BlockId Payload :=
 
 **The core rule as a carrier.**
 
+#### `DecidedWithin`
+
+*abbrev, `Mysticeti.Properties.lean`*
+
+```lean
+abbrev DecidedWithin (U : BlockUniverse Validator BlockId Payload)
+    (V : View Validator BlockId Payload U) (B : ℕ) : ℕ → Option BlockId → Prop :=
+  (coreAnchored Validator BlockId Payload).DecidedWithin (S := S) U V B
+```
+
+**The bounded decision relation**, at the core.
+
 #### `certLive`
 
 *def, `Mysticeti.Properties.lean`*
@@ -20171,7 +20251,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 607 theorems the body or Appendix A names, each
+The 608 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -27946,6 +28026,14 @@ theorem holds : Statement
 ```lean
 theorem decided (h : ReadAlike R₁ R₂ U) {V : U.View} {k : ℕ} {v : Option BlockId}
     (hd : R₁.Decided U V k v) : R₂.Decided U V k v
+```
+
+#### `complete`
+
+*theorem, `Scheme.Loop.Proof.lean`*
+
+```lean
+theorem complete : Complete
 ```
 
 #### `holds`

@@ -1,5 +1,6 @@
 import LeanDag.Scheme.Model.TryDecide
 import LeanDag.Scheme.Helpers.Sufficiency
+import LeanDag.Common.Anchored.Bounded
 /-!
 # The commit loop decides only what the relation derives
 
@@ -65,6 +66,19 @@ theorem history_subset_view {A : BlockId} (hA : A ∈ V.ids) : history U A ⊆ V
     rcases mem_historyUpto_succ.mp hx with rfl | ⟨j, hj, hxj⟩
     · exact hb
     · exact ih j (V.complete b hb j hj) hxj
+
+omit [Fintype Validator] S in
+/-- A candidate certified by a block the view holds lies in the view, at a
+positive certificate threshold. -/
+theorem mem_view_of_cert (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
+    {r : ℕ} {C L : BlockId} (hCV : C ∈ V.ids) (hC : C ∈ certsAt p σ U L r) : L ∈ V.ids := by
+  have hcert := (Finset.mem_filter.mp hC).2
+  unfold IsCert at hcert
+  split at hcert
+  · exact history_subset_view hCV (σ.sound U C _ _ L hcert).1
+  · rename_i hv
+    obtain ⟨b, hb, hbL⟩ := exists_vote_of_carriesVotes (hc (by simpa using hv)) hcert
+    exact history_subset_view (V.complete C hCV b hb) (σ.sound U b _ _ L hbL).1
 
 omit [Fintype Validator] in
 /-- **A candidate linked from an anchor the view holds lies in the view**,
@@ -311,6 +325,264 @@ theorem tryDecide_prefix (hl : 1 ≤ p.linkSize) (hc : p.voteIsCert = false → 
   have d₂ := s₂ e₂ he₂
   rw [heq] at d₁
   exact AnchoredRule.decided_unique hlaws hI d₁ V₂ _ d₂
+
+/-! ## Completeness -/
+
+omit [Fintype Validator] in
+/-- Every entry of the scan is the loop's decision for its slot. -/
+theorem scan_entry (N : ℕ) : ∀ m, m ≤ N + 1 → ∀ e ∈ scan p σ U V N m,
+    e.2 = decisionAt p σ U V N e.1 := by
+  intro m
+  induction m with
+  | zero => intro _ e he; simp [scan] at he
+  | succ m ih =>
+    intro hm e he
+    simp only [scan, List.mem_cons] at he
+    rcases he with rfl | he
+    · simp only [decisionAt]
+      rw [show N - (N - m) = m by omega]
+    · exact ih (by omega) e he
+
+omit [Fintype Validator] S in
+/-- A direct commit holds a candidate the view holds, at positive commit
+and certificate thresholds. -/
+theorem mem_view_of_commit (hcm : 1 ≤ p.commitThreshold)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold) {r κ : ℕ} {L : BlockId}
+    (h : (schemeAnchored p σ).Commit U V L r κ) : L ∈ V.ids := by
+  have h' : p.commitThreshold ≤ (heldAuthors U V (certsAt p σ U L r)).card := h
+  obtain ⟨v, hv⟩ := Finset.card_pos.mp (lt_of_lt_of_le hcm h')
+  obtain ⟨C, hC, hCV, -⟩ := mem_heldAuthors.mp hv
+  exact mem_view_of_cert hc hCV hC
+
+omit [Fintype Validator] in
+/-- **The walk finds the anchor**: past skipped and ineligible slots, at
+the first committed eligible slot it decides from that anchor. -/
+theorem tryIndirect_eq {k : ℕ} {ent : ℕ → Option (Option BlockId)} {j : ℕ} {A : BlockId}
+    (hj : S.slotRound k + (p.waveLength - 1) + 1 ≤ S.slotRound j) (hjA : ent j = some (some A))
+    (hmid : ∀ m, k < m → m < j → S.slotRound k + (p.waveLength - 1) + 1 ≤ S.slotRound m →
+      ent m = some none) :
+    ∀ (l : List (ℕ × Option (Option BlockId))) (a : ℕ),
+      l.map Prod.fst = List.range' a l.length → k < a → a ≤ j → j < a + l.length →
+      (∀ e ∈ l, e.2 = ent e.1) →
+      tryIndirect p σ U V k l = some (leastOf ((candidatesIn U V k).filter
+        (fun L => p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
+          (fun C => C ∈ history U A))).card))) := by
+  intro l
+  induction l with
+  | nil => intro a _ _ _ h _; simp at h; omega
+  | cons e rest ih =>
+    obtain ⟨m, s⟩ := e
+    intro a hrange hka haj hjl hent
+    simp only [List.map_cons, List.length_cons, List.range'_succ, List.cons.injEq] at hrange
+    obtain ⟨rfl, hrest⟩ := hrange
+    have hs : s = ent m := hent (m, s) (List.mem_cons_self ..)
+    have hent' : ∀ e ∈ rest, e.2 = ent e.1 := fun e he => hent e (List.mem_cons_of_mem _ he)
+    have hlen : rest.length = (rest.map Prod.fst).length := by simp
+    rcases Nat.lt_or_eq_of_le haj with hlt | rfl
+    · have hrec := ih (m + 1) hrest (by omega) (by omega)
+        (by simp only [List.length_cons] at hjl; omega) hent'
+      unfold tryIndirect
+      split
+      · rename_i helig
+        rw [hs, hmid m hka hlt helig]
+        exact hrec
+      · exact hrec
+    · unfold tryIndirect
+      rw [if_pos hj, hs, hjA]
+
+/-- **Completeness of a slot's decision.** A verdict the bounded relation
+derives below `N + 1` is the loop's decision, when the rule has its laws. -/
+theorem decisionAt_complete (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThreshold)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
+    {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+    (hlaws : (schemeAnchored p σ).Laws I) (hI : I S U) {N B k : ℕ} {v : Option BlockId}
+    (hB : B ≤ N + 1) (h : (schemeAnchored p σ).DecidedWithin U V B k v) :
+    decisionAt p σ U V N k = some v := by
+  -- A direct decision, when there is one, is the derived one.
+  have hdirect : ∀ {k w v}, (schemeAnchored p σ).Decided U V k v →
+      tryDirect p σ U V k = some w → w = v := fun {k w v} hd hw =>
+    AnchoredRule.decided_unique hlaws hI (tryDirect_sound w hw).1 V v hd
+  -- The scan below slot `k` lists slots `k + 1, …, N`.
+  have hscan : ∀ k, k ≤ N →
+      (scan p σ U V N (N - k)).map Prod.fst = List.range' (k + 1) (N - k) ∧
+      (scan p σ U V N (N - k)).length = N - k ∧
+      ∀ e ∈ scan p σ U V N (N - k), e.2 = decisionAt p σ U V N e.1 := fun k hk => by
+    obtain ⟨hr, -⟩ := scan_sound (σ := σ) (U := U) (V := V) hl hc N (N - k) (by omega)
+    refine ⟨by rw [hr]; congr 1; omega, by simpa using congrArg List.length hr,
+      scan_entry N (N - k) (by omega)⟩
+  -- The anchor the scan finds is the anchor the derivation names.
+  have hwalk : ∀ {k j : ℕ} {A : BlockId}, k < j → j ≤ N → (schemeAnchored p σ).Eligible k j →
+      decisionAt p σ U V N j = some (some A) →
+      (∀ m, k < m → m < j → (schemeAnchored p σ).Eligible k m →
+        decisionAt p σ U V N m = some none) →
+      tryIndirect p σ U V k (scan p σ U V N (N - k)) = some (leastOf ((candidatesIn U V k).filter
+        (fun L => p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
+          (fun C => C ∈ history U A))).card))) := fun {k j A} hkj hjN helig hjA hmid => by
+    obtain ⟨hr, hlen, hent⟩ := hscan k (by omega)
+    exact tryIndirect_eq ((schemeAnchored p σ).eligible_iff.mp helig) hjA
+      (fun m h1 h2 hm => hmid m h1 h2 ((schemeAnchored p σ).eligible_iff.mpr hm))
+      _ (k + 1) (by rw [hr, hlen]) (by omega) (by omega) (by rw [hlen]; omega) hent
+  -- The anchor's commit is a candidate the view holds.
+  have hAV : ∀ {j A}, j ≤ N → decisionAt p σ U V N j = some (some A) → A ∈ V.ids :=
+    fun {j A} hjN hjA => by
+      obtain ⟨-, hsound⟩ := scan_sound (σ := σ) (U := U) (V := V) hl hc N (N - j + 1) (by omega)
+      have hmem : (j, decisionAt p σ U V N j) ∈ scan p σ U V N (N - j + 1) := by
+        simp only [scan, decisionAt, List.mem_cons]
+        left; congr 1 <;> [omega; (congr 2; omega)]
+      exact (mem_candidatesIn.mp ((hsound _ hmem (some A) hjA).2 A rfl)).1
+  induction h with
+  | @directCommit k L hkB hL hcommit =>
+    simp only [decisionAt, decideSlot]
+    cases hd : tryDirect p σ U V k with
+    | some w => rw [hdirect (.directCommit hL hcommit) hd]
+    | none =>
+      exfalso
+      unfold tryDirect at hd
+      split at hd
+      · cases hd
+      · rename_i hskip
+        have hLV := mem_view_of_commit hcm hc hcommit
+        have hmem : L ∈ (candidatesIn U V k).filter
+            (fun L => (schemeAnchored p σ).Commit U V L (S.slotRound k) (S.kind k)) :=
+          Finset.mem_filter.mpr ⟨mem_candidatesIn.mpr ⟨hLV, hL.2.2, hL.2.1⟩, hcommit⟩
+        unfold leastOf at hd
+        rw [dif_pos ⟨L, hmem⟩] at hd
+        cases hd
+  | @directSkip k hkB hskip =>
+    simp only [decisionAt, decideSlot]
+    cases hd : tryDirect p σ U V k with
+    | some w => rw [hdirect (.directSkip hskip) hd]
+    | none =>
+      exfalso
+      unfold tryDirect at hd
+      rw [if_pos (show HoldsAtLeast U V p.skipThreshold (blamersAt p σ U k) from hskip)] at hd
+      cases hd
+  | @indirectCommit k j A L i hkj hjB helig hdj hmid hi hemp hL hlink hleast ihj ihmid =>
+    have hd := (AnchoredRule.DecidedWithin.indirectCommit hkj hjB helig hdj hmid hi hemp hL
+      hlink hleast).toDecided
+    simp only [decisionAt, decideSlot]
+    cases hdir : tryDirect p σ U V k with
+    | some w => rw [hdirect hd hdir]
+    | none =>
+      have hi0 : i = 0 := by simp only [schemeAnchored] at hi; omega
+      subst hi0
+      rw [hwalk hkj (by omega) helig ihj (fun m h1 h2 hm => ihmid m h1 h2 hm)]
+      have hAV' := hAV (by omega) ihj
+      have hLV := mem_view_of_link hl hc hAV' hlink
+      have hmem : L ∈ (candidatesIn U V k).filter (fun L => p.linkSize ≤
+          (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
+            (fun C => C ∈ history U A))).card) :=
+        Finset.mem_filter.mpr ⟨mem_candidatesIn.mpr ⟨hLV, hL.2.2, hL.2.1⟩, hlink⟩
+      cases hmin : leastOf ((candidatesIn U V k).filter (fun L => p.linkSize ≤
+          (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
+            (fun C => C ∈ history U A))).card)) with
+      | none => rw [leastOf_eq_none hmin] at hmem; exact absurd hmem (Finset.notMem_empty _)
+      | some L₀ =>
+        obtain ⟨hL₀, hle⟩ := leastOf_eq_some hmin
+        obtain ⟨hL₀c, hL₀link⟩ := Finset.mem_filter.mp hL₀
+        have h1 := hle L hmem
+        have h2 : ¬ L₀ < L := hleast L₀ (isLeaderBlock_of_mem_candidatesIn hL₀c) hL₀link
+        rw [le_antisymm h1 (not_lt.mp h2)]
+  | @indirectSkip k j A hkj hjB helig hdj hmid hemp ihj ihmid =>
+    have hd := (AnchoredRule.DecidedWithin.indirectSkip hkj hjB helig hdj hmid hemp).toDecided
+    simp only [decisionAt, decideSlot]
+    cases hdir : tryDirect p σ U V k with
+    | some w => rw [hdirect hd hdir]
+    | none =>
+      rw [hwalk hkj (by omega) helig ihj (fun m h1 h2 hm => ihmid m h1 h2 hm)]
+      cases hmin : leastOf ((candidatesIn U V k).filter (fun L => p.linkSize ≤
+          (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
+            (fun C => C ∈ history U A))).card)) with
+      | none => rfl
+      | some L₀ =>
+        exfalso
+        obtain ⟨hL₀, -⟩ := leastOf_eq_some hmin
+        obtain ⟨hL₀c, hL₀link⟩ := Finset.mem_filter.mp hL₀
+        exact hemp 0 (by simp [schemeAnchored]) L₀ (isLeaderBlock_of_mem_candidatesIn hL₀c)
+          hL₀link
+
+/-- **Completeness, unbounded.** A verdict the relation derives is the
+loop's decision once the scan reaches far enough. -/
+theorem decisionAt_eventually (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThreshold)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
+    {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+    (hlaws : (schemeAnchored p σ).Laws I) (hI : I S U) {k : ℕ} {v : Option BlockId}
+    (h : (schemeAnchored p σ).Decided U V k v) :
+    ∃ N₀, ∀ N, N₀ ≤ N → decisionAt p σ U V N k = some v := by
+  obtain ⟨B, hB⟩ := AnchoredRule.exists_bound h
+  exact ⟨B, fun N hN => decisionAt_complete hl hcm hc hlaws hI (by omega) hB⟩
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] S in
+theorem mem_takeWhile_of {β : Type} {q : ℕ × β → Bool} :
+    ∀ (l : List (ℕ × β)) (a : ℕ) {e : ℕ × β}, l.map Prod.fst = List.range' a l.length →
+      e ∈ l → (∀ e' ∈ l, e'.1 ≤ e.1 → q e' = true) → e ∈ l.takeWhile q := by
+  intro l
+  induction l with
+  | nil => intro a e _ h; simp at h
+  | cons x rest ih =>
+    intro a e hr he hq
+    simp only [List.map_cons, List.length_cons, List.range'_succ, List.cons.injEq] at hr
+    have hx : x.1 ≤ e.1 := by
+      rcases List.mem_cons.mp he with rfl | he
+      · exact le_rfl
+      · have : e.1 ∈ rest.map Prod.fst := List.mem_map_of_mem he
+        rw [hr.2, List.mem_range'_1] at this
+        omega
+    rw [List.takeWhile_cons, if_pos (hq x (List.mem_cons_self ..) hx)]
+    rcases List.mem_cons.mp he with rfl | he
+    · exact List.mem_cons_self ..
+    · exact List.mem_cons_of_mem _ (ih (a + 1) hr.2 he
+        fun e' he' h => hq e' (List.mem_cons_of_mem _ he') h)
+
+/-- **`TryDecide` outputs every derived verdict** once every slot from `lo`
+to `k` has one and the scan reaches far enough. -/
+theorem tryDecide_eventually (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThreshold)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
+    {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+    (hlaws : (schemeAnchored p σ).Laws I) (hI : I S U) {lo k : ℕ} (hlok : lo ≤ k)
+    (hall : ∀ m, lo ≤ m → m ≤ k → ∃ v, (schemeAnchored p σ).Decided U V m v) :
+    ∃ N₀, ∀ N, N₀ ≤ N → ∀ v, (schemeAnchored p σ).Decided U V k v →
+      (k, v) ∈ tryDecide p σ U V lo N := by
+  classical
+  have hb : ∀ m, ∃ B, lo ≤ m → m ≤ k → ∀ v, (schemeAnchored p σ).Decided U V m v →
+      ∀ N, B ≤ N → decisionAt p σ U V N m = some v := by
+    intro m
+    by_cases hm : lo ≤ m ∧ m ≤ k
+    · obtain ⟨v, hv⟩ := hall m hm.1 hm.2
+      obtain ⟨B, hB⟩ := decisionAt_eventually hl hcm hc hlaws hI hv
+      refine ⟨B, fun _ _ v' hv' N hN => ?_⟩
+      rw [AnchoredRule.decided_unique hlaws hI hv' V v hv]
+      exact hB N hN
+    · exact ⟨0, fun h1 h2 => absurd ⟨h1, h2⟩ hm⟩
+  choose B hB using hb
+  refine ⟨(Finset.range (k + 1)).sup B + k, fun N hN v hv => ?_⟩
+  have hBm : ∀ m, m ≤ k → B m ≤ N := fun m hm => by
+    have := Finset.le_sup (f := B) (Finset.mem_range.mpr (show m < k + 1 by omega))
+    omega
+  obtain ⟨hrange, -⟩ := scan_sound (σ := σ) (U := U) (V := V) hl hc N (N + 1 - lo) (by omega)
+  have hent := scan_entry (p := p) (σ := σ) (U := U) (V := V) N (N + 1 - lo) (by omega)
+  have hlen : (scan p σ U V N (N + 1 - lo)).length = N + 1 - lo := by
+    simpa using congrArg List.length hrange
+  rw [show N + 1 - (N + 1 - lo) = lo by omega] at hrange
+  have hmem : (k, decisionAt p σ U V N k) ∈ scan p σ U V N (N + 1 - lo) := by
+    have : k ∈ (scan p σ U V N (N + 1 - lo)).map Prod.fst := by
+      rw [hrange, List.mem_range'_1]; omega
+    obtain ⟨e, he, hek⟩ := List.mem_map.mp this
+    have := hent e he
+    rw [hek] at this
+    rwa [show (k, decisionAt p σ U V N k) = e from Prod.ext hek.symm this.symm]
+  have hkv : decisionAt p σ U V N k = some v := hB k hlok le_rfl v hv N (hBm k le_rfl)
+  unfold tryDecide
+  refine List.mem_map.mpr ⟨(k, decisionAt p σ U V N k), mem_takeWhile_of _ lo
+    (by rw [hrange, hlen]) hmem fun e' he' hle => ?_, by simp [hkv]⟩
+  have hee := hent e' he'
+  have hlo' : lo ≤ e'.1 := by
+    have : e'.1 ∈ (scan p σ U V N (N + 1 - lo)).map Prod.fst := List.mem_map_of_mem he'
+    rw [hrange, List.mem_range'_1] at this
+    omega
+  obtain ⟨w, hw⟩ := hall e'.1 hlo' hle
+  rw [hee, hB e'.1 hlo' hle w hw N (hBm e'.1 hle)]
+  rfl
 
 end Scheme
 
