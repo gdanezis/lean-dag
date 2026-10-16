@@ -12,12 +12,10 @@ from slot `lo` to slot `N`:
   certificate thresholds are positive.
 * **Two validators' outputs are prefix-comparable**, and **the loop
   decides every verdict the relation derives** once its scan reaches far
-  enough, at every row the
-  inequalities cover (`Scheme/Sufficiency/`): a two-round row meeting
-  `TwoRound n f q` with a positive link, or a three-round row with a link
-  of one certificate meeting `ThreeRound n f q`, on a record whose blocks
-  reference `q` distinct authors and where validators outside `Hon`, at
-  most `f`, never equivocate.
+  enough, at every row the inequalities cover (`Params.Covered`,
+  `Scheme/Sufficiency/`), on a record whose blocks reference `q` distinct
+  authors and where validators outside `Hon`, at most `f`, never
+  equivocate.
 * **Restarting is idempotent**: a call from a slot inside an earlier
   output repeats its tail, and at the rows the inequalities cover, calls
   on growing views, each restarting after the last decision output,
@@ -58,10 +56,7 @@ def PrefixComparable : Prop :=
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V₁ V₂ : U.View) (lo N₁ N₂ : ℕ),
     Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    ((p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
-        p.TwoRound (Fintype.card Validator) f q) ∨
-      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
-        p.ThreeRound (Fintype.card Validator) f q)) →
+    p.Covered (Fintype.card Validator) f q →
     lo ≤ N₁ + 1 → lo ≤ N₂ + 1 →
     tryDecide p σ U V₁ lo N₁ <+: tryDecide p σ U V₂ lo N₂ ∨
       tryDecide p σ U V₂ lo N₂ <+: tryDecide p σ U V₁ lo N₁
@@ -76,10 +71,7 @@ def Complete : Prop :=
     (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (k : ℕ)
     (v : Option BlockId),
     Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    ((p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
-        p.TwoRound (Fintype.card Validator) f q) ∨
-      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
-        p.ThreeRound (Fintype.card Validator) f q)) →
+    p.Covered (Fintype.card Validator) f q →
     (schemeAnchored p σ).Decided U V k v →
     ∃ N₀, ∀ N, N₀ ≤ N → decisionAt p σ U V N k = some v
 
@@ -93,10 +85,7 @@ def OutputComplete : Prop :=
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (lo k : ℕ),
     Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    ((p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
-        p.TwoRound (Fintype.card Validator) f q) ∨
-      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
-        p.ThreeRound (Fintype.card Validator) f q)) →
+    p.Covered (Fintype.card Validator) f q →
     lo ≤ k → (∀ m, lo ≤ m → m ≤ k → ∃ v, (schemeAnchored p σ).Decided U V m v) →
     ∃ N₀, ∀ N, N₀ ≤ N → ∀ v, (schemeAnchored p σ).Decided U V k v →
       (k, v) ∈ tryDecide p σ U V lo N
@@ -122,10 +111,7 @@ def Resume : Prop :=
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V₁ V₂ : U.View) (lo N₁ N₂ : ℕ),
     Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    ((p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
-        p.TwoRound (Fintype.card Validator) f q) ∨
-      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
-        p.ThreeRound (Fintype.card Validator) f q)) →
+    p.Covered (Fintype.card Validator) f q →
     V₁.ids ⊆ V₂.ids → N₁ ≤ N₂ →
     tryDecide p σ U V₁ lo N₁ ++
         tryDecide p σ U V₂ (lo + (tryDecide p σ U V₁ lo N₁).length) N₂ =
@@ -143,10 +129,7 @@ def Repeated : Prop :=
     (U : BlockRecord Validator BlockId Payload P honest) (lo : ℕ) (W : ℕ → U.View)
     (N : ℕ → ℕ),
     Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    ((p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
-        p.TwoRound (Fintype.card Validator) f q) ∨
-      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
-        p.ThreeRound (Fintype.card Validator) f q)) →
+    p.Covered (Fintype.card Validator) f q →
     (∀ t, (W t).ids ⊆ (W (t + 1)).ids) → (∀ t, N t ≤ N (t + 1)) →
     ∀ t, consumed p σ U lo W N (t + 1) = tryDecide p σ U (W t) lo (N t)
 
@@ -187,10 +170,7 @@ def RestartRound : Prop :=
     (U : BlockRecord Validator BlockId Payload P honest) (V₁ V₂ : U.View)
     (per m rLast rHigh₁ rHigh₂ k : ℕ) (v : Option BlockId),
     Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    ((p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
-        p.TwoRound (Fintype.card Validator) f q) ∨
-      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
-        p.ThreeRound (Fintype.card Validator) f q)) →
+    p.Covered (Fintype.card Validator) f q →
     V₁.ids ⊆ V₂.ids → 0 < per → 0 < m → rLast ≤ rHigh₁ + 1 → rHigh₁ ≤ rHigh₂ →
     (schemeTryDecide p σ U V₁ per m rLast rHigh₁).getLast? = some (k, v) →
     schemeTryDecide p σ U V₁ per m rLast rHigh₁ ++
@@ -225,10 +205,7 @@ def LedgerAgree : Prop :=
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V₁ V₂ : U.View) (N₁ N₂ : ℕ),
     Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    ((p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
-        p.TwoRound (Fintype.card Validator) f q) ∨
-      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
-        p.ThreeRound (Fintype.card Validator) f q)) →
+    p.Covered (Fintype.card Validator) f q →
     (commitSeq (loopAssign p σ U V₁ N₁) (tryDecide p σ U V₁ 0 N₁).length <+:
         commitSeq (loopAssign p σ U V₂ N₂) (tryDecide p σ U V₂ 0 N₂).length ∧
       ledgerSet U (loopAssign p σ U V₁ N₁) (tryDecide p σ U V₁ 0 N₁).length ⊆

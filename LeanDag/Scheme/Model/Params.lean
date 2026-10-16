@@ -96,6 +96,31 @@ def ThreeRound (p : Params) (n f q : ℕ) : Prop :=
   n + f + 1 ≤ p.skipThreshold + p.certThreshold ∧
   n + f + 1 ≤ p.commitThreshold + q
 
+/-- **The two-round inequalities where nobody equivocates**: the two-round
+inequalities at `f = 0` without the one against an equivocating twin. -/
+def TwoRoundCrash (p : Params) (n q : ℕ) : Prop :=
+  n + 1 ≤ p.skipThreshold + p.linkSize ∧
+  p.linkSize + n ≤ p.commitThreshold + q
+
+/-- **The three-round inequalities where nobody equivocates**: the
+three-round inequalities at `f = 0` without the one making certificates
+unique. -/
+def ThreeRoundCrash (p : Params) (n q : ℕ) : Prop :=
+  n + 1 ≤ p.skipThreshold + p.certThreshold ∧
+  n + 1 ≤ p.commitThreshold + q
+
+/-- **The rows the inequalities cover**: a two-round row with a positive
+link meeting `TwoRound n f q`, a three-round row with a link of one
+certificate meeting `ThreeRound n f q`, and at `f = 0` the same with
+`TwoRoundCrash n q`, or with `ThreeRoundCrash n q` and a positive
+certificate threshold. -/
+def Covered (p : Params) (n f q : ℕ) : Prop :=
+  (p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧ p.TwoRound n f q) ∨
+  (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧ p.ThreeRound n f q) ∨
+  (p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧ f = 0 ∧ p.TwoRoundCrash n q) ∨
+  (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧ 1 ≤ p.certThreshold ∧ f = 0 ∧
+    p.ThreeRoundCrash n q)
+
 /-- **Liveness**: every threshold is reachable by the correct validators. -/
 def Live (p : Params) (n f c : ℕ) : Prop :=
   p.commitThreshold ≤ n - f - c ∧ p.skipThreshold ≤ n - f - c ∧ p.certThreshold ≤ n - f - c

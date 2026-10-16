@@ -44,7 +44,31 @@ theorem nemoNotTwoRound : NemoNotTwoRound := by
   simp only [TwoRound, nemoNemo]
   refine ⟨fun ⟨_, h2, _⟩ => by omega, by omega, by omega⟩
 
-theorem holds : Statement := ⟨rowsHold, twoRoundBound, threeRoundBound, nemoNotTwoRound⟩
+theorem crashWeaker : CrashWeaker := by
+  intro p n q
+  simp only [TwoRound, ThreeRound, TwoRoundCrash, ThreeRoundCrash]
+  refine ⟨fun h => ?_, fun h => ?_⟩ <;> obtain ⟨h1, h2, h3⟩ := h <;> exact ⟨by omega, by omega⟩
+
+theorem crashRows : CrashRows := by
+  intro c
+  simp only [TwoRoundCrash, nemoNemo, asyncNemoNemo]
+  refine ⟨⟨⟨?_, ?_⟩, ?_, ?_⟩, ⟨?_, ?_⟩, ?_, ?_⟩ <;> omega
+
+theorem crashBound : CrashBound := by
+  refine ⟨fun p n c h hl hcm => ?_, fun p n c h hcm => ?_⟩
+  · simp only [TwoRoundCrash, Live, orcaella] at *
+    obtain ⟨h1, h2⟩ := h
+    refine ⟨by omega, fun hl => ?_⟩
+    obtain ⟨l1, l2, l3⟩ := hl
+    exact ⟨by omega, fun hn => ⟨by omega, by omega, by omega⟩⟩
+  · simp only [ThreeRoundCrash, Live, hybridMysticeti] at *
+    obtain ⟨h1, h2⟩ := h
+    refine ⟨by omega, fun hl hn => ?_⟩
+    obtain ⟨l1, l2, l3⟩ := hl
+    exact ⟨by omega, by omega, by omega⟩
+
+theorem holds : Statement :=
+  ⟨rowsHold, twoRoundBound, threeRoundBound, nemoNotTwoRound, crashWeaker, crashRows, crashBound⟩
 
 end Table
 

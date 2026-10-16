@@ -19,6 +19,13 @@ scheme, and `n − f − c` where the scheme solves for its rows.
   inequalities: at `f = 0` and `c ≥ 1` its commit and link sum to
   `c + 2 < n + 1`. Its committee `2c + 1` is below the bound `3c + 1`
   the inequalities give at `f = 0`.
+* `CrashWeaker`, `CrashRows`: at `f = 0` the inequalities imply those
+  where nobody equivocates (`TwoRoundCrash`, `ThreeRoundCrash`), and
+  Nemo-Nemo and Async Nemo-Nemo meet the two-round ones at `n = 2c + 1`.
+* `CrashBound`: where nobody equivocates, a two-round row needs
+  `n ≥ 2c + 1`, and `n ≥ 3c + 1` with a direct skip within the liveness
+  bound, where Orcaella's thresholds at `f = 0` are forced; a three-round
+  row needs `n ≥ 2c + 1`, where Hybrid Mysticeti's at `f = 0` are forced.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -89,6 +96,46 @@ def ThreeRoundBound : Prop :=
           p.skipThreshold = (mysticeti n f).skipThreshold ∧
           p.certThreshold = (mysticeti n f).certThreshold))
 
+/-- **At `f = 0` the inequalities imply those where nobody equivocates.** -/
+def CrashWeaker : Prop :=
+  ∀ (p : Params) (n q : ℕ),
+    (TwoRound p n 0 q → TwoRoundCrash p n q) ∧ (ThreeRound p n 0 q → ThreeRoundCrash p n q)
+
+/-- **Nemo-Nemo and Async Nemo-Nemo meet the two-round inequalities where
+nobody equivocates**, at `n = 2c + 1` and `q = c + 1`, and the liveness
+bounds on the commit and certificate thresholds. -/
+def CrashRows : Prop :=
+  ∀ c : ℕ,
+    (TwoRoundCrash (nemoNemo (2 * c + 1) c) (2 * c + 1) (c + 1) ∧
+      (nemoNemo (2 * c + 1) c).commitThreshold ≤ c + 1 ∧
+      (nemoNemo (2 * c + 1) c).certThreshold ≤ c + 1) ∧
+    (TwoRoundCrash (asyncNemoNemo (2 * c + 1) c) (2 * c + 1) (c + 1) ∧
+      (asyncNemoNemo (2 * c + 1) c).commitThreshold ≤ c + 1 ∧
+      (asyncNemoNemo (2 * c + 1) c).certThreshold ≤ c + 1)
+
+/-- **The committees where nobody equivocates**, with `q = n − c`. A
+two-round row with a positive link and a reachable commit needs
+`n ≥ 2c + 1`, and with every threshold within the liveness bound
+`n ≥ 3c + 1`, where Orcaella's thresholds at `f = 0` are forced. A
+three-round row with a reachable commit needs `n ≥ 2c + 1`, where with
+every threshold within the bound Hybrid Mysticeti's at `f = 0` are forced. -/
+def CrashBound : Prop :=
+  (∀ (p : Params) (n c : ℕ),
+    TwoRoundCrash p n (n - c) → 1 ≤ p.linkSize → p.commitThreshold ≤ n - c →
+      2 * c + 1 ≤ n ∧
+      (Live p n 0 c → 3 * c + 1 ≤ n ∧
+        (n = 3 * c + 1 →
+          p.commitThreshold = (orcaella n 0 c).commitThreshold ∧
+          p.skipThreshold = (orcaella n 0 c).skipThreshold ∧
+          p.linkSize = (orcaella n 0 c).linkSize))) ∧
+  (∀ (p : Params) (n c : ℕ),
+    ThreeRoundCrash p n (n - c) → p.commitThreshold ≤ n - c →
+      2 * c + 1 ≤ n ∧
+      (Live p n 0 c → n = 2 * c + 1 →
+        p.commitThreshold = (hybridMysticeti n 0 c).commitThreshold ∧
+        p.skipThreshold = (hybridMysticeti n 0 c).skipThreshold ∧
+        p.certThreshold = (hybridMysticeti n 0 c).certThreshold))
+
 /-- **Nemo-Nemo is no two-round solution**: at `n = 2c + 1`, `f = 0`,
 `q = n − c` and `c ≥ 1`, its second inequality fails, while its first and
 third hold. -/
@@ -101,7 +148,9 @@ def NemoNotTwoRound : Prop :=
       (nemoNemo (2 * c + 1) c).commitThreshold + (c + 1)
 
 /-- The table's claims, together. -/
-def Statement : Prop := RowsHold ∧ TwoRoundBound ∧ ThreeRoundBound ∧ NemoNotTwoRound
+def Statement : Prop :=
+  RowsHold ∧ TwoRoundBound ∧ ThreeRoundBound ∧ NemoNotTwoRound ∧ CrashWeaker ∧ CrashRows ∧
+    CrashBound
 
 end Table
 

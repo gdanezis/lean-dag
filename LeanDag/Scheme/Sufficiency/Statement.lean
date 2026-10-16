@@ -15,9 +15,15 @@ Crash faults enter only through `q`. At every vote-selection rule:
   three and a link of one certificate, meeting `Params.ThreeRound n f q`,
   decides alike from two views.
 
+Where nobody equivocates (`Hon` is every validator), the inequality
+against an equivocating twin and the one making certificates unique are
+not needed: rows meeting `Params.TwoRoundCrash n q` or
+`Params.ThreeRoundCrash n q` decide alike.
+
 The derived rows follow: Hybrid Mysticeti and Hybrid Mahi-Mahi at
-`n = 3f + 2c + 1` and `q = 2f + c + 1`, and Orcaella and Async Orcaella
-at every `n ≥ 5f + 3c + 1` and `q = n − f − c`.
+`n = 3f + 2c + 1` and `q = 2f + c + 1`, Orcaella and Async Orcaella at
+every `n ≥ 5f + 3c + 1` and `q = n − f − c`, and Nemo-Nemo and Async
+Nemo-Nemo at `n = 2c + 1` and `q = c + 1` where nobody equivocates.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -80,9 +86,46 @@ def OrcaellaRowsAgree : Prop :=
     Agree ((schemeAnchored (Params.asyncOrcaella (Fintype.card Validator) f c) σ).toDagRuleOn
       (fun U => U.NoEquivOn Hon))
 
-/-- The two families, and the rows they give. -/
+/-- **The two-round inequalities where nobody equivocates give
+agreement.** -/
+def TwoRoundCrashAgree : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (q : ℕ) [P.Quorate q] (honest Hon : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest),
+    Honᶜ.card ≤ 0 → q ≤ Fintype.card Validator →
+    p.voteIsCert = true → 2 ≤ p.waveLength → p.TwoRoundCrash (Fintype.card Validator) q →
+    Agree ((schemeAnchored p σ).toDagRuleOn (fun U => U.NoEquivOn Hon))
+
+/-- **The three-round inequalities where nobody equivocates give
+agreement**, at a link of one certificate. -/
+def ThreeRoundCrashAgree : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (q : ℕ) [P.Quorate q] (honest Hon : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest),
+    Honᶜ.card ≤ 0 → q ≤ Fintype.card Validator →
+    p.voteIsCert = false → 3 ≤ p.waveLength → p.linkSize = 1 →
+    p.ThreeRoundCrash (Fintype.card Validator) q →
+    Agree ((schemeAnchored p σ).toDagRuleOn (fun U => U.NoEquivOn Hon))
+
+/-- **Nemo-Nemo and Async Nemo-Nemo agree** at `n = 2c + 1` and
+`q = c + 1`, where nobody equivocates. -/
+def NemoRowsAgree : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (c : ℕ) [P.Quorate (c + 1)] (honest Hon : Finset Validator)
+    (σ : VoteSel Validator BlockId Payload P honest),
+    Honᶜ.card ≤ 0 → Fintype.card Validator = 2 * c + 1 →
+    Agree ((schemeAnchored (Params.nemoNemo (Fintype.card Validator) c) σ).toDagRuleOn
+      (fun U => U.NoEquivOn Hon)) ∧
+    Agree ((schemeAnchored (Params.asyncNemoNemo (Fintype.card Validator) c) σ).toDagRuleOn
+      (fun U => U.NoEquivOn Hon))
+
+/-- The families, and the rows they give. -/
 def Statement : Prop :=
-  TwoRoundAgree ∧ ThreeRoundAgree ∧ HybridRowsAgree ∧ OrcaellaRowsAgree
+  TwoRoundAgree ∧ ThreeRoundAgree ∧ HybridRowsAgree ∧ OrcaellaRowsAgree ∧
+    TwoRoundCrashAgree ∧ ThreeRoundCrashAgree ∧ NemoRowsAgree
 
 end Sufficiency
 

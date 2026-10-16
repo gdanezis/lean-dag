@@ -38,6 +38,19 @@ example [F : Faults Validator] (σ : VoteSel Validator BlockId Payload ValidWrt 
     Correct F.f _ σ card_compl_correct_le (Nat.sub_le _ _) rfl (show 3 ≤ 3 by omega) rfl
     (by have := F.card_validators; simp only [Params.ThreeRound, Params.mysticeti]; omega)
 
+/-- The crash theorem on Nemo's universe, at the Async Nemo-Nemo row and any
+vote: every validator is honest, and the majority quorum is `c + 1` at
+`n = 2c + 1`. -/
+example (c : ℕ) (hn : Fintype.card Validator = 2 * c + 1)
+    (σ : VoteSel Validator BlockId Payload Nemo.ValidWrt Finset.univ) :
+    Properties.Agree ((schemeAnchored (Params.asyncNemoNemo (Fintype.card Validator) c) σ).toDagRuleOn
+      (fun U => U.NoEquivOn Finset.univ)) := by
+  have hm : Nemo.majority Validator = c + 1 := by unfold Nemo.majority; omega
+  haveI : Validity.Quorate (Nemo.ValidWrt (Validator := Validator) (BlockId := BlockId)
+      (Payload := Payload)) (c + 1) := hm ▸ Nemo.ValidWrt.quorate
+  exact (Sufficiency.nemoRowsAgree Validator BlockId Payload Nemo.ValidWrt c Finset.univ
+    Finset.univ σ (by simp) hn).2
+
 end Scheme
 
 end LeanDagTest
@@ -47,6 +60,7 @@ end LeanDagTest
 #print axioms LeanDag.Scheme.leastSel
 #print axioms LeanDag.Scheme.Safety.holds
 #print axioms LeanDag.Scheme.Sufficiency.holds
+#print axioms LeanDag.Scheme.Sufficiency.nemoRowsAgree
 #print axioms LeanDag.Scheme.Loop.holds
 #print axioms LeanDag.Scheme.banded
 #print axioms LeanDag.Scheme.safety

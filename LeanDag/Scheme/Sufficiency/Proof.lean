@@ -41,8 +41,26 @@ theorem orcaellaRowsAgree : OrcaellaRowsAgree := by
     twoRoundAgree Validator BlockId Payload P _ honest Hon f _ σ hHon (by omega) rfl
       (show 2 ≤ 3 by omega) h₂⟩
 
+theorem twoRoundCrashAgree : TwoRoundCrashAgree := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon p σ hHon hq hv hw hineq
+  exact AnchoredRule.agreeOn (twoRoundCrashLaws σ hv hHon hq hineq) (fun _ _ h => h)
+
+theorem threeRoundCrashAgree : ThreeRoundCrashAgree := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon p σ hHon hq hv hw hl hineq
+  exact AnchoredRule.agreeOn (threeRoundCrashLaws σ hv hw hHon hq hl hineq) (fun _ _ h => h)
+
+theorem nemoRowsAgree : NemoRowsAgree := by
+  intro Validator BlockId Payload _ _ _ P _ c _ honest Hon σ hHon hn
+  obtain ⟨⟨h₁, -⟩, ⟨h₂, -⟩⟩ := Table.crashRows c
+  rw [hn]
+  exact ⟨twoRoundCrashAgree Validator BlockId Payload P (c + 1) honest Hon _ σ hHon (by omega)
+      rfl (show 2 ≤ 2 by omega) (hn ▸ h₁),
+    twoRoundCrashAgree Validator BlockId Payload P (c + 1) honest Hon _ σ hHon (by omega)
+      rfl (show 2 ≤ 3 by omega) (hn ▸ h₂)⟩
+
 theorem holds : Statement :=
-  ⟨twoRoundAgree, threeRoundAgree, hybridRowsAgree, orcaellaRowsAgree⟩
+  ⟨twoRoundAgree, threeRoundAgree, hybridRowsAgree, orcaellaRowsAgree, twoRoundCrashAgree,
+    threeRoundCrashAgree, nemoRowsAgree⟩
 
 end Sufficiency
 

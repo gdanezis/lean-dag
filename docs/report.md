@@ -560,7 +560,8 @@ rows as rules of this development, three of them at the least vote
 three are not the development's rules, and two views still decide alike
 (`Scheme.Safety.holds` (SC10, SC11)). The table's inequalities give
 agreement at every row that meets them (`Scheme.Sufficiency.holds`
-(SC12)). The scheme's commit loop computes the relation: it outputs only verdicts
+(SC12)), and where nobody equivocates fewer of them suffice, which
+covers Nemo-Nemo and Async Nemo-Nemo (SC22). The scheme's commit loop computes the relation: it outputs only verdicts
 the relation derives, every derived verdict once it scans far enough,
 and two validators' outputs are prefix-comparable (`Scheme.Loop.holds`
 (SC13–SC15)); calls restarting after the last decision output on growing
@@ -11817,8 +11818,26 @@ other than Hybrid's (§27.4), and is safe. The statements quantify over
 the record's validity, not over the hybrid fault model of §14: that
 model's base bound `n ≥ 3(fb + fc) + 1` excludes Hybrid Mysticeti's
 committee `3f + 2c + 1` whenever `c ≥ 1`. Nemo-Nemo and Async Nemo-Nemo
-fail the second two-round inequality (SC1) and are outside SC12; their
-safety rests on the crash model, which §27.4 uses for Nemo-Nemo.
+fail the second two-round inequality (SC1) and are outside SC12.
+
+SC22: where nobody equivocates, fewer inequalities suffice. When `Hon` is
+every validator, a slot has one block (`Scheme.eq_of_noEquiv_all`), and
+the laws comparing two blocks of one slot hold without a count. The
+two-round inequality `n + f + 1 ≤ commit + link` and the three-round
+`n + f + 1 ≤ 2·cert` are written for those laws only; without them,
+`Params.TwoRoundCrash n q` and `Params.ThreeRoundCrash n q` give the
+anchored laws (`Scheme.twoRoundCrashLaws`, `Scheme.threeRoundCrashLaws`)
+and agreement at every vote. At `f = 0` the table's inequalities imply
+them; Nemo-Nemo and Async Nemo-Nemo meet the two-round ones at
+`n = 2c + 1`, `q = c + 1`, and agree (`Scheme.Sufficiency.nemoRowsAgree`).
+With `q = n − c`, a two-round row needs `n ≥ 2c + 1`, and `n ≥ 3c + 1`
+when its skip threshold is within the liveness bound, where Orcaella's
+thresholds at `f = 0` are forced; a three-round row needs `n ≥ 2c + 1`,
+where Hybrid Mysticeti's at `f = 0` are forced. Nemo-Nemo's "no direct
+skip" is what brings its committee from `3c + 1` to `2c + 1`. The rows
+SC12 and SC22 cover, `Scheme.Params.Covered`, are the rows at which the
+loop's agreement results (SC14–SC21) and the family's safety (SC17)
+hold.
 
 ### 27.8 The commit loop
 
@@ -11951,9 +11970,8 @@ leaders.
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
-properties of §27.9 hold of the family at every vote. Async Nemo-Nemo's
-safety is not proved. The commit loop *TryDecide* is read through
-`Decided` (SC13, SC15) on the rows of SC12; at a row outside them the
+properties of §27.9 hold of the family at every vote. The commit loop *TryDecide* is read through
+`Decided` (SC13, SC15) on the rows of SC12 and SC22; at a row outside them the
 loop is sound, its restart on one view holds (SC19), and its order
 and ledger reading hold (SC20, SC21); its completeness, its resumption
 on a larger view and the nesting of ledgers are not stated. The asynchronous rows' liveness by the coin is proved rule by
@@ -13191,6 +13209,7 @@ reused.
 | SC19 | a call restarting inside an earlier output repeats its tail; at the rows of SC12, calls on growing views, each restarting after the last decision output, output what one call on the last view outputs | `Scheme.tryDecide_restart`, `Scheme.decisionAt_mono`, `Scheme.tryDecide_resume`, `Scheme.consumed_eq`, `Scheme.Loop.restart`, `Scheme.Loop.resume`, `Scheme.Loop.repeated` *(Scheme/Loop, Scheme/Helpers/Restart)* |
 | SC20 | the scheme's loop over rounds and leader indices, both downward, outputs `tryDecide` between the corresponding slots, and under `Slots.uniform` each pair is its slot's round and leader index; at the rows of SC12, its restart at the round of the last decision, dropping the slots already output, resumes it on a larger view | `Scheme.schemeOrder_slots`, `Scheme.schemeTryDecide_eq`, `Scheme.schemeOrder_uniform`, `Scheme.schemeTryDecide_restartRound`, `Scheme.Loop.order`, `Scheme.Loop.orderUniform`, `Scheme.Loop.restartRound` *(Scheme/Loop, Scheme/Helpers/Order)* |
 | SC21 | the output from slot `0` is `commitSeq` and `ledgerSet` of the loop's assignment, every slot below its length decided with that verdict; at the rows of SC12 two validators' ledgers are nested | `Scheme.tryDecide_eq_map`, `Scheme.ledger_read`, `Scheme.ledger_agree`, `Scheme.Loop.ledger`, `Scheme.Loop.ledgerAgree` *(Scheme/Loop, Scheme/Helpers/Ledger)* |
+| SC22 | where nobody equivocates, the two-round inequalities without `n + f + 1 ≤ commit + link` and the three-round ones without `n + f + 1 ≤ 2·cert` give agreement at every vote; Nemo-Nemo and Async Nemo-Nemo meet them at `n = 2c + 1` and agree; with `q = n − c` they need `n ≥ 2c + 1`, and `3c + 1` for a two-round row with a direct skip within the liveness bound | `Scheme.eq_of_noEquiv_all`, `Scheme.twoRoundCrashLaws`, `Scheme.threeRoundCrashLaws`, `Scheme.Table.crashWeaker`, `Scheme.Table.crashRows`, `Scheme.Table.crashBound`, `Scheme.Sufficiency.twoRoundCrashAgree`, `Scheme.Sufficiency.threeRoundCrashAgree`, `Scheme.Sufficiency.nemoRowsAgree` *(Scheme/Helpers/Sufficiency, Scheme/Table, Scheme/Sufficiency)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -28310,10 +28329,7 @@ theorem selfParent [Faults Validator] {σ : VoteSel Validator BlockId Payload Va
 ```lean
 theorem agree {q : ℕ} [P.Quorate q] {f : ℕ} (hHon : Honᶜ.card ≤ f)
     (hq : q ≤ Fintype.card Validator)
-    (hfam : (p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
-        p.TwoRound (Fintype.card Validator) f q) ∨
-      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
-        p.ThreeRound (Fintype.card Validator) f q)) :
+    (hfam : p.Covered (Fintype.card Validator) f q) :
     Agree (schemeRule p σ Hon)
 ```
 
@@ -28326,10 +28342,7 @@ theorem agree {q : ℕ} [P.Quorate q] {f : ℕ} (hHon : Honᶜ.card ≤ f)
 ```lean
 theorem safety {q : ℕ} [P.Quorate q] {f : ℕ} (hσ : σ.Local) (hHon : Honᶜ.card ≤ f)
     (hq : q ≤ Fintype.card Validator)
-    (hfam : (p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
-        p.TwoRound (Fintype.card Validator) f q) ∨
-      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
-        p.ThreeRound (Fintype.card Validator) f q)) :
+    (hfam : p.Covered (Fintype.card Validator) f q) :
     Safe (schemeRule p σ Hon)
 ```
 

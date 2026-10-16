@@ -103,10 +103,7 @@ records with quorum `q` where validators outside `Hon`, at most `f`, may
 equivocate. -/
 theorem agree {q : ℕ} [P.Quorate q] {f : ℕ} (hHon : Honᶜ.card ≤ f)
     (hq : q ≤ Fintype.card Validator)
-    (hfam : (p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
-        p.TwoRound (Fintype.card Validator) f q) ∨
-      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
-        p.ThreeRound (Fintype.card Validator) f q)) :
+    (hfam : p.Covered (Fintype.card Validator) f q) :
     Agree (schemeRule p σ Hon) :=
   AnchoredRule.agreeOn (Loop.family σ hHon hq hfam).2.2.2 (fun _ _ h => h)
 
@@ -114,13 +111,11 @@ theorem agree {q : ℕ} [P.Quorate q] {f : ℕ} (hHon : Honᶜ.card ≤ f)
 meeting its inequalities, at a local vote. -/
 theorem safety {q : ℕ} [P.Quorate q] {f : ℕ} (hσ : σ.Local) (hHon : Honᶜ.card ≤ f)
     (hq : q ≤ Fintype.card Validator)
-    (hfam : (p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
-        p.TwoRound (Fintype.card Validator) f q) ∨
-      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
-        p.ThreeRound (Fintype.card Validator) f q)) :
+    (hfam : p.Covered (Fintype.card Validator) f q) :
     Safe (schemeRule p σ Hon) := by
   obtain ⟨hl, -, hc, -⟩ := Loop.family σ hHon hq hfam
-  have hw : 2 ≤ p.waveLength := by rcases hfam with ⟨-, hw, -⟩ | ⟨-, hw, -⟩ <;> omega
+  have hw : 2 ≤ p.waveLength := by
+    rcases hfam with ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ <;> omega
   exact Properties.safety (banded hσ hw hl hc) (agree hHon hq hfam) commitsCandidate
 
 /-- **The carrier lives** on the core's universes, at a commit threshold

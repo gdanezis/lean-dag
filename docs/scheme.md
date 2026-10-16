@@ -43,7 +43,10 @@ are the evidence.
   `ThreeRound n f q` decides alike from two views, at every vote. The
   derived rows follow: Hybrid Mysticeti and Hybrid Mahi-Mahi at
   `n = 3f + 2c + 1`, and Orcaella and Async Orcaella at every
-  `n ≥ 5f + 3c + 1`.
+  `n ≥ 5f + 3c + 1`. Where nobody equivocates, the inequality against an
+  equivocating twin (two rounds) and the one making certificates unique
+  (three rounds) are not needed; Nemo-Nemo and Async Nemo-Nemo meet the
+  rest at `n = 2c + 1` and agree.
 * **The commit loop computes the relation** (`Scheme.Loop.holds`, §8).
   `tryDecide`, the scheme's `TryDecide` as a function of a view, outputs
   only verdicts `Decided` derives from that view, at every row and vote
@@ -68,8 +71,10 @@ are the evidence.
    below `n + 1 = 2c + 2` (`Table.NemoNotTwoRound`). The table's "Nemo-Nemo
    at `f = 0`" does not follow from the inequalities; their solution at
    `f = 0` is Orcaella's `n = 3c + 1`. The inequality that fails guards
-   against equivocating twins, which a crash-only model excludes, so
-   Nemo-Nemo is safe for a reason the table does not state.
+   against equivocating twins. Where nobody equivocates it is not needed
+   (§7.1): the remaining inequalities give agreement, Nemo-Nemo and Async
+   Nemo-Nemo meet them at `n = 2c + 1`, and its "no direct skip" is what
+   brings the committee from `3c + 1` down to `2c + 1`.
 2. **The scheme's Nemo-Nemo is not this development's Nemo-Nemo.** Nemo's
    validity has no self-parent clause, so a skip threshold of `n` is met
    when every vote-round block, the leader's included, omits the leader's
@@ -146,7 +151,8 @@ references per block: skip plus link and commit plus link at least
 `n = 2c + 1` and `c ≥ 1`, commit plus link is `c + 2 < n + 1`. The
 table's "Nemo-Nemo at `f = 0`" does not follow from the inequalities;
 their solution at `f = 0` is Orcaella's `3c + 1`. The failing inequality
-guards against an equivocating twin, which the crash model excludes.
+guards against an equivocating twin, which the crash model excludes; the
+inequalities without it (§7.1) hold of Nemo-Nemo.
 
 ## 3. The rule
 
@@ -232,7 +238,8 @@ as Mahi-Mahi's `Votes` (`leastSel_votes_iff`). Mahi-Mahi has no
 tie-break; two linked candidates are one block by
 `MahiMahi.eq_of_hasCertificate`.
 
-**Open.** Async Nemo-Nemo, whose safety the inequalities do not give.
+Async Nemo-Nemo agrees by the inequalities where nobody equivocates
+(§7.1).
 
 ## 6. The rows with buffer rounds at every vote
 
@@ -282,6 +289,41 @@ history (`card_inHistory_ge`): this gives visibility, the inequality
 with `q`. In the two-round family the third inequality and `q ≤ n` give
 `commit ≥ link + f`, which the cases of two direct commits, and of a
 direct commit and a direct skip, need.
+
+### 7.1 Where nobody equivocates
+
+When `Hon` is every validator (`f = 0`), a slot has one block
+(`eq_of_noEquiv_all`), and the laws that compare two blocks of one slot
+need no count: two direct commits, a direct commit and a link, and two
+links name one block. The inequality written for them is not needed:
+`n + f + 1 ≤ commit + link` in the two-round family, which keeps a
+direct commit consistent with a link to an equivocating twin, and
+`n + f + 1 ≤ 2·cert` in the three-round family, which makes certificates
+unique. What remains is `Params.TwoRoundCrash n q`
+(`n + 1 ≤ skip + link`, `link + n ≤ commit + q`) and
+`Params.ThreeRoundCrash n q` (`n + 1 ≤ skip + cert`,
+`n + 1 ≤ commit + q`).
+
+* **Agreement** (`TwoRoundCrashAgree`, `ThreeRoundCrashAgree`, from
+  `twoRoundCrashLaws`, `threeRoundCrashLaws`): a row meeting them agrees
+  on records where nobody equivocates, at every vote.
+* **The table** (`Table.CrashWeaker`, `Table.CrashRows`,
+  `Table.CrashBound`): at `f = 0` the inequalities imply these;
+  Nemo-Nemo and Async Nemo-Nemo meet the two-round ones at `n = 2c + 1`,
+  `q = c + 1`. With `q = n − c`, a two-round row needs `n ≥ 2c + 1`, and
+  `n ≥ 3c + 1` when its skip is within the liveness bound, where
+  Orcaella's thresholds at `f = 0` are forced; a three-round row needs
+  `n ≥ 2c + 1`, where Hybrid Mysticeti's at `f = 0` are forced. A direct
+  skip within the bound costs a two-round row `c` validators, and
+  Nemo-Nemo's "no direct skip" saves them.
+* **The Nemo rows** (`NemoRowsAgree`): Nemo-Nemo and Async Nemo-Nemo
+  agree at `n = 2c + 1`, `q = c + 1`, where nobody equivocates. A test
+  instantiates Async Nemo-Nemo on Nemo's universe, whose majority quorum
+  is `c + 1`.
+
+The rows the inequalities cover, `Params.Covered n f q`, include these at
+`f = 0`, so the commit loop (§8) and the family's properties (§9) hold
+at them.
 
 ## 8. The commit loop
 
@@ -479,8 +521,9 @@ every vote.
   checked; if it is the first block in reference order, the
   development's Mahi-Mahi differs from the implementation.
 * **Nemo-Nemo.** The scheme's row is `nemoBlameAnchored`, with its own
-  laws on Nemo's universes (`nemoBlameLaws`), outside the inequalities.
-  Async Nemo-Nemo has no safety result.
+  laws on Nemo's universes (`nemoBlameLaws`), and meets the inequalities
+  where nobody equivocates (§7.1), as Async Nemo-Nemo does. There is no
+  asynchronous Nemo in the development to compare Async Nemo-Nemo with.
 * **Orcaella above its bound** is a rule other than Hybrid's, with every
   property of §9.1, and has no reference algorithm.
 * **Cordial Miners and the derived rows** have no earlier formalisation
