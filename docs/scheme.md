@@ -78,6 +78,12 @@ are the evidence.
   is decided; a uniform coin names a good leader with probability at
   least the count over `n`, and misses `m` times with probability that
   vanishes.
+* **Every row is safe and live** (§12): Cordial Miners on the core's
+  universes; the rows with crash faults under the hybrid fault model with
+  self-reference; the asynchronous rows ready for the count.
+* **The family runs reactively** (§13): building on votes and
+  certificates as they arrive, with the timeout only as a fallback, every
+  reliably-led slot commits past GST; Reactive Mysticeti is an instance.
 
 **What the table claims and does not hold, or holds otherwise.**
 
@@ -544,7 +550,9 @@ every vote.
   property of §9.1, and has no reference algorithm.
 * **Cordial Miners and the derived rows** other than Hybrid Mysticeti
   have no earlier formalisation to compare with. Hybrid Mysticeti is
-  Hydrozoan without its fast path (§10).
+  Hydrozoan without its fast path (§10). Every one of them is shown safe
+  and live (§12); what cannot be checked is fidelity to an
+  implementation.
 * **Stake.** The scheme counts stake; the arc counts one unit per
   validator.
 * **The asynchronous leader.** The coin is abstracted (§11): by the
@@ -559,8 +567,11 @@ every vote.
 * **The hybrid fault model.** The family's `Lives` is stated on the
   core's universes, where a `Faults` instance asks `n ≥ 3f + 1` of the
   slack `f`; that excludes Hybrid Mysticeti's committee `3f + 2c + 1` at
-  `c ≥ 1`. Hybrid Mysticeti lives at Hydrozoan's fault model, which
-  admits it (§10); Hybrid Mahi-Mahi's liveness there is not stated.
+  `c ≥ 1`. Every covered row lives at Hydrozoan's fault model, which
+  admits it (§10), with self-reference: Hybrid Mysticeti, Hybrid
+  Mahi-Mahi, Orcaella, Async Orcaella, Nemo-Nemo and Async Nemo-Nemo
+  (§12). The reactive run (§13) reads the core's quorum `n − f` and
+  reaches only the committees the core's fault model admits.
 
 ### 9.3 Liveness
 
@@ -714,3 +725,77 @@ consequence), the local commit under a pacing structure, the
 hypergeometric probability for `K` leaders, and the general-`f`
 construction for "a third buffer round adds nothing".
 
+## 12. Every row, safe and live
+
+The family's theorems are stated over any row meeting their hypotheses;
+`Scheme/Rows/Statement.lean` states, and `Proof.lean` proves, that every
+row meets them. At every local vote:
+
+* **On the core's universes** (`CoreRows`): Cordial Miners PS and Async
+  are safe and live, progress and inclusion, at every `n ≥ 3f + 1`.
+* **Under the hybrid fault model** (`HybridRows`), on records that also
+  ask self-reference (`HybridValid`): Orcaella and Async Orcaella from
+  `n ≥ 5f + 3c + 1`, Hybrid Mysticeti, Hybrid Mahi-Mahi at every wave of
+  three or more, and, with no Byzantine replica, Nemo-Nemo and Async
+  Nemo-Nemo, are safe and live. This reads `HybridRow.WithSelfParent`,
+  now stated for every row covered at `q = n − f − c` whose commit
+  threshold is within `q` (and `HybridRow.OnHydrozoan`, progress on
+  Hydrozoan's own universe, likewise).
+* **The asynchronous rows are ready for the count of §11** (`AsyncRows`,
+  `Params.AsyncReady`: `2q ≥ n + f + 1`, the buffer rounds, and the
+  certificate and commit thresholds within `q`): one buffer round for
+  Mahi-Mahi and Hybrid Mahi-Mahi at wave four, Blue Bottle Async, Async
+  Orcaella and Async Nemo-Nemo; two for Mahi-Mahi and Hybrid Mahi-Mahi at
+  wave five and Cordial Miners Async.
+
+The rows with no reference algorithm get every result of the family; what
+they lack is a comparison with an implementation.
+
+## 13. The family, run reactively
+
+A responsive validator builds as soon as what the rule counts has
+arrived, with the timeout only as a fallback. The reactive timing is the
+development's (`ReactiveCore`, `Reactive/Basic.lean`);
+`Scheme/Model/Reactive.lean` defines `SchemeReactive`, which adds the
+family's wait clauses, one per round of the wave:
+
+* **reach or wait**, at each round from the one above the proposal to the
+  vote round: a reliable block already reaches the slot's leader block, or
+  its builder waited the timeout and references the leader's block of the
+  round below if it holds it;
+* **certify or wait**, at the decision round where votes are certified a
+  round later: a reliable block already certifies the leader block, or its
+  builder waited the timeout and references every reliable vote for it
+  that it holds.
+
+At the Mysticeti row these are Reactive Mysticeti's `vote_or_wait` and
+`cert_or_wait`. `Scheme/Reactive/Statement.lean` states, and `Proof.lean`
+proves, at every row and vote, past GST with the timeout clearing
+`2Δ + proc`:
+
+* **every reliable decision-round block certifies** a reliably-led slot's
+  leader block (`Certifies`). A reliable block that waited holds every
+  reliable block of the round below (`SchemeReactive.arrives`: built at
+  most `Δ + proc` later, arriving `Δ` after); round by round from the
+  proposal every reliable block reaches the leader block, on the exit by
+  the clause and on the fallback through the leader's own block
+  (`SchemeReactive.reaches`); a reliable vote-round block then votes, and
+  a reliable decision-round block certifies, its vote being the
+  certificate or its fallback referencing every reliable vote;
+* **the reactive precondition is the family support's**
+  (`Live`, `live_of_reactiveLive`), so **a reliably-led slot commits**
+  (`Commits`, the generic `LeaderCommits`) wherever the commit threshold
+  is within the quorum;
+* **Reactive Mysticeti is an instance** (`OfMysticeti`, `ofReactiveM`):
+  every Reactive Mysticeti execution with a correct reliable set is the
+  family run reactively at the Mysticeti row, at every vote.
+
+`LeanDagTest/Scheme/Reactive.lean` converts the Reactive Mysticeti witness
+`ugrowReactive`, in which no validator ever waits a timeout, shows it meets
+the family's reactive precondition, and commits a reliably-led slot.
+
+The pacing reads the core's quorum `n − f`, so the rows run reactively are
+those the core's fault model admits, `n ≥ 3f + 1` with crash faults
+counted in `f`: every row but Hybrid Mysticeti, Hybrid Mahi-Mahi and
+Nemo-Nemo at their committees. Inclusion under the reactive run
+(Reactive Mysticeti's RS5) is not stated for the family.
