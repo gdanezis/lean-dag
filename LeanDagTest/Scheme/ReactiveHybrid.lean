@@ -14,7 +14,8 @@ block referencing both blocks of the round below, so the quorum is
 on `q = 2` round authors. At the Hybrid Mysticeti row, whose thresholds
 are all `2`, the execution meets the family's reactive precondition at
 Hydrozoan's reliability, and a reliably-led slot commits by the generic
-`LeaderCommits`.
+`LeaderCommits`. Replica `2`'s round-`1` block (id `3`) enters the ledger
+through a slot `2` leads, though replica `0` never builds.
 -/
 
 namespace LeanDagTest
@@ -74,9 +75,9 @@ def Uhy (N : ℕ) : BlockRecord (Fin 3) ℕ Unit HybridValid Hydrozoan.NonByzant
   valid i _ := by
     refine ⟨fun j hj => ?_, fun hr => ?_, ⟨fun j hj l hl hjl => ?_, fun hr => ?_⟩⟩
     · have := mem_hyBlock_refs.mp hj
-      show j / 2 + 1 = i / 2
+      change j / 2 + 1 = i / 2
       omega
-    · show Fintype.card (Fin 3) - 0 - 1 ≤ _
+    · change Fintype.card (Fin 3) - 0 - 1 ≤ _
       exact le_trans (by decide) (le_card_hyCreators hr)
     · have h1 := mem_hyBlock_refs.mp hj
       have h2 := mem_hyBlock_refs.mp hl
@@ -138,18 +139,18 @@ def hyReactive (N : ℕ) :
     delay := 2
     rounds_le := fun b hb => by
       simp only [uhy_ids, Finset.mem_range] at hb
-      show b / 2 ≤ N
+      change b / 2 ≤ N
       omega
     built_of_le_top := fun v hv n hn => by
       obtain ⟨h1, h2⟩ := mem_Thy hv
       refine ⟨2 * n + ((v : ℕ) - 1), by simp only [uhy_ids, Finset.mem_range]; omega,
         Fin.ext ?_, ?_⟩
       · simp only [uhy_block, hyBlock_creator_val]; omega
-      · show (2 * n + ((v : ℕ) - 1)) / 2 = n
+      · change (2 * n + ((v : ℕ) - 1)) / 2 = n
         omega
     le_top_of_built := fun _ _ b hb _ => by
       simp only [uhy_ids, Finset.mem_range] at hb
-      show b / 2 ≤ N
+      change b / 2 ≤ N
       omega
     timeout_pos := fun _ => by omega
     latest := fun n => 2 + 6 * n
@@ -197,7 +198,6 @@ def hyReactive (N : ℕ) :
       have hbr' : b / 2 = n := hbr
       simp only [hyHolds, Finset.mem_filter, Finset.mem_range] at hheld
       refine ⟨hn, ?_⟩
-      show (v : ℕ) + 6 * n ≤ t + 5
       rcases hheld.2 with h | ⟨_, h⟩ <;> omega
     advancesAt := fun _ _ _ hn _ _ => hn
     reach_or_wait := fun v hv k _ _ L hL m hm c hc hcc hcr => by
@@ -209,7 +209,7 @@ def hyReactive (N : ℕ) :
       have hround' : L / 2 = hySlots.slotRound k := hround
       have hcr' : c / 2 = hySlots.slotRound k + m + 1 := hcr
       exact Reaches.single (by
-        show L ∈ (hyBlock c).refs
+        change L ∈ (hyBlock c).refs
         exact mem_hyBlock_refs.mpr (by omega))
     cert_or_wait := fun _ v hv k hN hlead L hL c hc hcc hcr => by
       -- the reactive exit: both round-`(r + 1)` blocks vote and are referenced
@@ -223,7 +223,7 @@ def hyReactive (N : ℕ) :
       have hcr' : c / 2 = hySlots.slotRound k + 1 + 1 := hcr
       unfold IsCert
       rw [if_neg (by decide)]
-      show 2 ≤ (creatorsOf hyBlock (carriedVotes (Uhy N) (σH.Votes (Uhy N)) c L)).card
+      change 2 ≤ (creatorsOf hyBlock (carriedVotes (Uhy N) (σH.Votes (Uhy N)) c L)).card
       have hsub : ({1, 2} : Finset (Fin 3)) ⊆
           creatorsOf hyBlock (carriedVotes (Uhy N) (σH.Votes (Uhy N)) c L) := by
         intro x hx
@@ -236,11 +236,11 @@ def hyReactive (N : ℕ) :
         refine votes_of_reaches_record (Uhy N).noEquivOn_honest
           (by simp only [uhy_ids, Finset.mem_range]; omega) hmem'
           (by
-            show _ ∈ (∅ : Finset (Fin 3))ᶜ
+            change _ ∈ (∅ : Finset (Fin 3))ᶜ
             simp)
-          (by show L / 2 < (2 * (hySlots.slotRound k + 1) + ((x : ℕ) - 1)) / 2; omega)
+          (by change L / 2 < (2 * (hySlots.slotRound k + 1) + ((x : ℕ) - 1)) / 2; omega)
           (Reaches.single ?_)
-        show L ∈ (hyBlock _).refs
+        change L ∈ (hyBlock _).refs
         exact mem_hyBlock_refs.mpr (by omega)
       exact le_trans (by decide) (Finset.card_le_card hsub) }
 
@@ -281,8 +281,38 @@ theorem hyReactive_commits (N k : ℕ) (hN : hySlots.slotRound k + 2 ≤ N) :
       · have : hySlots.leader k = 2 := Fin.ext (by rw [h, h2]; rfl)
         rw [this]; decide)
 
+/-- The schedule returns to each live replica: `2k + (v − 1)` is at or past
+`k` and led by `v`. -/
+theorem hySlots_fairToEach : ∀ v ∈ Thy, ∀ n, ∃ k, n ≤ k ∧ hySlots.leader k = v := by
+  intro v hv n
+  obtain ⟨h1, h2⟩ := mem_Thy hv
+  refine ⟨2 * n + ((v : ℕ) - 1), by omega, Fin.ext ?_⟩
+  change (2 * n + ((v : ℕ) - 1)) % 2 + 1 = (v : ℕ)
+  omega
+
+/-- **No live replica's block is censored, at the hybrid committee.**
+Replica `2`'s round-`1` block (id `3`) is in the history of the leader
+block a slot led by `2` commits. -/
+theorem hyReactive_includes : ∃ k', 1 ≤ hySlots.slotRound k' ∧ hySlots.leader k' = 2 ∧
+    ∀ N, hySlots.slotRound k' + 2 ≤ N →
+      ∃ L, (schemeRule hyP σH Hydrozoan.NonByzantine).Decided hySlots (uhyV N) k' (some L) ∧
+        3 ∈ historyFrom (Uhy N).block L := by
+  obtain ⟨k', hm, hlead, h⟩ := ReactiveRun.includes (Fin 3) ℕ Unit HybridValid
+    Hydrozoan.NonByzantine hyP σH Hydrozoan.NonByzantine (Hydrozoan.hzReliability (Fin 3))
+    (fun _ _ h => h.clause.2) (by decide) (by decide) (fun _ => ⟨by decide, by decide⟩)
+    (by decide) hySlots Thy (by decide) hySlots_fairToEach 1 2 (by decide)
+  refine ⟨k', hm, hlead, fun N hN => ?_⟩
+  obtain ⟨L, hdec, hb⟩ := h (uhyU N) (uhyV N) (hyReactive_live N k' hN)
+  refine ⟨L, hdec, (hb 3 ?_ ?_ ?_).1⟩
+  · change 3 ∈ (Uhy N).ids
+    simp only [uhy_ids, Finset.mem_range]
+    omega
+  · exact Fin.ext rfl
+  · rfl
+
 end Scheme
 
 end LeanDagTest
 
 #print axioms LeanDagTest.Scheme.hyReactive_commits
+#print axioms LeanDagTest.Scheme.hyReactive_includes

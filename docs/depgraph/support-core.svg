@@ -299,7 +299,7 @@
 <rect x="294.0" y="1916.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="1928.0" text-anchor="middle">TP10</text>
 <text class="nm" x="373.0" y="1942.0" text-anchor="middle">reaches_of_creator</text></g>
-<g><title>LeanDag.Scheme.SchemeReactive.reached — the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support&#x27;s precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; Reactive Mysticeti is an instance</title>
+<g><title>LeanDag.Scheme.SchemeReactive.reached — the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support&#x27;s precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance</title>
 <rect x="294.0" y="1964.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="1976.0" text-anchor="middle">SC26</text>
 <text class="nm" x="373.0" y="1990.0" text-anchor="middle">reached</text></g>

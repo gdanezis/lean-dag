@@ -260,7 +260,7 @@
 <g><title>LeanDag.Properties.SelfParent.reaches_of_creator — inclusion from self-reference: a reliable block reaches its author&#x27;s next commit</title>
 <rect x="134.0" y="1323.0" width="62" height="24" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="1335.0" text-anchor="middle">TP10</text></g>
-<g><title>LeanDag.Scheme.SchemeReactive.reached — the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support&#x27;s precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; Reactive Mysticeti is an instance</title>
+<g><title>LeanDag.Scheme.SchemeReactive.reached — the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support&#x27;s precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance</title>
 <rect x="134.0" y="1356.0" width="62" height="24" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="1368.0" text-anchor="middle">SC26</text></g>
 <g><title>LeanDag.Scheme.cordialLaws — Cordial Miners PS is the core with no direct skip, with the core&#x27;s laws</title>

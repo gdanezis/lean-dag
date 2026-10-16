@@ -994,7 +994,7 @@
 <g><title>LeanDag.ReactivePace.built_succ_le_of_fast — latency tracks delivery; the timeout never fires</title>
 <rect x="134.0" y="3666.0" width="62" height="24" rx="5" fill="#d9eef2" stroke="#4f8a98" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="3678.0" text-anchor="middle">RS4</text></g>
-<g><title>LeanDag.Scheme.SchemeReactive.reached — the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support&#x27;s precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; Reactive Mysticeti is an instance</title>
+<g><title>LeanDag.Scheme.SchemeReactive.reached — the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support&#x27;s precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance</title>
 <rect x="134.0" y="3699.0" width="62" height="24" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="3711.0" text-anchor="middle">SC26</text></g>
 <g><title>LeanDag.Scheme.decided_none_of_novel — the prompt skip: a novel slot is skipped, and conflicts with no verdict</title>

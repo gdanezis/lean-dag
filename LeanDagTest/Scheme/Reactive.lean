@@ -8,7 +8,8 @@ import LeanDagTest.Reactive.Model
 validator ever waits a timeout. Converted (`ofReactiveM`), it is the family
 run reactively at the Mysticeti row and the least vote; it meets the
 family's reactive precondition, and a reliably-led slot commits by the
-generic `LeaderCommits`.
+generic `LeaderCommits`; and validator `2`'s round-`1` block (id `6`)
+enters the ledger through a slot `2` leads.
 -/
 
 namespace LeanDagTest
@@ -61,9 +62,33 @@ theorem ugrowScheme_commits (N k : ℕ) (hN : rrSlots.slotRound k + 2 ≤ N)
     ({1, 2, 3} : Finset (Fin 4)) k (k + 1) (ugrowScheme_live N k hN) k (Nat.le_refl k)
     (Nat.lt_succ_self k) hlead
 
+/-- **No reliable block is censored, on data.** Validator `2`'s round-`1`
+block (id `6`) is in the history of the leader block a slot led by `2`
+commits. -/
+theorem ugrowScheme_includes : ∃ k', 1 ≤ rrSlots.slotRound k' ∧ rrSlots.leader k' = 2 ∧
+    ∀ N, rrSlots.slotRound k' + 2 ≤ N →
+      ∃ L, (schemeRule mystU σU Correct).Decided rrSlots (ugrowV N) k' (some L) ∧
+        6 ∈ historyFrom (Ugrow N).block L := by
+  obtain ⟨k', hm, hlead, h⟩ := ReactiveRun.includes (Fin 4) ℕ Unit ValidWrt Correct mystU σU
+    Correct (coreReliability (Fin 4)) (fun _ _ h => h.self_parent) le_rfl (by decide)
+    (fun _ => ⟨by decide, by decide⟩) (by decide) rrSlots ({1, 2, 3} : Finset (Fin 4))
+    (by decide) rrSlots_fairToEach 1 2 (by decide)
+  refine ⟨k', hm, hlead, fun N hN => ?_⟩
+  obtain ⟨L, hdec, hb⟩ := h (ugrowU N) (ugrowV N) (ugrowScheme_live N k' hN)
+  refine ⟨L, hdec, (hb 6 ?_ ?_ ?_).1⟩
+  · show 6 ∈ (Ugrow N).ids
+    simp only [ugrow_ids, Finset.mem_range]
+    omega
+  · apply Fin.ext
+    show ((Ugrow N).block 6).creator.val = 2
+    simp only [ugrow_block, rrBlock_creator_val]
+  · show ((Ugrow N).block 6).round = 1
+    simp only [ugrow_block, rrBlock_round]
+
 end Scheme
 
 end LeanDagTest
 
 #print axioms LeanDag.Scheme.ReactiveRun.holds
 #print axioms LeanDagTest.Scheme.ugrowScheme_commits
+#print axioms LeanDagTest.Scheme.ugrowScheme_includes

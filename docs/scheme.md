@@ -84,8 +84,9 @@ are the evidence.
 * **The family runs reactively** (§13): building on votes and
   certificates as they arrive, with the timeout only as a fallback, every
   reliably-led slot commits past GST, at every reliability whose quorum
-  meets the thresholds, the hybrid committees included; Reactive
-  Mysticeti is an instance.
+  meets the thresholds, the hybrid committees included, and with
+  self-reference no reliable block is censored; Reactive Mysticeti is an
+  instance.
 
 **What the table claims and does not hold, or holds otherwise.**
 
@@ -810,6 +811,15 @@ row and vote, past GST with the timeout clearing `2Δ + proc`:
   (`Live`, `live_of_reactiveLive`), so **a reliably-led slot commits**
   (`Commits`, the generic `LeaderCommits`) at every reliability whose
   quorum meets the commit and certificate thresholds;
+* **no reliable block is censored** (`Includes`, `includes_reactive`), on
+  records whose blocks reference their author's previous block, under a
+  schedule fair to each reliable validator: a reliable validator's block
+  enters the ledger through the next slot its author leads, its leader
+  block reaching it down the author's own chain. A reactive builder omits
+  what has not arrived, so coverage, from which the timed runs draw
+  inclusion, fails; the argument is the generic
+  `committed_of_correct_block` over the reactive `LeaderCommits`, as
+  Reactive Mysticeti's RS5 is;
 * **Reactive Mysticeti is an instance** (`OfMysticeti`, `ofReactiveM`):
   every Reactive Mysticeti execution with a correct reliable set is the
   family run reactively at the Mysticeti row, at every vote, pacing at
@@ -823,7 +833,7 @@ reactively at three replicas, none Byzantine and one crashed
 (`f = 0, c = 1`, `q = 2`), a committee the core's fault model excludes:
 the two live replicas build at spacing `6` inside a timeout of `9`, the
 execution meets the reactive precondition at Hydrozoan's reliability, and
-a reliably-led slot commits.
-
-Inclusion under the reactive run (Reactive Mysticeti's RS5) is not stated
-for the family.
+a reliably-led slot commits. On both witnesses a reliable validator's
+round-`1` block enters the ledger through a slot its author leads
+(`ugrowScheme_includes`, `hyReactive_includes`); on the second, replica
+`0` never builds.

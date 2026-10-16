@@ -1,6 +1,7 @@
 import LeanDag.Scheme.Model.Reactive
 import LeanDag.Scheme.Helpers.Support
 import LeanDag.Properties.Derived.LeaderCommits
+import LeanDag.Scheme.Properties
 /-!
 # The family, run reactively: the wait clauses certify
 
@@ -19,7 +20,10 @@ below. A reliable vote-round block therefore votes for it (`votes`), and
 a reliable decision-round block certifies it (`certifies`): the vote is the
 certificate, or on the fallback the block references every reliable vote.
 That is the family support's liveness precondition (`live_of_reactiveLive`),
-from which the generic `LeaderCommits` follows.
+from which the generic `LeaderCommits` follows, and on records whose
+blocks reference their author's previous block, inclusion
+(`includes_reactive`): a reliable block enters the ledger through the next
+slot its author leads, reached down the author's own chain.
 -/
 
 namespace LeanDag
@@ -209,6 +213,31 @@ theorem leaderCommits_reactive {Hon : Finset Validator} {rel : Reliability Valid
   fun S _ V T lo K h =>
     Support.leaderCommits (familySupport p σ Hon) (familySupport_commits hcm) S V T lo K
       (live_of_reactiveLive hw hcv h)
+
+omit S in
+/-- **Run reactively, no reliable block is censored**: on records whose
+blocks reference their author's previous block, under a schedule fair to
+each reliable validator, a reliable validator's round-`m` block enters the
+ledger through a slot its author leads at or above `m`. -/
+theorem includes_reactive {Hon : Finset Validator} {rel : Reliability Validator}
+    (hP : ∀ blk b, P blk b → Clause.selfParent blk b) (hsub : rel.correct ⊆ Hon)
+    (hw : 2 ≤ p.waveLength)
+    (hcv : p.voteIsCert = false →
+      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack)
+    (hcm : p.commitThreshold ≤ Fintype.card Validator - rel.slack)
+    (S : Slots Validator) {T : Finset Validator} (hT : T ⊆ rel.correct)
+    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
+      ∀ (U : (schemeRule p σ Hon).Universe) (V : (schemeRule p σ Hon).View U),
+        reactiveLive p σ Hon rel S V T k' (k' + 1) →
+        ∃ L, (schemeRule p σ Hon).Decided S V k' (some L) ∧
+          ∀ b ∈ (schemeRule p σ Hon).ids U, ((schemeRule p σ Hon).block U b).creator = v →
+            ((schemeRule p σ Hon).block U b).round = m →
+            b ∈ historyFrom ((schemeRule p σ Hon).block U) L ∧
+              ∀ (g : ℕ → Option BlockId) (n : ℕ), g k' = some L → k' < n →
+                b ∈ Arcs.ledgerSetOf (schemeRule p σ Hon) U g n :=
+  Arcs.committed_of_correct_block (selfParent hP) (noEquiv hsub) commitsCandidate
+    (leaderCommits_reactive hw hcv hcm) S hT fair m hv
 
 end Scheme
 

@@ -1,6 +1,7 @@
 import LeanDag.Scheme.Model.Reactive
 import LeanDag.Properties.Derived.LeaderCommits
 import LeanDag.Reactive.Mysticeti
+import LeanDag.Properties.Arcs.Quality
 /-!
 # The family, run reactively — statement
 
@@ -20,6 +21,10 @@ timeout clearing `2Δ + proc`:
   when the reliability's quorum meets the commit and certificate
   thresholds; the hybrid committees (`3f + 2c + 1`, `2c + 1`), which the
   core's fault class excludes, are among them;
+* **no reliable block is censored** (`Includes`), on records whose blocks
+  reference their author's previous block, under a schedule fair to each
+  reliable validator: a reliable validator's block enters the ledger
+  through a slot its author leads;
 * **Reactive Mysticeti is an instance** (`OfMysticeti`): every Reactive
   Mysticeti execution with a correct reliable set is the family run
   reactively at the Mysticeti row, pacing at `n − f`.
@@ -85,6 +90,33 @@ def Commits : Prop :=
     LeaderCommits (schemeRule p σ Hon)
       (fun S {U} V T lo K => reactiveLive p σ Hon rel S (U := U) V T lo K)
 
+/-- **Run reactively, no reliable block is censored**, on records whose
+blocks reference their author's previous block, at every reliability
+whose quorum meets the thresholds and whose reliable validators lie in
+`Hon`. -/
+def Includes : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (honest : Finset Validator) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
+    (rel : Reliability Validator),
+    (∀ blk b, P blk b → Clause.selfParent blk b) → rel.correct ⊆ Hon →
+    2 ≤ p.waveLength →
+    (p.voteIsCert = false →
+      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack) →
+    p.commitThreshold ≤ Fintype.card Validator - rel.slack →
+    ∀ (S : Slots Validator) (T : Finset Validator), T ⊆ rel.correct →
+    (∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) →
+    ∀ (m : ℕ), ∀ v ∈ T, ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
+      ∀ (U : (schemeRule p σ Hon).Universe) (V : (schemeRule p σ Hon).View U),
+        reactiveLive p σ Hon rel S V T k' (k' + 1) →
+        ∃ L, (schemeRule p σ Hon).Decided S V k' (some L) ∧
+          ∀ b ∈ (schemeRule p σ Hon).ids U, ((schemeRule p σ Hon).block U b).creator = v →
+            ((schemeRule p σ Hon).block U b).round = m →
+            b ∈ historyFrom ((schemeRule p σ Hon).block U) L ∧
+              ∀ (g : ℕ → Option BlockId) (n : ℕ), g k' = some L → k' < n →
+                b ∈ Arcs.ledgerSetOf (schemeRule p σ Hon) U g n
+
 /-- **Reactive Mysticeti is the family run reactively**, at the Mysticeti row
 and every vote, when its reliable set is correct. -/
 def OfMysticeti : Prop :=
@@ -97,7 +129,7 @@ def OfMysticeti : Prop :=
       (Params.mysticeti (Fintype.card Validator) F.f) σ U T N)
 
 /-- The family, run reactively. -/
-def Statement : Prop := Certifies ∧ Live ∧ Commits ∧ OfMysticeti
+def Statement : Prop := Certifies ∧ Live ∧ Commits ∧ Includes ∧ OfMysticeti
 
 end ReactiveRun
 

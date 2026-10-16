@@ -5,7 +5,8 @@ import LeanDag.Scheme.Helpers.ReactiveMysticeti
 
 The wait clauses certify (`Helpers/Reactive.lean`), which is the support's
 precondition; the generic `LeaderCommits` then applies. Reactive Mysticeti
-converts (`Helpers/ReactiveMysticeti.lean`).
+converts (`Helpers/ReactiveMysticeti.lean`). Inclusion is the generic
+`committed_of_correct_block` over the reactive `LeaderCommits`.
 -/
 
 namespace LeanDag
@@ -29,11 +30,16 @@ theorem commits : Commits := by
   intro Validator BlockId Payload _ _ _ _ P _ honest p σ Hon rel hw hcv hcm
   exact leaderCommits_reactive hw hcv hcm
 
+theorem includes : Includes := by
+  intro Validator BlockId Payload _ _ _ _ P _ honest p σ Hon rel hP hsub hw hcv hcm S T hT fair m v
+    hv
+  exact includes_reactive hP hsub hw hcv hcm S hT fair m hv
+
 theorem ofMysticeti : OfMysticeti := by
   intro Validator BlockId Payload _ _ F _ _ S σ U T N hT rm
   exact ⟨ofReactiveM σ hT rm⟩
 
-theorem holds : Statement := ⟨certifies, live, commits, ofMysticeti⟩
+theorem holds : Statement := ⟨certifies, live, commits, includes, ofMysticeti⟩
 
 end ReactiveRun
 
