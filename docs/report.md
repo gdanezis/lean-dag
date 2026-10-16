@@ -556,7 +556,9 @@ Bluestreak's claims in place of certificates
 §27 states the unified decider of the Mysticeti codebase as a rule,
 checks its table (`Scheme.Table.holds` (SC1)), and reads eight of its
 rows as rules of this development, three of them at the least vote
-(`Scheme.Equiv.holds` (SC4–SC6, SC9)).
+(`Scheme.Equiv.holds` (SC4–SC6, SC9)); at the scheme's own vote those
+three are not the development's rules, and two views still decide alike
+(`Scheme.Safety.holds` (SC10, SC11)).
 
 **The development has four kinds of arc, and the source says which each
 is.** A **commit rule** carries a universe, a decision relation, the
@@ -11742,15 +11744,39 @@ and `n` blames never occur at any wave: Cordial Miners Async is
 Mahi-Mahi's rule with no direct skip, which has Mahi-Mahi's laws
 (`Scheme.cordialAsyncLaws`).
 
-### 27.6 What the arc does not contain
+### 27.6 The rows with buffer rounds at the scheme's own vote
 
-The rows of §27.5 are read at the least vote only. At the scheme's own
-vote, the first block of the slot in reference order, their verdicts can
-differ from the least vote's on a record holding both twins. Mahi-Mahi's
-safety proof uses its vote through three facts: a block votes for at
-most one block of a slot, a vote lies in the voter's history, and a vote
-is not a blame. Every vote-selection rule has the three, so the laws are
-expected to hold at every such rule; that is argued here and not proved.
+The scheme's vote, *VotedBlock*, searches a block's parents depth first
+in their stored order and returns the first block of the slot it meets.
+`Scheme.votedBlock` takes the order as a parameter; when the order lists
+every parent, the search is a vote-selection rule (SC10). At a block of
+the record a reference lies one round down, so the search's pruning at
+the slot's round loses no block of the slot. The search and the least
+vote are different rules: on Mahi-Mahi's witness `twin4`, a block holds
+both twins of an equivocating leader in its history, the least vote
+names one, and the search with the parents in descending order names the
+other. At the scheme's own vote the three rows of §27.5 are therefore not
+Mahi-Mahi's and Async BlueBottle's rules.
+
+They are still safe at every vote-selection rule (SC11). The proofs read
+the vote through two facts: a block selects at most one block of a slot,
+and a block that selects a block of a slot does not blame it. For a
+Mahi-Mahi-shaped row, with votes certified one round later, a wave of at
+least three, commit and certificate thresholds `n − f`, a link of one
+certificate, and a skip threshold of at least `n − f`
+(`Params.QuorumRow`), two certificates for twins share a correct voter,
+whose one block selects one twin; a certificate and `n − f` blames share
+a voter that both selects and blames; and every block above the decision
+round reaches one of a direct commit's certificates
+(`Scheme.quorumRowLaws`). Mahi-Mahi at `w ≥ 3` and Cordial Miners Async
+are such rows. The Blue Bottle Async row takes Async BlueBottle's
+counting at `n ≥ 5f + 1` (`Scheme.blueBottleAsyncLaws`). Each row's
+carrier then has `Agree`.
+
+### 27.7 What the arc does not contain
+
+The properties of Mahi-Mahi and Async BlueBottle beyond agreement,
+liveness among them, reach the rows of §27.5 only at the least vote.
 The derived rows Hybrid Mysticeti, Async Orcaella,
 Async Nemo-Nemo and Hybrid Mahi-Mahi have their inequalities checked
 (SC1) and no laws. The commit loop *TryDecide*, which scans slots
@@ -12043,10 +12069,11 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Quality/Inclusion.lean` | post-`R` inclusion (CQ5, CQ6) |
 | `Quality/Capstone.lean` | the windowed bounds and `chain_quality` (CQ7) |
 | `LeanDagTest/` | the models of §28 and the witness files of every arc |
-| `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, the least vote `leastSel`, and the three rule variants its rows name |
+| `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, the least vote `leastSel`, the scheme's vote `votedBlock`, and the three rule variants its rows name |
 | `Scheme/Table/` | the table's inequalities and the claims of its reading paragraph, SC1 |
-| `Scheme/Helpers/` | two rules that read alike decide alike (SC2); votes one round up (SC3); votes further up (SC8); the rows' readings and the variants' laws |
+| `Scheme/Helpers/` | two rules that read alike decide alike (SC2); votes one round up (SC3); votes further up (SC8); the rows' readings and the variants' laws; the laws at every vote and the scheme's search (SC10–SC11) |
 | `Scheme/Equiv/` | eight rows as carriers, SC4–SC6 and SC9 |
+| `Scheme/Safety/` | the scheme's vote is a vote-selection rule, and three rows with buffer rounds agree at every vote, SC10–SC11 |
 
 **The support graph, extracted.** The dependency structure of the
 development is not documented by hand: `scripts/DepGraph.lean` walks
@@ -12969,6 +12996,8 @@ reused.
 | SC7 | a vote-selection rule exists: the least block of the slot in the voter's history | `Scheme.leastSel` *(Scheme/Model/LeastSel)* |
 | SC8 | below the voter, every vote-selection rule blames as Mahi-Mahi blames, and the least vote is Mahi-Mahi's vote | `Scheme.sel_eq_none_iff_blames`, `Scheme.leastSel_votes_iff` *(Scheme/Helpers/Buffered)* |
 | SC9 | at the least vote, the Mahi-Mahi row at `w ≥ 3` is Mahi-Mahi's carrier, the Blue Bottle Async row is Async BlueBottle's, and the Cordial Miners Async row is Mahi-Mahi at wave five with no direct skip, with Mahi-Mahi's laws | `Scheme.Equiv.mahiMahiRow`, `Scheme.Equiv.blueBottleAsyncRow`, `Scheme.Equiv.cordialMinersAsyncRow`, `Scheme.cordialAsyncLaws` *(Scheme/Equiv)* |
+| SC10 | the scheme's vote, a depth-first search of the parents in any order listing them all, is a vote-selection rule | `Scheme.Safety.votedBlockIsVote`, `Scheme.votedBlockSel` *(Scheme/Safety, Scheme/Helpers/VotedBlock)* |
+| SC11 | at every vote-selection rule, the Mahi-Mahi row at `w ≥ 3`, the Cordial Miners Async row and the Blue Bottle Async row have the anchored laws, and two views decide alike | `Scheme.quorumRowLaws`, `Scheme.blueBottleAsyncLaws`, `Scheme.Safety.holds` *(Scheme/Safety)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -13043,7 +13072,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 405 definitions and structures the report names, in
+The 406 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19834,7 +19863,7 @@ def leastSel : VoteSel Validator BlockId Payload P honest where
         exact ⟨hm.1, hm.2.1, hm.2.2⟩
     · rw [dif_neg hs] at hx
       exact absurd hx (by simp)
-  complete U b a r hr hsel x hx hc hxr := by
+  complete U b a r _ hr hsel x hx hc hxr := by
     have hmem : x ∈ slotIn U b a r := by
       simp only [slotIn, show ¬ (U.block b).round ≤ r by omega, if_false, Finset.mem_filter]
       exact ⟨hx, hc, hxr⟩
@@ -19925,6 +19954,19 @@ def nemoBlameAnchored (Validator BlockId Payload : Type) [Fintype Validator]
 
 **The scheme's Nemo-Nemo**: Nemo's rule, skipping a slot directly when every validator's vote-round block references no candidate of it.
 
+#### `votedBlock`
+
+*def, `Scheme.Model.VotedBlock.lean`*
+
+```lean
+def votedBlock (ord : BlockId → Finset BlockId → List BlockId)
+    (U : BlockRecord Validator BlockId Payload P honest) (b : BlockId) (a : Validator) (r : ℕ) :
+    Option BlockId :=
+  votedBlockUpto ord U ((U.block b).round + 1) b a r
+```
+
+**The scheme's `VotedBlock`**: the block of `(a, r)` that `b` votes for, searched to the depth of `b`'s round.
+
 #### `SynchronisedOn`
 
 *def, `Timed.Coverage.lean`*
@@ -19987,7 +20029,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 604 theorems the body or Appendix A names, each
+The 605 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -27762,6 +27804,14 @@ theorem holds : Statement
 ```lean
 theorem decided (h : ReadAlike R₁ R₂ U) {V : U.View} {k : ℕ} {v : Option BlockId}
     (hd : R₁.Decided U V k v) : R₂.Decided U V k v
+```
+
+#### `holds`
+
+*theorem, `Scheme.Safety.Proof.lean`*
+
+```lean
+theorem holds : Statement
 ```
 
 #### `holds`

@@ -38,7 +38,7 @@ theorem votes_iff {b L : BlockId} (hb : b ∈ U.ids) (hd : DistinctRefs U b)
   · intro hL
     unfold VoteSel.Votes
     cases hs : σ.sel U b (U.block L).creator (U.block L).round with
-    | none => exact absurd rfl (σ.complete U b _ _ (by omega) hs L (mem_history_of_mem_refs hb hL) rfl)
+    | none => exact absurd rfl (σ.complete U b _ _ hb (by omega) hs L (mem_history_of_mem_refs hb hL) rfl)
     | some x =>
       obtain ⟨hx, hxc, hxr⟩ := σ.sound U b _ _ x hs
       have hxref := mem_refs_of_mem_history_of_round_succ hb hx (by rw [hxr]; exact hr)
@@ -53,7 +53,7 @@ theorem sel_none_iff {b : BlockId} {k : ℕ} (hb : b ∈ U.ids)
       ∀ j ∈ (U.block b).refs, ¬ IsLeaderBlock U k j := by
   constructor
   · intro h j hj ⟨_, hjr, hjc⟩
-    exact σ.complete U b _ _ (by omega) h j (mem_history_of_mem_refs hb hj) hjc hjr
+    exact σ.complete U b _ _ hb (by omega) h j (mem_history_of_mem_refs hb hj) hjc hjr
   · intro h
     cases hs : σ.sel U b (S.leader k) (S.slotRound k) with
     | none => rfl

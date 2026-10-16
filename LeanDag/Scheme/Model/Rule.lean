@@ -40,8 +40,9 @@ structure VoteSel where
   /-- A selected block is a block of the slot in the voter's history. -/
   sound : ∀ U b a r x, sel U b a r = some x →
     x ∈ history U b ∧ (U.block x).creator = a ∧ (U.block x).round = r
-  /-- Nothing is selected only when the history holds no block of the slot. -/
-  complete : ∀ U b a r, r < (U.block b).round → sel U b a r = none →
+  /-- At a block of the record, nothing is selected only when the history
+  holds no block of the slot. -/
+  complete : ∀ U b a r, b ∈ U.ids → r < (U.block b).round → sel U b a r = none →
     ∀ x ∈ history U b, (U.block x).creator = a → (U.block x).round ≠ r
 
 namespace VoteSel

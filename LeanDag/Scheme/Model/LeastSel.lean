@@ -40,7 +40,7 @@ def leastSel : VoteSel Validator BlockId Payload P honest where
         exact ⟨hm.1, hm.2.1, hm.2.2⟩
     · rw [dif_neg hs] at hx
       exact absurd hx (by simp)
-  complete U b a r hr hsel x hx hc hxr := by
+  complete U b a r _ hr hsel x hx hc hxr := by
     have hmem : x ∈ slotIn U b a r := by
       simp only [slotIn, show ¬ (U.block b).round ≤ r by omega, if_false, Finset.mem_filter]
       exact ⟨hx, hc, hxr⟩

@@ -69,7 +69,7 @@ theorem sel_eq_none_iff_blames (σ : VoteSel Validator BlockId Payload ValidWrt 
   constructor
   · intro h x hx
     obtain ⟨-, hxr, hxc, hxh⟩ := MahiMahi.mem_candidatesAt.mp hx
-    exact σ.complete U b a r hr h x hxh hxc hxr
+    exact σ.complete U b a r hb hr h x hxh hxc hxr
   · intro h
     cases hs : σ.sel U b a r with
     | none => rfl
