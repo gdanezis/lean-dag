@@ -50,6 +50,11 @@ are the evidence.
   with positive link and certificate thresholds. At the rows the
   inequalities cover it outputs every derived verdict once its scan
   reaches far enough, and two validators' outputs are prefix-comparable.
+* **The family shows every property the mechanisms read** (§9): banded at
+  a local vote, which the least vote and `VotedBlock` are; candidate,
+  direct, indirect, quorate, non-equivocating, self-parent; safe at every
+  row meeting its inequalities; and a support with its three laws, so it
+  lives on the core's universes at every vote.
 
 **What the table claims and does not hold, or holds otherwise.**
 
@@ -100,9 +105,8 @@ are the evidence.
    over the record's quorum `q` and a non-equivocating set instead, so
    crash faults enter only through `q`.
 
-**Open.** The property interface and the mechanisms for the family,
-liveness, and the gaps to the concrete algorithms; §9 lists them with a
-plan.
+**Open.** The asynchronous liveness, and the gaps to the concrete
+algorithms; §9.2–§9.4 list them with a plan.
 
 ## 1. The parameters
 
@@ -223,8 +227,7 @@ as Mahi-Mahi's `Votes` (`leastSel_votes_iff`). Mahi-Mahi has no
 tie-break; two linked candidates are one block by
 `MahiMahi.eq_of_hasCertificate`.
 
-**Open.** The asynchronous derived rows; the laws of the derived rows
-(both settled by §7 but for Async Nemo-Nemo).
+**Open.** Async Nemo-Nemo, whose safety the inequalities do not give.
 
 ## 6. The rows with buffer rounds at every vote
 
@@ -324,58 +327,73 @@ least vote and at `VotedBlock`, and on Mysticeti's `U7` it commits slot
 
 **Open.** The restart at the round of the last consumed decision.
 
-## 9. What remains
+## 9. The family as a carrier, and what remains
 
 ### 9.1 The properties the mechanisms read
 
-The mechanisms (the cut, the fill, re-genesis, chain quality, adaptive
-leaders, prompt skip, and the safety and liveness headlines) read a
-rule through `Banded`, `Agree`, `CommitsCandidate`, `Indirect`,
-`Support`, an `OnRecord` instance, and the optional `Quorate`,
-`SelfParent`, `NoEquiv` and `SkipsUnsupported`. For the family
-`schemeAnchored p σ` at every row and vote:
+`Scheme/Properties.lean` states them at the family's carrier
+`schemeRule p σ Hon` (`Model/Local.lean`), the decider on the records
+where `Hon` does not equivocate:
 
-| Property | State |
+| Property | Holds at |
 |:---|:---|
-| `Agree` | generic: SC12, every row meeting its inequalities, every vote |
-| `CommitsCandidate`, `Indirect` | generic for an anchored rule with laws (`commitsCandidateOn`, `indirectOn`); not stated for the family |
-| `Quorate`, `SelfParent`, `NoEquiv` | from the record's validity; not stated for the family |
-| `OnRecord` | not written |
-| `Banded` | not proved |
-| `Support` | not written (§9.3) |
+| `Banded` | every row with a wave of at least two and positive link and certificate thresholds, at a local vote (`banded`) |
+| `CommitsCandidate`, `CommitsDirect`, `Indirect` | every row and vote |
+| `SkipsUnsupported` | every row whose vote round is one above the slot |
+| `Quorate`, `NoEquiv` | from validity's quorum and the invariant; `SelfParent` on the core's universes |
+| `Agree`, `Safe` | every row meeting its inequalities, at a local vote for `Safe` (`agree`, `safety`) |
+| support `familySupport` | `Local` at a local vote; `Commits` at `commit ≤ n − slack`; `OfCoverage` at `cert ≤ n − slack` (`Helpers/Support.lean`) |
+| `Lives` | the core's universes, at `commit ≤ n − f` (`lives`) |
 
-No mechanism is applied to the family, and the family is not among the
-rules of `audit-conformance.py` and `audit-mechanisms.py`. The eight rows
-equal to rules of the development (§5) take every mechanism those rules
-have, through the equality of carriers: one row at a time, and the three
-buffer-round rows at the least vote only. The derived rows, both Cordial
-Miners rows and the scheme's Nemo-Nemo take none.
+`OnRecord` is `Scheme/Record.lean`, with the prompt skip after an
+extension; chain quality at the carrier is
+`LeanDagTest/Quality/Generic.lean`. In `audit-conformance.py` and
+`audit-mechanisms.py` the family shows every obligation, and every
+mechanism but adaptive leaders, which no rule of the development has.
 
-`Banded` is the substantive step. It asks that a slot's verdict survive a
-truncation or a round shift of the record (`AnchoredRule.BandLaws`:
-`commit_band`, `skip_band`, `link_band`), so the vote must survive it.
-A `VoteSel` is any function of the whole record, and nothing makes it
-survive a shift. The repair is a locality condition on `VoteSel`: the
-vote depends on the voter's history only, and commutes with a round
-shift. `leastSel` and `votedBlockSel` meet it. With it, `Banded` for the
-family follows from band lemmas for `certsAt`, `blamersAt` and the link
-count, and every mechanism above from its generic theorem.
+**The local vote.** `Banded` asks that a slot's verdict survive a
+truncation or a round shift of the record, so the vote must survive it.
+`VoteSel.Local` asks this of a vote: a voter in a band, reading a slot at
+or above the band's floor, votes alike in both records. `leastSel` is
+local because the voter's history from the slot's round up is the same
+set across the band; `votedBlockSel` because the search reads the same
+parents at every block strictly above the slot's round and the same
+author and round at the blocks it tests, at any fuel that reaches the
+slot's round (`Helpers/Local.lean`). With it, the band laws hold
+(`schemeBandLaws`): certificates and blames carry into the band's other
+side, an old anchor's linked certificates are the same set, and a
+candidate the band adds is linked from no old anchor, since its votes
+would put it in the anchor's history in the old record. The rule needs
+nothing of its anchors, so `Banded` holds at every row, inequalities or
+not.
+
+**The support.** A block certifies a candidate a wave below it when
+`IsCert` holds. `Commits`: a reliable quorum populating the wave and
+certifying the candidate at the decision round holds a direct commit in
+any view caught up to that round, at a commit threshold the quorum
+meets. `OfCoverage`: under coverage toward the candidate, every reliable
+block from one round above it reaches it, layer by layer; an honest
+candidate in a voter's history is the voter's vote, every vote rule
+selecting it since it is the only block of its slot there; so a reliable
+decision-round block votes for it (vote rows) or references every
+reliable vote-round block (certificate rows, at a wave of at least
+three). Neither law reads the vote beyond that, so the family lives at
+every vote.
 
 ### 9.2 The gaps to the concrete algorithms
 
 * **The buffer-round rows.** Mahi-Mahi, Blue Bottle Async and Cordial
   Miners Async equal the development's rules at the least vote only; at
-  `VotedBlock` they are different rules (`twin4`), proved safe (SC11)
-  and nothing more. The development's Mahi-Mahi takes the least vote
+  `VotedBlock` they are different rules (`twin4`), which have every
+  property of §9.1. The development's Mahi-Mahi takes the least vote
   (`mahi-mahi.md` §2). Which vote the implementation takes is not
   checked; if it is the first block in reference order, the
   development's Mahi-Mahi differs from the implementation.
-* **Nemo-Nemo.** The scheme's row is `nemoBlameAnchored`, Nemo's rule
-  with a direct skip on `n` blames, and its safety rests on the crash
-  model (`nemoBlameLaws`), outside SC12. Async Nemo-Nemo has no safety
-  result.
-* **Orcaella above its bound** is a rule other than Hybrid's; it is safe
-  (SC12) and has no reference algorithm.
+* **Nemo-Nemo.** The scheme's row is `nemoBlameAnchored`, with its own
+  laws on Nemo's universes (`nemoBlameLaws`), outside the inequalities.
+  Async Nemo-Nemo has no safety result.
+* **Orcaella above its bound** is a rule other than Hybrid's, with every
+  property of §9.1, and has no reference algorithm.
 * **Cordial Miners and the derived rows** have no earlier formalisation
   to compare with. Hybrid Mysticeti's thresholds are Hydrozoan's slow
   path (`qSlow = 2f + c + 1`, `qCert = (n + f + 2)/2`); Hydrozoan keeps a
@@ -391,55 +409,34 @@ count, and every mechanism above from its generic theorem.
   indices, both downward, is slot order reversed under
   `Slots.uniform p m` is argued in §8, not stated in Lean.
 * **The commit loop.** The restart at the round of the last consumed
-  decision (`r_last`, which the scheme calls idempotent) is not stated,
-  and the loop's output is not connected to the ledger (`commitSeq`,
-  `ledgerSet` in `Common/Ledger.lean`), the step at which the scheme
-  commits the sub-DAGs of the committed leaders in order.
+  decision (`r_last`) is not stated, and the loop's output is not
+  connected to the ledger (`commitSeq`, `ledgerSet` in
+  `Common/Ledger.lean`).
 * **The buffer rounds.** The scheme's paragraph on how many buffer rounds
-  an asynchronous row needs (one at `n = 5f + 1`, more at `n = 3f + 1`) is
-  not formalised.
+  an asynchronous row needs (one at `n = 5f + 1`, more at `n = 3f + 1`)
+  is not formalised.
+* **The hybrid fault model.** `Lives` is stated on the core's universes,
+  where a `Faults` instance asks `n ≥ 3f + 1` of the slack `f`. Hybrid
+  rows live there at `f = fb + fc` when `n ≥ 3(fb + fc) + 1`, which
+  excludes Hybrid Mysticeti's committee `3f + 2c + 1` at `c ≥ 1`; its
+  safety (§7) is stated over the record's quorum and holds there.
 
 ### 9.3 Liveness
 
-What holds:
-
-* The liveness bounds of the table (`Params.Live`: every threshold at
-  most `n − f − c`) are checked as arithmetic (SC1) and read by no
-  liveness theorem.
-* A row equal to a rule of the development takes that rule's liveness:
-  Mysticeti, Blue Bottle PS and Orcaella at the bound at every vote;
-  Mahi-Mahi and Blue Bottle Async at the least vote; Nemo-Nemo progress
-  only, its universe having no self-parent clause.
-* The derived rows, both Cordial Miners rows, Orcaella above its bound,
-  and the buffer-round rows at `VotedBlock` have no liveness result.
-
-A generic route for the partially synchronous rows: a `Support` for the
-family, with `Certifies U c L := IsCert p σ U c L` and wave
-`waveLength − 1`, and its `Commits` law from `Params.Live`: the reliable
-set has at least `n − f − c` validators, so it alone meets the
-certificate and the commit thresholds. An honest leader has one block
-at its slot, and every vote-selection rule selects it when the voter's
-history holds it, so the law holds at every vote. `Arcs/Liveness.lean`
-and the headlines of `Arcs/Headline.lean` then give liveness under the
-timed model's coverage (`OfCoverage`) for every row meeting its bounds.
-
-The asynchronous rows are live with probability one, by the coin and
-the buffer rounds. The development proves this rule by rule (Mahi-Mahi,
-Async BlueBottle); a statement for the family, with the scheme's
-buffer-round argument, is separate and larger work.
+The partially synchronous liveness is the family's: `Lives` (progress
+and inclusion) on the core's universes at every row with
+`commit ≤ n − f`, at every vote, and the three support laws, `OfCoverage`
+at `cert ≤ n − slack`. The table's liveness bounds (`Params.Live`) are
+the hypotheses these read. The asynchronous rows are live with
+probability one by the coin and the buffer rounds; the development
+proves this rule by rule (Mahi-Mahi, Async BlueBottle), and a statement
+for the family, with the scheme's buffer-round argument, is not written.
 
 ### 9.4 Plan
 
-1. A locality condition on `VoteSel`; `Banded` for the family; the
-   one-line properties (`CommitsCandidate`, `Indirect`, `Quorate`,
-   `SelfParent`, `NoEquiv`) and an `OnRecord` instance. The cut, the
-   fill, re-genesis, chain quality and the safety headline then follow
-   for every row meeting its inequalities, at every vote.
-2. A generic `Support` from `Params.Live`: liveness of the partially
-   synchronous rows at every vote.
-3. The family in `audit-conformance.py` and `audit-mechanisms.py`, so
-   that its open cells are reported.
-4. The asynchronous liveness, the schedule mapping in Lean, the loop's
-   restart and ledger, and a variant of Hydrozoan with no fast path for
-   Hybrid Mysticeti.
-
+1. The asynchronous liveness for the family, with the buffer-round
+   argument.
+2. The schedule mapping in Lean, and the loop's restart and ledger.
+3. A variant of Hydrozoan with no fast path, compared with Hybrid
+   Mysticeti; `Lives` over a fault model admitting `n = 3f + 2c + 1`.
+4. Stake weights.

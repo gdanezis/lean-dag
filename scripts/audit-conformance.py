@@ -49,6 +49,8 @@ RULES = [
     ("FinWhale",           ["FinWhaleProperties.finWhaleRule"],  "band transported one rule at a time (Band.lean)"),
     ("Steelhead",          ["SteelheadProperties.steelheadRule"],
                            "one carrier per wavelength function; the wave is read at the kind"),
+    ("Scheme family",      ["Scheme.schemeRule"],
+                           "one carrier per row and vote; banded at a local vote, live at the core"),
     ("Black Marlin",       [], "no carrier; commits by round, no slot-indexed relation"),
 ]
 

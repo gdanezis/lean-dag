@@ -3,6 +3,7 @@ import LeanDag.Scheme.Table.Proof
 import LeanDag.Scheme.Safety.Proof
 import LeanDag.Scheme.Sufficiency.Proof
 import LeanDag.Scheme.Loop.Proof
+import LeanDag.Scheme.Record
 /-!
 # A vote-selection rule exists
 
@@ -47,3 +48,8 @@ end LeanDagTest
 #print axioms LeanDag.Scheme.Safety.holds
 #print axioms LeanDag.Scheme.Sufficiency.holds
 #print axioms LeanDag.Scheme.Loop.holds
+#print axioms LeanDag.Scheme.banded
+#print axioms LeanDag.Scheme.safety
+#print axioms LeanDag.Scheme.lives
+#print axioms LeanDag.Scheme.familySupport_ofCoverage
+#print axioms LeanDag.Scheme.votedBlockSel_local

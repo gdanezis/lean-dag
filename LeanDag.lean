@@ -529,6 +529,7 @@ import LeanDag.Scheme.Helpers.Sufficiency
 import LeanDag.Scheme.Helpers.TryDecide
 import LeanDag.Scheme.Helpers.Local
 import LeanDag.Scheme.Helpers.Band
+import LeanDag.Scheme.Helpers.Support
 import LeanDag.Scheme.Equiv.Statement
 import LeanDag.Scheme.Equiv.Proof
 import LeanDag.Scheme.Safety.Statement
@@ -538,5 +539,4 @@ import LeanDag.Scheme.Sufficiency.Proof
 import LeanDag.Scheme.Loop.Statement
 import LeanDag.Scheme.Loop.Proof
 import LeanDag.Scheme.Record
-import LeanDag.Scheme.Family.Statement
-import LeanDag.Scheme.Family.Proof
+import LeanDag.Scheme.Properties

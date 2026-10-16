@@ -563,7 +563,9 @@ agreement at every row that meets them (`Scheme.Sufficiency.holds`
 (SC12)). The scheme's commit loop computes the relation: it outputs only verdicts
 the relation derives, every derived verdict once it scans far enough,
 and two validators' outputs are prefix-comparable (`Scheme.Loop.holds`
-(SC13–SC15)).
+(SC13–SC15)). As a carrier the family shows every property the
+mechanisms read, banded at a local vote and live at every vote on the
+core's universes (SC16–SC18).
 
 **The development has four kinds of arc, and the source says which each
 is.** A **commit rule** carries a universe, a decision relation, the
@@ -11861,29 +11863,57 @@ Mysticeti's `U7` it commits slot `0` indirectly through slot `1`'s block
 `12`, as the hand-built derivation in `LeanDagTest/Mysticeti/Model.lean`
 does.
 
-### 27.9 What the arc does not contain
+### 27.9 The family as a carrier
 
-The properties of Mahi-Mahi and Async BlueBottle beyond agreement,
-liveness among them, reach the rows of §27.5 only at the least vote, and
-no row has a liveness result from SC12. The derived rows' safety is
-SC12's; Async Nemo-Nemo's is not proved. The commit loop *TryDecide*, which scans slots
-downward and outputs the longest decided prefix, is read through
+`Scheme.schemeRule p σ Hon` is the decider as a carrier, on the records
+where the validators of `Hon` do not equivocate, and
+`Scheme.familySupport` its support, a block certifying a candidate a wave
+below it when `IsCert` holds. SC16–SC18 show the properties the
+mechanisms read, for the whole family (`Scheme/Properties.lean`).
+
+A vote is local (`VoteSel.Local`) when a voter in a band, reading a slot
+at or above the band's floor, votes alike in both records. The least
+vote is local, the voter's history from the slot's round up being one
+set across the band, and so is `VotedBlock`, which reads the same parents
+at every block strictly above the slot's round (SC16). At a local vote,
+a wave of at least two and positive link and certificate thresholds, the
+decider's direct commit, direct skip and link carry across a band, and a
+candidate the band adds is linked from no old anchor, its votes putting
+it in the anchor's history in the old record (`Scheme.schemeBandLaws`).
+The rule reads nothing of its anchors, so the carrier is banded at every
+row (SC17). Its commits name candidates, its direct commits are
+verdicts, its indirect rule is a property, a slot left unsupported one
+round up is skipped when the vote round is one above the slot, its
+universes are quorate and its reliable validators do not equivocate
+when they lie in `Hon`; at every row meeting its inequalities the
+carrier agrees and is safe across every stack of mechanisms. The support
+has its three laws (SC18): certification is local; it commits at a
+commit threshold the quorum meets; and under coverage toward an honest
+candidate it follows at a certificate threshold the quorum meets, since
+every reliable block from one round above the candidate reaches it and
+every vote rule selects the only block of its slot. On the core's
+universes the carrier lives, at every vote. The prompt skip after an
+extension is `Scheme.decided_none_of_novel`, and chain quality at the
+carrier is in the test library; in the conformance and mechanism audits
+the family shows every obligation and every mechanism but adaptive
+leaders.
+
+### 27.10 What the arc does not contain
+
+The properties of Mahi-Mahi and Async BlueBottle that are proved of
+those rules alone reach the rows of §27.5 at the least vote only; the
+properties of §27.9 hold of the family at every vote. Async Nemo-Nemo's
+safety is not proved. The commit loop *TryDecide* is read through
 `Decided` (SC13, SC15) on the rows of SC12; at a row outside them the
 loop is sound and its completeness is not stated. The loop's restart at
 the round of the last consumed decision, which the scheme calls
-idempotent, is not stated.
-
-The family `schemeAnchored p σ` shows `Agree` (SC12) and no other
-property of the interface: `Banded`, `Support` and an `OnRecord`
-instance are not written, so no mechanism applies to it except
-through a row equal to a rule of the development (SC4–SC9). `Banded`
-asks that a vote survive a round shift of the record, which a
-`VoteSel` does not promise; a locality condition on `VoteSel`, which
-`leastSel` and `votedBlockSel` meet, is the missing hypothesis. A
-`Support` from the liveness bounds `Params.Live` would give the partially
-synchronous rows liveness at every vote; the asynchronous rows' liveness
-by the coin is proved rule by rule only. `scheme.md` §9 lists these and
-the gaps to the concrete algorithms.
+idempotent, is not stated, and its output is not connected to the
+ledger. The asynchronous rows' liveness by the coin is proved rule by
+rule only, and the family's `Lives` is stated on the core's universes,
+which at `f = fb + fc` exclude Hybrid Mysticeti's committee
+`3f + 2c + 1` when `c ≥ 1`. Stake weights, the coin-elected leader and
+the scheme's buffer-round argument are not formalised. `scheme.md` §9
+lists these with a plan.
 
 ---
 
@@ -12171,12 +12201,13 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Quality/Inclusion.lean` | post-`R` inclusion (CQ5, CQ6) |
 | `Quality/Capstone.lean` | the windowed bounds and `chain_quality` (CQ7) |
 | `LeanDagTest/` | the models of §28 and the witness files of every arc |
-| `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, the least vote `leastSel`, the scheme's vote `votedBlock`, and the three rule variants its rows name |
+| `Scheme/Model/` | the unified decider's parameters and rows, its rule `schemeAnchored` over a vote-selection rule, the least vote `leastSel`, the scheme's vote `votedBlock`, the local vote `VoteSel.Local`, the carrier `schemeRule` and its support `familySupport`, the commit loop, and the three rule variants its rows name |
 | `Scheme/Table/` | the table's inequalities and the claims of its reading paragraph, SC1 |
-| `Scheme/Helpers/` | two rules that read alike decide alike (SC2); votes one round up (SC3); votes further up (SC8); the rows' readings and the variants' laws; the scheme's search (SC10); the laws from the inequalities (SC12) |
+| `Scheme/Helpers/` | two rules that read alike decide alike (SC2); votes one round up (SC3); votes further up (SC8); the rows' readings and the variants' laws; the scheme's search (SC10); the laws from the inequalities (SC12); the loop's soundness and completeness; local votes, band laws and the support's laws (SC16–SC18) |
 | `Scheme/Equiv/` | eight rows as carriers, SC4–SC6 and SC9 |
 | `Scheme/Safety/` | the scheme's vote is a vote-selection rule, and three rows with buffer rounds agree at every vote, SC10–SC11 |
 | `Scheme/Sufficiency/` | the table's inequalities give agreement at every vote, and the derived rows agree, SC12 |
+| `Scheme/Properties.lean`, `Scheme/Record.lean` | the family as a carrier: every property the mechanisms read, its support, its record instance, SC16–SC18 |
 | `Scheme/Loop/` | the commit loop outputs exactly the derivable verdicts, and two validators' outputs are prefix-comparable, SC13–SC15 |
 
 **The support graph, extracted.** The dependency structure of the
@@ -13106,6 +13137,9 @@ reused.
 | SC13 | the commit loop outputs only verdicts `Decided` derives from the same view, at consecutive slots, at positive link and certificate thresholds | `Scheme.tryDecide_sound`, `Scheme.Loop.sound` *(Scheme/Loop)* |
 | SC14 | at the rows of SC12, two validators' loop outputs are prefix-comparable | `Scheme.tryDecide_prefix`, `Scheme.Loop.prefixComparable` *(Scheme/Loop)* |
 | SC15 | at the rows of SC12, the loop decides every verdict `Decided` derives once its scan reaches far enough, and outputs it once every slot from `lo` is decided | `Scheme.decisionAt_complete`, `Scheme.tryDecide_eventually`, `Scheme.Loop.complete`, `Scheme.Loop.outputComplete` *(Scheme/Loop)* |
+| SC16 | the least vote and the scheme's vote are local | `Scheme.leastSel_local`, `Scheme.votedBlockSel_local` *(Scheme/Helpers/Local)* |
+| SC17 | at a local vote, a wave of at least two and positive thresholds, the family's carrier is banded; at every row and vote it shows `CommitsCandidate`, `CommitsDirect`, `Indirect`, `Quorate`, `NoEquiv` (and `SelfParent` on the core's universes); at every row meeting its inequalities it agrees and is safe | `Scheme.schemeBandLaws`, `Scheme.banded`, `Scheme.indirect`, `Scheme.agree`, `Scheme.safety` *(Scheme/Properties)* |
+| SC18 | the family's support has its three laws, and the carrier lives on the core's universes at every vote | `Scheme.familySupport_local`, `Scheme.familySupport_commits`, `Scheme.familySupport_ofCoverage`, `Scheme.lives` *(Scheme/Helpers/Support, Scheme/Properties)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -13180,7 +13214,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 414 definitions and structures the report names, in
+The 420 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -19459,6 +19493,16 @@ def Safe (R : DagRule Validator BlockId Payload) : Prop :=
 
 **Safety, across any stack of mechanisms**, and at every slot across an extension.
 
+#### `Lives`
+
+*def, `Properties.Arcs.Headline.lean`*
+
+```lean
+def Lives : Prop := sp.Progresses rel ∧ sp.Includes rel
+```
+
+**Liveness**: progress and inclusion.
+
 #### `Stack`
 
 *inductive, `Properties.Arcs.Stack.lean`*
@@ -20050,6 +20094,47 @@ def leastSel : VoteSel Validator BlockId Payload P honest where
 
 **The least block of the slot in the voter's history.**
 
+#### `VoteSel.Local`
+
+*def, `Scheme.Model.Local.lean`*
+
+```lean
+def VoteSel.Local (σ : VoteSel Validator BlockId Payload P honest) : Prop :=
+  ∀ (R : AnchoredRule Validator BlockId Payload P honest)
+    {U U' : BlockRecord Validator BlockId Payload P honest} {lo hi g g' : ℕ} {q : BlockId}
+    {a : Validator} {r r' : ℕ},
+    Properties.AgreeBand R.toDagRule U U' lo hi g g' → q ∈ U.ids →
+    lo ≤ (U.block q).round + g → (U.block q).round + g ≤ hi →
+    lo ≤ r + g → r + g = r' + g' → σ.sel U' q a r' = σ.sel U q a r
+```
+
+**A local vote**: a voter in a band, reading a slot at or above the band's floor, votes alike in both records.
+
+#### `schemeRule`
+
+*def, `Scheme.Model.Local.lean`*
+
+```lean
+def schemeRule (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    (Hon : Finset Validator) : Properties.DagRule Validator BlockId Payload :=
+  (schemeAnchored p σ).toDagRuleOn (fun U => U.NoEquivOn Hon)
+```
+
+**The family's carrier**: the decider at `p` and `σ`, on the records where `Hon` does not equivocate.
+
+#### `familySupport`
+
+*def, `Scheme.Model.Local.lean`*
+
+```lean
+def familySupport (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    (Hon : Finset Validator) : Properties.Support (schemeRule p σ Hon) where
+  waveAt := fun _ => p.waveLength - 1
+  Certifies := fun U c L => IsCert p σ U.val c L
+```
+
+**The family's support.**
+
 #### `Params`
 
 *structure, `Scheme.Model.Params.lean`*
@@ -20082,6 +20167,17 @@ def Live (p : Params) (n f c : ℕ) : Prop :=
 ```
 
 **Liveness**: every threshold is reachable by the correct validators.
+
+#### `IsCert`
+
+*def, `Scheme.Model.Rule.lean`*
+
+```lean
+def IsCert (U : BlockRecord Validator BlockId Payload P honest) (C L : BlockId) : Prop :=
+  if p.voteIsCert then σ.Votes U C L else CarriesVotes U (σ.Votes U) p.certThreshold C L
+```
+
+**`C` certifies `L`** (the scheme's `IsCert`): its vote, or votes for `L` among its references from `certThreshold` distinct authors.
 
 #### `schemeAnchored`
 
@@ -20201,6 +20297,30 @@ def votedBlock (ord : BlockId → Finset BlockId → List BlockId)
 
 **The scheme's `VotedBlock`**: the block of `(a, r)` that `b` votes for, searched to the depth of `b`'s round.
 
+#### `onRecord`
+
+*def, `Scheme.Record.lean`*
+
+```lean
+def onRecord (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    (Hon : Finset Validator) :
+    (schemeRule p σ Hon).OnRecord P honest (fun U => U.NoEquivOn Hon) where
+  toRec := fun U => U.val
+  inv := fun U => U.property
+  ofRec := fun W h => ⟨W, h⟩
+  ids_to := fun _ => rfl
+  block_to := fun _ => rfl
+  ids_of := fun _ _ => rfl
+  block_of := fun _ _ => rfl
+  toRec_ofRec := fun _ _ => rfl
+  toView := fun V => V
+  ofView := fun V => V
+  viewIds_to := fun _ => rfl
+  viewIds_of := fun _ => rfl
+```
+
+**The family's carrier, read as block records.**
+
 #### `SynchronisedOn`
 
 *def, `Timed.Coverage.lean`*
@@ -20263,7 +20383,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 608 theorems the body or Appendix A names, each
+The 616 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28031,6 +28151,19 @@ theorem committed_of_correct_block
 theorem holds : Statement
 ```
 
+#### `votes_band`
+
+*theorem, `Scheme.Helpers.Band.lean`*
+
+```lean
+theorem votes_band (hσ : σ.Local) (h : AgreeBand R.toDagRule U U' lo hi g g') {b L : BlockId}
+    (hb : b ∈ U.ids) (hblo : lo ≤ (U.block b).round + g) (hbhi : (U.block b).round + g ≤ hi)
+    (hL : L ∈ U.ids) (hLlo : lo ≤ (U.block L).round + g) (hLhi : (U.block L).round + g ≤ hi) :
+    σ.Votes U' b L ↔ σ.Votes U b L
+```
+
+A vote, across a band.
+
 #### `decided`
 
 *theorem, `Scheme.Helpers.Transfer.lean`*
@@ -28055,6 +28188,101 @@ theorem complete : Complete
 ```lean
 theorem holds : Statement
 ```
+
+#### `commitsCandidate`
+
+*theorem, `Scheme.Properties.lean`*
+
+```lean
+theorem commitsCandidate : CommitsCandidate (schemeRule p σ Hon)
+```
+
+**A commit names a candidate.**
+
+#### `indirect`
+
+*theorem, `Scheme.Properties.lean`*
+
+```lean
+theorem indirect : Indirect (schemeRule p σ Hon)
+    (fun S i j => S.slotRound i + (p.waveLength - 1) + 1 ≤ S.slotRound j)
+```
+
+**The indirect rule is a property.**
+
+#### `skipsUnsupported`
+
+*theorem, `Scheme.Properties.lean`*
+
+```lean
+theorem skipsUnsupported (hv : p.voteOffset = 1) :
+    SkipsUnsupported (schemeRule p σ Hon) (fun T => p.skipThreshold ≤ T.card)
+```
+
+**A slot every quorum member's block one round up leaves unsupported is skipped**, at a vote round one above the slot and a skip threshold the quorum meets.
+
+#### `selfParent`
+
+*theorem, `Scheme.Properties.lean`*
+
+```lean
+theorem selfParent [Faults Validator] {σ : VoteSel Validator BlockId Payload ValidWrt Correct} :
+    SelfParent (schemeRule p σ Hon)
+```
+
+**Every block references its author's previous block**, on the core's universes.
+
+#### `agree`
+
+*theorem, `Scheme.Properties.lean`*
+
+```lean
+theorem agree {q : ℕ} [P.Quorate q] {f : ℕ} (hHon : Honᶜ.card ≤ f)
+    (hq : q ≤ Fintype.card Validator)
+    (hfam : (p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
+        p.TwoRound (Fintype.card Validator) f q) ∨
+      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
+        p.ThreeRound (Fintype.card Validator) f q)) :
+    Agree (schemeRule p σ Hon)
+```
+
+**Two views decide alike** at every row meeting its inequalities, on records with quorum `q` where validators outside `Hon`, at most `f`, may equivocate.
+
+#### `safety`
+
+*theorem, `Scheme.Properties.lean`*
+
+```lean
+theorem safety {q : ℕ} [P.Quorate q] {f : ℕ} (hσ : σ.Local) (hHon : Honᶜ.card ≤ f)
+    (hq : q ≤ Fintype.card Validator)
+    (hfam : (p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
+        p.TwoRound (Fintype.card Validator) f q) ∨
+      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
+        p.ThreeRound (Fintype.card Validator) f q)) :
+    Safe (schemeRule p σ Hon)
+```
+
+**The carrier is safe across every stack of mechanisms**, at every row meeting its inequalities, at a local vote.
+
+#### `decided_none_of_novel`
+
+*theorem, `Scheme.Record.lean`*
+
+```lean
+theorem decided_none_of_novel {p : Params} {σ : VoteSel Validator BlockId Payload P honest}
+    {Hon : Finset Validator} (hv : p.voteOffset = 1)
+    {U U' : (schemeRule p σ Hon).Universe} (he : Extends (schemeRule p σ Hon) U U')
+    (S : Slots Validator) {V' : (schemeRule p σ Hon).View U'} {T : Finset Validator} {k : ℕ}
+    (hok : p.skipThreshold ≤ T.card) (hpres : PresentAt (schemeRule p σ Hon) V' T (S.slotRound k + 1))
+    (hnov : ∀ L, (schemeRule p σ Hon).IsCandidate S U' k L → L ∉ (schemeRule p σ Hon).ids U)
+    (hold : ∀ c, c ∈ (schemeRule p σ Hon).viewIds V' →
+      ((schemeRule p σ Hon).block U' c).creator ∈ T →
+      ((schemeRule p σ Hon).block U' c).round = S.slotRound k + 1 →
+      c ∈ (schemeRule p σ Hon).ids U) :
+    (schemeRule p σ Hon).Decided S V' k none
+```
+
+**The prompt skip**: after an extension, a slot whose candidates are all new is skipped at once, at a vote round one above the slot and a quorum of old blocks one round up that meets the skip threshold.
 
 #### `holds`
 
