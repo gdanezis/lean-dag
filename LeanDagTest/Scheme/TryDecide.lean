@@ -57,6 +57,15 @@ example : schemeTryDecide mm4 σL full4 (View.full full4) 1 1 0 5 =
     [(0, some 0), (1, some 5), (2, some 10)] := by
   decide
 
+/-- The scheme's restart at a round: a call over rounds `0`–`1` ends at
+slot `1`; the call restarted at slot `1`'s round outputs slot `1` again,
+which is dropped, and then slot `2`. -/
+example : schemeTryDecide mm4 σL full4 (View.full full4) 1 1 0 1 = [(0, some 0), (1, some 5)] ∧
+    schemeTryDecide mm4 σL full4 (View.full full4) 1 1 1 5 = [(1, some 5), (2, some 10)] ∧
+    (schemeTryDecide mm4 σL full4 (View.full full4) 1 1 1 5).filter (fun e => 1 < e.1) =
+      [(2, some 10)] := by
+  decide
+
 /-- Three calls scanning to slots `1`, `3` and `5`, each restarting after the
 last decision output: the first outputs slots `0` and `1`, the second slot
 `2`, the third nothing. -/

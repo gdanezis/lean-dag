@@ -1115,7 +1115,7 @@
 <rect x="294.0" y="5564.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="5576.0" text-anchor="middle">SC17</text>
 <text class="nm" x="373.0" y="5590.0" text-anchor="middle">schemeBandLaws</text></g>
-<g><title>LeanDag.Scheme.schemeOrder_slots — the scheme&#x27;s loop over rounds and leader indices, both downward, outputs `tryDecide` between the corresponding slots, and under `Slots.uniform` each pair is its slot&#x27;s round and leader index</title>
+<g><title>LeanDag.Scheme.schemeOrder_slots — the scheme&#x27;s loop over rounds and leader indices, both downward, outputs `tryDecide` between the corresponding slots, and under `Slots.uniform` each pair is its slot&#x27;s round and leader index; at the rows of SC12, its restart at the round of the last decision, dropping the slots already output, resumes it on a larger view</title>
 <rect x="294.0" y="5612.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="5624.0" text-anchor="middle">SC20</text>
 <text class="nm" x="373.0" y="5638.0" text-anchor="middle">schemeOrder_slots</text></g>

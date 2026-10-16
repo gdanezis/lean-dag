@@ -123,6 +123,89 @@ theorem schemeTryDecide_eq {per m rLast rHigh : ℕ} (hp : 0 < per) (hm : 0 < m)
   rw [hslots, List.foldl_reverse, foldr_range', Nat.sub_mul]
   congr 3 <;> omega
 
+/-- **The scheme's restart at a round**, when the rule has its laws. A call
+over rounds `rLast, …, rHigh₁` on `V₁` whose last decision is slot `k`,
+followed by a call on a larger view `V₂` over rounds from `k`'s round
+`per·(k/m)` to `rHigh₂ ≥ rHigh₁`, with the slots up to `k` dropped, is
+the call on `V₂` over rounds `rLast, …, rHigh₂`. -/
+theorem schemeTryDecide_restartRound (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThreshold)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
+    {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+    (hlaws : (schemeAnchored p σ).Laws I) (hI : I S U) {V₁ V₂ : U.View} (hsub : V₁.ids ⊆ V₂.ids)
+    {per m rLast rHigh₁ rHigh₂ : ℕ} (hp : 0 < per) (hm : 0 < m) (h₁ : rLast ≤ rHigh₁ + 1)
+    (hH : rHigh₁ ≤ rHigh₂) {k : ℕ} {v : Option BlockId}
+    (hlast : (schemeTryDecide p σ U V₁ per m rLast rHigh₁).getLast? = some (k, v)) :
+    schemeTryDecide p σ U V₁ per m rLast rHigh₁ ++
+        (schemeTryDecide p σ U V₂ per m (per * (k / m)) rHigh₂).filter (fun e => k < e.1) =
+      schemeTryDecide p σ U V₂ per m rLast rHigh₂ := by
+  set lo := (rLast + per - 1) / per * m with hlo_def
+  set C₁ := (rHigh₁ + per) / per
+  have hC₁ : 1 ≤ C₁ := (Nat.one_le_div_iff hp).mpr (by omega)
+  have hm1 : m ≤ C₁ * m := Nat.le_mul_of_pos_left m hC₁
+  have hloC : lo ≤ C₁ * m := Nat.mul_le_mul_right m (Nat.div_le_div_right (by omega))
+  have hN : C₁ * m - 1 ≤ (rHigh₂ + per) / per * m - 1 :=
+    Nat.sub_le_sub_right (Nat.mul_le_mul_right m (Nat.div_le_div_right (by omega))) 1
+  rw [schemeTryDecide_eq hp hm h₁] at hlast ⊢
+  rw [schemeTryDecide_eq hp hm (by omega : rLast ≤ rHigh₂ + 1)]
+  have hlo₁ : lo ≤ C₁ * m - 1 + 1 := by omega
+  -- The output on `V₁` lists slots `lo, …, k`, and `k ≤ N₁`.
+  obtain ⟨hr₁, -⟩ := tryDecide_sound (σ := σ) (U := U) (V := V₁) hl hc hlo₁
+  have hlen₁ : (tryDecide p σ U V₁ lo (C₁ * m - 1)).length ≤ C₁ * m - 1 + 1 - lo := by
+    rw [tryDecide_eq hlo₁, List.length_map]
+    have := (List.takeWhile_sublist (fun e : ℕ × Option (Option BlockId) => e.2.isSome)
+      (l := (List.range' lo (C₁ * m - 1 + 1 - lo)).map
+        (fun j => (j, decisionAt p σ U V₁ (C₁ * m - 1) j)))).length_le
+    simpa using this
+  have hk : k = lo + (tryDecide p σ U V₁ lo (C₁ * m - 1)).length - 1 ∧
+      1 ≤ (tryDecide p σ U V₁ lo (C₁ * m - 1)).length := by
+    have h := congrArg (Option.map Prod.fst) hlast
+    rw [← List.getLast?_map, hr₁] at h
+    cases hn : (tryDecide p σ U V₁ lo (C₁ * m - 1)).length with
+    | zero => rw [hn] at h; simp at h
+    | succ n =>
+      rw [hn, List.range'_concat, List.getLast?_concat] at h
+      simp only [Option.map_some, Option.some.injEq] at h
+      omega
+  -- `k`'s round lies in the second call's range, and its first slot is `(k / m)·m`.
+  have hkm : k / m < C₁ := (Nat.div_lt_iff_lt_mul hm).mpr (by omega)
+  have hround : per * (k / m) ≤ rHigh₂ + 1 := by
+    have h1 : per * C₁ ≤ rHigh₁ + per := Nat.mul_div_le (rHigh₁ + per) per
+    have h2 : per * (k / m) ≤ per * (C₁ - 1) := Nat.mul_le_mul_left per (by omega)
+    rw [Nat.mul_sub_one] at h2
+    omega
+  have hceil : (per * (k / m) + per - 1) / per = k / m := by
+    rw [show per * (k / m) + per - 1 = per * (k / m) + (per - 1) by omega, Nat.mul_add_div hp,
+      Nat.div_eq_of_lt (by omega : per - 1 < per), Nat.add_zero]
+  rw [schemeTryDecide_eq hp hm hround, hceil]
+  have hlo' : lo ≤ k / m * m := by
+    have : (rLast + per - 1) / per ≤ k / m := by
+      rw [← Nat.mul_div_cancel ((rLast + per - 1) / per) hm]
+      exact Nat.div_le_div_right (by omega)
+    exact Nat.mul_le_mul_right m this
+  have hk' : k / m * m ≤ k := Nat.div_mul_le_self k m
+  -- Resume, then restart inside the resumed output.
+  have hres := tryDecide_resume hl hcm hc hlaws hI hsub hN (lo := lo)
+  have hlen₂ : k / m * m ≤ lo + (tryDecide p σ U V₂ lo ((rHigh₂ + per) / per * m - 1)).length := by
+    rw [← hres, List.length_append]; omega
+  rw [tryDecide_restart (by omega) hlen₂, ← hres,
+    List.drop_append_of_le_length (by omega), List.filter_append]
+  have hT := (tryDecide_sound (σ := σ) (U := U) (V := V₂) hl hc
+    (lo := lo + (tryDecide p σ U V₁ lo (C₁ * m - 1)).length)
+    (N := (rHigh₂ + per) / per * m - 1) (by omega)).1
+  rw [List.filter_eq_nil_iff.mpr ?_, List.filter_eq_self.mpr ?_, List.nil_append]
+  · intro e he
+    have : e.1 ∈ (tryDecide p σ U V₂ (lo + (tryDecide p σ U V₁ lo (C₁ * m - 1)).length)
+        ((rHigh₂ + per) / per * m - 1)).map Prod.fst := List.mem_map_of_mem he
+    rw [hT, List.mem_range'_1] at this
+    simp only [decide_eq_true_eq]
+    omega
+  · intro e he
+    have : e.1 ∈ (tryDecide p σ U V₁ lo (C₁ * m - 1)).map Prod.fst :=
+      List.mem_map_of_mem (List.mem_of_mem_drop he)
+    rw [hr₁, List.mem_range'_1] at this
+    simp only [decide_eq_true_eq]
+    omega
+
 omit [Fintype Validator] [DecidableEq Validator] S in
 /-- **The scheme's pairs are their slots' rounds and leader indices** under
 `Slots.uniform per m`. -/

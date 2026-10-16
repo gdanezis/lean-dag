@@ -382,8 +382,16 @@ decided prefix.
   offset adds its `m` slots on top), and deciding them in turn from the
   top is the scan (`foldr_range'`).
 
-The scheme's restart at round `r_last` is therefore `tryDecide` from the
-first slot of that round, and `Restart` applies to it.
+**The restart at a round** (`RestartRound`, from
+`schemeTryDecide_restartRound`), at the rows of §7. A call over rounds
+`rLast, …, rHigh₁` on `V₁` whose last decision is slot `k` is followed by
+a call on `V₂ ⊇ V₁` over rounds from `k`'s round, `r_last = per·(k/m)`,
+to `rHigh₂ ≥ rHigh₁`, with the slots up to `k` dropped. Together they
+output the call on `V₂` over rounds `rLast, …, rHigh₂`. The second call
+is `tryDecide` from `r_last`'s first slot (`Order`), which lies inside
+the first output; by `Resume` and `Restart` its output is the tail of
+the first output from that slot, followed by the resumed output, and
+dropping the slots up to `k` leaves the resumed output.
 
 **The ledger** (`Ledger`, `LedgerAgree`; `Helpers/Ledger.lean`). The
 loop's assignment `loopAssign N k` is slot `k`'s committed block, if any;
@@ -403,8 +411,10 @@ the output lists its slots with it (`tryDecide_eq_map`).
 With `Repeated`, the ledger after `t + 1` calls on growing views is the
 ledger of one call on the last view. The tests run the scheme's loop in
 its own order on `full4` and `U7`, restart it at round `3` on `U7`, read
-the committed blocks `0` and `12` off `U7`'s output, and list the slots
-`5, 4, 3, 2` for two leaders per round over rounds `2` down to `1`.
+the committed blocks `0` and `12` off `U7`'s output, list the slots
+`5, 4, 3, 2` for two leaders per round over rounds `2` down to `1`, and
+on `full4` restart at slot `1`'s round, where slot `1` is output again
+and dropped.
 
 ## 9. The family as a carrier, and what remains
 

@@ -1000,7 +1000,7 @@
 <g><title>LeanDag.Scheme.schemeBandLaws — at a local vote, a wave of at least two and positive thresholds, the family&#x27;s carrier is banded; at every row and vote it shows `CommitsCandidate`, `CommitsDirect`, `Indirect`, `Quorate`, `NoEquiv` (and `SelfParent` on the core&#x27;s universes); at every row meeting its inequalities it agrees and is safe</title>
 <rect x="134.0" y="3831.0" width="62" height="24" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="3843.0" text-anchor="middle">SC17</text></g>
-<g><title>LeanDag.Scheme.schemeOrder_slots — the scheme&#x27;s loop over rounds and leader indices, both downward, outputs `tryDecide` between the corresponding slots, and under `Slots.uniform` each pair is its slot&#x27;s round and leader index</title>
+<g><title>LeanDag.Scheme.schemeOrder_slots — the scheme&#x27;s loop over rounds and leader indices, both downward, outputs `tryDecide` between the corresponding slots, and under `Slots.uniform` each pair is its slot&#x27;s round and leader index; at the rows of SC12, its restart at the round of the last decision, dropping the slots already output, resumes it on a larger view</title>
 <rect x="134.0" y="3864.0" width="62" height="24" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="3876.0" text-anchor="middle">SC20</text></g>
 <g><title>LeanDag.Scheme.tryDecide_eq_map — the output from slot `0` is `commitSeq` and `ledgerSet` of the loop&#x27;s assignment, every slot below its length decided with that verdict; at the rows of SC12 two validators&#x27; ledgers are nested</title>

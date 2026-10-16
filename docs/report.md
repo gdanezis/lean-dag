@@ -11888,7 +11888,11 @@ the pair `(r, l)` is the slot `(r / per)·m + l`, proposed at round `r`
 with leader index `l` (`Scheme.schemeOrder_uniform`); the slots visited
 are those from `⌈rLast/per⌉·m` to `⌈(rHigh+1)/per⌉·m − 1`, downward
 (`Scheme.schemeOrder_slots`); and the loop outputs `tryDecide` between
-those slots, at every row and vote (`Scheme.schemeTryDecide_eq`).
+those slots, at every row and vote (`Scheme.schemeTryDecide_eq`). The
+scheme's restart at a round follows at the rows of SC12: a call whose
+last decision is slot `k`, followed by a call on a larger view from
+`k`'s round with the slots up to `k` dropped, is one call on the larger
+view (`Scheme.schemeTryDecide_restartRound`).
 
 SC21: the output is the ledger. The output from slot `0` lists its slots
 with the loop's assignment `Scheme.loopAssign`; its committed blocks are
@@ -13185,7 +13189,7 @@ reused.
 | SC17 | at a local vote, a wave of at least two and positive thresholds, the family's carrier is banded; at every row and vote it shows `CommitsCandidate`, `CommitsDirect`, `Indirect`, `Quorate`, `NoEquiv` (and `SelfParent` on the core's universes); at every row meeting its inequalities it agrees and is safe | `Scheme.schemeBandLaws`, `Scheme.banded`, `Scheme.indirect`, `Scheme.agree`, `Scheme.safety` *(Scheme/Properties)* |
 | SC18 | the family's support has its three laws, and the carrier lives on the core's universes at every vote | `Scheme.familySupport_local`, `Scheme.familySupport_commits`, `Scheme.familySupport_ofCoverage`, `Scheme.lives` *(Scheme/Helpers/Support, Scheme/Properties)* |
 | SC19 | a call restarting inside an earlier output repeats its tail; at the rows of SC12, calls on growing views, each restarting after the last decision output, output what one call on the last view outputs | `Scheme.tryDecide_restart`, `Scheme.decisionAt_mono`, `Scheme.tryDecide_resume`, `Scheme.consumed_eq`, `Scheme.Loop.restart`, `Scheme.Loop.resume`, `Scheme.Loop.repeated` *(Scheme/Loop, Scheme/Helpers/Restart)* |
-| SC20 | the scheme's loop over rounds and leader indices, both downward, outputs `tryDecide` between the corresponding slots, and under `Slots.uniform` each pair is its slot's round and leader index | `Scheme.schemeOrder_slots`, `Scheme.schemeTryDecide_eq`, `Scheme.schemeOrder_uniform`, `Scheme.Loop.order`, `Scheme.Loop.orderUniform` *(Scheme/Loop, Scheme/Helpers/Order)* |
+| SC20 | the scheme's loop over rounds and leader indices, both downward, outputs `tryDecide` between the corresponding slots, and under `Slots.uniform` each pair is its slot's round and leader index; at the rows of SC12, its restart at the round of the last decision, dropping the slots already output, resumes it on a larger view | `Scheme.schemeOrder_slots`, `Scheme.schemeTryDecide_eq`, `Scheme.schemeOrder_uniform`, `Scheme.schemeTryDecide_restartRound`, `Scheme.Loop.order`, `Scheme.Loop.orderUniform`, `Scheme.Loop.restartRound` *(Scheme/Loop, Scheme/Helpers/Order)* |
 | SC21 | the output from slot `0` is `commitSeq` and `ledgerSet` of the loop's assignment, every slot below its length decided with that verdict; at the rows of SC12 two validators' ledgers are nested | `Scheme.tryDecide_eq_map`, `Scheme.ledger_read`, `Scheme.ledger_agree`, `Scheme.Loop.ledger`, `Scheme.Loop.ledgerAgree` *(Scheme/Loop, Scheme/Helpers/Ledger)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):

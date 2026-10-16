@@ -23,7 +23,9 @@ from slot `lo` to slot `N`:
   on growing views, each restarting after the last decision output,
   output together what one call on the last view outputs.
 * **The scheme's order is slot order reversed**: its loop over rounds and
-  leader indices, both downward, is `tryDecide` under `Slots.uniform`.
+  leader indices, both downward, is `tryDecide` under `Slots.uniform`,
+  and its restart at the round of the last decision, dropping the slots
+  already output, resumes it.
 * **The output is the ledger**: from slot `0` it is `commitSeq` and
   `ledgerSet` of the loop's assignment, and at the rows the inequalities
   cover two validators' ledgers are nested.
@@ -172,6 +174,29 @@ def OrderUniform : Prop :=
       (Slots.uniform per m hp hm elect hblock).slotRound (slotOf per m rl.1 rl.2) = rl.1 ∧
         slotOf per m rl.1 rl.2 % m = rl.2
 
+/-- **The scheme's restart at a round**, at the rows the inequalities
+cover: a call over rounds `rLast, …, rHigh₁` whose last decision is slot
+`k`, followed by a call on a larger view from `k`'s round `per·(k/m)` to
+`rHigh₂ ≥ rHigh₁` with the slots up to `k` dropped, is the call on the
+larger view over rounds `rLast, …, rHigh₂`. -/
+def RestartRound : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (q : ℕ) [P.Quorate q] (honest Hon : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
+    (U : BlockRecord Validator BlockId Payload P honest) (V₁ V₂ : U.View)
+    (per m rLast rHigh₁ rHigh₂ k : ℕ) (v : Option BlockId),
+    Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
+    ((p.voteIsCert = true ∧ 2 ≤ p.waveLength ∧ 1 ≤ p.linkSize ∧
+        p.TwoRound (Fintype.card Validator) f q) ∨
+      (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧
+        p.ThreeRound (Fintype.card Validator) f q)) →
+    V₁.ids ⊆ V₂.ids → 0 < per → 0 < m → rLast ≤ rHigh₁ + 1 → rHigh₁ ≤ rHigh₂ →
+    (schemeTryDecide p σ U V₁ per m rLast rHigh₁).getLast? = some (k, v) →
+    schemeTryDecide p σ U V₁ per m rLast rHigh₁ ++
+        (schemeTryDecide p σ U V₂ per m (per * (k / m)) rHigh₂).filter (fun e => k < e.1) =
+      schemeTryDecide p σ U V₂ per m rLast rHigh₂
+
 /-- **The output from slot `0` is the ledger**, at every row and vote with
 positive link and certificate thresholds: its committed blocks are
 `commitSeq` of the loop's assignment over its length, every slot below
@@ -216,7 +241,7 @@ def LedgerAgree : Prop :=
 /-- The loop's claims. -/
 def Statement : Prop :=
   Sound ∧ PrefixComparable ∧ Complete ∧ OutputComplete ∧ Restart ∧ Resume ∧ Repeated ∧
-    Order ∧ OrderUniform ∧ Ledger ∧ LedgerAgree
+    Order ∧ OrderUniform ∧ RestartRound ∧ Ledger ∧ LedgerAgree
 
 end Loop
 

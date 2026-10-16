@@ -82,6 +82,12 @@ theorem orderUniform : OrderUniform := by
   intro Validator per m rLast rHigh hp hm elect hblock
   exact schemeOrder_uniform hp hm
 
+theorem restartRound : RestartRound := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ S U V₁ V₂ per m rLast rHigh₁
+    rHigh₂ k v hHon hq hne hfam hsub hp hm h₁ hH hlast
+  obtain ⟨hl, hcm, hc, hlaws⟩ := family σ hHon hq hfam
+  exact schemeTryDecide_restartRound hl hcm hc hlaws hne hsub hp hm h₁ hH hlast
+
 theorem ledger : Ledger := by
   intro Validator BlockId Payload _ _ _ P honest p σ S U V N hl hc
   exact ledger_read hl hc N
@@ -94,7 +100,7 @@ theorem ledgerAgree : LedgerAgree := by
 
 theorem holds : Statement :=
   ⟨sound, prefixComparable, complete, outputComplete, restart, resume, repeated, order,
-    orderUniform, ledger, ledgerAgree⟩
+    orderUniform, restartRound, ledger, ledgerAgree⟩
 
 end Loop
 
