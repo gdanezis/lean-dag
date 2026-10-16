@@ -7,8 +7,9 @@ coin opened at the decision round. The model has no adversary and no
 time, so the coin enters, as in the Mahi-Mahi and Async BlueBottle arcs,
 through its observable consequence on the schedule and the record:
 
-* `goodAt p σ U r`: the validators whose round-`r` block the row directly
-  commits on the full record; `good` the same at a slot's round;
+* `goodAt p σ U r`: the validators whose round-`r` block the record's
+  certificates commit: `commit` authors of decision-round blocks certify
+  it; `good` the same at a slot's round;
 * `UnpredictableWithin`: in every window of `c` slots whose decision
   rounds lie below the horizon `N`, the schedule names a good leader;
   `UnpredictableRunWithin`, a run of `d` good leaders.
@@ -26,10 +27,11 @@ variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
 variable (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
 
 /-- **The good set at round `r`**: the validators whose round-`r` block the
-row directly commits on the full record. -/
+record's certificates commit, `commit` authors of decision-round blocks
+certifying it. -/
 def goodAt (U : BlockRecord Validator BlockId Payload P honest) (r : ℕ) : Finset Validator :=
   Finset.univ.filter (fun v => ∃ L ∈ U.ids, (U.block L).round = r ∧ (U.block L).creator = v ∧
-    (schemeAnchored p σ).Commit U (BlockRecord.View.full U) L r 0)
+    p.commitThreshold ≤ (creatorsOf U.block (certsAt p σ U L r)).card)
 
 variable [S : Slots Validator]
 

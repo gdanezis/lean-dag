@@ -50,12 +50,12 @@ theorem goodCommits' : GoodCommits := by
   exact goodCommits σ hk hV
 
 theorem commitsWithin' : CommitsWithin := by
-  intro Validator BlockId Payload _ _ _ P honest p σ S U c N hU k hk
-  exact commitsWithin σ hU hk
+  intro Validator BlockId Payload _ _ _ P honest p σ S U V c N hU hV k hk
+  exact commitsWithin σ hU hV hk
 
 theorem allDecidedBelow' : AllDecidedBelow := by
-  intro Validator BlockId Payload _ _ _ P _ honest p σ S U c d N hd hspan hU k hk
-  exact allDecidedBelow σ hd hspan hU hk
+  intro Validator BlockId Payload _ _ _ P _ honest p σ S U V c d N hd hspan hU hV k hk
+  exact allDecidedBelow σ hd hspan hU hV hk
 
 theorem coinCommit : CoinCommit := by
   intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ U r T hf hq2 hw hcv hT hpop hcm

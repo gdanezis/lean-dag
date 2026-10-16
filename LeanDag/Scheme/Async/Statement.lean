@@ -136,29 +136,31 @@ def GoodCommits : Prop :=
     S.leader k ∈ good p σ U k → V.CoversUpto (S.slotRound k + (p.waveLength - 1)) →
     ∃ L, IsLeaderBlock U k L ∧ (schemeAnchored p σ).Decided U V k (some L)
 
-/-- **Every window commits** under the single-hit clause. -/
+/-- **Every window commits** under the single-hit clause, on every view
+holding the rounds up to the horizon. -/
 def CommitsWithin : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) (honest : Finset Validator)
     (p : Params) (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
-    (U : BlockRecord Validator BlockId Payload P honest) (c N : ℕ),
-    UnpredictableWithin p σ U c N →
+    (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (c N : ℕ),
+    UnpredictableWithin p σ U c N → V.CoversUpto N →
     ∀ k, (schemeAnchored p σ).decisionRound (k + c) ≤ N →
       ∃ k', k ≤ k' ∧ k' < k + c ∧ ∃ L, IsLeaderBlock U k' L ∧
-        (schemeAnchored p σ).Decided U (BlockRecord.View.full U) k' (some L)
+        (schemeAnchored p σ).Decided U V k' (some L)
 
 /-- **Every slot below a run is decided** under the run clause, when a run
-of `d` slots spans eligibility. -/
+of `d` slots spans eligibility, on every view holding the rounds up to the
+horizon. -/
 def AllDecidedBelow : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
     (honest : Finset Validator) (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
-    [S : Slots Validator] (U : BlockRecord Validator BlockId Payload P honest) (c d N : ℕ),
+    [S : Slots Validator] (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
+    (c d N : ℕ),
     0 < d → (schemeAnchored p σ).SpansEligible (S := S) d →
-    UnpredictableRunWithin p σ U c d N →
+    UnpredictableRunWithin p σ U c d N → V.CoversUpto N →
     ∀ k, (schemeAnchored p σ).decisionRound (k + c + d - 1) ≤ N →
-      ∃ b, k ≤ b ∧ ∀ i, i < b → ∃ v,
-        (schemeAnchored p σ).Decided U (BlockRecord.View.full U) i v
+      ∃ b, k ≤ b ∧ ∀ i, i < b → ∃ v, (schemeAnchored p σ).Decided U V i v
 
 /-- **The coin names a good leader** with probability at least `1/n` at one
 buffer round and `(q − f)/n` at two, under the hypotheses of the counts. -/

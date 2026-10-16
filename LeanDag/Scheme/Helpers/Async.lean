@@ -212,9 +212,6 @@ theorem mem_goodAt_of_safe {r : ℕ} {L : BlockId} {T : Finset Validator}
     (hsafe : ∀ b ∈ U.ids, (U.block b).round = r + p.voteOffset → Reaches U b L) :
     (U.block L).creator ∈ goodAt p σ U r := by
   refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, L, hL, hLr, rfl, ?_⟩
-  show HoldsAtLeast U (BlockRecord.View.full U) p.commitThreshold (certsAt p σ U L r)
-  rw [HoldsAtLeast.full (s := certsAt p σ U L r) (fun C hC => by
-    unfold certsAt at hC; exact (mem_blocksAt.mp (Finset.mem_filter.mp hC).1).1)]
   refine le_trans hcm (Finset.card_le_card fun v hv => ?_)
   obtain ⟨C, hC, hCc, hCr⟩ := hpop v hv
   refine mem_creatorsOf.mpr ⟨C, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hC, hCr⟩, ?_⟩, hCc⟩
@@ -447,31 +444,40 @@ theorem goodCommits {k : ℕ} {V : U.View} (hk : S.leader k ∈ good p σ U k)
     obtain ⟨hCU, hCr⟩ := mem_blocksAt.mp (Finset.mem_filter.mp hC).1
     exact ⟨hCU, hCr.le⟩
   have hfull : p.commitThreshold ≤ (creatorsOf U.block (certsAt p σ U L (S.slotRound k))).card :=
-    (HoldsAtLeast.full (fun C hC => (hs C hC).1)).mp (hLr ▸ hcommit)
+    hLr ▸ hcommit
   exact ⟨L, ⟨hL, hLr, hLc⟩, AnchoredRule.Decided.directCommit ⟨hL, hLr, hLc⟩
     (HoldsAtLeast.of_coversUpto hs hV hfull)⟩
 
 omit [P.Mechanised] [P.Quorate q] in
-/-- **Every window commits** under the single-hit clause. -/
-theorem commitsWithin {c N : ℕ} (hU : UnpredictableWithin p σ U c N) {k : ℕ}
-    (hk : (schemeAnchored p σ).decisionRound (k + c) ≤ N) :
+/-- **Every window commits** under the single-hit clause, on every view
+holding the rounds up to the horizon. -/
+theorem commitsWithin {c N : ℕ} (hU : UnpredictableWithin p σ U c N) {V : U.View}
+    (hV : V.CoversUpto N) {k : ℕ} (hk : (schemeAnchored p σ).decisionRound (k + c) ≤ N) :
     ∃ k', k ≤ k' ∧ k' < k + c ∧ ∃ L, IsLeaderBlock U k' L ∧
-      (schemeAnchored p σ).Decided U (BlockRecord.View.full U) k' (some L) := by
+      (schemeAnchored p σ).Decided U V k' (some L) := by
   obtain ⟨k', h1, h2, hg⟩ := hU k hk
-  exact ⟨k', h1, h2, goodCommits σ hg (BlockRecord.View.coversUpto_full _ _)⟩
+  have hmono := S.mono (show k' ≤ k + c by omega)
+  exact ⟨k', h1, h2, goodCommits σ hg (hV.mono (by
+    have : (schemeAnchored p σ).decisionRound (k + c) = S.slotRound (k + c) + (p.waveLength - 1) :=
+      rfl
+    omega))⟩
 
 /-- **Every slot below a run is decided** under the run clause, when a run
-of `d` slots spans eligibility. -/
+of `d` slots spans eligibility, on every view holding the rounds up to the
+horizon. -/
 theorem allDecidedBelow {c d N : ℕ} (hd : 0 < d)
     (hspan : (schemeAnchored p σ).SpansEligible (S := S) d)
-    (hU : UnpredictableRunWithin p σ U c d N) {k : ℕ}
+    (hU : UnpredictableRunWithin p σ U c d N) {V : U.View} (hV : V.CoversUpto N) {k : ℕ}
     (hk : (schemeAnchored p σ).decisionRound (k + c + d - 1) ≤ N) :
-    ∃ b, k ≤ b ∧ ∀ i, i < b → ∃ v, (schemeAnchored p σ).Decided U (BlockRecord.View.full U) i v := by
-  obtain ⟨k', hk', -, hrun⟩ := hU k hk
+    ∃ b, k ≤ b ∧ ∀ i, i < b → ∃ v, (schemeAnchored p σ).Decided U V i v := by
+  obtain ⟨k', hk', hk'c, hrun⟩ := hU k hk
+  have hdec : (schemeAnchored p σ).decisionRound (k + c + d - 1) =
+      S.slotRound (k + c + d - 1) + (p.waveLength - 1) := rfl
   refine ⟨k', hk', AnchoredRule.decided_below_of_run
     (fun _ h => AnchoredRule.exists_least_of_lt (fun _ _ => Iff.rfl) h) hd hspan
-    (Led := fun j => S.leader j ∈ good p σ U j) hrun fun j _ _ hj => ?_⟩
-  obtain ⟨L, -, hL⟩ := goodCommits σ hj (BlockRecord.View.coversUpto_full _ _)
+    (Led := fun j => S.leader j ∈ good p σ U j) hrun fun j _ h2 hj => ?_⟩
+  have hmono := S.mono (show j ≤ k + c + d - 1 by omega)
+  obtain ⟨L, -, hL⟩ := goodCommits σ hj (hV.mono (by omega))
   exact ⟨L, hL⟩
 
 end Live

@@ -563,7 +563,8 @@ agreement at every row that meets them (`Scheme.Sufficiency.holds`
 (SC12)), and where nobody equivocates fewer of them suffice, which
 covers Nemo-Nemo and Async Nemo-Nemo (SC22). Hybrid Mysticeti is
 Hydrozoan without its fast path, and lives at Hydrozoan's fault model
-(SC23). The scheme's commit loop computes the relation: it outputs only verdicts
+(SC23). The asynchronous rows are live under the coin, for the whole
+family (SC24). The scheme's commit loop computes the relation: it outputs only verdicts
 the relation derives, every derived verdict once it scans far enough,
 and two validators' outputs are prefix-comparable (`Scheme.Loop.holds`
 (SC13–SC15)); calls restarting after the last decision output on growing
@@ -12001,7 +12002,46 @@ alone skips a slot, where Hydrozoan's skip at `q_fast > q` is
 opportunistic. At six replicas, one Byzantine and one crashed, every
 threshold of the row is `4 = q` and Hydrozoan's `q_fast` is `6`.
 
-### 27.11 What the arc does not contain
+### 27.11 The asynchronous rows: the coin and the buffer rounds
+
+The asynchronous rows add buffer rounds between the proposal and the
+vote and elect a wave's leader by a coin opened at the decision round.
+The coin is abstracted as in §17 and §25 (Mahi-Mahi, Async BlueBottle): a
+deterministic count of the leaders that would commit, a clause on the
+schedule that the coin makes true, and a uniform distribution for the
+probabilities. `Scheme.goodAt p σ U r` is the set of validators whose
+round-`r` block the record's certificates commit.
+
+SC24: the asynchronous rows are live under the coin, at every row and
+vote, on any record whose blocks reference `q` distinct authors and
+whose validators outside `honest`, at most `f`, may equivocate. The count
+needs no network hypothesis. At `2q ≥ n + f + 1` a common core exists
+(`Scheme.exists_commonCore`): the core's double count (T3a, T3c) at a
+general quorum, a condition every asynchronous row meets at
+`q = n − f − c`, Mahi-Mahi, Cordial Miners Async, Async Nemo-Nemo and
+Hybrid Mahi-Mahi at equality. An honest block every vote-round block
+reaches is committed once a population of the decision round meets the
+commit threshold (`Scheme.mem_goodAt_of_safe`). One buffer round gives
+an honest good validator (`Scheme.goodAt_nonempty`) and the double count
+`|T|·(q − f) + G·(n − q) ≤ G·|T| + |honest|·(n − q)` over an honest
+population of the buffer round (`Scheme.card_goodAt_count`), the
+scheme's `|core| ≥ h − ⌊mh/(h − m)⌋` at `|T| = |honest| = n − f`; two give
+`q ≤ G + f` (`Scheme.le_card_goodAt`), the scheme's `h − m`; leaders
+outnumbering the rest include a good one (`Scheme.exists_good_leader`).
+Under the coin clause a good leader's slot commits on a view holding its
+decision round, and on every view holding the rounds up to the clause's
+horizon every window commits and every slot below a spanning run is
+decided (`Scheme.goodCommits`, `Scheme.commitsWithin`,
+`Scheme.allDecidedBelow`). Through the coin counts of §24 (Steelhead), a
+uniform coin names a good leader with probability at least `1/n` and
+`(q − f)/n`, and `m` independent coins all miss with probability at most
+`((n − c)/n)^m`, which vanishes (`Scheme.Async.coinCommit`,
+`Scheme.Async.coinTail`). On four validators at the Mahi-Mahi row, a DAG
+in which one honest block is referenced only along its author's chain
+has good set `{0, 2, 3}` at one, two and three buffer rounds alike: the
+two-buffer count is tight, and a third buffer round adds nothing.
+
+### 27.12 What the arc does not contain
 
 The properties of Mahi-Mahi and Async BlueBottle that are proved of
 those rules alone reach the rows of §27.5 at the least vote only; the
@@ -12009,11 +12049,14 @@ properties of §27.9 hold of the family at every vote. The commit loop *TryDecid
 `Decided` (SC13, SC15) on the rows of SC12 and SC22; at a row outside them the
 loop is sound, its restart on one view holds (SC19), and its order
 and ledger reading hold (SC20, SC21); its completeness, its resumption
-on a larger view and the nesting of ledgers are not stated. The asynchronous rows' liveness by the coin is proved rule by
-rule only. The family's `Lives` is stated on the core's universes, and
+on a larger view and the nesting of ledgers are not stated. The
+asynchronous rows' liveness (SC24) leaves out the good set's
+measurability, the local commit under pacing, the hypergeometric
+probability for `K` leaders, and the general construction behind "a third
+buffer round adds nothing", shown on a witness. The family's `Lives` is stated on the core's universes, and
 Hybrid Mysticeti's, at its committee `3f + 2c + 1`, at Hydrozoan's fault
-model (SC23); Hybrid Mahi-Mahi's there is not stated. Stake weights, the coin-elected leader and
-the scheme's buffer-round argument are not formalised. `scheme.md` §9
+model (SC23); Hybrid Mahi-Mahi's partially synchronous liveness there is not stated.
+Stake weights and the coin's construction are not formalised. `scheme.md` §9
 lists these with a plan.
 
 ---
@@ -13246,6 +13289,7 @@ reused.
 | SC21 | the output from slot `0` is `commitSeq` and `ledgerSet` of the loop's assignment, every slot below its length decided with that verdict; at the rows of SC12 two validators' ledgers are nested | `Scheme.tryDecide_eq_map`, `Scheme.ledger_read`, `Scheme.ledger_agree`, `Scheme.Loop.ledger`, `Scheme.Loop.ledgerAgree` *(Scheme/Loop, Scheme/Helpers/Ledger)* |
 | SC22 | where nobody equivocates, the two-round inequalities without `n + f + 1 ≤ commit + link` and the three-round ones without `n + f + 1 ≤ 2·cert` give agreement at every vote; Nemo-Nemo and Async Nemo-Nemo meet them at `n = 2c + 1` and agree; with `q = n − c` they need `n ≥ 2c + 1`, and `3c + 1` for a two-round row with a direct skip within the liveness bound | `Scheme.eq_of_noEquiv_all`, `Scheme.twoRoundCrashLaws`, `Scheme.threeRoundCrashLaws`, `Scheme.Table.crashWeaker`, `Scheme.Table.crashRows`, `Scheme.Table.crashBound`, `Scheme.Sufficiency.twoRoundCrashAgree`, `Scheme.Sufficiency.threeRoundCrashAgree`, `Scheme.Sufficiency.nemoRowsAgree` *(Scheme/Helpers/Sufficiency, Scheme/Table, Scheme/Sufficiency)* |
 | SC23 | on Hydrozoan's universe the Hybrid Mysticeti row decides as Hydrozoan without its fast path, at every vote; it meets its inequalities at every `n ≥ 3f + 2c + 1`, and its carrier is safe and progresses under Hydrozoan's fault model, and with self-reference lives | `Scheme.readAlike_hydrozoanSlow`, `Scheme.hydrozoanSlow_eq`, `Scheme.Table.hybridAnyCommittee`, `Scheme.HybridRow.slowRow`, `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent` *(Scheme/Helpers/Hydrozoan, Scheme/HybridRow)* |
+| SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; a safe block is good; one buffer round gives an honest good validator and the double count, two give `q − f`; leaders outnumbering the rest include a good one; under the coin clause a good leader commits, windows commit and slots below a run are decided; a uniform coin names a good leader with probability bounded below, and its misses vanish | `Scheme.exists_commonCore`, `Scheme.mem_goodAt_of_safe`, `Scheme.goodAt_nonempty`, `Scheme.card_goodAt_count`, `Scheme.le_card_goodAt`, `Scheme.exists_good_leader`, `Scheme.goodCommits`, `Scheme.commitsWithin`, `Scheme.allDecidedBelow`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Async)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -13320,7 +13364,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 421 definitions and structures the report names, in
+The 424 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -20168,6 +20212,42 @@ def fillBlock (k : ℕ) : Block Validator BlockId Payload where
 
 The filled block at gap round `k`: `v2`'s references at that round, plus the added self reference.
 
+#### `goodAt`
+
+*def, `Scheme.Model.Async.lean`*
+
+```lean
+def goodAt (U : BlockRecord Validator BlockId Payload P honest) (r : ℕ) : Finset Validator :=
+  Finset.univ.filter (fun v => ∃ L ∈ U.ids, (U.block L).round = r ∧ (U.block L).creator = v ∧
+    p.commitThreshold ≤ (creatorsOf U.block (certsAt p σ U L r)).card)
+```
+
+**The good set at round `r`**: the validators whose round-`r` block the record's certificates commit, `commit` authors of decision-round blocks certifying it.
+
+#### `good`
+
+*def, `Scheme.Model.Async.lean`*
+
+```lean
+def good (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) : Finset Validator :=
+  goodAt p σ U (S.slotRound k)
+```
+
+The good set at slot `k`'s round.
+
+#### `UnpredictableRunWithin`
+
+*def, `Scheme.Model.Async.lean`*
+
+```lean
+def UnpredictableRunWithin (U : BlockRecord Validator BlockId Payload P honest) (c d N : ℕ) :
+    Prop :=
+  ∀ k, (schemeAnchored p σ).decisionRound (k + c + d - 1) ≤ N →
+    ∃ k', k ≤ k' ∧ k' < k + c ∧ ∀ i < d, S.leader (k' + i) ∈ good p σ U (k' + i)
+```
+
+**The run clause**: in every window of `c` slots below the horizon, a run of `d` consecutive slots led by good leaders.
+
 #### `hydrozoanSlowAnchored`
 
 *def, `Scheme.Model.Hydrozoan.lean`*
@@ -20507,7 +20587,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 619 theorems the body or Appendix A names, each
+The 620 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -28266,6 +28346,14 @@ theorem committed_of_correct_block
 ```
 
 **RS5 — reactive inclusion.** The schedule fixes a `u`-led slot above any round `m` before an execution is named, and a sufficiently grown reactive execution commits it with a leader block whose cone contains `u`'s round-`m` block, so it lands in the agreed ledger.
+
+#### `holds`
+
+*theorem, `Scheme.Async.Proof.lean`*
+
+```lean
+theorem holds : Statement
+```
 
 #### `holds`
 

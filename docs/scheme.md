@@ -69,6 +69,15 @@ are the evidence.
   Hydrozoan's fault model, which admits `n = 3f + 2c + 1`, its carrier is
   safe and progresses, and on records that also ask self-reference it
   lives.
+* **The asynchronous rows are live under the coin** (§11), the coin
+  abstracted as in the Mahi-Mahi and Async BlueBottle arcs. At
+  `2q ≥ n + f + 1`, which every asynchronous row meets, a common core
+  exists; one buffer round gives an honest good leader and the paper's
+  double count, two give `q − f`, and a third adds nothing (a witness).
+  Under the coin clause every window commits and every slot below a run
+  is decided; a uniform coin names a good leader with probability at
+  least the count over `n`, and misses `m` times with probability that
+  vanishes.
 
 **What the table claims and does not hold, or holds otherwise.**
 
@@ -538,13 +547,15 @@ every vote.
   Hydrozoan without its fast path (§10).
 * **Stake.** The scheme counts stake; the arc counts one unit per
   validator.
-* **The asynchronous leader.** The asynchronous rows elect the leader by
-  a coin opened at the decision round. The arc reads a fixed schedule;
-  the coin is modelled in the Mahi-Mahi and Async BlueBottle arcs
-  (`Unpredictable`), not here.
-* **The buffer rounds.** The scheme's paragraph on how many buffer rounds
-  an asynchronous row needs (one at `n = 5f + 1`, more at `n = 3f + 1`)
-  is not formalised.
+* **The asynchronous leader.** The coin is abstracted (§11): by the
+  clause on the schedule and the record, and by a uniform distribution
+  for the probabilities. Its cryptographic construction is not
+  formalised, as in the Mahi-Mahi and Async BlueBottle arcs.
+* **The buffer rounds.** The paper's count is formalised (§11); its claim
+  that a third buffer round adds nothing at every `f` is shown on a
+  witness at `f = 1`, and its formula for `K` leaders,
+  `1 − C(n − |core|, K)/C(n, K)`, is stated only in its deterministic
+  form (`K > n − |core|` gives a good leader).
 * **The hybrid fault model.** The family's `Lives` is stated on the
   core's universes, where a `Faults` instance asks `n ≥ 3f + 1` of the
   slack `f`; that excludes Hybrid Mysticeti's committee `3f + 2c + 1` at
@@ -559,16 +570,14 @@ and inclusion) on the core's universes at every row with
 at `cert ≤ n − slack`. The table's liveness bounds (`Params.Live`) are
 the hypotheses these read. Hybrid Mysticeti progresses on Hydrozoan's
 universe under Hydrozoan's fault model (slack `f + c`), and with
-self-reference lives (§10). The asynchronous rows are live with
-probability one by the coin and the buffer rounds; the development
-proves this rule by rule (Mahi-Mahi, Async BlueBottle), and a statement
-for the family, with the scheme's buffer-round argument, is not written.
+self-reference lives (§10). The asynchronous rows are live under the
+coin for the whole family (§11): a good leader exists by the count with
+no network hypothesis, commits under the coin clause, and a uniform coin
+names one with probability bounded below at every round.
 
 ### 9.4 Plan
 
-1. The asynchronous liveness for the family, with the buffer-round
-   argument.
-2. Stake weights.
+1. Stake weights.
 
 ## 10. Hybrid Mysticeti against Hydrozoan
 
@@ -631,4 +640,77 @@ model admits and the core's excludes. Every threshold of the row is
 least vote.
 
 Nothing in `LeanDag/Hydrozoan/` changes; the arc is read, not edited.
+
+## 11. The asynchronous rows: the coin and the buffer rounds
+
+The asynchronous rows add `b` buffer rounds between the proposal and the
+vote (`b = voteOffset − 1`) and elect a wave's leader by a coin opened at
+the decision round. The coin is abstracted as the Mahi-Mahi and Async
+BlueBottle arcs abstract it (`mahi-mahi.md` §5, `async-bluebottle.md`
+§6): a deterministic count of the leaders that would commit, a clause on
+the schedule that the coin makes true, and a uniform distribution for
+the probabilities. `Scheme/Model/Async.lean` defines `goodAt p σ U r`,
+the validators whose round-`r` block the record's certificates commit
+(`commit` authors of decision-round blocks certify it), and the clauses `UnpredictableWithin` and `UnpredictableRunWithin`.
+`Scheme/Async/Statement.lean` states, and `Proof.lean` proves, on any
+record whose blocks reference `q` distinct authors one round down and
+whose validators outside `honest`, at most `f`, may equivocate, at every
+row and vote:
+
+**The count, with no network hypothesis.**
+
+* **The common core** (`CommonCore`, from `exists_commonCore`): at
+  `2q ≥ n + f + 1`, a block at round `r + 2` gives an honest round-`r`
+  block in the history of every block from round `r + 2` up. This is the
+  core's double count (`Common/CommonCore.lean`, at `q = n − f`) at a
+  general quorum: some honest author collects so many honest supporters
+  that every round-`(r+2)` block names one (`core_arith`). Every
+  asynchronous row meets the condition at `q = n − f − c`: Mahi-Mahi,
+  Cordial Miners Async, Async Nemo-Nemo and Hybrid Mahi-Mahi at
+  equality, Blue Bottle Async and Async Orcaella above it.
+* **A safe block is good** (`SafeGood`): an honest block every vote-round
+  block reaches is voted by each, certified by every decision-round
+  block, and committed when a population of the decision round meets the
+  commit threshold (and `cert ≤ q` where votes are certified a round
+  later).
+* **One buffer round** (`GoodNonempty`): the core of the proposal round
+  is good. **The double count** (`GoodCount`): with an honest population
+  `T` of the buffer round, `|T|·(q − f) + G·(n − q) ≤ G·|T| + |honest|·(n − q)`,
+  `G` the honest good validators, since a block named by more than
+  `n − q` of `T` is reached from two rounds up. At `|T| = |honest| = n − f`
+  this is the paper's `|core| ≥ h − ⌊mh/(h − m)⌋`: `4` at Blue Bottle
+  Async `f = 1`, `2` at Mahi-Mahi `f = 1, 2`.
+* **Two buffer rounds** (`GoodCard`): the core of the buffer round's first
+  round is reached by every block two rounds above it, and so is each of
+  its honest references: `q ≤ G + f`, the paper's `h − m`.
+* **Several leaders** (`MultiLeader`): leaders of a round more than `n`
+  less the good set include a good one.
+
+**Liveness under the clause.** A good leader's slot commits on every
+view holding its decision round (`GoodCommits`); under the single-hit
+clause every window commits (`CommitsWithin`); under the run clause,
+when a run spans eligibility, every slot below it is decided
+(`AllDecidedBelow`, the common descent with the least-id tie-break). Both
+conclude on every view holding the rounds up to the clause's horizon, a
+view a validator can hold.
+
+**The coin** (`CoinCommit`, `CoinTail`, through Steelhead's counts,
+`Steelhead/Helpers/Coin.lean`, whose fault model a fault-free instance
+supplies inside the proofs): a uniform coin names a good leader with
+probability at least `1/n` at one buffer round and `(q − f)/n` at two;
+`m` independent coins over rounds whose good sets hold `c` validators all
+miss with probability at most `((n − c)/n)^m`, which vanishes.
+
+`LeanDagTest/Scheme/Async.lean` shows the count on data at the Mahi-Mahi
+row: on `full4` every round-`0` block is good; on `starve4`, where one
+honest block is referenced only along its author's own chain, the good
+set is `{0, 2, 3}` at one, two and three buffer rounds alike, its honest
+part `q − f = 2`. The count of two buffer rounds is tight there, and a
+third buffer round adds nothing.
+
+**Not formalised.** Measurability of the good set (it reads only rounds
+up to the decision round, which is what makes the clause the coin's
+consequence), the local commit under a pacing structure, the
+hypergeometric probability for `K` leaders, and the general-`f`
+construction for "a third buffer round adds nothing".
 
