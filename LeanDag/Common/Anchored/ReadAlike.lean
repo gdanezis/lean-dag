@@ -12,7 +12,7 @@ holds of the other.
 
 namespace LeanDag
 
-namespace Scheme
+namespace AnchoredRule
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [DecidableEq BlockId] {Payload : Type}
@@ -103,6 +103,6 @@ theorem toDagRuleOn_eq (I : BlockRecord Validator BlockId Payload P honest → P
   funext S U V k v
   exact propext (h S U.val U.property V k v)
 
-end Scheme
+end AnchoredRule
 
 end LeanDag

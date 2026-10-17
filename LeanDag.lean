@@ -18,6 +18,7 @@ import LeanDag.Common.Dedup
 import LeanDag.Common.DedupLemmas
 import LeanDag.Common.Persistence
 import LeanDag.Common.CommonCore
+import LeanDag.Common.Anchored.ReadAlike
 import LeanDag.Mysticeti.Model.Validity
 import LeanDag.Mysticeti.Model.Rule
 import LeanDag.Mysticeti.Rule
@@ -524,7 +525,6 @@ import LeanDag.Scheme.Model.Reactive
 import LeanDag.Scheme.Model.AsyncPace
 import LeanDag.Scheme.Table.Statement
 import LeanDag.Scheme.Table.Proof
-import LeanDag.Scheme.Helpers.Transfer
 import LeanDag.Scheme.Helpers.Votes
 import LeanDag.Scheme.Helpers.Rows
 import LeanDag.Scheme.Helpers.Variants

@@ -5231,6 +5231,30 @@ block is `v1`'s. `v1` must be excluded because its own next filled
 block references the candidate. The audit's prompt-skip cell is now
 collected; Bluestreak's open cell is adaptive leaders alone.
 
+### 11.51 The common core at any quorum, and the scheme's general lemmas in Common
+
+**The common core.** `Common/CommonCore.lean` now proves the count at
+any block record with quorum `q` and at most `f` validators outside its
+honest set: at `2q ≥ n + f + 1`, some honest round-`r` block has so many
+honest supporters at round `r + 1` that with `q` they exceed the round's
+author pool (`exists_honest_common_support`), so it lies in the history
+of every block from round `r + 2` up (`exists_commonCore`). The core's
+T3a and T3c are the case `q = n − f`, where the condition is
+`n ≥ 3f + 1` (`card_add_f_lt_two_mul_quorum`); their statements are
+unchanged and their proofs are the general ones. Mahi-Mahi's own
+`exists_commonCore` and the scheme's copy are deleted; Mahi-Mahi, Async
+Blue Bottle and the scheme call the general lemma. `correctBlocksAt`
+stays for the DoS arc.
+
+**The scheme's general lemmas.** Visibility at a quorum
+(`card_inHistory_ge`) moves to `Common/History.lean`; the threshold form
+of the double count that keeps the count of lightly related members
+(`card_mul_le_of_bipartite_filter`) to `Common/Counting.lean`; and
+`ReadAlike` with `toDagRule_eq` and `toDagRuleOn_eq` to
+`Common/Anchored/ReadAlike.lean`, in the namespace `AnchoredRule`.
+Async Blue Bottle's weaker `card_mul_le_of_bipartite` and Steelhead's
+`decided_of_agreeOn` are left as they are.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

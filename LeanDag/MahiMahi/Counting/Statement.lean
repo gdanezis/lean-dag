@@ -26,8 +26,8 @@ variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
 
 /-- **The common core.** If some block exists at round `r + 2`, a correct
 validator's round-`r` block lies in the causal history of every block at
-every round `≥ r + 2`. The core's T3c (`CommonCore.lean`) at round `r + 2`,
-carried upward through references. -/
+every round `≥ r + 2`: the common core of `Common/CommonCore.lean` at the
+core's quorum. -/
 def CommonCore (U : BlockUniverse Validator BlockId Payload) : Prop :=
   ∀ (r : ℕ) (c₀ : BlockId),
     -- some block exists two rounds above r (its own quorum of references

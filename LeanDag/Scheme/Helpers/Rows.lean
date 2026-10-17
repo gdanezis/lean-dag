@@ -1,4 +1,4 @@
-import LeanDag.Scheme.Helpers.Transfer
+import LeanDag.Common.Anchored.ReadAlike
 import LeanDag.Scheme.Helpers.Votes
 import LeanDag.Mysticeti.Rule
 import LeanDag.Odontoceti.Decision
@@ -41,7 +41,7 @@ theorem one_le_card_iff_linkedVia {P : Validity Validator BlockId Payload}
 /-- **The Mysticeti row reads as `coreAnchored`.** -/
 theorem readAlike_mysticeti (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
     (U : BlockUniverse Validator BlockId Payload) :
-    ReadAlike (schemeAnchored (Params.mysticeti (Fintype.card Validator) F.f) σ)
+    AnchoredRule.ReadAlike (schemeAnchored (Params.mysticeti (Fintype.card Validator) F.f) σ)
       (coreAnchored Validator BlockId Payload) U where
   waveAt := fun _ => rfl
   rungs := rfl
@@ -94,7 +94,7 @@ theorem link_blueBottlePS (σ : VoteSel Validator BlockId Payload ValidWrt Corre
 /-- **The Blue Bottle PS row reads as `odontocetiAnchored`.** -/
 theorem readAlike_blueBottlePS (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
     (U : BlockUniverse Validator BlockId Payload) :
-    ReadAlike (schemeAnchored (Params.blueBottlePS (Fintype.card Validator) F.f) σ)
+    AnchoredRule.ReadAlike (schemeAnchored (Params.blueBottlePS (Fintype.card Validator) F.f) σ)
       (Odontoceti.odontocetiAnchored Validator BlockId Payload) U where
   waveAt := fun _ => rfl
   rungs := rfl
@@ -134,7 +134,7 @@ row's skip threshold `4f + 2c + 1` is `n − f − c`. -/
 theorem readAlike_orcaella (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
     (U : BlockUniverse Validator BlockId Payload)
     (hn : Fintype.card Validator = 5 * H.fb + 3 * H.fc + 1) :
-    ReadAlike (schemeAnchored (Params.orcaella (Fintype.card Validator) H.fb H.fc) σ)
+    AnchoredRule.ReadAlike (schemeAnchored (Params.orcaella (Fintype.card Validator) H.fb H.fc) σ)
       (Hybrid.hybridAnchored Validator BlockId Payload
         (Fintype.card Validator - 3 * H.fb - 2 * H.fc)) U where
   waveAt := fun _ => rfl

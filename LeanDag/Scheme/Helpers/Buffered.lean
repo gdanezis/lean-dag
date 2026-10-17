@@ -1,4 +1,4 @@
-import LeanDag.Scheme.Helpers.Transfer
+import LeanDag.Common.Anchored.ReadAlike
 import LeanDag.Scheme.Helpers.Rows
 import LeanDag.Scheme.Model.LeastSel
 import LeanDag.Scheme.Helpers.Variants
@@ -115,7 +115,7 @@ theorem link_mahiMahi (hw : 3 ≤ w) {i k : ℕ} {A L : BlockId} (hL : IsLeaderB
 
 /-- **The Mahi-Mahi row reads as `mahiMahiAnchored`**, at the least vote. -/
 theorem readAlike_mahiMahi (hw : 3 ≤ w) (U : BlockUniverse Validator BlockId Payload) :
-    ReadAlike (schemeAnchored (Params.mahiMahi w (Fintype.card Validator) F.f) leastSel)
+    AnchoredRule.ReadAlike (schemeAnchored (Params.mahiMahi w (Fintype.card Validator) F.f) leastSel)
       (MahiMahi.mahiMahiAnchored Validator BlockId Payload w) U where
   waveAt := fun _ => rfl
   rungs := rfl
@@ -167,7 +167,7 @@ theorem cordialAsyncLaws (hw : 2 ≤ w) : (cordialAsyncAnchored Validator BlockI
 the least vote: its skip threshold `n` is never met on the core's
 universe. -/
 theorem readAlike_cordialAsync (U : BlockUniverse Validator BlockId Payload) :
-    ReadAlike (schemeAnchored (Params.cordialMinersAsync (Fintype.card Validator) F.f) leastSel)
+    AnchoredRule.ReadAlike (schemeAnchored (Params.cordialMinersAsync (Fintype.card Validator) F.f) leastSel)
       (cordialAsyncAnchored Validator BlockId Payload 5) U where
   waveAt := fun _ => rfl
   rungs := rfl
@@ -210,7 +210,7 @@ theorem link_blueBottleAsync {i k : ℕ} {A L : BlockId} (hL : IsLeaderBlock U k
 /-- **The Blue Bottle Async row reads as `asyncBlueBottleAnchored`**, at
 the least vote. -/
 theorem readAlike_blueBottleAsync (U : BlockUniverse Validator BlockId Payload) :
-    ReadAlike (schemeAnchored (Params.blueBottleAsync (Fintype.card Validator) F.f) leastSel)
+    AnchoredRule.ReadAlike (schemeAnchored (Params.blueBottleAsync (Fintype.card Validator) F.f) leastSel)
       (AsyncBlueBottle.asyncBlueBottleAnchored Validator BlockId Payload) U where
   waveAt := fun _ => rfl
   rungs := rfl
