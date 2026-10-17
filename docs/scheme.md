@@ -72,12 +72,14 @@ are the evidence.
 * **The asynchronous rows are live under the coin** (§11), the coin
   abstracted as in the Mahi-Mahi and Async BlueBottle arcs. At
   `2q ≥ n + f + 1`, which every asynchronous row meets, a common core
-  exists; one buffer round gives an honest good leader and the paper's
-  double count, two give `q − f`, and a third adds nothing (a witness).
-  Under the coin clause every window commits and every slot below a run
-  is decided; a uniform coin names a good leader with probability at
-  least the count over `n`, and misses `m` times with probability that
-  vanishes.
+  exists; one buffer round gives a safe leader (an honest one whose block
+  every vote-round block reaches) and the paper's double count, two give
+  `q − f`, and a third adds nothing (a witness). A uniform coin names a
+  safe leader with probability at least the count over `n`, and misses
+  `m` times with probability that vanishes. Under eventual delivery alone,
+  with no time bound (§11.1), a safe leader's slot commits on every
+  reliable validator's own view from some time on, every window commits
+  and every slot below a run is decided.
 * **Every row is safe and live** (§12): Cordial Miners on the core's
   universes; the rows with crash faults under the hybrid fault model with
   self-reference; the asynchronous rows ready for the count.
@@ -585,9 +587,10 @@ at `cert ≤ n − slack`. The table's liveness bounds (`Params.Live`) are
 the hypotheses these read. Hybrid Mysticeti progresses on Hydrozoan's
 universe under Hydrozoan's fault model (slack `f + c`), and with
 self-reference lives (§10). The asynchronous rows are live under the
-coin for the whole family (§11): a good leader exists by the count with
-no network hypothesis, commits under the coin clause, and a uniform coin
-names one with probability bounded below at every round.
+coin for the whole family (§11): a safe leader exists by the count with
+no network hypothesis, a uniform coin names one with probability bounded
+below at every round, and under eventual delivery its slot commits on
+every reliable validator's own view (§11.1).
 
 ### 9.4 Plan
 
@@ -665,7 +668,13 @@ BlueBottle arcs abstract it (`mahi-mahi.md` §5, `async-bluebottle.md`
 the schedule that the coin makes true, and a uniform distribution for
 the probabilities. `Scheme/Model/Async.lean` defines `goodAt p σ U r`,
 the validators whose round-`r` block the record's certificates commit
-(`commit` authors of decision-round blocks certify it), and the clauses `UnpredictableWithin` and `UnpredictableRunWithin`.
+(`commit` authors of decision-round blocks certify it); `safeAt p U r`,
+the honest validators whose round-`r` block every vote-round block
+reaches; and the clauses `UnpredictableWithin` and
+`UnpredictableRunWithin` over good leaders, `SafeWithin` and
+`SafeRunWithin` over safe ones. The counts bound the safe set; the good
+set contains it once the decision round is populated, and may also
+contain validators whose blocks only Byzantine certificates commit.
 `Scheme/Async/Statement.lean` states, and `Proof.lean` proves, on any
 record whose blocks reference `q` distinct authors one round down and
 whose validators outside `honest`, at most `f`, may equivocate, at every
@@ -682,51 +691,95 @@ row and vote:
   asynchronous row meets the condition at `q = n − f − c`: Mahi-Mahi,
   Cordial Miners Async, Async Nemo-Nemo and Hybrid Mahi-Mahi at
   equality, Blue Bottle Async and Async Orcaella above it.
-* **A safe block is good** (`SafeGood`): an honest block every vote-round
-  block reaches is voted by each, certified by every decision-round
-  block, and committed when a population of the decision round meets the
-  commit threshold (and `cert ≤ q` where votes are certified a round
-  later).
-* **One buffer round** (`GoodNonempty`): the core of the proposal round
-  is good. **The double count** (`GoodCount`): with an honest population
+* **One buffer round** (`SafeNonempty`): the core of the proposal round
+  is safe. **The double count** (`SafeCount`): with an honest population
   `T` of the buffer round, `|T|·(q − f) + G·(n − q) ≤ G·|T| + |honest|·(n − q)`,
-  `G` the honest good validators, since a block named by more than
-  `n − q` of `T` is reached from two rounds up. At `|T| = |honest| = n − f`
-  this is the paper's `|core| ≥ h − ⌊mh/(h − m)⌋`: `4` at Blue Bottle
-  Async `f = 1`, `2` at Mahi-Mahi `f = 1, 2`.
-* **Two buffer rounds** (`GoodCard`): the core of the buffer round's first
+  `G` the size of the safe set, since a block named by more than `n − q`
+  of `T` is reached from two rounds up. At `|T| = |honest| = n − f` this
+  is the paper's `|core| ≥ h − ⌊mh/(h − m)⌋`: `4` at Blue Bottle Async
+  `f = 1`, `2` at Mahi-Mahi `f = 1, 2`.
+* **Two buffer rounds** (`SafeCard`): the core of the buffer round's first
   round is reached by every block two rounds above it, and so is each of
   its honest references: `q ≤ G + f`, the paper's `h − m`.
 * **Several leaders** (`MultiLeader`): leaders of a round more than `n`
-  less the good set include a good one.
+  less the safe set include a safe one.
+* **A safe validator is good** (`SafeGood`): every vote-round block
+  reaches its block, so votes for it; every decision-round block
+  certifies it (`isCert_of_safe`, where `cert ≤ q` if votes are certified
+  a round later); and a population of the decision round meeting the
+  commit threshold commits it.
 
-**Liveness under the clause.** A good leader's slot commits on every
-view holding its decision round (`GoodCommits`); under the single-hit
-clause every window commits (`CommitsWithin`); under the run clause,
-when a run spans eligibility, every slot below it is decided
-(`AllDecidedBelow`, the common descent with the least-id tie-break). Both
-conclude on every view holding the rounds up to the clause's horizon, a
-view a validator can hold.
+**Liveness under the clause, on a covering view.** A good leader's slot
+commits on every view holding its decision round (`GoodCommits`); under
+the single-hit clause every window commits (`CommitsWithin`); under the
+run clause, when a run spans eligibility, every slot below it is decided
+(`AllDecidedBelow`, the common descent with the least-id tie-break). All
+three conclude on views holding every block of the record up to the
+clause's horizon. §11.1 replaces that hypothesis by eventual delivery.
 
 **The coin** (`CoinCommit`, `CoinTail`, through Steelhead's counts,
 `Steelhead/Helpers/Coin.lean`, whose fault model a fault-free instance
-supplies inside the proofs): a uniform coin names a good leader with
+supplies inside the proofs): a uniform coin names a safe leader with
 probability at least `1/n` at one buffer round and `(q − f)/n` at two;
-`m` independent coins over rounds whose good sets hold `c` validators all
+`m` independent coins over rounds whose safe sets hold `c` validators all
 miss with probability at most `((n − c)/n)^m`, which vanishes.
 
 `LeanDagTest/Scheme/Async.lean` shows the count on data at the Mahi-Mahi
 row: on `full4` every round-`0` block is good; on `starve4`, where one
 honest block is referenced only along its author's own chain, the good
-set is `{0, 2, 3}` at one, two and three buffer rounds alike, its honest
-part `q − f = 2`. The count of two buffer rounds is tight there, and a
-third buffer round adds nothing.
+set is `{0, 2, 3}` at one, two and three buffer rounds alike, and the
+safe set `{2, 3}`, of size `q − f = 2`. The count of two buffer rounds is
+tight there, and a third buffer round adds nothing.
 
-**Not formalised.** Measurability of the good set (it reads only rounds
-up to the decision round, which is what makes the clause the coin's
-consequence), the local commit under a pacing structure, the
-hypergeometric probability for `K` leaders, and the general-`f`
-construction for "a third buffer round adds nothing".
+### 11.1 On a validator's own view, under eventual delivery
+
+Asynchronous liveness should rest on eventual delivery alone. The
+timed pacing trunk (`PaceCore`) bounds the delay after GST, and the local
+commit of the Mahi-Mahi and Async BlueBottle arcs reads that bound.
+`Scheme/Model/AsyncPace.lean` defines `AsyncPace qp U T N`, pacing with no
+clock: a reliable validator's holdings grow, are causally closed, and
+include its own blocks from some time on; whatever one reliable
+validator holds, every reliable validator holds at some later time
+(`ConvergesEventually`, the untimed half of the trunk's `converges`); and
+a reliable validator holding `qp` distinct round-`n` authors gets past
+round `n`. The quorum `qp` is a parameter, so the hybrid committees are
+covered. `AsyncPace.viewAt` is a reliable validator's view at a time: its
+holdings.
+
+`Scheme/AsyncLocal/Statement.lean` states, and `Proof.lean` proves, with
+the reliable set `T` at least `qp` strong, at every row and vote:
+
+* **Delivery** (`Delivered`): every reliable block of the record is held
+  by every reliable validator from some time on. The record is finite,
+  each of its reliable blocks is eventually held, and holdings only grow
+  (`AsyncPace.exists_time`).
+* **Production** (`Populated`): every round below the horizon has a block
+  by every reliable validator. At each round the reliable blocks are
+  eventually held, which is `qp` authors.
+* **A safe leader's slot commits** (`SafeCommits`) on every reliable
+  validator's own view from some time on, when `T` meets the commit
+  threshold: the view holds every reliable decision-round block, and each
+  certifies the safe block.
+* **Every window commits, and every slot below a run is decided**
+  (`CommitsWithin`, `AllDecidedBelow`), on every reliable validator's own
+  view from some time on, under `SafeWithin` and `SafeRunWithin`.
+* **Every timed run is an asynchronous one** (`OfPaceCore`): the trunk,
+  with a progress rule at `qp`, forgets its clock.
+
+The coin enters as before: it names a safe leader with the probabilities
+of `CoinCommit` and `CoinTail`. A leader that is only good may owe its
+commit to Byzantine certificates that a reliable validator never
+receives, which is why the local results read the safe set.
+
+`LeanDagTest/Scheme/AsyncLocal.lean` reads the hybrid three-replica run
+of §13, with its clock forgotten, as an asynchronous run at `qp = 2`:
+every leader block is safe there, and every slot, and every window of one
+slot, commits on each live replica's own view from some time on.
+
+**Not formalised.** Measurability of the safe set (it reads only rounds up
+to the vote round, which is what makes the clause the coin's
+consequence), the hypergeometric probability for `K` leaders, and the
+general-`f` construction for "a third buffer round adds nothing".
 
 ## 12. Every row, safe and live
 

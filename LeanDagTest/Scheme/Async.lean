@@ -13,7 +13,8 @@ Four validators, validator `0` Byzantine, `f = 1`, `q = 3`
   `{0, 2, 3}` one round down. The good set is `{0, 2, 3}` at one, two and
   three buffer rounds alike (waves four, five and six), its honest part
   `2 = q − f`: the count of two buffer rounds is tight, and a third buffer
-  round adds nothing.
+  round adds nothing. The safe set, its honest validators whose block every
+  vote-round block reaches, is `{2, 3}`.
 -/
 
 namespace LeanDagTest
@@ -52,22 +53,24 @@ example : goodAt (Params.mahiMahi 5 4 1) σ4 starve4 0 = {0, 2, 3} := by decide
 example : goodAt (Params.mahiMahi 6 4 1) σ4 starve4 0 = {0, 2, 3} := by decide
 example : (goodAt (Params.mahiMahi 6 4 1) σ4 starve4 0 ∩ Correct).card = 3 - 1 := by decide
 
+/-- The safe set of `starve4`: the honest validators whose round-`0` block
+every vote-round block reaches. At two buffer rounds it is `{2, 3}`, of
+size `2 = q − f`, and the good set adds the Byzantine validator `0`. -/
+example : safeAt (Params.mahiMahi 5 4 1) starve4 0 = {2, 3} := by decide
+example : safeAt (Params.mahiMahi 6 4 1) starve4 0 = {2, 3} := by decide
+
 /-- The two-buffer count on the core's universe at the Mahi-Mahi row of wave
 five: its hypotheses on the record are the fault model's, and it gives
-`f + 1` honest good validators. -/
+`q − f` safe validators. -/
 example {Validator : Type} [Fintype Validator] [DecidableEq Validator] [F : Faults Validator]
     {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
-    (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
     (U : BlockUniverse Validator BlockId Payload) (r : ℕ) (T : Finset Validator)
-    (hT : T.Nonempty) (hpop3 : PopulatedOn U T (r + 3)) (hpop : PopulatedOn U T (r + 4))
-    (hcm : quorumCard Validator ≤ T.card) :
+    (hT : T.Nonempty) (hpop3 : PopulatedOn U T (r + 3)) :
     quorumCard Validator ≤
-      (goodAt (Params.mahiMahi 5 (Fintype.card Validator) F.f) σ U r ∩ Correct).card + F.f :=
-  Async.goodCard Validator BlockId Payload ValidWrt (quorumCard Validator) Correct F.f _ σ U r T
-    card_compl_correct_le (by have := F.card_validators; omega) (by simp [Params.mahiMahi])
-    (fun _ => ⟨by simp [Params.mahiMahi], by simp [Params.mahiMahi]⟩)
-    (by simp [Params.voteOffset, Params.mahiMahi]) hT hpop3 (by simpa [Params.mahiMahi] using hpop)
-    (by simpa [Params.mahiMahi] using hcm)
+      (safeAt (Params.mahiMahi 5 (Fintype.card Validator) F.f) U r).card + F.f :=
+  Async.safeCard Validator BlockId Payload ValidWrt (quorumCard Validator) Correct F.f _ U r T
+    card_compl_correct_le (by have := F.card_validators; omega)
+    (by simp [Params.voteOffset, Params.mahiMahi]) hT hpop3
 
 /-! The one-buffer double count `|T|·(q − f) + G·(n − q) ≤ G·|T| + |honest|·(n − q)` at
 `|T| = |honest| = n − f` gives the paper's worst-case cores: Blue Bottle Async at `f = 1`

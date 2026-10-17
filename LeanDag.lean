@@ -521,6 +521,7 @@ import LeanDag.Scheme.Model.Hydrozoan
 import LeanDag.Scheme.Model.Async
 import LeanDag.Scheme.Model.NoFaults
 import LeanDag.Scheme.Model.Reactive
+import LeanDag.Scheme.Model.AsyncPace
 import LeanDag.Scheme.Table.Statement
 import LeanDag.Scheme.Table.Proof
 import LeanDag.Scheme.Helpers.Transfer
@@ -542,6 +543,7 @@ import LeanDag.Scheme.Helpers.Async
 import LeanDag.Scheme.Helpers.AsyncCoin
 import LeanDag.Scheme.Helpers.Reactive
 import LeanDag.Scheme.Helpers.ReactiveMysticeti
+import LeanDag.Scheme.Helpers.AsyncPace
 import LeanDag.Scheme.Equiv.Statement
 import LeanDag.Scheme.Equiv.Proof
 import LeanDag.Scheme.Safety.Statement
@@ -560,3 +562,5 @@ import LeanDag.Scheme.Rows.Statement
 import LeanDag.Scheme.Rows.Proof
 import LeanDag.Scheme.Reactive.Statement
 import LeanDag.Scheme.Reactive.Proof
+import LeanDag.Scheme.AsyncLocal.Statement
+import LeanDag.Scheme.AsyncLocal.Proof

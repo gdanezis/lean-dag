@@ -16,13 +16,13 @@ whose validators outside `honest`, at most `f`, may equivocate:
   general quorum: some honest author collects so many honest supporters
   that every round-`(r+2)` block, naming `q` of the round's authors,
   names one of them;
-* **a safe block is committed** (`mem_goodAt_of_safe`): an honest block
+* **a safe block is committed** (`safeAt_subset_goodAt`): an honest block
   every vote-round block reaches is voted by each, certified by every
-  decision-round block, and committed when a population of the decision
-  round meets the commit threshold;
-* the good set is then bounded below: at one buffer round, by the core of
-  the proposal round and by a double count over the buffer round; at two,
-  by the honest references of the core of the buffer round.
+  decision-round block (`isCert_of_safe`), and committed when a population
+  of the decision round meets the commit threshold;
+* the safe set is bounded below: at one buffer round, by the core of the
+  proposal round and by a double count over the buffer round; at two, by
+  the honest references of the core of the buffer round.
 -/
 
 namespace LeanDag
@@ -200,21 +200,35 @@ theorem exists_commonCore {f r : ℕ} (hf : honestᶜ.card ≤ f)
 
 variable {p : Params} (σ : VoteSel Validator BlockId Payload P honest)
 
-/-- **A safe honest block is good**: every vote-round block reaches it, so
-each votes for it, every decision-round block certifies it (its own vote,
-or its references' votes from at least `q ≥ cert` authors), and a
-population of the decision round meeting the commit threshold commits it. -/
-theorem mem_goodAt_of_safe {r : ℕ} {L : BlockId} {T : Finset Validator}
-    (hw : 2 ≤ p.waveLength)
-    (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
-    (hpop : PopulatedOn U T (r + (p.waveLength - 1))) (hcm : p.commitThreshold ≤ T.card)
-    (hL : L ∈ U.ids) (hLr : (U.block L).round = r) (hLc : (U.block L).creator ∈ honest)
+omit [Fintype Validator] [P.Quorate q] in
+theorem mem_safeAt {r : ℕ} {v : Validator} :
+    v ∈ safeAt p U r ↔ v ∈ honest ∧ ∃ L ∈ U.ids, (U.block L).round = r ∧
+      (U.block L).creator = v ∧
+      ∀ b ∈ U.ids, (U.block b).round = r + p.voteOffset → Reaches U b L := by
+  unfold safeAt
+  rw [Finset.mem_filter]
+  refine and_congr_right fun _ => exists_congr fun L => and_congr_right fun _ =>
+    and_congr_right fun _ => and_congr_right fun _ =>
+      forall₂_congr fun b hb => imp_congr_right fun _ => mem_history_iff hb
+
+omit [Fintype Validator] [P.Quorate q] in
+/-- An honest block every vote-round block reaches is safe. -/
+theorem mem_safeAt_of_reaches {r : ℕ} {L : BlockId} (hL : L ∈ U.ids)
+    (hLr : (U.block L).round = r) (hLc : (U.block L).creator ∈ honest)
     (hsafe : ∀ b ∈ U.ids, (U.block b).round = r + p.voteOffset → Reaches U b L) :
-    (U.block L).creator ∈ goodAt p σ U r := by
-  refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, L, hL, hLr, rfl, ?_⟩
-  refine le_trans hcm (Finset.card_le_card fun v hv => ?_)
-  obtain ⟨C, hC, hCc, hCr⟩ := hpop v hv
-  refine mem_creatorsOf.mpr ⟨C, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hC, hCr⟩, ?_⟩, hCc⟩
+    (U.block L).creator ∈ safeAt p U r :=
+  mem_safeAt.mpr ⟨hLc, L, hL, hLr, rfl, hsafe⟩
+
+omit [Fintype Validator] in
+/-- **Every decision-round block certifies a safe block**: every vote-round
+block reaches it, so votes for it, and a decision-round block's certificate
+is its own vote, or its references' votes from at least `q ≥ cert` authors. -/
+theorem isCert_of_safe {r : ℕ} {L : BlockId} (hw : 2 ≤ p.waveLength)
+    (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
+    (hL : L ∈ U.ids) (hLr : (U.block L).round = r) (hLc : (U.block L).creator ∈ honest)
+    (hsafe : ∀ b ∈ U.ids, (U.block b).round = r + p.voteOffset → Reaches U b L)
+    {C : BlockId} (hC : C ∈ U.ids) (hCr : (U.block C).round = r + (p.waveLength - 1)) :
+    IsCert p σ U C L := by
   unfold IsCert
   split
   · rename_i hv
@@ -237,63 +251,75 @@ theorem mem_goodAt_of_safe {r : ℕ} {L : BlockId} {T : Finset Validator}
     rw [hall]
     exact le_trans hcq (U.creators_quorum hC (by omega))
 
-/-! ## The good set -/
-
-/-- **One buffer round: the good set has an honest member.** The common
-core of the proposal round is reached by every block from two rounds up,
-the vote round among them. -/
-theorem goodAt_nonempty {f r : ℕ} {T : Finset Validator} (hf : honestᶜ.card ≤ f)
-    (hq2 : Fintype.card Validator + f + 1 ≤ 2 * q) (hw : 2 ≤ p.waveLength)
+/-- **A safe validator is good**: every decision-round block certifies its
+block, and a population of the decision round meeting the commit threshold
+commits it. -/
+theorem safeAt_subset_goodAt {r : ℕ} {T : Finset Validator}
+    (hw : 2 ≤ p.waveLength)
     (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
-    (hvo : 2 ≤ p.voteOffset) (hT : T.Nonempty) (hpop2 : PopulatedOn U T (r + 2))
     (hpop : PopulatedOn U T (r + (p.waveLength - 1))) (hcm : p.commitThreshold ≤ T.card) :
-    (goodAt p σ U r ∩ honest).Nonempty := by
+    safeAt p U r ⊆ goodAt p σ U r := by
+  intro w hw'
+  obtain ⟨hwh, L, hL, hLr, rfl, hsafe⟩ := mem_safeAt.mp hw'
+  refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, L, hL, hLr, rfl, ?_⟩
+  refine le_trans hcm (Finset.card_le_card fun v hv => ?_)
+  obtain ⟨C, hC, hCc, hCr⟩ := hpop v hv
+  exact mem_creatorsOf.mpr ⟨C, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hC, hCr⟩,
+    isCert_of_safe σ hw hcv hL hLr hwh hsafe hC hCr⟩, hCc⟩
+
+/-! ## The safe set -/
+
+/-- **One buffer round: the safe set is nonempty.** The common core of the
+proposal round is reached by every block from two rounds up, the vote round
+among them. -/
+theorem safeAt_nonempty {f r : ℕ} {T : Finset Validator} (hf : honestᶜ.card ≤ f)
+    (hq2 : Fintype.card Validator + f + 1 ≤ 2 * q) (hvo : 2 ≤ p.voteOffset) (hT : T.Nonempty)
+    (hpop2 : PopulatedOn U T (r + 2)) :
+    (safeAt p U r).Nonempty := by
   obtain ⟨v, hv⟩ := hT
   obtain ⟨c₀, hc₀, -, hc₀r⟩ := hpop2 v hv
   obtain ⟨b, hb, hbr, hbh, hreach⟩ := exists_commonCore hf hq2 hc₀ hc₀r
-  exact ⟨_, Finset.mem_inter.mpr ⟨mem_goodAt_of_safe σ hw hcv hpop hcm hb hbr hbh
-    fun x hx hxr => hreach x hx (by omega), hbh⟩⟩
+  exact ⟨_, mem_safeAt_of_reaches hb hbr hbh fun x hx hxr => hreach x hx (by omega)⟩
 
-/-- **Two buffer rounds: the good set holds `q − f` honest validators.** The
-common core of the round above the proposal is reached by every block from
-two rounds above it, the vote round among them, and so is each of its
-honest references. -/
-theorem le_card_goodAt {f r : ℕ} {T : Finset Validator} (hf : honestᶜ.card ≤ f)
-    (hq2 : Fintype.card Validator + f + 1 ≤ 2 * q) (hw : 2 ≤ p.waveLength)
-    (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
-    (hvo : 3 ≤ p.voteOffset) (hT : T.Nonempty) (hpop3 : PopulatedOn U T (r + 3))
-    (hpop : PopulatedOn U T (r + (p.waveLength - 1))) (hcm : p.commitThreshold ≤ T.card) :
-    q ≤ (goodAt p σ U r ∩ honest).card + f := by
+/-- **Two buffer rounds: the safe set holds `q − f` validators.** The common
+core of the round above the proposal is reached by every block from two
+rounds above it, the vote round among them, and so is each of its honest
+references. -/
+theorem le_card_safeAt {f r : ℕ} {T : Finset Validator} (hf : honestᶜ.card ≤ f)
+    (hq2 : Fintype.card Validator + f + 1 ≤ 2 * q) (hvo : 3 ≤ p.voteOffset) (hT : T.Nonempty)
+    (hpop3 : PopulatedOn U T (r + 3)) :
+    q ≤ (safeAt p U r).card + f := by
   obtain ⟨v, hv⟩ := hT
   obtain ⟨c₀, hc₀, -, hc₀r⟩ := hpop3 v hv
   obtain ⟨c, hc, hcr, -, hreach⟩ :=
     exists_commonCore (r := r + 1) hf hq2 hc₀ (by rw [hc₀r])
-  have hsub : creatorsOf U.block (U.block c).refs ∩ honest ⊆ goodAt p σ U r ∩ honest := by
+  have hsub : creatorsOf U.block (U.block c).refs ∩ honest ⊆ safeAt p U r := by
     intro w hw'
     obtain ⟨hwc, hwh⟩ := Finset.mem_inter.mp hw'
     obtain ⟨L, hL, rfl⟩ := mem_creatorsOf.mp hwc
     have hLU := U.complete c hc L hL
     have hLr : (U.block L).round = r := by have := U.round_of_mem_refs hc hL; omega
-    exact Finset.mem_inter.mpr ⟨mem_goodAt_of_safe σ hw hcv hpop hcm hLU hLr hwh
-      fun x hx hxr => (hreach x hx (by omega)).trans (Reaches.single hL), hwh⟩
+    exact mem_safeAt_of_reaches hLU hLr hwh
+      fun x hx hxr => (hreach x hx (by omega)).trans (Reaches.single hL)
   have hq := U.creators_quorum hc (by omega)
   have := card_le_inter_add_compl (honest := honest) (creatorsOf U.block (U.block c).refs)
   have := Finset.card_le_card hsub
   omega
 
+omit [Fintype Validator] [P.Mechanised] [P.Quorate q] in
+theorem safeAt_subset_honest {r : ℕ} : safeAt p U r ⊆ honest := Finset.filter_subset _ _
+
 /-- **One buffer round: the double count.** With an honest population `T`
 of the buffer round, each of its blocks names at least `q − f` honest
 round-`r` blocks, and an honest block named by more than `n − q` of them is
-reached from two rounds up, so good. Counting the names twice:
-`|T|·(q − f) + G·(n − q) ≤ G·|T| + |honest|·(n − q)`, `G` the honest good
-validators. -/
-theorem card_goodAt_count {f r : ℕ} {T : Finset Validator} (hf : honestᶜ.card ≤ f)
-    (hw : 2 ≤ p.waveLength) (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
+reached from two rounds up, so safe. Counting the names twice:
+`|T|·(q − f) + G·(n − q) ≤ G·|T| + |honest|·(n − q)`, `G` the safe set's
+size. -/
+theorem card_safeAt_count {f r : ℕ} {T : Finset Validator} (hf : honestᶜ.card ≤ f)
     (hvo : 2 ≤ p.voteOffset) (hTh : T ⊆ honest) (hpop1 : PopulatedOn U T (r + 1))
-    (hpop : PopulatedOn U T (r + (p.waveLength - 1))) (hcm : p.commitThreshold ≤ T.card)
     (hnq : Fintype.card Validator - q ≤ T.card) :
-    T.card * (q - f) + (goodAt p σ U r ∩ honest).card * (Fintype.card Validator - q) ≤
-      (goodAt p σ U r ∩ honest).card * T.card + honest.card * (Fintype.card Validator - q) := by
+    T.card * (q - f) + (safeAt p U r).card * (Fintype.card Validator - q) ≤
+      (safeAt p U r).card * T.card + honest.card * (Fintype.card Validator - q) := by
   classical
   set n := Fintype.card Validator
   set d := n - q
@@ -340,7 +366,7 @@ theorem card_goodAt_count {f r : ℕ} {T : Finset Validator} (hf : honestᶜ.car
     omega
   -- a block named by more than `n − q` of them is good
   have hgood : ∀ b ∈ tB, d < (sB.bipartiteBelow rel b).card →
-      (U.block b).creator ∈ goodAt p σ U r ∩ honest := by
+      (U.block b).creator ∈ safeAt p U r := by
     intro b hb hlt
     obtain ⟨hbs, hbh⟩ := Finset.mem_filter.mp hb
     obtain ⟨hbU, hbr⟩ := mem_blocksAt.mp hbs
@@ -361,8 +387,7 @@ theorem card_goodAt_count {f r : ℕ} {T : Finset Validator} (hf : honestᶜ.car
       · intro v hv
         obtain ⟨a, ha, rfl⟩ := mem_creatorsOf.mp hv
         exact hTh (Finset.mem_filter.mp (Finset.mem_filter.mp ha).1).2
-    refine Finset.mem_inter.mpr ⟨mem_goodAt_of_safe σ hw hcv hpop hcm hbU hbr hbh
-      fun x hx hxr => ?_, hbh⟩
+    refine mem_safeAt_of_reaches hbU hbr hbh fun x hx hxr => ?_
     obtain ⟨b', rfl, h⟩ := reaches_pred_of_round_le (Q := fun b' => b' = b) (N := r + 2)
       (fun c hc hcr => ⟨b, rfl, hreach2 c hc hcr⟩) hx (by omega)
     exact h
@@ -392,7 +417,7 @@ theorem card_goodAt_count {f r : ℕ} {T : Finset Validator} (hf : honestᶜ.car
   have hA : tB.card ≤ honest.card := by
     rw [← card_creatorsOf_honestBlocksAt]
     exact Finset.card_le_card creatorsOf_honestBlocksAt_subset
-  have hG' : G' ≤ (goodAt p σ U r ∩ honest).card := by
+  have hG' : G' ≤ (safeAt p U r).card := by
     have heq : (Finset.image (fun b => (U.block b).creator)
         (tB.filter (fun b => d < (sB.bipartiteBelow rel b).card))).card = G' :=
       Finset.card_image_of_injOn (creator_injOn_honestBlocksAt.mono
@@ -404,26 +429,26 @@ theorem card_goodAt_count {f r : ℕ} {T : Finset Validator} (hf : honestᶜ.car
     exact hgood b hbt hlt
   rw [hscard] at hlow hX
   have hmain : T.card * (q - f) ≤ G' * T.card + R * d := by omega
-  obtain ⟨e, he⟩ : ∃ e, (goodAt p σ U r ∩ honest).card = G' + e := ⟨_, (Nat.add_sub_cancel' hG').symm⟩
+  obtain ⟨e, he⟩ : ∃ e, (safeAt p U r).card = G' + e := ⟨_, (Nat.add_sub_cancel' hG').symm⟩
   obtain ⟨h', hh'⟩ : ∃ h', honest.card = G' + R + h' := ⟨honest.card - (G' + R), by omega⟩
   rw [he, hh']
   have hed : e * d ≤ e * T.card := Nat.mul_le_mul_left e hnq
   nlinarith [hmain, hed]
 
 omit [P.Mechanised] [P.Quorate q] in
-/-- **Several leaders**: leaders at round `r` more than `n` less the good set
-include a good one. -/
-theorem exists_good_leader [S : Slots Validator] {r : ℕ} {M : Finset Validator}
+/-- **Several leaders**: leaders at round `r` more than `n` less the safe set
+include a safe one. -/
+theorem exists_safe_leader [S : Slots Validator] {r : ℕ} {M : Finset Validator}
     (hM : ∀ v ∈ M, ∃ k, S.slotRound k = r ∧ S.leader k = v)
-    (hcard : Fintype.card Validator < M.card + (goodAt p σ U r ∩ honest).card) :
-    ∃ k, S.slotRound k = r ∧ S.leader k ∈ good p σ U k := by
+    (hcard : Fintype.card Validator < M.card + (safeAt p U r).card) :
+    ∃ k, S.slotRound k = r ∧ S.leader k ∈ safe p U k := by
   obtain ⟨v, hv⟩ := Finset.inter_nonempty_of_card_lt_card_add_card (Finset.subset_univ M)
     (Finset.subset_univ _) (by simpa using hcard)
   obtain ⟨hvM, hvg⟩ := Finset.mem_inter.mp hv
   obtain ⟨k, hkr, hkv⟩ := hM v hvM
   exact ⟨k, hkr, by
-    show S.leader k ∈ goodAt p σ U (S.slotRound k)
-    rw [hkr, hkv]; exact (Finset.mem_inter.mp hvg).1⟩
+    show S.leader k ∈ safeAt p U (S.slotRound k)
+    rw [hkr, hkv]; exact hvg⟩
 
 /-! ## Liveness under the clause -/
 

@@ -23,27 +23,24 @@ theorem commonCore : CommonCore := by
   exact exists_commonCore hf hq2 hc₀ hc₀r
 
 theorem safeGood : SafeGood := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest p σ U r L T hw hcv hpop hcm hL hLr hLc hs
-  exact mem_goodAt_of_safe σ hw hcv hpop hcm hL hLr hLc hs
+  intro Validator BlockId Payload _ _ _ P _ q _ honest p σ U r T hw hcv hpop hcm
+  exact safeAt_subset_goodAt σ hw hcv hpop hcm
 
-theorem goodNonempty : GoodNonempty := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ U r T hf hq2 hw hcv hvo hT hpop2
-    hpop hcm
-  exact goodAt_nonempty σ hf hq2 hw hcv hvo hT hpop2 hpop hcm
+theorem safeNonempty : SafeNonempty := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p U r T hf hq2 hvo hT hpop2
+  exact safeAt_nonempty hf hq2 hvo hT hpop2
 
-theorem goodCard : GoodCard := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ U r T hf hq2 hw hcv hvo hT hpop3
-    hpop hcm
-  exact le_card_goodAt σ hf hq2 hw hcv hvo hT hpop3 hpop hcm
+theorem safeCard : SafeCard := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p U r T hf hq2 hvo hT hpop3
+  exact le_card_safeAt hf hq2 hvo hT hpop3
 
-theorem goodCount : GoodCount := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ U r T hf hw hcv hvo hTh hpop1 hpop
-    hcm hnq
-  exact card_goodAt_count σ hf hw hcv hvo hTh hpop1 hpop hcm hnq
+theorem safeCount : SafeCount := by
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p U r T hf hvo hTh hpop1 hnq
+  exact card_safeAt_count hf hvo hTh hpop1 hnq
 
 theorem multiLeader : MultiLeader := by
-  intro Validator BlockId Payload _ _ _ P honest p σ S U r M hM hcard
-  exact exists_good_leader σ hM hcard
+  intro Validator BlockId Payload _ _ _ P _ honest p S U r M hM hcard
+  exact exists_safe_leader hM hcard
 
 theorem goodCommits' : GoodCommits := by
   intro Validator BlockId Payload _ _ _ P honest p σ S U V k hk hV
@@ -58,25 +55,23 @@ theorem allDecidedBelow' : AllDecidedBelow := by
   exact allDecidedBelow σ hd hspan hU hV hk
 
 theorem coinCommit : CoinCommit := by
-  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ U r T hf hq2 hw hcv hT hpop hcm
+  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p U r T hf hq2 hT
   refine ⟨fun hvo hpop2 => ?_, fun hvo hpop3 => ?_⟩
-  · obtain ⟨v, hv⟩ := goodAt_nonempty σ hf hq2 hw hcv hvo hT hpop2 hpop hcm
-    exact_mod_cast floor_le_coin (G := goodAt p σ U r) (c := 1)
-      (Finset.card_pos.mpr ⟨v, (Finset.mem_inter.mp hv).1⟩)
-  · have h := le_card_goodAt σ hf hq2 hw hcv hvo hT hpop3 hpop hcm
-    exact floor_le_coin (le_trans (by omega)
-      (Finset.card_le_card (Finset.inter_subset_left (s₁ := goodAt p σ U r) (s₂ := honest))))
+  · obtain ⟨v, hv⟩ := safeAt_nonempty hf hq2 hvo hT hpop2
+    exact_mod_cast floor_le_coin (G := safeAt p U r) (c := 1) (Finset.card_pos.mpr ⟨v, hv⟩)
+  · exact floor_le_coin (by have := le_card_safeAt (p := p) hf hq2 hvo hT hpop3; omega)
 
 theorem coinTail : CoinTail := by
-  intro Validator BlockId Payload _ _ _ _ P honest p σ U r₀ c
-  exact ⟨fun m hc => noHit_le (fun i : Fin m => goodAt p σ U (r₀ + i)) hc,
+  intro Validator BlockId Payload _ _ _ _ P _ honest p U r₀ c
+  exact ⟨fun m hc => noHit_le (fun i : Fin m => safeAt p U (r₀ + i)) hc,
     fun hc hcn => noHit_tendsto_zero hc hcn⟩
 
 theorem holds : Statement :=
-  ⟨commonCore, safeGood, goodNonempty, goodCard, goodCount, multiLeader, goodCommits',
+  ⟨commonCore, safeGood, safeNonempty, safeCard, safeCount, multiLeader, goodCommits',
     commitsWithin', allDecidedBelow', coinCommit, coinTail⟩
 
 end Async
+
 
 end Scheme
 

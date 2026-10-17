@@ -13,15 +13,16 @@ authors one round down and whose validators outside `honest`, at most
 `f`, may equivocate, at every row and vote:
 
 * **the count, with no network hypothesis**: at `2q ≥ n + f + 1` a common
-  core (`CommonCore`); a safe honest block is good (`SafeGood`); with
-  one buffer round an honest good validator (`GoodNonempty`) and the
-  double count over the buffer round (`GoodCount`); with two, `q − f`
-  honest good validators (`GoodCard`); and several leaders include a good
-  one once they outnumber the rest (`MultiLeader`);
+  core (`CommonCore`); with one buffer round a safe validator, an honest
+  one whose block every vote-round block reaches (`SafeNonempty`), and the
+  double count over the buffer round (`SafeCount`); with two, `q − f` safe
+  validators (`SafeCard`); several leaders include a safe one once they
+  outnumber the rest (`MultiLeader`); and a safe validator is good once the
+  decision round is populated (`SafeGood`);
 * **liveness under the coin clause**: a good leader's slot commits
   (`GoodCommits`), every window commits (`CommitsWithin`), and every slot
   below a run is decided (`AllDecidedBelow`);
-* **the coin**: a uniform coin names a good leader with probability at
+* **the coin**: a uniform coin names a safe leader with probability at
   least the count over `n` (`CoinCommit`), and over `m` independent coins
   misses every time with probability at most `((n − c)/n)^m`, which
   vanishes (`CoinTail`).
@@ -51,80 +52,66 @@ def CommonCore : Prop :=
     ∃ b ∈ U.ids, (U.block b).round = r ∧ (U.block b).creator ∈ honest ∧
       ∀ c ∈ U.ids, r + 2 ≤ (U.block c).round → Reaches U c b
 
-/-- **A safe honest block is good**: one every vote-round block reaches is
-committed, when a population of the decision round meets the commit
-threshold, and the certificate threshold is at most `q` where votes are
-certified a round later. -/
+/-- **A safe validator is good**: every decision-round block certifies its
+block, when the certificate threshold is at most `q` where votes are
+certified a round later, so a population of the decision round meeting the
+commit threshold commits it. -/
 def SafeGood : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
     (q : ℕ) [P.Quorate q] (honest : Finset Validator) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest)
-    (U : BlockRecord Validator BlockId Payload P honest) (r : ℕ) (L : BlockId)
-    (T : Finset Validator),
+    (U : BlockRecord Validator BlockId Payload P honest) (r : ℕ) (T : Finset Validator),
     2 ≤ p.waveLength → (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) →
     PopulatedOn U T (r + (p.waveLength - 1)) → p.commitThreshold ≤ T.card →
-    L ∈ U.ids → (U.block L).round = r → (U.block L).creator ∈ honest →
-    (∀ b ∈ U.ids, (U.block b).round = r + p.voteOffset → Reaches U b L) →
-    (U.block L).creator ∈ goodAt p σ U r
+    safeAt p U r ⊆ goodAt p σ U r
 
-/-- **One buffer round: an honest good validator**, at `2q ≥ n + f + 1`,
-given a population of round `r + 2` and of the decision round. -/
-def GoodNonempty : Prop :=
+/-- **One buffer round: a safe validator**, at `2q ≥ n + f + 1`, given a
+population of round `r + 2`. -/
+def SafeNonempty : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
     (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest)
     (U : BlockRecord Validator BlockId Payload P honest) (r : ℕ) (T : Finset Validator),
     honestᶜ.card ≤ f → Fintype.card Validator + f + 1 ≤ 2 * q →
-    2 ≤ p.waveLength → (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) →
     2 ≤ p.voteOffset → T.Nonempty → PopulatedOn U T (r + 2) →
-    PopulatedOn U T (r + (p.waveLength - 1)) → p.commitThreshold ≤ T.card →
-    (goodAt p σ U r ∩ honest).Nonempty
+    (safeAt p U r).Nonempty
 
-/-- **Two buffer rounds: `q − f` honest good validators**, at
-`2q ≥ n + f + 1`, given a population of round `r + 3` and of the decision
-round. -/
-def GoodCard : Prop :=
+/-- **Two buffer rounds: `q − f` safe validators**, at `2q ≥ n + f + 1`,
+given a population of round `r + 3`. -/
+def SafeCard : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
     (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest)
     (U : BlockRecord Validator BlockId Payload P honest) (r : ℕ) (T : Finset Validator),
     honestᶜ.card ≤ f → Fintype.card Validator + f + 1 ≤ 2 * q →
-    2 ≤ p.waveLength → (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) →
     3 ≤ p.voteOffset → T.Nonempty → PopulatedOn U T (r + 3) →
-    PopulatedOn U T (r + (p.waveLength - 1)) → p.commitThreshold ≤ T.card →
-    q ≤ (goodAt p σ U r ∩ honest).card + f
+    q ≤ (safeAt p U r).card + f
 
 /-- **One buffer round: the double count.** With an honest population `T`
-of the buffer round and the decision round, at least `n − q` strong,
-`|T|·(q − f) + G·(n − q) ≤ G·|T| + |honest|·(n − q)`, `G` the honest good
-validators. -/
-def GoodCount : Prop :=
+of the buffer round, at least `n − q` strong,
+`|T|·(q − f) + G·(n − q) ≤ G·|T| + |honest|·(n − q)`, `G` the size of the
+safe set. -/
+def SafeCount : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
     (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest)
     (U : BlockRecord Validator BlockId Payload P honest) (r : ℕ) (T : Finset Validator),
-    honestᶜ.card ≤ f →
-    2 ≤ p.waveLength → (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) →
-    2 ≤ p.voteOffset → T ⊆ honest → PopulatedOn U T (r + 1) →
-    PopulatedOn U T (r + (p.waveLength - 1)) → p.commitThreshold ≤ T.card →
+    honestᶜ.card ≤ f → 2 ≤ p.voteOffset → T ⊆ honest → PopulatedOn U T (r + 1) →
     Fintype.card Validator - q ≤ T.card →
-    T.card * (q - f) + (goodAt p σ U r ∩ honest).card * (Fintype.card Validator - q) ≤
-      (goodAt p σ U r ∩ honest).card * T.card + honest.card * (Fintype.card Validator - q)
+    T.card * (q - f) + (safeAt p U r).card * (Fintype.card Validator - q) ≤
+      (safeAt p U r).card * T.card + honest.card * (Fintype.card Validator - q)
 
-/-- **Several leaders**: leaders of round `r` more than `n` less the honest
-good validators include a good one. -/
+/-- **Several leaders**: leaders of round `r` more than `n` less the safe
+set include a safe one. -/
 def MultiLeader : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) (honest : Finset Validator)
-    (p : Params) (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
+    [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
+    (honest : Finset Validator) (p : Params) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (r : ℕ) (M : Finset Validator),
     (∀ v ∈ M, ∃ k, S.slotRound k = r ∧ S.leader k = v) →
-    Fintype.card Validator < M.card + (goodAt p σ U r ∩ honest).card →
-    ∃ k, S.slotRound k = r ∧ S.leader k ∈ good p σ U k
+    Fintype.card Validator < M.card + (safeAt p U r).card →
+    ∃ k, S.slotRound k = r ∧ S.leader k ∈ safe p U k
 
 /-- **A good leader's slot commits** on every view holding its decision
 round. -/
@@ -162,35 +149,32 @@ def AllDecidedBelow : Prop :=
     ∀ k, (schemeAnchored p σ).decisionRound (k + c + d - 1) ≤ N →
       ∃ b, k ≤ b ∧ ∀ i, i < b → ∃ v, (schemeAnchored p σ).Decided U V i v
 
-/-- **The coin names a good leader** with probability at least `1/n` at one
+/-- **The coin names a safe leader** with probability at least `1/n` at one
 buffer round and `(q − f)/n` at two, under the hypotheses of the counts. -/
 def CoinCommit : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest)
     (U : BlockRecord Validator BlockId Payload P honest) (r : ℕ) (T : Finset Validator),
-    honestᶜ.card ≤ f → Fintype.card Validator + f + 1 ≤ 2 * q →
-    2 ≤ p.waveLength → (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) →
-    T.Nonempty → PopulatedOn U T (r + (p.waveLength - 1)) → p.commitThreshold ≤ T.card →
+    honestᶜ.card ≤ f → Fintype.card Validator + f + 1 ≤ 2 * q → T.Nonempty →
     (2 ≤ p.voteOffset → PopulatedOn U T (r + 2) →
       (1 : ℝ≥0∞) / Fintype.card Validator ≤
-        (PMF.uniformOfFintype Validator).toOuterMeasure ↑(goodAt p σ U r)) ∧
+        (PMF.uniformOfFintype Validator).toOuterMeasure ↑(safeAt p U r)) ∧
     (3 ≤ p.voteOffset → PopulatedOn U T (r + 3) →
       ((q - f : ℕ) : ℝ≥0∞) / Fintype.card Validator ≤
-        (PMF.uniformOfFintype Validator).toOuterMeasure ↑(goodAt p σ U r))
+        (PMF.uniformOfFintype Validator).toOuterMeasure ↑(safeAt p U r))
 
-/-- **The tail**: `m` independent coins over rounds whose good sets hold at
+/-- **The tail**: `m` independent coins over rounds whose safe sets hold at
 least `c` validators all miss with probability at most `((n − c)/n)^m`,
 which vanishes at a positive floor. -/
 def CoinTail : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
-    (honest : Finset Validator) (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
+    [P.Mechanised] (honest : Finset Validator) (p : Params)
     (U : BlockRecord Validator BlockId Payload P honest) (r₀ c : ℕ),
-    (∀ m : ℕ, (∀ i : Fin m, c ≤ (goodAt p σ U (r₀ + i)).card) →
+    (∀ m : ℕ, (∀ i : Fin m, c ≤ (safeAt p U (r₀ + i)).card) →
       (PMF.uniformOfFintype (Fin m → Validator)).toOuterMeasure
-          {g | ∀ i : Fin m, g i ∉ goodAt p σ U (r₀ + i)} ≤
+          {g | ∀ i : Fin m, g i ∉ safeAt p U (r₀ + i)} ≤
         (((Fintype.card Validator - c : ℕ) : ℝ≥0∞) / Fintype.card Validator) ^ m) ∧
     (0 < c → c ≤ Fintype.card Validator →
       Tendsto (fun m : ℕ => (((Fintype.card Validator - c : ℕ) : ℝ≥0∞) /
@@ -198,7 +182,7 @@ def CoinTail : Prop :=
 
 /-- The asynchronous rows' claims. -/
 def Statement : Prop :=
-  CommonCore ∧ SafeGood ∧ GoodNonempty ∧ GoodCard ∧ GoodCount ∧ MultiLeader ∧ GoodCommits ∧
+  CommonCore ∧ SafeGood ∧ SafeNonempty ∧ SafeCard ∧ SafeCount ∧ MultiLeader ∧ GoodCommits ∧
     CommitsWithin ∧ AllDecidedBelow ∧ CoinCommit ∧ CoinTail
 
 end Async

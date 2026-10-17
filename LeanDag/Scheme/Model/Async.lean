@@ -10,11 +10,16 @@ through its observable consequence on the schedule and the record:
 * `goodAt p σ U r`: the validators whose round-`r` block the record's
   certificates commit: `commit` authors of decision-round blocks certify
   it; `good` the same at a slot's round;
+* `safeAt p U r`: the honest validators whose round-`r` block every
+  vote-round block reaches; `safe` the same at a slot's round. The counts
+  bound this set, and a safe block is good once the decision round is
+  populated;
 * `Params.AsyncReady`: the arithmetic a row meets for the count at `b`
   buffer rounds;
 * `UnpredictableWithin`: in every window of `c` slots whose decision
   rounds lie below the horizon `N`, the schedule names a good leader;
-  `UnpredictableRunWithin`, a run of `d` good leaders.
+  `UnpredictableRunWithin`, a run of `d` good leaders;
+  `SafeWithin` and `SafeRunWithin`, the same clauses over safe leaders.
 
 Definitions only; the claims are `Scheme/Async/Statement.lean`.
 -/
@@ -48,6 +53,36 @@ variable [S : Slots Validator]
 /-- The good set at slot `k`'s round. -/
 def good (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) : Finset Validator :=
   goodAt p σ U (S.slotRound k)
+
+section Safe
+
+variable [P.Mechanised]
+
+omit S in
+/-- **The safe set at round `r`**: the honest validators whose round-`r`
+block lies in the history of every vote-round block. -/
+def safeAt (U : BlockRecord Validator BlockId Payload P honest) (r : ℕ) : Finset Validator :=
+  honest.filter (fun v => ∃ L ∈ U.ids, (U.block L).round = r ∧ (U.block L).creator = v ∧
+    ∀ b ∈ U.ids, (U.block b).round = r + p.voteOffset → L ∈ history U b)
+
+/-- The safe set at slot `k`'s round. -/
+def safe (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) : Finset Validator :=
+  safeAt p U (S.slotRound k)
+
+/-- **The single-hit clause over safe leaders**: in every window of `c`
+slots whose decision rounds lie below the horizon `N`, the schedule names a
+safe leader. -/
+def SafeWithin (U : BlockRecord Validator BlockId Payload P honest) (c N : ℕ) : Prop :=
+  ∀ k, (schemeAnchored p σ).decisionRound (k + c) ≤ N →
+    ∃ k', k ≤ k' ∧ k' < k + c ∧ S.leader k' ∈ safe p U k'
+
+/-- **The run clause over safe leaders**: in every window of `c` slots
+below the horizon, a run of `d` consecutive slots led by safe leaders. -/
+def SafeRunWithin (U : BlockRecord Validator BlockId Payload P honest) (c d N : ℕ) : Prop :=
+  ∀ k, (schemeAnchored p σ).decisionRound (k + c + d - 1) ≤ N →
+    ∃ k', k ≤ k' ∧ k' < k + c ∧ ∀ i < d, S.leader (k' + i) ∈ safe p U (k' + i)
+
+end Safe
 
 /-- **The single-hit clause**: in every window of `c` slots whose decision
 rounds lie below the horizon `N`, the schedule names a good leader. -/
