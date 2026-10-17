@@ -1,4 +1,6 @@
 import LeanDag.Scheme.Model.Async
+import LeanDag.Scheme.Model.AsyncPace
+import Mathlib.Data.Prod.Lex
 import LeanDag.Common.Anchored
 import Mathlib.Probability.Distributions.Uniform
 import Mathlib.Order.Filter.Basic
@@ -17,8 +19,10 @@ authors one round down and whose validators outside `honest`, at most
   one whose block every vote-round block reaches (`SafeNonempty`), and the
   double count over the buffer round (`SafeCount`); with two, `q − f` safe
   validators (`SafeCard`); several leaders include a safe one once they
-  outnumber the rest (`MultiLeader`); and a safe validator is good once the
-  decision round is populated (`SafeGood`);
+  outnumber the rest (`MultiLeader`); a safe validator is good once the
+  decision round is populated (`SafeGood`); and further buffer rounds add
+  nothing (`BufferTight`): at every `f < q ≤ n` and every vote offset, an
+  execution under eventual delivery has exactly `q − f` safe validators;
 * **liveness under the coin clause**: a good leader's slot commits
   (`GoodCommits`), every window commits (`CommitsWithin`), and every slot
   below a run is decided (`AllDecidedBelow`);
@@ -113,6 +117,25 @@ def MultiLeader : Prop :=
     Fintype.card Validator < M.card + (safeAt p U r).card →
     ∃ k, S.slotRound k = r ∧ S.leader k ∈ safe p U k
 
+/-- **Buffer rounds past two add nothing**: at every `f < q ≤ n` and every
+vote offset within the horizon, a record on `n` validators, `f` of them
+Byzantine, whose blocks reference `q` distinct authors, the author's
+previous block among them, and in which every validator builds every round,
+has exactly `q − f` safe validators at round `0`. It is produced under
+asynchronous pacing at `q` by validators that reference, at each round,
+every block of the round below they hold when they build. -/
+def BufferTight : Prop :=
+  ∀ (n f q N : ℕ) (p : Params), f < q → q ≤ n → 1 ≤ p.voteOffset → p.voteOffset ≤ N →
+    ∃ (honest : Finset (Fin n))
+      (U : BlockRecord (Fin n) (Lex (ℕ × Fin n)) Unit
+        (ValidAt q (Clause.distinct.and Clause.selfParent)) honest)
+      (ap : AsyncPace q U honest N),
+      honestᶜ.card = f ∧ (∀ r ≤ N, PopulatedOn U Finset.univ r) ∧
+      (∀ b ∈ U.ids, (U.block b).refs =
+        (ap.holds (U.block b).creator (U.block b).round).filter
+          fun j => (U.block j).round + 1 = (U.block b).round) ∧
+      (safeAt p U 0).card = q - f
+
 /-- **A good leader's slot commits** on every view holding its decision
 round. -/
 def GoodCommits : Prop :=
@@ -182,7 +205,8 @@ def CoinTail : Prop :=
 
 /-- The asynchronous rows' claims. -/
 def Statement : Prop :=
-  CommonCore ∧ SafeGood ∧ SafeNonempty ∧ SafeCard ∧ SafeCount ∧ MultiLeader ∧ GoodCommits ∧
+  CommonCore ∧ SafeGood ∧ SafeNonempty ∧ SafeCard ∧ SafeCount ∧ MultiLeader ∧ BufferTight ∧
+    GoodCommits ∧
     CommitsWithin ∧ AllDecidedBelow ∧ CoinCommit ∧ CoinTail
 
 end Async

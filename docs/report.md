@@ -12045,8 +12045,16 @@ miss with probability at most `((n − c)/n)^m`, which vanishes
 (`Scheme.Async.coinCommit`, `Scheme.Async.coinTail`). On four validators
 at the Mahi-Mahi row, a DAG in which one honest block is referenced only
 along its author's chain has good set `{0, 2, 3}` at one, two and three
-buffer rounds alike, and safe set `{2, 3}`: the two-buffer count is
-tight, and a third buffer round adds nothing.
+buffer rounds alike, and safe set `{2, 3}`. In general buffer rounds past
+two add nothing (`Scheme.Async.bufferTight`): at every `f < q ≤ n` and
+every vote offset, an execution in which `n − q` honest validators are
+starved, their blocks referenced only by their own kind, has exactly
+`q − f` safe validators (`Scheme.Starve.card_safeAt_starve`), since a block
+outside the starved set never reaches a starved block
+(`Scheme.Starve.not_starved_of_reaches`). It is produced under
+asynchronous pacing by validators referencing every block of the round
+below they hold, the starved blocks arriving a round late
+(`Scheme.Starve.starvePace`, `Scheme.Starve.refs_starve_eq_held`).
 
 ### 27.12 Every row, safe and live
 
@@ -12146,9 +12154,8 @@ loop is sound, its restart on one view holds (SC19), and its order
 and ledger reading hold (SC20, SC21); its completeness, its resumption
 on a larger view and the nesting of ledgers are not stated. The
 asynchronous rows' liveness (SC24, SC27) leaves out the safe set's
-measurability, the hypergeometric
-probability for `K` leaders, and the general construction behind "a third
-buffer round adds nothing", shown on a witness. The family's `Lives` is stated on the core's universes, and
+measurability and the hypergeometric
+probability for `K` leaders. The family's `Lives` is stated on the core's universes, and
 Hybrid Mysticeti's, at its committee `3f + 2c + 1`, at Hydrozoan's fault
 model (SC23), as is every covered row's with self-reference (SC25). Stake weights and the coin's
 construction are not formalised. `scheme.md` §9
@@ -13384,7 +13391,7 @@ reused.
 | SC21 | the output from slot `0` is `commitSeq` and `ledgerSet` of the loop's assignment, every slot below its length decided with that verdict; at the rows of SC12 two validators' ledgers are nested | `Scheme.tryDecide_eq_map`, `Scheme.ledger_read`, `Scheme.ledger_agree`, `Scheme.Loop.ledger`, `Scheme.Loop.ledgerAgree` *(Scheme/Loop, Scheme/Helpers/Ledger)* |
 | SC22 | where nobody equivocates, the two-round inequalities without `n + f + 1 ≤ commit + link` and the three-round ones without `n + f + 1 ≤ 2·cert` give agreement at every vote; Nemo-Nemo and Async Nemo-Nemo meet them at `n = 2c + 1` and agree; with `q = n − c` they need `n ≥ 2c + 1`, and `3c + 1` for a two-round row with a direct skip within the liveness bound | `Scheme.eq_of_noEquiv_all`, `Scheme.twoRoundCrashLaws`, `Scheme.threeRoundCrashLaws`, `Scheme.Table.crashWeaker`, `Scheme.Table.crashRows`, `Scheme.Table.crashBound`, `Scheme.Sufficiency.twoRoundCrashAgree`, `Scheme.Sufficiency.threeRoundCrashAgree`, `Scheme.Sufficiency.nemoRowsAgree` *(Scheme/Helpers/Sufficiency, Scheme/Table, Scheme/Sufficiency)* |
 | SC23 | on Hydrozoan's universe the Hybrid Mysticeti row decides as Hydrozoan without its fast path, at every vote; it meets its inequalities at every `n ≥ 3f + 2c + 1`, and its carrier is safe and progresses under Hydrozoan's fault model, and with self-reference lives | `Scheme.readAlike_hydrozoanSlow`, `Scheme.hydrozoanSlow_eq`, `Scheme.Table.hybridAnyCommittee`, `Scheme.HybridRow.slowRow`, `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent` *(Scheme/Helpers/Hydrozoan, Scheme/HybridRow)* |
-| SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; a safe validator is good; under the coin clause a good leader commits, windows commit and slots below a run are decided; a uniform coin names a safe leader with probability bounded below, and its misses vanish | `Scheme.exists_commonCore`, `Scheme.isCert_of_safe`, `Scheme.safeAt_subset_goodAt`, `Scheme.safeAt_nonempty`, `Scheme.card_safeAt_count`, `Scheme.le_card_safeAt`, `Scheme.exists_safe_leader`, `Scheme.goodCommits`, `Scheme.commitsWithin`, `Scheme.allDecidedBelow`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Async)* |
+| SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; buffer rounds past two add nothing; a safe validator is good; under the coin clause a good leader commits, windows commit and slots below a run are decided; a uniform coin names a safe leader with probability bounded below, and its misses vanish | `Scheme.exists_commonCore`, `Scheme.isCert_of_safe`, `Scheme.safeAt_subset_goodAt`, `Scheme.safeAt_nonempty`, `Scheme.card_safeAt_count`, `Scheme.le_card_safeAt`, `Scheme.exists_safe_leader`, `Scheme.Starve.not_starved_of_reaches`, `Scheme.Starve.card_safeAt_starve`, `Scheme.Starve.starvePace`, `Scheme.goodCommits`, `Scheme.commitsWithin`, `Scheme.allDecidedBelow`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Helpers/Starve, Scheme/Async)* |
 | SC25 | every row safe and live: Cordial Miners on the core's universes; Orcaella, Async Orcaella, Hybrid Mysticeti, Hybrid Mahi-Mahi, Nemo-Nemo and Async Nemo-Nemo under the hybrid fault model with self-reference; the asynchronous rows ready for the count | `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent`, `Scheme.Rows.coreRows`, `Scheme.Rows.hybridRows`, `Scheme.Rows.asyncRows`, `Scheme.Rows.holds` *(Scheme/HybridRow, Scheme/Rows)* |
 | SC26 | the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.reached`, `Scheme.SchemeReactive.populated`, `Scheme.SchemeReactive.driftOn`, `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.reaches`, `Scheme.SchemeReactive.votes`, `Scheme.SchemeReactive.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.includes_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
 | SC27 | the asynchronous rows on a validator's own view, under eventual delivery with no time bound: every reliable block is held by every reliable validator from some time on, rounds are populated, and a safe leader's slot commits on every reliable validator's own view; windows commit and slots below a run are decided there; every timed run is an asynchronous one | `Scheme.AsyncPace.exists_time`, `Scheme.AsyncPace.delivered`, `Scheme.AsyncPace.reached`, `Scheme.AsyncPace.populated`, `Scheme.decided_of_safe_of_holds`, `Scheme.AsyncPace.decided_of_safe`, `Scheme.AsyncPace.commitsWithin`, `Scheme.AsyncPace.allDecidedBelow`, `Scheme.AsyncPace.ofPaceCore`, `Scheme.AsyncLocal.holds` *(Scheme/Helpers/AsyncPace, Scheme/AsyncLocal)* |
@@ -13462,7 +13469,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 428 definitions and structures the report names, in
+The 429 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -20323,6 +20330,19 @@ def Populated : Prop :=
 ```
 
 **Production**: every round below the horizon has a block by every reliable validator, when the reliable set is `qp` strong.
+
+#### `held`
+
+*def, `Scheme.Helpers.Starve.lean`*
+
+```lean
+def held (N : ℕ) (v : Fin n) (t : ℕ) : Finset (Lex (ℕ × Fin n)) :=
+  (record (f := f) hqn N).ids.filter fun b =>
+    (ofLex b).1 + 1 < t ∨
+      ((ofLex b).1 + 1 = t ∧ (starved n f q v = true ∨ starved n f q (ofLex b).2 = false))
+```
+
+What `v` holds at time `t`: every block below round `t − 1`, and of round `t − 1` the blocks outside the starved set, or all of them if `v` is starved. Round `r` is built at time `r`.
 
 #### `goodAt`
 

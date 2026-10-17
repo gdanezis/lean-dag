@@ -1,5 +1,6 @@
 import LeanDag.Scheme.Async.Statement
 import LeanDag.Scheme.Helpers.AsyncCoin
+import LeanDag.Scheme.Helpers.Starve
 /-!
 # The asynchronous rows — proof
 
@@ -42,6 +43,12 @@ theorem multiLeader : MultiLeader := by
   intro Validator BlockId Payload _ _ _ P _ honest p S U r M hM hcard
   exact exists_safe_leader hM hcard
 
+theorem bufferTight : BufferTight := by
+  intro n f q N p hfq hqn hvo hN
+  exact ⟨_, Starve.record (f := f) hqn N, Starve.starvePace N,
+    Starve.card_compl_honestSet (by omega), fun r hr => Starve.populated_record hr,
+    fun b hb => Starve.refs_starve_eq_held hb rfl, Starve.card_safeAt_starve hvo hN hfq⟩
+
 theorem goodCommits' : GoodCommits := by
   intro Validator BlockId Payload _ _ _ P honest p σ S U V k hk hV
   exact goodCommits σ hk hV
@@ -67,7 +74,8 @@ theorem coinTail : CoinTail := by
     fun hc hcn => noHit_tendsto_zero hc hcn⟩
 
 theorem holds : Statement :=
-  ⟨commonCore, safeGood, safeNonempty, safeCard, safeCount, multiLeader, goodCommits',
+  ⟨commonCore, safeGood, safeNonempty, safeCard, safeCount, multiLeader, bufferTight,
+    goodCommits',
     commitsWithin', allDecidedBelow', coinCommit, coinTail⟩
 
 end Async

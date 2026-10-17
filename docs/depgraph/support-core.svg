@@ -319,7 +319,7 @@
 <rect x="294.0" y="2156.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="2168.0" text-anchor="middle">SC15</text>
 <text class="nm" x="373.0" y="2182.0" text-anchor="middle">decisionAt_complete</text></g>
-<g><title>LeanDag.Scheme.exists_commonCore — the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; a safe validator is good; under the coin clause a good leader commits, windows commit and slots below a run are decided; a uniform coin names a safe leader with probability bounded below, and its misses vanish</title>
+<g><title>LeanDag.Scheme.exists_commonCore — the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; buffer rounds past two add nothing; a safe validator is good; under the coin clause a good leader commits, windows commit and slots below a run are decided; a uniform coin names a safe leader with probability bounded below, and its misses vanish</title>
 <rect x="294.0" y="2204.0" width="158" height="36" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="373.0" y="2216.0" text-anchor="middle">SC24</text>
 <text class="nm" x="373.0" y="2230.0" text-anchor="middle">exists_commonCore</text></g>

@@ -275,7 +275,7 @@
 <g><title>LeanDag.Scheme.decisionAt_complete — at the rows of SC12, the loop decides every verdict `Decided` derives once its scan reaches far enough, and outputs it once every slot from `lo` is decided</title>
 <rect x="134.0" y="1488.0" width="62" height="24" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="1500.0" text-anchor="middle">SC15</text></g>
-<g><title>LeanDag.Scheme.exists_commonCore — the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; a safe validator is good; under the coin clause a good leader commits, windows commit and slots below a run are decided; a uniform coin names a safe leader with probability bounded below, and its misses vanish</title>
+<g><title>LeanDag.Scheme.exists_commonCore — the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; buffer rounds past two add nothing; a safe validator is good; under the coin clause a good leader commits, windows commit and slots below a run are decided; a uniform coin names a safe leader with probability bounded below, and its misses vanish</title>
 <rect x="134.0" y="1521.0" width="62" height="24" rx="5" fill="#dce8f7" stroke="#5a7fa8" stroke-width="1.2"/>
 <text class="lbl" x="165.0" y="1533.0" text-anchor="middle">SC24</text></g>
 <g><title>LeanDag.Scheme.leastSel — a vote-selection rule exists: the least block of the slot in the voter&#x27;s history</title>

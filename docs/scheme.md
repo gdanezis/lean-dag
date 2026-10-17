@@ -74,7 +74,8 @@ are the evidence.
   `2q ≥ n + f + 1`, which every asynchronous row meets, a common core
   exists; one buffer round gives a safe leader (an honest one whose block
   every vote-round block reaches) and the paper's double count, two give
-  `q − f`, and a third adds nothing (a witness). A uniform coin names a
+  `q − f`, and further buffer rounds add nothing: at every `f < q ≤ n` an
+  execution under eventual delivery has exactly `q − f`. A uniform coin names a
   safe leader with probability at least the count over `n`, and misses
   `m` times with probability that vanishes. Under eventual delivery alone,
   with no time bound (§11.1), a safe leader's slot commits on every
@@ -564,11 +565,11 @@ every vote.
   clause on the schedule and the record, and by a uniform distribution
   for the probabilities. Its cryptographic construction is not
   formalised, as in the Mahi-Mahi and Async BlueBottle arcs.
-* **The buffer rounds.** The paper's count is formalised (§11); its claim
-  that a third buffer round adds nothing at every `f` is shown on a
-  witness at `f = 1`, and its formula for `K` leaders,
+* **The buffer rounds.** The paper's count is formalised (§11), with its
+  claim that buffer rounds past two add nothing (`BufferTight`); its
+  formula for `K` leaders,
   `1 − C(n − |core|, K)/C(n, K)`, is stated only in its deterministic
-  form (`K > n − |core|` gives a good leader).
+  form (`K > n − |core|` gives a safe leader).
 * **The hybrid fault model.** The family's `Lives` is stated on the
   core's universes, where a `Faults` instance asks `n ≥ 3f + 1` of the
   slack `f`; that excludes Hybrid Mysticeti's committee `3f + 2c + 1` at
@@ -703,6 +704,24 @@ row and vote:
   its honest references: `q ≤ G + f`, the paper's `h − m`.
 * **Several leaders** (`MultiLeader`): leaders of a round more than `n`
   less the safe set include a safe one.
+* **Buffer rounds past two add nothing** (`BufferTight`, from
+  `Scheme/Helpers/Starve.lean`): at every `f < q ≤ n` and every vote
+  offset, some execution has exactly `q − f` safe validators, so the
+  two-buffer bound is attained at every number of buffer rounds from two
+  on. In the execution the first `f` validators are Byzantine and
+  `m = n − q` honest validators are starved: a starved validator's block
+  references the whole round below, and every other block references the
+  round below less the starved validators' blocks, `q` authors. A block
+  outside the starved set then never reaches a starved block
+  (`Starve.not_starved_of_reaches`), at any depth, while every block above
+  round `0` reaches every other round-`0` block, so the safe set is the
+  `n − f − m = q − f` honest validators outside the starved set
+  (`Starve.card_safeAt_starve`). Every block also references its author's
+  previous block, so the execution is valid where self-reference is
+  required. It is what validators produce under eventual delivery when
+  each references every block of the round below it holds and the starved
+  validators' blocks arrive one round late (`Starve.starvePace`,
+  `Starve.refs_starve_eq_held`).
 * **A safe validator is good** (`SafeGood`): every vote-round block
   reaches its block, so votes for it; every decision-round block
   certifies it (`isCert_of_safe`, where `cert ≤ q` if votes are certified
@@ -778,8 +797,7 @@ slot, commits on each live replica's own view from some time on.
 
 **Not formalised.** Measurability of the safe set (it reads only rounds up
 to the vote round, which is what makes the clause the coin's
-consequence), the hypergeometric probability for `K` leaders, and the
-general-`f` construction for "a third buffer round adds nothing".
+consequence), and the hypergeometric probability for `K` leaders.
 
 ## 12. Every row, safe and live
 

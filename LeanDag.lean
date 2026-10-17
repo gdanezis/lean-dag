@@ -544,6 +544,7 @@ import LeanDag.Scheme.Helpers.AsyncCoin
 import LeanDag.Scheme.Helpers.Reactive
 import LeanDag.Scheme.Helpers.ReactiveMysticeti
 import LeanDag.Scheme.Helpers.AsyncPace
+import LeanDag.Scheme.Helpers.Starve
 import LeanDag.Scheme.Equiv.Statement
 import LeanDag.Scheme.Equiv.Proof
 import LeanDag.Scheme.Safety.Statement

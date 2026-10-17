@@ -15,6 +15,8 @@ Four validators, validator `0` Byzantine, `f = 1`, `q = 3`
   `2 = q − f`: the count of two buffer rounds is tight, and a third buffer
   round adds nothing. The safe set, its honest validators whose block every
   vote-round block reaches, is `{2, 3}`.
+* The starving execution at general `n, f, q` (`Starve.record`) has
+  `q − f` safe validators at every vote offset.
 -/
 
 namespace LeanDagTest
@@ -71,6 +73,20 @@ example {Validator : Type} [Fintype Validator] [DecidableEq Validator] [F : Faul
   Async.safeCard Validator BlockId Payload ValidWrt (quorumCard Validator) Correct F.f _ U r T
     card_compl_correct_le (by have := F.card_validators; omega)
     (by simp [Params.voteOffset, Params.mahiMahi]) hT hpop3
+
+/-- **A third buffer round adds nothing**, at `n = 7`, `f = 2`, `q = 5`: at
+the Mahi-Mahi row of wave six (three buffer rounds) the starving execution
+has `q − f = 3` safe validators, the two-buffer count's floor. -/
+example : (safeAt (Params.mahiMahi 6 7 2) (Starve.record (n := 7) (f := 2) (q := 5) (by omega) 6)
+    0).card = 3 :=
+  Starve.card_safeAt_starve (by decide) (by decide) (by omega)
+
+/-- And at every row and every vote offset within the horizon, for every
+`f < q ≤ n`. -/
+example (n f q N : ℕ) (p : Params) (hfq : f < q) (hqn : q ≤ n) (hvo : 1 ≤ p.voteOffset)
+    (hN : p.voteOffset ≤ N) :
+    (safeAt p (Starve.record (f := f) hqn N) 0).card = q - f :=
+  Starve.card_safeAt_starve hvo hN hfq
 
 /-! The one-buffer double count `|T|·(q − f) + G·(n − q) ≤ G·|T| + |honest|·(n − q)` at
 `|T| = |honest| = n − f` gives the paper's worst-case cores: Blue Bottle Async at `f = 1`
