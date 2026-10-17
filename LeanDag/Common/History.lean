@@ -206,4 +206,62 @@ theorem coneSupporters_subset_of_reaches {A B L : BlockId} {n : ℕ} (hB : B ∈
 
 end Linked
 
+/-! ## Visibility
+
+A block above a round sees, through its references, most of that round's
+authors: all but those its quorum misses and those outside a
+non-equivocating set. -/
+
+section Visibility
+
+variable [Fintype Validator] {q : ℕ} [P.Quorate q]
+variable {Hon : Finset Validator} {f : ℕ}
+
+/-- **Visibility.** A block `d + 1` rounds above a set `X` of round-`D`
+blocks holds in its history the blocks of `X` of at least
+`|authors X| + q − n − f` authors. -/
+theorem card_inHistory_ge (hne : U.NoEquivOn Hon) (hHon : Honᶜ.card ≤ f)
+    {X : Finset BlockId} {D : ℕ} (hX : ∀ b ∈ X, b ∈ U.ids ∧ (U.block b).round = D) :
+    ∀ d A, A ∈ U.ids → (U.block A).round = D + 1 + d →
+      (creatorsOf U.block X).card + q ≤
+        Fintype.card Validator + f +
+          (creatorsOf U.block (X.filter (fun C => C ∈ history U A))).card := by
+  intro d
+  induction d with
+  | zero =>
+    intro A hA hround
+    have hq : q ≤ (creatorsOf U.block (U.block A).refs).card := U.creators_quorum hA (by omega)
+    set R := creatorsOf U.block (U.block A).refs
+    set CX := creatorsOf U.block X
+    have hsub : (R ∩ CX) ∩ Hon ⊆ creatorsOf U.block (X.filter (fun C => C ∈ history U A)) := by
+      intro v hv
+      obtain ⟨hvRC, hvH⟩ := Finset.mem_inter.mp hv
+      obtain ⟨hvR, hvC⟩ := Finset.mem_inter.mp hvRC
+      obtain ⟨b, hb, hbc⟩ := mem_creatorsOf.mp hvR
+      obtain ⟨x, hx, hxc⟩ := mem_creatorsOf.mp hvC
+      have hbU := U.complete A hA b hb
+      have hbr := U.round_of_mem_refs hA hb
+      obtain ⟨hxU, hxr⟩ := hX x hx
+      have hbx : b = x := hne.eq_of_creator_eq hbU hxU hvH hbc hxc (by omega)
+      subst hbx
+      exact mem_creatorsOf.mpr ⟨b, Finset.mem_filter.mpr ⟨hx, mem_history_of_mem_refs hA hb⟩, hbc⟩
+    have h1 := Finset.card_union_add_card_inter R CX
+    have h2 := Finset.card_le_univ (R ∪ CX)
+    have h3 := Finset.card_inter_add_card_sdiff (R ∩ CX) Hon
+    have h4 : ((R ∩ CX) \ Hon).card ≤ Honᶜ.card :=
+      Finset.card_le_card fun v hv => Finset.mem_compl.mpr (Finset.mem_sdiff.mp hv).2
+    have h5 := Finset.card_le_card hsub
+    omega
+  | succ d ih =>
+    intro A hA hround
+    obtain ⟨b, hb⟩ := U.refs_nonempty hA (by omega)
+    have hbU := U.complete A hA b hb
+    have hbr := U.round_of_mem_refs hA hb
+    refine le_trans (ih b hbU (by omega)) (Nat.add_le_add_left (Finset.card_le_card
+      (Finset.image_subset_image fun C hC => ?_)) _)
+    rw [Finset.mem_filter] at hC ⊢
+    exact ⟨hC.1, history_subset_of_reaches hA (Reaches.single hb) hC.2⟩
+
+end Visibility
+
 end LeanDag

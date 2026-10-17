@@ -54,7 +54,7 @@ theorem goodNonempty {T : Finset Validator} {r : ℕ}
     (goodAt U r ∩ (Correct : Finset Validator)).Nonempty := by
   obtain ⟨v₀, hv₀⟩ := MahiMahi.nonempty_of_quorum hcard
   obtain ⟨c₀, hc₀, -, hc₀r⟩ := hpop v₀ hv₀
-  obtain ⟨b, hb, hbr, hbc, hreach⟩ := MahiMahi.exists_commonCore hc₀ hc₀r
+  obtain ⟨b, hb, hbr, hbc, hreach⟩ := exists_commonCore card_compl_correct_le card_add_f_lt_two_mul_quorum hc₀ hc₀r
   refine ⟨(U.block b).creator, Finset.mem_inter.mpr ⟨?_, hbc⟩⟩
   rw [mem_goodAt]
   exact ⟨b, hb, hbr, rfl,

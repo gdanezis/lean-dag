@@ -1833,7 +1833,10 @@ theorem exists_common_correct_ancestor {r : ℕ} {c₀ : BlockId}
 
 The sole premise is that some round-`(r+2)` block exists — a fact about the DAG
 in hand rather than an assumption that any party makes progress. The proof rests
-on a double-counting argument (T3a, `exists_correct_common_support`).
+on a double-counting argument (T3a, `exists_correct_common_support`). Both are
+the common core at a general quorum `q` (`exists_honest_common_support`,
+`exists_commonCore`) at the core's quorum `q = n − f`, where the condition
+`2q ≥ n + f + 1` is `n ≥ 3f + 1` (`card_add_f_lt_two_mul_quorum`).
 
 The counting: with `b ≤ f` the number of Byzantine validators, each correct
 round-`(r+1)` block names at least `n−f−b` correct round-`r` authors, and
@@ -6037,8 +6040,7 @@ the decision round — and nothing else.
 
 The common core is the core's own T3c: if any round-`(r+2)` block
 exists, a correct round-`r` block lies in the cone of every block at
-every round `≥ r + 2` (`MahiMahi.exists_commonCore`, which is
-`exists_common_correct_ancestor` carried upward). The paper's Lemma C.12 is the core's T3c. From it, **MM2**
+every round `≥ r + 2` (`exists_commonCore` at the core's quorum). The paper's Lemma C.12 is the core's T3c. From it, **MM2**
 (`MahiMahi.Counting.holds`): at every `w ≥ 4` some correct validator's
 round-`r` block is directly committed — every voting-round block
 reaches the common core, so every decision-round block certifies it
@@ -11675,12 +11677,12 @@ rows of §27.5 are read at it.
 
 ### 27.3 Two rules that read alike decide alike
 
-`Scheme.ReadAlike` collects what `Decided` reads of a rule: its wave and
+`AnchoredRule.ReadAlike` collects what `Decided` reads of a rule: its wave and
 rungs, its direct commit at a candidate of the slot, its direct skip, its
 rung at a candidate and an anchor of an eligible slot, and its
 tie-break's choice among linked candidates. `ReadAlike.decided_iff`
 (SC2) proves by induction on the relation that two rules agreeing on
-these decide every slot alike, and `Scheme.toDagRule_eq` that their
+these decide every slot alike, and `AnchoredRule.toDagRule_eq` that their
 carriers are then equal. Every property, mechanism and headline stated
 over a carrier therefore holds at one rule exactly when it holds at the
 other.
@@ -11807,7 +11809,7 @@ non-equivocating set by `Scheme.withHonest`, with the same blocks.
   commit with a direct skip. The third inequality is also visibility:
   a block `d + 1` rounds above `c` authors' decision-round blocks holds
   at least `c + q − n − f` of their authors in its history
-  (`Scheme.card_inHistory_ge`), so every anchor holds `link` votes for a
+  (`card_inHistory_ge`), so every anchor holds `link` votes for a
   directly committed candidate.
 * **Three rounds.** A row that certifies votes one round later, with a
   wave of at least three, a link of one certificate and
@@ -12025,8 +12027,8 @@ SC24: the asynchronous rows are live under the coin, at every row and
 vote, on any record whose blocks reference `q` distinct authors and
 whose validators outside `honest`, at most `f`, may equivocate. The count
 needs no network hypothesis. At `2q ≥ n + f + 1` a common core exists
-(`Scheme.exists_commonCore`): the core's double count (T3a, T3c) at a
-general quorum, a condition every asynchronous row meets at
+(`exists_commonCore`): the common core at a general quorum, of which the
+core's T3a and T3c are the case `q = n − f`, a condition every asynchronous row meets at
 `q = n − f − c`, Mahi-Mahi, Cordial Miners Async, Async Nemo-Nemo and
 Hybrid Mahi-Mahi at equality. One buffer round gives a safe validator
 (`Scheme.safeAt_nonempty`) and the double count
@@ -12310,7 +12312,7 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 
 | Module | Contents |
 |:---|:---|
-| `Common/Counting.lean` | the one counting fact: two sets whose sizes sum past `n + m` meet outside any set of at most `m` (`exists_mem_inter_notMem`), and its contrapositive |
+| `Common/Counting.lean` | the one counting fact: two sets whose sizes sum past `n + m` meet outside any set of at most `m` (`exists_mem_inter_notMem`), and its contrapositive; the threshold form of the double count (`card_mul_le_of_bipartite_filter`) |
 | `Common/Validators.lean` | the fault model (`n ≥ 3f+1`); T0 |
 | `Common/Slots.lean` | the slot schedule every rule runs on; its constructors (`uniform`, `uniformSingle`, `identity`, `waveRobin`) |
 | `Common/Schedule.lean` | conservativity of the pipelined schedule |
@@ -12323,11 +12325,12 @@ Lean 4. No result depends on `sorryAx`, on any bespoke axiom, or on
 | `Common/Support.lean` | counting vocabulary at any block record, in the record and in a view (`supportersIn`, `blamesIn`); what a view holds (`heldAuthors`, `HoldsAtLeast`); the certificate stack over a vote relation (`carriedVotes`, `CarriesVotes`, `certificatesAt`); the hitting lemma, propagation and coverage at any quorate record; the counting bounds under non-equivocation |
 | `Common/Participation.lean` | `PopulatedOn` and `SynchronisedOn`, at raw block data and at any block record |
 | `Common/Ledger.lean` | the ledger at any block record: `commitSeq`, `ledgerSet`, `OutputAt`; monotonicity, uniqueness, and agreement of agreeing assignments |
-| `Common/History.lean` | causal history as a `Finset`, at any block record; a block of a set in an anchor's cone (`LinkedVia`) and the votes in the cone (`coneSupporters`) |
+| `Common/History.lean` | causal history as a `Finset`, at any block record; a block of a set in an anchor's cone (`LinkedVia`) and the votes in the cone (`coneSupporters`); visibility at a quorum (`card_inHistory_ge`) |
 | `Common/Persistence.lean` | T3 |
-| `Common/CommonCore.lean` | T3a, T3c |
+| `Common/CommonCore.lean` | the common core at any quorum `q` with `2q ≥ n + f + 1` (`exists_commonCore`); T3a, T3c at `q = n − f` |
 | `Common/Anchored.lean` | the anchored decision relation every rule is an instance of: `AnchoredRule` (wave, direct commit and skip on a view, graded rungs, ties, what an anchor is), `EligibleAt`, `Decided`, what a rule owes (`Laws`), every committed block an anchor (`anchor_of_decided`), and agreement, monotonicity and the ledger once |
 | `Common/Anchored/Band.lean` | the carrier of a rule (`toDagRule`, `toDagRuleOn`), the four properties at it, the band laws and the band induction once, the indirect property |
+| `Common/Anchored/ReadAlike.lean` | two rules that read alike decide alike and have one carrier (`ReadAlike`, `toDagRule_eq`) |
 | `Common/Anchored/Bounded.lean` | the bounded relation, its congruence across schedules, totality at an anchor and the descent below a committed run |
 
 **The core, `Mysticeti/`.** The pipelined rule and its route, as one instance of the common layer.
@@ -13377,7 +13380,7 @@ reused.
 | Label | Statement | Lean *(module)* |
 |:---|:---|:---|
 | SC1 | every row meets its family's inequalities and the liveness bound (Cordial Miners but its skip); the inequalities force `n ≥ 5f + 3c + 1` and `n ≥ 3f + 2c + 1` and, there, Orcaella's and Hybrid Mysticeti's thresholds; Nemo-Nemo's row fails the second two-round inequality | `Scheme.Table.holds` *(Scheme/Table)* |
-| SC2 | two anchored rules that read alike decide alike, and have one carrier | `Scheme.ReadAlike.decided_iff`, `Scheme.toDagRule_eq` *(Scheme/Helpers/Transfer)* |
+| SC2 | two anchored rules that read alike decide alike, and have one carrier | `AnchoredRule.ReadAlike.decided_iff`, `AnchoredRule.toDagRule_eq` *(Common/Anchored/ReadAlike)* |
 | SC3 | one round up, a vote is a reference and a blame is a reference to no candidate | `Scheme.votes_iff`, `Scheme.blamersAt_eq` *(Scheme/Helpers/Votes)* |
 | SC4 | the Mysticeti, Blue Bottle PS and Orcaella rows are the core's, Odontoceti's and Hybrid's carriers, Orcaella at `n = 5f + 3c + 1` | `Scheme.Equiv.mysticetiRow`, `Scheme.Equiv.blueBottlePSRow`, `Scheme.Equiv.orcaellaRow` *(Scheme/Equiv)* |
 | SC5 | Cordial Miners PS is the core with no direct skip, with the core's laws | `Scheme.cordialLaws`, `Scheme.Equiv.cordialMinersPSRow` *(Scheme/Equiv)* |
@@ -13399,7 +13402,7 @@ reused.
 | SC21 | the output from slot `0` is `commitSeq` and `ledgerSet` of the loop's assignment, every slot below its length decided with that verdict; at the rows of SC12 two validators' ledgers are nested | `Scheme.tryDecide_eq_map`, `Scheme.ledger_read`, `Scheme.ledger_agree`, `Scheme.Loop.ledger`, `Scheme.Loop.ledgerAgree` *(Scheme/Loop, Scheme/Helpers/Ledger)* |
 | SC22 | where nobody equivocates, the two-round inequalities without `n + f + 1 ≤ commit + link` and the three-round ones without `n + f + 1 ≤ 2·cert` give agreement at every vote; Nemo-Nemo and Async Nemo-Nemo meet them at `n = 2c + 1` and agree; with `q = n − c` they need `n ≥ 2c + 1`, and `3c + 1` for a two-round row with a direct skip within the liveness bound | `Scheme.eq_of_noEquiv_all`, `Scheme.twoRoundCrashLaws`, `Scheme.threeRoundCrashLaws`, `Scheme.Table.crashWeaker`, `Scheme.Table.crashRows`, `Scheme.Table.crashBound`, `Scheme.Sufficiency.coveredAgree` *(Scheme/Helpers/Sufficiency, Scheme/Table, Scheme/Sufficiency)* |
 | SC23 | on Hydrozoan's universe the Hybrid Mysticeti row decides as Hydrozoan without its fast path, at every vote; it meets its inequalities at every `n ≥ 3f + 2c + 1`, and its carrier is safe and progresses under Hydrozoan's fault model, and with self-reference lives | `Scheme.readAlike_hydrozoanSlow`, `Scheme.hydrozoanSlow_eq`, `Scheme.Table.hybridAnyCommittee`, `Scheme.HybridRow.slowRow`, `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent` *(Scheme/Helpers/Hydrozoan, Scheme/HybridRow)* |
-| SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; buffer rounds past two add nothing; a uniform coin names a safe leader with probability bounded below, and its misses vanish | `Scheme.exists_commonCore`, `Scheme.isCert_of_safe`, `Scheme.safeAt_nonempty`, `Scheme.card_safeAt_count`, `Scheme.le_card_safeAt`, `Scheme.exists_safe_leader`, `Scheme.Starve.not_starved_of_reaches`, `Scheme.Starve.card_safeAt_starve`, `Scheme.Starve.starvePace`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Helpers/Starve, Scheme/Async)* |
+| SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; buffer rounds past two add nothing; a uniform coin names a safe leader with probability bounded below, and its misses vanish | `exists_commonCore`, `Scheme.isCert_of_safe`, `Scheme.safeAt_nonempty`, `Scheme.card_safeAt_count`, `Scheme.le_card_safeAt`, `Scheme.exists_safe_leader`, `Scheme.Starve.not_starved_of_reaches`, `Scheme.Starve.card_safeAt_starve`, `Scheme.Starve.starvePace`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Common/CommonCore, Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Helpers/Starve, Scheme/Async)* |
 | SC25 | every row safe and live: Cordial Miners on the core's universes; Orcaella, Async Orcaella, Hybrid Mysticeti, Hybrid Mahi-Mahi, Nemo-Nemo and Async Nemo-Nemo under the hybrid fault model with self-reference; the asynchronous rows ready for the count | `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent`, `Scheme.Rows.coreRows`, `Scheme.Rows.hybridRows`, `Scheme.Rows.asyncRows`, `Scheme.Rows.holds` *(Scheme/HybridRow, Scheme/Rows)* |
 | SC26 | the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.toAsyncPace`, `Scheme.SchemeReactive.driftOn`, `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.reaches`, `Scheme.SchemeReactive.votes`, `Scheme.SchemeReactive.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.includes_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
 | SC27 | the asynchronous rows on a validator's own view, under eventual delivery with no time bound: a uniform coin names a leader whose slot commits on every reliable validator's own view with probability at least `1/n` at one buffer round and `(q − f)/n` at two; every reliable block is held by every reliable validator from some time on, rounds are populated, and a safe leader's slot commits on every reliable validator's own view; windows commit and slots below a run are decided there; every timed run is an asynchronous one | `Scheme.AsyncPace.coin_eventuallyCommits`, `Scheme.AsyncPace.exists_time`, `Scheme.AsyncPace.delivered`, `Scheme.AsyncPace.reached`, `Scheme.AsyncPace.populated`, `Scheme.decided_of_safe_of_holds`, `Scheme.AsyncPace.decided_of_safe`, `Scheme.AsyncPace.commitsWithin`, `Scheme.AsyncPace.allDecidedBelow`, `Scheme.AsyncPace.ofPaceCore`, `Scheme.AsyncLocal.holds` *(Scheme/Helpers/AsyncPace, Scheme/AsyncLocal)* |
@@ -13477,7 +13480,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 426 definitions and structures the report names, in
+The 427 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -18205,6 +18208,27 @@ inductive DecidedWithin (U : BlockRecord Validator BlockId Payload P honest) (V 
 
 **The bounded relation**: `Decided`, with every slot the derivation mentions strictly below `B`.
 
+#### `ReadAlike`
+
+*structure, `Common.Anchored.ReadAlike.lean`*
+
+```lean
+structure ReadAlike (R₁ R₂ : AnchoredRule Validator BlockId Payload P honest)
+    (U : BlockRecord Validator BlockId Payload P honest) : Prop where
+  waveAt : ∀ κ, R₁.waveAt κ = R₂.waveAt κ
+  rungs : R₁.rungs = R₂.rungs
+  commit : ∀ (V : U.View) {k : ℕ} {L : BlockId}, IsLeaderBlock U k L →
+    (R₁.Commit U V L (S.slotRound k) (S.kind k) ↔ R₂.Commit U V L (S.slotRound k) (S.kind k))
+  skip : ∀ (V : U.View) (k : ℕ), R₁.Skip U V S k ↔ R₂.Skip U V S k
+  link : ∀ {i k j : ℕ} {A L : BlockId}, i < R₁.rungs → IsLeaderBlock U k L →
+    IsLeaderBlock U j A → R₁.Eligible k j → (R₁.Link i U A L S k ↔ R₂.Link i U A L S k)
+  least : ∀ {i k j : ℕ} {A L : BlockId}, i < R₁.rungs → IsLeaderBlock U k L →
+    IsLeaderBlock U j A → R₁.Eligible k j → R₁.Link i U A L S k →
+    (R₁.Least U A i k L ↔ R₂.Least U A i k L)
+```
+
+**What `Decided` reads, agreeing**, at one record.
+
 #### `EligibleAt`
 
 *def, `Common.Anchored.lean`*
@@ -20741,7 +20765,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 628 theorems the body or Appendix A names, each
+The 634 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -20760,6 +20784,21 @@ theorem exists_mem_inter_notMem {A B Bad : Finset α} {m : ℕ}
 ```
 
 **The intersection lemma.** Two sets whose sizes sum past `n + m` share a member outside any set of at most `m`.
+
+#### `card_mul_le_of_bipartite_filter`
+
+*theorem, `Common.Counting.lean`*
+
+```lean
+theorem card_mul_le_of_bipartite_filter {α β : Type*} (s : Finset α) (t : Finset β)
+    (rel : α → β → Prop) [∀ a b, Decidable (rel a b)] {m d : ℕ}
+    (hm : ∀ a ∈ s, m ≤ (t.bipartiteAbove rel a).card) :
+    s.card * m ≤
+      (t.filter (fun b => d < (s.bipartiteBelow rel b).card)).card * s.card +
+        (t.filter (fun b => ¬ d < (s.bipartiteBelow rel b).card)).card * d
+```
+
+**Double counting, threshold form.** If every `a ∈ s` relates to at least `m` members of `t`, then `|s|·m` is at most `|s|` times the number of `b ∈ t` related to more than `d` members of `s`, plus `d` times the number of the others.
 
 #### `reliable_eq_correct`
 
@@ -20904,6 +20943,21 @@ theorem View.exists_reaches_iff {U : BlockRecord Validator BlockId Payload P hon
 
 **T6a, in the form the commit rules consume.** Asking whether a `P`-block lies in `c`'s history gives the same answer confined to the view or not — what makes a view-relative certificate check well defined.
 
+#### `card_inHistory_ge`
+
+*theorem, `Common.History.lean`*
+
+```lean
+theorem card_inHistory_ge (hne : U.NoEquivOn Hon) (hHon : Honᶜ.card ≤ f)
+    {X : Finset BlockId} {D : ℕ} (hX : ∀ b ∈ X, b ∈ U.ids ∧ (U.block b).round = D) :
+    ∀ d A, A ∈ U.ids → (U.block A).round = D + 1 + d →
+      (creatorsOf U.block X).card + q ≤
+        Fintype.card Validator + f +
+          (creatorsOf U.block (X.filter (fun C => C ∈ history U A))).card
+```
+
+**Visibility.** A block `d + 1` rounds above a set `X` of round-`D` blocks holds in its history the blocks of `X` of at least `|authors X| + q − n − f` authors.
+
 #### `authorsAt_eq_authorsIn`
 
 *theorem, `Common.Support.lean`*
@@ -21013,6 +21067,45 @@ theorem BlockUniverse.exists_common_mem_of_quorums {s t : Finset BlockId} {n : �
 
 **Two quorum-backed sets of round-`n` blocks share a block**: a correct author common to both has one round-`n` block.
 
+#### `exists_honest_common_support`
+
+*theorem, `Common.CommonCore.lean`*
+
+```lean
+theorem exists_honest_common_support {f r : ℕ} (hf : honestᶜ.card ≤ f)
+    (hq2 : Fintype.card Validator + f + 1 ≤ 2 * q)
+    (hp : q ≤ (authorsAt U (r + 1)).card) :
+    ∃ bw ∈ U.ids, (U.block bw).round = r ∧ (U.block bw).creator ∈ honest ∧
+      (authorsAt U (r + 1)).card + 1 ≤ (supporters U bw (r + 1) ∩ honest).card + q
+```
+
+**The common core's count**: at `2q ≥ n + f + 1`, given a round-`(r+1)` author pool of at least `q`, some honest round-`r` block has so many honest supporters at round `r + 1` that with `q` they exceed the pool.
+
+#### `exists_commonCore`
+
+*theorem, `Common.CommonCore.lean`*
+
+```lean
+theorem exists_commonCore {f r : ℕ} (hf : honestᶜ.card ≤ f)
+    (hq2 : Fintype.card Validator + f + 1 ≤ 2 * q) {c₀ : BlockId}
+    (hc₀ : c₀ ∈ U.ids) (hc₀r : (U.block c₀).round = r + 2) :
+    ∃ b ∈ U.ids, (U.block b).round = r ∧ (U.block b).creator ∈ honest ∧
+      ∀ c ∈ U.ids, r + 2 ≤ (U.block c).round → Reaches U c b
+```
+
+**The common core**: at `2q ≥ n + f + 1`, if a block exists at round `r + 2`, some honest round-`r` block lies in the history of every block from round `r + 2` up.
+
+#### `card_add_f_lt_two_mul_quorum`
+
+*theorem, `Common.CommonCore.lean`*
+
+```lean
+theorem card_add_f_lt_two_mul_quorum :
+    Fintype.card Validator + F.f + 1 ≤ 2 * (quorumCard Validator)
+```
+
+The core's quorum meets the general count's condition.
+
 #### `exists_correct_common_support`
 
 *theorem, `Common.CommonCore.lean`*
@@ -21026,9 +21119,7 @@ theorem exists_correct_common_support {r : ℕ}
         ≤ (correctSupporters U bw (r + 1)).card + Fintype.card Validator
 ```
 
-**T3a (Correct-support counting).** Some correct validator's round-`r` block is backed by enough correct round-`(r+1)` validators to satisfy the `p - 2f` coverage threshold.
-
-Double counting: each correct round-`(r+1)` block names at least `(n-f) - b` correct round-`r` authors, and there are `l` such blocks spread over `c = n - b` correct validators, so some author `w` collects at least `l(n-f-b)/c`. The arithmetic obligation reduces to `c² ≤ f(l+c)`, which `l ≤ c` turns into `c ≤ 2f` — impossible, since `b ≤ f` and `n ≥ 3f+1` force `c ≥ 2f+1`. The same contradiction as at `n = 3f+1`, verbatim.
+**T3a (Correct-support counting).** Some correct validator's round-`r` block is backed by enough correct round-`(r+1)` validators to satisfy the `p - 2f` coverage threshold: the general count at the core's quorum.
 
 #### `exists_common_correct_ancestor`
 
@@ -21042,11 +21133,7 @@ theorem exists_common_correct_ancestor {r : ℕ} {c₀ : BlockId}
       ∀ c ∈ U.ids, (U.block c).round = r + 2 → Reaches U c bw
 ```
 
-**T3c (Common correct ancestor).** If any block exists at round `r+2`, some correct validator's round-`r` block lies in the causal history of *every* round-`(r+2)` block.
-
-The only premise is that a round-`(r+2)` block exists — a fact about the DAG in hand, not an assumption that anyone makes progress. Its own reference quorum supplies the `2f+1` author bound T3a needs.
-
-Note the statement mentions no `Finset BlockId` operation, so unlike T3a it does **not** require decidable equality on ids; the proof supplies that classically.
+**T3c (Common correct ancestor).** If any block exists at round `r+2`, some correct validator's round-`r` block lies in the causal history of *every* round-`(r+2)` block: the general common core at the core's quorum.
 
 #### `mem_ids_and_round_of_quorum_support`
 
@@ -26497,6 +26584,29 @@ theorem decidedBelowRun_of_least
 
 The descent below a committed run, from a choice at every nonempty rung.
 
+#### `decided`
+
+*theorem, `Common.Anchored.ReadAlike.lean`*
+
+```lean
+theorem decided (h : ReadAlike R₁ R₂ U) {V : U.View} {k : ℕ} {v : Option BlockId}
+    (hd : R₁.Decided U V k v) : R₂.Decided U V k v
+```
+
+#### `toDagRule_eq`
+
+*theorem, `Common.Anchored.ReadAlike.lean`*
+
+```lean
+theorem toDagRule_eq
+    (h : ∀ (S : Slots Validator) (U : BlockRecord Validator BlockId Payload P honest)
+      (V : U.View) (k : ℕ) (v : Option BlockId),
+      R₁.Decided (S := S) U V k v ↔ R₂.Decided (S := S) U V k v) :
+    R₁.toDagRule = R₂.toDagRule
+```
+
+**Rules that decide alike have one carrier.**
+
 #### `eligibleAt_of_lt_of_spacing`
 
 *theorem, `Common.Anchored.lean`*
@@ -28574,15 +28684,6 @@ theorem tryDecide_restart {lo lo' N : ℕ} (hlo : lo ≤ lo')
 ```
 
 **Restarting inside the output repeats its tail.**
-
-#### `decided`
-
-*theorem, `Scheme.Helpers.Transfer.lean`*
-
-```lean
-theorem decided (h : ReadAlike R₁ R₂ U) {V : U.View} {k : ℕ} {v : Option BlockId}
-    (hd : R₁.Decided U V k v) : R₂.Decided U V k v
-```
 
 #### `holds`
 

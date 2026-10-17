@@ -17,7 +17,7 @@ theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ _ _ U w
   refine ⟨?_, ?_, ?_, ?_⟩
   · intro r c₀ hc₀ hc₀r
-    exact exists_commonCore hc₀ hc₀r
+    exact exists_commonCore card_compl_correct_le card_add_f_lt_two_mul_quorum hc₀ hc₀r
   · intro T r hw _ hcard hpop2 hpopd
     exact goodNonempty hw hcard hpop2 hpopd
   · intro T r hw _ hcard hpop3 hpopd
