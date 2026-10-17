@@ -85,6 +85,12 @@ def certsAt (U : BlockRecord Validator BlockId Payload P honest) (L : BlockId) (
     Finset BlockId :=
   (blocksAt U (r + (p.waveLength - 1))).filter (fun C => IsCert p σ U C L)
 
+/-- The certificates of the round-`r` candidate `L` in the history of the
+anchor `A`: what the certified-link test counts. -/
+abbrev linkCerts (U : BlockRecord Validator BlockId Payload P honest)
+    (A L : BlockId) (r : ℕ) : Finset BlockId :=
+  (certsAt p σ U L r).filter (fun C => C ∈ history U A)
+
 /-- The vote-round blocks that vote for no block of slot `k`: its blames. -/
 def blamersAt [S : Slots Validator] (U : BlockRecord Validator BlockId Payload P honest)
     (k : ℕ) : Finset BlockId :=
@@ -103,8 +109,7 @@ def schemeAnchored : AnchoredRule Validator BlockId Payload P honest where
   Skip := fun U V _ k => HoldsAtLeast U V p.skipThreshold (blamersAt p σ U k)
   rungs := 1
   Link := fun _ U A L S k =>
-    p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card
+    p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card
   tie := fun _ L L' => L < L'
 
 end Scheme

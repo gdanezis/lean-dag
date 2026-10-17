@@ -35,6 +35,20 @@ theorem familySupport_local (hσ : σ.Local) (hw : 2 ≤ p.waveLength) :
     le_rfl)
   exact isCert_band hσ hb hc (by omega) (by omega) hL (by omega)
 
+/-- **A candidate every block of a population certifies is committed** on a
+view holding those blocks, when the population meets the commit
+threshold. -/
+theorem commit_of_certified {T : Finset Validator} {V : U.View} {L : BlockId} {r κ : ℕ}
+    (hcm : p.commitThreshold ≤ T.card) (hpop : PopulatedOn U T (r + (p.waveLength - 1)))
+    (hcert : ∀ C ∈ U.ids, (U.block C).creator ∈ T → (U.block C).round = r + (p.waveLength - 1) →
+      IsCert p σ U C L ∧ C ∈ V.ids) :
+    (schemeAnchored p σ).Commit U V L r κ := by
+  change p.commitThreshold ≤ (heldAuthors U V (certsAt p σ U L r)).card
+  refine le_trans hcm (Finset.card_le_card fun v hv => ?_)
+  obtain ⟨C, hC, hCc, hCr⟩ := hpop v hv
+  obtain ⟨hcer, hCV⟩ := hcert C hC (hCc ▸ hv) hCr
+  exact mem_heldAuthors.mpr ⟨C, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hC, hCr⟩, hcer⟩, hCV, hCc⟩
+
 /-- **Law 2: certification commits**, at a commit threshold the quorum
 meets. -/
 theorem familySupport_commits {rel : Reliability Validator}
@@ -45,13 +59,10 @@ theorem familySupport_commits {rel : Reliability Validator}
   have hw : (familySupport p σ Hon).waveAt (S.kind k) = p.waveLength - 1 := rfl
   obtain ⟨L, hLmem, hLc, hLr⟩ := hpop (S.slotRound k) le_rfl (by omega) (S.leader k) hlead
   have hLlead : IsLeaderBlock U.val k L := ⟨hLmem, hLr, hLc⟩
-  have hcommit : (schemeAnchored p σ).Commit U.val V L (S.slotRound k) (S.kind k) := by
-    show p.commitThreshold ≤ (heldAuthors U.val V (certsAt p σ U.val L (S.slotRound k))).card
-    refine le_trans hlive (le_trans hq.2 (Finset.card_le_card fun v hv => ?_))
-    obtain ⟨C, hC, hCc, hCr⟩ := hpop (S.slotRound k + (p.waveLength - 1)) (by omega) le_rfl v hv
-    have hcer := hcert L hLlead v hv C hC hCc hCr
-    exact mem_heldAuthors.mpr ⟨C, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hC, hCr⟩, hcer⟩,
-      hcov C hC (by rw [hCr, hw]), hCc⟩
+  have hcommit : (schemeAnchored p σ).Commit U.val V L (S.slotRound k) (S.kind k) :=
+    commit_of_certified (le_trans hlive hq.2) (hpop _ (by omega) le_rfl)
+      fun C hC hCT hCr => ⟨hcert L hLlead _ hCT C hC rfl hCr, hcov C hC (by
+        change (U.val.block C).round ≤ _; rw [hCr, hw])⟩
   refine ⟨L, by omega, AnchoredRule.Decided.directCommit hLlead hcommit, ?_⟩
   intro S' hround hlead' _
   have hS : S'.slotRound k = S.slotRound k := by rw [hround]
@@ -128,25 +139,20 @@ theorem familySupport_ofCoverage {rel : Reliability Validator} (hHon : rel.corre
   have hreach := reaches_of_coversToward hpop hct hL hLr' hLc'
   have hLH : (U.val.block L).creator ∈ Hon := hHon (hq.1 hLc')
   change IsCert p σ U.val c L
-  unfold IsCert
-  split
-  · exact votes_of_reaches hc hL hLH (by omega)
-      (hreach (p.waveLength - 1) (by omega) le_rfl c hc hcc' hcr')
-  · rename_i hv
-    have hw3' := hw3 (by simpa using hv)
-    unfold CarriesVotes
-    refine le_trans hcert (le_trans hq.2 (Finset.card_le_card fun v hvT => ?_))
-    obtain ⟨a, ha, hac, har⟩ := hpop (r + (p.waveLength - 2)) (by omega) (by omega) v hvT
-    have hac' : (U.val.block a).creator = v := hac
-    have har' : (U.val.block a).round = r + (p.waveLength - 2) := har
-    have hare := hreach (p.waveLength - 2) (by omega) (by omega) a ha (by rw [hac']; exact hvT)
-      har'
-    have haref : a ∈ (U.val.block c).refs :=
-      hct (r + (p.waveLength - 2)) (by omega) (by omega) c hc hcc
-        (show (U.val.block c).round = r + (p.waveLength - 2) + 1 by omega) a ha
-        (show (U.val.block a).creator ∈ T by rw [hac']; exact hvT) har hare
-    exact mem_creatorsOf.mpr ⟨a, Finset.mem_filter.mpr ⟨haref, votes_of_reaches ha hL hLH
-      (by omega) hare⟩, hac'⟩
+  refine isCert_of_votes σ p (fun _ => votes_of_reaches hc hL hLH (by omega)
+      (hreach (p.waveLength - 1) (by omega) le_rfl c hc hcc' hcr'))
+    fun hv => ⟨T, le_trans hcert hq.2, fun v hvT => ?_⟩
+  have hw3' := hw3 hv
+  obtain ⟨a, ha, hac, har⟩ := hpop (r + (p.waveLength - 2)) (by omega) (by omega) v hvT
+  have hac' : (U.val.block a).creator = v := hac
+  have har' : (U.val.block a).round = r + (p.waveLength - 2) := har
+  have hare := hreach (p.waveLength - 2) (by omega) (by omega) a ha (by rw [hac']; exact hvT)
+    har'
+  have haref : a ∈ (U.val.block c).refs :=
+    hct (r + (p.waveLength - 2)) (by omega) (by omega) c hc hcc
+      (show (U.val.block c).round = r + (p.waveLength - 2) + 1 by omega) a ha
+      (show (U.val.block a).creator ∈ T by rw [hac']; exact hvT) har hare
+  exact ⟨a, haref, hac', votes_of_reaches ha hL hLH (by omega) hare⟩
 
 end Scheme
 

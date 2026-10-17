@@ -848,9 +848,10 @@ committees (`3(f + c) + 1 > 3f + 2c + 1` at `c ≥ 1`, and
 model with no faults (`noFaults`), where every committee is admitted and
 the trunk's own progress clause is implied by `advancesAt`, and carries
 the quorum `q` in `advancesAt`. With the reliable set `q` strong every
-reliable validator reaches every round below the horizon
-(`SchemeReactive.reached`, the trunk's induction at `q`), so every round
-is populated (`SchemeReactive.populated`) and drift collapses past GST
+reliable validator reaches every round below the horizon, and every
+round is populated: the run with its clock forgotten is asynchronous
+pacing at `q` (`SchemeReactive.toAsyncPace`, §11.1), whose production
+needs no clock. Drift collapses past GST
 (`SchemeReactive.driftOn`, from the trunk's `drift_collapse`). The
 precondition `reactiveLive` is stated at a reliability `rel`, pacing at
 `q = n − rel.slack`: the core's `n − f`, Hydrozoan's `n − f − c`, Nemo's

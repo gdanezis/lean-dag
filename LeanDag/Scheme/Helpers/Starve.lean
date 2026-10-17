@@ -1,6 +1,7 @@
 import LeanDag.Scheme.Helpers.Async
 import LeanDag.Scheme.Model.AsyncPace
 import Mathlib.Data.Prod.Lex
+import Mathlib.Data.Fintype.Fin
 /-!
 # The asynchronous rows: buffer rounds past two add nothing
 
@@ -191,31 +192,26 @@ theorem safeAt_starve {p : Params} (hvo : 1 ≤ p.voteOffset) (hN : p.voteOffset
     rw [Nat.zero_add] at hbr
     exact reaches_of_not_starved hns p.voteOffset hvo hN b hbr
 
+theorem card_filter_le_val (n m : ℕ) :
+    (Finset.univ.filter fun v : Fin n => m ≤ v.val).card = n - min n m := by
+  have h := Finset.card_filter_add_card_filter_not (s := (Finset.univ : Finset (Fin n)))
+    (fun v : Fin n => v.val < m)
+  simp only [Finset.card_univ, Fintype.card_fin, not_lt] at h
+  rw [Fin.card_filter_val_lt] at h
+  omega
+
 /-- **`q − f` safe validators**, at every vote offset within the horizon. -/
 theorem card_safeAt_starve {p : Params} (hvo : 1 ≤ p.voteOffset) (hN : p.voteOffset ≤ N)
     (hfq : f < q) : (safeAt p (record (f := f) hqn N) 0).card = q - f := by
-  rw [safeAt_starve hvo hN hfq]
-  have : (Finset.univ.filter fun v : Fin n => f + (n - q) ≤ v.val).map Fin.valEmbedding =
-      Finset.Ico (f + (n - q)) n := by
-    ext x
-    simp only [Finset.mem_map, Finset.mem_filter, Finset.mem_univ, true_and, Fin.valEmbedding_apply,
-      Finset.mem_Ico]
-    constructor
-    · rintro ⟨v, hv, rfl⟩; exact ⟨hv, v.isLt⟩
-    · rintro ⟨h1, h2⟩; exact ⟨⟨x, h2⟩, h1, rfl⟩
-  rw [← Finset.card_map Fin.valEmbedding, this, Nat.card_Ico]
+  rw [safeAt_starve hvo hN hfq, card_filter_le_val]
   omega
 
 /-- The Byzantine validators are the first `f`. -/
 theorem card_compl_honestSet (hfn : f ≤ n) : (honestSet n f)ᶜ.card = f := by
-  have : ((honestSet n f)ᶜ).map Fin.valEmbedding = Finset.range f := by
-    ext x
-    simp only [honestSet, Finset.mem_map, Finset.mem_compl, Finset.mem_filter, Finset.mem_univ,
-      true_and, not_le, Fin.valEmbedding_apply, Finset.mem_range]
-    constructor
-    · rintro ⟨v, hv, rfl⟩; exact hv
-    · intro h; exact ⟨⟨x, by omega⟩, h, rfl⟩
-  rw [← Finset.card_map Fin.valEmbedding, this, Finset.card_range]
+  have : (honestSet n f)ᶜ = Finset.univ.filter fun v : Fin n => v.val < f := by
+    ext v; simp [honestSet]
+  rw [this, Fin.card_filter_val_lt]
+  omega
 
 /-- Every validator builds every round up to the horizon. -/
 theorem populated_record {r : ℕ} (hr : r ≤ N) :

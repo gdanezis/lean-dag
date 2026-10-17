@@ -27,12 +27,6 @@ section Core
 
 variable [F : Faults Validator]
 
-omit S in
-/-- The core's universe: references name distinct authors. -/
-theorem distinctRefs_core {U : BlockUniverse Validator BlockId Payload} :
-    ∀ b ∈ U.ids, DistinctRefs U b :=
-  fun b hb => (U.valid b hb).distinct_creators
-
 omit S F in
 /-- A count of one author is a block in the anchor's history. -/
 theorem one_le_card_iff_linkedVia {P : Validity Validator BlockId Payload}
@@ -53,7 +47,7 @@ theorem readAlike_mysticeti (σ : VoteSel Validator BlockId Payload ValidWrt Cor
   rungs := rfl
   commit := fun V k L hL => by
     show HoldsAtLeast U V _ (certsAt _ σ U L _) ↔ HoldsAtLeast U V _ _
-    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs_core hL.2.1]
+    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs hL.2.1]
     rfl
   skip := fun V k => by
     show HoldsAtLeast U V _ (blamersAt _ σ U k) ↔ HoldsAtLeast U V _ _
@@ -61,7 +55,7 @@ theorem readAlike_mysticeti (σ : VoteSel Validator BlockId Payload ValidWrt Cor
     rfl
   link := fun {i k j A L} _ hL hA _ => by
     show _ ≤ (creatorsOf U.block ((certsAt _ σ U L _).filter _)).card ↔ LinkedVia U A _
-    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs_core hL.2.1]
+    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs hL.2.1]
     exact one_le_card_iff_linkedVia hA.1 _
   least := fun {i k j A L} hi hL hA he hl => by
     have hi0 : i = 0 := by simp only [schemeAnchored] at hi; omega
@@ -70,7 +64,7 @@ theorem readAlike_mysticeti (σ : VoteSel Validator BlockId Payload ValidWrt Cor
         ((schemeAnchored (Params.mysticeti (Fintype.card Validator) F.f) σ).Link 0 U A L' S k ↔
           (coreAnchored Validator BlockId Payload).Link 0 U A L' S k) := fun hL' => by
       show _ ≤ (creatorsOf U.block ((certsAt _ σ U _ _).filter _)).card ↔ LinkedVia U A _
-      rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs_core hL'.2.1]
+      rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs hL'.2.1]
       exact one_le_card_iff_linkedVia hA.1 _
     constructor
     · exact fun _ _ _ _ h => h
@@ -94,7 +88,7 @@ theorem link_blueBottlePS (σ : VoteSel Validator BlockId Payload ValidWrt Corre
     (schemeAnchored (Params.blueBottlePS (Fintype.card Validator) F.f) σ).Link i U A L S k ↔
       (Odontoceti.odontocetiAnchored Validator BlockId Payload).Link i U A L S k := by
   show _ ≤ (creatorsOf U.block ((certsAt _ σ U L _).filter _)).card ↔ _
-  rw [certsAt_eq_votesFor σ _ rfl rfl distinctRefs_core hL.2.1]
+  rw [certsAt_eq_votesFor σ _ rfl rfl distinctRefs hL.2.1]
   rfl
 
 /-- **The Blue Bottle PS row reads as `odontocetiAnchored`.** -/
@@ -106,7 +100,7 @@ theorem readAlike_blueBottlePS (σ : VoteSel Validator BlockId Payload ValidWrt 
   rungs := rfl
   commit := fun V k L hL => by
     show HoldsAtLeast U V _ (certsAt _ σ U L _) ↔ HoldsAtLeast U V _ _
-    rw [certsAt_eq_votesFor σ _ rfl rfl distinctRefs_core hL.2.1]
+    rw [certsAt_eq_votesFor σ _ rfl rfl distinctRefs hL.2.1]
     rfl
   skip := fun V k => by
     show HoldsAtLeast U V _ (blamersAt _ σ U k) ↔ HoldsAtLeast U V _ _
@@ -131,7 +125,7 @@ theorem link_orcaella (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
       (Hybrid.hybridAnchored Validator BlockId Payload
         (Fintype.card Validator - 3 * H.fb - 2 * H.fc)).Link i U A L S k := by
   show _ ≤ (creatorsOf U.block ((certsAt _ σ U L _).filter _)).card ↔ _
-  rw [certsAt_eq_votesFor σ _ rfl rfl distinctRefs_core hL.2.1]
+  rw [certsAt_eq_votesFor σ _ rfl rfl distinctRefs hL.2.1]
   rfl
 
 /-- **The Orcaella row reads as `hybridAnchored`** at the committee
@@ -147,7 +141,7 @@ theorem readAlike_orcaella (σ : VoteSel Validator BlockId Payload ValidWrt Corr
   rungs := rfl
   commit := fun V k L hL => by
     show HoldsAtLeast U V _ (certsAt _ σ U L _) ↔ HoldsAtLeast U V _ _
-    rw [certsAt_eq_votesFor σ _ rfl rfl distinctRefs_core hL.2.1]
+    rw [certsAt_eq_votesFor σ _ rfl rfl distinctRefs hL.2.1]
     show HoldsAtLeast U V (Fintype.card Validator - H.fb - H.fc) _ ↔
       HoldsAtLeast U V (Fintype.card Validator - (H.fb + H.fc)) _
     rw [Nat.sub_sub]

@@ -63,11 +63,6 @@ section Slow
 
 variable [S : Slots Replica]
 
-omit [LinearOrder BlockId] S in
-theorem distinctRefs_hydrozoan {U : Hydrozoan.BlockUniverse Replica BlockId} :
-    ∀ b ∈ U.ids, DistinctRefs U b :=
-  fun b hb => (U.valid b hb).distinct_creators
-
 /-- **The row reads as Hydrozoan without its fast path.** -/
 theorem readAlike_hydrozoanSlow
     (σ : VoteSel Replica BlockId Unit Hydrozoan.ValidWrt Hydrozoan.NonByzantine)
@@ -78,7 +73,7 @@ theorem readAlike_hydrozoanSlow
   rungs := rfl
   commit := fun V k L hL => by
     show HoldsAtLeast U V _ (certsAt _ σ U L _) ↔ HoldsAtLeast U V _ _
-    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs_hydrozoan hL.2.1, hybridMysticeti_cert]
+    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs hL.2.1, hybridMysticeti_cert]
     rfl
   skip := fun V k => by
     show HoldsAtLeast U V _ (blamersAt _ σ U k) ↔ HoldsAtLeast U V _ _
@@ -86,7 +81,7 @@ theorem readAlike_hydrozoanSlow
     rfl
   link := fun {i k j A L} _ hL hA _ => by
     show _ ≤ (creatorsOf U.block ((certsAt _ σ U L _).filter _)).card ↔ LinkedVia U A _
-    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs_hydrozoan hL.2.1, hybridMysticeti_cert]
+    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs hL.2.1, hybridMysticeti_cert]
     exact one_le_card_iff_linkedVia hA.1 _
   least := fun {i k j A L} hi hL hA he hl => by
     refine ⟨fun _ _ _ _ h => h, fun _ L' hL' hl' hlt => ?_⟩
@@ -94,8 +89,8 @@ theorem readAlike_hydrozoanSlow
         F.f F.c) σ).Link i U A L₀ S k →
         (certsAt (Params.hybridMysticeti (Fintype.card Replica) F.f F.c) σ U L₀
           (S.slotRound k)).Nonempty) := fun {L₀} h => by
-      have h1 : 1 ≤ (creatorsOf U.block ((certsAt (Params.hybridMysticeti (Fintype.card Replica)
-          F.f F.c) σ U L₀ (S.slotRound k)).filter (fun C => C ∈ history U A))).card := h
+      have h1 : 1 ≤ (creatorsOf U.block (linkCerts (Params.hybridMysticeti (Fintype.card Replica)
+          F.f F.c) σ U A L₀ (S.slotRound k))).card := h
       exact (one_le_card_nonempty h1).mono (Finset.filter_subset _ _)
     have heq := eq_of_certs_three σ rfl (show 3 ≤ 3 by omega)
       U.noEquivOn_honest card_compl_nonByzantine

@@ -98,6 +98,75 @@ theorem eq_of_noEquiv_all (hne : U.NoEquivOn Hon) (hHon : Honᶜ.card ≤ 0) {L�
 
 variable [S : Slots Validator]
 
+/-! ## The laws every row has
+
+Monotonicity, the skip's and the link's reading of the schedule, and
+visibility at an inequality of the form `link + n + f ≤ commit + q`, which
+every covered family meets. -/
+
+section Common
+
+variable {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+
+omit [Fintype Validator] [P.Quorate q] S in
+theorem schemeCommitMono : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
+    {V V' : U.View} {L : BlockId} {r κ : ℕ}, I S U → V.ids ⊆ V'.ids →
+    (schemeAnchored p σ).Commit U V L r κ → (schemeAnchored p σ).Commit U V' L r κ :=
+  fun _ hsub h => HoldsAtLeast.mono hsub h
+
+omit [Fintype Validator] [P.Quorate q] S in
+theorem schemeSkipMono : ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
+    {V V' : U.View} {k : ℕ}, I S U → V.ids ⊆ V'.ids →
+    (schemeAnchored p σ).Skip U V S k → (schemeAnchored p σ).Skip U V' S k :=
+  fun _ hsub h => HoldsAtLeast.mono hsub h
+
+omit [Fintype Validator] [P.Quorate q] S in
+theorem schemeSkipCongr : ∀ {S₁ S₂ : Slots Validator}
+    {U : BlockRecord Validator BlockId Payload P honest} {V : U.View} {k : ℕ}, I S₁ U →
+    S₁.slotRound k = S₂.slotRound k → S₁.leader k = S₂.leader k → S₁.kind k = S₂.kind k →
+    (schemeAnchored p σ).Skip U V S₁ k → (schemeAnchored p σ).Skip U V S₂ k := by
+  intro S₁ S₂ U V k _ hround hk _ h
+  change HoldsAtLeast U V p.skipThreshold (blamersAt (S := S₁) p σ U k) at h
+  change HoldsAtLeast U V p.skipThreshold (blamersAt (S := S₂) p σ U k)
+  unfold blamersAt at h ⊢
+  rw [← hround, ← hk]
+  exact h
+
+omit [Fintype Validator] [P.Quorate q] S in
+theorem schemeLinkCongr : (schemeAnchored p σ).LinkCongr :=
+  (schemeAnchored p σ).linkCongr_of_round
+    (fun _ U A L r => p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L r)).card)
+    fun _ _ _ _ _ _ => rfl
+
+end Common
+
+omit [Fintype Validator] [P.Quorate q] S in
+theorem linkCerts_subset {A L : BlockId} {r : ℕ} : linkCerts p σ U A L r ⊆ certsAt p σ U L r :=
+  Finset.filter_subset _ _
+
+omit S in
+/-- **Visibility**, at `link + n + f ≤ commit + q`: a direct commit's
+certificates in any anchor's history meet the link threshold. -/
+theorem schemeCommitLink (hHon : Honᶜ.card ≤ f)
+    (hineq : p.linkSize + Fintype.card Validator + f ≤ p.commitThreshold + q) :
+    ∀ {S : Slots Validator} {U : BlockRecord Validator BlockId Payload P honest}
+      {V : U.View} {k j : ℕ} {L A : BlockId},
+      U.NoEquivOn Hon → IsLeaderBlock U k L →
+      (schemeAnchored p σ).Commit U V L (S.slotRound k) (S.kind k) →
+      IsLeaderBlock U j A → (schemeAnchored p σ).Anchor U A → (schemeAnchored p σ).Eligible k j →
+      ∃ i, i < (schemeAnchored p σ).rungs ∧ (schemeAnchored p σ).Link i U A L S k := by
+  intro S U V k j L A hne hL h hA _ helig
+  have hround := (schemeAnchored p σ).anchor_round_le hA helig
+  simp only [schemeAnchored] at hround
+  have hvis := card_inHistory_ge hne hHon (X := certsAt p σ U L (S.slotRound k))
+    (fun b hb => let h := (mem_certsAt_iff σ).mp hb; ⟨h.1, h.2.1⟩)
+    ((U.block A).round - (S.slotRound k + (p.waveLength - 1)) - 1) A hA.1 (by omega)
+  have := h.le
+  refine ⟨0, Nat.one_pos, ?_⟩
+  change p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card
+  simp only [linkCerts]
+  omega
+
 /-! ## Votes as certificates: the two-round family -/
 
 section TwoRound
@@ -109,8 +178,7 @@ omit [Fintype Validator] [P.Mechanised] S in
 theorem mem_certsAt_two {C L : BlockId} {r : ℕ} :
     C ∈ certsAt p σ U L r ↔
       C ∈ U.ids ∧ (U.block C).round = r + (p.waveLength - 1) ∧ σ.Votes U C L := by
-  rw [mem_certsAt_iff]
-  simp only [IsCert, hv, if_true]
+  rw [mem_certsAt_iff, isCert_iff_votes σ p hv]
 
 omit [P.Mechanised] S in
 /-- Two sets of votes for two blocks of a slot, past `n + f` authors, name
@@ -137,7 +205,7 @@ theorem not_votes_blames_two (hne : U.NoEquivOn Hon) (hHon : Honᶜ.card ≤ f)
     (hs : s ⊆ certsAt p σ U L (S.slotRound k))
     (h : Fintype.card Validator + f <
       (creatorsOf U.block s).card + (creatorsOf U.block (blamersAt p σ U k)).card) : False := by
-  have hoff : p.voteOffset = p.waveLength - 1 := by simp [Params.voteOffset, hv]
+  have hoff := Params.voteOffset_of_true hv
   obtain ⟨b, hb₁, hb₂⟩ := exists_common_block hne hHon
     (n := S.slotRound k + (p.waveLength - 1))
     (fun b hb => let h := (mem_certsAt_two σ hv).mp (hs hb); ⟨h.1, h.2.1⟩)
@@ -165,40 +233,25 @@ theorem twoRoundLaws (hHon : Honᶜ.card ≤ f) (hq : q ≤ Fintype.card Validat
     have := h.le; have := hs.le
     obtain ⟨ha, hb, hc⟩ := hineq
     exact not_votes_blames_two σ hv hne hHon hL subset_rfl (by omega)
-  commit_link := fun {S U V k j L A} hne hL h hA _ helig => by
-    have hround := (schemeAnchored p σ).anchor_round_le hA helig
-    simp only [schemeAnchored] at hround
-    have hvis := card_inHistory_ge hne hHon (X := certsAt p σ U L (S.slotRound k))
-      (fun b hb => let h := (mem_certsAt_two σ hv).mp hb; ⟨h.1, h.2.1⟩)
-      ((U.block A).round - (S.slotRound k + (p.waveLength - 1)) - 1) A hA.1 (by omega)
-    have := h.le
-    obtain ⟨ha, hb, hc⟩ := hineq
-    exact ⟨0, Nat.one_pos, show p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter (fun C => C ∈ history U A))).card by omega⟩
+  commit_link := schemeCommitLink σ hHon (by obtain ⟨-, -, hc⟩ := hineq; omega)
   commit_link_unique := fun {S U V k j i L₁ L₂ A} hne hL₁ hL₂ h _ _ _ _ _ hlink _ => by
     have := h.le
-    have hl : p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L₂ (S.slotRound k)).filter (fun C => C ∈ history U A))).card := hlink
+    have hl : p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L₂ (S.slotRound k))).card := hlink
     obtain ⟨ha, hb, hc⟩ := hineq
     exact eq_of_votes_two σ hv hne hHon (r := S.slotRound k) subset_rfl
-      (Finset.filter_subset (fun C => C ∈ history U A) _)
+      (linkCerts_subset σ (A := A))
       (by rw [hL₁.2.2, hL₂.2.2]) (by rw [hL₁.2.1, hL₂.2.1]) (by omega)
   skip_link := fun {S U V k i L A} hne hs hL _ _ hlink => by
     have := hs.le
-    have hl : p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter (fun C => C ∈ history U A))).card := hlink
+    have hl : p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card := hlink
     obtain ⟨ha, hb, hc⟩ := hineq
-    exact not_votes_blames_two σ hv hne hHon hL (Finset.filter_subset (fun C => C ∈ history U A) _) (by omega)
+    exact not_votes_blames_two σ hv hne hHon hL (linkCerts_subset σ (A := A)) (by omega)
   link_unique := fun {S U k j i L₁ L₂ A} _ hL₁ hL₂ _ _ _ _ _ hl₁ hl₂ hm₁ hm₂ =>
     le_antisymm (not_lt.mp (hm₁ L₂ hL₂ hl₂)) (not_lt.mp (hm₂ L₁ hL₁ hl₁))
-  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun {S₁ S₂ U V k} _ hround hk _ h => by
-    change HoldsAtLeast U V p.skipThreshold (blamersAt (S := S₁) p σ U k) at h
-    show HoldsAtLeast U V p.skipThreshold (blamersAt (S := S₂) p σ U k)
-    unfold blamersAt at h ⊢
-    rw [← hround, ← hk]
-    exact h
-  link_congr := (schemeAnchored p σ).linkCongr_of_round
-    (fun _ U A L r => p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L r).filter
-      (fun C => C ∈ history U A))).card) fun _ _ _ _ _ _ => rfl
+  commit_mono := fun {S} => schemeCommitMono σ (I := fun _ U => U.NoEquivOn Hon) (S := S)
+  skip_mono := schemeSkipMono σ (I := fun _ U => U.NoEquivOn Hon)
+  skip_congr := schemeSkipCongr σ (I := fun _ U => U.NoEquivOn Hon)
+  link_congr := schemeLinkCongr σ
 
 omit S in
 /-- **A two-round row meeting its inequalities where nobody equivocates has
@@ -213,38 +266,21 @@ theorem twoRoundCrashLaws (hHon : Honᶜ.card ≤ 0) (hq : q ≤ Fintype.card Va
     have := h.le; have := hs.le
     obtain ⟨ha, hc⟩ := hineq
     exact not_votes_blames_two σ hv hne hHon hL subset_rfl (by omega)
-  commit_link := fun {S U V k j L A} hne hL h hA _ helig => by
-    have hround := (schemeAnchored p σ).anchor_round_le hA helig
-    simp only [schemeAnchored] at hround
-    have hvis := card_inHistory_ge hne hHon (X := certsAt p σ U L (S.slotRound k))
-      (fun b hb => let h := (mem_certsAt_two σ hv).mp hb; ⟨h.1, h.2.1⟩)
-      ((U.block A).round - (S.slotRound k + (p.waveLength - 1)) - 1) A hA.1 (by omega)
-    have := h.le
-    obtain ⟨ha, hc⟩ := hineq
-    exact ⟨0, Nat.one_pos, show p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L
-      (S.slotRound k)).filter (fun C => C ∈ history U A))).card by omega⟩
+  commit_link := schemeCommitLink σ hHon (by obtain ⟨-, hc⟩ := hineq; omega)
   commit_link_unique := fun {S U V k j i L₁ L₂ A} hne hL₁ hL₂ _ _ _ _ _ _ _ _ =>
     eq_of_noEquiv_all hne hHon hL₁.1 hL₂.1 (by rw [hL₁.2.2, hL₂.2.2]) (by rw [hL₁.2.1, hL₂.2.1])
   skip_link := fun {S U V k i L A} hne hs hL _ _ hlink => by
     have := hs.le
-    have hl : p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card := hlink
+    have hl : p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card := hlink
     obtain ⟨ha, hc⟩ := hineq
-    exact not_votes_blames_two σ hv hne hHon hL (Finset.filter_subset (fun C => C ∈ history U A) _)
+    exact not_votes_blames_two σ hv hne hHon hL (linkCerts_subset σ (A := A))
       (by omega)
   link_unique := fun {S U k j i L₁ L₂ A} _ hL₁ hL₂ _ _ _ _ _ hl₁ hl₂ hm₁ hm₂ =>
     le_antisymm (not_lt.mp (hm₁ L₂ hL₂ hl₂)) (not_lt.mp (hm₂ L₁ hL₁ hl₁))
-  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun {S₁ S₂ U V k} _ hround hk _ h => by
-    change HoldsAtLeast U V p.skipThreshold (blamersAt (S := S₁) p σ U k) at h
-    show HoldsAtLeast U V p.skipThreshold (blamersAt (S := S₂) p σ U k)
-    unfold blamersAt at h ⊢
-    rw [← hround, ← hk]
-    exact h
-  link_congr := (schemeAnchored p σ).linkCongr_of_round
-    (fun _ U A L r => p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L r).filter
-      (fun C => C ∈ history U A))).card) fun _ _ _ _ _ _ => rfl
+  commit_mono := fun {S} => schemeCommitMono σ (I := fun _ U => U.NoEquivOn Hon) (S := S)
+  skip_mono := schemeSkipMono σ (I := fun _ U => U.NoEquivOn Hon)
+  skip_congr := schemeSkipCongr σ (I := fun _ U => U.NoEquivOn Hon)
+  link_congr := schemeLinkCongr σ
 
 end TwoRound
 
@@ -260,8 +296,8 @@ theorem mem_certsAt_three {C L : BlockId} {r : ℕ} :
     C ∈ certsAt p σ U L r ↔
       C ∈ U.ids ∧ (U.block C).round = r + (p.waveLength - 1) ∧
         p.certThreshold ≤ (creatorsOf U.block (carriedVotes U (σ.Votes U) C L)).card := by
-  rw [mem_certsAt_iff]
-  simp only [IsCert, hv, Bool.false_eq_true, if_false, CarriesVotes]
+  rw [mem_certsAt_iff, isCert_iff_carries σ p hv]
+  rfl
 
 omit [Fintype Validator] S in
 theorem mem_carriedVotes_three {C L b : BlockId} {r : ℕ} (hC : C ∈ certsAt p σ U L r)
@@ -333,64 +369,41 @@ theorem threeRoundLaws (hHon : Honᶜ.card ≤ f) (hq : q ≤ Fintype.card Valid
     have g : Fintype.card Validator + f <
         p.certThreshold + (creatorsOf U.block (blamersAt p σ U k)).card := by omega
     exact not_cert_blames_three σ hv hw hne hHon hL (one_le_card_nonempty g₁) g
-  commit_link := fun {S U V k j L A} hne hL h hA _ helig => by
-    have hround := (schemeAnchored p σ).anchor_round_le hA helig
-    simp only [schemeAnchored] at hround
-    have hvis := card_inHistory_ge hne hHon (X := certsAt p σ U L (S.slotRound k))
-      (fun b hb => let h := (mem_certsAt_three σ hv).mp hb; ⟨h.1, h.2.1⟩)
-      ((U.block A).round - (S.slotRound k + (p.waveLength - 1)) - 1) A hA.1 (by omega)
-    have := h.le
-    obtain ⟨ha, hb, hc⟩ := hineq
-    exact ⟨0, Nat.one_pos, show p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter (fun C => C ∈ history U A))).card by omega⟩
+  commit_link := schemeCommitLink σ hHon (by obtain ⟨-, -, hc⟩ := hineq; omega)
   commit_link_unique := fun {S U V k j i L₁ L₂ A} hne hL₁ hL₂ h _ _ _ _ _ hlink _ => by
     have := h.le
-    have hlk : p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L₂ (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card := hlink
+    have hlk : p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L₂ (S.slotRound k))).card := hlink
     obtain ⟨ha, hb, hc⟩ := hineq
     have g₁ : 1 ≤ (creatorsOf U.block (certsAt p σ U L₁ (S.slotRound k))).card := by omega
-    have g₂ : 1 ≤ (creatorsOf U.block ((certsAt p σ U L₂ (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card := by omega
+    have g₂ : 1 ≤ (creatorsOf U.block (linkCerts p σ U A L₂ (S.slotRound k))).card := by omega
     have g : Fintype.card Validator + f < 2 * p.certThreshold := by omega
     exact eq_of_certs_three σ hv hw hne hHon g (one_le_card_nonempty g₁)
       ((one_le_card_nonempty g₂).mono (Finset.filter_subset _ _))
       (by rw [hL₁.2.2, hL₂.2.2]) (by rw [hL₁.2.1, hL₂.2.1])
   skip_link := fun {S U V k i L A} hne hs hL _ _ hlink => by
     have := hs.le
-    have hlk : p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card := hlink
+    have hlk : p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card := hlink
     obtain ⟨ha, hb, hc⟩ := hineq
-    have g₁ : 1 ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card := by omega
+    have g₁ : 1 ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card := by omega
     have g : Fintype.card Validator + f <
         p.certThreshold + (creatorsOf U.block (blamersAt p σ U k)).card := by omega
     exact not_cert_blames_three σ hv hw hne hHon hL
       ((one_le_card_nonempty g₁).mono (Finset.filter_subset _ _)) g
   link_unique := fun {S U k j i L₁ L₂ A} hne hL₁ hL₂ _ _ _ _ _ hl₁ hl₂ _ _ => by
-    have hk₁ : p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L₁ (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card := hl₁
-    have hk₂ : p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L₂ (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card := hl₂
+    have hk₁ : p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L₁ (S.slotRound k))).card := hl₁
+    have hk₂ : p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L₂ (S.slotRound k))).card := hl₂
     obtain ⟨ha, hb, hc⟩ := hineq
-    have g₁ : 1 ≤ (creatorsOf U.block ((certsAt p σ U L₁ (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card := by omega
-    have g₂ : 1 ≤ (creatorsOf U.block ((certsAt p σ U L₂ (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card := by omega
+    have g₁ : 1 ≤ (creatorsOf U.block (linkCerts p σ U A L₁ (S.slotRound k))).card := by omega
+    have g₂ : 1 ≤ (creatorsOf U.block (linkCerts p σ U A L₂ (S.slotRound k))).card := by omega
     have g : Fintype.card Validator + f < 2 * p.certThreshold := by omega
     exact eq_of_certs_three σ hv hw hne hHon g
       ((one_le_card_nonempty g₁).mono (Finset.filter_subset _ _))
       ((one_le_card_nonempty g₂).mono (Finset.filter_subset _ _))
       (by rw [hL₁.2.2, hL₂.2.2]) (by rw [hL₁.2.1, hL₂.2.1])
-  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun {S₁ S₂ U V k} _ hround hk _ h => by
-    change HoldsAtLeast U V p.skipThreshold (blamersAt (S := S₁) p σ U k) at h
-    show HoldsAtLeast U V p.skipThreshold (blamersAt (S := S₂) p σ U k)
-    unfold blamersAt at h ⊢
-    rw [← hround, ← hk]
-    exact h
-  link_congr := (schemeAnchored p σ).linkCongr_of_round
-    (fun _ U A L r => p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L r).filter
-      (fun C => C ∈ history U A))).card) fun _ _ _ _ _ _ => rfl
+  commit_mono := fun {S} => schemeCommitMono σ (I := fun _ U => U.NoEquivOn Hon) (S := S)
+  skip_mono := schemeSkipMono σ (I := fun _ U => U.NoEquivOn Hon)
+  skip_congr := schemeSkipCongr σ (I := fun _ U => U.NoEquivOn Hon)
+  link_congr := schemeLinkCongr σ
 
 omit S in
 /-- **A three-round row meeting its inequalities where nobody equivocates
@@ -408,42 +421,24 @@ theorem threeRoundCrashLaws (hHon : Honᶜ.card ≤ 0) (hq : q ≤ Fintype.card 
     have g : Fintype.card Validator + 0 <
         p.certThreshold + (creatorsOf U.block (blamersAt p σ U k)).card := by omega
     exact not_cert_blames_three σ hv hw hne hHon hL (one_le_card_nonempty g₁) g
-  commit_link := fun {S U V k j L A} hne hL h hA _ helig => by
-    have hround := (schemeAnchored p σ).anchor_round_le hA helig
-    simp only [schemeAnchored] at hround
-    have hvis := card_inHistory_ge hne hHon (X := certsAt p σ U L (S.slotRound k))
-      (fun b hb => let h := (mem_certsAt_three σ hv).mp hb; ⟨h.1, h.2.1⟩)
-      ((U.block A).round - (S.slotRound k + (p.waveLength - 1)) - 1) A hA.1 (by omega)
-    have := h.le
-    obtain ⟨hb, hc⟩ := hineq
-    exact ⟨0, Nat.one_pos, show p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L
-      (S.slotRound k)).filter (fun C => C ∈ history U A))).card by omega⟩
+  commit_link := schemeCommitLink σ hHon (by obtain ⟨-, hc⟩ := hineq; omega)
   commit_link_unique := fun {S U V k j i L₁ L₂ A} hne hL₁ hL₂ _ _ _ _ _ _ _ _ =>
     eq_of_noEquiv_all hne hHon hL₁.1 hL₂.1 (by rw [hL₁.2.2, hL₂.2.2]) (by rw [hL₁.2.1, hL₂.2.1])
   skip_link := fun {S U V k i L A} hne hs hL _ _ hlink => by
     have := hs.le
-    have hlk : p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card := hlink
+    have hlk : p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card := hlink
     obtain ⟨hb, hc⟩ := hineq
-    have g₁ : 1 ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card := by omega
+    have g₁ : 1 ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card := by omega
     have g : Fintype.card Validator + 0 <
         p.certThreshold + (creatorsOf U.block (blamersAt p σ U k)).card := by omega
     exact not_cert_blames_three σ hv hw hne hHon hL
       ((one_le_card_nonempty g₁).mono (Finset.filter_subset _ _)) g
   link_unique := fun {S U k j i L₁ L₂ A} hne hL₁ hL₂ _ _ _ _ _ _ _ _ _ =>
     eq_of_noEquiv_all hne hHon hL₁.1 hL₂.1 (by rw [hL₁.2.2, hL₂.2.2]) (by rw [hL₁.2.1, hL₂.2.1])
-  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_congr := fun {S₁ S₂ U V k} _ hround hk _ h => by
-    change HoldsAtLeast U V p.skipThreshold (blamersAt (S := S₁) p σ U k) at h
-    show HoldsAtLeast U V p.skipThreshold (blamersAt (S := S₂) p σ U k)
-    unfold blamersAt at h ⊢
-    rw [← hround, ← hk]
-    exact h
-  link_congr := (schemeAnchored p σ).linkCongr_of_round
-    (fun _ U A L r => p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L r).filter
-      (fun C => C ∈ history U A))).card) fun _ _ _ _ _ _ => rfl
+  commit_mono := fun {S} => schemeCommitMono σ (I := fun _ U => U.NoEquivOn Hon) (S := S)
+  skip_mono := schemeSkipMono σ (I := fun _ U => U.NoEquivOn Hon)
+  skip_congr := schemeSkipCongr σ (I := fun _ U => U.NoEquivOn Hon)
+  link_congr := schemeLinkCongr σ
 
 end ThreeRound
 

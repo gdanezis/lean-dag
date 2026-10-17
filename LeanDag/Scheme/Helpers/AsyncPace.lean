@@ -99,7 +99,6 @@ section Commit
 variable [P.Mechanised] {q : ℕ} [P.Quorate q] {p : Params}
 variable (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
 
-omit [Fintype Validator] in
 /-- **A safe leader's slot commits on a view holding the reliable
 decision-round blocks**, when they meet the commit threshold. -/
 theorem decided_of_safe_of_holds {k : ℕ} (hw : 2 ≤ p.waveLength)
@@ -110,18 +109,14 @@ theorem decided_of_safe_of_holds {k : ℕ} (hw : 2 ≤ p.waveLength)
     (hV : ∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ V.ids) :
     ∃ L, IsLeaderBlock U k L ∧ (schemeAnchored p σ).Decided U V k (some L) := by
   obtain ⟨hLh, L, hL, hLr, hLc, hsafe⟩ := mem_safeAt.mp hk
-  refine ⟨L, ⟨hL, hLr, hLc⟩, AnchoredRule.Decided.directCommit ⟨hL, hLr, hLc⟩ ?_⟩
-  change p.commitThreshold ≤ (heldAuthors U V (certsAt p σ U L (S.slotRound k))).card
-  refine le_trans hcm (Finset.card_le_card fun u hu => ?_)
-  obtain ⟨C, hC, hCc, hCr⟩ := hpop u hu
-  exact mem_heldAuthors.mpr ⟨C, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hC, hCr⟩,
-    isCert_of_safe σ hw hcv hL hLr (hLc ▸ hLh) hsafe hC hCr⟩, hV C hC (hCc ▸ hu), hCc⟩
+  exact ⟨L, ⟨hL, hLr, hLc⟩, AnchoredRule.Decided.directCommit ⟨hL, hLr, hLc⟩
+    (commit_of_certified hcm hpop fun C hC hCT hCr =>
+      ⟨isCert_of_safe σ hw hcv hL hLr (hLc ▸ hLh) hsafe hC hCr, hV C hC hCT⟩)⟩
 
 namespace AsyncPace
 
 variable (ap : AsyncPace qp U T N)
 
-omit [Fintype Validator] in
 /-- **A safe leader's slot commits on every reliable validator's own
 view**, from some time on. -/
 theorem decided_of_safe {k : ℕ} (hw : 2 ≤ p.waveLength)
@@ -136,7 +131,6 @@ theorem decided_of_safe {k : ℕ} (hw : 2 ≤ p.waveLength)
     (V := ap.viewAt hv t') fun b hb hbT => ht t' htt' v hv b hb hbT
   rwa [U.eq_of_creator_eq hL'.1 hL hLh hL'.2.2 hLc (hL'.2.1.trans hLr.symm)] at hdec
 
-omit [Fintype Validator] in
 /-- **Every window commits on every reliable validator's own view** under
 the safe single-hit clause, from some time on. -/
 theorem commitsWithin {c : ℕ} (hw : 2 ≤ p.waveLength)
@@ -202,7 +196,7 @@ theorem coin_eventuallyCommits [Nonempty Validator] {f b r k : ℕ} (ap : AsyncP
       {v | ap.EventuallyCommits (S := elect v) p σ k} := fun v hv => by
     obtain ⟨hl, hr⟩ := helect v
     refine ap.decided_of_safe (S := elect v) σ hw hcv (le_trans hcm hq) hq (by omega) ?_
-    show (elect v).leader k ∈ safeAt p U ((elect v).slotRound k)
+    change (elect v).leader k ∈ safeAt p U ((elect v).slotRound k)
     rw [hl, hr]; exact hv
   have hmono := (PMF.uniformOfFintype Validator).toOuterMeasure.mono hsub
   refine ⟨fun hb => le_trans ?_ hmono, fun hb => le_trans ?_ hmono⟩

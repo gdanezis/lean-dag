@@ -1,4 +1,4 @@
-import LeanDag.Scheme.Model.Rule
+import LeanDag.Scheme.Model.LeastSel
 import Mathlib.Data.Finset.Max
 /-!
 # The commit loop
@@ -45,10 +45,6 @@ variable (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
 def candidatesIn (k : ℕ) : Finset BlockId :=
   V.ids.filter (fun b => (U.block b).creator = S.leader k ∧ (U.block b).round = S.slotRound k)
 
-/-- The least block of a set, if any. -/
-def leastOf (s : Finset BlockId) : Option BlockId :=
-  if h : s.Nonempty then some (s.min' h) else none
-
 /-- **The scheme's *TryDirectDecide*.** -/
 def tryDirect (k : ℕ) : Option (Option BlockId) :=
   if HoldsAtLeast U V p.skipThreshold (blamersAt p σ U k) then some none
@@ -66,8 +62,7 @@ def tryIndirect (k : ℕ) : List (ℕ × Option (Option BlockId)) → Option (Op
       | some none => tryIndirect k rest
       | some (some A) =>
         some (leastOf ((candidatesIn U V k).filter
-          (fun L => p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-            (fun C => C ∈ history U A))).card)))
+          (fun L => p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card)))
     else tryIndirect k rest
 
 /-- One slot's decision: the direct rules, else the indirect rule. -/

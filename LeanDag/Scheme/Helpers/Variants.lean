@@ -18,15 +18,37 @@ variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
 variable [S : Slots Validator]
 
-/-- A blame from every validator: each validator has a blaming block. -/
-theorem exists_blamer_of_card {P : Validity Validator BlockId Payload}
+omit S in
+/-- Every validator among a set's held authors: each has a block in it. -/
+theorem exists_mem_of_card {P : Validity Validator BlockId Payload}
     {honest : Finset Validator} {U : BlockRecord Validator BlockId Payload P honest}
-    {V : U.View} {k : ℕ} (hs : HoldsAtLeast U V (Fintype.card Validator) (slotBlamers U k))
-    (v : Validator) : ∃ b ∈ slotBlamers U k, (U.block b).creator = v := by
-  have huniv : heldAuthors U V (slotBlamers U k) = Finset.univ :=
+    {V : U.View} {s : Finset BlockId} (hs : HoldsAtLeast U V (Fintype.card Validator) s)
+    (v : Validator) : ∃ b ∈ s, (U.block b).creator = v := by
+  have huniv : heldAuthors U V s = Finset.univ :=
     Finset.eq_univ_of_card _ (le_antisymm (Finset.card_le_univ _) hs)
   obtain ⟨b, hb, -, hbc⟩ := mem_heldAuthors.mp (huniv ▸ Finset.mem_univ v)
   exact ⟨b, hb, hbc⟩
+
+omit [Fintype Validator] S in
+/-- **A rule without its direct skip keeps its laws**: the skip cases are
+empty. -/
+theorem laws_dropSkip {P : Validity Validator BlockId Payload} {honest : Finset Validator}
+    {R : AnchoredRule Validator BlockId Payload P honest}
+    {I : Slots Validator → BlockRecord Validator BlockId Payload P honest → Prop}
+    (hl : R.Laws I) : ({ R with Skip := fun _ _ _ _ => False } :
+      AnchoredRule Validator BlockId Payload P honest).Laws I where
+  commit_unique := hl.commit_unique
+  commit_skip := fun _ _ _ h => h.elim
+  commit_link := hl.commit_link
+  commit_link_unique := hl.commit_link_unique
+  skip_link := fun _ h _ _ _ => h.elim
+  link_unique := hl.link_unique
+  commit_mono := hl.commit_mono
+  skip_mono := fun _ _ h => h
+  skip_congr := fun _ _ _ _ h => h
+  link_congr := hl.link_congr
+  anchor_commit := hl.anchor_commit
+  anchor_link := hl.anchor_link
 
 section Cordial
 
@@ -38,7 +60,7 @@ theorem not_holdsAtLeast_card_slotBlamers (U : BlockUniverse Validator BlockId P
     (V : U.View) (k : ℕ) :
     ¬ HoldsAtLeast U V (Fintype.card Validator) (slotBlamers U k) := by
   intro h
-  obtain ⟨b, hb, hbc⟩ := exists_blamer_of_card h (S.leader k)
+  obtain ⟨b, hb, hbc⟩ := exists_mem_of_card h (S.leader k)
   obtain ⟨hbU, hbr, hbl⟩ := mem_slotBlamers.mp hb
   obtain ⟨i, hi, hic⟩ := (U.valid b hbU).self_parent (by omega)
   have hir := (U.valid b hbU).predecessor i hi
@@ -46,19 +68,8 @@ theorem not_holdsAtLeast_card_slotBlamers (U : BlockUniverse Validator BlockId P
 
 omit S in
 /-- **Cordial Miners PS has the core's laws.** -/
-theorem cordialLaws : (cordialAnchored Validator BlockId Payload).Laws where
-  commit_unique := (coreLaws (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload)).commit_unique
-  commit_skip := fun _ _ _ h => h.elim
-  commit_link := coreLaws.commit_link
-  commit_link_unique := coreLaws.commit_link_unique
-  skip_link := fun _ h _ _ _ => h.elim
-  link_unique := coreLaws.link_unique
-  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_mono := fun _ _ h => h
-  skip_congr := fun _ _ _ _ h => h
-  link_congr := (cordialAnchored Validator BlockId Payload).linkCongr_of_round
-    (fun _ U A L r => CertifiedIn U A L r) fun _ _ _ _ _ _ => rfl
+theorem cordialLaws : (cordialAnchored Validator BlockId Payload).Laws :=
+  laws_dropSkip coreLaws
 
 /-- **The Cordial Miners PS row reads as `cordialAnchored`**: its skip
 threshold `n` is never met on the core's universe. -/
@@ -70,7 +81,7 @@ theorem readAlike_cordial (σ : VoteSel Validator BlockId Payload ValidWrt Corre
   rungs := rfl
   commit := fun V k L hL => by
     change HoldsAtLeast U V _ (certsAt _ σ U L _) ↔ HoldsAtLeast U V _ _
-    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs_core hL.2.1]
+    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs hL.2.1]
     rfl
   skip := fun V k => by
     change HoldsAtLeast U V _ (blamersAt _ σ U k) ↔ False
@@ -78,7 +89,7 @@ theorem readAlike_cordial (σ : VoteSel Validator BlockId Payload ValidWrt Corre
     exact iff_false_intro (not_holdsAtLeast_card_slotBlamers U V k)
   link := fun {i k j A L} _ hL hA _ => by
     change _ ≤ (creatorsOf U.block ((certsAt _ σ U L _).filter _)).card ↔ LinkedVia U A _
-    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs_core hL.2.1]
+    rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs hL.2.1]
     exact one_le_card_iff_linkedVia hA.1 _
   least := fun {i k j A L} hi hL hA he hl => by
     have hi0 : i = 0 := by simp only [schemeAnchored] at hi; omega
@@ -87,7 +98,7 @@ theorem readAlike_cordial (σ : VoteSel Validator BlockId Payload ValidWrt Corre
         ((schemeAnchored (Params.cordialMinersPS (Fintype.card Validator) F.f) σ).Link 0 U A L'
           S k ↔ (coreAnchored Validator BlockId Payload).Link 0 U A L' S k) := fun hL' => by
       change _ ≤ (creatorsOf U.block ((certsAt _ σ U _ _).filter _)).card ↔ LinkedVia U A _
-      rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs_core hL'.2.1]
+      rw [certsAt_eq_certificatesAt σ _ rfl rfl distinctRefs hL'.2.1]
       exact one_le_card_iff_linkedVia hA.1 _
     constructor
     · exact fun _ _ _ _ h => h
@@ -117,7 +128,7 @@ theorem not_vote_of_card_blame {U : Nemo.Universe Validator BlockId Payload}
     (hs : HoldsAtLeast U V (Fintype.card Validator) (slotBlamers U k))
     (hL : IsLeaderBlock U k L) (hq : q ∈ U.ids) (hqr : (U.block q).round = S.slotRound k + 1)
     (hqL : L ∈ (U.block q).refs) : False := by
-  obtain ⟨b, hb, hbc⟩ := exists_blamer_of_card hs (U.block q).creator
+  obtain ⟨b, hb, hbc⟩ := exists_mem_of_card hs (U.block q).creator
   obtain ⟨hbU, hbr, hbl⟩ := mem_slotBlamers.mp hb
   have : b = q := U.no_equivocation b hbU q hq (Finset.mem_univ _) hbc (by omega)
   subst this

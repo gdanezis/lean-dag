@@ -31,7 +31,7 @@ theorem isCert_mysticeti_iff (σ : VoteSel Validator BlockId Payload ValidWrt Co
   show _ ≤ (creatorsOf U.block ((U.block c).refs.filter _)).card ↔
     _ ≤ (creatorsOf U.block ((U.block c).refs.filter _)).card
   rw [Finset.filter_congr fun b hb => votes_iff σ (U.complete c hc b hb)
-    (distinctRefs_core b (U.complete c hc b hb))
+    (distinctRefs b (U.complete c hc b hb))
     (by have := U.round_of_mem_refs hc hb; omega)]
   rfl
 
@@ -68,7 +68,7 @@ def ofReactiveM (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
     · exact Or.inl ((isCert_mysticeti_iff σ hc (by rw [hcr, hL.2.1])).mpr h)
     · refine Or.inr ⟨by simpa using hw, fun b hb hbT hbr hbh hvote => ?_⟩
       exact hincl b hb hbT hbr (by simpa using hbh)
-        ((votes_iff σ hb (distinctRefs_core b hb) (by rw [hbr, hL.2.1])).mp hvote)
+        ((votes_iff σ hb (distinctRefs b hb) (by rw [hbr, hL.2.1])).mp hvote)
 
 end Scheme
 

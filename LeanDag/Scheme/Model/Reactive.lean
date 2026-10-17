@@ -1,5 +1,6 @@
 import LeanDag.Scheme.Model.Local
 import LeanDag.Scheme.Model.NoFaults
+import LeanDag.Scheme.Model.AsyncPace
 import LeanDag.Reactive.Basic
 /-!
 # The family, run reactively
@@ -79,6 +80,13 @@ structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
           (U.block b).round = S.slotRound k + p.voteOffset →
           b ∈ holds v (built v (S.slotRound k + p.voteOffset + 1)) → σ.Votes U b L →
           b ∈ (U.block c).refs)
+
+/-- **The run, its clock forgotten**: asynchronous pacing at `q`. -/
+def SchemeReactive.toAsyncPace [S : Slots Validator] {q : ℕ} {p : Params}
+    {σ : VoteSel Validator BlockId Payload P honest}
+    {U : BlockRecord Validator BlockId Payload P honest} {T : Finset Validator} {N : ℕ}
+    (rs : SchemeReactive q p σ U T N) : AsyncPace q U T N :=
+  AsyncPace.ofPaceCore rs.toPaceCore rs.advancesAt
 
 /-- **The reactive liveness precondition**, at reliability `rel`, over a
 slot window: a quorum `T` of `rel` of non-equivocating validators running a

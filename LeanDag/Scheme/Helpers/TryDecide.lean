@@ -36,24 +36,6 @@ theorem isLeaderBlock_of_mem_candidatesIn {k : ℕ} {L : BlockId} (h : L ∈ can
   obtain ⟨hV, hc, hr⟩ := mem_candidatesIn.mp h
   exact ⟨V.subset_ids hV, hr, hc⟩
 
-omit [Fintype Validator] [DecidableEq Validator] S in
-theorem leastOf_eq_some {s : Finset BlockId} {L : BlockId} (h : leastOf s = some L) :
-    L ∈ s ∧ ∀ L' ∈ s, L ≤ L' := by
-  unfold leastOf at h
-  split at h
-  · rename_i hs
-    cases h
-    exact ⟨s.min'_mem hs, fun L' hL' => s.min'_le L' hL'⟩
-  · cases h
-
-omit [Fintype Validator] [DecidableEq Validator] S in
-theorem leastOf_eq_none {s : Finset BlockId} (h : leastOf s = none) : s = ∅ := by
-  unfold leastOf at h
-  split at h
-  · cases h
-  · rename_i hs
-    exact Finset.not_nonempty_iff_eq_empty.mp hs
-
 omit [Fintype Validator] S in
 /-- A view holds the history of every block it holds. -/
 theorem history_subset_view {A : BlockId} (hA : A ∈ V.ids) : history U A ⊆ V.ids := by
@@ -73,31 +55,23 @@ positive certificate threshold. -/
 theorem mem_view_of_cert (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
     {r : ℕ} {C L : BlockId} (hCV : C ∈ V.ids) (hC : C ∈ certsAt p σ U L r) : L ∈ V.ids := by
   have hcert := (Finset.mem_filter.mp hC).2
-  unfold IsCert at hcert
-  split at hcert
-  · exact history_subset_view hCV (σ.sound U C _ _ L hcert).1
-  · rename_i hv
-    obtain ⟨b, hb, hbL⟩ := exists_vote_of_carriesVotes (hc (by simpa using hv)) hcert
+  cases hv : p.voteIsCert
+  · obtain ⟨b, hb, hbL⟩ := exists_vote_of_carriesVotes (hc hv)
+      ((isCert_iff_carries σ p hv).mp hcert)
     exact history_subset_view (V.complete C hCV b hb) (σ.sound U b _ _ L hbL).1
+  · exact history_subset_view hCV (σ.sound U C _ _ L ((isCert_iff_votes σ p hv).mp hcert)).1
 
 omit [Fintype Validator] in
 /-- **A candidate linked from an anchor the view holds lies in the view**,
 at positive link and certificate thresholds. -/
 theorem mem_view_of_link (hl : 1 ≤ p.linkSize) (hc : p.voteIsCert = false → 1 ≤ p.certThreshold)
     {k : ℕ} {A L : BlockId} (hA : A ∈ V.ids)
-    (h : p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-      (fun C => C ∈ history U A))).card) : L ∈ V.ids := by
+    (h : p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card) :
+    L ∈ V.ids := by
   obtain ⟨v, hv⟩ := Finset.card_pos.mp (lt_of_lt_of_le hl h)
   obtain ⟨C, hC, -⟩ := mem_creatorsOf.mp hv
   obtain ⟨hCc, hCA⟩ := Finset.mem_filter.mp hC
-  have hCV : C ∈ V.ids := history_subset_view hA hCA
-  have hcert := (Finset.mem_filter.mp hCc).2
-  unfold IsCert at hcert
-  split at hcert
-  · exact history_subset_view hCV (σ.sound U C _ _ L hcert).1
-  · rename_i hv
-    obtain ⟨b, hb, hbL⟩ := exists_vote_of_carriesVotes (hc (by simpa using hv)) hcert
-    exact history_subset_view (V.complete C hCV b hb) (σ.sound U b _ _ L hbL).1
+  exact mem_view_of_cert hc (history_subset_view hA hCA) hCc
 
 /-- A slot's decision is derived below the bound `B`, and a commit names a
 candidate the view holds. -/
@@ -169,15 +143,13 @@ theorem tryIndirect_sound (hl : 1 ≤ p.linkSize)
         simp only [Option.some.injEq] at hv
         subst hv
         cases hL : leastOf ((candidatesIn U V k).filter (fun L => p.linkSize ≤
-            (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-              (fun C => C ∈ history U A))).card)) with
+            (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card)) with
         | none =>
           refine ⟨.indirectSkip (by omega) hjB helig' hdA hmid (fun i hi L hL' hlink => ?_),
             fun _ h => by cases h⟩
           have hLV := mem_view_of_link hl hc hAV hlink
           have hmem : L ∈ (candidatesIn U V k).filter (fun L => p.linkSize ≤
-              (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-                (fun C => C ∈ history U A))).card) :=
+              (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card) :=
             Finset.mem_filter.mpr ⟨mem_candidatesIn.mpr ⟨hLV, hL'.2.2, hL'.2.1⟩, hlink⟩
           rw [leastOf_eq_none hL] at hmem
           exact Finset.notMem_empty _ hmem
@@ -366,8 +338,7 @@ theorem tryIndirect_eq {k : ℕ} {ent : ℕ → Option (Option BlockId)} {j : �
       l.map Prod.fst = List.range' a l.length → k < a → a ≤ j → j < a + l.length →
       (∀ e ∈ l, e.2 = ent e.1) →
       tryIndirect p σ U V k l = some (leastOf ((candidatesIn U V k).filter
-        (fun L => p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-          (fun C => C ∈ history U A))).card))) := by
+        (fun L => p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card))) := by
   intro l
   induction l with
   | nil => intro a _ _ _ h _; simp at h; omega
@@ -418,8 +389,7 @@ theorem decisionAt_complete (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThresho
       (∀ m, k < m → m < j → (schemeAnchored p σ).Eligible k m →
         decisionAt p σ U V N m = some none) →
       tryIndirect p σ U V k (scan p σ U V N (N - k)) = some (leastOf ((candidatesIn U V k).filter
-        (fun L => p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-          (fun C => C ∈ history U A))).card))) := fun {k j A} hkj hjN helig hjA hmid => by
+        (fun L => p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card))) := fun {k j A} hkj hjN helig hjA hmid => by
     obtain ⟨hr, hlen, hent⟩ := hscan k (by omega)
     exact tryIndirect_eq ((schemeAnchored p σ).eligible_iff.mp helig) hjA
       (fun m h1 h2 hm => hmid m h1 h2 ((schemeAnchored p σ).eligible_iff.mpr hm))
@@ -472,12 +442,10 @@ theorem decisionAt_complete (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThresho
       have hAV' := hAV (by omega) ihj
       have hLV := mem_view_of_link hl hc hAV' hlink
       have hmem : L ∈ (candidatesIn U V k).filter (fun L => p.linkSize ≤
-          (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-            (fun C => C ∈ history U A))).card) :=
+          (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card) :=
         Finset.mem_filter.mpr ⟨mem_candidatesIn.mpr ⟨hLV, hL.2.2, hL.2.1⟩, hlink⟩
       cases hmin : leastOf ((candidatesIn U V k).filter (fun L => p.linkSize ≤
-          (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-            (fun C => C ∈ history U A))).card)) with
+          (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card)) with
       | none => rw [leastOf_eq_none hmin] at hmem; exact absurd hmem (Finset.notMem_empty _)
       | some L₀ =>
         obtain ⟨hL₀, hle⟩ := leastOf_eq_some hmin
@@ -493,8 +461,7 @@ theorem decisionAt_complete (hl : 1 ≤ p.linkSize) (hcm : 1 ≤ p.commitThresho
     | none =>
       rw [hwalk hkj (by omega) helig ihj (fun m h1 h2 hm => ihmid m h1 h2 hm)]
       cases hmin : leastOf ((candidatesIn U V k).filter (fun L => p.linkSize ≤
-          (creatorsOf U.block ((certsAt p σ U L (S.slotRound k)).filter
-            (fun C => C ∈ history U A))).card)) with
+          (creatorsOf U.block (linkCerts p σ U A L (S.slotRound k))).card)) with
       | none => rfl
       | some L₀ =>
         exfalso

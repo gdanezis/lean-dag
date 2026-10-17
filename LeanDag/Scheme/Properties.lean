@@ -60,8 +60,7 @@ theorem commitsDirect : CommitsDirect (schemeRule p σ Hon)
 theorem indirect : Indirect (schemeRule p σ Hon)
     (fun S i j => S.slotRound i + (p.waveLength - 1) + 1 ≤ S.slotRound j) :=
   AnchoredRule.indirectOn ((schemeAnchored p σ).linkCongr_of_round
-    (fun _ U A L r => p.linkSize ≤ (creatorsOf U.block ((certsAt p σ U L r).filter
-      (fun C => C ∈ history U A))).card) fun _ _ _ _ _ _ => rfl)
+    (fun _ U A L r => p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L r)).card) fun _ _ _ _ _ _ => rfl)
     fun _ h => AnchoredRule.exists_least_of_lt (fun _ _ => Iff.rfl) h
 
 /-- **A slot every quorum member's block one round up leaves unsupported

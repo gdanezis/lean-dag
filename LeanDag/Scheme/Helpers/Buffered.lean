@@ -1,7 +1,7 @@
 import LeanDag.Scheme.Helpers.Transfer
 import LeanDag.Scheme.Helpers.Rows
 import LeanDag.Scheme.Model.LeastSel
-import LeanDag.Scheme.Model.Variants
+import LeanDag.Scheme.Helpers.Variants
 import LeanDag.MahiMahi.Helpers.Decision
 import LeanDag.AsyncBlueBottle.Model.Decision
 import LeanDag.DoS.SelfParent
@@ -48,18 +48,9 @@ theorem leastSel_votes_iff {b L : BlockId} (hb : b ∈ U.ids)
   unfold VoteSel.Votes MahiMahi.Votes
   simp only [leastSel]
   rw [slotIn_eq_candidatesAt hb hr]
-  set s := MahiMahi.candidatesAt U b (U.block L).creator (U.block L).round
-  constructor
-  · intro h
-    by_cases hs : s.Nonempty
-    · rw [dif_pos hs, Option.some.injEq] at h
-      exact ⟨h ▸ s.min'_mem hs, fun L' hL' hlt => absurd (h ▸ s.min'_le L' hL') (not_le.mpr hlt)⟩
-    · rw [dif_neg hs] at h
-      exact absurd h (by simp)
-  · intro ⟨hL, hmin⟩
-    have hs : s.Nonempty := ⟨L, hL⟩
-    rw [dif_pos hs, Option.some.injEq]
-    exact le_antisymm (s.min'_le L hL) (s.le_min' hs L fun y hy => not_lt.mp (hmin y hy))
+  rw [leastOf_eq_some_iff]
+  exact ⟨fun ⟨hL, hmin⟩ => ⟨hL, fun L' hL' hlt => absurd (hmin L' hL') (not_le.mpr hlt)⟩,
+    fun ⟨hL, hmin⟩ => ⟨hL, fun y hy => not_lt.mp (hmin y hy)⟩⟩
 
 /-- **Any vote-selection rule blames as Mahi-Mahi blames**, below the voter. -/
 theorem sel_eq_none_iff_blames (σ : VoteSel Validator BlockId Payload ValidWrt Correct)
@@ -155,11 +146,7 @@ theorem not_holdsAtLeast_card_blames (hw : 3 ≤ w) (U : BlockUniverse Validator
       ((blocksAt U (MahiMahi.votingRound w (S.slotRound k))).filter
         (fun q => MahiMahi.Blames U q (S.leader k) (S.slotRound k))) := by
   intro h
-  set s := (blocksAt U (MahiMahi.votingRound w (S.slotRound k))).filter
-    (fun q => MahiMahi.Blames U q (S.leader k) (S.slotRound k))
-  have huniv : heldAuthors U V s = Finset.univ :=
-    Finset.eq_univ_of_card _ (le_antisymm (Finset.card_le_univ _) h)
-  obtain ⟨b, hb, -, hbc⟩ := mem_heldAuthors.mp (huniv ▸ Finset.mem_univ (S.leader k))
+  obtain ⟨b, hb, hbc⟩ := exists_mem_of_card h (S.leader k)
   obtain ⟨hbs, hbl⟩ := Finset.mem_filter.mp hb
   obtain ⟨hbU, hbr⟩ := mem_blocksAt.mp hbs
   obtain ⟨i, hi, hic, hir⟩ := exists_self_ancestor hbU (t := S.slotRound k)
@@ -173,19 +160,8 @@ theorem not_holdsAtLeast_card_blames (hw : 3 ≤ w) (U : BlockUniverse Validator
 omit S in
 /-- **Cordial Miners Async has Mahi-Mahi's laws**, the skip cases being
 empty. -/
-theorem cordialAsyncLaws (hw : 2 ≤ w) : (cordialAsyncAnchored Validator BlockId Payload w).Laws where
-  commit_unique := (MahiMahi.mahiMahiLaws (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload) hw).commit_unique
-  commit_skip := fun _ _ _ h => h.elim
-  commit_link := (MahiMahi.mahiMahiLaws hw).commit_link
-  commit_link_unique := (MahiMahi.mahiMahiLaws hw).commit_link_unique
-  skip_link := fun _ h _ _ _ => h.elim
-  link_unique := (MahiMahi.mahiMahiLaws hw).link_unique
-  commit_mono := fun _ hsub h => HoldsAtLeast.mono hsub h
-  skip_mono := fun _ _ h => h
-  skip_congr := fun _ _ _ _ h => h
-  link_congr := (cordialAsyncAnchored Validator BlockId Payload w).linkCongr_of_round
-    (fun _ U A L r => MahiMahi.CertifiedIn U w A L r) fun _ _ _ _ _ _ => rfl
+theorem cordialAsyncLaws (hw : 2 ≤ w) : (cordialAsyncAnchored Validator BlockId Payload w).Laws :=
+  laws_dropSkip (MahiMahi.mahiMahiLaws hw)
 
 /-- **The Cordial Miners Async row reads as `cordialAsyncAnchored 5`**, at
 the least vote: its skip threshold `n` is never met on the core's

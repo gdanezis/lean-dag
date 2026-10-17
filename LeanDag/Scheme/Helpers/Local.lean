@@ -1,6 +1,7 @@
 import LeanDag.Scheme.Model.Local
 import LeanDag.Scheme.Model.LeastSel
 import LeanDag.Scheme.Helpers.VotedBlock
+import LeanDag.Scheme.Helpers.Votes
 import LeanDag.Properties.Band
 /-!
 # The least vote and the scheme's vote are local

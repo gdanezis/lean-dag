@@ -228,27 +228,16 @@ theorem isCert_of_safe {r : ℕ} {L : BlockId} (hw : 2 ≤ p.waveLength)
     (hsafe : ∀ b ∈ U.ids, (U.block b).round = r + p.voteOffset → Reaches U b L)
     {C : BlockId} (hC : C ∈ U.ids) (hCr : (U.block C).round = r + (p.waveLength - 1)) :
     IsCert p σ U C L := by
-  unfold IsCert
-  split
-  · rename_i hv
-    have hoff : p.voteOffset = p.waveLength - 1 := by simp [Params.voteOffset, hv]
-    exact votes_of_reaches_record U.noEquivOn_honest hC hL hLc (by omega)
-      (hsafe C hC (by omega))
-  · rename_i hv
-    obtain ⟨hw3, hcq⟩ := hcv (by simpa using hv)
-    have hoff : p.voteOffset = p.waveLength - 2 := by
-      simp only [Params.voteOffset, show p.voteIsCert = false by simpa using hv,
-        Bool.false_eq_true, if_false]
-      omega
-    have hall : carriedVotes U (σ.Votes U) C L = (U.block C).refs := by
-      refine Finset.filter_true_of_mem fun b hb => ?_
-      have hbU := U.complete C hC b hb
-      have hbr := U.round_of_mem_refs hC hb
-      exact votes_of_reaches_record U.noEquivOn_honest hbU hL hLc (by omega)
-        (hsafe b hbU (by omega))
-    show p.certThreshold ≤ (creatorsOf U.block (carriedVotes U (σ.Votes U) C L)).card
-    rw [hall]
-    exact le_trans hcq (U.creators_quorum hC (by omega))
+  have vote : ∀ b ∈ U.ids, (U.block b).round = r + p.voteOffset → σ.Votes U b L :=
+    fun b hb hbr => votes_of_reaches_record U.noEquivOn_honest hb hL hLc
+      (by have := Params.one_le_voteOffset hw; omega)
+      (hsafe b hb hbr)
+  refine isCert_of_votes σ p (fun hv => vote C hC (by rw [Params.voteOffset_of_true hv]; omega))
+    fun hv => ⟨_, le_trans (hcv hv).2 (U.creators_quorum hC (by omega)), fun u hu => ?_⟩
+  obtain ⟨b, hb, rfl⟩ := mem_creatorsOf.mp hu
+  have hbU := U.complete C hC b hb
+  have hbr := U.round_of_mem_refs hC hb
+  exact ⟨b, hb, rfl, vote b hbU (by rw [Params.voteOffset_of_false hv (hcv hv).1]; omega)⟩
 
 /-! ## The safe set -/
 

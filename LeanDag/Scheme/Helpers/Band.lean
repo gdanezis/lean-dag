@@ -35,34 +35,18 @@ theorem votes_band (hσ : σ.Local) (h : AgreeBand R.toDagRule U U' lo hi g g') 
   unfold VoteSel.Votes
   rw [hLb.2, hσ R h hb hblo hbhi hLlo hLb.1.symm]
 
-theorem creatorsOf_band (h : AgreeBand R.toDagRule U U' lo hi g g') {s : Finset BlockId}
-    (hs : ∀ b ∈ s, b ∈ U.ids ∧ lo ≤ (U.block b).round + g ∧ (U.block b).round + g ≤ hi) :
-    creatorsOf U'.block s = creatorsOf U.block s :=
-  Finset.image_congr fun b hb => by
-    obtain ⟨hbU, h1, h2⟩ := hs b hb
-    exact (AnchoredRule.band_block h hbU h1 h2).2
-
 /-- **A certificate, across a band.** -/
 theorem isCert_band (hσ : σ.Local) (h : AgreeBand R.toDagRule U U' lo hi g g') {C L : BlockId}
     (hC : C ∈ U.ids) (hCr : (U.block L).round < (U.block C).round)
     (hChi : (U.block C).round + g ≤ hi) (hL : L ∈ U.ids) (hLlo : lo ≤ (U.block L).round + g) :
     IsCert p σ U' C L ↔ IsCert p σ U C L := by
-  unfold IsCert
-  split
-  · exact votes_band hσ h hC (by omega) hChi hL hLlo (by omega)
-  · unfold CarriesVotes carriedVotes
-    rw [AnchoredRule.band_refs h hC (by omega) hChi]
-    have hset : (U.block C).refs.filter (fun b => σ.Votes U' b L) =
-        (U.block C).refs.filter (fun b => σ.Votes U b L) := by
-      refine Finset.filter_congr fun b hb => ?_
-      have hbU := U.complete C hC b hb
+  cases hv : p.voteIsCert
+  · rw [isCert_iff_carries σ p hv, isCert_iff_carries σ p hv]
+    exact AnchoredRule.carriesVotes_band h hC (by omega) hChi fun b hb => by
       have hbr := U.round_of_mem_refs hC hb
-      exact votes_band hσ h hbU (by omega) (by omega) hL hLlo (by omega)
-    rw [hset, creatorsOf_band h fun b hb => by
-      have hb' := (Finset.mem_filter.mp hb).1
-      have hbU := U.complete C hC b hb'
-      have hbr := U.round_of_mem_refs hC hb'
-      exact ⟨hbU, by omega, by omega⟩]
+      exact votes_band hσ h (U.complete C hC b hb) (by omega) (by omega) hL hLlo (by omega)
+  · rw [isCert_iff_votes σ p hv, isCert_iff_votes σ p hv]
+    exact votes_band hσ h hC (by omega) hChi hL hLlo (by omega)
 
 /-- **Certificates carry into the band's other side.** -/
 theorem certsAt_subset_band (hσ : σ.Local) (hw : 2 ≤ p.waveLength)
@@ -84,8 +68,8 @@ theorem certsAt_history_band (hσ : σ.Local) (hw : 2 ≤ p.waveLength)
     (hAlo : lo ≤ (U.block A).round + g) (hAhi : (U.block A).round + g ≤ hi) (hL : L ∈ U.ids)
     (hLr : (U.block L).round = r) (hlo : lo ≤ r + g) (hrr : r + g = r' + g')
     (hhi : r + (p.waveLength - 1) + g ≤ hi) :
-    (certsAt p σ U' L r').filter (fun C => C ∈ history U' A) =
-      (certsAt p σ U L r).filter (fun C => C ∈ history U A) := by
+    linkCerts p σ U' A L r' =
+      linkCerts p σ U A L r := by
   have hA' := AnchoredRule.band_mem h hA hAlo hAhi
   ext C
   simp only [Finset.mem_filter]
@@ -114,8 +98,7 @@ theorem blamersAt_subset_band (hσ : σ.Local) (hw : 2 ≤ p.waveLength)
     (hkk : S.slotRound k + g = S'.slotRound k' + g') (hlk : S.leader k = S'.leader k')
     (hlo : lo ≤ S.slotRound k + g) (hhi : S.slotRound k + (p.waveLength - 1) + g ≤ hi) :
     blamersAt (S := S) p σ U k ⊆ blamersAt (S := S') p σ U' k' := by
-  have hoff : p.voteOffset ≤ p.waveLength - 1 := by
-    unfold Params.voteOffset; split <;> omega
+  have hoff := Params.voteOffset_le hw
   intro b hb
   obtain ⟨hbb, hnone⟩ := Finset.mem_filter.mp hb
   obtain ⟨hbU, hbr⟩ := mem_blocksAt.mp hbb
@@ -139,8 +122,7 @@ theorem schemeBandLaws (hσ : σ.Local) (hw : 2 ≤ p.waveLength) (hl : 1 ≤ p.
       (certsAt_subset_band hσ hw h hL.1 hL.2.1 (by omega) hkk (by omega)) hcommit
   skip_band := fun {S S' U U' lo hi g g' V V' k k'} h hkk hlk _ hlo hhi hV hskip => by
     have hw' : (schemeAnchored p σ).waveAt (S.kind k) = p.waveLength - 1 := rfl
-    have hoff : p.voteOffset ≤ p.waveLength - 1 := by
-      unfold Params.voteOffset; split <;> omega
+    have hoff := Params.voteOffset_le hw
     exact AnchoredRule.holdsAtLeast_band h hV (fun b hb => by
         obtain ⟨hbb, -⟩ := Finset.mem_filter.mp hb
         obtain ⟨hbU, hbr⟩ := mem_blocksAt.mp hbb
@@ -150,7 +132,7 @@ theorem schemeBandLaws (hσ : σ.Local) (hw : 2 ≤ p.waveLength) (hl : 1 ≤ p.
     have hw' : (schemeAnchored p σ).waveAt (S.kind k) = p.waveLength - 1 := rfl
     show p.linkSize ≤ _ ↔ p.linkSize ≤ _
     rw [certsAt_history_band hσ hw h hA hAlo hAhi hL.1 hL.2.1 hlo hkk (by omega),
-      creatorsOf_band h fun C hC => by
+      AnchoredRule.creatorsOf_band h fun C hC => by
         obtain ⟨hCc, hCh⟩ := Finset.mem_filter.mp hC
         obtain ⟨hCb, -⟩ := Finset.mem_filter.mp hCc
         obtain ⟨hCU, hCr⟩ := mem_blocksAt.mp hCb
@@ -159,26 +141,15 @@ theorem schemeBandLaws (hσ : σ.Local) (hw : 2 ≤ p.waveLength) (hl : 1 ≤ p.
       hLo hlink => by
     have hw' : (schemeAnchored p σ).waveAt (S.kind k) = p.waveLength - 1 := rfl
     have hA' := AnchoredRule.band_mem h hA hAlo hAhi
-    have hlink' : p.linkSize ≤ (creatorsOf U'.block ((certsAt p σ U' L (S'.slotRound k')).filter
-        (fun C => C ∈ history U' A))).card := hlink
+    have hlink' : p.linkSize ≤ (creatorsOf U'.block (linkCerts p σ U' A L (S'.slotRound k'))).card := hlink
     obtain ⟨v, hv⟩ := Finset.card_pos.mp (lt_of_lt_of_le hl hlink')
     obtain ⟨C, hC, -⟩ := mem_creatorsOf.mp hv
     obtain ⟨hCc, hCh⟩ := Finset.mem_filter.mp hC
     obtain ⟨hCb, hcert⟩ := Finset.mem_filter.mp hCc
     obtain ⟨hCU', hCr'⟩ := mem_blocksAt.mp hCb
     -- the candidate lies in the anchor's history in the new record
-    have hLh : L ∈ history U' A := by
-      have hCA := hCh
-      unfold IsCert at hcert
-      split at hcert
-      · exact history_subset_of_reaches hA' ((mem_history_iff hA').mp hCA)
-          (σ.sound U' C _ _ L hcert).1
-      · rename_i hv
-        obtain ⟨b, hb, hbL⟩ := exists_vote_of_carriesVotes (hc (by simpa using hv)) hcert
-        have hbh : b ∈ history U' A := history_subset_of_reaches hA'
-          ((mem_history_iff hA').mp hCA) (mem_history_of_mem_refs hCU' hb)
-        exact history_subset_of_reaches hA' ((mem_history_iff hA').mp hbh)
-          (σ.sound U' b _ _ L hbL).1
+    have hLh : L ∈ history U' A := history_subset_of_reaches hA'
+      ((mem_history_iff hA').mp hCh) (mem_history_of_isCert σ p hc hCU' hcert)
     obtain ⟨hLU, -, -⟩ := AgreeBand.reaches_old h hA hAlo hAhi ((mem_history_iff hA').mp hLh)
       (by show lo ≤ (U'.block L).round + g'; rw [hL.2.1]; omega)
     exact hLo hLU
