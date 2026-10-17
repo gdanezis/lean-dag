@@ -465,6 +465,27 @@ theorem laws_of_forall {R : AnchoredRule Validator BlockId Payload P honest}
   anchor_commit := fun _ => hl.anchor_commit (hI _ _)
   anchor_link := fun _ => hl.anchor_link (hI _ _)
 
+omit S in
+/-- The rows the inequalities cover (`Params.Covered`) have positive
+thresholds and their laws. -/
+theorem coveredLaws (hHon : Honᶜ.card ≤ f)
+    (hq : q ≤ Fintype.card Validator)
+    (hfam : p.Covered (Fintype.card Validator) f q) :
+    1 ≤ p.linkSize ∧ 1 ≤ p.commitThreshold ∧ (p.voteIsCert = false → 1 ≤ p.certThreshold) ∧
+      (schemeAnchored p σ).Laws (fun _ U => U.NoEquivOn Hon) := by
+  rcases hfam with ⟨hv, -, hl, hineq⟩ | ⟨hv, hw, hl, hineq⟩ | ⟨hv, -, hl, rfl, hineq⟩ |
+    ⟨hv, hw, hl, hc1, rfl, hineq⟩
+  · obtain ⟨-, -, hc⟩ := id hineq
+    exact ⟨hl, by omega, fun h => absurd (hv.symm.trans h) (by simp),
+      twoRoundLaws σ hv hHon hq hineq⟩
+  · obtain ⟨ha, -, hc⟩ := id hineq
+    exact ⟨by omega, by omega, fun _ => by omega, threeRoundLaws σ hv hw hHon hq hl hineq⟩
+  · obtain ⟨-, hc⟩ := id hineq
+    exact ⟨hl, by omega, fun h => absurd (hv.symm.trans h) (by simp),
+      twoRoundCrashLaws σ hv hHon hq hineq⟩
+  · obtain ⟨-, hc⟩ := id hineq
+    exact ⟨by omega, by omega, fun _ => hc1, threeRoundCrashLaws σ hv hw hHon hq hl hineq⟩
+
 end Scheme
 
 end LeanDag

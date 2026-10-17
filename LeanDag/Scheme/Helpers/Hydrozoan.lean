@@ -57,8 +57,7 @@ meeting `ThreeRound n f q` at `q = n − f − c`. -/
 theorem hybridMysticeti_covered :
     (Params.hybridMysticeti (Fintype.card Replica) F.f F.c).Covered (Fintype.card Replica) F.f
       (Hydrozoan.q Replica) :=
-  Or.inr (Or.inl ⟨rfl, show 3 ≤ 3 by omega, rfl,
-    (Table.hybridAnyCommittee _ _ _ (by have := F.card_replicas; omega)).1⟩)
+  ((Table.rowsCovered _ _ _).2.2.2.1 (by have := F.card_replicas; omega)).1
 
 section Slow
 

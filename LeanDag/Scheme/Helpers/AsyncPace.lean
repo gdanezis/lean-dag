@@ -1,5 +1,5 @@
 import LeanDag.Scheme.Model.AsyncPace
-import LeanDag.Scheme.Helpers.Async
+import LeanDag.Scheme.Helpers.AsyncCoin
 /-!
 # The family, paced asynchronously: local commit
 
@@ -15,7 +15,9 @@ some time on (`delivered`).
 On such a view a safe leader's slot commits directly (`decided_of_safe`):
 every reliable decision-round block certifies the safe block
 (`isCert_of_safe`), and the view holds them all. The window and run
-results follow on one view, at the delivery time.
+results follow on one view, at the delivery time. A uniform coin names a
+leader whose slot so commits with probability at least the safe set's
+density (`coin_eventuallyCommits`).
 -/
 
 namespace LeanDag
@@ -126,11 +128,13 @@ theorem decided_of_safe {k : ℕ} (hw : 2 ≤ p.waveLength)
     (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
     (hcm : p.commitThreshold ≤ T.card) (hq : qp ≤ T.card)
     (hN : S.slotRound k + (p.waveLength - 1) ≤ N) (hk : S.leader k ∈ safe p U k) :
-    ∃ t, ∀ t', t ≤ t' → ∀ v (hv : v ∈ T),
-      ∃ L, IsLeaderBlock U k L ∧ (schemeAnchored p σ).Decided U (ap.viewAt hv t') k (some L) := by
+    ap.EventuallyCommits p σ k := by
   obtain ⟨t, ht⟩ := ap.delivered
-  exact ⟨t, fun t' htt' v hv => decided_of_safe_of_holds σ hw hcv hcm
-    (ap.populated hq _ hN) hk fun b hb hbT => ht t' htt' v hv b hb hbT⟩
+  obtain ⟨hLh, L, hL, hLr, hLc, hsafe⟩ := mem_safeAt.mp hk
+  refine ⟨L, ⟨hL, hLr, hLc⟩, t, fun t' htt' v hv => ?_⟩
+  obtain ⟨L', hL', hdec⟩ := decided_of_safe_of_holds σ hw hcv hcm (ap.populated hq _ hN) hk
+    (V := ap.viewAt hv t') fun b hb hbT => ht t' htt' v hv b hb hbT
+  rwa [U.eq_of_creator_eq hL'.1 hL hLh hL'.2.2 hLc (hL'.2.1.trans hLr.symm)] at hdec
 
 omit [Fintype Validator] in
 /-- **Every window commits on every reliable validator's own view** under
@@ -172,6 +176,42 @@ theorem allDecidedBelow {c d : ℕ} (hd : 0 < d) (hw : 2 ≤ p.waveLength)
   obtain ⟨L, -, hL⟩ := decided_of_safe_of_holds σ hw hcv hcm (ap.populated hq _ (by omega)) hj
     (V := ap.viewAt hv t') fun b hb hbT => ht t' htt' v hv b hb hbT
   exact ⟨L, hL⟩
+
+omit S in
+open scoped ENNReal in
+/-- **The coin names a leader whose slot eventually commits** on every
+reliable validator's own view, with probability at least `1/n` at one
+buffer round and `(q − f)/n` at two or more, at a row ready for the count
+and a reliable set at least `q` strong. The coin's outcome `v` is the
+schedule `elect v`, which makes `v` the leader of slot `k` at round `r`. -/
+theorem coin_eventuallyCommits [Nonempty Validator] {f b r k : ℕ} (ap : AsyncPace q U T N)
+    (hf : honestᶜ.card ≤ f) (hp : p.AsyncReady (Fintype.card Validator) f q b)
+    (hq : q ≤ T.card) (elect : Validator → Slots Validator)
+    (helect : ∀ v, (elect v).leader k = v ∧ (elect v).slotRound k = r)
+    (hN : r + (p.waveLength - 1) ≤ N) :
+    (1 ≤ b → (1 : ℝ≥0∞) / Fintype.card Validator ≤
+      (PMF.uniformOfFintype Validator).toOuterMeasure
+        {v | ap.EventuallyCommits (S := elect v) p σ k}) ∧
+    (2 ≤ b → ((q - f : ℕ) : ℝ≥0∞) / Fintype.card Validator ≤
+      (PMF.uniformOfFintype Validator).toOuterMeasure
+        {v | ap.EventuallyCommits (S := elect v) p σ k}) := by
+  obtain ⟨hq2, hvo, hw, hcv, hcm⟩ := hp
+  have hvw : p.voteOffset ≤ p.waveLength - 1 := by unfold Params.voteOffset; split <;> omega
+  have hT : T.Nonempty := Finset.card_pos.mp (lt_of_lt_of_le (Validity.Quorate.pos P) hq)
+  have hsub : (↑(safeAt p U r) : Set Validator) ⊆
+      {v | ap.EventuallyCommits (S := elect v) p σ k} := fun v hv => by
+    obtain ⟨hl, hr⟩ := helect v
+    refine ap.decided_of_safe (S := elect v) σ hw hcv (le_trans hcm hq) hq (by omega) ?_
+    show (elect v).leader k ∈ safeAt p U ((elect v).slotRound k)
+    rw [hl, hr]; exact hv
+  have hmono := (PMF.uniformOfFintype Validator).toOuterMeasure.mono hsub
+  refine ⟨fun hb => le_trans ?_ hmono, fun hb => le_trans ?_ hmono⟩
+  · obtain ⟨v, hv⟩ := safeAt_nonempty (p := p) hf hq2 (by omega) hT
+      (ap.populated hq (r + 2) (by omega))
+    exact_mod_cast floor_le_coin (G := safeAt p U r) (c := 1) (Finset.card_pos.mpr ⟨v, hv⟩)
+  · exact floor_le_coin (by
+      have := le_card_safeAt (p := p) hf hq2 (by omega) hT (ap.populated hq (r + 3) (by omega))
+      omega)
 
 end AsyncPace
 

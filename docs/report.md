@@ -558,7 +558,7 @@ checks its table (`Scheme.Table.holds` (SC1)), and reads eight of its
 rows as rules of this development, three of them at the least vote
 (`Scheme.Equiv.holds` (SC4–SC6, SC9)); at the scheme's own vote those
 three are not the development's rules, and two views still decide alike
-(`Scheme.Safety.holds` (SC10, SC11)). The table's inequalities give
+(`Scheme.Safety.holds` (SC10), `Scheme.Table.rowsCovered` (SC11)). The table's inequalities give
 agreement at every row that meets them (`Scheme.Sufficiency.holds`
 (SC12)), and where nobody equivocates fewer of them suffice, which
 covers Nemo-Nemo and Async Nemo-Nemo (SC22). Hybrid Mysticeti is
@@ -11774,11 +11774,10 @@ names one, and the search with the parents in descending order names the
 other. At the scheme's own vote the three rows of §27.5 are therefore not
 Mahi-Mahi's and Async BlueBottle's rules.
 
-They are still safe at every vote-selection rule (SC11). On the core's
-universe the correct validators never equivocate and every block
-references `n − f` authors, and each of the three rows meets its family's
-inequalities at `q = n − f`, so the theorems of §27.7 give its laws and
-its carrier has `Agree`.
+They are still safe at every vote-selection rule (SC11). Each of the
+three rows meets its family's inequalities at `q = n − f`
+(`Scheme.Table.rowsCovered`), so by §27.7 its carrier has `Agree` at
+every vote.
 
 ### 27.7 The table's inequalities suffice
 
@@ -11816,15 +11815,19 @@ enter only through `q`.
   voter; and `n + f + 1 ≤ commit + q` puts a certificate of every direct
   commit in every anchor's history.
 
-The derived rows follow from the arithmetic of SC1. Hybrid Mysticeti and
-Hybrid Mahi-Mahi at `w ≥ 3` agree at `n = 3f + 2c + 1` and
-`q = 2f + c + 1`, and Orcaella and Async Orcaella agree at every
-`n ≥ 5f + 3c + 1` and `q = n − f − c`. Orcaella above its bound is a rule
+Together these are the rows the inequalities cover
+(`Scheme.Params.Covered`), and every covered row agrees
+(`Scheme.Sufficiency.coveredAgree`, from `Scheme.coveredLaws`). Every row
+of the table is covered, at `q = n − f − c` and every committee from its
+bound up (`Scheme.Table.rowsCovered`): Hybrid Mysticeti and Hybrid
+Mahi-Mahi at `w ≥ 3` from `n = 3f + 2c + 1`, and Orcaella and Async
+Orcaella from `n = 5f + 3c + 1`, among them. Orcaella above its bound is a rule
 other than Hybrid's (§27.4), and is safe. The statements quantify over
 the record's validity, not over the hybrid fault model of §14: that
 model's base bound `n ≥ 3(fb + fc) + 1` excludes Hybrid Mysticeti's
 committee `3f + 2c + 1` whenever `c ≥ 1`. Nemo-Nemo and Async Nemo-Nemo
-fail the second two-round inequality (SC1) and are outside SC12.
+fail the second two-round inequality (SC1) and are covered only where
+nobody equivocates (SC22).
 
 SC22: where nobody equivocates, fewer inequalities suffice. When `Hon` is
 every validator, a slot has one block (`Scheme.eq_of_noEquiv_all`), and
@@ -11835,7 +11838,8 @@ two-round inequality `n + f + 1 ≤ commit + link` and the three-round
 anchored laws (`Scheme.twoRoundCrashLaws`, `Scheme.threeRoundCrashLaws`)
 and agreement at every vote. At `f = 0` the table's inequalities imply
 them; Nemo-Nemo and Async Nemo-Nemo meet the two-round ones at
-`n = 2c + 1`, `q = c + 1`, and agree (`Scheme.Sufficiency.nemoRowsAgree`).
+`n = 2c + 1`, `q = c + 1`, are covered from `n = 2c + 1` at `q = n − c`,
+and agree.
 With `q = n − c`, a two-round row needs `n ≥ 2c + 1`, and `n ≥ 3c + 1`
 when its skip threshold is within the liveness bound, where Orcaella's
 thresholds at `f = 0` are forced; a three-round row needs `n ≥ 2c + 1`,
@@ -12012,10 +12016,8 @@ vote and elect a wave's leader by a coin opened at the decision round.
 The coin is abstracted as in §17 and §25 (Mahi-Mahi, Async BlueBottle): a
 deterministic count of the leaders that would commit, a clause on the
 schedule that the coin makes true, and a uniform distribution for the
-probabilities. `Scheme.goodAt p σ U r` is the set of validators whose
-round-`r` block the record's certificates commit; `Scheme.safeAt p U r`
-is the set of honest validators whose round-`r` block every vote-round
-block reaches.
+probabilities. `Scheme.safeAt p U r` is the set of honest validators
+whose round-`r` block every vote-round block reaches, the scheme's core.
 
 SC24: the asynchronous rows are live under the coin, at every row and
 vote, on any record whose blocks reference `q` distinct authors and
@@ -12032,20 +12034,14 @@ scheme's `|core| ≥ h − ⌊mh/(h − m)⌋` at `|T| = |honest| = n − f`; tw
 `q ≤ G + f` (`Scheme.le_card_safeAt`), the scheme's `h − m`; leaders
 outnumbering the rest include a safe one (`Scheme.exists_safe_leader`).
 Every decision-round block certifies a safe block
-(`Scheme.isCert_of_safe`), so a safe validator is good once a population
-of the decision round meets the commit threshold
-(`Scheme.safeAt_subset_goodAt`). Under the coin clause a good leader's
-slot commits on a view holding its decision round, and on every view
-holding the rounds up to the clause's horizon every window commits and
-every slot below a spanning run is decided (`Scheme.goodCommits`,
-`Scheme.commitsWithin`, `Scheme.allDecidedBelow`). Through the coin
+(`Scheme.isCert_of_safe`). Through the coin
 counts of §24 (Steelhead), a uniform coin names a safe leader with
 probability at least `1/n` and `(q − f)/n`, and `m` independent coins all
 miss with probability at most `((n − c)/n)^m`, which vanishes
 (`Scheme.Async.coinCommit`, `Scheme.Async.coinTail`). On four validators
 at the Mahi-Mahi row, a DAG in which one honest block is referenced only
-along its author's chain has good set `{0, 2, 3}` at one, two and three
-buffer rounds alike, and safe set `{2, 3}`. In general buffer rounds past
+along its author's chain has safe set `{2, 3}` at one, two and three
+buffer rounds alike. In general buffer rounds past
 two add nothing (`Scheme.Async.bufferTight`): at every `f < q ≤ n` and
 every vote offset, an execution in which `n − q` honest validators are
 starved, their blocks referenced only by their own kind, has exactly
@@ -12124,8 +12120,13 @@ bound and no GST); and a reliable validator holding `qp` round-`n`
 authors gets past round `n`. `Scheme.AsyncPace.viewAt` is a reliable
 validator's view at a time.
 
-SC27: under asynchronous pacing at `qp`, with the reliable set `qp`
-strong, at every row and vote, every reliable block is held by every
+SC27: under asynchronous pacing at `q`, at a row ready for the count
+(`Scheme.Params.AsyncReady`), with the reliable set `q` strong, a uniform
+coin names a leader whose slot commits on every reliable validator's own
+view from some time on (`Scheme.AsyncPace.EventuallyCommits`), with
+probability at least `1/n` at one buffer round and `(q − f)/n` at two or
+more (`Scheme.AsyncPace.coin_eventuallyCommits`). The steps, under pacing
+at any `qp` with the reliable set `qp` strong, at every row and vote: every reliable block is held by every
 reliable validator from some time on (`Scheme.AsyncPace.delivered`, from
 `Scheme.AsyncPace.exists_time`: finitely many eventual holdings are held
 together, since holdings grow), every round below the horizon is
@@ -12138,9 +12139,10 @@ every window commits and every slot below a spanning run is decided on
 those views (`Scheme.AsyncPace.commitsWithin`,
 `Scheme.AsyncPace.allDecidedBelow`). Every timed run is an asynchronous
 one (`Scheme.AsyncPace.ofPaceCore`). The local results read safe leaders
-rather than good ones, since a good leader may owe its commit to
-Byzantine certificates a reliable validator never receives; the coin
-names safe leaders with the probabilities of SC24. The hybrid
+because a leader committed by certificates that include Byzantine ones
+need not commit at a reliable validator. On the starving execution of
+four validators at the Mahi-Mahi row of wave five the coin's leader
+commits with probability at least `1/2`. The hybrid
 three-replica run of SC26, its clock forgotten, commits every slot on
 each live replica's own view.
 
@@ -13378,8 +13380,8 @@ reused.
 | SC8 | below the voter, every vote-selection rule blames as Mahi-Mahi blames, and the least vote is Mahi-Mahi's vote | `Scheme.sel_eq_none_iff_blames`, `Scheme.leastSel_votes_iff` *(Scheme/Helpers/Buffered)* |
 | SC9 | at the least vote, the Mahi-Mahi row at `w ≥ 3` is Mahi-Mahi's carrier, the Blue Bottle Async row is Async BlueBottle's, and the Cordial Miners Async row is Mahi-Mahi at wave five with no direct skip, with Mahi-Mahi's laws | `Scheme.Equiv.mahiMahiRow`, `Scheme.Equiv.blueBottleAsyncRow`, `Scheme.Equiv.cordialMinersAsyncRow`, `Scheme.cordialAsyncLaws` *(Scheme/Equiv)* |
 | SC10 | the scheme's vote, a depth-first search of the parents in any order listing them all, is a vote-selection rule | `Scheme.Safety.votedBlockIsVote`, `Scheme.votedBlockSel` *(Scheme/Safety, Scheme/Helpers/VotedBlock)* |
-| SC11 | at every vote-selection rule, the Mahi-Mahi row at `w ≥ 3`, the Cordial Miners Async row and the Blue Bottle Async row have the anchored laws, and two views decide alike | `Scheme.Safety.holds` *(Scheme/Safety)* |
-| SC12 | on records with quorum `q` and at most `f` validators that may equivocate, every two-round row meeting `TwoRound n f q` and every three-round row with a link of one certificate meeting `ThreeRound n f q` has the anchored laws and agrees, at every vote; Hybrid Mysticeti, Hybrid Mahi-Mahi, Orcaella at every `n ≥ 5f + 3c + 1` and Async Orcaella agree | `Scheme.twoRoundLaws`, `Scheme.threeRoundLaws`, `Scheme.Sufficiency.holds` *(Scheme/Sufficiency, Scheme/Helpers/Sufficiency)* |
+| SC11 | at every vote-selection rule, the Mahi-Mahi row at `w ≥ 3`, the Cordial Miners Async row and the Blue Bottle Async row are covered by the inequalities, so two views decide alike | `Scheme.Table.rowsCovered`, `Scheme.Sufficiency.coveredAgree` *(Scheme/Table, Scheme/Sufficiency)* |
+| SC12 | on records with quorum `q` and at most `f` validators that may equivocate, every row the inequalities cover has the anchored laws and agrees, at every vote: two-round rows meeting `TwoRound n f q`, three-round rows with a link of one certificate meeting `ThreeRound n f q`; every row of the table is covered at `q = n − f − c` from its bound up | `Scheme.twoRoundLaws`, `Scheme.threeRoundLaws`, `Scheme.coveredLaws`, `Scheme.Sufficiency.coveredAgree`, `Scheme.Table.rowsCovered`, `Scheme.Sufficiency.holds` *(Scheme/Helpers/Sufficiency, Scheme/Sufficiency, Scheme/Table)* |
 | SC13 | the commit loop outputs only verdicts `Decided` derives from the same view, at consecutive slots, at positive link and certificate thresholds | `Scheme.tryDecide_sound`, `Scheme.Loop.sound` *(Scheme/Loop)* |
 | SC14 | at the rows of SC12, two validators' loop outputs are prefix-comparable | `Scheme.tryDecide_prefix`, `Scheme.Loop.prefixComparable` *(Scheme/Loop)* |
 | SC15 | at the rows of SC12, the loop decides every verdict `Decided` derives once its scan reaches far enough, and outputs it once every slot from `lo` is decided | `Scheme.decisionAt_complete`, `Scheme.tryDecide_eventually`, `Scheme.Loop.complete`, `Scheme.Loop.outputComplete` *(Scheme/Loop)* |
@@ -13389,12 +13391,12 @@ reused.
 | SC19 | a call restarting inside an earlier output repeats its tail; at the rows of SC12, calls on growing views, each restarting after the last decision output, output what one call on the last view outputs | `Scheme.tryDecide_restart`, `Scheme.decisionAt_mono`, `Scheme.tryDecide_resume`, `Scheme.consumed_eq`, `Scheme.Loop.restart`, `Scheme.Loop.resume`, `Scheme.Loop.repeated` *(Scheme/Loop, Scheme/Helpers/Restart)* |
 | SC20 | the scheme's loop over rounds and leader indices, both downward, outputs `tryDecide` between the corresponding slots, and under `Slots.uniform` each pair is its slot's round and leader index; at the rows of SC12, its restart at the round of the last decision, dropping the slots already output, resumes it on a larger view | `Scheme.schemeOrder_slots`, `Scheme.schemeTryDecide_eq`, `Scheme.schemeOrder_uniform`, `Scheme.schemeTryDecide_restartRound`, `Scheme.Loop.order`, `Scheme.Loop.orderUniform`, `Scheme.Loop.restartRound` *(Scheme/Loop, Scheme/Helpers/Order)* |
 | SC21 | the output from slot `0` is `commitSeq` and `ledgerSet` of the loop's assignment, every slot below its length decided with that verdict; at the rows of SC12 two validators' ledgers are nested | `Scheme.tryDecide_eq_map`, `Scheme.ledger_read`, `Scheme.ledger_agree`, `Scheme.Loop.ledger`, `Scheme.Loop.ledgerAgree` *(Scheme/Loop, Scheme/Helpers/Ledger)* |
-| SC22 | where nobody equivocates, the two-round inequalities without `n + f + 1 ≤ commit + link` and the three-round ones without `n + f + 1 ≤ 2·cert` give agreement at every vote; Nemo-Nemo and Async Nemo-Nemo meet them at `n = 2c + 1` and agree; with `q = n − c` they need `n ≥ 2c + 1`, and `3c + 1` for a two-round row with a direct skip within the liveness bound | `Scheme.eq_of_noEquiv_all`, `Scheme.twoRoundCrashLaws`, `Scheme.threeRoundCrashLaws`, `Scheme.Table.crashWeaker`, `Scheme.Table.crashRows`, `Scheme.Table.crashBound`, `Scheme.Sufficiency.twoRoundCrashAgree`, `Scheme.Sufficiency.threeRoundCrashAgree`, `Scheme.Sufficiency.nemoRowsAgree` *(Scheme/Helpers/Sufficiency, Scheme/Table, Scheme/Sufficiency)* |
+| SC22 | where nobody equivocates, the two-round inequalities without `n + f + 1 ≤ commit + link` and the three-round ones without `n + f + 1 ≤ 2·cert` give agreement at every vote; Nemo-Nemo and Async Nemo-Nemo meet them at `n = 2c + 1` and agree; with `q = n − c` they need `n ≥ 2c + 1`, and `3c + 1` for a two-round row with a direct skip within the liveness bound | `Scheme.eq_of_noEquiv_all`, `Scheme.twoRoundCrashLaws`, `Scheme.threeRoundCrashLaws`, `Scheme.Table.crashWeaker`, `Scheme.Table.crashRows`, `Scheme.Table.crashBound`, `Scheme.Sufficiency.coveredAgree` *(Scheme/Helpers/Sufficiency, Scheme/Table, Scheme/Sufficiency)* |
 | SC23 | on Hydrozoan's universe the Hybrid Mysticeti row decides as Hydrozoan without its fast path, at every vote; it meets its inequalities at every `n ≥ 3f + 2c + 1`, and its carrier is safe and progresses under Hydrozoan's fault model, and with self-reference lives | `Scheme.readAlike_hydrozoanSlow`, `Scheme.hydrozoanSlow_eq`, `Scheme.Table.hybridAnyCommittee`, `Scheme.HybridRow.slowRow`, `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent` *(Scheme/Helpers/Hydrozoan, Scheme/HybridRow)* |
-| SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; buffer rounds past two add nothing; a safe validator is good; under the coin clause a good leader commits, windows commit and slots below a run are decided; a uniform coin names a safe leader with probability bounded below, and its misses vanish | `Scheme.exists_commonCore`, `Scheme.isCert_of_safe`, `Scheme.safeAt_subset_goodAt`, `Scheme.safeAt_nonempty`, `Scheme.card_safeAt_count`, `Scheme.le_card_safeAt`, `Scheme.exists_safe_leader`, `Scheme.Starve.not_starved_of_reaches`, `Scheme.Starve.card_safeAt_starve`, `Scheme.Starve.starvePace`, `Scheme.goodCommits`, `Scheme.commitsWithin`, `Scheme.allDecidedBelow`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Helpers/Starve, Scheme/Async)* |
+| SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; buffer rounds past two add nothing; a uniform coin names a safe leader with probability bounded below, and its misses vanish | `Scheme.exists_commonCore`, `Scheme.isCert_of_safe`, `Scheme.safeAt_nonempty`, `Scheme.card_safeAt_count`, `Scheme.le_card_safeAt`, `Scheme.exists_safe_leader`, `Scheme.Starve.not_starved_of_reaches`, `Scheme.Starve.card_safeAt_starve`, `Scheme.Starve.starvePace`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Helpers/Starve, Scheme/Async)* |
 | SC25 | every row safe and live: Cordial Miners on the core's universes; Orcaella, Async Orcaella, Hybrid Mysticeti, Hybrid Mahi-Mahi, Nemo-Nemo and Async Nemo-Nemo under the hybrid fault model with self-reference; the asynchronous rows ready for the count | `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent`, `Scheme.Rows.coreRows`, `Scheme.Rows.hybridRows`, `Scheme.Rows.asyncRows`, `Scheme.Rows.holds` *(Scheme/HybridRow, Scheme/Rows)* |
 | SC26 | the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.reached`, `Scheme.SchemeReactive.populated`, `Scheme.SchemeReactive.driftOn`, `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.reaches`, `Scheme.SchemeReactive.votes`, `Scheme.SchemeReactive.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.includes_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
-| SC27 | the asynchronous rows on a validator's own view, under eventual delivery with no time bound: every reliable block is held by every reliable validator from some time on, rounds are populated, and a safe leader's slot commits on every reliable validator's own view; windows commit and slots below a run are decided there; every timed run is an asynchronous one | `Scheme.AsyncPace.exists_time`, `Scheme.AsyncPace.delivered`, `Scheme.AsyncPace.reached`, `Scheme.AsyncPace.populated`, `Scheme.decided_of_safe_of_holds`, `Scheme.AsyncPace.decided_of_safe`, `Scheme.AsyncPace.commitsWithin`, `Scheme.AsyncPace.allDecidedBelow`, `Scheme.AsyncPace.ofPaceCore`, `Scheme.AsyncLocal.holds` *(Scheme/Helpers/AsyncPace, Scheme/AsyncLocal)* |
+| SC27 | the asynchronous rows on a validator's own view, under eventual delivery with no time bound: a uniform coin names a leader whose slot commits on every reliable validator's own view with probability at least `1/n` at one buffer round and `(q − f)/n` at two; every reliable block is held by every reliable validator from some time on, rounds are populated, and a safe leader's slot commits on every reliable validator's own view; windows commit and slots below a run are decided there; every timed run is an asynchronous one | `Scheme.AsyncPace.coin_eventuallyCommits`, `Scheme.AsyncPace.exists_time`, `Scheme.AsyncPace.delivered`, `Scheme.AsyncPace.reached`, `Scheme.AsyncPace.populated`, `Scheme.decided_of_safe_of_holds`, `Scheme.AsyncPace.decided_of_safe`, `Scheme.AsyncPace.commitsWithin`, `Scheme.AsyncPace.allDecidedBelow`, `Scheme.AsyncPace.ofPaceCore`, `Scheme.AsyncLocal.holds` *(Scheme/Helpers/AsyncPace, Scheme/AsyncLocal)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
 
@@ -13469,7 +13471,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 429 definitions and structures the report names, in
+The 426 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -20343,42 +20345,6 @@ def held (N : ℕ) (v : Fin n) (t : ℕ) : Finset (Lex (ℕ × Fin n)) :=
 ```
 
 What `v` holds at time `t`: every block below round `t − 1`, and of round `t − 1` the blocks outside the starved set, or all of them if `v` is starved. Round `r` is built at time `r`.
-
-#### `goodAt`
-
-*def, `Scheme.Model.Async.lean`*
-
-```lean
-def goodAt (U : BlockRecord Validator BlockId Payload P honest) (r : ℕ) : Finset Validator :=
-  Finset.univ.filter (fun v => ∃ L ∈ U.ids, (U.block L).round = r ∧ (U.block L).creator = v ∧
-    p.commitThreshold ≤ (creatorsOf U.block (certsAt p σ U L r)).card)
-```
-
-**The good set at round `r`**: the validators whose round-`r` block the record's certificates commit, `commit` authors of decision-round blocks certifying it.
-
-#### `good`
-
-*def, `Scheme.Model.Async.lean`*
-
-```lean
-def good (U : BlockRecord Validator BlockId Payload P honest) (k : ℕ) : Finset Validator :=
-  goodAt p σ U (S.slotRound k)
-```
-
-The good set at slot `k`'s round.
-
-#### `UnpredictableRunWithin`
-
-*def, `Scheme.Model.Async.lean`*
-
-```lean
-def UnpredictableRunWithin (U : BlockRecord Validator BlockId Payload P honest) (c d N : ℕ) :
-    Prop :=
-  ∀ k, (schemeAnchored p σ).decisionRound (k + c + d - 1) ≤ N →
-    ∃ k', k ≤ k' ∧ k' < k + c ∧ ∀ i < d, S.leader (k' + i) ∈ good p σ U (k' + i)
-```
-
-**The run clause**: in every window of `c` slots below the horizon, a run of `d` consecutive slots led by good leaders.
 
 #### `viewAt`
 

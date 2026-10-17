@@ -1,5 +1,6 @@
 import LeanDag.Scheme.AsyncLocal.Proof
 import LeanDagTest.Scheme.ReactiveHybrid
+import LeanDag.Scheme.Async.Proof
 /-!
 # The family on a validator's own view, paced asynchronously, on data
 
@@ -10,6 +11,11 @@ clock forgotten (`AsyncPace.ofPaceCore`), is an asynchronous run at
 `q = 2`. Every leader block is safe, since every block of the round above
 references it, so every slot commits on each live replica's own view from
 some time on, and so does every window of one slot.
+
+On the starving execution of four validators, one Byzantine, at the
+Mahi-Mahi row of wave five (two buffer rounds), a uniform coin names a
+leader whose slot commits on every honest validator's own view with
+probability at least `(q − f)/n = 1/2`.
 -/
 
 namespace LeanDagTest
@@ -51,8 +57,7 @@ theorem hy_safe (N k : ℕ) (hN : hySlots.slotRound k + 1 ≤ N) :
 /-- **Every slot commits on each live replica's own view**, from some time
 on. -/
 theorem hyAsync_commits (N k : ℕ) (hN : hySlots.slotRound k + 2 ≤ N) :
-    ∃ t, ∀ t', t ≤ t' → ∀ v (hv : v ∈ Thy), ∃ L, IsLeaderBlock (Uhy N) k L ∧
-      (schemeAnchored hyP σH).Decided (Uhy N) ((hyAsync N).viewAt hv t') k (some L) :=
+    (hyAsync N).EventuallyCommits hyP σH k :=
   AsyncLocal.safeCommits (Fin 3) ℕ Unit HybridValid (Hydrozoan.q (Fin 3))
     Hydrozoan.NonByzantine hyP σH (Uhy N) Thy N 2 (hyAsync N) k (by decide)
     (fun _ => ⟨by decide, by decide⟩) (by decide) (by decide)
@@ -74,6 +79,25 @@ theorem hyAsync_commitsWithin (N : ℕ) :
       have h1 := hySlots_slotRound k
       have h2 := hySlots_slotRound (k + 1)
       exact ⟨k, le_rfl, by omega, hy_safe N k (by omega)⟩
+
+/-- The starving execution's records are quorate at `q = 3`. -/
+instance starveQuorate :
+    Validity.Quorate (ValidAt (Validator := Fin 4) (BlockId := Lex (ℕ × Fin 4))
+      (Payload := Unit) 3 (Clause.distinct.and Clause.selfParent)) 3 :=
+  Validity.Quorate.of_validAt (by omega) fun _ _ => Iff.rfl
+
+/-- **The coin's leader commits with probability at least `1/2`** on the
+starving execution. -/
+example : ((3 - 1 : ℕ) : ENNReal) / 4 ≤
+    (PMF.uniformOfFintype (Fin 4)).toOuterMeasure
+      {v | (Starve.starvePace (f := 1) (q := 3) (hqn := by omega) 4).EventuallyCommits
+        (S := Slots.uniformSingle 1 one_pos fun _ => v) (Params.mahiMahi 5 4 1) leastSel 0} :=
+  (AsyncLocal.coinLive (Fin 4) (Lex (ℕ × Fin 4)) Unit _ 3 (Starve.honestSet 4 1) 1
+    (Params.mahiMahi 5 4 1) leastSel (Starve.record (by omega) 4) _ 4
+    (Starve.starvePace (hqn := by omega) 4) (fun v => Slots.uniformSingle 1 one_pos fun _ => v)
+    2 0 0 (by rw [Starve.card_compl_honestSet (by omega)])
+    (by simp [Params.AsyncReady, Params.voteOffset, Params.mahiMahi])
+    (by decide) (fun v => ⟨rfl, by simp⟩) (by decide)).2 (by omega)
 
 end Scheme
 

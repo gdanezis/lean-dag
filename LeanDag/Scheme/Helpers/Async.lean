@@ -16,10 +16,9 @@ whose validators outside `honest`, at most `f`, may equivocate:
   general quorum: some honest author collects so many honest supporters
   that every round-`(r+2)` block, naming `q` of the round's authors,
   names one of them;
-* **a safe block is committed** (`safeAt_subset_goodAt`): an honest block
-  every vote-round block reaches is voted by each, certified by every
-  decision-round block (`isCert_of_safe`), and committed when a population
-  of the decision round meets the commit threshold;
+* **a safe block is certified** (`isCert_of_safe`): an honest block every
+  vote-round block reaches is voted by each, and certified by every
+  decision-round block;
 * the safe set is bounded below: at one buffer round, by the core of the
   proposal round and by a double count over the buffer round; at two, by
   the honest references of the core of the buffer round.
@@ -251,22 +250,6 @@ theorem isCert_of_safe {r : ℕ} {L : BlockId} (hw : 2 ≤ p.waveLength)
     rw [hall]
     exact le_trans hcq (U.creators_quorum hC (by omega))
 
-/-- **A safe validator is good**: every decision-round block certifies its
-block, and a population of the decision round meeting the commit threshold
-commits it. -/
-theorem safeAt_subset_goodAt {r : ℕ} {T : Finset Validator}
-    (hw : 2 ≤ p.waveLength)
-    (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
-    (hpop : PopulatedOn U T (r + (p.waveLength - 1))) (hcm : p.commitThreshold ≤ T.card) :
-    safeAt p U r ⊆ goodAt p σ U r := by
-  intro w hw'
-  obtain ⟨hwh, L, hL, hLr, rfl, hsafe⟩ := mem_safeAt.mp hw'
-  refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, L, hL, hLr, rfl, ?_⟩
-  refine le_trans hcm (Finset.card_le_card fun v hv => ?_)
-  obtain ⟨C, hC, hCc, hCr⟩ := hpop v hv
-  exact mem_creatorsOf.mpr ⟨C, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hC, hCr⟩,
-    isCert_of_safe σ hw hcv hL hLr hwh hsafe hC hCr⟩, hCc⟩
-
 /-! ## The safe set -/
 
 /-- **One buffer round: the safe set is nonempty.** The common core of the
@@ -449,63 +432,6 @@ theorem exists_safe_leader [S : Slots Validator] {r : ℕ} {M : Finset Validator
   exact ⟨k, hkr, by
     show S.leader k ∈ safeAt p U (S.slotRound k)
     rw [hkr, hkv]; exact hvg⟩
-
-/-! ## Liveness under the clause -/
-
-section Live
-
-variable [S : Slots Validator]
-
-omit [P.Mechanised] [P.Quorate q] in
-/-- **A good leader's slot commits** on every view holding its decision
-round. -/
-theorem goodCommits {k : ℕ} {V : U.View} (hk : S.leader k ∈ good p σ U k)
-    (hV : V.CoversUpto (S.slotRound k + (p.waveLength - 1))) :
-    ∃ L, IsLeaderBlock U k L ∧ (schemeAnchored p σ).Decided U V k (some L) := by
-  obtain ⟨-, L, hL, hLr, hLc, hcommit⟩ := Finset.mem_filter.mp hk
-  have hs : ∀ C ∈ certsAt p σ U L (S.slotRound k),
-      C ∈ U.ids ∧ (U.block C).round ≤ S.slotRound k + (p.waveLength - 1) := fun C hC => by
-    unfold certsAt at hC
-    obtain ⟨hCU, hCr⟩ := mem_blocksAt.mp (Finset.mem_filter.mp hC).1
-    exact ⟨hCU, hCr.le⟩
-  have hfull : p.commitThreshold ≤ (creatorsOf U.block (certsAt p σ U L (S.slotRound k))).card :=
-    hLr ▸ hcommit
-  exact ⟨L, ⟨hL, hLr, hLc⟩, AnchoredRule.Decided.directCommit ⟨hL, hLr, hLc⟩
-    (HoldsAtLeast.of_coversUpto hs hV hfull)⟩
-
-omit [P.Mechanised] [P.Quorate q] in
-/-- **Every window commits** under the single-hit clause, on every view
-holding the rounds up to the horizon. -/
-theorem commitsWithin {c N : ℕ} (hU : UnpredictableWithin p σ U c N) {V : U.View}
-    (hV : V.CoversUpto N) {k : ℕ} (hk : (schemeAnchored p σ).decisionRound (k + c) ≤ N) :
-    ∃ k', k ≤ k' ∧ k' < k + c ∧ ∃ L, IsLeaderBlock U k' L ∧
-      (schemeAnchored p σ).Decided U V k' (some L) := by
-  obtain ⟨k', h1, h2, hg⟩ := hU k hk
-  have hmono := S.mono (show k' ≤ k + c by omega)
-  exact ⟨k', h1, h2, goodCommits σ hg (hV.mono (by
-    have : (schemeAnchored p σ).decisionRound (k + c) = S.slotRound (k + c) + (p.waveLength - 1) :=
-      rfl
-    omega))⟩
-
-/-- **Every slot below a run is decided** under the run clause, when a run
-of `d` slots spans eligibility, on every view holding the rounds up to the
-horizon. -/
-theorem allDecidedBelow {c d N : ℕ} (hd : 0 < d)
-    (hspan : (schemeAnchored p σ).SpansEligible (S := S) d)
-    (hU : UnpredictableRunWithin p σ U c d N) {V : U.View} (hV : V.CoversUpto N) {k : ℕ}
-    (hk : (schemeAnchored p σ).decisionRound (k + c + d - 1) ≤ N) :
-    ∃ b, k ≤ b ∧ ∀ i, i < b → ∃ v, (schemeAnchored p σ).Decided U V i v := by
-  obtain ⟨k', hk', hk'c, hrun⟩ := hU k hk
-  have hdec : (schemeAnchored p σ).decisionRound (k + c + d - 1) =
-      S.slotRound (k + c + d - 1) + (p.waveLength - 1) := rfl
-  refine ⟨k', hk', AnchoredRule.decided_below_of_run
-    (fun _ h => AnchoredRule.exists_least_of_lt (fun _ _ => Iff.rfl) h) hd hspan
-    (Led := fun j => S.leader j ∈ good p σ U j) hrun fun j _ h2 hj => ?_⟩
-  have hmono := S.mono (show j ≤ k + c + d - 1 by omega)
-  obtain ⟨L, -, hL⟩ := goodCommits σ hj (hV.mono (by omega))
-  exact ⟨L, hL⟩
-
-end Live
 
 end Scheme
 

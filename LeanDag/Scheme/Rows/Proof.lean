@@ -21,25 +21,25 @@ theorem coreRows : CoreRows := by
   intro Validator BlockId Payload _ _ _ F σ hσ
   have hn := F.card_validators
   have hq : Fintype.card Validator - F.f ≤ Fintype.card Validator := Nat.sub_le _ _
-  refine ⟨⟨Scheme.safety hσ card_compl_correct_le hq (Or.inr (Or.inl ⟨rfl, le_rfl, rfl, ?_⟩)),
+  obtain ⟨-, -, hps, has⟩ := (Table.rowsCovered _ F.f 0).1 (by omega)
+  exact ⟨⟨Scheme.safety hσ card_compl_correct_le hq hps,
       Scheme.lives subset_rfl (by simp [Params.cordialMinersPS])⟩,
-    ⟨Scheme.safety hσ card_compl_correct_le hq
-      (Or.inr (Or.inl ⟨rfl, by simp [Params.cordialMinersAsync], rfl, ?_⟩)),
-      Scheme.lives subset_rfl (by simp [Params.cordialMinersAsync])⟩⟩ <;>
-  · simp only [Params.ThreeRound, Params.cordialMinersPS, Params.cordialMinersAsync]
-    omega
+    ⟨Scheme.safety hσ card_compl_correct_le hq has,
+      Scheme.lives subset_rfl (by simp [Params.cordialMinersAsync])⟩⟩
 
 theorem hybridRows : HybridRows := by
   intro Replica BlockId _ _ _ F σ hσ
   have hn := F.card_replicas
+  have hc := Table.rowsCovered (Fintype.card Replica) F.f F.c
   have sl := fun p hcov hcm => HybridRow.withSelfParent Replica BlockId p σ hσ hcov hcm
-  refine ⟨fun hb => ⟨sl _ (Or.inl ⟨rfl, le_rfl, ?_, ?_⟩) ?_, sl _ (Or.inl ⟨rfl, by simp [Params.asyncOrcaella], ?_, ?_⟩) ?_⟩,
-    sl _ hybridMysticeti_covered ?_, fun w hw => sl _ (Or.inr (Or.inl ⟨rfl, hw, rfl, ?_⟩)) ?_,
-    fun hf => ⟨sl _ (Or.inr (Or.inr (Or.inl ⟨rfl, le_rfl, le_rfl, hf, ?_⟩))) ?_,
-      sl _ (Or.inr (Or.inr (Or.inl ⟨rfl, by simp [Params.asyncNemoNemo], le_rfl, hf, ?_⟩))) ?_⟩⟩ <;>
-  simp only [Params.TwoRound, Params.ThreeRound, Params.TwoRoundCrash, Params.orcaella,
-    Params.asyncOrcaella, Params.hybridMysticeti, Params.hybridMahiMahi, Params.nemoNemo,
-    Params.asyncNemoNemo, Hydrozoan.q] <;> omega
+  refine ⟨fun hb => ⟨sl _ (hc.2.2.1 hb).1 ?_, sl _ (hc.2.2.1 hb).2 ?_⟩,
+    sl _ (hc.2.2.2.1 (by omega)).1 ?_, fun w hw => sl _ ((hc.2.2.2.1 (by omega)).2 w hw) ?_,
+    fun hf => ⟨sl _ (by simpa [Hydrozoan.q, hf] using (hc.2.2.2.2 (by omega)).1) ?_,
+      sl _ (by simpa [Hydrozoan.q, hf] using (hc.2.2.2.2 (by omega)).2) ?_⟩⟩
+  all_goals
+    simp only [Params.orcaella, Params.asyncOrcaella, Params.hybridMysticeti,
+      Params.hybridMahiMahi, Params.nemoNemo, Params.asyncNemoNemo, Hydrozoan.q]
+    omega
 
 theorem asyncRows : AsyncRows := by
   intro n f c

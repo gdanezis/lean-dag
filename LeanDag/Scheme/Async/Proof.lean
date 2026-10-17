@@ -5,8 +5,8 @@ import LeanDag.Scheme.Helpers.Starve
 # The asynchronous rows — proof
 
 The count is the common core at a general quorum and two double counts
-(`Helpers/Async.lean`); liveness under the clause is the good leader's
-direct commit and the descent below a run; the coin is Steelhead's counts
+(`Helpers/Async.lean`); the tight case is a starving execution
+(`Helpers/Starve.lean`); the coin is Steelhead's counts
 (`Helpers/AsyncCoin.lean`).
 -/
 
@@ -22,10 +22,6 @@ open scoped ENNReal
 theorem commonCore : CommonCore := by
   intro Validator BlockId Payload _ _ _ P _ q _ honest f U r c₀ hf hq2 hc₀ hc₀r
   exact exists_commonCore hf hq2 hc₀ hc₀r
-
-theorem safeGood : SafeGood := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest p σ U r T hw hcv hpop hcm
-  exact safeAt_subset_goodAt σ hw hcv hpop hcm
 
 theorem safeNonempty : SafeNonempty := by
   intro Validator BlockId Payload _ _ _ P _ q _ honest f p U r T hf hq2 hvo hT hpop2
@@ -49,18 +45,6 @@ theorem bufferTight : BufferTight := by
     Starve.card_compl_honestSet (by omega), fun r hr => Starve.populated_record hr,
     fun b hb => Starve.refs_starve_eq_held hb rfl, Starve.card_safeAt_starve hvo hN hfq⟩
 
-theorem goodCommits' : GoodCommits := by
-  intro Validator BlockId Payload _ _ _ P honest p σ S U V k hk hV
-  exact goodCommits σ hk hV
-
-theorem commitsWithin' : CommitsWithin := by
-  intro Validator BlockId Payload _ _ _ P honest p σ S U V c N hU hV k hk
-  exact commitsWithin σ hU hV hk
-
-theorem allDecidedBelow' : AllDecidedBelow := by
-  intro Validator BlockId Payload _ _ _ P _ honest p σ S U V c d N hd hspan hU hV k hk
-  exact allDecidedBelow σ hd hspan hU hV hk
-
 theorem coinCommit : CoinCommit := by
   intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p U r T hf hq2 hT
   refine ⟨fun hvo hpop2 => ?_, fun hvo hpop3 => ?_⟩
@@ -74,9 +58,8 @@ theorem coinTail : CoinTail := by
     fun hc hcn => noHit_tendsto_zero hc hcn⟩
 
 theorem holds : Statement :=
-  ⟨commonCore, safeGood, safeNonempty, safeCard, safeCount, multiLeader, bufferTight,
-    goodCommits',
-    commitsWithin', allDecidedBelow', coinCommit, coinTail⟩
+  ⟨commonCore, safeNonempty, safeCard, safeCount, multiLeader, bufferTight, coinCommit,
+    coinTail⟩
 
 end Async
 

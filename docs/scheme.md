@@ -269,43 +269,46 @@ tie-break; two linked candidates are one block by
 Async Nemo-Nemo agrees by the inequalities where nobody equivocates
 (§7.1).
 
-## 6. The rows with buffer rounds at every vote
+## 6. The scheme's own vote
 
-`Scheme/Safety/Statement.lean` states, and `Proof.lean` proves:
+`Scheme/Safety/Statement.lean` states, and `Proof.lean` proves, that
+**`VotedBlock` is a vote-selection rule** for every parent order that
+lists every parent (`VotedBlockIsVote`). The search walks references as
+`historyUpto` does; at a block of the record a reference lies one round
+down, so pruning at the slot's round loses no block of the slot.
 
-* **`VotedBlock` is a vote-selection rule** for every parent order that
-  lists every parent (`VotedBlockIsVote`). The search walks references as
-  `historyUpto` does; at a block of the record a reference lies one round
-  down, so pruning at the slot's round loses no block of the slot.
-* **The three rows have the laws at every vote.** Mahi-Mahi at `w ≥ 3`
-  and Cordial Miners Async meet the three-round inequalities, and Blue
-  Bottle Async at `n ≥ 5f + 1` the two-round ones, at `q = n − f`; on the
-  core's universe the correct validators never equivocate, so §7 gives
-  the laws.
-
-Each row's carrier then has `Agree` (`MahiMahiAgree`,
-`CordialMinersAsyncAgree`, `BlueBottleAsyncAgree`). The properties of
-Mahi-Mahi and Async BlueBottle beyond agreement, liveness among them,
-are proved of those rules, and transfer to the rows only at the least
-vote (§5).
+Every row agrees at every vote-selection rule, this one included (§7):
+Mahi-Mahi at `w ≥ 3` and Cordial Miners Async meet the three-round
+inequalities, and Blue Bottle Async at `n ≥ 5f + 1` the two-round ones,
+at `q = n − f` (`Table.RowsCovered`). The properties of Mahi-Mahi and
+Async BlueBottle beyond agreement are proved of those rules, and transfer
+to the rows only at the least vote (§5); the family's own (§9) hold at
+every vote.
 
 ## 7. The table's inequalities suffice
 
 `Scheme/Sufficiency/Statement.lean` states, and `Proof.lean` proves, at
 every vote-selection rule, on records whose blocks reference `q` distinct
 authors one round down (`Validity.Quorate q`) and whose validators
-outside a set `Hon` of all but `f` never equivocate:
+outside a set `Hon` of all but `f` never equivocate, **every row the
+inequalities cover agrees** (`CoveredAgree`, from `coveredLaws`). The
+rows covered, `Params.Covered n f q`, are:
 
-* **Two rounds** (`TwoRoundAgree`, from `twoRoundLaws`): a row whose vote
-  is its certificate, with a wave of at least two, meeting
-  `TwoRound n f q`, agrees.
-* **Three rounds** (`ThreeRoundAgree`, from `threeRoundLaws`): a row that
-  certifies votes one round later, with a wave of at least three and a
-  link of one certificate, meeting `ThreeRound n f q`, agrees.
-* **The derived rows** (`HybridRowsAgree`, `OrcaellaRowsAgree`): Hybrid
-  Mysticeti and Hybrid Mahi-Mahi at `n = 3f + 2c + 1`, `q = 2f + c + 1`,
-  and Orcaella and Async Orcaella at every `n ≥ 5f + 3c + 1`,
-  `q = n − f − c`, by `Table.holds`.
+* **two rounds** (`twoRoundLaws`): a row whose vote is its certificate,
+  with a wave of at least two, meeting `TwoRound n f q`;
+* **three rounds** (`threeRoundLaws`): a row that certifies votes one
+  round later, with a wave of at least three and a link of one
+  certificate, meeting `ThreeRound n f q`;
+* the same rows meeting the weaker inequalities where nobody equivocates
+  (§7.1).
+
+Every row of the table is covered, at `q = n − f − c` and every committee
+from its bound up (`Table.RowsCovered`): Mysticeti, Mahi-Mahi at every
+wave of three or more and Cordial Miners from `3f + 1`, Blue Bottle from
+`5f + 1`, Orcaella and Async Orcaella from `5f + 3c + 1`, Hybrid
+Mysticeti and Hybrid Mahi-Mahi from `3f + 2c + 1`, and Nemo-Nemo and
+Async Nemo-Nemo, where nobody equivocates, from `2c + 1`. So every row
+agrees.
 
 Every step is one of two counts. Two sets of same-round blocks whose
 authors number more than `n + f` together share a block
@@ -332,9 +335,9 @@ unique. What remains is `Params.TwoRoundCrash n q`
 `Params.ThreeRoundCrash n q` (`n + 1 ≤ skip + cert`,
 `n + 1 ≤ commit + q`).
 
-* **Agreement** (`TwoRoundCrashAgree`, `ThreeRoundCrashAgree`, from
-  `twoRoundCrashLaws`, `threeRoundCrashLaws`): a row meeting them agrees
-  on records where nobody equivocates, at every vote.
+* **Agreement** (`CoveredAgree`, from `twoRoundCrashLaws`,
+  `threeRoundCrashLaws`): a row meeting them agrees on records where
+  nobody equivocates, at every vote.
 * **The table** (`Table.CrashWeaker`, `Table.CrashRows`,
   `Table.CrashBound`): at `f = 0` the inequalities imply these;
   Nemo-Nemo and Async Nemo-Nemo meet the two-round ones at `n = 2c + 1`,
@@ -344,10 +347,10 @@ unique. What remains is `Params.TwoRoundCrash n q`
   `n ≥ 2c + 1`, where Hybrid Mysticeti's at `f = 0` are forced. A direct
   skip within the bound costs a two-round row `c` validators, and
   Nemo-Nemo's "no direct skip" saves them.
-* **The Nemo rows** (`NemoRowsAgree`): Nemo-Nemo and Async Nemo-Nemo
-  agree at `n = 2c + 1`, `q = c + 1`, where nobody equivocates. A test
-  instantiates Async Nemo-Nemo on Nemo's universe, whose majority quorum
-  is `c + 1`.
+* **The Nemo rows**: Nemo-Nemo and Async Nemo-Nemo are covered at
+  `n ≥ 2c + 1`, `q = n − c`, where nobody equivocates
+  (`Table.RowsCovered`), and agree. A test instantiates Async Nemo-Nemo
+  on Nemo's universe, whose majority quorum is `c + 1`.
 
 The rows the inequalities cover, `Params.Covered n f q`, include these at
 `f = 0`, so the commit loop (§8) and the family's properties (§9) hold
@@ -667,15 +670,14 @@ the decision round. The coin is abstracted as the Mahi-Mahi and Async
 BlueBottle arcs abstract it (`mahi-mahi.md` §5, `async-bluebottle.md`
 §6): a deterministic count of the leaders that would commit, a clause on
 the schedule that the coin makes true, and a uniform distribution for
-the probabilities. `Scheme/Model/Async.lean` defines `goodAt p σ U r`,
-the validators whose round-`r` block the record's certificates commit
-(`commit` authors of decision-round blocks certify it); `safeAt p U r`,
-the honest validators whose round-`r` block every vote-round block
-reaches; and the clauses `UnpredictableWithin` and
-`UnpredictableRunWithin` over good leaders, `SafeWithin` and
-`SafeRunWithin` over safe ones. The counts bound the safe set; the good
-set contains it once the decision round is populated, and may also
-contain validators whose blocks only Byzantine certificates commit.
+the probabilities. `Scheme/Model/Async.lean` defines `safeAt p U r`, the
+honest validators whose round-`r` block every vote-round block reaches
+(the paper's core), and the clauses `SafeWithin` and `SafeRunWithin`
+over safe leaders. Every decision-round block certifies a safe block
+(`isCert_of_safe`), so a safe leader commits wherever the reliable
+decision-round blocks are held; a leader committed only by certificates
+that include Byzantine ones need not commit at a reliable validator,
+which is why the arc counts the safe set.
 `Scheme/Async/Statement.lean` states, and `Proof.lean` proves, on any
 record whose blocks reference `q` distinct authors one round down and
 whose validators outside `honest`, at most `f`, may equivocate, at every
@@ -722,20 +724,6 @@ row and vote:
   each references every block of the round below it holds and the starved
   validators' blocks arrive one round late (`Starve.starvePace`,
   `Starve.refs_starve_eq_held`).
-* **A safe validator is good** (`SafeGood`): every vote-round block
-  reaches its block, so votes for it; every decision-round block
-  certifies it (`isCert_of_safe`, where `cert ≤ q` if votes are certified
-  a round later); and a population of the decision round meeting the
-  commit threshold commits it.
-
-**Liveness under the clause, on a covering view.** A good leader's slot
-commits on every view holding its decision round (`GoodCommits`); under
-the single-hit clause every window commits (`CommitsWithin`); under the
-run clause, when a run spans eligibility, every slot below it is decided
-(`AllDecidedBelow`, the common descent with the least-id tie-break). All
-three conclude on views holding every block of the record up to the
-clause's horizon. §11.1 replaces that hypothesis by eventual delivery.
-
 **The coin** (`CoinCommit`, `CoinTail`, through Steelhead's counts,
 `Steelhead/Helpers/Coin.lean`, whose fault model a fault-free instance
 supplies inside the proofs): a uniform coin names a safe leader with
@@ -744,11 +732,10 @@ probability at least `1/n` at one buffer round and `(q − f)/n` at two;
 miss with probability at most `((n − c)/n)^m`, which vanishes.
 
 `LeanDagTest/Scheme/Async.lean` shows the count on data at the Mahi-Mahi
-row: on `full4` every round-`0` block is good; on `starve4`, where one
-honest block is referenced only along its author's own chain, the good
-set is `{0, 2, 3}` at one, two and three buffer rounds alike, and the
-safe set `{2, 3}`, of size `q − f = 2`. The count of two buffer rounds is
-tight there, and a third buffer round adds nothing.
+row: on `full4` every honest round-`0` block is safe; on `starve4`,
+where one honest block is referenced only along its author's own chain,
+the safe set is `{2, 3}`, of size `q − f = 2`, at one, two and three
+buffer rounds alike.
 
 ### 11.1 On a validator's own view, under eventual delivery
 
@@ -768,6 +755,13 @@ holdings.
 `Scheme/AsyncLocal/Statement.lean` states, and `Proof.lean` proves, with
 the reliable set `T` at least `qp` strong, at every row and vote:
 
+* **The coin's leader eventually commits** (`CoinLive`), the arc's
+  asynchronous headline: at a row ready for the count
+  (`Params.AsyncReady`), under asynchronous pacing at `q`, a uniform coin
+  names a leader whose slot commits on every reliable validator's own
+  view from some time on (`AsyncPace.EventuallyCommits`), with
+  probability at least `1/n` at one buffer round and `(q − f)/n` at two or
+  more. The coin's outcome `v` is a schedule in which `v` leads the slot.
 * **Delivery** (`Delivered`): every reliable block of the record is held
   by every reliable validator from some time on. The record is finite,
   each of its reliable blocks is eventually held, and holdings only grow
@@ -778,22 +772,19 @@ the reliable set `T` at least `qp` strong, at every row and vote:
 * **A safe leader's slot commits** (`SafeCommits`) on every reliable
   validator's own view from some time on, when `T` meets the commit
   threshold: the view holds every reliable decision-round block, and each
-  certifies the safe block.
+  certifies the safe block. This and the counts give `CoinLive`.
 * **Every window commits, and every slot below a run is decided**
   (`CommitsWithin`, `AllDecidedBelow`), on every reliable validator's own
   view from some time on, under `SafeWithin` and `SafeRunWithin`.
 * **Every timed run is an asynchronous one** (`OfPaceCore`): the trunk,
   with a progress rule at `qp`, forgets its clock.
 
-The coin enters as before: it names a safe leader with the probabilities
-of `CoinCommit` and `CoinTail`. A leader that is only good may owe its
-commit to Byzantine certificates that a reliable validator never
-receives, which is why the local results read the safe set.
-
 `LeanDagTest/Scheme/AsyncLocal.lean` reads the hybrid three-replica run
 of §13, with its clock forgotten, as an asynchronous run at `qp = 2`:
 every leader block is safe there, and every slot, and every window of one
-slot, commits on each live replica's own view from some time on.
+slot, commits on each live replica's own view from some time on. On the
+starving execution of four validators at the Mahi-Mahi row of wave five,
+`CoinLive` gives probability at least `1/2`.
 
 **Not formalised.** Measurability of the safe set (it reads only rounds up
 to the vote round, which is what makes the clause the coin's

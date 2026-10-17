@@ -1,4 +1,5 @@
 import LeanDag.Mysticeti.ViewPace
+import LeanDag.Scheme.Model.Rule
 /-!
 # The family, paced asynchronously
 
@@ -13,6 +14,8 @@ covered as well.
 
 `AsyncPace.viewAt v hv t` is a reliable validator's own view at time `t`:
 its holdings, a view because they are causally closed.
+`AsyncPace.EventuallyCommits` says a slot's leader block is committed on
+every reliable validator's own view from some time on.
 
 Definitions only; the claims are `Scheme/AsyncLocal/Statement.lean`.
 -/
@@ -59,6 +62,14 @@ def viewAt (ap : AsyncPace q U T N) {v : Validator} (hv : v ∈ T) (t : ℕ) : U
   ids := ap.holds v t
   subset_ids := ap.holds_sub v t
   complete := ap.holds_closed v hv t
+
+/-- **Slot `k` eventually commits on every reliable validator's own view**:
+some leader block of the slot is decided on each such view from some time
+on. -/
+def EventuallyCommits (ap : AsyncPace q U T N) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator] (k : ℕ) : Prop :=
+  ∃ L, IsLeaderBlock U k L ∧ ∃ t, ∀ t', t ≤ t' → ∀ v (hv : v ∈ T),
+    (schemeAnchored p σ).Decided U (ap.viewAt hv t') k (some L)
 
 /-- **A timed run is an asynchronous one**: the trunk of every timed
 discipline, with a progress rule at `q`, forgets its clock. -/

@@ -1,20 +1,18 @@
 import LeanDag.Scheme.Async.Proof
-import LeanDag.Scheme.Model.LeastSel
 import LeanDagTest.MahiMahi.Model
 /-!
 # The asynchronous rows on data
 
 Four validators, validator `0` Byzantine, `f = 1`, `q = 3`
-(`LeanDagTest/Model.lean`), at the Mahi-Mahi row and the least vote.
+(`LeanDagTest/Model.lean`), at the Mahi-Mahi row. The safe set holds the
+honest validators whose block every vote-round block reaches.
 
-* On `full4` every round-`0` block is good at waves four and five.
+* On `full4` every honest round-`0` block is safe at waves four and five.
 * `starve4` starves validator `1`'s round-`0` block: it is referenced only
   along validator `1`'s own chain, and every other block references
-  `{0, 2, 3}` one round down. The good set is `{0, 2, 3}` at one, two and
-  three buffer rounds alike (waves four, five and six), its honest part
-  `2 = q − f`: the count of two buffer rounds is tight, and a third buffer
-  round adds nothing. The safe set, its honest validators whose block every
-  vote-round block reaches, is `{2, 3}`.
+  `{0, 2, 3}` one round down. The safe set is `{2, 3}`, of size
+  `2 = q − f`, at one, two and three buffer rounds alike (waves four, five
+  and six): the count of two buffer rounds is tight.
 * The starving execution at general `n, f, q` (`Starve.record`) has
   `q − f` safe validators at every vote offset.
 -/
@@ -25,11 +23,8 @@ namespace Scheme
 
 open LeanDag LeanDag.Scheme
 
-/-- The least vote on the four-validator universes. -/
-abbrev σ4 : VoteSel (Fin 4) (Fin 24) Unit ValidWrt Correct := leastSel
-
-example : goodAt (Params.mahiMahi 4 4 1) σ4 full4 0 = {0, 1, 2, 3} := by decide
-example : goodAt (Params.mahiMahi 5 4 1) σ4 full4 0 = {0, 1, 2, 3} := by decide
+example : safeAt (Params.mahiMahi 4 4 1) full4 0 = {1, 2, 3} := by decide
+example : safeAt (Params.mahiMahi 5 4 1) full4 0 = {1, 2, 3} := by decide
 
 /-- Validator `v`'s round-`m` block references, one round down, `{0, 1, 2}`
 for `v = 1` and `{0, 2, 3}` otherwise. -/
@@ -50,14 +45,8 @@ def starve4 : BlockUniverse (Fin 4) (Fin 24) Unit where
   valid := by decide
   no_equivocation := by decide
 
-example : goodAt (Params.mahiMahi 4 4 1) σ4 starve4 0 = {0, 2, 3} := by decide
-example : goodAt (Params.mahiMahi 5 4 1) σ4 starve4 0 = {0, 2, 3} := by decide
-example : goodAt (Params.mahiMahi 6 4 1) σ4 starve4 0 = {0, 2, 3} := by decide
-example : (goodAt (Params.mahiMahi 6 4 1) σ4 starve4 0 ∩ Correct).card = 3 - 1 := by decide
-
-/-- The safe set of `starve4`: the honest validators whose round-`0` block
-every vote-round block reaches. At two buffer rounds it is `{2, 3}`, of
-size `2 = q − f`, and the good set adds the Byzantine validator `0`. -/
+/-- The safe set of `starve4` at one, two and three buffer rounds. -/
+example : safeAt (Params.mahiMahi 4 4 1) starve4 0 = {2, 3} := by decide
 example : safeAt (Params.mahiMahi 5 4 1) starve4 0 = {2, 3} := by decide
 example : safeAt (Params.mahiMahi 6 4 1) starve4 0 = {2, 3} := by decide
 

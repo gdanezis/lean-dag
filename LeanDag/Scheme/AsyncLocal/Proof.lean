@@ -5,7 +5,8 @@ import LeanDag.Scheme.Helpers.AsyncPace
 
 Finitely many eventual holdings are eventually held together, which gives
 delivery and production; on the delivered view a safe leader's slot
-commits directly (`Helpers/AsyncPace.lean`).
+commits directly, and the coin names a safe leader with the counts' floors
+(`Helpers/AsyncPace.lean`).
 -/
 
 namespace LeanDag
@@ -13,6 +14,11 @@ namespace LeanDag
 namespace Scheme
 
 namespace AsyncLocal
+
+theorem coinLive : CoinLive := by
+  intro Validator BlockId Payload _ _ _ _ P _ q _ honest f p σ U T N ap elect b r k hf hp hq
+    helect hN
+  exact ap.coin_eventuallyCommits σ hf hp hq elect helect hN
 
 theorem delivered : Delivered := by
   intro Validator BlockId Payload _ _ _ P honest U T N qp ap
@@ -40,7 +46,7 @@ theorem ofPaceCore : OfPaceCore := by
   exact ⟨AsyncPace.ofPaceCore pc hadv⟩
 
 theorem holds : Statement :=
-  ⟨delivered, populated, safeCommits, commitsWithin, allDecidedBelow, ofPaceCore⟩
+  ⟨coinLive, delivered, populated, safeCommits, commitsWithin, allDecidedBelow, ofPaceCore⟩
 
 end AsyncLocal
 

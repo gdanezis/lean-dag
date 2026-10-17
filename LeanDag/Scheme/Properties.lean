@@ -1,6 +1,7 @@
 import LeanDag.Scheme.Helpers.Band
 import LeanDag.Scheme.Helpers.Support
 import LeanDag.Scheme.Loop.Proof
+import LeanDag.Scheme.Sufficiency.Proof
 import LeanDag.Properties.Agree
 import LeanDag.Properties.Candidate
 import LeanDag.Properties.Commit
@@ -105,7 +106,7 @@ theorem agree {q : ℕ} [P.Quorate q] {f : ℕ} (hHon : Honᶜ.card ≤ f)
     (hq : q ≤ Fintype.card Validator)
     (hfam : p.Covered (Fintype.card Validator) f q) :
     Agree (schemeRule p σ Hon) :=
-  AnchoredRule.agreeOn (Loop.family σ hHon hq hfam).2.2.2 (fun _ _ h => h)
+  Sufficiency.coveredAgree _ _ _ P q honest Hon f p σ hHon hq hfam
 
 /-- **The carrier is safe across every stack of mechanisms**, at every row
 meeting its inequalities, at a local vote. -/
@@ -113,7 +114,7 @@ theorem safety {q : ℕ} [P.Quorate q] {f : ℕ} (hσ : σ.Local) (hHon : Honᶜ
     (hq : q ≤ Fintype.card Validator)
     (hfam : p.Covered (Fintype.card Validator) f q) :
     Safe (schemeRule p σ Hon) := by
-  obtain ⟨hl, -, hc, -⟩ := Loop.family σ hHon hq hfam
+  obtain ⟨hl, -, hc, -⟩ := coveredLaws σ hHon hq hfam
   have hw : 2 ≤ p.waveLength := by
     rcases hfam with ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ <;> omega
   exact Properties.safety (banded hσ hw hl hc) (agree hHon hq hfam) commitsCandidate

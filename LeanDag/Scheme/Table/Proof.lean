@@ -72,9 +72,24 @@ theorem hybridAnyCommittee : HybridAnyCommittee := by
   simp only [ThreeRound, Live, hybridMysticeti]
   refine ⟨⟨?_, ?_, ?_⟩, ?_, ?_, ?_⟩ <;> omega
 
+theorem rowsCovered : RowsCovered := by
+  intro n f c
+  refine ⟨fun hn => ⟨Or.inr (Or.inl ⟨rfl, le_rfl, rfl, ?_⟩),
+      fun w hw => Or.inr (Or.inl ⟨rfl, hw, rfl, ?_⟩), Or.inr (Or.inl ⟨rfl, le_rfl, rfl, ?_⟩),
+      Or.inr (Or.inl ⟨rfl, by simp [cordialMinersAsync], rfl, ?_⟩)⟩,
+    fun hn => ⟨Or.inl ⟨rfl, le_rfl, ?_, ?_⟩, Or.inl ⟨rfl, by simp [blueBottleAsync], ?_, ?_⟩⟩,
+    fun hn => ⟨Or.inl ⟨rfl, le_rfl, ?_, ?_⟩, Or.inl ⟨rfl, by simp [asyncOrcaella], ?_, ?_⟩⟩,
+    fun hn => ⟨Or.inr (Or.inl ⟨rfl, le_rfl, rfl, ?_⟩),
+      fun w hw => Or.inr (Or.inl ⟨rfl, hw, rfl, ?_⟩)⟩,
+    fun hn => ⟨Or.inr (Or.inr (Or.inl ⟨rfl, le_rfl, le_rfl, rfl, ?_⟩)),
+      Or.inr (Or.inr (Or.inl ⟨rfl, by simp [asyncNemoNemo], le_rfl, rfl, ?_⟩))⟩⟩ <;>
+  simp only [TwoRound, ThreeRound, TwoRoundCrash, mysticeti, mahiMahi, cordialMinersPS,
+    cordialMinersAsync, blueBottlePS, blueBottleAsync, orcaella, asyncOrcaella, hybridMysticeti,
+    hybridMahiMahi, nemoNemo, asyncNemoNemo] <;> omega
+
 theorem holds : Statement :=
   ⟨rowsHold, twoRoundBound, threeRoundBound, nemoNotTwoRound, crashWeaker, crashRows, crashBound,
-    hybridAnyCommittee⟩
+    hybridAnyCommittee, rowsCovered⟩
 
 end Table
 

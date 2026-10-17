@@ -1,5 +1,6 @@
 import LeanDag.Scheme.Model.AsyncPace
 import LeanDag.Scheme.Model.Async
+import Mathlib.Probability.Distributions.Uniform
 /-!
 # The asynchronous rows on a validator's own view — statement
 
@@ -7,6 +8,12 @@ import LeanDag.Scheme.Model.Async
 (`AsyncPace`: eventual delivery among the reliable validators, no time
 bound) with the reliable set `T` at least `qp` strong, at every row and
 vote:
+
+* **the coin's leader eventually commits** (`CoinLive`): at a row ready
+  for the count, with `qp = q`, a uniform coin names a leader whose slot
+  commits on every reliable validator's own view from some time on, with
+  probability at least `1/n` at one buffer round and `(q − f)/n` at two or
+  more;
 
 * **delivery**: every reliable block of the record is held by every
   reliable validator from some time on (`Delivered`);
@@ -22,9 +29,8 @@ vote:
   trunk of the timed disciplines, with a progress rule at `qp`, gives
   asynchronous pacing.
 
-The coin names a safe leader with the probabilities of
-`Scheme/Async/Statement.lean` (`Scheme.Async.CoinCommit`,
-`Scheme.Async.CoinTail`).
+The coin's bounds are those of `Scheme/Async/Statement.lean`
+(`Scheme.Async.CoinCommit`, `Scheme.Async.CoinTail`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -34,6 +40,31 @@ namespace LeanDag
 namespace Scheme
 
 namespace AsyncLocal
+
+open scoped ENNReal
+
+/-- **The coin's leader eventually commits on every reliable validator's
+own view**, with probability at least `1/n` at one buffer round and
+`(q − f)/n` at two or more, at a row ready for the count, under
+asynchronous pacing at `q` with a reliable set at least `q` strong. The
+coin's outcome `v` is the schedule `elect v`, in which `v` leads slot `k`
+at round `r`. -/
+def CoinLive : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
+    [P.Mechanised] (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N : ℕ)
+    (ap : AsyncPace q U T N) (elect : Validator → Slots Validator) (b r k : ℕ),
+    honestᶜ.card ≤ f → p.AsyncReady (Fintype.card Validator) f q b → q ≤ T.card →
+    (∀ v, (elect v).leader k = v ∧ (elect v).slotRound k = r) →
+    r + (p.waveLength - 1) ≤ N →
+    (1 ≤ b → (1 : ℝ≥0∞) / Fintype.card Validator ≤
+      (PMF.uniformOfFintype Validator).toOuterMeasure
+        {v | ap.EventuallyCommits (S := elect v) p σ k}) ∧
+    (2 ≤ b → ((q - f : ℕ) : ℝ≥0∞) / Fintype.card Validator ≤
+      (PMF.uniformOfFintype Validator).toOuterMeasure
+        {v | ap.EventuallyCommits (S := elect v) p σ k})
 
 /-- **Every reliable block is held by every reliable validator** from some
 time on. -/
@@ -64,8 +95,7 @@ def SafeCommits : Prop :=
     2 ≤ p.waveLength → (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) →
     p.commitThreshold ≤ T.card → qp ≤ T.card →
     S.slotRound k + (p.waveLength - 1) ≤ N → S.leader k ∈ safe p U k →
-    ∃ t, ∀ t', t ≤ t' → ∀ v (hv : v ∈ T),
-      ∃ L, IsLeaderBlock U k L ∧ (schemeAnchored p σ).Decided U (ap.viewAt hv t') k (some L)
+    ap.EventuallyCommits p σ k
 
 /-- **Every window commits on every reliable validator's own view** under
 the single-hit clause over safe leaders, from some time on. -/
@@ -113,7 +143,7 @@ def OfPaceCore : Prop :=
 
 /-- The asynchronous rows on a validator's own view. -/
 def Statement : Prop :=
-  Delivered ∧ Populated ∧ SafeCommits ∧ CommitsWithin ∧ AllDecidedBelow ∧ OfPaceCore
+  CoinLive ∧ Delivered ∧ Populated ∧ SafeCommits ∧ CommitsWithin ∧ AllDecidedBelow ∧ OfPaceCore
 
 end AsyncLocal
 
