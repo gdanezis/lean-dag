@@ -7,6 +7,7 @@ import LeanDag.Hybrid.Carrier
 import LeanDag.OptimalHydrozoan.Carrier
 import LeanDag.MahiMahi.Carrier
 import LeanDag.AsyncBlueBottle.Carrier
+import LeanDag.Scheme.Properties
 /-!
 # Chain quality for a second and third rule
 
@@ -252,6 +253,35 @@ end AsyncBlueBottle
 #print axioms LeanDagTest.odontoceti_card_correct_le_two_mul
 #print axioms LeanDagTest.hybrid_card_correct_le_two_mul
 #print axioms LeanDagTest.nemo_card_coveredAt_ge_of_decided
+section Scheme
+
+variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
+variable [F : LeanDag.Faults Validator]
+variable {B : Type} [LinearOrder B] {Payload : Type}
+
+/-- **CQ2 for the scheme's family**, on the core's universes, at every row
+and vote. -/
+theorem scheme_card_correct_le_two_mul (p : LeanDag.Scheme.Params)
+    (σ : LeanDag.Scheme.VoteSel Validator B Payload LeanDag.ValidWrt LeanDag.Correct)
+    (S : Slots Validator)
+    {U : (LeanDag.Scheme.schemeRule p σ).Universe}
+    {V : (LeanDag.Scheme.schemeRule p σ).View U} {k : ℕ} {L : B} {δ : ℕ}
+    (h : (LeanDag.Scheme.schemeRule p σ).Decided S V k (some L))
+    (hδ : δ < (U.block L).round) :
+    (Correct : Finset Validator).card ≤
+      2 * (coveredAt (LeanDag.Scheme.schemeRule p σ) (coreReliability Validator) U L δ).card :=
+  card_correct_le_two_mul_coveredAt_of_decided
+    (LeanDag.Scheme.quorate (q := quorumCard Validator) (rel := coreReliability Validator)
+      le_rfl)
+    LeanDag.Scheme.commitsCandidate
+    (by
+      simp only [coreReliability_correct, coreReliability_slack]
+      have := two_f_add_one_le_card_correct (Validator := Validator)
+      omega) h hδ
+
+end Scheme
+
+#print axioms LeanDagTest.scheme_card_correct_le_two_mul
 #print axioms LeanDagTest.optimal_card_coveredAt_ge_of_decided
 #print axioms LeanDagTest.mahiMahi_card_correct_le_two_mul
 #print axioms LeanDagTest.asyncBlueBottle_card_correct_le_two_mul

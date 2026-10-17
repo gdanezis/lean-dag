@@ -112,6 +112,17 @@ theorem mono (h : R.DecidedWithin U V B k v) (hBB : B ≤ B') : R.DecidedWithin 
   | indirectSkip hkj hj helig _ _ hnone ihj ihmid =>
       exact indirectSkip hkj (by omega) helig ihj (fun m h1 h2 h3 => ihmid m h1 h2 h3) hnone
 
+/-- **Bounded decisions are monotone in the view**, under the same bound. -/
+theorem view_mono (hl : R.Laws I) (hI : I S U) {V' : U.View} (hsub : V.ids ⊆ V'.ids)
+    (h : R.DecidedWithin U V B k v) : R.DecidedWithin U V' B k v := by
+  induction h with
+  | directCommit hk hL hdc => exact directCommit hk hL (hl.commit_mono hI hsub hdc)
+  | directSkip hk hall => exact directSkip hk (hl.skip_mono hI hsub hall)
+  | indirectCommit hkj hj helig _ _ hi hemp hL hlink hmin ihj ihmid =>
+      exact indirectCommit hkj hj helig ihj ihmid hi hemp hL hlink hmin
+  | indirectSkip hkj hj helig _ _ hnone ihj ihmid =>
+      exact indirectSkip hkj hj helig ihj ihmid hnone
+
 /-- Two bounded verdicts agree — agreement, through the embedding. -/
 theorem agree (hl : R.Laws I) (hI : I S U) {V₁ V₂ : U.View} {B₁ B₂ k : ℕ}
     {v₁ v₂ : Option BlockId} (h₁ : R.DecidedWithin U V₁ B₁ k v₁)

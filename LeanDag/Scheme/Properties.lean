@@ -1,0 +1,125 @@
+import LeanDag.Scheme.Helpers.Band
+import LeanDag.Scheme.Helpers.Support
+import LeanDag.Scheme.Loop.Proof
+import LeanDag.Scheme.Sufficiency.Proof
+import LeanDag.Properties.Agree
+import LeanDag.Properties.Candidate
+import LeanDag.Properties.Commit
+import LeanDag.Properties.Optional.Direct
+import LeanDag.Properties.Optional.Skip
+import LeanDag.Properties.Optional.Quorate
+import LeanDag.Properties.Optional.SelfParent
+import LeanDag.Properties.Arcs.Headline
+/-!
+# The family as a carrier, and the properties it shows
+
+`docs/scheme.md` §9. The decider's carrier `schemeRule p σ` shows the
+properties the mechanisms read, for the whole family:
+
+* **`Banded`** at a local vote (`leastSel_local`, `votedBlockSel_local`), a
+  wave of at least two and positive link and certificate thresholds, by
+  the band laws of `Helpers/Band.lean`; the rule needs nothing of its
+  anchors;
+* **`CommitsCandidate`**, **`CommitsDirect`** and **`Indirect`** at every
+  row and vote; **`SkipsUnsupported`** at a vote round one above the slot;
+* **`Quorate`**, **`NoEquiv`** and, on records whose validity asks it,
+  **`SelfParent`**, from validity and the record's honest set;
+* **`Agree`** and **`Safe`** at every row meeting its inequalities;
+* the support `familySupport` with its three laws (**`Local`**,
+  **`Commits`**, **`OfCoverage`**, `Helpers/Support.lean`), and **`Lives`**
+  on the core's universes.
+-/
+
+namespace LeanDag
+
+namespace Scheme
+
+open LeanDag.Properties
+
+variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
+variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}
+variable {P : Validity Validator BlockId Payload} [P.Mechanised] {honest : Finset Validator}
+variable {p : Params} {σ : VoteSel Validator BlockId Payload P honest}
+
+/-- **The carrier is banded**, at every row, at a local vote. -/
+theorem banded (hσ : σ.Local) (hw : 2 ≤ p.waveLength) (hl : 1 ≤ p.linkSize)
+    (hc : p.voteIsCert = false → 1 ≤ p.certThreshold) : Banded (schemeRule p σ) :=
+  AnchoredRule.banded (schemeBandLaws hσ hw hl hc) fun _ _ => trivial
+
+/-- **A commit names a candidate.** -/
+theorem commitsCandidate : CommitsCandidate (schemeRule p σ) :=
+  AnchoredRule.commitsCandidate
+
+/-- **A direct commit is a verdict.** -/
+theorem commitsDirect : CommitsDirect (schemeRule p σ)
+    (fun {U} V L r κ => (schemeAnchored p σ).Commit U V L r κ) :=
+  AnchoredRule.commitsDirect
+
+/-- **The indirect rule is a property.** -/
+theorem indirect : Indirect (schemeRule p σ)
+    (fun S i j => S.slotRound i + (p.waveLength - 1) + 1 ≤ S.slotRound j) :=
+  AnchoredRule.indirect ((schemeAnchored p σ).linkCongr_of_round
+    (fun _ U A L r => p.linkSize ≤ (creatorsOf U.block (linkCerts p σ U A L r)).card) fun _ _ _ _ _ _ => rfl)
+    fun _ h => AnchoredRule.exists_least_of_lt (fun _ _ => Iff.rfl) h
+
+/-- **A slot every quorum member's block one round up leaves unsupported
+is skipped**, at a vote round one above the slot and a skip threshold the
+quorum meets. -/
+theorem skipsUnsupported (hv : p.voteOffset = 1) :
+    SkipsUnsupported (schemeRule p σ) (fun T => p.skipThreshold ≤ T.card) := by
+  intro S U V T k hq hpres huns
+  refine AnchoredRule.Decided.directSkip (S := S) ?_
+  show p.skipThreshold ≤ (heldAuthors U V (blamersAt p σ U k)).card
+  refine le_trans hq (Finset.card_le_card fun v hvT => ?_)
+  obtain ⟨c, hcV, hcc, hcr⟩ := hpres v hvT
+  have hcU : c ∈ U.ids := V.subset_ids hcV
+  have hcr' : (U.block c).round = S.slotRound k + 1 := hcr
+  have hcc' : (U.block c).creator = v := hcc
+  refine mem_heldAuthors.mpr ⟨c, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hcU, by rw [hv]; exact
+    hcr'⟩, (sel_none_iff σ hcU hcr').mpr fun j hj hjL => ?_⟩, hcV, hcc'⟩
+  exact huns c hcV (show (U.block c).creator ∈ T by rw [hcc']; exact hvT) hcr j hjL hj
+
+/-- **The universes are quorate**, when validity's quorum is the
+reliability's. -/
+theorem quorate {q : ℕ} [P.Quorate q] {rel : Reliability Validator}
+    (hq : Fintype.card Validator - rel.slack ≤ q) : Quorate (schemeRule p σ) rel :=
+  fun U _ hb hr => le_trans hq (U.creators_quorum hb hr)
+
+/-- **A reliable author has one block per round**, when the reliable
+validators are honest. -/
+theorem noEquiv {rel : Reliability Validator} (hsub : rel.correct ⊆ honest) :
+    NoEquiv (schemeRule p σ) rel :=
+  fun U b c hb hc hbc heq hr => U.no_equivocation b hb c hc (hsub hbc) heq hr
+
+/-- **Every block references its author's previous block**, on records
+whose validity asks it. -/
+theorem selfParent (hP : ∀ blk b, P blk b → Clause.selfParent blk b) :
+    SelfParent (schemeRule p σ) :=
+  fun U b hb hr => hP _ _ (U.valid b hb) hr
+
+/-- **Two views decide alike** at every row that tolerates the record's
+faults, on records with quorum `q`. -/
+theorem agree {q : ℕ} [P.Quorate q] {f : ℕ} (ht : p.Tolerates honest f q) :
+    Agree (schemeRule p σ) :=
+  Sufficiency.coveredAgree _ _ _ P q honest f p σ ht
+
+/-- **The carrier is safe across every stack of mechanisms**, at every row
+that tolerates the record's faults, at a local vote. -/
+theorem safety {q : ℕ} [P.Quorate q] {f : ℕ} (hσ : σ.Local) (ht : p.Tolerates honest f q) :
+    Safe (schemeRule p σ) := by
+  obtain ⟨hl, -, hc, -⟩ := coveredLaws σ ht
+  have hw : 2 ≤ p.waveLength := by
+    rcases ht.2.2 with ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ <;> omega
+  exact Properties.safety (banded hσ hw hl hc) (agree ht) commitsCandidate
+
+/-- **The carrier lives** on the core's universes, at a commit threshold
+the correct validators meet: progress and inclusion. -/
+theorem lives [F : Faults Validator] {σ : VoteSel Validator BlockId Payload ValidWrt Correct}
+    (hlive : p.commitThreshold ≤ Fintype.card Validator - F.f) :
+    Support.Lives (R := schemeRule p σ) (familySupport p σ) (coreReliability Validator) :=
+  Support.liveness (familySupport_commits hlive) commitsCandidate
+    (selfParent fun _ _ h => h.self_parent) (noEquiv subset_rfl)
+
+end Scheme
+
+end LeanDag
