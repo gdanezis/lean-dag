@@ -18,22 +18,22 @@ namespace ReactiveRun
 open Properties
 
 theorem certifies : Certifies := by
-  intro Validator BlockId Payload _ _ _ _ P _ honest p σ S U T N R q rs k L hw hcv hTh hq hgst
+  intro Validator BlockId Payload _ _ _ _ P _ honest p σ S U T N R q rs k L hc hTh hq hgst
     hto hR hN hlead hL
-  exact rs.certifies hw hcv hTh hq hgst hto hR hN hlead hL
+  exact rs.certifies hc.1 hc.2 hTh hq hgst hto hR hN hlead hL
 
 theorem live : Live := by
-  intro Validator BlockId Payload _ _ _ _ P _ honest p σ Hon rel S U V T lo K hw hcv h
-  exact live_of_reactiveLive hw hcv h
+  intro Validator BlockId Payload _ _ _ _ P _ honest p σ Hon rel S U V T lo K hc h
+  exact live_of_reactiveLive hc.1 hc.2 h
 
 theorem commits : Commits := by
-  intro Validator BlockId Payload _ _ _ _ P _ honest p σ Hon rel hw hcv hcm
-  exact leaderCommits_reactive hw hcv hcm
+  intro Validator BlockId Payload _ _ _ _ P _ honest p σ Hon rel hc hcm
+  exact leaderCommits_reactive hc.1 hc.2 hcm
 
 theorem includes : Includes := by
-  intro Validator BlockId Payload _ _ _ _ P _ honest p σ Hon rel hP hsub hw hcv hcm S T hT fair m v
+  intro Validator BlockId Payload _ _ _ _ P _ honest p σ Hon rel hP hsub hc hcm S T hT fair m v
     hv
-  exact includes_reactive hP hsub hw hcv hcm S hT fair m hv
+  exact includes_reactive hP hsub hc.1 hc.2 hcm S hT fair m hv
 
 theorem ofMysticeti : OfMysticeti := by
   intro Validator BlockId Payload _ _ F _ _ S σ U T N hT rm

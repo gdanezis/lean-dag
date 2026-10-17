@@ -25,11 +25,10 @@ namespace Scheme
 
 /-- **Ready for the asynchronous count**, at `b` buffer rounds: two quorums
 of `q` overlap past `f` (the common core), the vote round is `b + 1` above
-the proposal, certificates fit in `q` where votes are certified a round
-later, and the commit threshold is within `q`. -/
+the proposal, a certificate fits the wave and `q`, and the commit threshold
+is within `q`. -/
 def Params.AsyncReady (p : Params) (n f q b : ℕ) : Prop :=
-  n + f + 1 ≤ 2 * q ∧ p.voteOffset = b + 1 ∧ 2 ≤ p.waveLength ∧
-    (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) ∧ p.commitThreshold ≤ q
+  n + f + 1 ≤ 2 * q ∧ p.voteOffset = b + 1 ∧ p.CertFits q ∧ p.commitThreshold ≤ q
 
 variable {Validator : Type} [Fintype Validator] [DecidableEq Validator]
 variable {BlockId : Type} [LinearOrder BlockId] {Payload : Type}

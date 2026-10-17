@@ -59,8 +59,8 @@ theorem eventually_held {v : Validator} (hv : v ∈ T) {b : BlockId} (hb : b ∈
 omit [Fintype Validator] in
 /-- **Every reliable block is held by every reliable validator** from some
 time on. -/
-theorem delivered : ∃ t, ∀ t', t ≤ t' → ∀ v ∈ T, ∀ b ∈ U.ids,
-    (U.block b).creator ∈ T → b ∈ ap.holds v t' := by
+theorem delivered :
+    ap.Eventually fun V => ∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ V.ids := by
   classical
   obtain ⟨t, ht⟩ := ap.exists_time ((U.ids.filter fun b => (U.block b).creator ∈ T) ×ˢ T)
     fun x hx => by
@@ -119,45 +119,37 @@ variable (ap : AsyncPace qp U T N)
 
 /-- **A safe leader's slot commits on every reliable validator's own
 view**, from some time on. -/
-theorem decided_of_safe {k : ℕ} (hw : 2 ≤ p.waveLength)
-    (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
+theorem decided_of_safe {k : ℕ} (hc : p.CertFits q)
     (hcm : p.commitThreshold ≤ T.card) (hq : qp ≤ T.card)
     (hN : S.slotRound k + (p.waveLength - 1) ≤ N) (hk : S.leader k ∈ safe p U k) :
     ap.EventuallyCommits p σ k := by
   obtain ⟨t, ht⟩ := ap.delivered
   obtain ⟨hLh, L, hL, hLr, hLc, hsafe⟩ := mem_safeAt.mp hk
   refine ⟨L, ⟨hL, hLr, hLc⟩, t, fun t' htt' v hv => ?_⟩
-  obtain ⟨L', hL', hdec⟩ := decided_of_safe_of_holds σ hw hcv hcm (ap.populated hq _ hN) hk
+  obtain ⟨L', hL', hdec⟩ := decided_of_safe_of_holds σ hc.1 hc.2 hcm (ap.populated hq _ hN) hk
     (V := ap.viewAt hv t') fun b hb hbT => ht t' htt' v hv b hb hbT
   rwa [U.eq_of_creator_eq hL'.1 hL hLh hL'.2.2 hLc (hL'.2.1.trans hLr.symm)] at hdec
 
 /-- **Every window commits on every reliable validator's own view** under
 the safe single-hit clause, from some time on. -/
-theorem commitsWithin {c : ℕ} (hw : 2 ≤ p.waveLength)
-    (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
+theorem commitsWithin {c : ℕ} (hc : p.CertFits q)
     (hcm : p.commitThreshold ≤ T.card) (hq : qp ≤ T.card) (hU : SafeWithin p σ U c N) :
-    ∃ t, ∀ t', t ≤ t' → ∀ v (hv : v ∈ T), ∀ k,
-      (schemeAnchored p σ).decisionRound (k + c) ≤ N →
-      ∃ k', k ≤ k' ∧ k' < k + c ∧ ∃ L, IsLeaderBlock U k' L ∧
-        (schemeAnchored p σ).Decided U (ap.viewAt hv t') k' (some L) := by
+    ap.Eventually fun V => WindowsCommit p σ U V c N := by
   obtain ⟨t, ht⟩ := ap.delivered
   refine ⟨t, fun t' htt' v hv k hk => ?_⟩
   obtain ⟨k', h1, h2, hs⟩ := hU k hk
   have hmono := S.mono (show k' ≤ k + c by omega)
   have hdec : (schemeAnchored p σ).decisionRound (k + c) =
       S.slotRound (k + c) + (p.waveLength - 1) := rfl
-  exact ⟨k', h1, h2, decided_of_safe_of_holds σ hw hcv hcm (ap.populated hq _ (by omega)) hs
+  exact ⟨k', h1, h2, decided_of_safe_of_holds σ hc.1 hc.2 hcm (ap.populated hq _ (by omega)) hs
     fun b hb hbT => ht t' htt' v hv b hb hbT⟩
 
 /-- **Every slot below a safe run is decided on every reliable validator's
 own view**, when a run of `d` slots spans eligibility, from some time on. -/
-theorem allDecidedBelow {c d : ℕ} (hd : 0 < d) (hw : 2 ≤ p.waveLength)
-    (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
+theorem allDecidedBelow {c d : ℕ} (hd : 0 < d) (hc : p.CertFits q)
     (hcm : p.commitThreshold ≤ T.card) (hq : qp ≤ T.card)
     (hspan : (schemeAnchored p σ).SpansEligible (S := S) d) (hU : SafeRunWithin p σ U c d N) :
-    ∃ t, ∀ t', t ≤ t' → ∀ v (hv : v ∈ T), ∀ k,
-      (schemeAnchored p σ).decisionRound (k + c + d - 1) ≤ N →
-      ∃ b, k ≤ b ∧ ∀ i, i < b → ∃ w, (schemeAnchored p σ).Decided U (ap.viewAt hv t') i w := by
+    ap.Eventually fun V => PrefixDecided p σ U V c d N := by
   obtain ⟨t, ht⟩ := ap.delivered
   refine ⟨t, fun t' htt' v hv k hk => ?_⟩
   obtain ⟨k', hk', hk'c, hrun⟩ := hU k hk
@@ -167,7 +159,7 @@ theorem allDecidedBelow {c d : ℕ} (hd : 0 < d) (hw : 2 ≤ p.waveLength)
     (fun _ h => AnchoredRule.exists_least_of_lt (fun _ _ => Iff.rfl) h) hd hspan
     (Led := fun j => S.leader j ∈ safe p U j) hrun fun j _ h2 hj => ?_⟩
   have hmono := S.mono (show j ≤ k + c + d - 1 by omega)
-  obtain ⟨L, -, hL⟩ := decided_of_safe_of_holds σ hw hcv hcm (ap.populated hq _ (by omega)) hj
+  obtain ⟨L, -, hL⟩ := decided_of_safe_of_holds σ hc.1 hc.2 hcm (ap.populated hq _ (by omega)) hj
     (V := ap.viewAt hv t') fun b hb hbT => ht t' htt' v hv b hb hbT
   exact ⟨L, hL⟩
 
@@ -189,13 +181,13 @@ theorem coin_eventuallyCommits [Nonempty Validator] {f b r k : ℕ} (ap : AsyncP
     (2 ≤ b → ((q - f : ℕ) : ℝ≥0∞) / Fintype.card Validator ≤
       (PMF.uniformOfFintype Validator).toOuterMeasure
         {v | ap.EventuallyCommits (S := elect v) p σ k}) := by
-  obtain ⟨hq2, hvo, hw, hcv, hcm⟩ := hp
-  have hvw : p.voteOffset ≤ p.waveLength - 1 := by unfold Params.voteOffset; split <;> omega
+  obtain ⟨hq2, hvo, hc, hcm⟩ := hp
+  have hvw := Params.voteOffset_le hc.1
   have hT : T.Nonempty := Finset.card_pos.mp (lt_of_lt_of_le (Validity.Quorate.pos P) hq)
   have hsub : (↑(safeAt p U r) : Set Validator) ⊆
       {v | ap.EventuallyCommits (S := elect v) p σ k} := fun v hv => by
     obtain ⟨hl, hr⟩ := helect v
-    refine ap.decided_of_safe (S := elect v) σ hw hcv (le_trans hcm hq) hq (by omega) ?_
+    refine ap.decided_of_safe (S := elect v) σ hc (le_trans hcm hq) hq (by omega) ?_
     change (elect v).leader k ∈ safeAt p U ((elect v).slotRound k)
     rw [hl, hr]; exact hv
   have hmono := (PMF.uniformOfFintype Validator).toOuterMeasure.mono hsub

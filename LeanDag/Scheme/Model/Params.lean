@@ -121,6 +121,12 @@ def Covered (p : Params) (n f q : ℕ) : Prop :=
   (p.voteIsCert = false ∧ 3 ≤ p.waveLength ∧ p.linkSize = 1 ∧ 1 ≤ p.certThreshold ∧ f = 0 ∧
     p.ThreeRoundCrash n q)
 
+/-- **A certificate fits the wave and the quorum `q`**: a wave of two or
+more, and where votes are certified a round later, a wave of three or more
+and a certificate threshold of at most `q`. -/
+def CertFits (p : Params) (q : ℕ) : Prop :=
+  2 ≤ p.waveLength ∧ (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
+
 /-- **Liveness**: every threshold is reachable by the correct validators. -/
 def Live (p : Params) (n f c : ℕ) : Prop :=
   p.commitThreshold ≤ n - f - c ∧ p.skipThreshold ≤ n - f - c ∧ p.certThreshold ≤ n - f - c

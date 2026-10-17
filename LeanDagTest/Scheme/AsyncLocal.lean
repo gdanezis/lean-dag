@@ -59,20 +59,17 @@ on. -/
 theorem hyAsync_commits (N k : ℕ) (hN : hySlots.slotRound k + 2 ≤ N) :
     (hyAsync N).EventuallyCommits hyP σH k :=
   AsyncLocal.safeCommits (Fin 3) ℕ Unit HybridValid (Hydrozoan.q (Fin 3))
-    Hydrozoan.NonByzantine hyP σH (Uhy N) Thy N 2 (hyAsync N) k (by decide)
-    (fun _ => ⟨by decide, by decide⟩) (by decide) (by decide)
+    Hydrozoan.NonByzantine hyP σH (Uhy N) Thy N 2 (hyAsync N) k ⟨by decide,
+    fun _ => ⟨by decide, by decide⟩⟩ (by decide) (by decide)
     (by have : hyP.waveLength - 1 = 2 := rfl; omega) (hy_safe N k (by omega))
 
 /-- **Every window of one slot commits on each live replica's own view**,
 from some time on. -/
 theorem hyAsync_commitsWithin (N : ℕ) :
-    ∃ t, ∀ t', t ≤ t' → ∀ v (hv : v ∈ Thy), ∀ k,
-      (schemeAnchored hyP σH).decisionRound (k + 1) ≤ N →
-      ∃ k', k ≤ k' ∧ k' < k + 1 ∧ ∃ L, IsLeaderBlock (Uhy N) k' L ∧
-        (schemeAnchored hyP σH).Decided (Uhy N) ((hyAsync N).viewAt hv t') k' (some L) :=
+    (hyAsync N).Eventually fun V => WindowsCommit hyP σH (Uhy N) V 1 N :=
   AsyncLocal.commitsWithin (Fin 3) ℕ Unit HybridValid (Hydrozoan.q (Fin 3))
-    Hydrozoan.NonByzantine hyP σH (Uhy N) Thy N 2 (hyAsync N) 1 (by decide)
-    (fun _ => ⟨by decide, by decide⟩) (by decide) (by decide) fun k hk => by
+    Hydrozoan.NonByzantine hyP σH (Uhy N) Thy N 2 (hyAsync N) 1 ⟨by decide,
+    fun _ => ⟨by decide, by decide⟩⟩ (by decide) (by decide) fun k hk => by
       have hdec : (schemeAnchored hyP σH).decisionRound (k + 1) =
           hySlots.slotRound (k + 1) + (hyP.waveLength - 1) := rfl
       have : hyP.waveLength - 1 = 2 := rfl
@@ -96,7 +93,7 @@ example : ((3 - 1 : ℕ) : ENNReal) / 4 ≤
     (Params.mahiMahi 5 4 1) leastSel (Starve.record (by omega) 4) _ 4
     (Starve.starvePace (hqn := by omega) 4) (fun v => Slots.uniformSingle 1 one_pos fun _ => v)
     2 0 0 (by rw [Starve.card_compl_honestSet (by omega)])
-    (by simp [Params.AsyncReady, Params.voteOffset, Params.mahiMahi])
+    (by simp [Params.AsyncReady, Params.CertFits, Params.voteOffset, Params.mahiMahi])
     (by decide) (fun v => ⟨rfl, by simp⟩) (by decide)).2 (by omega)
 
 end Scheme

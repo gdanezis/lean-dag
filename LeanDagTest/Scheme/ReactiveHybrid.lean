@@ -270,8 +270,8 @@ theorem hyReactive_commits (N k : ℕ) (hN : hySlots.slotRound k + 2 ≤ N) :
     ∃ L, Properties.DecidedBelow (schemeRule hyP σH Hydrozoan.NonByzantine) hySlots (k + 1)
       (uhyV N) k (some L) :=
   ReactiveRun.commits (Fin 3) ℕ Unit HybridValid Hydrozoan.NonByzantine hyP σH
-    Hydrozoan.NonByzantine (Hydrozoan.hzReliability (Fin 3)) (by decide)
-    (fun _ => ⟨by decide, by decide⟩) (by decide) hySlots (uhyV N) Thy k (k + 1)
+    Hydrozoan.NonByzantine (Hydrozoan.hzReliability (Fin 3)) ⟨by decide,
+    fun _ => ⟨by decide, by decide⟩⟩ (by decide) hySlots (uhyV N) Thy k (k + 1)
     (hyReactive_live N k hN) k (Nat.le_refl k) (Nat.lt_succ_self k)
     (by
       have h : ((hySlots.leader k : Fin 3) : ℕ) = k % 2 + 1 := rfl
@@ -299,7 +299,7 @@ theorem hyReactive_includes : ∃ k', 1 ≤ hySlots.slotRound k' ∧ hySlots.lea
         3 ∈ historyFrom (Uhy N).block L := by
   obtain ⟨k', hm, hlead, h⟩ := ReactiveRun.includes (Fin 3) ℕ Unit HybridValid
     Hydrozoan.NonByzantine hyP σH Hydrozoan.NonByzantine (Hydrozoan.hzReliability (Fin 3))
-    (fun _ _ h => h.clause.2) (by decide) (by decide) (fun _ => ⟨by decide, by decide⟩)
+    (fun _ _ h => h.clause.2) (by decide) ⟨by decide, fun _ => ⟨by decide, by decide⟩⟩
     (by decide) hySlots Thy (by decide) hySlots_fairToEach 1 2 (by decide)
   refine ⟨k', hm, hlead, fun N hN => ?_⟩
   obtain ⟨L, hdec, hb⟩ := h (uhyU N) (uhyV N) (hyReactive_live N k' hN)

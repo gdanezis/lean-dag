@@ -51,8 +51,7 @@ def Certifies : Prop :=
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N R q : ℕ)
     (rs : SchemeReactive q p σ U T N) (k : ℕ) (L : BlockId),
-    2 ≤ p.waveLength →
-    (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) →
+    p.CertFits q →
     T ⊆ honest → q ≤ T.card → rs.gst ≤ R →
     (∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) →
     R ≤ S.slotRound k → S.slotRound k + (p.waveLength - 1) ≤ N → S.leader k ∈ T →
@@ -69,9 +68,7 @@ def Live : Prop :=
     (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
     (rel : Reliability Validator) (S : Slots Validator) (U : (schemeRule p σ Hon).Universe)
     (V : (schemeRule p σ Hon).View U) (T : Finset Validator) (lo K : ℕ),
-    2 ≤ p.waveLength →
-    (p.voteIsCert = false →
-      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack) →
+    p.CertFits (Fintype.card Validator - rel.slack) →
     reactiveLive p σ Hon rel S V T lo K →
     (familySupport p σ Hon).live rel S V T lo K
 
@@ -83,9 +80,7 @@ def Commits : Prop :=
     [P.Mechanised] (honest : Finset Validator) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
     (rel : Reliability Validator),
-    2 ≤ p.waveLength →
-    (p.voteIsCert = false →
-      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack) →
+    p.CertFits (Fintype.card Validator - rel.slack) →
     p.commitThreshold ≤ Fintype.card Validator - rel.slack →
     LeaderCommits (schemeRule p σ Hon)
       (fun S {U} V T lo K => reactiveLive p σ Hon rel S (U := U) V T lo K)
@@ -101,9 +96,7 @@ def Includes : Prop :=
     (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
     (rel : Reliability Validator),
     (∀ blk b, P blk b → Clause.selfParent blk b) → rel.correct ⊆ Hon →
-    2 ≤ p.waveLength →
-    (p.voteIsCert = false →
-      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack) →
+    p.CertFits (Fintype.card Validator - rel.slack) →
     p.commitThreshold ≤ Fintype.card Validator - rel.slack →
     ∀ (S : Slots Validator) (T : Finset Validator), T ⊆ rel.correct →
     (∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) →

@@ -73,7 +73,7 @@ def Delivered : Prop :=
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) (honest : Finset Validator)
     (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N qp : ℕ)
     (ap : AsyncPace qp U T N),
-    ∃ t, ∀ t', t ≤ t' → ∀ v ∈ T, ∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ ap.holds v t'
+    ap.Eventually fun V => ∀ b ∈ U.ids, (U.block b).creator ∈ T → b ∈ V.ids
 
 /-- **Production**: every round below the horizon has a block by every
 reliable validator, when the reliable set is `qp` strong. -/
@@ -92,8 +92,7 @@ def SafeCommits : Prop :=
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N qp : ℕ)
     (ap : AsyncPace qp U T N) (k : ℕ),
-    2 ≤ p.waveLength → (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) →
-    p.commitThreshold ≤ T.card → qp ≤ T.card →
+    p.CertFits q → p.commitThreshold ≤ T.card → qp ≤ T.card →
     S.slotRound k + (p.waveLength - 1) ≤ N → S.leader k ∈ safe p U k →
     ap.EventuallyCommits p σ k
 
@@ -106,12 +105,8 @@ def CommitsWithin : Prop :=
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N qp : ℕ)
     (ap : AsyncPace qp U T N) (c : ℕ),
-    2 ≤ p.waveLength → (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) →
-    p.commitThreshold ≤ T.card → qp ≤ T.card → SafeWithin p σ U c N →
-    ∃ t, ∀ t', t ≤ t' → ∀ v (hv : v ∈ T), ∀ k,
-      (schemeAnchored p σ).decisionRound (k + c) ≤ N →
-      ∃ k', k ≤ k' ∧ k' < k + c ∧ ∃ L, IsLeaderBlock U k' L ∧
-        (schemeAnchored p σ).Decided U (ap.viewAt hv t') k' (some L)
+    p.CertFits q → p.commitThreshold ≤ T.card → qp ≤ T.card → SafeWithin p σ U c N →
+    ap.Eventually fun V => WindowsCommit p σ U V c N
 
 /-- **Every slot below a run is decided on every reliable validator's own
 view** under the run clause over safe leaders, when a run of `d` slots
@@ -123,13 +118,9 @@ def AllDecidedBelow : Prop :=
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N qp : ℕ)
     (ap : AsyncPace qp U T N) (c d : ℕ),
-    0 < d → 2 ≤ p.waveLength →
-    (p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q) →
-    p.commitThreshold ≤ T.card → qp ≤ T.card →
+    0 < d → p.CertFits q → p.commitThreshold ≤ T.card → qp ≤ T.card →
     (schemeAnchored p σ).SpansEligible (S := S) d → SafeRunWithin p σ U c d N →
-    ∃ t, ∀ t', t ≤ t' → ∀ v (hv : v ∈ T), ∀ k,
-      (schemeAnchored p σ).decisionRound (k + c + d - 1) ≤ N →
-      ∃ b, k ≤ b ∧ ∀ i, i < b → ∃ w, (schemeAnchored p σ).Decided U (ap.viewAt hv t') i w
+    ap.Eventually fun V => PrefixDecided p σ U V c d N
 
 /-- **Every timed run is an asynchronous one**: the pacing trunk, with a
 progress rule at `qp`, gives asynchronous pacing at `qp`. -/

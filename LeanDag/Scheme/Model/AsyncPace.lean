@@ -14,8 +14,12 @@ covered as well.
 
 `AsyncPace.viewAt v hv t` is a reliable validator's own view at time `t`:
 its holdings, a view because they are causally closed.
-`AsyncPace.EventuallyCommits` says a slot's leader block is committed on
-every reliable validator's own view from some time on.
+`AsyncPace.Eventually Φ` says every reliable validator's own view
+satisfies `Φ` from some time on; `AsyncPace.EventuallyCommits` says so of
+one leader block of a slot being committed. On a single view,
+`WindowsCommit` says every window of `c` slots below the horizon has a
+committed slot, and `PrefixDecided` that every slot below some point past
+each window is decided.
 
 Definitions only; the claims are `Scheme/AsyncLocal/Statement.lean`.
 -/
@@ -63,13 +67,17 @@ def viewAt (ap : AsyncPace q U T N) {v : Validator} (hv : v ∈ T) (t : ℕ) : U
   subset_ids := ap.holds_sub v t
   complete := ap.holds_closed v hv t
 
+/-- **From some time on, every reliable validator's own view satisfies
+`Φ`.** -/
+abbrev Eventually (ap : AsyncPace q U T N) (Φ : U.View → Prop) : Prop :=
+  ∃ t, ∀ t', t ≤ t' → ∀ v (hv : v ∈ T), Φ (ap.viewAt hv t')
+
 /-- **Slot `k` eventually commits on every reliable validator's own view**:
-some leader block of the slot is decided on each such view from some time
+one leader block of the slot is decided on each such view from some time
 on. -/
 def EventuallyCommits (ap : AsyncPace q U T N) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator] (k : ℕ) : Prop :=
-  ∃ L, IsLeaderBlock U k L ∧ ∃ t, ∀ t', t ≤ t' → ∀ v (hv : v ∈ T),
-    (schemeAnchored p σ).Decided U (ap.viewAt hv t') k (some L)
+  ∃ L, IsLeaderBlock U k L ∧ ap.Eventually fun V => (schemeAnchored p σ).Decided U V k (some L)
 
 /-- **A timed run is an asynchronous one**: the trunk of every timed
 discipline, with a progress rule at `q`, forgets its clock. -/
@@ -88,6 +96,25 @@ def ofPaceCore [Faults Validator] (pc : PaceCore U T N)
   advancesAt := hadv
 
 end AsyncPace
+
+variable (p : Params) (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
+
+/-- **Every window commits on the view `V`**: in every window of `c` slots
+whose decision rounds lie below the horizon `N`, some slot's leader block
+is committed on `V`. -/
+def WindowsCommit (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
+    (c N : ℕ) : Prop :=
+  ∀ k, (schemeAnchored p σ).decisionRound (k + c) ≤ N →
+    ∃ k', k ≤ k' ∧ k' < k + c ∧ ∃ L, IsLeaderBlock U k' L ∧
+      (schemeAnchored p σ).Decided U V k' (some L)
+
+/-- **The decided prefix of the view `V` keeps up with the horizon**: for
+every slot `k` whose window of `c` slots and run of `d` lie below `N`,
+every slot below some `b ≥ k` is decided on `V`. -/
+def PrefixDecided (U : BlockRecord Validator BlockId Payload P honest) (V : U.View)
+    (c d N : ℕ) : Prop :=
+  ∀ k, (schemeAnchored p σ).decisionRound (k + c + d - 1) ≤ N →
+    ∃ b, k ≤ b ∧ ∀ i < b, ∃ w, (schemeAnchored p σ).Decided U V i w
 
 end Scheme
 

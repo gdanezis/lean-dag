@@ -750,7 +750,12 @@ validator holds, every reliable validator holds at some later time
 a reliable validator holding `qp` distinct round-`n` authors gets past
 round `n`. The quorum `qp` is a parameter, so the hybrid committees are
 covered. `AsyncPace.viewAt` is a reliable validator's view at a time: its
-holdings.
+holdings. `AsyncPace.Eventually Φ` says that from some time on every
+reliable validator's view satisfies `Φ`; every conclusion below has this
+form. Each statement asks that a certificate fit the wave and the quorum
+(`Params.CertFits q`: a wave of two or more, and where votes are certified
+a round later a wave of three or more and a certificate threshold of at
+most `q`).
 
 `Scheme/AsyncLocal/Statement.lean` states, and `Proof.lean` proves, with
 the reliable set `T` at least `qp` strong, at every row and vote:
@@ -762,8 +767,8 @@ the reliable set `T` at least `qp` strong, at every row and vote:
   view from some time on (`AsyncPace.EventuallyCommits`), with
   probability at least `1/n` at one buffer round and `(q − f)/n` at two or
   more. The coin's outcome `v` is a schedule in which `v` leads the slot.
-* **Delivery** (`Delivered`): every reliable block of the record is held
-  by every reliable validator from some time on. The record is finite,
+* **Delivery** (`Delivered`): from some time on, every reliable
+  validator's view holds every reliable block of the record. The record is finite,
   each of its reliable blocks is eventually held, and holdings only grow
   (`AsyncPace.exists_time`).
 * **Production** (`Populated`): every round below the horizon has a block
@@ -775,7 +780,10 @@ the reliable set `T` at least `qp` strong, at every row and vote:
   certifies the safe block. This and the counts give `CoinLive`.
 * **Every window commits, and every slot below a run is decided**
   (`CommitsWithin`, `AllDecidedBelow`), on every reliable validator's own
-  view from some time on, under `SafeWithin` and `SafeRunWithin`.
+  view from some time on, under `SafeWithin` and `SafeRunWithin`. On one
+  view these are `WindowsCommit` (every window of `c` slots below the
+  horizon has a committed slot) and `PrefixDecided` (for each slot `k`
+  below the horizon, every slot below some `b ≥ k` is decided).
 * **Every timed run is an asynchronous one** (`OfPaceCore`): the trunk,
   with a progress rule at `qp`, forgets its clock.
 

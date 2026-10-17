@@ -45,11 +45,10 @@ theorem asyncRows : AsyncRows := by
   intro n f c
   refine ⟨fun hn => ⟨?_, ?_, ?_⟩, fun hn => ?_, fun hn => ?_, fun hn => ?_,
     fun hn => ⟨?_, ?_⟩⟩ <;>
-  simp only [Params.AsyncReady, Params.voteOffset, Params.mahiMahi, Params.cordialMinersAsync,
-    Params.blueBottleAsync, Params.asyncOrcaella, Params.asyncNemoNemo, Params.hybridMahiMahi,
+  simp only [Params.AsyncReady, Params.CertFits, Params.voteOffset, Params.mahiMahi,
+    Params.cordialMinersAsync, Params.blueBottleAsync, Params.asyncOrcaella, Params.asyncNemoNemo, Params.hybridMahiMahi,
     Bool.false_eq_true, if_false, if_true] <;>
-  exact ⟨by omega, by simp, by omega,
-    fun _ => ⟨by omega, by omega⟩, by omega⟩
+  exact ⟨by omega, by simp, ⟨by omega, fun _ => ⟨by omega, by omega⟩⟩, by omega⟩
 
 theorem holds : Statement := ⟨coreRows, hybridRows, asyncRows⟩
 

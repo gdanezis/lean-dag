@@ -12118,7 +12118,10 @@ blocks from some time on; whatever one reliable validator holds, every
 reliable validator holds later (`ConvergesEventually`, with no delay
 bound and no GST); and a reliable validator holding `qp` round-`n`
 authors gets past round `n`. `Scheme.AsyncPace.viewAt` is a reliable
-validator's view at a time.
+validator's view at a time, and `Scheme.AsyncPace.Eventually` says that
+from some time on every reliable validator's view satisfies a predicate;
+the results below conclude in this form. Each asks that a certificate fit
+the wave and the quorum (`Scheme.Params.CertFits`).
 
 SC27: under asynchronous pacing at `q`, at a row ready for the count
 (`Scheme.Params.AsyncReady`), with the reliable set `q` strong, a uniform
@@ -12137,7 +12140,8 @@ meets the commit threshold (`Scheme.AsyncPace.decided_of_safe`, by
 `Scheme.decided_of_safe_of_holds`). Under the clauses over safe leaders
 every window commits and every slot below a spanning run is decided on
 those views (`Scheme.AsyncPace.commitsWithin`,
-`Scheme.AsyncPace.allDecidedBelow`). Every timed run is an asynchronous
+`Scheme.AsyncPace.allDecidedBelow`, concluding `Scheme.WindowsCommit` and
+`Scheme.PrefixDecided` on each view). Every timed run is an asynchronous
 one (`Scheme.AsyncPace.ofPaceCore`). The local results read safe leaders
 because a leader committed by certificates that include Byzantine ones
 need not commit at a reliable validator. On the starving execution of
@@ -20624,9 +20628,7 @@ def Live : Prop :=
     (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
     (rel : Reliability Validator) (S : Slots Validator) (U : (schemeRule p σ Hon).Universe)
     (V : (schemeRule p σ Hon).View U) (T : Finset Validator) (lo K : ℕ),
-    2 ≤ p.waveLength →
-    (p.voteIsCert = false →
-      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack) →
+    p.CertFits (Fintype.card Validator - rel.slack) →
     reactiveLive p σ Hon rel S V T lo K →
     (familySupport p σ Hon).live rel S V T lo K
 ```
@@ -20644,9 +20646,7 @@ def Commits : Prop :=
     [P.Mechanised] (honest : Finset Validator) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
     (rel : Reliability Validator),
-    2 ≤ p.waveLength →
-    (p.voteIsCert = false →
-      3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack) →
+    p.CertFits (Fintype.card Validator - rel.slack) →
     p.commitThreshold ≤ Fintype.card Validator - rel.slack →
     LeaderCommits (schemeRule p σ Hon)
       (fun S {U} V T lo K => reactiveLive p σ Hon rel S (U := U) V T lo K)

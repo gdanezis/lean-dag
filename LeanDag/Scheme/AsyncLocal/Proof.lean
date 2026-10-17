@@ -29,17 +29,17 @@ theorem populated : Populated := by
   exact ap.populated hq
 
 theorem safeCommits : SafeCommits := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest p σ S U T N qp ap k hw hcv hcm hq hN hk
-  exact ap.decided_of_safe σ hw hcv hcm hq hN hk
+  intro Validator BlockId Payload _ _ _ P _ q _ honest p σ S U T N qp ap k hc hcm hq hN hk
+  exact ap.decided_of_safe σ hc hcm hq hN hk
 
 theorem commitsWithin : CommitsWithin := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest p σ S U T N qp ap c hw hcv hcm hq hU
-  exact ap.commitsWithin σ hw hcv hcm hq hU
+  intro Validator BlockId Payload _ _ _ P _ q _ honest p σ S U T N qp ap c hc hcm hq hU
+  exact ap.commitsWithin σ hc hcm hq hU
 
 theorem allDecidedBelow : AllDecidedBelow := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest p σ S U T N qp ap c d hd hw hcv hcm hq
+  intro Validator BlockId Payload _ _ _ P _ q _ honest p σ S U T N qp ap c d hd hc hcm hq
     hspan hU
-  exact ap.allDecidedBelow σ hd hw hcv hcm hq hspan hU
+  exact ap.allDecidedBelow σ hd hc hcm hq hspan hU
 
 theorem ofPaceCore : OfPaceCore := by
   intro Validator BlockId Payload _ _ _ _ P honest U T N qp pc hadv
