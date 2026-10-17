@@ -14,8 +14,8 @@ namespace Scheme
 namespace Sufficiency
 
 theorem coveredAgree : CoveredAgree := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ hHon hq hfam
-  exact AnchoredRule.agreeOn (coveredLaws σ hHon hq hfam).2.2.2 (fun _ _ h => h)
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ ht
+  exact AnchoredRule.agree (coveredLaws σ ht).2.2.2
 
 theorem holds : Statement := coveredAgree
 

@@ -1,5 +1,6 @@
 import LeanDag.Scheme.HybridRow.Proof
 import LeanDag.Scheme.Model.LeastSel
+import LeanDag.Hybrid.Faults
 /-!
 # The Hybrid Mysticeti row at its committee
 
@@ -48,9 +49,20 @@ example : (schemeAnchored (Params.hybridMysticeti (Fintype.card (Fin 6)) 1 1)
 vote. -/
 example : Properties.Safe (schemeRule (Params.hybridMysticeti (Fintype.card (Fin 6)) 1 1)
       (leastSel (Validator := Fin 6) (BlockId := Fin 20) (Payload := Unit) (P := HybridValid)
-        (honest := Hydrozoan.NonByzantine)) Hydrozoan.NonByzantine) :=
+        (honest := Hydrozoan.NonByzantine))) :=
   (HybridRow.withSelfParent (Fin 6) (Fin 20) _ leastSel leastSel_local hybridMysticeti_covered
     (by decide)).1
+
+/-- **The hybrid arc's records, read at the honest set.** A block universe
+of the hybrid fault model is keyed to the fully correct validators; read at
+`Honest`, its non-equivocating set, it keeps its blocks and has at most
+`fb` validators outside its honest set, as `Params.Tolerates` counts. -/
+example {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Validator]
+    [H : HybridFaults Validator] (U : BlockUniverse Validator BlockId Payload)
+    (h : HonestNoEquiv U) :
+    (withHonest U h).ids = U.ids ∧ (withHonest U h).block = U.block ∧
+      (Honest Validator)ᶜ.card ≤ H.fb :=
+  ⟨rfl, rfl, card_compl_honest_le⟩
 
 end Scheme
 

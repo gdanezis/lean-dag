@@ -11785,16 +11785,19 @@ The table derives each row's thresholds from inequalities in `n`, `f`
 and `q`. SC12 proves that the inequalities give agreement, for every row
 and every vote-selection rule. A record is read through three numbers:
 `n` validators, blocks that reference `q` distinct authors one round down
-(`Validity.Quorate q`), and a set `Hon` of validators that never
-equivocate, with at most `f` validators outside it. The rule's carrier
-is taken over the records where `Hon` does not equivocate. Crash faults
-enter only through `q`.
+(`Validity.Quorate q`), and at most `f` validators outside the record's
+honest set, the validators that never equivocate. A crash-prone
+validator is honest in this sense, and crash faults enter only through
+`q`. `Scheme.Params.Tolerates` collects these hypotheses with the row
+being covered. A record keyed to a smaller set, as the hybrid arc's
+records are keyed to the fully correct validators, is read at its
+non-equivocating set by `Scheme.withHonest`, with the same blocks.
 
 * **Two rounds.** A row whose vote is its certificate, with a wave of at
   least two and `Params.TwoRound n f q`, has the anchored laws
   (`Scheme.twoRoundLaws`). Two sets of same-round blocks whose authors
-  number more than `n + f` together share a block, since an author of
-  `Hon` common to both has one block at the round. A shared block
+  number more than `n + f` together share a block, since an honest
+  author common to both has one block at the round. A shared block
   selects at most one block of a slot and does not blame a slot it
   selects in. The first inequality, `n + f + 1 ≤ skip + link`, then
   excludes a direct skip and a link; the second,
@@ -11829,8 +11832,8 @@ committee `3f + 2c + 1` whenever `c ≥ 1`. Nemo-Nemo and Async Nemo-Nemo
 fail the second two-round inequality (SC1) and are covered only where
 nobody equivocates (SC22).
 
-SC22: where nobody equivocates, fewer inequalities suffice. When `Hon` is
-every validator, a slot has one block (`Scheme.eq_of_noEquiv_all`), and
+SC22: where nobody equivocates, fewer inequalities suffice. When every
+validator is honest, a slot has one block (`Scheme.eq_of_noEquiv_all`), and
 the laws comparing two blocks of one slot hold without a count. The
 two-round inequality `n + f + 1 ≤ commit + link` and the three-round
 `n + f + 1 ≤ 2·cert` are written for those laws only; without them,
@@ -11943,8 +11946,7 @@ ledger reads blocks `0` and `12` off `U7`'s output.
 
 ### 27.9 The family as a carrier
 
-`Scheme.schemeRule p σ Hon` is the decider as a carrier, on the records
-where the validators of `Hon` do not equivocate, and
+`Scheme.schemeRule p σ` is the decider as a carrier, on block records, and
 `Scheme.familySupport` its support, a block certifying a candidate a wave
 below it when `IsCert` holds. SC16–SC18 show the properties the
 mechanisms read, for the whole family (`Scheme/Properties.lean`).
@@ -11963,7 +11965,7 @@ row (SC17). Its commits name candidates, its direct commits are
 verdicts, its indirect rule is a property, a slot left unsupported one
 round up is skipped when the vote round is one above the slot, its
 universes are quorate and its reliable validators do not equivocate
-when they lie in `Hon`; at every row meeting its inequalities the
+when they are honest; at every row that tolerates the record's faults the
 carrier agrees and is safe across every stack of mechanisms. The support
 has its three laws (SC18): certification is local; it commits at a
 commit threshold the quorum meets; and under coverage toward an honest
@@ -20436,22 +20438,22 @@ def VoteSel.Local (σ : VoteSel Validator BlockId Payload P honest) : Prop :=
 *def, `Scheme.Model.Local.lean`*
 
 ```lean
-def schemeRule (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
-    (Hon : Finset Validator) : Properties.DagRule Validator BlockId Payload :=
-  (schemeAnchored p σ).toDagRuleOn (fun U => U.NoEquivOn Hon)
+def schemeRule (p : Params) (σ : VoteSel Validator BlockId Payload P honest) :
+    Properties.DagRule Validator BlockId Payload :=
+  (schemeAnchored p σ).toDagRule
 ```
 
-**The family's carrier**: the decider at `p` and `σ`, on the records where `Hon` does not equivocate.
+**The family's carrier**: the decider at `p` and `σ`, on block records.
 
 #### `familySupport`
 
 *def, `Scheme.Model.Local.lean`*
 
 ```lean
-def familySupport (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
-    (Hon : Finset Validator) : Properties.Support (schemeRule p σ Hon) where
+def familySupport (p : Params) (σ : VoteSel Validator BlockId Payload P honest) :
+    Properties.Support (schemeRule p σ) where
   waveAt := fun _ => p.waveLength - 1
-  Certifies := fun U c L => IsCert p σ U.val c L
+  Certifies := fun U c L => IsCert p σ U c L
 ```
 
 **The family's support.**
@@ -20625,12 +20627,12 @@ def Live : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (honest : Finset Validator) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
-    (rel : Reliability Validator) (S : Slots Validator) (U : (schemeRule p σ Hon).Universe)
-    (V : (schemeRule p σ Hon).View U) (T : Finset Validator) (lo K : ℕ),
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator) (S : Slots Validator) (U : (schemeRule p σ).Universe)
+    (V : (schemeRule p σ).View U) (T : Finset Validator) (lo K : ℕ),
     p.CertFits (Fintype.card Validator - rel.slack) →
-    reactiveLive p σ Hon rel S V T lo K →
-    (familySupport p σ Hon).live rel S V T lo K
+    reactiveLive p σ rel S V T lo K →
+    (familySupport p σ).live rel S V T lo K
 ```
 
 **The reactive precondition is the family support's**, at every reliability.
@@ -20644,12 +20646,12 @@ def Commits : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (honest : Finset Validator) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
+    (σ : VoteSel Validator BlockId Payload P honest)
     (rel : Reliability Validator),
     p.CertFits (Fintype.card Validator - rel.slack) →
     p.commitThreshold ≤ Fintype.card Validator - rel.slack →
-    LeaderCommits (schemeRule p σ Hon)
-      (fun S {U} V T lo K => reactiveLive p σ Hon rel S (U := U) V T lo K)
+    LeaderCommits (schemeRule p σ)
+      (fun S {U} V T lo K => reactiveLive p σ rel S (U := U) V T lo K)
 ```
 
 **Run reactively, a reliably-led slot commits**, at every reliability whose quorum meets the commit and certificate thresholds.
@@ -20659,12 +20661,11 @@ def Commits : Prop :=
 *def, `Scheme.Record.lean`*
 
 ```lean
-def onRecord (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
-    (Hon : Finset Validator) :
-    (schemeRule p σ Hon).OnRecord P honest (fun U => U.NoEquivOn Hon) where
-  toRec := fun U => U.val
-  inv := fun U => U.property
-  ofRec := fun W h => ⟨W, h⟩
+def onRecord (p : Params) (σ : VoteSel Validator BlockId Payload P honest) :
+    (schemeRule p σ).OnRecord P honest BlockRecord.Any where
+  toRec := fun U => U
+  inv := fun _ => True.intro
+  ofRec := fun W _ => W
   ids_to := fun _ => rfl
   block_to := fun _ => rfl
   ids_of := fun _ _ => rfl
@@ -28620,7 +28621,7 @@ theorem holds : Statement
 *theorem, `Scheme.Properties.lean`*
 
 ```lean
-theorem commitsCandidate : CommitsCandidate (schemeRule p σ Hon)
+theorem commitsCandidate : CommitsCandidate (schemeRule p σ)
 ```
 
 **A commit names a candidate.**
@@ -28630,7 +28631,7 @@ theorem commitsCandidate : CommitsCandidate (schemeRule p σ Hon)
 *theorem, `Scheme.Properties.lean`*
 
 ```lean
-theorem indirect : Indirect (schemeRule p σ Hon)
+theorem indirect : Indirect (schemeRule p σ)
     (fun S i j => S.slotRound i + (p.waveLength - 1) + 1 ≤ S.slotRound j)
 ```
 
@@ -28642,7 +28643,7 @@ theorem indirect : Indirect (schemeRule p σ Hon)
 
 ```lean
 theorem skipsUnsupported (hv : p.voteOffset = 1) :
-    SkipsUnsupported (schemeRule p σ Hon) (fun T => p.skipThreshold ≤ T.card)
+    SkipsUnsupported (schemeRule p σ) (fun T => p.skipThreshold ≤ T.card)
 ```
 
 **A slot every quorum member's block one round up leaves unsupported is skipped**, at a vote round one above the slot and a skip threshold the quorum meets.
@@ -28653,7 +28654,7 @@ theorem skipsUnsupported (hv : p.voteOffset = 1) :
 
 ```lean
 theorem selfParent (hP : ∀ blk b, P blk b → Clause.selfParent blk b) :
-    SelfParent (schemeRule p σ Hon)
+    SelfParent (schemeRule p σ)
 ```
 
 **Every block references its author's previous block**, on records whose validity asks it.
@@ -28663,26 +28664,22 @@ theorem selfParent (hP : ∀ blk b, P blk b → Clause.selfParent blk b) :
 *theorem, `Scheme.Properties.lean`*
 
 ```lean
-theorem agree {q : ℕ} [P.Quorate q] {f : ℕ} (hHon : Honᶜ.card ≤ f)
-    (hq : q ≤ Fintype.card Validator)
-    (hfam : p.Covered (Fintype.card Validator) f q) :
-    Agree (schemeRule p σ Hon)
+theorem agree {q : ℕ} [P.Quorate q] {f : ℕ} (ht : p.Tolerates honest f q) :
+    Agree (schemeRule p σ)
 ```
 
-**Two views decide alike** at every row meeting its inequalities, on records with quorum `q` where validators outside `Hon`, at most `f`, may equivocate.
+**Two views decide alike** at every row that tolerates the record's faults, on records with quorum `q`.
 
 #### `safety`
 
 *theorem, `Scheme.Properties.lean`*
 
 ```lean
-theorem safety {q : ℕ} [P.Quorate q] {f : ℕ} (hσ : σ.Local) (hHon : Honᶜ.card ≤ f)
-    (hq : q ≤ Fintype.card Validator)
-    (hfam : p.Covered (Fintype.card Validator) f q) :
-    Safe (schemeRule p σ Hon)
+theorem safety {q : ℕ} [P.Quorate q] {f : ℕ} (hσ : σ.Local) (ht : p.Tolerates honest f q) :
+    Safe (schemeRule p σ)
 ```
 
-**The carrier is safe across every stack of mechanisms**, at every row meeting its inequalities, at a local vote.
+**The carrier is safe across every stack of mechanisms**, at every row that tolerates the record's faults, at a local vote.
 
 #### `live`
 
@@ -28722,16 +28719,16 @@ theorem holds : Statement
 
 ```lean
 theorem decided_none_of_novel {p : Params} {σ : VoteSel Validator BlockId Payload P honest}
-    {Hon : Finset Validator} (hv : p.voteOffset = 1)
-    {U U' : (schemeRule p σ Hon).Universe} (he : Extends (schemeRule p σ Hon) U U')
-    (S : Slots Validator) {V' : (schemeRule p σ Hon).View U'} {T : Finset Validator} {k : ℕ}
-    (hok : p.skipThreshold ≤ T.card) (hpres : PresentAt (schemeRule p σ Hon) V' T (S.slotRound k + 1))
-    (hnov : ∀ L, (schemeRule p σ Hon).IsCandidate S U' k L → L ∉ (schemeRule p σ Hon).ids U)
-    (hold : ∀ c, c ∈ (schemeRule p σ Hon).viewIds V' →
-      ((schemeRule p σ Hon).block U' c).creator ∈ T →
-      ((schemeRule p σ Hon).block U' c).round = S.slotRound k + 1 →
-      c ∈ (schemeRule p σ Hon).ids U) :
-    (schemeRule p σ Hon).Decided S V' k none
+    (hv : p.voteOffset = 1)
+    {U U' : (schemeRule p σ).Universe} (he : Extends (schemeRule p σ) U U')
+    (S : Slots Validator) {V' : (schemeRule p σ).View U'} {T : Finset Validator} {k : ℕ}
+    (hok : p.skipThreshold ≤ T.card) (hpres : PresentAt (schemeRule p σ) V' T (S.slotRound k + 1))
+    (hnov : ∀ L, (schemeRule p σ).IsCandidate S U' k L → L ∉ (schemeRule p σ).ids U)
+    (hold : ∀ c, c ∈ (schemeRule p σ).viewIds V' →
+      ((schemeRule p σ).block U' c).creator ∈ T →
+      ((schemeRule p σ).block U' c).round = S.slotRound k + 1 →
+      c ∈ (schemeRule p σ).ids U) :
+    (schemeRule p σ).Decided S V' k none
 ```
 
 **The prompt skip**: after an extension, a slot whose candidates are all new is skipped at once, at a vote round one above the slot and a quorum of old blocks one round up that meets the skip threshold.

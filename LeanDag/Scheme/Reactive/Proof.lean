@@ -23,15 +23,15 @@ theorem certifies : Certifies := by
   exact rs.certifies hc.1 hc.2 hTh hq hgst hto hR hN hlead hL
 
 theorem live : Live := by
-  intro Validator BlockId Payload _ _ _ _ P _ honest p σ Hon rel S U V T lo K hc h
+  intro Validator BlockId Payload _ _ _ _ P _ honest p σ rel S U V T lo K hc h
   exact live_of_reactiveLive hc.1 hc.2 h
 
 theorem commits : Commits := by
-  intro Validator BlockId Payload _ _ _ _ P _ honest p σ Hon rel hc hcm
+  intro Validator BlockId Payload _ _ _ _ P _ honest p σ rel hc hcm
   exact leaderCommits_reactive hc.1 hc.2 hcm
 
 theorem includes : Includes := by
-  intro Validator BlockId Payload _ _ _ _ P _ honest p σ Hon rel hP hsub hc hcm S T hT fair m v
+  intro Validator BlockId Payload _ _ _ _ P _ honest p σ rel hP hsub hc hcm S T hT fair m v
     hv
   exact includes_reactive hP hsub hc.1 hc.2 hcm S hT fair m hv
 

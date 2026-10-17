@@ -89,18 +89,18 @@ def SchemeReactive.toAsyncPace [S : Slots Validator] {q : ℕ} {p : Params}
   AsyncPace.ofPaceCore rs.toPaceCore rs.advancesAt
 
 /-- **The reactive liveness precondition**, at reliability `rel`, over a
-slot window: a quorum `T` of `rel` of non-equivocating validators running a
+slot window: a quorum `T` of `rel` of honest validators running a
 reactive execution at `n − rel.slack` past GST, with the timeout clearing
 `2Δ + proc`, the view caught up to the horizon, and every slot of the
 window a wave under it. -/
 def reactiveLive (p : Params) (σ : VoteSel Validator BlockId Payload P honest)
-    (Hon : Finset Validator) (rel : Reliability Validator) (S : Slots Validator)
-    {U : (schemeRule p σ Hon).Universe} (V : (schemeRule p σ Hon).View U) (T : Finset Validator)
+    (rel : Reliability Validator) (S : Slots Validator)
+    {U : (schemeRule p σ).Universe} (V : (schemeRule p σ).View U) (T : Finset Validator)
     (lo K : ℕ) : Prop :=
   rel.IsQuorum T ∧ T ⊆ honest ∧
-    ∃ (N R₀ : ℕ) (rs : SchemeReactive (S := S) (Fintype.card Validator - rel.slack) p σ U.val T N),
+    ∃ (N R₀ : ℕ) (rs : SchemeReactive (S := S) (Fintype.card Validator - rel.slack) p σ U T N),
       rs.gst ≤ R₀ ∧ (∀ n, R₀ ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) ∧
-      R₀ ≤ S.slotRound lo ∧ Properties.CoversUpto (schemeRule p σ Hon) V N ∧
+      R₀ ≤ S.slotRound lo ∧ Properties.CoversUpto (schemeRule p σ) V N ∧
       ∀ k, k < K → S.slotRound k + (p.waveLength - 1) ≤ N
 
 end Scheme

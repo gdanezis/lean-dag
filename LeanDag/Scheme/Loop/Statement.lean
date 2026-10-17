@@ -14,8 +14,8 @@ from slot `lo` to slot `N`:
   decides every verdict the relation derives** once its scan reaches far
   enough, at every row the inequalities cover (`Params.Covered`,
   `Scheme/Sufficiency/`), on a record whose blocks reference `q` distinct
-  authors and where validators outside `Hon`, at most `f`, never
-  equivocate.
+  authors and with at most `f` validators outside its honest set
+  (`Params.Tolerates`).
 * **Restarting is idempotent**: a call from a slot inside an earlier
   output repeats its tail, and at the rows the inequalities cover, calls
   on growing views, each restarting after the last decision output,
@@ -52,11 +52,10 @@ inequalities cover. -/
 def PrefixComparable : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
-    (q : ℕ) [P.Quorate q] (honest Hon : Finset Validator) (f : ℕ) (p : Params)
+    (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V₁ V₂ : U.View) (lo N₁ N₂ : ℕ),
-    Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    p.Covered (Fintype.card Validator) f q →
+    p.Tolerates honest f q →
     lo ≤ N₁ + 1 → lo ≤ N₂ + 1 →
     tryDecide p σ U V₁ lo N₁ <+: tryDecide p σ U V₂ lo N₂ ∨
       tryDecide p σ U V₂ lo N₂ <+: tryDecide p σ U V₁ lo N₁
@@ -66,12 +65,11 @@ inequalities cover, once its scan reaches far enough. -/
 def Complete : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
-    (q : ℕ) [P.Quorate q] (honest Hon : Finset Validator) (f : ℕ) (p : Params)
+    (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (k : ℕ)
     (v : Option BlockId),
-    Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    p.Covered (Fintype.card Validator) f q →
+    p.Tolerates honest f q →
     (schemeAnchored p σ).Decided U V k v →
     ∃ N₀, ∀ N, N₀ ≤ N → decisionAt p σ U V N k = some v
 
@@ -81,11 +79,10 @@ scan reaches far enough. -/
 def OutputComplete : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
-    (q : ℕ) [P.Quorate q] (honest Hon : Finset Validator) (f : ℕ) (p : Params)
+    (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V : U.View) (lo k : ℕ),
-    Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    p.Covered (Fintype.card Validator) f q →
+    p.Tolerates honest f q →
     lo ≤ k → (∀ m, lo ≤ m → m ≤ k → ∃ v, (schemeAnchored p σ).Decided U V m v) →
     ∃ N₀, ∀ N, N₀ ≤ N → ∀ v, (schemeAnchored p σ).Decided U V k v →
       (k, v) ∈ tryDecide p σ U V lo N
@@ -107,11 +104,10 @@ least as far, from the slot after it, is the output on the larger view. -/
 def Resume : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
-    (q : ℕ) [P.Quorate q] (honest Hon : Finset Validator) (f : ℕ) (p : Params)
+    (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V₁ V₂ : U.View) (lo N₁ N₂ : ℕ),
-    Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    p.Covered (Fintype.card Validator) f q →
+    p.Tolerates honest f q →
     V₁.ids ⊆ V₂.ids → N₁ ≤ N₂ →
     tryDecide p σ U V₁ lo N₁ ++
         tryDecide p σ U V₂ (lo + (tryDecide p σ U V₁ lo N₁).length) N₂ =
@@ -124,12 +120,11 @@ restarting after the last decision output, the decisions output by
 def Repeated : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
-    (q : ℕ) [P.Quorate q] (honest Hon : Finset Validator) (f : ℕ) (p : Params)
+    (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (lo : ℕ) (W : ℕ → U.View)
     (N : ℕ → ℕ),
-    Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    p.Covered (Fintype.card Validator) f q →
+    p.Tolerates honest f q →
     (∀ t, (W t).ids ⊆ (W (t + 1)).ids) → (∀ t, N t ≤ N (t + 1)) →
     ∀ t, consumed p σ U lo W N (t + 1) = tryDecide p σ U (W t) lo (N t)
 
@@ -165,12 +160,11 @@ larger view over rounds `rLast, …, rHigh₂`. -/
 def RestartRound : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
-    (q : ℕ) [P.Quorate q] (honest Hon : Finset Validator) (f : ℕ) (p : Params)
+    (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V₁ V₂ : U.View)
     (per m rLast rHigh₁ rHigh₂ k : ℕ) (v : Option BlockId),
-    Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    p.Covered (Fintype.card Validator) f q →
+    p.Tolerates honest f q →
     V₁.ids ⊆ V₂.ids → 0 < per → 0 < m → rLast ≤ rHigh₁ + 1 → rHigh₁ ≤ rHigh₂ →
     (schemeTryDecide p σ U V₁ per m rLast rHigh₁).getLast? = some (k, v) →
     schemeTryDecide p σ U V₁ per m rLast rHigh₁ ++
@@ -201,11 +195,10 @@ contains the other. -/
 def LedgerAgree : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
-    (q : ℕ) [P.Quorate q] (honest Hon : Finset Validator) (f : ℕ) (p : Params)
+    (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest) [S : Slots Validator]
     (U : BlockRecord Validator BlockId Payload P honest) (V₁ V₂ : U.View) (N₁ N₂ : ℕ),
-    Honᶜ.card ≤ f → q ≤ Fintype.card Validator → U.NoEquivOn Hon →
-    p.Covered (Fintype.card Validator) f q →
+    p.Tolerates honest f q →
     (commitSeq (loopAssign p σ U V₁ N₁) (tryDecide p σ U V₁ 0 N₁).length <+:
         commitSeq (loopAssign p σ U V₂ N₂) (tryDecide p σ U V₂ 0 N₂).length ∧
       ledgerSet U (loopAssign p σ U V₁ N₁) (tryDecide p σ U V₁ 0 N₁).length ⊆

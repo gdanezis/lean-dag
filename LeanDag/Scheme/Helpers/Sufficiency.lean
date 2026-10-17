@@ -461,9 +461,9 @@ theorem laws_of_forall {R : AnchoredRule Validator BlockId Payload P honest}
   anchor_link := fun _ => hl.anchor_link (hI _ _)
 
 omit S in
-/-- The rows the inequalities cover (`Params.Covered`) have positive
-thresholds and their laws. -/
-theorem coveredLaws (hHon : Honᶜ.card ≤ f)
+/-- The rows the inequalities cover (`Params.Covered`), at non-equivocation
+on `Hon`, have positive thresholds and their laws. -/
+theorem coveredLawsOn (hHon : Honᶜ.card ≤ f)
     (hq : q ≤ Fintype.card Validator)
     (hfam : p.Covered (Fintype.card Validator) f q) :
     1 ≤ p.linkSize ∧ 1 ≤ p.commitThreshold ∧ (p.voteIsCert = false → 1 ≤ p.certThreshold) ∧
@@ -480,6 +480,15 @@ theorem coveredLaws (hHon : Honᶜ.card ≤ f)
       twoRoundCrashLaws σ hv hHon hq hineq⟩
   · obtain ⟨-, hc⟩ := id hineq
     exact ⟨by omega, by omega, fun _ => hc1, threeRoundCrashLaws σ hv hw hHon hq hl hineq⟩
+
+omit S in
+/-- **A row that tolerates the record's faults** has positive thresholds
+and its laws. -/
+theorem coveredLaws (h : p.Tolerates honest f q) :
+    1 ≤ p.linkSize ∧ 1 ≤ p.commitThreshold ∧ (p.voteIsCert = false → 1 ≤ p.certThreshold) ∧
+      (schemeAnchored p σ).Laws := by
+  obtain ⟨hl, hc, hcv, hlaws⟩ := coveredLawsOn σ (Hon := honest) h.1 h.2.1 h.2.2
+  exact ⟨hl, hc, hcv, laws_of_forall hlaws fun _ U => U.noEquivOn_honest⟩
 
 end Scheme
 

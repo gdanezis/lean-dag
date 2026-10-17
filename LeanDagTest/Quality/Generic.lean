@@ -263,13 +263,13 @@ variable {B : Type} [LinearOrder B] {Payload : Type}
 and vote. -/
 theorem scheme_card_correct_le_two_mul (p : LeanDag.Scheme.Params)
     (σ : LeanDag.Scheme.VoteSel Validator B Payload LeanDag.ValidWrt LeanDag.Correct)
-    (Hon : Finset Validator) (S : Slots Validator)
-    {U : (LeanDag.Scheme.schemeRule p σ Hon).Universe}
-    {V : (LeanDag.Scheme.schemeRule p σ Hon).View U} {k : ℕ} {L : B} {δ : ℕ}
-    (h : (LeanDag.Scheme.schemeRule p σ Hon).Decided S V k (some L))
-    (hδ : δ < (U.val.block L).round) :
+    (S : Slots Validator)
+    {U : (LeanDag.Scheme.schemeRule p σ).Universe}
+    {V : (LeanDag.Scheme.schemeRule p σ).View U} {k : ℕ} {L : B} {δ : ℕ}
+    (h : (LeanDag.Scheme.schemeRule p σ).Decided S V k (some L))
+    (hδ : δ < (U.block L).round) :
     (Correct : Finset Validator).card ≤
-      2 * (coveredAt (LeanDag.Scheme.schemeRule p σ Hon) (coreReliability Validator) U L δ).card :=
+      2 * (coveredAt (LeanDag.Scheme.schemeRule p σ) (coreReliability Validator) U L δ).card :=
   card_correct_le_two_mul_coveredAt_of_decided
     (LeanDag.Scheme.quorate (q := quorumCard Validator) (rel := coreReliability Validator)
       le_rfl)

@@ -22,10 +22,10 @@ theorem coreRows : CoreRows := by
   have hn := F.card_validators
   have hq : Fintype.card Validator - F.f ≤ Fintype.card Validator := Nat.sub_le _ _
   obtain ⟨-, -, hps, has⟩ := (Table.rowsCovered _ F.f 0).1 (by omega)
-  exact ⟨⟨Scheme.safety hσ card_compl_correct_le hq hps,
-      Scheme.lives subset_rfl (by simp [Params.cordialMinersPS])⟩,
-    ⟨Scheme.safety hσ card_compl_correct_le hq has,
-      Scheme.lives subset_rfl (by simp [Params.cordialMinersAsync])⟩⟩
+  exact ⟨⟨Scheme.safety hσ ⟨card_compl_correct_le, hq, hps⟩,
+      Scheme.lives (by simp [Params.cordialMinersPS])⟩,
+    ⟨Scheme.safety hσ ⟨card_compl_correct_le, hq, has⟩,
+      Scheme.lives (by simp [Params.cordialMinersAsync])⟩⟩
 
 theorem hybridRows : HybridRows := by
   intro Replica BlockId _ _ _ F σ hσ
@@ -46,7 +46,8 @@ theorem asyncRows : AsyncRows := by
   refine ⟨fun hn => ⟨?_, ?_, ?_⟩, fun hn => ?_, fun hn => ?_, fun hn => ?_,
     fun hn => ⟨?_, ?_⟩⟩ <;>
   simp only [Params.AsyncReady, Params.CertFits, Params.voteOffset, Params.mahiMahi,
-    Params.cordialMinersAsync, Params.blueBottleAsync, Params.asyncOrcaella, Params.asyncNemoNemo, Params.hybridMahiMahi,
+    Params.cordialMinersAsync, Params.blueBottleAsync, Params.asyncOrcaella,
+    Params.asyncNemoNemo, Params.hybridMahiMahi,
     Bool.false_eq_true, if_false, if_true] <;>
   exact ⟨by omega, by simp, ⟨by omega, fun _ => ⟨by omega, by omega⟩⟩, by omega⟩
 

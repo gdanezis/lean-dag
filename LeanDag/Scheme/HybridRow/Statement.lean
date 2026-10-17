@@ -52,11 +52,11 @@ def OnHydrozoan : Prop :=
     (σ : VoteSel Replica BlockId Unit Hydrozoan.ValidWrt Hydrozoan.NonByzantine), σ.Local →
     p.Covered (Fintype.card Replica) F.f (Hydrozoan.q Replica) →
     p.commitThreshold ≤ Hydrozoan.q Replica → p.certThreshold ≤ Hydrozoan.q Replica →
-    Safe (schemeRule p σ Hydrozoan.NonByzantine) ∧
-    Support.Progresses (R := schemeRule p σ Hydrozoan.NonByzantine)
-      (familySupport p σ Hydrozoan.NonByzantine) (Hydrozoan.hzReliability Replica) ∧
-    Timed.OfCoverage (R := schemeRule p σ Hydrozoan.NonByzantine)
-      (familySupport p σ Hydrozoan.NonByzantine) (Hydrozoan.hzReliability Replica)
+    Safe (schemeRule p σ) ∧
+    Support.Progresses (R := schemeRule p σ)
+      (familySupport p σ) (Hydrozoan.hzReliability Replica) ∧
+    Timed.OfCoverage (R := schemeRule p σ)
+      (familySupport p σ) (Hydrozoan.hzReliability Replica)
 
 /-- **With self-reference every covered row's carrier is safe and lives**,
 at a local vote, under Hydrozoan's fault model, when its commit threshold
@@ -67,9 +67,9 @@ def WithSelfParent : Prop :=
     (σ : VoteSel Replica BlockId Unit HybridValid Hydrozoan.NonByzantine), σ.Local →
     p.Covered (Fintype.card Replica) F.f (Hydrozoan.q Replica) →
     p.commitThreshold ≤ Hydrozoan.q Replica →
-    Safe (schemeRule p σ Hydrozoan.NonByzantine) ∧
-    Support.Lives (R := schemeRule p σ Hydrozoan.NonByzantine)
-      (familySupport p σ Hydrozoan.NonByzantine) (Hydrozoan.hzReliability Replica)
+    Safe (schemeRule p σ) ∧
+    Support.Lives (R := schemeRule p σ)
+      (familySupport p σ) (Hydrozoan.hzReliability Replica)
 
 /-- The row against Hydrozoan. -/
 def Statement : Prop := SlowRow ∧ OnHydrozoan ∧ WithSelfParent

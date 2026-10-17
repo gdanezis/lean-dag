@@ -155,13 +155,13 @@ omit S in
 precondition**, at any reliability: a reactive execution past GST is a
 quorum populating every round of each reliably-led slot's wave and
 certifying its candidates. -/
-theorem live_of_reactiveLive {Hon : Finset Validator} {rel : Reliability Validator}
+theorem live_of_reactiveLive {rel : Reliability Validator}
     (hw : 2 ≤ p.waveLength)
     (hcv : p.voteIsCert = false →
       3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack)
-    {S : Slots Validator} {U : (schemeRule p σ Hon).Universe} {V : (schemeRule p σ Hon).View U}
-    {T : Finset Validator} {lo K : ℕ} (h : reactiveLive p σ Hon rel S V T lo K) :
-    (familySupport p σ Hon).live rel S V T lo K := by
+    {S : Slots Validator} {U : (schemeRule p σ).Universe} {V : (schemeRule p σ).View U}
+    {T : Finset Validator} {lo K : ℕ} (h : reactiveLive p σ rel S V T lo K) :
+    (familySupport p σ).live rel S V T lo K := by
   obtain ⟨hT, hTh, N, R₀, rs, hgst, hto, hR, hcov, hN⟩ := h
   refine ⟨hT, N, hcov, fun k hk => hN k hk, fun k hlo hK hlead => ⟨?_, ?_⟩⟩
   · intro n _ h2
@@ -173,15 +173,15 @@ theorem live_of_reactiveLive {Hon : Finset Validator} {rel : Reliability Validat
 omit S in
 /-- **The family, run reactively, commits its reliable leaders**, at any
 reliability whose quorum meets the thresholds. -/
-theorem leaderCommits_reactive {Hon : Finset Validator} {rel : Reliability Validator}
+theorem leaderCommits_reactive {rel : Reliability Validator}
     (hw : 2 ≤ p.waveLength)
     (hcv : p.voteIsCert = false →
       3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack)
     (hcm : p.commitThreshold ≤ Fintype.card Validator - rel.slack) :
-    LeaderCommits (schemeRule p σ Hon)
-      (fun S {U} V T lo K => reactiveLive p σ Hon rel S (U := U) V T lo K) :=
+    LeaderCommits (schemeRule p σ)
+      (fun S {U} V T lo K => reactiveLive p σ rel S (U := U) V T lo K) :=
   fun S _ V T lo K h =>
-    Support.leaderCommits (familySupport p σ Hon) (familySupport_commits hcm) S V T lo K
+    Support.leaderCommits (familySupport p σ) (familySupport_commits hcm) S V T lo K
       (live_of_reactiveLive hw hcv h)
 
 omit S in
@@ -189,8 +189,8 @@ omit S in
 blocks reference their author's previous block, under a schedule fair to
 each reliable validator, a reliable validator's round-`m` block enters the
 ledger through a slot its author leads at or above `m`. -/
-theorem includes_reactive {Hon : Finset Validator} {rel : Reliability Validator}
-    (hP : ∀ blk b, P blk b → Clause.selfParent blk b) (hsub : rel.correct ⊆ Hon)
+theorem includes_reactive {rel : Reliability Validator}
+    (hP : ∀ blk b, P blk b → Clause.selfParent blk b) (hsub : rel.correct ⊆ honest)
     (hw : 2 ≤ p.waveLength)
     (hcv : p.voteIsCert = false →
       3 ≤ p.waveLength ∧ p.certThreshold ≤ Fintype.card Validator - rel.slack)
@@ -198,14 +198,14 @@ theorem includes_reactive {Hon : Finset Validator} {rel : Reliability Validator}
     (S : Slots Validator) {T : Finset Validator} (hT : T ⊆ rel.correct)
     (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) {v : Validator} (hv : v ∈ T) :
     ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
-      ∀ (U : (schemeRule p σ Hon).Universe) (V : (schemeRule p σ Hon).View U),
-        reactiveLive p σ Hon rel S V T k' (k' + 1) →
-        ∃ L, (schemeRule p σ Hon).Decided S V k' (some L) ∧
-          ∀ b ∈ (schemeRule p σ Hon).ids U, ((schemeRule p σ Hon).block U b).creator = v →
-            ((schemeRule p σ Hon).block U b).round = m →
-            b ∈ historyFrom ((schemeRule p σ Hon).block U) L ∧
+      ∀ (U : (schemeRule p σ).Universe) (V : (schemeRule p σ).View U),
+        reactiveLive p σ rel S V T k' (k' + 1) →
+        ∃ L, (schemeRule p σ).Decided S V k' (some L) ∧
+          ∀ b ∈ (schemeRule p σ).ids U, ((schemeRule p σ).block U b).creator = v →
+            ((schemeRule p σ).block U b).round = m →
+            b ∈ historyFrom ((schemeRule p σ).block U) L ∧
               ∀ (g : ℕ → Option BlockId) (n : ℕ), g k' = some L → k' < n →
-                b ∈ Arcs.ledgerSetOf (schemeRule p σ Hon) U g n :=
+                b ∈ Arcs.ledgerSetOf (schemeRule p σ) U g n :=
   Arcs.committed_of_correct_block (selfParent hP) (noEquiv hsub) commitsCandidate
     (leaderCommits_reactive hw hcv hcm) S hT fair m hv
 

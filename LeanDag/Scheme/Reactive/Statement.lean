@@ -65,12 +65,12 @@ def Live : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (honest : Finset Validator) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
-    (rel : Reliability Validator) (S : Slots Validator) (U : (schemeRule p σ Hon).Universe)
-    (V : (schemeRule p σ Hon).View U) (T : Finset Validator) (lo K : ℕ),
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (rel : Reliability Validator) (S : Slots Validator) (U : (schemeRule p σ).Universe)
+    (V : (schemeRule p σ).View U) (T : Finset Validator) (lo K : ℕ),
     p.CertFits (Fintype.card Validator - rel.slack) →
-    reactiveLive p σ Hon rel S V T lo K →
-    (familySupport p σ Hon).live rel S V T lo K
+    reactiveLive p σ rel S V T lo K →
+    (familySupport p σ).live rel S V T lo K
 
 /-- **Run reactively, a reliably-led slot commits**, at every reliability
 whose quorum meets the commit and certificate thresholds. -/
@@ -78,37 +78,37 @@ def Commits : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (honest : Finset Validator) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
+    (σ : VoteSel Validator BlockId Payload P honest)
     (rel : Reliability Validator),
     p.CertFits (Fintype.card Validator - rel.slack) →
     p.commitThreshold ≤ Fintype.card Validator - rel.slack →
-    LeaderCommits (schemeRule p σ Hon)
-      (fun S {U} V T lo K => reactiveLive p σ Hon rel S (U := U) V T lo K)
+    LeaderCommits (schemeRule p σ)
+      (fun S {U} V T lo K => reactiveLive p σ rel S (U := U) V T lo K)
 
 /-- **Run reactively, no reliable block is censored**, on records whose
 blocks reference their author's previous block, at every reliability
-whose quorum meets the thresholds and whose reliable validators lie in
-`Hon`. -/
+whose quorum meets the thresholds and whose reliable validators are
+honest. -/
 def Includes : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [Nonempty Validator] [LinearOrder BlockId] (P : Validity Validator BlockId Payload)
     [P.Mechanised] (honest : Finset Validator) (p : Params)
-    (σ : VoteSel Validator BlockId Payload P honest) (Hon : Finset Validator)
+    (σ : VoteSel Validator BlockId Payload P honest)
     (rel : Reliability Validator),
-    (∀ blk b, P blk b → Clause.selfParent blk b) → rel.correct ⊆ Hon →
+    (∀ blk b, P blk b → Clause.selfParent blk b) → rel.correct ⊆ honest →
     p.CertFits (Fintype.card Validator - rel.slack) →
     p.commitThreshold ≤ Fintype.card Validator - rel.slack →
     ∀ (S : Slots Validator) (T : Finset Validator), T ⊆ rel.correct →
     (∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) →
     ∀ (m : ℕ), ∀ v ∈ T, ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
-      ∀ (U : (schemeRule p σ Hon).Universe) (V : (schemeRule p σ Hon).View U),
-        reactiveLive p σ Hon rel S V T k' (k' + 1) →
-        ∃ L, (schemeRule p σ Hon).Decided S V k' (some L) ∧
-          ∀ b ∈ (schemeRule p σ Hon).ids U, ((schemeRule p σ Hon).block U b).creator = v →
-            ((schemeRule p σ Hon).block U b).round = m →
-            b ∈ historyFrom ((schemeRule p σ Hon).block U) L ∧
+      ∀ (U : (schemeRule p σ).Universe) (V : (schemeRule p σ).View U),
+        reactiveLive p σ rel S V T k' (k' + 1) →
+        ∃ L, (schemeRule p σ).Decided S V k' (some L) ∧
+          ∀ b ∈ (schemeRule p σ).ids U, ((schemeRule p σ).block U b).creator = v →
+            ((schemeRule p σ).block U b).round = m →
+            b ∈ historyFrom ((schemeRule p σ).block U) L ∧
               ∀ (g : ℕ → Option BlockId) (n : ℕ), g k' = some L → k' < n →
-                b ∈ Arcs.ledgerSetOf (schemeRule p σ Hon) U g n
+                b ∈ Arcs.ledgerSetOf (schemeRule p σ) U g n
 
 /-- **Reactive Mysticeti is the family run reactively**, at the Mysticeti row
 and every vote, when its reliable set is correct. -/

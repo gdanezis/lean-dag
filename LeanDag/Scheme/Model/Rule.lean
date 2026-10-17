@@ -59,6 +59,12 @@ instance (U : BlockRecord Validator BlockId Payload P honest) (b L : BlockId) :
 
 end VoteSel
 
+/-- **The row tolerates the record's faults** at quorum `q`: at most `f`
+validators lie outside the honest set, `q ≤ n`, and the inequalities cover
+the row at `n`, `f` and `q`. -/
+def Params.Tolerates (p : Params) (honest : Finset Validator) (f q : ℕ) : Prop :=
+  honestᶜ.card ≤ f ∧ q ≤ Fintype.card Validator ∧ p.Covered (Fintype.card Validator) f q
+
 namespace Params
 
 /-- The vote round's offset above the propose round: the decision round

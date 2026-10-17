@@ -245,17 +245,17 @@ def hyReactive (N : ℕ) :
       exact le_trans (by decide) (Finset.card_le_card hsub) }
 
 /-- `Uhy` as a universe of the row's carrier. -/
-abbrev uhyU (N : ℕ) : (schemeRule hyP σH Hydrozoan.NonByzantine).Universe :=
-  ⟨Uhy N, (Uhy N).noEquivOn_honest⟩
+abbrev uhyU (N : ℕ) : (schemeRule hyP σH).Universe :=
+  Uhy N
 
 /-- The full view of `Uhy`, as a view of the carrier. -/
-abbrev uhyV (N : ℕ) : (schemeRule hyP σH Hydrozoan.NonByzantine).View (uhyU N) :=
+abbrev uhyV (N : ℕ) : (schemeRule hyP σH).View (uhyU N) :=
   BlockRecord.View.full (Uhy N)
 
 /-- **The family's reactive precondition holds**, at Hydrozoan's
 reliability. -/
 theorem hyReactive_live (N k : ℕ) (hN : hySlots.slotRound k + 2 ≤ N) :
-    reactiveLive hyP σH Hydrozoan.NonByzantine (Hydrozoan.hzReliability (Fin 3)) hySlots
+    reactiveLive hyP σH (Hydrozoan.hzReliability (Fin 3)) hySlots
       (uhyV N) Thy k (k + 1) := by
   refine ⟨⟨by decide, by decide⟩, by decide, N, 0, hyReactive N, Nat.le_refl 0,
     (fun n _ => by change 2 * 2 + 5 ≤ 9; omega), Nat.zero_le _,
@@ -267,10 +267,9 @@ theorem hyReactive_live (N k : ℕ) (hN : hySlots.slotRound k + 2 ≤ N) :
 
 /-- **And a reliably-led slot commits**, by the generic `LeaderCommits`. -/
 theorem hyReactive_commits (N k : ℕ) (hN : hySlots.slotRound k + 2 ≤ N) :
-    ∃ L, Properties.DecidedBelow (schemeRule hyP σH Hydrozoan.NonByzantine) hySlots (k + 1)
+    ∃ L, Properties.DecidedBelow (schemeRule hyP σH) hySlots (k + 1)
       (uhyV N) k (some L) :=
-  ReactiveRun.commits (Fin 3) ℕ Unit HybridValid Hydrozoan.NonByzantine hyP σH
-    Hydrozoan.NonByzantine (Hydrozoan.hzReliability (Fin 3)) ⟨by decide,
+  ReactiveRun.commits (Fin 3) ℕ Unit HybridValid Hydrozoan.NonByzantine hyP σH (Hydrozoan.hzReliability (Fin 3)) ⟨by decide,
     fun _ => ⟨by decide, by decide⟩⟩ (by decide) hySlots (uhyV N) Thy k (k + 1)
     (hyReactive_live N k hN) k (Nat.le_refl k) (Nat.lt_succ_self k)
     (by
@@ -295,10 +294,10 @@ Replica `2`'s round-`1` block (id `3`) is in the history of the leader
 block a slot led by `2` commits. -/
 theorem hyReactive_includes : ∃ k', 1 ≤ hySlots.slotRound k' ∧ hySlots.leader k' = 2 ∧
     ∀ N, hySlots.slotRound k' + 2 ≤ N →
-      ∃ L, (schemeRule hyP σH Hydrozoan.NonByzantine).Decided hySlots (uhyV N) k' (some L) ∧
+      ∃ L, (schemeRule hyP σH).Decided hySlots (uhyV N) k' (some L) ∧
         3 ∈ historyFrom (Uhy N).block L := by
   obtain ⟨k', hm, hlead, h⟩ := ReactiveRun.includes (Fin 3) ℕ Unit HybridValid
-    Hydrozoan.NonByzantine hyP σH Hydrozoan.NonByzantine (Hydrozoan.hzReliability (Fin 3))
+    Hydrozoan.NonByzantine hyP σH (Hydrozoan.hzReliability (Fin 3))
     (fun _ _ h => h.clause.2) (by decide) ⟨by decide, fun _ => ⟨by decide, by decide⟩⟩
     (by decide) hySlots Thy (by decide) hySlots_fairToEach 1 2 (by decide)
   refine ⟨k', hm, hlead, fun N hN => ?_⟩

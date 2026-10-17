@@ -22,37 +22,37 @@ theorem sound : Sound := by
   exact tryDecide_sound hl hc hlo
 
 theorem prefixComparable : PrefixComparable := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ S U V₁ V₂ lo N₁ N₂
-    hHon hq hne hfam h₁ h₂
-  obtain ⟨hl, -, hc, hlaws⟩ := coveredLaws σ hHon hq hfam
-  exact tryDecide_prefix hl hc hlaws hne h₁ h₂ V₁ V₂
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ S U V₁ V₂ lo N₁ N₂
+    ht h₁ h₂
+  obtain ⟨hl, -, hc, hlaws⟩ := coveredLaws σ ht
+  exact tryDecide_prefix hl hc hlaws trivial h₁ h₂ V₁ V₂
 
 theorem complete : Complete := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ S U V k v hHon hq hne hfam hd
-  obtain ⟨hl, hcm, hc, hlaws⟩ := coveredLaws σ hHon hq hfam
-  exact decisionAt_eventually hl hcm hc hlaws hne hd
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ S U V k v ht hd
+  obtain ⟨hl, hcm, hc, hlaws⟩ := coveredLaws σ ht
+  exact decisionAt_eventually hl hcm hc hlaws trivial hd
 
 theorem outputComplete : OutputComplete := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ S U V lo k hHon hq hne hfam
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ S U V lo k ht
     hlok hall
-  obtain ⟨hl, hcm, hc, hlaws⟩ := coveredLaws σ hHon hq hfam
-  exact tryDecide_eventually hl hcm hc hlaws hne hlok hall
+  obtain ⟨hl, hcm, hc, hlaws⟩ := coveredLaws σ ht
+  exact tryDecide_eventually hl hcm hc hlaws trivial hlok hall
 
 theorem restart : Restart := by
   intro Validator BlockId Payload _ _ _ P honest p σ S U V lo lo' N hlo hlo'
   exact tryDecide_restart hlo hlo'
 
 theorem resume : Resume := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ S U V₁ V₂ lo N₁ N₂
-    hHon hq hne hfam hsub hN
-  obtain ⟨hl, hcm, hc, hlaws⟩ := coveredLaws σ hHon hq hfam
-  exact tryDecide_resume hl hcm hc hlaws hne hsub hN
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ S U V₁ V₂ lo N₁ N₂
+    ht hsub hN
+  obtain ⟨hl, hcm, hc, hlaws⟩ := coveredLaws σ ht
+  exact tryDecide_resume hl hcm hc hlaws trivial hsub hN
 
 theorem repeated : Repeated := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ S U lo W N
-    hHon hq hne hfam hW hN
-  obtain ⟨hl, hcm, hc, hlaws⟩ := coveredLaws σ hHon hq hfam
-  exact consumed_eq hl hcm hc hlaws hne hW hN
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ S U lo W N
+    ht hW hN
+  obtain ⟨hl, hcm, hc, hlaws⟩ := coveredLaws σ ht
+  exact consumed_eq hl hcm hc hlaws trivial hW hN
 
 theorem order : Order := by
   intro Validator BlockId Payload _ _ _ P honest p σ S U V per m rLast rHigh hp hm h
@@ -63,20 +63,20 @@ theorem orderUniform : OrderUniform := by
   exact schemeOrder_uniform hp hm
 
 theorem restartRound : RestartRound := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ S U V₁ V₂ per m rLast rHigh₁
-    rHigh₂ k v hHon hq hne hfam hsub hp hm h₁ hH hlast
-  obtain ⟨hl, hcm, hc, hlaws⟩ := coveredLaws σ hHon hq hfam
-  exact schemeTryDecide_restartRound hl hcm hc hlaws hne hsub hp hm h₁ hH hlast
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ S U V₁ V₂ per m rLast rHigh₁
+    rHigh₂ k v ht hsub hp hm h₁ hH hlast
+  obtain ⟨hl, hcm, hc, hlaws⟩ := coveredLaws σ ht
+  exact schemeTryDecide_restartRound hl hcm hc hlaws trivial hsub hp hm h₁ hH hlast
 
 theorem ledger : Ledger := by
   intro Validator BlockId Payload _ _ _ P honest p σ S U V N hl hc
   exact ledger_read hl hc N
 
 theorem ledgerAgree : LedgerAgree := by
-  intro Validator BlockId Payload _ _ _ P _ q _ honest Hon f p σ S U V₁ V₂ N₁ N₂
-    hHon hq hne hfam
-  obtain ⟨hl, -, hc, hlaws⟩ := coveredLaws σ hHon hq hfam
-  exact ledger_agree hl hc hlaws hne V₁ V₂ N₁ N₂
+  intro Validator BlockId Payload _ _ _ P _ q _ honest f p σ S U V₁ V₂ N₁ N₂
+    ht
+  obtain ⟨hl, -, hc, hlaws⟩ := coveredLaws σ ht
+  exact ledger_agree hl hc hlaws trivial V₁ V₂ N₁ N₂
 
 theorem holds : Statement :=
   ⟨sound, prefixComparable, complete, outputComplete, restart, resume, repeated, order,

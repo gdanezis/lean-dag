@@ -289,10 +289,15 @@ every vote.
 
 `Scheme/Sufficiency/Statement.lean` states, and `Proof.lean` proves, at
 every vote-selection rule, on records whose blocks reference `q` distinct
-authors one round down (`Validity.Quorate q`) and whose validators
-outside a set `Hon` of all but `f` never equivocate, **every row the
-inequalities cover agrees** (`CoveredAgree`, from `coveredLaws`). The
-rows covered, `Params.Covered n f q`, are:
+authors one round down (`Validity.Quorate q`) and with at most `f`
+validators outside the record's honest set, **every row the inequalities
+cover agrees** (`CoveredAgree`, from `coveredLaws`). The honest set is
+the set of validators that never equivocate, so a crash-prone validator
+belongs to it. `Params.Tolerates honest f q` collects the three
+hypotheses: `honestᶜ.card ≤ f`, `q ≤ n`, and the row is covered. A
+record keyed to a smaller set, as the hybrid arc's records are keyed to
+the fully correct validators, is read at its non-equivocating set by
+`withHonest`, with the same blocks. The rows covered, `Params.Covered n f q`, are:
 
 * **two rounds** (`twoRoundLaws`): a row whose vote is its certificate,
   with a wave of at least two, meeting `TwoRound n f q`;
@@ -323,7 +328,7 @@ direct commit and a direct skip, need.
 
 ### 7.1 Where nobody equivocates
 
-When `Hon` is every validator (`f = 0`), a slot has one block
+When every validator is honest (`f = 0`), a slot has one block
 (`eq_of_noEquiv_all`), and the laws that compare two blocks of one slot
 need no count: two direct commits, a direct commit and a link, and two
 links name one block. The inequality written for them is not needed:
@@ -494,15 +499,14 @@ and dropped.
 ### 9.1 The properties the mechanisms read
 
 `Scheme/Properties.lean` states them at the family's carrier
-`schemeRule p σ Hon` (`Model/Local.lean`), the decider on the records
-where `Hon` does not equivocate:
+`schemeRule p σ` (`Model/Local.lean`), the decider on block records:
 
 | Property | Holds at |
 |:---|:---|
 | `Banded` | every row with a wave of at least two and positive link and certificate thresholds, at a local vote (`banded`) |
 | `CommitsCandidate`, `CommitsDirect`, `Indirect` | every row and vote |
 | `SkipsUnsupported` | every row whose vote round is one above the slot |
-| `Quorate`, `NoEquiv` | from validity's quorum and the invariant; `SelfParent` on the core's universes |
+| `Quorate`, `NoEquiv` | from validity's quorum and the record's honest set; `SelfParent` on the core's universes |
 | `Agree`, `Safe` | every row meeting its inequalities, at a local vote for `Safe` (`agree`, `safety`) |
 | support `familySupport` | `Local` at a local vote; `Commits` at `commit ≤ n − slack`; `OfCoverage` at `cert ≤ n − slack` (`Helpers/Support.lean`) |
 | `Lives` | the core's universes, at `commit ≤ n − f` (`lives`) |

@@ -27,11 +27,11 @@ abbrev σU : VoteSel (Fin 4) ℕ Unit ValidWrt Correct := leastSel
 abbrev mystU : Params := Params.mysticeti (Fintype.card (Fin 4)) (Faults.f (Fin 4))
 
 /-- `Ugrow` as a universe of the row's carrier. -/
-abbrev ugrowU (N : ℕ) : (schemeRule mystU σU Correct).Universe :=
-  ⟨Ugrow N, (Ugrow N).noEquivOn_honest⟩
+abbrev ugrowU (N : ℕ) : (schemeRule mystU σU).Universe :=
+  Ugrow N
 
 /-- The full view of `Ugrow`, as a view of the carrier. -/
-abbrev ugrowV (N : ℕ) : (schemeRule mystU σU Correct).View (ugrowU N) :=
+abbrev ugrowV (N : ℕ) : (schemeRule mystU σU).View (ugrowU N) :=
   BlockRecord.View.full (Ugrow N)
 
 /-- The family run reactively, from `ugrowReactive`. -/
@@ -41,7 +41,7 @@ def ugrowScheme (N : ℕ) :
 
 /-- **The family's reactive precondition holds on this execution.** -/
 theorem ugrowScheme_live (N k : ℕ) (hN : rrSlots.slotRound k + 2 ≤ N) :
-    reactiveLive mystU σU Correct (coreReliability (Fin 4)) rrSlots (ugrowV N)
+    reactiveLive mystU σU (coreReliability (Fin 4)) rrSlots (ugrowV N)
       ({1, 2, 3} : Finset (Fin 4)) k (k + 1) := by
   refine ⟨⟨by decide, by decide⟩, by decide, N, 0, ugrowScheme N, Nat.le_refl 0,
     (fun n _ => by change 2 * 2 + 5 ≤ 9; omega), Nat.zero_le _,
@@ -54,9 +54,9 @@ theorem ugrowScheme_live (N k : ℕ) (hN : rrSlots.slotRound k + 2 ≤ N) :
 /-- **And a reliably-led slot commits**, by the generic `LeaderCommits`. -/
 theorem ugrowScheme_commits (N k : ℕ) (hN : rrSlots.slotRound k + 2 ≤ N)
     (hlead : rrSlots.leader k ∈ ({1, 2, 3} : Finset (Fin 4))) :
-    ∃ L, Properties.DecidedBelow (schemeRule mystU σU Correct) rrSlots (k + 1) (ugrowV N) k
+    ∃ L, Properties.DecidedBelow (schemeRule mystU σU) rrSlots (k + 1) (ugrowV N) k
       (some L) :=
-  ReactiveRun.commits (Fin 4) ℕ Unit ValidWrt Correct mystU σU Correct (coreReliability (Fin 4))
+  ReactiveRun.commits (Fin 4) ℕ Unit ValidWrt Correct mystU σU (coreReliability (Fin 4))
     ⟨by decide,
     fun _ => ⟨by decide, by decide⟩⟩ (by decide) rrSlots (ugrowV N)
     ({1, 2, 3} : Finset (Fin 4)) k (k + 1) (ugrowScheme_live N k hN) k (Nat.le_refl k)
@@ -67,10 +67,9 @@ block (id `6`) is in the history of the leader block a slot led by `2`
 commits. -/
 theorem ugrowScheme_includes : ∃ k', 1 ≤ rrSlots.slotRound k' ∧ rrSlots.leader k' = 2 ∧
     ∀ N, rrSlots.slotRound k' + 2 ≤ N →
-      ∃ L, (schemeRule mystU σU Correct).Decided rrSlots (ugrowV N) k' (some L) ∧
+      ∃ L, (schemeRule mystU σU).Decided rrSlots (ugrowV N) k' (some L) ∧
         6 ∈ historyFrom (Ugrow N).block L := by
-  obtain ⟨k', hm, hlead, h⟩ := ReactiveRun.includes (Fin 4) ℕ Unit ValidWrt Correct mystU σU
-    Correct (coreReliability (Fin 4)) (fun _ _ h => h.self_parent) le_rfl ⟨by decide,
+  obtain ⟨k', hm, hlead, h⟩ := ReactiveRun.includes (Fin 4) ℕ Unit ValidWrt Correct mystU σU (coreReliability (Fin 4)) (fun _ _ h => h.self_parent) le_rfl ⟨by decide,
     fun _ => ⟨by decide, by decide⟩⟩ (by decide) rrSlots ({1, 2, 3} : Finset (Fin 4))
     (by decide) rrSlots_fairToEach 1 2 (by decide)
   refine ⟨k', hm, hlead, fun N hN => ?_⟩

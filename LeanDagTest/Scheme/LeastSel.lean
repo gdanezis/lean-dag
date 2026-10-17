@@ -33,26 +33,25 @@ example [F : Faults Validator] :
 /-- Agreement on the core universe, at the Mysticeti row and any vote: the
 row is covered. -/
 example [F : Faults Validator] (σ : VoteSel Validator BlockId Payload ValidWrt Correct) :
-    Properties.Agree ((schemeAnchored (Params.mysticeti (Fintype.card Validator) F.f) σ).toDagRuleOn
-      (fun U => U.NoEquivOn Correct)) :=
+    Properties.Agree
+      (schemeAnchored (Params.mysticeti (Fintype.card Validator) F.f) σ).toDagRule :=
   Sufficiency.coveredAgree Validator BlockId Payload ValidWrt (quorumCard Validator) Correct
-    Correct F.f _ σ card_compl_correct_le (Nat.sub_le _ _)
-    ((Table.rowsCovered _ F.f 0).1 (by have := F.card_validators; omega)).1
+    F.f _ σ ⟨card_compl_correct_le, Nat.sub_le _ _,
+      ((Table.rowsCovered _ F.f 0).1 (by have := F.card_validators; omega)).1⟩
 
 /-- Agreement on Nemo's universe, at the Async Nemo-Nemo row and any vote:
 every validator is honest, and the majority quorum is `n − c` at
 `n = 2c + 1`. -/
 example (c : ℕ) (hn : Fintype.card Validator = 2 * c + 1)
     (σ : VoteSel Validator BlockId Payload Nemo.ValidWrt Finset.univ) :
-    Properties.Agree ((schemeAnchored (Params.asyncNemoNemo (Fintype.card Validator) c) σ).toDagRuleOn
-      (fun U => U.NoEquivOn Finset.univ)) := by
+    Properties.Agree
+      (schemeAnchored (Params.asyncNemoNemo (Fintype.card Validator) c) σ).toDagRule := by
   have hm : Nemo.majority Validator = Fintype.card Validator - c := by
     unfold Nemo.majority; omega
   haveI : Validity.Quorate (Nemo.ValidWrt (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload)) (Fintype.card Validator - c) := hm ▸ Nemo.ValidWrt.quorate
-  exact Sufficiency.coveredAgree Validator BlockId Payload Nemo.ValidWrt _ Finset.univ
-    Finset.univ 0 _ σ (by simp) (Nat.sub_le _ _)
-    ((Table.rowsCovered _ 0 c).2.2.2.2 (by omega)).2
+  exact Sufficiency.coveredAgree Validator BlockId Payload Nemo.ValidWrt _ Finset.univ 0 _ σ
+    ⟨by simp, Nat.sub_le _ _, ((Table.rowsCovered _ 0 c).2.2.2.2 (by omega)).2⟩
 
 end Scheme
 

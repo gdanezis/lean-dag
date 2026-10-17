@@ -5,11 +5,12 @@ import LeanDag.Common.Anchored.Band
 # The table's inequalities suffice for agreement — statement
 
 `docs/scheme.md` §7. A record is read with three numbers: `n` validators,
-blocks that reference `q` distinct authors one round down, and a set
-`Hon` of validators that never equivocate, with at most `f` outside it.
-Crash faults enter only through `q`. At every vote-selection rule, every
-row the inequalities cover (`Params.Covered`) decides alike from two
-views (`CoveredAgree`):
+blocks that reference `q` distinct authors one round down, and at most
+`f` validators outside the record's honest set, the validators that never
+equivocate. A crash-prone validator is honest in this sense; crash faults
+enter only through `q`. At every vote-selection rule, every row that
+tolerates the record's faults (`Params.Tolerates`: the inequalities cover
+it, `Params.Covered`) decides alike from two views (`CoveredAgree`):
 
 * a row whose vote is its certificate and whose wave is at least two,
   meeting `Params.TwoRound n f q`;
@@ -38,10 +39,9 @@ open LeanDag.Properties
 def CoveredAgree : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (P : Validity Validator BlockId Payload) [P.Mechanised]
-    (q : ℕ) [P.Quorate q] (honest Hon : Finset Validator) (f : ℕ) (p : Params)
+    (q : ℕ) [P.Quorate q] (honest : Finset Validator) (f : ℕ) (p : Params)
     (σ : VoteSel Validator BlockId Payload P honest),
-    Honᶜ.card ≤ f → q ≤ Fintype.card Validator → p.Covered (Fintype.card Validator) f q →
-    Agree ((schemeAnchored p σ).toDagRuleOn (fun U => U.NoEquivOn Hon))
+    p.Tolerates honest f q → Agree (schemeAnchored p σ).toDagRule
 
 /-- The inequalities suffice. -/
 def Statement : Prop := CoveredAgree
