@@ -63,6 +63,12 @@ structure Scenario where
   an equivocator accepts blocks built on its twin; it stops building, and
   its pending blocks grow. -/
   byzUntil : ℕ := 200
+  /-- A withholding attack `(z, v, R)`: node `z` holds back its round-`R`
+  block `x`, sends its round-`R + 1` block, which references `x`, to `v`
+  alone, reveals `x` to the others `revealAfter` ticks later, and never
+  answers `v`'s requests for `x`. -/
+  withhold : Option (ℕ × ℕ × ℕ) := none
+  revealAfter : ℕ := 6
   deriving Repr
 
 /-- A block's identifier: a hash of its content. -/
@@ -137,6 +143,8 @@ structure World (n : ℕ) where
   maxStore : ℕ
   events : ℕ
   time : ℕ
+  /-- The withheld block, once built. -/
+  withheld : Option (ℕ × Block (Fin n) ℕ ℕ)
 
 /-- Whether node `v` has crashed by time `t`. -/
 def crashed (v t : ℕ) : Bool := sc.crash.any fun e => e.1 = v ∧ e.2 ≤ t
@@ -185,6 +193,42 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
         | none => acc) acc
     | _ => acc) ([], g)
 
+/-- **The withholding attack**, applied to agent `src`'s outputs at time
+`t`: the outputs it keeps, the deliveries it adds, and the withheld
+block. -/
+def withholding (agents : Array (Agent n)) (src t : ℕ) (out : List (Output (Fin n) ℕ ℕ))
+    (wh : Option (ℕ × Block (Fin n) ℕ ℕ)) :
+    List (Output (Fin n) ℕ ℕ) × List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × Option (ℕ × Block (Fin n) ℕ ℕ) :=
+  match sc.withhold, agents[src]? with
+  | some (z, v, R), some a =>
+    if a.node.val ≠ z then (out, [], wh) else
+    out.foldl (fun (acc : List (Output (Fin n) ℕ ℕ) × List (ℕ × ℕ × Input (Fin n) ℕ ℕ) ×
+        Option (ℕ × Block (Fin n) ℕ ℕ)) o =>
+      match o with
+      | .broadcast id b =>
+        if b.round = R then (acc.1, acc.2.1, some (id, b))
+        else if b.round = R + 1 then
+          let toV := (List.range agents.size).filterMap fun d =>
+            match agents[d]? with
+            | some a' => if a'.node.val = v then some (t + 1, d, .deliver id b) else none
+            | none => none
+          let reveal := match acc.2.2 with
+            | some (xid, x) => (List.range agents.size).filterMap fun d =>
+                match agents[d]? with
+                | some a' =>
+                  if a'.node.val ≠ v ∧ a'.node.val ≠ z then
+                    some (t + sc.revealAfter, d, .deliver xid x)
+                  else none
+                | none => none
+            | none => []
+          (acc.1, acc.2.1 ++ toV ++ reveal, acc.2.2)
+        else (acc.1 ++ [o], acc.2.1, acc.2.2)
+      | .send peer id _ =>
+        if peer.val = v ∧ (acc.2.2.map (·.1)) = some id then acc
+        else (acc.1 ++ [o], acc.2.1, acc.2.2)
+      | _ => (acc.1 ++ [o], acc.2.1, acc.2.2)) ([], [], wh)
+  | _, _ => (out, [], wh)
+
 /-- Process at most `fuel` inputs, in order of arrival, up to the horizon. -/
 def loop : ℕ → World n → World n
   | 0, w => w
@@ -199,7 +243,9 @@ def loop : ℕ → World n → World n
           loop fuel { w with queue := rest, time := t } else
         let cfg := cfgFor sc p q hn a.node a.twin
         let r := step cfg st i
-        let (msgs, g) := sends sc w.agents d t r.2 w.gen
+        let (out, extra, wh) := withholding sc w.agents d t r.2 w.withheld
+        let (msgs, g) := sends sc w.agents d t out w.gen
+        let msgs := extra ++ msgs
         let isHonest := !(sc.byz.contains a.node.val)
         let bcast := r.2.filterMap fun
           | .broadcast id b => some (id, b)
@@ -217,7 +263,8 @@ def loop : ℕ → World n → World n
             blocks := bcast.foldl (fun m e => m.insert e.1 e.2) w.blocks
             maxStore := if isHonest then max w.maxStore r.1.store.ids.card else w.maxStore
             events := w.events + 1
-            time := t }
+            time := t
+            withheld := wh }
       | _, _ => loop fuel { w with queue := rest }
 
 end Run
@@ -250,7 +297,8 @@ def simulate (sc : Scenario) : Report :=
           blocks := ∅
           maxStore := 0
           events := 0
-          time := 0 }
+          time := 0
+          withheld := none }
       let w := loop sc p q hn sc.fuel w0
       let honestIdx := (List.range n).filter fun v => !(sc.byz.contains v)
       let decs := honestIdx.map fun v => w.decisions[v]?.getD []

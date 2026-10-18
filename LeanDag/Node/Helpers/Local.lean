@@ -391,8 +391,9 @@ theorem Inv.step {s : State Validator BlockId Payload}
           · exact Set.subset_union_left (hi.pend x hx))
       dsimp only at hfl ⊢
       generalize flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending) = fl at hfl ⊢
-      generalize missing { s with store := fl.1, pending := fl.2 } b = miss
-      have hi₀ : Inv cfg { s with store := fl.1, pending := fl.2, requested := s.requested ++ miss }
+      generalize missing { s with store := fl.1, pending := fl.2 } id b = miss
+      let req := s.requested ++ miss.map fun x => (x.1, id, x.2)
+      have hi₀ : Inv cfg { s with store := fl.1, pending := fl.2, requested := req }
           (K ∪ {x | x ∈ [(id, b)]} ∪
             {x | x ∈ ([] : List (BlockId × Block Validator BlockId Payload))})
           (B ++ []) := by

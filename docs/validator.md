@@ -195,15 +195,41 @@ an equivocator sends one twin to some nodes and the other twin to the
 rest, a node holding only one twin cannot complete the history of a
 block referencing the other. The liveness structures assume that every
 reliable node's holdings reach every reliable node (`converges`); the
-program makes that true by fetching what it lacks. After a delivery, the
-references of the delivered block that are neither accepted, pending,
-nor asked for already are asked of every peer in one *fetch* output, and
-recorded with the round they were referenced from, so that garbage
-collection drops them with the rest (`missing`). A node asked for blocks
-*send*s the asker each one its store holds (`answer`). An honest referrer
-holds everything its block references, so the answer comes. Only the
-delivered block can add new missing references: every block pending
-before it had its own asked for when it arrived.
+program makes that true by fetching what it lacks.
+
+**The rule.** After a block `h` arrives, the node walks `h`'s references
+down through its pending blocks and collects those it neither stores
+nor holds pending, at or above the horizon: the missing part of `h`'s
+history (`missing`). It asks every peer for them in one *fetch* output,
+and records each with `h` and its round, so as to ask for a block at
+most once on account of each block that needs it, and so that garbage
+collection drops the records with the rest. A node asked for blocks
+*send*s the asker each one its store holds (`answer`). If `h`'s author
+is honest, it accepted all of `h`'s history before building `h`, so it
+holds everything asked for, and answers.
+
+**Why per referrer.** A first rule asked for a block at most once. A
+Byzantine node then stalls an honest node `v`: it sends `v` a block
+referencing a block `x` no one else has seen, so that `v` asks for `x`
+and nobody can answer; then it reveals `x` to the others, who build on
+it; `v`, having asked once, never asks again, and never accepts their
+blocks. The simulator's withholding attack (`--withhold z,v,R`) does
+this, and stalled `v` under the first rule; under this one `v` asks
+again on account of the honest blocks and keeps pace.
+
+**What it gives** (to be proved with the run model, step 4): every block
+authored by an honest node, with its history, is eventually accepted by
+every honest node that stays up, when messages between honest nodes are
+eventually delivered and the answering node still holds what it is
+asked for. It does not give `converges` as stated, every block some
+honest node holds: a Byzantine block an honest node received too late to
+build on may be referenced by no honest block, and then nothing brings
+it to the others. The liveness arguments read the reliable nodes'
+blocks and their histories, which is the form §9.1 item 4 restates.
+
+**Cost.** The walk visits pending blocks, which nothing yet bounds; a
+node fed blocks it can never accept pays for them on every delivery.
+Bounding the pending blocks belongs to rate limiting (step 9).
 
 ## 4. Conformance
 

@@ -20,10 +20,10 @@ input `i` in the state `s`: the new state and the outputs.
 * **Deciding** (`decideStep`): `tryDecide` from the next undecided slot
   to the last slot whose decision round the store holds.
 
-* **Fetching** (`missing`, `answer`): after a delivery, the references
-  of pending blocks that are neither accepted, pending, nor asked for
-  already are asked of every peer; a request is answered with the blocks
-  the store holds.
+* **Fetching** (`missing`, `answer`): after a delivery, the missing part
+  of the delivered block's history, walked through the pending blocks, is
+  asked of every peer, once on account of each block that needs it; a
+  request is answered with the blocks the store holds.
 * **Collecting** (`collect`): the horizon rises to `Λ` below the lesser
   of the decided frontier and the node's round, and what lies below it is
   dropped.
@@ -56,8 +56,9 @@ structure State where
   fired : Finset ℕ
   /-- The next undecided slot. -/
   lo : ℕ
-  /-- The blocks asked for, each with the round it was referenced from. -/
-  requested : List (BlockId × ℕ)
+  /-- The blocks asked for, each with the block whose history needed it
+  and its own round. -/
+  requested : List (BlockId × BlockId × ℕ)
 
 variable (cfg : Config Validator BlockId Payload)
 
@@ -175,15 +176,33 @@ def decideStep (s : State Validator BlockId Payload) :
     ({ s with lo := s.lo + ds.length }, ds.map fun e => .commit e.1 e.2)
   else (s, [])
 
-/-- **The blocks to ask for**, after the block `b` arrived: its
-references at or above the horizon that are neither accepted, pending,
-nor asked for already, each with the round below `b`. Blocks pending
-before `b` had theirs asked for when they arrived. -/
-def missing (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) :
-    List (BlockId × ℕ) :=
-  ((b.refs.sort (· ≤ ·)).map fun j => (j, b.round - 1)).filter fun x =>
-    decide (s.store.base ≤ x.2) && decide (x.1 ∉ s.store.ids) &&
-      decide (x.1 ∉ s.pending.map Prod.fst) && decide (x.1 ∉ s.requested.map Prod.fst)
+/-- The missing part of a history, a level at a time: from the blocks
+`front`, each with its round, those at or above the horizon and neither
+accepted nor met already are missing if no pending block has their
+identifier, and are walked into otherwise. -/
+def missingFrom (s : State Validator BlockId Payload) :
+    ℕ → List (BlockId × ℕ) → List BlockId → List (BlockId × ℕ) → List (BlockId × ℕ)
+  | 0, _, _, acc => acc
+  | fuel + 1, front, seen, acc =>
+    let front := (front.filter fun x =>
+      decide (s.store.base ≤ x.2) && decide (x.1 ∉ s.store.ids) && decide (x.1 ∉ seen)).dedup
+    if front.isEmpty then acc else
+    let split := front.partition fun x => decide (x.1 ∈ s.pending.map Prod.fst)
+    let next := split.1.flatMap fun x =>
+      match s.pending.find? (fun e => decide (e.1 = x.1)) with
+      | some (_, c) => (c.refs.sort (· ≤ ·)).map fun j => (j, c.round - 1)
+      | none => []
+    missingFrom s fuel next (seen ++ front.map Prod.fst) (acc ++ split.2)
+
+/-- **The blocks to ask for**, after the block `b` with identifier `id`
+arrived: the missing part of its history, walked through the pending
+blocks, less those already asked for on `b`'s account. Asking again on
+account of a new block is what lets an honest block's author answer
+what a Byzantine block's author would not. -/
+def missing (s : State Validator BlockId Payload) (id : BlockId)
+    (b : Block Validator BlockId Payload) : List (BlockId × ℕ) :=
+  (missingFrom s (s.pending.length + 2) ((b.refs.sort (· ≤ ·)).map fun j => (j, b.round - 1))
+    [] []).filter fun x => decide ((x.1, id) ∉ s.requested.map fun e => (e.1, e.2.1))
 
 /-- **Answer a request**: send the peer each block asked for that the
 store holds. -/
@@ -203,7 +222,7 @@ def collect (s : State Validator BlockId Payload) :
     if h : s.store.base < G then
       let st := s.store.prune G h.le
       let pend := s.pending.filter fun e => G ≤ e.2.round
-      let req := s.requested.filter fun x => G ≤ x.2
+      let req := s.requested.filter fun x => G ≤ x.2.2
       ({ s with store := st, pending := pend, fired := s.fired.filter (G ≤ ·), requested := req },
         [.prune G])
     else (s, [])
@@ -238,8 +257,9 @@ def step (s : State Validator BlockId Payload) :
         id ∉ s.pending.map Prod.fst then
       let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
       let s₁ := { s with store := fl.1, pending := fl.2 }
-      let miss := missing s₁ b
-      let r := settle cfg { s₁ with requested := s₁.requested ++ miss }
+      let miss := missing s₁ id b
+      let req := s₁.requested ++ miss.map fun x => (x.1, id, x.2)
+      let r := settle cfg { s₁ with requested := req }
       (r.1, (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ r.2)
     else (s, [])
   | .timer r => settle cfg { s with fired := insert r s.fired }
