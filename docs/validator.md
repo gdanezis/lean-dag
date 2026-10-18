@@ -117,6 +117,17 @@ These are the clauses `advancesAt`, `reach_or_wait` and `cert_or_wait`
 of `SchemeReactive`, written as a rule the program runs, so the liveness
 hypotheses hold by construction.
 
+The rule is reactive: the program builds as soon as what the decider
+counts has arrived, and the timer is only the fallback for a leader
+block, or for votes, that do not arrive. Once its block would reach the
+leader block, and at a three-round row's decision round certify it, the
+program builds without waiting further. After GST the round time then
+tracks the actual delivery delay rather than the timeout; the core shows
+this at the Mysticeti row (`ReactivePace.built_succ_le_of_fast`,
+`ReactivePace.no_timeout_of_fast`), and its analogue for the family is
+part of step 11. The full-timeout discipline (`ViewPace`), in which a
+validator waits the timeout every round, is not used.
+
 The new block references one accepted block per round-`r` author,
 including the validator's own previous block, choosing the least
 identifier between twins. The program builds rounds in sequence and
@@ -270,7 +281,7 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 | 8 | Lift the rate-limiting results to block records (§8, L2) |
 | 9 | Rate limiting in the program: V7, V10 |
 | 10 | Efficient store and decider refining the full reference program: V8; differential tests |
-| 11 | Liveness: V11 |
+| 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST |
 
 The order proves safety and local conformance of every mechanism before
 the two large steps, so that step 10 refines the complete program once
