@@ -293,7 +293,7 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 | 8 | Lift the rate-limiting results to block records (§8, L2) |
 | 9 | Rate limiting in the program: V7, V10 |
 | 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests |
-| 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST |
+| 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST; first, the decisions of §9.1 |
 
 The order proves safety and local conformance of every mechanism before
 the two large steps, so that step 10 refines the complete program once
@@ -355,14 +355,28 @@ program's build rule (§3.2), clause by clause:
 
 The first three rows are what the liveness proofs consume of the build
 rule, and they hold by construction. The last four are idealisations of
-time and delivery. The likely repairs, to be decided before step 11:
-assert `deadline` and `catchup` from a round past GST, as `converges`
-already is, with `catchup` allowing the timer at a round whose leader
-block is not held; let `built_lt` be `≤`, or charge each build its
-processing time; and state convergence above the horizon, as the
-garbage-collection arc's induced delivery does (`garbage.md` §5). Each
-is a change to the shared pacing structures, and each needs the
-reactive liveness proof checked for where it reads the clause.
+time and delivery.
+
+### 9.1 Decisions for step 11
+
+Each of these changes the shared pacing structures (`Mysticeti/ViewPace.lean`,
+`Reactive/Basic.lean`) or adds a node-side variant of them, and each
+needs the reactive liveness proof checked for where it reads the clause.
+They are to be decided at the start of step 11.
+
+1. **`deadline`**: assert it from a round past GST only, as `converges`
+   is; before GST no bound on round time is claimed.
+2. **`catchup`**: assert it from a round past GST, and let it fall back
+   to the timer at a round whose leader block the node does not hold;
+   check that drift (`driftOn_of_catchup`) survives the fallback, or
+   bound it from `deadline` instead.
+3. **`built_lt`**: weaken it to `≤`, if `le_built` is the only reader and
+   tolerates it, or charge each build its processing time so that a step
+   building several rounds spreads them over time.
+4. **Convergence under garbage collection**: read `holds` as the
+   accepted blocks above the node's horizon, and state `converges` for
+   blocks above the receiver's horizon, as the garbage-collection arc's
+   induced delivery does (`garbage.md` §5, G13 and G14).
 
 ## 10. Tooling
 
