@@ -584,3 +584,6 @@ import LeanDag.Node.Helpers.Walk
 import LeanDag.Node.Converge.Statement
 import LeanDag.Node.Helpers.Flush
 import LeanDag.Node.Helpers.Steps
+import LeanDag.Node.Helpers.Trace
+import LeanDag.Node.Helpers.Converge
+import LeanDag.Node.Converge.Proof

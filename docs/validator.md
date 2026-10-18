@@ -120,6 +120,10 @@ round `r` and, for the slots whose wave is in progress, either
   the decision round of a three-round row; or
 * the timer for round `r` has fired.
 
+A step that changes the store (a delivery acted on, a timer, the start)
+ends by flushing the pending blocks, so no pending block is left ready
+after any step; a block built or a horizon raised can make one ready.
+
 These are the clauses `advancesAt`, `reach_or_wait` and `cert_or_wait`
 of `SchemeReactive`, written as a rule the program runs, so the liveness
 hypotheses hold by construction.
@@ -217,15 +221,31 @@ blocks. The simulator's withholding attack (`--withhold z,v,R`) does
 this, and stalled `v` under the first rule; under this one `v` asks
 again on account of the honest blocks and keeps pace.
 
-**What it gives** (to be proved with the run model, step 4): every block
-authored by an honest node, with its history, is eventually accepted by
-every honest node that stays up, when messages between honest nodes are
-eventually delivered and the answering node still holds what it is
-asked for. It does not give `converges` as stated, every block some
-honest node holds: a Byzantine block an honest node received too late to
-build on may be referenced by no honest block, and then nothing brings
-it to the others. The liveness arguments read the reliable nodes'
-blocks and their histories, which is the form §9.1 item 4 restates.
+**What it gives** (`Node.Converge.Converges`, proved). Over a trace of
+honest nodes and an adversary in which every message an honest node
+sends another reaches it later (*delivery*), a block delivered with an
+honest author's identity and its hash was broadcast by that author
+earlier (*timely authentication*), the hash is injective on the blocks
+honest nodes knew, and no horizon rises: every block an honest node
+broadcast, with its history, is in every honest node's store at the
+end. Suppose a node `v` lacks part of such a block `h`'s history. Then
+`h` is pending at `v`, and below it a chain of pending blocks leads to
+a block `z` that `v` lacks (no pending block is ever left ready). The
+last of the chain's pending blocks to arrive arrived after `h` was
+broadcast, with the rest pending; its walk reached `z`, which `v` had
+not yet asked for on its account; `h`'s author, holding `h`'s history
+since it built `h`, answered; and `z` arrived, after which it stays
+pending or stored. Timely authentication is needed: without it the
+adversary could deliver a copy of an honest block before its author
+built it, `v` would ask on its account when nobody could answer, and
+drop the genuine delivery as already pending.
+
+It does not give `converges` as the pacing structures state it, every
+block some honest node holds: a Byzantine block an honest node received
+too late to build on may be referenced by no honest block, and then
+nothing brings it to the others. The liveness arguments read the
+reliable nodes' blocks and their histories, which is the form §9.1
+item 4 restates.
 
 **Cost.** The walk visits pending blocks, which nothing yet bounds; a
 node fed blocks it can never accept pays for them on every delivery.
@@ -238,6 +258,7 @@ Bounding the pending blocks belongs to rate limiting (step 9).
 | V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved without restarts) |
 | V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAlike.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
 | V3 | In a run of honest nodes over any inputs, the blocks the honest nodes' stores end with form a `BlockRecord` at the row's validity whose honest set is the honest nodes; under authentication, an injective hash, `Params.Tolerates` and no horizon raised, any two honest nodes' commit sequences are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
+| V3′ | Over a trace with delivery, timely authentication and an injective hash, and no horizon raised, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
 | V4 | The pruned store is, up to the shift of rounds by `G`, `View.chop` of the full-history view, and the decisions it gives at slots from `F` up equal the full-history ones, at any two horizons. | `decided_chop_iff`, `chop_chop`, or the band (`AgreeBand`) |
 | V5 | A restart from the persisted state is a prune at an admissible horizon. | V4 |
 | V6 | A run with jump messages is a `skipFill` extension of the run without them; decisions persist across the fill, and new slots in the gap are skipped at once. | `decided_fill_of_persist`, `decided_none_of_novel` |
@@ -346,7 +367,7 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 | 1 | Reference program without mechanisms: *step* over a `Finset` store calling the model's functions; `#guard_msgs` tests (built) |
 | 2 | V1 and V2, with the transfer; the timing check (§9) (built) |
 | 3 | Simulator and JSON executable (built) |
-| 4 | The run model; V3 (built, without garbage collection); convergence of honest blocks and their histories under fetching (§3.7) |
+| 4 | The run model; V3 and convergence of honest blocks and their histories under fetching (§3.7), both without garbage collection (built) |
 | 5 | Garbage collection (pruning built), persistence and restart: V4, V5 |
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 |
 | 7 | Lift the bootstrap results to block records (§8, L1); bootstrap in the program: V9 |

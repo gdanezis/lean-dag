@@ -483,6 +483,58 @@ theorem step_bcast {s : State Validator BlockId Payload} {inp : Input Validator 
     simp at he
   | _ => intro e he; simp [Node.step, broadcasts] at he
 
+/-- No pending block is ready. -/
+def NoReady (s : State Validator BlockId Payload) : Prop :=
+  ∀ e ∈ s.pending, ready s.store e.2 = false
+
+omit [Fintype Validator] in
+theorem noReady_settle (s : State Validator BlockId Payload) : NoReady (Node.settle cfg s).1 :=
+  flush_no_ready _ _ _ (Nat.lt_succ_self _)
+
+/-- **After every step no pending block is ready.** -/
+theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady s)
+    (inp : Input Validator BlockId Payload) : NoReady (Node.step cfg s inp).1 := by
+  cases inp with
+  | start =>
+    simp only [Node.step]
+    split
+    · split
+      · exact noReady_settle _
+      · exact h
+    · exact h
+  | deliver id b =>
+    by_cases hc : Admits cfg s id b
+    · rw [step_deliver hc]; exact noReady_settle _
+    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
+          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst) := hc
+      simp only [Node.step, if_neg h']; exact h
+  | timer r => exact noReady_settle _
+  | _ => exact h
+
+/-- **A delivery the node acts on keeps a fitting block it delivers**
+pending or stored. -/
+theorem admit_keeps {s : State Validator BlockId Payload} {id : BlockId}
+    {b : Block Validator BlockId Payload} (hc : Admits cfg s id b)
+    (hR : ReadsAs g (Node.step cfg s (.deliver id b)).1.store)
+    (hb : (Node.step cfg s (.deliver id b)).1.store.base = s.store.base)
+    (hp : ∀ e ∈ s.pending, g e.1 = atBase 0 e.2) (hgb : g id = atBase 0 b)
+    (hf : Fits cfg g (id, b)) :
+    (id, b) ∈ (Node.step cfg s (.deliver id b)).1.pending ∨
+      id ∈ (Node.step cfg s (.deliver id b)).1.store.ids := by
+  have hgs := Grows.step (cfg := cfg) s (.deliver id b)
+  have hRs : ReadsAs g s.store := ⟨by rw [← hb]; exact hR.1, fun j hj => by
+    rw [← hgs.blk hb hj]; exact hR.2 j ((hgs.2 hb).1 hj)⟩
+  have hstep := step_deliver (cfg := cfg) hc
+  have hpb : ∀ e ∈ (id, b) :: s.pending, g e.1 = atBase 0 e.2 := by
+    intro e he
+    rcases List.mem_cons.mp he with rfl | he
+    · exact hgb
+    · exact hp e he
+  have hfl := ReadsAs.flush (cfg := cfg) (s.pending.length + 1) hRs hpb
+  have hk := flush_keeps (cfg := cfg) (s.pending.length + 1) hRs hpb hf List.mem_cons_self
+  rw [hstep] at hR hb ⊢
+  exact settle_keeps hR (hb.trans (flush_base _ _ _).symm) hfl.2 hf hk
+
 end Node
 
 end LeanDag
