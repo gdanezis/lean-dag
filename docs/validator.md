@@ -346,7 +346,7 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 | 1 | Reference program without mechanisms: *step* over a `Finset` store calling the model's functions; `#guard_msgs` tests (built) |
 | 2 | V1 and V2, with the transfer; the timing check (§9) (built) |
 | 3 | Simulator and JSON executable (built) |
-| 4 | V3 |
+| 4 | The run model; V3; convergence of honest blocks and their histories under fetching (§3.7) |
 | 5 | Garbage collection (pruning built), persistence and restart: V4, V5 |
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 |
 | 7 | Lift the bootstrap results to block records (§8, L1); bootstrap in the program: V9 |
