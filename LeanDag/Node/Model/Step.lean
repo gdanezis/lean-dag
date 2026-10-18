@@ -20,7 +20,7 @@ input `i` in the state `s`: the new state and the outputs.
 * **Deciding** (`decideStep`): `tryDecide` from the next undecided slot
   to the last slot whose decision round the store holds.
 
-* **Fetching** (`missing`, `answer`): after a delivery, the missing part
+* **Fetching** (`walkLevel`, `missing`, `answer`): after a delivery, the missing part
   of the delivered block's history, walked through the pending blocks, is
   asked of every peer, once on account of each block that needs it; a
   request is answered with the blocks the store holds.
@@ -176,23 +176,24 @@ def decideStep (s : State Validator BlockId Payload) :
     ({ s with lo := s.lo + ds.length }, ds.map fun e => .commit e.1 e.2)
   else (s, [])
 
-/-- The missing part of a history, a level at a time: from the blocks
-`front`, each with its round, those at or above the horizon and neither
-accepted nor met already are missing if no pending block has their
-identifier, and are walked into otherwise. -/
-def missingFrom (s : State Validator BlockId Payload) :
-    ℕ → List (BlockId × ℕ) → List BlockId → List (BlockId × ℕ) → List (BlockId × ℕ)
-  | 0, _, _, acc => acc
-  | fuel + 1, front, seen, acc =>
-    let front := (front.filter fun x =>
-      decide (s.store.base ≤ x.2) && decide (x.1 ∉ s.store.ids) && decide (x.1 ∉ seen)).dedup
-    if front.isEmpty then acc else
-    let split := front.partition fun x => decide (x.1 ∈ s.pending.map Prod.fst)
-    let next := split.1.flatMap fun x =>
-      match s.pending.find? (fun e => decide (e.1 = x.1)) with
-      | some (_, c) => (c.refs.sort (· ≤ ·)).map fun j => (j, c.round - 1)
-      | none => []
-    missingFrom s fuel next (seen ++ front.map Prod.fst) (acc ++ split.2)
+/-- The references of a pending block, each with the round below it. -/
+def expand (s : State Validator BlockId Payload) (j : BlockId) : List (BlockId × ℕ) :=
+  match s.pending.find? (fun e => decide (e.1 = j)) with
+  | some (_, c) => (c.refs.sort (· ≤ ·)).map fun k => (k, c.round - 1)
+  | none => []
+
+/-- **One level of the walk**, from a front, the identifiers met already,
+and the missing blocks found so far: the front's blocks at or above the
+horizon, neither accepted nor met already, are missing if no pending
+block has their identifier, and their references form the next front
+otherwise. -/
+def walkLevel (s : State Validator BlockId Payload)
+    (w : List (BlockId × ℕ) × List BlockId × List (BlockId × ℕ)) :
+    List (BlockId × ℕ) × List BlockId × List (BlockId × ℕ) :=
+  let front := (w.1.filter fun x =>
+    decide (s.store.base ≤ x.2) && decide (x.1 ∉ s.store.ids) && decide (x.1 ∉ w.2.1)).dedup
+  let split := front.partition fun x => decide (x.1 ∈ s.pending.map Prod.fst)
+  (split.1.flatMap fun x => expand s x.1, w.2.1 ++ front.map Prod.fst, w.2.2 ++ split.2)
 
 /-- **The blocks to ask for**, after the block `b` with identifier `id`
 arrived: the missing part of its history, walked through the pending
@@ -201,8 +202,9 @@ account of a new block is what lets an honest block's author answer
 what a Byzantine block's author would not. -/
 def missing (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : List (BlockId × ℕ) :=
-  (missingFrom s (s.pending.length + 2) ((b.refs.sort (· ≤ ·)).map fun j => (j, b.round - 1))
-    [] []).filter fun x => decide ((x.1, id) ∉ s.requested.map fun e => (e.1, e.2.1))
+  ((walkLevel s)^[s.pending.length + 2]
+    ((b.refs.sort (· ≤ ·)).map fun j => (j, b.round - 1), [], [])).2.2.filter
+    fun x => decide ((x.1, id) ∉ s.requested.map fun e => (e.1, e.2.1))
 
 /-- **Answer a request**: send the peer each block asked for that the
 store holds. -/
@@ -228,13 +230,17 @@ def collect (s : State Validator BlockId Payload) :
     else (s, [])
   | none => (s, [])
 
-/-- **Build, decide, collect**, after a change to the state. -/
+/-- **Build, decide, collect, then accept what that allows**, after a
+change to the state: a block built or a horizon raised can make a
+pending block ready, so the step ends by flushing, and no pending block
+is left ready after any step. -/
 def settle (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   let b := progress cfg (s.store.topRound + 2) s
   let d := decideStep cfg b.1
   let g := collect cfg d.1
-  (g.1, b.2 ++ d.2 ++ g.2)
+  let fl := flush cfg (g.1.pending.length + 1) g.1.store g.1.pending
+  ({ g.1 with store := fl.1, pending := fl.2 }, b.2 ++ d.2 ++ g.2)
 
 /-- **The node's transition function.** -/
 def step (s : State Validator BlockId Payload) :

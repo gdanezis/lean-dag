@@ -579,3 +579,6 @@ import LeanDag.Node.Helpers.Global
 import LeanDag.Node.Helpers.Commits
 import LeanDag.Node.Runs.Statement
 import LeanDag.Node.Runs.Proof
+import LeanDag.Node.Model.Trace
+import LeanDag.Node.Helpers.Walk
+import LeanDag.Node.Converge.Statement

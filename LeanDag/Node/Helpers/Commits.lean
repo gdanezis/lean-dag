@@ -179,19 +179,31 @@ theorem CommitInv.settle (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H f q
   simp only [Node.settle] at ha hb ⊢
   generalize Node.progress cfg (s.store.topRound + 2) s = r at hg₁ hlo₁ hbs ha hb ⊢
   have hd := decideStep_store (cfg := cfg) r.1
-  rcases collect_cases (cfg := cfg) (Node.decideStep cfg r.1).1 with hc | ⟨hcs, hcl, hco⟩
-  · rw [hd] at hc
-    have := hg₁.1
+  generalize hgdef : Node.collect cfg (Node.decideStep cfg r.1).1 = g at ha hb ⊢
+  have hgf := Grows.flush (cfg := cfg) (g.1.pending.length + 1) g.1.store g.1.pending
+  have hc := collect_cases (cfg := cfg) (Node.decideStep cfg r.1).1
+  rw [hgdef, hd] at hc
+  rcases hc with hc | ⟨hcs, hcl, hco⟩
+  · have := hg₁.1
+    have := hgf.1
+    change (flush cfg (g.1.pending.length + 1) g.1.store g.1.pending).1.base = s.store.base at hb
     omega
-  · rw [hcs, hd] at ha hb
-    have ha₀ : Agrees U s.store := Agrees.of_grows hg₁ hb ha
-    have h₁ : CommitInv cfg U r.1 cs := h.grow hlo₁ hg₁ hb ha₀ ha
-    have h₂ := h₁.decideStep hσ ht ha
-    have hc : commitsOf (built cfg bs ++ (Node.decideStep cfg r.1).2 ++ []) =
+  · change (flush cfg (g.1.pending.length + 1) g.1.store g.1.pending).1.base = s.store.base at hb
+    change Agrees U (flush cfg (g.1.pending.length + 1) g.1.store g.1.pending).1 at ha
+    have hgr : Grows r.1.store (flush cfg (g.1.pending.length + 1) g.1.store g.1.pending).1 := by
+      rw [← hcs]; exact hgf
+    have hbr : r.1.store.base = s.store.base := by
+      have := hg₁.1; have := hgr.1; omega
+    have hfb := hb.trans hbr.symm
+    have har : Agrees U r.1.store := Agrees.of_grows hgr hfb ha
+    have ha₀ : Agrees U s.store := Agrees.of_grows hg₁ hbr har
+    have h₁ : CommitInv cfg U r.1 cs := h.grow hlo₁ hg₁ hbr ha₀ har
+    have h₂ := h₁.decideStep hσ ht (hd ▸ har)
+    have hc : commitsOf (built cfg bs ++ (Node.decideStep cfg r.1).2 ++ g.2) =
         commitsOf (Node.decideStep cfg r.1).2 := by
-      rw [List.append_nil, commitsOf_append, commitsOf_built, List.nil_append]
-    rw [hbs, hco, hc]
-    exact h₂.congr hcl hcs
+      rw [hco, List.append_nil, commitsOf_append, commitsOf_built, List.nil_append]
+    rw [hbs, hc]
+    exact h₂.grow (hcl.trans rfl) (hd ▸ hgr) (by rw [hd]; exact hfb) (hd ▸ har) ha
 
 /-- **A step keeps the invariant**, at a fixed horizon. -/
 theorem CommitInv.step (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H f q)

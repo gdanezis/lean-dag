@@ -126,8 +126,10 @@ theorem Grows.settle (s : State Validator BlockId Payload) :
     Grows s.store (Node.settle cfg s).1.store := by
   simp only [Node.settle]
   refine (Grows.progress (cfg := cfg) (s.store.topRound + 2) s).1.trans ?_
-  rw [← decideStep_store (cfg := cfg)]
-  exact Grows.collect _
+  have hc := Grows.collect (cfg := cfg)
+    (Node.decideStep cfg (Node.progress cfg (s.store.topRound + 2) s).1).1
+  rw [decideStep_store] at hc
+  exact hc.trans (Grows.flush _ _ _)
 
 omit [Fintype Validator] in
 theorem Grows.settle_of {st : Store Validator BlockId Payload} (s : State Validator BlockId Payload)

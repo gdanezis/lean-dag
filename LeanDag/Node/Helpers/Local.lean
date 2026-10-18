@@ -298,21 +298,6 @@ theorem Inv.collect {s : State Validator BlockId Payload}
   · exact ⟨[], by simp, rfl, hi⟩
 
 omit [Fintype Validator] in
-/-- **Settling keeps the invariant**: built blocks, then decisions, then at
-most one horizon. -/
-theorem Inv.settle {s : State Validator BlockId Payload}
-    {K : Set (BlockId × Block Validator BlockId Payload)}
-    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) :
-    ∃ (bs : List (BlockId × Block Validator BlockId Payload)) (ds : List (ℕ × Option BlockId))
-      (gs : List ℕ), gs.length ≤ 1 ∧
-      (settle cfg s).2 = built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune ∧
-      Inv cfg (settle cfg s).1 (K ∪ {x | x ∈ bs}) (B ++ bs) := by
-  obtain ⟨bs, hbs, hi₁⟩ := hi.progress (s.store.topRound + 2)
-  obtain ⟨ds, hds, hi₂⟩ := hi₁.decideStep
-  obtain ⟨gs, hgs, hgo, hi₃⟩ := hi₂.collect
-  exact ⟨bs, ds, gs, hgs, by simp only [Node.settle, hbs, hds, hgo], hi₃⟩
-
-omit [Fintype Validator] in
 /-- Accepting a known block keeps the store known, at the same horizon. -/
 theorem accept_known {st : Store Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
@@ -367,6 +352,36 @@ theorem flush_known {K : Set (BlockId × Block Validator BlockId Payload)} :
         fun e he => hsplit e (List.mem_append_left _ he)
       have h₂ := flush_known fuel h₁.1 h₁.2.2 fun e he => hsplit e (List.mem_append_right _ he)
       exact ⟨h₂.1, h₂.2.1, h₂.2.2.1.trans h₁.2.1, h₂.2.2.2⟩
+
+omit [Fintype Validator] in
+/-- **A flush keeps the invariant.** -/
+theorem Inv.flushAll {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) (fuel : ℕ) :
+    let fl := flush cfg fuel s.store s.pending
+    Inv cfg { s with store := fl.1, pending := fl.2 } K B := by
+  intro fl
+  have hfl := flush_known (cfg := cfg) (K := K) fuel (st := s.store) (pend := s.pending)
+    hi.known hi.valid hi.pend
+  refine ⟨hfl.1, hfl.2.1, ?_, hi.good, hi.sub, hfl.2.2.2⟩
+  rcases hi.rounds with ⟨h0, hB, hb⟩ | ⟨t, ht, hb, hB⟩
+  · exact Or.inl ⟨h0, hB, by rw [hfl.2.2.1]; exact hb⟩
+  · exact Or.inr ⟨t, ht, by rw [hfl.2.2.1]; exact hb, hB⟩
+
+omit [Fintype Validator] in
+/-- **Settling keeps the invariant**: built blocks, then decisions, then at
+most one horizon. -/
+theorem Inv.settle {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) :
+    ∃ (bs : List (BlockId × Block Validator BlockId Payload)) (ds : List (ℕ × Option BlockId))
+      (gs : List ℕ), gs.length ≤ 1 ∧
+      (settle cfg s).2 = built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune ∧
+      Inv cfg (settle cfg s).1 (K ∪ {x | x ∈ bs}) (B ++ bs) := by
+  obtain ⟨bs, hbs, hi₁⟩ := hi.progress (s.store.topRound + 2)
+  obtain ⟨ds, hds, hi₂⟩ := hi₁.decideStep
+  obtain ⟨gs, hgs, hgo, hi₃⟩ := hi₂.collect
+  exact ⟨bs, ds, gs, hgs, by simp only [Node.settle, hbs, hds, hgo], hi₃.flushAll _⟩
 
 omit [Fintype Validator] in
 /-- Settling keeps the invariant, at a larger knowledge. -/
