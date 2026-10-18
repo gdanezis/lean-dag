@@ -85,6 +85,8 @@ Time is discrete (`ℕ`), as in `PaceCore`.
 
 ### 3.1 The store
 
+The store is an ordered map from identifiers to blocks
+(Std.TreeMap), with the accepted identifiers and the horizon (§3.4).
 A received block whose identifier is not *idOf* of its content is
 dropped, so that an identifier denotes one block. Otherwise it passes
 through three stages.
@@ -146,12 +148,20 @@ successive views this is `consumed`.
 
 ### 3.4 Garbage collection
 
-The horizon is `G = min(F − Λ, t − Λ)` with `Λ ≥ 2`, where `F` is the
-decided frontier (the largest round below which every slot is decided)
-and `t` the validator's round (the depth rule of `garbage.md` §6). Below
-`Λ = 2` the attested base can miss blocks a joiner needs; safety holds
-at every `G`. The decider runs at the schedule re-indexed from the first
-slot above the horizon (`Slots.chop`).
+The horizon is `G = min(F, t) − Λ`, where `F` is the decided frontier,
+the round of the first undecided slot, below which every slot is
+decided, and `t` the node's round (the depth rule of `garbage.md` §6).
+Below `Λ = 2` the attested base can miss blocks a joiner needs; safety
+holds at every `G`. After each decision step the horizon rises to `G`
+if that is higher: the store drops the blocks below `G`, reads those at
+`G` without references, and keeps absolute rounds; pending blocks and
+timers below `G` are dropped, and the node outputs `prune G`. A block
+received at the horizon is kept without its references, as the cut
+keeps it; one below it is dropped.
+
+The decider then runs on the original schedule. Every slot it still
+decides lies at `F` or above, and its decision reads only rounds from
+the slot's round up, all above the horizon.
 
 ### 3.5 Safe Skip
 
@@ -182,7 +192,7 @@ size (G7).
 | V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | induction over *step* |
 | V2 | The commit outputs are `consumed` over the successive views. | unfolding; `Restart`; the transfer below |
 | V3 | In a run of honest programs and arbitrary Byzantine blocks, the blocks accepted by honest validators form a `BlockRecord` whose honest set is the program-run validators. Under `Params.Tolerates`, any two honest validators' commit sequences are prefix-comparable. | V1, V2, `Scheme.safety` |
-| V4 | The pruned store is `View.chop` of the full-history view, and decisions across the horizon equal the full-history ones, at any two horizons. | `decided_chop_iff`, `chop_chop` |
+| V4 | The pruned store is, up to the shift of rounds by `G`, `View.chop` of the full-history view, and the decisions it gives at slots from `F` up equal the full-history ones, at any two horizons. | `decided_chop_iff`, `chop_chop`, or the band (`AgreeBand`) |
 | V5 | A restart from the persisted state is a prune at an admissible horizon. | V4 |
 | V6 | A run with jump messages is a `skipFill` extension of the run without them; decisions persist across the fill, and new slots in the gap are skipped at once. | `decided_fill_of_persist`, `decided_none_of_novel` |
 | V7 | Rate limiting does not make a validator decide wrongly. | `decided_mono_of_banded` |
@@ -277,12 +287,12 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 | 2 | V1 and V2, with the transfer; the timing check (§9) |
 | 3 | Simulator and JSON executable |
 | 4 | V3 |
-| 5 | Garbage collection, persistence and restart: V4, V5 |
+| 5 | Garbage collection (pruning built), persistence and restart: V4, V5 |
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 |
 | 7 | Lift the bootstrap results to block records (§8, L1); bootstrap in the program: V9 |
 | 8 | Lift the rate-limiting results to block records (§8, L2) |
 | 9 | Rate limiting in the program: V7, V10 |
-| 10 | Efficient store and decider refining the full reference program: V8; differential tests |
+| 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests |
 | 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST |
 
 The order proves safety and local conformance of every mechanism before
@@ -353,18 +363,20 @@ before step 11 rather than found during it.
 
 ## 10. Tooling
 
-* The model's functions run under `#eval`. Two changes make them fast
+* The model's functions run under `#eval`. Four changes make them fast
   enough to run the node. `historyUptoFrom` is computed a level at a
   time (`historyLevels`, proved equal and marked `@[csimp]` in
   `Common/Causality.lean`, `docs/target-properties.md` §11.52), which
   removes the exponential cost. The vote rule is `boundedSel`, the least
   vote searched only as deep as the slot, a `VoteSel` that selects what
   `leastSel` selects at every block of a record (`boundedSel_sel_eq`);
-  for that the store's record carries the row's validity. Four nodes
-  over 800 inputs (52 rounds) now run in ten seconds, about 12 ms an
-  input; without the two changes 60 inputs was the limit. What remains
-  grows with the store (`Finset` operations are list-based, and the
-  block map is a chain of updates), which garbage collection bounds.
+  for that the store's record carries `stored`, references one round
+  below. The store's block map is an ordered map rather than a chain of
+  updates, and garbage collection keeps the store a few rounds deep.
+  Four nodes over 16,000 inputs (1,000 rounds) run in about five
+  seconds, a third of a millisecond an input, and the cost of an input no
+  longer grows with the run; with the model's functions as they were, 60
+  inputs was the limit.
 * `scripts/check-arc-holes.py` forbids `partial` and `unsafe` in the
   arcs it lists. The directory `LeanDag/Node` is added to its list,
   and the executables' input loops, outside the library, run on fuel.

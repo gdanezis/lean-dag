@@ -9,8 +9,9 @@ the identifier map and the mechanisms' constants; `Input` and `Output`
 are the events it consumes and produces, with those of garbage
 collection, Safe Skip and bootstrap included.
 
-The node decides on a record of its own store, at the row's validity
-`rowValid q`, which it checks on receipt, and the honest set `∅`.
+The node checks the row's validity `rowValid q` on receipt, and decides
+on a record of its own store at `stored`, references one round below,
+which a store cut at a horizon also meets, and the honest set `∅`.
 
 Definitions only.
 -/
@@ -25,6 +26,11 @@ variable {Validator BlockId Payload : Type} [DecidableEq Validator]
 distinct authors, no author twice, and the author's own previous block. -/
 abbrev rowValid (q : ℕ) : Validity Validator BlockId Payload :=
   ValidAt q (Clause.distinct.and Clause.selfParent)
+
+variable (Validator BlockId Payload) in
+/-- **The validity a store's record carries**: references one round
+below. -/
+abbrev stored : Validity Validator BlockId Payload := ValidAt 0 Clause.none
 
 variable (Validator BlockId Payload) [Fintype Validator] [LinearOrder BlockId]
 
@@ -54,7 +60,7 @@ structure Config where
   /-- The timeout of round `r`. -/
   timeout : ℕ → ℕ
   /-- The vote rule. -/
-  σ : Scheme.VoteSel Validator BlockId Payload (rowValid q) ∅
+  σ : Scheme.VoteSel Validator BlockId Payload (stored Validator BlockId Payload) ∅
   /-- The identifier of a block: the environment's hash. -/
   idOf : Block Validator BlockId Payload → BlockId
   /-- The horizon's lag `Λ`. -/

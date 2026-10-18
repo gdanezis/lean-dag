@@ -1,4 +1,5 @@
 import LeanDag.Node.Vote
+import LeanDag.Node.Store
 /-!
 # The node's theorems use only the standard axioms
 -/
@@ -14,3 +15,9 @@ info: 'LeanDag.Node.boundedSel_sel_eq' depends on axioms: [propext, Classical.ch
 -/
 #guard_msgs in
 #print axioms LeanDag.Node.boundedSel_sel_eq
+
+/--
+info: 'LeanDag.Node.treeMap_getD_filter_of' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms LeanDag.Node.treeMap_getD_filter_of

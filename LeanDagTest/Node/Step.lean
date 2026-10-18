@@ -5,9 +5,12 @@ import Mathlib.Data.Finset.Sort
 # Four honest nodes at the Mysticeti row
 
 Four nodes, `n = 4`, `f = 1`, at the Mysticeti row with one leader per
-round, exchange every block at once in first-in first-out order; no
-timer fires. Each node builds as soon as it holds the round's leader
-block and three authors, and all four commit the same slots.
+round, over a network that delivers every block a tick after it is sent
+and fires each timer when it expires. Each node builds as soon as it
+holds the round's leader block and three authors, and all four commit
+the same slots. With node `3` down, the others wait out the timer at its
+rounds and skip its slots. Garbage collection keeps each store a few
+rounds deep however long the run.
 -/
 
 namespace LeanDagTest
@@ -43,7 +46,7 @@ def cfg (me : Fin 4) : Config (Fin 4) ℕ Unit where
 /-- A network of four nodes: their states, the inputs in flight with the
 time each arrives, ordered by it, and the commits each node output. -/
 structure Net where
-  states : Fin 4 → State (Fin 4) ℕ Unit 3
+  states : Fin 4 → State (Fin 4) ℕ Unit
   queue : List (ℕ × Fin 4 × Input (Fin 4) ℕ Unit)
   commits : Fin 4 → List (ℕ × Option ℕ)
 
@@ -149,6 +152,23 @@ def down3 : Net := run [3] 100 net0
 /-- info: true -/
 #guard_msgs in
 #eval agree down3
+
+/-! ## A long run, node `3` down
+
+Over `250` rounds every fourth slot, node `3`'s, is skipped, and each
+store holds thirteen blocks, its horizon four rounds below its top. -/
+
+/-- The network after `3000` inputs, node `3` down. -/
+def long3 : Net := run [3] 3000 net0
+
+/-- info: ([some 250, some 250, some 250, none], 248, 62, true) -/
+#guard_msgs in
+#eval (tops long3, (long3.commits 0).length, ((long3.commits 0).filter (·.2.isNone)).length,
+  agree long3)
+
+/-- info: [(13, 246), (13, 246), (13, 246)] -/
+#guard_msgs in
+#eval [0, 1, 2].map fun d : Fin 4 => ((long3.states d).store.ids.card, (long3.states d).store.base)
 
 end Node
 
