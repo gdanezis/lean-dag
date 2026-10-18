@@ -2,7 +2,9 @@
 
 This document plans a Lean program that acts as an honest validator of
 the partially synchronous rows of the scheme (`docs/scheme.md`), and the
-proofs that it conforms to the scheme. Nothing in it is built yet. Names
+proofs that it conforms to the scheme. The program lives in
+`LeanDag/Node`, namespace LeanDag.Node; steps 0 and 1 are built
+(§7). Names
 in backticks are existing declarations; names in italics are planned.
 
 ## 1. Scope
@@ -254,7 +256,7 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 ## 6. Testing
 
 1. **Agreement with the model.** `#guard` checks in
-   `LeanDagTest/Validator/` that the program's commits on the scheme's
+   `LeanDagTest/Node/` that the program's commits on the scheme's
    hand-built records match those the scheme's tests record.
 2. **Differential tests.** The efficient program against the reference
    program on random records of a few rounds.
@@ -270,8 +272,8 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 
 | Step | Content |
 |---|---|
-| 0 | This document; the interface types, all mechanisms' inputs and outputs included |
-| 1 | Reference program without mechanisms: *step* over a `Finset` store calling the model's functions; `#guard` tests |
+| 0 | This document; the interface types, all mechanisms' inputs and outputs included (built) |
+| 1 | Reference program without mechanisms: *step* over a `Finset` store calling the model's functions; `#guard_msgs` tests (built) |
 | 2 | V1 and V2, with the transfer; the timing check (§9) |
 | 3 | Simulator and JSON executable |
 | 4 | V3 |
@@ -353,10 +355,12 @@ before step 11 rather than found during it.
 
 * The model's functions run under `#eval`: `tryDecide` at the Mahi-Mahi
   row on the six-round, four-validator `full4` evaluates at once. The
-  reference program is fast enough for the build's tests and small
-  simulations; larger simulations wait for step 10.
+  reference program is exponential in the depth of the record, since
+  `historyUptoFrom` recurses without sharing: four nodes over 60 inputs
+  (five rounds) run in two seconds, over 150 inputs not in ten minutes.
+  It serves the build's tests; simulations wait for step 10.
 * `scripts/check-arc-holes.py` forbids `partial` and `unsafe` in the
-  arcs it lists. The directory `LeanDag/Validator` is added to its list,
+  arcs it lists. The directory `LeanDag/Node` is added to its list,
   and the executables' input loops, outside the library, run on fuel.
 * The executables are `[[lean_exe]]` targets of `lakefile.toml`, not
   default targets, so `lake build` and the audits are unchanged.
