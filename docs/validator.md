@@ -3,8 +3,8 @@
 This document plans a Lean program that acts as an honest validator of
 the partially synchronous rows of the scheme (`docs/scheme.md`), and the
 proofs that it conforms to the scheme. The program lives in
-`LeanDag/Node`, namespace LeanDag.Node; steps 0 and 1 are built
-(§7). Names
+`LeanDag/Node`, namespace LeanDag.Node; steps 0, 1 and 2 are built, and
+parts of steps 5 and 10 (§7). Names
 in backticks are existing declarations; names in italics are planned.
 
 ## 1. Scope
@@ -189,8 +189,8 @@ size (G7).
 
 | | Claim | Route |
 |---|---|---|
-| V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | induction over *step* |
-| V2 | The commit outputs are `consumed` over the successive views. | unfolding; `Restart`; the transfer below |
+| V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | `Node.OneEach`, `Node.Authored`, `Node.ValidOut`, `Node.Shape` (proved without restarts) |
+| V2 | The commit outputs are `consumed` over the successive views. | `Node.DecidesOnView`, `Node.ViewsAlike.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
 | V3 | In a run of honest programs and arbitrary Byzantine blocks, the blocks accepted by honest validators form a `BlockRecord` whose honest set is the program-run validators. Under `Params.Tolerates`, any two honest validators' commit sequences are prefix-comparable. | V1, V2, `Scheme.safety` |
 | V4 | The pruned store is, up to the shift of rounds by `G`, `View.chop` of the full-history view, and the decisions it gives at slots from `F` up equal the full-history ones, at any two horizons. | `decided_chop_iff`, `chop_chop`, or the band (`AgreeBand`) |
 | V5 | A restart from the persisted state is a prune at an admissible horizon. | V4 |
@@ -284,7 +284,7 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 |---|---|
 | 0 | This document; the interface types, all mechanisms' inputs and outputs included (built) |
 | 1 | Reference program without mechanisms: *step* over a `Finset` store calling the model's functions; `#guard_msgs` tests (built) |
-| 2 | V1 and V2, with the transfer; the timing check (§9) |
+| 2 | V1 and V2, with the transfer; the timing check (§9) (built) |
 | 3 | Simulator and JSON executable |
 | 4 | V3 |
 | 5 | Garbage collection (pruning built), persistence and restart: V4, V5 |
@@ -340,26 +340,29 @@ statements take as the reliable set `T` rather than the honest set.
 ## 9. The timing check
 
 The liveness structures were written as hypotheses, and their witnesses
-are hand-built records, not runs of a program. Two clauses are not met
-by every run of an implementable program:
+are hand-built records, not runs of a program. Read against the
+program's build rule (§3.2), clause by clause:
 
-* `ReactiveCore.deadline` asks that a reliable validator build round
-  `n + 1` within `timeout n` of round `n`, at every round. A validator
-  that holds fewer than `q` authors of round `n` when its timer fires
-  cannot build; before GST it may wait longer than the timeout.
-* `PaceCore.catchup` asks that a validator holding a reliable block of
-  round `n` after GST build there within `proc`, while `reach_or_wait`
-  asks it to wait the full timeout at a round where its block would not
-  reach the leader block. A lagging validator that holds a later block
-  but not the leader block of an earlier round meets one of the two only.
+| Clause | Met by the program? |
+|---|---|
+| `SchemeReactive.advancesAt` | yes, once the round's timer fires: the timer stays fired, so a quorum arriving later builds at once; this needs the environment to deliver timer callbacks |
+| `SchemeReactive.reach_or_wait`, `cert_or_wait` | yes: the program builds early only when its block reaches, or certifies, a leader block, and otherwise after the timer, referencing every author's block it holds, which includes a reliable leader's or voter's single block |
+| `PaceCore.refs_held`, `holds_own`, `holds_closed` | yes, reading `holds` as the accepted blocks |
+| `ReactiveCore.deadline` | no: at every round, not only after GST, it asks the next block within `timeout n`; a node holding fewer than `q` authors of round `n` when its timer fires cannot build |
+| `ReactiveCore.built_lt` | no: build times strictly increase, but one step may build several rounds at once, when a lagging node catches up |
+| `PaceCore.catchup` | no: a node holding a reliable block of a later round must build there within `proc`, while `reach_or_wait` makes it wait the timer at each round in between whose leader block its block would not reach |
+| `PaceCore.holds_mono`, `converges` | not under garbage collection: the store shrinks, and a reliable block arriving below a node's horizon is never accepted; logical holdings, everything ever accepted, keep `holds_mono` but not `converges` |
 
-Step 2 states the program's timing as properties of one validator's
-trace and compares them clause by clause with `ReactiveCore`,
-`PaceCore` and `SchemeReactive`. Where a clause is not met, the likely
-repair is to assert it from a round past GST, as `converges` and
-`catchup` already are, and to check that the reactive liveness proof
-reads it only there. That is a change to the shared layer, decided
-before step 11 rather than found during it.
+The first three rows are what the liveness proofs consume of the build
+rule, and they hold by construction. The last four are idealisations of
+time and delivery. The likely repairs, to be decided before step 11:
+assert `deadline` and `catchup` from a round past GST, as `converges`
+already is, with `catchup` allowing the timer at a round whose leader
+block is not held; let `built_lt` be `≤`, or charge each build its
+processing time; and state convergence above the horizon, as the
+garbage-collection arc's induced delivery does (`garbage.md` §5). Each
+is a change to the shared pacing structures, and each needs the
+reactive liveness proof checked for where it reads the clause.
 
 ## 10. Tooling
 

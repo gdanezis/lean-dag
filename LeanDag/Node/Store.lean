@@ -49,6 +49,11 @@ omit [DecidableEq Validator] [LinearOrder BlockId] in
   unfold atBase; split <;> rfl
 
 omit [DecidableEq Validator] [LinearOrder BlockId] in
+@[simp] theorem atBase_creator (base : ℕ) (b : Block Validator BlockId Payload) :
+    (atBase base b).creator = b.creator := by
+  unfold atBase; split <;> rfl
+
+omit [DecidableEq Validator] [LinearOrder BlockId] in
 theorem atBase_refs_of_lt {base : ℕ} {b : Block Validator BlockId Payload} (h : base < b.round) :
     (atBase base b).refs = b.refs := by
   unfold atBase; rw [if_neg (by omega)]
