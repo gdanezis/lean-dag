@@ -13,6 +13,8 @@ namespace LeanDag
 
 namespace Node
 
+namespace Local
+
 theorem shape : Shape := by
   intro Validator BlockId Payload _ _ _ cfg is i
   obtain ⟨xs, bs, ds, gs, hxs, hgs, ho, -⟩ := (Inv.init.run (cfg := cfg) is).step i
@@ -62,6 +64,8 @@ theorem decidesOnView : DecidesOnView := by
   · rfl
 
 theorem holds : Statement := ⟨shape, oneEach, authored, validOut, decidesOnView⟩
+
+end Local
 
 end Node
 

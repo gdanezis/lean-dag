@@ -235,9 +235,9 @@ Bounding the pending blocks belongs to rate limiting (step 9).
 
 | | Claim | Route |
 |---|---|---|
-| V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | `Node.OneEach`, `Node.Authored`, `Node.ValidOut`, `Node.Shape` (proved without restarts) |
-| V2 | The commit outputs are `consumed` over the successive views. | `Node.DecidesOnView`, `Node.ViewsAlike.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
-| V3 | In a run of honest programs and arbitrary Byzantine blocks, the blocks accepted by honest validators form a `BlockRecord` whose honest set is the program-run validators. Under `Params.Tolerates`, any two honest validators' commit sequences are prefix-comparable. | V1, V2, `Scheme.safety` |
+| V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved without restarts) |
+| V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAlike.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
+| V3 | In a run of honest nodes over any inputs, the blocks the honest nodes' stores end with form a `BlockRecord` at the row's validity whose honest set is the honest nodes; under authentication, an injective hash, `Params.Tolerates` and no horizon raised, any two honest nodes' commit sequences are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V4 | The pruned store is, up to the shift of rounds by `G`, `View.chop` of the full-history view, and the decisions it gives at slots from `F` up equal the full-history ones, at any two horizons. | `decided_chop_iff`, `chop_chop`, or the band (`AgreeBand`) |
 | V5 | A restart from the persisted state is a prune at an admissible horizon. | V4 |
 | V6 | A run with jump messages is a `skipFill` extension of the run without them; decisions persist across the fill, and new slots in the gap are skipped at once. | `decided_fill_of_persist`, `decided_none_of_novel` |
@@ -346,7 +346,7 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 | 1 | Reference program without mechanisms: *step* over a `Finset` store calling the model's functions; `#guard_msgs` tests (built) |
 | 2 | V1 and V2, with the transfer; the timing check (§9) (built) |
 | 3 | Simulator and JSON executable (built) |
-| 4 | The run model; V3; convergence of honest blocks and their histories under fetching (§3.7) |
+| 4 | The run model; V3 (built, without garbage collection); convergence of honest blocks and their histories under fetching (§3.7) |
 | 5 | Garbage collection (pruning built), persistence and restart: V4, V5 |
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 |
 | 7 | Lift the bootstrap results to block records (§8, L1); bootstrap in the program: V9 |

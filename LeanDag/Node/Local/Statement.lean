@@ -27,6 +27,8 @@ namespace LeanDag
 
 namespace Node
 
+namespace Local
+
 /-- **Each step's outputs**, from any state a run reaches: requests and
 answers, then built blocks, then decisions, then at most one horizon. -/
 def Shape : Prop :=
@@ -87,6 +89,8 @@ def DecidesOnView : Prop :=
 
 /-- One node at a time. -/
 def Statement : Prop := Shape ∧ OneEach ∧ Authored ∧ ValidOut ∧ DecidesOnView
+
+end Local
 
 end Node
 

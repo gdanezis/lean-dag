@@ -9,7 +9,12 @@ together, what the node knew. `built` is the shape of the outputs that
 build blocks: persist, broadcast, then the round's timer; `isFetch`
 marks the requests and answers that move blocks without building one.
 
-Definitions only; the claims are `Node/Local/Statement.lean`.
+`commitsOf` reads the decisions among the outputs. Over many nodes,
+`Config.at` is node `v`'s configuration, `runOf` its run and `knownOf`
+what it knew.
+
+Definitions only; the claims are `Node/Local/Statement.lean` and
+`Node/Runs/Statement.lean`.
 -/
 
 namespace LeanDag
@@ -60,6 +65,37 @@ def built (bs : List (BlockId × Block Validator BlockId Payload)) :
     List (Output Validator BlockId Payload) :=
   bs.flatMap fun e =>
     [.persist e.1 e.2, .broadcast e.1 e.2, .setTimer e.2.round (cfg.timeout e.2.round)]
+
+/-- The decisions among some outputs. -/
+def commitsOf (out : List (Output Validator BlockId Payload)) : List (ℕ × Option BlockId) :=
+  out.filterMap fun
+    | .commit k d => some (k, d)
+    | _ => none
+
+/-! ## Many nodes
+
+A run of many nodes gives each honest node its own sequence of inputs;
+the nodes share one configuration but for their identity. What the
+inputs are, and in what order they arrive, is the network's and the
+adversary's; the claims about runs constrain it only by
+authentication and by the hash. -/
+
+variable (cfg) in
+/-- The configuration of node `v`. -/
+def Config.at (v : Validator) : Config Validator BlockId Payload := { cfg with me := v }
+
+variable (cfg) in
+/-- **Node `v`'s run**, from the initial state over its inputs. -/
+def runOf (ins : Validator → List (Input Validator BlockId Payload)) (v : Validator) :
+    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
+  run (cfg.at v) (State.init (cfg.at v)) (ins v)
+
+variable (cfg) in
+/-- What node `v` knew: the blocks delivered to it with their hash, and
+those it broadcast. -/
+def knownOf (ins : Validator → List (Input Validator BlockId Payload)) (v : Validator) :
+    List (BlockId × Block Validator BlockId Payload) :=
+  delivered (cfg.at v) (ins v) ++ broadcasts (runOf cfg ins v).2
 
 end Node
 
