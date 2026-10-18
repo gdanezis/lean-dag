@@ -15,8 +15,8 @@ namespace Node
 
 theorem shape : Shape := by
   intro Validator BlockId Payload _ _ _ cfg is i
-  obtain ⟨bs, ds, gs, hgs, ho, -⟩ := (Inv.init.run (cfg := cfg) is).step i
-  exact ⟨bs, ds, gs, hgs, ho⟩
+  obtain ⟨xs, bs, ds, gs, hxs, hgs, ho, -⟩ := (Inv.init.run (cfg := cfg) is).step i
+  exact ⟨xs, bs, ds, gs, hxs, hgs, ho⟩
 
 theorem oneEach : OneEach := by
   intro Validator BlockId Payload _ _ _ cfg is

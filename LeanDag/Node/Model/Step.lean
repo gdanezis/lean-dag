@@ -1,4 +1,5 @@
 import LeanDag.Node.Store
+import Mathlib.Data.Finset.Sort
 /-!
 # An honest node — its transition function
 
@@ -19,6 +20,10 @@ input `i` in the state `s`: the new state and the outputs.
 * **Deciding** (`decideStep`): `tryDecide` from the next undecided slot
   to the last slot whose decision round the store holds.
 
+* **Fetching** (`missing`, `answer`): after a delivery, the references
+  of pending blocks that are neither accepted, pending, nor asked for
+  already are asked of every peer; a request is answered with the blocks
+  the store holds.
 * **Collecting** (`collect`): the horizon rises to `Λ` below the lesser
   of the decided frontier and the node's round, and what lies below it is
   dropped.
@@ -51,6 +56,8 @@ structure State where
   fired : Finset ℕ
   /-- The next undecided slot. -/
   lo : ℕ
+  /-- The blocks asked for, each with the round it was referenced from. -/
+  requested : List (BlockId × ℕ)
 
 variable (cfg : Config Validator BlockId Payload)
 
@@ -59,7 +66,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
-  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0⟩
+  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, []⟩
 
 /-- **Accept a block**: below the horizon it is dropped; at the horizon it
 is kept without its references, as the cut keeps it; above, it is kept if
@@ -168,6 +175,23 @@ def decideStep (s : State Validator BlockId Payload) :
     ({ s with lo := s.lo + ds.length }, ds.map fun e => .commit e.1 e.2)
   else (s, [])
 
+/-- **The blocks to ask for**, after the block `b` arrived: its
+references at or above the horizon that are neither accepted, pending,
+nor asked for already, each with the round below `b`. Blocks pending
+before `b` had theirs asked for when they arrived. -/
+def missing (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) :
+    List (BlockId × ℕ) :=
+  ((b.refs.sort (· ≤ ·)).map fun j => (j, b.round - 1)).filter fun x =>
+    decide (s.store.base ≤ x.2) && decide (x.1 ∉ s.store.ids) &&
+      decide (x.1 ∉ s.pending.map Prod.fst) && decide (x.1 ∉ s.requested.map Prod.fst)
+
+/-- **Answer a request**: send the peer each block asked for that the
+store holds. -/
+def answer (s : State Validator BlockId Payload) (peer : Validator) (ids : List BlockId) :
+    List (Output Validator BlockId Payload) :=
+  (ids.filter fun j => decide (j ∈ s.store.ids)).map fun j =>
+    .send peer j (s.store.map.getD j s.store.junk)
+
 /-- **Raise the horizon** (`docs/validator.md` §3.4) to `Λ` below the
 lesser of the decided frontier, the round of the first undecided slot,
 and the node's own round; drop what lies below it. -/
@@ -179,7 +203,9 @@ def collect (s : State Validator BlockId Payload) :
     if h : s.store.base < G then
       let st := s.store.prune G h.le
       let pend := s.pending.filter fun e => G ≤ e.2.round
-      ({ s with store := st, pending := pend, fired := s.fired.filter (G ≤ ·) }, [.prune G])
+      let req := s.requested.filter fun x => G ≤ x.2
+      ({ s with store := st, pending := pend, fired := s.fired.filter (G ≤ ·), requested := req },
+        [.prune G])
     else (s, [])
   | none => (s, [])
 
@@ -211,9 +237,13 @@ def step (s : State Validator BlockId Payload) :
     if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
         id ∉ s.pending.map Prod.fst then
       let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
-      settle cfg { s with store := fl.1, pending := fl.2 }
+      let s₁ := { s with store := fl.1, pending := fl.2 }
+      let miss := missing s₁ b
+      let r := settle cfg { s₁ with requested := s₁.requested ++ miss }
+      (r.1, (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ r.2)
     else (s, [])
   | .timer r => settle cfg { s with fired := insert r s.fired }
+  | .fetchRequest peer ids => (s, answer s peer ids)
   | _ => (s, [])
 
 end Node

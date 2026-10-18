@@ -5,7 +5,7 @@ import LeanDagSim.Net
 Runs one scenario and prints what each honest node reached and decided.
 Options, each `--name value`: `row`, `n`, `f`, `c`, `seed`, `horizon`,
 `gst`, `pre-max`, `delay-min`, `delay-max`, `timeout`, `lag`,
-`crash` (`node@time,…`) and `byz` (`node,…`).
+`crash` (`node@time,…`), `byz` (`node,…`) and `byz-until`.
 -/
 
 open LeanDagSim
@@ -42,6 +42,7 @@ def parseArgs : List String → Scenario → Except String Scenario
       | "--lag" => pure { sc with lag := ← nat }
       | "--crash" => pure { sc with crash := parseCrash v }
       | "--byz" => pure { sc with byz := parseNats v }
+      | "--byz-until" => pure { sc with byzUntil := ← nat }
       | _ => throw s!"unknown option {k}"
     parseArgs rest sc
   | [k], _ => .error s!"{k}: missing value"

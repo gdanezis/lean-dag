@@ -132,6 +132,8 @@ inductive Input where
   | baseOffer (peer : Validator) (G : ℕ) (blocks : List (BlockId × Block Validator BlockId Payload))
   /-- A peer asks for the base. -/
   | baseRequest (peer : Validator)
+  /-- A peer asks for the blocks `ids`. -/
+  | fetchRequest (peer : Validator) (ids : List BlockId)
 
 /-- **What a node produces.** -/
 inductive Output where
@@ -151,6 +153,10 @@ inductive Output where
   | requestBase
   /-- Send the base and window to a peer. -/
   | serveBase (peer : Validator) (G : ℕ) (blocks : List (BlockId × Block Validator BlockId Payload))
+  /-- Ask every peer for the blocks `ids`. -/
+  | fetch (ids : List BlockId)
+  /-- Send a block to one peer. -/
+  | send (peer : Validator) (id : BlockId) (b : Block Validator BlockId Payload)
 
 end Node
 

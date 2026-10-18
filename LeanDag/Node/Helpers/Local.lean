@@ -319,17 +319,22 @@ theorem Inv.step {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
     (i : Input Validator BlockId Payload) :
-    ∃ (bs : List (BlockId × Block Validator BlockId Payload)) (ds : List (ℕ × Option BlockId))
-      (gs : List ℕ), gs.length ≤ 1 ∧
-      (Node.step cfg s i).2 = built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune ∧
+    ∃ (xs : List (Output Validator BlockId Payload))
+      (bs : List (BlockId × Block Validator BlockId Payload)) (ds : List (ℕ × Option BlockId))
+      (gs : List ℕ), (∀ o ∈ xs, o.isFetch) ∧ gs.length ≤ 1 ∧
+      (Node.step cfg s i).2 =
+        xs ++ built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune ∧
       Inv cfg (Node.step cfg s i).1 (K ∪ {x | x ∈ delivered cfg [i]} ∪ {x | x ∈ bs}) (B ++ bs) := by
   have hnil : ∀ {K' : Set (BlockId × Block Validator BlockId Payload)}, K ⊆ K' →
-      ∃ (bs : List (BlockId × Block Validator BlockId Payload)) (ds : List (ℕ × Option BlockId))
-        (gs : List ℕ), gs.length ≤ 1 ∧
-        ([] : List (Output Validator BlockId Payload)) =
-          built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune ∧
+      ∀ (xs : List (Output Validator BlockId Payload)), (∀ o ∈ xs, o.isFetch) →
+      ∃ (xs' : List (Output Validator BlockId Payload))
+        (bs : List (BlockId × Block Validator BlockId Payload)) (ds : List (ℕ × Option BlockId))
+        (gs : List ℕ), (∀ o ∈ xs', o.isFetch) ∧ gs.length ≤ 1 ∧
+        xs = xs' ++ built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune ∧
         Inv cfg s (K' ∪ {x | x ∈ bs}) (B ++ bs) :=
-    fun hK => ⟨[], [], [], by simp, by simp [built], by simpa using hi.mono hK⟩
+    fun hK xs hxs => ⟨xs, [], [], [], hxs, by simp, by simp [built], by simpa using hi.mono hK⟩
+  have hnil' : ∀ {K' : Set (BlockId × Block Validator BlockId Payload)}, K ⊆ K' → _ :=
+    fun hK => hnil hK [] (by simp)
   have hsub : K ⊆ K ∪ {x | x ∈ delivered cfg [i]} := Set.subset_union_left
   cases i with
   | start =>
@@ -362,14 +367,14 @@ theorem Inv.step {s : State Validator BlockId Payload}
           · rw [hB.1, List.nil_append, List.mem_singleton] at hx
             subst hx; simp
         obtain ⟨bs, ds, gs, hgs, ho, hi'⟩ := hi₀.settle_of (K₀ := K) subset_rfl rfl
-        refine ⟨bs, ds, gs, hgs, ?_, hi'.mono ?_⟩
-        · rw [← ho]; simp [built, e, Config.genesis]; rfl
+        refine ⟨[], bs, ds, gs, by simp, hgs, ?_, hi'.mono ?_⟩
+        · rw [List.nil_append, ← ho]; simp [built, e, Config.genesis]; rfl
         · intro x hx
           rcases hx with hx | hx
           · exact Or.inl (Or.inl hx)
           · exact Or.inr hx
-      · exact hnil hsub
-    · exact hnil hsub
+      · exact hnil' hsub
+    · exact hnil' hsub
   | deliver id b =>
     simp only [Node.step]
     split
@@ -386,7 +391,8 @@ theorem Inv.step {s : State Validator BlockId Payload}
           · exact Set.subset_union_left (hi.pend x hx))
       dsimp only at hfl ⊢
       generalize flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending) = fl at hfl ⊢
-      have hi₀ : Inv cfg { s with store := fl.1, pending := fl.2 }
+      generalize missing { s with store := fl.1, pending := fl.2 } b = miss
+      have hi₀ : Inv cfg { s with store := fl.1, pending := fl.2, requested := s.requested ++ miss }
           (K ∪ {x | x ∈ [(id, b)]} ∪
             {x | x ∈ ([] : List (BlockId × Block Validator BlockId Payload))})
           (B ++ []) := by
@@ -397,8 +403,16 @@ theorem Inv.step {s : State Validator BlockId Payload}
         · intro x hx; exact (hi.good x (by simpa using hx)).mono (by intro y hy; simp [hy])
         · intro x hx; simp [hi.sub x (by simpa using hx)]
       obtain ⟨bs, ds, gs, hgs, ho, hi'⟩ := hi₀.settle_of (K₀ := K) (by intro x hx; simp [hx]) rfl
-      exact ⟨bs, ds, gs, hgs, by simpa [built] using ho, by simpa using hi'⟩
-    · exact hnil hsub
+      refine ⟨if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)], bs, ds, gs, ?_, hgs,
+        ?_, by simpa using hi'⟩
+      · intro o ho'
+        split at ho'
+        · simp at ho'
+        · rw [List.mem_singleton] at ho'; subst ho'; rfl
+      · simp only [List.append_assoc]
+        congr 1
+        simpa [built] using ho
+    · exact hnil' hsub
   | timer r =>
     simp only [Node.step]
     have h₀ := hi.mono hsub
@@ -409,11 +423,16 @@ theorem Inv.step {s : State Validator BlockId Payload}
         Inv cfg { s with fired := insert r s.fired } _ B)
     obtain ⟨bs, ds, gs, hgs, ho, hi'⟩ := hi₀.settle_of
       (K₀ := K ∪ {x | x ∈ delivered cfg [Input.timer r]}) subset_rfl rfl
-    exact ⟨bs, ds, gs, hgs, by simpa [built] using ho, by simpa using hi'⟩
-  | jump => exact hnil hsub
-  | restart => exact hnil hsub
-  | baseOffer => exact hnil hsub
-  | baseRequest => exact hnil hsub
+    exact ⟨[], bs, ds, gs, by simp, hgs, by simpa [built] using ho, by simpa using hi'⟩
+  | fetchRequest peer ids =>
+    simp only [Node.step]
+    refine hnil hsub _ fun o ho => ?_
+    obtain ⟨j, -, rfl⟩ := List.mem_map.mp ho
+    rfl
+  | jump => exact hnil' hsub
+  | restart => exact hnil' hsub
+  | baseOffer => exact hnil' hsub
+  | baseRequest => exact hnil' hsub
 
 omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
 theorem broadcasts_append (a b : List (Output Validator BlockId Payload)) :
@@ -437,6 +456,16 @@ theorem broadcasts_shape (bs : List (BlockId × Block Validator BlockId Payload)
     simp only [broadcasts, List.filterMap_cons] at ih ⊢
     simp [ih]
 
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem broadcasts_of_isFetch {xs : List (Output Validator BlockId Payload)}
+    (h : ∀ o ∈ xs, o.isFetch) : broadcasts xs = [] := by
+  induction xs with
+  | nil => rfl
+  | cons o xs ih =>
+    have ho := h o List.mem_cons_self
+    have := ih fun o' h' => h o' (List.mem_cons_of_mem _ h')
+    cases o <;> simp_all [broadcasts, Output.isFetch]
+
 omit [Fintype Validator] in
 theorem delivered_cons (i : Input Validator BlockId Payload)
     (is : List (Input Validator BlockId Payload)) :
@@ -454,10 +483,11 @@ theorem Inv.run : ∀ (is : List (Input Validator BlockId Payload))
       (B ++ broadcasts (Node.run cfg s is).2)
   | [], s, K, B, hi => by simpa [Node.run, delivered, broadcasts] using hi
   | i :: is, s, K, B, hi => by
-    obtain ⟨bs, ds, gs, -, ho, hi₁⟩ := hi.step i
+    obtain ⟨xs, bs, ds, gs, hxs, -, ho, hi₁⟩ := hi.step i
     have ih := Inv.run is hi₁
     simp only [Node.run]
-    rw [broadcasts_append, ho, broadcasts_shape]
+    rw [broadcasts_append, ho, List.append_assoc, List.append_assoc, broadcasts_append,
+      broadcasts_of_isFetch hxs, List.nil_append, ← List.append_assoc, broadcasts_shape]
     have hK : K ∪ {x | x ∈ delivered cfg [i]} ∪ {x | x ∈ bs} ∪
         {x | x ∈ delivered cfg is} ∪
           {x | x ∈ broadcasts (Node.run cfg (Node.step cfg s i).1 is).2} =

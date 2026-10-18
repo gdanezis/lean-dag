@@ -10,7 +10,8 @@ network with a seeded schedule: before GST a message takes up to
 fires when it expires. A crashed node acts on nothing from its crash
 time on. An equivocator is two copies of the honest program with the
 same identity and different payloads, each sending to half the nodes,
-so its twins are valid blocks. `simulate` runs the schedule and reports
+so its twins are valid blocks; it acts on nothing from `byzUntil` on. A node's request for blocks goes to every
+other node, and an answer to the node that asked. `simulate` runs the schedule and reports
 what each honest node reached and committed, whether their decisions
 agree, and whether every honest block is valid under the blocks
 broadcast.
@@ -57,6 +58,11 @@ structure Scenario where
   crash : List (ℕ × ℕ) := []
   /-- Equivocating nodes. -/
   byz : List ℕ := []
+  /-- The time from which equivocators act on nothing. A copy of the
+  honest program drops blocks that claim its identity, so neither copy of
+  an equivocator accepts blocks built on its twin; it stops building, and
+  its pending blocks grow. -/
+  byzUntil : ℕ := 200
   deriving Repr
 
 /-- A block's identifier: a hash of its content. -/
@@ -159,6 +165,24 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
           else acc
         | _, _ => acc) acc
     | .setTimer r after => ((t + after, src, .timer r) :: acc.1, acc.2)
+    | .fetch ids =>
+      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
+        match agents[src]?, agents[d]? with
+        | some s, some a =>
+          if a.node ≠ s.node then
+            let (dt, g') := delay sc t acc.2
+            ((t + dt, d, .fetchRequest s.node ids) :: acc.1, g')
+          else acc
+        | _, _ => acc) acc
+    | .send peer id b =>
+      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
+        match agents[d]? with
+        | some a =>
+          if a.node = peer then
+            let (dt, g') := delay sc t acc.2
+            ((t + dt, d, .deliver id b) :: acc.1, g')
+          else acc
+        | none => acc) acc
     | _ => acc) ([], g)
 
 /-- Process at most `fuel` inputs, in order of arrival, up to the horizon. -/
@@ -171,7 +195,8 @@ def loop : ℕ → World n → World n
       if t > sc.horizon then { w with time := t } else
       match w.agents[d]?, w.states[d]? with
       | some a, some st =>
-        if crashed sc a.node.val t then loop fuel { w with queue := rest, time := t } else
+        if crashed sc a.node.val t || (sc.byz.contains a.node.val && sc.byzUntil ≤ t) then
+          loop fuel { w with queue := rest, time := t } else
         let cfg := cfgFor sc p q hn a.node a.twin
         let r := step cfg st i
         let (msgs, g) := sends sc w.agents d t r.2 w.gen

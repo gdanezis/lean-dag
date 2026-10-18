@@ -6,8 +6,8 @@ import LeanDag.Node.Vote
 `docs/validator.md` §4, V1 and V2. Over any sequence of inputs from the
 initial state:
 
-* **each step's outputs**, from any state a run reaches, are its built
-  blocks, each persisted, then
+* **each step's outputs**, from any state a run reaches, are its
+  requests and answers, then its built blocks, each persisted, then
   broadcast, then its round's timer set, then its decisions, then at most
   one horizon (`Shape`);
 * **one block per round**: the node broadcasts at rounds `0, 1, 2, …`, in
@@ -27,16 +27,17 @@ namespace LeanDag
 
 namespace Node
 
-/-- **Each step's outputs**, from any state a run reaches: built blocks,
-then decisions, then at most one horizon. -/
+/-- **Each step's outputs**, from any state a run reaches: requests and
+answers, then built blocks, then decisions, then at most one horizon. -/
 def Shape : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
     (is : List (Input Validator BlockId Payload)) (i : Input Validator BlockId Payload),
-    ∃ (bs : List (BlockId × Block Validator BlockId Payload))
-      (ds : List (ℕ × Option BlockId)) (gs : List ℕ), gs.length ≤ 1 ∧
+    ∃ (xs : List (Output Validator BlockId Payload))
+      (bs : List (BlockId × Block Validator BlockId Payload))
+      (ds : List (ℕ × Option BlockId)) (gs : List ℕ), (∀ o ∈ xs, o.isFetch) ∧ gs.length ≤ 1 ∧
       (step cfg (run cfg (State.init cfg) is).1 i).2 =
-        built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune
+        xs ++ built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune
 
 /-- **One block per round**: the node broadcasts at rounds `0, 1, 2, …`,
 in order. -/

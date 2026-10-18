@@ -66,7 +66,8 @@ self-parent clause is what Safe Skip's fill reads (§3.5).
 * a restart, carrying the persisted state (§5.1);
 * a base offer from a peer: its round-`G` blocks and its window above
   them (§3.6);
-* a base request from a peer.
+* a base request from a peer;
+* a request from a peer for some blocks (§3.7).
 
 **Outputs.**
 
@@ -77,7 +78,9 @@ self-parent clause is what Safe Skip's fill reads (§3.5).
 * commit slot `k` with a decision `Option BlockId`;
 * prune below the horizon `G`;
 * request the base from the peers;
-* serve the base and window to a peer.
+* serve the base and window to a peer;
+* ask every peer for some blocks (§3.7);
+* send a block to one peer.
 
 Time is discrete (`ℕ`), as in `PaceCore`.
 
@@ -185,20 +188,22 @@ message if its own line has a gap. Peers serve their round-`G` blocks
 and their window on request; the obligation is bounded by the window's
 size (G7).
 
-### 3.7 Fetching missing blocks (open)
+### 3.7 Fetching missing blocks
 
 A node accepts a block only once it holds the block's references. When
 an equivocator sends one twin to some nodes and the other twin to the
-rest, a node that holds only one twin cannot complete the history of a
-block referencing the other, and stalls. The liveness structures assume
-the network makes every reliable node's holdings reach every reliable
-node (`converges`); a program must make that true by fetching what it
-lacks. The likely design: a node with a pending block asks its peers
-for the missing references (a new output, *fetch*), and a node asked
-answers with the blocks it holds (a new input and output); an honest
-referrer holds everything its block references, so the answer comes.
-This adds two inputs and two outputs to the interface and a clause to
-V1's shape.
+rest, a node holding only one twin cannot complete the history of a
+block referencing the other. The liveness structures assume that every
+reliable node's holdings reach every reliable node (`converges`); the
+program makes that true by fetching what it lacks. After a delivery, the
+references of the delivered block that are neither accepted, pending,
+nor asked for already are asked of every peer in one *fetch* output, and
+recorded with the round they were referenced from, so that garbage
+collection drops them with the rest (`missing`). A node asked for blocks
+*send*s the asker each one its store holds (`answer`). An honest referrer
+holds everything its block references, so the answer comes. Only the
+delivered block can add new missing references: every block pending
+before it had its own asked for when it arrived.
 
 ## 4. Conformance
 
@@ -297,11 +302,13 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
    Compiled, four nodes over 2,000 ticks (874 rounds) run in half a
    second. `lake exe node` runs one node over JSON lines.
 
-   **What it found.** With an equivocator, an honest node that receives
-   only one twin stalls: the others' blocks reference the twin it never
-   receives, and nothing fetches it. Safety holds; liveness rests on
-   `converges`, which the network was assumed to provide, and the
-   program does nothing to provide it (§3.7).
+   **What it found.** With an equivocator, an honest node that received
+   only one twin stalled: the others' blocks referenced the twin it never
+   received, and nothing fetched it. Fetching (§3.7) removed the stall.
+   An equivocator here is two copies of the honest program, and a copy
+   drops blocks that claim its identity, so neither copy accepts blocks
+   built on its twin: it stops building and its pending blocks grow.
+   From *byzUntil* on it therefore acts on nothing.
 4. **Optionally**, replaying records through the Rust decider of the
    Mysticeti codebase, where the scheme's table comes from.
 

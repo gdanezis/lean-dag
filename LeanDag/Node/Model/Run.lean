@@ -6,7 +6,8 @@ import LeanDag.Node.Model.Step
 outputs. `broadcasts` reads the blocks among the outputs, and
 `delivered` the blocks among the inputs whose identifier is their hash:
 together, what the node knew. `built` is the shape of the outputs that
-build blocks: persist, broadcast, then the round's timer.
+build blocks: persist, broadcast, then the round's timer; `isFetch`
+marks the requests and answers that move blocks without building one.
 
 Definitions only; the claims are `Node/Local/Statement.lean`.
 -/
@@ -44,6 +45,13 @@ def broadcasts (out : List (Output Validator BlockId Payload)) :
   out.filterMap fun
     | .broadcast id b => some (id, b)
     | _ => none
+
+/-- **An output that moves blocks between nodes without building one**:
+a request or an answer. -/
+def Output.isFetch : Output Validator BlockId Payload → Bool
+  | .fetch _ => true
+  | .send _ _ _ => true
+  | _ => false
 
 variable (cfg) in
 /-- **The outputs that build some blocks**: for each, persist, broadcast,

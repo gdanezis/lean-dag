@@ -8,11 +8,13 @@ One honest node, speaking JSON lines. The first line configures it:
 Each further line is an input, and the node answers with one line per
 output:
 
-* inputs: `{"start":{}}`, `{"timer":r}`, and
-  `{"deliver":{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}}`;
+* inputs: `{"start":{}}`, `{"timer":r}`,
+  `{"deliver":{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}}`, and
+  `{"fetchRequest":{"peer":v,"ids":[…]}}`;
 * outputs: `{"persist":block}`, `{"broadcast":block}`,
   `{"setTimer":{"round":r,"after":t}}`, `{"commit":{"slot":k,"block":i}}`
-  (`null` for a skip), `{"prune":G}`.
+  (`null` for a skip), `{"prune":G}`, `{"fetch":[…]}` (ask every peer),
+  and `{"send":{"peer":v,"block":block}}` (answer one).
 
 A delivered block's identifier, if given, must be its hash
 (`LeanDagSim.idOf`), and the node drops one that is not; if it is left
@@ -40,12 +42,20 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
   | .commit k d => Json.mkObj [("commit", Json.mkObj [("slot", k),
       ("block", match d with | some i => (i : Json) | none => Json.null)])]
   | .prune G => Json.mkObj [("prune", G)]
+  | .fetch ids => Json.mkObj [("fetch", Json.arr (ids.map fun i => (i : Json)).toArray)]
+  | .send peer id b => Json.mkObj [("send", Json.mkObj [("peer", peer.val),
+      ("block", blockJson id b)])]
   | _ => Json.mkObj [("unsupported", Json.null)]
 
 /-- An input, from JSON. -/
 def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ ℕ) := do
   if (j.getObjVal? "start").isOk then return .start
   if let .ok r := natField j "timer" then return .timer r
+  if let .ok f := j.getObjVal? "fetchRequest" then
+    let peer ← natField f "peer"
+    let ids ← ((← f.getObjVal? "ids").getArr?) >>= fun a => a.toList.mapM Json.getNat?
+    if h : peer < n then return .fetchRequest ⟨peer, h⟩ ids
+    else throw s!"peer {peer} out of range"
   let d ← j.getObjVal? "deliver"
   let round ← natField d "round"
   let creator ← natField d "creator"
