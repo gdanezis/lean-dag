@@ -138,6 +138,54 @@ theorem historyUptoFrom_succ (n : ℕ) (b : BlockId) :
     historyUptoFrom blk (n + 1) b =
       insert b ((blk b).refs.biUnion (historyUptoFrom blk n)) := rfl
 
+/-! ### Computing the cone by levels
+
+The recursion above calls itself once per path from `b`, exponential in
+the fuel. `historyLevels` computes the same set a level at a time, the
+blocks `i` steps below being the references of those `i − 1` steps
+below; `@[csimp]` makes compiled code run it wherever `historyUptoFrom`
+appears. -/
+
+/-- The union of `acc` with the levels `0 … n` below the set `front`. -/
+def levelsFrom (blk : BlockId → Block Validator BlockId Payload) :
+    ℕ → Finset BlockId → Finset BlockId → Finset BlockId
+  | 0, front, acc => acc ∪ front
+  | n + 1, front, acc => levelsFrom blk n (front.biUnion fun x => (blk x).refs) (acc ∪ front)
+
+/-- **Everything reachable from `b` in at most `n` steps**, by levels. -/
+def historyLevels (blk : BlockId → Block Validator BlockId Payload) (n : ℕ) (b : BlockId) :
+    Finset BlockId :=
+  levelsFrom blk n {b} ∅
+
+/-- The levels below `front`, added to `acc`, are the fuelled cones of `front`. -/
+theorem levelsFrom_eq (n : ℕ) (front acc : Finset BlockId) :
+    levelsFrom blk n front acc = acc ∪ front.biUnion (historyUptoFrom blk n) := by
+  induction n generalizing front acc with
+  | zero =>
+    have : front.biUnion (historyUptoFrom blk 0) = front := by
+      ext i; simp [historyUptoFrom_zero]
+    rw [levelsFrom, this]
+  | succ n ih =>
+    rw [levelsFrom, ih, Finset.biUnion_biUnion]
+    ext i
+    simp only [Finset.mem_union, Finset.mem_biUnion, historyUptoFrom_succ, Finset.mem_insert]
+    constructor
+    · rintro ((h | h) | ⟨x, hx, j, hj, hij⟩)
+      · exact Or.inl h
+      · exact Or.inr ⟨i, h, Or.inl rfl⟩
+      · exact Or.inr ⟨x, hx, Or.inr ⟨j, hj, hij⟩⟩
+    · rintro (h | ⟨x, hx, rfl | ⟨j, hj, hij⟩⟩)
+      · exact Or.inl (Or.inl h)
+      · exact Or.inl (Or.inr hx)
+      · exact Or.inr ⟨x, hx, j, hj, hij⟩
+
+/-- **The two computations agree.** -/
+@[csimp]
+theorem historyUptoFrom_eq_levels : @historyUptoFrom = @historyLevels := by
+  funext Validator BlockId Payload _ blk n b
+  rw [historyLevels, levelsFrom_eq]
+  simp
+
 theorem mem_historyUptoFrom_succ {n : ℕ} {b i : BlockId} :
     i ∈ historyUptoFrom blk (n + 1) b ↔
       i = b ∨ ∃ j ∈ (blk b).refs, i ∈ historyUptoFrom blk n j := by

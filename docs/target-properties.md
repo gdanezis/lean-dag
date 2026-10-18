@@ -5255,6 +5255,17 @@ of the double count that keeps the count of lightly related members
 Async Blue Bottle's weaker `card_mul_le_of_bipartite` and Steelhead's
 `decided_of_agreeOn` are left as they are.
 
+### 11.52 Causal history computed by levels
+
+`historyUptoFrom` recurses into every reference with no sharing, so
+evaluating it costs one call per path, exponential in the fuel; the
+honest node of `docs/validator.md` could not run past five rounds.
+`Common/Causality.lean` now defines `historyLevels`, which computes the
+same set a level at a time, proves the two equal at every block map
+(`levelsFrom_eq`, `historyUptoFrom_eq_levels`), and marks the equation
+`@[csimp]`, so compiled code everywhere downstream runs the level-wise
+form. No definition and no statement changes; only evaluation does.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

@@ -1,4 +1,5 @@
 import LeanDag.Node.Model.Step
+import LeanDag.Node.Vote
 import Mathlib.Data.Finset.Sort
 /-!
 # Four honest nodes at the Mysticeti row
@@ -33,7 +34,7 @@ def cfg (me : Fin 4) : Config (Fin 4) ℕ Unit where
   elect := fun k => ⟨k % 4, Nat.mod_lt _ (by omega)⟩
   elect_block := Slots.one_hblock _
   timeout := fun _ => 10
-  σ := Scheme.leastSel
+  σ := boundedSel
   idOf := idOf
   lag := 2
   budget := 100
@@ -42,7 +43,7 @@ def cfg (me : Fin 4) : Config (Fin 4) ℕ Unit where
 /-- A network of four nodes: their states, the inputs in flight with the
 time each arrives, ordered by it, and the commits each node output. -/
 structure Net where
-  states : Fin 4 → State (Fin 4) ℕ Unit
+  states : Fin 4 → State (Fin 4) ℕ Unit 3
   queue : List (ℕ × Fin 4 × Input (Fin 4) ℕ Unit)
   commits : Fin 4 → List (ℕ × Option ℕ)
 

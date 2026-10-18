@@ -568,3 +568,4 @@ import LeanDag.Scheme.AsyncLocal.Proof
 import LeanDag.Node.Model.Interface
 import LeanDag.Node.Model.Store
 import LeanDag.Node.Model.Step
+import LeanDag.Node.Vote

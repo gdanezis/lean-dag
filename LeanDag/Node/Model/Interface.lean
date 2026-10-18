@@ -9,9 +9,8 @@ the identifier map and the mechanisms' constants; `Input` and `Output`
 are the events it consumes and produces, with those of garbage
 collection, Safe Skip and bootstrap included.
 
-The node decides on a record of its own store, which checks no validity
-and constrains no author (`anyValid`, the honest set `∅`): it checks
-validity itself, on receipt, against `rowValid q`.
+The node decides on a record of its own store, at the row's validity
+`rowValid q`, which it checks on receipt, and the honest set `∅`.
 
 Definitions only.
 -/
@@ -20,13 +19,7 @@ namespace LeanDag
 
 namespace Node
 
-variable (Validator BlockId Payload : Type)
-
-/-- The validity a store's record carries: none, since the node checks
-validity on receipt. -/
-def anyValid : Validity Validator BlockId Payload := fun _ _ => True
-
-variable {Validator BlockId Payload} [DecidableEq Validator]
+variable {Validator BlockId Payload : Type} [DecidableEq Validator]
 
 /-- **The node's validity**: references one round below from `q`
 distinct authors, no author twice, and the author's own previous block. -/
@@ -61,7 +54,7 @@ structure Config where
   /-- The timeout of round `r`. -/
   timeout : ℕ → ℕ
   /-- The vote rule. -/
-  σ : Scheme.VoteSel Validator BlockId Payload (anyValid Validator BlockId Payload) ∅
+  σ : Scheme.VoteSel Validator BlockId Payload (rowValid q) ∅
   /-- The identifier of a block: the environment's hash. -/
   idOf : Block Validator BlockId Payload → BlockId
   /-- The horizon's lag `Λ`. -/

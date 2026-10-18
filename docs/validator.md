@@ -353,12 +353,18 @@ before step 11 rather than found during it.
 
 ## 10. Tooling
 
-* The model's functions run under `#eval`: `tryDecide` at the Mahi-Mahi
-  row on the six-round, four-validator `full4` evaluates at once. The
-  reference program is exponential in the depth of the record, since
-  `historyUptoFrom` recurses without sharing: four nodes over 60 inputs
-  (five rounds) run in two seconds, over 150 inputs not in ten minutes.
-  It serves the build's tests; simulations wait for step 10.
+* The model's functions run under `#eval`. Two changes make them fast
+  enough to run the node. `historyUptoFrom` is computed a level at a
+  time (`historyLevels`, proved equal and marked `@[csimp]` in
+  `Common/Causality.lean`, `docs/target-properties.md` §11.52), which
+  removes the exponential cost. The vote rule is `boundedSel`, the least
+  vote searched only as deep as the slot, a `VoteSel` that selects what
+  `leastSel` selects at every block of a record (`boundedSel_sel_eq`);
+  for that the store's record carries the row's validity. Four nodes
+  over 800 inputs (52 rounds) now run in ten seconds, about 12 ms an
+  input; without the two changes 60 inputs was the limit. What remains
+  grows with the store (`Finset` operations are list-based, and the
+  block map is a chain of updates), which garbage collection bounds.
 * `scripts/check-arc-holes.py` forbids `partial` and `unsafe` in the
   arcs it lists. The directory `LeanDag/Node` is added to its list,
   and the executables' input loops, outside the library, run on fuel.
