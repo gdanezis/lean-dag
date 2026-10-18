@@ -40,10 +40,23 @@ JSON lines, and a simulator running `n` instances over a seeded network.
 identity, the schedule `Slots`, the timeout per round, the vote rule
 (`leastSel` first, `votedBlock` with the stored reference order
 second), the hash *idOf*, the horizon lag `Λ`, the novelty budget `τ`,
-and the payload source.
+and the payload source. At start the program checks that the row is
+covered and live at the configured `n`, `f`, `c` and `q`
+(`Params.Covered`, `Params.CertFits`, `Params.Live`, all decidable) and
+refuses a configuration that is not.
+
+**Validity.** Every row uses `ValidAt q (Clause.distinct.and
+Clause.selfParent)`: references one round below from `q` distinct
+authors, no author twice, and a reference to the author's own previous
+block. It is decidable (`ValidAt.decidable`) and mechanised
+(`ValidAt.mechanised`), and quorate and distinct by
+`Validity.Quorate.of_validAt` and `Validity.Distinct.of_validAt`. The
+self-parent clause is what Safe Skip's fill reads (§3.5).
 
 **Inputs.**
 
+* a start, with no persisted state: the program builds its genesis
+  block;
 * a delivered block: identifier, round, author, ordered references,
   payload;
 * a delivered jump message (`JumpMsg`);
@@ -70,7 +83,9 @@ Time is discrete (`ℕ`), as in `PaceCore`.
 
 ### 3.1 The store
 
-A received block passes through three stages.
+A received block whose identifier is not *idOf* of its content is
+dropped, so that an identifier denotes one block. Otherwise it passes
+through three stages.
 
 1. **Pending**: some parent is missing. The block waits.
 2. **Held**: its parents are held and it satisfies the row's validity
@@ -83,6 +98,10 @@ The accepted set is closed under references, so it is a
 `BlockRecord.View`; this is the view the decider reads. Byzantine
 twins are accepted, since their votes count. Blocks below the horizon
 `G` are dropped, and round-`G` blocks are read without references.
+
+The physical store shrinks when the program prunes; the holdings the
+proofs read (`PaceCore.holds`) are the logical ones, every block
+accepted so far, which only grow. V4 relates the two.
 
 ### 3.2 The builder
 
@@ -101,8 +120,9 @@ hypotheses hold by construction.
 The new block references one accepted block per round-`r` author,
 including the validator's own previous block, choosing the least
 identifier between twins. The program builds rounds in sequence and
-never skips one. It persists the block, then broadcasts it, then sets
-the timer for round `r + 1`.
+never skips one. It persists the block and the accepted blocks of the
+window it references, then broadcasts it, then sets the timer for round
+`r + 1`.
 
 ### 3.3 The decider
 
@@ -147,7 +167,7 @@ size (G7).
 | | Claim | Route |
 |---|---|---|
 | V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | induction over *step* |
-| V2 | The commit outputs are `consumed` over the successive views. | unfolding; `Restart` |
+| V2 | The commit outputs are `consumed` over the successive views. | unfolding; `Restart`; the transfer below |
 | V3 | In a run of honest programs and arbitrary Byzantine blocks, the blocks accepted by honest validators form a `BlockRecord` whose honest set is the program-run validators. Under `Params.Tolerates`, any two honest validators' commit sequences are prefix-comparable. | V1, V2, `Scheme.safety` |
 | V4 | The pruned store is `View.chop` of the full-history view, and decisions across the horizon equal the full-history ones, at any two horizons. | `decided_chop_iff`, `chop_chop` |
 | V5 | A restart from the persisted state is a prune at an admissible horizon. | V4 |
@@ -157,6 +177,25 @@ size (G7).
 | V9 | A bootstrapped validator's view is a view of the record cut at its horizon, so its decisions agree with every other validator's at the slots both hold; the fetch is bounded. | lifted G10–G12 (§8), V4 |
 | V10 | Under the novelty budget, every honest block is eventually accepted, and an honest validator's store, with garbage collection, has a size independent of the runtime. | lifted C3 and B4 (§8), `card_retained_le` |
 | V11 | A timed run past GST, with timeouts of at least `2Δ + proc`, gives a `SchemeReactive` and the delivery obligation `DeliversOn`; the mechanisms compose (`Stack.safe_and_live`), and every slot commits. | field by field from the run, V10 |
+
+**The transfer.** The program decides on its own store, a record of its
+own; the run's claims are about a view of the run's record. The decider
+reads a view and the block map on it alone, so the two give the same
+decisions when the store's identifiers are the view's and its block map
+agrees on them. This is a lemma about `tryDecide` and the vote rule (for
+`leastSel` and `votedBlockSel`, which read only histories), proved in
+step 2; `View.toRecord` is the record a view gives.
+
+**Runs.** A run is a sequence of timestamped events over a global state:
+the honest validators' states, the messages in flight, and the
+adversary's blocks. An honest validator changes state only by *step*; a
+Byzantine one injects any block, valid or not, since the program checks
+validity itself; a crash discards a validator's state but its persisted
+part. The reliable set `T` of a liveness claim is the honest validators
+that do not crash over the claim's window. FinWhale's `Run` collects an
+execution as an assumed structure; here the run is generated by the
+program, and the structures the theorems read (`BlockRecord`, `PaceCore`,
+`Delivery`) are built from it.
 
 Two hypotheses belong to the environment, not the program: the hash is
 injective on the blocks of a run, and the network meets the delivery
@@ -222,11 +261,11 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 |---|---|
 | 0 | This document; the interface types, all mechanisms' inputs and outputs included |
 | 1 | Reference program without mechanisms: *step* over a `Finset` store calling the model's functions; `#guard` tests |
-| 2 | V1 and V2 |
+| 2 | V1 and V2, with the transfer; the timing check (§9) |
 | 3 | Simulator and JSON executable |
 | 4 | V3 |
 | 5 | Garbage collection, persistence and restart: V4, V5 |
-| 6 | Safe Skip: V6 |
+| 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 |
 | 7 | Lift the bootstrap results to block records (§8, L1); bootstrap in the program: V9 |
 | 8 | Lift the rate-limiting results to block records (§8, L2) |
 | 9 | Rate limiting in the program: V7, V10 |
@@ -242,6 +281,15 @@ shared layer and are recorded among the shared-layer steps of
 `docs/target-properties.md`.
 
 ## 8. Lifting to block records
+
+One small result is missing at the program's validity:
+
+* **L0, the fill**: the self-referencing fill block, the donor's
+  references plus one self reference, is valid under `ValidAt q
+  (Clause.distinct.and Clause.selfParent)`. `Record/Fill.lean` proves
+  the copy fill for predicates that do not read the author, and
+  `SafeSkip/Basic.lean` the self-referencing fill at the core's validity
+  only.
 
 Two groups of results the program needs are stated on the core's
 universe, at `n = 3f + 1` and quorum `quorumCard`, and so hold at the
@@ -265,3 +313,39 @@ Byzantine ones. Crash-prone validators are honest (they do not
 equivocate), so the attestation threshold stays `f + 1`; what changes is
 that a crashed validator neither presents nor serves, which the lifted
 statements take as the reliable set `T` rather than the honest set.
+
+## 9. The timing check
+
+The liveness structures were written as hypotheses, and their witnesses
+are hand-built records, not runs of a program. Two clauses are not met
+by every run of an implementable program:
+
+* `ReactiveCore.deadline` asks that a reliable validator build round
+  `n + 1` within `timeout n` of round `n`, at every round. A validator
+  that holds fewer than `q` authors of round `n` when its timer fires
+  cannot build; before GST it may wait longer than the timeout.
+* `PaceCore.catchup` asks that a validator holding a reliable block of
+  round `n` after GST build there within `proc`, while `reach_or_wait`
+  asks it to wait the full timeout at a round where its block would not
+  reach the leader block. A lagging validator that holds a later block
+  but not the leader block of an earlier round meets one of the two only.
+
+Step 2 states the program's timing as properties of one validator's
+trace and compares them clause by clause with `ReactiveCore`,
+`PaceCore` and `SchemeReactive`. Where a clause is not met, the likely
+repair is to assert it from a round past GST, as `converges` and
+`catchup` already are, and to check that the reactive liveness proof
+reads it only there. That is a change to the shared layer, decided
+before step 11 rather than found during it.
+
+## 10. Tooling
+
+* The model's functions run under `#eval`: `tryDecide` at the Mahi-Mahi
+  row on the six-round, four-validator `full4` evaluates at once. The
+  reference program is fast enough for the build's tests and small
+  simulations; larger simulations wait for step 10.
+* `scripts/check-arc-holes.py` forbids `partial` and `unsafe` in the
+  arcs it lists. The directory `LeanDag/Validator` is added to its list,
+  and the executables' input loops, outside the library, run on fuel.
+* The executables are `[[lean_exe]]` targets of `lakefile.toml`, not
+  default targets, so `lake build` and the audits are unchanged.
