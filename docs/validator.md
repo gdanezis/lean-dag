@@ -44,7 +44,7 @@ identity, the schedule `Slots`, the timeout per round, the vote rule
 second), the hash *idOf*, the horizon lag `Λ`, the novelty budget `τ`,
 and the payload source. At start the program checks that the row is
 covered and live at the configured `n`, `f`, `c` and `q`
-(`Params.Covered`, `Params.CertFits`, `Params.Live`, all decidable) and
+(`Params.Covered` and `Params.CertFits`, with the commit threshold within `n − f − c`, all decidable) and
 refuses a configuration that is not.
 
 **Validity.** Every row uses `ValidAt q (Clause.distinct.and
@@ -185,6 +185,21 @@ message if its own line has a gap. Peers serve their round-`G` blocks
 and their window on request; the obligation is bounded by the window's
 size (G7).
 
+### 3.7 Fetching missing blocks (open)
+
+A node accepts a block only once it holds the block's references. When
+an equivocator sends one twin to some nodes and the other twin to the
+rest, a node that holds only one twin cannot complete the history of a
+block referencing the other, and stalls. The liveness structures assume
+the network makes every reliable node's holdings reach every reliable
+node (`converges`); a program must make that true by fetching what it
+lacks. The likely design: a node with a pending block asks its peers
+for the missing references (a new output, *fetch*), and a node asked
+answers with the blocks it holds (a new input and output); an honest
+referrer holds everything its block references, so the answer comes.
+This adds two inputs and two outputs to the interface and a clause to
+V1's shape.
+
 ## 4. Conformance
 
 | | Claim | Route |
@@ -270,11 +285,23 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
    hand-built records match those the scheme's tests record.
 2. **Differential tests.** The efficient program against the reference
    program on random records of a few rounds.
-3. **The simulator.** `n` programs over a seeded network that reorders
-   and delays messages, with crashes, restarts and scripted Byzantine
-   equivocators, over all six rows. It checks validity, prefix-comparable
-   ledgers and commits after GST at run time; small scenarios also run as
-   `#guard` checks in the build.
+3. **The simulator** (`LeanDagSim/Net.lean`, `lake exe sim`). `n`
+   programs over a seeded network: before GST a message takes up to
+   *preMax* ticks, after it between *delayMin* and *delayMax*; crashes
+   at given times; and equivocators, each two copies of the program
+   with one identity and different payloads, each copy sending to half
+   the nodes. It reports the rounds reached, the slots decided and
+   skipped, whether the honest decisions are prefix-comparable, and
+   whether every honest block is valid under the blocks broadcast. One
+   scenario per row runs in the build (`LeanDagTest/Node/Sim.lean`).
+   Compiled, four nodes over 2,000 ticks (874 rounds) run in half a
+   second. `lake exe node` runs one node over JSON lines.
+
+   **What it found.** With an equivocator, an honest node that receives
+   only one twin stalls: the others' blocks reference the twin it never
+   receives, and nothing fetches it. Safety holds; liveness rests on
+   `converges`, which the network was assumed to provide, and the
+   program does nothing to provide it (§3.7).
 4. **Optionally**, replaying records through the Rust decider of the
    Mysticeti codebase, where the scheme's table comes from.
 
@@ -285,7 +312,7 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 | 0 | This document; the interface types, all mechanisms' inputs and outputs included (built) |
 | 1 | Reference program without mechanisms: *step* over a `Finset` store calling the model's functions; `#guard_msgs` tests (built) |
 | 2 | V1 and V2, with the transfer; the timing check (§9) (built) |
-| 3 | Simulator and JSON executable |
+| 3 | Simulator and JSON executable (built) |
 | 4 | V3 |
 | 5 | Garbage collection (pruning built), persistence and restart: V4, V5 |
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 |

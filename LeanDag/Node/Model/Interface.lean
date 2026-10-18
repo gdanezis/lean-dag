@@ -85,14 +85,17 @@ def slotsAt (r : ℕ) : List ℕ :=
   if r % cfg.per = 0 then (List.range cfg.m).map (fun i => cfg.m * (r / cfg.per) + i) else []
 
 /-- **An admissible configuration**: the row is covered at the
-committee's size, the bound `f` and the quorum `q`, its certificates fit,
-and its thresholds are reachable by the non-faulty validators. -/
+committee's size, the bound `f` and the quorum `q`, its certificates fit
+the quorum, and its commit threshold is reachable by the validators
+neither Byzantine nor crash-prone, which is what liveness reads; a row
+whose skip threshold is unreachable skips by the indirect rule. -/
 def Admissible : Prop :=
   cfg.p.Covered (Fintype.card Validator) cfg.f cfg.q ∧ cfg.p.CertFits cfg.q ∧
-    cfg.p.Live (Fintype.card Validator) cfg.f cfg.c ∧ 0 < cfg.q ∧ cfg.q ≤ Fintype.card Validator
+    cfg.p.commitThreshold ≤ Fintype.card Validator - cfg.f - cfg.c ∧ 0 < cfg.q ∧
+    cfg.q ≤ Fintype.card Validator
 
 instance : Decidable cfg.Admissible := by
-  unfold Admissible Scheme.Params.Covered Scheme.Params.CertFits Scheme.Params.Live
+  unfold Admissible Scheme.Params.Covered Scheme.Params.CertFits
     Scheme.Params.TwoRound Scheme.Params.ThreeRound Scheme.Params.TwoRoundCrash
     Scheme.Params.ThreeRoundCrash
   infer_instance
