@@ -2,11 +2,12 @@ import LeanDag.Node.Helpers.Steps
 /-!
 # The node's own top and its horizon
 
-Along a run the node holds its own block at its top round, and its
-horizon stays at or below its top and the round of its next undecided
-slot (`Held`): building adds the block of the new top, deciding moves the
-next slot up, and collecting raises the horizon to at most the lesser of
-that round and the top. Across a step the store keeps what lies at or
+Along a run the node's store holds a block at or above its top round, and
+its horizon stays at or below its top and the round of its next undecided
+slot (`Held`): building adds the block of the new top, resuming moves the
+top to a round the store holds, bootstrapping to the round of the base it
+takes, deciding moves the next slot up, and collecting raises the horizon
+to at most the lesser of that round and the top. Across a step the store keeps what lies at or
 above the new horizon, and its top round does not fall (`Keeps`).
 -/
 
@@ -21,16 +22,14 @@ variable {cfg : Config Validator BlockId Payload}
 variable (cfg) in
 /-- **The node holds its top and keeps its horizon low.** -/
 structure Held (s : State Validator BlockId Payload) : Prop where
-  /-- Its block at its top round is in its store. -/
-  own : ∀ t, s.top = some t → ∃ o, s.own = some o ∧ o ∈ s.store.ids ∧ (s.store.blk o).round = t
+  /-- A stored block lies at or above its top round. -/
+  top : ∀ t, s.top = some t → ∃ o ∈ s.store.ids, t ≤ (s.store.blk o).round
   /-- The horizon lies at or below the next undecided slot's round. -/
   horizon : s.store.base ≤ cfg.per * (s.lo / cfg.m)
   /-- Before the node starts, the horizon is `0`. -/
   low : s.top = none → s.store.base = 0
   /-- After, it lies at or below the top. -/
   le_top : ∀ t, s.top = some t → s.store.base ≤ t
-  /-- Before the node starts, it has no block of its own. -/
-  own_none : s.top = none → s.own = none
   /-- An identifier outside the store denotes the genesis block. -/
   junk : s.store.junk = cfg.genesis
 
@@ -95,16 +94,15 @@ theorem Keeps.prune (st : Store Validator BlockId Payload) {G : ℕ} (hG : st.ba
 omit [Fintype Validator] in
 theorem Held.grow {s s' : State Validator BlockId Payload} (h : Held cfg s)
     (hg : Grows s.store s'.store) (hb : s'.store.base = s.store.base) (htop : s'.top = s.top)
-    (hown : s'.own = s.own) (hlo : s.lo ≤ s'.lo) : Held cfg s' where
-  own t ht := by
-    obtain ⟨o, ho, hoi, hor⟩ := h.own t (htop.symm.trans ht)
-    exact ⟨o, hown.trans ho, (hg.2 hb).1 hoi, by rw [hg.blk hb hoi]; exact hor⟩
+    (hlo : s.lo ≤ s'.lo) : Held cfg s' where
+  top t ht := by
+    obtain ⟨o, hoi, hor⟩ := h.top t (htop.symm.trans ht)
+    exact ⟨o, (hg.2 hb).1 hoi, by rw [hg.blk hb hoi]; exact hor⟩
   horizon := by
     rw [hb]
     exact h.horizon.trans (Nat.mul_le_mul_left _ (Nat.div_le_div_right hlo))
   low ht := by rw [hb]; exact h.low (htop.symm.trans ht)
   le_top t ht := by rw [hb]; exact h.le_top t (htop.symm.trans ht)
-  own_none ht := hown.trans (h.own_none (htop.symm.trans ht))
   junk := ((hg.2 hb).2.1).trans h.junk
 
 omit [Fintype Validator] in
@@ -113,17 +111,17 @@ theorem Held.tryBuild {s s' : State Validator BlockId Payload}
     (hb : Node.tryBuild cfg s = some (s', out)) : Held cfg s' := by
   unfold Node.tryBuild at hb
   split at hb
-  · rename_i r o hr ho
+  · rename_i r hr
     dsimp only at hb
     split at hb
     · split at hb
       · rw [Option.some.injEq, Prod.mk.injEq] at hb
         obtain ⟨rfl, rfl⟩ := hb
-        refine ⟨fun t ht => ⟨_, rfl, Finset.mem_insert_self _ _, ?_⟩, h.horizon,
-          fun ht => absurd ht (by simp), fun t ht => ?_, fun ht => absurd ht (by simp), h.junk⟩
+        refine ⟨fun t ht => ⟨_, Finset.mem_insert_self _ _, ?_⟩, h.horizon,
+          fun ht => absurd ht (by simp), fun t ht => ?_, h.junk⟩
         · simp only [Option.some.injEq] at ht
           simp only [Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self, atBase_round]
-          exact ht
+          exact ht.ge
         · simp only [Option.some.injEq] at ht
           have := h.le_top r hr
           change s.store.base ≤ t
@@ -155,16 +153,16 @@ theorem decideStep_lo (s : State Validator BlockId Payload) :
 
 omit [Fintype Validator] in
 theorem decideStep_top (s : State Validator BlockId Payload) :
-    (Node.decideStep cfg s).1.top = s.top ∧ (Node.decideStep cfg s).1.own = s.own := by
+    (Node.decideStep cfg s).1.top = s.top := by
   unfold Node.decideStep
   dsimp only
-  split <;> exact ⟨rfl, rfl⟩
+  split <;> rfl
 
 omit [Fintype Validator] in
 theorem Held.decideStep {s : State Validator BlockId Payload} (h : Held cfg s) :
     Held cfg (Node.decideStep cfg s).1 :=
   h.grow (by rw [decideStep_store]; exact Grows.refl _) (by rw [decideStep_store])
-    (decideStep_top s).1 (decideStep_top s).2 (decideStep_lo s)
+    (decideStep_top s) (decideStep_lo s)
 
 omit [Fintype Validator] in
 /-- **Collecting keeps the store, and the node its top and its horizon.** -/
@@ -176,16 +174,15 @@ theorem Held.collect {s : State Validator BlockId Payload} (h : Held cfg s) :
     dsimp only
     split
     · rename_i hG
-      obtain ⟨o, ho, hoi, hor⟩ := h.own t ht
+      obtain ⟨o, hoi, hor⟩ := h.top t ht
       have hoG : min (cfg.per * (s.lo / cfg.m)) t - cfg.lag ≤ (s.store.blk o).round := by
-        rw [hor]; omega
+        omega
       refine ⟨⟨fun t' ht' => ?_, ?_, fun ht' => absurd (ht.symm.trans ht') (by simp),
-        fun t' ht' => ?_, fun ht' => absurd (ht.symm.trans ht') (by simp), h.junk⟩,
-        Keeps.prune s.store hG.le hoi hoG⟩
+        fun t' ht' => ?_, h.junk⟩, Keeps.prune s.store hG.le hoi hoG⟩
       · rw [ht, Option.some.injEq] at ht'
         subst ht'
-        exact ⟨o, ho, (mem_prune_ids (hG := hG.le)).mpr ⟨hoi, hoG⟩,
-          by rw [prune_blk_round _ _ hoG, hor]⟩
+        exact ⟨o, (mem_prune_ids (hG := hG.le)).mpr ⟨hoi, hoG⟩,
+          by rw [prune_blk_round _ _ hoG]; exact hor⟩
       · change min (cfg.per * (s.lo / cfg.m)) t - cfg.lag ≤ cfg.per * (s.lo / cfg.m)
         omega
       · rw [ht, Option.some.injEq] at ht'
@@ -200,7 +197,7 @@ theorem Held.store {s : State Validator BlockId Payload} (h : Held cfg s)
     {st : Store Validator BlockId Payload} (pend : List (BlockId × Block Validator BlockId Payload))
     (hg : Grows s.store st) (hb : st.base = s.store.base) :
     Held cfg { s with store := st, pending := pend } :=
-  h.grow hg hb rfl rfl le_rfl
+  h.grow hg hb rfl le_rfl
 
 omit [Fintype Validator] in
 theorem Held.advance {s : State Validator BlockId Payload} (h : Held cfg s) :
@@ -209,37 +206,31 @@ theorem Held.advance {s : State Validator BlockId Payload} (h : Held cfg s) :
   exact (Held.collect h₁).1.store _ (Grows.flush _ _ _) (flush_base _ _ _)
 
 omit [Fintype Validator] in
-/-- **A jump keeps the store and the horizon**, its last filled block the
-node's top. -/
-theorem Held.tryJump {s s' : State Validator BlockId Payload}
-    {out : List (Output Validator BlockId Payload)} (h : Held cfg s)
-    (hj : Node.tryJump cfg s = some (s', out)) : Held cfg s' := by
-  obtain ⟨r0, B1, B2, F, e, htop, -, -, hF, hst, he, htop', hown', -, hlo, -, -, -, -, hr0, -⟩ :=
-    tryJump_some hj
-  obtain ⟨-, -, -, -, -, hmap, -⟩ := jumpFills_spec hF
-  have hlast := round_of_getLast hmap he
-  have hlt : r0 < e.2.round := by
-    have := (jumpFills_spec hF).2.2.2.1; rw [hr0] at this hlast; omega
-  have hb := insertAll_base hst
-  have hg := Grows.insertAll hst
-  have hem := (insertAll_mem hst).2 e (List.mem_of_getLast? he)
-  refine ⟨fun t ht => ⟨e.1, hown', hem.1, ?_⟩, ?_, fun ht => absurd (htop'.symm.trans ht) (by simp),
-    fun t ht => ?_, fun ht => absurd (htop'.symm.trans ht) (by simp), ((hg.2 hb).2.1).trans h.junk⟩
-  · rw [htop', Option.some.injEq] at ht
-    simp only [Store.blk, lookup, atBase_round, hem.2, ht]
-  · rw [hb, hlo]; exact h.horizon
-  · rw [htop', Option.some.injEq] at ht
-    rw [hb, ← ht]
-    have := h.le_top r0 htop
+/-- **A resume keeps the store and the horizon**, its new top a round the
+store holds. -/
+theorem Held.tryResume {s s' : State Validator BlockId Payload} (h : Held cfg s)
+    (hr : Node.tryResume cfg s = some s') : Held cfg s' := by
+  obtain ⟨t, R, ht, htR, -, hR, hst, -, htop, -, hlo, -⟩ := tryResume_some hr
+  obtain ⟨v, hv⟩ := Finset.card_pos.mp hR
+  obtain ⟨o, hoi, hor, -⟩ := mem_authorsIn.mp hv
+  refine ⟨fun t' ht' => ⟨o, hst ▸ hoi, ?_⟩, ?_, fun ht' => absurd (htop.symm.trans ht') (by simp),
+    fun t' ht' => ?_, by rw [hst]; exact h.junk⟩
+  · rw [htop, Option.some.injEq] at ht'
+    rw [hst, ← ht']
+    exact hor.ge
+  · rw [hst, hlo]; exact h.horizon
+  · rw [htop, Option.some.injEq] at ht'
+    have := h.le_top t ht
+    rw [hst]
     omega
 
 omit [Fintype Validator] in
 /-- **Settling keeps the store, and the node its top and its horizon.** -/
 theorem Held.settle {s : State Validator BlockId Payload} (h : Held cfg s) :
     Held cfg (Node.settle cfg s).1 := by
-  rcases settle_cases (cfg := cfg) s with he | ⟨s₁, out, hj, he⟩ <;> rw [he]
+  rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hj, he⟩ <;> rw [he]
   · exact h.advance
-  · exact (h.tryJump hj).advance
+  · exact (h.tryResume hj).advance
 
 omit [Fintype Validator] in
 /-- The first slot at or above round `G` lies at or above it. -/
@@ -259,13 +250,54 @@ theorem le_slotRound_boot (G lo : ℕ) :
   exact h₃.trans (Nat.mul_le_mul_left _ h₂)
 
 omit [Fintype Validator] in
-/-- **A bootstrap keeps the store and the horizon held**: the new own
+/-- A round to bootstrap at has an attested base. -/
+theorem baseAt_of_bootRound {s : State Validator BlockId Payload} {t G : ℕ}
+    (h : bootRound cfg s t = some G) : ∃ e ∈ baseAt cfg s G, e.2.round = G := by
+  have hne := (List.mem_filter.mp (List.max?_mem h)).2
+  simp only [Bool.and_eq_true, Bool.not_eq_true', decide_eq_true_eq] at hne
+  rcases hl : baseAt cfg s G with _ | ⟨e, l⟩
+  · rw [hl] at hne; simp at hne
+  · have he : e ∈ baseAt cfg s G := by rw [hl]; exact List.mem_cons_self
+    refine ⟨e, List.mem_cons_self, ?_⟩
+    unfold baseAt at he
+    simp only [List.mem_filter, decide_eq_true_eq] at he
+    exact he.2.1
+
+omit [Fintype Validator] in
+/-- A block at the horizon is accepted, unless its identifier is. -/
+theorem mem_accept_of_base {st : Store Validator BlockId Payload} {id : BlockId}
+    {b : Block Validator BlockId Payload} (hb : b.round = st.base) :
+    id ∈ (Node.accept cfg st id b).ids := by
+  unfold Node.accept
+  split
+  · exact Finset.mem_insert_self _ _
+  · rename_i hn
+    by_contra hid
+    exact hn ⟨hid, hb.ge, fun h => absurd hb (ne_of_gt h), fun h => absurd hb (ne_of_gt h),
+      fun h => absurd hb (ne_of_gt h)⟩
+
+omit [Fintype Validator] in
+/-- Accepting blocks at the horizon stores each identifier. -/
+theorem mem_foldl_of_base : ∀ (l : List (BlockId × Block Validator BlockId Payload))
+    (st : Store Validator BlockId Payload), (∀ e ∈ l, e.2.round = st.base) →
+    ∀ e ∈ l, e.1 ∈ (l.foldl (fun s e => Node.accept cfg s e.1 e.2) st).ids
+  | [], _, _, _, he => absurd he List.not_mem_nil
+  | e' :: l, st, hl, e, he => by
+    rw [List.foldl_cons]
+    have hb' := accept_base (cfg := cfg) st e'.1 e'.2
+    rcases List.mem_cons.mp he with rfl | he
+    · have hin := mem_accept_of_base (cfg := cfg) (id := e.1) (hl e List.mem_cons_self)
+      have hg := Grows.foldl (cfg := cfg) l (Node.accept cfg st e.1 e.2)
+      exact (hg.2 (foldl_base _ _)).1 hin
+    · exact mem_foldl_of_base l _
+        (fun x hx => (hl x (List.mem_cons_of_mem _ hx)).trans hb'.symm) e he
+
+omit [Fintype Validator] in
+/-- **A bootstrap keeps the store and the horizon held**: an attested base
 block lies at the new top and horizon, and the next slot moves up to it. -/
-theorem Held.boot {s s' : State Validator BlockId Payload}
-    {out : List (Output Validator BlockId Payload)} (h : Held cfg s)
-    (hb : tryBoot cfg s = some (s', out)) : Held cfg s' := by
-  obtain ⟨t, G, hbG, -, -, -, hg, hst, -, htop, hown, hlo, -⟩ := tryBoot_some hb
-  dsimp only at hg hst
+theorem Held.boot {s s' : State Validator BlockId Payload} (h : Held cfg s)
+    (hb : tryBoot cfg s = some s') : Held cfg s' := by
+  obtain ⟨t, G, hbG, -, -, hG, hst, -, htop, -, hlo, -⟩ := tryBoot_some hb
   set st₀ := (baseAt cfg s G).foldl (fun st e => accept cfg st e.1 e.2) (s.store.prune G hbG.le)
     with hst₀
   have hb₀ : st₀.base = G := by rw [hst₀, foldl_base]; rfl
@@ -274,18 +306,22 @@ theorem Held.boot {s s' : State Validator BlockId Payload}
     have := (Grows.foldl (cfg := cfg) (baseAt cfg s G) (s.store.prune G hbG.le)).2
       (foldl_base _ _)
     exact this.2.1
-  set st₁ := st₀.insert (cfg.idOf ⟨G, cfg.me, ∅, cfg.payload G⟩) ⟨G, cfg.me, ∅, cfg.payload G⟩
-    hg.1 hg.2 (fun _ => Finset.empty_subset _) (fun _ j hj => absurd hj (Finset.notMem_empty j))
-  have hgf : Grows st₁ s'.store := by rw [hst]; exact Grows.flush _ _ _
-  have hfb : s'.store.base = st₁.base := by rw [hst]; exact flush_base _ _ _
-  have hin : cfg.idOf ⟨G, cfg.me, ∅, cfg.payload G⟩ ∈ st₁.ids := Finset.mem_insert_self _ _
+  obtain ⟨e, he, her⟩ := baseAt_of_bootRound hG
+  have he₀ : e.1 ∈ st₀.ids := by
+    have hall : ∀ x ∈ baseAt cfg s G, x.2.round = (s.store.prune G hbG.le).base := fun x hx => by
+      unfold baseAt at hx
+      simp only [List.mem_filter, decide_eq_true_eq] at hx
+      exact hx.2.1
+    exact mem_foldl_of_base _ _ hall e he
+  have hgf : Grows st₀ s'.store := by rw [hst]; exact Grows.flush _ _ _
+  have hfb : s'.store.base = st₀.base := by rw [hst]; exact flush_base _ _ _
+  have hin : e.1 ∈ s'.store.ids := (hgf.2 hfb).1 he₀
   have hbs : s'.store.base = G := hfb.trans hb₀
-  refine ⟨fun t' ht' => ⟨_, hown, (hgf.2 hfb).1 hin, ?_⟩, ?_, fun ht' => absurd (htop.symm.trans ht')
-    (by simp), fun t' ht' => ?_, fun ht' => absurd (htop.symm.trans ht') (by simp), ?_⟩
+  refine ⟨fun t' ht' => ⟨e.1, hin, ?_⟩, ?_, fun ht' => absurd (htop.symm.trans ht') (by simp),
+    fun t' ht' => ?_, ?_⟩
   · rw [htop, Option.some.injEq] at ht'
-    rw [Store.blk, lookup, atBase_round, (hgf.2 hfb).2.2 _ hin]
-    simp only [st₁, Store.insert, Std.TreeMap.getD_insert_self]
-    exact ht'
+    rw [← ht', ← hbs]
+    exact s'.store.above _ hin
   · rw [hbs, hlo]; exact le_slotRound_boot G s.lo
   · rw [htop, Option.some.injEq] at ht'; omega
   · rw [(hgf.2 hfb).2.1]; exact hj₀.trans h.junk
@@ -300,11 +336,11 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     · split
       · rename_i h₁ h₂
         have h0 := h.low h₁.1
-        refine Held.settle ⟨fun t ht => ⟨_, rfl, Finset.mem_insert_self _ _, ?_⟩, h.horizon,
-          fun ht => absurd ht (by simp), fun t _ => ?_, fun ht => absurd ht (by simp), h.junk⟩
+        refine Held.settle ⟨fun t ht => ⟨_, Finset.mem_insert_self _ _, ?_⟩, h.horizon,
+          fun ht => absurd ht (by simp), fun t _ => ?_, h.junk⟩
         · simp only [Option.some.injEq] at ht
           simp only [Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self, atBase_round]
-          exact ht
+          exact ht.ge
         · change s.store.base ≤ t
           omega
       · exact h
@@ -312,23 +348,18 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
   | deliver id b =>
     simp only [Node.step]
     split
-    · exact Held.settle (h.grow (Grows.flush _ _ _) (flush_base _ _ _) rfl rfl le_rfl)
+    · exact Held.settle (h.grow (Grows.flush _ _ _) (flush_base _ _ _) rfl le_rfl)
     · exact h
-  | timer r => exact Held.settle (h.grow (Grows.refl _) rfl rfl rfl le_rfl)
-  | restart => exact Held.settle (h.grow (Grows.refl _) rfl rfl rfl le_rfl)
-  | jump v1 B1 v2 B2 =>
-    rw [step_jump]
-    split
-    · exact h
-    · exact Held.settle (h.grow (Grows.flush _ _ _) (flush_base _ _ _) rfl rfl le_rfl)
+  | timer r => exact Held.settle (h.grow (Grows.refl _) rfl rfl le_rfl)
+  | restart => exact Held.settle (h.grow (Grows.refl _) rfl rfl le_rfl)
   | baseOffer p G bs =>
     rw [step_offer]
     split
     · split
-      · rename_i s₂ out hb
-        exact ((Held.grow h (Grows.refl _) rfl rfl rfl le_rfl :
+      · rename_i s₂ hb
+        exact ((Held.grow h (Grows.refl _) rfl rfl le_rfl :
           Held cfg (withOffer s p G bs)).boot hb).advance
-      · exact h.grow (Grows.refl _) rfl rfl rfl le_rfl
+      · exact h.grow (Grows.refl _) rfl rfl le_rfl
     · exact h
   | _ => exact h
 
@@ -341,7 +372,7 @@ theorem Held.run : ∀ (is : List (Input Validator BlockId Payload))
 omit [Fintype Validator] in
 theorem Held.init : Held cfg (State.init cfg) :=
   ⟨fun _ h => absurd h (by simp [State.init]), Nat.zero_le _, fun _ => rfl,
-    fun _ h => absurd h (by simp [State.init]), fun _ => rfl, rfl⟩
+    fun _ h => absurd h (by simp [State.init]), rfl⟩
 
 end Node
 

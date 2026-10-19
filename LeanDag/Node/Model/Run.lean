@@ -4,12 +4,9 @@ import LeanDag.Node.Model.Step
 
 `run cfg s is` feeds the inputs `is` to the node in turn and collects its
 outputs. `persists` reads the node's own blocks among the outputs,
-`broadcasts` those it sent, `delivered` the blocks among the inputs whose
-identifier is their hash, and `derived` those the jump messages it
-received gave it: together, what the node knew. `built` is the shape of
-the outputs that build blocks: persist, broadcast, then the round's
-timer; `jumped` that of a jump: each filled block persisted, then the
-message; `isFetch` marks the requests and answers that move blocks
+`broadcasts` those it sent, and `delivered` the blocks among the inputs,
+delivered or offered, whose identifier is their hash: together, what
+the node knew. `isFetch` marks the requests and answers that move blocks
 without building one.
 
 `commitsOf` reads the decisions among the outputs. Over many nodes,
@@ -47,19 +44,6 @@ def delivered (is : List (Input Validator BlockId Payload)) :
     | .baseOffer _ _ bs => bs.filter fun e => decide (e.1 = cfg.idOf e.2)
     | _ => []
 
-/-- The blocks an input gives the node besides a delivered one: those of a
-jump message. -/
-def received (s : State Validator BlockId Payload) :
-    Input Validator BlockId Payload → List (BlockId × Block Validator BlockId Payload)
-  | .jump v1 B1 v2 B2 => jumpIn cfg s v1 B1 v2 B2
-  | _ => []
-
-/-- **The blocks the received jump messages gave the node**, along a run. -/
-def derived : State Validator BlockId Payload → List (Input Validator BlockId Payload) →
-    List (BlockId × Block Validator BlockId Payload)
-  | _, [] => []
-  | s, i :: is => received cfg s i ++ derived (step cfg s i).1 is
-
 variable {cfg}
 
 /-- The blocks among some outputs that the node persisted: its own. -/
@@ -84,12 +68,6 @@ def Output.isFetch : Output Validator BlockId Payload → Bool
   | .requestBase => true
   | .serveBase _ _ _ => true
   | _ => false
-
-/-- **The outputs of a jump**: each filled block persisted, then the
-message. -/
-def jumped (fs : List (BlockId × Block Validator BlockId Payload)) (v1 : Validator) (B1 : BlockId)
-    (v2 : Validator) (B2 : BlockId) : List (Output Validator BlockId Payload) :=
-  fs.map (fun e => .persist e.1 e.2) ++ [.jump v1 B1 v2 B2]
 
 /-- The decisions among some outputs. -/
 def commitsOf (out : List (Output Validator BlockId Payload)) : List (ℕ × Option BlockId) :=
@@ -116,12 +94,11 @@ def runOf (ins : Validator → List (Input Validator BlockId Payload)) (v : Vali
   run (cfg.at v) (State.init (cfg.at v)) (ins v)
 
 variable (cfg) in
-/-- What node `v` knew: the blocks delivered to it with their hash, those
-its jump messages gave it, and its own. -/
+/-- What node `v` knew: the blocks delivered or offered to it with their
+hash, and its own. -/
 def knownOf (ins : Validator → List (Input Validator BlockId Payload)) (v : Validator) :
     List (BlockId × Block Validator BlockId Payload) :=
-  delivered (cfg.at v) (ins v) ++ derived (cfg.at v) (State.init (cfg.at v)) (ins v) ++
-    persists (runOf cfg ins v).2
+  delivered (cfg.at v) (ins v) ++ persists (runOf cfg ins v).2
 
 end Node
 

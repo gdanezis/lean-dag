@@ -4,8 +4,8 @@ import LeanDag.Node.Helpers.Converge
 /-!
 # Bootstrapping nodes agree slot by slot
 
-Over a trace, what each honest node knew is what the trace delivered,
-offered and gave it, and what it made (`knownOf_sub`). Under timely
+Over a trace, what each honest node knew is what the trace delivered and
+offered it, and what it made (`knownOf_sub`). Under timely
 authentication the honest nodes' runs meet the run model's assumptions,
 so their knowledge forms the run's record. Then, by induction over the
 trace, every honest store is a cut of that record and every decision a
@@ -31,14 +31,6 @@ theorem run_append (c : Config Validator BlockId Payload) :
   | s, i :: l₁, l₂ => by
     simp only [List.cons_append, run]
     rw [run_append c _ l₁ l₂, List.append_assoc]
-
-theorem derived_append (c : Config Validator BlockId Payload) :
-    ∀ (s : State Validator BlockId Payload) (l₁ l₂ : List (Input Validator BlockId Payload)),
-    derived c s (l₁ ++ l₂) = derived c s l₁ ++ derived c (run c s l₁).1 l₂
-  | s, [], l₂ => by simp [derived, run]
-  | s, i :: l₁, l₂ => by
-    simp only [List.cons_append, derived, run]
-    rw [derived_append c _ l₁ l₂, List.append_assoc]
 
 end Lists
 
@@ -95,29 +87,23 @@ theorem knownBefore_knownOf {t : ℕ} {v : Validator} {x : BlockId × Block Vali
   obtain ⟨l, hl⟩ := inputsBefore_prefix_length (tr := tr) v t
   simp only [Converge.knownBefore, Set.mem_setOf_eq, List.mem_append] at hx
   simp only [knownOf, runOf, insOf, List.mem_append, hl, delivered, List.flatMap_append,
-    derived_append, run_append, persists_append]
-  rcases hx with (hx | hx) | hx
-  · exact Or.inl (Or.inl (Or.inl hx))
-  · exact Or.inl (Or.inr (Or.inl hx))
+    run_append, persists_append]
+  rcases hx with hx | hx
+  · exact Or.inl (Or.inl hx)
   · exact Or.inr (Or.inl hx)
 
 /-- **What an event gives a node, it knew over the trace.** -/
 theorem event_knownOf {t : ℕ} {w : Validator} {inp : Input Validator BlockId Payload}
     (h : tr[t]? = some (w, inp)) :
     (∀ x ∈ delivered (cfg.at w) [inp], x ∈ knownOf cfg (insOf tr) w) ∧
-    (∀ x ∈ received (cfg.at w) (stateBefore cfg tr t w) inp, x ∈ knownOf cfg (insOf tr) w) ∧
     ∀ x ∈ persists (step (cfg.at w) (stateBefore cfg tr t w) inp).2,
       x ∈ knownOf cfg (insOf tr) w := by
   have ht : t + 1 ≤ tr.length := (List.getElem?_eq_some_iff.mp h).1
   obtain ⟨l, hl⟩ := inputsBefore_prefix (tr := tr) w ht
   rw [inputsBefore_succ h, if_pos rfl] at hl
-  refine ⟨fun x hx => ?_, fun x hx => ?_, fun x hx => ?_⟩
+  refine ⟨fun x hx => ?_, fun x hx => ?_⟩
   · simp only [knownOf, runOf, insOf, List.mem_append, hl, delivered, List.flatMap_append]
-    exact Or.inl (Or.inl (Or.inl (Or.inr (by simpa [delivered] using hx))))
-  · simp only [knownOf, runOf, insOf, List.mem_append, hl, derived_append]
-    refine Or.inl (Or.inr (Or.inl (Or.inr ?_)))
-    simp only [derived, List.append_nil]
-    exact hx
+    exact Or.inl (Or.inl (Or.inr (by simpa [delivered] using hx)))
   · simp only [knownOf, runOf, insOf, List.mem_append, hl, run_append, persists_append]
     refine Or.inr (Or.inl (Or.inr ?_))
     simpa [run, stateBefore] using hx
@@ -129,12 +115,11 @@ knew.** -/
 theorem knownOf_sub {v : Validator} (hv : v ∈ H) {x : BlockId × Block Validator BlockId Payload}
     (hx : x ∈ knownOf cfg (insOf tr) v) : x ∈ Converge.knownIn cfg H tr := by
   simp only [knownOf, List.mem_append] at hx
-  rcases hx with (hx | hx) | hx
+  rcases hx with hx | hx
   · obtain ⟨j, -, inp, hj, hd⟩ := mem_delivered_before (cfg.at v) v tr.length hx
     exact Or.inl ⟨j, v, inp, hj, hv, hd⟩
-  · exact Or.inr (Or.inr ⟨tr.length, v, hv, hx⟩)
   · obtain ⟨j, -, hjv, hx⟩ := mem_persists_before (cfg := cfg) v tr.length hx
-    exact Or.inr (Or.inl ⟨j, v, hjv, hv, hx⟩)
+    exact Or.inr ⟨j, v, hjv, hv, hx⟩
 
 /-! ## The served base -/
 
@@ -162,14 +147,9 @@ omit [Fintype Validator] in
 theorem serveBase_not_mem_settle (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
     {bs : List (BlockId × Block Validator BlockId Payload)} :
     Output.serveBase p G bs ∉ (Node.settle cfg s).2 := by
-  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, out, hj, h⟩ <;> rw [h]
+  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, -, h⟩ <;> rw [h]
   · exact serveBase_not_mem_advance s
-  · obtain ⟨r0, B1, B2, F, e, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, hout⟩ :=
-      tryJump_some hj
-    intro h'
-    rcases List.mem_append.mp h' with h' | h'
-    · rw [hout] at h'; simp [jumped] at h'
-    · exact serveBase_not_mem_advance s₁ h'
+  · exact serveBase_not_mem_advance s₁
 
 /-- **A served base is the server's store** at the step that served it. -/
 theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
@@ -201,11 +181,6 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
   | fetchRequest peer ids =>
     change Output.serveBase p G bs ∈ answer s peer ids at h
     unfold answer at h; simp at h
-  | jump v1 B1 v2 B2 =>
-    rw [step_jump] at h
-    split at h
-    · simp at h
-    · exact absurd h (serveBase_not_mem_settle _)
   | restart =>
     simp only [Node.step, List.mem_cons] at h
     rcases h with h | h
@@ -215,11 +190,7 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
     rw [step_offer] at h
     split at h
     · split at h
-      · rename_i s₂ out hb
-        obtain ⟨t', G'', hb', -, -, -, hg', -, -, -, -, -, -, -, -, hout⟩ := tryBoot_some hb
-        rcases List.mem_append.mp h with h | h
-        · rw [hout] at h; simp [built] at h
-        · exact absurd h (serveBase_not_mem_advance _)
+      · exact absurd h (serveBase_not_mem_advance _)
       · simp at h
     · simp at h
 

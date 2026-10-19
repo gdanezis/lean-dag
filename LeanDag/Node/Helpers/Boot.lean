@@ -3,9 +3,8 @@ import LeanDag.Node.Helpers.Commits
 # A node's store stays a cut through bootstraps
 
 A bootstrap at a round the record reaches keeps the store a cut of the
-record (`IsCut.boot`): the pruned store is one, the attested base and the
-node's new own block are known blocks at that round, and the offered
-blocks are known. With every other step (`IsCut.step`), the store stays a
+record (`IsCut.boot`): the pruned store is one, the attested base is
+known blocks at that round, and the offered blocks are known. With every other step (`IsCut.step`), the store stays a
 cut along a run whose bootstraps are at rounds the record reaches, and
 every decision a step outputs is a verdict on a view of the record
 (`Verdict`): the decision step reads as `tryDecide` on such a view, which
@@ -63,9 +62,10 @@ theorem advance_offers (s : State Validator BlockId Payload) :
 omit [Fintype Validator] in
 theorem settle_offers (s : State Validator BlockId Payload) :
     (Node.settle cfg s).1.offers = s.offers := by
-  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, out, hj, h⟩ <;> rw [h]
+  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h]
   · exact advance_offers s
-  · rw [advance_offers, tryJump_offers hj]
+  · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, hof, -⟩ := tryResume_some hj
+    rw [advance_offers, hof]
 
 /-- **A base offer a node holds was given to it**, at this step or before. -/
 theorem step_offers (s : State Validator BlockId Payload) (i : Input Validator BlockId Payload) :
@@ -87,20 +87,15 @@ theorem step_offers (s : State Validator BlockId Payload) (i : Input Validator B
   | timer r => simp only [Node.step] at ho; rw [settle_offers] at ho; exact Or.inl ho
   | restart =>
     simp only [Node.step] at ho; rw [settle_offers] at ho; simp [State.recover] at ho
-  | jump v1 B1 v2 B2 =>
-    rw [step_jump] at ho
-    split at ho
-    · exact Or.inl ho
-    · rw [settle_offers] at ho; exact Or.inl ho
   | fetchRequest => exact Or.inl ho
   | baseRequest => exact Or.inl ho
   | baseOffer p G bs =>
     rw [step_offer] at ho
     split at ho
     · split at ho
-      · rename_i s₂ out hb
+      · rename_i s₂ hb
         rw [advance_offers] at ho
-        obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, hof, -⟩ := tryBoot_some hb
+        obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, hof, -⟩ := tryBoot_some hb
         rw [hof] at ho; exact absurd ho List.not_mem_nil
       · rcases List.mem_cons.mp ho with rfl | ho
         · exact Or.inr rfl
@@ -112,13 +107,10 @@ theorem step_offers (s : State Validator BlockId Payload) (i : Input Validator B
 omit [Fintype Validator] in
 /-- **A bootstrap at a round the record reaches keeps the store a cut.** -/
 theorem IsCut.boot (hg : Ground U K cfg.q) {s s' : State Validator BlockId Payload}
-    {out : List (Output Validator BlockId Payload)} (hc : IsCut U s.store)
-    (hb : tryBoot cfg s = some (s', out))
+    (hc : IsCut U s.store) (hb : tryBoot cfg s = some s')
     (hoff : ∀ o ∈ s.offers, ∀ e ∈ o.2.2, e.1 = cfg.idOf e.2 → e ∈ K)
-    (hp : ∀ e ∈ s.pending, e ∈ K) (hgK : ∀ e ∈ persists out, e ∈ K)
-    (hspan : Spans U s'.store.base) : IsCut U s'.store := by
-  obtain ⟨t, G, hbG, -, -, -, hg', hst, -, -, -, -, -, -, -, hout⟩ := tryBoot_some hb
-  dsimp only at hg' hst
+    (hp : ∀ e ∈ s.pending, e ∈ K) (hspan : Spans U s'.store.base) : IsCut U s'.store := by
+  obtain ⟨t, G, hbG, -, -, -, hst, -⟩ := tryBoot_some hb
   set st₀ := (baseAt cfg s G).foldl (fun st e => Node.accept cfg st e.1 e.2)
     (s.store.prune G hbG.le)
     with hst₀
@@ -135,13 +127,8 @@ theorem IsCut.boot (hg : Ground U K cfg.q) {s s' : State Validator BlockId Paylo
     obtain ⟨hx, hcx⟩ := List.mem_filter.mp hx
     simp only [decide_eq_true_eq] at hcx
     exact hfo x hx hcx.2.1
-  have hgk : (cfg.idOf ⟨G, cfg.me, ∅, cfg.payload G⟩, ⟨G, cfg.me, ∅, cfg.payload G⟩) ∈ K :=
-    hgK _ (by rw [hout, persists_built]; exact List.mem_singleton_self _)
-  have hc₁ := hc₀.insert (hnew := hg'.1) (hab := hg'.2)
-    (hrefs := fun _ => Finset.empty_subset _) (hpred := fun _ j hj => absurd hj (Finset.notMem_empty j))
-    (by rw [hb₀]; exact hg.base _ hgk G le_rfl hspan)
   rw [hst]
-  refine IsCut.flush hg _ _ hc₁ (by change Spans U st₀.base; rw [hb₀]; exact hspan) fun x hx => ?_
+  refine IsCut.flush hg _ _ hc₀ (by change Spans U st₀.base; rw [hb₀]; exact hspan) fun x hx => ?_
   rcases List.mem_append.mp hx with hx | hx
   · obtain ⟨hx, hcx⟩ := List.mem_filter.mp hx
     simp only [decide_eq_true_eq] at hcx
@@ -217,18 +204,11 @@ theorem IsCut.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (hb : ∀ e ∈ persists (Node.settle cfg s).2, e ∈ K) :
     IsCut U (Node.settle cfg s).1.store ∧
       ∀ e ∈ commitsOf (Node.settle cfg s).2, Verdict cfg U e := by
-  rcases settle_cases (cfg := cfg) s with he | ⟨s₁, out, hj, he⟩ <;> rw [he] at hb ⊢
+  rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hj, he⟩ <;> rw [he] at hb ⊢
   · exact hc.advance hg hσ ht hh hp hb
-  · rw [persists_append] at hb
-    obtain ⟨hpd, -, -, -, -⟩ := tryJump_keeps hj
-    obtain ⟨r0, B1, B2, F, e, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, hout⟩ :=
-      tryJump_some hj
-    have hc₁ := hc.tryJump hg hj fun e he => hb e (List.mem_append_left _ he)
-    obtain ⟨h₁, h₂⟩ := hc₁.advance hg hσ ht (hh.tryJump hj) (by rw [hpd]; exact hp)
-      fun e he => hb e (List.mem_append_right _ he)
-    refine ⟨h₁, fun e' he' => ?_⟩
-    rw [commitsOf_append, hout, commitsOf_jumped, List.nil_append] at he'
-    exact h₂ e' he'
+  · obtain ⟨hst, hpd, -⟩ := tryResume_keeps hj
+    exact IsCut.advance hg hσ ht (by rw [hst]; exact hc) (hh.tryResume hj) (by rw [hpd]; exact hp)
+      hb
 
 /-- **A step from a cut**, bootstrapping only at rounds the record
 reaches: the store stays a cut, and the decisions are verdicts. -/
@@ -237,10 +217,10 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (i : Input Validator BlockId Payload) (hc : IsCut U s.store) (hh : Held cfg s)
     (hp : ∀ e ∈ s.pending, e ∈ K)
     (hoff : ∀ o ∈ s.offers, ∀ e ∈ o.2.2, e.1 = cfg.idOf e.2 → e ∈ K)
-    (hd : ∀ e ∈ delivered cfg [i], e ∈ K) (hr : ∀ e ∈ received cfg s i, e ∈ K)
+    (hd : ∀ e ∈ delivered cfg [i], e ∈ K)
     (hb : ∀ e ∈ persists (Node.step cfg s i).2, e ∈ K)
-    (hspan : ∀ p G bs s₂ out, i = .baseOffer p G bs →
-      tryBoot cfg (withOffer s p G bs) = some (s₂, out) → Spans U s₂.store.base) :
+    (hspan : ∀ p G bs s₂, i = .baseOffer p G bs →
+      tryBoot cfg (withOffer s p G bs) = some s₂ → Spans U s₂.store.base) :
     IsCut U (Node.step cfg s i).1.store ∧
       ∀ e ∈ commitsOf (Node.step cfg s i).2, Verdict cfg U e := by
   have hset : ∀ (s₀ : State Validator BlockId Payload) (pre : List (Output Validator BlockId Payload)),
@@ -274,12 +254,12 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         let gid := cfg.idOf cfg.genesis
         have hh₀ : Held cfg
             { s with store := st, top := some 0, own := some gid, recovering := false } := by
-          refine ⟨fun t ht => ⟨_, rfl, Finset.mem_insert_self _ _, ?_⟩, hh.horizon,
-            fun ht => absurd ht (by simp), fun t _ => ?_, fun ht => absurd ht (by simp), hh.junk⟩
+          refine ⟨fun t ht => ⟨_, Finset.mem_insert_self _ _, ?_⟩, hh.horizon,
+            fun ht => absurd ht (by simp), fun t _ => ?_, hh.junk⟩
           · simp only [Option.some.injEq] at ht
-            simp only [st, gid, Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self,
+            simp only [st, Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self,
               atBase_round]
-            exact ht
+            exact ht.ge
           · change s.store.base ≤ t
             omega
         exact hset { s with store := st, top := some 0, own := some gid, recovering := false }
@@ -301,7 +281,7 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
       exact hset { s₂ with asked := askedAfter (cfg := cfg) s b }
         ((if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b)
-        (IsCut.flush hg _ _ hc (hc.spans hh) hpend) (hh.grow hg₁ hb₁ rfl rfl le_rfl)
+        (IsCut.flush hg _ _ hc (hc.spans hh) hpend) (hh.grow hg₁ hb₁ rfl le_rfl)
         (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by rw [commitsOf_append]; unfold askOut; split <;> split <;> rfl) (step_deliver hA)
     · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
@@ -309,33 +289,16 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       exact hsame s rfl (by simp only [Node.step, if_neg h'])
   | timer r =>
     exact hset { s with fired := Insert.insert r s.fired } [] hc
-      (hh.grow (Grows.refl _) rfl rfl rfl le_rfl) hp rfl (by simp only [Node.step]; rfl)
+      (hh.grow (Grows.refl _) rfl rfl le_rfl) hp rfl (by simp only [Node.step]; rfl)
   | fetchRequest peer ids =>
     rw [show Node.step cfg s (.fetchRequest peer ids) = (s, answer s peer ids) from rfl]
     refine ⟨hc, fun e he => ?_⟩
     unfold answer commitsOf at he
     rw [List.filterMap_map] at he
     simp at he
-  | jump v1 B1 v2 B2 =>
-    by_cases hF : (jumpIn cfg s v1 B1 v2 B2).isEmpty
-    · exact hsame s rfl (by rw [step_jump, if_pos hF])
-    · have hg₁ := Grows.flush (cfg := cfg)
-        (s.pending.length + (jumpIn cfg s v1 B1 v2 B2).length + 1) s.store
-        (jumpIn cfg s v1 B1 v2 B2 ++ s.pending)
-      have hb₁ := flush_base (cfg := cfg)
-        (s.pending.length + (jumpIn cfg s v1 B1 v2 B2).length + 1) s.store
-        (jumpIn cfg s v1 B1 v2 B2 ++ s.pending)
-      have hpend : ∀ e ∈ jumpIn cfg s v1 B1 v2 B2 ++ s.pending, e ∈ K := fun e he => by
-        rcases List.mem_append.mp he with he | he
-        · exact hr e he
-        · exact hp e he
-      exact hset (afterJump (cfg := cfg) s v1 B1 v2 B2) []
-        (IsCut.flush hg _ _ hc (hc.spans hh) hpend) (hh.grow hg₁ hb₁ rfl rfl le_rfl)
-        (fun e he => hpend e (flush_pending_sub _ _ _ e he)) rfl
-        (by rw [step_jump, if_neg hF]; rfl)
   | restart =>
     exact hset s.recover [.requestBase] hc
-      (hh.grow (Grows.refl _) rfl rfl rfl le_rfl) (fun e he => by simp [State.recover] at he) rfl
+      (hh.grow (Grows.refl _) rfl rfl le_rfl) (fun e he => by simp [State.recover] at he) rfl
       (by simp only [Node.step]; rfl)
   | baseRequest peer =>
     rw [show Node.step cfg s (.baseRequest peer) =
@@ -343,13 +306,11 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
   | baseOffer p G bs =>
     by_cases hcnd : s.recovering ∧ p ≠ cfg.me
-    · rcases hbt : tryBoot cfg (withOffer s p G bs) with _ | ⟨s₂, out⟩
+    · rcases hbt : tryBoot cfg (withOffer s p G bs) with _ | s₂
       · exact hsame (withOffer s p G bs) rfl (by rw [step_offer, if_pos hcnd, hbt])
-      · have he : Node.step cfg s (.baseOffer p G bs) =
-            ((Node.advance cfg s₂).1, out ++ (Node.advance cfg s₂).2) := by
+      · have he : Node.step cfg s (.baseOffer p G bs) = Node.advance cfg s₂ := by
           rw [step_offer, if_pos hcnd, hbt]
         rw [he] at hb ⊢
-        rw [persists_append] at hb
         have hoff' : ∀ o ∈ (withOffer s p G bs).offers, ∀ e ∈ o.2.2, e.1 = cfg.idOf e.2 →
             e ∈ K := by
           intro o ho e heo hid
@@ -357,21 +318,18 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
           · exact hd e (by simp [delivered, heo, hid])
           · exact hoff o (List.mem_filter.mp ho).1 e heo hid
         have hc₂ := IsCut.boot hg (s := withOffer s p G bs) hc hbt hoff' hp
-          (fun e he => hb e (List.mem_append_left _ he)) (hspan p G bs s₂ out rfl hbt)
-        have hh₂ := (Held.grow hh (Grows.refl _) rfl rfl rfl le_rfl :
+          (hspan p G bs s₂ rfl hbt)
+        have hh₂ := (Held.grow hh (Grows.refl _) rfl rfl le_rfl :
           Held cfg (withOffer s p G bs)).boot hbt
-        obtain ⟨t', G', hb', -, -, -, hg', -, hpd, -, -, -, -, -, -, hout⟩ := tryBoot_some hbt
-        obtain ⟨h₁, h₂⟩ := hc₂.advance hg hσ ht hh₂ (fun e he => by
+        obtain ⟨t', G', hb', -, -, -, -, hpd, -⟩ := tryBoot_some hbt
+        exact hc₂.advance hg hσ ht hh₂ (fun e he => by
           rw [hpd] at he
           rcases List.mem_append.mp (flush_pending_sub (cfg := cfg) _ _ _ e he) with he | he
           · obtain ⟨he, hce⟩ := List.mem_filter.mp he
             simp only [decide_eq_true_eq] at hce
             obtain ⟨o, ho, heo⟩ := List.mem_flatMap.mp he
             exact hoff' o ho e heo hce.2
-          · exact hp e (List.mem_filter.mp he).1) fun e he => hb e (List.mem_append_right _ he)
-        refine ⟨h₁, fun e' he' => ?_⟩
-        rw [commitsOf_append, hout, commitsOf_built, List.nil_append] at he'
-        exact h₂ e' he'
+          · exact hp e (List.mem_filter.mp he).1) hb
     · exact hsame s rfl (by rw [step_offer, if_neg hcnd])
 
 end Node

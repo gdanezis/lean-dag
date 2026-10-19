@@ -587,10 +587,6 @@ import LeanDag.Node.Helpers.Steps
 import LeanDag.Node.Helpers.Trace
 import LeanDag.Node.Helpers.Converge
 import LeanDag.Node.Converge.Proof
-import LeanDag.Node.Helpers.Fills
-import LeanDag.Node.Helpers.Jumps
-import LeanDag.Node.Jump.Statement
-import LeanDag.Node.Jump.Proof
 import LeanDag.Node.Helpers.Boot
 import LeanDag.Node.Helpers.Agree
 import LeanDag.Node.Boot.Statement

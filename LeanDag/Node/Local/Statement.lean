@@ -7,18 +7,16 @@ import LeanDag.Node.Vote
 initial state:
 
 * **each step's outputs**, from any state a run reaches, are its
-  requests and answers, then at most one jump, its filled blocks each
-  persisted and then the message, then its built blocks, each persisted,
-  then broadcast, then its round's timer set, then its decisions, then at
-  most one horizon (`Shape`);
+  requests and answers, then its built blocks, each persisted, then
+  broadcast, then its round's timer set, then its decisions, then at most
+  one horizon (`Shape`);
 * **one block per round**: the node's own blocks, those it persists, lie
   at strictly increasing rounds (`OneEach`), each its own and identified
-  by its hash (`Authored`);
+  by its hash (`Authored`); the blocks it broadcasts are those it
+  persists (`Sends`);
 * **valid blocks**: each of its own blocks references only blocks it
-  knew, delivered or offered with their hash, given by a jump message, or
-  its own, and one with references is valid at the row under every block
-  map agreeing with what it knew (`ValidOut`); one without is a genesis
-  or the block that restarts its chain after a bootstrap;
+  knew, delivered or offered with their hash, or its own, and is valid at
+  the row under every block map agreeing with what it knew (`ValidOut`);
 * **decisions read only the view, from the horizon up**: at the bounded
   vote, with the horizon at or below the next undecided slot's round, a
   decision step outputs what `tryDecide` decides on any record and view
@@ -35,18 +33,16 @@ namespace Node
 namespace Local
 
 /-- **Each step's outputs**, from any state a run reaches: requests and
-answers, then at most one jump, then built blocks, then decisions, then
-at most one horizon. -/
+answers, then built blocks, then decisions, then at most one horizon. -/
 def Shape : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
     (is : List (Input Validator BlockId Payload)) (i : Input Validator BlockId Payload),
-    ∃ (xs js : List (Output Validator BlockId Payload))
+    ∃ (xs : List (Output Validator BlockId Payload))
       (bs : List (BlockId × Block Validator BlockId Payload))
-      (ds : List (ℕ × Option BlockId)) (gs : List ℕ), (∀ o ∈ xs, o.isFetch) ∧
-      (js = [] ∨ ∃ fs B1 v2 B2, js = jumped fs cfg.me B1 v2 B2) ∧ gs.length ≤ 1 ∧
+      (ds : List (ℕ × Option BlockId)) (gs : List ℕ), (∀ o ∈ xs, o.isFetch) ∧ gs.length ≤ 1 ∧
       (step cfg (run cfg (State.init cfg) is).1 i).2 =
-        xs ++ js ++ built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune
+        xs ++ built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune
 
 /-- **One block per round**: the node's own blocks lie at strictly
 increasing rounds. -/
@@ -65,18 +61,26 @@ def Authored : Prop :=
     (is : List (Input Validator BlockId Payload)),
     ∀ e ∈ persists (run cfg (State.init cfg) is).2, e.1 = cfg.idOf e.2 ∧ e.2.creator = cfg.me
 
+/-- **It sends its own blocks**: the blocks the node broadcasts are those
+it persists. -/
+def Sends : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
+    (is : List (Input Validator BlockId Payload)),
+    broadcasts (run cfg (State.init cfg) is).2 = persists (run cfg (State.init cfg) is).2
+
 /-- **Valid blocks**: each of the node's own blocks references only blocks
-it knew, and one with references is valid at the row under every block
-map agreeing with what it knew. -/
+it knew, and is valid at the row under every block map agreeing with
+what it knew. -/
 def ValidOut : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
     (is : List (Input Validator BlockId Payload)),
     let B := persists (run cfg (State.init cfg) is).2
-    let K := delivered cfg is ++ derived cfg (State.init cfg) is ++ B
-    ∀ e ∈ B, (∀ j ∈ e.2.refs, j ∈ K.map Prod.fst) ∧ (e.2.refs.Nonempty →
+    let K := delivered cfg is ++ B
+    ∀ e ∈ B, (∀ j ∈ e.2.refs, j ∈ K.map Prod.fst) ∧
       ∀ blk : BlockId → Block Validator BlockId Payload, (∀ x ∈ K, blk x.1 = x.2) →
-        rowValid cfg.q blk e.2)
+        rowValid cfg.q blk e.2
 
 /-- **Decisions read only the view, from the horizon up**: at the bounded
 vote, with the horizon at or below the next undecided slot's round, a
@@ -98,7 +102,7 @@ def DecidesOnView : Prop :=
       else []
 
 /-- One node at a time. -/
-def Statement : Prop := Shape ∧ OneEach ∧ Authored ∧ ValidOut ∧ DecidesOnView
+def Statement : Prop := Shape ∧ OneEach ∧ Authored ∧ Sends ∧ ValidOut ∧ DecidesOnView
 
 end Local
 

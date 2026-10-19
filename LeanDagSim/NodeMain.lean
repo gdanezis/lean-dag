@@ -11,11 +11,9 @@ output:
 * inputs: `{"start":{}}`, `{"timer":r}`, `{"restart":{}}` (the node keeps
   only what it persisted),
   `{"deliver":{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}}`,
-  `{"jump":{"v1":v,"B1":i,"v2":w,"B2":j}}`,
   `{"fetchRequest":{"peer":v,"ids":[…]}}`, `{"baseRequest":{"peer":v}}`, and
   `{"baseOffer":{"peer":v,"horizon":G,"blocks":[block…]}}`;
 * outputs: `{"persist":block}`, `{"broadcast":block}`,
-  `{"jump":{"v1":v,"B1":i,"v2":w,"B2":j}}` (send to every peer),
   `{"setTimer":{"round":r,"after":t}}`, `{"commit":{"slot":k,"block":i}}`
   (`null` for a skip), `{"prune":G}`, `{"fetch":[…]}` (ask every peer),
   `{"send":{"peer":v,"block":block}}` (answer one), `{"requestBase":{}}`
@@ -51,8 +49,6 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
   | .fetch ids => Json.mkObj [("fetch", Json.arr (ids.map fun i => (i : Json)).toArray)]
   | .send peer id b => Json.mkObj [("send", Json.mkObj [("peer", peer.val),
       ("block", blockJson id b)])]
-  | .jump v1 B1 v2 B2 => Json.mkObj [("jump", Json.mkObj [("v1", v1.val), ("B1", B1),
-      ("v2", v2.val), ("B2", B2)])]
   | .requestBase => Json.mkObj [("requestBase", Json.mkObj [])]
   | .serveBase peer G bs => Json.mkObj [("serveBase", Json.mkObj [("peer", peer.val),
       ("horizon", G), ("blocks", Json.arr (bs.map fun e => blockJson e.1 e.2).toArray)])]
@@ -90,13 +86,6 @@ def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ
     let bs ← ((← m.getObjVal? "blocks").getArr?) >>= fun a => a.toList.mapM (blockOf (n := n))
     if h : peer < n then return .baseOffer ⟨peer, h⟩ G bs
     else throw s!"peer {peer} out of range"
-  if let .ok m := j.getObjVal? "jump" then
-    let v1 ← natField m "v1"
-    let v2 ← natField m "v2"
-    let B1 ← natField m "B1"
-    let B2 ← natField m "B2"
-    if h : v1 < n ∧ v2 < n then return .jump ⟨v1, h.1⟩ B1 ⟨v2, h.2⟩ B2
-    else throw s!"validator out of range"
   let d ← j.getObjVal? "deliver"
   let _ := hn
   let (id, b) ← blockOf d

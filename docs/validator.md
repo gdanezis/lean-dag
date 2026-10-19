@@ -58,13 +58,12 @@ covered and live at the configured `n`, `f`, `c` and `q`
 (`Params.Covered` and `Params.CertFits`, with the commit threshold within `n − f − c`, all decidable) and
 refuses a configuration that is not.
 
-**Validity.** Every row uses `ValidAt q (Clause.distinct.and
-Clause.selfParent)`: references one round below from `q` distinct
-authors, no author twice, and a reference to the author's own previous
-block. It is decidable (`ValidAt.decidable`) and mechanised
-(`ValidAt.mechanised`), and quorate and distinct by
-`Validity.Quorate.of_validAt` and `Validity.Distinct.of_validAt`. The
-self-parent clause is what Safe Skip's fill reads (§3.5).
+**Validity.** Every row uses `ValidAt q Clause.distinct`: references
+one round below from `q` distinct authors, no author twice. It is
+decidable (`ValidAt.decidable`) and mechanised (`ValidAt.mechanised`),
+and quorate and distinct by `Validity.Quorate.of_validAt` and
+`Validity.Distinct.of_validAt`. A reference to the author's own
+previous block is the build rule (§3.2, §11).
 
 **Inputs.**
 
@@ -72,7 +71,6 @@ self-parent clause is what Safe Skip's fill reads (§3.5).
   block;
 * a delivered block: identifier, round, author, ordered references,
   payload;
-* a delivered jump message (`JumpMsg`);
 * a timer for round `r` that fired;
 * a crash and restart: the node keeps only what it persisted (§5.1);
 * a base offer from a peer: its round-`G` blocks and its window above
@@ -82,10 +80,8 @@ self-parent clause is what Safe Skip's fill reads (§3.5).
 
 **Outputs.**
 
-* persist one of its own blocks, emitted before the block is broadcast,
-  and for a filled block before the jump message;
+* persist one of its own blocks, emitted before the block is broadcast;
 * broadcast a block;
-* broadcast a jump message;
 * set a timer for round `r`;
 * commit slot `k` with a decision `Option BlockId`;
 * prune below the horizon `G`;
@@ -152,11 +148,14 @@ part of step 11. The full-timeout discipline (`ViewPace`), in which a
 validator waits the timeout every round, is not used.
 
 The new block references one accepted block per round-`r` author,
-including the validator's own previous block, choosing the least
-identifier between twins. The program builds rounds in sequence and
-skips them only by jumping (§3.5) or by bootstrapping (§3.6). It persists the block and the accepted blocks of the
-window it references, then broadcasts it, then sets the timer for round
-`r + 1`.
+its own block of round `r` for itself if it built one, and the least
+identifier between twins otherwise (`refsFor`). The validity it must
+meet is `ValidAt q Clause.distinct`: references one round below, from
+`q` distinct authors, none twice. Referencing its own previous block is
+the build rule, not a validity clause (§11). The program builds rounds
+in sequence and skips them only by resuming (§3.5) or by bootstrapping
+(§3.6). It persists the block, then broadcasts it, then sets the timer
+for round `r + 1`.
 
 ### 3.3 The decider
 
@@ -182,30 +181,24 @@ The decider then runs on the original schedule. Every slot it still
 decides lies at `F` or above, and its decision reads only rounds from
 the slot's round up, all above the horizon.
 
-### 3.5 Safe Skip
+### 3.5 Resuming after a restart
 
-After a restart whose downtime the network has moved past, the program
-sends one jump message `(v1, B1, v2, B2)` instead of building every
-missed round (`tryJump`). A restarted node jumps once, when its own
-block `B1` lies at its top round `r0` and the store's top round `R` is
-at least `r0 + 2`. The donor `B2` is the least block at `R` by another
-author. The line runs down from `B2` along references by `B2`'s author,
-the least where there are several (`lineDown`). Each round `k` with
-`r0 < k ≤ R` gets a filled block by `v1` (`jumpFills`, `fillUp`): the
-references and payload of the line's round-`k` block, plus `v1`'s block
-of round `k − 1`, which is `B1` at the bottom. Its identifier is its hash.
-The node accepts the filled blocks in turn, each checked as a built
-block is (`insertAll`), and persists them; then it sends the message.
-Its top becomes `R`, and the timer of round `R` counts as fired.
+A restarted node is recovering until it resumes (`tryResume`). Let `t`
+be its top. It resumes at the highest round `R > t` at which its store
+holds `q` authors (`quorumRound`), if it has no block of its own at `t`,
+or if `R ≥ t + 2`; with its own block at `t` and `R = t + 1` it builds
+`t + 1` on that block as usual. Its top becomes `R`, with no block of
+its own there, the timer of round `R` counts as fired, and it builds
+`R + 1` by the rule of §3.2. Resuming sends nothing, and the next block
+is an ordinary one, valid at the row.
 
-A receiver takes the filled blocks from its own store (`jumpIn`). It
-needs `B1` at or above its horizon and the line above `B1`'s round, and
-it accepts the blocks as it accepts delivered ones. A receiver that
-lacks the line fetches the filled blocks as it fetches any missing
-block, and the jumping node answers from its store. Where both stores
-hold a block above `B1`'s round, they hold the same block under its hash,
-so the receiver derives the blocks the sender made (V6). The core proves
-this on universes (`JumpMsg`, SS10 of `SafeSkip/Jump.lean`).
+A node that is not recovering never resumes. A reliable node's own
+blocks therefore reference each other round by round from its first
+round on, which is what the inclusion argument reads (§11).
+
+Safe Skip, the scheme's jump over a downtime with filled blocks, is not
+part of the program. Its results stay in the shared layer
+(`SafeSkip/Jump.lean`), with L0.
 
 ### 3.6 Bootstrap
 
@@ -223,17 +216,16 @@ round, a presenter's attestation being its own offer (G10, `garbage.md`
 its top that has an attested block (`bootRound`, `tryBoot`):
 
 * it prunes its store to `G` and keeps the attested blocks there;
-* it restarts its own chain with a reference-free block at `G`, which it
-  persists and broadcasts, as the core's re-genesis does
-  (`Integration/ReGenesis.lean`);
+* its top moves to `G`, with no block of its own there, and the timer of
+  round `G` counts as fired;
 * it takes the offered blocks above `G`, and its own pending blocks at or
   above it, as pending;
 * it moves its next slot up to the first at or above `G`.
 
-The node stays recovering, so it jumps from its new chain once it holds
-a line above it (§3.5). A peer at a lower horizon rejects the
-reference-free block until its own horizon reaches `G`, as the core's
-re-genesis requires. The node decides no slot below `G`, so its
+It builds `G + 1` on the base by the rule of §3.2, a block valid at the
+row; a peer holds it pending until it holds the base blocks it
+references. The node stays recovering, so it resumes once its store
+holds a quorum above `G` (§3.5). The node decides no slot below `G`, so its
 decisions have a gap and need not be a prefix of another node's. What
 holds is that two honest nodes that decide a slot decide it alike (V9).
 
@@ -331,16 +323,16 @@ it; those still rest on an honest presenter's store, earlier in the trace.
 
 | | Claim | Route |
 |---|---|---|
-| V1 | Every block of the program's own, those it persists, filled blocks included, with references satisfies `ValidAt q C`; one without is a genesis or a bootstrap's; they lie at strictly increasing rounds, across restarts, jumps and bootstraps; it references only what it knew; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved, restarts, jumps and bootstraps included) |
+| V1 | Every block of the program's own, those it persists, satisfies `ValidAt q Clause.distinct`; they lie at strictly increasing rounds, across restarts, resumes and bootstraps; it references only what it knew; the blocks it broadcasts are those it persists; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.Sends`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved, restarts, resumes and bootstraps included) |
 | V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
-| V3 | In a run of honest nodes over any inputs, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every store along every run is a cut of it; under authentication of blocks and of jump messages, an injective hash and `Params.Tolerates`, with no honest node given a base offer, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise and whenever they jump. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
-| V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised, no honest node restarting and none given a jump message or a base offer, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
+| V3 | In a run of honest nodes over any inputs, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every store along every run is a cut of it; under authentication of blocks, an injective hash and `Params.Tolerates`, with no honest node given a base offer, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise and whenever they restart and resume. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
+| V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised, no honest node restarting and none given a base offer, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
 | V4 | The decisions a store pruned at `G` gives from a slot at or above `G` equal those of every view holding its blocks from `G` up, read at `G`: the loop reads nothing below the slot's round. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq`, `Node.ViewsAbove.of_store` (proved) |
 | V5 | At every state a run reaches, resuming from what the node persisted gives the state its restart recovers: the same blocks, read alike, at the same horizon, the same next slot, top and own block, its top round's timer fired, and nothing pending or asked for. | `Node.Restart.Resumes` (proved): `Node.resume_persisted`, `Node.State.recover` |
-| V6 | Under authenticated jump messages and an injective hash, every block an honest node derived from a jump message in an honest node's name is one of that node's own; the self-referencing filled block is valid at the program's validity at any quorum (L0). | `Node.Jump.Derives` (proved); `BlockRecord.selfBlock_valid` (proved). Retired from the program at step 7.1, where Safe Skip leaves it; L0 stays in the shared layer |
+| V6 | Retired: Safe Skip is not part of the program (§3.5). L0, the self-referencing filled block valid at any quorum, stays in the shared layer. | `BlockRecord.selfBlock_valid` (proved) |
 | V7 | Rate limiting does not make a validator decide wrongly. | `decided_mono_of_banded` |
 | V8 | The efficient store and decider compute the reference program's values. | one equality per function |
-| V9 | Over a trace with timely authentication of blocks, jump messages and base offers, an injective hash and `Params.Tolerates`, every honest store is a cut of the run's record, bootstraps included, so two honest nodes that decide a slot decide it alike. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.IsCut.boot`, `Node.IsCut.step`, `Node.verdict_decideStep`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
+| V9 | Over a trace with timely authentication of blocks and base offers, an injective hash and `Params.Tolerates`, every honest store is a cut of the run's record, bootstraps included, so two honest nodes that decide a slot decide it alike. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.IsCut.boot`, `Node.IsCut.step`, `Node.verdict_decideStep`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
 | V10 | Under the novelty budget, every honest block is eventually accepted, and an honest validator's store, with garbage collection, has a size independent of the runtime. | lifted C3 and B4 (§8), `card_retained_le` |
 | V12 | Every certified checkpoint is the honest nodes' decided prefix at its height; a bootstrapped node's commits are a certified prefix followed by its own decisions; any two honest nodes' commits are prefix-comparable. | planned, step 7.3: `checkpointQC_eq_of_same_height`, `CommitCheckpointUnique`, V9 |
 | V11 | A timed run past GST, with timeouts of at least `2Δ + proc`, gives a `SchemeReactive` and the delivery obligation `DeliversOn`; the mechanisms compose (`Stack.safe_and_live`), and every slot commits. | field by field from the run, V10 |
@@ -353,20 +345,11 @@ agrees on them. This is a lemma about `tryDecide` and the vote rule (for
 `leastSel` and `votedBlockSel`, which read only histories), proved in
 step 2; `View.toRecord` is the record a view gives.
 
-**Jumps in the run's record.** What an honest node knew includes the
-blocks its jump messages gave it (`derived`). These need no assumption
-of their own. A jump message in an honest node's name is one that node
-sent (`AuthenticJumps`). The receiver's store and the sender's then read
-alike above the sender's last block, so a derived block is one the
-sender made (V6). The filled blocks are therefore blocks of the record
-like any other, one per round of their author, and the record needs no
-before and after the fill. The scheme's statements about the fill as an
-extension (`decided_fill_of_persist`, `decided_none_of_novel`) are not
-needed at the node, and the prompt skip of a slot that the jumping node
-leads at a filled round is not proved there. Authentication covers a
-filled block that a peer forwards (`Authentic` reads the author's own
-blocks, not its broadcasts), as a signed later block of its author
-would, through the hash.
+**Authentication.** A block delivered to an honest node in an honest
+author's name is one that author broadcast (`Runs.Authentic`). The
+program broadcasts exactly the blocks it persists (`Node.Local.Sends`),
+so such a block is one of the author's own, one a round. A block a peer
+forwards is covered, since its author broadcast it.
 
 **Bootstraps need time.** A run without time cannot order a bootstrap
 after the offers it rests on. Two honest nodes could each bootstrap on
@@ -378,8 +361,7 @@ bootstraps only at a round with a block that `f + 1` distinct peers
 offered, so one of them is honest. That peer's offer was its store when
 it served it, earlier in the trace, and that store was a cut of the
 record then. So the record reaches the round, which is what keeps the
-node's new base, and its reference-free block there, blocks of the
-record. Each decision is then a verdict on a view of the record
+node's new base blocks of the record. Each decision is then a verdict on a view of the record
 (`Loop.sound`), and two verdicts on one slot agree.
 
 **The run's record under garbage collection.** A node keeps a block at
@@ -391,12 +373,13 @@ round `0`, and a round holding a real block, one whose references are
 known and which is valid at quorum `q` above such a round
 (`Node.Real`, `Node.Lives`). A real block is read as known; another keeps
 its round, author and payload and takes the references of a real block
-of its round. The record is at `ValidAt q Clause.none`, without the
-self-parent clause, which only Safe Skip reads. Every honest store along
-every run is a cut of it (`Node.IsCut`): its blocks are the record's,
-read without references at the store's horizon. A block at a horizon
-always has a real block of its round, the node's own, since the horizon
-lies at or below the node's round (`Node.Held`). Decisions read nothing
+of its round. The record is at `ValidAt q Clause.none`, which reads
+neither the self-parent nor the distinctness clause. Every honest store
+along every run is a cut of it (`Node.IsCut`): its blocks are the
+record's, read without references at the store's horizon. The record
+reaches every honest store's horizon (`Node.IsCut.spans`): the store
+holds a block at or above the node's top, and the horizon lies at or
+below the top (`Node.Held`). Decisions read nothing
 below the slot's round (V4), so the loop on a store decides as on a view
 of the record, and V3 holds as horizons rise.
 
@@ -431,8 +414,8 @@ own blocks (`State.persisted`). After GST, whatever a correct validator holds by
 every correct store holds by `m + 1` (`viewUpto_subset_viewUpto_succ`),
 so a peer can serve whatever lies below the horizon
 (`pruned_subset_peer_store`). It also persists `G`, so as not to accept
-blocks below it again, `lo`, so as not to repeat commits, and its own
-block at its top round, from which it resumes building; repeated commits
+blocks below it again, `lo`, so as not to repeat commits, and its top
+round with its own block there, if any, from which it resumes building; repeated commits
 would be identical, since the loop's restart is idempotent (`Restart`).
 
 A block is persisted before it is broadcast. Otherwise a crash between
@@ -466,17 +449,17 @@ soon as its store allows.
 Convergence (V3′) is stated for nodes that do not restart, the reliable
 set of the liveness claims: a restart drops the pending blocks, and
 nothing asks for them again until a later block needs them. Such nodes
-never jump, and V3′ assumes that no honest node is given a jump message.
+never resume or bootstrap, and V3′ assumes that no honest node is given
+a base offer.
 
 A node down long enough that its peers' horizons pass the rounds it
 missed cannot catch up by fetching. Its fetches go one round down per
 request. Its peers' horizons rise one round per round. The simulator
-shows this at `Λ = 2` after six ticks down (§6). Safe Skip covers the
-downtime itself: on restart the validator is at its last own block `B1`
-with its window intact, and once it holds a block two rounds or more
-above it, with that block's line, it jumps there. A validator down past
-its peers' horizons never holds the line, and rejoins by bootstrap
-(§3.6).
+shows this at `Λ = 2` after six ticks down (§6). Resuming covers the
+downtime itself: on restart the node keeps its window, and once its
+store holds a quorum two rounds or more above its last own block, it
+builds above that round (§3.5). A node down past its peers' horizons
+rejoins by bootstrap (§3.6).
 
 ## 6. Testing
 
@@ -493,8 +476,8 @@ its peers' horizons never holds the line, and rejoins by bootstrap
    the nodes. It reports the rounds reached, the slots decided and
    skipped, whether two honest nodes that decide a slot decide it alike,
    whether their decisions are prefix-comparable, whether every honest
-   block with references is valid under the blocks the nodes made, and
-   the jump messages and bootstraps the honest nodes made. One
+   block above round `0` is valid under the blocks the nodes made, and
+   the skips and bootstraps the honest nodes made. One
    scenario per row runs in the build (`LeanDagTest/Node/Sim.lean`).
    Compiled, four nodes over 2,000 ticks (874 rounds) run in half a
    second. `lake exe node` runs one node over JSON lines.
@@ -507,33 +490,25 @@ its peers' horizons never holds the line, and rejoins by bootstrap
    built on its twin: it stops building and its pending blocks grow.
    From *byzUntil* on it therefore acts on nothing.
 
-   A node down for six ticks restarts and catches up at `Λ = 6`, but not
-   at `Λ = 2`. It asks for the rounds it missed one round down per
-   request, and its peers' horizons pass them before it gets there.
-   With Safe Skip the restarted node jumps once it has fetched a line,
-   and every node reaches more rounds by tick 150:
+   A node down for six ticks restarts and catches up at `Λ = 6` by
+   fetching, but not at `Λ = 2`. It asks for the rounds it missed one
+   round down per request, and its peers' horizons pass them before it
+   gets there. A node that lags leads slots it has not built, and each
+   costs the others a timeout, so its rejoining matters to the network,
+   not only to itself.
 
-   | Λ | ticks down | rounds, no jump | rounds, with jump |
-   |---|---|---|---|
-   | 6 | 6 | 57 | 63–64 |
-   | 6 | 20 | 51 | 58 |
-   | 20 | 50 | 37 | 44 |
-
-   The gain is the network's, not only the restarted node's. A node that
-   lags leads slots it has not built, and each costs the others a
-   timeout. At `Λ = 2` nothing changes: the node never holds the line.
-
-   With bootstrap the restarted node rejoins at `Λ = 2` as well. Over
-   five seeds each, at `Λ = 2` and `Λ = 6` and after 6, 20 and 50 ticks
-   down, it ends within a round of its peers in all 30 runs. Agreement
-   and validity hold in every run. Asking for the bases once, at the
-   restart, was not enough: in 5 of 15 runs at `Λ = 2` the peers'
-   horizons were not yet above the node's top when they answered, and by
-   the time fetching had failed the node had nothing to ask on. It now
-   asks again as delivered blocks rise, which gave 15 of 15. A
-   bootstrapped node's decisions skip the slots below its new horizon,
-   so they are not a prefix of its peers'; the simulator therefore checks
-   agreement slot by slot.
+   With resuming (§3.5) and bootstrap (§3.6) the restarted node rejoins.
+   Over five seeds each, at `Λ` = 2, 6 and 20 and after 6, 20 and 50
+   ticks down, it ends within one round of its peers in all 45 runs, and
+   agreement and validity hold in every run. It resumes in 43 runs.
+   Bootstraps fall as `Λ` grows: 12 runs at `Λ = 2`, 5 at `Λ = 6` and
+   none at `Λ = 20`. Asking for the bases once, at the restart, was not
+   enough: in 5 of 15 runs at `Λ = 2` the peers' horizons were not yet
+   above the node's top when they answered, and by the time fetching had
+   failed the node had nothing to ask on. It asks again as delivered
+   blocks rise. A bootstrapped node's decisions skip the slots below its
+   new horizon, so they are not a prefix of its peers'; the simulator
+   therefore checks agreement slot by slot.
 4. **Optionally**, replaying records through the Rust decider of the
    Mysticeti codebase, where the scheme's table comes from.
 
@@ -549,7 +524,7 @@ its peers' horizons never holds the line, and rejoins by bootstrap
 | 5 | Garbage collection: V4, and V3 with horizons rising; persistence and restart: V5 (built) |
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 (built) |
 | 7 | Bootstrap in the program: V9 over a trace; G10's soundness lifted to block records (§8, L1) (built) |
-| 7.1 | Self-parent as a build rule, not a validity clause (§11): the shared inclusion argument reads it for reliable authors from a round on; the program's validity drops it; a node resumes above the highest round it holds a quorum at; Safe Skip leaves the program; bootstrap needs no reference-free block; block authentication back to a block its author broadcast |
+| 7.1 | Self-parent as a build rule, not a validity clause (§11): the shared inclusion argument reads it for reliable authors from a round on; the program's validity drops it; a recovering node resumes above the highest round it holds a quorum at; Safe Skip leaves the program; bootstrap needs no reference-free block; block authentication back to a block its author broadcast (built) |
 | 7.2 | One run model: V3 proved over a trace, and the model without time retired (§4, *Bootstraps need time*); crash points between a step's outputs, or the atomic write of a step's state stated as an assumption (§5.1); §4 says that the run's record is the proof's construction, not the union of the honest stores |
 | 7.3 | Checkpoints (§3.8): signed proposals of the decided prefix and certificates of `q` of them; the horizon bounded by the certified frontier; bootstrap adopting the certified prefix; V12, and V9 restated as prefix-comparability |
 | 7.4 | Adversarial simulation (§6): Byzantine nodes that send base offers with fabricated or inconsistent bases, offers in another node's name, malformed and invalid blocks, and conflicting checkpoint proposals; each scenario checks agreement and validity |
@@ -687,24 +662,24 @@ They are to be decided at the start of step 11.
 * The executables are `[[lean_exe]]` targets of `lakefile.toml`, not
   default targets, so `lake build` and the audits are unchanged.
 
-## 11. Self-parent as a build rule (step 7.1)
+## 11. Self-parent as a build rule (step 7.1, built)
 
 **Why.** The row's validity asks every non-genesis block to reference a
 block by its own author. No safety argument reads this: the run's record
 already drops it (§4). Liveness reads it once, for inclusion
 (`SelfParent.reaches_of_creator`): a reliable author's committed leader
 block reaches each earlier block of that author, by walking the author's
-chain down. Yet the clause is what stops a node that missed rounds from
-building, so Safe Skip fills the missed rounds with blocks of its own
-(§3.5), and a bootstrapped node, whose own blocks lie below its horizon,
-starts again with a reference-free block that is invalid at the row
-(§3.6). Both cost more than inclusion needs. Inclusion walks one reliable
+chain down. As a validity clause it stopped a node that missed rounds
+from building: Safe Skip had to fill the missed rounds with blocks of
+its own, and a bootstrapped node, whose own blocks lie below its
+horizon, had to start again with a reference-free block invalid at the
+row. Both cost more than inclusion needs. Inclusion walks one reliable
 author's chain from a committed block down to an earlier one, so it needs
 the clause only for reliable authors, and only above the round from which
 their chains are unbroken. A node that restarted or bootstrapped is not
 reliable across its gap anyway.
 
-**The work, in order.**
+**The work.**
 
 1. **The shared layer** (a §11.x step of `docs/target-properties.md`).
    `SelfParent` takes a reliability and a round `R₀`: every block by a
@@ -721,16 +696,17 @@ reliable across its gap anyway.
    references one round below, from `q` distinct authors, none twice.
    Every block the node builds is valid at the row again, the genesis
    included (V1 as first stated).
-3. **The build rule.** The node builds above the highest round at which
-   its store holds `q` authors, if that lies at or above its top; it
-   references its own block of that round when it has one, which is the
-   self-parent rule for honest nodes. A node whose top is its own last
-   block builds as now. A restarted node, once it holds a quorum at a
-   later round `R`, builds `R + 1` directly. The node's state allows a
-   top without an own block there; `Held` keeps instead that the store
-   holds a block at or above the horizon, which is what `Spans` needs.
-   Building above a later quorum is also what the pacing clause `catchup`
-   asks (§9), so the rule bears on decision 2 of §9.1.
+3. **The build rule.** A node references its own block of the round
+   below when it has one, which is the self-parent rule for honest
+   nodes. A node that is not recovering builds rounds in sequence. A
+   recovering node resumes at the highest round above its top at which
+   its store holds `q` authors, two rounds or more above it if it holds
+   its own block at its top, and builds the round above (§3.5); a
+   reliable node never resumes, so its chain is unbroken. The node's
+   state allows a top without an own block there; `Held` keeps instead
+   that the store holds a block at or above the top, which is what
+   `Spans` needs. Building above a later quorum is also what the pacing
+   clause `catchup` asks (§9), so the rule bears on decision 2 of §9.1.
 4. **Safe Skip leaves the program.** The jump input and output, the
    fill derivation (`jumpFills`, `lineDown`, `fillUp`, `insertAll`,
    `tryJump`, `jumpIn`), what jump messages give (`received`,
@@ -744,13 +720,11 @@ reliable across its gap anyway.
    a bootstrap is valid at the row, so peers below `G` accept it once they
    hold the base blocks it references.
 6. **Authentication.** Every block of a node's own is broadcast and
-   signed, so block authentication reads broadcasts again, as in step 4,
-   and the step 6 extension to a node's own unsigned blocks goes. What
-   was planned as fill authentication is moot.
-7. **Simulator and docs.** The simulator drops jump messages, reports
-   skips (a build above the node's top plus one) and bootstraps, and the
-   recovery sweep of §6 is rerun. §3.5, §3.6, §4 (V1, V3, V6, V9) and §5
-   are rewritten.
+   signed, so block authentication reads broadcasts, and the program
+   broadcasts exactly the blocks it persists (`Node.Local.Sends`).
+7. **Simulator.** The simulator has no jump messages; it reports skips
+   (a recovering node resuming) and bootstraps, and the recovery sweep of
+   §6 is rerun.
 
 **What it gives up.** Inclusion for a node's blocks below a gap in its
 chain. Those blocks may still be included through other authors' blocks;

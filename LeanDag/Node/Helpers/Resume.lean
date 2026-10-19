@@ -5,7 +5,7 @@ import LeanDag.Node.Helpers.Horizon
 The window lists the store's identifiers in order, each with its block,
 so the map rebuilt from it gives every stored identifier its block, and
 the rebuilt store meets the store's conditions because the old one did
-(`resume_persisted`). The own block gives back the top.
+(`resume_persisted`). The top and the own block are persisted as they are.
 -/
 
 namespace LeanDag
@@ -39,13 +39,6 @@ theorem resume_persisted {s : State Validator BlockId Payload} (hh : Held cfg s)
   have hlk : ∀ j ∈ st.ids,
       lookup (Std.TreeMap.ofList w compare) cfg.genesis st.base j = st.blk j := fun j hj => by
     simp only [lookup, Store.blk, hget j hj]
-  have htop : ∀ (st' : Store Validator BlockId Payload), (∀ j ∈ st.ids, st'.blk j = st.blk j) →
-      s.own.map (fun o => (st'.blk o).round) = s.top := by
-    intro st' hst
-    rcases ht : s.top with _ | t
-    · rw [hh.own_none ht]; rfl
-    · obtain ⟨o, ho, hoi, hor⟩ := hh.own t ht
-      rw [ho, Option.map_some, hst o hoi, hor]
   unfold resume
   simp only [State.persisted, Store.window]
   split
@@ -55,7 +48,6 @@ theorem resume_persisted {s : State Validator BlockId Payload} (hh : Held cfg s)
         cfg.genesis, st.base, h.1, h.2.1, h.2.2⟩ : Store Validator BlockId Payload).blk j =
           st.blk j := hlk
     simp only [State.recover]
-    rw [htop _ hst]
   · rename_i h
     refine absurd ?_ h
     rw [hids]

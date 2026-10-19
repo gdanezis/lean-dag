@@ -8,15 +8,13 @@ one with a node withholding a block it leads from one node until
 that node has asked for it, and three with a node that restarts after a
 downtime: the honest nodes build, skip the slots of a node that is down,
 fetch what they did not receive, asking again on account of each block
-that needs it, decide alike, and make only valid blocks but the
-reference-free one a bootstrap starts its chain with. A restarting node
-asks its peers for their bases; one whose peers have pruned past its top
-bootstraps, and one that holds the line of a block two rounds or more
-above its own jumps there with one message. Each line reads: admissible,
-the round each honest node reached, the slots it decided, those it
-skipped, whether two nodes that decide a slot decide it alike, whether
-the blocks are valid, and, for the restarts, the jump messages sent and
-the bootstraps made.
+that needs it, decide alike, and make only valid blocks above round `0`.
+A restarting node asks its peers for their bases; one whose peers have
+pruned past its top bootstraps, and one whose store holds a quorum at a
+round above its top skips there. Each line reads: admissible, the round
+each honest node reached, the slots it decided, those it skipped,
+whether two nodes that decide a slot decide it alike, whether the blocks
+are valid, and, for the restarts, the skips and the bootstraps made.
 -/
 
 namespace LeanDagTest
@@ -31,11 +29,10 @@ def summary (sc : Scenario) : String :=
   s!"{r.admissible} {r.tops} {r.commits.map (·.length)} " ++
     s!"{r.commits.map fun l => (l.filter (·.2.isNone)).length} {r.agree} {r.valid}"
 
-/-- A scenario's outcome, with the jump messages sent and the bootstraps
-made. -/
-def summaryJ (sc : Scenario) : String :=
+/-- A scenario's outcome, with the skips and the bootstraps made. -/
+def summaryR (sc : Scenario) : String :=
   let r := simulate sc
-  s!"{summary sc} {r.jumps} {r.boots}"
+  s!"{summary sc} {r.skips} {r.boots}"
 
 /--
 info: "true [(some 41), (some 26), (some 41), (some 41)] [37, 24, 37, 37] [2, 0, 2, 2] true true"
@@ -88,28 +85,28 @@ info: "true [(some 141), (some 141), (some 141), (some 141)] [139, 139, 139, 139
 #eval summary { horizon := 150, row := "mysticeti", withhold := some (3, 2, 7), delayMax := 1 }
 
 /--
-info: "true [(some 57), (some 58), (some 57), (some 57)] [55, 56, 55, 55] [1, 1, 1, 1] true true 1 0"
+info: "true [(some 58), (some 58), (some 59), (some 58)] [57, 57, 57, 56] [1, 1, 1, 1] true true 1 0"
 -/
 #guard_msgs in
-#eval summaryJ { horizon := 150, row := "mysticeti", recover := [(1, 40, 46)], lag := 6 }
+#eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 46)], lag := 6 }
 
 /--
-info: "true [(some 59), (some 59), (some 59), (some 59)] [57, 57, 57, 57] [1, 1, 1, 1] true true 1 0"
+info: "true [(some 57), (some 56), (some 57), (some 57)] [55, 55, 55, 55] [1, 1, 1, 1] true true 1 0"
 -/
 #guard_msgs in
-#eval summaryJ { horizon := 150, row := "mysticeti", recover := [(1, 40, 60)], lag := 6 }
+#eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 60)], lag := 6 }
 
 /--
-info: "true [(some 54), (some 54), (some 55), (some 54)] [53, 48, 53, 52] [1, 1, 1, 1] true true 1 1"
+info: "true [(some 51), (some 51), (some 51), (some 51)] [49, 44, 49, 49] [2, 2, 2, 2] true true 1 1"
 -/
 #guard_msgs in
-#eval summaryJ { horizon := 150, row := "mysticeti", recover := [(1, 40, 46)] }
+#eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 46)] }
 
 /--
-info: "true [(some 52), (some 52), (some 53), (some 53)] [50, 43, 51, 51] [2, 1, 2, 2] true true 1 1"
+info: "true [(some 49), (some 50), (some 50), (some 50)] [48, 41, 48, 48] [2, 1, 2, 2] true true 1 1"
 -/
 #guard_msgs in
-#eval summaryJ { horizon := 150, row := "mysticeti", recover := [(1, 40, 90)] }
+#eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 90)] }
 
 end Node
 

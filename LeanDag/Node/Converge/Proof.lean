@@ -267,7 +267,7 @@ theorem converges : Converges := by
     (by simp [delivered, ← hid₀]) (by rw [hraw₀, hecr]; exact huH)
   rw [hraw₀, hecr] at hi'u
   obtain ⟨inp', hi'⟩ := event_of_map hi'u
-  have hst' := (persist_stored hbase huH hi' (by rw [hraw₀] at hi'b; exact hi'b)).1
+  have hst' := (persist_stored hbase huH hi' (by rw [hraw₀] at hi'b; exact persists_of_broadcasts hi'b)).1
   have hA0 : A ⟨0, h0⟩ ≤ A m := hmax ⟨0, h0⟩ (Finset.mem_univ _)
   have hgk := grows_before (cfg := cfg) (tr := tr) u (show i' + 1 ≤ k by omega)
   have hzk : x len ∈ (stateBefore cfg tr k u).store.ids :=
@@ -289,15 +289,14 @@ theorem converges : Converges := by
   -- `v` acts on it, so it ends pending or stored there, which it does not
   have hcr : (raw (x len)).creator ≠ v := by
     intro hc
-    rcases hrawk _ (hxH len le_rfl).1 with ⟨j, w', inp, hj₀, hw', hdl⟩ | ⟨j, w', hj, hw', hb⟩ |
-        ⟨j, w', hw', hd⟩
+    rcases hrawk _ (hxH len le_rfl).1 with ⟨j, w', inp, hj₀, hw', hdl⟩ | ⟨j, w', hj, hw', hb⟩
     · obtain ⟨hj, hid⟩ := deliver_of_delivered hnj hw' hj₀ hdl
       have hid' : x len = (cfg.at w').idOf (raw (x len)) := hid
       obtain ⟨i'', -, hi''v, hi''b⟩ := htime j w' _ hj hw' (x len, raw (x len))
         (by simp [delivered, ← hid']) (by rw [hc]; exact hv)
       rw [hc] at hi''v
       obtain ⟨inp'', hi''⟩ := event_of_map hi''v
-      have := (persist_stored hbase hv hi'' hi''b).1
+      have := (persist_stored hbase hv hi'' (persists_of_broadcasts hi''b)).1
       exact (hxH len le_rfl).2 ((grows_before (cfg := cfg) (tr := tr) v
         (show i'' + 1 ≤ L by have := (List.getElem?_eq_some_iff.mp hi'').1; omega)).2
         (by rw [base_before hbase hv, base_before hbase hv]) |>.1 this)
@@ -311,8 +310,6 @@ theorem converges : Converges := by
       exact (hxH len le_rfl).2 ((grows_before (cfg := cfg) (tr := tr) w'
         (show j + 1 ≤ L by have := (List.getElem?_eq_some_iff.mp hj').1; omega)).2
         (by rw [base_before hbase hv, base_before hbase hv]) |>.1 this)
-    · rw [derived_before hnj hw'] at hd
-      exact absurd hd List.not_mem_nil
   rcases hdeliv (x len) (hxH len le_rfl).1 k' hk'L htk' hcr with h' | h'
   · exact hxl (List.mem_map.mpr ⟨_, h', rfl⟩)
   · exact (hxH len le_rfl).2 h'

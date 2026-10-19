@@ -19,10 +19,10 @@ namespace Node
 
 namespace Boot
 
-theorem mem_persists {Validator BlockId Payload : Type}
+theorem mem_broadcasts {Validator BlockId Payload : Type}
     {out : List (Output Validator BlockId Payload)} {x : BlockId × Block Validator BlockId Payload} :
-    x ∈ persists out ↔ Output.persist x.1 x.2 ∈ out := by
-  unfold persists
+    x ∈ broadcasts out ↔ Output.broadcast x.1 x.2 ∈ out := by
+  unfold broadcasts
   rw [List.mem_filterMap]
   constructor
   · rintro ⟨o, ho, hox⟩
@@ -33,7 +33,7 @@ theorem mem_persists {Validator BlockId Payload : Type}
     exact ⟨_, h, rfl⟩
 
 theorem agrees : Agrees := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hjmp hoff hinj
+  intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hoff hinj
   -- the run model's assumptions, over the honest nodes' whole runs
   have hinjR : Runs.HashInjective cfg H (insOf tr) := fun v hv w hw x hx y hy h =>
     hinj x (knownOf_sub hv hx) y (knownOf_sub hw hy) h
@@ -42,19 +42,13 @@ theorem agrees : Agrees := by
     obtain ⟨j, -, inp, hj, hd⟩ := mem_delivered_before (cfg.at v) v tr.length hx
     obtain ⟨i, -, hiv, hxp⟩ := htime j v inp hj hv x hd hc
     obtain ⟨inp', hi⟩ := Converge.event_of_map hiv
-    exact mem_persists.mpr (mem_outputs_of_event hi (mem_persists.mp hxp))
-  have hjumpR : Runs.AuthenticJumps cfg H (insOf tr) := by
-    intro v hv v1 B1 v2 B2 hin hv1
-    obtain ⟨j, hj⟩ := Converge.mem_inputsBefore hin
-    obtain ⟨i, -, hiv, ho⟩ := hjmp j v v1 B1 v2 B2 hj hv hv1
-    obtain ⟨inp', hi⟩ := Converge.event_of_map hiv
-    exact mem_outputs_of_event hi ho
+    exact mem_broadcasts.mpr (mem_outputs_of_event hi (mem_broadcasts.mp hxp))
   haveI : Validity.Quorate (ValidAt (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
-  let U := globalRecord hinjR hauthR hjumpR
+  let U := globalRecord hinjR hauthR
   have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2, hadm.1⟩
-  have hg := ground hinjR hauthR hjumpR hadm.2.2.2.1
+  have hg := ground hinjR hauthR hadm.2.2.2.1
   have hK : ∀ v ∈ H, ∀ x ∈ knownOf cfg (insOf tr) v, x ∈ knownAll cfg H (insOf tr) :=
     fun v hv x hx => ⟨v, hv, hx⟩
   -- every honest store is a cut, and every decision a verdict
@@ -66,7 +60,7 @@ theorem agrees : Agrees := by
     | _ t ih =>
     intro v hv
     rcases t with _ | t
-    · refine ⟨isCut_init hinjR hauthR hjumpR (cfg.at v), fun e he => ?_⟩
+    · refine ⟨isCut_init hinjR hauthR (cfg.at v), fun e he => ?_⟩
       simp [inputsBefore, run, commitsOf] at he
     · rcases hj : tr[t]? with _ | ⟨w, inp⟩
       · have hL : tr.length ≤ t := List.getElem?_eq_none_iff.mp hj
@@ -81,13 +75,13 @@ theorem agrees : Agrees := by
           obtain ⟨hc, hv₀⟩ := ih t (by omega) w hv
           have hh : Held (cfg.at w) (stateBefore cfg tr t w) := Held.run _ Held.init
           have hi := Converge.inv_before (cfg := cfg) (tr := tr) t w
-          obtain ⟨hd, hr, hb⟩ := event_knownOf (cfg := cfg) hj
+          obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hj
           -- a bootstrap is at a round the record reaches
-          have hspan : ∀ p G bs s₂ out, inp = .baseOffer p G bs →
-              tryBoot (cfg.at w) (withOffer (stateBefore cfg tr t w) p G bs) = some (s₂, out) →
+          have hspan : ∀ p G bs s₂, inp = .baseOffer p G bs →
+              tryBoot (cfg.at w) (withOffer (stateBefore cfg tr t w) p G bs) = some s₂ →
               Spans U s₂.store.base := by
-            intro p G bs s₂ out hinp hbt
-            obtain ⟨t₀, G₂, hb₂, -, -, hroot, hg₂, hst, -⟩ := tryBoot_some hbt
+            intro p G bs s₂ hinp hbt
+            obtain ⟨t₀, G₂, hb₂, -, -, hroot, hst, -⟩ := tryBoot_some hbt
             have hbase : s₂.store.base = G₂ := by
               rw [hst, flush_base]
               change ((baseAt (cfg.at w) _ G₂).foldl (fun st e => Node.accept (cfg.at w) st e.1 e.2)
@@ -129,7 +123,7 @@ theorem agrees : Agrees := by
           obtain ⟨hc', hv'⟩ := IsCut.step (cfg := cfg.at w) hg hσ ht inp hc hh
             (fun e he => hK w hv e (knownBefore_knownOf (hi.pend e he)))
             (fun o ho e he hid => hK w hv e (knownBefore_knownOf (hi.offered o ho e he hid)))
-            (fun e he => hK w hv e (hd e he)) (fun e he => hK w hv e (hr e he))
+            (fun e he => hK w hv e (hd e he))
             (fun e he => hK w hv e (hb e he)) hspan
           refine ⟨by rw [stateBefore_succ hj, if_pos rfl]; exact hc', fun e he => ?_⟩
           rw [inputsBefore_succ hj, if_pos rfl, run_append_single, commitsOf_append] at he

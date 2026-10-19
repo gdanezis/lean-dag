@@ -10,13 +10,15 @@ network with a seeded schedule: before GST a message takes up to
 fires when it expires. A crashed node acts on nothing from its crash
 time on; a recovering node acts on nothing while it is down, then
 restarts, keeping only what it persisted, asks its peers for their bases,
-and may bootstrap from them or jump over its downtime with one message. An equivocator is two copies of the honest program with the
-same identity and different payloads, each sending to half the nodes,
-so its twins are valid blocks; it acts on nothing from `byzUntil` on. A node's request for blocks goes to every
-other node, and an answer to the node that asked. `simulate` runs the schedule and reports
-what each honest node reached and committed, whether their decisions
-agree, whether every honest block is valid under the blocks the nodes
-made, and how many jump messages and bootstraps the honest nodes made.
+and either skips to a round its store holds a quorum at or bootstraps
+from the bases. An equivocator is two copies of the honest program with
+the same identity and different payloads, each sending to half the
+nodes, so its twins are valid blocks; it acts on nothing from `byzUntil`
+on. A node's request for blocks goes to every other node, and an answer
+to the node that asked. `simulate` runs the schedule and reports what
+each honest node reached and committed, whether their decisions agree,
+whether every honest block above round `0` is valid under the blocks the
+nodes made, and how many skips and bootstraps the honest nodes made.
 -/
 
 namespace LeanDagSim
@@ -118,13 +120,13 @@ structure Report where
   agree : Bool
   /-- Any two honest nodes' decisions are prefix-comparable. -/
   prefixes : Bool
-  /-- Every honest block with references is valid at the row under the
+  /-- Every honest block above round `0` is valid at the row under the
   blocks the nodes made. -/
   valid : Bool
-  /-- The jump messages the honest nodes sent. -/
-  jumps : ℕ
-  /-- The bootstraps the honest nodes made: their reference-free blocks
-  above round `0`. -/
+  /-- The skips the honest nodes made: a recovering node resuming at a
+  round above its top. -/
+  skips : ℕ
+  /-- The bootstraps the honest nodes made. -/
   boots : ℕ
   /-- The largest store any honest node held. -/
   maxStore : ℕ
@@ -145,7 +147,7 @@ variable {n : ℕ} (sc : Scenario) (p : Scheme.Params) (q : ℕ) (hn : 0 < n)
 /-- The simulation's state: each agent's state, the inputs in flight, the
 seed, each agent's decisions, the honest agents' own blocks, all agents'
 own blocks, the largest honest store, the inputs processed, and the
-honest agents' jump messages. -/
+honest agents' skips and bootstraps. -/
 structure World (n : ℕ) where
   agents : Array (Agent n)
   states : Array (State (Fin n) ℕ ℕ)
@@ -159,7 +161,8 @@ structure World (n : ℕ) where
   time : ℕ
   /-- The withheld block, once built. -/
   withheld : Option (ℕ × Block (Fin n) ℕ ℕ)
-  jumps : ℕ
+  skips : ℕ
+  boots : ℕ
 
 /-- Whether node `v` has crashed by time `t`. -/
 def crashed (v t : ℕ) : Bool :=
@@ -187,15 +190,6 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
           if receives sc a s then
             let (dt, g') := delay sc t acc.2
             ((t + dt, d, .deliver id b) :: acc.1, g')
-          else acc
-        | _, _ => acc) acc
-    | .jump v1 B1 v2 B2 =>
-      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
-        match agents[src]?, agents[d]? with
-        | some s, some a =>
-          if receives sc a s then
-            let (dt, g') := delay sc t acc.2
-            ((t + dt, d, .jump v1 B1 v2 B2) :: acc.1, g')
           else acc
         | _, _ => acc) acc
     | .requestBase =>
@@ -294,7 +288,10 @@ def loop : ℕ → World n → World n
         let own := r.2.filterMap fun
           | .persist id b => some (id, b)
           | _ => none
-        let js := (r.2.filter fun | .jump .. => true | _ => false).length
+        let skip := st.recovering && !r.1.recovering
+        let boot := match i with
+          | .baseOffer .. => st.recovering && r.1.offers.isEmpty
+          | _ => false
         let decs := r.2.filterMap fun
           | .commit k x => some (k, x)
           | _ => none
@@ -310,7 +307,8 @@ def loop : ℕ → World n → World n
             events := w.events + 1
             time := t
             withheld := wh
-            jumps := if isHonest then w.jumps + js else w.jumps }
+            skips := if isHonest && skip then w.skips + 1 else w.skips
+            boots := if isHonest && boot then w.boots + 1 else w.boots }
       | _, _ => loop fuel { w with queue := rest }
 
 end Run
@@ -350,21 +348,22 @@ def simulate (sc : Scenario) : Report :=
           events := 0
           time := 0
           withheld := none
-          jumps := 0 }
+          skips := 0
+          boots := 0 }
       let w := loop sc p q hn sc.fuel w0
       let honestIdx := (List.range n).filter fun v => !(sc.byz.contains v)
       let decs := honestIdx.map fun v => w.decisions[v]?.getD []
       let junk : Block (Fin n) ℕ ℕ := ⟨0, ⟨0, hn⟩, ∅, 0⟩
       let valid := w.honest.all fun e =>
-        e.2.refs.card == 0 || decide (rowValid q (fun i => w.blocks.getD i junk) e.2)
+        e.2.round == 0 || decide (rowValid q (fun i => w.blocks.getD i junk) e.2)
       { admissible := true
         tops := honestIdx.map fun v => (w.states[v]?.map (·.top)).getD none
         commits := decs
         agree := agreeAt decs
         prefixes := comparable decs
         valid := valid
-        jumps := w.jumps
-        boots := (w.honest.filter fun e => e.2.refs.card == 0 && 0 < e.2.round).length
+        skips := w.skips
+        boots := w.boots
         maxStore := w.maxStore
         events := w.events
         time := w.time }

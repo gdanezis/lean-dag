@@ -5,7 +5,7 @@ import LeanDag.Node.Helpers.Local
 
 The invariant `Inv` holds of the initial state with nothing known and no
 block of its own, and each step keeps it (`Helpers/Local.lean`); the
-four claims about the node's own blocks are read off it at the end of a
+five claims about the node's own blocks are read off it at the end of a
 run. Decisions read only the view by `ViewsAbove.tryDecide_eq` at the
 bounded vote.
 -/
@@ -18,11 +18,8 @@ namespace Local
 
 theorem shape : Shape := by
   intro Validator BlockId Payload _ _ _ cfg is i
-  obtain ⟨xs, js, fs, bs, ds, gs, hxs, hjs, hgs, ho, -⟩ := (Inv.init.run (cfg := cfg) is).step i
-  refine ⟨xs, js, bs, ds, gs, hxs, ?_, hgs, ho⟩
-  rcases hjs.shape with ⟨rfl, -⟩ | ⟨B1, v2, B2, rfl⟩
-  · exact Or.inl rfl
-  · exact Or.inr ⟨fs, B1, v2, B2, rfl⟩
+  obtain ⟨xs, bs, ds, gs, hxs, hgs, ho, -⟩ := (Inv.init.run (cfg := cfg) is).step i
+  exact ⟨xs, bs, ds, gs, hxs, hgs, ho⟩
 
 theorem oneEach : OneEach := by
   intro Validator BlockId Payload _ _ _ cfg is
@@ -39,6 +36,10 @@ theorem authored : Authored := by
   simp only [List.nil_append] at hi
   exact ⟨(hi.good e he).1, (hi.good e he).2.1⟩
 
+theorem sends : Sends := by
+  intro Validator BlockId Payload _ _ _ cfg is
+  exact broadcasts_run is Inv.init
+
 theorem validOut : ValidOut := by
   intro Validator BlockId Payload _ _ _ cfg is
   dsimp only
@@ -46,7 +47,7 @@ theorem validOut : ValidOut := by
   have hi := Inv.init.run (cfg := cfg) is
   simp only [List.nil_append] at hi
   obtain ⟨-, -, hrefs, hv⟩ := hi.good e he
-  refine ⟨fun j hj => ?_, fun hn blk hblk => hv hn blk fun x hx => hblk x ?_⟩
+  refine ⟨fun j hj => ?_, fun blk hblk => hv blk fun x hx => hblk x ?_⟩
   · obtain ⟨c, hc⟩ := hrefs j hj
     refine List.mem_map.mpr ⟨(j, c), ?_, rfl⟩
     simp only [Set.empty_union, Set.mem_union, Set.mem_setOf_eq] at hc
@@ -64,7 +65,7 @@ theorem decidesOnView : DecidesOnView := by
   · rw [hσ, h.tryDecide_eq cfg.p hadm.2.1.1 _ hlo]
   · rfl
 
-theorem holds : Statement := ⟨shape, oneEach, authored, validOut, decidesOnView⟩
+theorem holds : Statement := ⟨shape, oneEach, authored, sends, validOut, decidesOnView⟩
 
 end Local
 

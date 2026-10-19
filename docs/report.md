@@ -2998,9 +2998,9 @@ def IncludesAt (BlockId : Type) [DecidableEq BlockId] (Payload : Type)
           b ∈ ledgerSet U g n
 
 theorem committed_of_correct_block
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (S : Slots Validator) (hT : T ⊆ rel.correct)
-    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) (hv : v ∈ T) :
+    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) (hm₀ : R₀ ≤ m) (hv : v ∈ T) :
     ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧ …
 ```
 

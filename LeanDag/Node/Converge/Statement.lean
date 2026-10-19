@@ -10,12 +10,12 @@ adversary, assume:
   has caught up;
 * **timely authentication** (`TimelyAuthentic`): a block delivered or
   offered to an honest node with an honest author's identity and its hash
-  was made by that author earlier in the trace;
+  was broadcast by that author earlier in the trace;
 * **the hash** (`HashInjective`): no two different blocks the honest
   nodes knew have one identifier;
 * no honest node raises its horizon or restarts (`NoRestart`): the
-  honest nodes here are the reliable ones; and none is given a jump
-  message or a base offer (`NoRejoin`).
+  honest nodes here are the reliable ones; and none is given a base
+  offer (`NoRejoin`).
 
 Then **every block an honest node broadcast, with its history, is in
 every honest node's store at the end** (`Converges`).
@@ -40,23 +40,21 @@ def Delivered (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     ∃ j, i < j ∧ tr[j]? = some m
 
 /-- **Timely authentication**: a block delivered or offered to an honest
-node with an honest author's identity and its hash was made by that
+node with an honest author's identity and its hash was broadcast by that
 author earlier. -/
 def TimelyAuthentic (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ j v inp, tr[j]? = some (v, inp) → v ∈ H → ∀ x ∈ delivered (cfg.at v) [inp], x.2.creator ∈ H →
-    ∃ i < j, (tr[i]?.map Prod.fst) = some x.2.creator ∧ x ∈ persists (outputsAt cfg tr i)
+    ∃ i < j, (tr[i]?.map Prod.fst) = some x.2.creator ∧ x ∈ broadcasts (outputsAt cfg tr i)
 
-/-- The blocks delivered or offered to honest nodes with their hash, those
-honest nodes made, and those jump messages gave them. -/
+/-- The blocks delivered or offered to honest nodes with their hash, and
+those honest nodes made. -/
 def knownIn (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload) : Set (BlockId × Block Validator BlockId Payload) :=
   {x | (∃ (j : ℕ) (v : Validator) (inp : Input Validator BlockId Payload),
       tr[j]? = some (v, inp) ∧ v ∈ H ∧ x ∈ delivered (cfg.at v) [inp]) ∨
-    (∃ (i : ℕ) (u : Validator), (tr[i]?.map Prod.fst) = some u ∧ u ∈ H ∧
-      x ∈ persists (outputsAt cfg tr i)) ∨
-    ∃ (i : ℕ) (v : Validator), v ∈ H ∧
-      x ∈ derived (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr i v)}
+    ∃ (i : ℕ) (u : Validator), (tr[i]?.map Prod.fst) = some u ∧ u ∈ H ∧
+      x ∈ persists (outputsAt cfg tr i)}
 
 /-- **The hash** is injective on the blocks honest nodes knew. -/
 def HashInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator)
@@ -67,10 +65,9 @@ def HashInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator
 def NoRestart (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ (i : ℕ) v, v ∈ H → tr[i]? ≠ some (v, Input.restart)
 
-/-- **No honest node is given a jump message or a base offer.** -/
+/-- **No honest node is given a base offer.** -/
 def NoRejoin (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Prop :=
-  ∀ (i : ℕ) v, v ∈ H → (∀ v1 B1 v2 B2, tr[i]? ≠ some (v, Input.jump v1 B1 v2 B2)) ∧
-    ∀ p G bs, tr[i]? ≠ some (v, Input.baseOffer p G bs)
+  ∀ (i : ℕ) v, v ∈ H → ∀ p G bs, tr[i]? ≠ some (v, Input.baseOffer p G bs)
 
 /-- **Every block an honest node broadcast, with its history, is in every
 honest node's store at the end.** -/

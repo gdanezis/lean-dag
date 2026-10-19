@@ -7,7 +7,7 @@ transition function from inputs to outputs. `Config` fixes the row, the
 quorum, the node's identity, the schedule, the timeouts, the vote rule,
 the identifier map and the mechanisms' constants; `Input` and `Output`
 are the events it consumes and produces, with those of garbage
-collection, Safe Skip and bootstrap included.
+collection and bootstrap included.
 
 The node checks the row's validity `rowValid q` on receipt, and decides
 on a record of its own store at `stored`, references one round below,
@@ -23,9 +23,11 @@ namespace Node
 variable {Validator BlockId Payload : Type} [DecidableEq Validator]
 
 /-- **The node's validity**: references one round below from `q`
-distinct authors, no author twice, and the author's own previous block. -/
+distinct authors, no author twice. Referencing the author's own previous
+block is the honest build rule, not a validity clause (`docs/validator.md`
+§11). -/
 abbrev rowValid (q : ℕ) : Validity Validator BlockId Payload :=
-  ValidAt q (Clause.distinct.and Clause.selfParent)
+  ValidAt q Clause.distinct
 
 variable (Validator BlockId Payload) in
 /-- **The validity a store's record carries**: references one round
@@ -114,7 +116,9 @@ structure Persisted where
   horizon : ℕ
   /-- The next undecided slot. -/
   lo : ℕ
-  /-- The node's own block at its top round, once started. -/
+  /-- The node's top round, once started. -/
+  top : Option ℕ
+  /-- The node's own block at its top round, if it built there. -/
   own : Option BlockId
 
 /-- **What a node consumes.** -/
@@ -123,9 +127,6 @@ inductive Input where
   | start
   /-- A block, with its identifier. -/
   | deliver (id : BlockId) (b : Block Validator BlockId Payload)
-  /-- A jump message: `v1` resumes after its block `B1` along `v2`'s
-  line through `B2`. -/
-  | jump (v1 : Validator) (B1 : BlockId) (v2 : Validator) (B2 : BlockId)
   /-- The timer of round `r` fired. -/
   | timer (r : ℕ)
   /-- A crash and restart: the node keeps only what it persisted. -/
@@ -143,8 +144,6 @@ inductive Output where
   | persist (id : BlockId) (b : Block Validator BlockId Payload)
   /-- Send a block to every peer. -/
   | broadcast (id : BlockId) (b : Block Validator BlockId Payload)
-  /-- Send a jump message to every peer. -/
-  | jump (v1 : Validator) (B1 : BlockId) (v2 : Validator) (B2 : BlockId)
   /-- Call back with `Input.timer r` after `after` ticks. -/
   | setTimer (r : ℕ) (after : ℕ)
   /-- Slot `k` is decided: committed to a block, or skipped. -/

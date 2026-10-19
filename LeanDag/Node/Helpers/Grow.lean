@@ -132,31 +132,18 @@ theorem Grows.advance (s : State Validator BlockId Payload) :
   exact hc.trans (Grows.flush _ _ _)
 
 omit [Fintype Validator] in
-theorem Grows.insertAll {F : List (BlockId × Block Validator BlockId Payload)}
-    {st st' : Store Validator BlockId Payload} (h : insertAll cfg st F = some st') : Grows st st' :=
-  insertAll_induct (cfg := cfg) (fun t => Grows st t) (fun _ _ _ _ ht => ht.trans (Grows.insert _))
-    h (Grows.refl st)
-
-omit [Fintype Validator] in
-theorem Grows.tryJump {s s' : State Validator BlockId Payload}
-    {out : List (Output Validator BlockId Payload)} (h : tryJump cfg s = some (s', out)) :
-    Grows s.store s'.store := by
-  obtain ⟨r0, B1, B2, F, e, -, -, -, -, hst, -⟩ := tryJump_some h
-  exact Grows.insertAll hst
-
-omit [Fintype Validator] in
 /-- **A bootstrap raises the horizon.** -/
-theorem Grows.boot {s s' : State Validator BlockId Payload}
-    {out : List (Output Validator BlockId Payload)} (h : tryBoot cfg s = some (s', out)) :
+theorem Grows.boot {s s' : State Validator BlockId Payload} (h : tryBoot cfg s = some s') :
     Grows s.store s'.store := by
   refine ⟨(boot_base h).le, fun e => absurd e (ne_of_gt (boot_base h))⟩
 
 omit [Fintype Validator] in
 theorem Grows.settle (s : State Validator BlockId Payload) :
     Grows s.store (Node.settle cfg s).1.store := by
-  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, out, hj, h⟩ <;> rw [h]
+  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h]
   · exact Grows.advance s
-  · exact (Grows.tryJump hj).trans (Grows.advance s₁)
+  · obtain ⟨-, -, -, -, -, -, hst, -⟩ := tryResume_some hj
+    exact hst ▸ Grows.advance s₁
 
 omit [Fintype Validator] in
 theorem Grows.settle_of {st : Store Validator BlockId Payload} (s : State Validator BlockId Payload)
@@ -189,16 +176,11 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     · exact Grows.refl _
   | timer r => exact Grows.settle_of _ rfl
   | restart => exact Grows.settle_of _ rfl
-  | jump v1 B1 v2 B2 =>
-    simp only [Node.step]
-    split
-    · exact Grows.refl _
-    · exact (Grows.flush (cfg := cfg) _ s.store _).trans (Grows.settle_of _ rfl)
   | baseOffer peer G bs =>
     simp only [Node.step]
     split
     · split
-      · rename_i s₂ out hb
+      · rename_i s₂ hb
         refine (Grows.boot hb).trans (Grows.advance _)
       · exact Grows.refl _
     · exact Grows.refl _
