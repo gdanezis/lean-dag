@@ -196,6 +196,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
     (hb : (Node.step cfg s inp).1.store.base = s.store.base)
     (hp : ∀ e ∈ s.pending, g e.1 = atBase 0 e.2)
     (hd : ∀ id b, inp = .deliver id b → id = cfg.idOf b → g id = atBase 0 b)
+    (hr : inp ≠ .restart)
     {y : BlockId × Block Validator BlockId Payload} (hf : Fits cfg g y)
     (hy : y ∈ s.pending ∨ y.1 ∈ s.store.ids) :
     y ∈ (Node.step cfg s inp).1.pending ∨ y.1 ∈ (Node.step cfg s inp).1.store.ids := by
@@ -253,7 +254,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
       hp hy
   | fetchRequest peer ids => exact hy
   | jump => exact hy
-  | restart => exact hy
+  | restart => exact absurd rfl hr
   | baseOffer => exact hy
   | baseRequest => exact hy
 
@@ -305,6 +306,10 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
   | timer r =>
     have := settle_sub (cfg := cfg) { s with fired := insert r s.fired }
     exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
+  | restart =>
+    have := settle_sub (cfg := cfg) s.recover
+    exact ⟨fun e he => absurd (this.1 e he) (by simp [State.recover]),
+      fun e he => absurd (this.2 e he) (by simp [State.recover])⟩
   | _ => exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
 
 omit [Fintype Validator] in
@@ -481,6 +486,7 @@ theorem step_bcast {s : State Validator BlockId Payload} {inp : Input Validator 
     unfold answer broadcasts at he
     rw [List.filterMap_map] at he
     simp at he
+  | restart => exact settle_bcast_of (s₀ := s.recover) (pre := []) (Or.inl rfl) hb
   | _ => intro e he; simp [Node.step, broadcasts] at he
 
 /-- No pending block is ready. -/
@@ -509,6 +515,7 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady s)
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst) := hc
       simp only [Node.step, if_neg h']; exact h
   | timer r => exact noReady_settle _
+  | restart => exact noReady_settle _
   | _ => exact h
 
 /-- **A delivery the node acts on keeps a fitting block it delivers**

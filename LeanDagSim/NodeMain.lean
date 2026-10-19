@@ -8,7 +8,8 @@ One honest node, speaking JSON lines. The first line configures it:
 Each further line is an input, and the node answers with one line per
 output:
 
-* inputs: `{"start":{}}`, `{"timer":r}`,
+* inputs: `{"start":{}}`, `{"timer":r}`, `{"restart":{}}` (the node keeps
+  only what it persisted),
   `{"deliver":{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}}`, and
   `{"fetchRequest":{"peer":v,"ids":[…]}}`;
 * outputs: `{"persist":block}`, `{"broadcast":block}`,
@@ -50,6 +51,7 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
 /-- An input, from JSON. -/
 def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ ℕ) := do
   if (j.getObjVal? "start").isOk then return .start
+  if (j.getObjVal? "restart").isOk then return .restart
   if let .ok r := natField j "timer" then return .timer r
   if let .ok f := j.getObjVal? "fetchRequest" then
     let peer ← natField f "peer"

@@ -509,7 +509,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         let gid := cfg.idOf cfg.genesis
         have hh₀ : Held cfg { s with store := st, top := some 0, own := some gid } := by
           refine ⟨fun t ht => ⟨_, rfl, Finset.mem_insert_self _ _, ?_⟩, hh.horizon,
-            fun ht => absurd ht (by simp), fun t _ => ?_⟩
+            fun ht => absurd ht (by simp), fun t _ => ?_, fun ht => absurd ht (by simp), hh.junk⟩
           · simp only [Option.some.injEq] at ht
             simp only [st, gid, Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self,
               atBase_round]
@@ -555,7 +555,10 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     rw [this, List.append_nil]
     exact ⟨h, hc⟩
   | jump => exact hsame rfl
-  | restart => exact hsame rfl
+  | restart =>
+    exact hset s.recover [] (h.keeps rfl (Keeps.refl _) hc) hc
+      (hh.grow (Grows.refl _) rfl rfl rfl le_rfl) (fun e he => by simp [State.recover] at he) rfl
+      (by simp only [Node.step]; rfl)
   | baseOffer => exact hsame rfl
   | baseRequest => exact hsame rfl
 

@@ -3,6 +3,7 @@ import LeanDag.Node.Store
 import LeanDag.Node.Local.Proof
 import LeanDag.Node.Runs.Proof
 import LeanDag.Node.Converge.Proof
+import LeanDag.Node.Restart.Proof
 /-!
 # The node's theorems use only the standard axioms
 -/
@@ -48,3 +49,9 @@ info: 'LeanDag.Node.Converge.holds' depends on axioms: [propext, Classical.choic
 -/
 #guard_msgs in
 #print axioms LeanDag.Node.Converge.holds
+
+/--
+info: 'LeanDag.Node.Restart.holds' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms LeanDag.Node.Restart.holds

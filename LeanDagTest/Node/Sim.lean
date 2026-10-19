@@ -4,11 +4,16 @@ import LeanDagSim.Net
 
 One short simulation per row of the six partially synchronous rows,
 each with a node down or a period before GST, two with an equivocator,
-and one with a node withholding a block it leads from one node until
-that node has asked for it: the honest nodes build, skip the slots of a
+one with a node withholding a block it leads from one node until
+that node has asked for it, and two with a node that restarts after a
+short downtime: the honest nodes build, skip the slots of a
 node that is down, fetch what they did not receive, asking again on
 account of each block that needs it, decide alike, and broadcast only
-valid blocks. Each line reads: admissible, the round each honest node
+valid blocks. A restarting node catches up only if its peers still hold
+the rounds it missed when its requests reach them: with a horizon lag of
+`6` it does; with the lag of `2` it stays at its last round, since it
+fetches one round below per request while the peers' horizon rises a
+round per round (Safe Skip and bootstrap are for this). Each line reads: admissible, the round each honest node
 reached, the slots it decided, those it skipped, whether the decisions
 agree, whether the blocks are valid.
 -/
@@ -74,6 +79,18 @@ info: "true [(some 141), (some 141), (some 141), (some 141)] [139, 139, 139, 139
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "mysticeti", withhold := some (3, 2, 7), delayMax := 1 }
+
+/--
+info: "true [(some 57), (some 57), (some 57), (some 57)] [55, 55, 55, 55] [1, 1, 1, 1] true true"
+-/
+#guard_msgs in
+#eval summary { horizon := 150, row := "mysticeti", recover := [(1, 40, 46)], lag := 6 }
+
+/--
+info: "true [(some 37), (some 18), (some 37), (some 37)] [36, 16, 35, 35] [4, 0, 4, 4] true true"
+-/
+#guard_msgs in
+#eval summary { horizon := 150, row := "mysticeti", recover := [(1, 40, 46)] }
 
 end Node
 

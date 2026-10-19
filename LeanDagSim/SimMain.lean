@@ -5,7 +5,7 @@ import LeanDagSim.Net
 Runs one scenario and prints what each honest node reached and decided.
 Options, each `--name value`: `row`, `n`, `f`, `c`, `seed`, `horizon`,
 `gst`, `pre-max`, `delay-min`, `delay-max`, `timeout`, `lag`,
-`crash` (`node@time,…`), `byz` (`node,…`), `byz-until`, `withhold` (`z,v,R`: node `z` withholds
+`crash` (`node@time,…`), `recover` (`node@down-up,…`), `byz` (`node,…`), `byz-until`, `withhold` (`z,v,R`: node `z` withholds
 its round-`R` block from `v`) and `reveal-after`.
 -/
 
@@ -16,6 +16,15 @@ def parseCrash (s : String) : List (ℕ × ℕ) :=
   (s.splitOn ",").filterMap fun e =>
     match e.splitOn "@" with
     | [v, t] => do pure (← v.toNat?, ← t.toNat?)
+    | _ => none
+
+/-- Read `node@down-up,…`. -/
+def parseRecover (s : String) : List (ℕ × ℕ × ℕ) :=
+  (s.splitOn ",").filterMap fun e =>
+    match e.splitOn "@" with
+    | [v, w] => match w.splitOn "-" with
+      | [d, u] => do pure (← v.toNat?, ← d.toNat?, ← u.toNat?)
+      | _ => none
     | _ => none
 
 /-- Read `node,…`. -/
@@ -42,6 +51,7 @@ def parseArgs : List String → Scenario → Except String Scenario
       | "--timeout" => pure { sc with timeout := ← nat }
       | "--lag" => pure { sc with lag := ← nat }
       | "--crash" => pure { sc with crash := parseCrash v }
+      | "--recover" => pure { sc with recover := parseRecover v }
       | "--byz" => pure { sc with byz := parseNats v }
       | "--byz-until" => pure { sc with byzUntil := ← nat }
       | "--withhold" => match parseNats v with

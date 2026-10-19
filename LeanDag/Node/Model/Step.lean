@@ -28,6 +28,12 @@ input `i` in the state `s`: the new state and the outputs.
   of the decided frontier and the node's round, and what lies below it is
   dropped.
 
+* **Restarting** (`State.recover`): a crash keeps the store, the next
+  slot and the top, and loses what is pending, the timers and the
+  requests; the downtime counts as the top round's timer firing.
+  `State.persisted` is what the node writes, and `resume` rebuilds a
+  state from it.
+
 Safe Skip, rate limiting and bootstrap are not yet implemented: their
 inputs leave the state unchanged.
 
@@ -242,6 +248,36 @@ def settle (s : State Validator BlockId Payload) :
   let fl := flush cfg (g.1.pending.length + 1) g.1.store g.1.pending
   ({ g.1 with store := fl.1, pending := fl.2 }, b.2 ++ d.2 ++ g.2)
 
+/-- **What the node persists**: its accepted blocks, the horizon, the next
+undecided slot and its own top block. -/
+def State.persisted (s : State Validator BlockId Payload) : Persisted Validator BlockId Payload :=
+  ⟨(s.store.ids.sort (· ≤ ·)).map fun j => (j, s.store.map.getD j s.store.junk), s.store.base,
+    s.lo, s.own⟩
+
+/-- **The state after a crash and restart**: the store, the next slot and
+the top kept; nothing pending or asked for; the top round's timer fired,
+since the node was away. -/
+def State.recover (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
+  { s with pending := [], fired := (s.top.map fun t => {t}).getD ∅, requested := [] }
+
+/-- **Resume from what was persisted**: the store rebuilt from the window
+at the horizon, if the window is closed under references one round below
+and lies at or above the horizon; the top read off the own block; and
+the rest as `State.recover` sets it. -/
+def resume (ps : Persisted Validator BlockId Payload) : Option (State Validator BlockId Payload) :=
+  let map : Std.TreeMap BlockId (Block Validator BlockId Payload) compare :=
+    Std.TreeMap.ofList ps.window
+  let ids := (ps.window.map Prod.fst).toFinset
+  if h : (∀ i ∈ ids, ∀ j ∈ (lookup map cfg.genesis ps.horizon i).refs, j ∈ ids) ∧
+      (∀ i ∈ ids, ∀ j ∈ (lookup map cfg.genesis ps.horizon i).refs,
+        (lookup map cfg.genesis ps.horizon j).round + 1 =
+          (lookup map cfg.genesis ps.horizon i).round) ∧
+      ∀ i ∈ ids, ps.horizon ≤ (lookup map cfg.genesis ps.horizon i).round then
+    let st : Store Validator BlockId Payload := ⟨map, ids, cfg.genesis, ps.horizon, h.1, h.2.1, h.2.2⟩
+    let top := ps.own.map fun o => (st.blk o).round
+    some ⟨st, [], top, ps.own, (top.map fun t => {t}).getD ∅, ps.lo, []⟩
+  else none
+
 /-- **The node's transition function.** -/
 def step (s : State Validator BlockId Payload) :
     Input Validator BlockId Payload →
@@ -270,6 +306,7 @@ def step (s : State Validator BlockId Payload) :
     else (s, [])
   | .timer r => settle cfg { s with fired := insert r s.fired }
   | .fetchRequest peer ids => (s, answer s peer ids)
+  | .restart => settle cfg s.recover
   | _ => (s, [])
 
 end Node

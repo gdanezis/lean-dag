@@ -8,7 +8,8 @@ import Mathlib.Data.Finset.Sort
 network with a seeded schedule: before GST a message takes up to
 `preMax` ticks, after it between `delayMin` and `delayMax`, and a timer
 fires when it expires. A crashed node acts on nothing from its crash
-time on. An equivocator is two copies of the honest program with the
+time on; a recovering node acts on nothing while it is down, then
+restarts, keeping only what it persisted. An equivocator is two copies of the honest program with the
 same identity and different payloads, each sending to half the nodes,
 so its twins are valid blocks; it acts on nothing from `byzUntil` on. A node's request for blocks goes to every
 other node, and an answer to the node that asked. `simulate` runs the schedule and reports
@@ -56,6 +57,9 @@ structure Scenario where
   lag : ℕ := 2
   /-- Crashed nodes, with the time each crashes. -/
   crash : List (ℕ × ℕ) := []
+  /-- Recovering nodes `(v, down, up)`: node `v` is down from `down` and
+  restarts at `up`. -/
+  recover : List (ℕ × ℕ × ℕ) := []
   /-- Equivocating nodes. -/
   byz : List ℕ := []
   /-- The time from which equivocators act on nothing. A copy of the
@@ -147,7 +151,9 @@ structure World (n : ℕ) where
   withheld : Option (ℕ × Block (Fin n) ℕ ℕ)
 
 /-- Whether node `v` has crashed by time `t`. -/
-def crashed (v t : ℕ) : Bool := sc.crash.any fun e => e.1 = v ∧ e.2 ≤ t
+def crashed (v t : ℕ) : Bool :=
+  sc.crash.any (fun e => e.1 = v ∧ e.2 ≤ t) ||
+    sc.recover.any fun e => e.1 = v ∧ e.2.1 ≤ t ∧ t < e.2.2
 
 /-- Whether agent `a` receives what agent `src` broadcasts. -/
 def receives (a src : Agent n) : Bool :=
@@ -290,7 +296,8 @@ def simulate (sc : Scenario) : Report :=
       let w0 : World n :=
         { agents := agents
           states := agents.map fun a => State.init (cfgFor sc p q hn a.node a.twin)
-          queue := (List.range agents.size).map fun d => (0, d, .start)
+          queue := sc.recover.foldl (fun q e => enqueue (e.2.2, e.1, .restart) q)
+            ((List.range agents.size).map fun d => (0, d, .start))
           gen := mkStdGen sc.seed
           decisions := agents.map fun _ => []
           honest := []

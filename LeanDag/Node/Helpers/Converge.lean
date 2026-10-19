@@ -127,7 +127,7 @@ theorem same_before {a : ℕ} {v : Validator} (h : ∀ inp, tr[a]? ≠ some (v, 
 
 /-- **A block that fits stays pending or stored.** -/
 theorem keeps_after (hinj : HashInjective cfg H tr)
-    (hbase : ∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0)
+    (hbase : ∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0) (hnr : NoRestart H tr)
     {v : Validator} (hv : v ∈ H) {y : BlockId × Block Validator BlockId Payload}
     (hf : Fits (cfg.at v) (gT cfg H tr) y) {a : ℕ}
     (hy : y ∈ (stateBefore cfg tr a v).pending ∨ y.1 ∈ (stateBefore cfg tr a v).store.ids) :
@@ -142,7 +142,7 @@ theorem keeps_after (hinj : HashInjective cfg H tr)
       rw [step_before hj]
       refine step_keeps (by rw [← step_before hj]; exact reads_before hinj hbase hv _)
         (by rw [← step_before hj, base_before hbase hv, base_before hbase hv])
-        (pend_before hinj hv j) (fun id b hib hid => ?_) hf ih
+        (pend_before hinj hv j) (fun id b hib hid => ?_) (fun h => hnr j v hv (h ▸ hj)) hf ih
       subst hib
       exact gT_of_known (x := (id, b)) hinj (Or.inl ⟨j, v, hj, hv, hid⟩)
     · rw [same_before fun inp h => he ⟨inp, h⟩]; exact ih

@@ -105,15 +105,17 @@ end Config
 variable (Validator BlockId Payload)
 
 /-- **What a node persists** across a crash (`docs/validator.md` §5.1):
-its accepted blocks above the horizon, the horizon, and the next
-undecided slot. -/
+its accepted blocks, from the horizon up, the horizon, the next
+undecided slot, and its own block at its top round. -/
 structure Persisted where
-  /-- The accepted blocks above the horizon, the node's own among them. -/
+  /-- The accepted blocks from the horizon up, the node's own among them. -/
   window : List (BlockId × Block Validator BlockId Payload)
   /-- The horizon. -/
   horizon : ℕ
   /-- The next undecided slot. -/
   lo : ℕ
+  /-- The node's own block at its top round, once started. -/
+  own : Option BlockId
 
 /-- **What a node consumes.** -/
 inductive Input where
@@ -126,8 +128,8 @@ inductive Input where
   | jump (v1 : Validator) (B1 : BlockId) (v2 : Validator) (B2 : BlockId)
   /-- The timer of round `r` fired. -/
   | timer (r : ℕ)
-  /-- Restart from what was persisted. -/
-  | restart (ps : Persisted Validator BlockId Payload)
+  /-- A crash and restart: the node keeps only what it persisted. -/
+  | restart
   /-- A peer's base: its round-`G` blocks and its window above them. -/
   | baseOffer (peer : Validator) (G : ℕ) (blocks : List (BlockId × Block Validator BlockId Payload))
   /-- A peer asks for the base. -/

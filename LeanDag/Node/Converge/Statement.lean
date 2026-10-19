@@ -13,7 +13,8 @@ adversary, assume:
   broadcast by that author earlier in the trace;
 * **the hash** (`HashInjective`): no two different blocks delivered to or
   broadcast by honest nodes have one identifier;
-* no honest node raises its horizon.
+* no honest node raises its horizon or restarts (`NoRestart`): the
+  honest nodes here are the reliable ones.
 
 Then **every block an honest node broadcast, with its history, is in
 every honest node's store at the end** (`Converges`).
@@ -59,6 +60,10 @@ def HashInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator
     (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ x ∈ knownIn cfg H tr, ∀ y ∈ knownIn cfg H tr, cfg.idOf x.2 = cfg.idOf y.2 → x.2 = y.2
 
+/-- **No honest node restarts.** -/
+def NoRestart (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Prop :=
+  ∀ (i : ℕ) v, v ∈ H → tr[i]? ≠ some (v, Input.restart)
+
 /-- **Every block an honest node broadcast, with its history, is in every
 honest node's store at the end.** -/
 def Converges : Prop :=
@@ -66,7 +71,7 @@ def Converges : Prop :=
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload),
     Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
-    (∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0) →
+    (∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0) → NoRestart H tr →
     ∀ i u, (tr[i]?.map Prod.fst) = some u → u ∈ H → ∀ e ∈ broadcasts (outputsAt cfg tr i),
       ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).store.blk e.1, ∀ v ∈ H,
         y ∈ (stateBefore cfg tr tr.length v).store.ids

@@ -525,7 +525,17 @@ theorem Inv.step {s : State Validator BlockId Payload}
     obtain ⟨j, -, rfl⟩ := List.mem_map.mp ho
     rfl
   | jump => exact hnil' hsub
-  | restart => exact hnil' hsub
+  | restart =>
+    simp only [Node.step]
+    have h₀ := hi.mono hsub
+    have hi₀ : Inv cfg s.recover
+        (K ∪ {x | x ∈ delivered cfg [Input.restart]} ∪
+          {x | x ∈ ([] : List (BlockId × Block Validator BlockId Payload))}) (B ++ []) := by
+      simpa using (⟨h₀.known, fun e he => by simp [State.recover] at he, h₀.rounds, h₀.good,
+        h₀.sub, h₀.valid⟩ : Inv cfg s.recover _ B)
+    obtain ⟨bs, ds, gs, hgs, ho, hi'⟩ := hi₀.settle_of
+      (K₀ := K ∪ {x | x ∈ delivered cfg [Input.restart]}) subset_rfl rfl
+    exact ⟨[], bs, ds, gs, by simp, hgs, by simpa [built] using ho, by simpa using hi'⟩
   | baseOffer => exact hnil' hsub
   | baseRequest => exact hnil' hsub
 

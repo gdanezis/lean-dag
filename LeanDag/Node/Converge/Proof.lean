@@ -20,7 +20,7 @@ namespace Node
 namespace Converge
 
 theorem converges : Converges := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hbase i u hu huH e he y hy v hv
+  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hbase hnr i u hu huH e he y hy v hv
   obtain ⟨inp, hi⟩ := event_of_map hu
   set L := tr.length
   -- `h`'s history, as the trace reads it, held by `u` from event `i + 1` on
@@ -43,7 +43,7 @@ theorem converges : Converges := by
   have hlast : ∀ j ∈ historyFrom (gT cfg H tr) e.1, ∀ t,
       ((j, raw j) ∈ (stateBefore cfg tr t v).pending ∨ j ∈ (stateBefore cfg tr t v).store.ids) →
       t ≤ L → (j, raw j) ∈ fin.pending ∨ j ∈ fin.store.ids := fun j hj t ht htL =>
-    keeps_after hinj hbase hv (hfits j hj) ht L htL
+    keeps_after hinj hbase hnr hv (hfits j hj) ht L htL
   by_contra hyv
   -- `v` lacks `h`, since it would hold its history with it
   have hhv : e.1 ∉ fin.store.ids := fun h' => hyv (hist_sub hinj hbase hv h' hy)
@@ -240,7 +240,7 @@ theorem converges : Converges := by
     have hbe : b = raw (x m) := content_eq hinj hbk hxmk rfl
     rw [hbe] at hab hca
     have hk := admit_after hinj hbase hv hab hca (hfits _ (hxH m (by omega)).1)
-    rcases keeps_after hinj hbase hv (hfits _ (hxH m (by omega)).1) hk (A m) (by omega) with
+    rcases keeps_after hinj hbase hnr hv (hfits _ (hxH m (by omega)).1) hk (A m) (by omega) with
       h'' | h''
     · exact hA1 m h''
     · exact (hxH m (by omega)).2 ((grows_before (cfg := cfg) (tr := tr) v (show A m ≤ L by omega)).2

@@ -29,6 +29,10 @@ structure Held (s : State Validator BlockId Payload) : Prop where
   low : s.top = none → s.store.base = 0
   /-- After, it lies at or below the top. -/
   le_top : ∀ t, s.top = some t → s.store.base ≤ t
+  /-- Before the node starts, it has no block of its own. -/
+  own_none : s.top = none → s.own = none
+  /-- An identifier outside the store denotes the genesis block. -/
+  junk : s.store.junk = cfg.genesis
 
 /-- **A store keeps another**: its horizon is no lower, it holds the
 other's blocks at or above its horizon, and its top round is no lower. -/
@@ -100,6 +104,8 @@ theorem Held.grow {s s' : State Validator BlockId Payload} (h : Held cfg s)
     exact h.horizon.trans (Nat.mul_le_mul_left _ (Nat.div_le_div_right hlo))
   low ht := by rw [hb]; exact h.low (htop.symm.trans ht)
   le_top t ht := by rw [hb]; exact h.le_top t (htop.symm.trans ht)
+  own_none ht := hown.trans (h.own_none (htop.symm.trans ht))
+  junk := ((hg.2 hb).2.1).trans h.junk
 
 omit [Fintype Validator] in
 theorem Held.tryBuild {s s' : State Validator BlockId Payload}
@@ -114,7 +120,7 @@ theorem Held.tryBuild {s s' : State Validator BlockId Payload}
       · rw [Option.some.injEq, Prod.mk.injEq] at hb
         obtain ⟨rfl, rfl⟩ := hb
         refine ⟨fun t ht => ⟨_, rfl, Finset.mem_insert_self _ _, ?_⟩, h.horizon,
-          fun ht => absurd ht (by simp), fun t ht => ?_⟩
+          fun ht => absurd ht (by simp), fun t ht => ?_, fun ht => absurd ht (by simp), h.junk⟩
         · simp only [Option.some.injEq] at ht
           simp only [Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self, atBase_round]
           exact ht
@@ -174,7 +180,8 @@ theorem Held.collect {s : State Validator BlockId Payload} (h : Held cfg s) :
       have hoG : min (cfg.per * (s.lo / cfg.m)) t - cfg.lag ≤ (s.store.blk o).round := by
         rw [hor]; omega
       refine ⟨⟨fun t' ht' => ?_, ?_, fun ht' => absurd (ht.symm.trans ht') (by simp),
-        fun t' ht' => ?_⟩, Keeps.prune s.store hG.le hoi hoG⟩
+        fun t' ht' => ?_, fun ht' => absurd (ht.symm.trans ht') (by simp), h.junk⟩,
+        Keeps.prune s.store hG.le hoi hoG⟩
       · rw [ht, Option.some.injEq] at ht'
         subst ht'
         exact ⟨o, ho, (mem_prune_ids (hG := hG.le)).mpr ⟨hoi, hoG⟩,
@@ -213,7 +220,7 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
       · rename_i h₁ h₂
         have h0 := h.low h₁.1
         refine Held.settle ⟨fun t ht => ⟨_, rfl, Finset.mem_insert_self _ _, ?_⟩, h.horizon,
-          fun ht => absurd ht (by simp), fun t _ => ?_⟩
+          fun ht => absurd ht (by simp), fun t _ => ?_, fun ht => absurd ht (by simp), h.junk⟩
         · simp only [Option.some.injEq] at ht
           simp only [Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self, atBase_round]
           exact ht
@@ -227,6 +234,7 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     · exact Held.settle (h.grow (Grows.flush _ _ _) (flush_base _ _ _) rfl rfl le_rfl)
     · exact h
   | timer r => exact Held.settle (h.grow (Grows.refl _) rfl rfl rfl le_rfl)
+  | restart => exact Held.settle (h.grow (Grows.refl _) rfl rfl rfl le_rfl)
   | _ => exact h
 
 /-- **A run keeps the node's top and its horizon.** -/
@@ -238,7 +246,7 @@ theorem Held.run : ∀ (is : List (Input Validator BlockId Payload))
 omit [Fintype Validator] in
 theorem Held.init : Held cfg (State.init cfg) :=
   ⟨fun _ h => absurd h (by simp [State.init]), Nat.zero_le _, fun _ => rfl,
-    fun _ h => absurd h (by simp [State.init])⟩
+    fun _ h => absurd h (by simp [State.init]), fun _ => rfl, rfl⟩
 
 end Node
 

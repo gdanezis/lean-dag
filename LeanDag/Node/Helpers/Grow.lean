@@ -161,6 +161,7 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
       exact Grows.settle_of _ rfl
     · exact Grows.refl _
   | timer r => exact Grows.settle_of _ rfl
+  | restart => exact Grows.settle_of _ rfl
   | _ => exact Grows.refl _
 
 /-- **Across a run the store grows.** -/

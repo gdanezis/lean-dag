@@ -3,8 +3,8 @@
 This document plans a Lean program that acts as an honest validator of
 the partially synchronous rows of the scheme (`docs/scheme.md`), and the
 proofs that it conforms to the scheme. The program lives in
-`LeanDag/Node`, namespace LeanDag.Node; steps 0, 1 and 2 are built, and
-parts of steps 5 and 10 (§7). Names
+`LeanDag/Node`, namespace LeanDag.Node; steps 0 to 5 are built, and
+part of step 10 (§7). Names
 in backticks are existing declarations; names in italics are planned.
 
 ## 1. Scope
@@ -63,7 +63,7 @@ self-parent clause is what Safe Skip's fill reads (§3.5).
   payload;
 * a delivered jump message (`JumpMsg`);
 * a timer for round `r` that fired;
-* a restart, carrying the persisted state (§5.1);
+* a crash and restart: the node keeps only what it persisted (§5.1);
 * a base offer from a peer: its round-`G` blocks and its window above
   them (§3.6);
 * a base request from a peer;
@@ -255,12 +255,12 @@ Bounding the pending blocks belongs to rate limiting (step 9).
 
 | | Claim | Route |
 |---|---|---|
-| V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved without restarts) |
+| V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved, restarts included) |
 | V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
 | V3 | In a run of honest nodes over any inputs, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every store along every run is a cut of it; under authentication, an injective hash and `Params.Tolerates`, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
-| V3′ | Over a trace with delivery, timely authentication and an injective hash, and no horizon raised, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
+| V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised and no honest node restarting, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
 | V4 | The decisions a store pruned at `G` gives from a slot at or above `G` equal those of every view holding its blocks from `G` up, read at `G`: the loop reads nothing below the slot's round. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq`, `Node.ViewsAbove.of_store` (proved) |
-| V5 | A restart from the persisted state is a prune at an admissible horizon. | V4 |
+| V5 | At every state a run reaches, resuming from what the node persisted gives the state its restart recovers: the same blocks, read alike, at the same horizon, the same next slot, top and own block, its top round's timer fired, and nothing pending or asked for. | `Node.Restart.Resumes` (proved): `Node.resume_persisted`, `Node.State.recover` |
 | V6 | A run with jump messages is a `skipFill` extension of the run without them; decisions persist across the fill, and new slots in the gap are skipped at once. | `decided_fill_of_persist`, `decided_none_of_novel` |
 | V7 | Rate limiting does not make a validator decide wrongly. | `decided_mono_of_banded` |
 | V8 | The efficient store and decider compute the reference program's values. | one equality per function |
@@ -320,12 +320,13 @@ and crashes before any peer has fetched `X`. No correct validator holds
 breaks `converges` and `holds_mono` of `PaceCore`.
 
 The program therefore persists every block not yet in the common core,
-that is, every accepted block above the horizon `G`, which includes its
-own blocks. After GST, whatever a correct validator holds by round `m`
+that is, every accepted block from the horizon `G` up, which includes its
+own blocks (`State.persisted`). After GST, whatever a correct validator holds by round `m`
 every correct store holds by `m + 1` (`viewUpto_subset_viewUpto_succ`),
 so a peer can serve whatever lies below the horizon
 (`pruned_subset_peer_store`). It also persists `G`, so as not to accept
-blocks below it again, and `lo`, so as not to repeat commits; repeats
+blocks below it again, `lo`, so as not to repeat commits, and its own
+block at its top round, from which it resumes building; repeated commits
 would be identical, since the loop's restart is idempotent (`Restart`).
 
 A block is persisted before it is broadcast. Otherwise a crash between
@@ -340,13 +341,26 @@ the runtime (`card_retained_le`, G6).
 
 ### 5.2 What this gives
 
-A crash loses exactly what pruning at the horizon would have dropped, so
-a restart needs no theorem beyond V4 (V5), and holdings above the
-horizon never shrink. Before GST possession is not universal in one
-round, and the horizon's frontier term keeps more blocks; safety holds
-at every horizon. Safe Skip covers the downtime itself: on restart the
-validator is at its last own block `B1` with its window intact. A
-validator down past its peers' horizons rejoins by bootstrap (§3.6).
+A crash loses the pending blocks, the timers and the requests, and keeps
+the store, the horizon, the next slot and the top. In the run model a
+crash is the restart input, which keeps the store as it is and empties
+the rest (`State.recover`); `resume` rebuilds a state from what was
+persisted, and V5 shows that it gives the same state, its store read
+alike. So V1, V3 and V4 cover runs with crashes. The restarted node
+counts its downtime as its top round's timer firing, so it builds as
+soon as its store allows.
+
+Convergence (V3′) is stated for nodes that do not restart, the reliable
+set of the liveness claims: a restart drops the pending blocks, and
+nothing asks for them again until a later block needs them.
+
+A node down long enough that its peers' horizons pass the rounds it
+missed cannot catch up by fetching. Its fetches go one round down per
+request. Its peers' horizons rise one round per round. The simulator
+shows this at `Λ = 2` after six ticks down (§6). Safe Skip covers the
+downtime itself: on restart the validator is at its last own block `B1`
+with its window intact. A validator down past its peers' horizons
+rejoins by bootstrap (§3.6).
 
 ## 6. Testing
 
@@ -358,7 +372,7 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 3. **The simulator** (`LeanDagSim/Net.lean`, `lake exe sim`). `n`
    programs over a seeded network: before GST a message takes up to
    *preMax* ticks, after it between *delayMin* and *delayMax*; crashes
-   at given times; and equivocators, each two copies of the program
+   at given times, and restarts after a downtime; and equivocators, each two copies of the program
    with one identity and different payloads, each copy sending to half
    the nodes. It reports the rounds reached, the slots decided and
    skipped, whether the honest decisions are prefix-comparable, and
@@ -374,6 +388,10 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
    drops blocks that claim its identity, so neither copy accepts blocks
    built on its twin: it stops building and its pending blocks grow.
    From *byzUntil* on it therefore acts on nothing.
+
+   A node down for six ticks restarts and catches up at `Λ = 6`, but not
+   at `Λ = 2`. It asks for the rounds it missed one round down per
+   request, and its peers' horizons pass them before it gets there.
 4. **Optionally**, replaying records through the Rust decider of the
    Mysticeti codebase, where the scheme's table comes from.
 
@@ -386,7 +404,7 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 | 2 | V1 and V2, with the transfer; the timing check (§9) (built) |
 | 3 | Simulator and JSON executable (built) |
 | 4 | The run model; V3 and convergence of honest blocks and their histories under fetching (§3.7), both without garbage collection (built) |
-| 5 | Garbage collection: V4, and V3 with horizons rising (built); persistence and restart: V5 |
+| 5 | Garbage collection: V4, and V3 with horizons rising; persistence and restart: V5 (built) |
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 |
 | 7 | Lift the bootstrap results to block records (§8, L1); bootstrap in the program: V9 |
 | 8 | Lift the rate-limiting results to block records (§8, L2) |
