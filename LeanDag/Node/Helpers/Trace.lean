@@ -7,8 +7,8 @@ Event `i` moves only its own node: node `v`'s state before event `i + 1`
 is its step at event `i` if that event is `v`'s, and its state before
 event `i` otherwise (`stateBefore_succ`). So a node's store grows from
 event to event (`grows_before`), and what its run up to an event
-broadcast or was delivered is what the trace's earlier events at it
-broadcast or delivered (`mem_broadcasts_before`, `mem_delivered_before`).
+persisted or was delivered is what the trace's earlier events at it
+persisted or delivered (`mem_persists_before`, `mem_delivered_before`).
 -/
 
 namespace LeanDag
@@ -80,40 +80,40 @@ theorem grows_before (v : Validator) : ∀ {i j : ℕ}, i ≤ j →
       · rename_i hw; subst hw; exact Grows.step _ _
       · exact Grows.refl _
 
-/-- **What a node's run up to event `i` broadcast**, its events before `i`
-broadcast. -/
-theorem mem_broadcasts_before (v : Validator) :
+/-- **What a node's run up to event `i` persisted**, its events before `i`
+persisted. -/
+theorem mem_persists_before (v : Validator) :
     ∀ (i : ℕ) {x : BlockId × Block Validator BlockId Payload},
-      x ∈ broadcasts (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr i v)).2 →
-      ∃ j < i, (tr[j]?.map Prod.fst) = some v ∧ x ∈ broadcasts (outputsAt cfg tr j)
-  | 0, x, hx => by simp [inputsBefore, run, broadcasts] at hx
+      x ∈ persists (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr i v)).2 →
+      ∃ j < i, (tr[j]?.map Prod.fst) = some v ∧ x ∈ persists (outputsAt cfg tr j)
+  | 0, x, hx => by simp [inputsBefore, run, persists] at hx
   | i + 1, x, hx => by
     rcases hi : tr[i]? with _ | ⟨w, inp⟩
     · have : tr.length ≤ i := List.getElem?_eq_none_iff.mp hi
       have he : inputsBefore tr (i + 1) v = inputsBefore tr i v := by
         rw [inputsBefore_of_le this, inputsBefore_of_le (by omega : tr.length ≤ i + 1)]
       rw [he] at hx
-      obtain ⟨j, hj, hjv, hx⟩ := mem_broadcasts_before v i hx
+      obtain ⟨j, hj, hjv, hx⟩ := mem_persists_before v i hx
       exact ⟨j, by omega, hjv, hx⟩
     · rw [inputsBefore_succ hi] at hx
       split at hx
       · rename_i hw; subst hw
-        rw [run_append_single, broadcasts_append] at hx
+        rw [run_append_single, persists_append] at hx
         rcases List.mem_append.mp hx with hx | hx
-        · obtain ⟨j, hj, hjv, hx⟩ := mem_broadcasts_before w i hx
+        · obtain ⟨j, hj, hjv, hx⟩ := mem_persists_before w i hx
           exact ⟨j, by omega, hjv, hx⟩
         · exact ⟨i, by omega, by rw [hi]; rfl, by rw [outputsAt_eq hi]; exact hx⟩
       · rw [List.append_nil] at hx
-        obtain ⟨j, hj, hjv, hx⟩ := mem_broadcasts_before v i hx
+        obtain ⟨j, hj, hjv, hx⟩ := mem_persists_before v i hx
         exact ⟨j, by omega, hjv, hx⟩
 
-/-- **What an event at a node broadcasts, the node's run past it
-broadcast.** -/
-theorem broadcasts_of_event {j : ℕ} {w : Validator} {inp : Input Validator BlockId Payload}
+/-- **What an event at a node persists, the node's run past it
+persisted.** -/
+theorem persists_of_event {j : ℕ} {w : Validator} {inp : Input Validator BlockId Payload}
     (h : tr[j]? = some (w, inp)) {x : BlockId × Block Validator BlockId Payload}
-    (hx : x ∈ broadcasts (outputsAt cfg tr j)) :
-    x ∈ broadcasts (run (cfg.at w) (State.init (cfg.at w)) (inputsBefore tr (j + 1) w)).2 := by
-  rw [inputsBefore_succ h, if_pos rfl, run_append_single, broadcasts_append]
+    (hx : x ∈ persists (outputsAt cfg tr j)) :
+    x ∈ persists (run (cfg.at w) (State.init (cfg.at w)) (inputsBefore tr (j + 1) w)).2 := by
+  rw [inputsBefore_succ h, if_pos rfl, run_append_single, persists_append]
   rw [outputsAt_eq h] at hx
   exact List.mem_append_right _ hx
 

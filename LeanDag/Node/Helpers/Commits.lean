@@ -55,19 +55,6 @@ structure Ground (U : BlockRecord Validator BlockId Payload P H)
 variable {U : BlockRecord Validator BlockId Payload P H}
 variable {K : Set (BlockId × Block Validator BlockId Payload)}
 
-omit [Fintype Validator] in
-theorem atBase_of_lt {G : ℕ} {b : Block Validator BlockId Payload} (h : G < b.round) :
-    atBase G b = b := by
-  unfold atBase; rw [if_neg (by omega)]
-
-omit [Fintype Validator] in
-theorem atBase_atBase {b G : ℕ} (h : b ≤ G) (x : Block Validator BlockId Payload) :
-    atBase G (atBase b x) = atBase G x := by
-  by_cases h₁ : x.round ≤ b
-  · have h₂ : x.round ≤ G := h₁.trans h
-    simp [atBase, h₁, h₂]
-  · simp only [atBase, if_neg h₁]
-
 section Cut
 
 variable {st : Store Validator BlockId Payload}
@@ -243,12 +230,12 @@ theorem IsCut.spans {s : State Validator BlockId Payload} (hc : IsCut U s.store)
 omit [Fintype Validator] in
 theorem IsCut.tryBuild (hg : Ground U K cfg.q) {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (hc : IsCut U s.store) (hh : Held cfg s)
-    (h : Node.tryBuild cfg s = some (s', out)) (hb : ∀ e ∈ broadcasts out, e ∈ K) :
+    (h : Node.tryBuild cfg s = some (s', out)) (hb : ∀ e ∈ persists out, e ∈ K) :
     IsCut U s'.store := by
   obtain ⟨r, id, b, hnew, hab, hrefs, hpred, hr, hbr, -, -, hv, hst, -, -, -, hout⟩ :=
     tryBuild_some h
   have hbase : s.store.base < b.round := by have := hh.le_top r hr; omega
-  have hx : (id, b) ∈ K := hb _ (by rw [hout]; simp [built, broadcasts])
+  have hx : (id, b) ∈ K := hb _ (by rw [hout, persists_built]; exact List.mem_singleton_self _)
   obtain ⟨h₁, h₂⟩ := hg.real _ hx (fun j hj => (hc j (hrefs hbase hj)).1)
     (validAt_of_cut hc hnew (hrefs hbase) hv)
   rw [hst]
@@ -258,7 +245,7 @@ omit [Fintype Validator] in
 /-- **Building known blocks keeps the store a cut.** -/
 theorem IsCut.progress (hg : Ground U K cfg.q) :
     ∀ (fuel : ℕ) {s : State Validator BlockId Payload}, IsCut U s.store → Held cfg s →
-      (∀ e ∈ broadcasts (Node.progress cfg fuel s).2, e ∈ K) →
+      (∀ e ∈ persists (Node.progress cfg fuel s).2, e ∈ K) →
       IsCut U (Node.progress cfg fuel s).1.store
   | 0, _, hc, _, _ => hc
   | fuel + 1, s, hc, hh, hb => by
@@ -266,9 +253,23 @@ theorem IsCut.progress (hg : Ground U K cfg.q) :
     · simp only [Node.progress, htb]
       exact hc
     · simp only [Node.progress, htb] at hb ⊢
-      rw [broadcasts_append] at hb
+      rw [persists_append] at hb
       exact IsCut.progress hg fuel (hc.tryBuild hg hh htb fun e he => hb e
         (List.mem_append_left _ he)) (hh.tryBuild htb) fun e he => hb e (List.mem_append_right _ he)
+
+omit [Fintype Validator] in
+/-- **A jump of known blocks keeps the store a cut.** -/
+theorem IsCut.tryJump (hg : Ground U K cfg.q) {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (hc : IsCut U s.store)
+    (h : Node.tryJump cfg s = some (s', out)) (hb : ∀ e ∈ persists out, e ∈ K) :
+    IsCut U s'.store := by
+  obtain ⟨r0, B1, B2, F, e, -, -, -, -, hst, -, -, -, -, -, -, -, -, -, -, hout⟩ :=
+    tryJump_some h
+  rw [hout, persists_jumped] at hb
+  refine insertAll_induct (cfg := cfg) (fun t => IsCut U t) (fun t x hx hcx ht => ?_) hst hc
+  obtain ⟨h₁, h₂⟩ := hg.real _ (hb x hx) (fun j hj => (ht j (hcx.2.2.1 hj)).1)
+    (validAt_of_cut ht hcx.1 hcx.2.2.1 hcx.2.2.2.2)
+  exact ht.insert ⟨h₁, by rw [h₂]⟩
 
 omit [Fintype Validator] in
 theorem IsCut.collect {s : State Validator BlockId Payload} (hc : IsCut U s.store) :
@@ -332,6 +333,11 @@ theorem collect_lo (s : State Validator BlockId Payload) : (Node.collect cfg s).
   · dsimp only
     split <;> rfl
   · rfl
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem commitsOf_jumped (fs : List (BlockId × Block Validator BlockId Payload)) (v1 : Validator)
+    (B1 : BlockId) (v2 : Validator) (B2 : BlockId) : commitsOf (jumped fs v1 B1 v2 B2) = [] := by
+  simp [jumped, commitsOf, List.filterMap_append, List.filterMap_map]
 
 omit [Fintype Validator] in
 /-- Building outputs only built blocks. -/
@@ -425,20 +431,19 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
       exact this
   · simpa [commitsOf] using h
 
-/-- **Settling keeps the invariant, and the store a cut.** -/
-theorem CommitInv.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
+theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)} (h : CommitInv cfg U s cs) (hc : IsCut U s.store)
     (hh : Held cfg s) (hp : ∀ e ∈ s.pending, e ∈ K)
-    (hb : ∀ e ∈ broadcasts (Node.settle cfg s).2, e ∈ K) :
-    CommitInv cfg U (Node.settle cfg s).1 (cs ++ commitsOf (Node.settle cfg s).2) ∧
-      IsCut U (Node.settle cfg s).1.store := by
+    (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) :
+    CommitInv cfg U (Node.advance cfg s).1 (cs ++ commitsOf (Node.advance cfg s).2) ∧
+      IsCut U (Node.advance cfg s).1.store := by
   obtain ⟨bs, hbs⟩ := progress_built (cfg := cfg) (s.store.topRound + 2) s
   obtain ⟨hg₁, hlo₁⟩ := Grows.progress (cfg := cfg) (s.store.topRound + 2) s
   have hb₁ := progress_base (cfg := cfg) (s.store.topRound + 2) s
   have hp₁ := (progress_pending (cfg := cfg) (s.store.topRound + 2) s).1
-  simp only [Node.settle] at hb ⊢
-  rw [broadcasts_append, broadcasts_append] at hb
+  simp only [Node.advance] at hb ⊢
+  rw [persists_append, persists_append] at hb
   have hc₁ := IsCut.progress hg _ hc hh fun e he => hb e
     (List.mem_append_left _ (List.mem_append_left _ he))
   have hh₁ := Held.progress (s.store.topRound + 2) hh
@@ -468,13 +473,34 @@ theorem CommitInv.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   rw [hcs]
   exact h₃.keeps rfl hk₄ hc₃
 
+/-- **Settling keeps the invariant, and the store a cut.** -/
+theorem CommitInv.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
+    (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
+    {cs : List (ℕ × Option BlockId)} (h : CommitInv cfg U s cs) (hc : IsCut U s.store)
+    (hh : Held cfg s) (hp : ∀ e ∈ s.pending, e ∈ K)
+    (hb : ∀ e ∈ persists (Node.settle cfg s).2, e ∈ K) :
+    CommitInv cfg U (Node.settle cfg s).1 (cs ++ commitsOf (Node.settle cfg s).2) ∧
+      IsCut U (Node.settle cfg s).1.store := by
+  rcases settle_cases (cfg := cfg) s with he | ⟨s₁, out, hj, he⟩ <;> rw [he] at hb ⊢
+  · exact h.advance hg hσ ht hc hh hp hb
+  · rw [persists_append] at hb
+    obtain ⟨hpd, -, hb₁, hg₁, -⟩ := tryJump_keeps hj
+    obtain ⟨r0, B1, B2, F, e, -, -, -, -, -, -, -, -, -, hlo, -, -, -, -, -, hout⟩ :=
+      tryJump_some hj
+    have hc₁ := hc.tryJump hg hj fun e he => hb e (List.mem_append_left _ he)
+    have h₁ : CommitInv cfg U s₁ cs := h.keeps hlo (hg₁.keeps hb₁) hc
+    have := h₁.advance hg hσ ht hc₁ (hh.tryJump hj) (by rw [hpd]; exact hp)
+      fun e he => hb e (List.mem_append_right _ he)
+    rw [commitsOf_append, hout, commitsOf_jumped, List.nil_append]
+    exact this
+
 /-- **A step keeps the invariant, and the store a cut.** -/
 theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)} (i : Input Validator BlockId Payload)
     (h : CommitInv cfg U s cs) (hc : IsCut U s.store) (hh : Held cfg s)
     (hp : ∀ e ∈ s.pending, e ∈ K) (hd : ∀ e ∈ delivered cfg [i], e ∈ K)
-    (hb : ∀ e ∈ broadcasts (Node.step cfg s i).2, e ∈ K) :
+    (hr : ∀ e ∈ received cfg s i, e ∈ K) (hb : ∀ e ∈ persists (Node.step cfg s i).2, e ∈ K) :
     CommitInv cfg U (Node.step cfg s i).1 (cs ++ commitsOf (Node.step cfg s i).2) ∧
       IsCut U (Node.step cfg s i).1.store := by
   -- a step that settles a state `s₀`, after outputs without decisions
@@ -486,7 +512,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         IsCut U (Node.step cfg s i).1.store := by
     intro s₀ pre h₀ hc₀ hh₀ hp₀ hpre he
     rw [he] at hb ⊢
-    rw [broadcasts_append] at hb
+    rw [persists_append] at hb
     rw [commitsOf_append, hpre, List.nil_append]
     exact h₀.settle hg hσ ht hc₀ hh₀ hp₀ fun e he => hb e (List.mem_append_right _ he)
   have hsame : Node.step cfg s i = (s, []) →
@@ -503,11 +529,12 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
         have h0 := hh.low h₁.1
         have hx : (cfg.idOf cfg.genesis, cfg.genesis) ∈ K :=
-          hb _ (by simp only [Node.step, dif_pos h₂, if_pos h₁]; simp [broadcasts])
+          hb _ (by simp only [Node.step, dif_pos h₂, if_pos h₁]; simp [persists])
         have hcst : IsCut U st := hc.insert (hg.base _ hx s.store.base
           (by simp [Config.genesis]) (Or.inl h0))
         let gid := cfg.idOf cfg.genesis
-        have hh₀ : Held cfg { s with store := st, top := some 0, own := some gid } := by
+        have hh₀ : Held cfg
+            { s with store := st, top := some 0, own := some gid, recovering := false } := by
           refine ⟨fun t ht => ⟨_, rfl, Finset.mem_insert_self _ _, ?_⟩, hh.horizon,
             fun ht => absurd ht (by simp), fun t _ => ?_, fun ht => absurd ht (by simp), hh.junk⟩
           · simp only [Option.some.injEq] at ht
@@ -517,7 +544,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
           · change s.store.base ≤ t
             omega
         have hk : Keeps s.store st := (Grows.insert s.store).keeps rfl
-        exact hset { s with store := st, top := some 0, own := some gid }
+        exact hset { s with store := st, top := some 0, own := some gid, recovering := false }
           (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)]) (h.keeps rfl hk hc) hcst hh₀ hp
           (commitsOf_built _) (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
       · exact hsame (by simp only [Node.step, dif_neg h₂, if_pos h₁])
@@ -554,7 +581,23 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       exact List.filterMap_eq_nil_iff.mpr fun _ _ => rfl
     rw [this, List.append_nil]
     exact ⟨h, hc⟩
-  | jump => exact hsame rfl
+  | jump v1 B1 v2 B2 =>
+    by_cases hF : (jumpIn cfg s v1 B1 v2 B2).isEmpty
+    · exact hsame (by rw [step_jump, if_pos hF])
+    · have hg₁ := Grows.flush (cfg := cfg)
+        (s.pending.length + (jumpIn cfg s v1 B1 v2 B2).length + 1) s.store
+        (jumpIn cfg s v1 B1 v2 B2 ++ s.pending)
+      have hb₁ := flush_base (cfg := cfg)
+        (s.pending.length + (jumpIn cfg s v1 B1 v2 B2).length + 1) s.store
+        (jumpIn cfg s v1 B1 v2 B2 ++ s.pending)
+      have hpend : ∀ e ∈ jumpIn cfg s v1 B1 v2 B2 ++ s.pending, e ∈ K := fun e he => by
+        rcases List.mem_append.mp he with he | he
+        · exact hr e he
+        · exact hp e he
+      exact hset (afterJump (cfg := cfg) s v1 B1 v2 B2) [] (h.keeps rfl (hg₁.keeps hb₁) hc)
+        (IsCut.flush hg _ _ hc (hc.spans hh) hpend) (hh.grow hg₁ hb₁ rfl rfl le_rfl)
+        (fun e he => hpend e (flush_pending_sub _ _ _ e he)) rfl
+        (by rw [step_jump, if_neg hF]; rfl)
   | restart =>
     exact hset s.recover [] (h.keeps rfl (Keeps.refl _) hc) hc
       (hh.grow (Grows.refl _) rfl rfl rfl le_rfl) (fun e he => by simp [State.recover] at he) rfl
@@ -568,24 +611,27 @@ theorem CommitInv.run (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     ∀ (is : List (Input Validator BlockId Payload)) {s : State Validator BlockId Payload}
       {cs : List (ℕ × Option BlockId)}, CommitInv cfg U s cs → IsCut U s.store → Held cfg s →
       (∀ e ∈ s.pending, e ∈ K) → (∀ e ∈ delivered cfg is, e ∈ K) →
-      (∀ e ∈ broadcasts (Node.run cfg s is).2, e ∈ K) →
+      (∀ e ∈ derived cfg s is, e ∈ K) → (∀ e ∈ persists (Node.run cfg s is).2, e ∈ K) →
       CommitInv cfg U (Node.run cfg s is).1 (cs ++ commitsOf (Node.run cfg s is).2)
-  | [], s, cs, h, _, _, _, _, _ => by simpa [Node.run, commitsOf] using h
-  | i :: is, s, cs, h, hc, hh, hp, hd, hb => by
+  | [], s, cs, h, _, _, _, _, _, _ => by simpa [Node.run, commitsOf] using h
+  | i :: is, s, cs, h, hc, hh, hp, hd, hr, hb => by
     simp only [Node.run] at hb ⊢
-    rw [broadcasts_append] at hb
+    rw [persists_append] at hb
     rw [delivered_cons] at hd
+    simp only [derived] at hr
     obtain ⟨h₁, hc₁⟩ := h.step hg hσ ht i hc hh hp (fun e he => hd e (List.mem_append_left _ he))
-      fun e he => hb e (List.mem_append_left _ he)
+      (fun e he => hr e (List.mem_append_left _ he)) fun e he => hb e (List.mem_append_left _ he)
     have hp₁ : ∀ e ∈ (Node.step cfg s i).1.pending, e ∈ K := fun e he => by
-      rcases (step_sub s i).1 e he with he | ⟨hi, hA⟩
+      rcases (step_sub s i).1 e he with he | ⟨hi, hA⟩ | he
       · exact hp e he
       · refine hd e (List.mem_append_left _ ?_)
         rw [hi]
         simp only [delivered, List.filterMap_cons, List.filterMap_nil, if_pos hA.1]
         exact List.mem_singleton.mpr rfl
+      · exact hr e (List.mem_append_left _ he)
     have := CommitInv.run hg hσ ht is h₁ hc₁ (hh.step i) hp₁
-      (fun e he => hd e (List.mem_append_right _ he)) fun e he => hb e (List.mem_append_right _ he)
+      (fun e he => hd e (List.mem_append_right _ he)) (fun e he => hr e (List.mem_append_right _ he))
+      fun e he => hb e (List.mem_append_right _ he)
     rw [commitsOf_append, ← List.append_assoc]
     exact this
 

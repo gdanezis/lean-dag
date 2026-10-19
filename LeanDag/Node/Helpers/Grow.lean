@@ -122,14 +122,34 @@ theorem Grows.collect (s : State Validator BlockId Payload) :
   · rw [h]; exact Grows.refl _
 
 omit [Fintype Validator] in
-theorem Grows.settle (s : State Validator BlockId Payload) :
-    Grows s.store (Node.settle cfg s).1.store := by
-  simp only [Node.settle]
+theorem Grows.advance (s : State Validator BlockId Payload) :
+    Grows s.store (Node.advance cfg s).1.store := by
+  simp only [Node.advance]
   refine (Grows.progress (cfg := cfg) (s.store.topRound + 2) s).1.trans ?_
   have hc := Grows.collect (cfg := cfg)
     (Node.decideStep cfg (Node.progress cfg (s.store.topRound + 2) s).1).1
   rw [decideStep_store] at hc
   exact hc.trans (Grows.flush _ _ _)
+
+omit [Fintype Validator] in
+theorem Grows.insertAll {F : List (BlockId × Block Validator BlockId Payload)}
+    {st st' : Store Validator BlockId Payload} (h : insertAll cfg st F = some st') : Grows st st' :=
+  insertAll_induct (cfg := cfg) (fun t => Grows st t) (fun _ _ _ _ ht => ht.trans (Grows.insert _))
+    h (Grows.refl st)
+
+omit [Fintype Validator] in
+theorem Grows.tryJump {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (h : tryJump cfg s = some (s', out)) :
+    Grows s.store s'.store := by
+  obtain ⟨r0, B1, B2, F, e, -, -, -, -, hst, -⟩ := tryJump_some h
+  exact Grows.insertAll hst
+
+omit [Fintype Validator] in
+theorem Grows.settle (s : State Validator BlockId Payload) :
+    Grows s.store (Node.settle cfg s).1.store := by
+  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, out, hj, h⟩ <;> rw [h]
+  · exact Grows.advance s
+  · exact (Grows.tryJump hj).trans (Grows.advance s₁)
 
 omit [Fintype Validator] in
 theorem Grows.settle_of {st : Store Validator BlockId Payload} (s : State Validator BlockId Payload)
@@ -162,6 +182,11 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     · exact Grows.refl _
   | timer r => exact Grows.settle_of _ rfl
   | restart => exact Grows.settle_of _ rfl
+  | jump v1 B1 v2 B2 =>
+    simp only [Node.step]
+    split
+    · exact Grows.refl _
+    · exact (Grows.flush (cfg := cfg) _ s.store _).trans (Grows.settle_of _ rfl)
   | _ => exact Grows.refl _
 
 /-- **Across a run the store grows.** -/

@@ -6,8 +6,8 @@ import LeanDag.Node.Model.Run
 they occur. Node `v`'s state before event `i` is its run over its inputs
 among the first `i` events (`stateBefore`); the outputs of event `i` are
 its node's step there (`outputsAt`); and an output sends a message to
-other nodes (`Sends`): a broadcast block and a request to every other
-node, an answer to the node it names.
+other nodes (`Sends`): a broadcast block, a jump message and a request
+to every other node, an answer to the node it names.
 
 Definitions only; the claims are `Node/Converge/Statement.lean`.
 -/
@@ -42,12 +42,13 @@ def outputsAt (tr : Trace Validator BlockId Payload) (i : ℕ) :
   | some (v, inp) => (step (cfg.at v) (stateBefore cfg tr i v) inp).2
   | none => []
 
-/-- **What node `u`'s outputs send**: a broadcast block and a request to
-every other node, an answer to the node it names. -/
+/-- **What node `u`'s outputs send**: a broadcast block, a jump message
+and a request to every other node, an answer to the node it names. -/
 def Sends (u : Validator) (out : List (Output Validator BlockId Payload))
     (m : Validator × Input Validator BlockId Payload) : Prop :=
   ∃ o ∈ out, match o with
     | .broadcast id b => m.1 ≠ u ∧ m.2 = .deliver id b
+    | .jump v1 B1 v2 B2 => m.1 ≠ u ∧ m.2 = .jump v1 B1 v2 B2
     | .fetch ids => m.1 ≠ u ∧ m.2 = .fetchRequest u ids
     | .send peer id b => m.1 = peer ∧ m.2 = .deliver id b
     | _ => False

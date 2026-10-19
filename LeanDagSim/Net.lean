@@ -9,13 +9,14 @@ network with a seeded schedule: before GST a message takes up to
 `preMax` ticks, after it between `delayMin` and `delayMax`, and a timer
 fires when it expires. A crashed node acts on nothing from its crash
 time on; a recovering node acts on nothing while it is down, then
-restarts, keeping only what it persisted. An equivocator is two copies of the honest program with the
+restarts, keeping only what it persisted, and may jump over its
+downtime with one message (Safe Skip). An equivocator is two copies of the honest program with the
 same identity and different payloads, each sending to half the nodes,
 so its twins are valid blocks; it acts on nothing from `byzUntil` on. A node's request for blocks goes to every
 other node, and an answer to the node that asked. `simulate` runs the schedule and reports
 what each honest node reached and committed, whether their decisions
-agree, and whether every honest block is valid under the blocks
-broadcast.
+agree, whether every honest block is valid under the blocks the nodes
+made, and how many jump messages the honest nodes sent.
 -/
 
 namespace LeanDagSim
@@ -115,8 +116,11 @@ structure Report where
   commits : List (List (ℕ × Option ℕ))
   /-- Any two honest nodes' decisions are prefix-comparable. -/
   agree : Bool
-  /-- Every honest block is valid at the row under the blocks broadcast. -/
+  /-- Every honest block is valid at the row under the blocks the nodes
+  made. -/
   valid : Bool
+  /-- The jump messages the honest nodes sent. -/
+  jumps : ℕ
   /-- The largest store any honest node held. -/
   maxStore : ℕ
   /-- The inputs processed. -/
@@ -134,8 +138,9 @@ section Run
 variable {n : ℕ} (sc : Scenario) (p : Scheme.Params) (q : ℕ) (hn : 0 < n)
 
 /-- The simulation's state: each agent's state, the inputs in flight, the
-seed, each agent's decisions, the blocks broadcast by honest agents, all
-blocks broadcast, the largest honest store, and the inputs processed. -/
+seed, each agent's decisions, the honest agents' own blocks, all agents'
+own blocks, the largest honest store, the inputs processed, and the
+honest agents' jump messages. -/
 structure World (n : ℕ) where
   agents : Array (Agent n)
   states : Array (State (Fin n) ℕ ℕ)
@@ -149,6 +154,7 @@ structure World (n : ℕ) where
   time : ℕ
   /-- The withheld block, once built. -/
   withheld : Option (ℕ × Block (Fin n) ℕ ℕ)
+  jumps : ℕ
 
 /-- Whether node `v` has crashed by time `t`. -/
 def crashed (v t : ℕ) : Bool :=
@@ -176,6 +182,15 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
           if receives sc a s then
             let (dt, g') := delay sc t acc.2
             ((t + dt, d, .deliver id b) :: acc.1, g')
+          else acc
+        | _, _ => acc) acc
+    | .jump v1 B1 v2 B2 =>
+      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
+        match agents[src]?, agents[d]? with
+        | some s, some a =>
+          if receives sc a s then
+            let (dt, g') := delay sc t acc.2
+            ((t + dt, d, .jump v1 B1 v2 B2) :: acc.1, g')
           else acc
         | _, _ => acc) acc
     | .setTimer r after => ((t + after, src, .timer r) :: acc.1, acc.2)
@@ -253,9 +268,10 @@ def loop : ℕ → World n → World n
         let (msgs, g) := sends sc w.agents d t out w.gen
         let msgs := extra ++ msgs
         let isHonest := !(sc.byz.contains a.node.val)
-        let bcast := r.2.filterMap fun
-          | .broadcast id b => some (id, b)
+        let own := r.2.filterMap fun
+          | .persist id b => some (id, b)
           | _ => none
+        let js := (r.2.filter fun | .jump .. => true | _ => false).length
         let decs := r.2.filterMap fun
           | .commit k x => some (k, x)
           | _ => none
@@ -265,12 +281,13 @@ def loop : ℕ → World n → World n
             queue := msgs.foldl (fun q e => enqueue e q) rest
             gen := g
             decisions := w.decisions.modify d (· ++ decs)
-            honest := if isHonest then w.honest ++ bcast else w.honest
-            blocks := bcast.foldl (fun m e => m.insert e.1 e.2) w.blocks
+            honest := if isHonest then w.honest ++ own else w.honest
+            blocks := own.foldl (fun m e => m.insert e.1 e.2) w.blocks
             maxStore := if isHonest then max w.maxStore r.1.store.ids.card else w.maxStore
             events := w.events + 1
             time := t
-            withheld := wh }
+            withheld := wh
+            jumps := if isHonest then w.jumps + js else w.jumps }
       | _, _ => loop fuel { w with queue := rest }
 
 end Run
@@ -281,7 +298,7 @@ def comparable {α : Type} [BEq α] (ls : List (List α)) : Bool :=
 
 /-- **Run a scenario.** -/
 def simulate (sc : Scenario) : Report :=
-  let empty : Report := ⟨false, [], [], true, true, 0, 0, 0⟩
+  let empty : Report := ⟨false, [], [], true, true, 0, 0, 0, 0⟩
   match row? sc.row sc.n sc.f sc.c with
   | none => empty
   | some (p, q) =>
@@ -305,7 +322,8 @@ def simulate (sc : Scenario) : Report :=
           maxStore := 0
           events := 0
           time := 0
-          withheld := none }
+          withheld := none
+          jumps := 0 }
       let w := loop sc p q hn sc.fuel w0
       let honestIdx := (List.range n).filter fun v => !(sc.byz.contains v)
       let decs := honestIdx.map fun v => w.decisions[v]?.getD []
@@ -317,6 +335,7 @@ def simulate (sc : Scenario) : Report :=
         commits := decs
         agree := comparable decs
         valid := valid
+        jumps := w.jumps
         maxStore := w.maxStore
         events := w.events
         time := w.time }

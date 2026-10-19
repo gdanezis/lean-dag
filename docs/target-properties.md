@@ -3880,7 +3880,8 @@ reading `selfBlocks` and the copy reading `copyBlocks`), `copyFill`
 with the copy reading's validity discharged from `CopyStable`,
 `addGenesis`, and the view lifts. The core's `chop`, `skipFill` and
 `addGenesis` are these at the core's record, the fill under the
-self-referencing reading with `fillBlock_valid` as its one obligation;
+self-referencing reading with `BlockRecord.selfBlock_valid` as its one
+obligation (§11.53);
 `chopBlk` moves to `BlockRecord.lean` and `SkipData` to
 `SafeSkip/Data.lean`.
 
@@ -5265,6 +5266,20 @@ same set a level at a time, proves the two equal at every block map
 (`levelsFrom_eq`, `historyUptoFrom_eq_levels`), and marks the equation
 `@[csimp]`, so compiled code everywhere downstream runs the level-wise
 form. No definition and no statement changes; only evaluation does.
+
+### 11.53 The self-referencing fill at any quorum
+
+The core's fill discharged its validity obligation at the core's
+predicate only, at quorum `n − f`, so the honest node of
+`docs/validator.md`, whose validity is the family with distinct creators
+and the self-parent clause at its own quorum `q`, could not use it.
+`Common/Record/Fill.lean` now proves the obligation at every predicate
+equivalent to that family, at any quorum (`BlockRecord.selfBlock_valid`):
+the copied references sit one round below, `v1` appears among their
+authors only as `B1`, the authors only grow, and the added self
+reference is the self-parent. The core's `SkipMsg.fillBlock_valid` is
+deleted; `skipFill`, the Mysticeti cell's sustaining fill and the hybrid's fill
+call the general lemma at `ValidWrt.iff_validAt`. No statement changes.
 
 ### 11.5 Next steps, in order
 

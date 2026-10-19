@@ -3,7 +3,7 @@
 This document plans a Lean program that acts as an honest validator of
 the partially synchronous rows of the scheme (`docs/scheme.md`), and the
 proofs that it conforms to the scheme. The program lives in
-`LeanDag/Node`, namespace LeanDag.Node; steps 0 to 5 are built, and
+`LeanDag/Node`, namespace LeanDag.Node; steps 0 to 6 are built, and
 part of step 10 (§7). Names
 in backticks are existing declarations; names in italics are planned.
 
@@ -71,7 +71,8 @@ self-parent clause is what Safe Skip's fill reads (§3.5).
 
 **Outputs.**
 
-* persist a block, emitted before the block is broadcast;
+* persist one of its own blocks, emitted before the block is broadcast,
+  and for a filled block before the jump message;
 * broadcast a block;
 * broadcast a jump message;
 * set a timer for round `r`;
@@ -142,7 +143,7 @@ validator waits the timeout every round, is not used.
 The new block references one accepted block per round-`r` author,
 including the validator's own previous block, choosing the least
 identifier between twins. The program builds rounds in sequence and
-never skips one. It persists the block and the accepted blocks of the
+skips one only by jumping (§3.5). It persists the block and the accepted blocks of the
 window it references, then broadcasts it, then sets the timer for round
 `r + 1`.
 
@@ -174,9 +175,26 @@ the slot's round up, all above the horizon.
 
 After a restart whose downtime the network has moved past, the program
 sends one jump message `(v1, B1, v2, B2)` instead of building every
-missed round. A receiver derives the fill blocks locally, with
-identifiers from the hash, so every receiver derives the same fill
-(`JumpMsg`, SS10 of `SafeSkip/Jump.lean`).
+missed round (`tryJump`). A restarted node jumps once, when its own
+block `B1` lies at its top round `r0` and the store's top round `R` is
+at least `r0 + 2`. The donor `B2` is the least block at `R` by another
+author. The line runs down from `B2` along references by `B2`'s author,
+the least where there are several (`lineDown`). Each round `k` with
+`r0 < k ≤ R` gets a filled block by `v1` (`jumpFills`, `fillUp`): the
+references and payload of the line's round-`k` block, plus `v1`'s block
+of round `k − 1`, which is `B1` at the bottom. Its identifier is its hash.
+The node accepts the filled blocks in turn, each checked as a built
+block is (`insertAll`), and persists them; then it sends the message.
+Its top becomes `R`, and the timer of round `R` counts as fired.
+
+A receiver takes the filled blocks from its own store (`jumpIn`). It
+needs `B1` at or above its horizon and the line above `B1`'s round, and
+it accepts the blocks as it accepts delivered ones. A receiver that
+lacks the line fetches the filled blocks as it fetches any missing
+block, and the jumping node answers from its store. Where both stores
+hold a block above `B1`'s round, they hold the same block under its hash,
+so the receiver derives the blocks the sender made (V6). The core proves
+this on universes (`JumpMsg`, SS10 of `SafeSkip/Jump.lean`).
 
 ### 3.6 Bootstrap
 
@@ -255,13 +273,13 @@ Bounding the pending blocks belongs to rate limiting (step 9).
 
 | | Claim | Route |
 |---|---|---|
-| V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved, restarts included) |
+| V1 | Every block of the program's own, those it persists, filled blocks included, satisfies `ValidAt q C`; they lie one per round, in consecutive rounds, across restarts and jumps; it references only what it knew; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved, restarts and jumps included) |
 | V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
-| V3 | In a run of honest nodes over any inputs, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every store along every run is a cut of it; under authentication, an injective hash and `Params.Tolerates`, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
-| V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised and no honest node restarting, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
+| V3 | In a run of honest nodes over any inputs, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every store along every run is a cut of it; under authentication of blocks and of jump messages, an injective hash and `Params.Tolerates`, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise and whenever they jump. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
+| V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised, no honest node restarting and none given a jump message, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
 | V4 | The decisions a store pruned at `G` gives from a slot at or above `G` equal those of every view holding its blocks from `G` up, read at `G`: the loop reads nothing below the slot's round. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq`, `Node.ViewsAbove.of_store` (proved) |
 | V5 | At every state a run reaches, resuming from what the node persisted gives the state its restart recovers: the same blocks, read alike, at the same horizon, the same next slot, top and own block, its top round's timer fired, and nothing pending or asked for. | `Node.Restart.Resumes` (proved): `Node.resume_persisted`, `Node.State.recover` |
-| V6 | A run with jump messages is a `skipFill` extension of the run without them; decisions persist across the fill, and new slots in the gap are skipped at once. | `decided_fill_of_persist`, `decided_none_of_novel` |
+| V6 | Under authenticated jump messages and an injective hash, every block an honest node derived from a jump message in an honest node's name is one of that node's own; the self-referencing filled block is valid at the program's validity at any quorum (L0). | `Node.Jump.Derives` (proved): `Node.derived_persisted`, `Node.jumpFills_congr`; `BlockRecord.selfBlock_valid` (proved) |
 | V7 | Rate limiting does not make a validator decide wrongly. | `decided_mono_of_banded` |
 | V8 | The efficient store and decider compute the reference program's values. | one equality per function |
 | V9 | A bootstrapped validator's view is a view of the record cut at its horizon, so its decisions agree with every other validator's at the slots both hold; the fetch is bounded. | lifted G10–G12 (§8), V4 |
@@ -275,6 +293,21 @@ decisions when the store's identifiers are the view's and its block map
 agrees on them. This is a lemma about `tryDecide` and the vote rule (for
 `leastSel` and `votedBlockSel`, which read only histories), proved in
 step 2; `View.toRecord` is the record a view gives.
+
+**Jumps in the run's record.** What an honest node knew includes the
+blocks its jump messages gave it (`derived`). These need no assumption
+of their own. A jump message in an honest node's name is one that node
+sent (`AuthenticJumps`). The receiver's store and the sender's then read
+alike above the sender's last block, so a derived block is one the
+sender made (V6). The filled blocks are therefore blocks of the record
+like any other, one per round of their author, and the record needs no
+before and after the fill. The scheme's statements about the fill as an
+extension (`decided_fill_of_persist`, `decided_none_of_novel`) are not
+needed at the node, and the prompt skip of a slot that the jumping node
+leads at a filled round is not proved there. Authentication covers a
+filled block that a peer forwards (`Authentic` reads the author's own
+blocks, not its broadcasts), as a signed later block of its author
+would, through the hash.
 
 **The run's record under garbage collection.** A node keeps a block at
 its horizon without checking its references (§3.4), so a Byzantine block
@@ -352,15 +385,18 @@ soon as its store allows.
 
 Convergence (V3′) is stated for nodes that do not restart, the reliable
 set of the liveness claims: a restart drops the pending blocks, and
-nothing asks for them again until a later block needs them.
+nothing asks for them again until a later block needs them. Such nodes
+never jump, and V3′ assumes that no honest node is given a jump message.
 
 A node down long enough that its peers' horizons pass the rounds it
 missed cannot catch up by fetching. Its fetches go one round down per
 request. Its peers' horizons rise one round per round. The simulator
 shows this at `Λ = 2` after six ticks down (§6). Safe Skip covers the
 downtime itself: on restart the validator is at its last own block `B1`
-with its window intact. A validator down past its peers' horizons
-rejoins by bootstrap (§3.6).
+with its window intact, and once it holds a block two rounds or more
+above it, with that block's line, it jumps there. A validator down past
+its peers' horizons never holds the line, and rejoins by bootstrap
+(§3.6).
 
 ## 6. Testing
 
@@ -392,6 +428,18 @@ rejoins by bootstrap (§3.6).
    A node down for six ticks restarts and catches up at `Λ = 6`, but not
    at `Λ = 2`. It asks for the rounds it missed one round down per
    request, and its peers' horizons pass them before it gets there.
+   With Safe Skip the restarted node jumps once it has fetched a line,
+   and every node reaches more rounds by tick 150:
+
+   | Λ | ticks down | rounds, no jump | rounds, with jump |
+   |---|---|---|---|
+   | 6 | 6 | 57 | 63–64 |
+   | 6 | 20 | 51 | 58 |
+   | 20 | 50 | 37 | 44 |
+
+   The gain is the network's, not only the restarted node's. A node that
+   lags leads slots it has not built, and each costs the others a
+   timeout. At `Λ = 2` nothing changes: the node never holds the line.
 4. **Optionally**, replaying records through the Rust decider of the
    Mysticeti codebase, where the scheme's table comes from.
 
@@ -405,7 +453,7 @@ rejoins by bootstrap (§3.6).
 | 3 | Simulator and JSON executable (built) |
 | 4 | The run model; V3 and convergence of honest blocks and their histories under fetching (§3.7), both without garbage collection (built) |
 | 5 | Garbage collection: V4, and V3 with horizons rising; persistence and restart: V5 (built) |
-| 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 |
+| 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 (built) |
 | 7 | Lift the bootstrap results to block records (§8, L1); bootstrap in the program: V9 |
 | 8 | Lift the rate-limiting results to block records (§8, L2) |
 | 9 | Rate limiting in the program: V7, V10 |
@@ -422,14 +470,13 @@ shared layer and are recorded among the shared-layer steps of
 
 ## 8. Lifting to block records
 
-One small result is missing at the program's validity:
+One small result was missing at the program's validity, and is proved:
 
 * **L0, the fill**: the self-referencing fill block, the donor's
-  references plus one self reference, is valid under `ValidAt q
-  (Clause.distinct.and Clause.selfParent)`. `Record/Fill.lean` proves
-  the copy fill for predicates that do not read the author, and
-  `SafeSkip/Basic.lean` the self-referencing fill at the core's validity
-  only.
+  references plus one self reference, is valid at every predicate
+  equivalent to `ValidAt q (Clause.distinct.and Clause.selfParent)`, at
+  any quorum (`BlockRecord.selfBlock_valid`, `Record/Fill.lean`). The
+  core's fill calls it at `ValidWrt.iff_validAt`.
 
 Two groups of results the program needs are stated on the core's
 universe, at `n = 3f + 1` and quorum `quorumCard`, and so hold at the

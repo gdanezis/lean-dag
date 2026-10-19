@@ -203,11 +203,43 @@ theorem Held.store {s : State Validator BlockId Payload} (h : Held cfg s)
   h.grow hg hb rfl rfl le_rfl
 
 omit [Fintype Validator] in
+theorem Held.advance {s : State Validator BlockId Payload} (h : Held cfg s) :
+    Held cfg (Node.advance cfg s).1 := by
+  have h₁ := (Held.progress (s.store.topRound + 2) h).decideStep
+  exact (Held.collect h₁).1.store _ (Grows.flush _ _ _) (flush_base _ _ _)
+
+omit [Fintype Validator] in
+/-- **A jump keeps the store and the horizon**, its last filled block the
+node's top. -/
+theorem Held.tryJump {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (h : Held cfg s)
+    (hj : Node.tryJump cfg s = some (s', out)) : Held cfg s' := by
+  obtain ⟨r0, B1, B2, F, e, htop, -, -, hF, hst, he, htop', hown', -, hlo, -, -, -, -, hr0, -⟩ :=
+    tryJump_some hj
+  obtain ⟨-, -, -, -, -, hmap, -⟩ := jumpFills_spec hF
+  have hlast := round_of_getLast hmap he
+  have hlt : r0 < e.2.round := by
+    have := (jumpFills_spec hF).2.2.2.1; rw [hr0] at this hlast; omega
+  have hb := insertAll_base hst
+  have hg := Grows.insertAll hst
+  have hem := (insertAll_mem hst).2 e (List.mem_of_getLast? he)
+  refine ⟨fun t ht => ⟨e.1, hown', hem.1, ?_⟩, ?_, fun ht => absurd (htop'.symm.trans ht) (by simp),
+    fun t ht => ?_, fun ht => absurd (htop'.symm.trans ht) (by simp), ((hg.2 hb).2.1).trans h.junk⟩
+  · rw [htop', Option.some.injEq] at ht
+    simp only [Store.blk, lookup, atBase_round, hem.2, ht]
+  · rw [hb, hlo]; exact h.horizon
+  · rw [htop', Option.some.injEq] at ht
+    rw [hb, ← ht]
+    have := h.le_top r0 htop
+    omega
+
+omit [Fintype Validator] in
 /-- **Settling keeps the store, and the node its top and its horizon.** -/
 theorem Held.settle {s : State Validator BlockId Payload} (h : Held cfg s) :
     Held cfg (Node.settle cfg s).1 := by
-  have h₁ := (Held.progress (s.store.topRound + 2) h).decideStep
-  exact (Held.collect h₁).1.store _ (Grows.flush _ _ _) (flush_base _ _ _)
+  rcases settle_cases (cfg := cfg) s with he | ⟨s₁, out, hj, he⟩ <;> rw [he]
+  · exact h.advance
+  · exact (h.tryJump hj).advance
 
 /-- **A step keeps the node's top and its horizon.** -/
 theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
@@ -235,6 +267,11 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     · exact h
   | timer r => exact Held.settle (h.grow (Grows.refl _) rfl rfl rfl le_rfl)
   | restart => exact Held.settle (h.grow (Grows.refl _) rfl rfl rfl le_rfl)
+  | jump v1 B1 v2 B2 =>
+    rw [step_jump]
+    split
+    · exact h
+    · exact Held.settle (h.grow (Grows.flush _ _ _) (flush_base _ _ _) rfl rfl le_rfl)
   | _ => exact h
 
 /-- **A run keeps the node's top and its horizon.** -/

@@ -4163,7 +4163,8 @@ unchanged:
 **SS1.**
 ```lean
 def skipFill : BlockUniverse Validator BlockId Payload :=
-  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete) (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2)
+  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete)
+    (fun _ hk1 hk2 => BlockRecord.selfBlock_valid ValidWrt.iff_validAt U sk hk1 hk2)
 ```
 
 The fill is built once at the block record (§2.3): `BlockRecord.fill`
@@ -4172,8 +4173,11 @@ looks every old identifier up unchanged, and proves closure,
 non-equivocation and the old blocks' validity for any predicate that is
 `Mechanised`. What a reading owes is the one clause the record cannot
 supply, that each filled block is valid under the extended map. The
-core's reading is the self-referencing one, and `fillBlock_valid` is
-that obligation: every clause of §2.2 must survive the fill. The predecessor clause P1 holds
+core's reading is the self-referencing one, and
+`BlockRecord.selfBlock_valid` is that obligation, proved at every
+predicate equivalent to the family with distinct creators and the
+self-parent clause, at any quorum: every clause of §2.2 must survive the
+fill. The predecessor clause P1 holds
 because the copied references sit one round below by the line's own P1
 and the self reference is placed there by construction. P2, distinct
 creators, is the delicate clause: the copied references must not already
@@ -14521,10 +14525,11 @@ abbrev SkipMsg (U : BlockUniverse Validator BlockId Payload) :=
 
 ```lean
 def skipFill : BlockUniverse Validator BlockId Payload :=
-  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete) (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2)
+  BlockRecord.fill U sk.toGapData (sk.selfBlocks U.complete)
+    (fun _ hk1 hk2 => BlockRecord.selfBlock_valid ValidWrt.iff_validAt U sk hk1 hk2)
 ```
 
-**The denotation.** `U`, extended with one filled block per gap round; every old block looked up unchanged. The block record's fill under the self-referencing reading, with `fillBlock_valid` as the one obligation.
+**The denotation.** `U`, extended with one filled block per gap round; every old block looked up unchanged. The block record's fill under the self-referencing reading, its obligation discharged by `BlockRecord.selfBlock_valid`.
 
 #### `selfParent`
 
@@ -19384,7 +19389,7 @@ def fill (U : (HybridProperties.hybridRule (Validator := Validator)
     (HybridProperties.hybridRule (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) kt).Universe :=
   onRecord.fill U sk.toGapData (sk.selfBlocks U.val.complete)
-    (fun _ hk1 hk2 => sk.fillBlock_valid hk1 hk2) (honestNoEquiv_fill sk.toGapData _ _ U.property)
+    (fun _ hk1 hk2 => BlockRecord.selfBlock_valid ValidWrt.iff_validAt _ sk hk1 hk2) (honestNoEquiv_fill sk.toGapData _ _ U.property)
 ```
 
 **The fill, at Hybrid's carrier**: the core's self-referencing fill through `onRecord`, with `honestNoEquiv_fill` as the invariant.
@@ -20765,7 +20770,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 634 theorems the body or Appendix A names, each
+The 633 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -22724,18 +22729,6 @@ theorem hB1uniq_of_correct {v1 : Validator} {B1 : BlockId}
 ```
 
 **The boundary condition from correctness.** For a `v1` outside the Byzantine set, non-equivocation pins its round-`r0` block to `B1` — how a `SkipMsg` is built here, and what `hB1uniq` generalises for a crash-prone `v1` in the hybrid model.
-
-#### `fillBlock_valid`
-
-*theorem, `SafeSkip.Basic.lean`*
-
-```lean
-theorem fillBlock_valid {k : ℕ} (hk1 : sk.r0 < k) (hk2 : k ≤ sk.r) :
-    ValidWrt (fun b => if b ∈ U.ids then U.block b else sk.fillBlock (sk.idx b))
-      (sk.fillBlock k)
-```
-
-**The filled block is valid** under the extended block map: the copied references sit one round below (P1), `v1` appears among the authors exactly once (by `hB1uniq` at the boundary), the reference quorum only grows, and the added self reference is P3′.
 
 #### `reaches_fill_old`
 

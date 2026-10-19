@@ -33,9 +33,15 @@ input `i` in the state `s`: the new state and the outputs.
   requests; the downtime counts as the top round's timer firing.
   `State.persisted` is what the node writes, and `resume` rebuilds a
   state from it.
+* **Jumping** (`tryJump`, `jumpFills`): after a restart, a node two
+  rounds or more behind the store's top fills the rounds in between with
+  blocks of its own, each the references of another author's line plus
+  its own block of the round below, persists them and sends one jump
+  message; a receiver derives the same blocks from its own store and
+  accepts them as it accepts delivered ones (`jumpIn`).
 
-Safe Skip, rate limiting and bootstrap are not yet implemented: their
-inputs leave the state unchanged.
+Rate limiting and bootstrap are not yet implemented: their inputs leave
+the state unchanged.
 
 Definitions only.
 -/
@@ -65,6 +71,8 @@ structure State where
   /-- The blocks asked for, each with the block whose history needed it
   and its own round. -/
   requested : List (BlockId × BlockId × ℕ)
+  /-- Restarted, and not yet jumped. -/
+  recovering : Bool
 
 variable (cfg : Config Validator BlockId Payload)
 
@@ -73,7 +81,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
-  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, []⟩
+  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false⟩
 
 /-- **Accept a block**: below the horizon it is dropped; at the horizon it
 is kept without its references, as the cut keeps it; above, it is kept if
@@ -166,6 +174,95 @@ def progress : ℕ → State Validator BlockId Payload →
     | some (s', out) => let r := progress fuel s'; (r.1, out ++ r.2)
     | none => (s, [])
 
+/-- **The reference by `v`** of a block, the least if there are several. -/
+def refBy (s : Store Validator BlockId Payload) (b : Block Validator BlockId Payload)
+    (v : Validator) : Option BlockId :=
+  Scheme.leastOf (b.refs.filter fun j => (s.blk j).creator = v)
+
+/-- **A line**: from `j`, `d` rounds down along references by `j`'s
+author, each above round `lo`; lowest first. -/
+def lineDown (s : Store Validator BlockId Payload) (lo : ℕ) : ℕ → BlockId → Option (List BlockId)
+  | 0, j => if j ∈ s.ids ∧ lo < (s.blk j).round then some [j] else none
+  | d + 1, j =>
+    if j ∈ s.ids ∧ lo < (s.blk j).round then
+      ((refBy s (s.blk j) (s.blk j).creator).bind (lineDown s lo d)).map (· ++ [j])
+    else none
+
+/-- **The filled blocks along a line**, lowest first: each by `v1`, at its
+line block's round, with that block's references and payload and the
+filled block below, `prev` at the bottom. -/
+def fillUp (idOf : Block Validator BlockId Payload → BlockId)
+    (blk : BlockId → Block Validator BlockId Payload) (v1 : Validator) :
+    BlockId → List BlockId → List (BlockId × Block Validator BlockId Payload)
+  | _, [] => []
+  | prev, l :: ls =>
+    let b : Block Validator BlockId Payload :=
+      ⟨(blk l).round, v1, insert prev (blk l).refs, (blk l).payload⟩
+    (idOf b, b) :: fillUp idOf blk v1 (idOf b) ls
+
+/-- **The blocks a jump message denotes** on a store (`docs/validator.md`
+§3.5): `v1` resumes after its block `B1` along the line of `B2`, one
+filled block per round in between; if the store holds `B1` at or above
+its horizon, and the line above it. -/
+def jumpFills (idOf : Block Validator BlockId Payload → BlockId) (s : Store Validator BlockId Payload)
+    (v1 : Validator) (B1 B2 : BlockId) : Option (List (BlockId × Block Validator BlockId Payload)) :=
+  if B1 ∈ s.ids ∧ (s.blk B1).creator = v1 ∧ s.base ≤ (s.blk B1).round ∧
+      (s.blk B1).round < (s.blk B2).round then
+    (lineDown s (s.blk B1).round ((s.blk B2).round - (s.blk B1).round - 1) B2).map
+      (fillUp idOf s.blk v1 B1)
+  else none
+
+/-- **Accept blocks in turn**, each new, above the horizon, with its
+references accepted one round below, and valid at the row; nothing if
+one is not. -/
+def insertAll (st : Store Validator BlockId Payload) :
+    List (BlockId × Block Validator BlockId Payload) → Option (Store Validator BlockId Payload)
+  | [] => some st
+  | e :: l =>
+    if h : e.1 ∉ st.ids ∧ st.base < e.2.round ∧ e.2.refs ⊆ st.ids ∧
+        (∀ j ∈ e.2.refs, (st.blk j).round + 1 = e.2.round) ∧
+        rowValid cfg.q (Function.update st.blk e.1 e.2) e.2 then
+      insertAll (st.insert e.1 e.2 h.1 h.2.1.le (fun _ => h.2.2.1) (fun _ => h.2.2.2.1)) l
+    else none
+
+/-- **Jump over the downtime** (`docs/validator.md` §3.5): once
+restarted, when the store's top round lies two rounds or more above the
+node's top, the node fills each round in between along the line of the
+least block there by another author, persists the filled blocks, and
+sends the jump message; its top is then the last filled block, whose
+round's timer counts as fired. -/
+def tryJump (s : State Validator BlockId Payload) :
+    Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
+  match s.recovering, s.top, s.own with
+  | true, some r0, some B1 =>
+    let R := s.store.topRound
+    match Scheme.leastOf ((blocksAt s.store.toRecord R).filter fun i =>
+        (s.store.blk i).creator ≠ cfg.me) with
+    | some B2 =>
+      if r0 + 2 ≤ R ∧ (s.store.blk B1).round = r0 then
+        match jumpFills cfg.idOf s.store cfg.me B1 B2 with
+        | some F =>
+          match insertAll cfg s.store F, F.getLast? with
+          | some st, some e =>
+            let s' := { s with store := st, top := some e.2.round, own := some e.1 }
+            some ({ s' with fired := insert e.2.round s.fired, recovering := false },
+              F.map (fun e => .persist e.1 e.2) ++ [.jump cfg.me B1 (s.store.blk B2).creator B2])
+          | _, _ => none
+        | none => none
+      else none
+    | none => none
+  | _, _, _ => none
+
+/-- **The blocks a received jump message gives**: those it denotes on the
+store, if it names another node and `B2`'s author, less those stored or
+pending. -/
+def jumpIn (s : State Validator BlockId Payload) (v1 : Validator) (B1 : BlockId) (v2 : Validator)
+    (B2 : BlockId) : List (BlockId × Block Validator BlockId Payload) :=
+  if v1 ≠ cfg.me ∧ B2 ∈ s.store.ids ∧ (s.store.blk B2).creator = v2 then
+    ((jumpFills cfg.idOf s.store v1 B1 B2).getD []).filter fun e =>
+      decide (e.1 ∉ s.store.ids) && decide (e.1 ∉ s.pending.map Prod.fst)
+  else []
+
 /-- The number of slots whose decision round is at most `R`. -/
 def decidable (R : ℕ) : ℕ :=
   if R + 1 < cfg.p.waveLength then 0 else cfg.m * ((R + 1 - cfg.p.waveLength) / cfg.per + 1)
@@ -236,17 +333,23 @@ def collect (s : State Validator BlockId Payload) :
     else (s, [])
   | none => (s, [])
 
-/-- **Build, decide, collect, then accept what that allows**, after a
-change to the state: a block built or a horizon raised can make a
-pending block ready, so the step ends by flushing, and no pending block
-is left ready after any step. -/
-def settle (s : State Validator BlockId Payload) :
+/-- **Build, decide, collect, then accept what that allows**: a block
+built or a horizon raised can make a pending block ready, so this ends
+by flushing, and no pending block is left ready. -/
+def advance (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   let b := progress cfg (s.store.topRound + 2) s
   let d := decideStep cfg b.1
   let g := collect cfg d.1
   let fl := flush cfg (g.1.pending.length + 1) g.1.store g.1.pending
   ({ g.1 with store := fl.1, pending := fl.2 }, b.2 ++ d.2 ++ g.2)
+
+/-- **Jump if it can, then advance**, after a change to the state. -/
+def settle (s : State Validator BlockId Payload) :
+    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
+  match tryJump cfg s with
+  | some (s', out) => let r := advance cfg s'; (r.1, out ++ r.2)
+  | none => advance cfg s
 
 /-- **What the node persists**: its accepted blocks, the horizon, the next
 undecided slot and its own top block. -/
@@ -256,9 +359,10 @@ def State.persisted (s : State Validator BlockId Payload) : Persisted Validator 
 
 /-- **The state after a crash and restart**: the store, the next slot and
 the top kept; nothing pending or asked for; the top round's timer fired,
-since the node was away. -/
+since the node was away; recovering. -/
 def State.recover (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
-  { s with pending := [], fired := (s.top.map fun t => {t}).getD ∅, requested := [] }
+  let s' := { s with pending := [], fired := (s.top.map fun t => {t}).getD ∅ }
+  { s' with requested := [], recovering := true }
 
 /-- **Resume from what was persisted**: the store rebuilt from the window
 at the horizon, if the window is closed under references one round below
@@ -275,7 +379,7 @@ def resume (ps : Persisted Validator BlockId Payload) : Option (State Validator 
       ∀ i ∈ ids, ps.horizon ≤ (lookup map cfg.genesis ps.horizon i).round then
     let st : Store Validator BlockId Payload := ⟨map, ids, cfg.genesis, ps.horizon, h.1, h.2.1, h.2.2⟩
     let top := ps.own.map fun o => (st.blk o).round
-    some ⟨st, [], top, ps.own, (top.map fun t => {t}).getD ∅, ps.lo, []⟩
+    some ⟨st, [], top, ps.own, (top.map fun t => {t}).getD ∅, ps.lo, [], true⟩
   else none
 
 /-- **The node's transition function.** -/
@@ -290,7 +394,8 @@ def step (s : State Validator BlockId Payload) :
           rowValid cfg.q (Function.update s.store.blk id b) b then
         let st := s.store.insert id b h.1 h.2.1 (fun _ => Finset.empty_subset _)
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
-        let r := settle cfg { s with store := st, top := some 0, own := some id }
+        let s₀ := { s with store := st, top := some 0, own := some id }
+        let r := settle cfg { s₀ with recovering := false }
         (r.1, [.persist id b, .broadcast id b, .setTimer 0 (cfg.timeout 0)] ++ r.2)
       else (s, [])
     else (s, [])
@@ -305,6 +410,12 @@ def step (s : State Validator BlockId Payload) :
       (r.1, (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ r.2)
     else (s, [])
   | .timer r => settle cfg { s with fired := insert r s.fired }
+  | .jump v1 B1 v2 B2 =>
+    let F := jumpIn cfg s v1 B1 v2 B2
+    if F.isEmpty then (s, [])
+    else
+      let fl := flush cfg (s.pending.length + F.length + 1) s.store (F ++ s.pending)
+      settle cfg { s with store := fl.1, pending := fl.2 }
   | .fetchRequest peer ids => (s, answer s peer ids)
   | .restart => settle cfg s.recover
   | _ => (s, [])

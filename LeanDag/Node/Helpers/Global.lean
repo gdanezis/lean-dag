@@ -1,5 +1,4 @@
-import LeanDag.Node.Runs.Statement
-import LeanDag.Node.Local.Proof
+import LeanDag.Node.Helpers.Jumps
 import LeanDag.Node.Helpers.Commits
 /-!
 # The run's record
@@ -19,8 +18,9 @@ reads it without references, and the record reads it alike there.
 The record grounds what the honest nodes knew (`ground`): a known block
 valid over the record is real, and one at or below a round the record
 reaches is its block, read alike at that round. Free of honest
-equivocation because a block with an honest author's identity is one
-that author broadcast, one a round.
+equivocation because a block with an honest author's identity is one of
+that author's own, one a round: delivered, by authentication; derived
+from a jump message, by `derived_persisted`.
 -/
 
 namespace LeanDag
@@ -85,23 +85,6 @@ theorem mem_globalIds {j : BlockId} :
     j ∈ globalIds cfg H ins ↔ j ∈ knownIds cfg H ins ∧ Lives cfg H ins (content cfg H ins j).round := by
   unfold globalIds
   exact Finset.mem_filter
-
-/-- What a node knew is identified by its hash. -/
-theorem id_of_known {v : Validator} {x : BlockId × Block Validator BlockId Payload}
-    (hx : x ∈ knownOf cfg ins v) : x.1 = cfg.idOf x.2 := by
-  rcases List.mem_append.mp hx with hx | hx
-  · obtain ⟨i, -, hi⟩ := List.mem_filterMap.mp hx
-    cases i with
-    | deliver id b =>
-      simp only at hi
-      split at hi
-      · rename_i h
-        rw [Option.some.injEq] at hi
-        subst hi
-        exact h
-      · exact absurd hi (by simp)
-    | _ => exact absurd hi (by simp)
-  · exact (Local.authored _ _ _ (cfg.at v) (ins v) x hx).1
 
 theorem mem_knownIds {x : BlockId × Block Validator BlockId Payload}
     (hx : x ∈ knownAll cfg H ins) : x.1 ∈ knownIds cfg H ins := by
@@ -173,28 +156,31 @@ theorem globalBlock_refs {j : BlockId} (hj : Lives cfg H ins (content cfg H ins 
       · exact hyv.quorum (by omega)
 
 variable (hinj : Runs.HashInjective cfg H ins) (hauth : Runs.Authentic cfg H ins)
+variable (hjump : Runs.AuthenticJumps cfg H ins)
 
-include hauth in
+include hinj hauth hjump in
 /-- **A block the honest nodes knew with an honest author's identity is
-one that author broadcast.** -/
-theorem mem_broadcasts_of_known {x : BlockId × Block Validator BlockId Payload}
+one of that author's own.** -/
+theorem mem_persists_of_known {x : BlockId × Block Validator BlockId Payload}
     (hx : x ∈ knownAll cfg H ins) (hc : x.2.creator ∈ H) :
-    x ∈ broadcasts (runOf cfg ins x.2.creator).2 := by
+    x ∈ persists (runOf cfg ins x.2.creator).2 := by
   obtain ⟨v, hv, hx⟩ := hx
-  rcases List.mem_append.mp hx with hx | hx
+  simp only [knownOf, List.mem_append] at hx
+  rcases hx with (hx | hx) | hx
   · exact hauth v hv x hx hc
+  · exact derived_persisted hjump hinj hv hx hc
   · have := (Local.authored _ _ _ (cfg.at v) (ins v) x hx).2
     change x.2.creator = v at this
     rw [this]
     exact hx
 
-/-- **One block a round**: two blocks a node broadcast at one round are one. -/
-theorem eq_of_broadcasts (v : Validator) {x y : BlockId × Block Validator BlockId Payload}
-    (hx : x ∈ broadcasts (runOf cfg ins v).2) (hy : y ∈ broadcasts (runOf cfg ins v).2)
+/-- **One block a round**: two of a node's own blocks at one round are one. -/
+theorem eq_of_persists (v : Validator) {x y : BlockId × Block Validator BlockId Payload}
+    (hx : x ∈ persists (runOf cfg ins v).2) (hy : y ∈ persists (runOf cfg ins v).2)
     (hr : x.2.round = y.2.round) : x = y := by
   have h := Local.oneEach _ _ _ (cfg.at v) (ins v)
   dsimp only at h
-  have hnd : ((broadcasts (runOf cfg ins v).2).map fun e => e.2.round).Nodup := by
+  have hnd : ((persists (runOf cfg ins v).2).map fun e => e.2.round).Nodup := by
     unfold runOf
     rw [h]
     exact List.nodup_range
@@ -207,7 +193,7 @@ theorem exists_of_mem_knownIds {j : BlockId} (hj : j ∈ knownIds cfg H ins) :
   obtain ⟨x, hx, rfl⟩ := List.mem_map.mp (List.mem_toFinset.mp hj)
   exact ⟨x, ⟨v, hv, hx⟩, rfl⟩
 
-include hinj hauth in
+include hinj hauth hjump in
 /-- **The run's record.** -/
 noncomputable def globalRecord :
     BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H where
@@ -236,10 +222,10 @@ noncomputable def globalRecord :
     obtain ⟨y, hy, rfl⟩ := exists_of_mem_knownIds (mem_globalIds.mp hj).1
     simp only [globalBlock_creator, globalBlock_round, content_of_known hinj hx,
       content_of_known hinj hy] at hc hcr hr
-    have hbx := mem_broadcasts_of_known hauth hx hc
-    have hby := mem_broadcasts_of_known hauth hy (hcr ▸ hc)
+    have hbx := mem_persists_of_known hinj hauth hjump hx hc
+    have hby := mem_persists_of_known hinj hauth hjump hy (hcr ▸ hc)
     rw [hcr] at hbx
-    exact congrArg Prod.fst (eq_of_broadcasts _ hbx hby hr)
+    exact congrArg Prod.fst (eq_of_persists _ hbx hby hr)
 
 theorem globalBlock_atBase {j : BlockId} {G : ℕ} (hG : (content cfg H ins j).round ≤ G) :
     atBase G (globalBlock cfg H ins j) = atBase G (content cfg H ins j) := by
@@ -250,7 +236,7 @@ theorem globalBlock_atBase {j : BlockId} {G : ℕ} (hG : (content cfg H ins j).r
 
 /-- **The record grounds what the honest nodes knew.** -/
 theorem ground (hq : 0 < cfg.q) :
-    Ground (globalRecord hinj hauth) (knownAll cfg H ins) cfg.q where
+    Ground (globalRecord hinj hauth hjump) (knownAll cfg H ins) cfg.q where
   real := by
     intro x hx hs hv
     have hcx := content_of_known hinj hx
@@ -261,7 +247,8 @@ theorem ground (hq : 0 < cfg.q) :
         · have := hv.predecessor j hj
           simp only [globalRecord, globalBlock_round] at this
           exact this
-        · have hcr : creators (content cfg H ins) x.2 = creators (globalRecord hinj hauth).block x.2 :=
+        · have hcr : creators (content cfg H ins) x.2 =
+              creators (globalRecord hinj hauth hjump).block x.2 :=
             Finset.image_congr fun j _ => (globalBlock_creator j).symm
           rw [hcr]
           exact hv.quorum h0
@@ -291,7 +278,7 @@ theorem ground (hq : 0 < cfg.q) :
 
 /-- **A started node's store is a cut of the record.** -/
 theorem isCut_init (c : Config Validator BlockId Payload) :
-    IsCut (globalRecord hinj hauth) (State.init c).store :=
+    IsCut (globalRecord hinj hauth hjump) (State.init c).store :=
   fun _ h => absurd h (Finset.notMem_empty _)
 
 end Node

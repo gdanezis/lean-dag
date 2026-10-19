@@ -4,6 +4,8 @@ import LeanDag.Node.Local.Proof
 import LeanDag.Node.Runs.Proof
 import LeanDag.Node.Converge.Proof
 import LeanDag.Node.Restart.Proof
+import LeanDag.Node.Jump.Proof
+import LeanDag.Common.Record.Fill
 /-!
 # The node's theorems use only the standard axioms
 -/
@@ -55,3 +57,15 @@ info: 'LeanDag.Node.Restart.holds' depends on axioms: [propext, Classical.choice
 -/
 #guard_msgs in
 #print axioms LeanDag.Node.Restart.holds
+
+/--
+info: 'LeanDag.Node.Jump.holds' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms LeanDag.Node.Jump.holds
+
+/--
+info: 'LeanDag.BlockRecord.selfBlock_valid' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms LeanDag.BlockRecord.selfBlock_valid

@@ -42,11 +42,14 @@ theorem event_of_map {i : ℕ} {u : Validator} (h : (tr[i]?.map Prod.fst) = some
 /-- What honest nodes knew is identified by its hash. -/
 theorem id_of_knownIn {x : BlockId × Block Validator BlockId Payload}
     (hx : x ∈ knownIn cfg H tr) : x.1 = cfg.idOf x.2 := by
-  rcases hx with ⟨j, v, hj, hv, hid⟩ | ⟨i, u, hu, -, hb⟩
+  rcases hx with ⟨j, v, hj, hv, hid⟩ | ⟨i, u, hu, -, hb⟩ | ⟨i, v, -, hd⟩
   · exact hid
   · obtain ⟨inp, hi⟩ := event_of_map hu
     exact (Local.authored _ _ _ (cfg.at u) (inputsBefore tr (i + 1) u) x
-      (broadcasts_of_event hi hb)).1
+      (persists_of_event hi hb)).1
+  · obtain ⟨v1, B1, v2, B2, -, -, st, F, hF, hxF, -⟩ :=
+      Inv.derived_from (cfg := cfg.at v) _ Inv.init x hd
+    exact ((jumpFills_spec hF).2.2.2.2.2.2 x hxF).1
 
 theorem content_eq (hinj : HashInjective cfg H tr) {x y : BlockId × Block Validator BlockId Payload}
     (hx : x ∈ knownIn cfg H tr) (hy : y ∈ knownIn cfg H tr) (h : x.1 = y.1) : x.2 = y.2 :=
@@ -64,25 +67,80 @@ theorem gT_of_known (hinj : HashInjective cfg H tr) {x : BlockId × Block Valida
 def knownBefore (cfg : Config Validator BlockId Payload) (tr : Trace Validator BlockId Payload)
     (i : ℕ) (v : Validator) : Set (BlockId × Block Validator BlockId Payload) :=
   {x | x ∈ delivered (cfg.at v) (inputsBefore tr i v) ++
-    broadcasts (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr i v)).2}
+    derived (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr i v) ++
+    persists (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr i v)).2}
 
 theorem inv_before (i : ℕ) (v : Validator) :
     Inv (cfg.at v) (stateBefore cfg tr i v) (knownBefore cfg tr i v)
-      (broadcasts (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr i v)).2) := by
+      (persists (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr i v)).2) := by
   have hi := Inv.init.run (cfg := cfg.at v) (inputsBefore tr i v)
   simp only [Set.empty_union, List.nil_append] at hi
   refine hi.mono fun x hx => ?_
   simp only [Set.mem_union, Set.mem_setOf_eq] at hx
-  exact List.mem_append.mpr hx
+  simp only [knownBefore, Set.mem_setOf_eq, List.mem_append]
+  exact hx
 
 theorem knownBefore_sub {v : Validator} (hv : v ∈ H) (i : ℕ) :
     knownBefore cfg tr i v ⊆ knownIn cfg H tr := by
   intro x hx
-  rcases List.mem_append.mp hx with hx | hx
+  simp only [knownBefore, Set.mem_setOf_eq, List.mem_append] at hx
+  rcases hx with (hx | hx) | hx
   · obtain ⟨j, -, hj, hid⟩ := mem_delivered_before (cfg.at v) v i hx
     exact Or.inl ⟨j, v, hj, hv, hid⟩
-  · obtain ⟨j, -, hjv, hx⟩ := mem_broadcasts_before (cfg := cfg) v i hx
-    exact Or.inr ⟨j, v, hjv, hv, hx⟩
+  · exact Or.inr (Or.inr ⟨i, v, hv, hx⟩)
+  · obtain ⟨j, -, hjv, hx⟩ := mem_persists_before (cfg := cfg) v i hx
+    exact Or.inr (Or.inl ⟨j, v, hjv, hv, hx⟩)
+
+/-- **What an event broadcasts it made.** -/
+theorem persists_of_broadcasts {i : ℕ} {e : BlockId × Block Validator BlockId Payload}
+    (he : e ∈ broadcasts (outputsAt cfg tr i)) : e ∈ persists (outputsAt cfg tr i) := by
+  unfold outputsAt at he ⊢
+  split at he
+  · rename_i v inp _
+    obtain ⟨xs, js, fs, bs, ds, gs, hxs, hjs, -, ho, -⟩ :=
+      (inv_before (cfg := cfg) (tr := tr) i v).step inp
+    rw [ho, broadcasts_shape hxs hjs.shape] at he
+    rw [ho, persists_shape hxs hjs.shape]
+    exact List.mem_append_right _ he
+  · exact absurd he List.not_mem_nil
+
+omit [Fintype Validator] [LinearOrder BlockId] in
+theorem mem_inputsBefore {i : ℕ} {w : Validator} {x : Input Validator BlockId Payload}
+    (h : x ∈ inputsBefore tr i w) : ∃ j : ℕ, tr[j]? = some (w, x) := by
+  obtain ⟨e, he, hex⟩ := List.mem_filterMap.mp h
+  split at hex
+  · rename_i hw
+    rw [Option.some.injEq] at hex
+    obtain ⟨j, hj⟩ := List.mem_iff_getElem?.mp he
+    rw [List.getElem?_take] at hj
+    split at hj
+    · refine ⟨j, ?_⟩
+      rw [hj, ← hw, ← hex]
+    · cases hj
+  · cases hex
+
+/-- An input other than a jump message gives no block besides a delivered one. -/
+theorem received_of_ne {c : Config Validator BlockId Payload} {s : State Validator BlockId Payload}
+    {inp : Input Validator BlockId Payload} (h : ∀ v1 B1 v2 B2, inp ≠ .jump v1 B1 v2 B2) :
+    received c s inp = [] := by
+  cases inp with
+  | jump v1 B1 v2 B2 => exact absurd rfl (h v1 B1 v2 B2)
+  | _ => rfl
+
+theorem derived_nil {c : Config Validator BlockId Payload} :
+    ∀ {s : State Validator BlockId Payload} {is : List (Input Validator BlockId Payload)},
+    (∀ i ∈ is, ∀ v1 B1 v2 B2, i ≠ .jump v1 B1 v2 B2) → derived c s is = []
+  | _, [], _ => rfl
+  | s, i :: is, h => by
+    simp only [derived, received_of_ne (h i List.mem_cons_self), List.nil_append]
+    exact derived_nil fun x hx => h x (List.mem_cons_of_mem _ hx)
+
+/-- **No jump message gives an honest node a block**, when none is given one. -/
+theorem derived_before (hnj : NoJump H tr) {w : Validator} (hw : w ∈ H) (i : ℕ) :
+    derived (cfg.at w) (State.init (cfg.at w)) (inputsBefore tr i w) = [] :=
+  derived_nil fun x hx v1 B1 v2 B2 h => by
+    obtain ⟨j, hj⟩ := mem_inputsBefore hx
+    exact hnj j w v1 B1 v2 B2 hw (h ▸ hj)
 
 theorem stateBefore_of_le {i : ℕ} (h : tr.length ≤ i) (v : Validator) :
     stateBefore cfg tr i v = stateBefore cfg tr tr.length v := by
@@ -128,7 +186,7 @@ theorem same_before {a : ℕ} {v : Validator} (h : ∀ inp, tr[a]? ≠ some (v, 
 /-- **A block that fits stays pending or stored.** -/
 theorem keeps_after (hinj : HashInjective cfg H tr)
     (hbase : ∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0) (hnr : NoRestart H tr)
-    {v : Validator} (hv : v ∈ H) {y : BlockId × Block Validator BlockId Payload}
+    (hnj : NoJump H tr) {v : Validator} (hv : v ∈ H) {y : BlockId × Block Validator BlockId Payload}
     (hf : Fits (cfg.at v) (gT cfg H tr) y) {a : ℕ}
     (hy : y ∈ (stateBefore cfg tr a v).pending ∨ y.1 ∈ (stateBefore cfg tr a v).store.ids) :
     ∀ b, a ≤ b →
@@ -142,7 +200,11 @@ theorem keeps_after (hinj : HashInjective cfg H tr)
       rw [step_before hj]
       refine step_keeps (by rw [← step_before hj]; exact reads_before hinj hbase hv _)
         (by rw [← step_before hj, base_before hbase hv, base_before hbase hv])
-        (pend_before hinj hv j) (fun id b hib hid => ?_) (fun h => hnr j v hv (h ▸ hj)) hf ih
+        (pend_before hinj hv j) (fun id b hib hid => ?_)
+        (by
+          rw [received_of_ne fun v1 B1 v2 B2 h => hnj j v v1 B1 v2 B2 hv (h ▸ hj)]
+          exact fun e he => absurd he List.not_mem_nil)
+        (fun h => hnr j v hv (h ▸ hj)) hf ih
       subst hib
       exact gT_of_known (x := (id, b)) hinj (Or.inl ⟨j, v, hj, hv, hid⟩)
     · rw [same_before fun inp h => he ⟨inp, h⟩]; exact ih
@@ -158,15 +220,18 @@ theorem noReady_before (v : Validator) : ∀ i, NoReady (stateBefore cfg tr i v)
     · rw [same_before fun inp h => he ⟨inp, h⟩]; exact noReady_before v i
 
 /-- **A block becomes pending only by a delivery the node acts on.** -/
-theorem entry_before {v : Validator} {y : BlockId × Block Validator BlockId Payload} {a : ℕ}
+theorem entry_before (hnj : NoJump H tr) {v : Validator} (hv : v ∈ H)
+    {y : BlockId × Block Validator BlockId Payload} {a : ℕ}
     (h₁ : y ∉ (stateBefore cfg tr a v).pending) (h₂ : y ∈ (stateBefore cfg tr (a + 1) v).pending) :
     tr[a]? = some (v, .deliver y.1 y.2) ∧ Admits (cfg.at v) (stateBefore cfg tr a v) y.1 y.2 := by
   by_cases he : ∃ inp, tr[a]? = some (v, inp)
   · obtain ⟨inp, ha⟩ := he
     rw [step_before ha] at h₂
-    rcases (step_sub (cfg := cfg.at v) _ inp).1 y h₂ with h | ⟨rfl, hc⟩
+    rcases (step_sub (cfg := cfg.at v) _ inp).1 y h₂ with h | ⟨rfl, hc⟩ | h
     · exact absurd h h₁
     · exact ⟨ha, hc⟩
+    · rw [received_of_ne fun v1 B1 v2 B2 h => hnj a v v1 B1 v2 B2 hv (h ▸ ha)] at h
+      exact absurd h List.not_mem_nil
   · rw [same_before fun inp h => he ⟨inp, h⟩] at h₂; exact absurd h₂ h₁
 
 /-- **A request is recorded only on account of a delivery the node acted
@@ -271,16 +336,16 @@ theorem fits_stored {u : Validator} (hu : u ∈ H) {i : ℕ} {j : BlockId}
     exact ⟨rfl, rfl⟩
 
 omit hinj in
-/-- **What an event broadcasts its node stores after it.** -/
-theorem bcast_stored {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
+/-- **What an event makes its node stores after it.** -/
+theorem persist_stored {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
     (hu : u ∈ H) (hi : tr[i]? = some (u, inp)) {e : BlockId × Block Validator BlockId Payload}
-    (he : e ∈ broadcasts (outputsAt cfg tr i)) :
+    (he : e ∈ persists (outputsAt cfg tr i)) :
     e.1 ∈ (stateBefore cfg tr (i + 1) u).store.ids ∧
       (stateBefore cfg tr (i + 1) u).store.map.getD e.1
         (stateBefore cfg tr (i + 1) u).store.junk = e.2 := by
   rw [outputsAt_eq hi] at he
   rw [step_before hi]
-  exact step_bcast (by rw [← step_before hi, base_before hbase hu, base_before hbase hu]) e he
+  exact step_persist (by rw [← step_before hi, base_before hbase hu, base_before hbase hu]) e he
 
 omit hinj hbase in
 /-- **A block pending at the end entered once and stayed.** -/

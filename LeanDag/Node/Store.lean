@@ -63,6 +63,19 @@ theorem atBase_refs_of_le {base : ℕ} {b : Block Validator BlockId Payload} (h 
     (atBase base b).refs = ∅ := by
   unfold atBase; rw [if_pos h]
 
+omit [DecidableEq Validator] [LinearOrder BlockId] in
+theorem atBase_of_lt {G : ℕ} {b : Block Validator BlockId Payload} (h : G < b.round) :
+    atBase G b = b := by
+  unfold atBase; rw [if_neg (by omega)]
+
+omit [DecidableEq Validator] [LinearOrder BlockId] in
+theorem atBase_atBase {b G : ℕ} (h : b ≤ G) (x : Block Validator BlockId Payload) :
+    atBase G (atBase b x) = atBase G x := by
+  by_cases h₁ : x.round ≤ b
+  · have h₂ : x.round ≤ G := h₁.trans h
+    simp [atBase, h₁, h₂]
+  · simp only [atBase, if_neg h₁]
+
 /-- The block an identifier denotes in a map, at the horizon `base`. -/
 def lookup (map : Std.TreeMap BlockId (Block Validator BlockId Payload) compare)
     (junk : Block Validator BlockId Payload) (base : ℕ) (i : BlockId) :

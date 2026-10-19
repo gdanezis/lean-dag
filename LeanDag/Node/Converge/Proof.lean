@@ -20,11 +20,13 @@ namespace Node
 namespace Converge
 
 theorem converges : Converges := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hbase hnr i u hu huH e he y hy v hv
+  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hbase hnr hnj i u hu huH e he y hy v
+    hv
   obtain ⟨inp, hi⟩ := event_of_map hu
   set L := tr.length
   -- `h`'s history, as the trace reads it, held by `u` from event `i + 1` on
-  obtain ⟨hst₁, hval₁⟩ := bcast_stored hbase huH hi he
+  have hep := persists_of_broadcasts he
+  obtain ⟨hst₁, hval₁⟩ := persist_stored hbase huH hi hep
   have hiL : i < L := (List.getElem?_eq_some_iff.mp hi).1
   have hgr := grows_before (cfg := cfg) (tr := tr) u (show i + 1 ≤ L by omega)
   have hb₁ : (stateBefore cfg tr L u).store.base = (stateBefore cfg tr (i + 1) u).store.base := by
@@ -43,16 +45,15 @@ theorem converges : Converges := by
   have hlast : ∀ j ∈ historyFrom (gT cfg H tr) e.1, ∀ t,
       ((j, raw j) ∈ (stateBefore cfg tr t v).pending ∨ j ∈ (stateBefore cfg tr t v).store.ids) →
       t ≤ L → (j, raw j) ∈ fin.pending ∨ j ∈ fin.store.ids := fun j hj t ht htL =>
-    keeps_after hinj hbase hnr hv (hfits j hj) ht L htL
+    keeps_after hinj hbase hnr hnj hv (hfits j hj) ht L htL
   by_contra hyv
   -- `v` lacks `h`, since it would hold its history with it
   have hhv : e.1 ∉ fin.store.ids := fun h' => hyv (hist_sub hinj hbase hv h' hy)
   have hvu : v ≠ u := by rintro rfl; exact hhv ((hgr.2 hb₁).1 hst₁)
   have heH : e.1 ∈ historyFrom (gT cfg H tr) e.1 := mem_historyFrom_self
   have hraw₀ : raw e.1 = e.2 := hval₁
-  have hek : e ∈ knownIn cfg H tr := Or.inr ⟨i, u, hu, huH, he⟩
   have hecr : e.2.creator = u :=
-    (Local.authored _ _ _ (cfg.at u) (inputsBefore tr (i + 1) u) e (broadcasts_of_event hi he)).2
+    (Local.authored _ _ _ (cfg.at u) (inputsBefore tr (i + 1) u) e (persists_of_event hi hep)).2
   -- a block of the history delivered to `v` ends pending or stored there
   have hdeliv : ∀ j ∈ historyFrom (gT cfg H tr) e.1, ∀ t, t < L →
       tr[t]? = some (v, .deliver j (raw j)) → (raw j).creator ≠ v →
@@ -116,7 +117,7 @@ theorem converges : Converges := by
   choose A hAL hA1 hA2 using hent
   have hentry : ∀ k : Fin len, tr[A k]? = some (v, .deliver (x k) (raw (x k))) ∧
       Admits (cfg.at v) (stateBefore cfg tr (A k) v) (x k) (raw (x k)) := fun k =>
-    entry_before (hA1 k) (hA2 k (A k + 1) (by omega) (by have := hAL k; omega))
+    entry_before hnj hv (hA1 k) (hA2 k (A k + 1) (by omega) (by have := hAL k; omega))
   -- the last of them to arrive
   obtain ⟨m, -, hmax⟩ := Finset.exists_max_image Finset.univ A ⟨⟨0, hlen⟩, Finset.mem_univ _⟩
   have hAlt : ∀ k : Fin len, m.1 < k.1 → A k < A m := by
@@ -240,7 +241,7 @@ theorem converges : Converges := by
     have hbe : b = raw (x m) := content_eq hinj hbk hxmk rfl
     rw [hbe] at hab hca
     have hk := admit_after hinj hbase hv hab hca (hfits _ (hxH m (by omega)).1)
-    rcases keeps_after hinj hbase hnr hv (hfits _ (hxH m (by omega)).1) hk (A m) (by omega) with
+    rcases keeps_after hinj hbase hnr hnj hv (hfits _ (hxH m (by omega)).1) hk (A m) (by omega) with
       h'' | h''
     · exact hA1 m h''
     · exact (hxH m (by omega)).2 ((grows_before (cfg := cfg) (tr := tr) v (show A m ≤ L by omega)).2
@@ -265,7 +266,7 @@ theorem converges : Converges := by
     (by rw [hraw₀, hecr]; exact huH) (id_of_knownIn (hrawk _ heH))
   rw [hraw₀, hecr] at hi'u
   obtain ⟨inp', hi'⟩ := event_of_map hi'u
-  have hst' := (bcast_stored hbase huH hi' (by rw [hraw₀] at hi'b; exact hi'b)).1
+  have hst' := (persist_stored hbase huH hi' (by rw [hraw₀] at hi'b; exact hi'b)).1
   have hA0 : A ⟨0, h0⟩ ≤ A m := hmax ⟨0, h0⟩ (Finset.mem_univ _)
   have hgk := grows_before (cfg := cfg) (tr := tr) u (show i' + 1 ≤ k by omega)
   have hzk : x len ∈ (stateBefore cfg tr k u).store.ids :=
@@ -287,24 +288,27 @@ theorem converges : Converges := by
   -- `v` acts on it, so it ends pending or stored there, which it does not
   have hcr : (raw (x len)).creator ≠ v := by
     intro hc
-    rcases hrawk _ (hxH len le_rfl).1 with ⟨j, w', hj, hw', hid⟩ | ⟨j, w', hj, hw', hb⟩
+    rcases hrawk _ (hxH len le_rfl).1 with ⟨j, w', hj, hw', hid⟩ | ⟨j, w', hj, hw', hb⟩ |
+        ⟨j, w', hw', hd⟩
     · obtain ⟨i'', -, hi''v, hi''b⟩ := htime j w' _ _ hj hw' (by rw [hc]; exact hv) hid
       rw [hc] at hi''v
       obtain ⟨inp'', hi''⟩ := event_of_map hi''v
-      have := (bcast_stored hbase hv hi'' hi''b).1
+      have := (persist_stored hbase hv hi'' hi''b).1
       exact (hxH len le_rfl).2 ((grows_before (cfg := cfg) (tr := tr) v
         (show i'' + 1 ≤ L by have := (List.getElem?_eq_some_iff.mp hi'').1; omega)).2
         (by rw [base_before hbase hv, base_before hbase hv]) |>.1 this)
     · obtain ⟨inp'', hj'⟩ := event_of_map hj
       have hcw := (Local.authored _ _ _ (cfg.at w') (inputsBefore tr (j + 1) w') _
-        (broadcasts_of_event hj' hb)).2
+        (persists_of_event hj' hb)).2
       change (raw (x len)).creator = w' at hcw
       have hwv : w' = v := hcw.symm.trans hc
       subst hwv
-      have := (bcast_stored hbase hv hj' hb).1
+      have := (persist_stored hbase hv hj' hb).1
       exact (hxH len le_rfl).2 ((grows_before (cfg := cfg) (tr := tr) w'
         (show j + 1 ≤ L by have := (List.getElem?_eq_some_iff.mp hj').1; omega)).2
         (by rw [base_before hbase hv, base_before hbase hv]) |>.1 this)
+    · rw [derived_before hnj hw'] at hd
+      exact absurd hd List.not_mem_nil
   rcases hdeliv (x len) (hxH len le_rfl).1 k' hk'L htk' hcr with h' | h'
   · exact hxl (List.mem_map.mpr ⟨_, h', rfl⟩)
   · exact (hxH len le_rfl).2 h'
