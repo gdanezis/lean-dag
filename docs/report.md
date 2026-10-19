@@ -3485,11 +3485,12 @@ nothing of the correct layer can be filtered out, by anyone
 *obtainable* — Byzantine-authored included:
 
 ```lean
-theorem accepted_mem_base (hs : Synchronised U R) (hv : v ∈ Correct)
-    (hy : y ∈ viewUpto D v m) (hyr : (U.block y).round = G)
-    (hcar : Populated U (m + 1)) (hpop : Populated U t)
-    (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
-    y ∈ Base U F.f t G
+theorem accepted_mem_base [P.SelfParent] [P.Quorate q] {R m t : ℕ} (hT : q ≤ T.card)
+    (hq : Fintype.card Validator + f + 1 ≤ 2 * q) (hTh : T ⊆ honest) (hs : SynchronisedOn U T R)
+    (hv : v ∈ T) (hy : y ∈ viewUpto D v m)
+    (hyr : (U.block y).round = G) (hcar : PopulatedOn U T (m + 1))
+    (hpop : PopulatedOn U T t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
+    y ∈ Base U f t G
 ```
 
 — every round-`G` block a correct validator accepted into its window by `m`
@@ -3505,11 +3506,12 @@ content: window references above the cut stay in the window, references *at*
 the cut are exactly the blocks `accepted_mem_base` puts in the base), and:
 
 ```lean
-theorem bootstrap_agree {R : Properties.DagRule Validator BlockId Payload}
-    (c : R.OnRecord ValidWrt (Correct : Finset Validator) …)
+theorem bootstrap_agree [P.SelfParent] [P.Quorate q] {R : Properties.DagRule Validator BlockId Payload}
+    {I : BlockRecord Validator BlockId Payload P honest → Prop} [BlockRecord.Invariant.Chops I]
+    (c : R.OnRecord P honest I) (hI : I U)
     (ha : Properties.Agree R) (hb : Properties.Banded R) …
     (hJ : R.Decided (S.chop G d hd)
-      (c.chop_ofRec U True.intro ▸ c.ofView (joinView …)) k jv)
+      (c.chop_ofRec U hI ▸ c.ofView (joinView …)) k jv)
     (hV : R.Decided S V (d + k) fv) : jv = fv
 ```
 
@@ -13059,7 +13061,7 @@ reused.
 | C2 | at most `f` authors exposed per cone | `card_exposedTo_le` *(DoS/Exposure)* |
 | D14 | safety and the DoS condition do not interact | witness file *(LeanDagTest/DoS/SafetyUnderDoS)* |
 | D15a | at zero margin, references are exactly the correct validators | `creators_refs_eq_correct` *(DoS/Exclusion)* |
-| E1 | the correct backbone | `mem_history_of_correct` *(DoS/Exclusion)* |
+| E1 | the correct backbone | `mem_history_of_correct` *(GC/AttestedBase)* |
 | C1′ | the general per-cone bound | `card_history_le'` *(DoS/Pedigree)* |
 | D25 | density: cones miss at most `f` per layer | `card_missingAt_le` *(DoS/Density)* |
 | C5 | the doubling construction (`2^(e−2)`) | `Udouble` witnesses *(LeanDagTest/DoS/Doubling)* |
@@ -14328,11 +14330,11 @@ A delivery for the truncation: round `m` of the window is round `G + m` of the o
 *def, `GC.Bootstrap.lean`*
 
 ```lean
-def joinView {R m t : ℕ} (hs : Synchronised U R)
-    (hw : w ∈ (Correct : Finset Validator)) (hcar : Populated U (m + 1))
-    (hpop : Populated U t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
-    View Validator BlockId Payload (chop U G) where
-  ids := joinIds D w m t G
+def joinView [P.SelfParent] [P.Quorate q] {R m t : ℕ} (hT : q ≤ T.card)
+    (hq : Fintype.card Validator + f + 1 ≤ 2 * q) (hTh : T ⊆ honest) (hs : SynchronisedOn U T R)
+    (hw : w ∈ T) (hcar : PopulatedOn U T (m + 1))
+    (hpop : PopulatedOn U T t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) : (chop U G).View where
+  ids := joinIds D w f m t G
   subset_ids := by
     intro i hi
     rcases Finset.mem_union.mp hi with h | h
@@ -14356,7 +14358,7 @@ def joinView {R m t : ℕ} (hs : Synchronised U R)
       rcases Nat.lt_or_ge G (U.block j).round with hlt | hge
       · exact Finset.mem_union_right _ (Finset.mem_filter.mpr ⟨hjv, hlt⟩)
       · exact Finset.mem_union_left _
-          (accepted_mem_base hs hw hjv (by omega) hcar hpop hR hmt)
+          (accepted_mem_base hT hq hTh hs hw hjv (by omega) hcar hpop hR hmt)
 ```
 
 **G12, the assembly.** Base plus window is a bona-fide view of the truncation. Closure is the whole content: a window reference above the cut is in the window (stores are reference-closed), and a window reference *at* the cut is a round-`G` block the peer accepted — which is exactly what G11 puts in the base. The base layer itself has no references to chase: `chop` made it the genesis layer.
@@ -22059,21 +22061,6 @@ theorem card_creators_accepted_of_eventuallyDelivers {R : ℕ} (D : Delivery U)
 
 **Where the quorum comes from after `R`.** After `R`, a quorum of accepted creators is a consequence rather than a hypothesis: `EventuallyDelivers` and `accepts_correct` supply it from a populated round. Before `R` it is not, which is why L1 holds only from `R`.
 
-#### `mem_history_of_correct`
-
-*theorem, `DoS.Exclusion.lean`*
-
-```lean
-theorem mem_history_of_correct {R : ℕ} (hs : SynchronisedOn U (Correct : Finset Validator) R) :
-    ∀ d : ℕ, ∀ c ∈ U.ids, ∀ a ∈ U.ids,
-      (U.block c).creator ∈ (Correct : Finset Validator) →
-      (U.block a).creator ∈ (Correct : Finset Validator) →
-      R ≤ (U.block a).round → (U.block a).round + 1 + d = (U.block c).round →
-      a ∈ history U c
-```
-
-**The backbone lemma.** After `R`, correct histories contain the whole correct past.
-
 #### `card_history_le_of_stepNovelty`
 
 *theorem, `DoS.Novelty.lean`*
@@ -22310,6 +22297,22 @@ theorem card_retained_le {κ Λ t f : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : B
 
 **G6.** A validator whose horizon `G` trails its round `t` by at most `Λ` retains a constant number of blocks, independent of `t`: the retained store is the truncated store (G14), which B4 bounds at window depth `t − G ≤ Λ`.
 
+#### `mem_history_of_correct`
+
+*theorem, `GC.AttestedBase.lean`*
+
+```lean
+theorem mem_history_of_correct [Fintype Validator] [P.Mechanised] {q : ℕ} [P.Quorate q]
+    {T : Finset Validator} (hT : q ≤ T.card) (hq : Fintype.card Validator < 2 * q) {R : ℕ}
+    (hs : SynchronisedOn U T R) :
+    ∀ d : ℕ, ∀ c ∈ U.ids, ∀ a ∈ U.ids,
+      (U.block c).creator ∈ T → (U.block a).creator ∈ T →
+      R ≤ (U.block a).round → (U.block a).round + 1 + d = (U.block c).round →
+      a ∈ history U c
+```
+
+**The backbone lemma.** After `R`, at a record whose quorum `q` the set `T` holds, with `n < 2q`, the history of a block by a member of `T` holds every block by a member of `T` of every round from `R` below it.
+
 #### `exists_honest_attester_of_mem_base`
 
 *theorem, `GC.AttestedBase.lean`*
@@ -22326,25 +22329,27 @@ theorem exists_honest_attester_of_mem_base (hf : honestᶜ.card ≤ f) (hy : y �
 *theorem, `GC.AttestedBase.lean`*
 
 ```lean
-theorem correct_mem_base {R : ℕ} (hs : Synchronised U R) (hR : R ≤ G)
-    (hGt : G < t) (hpop : Populated U t) (hy : y ∈ U.ids)
-    (hyr : (U.block y).round = G)
-    (hyc : (U.block y).creator ∈ (Correct : Finset Validator)) :
-    y ∈ Base U F.f t G
+theorem correct_mem_base [Fintype Validator] [P.Mechanised] {q : ℕ} [P.Quorate q]
+    {T : Finset Validator} (hT : q ≤ T.card) (hq : Fintype.card Validator + f + 1 ≤ 2 * q)
+    {R : ℕ} (hs : SynchronisedOn U T R) (hR : R ≤ G)
+    (hGt : G < t) (hpop : PopulatedOn U T t) (hy : y ∈ U.ids)
+    (hyr : (U.block y).round = G) (hyc : (U.block y).creator ∈ T) :
+    y ∈ Base U f t G
 ```
 
-**G10, completeness.** Post-`R`, every correct block of the layer is in every correct attestation (the backbone), so it clears the `f+1` bar in *every* sample — the shared correct layer `C` is in every base, and the adversary cannot filter it out.
+**G10, completeness.** Post-`R`, every reliable block of the layer is in every reliable attestation (the backbone), so it clears the `f+1` bar in *every* sample — the shared reliable layer is in every base, and the adversary cannot filter it out.
 
 #### `accepted_mem_base`
 
 *theorem, `GC.Bootstrap.lean`*
 
 ```lean
-theorem accepted_mem_base {R m t : ℕ} (hs : Synchronised U R)
-    (hv : v ∈ (Correct : Finset Validator)) (hy : y ∈ viewUpto D v m)
-    (hyr : (U.block y).round = G) (hcar : Populated U (m + 1))
-    (hpop : Populated U t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
-    y ∈ Base U F.f t G
+theorem accepted_mem_base [P.SelfParent] [P.Quorate q] {R m t : ℕ} (hT : q ≤ T.card)
+    (hq : Fintype.card Validator + f + 1 ≤ 2 * q) (hTh : T ⊆ honest) (hs : SynchronisedOn U T R)
+    (hv : v ∈ T) (hy : y ∈ viewUpto D v m)
+    (hyr : (U.block y).round = G) (hcar : PopulatedOn U T (m + 1))
+    (hpop : PopulatedOn U T t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
+    y ∈ Base U f t G
 ```
 
 **G11.** Every round-`G` block a correct validator accepted into its window by `m` — Byzantine-authored included — is in the base attested at any `t ≥ m + 2`. Acceptance → the keeper's round-`(m+1)` block carries it (`viewUpto_subset_history`) → the backbone hands that block to every correct round-`t` cone → every correct author attests it, clearing `f + 1` in **every** sample. Nothing obtainable is ever filtered out.
@@ -22354,14 +22359,11 @@ theorem accepted_mem_base {R m t : ℕ} (hs : Synchronised U R)
 *theorem, `GC.Bootstrap.lean`*
 
 ```lean
-theorem card_joinIds_le {κ Λ R m t : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hED : EventuallyDelivers D R)
-    (hw : w ∈ (Correct : Finset Validator)) (hR : R ≤ t) (hmt : m ≤ t)
-    (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
-    (joinIds D w m t G).card ≤
-      (Correct : Finset Validator).card * (Λ + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          Λ * ((Correct : Finset Validator).card * (F.f * κ)))
+theorem card_joinIds_le {κ Λ R m t : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hED : EventuallyDeliversOn D T R) (hTh : T ⊆ honest)
+    (hw : w ∈ T) (hR : R ≤ t) (hmt : m ≤ t) (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
+    (joinIds D w f m t G).card ≤
+      honest.card * (Λ + 1) + (honest.card * f + Λ * (honest.card * (f * κ)))
 ```
 
 **G6b.** The joiner's entire fetch is inside one correct peer's retained store, hence bounded by the G6 constant: sync cost, not just storage, is constant at lag `Λ`.
@@ -22371,35 +22373,36 @@ theorem card_joinIds_le {κ Λ R m t : ℕ} (hbyz : ByzBudget D κ)
 *theorem, `GC.Bootstrap.lean`*
 
 ```lean
-theorem bootstrap_agree {R : Properties.DagRule Validator BlockId Payload}
-    (c : R.OnRecord ValidWrt (Correct : Finset Validator)
-      (BlockRecord.Any (P := ValidWrt) (honest := (Correct : Finset Validator))))
+theorem bootstrap_agree [P.SelfParent] [P.Quorate q] {R : Properties.DagRule Validator BlockId Payload}
+    {I : BlockRecord Validator BlockId Payload P honest → Prop} [BlockRecord.Invariant.Chops I]
+    (c : R.OnRecord P honest I) (hI : I U)
     (ha : Properties.Agree R) (hb : Properties.Banded R)
     [S : Slots Validator] {d : ℕ} (hd : G ≤ S.slotRound d)
-    {R' m t : ℕ} (hs : Synchronised U R') (hw : w ∈ (Correct : Finset Validator))
-    (hcar : Populated U (m + 1)) (hpop : Populated U t) (hR : R' ≤ m + 1) (hmt : m + 2 ≤ t)
-    {V : R.View (c.ofRec U True.intro)} {k : ℕ} {jv fv : Option BlockId}
+    {R' m t : ℕ} (hT : q ≤ T.card) (hq : Fintype.card Validator + f + 1 ≤ 2 * q)
+    (hTh : T ⊆ honest) (hs : SynchronisedOn U T R') (hw : w ∈ T)
+    (hcar : PopulatedOn U T (m + 1)) (hpop : PopulatedOn U T t) (hR : R' ≤ m + 1)
+    (hmt : m + 2 ≤ t)
+    {V : R.View (c.ofRec U hI)} {k : ℕ} {jv fv : Option BlockId}
     (hJ : R.Decided (S.chop G d hd)
-      (c.chop_ofRec U True.intro ▸
-        c.ofView (h := True.intro) (joinView (D := D) (G := G) hs hw hcar hpop hR hmt)) k jv)
+      (c.chop_ofRec U hI ▸
+        c.ofView (h := BlockRecord.Invariant.Chops.chop G hI)
+          (joinView (D := D) (G := G) hT hq hTh hs hw hcar hpop hR hmt)) k jv)
     (hV : R.Decided S V (d + k) fv) : jv = fv
 ```
 
-**G12 (bootstrap safety).** A joiner that assembles its view from the attested base and a correct peer's window, and runs the rule on the truncation, never conflicts with any full-history validator on any slot. The composition *is* the proof: `joinView` is a view of `chop U G`, and cross-cut agreement never asked whose view it was. Stated for any rule whose universes are the block universes — the round trip of its carrier is what reads the joiner's view, built on the record, as the rule's.
+**G12 (bootstrap safety).** A joiner that assembles its view from the attested base and a correct peer's window, and runs the rule on the truncation, never conflicts with any full-history validator on any slot. The composition *is* the proof: `joinView` is a view of `chop U G`, and cross-cut agreement never asked whose view it was. Stated for any rule with a carrier on the records of the invariant `I`, which survives the cut — the round trip of the carrier is what reads the joiner's view, built on the record, as the rule's.
 
 #### `card_serve_le`
 
 *theorem, `GC.Bootstrap.lean`*
 
 ```lean
-theorem card_serve_le {κ Λ n : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hw : w ∈ (Correct : Finset Validator))
+theorem card_serve_le {κ Λ n : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hw : w ∈ honest)
     {b : BlockId} (hb : b ∈ U.ids) (hbc : (U.block b).creator = w)
     (hbr : (U.block b).round = n + 1) (hG : G ≤ n) (hΛ : n ≤ G + Λ) :
     (history (chop U G) b).card ≤
-      ((Correct : Finset Validator).card * (Λ + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          Λ * ((Correct : Finset Validator).card * (F.f * κ)))) + 1
+      (honest.card * (Λ + 1) + (honest.card * f + Λ * (honest.card * (f * κ)))) + 1
 ```
 
 **G7, priced.** Serving cost is the G6 constant plus one.

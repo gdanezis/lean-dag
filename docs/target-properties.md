@@ -5342,6 +5342,19 @@ window (`chopD`, G13, G14, G6 `card_retained_le`) and the depth rule
 `pruned_subset_peer_store`, at receivers `T` inside the honest set) hold
 on any record too.
 
+The backbone `mem_history_of_correct` moves to `GC/AttestedBase.lean` and
+holds at any record whose quorum `q` the set `T` holds, with `n < 2q`:
+the quorum is read as a reliability of slack `n − q`
+(`quorumReliability`). With it, G10 completeness (`correct_mem_base`),
+window completeness G11 (`accepted_mem_base`), the bounded fetch G6b
+(`base_subset_retained`, `card_base_le`, `card_joinIds_le`), the
+joiner's view G12 (`joinView`, and `bootstrap_agree` for any carrier on
+records whose invariant survives the cut) and the relay obligation G7
+(`history_chop_subset_retained`, `card_serve_le`) hold at any record: the
+reliable validators a set `T` inside the honest set holding the quorum,
+with `n + f + 1 ≤ 2q`, which gives `f + 1 ≤ |T|`, so the attestation
+threshold stays `f + 1`.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

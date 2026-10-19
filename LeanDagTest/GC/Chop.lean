@@ -148,7 +148,8 @@ example : ∃ a ∈ Utwin.ids, (Utwin.block a).round = 1 ∧
 -- through round 5): every correct round-2 block clears the filter at
 -- attestation round 4, through the backbone.
 example : (8 : Fin 20) ∈ Base Uexcl (Faults.f (Fin 4)) 4 2 :=
-  correct_mem_base (SynchronisedOn.mono (by decide) uexcl_synchronised)
+  correct_mem_base (T := Correct) card_correct card_add_f_lt_two_mul_quorum
+    (SynchronisedOn.mono (by decide) uexcl_synchronised)
     (by omega) (by omega) (uexcl_populated 4 (by omega)) (by decide)
     (by decide) (by decide)
 

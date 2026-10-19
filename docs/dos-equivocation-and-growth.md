@@ -765,7 +765,7 @@ form — `card_viewUpto_le` / `card_viewUpto_le'`,
 | **D19a** | a clean history is linear | `card_history_le_of_not_exposed` | `Counting` |
 | **D19b** | a block is clean about what it references | `card_filter_creator_le_of_mem_refs` | `Counting` |
 | — | the intersection lemma | `exists_shared_correct_ref`, `eq_of_both_name_of_shared` | `Exclusion` |
-| — | the backbone lemma | `mem_history_of_correct` | `Exclusion` |
+| — | the backbone lemma | `mem_history_of_correct` | `AttestedBase` |
 | — | nothing published is invisible to the correct | `exists_accepted_of_mem_ids` | `Exclusion` |
 | — | the condition is implementable | `not_exposedIn_refs_of_policy` | `Exclusion` |
 | — | the quorum is derivable after `R` | `card_creators_accepted_of_eventuallyDelivers` | `Exclusion` |

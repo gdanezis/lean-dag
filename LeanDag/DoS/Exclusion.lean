@@ -317,20 +317,6 @@ theorem eq_of_both_name_of_shared (hdos : DoSValid U)
     exact hclean₂ ⟨A₂, hA₂, A, hAw₂, hne, hA₂c, hAc, hA₂r⟩
   rw [e₁, e₂]
 
-/-! ## The correct backbone: after `R`, `SynchronisedOn` makes every
-correct block's history contain every correct block of every round from
-`R` to its own. -/
-
-/-- **The backbone lemma.** After `R`, correct histories contain the whole
-correct past. -/
-theorem mem_history_of_correct {R : ℕ} (hs : SynchronisedOn U (Correct : Finset Validator) R) :
-    ∀ d : ℕ, ∀ c ∈ U.ids, ∀ a ∈ U.ids,
-      (U.block c).creator ∈ (Correct : Finset Validator) →
-      (U.block a).creator ∈ (Correct : Finset Validator) →
-      R ≤ (U.block a).round → (U.block a).round + 1 + d = (U.block c).round →
-      a ∈ history U c :=
-  mem_historyFrom_of_correct U.causal U.quorateOn hs
-
 /-! ## Two delivery policies: made explicit, nothing an author publishes
 is invisible to the correct population. -/
 
