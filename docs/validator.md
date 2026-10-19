@@ -554,7 +554,54 @@ rejoins by bootstrap (§3.6).
    skipped the slots below its new horizon; with them it outputs the
    certified decisions, and its decisions are a prefix of its peers' or
    extend them.
-4. **Optionally**, replaying records through the Rust decider of the
+4. **Attacks** (`LeanDagTest/Node/Adversary.lean`, `--adv` and
+   `--attacks` of `lake exe sim`). An attacker runs the honest program
+   and also mounts attacks:
+   - `fakeBase`: it answers base requests with a fabricated base, five
+     rounds above its top, of reference-free blocks in every node's name;
+   - `splitBase`: as `fakeBase`, with a different base for each requester;
+   - `fakeCert`: it serves a certificate of fabricated decisions, every
+     slot skipped, listing every node as a signer;
+   - `conflictProposals`: it signs two proposals at each height and sends
+     each to half the nodes;
+   - `invalidBlocks`: with each block it broadcasts one without
+     references, one referencing a block that does not exist, and one
+     under an identifier that is not its hash;
+   - `forgedAuthor`: with each block it broadcasts one in the next node's
+     name.
+
+   The network checks signatures (`Scenario.verify`), which is what the
+   claims over traces assume (`TimelyAuthentic`, `TimelyOffers`,
+   `TimelyCerts`): a block in an honest author's name must be one that
+   author made, a certificate's honest signers must have signed its
+   decisions at its height, and a message's sender is the node that sent
+   it.
+
+   **What it found.** At the Mysticeti row with `n = 4`, node `3`
+   attacking, five seeds each, with node `1` down from tick 40 to tick 90,
+   down from 40 to 46, or not at all, and the checks on, every attack
+   leaves agreement, prefix-comparability and validity intact in all 15
+   runs. A fabricated base is never attested, since one presenter is not
+   `f + 1`. Conflicting proposals are never certified, since only the
+   honest nodes' agree. Invalid blocks cost the attacker its own
+   progress: it sends a second genesis block without references, which
+   honest nodes keep at the horizon as the cut does, and some of them
+   reference it; the attacker drops blocks claiming its identity, never
+   completes those histories, and stops building. The others then
+   progress as with one crashed node, round for round.
+
+   Without the checks, the assumptions do work the program cannot do.
+   A certificate of fabricated decisions is adopted by the joiner in 2 of
+   15 runs, and its decisions then disagree with its peers'. Blocks in an
+   honest node's name halt that node in all 15 runs, for the same reason
+   the attacker halts itself above, and the honest blocks referencing the
+   forged ones are invalid under the blocks the nodes made.
+
+   The check that honest blocks are valid reads every block a node made
+   or broadcast in its own name under its hash, since an honest block
+   may reference an attacker's block that the attacker broadcast but did
+   not keep.
+5. **Optionally**, replaying records through the Rust decider of the
    Mysticeti codebase, where the scheme's table comes from.
 
 ## 7. Steps
@@ -572,7 +619,7 @@ rejoins by bootstrap (§3.6).
 | 7.1 | Self-parent as a build rule, not a validity clause (§11): the shared inclusion argument reads it for reliable authors from a round on; the program's validity drops it; a recovering node resumes above the highest round it holds a quorum at; Safe Skip leaves the program; bootstrap needs no reference-free block; block authentication back to a block its author broadcast (built) |
 | 7.2 | One run model: V3 proved over a trace, and the model without time retired (§4, *One run model*); the atomic write of a step's state stated as an assumption on the node's storage (§5.1); the run's record described as the proof's construction, not the union of the honest stores (§4) (built) |
 | 7.3 | Checkpoints (§3.8): signed proposals of the decided prefix and certificates of `q` of them; the horizon bounded by the certified frontier; bootstrap adopting the certified prefix; V12, and V9 restated as prefix-comparability (built) |
-| 7.4 | Adversarial simulation (§6): Byzantine nodes that send base offers with fabricated or inconsistent bases, offers in another node's name, malformed and invalid blocks, and conflicting checkpoint proposals; each scenario checks agreement and validity |
+| 7.4 | Adversarial simulation (§6, item 4): Byzantine nodes that send fabricated or inconsistent bases, fabricated certificates, conflicting signed proposals, invalid blocks and blocks in another node's name, with the network's signature checks on and off; each scenario checks agreement, prefix-comparability and validity (built) |
 | 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget |
 | 9 | Rate limiting in the program: V7, V10; the novelty budget also bounds what a Byzantine node can add to an honest node's pending blocks and requests |
 | 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests; agreement with the model (§6, item 1): the program's commits on the scheme's hand-built records |

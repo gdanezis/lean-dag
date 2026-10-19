@@ -5,8 +5,12 @@ import LeanDagSim.Net
 Runs one scenario and prints what each honest node reached and decided.
 Options, each `--name value`: `row`, `n`, `f`, `c`, `seed`, `horizon`,
 `gst`, `pre-max`, `delay-min`, `delay-max`, `timeout`, `lag`,
-`crash` (`node@time,…`), `recover` (`node@down-up,…`), `byz` (`node,…`), `byz-until`, `withhold` (`z,v,R`: node `z` withholds
-its round-`R` block from `v`) and `reveal-after`.
+`crash` (`node@time,…`), `recover` (`node@down-up,…`), `byz` (`node,…`),
+`byz-until`, `withhold` (`z,v,R`: node `z` withholds its round-`R` block
+from `v`), `reveal-after`, `adv` (`node,…`: attackers), `attacks`
+(`fake-base`, `split-base`, `fake-cert`, `conflict-proposals`,
+`invalid-blocks`, `forged-author`, comma-separated) and `verify`
+(`true` or `false`: whether the network checks signatures).
 -/
 
 open LeanDagSim
@@ -58,6 +62,21 @@ def parseArgs : List String → Scenario → Except String Scenario
         | [z, t, r] => pure { sc with withhold := some (z, t, r) }
         | _ => throw s!"--withhold wants z,v,R: {v}"
       | "--reveal-after" => pure { sc with revealAfter := ← nat }
+      | "--adv" => pure { sc with adv := parseNats v }
+      | "--attacks" => do
+        let as ← (v.splitOn ",").mapM fun a => match a with
+          | "fake-base" => pure Attack.fakeBase
+          | "split-base" => pure Attack.splitBase
+          | "fake-cert" => pure Attack.fakeCert
+          | "conflict-proposals" => pure Attack.conflictProposals
+          | "invalid-blocks" => pure Attack.invalidBlocks
+          | "forged-author" => pure Attack.forgedAuthor
+          | _ => throw s!"unknown attack {a}"
+        pure { sc with attacks := as }
+      | "--verify" => match v with
+        | "true" => pure { sc with verify := true }
+        | "false" => pure { sc with verify := false }
+        | _ => throw s!"--verify wants true or false: {v}"
       | _ => throw s!"unknown option {k}"
     parseArgs rest sc
   | [k], _ => .error s!"{k}: missing value"
@@ -75,9 +94,9 @@ def main (args : List String) : IO UInt32 := do
       return 2
     IO.println s!"row {sc.row}  n={sc.n} f={sc.f} c={sc.c}  seed={sc.seed}  gst={sc.gst}"
     IO.println s!"time {r.time}  inputs {r.events}  largest store {r.maxStore} blocks"
-    let honest := (List.range sc.n).filter fun v => !(sc.byz.contains v)
+    let honest := (List.range sc.n).filter sc.honest
     for (v, top, ds) in (honest.zip (r.tops.zip r.commits)).map fun (v, t, d) => (v, t, d) do
       let skips := (ds.filter (·.2.isNone)).length
       IO.println s!"node {v}: round {top.getD 0}, {ds.length} slots decided, {skips} skipped"
-    IO.println s!"agree {r.agree}  prefixes {r.prefixes}  valid {r.valid}  skips {r.skips}  boots {r.boots}"
+    IO.println s!"agree {r.agree}  prefixes {r.prefixes}  valid {r.valid}  skips {r.skips}  boots {r.boots}  dropped {r.dropped}"
     return if r.agree && r.valid then 0 else 1
