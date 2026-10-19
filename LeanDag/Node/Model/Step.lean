@@ -59,10 +59,11 @@ input `i` in the state `s`: the new state and the outputs.
   when the configuration sets a budget `τ` and a window `W`: a delivered
   block is kept only as a candidate, the first block of its author and
   round within the window, or on the account of a candidate slot that
-  asked for it, while that slot is charged fewer than `τ` blocks; a
-  delivery asks for at most what its slot's budget leaves. A bootstrap
-  then keeps one attested block per author, and takes no offered block
-  above the new horizon.
+  asked for it, at or above its round, while that slot is charged fewer
+  than `τ` blocks; a delivery asks for at most what its slot's budget
+  leaves. The node's own blocks and its bootstrap base are charged to
+  their own slots (`slotted`). A bootstrap then keeps one attested block
+  per author, and takes no offered block above the new horizon.
 
 Definitions only.
 -/
@@ -186,6 +187,15 @@ def certReady (s : Store Validator BlockId Payload) (refs : Finset BlockId) (r :
           (creatorsOf s.blk (refs.filter fun b => cfg.σ.Votes s.toRecord b L)).card)
   else true
 
+/-- The candidate slot a block fills: its author and its round. -/
+def slotOf (b : Block Validator BlockId Payload) : Validator × ℕ := (b.creator, b.round)
+
+/-- **The charges of blocks taken without a delivery**, the node's own and
+its bootstrap base, with rate limiting: each to its own slot. -/
+def slotted (l : List (BlockId × Block Validator BlockId Payload)) :
+    List (BlockId × (Validator × ℕ)) :=
+  if cfg.limit.isSome then l.map fun e => (e.1, slotOf e.2) else []
+
 /-- **Build the next round**, if the build rule allows it. -/
 def tryBuild (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
@@ -201,7 +211,8 @@ def tryBuild (s : State Validator BlockId Payload) :
           (s.store.base < b.round → ∀ j ∈ b.refs, (s.store.blk j).round + 1 = b.round) ∧
           rowValid cfg.q (Function.update s.store.blk id b) b then
         let st := s.store.insert id b h.1 h.2.1 h.2.2.1 h.2.2.2.1
-        some ({ s with store := st, top := some (r + 1), own := some id },
+        let s₁ := { s with store := st, top := some (r + 1), own := some id }
+        some ({ s₁ with owner := slotted cfg [(id, b)] ++ s.owner },
           [.persist id b, .broadcast id b, .setTimer (r + 1) (cfg.timeout (r + 1))])
       else none
     else none
@@ -241,9 +252,6 @@ def baseAt (s : State Validator BlockId Payload) (G : ℕ) :
   (s.offers.flatMap (·.2.2)).filter fun e =>
     decide (e.2.round = G ∧ e.1 = cfg.idOf e.2 ∧ cfg.f + 1 ≤ (presenters s G e.1).length)
 
-/-- The candidate slot a block fills: its author and its round. -/
-def slotOf (b : Block Validator BlockId Payload) : Validator × ℕ := (b.creator, b.round)
-
 /-- The blocks charged to a slot. -/
 def State.charge (s : State Validator BlockId Payload) (sl : Validator × ℕ) : ℕ :=
   (s.owner.filter fun e => decide (e.2 = sl)).length
@@ -257,12 +265,12 @@ def State.ownerOf (s : State Validator BlockId Payload) (j : BlockId) :
 the node rate-limits: the block's own, if it is a candidate — its slot
 unclaimed and its round at most `W` above the node's top — and otherwise
 the slot of a block on whose account it was asked for, if that slot is
-charged fewer than `τ` blocks. -/
+charged fewer than `τ` blocks and lies at or above the block's round. -/
 def chargeTo (τ W : ℕ) (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : Option (Validator × ℕ) :=
   if b.round ≤ s.top.getD 0 + W ∧ s.charge (slotOf b) = 0 ∧ 0 < τ then some (slotOf b)
   else ((s.requested.find? fun e => decide (e.1 = id)).bind fun e => s.ownerOf e.2.1).filter
-    fun sl => decide (s.charge sl < τ)
+    fun sl => decide (s.charge sl < τ ∧ b.round ≤ sl.2)
 
 /-- **Whether a delivery is kept**: always, without rate limiting; with
 it, if it is charged to a slot. -/
@@ -342,7 +350,9 @@ def tryBoot (s : State Validator BlockId Payload) :
         let s₁ := { s with store := fl.1, pending := fl.2, top := some G, own := none }
         let ads := c.decisions.drop s.decided.length
         let s₂ := { s₁ with lo := max s.lo c.height, fired := {G}, offers := [] }
-        let s₃ := { s₂ with requested := s.requested.filter fun x => G ≤ x.2.2 }
+        let ch : List (BlockId × (Validator × ℕ)) :=
+          slotted cfg (keptBase cfg (baseAt cfg s G)) ++ s.owner.filter fun e => G ≤ e.2.2
+        let s₃ := { s₂ with requested := s.requested.filter fun x => G ≤ x.2.2, owner := ch }
         let s₄ := { s₃ with decided := s.decided ++ ads, certs := [] }
         some ({ s₄ with cert := if s.certHeight < c.height then some c else s.cert }, ads)
       else none
@@ -546,6 +556,7 @@ def step (s : State Validator BlockId Payload) :
         let st := s.store.insert id b h.1 h.2.1 (fun _ => Finset.empty_subset _)
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
         let s₀ := { s with store := st, top := some 0, own := some id }
+        let s₀ := { s₀ with owner := slotted cfg [(id, b)] ++ s.owner }
         let r := settle cfg { s₀ with recovering := false }
         (r.1, [.persist id b, .broadcast id b, .setTimer 0 (cfg.timeout 0)] ++ r.2)
       else (s, [])

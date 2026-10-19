@@ -351,7 +351,8 @@ its *candidates*, and prices each candidate's fetch.
   block a round, so its slot is its block's.
 * **The budget.** Each slot is charged for the blocks taken into the
   node's pending blocks on its account: the candidate, and every
-  ancestor fetched for it or for a block fetched for it. A slot charged
+  ancestor fetched for it or for a block fetched for it, at or below the
+  slot's round. A slot charged
   `τ` asks for nothing more, and the candidate waits: deferred, not
   rejected, since what it lacks only shrinks as the store grows (the
   novelty budget's antitone measure, §6 of the design note).
@@ -366,11 +367,16 @@ its *candidates*, and prices each candidate's fetch.
 * **The bootstrap base** keeps at most one attested block per author at
   the new horizon; a block above that references another is fetched on
   its candidate's account.
+* **Own blocks and the base are charged too**, each to its own slot
+  (`slotted`): the node's block at round `r` to its slot at `r`, and a
+  base block to its author's slot at the horizon. So every block the node
+  holds is charged, and a slot carries at most `τ + 1` charges: `τ` from
+  deliveries and one from the node itself.
 
 The budget `τ` and the window `W` are optional in the configuration
 (`Config.limit`); without them the node behaves as without rate limiting
-(`chargeTo`, `kept`, `askable`, `keptBase`, and the charges in
-`State.owner`, persisted across a crash).
+(`chargeTo`, `kept`, `askable`, `keptBase`, `slotted`, and the charges
+in `State.owner`, persisted across a crash).
 
 The window must exceed the depth by which the network's frontier leads a
 node's top. After a bootstrap the top is the new horizon, which trails
@@ -379,14 +385,23 @@ shorter drops the blocks it needs to resume, and stays behind. In the
 simulator, at `Λ = 2`, a window of 4 rounds left a node down from tick 40
 to tick 90 at round 21; a window of 8 lets it rejoin.
 
-**What it gives** (V7 and V10 are steps 9.2 and 9.3).
-* **V10, storage**: at every state a run reaches, the store and the
-  pending blocks hold at most `(top + W + 1 − base)·(n·(τ + 1) + 1)`
-  blocks: one own block a round, and at most `τ + 1` blocks for each of
-  at most `n` slots a round, over the window. This is a claim about one
-  node, from round `0`, under any adversary; with the horizon trailing
-  the top by a bounded depth (§3.4) it is independent of the runtime.
-  The requests are bounded the same way.
+**What it gives** (V7 is step 9.3).
+* **V10, storage** (`Node.Storage.Bounded`, proved): at every state a
+  run reaches, every block the store and the pending blocks hold is
+  charged, and the charges number at most
+  `n·(τ + 1)·(top + W + 1 − base)`: at most `τ + 1` for each of `n`
+  slots a round, from the horizon to `W` above the top. This is a claim
+  about one node, from round `0`, under any input sequence, so under any
+  adversary, and it assumes nothing of the hash. With the horizon
+  trailing the top by a bounded depth (§3.4) the bound does not grow with
+  the run. The invariant behind it (`Node.Lim`): each held block is
+  charged to a slot at or above its round, so a slot dropped at a new
+  horizon takes only blocks the horizon drops; each slot lies in the
+  window; and a slot above the top carries at most `τ` charges, so the
+  node's own block or a base block, which land above the old top, add at
+  most one. The requests are not bounded by this claim: each kept
+  delivery asks for at most `τ` blocks, and requests are dropped at the
+  horizon and on a restart.
 * **V7**: the store is still a cut of the run's record, with fewer
   blocks, so V3, V9 and V12 hold of the rate-limited node unchanged; a
   deferral delays a decision and never changes it
@@ -413,7 +428,7 @@ to tick 90 at round 21; a window of 8 lets it rejoin.
 | V7 | Rate limiting does not make a validator decide wrongly: the rate-limited store is a cut of the run's record, so V3, V9 and V12 hold of it, and a deferral delays a decision without changing it. | planned, step 9.3: V3, V9, V12 at every configuration; `decided_mono_of_banded` |
 | V8 | The efficient store and decider compute the reference program's values. | one equality per function |
 | V9 | Over a trace with timely authentication of blocks, base offers and checkpoint proposals, an injective hash and `Params.Tolerates`, every honest store is a cut of the run's record and every honest decision a verdict on a view of it, bootstraps and adopted certificates included; a node's decisions are slots `0, 1, …`; so any two honest nodes' decisions are prefix-comparable. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.IsCut.bootFrom`, `Node.IsCut.step`, `Node.verdict_decideStep`, `Node.propose_prefix`, `Node.prefix_of_slots`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
-| V10 | At every state a run reaches, the store and the pending blocks hold at most `(top + W + 1 − base)·(n·(τ + 1) + 1)` blocks, under any adversary, and the requests are bounded alike; with the horizon trailing the top by a bounded depth the bound is independent of the runtime. Eventual admission of every honest block is step 11's. | planned, step 9.2: a claim about one node (§3.9) |
+| V10 | With rate limiting, at every state a run reaches, every block the store and the pending blocks hold is charged to a slot, and the charges number at most `n·(τ + 1)·(top + W + 1 − base)`, under any input sequence; with the horizon trailing the top by a bounded depth the bound does not grow with the run. Eventual admission of every honest block is step 11's. | `Node.Storage.Bounded` (proved): `Node.Lim.run`, `Node.Lim.bound`, `Node.length_le_of_slots` |
 | V12 | Every certificate with `q` distinct signers given to an honest node certifies a prefix of an honest node's decisions, with timely signed proposals and `f < q`. | `Node.Boot.Certified` (proved): `Node.propose_prefix`, `Node.commits_prefix`, `Node.Local.Decisions` |
 | V11 | A timed run past GST, with timeouts of at least `2Δ + proc`, gives a `SchemeReactive` and the delivery obligation `DeliversOn`; the mechanisms compose (`Stack.safe_and_live`), and every slot commits. | field by field from the run, V10 |
 
@@ -690,7 +705,7 @@ rejoins by bootstrap (§3.6).
 | 7.3 | Checkpoints (§3.8): signed proposals of the decided prefix and certificates of `q` of them; the horizon bounded by the certified frontier; bootstrap adopting the certified prefix; V12, and V9 restated as prefix-comparability (built) |
 | 7.4 | Adversarial simulation (§6, item 4): Byzantine nodes that send fabricated or inconsistent bases, fabricated certificates, conflicting signed proposals, invalid blocks and blocks in another node's name, with the network's signature checks on and off; each scenario checks agreement, prefix-comparability and validity (built) |
 | 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget (built) |
-| 9 | Rate limiting in the program (§3.9): V7, V10; the novelty budget also bounds what a Byzantine node can add to an honest node's pending blocks and requests. Sub-steps: 9.1 the configuration's optional budget and window, candidate slots and their charges, the bounded bootstrap base, the simulator's flood attack, and the existing claims kept (V3′ at the unlimited configuration) (built); 9.2 V10's storage claim; 9.3 V7 and the docs |
+| 9 | Rate limiting in the program (§3.9): V7, V10; the novelty budget also bounds what a Byzantine node can add to an honest node's pending blocks and requests. Sub-steps: 9.1 the configuration's optional budget and window, candidate slots and their charges, the bounded bootstrap base, the simulator's flood attack, and the existing claims kept (V3′ at the unlimited configuration) (built); 9.2 V10's storage claim, with the node's own blocks and its base charged to their slots (built); 9.3 V7 and the docs |
 | 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests; agreement with the model (§6, item 1): the program's commits on the scheme's hand-built records |
 | 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST; first, the decisions of §9.1, including the liveness of recovery, of checkpointing and of convergence under garbage collection and rejoin |
 

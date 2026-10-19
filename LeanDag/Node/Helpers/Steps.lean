@@ -324,6 +324,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
       · let st := s.store.insert _ _ h₂.1 h₂.2.1 (fun _ => Finset.empty_subset _)
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
         let s₀ := { s with store := st, top := some 0, own := some (cfg.idOf cfg.genesis) }
+        let s₀ := { s₀ with owner := slotted cfg [(cfg.idOf cfg.genesis, cfg.genesis)] ++ s.owner }
         refine hset { s₀ with recovering := false }
           ?_ (show Grows s.store st from Grows.insert _) rfl hp ?_
         · simp only [Node.step, dif_pos h₂, if_pos h₁]
@@ -415,6 +416,7 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
         let s₀ : State Validator BlockId Payload :=
           { s with store := st, top := some 0, own := some (cfg.idOf cfg.genesis) }
+        let s₀ := { s₀ with owner := slotted cfg [(cfg.idOf cfg.genesis, cfg.genesis)] ++ s.owner }
         have := settle_sub (cfg := cfg) { s₀ with recovering := false }
         exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
       · simp only [Node.step, dif_neg h₂, if_pos h₁]
@@ -597,6 +599,7 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
         let s₁ : State Validator BlockId Payload :=
           { s with store := st, top := some 0, own := some (cfg.idOf cfg.genesis) }
+        let s₁ := { s₁ with owner := slotted cfg [(cfg.idOf cfg.genesis, cfg.genesis)] ++ s.owner }
         let s₀ : State Validator BlockId Payload := { s₁ with recovering := false }
         have he : Node.step cfg s .start =
             ((Node.settle cfg s₀).1, built cfg [(cfg.idOf cfg.genesis, cfg.genesis)] ++

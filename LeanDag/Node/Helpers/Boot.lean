@@ -381,7 +381,8 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
           (by simp [Config.genesis]) (Or.inl h0))
         let gid := cfg.idOf cfg.genesis
         have hh₀ : Held cfg
-            { s with store := st, top := some 0, own := some gid, recovering := false } := by
+            { { s with store := st, top := some 0, own := some gid } with
+            owner := slotted cfg [(gid, cfg.genesis)] ++ s.owner, recovering := false } := by
           refine ⟨fun t ht => ⟨_, Finset.mem_insert_self _ _, ?_⟩, hh.horizon,
             fun ht => absurd ht (by simp), fun t _ => ?_, hh.junk⟩
           · simp only [Option.some.injEq] at ht
@@ -390,7 +391,8 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
             exact ht.ge
           · change s.store.base ≤ t
             omega
-        exact hset { s with store := st, top := some 0, own := some gid, recovering := false }
+        exact hset { { s with store := st, top := some 0, own := some gid } with
+            owner := slotted cfg [(gid, cfg.genesis)] ++ s.owner, recovering := false }
           (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)]) hcst hh₀ hp
           (commitsOf_built _) (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
       · exact hsame s rfl (by simp only [Node.step, dif_neg h₂, if_pos h₁])

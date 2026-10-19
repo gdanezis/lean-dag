@@ -682,7 +682,8 @@ its horizon, with a certificate `c` the node can adopt there: the pruned
 store takes the attested base, then flushes the offered blocks above `G`
 and the pending ones at or above it; the top moves to `G` with no block
 of the node's own there; the node takes the certified decisions it
-lacks, and its next slot moves up to `c`'s height. -/
+lacks, and its next slot moves up to `c`'s height; the kept base is
+charged at its slots. -/
 theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ × Option BlockId)}
     (h : tryBoot cfg s = some (s', ads)) :
     ∃ t G c, ∃ hb : s.store.base < G, s.top = some t ∧ t < G ∧ bootRound cfg s t = some G ∧
@@ -698,7 +699,9 @@ theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ �
       s'.requested = s.requested.filter (fun x => G ≤ x.2.2) ∧ s'.fired = {G} ∧
       ads = c.decisions.drop s.decided.length ∧ s'.decided = s.decided ++ ads ∧
       s'.certs = [] ∧ s'.props = s.props ∧ s'.lastProposed = s.lastProposed ∧
-      s'.cert = (if s.certHeight < c.height then some c else s.cert) := by
+      s'.cert = (if s.certHeight < c.height then some c else s.cert) ∧
+      s'.owner = slotted cfg (keptBase cfg (baseAt cfg s G)) ++
+        s.owner.filter fun e => G ≤ e.2.2 := by
   unfold tryBoot at h
   split at h
   · rename_i t G ht hG
@@ -714,7 +717,7 @@ theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ �
           have := List.mem_filter.mp (List.max?_mem hG')
           exact (by simpa using this.2 : (t < G ∧ _) ∧ _).1.1
         exact ⟨t, G, c, hbase, ht, htG, hG', hc, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
-          rfl, rfl, rfl, rfl, rfl, rfl⟩
+          rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
       · cases h
     · cases h
   · cases h
@@ -848,6 +851,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
         let st := s.store.insert e.1 e.2 h₂.1 h₂.2.1 (fun _ => Finset.empty_subset _)
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
         let s₀ := { s with store := st, top := some 0, own := some e.1 }
+        let s₀ := { s₀ with owner := slotted cfg [e] ++ s.owner }
         have hi₀ : Inv cfg { s₀ with recovering := false } (K ∪ {x | x ∈ [e]}) (B ++ [e]) := by
           refine ⟨known_insert (hnew := h₂.1) (hab := h₂.2.1)
               (hrefs := fun _ => Finset.empty_subset _)
