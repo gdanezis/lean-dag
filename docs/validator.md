@@ -325,7 +325,7 @@ it; those still rest on an honest presenter's store, earlier in the trace.
 |---|---|---|
 | V1 | Every block of the program's own, those it persists, satisfies `ValidAt q Clause.distinct`; they lie at strictly increasing rounds, across restarts, resumes and bootstraps; it references only what it knew; the blocks it broadcasts are those it persists; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.Sends`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved, restarts, resumes and bootstraps included) |
 | V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
-| V3 | In a run of honest nodes over any inputs, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every store along every run is a cut of it; under authentication of blocks, an injective hash and `Params.Tolerates`, with no honest node given a base offer, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise and whenever they restart and resume. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
+| V3 | Over a trace, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every honest store is a cut of it; with timely authentication of blocks, an injective hash and `Params.Tolerates`, and no honest node given a base offer, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise and whenever they restart and resume. | `Node.Runs.Safety` (proved): `Node.authentic_of_timely`, `Node.hashInjective_of_trace`, `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised, no honest node restarting and none given a base offer, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
 | V4 | The decisions a store pruned at `G` gives from a slot at or above `G` equal those of every view holding its blocks from `G` up, read at `G`: the loop reads nothing below the slot's round. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq`, `Node.ViewsAbove.of_store` (proved) |
 | V5 | At every state a run reaches, resuming from what the node persisted gives the state its restart recovers: the same blocks, read alike, at the same horizon, the same next slot, top and own block, its top round's timer fired, and nothing pending or asked for. | `Node.Restart.Resumes` (proved): `Node.resume_persisted`, `Node.State.recover` |
@@ -345,24 +345,36 @@ agrees on them. This is a lemma about `tryDecide` and the vote rule (for
 `leastSel` and `votedBlockSel`, which read only histories), proved in
 step 2; `View.toRecord` is the record a view gives.
 
-**Authentication.** A block delivered to an honest node in an honest
-author's name is one that author broadcast (`Runs.Authentic`). The
-program broadcasts exactly the blocks it persists (`Node.Local.Sends`),
-so such a block is one of the author's own, one a round. A block a peer
-forwards is covered, since its author broadcast it.
+**Authentication.** A block delivered or offered to an honest node in
+an honest author's name was broadcast by that author earlier in the
+trace (`Converge.TimelyAuthentic`); at the end of the trace this gives
+`Node.Authentic` (`Node.authentic_of_timely`). The program broadcasts
+exactly the blocks it persists (`Node.Local.Sends`), so such a block is
+one of the author's own, one a round. A block a peer forwards is
+covered, since its author broadcast it.
 
-**Bootstraps need time.** A run without time cannot order a bootstrap
-after the offers it rests on. Two honest nodes could each bootstrap on
-the other's offer, made after its own bootstrap, and nothing would ground
-the base. V3 is therefore stated for runs in which no honest node is
-given a base offer, and V9 over a trace. There, by induction over the
-trace, every honest store is a cut of the run's record. A node
-bootstraps only at a round with a block that `f + 1` distinct peers
-offered, so one of them is honest. That peer's offer was its store when
-it served it, earlier in the trace, and that store was a cut of the
-record then. So the record reaches the round, which is what keeps the
-node's new base blocks of the record. Each decision is then a verdict on a view of the record
-(`Loop.sound`), and two verdicts on one slot agree.
+**One run model.** Every claim about many nodes is stated over a trace
+(`Model/Trace.lean`), which orders all nodes' inputs in one list. The
+order is what bootstrap needs. Without it, two honest nodes could each
+bootstrap on the other's offer, made after its own bootstrap, and
+nothing would ground the base. Over a trace, by induction, every honest
+store is a cut of the run's record. A node bootstraps only at a round
+with a block that `f + 1` distinct peers offered, so one of them is
+honest. That peer's offer was its store when it served it, earlier in
+the trace, and that store was a cut of the record then. So the record
+reaches the round, which keeps the node's new base blocks of the record.
+Each decision is then a verdict on a view of the record (`Loop.sound`),
+and two verdicts on one slot agree (V9). A bootstrapped node's decisions
+skip the slots below its new horizon, so they need not be a prefix of
+another node's: V3 assumes that no honest node is given a base offer,
+and step 7.3 restores prefix-comparability with certified checkpoints.
+
+**The run's record is a construction.** The proofs build the run's
+record from what the honest nodes knew over the whole trace (`knownOf`):
+every block delivered or offered to them with its hash, and every block
+of their own, pruned ones included. It is not the union of the honest
+stores at any event, and no node computes it; it exists to state the
+claims. Each honest store, at each event, is a cut of it.
 
 **The run's record under garbage collection.** A node keeps a block at
 its horizon without checking its references (§3.4), so a Byzantine block
@@ -383,20 +395,22 @@ below the top (`Node.Held`). Decisions read nothing
 below the slot's round (V4), so the loop on a store decides as on a view
 of the record, and V3 holds as horizons rise.
 
-**Runs.** A run is a sequence of timestamped events over a global state:
-the honest validators' states, the messages in flight, and the
-adversary's blocks. An honest validator changes state only by *step*; a
-Byzantine one injects any block, valid or not, since the program checks
-validity itself; a crash discards a validator's state but its persisted
-part. The reliable set `T` of a liveness claim is the honest validators
+**Traces.** A trace is a list of events, each an input to one node. An
+honest node changes state only by *step* on its own events. The network
+and the adversary choose the events, so a Byzantine node's blocks enter
+as delivered blocks, valid or not, since the program checks validity
+itself. A crash is the restart input, which keeps what the node
+persisted (§5). The trace has no clock; the timed claims of step 11 add
+times to its events. The reliable set `T` of a liveness claim is the honest validators
 that do not crash over the claim's window. FinWhale's `Run` collects an
 execution as an assumed structure; here the run is generated by the
 program, and the structures the theorems read (`BlockRecord`, `PaceCore`,
 `Delivery`) are built from it.
 
-Two hypotheses belong to the environment, not the program: the hash is
-injective on the blocks of a run, and the network meets the delivery
-assumptions.
+Three hypotheses belong to the environment, not the program: the hash
+is injective on the blocks of a trace, the network meets the delivery
+assumptions, and a node's storage writes the state a step leaves at
+once, before any of the step's outputs takes effect (§5.1).
 
 ## 5. Crashes
 
@@ -423,11 +437,16 @@ the two lets the restarted validator build a different block at the same
 round, which is an equivocation.
 
 The model persists the whole state a step leaves, at once, and a crash
-falls only between steps; "persist before broadcast" is the order of a
-step's outputs. A real node writes block by block and can crash between
-two outputs of one step. Step 7.2 either adds crash points between a
-step's outputs to the trace and proves V5 and V3 across them, or states
-the atomic write of a step's state as an assumption on the environment.
+falls only between steps. This is an assumption on the node's storage:
+it writes the state a step leaves (`State.persisted`) in one atomic
+write, as a write-ahead log does, before it sends any of the step's
+messages or acts on its other outputs. "Persist before broadcast" is then
+the order of a step's outputs. A crash after the write and before a
+broadcast loses only the message: the block is in the restarted node's
+store, and peers fetch it when the node's next block references it.
+Crash points between one step's writes are not modelled. They would
+admit a restart that persisted a block but not the top above it, and so
+built a second block at that round.
 
 Pending and deferred blocks are not persisted: no own block references
 them, and their authors or other peers can serve them again.
@@ -438,7 +457,7 @@ the runtime (`card_retained_le`, G6).
 ### 5.2 What this gives
 
 A crash loses the pending blocks, the timers and the requests, and keeps
-the store, the horizon, the next slot and the top. In the run model a
+the store, the horizon, the next slot and the top. In a trace a
 crash is the restart input, which keeps the store as it is and empties
 the rest (`State.recover`); `resume` rebuilds a state from what was
 persisted, and V5 shows that it gives the same state, its store read
@@ -525,7 +544,7 @@ rejoins by bootstrap (§3.6).
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 (built) |
 | 7 | Bootstrap in the program: V9 over a trace; G10's soundness lifted to block records (§8, L1) (built) |
 | 7.1 | Self-parent as a build rule, not a validity clause (§11): the shared inclusion argument reads it for reliable authors from a round on; the program's validity drops it; a recovering node resumes above the highest round it holds a quorum at; Safe Skip leaves the program; bootstrap needs no reference-free block; block authentication back to a block its author broadcast (built) |
-| 7.2 | One run model: V3 proved over a trace, and the model without time retired (§4, *Bootstraps need time*); crash points between a step's outputs, or the atomic write of a step's state stated as an assumption (§5.1); §4 says that the run's record is the proof's construction, not the union of the honest stores |
+| 7.2 | One run model: V3 proved over a trace, and the model without time retired (§4, *One run model*); the atomic write of a step's state stated as an assumption on the node's storage (§5.1); the run's record described as the proof's construction, not the union of the honest stores (§4) (built) |
 | 7.3 | Checkpoints (§3.8): signed proposals of the decided prefix and certificates of `q` of them; the horizon bounded by the certified frontier; bootstrap adopting the certified prefix; V12, and V9 restated as prefix-comparability |
 | 7.4 | Adversarial simulation (§6): Byzantine nodes that send base offers with fabricated or inconsistent bases, offers in another node's name, malformed and invalid blocks, and conflicting checkpoint proposals; each scenario checks agreement and validity |
 | 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget |

@@ -1,23 +1,24 @@
-import LeanDag.Node.Model.Run
+import LeanDag.Node.Converge.Statement
 import LeanDag.Node.Vote
 /-!
 # Many honest nodes — statement
 
-`docs/validator.md` §4, V3. Honest nodes `H` run one configuration but
-for their identity, each over its own sequence of inputs, which the
-network and the adversary choose. Two assumptions constrain them:
+`docs/validator.md` §4, V3. Over a trace of honest nodes `H` and an
+adversary, assume:
 
-* **authentication** (`Authentic`): a block delivered to an honest node
-  with an honest author's identity is one that author broadcast;
-* **the hash** (`HashInjective`): no two different blocks the honest
-  nodes knew have one identifier.
+* **timely authentication** (`Converge.TimelyAuthentic`): a block
+  delivered or offered to an honest node with an honest author's
+  identity and its hash was broadcast by that author earlier;
+* **the hash** (`Converge.HashInjective`): no two different blocks the
+  honest nodes knew have one identifier;
+* no honest node is given a base offer (`Converge.NoRejoin`).
 
 Then, at the bounded vote, with an admissible row and at most `f` nodes
-outside `H`, and no honest node given a base offer (`NoOffer`), **any two
-honest nodes' decisions are prefix-comparable** (`Safety`), whatever
-horizons they raise and whenever they restart and resume. A run without time cannot
-order a bootstrap after the offers it rests on, so bootstrap is covered
-over a trace (`Node/Boot/Statement.lean`).
+outside `H`, **any two honest nodes' decisions are prefix-comparable**
+(`Safety`), whatever horizons they raise and whenever they restart and
+resume. A node that bootstraps skips the slots below its new horizon;
+two honest nodes then still decide each slot alike
+(`Node/Boot/Statement.lean`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -28,37 +29,16 @@ namespace Node
 
 namespace Runs
 
-variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Validator]
-variable [LinearOrder BlockId]
-
-/-- **Authentication**: a block delivered to an honest node with an honest
-author's identity is one that author broadcast. -/
-def Authentic (cfg : Config Validator BlockId Payload) (H : Finset Validator)
-    (ins : Validator → List (Input Validator BlockId Payload)) : Prop :=
-  ∀ v ∈ H, ∀ x ∈ delivered (cfg.at v) (ins v), x.2.creator ∈ H →
-    x ∈ broadcasts (runOf cfg ins x.2.creator).2
-
-/-- **The hash** is injective on the blocks the honest nodes knew. -/
-def HashInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator)
-    (ins : Validator → List (Input Validator BlockId Payload)) : Prop :=
-  ∀ v ∈ H, ∀ w ∈ H, ∀ x ∈ knownOf cfg ins v, ∀ y ∈ knownOf cfg ins w,
-    cfg.idOf x.2 = cfg.idOf y.2 → x.2 = y.2
-
-/-- **No honest node is given a base offer.** -/
-def NoOffer (H : Finset Validator) (ins : Validator → List (Input Validator BlockId Payload)) :
-    Prop :=
-  ∀ v ∈ H, ∀ p G bs, Input.baseOffer p G bs ∉ ins v
-
 /-- **Run safety**: any two honest nodes' decisions are prefix-comparable. -/
 def Safety : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
-    (ins : Validator → List (Input Validator BlockId Payload)),
+    (tr : Trace Validator BlockId Payload),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
-    Authentic cfg H ins → HashInjective cfg H ins → NoOffer H ins →
-    ∀ v ∈ H, ∀ w ∈ H,
-      commitsOf (runOf cfg ins v).2 <+: commitsOf (runOf cfg ins w).2 ∨
-        commitsOf (runOf cfg ins w).2 <+: commitsOf (runOf cfg ins v).2
+    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
+    Converge.NoRejoin H tr →
+    ∀ v ∈ H, ∀ w ∈ H, decisionsOf cfg tr v <+: decisionsOf cfg tr w ∨
+      decisionsOf cfg tr w <+: decisionsOf cfg tr v
 
 /-- Many honest nodes. -/
 def Statement : Prop := Safety

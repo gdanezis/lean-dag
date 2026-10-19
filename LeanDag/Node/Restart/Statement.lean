@@ -9,8 +9,10 @@ run reaches, **resuming from what was persisted gives the state the
 restart input recovers** (`Resumes`): the same blocks, read alike, at the
 same horizon, and the recovered state's next slot, top and own block, its
 top round's timer fired, and nothing pending or asked for. The restart
-input keeps the store as it is (`State.recover`), so the claims about
-runs cover crashes as restart inputs.
+input keeps the store as it is (`State.recover`), so the claims over
+traces cover crashes as restart inputs. A crash falls between steps:
+the node's storage writes the state a step leaves at once, before any of
+its outputs takes effect.
 
 Statements only; the proofs are `Proof.lean`.
 -/

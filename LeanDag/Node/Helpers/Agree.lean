@@ -5,9 +5,10 @@ import LeanDag.Node.Helpers.Converge
 # Bootstrapping nodes agree slot by slot
 
 Over a trace, what each honest node knew is what the trace delivered and
-offered it, and what it made (`knownOf_sub`). Under timely
-authentication the honest nodes' runs meet the run model's assumptions,
-so their knowledge forms the run's record. Then, by induction over the
+offered it, and what it made (`knownOf_sub`). Timely authentication and
+the hash over the trace give authentication and the hash at its end
+(`authentic_of_timely`, `hashInjective_of_trace`), so the honest nodes'
+knowledge forms the run's record. Then, by induction over the
 trace, every honest store is a cut of that record and every decision a
 verdict on a view of it (`cut_before`): a node bootstraps only at a round
 some honest peer offered from its store, which the record reaches, since
@@ -76,17 +77,12 @@ theorem mem_outputs_of_event {i : ℕ} {w : Validator} {inp : Input Validator Bl
   rw [outputsAt_eq h] at ho
   exact List.mem_append_right _ ho
 
-/-- The node's inputs over the whole trace. -/
-abbrev insOf (tr : Trace Validator BlockId Payload) (v : Validator) :
-    List (Input Validator BlockId Payload) :=
-  inputsBefore tr tr.length v
-
 /-- **What a node knew before an event, it knew over the trace.** -/
 theorem knownBefore_knownOf {t : ℕ} {v : Validator} {x : BlockId × Block Validator BlockId Payload}
-    (hx : x ∈ Converge.knownBefore cfg tr t v) : x ∈ knownOf cfg (insOf tr) v := by
+    (hx : x ∈ Converge.knownBefore cfg tr t v) : x ∈ knownOf cfg tr v := by
   obtain ⟨l, hl⟩ := inputsBefore_prefix_length (tr := tr) v t
   simp only [Converge.knownBefore, Set.mem_setOf_eq, List.mem_append] at hx
-  simp only [knownOf, runOf, insOf, List.mem_append, hl, delivered, List.flatMap_append,
+  simp only [knownOf, runOf, List.mem_append, hl, delivered, List.flatMap_append,
     run_append, persists_append]
   rcases hx with hx | hx
   · exact Or.inl (Or.inl hx)
@@ -95,16 +91,16 @@ theorem knownBefore_knownOf {t : ℕ} {v : Validator} {x : BlockId × Block Vali
 /-- **What an event gives a node, it knew over the trace.** -/
 theorem event_knownOf {t : ℕ} {w : Validator} {inp : Input Validator BlockId Payload}
     (h : tr[t]? = some (w, inp)) :
-    (∀ x ∈ delivered (cfg.at w) [inp], x ∈ knownOf cfg (insOf tr) w) ∧
+    (∀ x ∈ delivered (cfg.at w) [inp], x ∈ knownOf cfg tr w) ∧
     ∀ x ∈ persists (step (cfg.at w) (stateBefore cfg tr t w) inp).2,
-      x ∈ knownOf cfg (insOf tr) w := by
+      x ∈ knownOf cfg tr w := by
   have ht : t + 1 ≤ tr.length := (List.getElem?_eq_some_iff.mp h).1
   obtain ⟨l, hl⟩ := inputsBefore_prefix (tr := tr) w ht
   rw [inputsBefore_succ h, if_pos rfl] at hl
   refine ⟨fun x hx => ?_, fun x hx => ?_⟩
-  · simp only [knownOf, runOf, insOf, List.mem_append, hl, delivered, List.flatMap_append]
+  · simp only [knownOf, runOf, List.mem_append, hl, delivered, List.flatMap_append]
     exact Or.inl (Or.inl (Or.inr (by simpa [delivered] using hx)))
-  · simp only [knownOf, runOf, insOf, List.mem_append, hl, run_append, persists_append]
+  · simp only [knownOf, runOf, List.mem_append, hl, run_append, persists_append]
     refine Or.inr (Or.inl (Or.inr ?_))
     simpa [run, stateBefore] using hx
 
@@ -113,7 +109,7 @@ variable {H : Finset Validator}
 /-- **What an honest node knew over the trace, the trace's honest nodes
 knew.** -/
 theorem knownOf_sub {v : Validator} (hv : v ∈ H) {x : BlockId × Block Validator BlockId Payload}
-    (hx : x ∈ knownOf cfg (insOf tr) v) : x ∈ Converge.knownIn cfg H tr := by
+    (hx : x ∈ knownOf cfg tr v) : x ∈ Converge.knownIn cfg H tr := by
   simp only [knownOf, List.mem_append] at hx
   rcases hx with hx | hx
   · obtain ⟨j, -, inp, hj, hd⟩ := mem_delivered_before (cfg.at v) v tr.length hx
@@ -223,6 +219,37 @@ theorem exists_mem_of_length {f : ℕ} (hf : Hᶜ.card ≤ f) {l : List Validato
   obtain ⟨p, hp, hpH⟩ := exists_mem_of_card hf (S := l.toFinset)
     (by rw [List.toFinset_card_of_nodup hl]; exact hlen)
   exact ⟨p, List.mem_toFinset.mp hp, hpH⟩
+
+/-! ## The record's assumptions -/
+
+theorem mem_broadcasts {out : List (Output Validator BlockId Payload)}
+    {x : BlockId × Block Validator BlockId Payload} :
+    x ∈ broadcasts out ↔ Output.broadcast x.1 x.2 ∈ out := by
+  unfold broadcasts
+  rw [List.mem_filterMap]
+  constructor
+  · rintro ⟨o, ho, hox⟩
+    cases o <;> simp at hox
+    subst hox
+    exact ho
+  · intro h
+    exact ⟨_, h, rfl⟩
+
+/-- **The hash over the trace is injective on what the honest nodes knew
+at its end.** -/
+theorem hashInjective_of_trace (hinj : Converge.HashInjective cfg H tr) :
+    HashInjective cfg H tr := fun _ hv _ hw x hx y hy h =>
+  hinj x (knownOf_sub hv hx) y (knownOf_sub hw hy) h
+
+/-- **Timely authentication gives authentication at the end of the
+trace.** -/
+theorem authentic_of_timely (htime : Converge.TimelyAuthentic cfg H tr) :
+    Authentic cfg H tr := by
+  intro v hv x hx hc
+  obtain ⟨j, -, inp, hj, hd⟩ := mem_delivered_before (cfg.at v) v tr.length hx
+  obtain ⟨i, -, hiv, hxp⟩ := htime j v inp hj hv x hd hc
+  obtain ⟨inp', hi⟩ := Converge.event_of_map hiv
+  exact mem_broadcasts.mpr (mem_outputs_of_event hi (mem_broadcasts.mp hxp))
 
 end Node
 

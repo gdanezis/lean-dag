@@ -3,8 +3,8 @@ import LeanDag.Node.Helpers.Agree
 /-!
 # Bootstrap — proof
 
-The honest nodes' runs over the trace meet the run model's assumptions,
-so what they knew forms the run's record (`globalRecord`). By induction
+Authentication and the hash at the end of the trace hold, so what the
+honest nodes knew forms the run's record (`globalRecord`). By induction
 over the trace every honest store is a cut of it and every decision a
 verdict on a view of it (`IsCut.step`): a node bootstraps only at a
 round with a block that `f + 1` distinct peers offered, one of them
@@ -19,37 +19,18 @@ namespace Node
 
 namespace Boot
 
-theorem mem_broadcasts {Validator BlockId Payload : Type}
-    {out : List (Output Validator BlockId Payload)} {x : BlockId × Block Validator BlockId Payload} :
-    x ∈ broadcasts out ↔ Output.broadcast x.1 x.2 ∈ out := by
-  unfold broadcasts
-  rw [List.mem_filterMap]
-  constructor
-  · rintro ⟨o, ho, hox⟩
-    cases o <;> simp at hox
-    subst hox
-    exact ho
-  · intro h
-    exact ⟨_, h, rfl⟩
-
 theorem agrees : Agrees := by
   intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hoff hinj
-  -- the run model's assumptions, over the honest nodes' whole runs
-  have hinjR : Runs.HashInjective cfg H (insOf tr) := fun v hv w hw x hx y hy h =>
-    hinj x (knownOf_sub hv hx) y (knownOf_sub hw hy) h
-  have hauthR : Runs.Authentic cfg H (insOf tr) := by
-    intro v hv x hx hc
-    obtain ⟨j, -, inp, hj, hd⟩ := mem_delivered_before (cfg.at v) v tr.length hx
-    obtain ⟨i, -, hiv, hxp⟩ := htime j v inp hj hv x hd hc
-    obtain ⟨inp', hi⟩ := Converge.event_of_map hiv
-    exact mem_broadcasts.mpr (mem_outputs_of_event hi (mem_broadcasts.mp hxp))
+  -- authentication and the hash at the end of the trace
+  have hinjR := hashInjective_of_trace hinj
+  have hauthR := authentic_of_timely htime
   haveI : Validity.Quorate (ValidAt (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
   let U := globalRecord hinjR hauthR
   have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2, hadm.1⟩
   have hg := ground hinjR hauthR hadm.2.2.2.1
-  have hK : ∀ v ∈ H, ∀ x ∈ knownOf cfg (insOf tr) v, x ∈ knownAll cfg H (insOf tr) :=
+  have hK : ∀ v ∈ H, ∀ x ∈ knownOf cfg tr v, x ∈ knownAll cfg H tr :=
     fun v hv x hx => ⟨v, hv, hx⟩
   -- every honest store is a cut, and every decision a verdict
   have key : ∀ t, ∀ v ∈ H, IsCut U (stateBefore cfg tr t v).store ∧

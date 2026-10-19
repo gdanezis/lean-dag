@@ -2,14 +2,21 @@ import LeanDag.Node.Model.Run
 /-!
 # Many honest nodes over one trace
 
-`docs/validator.md` §3.7. A trace lists every node's inputs in the order
-they occur. Node `v`'s state before event `i` is its run over its inputs
-among the first `i` events (`stateBefore`); the outputs of event `i` are
-its node's step there (`outputsAt`); and an output sends a message to
-other nodes (`Sends`): a broadcast block and a request for blocks or for
-the base to every other node, an answer or a base to the node it names.
+`docs/validator.md` §4. The nodes share one configuration but for their
+identity (`Config.at`). A trace lists every node's inputs in the order
+they occur; what the inputs are, and in what order they arrive, is the
+network's and the adversary's. Node `v`'s state before event `i` is its
+run over its inputs among the first `i` events (`stateBefore`); the
+outputs of event `i` are its node's step there (`outputsAt`); node `v`'s
+run over the whole trace is `runOf`, and what it knew `knownOf`; and an
+output sends a message to other nodes (`Sends`): a broadcast block and a
+request for blocks or for the base to every other node, an answer or a
+base to the node it names. A crash is the restart input, between two
+events: the node's storage writes the state a step leaves at once,
+before any of its outputs takes effect (`docs/validator.md` §5.1).
 
-Definitions only; the claims are `Node/Converge/Statement.lean`.
+Definitions only; the claims over traces are `Node/Runs/Statement.lean`,
+`Node/Converge/Statement.lean` and `Node/Boot/Statement.lean`.
 -/
 
 namespace LeanDag
@@ -30,6 +37,9 @@ def inputsBefore (tr : Trace Validator BlockId Payload) (i : ℕ) (v : Validator
 
 variable (cfg : Config Validator BlockId Payload)
 
+/-- The configuration of node `v`. -/
+def Config.at (v : Validator) : Config Validator BlockId Payload := { cfg with me := v }
+
 /-- **Node `v`'s state before event `i`.** -/
 def stateBefore (tr : Trace Validator BlockId Payload) (i : ℕ) (v : Validator) :
     State Validator BlockId Payload :=
@@ -42,9 +52,20 @@ def outputsAt (tr : Trace Validator BlockId Payload) (i : ℕ) :
   | some (v, inp) => (step (cfg.at v) (stateBefore cfg tr i v) inp).2
   | none => []
 
+/-- **Node `v`'s run** over the whole trace. -/
+def runOf (tr : Trace Validator BlockId Payload) (v : Validator) :
+    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
+  run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr tr.length v)
+
+/-- What node `v` knew over the trace: the blocks delivered or offered to
+it with their hash, and its own. -/
+def knownOf (tr : Trace Validator BlockId Payload) (v : Validator) :
+    List (BlockId × Block Validator BlockId Payload) :=
+  delivered (cfg.at v) (inputsBefore tr tr.length v) ++ persists (runOf cfg tr v).2
+
 /-- **The decisions node `v` output** over the trace. -/
 def decisionsOf (tr : Trace Validator BlockId Payload) (v : Validator) : List (ℕ × Option BlockId) :=
-  commitsOf (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr tr.length v)).2
+  commitsOf (runOf cfg tr v).2
 
 /-- **What node `u`'s outputs send**: a broadcast block and a request for
 blocks or for the base to every other node, an answer or a base to the

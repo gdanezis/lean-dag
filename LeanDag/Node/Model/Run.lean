@@ -9,12 +9,10 @@ delivered or offered, whose identifier is their hash: together, what
 the node knew. `isFetch` marks the requests and answers that move blocks
 without building one.
 
-`commitsOf` reads the decisions among the outputs. Over many nodes,
-`Config.at` is node `v`'s configuration, `runOf` its run and `knownOf`
-what it knew.
+`commitsOf` reads the decisions among the outputs. Many nodes run over
+one trace (`Model/Trace.lean`).
 
-Definitions only; the claims are `Node/Local/Statement.lean` and
-`Node/Runs/Statement.lean`.
+Definitions only; the claims are `Node/Local/Statement.lean`.
 -/
 
 namespace LeanDag
@@ -74,31 +72,6 @@ def commitsOf (out : List (Output Validator BlockId Payload)) : List (ℕ × Opt
   out.filterMap fun
     | .commit k d => some (k, d)
     | _ => none
-
-/-! ## Many nodes
-
-A run of many nodes gives each honest node its own sequence of inputs;
-the nodes share one configuration but for their identity. What the
-inputs are, and in what order they arrive, is the network's and the
-adversary's; the claims about runs constrain it only by
-authentication and by the hash. -/
-
-variable (cfg) in
-/-- The configuration of node `v`. -/
-def Config.at (v : Validator) : Config Validator BlockId Payload := { cfg with me := v }
-
-variable (cfg) in
-/-- **Node `v`'s run**, from the initial state over its inputs. -/
-def runOf (ins : Validator → List (Input Validator BlockId Payload)) (v : Validator) :
-    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
-  run (cfg.at v) (State.init (cfg.at v)) (ins v)
-
-variable (cfg) in
-/-- What node `v` knew: the blocks delivered or offered to it with their
-hash, and its own. -/
-def knownOf (ins : Validator → List (Input Validator BlockId Payload)) (v : Validator) :
-    List (BlockId × Block Validator BlockId Payload) :=
-  delivered (cfg.at v) (ins v) ++ persists (runOf cfg ins v).2
 
 end Node
 
