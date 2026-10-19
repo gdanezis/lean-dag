@@ -11,13 +11,16 @@ output:
 * inputs: `{"start":{}}`, `{"timer":r}`, `{"restart":{}}` (the node keeps
   only what it persisted),
   `{"deliver":{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}}`,
-  `{"jump":{"v1":v,"B1":i,"v2":w,"B2":j}}`, and
-  `{"fetchRequest":{"peer":v,"ids":[…]}}`;
+  `{"jump":{"v1":v,"B1":i,"v2":w,"B2":j}}`,
+  `{"fetchRequest":{"peer":v,"ids":[…]}}`, `{"baseRequest":{"peer":v}}`, and
+  `{"baseOffer":{"peer":v,"horizon":G,"blocks":[block…]}}`;
 * outputs: `{"persist":block}`, `{"broadcast":block}`,
   `{"jump":{"v1":v,"B1":i,"v2":w,"B2":j}}` (send to every peer),
   `{"setTimer":{"round":r,"after":t}}`, `{"commit":{"slot":k,"block":i}}`
   (`null` for a skip), `{"prune":G}`, `{"fetch":[…]}` (ask every peer),
-  and `{"send":{"peer":v,"block":block}}` (answer one).
+  `{"send":{"peer":v,"block":block}}` (answer one), `{"requestBase":{}}`
+  (ask every peer for its base), and
+  `{"serveBase":{"peer":v,"horizon":G,"blocks":[block…]}}` (answer one).
 
 A delivered block's identifier, if given, must be its hash
 (`LeanDagSim.idOf`), and the node drops one that is not; if it is left
@@ -50,7 +53,22 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
       ("block", blockJson id b)])]
   | .jump v1 B1 v2 B2 => Json.mkObj [("jump", Json.mkObj [("v1", v1.val), ("B1", B1),
       ("v2", v2.val), ("B2", B2)])]
-  | _ => Json.mkObj [("unsupported", Json.null)]
+  | .requestBase => Json.mkObj [("requestBase", Json.mkObj [])]
+  | .serveBase peer G bs => Json.mkObj [("serveBase", Json.mkObj [("peer", peer.val),
+      ("horizon", G), ("blocks", Json.arr (bs.map fun e => blockJson e.1 e.2).toArray)])]
+
+/-- A block with its identifier, from JSON; the identifier is its hash
+when left out. -/
+def blockOf {n : ℕ} (d : Json) : Except String (ℕ × Block (Fin n) ℕ ℕ) := do
+  let round ← natField d "round"
+  let creator ← natField d "creator"
+  let payload ← natField d "payload"
+  let refs ← (← d.getObjVal? "refs").getArr?
+  let refs ← refs.toList.mapM Json.getNat?
+  if h : creator < n then
+    let b : Block (Fin n) ℕ ℕ := ⟨round, ⟨creator, h⟩, refs.toFinset, payload⟩
+    return ((natField d "id").toOption.getD (idOf b), b)
+  else throw s!"creator {creator} out of range"
 
 /-- An input, from JSON. -/
 def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ ℕ) := do
@@ -62,6 +80,16 @@ def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ
     let ids ← ((← f.getObjVal? "ids").getArr?) >>= fun a => a.toList.mapM Json.getNat?
     if h : peer < n then return .fetchRequest ⟨peer, h⟩ ids
     else throw s!"peer {peer} out of range"
+  if let .ok m := j.getObjVal? "baseRequest" then
+    let peer ← natField m "peer"
+    if h : peer < n then return .baseRequest ⟨peer, h⟩
+    else throw s!"peer {peer} out of range"
+  if let .ok m := j.getObjVal? "baseOffer" then
+    let peer ← natField m "peer"
+    let G ← natField m "horizon"
+    let bs ← ((← m.getObjVal? "blocks").getArr?) >>= fun a => a.toList.mapM (blockOf (n := n))
+    if h : peer < n then return .baseOffer ⟨peer, h⟩ G bs
+    else throw s!"peer {peer} out of range"
   if let .ok m := j.getObjVal? "jump" then
     let v1 ← natField m "v1"
     let v2 ← natField m "v2"
@@ -70,17 +98,9 @@ def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ
     if h : v1 < n ∧ v2 < n then return .jump ⟨v1, h.1⟩ B1 ⟨v2, h.2⟩ B2
     else throw s!"validator out of range"
   let d ← j.getObjVal? "deliver"
-  let round ← natField d "round"
-  let creator ← natField d "creator"
-  let payload ← natField d "payload"
-  let refs ← (← d.getObjVal? "refs").getArr?
-  let refs ← refs.toList.mapM Json.getNat?
-  if h : creator < n then
-    let b : Block (Fin n) ℕ ℕ := ⟨round, ⟨creator, h⟩, refs.toFinset, payload⟩
-    return .deliver ((natField d "id").toOption.getD (idOf b)) b
-  else
-    let _ := hn
-    throw s!"creator {creator} out of range"
+  let _ := hn
+  let (id, b) ← blockOf d
+  return .deliver id b
 
 def main : IO UInt32 := do
   let stdin ← IO.getStdin

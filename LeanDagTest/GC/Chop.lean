@@ -28,7 +28,7 @@ converse direction `dosValid_chop` deliberately does not have.
 `Λ = 1`, validator 1's retained store at round 2 is 4 blocks against the
 G6 constant of 9 — and the constant does not grow with `t`.
 
-**The attested base on data** (`Utwin`, `Uexcl`): `Base Utwin 1 0` is
+**The attested base on data** (`Utwin`, `Uexcl`): `Base Utwin (Faults.f (Fin 4)) 1 0` is
 exactly `{1, 2, 3}` — the shared correct layer, with both equivocation
 halves (each attested once) filtered out: the sandwich `C ⊆ Base` tight at
 the bottom. On `Uexcl`, completeness applied: the correct round-2 blocks
@@ -136,23 +136,23 @@ example : ∀ r ≤ 0, Populated (chop Utwin 1) r :=
 **exactly the shared correct layer** — both equivocation halves (geneses
 `0` and `4`, each attested by a single author) fail the `f+1` filter. The
 sandwich `C ⊆ Base ⊆ ∪ correct cones`, tight at the bottom. -/
-example : Base Utwin 1 0 = {1, 2, 3} := by decide
+example : Base Utwin (Faults.f (Fin 4)) 1 0 = {1, 2, 3} := by decide
 
 -- Soundness applied: everything in the base has a correct attester.
 example : ∃ a ∈ Utwin.ids, (Utwin.block a).round = 1 ∧
     (Utwin.block a).creator ∈ (Correct : Finset (Fin 4)) ∧
     (1 : Fin 9) ∈ history Utwin a :=
-  exists_correct_attester_of_mem_base (G := 0) (by decide)
+  exists_honest_attester_of_mem_base card_compl_correct_le (G := 0) (by decide)
 
 -- Completeness applied on `Uexcl` (synchronised from round 0, populated
 -- through round 5): every correct round-2 block clears the filter at
 -- attestation round 4, through the backbone.
-example : (8 : Fin 20) ∈ Base Uexcl 4 2 :=
+example : (8 : Fin 20) ∈ Base Uexcl (Faults.f (Fin 4)) 4 2 :=
   correct_mem_base (SynchronisedOn.mono (by decide) uexcl_synchronised)
     (by omega) (by omega) (uexcl_populated 4 (by omega)) (by decide)
     (by decide) (by decide)
 
-example : Base Uexcl 4 2 = {8, 9, 10} := by decide
+example : Base Uexcl (Faults.f (Fin 4)) 4 2 = {8, 9, 10} := by decide
 
 #print axioms dosValid_chop
 #print axioms card_retained_le

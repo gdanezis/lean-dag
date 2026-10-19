@@ -8,14 +8,14 @@ adversary, assume:
 * **delivery** (`Delivered`): every message an honest node sends another
   reaches it later in the trace, so the trace is causal and the network
   has caught up;
-* **timely authentication** (`TimelyAuthentic`): a block delivered to an
-  honest node with an honest author's identity and its hash was made by
-  that author earlier in the trace;
+* **timely authentication** (`TimelyAuthentic`): a block delivered or
+  offered to an honest node with an honest author's identity and its hash
+  was made by that author earlier in the trace;
 * **the hash** (`HashInjective`): no two different blocks the honest
   nodes knew have one identifier;
 * no honest node raises its horizon or restarts (`NoRestart`): the
   honest nodes here are the reliable ones; and none is given a jump
-  message (`NoJump`).
+  message or a base offer (`NoRejoin`).
 
 Then **every block an honest node broadcast, with its history, is in
 every honest node's store at the end** (`Converges`).
@@ -39,19 +39,20 @@ def Delivered (cfg : Config Validator BlockId Payload) (H : Finset Validator)
   ∀ i u inp, tr[i]? = some (u, inp) → u ∈ H → ∀ m, Sends u (outputsAt cfg tr i) m → m.1 ∈ H →
     ∃ j, i < j ∧ tr[j]? = some m
 
-/-- **Timely authentication**: a block delivered to an honest node with an
-honest author's identity and its hash was made by that author earlier. -/
+/-- **Timely authentication**: a block delivered or offered to an honest
+node with an honest author's identity and its hash was made by that
+author earlier. -/
 def TimelyAuthentic (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload) : Prop :=
-  ∀ j v id b, tr[j]? = some (v, .deliver id b) → v ∈ H → b.creator ∈ H → id = cfg.idOf b →
-    ∃ i < j, (tr[i]?.map Prod.fst) = some b.creator ∧ (id, b) ∈ persists (outputsAt cfg tr i)
+  ∀ j v inp, tr[j]? = some (v, inp) → v ∈ H → ∀ x ∈ delivered (cfg.at v) [inp], x.2.creator ∈ H →
+    ∃ i < j, (tr[i]?.map Prod.fst) = some x.2.creator ∧ x ∈ persists (outputsAt cfg tr i)
 
-/-- The blocks delivered to honest nodes with their hash, those honest
-nodes made, and those jump messages gave them. -/
+/-- The blocks delivered or offered to honest nodes with their hash, those
+honest nodes made, and those jump messages gave them. -/
 def knownIn (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload) : Set (BlockId × Block Validator BlockId Payload) :=
-  {x | (∃ (j : ℕ) (v : Validator), tr[j]? = some (v, Input.deliver x.1 x.2) ∧ v ∈ H ∧
-      x.1 = cfg.idOf x.2) ∨
+  {x | (∃ (j : ℕ) (v : Validator) (inp : Input Validator BlockId Payload),
+      tr[j]? = some (v, inp) ∧ v ∈ H ∧ x ∈ delivered (cfg.at v) [inp]) ∨
     (∃ (i : ℕ) (u : Validator), (tr[i]?.map Prod.fst) = some u ∧ u ∈ H ∧
       x ∈ persists (outputsAt cfg tr i)) ∨
     ∃ (i : ℕ) (v : Validator), v ∈ H ∧
@@ -66,9 +67,10 @@ def HashInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator
 def NoRestart (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ (i : ℕ) v, v ∈ H → tr[i]? ≠ some (v, Input.restart)
 
-/-- **No honest node is given a jump message.** -/
-def NoJump (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Prop :=
-  ∀ (i : ℕ) v v1 B1 v2 B2, v ∈ H → tr[i]? ≠ some (v, Input.jump v1 B1 v2 B2)
+/-- **No honest node is given a jump message or a base offer.** -/
+def NoRejoin (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Prop :=
+  ∀ (i : ℕ) v, v ∈ H → (∀ v1 B1 v2 B2, tr[i]? ≠ some (v, Input.jump v1 B1 v2 B2)) ∧
+    ∀ p G bs, tr[i]? ≠ some (v, Input.baseOffer p G bs)
 
 /-- **Every block an honest node broadcast, with its history, is in every
 honest node's store at the end.** -/
@@ -77,7 +79,7 @@ def Converges : Prop :=
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload),
     Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
-    (∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0) → NoRestart H tr → NoJump H tr →
+    (∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0) → NoRestart H tr → NoRejoin H tr →
     ∀ i u, (tr[i]?.map Prod.fst) = some u → u ∈ H → ∀ e ∈ broadcasts (outputsAt cfg tr i),
       ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).store.blk e.1, ∀ v ∈ H,
         y ∈ (stateBefore cfg tr tr.length v).store.ids

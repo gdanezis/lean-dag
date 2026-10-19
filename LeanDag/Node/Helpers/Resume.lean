@@ -47,7 +47,7 @@ theorem resume_persisted {s : State Validator BlockId Payload} (hh : Held cfg s)
     · obtain ⟨o, ho, hoi, hor⟩ := hh.own t ht
       rw [ho, Option.map_some, hst o hoi, hor]
   unfold resume
-  simp only [State.persisted]
+  simp only [State.persisted, Store.window]
   split
   · rename_i h
     refine ⟨_, rfl, hids, rfl, hh.junk.symm, fun j hj => hget j hj _, ?_⟩

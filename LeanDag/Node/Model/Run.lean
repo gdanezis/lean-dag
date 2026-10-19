@@ -38,12 +38,14 @@ def run : State Validator BlockId Payload → List (Input Validator BlockId Payl
     let r' := run r.1 is
     (r'.1, r.2 ++ r'.2)
 
-/-- The blocks among some inputs whose identifier is their hash. -/
+/-- The blocks among some inputs, delivered or offered, whose identifier
+is their hash. -/
 def delivered (is : List (Input Validator BlockId Payload)) :
     List (BlockId × Block Validator BlockId Payload) :=
-  is.filterMap fun
-    | .deliver id b => if id = cfg.idOf b then some (id, b) else none
-    | _ => none
+  is.flatMap fun
+    | .deliver id b => if id = cfg.idOf b then [(id, b)] else []
+    | .baseOffer _ _ bs => bs.filter fun e => decide (e.1 = cfg.idOf e.2)
+    | _ => []
 
 /-- The blocks an input gives the node besides a delivered one: those of a
 jump message. -/
@@ -79,15 +81,9 @@ a request or an answer. -/
 def Output.isFetch : Output Validator BlockId Payload → Bool
   | .fetch _ => true
   | .send _ _ _ => true
+  | .requestBase => true
+  | .serveBase _ _ _ => true
   | _ => false
-
-variable (cfg) in
-/-- **The outputs that build some blocks**: for each, persist, broadcast,
-then set the timer of its round. -/
-def built (bs : List (BlockId × Block Validator BlockId Payload)) :
-    List (Output Validator BlockId Payload) :=
-  bs.flatMap fun e =>
-    [.persist e.1 e.2, .broadcast e.1 e.2, .setTimer e.2.round (cfg.timeout e.2.round)]
 
 /-- **The outputs of a jump**: each filled block persisted, then the
 message. -/

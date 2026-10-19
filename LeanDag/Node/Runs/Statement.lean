@@ -15,8 +15,11 @@ network and the adversary choose. Three assumptions constrain them:
   nodes knew have one identifier.
 
 Then, at the bounded vote, with an admissible row and at most `f` nodes
-outside `H`, **any two honest nodes' decisions are prefix-comparable**
-(`Safety`), whatever horizons they raise and whenever they jump.
+outside `H`, and no honest node given a base offer (`NoOffer`), **any two
+honest nodes' decisions are prefix-comparable** (`Safety`), whatever
+horizons they raise and whenever they jump. A run without time cannot
+order a bootstrap after the offers it rests on, so bootstrap is covered
+over a trace (`Node/Boot/Statement.lean`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -50,13 +53,18 @@ def HashInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator
   ∀ v ∈ H, ∀ w ∈ H, ∀ x ∈ knownOf cfg ins v, ∀ y ∈ knownOf cfg ins w,
     cfg.idOf x.2 = cfg.idOf y.2 → x.2 = y.2
 
+/-- **No honest node is given a base offer.** -/
+def NoOffer (H : Finset Validator) (ins : Validator → List (Input Validator BlockId Payload)) :
+    Prop :=
+  ∀ v ∈ H, ∀ p G bs, Input.baseOffer p G bs ∉ ins v
+
 /-- **Run safety**: any two honest nodes' decisions are prefix-comparable. -/
 def Safety : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (ins : Validator → List (Input Validator BlockId Payload)),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
-    Authentic cfg H ins → AuthenticJumps cfg H ins → HashInjective cfg H ins →
+    Authentic cfg H ins → AuthenticJumps cfg H ins → HashInjective cfg H ins → NoOffer H ins →
     ∀ v ∈ H, ∀ w ∈ H,
       commitsOf (runOf cfg ins v).2 <+: commitsOf (runOf cfg ins w).2 ∨
         commitsOf (runOf cfg ins w).2 <+: commitsOf (runOf cfg ins v).2

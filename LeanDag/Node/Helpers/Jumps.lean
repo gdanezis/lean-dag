@@ -149,17 +149,7 @@ theorem id_of_known {v : Validator} {x : BlockId × Block Validator BlockId Payl
     (hx : x ∈ knownOf cfg ins v) : x.1 = cfg.idOf x.2 := by
   simp only [knownOf, List.mem_append] at hx
   rcases hx with (hx | hx) | hx
-  · obtain ⟨i, -, hi⟩ := List.mem_filterMap.mp hx
-    cases i with
-    | deliver id b =>
-      simp only at hi
-      split at hi
-      · rename_i h
-        rw [Option.some.injEq] at hi
-        subst hi
-        exact h
-      · exact absurd hi (by simp)
-    | _ => exact absurd hi (by simp)
+  · exact id_of_delivered hx
   · obtain ⟨v1, B1, v2, B2, -, -, st, F, hF, hxF, -⟩ :=
       Inv.derived_from (cfg := cfg.at v) (ins v) Inv.init x hx
     exact ((jumpFills_spec hF).2.2.2.2.2.2 x hxF).1

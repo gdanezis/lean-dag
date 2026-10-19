@@ -3466,13 +3466,13 @@ and needs no signatures:
 def attesters (U) (t : ℕ) (y : BlockId) : Finset Validator :=
   creatorsOf U.block ((blocksAt U t).filter fun a => y ∈ history U a)
 
-def Base (U) (t G : ℕ) : Finset BlockId :=
-  (blocksAt U G).filter fun y => F.f + 1 ≤ (attesters U t y).card
+def Base (U) (f t G : ℕ) : Finset BlockId :=
+  (blocksAt U G).filter fun y => f + 1 ≤ (attesters U t y).card
 ```
 
 The base is **sandwiched** between the shared correct layer and the union of
 correct cones: everything in it has a correct attester, so the adversary
-cannot smuggle fabrications in (`exists_correct_attester_of_mem_base`);
+cannot smuggle fabrications in (`exists_honest_attester_of_mem_base`);
 post-`R`, every correct round-`G` block is in every correct attestation, so
 nothing of the correct layer can be filtered out, by anyone
 (`correct_mem_base`). Completeness in fact extends to everything
@@ -3483,7 +3483,7 @@ theorem accepted_mem_base (hs : Synchronised U R) (hv : v ∈ Correct)
     (hy : y ∈ viewUpto D v m) (hyr : (U.block y).round = G)
     (hcar : Populated U (m + 1)) (hpop : Populated U t)
     (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
-    y ∈ Base U t G
+    y ∈ Base U F.f t G
 ```
 
 — every round-`G` block a correct validator accepted into its window by `m`
@@ -12239,7 +12239,7 @@ of the committed cone, exactly `f`) and the censorship exhibit
 chain and a commit after it), the budget satisfiable at its exact constant
 (`UniformBudget Dtwin 3` with `ByzBudget Dtwin 0`), the horizon computed and
 its statute of limitations exhibited (`chop Uexcl 2`, `chop Umerge 1`), the
-attested base sandwich tight at the bottom (`Base Utwin 1 0 = {1,2,3}`), and
+attested base sandwich tight at the bottom (`Base Utwin F.f 1 0 = {1,2,3}`), and
 every Odontoceti rule and all four `Decided` constructors at `n = 6, f = 1`
 (`Uodo`, `Uskip`, `Utwin6`), including the two-twin configuration that
 motivates the canonicity premise (`utwin6_both_pass` (O11)). The reactive
@@ -13077,7 +13077,7 @@ reused.
 | G13, G14 | windowed novelty; store correspondence | `novelty_chop_anti`, `viewUpto_chopD` *(GC/Window)* |
 | G6 | storage constant at lag `Λ` | `card_retained_le` *(GC/Window)* |
 | G6b, G7 | join and relay at the same constant | `card_joinIds_le`, `card_serve_le` *(GC/Bootstrap)* |
-| G10 | the attested-base sandwich | `correct_mem_base`, `exists_correct_attester_of_mem_base` *(GC/AttestedBase)* |
+| G10 | the attested-base sandwich | `correct_mem_base`, `exists_honest_attester_of_mem_base` *(GC/AttestedBase)* |
 | G11 | window completeness, tight at lag two | `accepted_mem_base` *(GC/Bootstrap)* |
 | G12 | bootstrap safety | `joinView`, `bootstrap_agree` *(GC/Bootstrap)* |
 | G8 | horizons compose; heterogeneous horizons agree | `chop_chop`, `decided_agree_horizons` *(GC/Horizon)* |
@@ -22296,18 +22296,16 @@ theorem card_retained_le {κ Λ t : ℕ} (hbyz : ByzBudget D κ)
 
 **G6.** A validator whose horizon `G` trails its round `t` by at most `Λ` retains a constant number of blocks, independent of `t`: the retained store is the truncated store (G14), which B4 bounds at window depth `t − G ≤ Λ`.
 
-#### `exists_correct_attester_of_mem_base`
+#### `exists_honest_attester_of_mem_base`
 
 *theorem, `GC.AttestedBase.lean`*
 
 ```lean
-theorem exists_correct_attester_of_mem_base (hy : y ∈ Base U t G) :
-    ∃ a ∈ U.ids, (U.block a).round = t ∧
-      (U.block a).creator ∈ (Correct : Finset Validator) ∧
-      y ∈ history U a
+theorem exists_honest_attester_of_mem_base (hf : honestᶜ.card ≤ f) (hy : y ∈ Base U f t G) :
+    ∃ a ∈ U.ids, (U.block a).round = t ∧ (U.block a).creator ∈ honest ∧ y ∈ history U a
 ```
 
-**G10, soundness.** Everything in the base has a correct attester — `f+1` authors always include one — and so lies in a correct cone. The adversary cannot smuggle fabrications into anyone's base.
+**G10, soundness.** With at most `f` validators outside the honest set, everything in the base has an honest attester, and so lies in an honest cone. The adversary cannot smuggle fabrications into anyone's base.
 
 #### `correct_mem_base`
 
@@ -22318,7 +22316,7 @@ theorem correct_mem_base {R : ℕ} (hs : Synchronised U R) (hR : R ≤ G)
     (hGt : G < t) (hpop : Populated U t) (hy : y ∈ U.ids)
     (hyr : (U.block y).round = G)
     (hyc : (U.block y).creator ∈ (Correct : Finset Validator)) :
-    y ∈ Base U t G
+    y ∈ Base U F.f t G
 ```
 
 **G10, completeness.** Post-`R`, every correct block of the layer is in every correct attestation (the backbone), so it clears the `f+1` bar in *every* sample — the shared correct layer `C` is in every base, and the adversary cannot filter it out.
@@ -22332,7 +22330,7 @@ theorem accepted_mem_base {R m t : ℕ} (hs : Synchronised U R)
     (hv : v ∈ (Correct : Finset Validator)) (hy : y ∈ viewUpto D v m)
     (hyr : (U.block y).round = G) (hcar : Populated U (m + 1))
     (hpop : Populated U t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
-    y ∈ Base U t G
+    y ∈ Base U F.f t G
 ```
 
 **G11.** Every round-`G` block a correct validator accepted into its window by `m` — Byzantine-authored included — is in the base attested at any `t ≥ m + 2`. Acceptance → the keeper's round-`(m+1)` block carries it (`viewUpto_subset_history`) → the backbone hands that block to every correct round-`t` cone → every correct author attests it, clearing `f + 1` in **every** sample. Nothing obtainable is ever filtered out.

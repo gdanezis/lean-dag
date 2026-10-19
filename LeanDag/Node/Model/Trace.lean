@@ -7,7 +7,8 @@ they occur. Node `v`'s state before event `i` is its run over its inputs
 among the first `i` events (`stateBefore`); the outputs of event `i` are
 its node's step there (`outputsAt`); and an output sends a message to
 other nodes (`Sends`): a broadcast block, a jump message and a request
-to every other node, an answer to the node it names.
+for blocks or for the base to every other node, an answer or a base to
+the node it names.
 
 Definitions only; the claims are `Node/Converge/Statement.lean`.
 -/
@@ -42,13 +43,20 @@ def outputsAt (tr : Trace Validator BlockId Payload) (i : ℕ) :
   | some (v, inp) => (step (cfg.at v) (stateBefore cfg tr i v) inp).2
   | none => []
 
+/-- **The decisions node `v` output** over the trace. -/
+def decisionsOf (tr : Trace Validator BlockId Payload) (v : Validator) : List (ℕ × Option BlockId) :=
+  commitsOf (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr tr.length v)).2
+
 /-- **What node `u`'s outputs send**: a broadcast block, a jump message
-and a request to every other node, an answer to the node it names. -/
+and a request for blocks or for the base to every other node, an answer
+or a base to the node it names. -/
 def Sends (u : Validator) (out : List (Output Validator BlockId Payload))
     (m : Validator × Input Validator BlockId Payload) : Prop :=
   ∃ o ∈ out, match o with
     | .broadcast id b => m.1 ≠ u ∧ m.2 = .deliver id b
     | .jump v1 B1 v2 B2 => m.1 ≠ u ∧ m.2 = .jump v1 B1 v2 B2
+    | .requestBase => m.1 ≠ u ∧ m.2 = .baseRequest u
+    | .serveBase peer G bs => m.1 = peer ∧ m.2 = .baseOffer u G bs
     | .fetch ids => m.1 ≠ u ∧ m.2 = .fetchRequest u ids
     | .send peer id b => m.1 = peer ∧ m.2 = .deliver id b
     | _ => False

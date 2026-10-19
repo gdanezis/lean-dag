@@ -31,9 +31,7 @@ theorem oneEach : OneEach := by
   simp only [List.nil_append] at hi
   rcases hi.rounds with ⟨-, hB, -⟩ | ⟨t, -, -, hB⟩
   · simp [hB]
-  · have hlen := congrArg List.length hB
-    rw [List.length_map, List.length_range] at hlen
-    rw [hB, hlen]
+  · exact hB.1
 
 theorem authored : Authored := by
   intro Validator BlockId Payload _ _ _ cfg is e he
@@ -48,7 +46,7 @@ theorem validOut : ValidOut := by
   have hi := Inv.init.run (cfg := cfg) is
   simp only [List.nil_append] at hi
   obtain ⟨-, -, hrefs, hv⟩ := hi.good e he
-  refine ⟨fun j hj => ?_, fun blk hblk => hv blk fun x hx => hblk x ?_⟩
+  refine ⟨fun j hj => ?_, fun hn blk hblk => hv hn blk fun x hx => hblk x ?_⟩
   · obtain ⟨c, hc⟩ := hrefs j hj
     refine List.mem_map.mpr ⟨(j, c), ?_, rfl⟩
     simp only [Set.empty_union, Set.mem_union, Set.mem_setOf_eq] at hc

@@ -130,14 +130,14 @@ example : (0 : Fin 20) ∈ viewUpto Dexcl 1 0 := by decide
 
 -- …one lag too early the base misses it: at attestation round 1 only
 -- carrier 5 (author 1) holds it, and the f+1 filter drops it…
-example : (0 : Fin 20) ∉ Base Uexcl 1 0 := by decide
+example : (0 : Fin 20) ∉ Base Uexcl (Faults.f (Fin 4)) 1 0 := by decide
 
 -- …and one backbone round later it clears the filter in every sample.
-example : (0 : Fin 20) ∈ Base Uexcl 2 0 := by decide
+example : (0 : Fin 20) ∈ Base Uexcl (Faults.f (Fin 4)) 2 0 := by decide
 
 -- G11 applied: the same membership from the theorem, at its boundary
 -- t = m + 2 exactly.
-example : (0 : Fin 20) ∈ Base Uexcl 2 0 :=
+example : (0 : Fin 20) ∈ Base Uexcl (Faults.f (Fin 4)) 2 0 :=
   accepted_mem_base (D := Dexcl) (v := 1)
     (SynchronisedOn.mono (by decide) uexcl_synchronised)
     (by decide) (by decide) (by decide) (uexcl_populated 1 (by omega))
@@ -147,7 +147,7 @@ example : (0 : Fin 20) ∈ Base Uexcl 2 0 :=
 
 -- The attested base at G = 1, sampled at t = 4: the correct round-1
 -- layer exactly.
-example : Base Uexcl 4 1 = {5, 6, 7} := by decide
+example : Base Uexcl (Faults.f (Fin 4)) 4 1 = {5, 6, 7} := by decide
 
 -- The joiner's fetch: base {5,6,7} plus window {8,9,10} above the cut.
 example : joinIds Dexcl 1 2 4 1 = {5, 6, 7, 8, 9, 10} := by decide

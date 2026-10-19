@@ -145,6 +145,13 @@ theorem Grows.tryJump {s s' : State Validator BlockId Payload}
   exact Grows.insertAll hst
 
 omit [Fintype Validator] in
+/-- **A bootstrap raises the horizon.** -/
+theorem Grows.boot {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (h : tryBoot cfg s = some (s', out)) :
+    Grows s.store s'.store := by
+  refine ⟨(boot_base h).le, fun e => absurd e (ne_of_gt (boot_base h))⟩
+
+omit [Fintype Validator] in
 theorem Grows.settle (s : State Validator BlockId Payload) :
     Grows s.store (Node.settle cfg s).1.store := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, out, hj, h⟩ <;> rw [h]
@@ -187,6 +194,14 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     split
     · exact Grows.refl _
     · exact (Grows.flush (cfg := cfg) _ s.store _).trans (Grows.settle_of _ rfl)
+  | baseOffer peer G bs =>
+    simp only [Node.step]
+    split
+    · split
+      · rename_i s₂ out hb
+        refine (Grows.boot hb).trans (Grows.advance _)
+      · exact Grows.refl _
+    · exact Grows.refl _
   | _ => exact Grows.refl _
 
 /-- **Across a run the store grows.** -/

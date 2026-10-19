@@ -39,9 +39,15 @@ input `i` in the state `s`: the new state and the outputs.
   its own block of the round below, persists them and sends one jump
   message; a receiver derives the same blocks from its own store and
   accepts them as it accepts delivered ones (`jumpIn`).
+* **Bootstrap** (`tryBoot`): a restarted node asks its peers for their
+  bases, and again whenever a delivered block lies `Λ + 2` rounds above
+  the one it last asked on; a peer answers with its horizon and its store. Once some round
+  above the node's top has blocks offered by `f + 1` distinct peers, the
+  node raises its horizon there, keeps those blocks, starts its own
+  chain again with a reference-free block at that round, and takes the
+  offered blocks above it as pending.
 
-Rate limiting and bootstrap are not yet implemented: their inputs leave
-the state unchanged.
+Rate limiting is not yet implemented: the budget is unused.
 
 Definitions only.
 -/
@@ -73,6 +79,12 @@ structure State where
   requested : List (BlockId × BlockId × ℕ)
   /-- Restarted, and not yet jumped. -/
   recovering : Bool
+  /-- The bases offered since the restart, one per peer: the peer, its
+  horizon and its store. -/
+  offers : List (Validator × ℕ × List (BlockId × Block Validator BlockId Payload))
+  /-- The round of the delivered block on whose account the node last
+  asked for the bases. -/
+  asked : ℕ
 
 variable (cfg : Config Validator BlockId Payload)
 
@@ -81,7 +93,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
-  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false⟩
+  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false, [], 0⟩
 
 /-- **Accept a block**: below the horizon it is dropped; at the horizon it
 is kept without its references, as the cut keeps it; above, it is kept if
@@ -263,6 +275,64 @@ def jumpIn (s : State Validator BlockId Payload) (v1 : Validator) (B1 : BlockId)
       decide (e.1 ∉ s.store.ids) && decide (e.1 ∉ s.pending.map Prod.fst)
   else []
 
+/-- **The outputs that build some blocks**: for each, persist, broadcast,
+then set the timer of its round. -/
+def built (bs : List (BlockId × Block Validator BlockId Payload)) :
+    List (Output Validator BlockId Payload) :=
+  bs.flatMap fun e =>
+    [.persist e.1 e.2, .broadcast e.1 e.2, .setTimer e.2.round (cfg.timeout e.2.round)]
+
+/-- **The store as a list**: its identifiers in order, each with its
+block as kept. -/
+def Store.window (st : Store Validator BlockId Payload) :
+    List (BlockId × Block Validator BlockId Payload) :=
+  (st.ids.sort (· ≤ ·)).map fun j => (j, st.map.getD j st.junk)
+
+/-- The distinct peers whose offers hold the block `j` at round `G`. -/
+def presenters (s : State Validator BlockId Payload) (G : ℕ) (j : BlockId) : List Validator :=
+  ((s.offers.filter fun o => o.2.2.any fun e => decide (e.1 = j ∧ e.2.round = G)).map
+    Prod.fst).dedup
+
+/-- **The attested base at round `G`**: the offered round-`G` blocks,
+identified by their hash, that `f + 1` distinct peers offered. -/
+def baseAt (s : State Validator BlockId Payload) (G : ℕ) :
+    List (BlockId × Block Validator BlockId Payload) :=
+  (s.offers.flatMap (·.2.2)).filter fun e =>
+    decide (e.2.round = G ∧ e.1 = cfg.idOf e.2 ∧ cfg.f + 1 ≤ (presenters s G e.1).length)
+
+/-- **The round to bootstrap at**: the highest offered horizon above the
+node's top with an attested base. -/
+def bootRound (s : State Validator BlockId Payload) (t : ℕ) : Option ℕ :=
+  ((s.offers.map (·.2.1)).filter fun G => decide (t < G) && !(baseAt cfg s G).isEmpty).max?
+
+/-- **Bootstrap** (`docs/validator.md` §3.6): at the round `G` of
+`bootRound`, the store is pruned to `G` and takes the attested base; the
+node starts its own chain again with a reference-free block at `G`,
+built and broadcast, and takes the offered blocks above `G` as pending;
+its next slot moves to the first at or above `G`. -/
+def tryBoot (s : State Validator BlockId Payload) :
+    Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
+  match s.top, s.top.bind (bootRound cfg s) with
+  | some _, some G =>
+    if h : s.store.base < G then
+      let st₀ := (baseAt cfg s G).foldl (fun st e => accept cfg st e.1 e.2) (s.store.prune G h.le)
+      let g : Block Validator BlockId Payload := ⟨G, cfg.me, ∅, cfg.payload G⟩
+      let gid := cfg.idOf g
+      if hg : gid ∉ st₀.ids ∧ st₀.base ≤ g.round then
+        let st₁ := st₀.insert gid g hg.1 hg.2 (fun _ => Finset.empty_subset _)
+          (fun _ j hj => absurd hj (Finset.notMem_empty j))
+        let win := (s.offers.flatMap (·.2.2)).filter fun e =>
+          decide (G < e.2.round ∧ e.1 = cfg.idOf e.2)
+        let pend := win ++ s.pending.filter fun e => G ≤ e.2.round
+        let fl := flush cfg (pend.length + 1) st₁ pend
+        let s₁ := { s with store := fl.1, pending := fl.2, top := some G, own := some gid }
+        let lo := max s.lo (cfg.m * ((G + cfg.per - 1) / cfg.per))
+        let s₂ := { s₁ with lo := lo, fired := {G}, offers := [] }
+        some ({ s₂ with requested := s.requested.filter fun x => G ≤ x.2.2 }, built cfg [(gid, g)])
+      else none
+    else none
+  | _, _ => none
+
 /-- The number of slots whose decision round is at most `R`. -/
 def decidable (R : ℕ) : ℕ :=
   if R + 1 < cfg.p.waveLength then 0 else cfg.m * ((R + 1 - cfg.p.waveLength) / cfg.per + 1)
@@ -354,15 +424,14 @@ def settle (s : State Validator BlockId Payload) :
 /-- **What the node persists**: its accepted blocks, the horizon, the next
 undecided slot and its own top block. -/
 def State.persisted (s : State Validator BlockId Payload) : Persisted Validator BlockId Payload :=
-  ⟨(s.store.ids.sort (· ≤ ·)).map fun j => (j, s.store.map.getD j s.store.junk), s.store.base,
-    s.lo, s.own⟩
+  ⟨s.store.window, s.store.base, s.lo, s.own⟩
 
 /-- **The state after a crash and restart**: the store, the next slot and
 the top kept; nothing pending or asked for; the top round's timer fired,
 since the node was away; recovering. -/
 def State.recover (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
   let s' := { s with pending := [], fired := (s.top.map fun t => {t}).getD ∅ }
-  { s' with requested := [], recovering := true }
+  { s' with requested := [], recovering := true, offers := [], asked := 0 }
 
 /-- **Resume from what was persisted**: the store rebuilt from the window
 at the horizon, if the window is closed under references one round below
@@ -379,7 +448,7 @@ def resume (ps : Persisted Validator BlockId Payload) : Option (State Validator 
       ∀ i ∈ ids, ps.horizon ≤ (lookup map cfg.genesis ps.horizon i).round then
     let st : Store Validator BlockId Payload := ⟨map, ids, cfg.genesis, ps.horizon, h.1, h.2.1, h.2.2⟩
     let top := ps.own.map fun o => (st.blk o).round
-    some ⟨st, [], top, ps.own, (top.map fun t => {t}).getD ∅, ps.lo, [], true⟩
+    some ⟨st, [], top, ps.own, (top.map fun t => {t}).getD ∅, ps.lo, [], true, [], 0⟩
   else none
 
 /-- **The node's transition function.** -/
@@ -406,8 +475,11 @@ def step (s : State Validator BlockId Payload) :
       let s₁ := { s with store := fl.1, pending := fl.2 }
       let miss := missing s₁ id b
       let req := s₁.requested ++ miss.map fun x => (x.1, id, x.2)
-      let r := settle cfg { s₁ with requested := req }
-      (r.1, (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ r.2)
+      let ask := s.recovering ∧ s.asked + cfg.lag + 2 ≤ b.round
+      let top := if ask then b.round else s.asked
+      let r := settle cfg { s₁ with requested := req, asked := top }
+      (r.1, (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++
+        (if ask then [.requestBase] else []) ++ r.2)
     else (s, [])
   | .timer r => settle cfg { s with fired := insert r s.fired }
   | .jump v1 B1 v2 B2 =>
@@ -417,8 +489,15 @@ def step (s : State Validator BlockId Payload) :
       let fl := flush cfg (s.pending.length + F.length + 1) s.store (F ++ s.pending)
       settle cfg { s with store := fl.1, pending := fl.2 }
   | .fetchRequest peer ids => (s, answer s peer ids)
-  | .restart => settle cfg s.recover
-  | _ => (s, [])
+  | .restart => let r := settle cfg s.recover; (r.1, .requestBase :: r.2)
+  | .baseRequest peer => (s, [.serveBase peer s.store.base s.store.window])
+  | .baseOffer peer G blocks =>
+    if s.recovering ∧ peer ≠ cfg.me then
+      let s₁ := { s with offers := (peer, G, blocks) :: s.offers.filter fun o => o.1 ≠ peer }
+      match tryBoot cfg s₁ with
+      | some (s₂, out) => let r := advance cfg s₂; (r.1, out ++ r.2)
+      | none => (s₁, [])
+    else (s, [])
 
 end Node
 

@@ -181,9 +181,7 @@ theorem eq_of_persists (v : Validator) {x y : BlockId × Block Validator BlockId
   have h := Local.oneEach _ _ _ (cfg.at v) (ins v)
   dsimp only at h
   have hnd : ((persists (runOf cfg ins v).2).map fun e => e.2.round).Nodup := by
-    unfold runOf
-    rw [h]
-    exact List.nodup_range
+    exact h.imp fun hab => ne_of_lt hab
   exact List.inj_on_of_nodup_map hnd hx hy hr
 
 /-- A known identifier is one the honest nodes knew a block under. -/

@@ -42,8 +42,8 @@ theorem event_of_map {i : ℕ} {u : Validator} (h : (tr[i]?.map Prod.fst) = some
 /-- What honest nodes knew is identified by its hash. -/
 theorem id_of_knownIn {x : BlockId × Block Validator BlockId Payload}
     (hx : x ∈ knownIn cfg H tr) : x.1 = cfg.idOf x.2 := by
-  rcases hx with ⟨j, v, hj, hv, hid⟩ | ⟨i, u, hu, -, hb⟩ | ⟨i, v, -, hd⟩
-  · exact hid
+  rcases hx with ⟨j, v, inp, hj, hv, hd⟩ | ⟨i, u, hu, -, hb⟩ | ⟨i, v, -, hd⟩
+  · exact id_of_delivered hd
   · obtain ⟨inp, hi⟩ := event_of_map hu
     exact (Local.authored _ _ _ (cfg.at u) (inputsBefore tr (i + 1) u) x
       (persists_of_event hi hb)).1
@@ -85,8 +85,8 @@ theorem knownBefore_sub {v : Validator} (hv : v ∈ H) (i : ℕ) :
   intro x hx
   simp only [knownBefore, Set.mem_setOf_eq, List.mem_append] at hx
   rcases hx with (hx | hx) | hx
-  · obtain ⟨j, -, hj, hid⟩ := mem_delivered_before (cfg.at v) v i hx
-    exact Or.inl ⟨j, v, hj, hv, hid⟩
+  · obtain ⟨j, -, inp, hj, hd⟩ := mem_delivered_before (cfg.at v) v i hx
+    exact Or.inl ⟨j, v, inp, hj, hv, hd⟩
   · exact Or.inr (Or.inr ⟨i, v, hv, hx⟩)
   · obtain ⟨j, -, hjv, hx⟩ := mem_persists_before (cfg := cfg) v i hx
     exact Or.inr (Or.inl ⟨j, v, hjv, hv, hx⟩)
@@ -136,11 +136,27 @@ theorem derived_nil {c : Config Validator BlockId Payload} :
     exact derived_nil fun x hx => h x (List.mem_cons_of_mem _ hx)
 
 /-- **No jump message gives an honest node a block**, when none is given one. -/
-theorem derived_before (hnj : NoJump H tr) {w : Validator} (hw : w ∈ H) (i : ℕ) :
+theorem derived_before (hnj : NoRejoin H tr) {w : Validator} (hw : w ∈ H) (i : ℕ) :
     derived (cfg.at w) (State.init (cfg.at w)) (inputsBefore tr i w) = [] :=
   derived_nil fun x hx v1 B1 v2 B2 h => by
     obtain ⟨j, hj⟩ := mem_inputsBefore hx
-    exact hnj j w v1 B1 v2 B2 hw (h ▸ hj)
+    exact (hnj j w hw).1 v1 B1 v2 B2 (h ▸ hj)
+
+/-- **A block an honest node knew from an input** was delivered to it, when
+no honest node is given a base offer. -/
+theorem deliver_of_delivered (hnj : NoRejoin H tr) {j : ℕ} {v : Validator} (hv : v ∈ H)
+    {inp : Input Validator BlockId Payload} (hj : tr[j]? = some (v, inp))
+    {x : BlockId × Block Validator BlockId Payload} (hx : x ∈ delivered (cfg.at v) [inp]) :
+    tr[j]? = some (v, .deliver x.1 x.2) ∧ x.1 = cfg.idOf x.2 := by
+  have hid := id_of_delivered hx
+  cases inp with
+  | deliver id b =>
+    simp only [delivered, List.flatMap_cons, List.flatMap_nil, List.append_nil] at hx
+    split at hx
+    · rw [List.mem_singleton] at hx; subst hx; exact ⟨hj, hid⟩
+    · exact absurd hx List.not_mem_nil
+  | baseOffer p G bs => exact absurd hj ((hnj j v hv).2 p G bs)
+  | _ => simp [delivered] at hx
 
 theorem stateBefore_of_le {i : ℕ} (h : tr.length ≤ i) (v : Validator) :
     stateBefore cfg tr i v = stateBefore cfg tr tr.length v := by
@@ -186,7 +202,7 @@ theorem same_before {a : ℕ} {v : Validator} (h : ∀ inp, tr[a]? ≠ some (v, 
 /-- **A block that fits stays pending or stored.** -/
 theorem keeps_after (hinj : HashInjective cfg H tr)
     (hbase : ∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0) (hnr : NoRestart H tr)
-    (hnj : NoJump H tr) {v : Validator} (hv : v ∈ H) {y : BlockId × Block Validator BlockId Payload}
+    (hnj : NoRejoin H tr) {v : Validator} (hv : v ∈ H) {y : BlockId × Block Validator BlockId Payload}
     (hf : Fits (cfg.at v) (gT cfg H tr) y) {a : ℕ}
     (hy : y ∈ (stateBefore cfg tr a v).pending ∨ y.1 ∈ (stateBefore cfg tr a v).store.ids) :
     ∀ b, a ≤ b →
@@ -202,11 +218,12 @@ theorem keeps_after (hinj : HashInjective cfg H tr)
         (by rw [← step_before hj, base_before hbase hv, base_before hbase hv])
         (pend_before hinj hv j) (fun id b hib hid => ?_)
         (by
-          rw [received_of_ne fun v1 B1 v2 B2 h => hnj j v v1 B1 v2 B2 hv (h ▸ hj)]
+          rw [received_of_ne fun v1 B1 v2 B2 h => (hnj j v hv).1 v1 B1 v2 B2 (h ▸ hj)]
           exact fun e he => absurd he List.not_mem_nil)
         (fun h => hnr j v hv (h ▸ hj)) hf ih
       subst hib
-      exact gT_of_known (x := (id, b)) hinj (Or.inl ⟨j, v, hj, hv, hid⟩)
+      exact gT_of_known (x := (id, b)) hinj
+        (Or.inl ⟨j, v, .deliver id b, hj, hv, by simp [delivered, ← hid]⟩)
     · rw [same_before fun inp h => he ⟨inp, h⟩]; exact ih
 
 /-- **No pending block is ever ready.** -/
@@ -220,18 +237,19 @@ theorem noReady_before (v : Validator) : ∀ i, NoReady (stateBefore cfg tr i v)
     · rw [same_before fun inp h => he ⟨inp, h⟩]; exact noReady_before v i
 
 /-- **A block becomes pending only by a delivery the node acts on.** -/
-theorem entry_before (hnj : NoJump H tr) {v : Validator} (hv : v ∈ H)
+theorem entry_before (hnj : NoRejoin H tr) {v : Validator} (hv : v ∈ H)
     {y : BlockId × Block Validator BlockId Payload} {a : ℕ}
     (h₁ : y ∉ (stateBefore cfg tr a v).pending) (h₂ : y ∈ (stateBefore cfg tr (a + 1) v).pending) :
     tr[a]? = some (v, .deliver y.1 y.2) ∧ Admits (cfg.at v) (stateBefore cfg tr a v) y.1 y.2 := by
   by_cases he : ∃ inp, tr[a]? = some (v, inp)
   · obtain ⟨inp, ha⟩ := he
     rw [step_before ha] at h₂
-    rcases (step_sub (cfg := cfg.at v) _ inp).1 y h₂ with h | ⟨rfl, hc⟩ | h
+    rcases (step_sub (cfg := cfg.at v) _ inp).1 y h₂ with h | ⟨rfl, hc⟩ | h | ⟨p, G, bs, rfl, -⟩
     · exact absurd h h₁
     · exact ⟨ha, hc⟩
-    · rw [received_of_ne fun v1 B1 v2 B2 h => hnj a v v1 B1 v2 B2 hv (h ▸ ha)] at h
+    · rw [received_of_ne fun v1 B1 v2 B2 h => (hnj a v hv).1 v1 B1 v2 B2 (h ▸ ha)] at h
       exact absurd h List.not_mem_nil
+    · exact absurd ha ((hnj a v hv).2 p G bs)
   · rw [same_before fun inp h => he ⟨inp, h⟩] at h₂; exact absurd h₂ h₁
 
 /-- **A request is recorded only on account of a delivery the node acted
@@ -263,7 +281,8 @@ theorem admit_after (hinj : HashInjective cfg H tr)
   rw [step_before ha]
   exact admit_keeps hc (by rw [← step_before ha]; exact reads_before hinj hbase hv _)
     (by rw [← step_before ha, base_before hbase hv, base_before hbase hv])
-    (pend_before hinj hv a) (gT_of_known (x := (id, b)) hinj (Or.inl ⟨a, v, ha, hv, hc.1⟩)) hf
+    (pend_before hinj hv a) (gT_of_known (x := (id, b)) hinj
+      (Or.inl ⟨a, v, .deliver id b, ha, hv, by simp [delivered, ← hc.1]⟩)) hf
 
 end Converge
 

@@ -79,5 +79,5 @@ def main (args : List String) : IO UInt32 := do
     for (v, top, ds) in (honest.zip (r.tops.zip r.commits)).map fun (v, t, d) => (v, t, d) do
       let skips := (ds.filter (·.2.isNone)).length
       IO.println s!"node {v}: round {top.getD 0}, {ds.length} slots decided, {skips} skipped"
-    IO.println s!"agree {r.agree}  valid {r.valid}  jumps {r.jumps}"
+    IO.println s!"agree {r.agree}  prefixes {r.prefixes}  valid {r.valid}  jumps {r.jumps}  boots {r.boots}"
     return if r.agree && r.valid then 0 else 1

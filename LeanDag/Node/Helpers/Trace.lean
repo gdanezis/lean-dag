@@ -119,11 +119,11 @@ theorem persists_of_event {j : ℕ} {w : Validator} {inp : Input Validator Block
 
 omit [Fintype Validator] in
 /-- **What was delivered to a node before event `i`**, its earlier events
-delivered, with their hash. -/
+delivered or offered. -/
 theorem mem_delivered_before (c : Config Validator BlockId Payload) (v : Validator) :
     ∀ (i : ℕ) {x : BlockId × Block Validator BlockId Payload},
       x ∈ delivered c (inputsBefore tr i v) →
-      ∃ j < i, tr[j]? = some (v, .deliver x.1 x.2) ∧ x.1 = c.idOf x.2
+      ∃ j < i, ∃ inp, tr[j]? = some (v, inp) ∧ x ∈ delivered c [inp]
   | 0, x, hx => by simp [inputsBefore, delivered] at hx
   | i + 1, x, hx => by
     rcases hi : tr[i]? with _ | ⟨w, inp⟩
@@ -131,30 +131,18 @@ theorem mem_delivered_before (c : Config Validator BlockId Payload) (v : Validat
       have he : inputsBefore tr (i + 1) v = inputsBefore tr i v := by
         rw [inputsBefore_of_le this, inputsBefore_of_le (by omega : tr.length ≤ i + 1)]
       rw [he] at hx
-      obtain ⟨j, hj, hjv, hx⟩ := mem_delivered_before c v i hx
-      exact ⟨j, by omega, hjv, hx⟩
+      obtain ⟨j, hj, inp, hjv, hx⟩ := mem_delivered_before c v i hx
+      exact ⟨j, by omega, inp, hjv, hx⟩
     · rw [inputsBefore_succ hi] at hx
       unfold delivered at hx
-      rw [List.filterMap_append] at hx
+      rw [List.flatMap_append] at hx
       rcases List.mem_append.mp hx with hx | hx
-      · obtain ⟨j, hj, hjv, hx⟩ := mem_delivered_before c v i hx
-        exact ⟨j, by omega, hjv, hx⟩
+      · obtain ⟨j, hj, inp', hjv, hx⟩ := mem_delivered_before c v i hx
+        exact ⟨j, by omega, inp', hjv, hx⟩
       · by_cases hw : w = v
         · subst hw
           rw [if_pos rfl] at hx
-          obtain ⟨y, hy, hyx⟩ := List.mem_filterMap.mp hx
-          rw [List.mem_singleton] at hy
-          rw [hy] at hyx
-          cases inp with
-          | deliver id b =>
-            simp only at hyx
-            split at hyx
-            · rename_i hid
-              rw [Option.some.injEq] at hyx
-              subst hyx
-              exact ⟨i, by omega, hi, hid⟩
-            · exact absurd hyx (by simp)
-          | _ => exact absurd hyx (by simp)
+          exact ⟨i, by omega, inp, hi, hx⟩
         · rw [if_neg hw] at hx
           exact absurd hx (by simp)
 

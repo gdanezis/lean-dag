@@ -45,7 +45,7 @@ theorem accepted_mem_base {R m t : ℕ} (hs : Synchronised U R)
     (hv : v ∈ (Correct : Finset Validator)) (hy : y ∈ viewUpto D v m)
     (hyr : (U.block y).round = G) (hcar : Populated U (m + 1))
     (hpop : Populated U t) (hR : R ≤ m + 1) (hmt : m + 2 ≤ t) :
-    y ∈ Base U t G := by
+    y ∈ Base U F.f t G := by
   obtain ⟨b, hb, hbc, hbr⟩ := hcar v hv
   have hyb : y ∈ history U b := viewUpto_subset_history hv hb hbc hbr hy
   have hyids : y ∈ U.ids := history_subset_ids hb hyb
@@ -71,9 +71,9 @@ is delivered and accepted post-`R`, and an accepted block's cone is
 retained. -/
 theorem base_subset_retained {R t : ℕ} (hED : EventuallyDelivers D R)
     (hw : w ∈ (Correct : Finset Validator)) (hR : R ≤ t) :
-    Base U t G ⊆ (viewUpto D w t).filter fun i => G ≤ (U.block i).round := by
+    Base U F.f t G ⊆ (viewUpto D w t).filter fun i => G ≤ (U.block i).round := by
   intro y hy
-  obtain ⟨a, ha, har, hac, hya⟩ := exists_correct_attester_of_mem_base hy
+  obtain ⟨a, ha, har, hac, hya⟩ := exists_honest_attester_of_mem_base card_compl_correct_le hy
   have hacc : a ∈ D.accepted w t :=
     D.accepts_correct w hw t a (hED t hR w hw a ha har hac) hac
   obtain ⟨⟨-, hyr⟩, -⟩ := mem_base.mp hy
@@ -85,7 +85,7 @@ theorem card_base_le {κ Λ R t : ℕ} (hbyz : ByzBudget D κ)
     (hra : RefsAccepted D) (hED : EventuallyDelivers D R)
     (hw : w ∈ (Correct : Finset Validator)) (hR : R ≤ t) (hG : G ≤ t)
     (hΛ : t ≤ G + Λ) :
-    (Base U t G).card ≤
+    (Base U F.f t G).card ≤
       (Correct : Finset Validator).card * (Λ + 1) +
         ((Correct : Finset Validator).card * F.f +
           Λ * ((Correct : Finset Validator).card * (F.f * κ))) :=
@@ -98,7 +98,7 @@ theorem card_base_le {κ Λ R t : ℕ} (hbyz : ByzBudget D κ)
 correct peer's window strictly above the cut, up to frontier `m`. The
 round-`G` layer comes **only** from the base — that is the rebasing. -/
 def joinIds (D : Delivery U) (w : Validator) (m t G : ℕ) : Finset BlockId :=
-  Base U t G ∪ ((viewUpto D w m).filter fun i => G < (U.block i).round)
+  Base U F.f t G ∪ ((viewUpto D w m).filter fun i => G < (U.block i).round)
 
 /-- **G6b.** The joiner's entire fetch is inside one correct peer's
 retained store, hence bounded by the G6 constant: sync cost, not just

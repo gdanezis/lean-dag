@@ -5281,6 +5281,20 @@ reference is the self-parent. The core's `SkipMsg.fillBlock_valid` is
 deleted; `skipFill`, the Mysticeti cell's sustaining fill and the hybrid's fill
 call the general lemma at `ValidWrt.iff_validAt`. No statement changes.
 
+### 11.54 The attested base at any block record
+
+G10's base and its soundness were stated on the core's universe, with
+`F.f` and `Correct`. `GC/AttestedBase.lean` now defines `attesters` and
+`Base U f t G` at any block record, and proves soundness wherever at most
+`f` validators lie outside the honest set
+(`exists_honest_attester_of_mem_base`), from the counting fact
+`exists_mem_of_card` in `Common/Validators.lean`. The core's
+`exists_correct_attester_of_mem_base` is deleted; its callers use the
+lifted lemma at `card_compl_correct_le`, and `exists_correct_of_card` is
+`exists_mem_of_card` there. Completeness (`correct_mem_base`,
+`accepted_mem_base`) stays on the core's universe, at `Base U F.f t G`,
+until the delivery model is lifted (`docs/validator.md` §8).
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

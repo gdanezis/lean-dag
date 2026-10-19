@@ -237,7 +237,8 @@ theorem converges : Converges := by
     simp only [Prod.mk.injEq] at hqe
     obtain ⟨a', ha', b, hab, hca⟩ := requested_before (cfg := cfg) (tr := tr) v (A m) q hq
     rw [hqe.2] at hab hca
-    have hbk : (x m, b) ∈ knownIn cfg H tr := Or.inl ⟨a', v, hab, hv, hca.1⟩
+    have hbk : (x m, b) ∈ knownIn cfg H tr :=
+      Or.inl ⟨a', v, .deliver (x m) b, hab, hv, by simp [delivered, ← hca.1]⟩
     have hbe : b = raw (x m) := content_eq hinj hbk hxmk rfl
     rw [hbe] at hab hca
     have hk := admit_after hinj hbase hv hab hca (hfits _ (hxH m (by omega)).1)
@@ -249,10 +250,9 @@ theorem converges : Converges := by
   -- so it asked for it at the last arrival, and `u` got the request
   set miss := missing s₁ (x m) (raw (x m))
   have hwm : w ∈ miss := List.mem_filter.mpr ⟨hw, by simpa using hnreq⟩
-  have hout : outputsAt cfg tr (A m) = (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++
-      (Node.settle (cfg.at v) { s₁ with
-        requested := s₁.requested ++ miss.map fun q => (q.1, x m, q.2) }).2 := by
-    rw [outputsAt_eq htm, step_deliver hcm]
+  obtain ⟨rest, hout⟩ : ∃ rest, outputsAt cfg tr (A m) =
+      (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ rest :=
+    ⟨_, by rw [outputsAt_eq htm, step_deliver hcm, List.append_assoc]⟩
   have hne : miss.isEmpty = false := by
     rw [List.isEmpty_eq_false_iff]; exact List.ne_nil_of_mem hwm
   obtain ⟨k, hkm, htk⟩ := hdel (A m) v _ htm hv (u, .fetchRequest v (miss.map Prod.fst))
@@ -262,8 +262,9 @@ theorem converges : Converges := by
   have h0 : (0 : ℕ) < len := hlen
   obtain ⟨ht0, -⟩ := hentry ⟨0, h0⟩
   simp only [hx0] at ht0
-  obtain ⟨i', hi'A, hi'u, hi'b⟩ := htime (A ⟨0, h0⟩) v e.1 (raw e.1) ht0 hv
-    (by rw [hraw₀, hecr]; exact huH) (id_of_knownIn (hrawk _ heH))
+  have hid₀ : e.1 = (cfg.at v).idOf (raw e.1) := id_of_knownIn (hrawk _ heH)
+  obtain ⟨i', hi'A, hi'u, hi'b⟩ := htime (A ⟨0, h0⟩) v _ ht0 hv (e.1, raw e.1)
+    (by simp [delivered, ← hid₀]) (by rw [hraw₀, hecr]; exact huH)
   rw [hraw₀, hecr] at hi'u
   obtain ⟨inp', hi'⟩ := event_of_map hi'u
   have hst' := (persist_stored hbase huH hi' (by rw [hraw₀] at hi'b; exact hi'b)).1
@@ -288,9 +289,12 @@ theorem converges : Converges := by
   -- `v` acts on it, so it ends pending or stored there, which it does not
   have hcr : (raw (x len)).creator ≠ v := by
     intro hc
-    rcases hrawk _ (hxH len le_rfl).1 with ⟨j, w', hj, hw', hid⟩ | ⟨j, w', hj, hw', hb⟩ |
+    rcases hrawk _ (hxH len le_rfl).1 with ⟨j, w', inp, hj₀, hw', hdl⟩ | ⟨j, w', hj, hw', hb⟩ |
         ⟨j, w', hw', hd⟩
-    · obtain ⟨i'', -, hi''v, hi''b⟩ := htime j w' _ _ hj hw' (by rw [hc]; exact hv) hid
+    · obtain ⟨hj, hid⟩ := deliver_of_delivered hnj hw' hj₀ hdl
+      have hid' : x len = (cfg.at w').idOf (raw (x len)) := hid
+      obtain ⟨i'', -, hi''v, hi''b⟩ := htime j w' _ hj hw' (x len, raw (x len))
+        (by simp [delivered, ← hid']) (by rw [hc]; exact hv)
       rw [hc] at hi''v
       obtain ⟨inp'', hi''⟩ := event_of_map hi''v
       have := (persist_stored hbase hv hi'' hi''b).1

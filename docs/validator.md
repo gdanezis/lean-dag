@@ -3,7 +3,7 @@
 This document plans a Lean program that acts as an honest validator of
 the partially synchronous rows of the scheme (`docs/scheme.md`), and the
 proofs that it conforms to the scheme. The program lives in
-`LeanDag/Node`, namespace LeanDag.Node; steps 0 to 6 are built, and
+`LeanDag/Node`, namespace LeanDag.Node; steps 0 to 7 are built, and
 part of step 10 (§7). Names
 in backticks are existing declarations; names in italics are planned.
 
@@ -143,7 +143,7 @@ validator waits the timeout every round, is not used.
 The new block references one accepted block per round-`r` author,
 including the validator's own previous block, choosing the least
 identifier between twins. The program builds rounds in sequence and
-skips one only by jumping (§3.5). It persists the block and the accepted blocks of the
+skips them only by jumping (§3.5) or by bootstrapping (§3.6). It persists the block and the accepted blocks of the
 window it references, then broadcasts it, then sets the timer for round
 `r + 1`.
 
@@ -200,15 +200,31 @@ this on universes (`JumpMsg`, SS10 of `SafeSkip/Jump.lean`).
 
 A validator whose last own block lies below its peers' horizons cannot
 rejoin from its window, because the blocks its window references are
-pruned. It requests the base from its peers and keeps a round-`G` block
-once `f + 1` distinct presenters offer it, a presenter's attestation
-being its own offer (G10, `garbage.md` §7). Every block kept then has a
-non-Byzantine presenter, and no block of an honest author is filtered
-out. It adds the offered window above the kept base, through the store's
-usual stages, and resumes at the horizon of the assembled view, by a jump
-message if its own line has a gap. Peers serve their round-`G` blocks
-and their window on request; the obligation is bounded by the window's
-size (G7).
+pruned. A restarted node asks every peer for its base. It asks again
+whenever a delivered block lies `Λ + 2` rounds above the one it last
+asked on. A peer answers with its horizon and its store
+(`State.window`).
+
+The node keeps each base offered, one per peer (`State.offers`). A block
+is attested at round `G` when `f + 1` distinct peers offered it at that
+round, a presenter's attestation being its own offer (G10, `garbage.md`
+§7; `baseAt`). The node bootstraps at the highest offered horizon above
+its top that has an attested block (`bootRound`, `tryBoot`):
+
+* it prunes its store to `G` and keeps the attested blocks there;
+* it restarts its own chain with a reference-free block at `G`, which it
+  persists and broadcasts, as the core's re-genesis does
+  (`Integration/ReGenesis.lean`);
+* it takes the offered blocks above `G`, and its own pending blocks at or
+  above it, as pending;
+* it moves its next slot up to the first at or above `G`.
+
+The node stays recovering, so it jumps from its new chain once it holds
+a line above it (§3.5). A peer at a lower horizon rejects the
+reference-free block until its own horizon reaches `G`, as the core's
+re-genesis requires. The node decides no slot below `G`, so its
+decisions have a gap and need not be a prefix of another node's. What
+holds is that two honest nodes that decide a slot decide it alike (V9).
 
 ### 3.7 Fetching missing blocks
 
@@ -273,16 +289,16 @@ Bounding the pending blocks belongs to rate limiting (step 9).
 
 | | Claim | Route |
 |---|---|---|
-| V1 | Every block of the program's own, those it persists, filled blocks included, satisfies `ValidAt q C`; they lie one per round, in consecutive rounds, across restarts and jumps; it references only what it knew; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved, restarts and jumps included) |
+| V1 | Every block of the program's own, those it persists, filled blocks included, with references satisfies `ValidAt q C`; one without is a genesis or a bootstrap's; they lie at strictly increasing rounds, across restarts, jumps and bootstraps; it references only what it knew; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved, restarts, jumps and bootstraps included) |
 | V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
-| V3 | In a run of honest nodes over any inputs, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every store along every run is a cut of it; under authentication of blocks and of jump messages, an injective hash and `Params.Tolerates`, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise and whenever they jump. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
-| V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised, no honest node restarting and none given a jump message, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
+| V3 | In a run of honest nodes over any inputs, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every store along every run is a cut of it; under authentication of blocks and of jump messages, an injective hash and `Params.Tolerates`, with no honest node given a base offer, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise and whenever they jump. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
+| V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised, no honest node restarting and none given a jump message or a base offer, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
 | V4 | The decisions a store pruned at `G` gives from a slot at or above `G` equal those of every view holding its blocks from `G` up, read at `G`: the loop reads nothing below the slot's round. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq`, `Node.ViewsAbove.of_store` (proved) |
 | V5 | At every state a run reaches, resuming from what the node persisted gives the state its restart recovers: the same blocks, read alike, at the same horizon, the same next slot, top and own block, its top round's timer fired, and nothing pending or asked for. | `Node.Restart.Resumes` (proved): `Node.resume_persisted`, `Node.State.recover` |
 | V6 | Under authenticated jump messages and an injective hash, every block an honest node derived from a jump message in an honest node's name is one of that node's own; the self-referencing filled block is valid at the program's validity at any quorum (L0). | `Node.Jump.Derives` (proved): `Node.derived_persisted`, `Node.jumpFills_congr`; `BlockRecord.selfBlock_valid` (proved) |
 | V7 | Rate limiting does not make a validator decide wrongly. | `decided_mono_of_banded` |
 | V8 | The efficient store and decider compute the reference program's values. | one equality per function |
-| V9 | A bootstrapped validator's view is a view of the record cut at its horizon, so its decisions agree with every other validator's at the slots both hold; the fetch is bounded. | lifted G10–G12 (§8), V4 |
+| V9 | Over a trace with timely authentication of blocks, jump messages and base offers, an injective hash and `Params.Tolerates`, every honest store is a cut of the run's record, bootstraps included, so two honest nodes that decide a slot decide it alike. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.IsCut.boot`, `Node.IsCut.step`, `Node.verdict_decideStep`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
 | V10 | Under the novelty budget, every honest block is eventually accepted, and an honest validator's store, with garbage collection, has a size independent of the runtime. | lifted C3 and B4 (§8), `card_retained_le` |
 | V11 | A timed run past GST, with timeouts of at least `2Δ + proc`, gives a `SchemeReactive` and the delivery obligation `DeliversOn`; the mechanisms compose (`Stack.safe_and_live`), and every slot commits. | field by field from the run, V10 |
 
@@ -308,6 +324,20 @@ leads at a filled round is not proved there. Authentication covers a
 filled block that a peer forwards (`Authentic` reads the author's own
 blocks, not its broadcasts), as a signed later block of its author
 would, through the hash.
+
+**Bootstraps need time.** A run without time cannot order a bootstrap
+after the offers it rests on. Two honest nodes could each bootstrap on
+the other's offer, made after its own bootstrap, and nothing would ground
+the base. V3 is therefore stated for runs in which no honest node is
+given a base offer, and V9 over a trace. There, by induction over the
+trace, every honest store is a cut of the run's record. A node
+bootstraps only at a round with a block that `f + 1` distinct peers
+offered, so one of them is honest. That peer's offer was its store when
+it served it, earlier in the trace, and that store was a cut of the
+record then. So the record reaches the round, which is what keeps the
+node's new base, and its reference-free block there, blocks of the
+record. Each decision is then a verdict on a view of the record
+(`Loop.sound`), and two verdicts on one slot agree.
 
 **The run's record under garbage collection.** A node keeps a block at
 its horizon without checking its references (§3.4), so a Byzantine block
@@ -411,8 +441,10 @@ its peers' horizons never holds the line, and rejoins by bootstrap
    at given times, and restarts after a downtime; and equivocators, each two copies of the program
    with one identity and different payloads, each copy sending to half
    the nodes. It reports the rounds reached, the slots decided and
-   skipped, whether the honest decisions are prefix-comparable, and
-   whether every honest block is valid under the blocks broadcast. One
+   skipped, whether two honest nodes that decide a slot decide it alike,
+   whether their decisions are prefix-comparable, whether every honest
+   block with references is valid under the blocks the nodes made, and
+   the jump messages and bootstraps the honest nodes made. One
    scenario per row runs in the build (`LeanDagTest/Node/Sim.lean`).
    Compiled, four nodes over 2,000 ticks (874 rounds) run in half a
    second. `lake exe node` runs one node over JSON lines.
@@ -440,6 +472,18 @@ its peers' horizons never holds the line, and rejoins by bootstrap
    The gain is the network's, not only the restarted node's. A node that
    lags leads slots it has not built, and each costs the others a
    timeout. At `Λ = 2` nothing changes: the node never holds the line.
+
+   With bootstrap the restarted node rejoins at `Λ = 2` as well. Over
+   five seeds each, at `Λ = 2` and `Λ = 6` and after 6, 20 and 50 ticks
+   down, it ends within a round of its peers in all 30 runs. Agreement
+   and validity hold in every run. Asking for the bases once, at the
+   restart, was not enough: in 5 of 15 runs at `Λ = 2` the peers'
+   horizons were not yet above the node's top when they answered, and by
+   the time fetching had failed the node had nothing to ask on. It now
+   asks again as delivered blocks rise, which gave 15 of 15. A
+   bootstrapped node's decisions skip the slots below its new horizon,
+   so they are not a prefix of its peers'; the simulator therefore checks
+   agreement slot by slot.
 4. **Optionally**, replaying records through the Rust decider of the
    Mysticeti codebase, where the scheme's table comes from.
 
@@ -454,8 +498,8 @@ its peers' horizons never holds the line, and rejoins by bootstrap
 | 4 | The run model; V3 and convergence of honest blocks and their histories under fetching (§3.7), both without garbage collection (built) |
 | 5 | Garbage collection: V4, and V3 with horizons rising; persistence and restart: V5 (built) |
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 (built) |
-| 7 | Lift the bootstrap results to block records (§8, L1); bootstrap in the program: V9 |
-| 8 | Lift the rate-limiting results to block records (§8, L2) |
+| 7 | Bootstrap in the program: V9 over a trace; G10's soundness lifted to block records (§8, L1) (built) |
+| 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget |
 | 9 | Rate limiting in the program: V7, V10 |
 | 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests |
 | 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST; first, the decisions of §9.1 |
@@ -489,7 +533,11 @@ was, with the core's statement kept as the corollary at `q = n − f`.
   (G6b), the joiner's view (G12) and the relay obligation (G7), from
   `GC/AttestedBase.lean` and `GC/Bootstrap.lean`, with the depth rule
   (`viewUpto_subset_viewUpto_succ`, `pruned_subset_peer_store`) they rest
-  on.
+  on. The attested base and its soundness are lifted
+  (`exists_honest_attester_of_mem_base`, any record with at most `f`
+  validators outside its honest set). The rest reads the delivery model
+  and the novelty budget, and is lifted with L2 in step 8. The program's
+  safety (V9) needs none of it; it rests on the run's record.
 * **L2, rate limiting**: the delivery model of `Network/Delivery.lean`
   (`Delivery`, `EventuallyDelivers`), the novelty budget (`UniformBudget`,
   `ByzBudget`), the liveness half (C3) and linear storage (B4) of

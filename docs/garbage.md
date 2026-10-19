@@ -38,7 +38,7 @@ protocol rule *reference only what you accepted*. New objects here:
 - `Λ` — the **lag**: how far `G` trails the current round;
 - `Slots.chop S G d` — the induced slot schedule, re-indexed from a
   base slot `d` with `G ≤ slotRound d`;
-- `Base U t G` — the **attested base**: the round-`G` blocks lying in
+- `Base U F.f t G` — the **attested base**: the round-`G` blocks lying in
   the cones of round-`t` blocks by `≥ f+1` distinct authors;
 - `joinIds` — what a joiner fetches: the base plus a correct peer's
   window strictly above the cut.
@@ -62,7 +62,7 @@ protocol rule *reference only what you accepted*. New objects here:
   peer's retained store; a correct author serves at most its own
   retained store plus its block. GC bounds sync cost, not just storage.
 - **Bootstrap needs sampling, not consensus** (`Base` sandwiched by
-  `exists_correct_attester_of_mem_base` / `correct_mem_base` /
+  `exists_honest_attester_of_mem_base` / `correct_mem_base` /
   `accepted_mem_base`; `joinView`; `bootstrap_agree`). A joiner adopts
   a genesis layer filtered per block by `f+1` distinct attesters —
   attestations *are* blocks, no signatures — and its decisions equal
@@ -467,7 +467,7 @@ is mitigated at the cut itself.
 *is its block* — its cone is its objective, checkable (D13), unforgeable
 statement of what the layer contains. The certificate is DAG-internal
 and decidable:
-`Base U t G := { y at round G : y lies in the cones of round-t blocks by
+`Base U F.f t G := { y at round G : y lies in the cones of round-t blocks by
 ≥ f+1 distinct authors }`, with the guarantee side supplied by `n−f`
 authors *having* round-`t` blocks (Populated) rather than by collecting
 messages. Equivocating attesters gain nothing — the filter counts distinct
@@ -479,11 +479,11 @@ that G8 makes inert.
 The bootstrap results:
 
 - **G10 (the sandwich)** — `AttestedBase.lean`. Post-`R`,
-  `C ⊆ Base U t G ⊆` the round-`G` layer of the union of correct
+  `C ⊆ Base U F.f t G ⊆` the round-`G` layer of the union of correct
   cones — completeness from the backbone (`correct_mem_base`),
   soundness from `f+1`-implies-a-correct-attester
-  (`exists_correct_attester_of_mem_base`). Witness:
-  `Base Utwin 1 0 = {1,2,3}`, the shared correct layer exactly, both
+  (`exists_honest_attester_of_mem_base`). Witness:
+  `Base Utwin F.f 1 0 = {1,2,3}`, the shared correct layer exactly, both
   equivocation halves filtered.
 - **G11 (window completeness)** — `accepted_mem_base`
   (`Bootstrap.lean`). *Every* round-`G` block a correct validator

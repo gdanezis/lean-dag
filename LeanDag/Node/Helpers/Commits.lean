@@ -500,7 +500,8 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     {cs : List (ℕ × Option BlockId)} (i : Input Validator BlockId Payload)
     (h : CommitInv cfg U s cs) (hc : IsCut U s.store) (hh : Held cfg s)
     (hp : ∀ e ∈ s.pending, e ∈ K) (hd : ∀ e ∈ delivered cfg [i], e ∈ K)
-    (hr : ∀ e ∈ received cfg s i, e ∈ K) (hb : ∀ e ∈ persists (Node.step cfg s i).2, e ∈ K) :
+    (hr : ∀ e ∈ received cfg s i, e ∈ K) (hb : ∀ e ∈ persists (Node.step cfg s i).2, e ∈ K)
+    (hno : ∀ p G bs, i ≠ .baseOffer p G bs) :
     CommitInv cfg U (Node.step cfg s i).1 (cs ++ commitsOf (Node.step cfg s i).2) ∧
       IsCut U (Node.step cfg s i).1.store := by
   -- a step that settles a state `s₀`, after outputs without decisions
@@ -562,11 +563,12 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         · exact hp e he
       have hc₁ : IsCut U s₁.store :=
         IsCut.flush hg _ _ hc (hc.spans hh) hpend
-      refine hset { s₁ with requested := s₁.requested ++ miss.map fun x => (x.1, id, x.2) }
-        (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)])
+      let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
+      refine hset { s₂ with asked := askedAfter (cfg := cfg) s b }
+        ((if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b)
         (h.keeps rfl (hg₁.keeps hb₁) hc) hc₁ (hh.grow hg₁ hb₁ rfl rfl le_rfl)
-        (fun e he => hpend e (flush_pending_sub _ _ _ e he)) (by split <;> rfl)
-        (step_deliver hA)
+        (fun e he => hpend e (flush_pending_sub _ _ _ e he))
+        (by rw [commitsOf_append]; unfold askOut; split <;> split <;> rfl) (step_deliver hA)
     · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst) := hA
       exact hsame (by simp only [Node.step, if_neg h'])
@@ -599,11 +601,14 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         (fun e he => hpend e (flush_pending_sub _ _ _ e he)) rfl
         (by rw [step_jump, if_neg hF]; rfl)
   | restart =>
-    exact hset s.recover [] (h.keeps rfl (Keeps.refl _) hc) hc
+    exact hset s.recover [.requestBase] (h.keeps rfl (Keeps.refl _) hc) hc
       (hh.grow (Grows.refl _) rfl rfl rfl le_rfl) (fun e he => by simp [State.recover] at he) rfl
       (by simp only [Node.step]; rfl)
-  | baseOffer => exact hsame rfl
-  | baseRequest => exact hsame rfl
+  | baseOffer p G bs => exact absurd rfl (hno p G bs)
+  | baseRequest peer =>
+    rw [show Node.step cfg s (.baseRequest peer) =
+      (s, [.serveBase peer s.store.base s.store.window]) from rfl]
+    exact ⟨by simpa [commitsOf] using h, hc⟩
 
 /-- **A run keeps the invariant**, at a record grounding what the node knew. -/
 theorem CommitInv.run (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
@@ -612,26 +617,29 @@ theorem CommitInv.run (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       {cs : List (ℕ × Option BlockId)}, CommitInv cfg U s cs → IsCut U s.store → Held cfg s →
       (∀ e ∈ s.pending, e ∈ K) → (∀ e ∈ delivered cfg is, e ∈ K) →
       (∀ e ∈ derived cfg s is, e ∈ K) → (∀ e ∈ persists (Node.run cfg s is).2, e ∈ K) →
+      (∀ i ∈ is, ∀ p G bs, i ≠ .baseOffer p G bs) →
       CommitInv cfg U (Node.run cfg s is).1 (cs ++ commitsOf (Node.run cfg s is).2)
-  | [], s, cs, h, _, _, _, _, _, _ => by simpa [Node.run, commitsOf] using h
-  | i :: is, s, cs, h, hc, hh, hp, hd, hr, hb => by
+  | [], s, cs, h, _, _, _, _, _, _, _ => by simpa [Node.run, commitsOf] using h
+  | i :: is, s, cs, h, hc, hh, hp, hd, hr, hb, hno => by
     simp only [Node.run] at hb ⊢
     rw [persists_append] at hb
     rw [delivered_cons] at hd
     simp only [derived] at hr
     obtain ⟨h₁, hc₁⟩ := h.step hg hσ ht i hc hh hp (fun e he => hd e (List.mem_append_left _ he))
-      (fun e he => hr e (List.mem_append_left _ he)) fun e he => hb e (List.mem_append_left _ he)
+      (fun e he => hr e (List.mem_append_left _ he)) (fun e he => hb e (List.mem_append_left _ he))
+      (hno i List.mem_cons_self)
     have hp₁ : ∀ e ∈ (Node.step cfg s i).1.pending, e ∈ K := fun e he => by
-      rcases (step_sub s i).1 e he with he | ⟨hi, hA⟩ | he
+      rcases (step_sub s i).1 e he with he | ⟨hi, hA⟩ | he | ⟨p, G, bs, hi, -⟩
       · exact hp e he
       · refine hd e (List.mem_append_left _ ?_)
         rw [hi]
-        simp only [delivered, List.filterMap_cons, List.filterMap_nil, if_pos hA.1]
+        simp only [delivered, List.flatMap_cons, List.flatMap_nil, List.append_nil, if_pos hA.1]
         exact List.mem_singleton.mpr rfl
       · exact hr e (List.mem_append_left _ he)
+      · exact absurd hi (hno i List.mem_cons_self p G bs)
     have := CommitInv.run hg hσ ht is h₁ hc₁ (hh.step i) hp₁
       (fun e he => hd e (List.mem_append_right _ he)) (fun e he => hr e (List.mem_append_right _ he))
-      fun e he => hb e (List.mem_append_right _ he)
+      (fun e he => hb e (List.mem_append_right _ he)) fun x hx => hno x (List.mem_cons_of_mem _ hx)
     rw [commitsOf_append, ← List.append_assoc]
     exact this
 
