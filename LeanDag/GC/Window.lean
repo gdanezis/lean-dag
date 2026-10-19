@@ -193,7 +193,7 @@ theorem card_retained_le {κ Λ t : ℕ} (hbyz : ByzBudget D κ)
       (Correct : Finset Validator).card * (Λ + 1) +
         ((Correct : Finset Validator).card * F.f +
           Λ * ((Correct : Finset Validator).card * (F.f * κ))) := by
-  have h := card_viewUpto_le (D := chopD D G)
+  have h := card_viewUpto_le (D := chopD D G) card_compl_correct_le
     (byzBudget_chopD hbyz) (refsAccepted_chopD hra) hv (t - G)
   rw [viewUpto_chopD, show G + (t - G) = t from by omega] at h
   refine le_trans h (Nat.add_le_add ?_ (Nat.add_le_add_left ?_ _))

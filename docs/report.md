@@ -1665,7 +1665,7 @@ exposure is a fact about the cone a validator already holds.
 
 ```lean
 def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
     (novelty U (viewUpto D v n) b).card ≤ τ
 ```
 
@@ -1678,7 +1678,7 @@ needs, and `uniform_of_byzBudget` (B6) shows the enforceable form implies it.
 
 ```lean
 def RefsAccepted (D : Delivery U) : Prop :=
-  ∀ w ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
+  ∀ w ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = w → (U.block b).round = n + 1 →
     (U.block b).refs ⊆ D.accepted w n
 ```
@@ -3164,6 +3164,12 @@ required, and is orthogonal to it.
 
 ### 8.4 The novelty budget
 
+The budget, its liveness half and linear storage hold on any block
+record, "correct" read as its honest set: the Byzantine count is a bound
+`f` on the validators outside it (`hf : honestᶜ.card ≤ f`), and the
+receivers of the delivery assumption a set `T` inside it. At the core,
+the honest set is `Correct` and `f` its bound.
+
 The budget is a rule about acceptance, and deliberately about nothing else.
 Two formulations are related. The analysis-side form guards on the author
 being Byzantine; the mechanism-side form is the rule a validator can
@@ -3172,16 +3178,16 @@ tell who is Byzantine:
 
 ```lean
 def ByzBudget (D : Delivery U) (κ : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
-    (U.block b).creator ∉ (Correct : Finset Validator) →
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
+    (U.block b).creator ∉ honest →
     (novelty U (viewUpto D v n) b).card ≤ κ
 
-def UniformBudget (D : Delivery U) (T : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
-    (novelty U (viewUpto D v n) b).card ≤ T
+def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
+    (novelty U (viewUpto D v n) b).card ≤ τ
 
 def RefsAccepted (D : Delivery U) : Prop :=
-  ∀ w ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
+  ∀ w ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = w → (U.block b).round = n + 1 →
     (U.block b).refs ⊆ D.accepted w n
 ```
@@ -3205,7 +3211,7 @@ forward:
 
 **B7.**
 ```lean
-theorem viewUpto_subset_history (hw : w ∈ Correct) (hb : b ∈ U.ids)
+theorem viewUpto_subset_history [P.SelfParent] (hw : w ∈ honest) (hb : b ∈ U.ids)
     (hbc : (U.block b).creator = w) (hbr : (U.block b).round = n + 1) :
     viewUpto D w n ⊆ history U b
 ```
@@ -3230,8 +3236,8 @@ correct validator retains:
 
 ```lean
 def byzPool (D : Delivery U) (n : ℕ) : Finset BlockId :=
-  (Correct : Finset Validator).biUnion fun w =>
-    (viewUpto D w n).filter fun i => (U.block i).creator ∉ Correct
+  honest.biUnion fun w =>
+    (viewUpto D w n).filter fun i => (U.block i).creator ∉ honest
 ```
 
 A Byzantine block enters the pool only as a direct budgeted acceptance — if
@@ -3240,12 +3246,11 @@ author's *earlier* store — so the pool grows by at most `|Correct|·f·κ` per
 round (`card_byzPool_le`), and the store bound follows:
 
 ```lean
-theorem card_viewUpto_le (hbyz : ByzBudget D κ) (hra : RefsAccepted D)
-    (hv : v ∈ Correct) (n : ℕ) :
+theorem card_viewUpto_le (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hv : v ∈ honest) (n : ℕ) :
     (viewUpto D v n).card ≤
-      (Correct : Finset Validator).card * (n + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          n * ((Correct : Finset Validator).card * (F.f * κ)))
+      honest.card * (n + 1) +
+        (honest.card * f + n * (honest.card * (f * κ)))
 ```
 
 — correct production, a Byzantine genesis allowance, and a Byzantine rate.
@@ -3256,15 +3261,14 @@ hypothesis rather than a premise of the DoS argument: any of the routes of
 §§6.7–6.9 discharges it (§4.3):
 
 ```lean
-theorem dos_resistance {τ N : ℕ} {P : Finset Validator}
-    (hpop : ∀ r ≤ N, PopulatedOn U P r)
+theorem dos_resistance {τ N : ℕ} {Q : Finset Validator} (hf : honestᶜ.card ≤ f)
+    (hpop : ∀ r ≤ N, PopulatedOn U Q r)
     (hu : UniformBudget D τ) (hra : RefsAccepted D) :
-    (∀ r ≤ N, PopulatedOn U P r) ∧
-      ∀ v ∈ (Correct : Finset Validator), ∀ n,
+    (∀ r ≤ N, PopulatedOn U Q r) ∧
+      ∀ v ∈ honest, ∀ n,
         (viewUpto D v n).card ≤
-          (Correct : Finset Validator).card * (n + 1) +
-            ((Correct : Finset Validator).card * F.f +
-              n * ((Correct : Finset Validator).card * (F.f * τ)))
+          honest.card * (n + 1) +
+            (honest.card * f + n * (honest.card * (f * τ)))
 ```
 
 with a post-`R` incremental form (`dos_resistance'`) in which the slope is
@@ -14186,8 +14190,8 @@ def View.ofAccepted (h : Accepted U A n) : View Validator BlockId Payload U wher
 *def, `DoS.Novelty.lean`*
 
 ```lean
-def StepNovelty (U : BlockUniverse Validator BlockId Payload) (κ' : ℕ) : Prop :=
-  ∀ b ∈ U.ids, (U.block b).creator ∈ (Correct : Finset Validator) →
+def StepNovelty (U : BlockRecord Validator BlockId Payload P honest) (κ' : ℕ) : Prop :=
+  ∀ b ∈ U.ids, (U.block b).creator ∈ honest →
     ∀ p ∈ (U.block b).refs, (U.block p).creator = (U.block b).creator →
       (novelty U (history U p) b).card ≤ κ'
 ```
@@ -14212,8 +14216,8 @@ Everything `v` has retained by round `n`: the whole histories of everything it a
 
 ```lean
 def ByzBudget (D : Delivery U) (κ : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
-    (U.block b).creator ∉ (Correct : Finset Validator) →
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
+    (U.block b).creator ∉ honest →
     (novelty U (viewUpto D v n) b).card ≤ κ
 ```
 
@@ -14225,7 +14229,7 @@ The **analysis-side budget**: only the Byzantine clause. The weakest thing the t
 
 ```lean
 def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
-  ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ D.accepted v (n + 1),
+  ∀ v ∈ honest, ∀ n, ∀ b ∈ D.accepted v (n + 1),
     (novelty U (viewUpto D v n) b).card ≤ τ
 ```
 
@@ -14237,7 +14241,7 @@ def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
 
 ```lean
 def RefsAccepted (D : Delivery U) : Prop :=
-  ∀ w ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
+  ∀ w ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = w → (U.block b).round = n + 1 →
     (U.block b).refs ⊆ D.accepted w n
 ```
@@ -22077,8 +22081,8 @@ theorem mem_history_of_correct {R : ℕ} (hs : SynchronisedOn U (Correct : Finse
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem card_history_le_of_stepNovelty {κ' : ℕ} (hstep : StepNovelty U κ')
-    (hb : b ∈ U.ids) (hcorr : (U.block b).creator ∈ (Correct : Finset Validator)) :
+theorem card_history_le_of_stepNovelty [P.SelfParent] {κ' : ℕ} (hstep : StepNovelty U κ')
+    (hb : b ∈ U.ids) (hcorr : (U.block b).creator ∈ honest) :
     (history U b).card ≤ κ' * (U.block b).round + 1
 ```
 
@@ -22100,8 +22104,8 @@ Dropping a guard weakens nothing: the author-blind cap implies the Byzantine-sid
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem card_novelty_le_viewGap_add_one {R : ℕ} (hED : EventuallyDelivers D R)
-    (hn : R ≤ n) (hv : v ∈ (Correct : Finset Validator)) (hb : b ∈ U.ids)
+theorem card_novelty_le_viewGap_add_one {R : ℕ} (hED : EventuallyDeliversOn D T R)
+    (hT : T ⊆ honest) (hn : R ≤ n) (hv : v ∈ T) (hb : b ∈ U.ids)
     (hrefs : (U.block b).refs ⊆ D.accepted w n) :
     (novelty U (viewUpto D v n) b).card ≤ (viewGap D v w n).card + 1
 ```
@@ -22113,7 +22117,7 @@ theorem card_novelty_le_viewGap_add_one {R : ℕ} (hED : EventuallyDelivers D R)
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem viewUpto_subset_history (hw : w ∈ (Correct : Finset Validator))
+theorem viewUpto_subset_history [P.SelfParent] (hw : w ∈ honest)
     {b : BlockId} (hb : b ∈ U.ids) (hbc : (U.block b).creator = w)
     (hbr : (U.block b).round = n + 1) :
     viewUpto D w n ⊆ history U b
@@ -22126,12 +22130,11 @@ A correct validator's block carries everything its author ever accepted: `includ
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem card_viewGap_succ_le {κ R : ℕ} (hbyz : ByzBudget D κ)
-    (hED : EventuallyDelivers D R) (hn : R ≤ n + 1)
-    (hv : v ∈ (Correct : Finset Validator))
-    (hw : w ∈ (Correct : Finset Validator)) {c : BlockId} (hc : c ∈ U.ids)
+theorem card_viewGap_succ_le [P.SelfParent] {κ R : ℕ} (hf : honestᶜ.card ≤ f)
+    (hbyz : ByzBudget D κ) (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest)
+    (hn : R ≤ n + 1) (hv : v ∈ T) (hw : w ∈ honest) {c : BlockId} (hc : c ∈ U.ids)
     (hcc : (U.block c).creator = w) (hcr : (U.block c).round = n + 1) :
-    (viewGap D v w (n + 1)).card ≤ F.f * κ
+    (viewGap D v w (n + 1)).card ≤ f * κ
 ```
 
 **C3′ — the gap is constant, not a drift.** After `R`, the divergence between two correct validators' views is at most one round of Byzantine budget: `w`'s round-`(n+1)` block hands `v` all of `viewUpto w n` at once, the remainder being `w`'s budgeted Byzantine frontier.
@@ -22141,11 +22144,11 @@ theorem card_viewGap_succ_le {κ R : ℕ} (hbyz : ByzBudget D κ)
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem uniform_of_byzBudget {κ R : ℕ} (hbyz : ByzBudget D κ)
-    (hED : EventuallyDelivers D R) (hra : RefsAccepted D)
-    (hv : v ∈ (Correct : Finset Validator)) {n : ℕ} (hn : R ≤ n + 1)
+theorem uniform_of_byzBudget [P.SelfParent] {κ R : ℕ} (hf : honestᶜ.card ≤ f)
+    (hbyz : ByzBudget D κ) (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest)
+    (hra : RefsAccepted D) (hv : v ∈ T) {n : ℕ} (hn : R ≤ n + 1)
     (hb : b ∈ D.accepted v (n + 2)) :
-    (novelty U (viewUpto D v (n + 1)) b).card ≤ F.f * κ + 1
+    (novelty U (viewUpto D v (n + 1)) b).card ≤ f * κ + 1
 ```
 
 **The sandwich, converse direction.** After `R`, a `ByzBudget κ` schedule is uniformly budgeted at `f·κ + 1` with no creator guard: Byzantine acceptances by enforcement, correct ones by C3″.
@@ -22155,10 +22158,10 @@ theorem uniform_of_byzBudget {κ R : ℕ} (hbyz : ByzBudget D κ)
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem card_byzPool_le {κ : ℕ} (hbyz : ByzBudget D κ) (hra : RefsAccepted D)
-    (n : ℕ) :
-    (byzPool D n).card ≤ (Correct : Finset Validator).card * F.f +
-      n * ((Correct : Finset Validator).card * (F.f * κ))
+theorem card_byzPool_le {κ : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (n : ℕ) :
+    (byzPool D n).card ≤ honest.card * f +
+      n * (honest.card * (f * κ))
 ```
 
 The pool, telescoped: linear from round 0.
@@ -22168,12 +22171,12 @@ The pool, telescoped: linear from round 0.
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem card_viewUpto_le {κ : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hv : v ∈ (Correct : Finset Validator)) (n : ℕ) :
+theorem card_viewUpto_le {κ : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hv : v ∈ honest) (n : ℕ) :
     (viewUpto D v n).card ≤
-      (Correct : Finset Validator).card * (n + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          n * ((Correct : Finset Validator).card * (F.f * κ)))
+      honest.card * (n + 1) +
+        (honest.card * f +
+          n * (honest.card * (f * κ)))
 ```
 
 **B4 — unconditional linear storage.** Under nothing but the enforceable budget and the reference discipline — no synchrony, no `R`, no delivery guarantee — every correct validator's retained view is linear in the round.
@@ -22183,15 +22186,15 @@ theorem card_viewUpto_le {κ : ℕ} (hbyz : ByzBudget D κ)
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem dos_resistance {τ N : ℕ} {P : Finset Validator}
-    (hpop : ∀ r ≤ N, PopulatedOn U P r)
+theorem dos_resistance {τ N : ℕ} {Q : Finset Validator} (hf : honestᶜ.card ≤ f)
+    (hpop : ∀ r ≤ N, PopulatedOn U Q r)
     (hu : UniformBudget D τ) (hra : RefsAccepted D) :
-    (∀ r ≤ N, PopulatedOn U P r) ∧
-      ∀ v ∈ (Correct : Finset Validator), ∀ n,
+    (∀ r ≤ N, PopulatedOn U Q r) ∧
+      ∀ v ∈ honest, ∀ n,
         (viewUpto D v n).card ≤
-          (Correct : Finset Validator).card * (n + 1) +
-            ((Correct : Finset Validator).card * F.f +
-              n * ((Correct : Finset Validator).card * (F.f * τ)))
+          honest.card * (n + 1) +
+            (honest.card * f +
+              n * (honest.card * (f * τ)))
 ```
 
 **DoS resistance, from enforceable conditions only.** Liveness and linear storage from round 0 under full asynchrony.
@@ -22201,15 +22204,15 @@ theorem dos_resistance {τ N : ℕ} {P : Finset Validator}
 *theorem, `DoS.Novelty.lean`*
 
 ```lean
-theorem dos_resistance' {τ R N : ℕ} {P : Finset Validator}
-    (hpop : ∀ r ≤ N, PopulatedOn U P r)
-    (hED : EventuallyDelivers D R) (hu : UniformBudget D τ)
+theorem dos_resistance' [P.SelfParent] {τ R N : ℕ} {Q : Finset Validator}
+    (hf : honestᶜ.card ≤ f) (hpop : ∀ r ≤ N, PopulatedOn U Q r)
+    (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest) (hu : UniformBudget D τ)
     (hra : RefsAccepted D) :
-    (∀ r ≤ N, PopulatedOn U P r) ∧
-      ∀ v ∈ (Correct : Finset Validator), ∀ n, R + 1 ≤ n →
+    (∀ r ≤ N, PopulatedOn U Q r) ∧
+      ∀ v ∈ T, ∀ n, R + 1 ≤ n →
         (viewUpto D v n).card ≤ (viewUpto D v (R + 1)).card +
           (n - (R + 1)) *
-            ((Correct : Finset Validator).card * (F.f * τ + 1) + F.f * τ)
+            (honest.card * (f * τ + 1) + f * τ)
 ```
 
 The post-`R` incremental form of the headline: the same enforceable conduct, plus the network's `EventuallyDelivers`.

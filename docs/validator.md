@@ -674,7 +674,7 @@ was, with the core's statement kept as the corollary at `q = n − f`.
 Step 8 runs in sub-steps, each with the build green: **8.0** a
 `Validity.SelfParent` class, which the novelty telescope reads (built);
 **8.1** the delivery layer on any record, with `EventuallyDeliversOn D T
-R` (built); **8.2** the budgets, C3, B3′ and B4 of `DoS/Novelty.lean`;
+R` (built); **8.2** the budgets, C3, B3′ and B4 of `DoS/Novelty.lean` (built);
 **8.3** the transfer lemmas of `GC/Chop.lean`, G6 (`card_retained_le`)
 and the depth rule (G8, G9); **8.4** the backbone
 (`mem_history_of_correct`), G10 completeness, G11, G6b, G12 and G7;

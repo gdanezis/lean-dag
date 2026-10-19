@@ -127,6 +127,6 @@ theorem card_viewUpto_le_of_allExposed' {κ : ℕ} (hdos : DoSValid U)
         ((Correct : Finset Validator).card * F.f +
           (m + 1) * ((Correct : Finset Validator).card * (F.f * κ))) :=
   (card_viewUpto_le_of_allExposed hdos hra hexp hv hn hpop).trans
-    (Nat.add_le_add_left (card_byzPool_le hbyz hra (m + 1)) _)
+    (Nat.add_le_add_left (card_byzPool_le card_compl_correct_le hbyz hra (m + 1)) _)
 
 end LeanDag

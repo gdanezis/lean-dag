@@ -5330,6 +5330,13 @@ blocks of every honest author, so a crash-prone validator's blocks still
 reach the validators that stay up; the core's `EventuallyDelivers` is the
 case `T = Correct`, as `Populated` and `Synchronised` are.
 
+The novelty budgets (`ByzBudget`, `UniformBudget`), `RefsAccepted`, the
+liveness half of rate limiting (C3a, C3′, C3″), linear storage (B3′, B4)
+and the headline `dos_resistance` hold on any record: the Byzantine count
+is a bound `f` on the validators outside the honest set, the receivers a
+set `T` inside it, and the telescope and the retained store read the
+self-parent clause through the class. No quorum is read.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

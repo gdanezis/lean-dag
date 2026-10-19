@@ -260,8 +260,8 @@ example : viewGap Dtwin 1 3 1 = ∅ := by decide
 gap is empty and the bound is tight: `1 ≤ 0 + 1`. -/
 example : (novelty Utwin (viewUpto Dtwin 1 1) 8).card ≤
     (viewGap Dtwin 1 3 1).card + 1 :=
-  card_novelty_le_viewGap_add_one (v := 1) (w := 3) dtwin_delivers (le_refl 1)
-    (by decide) (by decide) (by decide)
+  card_novelty_le_viewGap_add_one (v := 1) (w := 3) dtwin_delivers (Finset.Subset.refl _)
+    (le_refl 1) (by decide) (by decide) (by decide)
 
 example : (novelty Utwin (viewUpto Dtwin 1 1) 8).card = 1 := by decide
 
@@ -307,7 +307,7 @@ example : (viewUpto Dtwin 3 2).card ≤
     (Correct : Finset (Fin 4)).card * (2 + 1) +
       ((Correct : Finset (Fin 4)).card * Faults.f (Fin 4) +
         2 * ((Correct : Finset (Fin 4)).card * (Faults.f (Fin 4) * 0))) :=
-  card_viewUpto_le dtwin_byz dtwin_refsAccepted (by decide) 2
+  card_viewUpto_le card_compl_correct_le dtwin_byz dtwin_refsAccepted (by decide) 2
 
 /-- **The unconditional capstone applied**: liveness and linear storage
 under full asynchrony — `EventuallyDelivers` appears nowhere. -/
@@ -329,7 +329,7 @@ example : (∀ r ≤ 1, Populated Utwin r) ∧
         (Correct : Finset (Fin 4)).card * (n + 1) +
           ((Correct : Finset (Fin 4)).card * Faults.f (Fin 4) +
             n * ((Correct : Finset (Fin 4)).card * (Faults.f (Fin 4) * 3))) :=
-  dos_resistance utwin_populated dtwin_uniform
+  dos_resistance card_compl_correct_le utwin_populated dtwin_uniform
     dtwin_refsAccepted
 
 /-! ## The composition — the pool freezes -/
