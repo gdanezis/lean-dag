@@ -69,8 +69,10 @@ structure Config where
   idOf : Block Validator BlockId Payload → BlockId
   /-- The horizon's lag `Λ`. -/
   lag : ℕ
-  /-- The novelty budget `τ`. -/
-  budget : ℕ
+  /-- **Rate limiting**, if the node rate-limits: the novelty budget `τ`
+  of a candidate slot and the window `W` above the node's top
+  (`docs/validator.md` §3.9). -/
+  limit : Option (ℕ × ℕ)
   /-- The payload of the node's round-`r` block. -/
   payload : ℕ → Payload
 
@@ -124,7 +126,8 @@ structure Cert where
 /-- **What a node persists** across a crash (`docs/validator.md` §5.1):
 its accepted blocks, from the horizon up, the horizon, the next
 undecided slot, its top round and its own block there, its decisions,
-the height it last proposed, and its certificate. -/
+the height it last proposed, its certificate, and the slots its blocks
+were charged to. -/
 structure Persisted where
   /-- The accepted blocks from the horizon up, the node's own among them. -/
   window : List (BlockId × Block Validator BlockId Payload)
@@ -142,6 +145,8 @@ structure Persisted where
   lastProposed : ℕ
   /-- The highest certificate the node holds. -/
   cert : Option (Cert Validator BlockId)
+  /-- The candidate slot each block was charged to. -/
+  owner : List (BlockId × (Validator × ℕ))
 
 /-- **What a node consumes.** -/
 inductive Input where

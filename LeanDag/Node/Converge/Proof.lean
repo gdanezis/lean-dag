@@ -20,8 +20,13 @@ namespace Node
 namespace Converge
 
 theorem converges : Converges := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hbase hnr hnj i u hu huH e he y hy v
-    hv
+  intro Validator BlockId Payload _ _ _ cfg H tr hlim hdel htime hinj hbase hnr hnj i u hu huH e he
+    y hy v hv
+  have hkept : ∀ (s : State Validator BlockId Payload) j b, kept (cfg.at v) s j b = true := by
+    intro s j b; simp [kept, Config.at, hlim]
+  have hask : ∀ (s : State Validator BlockId Payload) j (miss : List (BlockId × ℕ)),
+      askable (cfg.at v) s j miss = miss := by
+    intro s j miss; simp [askable, Config.at, hlim]
   obtain ⟨inp, hi⟩ := event_of_map hu
   set L := tr.length
   -- `h`'s history, as the trace reads it, held by `u` from event `i + 1` on
@@ -71,7 +76,7 @@ theorem converges : Converges := by
           have hpk := knownBefore_sub hv t ((inv_before (cfg := cfg) t v).pend p hp)
           have hpe : p = (j, raw j) := Prod.ext hpj (content_eq hinj hpk (hrawk j hj) hpj)
           exact hlast j hj t (Or.inl (hpe ▸ hp)) (by omega)
-        · exact absurd ⟨hid, hcr, hb0, hs, hp⟩ hc
+        · exact absurd ⟨hid, hcr, hb0, hs, hp, hkept _ _ _⟩ hc
   -- `h` reaches `v`, and ends pending there
   obtain ⟨o, ho, hoe⟩ := List.mem_filterMap.mp he
   have hob : o = .broadcast e.1 e.2 := by
@@ -248,8 +253,10 @@ theorem converges : Converges := by
     · exact (hxH m (by omega)).2 ((grows_before (cfg := cfg) (tr := tr) v (show A m ≤ L by omega)).2
         (by rw [base_before hbase hv, base_before hbase hv]) |>.1 h'')
   -- so it asked for it at the last arrival, and `u` got the request
-  set miss := missing s₁ (x m) (raw (x m))
-  have hwm : w ∈ miss := List.mem_filter.mpr ⟨hw, by simpa using hnreq⟩
+  set miss := askable (cfg.at v) s₁ (x m) (missing s₁ (x m) (raw (x m)))
+  have hwm : w ∈ miss := by
+    rw [show miss = missing s₁ (x m) (raw (x m)) from hask _ _ _]
+    exact List.mem_filter.mpr ⟨hw, by simpa using hnreq⟩
   obtain ⟨rest, hout⟩ : ∃ rest, outputsAt cfg tr (A m) =
       (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ rest :=
     ⟨_, by rw [outputsAt_eq htm, step_deliver hcm, List.append_assoc]⟩

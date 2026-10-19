@@ -79,7 +79,8 @@ theorem agrees : Agrees := by
             obtain ⟨t₀, G₂, c₂, hb₂, -, -, hroot, -, hst, -⟩ := tryBoot_some hbt
             have hbase : s₂.store.base = G₂ := by
               rw [hst, flush_base]
-              change ((baseAt (cfg.at w) _ G₂).foldl (fun st e => Node.accept (cfg.at w) st e.1 e.2)
+              change ((keptBase (cfg.at w) (baseAt (cfg.at w) _ G₂)).foldl
+                (fun st e => Node.accept (cfg.at w) st e.1 e.2)
                 ((withInput (stateBefore cfg tr t w) inp).store.prune G₂ hb₂.le)).base = G₂
               rw [foldl_base]; rfl
             rw [hbase]

@@ -55,7 +55,14 @@ input `i` in the state `s`: the new state and the outputs.
   own, takes the offered blocks above it as pending, and outputs the
   certified decisions it lacks.
 
-Rate limiting is not yet implemented: the budget is unused.
+* **Rate limiting** (`chargeTo`, `askable`, `docs/validator.md` §3.9),
+  when the configuration sets a budget `τ` and a window `W`: a delivered
+  block is kept only as a candidate, the first block of its author and
+  round within the window, or on the account of a candidate slot that
+  asked for it, while that slot is charged fewer than `τ` blocks; a
+  delivery asks for at most what its slot's budget leaves. A bootstrap
+  then keeps one attested block per author, and takes no offered block
+  above the new horizon.
 
 Definitions only.
 -/
@@ -104,6 +111,9 @@ structure State where
   cert : Option (Cert Validator BlockId)
   /-- The certificates offered since the restart. -/
   certs : List (Cert Validator BlockId)
+  /-- The candidate slot, an author and a round, each kept block was
+  charged to. -/
+  owner : List (BlockId × (Validator × ℕ))
 
 variable (cfg : Config Validator BlockId Payload)
 
@@ -112,7 +122,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
-  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false, [], 0, [], 0, [], none, []⟩
+  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false, [], 0, [], 0, [], none, [], []⟩
 
 /-- **Accept a block**: below the horizon it is dropped; at the horizon it
 is kept without its references, as the cut keeps it; above, it is kept if
@@ -231,6 +241,61 @@ def baseAt (s : State Validator BlockId Payload) (G : ℕ) :
   (s.offers.flatMap (·.2.2)).filter fun e =>
     decide (e.2.round = G ∧ e.1 = cfg.idOf e.2 ∧ cfg.f + 1 ≤ (presenters s G e.1).length)
 
+/-- The candidate slot a block fills: its author and its round. -/
+def slotOf (b : Block Validator BlockId Payload) : Validator × ℕ := (b.creator, b.round)
+
+/-- The blocks charged to a slot. -/
+def State.charge (s : State Validator BlockId Payload) (sl : Validator × ℕ) : ℕ :=
+  (s.owner.filter fun e => decide (e.2 = sl)).length
+
+/-- The slot a block was charged to, if any. -/
+def State.ownerOf (s : State Validator BlockId Payload) (j : BlockId) :
+    Option (Validator × ℕ) :=
+  (s.owner.find? fun e => decide (e.1 = j)).map Prod.snd
+
+/-- **The slot a delivery is charged to** (`docs/validator.md` §3.9), when
+the node rate-limits: the block's own, if it is a candidate — its slot
+unclaimed and its round at most `W` above the node's top — and otherwise
+the slot of a block on whose account it was asked for, if that slot is
+charged fewer than `τ` blocks. -/
+def chargeTo (τ W : ℕ) (s : State Validator BlockId Payload) (id : BlockId)
+    (b : Block Validator BlockId Payload) : Option (Validator × ℕ) :=
+  if b.round ≤ s.top.getD 0 + W ∧ s.charge (slotOf b) = 0 ∧ 0 < τ then some (slotOf b)
+  else ((s.requested.find? fun e => decide (e.1 = id)).bind fun e => s.ownerOf e.2.1).filter
+    fun sl => decide (s.charge sl < τ)
+
+/-- **Whether a delivery is kept**: always, without rate limiting; with
+it, if it is charged to a slot. -/
+def kept (s : State Validator BlockId Payload) (id : BlockId)
+    (b : Block Validator BlockId Payload) : Bool :=
+  match cfg.limit with
+  | none => true
+  | some (τ, W) => (chargeTo τ W s id b).isSome
+
+/-- The charge a kept delivery adds: its slot, with rate limiting. -/
+def charged (s : State Validator BlockId Payload) (id : BlockId)
+    (b : Block Validator BlockId Payload) : List (BlockId × (Validator × ℕ)) :=
+  match cfg.limit with
+  | none => []
+  | some (τ, W) => ((chargeTo τ W s id b).map fun sl => (id, sl)).toList
+
+/-- **What a delivery asks for**: what is missing, without rate limiting;
+with it, as much as the budget of its slot leaves. -/
+def askable (s : State Validator BlockId Payload) (id : BlockId) (miss : List (BlockId × ℕ)) :
+    List (BlockId × ℕ) :=
+  match cfg.limit, s.ownerOf id with
+  | some (τ, _), some sl => miss.take (τ - s.charge sl)
+  | some _, none => []
+  | none, _ => miss
+
+/-- The attested base a bootstrap keeps: all of it, without rate
+limiting; with it, one block per author. -/
+def keptBase (l : List (BlockId × Block Validator BlockId Payload)) :
+    List (BlockId × Block Validator BlockId Payload) :=
+  match cfg.limit with
+  | none => l
+  | some _ => l.pwFilter fun x y => x.2.creator ≠ y.2.creator
+
 /-- The height of the node's certificate, `0` without one. -/
 def State.certHeight (s : State Validator BlockId Payload) : ℕ :=
   (s.cert.map Cert.height).getD 0
@@ -268,9 +333,9 @@ def tryBoot (s : State Validator BlockId Payload) :
     match certFor cfg s G with
     | some c =>
       if h : s.store.base < G then
-        let st₀ := (baseAt cfg s G).foldl (fun st e => accept cfg st e.1 e.2)
+        let st₀ := (keptBase cfg (baseAt cfg s G)).foldl (fun st e => accept cfg st e.1 e.2)
           (s.store.prune G h.le)
-        let win := (s.offers.flatMap (·.2.2)).filter fun e =>
+        let win := if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter fun e =>
           decide (G < e.2.round ∧ e.1 = cfg.idOf e.2)
         let pend := win ++ s.pending.filter fun e => G ≤ e.2.round
         let fl := flush cfg (pend.length + 1) st₀ pend
@@ -376,8 +441,8 @@ def collect (s : State Validator BlockId Payload) :
       let st := s.store.prune G h.le
       let pend := s.pending.filter fun e => G ≤ e.2.round
       let req := s.requested.filter fun x => G ≤ x.2.2
-      ({ s with store := st, pending := pend, fired := s.fired.filter (G ≤ ·), requested := req },
-        [.prune G])
+      let s₁ := { s with store := st, pending := pend, fired := s.fired.filter (G ≤ ·) }
+      ({ s₁ with requested := req, owner := s.owner.filter fun e => G ≤ e.2.2 }, [.prune G])
     else (s, [])
   | none => (s, [])
 
@@ -426,7 +491,8 @@ def settle (s : State Validator BlockId Payload) :
 undecided slot, its top round and its own block there, its decisions,
 the height it last proposed, and its certificate. -/
 def State.persisted (s : State Validator BlockId Payload) : Persisted Validator BlockId Payload :=
-  ⟨s.store.window, s.store.base, s.lo, s.top, s.own, s.decided, s.lastProposed, s.cert⟩
+  ⟨s.store.window, s.store.base, s.lo, s.top, s.own, s.decided, s.lastProposed, s.cert,
+    s.owner⟩
 
 /-- **The state after a crash and restart**: the store, the next slot,
 the top, the decisions and the certificate kept; nothing pending, asked
@@ -454,7 +520,7 @@ def resume (ps : Persisted Validator BlockId Payload) : Option (State Validator 
     let st : Store Validator BlockId Payload :=
       ⟨map, ids, cfg.genesis, ps.horizon, h.1, h.2.1, h.2.2⟩
     some ⟨st, [], ps.top, ps.own, (ps.top.map fun t => {t}).getD ∅, ps.lo, [], true, [], 0,
-      ps.decided, ps.lastProposed, [], ps.cert, []⟩
+      ps.decided, ps.lastProposed, [], ps.cert, [], ps.owner⟩
   else none
 
 /-- **Try to bootstrap** from what was offered: if the node bootstraps,
@@ -486,10 +552,10 @@ def step (s : State Validator BlockId Payload) :
     else (s, [])
   | .deliver id b =>
     if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
-        id ∉ s.pending.map Prod.fst then
+        id ∉ s.pending.map Prod.fst ∧ kept cfg s id b then
       let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
-      let s₁ := { s with store := fl.1, pending := fl.2 }
-      let miss := missing s₁ id b
+      let s₁ := { s with store := fl.1, pending := fl.2, owner := charged cfg s id b ++ s.owner }
+      let miss := askable cfg s₁ id (missing s₁ id b)
       let req := s₁.requested ++ miss.map fun x => (x.1, id, x.2)
       let ask := s.recovering ∧ s.asked + cfg.lag + 2 ≤ b.round
       let top := if ask then b.round else s.asked

@@ -289,17 +289,20 @@ theorem Held.boot {s s' : State Validator BlockId Payload} {ads : List (ℕ × O
     (h : Held cfg s) (hb : tryBoot cfg s = some (s', ads)) : Held cfg s' := by
   obtain ⟨t, G, c, hbG, -, -, hG, hc, hst, -, htop, -, hlo, -⟩ := tryBoot_some hb
   have hcG := ((validCert_iff (cfg := cfg)).mp (certFor_valid hc).2).2.2.2
-  set st₀ := (baseAt cfg s G).foldl (fun st e => accept cfg st e.1 e.2) (s.store.prune G hbG.le)
-    with hst₀
+  set st₀ := (keptBase cfg (baseAt cfg s G)).foldl (fun st e => accept cfg st e.1 e.2)
+    (s.store.prune G hbG.le) with hst₀
   have hb₀ : st₀.base = G := by rw [hst₀, foldl_base]; rfl
   have hj₀ : st₀.junk = s.store.junk := by
     rw [hst₀]
-    have := (Grows.foldl (cfg := cfg) (baseAt cfg s G) (s.store.prune G hbG.le)).2
-      (foldl_base _ _)
+    have := (Grows.foldl (cfg := cfg) (keptBase cfg (baseAt cfg s G))
+      (s.store.prune G hbG.le)).2 (foldl_base _ _)
     exact this.2.1
-  obtain ⟨e, he, her⟩ := baseAt_of_bootRound hG
+  obtain ⟨e₁, he₁, -⟩ := baseAt_of_bootRound hG
+  obtain ⟨e, he⟩ := exists_mem_keptBase (cfg := cfg) he₁
   have he₀ : e.1 ∈ st₀.ids := by
-    have hall : ∀ x ∈ baseAt cfg s G, x.2.round = (s.store.prune G hbG.le).base := fun x hx => by
+    have hall : ∀ x ∈ keptBase cfg (baseAt cfg s G),
+        x.2.round = (s.store.prune G hbG.le).base := fun x hx => by
+      have hx := mem_keptBase hx
       unfold baseAt at hx
       simp only [List.mem_filter, decide_eq_true_eq] at hx
       exact hx.2.1

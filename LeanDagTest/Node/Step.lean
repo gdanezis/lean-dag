@@ -41,7 +41,7 @@ def cfg (me : Fin 4) : Config (Fin 4) ℕ Unit where
   σ := boundedSel
   idOf := idOf
   lag := 2
-  budget := 100
+  limit := none
   payload := fun _ => ()
 
 /-- A network of four nodes: their states, the inputs in flight with the

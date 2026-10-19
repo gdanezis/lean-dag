@@ -13,6 +13,10 @@ adversary, assume:
   was broadcast by that author earlier in the trace;
 * **the hash** (`HashInjective`): no two different blocks the honest
   nodes knew have one identifier;
+* the node does not rate-limit (`cfg.limit = none`): a node that does
+  drops what lies beyond its window or its candidates' budget, and
+  convergence under rate limiting is step 11's (`docs/validator.md`
+  §3.9);
 * no honest node raises its horizon or restarts (`NoRestart`): the
   honest nodes here are the reliable ones; and none is given a base
   offer or a certificate offer (`NoRejoin`).
@@ -76,7 +80,7 @@ def Converges : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload),
-    Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
+    cfg.limit = none → Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
     (∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0) → NoRestart H tr → NoRejoin H tr →
     ∀ i u, (tr[i]?.map Prod.fst) = some u → u ∈ H → ∀ e ∈ broadcasts (outputsAt cfg tr i),
       ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).store.blk e.1, ∀ v ∈ H,

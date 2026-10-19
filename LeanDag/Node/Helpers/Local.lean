@@ -58,7 +58,7 @@ theorem tryBuild_offers {s s' : State Validator BlockId Payload}
     · exact absurd h (by simp)
   · exact absurd h (by simp)
 
-omit [Fintype Validator] [LinearOrder BlockId] in
+omit [Fintype Validator] in
 /-- **The row's validity reads only rounds and authors** of the
 references. -/
 theorem rowValid_congr {q : ℕ} {blk blk' : BlockId → Block Validator BlockId Payload}
@@ -632,6 +632,51 @@ theorem flush_base : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
     · rw [flush_base fuel, foldl_base]
 
 omit [Fintype Validator] in
+/-- The base a bootstrap keeps is part of the attested base. -/
+theorem mem_keptBase {l : List (BlockId × Block Validator BlockId Payload)}
+    {x : BlockId × Block Validator BlockId Payload} (h : x ∈ keptBase cfg l) : x ∈ l := by
+  unfold keptBase at h
+  split at h
+  · exact h
+  · exact List.pwFilter_subset _ h
+
+omit [Fintype Validator] in
+/-- The base a bootstrap keeps of a nonempty attested base is nonempty. -/
+theorem exists_mem_keptBase {l : List (BlockId × Block Validator BlockId Payload)}
+    {x : BlockId × Block Validator BlockId Payload} (hx : x ∈ l) :
+    ∃ y, y ∈ keptBase cfg l := by
+  unfold keptBase
+  split
+  · exact ⟨x, hx⟩
+  · induction l generalizing x with
+    | nil => exact absurd hx List.not_mem_nil
+    | cons a l ih =>
+      by_cases hl : ∃ y, y ∈ l
+      · obtain ⟨y, hy⟩ := hl
+        obtain ⟨z, hz⟩ := ih hy
+        by_cases hp : ∀ b ∈ l.pwFilter (fun x y => x.2.creator ≠ y.2.creator),
+            a.2.creator ≠ b.2.creator
+        · exact ⟨z, by rw [List.pwFilter_cons_of_pos hp]; exact List.mem_cons_of_mem _ hz⟩
+        · exact ⟨z, by rw [List.pwFilter_cons_of_neg hp]; exact hz⟩
+      · have hnil : l = [] := List.eq_nil_iff_forall_not_mem.mpr fun y hy => hl ⟨y, hy⟩
+        subst hnil
+        exact ⟨a, by simp⟩
+
+omit [Fintype Validator] in
+/-- The offered blocks above the horizon a bootstrap takes are offered
+blocks, identified by their hash, above it. -/
+theorem mem_bootWindow {s : State Validator BlockId Payload} {G : ℕ}
+    {x : BlockId × Block Validator BlockId Payload}
+    (h : x ∈ (if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun e =>
+      decide (G < e.2.round ∧ e.1 = cfg.idOf e.2)))) :
+    x ∈ s.offers.flatMap (·.2.2) ∧ G < x.2.round ∧ x.1 = cfg.idOf x.2 := by
+  split at h
+  · exact absurd h List.not_mem_nil
+  · obtain ⟨hx, hc⟩ := List.mem_filter.mp h
+    simp only [decide_eq_true_eq] at hc
+    exact ⟨hx, hc⟩
+
+omit [Fintype Validator] in
 /-- **A successful bootstrap**, at a round `G` above the node's top and
 its horizon, with a certificate `c` the node can adopt there: the pruned
 store takes the attested base, then flushes the offered blocks above `G`
@@ -642,9 +687,10 @@ theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ �
     (h : tryBoot cfg s = some (s', ads)) :
     ∃ t G c, ∃ hb : s.store.base < G, s.top = some t ∧ t < G ∧ bootRound cfg s t = some G ∧
       certFor cfg s G = some c ∧
-      let st₀ := (baseAt cfg s G).foldl (fun st e => accept cfg st e.1 e.2) (s.store.prune G hb.le)
-      let pend := (s.offers.flatMap (·.2.2)).filter (fun e =>
-        decide (G < e.2.round ∧ e.1 = cfg.idOf e.2)) ++ s.pending.filter fun e => G ≤ e.2.round
+      let st₀ := (keptBase cfg (baseAt cfg s G)).foldl (fun st e => accept cfg st e.1 e.2)
+        (s.store.prune G hb.le)
+      let pend := (if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun e =>
+        decide (G < e.2.round ∧ e.1 = cfg.idOf e.2))) ++ s.pending.filter fun e => G ≤ e.2.round
       s'.store = (flush cfg (pend.length + 1) st₀ pend).1 ∧
       s'.pending = (flush cfg (pend.length + 1) st₀ pend).2 ∧
       s'.top = some G ∧ s'.own = none ∧ s'.lo = max s.lo c.height ∧
@@ -717,22 +763,21 @@ theorem Inv.tryBoot {s s' : State Validator BlockId Payload}
     change (j, (s.store.map.filter _).getD j s.store.junk) ∈ K
     rw [hraw]
     exact hi.known j hj'.1
-  have h₀ := foldl_accept_known (cfg := cfg) (baseAt cfg s G) hkp
+  have h₀ := foldl_accept_known (cfg := cfg) (keptBase cfg (baseAt cfg s G)) hkp
     (hi.valid.prune (hG := hbase.le)) fun x hx => by
-      obtain ⟨hx, hc⟩ := List.mem_filter.mp hx
+      obtain ⟨hx, hc⟩ := List.mem_filter.mp (mem_keptBase hx)
       simp only [decide_eq_true_eq] at hc
       exact hfo x hx hc.2.1
   have hfl := flush_known (cfg := cfg) (K := K)
-    (((s.offers.flatMap (·.2.2)).filter (fun x =>
-      decide (G < x.2.round ∧ x.1 = cfg.idOf x.2)) ++
+    (((if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun x =>
+      decide (G < x.2.round ∧ x.1 = cfg.idOf x.2))) ++
       s.pending.filter fun x => G ≤ x.2.round).length + 1) h₀.1 h₀.2.2 (pend :=
-    (s.offers.flatMap (·.2.2)).filter (fun x => decide (G < x.2.round ∧ x.1 = cfg.idOf x.2))
-      ++ s.pending.filter fun x => G ≤ x.2.round)
+    (if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun x =>
+      decide (G < x.2.round ∧ x.1 = cfg.idOf x.2))) ++ s.pending.filter fun x => G ≤ x.2.round)
     (fun x hx => by
       rcases List.mem_append.mp hx with hx | hx
-      · obtain ⟨hx, hc⟩ := List.mem_filter.mp hx
-        simp only [decide_eq_true_eq] at hc
-        exact hfo x hx hc.2
+      · obtain ⟨hx, -, hc⟩ := mem_bootWindow hx
+        exact hfo x hx hc
       · exact hi.pend x (List.mem_filter.mp hx).1)
   refine ⟨by rw [hst]; exact hfl.1, by rw [hpd]; exact hfl.2.1, Or.inr ⟨G, htop', ?_, ?_⟩,
     hi.good, hi.sub, by rw [hst]; exact hfl.2.2.2,
@@ -849,10 +894,12 @@ theorem Inv.step {s : State Validator BlockId Payload}
           · exact hsub (hi.pend x hx))
       dsimp only at hfl ⊢
       generalize flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending) = fl at hfl ⊢
-      generalize missing { s with store := fl.1, pending := fl.2 } id b = miss
+      generalize charged cfg s id b ++ s.owner = ow
+      generalize askable cfg { s with store := fl.1, pending := fl.2, owner := ow } id
+        (missing { s with store := fl.1, pending := fl.2, owner := ow } id b) = miss
       let req := s.requested ++ miss.map fun x => (x.1, id, x.2)
       have hi₀ : ∀ a, Inv cfg
-          { s with store := fl.1, pending := fl.2, requested := req, asked := a } K' B :=
+          { s with store := fl.1, pending := fl.2, owner := ow, requested := req, asked := a } K' B :=
         fun _ => ⟨hfl.1, hfl.2.1, by
           rcases hi.rounds with ⟨h0, hB, hb⟩ | ⟨t, ht, hb, hB⟩
           · exact Or.inl ⟨h0, hB, by rw [hfl.2.2.1]; exact hb⟩

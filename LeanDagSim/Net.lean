@@ -64,6 +64,9 @@ inductive Attack where
   | invalidBlocks
   /-- With each block, broadcast a block in the next node's name. -/
   | forgedAuthor
+  /-- With each block, broadcast twenty valid twins of it, each with its
+  own payload: what rate limiting bounds. -/
+  | flood
   deriving Repr, DecidableEq
 
 /-- **A scenario.** Times are in ticks. -/
@@ -110,6 +113,9 @@ structure Scenario where
   decisions at its height, and a message's sender is the node that sent
   it. -/
   verify : Bool := true
+  /-- Rate limiting, if any: the budget `τ` of a candidate slot and the
+  window `W` above a node's top. -/
+  limit : Option (ℕ × ℕ) := none
   deriving Repr
 
 /-- Whether node `v` is honest: neither an equivocator nor an attacker. -/
@@ -138,7 +144,7 @@ def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) 
   σ := boundedSel
   idOf := idOf
   lag := sc.lag
-  budget := 0
+  limit := sc.limit
   payload := fun _ => twin
 
 /-- An agent: a node, and which copy of it (`0` unless it equivocates). -/
@@ -170,6 +176,8 @@ structure Report where
   dropped : ℕ
   /-- The largest store any honest node held. -/
   maxStore : ℕ
+  /-- The most pending blocks any honest node held. -/
+  maxPending : ℕ
   /-- The inputs processed. -/
   events : ℕ
   /-- The simulated time reached. -/
@@ -198,6 +206,7 @@ structure World (n : ℕ) where
   honest : List (ℕ × Block (Fin n) ℕ ℕ)
   blocks : Std.TreeMap ℕ (Block (Fin n) ℕ ℕ) compare
   maxStore : ℕ
+  maxPending : ℕ
   events : ℕ
   time : ℕ
   /-- The withheld block, once built. -/
@@ -394,12 +403,17 @@ def attacked (agents : Array (Agent n)) (src t : ℕ) (a : Agent n) (st : State 
           let b₃ : Block (Fin n) ℕ ℕ := { b with payload := 3 }
           [.broadcast (idOf b₁) b₁, .broadcast (idOf b₂) b₂, .broadcast (idOf b₃ + 1) b₃]
         else []
+      let twins : List (Output (Fin n) ℕ ℕ) := if has .flood then
+          (List.range 20).map fun k =>
+            let bk : Block (Fin n) ℕ ℕ := { b with payload := 100 + k }
+            .broadcast (idOf bk) bk
+        else []
       let forged : List (Output (Fin n) ℕ ℕ) := if has .forgedAuthor then
           let v : Fin n := ⟨(b.creator.val + 1) % n, Nat.mod_lt _ (Fin.pos b.creator)⟩
           let b₄ : Block (Fin n) ℕ ℕ := { b with creator := v, payload := 4 }
           [.broadcast (idOf b₄) b₄]
         else []
-      o :: junk ++ forged
+      o :: junk ++ twins ++ forged
     | o => [o]
   -- proposals
   if has .conflictProposals then
@@ -468,6 +482,7 @@ def loop : ℕ → World n → World n
             honest := if isHonest then w.honest ++ own else w.honest
             blocks := (own ++ sent).foldl (fun m e => m.insert e.1 e.2) w.blocks
             maxStore := if isHonest then max w.maxStore r.1.store.ids.card else w.maxStore
+            maxPending := if isHonest then max w.maxPending r.1.pending.length else w.maxPending
             events := w.events + 1
             time := t
             withheld := wh
@@ -489,7 +504,7 @@ def agreeAt (ls : List (List (ℕ × Option ℕ))) : Bool :=
 
 /-- **Run a scenario.** -/
 def simulate (sc : Scenario) : Report :=
-  let empty : Report := ⟨false, [], [], true, true, true, 0, 0, 0, 0, 0, 0⟩
+  let empty : Report := ⟨false, [], [], true, true, true, 0, 0, 0, 0, 0, 0, 0⟩
   match row? sc.row sc.n sc.f sc.c with
   | none => empty
   | some (p, q) =>
@@ -511,6 +526,7 @@ def simulate (sc : Scenario) : Report :=
           honest := []
           blocks := ∅
           maxStore := 0
+          maxPending := 0
           events := 0
           time := 0
           withheld := none
@@ -534,6 +550,7 @@ def simulate (sc : Scenario) : Report :=
         boots := w.boots
         dropped := w.dropped
         maxStore := w.maxStore
+        maxPending := w.maxPending
         events := w.events
         time := w.time }
     else empty

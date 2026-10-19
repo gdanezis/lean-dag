@@ -79,6 +79,35 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 
+/-! ## Rate limiting
+
+A flood: node `3` broadcasts twenty valid twins with each block. Without
+rate limiting the honest stores take them; with a budget `τ = 8` and a
+window `W = 8` (`docs/validator.md` §3.9) each node keeps one candidate
+per author and round, and the stores stay small. Each line reads: the
+slots each honest node decided, agreement, validity, the largest honest
+store and the most pending blocks an honest node held. -/
+
+/-- A scenario's outcome, with its storage. -/
+def storageLine (sc : Scenario) : String :=
+  let r := simulate sc
+  s!"{r.commits.map (·.length)} {r.agree} {r.valid} {r.maxStore} {r.maxPending}"
+
+/-- info: "[23, 23, 23] true true 57 1" -/
+#guard_msgs in
+#eval storageLine { horizon := 150, row := "mysticeti", adv := [3], attacks := [.flood] }
+
+/-- info: "[22, 22, 22] true true 22 3" -/
+#guard_msgs in
+#eval storageLine
+  { horizon := 150, row := "mysticeti", adv := [3], attacks := [.flood], limit := some (8, 8) }
+
+-- A node down from tick `40` to tick `90` rejoins under rate limiting.
+/-- info: "[46, 46, 46, 46] true true 30 10" -/
+#guard_msgs in
+#eval storageLine
+  { horizon := 150, row := "mysticeti", recover := [(1, 40, 90)], limit := some (8, 8) }
+
 end Node
 
 end LeanDagTest

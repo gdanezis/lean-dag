@@ -534,7 +534,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · let s₁ := afterFlush (cfg := cfg) s id b
-      let miss := missing s₁ id b
+      let miss := askable cfg s₁ id (missing s₁ id b)
       have hx : (id, b) ∈ K := hd _ (by simp [delivered, hA.1])
       have hg₁ := Grows.flush (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
       have hb₁ := flush_base (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
@@ -551,7 +551,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by rw [commitsOf_append]; unfold askOut; split <;> split <;> rfl) (step_deliver hA)
     · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst) := hA
+          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
       exact hsame (by simp only [Node.step, if_neg h'])
   | timer r =>
     exact hset { s with fired := insert r s.fired } [] h hc

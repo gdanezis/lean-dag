@@ -175,7 +175,7 @@ theorem IsCut.boot (hg : Ground U K cfg.q) {s s' : State Validator BlockId Paylo
     (hoff : ∀ o ∈ s.offers, ∀ e ∈ o.2.2, e.1 = cfg.idOf e.2 → e ∈ K)
     (hp : ∀ e ∈ s.pending, e ∈ K) (hspan : Spans U s'.store.base) : IsCut U s'.store := by
   obtain ⟨t, G, c, hbG, -, -, -, -, hst, -⟩ := tryBoot_some hb
-  set st₀ := (baseAt cfg s G).foldl (fun st e => Node.accept cfg st e.1 e.2)
+  set st₀ := (keptBase cfg (baseAt cfg s G)).foldl (fun st e => Node.accept cfg st e.1 e.2)
     (s.store.prune G hbG.le)
     with hst₀
   have hb₀ : st₀.base = G := by rw [hst₀, foldl_base]; rfl
@@ -188,15 +188,14 @@ theorem IsCut.boot (hg : Ground U K cfg.q) {s s' : State Validator BlockId Paylo
   have hc₀ : IsCut U st₀ := by
     rw [hst₀]
     refine IsCut.foldl hg _ (hc.prune hbG.le) hspan fun x hx => ?_
-    obtain ⟨hx, hcx⟩ := List.mem_filter.mp hx
+    obtain ⟨hx, hcx⟩ := List.mem_filter.mp (mem_keptBase hx)
     simp only [decide_eq_true_eq] at hcx
     exact hfo x hx hcx.2.1
   rw [hst]
   refine IsCut.flush hg _ _ hc₀ (by change Spans U st₀.base; rw [hb₀]; exact hspan) fun x hx => ?_
   rcases List.mem_append.mp hx with hx | hx
-  · obtain ⟨hx, hcx⟩ := List.mem_filter.mp hx
-    simp only [decide_eq_true_eq] at hcx
-    exact hfo x hx hcx.2
+  · obtain ⟨hx, -, hcx⟩ := mem_bootWindow hx
+    exact hfo x hx hcx
   · exact hp x (List.mem_filter.mp hx).1
 
 variable {q f : ℕ} [P.Quorate q]
@@ -297,10 +296,9 @@ theorem IsCut.bootFrom (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     obtain ⟨h₁, h₂⟩ := hc₂.advance hg hσ ht hh₂ (fun e he => by
       rw [hpd] at he
       rcases List.mem_append.mp (flush_pending_sub (cfg := cfg) _ _ _ e he) with he | he
-      · obtain ⟨he, hce⟩ := List.mem_filter.mp he
-        simp only [decide_eq_true_eq] at hce
+      · obtain ⟨he, -, hce⟩ := mem_bootWindow he
         obtain ⟨o, ho, heo⟩ := List.mem_flatMap.mp he
-        exact hoff o ho e heo hce.2
+        exact hoff o ho e heo hce
       · exact hp e (List.mem_filter.mp he).1) (fun e he => hb e (List.mem_append_right _ he))
     refine ⟨h₁, fun e he => ?_⟩
     rw [commitsOf_append, commitsOf_map] at he
@@ -400,7 +398,7 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · let s₁ := afterFlush (cfg := cfg) s id b
-      let miss := missing s₁ id b
+      let miss := askable cfg s₁ id (missing s₁ id b)
       have hx : (id, b) ∈ K := hd _ (by simp [delivered, ← hA.1])
       have hg₁ := Grows.flush (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
       have hb₁ := flush_base (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
@@ -415,7 +413,7 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by rw [commitsOf_append]; unfold askOut; split <;> split <;> rfl) (step_deliver hA)
     · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst) := hA
+          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
       exact hsame s rfl (by simp only [Node.step, if_neg h'])
   | timer r =>
     exact hset { s with fired := Insert.insert r s.fired } [] hc

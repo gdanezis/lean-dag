@@ -194,18 +194,18 @@ theorem settle_sub (s : State Validator BlockId Payload) :
 
 variable (cfg) in
 /-- **A delivery the node acts on**: identified by its hash, not the
-node's own, at or above the horizon, and new. -/
+node's own, at or above the horizon, new, and kept by the rate limiter. -/
 def Admits (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : Prop :=
   id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
-    id ∉ s.pending.map Prod.fst
+    id ∉ s.pending.map Prod.fst ∧ kept cfg s id b
 
 /-- The state a delivery the node acts on settles: the store and pending
-blocks after flushing, and the requests the walk adds. -/
+blocks after flushing, and the slot the delivery is charged to. -/
 def afterFlush (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : State Validator BlockId Payload :=
   let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
-  { s with store := fl.1, pending := fl.2 }
+  { s with store := fl.1, pending := fl.2, owner := charged cfg s id b ++ s.owner }
 
 /-- The round a delivery leaves the node's last request for the bases on. -/
 def askedAfter (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) : ℕ :=
@@ -224,14 +224,14 @@ theorem askOut_isQuiet {s : State Validator BlockId Payload} {b : Block Validato
 theorem step_deliver {s : State Validator BlockId Payload} {id : BlockId}
     {b : Block Validator BlockId Payload} (h : Admits cfg s id b) :
     let s₁ := afterFlush (cfg := cfg) s id b
-    let miss := missing s₁ id b
+    let miss := askable cfg s₁ id (missing s₁ id b)
     let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
     Node.step cfg s (.deliver id b) =
       ((Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).1,
         (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b ++
           (Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).2) := by
   have h' : id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
-      id ∉ s.pending.map Prod.fst := h
+      id ∉ s.pending.map Prod.fst ∧ kept cfg s id b := h
   simp only [Node.step]
   rw [if_pos h']
   rfl
@@ -343,7 +343,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
         · exact hd _ _ rfl hc.1
         · exact hp e he
       have hfl := ReadsAs.flush (cfg := cfg) (s.pending.length + 1) hRs hpb
-      let req := s₁.requested ++ (missing s₁ id b).map fun x => (x.1, id, x.2)
+      let req := s₁.requested ++ (askable cfg s₁ id (missing s₁ id b)).map fun x => (x.1, id, x.2)
       refine hset { s₁ with requested := req, asked := askedAfter (cfg := cfg) s b } (by rw [hstep])
         (Grows.flush _ _ _) ?_ hfl.2 ?_
       · exact hfl.1.1.trans hRs.1.symm
@@ -352,7 +352,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
         · have hg := Grows.flush (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
           exact Or.inr ((hg.2 (hfl.1.1.trans hRs.1.symm)).1 hy)
     · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst) := hc
+          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc
       simp only [Node.step, if_neg h']; exact hy
   | timer r =>
     exact hset { s with fired := insert r s.fired } (by simp only [Node.step]) (Grows.refl _) rfl
@@ -426,7 +426,7 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
     · rw [step_deliver hc]
       dsimp only
       let s₁ := afterFlush (cfg := cfg) s id b
-      let req := s₁.requested ++ (missing s₁ id b).map fun x => (x.1, id, x.2)
+      let req := s₁.requested ++ (askable cfg s₁ id (missing s₁ id b)).map fun x => (x.1, id, x.2)
       have := settle_sub (cfg := cfg) { s₁ with requested := req, asked := askedAfter (cfg := cfg) s b }
       refine ⟨fun e he => ?_, fun e he => ?_⟩
       · have hm := flush_pending_sub (cfg := cfg) _ _ _ e (this.1 e he)
@@ -438,7 +438,7 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
         · obtain ⟨x, -, rfl⟩ := List.mem_map.mp he
           exact Or.inr ⟨b, rfl, hc⟩
     · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst) := hc
+          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc
       simp only [Node.step, if_neg h']
       exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
   | timer r =>
@@ -620,7 +620,7 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
         · rw [List.mem_singleton] at ho; subst ho; rfl
       · exact askOut_isQuiet o ho
     · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst) := hc
+          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc
       simp only [Node.step, if_neg h']; simp [persists]
   | timer r =>
     exact settle_persist_of (s₀ := { s with fired := insert r s.fired }) (pre := []) (Or.inl rfl) hb
@@ -680,7 +680,7 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady s)
     by_cases hc : Admits cfg s id b
     · rw [step_deliver hc]; exact noReady_settle _
     · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst) := hc
+          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc
       simp only [Node.step, if_neg h']; exact h
   | timer r => exact noReady_settle _
   | restart => exact noReady_settle _

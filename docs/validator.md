@@ -336,7 +336,7 @@ prefix-comparable. Finality certificates and the recovery epochs of
 The certificate grounds the decisions below the horizon, not the blocks
 at it; those rest on an honest presenter's store, earlier in the trace.
 
-### 3.9 Rate limiting (planned, step 9)
+### 3.9 Rate limiting
 
 A Byzantine author can deliver any number of valid blocks a round, each
 a twin of the others, and can build a cone of them out of sight and
@@ -367,10 +367,19 @@ its *candidates*, and prices each candidate's fetch.
   the new horizon; a block above that references another is fetched on
   its candidate's account.
 
-The budget `τ` and the window `W` are optional in the configuration;
-without them the node behaves as without rate limiting.
+The budget `τ` and the window `W` are optional in the configuration
+(`Config.limit`); without them the node behaves as without rate limiting
+(`chargeTo`, `kept`, `askable`, `keptBase`, and the charges in
+`State.owner`, persisted across a crash).
 
-**What it gives.**
+The window must exceed the depth by which the network's frontier leads a
+node's top. After a bootstrap the top is the new horizon, which trails
+the frontier by `Λ` and the certificates' lag; a node whose window is
+shorter drops the blocks it needs to resume, and stays behind. In the
+simulator, at `Λ = 2`, a window of 4 rounds left a node down from tick 40
+to tick 90 at round 21; a window of 8 lets it rejoin.
+
+**What it gives** (V7 and V10 are steps 9.2 and 9.3).
 * **V10, storage**: at every state a run reaches, the store and the
   pending blocks hold at most `(top + W + 1 − base)·(n·(τ + 1) + 1)`
   blocks: one own block a round, and at most `τ + 1` blocks for each of
@@ -654,6 +663,13 @@ rejoins by bootstrap (§3.6).
    or broadcast in its own name under its hash, since an honest block
    may reference an attacker's block that the attacker broadcast but did
    not keep.
+   **Rate limiting.** A flood, the attacker broadcasting twenty valid
+   twins with each block, fills the honest stores to 57 blocks without
+   rate limiting; with `τ = 8` and `W = 8` they stay at 22, against 30
+   in an unattacked run, and agreement and validity hold. The attacker
+   stalls itself, as with invalid blocks, so the network progresses as
+   with one crashed node either way. Without an attack the limit changes
+   nothing at `τ ≥ 4`.
 5. **Optionally**, replaying records through the Rust decider of the
    Mysticeti codebase, where the scheme's table comes from.
 
@@ -674,7 +690,7 @@ rejoins by bootstrap (§3.6).
 | 7.3 | Checkpoints (§3.8): signed proposals of the decided prefix and certificates of `q` of them; the horizon bounded by the certified frontier; bootstrap adopting the certified prefix; V12, and V9 restated as prefix-comparability (built) |
 | 7.4 | Adversarial simulation (§6, item 4): Byzantine nodes that send fabricated or inconsistent bases, fabricated certificates, conflicting signed proposals, invalid blocks and blocks in another node's name, with the network's signature checks on and off; each scenario checks agreement, prefix-comparability and validity (built) |
 | 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget (built) |
-| 9 | Rate limiting in the program (§3.9): V7, V10; the novelty budget also bounds what a Byzantine node can add to an honest node's pending blocks and requests. Sub-steps: 9.1 the configuration's optional budget and window, candidate slots and their charges, the bounded bootstrap base, the simulator's flood attack, and the existing claims kept (V3′ at the unlimited configuration); 9.2 V10's storage claim; 9.3 V7 and the docs |
+| 9 | Rate limiting in the program (§3.9): V7, V10; the novelty budget also bounds what a Byzantine node can add to an honest node's pending blocks and requests. Sub-steps: 9.1 the configuration's optional budget and window, candidate slots and their charges, the bounded bootstrap base, the simulator's flood attack, and the existing claims kept (V3′ at the unlimited configuration) (built); 9.2 V10's storage claim; 9.3 V7 and the docs |
 | 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests; agreement with the model (§6, item 1): the program's commits on the scheme's hand-built records |
 | 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST; first, the decisions of §9.1, including the liveness of recovery, of checkpointing and of convergence under garbage collection and rejoin |
 

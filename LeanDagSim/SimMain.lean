@@ -9,7 +9,8 @@ Options, each `--name value`: `row`, `n`, `f`, `c`, `seed`, `horizon`,
 `byz-until`, `withhold` (`z,v,R`: node `z` withholds its round-`R` block
 from `v`), `reveal-after`, `adv` (`node,…`: attackers), `attacks`
 (`fake-base`, `split-base`, `fake-cert`, `conflict-proposals`,
-`invalid-blocks`, `forged-author`, comma-separated) and `verify`
+`invalid-blocks`, `forged-author`, `flood`, comma-separated), `limit`
+(`τ,W`: the rate limiter's budget and window) and `verify`
 (`true` or `false`: whether the network checks signatures).
 -/
 
@@ -63,6 +64,9 @@ def parseArgs : List String → Scenario → Except String Scenario
         | _ => throw s!"--withhold wants z,v,R: {v}"
       | "--reveal-after" => pure { sc with revealAfter := ← nat }
       | "--adv" => pure { sc with adv := parseNats v }
+      | "--limit" => match parseNats v with
+        | [τ, W] => pure { sc with limit := some (τ, W) }
+        | _ => throw s!"--limit wants τ,W: {v}"
       | "--attacks" => do
         let as ← (v.splitOn ",").mapM fun a => match a with
           | "fake-base" => pure Attack.fakeBase
@@ -71,6 +75,7 @@ def parseArgs : List String → Scenario → Except String Scenario
           | "conflict-proposals" => pure Attack.conflictProposals
           | "invalid-blocks" => pure Attack.invalidBlocks
           | "forged-author" => pure Attack.forgedAuthor
+          | "flood" => pure Attack.flood
           | _ => throw s!"unknown attack {a}"
         pure { sc with attacks := as }
       | "--verify" => match v with
@@ -93,7 +98,7 @@ def main (args : List String) : IO UInt32 := do
       IO.eprintln s!"row {sc.row} is not admissible at n={sc.n} f={sc.f} c={sc.c}"
       return 2
     IO.println s!"row {sc.row}  n={sc.n} f={sc.f} c={sc.c}  seed={sc.seed}  gst={sc.gst}"
-    IO.println s!"time {r.time}  inputs {r.events}  largest store {r.maxStore} blocks"
+    IO.println s!"time {r.time}  inputs {r.events}  largest store {r.maxStore} blocks  most pending {r.maxPending}"
     let honest := (List.range sc.n).filter sc.honest
     for (v, top, ds) in (honest.zip (r.tops.zip r.commits)).map fun (v, t, d) => (v, t, d) do
       let skips := (ds.filter (·.2.isNone)).length
