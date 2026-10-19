@@ -207,7 +207,7 @@ theorem includes_reactive {rel : Reliability Validator}
               ∀ (g : ℕ → Option BlockId) (n : ℕ), g k' = some L → k' < n →
                 b ∈ Arcs.ledgerSetOf (schemeRule p σ) U g n :=
   Arcs.committed_of_correct_block (selfParent hP) (noEquiv hsub) commitsCandidate
-    (leaderCommits_reactive hw hcv hcm) S hT fair m hv
+    (leaderCommits_reactive hw hcv hcm) S hT fair m (Nat.zero_le m) hv
 
 end Scheme
 

@@ -19790,10 +19790,10 @@ def Safe (R : DagRule Validator BlockId Payload) : Prop :=
 *def, `Properties.Arcs.Headline.lean`*
 
 ```lean
-def Lives : Prop := sp.Progresses rel ∧ sp.Includes rel
+def Lives (R₀ : ℕ) : Prop := sp.Progresses rel ∧ sp.Includes rel R₀
 ```
 
-**Liveness**: progress and inclusion.
+**Liveness**: progress, and inclusion from round `R₀`.
 
 #### `Stack`
 
@@ -20084,12 +20084,14 @@ The fault model comes in as a `Reliability`: which validators the count is about
 *def, `Properties.Optional.SelfParent.lean`*
 
 ```lean
-def SelfParent (R : DagRule Validator BlockId Payload) : Prop :=
-  ∀ (U : R.Universe) (b : BlockId), b ∈ R.ids U → 0 < (R.block U b).round →
+def SelfParent (R : DagRule Validator BlockId Payload) (rel : Reliability Validator) (R₀ : ℕ) :
+    Prop :=
+  ∀ (U : R.Universe) (b : BlockId), b ∈ R.ids U → (R.block U b).creator ∈ rel.correct →
+    R₀ < (R.block U b).round →
     ∃ p ∈ (R.block U b).refs, (R.block U p).creator = (R.block U b).creator
 ```
 
-**Every non-genesis block references its author's previous block.**
+**Every reliable author's block above round `R₀` references a block by its author.**
 
 #### `NoEquiv`
 
@@ -23807,8 +23809,9 @@ theorem votes {R k : ℕ} {L : BlockId}
 *theorem, `Steelhead.Properties.lean`*
 
 ```lean
-theorem selfParent (w : ℕ → ℕ) : SelfParent (steelheadRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload) w)
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (w : ℕ → ℕ) :
+    SelfParent (steelheadRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) w) rel R₀
 ```
 
 **P3′ at the carrier.**
@@ -24172,8 +24175,9 @@ theorem holds : Statement
 *theorem, `AsyncBlueBottle.Carrier.lean`*
 
 ```lean
-theorem selfParent : SelfParent (asyncBlueBottleRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload))
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} :
+    SelfParent (asyncBlueBottleRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload)) rel R₀
 ```
 
 **P3′ at the carrier.**
@@ -26167,8 +26171,9 @@ theorem indirect : Indirect
 *theorem, `Bluestreak.Carrier.lean`*
 
 ```lean
-theorem selfParent : SelfParent (bluestreakRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload))
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} :
+    SelfParent (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)) rel R₀
 ```
 
 **Every non-genesis block references a block of its own author**: the self-parent clause of Bluestreak's validity, which is what the sparse chain is.
@@ -27269,8 +27274,9 @@ theorem agreement_of_commits [LinearOrder BlockId] {V V' : D.View}
 *theorem, `Hybrid.Carrier.lean`*
 
 ```lean
-theorem selfParent (k : ℕ) : SelfParent (hybridRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload) k)
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (k : ℕ) :
+    SelfParent (hybridRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) k) rel R₀
 ```
 
 **P3′ at the carrier.**
@@ -27497,8 +27503,9 @@ theorem stack_core (sk : SkipMsg U) (hd : G ≤ S.slotRound d) :
 *theorem, `MahiMahi.Carrier.lean`*
 
 ```lean
-theorem selfParent (w : ℕ) : SelfParent (mahiMahiRule (Validator := Validator)
-    (BlockId := BlockId) (Payload := Payload) w)
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (w : ℕ) :
+    SelfParent (mahiMahiRule (Validator := Validator)
+    (BlockId := BlockId) (Payload := Payload) w) rel R₀
 ```
 
 **P3′ at the carrier.**
@@ -27581,8 +27588,9 @@ theorem safety (hw : 2 ≤ w) : Properties.Safe (mahiMahiRule (Validator := Vali
 *theorem, `Mysticeti.Properties.lean`*
 
 ```lean
-theorem selfParent : SelfParent (mysticetiRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload))
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} :
+    SelfParent (mysticetiRule (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)) rel R₀
 ```
 
 **P3′ at the carrier**: every non-genesis block references its author's previous block.
@@ -27874,8 +27882,9 @@ theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
 *theorem, `Odontoceti.Carrier.lean`*
 
 ```lean
-theorem selfParent : SelfParent (odontocetiRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload))
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} :
+    SelfParent (odontocetiRule (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)) rel R₀
 ```
 
 **P3′ at the carrier.**
@@ -28143,12 +28152,12 @@ theorem ledger_coverage (hq : Quorate R rel) (hcc : CommitsCandidate R)
 *theorem, `Properties.Arcs.Quality.lean`*
 
 ```lean
-theorem mem_history_of_decided_commit (hsp : SelfParent R) (hne : NoEquiv R rel)
+theorem mem_history_of_decided_commit (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel)
     (hcc : CommitsCandidate R)
     (hdec : R.Decided S V k (some L))
     (hLc : (R.block U L).creator ∈ rel.correct)
     (hb : b ∈ R.ids U) (hbc : (R.block U b).creator = (R.block U L).creator)
-    (hle : (R.block U b).round ≤ (R.block U L).round) :
+    (hle : (R.block U b).round ≤ (R.block U L).round) (h₀ : R₀ ≤ (R.block U b).round) :
     b ∈ historyFrom (R.block U) L
 ```
 
@@ -28162,10 +28171,10 @@ theorem mem_history_of_decided_commit (hsp : SelfParent R) (hne : NoEquiv R rel)
 theorem committed_of_correct_block
     {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator →
       ℕ → ℕ → Prop}
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (S : Slots Validator) {T : Finset Validator}
     (hT : T ⊆ rel.correct) (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v)
-    (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    (m : ℕ) (hm₀ : R₀ ≤ m) {v : Validator} (hv : v ∈ T) :
     ∃ k', m ≤ S.slotRound k' ∧ S.leader k' = v ∧
       ∀ (U : R.Universe) (V : R.View U), Live S V T k' (k' + 1) →
         ∃ L, R.Decided S V k' (some L) ∧
@@ -28185,10 +28194,10 @@ theorem committed_of_correct_block
 theorem chain_quality
     {Live : Slots Validator → ∀ {U : R.Universe}, R.View U → Finset Validator →
       ℕ → ℕ → Prop}
-    (hq : Quorate R rel) (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hq : Quorate R rel) (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (hhalf : 2 * rel.slack ≤ rel.correct.card)
     (S : Slots Validator) {T : Finset Validator} (hT : T ⊆ rel.correct)
-    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) :
+    (fair : ∀ v ∈ T, ∀ n, ∃ k, n ≤ k ∧ S.leader k = v) (m : ℕ) (hm₀ : R₀ ≤ m) :
     (∀ (U : R.Universe) (V : R.View U) (k : ℕ) (L : BlockId) (δ : ℕ),
         R.Decided S V k (some L) → δ < (R.block U L).round →
         rel.correct.card ≤ 2 * (coveredAt R rel U L δ).card) ∧
@@ -28209,9 +28218,9 @@ theorem chain_quality
 
 ```lean
 theorem committed_of_correct_block_within
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (hT : T ⊆ rel.correct)
-    (fair : FairToEachWithin T w) (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    (fair : FairToEachWithin T w) (m : ℕ) (hm₀ : R₀ ≤ m) {v : Validator} (hv : v ∈ T) :
     ∃ k', slotAt Validator m ≤ k' ∧ k' < slotAt Validator m + w ∧
       m ≤ S.slotRound k' ∧ S.leader k' = v ∧
       ∀ (U : R.Universe) (V : R.View U), Live S V T k' (k' + 1) →
@@ -28231,10 +28240,10 @@ theorem committed_of_correct_block_within
 
 ```lean
 theorem committed_of_correct_block_by_round
-    (hsp : SelfParent R) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) (hcc : CommitsCandidate R)
     (hlc : LeaderCommits R Live) (hT : T ⊆ rel.correct)
     (fair : FairToEachWithin T w) (hs : BoundedSpacing (Validator := Validator) s)
-    (m : ℕ) {v : Validator} (hv : v ∈ T) :
+    (m : ℕ) (hm₀ : R₀ ≤ m) {v : Validator} (hv : v ∈ T) :
     ∃ k', m ≤ S.slotRound k' ∧
       S.slotRound k' ≤ S.slotRound (slotAt Validator m) + s * w ∧
       S.leader k' = v ∧
@@ -28480,15 +28489,15 @@ theorem LocalTruncate.of_banded (h : Banded R) : LocalTruncate R
 *theorem, `Properties.Optional.SelfParent.lean`*
 
 ```lean
-theorem SelfParent.reaches_of_creator (hsp : SelfParent R) {rel : Reliability Validator}
-    (hne : NoEquiv R rel) {U : R.Universe} {b c : BlockId}
+theorem SelfParent.reaches_of_creator {rel : Reliability Validator} {R₀ : ℕ}
+    (hsp : SelfParent R rel R₀) (hne : NoEquiv R rel) {U : R.Universe} {b c : BlockId}
     (hb : b ∈ R.ids U) (hc : c ∈ R.ids U) (hbc : (R.block U b).creator ∈ rel.correct)
     (hcc : (R.block U c).creator = (R.block U b).creator)
-    (hle : (R.block U b).round ≤ (R.block U c).round) :
+    (hle : (R.block U b).round ≤ (R.block U c).round) (h₀ : R₀ ≤ (R.block U b).round) :
     ReachesFrom (R.block U) c b
 ```
 
-**A reliable author's block reaches every earlier block of that author**: walk the self-parent chain down to the earlier block's round, where non-equivocation says the chain has arrived.
+**A reliable author's block reaches every earlier block of that author** at or above `R₀`: walk the self-parent chain down to the earlier block's round, where non-equivocation says the chain has arrived.
 
 #### `rebases_chop`
 
@@ -28745,8 +28754,8 @@ theorem skipsUnsupported (hv : p.voteOffset = 1) :
 *theorem, `Scheme.Properties.lean`*
 
 ```lean
-theorem selfParent (hP : ∀ blk b, P blk b → Clause.selfParent blk b) :
-    SelfParent (schemeRule p σ)
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} (hP : ∀ blk b, P blk b → Clause.selfParent blk b) :
+    SelfParent (schemeRule p σ) rel R₀
 ```
 
 **Every block references its author's previous block**, on records whose validity asks it.

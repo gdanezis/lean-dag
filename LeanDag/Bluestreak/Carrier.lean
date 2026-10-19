@@ -91,9 +91,10 @@ theorem noEquiv : NoEquiv (bluestreakRule (Validator := Validator) (BlockId := B
 /-- **Every non-genesis block references a block of its own author**:
 the self-parent clause of Bluestreak's validity, which is what the
 sparse chain is. -/
-theorem selfParent : SelfParent (bluestreakRule (Validator := Validator) (BlockId := BlockId)
-    (Payload := Payload)) :=
-  fun U b hb hr => (U.val.valid b hb).clause.1.2 hr
+theorem selfParent {rel : Reliability Validator} {R₀ : ℕ} :
+    SelfParent (bluestreakRule (Validator := Validator) (BlockId := BlockId)
+    (Payload := Payload)) rel R₀ :=
+  fun U b hb _ hr => (U.val.valid b hb).clause.1.2 (Nat.lt_of_le_of_lt (Nat.zero_le _) hr)
 
 /-- **A slot a quorum does not support is skipped**: the quorum's blocks
 one round up are a quorum of that round, and each omits every candidate,
@@ -379,7 +380,7 @@ and every reliable author's block entering the ledger through a slot it
 leads. -/
 theorem liveness : Properties.Support.Lives (R := bluestreakRule (Validator := Validator)
     (BlockId := BlockId) (Payload := Payload)) bluestreakSupport
-    (bluestreakReliability Validator) :=
+    (bluestreakReliability Validator) 0 :=
   Properties.Support.liveness commits commitsCandidate selfParent noEquiv
 
 end BluestreakProperties

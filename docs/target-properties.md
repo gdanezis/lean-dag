@@ -5295,6 +5295,24 @@ lifted lemma at `card_compl_correct_le`, and `exists_correct_of_card` is
 `accepted_mem_base`) stays on the core's universe, at `Base U F.f t G`,
 until the delivery model is lifted (`docs/validator.md` §8).
 
+### 11.55 Self-reference for the reliable authors, from a round on
+
+`SelfParent` asked every non-genesis block to reference a block by its
+author. Its one reader, the chain walk of inclusion
+(`SelfParent.reaches_of_creator`), walks a reliable author's chain from a
+committed block down to an earlier one, so it needs the clause only of
+reliable authors' blocks and only above the earlier block's round.
+`Properties/Optional/SelfParent.lean` now states `SelfParent R rel R₀`:
+every reliable author's block above round `R₀` references a block by its
+author. Chain quality (`Arcs/Quality.lean`) and the headline
+(`Support.Includes rel R₀`, `Support.Lives rel R₀`) cover the reliable
+blocks at or above `R₀`. The rules whose validity carries the clause
+prove `SelfParent` at every reliability and every `R₀`, and state their
+liveness at `R₀ = 0`, which is the statement they had. The honest node
+of `docs/validator.md` drops the clause from its validity and keeps it
+as its build rule, so its record has the property for its reliable
+nodes only from the round their chains are unbroken (§11 there).
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

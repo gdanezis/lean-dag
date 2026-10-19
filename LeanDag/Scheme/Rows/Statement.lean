@@ -37,7 +37,7 @@ def SafeLivesCore {Validator BlockId Payload : Type} [Fintype Validator] [Decida
     (σ : VoteSel Validator BlockId Payload ValidWrt Correct) : Prop :=
   Safe (schemeRule p σ) ∧
     Support.Lives (R := schemeRule p σ) (familySupport p σ)
-      (coreReliability Validator)
+      (coreReliability Validator) 0
 
 /-- A row's carrier at the hybrid fault model, with self-reference, is safe
 and lives. -/
@@ -46,7 +46,7 @@ def SafeLivesHybrid {Replica BlockId : Type} [Fintype Replica] [DecidableEq Repl
     (σ : VoteSel Replica BlockId Unit HybridValid Hydrozoan.NonByzantine) : Prop :=
   Safe (schemeRule p σ) ∧
     Support.Lives (R := schemeRule p σ)
-      (familySupport p σ) (Hydrozoan.hzReliability Replica)
+      (familySupport p σ) (Hydrozoan.hzReliability Replica) 0
 
 /-- **Cordial Miners, safe and live on the core's universes.** -/
 def CoreRows : Prop :=
