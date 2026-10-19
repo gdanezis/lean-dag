@@ -111,9 +111,8 @@ through three stages.
 1. **Pending**: some parent is missing. The block waits.
 2. **Held**: its parents are held and it satisfies the row's validity
    `ValidAt q C`, which is decidable.
-3. **Accepted**: its novelty, the blocks of its history not yet
-   accepted, is at most `τ` (`UniformBudget`). Otherwise it is deferred
-   until the accepted set has grown.
+3. **Accepted**: it came as a candidate or on a candidate's account,
+   within the candidate's budget (§3.9). Otherwise it is not kept.
 
 The accepted set is closed under references, so it is a
 `BlockRecord.View`; this is the view the decider reads. Byzantine
@@ -337,6 +336,60 @@ prefix-comparable. Finality certificates and the recovery epochs of
 The certificate grounds the decisions below the horizon, not the blocks
 at it; those rest on an honest presenter's store, earlier in the trace.
 
+### 3.9 Rate limiting (planned, step 9)
+
+A Byzantine author can deliver any number of valid blocks a round, each
+a twin of the others, and can build a cone of them out of sight and
+reveal it at once (`docs/dos-equivocation-and-growth.md` §5). The node
+therefore keeps, above its horizon, only its own cone and the cones of
+its *candidates*, and prices each candidate's fetch.
+
+* **Candidates.** A delivered block of round `r` within the window,
+  `base ≤ r ≤ top + W`, is a candidate if no block of its author at
+  round `r` has been one: one candidate slot per author per round,
+  claimed by the first block delivered for it. An honest author has one
+  block a round, so its slot is its block's.
+* **The budget.** Each slot is charged for the blocks taken into the
+  node's pending blocks on its account: the candidate, and every
+  ancestor fetched for it or for a block fetched for it. A slot charged
+  `τ` asks for nothing more, and the candidate waits: deferred, not
+  rejected, since what it lacks only shrinks as the store grows (the
+  novelty budget's antitone measure, §6 of the design note).
+* **Everything else is dropped.** A delivered block that is neither a
+  candidate nor asked for on a slot's account is not kept; a block above
+  `top + W` is not kept. A block a later candidate needs is fetched
+  again, on that candidate's account.
+* **References.** The node references, at the round it builds on, one
+  stored block per author, as before. Each was taken into the store on a
+  slot's account, so its novelty against the store was within the
+  budget when it came.
+* **The bootstrap base** keeps at most one attested block per author at
+  the new horizon; a block above that references another is fetched on
+  its candidate's account.
+
+The budget `τ` and the window `W` are optional in the configuration;
+without them the node behaves as without rate limiting.
+
+**What it gives.**
+* **V10, storage**: at every state a run reaches, the store and the
+  pending blocks hold at most `(top + W + 1 − base)·(n·(τ + 1) + 1)`
+  blocks: one own block a round, and at most `τ + 1` blocks for each of
+  at most `n` slots a round, over the window. This is a claim about one
+  node, from round `0`, under any adversary; with the horizon trailing
+  the top by a bounded depth (§3.4) it is independent of the runtime.
+  The requests are bounded the same way.
+* **V7**: the store is still a cut of the run's record, with fewer
+  blocks, so V3, V9 and V12 hold of the rate-limited node unchanged; a
+  deferral delays a decision and never changes it
+  (`decided_mono_of_banded`).
+* **Convergence.** V3′ holds for the unlimited configuration. With a
+  finite window a node lagging more than `W` rounds drops a block ahead
+  of it, and with a finite budget a candidate whose missing cone exceeds
+  `τ` waits; both are fetched again only once a later candidate needs
+  them. Convergence and the eventual admission of every honest block
+  under rate limiting rest on the lifted C3 (§8) and on delivery after
+  GST, and belong to step 11 with liveness.
+
 ## 4. Conformance
 
 | | Claim | Route |
@@ -348,10 +401,10 @@ at it; those rest on an honest presenter's store, earlier in the trace.
 | V4 | The decisions a store pruned at `G` gives from a slot at or above `G` equal those of every view holding its blocks from `G` up, read at `G`: the loop reads nothing below the slot's round. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq`, `Node.ViewsAbove.of_store` (proved) |
 | V5 | At every state a run reaches, resuming from what the node persisted gives the state its restart recovers: the same blocks, read alike, at the same horizon, the same next slot, top and own block, its top round's timer fired, and nothing pending or asked for. | `Node.Restart.Resumes` (proved): `Node.resume_persisted`, `Node.State.recover` |
 | V6 | Retired: Safe Skip is not part of the program (§3.5). L0, the self-referencing filled block valid at any quorum, stays in the shared layer. | `BlockRecord.selfBlock_valid` (proved) |
-| V7 | Rate limiting does not make a validator decide wrongly. | `decided_mono_of_banded` |
+| V7 | Rate limiting does not make a validator decide wrongly: the rate-limited store is a cut of the run's record, so V3, V9 and V12 hold of it, and a deferral delays a decision without changing it. | planned, step 9.3: V3, V9, V12 at every configuration; `decided_mono_of_banded` |
 | V8 | The efficient store and decider compute the reference program's values. | one equality per function |
 | V9 | Over a trace with timely authentication of blocks, base offers and checkpoint proposals, an injective hash and `Params.Tolerates`, every honest store is a cut of the run's record and every honest decision a verdict on a view of it, bootstraps and adopted certificates included; a node's decisions are slots `0, 1, …`; so any two honest nodes' decisions are prefix-comparable. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.IsCut.bootFrom`, `Node.IsCut.step`, `Node.verdict_decideStep`, `Node.propose_prefix`, `Node.prefix_of_slots`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
-| V10 | Under the novelty budget, every honest block is eventually accepted, and an honest validator's store, with garbage collection, has a size independent of the runtime. | lifted C3 and B4 (§8), `card_retained_le` |
+| V10 | At every state a run reaches, the store and the pending blocks hold at most `(top + W + 1 − base)·(n·(τ + 1) + 1)` blocks, under any adversary, and the requests are bounded alike; with the horizon trailing the top by a bounded depth the bound is independent of the runtime. Eventual admission of every honest block is step 11's. | planned, step 9.2: a claim about one node (§3.9) |
 | V12 | Every certificate with `q` distinct signers given to an honest node certifies a prefix of an honest node's decisions, with timely signed proposals and `f < q`. | `Node.Boot.Certified` (proved): `Node.propose_prefix`, `Node.commits_prefix`, `Node.Local.Decisions` |
 | V11 | A timed run past GST, with timeouts of at least `2Δ + proc`, gives a `SchemeReactive` and the delivery obligation `DeliversOn`; the mechanisms compose (`Stack.safe_and_live`), and every slot commits. | field by field from the run, V10 |
 
@@ -621,7 +674,7 @@ rejoins by bootstrap (§3.6).
 | 7.3 | Checkpoints (§3.8): signed proposals of the decided prefix and certificates of `q` of them; the horizon bounded by the certified frontier; bootstrap adopting the certified prefix; V12, and V9 restated as prefix-comparability (built) |
 | 7.4 | Adversarial simulation (§6, item 4): Byzantine nodes that send fabricated or inconsistent bases, fabricated certificates, conflicting signed proposals, invalid blocks and blocks in another node's name, with the network's signature checks on and off; each scenario checks agreement, prefix-comparability and validity (built) |
 | 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget (built) |
-| 9 | Rate limiting in the program: V7, V10; the novelty budget also bounds what a Byzantine node can add to an honest node's pending blocks and requests |
+| 9 | Rate limiting in the program (§3.9): V7, V10; the novelty budget also bounds what a Byzantine node can add to an honest node's pending blocks and requests. Sub-steps: 9.1 the configuration's optional budget and window, candidate slots and their charges, the bounded bootstrap base, the simulator's flood attack, and the existing claims kept (V3′ at the unlimited configuration); 9.2 V10's storage claim; 9.3 V7 and the docs |
 | 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests; agreement with the model (§6, item 1): the program's commits on the scheme's hand-built records |
 | 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST; first, the decisions of §9.1, including the liveness of recovery, of checkpointing and of convergence under garbage collection and rejoin |
 
