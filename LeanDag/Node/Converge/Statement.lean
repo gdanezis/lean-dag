@@ -15,7 +15,7 @@ adversary, assume:
   nodes knew have one identifier;
 * no honest node raises its horizon or restarts (`NoRestart`): the
   honest nodes here are the reliable ones; and none is given a base
-  offer (`NoRejoin`).
+  offer or a certificate offer (`NoRejoin`).
 
 Then **every block an honest node broadcast, with its history, is in
 every honest node's store at the end** (`Converges`).
@@ -65,9 +65,10 @@ def HashInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator
 def NoRestart (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ (i : ℕ) v, v ∈ H → tr[i]? ≠ some (v, Input.restart)
 
-/-- **No honest node is given a base offer.** -/
+/-- **No honest node is given a base offer or a certificate offer.** -/
 def NoRejoin (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Prop :=
-  ∀ (i : ℕ) v, v ∈ H → ∀ p G bs, tr[i]? ≠ some (v, Input.baseOffer p G bs)
+  ∀ (i : ℕ) v, v ∈ H → (∀ p G bs, tr[i]? ≠ some (v, Input.baseOffer p G bs)) ∧
+    ∀ p c, tr[i]? ≠ some (v, Input.certOffer p c)
 
 /-- **Every block an honest node broadcast, with its history, is in every
 honest node's store at the end.** -/

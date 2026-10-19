@@ -120,6 +120,14 @@ theorem knownOf_sub {v : Validator} (hv : v ∈ H) {x : BlockId × Block Validat
 /-! ## The served base -/
 
 omit [Fintype Validator] in
+theorem serveBase_not_mem_proposeAt (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
+    {bs : List (BlockId × Block Validator BlockId Payload)} :
+    Output.serveBase p G bs ∉ (proposeAt cfg s).2 := by
+  unfold proposeAt
+  dsimp only
+  split <;> simp
+
+omit [Fintype Validator] in
 theorem serveBase_not_mem_advance (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
     {bs : List (BlockId × Block Validator BlockId Payload)} :
     Output.serveBase p G bs ∉ (advance cfg s).2 := by
@@ -133,7 +141,11 @@ theorem serveBase_not_mem_advance (s : State Validator BlockId Payload) {p : Val
     simp [built] at h
   · unfold Node.decideStep at h
     dsimp only at h
-    split at h <;> simp at h
+    split at h
+    · rcases List.mem_append.mp h with h | h
+      · simp at h
+      · exact serveBase_not_mem_proposeAt _ h
+    · simp at h
   · unfold Node.collect at h
     split at h
     · dsimp only at h; split at h <;> simp at h
@@ -147,14 +159,28 @@ theorem serveBase_not_mem_settle (s : State Validator BlockId Payload) {p : Vali
   · exact serveBase_not_mem_advance s
   · exact serveBase_not_mem_advance s₁
 
+omit [Fintype Validator] in
+theorem serveBase_not_mem_bootFrom (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
+    {bs : List (BlockId × Block Validator BlockId Payload)} :
+    Output.serveBase p G bs ∉ (bootFrom cfg s).2 := by
+  rcases bootFrom_cases (cfg := cfg) s with he | ⟨s₂, ads, -, he⟩ <;> rw [he]
+  · simp
+  · intro h
+    rcases List.mem_append.mp h with h | h
+    · obtain ⟨e, -, he⟩ := List.mem_map.mp h; cases he
+    · exact serveBase_not_mem_advance _ h
+
 /-- **A served base is the server's store** at the step that served it. -/
 theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
     {p : Validator} {G : ℕ} {bs : List (BlockId × Block Validator BlockId Payload)}
     (h : Output.serveBase p G bs ∈ (step cfg s inp).2) : bs = s.store.window := by
   cases inp with
   | baseRequest peer =>
-    change Output.serveBase p G bs ∈ [Output.serveBase peer s.store.base s.store.window] at h
-    simp at h; exact h.2.2
+    change Output.serveBase p G bs ∈ Output.serveBase peer s.store.base s.store.window ::
+      s.cert.toList.map (Output.serveCert peer) at h
+    rcases List.mem_cons.mp h with h | h
+    · cases h; rfl
+    · obtain ⟨c, -, hc⟩ := List.mem_map.mp h; cases hc
   | start =>
     simp only [Node.step] at h
     split at h
@@ -185,10 +211,16 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
   | baseOffer q G' bs' =>
     rw [step_offer] at h
     split at h
-    · split at h
-      · exact absurd h (serveBase_not_mem_advance _)
-      · simp at h
+    · exact absurd h (serveBase_not_mem_bootFrom _)
     · simp at h
+  | certOffer q c =>
+    rw [step_certOffer] at h
+    split at h
+    · exact absurd h (serveBase_not_mem_bootFrom _)
+    · simp at h
+  | proposal q k ds =>
+    rw [step_proposal] at h
+    split at h <;> simp at h
 
 /-- **The offers a node holds were given to it before.** -/
 theorem offers_before (v : Validator) : ∀ (t : ℕ), ∀ o ∈ (stateBefore cfg tr t v).offers,
@@ -204,11 +236,32 @@ theorem offers_before (v : Validator) : ∀ (t : ℕ), ∀ o ∈ (stateBefore cf
       split at ho
       · rename_i hw
         subst hw
-        rcases step_offers _ inp o ho with ho | rfl
+        rcases (step_offered _ inp).1 o ho with ho | rfl
         · obtain ⟨j, hj', h⟩ := offers_before w t o ho
           exact ⟨j, by omega, h⟩
         · exact ⟨t, by omega, hj⟩
       · obtain ⟨j, hj', h⟩ := offers_before v t o ho
+        exact ⟨j, by omega, h⟩
+
+/-- **The certificates a node holds were offered to it before.** -/
+theorem certs_before (v : Validator) : ∀ (t : ℕ), ∀ c ∈ (stateBefore cfg tr t v).certs,
+    ∃ j < t, ∃ p, tr[j]? = some (v, .certOffer p c)
+  | 0, c, hc => by simp [stateBefore, inputsBefore, run, State.init] at hc
+  | t + 1, c, hc => by
+    rcases hj : tr[t]? with _ | ⟨w, inp⟩
+    · have hL : tr.length ≤ t := List.getElem?_eq_none_iff.mp hj
+      rw [Converge.stateBefore_of_le (by omega), ← Converge.stateBefore_of_le hL] at hc
+      obtain ⟨j, hj', h⟩ := certs_before v t c hc
+      exact ⟨j, by omega, h⟩
+    · rw [stateBefore_succ hj] at hc
+      split at hc
+      · rename_i hw
+        subst hw
+        rcases (step_offered _ inp).2 c hc with hc | ⟨p, rfl⟩
+        · obtain ⟨j, hj', h⟩ := certs_before w t c hc
+          exact ⟨j, by omega, h⟩
+        · exact ⟨t, by omega, p, hj⟩
+      · obtain ⟨j, hj', h⟩ := certs_before v t c hc
         exact ⟨j, by omega, h⟩
 
 omit [LinearOrder BlockId] in
@@ -250,6 +303,64 @@ theorem authentic_of_timely (htime : Converge.TimelyAuthentic cfg H tr) :
   obtain ⟨i, -, hiv, hxp⟩ := htime j v inp hj hv x hd hc
   obtain ⟨inp', hi⟩ := Converge.event_of_map hiv
   exact mem_broadcasts.mpr (mem_outputs_of_event hi (mem_broadcasts.mp hxp))
+
+/-! ## Decisions and proposals over the trace -/
+
+/-- **A node's decisions before an event are a prefix of its decisions
+over the trace.** -/
+theorem commits_prefix (v : Validator) (t : ℕ) :
+    commitsOf (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr t v)).2 <+:
+      decisionsOf cfg tr v := by
+  obtain ⟨l, hl⟩ := inputsBefore_prefix_length (tr := tr) v t
+  unfold decisionsOf runOf
+  rw [hl, run_append, commitsOf_append]
+  exact List.prefix_append _ _
+
+/-- **A proposal an event outputs is a prefix of its node's decisions up
+to that event.** -/
+theorem propose_prefix {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
+    (hi : tr[i]? = some (u, inp)) {k : ℕ} {ds : List (ℕ × Option BlockId)}
+    (h : Output.propose k ds ∈ outputsAt cfg tr i) :
+    ds <+: commitsOf (run (cfg.at u) (State.init (cfg.at u)) (inputsBefore tr (i + 1) u)).2 := by
+  rw [outputsAt_eq hi] at h
+  have hr := (Local.decisions _ _ _ (cfg.at u) (inputsBefore tr (i + 1) u)).2.2 k ds
+  apply hr
+  rw [inputsBefore_succ hi, if_pos rfl, run_append_single]
+  exact List.mem_append_right _ h
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+/-- The entry at position `i` of a list whose slots are `0, 1, …` is slot `i`. -/
+theorem fst_getElem_of_slots {β : Type} {l : List (ℕ × β)}
+    (hl : l.map Prod.fst = List.range l.length) {i : ℕ} (hi : i < l.length) : (l[i]).1 = i := by
+  have h := congrArg (fun m => m[i]?) hl
+  simp only [List.getElem?_map, List.getElem?_range hi, List.getElem?_eq_getElem hi,
+    Option.map_some, Option.some.injEq] at h
+  exact h
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+/-- **Two lists of decisions of slots `0, 1, …` that agree at every slot
+both decide are prefix-comparable.** -/
+theorem prefix_of_slots {β : Type} {l₁ l₂ : List (ℕ × β)}
+    (h₁ : l₁.map Prod.fst = List.range l₁.length) (h₂ : l₂.map Prod.fst = List.range l₂.length)
+    (hag : ∀ k d d', (k, d) ∈ l₁ → (k, d') ∈ l₂ → d = d') : l₁ <+: l₂ ∨ l₂ <+: l₁ := by
+  have key : ∀ {a b : List (ℕ × β)}, a.map Prod.fst = List.range a.length →
+      b.map Prod.fst = List.range b.length → (∀ k d d', (k, d) ∈ a → (k, d') ∈ b → d = d') →
+      a.length ≤ b.length → a <+: b := by
+    intro a b ha hb hab hle
+    rw [List.prefix_iff_eq_take]
+    refine List.ext_getElem (by simp; omega) fun i hi₁ hi₂ => ?_
+    have hib : i < b.length := by omega
+    rw [List.getElem_take]
+    have e₁ := fst_getElem_of_slots ha hi₁
+    have e₂ := fst_getElem_of_slots hb hib
+    have hm₁ : (i, (a[i]).2) ∈ a := by
+      have := List.getElem_mem hi₁; rwa [← Prod.mk.eta (p := a[i]), e₁] at this
+    have hm₂ : (i, (b[i]).2) ∈ b := by
+      have := List.getElem_mem hib; rwa [← Prod.mk.eta (p := b[i]), e₂] at this
+    exact Prod.ext (e₁.trans e₂.symm) (hab i _ _ hm₁ hm₂)
+  rcases le_total l₁.length l₂.length with h | h
+  · exact Or.inl (key h₁ h₂ hag h)
+  · exact Or.inr (key h₂ h₁ (fun k d d' ha hb => (hag k d' d hb ha).symm) h)
 
 end Node
 

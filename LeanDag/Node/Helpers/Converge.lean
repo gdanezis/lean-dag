@@ -92,9 +92,9 @@ theorem persists_of_broadcasts {i : ℕ} {e : BlockId × Block Validator BlockId
   unfold outputsAt at he ⊢
   split at he
   · rename_i v inp _
-    obtain ⟨xs, bs, ds, gs, hxs, -, ho, -⟩ := (inv_before (cfg := cfg) (tr := tr) i v).step inp
-    rw [ho, broadcasts_shape hxs] at he
-    rw [ho, persists_shape hxs]
+    obtain ⟨bs, ho, -⟩ := (inv_before (cfg := cfg) (tr := tr) i v).step inp
+    rw [ho.2] at he
+    rw [ho.1]
     exact he
   · exact absurd he List.not_mem_nil
 
@@ -126,7 +126,7 @@ theorem deliver_of_delivered (hnj : NoRejoin H tr) {j : ℕ} {v : Validator} (hv
     split at hx
     · rw [List.mem_singleton] at hx; subst hx; exact ⟨hj, hid⟩
     · exact absurd hx List.not_mem_nil
-  | baseOffer p G bs => exact absurd hj (hnj j v hv p G bs)
+  | baseOffer p G bs => exact absurd hj ((hnj j v hv).1 p G bs)
   | _ => simp [delivered] at hx
 
 theorem stateBefore_of_le {i : ℕ} (h : tr.length ≤ i) (v : Validator) :
@@ -212,10 +212,12 @@ theorem entry_before (hnj : NoRejoin H tr) {v : Validator} (hv : v ∈ H)
   by_cases he : ∃ inp, tr[a]? = some (v, inp)
   · obtain ⟨inp, ha⟩ := he
     rw [step_before ha] at h₂
-    rcases (step_sub (cfg := cfg.at v) _ inp).1 y h₂ with h | ⟨rfl, hc⟩ | ⟨p, G, bs, rfl, -⟩
+    rcases (step_sub (cfg := cfg.at v) _ inp).1 y h₂ with h | ⟨rfl, hc⟩ | hoff
     · exact absurd h h₁
     · exact ⟨ha, hc⟩
-    · exact absurd ha (hnj a v hv p G bs)
+    · cases inp <;> simp only [Input.isOffer] at hoff
+      · exact absurd ha ((hnj a v hv).1 _ _ _)
+      · exact absurd ha ((hnj a v hv).2 _ _)
   · rw [same_before fun inp h => he ⟨inp, h⟩] at h₂; exact absurd h₂ h₁
 
 /-- **A request is recorded only on account of a delivery the node acted

@@ -1,11 +1,11 @@
 import LeanDag.Node.Local.Statement
-import LeanDag.Node.Helpers.Local
+import LeanDag.Node.Helpers.Decided
 /-!
 # An honest node, one node at a time — proof
 
 The invariant `Inv` holds of the initial state with nothing known and no
 block of its own, and each step keeps it (`Helpers/Local.lean`); the
-five claims about the node's own blocks are read off it at the end of a
+claims about the node's own blocks and decisions are read off it at the end of a
 run. Decisions read only the view by `ViewsAbove.tryDecide_eq` at the
 bounded vote.
 -/
@@ -15,11 +15,6 @@ namespace LeanDag
 namespace Node
 
 namespace Local
-
-theorem shape : Shape := by
-  intro Validator BlockId Payload _ _ _ cfg is i
-  obtain ⟨xs, bs, ds, gs, hxs, hgs, ho, -⟩ := (Inv.init.run (cfg := cfg) is).step i
-  exact ⟨xs, bs, ds, gs, hxs, hgs, ho⟩
 
 theorem oneEach : OneEach := by
   intro Validator BlockId Payload _ _ _ cfg is
@@ -39,6 +34,14 @@ theorem authored : Authored := by
 theorem sends : Sends := by
   intro Validator BlockId Payload _ _ _ cfg is
   exact broadcasts_run is Inv.init
+
+theorem decisions : Decisions := by
+  intro Validator BlockId Payload _ _ _ cfg is
+  dsimp only
+  obtain ⟨h, hL⟩ := run_appends (cfg := cfg) is Ledger.init
+  have hd : (run cfg (State.init cfg) is).1.decided = commitsOf (run cfg (State.init cfg) is).2 :=
+    h.1.trans (List.nil_append _)
+  refine ⟨hd, hd ▸ hL, fun k ds hp => hd ▸ h.2 k ds hp⟩
 
 theorem validOut : ValidOut := by
   intro Validator BlockId Payload _ _ _ cfg is
@@ -62,10 +65,11 @@ theorem decidesOnView : DecidesOnView := by
   unfold decideStep
   dsimp only
   split
-  · rw [hσ, h.tryDecide_eq cfg.p hadm.2.1.1 _ hlo]
+  · rw [commitsOf_append, commitsOf_map, proposeAt_commits, List.append_nil, hσ,
+      h.tryDecide_eq cfg.p hadm.2.1.1 _ hlo]
   · rfl
 
-theorem holds : Statement := ⟨shape, oneEach, authored, sends, validOut, decidesOnView⟩
+theorem holds : Statement := ⟨oneEach, authored, sends, decisions, validOut, decidesOnView⟩
 
 end Local
 

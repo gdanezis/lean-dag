@@ -6,20 +6,19 @@ import LeanDag.Node.Vote
 `docs/validator.md` §4, V1, V2 and V4. Over any sequence of inputs from the
 initial state:
 
-* **each step's outputs**, from any state a run reaches, are its
-  requests and answers, then its built blocks, each persisted, then
-  broadcast, then its round's timer set, then its decisions, then at most
-  one horizon (`Shape`);
 * **one block per round**: the node's own blocks, those it persists, lie
   at strictly increasing rounds (`OneEach`), each its own and identified
   by its hash (`Authored`); the blocks it broadcasts are those it
   persists (`Sends`);
+* **its decisions**: the node keeps the decisions it outputs, which are
+  slots `0 … lo − 1` in order, and every proposal it signs is a prefix of
+  them (`Decisions`);
 * **valid blocks**: each of its own blocks references only blocks it
   knew, delivered or offered with their hash, or its own, and is valid at
   the row under every block map agreeing with what it knew (`ValidOut`);
 * **decisions read only the view, from the horizon up**: at the bounded
   vote, with the horizon at or below the next undecided slot's round, a
-  decision step outputs what `tryDecide` decides on any record and view
+  decision step decides what `tryDecide` decides on any record and view
   holding the store's blocks from the horizon up (`DecidesOnView`); a
   pruned store decides as the view it is a cut of.
 
@@ -31,18 +30,6 @@ namespace LeanDag
 namespace Node
 
 namespace Local
-
-/-- **Each step's outputs**, from any state a run reaches: requests and
-answers, then built blocks, then decisions, then at most one horizon. -/
-def Shape : Prop :=
-  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
-    (is : List (Input Validator BlockId Payload)) (i : Input Validator BlockId Payload),
-    ∃ (xs : List (Output Validator BlockId Payload))
-      (bs : List (BlockId × Block Validator BlockId Payload))
-      (ds : List (ℕ × Option BlockId)) (gs : List ℕ), (∀ o ∈ xs, o.isFetch) ∧ gs.length ≤ 1 ∧
-      (step cfg (run cfg (State.init cfg) is).1 i).2 =
-        xs ++ built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune
 
 /-- **One block per round**: the node's own blocks lie at strictly
 increasing rounds. -/
@@ -69,6 +56,17 @@ def Sends : Prop :=
     (is : List (Input Validator BlockId Payload)),
     broadcasts (run cfg (State.init cfg) is).2 = persists (run cfg (State.init cfg) is).2
 
+/-- **Its decisions**: the node keeps the decisions it outputs, which are
+slots `0 … lo − 1` in order, and every proposal it signs is a prefix of
+them. -/
+def Decisions : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
+    (is : List (Input Validator BlockId Payload)),
+    let r := run cfg (State.init cfg) is
+    r.1.decided = commitsOf r.2 ∧ (commitsOf r.2).map Prod.fst = List.range r.1.lo ∧
+      ∀ k ds, Output.propose k ds ∈ r.2 → ds <+: commitsOf r.2
+
 /-- **Valid blocks**: each of the node's own blocks references only blocks
 it knew, and is valid at the row under every block map agreeing with
 what it knew. -/
@@ -84,7 +82,7 @@ def ValidOut : Prop :=
 
 /-- **Decisions read only the view, from the horizon up**: at the bounded
 vote, with the horizon at or below the next undecided slot's round, a
-decision step outputs what `tryDecide` decides on any record and view
+decision step decides what `tryDecide` decides on any record and view
 holding the store's blocks from the horizon up, read at the horizon. -/
 def DecidesOnView : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
@@ -95,14 +93,12 @@ def DecidesOnView : Prop :=
     (∀ i, i ∈ V.ids ∧ s.store.base ≤ (U.block i).round ↔ i ∈ s.store.ids) →
     (∀ i ∈ s.store.ids, atBase s.store.base (U.block i) = s.store.blk i) →
     let N := decidable cfg s.store.topRound
-    (decideStep cfg s).2 =
-      if s.lo < N then
-        (Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel U V s.lo (N - 1)).map
-          fun e => .commit e.1 e.2
+    commitsOf (decideStep cfg s).2 =
+      if s.lo < N then Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel U V s.lo (N - 1)
       else []
 
 /-- One node at a time. -/
-def Statement : Prop := Shape ∧ OneEach ∧ Authored ∧ Sends ∧ ValidOut ∧ DecidesOnView
+def Statement : Prop := OneEach ∧ Authored ∧ Sends ∧ Decisions ∧ ValidOut ∧ DecidesOnView
 
 end Local
 

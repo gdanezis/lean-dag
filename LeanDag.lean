@@ -577,6 +577,7 @@ import LeanDag.Node.Local.Proof
 import LeanDag.Node.Helpers.Grow
 import LeanDag.Node.Helpers.Global
 import LeanDag.Node.Helpers.Commits
+import LeanDag.Node.Helpers.Decided
 import LeanDag.Node.Runs.Statement
 import LeanDag.Node.Runs.Proof
 import LeanDag.Node.Model.Trace

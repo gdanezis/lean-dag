@@ -11,14 +11,19 @@ output:
 * inputs: `{"start":{}}`, `{"timer":r}`, `{"restart":{}}` (the node keeps
   only what it persisted),
   `{"deliver":{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}}`,
-  `{"fetchRequest":{"peer":v,"ids":[…]}}`, `{"baseRequest":{"peer":v}}`, and
-  `{"baseOffer":{"peer":v,"horizon":G,"blocks":[block…]}}`;
+  `{"fetchRequest":{"peer":v,"ids":[…]}}`, `{"baseRequest":{"peer":v}}`,
+  `{"baseOffer":{"peer":v,"horizon":G,"blocks":[block…]}}`,
+  `{"proposal":{"peer":v,"height":k,"decisions":[[slot,block]…]}}` (a peer's
+  signed proposal, `null` for a skip), and
+  `{"certOffer":{"peer":v,"cert":{"height":k,"decisions":[…],"signers":[…]}}}`;
 * outputs: `{"persist":block}`, `{"broadcast":block}`,
   `{"setTimer":{"round":r,"after":t}}`, `{"commit":{"slot":k,"block":i}}`
   (`null` for a skip), `{"prune":G}`, `{"fetch":[…]}` (ask every peer),
   `{"send":{"peer":v,"block":block}}` (answer one), `{"requestBase":{}}`
-  (ask every peer for its base), and
-  `{"serveBase":{"peer":v,"horizon":G,"blocks":[block…]}}` (answer one).
+  (ask every peer for its base),
+  `{"serveBase":{"peer":v,"horizon":G,"blocks":[block…]}}` (answer one),
+  `{"propose":{"height":k,"decisions":[[slot,block]…]}}` (sign and send to
+  every peer), and `{"serveCert":{"peer":v,"cert":cert}}` (answer one).
 
 A delivered block's identifier, if given, must be its hash
 (`LeanDagSim.idOf`), and the node drops one that is not; if it is left
@@ -38,6 +43,16 @@ def blockJson {n : ℕ} (id : ℕ) (b : Block (Fin n) ℕ ℕ) : Json :=
     ("refs", Json.arr ((b.refs.sort (· ≤ ·)).map fun r => (r : Json)).toArray),
     ("payload", b.payload)]
 
+/-- Decisions, as JSON: each a slot and its block, `null` for a skip. -/
+def decisionsJson (ds : List (ℕ × Option ℕ)) : Json :=
+  Json.arr (ds.map fun e =>
+    Json.arr #[(e.1 : Json), match e.2 with | some i => (i : Json) | none => Json.null]).toArray
+
+/-- A certificate, as JSON. -/
+def certJson {n : ℕ} (c : Cert (Fin n) ℕ) : Json :=
+  Json.mkObj [("height", c.height), ("decisions", decisionsJson c.decisions),
+    ("signers", Json.arr (c.signers.map fun v => (v.val : Json)).toArray)]
+
 /-- An output, as JSON. -/
 def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
   | .persist id b => Json.mkObj [("persist", blockJson id b)]
@@ -52,6 +67,10 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
   | .requestBase => Json.mkObj [("requestBase", Json.mkObj [])]
   | .serveBase peer G bs => Json.mkObj [("serveBase", Json.mkObj [("peer", peer.val),
       ("horizon", G), ("blocks", Json.arr (bs.map fun e => blockJson e.1 e.2).toArray)])]
+  | .propose k ds => Json.mkObj [("propose", Json.mkObj [("height", k),
+      ("decisions", decisionsJson ds)])]
+  | .serveCert peer c => Json.mkObj [("serveCert", Json.mkObj [("peer", peer.val),
+      ("cert", certJson c)])]
 
 /-- A block with its identifier, from JSON; the identifier is its hash
 when left out. -/
@@ -65,6 +84,20 @@ def blockOf {n : ℕ} (d : Json) : Except String (ℕ × Block (Fin n) ℕ ℕ) 
     let b : Block (Fin n) ℕ ℕ := ⟨round, ⟨creator, h⟩, refs.toFinset, payload⟩
     return ((natField d "id").toOption.getD (idOf b), b)
   else throw s!"creator {creator} out of range"
+
+/-- Decisions, from JSON. -/
+def decisionsOf (d : Json) : Except String (List (ℕ × Option ℕ)) := do
+  let a ← d.getArr?
+  a.toList.mapM fun e => do
+    let p ← e.getArr?
+    match p.toList with
+    | [k, b] => return (← k.getNat?, b.getNat?.toOption)
+    | _ => throw "a decision is a slot and a block"
+
+/-- A validator, from JSON. -/
+def validatorOf {n : ℕ} (d : Json) : Except String (Fin n) := do
+  let v ← d.getNat?
+  if h : v < n then return ⟨v, h⟩ else throw s!"validator {v} out of range"
 
 /-- An input, from JSON. -/
 def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ ℕ) := do
@@ -86,6 +119,14 @@ def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ
     let bs ← ((← m.getObjVal? "blocks").getArr?) >>= fun a => a.toList.mapM (blockOf (n := n))
     if h : peer < n then return .baseOffer ⟨peer, h⟩ G bs
     else throw s!"peer {peer} out of range"
+  if let .ok m := j.getObjVal? "proposal" then
+    return .proposal (← validatorOf (← m.getObjVal? "peer")) (← natField m "height")
+      (← decisionsOf (← m.getObjVal? "decisions"))
+  if let .ok m := j.getObjVal? "certOffer" then
+    let c ← m.getObjVal? "cert"
+    let signers ← ((← c.getObjVal? "signers").getArr?) >>= fun a => a.toList.mapM validatorOf
+    return .certOffer (← validatorOf (← m.getObjVal? "peer"))
+      ⟨← natField c "height", ← decisionsOf (← c.getObjVal? "decisions"), signers⟩
   let d ← j.getObjVal? "deliver"
   let _ := hn
   let (id, b) ← blockOf d

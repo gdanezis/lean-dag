@@ -112,7 +112,9 @@ theorem decideStep_store (s : State Validator BlockId Payload) :
     (Node.decideStep cfg s).1.store = s.store := by
   unfold Node.decideStep
   dsimp only
-  split <;> rfl
+  split
+  · exact (proposeAt_keeps _).1
+  · rfl
 
 omit [Fintype Validator] in
 theorem Grows.collect (s : State Validator BlockId Payload) :
@@ -133,8 +135,8 @@ theorem Grows.advance (s : State Validator BlockId Payload) :
 
 omit [Fintype Validator] in
 /-- **A bootstrap raises the horizon.** -/
-theorem Grows.boot {s s' : State Validator BlockId Payload} (h : tryBoot cfg s = some s') :
-    Grows s.store s'.store := by
+theorem Grows.boot {s s' : State Validator BlockId Payload} {ads : List (ℕ × Option BlockId)}
+    (h : tryBoot cfg s = some (s', ads)) : Grows s.store s'.store := by
   refine ⟨(boot_base h).le, fun e => absurd e (ne_of_gt (boot_base h))⟩
 
 omit [Fintype Validator] in
@@ -149,6 +151,15 @@ omit [Fintype Validator] in
 theorem Grows.settle_of {st : Store Validator BlockId Payload} (s : State Validator BlockId Payload)
     (h : s.store = st) : Grows st (Node.settle cfg s).1.store :=
   h ▸ Grows.settle s
+
+omit [Fintype Validator] in
+theorem Grows.bootFrom (s : State Validator BlockId Payload) :
+    Grows s.store (Node.bootFrom cfg s).1.store := by
+  unfold Node.bootFrom
+  split
+  · rename_i s₂ ads hb
+    exact (Grows.boot hb).trans (Grows.advance _)
+  · exact Grows.refl _
 
 /-- **Across a step the store grows.** -/
 theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator BlockId Payload) :
@@ -177,13 +188,21 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
   | timer r => exact Grows.settle_of _ rfl
   | restart => exact Grows.settle_of _ rfl
   | baseOffer peer G bs =>
+    have h := Grows.bootFrom (cfg := cfg)
+      { s with offers := (peer, G, bs) :: s.offers.filter fun o => o.1 ≠ peer }
     simp only [Node.step]
     split
-    · split
-      · rename_i s₂ hb
-        refine (Grows.boot hb).trans (Grows.advance _)
-      · exact Grows.refl _
+    · exact h
     · exact Grows.refl _
+  | certOffer peer c =>
+    have h := Grows.bootFrom (cfg := cfg) { s with certs := c :: s.certs }
+    simp only [Node.step]
+    split
+    · exact h
+    · exact Grows.refl _
+  | proposal peer k ds =>
+    simp only [Node.step]
+    split <;> exact Grows.refl _
   | _ => exact Grows.refl _
 
 /-- **Across a run the store grows.** -/

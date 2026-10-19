@@ -6,8 +6,8 @@ import LeanDag.Node.Model.Step
 outputs. `persists` reads the node's own blocks among the outputs,
 `broadcasts` those it sent, and `delivered` the blocks among the inputs,
 delivered or offered, whose identifier is their hash: together, what
-the node knew. `isFetch` marks the requests and answers that move blocks
-without building one.
+the node knew. `isQuiet` marks the outputs that neither persist nor
+broadcast a block.
 
 `commitsOf` reads the decisions among the outputs. Many nodes run over
 one trace (`Model/Trace.lean`).
@@ -58,14 +58,11 @@ def broadcasts (out : List (Output Validator BlockId Payload)) :
     | .broadcast id b => some (id, b)
     | _ => none
 
-/-- **An output that moves blocks between nodes without building one**:
-a request or an answer. -/
-def Output.isFetch : Output Validator BlockId Payload → Bool
-  | .fetch _ => true
-  | .send _ _ _ => true
-  | .requestBase => true
-  | .serveBase _ _ _ => true
-  | _ => false
+/-- **An output that neither persists nor broadcasts a block.** -/
+def Output.isQuiet : Output Validator BlockId Payload → Bool
+  | .persist _ _ => false
+  | .broadcast _ _ => false
+  | _ => true
 
 /-- The decisions among some outputs. -/
 def commitsOf (out : List (Output Validator BlockId Payload)) : List (ℕ × Option BlockId) :=

@@ -201,6 +201,24 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
             ((t + dt, d, .baseRequest s.node) :: acc.1, g')
           else acc
         | _, _ => acc) acc
+    | .propose k ds =>
+      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
+        match agents[src]?, agents[d]? with
+        | some s, some a =>
+          if receives sc a s then
+            let (dt, g') := delay sc t acc.2
+            ((t + dt, d, .proposal s.node k ds) :: acc.1, g')
+          else acc
+        | _, _ => acc) acc
+    | .serveCert peer c =>
+      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
+        match agents[src]?, agents[d]? with
+        | some s, some a =>
+          if a.node = peer then
+            let (dt, g') := delay sc t acc.2
+            ((t + dt, d, .certOffer s.node c) :: acc.1, g')
+          else acc
+        | _, _ => acc) acc
     | .serveBase peer G bs =>
       (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
         match agents[src]?, agents[d]? with

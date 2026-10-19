@@ -35,82 +35,146 @@ def Verdict (e : ℕ × Option BlockId) : Prop :=
 /-! ## Offers -/
 
 omit [Fintype Validator] in
-theorem advance_offers (s : State Validator BlockId Payload) :
-    (advance cfg s).1.offers = s.offers := by
+theorem tryBuild_certs {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
+    s'.offers = s.offers ∧ s'.certs = s.certs := by
+  unfold tryBuild at h
+  split at h
+  · dsimp only at h
+    split at h
+    · split at h
+      · rw [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, -⟩ := h
+        exact ⟨rfl, rfl⟩
+      · exact absurd h (by simp)
+    · exact absurd h (by simp)
+  · exact absurd h (by simp)
+
+omit [Fintype Validator] in
+/-- **Advancing keeps the offers**, of bases and of certificates. -/
+theorem advance_offered (s : State Validator BlockId Payload) :
+    (advance cfg s).1.offers = s.offers ∧ (advance cfg s).1.certs = s.certs := by
   have hp : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
-      (progress cfg fuel s).1.offers = s.offers := by
+      (progress cfg fuel s).1.offers = s.offers ∧ (progress cfg fuel s).1.certs = s.certs := by
     intro fuel
     induction fuel with
-    | zero => intro _; rfl
+    | zero => intro _; exact ⟨rfl, rfl⟩
     | succ n ih =>
       intro s
       unfold Node.progress
       split
       · rename_i s₁ out h
-        rw [ih, tryBuild_offers h]
-      · rfl
-  have hd : ∀ s : State Validator BlockId Payload, (decideStep cfg s).1.offers = s.offers := by
-    intro s; unfold Node.decideStep; dsimp only; split <;> rfl
-  have hc : ∀ s : State Validator BlockId Payload, (collect cfg s).1.offers = s.offers := by
+        rw [(ih s₁).1, (ih s₁).2, (tryBuild_certs h).1, (tryBuild_certs h).2]
+        exact ⟨rfl, rfl⟩
+      · exact ⟨rfl, rfl⟩
+  have hd : ∀ s : State Validator BlockId Payload,
+      (decideStep cfg s).1.offers = s.offers ∧ (decideStep cfg s).1.certs = s.certs := by
+    intro s; unfold Node.decideStep; dsimp only; split
+    · obtain ⟨-, -, -, -, hof, -, -, -, -, -, hce⟩ := proposeAt_keeps (cfg := cfg) _
+      exact ⟨hof, hce⟩
+    · exact ⟨rfl, rfl⟩
+  have hc : ∀ s : State Validator BlockId Payload,
+      (collect cfg s).1.offers = s.offers ∧ (collect cfg s).1.certs = s.certs := by
     intro s; unfold Node.collect; split
-    · dsimp only; split <;> rfl
-    · rfl
+    · dsimp only; split <;> exact ⟨rfl, rfl⟩
+    · exact ⟨rfl, rfl⟩
   simp only [Node.advance]
-  change (collect cfg (decideStep cfg (progress cfg (s.store.topRound + 2) s).1).1).1.offers = _
-  rw [hc, hd, hp]
+  change (collect cfg (decideStep cfg (progress cfg (s.store.topRound + 2) s).1).1).1.offers = _ ∧
+    (collect cfg (decideStep cfg (progress cfg (s.store.topRound + 2) s).1).1).1.certs = _
+  rw [(hc _).1, (hc _).2, (hd _).1, (hd _).2, (hp _ _).1, (hp _ _).2]
+  exact ⟨rfl, rfl⟩
 
 omit [Fintype Validator] in
-theorem settle_offers (s : State Validator BlockId Payload) :
-    (Node.settle cfg s).1.offers = s.offers := by
+theorem settle_offered (s : State Validator BlockId Payload) :
+    (Node.settle cfg s).1.offers = s.offers ∧ (Node.settle cfg s).1.certs = s.certs := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h]
-  · exact advance_offers s
+  · exact advance_offered s
   · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, hof, -⟩ := tryResume_some hj
-    rw [advance_offers, hof]
+    have hce : s₁.certs = s.certs := by
+      unfold tryResume at hj
+      split at hj
+      · dsimp only at hj
+        split at hj
+        · split at hj
+          · rw [Option.some.injEq] at hj; subst hj; rfl
+          · cases hj
+        · cases hj
+      · cases hj
+    rw [(advance_offered s₁).1, (advance_offered s₁).2, hof, hce]
+    exact ⟨rfl, rfl⟩
 
-/-- **A base offer a node holds was given to it**, at this step or before. -/
-theorem step_offers (s : State Validator BlockId Payload) (i : Input Validator BlockId Payload) :
-    ∀ o ∈ (Node.step cfg s i).1.offers, o ∈ s.offers ∨ i = .baseOffer o.1 o.2.1 o.2.2 := by
-  intro o ho
+omit [Fintype Validator] in
+/-- **Trying to bootstrap keeps no offer it did not hold.** -/
+theorem bootFrom_offered (s : State Validator BlockId Payload) :
+    (∀ o ∈ (bootFrom cfg s).1.offers, o ∈ s.offers) ∧
+      ∀ c ∈ (bootFrom cfg s).1.certs, c ∈ s.certs := by
+  rcases bootFrom_cases (cfg := cfg) s with he | ⟨s₂, ads, hb, he⟩ <;> rw [he]
+  · exact ⟨fun _ h => h, fun _ h => h⟩
+  · obtain ⟨t, G, c, hbG, -, -, -, -, -, -, -, -, -, -, hof, -, -, -, -, hce, -⟩ := tryBoot_some hb
+    rw [(advance_offered s₂).1, (advance_offered s₂).2, hof, hce]
+    exact ⟨fun _ h => absurd h List.not_mem_nil, fun _ h => absurd h List.not_mem_nil⟩
+
+/-- **The offers a node holds were given to it**, at this step or before:
+a base offer as a base offer, a certificate as a certificate offer. -/
+theorem step_offered (s : State Validator BlockId Payload) (i : Input Validator BlockId Payload) :
+    (∀ o ∈ (Node.step cfg s i).1.offers, o ∈ s.offers ∨ i = .baseOffer o.1 o.2.1 o.2.2) ∧
+      ∀ c ∈ (Node.step cfg s i).1.certs, c ∈ s.certs ∨ ∃ p, i = .certOffer p c := by
   cases i with
   | start =>
-    simp only [Node.step] at ho
-    split at ho
-    · split at ho
-      · rw [settle_offers] at ho; exact Or.inl ho
-      · exact Or.inl ho
-    · exact Or.inl ho
+    simp only [Node.step]
+    split
+    · split
+      · rw [(settle_offered _).1, (settle_offered _).2]
+        exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+      · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+    · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
   | deliver id b =>
-    simp only [Node.step] at ho
-    split at ho
-    · rw [settle_offers] at ho; exact Or.inl ho
-    · exact Or.inl ho
-  | timer r => simp only [Node.step] at ho; rw [settle_offers] at ho; exact Or.inl ho
+    simp only [Node.step]
+    split
+    · rw [(settle_offered _).1, (settle_offered _).2]
+      exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+    · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+  | timer r =>
+    simp only [Node.step]
+    rw [(settle_offered _).1, (settle_offered _).2]
+    exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
   | restart =>
-    simp only [Node.step] at ho; rw [settle_offers] at ho; simp [State.recover] at ho
-  | fetchRequest => exact Or.inl ho
-  | baseRequest => exact Or.inl ho
+    simp only [Node.step]
+    rw [(settle_offered _).1, (settle_offered _).2]
+    exact ⟨fun o ho => by simp [State.recover] at ho, fun c hc => by simp [State.recover] at hc⟩
+  | fetchRequest => exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+  | baseRequest => exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+  | proposal p k ds =>
+    rw [step_proposal]
+    split <;> exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
   | baseOffer p G bs =>
-    rw [step_offer] at ho
-    split at ho
-    · split at ho
-      · rename_i s₂ hb
-        rw [advance_offers] at ho
-        obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, hof, -⟩ := tryBoot_some hb
-        rw [hof] at ho; exact absurd ho List.not_mem_nil
-      · rcases List.mem_cons.mp ho with rfl | ho
-        · exact Or.inr rfl
-        · exact Or.inl (List.mem_filter.mp ho).1
-    · exact Or.inl ho
+    rw [step_offer]
+    split
+    · obtain ⟨h₁, h₂⟩ := bootFrom_offered (cfg := cfg) (withOffer s p G bs)
+      refine ⟨fun o ho => ?_, fun c hc => Or.inl (h₂ c hc)⟩
+      rcases List.mem_cons.mp (h₁ o ho) with rfl | ho
+      · exact Or.inr rfl
+      · exact Or.inl (List.mem_filter.mp ho).1
+    · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+  | certOffer p c =>
+    rw [step_certOffer]
+    split
+    · obtain ⟨h₁, h₂⟩ := bootFrom_offered (cfg := cfg) (withCert s c)
+      refine ⟨fun o ho => Or.inl (h₁ o ho), fun c' hc => ?_⟩
+      rcases List.mem_cons.mp (h₂ c' hc) with rfl | hc
+      · exact Or.inr ⟨p, rfl⟩
+      · exact Or.inl hc
+    · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
 
 /-! ## The store stays a cut -/
 
 omit [Fintype Validator] in
 /-- **A bootstrap at a round the record reaches keeps the store a cut.** -/
 theorem IsCut.boot (hg : Ground U K cfg.q) {s s' : State Validator BlockId Payload}
-    (hc : IsCut U s.store) (hb : tryBoot cfg s = some s')
+    {ads : List (ℕ × Option BlockId)} (hc : IsCut U s.store) (hb : tryBoot cfg s = some (s', ads))
     (hoff : ∀ o ∈ s.offers, ∀ e ∈ o.2.2, e.1 = cfg.idOf e.2 → e ∈ K)
     (hp : ∀ e ∈ s.pending, e ∈ K) (hspan : Spans U s'.store.base) : IsCut U s'.store := by
-  obtain ⟨t, G, hbG, -, -, -, hst, -⟩ := tryBoot_some hb
+  obtain ⟨t, G, c, hbG, -, -, -, -, hst, -⟩ := tryBoot_some hb
   set st₀ := (baseAt cfg s G).foldl (fun st e => Node.accept cfg st e.1 e.2)
     (s.store.prune G hbG.le)
     with hst₀
@@ -151,7 +215,7 @@ theorem verdict_decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H f
   dsimp only at he
   split at he
   · rename_i hlt
-    rw [commitsOf_map] at he
+    rw [commitsOf_append, commitsOf_map, proposeAt_commits, List.append_nil] at he
     obtain ⟨V', -, hiff⟩ := hc.extend ⟨∅, Finset.empty_subset _,
       fun _ h => absurd h (Finset.notMem_empty _)⟩ (fun i hi => absurd hi (Finset.notMem_empty i))
     have hT : tryDecide cfg.p cfg.σ s.store.toRecord s.store.view s.lo
@@ -210,8 +274,73 @@ theorem IsCut.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     exact IsCut.advance hg hσ ht (by rw [hst]; exact hc) (hh.tryResume hj) (by rw [hpd]; exact hp)
       hb
 
+/-- **Trying to bootstrap from a cut**, at a round the record reaches,
+with offered certificates whose decisions are verdicts: the store stays a
+cut, and the decisions are verdicts. -/
+theorem IsCut.bootFrom (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
+    (ht : cfg.p.Tolerates H f q) {s₁ : State Validator BlockId Payload}
+    (hc : IsCut U s₁.store) (hh : Held cfg s₁) (hp : ∀ e ∈ s₁.pending, e ∈ K)
+    (hoff : ∀ o ∈ s₁.offers, ∀ e ∈ o.2.2, e.1 = cfg.idOf e.2 → e ∈ K)
+    (hcv : ∀ c ∈ s₁.certs, cfg.q ≤ c.signers.length → c.signers.Nodup →
+      ∀ e ∈ c.decisions, Verdict cfg U e)
+    (hb : ∀ e ∈ persists (Node.bootFrom cfg s₁).2, e ∈ K)
+    (hspan : ∀ s₂ ads, tryBoot cfg s₁ = some (s₂, ads) → Spans U s₂.store.base) :
+    IsCut U (Node.bootFrom cfg s₁).1.store ∧
+      ∀ e ∈ commitsOf (Node.bootFrom cfg s₁).2, Verdict cfg U e := by
+  rcases bootFrom_cases (cfg := cfg) s₁ with he | ⟨s₂, ads, hbt, he⟩ <;> rw [he] at hb ⊢
+  · exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
+  · rw [persists_append] at hb
+    have hc₂ := IsCut.boot hg hc hbt hoff hp (hspan s₂ ads hbt)
+    have hh₂ := hh.boot hbt
+    obtain ⟨t', G', c, hb', -, -, -, hcf, -, hpd, -, -, -, -, -, -, -, hads, -⟩ :=
+      tryBoot_some hbt
+    obtain ⟨h₁, h₂⟩ := hc₂.advance hg hσ ht hh₂ (fun e he => by
+      rw [hpd] at he
+      rcases List.mem_append.mp (flush_pending_sub (cfg := cfg) _ _ _ e he) with he | he
+      · obtain ⟨he, hce⟩ := List.mem_filter.mp he
+        simp only [decide_eq_true_eq] at hce
+        obtain ⟨o, ho, heo⟩ := List.mem_flatMap.mp he
+        exact hoff o ho e heo hce.2
+      · exact hp e (List.mem_filter.mp he).1) (fun e he => hb e (List.mem_append_right _ he))
+    refine ⟨h₁, fun e he => ?_⟩
+    rw [commitsOf_append, commitsOf_map] at he
+    rcases List.mem_append.mp he with he | he
+    · obtain ⟨hcm, hv⟩ := certFor_valid hcf
+      obtain ⟨hq, hnd, -, -⟩ := (validCert_iff (cfg := cfg)).mp hv
+      rw [hads] at he
+      exact hcv c hcm hq hnd e (List.mem_of_mem_drop he)
+    · exact h₂ e he
+
+/-- The state with the offer an input gives recorded, if any. -/
+def withInput (s : State Validator BlockId Payload) :
+    Input Validator BlockId Payload → State Validator BlockId Payload
+  | .baseOffer p G bs => withOffer s p G bs
+  | .certOffer _ c => withCert s c
+  | _ => s
+
+omit [Fintype Validator] in
+/-- The offers of a state with an input's offer recorded: its own, and
+the input's. -/
+theorem withInput_offered {s : State Validator BlockId Payload}
+    {i : Input Validator BlockId Payload} :
+    (∀ o ∈ (withInput s i).offers, o ∈ s.offers ∨ i = .baseOffer o.1 o.2.1 o.2.2) ∧
+      ∀ c ∈ (withInput s i).certs, c ∈ s.certs ∨ ∃ p, i = .certOffer p c := by
+  cases i with
+  | baseOffer p G bs =>
+    refine ⟨fun o ho => ?_, fun c hc => Or.inl hc⟩
+    rcases List.mem_cons.mp ho with rfl | ho
+    · exact Or.inr rfl
+    · exact Or.inl (List.mem_filter.mp ho).1
+  | certOffer p c =>
+    refine ⟨fun o ho => Or.inl ho, fun c' hc => ?_⟩
+    rcases List.mem_cons.mp hc with rfl | hc
+    · exact Or.inr ⟨p, rfl⟩
+    · exact Or.inl hc
+  | _ => exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+
 /-- **A step from a cut**, bootstrapping only at rounds the record
-reaches: the store stays a cut, and the decisions are verdicts. -/
+reaches and from certificates whose decisions are verdicts: the store
+stays a cut, and the decisions are verdicts. -/
 theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
     (i : Input Validator BlockId Payload) (hc : IsCut U s.store) (hh : Held cfg s)
@@ -219,8 +348,9 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (hoff : ∀ o ∈ s.offers, ∀ e ∈ o.2.2, e.1 = cfg.idOf e.2 → e ∈ K)
     (hd : ∀ e ∈ delivered cfg [i], e ∈ K)
     (hb : ∀ e ∈ persists (Node.step cfg s i).2, e ∈ K)
-    (hspan : ∀ p G bs s₂, i = .baseOffer p G bs →
-      tryBoot cfg (withOffer s p G bs) = some s₂ → Spans U s₂.store.base) :
+    (hcv : ∀ c ∈ (withInput s i).certs, cfg.q ≤ c.signers.length → c.signers.Nodup →
+      ∀ e ∈ c.decisions, Verdict cfg U e)
+    (hspan : ∀ s₂ ads, tryBoot cfg (withInput s i) = some (s₂, ads) → Spans U s₂.store.base) :
     IsCut U (Node.step cfg s i).1.store ∧
       ∀ e ∈ commitsOf (Node.step cfg s i).2, Verdict cfg U e := by
   have hset : ∀ (s₀ : State Validator BlockId Payload) (pre : List (Output Validator BlockId Payload)),
@@ -301,36 +431,32 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       (hh.grow (Grows.refl _) rfl rfl le_rfl) (fun e he => by simp [State.recover] at he) rfl
       (by simp only [Node.step]; rfl)
   | baseRequest peer =>
-    rw [show Node.step cfg s (.baseRequest peer) =
-      (s, [.serveBase peer s.store.base s.store.window]) from rfl]
-    exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
+    rw [show Node.step cfg s (.baseRequest peer) = (s, .serveBase peer s.store.base
+      s.store.window :: s.cert.toList.map (.serveCert peer)) from rfl]
+    exact ⟨hc, fun e he => by cases hcert : s.cert <;> simp [commitsOf, hcert] at he⟩
+  | proposal p k ds =>
+    rw [step_proposal]
+    split
+    · exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
+    · exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
   | baseOffer p G bs =>
     by_cases hcnd : s.recovering ∧ p ≠ cfg.me
-    · rcases hbt : tryBoot cfg (withOffer s p G bs) with _ | s₂
-      · exact hsame (withOffer s p G bs) rfl (by rw [step_offer, if_pos hcnd, hbt])
-      · have he : Node.step cfg s (.baseOffer p G bs) = Node.advance cfg s₂ := by
-          rw [step_offer, if_pos hcnd, hbt]
-        rw [he] at hb ⊢
-        have hoff' : ∀ o ∈ (withOffer s p G bs).offers, ∀ e ∈ o.2.2, e.1 = cfg.idOf e.2 →
-            e ∈ K := by
-          intro o ho e heo hid
-          rcases List.mem_cons.mp ho with rfl | ho
-          · exact hd e (by simp [delivered, heo, hid])
-          · exact hoff o (List.mem_filter.mp ho).1 e heo hid
-        have hc₂ := IsCut.boot hg (s := withOffer s p G bs) hc hbt hoff' hp
-          (hspan p G bs s₂ rfl hbt)
-        have hh₂ := (Held.grow hh (Grows.refl _) rfl rfl le_rfl :
-          Held cfg (withOffer s p G bs)).boot hbt
-        obtain ⟨t', G', hb', -, -, -, -, hpd, -⟩ := tryBoot_some hbt
-        exact hc₂.advance hg hσ ht hh₂ (fun e he => by
-          rw [hpd] at he
-          rcases List.mem_append.mp (flush_pending_sub (cfg := cfg) _ _ _ e he) with he | he
-          · obtain ⟨he, hce⟩ := List.mem_filter.mp he
-            simp only [decide_eq_true_eq] at hce
-            obtain ⟨o, ho, heo⟩ := List.mem_flatMap.mp he
-            exact hoff' o ho e heo hce.2
-          · exact hp e (List.mem_filter.mp he).1) hb
+    · rw [step_offer, if_pos hcnd] at hb ⊢
+      have hoff' : ∀ o ∈ (withOffer s p G bs).offers, ∀ e ∈ o.2.2, e.1 = cfg.idOf e.2 →
+          e ∈ K := by
+        intro o ho e heo hid
+        rcases List.mem_cons.mp ho with rfl | ho
+        · exact hd e (by simp [delivered, heo, hid])
+        · exact hoff o (List.mem_filter.mp ho).1 e heo hid
+      exact IsCut.bootFrom hg hσ ht (s₁ := withOffer s p G bs) hc
+        (hh.grow (s' := withOffer s p G bs) (Grows.refl _) rfl rfl le_rfl) hp hoff' hcv hb hspan
     · exact hsame s rfl (by rw [step_offer, if_neg hcnd])
+  | certOffer p c =>
+    by_cases hcnd : s.recovering ∧ p ≠ cfg.me
+    · rw [step_certOffer, if_pos hcnd] at hb ⊢
+      exact IsCut.bootFrom hg hσ ht (s₁ := withCert s c) hc
+        (hh.grow (s' := withCert s c) (Grows.refl _) rfl rfl le_rfl) hp hoff hcv hb hspan
+    · exact hsame s rfl (by rw [step_certOffer, if_neg hcnd])
 
 end Node
 

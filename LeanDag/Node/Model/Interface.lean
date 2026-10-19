@@ -7,7 +7,9 @@ transition function from inputs to outputs. `Config` fixes the row, the
 quorum, the node's identity, the schedule, the timeouts, the vote rule,
 the identifier map and the mechanisms' constants; `Input` and `Output`
 are the events it consumes and produces, with those of garbage
-collection and bootstrap included.
+collection, checkpoints and bootstrap included. A checkpoint certificate
+(`Cert`) carries a height, the decisions of the slots below it, and the
+validators whose signed proposals of them it holds.
 
 The node checks the row's validity `rowValid q` on receipt, and decides
 on a record of its own store at `stored`, references one round below,
@@ -90,11 +92,13 @@ def slotsAt (r : ℕ) : List ℕ :=
 committee's size, the bound `f` and the quorum `q`, its certificates fit
 the quorum, and its commit threshold is reachable by the validators
 neither Byzantine nor crash-prone, which is what liveness reads; a row
-whose skip threshold is unreachable skips by the indirect rule. -/
+whose skip threshold is unreachable skips by the indirect rule; and a
+quorum holds a node that is not Byzantine, which is what a checkpoint
+certificate reads. -/
 def Admissible : Prop :=
   cfg.p.Covered (Fintype.card Validator) cfg.f cfg.q ∧ cfg.p.CertFits cfg.q ∧
     cfg.p.commitThreshold ≤ Fintype.card Validator - cfg.f - cfg.c ∧ 0 < cfg.q ∧
-    cfg.q ≤ Fintype.card Validator
+    cfg.q ≤ Fintype.card Validator ∧ cfg.f < cfg.q
 
 instance : Decidable cfg.Admissible := by
   unfold Admissible Scheme.Params.Covered Scheme.Params.CertFits
@@ -106,9 +110,21 @@ end Config
 
 variable (Validator BlockId Payload)
 
+/-- **A checkpoint certificate**: a height, the decisions of the slots
+below it, and the validators whose signed proposals of these decisions at
+this height it carries. -/
+structure Cert where
+  /-- The number of slots certified. -/
+  height : ℕ
+  /-- The decisions of slots `0 … height − 1`, in order. -/
+  decisions : List (ℕ × Option BlockId)
+  /-- The signers. -/
+  signers : List Validator
+
 /-- **What a node persists** across a crash (`docs/validator.md` §5.1):
 its accepted blocks, from the horizon up, the horizon, the next
-undecided slot, and its own block at its top round. -/
+undecided slot, its top round and its own block there, its decisions,
+the height it last proposed, and its certificate. -/
 structure Persisted where
   /-- The accepted blocks from the horizon up, the node's own among them. -/
   window : List (BlockId × Block Validator BlockId Payload)
@@ -120,6 +136,12 @@ structure Persisted where
   top : Option ℕ
   /-- The node's own block at its top round, if it built there. -/
   own : Option BlockId
+  /-- The decisions the node output, in order. -/
+  decided : List (ℕ × Option BlockId)
+  /-- The height the node last proposed. -/
+  lastProposed : ℕ
+  /-- The highest certificate the node holds. -/
+  cert : Option (Cert Validator BlockId)
 
 /-- **What a node consumes.** -/
 inductive Input where
@@ -137,6 +159,10 @@ inductive Input where
   | baseRequest (peer : Validator)
   /-- A peer asks for the blocks `ids`. -/
   | fetchRequest (peer : Validator) (ids : List BlockId)
+  /-- A peer's signed proposal of the decisions `ds` of slots `0 … k − 1`. -/
+  | proposal (peer : Validator) (k : ℕ) (ds : List (ℕ × Option BlockId))
+  /-- A peer's certificate, served with its base. -/
+  | certOffer (peer : Validator) (c : Cert Validator BlockId)
 
 /-- **What a node produces.** -/
 inductive Output where
@@ -158,6 +184,11 @@ inductive Output where
   | fetch (ids : List BlockId)
   /-- Send a block to one peer. -/
   | send (peer : Validator) (id : BlockId) (b : Block Validator BlockId Payload)
+  /-- Sign and send every peer a proposal of the decisions `ds` of slots
+  `0 … k − 1`. -/
+  | propose (k : ℕ) (ds : List (ℕ × Option BlockId))
+  /-- Send the certificate to a peer. -/
+  | serveCert (peer : Validator) (c : Cert Validator BlockId)
 
 end Node
 

@@ -27,7 +27,7 @@ theorem safety : Safety := by
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
   let U := globalRecord hinj hauth
-  have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2, hadm.1⟩
+  have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2.1, hadm.1⟩
   have hg := ground hinj hauth hadm.2.2.2.1
   -- each honest node's decisions are nothing or one call of the loop on `U`
   have hone : ∀ u ∈ H, commitsOf (runOf cfg tr u).2 = [] ∨
@@ -36,12 +36,15 @@ theorem safety : Safety := by
     intro u hu
     have h₀ : CommitInv (cfg.at u) U (State.init (cfg.at u)) [] := ⟨rfl, Or.inl rfl⟩
     have h := CommitInv.run (cfg := cfg.at u) (U := U) (f := cfg.f) (q := cfg.q) hg hσ ht
-      (inputsBefore tr tr.length u) h₀ (isCut_init hinj hauth _) Held.init (fun _ h => absurd h List.not_mem_nil)
+      (inputsBefore tr tr.length u) h₀ (isCut_init hinj hauth _) Held.init
+      (fun _ h => absurd h List.not_mem_nil)
       (fun e he => ⟨u, hu, by simp only [knownOf, List.mem_append]; exact Or.inl he⟩)
       (fun e he => ⟨u, hu, by simp only [knownOf, List.mem_append]; exact Or.inr he⟩)
-      fun i hi p G bs he => by
+      fun i hi hoff => by
         obtain ⟨j, hj⟩ := Converge.mem_inputsBefore hi
-        exact hno j u hu p G bs (he ▸ hj)
+        cases i <;> simp only [Input.isOffer] at hoff
+        · exact (hno j u hu).1 _ _ _ hj
+        · exact (hno j u hu).2 _ _ hj
     rcases h.2 with h0 | ⟨V, N, -, -, hcs⟩
     · exact Or.inl h0
     · exact Or.inr ⟨V, N, hcs⟩

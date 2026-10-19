@@ -295,39 +295,145 @@ theorem Inv.progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payload}
         simpa using hi₂
     · exact ⟨[], rfl, by simpa using hi⟩
 
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem broadcasts_append (a b : List (Output Validator BlockId Payload)) :
+    broadcasts (a ++ b) = broadcasts a ++ broadcasts b :=
+  List.filterMap_append
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem persists_append (a b : List (Output Validator BlockId Payload)) :
+    persists (a ++ b) = persists a ++ persists b :=
+  List.filterMap_append
+
 omit [Fintype Validator] in
-/-- **Deciding keeps the invariant** and outputs only decisions. -/
+theorem persists_built (bs : List (BlockId × Block Validator BlockId Payload)) :
+    persists (built cfg bs) = bs := by
+  induction bs with
+  | nil => rfl
+  | cons e bs ih =>
+    simp only [built, List.flatMap_cons] at ih ⊢
+    rw [persists_append, ih]
+    rfl
+
+omit [Fintype Validator] in
+theorem broadcasts_built (bs : List (BlockId × Block Validator BlockId Payload)) :
+    broadcasts (built cfg bs) = bs := by
+  induction bs with
+  | nil => rfl
+  | cons e bs ih =>
+    simp only [built, List.flatMap_cons] at ih ⊢
+    rw [broadcasts_append, ih]
+    rfl
+
+/-- **A step's own blocks**: its outputs persist exactly `bs`, and
+broadcast exactly `bs`. -/
+def Out (bs : List (BlockId × Block Validator BlockId Payload))
+    (out : List (Output Validator BlockId Payload)) : Prop :=
+  persists out = bs ∧ broadcasts out = bs
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem Out.append {a b : List (BlockId × Block Validator BlockId Payload)}
+    {x y : List (Output Validator BlockId Payload)} (h₁ : Out a x) (h₂ : Out b y) :
+    Out (a ++ b) (x ++ y) :=
+  ⟨by rw [persists_append, h₁.1, h₂.1], by rw [broadcasts_append, h₁.2, h₂.2]⟩
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem out_quiet {xs : List (Output Validator BlockId Payload)} (h : ∀ o ∈ xs, o.isQuiet) :
+    Out [] xs := by
+  induction xs with
+  | nil => exact ⟨rfl, rfl⟩
+  | cons o xs ih =>
+    have ho := h o List.mem_cons_self
+    obtain ⟨h₁, h₂⟩ := ih fun o' h' => h o' (List.mem_cons_of_mem _ h')
+    have hp : persists [o] = [] ∧ broadcasts [o] = [] := by
+      cases o <;> first | exact ⟨rfl, rfl⟩ | exact absurd ho (by simp [Output.isQuiet])
+    refine ⟨?_, ?_⟩
+    · rw [show o :: xs = [o] ++ xs from rfl, persists_append, hp.1, h₁]; rfl
+    · rw [show o :: xs = [o] ++ xs from rfl, broadcasts_append, hp.2, h₂]; rfl
+
+omit [Fintype Validator] in
+theorem out_built (bs : List (BlockId × Block Validator BlockId Payload)) :
+    Out bs (built cfg bs) :=
+  ⟨persists_built bs, broadcasts_built bs⟩
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem quiet_commits (ds : List (ℕ × Option BlockId)) :
+    ∀ o ∈ (ds.map fun e => (Output.commit e.1 e.2 : Output Validator BlockId Payload)),
+      o.isQuiet := by
+  intro o ho
+  obtain ⟨e, -, rfl⟩ := List.mem_map.mp ho
+  rfl
+
+omit [Fintype Validator] in
+/-- An invariant read only from the store, the pending blocks, the top
+and the offers carries over to a state that keeps them. -/
+theorem Inv.of_eq {s s' : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
+    (hst : s'.store = s.store) (hpd : s'.pending = s.pending) (htop : s'.top = s.top)
+    (hof : s'.offers = s.offers) : Inv cfg s' K B :=
+  ⟨by rw [hst]; exact hi.known, by rw [hpd]; exact hi.pend,
+    by rw [hst, htop]; exact hi.rounds, hi.good, hi.sub, by rw [hst]; exact hi.valid,
+    by rw [hof]; exact hi.offered⟩
+
+omit [Fintype Validator] in
+/-- **Proposing** keeps everything but the proposals, the certificate and
+the height last proposed. -/
+theorem proposeAt_keeps (s : State Validator BlockId Payload) :
+    (proposeAt cfg s).1.store = s.store ∧ (proposeAt cfg s).1.pending = s.pending ∧
+      (proposeAt cfg s).1.top = s.top ∧ (proposeAt cfg s).1.own = s.own ∧
+      (proposeAt cfg s).1.offers = s.offers ∧ (proposeAt cfg s).1.lo = s.lo ∧
+      (proposeAt cfg s).1.requested = s.requested ∧
+      (proposeAt cfg s).1.recovering = s.recovering ∧ (proposeAt cfg s).1.fired = s.fired ∧
+      (proposeAt cfg s).1.decided = s.decided ∧ (proposeAt cfg s).1.certs = s.certs := by
+  unfold proposeAt
+  dsimp only
+  split <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+omit [Fintype Validator] in
+theorem proposeAt_quiet (s : State Validator BlockId Payload) :
+    ∀ o ∈ (proposeAt cfg s).2, o.isQuiet := by
+  unfold proposeAt
+  dsimp only
+  split <;> simp [Output.isQuiet]
+
+omit [Fintype Validator] in
+/-- **Deciding keeps the invariant** and outputs no block. -/
 theorem Inv.decideStep {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) :
-    ∃ ds : List (ℕ × Option BlockId), (decideStep cfg s).2 = ds.map (fun e => .commit e.1 e.2) ∧
-      Inv cfg (decideStep cfg s).1 K B := by
+    Out [] (decideStep cfg s).2 ∧ Inv cfg (decideStep cfg s).1 K B := by
   unfold Node.decideStep
   dsimp only
   split
-  · exact ⟨_, rfl, ⟨hi.known, hi.pend, hi.rounds, hi.good, hi.sub, hi.valid, hi.offered⟩⟩
-  · exact ⟨[], rfl, hi⟩
+  · rename_i hlt
+    generalize hds : Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ s.store.toRecord
+      s.store.view s.lo (decidable cfg s.store.topRound - 1) = ds
+    obtain ⟨hst, hpd, htop, -, hof, -⟩ :=
+      proposeAt_keeps (cfg := cfg) { s with lo := s.lo + ds.length, decided := s.decided ++ ds }
+    exact ⟨(out_quiet (quiet_commits _)).append (out_quiet (proposeAt_quiet _)),
+      hi.of_eq hst hpd htop hof⟩
+  · exact ⟨⟨rfl, rfl⟩, hi⟩
 
 omit [Fintype Validator] in
-/-- **Collecting keeps the invariant** and outputs at most one horizon. -/
+/-- **Collecting keeps the invariant** and outputs no block. -/
 theorem Inv.collect {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) :
-    ∃ gs : List ℕ, gs.length ≤ 1 ∧ (collect cfg s).2 = gs.map .prune ∧
-      Inv cfg (collect cfg s).1 K B := by
+    Out [] (collect cfg s).2 ∧ Inv cfg (collect cfg s).1 K B := by
   unfold Node.collect
   split
   · rename_i t ht
     dsimp only
     split
     · rename_i hG
-      refine ⟨[_], by simp, rfl, ⟨?_, ?_, ?_, hi.good, hi.sub, hi.valid.prune (hG := hG.le),
+      refine ⟨⟨rfl, rfl⟩, ⟨?_, ?_, ?_, hi.good, hi.sub, hi.valid.prune (hG := hG.le),
         hi.offered⟩⟩
       · intro j hj
         have hj' := (Finset.mem_filter.mp hj)
         have hraw := treeMap_getD_filter_of (t := s.store.map)
-          (f := fun _ b => decide (min (cfg.per * (s.lo / cfg.m)) t - cfg.lag ≤ b.round)) (k := j)
-          (fb := s.store.junk) (by simpa [Store.blk, lookup] using hj'.2)
+          (f := fun _ b => decide (min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤
+            b.round)) (k := j) (fb := s.store.junk) (by simpa [Store.blk, lookup] using hj'.2)
         change (j, (s.store.map.filter _).getD j s.store.junk) ∈ K
         rw [hraw]
         exact hi.known j hj'.1
@@ -339,8 +445,8 @@ theorem Inv.collect {s : State Validator BlockId Payload}
         · rw [ht, Option.some.injEq] at ht'
           subst ht'
           exact ⟨t, ht, by change _ - _ ≤ t; omega, hB⟩
-    · exact ⟨[], by simp, rfl, hi⟩
-  · exact ⟨[], by simp, rfl, hi⟩
+    · exact ⟨⟨rfl, rfl⟩, hi⟩
+  · exact ⟨⟨rfl, rfl⟩, hi⟩
 
 omit [Fintype Validator] in
 /-- Accepting a known block keeps the store known, at the same horizon. -/
@@ -414,19 +520,19 @@ theorem Inv.flushAll {s : State Validator BlockId Payload}
   · exact Or.inr ⟨t, ht, by rw [hfl.2.2.1]; exact hb, hB⟩
 
 omit [Fintype Validator] in
-/-- **Advancing keeps the invariant**: built blocks, then decisions, then
-at most one horizon. -/
+/-- **Advancing keeps the invariant**, and its own blocks are the built
+ones. -/
 theorem Inv.advance {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) :
-    ∃ (bs : List (BlockId × Block Validator BlockId Payload)) (ds : List (ℕ × Option BlockId))
-      (gs : List ℕ), gs.length ≤ 1 ∧
-      (advance cfg s).2 = built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune ∧
-      Inv cfg (advance cfg s).1 (K ∪ {x | x ∈ bs}) (B ++ bs) := by
+    ∃ bs, Out bs (advance cfg s).2 ∧ Inv cfg (advance cfg s).1 (K ∪ {x | x ∈ bs}) (B ++ bs) := by
   obtain ⟨bs, hbs, hi₁⟩ := hi.progress (s.store.topRound + 2)
-  obtain ⟨ds, hds, hi₂⟩ := hi₁.decideStep
-  obtain ⟨gs, hgs, hgo, hi₃⟩ := hi₂.collect
-  exact ⟨bs, ds, gs, hgs, by simp only [Node.advance, hbs, hds, hgo], hi₃.flushAll _⟩
+  obtain ⟨hds, hi₂⟩ := hi₁.decideStep
+  obtain ⟨hgo, hi₃⟩ := hi₂.collect
+  refine ⟨bs, ?_, hi₃.flushAll _⟩
+  simp only [Node.advance]
+  rw [hbs]
+  simpa using ((out_built (cfg := cfg) bs).append hds).append hgo
 
 omit [Fintype Validator] in
 /-- **A successful resume**: the top moves up to a round where the store
@@ -490,14 +596,12 @@ theorem Inv.tryResume {s s' : State Validator BlockId Payload}
     exact Or.inr ⟨R, htop', by rw [hst]; omega, hB.mono htR.le⟩
 
 omit [Fintype Validator] in
-/-- **Settling keeps the invariant**: built blocks, then decisions, then
-at most one horizon. -/
+/-- **Settling keeps the invariant**, and its own blocks are the built
+ones. -/
 theorem Inv.settle {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) :
-    ∃ (bs : List (BlockId × Block Validator BlockId Payload)) (ds : List (ℕ × Option BlockId))
-      (gs : List ℕ), gs.length ≤ 1 ∧
-      (Node.settle cfg s).2 = built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune ∧
+    ∃ bs, Out bs (Node.settle cfg s).2 ∧
       Inv cfg (Node.settle cfg s).1 (K ∪ {x | x ∈ bs}) (B ++ bs) := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hr, h⟩ <;> rw [h]
   · exact hi.advance
@@ -529,41 +633,64 @@ theorem flush_base : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
 
 omit [Fintype Validator] in
 /-- **A successful bootstrap**, at a round `G` above the node's top and
-its horizon: the pruned store takes the attested base, then flushes the
-offered blocks above `G` and the pending ones at or above it; the top
-moves to `G` with no block of the node's own there. -/
-theorem tryBoot_some {s s' : State Validator BlockId Payload} (h : tryBoot cfg s = some s') :
-    ∃ t G, ∃ hb : s.store.base < G, s.top = some t ∧ t < G ∧ bootRound cfg s t = some G ∧
+its horizon, with a certificate `c` the node can adopt there: the pruned
+store takes the attested base, then flushes the offered blocks above `G`
+and the pending ones at or above it; the top moves to `G` with no block
+of the node's own there; the node takes the certified decisions it
+lacks, and its next slot moves up to `c`'s height. -/
+theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ × Option BlockId)}
+    (h : tryBoot cfg s = some (s', ads)) :
+    ∃ t G c, ∃ hb : s.store.base < G, s.top = some t ∧ t < G ∧ bootRound cfg s t = some G ∧
+      certFor cfg s G = some c ∧
       let st₀ := (baseAt cfg s G).foldl (fun st e => accept cfg st e.1 e.2) (s.store.prune G hb.le)
       let pend := (s.offers.flatMap (·.2.2)).filter (fun e =>
         decide (G < e.2.round ∧ e.1 = cfg.idOf e.2)) ++ s.pending.filter fun e => G ≤ e.2.round
       s'.store = (flush cfg (pend.length + 1) st₀ pend).1 ∧
       s'.pending = (flush cfg (pend.length + 1) st₀ pend).2 ∧
-      s'.top = some G ∧ s'.own = none ∧
-      s'.lo = max s.lo (cfg.m * ((G + cfg.per - 1) / cfg.per)) ∧
+      s'.top = some G ∧ s'.own = none ∧ s'.lo = max s.lo c.height ∧
       s'.recovering = s.recovering ∧ s'.offers = [] ∧
-      s'.requested = s.requested.filter (fun x => G ≤ x.2.2) ∧ s'.fired = {G} := by
+      s'.requested = s.requested.filter (fun x => G ≤ x.2.2) ∧ s'.fired = {G} ∧
+      ads = c.decisions.drop s.decided.length ∧ s'.decided = s.decided ++ ads ∧
+      s'.certs = [] ∧ s'.props = s.props ∧ s'.lastProposed = s.lastProposed ∧
+      s'.cert = (if s.certHeight < c.height then some c else s.cert) := by
   unfold tryBoot at h
   split at h
   · rename_i t G ht hG
     split at h
-    · rename_i hbase
-      dsimp only at h
-      rw [Option.some.injEq] at h
-      subst h
-      have hG' : bootRound cfg s t = some G := by rw [ht] at hG; exact hG
-      have htG : t < G := by
-        have := List.mem_filter.mp (List.max?_mem hG')
-        exact (by simpa using this.2 : t < G ∧ _).1
-      exact ⟨t, G, hbase, ht, htG, hG', rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    · rename_i c hc
+      split at h
+      · rename_i hbase
+        dsimp only at h
+        rw [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        have hG' : bootRound cfg s t = some G := by rw [ht] at hG; exact hG
+        have htG : t < G := by
+          have := List.mem_filter.mp (List.max?_mem hG')
+          exact (by simpa using this.2 : (t < G ∧ _) ∧ _).1.1
+        exact ⟨t, G, c, hbase, ht, htG, hG', hc, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+          rfl, rfl, rfl, rfl, rfl, rfl⟩
+      · cases h
     · cases h
   · cases h
 
 omit [Fintype Validator] in
+/-- **An adoptable certificate**, unfolded. -/
+theorem validCert_iff {G : ℕ} {c : Cert Validator BlockId} :
+    validCert cfg G c = true ↔ cfg.q ≤ c.signers.length ∧ c.signers.Nodup ∧
+      c.decisions.map Prod.fst = List.range c.height ∧ G ≤ cfg.per * (c.height / cfg.m) := by
+  simp [validCert, and_assoc]
+
+omit [Fintype Validator] in
+/-- The certificate a bootstrap adopts was offered, and is adoptable. -/
+theorem certFor_valid {s : State Validator BlockId Payload} {G : ℕ} {c : Cert Validator BlockId}
+    (h : certFor cfg s G = some c) : c ∈ s.certs ∧ validCert cfg G c = true :=
+  ⟨List.mem_of_find?_eq_some h, List.find?_some h⟩
+
+omit [Fintype Validator] in
 /-- **A bootstrap raises the horizon** to its round. -/
-theorem boot_base {s s' : State Validator BlockId Payload} (h : tryBoot cfg s = some s') :
-    s.store.base < s'.store.base := by
-  obtain ⟨t, G, hb, -, -, -, hst, -⟩ := tryBoot_some h
+theorem boot_base {s s' : State Validator BlockId Payload} {ads : List (ℕ × Option BlockId)}
+    (h : tryBoot cfg s = some (s', ads)) : s.store.base < s'.store.base := by
+  obtain ⟨t, G, c, hb, -, -, -, -, hst, -⟩ := tryBoot_some h
   rw [hst, flush_base, foldl_base]
   exact hb
 
@@ -573,9 +700,9 @@ node's new top, above its old top, and what it takes from the offers is
 known. -/
 theorem Inv.tryBoot {s s' : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
-    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
-    (h : tryBoot cfg s = some s') : Inv cfg s' K B := by
-  obtain ⟨t, G, hbase, ht, htG, -, hst, hpd, htop', -, -, -, hof, -⟩ := tryBoot_some h
+    {B : List (BlockId × Block Validator BlockId Payload)} {ads : List (ℕ × Option BlockId)}
+    (hi : Inv cfg s K B) (h : tryBoot cfg s = some (s', ads)) : Inv cfg s' K B := by
+  obtain ⟨t, G, c, hbase, ht, htG, -, -, hst, hpd, htop', -, -, -, hof, -⟩ := tryBoot_some h
   have hfo : ∀ x ∈ s.offers.flatMap (·.2.2), x.1 = cfg.idOf x.2 → x ∈ K := by
     intro x hx hid
     obtain ⟨o, ho, hxo⟩ := List.mem_flatMap.mp hx
@@ -608,7 +735,8 @@ theorem Inv.tryBoot {s s' : State Validator BlockId Payload}
         exact hfo x hx hc.2
       · exact hi.pend x (List.mem_filter.mp hx).1)
   refine ⟨by rw [hst]; exact hfl.1, by rw [hpd]; exact hfl.2.1, Or.inr ⟨G, htop', ?_, ?_⟩,
-    hi.good, hi.sub, by rw [hst]; exact hfl.2.2.2, by rw [hof]; exact fun o ho => absurd ho (by simp)⟩
+    hi.good, hi.sub, by rw [hst]; exact hfl.2.2.2,
+    by rw [hof]; exact fun o ho => absurd ho (by simp)⟩
   · rw [hst, hfl.2.2.1, h₀.2.1]; exact le_rfl
   · rcases hi.rounds with ⟨h0, -⟩ | ⟨t', ht', -, hB⟩
     · rw [ht] at h0; exact absurd h0 (by simp)
@@ -617,24 +745,34 @@ theorem Inv.tryBoot {s s' : State Validator BlockId Payload}
       exact hB.mono htG.le
 
 omit [Fintype Validator] in
-/-- **Settling keeps the invariant**, after outputs that move blocks
-only, at a larger knowledge. -/
+/-- **Settling keeps the invariant**, after outputs with no block of the
+node's own, at a larger knowledge. -/
 theorem Inv.settle_of {s : State Validator BlockId Payload}
     {K K' : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) (hK : K ⊆ K')
-    (pre : List (Output Validator BlockId Payload)) (hpre : ∀ o ∈ pre, o.isFetch) :
-    ∃ (xs : List (Output Validator BlockId Payload))
-      (bs : List (BlockId × Block Validator BlockId Payload)) (ds : List (ℕ × Option BlockId))
-      (gs : List ℕ), (∀ o ∈ xs, o.isFetch) ∧ gs.length ≤ 1 ∧
-      pre ++ (Node.settle cfg s).2 =
-        xs ++ built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune ∧
+    (pre : List (Output Validator BlockId Payload)) (hpre : ∀ o ∈ pre, o.isQuiet) :
+    ∃ bs, Out bs (pre ++ (Node.settle cfg s).2) ∧
       Inv cfg (Node.settle cfg s).1 (K' ∪ {x | x ∈ bs}) (B ++ bs) := by
-  obtain ⟨bs, ds, gs, hgs, ho, hi'⟩ := hi.settle
-  refine ⟨pre, bs, ds, gs, hpre, hgs, by rw [ho]; simp only [List.append_assoc],
-    hi'.mono fun x hx => ?_⟩
+  obtain ⟨bs, ho, hi'⟩ := hi.settle
+  refine ⟨bs, by simpa using (out_quiet hpre).append ho, hi'.mono fun x hx => ?_⟩
   rcases hx with hx | hx
   · exact Or.inl (hK hx)
   · exact Or.inr hx
+
+omit [Fintype Validator] in
+/-- **Trying to bootstrap keeps the invariant**, and its own blocks are
+the built ones. -/
+theorem Inv.bootFrom {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) :
+    ∃ bs, Out bs (bootFrom cfg s).2 ∧
+      Inv cfg (bootFrom cfg s).1 (K ∪ {x | x ∈ bs}) (B ++ bs) := by
+  unfold Node.bootFrom
+  split
+  · rename_i s₂ ads hb
+    obtain ⟨bs, ho, hi'⟩ := (hi.tryBoot hb).advance
+    exact ⟨bs, by simpa using (out_quiet (quiet_commits ads)).append ho, hi'⟩
+  · exact ⟨[], ⟨rfl, rfl⟩, by simpa using hi⟩
 
 /-- **A step keeps the invariant**: what it was given and its own blocks
 are known, and its own blocks are good. -/
@@ -642,20 +780,13 @@ theorem Inv.step {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
     (i : Input Validator BlockId Payload) :
-    ∃ (xs : List (Output Validator BlockId Payload))
-      (bs : List (BlockId × Block Validator BlockId Payload)) (ds : List (ℕ × Option BlockId))
-      (gs : List ℕ), (∀ o ∈ xs, o.isFetch) ∧ gs.length ≤ 1 ∧ (Node.step cfg s i).2 =
-        xs ++ built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune ∧
+    ∃ bs, Out bs (Node.step cfg s i).2 ∧
       Inv cfg (Node.step cfg s i).1 (K ∪ {x | x ∈ delivered cfg [i]} ∪ {x | x ∈ bs}) (B ++ bs) := by
   let K' := K ∪ {x | x ∈ delivered cfg [i]}
   have hsub : K ⊆ K' := fun x hx => Or.inl hx
-  have hnil : ∀ (xs : List (Output Validator BlockId Payload)), (∀ o ∈ xs, o.isFetch) →
-      ∃ (xs' : List (Output Validator BlockId Payload))
-        (bs : List (BlockId × Block Validator BlockId Payload)) (ds : List (ℕ × Option BlockId))
-        (gs : List ℕ), (∀ o ∈ xs', o.isFetch) ∧ gs.length ≤ 1 ∧
-        xs = xs' ++ built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune ∧
-        Inv cfg s (K' ∪ {x | x ∈ bs}) (B ++ bs) :=
-    fun xs hxs => ⟨xs, [], [], [], hxs, by simp, by simp [built], by simpa using hi.mono hsub⟩
+  have hnil : ∀ (xs : List (Output Validator BlockId Payload)), (∀ o ∈ xs, o.isQuiet) →
+      ∃ bs, Out bs xs ∧ Inv cfg s (K' ∪ {x | x ∈ bs}) (B ++ bs) :=
+    fun xs hxs => ⟨[], out_quiet hxs, by simpa using hi.mono hsub⟩
   have hnil' := hnil [] (by simp)
   cases i with
   | start =>
@@ -694,9 +825,9 @@ theorem Inv.step {s : State Validator BlockId Payload}
           · rw [hB.1, List.nil_append, List.mem_singleton] at hx
             subst hx; simp
         rw [settle_of_idle rfl]
-        obtain ⟨bs, ds, gs, hgs, ho, hi'⟩ := hi₀.advance
-        refine ⟨[], e :: bs, ds, gs, by simp, hgs, ?_, ?_⟩
-        · rw [ho]; simp [built, e, Config.genesis]
+        obtain ⟨bs, ho, hi'⟩ := hi₀.advance
+        refine ⟨e :: bs, ?_, ?_⟩
+        · exact (out_built (cfg := cfg) [e]).append ho
         · refine (by simpa using hi' : Inv cfg _ (K ∪ {x | x ∈ [e]} ∪ {x | x ∈ bs}) (B ++ e :: bs)).mono
             fun x hx => ?_
           simp only [Set.mem_union, Set.mem_setOf_eq, List.mem_singleton, List.mem_cons,
@@ -756,10 +887,23 @@ theorem Inv.step {s : State Validator BlockId Payload}
     exact (⟨fun j hj => hsub (hi.known j hj), fun e he => by simp [State.recover] at he,
       hi.rounds, fun x hx => (hi.good x hx).mono hsub, fun x hx => hsub (hi.sub x hx),
       hi.valid, fun o ho => by simp [State.recover] at ho⟩ : Inv cfg s.recover K' B).settle_of
-        subset_rfl [.requestBase] (by simp [Output.isFetch])
+        subset_rfl [.requestBase] (by simp [Output.isQuiet])
   | baseRequest peer =>
     simp only [Node.step]
-    exact hnil _ (by simp [Output.isFetch])
+    exact hnil _ (by simp [Output.isQuiet])
+  | proposal peer k ds =>
+    simp only [Node.step]
+    split
+    · have h₁ : Inv cfg (record cfg s peer k ds) K' B := (hi.mono hsub).of_eq rfl rfl rfl rfl
+      exact ⟨[], ⟨rfl, rfl⟩, by simpa using h₁⟩
+    · exact hnil'
+  | certOffer peer c =>
+    simp only [Node.step]
+    split
+    · have h₁ : Inv cfg { s with certs := c :: s.certs } K' B :=
+        (hi.mono hsub).of_eq rfl rfl rfl rfl
+      exact h₁.bootFrom
+    · exact hnil'
   | baseOffer peer G bs =>
     simp only [Node.step]
     split
@@ -775,76 +919,8 @@ theorem Inv.step {s : State Validator BlockId Payload}
                 List.append_nil, List.mem_filter, decide_eq_true_eq]
               exact ⟨hx, hid⟩
             · exact hsub (hi.offered o (List.mem_filter.mp ho).1 x hx hid)⟩
-      split
-      · rename_i s₂ hb
-        obtain ⟨bs', ds, gs, hgs, ho, hi'⟩ := (hi₁.tryBoot hb).advance
-        exact ⟨[], bs', ds, gs, by simp, hgs, by rw [ho]; simp, hi'⟩
-      · exact ⟨[], [], [], [], by simp, by simp, by simp [built],
-          by simpa only [List.append_nil] using hi₁.mono Set.subset_union_left⟩
+      exact hi₁.bootFrom
     · exact hnil'
-
-omit [Fintype Validator] in
-/-- The blocks a step's outputs broadcast: the built ones. -/
-theorem broadcasts_shape {xs : List (Output Validator BlockId Payload)}
-    {bs : List (BlockId × Block Validator BlockId Payload)} {ds : List (ℕ × Option BlockId)}
-    {gs : List ℕ} (hxs : ∀ o ∈ xs, o.isFetch) :
-    broadcasts (xs ++ built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune) = bs := by
-  have hx : broadcasts xs = [] := by
-    induction xs with
-    | nil => rfl
-    | cons o xs ih =>
-      have ho := hxs o List.mem_cons_self
-      have := ih fun o' h' => hxs o' (List.mem_cons_of_mem _ h')
-      cases o <;> simp_all [broadcasts, Output.isFetch]
-  have hb : broadcasts (built cfg bs) = bs := by
-    induction bs with
-    | nil => rfl
-    | cons e bs ih =>
-      simp only [built, List.flatMap_cons] at ih ⊢
-      simp only [broadcasts, List.filterMap_append, List.filterMap_cons] at ih ⊢
-      simp [ih]
-  simp only [broadcasts, List.filterMap_append] at hx hb ⊢
-  rw [hx, hb]
-  simp [List.filterMap_map]
-
-omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
-theorem broadcasts_append (a b : List (Output Validator BlockId Payload)) :
-    broadcasts (a ++ b) = broadcasts a ++ broadcasts b :=
-  List.filterMap_append
-
-omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
-theorem persists_append (a b : List (Output Validator BlockId Payload)) :
-    persists (a ++ b) = persists a ++ persists b :=
-  List.filterMap_append
-
-omit [Fintype Validator] in
-theorem persists_built (bs : List (BlockId × Block Validator BlockId Payload)) :
-    persists (built cfg bs) = bs := by
-  induction bs with
-  | nil => rfl
-  | cons e bs ih =>
-    simp only [built, List.flatMap_cons] at ih ⊢
-    rw [persists_append, ih]
-    rfl
-
-omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
-theorem persists_of_isFetch {xs : List (Output Validator BlockId Payload)}
-    (h : ∀ o ∈ xs, o.isFetch) : persists xs = [] := by
-  induction xs with
-  | nil => rfl
-  | cons o xs ih =>
-    have ho := h o List.mem_cons_self
-    have := ih fun o' h' => h o' (List.mem_cons_of_mem _ h')
-    cases o <;> simp_all [persists, Output.isFetch]
-
-omit [Fintype Validator] in
-/-- The node's own blocks in a step's outputs: the built ones. -/
-theorem persists_shape {xs : List (Output Validator BlockId Payload)}
-    {bs : List (BlockId × Block Validator BlockId Payload)} {ds : List (ℕ × Option BlockId)}
-    {gs : List ℕ} (hxs : ∀ o ∈ xs, o.isFetch) :
-    persists (xs ++ built cfg bs ++ ds.map (fun e => .commit e.1 e.2) ++ gs.map .prune) = bs := by
-  simp only [persists_append, persists_of_isFetch hxs, persists_built, List.nil_append]
-  simp [persists, List.filterMap_map]
 
 omit [Fintype Validator] in
 /-- What was delivered or offered is identified by its hash. -/
@@ -879,10 +955,10 @@ theorem Inv.run : ∀ (is : List (Input Validator BlockId Payload))
       (B ++ persists (Node.run cfg s is).2)
   | [], s, K, B, hi => by simpa [Node.run, delivered, persists] using hi
   | i :: is, s, K, B, hi => by
-    obtain ⟨xs, bs, ds, gs, hxs, -, ho, hi₁⟩ := hi.step i
+    obtain ⟨bs, ho, hi₁⟩ := hi.step i
     have ih := Inv.run is hi₁
     simp only [Node.run]
-    rw [persists_append, ho, persists_shape hxs]
+    rw [persists_append, ho.1]
     have hK : K ∪ {x | x ∈ delivered cfg [i]} ∪ {x | x ∈ bs} ∪
         {x | x ∈ delivered cfg is} ∪
           {x | x ∈ persists (Node.run cfg (Node.step cfg s i).1 is).2} =
@@ -902,10 +978,9 @@ theorem broadcasts_run : ∀ (is : List (Input Validator BlockId Payload))
     broadcasts (Node.run cfg s is).2 = persists (Node.run cfg s is).2
   | [], _, _, _, _ => rfl
   | i :: is, _, _, _, hi => by
-    obtain ⟨xs, bs, ds, gs, hxs, -, ho, hi₁⟩ := hi.step i
+    obtain ⟨bs, ho, hi₁⟩ := hi.step i
     simp only [Node.run]
-    rw [broadcasts_append, persists_append, ho, broadcasts_shape hxs, persists_shape hxs,
-      broadcasts_run is hi₁]
+    rw [broadcasts_append, persists_append, ho.1, ho.2, broadcasts_run is hi₁]
 
 omit [Fintype Validator] in
 /-- The initial state meets the invariant, with nothing known or broadcast. -/
