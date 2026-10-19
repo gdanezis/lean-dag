@@ -3439,12 +3439,10 @@ is a
 sequence of cuts:
 
 ```lean
-theorem card_retained_le {κ Λ t : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hv : v ∈ Correct) (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
+theorem card_retained_le {κ Λ t f : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hv : v ∈ honest) (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
     ((viewUpto D v t).filter fun i => G ≤ (U.block i).round).card ≤
-      (Correct : Finset Validator).card * (Λ + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          Λ * ((Correct : Finset Validator).card * (F.f * κ)))
+      honest.card * (Λ + 1) + (honest.card * f + Λ * (honest.card * (f * κ)))
 ```
 
 — **constant in `t`**: at lag `Λ`, the retained store is bounded
@@ -22293,8 +22291,8 @@ theorem refsAccepted_chopD (hra : RefsAccepted D) :
 *theorem, `GC.Window.lean`*
 
 ```lean
-theorem populated_chop {N : ℕ} (hpop : ∀ r ≤ N, Populated U r) (hG : G ≤ N) :
-    ∀ r ≤ N - G, Populated (chop U G) r
+theorem populated_chop {N : ℕ} {T : Finset Validator} (hpop : ∀ r ≤ N, PopulatedOn U T r)
+    (hG : G ≤ N) : ∀ r ≤ N - G, PopulatedOn (chop U G) T r
 ```
 
 **G5.** The truncated universe never stalls above the cut: a round-`r` block of `chop U G` is a round-`(G+r)` block of `U`, so this is the production hypothesis with its index shifted.
@@ -22304,13 +22302,10 @@ theorem populated_chop {N : ℕ} (hpop : ∀ r ≤ N, Populated U r) (hG : G ≤
 *theorem, `GC.Window.lean`*
 
 ```lean
-theorem card_retained_le {κ Λ t : ℕ} (hbyz : ByzBudget D κ)
-    (hra : RefsAccepted D) (hv : v ∈ (Correct : Finset Validator))
-    (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
+theorem card_retained_le {κ Λ t f : ℕ} (hf : honestᶜ.card ≤ f) (hbyz : ByzBudget D κ)
+    (hra : RefsAccepted D) (hv : v ∈ honest) (hG : G ≤ t) (hΛ : t ≤ G + Λ) :
     ((viewUpto D v t).filter fun i => G ≤ (U.block i).round).card ≤
-      (Correct : Finset Validator).card * (Λ + 1) +
-        ((Correct : Finset Validator).card * F.f +
-          Λ * ((Correct : Finset Validator).card * (F.f * κ)))
+      honest.card * (Λ + 1) + (honest.card * f + Λ * (honest.card * (f * κ)))
 ```
 
 **G6.** A validator whose horizon `G` trails its round `t` by at most `Λ` retains a constant number of blocks, independent of `t`: the retained store is the truncated store (G14), which B4 bounds at window depth `t − G ≤ Λ`.
@@ -22425,10 +22420,9 @@ theorem chop_chop {G₁ G₂ : ℕ} (hG : G₁ ≤ G₂) :
 *theorem, `GC.Horizon.lean`*
 
 ```lean
-theorem viewUpto_subset_viewUpto_succ {R m : ℕ}
-    (hED : EventuallyDelivers D R) (hcar : Populated U (m + 1))
-    (hv : v ∈ (Correct : Finset Validator))
-    (hw : w ∈ (Correct : Finset Validator)) (hR : R ≤ m + 1) :
+theorem viewUpto_subset_viewUpto_succ [P.SelfParent] {R m : ℕ}
+    (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest) (hcar : PopulatedOn U T (m + 1))
+    (hv : v ∈ T) (hw : w ∈ T) (hR : R ≤ m + 1) :
     viewUpto D v m ⊆ viewUpto D w (m + 1)
 ```
 
@@ -22439,10 +22433,9 @@ theorem viewUpto_subset_viewUpto_succ {R m : ℕ}
 *theorem, `GC.Horizon.lean`*
 
 ```lean
-theorem pruned_subset_peer_store {R m : ℕ}
-    (hED : EventuallyDelivers D R) (hcar : Populated U (m + 1))
-    (hv : v ∈ (Correct : Finset Validator))
-    (hw : w ∈ (Correct : Finset Validator)) (hR : R ≤ m + 1) :
+theorem pruned_subset_peer_store [P.SelfParent] {R m : ℕ}
+    (hED : EventuallyDeliversOn D T R) (hT : T ⊆ honest) (hcar : PopulatedOn U T (m + 1))
+    (hv : v ∈ T) (hw : w ∈ T) (hR : R ≤ m + 1) :
     (viewUpto D v m).filter (fun i => (U.block i).round < G) ⊆
       viewUpto D w (m + 1)
 ```

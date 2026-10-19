@@ -90,7 +90,7 @@ theorem card_base_le {κ Λ R t : ℕ} (hbyz : ByzBudget D κ)
         ((Correct : Finset Validator).card * F.f +
           Λ * ((Correct : Finset Validator).card * (F.f * κ))) :=
   le_trans (Finset.card_le_card (base_subset_retained hED hw hR))
-    (card_retained_le hbyz hra hw hG hΛ)
+    (card_retained_le card_compl_correct_le hbyz hra hw hG hΛ)
 
 /-! ## G12 — the joiner's view -/
 
@@ -111,7 +111,8 @@ theorem card_joinIds_le {κ Λ R m t : ℕ} (hbyz : ByzBudget D κ)
       (Correct : Finset Validator).card * (Λ + 1) +
         ((Correct : Finset Validator).card * F.f +
           Λ * ((Correct : Finset Validator).card * (F.f * κ))) := by
-  refine le_trans (Finset.card_le_card ?_) (card_retained_le hbyz hra hw hG hΛ)
+  refine le_trans (Finset.card_le_card ?_)
+    (card_retained_le card_compl_correct_le hbyz hra hw hG hΛ)
   refine Finset.union_subset (base_subset_retained hED hw hR) ?_
   intro i hi
   obtain ⟨hiv, hiG⟩ := Finset.mem_filter.mp hi
@@ -225,7 +226,7 @@ theorem card_serve_le {κ Λ n : ℕ} (hbyz : ByzBudget D κ)
   refine le_trans (Finset.card_le_card
     (history_chop_subset_retained hra hw hb hbc hbr (by omega))) ?_
   refine le_trans (Finset.card_insert_le _ _) ?_
-  have := card_retained_le (G := G) hbyz hra hw hG hΛ
+  have := card_retained_le (G := G) card_compl_correct_le hbyz hra hw hG hΛ
   omega
 
 end LeanDag

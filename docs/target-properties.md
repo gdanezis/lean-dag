@@ -5335,7 +5335,12 @@ liveness half of rate limiting (C3a, C3′, C3″), linear storage (B3′, B4)
 and the headline `dos_resistance` hold on any record: the Byzantine count
 is a bound `f` on the validators outside the honest set, the receivers a
 set `T` inside it, and the telescope and the retained store read the
-self-parent clause through the class. No quorum is read.
+self-parent clause through the class. No quorum is read. The cut's
+transfer lemmas (`history_chop` and the reachability it rests on), the
+window (`chopD`, G13, G14, G6 `card_retained_le`) and the depth rule
+(G8 `chop_chop`, G9 `viewUpto_subset_viewUpto_succ`,
+`pruned_subset_peer_store`, at receivers `T` inside the honest set) hold
+on any record too.
 
 ### 11.5 Next steps, in order
 

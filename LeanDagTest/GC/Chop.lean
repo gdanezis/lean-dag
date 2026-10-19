@@ -119,7 +119,7 @@ example : ((viewUpto Dtwin 1 2).filter
     (Correct : Finset (Fin 4)).card * (1 + 1) +
       ((Correct : Finset (Fin 4)).card * Faults.f (Fin 4) +
         1 * ((Correct : Finset (Fin 4)).card * (Faults.f (Fin 4) * 0))) :=
-  card_retained_le dtwin_byz dtwin_refsAccepted (by decide) (by omega)
+  card_retained_le card_compl_correct_le dtwin_byz dtwin_refsAccepted (by decide) (by omega)
     (by omega)
 
 example : ((viewUpto Dtwin 1 2).filter
