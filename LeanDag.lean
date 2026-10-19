@@ -76,7 +76,10 @@ import LeanDag.Checkpoint.RecoveryProofs
 import LeanDag.Checkpoint.CommitProofs
 import LeanDag.Integration.Preservation
 import LeanDag.Integration.HybridCheckpoint
+import LeanDag.Checkpoint.CarrySpec
+import LeanDag.Checkpoint.CarryProofs
 import LeanDag.Integration.BarnacleCheckpoint
+import LeanDag.Integration.SchemeCheckpoint
 import LeanDag.Integration.ReactiveMechanisms
 import LeanDag.Integration.HydrozoanMechanisms
 import LeanDag.Properties.Arcs.Stack

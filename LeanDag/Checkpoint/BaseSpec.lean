@@ -14,10 +14,12 @@ cryptographic conclusion assumed.
 The fault model is a parameter, as `Reliability` is for density:
 `SigningFaults` is what the counting needs, a quorum threshold, the
 validators whose signing state is enforced, those of them that stay
-available, and two bounds. Which validators are Byzantine, crashed or
-alive-but-corrupt is the business of the protocol supplying the
-instance; `Integration/HybridCheckpoint.lean` builds one from the
-hybrid classes and the paper's resilience bound. Forked histories are
+available, the validators that follow the signing rule, and two bounds.
+Which validators are Byzantine, crashed or alive-but-corrupt is the
+business of the protocol supplying the instance;
+`Integration/HybridCheckpoint.lean` builds one from the hybrid classes
+and the paper's resilience bound, with the alive-but-corrupt validators
+following the rule but not reliable. Forked histories are
 permitted inputs: this layer neither derives a fork from a DAG rule nor
 reads one.
 -/
@@ -50,20 +52,29 @@ structure ChkProp (Validator Value : Type*) where
 
 /-- What the signing counts need of a fault model, with no commitment to
 which model: the quorum threshold of both phases, the validators whose
-signing state is enforced, those of them that remain available, and the
-two bounds that let a quorum reach one of each. -/
+signing state is enforced, the validators that store certificates and
+take part in recovery, the validators that follow the signing rule, and
+the two bounds that let a quorum reach one reliable and one available
+signer. No proof relates `reliableSigner` and `recoveryCorrect`; an
+instance may make one a subset of the other, as `HybridCheckpoint` does. -/
 structure SigningFaults (Validator : Type*) [Fintype Validator]
     [DecidableEq Validator] where
   /-- The quorum threshold of both signing phases. -/
   q : ℕ
   /-- Validators whose checkpoint protocol state is enforced. -/
   reliableSigner : Finset Validator
-  /-- Reliable signers that also remain available during recovery.
-  Membership identifies eligible recovery participants; it does not by
-  itself imply that checkpoint recovery occurs. -/
+  /-- Validators that store the certificates they sign and remain
+  available during recovery. Membership identifies eligible recovery
+  participants; it does not by itself imply that checkpoint recovery
+  occurs. -/
   recoveryCorrect : Finset Validator
-  /-- Availability is asked only of reliable signers. -/
-  recoveryCorrect_subset : recoveryCorrect ⊆ reliableSigner
+  /-- Validators that follow the signing rule: they propose what they
+  commit and witness what they propose. Safety never relies on this
+  set; existence of certificates counts it. Alive-but-corrupt
+  validators belong here without being reliable. -/
+  alive : Finset Validator
+  /-- Available signers follow the rule. -/
+  recoveryCorrect_subset_alive : recoveryCorrect ⊆ alive
   /-- Two quorums overlap outside the unreliable validators. -/
   intersect : Fintype.card Validator + reliableSignerᶜ.card < 2 * q
   /-- A quorum holds a recovery-correct validator. -/
