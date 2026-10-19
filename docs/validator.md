@@ -529,7 +529,7 @@ its peers' horizons never holds the line, and rejoins by bootstrap
 | 5 | Garbage collection: V4, and V3 with horizons rising; persistence and restart: V5 (built) |
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 (built) |
 | 7 | Bootstrap in the program: V9 over a trace; G10's soundness lifted to block records (§8, L1) (built) |
-| 7.1 | Fill blocks authenticated only through the signed jump message (§3.5): block authentication back to a block its author broadcast; a node accepts a filled block only by deriving it, never as a delivered block; a request for a filled block is answered with the jump message |
+| 7.1 | Self-parent as a build rule, not a validity clause (§11): the shared inclusion argument reads it for reliable authors from a round on; the program's validity drops it; a node resumes above the highest round it holds a quorum at; Safe Skip leaves the program; bootstrap needs no reference-free block; block authentication back to a block its author broadcast |
 | 7.2 | One run model: V3 proved over a trace, and the model without time retired (§4, *Bootstraps need time*) |
 | 7.3 | Checkpoints (§3.8): signed proposals of the decided prefix and certificates of `q` of them; the horizon bounded by the certified frontier; bootstrap adopting the certified prefix; V12, and V9 restated as prefix-comparability |
 | 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget |
@@ -537,10 +537,11 @@ its peers' horizons never holds the line, and rejoins by bootstrap
 | 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests |
 | 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST; first, the decisions of §9.1 |
 
-Steps 7.1 to 7.3 follow from what steps 5 to 7 found. A filled block is
-signed by no one, so only the jump message can authenticate it. A run
-without time cannot ground a bootstrap. A bootstrapped node's decisions
-have a gap below its horizon, which certified checkpoints close.
+Steps 7.1 to 7.3 follow from what steps 5 to 7 found. The self-parent
+clause is what made a restarted or bootstrapped node unable to build,
+and no safety argument reads it. A run without time cannot ground a
+bootstrap. A bootstrapped node's decisions have a gap below its horizon,
+which certified checkpoints close.
 
 The order proves safety and local conformance of every mechanism before
 the two large steps, so that step 10 refines the complete program once
@@ -649,3 +650,72 @@ They are to be decided at the start of step 11.
   and the executables' input loops, outside the library, run on fuel.
 * The executables are `[[lean_exe]]` targets of `lakefile.toml`, not
   default targets, so `lake build` and the audits are unchanged.
+
+## 11. Self-parent as a build rule (step 7.1)
+
+**Why.** The row's validity asks every non-genesis block to reference a
+block by its own author. No safety argument reads this: the run's record
+already drops it (§4). Liveness reads it once, for inclusion
+(`SelfParent.reaches_of_creator`): a reliable author's committed leader
+block reaches each earlier block of that author, by walking the author's
+chain down. Yet the clause is what stops a node that missed rounds from
+building, so Safe Skip fills the missed rounds with blocks of its own
+(§3.5), and a bootstrapped node, whose own blocks lie below its horizon,
+starts again with a reference-free block that is invalid at the row
+(§3.6). Both cost more than inclusion needs. Inclusion walks one reliable
+author's chain from a committed block down to an earlier one, so it needs
+the clause only for reliable authors, and only above the round from which
+their chains are unbroken. A node that restarted or bootstrapped is not
+reliable across its gap anyway.
+
+**The work, in order.**
+
+1. **The shared layer** (a §11.x step of `docs/target-properties.md`).
+   `SelfParent` takes a reliability and a round `R₀`: every block by a
+   reliable author above `R₀` references a block by its author. The
+   chain walk (`reaches_of_creator`) runs above `R₀`, and inclusion
+   (`mem_history_of_decided_commit`, `includes_of_leads`,
+   `committed_of_correct_block`, `Support.inclusion`, `Support.liveness`)
+   covers reliable blocks above `R₀`. The rules whose validity keeps the
+   clause, the core and the rows built on it, prove the new property at
+   every reliability and every `R₀` from their validity, so their
+   statements are corollaries at `R₀ = 0`. About twenty-five files read
+   the property; most only produce it.
+2. **Validity.** The node's validity becomes `ValidAt q Clause.distinct`:
+   references one round below, from `q` distinct authors, none twice.
+   Every block the node builds is valid at the row again, the genesis
+   included (V1 as first stated).
+3. **The build rule.** The node builds above the highest round at which
+   its store holds `q` authors, if that lies at or above its top; it
+   references its own block of that round when it has one, which is the
+   self-parent rule for honest nodes. A node whose top is its own last
+   block builds as now. A restarted node, once it holds a quorum at a
+   later round `R`, builds `R + 1` directly. The node's state allows a
+   top without an own block there; `Held` keeps instead that the store
+   holds a block at or above the horizon, which is what `Spans` needs.
+   Building above a later quorum is also what the pacing clause `catchup`
+   asks (§9), so the rule bears on decision 2 of §9.1.
+4. **Safe Skip leaves the program.** The jump input and output, the
+   fill derivation (`jumpFills`, `lineDown`, `fillUp`, `insertAll`,
+   `tryJump`, `jumpIn`), what jump messages give (`received`,
+   `derived`), `Helpers/Fills.lean`, `Helpers/Jumps.lean`, `Node/Jump/`,
+   `Runs.AuthenticJumps` and `Boot.TimelyJumps` are deleted. The
+   scheme's Safe Skip results and L0 stay in the shared layer; V6 is no
+   longer a claim about the program.
+5. **Bootstrap without re-genesis.** After pruning to `G` and keeping the
+   attested base, the node's top is `G` with no own block there, and it
+   builds `G + 1` on the base by the rule of item 3. Its first block after
+   a bootstrap is valid at the row, so peers below `G` accept it once they
+   hold the base blocks it references.
+6. **Authentication.** Every block of a node's own is broadcast and
+   signed, so block authentication reads broadcasts again, as in step 4,
+   and the step 6 extension to a node's own unsigned blocks goes. What
+   was planned as fill authentication is moot.
+7. **Simulator and docs.** The simulator drops jump messages, reports
+   skips (a build above the node's top plus one) and bootstraps, and the
+   recovery sweep of §6 is rerun. §3.5, §3.6, §4 (V1, V3, V6, V9) and §5
+   are rewritten.
+
+**What it gives up.** Inclusion for a node's blocks below a gap in its
+chain. Those blocks may still be included through other authors' blocks;
+they are no longer guaranteed through their author's own.
