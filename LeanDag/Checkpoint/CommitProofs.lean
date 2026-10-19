@@ -33,22 +33,22 @@ because agreement makes its verdict equal the commit. -/
 theorem emitted_of_decided (ha : Agree R) (P : SigningRule M E R S U vm)
     {V : R.View U} {slot : ℕ} {block : BlockId}
     (commit : R.Decided S V slot (some block))
-    {v : Validator} (hv : v ∈ M.recoveryCorrect) {b : BlockId}
+    {v : Validator} (hv : v ∈ M.alive) {b : BlockId}
     (hb : R.Decided S (P.view v) slot (some b)) :
     E.emitted ⟨v, vm.checkpointAfterCommit slot block⟩ := by
   have heq : b = block := Option.some.inj (ha S (P.view v) V slot _ _ hb commit)
   subst heq
   exact P.proposes v hv hb
 
-/-- Construction behind `CommitCertified`: the online correct validators
+/-- Construction behind `CommitCertified`: the rule-following validators
 are the signers, each by `emitted_of_decided`. -/
 def checkpointQCOfDecided (ha : Agree R) (P : SigningRule M E R S U vm)
     {V : R.View U} {slot : ℕ} {block : BlockId}
     (commit : R.Decided S V slot (some block))
-    (hall : ∀ v ∈ M.recoveryCorrect, ∃ b, R.Decided S (P.view v) slot (some b)) :
+    (hall : ∀ v ∈ M.alive, ∃ b, R.Decided S (P.view v) slot (some b)) :
     SigningFaults.Execution.CheckpointQC M E
       (vm.checkpointAfterCommit slot block) where
-  signers := M.recoveryCorrect
+  signers := M.alive
   quorum := P.quorum
   messages := by
     intro v hv
@@ -60,12 +60,12 @@ certificate above also witnesses it, by the rule's second clause. -/
 def finalityQCOfDecided (ha : Agree R) (P : SigningRule M E R S U vm)
     {V : R.View U} {slot : ℕ} {block : BlockId}
     (commit : R.Decided S V slot (some block))
-    (hall : ∀ v ∈ M.recoveryCorrect, ∃ b, R.Decided S (P.view v) slot (some b)) :
+    (hall : ∀ v ∈ M.alive, ∃ b, R.Decided S (P.view v) slot (some b)) :
     SigningFaults.Execution.FinalityQC M E
       (vm.checkpointAfterCommit slot block) :=
   let Q := checkpointQCOfDecided M E vm ha P commit hall
   { checkpointQC := Q
-    witnesses := M.recoveryCorrect
+    witnesses := M.alive
     quorum := P.quorum
     messages := fun v hv =>
       (P.witnesses v hv (Q.messages v hv) Q).1
@@ -83,13 +83,13 @@ theorem commitFinalized : CommitFinalized M E R vm := by
   exact ⟨finalityQCOfDecided M E vm ha P commit hall⟩
 
 /-- Proof of `LiveCommitFinalized`: `Commits` on the leader's own view
-supplies the commit, and on each online correct validator's view
+supplies the commit, and on each rule-following validator's view
 supplies the settled-everywhere hypothesis. -/
 theorem liveCommitFinalized (sp : Support R) (rel : Reliability Validator) :
     LiveCommitFinalized M E R sp rel vm := by
   intro ha hcand hc S U P slot hq hpop hcert hcov hlead
   obtain ⟨L, hL⟩ := hc S (P.view (S.leader slot)) M.recoveryCorrect slot hq hpop hcert
-    (hcov _ hlead) hlead
+    (hcov _ (M.recoveryCorrect_subset_alive hlead)) hlead
   refine ⟨L, hcand S U _ slot L hL.toDecided, ?_⟩
   refine commitFinalized M E vm ha S P hL.toDecided ?_
   intro v hv

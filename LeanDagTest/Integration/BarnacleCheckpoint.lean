@@ -39,7 +39,8 @@ def faults : SigningFaults (Fin 4) where
   q := 3
   reliableSigner := {0, 1, 2}
   recoveryCorrect := {0, 1, 2}
-  recoveryCorrect_subset := subset_refl _
+  alive := {0, 1, 2}
+  recoveryCorrect_subset_alive := subset_refl _
   intersect := by decide
   reach := by decide
 
@@ -89,7 +90,7 @@ noncomputable def execution : faults.Execution ℕ where
   genesis := fun _ => []
   localHistory := fun _ _ h => ledger S U h
   emitted := fun m =>
-    (m.sender ∈ faults.recoveryCorrect ∧ ∃ κ L,
+    (m.sender ∈ faults.alive ∧ ∃ κ L,
       bnRule32.Decided S (view m.sender) κ (some L) ∧
         m.checkpoint = (ledgerVM S U).checkpointAfterCommit κ L) ∨
     (m.sender = 3 ∧ m.checkpoint = forked)
@@ -123,7 +124,7 @@ noncomputable def signingRule :
     refine ⟨{ sender := v, certificate := Q, recorded := fun hv' => ⟨hv', ?_⟩ }, rfl⟩
     rcases he with ⟨-, h⟩ | ⟨h3, -⟩
     · exact h
-    · exact absurd (h3 ▸ hv : (3 : Fin 4) ∈ faults.recoveryCorrect) (by decide)
+    · exact absurd (h3 ▸ hv : (3 : Fin 4) ∈ faults.alive) (by decide)
 
 /-- `forked` has no first-phase certificate: only validator `3` proposes
 it, two signers short of the quorum. -/

@@ -4835,14 +4835,19 @@ protocol's instance lives under `Integration/`.
 **The fault model is a parameter.** `SigningFaults` is to the signing
 counts what `Reliability` is to density: the quorum threshold `q`, the
 `reliableSigner` set whose state is enforced, the `recoveryCorrect` set
-that also stays available, and two bounds, `n + |reliableSignerᶜ| < 2q`
-so that two quorums meet outside the unreliable validators and
-`|recoveryCorrectᶜ| < q` so that a quorum holds an available one. The
-three `exists_*_mem*` lemmas of `SafetyProofs.lean` are those two
-bounds; the derivations above them are unchanged. The paper's
-three-class `FlexibleFaults` is `Integration/HybridCheckpoint.lean`,
-and its `signing` instance is the resilience bound
-`fabc + 3·fb + 2·fc < n` read at `q = n − fb − fc`.
+that stores certificates and stays available (no law relates it to
+`reliableSigner`; instances take the reliable signers minus the crashed
+ones), the `alive` set that follows the signing rule
+(`recoveryCorrect ⊆ alive`), and two bounds,
+`n + |reliableSignerᶜ| < 2q` so that two quorums meet outside the
+unreliable validators and `|recoveryCorrectᶜ| < q` so that a quorum
+holds an available one. The three `exists_*_mem*` lemmas of
+`SafetyProofs.lean` are those two bounds; the derivations above them
+are unchanged, and none reads `alive`. The paper's three-class
+`FlexibleFaults` is `Integration/HybridCheckpoint.lean`, and its
+`signing` instance is the resilience bound `fabc + 3·fb + 2·fc < n`
+read at `q = n − fb − fc`, with `alive = Correct`: the AbC validators
+follow the rule and complete quorums without being reliable.
 
 **The bridge reads the properties.** `SigningRule` is over a `DagRule`,
 a schedule and a universe; `proposes` is stated at `R.Decided`.
@@ -4854,9 +4859,12 @@ and its hypotheses are the law's: production
 across the wave, certification of every candidate, views caught up to
 the wave, a quorum-member leader. `SynchronisedOn` is gone from the
 statement, as §11.16 requires of a mechanism. The `noAbC` field became
-`quorum : M.q ≤ M.recoveryCorrect.card`, the fact it was there to
-supply; Hybrid discharges it and `rel.IsQuorum` from `abc = ∅` in
-`FlexibleFaults.quorum_of_noAbC` and `isQuorum_of_noAbC`.
+`quorum : M.q ≤ M.alive.card`, the fact it was there to supply; Hybrid
+discharges it with no hypothesis in `FlexibleFaults.quorum_alive`, and
+`rel.IsQuorum M.recoveryCorrect` from `abc = ∅` in `isQuorum_of_noAbC`.
+`proposes`, `witnesses` and the settled-on-its-own-view hypothesis of
+the claims range over `alive`; `ChkWitness.recorded` and the recovery
+layer stay on `recoveryCorrect`.
 
 **The schedule mechanism composes with the bridge as it is.** A
 Barnacle validator decides each configuration's slots against that

@@ -8,16 +8,17 @@ The paper's flexible fault model is the hybrid Byzantine and crash
 classes plus alive-but-corrupt signers, at the resilience bound
 `fabc + 3·fb + 2·fc < n`. It is one `SigningFaults` instance: the quorum
 is the hybrid `q`, the reliable signers are everyone outside the
-Byzantine and AbC classes, and the recovery-correct validators are the
-reliable signers that do not crash. The two counting laws are the
-resilience bound read at the quorum.
+Byzantine and AbC classes, the recovery-correct validators are the
+reliable signers that do not crash, and the rule-following validators
+are everyone outside the Byzantine and crash classes, AbC included. The
+two counting laws are the resilience bound read at the quorum.
 
-At `abc = ∅` the recovery-correct validators are the fully-correct class
-`Correct`, a quorum of both the signing threshold and the core
-reliability. That is what the commit bridge asks of a run at
-`hybridRule`, alongside `HybridProperties.agree` and
-`voteSupport_commits`; `LeanDagTest/Hybrid/CheckpointCommit.lean`
-assembles the four.
+The rule-following validators are the fully-correct class `Correct`, a
+signing quorum by the hybrid bound alone (`quorum_alive`), so AbC
+validators complete checkpoint quorums. At `abc = ∅` the
+recovery-correct validators are `Correct` too and form a quorum of the
+core reliability, which the liveness bridge asks of the DAG.
+`LeanDagTest/Hybrid/CheckpointCommit.lean` assembles the pieces.
 -/
 
 namespace LeanDag
@@ -65,13 +66,18 @@ theorem card_byzantine_union_abc :
     (Nat.add_le_add H.card_byzantine M.card_abc)
 
 /-- The flexible model as signing faults: the hybrid quorum, reliable
-signers outside the Byzantine and AbC classes, and recovery-correct
-validators that also do not crash. -/
+signers outside the Byzantine and AbC classes, recovery-correct
+validators that also do not crash, and rule-following validators
+outside the Byzantine and crash classes. -/
 def signing : SigningFaults Validator where
   q := Hybrid.q Validator
   reliableSigner := (H.byzantine ∪ M.abc)ᶜ
   recoveryCorrect := (H.byzantine ∪ M.abc)ᶜ \ H.crash
-  recoveryCorrect_subset := Finset.sdiff_subset
+  alive := (H.byzantine ∪ H.crash)ᶜ
+  recoveryCorrect_subset_alive := by
+    intro v hv
+    simp only [Finset.mem_sdiff, Finset.mem_compl, Finset.mem_union] at hv ⊢
+    tauto
   intersect := by
     rw [compl_compl]
     have := M.card_byzantine_union_abc
@@ -91,21 +97,26 @@ def signing : SigningFaults Validator where
     unfold Hybrid.q
     omega
 
+/-- The rule-following validators are the fully-correct class, whatever
+the AbC population. -/
+theorem alive_eq : M.signing.alive = (Correct : Finset Validator) := by
+  ext v
+  simp [signing, Correct]
+
+/-- The rule-following validators form the signing quorum, by the
+inherited `fb`, `fc` bounds through `card_correct`. AbC validators
+count: this is the bridge's `quorum` with AbC present. -/
+theorem quorum_alive : M.signing.q ≤ M.signing.alive.card := by
+  rw [alive_eq]
+  have := card_correct (Validator := Validator)
+  simpa [signing, Hybrid.q] using this
+
 /-- Without an AbC population the recovery-correct validators are the
 fully-correct class. -/
 theorem recoveryCorrect_eq (hno : M.abc = ∅) :
     M.signing.recoveryCorrect = (Correct : Finset Validator) := by
   ext v
   simp [signing, hno, Correct]
-
-/-- Without an AbC population the online correct validators form the
-signing quorum, by the inherited `fb`, `fc` bounds through
-`card_correct`. -/
-theorem quorum_of_noAbC (hno : M.abc = ∅) :
-    M.signing.q ≤ M.signing.recoveryCorrect.card := by
-  rw [recoveryCorrect_eq M hno]
-  have := card_correct (Validator := Validator)
-  simpa [signing, Hybrid.q] using this
 
 /-- Without an AbC population the online correct validators are a quorum
 of the core reliability. -/

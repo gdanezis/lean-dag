@@ -61,22 +61,23 @@ certificate of a checkpoint it proposed itself. Both are obligations,
 not restrictions: the rule does not say what a validator does with a
 certificate for a checkpoint it did not propose, and `Execution` has no
 witness-emission predicate over which such a restriction could be
-stated. `quorum` is the secure-base regime: the online correct
-validators alone reach the signing threshold. -/
+stated. Both range over `M.alive`, the validators that follow the rule;
+`quorum` says they reach the signing threshold. Alive-but-corrupt
+validators count here and nowhere in safety. -/
 structure SigningRule (R : DagRule Validator BlockId Payload) (S : Slots Validator)
     (U : R.Universe) (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) where
-  /-- The online correct validators form a signing quorum. -/
-  quorum : M.q ≤ M.recoveryCorrect.card
+  /-- The validators following the rule form a signing quorum. -/
+  quorum : M.q ≤ M.alive.card
   /-- Each validator's local DAG. -/
   view : Validator → R.View U
   /-- Sign what you commit. -/
   proposes :
-    ∀ v ∈ M.recoveryCorrect, ∀ {slot : ℕ} {block : BlockId},
+    ∀ v ∈ M.alive, ∀ {slot : ℕ} {block : BlockId},
       R.Decided S (view v) slot (some block) →
         E.emitted ⟨v, vm.checkpointAfterCommit slot block⟩
   /-- Witness a certificate for what you proposed. -/
   witnesses :
-    ∀ v ∈ M.recoveryCorrect, ∀ {checkpoint : CheckpointData Value},
+    ∀ v ∈ M.alive, ∀ {checkpoint : CheckpointData Value},
       E.emitted ⟨v, checkpoint⟩ →
         SigningFaults.Execution.CheckpointQC M E checkpoint →
           { witness : SigningFaults.Execution.ChkWitness M E checkpoint //
@@ -88,7 +89,7 @@ The propositions below are the theorem statements of this bridge. They
 are stated here so that the review boundary is this file alone;
 `CommitProofs.lean` proves each one and its bodies need no reading. -/
 
-/-- Claim: under agreement, a commit that every online correct validator
+/-- Claim: under agreement, a commit that every rule-following validator
 has settled on its own view has a first-phase certificate. Agreement
 makes the validators' verdicts equal the given commit, so the rule's
 proposals are all for the same checkpoint. -/
@@ -98,11 +99,11 @@ def CommitCertified (R : DagRule Validator BlockId Payload)
   ∀ (S : Slots Validator) {U : R.Universe} (P : SigningRule M E R S U vm)
     {V : R.View U} {slot : ℕ} {block : BlockId},
     R.Decided S V slot (some block) →
-    (∀ v ∈ M.recoveryCorrect, ∃ b, R.Decided S (P.view v) slot (some b)) →
+    (∀ v ∈ M.alive, ∃ b, R.Decided S (P.view v) slot (some b)) →
     Nonempty (SigningFaults.Execution.CheckpointQC M E
       (vm.checkpointAfterCommit slot block))
 
-/-- Claim: under agreement, a commit that every online correct validator
+/-- Claim: under agreement, a commit that every rule-following validator
 has settled on its own view has a finality certificate. -/
 def CommitFinalized (R : DagRule Validator BlockId Payload)
     (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) : Prop :=
@@ -110,16 +111,17 @@ def CommitFinalized (R : DagRule Validator BlockId Payload)
   ∀ (S : Slots Validator) {U : R.Universe} (P : SigningRule M E R S U vm)
     {V : R.View U} {slot : ℕ} {block : BlockId},
     R.Decided S V slot (some block) →
-    (∀ v ∈ M.recoveryCorrect, ∃ b, R.Decided S (P.view v) slot (some b)) →
+    (∀ v ∈ M.alive, ∃ b, R.Decided S (P.view v) slot (some b)) →
     Nonempty (SigningFaults.Execution.FinalityQC M E
       (vm.checkpointAfterCommit slot block))
 
 /-- Claim: liveness delivers a finalized checkpoint. Under `Commits` for
 the rule's support at a reliability whose quorum the online correct
 validators form, a slot they lead, populated across the wave and with
-every candidate certified, reaches checkpoint finality on views caught
-up to the wave. No commit is assumed; the proof derives the decisions it
-needs from the support's law. -/
+every candidate certified, reaches checkpoint finality once every
+rule-following validator's view has caught up to the wave. No commit is
+assumed; the proof derives the decisions it needs from the support's
+law. -/
 def LiveCommitFinalized (R : DagRule Validator BlockId Payload) (sp : Support R)
     (rel : Reliability Validator)
     (vm : DeterministicVM (BlockId := BlockId) (Value := Value)) : Prop :=
@@ -130,7 +132,7 @@ def LiveCommitFinalized (R : DagRule Validator BlockId Payload) (sp : Support R)
       Properties.PopulatedOn R U M.recoveryCorrect n) →
     (∀ L, R.IsCandidate S U slot L →
       sp.certifiesAt U M.recoveryCorrect (S.slotRound slot) (S.kind slot) L) →
-    (∀ v ∈ M.recoveryCorrect,
+    (∀ v ∈ M.alive,
       Properties.CoversUpto R (P.view v) (S.slotRound slot + sp.waveAt (S.kind slot))) →
     S.leader slot ∈ M.recoveryCorrect →
     ∃ L, R.IsCandidate S U slot L ∧
