@@ -14,20 +14,31 @@ covers the six partially synchronous rows: Cordial Miners PS, Mysticeti,
 Blue Bottle PS, Orcaella, Nemo-Nemo and Hybrid Mysticeti. The
 asynchronous rows, the coin and `AsyncPace` are out of scope.
 
-It integrates three mechanisms:
+It integrates these mechanisms:
 
 * **garbage collection**, with crash persistence and restart;
-* **Safe Skip**, the one-message return after downtime;
+* **Safe Skip**, the one-message return after downtime, built in step 6
+  and taken out again in step 7.1, where a node resumes by building
+  above the highest round it holds a quorum at (§11);
 * **rate limiting**, the novelty budget on acceptance;
 * **bootstrap**, the return of a validator down past the horizon, from
-  the attested base.
+  the attested base;
+* **checkpoints**, certificates of the decided prefix by a quorum, which
+  bound the horizon and give a bootstrapped node the decisions below it
+  (§3.8, step 7.3).
 
 Two of these rest on results stated on the core's universe only, which
 are lifted to block records at quorum `q` first (§8).
 
 Out of scope: stake weights, a mempool (the payload comes from a
-configured source), and an implementation of hashing (identifiers are
-the environment's hash, assumed injective on the blocks of a run).
+configured source), execution (a checkpoint certifies decisions, not an
+executed state, and `DeterministicVM` appends a decision), and an
+implementation of hashing and signatures. Identifiers are the
+environment's hash, assumed injective on the blocks of a run. Blocks,
+base offers and checkpoint proposals are signed by their source, and the
+proofs assume what the signatures give (authentication); the
+executables check no signature and trust their inputs, so a deployable
+node would verify each of these signatures on receipt.
 
 ## 2. Interface
 
@@ -307,6 +318,8 @@ The checkpoint model of `LeanDag/Checkpoint` is used as it stands.
 * **Bootstrap.** A peer serves its latest certificate with its base. The
   joiner checks it, outputs the certified decisions for the slots below
   its new horizon, and decides from there on. Its decisions have no gap.
+* **Adversarial checks** (step 7.4): conflicting proposals from Byzantine
+  signers, and certificates with forged or too few signatures.
 
 V12 states that every certified prefix is the honest nodes' decisions,
 through `CommitCheckpointUnique` at the scheme's agreement, so that every
@@ -324,7 +337,7 @@ it; those still rest on an honest presenter's store, earlier in the trace.
 | V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised, no honest node restarting and none given a jump message or a base offer, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
 | V4 | The decisions a store pruned at `G` gives from a slot at or above `G` equal those of every view holding its blocks from `G` up, read at `G`: the loop reads nothing below the slot's round. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq`, `Node.ViewsAbove.of_store` (proved) |
 | V5 | At every state a run reaches, resuming from what the node persisted gives the state its restart recovers: the same blocks, read alike, at the same horizon, the same next slot, top and own block, its top round's timer fired, and nothing pending or asked for. | `Node.Restart.Resumes` (proved): `Node.resume_persisted`, `Node.State.recover` |
-| V6 | Under authenticated jump messages and an injective hash, every block an honest node derived from a jump message in an honest node's name is one of that node's own; the self-referencing filled block is valid at the program's validity at any quorum (L0). | `Node.Jump.Derives` (proved): `Node.derived_persisted`, `Node.jumpFills_congr`; `BlockRecord.selfBlock_valid` (proved) |
+| V6 | Under authenticated jump messages and an injective hash, every block an honest node derived from a jump message in an honest node's name is one of that node's own; the self-referencing filled block is valid at the program's validity at any quorum (L0). | `Node.Jump.Derives` (proved); `BlockRecord.selfBlock_valid` (proved). Retired from the program at step 7.1, where Safe Skip leaves it; L0 stays in the shared layer |
 | V7 | Rate limiting does not make a validator decide wrongly. | `decided_mono_of_banded` |
 | V8 | The efficient store and decider compute the reference program's values. | one equality per function |
 | V9 | Over a trace with timely authentication of blocks, jump messages and base offers, an injective hash and `Params.Tolerates`, every honest store is a cut of the run's record, bootstraps included, so two honest nodes that decide a slot decide it alike. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.IsCut.boot`, `Node.IsCut.step`, `Node.verdict_decideStep`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
@@ -425,6 +438,13 @@ would be identical, since the loop's restart is idempotent (`Restart`).
 A block is persisted before it is broadcast. Otherwise a crash between
 the two lets the restarted validator build a different block at the same
 round, which is an equivocation.
+
+The model persists the whole state a step leaves, at once, and a crash
+falls only between steps; "persist before broadcast" is the order of a
+step's outputs. A real node writes block by block and can crash between
+two outputs of one step. Step 7.2 either adds crash points between a
+step's outputs to the trace and proves V5 and V3 across them, or states
+the atomic write of a step's state as an assumption on the environment.
 
 Pending and deferred blocks are not persisted: no own block references
 them, and their authors or other peers can serve them again.
@@ -530,18 +550,20 @@ its peers' horizons never holds the line, and rejoins by bootstrap
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 (built) |
 | 7 | Bootstrap in the program: V9 over a trace; G10's soundness lifted to block records (§8, L1) (built) |
 | 7.1 | Self-parent as a build rule, not a validity clause (§11): the shared inclusion argument reads it for reliable authors from a round on; the program's validity drops it; a node resumes above the highest round it holds a quorum at; Safe Skip leaves the program; bootstrap needs no reference-free block; block authentication back to a block its author broadcast |
-| 7.2 | One run model: V3 proved over a trace, and the model without time retired (§4, *Bootstraps need time*) |
+| 7.2 | One run model: V3 proved over a trace, and the model without time retired (§4, *Bootstraps need time*); crash points between a step's outputs, or the atomic write of a step's state stated as an assumption (§5.1); §4 says that the run's record is the proof's construction, not the union of the honest stores |
 | 7.3 | Checkpoints (§3.8): signed proposals of the decided prefix and certificates of `q` of them; the horizon bounded by the certified frontier; bootstrap adopting the certified prefix; V12, and V9 restated as prefix-comparability |
+| 7.4 | Adversarial simulation (§6): Byzantine nodes that send base offers with fabricated or inconsistent bases, offers in another node's name, malformed and invalid blocks, and conflicting checkpoint proposals; each scenario checks agreement and validity |
 | 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget |
-| 9 | Rate limiting in the program: V7, V10 |
-| 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests |
-| 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST; first, the decisions of §9.1 |
+| 9 | Rate limiting in the program: V7, V10; the novelty budget also bounds what a Byzantine node can add to an honest node's pending blocks and requests |
+| 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests; agreement with the model (§6, item 1): the program's commits on the scheme's hand-built records |
+| 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST; first, the decisions of §9.1, including the liveness of recovery, of checkpointing and of convergence under garbage collection and rejoin |
 
-Steps 7.1 to 7.3 follow from what steps 5 to 7 found. The self-parent
+Steps 7.1 to 7.4 follow from what steps 5 to 7 found. The self-parent
 clause is what made a restarted or bootstrapped node unable to build,
 and no safety argument reads it. A run without time cannot ground a
 bootstrap. A bootstrapped node's decisions have a gap below its horizon,
-which certified checkpoints close.
+which certified checkpoints close. The simulator's adversary has only
+equivocated and withheld, while the new messages give it more to forge.
 
 The order proves safety and local conformance of every mechanism before
 the two large steps, so that step 10 refines the complete program once
@@ -627,7 +649,21 @@ They are to be decided at the start of step 11.
 4. **Convergence under garbage collection**: read `holds` as the
    accepted blocks above the node's horizon, and state `converges` for
    blocks above the receiver's horizon, as the garbage-collection arc's
-   induced delivery does (`garbage.md` §5, G13 and G14).
+   induced delivery does (`garbage.md` §5, G13 and G14). V3′ today
+   excludes raised horizons, restarts and base offers; the version
+   liveness reads must admit all three.
+5. **Recovery**: a restarted node rejoins, by building above a quorum it
+   holds (§11) or by bootstrapping. The bootstrap trigger and its
+   re-request (§3.6) are tuned in the simulator, not proved; liveness
+   needs a bound on when a restarted reliable node builds again, from
+   delivery after GST.
+6. **Checkpointing**: once the horizon waits on the certified frontier
+   (§3.8), garbage collection, storage (V10) and bootstrap all rest on
+   certificates forming. Liveness needs that a signing quorum certifies
+   every decided prefix within a bound after GST.
+7. **Skipping rounds**: the build rule of step 7.1 builds above the
+   highest round a node holds a quorum at, which is what `catchup` (item
+   2) asks; check whether it meets `catchup` outright.
 
 ## 10. Tooling
 
