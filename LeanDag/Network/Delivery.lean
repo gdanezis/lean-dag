@@ -7,16 +7,25 @@ import LeanDag.Common.Support
 What each validator actually received, one round at a time, as distinct
 from what the DAG records. `Delivery` contains no clock and no commit
 rule: a timeout's only trace, with no time model, is a larger `held`,
-which `EventuallyDelivers` then demands after `R`. The rate-limiting and
-garbage-collection arcs read this and nothing of a protocol.
+which `EventuallyDeliversOn` then demands after `R`. The rate-limiting
+and garbage-collection arcs read this and nothing of a protocol.
+
+The layer is stated on any block record, its honest set the validators
+that follow the acceptance and inclusion rules; the density lemmas (L0)
+at the record's quorum `q`. The delivery assumption names the receivers
+`T`, the validators that stay up, and covers the blocks of every honest
+author. The core's `Populated`, `Synchronised` and `EventuallyDelivers`
+are the cases at `Correct`.
 -/
 
 namespace LeanDag
 
+section General
+
 variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
-variable [F : Faults Validator]
 variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
-variable {U : BlockUniverse Validator BlockId Payload}
+variable {P : Validity Validator BlockId Payload} {honest : Finset Validator}
+variable {U : BlockRecord Validator BlockId Payload P honest}
 
 omit [DecidableEq BlockId] in
 /-- A round with any author at all has a block. The bridge that lets L0's
@@ -29,35 +38,32 @@ theorem exists_mem_of_authorsAt_card_pos {n : ℕ} (h : 0 < (authorsAt U n).card
   exact ⟨i, hi, hir⟩
 omit [DecidableEq BlockId] in
 /-- One step of L0: a block at round `n+1` forces a quorum of authors at
-round `n`, immediate from validity — its references carry `2f+1`
-distinct creators, each holding a round-`n` block. -/
-theorem card_authorsAt_of_succ {n : ℕ} {i : BlockId}
+round `n`, immediate from validity — its references carry `q` distinct
+creators, each holding a round-`n` block. -/
+theorem card_authorsAt_of_succ [P.Mechanised] {q : ℕ} [P.Quorate q] {n : ℕ} {i : BlockId}
     (hi : i ∈ U.ids) (hir : (U.block i).round = n + 1) :
-    quorumCard Validator ≤ (authorsAt U n).card :=
+    q ≤ (authorsAt U n).card :=
   le_trans (U.creators_quorum hi (by omega))
     (Finset.card_le_card (creators_refs_subset_authorsAt hi hir))
 omit [DecidableEq BlockId] in
 /-- **L0 — the DAG is dense below its frontier.** If any block exists at
-round `r`, every round `n < r` has at least `2f+1` distinct authors:
+round `r`, every round `n < r` has at least `q` distinct authors:
 downward induction on the gap `r - n`, generalised over `n` so the step
 can re-enter at `n+1`. -/
-theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
-    (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
-    quorumCard Validator ≤ (authorsAt U n).card := by
+theorem card_authorsAt_of_lt [P.Mechanised] {q : ℕ} [P.Quorate q] {r n : ℕ} (hn : n < r)
+    {i : BlockId} (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
+    q ≤ (authorsAt U n).card := by
   obtain ⟨d, rfl⟩ : ∃ d, r = n + 1 + d := ⟨r - n - 1, by omega⟩
   clear hn
   induction d generalizing n i with
   | zero => exact card_authorsAt_of_succ hi hir
   | succ d ih =>
-      have h1 : quorumCard Validator ≤ (authorsAt U (n + 1)).card :=
+      have h1 : q ≤ (authorsAt U (n + 1)).card :=
         ih (n := n + 1) (i := i) hi (by omega)
       obtain ⟨j, hj, hjr⟩ := exists_mem_of_authorsAt_card_pos (U := U) (n := n + 1)
-        (by have := F.card_validators; omega)
+        (by have := Validity.Quorate.pos (P := P) (q := q); omega)
       exact card_authorsAt_of_succ hj hjr
 
-/-- The all-of-`Correct` case, which is what L1 produces. -/
-abbrev Populated (U : BlockUniverse Validator BlockId Payload) (r : ℕ) : Prop :=
-  PopulatedOn U (Correct : Finset Validator) r
 
 /-! ## The delivery layer
 
@@ -75,7 +81,7 @@ it `held` would be unsatisfiable the moment it holds both halves of an
 equivocation, since `distinct_creators` forbids referencing both
 (`dos-equivocation-and-growth.md` §4). `held` is not deduplicated,
 since `U` is every block some correct validator held. -/
-structure Delivery (U : BlockUniverse Validator BlockId Payload) where
+structure Delivery (U : BlockRecord Validator BlockId Payload P honest) where
   /-- What `v` held from round `n` when it built its round-`(n+1)` block. -/
   held : Validator → ℕ → Finset BlockId
   /-- Held ids are real blocks of the stated round — what keeps `Delivery`
@@ -91,17 +97,43 @@ structure Delivery (U : BlockUniverse Validator BlockId Payload) where
   one, because it cannot reference both. -/
   accepted_inj : ∀ v n, ∀ i ∈ accepted v n, ∀ j ∈ accepted v n,
     (U.block i).creator = (U.block j).creator → i = j
-  /-- A correct block is always accepted. It never conflicts with anything —
-  its author has only the one block for that round (T1) — so nothing is ever
-  given up by taking it, and L7 needs it. -/
-  accepts_correct : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ a ∈ held v n,
-    (U.block a).creator ∈ (Correct : Finset Validator) → a ∈ accepted v n
-  /-- **The protocol rule.** A correct validator references everything it
+  /-- An honest block is always accepted by an honest validator. It never
+  conflicts with anything — its author has only the one block for that round
+  (T1) — so nothing is ever given up by taking it, and L7 needs it. -/
+  accepts_correct : ∀ v ∈ honest, ∀ n, ∀ a ∈ held v n,
+    (U.block a).creator ∈ honest → a ∈ accepted v n
+  /-- **The protocol rule.** An honest validator references everything it
   accepted. Implementable and observable — unlike `Synchronised` itself. -/
-  includes : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
+  includes : ∀ v ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = v → (U.block b).round = n + 1 →
     accepted v n ⊆ (U.block b).refs
 
+
+/-- **The network assumption**: after `R`, the blocks of honest authors
+reach the receivers `T` in time to be built on. This is eventual DAG
+synchrony proper — pure delivery, no protocol content. A crash-prone
+validator is honest but need not be among the receivers. -/
+def EventuallyDeliversOn (D : Delivery U) (T : Finset Validator) (R : ℕ) : Prop :=
+  ∀ n, R ≤ n → ∀ v ∈ T, ∀ a ∈ U.ids,
+    (U.block a).round = n → (U.block a).creator ∈ honest → a ∈ D.held v n
+
+end General
+
+/-! ## The core
+
+At the core's universes the honest set is `Correct`, and every correct
+validator receives. -/
+
+section Core
+
+variable {Validator : Type*} [Fintype Validator] [DecidableEq Validator]
+variable [F : Faults Validator]
+variable {BlockId : Type*} [DecidableEq BlockId] {Payload : Type*}
+variable {U : BlockUniverse Validator BlockId Payload}
+
+/-- The all-of-`Correct` case, which is what L1 produces. -/
+abbrev Populated (U : BlockUniverse Validator BlockId Payload) (r : ℕ) : Prop :=
+  PopulatedOn U (Correct : Finset Validator) r
 
 omit [DecidableEq BlockId] in
 /-- A populated round carries a quorum of authors — the step that feeds a
@@ -114,8 +146,6 @@ theorem card_authorsAt_of_populated {r : ℕ} (h : Populated U r) :
   obtain ⟨b, hb, hbc, hbr⟩ := h w hw
   exact mem_authorsAt.mpr ⟨b, hb, hbr, hbc⟩
 
-
-omit [DecidableEq BlockId] in
 /-! **`SynchronisedOn`** (`Participation.lean`) is the post-stabilisation
 coverage assumption: from round `R` on, every `T`-authored block
 references every `T`-authored block of the round below. It does not
@@ -126,22 +156,11 @@ built — so it is an assumption, not a theorem. -/
 abbrev Synchronised (U : BlockUniverse Validator BlockId Payload) (R : ℕ) : Prop :=
   SynchronisedOn U (Correct : Finset Validator) R
 
-/-! ## L7 — `Synchronised`, derived
+/-- **The core's network assumption**: after `R`, correct blocks reach
+correct validators. -/
+abbrev EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
+  EventuallyDeliversOn D (Correct : Finset Validator) R
 
-`Synchronised` welds a protocol rule and a
-network guarantee into one object stated on `refs`, since the static
-model has no delivery layer to state it on separately. Splitting it
-into `includes` (implementable and observable) plus
-`EventuallyDelivers` (pure network) gains nothing logically — the chain
-still bottoms out at delivery — but gives the timeout, which governs
-when a validator builds, somewhere real to live. -/
-
-/-- **The network assumption**: after `R`, correct blocks reach correct
-validators in time to be built on. This is eventual DAG synchrony proper —
-pure delivery, no protocol content. -/
-def EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
-  ∀ n, R ≤ n → ∀ v ∈ (Correct : Finset Validator), ∀ a ∈ U.ids,
-    (U.block a).round = n → (U.block a).creator ∈ (Correct : Finset Validator) →
-    a ∈ D.held v n
+end Core
 
 end LeanDag

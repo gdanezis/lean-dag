@@ -671,6 +671,24 @@ was, with the core's statement kept as the corollary at `q = n − f`.
   `ByzBudget`), the liveness half (C3) and linear storage (B4) of
   `DoS/Novelty.lean`, and the coverage witness of `DoS/Delivers.lean`.
 
+Step 8 runs in sub-steps, each with the build green: **8.0** a
+`Validity.SelfParent` class, which the novelty telescope reads (built);
+**8.1** the delivery layer on any record, with `EventuallyDeliversOn D T
+R` (built); **8.2** the budgets, C3, B3′ and B4 of `DoS/Novelty.lean`;
+**8.3** the transfer lemmas of `GC/Chop.lean`, G6 (`card_retained_le`)
+and the depth rule (G8, G9); **8.4** the backbone
+(`mem_history_of_correct`), G10 completeness, G11, G6b, G12 and G7;
+**8.5** the coverage witness of `DoS/Delivers.lean`. The rate-limiting
+half needs no quorum: only the honest set, the bound `honestᶜ.card ≤ f`
+and the self-parent clause. Completeness needs `q ≤ T.card` and
+`n + f + 1 ≤ 2q`, which give `f + 1 ≤ T.card`.
+
+**The delivery assumption** (`EventuallyDeliversOn D T R`): after `R`,
+the blocks of every honest author reach every receiver in `T`. A block a
+crash-prone validator made before it crashed still reaches the
+validators that stay up; so the attestation threshold stays `f + 1`, and
+the bounded fetch (G6b) and the Byzantine budget keep their core form.
+
 The hybrid rows have `c` crash-prone validators besides the `f`
 Byzantine ones. Crash-prone validators are honest (they do not
 equivocate), so the attestation threshold stays `f + 1`; what changes is

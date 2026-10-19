@@ -5313,6 +5313,23 @@ of `docs/validator.md` drops the clause from its validity and keeps it
 as its build rule, so its record has the property for its reliable
 nodes only from the round their chains are unbroken (§11 there).
 
+### 11.56 The delivery layer and its budgets at any block record
+
+The delivery model, the novelty budgets, the liveness half of rate
+limiting and linear storage, and the bootstrap results that read them
+were stated on the core's universe. `docs/validator.md` §8 lifts them to
+block records, in sub-steps. A validity predicate now says whether it
+carries the self-parent clause (`Validity.SelfParent`, with
+`BlockRecord.self_parent`), as it says whether it is quorate or
+distinct, and the core's `ValidWrt` has an instance. `Delivery` is stated
+on any record, its acceptance and inclusion rules at the record's honest
+set, and the density lemmas `card_authorsAt_of_succ` and
+`card_authorsAt_of_lt` at the record's quorum. The delivery assumption
+`EventuallyDeliversOn D T R` names its receivers `T` and covers the
+blocks of every honest author, so a crash-prone validator's blocks still
+reach the validators that stay up; the core's `EventuallyDelivers` is the
+case `T = Correct`, as `Populated` and `Synchronised` are.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

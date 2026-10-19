@@ -1998,32 +1998,36 @@ the targeted predicates of §6.6.
 
 **L0.**
 ```lean
-theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
-    (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
-    quorumCard Validator ≤ (authorsAt U n).card
+theorem card_authorsAt_of_lt [P.Mechanised] {q : ℕ} [P.Quorate q] {r n : ℕ} (hn : n < r)
+    {i : BlockId} (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
+    q ≤ (authorsAt U n).card
 ```
 
-If any block exists at round `r`, every round below `r` has at least `n−f`
-distinct authors. The result requires no assumption beyond validity. Its content
+If any block exists at round `r`, every round below `r` has at least `q`
+distinct authors, `n−f` at the core. The result requires no assumption beyond validity. Its content
 is not that the DAG grows, but that it cannot grow tall and thin: a single block
 high in the DAG forces a quorum of authors at every round beneath it.
 
 ### 6.2 The delivery layer
 
 ```lean
-structure Delivery (U) where
+structure Delivery (U : BlockRecord Validator BlockId Payload P honest) where
   held : Validator → ℕ → Finset BlockId
   held_spec : ∀ v n, ∀ i ∈ held v n, i ∈ U.ids ∧ (U.block i).round = n
   accepted : Validator → ℕ → Finset BlockId
   accepted_sub : ∀ v n, accepted v n ⊆ held v n
   accepted_inj : ∀ v n, ∀ i ∈ accepted v n, ∀ j ∈ accepted v n,
     (U.block i).creator = (U.block j).creator → i = j
-  accepts_correct : ∀ v ∈ Correct, ∀ n, ∀ a ∈ held v n,
-    (U.block a).creator ∈ Correct → a ∈ accepted v n
-  includes : ∀ v ∈ Correct, ∀ n, ∀ b ∈ U.ids,
+  accepts_correct : ∀ v ∈ honest, ∀ n, ∀ a ∈ held v n,
+    (U.block a).creator ∈ honest → a ∈ accepted v n
+  includes : ∀ v ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = v → (U.block b).round = n + 1 →
     accepted v n ⊆ (U.block b).refs
 ```
+
+The layer is stated on any block record: its honest set is the
+validators that follow the acceptance and inclusion rules, `Correct` at
+the core.
 
 The indexing of `held` is essential: `held v n` denotes what `v` had in hand *at
 the moment it built its round-`(n+1)` block*, not what `v` eventually receives.
@@ -13484,7 +13488,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 427 definitions and structures the report names, in
+The 428 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -18630,6 +18634,18 @@ class Quorate [DecidableEq Validator] (P : Validity Validator BlockId Payload)
 
 Non-genesis blocks reference `q` distinct creators, and `q` is positive, so a non-genesis block references something.
 
+#### `SelfParent`
+
+*class, `Common.BlockRecord.lean`*
+
+```lean
+class SelfParent (P : Validity Validator BlockId Payload) : Prop where
+  self_parent : ∀ (blk : BlockId → Block Validator BlockId Payload)
+    (b : Block Validator BlockId Payload), P blk b → Clause.selfParent blk b
+```
+
+Non-genesis blocks reference a block by their own author: the clause the novelty telescope and the retained store read.
+
 #### `commitSeq`
 
 *def, `Common.Ledger.lean`*
@@ -19619,23 +19635,12 @@ def onRecord :
 
 **Nemo's carrier, on the record**: every map the identity.
 
-#### `Populated`
-
-*abbrev, `Network.Delivery.lean`*
-
-```lean
-abbrev Populated (U : BlockUniverse Validator BlockId Payload) (r : ℕ) : Prop :=
-  PopulatedOn U (Correct : Finset Validator) r
-```
-
-The all-of-`Correct` case, which is what L1 produces.
-
 #### `Delivery`
 
 *structure, `Network.Delivery.lean`*
 
 ```lean
-structure Delivery (U : BlockUniverse Validator BlockId Payload) where
+structure Delivery (U : BlockRecord Validator BlockId Payload P honest) where
   /-- What `v` held from round `n` when it built its round-`(n+1)` block. -/
   held : Validator → ℕ → Finset BlockId
   /-- Held ids are real blocks of the stated round — what keeps `Delivery`
@@ -19651,19 +19656,30 @@ structure Delivery (U : BlockUniverse Validator BlockId Payload) where
   one, because it cannot reference both. -/
   accepted_inj : ∀ v n, ∀ i ∈ accepted v n, ∀ j ∈ accepted v n,
     (U.block i).creator = (U.block j).creator → i = j
-  /-- A correct block is always accepted. It never conflicts with anything —
-  its author has only the one block for that round (T1) — so nothing is ever
-  given up by taking it, and L7 needs it. -/
-  accepts_correct : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ a ∈ held v n,
-    (U.block a).creator ∈ (Correct : Finset Validator) → a ∈ accepted v n
-  /-- **The protocol rule.** A correct validator references everything it
+  /-- An honest block is always accepted by an honest validator. It never
+  conflicts with anything — its author has only the one block for that round
+  (T1) — so nothing is ever given up by taking it, and L7 needs it. -/
+  accepts_correct : ∀ v ∈ honest, ∀ n, ∀ a ∈ held v n,
+    (U.block a).creator ∈ honest → a ∈ accepted v n
+  /-- **The protocol rule.** An honest validator references everything it
   accepted. Implementable and observable — unlike `Synchronised` itself. -/
-  includes : ∀ v ∈ (Correct : Finset Validator), ∀ n, ∀ b ∈ U.ids,
+  includes : ∀ v ∈ honest, ∀ n, ∀ b ∈ U.ids,
     (U.block b).creator = v → (U.block b).round = n + 1 →
     accepted v n ⊆ (U.block b).refs
 ```
 
 What each validator had in hand, one round at a time, and which of it it chose to build on. Two fields because delivery and policy are two things: a structure demanding a correct validator reference everything it `held` would be unsatisfiable the moment it holds both halves of an equivocation, since `distinct_creators` forbids referencing both (`dos-equivocation-and-growth.md` §4). `held` is not deduplicated, since `U` is every block some correct validator held.
+
+#### `Populated`
+
+*abbrev, `Network.Delivery.lean`*
+
+```lean
+abbrev Populated (U : BlockUniverse Validator BlockId Payload) (r : ℕ) : Prop :=
+  PopulatedOn U (Correct : Finset Validator) r
+```
+
+The all-of-`Correct` case, which is what L1 produces.
 
 #### `Synchronised`
 
@@ -19678,16 +19694,14 @@ The all-of-`Correct` case.
 
 #### `EventuallyDelivers`
 
-*def, `Network.Delivery.lean`*
+*abbrev, `Network.Delivery.lean`*
 
 ```lean
-def EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
-  ∀ n, R ≤ n → ∀ v ∈ (Correct : Finset Validator), ∀ a ∈ U.ids,
-    (U.block a).round = n → (U.block a).creator ∈ (Correct : Finset Validator) →
-    a ∈ D.held v n
+abbrev EventuallyDelivers (D : Delivery U) (R : ℕ) : Prop :=
+  EventuallyDeliversOn D (Correct : Finset Validator) R
 ```
 
-**The network assumption**: after `R`, correct blocks reach correct validators in time to be built on. This is eventual DAG synchrony proper — pure delivery, no protocol content.
+**The core's network assumption**: after `R`, correct blocks reach correct validators.
 
 #### `onRecord`
 
@@ -20772,7 +20786,7 @@ def Good (R : DagRule Validator BlockId Payload) (rel : Reliability Validator)
 
 ## Appendix C. The theorem reference
 
-The 633 theorems the body or Appendix A names, each
+The 634 theorems the body or Appendix A names, each
 the source statement, unabridged. Generated with Appendix B;
 a theorem the report does not name is a step of an argument
 rather than a result it presents, and the source is its
@@ -26804,6 +26818,18 @@ theorem Mechanised.of_iff {Q : Validity Validator BlockId Payload} [Q.Mechanised
 
 The obligations transfer along an equivalence of predicates.
 
+#### `self_parent`
+
+*theorem, `Common.BlockRecord.lean`*
+
+```lean
+theorem self_parent [P.SelfParent] {i : BlockId} (hi : i ∈ U.ids)
+    (hround : 0 < (U.block i).round) :
+    ∃ j ∈ (U.block i).refs, (U.block j).creator = (U.block i).creator
+```
+
+A non-genesis block references a block by its own author.
+
 #### `distinct_creators`
 
 *theorem, `Common.BlockRecord.lean`*
@@ -27870,12 +27896,12 @@ theorem progress (hn : 0 < Fintype.card Validator) :
 *theorem, `Network.Delivery.lean`*
 
 ```lean
-theorem card_authorsAt_of_lt {r n : ℕ} (hn : n < r) {i : BlockId}
-    (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
-    quorumCard Validator ≤ (authorsAt U n).card
+theorem card_authorsAt_of_lt [P.Mechanised] {q : ℕ} [P.Quorate q] {r n : ℕ} (hn : n < r)
+    {i : BlockId} (hi : i ∈ U.ids) (hir : (U.block i).round = r) :
+    q ≤ (authorsAt U n).card
 ```
 
-**L0 — the DAG is dense below its frontier.** If any block exists at round `r`, every round `n < r` has at least `2f+1` distinct authors: downward induction on the gap `r - n`, generalised over `n` so the step can re-enter at `n+1`.
+**L0 — the DAG is dense below its frontier.** If any block exists at round `r`, every round `n < r` has at least `q` distinct authors: downward induction on the gap `r - n`, generalised over `n` so the step can re-enter at `n+1`.
 
 #### `selfParent`
 
