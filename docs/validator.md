@@ -620,7 +620,7 @@ rejoins by bootstrap (§3.6).
 | 7.2 | One run model: V3 proved over a trace, and the model without time retired (§4, *One run model*); the atomic write of a step's state stated as an assumption on the node's storage (§5.1); the run's record described as the proof's construction, not the union of the honest stores (§4) (built) |
 | 7.3 | Checkpoints (§3.8): signed proposals of the decided prefix and certificates of `q` of them; the horizon bounded by the certified frontier; bootstrap adopting the certified prefix; V12, and V9 restated as prefix-comparability (built) |
 | 7.4 | Adversarial simulation (§6, item 4): Byzantine nodes that send fabricated or inconsistent bases, fabricated certificates, conflicting signed proposals, invalid blocks and blocks in another node's name, with the network's signature checks on and off; each scenario checks agreement, prefix-comparability and validity (built) |
-| 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget |
+| 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget (built) |
 | 9 | Rate limiting in the program: V7, V10; the novelty budget also bounds what a Byzantine node can add to an honest node's pending blocks and requests |
 | 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests; agreement with the model (§6, item 1): the program's commits on the scheme's hand-built records |
 | 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST; first, the decisions of §9.1, including the liveness of recovery, of checkpointing and of convergence under garbage collection and rejoin |
@@ -650,39 +650,31 @@ One small result was missing at the program's validity, and is proved:
   any quorum (`BlockRecord.selfBlock_valid`, `Record/Fill.lean`). The
   core's fill calls it at `ValidWrt.iff_validAt`.
 
-Two groups of results the program needs are stated on the core's
-universe, at `n = 3f + 1` and quorum `quorumCard`, and so hold at the
-Mysticeti and Cordial Miners PS rows only. Each is lifted to block
-records at a quorum `q` with `2q ≥ n + f + 1`, as `exists_commonCore`
-was, with the core's statement kept as the corollary at `q = n − f`.
+Two groups of results the program needs were stated on the core's
+universe, at `n = 3f + 1` and quorum `quorumCard`, and so held at the
+Mysticeti and Cordial Miners PS rows only. Both are lifted to block
+records (step 8, built), in place: the core's users instantiate them at
+`honest = Correct`, `f = F.f` and `q = n − f`.
 
 * **L1, bootstrap**: the attested base and its soundness and
   completeness (G10), window completeness (G11), the bounded fetch
   (G6b), the joiner's view (G12) and the relay obligation (G7), from
   `GC/AttestedBase.lean` and `GC/Bootstrap.lean`, with the depth rule
-  (`viewUpto_subset_viewUpto_succ`, `pruned_subset_peer_store`) they rest
-  on. The attested base and its soundness are lifted
-  (`exists_honest_attester_of_mem_base`, any record with at most `f`
-  validators outside its honest set). The rest reads the delivery model
-  and the novelty budget, and is lifted with L2 in step 8. The program's
-  safety (V9) needs none of it; it rests on the run's record.
+  (G8, G9) of `GC/Horizon.lean` and the backbone
+  (`mem_history_of_correct`) they rest on. Soundness needs at most `f`
+  validators outside the honest set; completeness needs the reliable set
+  `T` inside the honest set to hold the record's quorum `q`, with
+  `n + f + 1 ≤ 2q`, which gives `f + 1 ≤ |T|`. The program's safety (V9)
+  needs none of it; it rests on the run's record.
 * **L2, rate limiting**: the delivery model of `Network/Delivery.lean`
-  (`Delivery`, `EventuallyDelivers`), the novelty budget (`UniformBudget`,
-  `ByzBudget`), the liveness half (C3) and linear storage (B4) of
-  `DoS/Novelty.lean`, and the coverage witness of `DoS/Delivers.lean`.
-
-Step 8 runs in sub-steps, each with the build green: **8.0** a
-`Validity.SelfParent` class, which the novelty telescope reads (built);
-**8.1** the delivery layer on any record, with `EventuallyDeliversOn D T
-R` (built); **8.2** the budgets, C3, B3′ and B4 of `DoS/Novelty.lean` (built);
-**8.3** the transfer lemmas of `GC/Chop.lean`, G6 (`card_retained_le`)
-and the depth rule (G8, G9) (built); **8.4** the backbone
-(`mem_history_of_correct`), G10 completeness, G11, G6b, G12 and G7
-(built);
-**8.5** the coverage witness of `DoS/Delivers.lean`. The rate-limiting
-half needs no quorum: only the honest set, the bound `honestᶜ.card ≤ f`
-and the self-parent clause. Completeness needs `q ≤ T.card` and
-`n + f + 1 ≤ 2q`, which give `f + 1 ≤ T.card`.
+  (`Delivery`, `EventuallyDeliversOn`), the novelty budget
+  (`UniformBudget`, `ByzBudget`), the liveness half (C3) and linear
+  storage (B3′, B4) of `DoS/Novelty.lean`, the window and G6 of
+  `GC/Window.lean`, and the coverage witness of `DoS/Delivers.lean`
+  (`deliversOn_viewUpto`, for any rule's carrier on the record). This
+  half reads no quorum: only the honest set, the bound
+  `honestᶜ.card ≤ f`, the receivers `T` and the self-parent clause, which
+  a validity now states as a class (`Validity.SelfParent`).
 
 **The delivery assumption** (`EventuallyDeliversOn D T R`): after `R`,
 the blocks of every honest author reach every receiver in `T`. A block a

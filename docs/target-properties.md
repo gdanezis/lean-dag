@@ -5355,6 +5355,13 @@ reliable validators a set `T` inside the honest set holding the quorum,
 with `n + f + 1 ≤ 2q`, which gives `f + 1 ≤ |T|`, so the attestation
 threshold stays `f + 1`.
 
+The coverage witness (`DoS/Delivers.lean`) follows: a retained store is a
+view of any record (`View.ofViewUpto`), it holds every honest block from
+the settling round on at a receiver (`correct_mem_viewUpto`), and the
+novelty budget's stores deliver the receivers for any rule with a carrier
+on the record (`deliversOn_viewUpto`). The direct commit from that
+coverage stays at the Mysticeti row.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition
