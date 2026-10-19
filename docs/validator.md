@@ -285,6 +285,35 @@ item 4 restates.
 node fed blocks it can never accept pays for them on every delivery.
 Bounding the pending blocks belongs to rate limiting (step 9).
 
+### 3.8 Checkpoints (planned, step 7.3)
+
+The checkpoint model of `LeanDag/Checkpoint` is used as it stands.
+* **Proposals.** After a decision step that raises its decided frontier
+  past its last proposal by a horizon step, the node signs and sends a
+  proposal for its decided prefix. The prefix is slots `0 … k − 1` with
+  their decisions, sent as a hash chain; the model compares histories by
+  equality, and `DeterministicVM` appends a decision.
+* **Certificates.** A node that holds `q` matching proposals for one
+  height holds a first-phase certificate (`CheckpointQC`). Two
+  certificates at one height certify one prefix
+  (`checkpointQC_eq_of_same_height`), at `n + |unreliable| < 2q`, which
+  `q = n − f` meets when `n > 3f`. Finality certificates, and the
+  recovery epochs of `RecoverySpec`, are not used.
+* **Garbage collection.** The horizon rises to at most `Λ` below the
+  slot round of the certified frontier rather than the decided one, so
+  every slot below a peer's horizon has a certificate. The horizon
+  therefore waits for checkpoints: without a signing quorum it stops
+  rising, and the store grows.
+* **Bootstrap.** A peer serves its latest certificate with its base. The
+  joiner checks it, outputs the certified decisions for the slots below
+  its new horizon, and decides from there on. Its decisions have no gap.
+
+V12 states that every certified prefix is the honest nodes' decisions,
+through `CommitCheckpointUnique` at the scheme's agreement, so that every
+honest node's commits are prefix-comparable again, bootstraps included.
+The certificate grounds the decisions below the cut, not the blocks at
+it; those still rest on an honest presenter's store, earlier in the trace.
+
 ## 4. Conformance
 
 | | Claim | Route |
@@ -300,6 +329,7 @@ Bounding the pending blocks belongs to rate limiting (step 9).
 | V8 | The efficient store and decider compute the reference program's values. | one equality per function |
 | V9 | Over a trace with timely authentication of blocks, jump messages and base offers, an injective hash and `Params.Tolerates`, every honest store is a cut of the run's record, bootstraps included, so two honest nodes that decide a slot decide it alike. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.IsCut.boot`, `Node.IsCut.step`, `Node.verdict_decideStep`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
 | V10 | Under the novelty budget, every honest block is eventually accepted, and an honest validator's store, with garbage collection, has a size independent of the runtime. | lifted C3 and B4 (§8), `card_retained_le` |
+| V12 | Every certified checkpoint is the honest nodes' decided prefix at its height; a bootstrapped node's commits are a certified prefix followed by its own decisions; any two honest nodes' commits are prefix-comparable. | planned, step 7.3: `checkpointQC_eq_of_same_height`, `CommitCheckpointUnique`, V9 |
 | V11 | A timed run past GST, with timeouts of at least `2Δ + proc`, gives a `SchemeReactive` and the delivery obligation `DeliversOn`; the mechanisms compose (`Stack.safe_and_live`), and every slot commits. | field by field from the run, V10 |
 
 **The transfer.** The program decides on its own store, a record of its
@@ -499,10 +529,18 @@ its peers' horizons never holds the line, and rejoins by bootstrap
 | 5 | Garbage collection: V4, and V3 with horizons rising; persistence and restart: V5 (built) |
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 (built) |
 | 7 | Bootstrap in the program: V9 over a trace; G10's soundness lifted to block records (§8, L1) (built) |
+| 7.1 | Fill blocks authenticated only through the signed jump message (§3.5): block authentication back to a block its author broadcast; a node accepts a filled block only by deriving it, never as a delivered block; a request for a filled block is answered with the jump message |
+| 7.2 | One run model: V3 proved over a trace, and the model without time retired (§4, *Bootstraps need time*) |
+| 7.3 | Checkpoints (§3.8): signed proposals of the decided prefix and certificates of `q` of them; the horizon bounded by the certified frontier; bootstrap adopting the certified prefix; V12, and V9 restated as prefix-comparability |
 | 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget |
 | 9 | Rate limiting in the program: V7, V10 |
 | 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests |
 | 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST; first, the decisions of §9.1 |
+
+Steps 7.1 to 7.3 follow from what steps 5 to 7 found. A filled block is
+signed by no one, so only the jump message can authenticate it. A run
+without time cannot ground a bootstrap. A bootstrapped node's decisions
+have a gap below its horizon, which certified checkpoints close.
 
 The order proves safety and local conformance of every mechanism before
 the two large steps, so that step 10 refines the complete program once
