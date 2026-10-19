@@ -257,7 +257,7 @@ Bounding the pending blocks belongs to rate limiting (step 9).
 |---|---|---|
 | V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved without restarts) |
 | V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
-| V3 | In a run of honest nodes over any inputs, the blocks the honest nodes' stores end with form a `BlockRecord` at the row's validity whose honest set is the honest nodes; under authentication, an injective hash, `Params.Tolerates` and no horizon raised, any two honest nodes' commit sequences are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
+| V3 | In a run of honest nodes over any inputs, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every store along every run is a cut of it; under authentication, an injective hash and `Params.Tolerates`, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | Over a trace with delivery, timely authentication and an injective hash, and no horizon raised, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
 | V4 | The decisions a store pruned at `G` gives from a slot at or above `G` equal those of every view holding its blocks from `G` up, read at `G`: the loop reads nothing below the slot's round. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq`, `Node.ViewsAbove.of_store` (proved) |
 | V5 | A restart from the persisted state is a prune at an admissible horizon. | V4 |
@@ -275,6 +275,24 @@ decisions when the store's identifiers are the view's and its block map
 agrees on them. This is a lemma about `tryDecide` and the vote rule (for
 `leastSel` and `votedBlockSel`, which read only histories), proved in
 step 2; `View.toRecord` is the record a view gives.
+
+**The run's record under garbage collection.** A node keeps a block at
+its horizon without checking its references (§3.4), so a Byzantine block
+there may reference blocks no honest node holds, and the union of the
+honest stores is not closed. The run's record (`Node.globalRecord`)
+holds the blocks the honest nodes knew at rounds their knowledge reaches:
+round `0`, and a round holding a real block, one whose references are
+known and which is valid at quorum `q` above such a round
+(`Node.Real`, `Node.Lives`). A real block is read as known; another keeps
+its round, author and payload and takes the references of a real block
+of its round. The record is at `ValidAt q Clause.none`, without the
+self-parent clause, which only Safe Skip reads. Every honest store along
+every run is a cut of it (`Node.IsCut`): its blocks are the record's,
+read without references at the store's horizon. A block at a horizon
+always has a real block of its round, the node's own, since the horizon
+lies at or below the node's round (`Node.Held`). Decisions read nothing
+below the slot's round (V4), so the loop on a store decides as on a view
+of the record, and V3 holds as horizons rise.
 
 **Runs.** A run is a sequence of timestamped events over a global state:
 the honest validators' states, the messages in flight, and the
@@ -368,7 +386,7 @@ validator down past its peers' horizons rejoins by bootstrap (§3.6).
 | 2 | V1 and V2, with the transfer; the timing check (§9) (built) |
 | 3 | Simulator and JSON executable (built) |
 | 4 | The run model; V3 and convergence of honest blocks and their histories under fetching (§3.7), both without garbage collection (built) |
-| 5 | Garbage collection (pruning built), persistence and restart: V4, V5 |
+| 5 | Garbage collection: V4, and V3 with horizons rising (built); persistence and restart: V5 |
 | 6 | Safe Skip: the fill's validity at the program's validity (§8, L0); V6 |
 | 7 | Lift the bootstrap results to block records (§8, L1); bootstrap in the program: V9 |
 | 8 | Lift the rate-limiting results to block records (§8, L2) |

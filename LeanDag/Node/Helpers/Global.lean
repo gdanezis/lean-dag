@@ -1,15 +1,26 @@
 import LeanDag.Node.Runs.Statement
 import LeanDag.Node.Local.Proof
-import LeanDag.Node.Helpers.Grow
+import LeanDag.Node.Helpers.Commits
 /-!
 # The run's record
 
-The blocks the honest nodes' stores hold at the end of a run, with the
-block map the blocks they knew give (`globalBlock`), form a block record
-at the row's validity whose honest set is `H` (`globalRecord`), while no
-horizon rose: closed and valid because every store is, and free of
-honest equivocation because a block with an honest author's identity is
-one that author broadcast, one a round.
+The blocks the honest nodes knew, with the block map they give
+(`content`), form a block record at quorum `q` whose honest set is `H`
+(`globalRecord`), once two kinds of block are handled. A block is real
+(`Real`) when its references are known, it is valid at `q`, and it sits
+above a round the knowledge reaches (`Lives`): round `0`, or a round
+holding a real block. A block that is not real keeps its round, author
+and payload, and takes the references of a real block of its round
+(`globalBlock`); the record holds the known blocks at rounds the
+knowledge reaches. A node keeps a block at its horizon without checking
+its references, so a Byzantine block there need not be real; the cut
+reads it without references, and the record reads it alike there.
+
+The record grounds what the honest nodes knew (`ground`): a known block
+valid over the record is real, and one at or below a round the record
+reaches is its block, read alike at that round. Free of honest
+equivocation because a block with an honest author's identity is one
+that author broadcast, one a round.
 -/
 
 namespace LeanDag
@@ -25,14 +36,55 @@ variable (ins : Validator → List (Input Validator BlockId Payload))
 def knownAll : Set (BlockId × Block Validator BlockId Payload) :=
   {x | ∃ v ∈ H, x ∈ knownOf cfg ins v}
 
+/-- The identifiers the honest nodes knew. -/
+def knownIds : Finset BlockId := H.biUnion fun v => ((knownOf cfg ins v).map Prod.fst).toFinset
+
 open Classical in
-/-- **The run's block map**: an identifier denotes the block the honest
-nodes knew under it, read at horizon `0`. -/
-noncomputable def globalBlock (id : BlockId) : Block Validator BlockId Payload :=
-  if h : ∃ x ∈ knownAll cfg H ins, x.1 = id then atBase 0 (Classical.choose h).2
-  else cfg.genesis
+/-- **What an identifier denotes**: the block the honest nodes knew under it. -/
+noncomputable def content (id : BlockId) : Block Validator BlockId Payload :=
+  if h : ∃ x ∈ knownAll cfg H ins, x.1 = id then (Classical.choose h).2 else cfg.genesis
+
+/-- **The rounds the knowledge reaches**: round `0`, and a round holding a
+known block valid at the quorum, with known references, above a round
+the knowledge reaches. -/
+def Lives : ℕ → Prop
+  | 0 => True
+  | r + 1 => ∃ j ∈ knownIds cfg H ins, (content cfg H ins j).round = r + 1 ∧
+      (content cfg H ins j).refs ⊆ knownIds cfg H ins ∧
+      ValidAt cfg.q Clause.none (content cfg H ins) (content cfg H ins j) ∧ Lives r
+
+/-- **A real block**: its references known, valid at the quorum, above a
+round the knowledge reaches. -/
+def Real (j : BlockId) : Prop :=
+  (content cfg H ins j).refs ⊆ knownIds cfg H ins ∧
+    ValidAt cfg.q Clause.none (content cfg H ins) (content cfg H ins j) ∧
+    Lives cfg H ins ((content cfg H ins j).round - 1)
+
+open Classical in
+/-- The references of a real block of round `r`, if any. -/
+noncomputable def fillRefs : ℕ → Finset BlockId
+  | 0 => ∅
+  | r + 1 => if h : Lives cfg H ins (r + 1) then (content cfg H ins (Classical.choose h)).refs else ∅
+
+open Classical in
+/-- **The run's block map**: a real block as known; another with the
+references of a real block of its round. -/
+noncomputable def globalBlock (j : BlockId) : Block Validator BlockId Payload :=
+  if Real cfg H ins j then content cfg H ins j
+  else { content cfg H ins j with refs := fillRefs cfg H ins (content cfg H ins j).round }
+
+open Classical in
+/-- The known blocks at rounds the knowledge reaches. -/
+noncomputable def globalIds : Finset BlockId :=
+  (knownIds cfg H ins).filter fun j => Lives cfg H ins (content cfg H ins j).round
 
 variable {cfg H ins}
+
+open Classical in
+theorem mem_globalIds {j : BlockId} :
+    j ∈ globalIds cfg H ins ↔ j ∈ knownIds cfg H ins ∧ Lives cfg H ins (content cfg H ins j).round := by
+  unfold globalIds
+  exact Finset.mem_filter
 
 /-- What a node knew is identified by its hash. -/
 theorem id_of_known {v : Validator} {x : BlockId × Block Validator BlockId Payload}
@@ -51,55 +103,83 @@ theorem id_of_known {v : Validator} {x : BlockId × Block Validator BlockId Payl
     | _ => exact absurd hi (by simp)
   · exact (Local.authored _ _ _ (cfg.at v) (ins v) x hx).1
 
-theorem globalBlock_of_known (hinj : Runs.HashInjective cfg H ins)
+theorem mem_knownIds {x : BlockId × Block Validator BlockId Payload}
+    (hx : x ∈ knownAll cfg H ins) : x.1 ∈ knownIds cfg H ins := by
+  obtain ⟨v, hv, hx⟩ := hx
+  exact Finset.mem_biUnion.mpr ⟨v, hv, List.mem_toFinset.mpr (List.mem_map_of_mem hx)⟩
+
+theorem content_of_known (hinj : Runs.HashInjective cfg H ins)
     {x : BlockId × Block Validator BlockId Payload} (hx : x ∈ knownAll cfg H ins) :
-    globalBlock cfg H ins x.1 = atBase 0 x.2 := by
+    content cfg H ins x.1 = x.2 := by
   have h : ∃ y ∈ knownAll cfg H ins, y.1 = x.1 := ⟨x, hx, rfl⟩
-  unfold globalBlock
+  unfold content
   rw [dif_pos h]
   obtain ⟨hy, hyx⟩ := Classical.choose_spec h
   obtain ⟨v, hv, hyv⟩ := hy
   obtain ⟨w, hw, hxw⟩ := hx
-  congr 1
   exact hinj v hv w hw _ hyv x hxw (by rw [← id_of_known hyv, ← id_of_known hxw, hyx])
 
-/-- **What a node's last state holds it knew.** -/
-theorem inv_runOf (v : Validator) :
-    Inv (cfg.at v) (runOf cfg ins v).1 {x | x ∈ knownOf cfg ins v}
-      (broadcasts (runOf cfg ins v).2) := by
-  have hi := Inv.init.run (cfg := cfg.at v) (ins v)
-  simp only [Set.empty_union, List.nil_append] at hi
-  refine hi.mono fun x hx => ?_
-  simp only [Set.mem_union, Set.mem_setOf_eq] at hx
-  exact List.mem_append.mpr hx
+/-- The rounds the knowledge reaches are closed downward. -/
+theorem Lives.mono : ∀ {r r' : ℕ}, r ≤ r' → Lives cfg H ins r' → Lives cfg H ins r
+  | _, 0, h, _ => by rw [Nat.le_zero.mp h]; trivial
+  | r, r' + 1, h, hl => by
+    rcases Nat.lt_or_ge r (r' + 1) with hr | hr
+    · obtain ⟨-, -, -, -, -, hl'⟩ := hl
+      exact Lives.mono (by omega) hl'
+    · rwa [show r = r' + 1 by omega]
 
-theorem known_sub {v : Validator} (hv : v ∈ H) :
-    {x | x ∈ knownOf cfg ins v} ⊆ knownAll cfg H ins := fun _ hx => ⟨v, hv, hx⟩
+theorem lives_of_real {j : BlockId} (hj : j ∈ knownIds cfg H ins) (h : Real cfg H ins j) :
+    Lives cfg H ins (content cfg H ins j).round := by
+  rcases hr : (content cfg H ins j).round with _ | r
+  · trivial
+  · have := h.2.2
+    rw [hr, Nat.add_sub_cancel] at this
+    exact ⟨j, hj, hr, h.1, h.2.1, this⟩
 
-/-- **A store at horizon `0` holding known blocks reads them as the run
-does.** -/
-theorem blk_eq_globalBlock (hinj : Runs.HashInjective cfg H ins)
-    {st : Store Validator BlockId Payload} (hb : st.base = 0)
-    (hk : ∀ j ∈ st.ids, (j, st.map.getD j st.junk) ∈ knownAll cfg H ins) :
-    ∀ j ∈ st.ids, st.blk j = globalBlock cfg H ins j := fun j hj => by
-  rw [globalBlock_of_known hinj (hk j hj)]
-  simp only [Store.blk, lookup, hb]
+@[simp] theorem globalBlock_round (j : BlockId) :
+    (globalBlock cfg H ins j).round = (content cfg H ins j).round := by
+  unfold globalBlock; split <;> rfl
 
-omit [Fintype Validator] [LinearOrder BlockId] in
-/-- A reference-free block at round `0` is valid at the row. -/
-theorem rowValid_zero {q : ℕ} {blk : BlockId → Block Validator BlockId Payload}
-    {b : Block Validator BlockId Payload} (h0 : b.round = 0) (hr : b.refs = ∅) :
-    rowValid q blk b := by
-  refine ⟨fun i hi => ?_, fun h => absurd h (by omega),
-    ⟨fun i hi => ?_, fun h => absurd h (by omega)⟩⟩
-  · rw [hr] at hi; exact absurd hi (Finset.notMem_empty i)
-  · rw [hr] at hi; exact absurd hi (Finset.notMem_empty i)
+@[simp] theorem globalBlock_creator (j : BlockId) :
+    (globalBlock cfg H ins j).creator = (content cfg H ins j).creator := by
+  unfold globalBlock; split <;> rfl
 
+/-- **The references the run reads a block with**, at a round the
+knowledge reaches: known, one round below, at rounds the knowledge
+reaches, and from the quorum's authors above round `0`. -/
+theorem globalBlock_refs {j : BlockId} (hj : Lives cfg H ins (content cfg H ins j).round) :
+    (globalBlock cfg H ins j).refs ⊆ knownIds cfg H ins ∧
+      (∀ x ∈ (globalBlock cfg H ins j).refs,
+        (content cfg H ins x).round + 1 = (content cfg H ins j).round ∧
+          Lives cfg H ins (content cfg H ins x).round) ∧
+      (0 < (content cfg H ins j).round →
+        cfg.q ≤ (creatorsOf (content cfg H ins) (globalBlock cfg H ins j).refs).card) := by
+  unfold globalBlock
+  split
+  · rename_i h
+    refine ⟨h.1, fun x hx => ⟨h.2.1.predecessor x hx, ?_⟩, h.2.1.quorum⟩
+    have hp := h.2.1.predecessor x hx
+    have := h.2.2
+    rwa [show (content cfg H ins j).round - 1 = (content cfg H ins x).round by omega] at this
+  · dsimp only
+    rcases hr : (content cfg H ins j).round with _ | r
+    · simp [fillRefs]
+    · rw [hr] at hj
+      simp only [fillRefs, dif_pos hj]
+      obtain ⟨-, hyr, hys, hyv, hyl⟩ := Classical.choose_spec hj
+      refine ⟨hys, fun x hx => ⟨by rw [hyv.predecessor x hx, hyr], ?_⟩, fun _ => ?_⟩
+      · have := hyv.predecessor x hx
+        rwa [show (content cfg H ins x).round = r by omega]
+      · exact hyv.quorum (by omega)
+
+variable (hinj : Runs.HashInjective cfg H ins) (hauth : Runs.Authentic cfg H ins)
+
+include hauth in
 /-- **A block the honest nodes knew with an honest author's identity is
 one that author broadcast.** -/
-theorem mem_broadcasts_of_known (hauth : Runs.Authentic cfg H ins)
-    {x : BlockId × Block Validator BlockId Payload} (hx : x ∈ knownAll cfg H ins)
-    (hc : x.2.creator ∈ H) : x ∈ broadcasts (runOf cfg ins x.2.creator).2 := by
+theorem mem_broadcasts_of_known {x : BlockId × Block Validator BlockId Payload}
+    (hx : x ∈ knownAll cfg H ins) (hc : x.2.creator ∈ H) :
+    x ∈ broadcasts (runOf cfg ins x.2.creator).2 := by
   obtain ⟨v, hv, hx⟩ := hx
   rcases List.mem_append.mp hx with hx | hx
   · exact hauth v hv x hx hc
@@ -120,55 +200,99 @@ theorem eq_of_broadcasts (v : Validator) {x y : BlockId × Block Validator Block
     exact List.nodup_range
   exact List.inj_on_of_nodup_map hnd hx hy hr
 
-variable (cfg H ins) in
-/-- The blocks the honest nodes' stores end with. -/
-def globalIds : Finset BlockId := H.biUnion fun v => (runOf cfg ins v).1.store.ids
+/-- A known identifier is one the honest nodes knew a block under. -/
+theorem exists_of_mem_knownIds {j : BlockId} (hj : j ∈ knownIds cfg H ins) :
+    ∃ x ∈ knownAll cfg H ins, x.1 = j := by
+  obtain ⟨v, hv, hj⟩ := Finset.mem_biUnion.mp hj
+  obtain ⟨x, hx, rfl⟩ := List.mem_map.mp (List.mem_toFinset.mp hj)
+  exact ⟨x, ⟨v, hv, hx⟩, rfl⟩
 
-/-- **The run's record**, while no horizon rose. -/
-noncomputable def globalRecord (hinj : Runs.HashInjective cfg H ins)
-    (hauth : Runs.Authentic cfg H ins) (hbase : ∀ v ∈ H, (runOf cfg ins v).1.store.base = 0) :
-    BlockRecord Validator BlockId Payload (rowValid cfg.q) H where
+include hinj hauth in
+/-- **The run's record.** -/
+noncomputable def globalRecord :
+    BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H where
   ids := globalIds cfg H ins
   block := globalBlock cfg H ins
   complete := by
-    intro i hi j hj
-    obtain ⟨v, hv, hiv⟩ := Finset.mem_biUnion.mp hi
-    have hk := fun j hj => known_sub hv ((inv_runOf (cfg := cfg) (ins := ins) v).known j hj)
-    rw [← blk_eq_globalBlock hinj (hbase v hv) hk i hiv] at hj
-    exact Finset.mem_biUnion.mpr ⟨v, hv, (runOf cfg ins v).1.store.complete i hiv j hj⟩
+    intro i hi x hx
+    obtain ⟨-, hil⟩ := mem_globalIds.mp hi
+    obtain ⟨hs, hr, -⟩ := globalBlock_refs hil
+    exact mem_globalIds.mpr ⟨hs hx, (hr x hx).2⟩
   valid := by
     intro i hi
-    obtain ⟨v, hv, hiv⟩ := Finset.mem_biUnion.mp hi
-    have hI := inv_runOf (cfg := cfg) (ins := ins) v
-    have hk := fun j hj => known_sub hv (hI.known j hj)
-    have hag := blk_eq_globalBlock hinj (hbase v hv) hk
-    set st := (runOf cfg ins v).1.store
-    rw [← hag i hiv]
-    by_cases h0 : st.base < (st.map.getD i st.junk).round
-    · rw [Store.blk_of_lt h0]
-      refine rowValid_congr (fun j hj => ?_) (hI.valid i hiv h0)
-      have hj' : j ∈ st.ids :=
-        st.complete i hiv j (show j ∈ (st.blk i).refs by rw [Store.blk_of_lt h0]; exact hj)
-      rw [hag j hj']
-      exact ⟨rfl, rfl⟩
-    · have hb : st.base = 0 := hbase v hv
-      have hr : (st.blk i).round = 0 := by
-        simp only [Store.blk, lookup, atBase_round]; omega
-      exact rowValid_zero hr (by
-        simp only [Store.blk, lookup]; exact atBase_refs_of_le (by omega))
+    obtain ⟨-, hil⟩ := mem_globalIds.mp hi
+    obtain ⟨-, hr, hq⟩ := globalBlock_refs hil
+    refine ⟨fun x hx => ?_, fun h0 => ?_, trivial⟩
+    · rw [globalBlock_round, globalBlock_round]
+      exact (hr x hx).1
+    · have hcr : creators (globalBlock cfg H ins) (globalBlock cfg H ins i) =
+          creatorsOf (content cfg H ins) (globalBlock cfg H ins i).refs :=
+        Finset.image_congr fun x _ => globalBlock_creator x
+      rw [hcr]
+      exact hq (by rwa [globalBlock_round] at h0)
   no_equivocation := by
     intro i hi j hj hc hcr hr
-    obtain ⟨v, hv, hiv⟩ := Finset.mem_biUnion.mp hi
-    obtain ⟨w, hw, hjw⟩ := Finset.mem_biUnion.mp hj
-    have hxi := known_sub hv ((inv_runOf (cfg := cfg) (ins := ins) v).known i hiv)
-    have hxj := known_sub hw ((inv_runOf (cfg := cfg) (ins := ins) w).known j hjw)
-    rw [globalBlock_of_known hinj hxi] at hc hcr hr
-    rw [globalBlock_of_known hinj hxj] at hcr hr
-    simp only [atBase_creator, atBase_round] at hc hcr hr
-    have hbi := mem_broadcasts_of_known hauth hxi hc
-    have hbj := mem_broadcasts_of_known hauth hxj (hcr ▸ hc)
-    rw [hcr] at hbi
-    exact congrArg Prod.fst (eq_of_broadcasts _ hbi hbj hr)
+    obtain ⟨x, hx, rfl⟩ := exists_of_mem_knownIds (mem_globalIds.mp hi).1
+    obtain ⟨y, hy, rfl⟩ := exists_of_mem_knownIds (mem_globalIds.mp hj).1
+    simp only [globalBlock_creator, globalBlock_round, content_of_known hinj hx,
+      content_of_known hinj hy] at hc hcr hr
+    have hbx := mem_broadcasts_of_known hauth hx hc
+    have hby := mem_broadcasts_of_known hauth hy (hcr ▸ hc)
+    rw [hcr] at hbx
+    exact congrArg Prod.fst (eq_of_broadcasts _ hbx hby hr)
+
+theorem globalBlock_atBase {j : BlockId} {G : ℕ} (hG : (content cfg H ins j).round ≤ G) :
+    atBase G (globalBlock cfg H ins j) = atBase G (content cfg H ins j) := by
+  unfold globalBlock
+  split
+  · rfl
+  · simp [atBase, hG]
+
+/-- **The record grounds what the honest nodes knew.** -/
+theorem ground (hq : 0 < cfg.q) :
+    Ground (globalRecord hinj hauth) (knownAll cfg H ins) cfg.q where
+  real := by
+    intro x hx hs hv
+    have hcx := content_of_known hinj hx
+    have hreal : Real cfg H ins x.1 := by
+      rw [Real, hcx]
+      refine ⟨fun j hj => (mem_globalIds.mp (hs hj)).1, ?_, ?_⟩
+      · refine ⟨fun j hj => ?_, fun h0 => ?_, trivial⟩
+        · have := hv.predecessor j hj
+          simp only [globalRecord, globalBlock_round] at this
+          exact this
+        · have hcr : creators (content cfg H ins) x.2 = creators (globalRecord hinj hauth).block x.2 :=
+            Finset.image_congr fun j _ => (globalBlock_creator j).symm
+          rw [hcr]
+          exact hv.quorum h0
+      · rcases hr : x.2.round with _ | r
+        · trivial
+        · obtain ⟨j, hj⟩ := Finset.card_pos.mp (lt_of_lt_of_le hq (hv.quorum (by omega)))
+          obtain ⟨y, hy, -⟩ := mem_creatorsOf.mp hj
+          have hyr := hv.predecessor y hy
+          simp only [globalRecord, globalBlock_round] at hyr
+          have hyl := (mem_globalIds.mp (hs hy)).2
+          rw [show (content cfg H ins y).round = r by omega] at hyl
+          simpa using hyl
+    refine ⟨mem_globalIds.mpr ⟨mem_knownIds hx, lives_of_real (mem_knownIds hx) hreal⟩, ?_⟩
+    change globalBlock cfg H ins x.1 = x.2
+    unfold globalBlock
+    rw [if_pos hreal, hcx]
+  base := by
+    intro x hx G hxG hG
+    have hcx := content_of_known hinj hx
+    have hl : Lives cfg H ins G := by
+      rcases hG with rfl | ⟨j, hj, hjG⟩
+      · trivial
+      · exact Lives.mono (by simpa [globalRecord] using hjG) (mem_globalIds.mp hj).2
+    refine ⟨mem_globalIds.mpr ⟨mem_knownIds hx, Lives.mono (by rw [hcx]; exact hxG) hl⟩, ?_⟩
+    change atBase G (globalBlock cfg H ins x.1) = atBase G x.2
+    rw [globalBlock_atBase (by rw [hcx]; exact hxG), hcx]
+
+/-- **A started node's store is a cut of the record.** -/
+theorem isCut_init (c : Config Validator BlockId Payload) :
+    IsCut (globalRecord hinj hauth) (State.init c).store :=
+  fun _ h => absurd h (Finset.notMem_empty _)
 
 end Node
 

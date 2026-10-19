@@ -13,8 +13,8 @@ network and the adversary choose. Two assumptions constrain them:
   nodes knew have one identifier.
 
 Then, at the bounded vote, with an admissible row and at most `f` nodes
-outside `H`, and while no honest node raises its horizon, **any two
-honest nodes' decisions are prefix-comparable** (`Safety`).
+outside `H`, **any two honest nodes' decisions are prefix-comparable**
+(`Safety`), whatever horizons they raise.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -41,15 +41,13 @@ def HashInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator
   ∀ v ∈ H, ∀ w ∈ H, ∀ x ∈ knownOf cfg ins v, ∀ y ∈ knownOf cfg ins w,
     cfg.idOf x.2 = cfg.idOf y.2 → x.2 = y.2
 
-/-- **Run safety**: any two honest nodes' decisions are prefix-comparable,
-while no honest node raises its horizon. -/
+/-- **Run safety**: any two honest nodes' decisions are prefix-comparable. -/
 def Safety : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (ins : Validator → List (Input Validator BlockId Payload)),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
     Authentic cfg H ins → HashInjective cfg H ins →
-    (∀ v ∈ H, (runOf cfg ins v).1.store.base = 0) →
     ∀ v ∈ H, ∀ w ∈ H,
       commitsOf (runOf cfg ins v).2 <+: commitsOf (runOf cfg ins w).2 ∨
         commitsOf (runOf cfg ins w).2 <+: commitsOf (runOf cfg ins v).2
