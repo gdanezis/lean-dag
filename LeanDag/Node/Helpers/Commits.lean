@@ -115,11 +115,16 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
     (h : CommitInv cfg U s cs) (ha : Agrees U s.store) :
     CommitInv cfg U (Node.decideStep cfg s).1 (cs ++ commitsOf (Node.decideStep cfg s).2) := by
   letI := cfg.slots
+  have hw : 2 ≤ cfg.p.waveLength := by
+    rcases ht.2.2 with ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ <;> omega
   have hT : ∀ lo N, tryDecide cfg.p cfg.σ s.store.toRecord s.store.view lo N =
       tryDecide cfg.p boundedSel U ha.view lo N := fun lo N => by
     rw [hσ]
-    exact (ViewsAlike.of_boundedSel (U₁ := s.store.toRecord) (V₁ := s.store.view)
-      (V₂ := ha.view) rfl fun i hi => ha.2 i hi).tryDecide_eq cfg.p lo N
+    exact (ViewsAbove.of_boundedSel (R := 0) (U₁ := s.store.toRecord) (V₁ := s.store.view)
+      (V₂ := ha.view) (fun _ hi _ => hi) (fun _ hi _ => ⟨hi, Nat.zero_le _⟩)
+      (fun i hi _ => (congrArg Block.round (ha.2 i hi)).symm)
+      (fun i hi _ => (congrArg Block.creator (ha.2 i hi)).symm)
+      (fun i hi _ => (congrArg Block.refs (ha.2 i hi)).symm)).tryDecide_eq cfg.p hw N (Nat.zero_le _)
   unfold Node.decideStep
   dsimp only
   split

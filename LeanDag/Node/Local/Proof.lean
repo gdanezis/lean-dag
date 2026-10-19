@@ -53,14 +53,13 @@ theorem validOut : ValidOut := by
     exact List.mem_append.mpr hx
 
 theorem decidesOnView : DecidesOnView := by
-  intro Validator BlockId Payload _ _ _ cfg s P _ H U V hσ hV hU
-  have h := ViewsAlike.of_boundedSel (U₁ := s.store.toRecord) (V₁ := s.store.view) (V₂ := V)
-    hV.symm fun i hi => (hU i hi).symm
+  intro Validator BlockId Payload _ _ _ cfg s P _ H U V hσ hadm hlo hV hU
+  have h := ViewsAbove.of_store hV hU
   letI := cfg.slots
   unfold decideStep
   dsimp only
   split
-  · rw [hσ, h.tryDecide_eq]
+  · rw [hσ, h.tryDecide_eq cfg.p hadm.2.1.1 _ hlo]
   · rfl
 
 theorem holds : Statement := ⟨shape, oneEach, authored, validOut, decidesOnView⟩

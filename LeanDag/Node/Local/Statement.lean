@@ -3,7 +3,7 @@ import LeanDag.Node.Vote
 /-!
 # An honest node, one node at a time — statement
 
-`docs/validator.md` §4, V1 and V2. Over any sequence of inputs from the
+`docs/validator.md` §4, V1, V2 and V4. Over any sequence of inputs from the
 initial state:
 
 * **each step's outputs**, from any state a run reaches, are its
@@ -16,9 +16,11 @@ initial state:
 * **valid blocks**: each block it broadcasts references only blocks it
   knew, delivered with their hash or its own, and is valid at the row
   under every block map agreeing with what it knew (`ValidOut`);
-* **decisions read only the view**: at the bounded vote, a decision step
-  outputs what `tryDecide` decides on any record and view holding the
-  store's blocks (`DecidesOnView`).
+* **decisions read only the view, from the horizon up**: at the bounded
+  vote, with the horizon at or below the next undecided slot's round, a
+  decision step outputs what `tryDecide` decides on any record and view
+  holding the store's blocks from the horizon up (`DecidesOnView`); a
+  pruned store decides as the view it is a cut of.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -71,15 +73,18 @@ def ValidOut : Prop :=
       ∀ blk : BlockId → Block Validator BlockId Payload, (∀ x ∈ K, blk x.1 = x.2) →
         rowValid cfg.q blk e.2
 
-/-- **Decisions read only the view**: at the bounded vote, a decision step
-outputs what `tryDecide` decides on any record and view holding the
-store's blocks. -/
+/-- **Decisions read only the view, from the horizon up**: at the bounded
+vote, with the horizon at or below the next undecided slot's round, a
+decision step outputs what `tryDecide` decides on any record and view
+holding the store's blocks from the horizon up, read at the horizon. -/
 def DecidesOnView : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
     (s : State Validator BlockId Payload) (P : Validity Validator BlockId Payload) [P.Mechanised]
     (H : Finset Validator) (U : BlockRecord Validator BlockId Payload P H) (V : U.View),
-    cfg.σ = boundedSel → V.ids = s.store.ids → (∀ i ∈ s.store.ids, U.block i = s.store.blk i) →
+    cfg.σ = boundedSel → cfg.Admissible → s.store.base ≤ cfg.per * (s.lo / cfg.m) →
+    (∀ i, i ∈ V.ids ∧ s.store.base ≤ (U.block i).round ↔ i ∈ s.store.ids) →
+    (∀ i ∈ s.store.ids, atBase s.store.base (U.block i) = s.store.blk i) →
     let N := decidable cfg s.store.topRound
     (decideStep cfg s).2 =
       if s.lo < N then

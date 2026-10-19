@@ -32,10 +32,10 @@ info: 'LeanDag.Node.Local.holds' depends on axioms: [propext, Classical.choice, 
 #print axioms LeanDag.Node.Local.holds
 
 /--
-info: 'LeanDag.Node.ViewsAlike.tryDecide_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'LeanDag.Node.ViewsAbove.tryDecide_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
-#print axioms LeanDag.Node.ViewsAlike.tryDecide_eq
+#print axioms LeanDag.Node.ViewsAbove.tryDecide_eq
 
 /--
 info: 'LeanDag.Node.Runs.holds' depends on axioms: [propext, Classical.choice, Quot.sound]

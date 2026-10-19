@@ -256,10 +256,10 @@ Bounding the pending blocks belongs to rate limiting (step 9).
 | | Claim | Route |
 |---|---|---|
 | V1 | Every block the program broadcasts satisfies `ValidAt q C`; it builds at most one block per round, in consecutive rounds, across restarts; it references only what it accepted; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.ValidOut`, `Node.Local.Shape` (proved without restarts) |
-| V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAlike.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
+| V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
 | V3 | In a run of honest nodes over any inputs, the blocks the honest nodes' stores end with form a `BlockRecord` at the row's validity whose honest set is the honest nodes; under authentication, an injective hash, `Params.Tolerates` and no horizon raised, any two honest nodes' commit sequences are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | Over a trace with delivery, timely authentication and an injective hash, and no horizon raised, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
-| V4 | The pruned store is, up to the shift of rounds by `G`, `View.chop` of the full-history view, and the decisions it gives at slots from `F` up equal the full-history ones, at any two horizons. | `decided_chop_iff`, `chop_chop`, or the band (`AgreeBand`) |
+| V4 | The decisions a store pruned at `G` gives from a slot at or above `G` equal those of every view holding its blocks from `G` up, read at `G`: the loop reads nothing below the slot's round. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq`, `Node.ViewsAbove.of_store` (proved) |
 | V5 | A restart from the persisted state is a prune at an admissible horizon. | V4 |
 | V6 | A run with jump messages is a `skipFill` extension of the run without them; decisions persist across the fill, and new slots in the gap are skipped at once. | `decided_fill_of_persist`, `decided_none_of_novel` |
 | V7 | Rate limiting does not make a validator decide wrongly. | `decided_mono_of_banded` |
