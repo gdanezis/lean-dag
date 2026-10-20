@@ -31,9 +31,10 @@ input `i` in the state `s`: the new state and the outputs.
   extending the head it last proposed by the decisions since. It keeps
   one proposal per signer and height above its certificate's height,
   its own included, and above `lo + ahead` only each signer's latest;
-  `q` distinct signers of one height and one head make a certificate,
-  once the node's own decisions reach the height; the node keeps the
-  highest, and serves it with the decisions it certifies.
+  `q` distinct signers of one height and one head, the node's own among
+  them, make a certificate, once the node's own decisions reach the
+  height; the node keeps the highest, and serves it with the decisions it
+  certifies.
 * **Announcing** (`collect`, `confirms`, `confirm`): a node that raises
   its horizon announces its certificate to every peer. A node not
   recovering, given a certificate above its own, of `q` distinct
@@ -435,12 +436,15 @@ def tryBoot (s : State Validator BlockId Payload) :
 def decidable (R : ℕ) : ℕ := cfg.m * (R / cfg.per + 1)
 
 /-- **Certify**: the certificate the node holds once the proposals it
-keeps include `q` distinct signers of the head `h` at height `k`, if `k`
-lies above its certificate's height and its own decisions reach `k`. -/
+keeps include `q` distinct signers of the head `h` at height `k`, its own
+among them, if `k` lies above its certificate's height and its own
+decisions reach `k`. -/
 def certify (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
     Option (Cert Validator BlockId) :=
   let signers := ((s.props.filter fun x => decide (x.2 = (k, h))).map Prod.fst).dedup
-  if cfg.q ≤ signers.length ∧ s.certHeight < k ∧ k ≤ s.lo then some ⟨k, h, signers⟩ else s.cert
+  if cfg.q ≤ signers.length ∧ s.certHeight < k ∧ k ≤ s.lo ∧ (cfg.me, k, h) ∈ s.props then
+    some ⟨k, h, signers⟩
+  else s.cert
 
 /-- **Record a proposal**, then certify: one proposal kept per signer and
 height, the signer's others above `lo + ahead` dropped if this one lies

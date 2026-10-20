@@ -210,7 +210,7 @@ theorem record_cert_le (s : State Validator BlockId Payload) (v : Validator) (k 
   dsimp only
   split
   · rename_i hc
-    exact Or.inr hc.2.2
+    exact Or.inr hc.2.2.1
   · exact Or.inl rfl
 
 omit [Fintype Validator] in

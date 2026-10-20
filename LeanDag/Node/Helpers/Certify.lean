@@ -107,16 +107,19 @@ theorem mem_record {s : State Validator BlockId Payload} {v : Validator} {k : �
 
 omit [Fintype Validator] in
 /-- **Recording certifies** the recorded height, once `q` signers of its
-head are kept and the node's decisions reach it. -/
+head are kept, the node's own among them, and its decisions reach it. -/
 theorem record_certifies {s : State Validator BlockId Payload} {v : Validator} {k : ℕ}
     {h : BlockId}
     (hq : cfg.q ≤ (signersOf ((v, k, h) :: s.props.filter fun x =>
       x.1 ≠ v ∨ x.2.1 ≠ k ∧ (k ≤ s.lo + cfg.ahead ∨ x.2.1 ≤ s.lo + cfg.ahead)) k h).card)
-    (hk : k ≤ s.lo) : k ≤ (record cfg s v k h).certHeight := by
+    (hk : k ≤ s.lo)
+    (hme : (cfg.me, k, h) ∈ (v, k, h) :: s.props.filter fun x =>
+      x.1 ≠ v ∨ x.2.1 ≠ k ∧ (k ≤ s.lo + cfg.ahead ∨ x.2.1 ≤ s.lo + cfg.ahead)) :
+    k ≤ (record cfg s v k h).certHeight := by
   by_cases hc : s.certHeight < k
   · unfold record certify
     dsimp only
-    rw [if_pos ⟨by rw [← List.card_toFinset]; exact hq, hc, hk⟩]
+    rw [if_pos ⟨by rw [← List.card_toFinset]; exact hq, hc, hk, hme⟩]
     exact le_rfl
   · exact (not_lt.mp hc).trans (record_certHeight s v k h)
 
@@ -172,7 +175,7 @@ theorem Kept.record {P : List (Validator × ℕ × BlockId)} {s : State Validato
         rcases hsub _ hme with he | he
         · exact (hv (Prod.mk.inj he).1.symm).1
         · exact hK.own_le _ he rfl
-      exact record_certifies hq' hk₀
+      exact record_certifies hq' hk₀ (hps _ hme)
     · have hold : ∀ u, (u, k, h) ∈ s'.props → (u, k, h) ∈ s.props := fun u hu => by
         rcases hsub _ hu with he | he
         · exact absurd (by simp only [Prod.mk.injEq] at he ⊢; exact ⟨he.2.1, he.2.2⟩) hkh

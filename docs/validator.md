@@ -373,9 +373,11 @@ Bounding the pending blocks belongs to rate limiting (step 9).
   the proposals at or below the certificate the node then holds, so it
   keeps at most `lo + ahead − certHeight + 1` proposals of each signer
   (`Node.Local.Bounded`, §13.7). `q` distinct signers of one height and one
-  head make a certificate (`certify`), once the node's own decisions
-  reach the height, and the node keeps the highest. Every proposal is
-  signed, so a certificate carries the signed proposals of its signers.
+  head, the node's own among them, make a certificate (`certify`), once
+  the node's own decisions reach the height, and the node keeps the
+  highest. Every proposal is signed, so a certificate carries the signed
+  proposals of its signers, and one an honest node made carries the head
+  of its own decisions at its height.
   A node certifies every height it decides once `q − 1` other signers'
   proposals of the same head reach it while the height lies at most
   `ahead` above its next undecided slot (`Node.Local.Certifies`, §13.7).
@@ -1659,6 +1661,9 @@ can stall for good. Take `n = 4`, `f = 1`, `q = 3`, reliable nodes `u`,
   so an answer that arrives after the node decided more is still
   adopted. `Boot.ChainInjective` speaks of a sublist of the served
   decisions, the part adopted.
+* A node certifies a head only with its own proposal of it among the
+  signers (`certify`), so the certificate it announces carries its own
+  head, which a peer that decided the height proposed too and confirms.
 
 **Why it closes the gap.** Past GST, when a reliable node `u` raises its
 horizon at `t`, every reliable node `v` holds a certificate at least as
