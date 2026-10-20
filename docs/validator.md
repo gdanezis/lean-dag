@@ -1365,3 +1365,126 @@ explicit.
    its history held. The rule cuts off a node that rejoins at its peers'
    horizon, which a reliable node never does; the resume rule that avoids
    it belongs to 11.3.
+
+### 13.6 Blocks at the horizon (design, not built)
+
+**The problem.** A block's validity is checked against its references,
+one round below it. At a node's horizon `G` those references are pruned,
+so a block that arrives at round `G` cannot be checked. Every rule for
+such a block fails in one case:
+
+* **taken unchecked** (the rule before 78e5338): a Byzantine node sends
+  an invalid block `x` at node A's horizon, and builds valid blocks of
+  its own above it, which A checks against `x`'s round and author only.
+  A references the top of that chain, so every later block of A has `x`
+  in its history. A node B whose horizon is lower checks `x`, drops it,
+  and can accept none of A's later blocks. If B needs them for a quorum,
+  B stalls;
+* **checked one level down** (the parents fetched for checking only):
+  validity reads only the parents' rounds and authors, so an invalid
+  parent at `G − 1` with a plausible round and author lets `x` pass. The
+  same attack works one round lower, against a node whose horizon is at
+  `G − 2` or below;
+* **taken only if vouched for** (`f + 1` authors' pending blocks above
+  it, built): no attack is needed. A late honest block, with only its
+  author's chain above it, is never taken, and every later block of its
+  author waits on it. A node rejoins late this way (§6, `W = 4`), and so
+  can a reliable node that never crashes. Suppose `q` nodes, a Byzantine
+  one among them, decide, certify and raise their horizon while a
+  slower reliable node's blocks are still in flight within `Δ`, and the
+  leader schedule gives the slower node no slot meanwhile. Its blocks
+  then reach the others at their horizon and are never taken. If the
+  Byzantine node then falls silent, the others need the slower node for
+  a quorum and stall. This is an argument, not yet reproduced in the
+  simulator.
+
+The cause is that honest nodes' horizons differ. A node takes a block at
+its horizon on trust, while a node with a lower horizon can still check
+it, and the two disagree when the block is invalid.
+
+**The design.** The honest nodes treat the same certified prefix as
+settled.
+
+1. **The horizon is a certified checkpoint less `Λ`.** A node certifies
+   a height `k` only once its own decisions reach `k`, so its certified
+   frontier lies at or below its decided one, and the horizon of §3.4 is
+   already `min(R(c), t) − Λ`. Here `R(c)` is the slot round of the
+   height of the node's certificate `c`, and `t` is the node's round.
+   This item is the program as built.
+2. **A block at the horizon is taken unchecked**, read without its
+   references, and a block below it is dropped. Vouching is removed.
+3. **A certificate is adopted on sight, not only when recovering.** A
+   node that holds `q` signed proposals of a head at a height `k` above
+   its next undecided slot `lo` asks a signer for the certificate and the
+   decisions of slots `lo … k − 1`. It checks them by extending the head
+   of its own decisions to `k`, adopts them as bootstrap does (§3.6), and
+   raises its horizon at the next collection. If the new horizon lies
+   above its round, the node recovers as after a restart: it resumes at
+   the highest round above it at which it holds a quorum (§3.5), with no
+   block of its own there. The decisions served are those since the
+   asker's frontier, so their size does not grow with the run.
+
+**Why it closes the attack.** Junk at A's horizon `G` lies at or below
+`R(c) − Λ` for a certificate `c` that A holds, whose signers broadcast
+their proposals. A node B whose horizon is lower receives those
+proposals, adopts `c`, and its horizon rises to `G` or above. B then
+takes `x` unchecked as A did, or drops it as lying below its horizon. In
+both cases B accepts A's blocks above `x`. Any copy of `x`, or block
+above it, that B dropped earlier is fetched again, since the pending
+blocks above it still miss it. The disagreement lasts only until B
+adopts `c`. Past GST that is bounded: by the delivery of the
+proposals, `Δ`, plus one request and answer, `2Δ`.
+
+**Why it keeps late honest blocks.** A late honest block at a peer's
+horizon is taken unchecked (item 2), so no node is cut off for being
+slow. A node whose round falls below its peers' horizon adopts their
+certificate and resumes above it (item 3), with no block of its own
+there, so no later block of it references the round it missed.
+
+**Against the proofs.**
+
+* **V1, V2** (`Local`): adoption changes `decided`, `lo` and `cert` as a
+  bootstrap does, and leaves `lastProposed` and `chain` alone, so the
+  ledger (`Ledger`: the kept decisions are slots `0 … lo − 1`, the head
+  kept is the chain's at the height last proposed) is kept by the
+  argument of `bootFrom_appends`. Recovering on a high horizon is the
+  restart path, already covered.
+* **V3** (`Runs.Safety`) assumes no base or certificate offers
+  (`NoRejoin`) and stays true as stated, but describes only traces
+  without adoption. V9 then carries safety for every trace, as it
+  already does with bootstrap.
+* **V9, V12, V7** (`Boot.Agrees`, `Boot.Certified`, `Defer.Decides`):
+  their induction (`cut_before`) already handles a decision taken from a
+  certificate. Its honest signer proposed the head of its own
+  decisions, and `ChainInjective` identifies the decisions served with
+  them. The new step case is the bootstrap's without the base. The store
+  is kept, so it stays a cut of the run's record, and the raised horizon
+  lies at or below the node's round, so the record reaches it
+  (`IsCut.spans`). One assumption changes: `ChainInjective` must speak of
+  the list the receiver forms, its own decisions below `lo` followed by
+  those served, not of a full list served.
+* **V10** (`Storage.Bounded`): adoption adds no block; the horizon rises
+  and the charges below it are dropped. Unaffected.
+* **Convergence** (`Converge.Converges`) assumes no garbage collection
+  and no offers. Unaffected.
+* **Unchecked blocks at the horizon** are what the run's record was
+  built for: a block that is not real takes a real block's references at
+  its round (`globalBlock`, `Ground.base`), and the safety proofs held
+  with that rule before 78e5338.
+* **V11** must allow certificate offers to the reliable nodes:
+  `NoRejoin T` becomes "no base offer and no restart at `T`". Arrival
+  (11.1c) gains a bound on the spread of the reliable nodes' horizons.
+  A reliable block's history can hold junk only at or below its author's
+  horizon, which every reliable node reaches within the adoption bound
+  above. The decision half is unaffected. The synchronisation assumption
+  must also cover a block dropped as invalid and needed again after the
+  receiver's horizon rose past it. Both are to be settled in 11.1c.
+
+**Cost.** One request and answer per adoption, carrying the decisions
+since the asker's frontier. In a fault-free run every node certifies
+each height itself, and none adopts.
+
+**Open before building.** A simulator check that the slower-node stall
+occurs under vouching and not under this design; the request message and
+whom it is asked of (a signer of the proposals, as fetches ask the
+referring block's author, §3.7).
