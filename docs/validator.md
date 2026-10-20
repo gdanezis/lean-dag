@@ -1704,8 +1704,20 @@ leaves the node with nothing to build, decide or accept.
 fact of a pass lifts to the passes by induction (`quiesce_rel`,
 `quiesce_ind`). A block a step builds is built at a state whose horizon
 may have risen within the step, so `BuildState` keeps the store's blocks
-at or above its horizon (`Retains`) rather than at the same horizon. That
-the passes stop by their condition, not by running out, is for 11.1c.
+at or above its horizon (`Retains`) rather than at the same horizon.
+
+**The passes stop by their condition** (`Helpers/Quiet.lean`,
+`settle_settled`), for a quorum of two or more. Within a settle the
+node's blocks of other authors lie at or below the highest round `R` its
+store, its pending blocks and its top hold, so it builds only at a top at
+most `R`, and its next undecided slot and certificate's height are at
+most the slots at round `R + 1`. A pass that does not stop lowers the
+sum of the pending blocks and the distances of the top, the horizon, the
+slot and the height from these bounds, which `passes s` exceeds. The
+state a stopping pass leaves is settled (`Settled`): it can build
+nothing, no pending block is ready, its horizon is the one its
+certificate and top give, and `tryDecide` from its next undecided slot
+decides nothing.
 
 **The simulator.** The tests' figures move with the change; the stores
 of the long run hold nine to fifteen blocks, their horizons two to four
