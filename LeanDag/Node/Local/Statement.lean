@@ -24,7 +24,9 @@ initial state:
   pruned store decides as the view it is a cut of;
 * **certifying what it decides**: without a restart, a node whose
   decisions reach a multiple of `m` certifies it once `q − 1` other
-  signers' proposals of the same head reached it in time (`Certifies`).
+  signers' proposals of the same head reached it in time (`Certifies`);
+* **the proposals it keeps**: of each signer at most
+  `lo + ahead − certHeight + 1`, and `n` times that in all (`Bounded`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -121,9 +123,20 @@ def Certifies : Prop :=
       ∀ h', .proposal u k h' ∈ is₂ → h' = h) →
     k ≤ r.1.certHeight
 
+/-- **The proposals it keeps**: over any inputs, the node keeps at most
+`lo + ahead − certHeight + 1` proposals of each signer, and `n` times that
+in all. -/
+def Bounded : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
+    (is : List (Input Validator BlockId Payload)),
+    let s := (run cfg (State.init cfg) is).1
+    (∀ v, (s.props.filter fun x => x.1 = v).length ≤ s.lo + cfg.ahead - s.certHeight + 1) ∧
+      s.props.length ≤ Fintype.card Validator * (s.lo + cfg.ahead - s.certHeight + 1)
+
 /-- One node at a time. -/
 def Statement : Prop :=
-  OneEach ∧ Authored ∧ Sends ∧ Decisions ∧ ValidOut ∧ DecidesOnView ∧ Certifies
+  OneEach ∧ Authored ∧ Sends ∧ Decisions ∧ ValidOut ∧ DecidesOnView ∧ Certifies ∧ Bounded
 
 end Local
 

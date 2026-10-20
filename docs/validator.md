@@ -364,7 +364,10 @@ Bounding the pending blocks belongs to rate limiting (step 9).
 * **Certificates.** The node keeps one proposal per signer and height,
   its own included, above its certificate's height (`record`). Above
   `lo + ahead`, for `ahead` a parameter of the configuration, it keeps
-  only each signer's latest. `q` distinct signers of one height and one
+  only each signer's latest. Recording, adopting and bootstrapping drop
+  the proposals at or below the certificate the node then holds, so it
+  keeps at most `lo + ahead − certHeight + 1` proposals of each signer
+  (`Node.Local.Bounded`, §13.7). `q` distinct signers of one height and one
   head make a certificate (`certify`), once the node's own decisions
   reach the height, and the node keeps the highest. Every proposal is
   signed, so a certificate carries the signed proposals of its signers.
@@ -493,7 +496,7 @@ at once.
 
 | | Claim | Route |
 |---|---|---|
-| V1 | Every block of the program's own, those it persists, satisfies `ValidAt q Clause.distinct`; they lie at strictly increasing rounds, across restarts, resumes and bootstraps; it references only what it knew; the blocks it broadcasts are those it persists; it keeps the decisions it outputs, slots `0 … lo − 1` in order, and every proposal it signs at a height `k` is the head of the chain of its first `k` decisions; its accepted set is a view; without a restart it certifies every height it decides once `q − 1` other signers' proposals of the same head reach it in time. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.Sends`, `Node.Local.Decisions`, `Node.Local.ValidOut` (proved, restarts, resumes and bootstraps included), `Node.Local.Certifies` (proved) |
+| V1 | Every block of the program's own, those it persists, satisfies `ValidAt q Clause.distinct`; they lie at strictly increasing rounds, across restarts, resumes and bootstraps; it references only what it knew; the blocks it broadcasts are those it persists; it keeps the decisions it outputs, slots `0 … lo − 1` in order, and every proposal it signs at a height `k` is the head of the chain of its first `k` decisions; its accepted set is a view; without a restart it certifies every height it decides once `q − 1` other signers' proposals of the same head reach it in time; it keeps at most `lo + ahead − certHeight + 1` proposals of each signer. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.Sends`, `Node.Local.Decisions`, `Node.Local.ValidOut` (proved, restarts, resumes and bootstraps included), `Node.Local.Certifies` (proved), `Node.Local.Bounded` (proved, restarts, resumes and bootstraps included) |
 | V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
 | V3 | Over a trace, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every honest store is a cut of it; with timely authentication of blocks, an injective hash and `Params.Tolerates`, and no honest node given a base offer or a certificate, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise and whenever they restart and resume. | `Node.Runs.Safety` (proved): `Node.authentic_of_timely`, `Node.hashInjective_of_trace`, `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised, no honest node restarting and none given a base offer or a certificate, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
@@ -1526,6 +1529,8 @@ frontiers jump past different heights may never propose a common one.
 * It keeps one proposal per signer and height above its certificate's
   height. Above `lo + ahead` it keeps only each signer's latest
   (`record`), for `ahead` a parameter of the configuration.
+* Adopting and bootstrapping drop the proposals at or below the
+  certificate the node then holds, as recording does.
 
 **The claim.** `Node.Local.Certifies`: over inputs without a restart, a
 node whose decisions reach a positive multiple `k` of `m` holds a
@@ -1551,15 +1556,27 @@ run.
 At the end, the node proposed `k` by `Covered`, so its own proposal and
 the `q − 1` peers' are kept by `Kept`, and `Kept` gives the certificate.
 
+**The memory bound.** `Node.Local.Bounded`: over any inputs, restarts
+included, the node keeps at most `lo + ahead − certHeight + 1` proposals
+of each signer, and `n` times that in all. The proof
+(`Helpers/Retain.lean`) carries the invariant `Sparse` over the run:
+the kept proposals are one per signer and height, each above the
+certificate's height, and of each signer at most one above
+`lo + ahead`. A step keeps it because `lo` never falls and every step
+that raises the certificate also drops the proposals at or below it.
+The heights of a signer's proposals at or below `lo + ahead` are
+distinct and lie in `certHeight + 1 … lo + ahead`, which gives the
+bound.
+
 **What it does not give.** The claim is about one node's inputs.
 
 * That the proposals reach the node within `ahead` of its frontier, and
   that the honest nodes decide each height, are for 11.1c.
-* Memory: the proposals kept per signer lie at distinct heights, at
-  most one of them above `lo + ahead`, and each recording drops those at
-  or below the certificate's height. They therefore do not grow with the
-  run while the certificate keeps up with the decisions. This follows
-  from `record` but is not a Lean claim.
+* The memory bound grows with `lo − certHeight`. It stays fixed over
+  the run only while the certificate keeps up with the decisions, which
+  is for 11.1c. An honest signer proposes only at multiples of `m`, but
+  the node keeps a proposal at any height, so a Byzantine signer can
+  reach the bound.
 
 **The simulator.** Mysticeti row, 600 ticks, ten seeds, one attacker
 (node 3 at `n = 4`, node 6 at `n = 7`) running the honest program.

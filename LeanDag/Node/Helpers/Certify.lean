@@ -101,7 +101,7 @@ theorem mem_record {s : State Validator BlockId Payload} {v : Validator} {k : �
       (y = (v, k, h) ∨ y ∈ s.props ∧ (y.1 ≠ v ∨ y.2.1 ≠ k ∧
         (k ≤ s.lo + cfg.ahead ∨ y.2.1 ≤ s.lo + cfg.ahead))) ∧
       (record cfg s v k h).certHeight < y.2.1 := by
-  unfold record
+  unfold record above
   simp only [List.mem_filter, List.mem_cons, decide_eq_true_eq]
   rfl
 
@@ -223,6 +223,35 @@ theorem Kept.grow {P : List (Validator × ℕ × BlockId)} {s s' : State Validat
   · rw [hp] at hme hq; exact (hK.certified k h hme hq).trans hc
   · obtain ⟨hin, hw⟩ := hK.peers x hx
     exact ⟨by rw [hp]; exact hin.imp_right fun h => h.trans hc, hw.trans (by omega)⟩
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem mem_above {c : Option (Cert Validator BlockId)} {ps : List (Validator × ℕ × BlockId)}
+    {y : Validator × ℕ × BlockId} : y ∈ above c ps ↔ y ∈ ps ∧ (c.map Cert.height).getD 0 < y.2.1 :=
+  by simp [above]
+
+omit [Fintype Validator] in
+/-- **Dropping the proposals at or below the certificate's height** keeps
+what the node keeps. -/
+theorem Kept.above {P : List (Validator × ℕ × BlockId)} {s s' : State Validator BlockId Payload}
+    (hK : Kept cfg P s) (hp : s'.props = above s.cert s.props) (hc : s'.cert = s.cert)
+    (hlo : s'.lo = s.lo) (hlp : s'.lastProposed = s.lastProposed) (hd : s'.decided = s.decided)
+    (hch : s'.chain = s.chain) : Kept cfg P s' := by
+  have hcH : s'.certHeight = s.certHeight := by simp [State.certHeight, hc]
+  have hsub : ∀ y ∈ s'.props, y ∈ s.props := fun y hy => (mem_above.mp (hp ▸ hy)).1
+  refine ⟨hK.ledger.of_eq hd hlo hlp hch, fun x hx hme => ?_, fun k hk hm hkl hkc => ?_,
+    fun k h hme hq => ?_, fun x hx => ?_⟩
+  · rw [hlo]; exact hK.own_le x (hsub x hx) hme
+  · rw [hlp] at hkl; rw [hcH] at hkc
+    rw [hp, hd]; exact mem_above.mpr ⟨hK.own_mem k hk hm hkl hkc, hkc⟩
+  · rw [hcH]
+    exact hK.certified k h (hsub _ hme)
+      (hq.trans (Finset.card_le_card (signersOf_mono fun u hu => hsub _ hu)))
+  · obtain ⟨hin, hw⟩ := hK.peers x hx
+    refine ⟨?_, by rw [hlo]; exact hw⟩
+    rw [hcH]
+    by_cases hx₂ : x.2.1 ≤ s.certHeight
+    · exact Or.inr hx₂
+    · exact Or.inl (by rw [hp]; exact mem_above.mpr ⟨hin.resolve_right hx₂, not_le.mp hx₂⟩)
 
 omit [Fintype Validator] in
 /-- A change of nothing the claims read. -/
@@ -446,9 +475,10 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
         · rename_i h; simp only [Option.map_some, Option.getD_some]
           exact h.le
         · exact le_rfl
-      have hK₁ := hK.grow hL₁ rfl hcH (adoptable_lo ha.2).le rfl ⟨ds, hD⟩
+      have hK₁ := hK.grow (s' := { adopted s c ds with props := s.props }) hL₁ rfl hcH
+        (adoptable_lo ha.2).le rfl ⟨ds, hD⟩
       rw [adopt_eq]
-      exact hK₁.settle hP hrec
+      exact (hK₁.above (s' := adopted s c ds) rfl rfl rfl rfl rfl rfl).settle hP hrec
     · exact ⟨hK, hcov⟩
   | proposal p k kh =>
     rw [step_proposal]

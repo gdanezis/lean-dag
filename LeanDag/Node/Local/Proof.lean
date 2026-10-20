@@ -1,6 +1,7 @@
 import LeanDag.Node.Local.Statement
 import LeanDag.Node.Helpers.Decided
 import LeanDag.Node.Helpers.Certify
+import LeanDag.Node.Helpers.Retain
 /-!
 # An honest node, one node at a time — proof
 
@@ -10,7 +11,8 @@ claims about the node's own blocks and decisions are read off it at the end of a
 run. Decisions read only the view by `ViewsAbove.tryDecide_eq` at the
 bounded vote. A node certifies what it decides by `Kept`
 (`Helpers/Certify.lean`): its own proposal at the height and the peers'
-are kept, so `q` signers of the head meet there.
+are kept, so `q` signers of the head meet there. The proposals it keeps
+stay sparse (`Sparse`, `Helpers/Retain.lean`), which bounds them.
 -/
 
 namespace LeanDag
@@ -109,8 +111,13 @@ theorem certifies : Certifies := by
     hq.trans ((Finset.card_insert_of_notMem hme).symm.le.trans (Finset.card_le_card hsub))
   exact absurd (hK.certified k h hown hcard) (not_le.mpr hlt)
 
+theorem bounded : Bounded := by
+  intro Validator BlockId Payload _ _ _ cfg is s
+  have h := Sparse.run (cfg := cfg) is Sparse.init
+  exact ⟨h.signer_le, h.length_le⟩
+
 theorem holds : Statement :=
-  ⟨oneEach, authored, sends, decisions, validOut, decidesOnView, certifies⟩
+  ⟨oneEach, authored, sends, decisions, validOut, decidesOnView, certifies, bounded⟩
 
 end Local
 

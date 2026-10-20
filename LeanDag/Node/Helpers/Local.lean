@@ -415,7 +415,8 @@ theorem serveFrom_out (s : State Validator BlockId Payload) (peer : Validator) (
 def adopted (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
     (ds : List (ℕ × Option BlockId)) : State Validator BlockId Payload :=
   let ct := if s.certHeight < c.height then some c else s.cert
-  { s with decided := ds.reverse ++ s.decided, lo := c.height, cert := ct }
+  { s with decided := ds.reverse ++ s.decided, lo := c.height, cert := ct,
+           props := above ct s.props }
 
 omit [Fintype Validator] [LinearOrder BlockId] in
 theorem commitsOf_requests {xs : List (Output Validator BlockId Payload)}
@@ -818,7 +819,8 @@ theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ �
       s'.recovering = s.recovering ∧ s'.offers = [] ∧
       s'.requested = s.requested.filter (fun x => G ≤ x.2.2) ∧ s'.fired = {G} ∧
       ads = ds.drop s.decided.length ∧ s'.decided = ads.reverse ++ s.decided ∧
-      s'.certs = [] ∧ s'.props = s.props ∧ s'.lastProposed = s.lastProposed ∧ s'.chain = s.chain ∧
+      s'.certs = [] ∧ s'.props = above s'.cert s.props ∧ s'.lastProposed = s.lastProposed ∧
+      s'.chain = s.chain ∧
       s'.cert = (if s.certHeight < c.height then some c else s.cert) ∧
       s'.owner = slotted cfg (keptBase cfg (baseAt cfg s G)) ++
         s.owner.filter fun e => G ≤ e.2.2 := by

@@ -358,6 +358,11 @@ def keptBase (l : List (BlockId × Block Validator BlockId Payload)) :
 def State.certHeight (s : State Validator BlockId Payload) : ℕ :=
   (s.cert.map Cert.height).getD 0
 
+/-- The proposals above the height of the certificate `c`, taken as `0` without one. -/
+def above (c : Option (Cert Validator BlockId)) (ps : List (Validator × ℕ × BlockId)) :
+    List (Validator × ℕ × BlockId) :=
+  ps.filter fun x => (c.map Cert.height).getD 0 < x.2.1
+
 /-- **A certificate the node can adopt at round `G`**, served with the
 decisions `ds`: `q` distinct signers, `ds` the decisions of slots
 `0 … height − 1` in order with the certificate's head, and a height whose
@@ -386,7 +391,8 @@ def bootRound (s : State Validator BlockId Payload) (t : ℕ) : Option ℕ :=
 block of its own there, the round's timer counts as fired, and the
 offered blocks above `G` are pending; the node takes the certified
 decisions it lacks, which it returns, its next slot moves up to `c`'s
-height, and it keeps `c` if `c` is higher than its own. -/
+height, and it keeps `c` if `c` is higher than its own, and only the
+proposals above the certificate it holds. -/
 def tryBoot (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × List (ℕ × Option BlockId)) :=
   match s.top, s.top.bind (bootRound cfg s) with
@@ -407,7 +413,8 @@ def tryBoot (s : State Validator BlockId Payload) :
           slotted cfg (keptBase cfg (baseAt cfg s G)) ++ s.owner.filter fun e => G ≤ e.2.2
         let s₃ := { s₂ with requested := s.requested.filter fun x => G ≤ x.2.2, owner := ch }
         let s₄ := { s₃ with decided := ads.reverse ++ s.decided, certs := [] }
-        some ({ s₄ with cert := if s.certHeight < c.height then some c else s.cert }, ads)
+        let ct := if s.certHeight < c.height then some c else s.cert
+        some ({ s₄ with cert := ct, props := above ct s.props }, ads)
       else none
     | none => none
   | _, _ => none
@@ -431,8 +438,7 @@ def record (s : State Validator BlockId Payload) (v : Validator) (k : ℕ) (h : 
   let w := s.lo + cfg.ahead
   let ps := (v, k, h) :: s.props.filter fun x => x.1 ≠ v ∨ x.2.1 ≠ k ∧ (k ≤ w ∨ x.2.1 ≤ w)
   let c := certify cfg { s with props := ps } k h
-  let s₁ := { s with props := ps.filter fun x => (c.map Cert.height).getD 0 < x.2.1 }
-  { s₁ with cert := c }
+  { s with props := above c ps, cert := c }
 
 /-- **The next height to propose**: the least multiple of `m` above both
 the height last proposed and the certificate's height. -/
@@ -663,14 +669,14 @@ def adoptable (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
       c.head)
 
 /-- **Adopt certified decisions**: output and keep them, move the next
-slot to the certificate's height, keep the certificate if higher, then
-settle. -/
+slot to the certificate's height, keep the certificate if higher and
+only the proposals above the certificate held, then settle. -/
 def adopt (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
     (ds : List (ℕ × Option BlockId)) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   let ct := if s.certHeight < c.height then some c else s.cert
   let s₁ := { s with decided := ds.reverse ++ s.decided, lo := c.height, cert := ct }
-  let r := settle cfg s₁
+  let r := settle cfg { s₁ with props := above ct s.props }
   (r.1, ds.map (fun e => .commit e.1 e.2) ++ r.2)
 
 /-- **The node's transition function.** -/
