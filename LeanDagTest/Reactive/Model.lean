@@ -65,7 +65,6 @@ def ugrowReactive (N : ℕ) : ReactiveM (Ugrow N) {1, 2, 3} N where
   latest n := 3 + 6 * n
   built_le_latest v _ _ _ := by have := v.isLt; omega
   built_lt _ _ _ _ := by omega
-  deadline _ _ _ _ := by omega
   refs_held v hv n b hb hbc hbr := by
     obtain ⟨h1, h3⟩ := mem_T_bounds hv
     intro j hj

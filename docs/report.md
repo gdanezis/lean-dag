@@ -2403,7 +2403,8 @@ processing bound `proc` — and nothing about *when* a validator chooses
 to build within a round; `reached`, `populatedOn` and the drift collapse
 are proved on it, once. `ViewPace` is the full-timeout discipline: the
 waiting floor P9 and global referencing. The reactive schedule (§11)
-extends the same trunk with a deadline in place of the floor, and
+extends the same trunk with the reactive wait clauses in place of the
+floor, and
 inherits production and drift rather than assuming them.
 
 `top v` is the highest round `v` reached; `built v n` is read only at
@@ -3843,7 +3844,6 @@ any block record —
 structure ReactiveCore (U : BlockRecord Validator BlockId Payload P honest)
     (T : Finset Validator) (N : ℕ) extends PaceCore U T N where
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
 ```
 
 — and the core's wait clauses over it:
@@ -3861,9 +3861,8 @@ structure ReactivePace (U : BlockUniverse Validator BlockId Payload)
   prompt_vote : …
 ```
 
-`deadline` is the ceiling — a validator never waits *past* the timeout —
-and `built_lt` the only remaining floor, both over the rounds the
-validator reached. `vote_or_wait` is the reactive dichotomy: at the
+`built_lt` is the only remaining floor, over the rounds the validator
+reached; no ceiling is asked, since no proof reads one. `vote_or_wait` is the reactive dichotomy: at the
 round above a reliable leader, any `T`-authored block either references
 the leader (the reactive exit), or its builder waited the full timeout
 and references any leader block it holds (the fallback). Building early
@@ -3975,7 +3974,7 @@ theorem no_timeout_of_fast {δ : ℕ}
 `δ` is the *actual* per-block propagation bound of the run — a premise
 about this execution, not an assumption about the network — and the
 conclusion degrades continuously as it approaches the timeout. Below it,
-every reliable validator builds strictly before its deadline: the
+every reliable validator builds strictly before its timeout expires: the
 fallback branch of the dichotomy is never taken, and consensus proceeds
 at the pace of `built_succ_le_of_fast` (RS4)'s bound, drift plus delivery plus
 processing per round.
@@ -3985,7 +3984,7 @@ processing per round.
 `ugrowReactive` (§28) runs the Mysticeti structure on the round-robin
 schedule at build spacing `6` inside a timeout of `9 = 2Δ + proc` — the
 drift-free backoff met with equality: every fallback branch untaken, the
-commit, the latency bound and the strictly-inside-deadline conclusion
+commit, the latency bound and the strictly-inside-timeout conclusion
 all exhibited on data. Its
 processing constant is honest rather than generous: `proc = 5` is the
 least value `prompt_vote` admits on this model, because a validator's
@@ -7755,8 +7754,8 @@ FinWhale creates a round-`r` block when any of three conditions holds:
 a quorum of voters for the round-`(r−2)` leader, or an SP-skip pattern
 for it; **C2**, the `2∆` timeout has expired; **C3**, the local DAG has
 `n − f` round-`r` blocks. The timeout is the fallback and not the rule,
-so the discipline is `ReactivePace`, whose `deadline` is a ceiling on
-waiting, rather than `ViewPace`, whose `waits` is a floor. One
+so the discipline is `ReactivePace`, whose timeout is a fallback with no
+floor under it, rather than `ViewPace`, whose `waits` is a floor. One
 consequence shapes the rest: **reference coverage is unavailable**. A
 reactive builder omits whatever had not arrived when its exit fired, so
 `SynchronisedFrom` is false in general and nothing below uses it.
@@ -12107,9 +12106,9 @@ populated, as for the run with its clock forgotten
 (`Scheme.SchemeReactive.toAsyncPace`, SC27), and drift collapses
 (`Scheme.SchemeReactive.driftOn`). A reliable block that waited holds every reliable block of the round below
 (`Scheme.SchemeReactive.arrives`); round by round every reliable block
-reaches the leader block (`Scheme.SchemeReactive.reaches`), every
+reaches the leader block (`Scheme.WaveFacts.reaches`), every
 reliable vote-round block votes, and every reliable decision-round block
-certifies (`Scheme.SchemeReactive.certifies`). That is the family
+certifies (`Scheme.WaveFacts.certifies`). That is the family
 support's liveness precondition (`Scheme.live_of_reactiveLive`), and the
 generic `LeaderCommits` follows (`Scheme.leaderCommits_reactive`). Every
 Reactive Mysticeti execution with a correct reliable set is an instance
@@ -13416,7 +13415,7 @@ reused.
 | SC23 | on Hydrozoan's universe the Hybrid Mysticeti row decides as Hydrozoan without its fast path, at every vote; it meets its inequalities at every `n ≥ 3f + 2c + 1`, and its carrier is safe and progresses under Hydrozoan's fault model, and with self-reference lives | `Scheme.readAlike_hydrozoanSlow`, `Scheme.hydrozoanSlow_eq`, `Scheme.Table.hybridAnyCommittee`, `Scheme.HybridRow.slowRow`, `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent` *(Scheme/Helpers/Hydrozoan, Scheme/HybridRow)* |
 | SC24 | the asynchronous rows are live under the coin: at `2q ≥ n + f + 1` a common core; one buffer round gives a safe validator and the double count, two give `q − f`; leaders outnumbering the rest include a safe one; buffer rounds past two add nothing; a uniform coin names a safe leader with probability bounded below, and its misses vanish | `exists_commonCore`, `Scheme.isCert_of_safe`, `Scheme.safeAt_nonempty`, `Scheme.card_safeAt_count`, `Scheme.le_card_safeAt`, `Scheme.exists_safe_leader`, `Scheme.Starve.not_starved_of_reaches`, `Scheme.Starve.card_safeAt_starve`, `Scheme.Starve.starvePace`, `Scheme.Async.coinCommit`, `Scheme.Async.coinTail`, `Scheme.Async.holds` *(Common/CommonCore, Scheme/Helpers/Async, Scheme/Helpers/AsyncCoin, Scheme/Helpers/Starve, Scheme/Async)* |
 | SC25 | every row safe and live: Cordial Miners on the core's universes; Orcaella, Async Orcaella, Hybrid Mysticeti, Hybrid Mahi-Mahi, Nemo-Nemo and Async Nemo-Nemo under the hybrid fault model with self-reference; the asynchronous rows ready for the count | `Scheme.HybridRow.onHydrozoan`, `Scheme.HybridRow.withSelfParent`, `Scheme.Rows.coreRows`, `Scheme.Rows.hybridRows`, `Scheme.Rows.asyncRows`, `Scheme.Rows.holds` *(Scheme/HybridRow, Scheme/Rows)* |
-| SC26 | the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.toAsyncPace`, `Scheme.SchemeReactive.driftOn`, `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.reaches`, `Scheme.SchemeReactive.votes`, `Scheme.SchemeReactive.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.includes_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
+| SC26 | the family run reactively, pacing at a quorum `q`: a reliable block reaches the leader block round by round, votes and certifies; that is the family support's precondition at any reliability, so a reliably-led slot commits, at the hybrid committees too; with self-reference no reliable block is censored; Reactive Mysticeti is an instance | `Scheme.SchemeReactive.toAsyncPace`, `Scheme.SchemeReactive.driftOn`, `Scheme.SchemeReactive.arrives`, `Scheme.SchemeReactive.toWaveFacts`, `Scheme.WaveFacts.reaches`, `Scheme.WaveFacts.votes`, `Scheme.WaveFacts.certifies`, `Scheme.live_of_reactiveLive`, `Scheme.leaderCommits_reactive`, `Scheme.includes_reactive`, `Scheme.ofReactiveM`, `Scheme.ReactiveRun.holds` *(Scheme/Helpers/Reactive, Scheme/Helpers/ReactiveMysticeti, Scheme/Reactive)* |
 | SC27 | the asynchronous rows on a validator's own view, under eventual delivery with no time bound: a uniform coin names a leader whose slot commits on every reliable validator's own view with probability at least `1/n` at one buffer round and `(q − f)/n` at two; every reliable block is held by every reliable validator from some time on, rounds are populated, and a safe leader's slot commits on every reliable validator's own view; windows commit and slots below a run are decided there; every timed run is an asynchronous one | `Scheme.AsyncPace.coin_eventuallyCommits`, `Scheme.AsyncPace.exists_time`, `Scheme.AsyncPace.delivered`, `Scheme.AsyncPace.reached`, `Scheme.AsyncPace.populated`, `Scheme.decided_of_safe_of_holds`, `Scheme.AsyncPace.decided_of_safe`, `Scheme.AsyncPace.commitsWithin`, `Scheme.AsyncPace.allDecidedBelow`, `Scheme.AsyncPace.ofPaceCore`, `Scheme.AsyncLocal.holds` *(Scheme/Helpers/AsyncPace, Scheme/AsyncLocal)* |
 
 **Hydrozoan and Optimal-Hydrozoan through the properties** (§22.7, §23.7):
@@ -14450,12 +14449,9 @@ structure ReactiveCore (U : BlockRecord Validator BlockId Payload P honest)
   /-- Time advances with rounds — the only lower bound a reactive
   schedule keeps, over the rounds `v` reached. -/
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  /-- **The reactive ceiling.** A validator never waits past the
-  timeout; it may build any time before it. -/
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
 ```
 
-**The reactive timing**, at any record: `PaceCore` with the ceiling and the round-advance clause in place of `ViewPace`'s full-timeout floor. What a reactive discipline's wait clauses are stated over.
+**The reactive timing**, at any record: `PaceCore` with the round-advance clause in place of `ViewPace`'s full-timeout floor. What a reactive discipline's wait clauses are stated over.
 
 #### `ReactivePace`
 
@@ -15472,9 +15468,6 @@ structure ReactiveS (U : BlockUniverse Validator BlockId Payload) (T : Finset Va
     (w : ℕ → ℕ) (waits : ℕ → Prop) extends PaceCore U T N where
   /-- Time advances with rounds, over the rounds `v` reached. -/
   built_lt : ∀ v ∈ T, ∀ n < top v, built v n < built v (n + 1)
-  /-- **The reactive ceiling.** A validator never waits past the timeout; it may build any time
-  before it. -/
-  deadline : ∀ v ∈ T, ∀ n < top v, built v (n + 1) ≤ built v n + timeout n
   /-- **The leader wait, at the rounds that carry it.** At the round above a reliable leader of
   a waiting round, any `T`-authored block either votes (the reactive exit), or its builder waited
   the full timeout and votes for any leader block it holds (the fallback). -/
@@ -15497,7 +15490,7 @@ structure ReactiveS (U : BlockUniverse Validator BlockId Payload) (T : Finset Va
           L ∈ (U.block b).refs → b ∈ (U.block c).refs)
 ```
 
-**Steelhead's reactive schedule** at the wavelength function `w`, the leader wait at the rounds `waits` names: the core's pace, the reactive ceiling, the leader wait at the round above a reliable leader of a waiting round, and the certificate wait at the wave of three. At two rounds above such a leader, any `T`-authored block either already certifies, or its builder waited the full timeout and references every reliable vote it holds. Above wave three the certificate clause says nothing: reachability carries the votes, so the discipline is the core's own.
+**Steelhead's reactive schedule** at the wavelength function `w`, the leader wait at the rounds `waits` names: the core's pace, the leader wait at the round above a reliable leader of a waiting round, and the certificate wait at the wave of three. At two rounds above such a leader, any `T`-authored block either already certifies, or its builder waited the full timeout and references every reliable vote it holds. Above wave three the certificate clause says nothing: reachability carries the votes, so the discipline is the core's own.
 
 #### `certProb`
 
@@ -22709,7 +22702,7 @@ theorem no_timeout_of_fast {δ : ℕ}
       < rc.built v (S.slotRound k) + rc.timeout (S.slotRound k)
 ```
 
-**The timeout never fires.** When delivery, drift and processing together undercut the timeout, every reliable validator builds strictly before its deadline — the fallback branch of `vote_or_wait` is never taken, and consensus proceeds at network speed.
+**The timeout never fires.** When delivery, drift and processing together undercut the timeout, every reliable validator builds strictly before its timeout expires — the fallback branch of `vote_or_wait` is never taken, and consensus proceeds at network speed.
 
 #### `decided`
 
@@ -28688,8 +28681,7 @@ A vote, across a band.
 *theorem, `Scheme.Helpers.Reactive.lean`*
 
 ```lean
-theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) (hq : q ≤ T.card)
-    (hgst : rs.gst ≤ R) (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ}
+theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) {k : ℕ}
     {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ N)
     (hlead : S.leader k ∈ T) (hL : IsLeaderBlock U k L) :
     ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →

@@ -20,9 +20,11 @@ below. A reliable vote-round block therefore votes for it (`votes`), and
 a reliable decision-round block certifies it (`certifies`): the vote is the
 certificate, or on the fallback the block references every reliable vote.
 That is the family support's liveness precondition (`live_of_reactiveLive`),
-from which the generic `LeaderCommits` follows, and on records whose
-blocks reference their author's previous block, inclusion
-(`includes_reactive`): a reliable block enters the ledger through the next
+from which the generic `LeaderCommits` follows. `reaches`, `votes` and
+`certifies` read only production, arrival and the wait clauses
+(`WaveFacts`), which a reactive execution past GST supplies
+(`SchemeReactive.toWaveFacts`). On records whose blocks reference their
+author's previous block, inclusion follows (`includes_reactive`): a reliable block enters the ledger through the next
 slot its author leads, reached down the author's own chain.
 -/
 
@@ -72,10 +74,28 @@ theorem arrives (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
   have := hto n hRn
   omega
 
+/-- **The wave facts of a reactive execution past GST.** -/
+def toWaveFacts (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
+    (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) : WaveFacts p σ U T N R where
+  built := rs.built
+  timeout := rs.timeout
+  holds := rs.holds
+  populated := fun n _ hn => rs.toAsyncPace.populated hq n hn
+  arrives := fun _ hv _ hu _ hRn hn _ hb hbc hbr hwait =>
+    rs.arrives hq hgst hto hv hu hRn hn hb hbc hbr hwait
+  reach_or_wait := rs.reach_or_wait
+  cert_or_wait := rs.cert_or_wait
+
+end SchemeReactive
+
+namespace WaveFacts
+
+variable (wf : WaveFacts p σ U T N R)
+include wf
+
 /-- **Every reliable block reaches the leader block**, at each round from the
 one above the proposal to the vote round. -/
-theorem reaches (hTh : T ⊆ honest) (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
-    (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ} {L : BlockId}
+theorem reaches (hTh : T ⊆ honest) {k : ℕ} {L : BlockId}
     (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ N) (hlead : S.leader k ∈ T)
     (hL : IsLeaderBlock U k L) :
     ∀ m, m < p.voteOffset → ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
@@ -86,12 +106,12 @@ theorem reaches (hTh : T ⊆ honest) (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
       ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
         (U.block c).round = S.slotRound k + m + 1 → Reaches U c L := by
     intro m hm hbelow v hv c hc hcc hcr
-    rcases rs.reach_or_wait v hv k hN hlead L hL m hm c hc hcc hcr with h | ⟨hwait, hincl⟩
+    rcases wf.reach_or_wait v hv k hN hlead L hL m hm c hc hcc hcr with h | ⟨hwait, hincl⟩
     · exact h
-    obtain ⟨b, hb, hbc, hbr⟩ :=
-      rs.toAsyncPace.populated hq (S.slotRound k + m) (by omega) (S.leader k) hlead
-    have harr := rs.arrives hq hgst hto hv hlead (n := S.slotRound k + m) (by omega)
-      (by omega) hb hbc hbr hwait
+    obtain ⟨b, hb, hbc, hbr⟩ := wf.populated (S.slotRound k + m) (by omega) (by omega)
+      (S.leader k) hlead
+    have harr := wf.arrives v hv _ hlead (S.slotRound k + m) (by omega) (by omega) b hb hbc hbr
+      hwait
     exact Reaches.of_mem_refs (hincl b hb hbc hbr harr) (hbelow b hb hbc hbr)
   intro m
   induction m with
@@ -105,15 +125,14 @@ theorem reaches (hTh : T ⊆ honest) (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
       ih (by omega) _ hlead b hb hbc (by omega)
 
 /-- **Every reliable vote-round block votes for the leader block.** -/
-theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) (hq : q ≤ T.card)
-    (hgst : rs.gst ≤ R) (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ}
+theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) {k : ℕ}
     {L : BlockId} (hR : R ≤ S.slotRound k) (hN : S.slotRound k + p.voteOffset ≤ N)
     (hlead : S.leader k ∈ T) (hL : IsLeaderBlock U k L) :
     ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
       (U.block c).round = S.slotRound k + p.voteOffset → σ.Votes U c L := by
   intro v hv c hc hcc hcr
   have hvo := Params.one_le_voteOffset hw
-  have hre := rs.reaches hTh hq hgst hto hR hN hlead hL (p.voteOffset - 1) (by omega) v hv c
+  have hre := wf.reaches hTh hR hN hlead hL (p.voteOffset - 1) (by omega) v hv c
     hc hcc (by omega)
   exact votes_of_reaches_record U.noEquivOn_honest hc hL.1 (hL.2.2 ▸ hTh hlead)
     (by rw [hL.2.1, hcr]; omega) hre
@@ -121,8 +140,7 @@ theorem votes (hw : 2 ≤ p.waveLength) (hTh : T ⊆ honest) (hq : q ≤ T.card)
 /-- **Every reliable decision-round block certifies the leader block.** -/
 theorem certifies (hw : 2 ≤ p.waveLength)
     (hcv : p.voteIsCert = false → 3 ≤ p.waveLength ∧ p.certThreshold ≤ q)
-    (hTh : T ⊆ honest) (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
-    (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) {k : ℕ} {L : BlockId}
+    (hTh : T ⊆ honest) (hq : q ≤ T.card) {k : ℕ} {L : BlockId}
     (hR : R ≤ S.slotRound k) (hN : S.slotRound k + (p.waveLength - 1) ≤ N)
     (hlead : S.leader k ∈ T) (hL : IsLeaderBlock U k L) :
     ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
@@ -131,24 +149,24 @@ theorem certifies (hw : 2 ≤ p.waveLength)
   have hvw := Params.voteOffset_le hw
   cases hvc : p.voteIsCert with
   | true =>
-    exact (isCert_iff_votes σ p hvc).mpr (rs.votes hw hTh hq hgst hto hR (by omega) hlead hL v hv
+    exact (isCert_iff_votes σ p hvc).mpr (wf.votes hw hTh hR (by omega) hlead hL v hv
       c hc hcc (by rw [Params.voteOffset_of_true hvc]; omega))
   | false =>
     obtain ⟨hw3, hcq⟩ := hcv hvc
     have hoff := Params.voteOffset_of_false hvc hw3
-    rcases rs.cert_or_wait hvc v hv k (by omega) hlead L hL c hc hcc (by omega) with
+    rcases wf.cert_or_wait hvc v hv k (by omega) hlead L hL c hc hcc (by omega) with
       h | ⟨hwait, hincl⟩
     · exact h
     refine isCert_of_votes σ p (fun h => absurd (hvc.symm.trans h) (by simp))
       fun _ => ⟨T, le_trans hcq hq, fun u hu => ?_⟩
     obtain ⟨b, hb, hbc, hbr⟩ :=
-      rs.toAsyncPace.populated hq (S.slotRound k + p.voteOffset) (by omega) u hu
-    have harr := rs.arrives hq hgst hto hv hu (n := S.slotRound k + p.voteOffset) (by omega)
-      (by omega) hb hbc hbr hwait
-    have hvote := rs.votes hw hTh hq hgst hto hR (by omega) hlead hL u hu b hb hbc hbr
+      wf.populated (S.slotRound k + p.voteOffset) (by omega) (by omega) u hu
+    have harr := wf.arrives v hv u hu (S.slotRound k + p.voteOffset) (by omega) (by omega) b hb
+      hbc hbr hwait
+    have hvote := wf.votes hw hTh hR (by omega) hlead hL u hu b hb hbc hbr
     exact ⟨b, hincl b hb (hbc ▸ hu) hbr harr hvote, hbc, hvote⟩
 
-end SchemeReactive
+end WaveFacts
 
 omit S in
 /-- **The reactive discipline reaches the family support's liveness
@@ -167,8 +185,8 @@ theorem live_of_reactiveLive {rel : Reliability Validator}
   · intro n _ h2
     exact rs.toAsyncPace.populated hT.2 n (le_trans h2 (hN k hK))
   · rintro L ⟨hLmem, hLr, hLc⟩
-    exact rs.certifies (S := S) hw hcv hTh hT.2 hgst hto (le_trans hR (S.mono hlo)) (hN k hK)
-      hlead ⟨hLmem, hLr, hLc⟩
+    exact (rs.toWaveFacts hT.2 hgst hto).certifies (S := S) hw hcv hTh hT.2
+      (le_trans hR (S.mono hlo)) (hN k hK) hlead ⟨hLmem, hLr, hLc⟩
 
 omit S in
 /-- **The family, run reactively, commits its reliable leaders**, at any

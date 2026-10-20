@@ -24,7 +24,8 @@ family's wait clauses, one per round of the wave:
   reliable vote for it that it holds.
 
 At the Mysticeti row these are Reactive Mysticeti's `vote_or_wait` and
-`cert_or_wait`.
+`cert_or_wait`. What the wave argument reads of a run is `WaveFacts`:
+production, arrival after a wait, and the wait clauses.
 
 The commit rule is unchanged. `reactiveLive` is the precondition, at a
 reliability `rel` (the core's, Hydrozoan's, Nemo's): a quorum of `rel`
@@ -69,6 +70,48 @@ structure SchemeReactive [S : Slots Validator] (q : ℕ) (p : Params)
   reliable decision-round block certifies the leader block, or its builder
   waited the timeout and references every reliable vote for it that it
   holds. -/
+  cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ,
+    S.slotRound k + p.voteOffset + 1 ≤ N → S.leader k ∈ T →
+    ∀ L, IsLeaderBlock U k L →
+    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + p.voteOffset + 1 →
+    IsCert p σ U c L ∨
+      (built v (S.slotRound k + p.voteOffset) + timeout (S.slotRound k + p.voteOffset)
+          ≤ built v (S.slotRound k + p.voteOffset + 1) ∧
+        ∀ b ∈ U.ids, (U.block b).creator ∈ T →
+          (U.block b).round = S.slotRound k + p.voteOffset →
+          b ∈ holds v (built v (S.slotRound k + p.voteOffset + 1)) → σ.Votes U b L →
+          b ∈ (U.block c).refs)
+
+/-- **What the wave argument reads of a run**, from round `R` up to `N`:
+build times, timeouts and holdings of a reliable set `T`; every round
+has a block by every reliable validator; a reliable validator that
+waited the timeout holds every reliable block of the round below; and
+the wait clauses. A reactive execution past GST supplies it, and so does
+a node's timed run, whose holdings shrink below its horizon. -/
+structure WaveFacts [S : Slots Validator] (p : Params)
+    (σ : VoteSel Validator BlockId Payload P honest)
+    (U : BlockRecord Validator BlockId Payload P honest) (T : Finset Validator) (N R : ℕ) where
+  built : Validator → ℕ → ℕ
+  timeout : ℕ → ℕ
+  holds : Validator → ℕ → Finset BlockId
+  /-- Every round from `R` to `N` has a block by every reliable validator. -/
+  populated : ∀ n, R ≤ n → n ≤ N → PopulatedOn U T n
+  /-- **Arrival.** A reliable validator that waited the timeout at a round
+  from `R` holds every reliable block of that round when it builds the
+  next. -/
+  arrives : ∀ v ∈ T, ∀ u ∈ T, ∀ n, R ≤ n → n + 1 ≤ N → ∀ b ∈ U.ids,
+    (U.block b).creator = u → (U.block b).round = n →
+    built v n + timeout n ≤ built v (n + 1) → b ∈ holds v (built v (n + 1))
+  /-- **Reach or wait**, as `SchemeReactive.reach_or_wait`. -/
+  reach_or_wait : ∀ v ∈ T, ∀ k : ℕ, S.slotRound k + p.voteOffset ≤ N → S.leader k ∈ T →
+    ∀ L, IsLeaderBlock U k L → ∀ m, m < p.voteOffset →
+    ∀ c ∈ U.ids, (U.block c).creator = v → (U.block c).round = S.slotRound k + m + 1 →
+    Reaches U c L ∨
+      (built v (S.slotRound k + m) + timeout (S.slotRound k + m)
+          ≤ built v (S.slotRound k + m + 1) ∧
+        ∀ b ∈ U.ids, (U.block b).creator = S.leader k → (U.block b).round = S.slotRound k + m →
+          b ∈ holds v (built v (S.slotRound k + m + 1)) → b ∈ (U.block c).refs)
+  /-- **Certify or wait**, as `SchemeReactive.cert_or_wait`. -/
   cert_or_wait : p.voteIsCert = false → ∀ v ∈ T, ∀ k : ℕ,
     S.slotRound k + p.voteOffset + 1 ≤ N → S.leader k ∈ T →
     ∀ L, IsLeaderBlock U k L →

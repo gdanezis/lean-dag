@@ -1175,8 +1175,9 @@ wait clauses. The node meets the wait clauses by its build rule (§9).
 Under garbage collection it does not meet `PaceCore.converges` as
 stated, so the four facts are proved for the node from the timed trace
 with holdings above the horizon, and `reaches`, `votes` and `certifies`
-are restated over the four facts, so that `SchemeReactive` and the node
-both supply them; the scheme's statements are unchanged.
+are stated over production, arrival and the wait clauses (`WaveFacts`),
+which `SchemeReactive` and the node both supply; the scheme's statements
+are unchanged.
 
 **Catch-up.** Drift rests on catch-up: a reliable node holding a
 reliable round-`n` block at `t` builds round `n` by `t + proc`. The
@@ -1210,21 +1211,18 @@ decided on its view once its scan reaches far enough
 store holds (§3.3), and the bound on how far it must reach is to be made
 explicit.
 
-### 13.5 Decisions for 11.1
+### 13.5 Decisions for 11.1 (taken)
 
-1. **`deadline`**: delete it from `ReactiveCore` and from Steelhead's
-   copy; no proof reads it.
-2. **`built_lt`**: one step may build several rounds at one time. Make
-   `reactiveLive` ask `gst ≤ built u n` for the rounds `n ≥ R₀` instead
-   of deriving it from `built_lt` through `le_built`, or keep `built_lt`
-   and give each build a tick in the timed trace.
-3. **Catch-up**: prove it of the program with `proc = Δ`, as in 13.3,
-   at the cost of `timeout ≥ 3Δ`; or change the build rule so that a
-   node holding a quorum of round-`n` blocks with a reliable one among
-   them builds at once.
-4. **Garbage collection**: the four facts for the node with holdings
-   above its horizon, and the scheme's `reaches`, `votes` and
-   `certifies` restated over the four facts (a shared-layer step,
-   §11.x of `docs/target-properties.md`).
+1. **`deadline`** is deleted from `ReactiveCore` and from Steelhead's
+   copy; no proof read it (built).
+2. **`built_lt`**: the node supplies `WaveFacts`, not a `SchemeReactive`,
+   so it owes no `built_lt`, and one step may build several rounds at one
+   time; `reactiveLive` is unchanged.
+3. **Catch-up** is proved of the program as it is, with `proc = Δ`, as
+   in 13.3; the liveness bound is `timeout ≥ 3Δ`.
+4. **Garbage collection**: the node proves production and arrival with
+   holdings above its horizon, and the scheme's `reaches`, `votes` and
+   `certifies` are stated over `WaveFacts`: production, arrival and the
+   wait clauses (built, `docs/target-properties.md` §11.57).
 5. **The statement**: production and decision as in 13.2, with an
    explicit time bound per slot.

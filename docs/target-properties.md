@@ -5362,6 +5362,23 @@ novelty budget's stores deliver the receivers for any rule with a carrier
 on the record (`deliversOn_viewUpto`). The direct commit from that
 coverage stays at the Mysticeti row.
 
+### 11.57 The wave argument over what it reads
+
+The family's reactive argument, that every reliable block reaches a
+reliable leader's block, votes for it and certifies it, read a whole
+`SchemeReactive`. It reads only production from a round on, arrival
+after a wait, and the two wait clauses. These are `WaveFacts`
+(`Scheme/Model/Reactive.lean`), and `reaches`, `votes` and `certifies`
+are stated over them (`WaveFacts.reaches`, `WaveFacts.votes`,
+`WaveFacts.certifies`). A reactive execution past GST supplies them
+(`SchemeReactive.toWaveFacts`), from its drift and production, and so
+can a run whose holdings shrink below a horizon, which meets no
+`PaceCore`: the validator of `docs/validator.md` §13. The scheme's
+statements are unchanged.
+
+`ReactiveCore.deadline`, the ceiling on a validator's wait, is deleted,
+with Steelhead's copy: no proof in any arc read it.
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition
