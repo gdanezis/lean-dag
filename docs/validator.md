@@ -1107,5 +1107,124 @@ What the numbers say for step 11:
   the fault-free run, none with delays of one tick. Their effect on
   timing was not measured.
 
+**Catch-up.** The gap between a node's first accepting another honest
+node's round-`n` block and its own build of round `n`, past tick 50: 0
+in every round without faults (968 rounds, and 524 at delays up to 6,
+1,542 at `n = 7`); at most 1 tick, in 8 and 13 of 261 rounds, with a
+crashed leader and with an equivocator; at most 5 ticks, in 13 of 183
+rounds, with a crashed leader at delays up to 6 and timeout 13. A node
+builds late only at a round whose leader block it waits the timer for.
+
 The simulator records these measurements (`LeanDagSim.Stats`, in the
 report's `stats`).
+
+## 13. Step 11.1: liveness of the reliable nodes (design draft)
+
+**Scope.** A reliable set `T` of honest nodes that never crash, restart
+or bootstrap, at least `q` strong, from a GST on. Garbage collection is
+on; rate limiting is off (11.2); restarted nodes are 11.3. The horizon
+waits on certificates (§3.8), but a horizon that stops rising costs
+storage, not decisions, so the liveness of checkpointing (§9.1, item 6)
+is not needed here. Skipping rounds happens only when recovering
+(§9.1, item 7), so it does not arise.
+
+### 13.1 Timed traces
+
+A timed trace is a trace with a time for each event, nondecreasing. Its
+assumptions, over the reliable nodes:
+
+* **delivery** (`DeliveredWithin`): a message one reliable node sends
+  another at time `t` arrives by `max t gst + Δ`;
+* **timers** (`TimersOnTime`): a timer a reliable node sets at time `t`
+  for `a` ticks fires at `t + a`, neither earlier nor later;
+* **completeness up to `t₁`**: every delivery and timer due by `t₁` is in
+  the trace.
+
+A step takes no time; the time it costs a node to act on what it holds is
+the catch-up bound below, not a processing constant.
+
+### 13.2 What the run gives
+
+The readings are those of §12.2: `holds v t` the store of `v` after its
+last event at or before `t`, `built v n` the time of the event at which
+`v` persisted its round-`n` block, the record the run's (`globalRecord`),
+and `hor v t` the horizon of `v` at `t`, nondecreasing.
+
+The proof splits in two:
+
+* **production** (conjectured, from §12.5): past GST the reliable nodes'
+  rounds advance at a rate of at least one round per `timeout + 2Δ`, so a trace complete up to
+  `t₁` takes every reliable node to round `(t₁ − gst)/(timeout + 2Δ) − c`
+  for a constant `c`;
+* **decision**: a reliable node that reached the round above slot `k`'s
+  decision round has committed `k` if a reliable node leads it, and,
+  under a schedule with runs of `d` reliably led slots spanning
+  eligibility, has decided every slot below the run (`decided_below_of_run`).
+
+Together they bound the time to decide each slot.
+
+### 13.3 The pacing facts and where they come from
+
+The family's argument (`Scheme/Helpers/Reactive.lean`) reads four facts
+of `SchemeReactive` and its wait clauses: every reliable node reaches
+every round below the horizon (`reached`), with a block there
+(`populated`); drift collapses (`driftOn`); and a reliable block that
+waited the timeout holds every reliable block of the round below
+(`arrives`). `reaches`, `votes` and `certifies` read only these and the
+wait clauses. The node meets the wait clauses by its build rule (§9).
+Under garbage collection it does not meet `PaceCore.converges` as
+stated, so the four facts are proved for the node from the timed trace
+with holdings above the horizon, and `reaches`, `votes` and `certifies`
+are restated over the four facts, so that `SchemeReactive` and the node
+both supply them; the scheme's statements are unchanged.
+
+**Catch-up.** Drift rests on catch-up: a reliable node holding a
+reliable round-`n` block at `t` builds round `n` by `t + proc`. The
+program does not build on sight; it builds round `n` once it holds a
+quorum of round `n − 1` and its block would reach (and certify) the
+leader block or its round's timer fired. In the simulator the gap is
+zero without faults and at most 5 ticks at delays up to 6 with a
+crashed leader (§12.5): a node that waits a timer at a round
+whose leader crashed builds when its timer fires, within the drift of
+its round entry behind the node it saw. The claim to prove is catch-up
+with `proc = Δ`, by induction over rounds past GST: a reliable block of
+round `n` was built either on the reactive exit, whose evidence the
+holder then holds, or on the timer, which the holder's timer follows
+within the drift of round `n − 1`. The liveness bound becomes `timeout ≥
+3Δ`. The reactive exit's evidence carries over when the path from the
+seen block to the leader block runs through reliable blocks, which the
+holder references alike; through a Byzantine twin it may not.
+
+### 13.4 From verdicts to the node's decisions
+
+The family's results conclude `Decided` on a view holding every block up
+to a round (`CoversUpto`), Byzantine blocks included, which a node's
+store need not hold. A direct commit needs only the reliable
+decision-round blocks (`decided_of_safe_of_holds` reads only those), and
+the prefix needs only the run's (`decided_below_of_run`), so the node's
+view, which holds every reliable block it has received above its
+horizon, suffices. The decision step reads the store as `tryDecide` on
+a view of the run's record (V2, V4), and `tryDecide` outputs every slot
+decided on its view once its scan reaches far enough
+(`Loop.OutputComplete`); the scan reaches every slot at a round the
+store holds (§3.3), and the bound on how far it must reach is to be made
+explicit.
+
+### 13.5 Decisions for 11.1
+
+1. **`deadline`**: delete it from `ReactiveCore` and from Steelhead's
+   copy; no proof reads it.
+2. **`built_lt`**: one step may build several rounds at one time. Make
+   `reactiveLive` ask `gst ≤ built u n` for the rounds `n ≥ R₀` instead
+   of deriving it from `built_lt` through `le_built`, or keep `built_lt`
+   and give each build a tick in the timed trace.
+3. **Catch-up**: prove it of the program with `proc = Δ`, as in 13.3,
+   at the cost of `timeout ≥ 3Δ`; or change the build rule so that a
+   node holding a quorum of round-`n` blocks with a reliable one among
+   them builds at once.
+4. **Garbage collection**: the four facts for the node with holdings
+   above its horizon, and the scheme's `reaches`, `votes` and
+   `certifies` restated over the four facts (a shared-layer step,
+   §11.x of `docs/target-properties.md`).
+5. **The statement**: production and decision as in 13.2, with an
+   explicit time bound per slot.

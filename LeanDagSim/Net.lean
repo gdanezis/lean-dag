@@ -171,6 +171,9 @@ structure Stats where
   built : List (ℕ × ℕ × ℕ) := []
   /-- Each honest node's decisions: the node, the slot and the time. -/
   decided : List (ℕ × ℕ × ℕ) := []
+  /-- The blocks of other honest authors each honest node accepted: the
+  node, the round and the time. -/
+  accepted : List (ℕ × ℕ × ℕ) := []
   /-- Honest-authored blocks delivered to an honest node below its horizon. -/
   belowHorizon : ℕ := 0
   /-- Those delivered past GST. -/
@@ -514,6 +517,10 @@ def loop : ℕ → World n → World n
             let ss := { ss with
               built := own.map (fun e => (a.node.val, e.2.round, t)) ++ ss.built
               decided := decs.map (fun e => (a.node.val, e.1, t)) ++ ss.decided
+              accepted := (((r.1.store.ids \ st.store.ids).sort (· ≤ ·)).filterMap fun j =>
+                  let b := r.1.store.blk j
+                  if sc.honest b.creator.val ∧ b.creator ≠ a.node then some (a.node.val, b.round, t)
+                  else none) ++ ss.accepted
               fetches := ss.fetches + fs.length
               fetched := ss.fetched + fs.foldl (· + ·) 0 }
             let ss := match i with
