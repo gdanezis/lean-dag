@@ -393,7 +393,7 @@ move the committee — `n ≥ 5f+1` for two-round commitment,
   is the third under the statement/proof partition.
 
 - **Hydrozoan** (`LeanDag/Hydrozoan/`): the dual-path commit rule of
-  the Hydrozoan paper under the hybrid fault model of DagHydrangea —
+  the Hydrozoan paper under the hybrid fault model of Hydrangea —
   `n ≥ 3f + 2c + k + 1`, at most `f` Byzantine, at most `c` crashed,
   `k` a tunable slack — which commits a leader in two message delays on
   `n − p` votes, `p = ⌊(c + k)/2⌋`, or in three on `2f + c + 1`
