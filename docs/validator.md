@@ -1156,12 +1156,35 @@ The proof splits in two:
   rounds advance at a rate of at least one round per `timeout + 2Δ`, so a trace complete up to
   `t₁` takes every reliable node to round `(t₁ − gst)/(timeout + 2Δ) − c`
   for a constant `c`;
-* **decision**: a reliable node that reached the round above slot `k`'s
-  decision round has committed `k` if a reliable node leads it, and,
-  under a schedule with runs of `d` reliably led slots spanning
-  eligibility, has decided every slot below the run (`decided_below_of_run`).
+* **decision**: a node outputs a slot's decision only once every slot
+  below it is decided, so the claim is about runs. Let slots
+  `b … b + c − 1` be led by reliable nodes, at slot rounds past GST,
+  with `c` spanning the rule's eligibility (`SpansEligible c`). By the
+  time `t*`, `Δ` after the last reliable node built the decision round
+  of slot `b + c − 1`, every reliable node has output the decisions of
+  every slot below `b + c`: the run's slots commit on its view, from the
+  reliable decision-round blocks, which have all arrived; every slot
+  below `b` is then decided on that view (`decided_below_of_run`); and
+  the decision step outputs them (`Loop.OutputComplete`, with the scan's
+  reach made explicit), reading only the rounds from each slot's own up
+  (V4), so the slots below the node's horizon, already output, cost
+  nothing.
 
 Together they bound the time to decide each slot.
+
+**Sub-steps.**
+
+* **11.1a** The timed-trace model (`Node/Model/Timed.lean`: times,
+  holdings, horizons and build times read off a trace) and the
+  statement of V11.
+* **11.1b** The wait clauses: the build rule gives `reach_or_wait` and
+  `cert_or_wait` over the run's record, from `reachReady` and
+  `certReady` on the store's record and from the timer.
+* **11.1c** Production, arrival and catch-up past GST, with holdings
+  above the horizon: the induction of 13.3, giving `WaveFacts`.
+* **11.1d** From `WaveFacts.certifies` to the node's decisions, as in the
+  decision half above.
+* **11.1e** The production rate and the time bound.
 
 ### 13.3 The pacing facts and where they come from
 
