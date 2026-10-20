@@ -1,5 +1,6 @@
 import LeanDag.Node.Model.Timed
 import LeanDag.Node.Converge.Statement
+import LeanDag.Node.Boot.Statement
 import LeanDag.Node.Vote
 /-!
 # The reliable nodes produce rounds and decide — statement
@@ -19,7 +20,9 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
   efficient synchronisation is out of scope (`docs/validator.md` §1);
 * every reliable node **starts** by `gst` (`StartedBy`), and none
   restarts or is offered a base or a certificate;
-* timely authentication, the injective hash, no rate limiting, at most
+* timely authentication, of blocks, bases, certificates and the chain's
+  hash, since honest nodes outside `T` may rejoin (as for V9);
+* the injective hash, no rate limiting, at most
   `f` nodes outside `H`, `n − f − c` reliable nodes, and
   `2 (Δ + Δₛ) ≤ timeout r` at every round.
 
@@ -122,7 +125,8 @@ def Progresses : Prop :=
     cfg.σ = boundedSel → cfg.Admissible → cfg.limit = none → Hᶜ.card ≤ cfg.f → T ⊆ H →
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card →
     (∀ r, 2 * (Δ + Δₛ) ≤ cfg.timeout r) →
-    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
+    Converge.TimelyAuthentic cfg H tr → Boot.TimelyOffers cfg H tr → Boot.TimelyCerts cfg H tr →
+    Converge.HashInjective cfg H tr → Boot.ChainInjective cfg H tr →
     Converge.NoRestart T tr → Converge.NoRejoin T tr →
     TimeMono tr time → DeliveredWithin cfg T tr time gst Δ t₁ → TimersOnTime cfg T tr time t₁ →
     SyncedWithin cfg T tr time gst Δₛ t₁ → StartedBy T tr time gst →

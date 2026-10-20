@@ -1250,7 +1250,9 @@ Together they bound the time to decide each slot.
   built).
 * **11.1b** The wait clauses: the build rule gives `reach_or_wait` and
   `cert_or_wait` over the run's record, from `reachReady` and
-  `certReady` on the store's record and from the timer.
+  `certReady` on the store's record and from the timer (built:
+  `Node.reach_or_wait_node`, `Node.cert_or_wait_node`, with holdings
+  read before the build's time, `heldBefore`).
 * **11.1c** Production, arrival and catch-up past GST, with holdings
   above the horizon: the induction of 13.3, giving `WaveFacts`.
 * **11.1d** From `WaveFacts.certifies` to the node's decisions, as in the
@@ -1348,7 +1350,16 @@ explicit.
    `SyncedWithin` (13.1) as an assumption on the trace, so the arrival of
    histories is not derived from fetch answers; 13.3 counts it in
    `D = Δ + Δₛ`.
-8. **No junk at the horizon** (built): a block received at the horizon
+8. **Holdings before the build.** The wait clauses read what a node
+   held strictly before the time it built (`heldBefore`): a block given
+   at the same time but after the build is not referenced. Arrival must
+   then land strictly before the build, so 11.1c is expected to need
+   `2(Δ + Δₛ) < timeout`, not `≤`.
+9. **Rejoining nodes outside `T`.** Honest nodes outside `T` may restart
+   and bootstrap, so V11 assumes the signatures of bases, certificates
+   and the chain's hash over `H`, as V9 does; every honest store is then
+   a cut of the run's record (`cut_before`).
+10. **No junk at the horizon** (built): a block received at the horizon
    is taken only if vouched for by `f + 1` authors above it (§3.4), since
    the proofs need every block a reliable node builds on to be valid with
    its history held. The rule cuts off a node that rejoins at its peers'
