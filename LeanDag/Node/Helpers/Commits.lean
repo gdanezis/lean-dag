@@ -548,7 +548,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         (h.keeps rfl (hg₁.keeps hb₁) hc) hc₁ (hh.grow hg₁ hb₁ rfl le_rfl)
         (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by rw [commitsOf_append]; unfold askOut; split <;> split <;> rfl) (step_deliver hA)
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
+    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
       exact hsame (by simp only [Node.step, if_neg h'])
   | timer r =>
@@ -571,9 +571,17 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · exact ⟨by simpa [commitsOf] using
-        (h.keeps (s' := record cfg s p k kh) rfl (Keeps.refl _) hc), hc⟩
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      rw [commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho), hn,
+        List.append_nil]
+      exact ⟨h.keeps rfl (Keeps.refl _) hc, hc⟩
     · exact ⟨by simpa [commitsOf] using h, hc⟩
+  | decisionRequest p lo =>
+    rw [step_decisionRequest, commitsOf_requests fun o ho => Or.inr (by
+      split at ho
+      · exact ⟨p, serveFrom_out s p lo o ho⟩
+      · simp at ho), List.append_nil]
+    exact ⟨h, hc⟩
   | baseRequest peer =>
     rw [show Node.step cfg s (.baseRequest peer) = (s, .serveBase peer s.store.base
       s.store.window :: s.cert.toList.map (fun c => .serveCert peer c

@@ -8,7 +8,9 @@ peers for their bases and certificates; once some round above its top
 has blocks offered by `f + 1` distinct peers and an offered certificate
 reaches it, it raises its horizon there, keeps those blocks, moves its
 top to that round with no block of its own there, takes the offered
-blocks above it, and outputs the certified decisions it lacks. Over a
+blocks above it, and outputs the certified decisions it lacks. A node
+not recovering adopts the certified decisions above its own that it
+asked for (§13.6). Over a
 trace of honest nodes `H` and an adversary, assume:
 
 * **timely authentication** (`Converge.TimelyAuthentic`): a block
@@ -21,7 +23,8 @@ trace of honest nodes `H` and an adversary, assume:
   height earlier;
 * **the hash** (`Converge.HashInjective`), and **the chain's hash**
   (`ChainInjective`): decisions served with a certificate to an honest
-  node have the head of no other prefix of an honest node's decisions.
+  node, after a prefix of its own, have the head of no other prefix of
+  an honest node's decisions.
 
 Then, at the bounded vote, with an admissible row and at most `f` nodes
 outside `H`:
@@ -61,14 +64,14 @@ def TimelyCerts (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     ∃ i < j, (tr[i]?.map Prod.fst) = some u ∧ Output.propose c.height c.head ∈ outputsAt cfg tr i
 
 /-- **The chain's hash**: decisions served with a certificate to an
-honest node have the head of no other prefix of an honest node's
-decisions. -/
+honest node, after a prefix of its own, have the head of no other prefix
+of an honest node's decisions. -/
 def ChainInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ (j : ℕ) v p (c : Cert Validator BlockId) ds, tr[j]? = some (v, Input.certOffer p c ds) →
-    v ∈ H → ∀ u ∈ H, ∀ k ≤ (decisionsOf cfg tr u).length,
-      cfg.headOf ds = cfg.headOf ((decisionsOf cfg tr u).take k) →
-        ds = (decisionsOf cfg tr u).take k
+    v ∈ H → ∀ pre, pre <+: decisionsOf cfg tr v → ∀ u ∈ H, ∀ k ≤ (decisionsOf cfg tr u).length,
+      cfg.headOf (pre ++ ds) = cfg.headOf ((decisionsOf cfg tr u).take k) →
+        pre ++ ds = (decisionsOf cfg tr u).take k
 
 /-- **A certificate carries an honest node's head**: one given to an
 honest node with `q` distinct signers carries the head of the chain of an

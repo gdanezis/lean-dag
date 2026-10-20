@@ -7,13 +7,9 @@ import Mathlib.Data.Finset.Sort
 input `i` in the state `s`: the new state and the outputs.
 
 * **Receipt** (`deliver`): a block whose identifier is its hash, not the
-  node's own, new, and above the horizon or vouched for at it (`takes`),
-  waits in `pending` until its references are accepted; it is then
-  accepted if it satisfies `rowValid q`, and dropped otherwise (`flush`).
-  A block at the horizon, whose references are pruned, is taken only if
-  pending blocks of `f + 1` authors lie above it (`vouched`), and pending
-  blocks the horizon reaches are kept only if so; a store's unchecked
-  blocks are then ones an honest node built on, or an attested base.
+  node's own, and new, waits in `pending` until its references are
+  accepted; it is then accepted if it satisfies `rowValid q`, and
+  dropped otherwise (`flush`).
 * **Building** (`tryBuild`): round `r + 1`, above the node's top `r`,
   once the store holds `q` authors of round `r` and either the round's
   timer fired or the block would reach every leader block of a slot
@@ -37,6 +33,13 @@ input `i` in the state `s`: the new state and the outputs.
   make a certificate, once the node's own decisions reach the height;
   the node keeps the highest, and serves it with the decisions it
   certifies.
+* **Adopting** (`adoptable`, `adopt`): a node that holds `q` signers'
+  proposals of one head at a height above its next undecided slot asks
+  them for the decisions certified from that slot up; served a
+  certificate above that slot with those decisions, whose chain extends
+  its own to the certificate's head, it outputs them and moves its next
+  slot to the certificate's height. Its horizon then rises with its
+  peers', so it takes the blocks at their horizon as they did.
 
 * **Fetching** (`walkLevel`, `missing`, `answer`): after a delivery, the missing part
   of the delivered block's history, walked through the pending blocks, is
@@ -129,6 +132,8 @@ structure State where
   /-- The candidate slot, an author and a round, each kept block was
   charged to. -/
   owner : List (BlockId × (Validator × ℕ))
+  /-- The highest height whose decisions the node asked for. -/
+  sought : ℕ
 
 variable (cfg : Config Validator BlockId Payload)
 
@@ -138,7 +143,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
   ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false, [], 0, [], 0, cfg.root, [], none, [],
-    []⟩
+    [], 0⟩
 
 /-- **Accept a block**: below the horizon it is dropped; at the horizon it
 is kept without its references, as the cut keeps it; above, it is kept if
@@ -164,26 +169,6 @@ def flush : ℕ → Store Validator BlockId Payload → List (BlockId × Block V
     let split := pend.partition fun e => ready s e.2
     if split.1.isEmpty then (s, pend)
     else flush fuel (split.1.foldl (fun s e => accept cfg s e.1 e.2) s) split.2
-
-/-- **The pending blocks above the block `id`**: those whose references,
-followed through pending blocks, reach `id`. -/
-def above (pend : List (BlockId × Block Validator BlockId Payload)) (id : BlockId) :
-    List (BlockId × Block Validator BlockId Payload) :=
-  (fun R => pend.filter fun e =>
-    decide (id ∈ e.2.refs) || R.any fun r => decide (r.1 ∈ e.2.refs))^[pend.length] []
-
-/-- **A block the node's pending blocks vouch for**: blocks of `f + 1`
-distinct authors pending above it, so an honest node built on it. -/
-def vouched (s : State Validator BlockId Payload) (id : BlockId) : Bool :=
-  decide (cfg.f + 1 ≤ ((above s.pending id).map (·.2.creator)).dedup.length)
-
-/-- **A delivered block the node takes, by its round**: above the horizon,
-where its references can be checked; or at the horizon, where they are
-pruned, if it is the genesis round or the node's pending blocks vouch for
-it. Junk at the horizon is then never taken: an honest block above it
-would need an honest node to have taken it first. -/
-abbrev takes (s : State Validator BlockId Payload) (id : BlockId) (r : ℕ) : Prop :=
-  s.store.base < r ∨ (s.store.base = r ∧ (r = 0 ∨ vouched cfg s id = true))
 
 /-- **The references of the node's next block**, above round `r`: one
 accepted block per author of round `r`, the node's own block `o` there
@@ -412,7 +397,7 @@ def tryBoot (s : State Validator BlockId Payload) :
           (s.store.prune G h.le)
         let win := if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter fun e =>
           decide (G < e.2.round ∧ e.1 = cfg.idOf e.2)
-        let pend := win ++ s.pending.filter fun e => G < e.2.round
+        let pend := win ++ s.pending.filter fun e => G ≤ e.2.round
         let fl := flush cfg (pend.length + 1) st₀ pend
         let s₁ := { s with store := fl.1, pending := fl.2, top := some G, own := none }
         let ads := ds.drop s.decided.length
@@ -526,8 +511,7 @@ def collect (s : State Validator BlockId Payload) :
     let G := min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag
     if h : s.store.base < G then
       let st := s.store.prune G h.le
-      let pend := s.pending.filter fun e => decide (G < e.2.round) ||
-        (decide (G = e.2.round) && vouched cfg s e.1)
+      let pend := s.pending.filter fun e => G ≤ e.2.round
       let req := s.requested.filter fun x => G ≤ x.2.2
       let s₁ := { s with store := st, pending := pend, fired := s.fired.filter (G ≤ ·) }
       ({ s₁ with requested := req, owner := s.owner.filter fun e => G ≤ e.2.2 }, [.prune G])
@@ -589,7 +573,7 @@ the node was away; recovering. -/
 def State.recover (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
   let s' := { s with pending := [], fired := (s.top.map fun t => {t}).getD ∅ }
   let s'' := { s' with requested := [], recovering := true, offers := [], asked := 0 }
-  { s'' with props := [], certs := [] }
+  { s'' with props := [], certs := [], sought := 0 }
 
 /-- **Resume from what was persisted**: the store rebuilt from the window
 at the horizon, if the window is closed under references one round below
@@ -608,7 +592,7 @@ def resume (ps : Persisted Validator BlockId Payload) : Option (State Validator 
     let st : Store Validator BlockId Payload :=
       ⟨map, ids, cfg.genesis, ps.horizon, h.1, h.2.1, h.2.2⟩
     some ⟨st, [], ps.top, ps.own, (ps.top.map fun t => {t}).getD ∅, ps.lo, [], true, [], 0,
-      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, [], ps.owner⟩
+      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, [], ps.owner, 0⟩
   else none
 
 /-- **Try to bootstrap** from what was offered: if the node bootstraps,
@@ -620,6 +604,50 @@ def bootFrom (s : State Validator BlockId Payload) :
     let r := advance cfg s₂
     (r.1, ads.map (fun e => .commit e.1 e.2) ++ r.2)
   | none => (s, [])
+
+/-- **Seek certified decisions**: once the proposals the node keeps hold
+`q` signers of the head `h` at a height `k` above its next undecided slot,
+and it has not asked up to `k`, ask the other signers for the decisions
+certified from that slot up. -/
+def seek (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
+    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
+  let signers := ((s.props.filter fun x => decide (x.2 = (k, h))).map Prod.fst).dedup
+  if cfg.q ≤ signers.length ∧ s.lo < k ∧ s.sought < k then
+    ({ s with sought := k }, (signers.filter (· ≠ cfg.me)).map fun p => .requestDecisions p s.lo)
+  else (s, [])
+
+/-- **Serve certified decisions** from slot `lo` up: the node's
+certificate, if above `lo`, with the decisions of slots `lo … height − 1`. -/
+def serveFrom (s : State Validator BlockId Payload) (peer : Validator) (lo : ℕ) :
+    List (Output Validator BlockId Payload) :=
+  match s.cert with
+  | some c =>
+    if lo < c.height ∧ c.height ≤ s.lo then
+      [.serveCert peer c ((s.decided.drop (s.lo - c.height)).take (c.height - lo)).reverse]
+    else []
+  | none => []
+
+/-- **Decisions the node can adopt**: a certificate of `q` distinct
+signers above its next undecided slot, served with the decisions of the
+slots from there to its height, in order, whose chain extends the node's
+own to the certificate's head. -/
+def adoptable (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
+    (ds : List (ℕ × Option BlockId)) : Bool :=
+  decide (cfg.q ≤ c.signers.length) && decide c.signers.Nodup && decide (s.lo < c.height) &&
+    decide (ds.map Prod.fst = List.range' s.lo (c.height - s.lo)) &&
+    decide (((s.decided.take (s.lo - s.lastProposed)).reverse ++ ds).foldl cfg.extend s.chain =
+      c.head)
+
+/-- **Adopt certified decisions**: output and keep them, move the next
+slot to the certificate's height, keep the certificate if higher, then
+settle. -/
+def adopt (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
+    (ds : List (ℕ × Option BlockId)) :
+    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
+  let ct := if s.certHeight < c.height then some c else s.cert
+  let s₁ := { s with decided := ds.reverse ++ s.decided, lo := c.height, cert := ct }
+  let r := settle cfg s₁
+  (r.1, ds.map (fun e => .commit e.1 e.2) ++ r.2)
 
 /-- **The node's transition function.** -/
 def step (s : State Validator BlockId Payload) :
@@ -640,8 +668,8 @@ def step (s : State Validator BlockId Payload) :
       else (s, [])
     else (s, [])
   | .deliver id b =>
-    if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
-        id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b then
+    if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
+        id ∉ s.pending.map Prod.fst ∧ kept cfg s id b then
       let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
       let s₁ := { s with store := fl.1, pending := fl.2, owner := charged cfg s id b ++ s.owner }
       let miss := askable cfg s₁ id (missing s₁ id b)
@@ -664,8 +692,10 @@ def step (s : State Validator BlockId Payload) :
     else (s, [])
   | .certOffer peer c ds =>
     if s.recovering ∧ peer ≠ cfg.me then bootFrom cfg { s with certs := (c, ds) :: s.certs }
+    else if peer ≠ cfg.me ∧ adoptable cfg s c ds then adopt cfg s c ds
     else (s, [])
-  | .proposal peer k h => if peer ≠ cfg.me then (record cfg s peer k h, []) else (s, [])
+  | .decisionRequest peer lo => (s, if peer ≠ cfg.me then serveFrom s peer lo else [])
+  | .proposal peer k h => if peer ≠ cfg.me then seek cfg (record cfg s peer k h) k h else (s, [])
 
 end Node
 

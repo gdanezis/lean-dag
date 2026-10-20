@@ -1,6 +1,7 @@
 import LeanDag.Node.Boot.Statement
 import LeanDag.Node.Helpers.Boot
 import LeanDag.Node.Helpers.Converge
+import LeanDag.Node.Helpers.Decided
 /-!
 # Bootstrapping nodes agree slot by slot
 
@@ -214,14 +215,26 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
     split at h
     · exact absurd h (serveBase_not_mem_bootFrom _)
     · simp at h
-  | certOffer q c =>
+  | certOffer q c ds =>
     rw [step_certOffer] at h
     split at h
     · exact absurd h (serveBase_not_mem_bootFrom _)
-    · simp at h
-  | proposal q k ds =>
+    · split at h
+      · rw [adopt_eq] at h
+        rcases List.mem_append.mp h with h | h
+        · obtain ⟨_, -, he⟩ := List.mem_map.mp h; cases he
+        · exact absurd h (serveBase_not_mem_settle _)
+      · simp at h
+  | proposal q k kh =>
     rw [step_proposal] at h
-    split at h <;> simp at h
+    split at h
+    · obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ h; cases he
+    · simp at h
+  | decisionRequest q lo =>
+    rw [step_decisionRequest] at h
+    split at h
+    · obtain ⟨_, _, he⟩ := serveFrom_out s q lo _ h; cases he
+    · simp at h
 
 /-- **The offers a node holds were given to it before.** -/
 theorem offers_before (v : Validator) : ∀ (t : ℕ), ∀ o ∈ (stateBefore cfg tr t v).offers,
@@ -480,16 +493,49 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
             obtain ⟨hk, hkh⟩ := propose_head hi' hprop
             have hpre := commits_prefix (cfg := cfg) (tr := tr) u (i + 1)
             have htk := take_of_prefix hpre hk
-            have hds := hchain j w p x.1 x.2 hj' hv u huH x.1.height
-              (hk.trans hpre.length_le) (by rw [htk, ← hkh]; exact hhd)
-            rw [htk] at hds
+            have hds := hchain j w p x.1 x.2 hj' hv [] (List.nil_prefix) u huH x.1.height
+              (hk.trans hpre.length_le) (by rw [htk, ← hkh, List.nil_append]; exact hhd)
+            rw [htk, List.nil_append] at hds
             rw [hds] at he
             exact (ih (i + 1) (by omega) u huH).2 e (List.mem_of_mem_take he)
+          -- adopted decisions are an honest signer's
+          have hadopt : ∀ p c ds, inp = .certOffer p c ds →
+              adoptable (cfg.at w) (stateBefore cfg tr t w) c ds = true →
+              ∀ e ∈ ds, Verdict (cfg.at w) U e := by
+            intro p c ds hinp ha e he
+            have hj' : tr[t]? = some (w, .certOffer p c ds) := by rw [hj, hinp]
+            obtain ⟨hap, hL⟩ := run_appends (cfg := cfg.at w) (inputsBefore tr t w)
+              (Ledger.init (cfg := cfg.at w))
+            have hD : (stateBefore cfg tr t w).decided.reverse =
+                commitsOf (run (cfg.at w) (State.init (cfg.at w)) (inputsBefore tr t w)).2 := by
+              have := hap.1
+              rw [show (State.init (cfg.at w)).decided.reverse = [] from rfl,
+                List.nil_append] at this
+              exact this
+            have hhead : (cfg.at w).headOf (commitsOf (run (cfg.at w) (State.init (cfg.at w))
+                (inputsBefore tr t w)).2 ++ ds) = c.head := by
+              rw [← hD]; exact adoptable_head hL ha
+            unfold adoptable at ha
+            simp only [Bool.and_eq_true, decide_eq_true_eq] at ha
+            obtain ⟨u, hu, huH⟩ := exists_mem_of_length hf ha.1.1.1.2
+              (by have := hadm.2.2.2.2.2; have := ha.1.1.1.1; change cfg.q ≤ _ at this; omega)
+            obtain ⟨i, hit, hiu, hprop⟩ := hcert t w p c ds hj' hv u hu huH
+            obtain ⟨inp', hi'⟩ := Converge.event_of_map hiu
+            obtain ⟨hk, hkh⟩ := propose_head hi' hprop
+            have hpre := commits_prefix (cfg := cfg) (tr := tr) u (i + 1)
+            have htk := take_of_prefix hpre hk
+            have hds := hchain t w p c ds hj' hv _ (commits_prefix (cfg := cfg) (tr := tr) w t)
+              u huH c.height (hk.trans hpre.length_le) (by rw [htk, ← hkh]; exact hhead)
+            rw [htk] at hds
+            have he' : e ∈ (commitsOf (run (cfg.at u) (State.init (cfg.at u))
+                (inputsBefore tr (i + 1) u)).2).take c.height := by
+              rw [← hds]; exact List.mem_append_right _ he
+            exact (ih (i + 1) (by omega) u huH).2 e (List.mem_of_mem_take he')
           obtain ⟨hc', hv'⟩ := IsCut.step (cfg := cfg.at w) hg hσ ht inp hc hh
             (fun e he => hK w hv e (knownBefore_knownOf (hi.pend e he)))
             (fun o ho e he hid => hK w hv e (knownBefore_knownOf (hi.offered o ho e he hid)))
             (fun e he => hK w hv e (hd e he))
-            (fun e he => hK w hv e (hb e he)) hcv hspan
+            (fun e he => hK w hv e (hb e he)) hcv hspan hadopt
           refine ⟨by rw [stateBefore_succ hj, if_pos rfl]; exact hc', fun e he => ?_⟩
           rw [inputsBefore_succ hj, if_pos rfl, run_append_single, commitsOf_append] at he
           rcases List.mem_append.mp he with he | he

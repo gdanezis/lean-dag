@@ -198,11 +198,18 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]
     exact ⟨trivial, fun r h => Or.inl h⟩
   | certOffer p c ds =>
-    simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]
-    exact ⟨trivial, fun r h => Or.inl h⟩
+    rw [step_certOffer, if_neg (by simp [hs])]
+    split
+    · rw [adopt_eq]
+      have k := key (adopted s c ds) hs
+      exact ⟨k.1, fun r h => Or.inl (k.2 h)⟩
+    · exact ⟨hs, fun r h => Or.inl h⟩
   | proposal p k h =>
-    simp only [Node.step, record]
-    split <;> exact ⟨hs, fun r h => Or.inl h⟩
+    rw [step_proposal]
+    split
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k h) k h
+      rw [hn]; exact ⟨hs, fun r h => Or.inl h⟩
+    · exact ⟨hs, fun r h => Or.inl h⟩
   | _ => exact ⟨hs, fun r h => Or.inl h⟩
 
 /-- **Along a trace without restarts at `v`**, node `v` never recovers,
@@ -378,11 +385,16 @@ theorem OwnTop.step {s : State Validator BlockId Payload} {inp : Input Validator
   | baseOffer p G bs =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact h
   | certOffer p c ds =>
-    simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact h
-  | proposal p k kh =>
-    simp only [Node.step, record]
+    rw [step_certOffer, if_neg (by simp [hs])]
     split
-    · exact h.grow (Grows.refl _) rfl rfl rfl
+    · rw [adopt_eq]
+      exact OwnTop.settle (h.grow (s' := adopted s c ds) (Grows.refl _) rfl rfl rfl) hs
+    · exact h
+  | proposal p k kh =>
+    rw [step_proposal]
+    split
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      rw [hn]; exact h.grow (Grows.refl _) rfl rfl rfl
     · exact h
   | _ => exact h
 
@@ -561,7 +573,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       rcases List.mem_append.mp he with he | he
       · split at he <;> simp [persists] at he
       · unfold askOut at he; split at he <;> simp [persists] at he
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
+    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
       exact hsame (by simp only [Node.step, if_neg h'])
   | timer r =>
@@ -575,11 +587,29 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
   | baseOffer p G bs =>
     exact hsame (by simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false])
   | certOffer p c ds =>
-    exact hsame (by simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false])
+    by_cases ha : p ≠ cfg.me ∧ adoptable cfg s c ds = true
+    · refine hset (adopted s c ds) (ds.map fun e => .commit e.1 e.2)
+        ⟨hc, hh.grow (Grows.refl _) rfl rfl (adoptable_lo ha.2).le,
+          hown.grow (Grows.refl _) rfl rfl rfl, Grows.refl _, rfl, fun r hr => Or.inl hr⟩ hs
+        (fun e he => by rw [persists_commits] at he; exact absurd he List.not_mem_nil) ?_
+      rw [step_certOffer, if_neg (by simp [hs]), if_pos ha, adopt_eq]
+    · exact hsame (by rw [step_certOffer, if_neg (by simp [hs]), if_neg ha])
   | proposal p k kh =>
     intro e he
     rw [step_proposal] at he
-    split at he <;> simp [persists] at he
+    split at he
+    · have hq := (out_quiet (xs := (seek cfg (record cfg s p k kh) k kh).2) fun o ho => by
+        obtain ⟨_, _, rfl⟩ := seek_out (cfg := cfg) _ k kh o ho; rfl).1
+      rw [hq] at he; exact absurd he List.not_mem_nil
+    · simp [persists] at he
+  | decisionRequest p lo =>
+    intro e he
+    rw [step_decisionRequest] at he
+    have hq := (out_quiet (xs := if p ≠ cfg.me then serveFrom s p lo else []) fun o ho => by
+      split at ho
+      · obtain ⟨_, _, rfl⟩ := serveFrom_out s p lo o ho; rfl
+      · simp at ho).1
+    rw [hq] at he; exact absurd he List.not_mem_nil
   | fetchRequest peer G ids =>
     intro e he
     change e ∈ persists (answer s peer G ids) at he
@@ -701,11 +731,24 @@ theorem timersBuilt_step {s : State Validator BlockId Payload}
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]
     exact TimersBuilt.of_none fun _ _ h => by simp at h
   | certOffer p c ds =>
-    simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]
-    exact TimersBuilt.of_none fun _ _ h => by simp at h
+    rw [step_certOffer, if_neg (by simp [hs])]
+    split
+    · rw [adopt_eq]
+      refine (TimersBuilt.of_none fun r a h => ?_).append (hset _ hs)
+      obtain ⟨_, -, he⟩ := List.mem_map.mp h; cases he
+    · exact TimersBuilt.of_none fun _ _ h => by simp at h
   | proposal p k kh =>
-    simp only [Node.step]
-    split <;> exact TimersBuilt.of_none fun _ _ h => by simp at h
+    rw [step_proposal]
+    split
+    · exact TimersBuilt.of_none fun r a h => by
+        obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ h; cases he
+    · exact TimersBuilt.of_none fun _ _ h => by simp at h
+  | decisionRequest p lo =>
+    rw [step_decisionRequest]
+    refine TimersBuilt.of_none fun r a h => ?_
+    split at h
+    · obtain ⟨_, _, he⟩ := serveFrom_out s p lo _ h; cases he
+    · simp at h
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- **A cut's paths are the record's**: what a stored block reaches in the
@@ -903,10 +946,16 @@ theorem retains_step {s : State Validator BlockId Payload} {inp : Input Validato
   | baseOffer p G bs =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact Retains.refl _
   | certOffer p c ds =>
-    simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact Retains.refl _
+    rw [step_certOffer, if_neg (by simp [hs])]
+    split
+    · rw [adopt_eq]; exact hset (adopted s c ds) hs (Grows.refl _) rfl
+    · exact Retains.refl _
   | proposal p k kh =>
-    simp only [Node.step, record]
-    split <;> exact Retains.refl _
+    rw [step_proposal]
+    split
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      rw [hn]; exact Retains.refl _
+    · exact Retains.refl _
   | _ => exact Retains.refl _
 
 end Node

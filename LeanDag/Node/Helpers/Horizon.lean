@@ -363,11 +363,18 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     rw [step_certOffer]
     split
     · exact (h.grow (s' := withCert s c ds) (Grows.refl _) rfl rfl le_rfl).bootFrom
-    · exact h
+    · split
+      · rename_i ha
+        rw [adopt_eq]
+        exact Held.settle (h.grow (s' := adopted s c ds) (Grows.refl _) rfl rfl
+          (adoptable_lo ha.2).le)
+      · exact h
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · exact h.grow (s' := record cfg s p k kh) (Grows.refl _) rfl rfl le_rfl
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      rw [hn]
+      exact h.grow (Grows.refl _) rfl rfl le_rfl
     · exact h
   | _ => exact h
 

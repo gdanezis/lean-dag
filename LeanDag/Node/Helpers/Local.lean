@@ -377,6 +377,70 @@ theorem Inv.of_eq {s s' : State Validator BlockId Payload}
     by rw [hof]; exact hi.offered⟩
 
 omit [Fintype Validator] in
+/-- **Seeking decisions** changes only the height sought. -/
+theorem seek_eq (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
+    ∃ n, (seek cfg s k h).1 = { s with sought := n } := by
+  unfold seek
+  dsimp only
+  split
+  · exact ⟨k, rfl⟩
+  · exact ⟨s.sought, rfl⟩
+
+omit [Fintype Validator] in
+/-- Seeking decisions outputs only requests for them. -/
+theorem seek_out (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
+    ∀ o ∈ (seek cfg s k h).2, ∃ p lo, o = .requestDecisions p lo := by
+  unfold seek
+  dsimp only
+  split
+  · intro o ho
+    obtain ⟨p, -, rfl⟩ := List.mem_map.mp ho
+    exact ⟨p, _, rfl⟩
+  · simp
+
+omit [Fintype Validator] in
+/-- Serving decisions outputs only certificates. -/
+theorem serveFrom_out (s : State Validator BlockId Payload) (peer : Validator) (lo : ℕ) :
+    ∀ o ∈ serveFrom s peer lo, ∃ c ds, o = .serveCert peer c ds := by
+  unfold serveFrom
+  split
+  · split
+    · intro o ho
+      rw [List.mem_singleton] at ho
+      exact ⟨_, _, ho⟩
+    · simp
+  · simp
+
+/-- The state adopting certified decisions settles. -/
+def adopted (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
+    (ds : List (ℕ × Option BlockId)) : State Validator BlockId Payload :=
+  let ct := if s.certHeight < c.height then some c else s.cert
+  { s with decided := ds.reverse ++ s.decided, lo := c.height, cert := ct }
+
+omit [Fintype Validator] [LinearOrder BlockId] in
+theorem commitsOf_requests {xs : List (Output Validator BlockId Payload)}
+    (h : ∀ o ∈ xs, (∃ p lo, o = .requestDecisions p lo) ∨ ∃ p c ds, o = .serveCert p c ds) :
+    commitsOf xs = [] := by
+  unfold commitsOf
+  refine List.filterMap_eq_nil_iff.mpr fun o ho => ?_
+  rcases h o ho with ⟨_, _, rfl⟩ | ⟨_, _, _, rfl⟩ <;> rfl
+
+omit [Fintype Validator] in
+/-- Adoptable decisions lie above the next undecided slot. -/
+theorem adoptable_lo {s : State Validator BlockId Payload} {c : Cert Validator BlockId}
+    {ds : List (ℕ × Option BlockId)} (h : adoptable cfg s c ds = true) : s.lo < c.height := by
+  unfold adoptable at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  exact h.1.1.2
+
+omit [Fintype Validator] in
+/-- **Adopting certified decisions** outputs them, then settles. -/
+theorem adopt_eq (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
+    (ds : List (ℕ × Option BlockId)) :
+    adopt cfg s c ds = ((Node.settle cfg (adopted s c ds)).1,
+      ds.map (fun e => .commit e.1 e.2) ++ (Node.settle cfg (adopted s c ds)).2) := rfl
+
+omit [Fintype Validator] in
 /-- **Proposing** keeps everything but the proposals, the certificate and
 the height last proposed. -/
 theorem proposeAt_keeps (s : State Validator BlockId Payload) :
@@ -693,7 +757,7 @@ theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ �
       let st₀ := (keptBase cfg (baseAt cfg s G)).foldl (fun st e => accept cfg st e.1 e.2)
         (s.store.prune G hb.le)
       let pend := (if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun e =>
-        decide (G < e.2.round ∧ e.1 = cfg.idOf e.2))) ++ s.pending.filter fun e => G < e.2.round
+        decide (G < e.2.round ∧ e.1 = cfg.idOf e.2))) ++ s.pending.filter fun e => G ≤ e.2.round
       s'.store = (flush cfg (pend.length + 1) st₀ pend).1 ∧
       s'.pending = (flush cfg (pend.length + 1) st₀ pend).2 ∧
       s'.top = some G ∧ s'.own = none ∧ s'.lo = max s.lo c.height ∧
@@ -778,9 +842,9 @@ theorem Inv.tryBoot {s s' : State Validator BlockId Payload}
   have hfl := flush_known (cfg := cfg) (K := K)
     (((if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun x =>
       decide (G < x.2.round ∧ x.1 = cfg.idOf x.2))) ++
-      s.pending.filter fun x => G < x.2.round).length + 1) h₀.1 h₀.2.2 (pend :=
+      s.pending.filter fun x => G ≤ x.2.round).length + 1) h₀.1 h₀.2.2 (pend :=
     (if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun x =>
-      decide (G < x.2.round ∧ x.1 = cfg.idOf x.2))) ++ s.pending.filter fun x => G < x.2.round)
+      decide (G < x.2.round ∧ x.1 = cfg.idOf x.2))) ++ s.pending.filter fun x => G ≤ x.2.round)
     (fun x hx => by
       rcases List.mem_append.mp hx with hx | hx
       · obtain ⟨hx, -, hc⟩ := mem_bootWindow hx
@@ -950,7 +1014,15 @@ theorem Inv.step {s : State Validator BlockId Payload}
     simp only [Node.step]
     split
     · have h₁ : Inv cfg (record cfg s peer k h) K' B := (hi.mono hsub).of_eq rfl rfl rfl rfl
-      exact ⟨[], ⟨rfl, rfl⟩, by simpa using h₁⟩
+      unfold seek
+      dsimp only
+      split
+      · have h₂ : Inv cfg { record cfg s peer k h with sought := k } K' B :=
+          h₁.of_eq rfl rfl rfl rfl
+        refine ⟨[], out_quiet fun o ho => ?_, by simpa using h₂⟩
+        obtain ⟨_, -, rfl⟩ := List.mem_map.mp ho
+        rfl
+      · exact ⟨[], ⟨rfl, rfl⟩, by simpa using h₁⟩
     · exact hnil'
   | certOffer peer c ds =>
     simp only [Node.step]
@@ -958,7 +1030,23 @@ theorem Inv.step {s : State Validator BlockId Payload}
     · have h₁ : Inv cfg { s with certs := (c, ds) :: s.certs } K' B :=
         (hi.mono hsub).of_eq rfl rfl rfl rfl
       exact h₁.bootFrom
-    · exact hnil'
+    · split
+      · unfold adopt
+        dsimp only
+        refine Inv.settle_of (K := K') ?_ subset_rfl _ (quiet_commits ds)
+        exact (hi.mono hsub).of_eq rfl rfl rfl rfl
+      · exact hnil'
+  | decisionRequest peer lo =>
+    simp only [Node.step]
+    refine hnil _ fun o ho => ?_
+    split at ho
+    · unfold serveFrom at ho
+      split at ho
+      · split at ho
+        · rw [List.mem_singleton] at ho; subst ho; rfl
+        · simp at ho
+      · simp at ho
+    · simp at ho
   | baseOffer peer G bs =>
     simp only [Node.step]
     split

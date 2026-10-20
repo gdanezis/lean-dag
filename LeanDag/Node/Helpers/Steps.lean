@@ -192,18 +192,12 @@ theorem settle_sub (s : State Validator BlockId Payload) :
     have := advance_sub (cfg := cfg) s₁
     exact ⟨fun e he => hpd ▸ this.1 e he, fun e he => hrq ▸ this.2 e he⟩
 
-omit [Fintype Validator] in
-/-- A block the node takes lies at or above its horizon. -/
-theorem takes.le {s : State Validator BlockId Payload} {id : BlockId} {r : ℕ}
-    (h : takes cfg s id r) : s.store.base ≤ r := by
-  rcases h with h | ⟨h, -⟩ <;> omega
-
 variable (cfg) in
 /-- **A delivery the node acts on**: identified by its hash, not the
 node's own, at or above the horizon, new, and kept by the rate limiter. -/
 def Admits (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : Prop :=
-  id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧ id ∉ s.store.ids ∧
+  id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
     id ∉ s.pending.map Prod.fst ∧ kept cfg s id b
 
 /-- The state a delivery the node acts on settles: the store and pending
@@ -236,8 +230,8 @@ theorem step_deliver {s : State Validator BlockId Payload} {id : BlockId}
       ((Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).1,
         (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b ++
           (Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).2) := by
-  have h' : id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
-      id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b := h
+  have h' : id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
+      id ∉ s.pending.map Prod.fst ∧ kept cfg s id b := h
   simp only [Node.step]
   rw [if_pos h']
   rfl
@@ -260,12 +254,17 @@ def withCert (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
 theorem step_certOffer {s : State Validator BlockId Payload} {p : Validator}
     {c : Cert Validator BlockId} {ds : List (ℕ × Option BlockId)} :
     Node.step cfg s (.certOffer p c ds) =
-      if s.recovering ∧ p ≠ cfg.me then bootFrom cfg (withCert s c ds) else (s, []) := rfl
+      if s.recovering ∧ p ≠ cfg.me then bootFrom cfg (withCert s c ds)
+      else if p ≠ cfg.me ∧ adoptable cfg s c ds then adopt cfg s c ds else (s, []) := rfl
 
 theorem step_proposal {s : State Validator BlockId Payload} {p : Validator} {k : ℕ}
     {kh : BlockId} :
     Node.step cfg s (.proposal p k kh) =
-      if p ≠ cfg.me then (record cfg s p k kh, []) else (s, []) := rfl
+      if p ≠ cfg.me then seek cfg (record cfg s p k kh) k kh else (s, []) := rfl
+
+theorem step_decisionRequest {s : State Validator BlockId Payload} {p : Validator} {lo : ℕ} :
+    Node.step cfg s (.decisionRequest p lo) =
+      (s, if p ≠ cfg.me then serveFrom s p lo else []) := rfl
 
 /-- **An offer**: a base or a certificate. -/
 def Input.isOffer : Input Validator BlockId Payload → Prop
@@ -358,7 +357,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
         · exact flush_keeps _ hRs hpb hf (List.mem_cons_of_mem _ hy)
         · have hg := Grows.flush (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
           exact Or.inr ((hg.2 (hfl.1.1.trans hRs.1.symm)).1 hy)
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
+    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc
       simp only [Node.step, if_neg h']; exact hy
   | timer r =>
@@ -373,15 +372,21 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
       rw [bootFrom_of_base (s := withOffer s p G bs) hb]; exact hy
     · rw [if_neg hc]; exact hy
   | certOffer p c ds =>
-    rw [step_certOffer] at hR hb ⊢
     by_cases hc : s.recovering ∧ p ≠ cfg.me
-    · rw [if_pos hc] at hb ⊢
+    · rw [step_certOffer, if_pos hc] at hb ⊢
       rw [bootFrom_of_base (s := withCert s c ds) hb]; exact hy
-    · rw [if_neg hc]; exact hy
+    · by_cases ha : p ≠ cfg.me ∧ adoptable cfg s c ds = true
+      · exact hset (adopted s c ds) (by rw [step_certOffer, if_neg hc, if_pos ha, adopt_eq])
+          (Grows.refl _) rfl hp hy
+      · rw [step_certOffer, if_neg hc, if_neg ha]; exact hy
   | proposal p k kh =>
     rw [step_proposal]
-    split <;> exact hy
+    split
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      rw [hn]; exact hy
+    · exact hy
   | baseRequest => exact hy
+  | decisionRequest => exact hy
 
 omit [Fintype Validator] in
 /-- **Trying to bootstrap adds pending blocks only from the offers**, and
@@ -445,7 +450,7 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
         · exact Or.inl he
         · obtain ⟨x, -, rfl⟩ := List.mem_map.mp he
           exact Or.inr ⟨b, rfl, hc⟩
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
+    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc
       simp only [Node.step, if_neg h']
       exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
@@ -467,10 +472,18 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
     by_cases hc : s.recovering ∧ p ≠ cfg.me
     · rw [if_pos hc]
       exact bootFrom_sub (s := s) (withCert s c ds) ⟨rfl, rfl⟩ trivial
-    · rw [if_neg hc]; exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
+    · rw [if_neg hc]
+      split
+      · rw [adopt_eq]
+        have := settle_sub (cfg := cfg) (adopted s c ds)
+        exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
+      · exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
   | proposal p k kh =>
     rw [step_proposal]
-    split <;> exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
+    split
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      rw [hn]; exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
+    · exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
   | _ => exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
 
 omit [Fintype Validator] in
@@ -628,7 +641,7 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
         · simp at ho
         · rw [List.mem_singleton] at ho; subst ho; rfl
       · exact askOut_isQuiet o ho
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
+    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc
       simp only [Node.step, if_neg h']; simp [persists]
   | timer r =>
@@ -651,10 +664,30 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
     by_cases hc : s.recovering ∧ p ≠ cfg.me
     · rw [if_pos hc] at hb ⊢
       rw [bootFrom_of_base (s := withCert s c ds) hb]; intro e he; simp [persists] at he
-    · rw [if_neg hc]; intro e he; simp [persists] at he
+    · rw [if_neg hc] at hb ⊢
+      split at hb
+      · rename_i ha
+        rw [adopt_eq] at hb
+        rw [if_pos ha, adopt_eq]
+        exact settle_persist_of (s₀ := adopted s c ds) (Or.inl (persists_commits ds)) hb
+      · rename_i ha
+        rw [if_neg ha]; intro e he; simp [persists] at he
   | proposal p k kh =>
     rw [step_proposal]
-    split <;> (intro e he; simp [persists] at he)
+    split
+    · intro e he
+      have hq := (out_quiet (xs := (seek cfg (record cfg s p k kh) k kh).2) fun o ho => by
+        obtain ⟨_, _, rfl⟩ := seek_out (cfg := cfg) _ k kh o ho; rfl).1
+      rw [hq] at he; exact absurd he List.not_mem_nil
+    · intro e he; simp [persists] at he
+  | decisionRequest p lo =>
+    intro e he
+    rw [step_decisionRequest] at he
+    have hq := (out_quiet (xs := if p ≠ cfg.me then serveFrom s p lo else []) fun o ho => by
+      split at ho
+      · obtain ⟨_, _, rfl⟩ := serveFrom_out s p lo o ho; rfl
+      · simp at ho).1
+    rw [hq] at he; exact absurd he List.not_mem_nil
   | _ => intro e he; simp [Node.step, persists] at he
 
 /-- No pending block is ready. -/
@@ -688,7 +721,7 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady s)
   | deliver id b =>
     by_cases hc : Admits cfg s id b
     · rw [step_deliver hc]; exact noReady_settle _
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
+    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc
       simp only [Node.step, if_neg h']; exact h
   | timer r => exact noReady_settle _
@@ -702,11 +735,14 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady s)
     rw [step_certOffer]
     split
     · exact noReady_bootFrom h
-    · exact h
+    · split
+      · rw [adopt_eq]; exact noReady_settle _
+      · exact h
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · exact h
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      rw [hn]; exact h
     · exact h
   | _ => exact h
 

@@ -179,9 +179,11 @@ inductive Input where
   /-- A peer's signed proposal of the head `h` of the chain of the
   decisions of slots `0 … k − 1`. -/
   | proposal (peer : Validator) (k : ℕ) (h : BlockId)
-  /-- A peer's certificate, served with its base, and the decisions it
-  certifies. -/
+  /-- A peer's certificate, with the decisions it certifies: all of them,
+  served with its base, or those from a slot asked for. -/
   | certOffer (peer : Validator) (c : Cert Validator BlockId) (ds : List (ℕ × Option BlockId))
+  /-- A peer asks for the decisions certified from slot `lo` up. -/
+  | decisionRequest (peer : Validator) (lo : ℕ)
 
 /-- **What a node produces.** -/
 inductive Output where
@@ -209,6 +211,8 @@ inductive Output where
   | propose (k : ℕ) (h : BlockId)
   /-- Send the certificate to a peer, with the decisions it certifies. -/
   | serveCert (peer : Validator) (c : Cert Validator BlockId) (ds : List (ℕ × Option BlockId))
+  /-- Ask a peer for the decisions it certified from slot `lo` up. -/
+  | requestDecisions (peer : Validator) (lo : ℕ)
 
 end Node
 

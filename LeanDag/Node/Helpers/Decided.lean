@@ -299,6 +299,55 @@ theorem bootFrom_appends {s : State Validator BlockId Payload} (hL : Ledger cfg 
         obtain ⟨e, -, he⟩ := List.mem_map.mp hp; cases he⟩
     exact ⟨h₁.trans h₃, hL₃⟩
 
+omit [Fintype Validator] in
+/-- **Adoptable decisions extend the node's chain to the certificate's
+head.** -/
+theorem adoptable_head {s : State Validator BlockId Payload} (hL : Ledger cfg s)
+    {c : Cert Validator BlockId} {ds : List (ℕ × Option BlockId)}
+    (ha : adoptable cfg s c ds = true) : cfg.headOf (s.decided.reverse ++ ds) = c.head := by
+  unfold adoptable at ha
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at ha
+  have hlen : s.decided.reverse.length = s.lo := by rw [List.length_reverse]; exact hL.length
+  have hcs := chain_step (cfg := cfg) (D := s.decided.reverse) hL.2.1 (le_of_eq hlen.symm)
+  have hX : ((s.decided.take (s.lo - s.lastProposed)).reverse).take (s.lo - s.lastProposed) =
+      (s.decided.take (s.lo - s.lastProposed)).reverse :=
+    List.take_of_length_le (by simp)
+  rw [List.reverse_reverse, hlen, hX, ← hL.2.2, List.take_of_length_le (le_of_eq hlen)] at hcs
+  rw [← ha.2, List.foldl_append, hcs, Config.headOf, Config.headOf, List.foldl_append]
+
+omit [Fintype Validator] in
+/-- **Adopting certified decisions appends them**, and keeps the ledger. -/
+theorem adopt_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
+    {c : Cert Validator BlockId} {ds : List (ℕ × Option BlockId)}
+    (ha : adoptable cfg s c ds = true) :
+    Appends cfg s (adopt cfg s c ds).2 (adopt cfg s c ds).1 ∧ Ledger cfg (adopt cfg s c ds).1 := by
+  have hlt := adoptable_lo ha
+  unfold adoptable at ha
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at ha
+  have hds := ha.1.2
+  have hlen : s.decided.length = s.lo := hL.length
+  have hD : (adopted s c ds).decided.reverse = s.decided.reverse ++ ds := by
+    simp [adopted, List.reverse_append]
+  have hlp' : s.lastProposed ≤ s.decided.reverse.length := by
+    rw [List.length_reverse, hlen]; exact hL.2.1
+  have hL₁ : Ledger cfg (adopted s c ds) := by
+    refine ⟨?_, ?_, ?_⟩
+    · rw [hD, List.map_append, hL.1, hds]
+      change List.range s.lo ++ List.range' s.lo (c.height - s.lo) = List.range c.height
+      obtain ⟨k, hk⟩ := Nat.exists_eq_add_of_le hlt.le
+      rw [hk, Nat.add_sub_cancel_left, List.range_add, List.range'_eq_map_range]
+    · exact hL.2.1.trans hlt.le
+    · change s.chain = cfg.headOf ((adopted s c ds).decided.reverse.take s.lastProposed)
+      rw [hD, List.take_append_of_le_length hlp']; exact hL.2.2
+  rw [adopt_eq]
+  obtain ⟨h₂, hL₂⟩ := settle_appends (cfg := cfg) hL₁
+  have h₁ : Appends cfg s
+      (ds.map fun e => (Output.commit e.1 e.2 : Output Validator BlockId Payload))
+      (adopted s c ds) :=
+    ⟨by rw [hD, commitsOf_map], fun k h hp => by
+      obtain ⟨e, -, he⟩ := List.mem_map.mp hp; cases he⟩
+  exact ⟨h₁.trans h₂, hL₂⟩
+
 /-- **A step appends its decisions**, and keeps the ledger. -/
 theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
     (i : Input Validator BlockId Payload) :
@@ -356,8 +405,25 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · exact ⟨Appends.quiet rfl rfl (by simp), hL.of_eq rfl rfl rfl rfl⟩
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      rw [hn]
+      refine ⟨Appends.quiet rfl
+        (commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho))
+        fun k' h' hk => ?_, hL.of_eq rfl rfl rfl rfl⟩
+      obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ hk
+      cases he
     · exact ⟨Appends.refl s, hL⟩
+  | decisionRequest p lo =>
+    rw [step_decisionRequest]
+    have hout : ∀ o ∈ (if p ≠ cfg.me then serveFrom s p lo else []), ∃ c ds,
+        o = Output.serveCert p c ds := fun o ho => by
+      split at ho
+      · exact serveFrom_out s p lo o ho
+      · simp at ho
+    refine ⟨Appends.quiet rfl
+      (commitsOf_requests fun o ho => Or.inr ⟨p, hout o ho⟩) fun k h hk => ?_, hL⟩
+    obtain ⟨_, _, he⟩ := hout _ hk
+    cases he
   | baseOffer p G bs =>
     rw [step_offer]
     split
@@ -367,7 +433,10 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
     rw [step_certOffer]
     split
     · exact bootFrom_appends (s := withCert s c ds) hL
-    · exact ⟨Appends.refl s, hL⟩
+    · split
+      · rename_i ha
+        exact adopt_appends hL ha.2
+      · exact ⟨Appends.refl s, hL⟩
 
 /-- **A run appends its decisions**, and keeps the ledger. -/
 theorem run_appends : ∀ (is : List (Input Validator BlockId Payload))

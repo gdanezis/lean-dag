@@ -147,7 +147,11 @@ theorem step_offered (s : State Validator BlockId Payload) (i : Input Validator 
   | baseRequest => exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
   | proposal p k kh =>
     rw [step_proposal]
-    split <;> exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+    split
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      rw [hn]; exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+    · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+  | decisionRequest => exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
   | baseOffer p G bs =>
     rw [step_offer]
     split
@@ -165,7 +169,10 @@ theorem step_offered (s : State Validator BlockId Payload) (i : Input Validator 
       rcases List.mem_cons.mp (h₂ c' hc) with rfl | hc
       · exact Or.inr ⟨p, rfl⟩
       · exact Or.inl hc
-    · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+    · split
+      · rw [adopt_eq, (settle_offered _).1, (settle_offered _).2]
+        exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+      · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
 
 /-! ## The store stays a cut -/
 
@@ -350,7 +357,9 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (hb : ∀ e ∈ persists (Node.step cfg s i).2, e ∈ K)
     (hcv : ∀ x ∈ (withInput s i).certs, cfg.q ≤ x.1.signers.length → x.1.signers.Nodup →
       cfg.headOf x.2 = x.1.head → ∀ e ∈ x.2, Verdict cfg U e)
-    (hspan : ∀ s₂ ads, tryBoot cfg (withInput s i) = some (s₂, ads) → Spans U s₂.store.base) :
+    (hspan : ∀ s₂ ads, tryBoot cfg (withInput s i) = some (s₂, ads) → Spans U s₂.store.base)
+    (hadopt : ∀ p c ds, i = .certOffer p c ds → adoptable cfg s c ds = true →
+      ∀ e ∈ ds, Verdict cfg U e) :
     IsCut U (Node.step cfg s i).1.store ∧
       ∀ e ∈ commitsOf (Node.step cfg s i).2, Verdict cfg U e := by
   have hset : ∀ (s₀ : State Validator BlockId Payload) (pre : List (Output Validator BlockId Payload)),
@@ -416,7 +425,7 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         (IsCut.flush hg _ _ hc (hc.spans hh) hpend) (hh.grow hg₁ hb₁ rfl le_rfl)
         (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by rw [commitsOf_append]; unfold askOut; split <;> split <;> rfl) (step_deliver hA)
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
+    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
       exact hsame s rfl (by simp only [Node.step, if_neg h'])
   | timer r =>
@@ -440,8 +449,16 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | proposal p k kh =>
     rw [step_proposal]
     split
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      rw [hn, commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho)]
+      exact ⟨hc, fun e he => absurd he List.not_mem_nil⟩
     · exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
-    · exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
+  | decisionRequest p lo =>
+    rw [step_decisionRequest, commitsOf_requests fun o ho => Or.inr (by
+      split at ho
+      · exact ⟨p, serveFrom_out s p lo o ho⟩
+      · simp at ho)]
+    exact ⟨hc, fun e he => absurd he List.not_mem_nil⟩
   | baseOffer p G bs =>
     by_cases hcnd : s.recovering ∧ p ≠ cfg.me
     · rw [step_offer, if_pos hcnd] at hb ⊢
@@ -459,7 +476,18 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     · rw [step_certOffer, if_pos hcnd] at hb ⊢
       exact IsCut.bootFrom hg hσ ht (s₁ := withCert s c ds) hc
         (hh.grow (s' := withCert s c ds) (Grows.refl _) rfl rfl le_rfl) hp hoff hcv hb hspan
-    · exact hsame s rfl (by rw [step_certOffer, if_neg hcnd])
+    · by_cases ha : p ≠ cfg.me ∧ adoptable cfg s c ds = true
+      · rw [step_certOffer, if_neg hcnd, if_pos ha, adopt_eq] at hb ⊢
+        rw [persists_append] at hb
+        obtain ⟨h₁, h₂⟩ := IsCut.settle (s := adopted s c ds) hg hσ ht hc
+          (hh.grow (Grows.refl _) rfl rfl (adoptable_lo ha.2).le) hp
+          fun e he => hb e (List.mem_append_right _ he)
+        refine ⟨h₁, fun e he => ?_⟩
+        rw [commitsOf_append, commitsOf_map] at he
+        rcases List.mem_append.mp he with he | he
+        · exact hadopt p c ds rfl ha.2 e he
+        · exact h₂ e he
+      · exact hsame s rfl (by rw [step_certOffer, if_neg hcnd, if_neg ha])
 
 end Node
 

@@ -116,6 +116,12 @@ structure Scenario where
   /-- Rate limiting, if any: the budget `τ` of a candidate slot and the
   window `W` above a node's top. -/
   limit : Option (ℕ × ℕ) := none
+  /-- Slow nodes: every message to or from one takes at least `slowDelay`
+  ticks past GST. -/
+  slow : List ℕ := []
+  slowDelay : ℕ := 0
+  /-- The leader schedule, cycled, if not round robin. -/
+  leaders : List ℕ := []
   deriving Repr
 
 /-- Whether node `v` is honest: neither an equivocator nor an attacker. -/
@@ -144,7 +150,9 @@ def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) 
   m := 1
   per_pos := Nat.one_pos
   m_pos := Nat.one_pos
-  elect := fun k => ⟨k % n, Nat.mod_lt _ hn⟩
+  elect := fun k =>
+    if sc.leaders.isEmpty then ⟨k % n, Nat.mod_lt _ hn⟩
+    else ⟨sc.leaders.getD (k % sc.leaders.length) 0 % n, Nat.mod_lt _ hn⟩
   elect_block := Slots.one_hblock _
   timeout := fun _ => sc.timeout
   σ := boundedSel
@@ -165,7 +173,7 @@ conditions (`docs/validator.md` §12): when each built each round and
 decided each slot, the honest-authored blocks delivered below the
 receiver's horizon and those the rate limiter did not keep, the greatest
 lag of the certified frontier behind the decided one past GST, and the
-fetches asked for. -/
+fetches asked for, and the certified decisions asked for and adopted. -/
 structure Stats where
   /-- Each honest node's own blocks: the node, the round and the time. -/
   built : List (ℕ × ℕ × ℕ) := []
@@ -186,6 +194,10 @@ structure Stats where
   /-- The fetches honest nodes asked for, and the identifiers in them. -/
   fetches : ℕ := 0
   fetched : ℕ := 0
+  /-- The requests for certified decisions honest nodes sent, and the
+  times an honest node not recovering adopted decisions. -/
+  asks : ℕ := 0
+  adoptions : ℕ := 0
   deriving Inhabited
 
 /-- **What a simulation reports.** -/
@@ -273,6 +285,13 @@ def receives (a src : Agent n) : Bool :=
 def delay (t : ℕ) (g : StdGen) : ℕ × StdGen :=
   if t < sc.gst then randNat g 1 (max 1 sc.preMax) else randNat g sc.delayMin sc.delayMax
 
+/-- A message delay at time `t` from node `src` to node `dst`, slow if
+either is. -/
+def delayAt (src dst t : ℕ) (g : StdGen) : ℕ × StdGen :=
+  let (dt, g') := delay sc t g
+  if sc.gst ≤ t && (sc.slow.contains src || sc.slow.contains dst) then (max dt sc.slowDelay, g')
+  else (dt, g')
+
 /-- The inputs an agent's outputs at time `t` send. -/
 def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (Fin n) ℕ ℕ))
     (g : StdGen) : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen :=
@@ -283,7 +302,7 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if receives sc a s then
-            let (dt, g') := delay sc t acc.2
+            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
             ((t + dt, d, .deliver id b) :: acc.1, g')
           else acc
         | _, _ => acc) acc
@@ -292,7 +311,7 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if a.node ≠ s.node then
-            let (dt, g') := delay sc t acc.2
+            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
             ((t + dt, d, .baseRequest s.node) :: acc.1, g')
           else acc
         | _, _ => acc) acc
@@ -301,7 +320,7 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if receives sc a s then
-            let (dt, g') := delay sc t acc.2
+            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
             ((t + dt, d, .proposal s.node k h) :: acc.1, g')
           else acc
         | _, _ => acc) acc
@@ -310,7 +329,7 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if a.node = peer then
-            let (dt, g') := delay sc t acc.2
+            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
             ((t + dt, d, .certOffer s.node c ds) :: acc.1, g')
           else acc
         | _, _ => acc) acc
@@ -319,8 +338,17 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if a.node = peer then
-            let (dt, g') := delay sc t acc.2
+            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
             ((t + dt, d, .baseOffer s.node G bs) :: acc.1, g')
+          else acc
+        | _, _ => acc) acc
+    | .requestDecisions peer lo =>
+      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
+        match agents[src]?, agents[d]? with
+        | some s, some a =>
+          if a.node = peer then
+            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
+            ((t + dt, d, .decisionRequest s.node lo) :: acc.1, g')
           else acc
         | _, _ => acc) acc
     | .setTimer r after => ((t + after, src, .timer r) :: acc.1, acc.2)
@@ -329,7 +357,7 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if a.node = peer then
-            let (dt, g') := delay sc t acc.2
+            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
             ((t + dt, d, .fetchRequest s.node G ids) :: acc.1, g')
           else acc
         | _, _ => acc) acc
@@ -338,7 +366,7 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
         match agents[d]? with
         | some a =>
           if a.node = peer then
-            let (dt, g') := delay sc t acc.2
+            let (dt, g') := delayAt sc ((agents[src]?.map (·.node.val)).getD src) a.node.val t acc.2
             ((t + dt, d, .deliver id b) :: acc.1, g')
           else acc
         | none => acc) acc
@@ -522,7 +550,11 @@ def loop : ℕ → World n → World n
                   if sc.honest b.creator.val ∧ b.creator ≠ a.node then some (a.node.val, b.round, t)
                   else none) ++ ss.accepted
               fetches := ss.fetches + fs.length
-              fetched := ss.fetched + fs.foldl (· + ·) 0 }
+              fetched := ss.fetched + fs.foldl (· + ·) 0
+              asks := ss.asks + (r.2.filter fun | .requestDecisions .. => true | _ => false).length
+              adoptions := ss.adoptions + match i with
+                | .certOffer .. => if !st.recovering && st.lo < r.1.lo then 1 else 0
+                | _ => 0 }
             let ss := match i with
               | .deliver id b =>
                 if sc.honest b.creator.val ∧ b.creator ≠ a.node ∧ id = idOf b then

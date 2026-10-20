@@ -67,11 +67,8 @@ theorem converges : Converges := by
     by_cases hc : Admits (cfg.at v) (stateBefore cfg tr t v) j (raw j)
     · exact hlast j hj (t + 1) (admit_after hinj hbase hv ht hc (hfits j hj)) (by omega)
     · have hid : j = cfg.idOf (raw j) := id_of_knownIn (hrawk j hj)
-      have hb0 : takes (cfg.at v) (stateBefore cfg tr t v) j (raw j).round := by
-        rw [takes, base_before hbase hv]
-        rcases Nat.eq_zero_or_pos (raw j).round with h0 | h0
-        · exact Or.inr ⟨h0.symm, Or.inl h0⟩
-        · exact Or.inl h0
+      have hb0 : (stateBefore cfg tr t v).store.base ≤ (raw j).round := by
+        rw [base_before hbase hv]; exact Nat.zero_le _
       by_cases hs : j ∈ (stateBefore cfg tr t v).store.ids
       · exact hlast j hj t (Or.inr hs) (by omega)
       · by_cases hp : j ∈ (stateBefore cfg tr t v).pending.map Prod.fst

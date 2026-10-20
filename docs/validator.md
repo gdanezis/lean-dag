@@ -203,23 +203,11 @@ holds at every `G`. After each decision step the horizon rises to `G`
 if that is higher: the store drops the blocks below `G`, reads those at
 `G` without references, and keeps absolute rounds; pending blocks and
 timers below `G` are dropped, and the node outputs `prune G`. A block
-received below the horizon is dropped. One received at the horizon,
-whose references can no longer be checked, is taken only if pending
-blocks of `f + 1` distinct authors lie above it, following references
-through pending blocks (`vouched`); the genesis round is always taken.
-Pending blocks the horizon reaches are kept only on the same condition.
-Junk, a block that fails validity, then never enters an honest store:
-the first honest node to take it at its horizon would need an honest
-block above it, whose author checked it below its own horizon and
-dropped it, or took it at its horizon first.
-
-The rule has a cost. A block of an honest node that its peers receive
-only at their horizon, with only its author's blocks above it, is not
-taken, and the author's later blocks, which reference it, wait on it.
-A node that rejoins at its peers' horizon is cut off this way (§6,
-`W = 4`). A reliable node never meets it, since its blocks reach its
-peers above their horizon; making a rejoining node resume above it is
-part of step 11.3.
+received at the horizon is kept without its references, as the cut
+keeps it; one below it is dropped. A node whose horizon lags its peers'
+could check, and reject, a block they kept unchecked, so a node behind
+adopts the decisions its peers certified, and its horizon rises with
+theirs (§3.8, §13.6).
 
 The decider then runs on the original schedule. Every slot it still
 decides lies at `F` or above, and its decision reads only rounds from
@@ -381,6 +369,12 @@ Bounding the pending blocks belongs to rate limiting (step 9).
   every slot below a node's horizon is certified by the certificate it
   holds. The horizon therefore waits for checkpoints: without a signing
   quorum it stops rising, and the store grows.
+* **Adopting.** A node that keeps `q` signers' proposals of one head
+  at a height above its next undecided slot asks those signers for the
+  decisions certified from that slot up. A signer serves its
+  certificate with them; the node adopts them if the certificate has `q`
+  distinct signers and they extend the chain of its own decisions to the
+  certificate's head, and outputs them (§13.6).
 * **Bootstrap.** A peer serves its certificate with its base and the
   decisions it certifies, its own. The joiner adopts a certificate with
   `q` distinct signers, served with the decisions of slots `0 … k − 1` in
@@ -453,10 +447,8 @@ node's top. After a bootstrap the top is the new horizon, which trails
 the frontier by `Λ` and the certificates' lag; a node whose window is
 shorter drops the blocks it needs to resume, and stays behind. In the
 simulator, at `Λ = 2`, a node down from tick 40 to tick 90 rejoins with a
-window of 8 rounds, the fetches bringing the histories it lacks at once.
-With a window of 4 it resumes at its peers' horizon, where its block is
-not taken (§3.4), and is cut off; with `τ = 8` the nodes reach round 34
-by tick 150, against 43 to 44 with the node back.
+window of 4 rounds or of 8, the fetches bringing the histories it lacks
+at once.
 
 **What it gives.**
 * **V10, storage** (`Node.Storage.Bounded`, proved): at every state a
@@ -503,7 +495,7 @@ by tick 150, against 43 to 44 with the node back.
 | V6 | Retired: Safe Skip is not part of the program (§3.5). L0, the self-referencing filled block valid at any quorum, stays in the shared layer. | `BlockRecord.selfBlock_valid` (proved) |
 | V7 | Rate limiting does not make a validator decide wrongly: V3, V9 and V12 hold at every configuration; under the assumptions of V9, every honest store is a cut of the run's record and every honest decision is the record's verdict on a view of it and on every larger view. | `Node.Defer.Decides` (proved): `Node.cut_before`, `AnchoredRule.decided_mono` |
 | V8 | The claims are about the program that runs: its store is the ordered map, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | proved by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` |
-| V9 | Over a trace with timely authentication of blocks, base offers and checkpoint proposals, an injective hash on blocks and on the decisions served with certificates (`Boot.ChainInjective`), and `Params.Tolerates`, every honest store is a cut of the run's record and every honest decision a verdict on a view of it, bootstraps and adopted certificates included; a node's decisions are slots `0, 1, …`; so any two honest nodes' decisions are prefix-comparable. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.cut_before`, `Node.IsCut.bootFrom`, `Node.IsCut.step`, `Node.verdict_decideStep`, `Node.propose_head`, `Node.prefix_of_slots`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
+| V9 | Over a trace with timely authentication of blocks, base offers and checkpoint proposals, an injective hash on blocks and on the decisions served with certificates (`Boot.ChainInjective`), and `Params.Tolerates`, every honest store is a cut of the run's record and every honest decision a verdict on a view of it, bootstraps and adopted decisions included; a node's decisions are slots `0, 1, …`; so any two honest nodes' decisions are prefix-comparable. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.cut_before`, `Node.IsCut.bootFrom`, `Node.IsCut.step`, `Node.verdict_decideStep`, `Node.propose_head`, `Node.prefix_of_slots`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
 | V10 | With rate limiting, at every state a run reaches, every block the store and the pending blocks hold is charged to a slot, and the charges number at most `n·(τ + 1)·(top + W + 1 − base)`, under any input sequence; with the horizon trailing the top by a bounded depth the bound does not grow with the run. Eventual admission of every honest block is step 11's. | `Node.Storage.Bounded` (proved): `Node.Lim.run`, `Node.Lim.bound`, `Node.length_le_of_slots` |
 | V12 | Every certificate with `q` distinct signers given to an honest node carries the head of the chain of an honest node's decisions at its height, with timely signed proposals and `f < q`. | `Node.Boot.Certified` (proved): `Node.propose_head`, `Node.commits_prefix`, `Node.Local.Decisions` |
 | V11 | Over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, and timeouts of at least `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout, and a run of reliably led slots past a round they built within `Δ + Δₛ` of each other is decided by all of them `Δ + Δₛ` after they reach its last decision round (`Node.Live.Progresses`, stated, §13). | `WaveFacts` from the run, V3, V4 |
@@ -722,7 +714,7 @@ rejoins by bootstrap (§3.6).
    restarted node rejoins. Over five seeds each, at `Λ` = 2, 6 and 20
    and after 6, 20 and 50 ticks down, it ends within one round of its
    peers, and at most one slot behind them, in all 45 runs. Agreement,
-   prefix-comparability and validity hold in every run. It resumes in 33
+   prefix-comparability and validity hold in every run. It resumes in 32
    runs. Bootstraps fall as `Λ` grows: 7 runs at `Λ = 2`, 3 at `Λ = 6` and
    none at `Λ = 20`. The horizon now waits for certificates, which
    lag the decided frontier, so a short downtime is more often caught up
@@ -773,9 +765,11 @@ rejoins by bootstrap (§3.6).
    Without the checks, the assumptions do work the program cannot do.
    A certificate of fabricated decisions is adopted by the joiner in 2 of
    15 runs, and its decisions then disagree with its peers'. Blocks in an
-   honest node's name halt that node in all 15 runs, for the same reason
-   the attacker halts itself above, and the honest blocks referencing the
-   forged ones are invalid under the blocks the nodes made.
+   honest node's name stop that node building in all 15 runs, for the
+   same reason the attacker halts itself above, and the honest blocks
+   referencing the forged ones are invalid under the blocks the nodes
+   made; it still decides, adopting its peers' certified decisions
+   (§13.6).
 
    The check that honest blocks are valid reads every block a node made
    or broadcast in its own name under its hash, since an honest block
@@ -783,7 +777,7 @@ rejoins by bootstrap (§3.6).
    not keep.
    **Rate limiting.** A flood, the attacker broadcasting twenty valid
    twins with each block, fills the honest stores to 57 blocks without
-   rate limiting; with `τ = 8` and `W = 8` they stay at 22, against 30
+   rate limiting; with `τ = 8` and `W = 8` they stay at 22, against 29
    in an unattacked run, and agreement and validity hold. The attacker
    stalls itself, as with invalid blocks, so the network progresses as
    with one crashed node either way. Without an attack the limit changes
@@ -1119,40 +1113,40 @@ not kept.
 
 | Scenario | Gap | Spread | Latency max / mean | Cert lag | Not kept |
 |---|---|---|---|---|---|
-| as above | 6 | 3 | 11 / 7.3 | 4 | 0 |
+| as above | 6 | 3 | 11 / 7.3 | 3 | 0 |
 | delays 1 | 1 | 0 | 3 / 3.0 | 1 | 0 |
-| delays 1–6 | 10 | 6 | 23 / 13.7 | 5 | 0 |
+| delays 1–6 | 10 | 6 | 41 / 14.3 | 6 | 0 |
 | delays 1–6, timeout 5 | 10 | 5 | 61 / 19.7 | 11 | 0 |
 | delays 1–6, timeout 3 | 9 | 5 | 53 / 26.7 | 12 | 0 |
 | `Λ` = 1 or 6 | 6 | 3 | 11–12 / 7.2–7.4 | 4 | 0 |
-| GST 100, 20 ticks before | 6 | 3 | 10 / 7.3 | 10 | 0 |
+| GST 100, 20 ticks before | 6 | 3 | 11 / 7.3 | 10 | 0 |
 | GST 100, 60 ticks before | 6 | 3 | 11 / 7.3 | 5 | 0 |
 | node 3 crashed | 10 | 3 | 19 / 13.4 | 4 | 0 |
 | node 3 crashed, delays 1–6, timeout 13 | 13 | 6 | 29 / 20.8 | 4 | 0 |
-| an equivocator | 10 | 2 | 42 / 13.9 | 5 | 0 |
+| an equivocator | 10 | 3 | 42 / 14.0 | 5 | 0 |
 | `n = 7`, `f = 2` | 6 | 3 | 11 / 7.8 | 3 | 0 |
 | `n = 7`, two crashed | 10 | 2 | 18 / 12.7 | 4 | 0 |
-| `τ = 1` | 6 | 3 | 12 / 7.4 | 4 | 0 |
+| `τ = 1` | 6 | 3 | 11 / 7.4 | 4 | 0 |
 | `W = 1` | as above | | | | 0 |
-| `τ = 8, W = 8`, a flood | 10 | 3 | 19 / 13.6 | 3 | 0 |
+| `τ = 8, W = 8`, a flood | 10 | 3 | 19 / 13.4 | 4 | 0 |
 | `τ = 0` | no round built | | | | 12 |
-| `W = 0` | 17 rounds, 8 at one node, then stuck | | | | 35 |
-| node 1 down 40–90 | 6 | 3 | 11 / 7.2 | 4 | 3 |
-| node 1 down 40–90, `τ = 8, W = 4` | 12 | 10 | 25 / 17.1 | 3 | 99 |
-| node 1 down 40–90, `τ = 2, W = 8` | 5 | 3 | 10 / 7.4 | 6 | 15 |
+| `W = 0` | 14 rounds, 8 at one node, then stuck | | | | 25 |
+| node 1 down 40–90 | 5 | 3 | 10 / 7.2 | 4 | 2 |
+| node 1 down 40–90, `τ = 8, W = 4` | 6 | 3 | 10 / 7.2 | 4 | 8 |
+| node 1 down 40–90, `τ = 2, W = 8` | 6 | 3 | 11 / 7.4 | 4 | 4 |
 
 What the numbers say for step 11:
 
 * **The fast path holds.** Without a fault, a round takes at most twice
   the largest delay, and a decision follows the slot's round within 11
-  ticks at delays up to 3 and 23 at delays up to 6; the timeout plays no
+  ticks at delays up to 3 and 41 at delays up to 6; the timeout plays no
   part. A crashed leader costs its rounds a timeout each.
 * **`2Δ + proc` is sufficient, not necessary.** With timeouts below the
   delay the nodes stay live and agree, at a higher latency and a longer
   certificate lag.
 * **The lag `Λ` does not affect timing**, only the store's depth; without
-  rate limiting no new honest block at or above a horizon went unkept,
-  except a rejoining node's blocks at its peers' horizon (§3.4).
+  rate limiting no new honest block at or above a horizon went unkept
+  but in a rejoin, where 2 arrived as the horizon rose past them.
 * **The certificate lag is a few slots** past GST, ten after a GST at
   which messages had been slow. The horizon trails the certified
   frontier, so its bound enters the liveness of garbage collection
@@ -1160,22 +1154,22 @@ What the numbers say for step 11:
 * **The budget and the window are generous** for the reliable nodes: a
   budget of one and a window of one keep every honest block. A node
   rejoining after a bootstrap lands `Λ` and the certificate lag below
-  its peers, and fetches the histories it lacks at once; with a window
-  of 8 it rejoins. With a window of 4 it resumes at its peers' horizon
-  and is cut off (§3.4), its blocks never taken.
+  its peers, and fetches the histories it lacks at once; a window of 4
+  keeps all but 8 of the honest blocks it is sent, and it rejoins.
 * **Fetching fires without faults.** Blocks arrive out of order, and a
-  block whose references are in flight triggers a fetch: 176 in the
+  block whose references are in flight triggers a fetch: 183 in the
   fault-free run, none with delays of one tick.
 
 **Catch-up.** The gap between a node's first accepting another honest
 node's round-`n` block and its own build of round `n`, past tick 50: 0
-in every round without faults, at delays up to 3 (958 rounds, and 1,583
-at `n = 7`) and up to 6 (522 rounds); at most 2 and 1 ticks, in 7 and 6
-of 261 and 262 rounds, with a crashed leader and with an equivocator;
-at most 3 ticks, in 11 of 185 rounds, with a crashed leader at delays up
-to 6 and timeout 13. With a fault, a node builds late at a round whose
-leader block it waits the timer for; without one, it does not build
-late in these runs.
+in every round without faults at delays up to 3 (962 rounds, and 1,583
+at `n = 7`); at most 3 ticks, in 3 of 510 rounds, at delays up to 6; at
+most 2 ticks, in 7 and 5 of 261 and 262 rounds, with a crashed leader
+and with an equivocator; at most 3 ticks, in 11 of 185 rounds, with a
+crashed leader at delays up to 6 and timeout 13. With a fault, a node
+builds late at a round whose leader block it waits the timer for; the
+three late builds at delays up to 6 without a fault are not yet
+explained.
 
 The simulator records these measurements (`LeanDagSim.Stats`, in the
 report's `stats`).
@@ -1279,8 +1273,9 @@ are unchanged.
 reliable round-`n` block builds round `n` soon after. The program does
 not build on sight; it builds round `n` once it holds a quorum of round
 `n − 1` and its block would reach (and certify) the leader block, or its
-round's timer fired. In the simulator the gap is zero without faults and
-at most 3 ticks at delays up to 6 with a crashed leader (§12.5).
+round's timer fired. In the simulator the gap is zero without faults at
+delays up to 3, and at most 3 ticks at delays up to 6, with or without a
+crashed leader (§12.5).
 
 Let `drift n` be the spread of the reliable nodes' build times of round
 `n`, and `D = Δ + Δₛ`. Past GST, `drift (n + 1) ≤ max (drift n) D`. Let
@@ -1359,44 +1354,33 @@ explicit.
    and bootstrap, so V11 assumes the signatures of bases, certificates
    and the chain's hash over `H`, as V9 does; every honest store is then
    a cut of the run's record (`cut_before`).
-10. **No junk at the horizon** (built): a block received at the horizon
-   is taken only if vouched for by `f + 1` authors above it (§3.4), since
-   the proofs need every block a reliable node builds on to be valid with
-   its history held. The rule cuts off a node that rejoins at its peers'
-   horizon, which a reliable node never does; the resume rule that avoids
-   it belongs to 11.3.
+10. **Blocks at the horizon** are taken unchecked, and a node behind
+    adopts the decisions its peers certified (§13.6).
 
-### 13.6 Blocks at the horizon (design, not built)
+### 13.6 Blocks at the horizon (built)
 
 **The problem.** A block's validity is checked against its references,
 one round below it. At a node's horizon `G` those references are pruned,
 so a block that arrives at round `G` cannot be checked. Every rule for
 such a block fails in one case:
 
-* **taken unchecked** (the rule before 78e5338): a Byzantine node sends
-  an invalid block `x` at node A's horizon, and builds valid blocks of
-  its own above it, which A checks against `x`'s round and author only.
-  A references the top of that chain, so every later block of A has `x`
-  in its history. A node B whose horizon is lower checks `x`, drops it,
-  and can accept none of A's later blocks. If B needs them for a quorum,
-  B stalls;
+* **taken unchecked**: a Byzantine node sends an invalid block `x` at
+  node A's horizon, and builds valid blocks of its own above it, which A
+  checks against `x`'s round and author only. A references the top of
+  that chain, so every later block of A has `x` in its history. A node B
+  whose horizon is lower checks `x`, drops it, and can accept none of
+  A's later blocks. If B needs them for a quorum, B stalls;
 * **checked one level down** (the parents fetched for checking only):
   validity reads only the parents' rounds and authors, so an invalid
   parent at `G − 1` with a plausible round and author lets `x` pass. The
   same attack works one round lower, against a node whose horizon is at
   `G − 2` or below;
-* **taken only if vouched for** (`f + 1` authors' pending blocks above
-  it, built): no attack is needed. A late honest block, with only its
+* **taken only if vouched for** by pending blocks of `f + 1` authors
+  above it: no attack is needed. A late honest block, with only its
   author's chain above it, is never taken, and every later block of its
-  author waits on it. A node rejoins late this way (§6, `W = 4`), and so
-  can a reliable node that never crashes. Suppose `q` nodes, a Byzantine
-  one among them, decide, certify and raise their horizon while a
-  slower reliable node's blocks are still in flight within `Δ`, and the
-  leader schedule gives the slower node no slot meanwhile. Its blocks
-  then reach the others at their horizon and are never taken. If the
-  Byzantine node then falls silent, the others need the slower node for
-  a quorum and stall. This is an argument, not yet reproduced in the
-  simulator.
+  author waits on it. A node that rejoins at its peers' horizon is cut
+  off this way, and so is a reliable node that never crashes but is
+  slower than its peers, as the simulator shows below.
 
 The cause is that honest nodes' horizons differ. A node takes a block at
 its horizon on trust, while a node with a lower horizon can still check
@@ -1408,83 +1392,83 @@ settled.
 1. **The horizon is a certified checkpoint less `Λ`.** A node certifies
    a height `k` only once its own decisions reach `k`, so its certified
    frontier lies at or below its decided one, and the horizon of §3.4 is
-   already `min(R(c), t) − Λ`. Here `R(c)` is the slot round of the
-   height of the node's certificate `c`, and `t` is the node's round.
-   This item is the program as built.
+   `min(R(c), t) − Λ`, for `R(c)` the slot round of the height of the
+   node's certificate `c` and `t` its round.
 2. **A block at the horizon is taken unchecked**, read without its
-   references, and a block below it is dropped. Vouching is removed.
-3. **A certificate is adopted on sight, not only when recovering.** A
-   node that holds `q` signed proposals of a head at a height `k` above
-   its next undecided slot `lo` asks a signer for the certificate and the
-   decisions of slots `lo … k − 1`. It checks them by extending the head
-   of its own decisions to `k`, adopts them as bootstrap does (§3.6), and
-   raises its horizon at the next collection. If the new horizon lies
-   above its round, the node recovers as after a restart: it resumes at
-   the highest round above it at which it holds a quorum (§3.5), with no
-   block of its own there. The decisions served are those since the
-   asker's frontier, so their size does not grow with the run.
+   references, and a block below it is dropped.
+3. **A node behind adopts certified decisions** (`seek`, `serveFrom`,
+   `adoptable`, `adopt`). Once the proposals it keeps hold `q` signers of
+   one head at a height above its next undecided slot `lo`, it asks
+   those signers for the decisions certified from `lo` up. A signer
+   answers with its certificate, if higher than `lo`, and the decisions
+   of slots `lo` to the certificate's height. The node adopts them if the
+   certificate has `q` distinct signers and the decisions extend the
+   chain of its own to the certificate's head: it outputs them, moves
+   `lo` to the height and keeps the certificate. Its horizon then rises
+   at the next collection.
+
+A node's horizon never exceeds its own round, so adoption needs no
+jump. A node behind needs the blocks of the rounds near its top, and a
+peer's block of such a round has junk in its history only at or below
+the horizon the peer had when it built it, which the node reaches once
+it holds the same certificate.
 
 **Why it closes the attack.** Junk at A's horizon `G` lies at or below
-`R(c) − Λ` for a certificate `c` that A holds, whose signers broadcast
+`R(c) − Λ` for the certificate `c` that A holds, whose signers broadcast
 their proposals. A node B whose horizon is lower receives those
-proposals, adopts `c`, and its horizon rises to `G` or above. B then
-takes `x` unchecked as A did, or drops it as lying below its horizon. In
-both cases B accepts A's blocks above `x`. Any copy of `x`, or block
-above it, that B dropped earlier is fetched again, since the pending
-blocks above it still miss it. The disagreement lasts only until B
-adopts `c`. Past GST that is bounded: by the delivery of the
-proposals, `Δ`, plus one request and answer, `2Δ`.
+proposals, adopts the decisions, and its horizon rises to `G` or above.
+B then takes `x` unchecked as A did, or drops it as lying below its
+horizon, and in both cases accepts A's blocks above `x`. A block above
+`x` that B dropped earlier is fetched again, since the pending blocks
+above it still miss it. Past GST the disagreement lasts at most the
+delivery of the proposals, `Δ`, and one request and answer, `2Δ`.
 
 **Why it keeps late honest blocks.** A late honest block at a peer's
-horizon is taken unchecked (item 2), so no node is cut off for being
-slow. A node whose round falls below its peers' horizon adopts their
-certificate and resumes above it (item 3), with no block of its own
-there, so no later block of it references the round it missed.
+horizon is taken unchecked, so no node is cut off for being slow.
 
-**Against the proofs.**
+**The proofs.** Every claim holds for the program with adoption.
 
-* **V1, V2** (`Local`): adoption changes `decided`, `lo` and `cert` as a
-  bootstrap does, and leaves `lastProposed` and `chain` alone, so the
-  ledger (`Ledger`: the kept decisions are slots `0 … lo − 1`, the head
-  kept is the chain's at the height last proposed) is kept by the
-  argument of `bootFrom_appends`. Recovering on a high horizon is the
-  restart path, already covered.
-* **V3** (`Runs.Safety`) assumes no base or certificate offers
-  (`NoRejoin`) and stays true as stated, but describes only traces
-  without adoption. V9 then carries safety for every trace, as it
-  already does with bootstrap.
+* **V1, V2** (`Local`): adoption keeps the ledger, the kept decisions
+  being slots `0 … lo − 1` and the head kept the chain's at the height
+  last proposed (`adopt_appends`).
 * **V9, V12, V7** (`Boot.Agrees`, `Boot.Certified`, `Defer.Decides`):
-  their induction (`cut_before`) already handles a decision taken from a
-  certificate. Its honest signer proposed the head of its own
-  decisions, and `ChainInjective` identifies the decisions served with
-  them. The new step case is the bootstrap's without the base. The store
-  is kept, so it stays a cut of the run's record, and the raised horizon
-  lies at or below the node's round, so the record reaches it
-  (`IsCut.spans`). One assumption changes: `ChainInjective` must speak of
-  the list the receiver forms, its own decisions below `lo` followed by
-  those served, not of a full list served.
-* **V10** (`Storage.Bounded`): adoption adds no block; the horizon rises
-  and the charges below it are dropped. Unaffected.
-* **Convergence** (`Converge.Converges`) assumes no garbage collection
-  and no offers. Unaffected.
-* **Unchecked blocks at the horizon** are what the run's record was
-  built for: a block that is not real takes a real block's references at
-  its round (`globalBlock`, `Ground.base`), and the safety proofs held
-  with that rule before 78e5338.
+  the induction `cut_before` takes the adopted decisions as an honest
+  signer's: the certificate's `q` distinct signers include an honest
+  one, which proposed the head at the height (`TimelyCerts`), and the
+  node's own decisions followed by those served have that head
+  (`adoptable_head`), so they are that signer's (`ChainInjective`).
+  `ChainInjective` speaks of the list the receiver forms, a prefix of
+  its own decisions followed by those served.
+* **V3** (`Runs.Safety`) assumes no offers and is unchanged; V9 carries
+  safety on every trace.
+* **V10** (`Storage.Bounded`) and convergence (`Converge.Converges`) are
+  unchanged: adoption adds no block, and convergence assumes no offers.
 * **V11** must allow certificate offers to the reliable nodes:
-  `NoRejoin T` becomes "no base offer and no restart at `T`". Arrival
-  (11.1c) gains a bound on the spread of the reliable nodes' horizons.
-  A reliable block's history can hold junk only at or below its author's
-  horizon, which every reliable node reaches within the adoption bound
-  above. The decision half is unaffected. The synchronisation assumption
-  must also cover a block dropped as invalid and needed again after the
-  receiver's horizon rose past it. Both are to be settled in 11.1c.
+  `NoRejoin T` is to become "no base offer and no restart at `T`".
+  Arrival (11.1c) gains the adoption bound above, and the synchronisation
+  assumption must cover a block dropped as invalid and needed again after
+  the receiver's horizon rose past it. Both are 11.1c's.
 
-**Cost.** One request and answer per adoption, carrying the decisions
-since the asker's frontier. In a fault-free run every node certifies
-each height itself, and none adopts.
+**The simulator.** Node 2 slow, every message to or from it taking at
+least the delay below; node 3 running the honest program and silent from
+tick 150; the leader schedule cycling over nodes 0, 1 and 3, so node 2
+leads no slot; delays 1 otherwise; 600 ticks. Rounds and decisions of
+nodes 0, 1 and 2 at the end:
 
-**Open before building.** A simulator check that the slower-node stall
-occurs under vouching and not under this design; the request message and
-whom it is asked of (a signer of the proposals, as fetches ask the
-referring block's author, §3.7).
+| Slow delay, timeout | Vouched for | Taken unchecked, with adoption |
+|---|---|---|
+| 15, 100 | rounds 150, 150, 151; decisions 148, 148, 149; stuck | rounds 156, 156, 157; decisions 156, 156, 156 |
+| 30, 200 | rounds 150, 150, 151; decisions 148, 148, 149; stuck | rounds 153, 153, 153; decisions 153, 153, 153 |
+| 8, 60 | rounds 150, 150, 151; decisions 148, 148, 149; stuck | rounds 161, 161, 161; decisions 160, 160, 160 |
+
+Under vouching, four of node 2's blocks reach 0 and 1 at their horizon
+and are never taken, and after node 3 falls silent they stall for good.
+Taking them unchecked, the three continue, at a timeout a round for node
+3's slots. Over the ten-seed families of §6 every run is safe, the
+`W = 4` rejoin reaches rounds 44 to 45 against 34 under vouching, and
+the equivocator family decides 270 slots against 226. A node asks for
+decisions in few runs, 3 to 6 times in 600 ticks without faults, and
+adopts none there: by the answer it has decided itself. It adopts where
+it cannot decide, as the node halted by blocks forged in its name
+without signature checks (§6). The attack that adoption closes, junk
+planted at a horizon, is not in the simulator.

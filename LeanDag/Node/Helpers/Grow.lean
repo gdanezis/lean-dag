@@ -199,10 +199,15 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     simp only [Node.step]
     split
     · exact h
-    · exact Grows.refl _
+    · split
+      · rw [adopt_eq]; exact Grows.settle_of _ rfl
+      · exact Grows.refl _
   | proposal peer k kh =>
     simp only [Node.step]
-    split <;> exact Grows.refl _
+    split
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s peer k kh) k kh
+      rw [hn]; exact Grows.refl _
+    · exact Grows.refl _
   | _ => exact Grows.refl _
 
 /-- **Across a run the store grows.** -/
