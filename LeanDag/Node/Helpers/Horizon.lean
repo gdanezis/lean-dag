@@ -149,7 +149,7 @@ theorem decideStep_lo (s : State Validator BlockId Payload) :
   dsimp only
   split
   · rw [(proposeAt_keeps _).2.2.2.2.2.1]; exact Nat.le_add_right _ _
-  · exact le_rfl
+  · exact (proposeAt_keeps _).2.2.2.2.2.1.ge
 
 omit [Fintype Validator] in
 theorem decideStep_top (s : State Validator BlockId Payload) :
@@ -157,8 +157,7 @@ theorem decideStep_top (s : State Validator BlockId Payload) :
   unfold Node.decideStep
   dsimp only
   split
-  · exact (proposeAt_keeps _).2.2.1
-  · rfl
+  all_goals exact (proposeAt_keeps _).2.2.1
 
 omit [Fintype Validator] in
 theorem Held.decideStep {s : State Validator BlockId Payload} (h : Held cfg s) :

@@ -23,19 +23,6 @@ namespace Node
 variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Validator]
 variable [LinearOrder BlockId]
 
-section Lists
-
-theorem run_append (c : Config Validator BlockId Payload) :
-    ∀ (s : State Validator BlockId Payload) (l₁ l₂ : List (Input Validator BlockId Payload)),
-    run c s (l₁ ++ l₂) =
-      ((run c (run c s l₁).1 l₂).1, (run c s l₁).2 ++ (run c (run c s l₁).1 l₂).2)
-  | s, [], l₂ => by simp [run]
-  | s, i :: l₁, l₂ => by
-    simp only [List.cons_append, run]
-    rw [run_append c _ l₁ l₂, List.append_assoc]
-
-end Lists
-
 variable {cfg : Config Validator BlockId Payload} {tr : Trace Validator BlockId Payload}
 
 omit [Fintype Validator] [LinearOrder BlockId] in
@@ -124,9 +111,10 @@ omit [Fintype Validator] in
 theorem serveBase_not_mem_proposeAt (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
     {bs : List (BlockId × Block Validator BlockId Payload)} :
     Output.serveBase p G bs ∉ (proposeAt cfg s).2 := by
-  unfold proposeAt
-  dsimp only
-  split <;> simp
+  intro h
+  obtain ⟨-, -, -, -, -, ho⟩ := proposeAt_eq (cfg := cfg) s
+  obtain ⟨k, h', hk⟩ := ho _ h
+  cases hk
 
 omit [Fintype Validator] in
 theorem serveBase_not_mem_advance (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
@@ -146,7 +134,7 @@ theorem serveBase_not_mem_advance (s : State Validator BlockId Payload) {p : Val
     · rcases List.mem_append.mp h with h | h
       · simp at h
       · exact serveBase_not_mem_proposeAt _ h
-    · simp at h
+    · exact serveBase_not_mem_proposeAt _ h
   · unfold Node.collect at h
     split at h
     · dsimp only at h; split at h <;> simp at h

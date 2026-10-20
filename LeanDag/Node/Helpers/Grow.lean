@@ -114,7 +114,7 @@ theorem decideStep_store (s : State Validator BlockId Payload) :
   dsimp only
   split
   · exact (proposeAt_keeps _).1
-  · rfl
+  · exact (proposeAt_keeps _).1
 
 omit [Fintype Validator] in
 theorem Grows.collect (s : State Validator BlockId Payload) :

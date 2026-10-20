@@ -100,30 +100,64 @@ theorem chain_step {D : List (ℕ × Option BlockId)} {lp k : ℕ} (hlp : lp ≤
     ← List.foldl_append, ← List.take_add, Nat.add_sub_cancel' hlp]
 
 omit [Fintype Validator] in
+/-- The next height lies above the height last proposed. -/
+theorem lastProposed_lt_nextHeight (s : State Validator BlockId Payload) :
+    s.lastProposed < nextHeight cfg s := by
+  unfold nextHeight
+  have := Nat.lt_mul_div_succ (max s.lastProposed s.certHeight) cfg.m_pos
+  exact lt_of_le_of_lt (le_max_left _ _) this
+
+omit [Fintype Validator] in
+/-- **Proposing once keeps the ledger** and the decisions, and its
+proposal at a height `k` is the head of the chain of the first `k`
+decisions. -/
+theorem proposeNext_ledger {s s₁ : State Validator BlockId Payload}
+    {o : Output Validator BlockId Payload} (hL : Ledger cfg s)
+    (hn : proposeNext cfg s = some (s₁, o)) :
+    Ledger cfg s₁ ∧ s₁.decided = s.decided ∧ ∀ k h, o = Output.propose k h →
+      k ≤ s.decided.length ∧ h = cfg.headOf (s.decided.reverse.take k) := by
+  have hlen := hL.length
+  obtain ⟨hk, rfl, rfl⟩ := proposeNext_some hn
+  have hlt := lastProposed_lt_nextHeight (cfg := cfg) s
+  have hD : s.decided.reverse.length = s.lo := by rw [List.length_reverse, hlen]
+  have hh : ((s.decided.take (s.lo - s.lastProposed)).reverse.take
+      (nextHeight cfg s - s.lastProposed)).foldl cfg.extend s.chain =
+      cfg.headOf (s.decided.reverse.take (nextHeight cfg s)) := by
+    have := chain_step (cfg := cfg) (D := s.decided.reverse) hlt.le (by rw [hD]; exact hk)
+    rw [List.reverse_reverse, hD] at this
+    rw [hL.2.2]; exact this
+  refine ⟨⟨hL.1, hk, hh⟩, rfl, fun k h hp => ?_⟩
+  rw [Output.propose.injEq] at hp
+  obtain ⟨rfl, rfl⟩ := hp
+  exact ⟨hlen ▸ hk, hh⟩
+
+omit [Fintype Validator] in
+theorem proposeFrom_ledger : ∀ (fuel : ℕ) {s : State Validator BlockId Payload},
+    Ledger cfg s → Ledger cfg (proposeFrom cfg fuel s).1 ∧
+      (proposeFrom cfg fuel s).1.decided = s.decided ∧
+      ∀ k h, Output.propose k h ∈ (proposeFrom cfg fuel s).2 → k ≤ s.decided.length ∧
+        h = cfg.headOf (s.decided.reverse.take k)
+  | 0, s, hL => ⟨hL, rfl, fun k h hp => by simp [proposeFrom] at hp⟩
+  | fuel + 1, s, hL => by
+    rw [proposeFrom_succ]
+    split
+    · rename_i s₁ o hn
+      obtain ⟨hL₁, hd₁, ho⟩ := proposeNext_ledger hL hn
+      obtain ⟨hL₂, hd₂, hp₂⟩ := proposeFrom_ledger fuel hL₁
+      refine ⟨hL₂, hd₂.trans hd₁, fun k h hp => ?_⟩
+      rcases List.mem_cons.mp hp with hp | hp
+      · exact ho k h hp.symm
+      · rw [← hd₁]; exact hp₂ k h hp
+    · exact ⟨hL, rfl, fun k h hp => by simp at hp⟩
+
+omit [Fintype Validator] in
 /-- **Proposing keeps the ledger** and the decisions, and a proposal at a
 height `k` is the head of the chain of the first `k` decisions. -/
 theorem proposeAt_ledger {s : State Validator BlockId Payload} (hL : Ledger cfg s) :
     Ledger cfg (proposeAt cfg s).1 ∧ (proposeAt cfg s).1.decided = s.decided ∧
       ∀ k h, Output.propose k h ∈ (proposeAt cfg s).2 → k ≤ s.decided.length ∧
-        h = cfg.headOf (s.decided.reverse.take k) := by
-  have hlen := hL.length
-  unfold proposeAt
-  dsimp only
-  split
-  · rename_i hlt
-    have hk : cfg.m * (s.lo / cfg.m) ≤ s.lo := Nat.mul_div_le _ _
-    have hD : s.decided.reverse.length = s.lo := by rw [List.length_reverse, hlen]
-    have hh : ((s.decided.take (s.lo - s.lastProposed)).reverse.take
-        (cfg.m * (s.lo / cfg.m) - s.lastProposed)).foldl cfg.extend s.chain =
-        cfg.headOf (s.decided.reverse.take (cfg.m * (s.lo / cfg.m))) := by
-      have := chain_step (cfg := cfg) (D := s.decided.reverse) hlt.le (by rw [hD]; exact hk)
-      rw [List.reverse_reverse, hD] at this
-      rw [hL.2.2]; exact this
-    refine ⟨⟨hL.1, hk, hh⟩, rfl, fun k h hp => ?_⟩
-    rw [List.mem_singleton, Output.propose.injEq] at hp
-    obtain ⟨rfl, rfl⟩ := hp
-    exact ⟨hlen ▸ hk, hh⟩
-  · exact ⟨hL, rfl, fun k h hp => absurd hp List.not_mem_nil⟩
+        h = cfg.headOf (s.decided.reverse.take k) :=
+  proposeFrom_ledger _ hL
 
 omit [Fintype Validator] in
 theorem tryBuild_appends {s s' : State Validator BlockId Payload}
@@ -215,7 +249,9 @@ theorem decideStep_appends {s : State Validator BlockId Payload} (hL : Ledger cf
     · rcases List.mem_append.mp hp with hp | hp
       · obtain ⟨e, -, he⟩ := List.mem_map.mp hp; cases he
       · rw [hdec]; exact hprop k h hp
-  · exact ⟨Appends.refl s, hL⟩
+  · obtain ⟨hL₂, hdec, hprop⟩ := proposeAt_ledger (cfg := cfg) hL
+    refine ⟨⟨by rw [hdec, proposeAt_commits, List.append_nil], fun k h hp => ?_⟩, hL₂⟩
+    rw [hdec]; exact hprop k h hp
 
 omit [Fintype Validator] in
 theorem collect_appends (s : State Validator BlockId Payload) :
@@ -316,11 +352,12 @@ theorem adoptable_head {s : State Validator BlockId Payload} (hL : Ledger cfg s)
   rw [← ha.2, List.foldl_append, hcs, Config.headOf, Config.headOf, List.foldl_append]
 
 omit [Fintype Validator] in
-/-- **Adopting certified decisions appends them**, and keeps the ledger. -/
-theorem adopt_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
+/-- **Adopted decisions keep the ledger**: the decisions, read oldest
+first, grow by those served, up to the certificate's height. -/
+theorem adopted_ledger {s : State Validator BlockId Payload} (hL : Ledger cfg s)
     {c : Cert Validator BlockId} {ds : List (ℕ × Option BlockId)}
     (ha : adoptable cfg s c ds = true) :
-    Appends cfg s (adopt cfg s c ds).2 (adopt cfg s c ds).1 ∧ Ledger cfg (adopt cfg s c ds).1 := by
+    Ledger cfg (adopted s c ds) ∧ (adopted s c ds).decided.reverse = s.decided.reverse ++ ds := by
   have hlt := adoptable_lo ha
   unfold adoptable at ha
   simp only [Bool.and_eq_true, decide_eq_true_eq] at ha
@@ -330,15 +367,21 @@ theorem adopt_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
     simp [adopted, List.reverse_append]
   have hlp' : s.lastProposed ≤ s.decided.reverse.length := by
     rw [List.length_reverse, hlen]; exact hL.2.1
-  have hL₁ : Ledger cfg (adopted s c ds) := by
-    refine ⟨?_, ?_, ?_⟩
-    · rw [hD, List.map_append, hL.1, hds]
-      change List.range s.lo ++ List.range' s.lo (c.height - s.lo) = List.range c.height
-      obtain ⟨k, hk⟩ := Nat.exists_eq_add_of_le hlt.le
-      rw [hk, Nat.add_sub_cancel_left, List.range_add, List.range'_eq_map_range]
-    · exact hL.2.1.trans hlt.le
-    · change s.chain = cfg.headOf ((adopted s c ds).decided.reverse.take s.lastProposed)
-      rw [hD, List.take_append_of_le_length hlp']; exact hL.2.2
+  refine ⟨⟨?_, ?_, ?_⟩, hD⟩
+  · rw [hD, List.map_append, hL.1, hds]
+    change List.range s.lo ++ List.range' s.lo (c.height - s.lo) = List.range c.height
+    obtain ⟨k, hk⟩ := Nat.exists_eq_add_of_le hlt.le
+    rw [hk, Nat.add_sub_cancel_left, List.range_add, List.range'_eq_map_range]
+  · exact hL.2.1.trans hlt.le
+  · change s.chain = cfg.headOf ((adopted s c ds).decided.reverse.take s.lastProposed)
+    rw [hD, List.take_append_of_le_length hlp']; exact hL.2.2
+
+omit [Fintype Validator] in
+theorem adopt_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
+    {c : Cert Validator BlockId} {ds : List (ℕ × Option BlockId)}
+    (ha : adoptable cfg s c ds = true) :
+    Appends cfg s (adopt cfg s c ds).2 (adopt cfg s c ds).1 ∧ Ledger cfg (adopt cfg s c ds).1 := by
+  obtain ⟨hL₁, hD⟩ := adopted_ledger hL ha
   rw [adopt_eq]
   obtain ⟨h₂, hL₂⟩ := settle_appends (cfg := cfg) hL₁
   have h₁ : Appends cfg s

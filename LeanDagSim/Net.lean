@@ -67,6 +67,12 @@ inductive Attack where
   /-- With each block, broadcast twenty valid twins of it, each with its
   own payload: what rate limiting bounds. -/
   | flood
+  /-- When the honest horizons differ, an invalid block at the highest,
+  referencing one block below it, and above it a chain of valid blocks up
+  to the highest honest top, each referencing the one below and `q − 1`
+  honest blocks, its identifier the least of the attacker's at its
+  round. -/
+  | junkAtCut
   deriving Repr, DecidableEq
 
 /-- **A scenario.** Times are in ticks. -/
@@ -86,6 +92,9 @@ structure Scenario where
   delayMax : ℕ := 3
   timeout : ℕ := 10
   lag : ℕ := 2
+  /-- The heights above its next undecided slot at which a node keeps
+  every proposal. -/
+  ahead : ℕ := 8
   /-- Crashed nodes, with the time each crashes. -/
   crash : List (ℕ × ℕ) := []
   /-- Recovering nodes `(v, down, up)`: node `v` is down from `down` and
@@ -158,6 +167,7 @@ def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) 
   σ := boundedSel
   idOf := idOf
   lag := sc.lag
+  ahead := sc.ahead
   limit := sc.limit
   payload := fun _ => twin
   extend := extend
@@ -198,6 +208,8 @@ structure Stats where
   times an honest node not recovering adopted decisions. -/
   asks : ℕ := 0
   adoptions : ℕ := 0
+  /-- The junk chains planted, and the honest blocks that referenced one. -/
+  junkChains : ℕ := 0
   deriving Inhabited
 
 /-- **What a simulation reports.** -/
@@ -270,6 +282,8 @@ structure World (n : ℕ) where
   dropped : ℕ
   /-- The timing measurements. -/
   stats : Stats
+  /-- The horizons a junk chain was planted at. -/
+  junked : List ℕ := []
 
 /-- Whether node `v` has crashed by time `t`. -/
 def crashed (v t : ℕ) : Bool :=
@@ -502,6 +516,48 @@ def attacked (agents : Array (Agent n)) (src t : ℕ) (a : Agent n) (st : State 
       | .propose k h => some (k, h)
       | _ => none), [])
 
+/-- A block by `me` like `b`, its payload chosen to give it an identifier
+below `bound`, if one of `256` tries does. -/
+def ground (b : Block (Fin n) ℕ ℕ) (bound : ℕ) : Block (Fin n) ℕ ℕ :=
+  ((List.range 256).map fun k => { b with payload := 1000 + k }).find? (idOf · < bound) |>.getD b
+
+/-- **The junk chain** `junkAtCut` plants, in node `me`'s name at time `t`, and
+the horizon it is planted at: the deliveries to the honest agents and the
+blocks. -/
+def junkChain (w : World n) (me : Fin n) (t : ℕ) :
+    Option (ℕ × List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × List (ℕ × Block (Fin n) ℕ ℕ)) :=
+  let hs := (List.range w.agents.size).filter fun d => match w.agents[d]? with
+    | some a => a.twin = 0 && sc.honest a.node.val && !crashed sc a.node.val t
+    | none => false
+  let bases := hs.filterMap fun d => w.states[d]?.map (·.store.base)
+  let tops := hs.filterMap fun d => w.states[d]?.bind (·.top)
+  match bases.max?, bases.min?, tops.max? with
+  | some G, some g, some T =>
+    if g < G ∧ 0 < G ∧ G ∉ w.junked then
+      let atR (r : ℕ) := w.honest.filter fun e => e.2.round = r ∧ e.2.creator ≠ me
+      match atR (G - 1) with
+      | [] => none
+      | e :: _ =>
+        let x : Block (Fin n) ℕ ℕ := ⟨G, me, {e.1}, 999⟩
+        let mine (r : ℕ) := w.blocks.foldl (fun m i b =>
+          if b.round = r ∧ b.creator = me then min m i else m) (2 ^ 64)
+        let chain := (List.range (T - G)).foldl (fun (acc : List (ℕ × Block (Fin n) ℕ ℕ)) k =>
+          let r := G + 1 + k
+          match acc.head? with
+          | none => acc
+          | some (pid, _) =>
+            let others := ((atR (r - 1)).foldl (fun (l : List (ℕ × Block (Fin n) ℕ ℕ)) e =>
+              if l.any (·.2.creator = e.2.creator) then l else l ++ [e]) []).take (q - 1)
+            if others.length + 1 < q then acc else
+            let refs : Finset ℕ := insert pid (others.map (·.1)).toFinset
+            let y := ground ⟨r, me, refs, 0⟩ (mine r)
+            (idOf y, y) :: acc) [(idOf x, x)]
+        let blocks := chain.reverse
+        let msgs := hs.flatMap fun d => blocks.map fun e => (t + 1, d, Input.deliver e.1 e.2)
+        some (G, msgs, blocks)
+    else none
+  | _, _, _ => none
+
 /-- Process at most `fuel` inputs, in order of arrival, up to the horizon. -/
 def loop : ℕ → World n → World n
   | 0, w => w
@@ -522,6 +578,11 @@ def loop : ℕ → World n → World n
         let (out, sig, direct) := if sc.adv.contains a.node.val then
             attacked sc w.agents d t a st i r.2
           else (r.2, r.2.filterMap (fun | .propose k h => some (k, h) | _ => none), [])
+        let jc := match sc.adv.head? with
+          | some z => if h : z < n ∧ sc.attacks.contains .junkAtCut then
+              junkChain sc q w ⟨z, h.1⟩ t else none
+          | none => none
+        let direct := direct ++ (jc.map (·.2.1)).getD []
         let (out, extra, wh) := withholding sc w.agents d t out w.withheld
         let (msgs, g) := sends sc w.agents d t out w.gen
         let msgs := extra ++ direct ++ msgs
@@ -577,7 +638,8 @@ def loop : ℕ → World n → World n
             gen := g
             decisions := w.decisions.modify d (decs.reverse ++ ·)
             honest := if isHonest then own ++ w.honest else w.honest
-            blocks := (own ++ sent).foldl (fun m e => m.insert e.1 e.2) w.blocks
+            blocks := (own ++ sent ++ (jc.map (·.2.2)).getD []).foldl (fun m e => m.insert e.1 e.2)
+              w.blocks
             maxStore := if isHonest then max w.maxStore r.1.store.ids.card else w.maxStore
             maxPending := if isHonest then max w.maxPending r.1.pending.length else w.maxPending
             events := w.events + 1
@@ -587,7 +649,10 @@ def loop : ℕ → World n → World n
             boots := if isHonest && boot then w.boots + 1 else w.boots
             signed := sig.map (fun e => (a.node.val, e.1, e.2)) ++ w.signed
             dropped := w.dropped
-            stats := ss }
+            stats := match jc with
+              | some _ => { ss with junkChains := ss.junkChains + 1 }
+              | none => ss
+            junked := (jc.map (·.1)).toList ++ w.junked }
       | _, _ => loop fuel { w with queue := rest }
 
 end Run

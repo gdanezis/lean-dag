@@ -302,9 +302,13 @@ theorem commitsOf_map (ds : List (ℕ × Option BlockId)) :
 omit [Fintype Validator] in
 theorem proposeAt_commits (s : State Validator BlockId Payload) :
     commitsOf (proposeAt cfg s).2 = [] := by
-  unfold proposeAt
-  dsimp only
-  split <;> rfl
+  obtain ⟨-, -, -, -, -, ho⟩ := proposeAt_eq (cfg := cfg) s
+  generalize (proposeAt cfg s).2 = out at ho
+  induction out with
+  | nil => rfl
+  | cons o out ih =>
+    obtain ⟨k, h, rfl⟩ := ho o (List.mem_cons_self ..)
+    exact ih fun o' h' => ho o' (List.mem_cons_of_mem _ h')
 
 omit [Fintype Validator] in
 theorem commitsOf_collect (s : State Validator BlockId Payload) :
@@ -414,7 +418,9 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
         (decidable cfg s.store.topRound - 1) ht hVV (by omega)
       rw [Nat.zero_add] at this
       exact this
-  · simpa [commitsOf] using h
+  · rw [proposeAt_commits, List.append_nil]
+    exact CommitInv.keeps (hlo := (proposeAt_keeps _).2.2.2.2.2.1)
+      (hk := by rw [(proposeAt_keeps _).1]; exact Keeps.refl _) (hc := hc) h
 
 theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}

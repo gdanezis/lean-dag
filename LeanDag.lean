@@ -601,3 +601,4 @@ import LeanDag.Node.Defer.Proof
 import LeanDag.Node.Live.Statement
 import LeanDag.Node.Helpers.Wait
 import LeanDag.Node.Helpers.Live
+import LeanDag.Node.Helpers.Certify

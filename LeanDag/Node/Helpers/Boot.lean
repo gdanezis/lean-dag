@@ -70,9 +70,9 @@ theorem advance_offered (s : State Validator BlockId Payload) :
   have hd : ∀ s : State Validator BlockId Payload,
       (decideStep cfg s).1.offers = s.offers ∧ (decideStep cfg s).1.certs = s.certs := by
     intro s; unfold Node.decideStep; dsimp only; split
-    · obtain ⟨-, -, -, -, hof, -, -, -, -, -, hce⟩ := proposeAt_keeps (cfg := cfg) _
+    all_goals
+      obtain ⟨-, -, -, -, hof, -, -, -, -, -, hce⟩ := proposeAt_keeps (cfg := cfg) _
       exact ⟨hof, hce⟩
-    · exact ⟨rfl, rfl⟩
   have hc : ∀ s : State Validator BlockId Payload,
       (collect cfg s).1.offers = s.offers ∧ (collect cfg s).1.certs = s.certs := by
     intro s; unfold Node.collect; split
@@ -232,7 +232,7 @@ theorem verdict_decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H f
       exact (ViewsAbove.of_store hiff fun i hi => (hc i hi).2).tryDecide_eq cfg.p hw _ hh.horizon
     rw [hT] at he
     exact ⟨V', (Loop.sound _ _ _ P H cfg.p boundedSel U V' s.lo _ hl hcv (by omega)).2 e he⟩
-  · simp [commitsOf] at he
+  · rw [proposeAt_commits] at he; simp at he
 
 /-- **Advancing from a cut**: the store stays one, and the decisions are
 verdicts. -/

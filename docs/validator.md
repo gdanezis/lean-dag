@@ -351,19 +351,26 @@ Bounding the pending blocks belongs to rate limiting (step 9).
   hash: the head of `d₀ … d_{k−1}` is `extend (… (extend root d₀) …)
   d_{k−1}` (`Config.headOf`), so a head at height `k` stands for the
   decisions of slots `0 … k − 1`.
-* **Proposals.** After a decision step whose decided frontier reaches a
-  multiple `k` of `m` slots above the height it last proposed, the node
-  signs and sends every peer a proposal of the head at `k`
-  (`proposeAt`). It keeps the decisions it outputs, the latest first
-  (`State.decided`), and the head at the height it last proposed
-  (`State.chain`), and extends that head by the decisions since; a
-  proposal therefore costs the decisions since the last one, and its size
-  does not grow with the run.
-* **Certificates.** The node keeps each peer's latest proposal, its own
-  included (`record`). `q` distinct signers of one height and one head
-  make a certificate (`certify`), once the node's own decisions reach the
-  height, and the node keeps the highest. Every proposal is signed, so a
-  certificate carries the signed proposals of its signers.
+* **Proposals.** After each decision step the node signs and sends every
+  peer a proposal of the head at each multiple `k` of `m` slots that its
+  decided frontier reaches above both the height it last proposed and
+  its certificate's height (`proposeAt`, `nextHeight`). It keeps the
+  decisions it outputs, the latest first (`State.decided`), and the head
+  at the height it last proposed (`State.chain`), and extends that head
+  by the decisions since; a proposal therefore costs the decisions since
+  the last one, and its size does not grow with the run. A node whose
+  frontier jumps past several heights proposes each, so two nodes whose
+  frontiers jump differently still propose a common height.
+* **Certificates.** The node keeps one proposal per signer and height,
+  its own included, above its certificate's height (`record`). Above
+  `lo + ahead`, for `ahead` a parameter of the configuration, it keeps
+  only each signer's latest. `q` distinct signers of one height and one
+  head make a certificate (`certify`), once the node's own decisions
+  reach the height, and the node keeps the highest. Every proposal is
+  signed, so a certificate carries the signed proposals of its signers.
+  A node certifies every height it decides once `q − 1` other signers'
+  proposals of the same head reach it while the height lies at most
+  `ahead` above its next undecided slot (`Node.Local.Certifies`, §13.7).
 * **Garbage collection.** The horizon rises to `Λ` below the slot round
   of the lesser of the decided and the certified frontiers (§3.4), so
   every slot below a node's horizon is certified by the certificate it
@@ -486,7 +493,7 @@ at once.
 
 | | Claim | Route |
 |---|---|---|
-| V1 | Every block of the program's own, those it persists, satisfies `ValidAt q Clause.distinct`; they lie at strictly increasing rounds, across restarts, resumes and bootstraps; it references only what it knew; the blocks it broadcasts are those it persists; it keeps the decisions it outputs, slots `0 … lo − 1` in order, and every proposal it signs at a height `k` is the head of the chain of its first `k` decisions; its accepted set is a view. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.Sends`, `Node.Local.Decisions`, `Node.Local.ValidOut` (proved, restarts, resumes and bootstraps included) |
+| V1 | Every block of the program's own, those it persists, satisfies `ValidAt q Clause.distinct`; they lie at strictly increasing rounds, across restarts, resumes and bootstraps; it references only what it knew; the blocks it broadcasts are those it persists; it keeps the decisions it outputs, slots `0 … lo − 1` in order, and every proposal it signs at a height `k` is the head of the chain of its first `k` decisions; its accepted set is a view; without a restart it certifies every height it decides once `q − 1` other signers' proposals of the same head reach it in time. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.Sends`, `Node.Local.Decisions`, `Node.Local.ValidOut` (proved, restarts, resumes and bootstraps included), `Node.Local.Certifies` (proved) |
 | V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
 | V3 | Over a trace, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every honest store is a cut of it; with timely authentication of blocks, an injective hash and `Params.Tolerates`, and no honest node given a base offer or a certificate, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise and whenever they restart and resume. | `Node.Runs.Safety` (proved): `Node.authentic_of_timely`, `Node.hashInjective_of_trace`, `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised, no honest node restarting and none given a base offer or a certificate, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
@@ -675,9 +682,7 @@ rejoins by bootstrap (§3.6).
    skipped a slot at its voting round, the top round, which the program
    skipped only a round later. The program scans as the scheme does
    (§3.3). Over ten seeds each of six simulator scenarios, the slots
-   decided are as many or more than with the narrower scan; with node `3`
-   down, 5,300 inputs take the others to round `283` (`LeanDagTest/Node/Step.lean`),
-   against `253` with the narrower scan.
+   decided are as many or more than with the narrower scan.
 3. **The simulator** (`LeanDagSim/Net.lean`, `lake exe sim`). `n`
    programs over a seeded network: before GST a message takes up to
    *preMax* ticks, after it between *delayMin* and *delayMax*; crashes
@@ -1356,6 +1361,10 @@ explicit.
    a cut of the run's record (`cut_before`).
 10. **Blocks at the horizon** are taken unchecked, and a node behind
     adopts the decisions its peers certified (§13.6).
+11. **Certifying what a node decides**: a node proposes every height its
+    decisions reach and keeps every proposal near its frontier, so it
+    certifies each height it decides once its peers' proposals reach it
+    (§13.7, built).
 
 ### 13.6 Blocks at the horizon (built)
 
@@ -1414,14 +1423,18 @@ the horizon the peer had when it built it, which the node reaches once
 it holds the same certificate.
 
 **Why it closes the attack.** Junk at A's horizon `G` lies at or below
-`R(c) − Λ` for the certificate `c` that A holds, whose signers broadcast
-their proposals. A node B whose horizon is lower receives those
-proposals, adopts the decisions, and its horizon rises to `G` or above.
+`R(c) − Λ` for the certificate `c` that A holds, at a height `k`, whose
+signers broadcast their proposals. A node B whose horizon is lower
+raises it to `G` or above in one of two ways. If B has decided `k`, it
+certifies `k` once the signers' proposals reach it (§13.7). If B has
+not, and `q` signers other than B proposed `k`, it adopts the decisions.
 B then takes `x` unchecked as A did, or drops it as lying below its
 horizon, and in both cases accepts A's blocks above `x`. A block above
 `x` that B dropped earlier is fetched again, since the pending blocks
-above it still miss it. Past GST the disagreement lasts at most the
-delivery of the proposals, `Δ`, and one request and answer, `2Δ`.
+above it still miss it. When the honest nodes number exactly `q` and
+the Byzantine ones sign nothing, every certificate needs B's signature,
+so adoption cannot help B and the first way is the only one; the
+simulator's attack exercises this case (§13.7).
 
 **Why it keeps late honest blocks.** A late honest block at a peer's
 horizon is taken unchecked, so no node is cut off for being slow.
@@ -1445,9 +1458,11 @@ horizon is taken unchecked, so no node is cut off for being slow.
   unchanged: adoption adds no block, and convergence assumes no offers.
 * **V11** must allow certificate offers to the reliable nodes:
   `NoRejoin T` is to become "no base offer and no restart at `T`".
-  Arrival (11.1c) gains the adoption bound above, and the synchronisation
-  assumption must cover a block dropped as invalid and needed again after
-  the receiver's horizon rose past it. Both are 11.1c's.
+  Arrival (11.1c) gains the bound on how long horizons differ, and the
+  synchronisation assumption must cover a Byzantine block dropped as
+  invalid and needed again after the receiver's horizon rose past it: a
+  delivery before the rise satisfies `SyncedWithin` as stated while the
+  receiver lacks the block. Both are 11.1c's.
 
 **The simulator.** Node 2 slow, every message to or from it taking at
 least the delay below; node 3 running the honest program and silent from
@@ -1470,5 +1485,96 @@ the equivocator family decides 270 slots against 226. A node asks for
 decisions in few runs, 3 to 6 times in 600 ticks without faults, and
 adopts none there: by the answer it has decided itself. It adopts where
 it cannot decide, as the node halted by blocks forged in its name
-without signature checks (§6). The attack that adoption closes, junk
-planted at a horizon, is not in the simulator.
+without signature checks (§6). Junk planted at a horizon is simulated
+in §13.7.
+
+### 13.7 Certifying what a node decides (built)
+
+**The attack.** The simulator's attack `junk-at-cut` is mounted by one
+Byzantine node that sees every node's state. Whenever two honest nodes'
+horizons differ, it sends every honest node two things:
+
+* an invalid block at the highest honest horizon `G`, referencing one
+  block of round `G − 1`;
+* above it, a chain of valid blocks up to the highest honest round, each
+  referencing the one below and `q − 1` honest blocks. Each has the least
+  identifier among the attacker's blocks at its round, so honest
+  builders reference it.
+
+**What it found.** Under the previous rule the attack stalled every
+honest node for good (`n = 4`, `f = 1`, seed 1, at round 13).
+
+* Node 1 had decided the slots below 10 but held a certificate only at
+  height 7, so its horizon stayed at round 5, below the invalid blocks at
+  rounds 6 and 8. It could accept none of the other nodes' later blocks.
+* It could not adopt. With three honest nodes and `q = 3`, every
+  certificate needs node 1's own signature, and node 1 signs only the
+  heights it has decided.
+* It had not certified height 10 itself, because a node kept only each
+  signer's latest proposal. Nodes 0 and 2 had proposed height 11,
+  replacing their proposals at 10, before node 1 decided 10.
+
+A second cause was found while proving the change. A node proposed only
+the highest multiple of `m` its frontier reached, so two nodes whose
+frontiers jump past different heights may never propose a common one.
+
+**The change.**
+
+* A node proposes at every multiple of `m` that its decided frontier
+  reaches above both the height it last proposed and its certificate's
+  height (`proposeAt`, `nextHeight`), after every decision step.
+* It keeps one proposal per signer and height above its certificate's
+  height. Above `lo + ahead` it keeps only each signer's latest
+  (`record`), for `ahead` a parameter of the configuration.
+
+**The claim.** `Node.Local.Certifies`: over inputs without a restart, a
+node whose decisions reach a positive multiple `k` of `m` holds a
+certificate at `k` or above, once proposals at `k` of the head of its
+first `k` decisions reached it from `q − 1` distinct other signers, each
+while `k` lay at most `ahead` above its next undecided slot, and none of
+those signers sent another head at `k` afterwards.
+
+**The proof** (`Helpers/Certify.lean`) carries two invariants over the
+run.
+
+* `Kept`: the node's own proposal at every multiple of `m` up to the
+  height it last proposed and above its certificate's is kept, with the
+  head of its first decisions there; its own proposals lie at heights it
+  decided; wherever its own proposal and `q` signers of one head meet,
+  it holds a certificate at that height or above; and a peer's proposal
+  received at most `ahead` above the frontier is kept until the
+  certificate reaches its height, unless the peer sends another head at
+  that height.
+* `Covered`: after each step, the next height to propose lies above the
+  decided frontier.
+
+At the end, the node proposed `k` by `Covered`, so its own proposal and
+the `q − 1` peers' are kept by `Kept`, and `Kept` gives the certificate.
+
+**What it does not give.** The claim is about one node's inputs.
+
+* That the proposals reach the node within `ahead` of its frontier, and
+  that the honest nodes decide each height, are for 11.1c.
+* Memory: the proposals kept per signer lie at distinct heights, at
+  most one of them above `lo + ahead`, and each recording drops those at
+  or below the certificate's height. They therefore do not grow with the
+  run while the certificate keeps up with the decisions. This follows
+  from `record` but is not a Lean claim.
+
+**The simulator.** Mysticeti row, 600 ticks, ten seeds, one attacker
+(node 3 at `n = 4`, node 6 at `n = 7`) running the honest program.
+Rounds are the least an honest node reached; store is the largest an
+honest node held. Every run is safe.
+
+| | `n = 4`, `f = 1`: rounds | store | `n = 7`, `f = 2`: rounds | store |
+|---|---|---|---|---|
+| no attack | 254–267 | 26–29 | 240–246 | 44 |
+| attacker silent from the start | 95–96 | 18 | 102–103 (two silent) | 31–33 |
+| junk at the horizon, latest proposal only | 12–77; 9 of 10 below 50 | 39–45 | 88–230 | 64–75 |
+| junk at the horizon, with the change | 186–222 | 41–45 | 220–233 | 59–72 |
+
+With the change the attack costs a quarter of the rounds at `n = 4` and
+a twentieth at `n = 7`, and less than the attacker's silence in both,
+since its own slots are still decided. At `n = 7` the honest nodes
+outnumber `q`, so a node behind can adopt and the previous rule did not
+stall, but it lost up to two thirds of the rounds.

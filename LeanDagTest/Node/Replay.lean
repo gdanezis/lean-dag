@@ -49,6 +49,7 @@ def cfg (p : Scheme.Params) (per : ℕ) (hper : 0 < per) (elect : ℕ → Fin 4)
   σ := boundedSel
   idOf := idIn blk
   lag := 100
+  ahead := 8
   limit := none
   payload := fun _ => ()
   extend := fun h _ => h

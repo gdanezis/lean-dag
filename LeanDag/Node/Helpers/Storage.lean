@@ -337,8 +337,9 @@ theorem Lim.decideStep {τ W : ℕ} {s : State Validator BlockId Payload} (h : L
   unfold Node.decideStep
   dsimp only
   split
-  · refine h.of_eq ?_ ?_ ?_ ?_ <;> (unfold proposeAt record; dsimp only; split <;> rfl)
-  · exact h
+  all_goals
+    obtain ⟨ps, c, lp, ch, he, -⟩ := proposeAt_eq (cfg := cfg) _
+    rw [he]; exact h.of_eq rfl rfl rfl rfl
 
 omit [Fintype Validator] in
 theorem Lim.collect {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim τ W s) :

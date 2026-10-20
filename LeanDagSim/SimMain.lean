@@ -4,12 +4,12 @@ import LeanDagSim.Net
 
 Runs one scenario and prints what each honest node reached and decided.
 Options, each `--name value`: `row`, `n`, `f`, `c`, `seed`, `horizon`,
-`gst`, `pre-max`, `delay-min`, `delay-max`, `timeout`, `lag`,
+`gst`, `pre-max`, `delay-min`, `delay-max`, `timeout`, `lag`, `ahead`,
 `crash` (`node@time,…`), `recover` (`node@down-up,…`), `byz` (`node,…`),
 `byz-until`, `withhold` (`z,v,R`: node `z` withholds its round-`R` block
 from `v`), `reveal-after`, `adv` (`node,…`: attackers), `attacks`
 (`fake-base`, `split-base`, `fake-cert`, `conflict-proposals`,
-`invalid-blocks`, `forged-author`, `flood`, comma-separated), `limit`
+`invalid-blocks`, `forged-author`, `flood`, `junk-at-cut`, comma-separated), `limit`
 (`τ,W`: the rate limiter's budget and window) and `verify`
 (`true` or `false`: whether the network checks signatures).
 -/
@@ -55,6 +55,7 @@ def parseArgs : List String → Scenario → Except String Scenario
       | "--delay-max" => pure { sc with delayMax := ← nat }
       | "--timeout" => pure { sc with timeout := ← nat }
       | "--lag" => pure { sc with lag := ← nat }
+      | "--ahead" => pure { sc with ahead := ← nat }
       | "--crash" => pure { sc with crash := parseCrash v }
       | "--recover" => pure { sc with recover := parseRecover v }
       | "--byz" => pure { sc with byz := parseNats v }
@@ -76,6 +77,7 @@ def parseArgs : List String → Scenario → Except String Scenario
           | "invalid-blocks" => pure Attack.invalidBlocks
           | "forged-author" => pure Attack.forgedAuthor
           | "flood" => pure Attack.flood
+          | "junk-at-cut" => pure Attack.junkAtCut
           | _ => throw s!"unknown attack {a}"
         pure { sc with attacks := as }
       | "--verify" => match v with
@@ -103,5 +105,6 @@ def main (args : List String) : IO UInt32 := do
     for (v, top, ds) in (honest.zip (r.tops.zip r.commits)).map fun (v, t, d) => (v, t, d) do
       let skips := (ds.filter (·.2.isNone)).length
       IO.println s!"node {v}: round {top.getD 0}, {ds.length} slots decided, {skips} skipped"
+    IO.println s!"junk chains {r.stats.junkChains}  asks {r.stats.asks}  adoptions {r.stats.adoptions}"
     IO.println s!"agree {r.agree}  prefixes {r.prefixes}  valid {r.valid}  skips {r.skips}  boots {r.boots}  dropped {r.dropped}"
     return if r.agree && r.valid then 0 else 1

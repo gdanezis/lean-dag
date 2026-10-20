@@ -72,6 +72,9 @@ structure Config where
   idOf : Block Validator BlockId Payload → BlockId
   /-- The horizon's lag `Λ`. -/
   lag : ℕ
+  /-- The heights above its next undecided slot at which a node keeps
+  every proposal of each signer. -/
+  ahead : ℕ
   /-- **Rate limiting**, if the node rate-limits: the novelty budget `τ`
   of a candidate slot and the window `W` above the node's top
   (`docs/validator.md` §3.9). -/

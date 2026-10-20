@@ -55,9 +55,9 @@ theorem decideStep_pending (s : State Validator BlockId Payload) :
   unfold Node.decideStep
   dsimp only
   split
-  · obtain ⟨-, hpd, -, -, -, -, hrq, -⟩ := proposeAt_keeps (cfg := cfg) _
+  all_goals
+    obtain ⟨-, hpd, -, -, -, -, hrq, -⟩ := proposeAt_keeps (cfg := cfg) _
     exact ⟨hpd, hrq⟩
-  · exact ⟨rfl, rfl⟩
 
 omit [Fintype Validator] in
 /-- **Collecting at a horizon that does not rise changes nothing.** -/
@@ -538,7 +538,7 @@ theorem decideStep_persist (s : State Validator BlockId Payload) :
   dsimp only
   split
   · exact ((out_quiet (quiet_commits _)).append (out_quiet (proposeAt_quiet _))).1
-  · rfl
+  · exact (out_quiet (proposeAt_quiet _)).1
 
 omit [Fintype Validator] in
 theorem collect_persist (s : State Validator BlockId Payload) :

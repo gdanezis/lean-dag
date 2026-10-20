@@ -3,7 +3,7 @@ import LeanDag.Node.Vote
 /-!
 # An honest node, one node at a time — statement
 
-`docs/validator.md` §4, V1, V2 and V4. Over any sequence of inputs from the
+`docs/validator.md` §4, V1, V2 and V4, and certification. Over any sequence of inputs from the
 initial state:
 
 * **one block per round**: the node's own blocks, those it persists, lie
@@ -21,7 +21,10 @@ initial state:
   vote, with the horizon at or below the next undecided slot's round, a
   decision step decides what `tryDecide` decides on any record and view
   holding the store's blocks from the horizon up (`DecidesOnView`); a
-  pruned store decides as the view it is a cut of.
+  pruned store decides as the view it is a cut of;
+* **certifying what it decides**: without a restart, a node whose
+  decisions reach a multiple of `m` certifies it once `q − 1` other
+  signers' proposals of the same head reached it in time (`Certifies`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -99,8 +102,28 @@ def DecidesOnView : Prop :=
       if s.lo < N then Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel U V s.lo (N - 1)
       else []
 
+/-- **Certifying what it decides**: over inputs without a restart, a node
+whose decisions reach a positive multiple `k` of `m` holds a certificate
+at `k` or above, once proposals at `k` of the head of its first `k`
+decisions reached it from `q − 1` distinct other signers, each while `k`
+lay at most `ahead` above its next undecided slot, and none of them sent
+another head at `k` after. -/
+def Certifies : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
+    (is : List (Input Validator BlockId Payload)) (k : ℕ) (S : Finset Validator),
+    let r := run cfg (State.init cfg) is
+    let h := cfg.headOf ((commitsOf r.2).take k)
+    (∀ i ∈ is, i ≠ .restart) → 0 < k → cfg.m ∣ k → k ≤ (commitsOf r.2).length →
+    cfg.me ∉ S → cfg.q ≤ S.card + 1 →
+    (∀ u ∈ S, ∃ is₁ is₂, is = is₁ ++ .proposal u k h :: is₂ ∧
+      k ≤ (run cfg (State.init cfg) is₁).1.lo + cfg.ahead ∧
+      ∀ h', .proposal u k h' ∈ is₂ → h' = h) →
+    k ≤ r.1.certHeight
+
 /-- One node at a time. -/
-def Statement : Prop := OneEach ∧ Authored ∧ Sends ∧ Decisions ∧ ValidOut ∧ DecidesOnView
+def Statement : Prop :=
+  OneEach ∧ Authored ∧ Sends ∧ Decisions ∧ ValidOut ∧ DecidesOnView ∧ Certifies
 
 end Local
 

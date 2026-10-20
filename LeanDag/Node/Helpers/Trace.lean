@@ -34,6 +34,15 @@ theorem inputsBefore_of_le {i : ℕ} (h : tr.length ≤ i) (v : Validator) :
   unfold inputsBefore
   rw [List.take_of_length_le h, List.take_length]
 
+theorem run_append (c : Config Validator BlockId Payload) :
+    ∀ (s : State Validator BlockId Payload) (l₁ l₂ : List (Input Validator BlockId Payload)),
+    run c s (l₁ ++ l₂) =
+      ((run c (run c s l₁).1 l₂).1, (run c s l₁).2 ++ (run c (run c s l₁).1 l₂).2)
+  | s, [], l₂ => by simp [run]
+  | s, i :: l₁, l₂ => by
+    simp only [List.cons_append, run]
+    rw [run_append c _ l₁ l₂, List.append_assoc]
+
 theorem run_append_single (c : Config Validator BlockId Payload) :
     ∀ (s : State Validator BlockId Payload) (l : List (Input Validator BlockId Payload))
       (x : Input Validator BlockId Payload),

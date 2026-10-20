@@ -24,15 +24,16 @@ input `i` in the state `s`: the new state and the outputs.
 * **Deciding** (`decideStep`): `tryDecide` from the next undecided slot
   to the last slot at a round the store holds; the decisions are kept
   (`State.decided`), the latest first.
-* **Checkpoints** (`proposeAt`, `record`, `certify`): once the decided
-  frontier reaches a multiple of `m` slots above the height last
-  proposed, the node signs and sends a proposal of the head of the chain
-  of its decisions below it (`Config.headOf`), extending the head it last
-  proposed by the decisions since. It keeps each peer's latest proposal,
-  its own included, and `q` distinct signers of one height and one head
-  make a certificate, once the node's own decisions reach the height;
-  the node keeps the highest, and serves it with the decisions it
-  certifies.
+* **Checkpoints** (`proposeAt`, `record`, `certify`): at each multiple
+  of `m` slots above the height last proposed and the certificate's that
+  the decided frontier reaches, the node signs and sends a proposal of
+  the head of the chain of its decisions below it (`Config.headOf`),
+  extending the head it last proposed by the decisions since. It keeps
+  one proposal per signer and height above its certificate's height,
+  its own included, and above `lo + ahead` only each signer's latest;
+  `q` distinct signers of one height and one head make a certificate,
+  once the node's own decisions reach the height; the node keeps the
+  highest, and serves it with the decisions it certifies.
 * **Adopting** (`adoptable`, `adopt`): a node that holds `q` signers'
   proposals of one head at a height above its next undecided slot asks
   them for the decisions certified from that slot up; served a
@@ -121,8 +122,8 @@ structure State where
   lastProposed : ℕ
   /-- The head of the chain of its decisions below that height. -/
   chain : BlockId
-  /-- Each peer's latest proposal, the node's own included: the signer,
-  the height and the head. -/
+  /-- The proposals kept, the node's own included: the signer, the height
+  and the head. -/
   props : List (Validator × ℕ × BlockId)
   /-- The highest certificate the node holds. -/
   cert : Option (Cert Validator BlockId)
@@ -422,28 +423,51 @@ def certify (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
   let signers := ((s.props.filter fun x => decide (x.2 = (k, h))).map Prod.fst).dedup
   if cfg.q ≤ signers.length ∧ s.certHeight < k ∧ k ≤ s.lo then some ⟨k, h, signers⟩ else s.cert
 
-/-- **Record a proposal**: keep it as the signer's latest, then certify. -/
+/-- **Record a proposal**, then certify: one proposal kept per signer and
+height, the signer's others above `lo + ahead` dropped if this one lies
+there too, and none at or below the certificate's height. -/
 def record (s : State Validator BlockId Payload) (v : Validator) (k : ℕ) (h : BlockId) :
     State Validator BlockId Payload :=
-  let s₁ := { s with props := (v, k, h) :: s.props.filter fun x => x.1 ≠ v }
-  { s₁ with cert := certify cfg s₁ k h }
+  let w := s.lo + cfg.ahead
+  let ps := (v, k, h) :: s.props.filter fun x => x.1 ≠ v ∨ x.2.1 ≠ k ∧ (k ≤ w ∨ x.2.1 ≤ w)
+  let c := certify cfg { s with props := ps } k h
+  let s₁ := { s with props := ps.filter fun x => (c.map Cert.height).getD 0 < x.2.1 }
+  { s₁ with cert := c }
 
-/-- **Propose**: once the decided frontier reaches a multiple `k` of `m`
-slots above the height last proposed, extend the head last proposed by
-the decisions of slots `lastProposed … k − 1`, the latest `lo −
-lastProposed` kept, sign and send the head at `k`, and record the
-proposal. -/
-def proposeAt (s : State Validator BlockId Payload) :
-    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
-  let k := cfg.m * (s.lo / cfg.m)
-  if s.lastProposed < k then
+/-- **The next height to propose**: the least multiple of `m` above both
+the height last proposed and the certificate's height. -/
+def nextHeight (s : State Validator BlockId Payload) : ℕ :=
+  cfg.m * (max s.lastProposed s.certHeight / cfg.m + 1)
+
+/-- **Propose once**: if the decided frontier reaches the next height `k`,
+extend the head last proposed by the decisions of slots `lastProposed …
+k − 1`, the latest `lo − lastProposed` kept, sign the head at `k`, and
+record the proposal. -/
+def proposeNext (s : State Validator BlockId Payload) :
+    Option (State Validator BlockId Payload × Output Validator BlockId Payload) :=
+  let k := nextHeight cfg s
+  if k ≤ s.lo then
     let h := ((s.decided.take (s.lo - s.lastProposed)).reverse.take (k - s.lastProposed)).foldl
       cfg.extend s.chain
-    ({ record cfg s cfg.me k h with lastProposed := k, chain := h }, [.propose k h])
-  else (s, [])
+    some ({ record cfg s cfg.me k h with lastProposed := k, chain := h }, .propose k h)
+  else none
+
+/-- Propose at most `fuel` times. -/
+def proposeFrom : ℕ → State Validator BlockId Payload →
+    State Validator BlockId Payload × List (Output Validator BlockId Payload)
+  | 0, s => (s, [])
+  | fuel + 1, s =>
+    match proposeNext cfg s with
+    | some (s₁, o) => let r := proposeFrom fuel s₁; (r.1, o :: r.2)
+    | none => (s, [])
+
+/-- **Propose** at every height the decided frontier reaches. -/
+def proposeAt (s : State Validator BlockId Payload) :
+    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
+  proposeFrom cfg (s.lo + 1) s
 
 /-- **Decide**: `tryDecide` from the next undecided slot to the last slot
-at a round the store holds; output and keep what it decides, then
+at a round the store holds; output and keep what it decides; then
 propose. -/
 def decideStep (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
@@ -454,7 +478,7 @@ def decideStep (s : State Validator BlockId Payload) :
       s.store.view s.lo (N - 1)
     let r := proposeAt cfg { s with lo := s.lo + ds.length, decided := ds.reverse ++ s.decided }
     (r.1, ds.map (fun e => .commit e.1 e.2) ++ r.2)
-  else (s, [])
+  else proposeAt cfg s
 
 /-- The references of a pending block, each with the round below it. -/
 def expand (s : State Validator BlockId Payload) (j : BlockId) : List (BlockId × ℕ) :=

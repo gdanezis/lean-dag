@@ -136,12 +136,12 @@ theorem calm_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
 omit [Fintype Validator] in
 theorem calm_decideStep (s : State Validator BlockId Payload) :
     Calm s (Node.decideStep cfg s).1 := by
-  unfold Node.decideStep proposeAt record
+  unfold Node.decideStep
   dsimp only
   split
-  · dsimp only
-    split <;> exact Calm.refl _
-  · exact Calm.refl _
+  all_goals
+    obtain ⟨ps, c, lp, ch, he, -⟩ := proposeAt_eq (cfg := cfg) _
+    rw [he]; exact Calm.refl _
 
 omit [Fintype Validator] in
 theorem calm_collect (s : State Validator BlockId Payload) :
@@ -347,7 +347,8 @@ theorem OwnTop.advance {s : State Validator BlockId Payload} (h : OwnTop cfg s) 
     · obtain ⟨hst, -, htop, hown, -⟩ := proposeAt_keeps (cfg := cfg)
         { r.1 with lo := r.1.lo + _, decided := _ }
       exact h₁.grow (by rw [hst]; exact Grows.refl _) (by rw [hst]) htop hown
-    · exact h₁
+    · obtain ⟨hst, -, htop, hown, -⟩ := proposeAt_keeps (cfg := cfg) r.1
+      exact h₁.grow (by rw [hst]; exact Grows.refl _) (by rw [hst]) htop hown
   have h₃ := h₂.collect
   generalize Node.collect cfg (Node.decideStep cfg r.1).1 = c at h₃
   exact h₃.grow (Grows.flush _ _ _) (flush_base _ _ _) rfl rfl
@@ -683,10 +684,12 @@ theorem timersBuilt_advance (s : State Validator BlockId Payload) :
     · rcases List.mem_append.mp h with h | h
       · obtain ⟨_, _, h⟩ := List.mem_map.mp h
         cases h
-      · unfold proposeAt at h
-        dsimp only at h
-        split at h <;> simp at h
-    · simp at h
+      · obtain ⟨-, -, -, -, -, ho⟩ := proposeAt_eq (cfg := cfg) _
+        obtain ⟨k, h', hk⟩ := ho _ h
+        cases hk
+    · obtain ⟨-, -, -, -, -, ho⟩ := proposeAt_eq (cfg := cfg) _
+      obtain ⟨k, h', hk⟩ := ho _ h
+      cases hk
   · unfold Node.collect at h
     split at h
     · dsimp only at h

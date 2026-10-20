@@ -441,6 +441,58 @@ theorem adopt_eq (s : State Validator BlockId Payload) (c : Cert Validator Block
       ds.map (fun e => .commit e.1 e.2) ++ (Node.settle cfg (adopted s c ds)).2) := rfl
 
 omit [Fintype Validator] in
+/-- **Proposing once**, at the next height `k`, which the decided frontier
+reaches: the proposal recorded, `k` the height last proposed and the head
+there the chain extended by the decisions since. -/
+theorem proposeNext_some {s s₁ : State Validator BlockId Payload}
+    {o : Output Validator BlockId Payload} (h : proposeNext cfg s = some (s₁, o)) :
+    let k := nextHeight cfg s
+    let hd := ((s.decided.take (s.lo - s.lastProposed)).reverse.take (k - s.lastProposed)).foldl
+      cfg.extend s.chain
+    k ≤ s.lo ∧ s₁ = { record cfg s cfg.me k hd with lastProposed := k, chain := hd } ∧
+      o = .propose k hd := by
+  unfold proposeNext at h
+  dsimp only at h
+  split at h
+  · rename_i hk
+    rw [Option.some.injEq, Prod.mk.injEq] at h
+    exact ⟨hk, h.1.symm, h.2.symm⟩
+  · cases h
+
+omit [Fintype Validator] in
+theorem proposeFrom_succ (fuel : ℕ) (s : State Validator BlockId Payload) :
+    proposeFrom cfg (fuel + 1) s = match proposeNext cfg s with
+      | some (s₁, o) => ((proposeFrom cfg fuel s₁).1, o :: (proposeFrom cfg fuel s₁).2)
+      | none => (s, []) := rfl
+
+omit [Fintype Validator] in
+/-- **Proposing** changes only the proposals, the certificate, the height
+last proposed and the head there, and outputs only proposals. -/
+theorem proposeFrom_eq : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
+    ∃ ps c lp ch, (proposeFrom cfg fuel s).1 =
+        { s with props := ps, cert := c, lastProposed := lp, chain := ch } ∧
+      ∀ o ∈ (proposeFrom cfg fuel s).2, ∃ k h, o = .propose k h
+  | 0, s => ⟨s.props, s.cert, s.lastProposed, s.chain, rfl, by simp [proposeFrom]⟩
+  | fuel + 1, s => by
+    rw [proposeFrom_succ]
+    split
+    · rename_i s₁ o hn
+      obtain ⟨-, rfl, rfl⟩ := proposeNext_some hn
+      obtain ⟨ps, c, lp, ch, he, ho⟩ := proposeFrom_eq fuel _
+      refine ⟨ps, c, lp, ch, by rw [he]; rfl, fun o' ho' => ?_⟩
+      rcases List.mem_cons.mp ho' with rfl | ho'
+      · exact ⟨_, _, rfl⟩
+      · exact ho o' ho'
+    · exact ⟨s.props, s.cert, s.lastProposed, s.chain, rfl, by simp⟩
+
+omit [Fintype Validator] in
+theorem proposeAt_eq (s : State Validator BlockId Payload) :
+    ∃ ps c lp ch, (proposeAt cfg s).1 =
+        { s with props := ps, cert := c, lastProposed := lp, chain := ch } ∧
+      ∀ o ∈ (proposeAt cfg s).2, ∃ k h, o = .propose k h :=
+  proposeFrom_eq _ s
+
+omit [Fintype Validator] in
 /-- **Proposing** keeps everything but the proposals, the certificate and
 the height last proposed. -/
 theorem proposeAt_keeps (s : State Validator BlockId Payload) :
@@ -450,16 +502,17 @@ theorem proposeAt_keeps (s : State Validator BlockId Payload) :
       (proposeAt cfg s).1.requested = s.requested ∧
       (proposeAt cfg s).1.recovering = s.recovering ∧ (proposeAt cfg s).1.fired = s.fired ∧
       (proposeAt cfg s).1.decided = s.decided ∧ (proposeAt cfg s).1.certs = s.certs := by
-  unfold proposeAt
-  dsimp only
-  split <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  obtain ⟨ps, c, lp, ch, he, -⟩ := proposeAt_eq (cfg := cfg) s
+  rw [he]
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 omit [Fintype Validator] in
 theorem proposeAt_quiet (s : State Validator BlockId Payload) :
     ∀ o ∈ (proposeAt cfg s).2, o.isQuiet := by
-  unfold proposeAt
-  dsimp only
-  split <;> simp [Output.isQuiet]
+  intro o ho
+  obtain ⟨-, -, -, -, -, hs⟩ := proposeAt_eq (cfg := cfg) s
+  obtain ⟨k, h, rfl⟩ := hs o ho
+  simp [Output.isQuiet]
 
 omit [Fintype Validator] in
 /-- **Deciding keeps the invariant** and outputs no block. -/
@@ -478,7 +531,8 @@ theorem Inv.decideStep {s : State Validator BlockId Payload}
         { s with lo := s.lo + ds.length, decided := ds.reverse ++ s.decided }
     exact ⟨(out_quiet (quiet_commits _)).append (out_quiet (proposeAt_quiet _)),
       hi.of_eq hst hpd htop hof⟩
-  · exact ⟨⟨rfl, rfl⟩, hi⟩
+  · obtain ⟨hst, hpd, htop, -, hof, -⟩ := proposeAt_keeps (cfg := cfg) s
+    exact ⟨out_quiet (proposeAt_quiet _), hi.of_eq hst hpd htop hof⟩
 
 omit [Fintype Validator] in
 /-- **Collecting keeps the invariant** and outputs no block. -/
