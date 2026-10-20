@@ -10,8 +10,9 @@ run over its inputs among the first `i` events (`stateBefore`); the
 outputs of event `i` are its node's step there (`outputsAt`); node `v`'s
 run over the whole trace is `runOf`, and what it knew `knownOf`; and an
 output sends a message to other nodes (`Sends`): a broadcast block, a
-proposal and a request for blocks or for the base to every other node,
-an answer, a base or a certificate to the node it names. A crash is the restart input, between two
+proposal, an announced certificate and a request for blocks or for the
+base to every other node, an answer, a base or a certificate to the node
+it names. A crash is the restart input, between two
 events: the node's storage writes the state a step leaves at once,
 before any of its outputs takes effect (`docs/validator.md` §5.1).
 
@@ -81,6 +82,7 @@ def Sends (u : Validator) (out : List (Output Validator BlockId Payload))
     | .propose k h => m.1 ≠ u ∧ m.2 = .proposal u k h
     | .serveCert peer c ds => m.1 = peer ∧ m.2 = .certOffer u c ds
     | .requestDecisions peer lo => m.1 = peer ∧ m.2 = .decisionRequest u lo
+    | .announce c => m.1 ≠ u ∧ m.2 = .announced u c
     | _ => False
 
 end Node

@@ -34,13 +34,20 @@ input `i` in the state `s`: the new state and the outputs.
   `q` distinct signers of one height and one head make a certificate,
   once the node's own decisions reach the height; the node keeps the
   highest, and serves it with the decisions it certifies.
+* **Announcing** (`collect`, `confirms`, `confirm`): a node that raises
+  its horizon announces its certificate to every peer. A node not
+  recovering, given a certificate above its own, of `q` distinct
+  signers, at a height it has decided and of the head it proposed there,
+  keeps it; announced one at a height it has not decided, it asks the
+  sender for the decisions certified from its next undecided slot up.
 * **Adopting** (`adoptable`, `adopt`): a node that holds `q` signers'
   proposals of one head at a height above its next undecided slot asks
   them for the decisions certified from that slot up; served a
-  certificate above that slot with those decisions, whose chain extends
-  its own to the certificate's head, it outputs them and moves its next
-  slot to the certificate's height. Its horizon then rises with its
-  peers', so it takes the blocks at their horizon as they did.
+  certificate above that slot with decisions from that slot or below,
+  whose chain extends its own to the certificate's head, it outputs
+  those from that slot and moves its next slot to the certificate's
+  height. Its horizon then rises with its peers', so it takes the blocks
+  at their horizon as they did.
 
 * **Fetching** (`walkLevel`, `missing`, `answer`): after a delivery, the missing part
   of the delivered block's history, walked through the pending blocks, is
@@ -533,7 +540,8 @@ def answer (s : State Validator BlockId Payload) (peer : Validator) (G : ℕ)
 
 /-- **Raise the horizon** (`docs/validator.md` §3.4) to `Λ` below the
 lesser of the round of the first slot neither decided nor certified,
-and the node's own round; drop what lies below it. -/
+and the node's own round; drop what lies below it, and announce the
+certificate. -/
 def collect (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   match s.top with
@@ -544,7 +552,8 @@ def collect (s : State Validator BlockId Payload) :
       let pend := s.pending.filter fun e => G ≤ e.2.round
       let req := s.requested.filter fun x => G ≤ x.2.2
       let s₁ := { s with store := st, pending := pend, fired := s.fired.filter (G ≤ ·) }
-      ({ s₁ with requested := req, owner := s.owner.filter fun e => G ≤ e.2.2 }, [.prune G])
+      ({ s₁ with requested := req, owner := s.owner.filter fun e => G ≤ e.2.2 },
+        .prune G :: s.cert.toList.map .announce)
     else (s, [])
   | none => (s, [])
 
@@ -679,6 +688,19 @@ def adopt (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
   let r := settle cfg { s₁ with props := above ct s.props }
   (r.1, ds.map (fun e => .commit e.1 e.2) ++ r.2)
 
+/-- **A certificate the node can confirm**: `q` distinct signers, above
+its certificate's height and at or below its next undecided slot, of the
+head the node itself proposed there. -/
+def confirms (s : State Validator BlockId Payload) (c : Cert Validator BlockId) : Bool :=
+  decide (cfg.q ≤ c.signers.length) && decide c.signers.Nodup && decide (s.certHeight < c.height) &&
+    decide (c.height ≤ s.lo) && decide ((cfg.me, c.height, c.head) ∈ s.props)
+
+/-- **Confirm a certificate**: keep it, and only the proposals above it,
+then settle. -/
+def confirm (s : State Validator BlockId Payload) (c : Cert Validator BlockId) :
+    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
+  settle cfg { s with cert := some c, props := above (some c) s.props }
+
 /-- **The node's transition function.** -/
 def step (s : State Validator BlockId Payload) :
     Input Validator BlockId Payload →
@@ -721,11 +743,18 @@ def step (s : State Validator BlockId Payload) :
       bootFrom cfg { s with offers := (peer, G, blocks) :: s.offers.filter fun o => o.1 ≠ peer }
     else (s, [])
   | .certOffer peer c ds =>
+    let ds' := ds.filter fun e => s.lo ≤ e.1
     if s.recovering ∧ peer ≠ cfg.me then bootFrom cfg { s with certs := (c, ds) :: s.certs }
-    else if peer ≠ cfg.me ∧ adoptable cfg s c ds then adopt cfg s c ds
+    else if peer ≠ cfg.me ∧ adoptable cfg s c ds' then adopt cfg s c ds'
+    else if peer ≠ cfg.me ∧ confirms cfg s c then confirm cfg s c
     else (s, [])
   | .decisionRequest peer lo => (s, if peer ≠ cfg.me then serveFrom s peer lo else [])
   | .proposal peer k h => if peer ≠ cfg.me then seek cfg (record cfg s peer k h) k h else (s, [])
+  | .announced peer c =>
+    if s.recovering ∨ peer = cfg.me then (s, [])
+    else if confirms cfg s c then confirm cfg s c
+    else if cfg.q ≤ c.signers.length ∧ s.lo < c.height then (s, [.requestDecisions peer s.lo])
+    else (s, [])
 
 end Node
 

@@ -634,12 +634,19 @@ theorem Lim.step {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validat
     · exact Lim.bootFrom hl (h.of_eq rfl rfl rfl rfl)
     · exact h
   | certOffer p c ds =>
-    rw [step_certOffer]
-    split
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, ha, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
     · exact Lim.bootFrom hl (h.of_eq rfl rfl rfl rfl)
-    · split
-      · rw [adopt_eq]; exact Lim.settle hl (h.of_eq (s' := adopted s c ds) rfl rfl rfl rfl)
-      · exact h
+    · rw [adopt_eq]; exact Lim.settle hl (h.of_eq (s' := adopted s c ds') rfl rfl rfl rfl)
+    · exact Lim.settle hl (h.of_eq (s' := { s with cert := some c, props := above (some c) s.props })
+        rfl rfl rfl rfl)
+    · exact h
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
+    · exact Lim.settle hl (h.of_eq (s' := { s with cert := some c, props := above (some c) s.props })
+        rfl rfl rfl rfl)
+    · exact h
+    · exact h
   | proposal p k kh =>
     rw [step_proposal]
     split

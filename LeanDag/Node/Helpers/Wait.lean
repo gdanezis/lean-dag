@@ -198,11 +198,21 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]
     exact ⟨trivial, fun r h => Or.inl h⟩
   | certOffer p c ds =>
-    rw [step_certOffer, if_neg (by simp [hs])]
-    split
-    · rw [adopt_eq]
-      have k := key (adopted s c ds) hs
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    · rw [hs] at h₁; cases h₁
+    · rw [he, adopt_eq]
+      have k := key (adopted s c ds') hs
       exact ⟨k.1, fun r h => Or.inl (k.2 h)⟩
+    · rw [he]
+      have k := key { s with cert := some c, props := above (some c) s.props } hs
+      exact ⟨k.1, fun r h => Or.inl (k.2 h)⟩
+    · rw [he]; exact ⟨hs, fun r h => Or.inl h⟩
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
+    · have k := key { s with cert := some c, props := above (some c) s.props } hs
+      exact ⟨k.1, fun r h => Or.inl (k.2 h)⟩
+    · exact ⟨hs, fun r h => Or.inl h⟩
     · exact ⟨hs, fun r h => Or.inl h⟩
   | proposal p k h =>
     rw [step_proposal]
@@ -386,10 +396,20 @@ theorem OwnTop.step {s : State Validator BlockId Payload} {inp : Input Validator
   | baseOffer p G bs =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact h
   | certOffer p c ds =>
-    rw [step_certOffer, if_neg (by simp [hs])]
-    split
-    · rw [adopt_eq]
-      exact OwnTop.settle (h.grow (s' := adopted s c ds) (Grows.refl _) rfl rfl rfl) hs
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    · rw [hs] at h₁; cases h₁
+    · rw [he, adopt_eq]
+      exact OwnTop.settle (h.grow (s' := adopted s c ds') (Grows.refl _) rfl rfl rfl) hs
+    · rw [he]
+      exact OwnTop.settle (h.grow (s' := { s with cert := some c, props := above (some c) s.props })
+        (Grows.refl _) rfl rfl rfl) hs
+    · rw [he]; exact h
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
+    · exact OwnTop.settle (h.grow (s' := { s with cert := some c, props := above (some c) s.props })
+        (Grows.refl _) rfl rfl rfl) hs
+    · exact h
     · exact h
   | proposal p k kh =>
     rw [step_proposal]
@@ -588,13 +608,29 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
   | baseOffer p G bs =>
     exact hsame (by simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false])
   | certOffer p c ds =>
-    by_cases ha : p ≠ cfg.me ∧ adoptable cfg s c ds = true
-    · refine hset (adopted s c ds) (ds.map fun e => .commit e.1 e.2)
-        ⟨hc, hh.grow (Grows.refl _) rfl rfl (adoptable_lo ha.2).le,
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    · rw [hs] at h₁; cases h₁
+    · refine hset (adopted s c ds') (ds'.map fun e => .commit e.1 e.2)
+        ⟨hc, hh.grow (Grows.refl _) rfl rfl (adoptable_lo ha).le,
           hown.grow (Grows.refl _) rfl rfl rfl, Grows.refl _, rfl, fun r hr => Or.inl hr⟩ hs
         (fun e he => by rw [persists_commits] at he; exact absurd he List.not_mem_nil) ?_
-      rw [step_certOffer, if_neg (by simp [hs]), if_pos ha, adopt_eq]
-    · exact hsame (by rw [step_certOffer, if_neg (by simp [hs]), if_neg ha])
+      rw [he, adopt_eq]
+    · refine hset { s with cert := some c, props := above (some c) s.props } []
+        ⟨hc, hh.grow (Grows.refl _) rfl rfl le_rfl,
+          hown.grow (Grows.refl _) rfl rfl rfl, Grows.refl _, rfl, fun r hr => Or.inl hr⟩ hs
+        (by simp [persists]) ?_
+      rw [he]; rfl
+    · exact hsame he
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he
+    · refine hset { s with cert := some c, props := above (some c) s.props } []
+        ⟨hc, hh.grow (Grows.refl _) rfl rfl le_rfl,
+          hown.grow (Grows.refl _) rfl rfl rfl, Grows.refl _, rfl, fun r hr => Or.inl hr⟩ hs
+        (by simp [persists]) ?_
+      rw [he]; rfl
+    · intro e hev; rw [he] at hev; simp [persists] at hev
+    · exact hsame he
   | proposal p k kh =>
     intro e he
     rw [step_proposal] at he
@@ -734,11 +770,18 @@ theorem timersBuilt_step {s : State Validator BlockId Payload}
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]
     exact TimersBuilt.of_none fun _ _ h => by simp at h
   | certOffer p c ds =>
-    rw [step_certOffer, if_neg (by simp [hs])]
-    split
-    · rw [adopt_eq]
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    · rw [hs] at h₁; cases h₁
+    · rw [he, adopt_eq]
       refine (TimersBuilt.of_none fun r a h => ?_).append (hset _ hs)
       obtain ⟨_, -, he⟩ := List.mem_map.mp h; cases he
+    · rw [he]; exact hset _ hs
+    · rw [he]; exact TimersBuilt.of_none fun _ _ h => by simp at h
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
+    · exact hset _ hs
+    · exact TimersBuilt.of_none fun _ _ h => by simp at h
     · exact TimersBuilt.of_none fun _ _ h => by simp at h
   | proposal p k kh =>
     rw [step_proposal]
@@ -949,9 +992,16 @@ theorem retains_step {s : State Validator BlockId Payload} {inp : Input Validato
   | baseOffer p G bs =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact Retains.refl _
   | certOffer p c ds =>
-    rw [step_certOffer, if_neg (by simp [hs])]
-    split
-    · rw [adopt_eq]; exact hset (adopted s c ds) hs (Grows.refl _) rfl
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    · rw [hs] at h₁; cases h₁
+    · rw [he, adopt_eq]; exact hset (adopted s c ds') hs (Grows.refl _) rfl
+    · rw [he]; exact hset { s with cert := some c, props := above (some c) s.props } hs (Grows.refl _) rfl
+    · rw [he]; exact Retains.refl _
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
+    · exact hset { s with cert := some c, props := above (some c) s.props } hs (Grows.refl _) rfl
+    · exact Retains.refl _
     · exact Retains.refl _
   | proposal p k kh =>
     rw [step_proposal]

@@ -187,6 +187,8 @@ inductive Input where
   | certOffer (peer : Validator) (c : Cert Validator BlockId) (ds : List (ℕ × Option BlockId))
   /-- A peer asks for the decisions certified from slot `lo` up. -/
   | decisionRequest (peer : Validator) (lo : ℕ)
+  /-- A peer's certificate, announced without decisions. -/
+  | announced (peer : Validator) (c : Cert Validator BlockId)
 
 /-- **What a node produces.** -/
 inductive Output where
@@ -216,6 +218,8 @@ inductive Output where
   | serveCert (peer : Validator) (c : Cert Validator BlockId) (ds : List (ℕ × Option BlockId))
   /-- Ask a peer for the decisions it certified from slot `lo` up. -/
   | requestDecisions (peer : Validator) (lo : ℕ)
+  /-- Send the certificate to every peer, without decisions. -/
+  | announce (c : Cert Validator BlockId)
 
 end Node
 

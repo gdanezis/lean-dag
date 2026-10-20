@@ -430,6 +430,23 @@ theorem Kept.settle {P : List (Validator × ℕ × BlockId)} {s : State Validato
 
 /-! ## A step, and a run -/
 
+omit [Fintype Validator] in
+/-- **Confirming a certificate keeps what the node keeps**, and every
+height reached is then proposed. -/
+theorem Kept.confirm {P : List (Validator × ℕ × BlockId)} {s : State Validator BlockId Payload}
+    (hK : Kept cfg P s) (hP : ∀ x ∈ P, x.1 ≠ cfg.me) (hrec : s.recovering = false)
+    {c : Cert Validator BlockId} (hcf : confirms cfg s c = true) :
+    Kept cfg P (Node.confirm cfg s c).1 ∧ Covered cfg (Node.confirm cfg s c).1 := by
+  have hcH : s.certHeight ≤
+      ({ s with cert := some c } : State Validator BlockId Payload).certHeight := by
+    unfold confirms at hcf
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hcf
+    exact hcf.1.1.2.le
+  have hK₁ := hK.grow (s' := { s with cert := some c }) hK.ledger rfl hcH le_rfl rfl
+    ⟨[], by rw [List.append_nil]⟩
+  exact (hK₁.above (s' := { s with cert := some c, props := Node.above (some c) s.props })
+    rfl rfl rfl rfl rfl rfl).settle hP hrec
+
 /-- **A step keeps what the node keeps**, short of a restart, a
 recovering node, and a proposal of another head at a kept peer's height
 from that peer; and every height reached is then proposed. -/
@@ -465,20 +482,26 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
     rw [if_neg (by simp [hrec])]
     exact ⟨hK, hcov⟩
   | certOffer p c ds =>
-    rw [step_certOffer, if_neg (by simp [hrec])]
-    split
-    · rename_i ha
-      obtain ⟨hL₁, hD⟩ := adopted_ledger hK.ledger ha.2
-      have hcH : s.certHeight ≤ (adopted s c ds).certHeight := by
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
+      ⟨-, -, hcf, he⟩ | ⟨-, he⟩
+    · rw [hrec] at h₁; cases h₁
+    · obtain ⟨hL₁, hD⟩ := adopted_ledger hK.ledger ha
+      have hcH : s.certHeight ≤ (adopted s c ds').certHeight := by
         unfold adopted State.certHeight; dsimp only
         split
         · rename_i h; simp only [Option.map_some, Option.getD_some]
           exact h.le
         · exact le_rfl
-      have hK₁ := hK.grow (s' := { adopted s c ds with props := s.props }) hL₁ rfl hcH
-        (adoptable_lo ha.2).le rfl ⟨ds, hD⟩
-      rw [adopt_eq]
-      exact (hK₁.above (s' := adopted s c ds) rfl rfl rfl rfl rfl rfl).settle hP hrec
+      have hK₁ := hK.grow (s' := { adopted s c ds' with props := s.props }) hL₁ rfl hcH
+        (adoptable_lo ha).le rfl ⟨ds', hD⟩
+      rw [he, adopt_eq]
+      exact (hK₁.above (s' := adopted s c ds') rfl rfl rfl rfl rfl rfl).settle hP hrec
+    · rw [he]; exact hK.confirm hP hrec hcf
+    · rw [he]; exact ⟨hK, hcov⟩
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, hcf, he⟩ | he | he <;> rw [he]
+    · exact hK.confirm hP hrec hcf
+    · exact ⟨hK, hcov⟩
     · exact ⟨hK, hcov⟩
   | proposal p k kh =>
     rw [step_proposal]

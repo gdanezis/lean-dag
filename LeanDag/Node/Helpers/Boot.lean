@@ -162,17 +162,26 @@ theorem step_offered (s : State Validator BlockId Payload) (i : Input Validator 
       · exact Or.inl (List.mem_filter.mp ho).1
     · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
   | certOffer p c ds =>
-    rw [step_certOffer]
-    split
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, ha, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
     · obtain ⟨h₁, h₂⟩ := bootFrom_offered (cfg := cfg) (withCert s c ds)
       refine ⟨fun o ho => Or.inl (h₁ o ho), fun c' hc => ?_⟩
       rcases List.mem_cons.mp (h₂ c' hc) with rfl | hc
       · exact Or.inr ⟨p, rfl⟩
       · exact Or.inl hc
-    · split
-      · rw [adopt_eq, (settle_offered _).1, (settle_offered _).2]
-        exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
-      · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+    · rw [adopt_eq, (settle_offered _).1, (settle_offered _).2]
+      exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+    · unfold confirm
+      rw [(settle_offered _).1, (settle_offered _).2]
+      exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+    · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
+    · unfold confirm
+      rw [(settle_offered _).1, (settle_offered _).2]
+      exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+    · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+    · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
 
 /-! ## The store stays a cut -/
 
@@ -358,8 +367,8 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (hcv : ∀ x ∈ (withInput s i).certs, cfg.q ≤ x.1.signers.length → x.1.signers.Nodup →
       cfg.headOf x.2 = x.1.head → ∀ e ∈ x.2, Verdict cfg U e)
     (hspan : ∀ s₂ ads, tryBoot cfg (withInput s i) = some (s₂, ads) → Spans U s₂.store.base)
-    (hadopt : ∀ p c ds, i = .certOffer p c ds → adoptable cfg s c ds = true →
-      ∀ e ∈ ds, Verdict cfg U e) :
+    (hadopt : ∀ p c ds, i = .certOffer p c ds → ∀ ds', ds'.Sublist ds →
+      adoptable cfg s c ds' = true → ∀ e ∈ ds', Verdict cfg U e) :
     IsCut U (Node.step cfg s i).1.store ∧
       ∀ e ∈ commitsOf (Node.step cfg s i).2, Verdict cfg U e := by
   have hset : ∀ (s₀ : State Validator BlockId Payload) (pre : List (Output Validator BlockId Payload)),
@@ -476,18 +485,28 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     · rw [step_certOffer, if_pos hcnd] at hb ⊢
       exact IsCut.bootFrom hg hσ ht (s₁ := withCert s c ds) hc
         (hh.grow (s' := withCert s c ds) (Grows.refl _) rfl rfl le_rfl) hp hoff hcv hb hspan
-    · by_cases ha : p ≠ cfg.me ∧ adoptable cfg s c ds = true
-      · rw [step_certOffer, if_neg hcnd, if_pos ha, adopt_eq] at hb ⊢
+    · rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, h₂, -⟩ | ⟨-, ds', hsub, -, ha, he⟩ |
+        ⟨-, -, -, he⟩ | ⟨-, he⟩
+      · exact absurd ⟨h₁, h₂⟩ hcnd
+      · rw [he, adopt_eq] at hb ⊢
         rw [persists_append] at hb
-        obtain ⟨h₁, h₂⟩ := IsCut.settle (s := adopted s c ds) hg hσ ht hc
-          (hh.grow (Grows.refl _) rfl rfl (adoptable_lo ha.2).le) hp
+        obtain ⟨h₁, h₂⟩ := IsCut.settle (s := adopted s c ds') hg hσ ht hc
+          (hh.grow (Grows.refl _) rfl rfl (adoptable_lo ha).le) hp
           fun e he => hb e (List.mem_append_right _ he)
         refine ⟨h₁, fun e he => ?_⟩
         rw [commitsOf_append, commitsOf_map] at he
         rcases List.mem_append.mp he with he | he
-        · exact hadopt p c ds rfl ha.2 e he
+        · exact hadopt p c ds rfl ds' hsub ha e he
         · exact h₂ e he
-      · exact hsame s rfl (by rw [step_certOffer, if_neg hcnd, if_neg ha])
+      · exact hset { s with cert := some c, props := above (some c) s.props } [] hc
+          (hh.grow (Grows.refl _) rfl rfl le_rfl) hp rfl (by rw [he]; rfl)
+      · exact hsame s rfl he
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he
+    · exact hset { s with cert := some c, props := above (some c) s.props } [] hc
+        (hh.grow (Grows.refl _) rfl rfl le_rfl) hp rfl (by rw [he]; rfl)
+    · rw [he]; exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
+    · exact hsame s rfl he
 
 end Node
 

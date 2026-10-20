@@ -312,12 +312,9 @@ theorem proposeAt_commits (s : State Validator BlockId Payload) :
 
 omit [Fintype Validator] in
 theorem commitsOf_collect (s : State Validator BlockId Payload) :
-    commitsOf (Node.collect cfg s).2 = [] := by
-  unfold Node.collect
-  split
-  · dsimp only
-    split <;> rfl
-  · rfl
+    commitsOf (Node.collect cfg s).2 = [] :=
+  List.filterMap_eq_nil_iff.mpr fun o ho => by
+    rcases collect_out s o ho with ⟨_, rfl⟩ | ⟨_, rfl⟩ <;> rfl
 
 omit [Fintype Validator] in
 theorem collect_lo (s : State Validator BlockId Payload) : (Node.collect cfg s).1.lo = s.lo := by
@@ -574,6 +571,13 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       (by simp only [Node.step]; rfl)
   | baseOffer p G bs => exact absurd trivial hno
   | certOffer p c ds => exact absurd trivial hno
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he
+    · exact hset { s with cert := some c, props := above (some c) s.props } []
+        (h.keeps rfl (Keeps.refl _) hc) hc (hh.grow (Grows.refl _) rfl rfl le_rfl) hp rfl
+        (by rw [he]; rfl)
+    · rw [he]; exact ⟨by simpa [commitsOf] using h, hc⟩
+    · exact hsame he
   | proposal p k kh =>
     rw [step_proposal]
     split

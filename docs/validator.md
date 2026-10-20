@@ -379,12 +379,19 @@ Bounding the pending blocks belongs to rate limiting (step 9).
   every slot below a node's horizon is certified by the certificate it
   holds. The horizon therefore waits for checkpoints: without a signing
   quorum it stops rising, and the store grows.
+* **Announcing.** A node that raises its horizon sends its certificate
+  to every peer (`collect`). A node given a certificate of `q` distinct
+  signers above its own keeps it if it has decided the height and
+  proposed the certificate's head there (`confirms`); announced one at a
+  height it has not decided, it asks the sender for the decisions
+  certified from its next undecided slot up (§13.8).
 * **Adopting.** A node that keeps `q` signers' proposals of one head
-  at a height above its next undecided slot asks those signers for the
-  decisions certified from that slot up. A signer serves its
-  certificate with them; the node adopts them if the certificate has `q`
-  distinct signers and they extend the chain of its own decisions to the
-  certificate's head, and outputs them (§13.6).
+  at a height above its next undecided slot, or is given a certificate
+  above it, asks for the decisions certified from that slot up. A signer
+  serves its certificate with them; the node adopts those from its next
+  undecided slot up if the certificate has `q` distinct signers and they
+  extend the chain of its own decisions to the certificate's head, and
+  outputs them (§13.6).
 * **Bootstrap.** A peer serves its certificate with its base and the
   decisions it certifies, its own. The joiner adopts a certificate with
   `q` distinct signers, served with the decisions of slots `0 … k − 1` in
@@ -508,7 +515,7 @@ at once.
 | V9 | Over a trace with timely authentication of blocks, base offers and checkpoint proposals, an injective hash on blocks and on the decisions served with certificates (`Boot.ChainInjective`), and `Params.Tolerates`, every honest store is a cut of the run's record and every honest decision a verdict on a view of it, bootstraps and adopted decisions included; a node's decisions are slots `0, 1, …`; so any two honest nodes' decisions are prefix-comparable. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.cut_before`, `Node.IsCut.bootFrom`, `Node.IsCut.step`, `Node.verdict_decideStep`, `Node.propose_head`, `Node.prefix_of_slots`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
 | V10 | With rate limiting, at every state a run reaches, every block the store and the pending blocks hold is charged to a slot, and the charges number at most `n·(τ + 1)·(top + W + 1 − base)`, under any input sequence; with the horizon trailing the top by a bounded depth the bound does not grow with the run. Eventual admission of every honest block is step 11's. | `Node.Storage.Bounded` (proved): `Node.Lim.run`, `Node.Lim.bound`, `Node.length_le_of_slots` |
 | V12 | Every certificate with `q` distinct signers given to an honest node carries the head of the chain of an honest node's decisions at its height, with timely signed proposals and `f < q`. | `Node.Boot.Certified` (proved): `Node.propose_head`, `Node.commits_prefix`, `Node.Local.Decisions` |
-| V11 | Over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, and timeouts of at least `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout, and a run of reliably led slots past a round they built within `Δ + Δₛ` of each other is decided by all of them `Δ + Δₛ` after they reach its last decision round (`Node.Live.Progresses`, stated, §13). | `WaveFacts` from the run, V3, V4 |
+| V11 | Over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, and timeouts above `2(3Δ + Δₛ)`, the reliable nodes produce a round per timeout, and a run of reliably led slots past a round they built within `3Δ + Δₛ` of each other is decided by all of them `3Δ + Δₛ` after they reach its last decision round (`Node.Live.Progresses`, stated, §13). | `WaveFacts` from the run, V3, V4 |
 
 **The transfer.** The program decides on its own store, a record of its
 own; the run's claims are about a view of the run's record. The decider
@@ -1203,10 +1210,15 @@ assumptions, over the reliable nodes:
   for `a` ticks fires at `t + a`, neither earlier nor later;
 * **synchronisation** (`SyncedWithin`): a reliable node that receives a
   reliable node's block at time `t` has received, by `max t gst + Δₛ`,
-  every block of that block's history at or above its horizon. This is
-  assumed of the network, not proved of the program's fetch (§3.7),
-  since efficient synchronisation is out of scope (§1); the fetch meets
-  it with `Δₛ = 2Δ` when the block's author answers;
+  every block of that block's history at or above its horizon; and once
+  its horizon rises to `G` at `t'`, it receives again, by
+  `max t' gst + Δₛ`, the round-`G` blocks of that history. The second
+  clause covers a Byzantine block at `G` that the node dropped as invalid
+  while its horizon was lower and takes unchecked once its horizon is
+  `G` (§13.6). This is assumed of the network, not proved of the
+  program's fetch (§3.7), since efficient synchronisation is out of
+  scope (§1); the fetch meets the first clause with `Δₛ = 2Δ` when the
+  block's author answers;
 * **completeness up to `t₁`**: every delivery and timer due by `t₁` is in
   the trace.
 
@@ -1225,16 +1237,17 @@ The proof splits in two:
 * **production** (`Produces`): past GST, once every reliable node is
   at round `n` or above at `s`, every reliable node is above `n` at
   `s + timeout n`: the reliable round-`n` blocks and their histories
-  arrive within `D = Δ + Δₛ`, which the timeout exceeds, and the round's
-  timer has fired;
+  are held within `A = 3Δ + Δₛ`, which the timeout exceeds, and the
+  round's timer has fired. `A` counts the catch-up of a certificate,
+  `3Δ`, before the history's synchronisation, `Δₛ` (§13.8);
 * **decision** (`Decides`): a node outputs a slot's decision only once
   every slot below it is decided, so the claim is about runs. Suppose
-  the reliable nodes built a round `n₀` between `s ≥ gst` and `s + D`
+  the reliable nodes built a round `n₀` between `s ≥ gst` and `s + A`
   (the synchronisation point, 13.3), and slots `b … b + c − 1`, at or
   above `n₀`, are led by reliable nodes with `c` spanning the rule's
   eligibility (`SpansEligible c`). Once every reliable node is at the
   decision round of slot `b + c − 1`, at `t`, every reliable node has
-  output by `t + D` the decisions of every slot below `b + c`: the run's
+  output by `t + A` the decisions of every slot below `b + c`: the run's
   slots commit on its view, from the reliable decision-round blocks,
   which have all arrived; every slot below `b` is then decided on that
   view (`decided_below_of_run`); and the decision step outputs them
@@ -1286,17 +1299,17 @@ delays up to 3, and at most 3 ticks at delays up to 6, with or without a
 crashed leader (§12.5).
 
 Let `drift n` be the spread of the reliable nodes' build times of round
-`n`, and `D = Δ + Δₛ`. Past GST, `drift (n + 1) ≤ max (drift n) D`. Let
-`u` be the first reliable node to build round `n + 1`, at `t`. By `t + D`
+`n`, and `A = 3Δ + Δₛ`. Past GST, `drift (n + 1) ≤ max (drift n) A`. Let
+`u` be the first reliable node to build round `n + 1`, at `t`. By `t + A`
 every reliable node `v` holds `u`'s block and its history, so a quorum
 of round `n`. If `u` built on the reach and certificate tests, `v` passes
 them with `u`'s references (§3.2, copied references) and builds by
-`t + D`. If `u` built on its timer, which fired at `u`'s build of round
+`t + A`. If `u` built on its timer, which fired at `u`'s build of round
 `n` plus the timeout, `v`'s fires at most `drift n` later. So the drift
-never grows past `D` once it is there, and arrival follows: a node that
+never grows past `A` once it is there, and arrival follows: a node that
 waited the timeout at round `n` holds every reliable round-`n` block,
-built at most `D` after its own and arrived `D` after that, when
-`timeout ≥ 2D`.
+built at most `A` after its own and held `A` after that, when
+`2A < timeout`.
 
 Two things the argument needs were found missing in the program as it
 was. Through a Byzantine twin, the reach test's evidence did not carry
@@ -1307,7 +1320,7 @@ node that fell behind before GST pays every timer round again, gaining
 on its peers only a round-time per round built on the tests, so its
 drift shrinks at a rate no bound in `Δ` and the timeout controls. The
 decision half therefore starts from a synchronisation point, a round
-the reliable nodes built within `D` of each other past GST, and
+the reliable nodes built within `A` of each other past GST, and
 production, which needs no drift bound, holds from GST.
 
 ### 13.4 From verdicts to the node's decisions
@@ -1338,7 +1351,7 @@ explicit.
    time; `reactiveLive` is unchanged.
 3. **Catch-up** is proved with copied references (item 0), from a
    synchronisation point, as in 13.3; the liveness bound is
-   `timeout ≥ 2(Δ + Δₛ)`.
+   `2(3Δ + Δₛ) < timeout` (items 8 and 12).
 4. **Garbage collection**: the node proves production and arrival with
    holdings above its horizon, and the scheme's `reaches`, `votes` and
    `certifies` are stated over `WaveFacts`: production, arrival and the
@@ -1352,12 +1365,12 @@ explicit.
 7. **Synchronisation is assumed**: the liveness claims take
    `SyncedWithin` (13.1) as an assumption on the trace, so the arrival of
    histories is not derived from fetch answers; 13.3 counts it in
-   `D = Δ + Δₛ`.
+   `A = 3Δ + Δₛ`.
 8. **Holdings before the build.** The wait clauses read what a node
    held strictly before the time it built (`heldBefore`): a block given
    at the same time but after the build is not referenced. Arrival must
-   then land strictly before the build, so 11.1c is expected to need
-   `2(Δ + Δₛ) < timeout`, not `≤`.
+   then land strictly before the build, so V11 assumes
+   `2(3Δ + Δₛ) < timeout`, not `≤`.
 9. **Rejoining nodes outside `T`.** Honest nodes outside `T` may restart
    and bootstrap, so V11 assumes the signatures of bases, certificates
    and the chain's hash over `H`, as V9 does; every honest store is then
@@ -1368,6 +1381,11 @@ explicit.
     decisions reach and keeps every proposal near its frontier, so it
     certifies each height it decides once its peers' proposals reach it
     (§13.7, built).
+12. **Announced certificates**: a node that raises its horizon announces
+    its certificate, and a node given a certificate above its own keeps
+    it or asks for the decisions it certifies, so a reliable node's
+    certificate catches up with another's within `3Δ` past GST (§13.8,
+    built).
 
 ### 13.6 Blocks at the horizon (built)
 
@@ -1459,13 +1477,12 @@ horizon is taken unchecked, so no node is cut off for being slow.
   safety on every trace.
 * **V10** (`Storage.Bounded`) and convergence (`Converge.Converges`) are
   unchanged: adoption adds no block, and convergence assumes no offers.
-* **V11** must allow certificate offers to the reliable nodes:
-  `NoRejoin T` is to become "no base offer and no restart at `T`".
-  Arrival (11.1c) gains the bound on how long horizons differ, and the
-  synchronisation assumption must cover a Byzantine block dropped as
-  invalid and needed again after the receiver's horizon rose past it: a
-  delivery before the rise satisfies `SyncedWithin` as stated while the
-  receiver lacks the block. Both are 11.1c's.
+* **V11** allows certificate offers to the reliable nodes: it assumes
+  only that they do not restart, since a node not recovering ignores a
+  base offer. Arrival bounds how long reliable horizons differ by the
+  announcements of §13.8, and the synchronisation assumption covers a
+  Byzantine block dropped as invalid and needed again after the
+  receiver's horizon rose to its round (§13.1).
 
 **The simulator.** Node 2 slow, every message to or from it taking at
 least the delay below; node 3 running the honest program and silent from
@@ -1585,13 +1602,72 @@ honest node held. Every run is safe.
 
 | | `n = 4`, `f = 1`: rounds | store | `n = 7`, `f = 2`: rounds | store |
 |---|---|---|---|---|
-| no attack | 254–267 | 26–29 | 240–246 | 44 |
+| no attack | 257–266 | 26–28 | 238–248 | 44–46 |
 | attacker silent from the start | 95–96 | 18 | 102–103 (two silent) | 31–33 |
 | junk at the horizon, latest proposal only | 12–77; 9 of 10 below 50 | 39–45 | 88–230 | 64–75 |
-| junk at the horizon, with the change | 186–222 | 41–45 | 220–233 | 59–72 |
+| junk at the horizon, with the change | 171–233 | 41–44 | 215–235 | 59–76 |
 
-With the change the attack costs a quarter of the rounds at `n = 4` and
-a twentieth at `n = 7`, and less than the attacker's silence in both,
+The rows other than "latest proposal only" are of the program with the
+announcements of §13.8. With the change the attack costs at most a third
+of the rounds at `n = 4` and a tenth at `n = 7`, and less than the
+attacker's silence in both,
 since its own slots are still decided. At `n = 7` the honest nodes
 outnumber `q`, so a node behind can adopt and the previous rule did not
 stall, but it lost up to two thirds of the rounds.
+
+### 13.8 Announced certificates (built)
+
+**The gap.** Under §13.6 and §13.7 a reliable node's certificate need
+not catch up with another reliable node's, and then the second node
+can stall for good. Take `n = 4`, `f = 1`, `q = 3`, reliable nodes `u`,
+`w` and `v`, and a Byzantine node `b`.
+
+1. `b` sends `u` and `w` a vote for a slot late, after they built the
+   round above it, and none of the blocks `v` is given references it.
+   `u` and `w` decide the slot on it; `v`'s view does not decide it.
+2. `b` sends its proposal at the next multiple `k` of `m` to `u` and `w`
+   only. They certify `k` with `b`, raise their horizons, and `b` plants
+   an invalid block at that horizon with a chain of valid blocks above
+   it, as in §13.7, which `u` and `w` then reference.
+3. `v` has not decided `k`, so it cannot certify it; it keeps only
+   `u`'s and `w`'s proposals at `k`, two signers, so it cannot adopt.
+   Its horizon stays below the invalid block, which it drops, and it
+   accepts none of `u`'s and `w`'s later blocks. It has no quorum of any
+   later round, while `u`, `w` and `b` continue without it.
+
+**The change** (`collect`, `confirms`, `confirm`).
+
+* A node that raises its horizon announces its certificate to every
+  peer (`Output.announce`, received as `Input.announced`).
+* A node not recovering, given a certificate of `q` distinct signers
+  above its own, announced or served:
+  * keeps it, if it has decided the height and its own proposal there
+    has the certificate's head (`confirms`), and then settles, which
+    raises its horizon;
+  * otherwise, if the certificate was announced and its height lies
+    above the node's next undecided slot, asks the sender for the
+    decisions certified from that slot up.
+* Served decisions are adopted from the node's next undecided slot up,
+  so an answer that arrives after the node decided more is still
+  adopted. `Boot.ChainInjective` speaks of a sublist of the served
+  decisions, the part adopted.
+
+**Why it closes the gap.** Past GST, when a reliable node `u` raises its
+horizon at `t`, every reliable node `v` holds a certificate at least as
+high by `max t gst + 3Δ`: `u`'s announcement reaches `v` within `Δ`. If
+`v` decided the height, it proposed it, and its proposal is kept above
+its certificate (`Kept`, §13.7), with the head of an honest signer's
+decisions, so `v` keeps the certificate. If not, `v` asks `u`, which
+serves its certificate, no lower, with the decisions, and `v` adopts
+them within `2Δ` more. A block `y` of a reliable author has an invalid
+block in its history only at its author's horizon when it built `y`,
+which `v` reaches once it holds the author's certificate and is at
+`y`'s round, so `v` holds `y` and its history within
+`A = 3Δ + Δₛ` of `y`'s build past GST (13.1 for the history, and its
+second clause for an invalid block at `v`'s new horizon).
+
+**The proofs.** Every claim holds of the program with announcements: a
+confirmed certificate adds no decision, and adopted decisions are a
+sublist of those served, which `ChainInjective` covers. V3 and
+convergence assume no base or certificate offers; an announcement is
+neither, and their proofs cover it.

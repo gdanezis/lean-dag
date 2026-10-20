@@ -255,7 +255,64 @@ theorem step_certOffer {s : State Validator BlockId Payload} {p : Validator}
     {c : Cert Validator BlockId} {ds : List (ℕ × Option BlockId)} :
     Node.step cfg s (.certOffer p c ds) =
       if s.recovering ∧ p ≠ cfg.me then bootFrom cfg (withCert s c ds)
-      else if p ≠ cfg.me ∧ adoptable cfg s c ds then adopt cfg s c ds else (s, []) := rfl
+      else if p ≠ cfg.me ∧ adoptable cfg s c (ds.filter fun e => s.lo ≤ e.1) then
+        adopt cfg s c (ds.filter fun e => s.lo ≤ e.1)
+      else if p ≠ cfg.me ∧ confirms cfg s c then confirm cfg s c
+      else (s, []) := rfl
+
+/-- **The cases of a certificate offer**: a recovering node records it and
+tries to bootstrap; otherwise the node adopts decisions from a sublist of
+those served, confirms the certificate, or does nothing. -/
+theorem certOffer_cases (s : State Validator BlockId Payload) (p : Validator)
+    (c : Cert Validator BlockId) (ds : List (ℕ × Option BlockId)) :
+    (s.recovering ∧ p ≠ cfg.me ∧
+      Node.step cfg s (.certOffer p c ds) = bootFrom cfg (withCert s c ds)) ∨
+    (¬ (s.recovering ∧ p ≠ cfg.me) ∧ ∃ ds', ds'.Sublist ds ∧ p ≠ cfg.me ∧
+      adoptable cfg s c ds' = true ∧ Node.step cfg s (.certOffer p c ds) = adopt cfg s c ds') ∨
+    (¬ (s.recovering ∧ p ≠ cfg.me) ∧ p ≠ cfg.me ∧ confirms cfg s c = true ∧
+      Node.step cfg s (.certOffer p c ds) = confirm cfg s c) ∨
+    (¬ (s.recovering ∧ p ≠ cfg.me) ∧ Node.step cfg s (.certOffer p c ds) = (s, [])) := by
+  rw [step_certOffer]
+  by_cases h₁ : s.recovering ∧ p ≠ cfg.me
+  · exact Or.inl ⟨h₁.1, h₁.2, if_pos h₁⟩
+  rw [if_neg h₁]
+  by_cases h₂ : p ≠ cfg.me ∧ adoptable cfg s c (ds.filter fun e => s.lo ≤ e.1) = true
+  · exact Or.inr (Or.inl ⟨h₁, _, List.filter_sublist, h₂.1, h₂.2, if_pos h₂⟩)
+  rw [if_neg h₂]
+  by_cases h₃ : p ≠ cfg.me ∧ confirms cfg s c = true
+  · exact Or.inr (Or.inr (Or.inl ⟨h₁, h₃.1, h₃.2, if_pos h₃⟩))
+  exact Or.inr (Or.inr (Or.inr ⟨h₁, if_neg h₃⟩))
+
+theorem step_announced {s : State Validator BlockId Payload} {p : Validator}
+    {c : Cert Validator BlockId} :
+    Node.step cfg s (.announced p c) =
+      if s.recovering ∨ p = cfg.me then (s, [])
+      else if confirms cfg s c then confirm cfg s c
+      else if cfg.q ≤ c.signers.length ∧ s.lo < c.height then (s, [.requestDecisions p s.lo])
+      else (s, []) := rfl
+
+/-- **The cases of an announced certificate**: the node confirms it, asks
+the sender for decisions, or does nothing; it confirms only when not
+recovering. -/
+theorem announced_cases (s : State Validator BlockId Payload) (p : Validator)
+    (c : Cert Validator BlockId) :
+    (s.recovering = false ∧ confirms cfg s c = true ∧
+      Node.step cfg s (.announced p c) = confirm cfg s c) ∨
+    Node.step cfg s (.announced p c) = (s, [.requestDecisions p s.lo]) ∨
+    Node.step cfg s (.announced p c) = (s, []) := by
+  rw [step_announced]
+  split
+  · exact Or.inr (Or.inr rfl)
+  · rename_i h
+    split
+    · rename_i hc
+      refine Or.inl ⟨?_, hc, rfl⟩
+      cases hr : s.recovering
+      · rfl
+      · exact absurd (Or.inl hr) h
+    · split
+      · exact Or.inr (Or.inl rfl)
+      · exact Or.inr (Or.inr rfl)
 
 theorem step_proposal {s : State Validator BlockId Payload} {p : Validator} {k : ℕ}
     {kh : BlockId} :
@@ -372,13 +429,20 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
       rw [bootFrom_of_base (s := withOffer s p G bs) hb]; exact hy
     · rw [if_neg hc]; exact hy
   | certOffer p c ds =>
-    by_cases hc : s.recovering ∧ p ≠ cfg.me
-    · rw [step_certOffer, if_pos hc] at hb ⊢
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, -, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    · rw [he] at hb ⊢
       rw [bootFrom_of_base (s := withCert s c ds) hb]; exact hy
-    · by_cases ha : p ≠ cfg.me ∧ adoptable cfg s c ds = true
-      · exact hset (adopted s c ds) (by rw [step_certOffer, if_neg hc, if_pos ha, adopt_eq])
-          (Grows.refl _) rfl hp hy
-      · rw [step_certOffer, if_neg hc, if_neg ha]; exact hy
+    · exact hset (adopted s c ds') (by rw [he, adopt_eq]) (Grows.refl _) rfl hp hy
+    · exact hset { s with cert := some c, props := above (some c) s.props } (by rw [he]; rfl)
+        (Grows.refl _) rfl hp hy
+    · rw [he]; exact hy
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he
+    · exact hset { s with cert := some c, props := above (some c) s.props } (by rw [he]; rfl)
+        (Grows.refl _) rfl hp hy
+    · rw [he]; exact hy
+    · rw [he]; exact hy
   | proposal p k kh =>
     rw [step_proposal]
     split
@@ -468,16 +532,21 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
       exact bootFrom_sub (s := s) (withOffer s p G bs) ⟨rfl, rfl⟩ trivial
     · rw [if_neg hc]; exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
   | certOffer p c ds =>
-    rw [step_certOffer]
-    by_cases hc : s.recovering ∧ p ≠ cfg.me
-    · rw [if_pos hc]
-      exact bootFrom_sub (s := s) (withCert s c ds) ⟨rfl, rfl⟩ trivial
-    · rw [if_neg hc]
-      split
-      · rw [adopt_eq]
-        have := settle_sub (cfg := cfg) (adopted s c ds)
-        exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
-      · exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, -, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
+    · exact bootFrom_sub (s := s) (withCert s c ds) ⟨rfl, rfl⟩ trivial
+    · rw [adopt_eq]
+      have := settle_sub (cfg := cfg) (adopted s c ds')
+      exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
+    · have := settle_sub (cfg := cfg) { s with cert := some c, props := above (some c) s.props }
+      exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
+    · exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
+    · have := settle_sub (cfg := cfg) { s with cert := some c, props := above (some c) s.props }
+      exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
+    · exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
+    · exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
   | proposal p k kh =>
     rw [step_proposal]
     split
@@ -541,13 +610,25 @@ theorem decideStep_persist (s : State Validator BlockId Payload) :
   · exact (out_quiet (proposeAt_quiet _)).1
 
 omit [Fintype Validator] in
-theorem collect_persist (s : State Validator BlockId Payload) :
-    persists (Node.collect cfg s).2 = [] := by
+/-- **Collecting outputs** a prune and the announced certificate. -/
+theorem collect_out (s : State Validator BlockId Payload) :
+    ∀ o ∈ (Node.collect cfg s).2, (∃ G, o = .prune G) ∨ ∃ c, o = .announce c := by
   unfold Node.collect
   split
   · dsimp only
-    split <;> rfl
-  · rfl
+    split
+    · intro o ho
+      rcases List.mem_cons.mp ho with rfl | ho
+      · exact Or.inl ⟨_, rfl⟩
+      · obtain ⟨c, -, rfl⟩ := List.mem_map.mp ho; exact Or.inr ⟨c, rfl⟩
+    · simp
+  · simp
+
+omit [Fintype Validator] in
+theorem collect_persist (s : State Validator BlockId Payload) :
+    persists (Node.collect cfg s).2 = [] :=
+  List.filterMap_eq_nil_iff.mpr fun o ho => by
+    rcases collect_out s o ho with ⟨_, rfl⟩ | ⟨_, rfl⟩ <;> rfl
 
 omit [Fintype Validator] in
 theorem advance_persist (s : State Validator BlockId Payload)
@@ -660,18 +741,22 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
       rw [bootFrom_of_base (s := withOffer s p G bs) hb]; intro e he; simp [persists] at he
     · rw [if_neg hc]; intro e he; simp [persists] at he
   | certOffer p c ds =>
-    rw [step_certOffer] at hb ⊢
-    by_cases hc : s.recovering ∧ p ≠ cfg.me
-    · rw [if_pos hc] at hb ⊢
-      rw [bootFrom_of_base (s := withCert s c ds) hb]; intro e he; simp [persists] at he
-    · rw [if_neg hc] at hb ⊢
-      split at hb
-      · rename_i ha
-        rw [adopt_eq] at hb
-        rw [if_pos ha, adopt_eq]
-        exact settle_persist_of (s₀ := adopted s c ds) (Or.inl (persists_commits ds)) hb
-      · rename_i ha
-        rw [if_neg ha]; intro e he; simp [persists] at he
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, -, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he] at hb ⊢
+    · rw [bootFrom_of_base (s := withCert s c ds) hb]; intro e he; simp [persists] at he
+    · rw [adopt_eq] at hb ⊢
+      exact settle_persist_of (s₀ := adopted s c ds') (Or.inl (persists_commits ds')) hb
+    · unfold confirm at hb ⊢
+      simpa using settle_persist_of (pre := [])
+        (s₀ := { s with cert := some c, props := above (some c) s.props }) (Or.inl rfl) hb
+    · intro e he; simp [persists] at he
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he] at hb ⊢
+    · unfold confirm at hb ⊢
+      simpa using settle_persist_of (pre := [])
+        (s₀ := { s with cert := some c, props := above (some c) s.props }) (Or.inl rfl) hb
+    · intro e he; simp [persists] at he
+    · intro e he; simp [persists] at he
   | proposal p k kh =>
     rw [step_proposal]
     split
@@ -732,12 +817,17 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady s)
     · exact noReady_bootFrom h
     · exact h
   | certOffer p c ds =>
-    rw [step_certOffer]
-    split
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, -, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
     · exact noReady_bootFrom h
-    · split
-      · rw [adopt_eq]; exact noReady_settle _
-      · exact h
+    · rw [adopt_eq]; exact noReady_settle _
+    · exact noReady_settle _
+    · exact h
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
+    · exact noReady_settle _
+    · exact h
+    · exact h
   | proposal p k kh =>
     rw [step_proposal]
     split

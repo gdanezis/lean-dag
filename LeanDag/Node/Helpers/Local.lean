@@ -547,8 +547,11 @@ theorem Inv.collect {s : State Validator BlockId Payload}
     dsimp only
     split
     · rename_i hG
-      refine ⟨⟨rfl, rfl⟩, ⟨?_, ?_, ?_, hi.good, hi.sub, hi.valid.prune (hG := hG.le),
-        hi.offered⟩⟩
+      refine ⟨out_quiet fun o ho => ?_, ⟨?_, ?_, ?_, hi.good, hi.sub,
+        hi.valid.prune (hG := hG.le), hi.offered⟩⟩
+      · rcases List.mem_cons.mp ho with rfl | ho
+        · rfl
+        · obtain ⟨_, -, rfl⟩ := List.mem_map.mp ho; rfl
       · intro j hj
         have hj' := (Finset.mem_filter.mp hj)
         have hraw := treeMap_getD_filter_of (t := s.store.map)
@@ -1089,9 +1092,26 @@ theorem Inv.step {s : State Validator BlockId Payload}
     · split
       · unfold adopt
         dsimp only
-        refine Inv.settle_of (K := K') ?_ subset_rfl _ (quiet_commits ds)
+        refine Inv.settle_of (K := K') ?_ subset_rfl _ (quiet_commits _)
         exact (hi.mono hsub).of_eq rfl rfl rfl rfl
-      · exact hnil'
+      · split
+        · unfold confirm
+          simpa using Inv.settle_of (K := K')
+            (s := { s with cert := some c, props := above (some c) s.props })
+            ((hi.mono hsub).of_eq rfl rfl rfl rfl) subset_rfl [] (by simp)
+        · exact hnil'
+  | announced peer c =>
+    simp only [Node.step]
+    split
+    · exact hnil'
+    · split
+      · unfold confirm
+        simpa using Inv.settle_of (K := K')
+          (s := { s with cert := some c, props := above (some c) s.props })
+          ((hi.mono hsub).of_eq rfl rfl rfl rfl) subset_rfl [] (by simp)
+      · split
+        · exact hnil _ (by simp [Output.isQuiet])
+        · exact hnil'
   | decisionRequest peer lo =>
     simp only [Node.step]
     refine hnil _ fun o ho => ?_

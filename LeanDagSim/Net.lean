@@ -347,6 +347,15 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
             ((t + dt, d, .certOffer s.node c ds) :: acc.1, g')
           else acc
         | _, _ => acc) acc
+    | .announce c =>
+      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
+        match agents[src]?, agents[d]? with
+        | some s, some a =>
+          if receives sc a s then
+            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
+            ((t + dt, d, .announced s.node c) :: acc.1, g')
+          else acc
+        | _, _ => acc) acc
     | .serveBase peer G bs =>
       (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
         match agents[src]?, agents[d]? with
@@ -431,14 +440,18 @@ def authentic (w : World n) (id : ℕ) (b : Block (Fin n) ℕ ℕ) : Bool :=
   !(sc.honest b.creator.val) || (w.blocks.get? id).any (sameBlock b)
 
 /-- **The signature checks** on an input: a block in an honest author's
-name is one it made, an offered base keeps only such blocks, and a
-certificate's honest signers signed its head at its height. -/
+name is one it made, an offered base keeps only such blocks, and an
+offered or announced certificate's honest signers signed its head at its
+height. -/
 def checked (w : World n) : Input (Fin n) ℕ ℕ → Option (Input (Fin n) ℕ ℕ)
   | .deliver id b => if authentic sc w id b then some (.deliver id b) else none
   | .baseOffer peer G bs => some (.baseOffer peer G (bs.filter fun e => authentic sc w e.1 e.2))
   | .certOffer peer c ds =>
     if c.signers.all fun v => !(sc.honest v.val) || w.signed.contains (v.val, c.height, c.head)
     then some (.certOffer peer c ds) else none
+  | .announced peer c =>
+    if c.signers.all fun v => !(sc.honest v.val) || w.signed.contains (v.val, c.height, c.head)
+    then some (.announced peer c) else none
   | i => some i
 
 /-- A head other than `h`. -/

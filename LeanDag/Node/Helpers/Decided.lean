@@ -258,13 +258,15 @@ theorem collect_appends (s : State Validator BlockId Payload) :
     Appends cfg s (collect cfg s).2 (collect cfg s).1 ∧ (collect cfg s).1.lo = s.lo ∧
       (collect cfg s).1.decided = s.decided ∧ (collect cfg s).1.lastProposed = s.lastProposed ∧
       (collect cfg s).1.chain = s.chain := by
-  unfold Node.collect
-  split
-  · dsimp only
+  have hf : (collect cfg s).1.lo = s.lo ∧ (collect cfg s).1.decided = s.decided ∧
+      (collect cfg s).1.lastProposed = s.lastProposed ∧ (collect cfg s).1.chain = s.chain := by
+    unfold Node.collect
     split
-    · exact ⟨Appends.quiet rfl rfl (by simp), rfl, rfl, rfl, rfl⟩
-    · exact ⟨Appends.refl s, rfl, rfl, rfl, rfl⟩
-  · exact ⟨Appends.refl s, rfl, rfl, rfl, rfl⟩
+    · dsimp only
+      split <;> exact ⟨rfl, rfl, rfl, rfl⟩
+    · exact ⟨rfl, rfl, rfl, rfl⟩
+  refine ⟨Appends.quiet hf.2.1 (commitsOf_collect s) fun k h hk => ?_, hf⟩
+  rcases collect_out s _ hk with ⟨_, he⟩ | ⟨_, he⟩ <;> cases he
 
 omit [Fintype Validator] in
 theorem advance_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s) :
@@ -473,13 +475,22 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
     · exact bootFrom_appends (s := withOffer s p G bs) hL
     · exact ⟨Appends.refl s, hL⟩
   | certOffer p c ds =>
-    rw [step_certOffer]
-    split
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, ha, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
     · exact bootFrom_appends (s := withCert s c ds) hL
-    · split
-      · rename_i ha
-        exact adopt_appends hL ha.2
-      · exact ⟨Appends.refl s, hL⟩
+    · exact adopt_appends hL ha
+    · have h₀ : Ledger cfg { s with cert := some c, props := above (some c) s.props } := hL
+      obtain ⟨ha, hL'⟩ := settle_appends h₀
+      exact ⟨⟨ha.1, ha.2⟩, hL'⟩
+    · exact ⟨Appends.refl s, hL⟩
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
+    · have h₀ : Ledger cfg { s with cert := some c, props := above (some c) s.props } := hL
+      obtain ⟨ha, hL'⟩ := settle_appends h₀
+      exact ⟨⟨ha.1, ha.2⟩, hL'⟩
+    · refine ⟨Appends.quiet rfl rfl fun k h hk => ?_, hL⟩
+      simp at hk
+    · exact ⟨Appends.refl s, hL⟩
 
 /-- **A run appends its decisions**, and keeps the ledger. -/
 theorem run_appends : ∀ (is : List (Input Validator BlockId Payload))

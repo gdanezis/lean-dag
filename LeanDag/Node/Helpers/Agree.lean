@@ -204,15 +204,20 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
     · exact absurd h (serveBase_not_mem_bootFrom _)
     · simp at h
   | certOffer q c ds =>
-    rw [step_certOffer] at h
-    split at h
+    rcases certOffer_cases (cfg := cfg) s q c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, -, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he] at h
     · exact absurd h (serveBase_not_mem_bootFrom _)
-    · split at h
-      · rw [adopt_eq] at h
-        rcases List.mem_append.mp h with h | h
-        · obtain ⟨_, -, he⟩ := List.mem_map.mp h; cases he
-        · exact absurd h (serveBase_not_mem_settle _)
-      · simp at h
+    · rw [adopt_eq] at h
+      rcases List.mem_append.mp h with h | h
+      · obtain ⟨_, -, he⟩ := List.mem_map.mp h; cases he
+      · exact absurd h (serveBase_not_mem_settle _)
+    · exact absurd h (serveBase_not_mem_settle _)
+    · simp at h
+  | announced q c =>
+    rcases announced_cases (cfg := cfg) s q c with ⟨-, -, he⟩ | he | he <;> rw [he] at h
+    · exact absurd h (serveBase_not_mem_settle _)
+    · simp at h
+    · simp at h
   | proposal q k kh =>
     rw [step_proposal] at h
     split at h
@@ -481,16 +486,17 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
             obtain ⟨hk, hkh⟩ := propose_head hi' hprop
             have hpre := commits_prefix (cfg := cfg) (tr := tr) u (i + 1)
             have htk := take_of_prefix hpre hk
-            have hds := hchain j w p x.1 x.2 hj' hv [] (List.nil_prefix) u huH x.1.height
+            have hds := hchain j w p x.1 x.2 hj' hv x.2 (List.Sublist.refl _) [] (List.nil_prefix) u huH
+              x.1.height
               (hk.trans hpre.length_le) (by rw [htk, ← hkh, List.nil_append]; exact hhd)
             rw [htk, List.nil_append] at hds
             rw [hds] at he
             exact (ih (i + 1) (by omega) u huH).2 e (List.mem_of_mem_take he)
           -- adopted decisions are an honest signer's
-          have hadopt : ∀ p c ds, inp = .certOffer p c ds →
-              adoptable (cfg.at w) (stateBefore cfg tr t w) c ds = true →
-              ∀ e ∈ ds, Verdict (cfg.at w) U e := by
-            intro p c ds hinp ha e he
+          have hadopt : ∀ p c ds, inp = .certOffer p c ds → ∀ ds', ds'.Sublist ds →
+              adoptable (cfg.at w) (stateBefore cfg tr t w) c ds' = true →
+              ∀ e ∈ ds', Verdict (cfg.at w) U e := by
+            intro p c ds hinp ds' hsub ha e he
             have hj' : tr[t]? = some (w, .certOffer p c ds) := by rw [hj, hinp]
             obtain ⟨hap, hL⟩ := run_appends (cfg := cfg.at w) (inputsBefore tr t w)
               (Ledger.init (cfg := cfg.at w))
@@ -501,7 +507,7 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
                 List.nil_append] at this
               exact this
             have hhead : (cfg.at w).headOf (commitsOf (run (cfg.at w) (State.init (cfg.at w))
-                (inputsBefore tr t w)).2 ++ ds) = c.head := by
+                (inputsBefore tr t w)).2 ++ ds') = c.head := by
               rw [← hD]; exact adoptable_head hL ha
             unfold adoptable at ha
             simp only [Bool.and_eq_true, decide_eq_true_eq] at ha
@@ -512,7 +518,7 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
             obtain ⟨hk, hkh⟩ := propose_head hi' hprop
             have hpre := commits_prefix (cfg := cfg) (tr := tr) u (i + 1)
             have htk := take_of_prefix hpre hk
-            have hds := hchain t w p c ds hj' hv _ (commits_prefix (cfg := cfg) (tr := tr) w t)
+            have hds := hchain t w p c ds hj' hv ds' hsub _ (commits_prefix (cfg := cfg) (tr := tr) w t)
               u huH c.height (hk.trans hpre.length_le) (by rw [htk, ← hkh]; exact hhead)
             rw [htk] at hds
             have he' : e ∈ (commitsOf (run (cfg.at u) (State.init (cfg.at u))

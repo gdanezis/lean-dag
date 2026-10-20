@@ -201,7 +201,16 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     · exact h
     · split
       · rw [adopt_eq]; exact Grows.settle_of _ rfl
-      · exact Grows.refl _
+      · split
+        · exact Grows.settle_of _ rfl
+        · exact Grows.refl _
+  | announced peer c =>
+    simp only [Node.step]
+    split
+    · exact Grows.refl _
+    · split
+      · exact Grows.settle_of _ rfl
+      · split <;> exact Grows.refl _
   | proposal peer k kh =>
     simp only [Node.step]
     split

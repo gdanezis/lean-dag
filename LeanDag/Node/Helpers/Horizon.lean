@@ -359,15 +359,21 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     · exact (h.grow (s' := withOffer s p G bs) (Grows.refl _) rfl rfl le_rfl).bootFrom
     · exact h
   | certOffer p c ds =>
-    rw [step_certOffer]
-    split
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, ha, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
     · exact (h.grow (s' := withCert s c ds) (Grows.refl _) rfl rfl le_rfl).bootFrom
-    · split
-      · rename_i ha
-        rw [adopt_eq]
-        exact Held.settle (h.grow (s' := adopted s c ds) (Grows.refl _) rfl rfl
-          (adoptable_lo ha.2).le)
-      · exact h
+    · rw [adopt_eq]
+      exact Held.settle (h.grow (s' := adopted s c ds') (Grows.refl _) rfl rfl
+        (adoptable_lo ha).le)
+    · exact Held.settle (h.grow (s' := { s with cert := some c, props := above (some c) s.props })
+        (Grows.refl _) rfl rfl le_rfl)
+    · exact h
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
+    · exact Held.settle (h.grow (s' := { s with cert := some c, props := above (some c) s.props })
+        (Grows.refl _) rfl rfl le_rfl)
+    · exact h
+    · exact h
   | proposal p k kh =>
     rw [step_proposal]
     split

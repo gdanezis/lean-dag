@@ -64,14 +64,15 @@ def TimelyCerts (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     ∃ i < j, (tr[i]?.map Prod.fst) = some u ∧ Output.propose c.height c.head ∈ outputsAt cfg tr i
 
 /-- **The chain's hash**: decisions served with a certificate to an
-honest node, after a prefix of its own, have the head of no other prefix
-of an honest node's decisions. -/
+honest node, or a sublist of them, after a prefix of its own, have the
+head of no other prefix of an honest node's decisions. -/
 def ChainInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ (j : ℕ) v p (c : Cert Validator BlockId) ds, tr[j]? = some (v, Input.certOffer p c ds) →
-    v ∈ H → ∀ pre, pre <+: decisionsOf cfg tr v → ∀ u ∈ H, ∀ k ≤ (decisionsOf cfg tr u).length,
-      cfg.headOf (pre ++ ds) = cfg.headOf ((decisionsOf cfg tr u).take k) →
-        pre ++ ds = (decisionsOf cfg tr u).take k
+    v ∈ H → ∀ ds', ds'.Sublist ds → ∀ pre, pre <+: decisionsOf cfg tr v →
+      ∀ u ∈ H, ∀ k ≤ (decisionsOf cfg tr u).length,
+        cfg.headOf (pre ++ ds') = cfg.headOf ((decisionsOf cfg tr u).take k) →
+          pre ++ ds' = (decisionsOf cfg tr u).take k
 
 /-- **A certificate carries an honest node's head**: one given to an
 honest node with `q` distinct signers carries the head of the chain of an

@@ -173,14 +173,20 @@ theorem Sparse.step {s : State Validator BlockId Payload} (h : Sparse cfg s)
     · exact Sparse.bootFrom (h.frame rfl rfl le_rfl)
     · exact h
   | certOffer p c ds =>
-    rw [step_certOffer]
-    split
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, ha, he⟩ |
+      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
     · exact Sparse.bootFrom (h.frame rfl rfl le_rfl)
-    · split
-      · rename_i ha
-        rw [adopt_eq]
-        exact (h.above (s' := adopted s c ds) rfl (adoptable_lo ha.2).le).settle
-      · exact h
+    · rw [adopt_eq]
+      exact (h.above (s' := adopted s c ds') rfl (adoptable_lo ha).le).settle
+    · exact (h.above (s' := { s with cert := some c, props := Node.above (some c) s.props }) rfl
+        le_rfl).settle
+    · exact h
+  | announced p c =>
+    rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
+    · exact (h.above (s' := { s with cert := some c, props := Node.above (some c) s.props }) rfl
+        le_rfl).settle
+    · exact h
+    · exact h
   | proposal p k kh =>
     rw [step_proposal]
     split

@@ -17,25 +17,28 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
 * **synchronisation** (`SyncedWithin`): a reliable node that receives a
   reliable node's block at `t` has received, by `max t gst + Δₛ`, each
   block of its history at or above its horizon that it did not make;
-  efficient synchronisation is out of scope (`docs/validator.md` §1);
+  and once its horizon rises to `G`, it receives again, within `Δₛ`, the
+  round-`G` blocks of those histories. Efficient synchronisation is out
+  of scope (`docs/validator.md` §1);
 * every reliable node **starts** by `gst` (`StartedBy`), and none
-  restarts or is offered a base or a certificate;
+  restarts;
 * timely authentication, of blocks, bases, certificates and the chain's
   hash, since honest nodes outside `T` may rejoin (as for V9);
-* the injective hash, no rate limiting, at most
-  `f` nodes outside `H`, `n − f − c` reliable nodes, and
-  `2 (Δ + Δₛ) ≤ timeout r` at every round.
+* the injective hash, no rate limiting, at most `f` nodes outside `H`,
+  `n − f − c` reliable nodes, and `2 (3Δ + Δₛ) < timeout r` at every
+  round.
 
-Then:
+Then, for `A = 3Δ + Δₛ`, the time a reliable block and its history take
+to be held by every reliable node, a certificate's catch-up included:
 
 * **production** (`Produces`): past GST, once every reliable node is at
   round `n` or above, every reliable node is above `n` a timeout later;
 * **decision** (`Decides`): suppose the reliable nodes built some round
-  `n₀` past GST within `Δ + Δₛ` of each other, and the slots
-  `b … b + c − 1` at or above `n₀` are led by reliable nodes and span
-  the rule's eligibility. Once every reliable node is at the decision
-  round of slot `b + c − 1`, `Δ + Δₛ` later every reliable node has
-  output the decisions of every slot below `b + c`.
+  `n₀` past GST within `A` of each other, and the slots `b … b + c − 1`
+  at or above `n₀` are led by reliable nodes and span the rule's
+  eligibility. Once every reliable node is at the decision round of slot
+  `b + c − 1`, `A` later every reliable node has output the decisions of
+  every slot below `b + c`.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -74,17 +77,26 @@ def TimersOnTime (cfg : Config Validator BlockId Payload) (T : Finset Validator)
 /-- **Synchronisation within `Δₛ` past GST**: a reliable node `v` given
 a reliable author's block at `t` is given, by `max t gst + Δₛ`, each
 block of the history the author broadcast it with, at or above `v`'s
-horizon then, that `v` did not make. -/
+horizon then, that `v` did not make; and once `v`'s horizon rises to `G`
+at `t'`, it is given again, by `max t' gst + Δₛ`, each round-`G` block of
+that history that it did not make. -/
 def SyncedWithin (cfg : Config Validator BlockId Payload) (T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δₛ t₁ : ℕ) : Prop :=
   ∀ j v id b, tr[j]? = some (v, .deliver id b) → v ∈ T → b.creator ∈ T →
-    max (time j) gst + Δₛ ≤ t₁ →
     ∀ i, (tr[i]?.map Prod.fst) = some b.creator → (id, b) ∈ broadcasts (outputsAt cfg tr i) →
       let st := (stateBefore cfg tr (i + 1) b.creator).store
-      ∀ y ∈ historyFrom st.blk id,
-        horAt cfg tr time v (max (time j) gst + Δₛ) ≤ (st.blk y).round → (st.blk y).creator ≠ v →
+      (max (time j) gst + Δₛ ≤ t₁ → ∀ y ∈ historyFrom st.blk id,
+        horAt cfg tr time v (max (time j) gst + Δₛ) ≤ (st.blk y).round →
+        (st.blk y).creator ≠ v →
         ∃ k, tr[k]? = some (v, .deliver y (st.map.getD y st.junk)) ∧
-          time k ≤ max (time j) gst + Δₛ
+          time k ≤ max (time j) gst + Δₛ) ∧
+      ∀ e, j < e → (tr[e]?.map Prod.fst) = some v →
+        (stateBefore cfg tr e v).store.base < (stateBefore cfg tr (e + 1) v).store.base →
+        max (time e) gst + Δₛ ≤ t₁ → ∀ y ∈ historyFrom st.blk id,
+        (st.blk y).round = (stateBefore cfg tr (e + 1) v).store.base →
+        (st.blk y).creator ≠ v →
+        ∃ k, e < k ∧ tr[k]? = some (v, .deliver y (st.map.getD y st.junk)) ∧
+          time k ≤ max (time e) gst + Δₛ
 
 /-- **Every reliable node starts by `gst`.** -/
 def StartedBy (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
@@ -124,13 +136,12 @@ def Progresses : Prop :=
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t₁ : ℕ),
     cfg.σ = boundedSel → cfg.Admissible → cfg.limit = none → Hᶜ.card ≤ cfg.f → T ⊆ H →
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card →
-    (∀ r, 2 * (Δ + Δₛ) ≤ cfg.timeout r) →
+    (∀ r, 2 * (3 * Δ + Δₛ) < cfg.timeout r) →
     Converge.TimelyAuthentic cfg H tr → Boot.TimelyOffers cfg H tr → Boot.TimelyCerts cfg H tr →
-    Converge.HashInjective cfg H tr → Boot.ChainInjective cfg H tr →
-    Converge.NoRestart T tr → Converge.NoRejoin T tr →
+    Converge.HashInjective cfg H tr → Boot.ChainInjective cfg H tr → Converge.NoRestart T tr →
     TimeMono tr time → DeliveredWithin cfg T tr time gst Δ t₁ → TimersOnTime cfg T tr time t₁ →
     SyncedWithin cfg T tr time gst Δₛ t₁ → StartedBy T tr time gst →
-    Produces cfg T tr time gst t₁ ∧ Decides cfg T tr time gst (Δ + Δₛ) t₁
+    Produces cfg T tr time gst t₁ ∧ Decides cfg T tr time gst (3 * Δ + Δₛ) t₁
 
 /-- The reliable nodes' liveness. -/
 def Statement : Prop := Progresses
