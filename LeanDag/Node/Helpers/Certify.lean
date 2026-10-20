@@ -423,10 +423,22 @@ theorem Kept.advance {P : List (Validator × ℕ × BlockId)} {s : State Validat
   exact ⟨h₂.frame a₃ b₃ c₃ d₃ e₃ f₃, hc₂.frame b₃ c₃ d₃⟩
 
 omit [Fintype Validator] in
+theorem Kept.quiesce {P : List (Validator × ℕ × BlockId)} (hP : ∀ x ∈ P, x.1 ≠ cfg.me) :
+    ∀ (n : ℕ) {s : State Validator BlockId Payload}, Kept cfg P s →
+      Kept cfg P (Node.quiesce cfg (n + 1) s).1 ∧ Covered cfg (Node.quiesce cfg (n + 1) s).1
+  | n, s, hK => by
+    rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he]
+    · exact hK.advance hP
+    · cases n with
+      | zero => exact hK.advance hP
+      | succ n => exact Kept.quiesce hP n (hK.advance hP).1
+
+omit [Fintype Validator] in
 theorem Kept.settle {P : List (Validator × ℕ × BlockId)} {s : State Validator BlockId Payload}
     (hK : Kept cfg P s) (hP : ∀ x ∈ P, x.1 ≠ cfg.me) (hr : s.recovering = false) :
     Kept cfg P (Node.settle cfg s).1 ∧ Covered cfg (Node.settle cfg s).1 := by
-  rw [settle_of_idle hr]; exact hK.advance hP
+  obtain ⟨n, hn⟩ := passes_succ (cfg := cfg) s
+  rw [settle_of_idle hr, hn]; exact Kept.quiesce hP n hK
 
 /-! ## A step, and a run -/
 
@@ -511,7 +523,8 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
       rw [hn]
       have hr := hK.record (v := p) (k₀ := k) (h₀ := kh) (fun h => absurd h hp)
         (fun x hx h1 h2 => hc x hx p k kh rfl h1 h2)
-      exact ⟨hr.frame rfl rfl rfl rfl rfl rfl, (hcov.record p k kh).frame rfl rfl rfl⟩
+      exact (hr.frame (s' := { Node.record cfg s p k kh with sought := n }) rfl rfl rfl rfl rfl
+        rfl).settle hP hrec
     · exact ⟨hK, hcov⟩
   | baseRequest => exact ⟨hK, hcov⟩
   | decisionRequest => exact ⟨hK, hcov⟩
@@ -562,21 +575,19 @@ theorem kept_peer {u : Validator} {k : ℕ} {h : BlockId}
     Covered.init rfl hr₁ (by simp)
   set s₀ := (Node.run cfg (State.init cfg) is₁).1
   -- the receipt
-  have hstep : Node.step cfg s₀ (.proposal u k h) =
-      seek cfg (record cfg s₀ u k h) k h := by
-    rw [step_proposal, if_pos hu]
   obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s₀ u k h) k h
   set s₁ := (Node.step cfg s₀ (.proposal u k h)).1
-  have hs₁ : s₁ = { record cfg s₀ u k h with sought := n } := by
-    simp only [s₁, hstep, hn]
-  have hK₁ : Kept cfg [(u, k, h)] s₁ := by
+  have hs₁ : s₁ = (Node.settle cfg { record cfg s₀ u k h with sought := n }).1 := by
+    simp only [s₁, step_proposal, if_pos hu, hn]
+  have hKc : Kept cfg [(u, k, h)] s₁ ∧ Covered cfg s₁ := by
     rw [hs₁]
     have hr := hK₀.record (v := u) (k₀ := k) (h₀ := h) (fun h => absurd h hu) (by simp)
-    exact ⟨hr.ledger, hr.own_le, hr.own_mem, hr.certified, fun x hx => by
-      rw [List.mem_singleton.mp hx]
-      exact ⟨record_self s₀ u k h, hw⟩⟩
-  have hcov₁ : Covered cfg s₁ := by
-    rw [hs₁]; exact (hcov₀.record u k h).frame rfl rfl rfl
+    have hK' : Kept cfg [(u, k, h)] { record cfg s₀ u k h with sought := n } :=
+      ⟨hr.ledger, hr.own_le, hr.own_mem, hr.certified, fun x hx => by
+        rw [List.mem_singleton.mp hx]
+        exact ⟨record_self s₀ u k h, hw⟩⟩
+    exact hK'.settle (by simpa using hu) hrec₀
+  obtain ⟨hK₁, hcov₁⟩ := hKc
   have hrec₁ : s₁.recovering = false :=
     (step_calm hrec₀ (hr _ (List.mem_append_right _ (List.mem_cons_self ..)))).1
   obtain ⟨hK₂, hcov₂, -⟩ := Kept.run (cfg := cfg) (P := [(u, k, h)]) (by simpa using hu) is₂

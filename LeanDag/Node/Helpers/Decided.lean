@@ -286,10 +286,16 @@ theorem advance_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s
   exact ⟨(h₁.trans h₂).trans h₃, hL₂.of_eq hd₃ hl₃ hp₃ hc₃⟩
 
 omit [Fintype Validator] in
+theorem quiesce_appends (n : ℕ) {s : State Validator BlockId Payload} (hL : Ledger cfg s) :
+    Appends cfg s (quiesce cfg n s).2 (quiesce cfg n s).1 ∧ Ledger cfg (quiesce cfg n s).1 :=
+  quiesce_rel (P := Ledger cfg) (R := Appends cfg) Appends.refl
+    (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂) (fun _ h => advance_appends h) n s hL
+
+omit [Fintype Validator] in
 theorem settle_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s) :
     Appends cfg s (settle cfg s).2 (settle cfg s).1 ∧ Ledger cfg (settle cfg s).1 := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hr, h⟩ <;> rw [h]
-  · exact advance_appends hL
+  · exact quiesce_appends _ hL
   · obtain ⟨-, -, -, -, -, -, -, -, -, -, hlo, -⟩ := tryResume_some hr
     have hd : s₁.decided = s.decided ∧ s₁.lastProposed = s.lastProposed ∧
         s₁.chain = s.chain := by
@@ -302,7 +308,8 @@ theorem settle_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
           · cases hr
         · cases hr
       · cases hr
-    obtain ⟨h₂, hL₂⟩ := advance_appends (cfg := cfg) (hL.of_eq hd.1 hlo hd.2.1 hd.2.2)
+    obtain ⟨h₂, hL₂⟩ := quiesce_appends (cfg := cfg) (passes cfg s₁)
+      (hL.of_eq hd.1 hlo hd.2.1 hd.2.2)
     exact ⟨(Appends.quiet hd.1 rfl fun _ _ h => absurd h List.not_mem_nil).trans h₂, hL₂⟩
 
 omit [Fintype Validator] in
@@ -450,13 +457,19 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]
-      refine ⟨Appends.quiet rfl
-        (commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho))
-        fun k' h' hk => ?_, hL.of_eq rfl rfl rfl rfl⟩
-      obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ hk
-      cases he
+    · have h₁ : Appends cfg s (seek cfg (record cfg s p k kh) k kh).2
+          (seek cfg (record cfg s p k kh) k kh).1 := by
+        obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+        refine Appends.quiet (by rw [hn]; rfl)
+          (commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho))
+          fun k' h' hk => ?_
+        obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ hk
+        cases he
+      have hL₁ : Ledger cfg (seek cfg (record cfg s p k kh) k kh).1 := by
+        obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+        rw [hn]; exact hL.of_eq rfl rfl rfl rfl
+      obtain ⟨h₂, hL₂⟩ := settle_appends hL₁
+      exact ⟨h₁.trans h₂, hL₂⟩
     · exact ⟨Appends.refl s, hL⟩
   | decisionRequest p lo =>
     rw [step_decisionRequest]

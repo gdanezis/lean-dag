@@ -159,6 +159,12 @@ theorem calm_advance (s : State Validator BlockId Payload) :
     Calm s (Node.advance cfg s).1 :=
   Calm.trans (Calm.trans (calm_progress _ s) (calm_decideStep _)) (calm_collect _)
 
+omit [Fintype Validator] in
+theorem calm_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
+    Calm s (quiesce cfg n s).1 :=
+  (quiesce_rel (P := fun _ => True) (R := fun a _ b => Calm a b) Calm.refl
+    (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂) (fun s _ => ⟨calm_advance s, trivial⟩) n s trivial).1
+
 /-- **A step of a node not recovering, other than a restart**, starts no
 recovery, and fires a round's timer only on that timer's input. -/
 theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
@@ -169,7 +175,7 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
       (Node.settle cfg s₀).1.recovering = false ∧ (Node.settle cfg s₀).1.fired ⊆ s₀.fired :=
     fun s₀ h₀ => by
       rw [settle_of_idle h₀]
-      exact ⟨(calm_advance s₀).2.trans h₀, (calm_advance s₀).1⟩
+      exact ⟨(calm_quiesce _ s₀).2.trans h₀, (calm_quiesce _ s₀).1⟩
   cases inp with
   | start =>
     simp only [Node.step]
@@ -218,7 +224,9 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
     rw [step_proposal]
     split
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k h) k h
-      rw [hn]; exact ⟨hs, fun r h => Or.inl h⟩
+      rw [hn]
+      have k := key { record cfg s p k h with sought := n } hs
+      exact ⟨k.1, fun r h => Or.inl (k.2 h)⟩
     · exact ⟨hs, fun r h => Or.inl h⟩
   | _ => exact ⟨hs, fun r h => Or.inl h⟩
 
@@ -366,7 +374,7 @@ theorem OwnTop.advance {s : State Validator BlockId Payload} (h : OwnTop cfg s) 
 omit [Fintype Validator] in
 theorem OwnTop.settle {s : State Validator BlockId Payload} (h : OwnTop cfg s)
     (hs : s.recovering = false) : OwnTop cfg (Node.settle cfg s).1 := by
-  rw [settle_of_idle hs]; exact h.advance
+  rw [settle_of_idle hs]; exact quiesce_ind (fun _ h => h.advance) _ _ h
 
 /-- **A step of a node not recovering, other than a restart, keeps its
 own block at its top stored.** -/
@@ -415,7 +423,7 @@ theorem OwnTop.step {s : State Validator BlockId Payload} {inp : Input Validator
     rw [step_proposal]
     split
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]; exact h.grow (Grows.refl _) rfl rfl rfl
+      rw [hn]; exact OwnTop.settle (h.grow (Grows.refl _) rfl rfl rfl) hs
     · exact h
   | _ => exact h
 
@@ -440,21 +448,83 @@ theorem ownTop_before {tr : Trace Validator BlockId Payload} {v : Validator}
         exact ih.step (fired_before (cfg := cfg) hnr i).1 fun h => hnr i (by rw [he, h])
       · exact ih
 
+/-- **A store retains another's blocks** at or above its horizon, at
+their rounds. -/
+def Retains (st st' : Store Validator BlockId Payload) : Prop :=
+  ∀ j ∈ st.ids, st'.base ≤ (st.blk j).round → j ∈ st'.ids ∧ (st'.blk j).round = (st.blk j).round
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem Retains.refl (st : Store Validator BlockId Payload) : Retains st st :=
+  fun _ hj _ => ⟨hj, rfl⟩
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem Retains.trans {a b c : Store Validator BlockId Payload} (h₁ : Retains a b)
+    (h₂ : Retains b c) (hbc : b.base ≤ c.base) : Retains a c := fun j hj hr => by
+  obtain ⟨hjb, hrb⟩ := h₁ j hj (hbc.trans hr)
+  obtain ⟨hjc, hrc⟩ := h₂ j hjb (by rw [hrb]; exact hr)
+  exact ⟨hjc, hrc.trans hrb⟩
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem Retains.of_grows {st st' : Store Validator BlockId Payload} (hg : Grows st st')
+    (hb : st'.base = st.base) : Retains st st' := fun _ hj _ =>
+  ⟨(hg.2 hb).1 hj, by rw [hg.blk hb hj]⟩
+
+omit [Fintype Validator] in
+theorem retains_collect (s : State Validator BlockId Payload) :
+    Retains s.store (Node.collect cfg s).1.store := by
+  unfold Node.collect
+  split
+  · dsimp only
+    split
+    · rename_i hG
+      intro j hj hr
+      exact ⟨(mem_prune_ids (hG := hG.le)).mpr ⟨hj, hr⟩, prune_blk_round _ hG.le hr⟩
+    · exact Retains.refl _
+  · exact Retains.refl _
+
+omit [Fintype Validator] in
+theorem retains_advance (s : State Validator BlockId Payload) :
+    Retains s.store (Node.advance cfg s).1.store := by
+  have hg₁ := (Grows.progress (cfg := cfg) (s.store.topRound + 2) s).1
+  have hb₁ := progress_base (cfg := cfg) (s.store.topRound + 2) s
+  simp only [Node.advance]
+  generalize Node.progress cfg (s.store.topRound + 2) s = r at hg₁ hb₁ ⊢
+  have hd := decideStep_store (cfg := cfg) r.1
+  have hc := retains_collect (cfg := cfg) (Node.decideStep cfg r.1).1
+  have hgc := Grows.collect (cfg := cfg) (Node.decideStep cfg r.1).1
+  rw [hd] at hc hgc
+  generalize Node.collect cfg (Node.decideStep cfg r.1).1 = c at hc hgc ⊢
+  have hf := Retains.of_grows (Grows.flush (cfg := cfg) (c.1.pending.length + 1) c.1.store
+    c.1.pending) (flush_base _ _ _)
+  refine ((Retains.of_grows hg₁ hb₁).trans hc hgc.1).trans hf ?_
+  rw [flush_base]
+
+omit [Fintype Validator] in
+/-- **The passes retain the store's blocks** at or above the horizon,
+which does not fall. -/
+theorem retains_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
+    Retains s.store (quiesce cfg n s).1.store ∧ s.store.base ≤ (quiesce cfg n s).1.store.base :=
+  (quiesce_rel (P := fun _ => True)
+    (R := fun a _ b => Retains a.store b.store ∧ a.store.base ≤ b.store.base)
+    (fun _ => ⟨Retains.refl _, le_rfl⟩)
+    (fun _ _ _ _ _ h₁ h₂ => ⟨h₁.1.trans h₂.1 h₂.2, h₁.2.trans h₂.2⟩)
+    (fun s _ => ⟨⟨retains_advance s, (Grows.advance s).1⟩, trivial⟩) n s trivial).1
+
 variable {P : Validity Validator BlockId Payload} {H : Finset Validator}
 
 variable (cfg) in
 /-- **A state the node builds from during a step at `s` on `inp`**: its
-store a cut of `U`, grown from `s`'s at the same horizon, its own block at
-its top stored, and each round it counts as fired fired before or by
-`inp`. -/
+store a cut of `U` that retains `s`'s blocks at or above its horizon, no
+lower than `s`'s, its own block at its top stored, and each round it
+counts as fired fired before or by `inp`. -/
 structure BuildState (U : BlockRecord Validator BlockId Payload P H)
     (s : State Validator BlockId Payload) (inp : Input Validator BlockId Payload)
     (x : State Validator BlockId Payload) : Prop where
   cut : IsCut U x.store
   held : Held cfg x
   own : OwnTop cfg x
-  grows : Grows s.store x.store
-  base : x.store.base = s.store.base
+  retains : Retains s.store x.store
+  base : s.store.base ≤ x.store.base
   fired : ∀ r ∈ x.fired, r ∈ s.fired ∨ inp = .timer r
 
 omit [Fintype Validator] in
@@ -468,19 +538,30 @@ theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H}
   have hgy : Grows x.store y.store := hst ▸ Grows.insert x.store
   have hby : y.store.base = x.store.base := by rw [hst]; rfl
   exact ⟨h.cut.tryBuild hg h.held hb hK, h.held.tryBuild hb, OwnTop.tryBuild hb,
-    h.grows.trans hgy, hby.trans h.base, fun r hr => h.fired r ((calm_tryBuild hb).1 hr)⟩
+    h.retains.trans (Retains.of_grows hgy hby) hby.ge, h.base.trans hby.ge,
+    fun r hr => h.fired r ((calm_tryBuild hb).1 hr)⟩
 
 omit [Fintype Validator] in
-/-- **Each block a settle persists comes from one build**, at a state the
+/-- **A pass keeps a state the node builds from.** -/
+theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H}
+    {K : Set (BlockId × Block Validator BlockId Payload)} (hg : Ground U K cfg.q)
+    {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
+    (h : BuildState cfg U s inp x) (hp : ∀ e ∈ x.pending, e ∈ K)
+    (hK : ∀ e ∈ persists (Node.advance cfg x).2, e ∈ K) :
+    BuildState cfg U s inp (Node.advance cfg x).1 :=
+  ⟨h.cut.advanceStore hg h.held hp hK, h.held.advance, h.own.advance,
+    h.retains.trans (retains_advance x) (Grows.advance x).1, h.base.trans (Grows.advance x).1,
+    fun r hr => h.fired r ((calm_advance x).1 hr)⟩
+
+omit [Fintype Validator] in
+/-- **Each block a pass persists comes from one build**, at a state the
 node builds from. -/
-theorem settle_witness {U : BlockRecord Validator BlockId Payload P H}
+theorem advance_witness {U : BlockRecord Validator BlockId Payload P H}
     {K : Set (BlockId × Block Validator BlockId Payload)} (hg : Ground U K cfg.q)
     {s s₀ : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (h₀ : BuildState cfg U s inp s₀) (hs : s₀.recovering = false)
-    (hK : ∀ e ∈ persists (Node.settle cfg s₀).2, e ∈ K) :
-    ∀ e ∈ persists (Node.settle cfg s₀).2, ∃ x y o, BuildState cfg U s inp x ∧
+    (h₀ : BuildState cfg U s inp s₀) (hK : ∀ e ∈ persists (Node.advance cfg s₀).2, e ∈ K) :
+    ∀ e ∈ persists (Node.advance cfg s₀).2, ∃ x y o, BuildState cfg U s inp x ∧
       Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o := by
-  rw [settle_of_idle hs] at hK ⊢
   have hpe : persists (Node.advance cfg s₀).2 =
       persists (Node.progress cfg (s₀.store.topRound + 2) s₀).2 := by
     simp only [Node.advance]
@@ -489,6 +570,41 @@ theorem settle_witness {U : BlockRecord Validator BlockId Payload P H}
   rw [hpe] at hK ⊢
   exact progress_witness (BuildState cfg U s inp) K (fun _ _ _ hx hb hK => hx.tryBuild hg hb hK)
     _ s₀ h₀ hK
+
+omit [Fintype Validator] in
+theorem quiesce_witness {U : BlockRecord Validator BlockId Payload P H}
+    {K : Set (BlockId × Block Validator BlockId Payload)} (hg : Ground U K cfg.q)
+    {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload} :
+    ∀ (n : ℕ) (s₀ : State Validator BlockId Payload), BuildState cfg U s inp s₀ →
+    (∀ e ∈ s₀.pending, e ∈ K) → (∀ e ∈ persists (quiesce cfg n s₀).2, e ∈ K) →
+    ∀ e ∈ persists (quiesce cfg n s₀).2, ∃ x y o, BuildState cfg U s inp x ∧
+      Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o
+  | 0, s₀, _, _, _ => by intro e he; simp [Node.quiesce, persists] at he
+  | n + 1, s₀, h₀, hp, hK => by
+    rcases quiesce_succ_cases (cfg := cfg) n s₀ with he | he <;> rw [he] at hK ⊢
+    · exact advance_witness hg h₀ hK
+    · rw [persists_append] at hK
+      intro e he'
+      rw [persists_append] at he'
+      rcases List.mem_append.mp he' with he' | he'
+      · exact advance_witness hg h₀ (fun e he => hK e (List.mem_append_left _ he)) e he'
+      · exact quiesce_witness hg n _
+          (h₀.advance hg hp fun e he => hK e (List.mem_append_left _ he))
+          (fun e he => hp e ((advance_sub (cfg := cfg) s₀).1 e he))
+          (fun e he => hK e (List.mem_append_right _ he)) e he'
+
+omit [Fintype Validator] in
+/-- **Each block a settle persists comes from one build**, at a state the
+node builds from. -/
+theorem settle_witness {U : BlockRecord Validator BlockId Payload P H}
+    {K : Set (BlockId × Block Validator BlockId Payload)} (hg : Ground U K cfg.q)
+    {s s₀ : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
+    (h₀ : BuildState cfg U s inp s₀) (hs : s₀.recovering = false) (hp : ∀ e ∈ s₀.pending, e ∈ K)
+    (hK : ∀ e ∈ persists (Node.settle cfg s₀).2, e ∈ K) :
+    ∀ e ∈ persists (Node.settle cfg s₀).2, ∃ x y o, BuildState cfg U s inp x ∧
+      Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o := by
+  rw [settle_of_idle hs] at hK ⊢
+  exact quiesce_witness hg _ s₀ h₀ hp hK
 
 /-- **Each block a step persists**, of a node not recovering and other
 than a restart, is the genesis block or comes from one build, at a state
@@ -504,16 +620,18 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
   -- a step that settles `s₀` after outputs persisting only round-`0` blocks
   have hset : ∀ (s₀ : State Validator BlockId Payload)
       (pre : List (Output Validator BlockId Payload)),
-      BuildState cfg U s inp s₀ → s₀.recovering = false → (∀ e ∈ persists pre, e.2.round = 0) →
+      BuildState cfg U s inp s₀ → s₀.recovering = false → (∀ e ∈ s₀.pending, e ∈ K) →
+      (∀ e ∈ persists pre, e.2.round = 0) →
       Node.step cfg s inp = ((Node.settle cfg s₀).1, pre ++ (Node.settle cfg s₀).2) →
       ∀ e ∈ persists (Node.step cfg s inp).2, e.2.round = 0 ∨ ∃ x y o,
         BuildState cfg U s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o := by
-    intro s₀ pre h₀ hs₀ hpre he e hev
+    intro s₀ pre h₀ hs₀ hp₀ hpre he e hev
     rw [he] at hb hev
     rw [persists_append] at hb hev
     rcases List.mem_append.mp hev with hev | hev
     · exact Or.inl (hpre e hev)
-    · exact Or.inr (settle_witness hg h₀ hs₀ (fun e he => hb e (List.mem_append_right _ he)) e hev)
+    · exact Or.inr (settle_witness hg h₀ hs₀ hp₀ (fun e he => hb e (List.mem_append_right _ he))
+        e hev)
   have hsame : Node.step cfg s inp = (s, []) →
       ∀ e ∈ persists (Node.step cfg s inp).2, e.2.round = 0 ∨ ∃ x y o,
         BuildState cfg U s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o := by
@@ -559,8 +677,8 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
             simp [st, gid, Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self,
               Config.genesis]
         refine hset s₀ (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)])
-          ⟨hcst, hh₀, ho₀, (Grows.insert s.store : Grows s.store st), rfl,
-            fun r hr => Or.inl hr⟩ rfl ?_
+          ⟨hcst, hh₀, ho₀, Retains.of_grows (Grows.insert s.store : Grows s.store st) rfl,
+            le_rfl, fun r hr => Or.inl hr⟩ rfl hp ?_
           (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
         intro e he
         simp only [built, persists, List.flatMap_cons, List.flatMap_nil, List.append_nil,
@@ -587,8 +705,9 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       refine hset { s₂ with asked := askedAfter (cfg := cfg) s b }
         ((if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++
           askOut (cfg := cfg) s b)
-        ⟨hc₁, hh.grow hg₁ hb₁ rfl le_rfl, hown.grow hg₁ hb₁ rfl rfl, hg₁, hb₁,
-          fun r hr => Or.inl hr⟩ hs ?_ (step_deliver hA)
+        ⟨hc₁, hh.grow hg₁ hb₁ rfl le_rfl, hown.grow hg₁ hb₁ rfl rfl, Retains.of_grows hg₁ hb₁,
+          hb₁.ge, fun r hr => Or.inl hr⟩ hs
+        (fun e he => hpend e (flush_pending_sub _ _ _ e he)) ?_ (step_deliver hA)
       intro e he
       rw [persists_append] at he
       rcases List.mem_append.mp he with he | he
@@ -600,7 +719,8 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
   | timer r =>
     refine hset { s with fired := insert r s.fired } []
       ⟨hc, hh.grow (Grows.refl _) rfl rfl le_rfl, hown.grow (Grows.refl _) rfl rfl rfl,
-        Grows.refl _, rfl, fun t ht => ?_⟩ hs (by simp [persists]) (by simp only [Node.step]; rfl)
+        Retains.refl _, le_rfl, fun t ht => ?_⟩ hs hp (by simp [persists])
+      (by simp only [Node.step]; rfl)
     rcases Finset.mem_insert.mp ht with rfl | ht
     · exact Or.inr rfl
     · exact Or.inl ht
@@ -613,32 +733,38 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     · rw [hs] at h₁; cases h₁
     · refine hset (adopted s c ds') (ds'.map fun e => .commit e.1 e.2)
         ⟨hc, hh.grow (Grows.refl _) rfl rfl (adoptable_lo ha).le,
-          hown.grow (Grows.refl _) rfl rfl rfl, Grows.refl _, rfl, fun r hr => Or.inl hr⟩ hs
-        (fun e he => by rw [persists_commits] at he; exact absurd he List.not_mem_nil) ?_
+          hown.grow (Grows.refl _) rfl rfl rfl, Retains.refl _, le_rfl, fun r hr => Or.inl hr⟩ hs
+        hp (fun e he => by rw [persists_commits] at he; exact absurd he List.not_mem_nil) ?_
       rw [he, adopt_eq]
     · refine hset { s with cert := some c, props := above (some c) s.props } []
         ⟨hc, hh.grow (Grows.refl _) rfl rfl le_rfl,
-          hown.grow (Grows.refl _) rfl rfl rfl, Grows.refl _, rfl, fun r hr => Or.inl hr⟩ hs
-        (by simp [persists]) ?_
+          hown.grow (Grows.refl _) rfl rfl rfl, Retains.refl _, le_rfl, fun r hr => Or.inl hr⟩ hs
+        hp (by simp [persists]) ?_
       rw [he]; rfl
     · exact hsame he
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he
     · refine hset { s with cert := some c, props := above (some c) s.props } []
         ⟨hc, hh.grow (Grows.refl _) rfl rfl le_rfl,
-          hown.grow (Grows.refl _) rfl rfl rfl, Grows.refl _, rfl, fun r hr => Or.inl hr⟩ hs
-        (by simp [persists]) ?_
+          hown.grow (Grows.refl _) rfl rfl rfl, Retains.refl _, le_rfl, fun r hr => Or.inl hr⟩ hs
+        hp (by simp [persists]) ?_
       rw [he]; rfl
     · intro e hev; rw [he] at hev; simp [persists] at hev
     · exact hsame he
   | proposal p k kh =>
-    intro e he
-    rw [step_proposal] at he
-    split at he
-    · have hq := (out_quiet (xs := (seek cfg (record cfg s p k kh) k kh).2) fun o ho => by
+    by_cases hpm : p ≠ cfg.me
+    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      have hq := (out_quiet (xs := (seek cfg (record cfg s p k kh) k kh).2) fun o ho => by
         obtain ⟨_, _, rfl⟩ := seek_out (cfg := cfg) _ k kh o ho; rfl).1
-      rw [hq] at he; exact absurd he List.not_mem_nil
-    · simp [persists] at he
+      refine hset (seek cfg (record cfg s p k kh) k kh).1 (seek cfg (record cfg s p k kh) k kh).2
+        ?_ (by rw [hn]; exact hs) (by rw [hn]; exact hp) (by rw [hq]; simp)
+        (by rw [step_proposal, if_pos hpm])
+      rw [hn]
+      exact ⟨hc, hh.grow (Grows.refl _) rfl rfl le_rfl, hown.grow (Grows.refl _) rfl rfl rfl,
+        Retains.refl _, le_rfl, fun r hr => Or.inl hr⟩
+    · intro e he
+      rw [step_proposal, if_neg hpm] at he
+      simp [persists] at he
   | decisionRequest p lo =>
     intro e he
     rw [step_decisionRequest] at he
@@ -738,7 +864,11 @@ theorem timersBuilt_step {s : State Validator BlockId Payload}
     TimersBuilt cfg (Node.step cfg s inp).2 := by
   have hset : ∀ s₀ : State Validator BlockId Payload, s₀.recovering = false →
       TimersBuilt cfg (Node.settle cfg s₀).2 := fun s₀ h₀ => by
-    rw [settle_of_idle h₀]; exact timersBuilt_advance s₀
+    rw [settle_of_idle h₀]
+    exact (quiesce_rel (P := fun _ => True) (R := fun _ out _ => TimersBuilt cfg out)
+      (fun _ => TimersBuilt.of_none fun _ _ h => absurd h List.not_mem_nil)
+      (fun _ _ _ _ _ h₁ h₂ => h₁.append h₂) (fun s _ => ⟨timersBuilt_advance s, trivial⟩) _ s₀
+      trivial).1
   cases inp with
   | start =>
     simp only [Node.step]
@@ -786,8 +916,10 @@ theorem timersBuilt_step {s : State Validator BlockId Payload}
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · exact TimersBuilt.of_none fun r a h => by
-        obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ h; cases he
+    · refine (TimersBuilt.of_none fun r a h => ?_).append (hset _ ?_)
+      · obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ h; cases he
+      · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+        rw [hn]; exact hs
     · exact TimersBuilt.of_none fun _ _ h => by simp at h
   | decisionRequest p lo =>
     rw [step_decisionRequest]
@@ -910,57 +1042,6 @@ theorem isCert_of_certReady [P.Mechanised] (hσ : cfg.σ = boundedSel)
   rw [hcr]
   exact hcount
 
-/-- **A store retains another's blocks** at or above its horizon, at
-their rounds. -/
-def Retains (st st' : Store Validator BlockId Payload) : Prop :=
-  ∀ j ∈ st.ids, st'.base ≤ (st.blk j).round → j ∈ st'.ids ∧ (st'.blk j).round = (st.blk j).round
-
-omit [Fintype Validator] [DecidableEq Validator] in
-theorem Retains.refl (st : Store Validator BlockId Payload) : Retains st st :=
-  fun _ hj _ => ⟨hj, rfl⟩
-
-omit [Fintype Validator] [DecidableEq Validator] in
-theorem Retains.trans {a b c : Store Validator BlockId Payload} (h₁ : Retains a b)
-    (h₂ : Retains b c) (hbc : b.base ≤ c.base) : Retains a c := fun j hj hr => by
-  obtain ⟨hjb, hrb⟩ := h₁ j hj (hbc.trans hr)
-  obtain ⟨hjc, hrc⟩ := h₂ j hjb (by rw [hrb]; exact hr)
-  exact ⟨hjc, hrc.trans hrb⟩
-
-omit [Fintype Validator] [DecidableEq Validator] in
-theorem Retains.of_grows {st st' : Store Validator BlockId Payload} (hg : Grows st st')
-    (hb : st'.base = st.base) : Retains st st' := fun _ hj _ =>
-  ⟨(hg.2 hb).1 hj, by rw [hg.blk hb hj]⟩
-
-omit [Fintype Validator] in
-theorem retains_collect (s : State Validator BlockId Payload) :
-    Retains s.store (Node.collect cfg s).1.store := by
-  unfold Node.collect
-  split
-  · dsimp only
-    split
-    · rename_i hG
-      intro j hj hr
-      exact ⟨(mem_prune_ids (hG := hG.le)).mpr ⟨hj, hr⟩, prune_blk_round _ hG.le hr⟩
-    · exact Retains.refl _
-  · exact Retains.refl _
-
-omit [Fintype Validator] in
-theorem retains_advance (s : State Validator BlockId Payload) :
-    Retains s.store (Node.advance cfg s).1.store := by
-  have hg₁ := (Grows.progress (cfg := cfg) (s.store.topRound + 2) s).1
-  have hb₁ := progress_base (cfg := cfg) (s.store.topRound + 2) s
-  simp only [Node.advance]
-  generalize Node.progress cfg (s.store.topRound + 2) s = r at hg₁ hb₁ ⊢
-  have hd := decideStep_store (cfg := cfg) r.1
-  have hc := retains_collect (cfg := cfg) (Node.decideStep cfg r.1).1
-  have hgc := Grows.collect (cfg := cfg) (Node.decideStep cfg r.1).1
-  rw [hd] at hc hgc
-  generalize Node.collect cfg (Node.decideStep cfg r.1).1 = c at hc hgc ⊢
-  have hf := Retains.of_grows (Grows.flush (cfg := cfg) (c.1.pending.length + 1) c.1.store
-    c.1.pending) (flush_base _ _ _)
-  refine ((Retains.of_grows hg₁ hb₁).trans hc hgc.1).trans hf ?_
-  rw [flush_base]
-
 /-- **A step of a node not recovering, other than a restart, retains its
 store's blocks** at or above its new horizon. -/
 theorem retains_step {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
@@ -970,7 +1051,7 @@ theorem retains_step {s : State Validator BlockId Payload} {inp : Input Validato
       Grows s.store s₀.store → s₀.store.base = s.store.base →
       Retains s.store (Node.settle cfg s₀).1.store := fun s₀ h₀ hg hb => by
     rw [settle_of_idle h₀]
-    exact (Retains.of_grows hg hb).trans (retains_advance s₀) (Grows.advance s₀).1
+    exact (Retains.of_grows hg hb).trans (retains_quiesce _ s₀).1 (retains_quiesce _ s₀).2
   cases inp with
   | start =>
     simp only [Node.step]
@@ -1007,7 +1088,7 @@ theorem retains_step {s : State Validator BlockId Payload} {inp : Input Validato
     rw [step_proposal]
     split
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]; exact Retains.refl _
+      rw [hn]; exact hset _ hs (Grows.refl _) rfl
     · exact Retains.refl _
   | _ => exact Retains.refl _
 

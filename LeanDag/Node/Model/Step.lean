@@ -57,6 +57,11 @@ input `i` in the state `s`: the new state and the outputs.
 * **Collecting** (`collect`): the horizon rises to `Λ` below the lesser
   of the decided frontier, the certified frontier and the node's round,
   and what lies below it is dropped.
+* **Settling** (`settle`, `quiesce`): after each change to its state,
+  peers' proposals included, the node builds, decides, collects and
+  accepts what that allows, in passes, until a pass changes none of its
+  top, its horizon, its pending blocks, its next undecided slot and its
+  certificate's height.
 
 * **Restarting** (`State.recover`): a crash keeps the store, the next
   slot and the top, and loses what is pending, the timers and the
@@ -591,12 +596,37 @@ def tryResume (s : State Validator BlockId Payload) : Option (State Validator Bl
     | none => none
   | _, _ => none
 
-/-- **Resume if it can, then advance**, after a change to the state. -/
+/-- **Advance until a pass changes nothing the next would read**: the top,
+the horizon, the pending blocks, the next undecided slot and the
+certificate's height; at most `fuel` passes. -/
+def quiesce : ℕ → State Validator BlockId Payload →
+    State Validator BlockId Payload × List (Output Validator BlockId Payload)
+  | 0, s => (s, [])
+  | fuel + 1, s =>
+    let r := advance cfg s
+    if r.1.top = s.top ∧ r.1.store.base = s.store.base ∧ r.1.pending.length = s.pending.length ∧
+        r.1.lo = s.lo ∧ r.1.certHeight = s.certHeight then r
+    else let r' := quiesce fuel r.1; (r'.1, r.2 ++ r'.2)
+
+/-- The highest round of a pending block, `0` without one. -/
+def pendingTop (s : State Validator BlockId Payload) : ℕ :=
+  (s.pending.map (·.2.round)).foldr max 0
+
+/-- **The passes a settle takes at most**: each but the last raises the
+top, the horizon, the next undecided slot or the certificate's height, or
+leaves fewer blocks pending, within bounds the state fixes. -/
+def passes (s : State Validator BlockId Payload) : ℕ :=
+  let B := max (s.top.getD 0) (max s.store.topRound (pendingTop s)) + 1
+  let L := max s.lo (decidable cfg B)
+  s.pending.length + 2 * B + 2 * L + 1
+
+/-- **Resume if it can, then advance until nothing changes**, after a
+change to the state. -/
 def settle (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   match tryResume cfg s with
-  | some s' => advance cfg s'
-  | none => advance cfg s
+  | some s' => quiesce cfg (passes cfg s') s'
+  | none => quiesce cfg (passes cfg s) s
 
 /-- **What the node persists**: its accepted blocks, the horizon, the next
 undecided slot, its top round and its own block there, its decisions,
@@ -749,7 +779,12 @@ def step (s : State Validator BlockId Payload) :
     else if peer ≠ cfg.me ∧ confirms cfg s c then confirm cfg s c
     else (s, [])
   | .decisionRequest peer lo => (s, if peer ≠ cfg.me then serveFrom s peer lo else [])
-  | .proposal peer k h => if peer ≠ cfg.me then seek cfg (record cfg s peer k h) k h else (s, [])
+  | .proposal peer k h =>
+    if peer ≠ cfg.me then
+      let r := seek cfg (record cfg s peer k h) k h
+      let r' := settle cfg r.1
+      (r'.1, r.2 ++ r'.2)
+    else (s, [])
   | .announced peer c =>
     if s.recovering ∨ peer = cfg.me then (s, [])
     else if confirms cfg s c then confirm cfg s c

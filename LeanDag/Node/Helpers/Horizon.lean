@@ -234,8 +234,8 @@ omit [Fintype Validator] in
 theorem Held.settle {s : State Validator BlockId Payload} (h : Held cfg s) :
     Held cfg (Node.settle cfg s).1 := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hj, he⟩ <;> rw [he]
-  · exact h.advance
-  · exact (h.tryResume hj).advance
+  · exact quiesce_ind (fun _ h => h.advance) _ _ h
+  · exact quiesce_ind (fun _ h => h.advance) _ _ (h.tryResume hj)
 
 omit [Fintype Validator] in
 /-- A round to bootstrap at has an attested base. -/
@@ -379,7 +379,7 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     split
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
       rw [hn]
-      exact h.grow (Grows.refl _) rfl rfl le_rfl
+      exact Held.settle (h.grow (Grows.refl _) rfl rfl le_rfl)
     · exact h
   | _ => exact h
 

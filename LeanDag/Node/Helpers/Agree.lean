@@ -144,9 +144,10 @@ omit [Fintype Validator] in
 theorem serveBase_not_mem_settle (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
     {bs : List (BlockId × Block Validator BlockId Payload)} :
     Output.serveBase p G bs ∉ (Node.settle cfg s).2 := by
-  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, -, h⟩ <;> rw [h]
-  · exact serveBase_not_mem_advance s
-  · exact serveBase_not_mem_advance s₁
+  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, -, h⟩ <;> rw [h] <;>
+    exact fun hm => quiesce_out (P := fun _ => True) (Q := fun o => o ≠ Output.serveBase p G bs)
+      (fun s _ => ⟨fun o ho he => serveBase_not_mem_advance s (he ▸ ho), trivial⟩) _ _ trivial _
+      hm rfl
 
 omit [Fintype Validator] in
 theorem serveBase_not_mem_bootFrom (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
@@ -221,7 +222,9 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
   | proposal q k kh =>
     rw [step_proposal] at h
     split at h
-    · obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ h; cases he
+    · rcases List.mem_append.mp h with h | h
+      · obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ h; cases he
+      · exact absurd h (serveBase_not_mem_settle _)
     · simp at h
   | decisionRequest q lo =>
     rw [step_decisionRequest] at h

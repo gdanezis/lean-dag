@@ -85,10 +85,17 @@ theorem advance_offered (s : State Validator BlockId Payload) :
   exact ⟨rfl, rfl⟩
 
 omit [Fintype Validator] in
+theorem quiesce_offered (n : ℕ) (s : State Validator BlockId Payload) :
+    (quiesce cfg n s).1.offers = s.offers ∧ (quiesce cfg n s).1.certs = s.certs :=
+  (quiesce_rel (P := fun _ => True) (R := fun a _ b => b.offers = a.offers ∧ b.certs = a.certs)
+    (fun _ => ⟨rfl, rfl⟩) (fun _ _ _ _ _ h₁ h₂ => ⟨h₂.1.trans h₁.1, h₂.2.trans h₁.2⟩)
+    (fun s _ => ⟨advance_offered s, trivial⟩) n s trivial).1
+
+omit [Fintype Validator] in
 theorem settle_offered (s : State Validator BlockId Payload) :
     (Node.settle cfg s).1.offers = s.offers ∧ (Node.settle cfg s).1.certs = s.certs := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h]
-  · exact advance_offered s
+  · exact quiesce_offered _ s
   · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, hof, -⟩ := tryResume_some hj
     have hce : s₁.certs = s.certs := by
       unfold tryResume at hj
@@ -100,7 +107,7 @@ theorem settle_offered (s : State Validator BlockId Payload) :
           · cases hj
         · cases hj
       · cases hj
-    rw [(advance_offered s₁).1, (advance_offered s₁).2, hof, hce]
+    rw [(quiesce_offered _ s₁).1, (quiesce_offered _ s₁).2, hof, hce]
     exact ⟨rfl, rfl⟩
 
 omit [Fintype Validator] in
@@ -149,7 +156,8 @@ theorem step_offered (s : State Validator BlockId Payload) (i : Input Validator 
     rw [step_proposal]
     split
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]; exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+      rw [hn, (settle_offered _).1, (settle_offered _).2]
+      exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
     · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
   | decisionRequest => exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
   | baseOffer p G bs =>
@@ -276,6 +284,27 @@ theorem IsCut.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     List.append_nil] at he
   exact hv e he
 
+/-- **The passes from a cut**: the store stays one, and the decisions are
+verdicts. -/
+theorem IsCut.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
+    (ht : cfg.p.Tolerates H f q) : ∀ (n : ℕ) {s : State Validator BlockId Payload},
+    IsCut U s.store → Held cfg s → (∀ e ∈ s.pending, e ∈ K) →
+    (∀ e ∈ persists (Node.quiesce cfg n s).2, e ∈ K) →
+    IsCut U (Node.quiesce cfg n s).1.store ∧
+      ∀ e ∈ commitsOf (Node.quiesce cfg n s).2, Verdict cfg U e
+  | 0, s, hc, _, _, _ => ⟨hc, fun e he => by simp [Node.quiesce, commitsOf] at he⟩
+  | n + 1, s, hc, hh, hp, hb => by
+    rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he] at hb ⊢
+    · exact hc.advance hg hσ ht hh hp hb
+    · rw [persists_append] at hb
+      obtain ⟨hc₁, hv₁⟩ := hc.advance hg hσ ht hh hp fun e he => hb e (List.mem_append_left _ he)
+      obtain ⟨hc₂, hv₂⟩ := IsCut.quiesce hg hσ ht n hc₁ hh.advance
+        (fun e he => hp e ((advance_sub (cfg := cfg) s).1 e he))
+        fun e he => hb e (List.mem_append_right _ he)
+      refine ⟨hc₂, fun e he => ?_⟩
+      rw [commitsOf_append] at he
+      exact (List.mem_append.mp he).elim (hv₁ e) (hv₂ e)
+
 /-- **Settling from a cut**: the store stays one, and the decisions are
 verdicts. -/
 theorem IsCut.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
@@ -285,10 +314,10 @@ theorem IsCut.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     IsCut U (Node.settle cfg s).1.store ∧
       ∀ e ∈ commitsOf (Node.settle cfg s).2, Verdict cfg U e := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hj, he⟩ <;> rw [he] at hb ⊢
-  · exact hc.advance hg hσ ht hh hp hb
+  · exact IsCut.quiesce hg hσ ht _ hc hh hp hb
   · obtain ⟨hst, hpd, -⟩ := tryResume_keeps hj
-    exact IsCut.advance hg hσ ht (by rw [hst]; exact hc) (hh.tryResume hj) (by rw [hpd]; exact hp)
-      hb
+    exact IsCut.quiesce hg hσ ht _ (by rw [hst]; exact hc) (hh.tryResume hj)
+      (by rw [hpd]; exact hp) hb
 
 /-- **Trying to bootstrap from a cut**, at a round the record reaches,
 with offered certificates whose decisions, where their chain has the
@@ -456,12 +485,14 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         (s.decided.drop (s.lo - c.height)).reverse)) from rfl]
     exact ⟨hc, fun e he => by cases hcert : s.cert <;> simp [commitsOf, hcert] at he⟩
   | proposal p k kh =>
-    rw [step_proposal]
-    split
+    by_cases hpm : p ≠ cfg.me
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn, commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho)]
-      exact ⟨hc, fun e he => absurd he List.not_mem_nil⟩
-    · exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
+      exact hset (seek cfg (record cfg s p k kh) k kh).1 (seek cfg (record cfg s p k kh) k kh).2
+        (by rw [hn]; exact hc) (by rw [hn]; exact hh.grow (Grows.refl _) rfl rfl le_rfl)
+        (by rw [hn]; exact hp)
+        (commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho))
+        (by rw [step_proposal, if_pos hpm])
+    · rw [step_proposal, if_neg hpm]; exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
   | decisionRequest p lo =>
     rw [step_decisionRequest, commitsOf_requests fun o ho => Or.inr (by
       split at ho

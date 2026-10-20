@@ -126,22 +126,6 @@ theorem tryResume_keeps {s s₁ : State Validator BlockId Payload} (h : tryResum
   exact ⟨hst, hpd, hrq⟩
 
 omit [Fintype Validator] in
-/-- **A block that fits stays pending or stored across a settle**, at a
-horizon that does not rise. -/
-theorem settle_keeps {s : State Validator BlockId Payload}
-    (hR : ReadsAs g (Node.settle cfg s).1.store)
-    (hb : (Node.settle cfg s).1.store.base = s.store.base)
-    (hp : ∀ e ∈ s.pending, g e.1 = atBase 0 e.2) {y : BlockId × Block Validator BlockId Payload}
-    (hf : Fits cfg g y) (hy : y ∈ s.pending ∨ y.1 ∈ s.store.ids) :
-    y ∈ (Node.settle cfg s).1.pending ∨ y.1 ∈ (Node.settle cfg s).1.store.ids := by
-  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h] at hR hb ⊢
-  · exact advance_keeps hR hb hp hf hy
-  · obtain ⟨hst, hpd, -⟩ := tryResume_keeps hj
-    refine advance_keeps hR (by rw [hb, hst]) (by rw [hpd]; exact hp) hf ?_
-    rw [hpd, hst]
-    exact hy
-
-omit [Fintype Validator] in
 theorem flush_pending_sub : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
     (pend : List (BlockId × Block Validator BlockId Payload)),
     ∀ e ∈ (Node.flush cfg fuel st pend).2, e ∈ pend
@@ -181,15 +165,72 @@ theorem advance_sub (s : State Validator BlockId Payload) :
   · have := hc.2 e he
     rwa [hd.2, hp.2] at this
 
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- A store that grows at the same horizon into one reading as `g` reads
+as `g`. -/
+theorem ReadsAs.of_grows {st st' : Store Validator BlockId Payload} (h : ReadsAs g st')
+    (hg : Grows st st') (hb : st'.base = st.base) : ReadsAs g st := by
+  obtain ⟨hsub, hjk, hmap⟩ := hg.2 hb
+  refine ⟨hb ▸ h.1, fun j hj => ?_⟩
+  rw [← h.2 j (hsub hj)]
+  simp only [Store.blk, lookup, hb, hmap j hj]
+
+omit [Fintype Validator] in
+/-- **A block that fits stays pending or stored across the passes**, at a
+horizon that does not rise. -/
+theorem quiesce_keeps : ∀ (n : ℕ) {s : State Validator BlockId Payload},
+    ReadsAs g (quiesce cfg n s).1.store → (quiesce cfg n s).1.store.base = s.store.base →
+    (∀ e ∈ s.pending, g e.1 = atBase 0 e.2) → ∀ {y : BlockId × Block Validator BlockId Payload},
+    Fits cfg g y → (y ∈ s.pending ∨ y.1 ∈ s.store.ids) →
+    y ∈ (quiesce cfg n s).1.pending ∨ y.1 ∈ (quiesce cfg n s).1.store.ids
+  | 0, s, _, _, _, _, _, hy => hy
+  | n + 1, s, hR, hb, hp, y, hf, hy => by
+    rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he] at hR hb ⊢
+    · exact advance_keeps hR hb hp hf hy
+    · set a := (Node.advance cfg s).1
+      have hga := Grows.quiesce (cfg := cfg) n a
+      have hba : a.store.base = s.store.base :=
+        le_antisymm (hb ▸ hga.1) (Grows.advance (cfg := cfg) s).1
+      have hRa : ReadsAs g a.store := hR.of_grows hga (hb.trans hba.symm)
+      exact quiesce_keeps n hR (hb.trans hba.symm)
+        (fun e he => hp e ((advance_sub (cfg := cfg) s).1 e he)) hf
+        (advance_keeps hRa hba hp hf hy)
+
+omit [Fintype Validator] in
+/-- **A block that fits stays pending or stored across a settle**, at a
+horizon that does not rise. -/
+theorem settle_keeps {s : State Validator BlockId Payload}
+    (hR : ReadsAs g (Node.settle cfg s).1.store)
+    (hb : (Node.settle cfg s).1.store.base = s.store.base)
+    (hp : ∀ e ∈ s.pending, g e.1 = atBase 0 e.2) {y : BlockId × Block Validator BlockId Payload}
+    (hf : Fits cfg g y) (hy : y ∈ s.pending ∨ y.1 ∈ s.store.ids) :
+    y ∈ (Node.settle cfg s).1.pending ∨ y.1 ∈ (Node.settle cfg s).1.store.ids := by
+  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h] at hR hb ⊢
+  · exact quiesce_keeps _ hR hb hp hf hy
+  · obtain ⟨hst, hpd, -⟩ := tryResume_keeps hj
+    refine quiesce_keeps _ hR (by rw [hb, hst]) (by rw [hpd]; exact hp) hf ?_
+    rw [hpd, hst]
+    exact hy
+
+omit [Fintype Validator] in
+theorem quiesce_sub (n : ℕ) (s : State Validator BlockId Payload) :
+    (∀ e ∈ (quiesce cfg n s).1.pending, e ∈ s.pending) ∧
+      ∀ e ∈ (quiesce cfg n s).1.requested, e ∈ s.requested :=
+  (quiesce_rel (P := fun _ => True)
+    (R := fun a _ b => (∀ e ∈ b.pending, e ∈ a.pending) ∧ ∀ e ∈ b.requested, e ∈ a.requested)
+    (fun _ => ⟨fun _ h => h, fun _ h => h⟩)
+    (fun _ _ _ _ _ h₁ h₂ => ⟨fun e he => h₁.1 e (h₂.1 e he), fun e he => h₁.2 e (h₂.2 e he)⟩)
+    (fun s _ => ⟨advance_sub s, trivial⟩) n s trivial).1
+
 omit [Fintype Validator] in
 /-- **A settle adds no pending block and records no request.** -/
 theorem settle_sub (s : State Validator BlockId Payload) :
     (∀ e ∈ (Node.settle cfg s).1.pending, e ∈ s.pending) ∧
       ∀ e ∈ (Node.settle cfg s).1.requested, e ∈ s.requested := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h]
-  · exact advance_sub s
+  · exact quiesce_sub _ s
   · obtain ⟨-, hpd, hrq⟩ := tryResume_keeps hj
-    have := advance_sub (cfg := cfg) s₁
+    have := quiesce_sub (cfg := cfg) (passes cfg s₁) s₁
     exact ⟨fun e he => hpd ▸ this.1 e he, fun e he => hrq ▸ this.2 e he⟩
 
 variable (cfg) in
@@ -317,7 +358,11 @@ theorem announced_cases (s : State Validator BlockId Payload) (p : Validator)
 theorem step_proposal {s : State Validator BlockId Payload} {p : Validator} {k : ℕ}
     {kh : BlockId} :
     Node.step cfg s (.proposal p k kh) =
-      if p ≠ cfg.me then seek cfg (record cfg s p k kh) k kh else (s, []) := rfl
+      if p ≠ cfg.me then
+        ((Node.settle cfg (seek cfg (record cfg s p k kh) k kh).1).1,
+          (seek cfg (record cfg s p k kh) k kh).2 ++
+            (Node.settle cfg (seek cfg (record cfg s p k kh) k kh).1).2)
+      else (s, []) := rfl
 
 theorem step_decisionRequest {s : State Validator BlockId Payload} {p : Validator} {lo : ℕ} :
     Node.step cfg s (.decisionRequest p lo) =
@@ -444,11 +489,12 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
     · rw [he]; exact hy
     · rw [he]; exact hy
   | proposal p k kh =>
-    rw [step_proposal]
-    split
+    by_cases hpm : p ≠ cfg.me
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]; exact hy
-    · exact hy
+      exact hset (seek cfg (record cfg s p k kh) k kh).1 (by rw [step_proposal, if_pos hpm])
+        (by rw [hn]; exact Grows.refl _) (by rw [hn]; rfl) (by rw [hn]; exact hp)
+        (by rw [hn]; exact hy)
+    · rw [step_proposal, if_neg hpm]; exact hy
   | baseRequest => exact hy
   | decisionRequest => exact hy
 
@@ -551,7 +597,9 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
     rw [step_proposal]
     split
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]; exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
+      rw [hn]
+      have := settle_sub (cfg := cfg) { record cfg s p k kh with sought := n }
+      exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
     · exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
   | _ => exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
 
@@ -655,6 +703,29 @@ theorem advance_persist (s : State Validator BlockId Payload)
   exact ⟨(hg.2 hbe).1 hin, by rw [(hg.2 hbe).2.2 _ hin]; exact hval⟩
 
 omit [Fintype Validator] in
+/-- **What the passes persist they store**, at a horizon that does not
+rise. -/
+theorem quiesce_persist : ∀ (n : ℕ) (s : State Validator BlockId Payload),
+    (quiesce cfg n s).1.store.base = s.store.base →
+    ∀ e ∈ persists (quiesce cfg n s).2, e.1 ∈ (quiesce cfg n s).1.store.ids ∧
+      (quiesce cfg n s).1.store.map.getD e.1 (quiesce cfg n s).1.store.junk = e.2
+  | 0, s, _ => by intro e he; simp [Node.quiesce, persists] at he
+  | n + 1, s, hb => by
+    rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he] at hb ⊢
+    · exact advance_persist s hb
+    · set a := (Node.advance cfg s).1
+      have hga := Grows.quiesce (cfg := cfg) n a
+      have hba : a.store.base = s.store.base :=
+        le_antisymm (hb ▸ hga.1) (Grows.advance (cfg := cfg) s).1
+      intro e he
+      rw [persists_append] at he
+      rcases List.mem_append.mp he with he | he
+      · obtain ⟨hin, hval⟩ := advance_persist s hba e he
+        obtain ⟨hsub, hjk, hmap⟩ := hga.2 (hb.trans hba.symm)
+        exact ⟨hsub hin, by rw [hmap _ hin]; exact hval⟩
+      · exact quiesce_persist n a (hb.trans hba.symm) e he
+
+omit [Fintype Validator] in
 /-- **What a settle persists it stores**, at a horizon that does not
 rise. -/
 theorem settle_persist (s : State Validator BlockId Payload)
@@ -662,8 +733,8 @@ theorem settle_persist (s : State Validator BlockId Payload)
     ∀ e ∈ persists (Node.settle cfg s).2, e.1 ∈ (Node.settle cfg s).1.store.ids ∧
       (Node.settle cfg s).1.store.map.getD e.1 (Node.settle cfg s).1.store.junk = e.2 := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h] at hb ⊢
-  · exact advance_persist s hb
-  · exact advance_persist s₁ (by rw [hb, (tryResume_keeps hj).1])
+  · exact quiesce_persist _ s hb
+  · exact quiesce_persist _ s₁ (by rw [hb, (tryResume_keeps hj).1])
 
 omit [Fintype Validator] in
 theorem settle_persist_of {s₀ : State Validator BlockId Payload}
@@ -758,13 +829,13 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
     · intro e he; simp [persists] at he
     · intro e he; simp [persists] at he
   | proposal p k kh =>
-    rw [step_proposal]
-    split
-    · intro e he
+    by_cases hpm : p ≠ cfg.me
+    · rw [step_proposal, if_pos hpm] at hb ⊢
       have hq := (out_quiet (xs := (seek cfg (record cfg s p k kh) k kh).2) fun o ho => by
         obtain ⟨_, _, rfl⟩ := seek_out (cfg := cfg) _ k kh o ho; rfl).1
-      rw [hq] at he; exact absurd he List.not_mem_nil
-    · intro e he; simp [persists] at he
+      obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
+      exact settle_persist_of (Or.inl hq) (by rw [hb, hn]; rfl)
+    · rw [step_proposal, if_neg hpm]; intro e he; simp [persists] at he
   | decisionRequest p lo =>
     intro e he
     rw [step_decisionRequest] at he
@@ -780,9 +851,18 @@ def NoReady (s : State Validator BlockId Payload) : Prop :=
   ∀ e ∈ s.pending, ready s.store e.2 = false
 
 omit [Fintype Validator] in
+theorem noReady_quiesce : ∀ (n : ℕ) (s : State Validator BlockId Payload),
+    NoReady (quiesce cfg (n + 1) s).1
+  | n, s => by
+    rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he]
+    · exact flush_no_ready _ _ _ (Nat.lt_succ_self _)
+    · cases n with
+      | zero => exact flush_no_ready _ _ _ (Nat.lt_succ_self _)
+      | succ n => exact noReady_quiesce n _
+
+omit [Fintype Validator] in
 theorem noReady_settle (s : State Validator BlockId Payload) : NoReady (Node.settle cfg s).1 := by
-  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, -, h⟩ <;> rw [h] <;>
-    exact flush_no_ready _ _ _ (Nat.lt_succ_self _)
+  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, -, h⟩ <;> rw [h] <;> exact noReady_quiesce _ _
 
 omit [Fintype Validator] in
 theorem noReady_bootFrom {s s₁ : State Validator BlockId Payload} (h : NoReady s)
@@ -831,8 +911,7 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady s)
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]; exact h
+    · exact noReady_settle _
     · exact h
   | _ => exact h
 

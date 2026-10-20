@@ -122,8 +122,8 @@ omit [Fintype Validator] in
 theorem Sparse.settle {s : State Validator BlockId Payload} (h : Sparse cfg s) :
     Sparse cfg (Node.settle cfg s).1 := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hr, he⟩ <;> rw [he]
-  · exact h.advance
-  · refine Sparse.advance (h.frame ?_ ?_ ?_) <;>
+  · exact quiesce_ind (fun _ h => h.advance) _ _ h
+  · refine quiesce_ind (fun _ h => h.advance) _ _ (h.frame ?_ ?_ ?_) <;>
     · unfold Node.tryResume at hr
       split at hr
       · dsimp only at hr
@@ -192,7 +192,7 @@ theorem Sparse.step {s : State Validator BlockId Payload} (h : Sparse cfg s)
     split
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (Node.record cfg s p k kh) k kh
       rw [hn]
-      exact (h.record p k kh).frame rfl rfl le_rfl
+      exact Sparse.settle ((h.record p k kh).frame rfl rfl le_rfl)
     · exact h
   | decisionRequest => exact h
 

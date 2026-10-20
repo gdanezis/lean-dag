@@ -165,7 +165,8 @@ info: [(0, true), (1, true), (2, true), (3, false), (4, true), (5, true), (6, tr
 /-! ## A long run, node `3` down
 
 Over `252` rounds every fourth slot, node `3`'s, is skipped, and each
-store holds fifteen blocks, its horizon four rounds below its top. -/
+store holds nine to fifteen blocks, its horizon two to four rounds below
+its top. -/
 
 /-- The network after `5300` inputs, node `3` down. -/
 def long3 : Net := run [3] 5300 net0
@@ -175,7 +176,7 @@ def long3 : Net := run [3] 5300 net0
 #eval (tops long3, (long3.commits 0).length, ((long3.commits 0).filter (·.2.isNone)).length,
   agree long3)
 
-/-- info: [(15, 248), (15, 248), (15, 248)] -/
+/-- info: [(12, 249), (15, 248), (9, 250)] -/
 #guard_msgs in
 #eval [0, 1, 2].map fun d : Fin 4 => ((long3.states d).store.ids.card, (long3.states d).store.base)
 

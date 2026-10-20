@@ -140,9 +140,14 @@ round `r` and, for the slots whose wave is in progress, either
   the decision round of a three-round row; or
 * the timer for round `r` has fired.
 
-A step that changes the store (a delivery acted on, a timer, the start)
-ends by flushing the pending blocks, so no pending block is left ready
-after any step; a block built or a horizon raised can make one ready.
+A step that changes the state (a delivery acted on, a timer, the start,
+a peer's proposal, an adoption or a confirmed certificate) ends by
+settling: the node builds, decides, collects and flushes the pending
+blocks in passes, until a pass changes none of its top, its horizon, its
+pending blocks, its next undecided slot and its certificate's height
+(`settle`, `quiesce`; §13.9). No pending block is left ready after any
+step, and none of the node's moves that what it holds allows is left for
+a later event.
 
 These are the clauses `advancesAt`, `reach_or_wait` and `cert_or_wait`
 of `SchemeReactive`, written as a rule the program runs, so the liveness
@@ -1386,6 +1391,9 @@ explicit.
     it or asks for the decisions it certifies, so a reliable node's
     certificate catches up with another's within `3Δ` past GST (§13.8,
     built).
+13. **Settling until nothing changes**: a node acts on what it holds
+    before it waits for the next event, peers' proposals included
+    (§13.9, built).
 
 ### 13.6 Blocks at the horizon (built)
 
@@ -1671,3 +1679,35 @@ confirmed certificate adds no decision, and adopted decisions are a
 sublist of those served, which `ChainInjective` covers. V3 and
 convergence assume no base or certificate offers; an announcement is
 neither, and their proofs cover it.
+
+### 13.9 Settling until nothing changes (built)
+
+**The gap.** A pass builds, decides, collects and then flushes the
+pending blocks. The flush can accept blocks that the collection made
+ready, a pending block at the new horizon and those above it waiting on
+it. These can complete a quorum or a decision that the pass does not
+act on, and the node then waits for its next event, whose time nothing
+bounds. A node whose horizon rises past an invalid block (§13.6) is the
+case the liveness argument meets. A peer's proposal, which can raise the
+certificate, did not settle at all, so the horizon could lag the
+certificate until a later event.
+
+**The change.** `settle` runs passes (`advance`) until one changes none
+of the top, the horizon, the number of pending blocks, the next
+undecided slot and the certificate's height (`quiesce`), at most
+`passes s` of them: each pass but the last raises one of these or
+leaves fewer blocks pending, and the state bounds them. A peer's
+proposal is now followed by a settle. A pass that changes none of these
+leaves the node with nothing to build, decide or accept.
+
+**The proofs.** Every claim holds of the program with the change: each
+fact of a pass lifts to the passes by induction (`quiesce_rel`,
+`quiesce_ind`). A block a step builds is built at a state whose horizon
+may have risen within the step, so `BuildState` keeps the store's blocks
+at or above its horizon (`Retains`) rather than at the same horizon. That
+the passes stop by their condition, not by running out, is for 11.1c.
+
+**The simulator.** The tests' figures move with the change; the stores
+of the long run hold nine to fifteen blocks, their horizons two to four
+rounds below the top, against fifteen and four before.
+

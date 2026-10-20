@@ -140,12 +140,19 @@ theorem Grows.boot {s s' : State Validator BlockId Payload} {ads : List (ℕ × 
   refine ⟨(boot_base h).le, fun e => absurd e (ne_of_gt (boot_base h))⟩
 
 omit [Fintype Validator] in
+theorem Grows.quiesce (n : ℕ) (s : State Validator BlockId Payload) :
+    Grows s.store (Node.quiesce cfg n s).1.store :=
+  (quiesce_rel (P := fun _ => True) (R := fun a _ b => Grows a.store b.store)
+    (fun s => Grows.refl _) (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂)
+    (fun s _ => ⟨Grows.advance s, trivial⟩) n s trivial).1
+
+omit [Fintype Validator] in
 theorem Grows.settle (s : State Validator BlockId Payload) :
     Grows s.store (Node.settle cfg s).1.store := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h]
-  · exact Grows.advance s
+  · exact Grows.quiesce _ s
   · obtain ⟨-, -, -, -, -, -, hst, -⟩ := tryResume_some hj
-    exact hst ▸ Grows.advance s₁
+    exact hst ▸ Grows.quiesce _ s₁
 
 omit [Fintype Validator] in
 theorem Grows.settle_of {st : Store Validator BlockId Payload} (s : State Validator BlockId Payload)
@@ -215,7 +222,7 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     simp only [Node.step]
     split
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s peer k kh) k kh
-      rw [hn]; exact Grows.refl _
+      exact Grows.settle_of _ (by rw [hn]; rfl)
     · exact Grows.refl _
   | _ => exact Grows.refl _
 

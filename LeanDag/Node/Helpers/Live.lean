@@ -314,10 +314,11 @@ theorem reach_or_wait_node (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     have hcut₀ := (cut_before hσ hadm hf htime hoff hcert hinj hchain
       (eventsBefore tr time (time i₀)) v (hTH hvT)).1
     have hbase : (stateBefore cfg tr i₀ v).store.base ≤ cfg.slots.slotRound k + m := by
-      rw [← hbs.base]; exact hbs.held.le_top _ hxt
-    obtain ⟨hb₀, -⟩ := retains_before (cfg := cfg) hnr hle b hbh
+      exact hbs.base.trans (hbs.held.le_top _ hxt)
+    obtain ⟨hb₀, hb₀r⟩ := retains_before (cfg := cfg) hnr hle b hbh
       (by rw [← hcut₀.round hbh, hbr]; exact hbase)
-    have hbx : b ∈ x.store.ids := (hbs.grows.2 hbs.base).1 hb₀
+    have hbx : b ∈ x.store.ids := (hbs.retains b hb₀
+      (by rw [hb₀r, ← hcut₀.round hbh, hbr]; exact hbs.held.le_top _ hxt)).1
     rw [hcrefs, hfor]
     refine mem_refsFor_of_cut hbs.cut hbx (by rw [← hbs.cut.round hbx, hbr])
       (by rw [← hbs.cut.creator hbx, hbc]; exact hTH hlead) fun hme => ?_
@@ -382,10 +383,11 @@ theorem cert_or_wait_node (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
       (eventsBefore tr time (time i₀)) v (hTH hvT)).1
     have hbase : (stateBefore cfg tr i₀ v).store.base ≤
         cfg.slots.slotRound k + cfg.p.voteOffset := by
-      rw [← hbs.base]; exact hbs.held.le_top _ hxt
-    obtain ⟨hb₀, -⟩ := retains_before (cfg := cfg) hnr hle b hbh
+      exact hbs.base.trans (hbs.held.le_top _ hxt)
+    obtain ⟨hb₀, hb₀r⟩ := retains_before (cfg := cfg) hnr hle b hbh
       (by rw [← hcut₀.round hbh, hbr]; exact hbase)
-    have hbx : b ∈ x.store.ids := (hbs.grows.2 hbs.base).1 hb₀
+    have hbx : b ∈ x.store.ids := (hbs.retains b hb₀
+      (by rw [hb₀r, ← hcut₀.round hbh, hbr]; exact hbs.held.le_top _ hxt)).1
     rw [hcrefs, hfor]
     refine mem_refsFor_of_cut hbs.cut hbx (by rw [← hbs.cut.round hbx, hbr])
       (by rw [← hbs.cut.creator hbx]; exact hTH hbc) fun hme => ?_

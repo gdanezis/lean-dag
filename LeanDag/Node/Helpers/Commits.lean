@@ -419,6 +419,29 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
     exact CommitInv.keeps (hlo := (proposeAt_keeps _).2.2.2.2.2.1)
       (hk := by rw [(proposeAt_keeps _).1]; exact Keeps.refl _) (hc := hc) h
 
+omit [Fintype Validator] [P.Mechanised] in
+/-- **A pass from a cut keeps the store a cut.** -/
+theorem IsCut.advanceStore (hg : Ground U K cfg.q) {s : State Validator BlockId Payload}
+    (hc : IsCut U s.store) (hh : Held cfg s) (hp : ∀ e ∈ s.pending, e ∈ K)
+    (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : IsCut U (Node.advance cfg s).1.store := by
+  have hp₁ := (progress_pending (cfg := cfg) (s.store.topRound + 2) s).1
+  simp only [Node.advance] at hb ⊢
+  rw [persists_append, persists_append] at hb
+  have hc₁ := IsCut.progress hg _ hc hh fun e he => hb e
+    (List.mem_append_left _ (List.mem_append_left _ he))
+  have hh₁ := Held.progress (s.store.topRound + 2) hh
+  generalize Node.progress cfg (s.store.topRound + 2) s = r at hp₁ hc₁ hh₁ ⊢
+  have hd := decideStep_store (cfg := cfg) r.1
+  have hdp := (decideStep_pending (cfg := cfg) r.1).1
+  have hc₂ : IsCut U (Node.decideStep cfg r.1).1.store := by rw [hd]; exact hc₁
+  obtain ⟨hh₃, -⟩ := Held.collect hh₁.decideStep
+  have hc₃ := hc₂.collect (cfg := cfg)
+  have hcp := (collect_sub (cfg := cfg) (Node.decideStep cfg r.1).1).1
+  generalize Node.collect cfg (Node.decideStep cfg r.1).1 = g at hh₃ hc₃ hcp ⊢
+  have hgp : ∀ e ∈ g.1.pending, e ∈ K := fun e he => hp e (by
+    have := hcp e he; rwa [hdp, hp₁] at this)
+  exact IsCut.flush hg (g.1.pending.length + 1) g.1.pending hc₃ (hc₃.spans hh₃) hgp
+
 theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)} (h : CommitInv cfg U s cs) (hc : IsCut U s.store)
@@ -461,6 +484,25 @@ theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   rw [hcs]
   exact h₃.keeps rfl hk₄ hc₃
 
+/-- **The passes keep the invariant, and the store a cut.** -/
+theorem CommitInv.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
+    (ht : cfg.p.Tolerates H f q) : ∀ (n : ℕ) {s : State Validator BlockId Payload}
+    {cs : List (ℕ × Option BlockId)}, CommitInv cfg U s cs → IsCut U s.store → Held cfg s →
+    (∀ e ∈ s.pending, e ∈ K) → (∀ e ∈ persists (Node.quiesce cfg n s).2, e ∈ K) →
+    CommitInv cfg U (Node.quiesce cfg n s).1 (cs ++ commitsOf (Node.quiesce cfg n s).2) ∧
+      IsCut U (Node.quiesce cfg n s).1.store
+  | 0, s, cs, h, hc, _, _, _ => by
+    simp only [Node.quiesce, commitsOf, List.filterMap_nil, List.append_nil]; exact ⟨h, hc⟩
+  | n + 1, s, cs, h, hc, hh, hp, hb => by
+    rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he] at hb ⊢
+    · exact h.advance hg hσ ht hc hh hp hb
+    · rw [persists_append] at hb
+      obtain ⟨h₁, hc₁⟩ := h.advance hg hσ ht hc hh hp fun e he => hb e (List.mem_append_left _ he)
+      have := CommitInv.quiesce hg hσ ht n h₁ hc₁ hh.advance
+        (fun e he => hp e ((advance_sub (cfg := cfg) s).1 e he))
+        fun e he => hb e (List.mem_append_right _ he)
+      rw [commitsOf_append, ← List.append_assoc]; exact this
+
 /-- **Settling keeps the invariant, and the store a cut.** -/
 theorem CommitInv.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
@@ -470,10 +512,11 @@ theorem CommitInv.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     CommitInv cfg U (Node.settle cfg s).1 (cs ++ commitsOf (Node.settle cfg s).2) ∧
       IsCut U (Node.settle cfg s).1.store := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hj, he⟩ <;> rw [he] at hb ⊢
-  · exact h.advance hg hσ ht hc hh hp hb
+  · exact CommitInv.quiesce hg hσ ht _ h hc hh hp hb
   · obtain ⟨-, -, -, -, -, -, hst, hpd, -, -, hlo, -⟩ := tryResume_some hj
     have h₁ : CommitInv cfg U s₁ cs := h.keeps hlo (by rw [hst]; exact Keeps.refl _) hc
-    exact h₁.advance hg hσ ht (by rw [hst]; exact hc) (hh.tryResume hj) (by rw [hpd]; exact hp) hb
+    exact CommitInv.quiesce hg hσ ht _ h₁ (by rw [hst]; exact hc) (hh.tryResume hj)
+      (by rw [hpd]; exact hp) hb
 
 /-- **A step keeps the invariant, and the store a cut.** -/
 theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
@@ -579,13 +622,14 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     · rw [he]; exact ⟨by simpa [commitsOf] using h, hc⟩
     · exact hsame he
   | proposal p k kh =>
-    rw [step_proposal]
-    split
+    by_cases hpm : p ≠ cfg.me
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho), hn,
-        List.append_nil]
-      exact ⟨h.keeps rfl (Keeps.refl _) hc, hc⟩
-    · exact ⟨by simpa [commitsOf] using h, hc⟩
+      exact hset (seek cfg (record cfg s p k kh) k kh).1 (seek cfg (record cfg s p k kh) k kh).2
+        (by rw [hn]; exact h.keeps rfl (Keeps.refl _) hc) (by rw [hn]; exact hc)
+        (by rw [hn]; exact hh.grow (Grows.refl _) rfl rfl le_rfl) (by rw [hn]; exact hp)
+        (commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho))
+        (by rw [step_proposal, if_pos hpm])
+    · rw [step_proposal, if_neg hpm]; exact ⟨by simpa [commitsOf] using h, hc⟩
   | decisionRequest p lo =>
     rw [step_decisionRequest, commitsOf_requests fun o ho => Or.inr (by
       split at ho

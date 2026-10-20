@@ -690,18 +690,79 @@ theorem tryResume_of_idle {s : State Validator BlockId Payload} (h : s.recoverin
 
 omit [Fintype Validator] in
 theorem settle_of_idle {s : State Validator BlockId Payload} (h : s.recovering = false) :
-    settle cfg s = advance cfg s := by
+    settle cfg s = quiesce cfg (passes cfg s) s := by
   unfold settle; rw [tryResume_of_idle h]
 
 omit [Fintype Validator] in
-/-- **A settle advances**, after a resume or not. -/
+/-- **A settle advances until nothing changes**, after a resume or not. -/
 theorem settle_cases (s : State Validator BlockId Payload) :
-    Node.settle cfg s = advance cfg s ∨ ∃ s₁, tryResume cfg s = some s₁ ∧
-      Node.settle cfg s = advance cfg s₁ := by
+    Node.settle cfg s = quiesce cfg (passes cfg s) s ∨ ∃ s₁, tryResume cfg s = some s₁ ∧
+      Node.settle cfg s = quiesce cfg (passes cfg s₁) s₁ := by
   unfold Node.settle
   split
   · rename_i s₁ h; exact Or.inr ⟨s₁, h, rfl⟩
   · exact Or.inl rfl
+
+omit [Fintype Validator] in
+/-- A settle takes at least one pass. -/
+theorem passes_succ (s : State Validator BlockId Payload) : ∃ n, passes cfg s = n + 1 := ⟨_, rfl⟩
+
+omit [Fintype Validator] in
+theorem quiesce_succ (n : ℕ) (s : State Validator BlockId Payload) :
+    quiesce cfg (n + 1) s =
+      if (advance cfg s).1.top = s.top ∧ (advance cfg s).1.store.base = s.store.base ∧
+          (advance cfg s).1.pending.length = s.pending.length ∧ (advance cfg s).1.lo = s.lo ∧
+          (advance cfg s).1.certHeight = s.certHeight then advance cfg s
+      else ((quiesce cfg n (advance cfg s).1).1,
+        (advance cfg s).2 ++ (quiesce cfg n (advance cfg s).1).2) := rfl
+
+omit [Fintype Validator] in
+/-- **A pass stops the settle or is followed by the rest.** -/
+theorem quiesce_succ_cases (n : ℕ) (s : State Validator BlockId Payload) :
+    quiesce cfg (n + 1) s = advance cfg s ∨
+      quiesce cfg (n + 1) s = ((quiesce cfg n (advance cfg s).1).1,
+        (advance cfg s).2 ++ (quiesce cfg n (advance cfg s).1).2) := by
+  rw [quiesce_succ]
+  split
+  · exact Or.inl rfl
+  · exact Or.inr rfl
+
+omit [Fintype Validator] in
+/-- **A relation pass by pass holds across the passes**: one reflexive
+and transitive along outputs, that each pass keeps under an invariant. -/
+theorem quiesce_rel {P : State Validator BlockId Payload → Prop}
+    {R : State Validator BlockId Payload → List (Output Validator BlockId Payload) →
+      State Validator BlockId Payload → Prop}
+    (hrefl : ∀ s, R s [] s) (htrans : ∀ a o₁ b o₂ c, R a o₁ b → R b o₂ c → R a (o₁ ++ o₂) c)
+    (hadv : ∀ s, P s → R s (advance cfg s).2 (advance cfg s).1 ∧ P (advance cfg s).1) :
+    ∀ (n : ℕ) (s : State Validator BlockId Payload), P s →
+      R s (quiesce cfg n s).2 (quiesce cfg n s).1 ∧ P (quiesce cfg n s).1
+  | 0, s, h => ⟨hrefl s, h⟩
+  | n + 1, s, h => by
+    rw [quiesce_succ]
+    split
+    · exact hadv s h
+    · obtain ⟨h₁, h₂⟩ := hadv s h
+      obtain ⟨h₃, h₄⟩ := quiesce_rel hrefl htrans hadv n _ h₂
+      exact ⟨htrans _ _ _ _ _ h₁ h₃, h₄⟩
+
+omit [Fintype Validator] in
+/-- **An invariant each pass keeps holds across the passes.** -/
+theorem quiesce_ind {P : State Validator BlockId Payload → Prop}
+    (hadv : ∀ s, P s → P (advance cfg s).1) (n : ℕ) (s : State Validator BlockId Payload)
+    (h : P s) : P (quiesce cfg n s).1 :=
+  (quiesce_rel (P := P) (R := fun _ _ _ => True) (fun _ => trivial) (fun _ _ _ _ _ _ _ => trivial)
+    (fun s h => ⟨trivial, hadv s h⟩) n s h).2
+
+omit [Fintype Validator] in
+/-- **A property of each pass's outputs** holds of all of them. -/
+theorem quiesce_out {P : State Validator BlockId Payload → Prop}
+    {Q : Output Validator BlockId Payload → Prop}
+    (hadv : ∀ s, P s → (∀ o ∈ (advance cfg s).2, Q o) ∧ P (advance cfg s).1) (n : ℕ)
+    (s : State Validator BlockId Payload) (h : P s) : ∀ o ∈ (quiesce cfg n s).2, Q o :=
+  (quiesce_rel (P := P) (R := fun _ out _ => ∀ o ∈ out, Q o)
+    (fun _ _ h => absurd h List.not_mem_nil)
+    (fun _ _ _ _ _ h₁ h₂ o ho => (List.mem_append.mp ho).elim (h₁ o) (h₂ o)) hadv n s h).1
 
 omit [Fintype Validator] in
 /-- **A resume keeps the invariant.** -/
@@ -719,6 +780,28 @@ theorem Inv.tryResume {s s' : State Validator BlockId Payload}
     exact Or.inr ⟨R, htop', by rw [hst]; omega, hB.mono htR.le⟩
 
 omit [Fintype Validator] in
+/-- **Advancing until nothing changes keeps the invariant**, and its own
+blocks are the built ones. -/
+theorem Inv.quiesce : ∀ (n : ℕ) {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)}, Inv cfg s K B →
+    ∃ bs, Out bs (quiesce cfg n s).2 ∧
+      Inv cfg (quiesce cfg n s).1 (K ∪ {x | x ∈ bs}) (B ++ bs)
+  | 0, s, K, B, hi => ⟨[], ⟨rfl, rfl⟩, by
+      simp only [Node.quiesce, List.append_nil]; exact hi.mono fun x hx => Or.inl hx⟩
+  | n + 1, s, K, B, hi => by
+    rw [quiesce_succ]
+    split
+    · exact hi.advance
+    · obtain ⟨bs, ho, hi₁⟩ := hi.advance
+      obtain ⟨bs', ho', hi₂⟩ := Inv.quiesce n hi₁
+      refine ⟨bs ++ bs', ho.append ho', ?_⟩
+      rw [← List.append_assoc]
+      exact hi₂.mono fun x hx => by
+        simp only [Set.mem_union, Set.mem_setOf_eq, List.mem_append] at hx ⊢
+        tauto
+
+omit [Fintype Validator] in
 /-- **Settling keeps the invariant**, and its own blocks are the built
 ones. -/
 theorem Inv.settle {s : State Validator BlockId Payload}
@@ -727,8 +810,8 @@ theorem Inv.settle {s : State Validator BlockId Payload}
     ∃ bs, Out bs (Node.settle cfg s).2 ∧
       Inv cfg (Node.settle cfg s).1 (K ∪ {x | x ∈ bs}) (B ++ bs) := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hr, h⟩ <;> rw [h]
-  · exact hi.advance
-  · exact (hi.tryResume hr).advance
+  · exact Inv.quiesce _ hi
+  · exact Inv.quiesce _ (hi.tryResume hr)
 
 omit [Fintype Validator] in
 theorem accept_base (st : Store Validator BlockId Payload) (id : BlockId)
@@ -1001,7 +1084,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
           · rw [hB.1, List.nil_append, List.mem_singleton] at hx
             subst hx; simp
         rw [settle_of_idle rfl]
-        obtain ⟨bs, ho, hi'⟩ := hi₀.advance
+        obtain ⟨bs, ho, hi'⟩ := Inv.quiesce _ hi₀
         refine ⟨e :: bs, ?_, ?_⟩
         · exact (out_built (cfg := cfg) [e]).append ho
         · refine (by simpa using hi' : Inv cfg _ (K ∪ {x | x ∈ [e]} ∪ {x | x ∈ bs}) (B ++ e :: bs)).mono
@@ -1073,15 +1156,11 @@ theorem Inv.step {s : State Validator BlockId Payload}
     simp only [Node.step]
     split
     · have h₁ : Inv cfg (record cfg s peer k h) K' B := (hi.mono hsub).of_eq rfl rfl rfl rfl
-      unfold seek
-      dsimp only
-      split
-      · have h₂ : Inv cfg { record cfg s peer k h with sought := k } K' B :=
-          h₁.of_eq rfl rfl rfl rfl
-        refine ⟨[], out_quiet fun o ho => ?_, by simpa using h₂⟩
-        obtain ⟨_, -, rfl⟩ := List.mem_map.mp ho
-        rfl
-      · exact ⟨[], ⟨rfl, rfl⟩, by simpa using h₁⟩
+      obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s peer k h) k h
+      have h₂ : Inv cfg (seek cfg (record cfg s peer k h) k h).1 K' B := by
+        rw [hn]; exact h₁.of_eq rfl rfl rfl rfl
+      exact h₂.settle_of subset_rfl _ fun o ho => by
+        obtain ⟨_, _, rfl⟩ := seek_out (cfg := cfg) _ k h o ho; rfl
     · exact hnil'
   | certOffer peer c ds =>
     simp only [Node.step]

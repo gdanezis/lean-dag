@@ -414,8 +414,8 @@ omit [Fintype Validator] in
 theorem Lim.settle {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validator BlockId Payload}
     (h : Lim τ W s) : Lim τ W (Node.settle cfg s).1 := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hr, he⟩ <;> rw [he]
-  · exact h.advance hl
-  · exact (h.tryResume hr).advance hl
+  · exact quiesce_ind (fun _ h => h.advance hl) _ _ h
+  · exact quiesce_ind (fun _ h => h.advance hl) _ _ (h.tryResume hr)
 
 /-! ## Bootstrapping -/
 
@@ -652,7 +652,7 @@ theorem Lim.step {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validat
     split
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
       rw [hn]
-      exact h.of_eq rfl rfl rfl rfl
+      exact Lim.settle hl (h.of_eq rfl rfl rfl rfl)
     · exact h
   | decisionRequest => exact h
 
