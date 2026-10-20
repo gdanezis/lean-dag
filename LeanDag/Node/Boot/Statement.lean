@@ -17,15 +17,18 @@ trace of honest nodes `H` and an adversary, assume:
 * **timely offers** (`TimelyOffers`): a base offer given to an honest node
   in an honest peer's name was served by that peer earlier;
 * **signed checkpoints** (`TimelyCerts`): every honest signer that a
-  certificate given to an honest node lists proposed its decisions at its
+  certificate given to an honest node lists proposed its head at its
   height earlier;
-* **the hash** (`Converge.HashInjective`).
+* **the hash** (`Converge.HashInjective`), and **the chain's hash**
+  (`ChainInjective`): decisions served with a certificate to an honest
+  node have the head of no other prefix of an honest node's decisions.
 
 Then, at the bounded vote, with an admissible row and at most `f` nodes
 outside `H`:
 
 * **every certificate an honest node is given, with `q` distinct signers,
-  certifies a prefix of an honest node's decisions** (`Certified`, V12);
+  carries the head of a prefix of an honest node's decisions at its
+  height** (`Certified`, V12);
 * **any two honest nodes' decisions are prefix-comparable** (`Agrees`,
   V9), whatever horizons they raise, whenever they restart and however
   they bootstrap.
@@ -50,25 +53,35 @@ def TimelyOffers (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     ∃ i < j, (tr[i]?.map Prod.fst) = some p ∧ Output.serveBase v G bs ∈ outputsAt cfg tr i
 
 /-- **Signed checkpoints**: every honest signer that a certificate given
-to an honest node lists proposed its decisions at its height earlier. -/
+to an honest node lists proposed its head at its height earlier. -/
 def TimelyCerts (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload) : Prop :=
-  ∀ (j : ℕ) v p (c : Cert Validator BlockId), tr[j]? = some (v, Input.certOffer p c) → v ∈ H →
-    ∀ u ∈ c.signers, u ∈ H →
-    ∃ i < j, (tr[i]?.map Prod.fst) = some u ∧
-      Output.propose c.height c.decisions ∈ outputsAt cfg tr i
+  ∀ (j : ℕ) v p (c : Cert Validator BlockId) ds, tr[j]? = some (v, Input.certOffer p c ds) →
+    v ∈ H → ∀ u ∈ c.signers, u ∈ H →
+    ∃ i < j, (tr[i]?.map Prod.fst) = some u ∧ Output.propose c.height c.head ∈ outputsAt cfg tr i
 
-/-- **A certificate certifies an honest node's decisions**: one given to
-an honest node with `q` distinct signers lists a prefix of an honest
-node's decisions. -/
+/-- **The chain's hash**: decisions served with a certificate to an
+honest node have the head of no other prefix of an honest node's
+decisions. -/
+def ChainInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator)
+    (tr : Trace Validator BlockId Payload) : Prop :=
+  ∀ (j : ℕ) v p (c : Cert Validator BlockId) ds, tr[j]? = some (v, Input.certOffer p c ds) →
+    v ∈ H → ∀ u ∈ H, ∀ k ≤ (decisionsOf cfg tr u).length,
+      cfg.headOf ds = cfg.headOf ((decisionsOf cfg tr u).take k) →
+        ds = (decisionsOf cfg tr u).take k
+
+/-- **A certificate carries an honest node's head**: one given to an
+honest node with `q` distinct signers carries the head of the chain of an
+honest node's decisions at its height. -/
 def Certified : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload),
     cfg.Admissible → Hᶜ.card ≤ cfg.f → TimelyCerts cfg H tr →
-    ∀ (j : ℕ) v p (c : Cert Validator BlockId), tr[j]? = some (v, Input.certOffer p c) → v ∈ H →
-      cfg.q ≤ c.signers.length →
-        c.signers.Nodup → ∃ u ∈ H, c.decisions <+: decisionsOf cfg tr u
+    ∀ (j : ℕ) v p (c : Cert Validator BlockId) ds, tr[j]? = some (v, Input.certOffer p c ds) →
+      v ∈ H → cfg.q ≤ c.signers.length → c.signers.Nodup →
+        ∃ u ∈ H, c.height ≤ (decisionsOf cfg tr u).length ∧
+          c.head = cfg.headOf ((decisionsOf cfg tr u).take c.height)
 
 /-- **Two honest nodes' decisions are prefix-comparable**, bootstraps
 included. -/
@@ -78,7 +91,7 @@ def Agrees : Prop :=
     (tr : Trace Validator BlockId Payload),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
     Converge.TimelyAuthentic cfg H tr → TimelyOffers cfg H tr → TimelyCerts cfg H tr →
-    Converge.HashInjective cfg H tr →
+    Converge.HashInjective cfg H tr → ChainInjective cfg H tr →
     ∀ v ∈ H, ∀ w ∈ H, decisionsOf cfg tr v <+: decisionsOf cfg tr w ∨
       decisionsOf cfg tr w <+: decisionsOf cfg tr v
 

@@ -4,8 +4,8 @@ import LeanDag.Node.Helpers.Agree
 # Bootstrap — proof
 
 A certificate with `q` distinct signers lists an honest one, since
-`f < q`, and an honest signer proposes a prefix of its own decisions
-(`propose_prefix`), which `Certified` is.
+`f < q`, and an honest signer proposes the head of the chain of its own
+decisions at the height (`propose_head`), which `Certified` is.
 
 Authentication and the hash at the end of the trace hold, so what the
 honest nodes knew forms the run's record (`globalRecord`). By induction
@@ -15,7 +15,8 @@ round with a block that `f + 1` distinct peers offered, one of them
 honest, whose store held the block when it served it and was a cut of
 the record then, so the record reaches the round; and the decisions it
 takes from a certificate are an honest signer's, verdicts earlier in the
-trace. Two verdicts on one slot agree (`AnchoredRule.decided_agree`),
+trace, the chain's hash making the decisions served with it the signer's.
+Two verdicts on one slot agree (`AnchoredRule.decided_agree`),
 and a node's decisions are slots `0, 1, …` (`Local.decisions`), so two
 nodes' decisions are prefix-comparable (`prefix_of_slots`).
 -/
@@ -27,19 +28,21 @@ namespace Node
 namespace Boot
 
 theorem certified : Certified := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hadm hf hcert j v p c hj hv hq hnd
+  intro Validator BlockId Payload _ _ _ cfg H tr hadm hf hcert j v p c ds hj hv hq hnd
   obtain ⟨u, hu, huH⟩ := exists_mem_of_length hf hnd (by have := hadm.2.2.2.2.2; omega)
-  obtain ⟨i, -, hiu, hprop⟩ := hcert j v p c hj hv u hu huH
+  obtain ⟨i, -, hiu, hprop⟩ := hcert j v p c ds hj hv u hu huH
   obtain ⟨inp', hi'⟩ := Converge.event_of_map hiu
-  exact ⟨u, huH, (propose_prefix hi' hprop).trans (commits_prefix u (i + 1))⟩
+  obtain ⟨hk, hkh⟩ := propose_head hi' hprop
+  have hpre := commits_prefix (cfg := cfg) (tr := tr) u (i + 1)
+  exact ⟨u, huH, hk.trans hpre.length_le, by rw [take_of_prefix hpre hk]; exact hkh⟩
 
 theorem agrees : Agrees := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hoff hcert hinj
+  intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hoff hcert hinj hchain
   haveI : Validity.Quorate (ValidAt (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
   have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2.1, hadm.1⟩
-  have key := cut_before hσ hadm hf htime hoff hcert hinj
+  have key := cut_before hσ hadm hf htime hoff hcert hinj hchain
   have hL : ∀ u,
       (decisionsOf cfg tr u).map Prod.fst = List.range (decisionsOf cfg tr u).length := by
     intro u

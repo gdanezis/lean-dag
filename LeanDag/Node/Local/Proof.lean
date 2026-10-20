@@ -39,9 +39,13 @@ theorem decisions : Decisions := by
   intro Validator BlockId Payload _ _ _ cfg is
   dsimp only
   obtain ⟨h, hL⟩ := run_appends (cfg := cfg) is Ledger.init
-  have hd : (run cfg (State.init cfg) is).1.decided = commitsOf (run cfg (State.init cfg) is).2 :=
+  have hd : (run cfg (State.init cfg) is).1.decided.reverse =
+      commitsOf (run cfg (State.init cfg) is).2 :=
     h.1.trans (List.nil_append _)
-  refine ⟨hd, hd ▸ hL, fun k ds hp => hd ▸ h.2 k ds hp⟩
+  refine ⟨hd, hd ▸ hL.1, fun k kh hp => ?_⟩
+  obtain ⟨hk, hkh⟩ := h.2 k kh hp
+  rw [← hd, List.length_reverse]
+  exact ⟨hk, hkh⟩
 
 theorem validOut : ValidOut := by
   intro Validator BlockId Payload _ _ _ cfg is

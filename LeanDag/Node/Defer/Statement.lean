@@ -33,7 +33,7 @@ def Decides : Prop :=
     (tr : Trace Validator BlockId Payload),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
     Converge.TimelyAuthentic cfg H tr → Boot.TimelyOffers cfg H tr → Boot.TimelyCerts cfg H tr →
-    Converge.HashInjective cfg H tr →
+    Converge.HashInjective cfg H tr → Boot.ChainInjective cfg H tr →
     ∃ U : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H,
       (∀ j ∈ U.ids, ∃ v ∈ H, ∃ x ∈ knownOf cfg tr v, x.1 = j) ∧
       (∀ v ∈ H, let st := (stateBefore cfg tr tr.length v).store

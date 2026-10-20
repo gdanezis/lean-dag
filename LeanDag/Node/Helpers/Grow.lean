@@ -194,13 +194,13 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     split
     · exact h
     · exact Grows.refl _
-  | certOffer peer c =>
-    have h := Grows.bootFrom (cfg := cfg) { s with certs := c :: s.certs }
+  | certOffer peer c ds =>
+    have h := Grows.bootFrom (cfg := cfg) { s with certs := (c, ds) :: s.certs }
     simp only [Node.step]
     split
     · exact h
     · exact Grows.refl _
-  | proposal peer k ds =>
+  | proposal peer k kh =>
     simp only [Node.step]
     split <;> exact Grows.refl _
   | _ => exact Grows.refl _

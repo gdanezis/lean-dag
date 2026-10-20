@@ -116,6 +116,8 @@ def cfg (p : Scheme.Params) (per m : ℕ) (hper : 0 < per) (hm : 0 < m)
   lag := 100
   limit := none
   payload := fun _ => ()
+  extend := fun h _ => h
+  root := 0
 
 /-- The record through the store path into an empty store. -/
 def load (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : State (Fin 4) ℕ Unit :=

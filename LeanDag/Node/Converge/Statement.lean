@@ -72,7 +72,7 @@ def NoRestart (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Pr
 /-- **No honest node is given a base offer or a certificate offer.** -/
 def NoRejoin (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ (i : ℕ) v, v ∈ H → (∀ p G bs, tr[i]? ≠ some (v, Input.baseOffer p G bs)) ∧
-    ∀ p c, tr[i]? ≠ some (v, Input.certOffer p c)
+    ∀ p c ds, tr[i]? ≠ some (v, Input.certOffer p c ds)
 
 /-- **Every block an honest node broadcast, with its history, is in every
 honest node's store at the end.** -/

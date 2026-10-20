@@ -217,7 +217,7 @@ theorem entry_before (hnj : NoRejoin H tr) {v : Validator} (hv : v ∈ H)
     · exact ⟨ha, hc⟩
     · cases inp <;> simp only [Input.isOffer] at hoff
       · exact absurd ha ((hnj a v hv).1 _ _ _)
-      · exact absurd ha ((hnj a v hv).2 _ _)
+      · exact absurd ha ((hnj a v hv).2 _ _ _)
   · rw [same_before fun inp h => he ⟨inp, h⟩] at h₂; exact absurd h₂ h₁
 
 /-- **A request is recorded only on account of a delivery the node acted

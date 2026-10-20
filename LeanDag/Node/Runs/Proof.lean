@@ -44,7 +44,7 @@ theorem safety : Safety := by
         obtain ⟨j, hj⟩ := Converge.mem_inputsBefore hi
         cases i <;> simp only [Input.isOffer] at hoff
         · exact (hno j u hu).1 _ _ _ hj
-        · exact (hno j u hu).2 _ _ hj
+        · exact (hno j u hu).2 _ _ _ hj
     rcases h.2 with h0 | ⟨V, N, -, -, hcs⟩
     · exact Or.inl h0
     · exact Or.inr ⟨V, N, hcs⟩

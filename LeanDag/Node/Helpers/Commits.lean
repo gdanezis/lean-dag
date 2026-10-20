@@ -567,16 +567,17 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       (hh.grow (Grows.refl _) rfl rfl le_rfl) (fun e he => by simp [State.recover] at he) rfl
       (by simp only [Node.step]; rfl)
   | baseOffer p G bs => exact absurd trivial hno
-  | certOffer p c => exact absurd trivial hno
-  | proposal p k ds =>
+  | certOffer p c ds => exact absurd trivial hno
+  | proposal p k kh =>
     rw [step_proposal]
     split
     · exact ⟨by simpa [commitsOf] using
-        (h.keeps (s' := record cfg s p k ds) rfl (Keeps.refl _) hc), hc⟩
+        (h.keeps (s' := record cfg s p k kh) rfl (Keeps.refl _) hc), hc⟩
     · exact ⟨by simpa [commitsOf] using h, hc⟩
   | baseRequest peer =>
     rw [show Node.step cfg s (.baseRequest peer) = (s, .serveBase peer s.store.base
-      s.store.window :: s.cert.toList.map (.serveCert peer)) from rfl]
+      s.store.window :: s.cert.toList.map (fun c => .serveCert peer c
+        (s.decided.drop (s.lo - c.height)).reverse)) from rfl]
     refine ⟨?_, hc⟩
     cases hcert : s.cert <;> simpa [commitsOf] using h
 

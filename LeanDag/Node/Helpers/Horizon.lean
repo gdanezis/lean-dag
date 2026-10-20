@@ -287,7 +287,7 @@ block lies at the new top and horizon, and the next slot moves up to the
 adopted certificate's height, whose slot round lies at or above it. -/
 theorem Held.boot {s s' : State Validator BlockId Payload} {ads : List (ℕ × Option BlockId)}
     (h : Held cfg s) (hb : tryBoot cfg s = some (s', ads)) : Held cfg s' := by
-  obtain ⟨t, G, c, hbG, -, -, hG, hc, hst, -, htop, -, hlo, -⟩ := tryBoot_some hb
+  obtain ⟨t, G, c, ds, hbG, -, -, hG, hc, hst, -, htop, -, hlo, -⟩ := tryBoot_some hb
   have hcG := ((validCert_iff (cfg := cfg)).mp (certFor_valid hc).2).2.2.2
   set st₀ := (keptBase cfg (baseAt cfg s G)).foldl (fun st e => accept cfg st e.1 e.2)
     (s.store.prune G hbG.le) with hst₀
@@ -317,7 +317,7 @@ theorem Held.boot {s s' : State Validator BlockId Payload} {ads : List (ℕ × O
     rw [← ht', ← hbs]
     exact s'.store.above _ hin
   · rw [hbs, hlo]
-    exact hcG.trans (Nat.mul_le_mul_left _ (Nat.div_le_div_right (le_max_right _ _)))
+    exact hcG.2.trans (Nat.mul_le_mul_left _ (Nat.div_le_div_right (le_max_right _ _)))
   · rw [htop, Option.some.injEq] at ht'; omega
   · rw [(hgf.2 hfb).2.1]; exact hj₀.trans h.junk
 
@@ -359,15 +359,15 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     split
     · exact (h.grow (s' := withOffer s p G bs) (Grows.refl _) rfl rfl le_rfl).bootFrom
     · exact h
-  | certOffer p c =>
+  | certOffer p c ds =>
     rw [step_certOffer]
     split
-    · exact (h.grow (s' := withCert s c) (Grows.refl _) rfl rfl le_rfl).bootFrom
+    · exact (h.grow (s' := withCert s c ds) (Grows.refl _) rfl rfl le_rfl).bootFrom
     · exact h
-  | proposal p k ds =>
+  | proposal p k kh =>
     rw [step_proposal]
     split
-    · exact h.grow (s' := record cfg s p k ds) (Grows.refl _) rfl rfl le_rfl
+    · exact h.grow (s' := record cfg s p k kh) (Grows.refl _) rfl rfl le_rfl
     · exact h
   | _ => exact h
 

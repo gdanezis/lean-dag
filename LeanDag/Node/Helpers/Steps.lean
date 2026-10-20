@@ -247,19 +247,19 @@ theorem step_offer {s : State Validator BlockId Payload} {p : Validator} {G : �
       if s.recovering ∧ p ≠ cfg.me then bootFrom cfg (withOffer s p G bs) else (s, []) := rfl
 
 /-- The state with a peer's certificate recorded. -/
-def withCert (s : State Validator BlockId Payload) (c : Cert Validator BlockId) :
-    State Validator BlockId Payload :=
-  { s with certs := c :: s.certs }
+def withCert (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
+    (ds : List (ℕ × Option BlockId)) : State Validator BlockId Payload :=
+  { s with certs := (c, ds) :: s.certs }
 
 theorem step_certOffer {s : State Validator BlockId Payload} {p : Validator}
-    {c : Cert Validator BlockId} :
-    Node.step cfg s (.certOffer p c) =
-      if s.recovering ∧ p ≠ cfg.me then bootFrom cfg (withCert s c) else (s, []) := rfl
+    {c : Cert Validator BlockId} {ds : List (ℕ × Option BlockId)} :
+    Node.step cfg s (.certOffer p c ds) =
+      if s.recovering ∧ p ≠ cfg.me then bootFrom cfg (withCert s c ds) else (s, []) := rfl
 
 theorem step_proposal {s : State Validator BlockId Payload} {p : Validator} {k : ℕ}
-    {ds : List (ℕ × Option BlockId)} :
-    Node.step cfg s (.proposal p k ds) =
-      if p ≠ cfg.me then (record cfg s p k ds, []) else (s, []) := rfl
+    {kh : BlockId} :
+    Node.step cfg s (.proposal p k kh) =
+      if p ≠ cfg.me then (record cfg s p k kh, []) else (s, []) := rfl
 
 /-- **An offer**: a base or a certificate. -/
 def Input.isOffer : Input Validator BlockId Payload → Prop
@@ -366,13 +366,13 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
     · rw [if_pos hc] at hb ⊢
       rw [bootFrom_of_base (s := withOffer s p G bs) hb]; exact hy
     · rw [if_neg hc]; exact hy
-  | certOffer p c =>
+  | certOffer p c ds =>
     rw [step_certOffer] at hR hb ⊢
     by_cases hc : s.recovering ∧ p ≠ cfg.me
     · rw [if_pos hc] at hb ⊢
-      rw [bootFrom_of_base (s := withCert s c) hb]; exact hy
+      rw [bootFrom_of_base (s := withCert s c ds) hb]; exact hy
     · rw [if_neg hc]; exact hy
-  | proposal p k ds =>
+  | proposal p k kh =>
     rw [step_proposal]
     split <;> exact hy
   | baseRequest => exact hy
@@ -390,7 +390,7 @@ theorem bootFrom_sub (s₁ : State Validator BlockId Payload) {s : State Validat
       ∃ b, inp = .deliver e.2.1 b ∧ Admits cfg s e.2.1 b := by
   rcases bootFrom_cases (cfg := cfg) s₁ with he | ⟨s₂, ads, hbt, he⟩ <;> rw [he]
   · exact ⟨fun e h => Or.inl (hs.1 ▸ h), fun e h => Or.inl (hs.2 ▸ h)⟩
-  · obtain ⟨t, G, c, hb, -, -, -, -, -, -, -, -, -, -, -, hrq, -⟩ := tryBoot_some hbt
+  · obtain ⟨t, G, c, ds, hb, -, -, -, -, -, -, -, -, -, -, -, hrq, -⟩ := tryBoot_some hbt
     have ha := advance_sub (cfg := cfg) s₂
     refine ⟨fun e _ => Or.inr (Or.inr hi), fun e h => Or.inl ?_⟩
     have he₂ := ha.2 e h
@@ -456,13 +456,13 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
     · rw [if_pos hc]
       exact bootFrom_sub (s := s) (withOffer s p G bs) ⟨rfl, rfl⟩ trivial
     · rw [if_neg hc]; exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
-  | certOffer p c =>
+  | certOffer p c ds =>
     rw [step_certOffer]
     by_cases hc : s.recovering ∧ p ≠ cfg.me
     · rw [if_pos hc]
-      exact bootFrom_sub (s := s) (withCert s c) ⟨rfl, rfl⟩ trivial
+      exact bootFrom_sub (s := s) (withCert s c ds) ⟨rfl, rfl⟩ trivial
     · rw [if_neg hc]; exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
-  | proposal p k ds =>
+  | proposal p k kh =>
     rw [step_proposal]
     split <;> exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
   | _ => exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
@@ -640,13 +640,13 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
     · rw [if_pos hc] at hb ⊢
       rw [bootFrom_of_base (s := withOffer s p G bs) hb]; intro e he; simp [persists] at he
     · rw [if_neg hc]; intro e he; simp [persists] at he
-  | certOffer p c =>
+  | certOffer p c ds =>
     rw [step_certOffer] at hb ⊢
     by_cases hc : s.recovering ∧ p ≠ cfg.me
     · rw [if_pos hc] at hb ⊢
-      rw [bootFrom_of_base (s := withCert s c) hb]; intro e he; simp [persists] at he
+      rw [bootFrom_of_base (s := withCert s c ds) hb]; intro e he; simp [persists] at he
     · rw [if_neg hc]; intro e he; simp [persists] at he
-  | proposal p k ds =>
+  | proposal p k kh =>
     rw [step_proposal]
     split <;> (intro e he; simp [persists] at he)
   | _ => intro e he; simp [Node.step, persists] at he
@@ -692,12 +692,12 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady s)
     split
     · exact noReady_bootFrom h
     · exact h
-  | certOffer p c =>
+  | certOffer p c ds =>
     rw [step_certOffer]
     split
     · exact noReady_bootFrom h
     · exact h
-  | proposal p k ds =>
+  | proposal p k kh =>
     rw [step_proposal]
     split
     · exact h

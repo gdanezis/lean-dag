@@ -177,7 +177,8 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
   cases inp with
   | baseRequest peer =>
     change Output.serveBase p G bs ∈ Output.serveBase peer s.store.base s.store.window ::
-      s.cert.toList.map (Output.serveCert peer) at h
+      s.cert.toList.map (fun c => Output.serveCert peer c
+        (s.decided.drop (s.lo - c.height)).reverse) at h
     rcases List.mem_cons.mp h with h | h
     · cases h; rfl
     · obtain ⟨c, -, hc⟩ := List.mem_map.mp h; cases hc
@@ -245,7 +246,7 @@ theorem offers_before (v : Validator) : ∀ (t : ℕ), ∀ o ∈ (stateBefore cf
 
 /-- **The certificates a node holds were offered to it before.** -/
 theorem certs_before (v : Validator) : ∀ (t : ℕ), ∀ c ∈ (stateBefore cfg tr t v).certs,
-    ∃ j < t, ∃ p, tr[j]? = some (v, .certOffer p c)
+    ∃ j < t, ∃ p, tr[j]? = some (v, .certOffer p c.1 c.2)
   | 0, c, hc => by simp [stateBefore, inputsBefore, run, State.init] at hc
   | t + 1, c, hc => by
     rcases hj : tr[t]? with _ | ⟨w, inp⟩
@@ -316,17 +317,24 @@ theorem commits_prefix (v : Validator) (t : ℕ) :
   rw [hl, run_append, commitsOf_append]
   exact List.prefix_append _ _
 
-/-- **A proposal an event outputs is a prefix of its node's decisions up
-to that event.** -/
-theorem propose_prefix {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
-    (hi : tr[i]? = some (u, inp)) {k : ℕ} {ds : List (ℕ × Option BlockId)}
-    (h : Output.propose k ds ∈ outputsAt cfg tr i) :
-    ds <+: commitsOf (run (cfg.at u) (State.init (cfg.at u)) (inputsBefore tr (i + 1) u)).2 := by
-  rw [outputsAt_eq hi] at h
-  have hr := (Local.decisions _ _ _ (cfg.at u) (inputsBefore tr (i + 1) u)).2.2 k ds
-  apply hr
+/-- **A proposal an event outputs at a height `k` is the head of the
+chain of its node's first `k` decisions up to that event.** -/
+theorem propose_head {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
+    (hi : tr[i]? = some (u, inp)) {k : ℕ} {h : BlockId}
+    (hp : Output.propose k h ∈ outputsAt cfg tr i) :
+    let C := commitsOf (run (cfg.at u) (State.init (cfg.at u)) (inputsBefore tr (i + 1) u)).2
+    k ≤ C.length ∧ h = cfg.headOf (C.take k) := by
+  rw [outputsAt_eq hi] at hp
+  apply (Local.decisions _ _ _ (cfg.at u) (inputsBefore tr (i + 1) u)).2.2 k h
   rw [inputsBefore_succ hi, if_pos rfl, run_append_single]
-  exact List.mem_append_right _ h
+  exact List.mem_append_right _ hp
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+/-- A prefix's first `k` entries, `k` within it, are the whole list's. -/
+theorem take_of_prefix {α : Type} {l₁ l₂ : List α} (h : l₁ <+: l₂) {k : ℕ}
+    (hk : k ≤ l₁.length) : l₂.take k = l₁.take k := by
+  obtain ⟨t, rfl⟩ := h
+  exact List.take_append_of_le_length hk
 
 omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
 /-- The entry at position `i` of a list whose slots are `0, 1, …` is slot `i`. -/
@@ -368,7 +376,8 @@ theorem prefix_of_slots {β : Type} {l₁ l₂ : List (ℕ × β)}
 a verdict on a view of it**, before every event of the trace. -/
 theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
     (htime : Converge.TimelyAuthentic cfg H tr) (hoff : Boot.TimelyOffers cfg H tr)
-    (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr) (t : ℕ) :
+    (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
+    (hchain : Boot.ChainInjective cfg H tr) (t : ℕ) :
     ∀ v ∈ H,
       IsCut (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime))
         (stateBefore cfg tr t v).store ∧
@@ -416,7 +425,7 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
               tryBoot (cfg.at w) (withInput (stateBefore cfg tr t w) inp) = some (s₂, ads) →
               Spans U s₂.store.base := by
             intro s₂ ads hbt
-            obtain ⟨t₀, G₂, c₂, hb₂, -, -, hroot, -, hst, -⟩ := tryBoot_some hbt
+            obtain ⟨t₀, G₂, c₂, ds₂, hb₂, -, -, hroot, -, hst, -⟩ := tryBoot_some hbt
             have hbase : s₂.store.base = G₂ := by
               rw [hst, flush_base]
               change ((keptBase (cfg.at w) (baseAt (cfg.at w) _ G₂)).foldl
@@ -454,21 +463,28 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
             rw [hr]
             exact hxc.2.ge
           -- the decisions a certificate gives are an honest signer's
-          have hcv : ∀ c ∈ (withInput (stateBefore cfg tr t w) inp).certs,
-              (cfg.at w).q ≤ c.signers.length → c.signers.Nodup →
-                ∀ e ∈ c.decisions, Verdict (cfg.at w) U e := by
-            intro c hc hq hnd e he
-            have hjc : ∃ j ≤ t, ∃ p, tr[j]? = some (w, .certOffer p c) := by
-              rcases withInput_offered.2 c hc with hc | ⟨p, hinp⟩
-              · obtain ⟨j, hjt, p, hj'⟩ := certs_before (cfg := cfg) w t c hc
+          have hcv : ∀ x ∈ (withInput (stateBefore cfg tr t w) inp).certs,
+              (cfg.at w).q ≤ x.1.signers.length → x.1.signers.Nodup →
+                (cfg.at w).headOf x.2 = x.1.head → ∀ e ∈ x.2, Verdict (cfg.at w) U e := by
+            intro x hx hq hnd hhd e he
+            have hjc : ∃ j ≤ t, ∃ p, tr[j]? = some (w, .certOffer p x.1 x.2) := by
+              rcases withInput_offered.2 x hx with hx | ⟨p, hinp⟩
+              · obtain ⟨j, hjt, p, hj'⟩ := certs_before (cfg := cfg) w t x hx
                 exact ⟨j, hjt.le, p, hj'⟩
               · exact ⟨t, le_rfl, p, by rw [hj, hinp]⟩
             obtain ⟨j, hjt, p, hj'⟩ := hjc
             obtain ⟨u, hu, huH⟩ := exists_mem_of_length hf hnd
               (by have := hadm.2.2.2.2.2; change cfg.q ≤ _ at hq; omega)
-            obtain ⟨i, hij, hiu, hprop⟩ := hcert j w p c hj' hv u hu huH
+            obtain ⟨i, hij, hiu, hprop⟩ := hcert j w p x.1 x.2 hj' hv u hu huH
             obtain ⟨inp', hi'⟩ := Converge.event_of_map hiu
-            exact (ih (i + 1) (by omega) u huH).2 e ((propose_prefix hi' hprop).subset he)
+            obtain ⟨hk, hkh⟩ := propose_head hi' hprop
+            have hpre := commits_prefix (cfg := cfg) (tr := tr) u (i + 1)
+            have htk := take_of_prefix hpre hk
+            have hds := hchain j w p x.1 x.2 hj' hv u huH x.1.height
+              (hk.trans hpre.length_le) (by rw [htk, ← hkh]; exact hhd)
+            rw [htk] at hds
+            rw [hds] at he
+            exact (ih (i + 1) (by omega) u huH).2 e (List.mem_of_mem_take he)
           obtain ⟨hc', hv'⟩ := IsCut.step (cfg := cfg.at w) hg hσ ht inp hc hh
             (fun e he => hK w hv e (knownBefore_knownOf (hi.pend e he)))
             (fun o ho e he hid => hK w hv e (knownBefore_knownOf (hi.offered o ho e he hid)))

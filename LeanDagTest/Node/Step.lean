@@ -43,6 +43,8 @@ def cfg (me : Fin 4) : Config (Fin 4) ℕ Unit where
   lag := 2
   limit := none
   payload := fun _ => ()
+  extend := fun h e => (hash (h, e.1, e.2)).toNat
+  root := 0
 
 /-- A network of four nodes: their states, the inputs in flight with the
 time each arrives, ordered by it, and the commits each node output. -/
@@ -65,8 +67,8 @@ def sends (t : ℕ) (src : Fin 4) (out : List (Output (Fin 4) ℕ Unit)) :
   out.flatMap fun
     | .broadcast id b =>
       ((List.finRange 4).filter (· ≠ src)).map fun d => (t + 1, d, .deliver id b)
-    | .propose k ds =>
-      ((List.finRange 4).filter (· ≠ src)).map fun d => (t + 1, d, .proposal src k ds)
+    | .propose k h =>
+      ((List.finRange 4).filter (· ≠ src)).map fun d => (t + 1, d, .proposal src k h)
     | .setTimer r after => [(t + after, src, .timer r)]
     | _ => []
 

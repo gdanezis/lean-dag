@@ -10,9 +10,10 @@ initial state:
   at strictly increasing rounds (`OneEach`), each its own and identified
   by its hash (`Authored`); the blocks it broadcasts are those it
   persists (`Sends`);
-* **its decisions**: the node keeps the decisions it outputs, which are
-  slots `0 … lo − 1` in order, and every proposal it signs is a prefix of
-  them (`Decisions`);
+* **its decisions**: the node keeps the decisions it outputs, the latest
+  first, which are slots `0 … lo − 1`, and every proposal it signs at a
+  height `k` is the head of the chain of its first `k` decisions
+  (`Decisions`);
 * **valid blocks**: each of its own blocks references only blocks it
   knew, delivered or offered with their hash, or its own, and is valid at
   the row under every block map agreeing with what it knew (`ValidOut`);
@@ -56,16 +57,17 @@ def Sends : Prop :=
     (is : List (Input Validator BlockId Payload)),
     broadcasts (run cfg (State.init cfg) is).2 = persists (run cfg (State.init cfg) is).2
 
-/-- **Its decisions**: the node keeps the decisions it outputs, which are
-slots `0 … lo − 1` in order, and every proposal it signs is a prefix of
-them. -/
+/-- **Its decisions**: the node keeps the decisions it outputs, the latest
+first, which are slots `0 … lo − 1`, and every proposal it signs at a
+height `k` is the head of the chain of its first `k` decisions. -/
 def Decisions : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
     (is : List (Input Validator BlockId Payload)),
     let r := run cfg (State.init cfg) is
-    r.1.decided = commitsOf r.2 ∧ (commitsOf r.2).map Prod.fst = List.range r.1.lo ∧
-      ∀ k ds, Output.propose k ds ∈ r.2 → ds <+: commitsOf r.2
+    r.1.decided.reverse = commitsOf r.2 ∧ (commitsOf r.2).map Prod.fst = List.range r.1.lo ∧
+      ∀ k h, Output.propose k h ∈ r.2 → k ≤ (commitsOf r.2).length ∧
+        h = cfg.headOf ((commitsOf r.2).take k)
 
 /-- **Valid blocks**: each of the node's own blocks references only blocks
 it knew, and is valid at the row under every block map agreeing with

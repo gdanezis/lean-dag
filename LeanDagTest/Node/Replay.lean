@@ -51,6 +51,8 @@ def cfg (p : Scheme.Params) (per : ℕ) (hper : 0 < per) (elect : ℕ → Fin 4)
   lag := 100
   limit := none
   payload := fun _ => ()
+  extend := fun h _ => h
+  root := 0
 
 /-- The record's blocks through the store path into an empty store: the
 number of blocks the store accepted, the number left pending, and the commits of one

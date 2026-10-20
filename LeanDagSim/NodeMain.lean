@@ -13,17 +13,18 @@ output:
   `{"deliver":{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}}`,
   `{"fetchRequest":{"peer":v,"ids":[…]}}`, `{"baseRequest":{"peer":v}}`,
   `{"baseOffer":{"peer":v,"horizon":G,"blocks":[block…]}}`,
-  `{"proposal":{"peer":v,"height":k,"decisions":[[slot,block]…]}}` (a peer's
-  signed proposal, `null` for a skip), and
-  `{"certOffer":{"peer":v,"cert":{"height":k,"decisions":[…],"signers":[…]}}}`;
+  `{"proposal":{"peer":v,"height":k,"head":h}}` (a peer's signed proposal of
+  the head of its chain of decisions, `LeanDagSim.chainHead`), and
+  `{"certOffer":{"peer":v,"cert":{"height":k,"head":h,"signers":[…]},
+  "decisions":[[slot,block]…]}}` (`null` for a skip);
 * outputs: `{"persist":block}`, `{"broadcast":block}`,
   `{"setTimer":{"round":r,"after":t}}`, `{"commit":{"slot":k,"block":i}}`
   (`null` for a skip), `{"prune":G}`, `{"fetch":[…]}` (ask every peer),
   `{"send":{"peer":v,"block":block}}` (answer one), `{"requestBase":{}}`
   (ask every peer for its base),
   `{"serveBase":{"peer":v,"horizon":G,"blocks":[block…]}}` (answer one),
-  `{"propose":{"height":k,"decisions":[[slot,block]…]}}` (sign and send to
-  every peer), and `{"serveCert":{"peer":v,"cert":cert}}` (answer one).
+  `{"propose":{"height":k,"head":h}}` (sign and send to every peer), and
+  `{"serveCert":{"peer":v,"cert":cert,"decisions":[…]}}` (answer one).
 
 A delivered block's identifier, if given, must be its hash
 (`LeanDagSim.idOf`), and the node drops one that is not; if it is left
@@ -50,7 +51,7 @@ def decisionsJson (ds : List (ℕ × Option ℕ)) : Json :=
 
 /-- A certificate, as JSON. -/
 def certJson {n : ℕ} (c : Cert (Fin n) ℕ) : Json :=
-  Json.mkObj [("height", c.height), ("decisions", decisionsJson c.decisions),
+  Json.mkObj [("height", c.height), ("head", c.head),
     ("signers", Json.arr (c.signers.map fun v => (v.val : Json)).toArray)]
 
 /-- An output, as JSON. -/
@@ -67,10 +68,9 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
   | .requestBase => Json.mkObj [("requestBase", Json.mkObj [])]
   | .serveBase peer G bs => Json.mkObj [("serveBase", Json.mkObj [("peer", peer.val),
       ("horizon", G), ("blocks", Json.arr (bs.map fun e => blockJson e.1 e.2).toArray)])]
-  | .propose k ds => Json.mkObj [("propose", Json.mkObj [("height", k),
-      ("decisions", decisionsJson ds)])]
-  | .serveCert peer c => Json.mkObj [("serveCert", Json.mkObj [("peer", peer.val),
-      ("cert", certJson c)])]
+  | .propose k h => Json.mkObj [("propose", Json.mkObj [("height", k), ("head", h)])]
+  | .serveCert peer c ds => Json.mkObj [("serveCert", Json.mkObj [("peer", peer.val),
+      ("cert", certJson c), ("decisions", decisionsJson ds)])]
 
 /-- A block with its identifier, from JSON; the identifier is its hash
 when left out. -/
@@ -121,12 +121,13 @@ def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ
     else throw s!"peer {peer} out of range"
   if let .ok m := j.getObjVal? "proposal" then
     return .proposal (← validatorOf (← m.getObjVal? "peer")) (← natField m "height")
-      (← decisionsOf (← m.getObjVal? "decisions"))
+      (← natField m "head")
   if let .ok m := j.getObjVal? "certOffer" then
     let c ← m.getObjVal? "cert"
     let signers ← ((← c.getObjVal? "signers").getArr?) >>= fun a => a.toList.mapM validatorOf
     return .certOffer (← validatorOf (← m.getObjVal? "peer"))
-      ⟨← natField c "height", ← decisionsOf (← c.getObjVal? "decisions"), signers⟩
+      ⟨← natField c "height", ← natField c "head", signers⟩
+      (← decisionsOf (← m.getObjVal? "decisions"))
   let d ← j.getObjVal? "deliver"
   let _ := hn
   let (id, b) ← blockOf d

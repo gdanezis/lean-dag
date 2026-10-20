@@ -435,8 +435,8 @@ theorem Lim.tryBoot {τ W : ℕ} (hl : cfg.limit = some (τ, W))
     {s s' : State Validator BlockId Payload}
     {ads : List (ℕ × Option BlockId)} (h : Lim τ W s) (hb : tryBoot cfg s = some (s', ads)) :
     Lim τ W s' := by
-  obtain ⟨t, G, c, hbase, ht, htG, -, -, hst, hpd, htop', -, -, -, -, -, -, -, -, -, -, -, -,
-    how⟩ := tryBoot_some hb
+  obtain ⟨t, G, c, ds, hbase, ht, htG, -, -, hst, hpd, htop', -, -, -, -, -, -, -, -, -, -, -, -,
+    -, how⟩ := tryBoot_some hb
   have hslot : ∀ e ∈ slotted cfg (keptBase cfg (baseAt cfg s G)), e.2.2 = G := by
     intro e he
     simp only [slotted, hl, Option.isSome_some, if_true, List.mem_map] at he
@@ -632,12 +632,12 @@ theorem Lim.step {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validat
     split
     · exact Lim.bootFrom hl (h.of_eq rfl rfl rfl rfl)
     · exact h
-  | certOffer p c =>
+  | certOffer p c ds =>
     rw [step_certOffer]
     split
     · exact Lim.bootFrom hl (h.of_eq rfl rfl rfl rfl)
     · exact h
-  | proposal p k ds =>
+  | proposal p k kh =>
     rw [step_proposal]
     split
     · exact h.of_eq rfl rfl rfl rfl

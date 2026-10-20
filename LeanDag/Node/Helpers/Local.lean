@@ -410,7 +410,8 @@ theorem Inv.decideStep {s : State Validator BlockId Payload}
     generalize hds : Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ s.store.toRecord
       s.store.view s.lo (decidable cfg s.store.topRound - 1) = ds
     obtain ⟨hst, hpd, htop, -, hof, -⟩ :=
-      proposeAt_keeps (cfg := cfg) { s with lo := s.lo + ds.length, decided := s.decided ++ ds }
+      proposeAt_keeps (cfg := cfg)
+        { s with lo := s.lo + ds.length, decided := ds.reverse ++ s.decided }
     exact ⟨(out_quiet (quiet_commits _)).append (out_quiet (proposeAt_quiet _)),
       hi.of_eq hst hpd htop hof⟩
   · exact ⟨⟨rfl, rfl⟩, hi⟩
@@ -678,7 +679,8 @@ theorem mem_bootWindow {s : State Validator BlockId Payload} {G : ℕ}
 
 omit [Fintype Validator] in
 /-- **A successful bootstrap**, at a round `G` above the node's top and
-its horizon, with a certificate `c` the node can adopt there: the pruned
+its horizon, with a certificate `c` the node can adopt there, served with
+the decisions `ds`: the pruned
 store takes the attested base, then flushes the offered blocks above `G`
 and the pending ones at or above it; the top moves to `G` with no block
 of the node's own there; the node takes the certified decisions it
@@ -686,8 +688,8 @@ lacks, and its next slot moves up to `c`'s height; the kept base is
 charged at its slots. -/
 theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ × Option BlockId)}
     (h : tryBoot cfg s = some (s', ads)) :
-    ∃ t G c, ∃ hb : s.store.base < G, s.top = some t ∧ t < G ∧ bootRound cfg s t = some G ∧
-      certFor cfg s G = some c ∧
+    ∃ t G c ds, ∃ hb : s.store.base < G, s.top = some t ∧ t < G ∧ bootRound cfg s t = some G ∧
+      certFor cfg s G = some (c, ds) ∧
       let st₀ := (keptBase cfg (baseAt cfg s G)).foldl (fun st e => accept cfg st e.1 e.2)
         (s.store.prune G hb.le)
       let pend := (if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun e =>
@@ -697,8 +699,8 @@ theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ �
       s'.top = some G ∧ s'.own = none ∧ s'.lo = max s.lo c.height ∧
       s'.recovering = s.recovering ∧ s'.offers = [] ∧
       s'.requested = s.requested.filter (fun x => G ≤ x.2.2) ∧ s'.fired = {G} ∧
-      ads = c.decisions.drop s.decided.length ∧ s'.decided = s.decided ++ ads ∧
-      s'.certs = [] ∧ s'.props = s.props ∧ s'.lastProposed = s.lastProposed ∧
+      ads = ds.drop s.decided.length ∧ s'.decided = ads.reverse ++ s.decided ∧
+      s'.certs = [] ∧ s'.props = s.props ∧ s'.lastProposed = s.lastProposed ∧ s'.chain = s.chain ∧
       s'.cert = (if s.certHeight < c.height then some c else s.cert) ∧
       s'.owner = slotted cfg (keptBase cfg (baseAt cfg s G)) ++
         s.owner.filter fun e => G ≤ e.2.2 := by
@@ -706,7 +708,7 @@ theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ �
   split at h
   · rename_i t G ht hG
     split at h
-    · rename_i c hc
+    · rename_i c ds hc
       split at h
       · rename_i hbase
         dsimp only at h
@@ -716,30 +718,32 @@ theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ �
         have htG : t < G := by
           have := List.mem_filter.mp (List.max?_mem hG')
           exact (by simpa using this.2 : (t < G ∧ _) ∧ _).1.1
-        exact ⟨t, G, c, hbase, ht, htG, hG', hc, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
-          rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+        exact ⟨t, G, c, ds, hbase, ht, htG, hG', hc, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+          rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
       · cases h
     · cases h
   · cases h
 
 omit [Fintype Validator] in
 /-- **An adoptable certificate**, unfolded. -/
-theorem validCert_iff {G : ℕ} {c : Cert Validator BlockId} :
-    validCert cfg G c = true ↔ cfg.q ≤ c.signers.length ∧ c.signers.Nodup ∧
-      c.decisions.map Prod.fst = List.range c.height ∧ G ≤ cfg.per * (c.height / cfg.m) := by
+theorem validCert_iff {G : ℕ} {c : Cert Validator BlockId} {ds : List (ℕ × Option BlockId)} :
+    validCert cfg G c ds = true ↔ cfg.q ≤ c.signers.length ∧ c.signers.Nodup ∧
+      ds.map Prod.fst = List.range c.height ∧ cfg.headOf ds = c.head ∧
+        G ≤ cfg.per * (c.height / cfg.m) := by
   simp [validCert, and_assoc]
 
 omit [Fintype Validator] in
 /-- The certificate a bootstrap adopts was offered, and is adoptable. -/
 theorem certFor_valid {s : State Validator BlockId Payload} {G : ℕ} {c : Cert Validator BlockId}
-    (h : certFor cfg s G = some c) : c ∈ s.certs ∧ validCert cfg G c = true :=
-  ⟨List.mem_of_find?_eq_some h, List.find?_some h⟩
+    {ds : List (ℕ × Option BlockId)} (h : certFor cfg s G = some (c, ds)) :
+    (c, ds) ∈ s.certs ∧ validCert cfg G c ds = true :=
+  ⟨List.mem_of_find?_eq_some h, by simpa using List.find?_some h⟩
 
 omit [Fintype Validator] in
 /-- **A bootstrap raises the horizon** to its round. -/
 theorem boot_base {s s' : State Validator BlockId Payload} {ads : List (ℕ × Option BlockId)}
     (h : tryBoot cfg s = some (s', ads)) : s.store.base < s'.store.base := by
-  obtain ⟨t, G, c, hb, -, -, -, -, hst, -⟩ := tryBoot_some h
+  obtain ⟨t, G, c, ds, hb, -, -, -, -, hst, -⟩ := tryBoot_some h
   rw [hst, flush_base, foldl_base]
   exact hb
 
@@ -751,7 +755,7 @@ theorem Inv.tryBoot {s s' : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} {ads : List (ℕ × Option BlockId)}
     (hi : Inv cfg s K B) (h : tryBoot cfg s = some (s', ads)) : Inv cfg s' K B := by
-  obtain ⟨t, G, c, hbase, ht, htG, -, -, hst, hpd, htop', -, -, -, hof, -⟩ := tryBoot_some h
+  obtain ⟨t, G, c, ds, hbase, ht, htG, -, -, hst, hpd, htop', -, -, -, hof, -⟩ := tryBoot_some h
   have hfo : ∀ x ∈ s.offers.flatMap (·.2.2), x.1 = cfg.idOf x.2 → x ∈ K := by
     intro x hx hid
     obtain ⟨o, ho, hxo⟩ := List.mem_flatMap.mp hx
@@ -942,16 +946,16 @@ theorem Inv.step {s : State Validator BlockId Payload}
   | baseRequest peer =>
     simp only [Node.step]
     exact hnil _ (by simp [Output.isQuiet])
-  | proposal peer k ds =>
+  | proposal peer k h =>
     simp only [Node.step]
     split
-    · have h₁ : Inv cfg (record cfg s peer k ds) K' B := (hi.mono hsub).of_eq rfl rfl rfl rfl
+    · have h₁ : Inv cfg (record cfg s peer k h) K' B := (hi.mono hsub).of_eq rfl rfl rfl rfl
       exact ⟨[], ⟨rfl, rfl⟩, by simpa using h₁⟩
     · exact hnil'
-  | certOffer peer c =>
+  | certOffer peer c ds =>
     simp only [Node.step]
     split
-    · have h₁ : Inv cfg { s with certs := c :: s.certs } K' B :=
+    · have h₁ : Inv cfg { s with certs := (c, ds) :: s.certs } K' B :=
         (hi.mono hsub).of_eq rfl rfl rfl rfl
       exact h₁.bootFrom
     · exact hnil'

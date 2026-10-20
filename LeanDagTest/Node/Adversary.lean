@@ -75,7 +75,7 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeCert] (verify := false) (seed := 5))
 
-/-- info: "[(some 2), (some 28), (some 28)] [0, 26, 26] true true false 0 0" -/
+/-- info: "[(some 2), (some 27), (some 27)] [0, 25, 25] true true false 0 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 
