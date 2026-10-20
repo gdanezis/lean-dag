@@ -968,3 +968,144 @@ reliable across its gap anyway.
 **What it gives up.** Inclusion for a node's blocks below a gap in its
 chain. Those blocks may still be included through other authors' blocks;
 they are no longer guaranteed through their author's own.
+
+## 12. Before step 11: what the liveness proof reads
+
+Three investigations precede the design of step 11: which shared lemmas
+read the clauses the program does not meet (§9), what timed machinery
+exists, and what the simulator measures of the quantities the proof must
+bound. Nothing here changes the program or a proof.
+
+### 12.1 The clauses on the scheme's path
+
+The family's reactive liveness (`Scheme/Reactive/Proof.lean`) reads
+`PaceCore` through `drift_collapse` (`Mysticeti/ViewPace.lean`), through
+`AsyncPace.ofPaceCore` for `reached` and `populated`, and directly in
+`arrives` (`Scheme/Helpers/Reactive.lean`). From there `reaches`,
+`votes`, `certifies`, `live_of_reactiveLive`, `leaderCommits_reactive`
+and `includes_reactive` follow. `Stack.safe_and_live` takes the
+support's `live` as given and reads none of the clauses.
+
+| Clause | Read on the scheme's path | Weakening, and its cost |
+|---|---|---|
+| `ReactiveCore.deadline` | nowhere, in any arc | free: restricted past GST, or deleted |
+| `ReactiveCore.built_lt` | through `le_built`, only to turn `gst ≤ R ≤ n` into `gst ≤ built u n` | `≤` breaks `le_built`; it survives if `reactiveLive` asks `gst ≤ built u n` for `n ≥ R₀` instead of `gst ≤ R₀`, or if each build takes at least one tick |
+| `PaceCore.catchup` | in `drift_collapse`, past GST, for a reliable round-`n` block held at `built w n + Δ` | a timer fallback breaks the drift argument: the drift becomes the timeout, and `arrives` needs the timeout above the drift. A fallback bounded by `Δ` and `proc` needs a new drift lemma. Meeting `catchup` outright, by building above a quorum the node holds (§9.1, item 7), needs none |
+| `PaceCore.converges` | in `drift_collapse` and `arrives` for reliable blocks past GST, and in `AsyncPace.ofPaceCore` for every reliable block | above the receiver's horizon, `drift_collapse` and `arrives` survive given that a round below a node's horizon is one it built; `reached` and `populated` must be proved again from the horizon, as `PaceCore.reached` is |
+| `PaceCore.holds_mono` | beside each use of `converges` | monotone above the horizon survives where pruning drops only blocks below it; `holds_closed` likewise becomes closed above the horizon. Logical holdings, everything ever accepted, do not help: `arrives` reads the blocks held when the next block is built |
+
+The other arcs (Mysticeti's `ViewPace`, Reactive Mysticeti, Bluestreak,
+FinWhale, Steelhead, Mahi-Mahi) read the same clauses through their own
+copies of these lemmas, so a change in place reaches them all. The
+shared `converges` is false under garbage collection, so the node
+supplies a variant of `PaceCore` with a nondecreasing horizon, and the
+scheme's `drift_collapse`, `arrives`, `reached` and `populated` are
+proved against it; `certifies` onward reads only these and is unchanged.
+
+### 12.2 The timed model
+
+`Timed/Coverage.lean` and `Timed/Extension.lean` hold no time: their
+notions (`SynchronisedOn`, `CoversToward`) are stated in rounds, and a
+reactive builder does not meet `SynchronisedOn`. The timed model is
+`PaceCore` and its extensions, whose witnesses are hand-built records.
+No witness is built from a program's run, and the node's traces have no
+clock. The least new machinery is a time for each event of a trace,
+nondecreasing, with three assumptions: past GST a send arrives within
+`Δ`; a timer fires at its time; and a step's processing time is at most
+`proc`. Holdings are the store before an event, built times the times of
+the events that persisted the node's blocks, and the record the run's
+(`globalRecord`).
+
+`DeliversOn`, the coverage of a reliable set's blocks, has no consumer:
+`reactiveLive` and the support's `live` ask that a view hold every block
+up to a round. Either the node's view covers every block up to the
+round, or a lemma from coverage of the reliable blocks to `live` is
+needed.
+
+### 12.3 Garbage collection and delivery
+
+The garbage-collection arc's induced delivery (`viewUpto_chopD`, G14)
+cuts every validator at one horizon `G`; nothing states delivery for
+blocks above a per-validator, rising horizon. The node's convergence
+(V3′) assumes the horizon `0` throughout (`reads_before`, `keeps_after`),
+and its argument is by contradiction at the end of a trace, which gives
+no time bound. `walk_reaches` and `flush_no_ready`, facts about one step,
+carry over.
+
+In the simulator, honest blocks do arrive below their receiver's
+horizon past GST: 10 at GST `100` with messages before it taking up to
+60 ticks (sent before GST, delivered after), and 1 to 5 to a node that
+rejoined by bootstrap. These lie below a certified frontier, so their
+loss costs no decision, but the shared `converges` fails, as §12.1 found.
+
+### 12.4 Rate limiting
+
+No shared result relates the budget or the window to delivery: the
+novelty results (C3, `card_novelty_le_of_byzBudget`) bound an honest
+block's novelty by `f·κ + 1` past the settling round, given eventual
+delivery, and `Delivery.accepts_correct`, the clause that would carry a
+rate limiter's obligation, is a field to be proved. The node charges per
+candidate slot, not novelty against a view, and the two are not related
+by a proof.
+
+### 12.5 Measurements
+
+At the Mysticeti row, `n = 4`, `f = 1`, delays of 1 to 3 ticks, timeout
+10, `Λ = 2`, 600 ticks, measured from tick 50 (150 for the GST and
+rejoin runs): the largest gap between a node's consecutive rounds, the
+largest spread of one round's build times across the honest nodes, the
+largest and the mean time from the first block of a slot's round to a
+node's decision, the largest lag of the certified frontier behind the
+decided one, in slots, and the honest blocks delivered below the
+receiver's horizon past GST and new ones not kept.
+
+| Scenario | Gap | Spread | Latency max / mean | Cert lag | Below | Not kept |
+|---|---|---|---|---|---|---|
+| as above | 6 | 3 | 11 / 7.2 | 4 | 0 | 0 |
+| delays 1 | 1 | 0 | 3 / 3.0 | 1 | 0 | 0 |
+| delays 1–6 | 11 | 6 | 27 / 13.5 | 5 | 0 | 0 |
+| delays 1–6, timeout 5 | 9 | 5 | 72 / 22.5 | 13 | 0 | 0 |
+| delays 1–6, timeout 3 | 9 | 5 | 110 / 43.2 | 22 | 0 | 0 |
+| `Λ` = 1 or 6 | as above | | | | | |
+| GST 100, 20 ticks before | 6 | 3 | 11 / 7.4 | 9 | 0 | 0 |
+| GST 100, 60 ticks before | 6 | 3 | 11 / 7.6 | 5 | 10 | 0 |
+| node 3 crashed | 10 | 3 | 19 / 13.5 | 4 | 0 | 0 |
+| node 3 crashed, delays 1–6, timeout 13 | 13 | 6 | 30 / 21.2 | 4 | 0 | 0 |
+| an equivocator | 10 | 3 | 18 / 13.5 | 5 | 0 | 0 |
+| `n = 7`, `f = 2` | 5 | 3 | 11 / 8.0 | 3 | 0 | 0 |
+| `n = 7`, two crashed | 10 | 2 | 18 / 12.7 | 4 | 0 | 0 |
+| `τ = 1` or `W = 1`; `τ = 8, W = 8` with a flood | as above, a flood as a crash | | | | 0 | 0 |
+| `τ = 0` | no round built | | | | | 12 |
+| `W = 0` | 16 rounds, then stuck | | | | | 26 |
+| node 1 down 40–90 | 6 | 3 | 11 / 7.4 | 3 | 1 | 0 |
+| node 1 down 40–90, `τ = 8, W = 4` | node 1 stuck at round 21 | | | | 0 | 242 |
+| node 1 down 40–90, `τ = 2, W = 8` | 6 | 3 | 11 / 7.3 | 4 | 0 | 1 |
+
+What the numbers say for step 11:
+
+* **The fast path holds.** Without a fault, a round takes at most twice
+  the largest delay, and a decision follows the slot's round within 11
+  ticks at delays up to 3 and 27 at delays up to 6; the timeout plays no
+  part. A crashed leader costs its
+  rounds a timeout each.
+* **`2Δ + proc` is sufficient, not necessary.** With timeouts below the
+  delay the nodes stay live and agree, at a higher latency and a longer
+  certificate lag.
+* **The lag `Λ` does not affect timing**, only the store's depth; without
+  rate limiting no new honest block at or above a horizon went unkept.
+* **The certificate lag is a few slots** past GST, nine after a GST at
+  which messages had been slow. The horizon trails the certified
+  frontier, so its bound enters the liveness of garbage collection
+  (§9.1, item 6).
+* **The budget and the window are generous** for the reliable nodes: a
+  budget of one and a window of one keep every honest block. What needs
+  a window is rejoining: a node that bootstraps lands `Λ` and the
+  certificate lag below its peers, and a window of 4 at `Λ = 2` leaves
+  it behind.
+* **Fetching fires without faults.** Blocks arrive out of order, and a
+  block whose references are in flight triggers a fetch: 194 fetches in
+  the fault-free run, none with delays of one tick. Their effect on
+  timing was not measured.
+
+The simulator records these measurements (`LeanDagSim.Stats`, in the
+report's `stats`).

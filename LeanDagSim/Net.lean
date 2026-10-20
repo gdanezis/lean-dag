@@ -160,6 +160,31 @@ structure Agent (n : ℕ) where
   node : Fin n
   twin : ℕ
 
+/-- **Timing measurements** of the honest nodes, for the liveness
+conditions (`docs/validator.md` §12): when each built each round and
+decided each slot, the honest-authored blocks delivered below the
+receiver's horizon and those the rate limiter did not keep, the greatest
+lag of the certified frontier behind the decided one past GST, and the
+fetches asked for. -/
+structure Stats where
+  /-- Each honest node's own blocks: the node, the round and the time. -/
+  built : List (ℕ × ℕ × ℕ) := []
+  /-- Each honest node's decisions: the node, the slot and the time. -/
+  decided : List (ℕ × ℕ × ℕ) := []
+  /-- Honest-authored blocks delivered to an honest node below its horizon. -/
+  belowHorizon : ℕ := 0
+  /-- Those delivered past GST. -/
+  belowAfterGst : ℕ := 0
+  /-- Honest-authored blocks delivered to an honest node, new and at or
+  above its horizon, that it neither stored nor kept pending. -/
+  notKept : ℕ := 0
+  /-- The greatest `lo − certHeight` of an honest node past GST. -/
+  certLag : ℕ := 0
+  /-- The fetches honest nodes asked for, and the identifiers in them. -/
+  fetches : ℕ := 0
+  fetched : ℕ := 0
+  deriving Inhabited
+
 /-- **What a simulation reports.** -/
 structure Report where
   /-- The row was admissible at `n`, `f`, `c` and its quorum. -/
@@ -190,6 +215,8 @@ structure Report where
   events : ℕ
   /-- The simulated time reached. -/
   time : ℕ
+  /-- The timing measurements. -/
+  stats : Stats := {}
 
 /-- Put an input in flight, behind those arriving no later. -/
 def enqueue {α : Type} (e : ℕ × α) : List (ℕ × α) → List (ℕ × α)
@@ -226,6 +253,8 @@ structure World (n : ℕ) where
   signed : List (ℕ × ℕ × ℕ)
   /-- The inputs the signature checks dropped. -/
   dropped : ℕ
+  /-- The timing measurements. -/
+  stats : Stats
 
 /-- Whether node `v` has crashed by time `t`. -/
 def crashed (v t : ℕ) : Bool :=
@@ -479,6 +508,29 @@ def loop : ℕ → World n → World n
         let decs := r.2.filterMap fun
           | .commit k x => some (k, x)
           | _ => none
+        let ss := w.stats
+        let ss : Stats := if isHonest then
+            let fs := r.2.filterMap fun | .fetch ids => some ids.length | _ => none
+            let ss := { ss with
+              built := own.map (fun e => (a.node.val, e.2.round, t)) ++ ss.built
+              decided := decs.map (fun e => (a.node.val, e.1, t)) ++ ss.decided
+              fetches := ss.fetches + fs.length
+              fetched := ss.fetched + fs.foldl (· + ·) 0 }
+            let ss := match i with
+              | .deliver id b =>
+                if sc.honest b.creator.val ∧ b.creator ≠ a.node ∧ id = idOf b then
+                  if b.round < st.store.base then
+                    { ss with belowHorizon := ss.belowHorizon + 1,
+                              belowAfterGst := ss.belowAfterGst + if sc.gst ≤ t then 1 else 0 }
+                  else if id ∉ st.store.ids ∧ id ∉ st.pending.map Prod.fst ∧
+                      id ∉ r.1.store.ids ∧ id ∉ r.1.pending.map Prod.fst then
+                    { ss with notKept := ss.notKept + 1 }
+                  else ss
+                else ss
+              | _ => ss
+            if sc.gst ≤ t then { ss with certLag := max ss.certLag (r.1.lo - r.1.certHeight) }
+            else ss
+          else ss
         loop fuel
           { agents := w.agents
             states := w.states.set! d r.1
@@ -495,7 +547,8 @@ def loop : ℕ → World n → World n
             skips := if isHonest && skip then w.skips + 1 else w.skips
             boots := if isHonest && boot then w.boots + 1 else w.boots
             signed := sig.map (fun e => (a.node.val, e.1, e.2)) ++ w.signed
-            dropped := w.dropped }
+            dropped := w.dropped
+            stats := ss }
       | _, _ => loop fuel { w with queue := rest }
 
 end Run
@@ -510,7 +563,7 @@ def agreeAt (ls : List (List (ℕ × Option ℕ))) : Bool :=
 
 /-- **Run a scenario.** -/
 def simulate (sc : Scenario) : Report :=
-  let empty : Report := ⟨false, [], [], true, true, true, 0, 0, 0, 0, 0, 0, 0⟩
+  let empty : Report := ⟨false, [], [], true, true, true, 0, 0, 0, 0, 0, 0, 0, {}⟩
   match row? sc.row sc.n sc.f sc.c with
   | none => empty
   | some (p, q) =>
@@ -539,7 +592,8 @@ def simulate (sc : Scenario) : Report :=
           skips := 0
           boots := 0
           signed := []
-          dropped := 0 }
+          dropped := 0
+          stats := {} }
       let w := loop sc p q hn sc.fuel w0
       let honestIdx := (List.range n).filter sc.honest
       let decs := honestIdx.map fun v => (w.decisions[v]?.getD []).reverse
@@ -558,7 +612,8 @@ def simulate (sc : Scenario) : Report :=
         maxStore := w.maxStore
         maxPending := w.maxPending
         events := w.events
-        time := w.time }
+        time := w.time
+        stats := w.stats }
     else empty
 
 end LeanDagSim
