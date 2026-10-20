@@ -34,7 +34,7 @@ input `i` in the state `s`: the new state and the outputs.
 
 * **Fetching** (`walkLevel`, `missing`, `answer`): after a delivery, the missing part
   of the delivered block's history, walked through the pending blocks, is
-  asked of every peer, with the node's horizon, once on account of each
+  asked of its author, with the node's horizon, once on account of each
   block that needs it; a request is answered with the blocks asked for
   that the store holds and their histories above the asker's horizon.
 * **Collecting** (`collect`): the horizon rises to `Λ` below the lesser
@@ -593,7 +593,7 @@ def step (s : State Validator BlockId Payload) :
       let ask := s.recovering ∧ s.asked + cfg.lag + 2 ≤ b.round
       let top := if ask then b.round else s.asked
       let r := settle cfg { s₁ with requested := req, asked := top }
-      (r.1, (if miss.isEmpty then [] else [.fetch s.store.base (miss.map Prod.fst)]) ++
+      (r.1, (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++
         (if ask then [.requestBase] else []) ++ r.2)
     else (s, [])
   | .timer r => settle cfg { s with fired := insert r s.fired }

@@ -38,7 +38,12 @@ environment's hash, assumed injective on the blocks of a run. Blocks,
 base offers and checkpoint proposals are signed by their source, and the
 proofs assume what the signatures give (authentication); the
 executables check no signature and trust their inputs, so a deployable
-node would verify each of these signatures on receipt.
+node would verify each of these signatures on receipt. Efficient
+synchronisation is also out of scope: the program's fetch (§3.7) asks
+one peer and is answered with whole histories, which repeat blocks the
+asker holds, and the liveness claims (§13) assume of the network that a
+reliable node receives the history of each reliable block it receives,
+however a deployment obtains it.
 
 ## 2. Interface
 
@@ -92,7 +97,7 @@ previous block is the build rule (§3.2, §11).
 * prune below the horizon `G`;
 * request the base from the peers;
 * serve the base and window to a peer;
-* ask every peer for some blocks (§3.7);
+* ask a peer for some blocks (§3.7);
 * send a block to one peer;
 * sign and send every peer a proposal of the head of the chain of its
   decisions below a height, and send its certificate to a peer with the
@@ -256,7 +261,7 @@ program makes that true by fetching what it lacks.
 **The rule.** After a block `h` arrives, the node walks `h`'s references
 down through its pending blocks and collects those it neither stores
 nor holds pending, at or above the horizon: the missing part of `h`'s
-history (`missing`). It asks every peer for them in one *fetch* output,
+history (`missing`). It asks `h`'s author for them in one *fetch* output,
 with its horizon, and records each with `h` and its round, so as to ask
 for a block at most once on account of each block that needs it, and so
 that garbage collection drops the records with the rest. A node asked
@@ -272,10 +277,19 @@ that shows a chain of its own blocks to some honest nodes, which build
 on it, and withholds it from another, makes that node accept the honest
 blocks up to the horizon's depth late. Answered with histories, a
 missing history arrives in one round trip, whatever its depth, which is
-what the liveness argument needs (§13). The cost is messages: an answer
-repeats the parts of the history the asker holds, and in the simulator's
-fault-free run, where blocks arriving out of order trigger fetches, the
-answers are about half the inputs.
+what the liveness argument needs (§13).
+
+**Why the author.** A fetch asked of every peer is answered `n − 1`
+times. In the simulator's fault-free run blocks arrive out of order, a
+block whose references are still in flight triggers a fetch, and each
+answer repeats the history the asker holds down to its horizon: over
+2,000 ticks at the Mysticeti row the inputs were 55,352 at `n = 4`,
+291,809 at `n = 7` and 882,004 at `n = 10`, against about `n²` per
+round for the blocks and timers alone (14,000, 40,000 and 80,000). Asked of the author, they
+are 33,580, 110,953 and 231,506. A Byzantine author that does not answer
+stalls nothing: a later honest block needing the same blocks is asked
+of its own author (per referrer, below). Answers still repeat what the
+asker holds; synchronising only what it lacks is out of scope (§1).
 
 **Why per referrer.** A first rule asked for a block at most once. A
 Byzantine node then stalls an honest node `v`: it sends `v` a block
@@ -295,12 +309,12 @@ honest nodes knew, and no horizon rises: every block an honest node
 broadcast, with its history, is in every honest node's store at the
 end. Suppose a node `v` lacks part of such a block `h`'s history. Then
 `h` is pending at `v`, and below it a chain of pending blocks leads to
-a block `z` that `v` lacks (no pending block is ever left ready). The
-last of the chain's pending blocks to arrive arrived after `h` was
-broadcast, with the rest pending; its walk reached `z`, which `v` had
-not yet asked for on its account; `h`'s author, holding `h`'s history
-since it built `h`, answered; and `z` arrived, after which it stays
-pending or stored. Timely authentication is needed: without it the
+a block `z` that `v` lacks (no pending block is ever left ready). When
+`h` arrived, its walk reached the first block of the chain not then
+pending, which `v` lacked and had not yet asked for on `h`'s account; so
+`v` asked `h`'s author, which, holding `h`'s history since it built
+`h`, answered with that block's history, `z` among it; and `z` arrived,
+after which it stays pending or stored. Timely authentication is needed: without it the
 adversary could deliver a copy of an honest block before its author
 built it, `v` would ask on its account when nobody could answer, and
 drop the genuine delivery as already pending.
@@ -654,10 +668,10 @@ rejoins by bootstrap (§3.6).
    block above round `0` is valid under the blocks the nodes made, and
    the skips and bootstraps the honest nodes made. One
    scenario per row runs in the build (`LeanDagTest/Node/Sim.lean`).
-   Compiled, four nodes over 2,000 ticks (873 rounds, 55,352 inputs)
-   run in 0.5 seconds, over 4,000 ticks in 1.8 seconds, over 8,000 in
-   2.3 seconds, and over 16,000 ticks (6,999 rounds, 430,628 inputs) in
-   5.0 seconds: the cost of an input does not grow with the run (§10).
+   Compiled, four nodes over 2,000 ticks (869 rounds, 33,580 inputs)
+   run in 0.5 seconds, over 4,000 ticks in 1.0 second, over 8,000 in
+   2.1 seconds, and over 16,000 ticks (6,989 rounds, 275,275 inputs) in
+   4.7 seconds: the cost of an input does not grow with the run (§10).
    `lake exe node` runs one node over JSON lines.
 
    **What it found.** With an equivocator, an honest node that received
@@ -678,12 +692,10 @@ rejoins by bootstrap (§3.6).
    With resuming (§3.5), bootstrap (§3.6) and checkpoints (§3.8) the
    restarted node rejoins. Over five seeds each, at `Λ` = 2, 6 and 20
    and after 6, 20 and 50 ticks down, it ends within one round of its
-   peers, and at most one slot behind them, in 44 of the 45 runs; in the
-   other, at `Λ = 20` after 50 ticks down, it ends two rounds behind the
-   leading node, one behind the rest, and one slot behind in decisions.
-   Agreement, prefix-comparability and validity hold in every run. It
-   resumes in 33 runs. Bootstraps fall as `Λ` grows: 7 runs at `Λ = 2`, 5
-   at `Λ = 6` and none at `Λ = 20`. The horizon now waits for certificates, which
+   peers, and at most one slot behind them, in all 45 runs. Agreement,
+   prefix-comparability and validity hold in every run. It resumes in 33
+   runs. Bootstraps fall as `Λ` grows: 7 runs at `Λ = 2`, 3 at `Λ = 6` and
+   none at `Λ = 20`. The horizon now waits for certificates, which
    lag the decided frontier, so a short downtime is more often caught up
    by fetching alone. Asking for the bases once, at the restart, was not
    enough: in 5 of 15 runs at `Λ = 2` the peers' horizons were not yet
@@ -730,7 +742,7 @@ rejoins by bootstrap (§3.6).
    progress as with one crashed node, round for round.
 
    Without the checks, the assumptions do work the program cannot do.
-   A certificate of fabricated decisions is adopted by the joiner in 3 of
+   A certificate of fabricated decisions is adopted by the joiner in 2 of
    15 runs, and its decisions then disagree with its peers'. Blocks in an
    honest node's name halt that node in all 15 runs, for the same reason
    the attacker halts itself above, and the honest blocks referencing the
@@ -742,11 +754,11 @@ rejoins by bootstrap (§3.6).
    not keep.
    **Rate limiting.** A flood, the attacker broadcasting twenty valid
    twins with each block, fills the honest stores to 57 blocks without
-   rate limiting; with `τ = 8` and `W = 8` they stay at 22, against 33
+   rate limiting; with `τ = 8` and `W = 8` they stay at 22, against 30
    in an unattacked run, and agreement and validity hold. The attacker
    stalls itself, as with invalid blocks, so the network progresses as
    with one crashed node either way. Without an attack the limit changes
-   nothing at `τ ≥ 4`.
+   nothing at `τ ≥ 3`.
 5. **Optionally**, replaying records through the Rust decider of the
    Mysticeti codebase, where the scheme's table comes from.
 
@@ -1078,39 +1090,40 @@ not kept.
 
 | Scenario | Gap | Spread | Latency max / mean | Cert lag | Not kept |
 |---|---|---|---|---|---|
-| as above | 6 | 3 | 12 / 7.5 | 4 | 0 |
+| as above | 6 | 3 | 11 / 7.3 | 4 | 0 |
 | delays 1 | 1 | 0 | 3 / 3.0 | 1 | 0 |
-| delays 1–6 | 10 | 6 | 34 / 13.9 | 6 | 0 |
-| delays 1–6, timeout 5 | 10 | 5 | 55 / 20.0 | 11 | 0 |
-| delays 1–6, timeout 3 | 8 | 4 | 77 / 35.4 | 16 | 0 |
-| `Λ` = 1 or 6 | 6 | 3 | 11 / 7.3–7.4 | 4–5 | 0 |
-| GST 100, 20 ticks before | 6 | 3 | 11 / 7.3 | 9 | 0 |
-| GST 100, 60 ticks before | 6 | 3 | 10 / 7.2 | 4 | 0 |
-| node 3 crashed | 10 | 2 | 18 / 13.5 | 4 | 0 |
-| node 3 crashed, delays 1–6, timeout 13 | 13 | 6 | 30 / 21.3 | 4 | 0 |
-| an equivocator | 10 | 3 | 41 / 14.3 | 5 | 0 |
-| `n = 7`, `f = 2` | 5 | 3 | 11 / 7.9 | 3 | 0 |
-| `n = 7`, two crashed | 10 | 2 | 18 / 12.7 | 3 | 0 |
-| `τ = 1` or `W = 1` | as above | | | | 0 |
-| `τ = 8, W = 8`, a flood | 10 | 3 | 18 / 13.5 | 4 | 0 |
+| delays 1–6 | 10 | 6 | 23 / 13.7 | 5 | 0 |
+| delays 1–6, timeout 5 | 10 | 5 | 61 / 19.7 | 11 | 0 |
+| delays 1–6, timeout 3 | 9 | 5 | 53 / 26.7 | 12 | 0 |
+| `Λ` = 1 or 6 | 6 | 3 | 11–12 / 7.2–7.4 | 4 | 0 |
+| GST 100, 20 ticks before | 6 | 3 | 10 / 7.3 | 10 | 0 |
+| GST 100, 60 ticks before | 6 | 3 | 11 / 7.3 | 5 | 0 |
+| node 3 crashed | 10 | 3 | 19 / 13.4 | 4 | 0 |
+| node 3 crashed, delays 1–6, timeout 13 | 13 | 6 | 29 / 20.8 | 4 | 0 |
+| an equivocator | 10 | 2 | 42 / 13.9 | 5 | 0 |
+| `n = 7`, `f = 2` | 6 | 3 | 11 / 7.8 | 3 | 0 |
+| `n = 7`, two crashed | 10 | 2 | 18 / 12.7 | 4 | 0 |
+| `τ = 1` | 6 | 3 | 12 / 7.4 | 4 | 0 |
+| `W = 1` | as above | | | | 0 |
+| `τ = 8, W = 8`, a flood | 10 | 3 | 19 / 13.6 | 3 | 0 |
 | `τ = 0` | no round built | | | | 12 |
-| `W = 0` | 8 rounds, then stuck | | | | 14 |
-| node 1 down 40–90 | 5 | 3 | 11 / 7.3 | 4 | 0 |
-| node 1 down 40–90, `τ = 8, W = 4` | 5 | 3 | 11 / 7.1 | 4 | 4 |
-| node 1 down 40–90, `τ = 2, W = 8` | 6 | 3 | 10 / 7.4 | 4 | 0 |
+| `W = 0` | 17 rounds, 8 at one node, then stuck | | | | 35 |
+| node 1 down 40–90 | 6 | 3 | 11 / 7.2 | 4 | 0 |
+| node 1 down 40–90, `τ = 8, W = 4` | 6 | 3 | 11 / 7.3 | 4 | 4 |
+| node 1 down 40–90, `τ = 2, W = 8` | 5 | 3 | 10 / 7.4 | 6 | 3 |
 
 What the numbers say for step 11:
 
 * **The fast path holds.** Without a fault, a round takes at most twice
-  the largest delay, and a decision follows the slot's round within 12
-  ticks at delays up to 3 and 34 at delays up to 6; the timeout plays no
+  the largest delay, and a decision follows the slot's round within 11
+  ticks at delays up to 3 and 23 at delays up to 6; the timeout plays no
   part. A crashed leader costs its rounds a timeout each.
 * **`2Δ + proc` is sufficient, not necessary.** With timeouts below the
   delay the nodes stay live and agree, at a higher latency and a longer
   certificate lag.
 * **The lag `Λ` does not affect timing**, only the store's depth; without
   rate limiting no new honest block at or above a horizon went unkept.
-* **The certificate lag is a few slots** past GST, nine after a GST at
+* **The certificate lag is a few slots** past GST, ten after a GST at
   which messages had been slow. The horizon trails the certified
   frontier, so its bound enters the liveness of garbage collection
   (§9.1, item 6).
@@ -1120,18 +1133,18 @@ What the numbers say for step 11:
   its peers, and fetches the histories it lacks at once; a window of 4
   keeps all but 4 of the honest blocks it is sent, and it rejoins.
 * **Fetching fires without faults.** Blocks arrive out of order, and a
-  block whose references are in flight triggers a fetch: over 200 in the
+  block whose references are in flight triggers a fetch: 176 in the
   fault-free run, none with delays of one tick.
 
 **Catch-up.** The gap between a node's first accepting another honest
 node's round-`n` block and its own build of round `n`, past tick 50: 0
-in every round without faults at delays up to 3 (943 rounds, and 1,568
-at `n = 7`); at most 3 ticks, in 3 of 504 rounds, at delays up to 6; at
-most 1 and 2 ticks, in 3 and 13 of 261 and 255 rounds, with a crashed
-leader and with an equivocator; at most 5 ticks, in 17 of 183 rounds,
-with a crashed leader at delays up to 6 and timeout 13. With a fault, a
-node builds late at a round whose leader block it waits the timer for;
-without one, it builds late only at delays up to 6, in 3 of 504 rounds.
+in every round without faults, at delays up to 3 (958 rounds, and 1,583
+at `n = 7`) and up to 6 (522 rounds); at most 2 and 1 ticks, in 7 and 6
+of 261 and 262 rounds, with a crashed leader and with an equivocator;
+at most 3 ticks, in 11 of 185 rounds, with a crashed leader at delays up
+to 6 and timeout 13. With a fault, a node builds late at a round whose
+leader block it waits the timer for; without one, it does not build
+late in these runs.
 
 The simulator records these measurements (`LeanDagSim.Stats`, in the
 report's `stats`).
@@ -1155,6 +1168,12 @@ assumptions, over the reliable nodes:
   another at time `t` arrives by `max t gst + Δ`;
 * **timers** (`TimersOnTime`): a timer a reliable node sets at time `t`
   for `a` ticks fires at `t + a`, neither earlier nor later;
+* **synchronisation** (`SyncedWithin`): a reliable node that receives a
+  reliable node's block at time `t` has received, by `max t gst + Δₛ`,
+  every block of that block's history at or above its horizon. This is
+  assumed of the network, not proved of the program's fetch (§3.7),
+  since efficient synchronisation is out of scope (§1); the fetch meets
+  it with `Δₛ = 2Δ` when the block's author answers;
 * **completeness up to `t₁`**: every delivery and timer due by `t₁` is in
   the trace.
 
@@ -1225,7 +1244,7 @@ reliable round-`n` block at `t` builds round `n` by `t + proc`. The
 program does not build on sight; it builds round `n` once it holds a
 quorum of round `n − 1` and its block would reach (and certify) the
 leader block or its round's timer fired. In the simulator the gap is
-zero without faults and at most 5 ticks at delays up to 6 with a
+zero without faults and at most 3 ticks at delays up to 6 with a
 crashed leader (§12.5): a node that waits a timer at a round
 whose leader crashed builds when its timer fires, within the drift of
 its round entry behind the node it saw. The claim to prove is catch-up
@@ -1267,6 +1286,11 @@ explicit.
    wait clauses (built, `docs/target-properties.md` §11.57).
 5. **The statement**: production and decision as in 13.2, with an
    explicit time bound per slot.
-6. **Fetching**: a fetch is answered with the blocks asked for and their
-   histories above the asker's horizon, so that past GST a missing
-   history arrives in one round trip, whatever its depth (§3.7, built).
+6. **Fetching**: a fetch is asked of the author of the block that needs
+   it, and answered with the blocks asked for and their histories above
+   the asker's horizon, so that past GST a missing history arrives in one
+   round trip, whatever its depth (§3.7, built).
+7. **Synchronisation is assumed**: the liveness claims take
+   `SyncedWithin` (13.1) as an assumption on the trace, so the arrival of
+   histories is not derived from fetch answers; the bounds of 13.3 are
+   restated with `Δₛ`.

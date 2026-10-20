@@ -19,8 +19,8 @@ output:
   "decisions":[[slot,block]…]}}` (`null` for a skip);
 * outputs: `{"persist":block}`, `{"broadcast":block}`,
   `{"setTimer":{"round":r,"after":t}}`, `{"commit":{"slot":k,"block":i}}`
-  (`null` for a skip), `{"prune":G}`, `{"fetch":{"horizon":G,"ids":[…]}}` (ask every peer for the blocks and
-  their histories above `G`),
+  (`null` for a skip), `{"prune":G}`, `{"fetch":{"peer":v,"horizon":G,"ids":[…]}}` (ask peer `v` for the blocks
+  and their histories above `G`),
   `{"send":{"peer":v,"block":block}}` (answer one), `{"requestBase":{}}`
   (ask every peer for its base),
   `{"serveBase":{"peer":v,"horizon":G,"blocks":[block…]}}` (answer one),
@@ -63,7 +63,7 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
   | .commit k d => Json.mkObj [("commit", Json.mkObj [("slot", k),
       ("block", match d with | some i => (i : Json) | none => Json.null)])]
   | .prune G => Json.mkObj [("prune", G)]
-  | .fetch G ids => Json.mkObj [("fetch", Json.mkObj [("horizon", G),
+  | .fetch peer G ids => Json.mkObj [("fetch", Json.mkObj [("peer", peer.val), ("horizon", G),
       ("ids", Json.arr (ids.map fun i => (i : Json)).toArray)])]
   | .send peer id b => Json.mkObj [("send", Json.mkObj [("peer", peer.val),
       ("block", blockJson id b)])]

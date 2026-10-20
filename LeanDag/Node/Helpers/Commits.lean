@@ -544,7 +544,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         IsCut.flush hg _ _ hc (hc.spans hh) hpend
       let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
       refine hset { s₂ with asked := askedAfter (cfg := cfg) s b }
-        ((if miss.isEmpty then [] else [.fetch s.store.base (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b)
+        ((if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b)
         (h.keeps rfl (hg₁.keeps hb₁) hc) hc₁ (hh.grow hg₁ hb₁ rfl le_rfl)
         (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by rw [commitsOf_append]; unfold askOut; split <;> split <;> rfl) (step_deliver hA)

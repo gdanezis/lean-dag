@@ -228,7 +228,7 @@ theorem step_deliver {s : State Validator BlockId Payload} {id : BlockId}
     let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
     Node.step cfg s (.deliver id b) =
       ((Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).1,
-        (if miss.isEmpty then [] else [.fetch s.store.base (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b ++
+        (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b ++
           (Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).2) := by
   have h' : id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
       id ∉ s.pending.map Prod.fst ∧ kept cfg s id b := h

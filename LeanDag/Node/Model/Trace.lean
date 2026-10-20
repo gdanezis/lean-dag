@@ -76,7 +76,7 @@ def Sends (u : Validator) (out : List (Output Validator BlockId Payload))
     | .broadcast id b => m.1 ≠ u ∧ m.2 = .deliver id b
     | .requestBase => m.1 ≠ u ∧ m.2 = .baseRequest u
     | .serveBase peer G bs => m.1 = peer ∧ m.2 = .baseOffer u G bs
-    | .fetch G ids => m.1 ≠ u ∧ m.2 = .fetchRequest u G ids
+    | .fetch peer G ids => m.1 = peer ∧ m.2 = .fetchRequest u G ids
     | .send peer id b => m.1 = peer ∧ m.2 = .deliver id b
     | .propose k h => m.1 ≠ u ∧ m.2 = .proposal u k h
     | .serveCert peer c ds => m.1 = peer ∧ m.2 = .certOffer u c ds
