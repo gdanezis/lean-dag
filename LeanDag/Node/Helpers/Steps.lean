@@ -228,7 +228,7 @@ theorem step_deliver {s : State Validator BlockId Payload} {id : BlockId}
     let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
     Node.step cfg s (.deliver id b) =
       ((Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).1,
-        (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b ++
+        (if miss.isEmpty then [] else [.fetch s.store.base (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b ++
           (Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).2) := by
   have h' : id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
       id ∉ s.pending.map Prod.fst ∧ kept cfg s id b := h
@@ -358,7 +358,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
   | timer r =>
     exact hset { s with fired := insert r s.fired } (by simp only [Node.step]) (Grows.refl _) rfl
       hp hy
-  | fetchRequest peer ids => exact hy
+  | fetchRequest peer G ids => exact hy
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>
     rw [step_offer] at hR hb ⊢
@@ -627,9 +627,9 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
       simp only [Node.step, if_neg h']; simp [persists]
   | timer r =>
     exact settle_persist_of (s₀ := { s with fired := insert r s.fired }) (pre := []) (Or.inl rfl) hb
-  | fetchRequest peer ids =>
+  | fetchRequest peer G ids =>
     intro e he
-    change e ∈ persists (answer s peer ids) at he
+    change e ∈ persists (answer s peer G ids) at he
     unfold answer persists at he
     rw [List.filterMap_map] at he
     simp at he

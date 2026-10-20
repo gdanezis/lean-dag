@@ -201,8 +201,8 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
       · exact absurd h (serveBase_not_mem_settle _)
     · simp at h
   | timer r => exact absurd h (serveBase_not_mem_settle _)
-  | fetchRequest peer ids =>
-    change Output.serveBase p G bs ∈ answer s peer ids at h
+  | fetchRequest peer G' ids =>
+    change Output.serveBase p G bs ∈ answer s peer G' ids at h
     unfold answer at h; simp at h
   | restart =>
     simp only [Node.step, List.mem_cons] at h

@@ -258,12 +258,14 @@ theorem converges : Converges := by
     rw [show miss = missing s₁ (x m) (raw (x m)) from hask _ _ _]
     exact List.mem_filter.mpr ⟨hw, by simpa using hnreq⟩
   obtain ⟨rest, hout⟩ : ∃ rest, outputsAt cfg tr (A m) =
-      (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ rest :=
+      (if miss.isEmpty then [] else
+        [.fetch (stateBefore cfg tr (A m) v).store.base (miss.map Prod.fst)]) ++ rest :=
     ⟨_, by rw [outputsAt_eq htm, step_deliver hcm, List.append_assoc]⟩
   have hne : miss.isEmpty = false := by
     rw [List.isEmpty_eq_false_iff]; exact List.ne_nil_of_mem hwm
-  obtain ⟨k, hkm, htk⟩ := hdel (A m) v _ htm hv (u, .fetchRequest v (miss.map Prod.fst))
-    ⟨.fetch (miss.map Prod.fst), by rw [hout, hne]; simp, ⟨hvu.symm, rfl⟩⟩ huH
+  set G := (stateBefore cfg tr (A m) v).store.base
+  obtain ⟨k, hkm, htk⟩ := hdel (A m) v _ htm hv (u, .fetchRequest v G (miss.map Prod.fst))
+    ⟨.fetch G (miss.map Prod.fst), by rw [hout, hne]; simp, ⟨hvu.symm, rfl⟩⟩ huH
   have hkL : k < L := (List.getElem?_eq_some_iff.mp htk).1
   -- `u` broadcast `h` before it reached `v`, so holds its history by `k`
   have h0 : (0 : ℕ) < len := hlen
@@ -284,10 +286,10 @@ theorem converges : Converges := by
   set rk := (stateBefore cfg tr k u).store.map.getD (x len) (stateBefore cfg tr k u).store.junk
   have hans : Output.send v (x len) rk ∈ outputsAt cfg tr k := by
     rw [outputsAt_eq htk]
-    change Output.send v (x len) rk ∈ answer _ v (miss.map Prod.fst)
-    unfold answer
-    exact List.mem_map.mpr ⟨x len, List.mem_filter.mpr ⟨List.mem_map.mpr ⟨w, hwm, hwx'⟩,
-      by simpa using hzk⟩, rfl⟩
+    change Output.send v (x len) rk ∈ answer _ v G (miss.map Prod.fst)
+    unfold answer answerIds
+    exact List.mem_map.mpr ⟨x len, List.mem_dedup.mpr (List.mem_append_left _
+      (List.mem_filter.mpr ⟨List.mem_map.mpr ⟨w, hwm, hwx'⟩, by simpa using hzk⟩)), rfl⟩
   obtain ⟨k', hk'k, htk'⟩ := hdel k u _ htk huH (v, .deliver (x len) rk) ⟨_, hans, rfl, rfl⟩ hv
   have hk'L : k' < L := (List.getElem?_eq_some_iff.mp htk').1
   have hrk : rk = raw (x len) :=

@@ -622,7 +622,7 @@ theorem Lim.step {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validat
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc
       simp only [Node.step, if_neg h']; exact h
   | timer r => exact Lim.settle hl (h.of_eq rfl rfl rfl rfl)
-  | fetchRequest peer ids => exact h
+  | fetchRequest peer G ids => exact h
   | restart =>
     refine Lim.settle hl ⟨h.store, fun e he => absurd he List.not_mem_nil, h.slots, h.charge,
       h.fresh, h.base⟩

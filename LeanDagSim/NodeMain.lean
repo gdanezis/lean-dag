@@ -11,7 +11,7 @@ output:
 * inputs: `{"start":{}}`, `{"timer":r}`, `{"restart":{}}` (the node keeps
   only what it persisted),
   `{"deliver":{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}}`,
-  `{"fetchRequest":{"peer":v,"ids":[…]}}`, `{"baseRequest":{"peer":v}}`,
+  `{"fetchRequest":{"peer":v,"horizon":G,"ids":[…]}}`, `{"baseRequest":{"peer":v}}`,
   `{"baseOffer":{"peer":v,"horizon":G,"blocks":[block…]}}`,
   `{"proposal":{"peer":v,"height":k,"head":h}}` (a peer's signed proposal of
   the head of its chain of decisions, `LeanDagSim.chainHead`), and
@@ -19,7 +19,8 @@ output:
   "decisions":[[slot,block]…]}}` (`null` for a skip);
 * outputs: `{"persist":block}`, `{"broadcast":block}`,
   `{"setTimer":{"round":r,"after":t}}`, `{"commit":{"slot":k,"block":i}}`
-  (`null` for a skip), `{"prune":G}`, `{"fetch":[…]}` (ask every peer),
+  (`null` for a skip), `{"prune":G}`, `{"fetch":{"horizon":G,"ids":[…]}}` (ask every peer for the blocks and
+  their histories above `G`),
   `{"send":{"peer":v,"block":block}}` (answer one), `{"requestBase":{}}`
   (ask every peer for its base),
   `{"serveBase":{"peer":v,"horizon":G,"blocks":[block…]}}` (answer one),
@@ -62,7 +63,8 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
   | .commit k d => Json.mkObj [("commit", Json.mkObj [("slot", k),
       ("block", match d with | some i => (i : Json) | none => Json.null)])]
   | .prune G => Json.mkObj [("prune", G)]
-  | .fetch ids => Json.mkObj [("fetch", Json.arr (ids.map fun i => (i : Json)).toArray)]
+  | .fetch G ids => Json.mkObj [("fetch", Json.mkObj [("horizon", G),
+      ("ids", Json.arr (ids.map fun i => (i : Json)).toArray)])]
   | .send peer id b => Json.mkObj [("send", Json.mkObj [("peer", peer.val),
       ("block", blockJson id b)])]
   | .requestBase => Json.mkObj [("requestBase", Json.mkObj [])]
@@ -107,7 +109,7 @@ def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ
   if let .ok f := j.getObjVal? "fetchRequest" then
     let peer ← natField f "peer"
     let ids ← ((← f.getObjVal? "ids").getArr?) >>= fun a => a.toList.mapM Json.getNat?
-    if h : peer < n then return .fetchRequest ⟨peer, h⟩ ids
+    if h : peer < n then return .fetchRequest ⟨peer, h⟩ (← natField f "horizon") ids
     else throw s!"peer {peer} out of range"
   if let .ok m := j.getObjVal? "baseRequest" then
     let peer ← natField m "peer"

@@ -333,13 +333,13 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
     · exact ⟨Appends.refl s, hL⟩
   | timer r => exact hset _ [] rfl rfl rfl rfl rfl (by simp)
   | restart => exact hset _ [.requestBase] rfl rfl rfl rfl rfl (by simp)
-  | fetchRequest peer ids =>
+  | fetchRequest peer G ids =>
     refine ⟨Appends.quiet rfl ?_ fun k h hk => ?_, hL⟩
-    · change commitsOf (answer s peer ids) = []
+    · change commitsOf (answer s peer G ids) = []
       unfold answer commitsOf
       rw [List.filterMap_map]
       exact List.filterMap_eq_nil_iff.mpr fun _ _ => rfl
-    · change Output.propose k h ∈ answer s peer ids at hk
+    · change Output.propose k h ∈ answer s peer G ids at hk
       unfold answer at hk
       obtain ⟨j, -, hj⟩ := List.mem_map.mp hk
       cases hj

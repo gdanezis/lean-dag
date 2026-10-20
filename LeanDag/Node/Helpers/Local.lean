@@ -915,7 +915,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
           fun x hx => (hi.good x hx).mono hsub, fun x hx => hsub (hi.sub x hx), hfl.2.2.2,
           fun o ho x hx hid => hsub (hi.offered o ho x hx hid)⟩
       exact (hi₀ _).settle_of subset_rfl
-        ((if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++
+        ((if miss.isEmpty then [] else [.fetch s.store.base (miss.map Prod.fst)]) ++
           if s.recovering = true ∧ s.asked + cfg.lag + 2 ≤ b.round then [.requestBase] else [])
         fun o ho' => by
         rcases List.mem_append.mp ho' with ho' | ho'
@@ -932,7 +932,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
       fun x hx => (hi.good x hx).mono hsub, fun x hx => hsub (hi.sub x hx), hi.valid,
       fun o ho x hx hid => hsub (hi.offered o ho x hx hid)⟩ :
         Inv cfg { s with fired := insert r s.fired } K' B).settle_of subset_rfl [] (by simp)
-  | fetchRequest peer ids =>
+  | fetchRequest peer G ids =>
     simp only [Node.step]
     refine hnil _ fun o ho => ?_
     obtain ⟨j, -, rfl⟩ := List.mem_map.mp ho

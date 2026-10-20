@@ -412,7 +412,7 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         · exact hp e he
       let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
       exact hset { s₂ with asked := askedAfter (cfg := cfg) s b }
-        ((if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b)
+        ((if miss.isEmpty then [] else [.fetch s.store.base (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b)
         (IsCut.flush hg _ _ hc (hc.spans hh) hpend) (hh.grow hg₁ hb₁ rfl le_rfl)
         (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by rw [commitsOf_append]; unfold askOut; split <;> split <;> rfl) (step_deliver hA)
@@ -422,8 +422,8 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | timer r =>
     exact hset { s with fired := Insert.insert r s.fired } [] hc
       (hh.grow (Grows.refl _) rfl rfl le_rfl) hp rfl (by simp only [Node.step]; rfl)
-  | fetchRequest peer ids =>
-    rw [show Node.step cfg s (.fetchRequest peer ids) = (s, answer s peer ids) from rfl]
+  | fetchRequest peer G ids =>
+    rw [show Node.step cfg s (.fetchRequest peer G ids) = (s, answer s peer G ids) from rfl]
     refine ⟨hc, fun e he => ?_⟩
     unfold answer commitsOf at he
     rw [List.filterMap_map] at he

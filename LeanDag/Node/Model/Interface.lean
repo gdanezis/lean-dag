@@ -174,8 +174,8 @@ inductive Input where
   | baseOffer (peer : Validator) (G : ℕ) (blocks : List (BlockId × Block Validator BlockId Payload))
   /-- A peer asks for the base. -/
   | baseRequest (peer : Validator)
-  /-- A peer asks for the blocks `ids`. -/
-  | fetchRequest (peer : Validator) (ids : List BlockId)
+  /-- A peer at horizon `G` asks for the blocks `ids` and their histories. -/
+  | fetchRequest (peer : Validator) (G : ℕ) (ids : List BlockId)
   /-- A peer's signed proposal of the head `h` of the chain of the
   decisions of slots `0 … k − 1`. -/
   | proposal (peer : Validator) (k : ℕ) (h : BlockId)
@@ -199,8 +199,9 @@ inductive Output where
   | requestBase
   /-- Send the base and window to a peer. -/
   | serveBase (peer : Validator) (G : ℕ) (blocks : List (BlockId × Block Validator BlockId Payload))
-  /-- Ask every peer for the blocks `ids`. -/
-  | fetch (ids : List BlockId)
+  /-- Ask every peer for the blocks `ids` and their histories above the
+  horizon `G`. -/
+  | fetch (G : ℕ) (ids : List BlockId)
   /-- Send a block to one peer. -/
   | send (peer : Validator) (id : BlockId) (b : Block Validator BlockId Payload)
   /-- Sign and send every peer a proposal of the head `h` of the chain of

@@ -34,8 +34,9 @@ input `i` in the state `s`: the new state and the outputs.
 
 * **Fetching** (`walkLevel`, `missing`, `answer`): after a delivery, the missing part
   of the delivered block's history, walked through the pending blocks, is
-  asked of every peer, once on account of each block that needs it; a
-  request is answered with the blocks the store holds.
+  asked of every peer, with the node's horizon, once on account of each
+  block that needs it; a request is answered with the blocks asked for
+  that the store holds and their histories above the asker's horizon.
 * **Collecting** (`collect`): the horizon rises to `Λ` below the lesser
   of the decided frontier, the certified frontier and the node's round,
   and what lies below it is dropped.
@@ -445,12 +446,20 @@ def missing (s : State Validator BlockId Payload) (id : BlockId)
     ((b.refs.sort (· ≤ ·)).map fun j => (j, b.round - 1), [], [])).2.2.filter
     fun x => decide ((x.1, id) ∉ s.requested.map fun e => (e.1, e.2.1))
 
-/-- **Answer a request**: send the peer each block asked for that the
-store holds. -/
-def answer (s : State Validator BlockId Payload) (peer : Validator) (ids : List BlockId) :
-    List (Output Validator BlockId Payload) :=
-  (ids.filter fun j => decide (j ∈ s.store.ids)).map fun j =>
-    .send peer j (s.store.map.getD j s.store.junk)
+/-- **The blocks a request is answered with**: each block asked for that
+the store holds, then their histories in the store at or above the
+asker's horizon `G`, searched no deeper than `G`. -/
+def answerIds (s : State Validator BlockId Payload) (G : ℕ) (ids : List BlockId) : List BlockId :=
+  let held := ids.filter fun j => decide (j ∈ s.store.ids)
+  (held ++ held.flatMap fun j =>
+    ((historyUptoFrom s.store.blk ((s.store.blk j).round + 1 - G) j).filter fun x =>
+      decide (x ∈ s.store.ids ∧ G ≤ (s.store.blk x).round)).sort (· ≤ ·)).dedup
+
+/-- **Answer a request**: send the peer the blocks of `answerIds`. A
+missing history then arrives in one round trip, whatever its depth. -/
+def answer (s : State Validator BlockId Payload) (peer : Validator) (G : ℕ)
+    (ids : List BlockId) : List (Output Validator BlockId Payload) :=
+  (answerIds s G ids).map fun j => .send peer j (s.store.map.getD j s.store.junk)
 
 /-- **Raise the horizon** (`docs/validator.md` §3.4) to `Λ` below the
 lesser of the round of the first slot neither decided nor certified,
@@ -584,11 +593,11 @@ def step (s : State Validator BlockId Payload) :
       let ask := s.recovering ∧ s.asked + cfg.lag + 2 ≤ b.round
       let top := if ask then b.round else s.asked
       let r := settle cfg { s₁ with requested := req, asked := top }
-      (r.1, (if miss.isEmpty then [] else [.fetch (miss.map Prod.fst)]) ++
+      (r.1, (if miss.isEmpty then [] else [.fetch s.store.base (miss.map Prod.fst)]) ++
         (if ask then [.requestBase] else []) ++ r.2)
     else (s, [])
   | .timer r => settle cfg { s with fired := insert r s.fired }
-  | .fetchRequest peer ids => (s, answer s peer ids)
+  | .fetchRequest peer G ids => (s, answer s peer G ids)
   | .restart => let r := settle cfg s.recover; (r.1, .requestBase :: r.2)
   | .baseRequest peer =>
     (s, .serveBase peer s.store.base s.store.window :: s.cert.toList.map fun c =>

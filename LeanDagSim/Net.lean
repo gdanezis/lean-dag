@@ -324,13 +324,13 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
           else acc
         | _, _ => acc) acc
     | .setTimer r after => ((t + after, src, .timer r) :: acc.1, acc.2)
-    | .fetch ids =>
+    | .fetch G ids =>
       (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if a.node ≠ s.node then
             let (dt, g') := delay sc t acc.2
-            ((t + dt, d, .fetchRequest s.node ids) :: acc.1, g')
+            ((t + dt, d, .fetchRequest s.node G ids) :: acc.1, g')
           else acc
         | _, _ => acc) acc
     | .send peer id b =>
@@ -513,7 +513,7 @@ def loop : ℕ → World n → World n
           | _ => none
         let ss := w.stats
         let ss : Stats := if isHonest then
-            let fs := r.2.filterMap fun | .fetch ids => some ids.length | _ => none
+            let fs := r.2.filterMap fun | .fetch _ ids => some ids.length | _ => none
             let ss := { ss with
               built := own.map (fun e => (a.node.val, e.2.round, t)) ++ ss.built
               decided := decs.map (fun e => (a.node.val, e.1, t)) ++ ss.decided
