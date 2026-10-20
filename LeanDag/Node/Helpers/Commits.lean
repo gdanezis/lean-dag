@@ -274,11 +274,7 @@ theorem IsCut.collect {s : State Validator BlockId Payload} (hc : IsCut U s.stor
 omit [Fintype Validator] in
 theorem decidable_mono {R R' : ℕ} (h : R ≤ R') : decidable cfg R ≤ decidable cfg R' := by
   unfold decidable
-  split <;> split
-  · exact le_rfl
-  · exact Nat.zero_le _
-  · omega
-  · exact Nat.mul_le_mul_left _ (Nat.add_le_add_right (Nat.div_le_div_right (by omega)) 1)
+  exact Nat.mul_le_mul_left _ (Nat.add_le_add_right (Nat.div_le_div_right h) 1)
 
 omit [Fintype Validator] in
 theorem commitsOf_append (a b : List (Output Validator BlockId Payload)) :

@@ -141,15 +141,15 @@ of round `3` fires, skip slot `3`, and commit the slots around it. -/
 /-- The network after `170` inputs, node `3` down. -/
 def down3 : Net := run [3] 170 net0
 
-/-- info: [some 8, some 8, some 8, none] -/
+/-- info: [some 9, some 10, some 9, none] -/
 #guard_msgs in
 #eval tops down3
 
-/-- info: [(0, true), (1, true), (2, true), (3, false), (4, true), (5, true), (6, true)] -/
+/-- info: [(0, true), (1, true), (2, true), (3, false), (4, true), (5, true), (6, true), (7, false)] -/
 #guard_msgs in
 #eval (down3.commits 0).map fun e => (e.1, e.2.isSome)
 
-/-- info: [7, 7, 7, 0] -/
+/-- info: [8, 8, 8, 0] -/
 #guard_msgs in
 #eval (List.finRange 4).map fun d => (down3.commits d).length
 
@@ -159,19 +159,18 @@ def down3 : Net := run [3] 170 net0
 
 /-! ## A long run, node `3` down
 
-Over `253` rounds every fourth slot, node `3`'s, is skipped, and each
-store holds thirteen or fourteen blocks, its horizon four rounds below
-its top. -/
+Over `283` rounds every fourth slot, node `3`'s, is skipped, and each
+store holds eighteen blocks, its horizon five rounds below its top. -/
 
 /-- The network after `5300` inputs, node `3` down. -/
 def long3 : Net := run [3] 5300 net0
 
-/-- info: ([some 253, some 253, some 253, none], 252, 63, true) -/
+/-- info: ([some 283, some 283, some 283, none], 282, 70, true) -/
 #guard_msgs in
 #eval (tops long3, (long3.commits 0).length, ((long3.commits 0).filter (·.2.isNone)).length,
   agree long3)
 
-/-- info: [(14, 249), (13, 249), (13, 249)] -/
+/-- info: [(18, 278), (18, 278), (18, 278)] -/
 #guard_msgs in
 #eval [0, 1, 2].map fun d : Fin 4 => ((long3.states d).store.ids.card, (long3.states d).store.base)
 

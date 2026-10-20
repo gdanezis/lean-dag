@@ -168,3 +168,5 @@ import LeanDagTest.Node.Step
 import LeanDagTest.Node.Axioms
 import LeanDagTest.Node.Sim
 import LeanDagTest.Node.Adversary
+import LeanDagTest.Node.Replay
+import LeanDagTest.Node.Differential

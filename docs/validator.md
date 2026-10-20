@@ -166,8 +166,11 @@ for round `r + 1`.
 
 After each step the program runs `tryDecide p σ U V lo N` on its view,
 where `lo` is the slot after the last decision output and `N` the last
-slot whose decision round it holds, and outputs the new decisions. Over
-successive views this is `consumed`.
+slot at a round it holds, as the scheme's *TryDecide* scans to the
+highest round (`decidable`), and outputs the new decisions. Over
+successive views this is `consumed`. A slot can be skipped directly
+once its voting round holds `skipThreshold` blamers, before its
+decision round.
 
 ### 3.4 Garbage collection
 
@@ -429,7 +432,7 @@ to tick 90 at round 21; a window of 8 lets it rejoin.
 | V5 | At every state a run reaches, resuming from what the node persisted gives the state its restart recovers: the same blocks, read alike, at the same horizon, the same next slot, top and own block, its top round's timer fired, and nothing pending or asked for. | `Node.Restart.Resumes` (proved): `Node.resume_persisted`, `Node.State.recover` |
 | V6 | Retired: Safe Skip is not part of the program (§3.5). L0, the self-referencing filled block valid at any quorum, stays in the shared layer. | `BlockRecord.selfBlock_valid` (proved) |
 | V7 | Rate limiting does not make a validator decide wrongly: V3, V9 and V12 hold at every configuration; under the assumptions of V9, every honest store is a cut of the run's record and every honest decision is the record's verdict on a view of it and on every larger view. | `Node.Defer.Decides` (proved): `Node.cut_before`, `AnchoredRule.decided_mono` |
-| V8 | The efficient store and decider compute the reference program's values. | one equality per function |
+| V8 | The claims are about the program that runs: its store is the ordered map, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | proved by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` |
 | V9 | Over a trace with timely authentication of blocks, base offers and checkpoint proposals, an injective hash and `Params.Tolerates`, every honest store is a cut of the run's record and every honest decision a verdict on a view of it, bootstraps and adopted certificates included; a node's decisions are slots `0, 1, …`; so any two honest nodes' decisions are prefix-comparable. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.cut_before`, `Node.IsCut.bootFrom`, `Node.IsCut.step`, `Node.verdict_decideStep`, `Node.propose_prefix`, `Node.prefix_of_slots`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
 | V10 | With rate limiting, at every state a run reaches, every block the store and the pending blocks hold is charged to a slot, and the charges number at most `n·(τ + 1)·(top + W + 1 − base)`, under any input sequence; with the horizon trailing the top by a bounded depth the bound does not grow with the run. Eventual admission of every honest block is step 11's. | `Node.Storage.Bounded` (proved): `Node.Lim.run`, `Node.Lim.bound`, `Node.length_le_of_slots` |
 | V12 | Every certificate with `q` distinct signers given to an honest node certifies a prefix of an honest node's decisions, with timely signed proposals and `f < q`. | `Node.Boot.Certified` (proved): `Node.propose_prefix`, `Node.commits_prefix`, `Node.Local.Decisions` |
@@ -584,11 +587,35 @@ rejoins by bootstrap (§3.6).
 
 ## 6. Testing
 
-1. **Agreement with the model.** `#guard` checks in
-   `LeanDagTest/Node/` that the program's commits on the scheme's
-   hand-built records match those the scheme's tests record.
-2. **Differential tests.** The efficient program against the reference
-   program on random records of a few rounds.
+1. **Agreement with the model** (`LeanDagTest/Node/Replay.lean`). A
+   hand-built record of the scheme's tests goes through the program's
+   store path (`flush`) into an empty store, and one decision step
+   (`decideStep`) runs on it. Its commits are those the scheme's tests
+   record for `tryDecide`: slots `0`, `1` and `2` of Mahi-Mahi's `full4`
+   at the Mahi-Mahi row of wave four, and slots `0`, indirectly, and `1`
+   of Mysticeti's `U7` at the Mysticeti row.
+2. **Differential tests** (`LeanDagTest/Node/Differential.lean`). A
+   seeded generator draws records of eight rounds over four validators,
+   with an absent validator and an equivocator at random, and references
+   to one block of each of at least three authors of the round below.
+   On forty records at five configurations (Mysticeti, Mahi-Mahi at wave
+   four, Cordial Miners and Bluestreak's partially synchronous row with
+   one leader a round, and Mysticeti with two), four computations give
+   one decided prefix: the program's decision step at the bounded vote;
+   the same at the least vote, which searches the voter's whole history;
+   the scheme's *TryDecide* in its own order, rounds from the top down;
+   and the program as it runs, a decision step after each round arrives.
+   In all 200 runs they agree, deciding 1,327 commits and 143 skips.
+
+   **What it found.** The program scanned only the slots whose decision
+   round its store held, where the scheme's *TryDecide* scans every slot
+   up to the highest round. In 2 of the 200 runs the scheme's loop
+   skipped a slot at its voting round, the top round, which the program
+   skipped only a round later. The program scans as the scheme does
+   (§3.3). Over ten seeds each of six simulator scenarios, the slots
+   decided are as many or more than with the narrower scan; with node `3`
+   down, 5,300 inputs take the others to round `283` (`LeanDagTest/Node/Step.lean`),
+   against `253` with the narrower scan.
 3. **The simulator** (`LeanDagSim/Net.lean`, `lake exe sim`). `n`
    programs over a seeded network: before GST a message takes up to
    *preMax* ticks, after it between *delayMin* and *delayMax*; crashes
@@ -600,8 +627,11 @@ rejoins by bootstrap (§3.6).
    block above round `0` is valid under the blocks the nodes made, and
    the skips and bootstraps the honest nodes made. One
    scenario per row runs in the build (`LeanDagTest/Node/Sim.lean`).
-   Compiled, four nodes over 2,000 ticks (874 rounds) run in half a
-   second. `lake exe node` runs one node over JSON lines.
+   Compiled, four nodes over 1,000 ticks (441 rounds, 14,560 inputs)
+   run in 0.6 seconds, over 2,000 ticks (872 rounds) in 2.1 seconds, and
+   over 4,000 ticks (1,748 rounds) in 9.7 seconds: the cost of an input
+   grows with the run, through the checkpoint proposals (§10). `lake exe
+   node` runs one node over JSON lines.
 
    **What it found.** With an equivocator, an honest node that received
    only one twin stalled: the others' blocks referenced the twin it never
@@ -622,8 +652,8 @@ rejoins by bootstrap (§3.6).
    restarted node rejoins. Over five seeds each, at `Λ` = 2, 6 and 20
    and after 6, 20 and 50 ticks down, it ends within one round of its
    peers, and at most one slot behind them, in all 45 runs; agreement,
-   prefix-comparability and validity hold in every run. It resumes in 38
-   runs. Bootstraps fall as `Λ` grows: 8 runs at `Λ = 2`, 5 at `Λ = 6`
+   prefix-comparability and validity hold in every run. It resumes in 40
+   runs. Bootstraps fall as `Λ` grows: 10 runs at `Λ = 2`, 5 at `Λ = 6`
    and none at `Λ = 20`. The horizon now waits for certificates, which
    lag the decided frontier, so a short downtime is more often caught up
    by fetching alone. Asking for the bases once, at the restart, was not
@@ -671,7 +701,7 @@ rejoins by bootstrap (§3.6).
    progress as with one crashed node, round for round.
 
    Without the checks, the assumptions do work the program cannot do.
-   A certificate of fabricated decisions is adopted by the joiner in 2 of
+   A certificate of fabricated decisions is adopted by the joiner in 1 of
    15 runs, and its decisions then disagree with its peers'. Blocks in an
    honest node's name halt that node in all 15 runs, for the same reason
    the attacker halts itself above, and the honest blocks referencing the
@@ -709,7 +739,7 @@ rejoins by bootstrap (§3.6).
 | 7.4 | Adversarial simulation (§6, item 4): Byzantine nodes that send fabricated or inconsistent bases, fabricated certificates, conflicting signed proposals, invalid blocks and blocks in another node's name, with the network's signature checks on and off; each scenario checks agreement, prefix-comparability and validity (built) |
 | 8 | Lift the rate-limiting results to block records (§8, L2), and with them the rest of L1: completeness (G10, G11), the bounded fetch (G6b) and the relay obligation (G7), which rest on the same delivery model and novelty budget (built) |
 | 9 | Rate limiting in the program (§3.9): V7, V10; the novelty budget also bounds what a Byzantine node can add to an honest node's pending blocks and requests. Sub-steps: 9.1 the configuration's optional budget and window, candidate slots and their charges, the bounded bootstrap base, the simulator's flood attack, and the existing claims kept (V3′ at the unlimited configuration) (built); 9.2 V10's storage claim, with the node's own blocks and its base charged to their slots (built); 9.3 V7: every honest decision the run's record's verdict on a view of it and on every larger view, at every configuration (built) |
-| 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests; agreement with the model (§6, item 1): the program's commits on the scheme's hand-built records |
+| 10 | Efficient store and decider (history by levels, the bounded vote and the map-backed store built): V8; differential tests; agreement with the model (§6, item 1): the program's commits on the scheme's hand-built records (built); the decider scanning every slot at a held round, as the scheme does (built); checkpoint proposals whose cost does not grow with the run (open, §10) |
 | 11 | Liveness: V11, and the fast path: round time bounded by the delivery delay after GST; first, the decisions of §9.1, including the liveness of recovery, of checkpointing and of convergence under garbage collection and rejoin |
 
 Steps 7.1 to 7.4 follow from what steps 5 to 7 found. The self-parent
@@ -842,12 +872,16 @@ They are to be decided at the start of step 11.
   for that the store's record carries `stored`, references one round
   below. The store's block map is an ordered map rather than a chain of
   updates, and garbage collection keeps the store a few rounds deep.
-  Four nodes over 16,000 inputs (1,000 rounds) run in about five
-  seconds, a third of a millisecond an input, and the cost of an input no
-  longer grows with the run; with the model's functions as they were, 60
-  inputs was the limit.
-* `scripts/check-arc-holes.py` forbids `partial` and `unsafe` in the
-  arcs it lists. The directory `LeanDag/Node` is added to its list,
+  With the model's functions as they were, 60 inputs was the limit.
+  The store, the vote and the history do not grow with the run, but
+  the checkpoint proposals do: a proposal at height `k` carries the
+  decisions of slots `0 … k − 1`, and recording one compares that list
+  with every proposal kept (`certify`). Over 4,000 ticks this comparison
+  takes most of the time, and the run's cost is quadratic in its
+  length.
+* `scripts/check-arc-holes.py` forbids `partial`, `unsafe`,
+  `implemented_by` and `extern` in the arcs it lists, so compiled code
+  departs from the definitions only by proved `@[csimp]` equalities. The directory `LeanDag/Node` is added to its list,
   and the executables' input loops, outside the library, run on fuel.
 * The executables are `[[lean_exe]]` targets of `lakefile.toml`, not
   default targets, so `lake build` and the audits are unchanged.

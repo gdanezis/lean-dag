@@ -8,8 +8,10 @@ Mahi-Mahi (`docs/mahi-mahi.md` §9), Black Marlin (`docs/black-marlin.md`
 their witness directories. Three checks, after stripping comments so prose may use the
 words:
 
-  sorry / admit / axiom / native_decide / unsafe / partial
-      are absent everywhere in the arc;
+  sorry / admit / axiom / native_decide / unsafe / partial /
+  implemented_by / extern
+      are absent everywhere in the arc (compiled code then departs from
+      the definitions only by proved `@[csimp]` equalities);
   Statement.lean files are proof-free  (no theorem/lemma/example/instance),
   Model/ files are theorem-free        (no theorem/lemma/example; instances
                                         by `inferInstanceAs` are allowed);
@@ -39,7 +41,7 @@ import re
 import sys
 from pathlib import Path
 
-FORBIDDEN = re.compile(r"\b(sorry|admit|axiom|native_decide|unsafe|partial)\b")
+FORBIDDEN = re.compile(r"\b(sorry|admit|axiom|native_decide|unsafe|partial|implemented_by|extern)\b")
 STATEMENT_FORBIDDEN = re.compile(r"^\s*(theorem|lemma|example|instance)\b")
 MODEL_FORBIDDEN = re.compile(r"^\s*(theorem|lemma|example)\b")
 FULLVIEW = re.compile(r"\bView\.full\b")

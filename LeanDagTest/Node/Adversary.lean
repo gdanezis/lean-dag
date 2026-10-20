@@ -36,46 +36,46 @@ def attackLine (sc : Scenario) : String :=
   let r := simulate sc
   s!"{r.tops} {r.commits.map (·.length)} {r.agree} {r.prefixes} {r.valid} {r.boots} {r.dropped}"
 
-/-- info: "[(some 48), (some 48), (some 47)] [46, 46, 45] true true true 1 0" -/
+/-- info: "[(some 50), (some 51), (some 51)] [48, 49, 49] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeBase])
 
-/-- info: "[(some 48), (some 48), (some 47)] [46, 46, 45] true true true 1 0" -/
+/-- info: "[(some 50), (some 51), (some 51)] [48, 49, 49] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.splitBase])
 
-/-- info: "[(some 48), (some 48), (some 47)] [46, 46, 45] true true true 1 2" -/
+/-- info: "[(some 50), (some 51), (some 51)] [48, 49, 49] true true true 1 2" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeCert])
 
-/-- info: "[(some 52), (some 51), (some 52)] [50, 49, 50] true true true 1 2" -/
+/-- info: "[(some 52), (some 51), (some 51)] [50, 50, 50] true true true 1 2" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeCert] (seed := 3))
 
-/-- info: "[(some 49), (some 50), (some 49)] [47, 48, 47] true true true 1 0" -/
+/-- info: "[(some 50), (some 51), (some 51)] [48, 49, 49] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.conflictProposals])
 
-/-- info: "[(some 43), (some 44), (some 44)] [42, 42, 42] true true true 1 0" -/
+/-- info: "[(some 49), (some 49), (some 49)] [47, 47, 47] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks])
 
-/-- info: "[(some 49), (some 49), (some 49)] [47, 47, 47] true true true 1 140" -/
+/-- info: "[(some 43), (some 44), (some 43)] [41, 42, 41] true true true 0 124" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor])
 
-/-- info: "[(some 50), (some 50), (some 50)] [48, 48, 48] true true true 1 139" -/
+/-- info: "[(some 51), (some 52), (some 51)] [49, 50, 49] true true true 1 147" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeBase, .splitBase, .fakeCert, .conflictProposals,
   .invalidBlocks, .forgedAuthor])
 
 /-! ## Without the signature checks -/
 
-/-- info: "[(some 52), (some 53), (some 52)] [50, 51, 50] false false true 1 0" -/
+/-- info: "[(some 51), (some 50), (some 51)] [49, 49, 49] false false true 1 0" -/
 #guard_msgs in
-#eval attackLine (attackedBy [.fakeCert] (verify := false) (seed := 3))
+#eval attackLine (attackedBy [.fakeCert] (verify := false) (seed := 5))
 
-/-- info: "[(some 2), (some 27), (some 27)] [0, 25, 25] true true false 0 0" -/
+/-- info: "[(some 2), (some 28), (some 28)] [0, 26, 26] true true false 0 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 
@@ -93,7 +93,7 @@ def storageLine (sc : Scenario) : String :=
   let r := simulate sc
   s!"{r.commits.map (·.length)} {r.agree} {r.valid} {r.maxStore} {r.maxPending}"
 
-/-- info: "[23, 23, 23] true true 57 1" -/
+/-- info: "[24, 24, 24] true true 57 1" -/
 #guard_msgs in
 #eval storageLine { horizon := 150, row := "mysticeti", adv := [3], attacks := [.flood] }
 
@@ -103,7 +103,7 @@ def storageLine (sc : Scenario) : String :=
   { horizon := 150, row := "mysticeti", adv := [3], attacks := [.flood], limit := some (8, 8) }
 
 -- A node down from tick `40` to tick `90` rejoins under rate limiting.
-/-- info: "[46, 46, 46, 46] true true 30 10" -/
+/-- info: "[40, 40, 39, 40] true true 29 12" -/
 #guard_msgs in
 #eval storageLine
   { horizon := 150, row := "mysticeti", recover := [(1, 40, 90)], limit := some (8, 8) }

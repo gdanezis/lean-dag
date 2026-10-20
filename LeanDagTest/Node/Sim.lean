@@ -65,12 +65,12 @@ info: "true [(some 40), (some 40), none, (some 40), (some 40), (some 40), (some 
 #eval summary { horizon := 150, row := "nemo-nemo", n := 3, f := 0, c := 1, crash := [(0, 40)] }
 
 /--
-info: "true [(some 37), (some 37), (some 37), (some 37), (some 37), (some 12)] [36, 36, 36, 36, 36, 11] [4, 4, 4, 4, 4, 0] true true"
+info: "true [(some 38), (some 37), (some 38), (some 38), (some 37), (some 12)] [36, 36, 36, 36, 36, 11] [4, 4, 4, 4, 4, 0] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "hybrid-mysticeti", n := 6, c := 1, crash := [(5, 30)] }
 
-/-- info: "true [(some 24), (some 24), (some 24)] [23, 23, 23] [5, 5, 5] true true" -/
+/-- info: "true [(some 24), (some 24), (some 24)] [24, 24, 24] [6, 6, 6] true true" -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "mysticeti", byz := [3], byzUntil := 150 }
 
@@ -87,25 +87,25 @@ info: "true [(some 141), (some 141), (some 141), (some 141)] [139, 139, 139, 139
 #eval summary { horizon := 150, row := "mysticeti", withhold := some (3, 2, 7), delayMax := 1 }
 
 /--
-info: "true [(some 55), (some 56), (some 56), (some 56)] [54, 54, 54, 54] [1, 1, 1, 1] true true true 0 0"
+info: "true [(some 56), (some 56), (some 56), (some 56)] [54, 54, 54, 54] [1, 1, 1, 1] true true true 1 0"
 -/
 #guard_msgs in
 #eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 46)], lag := 6 }
 
 /--
-info: "true [(some 51), (some 51), (some 51), (some 51)] [49, 49, 49, 49] [2, 2, 2, 2] true true true 1 0"
+info: "true [(some 50), (some 51), (some 51), (some 51)] [48, 49, 49, 49] [2, 2, 2, 2] true true true 1 0"
 -/
 #guard_msgs in
 #eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 60)], lag := 6 }
 
 /--
-info: "true [(some 56), (some 56), (some 55), (some 56)] [54, 54, 54, 54] [1, 1, 1, 1] true true true 0 0"
+info: "true [(some 56), (some 56), (some 56), (some 56)] [54, 54, 54, 54] [1, 1, 1, 1] true true true 1 0"
 -/
 #guard_msgs in
 #eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 46)] }
 
 /--
-info: "true [(some 48), (some 48), (some 47), (some 48)] [46, 46, 45, 46] [2, 2, 2, 2] true true true 1 1"
+info: "true [(some 50), (some 51), (some 51), (some 50)] [48, 49, 49, 48] [2, 2, 2, 2] true true true 1 1"
 -/
 #guard_msgs in
 #eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 90)] }

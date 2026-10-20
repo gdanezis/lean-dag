@@ -20,8 +20,8 @@ input `i` in the state `s`: the new state and the outputs.
   identifier otherwise; it is persisted, then broadcast, then the
   round's timer is set.
 * **Deciding** (`decideStep`): `tryDecide` from the next undecided slot
-  to the last slot whose decision round the store holds; the decisions
-  are kept (`State.decided`).
+  to the last slot at a round the store holds; the decisions are kept
+  (`State.decided`).
 * **Checkpoints** (`proposeAt`, `record`, `certify`): once the decided
   frontier reaches a multiple of `m` slots above the height last
   proposed, the node signs and sends a proposal of its decisions below
@@ -359,9 +359,8 @@ def tryBoot (s : State Validator BlockId Payload) :
     | none => none
   | _, _ => none
 
-/-- The number of slots whose decision round is at most `R`. -/
-def decidable (R : ℕ) : ℕ :=
-  if R + 1 < cfg.p.waveLength then 0 else cfg.m * ((R + 1 - cfg.p.waveLength) / cfg.per + 1)
+/-- The number of slots at rounds at most `R`. -/
+def decidable (R : ℕ) : ℕ := cfg.m * (R / cfg.per + 1)
 
 /-- **Certify**: the certificate the node holds once the proposals it
 keeps include `q` distinct signers of the decisions `ds` at height `k`,
@@ -389,8 +388,8 @@ def proposeAt (s : State Validator BlockId Payload) :
   else (s, [])
 
 /-- **Decide**: `tryDecide` from the next undecided slot to the last slot
-whose decision round the store holds; output and keep what it decides,
-then propose. -/
+at a round the store holds; output and keep what it decides, then
+propose. -/
 def decideStep (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   letI := cfg.slots
