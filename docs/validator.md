@@ -161,7 +161,19 @@ validator waits the timeout every round, is not used.
 
 The new block references one accepted block per round-`r` author,
 its own block of round `r` for itself if it built one, and the least
-identifier between twins otherwise (`refsFor`). The validity it must
+identifier between twins otherwise (`refsFor`). Where these would wait,
+and a held round-`r + 1` block of another author has references that
+would not, it builds on those instead, with its own block for itself
+(`refsAt`, `lent`), provided the block they make is valid
+(`buildable`). Without this a Byzantine author could show one twin,
+through which the leader block is reached, to the nodes ahead and the
+other to a node behind: the node behind holds both once it receives the
+history of a block built on the first, but the least identifier may be
+the second, and it then waits its timer where its peers did not, by a
+timeout at each round the attack repeats. Copying the references, it
+reaches and certifies what the block it copied from does. The
+simulator's equivocators do not mount this attack, and no simulated run
+changes. The validity it must
 meet is `ValidAt q Clause.distinct`: references one round below, from
 `q` distinct authors, none twice. Referencing its own previous block is
 the build rule, not a validity clause (§11). The program builds rounds
@@ -477,7 +489,7 @@ at once.
 | V9 | Over a trace with timely authentication of blocks, base offers and checkpoint proposals, an injective hash on blocks and on the decisions served with certificates (`Boot.ChainInjective`), and `Params.Tolerates`, every honest store is a cut of the run's record and every honest decision a verdict on a view of it, bootstraps and adopted certificates included; a node's decisions are slots `0, 1, …`; so any two honest nodes' decisions are prefix-comparable. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.cut_before`, `Node.IsCut.bootFrom`, `Node.IsCut.step`, `Node.verdict_decideStep`, `Node.propose_head`, `Node.prefix_of_slots`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
 | V10 | With rate limiting, at every state a run reaches, every block the store and the pending blocks hold is charged to a slot, and the charges number at most `n·(τ + 1)·(top + W + 1 − base)`, under any input sequence; with the horizon trailing the top by a bounded depth the bound does not grow with the run. Eventual admission of every honest block is step 11's. | `Node.Storage.Bounded` (proved): `Node.Lim.run`, `Node.Lim.bound`, `Node.length_le_of_slots` |
 | V12 | Every certificate with `q` distinct signers given to an honest node carries the head of the chain of an honest node's decisions at its height, with timely signed proposals and `f < q`. | `Node.Boot.Certified` (proved): `Node.propose_head`, `Node.commits_prefix`, `Node.Local.Decisions` |
-| V11 | A timed run past GST, with timeouts of at least `2Δ + proc`, gives a `SchemeReactive` and the delivery obligation `DeliversOn`; the mechanisms compose (`Stack.safe_and_live`), and every slot commits. | field by field from the run, V10 |
+| V11 | Over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, and timeouts of at least `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout, and a run of reliably led slots past a round they built within `Δ + Δₛ` of each other is decided by all of them `Δ + Δₛ` after they reach its last decision round (`Node.Live.Progresses`, stated, §13). | `WaveFacts` from the run, V3, V4 |
 
 **The transfer.** The program decides on its own store, a record of its
 own; the run's claims are about a view of the run's record. The decider
@@ -1189,23 +1201,25 @@ and `hor v t` the horizon of `v` at `t`, nondecreasing.
 
 The proof splits in two:
 
-* **production** (conjectured, from §12.5): past GST the reliable nodes'
-  rounds advance at a rate of at least one round per `timeout + 2Δ`, so a trace complete up to
-  `t₁` takes every reliable node to round `(t₁ − gst)/(timeout + 2Δ) − c`
-  for a constant `c`;
-* **decision**: a node outputs a slot's decision only once every slot
-  below it is decided, so the claim is about runs. Let slots
-  `b … b + c − 1` be led by reliable nodes, at slot rounds past GST,
-  with `c` spanning the rule's eligibility (`SpansEligible c`). By the
-  time `t*`, `Δ` after the last reliable node built the decision round
-  of slot `b + c − 1`, every reliable node has output the decisions of
-  every slot below `b + c`: the run's slots commit on its view, from the
-  reliable decision-round blocks, which have all arrived; every slot
-  below `b` is then decided on that view (`decided_below_of_run`); and
-  the decision step outputs them (`Loop.OutputComplete`, with the scan's
-  reach made explicit), reading only the rounds from each slot's own up
-  (V4), so the slots below the node's horizon, already output, are not
-  read again.
+* **production** (`Produces`): past GST, once every reliable node is
+  at round `n` or above at `s`, every reliable node is above `n` at
+  `s + timeout n`: the reliable round-`n` blocks and their histories
+  arrive within `D = Δ + Δₛ`, which the timeout exceeds, and the round's
+  timer has fired;
+* **decision** (`Decides`): a node outputs a slot's decision only once
+  every slot below it is decided, so the claim is about runs. Suppose
+  the reliable nodes built a round `n₀` between `s ≥ gst` and `s + D`
+  (the synchronisation point, 13.3), and slots `b … b + c − 1`, at or
+  above `n₀`, are led by reliable nodes with `c` spanning the rule's
+  eligibility (`SpansEligible c`). Once every reliable node is at the
+  decision round of slot `b + c − 1`, at `t`, every reliable node has
+  output by `t + D` the decisions of every slot below `b + c`: the run's
+  slots commit on its view, from the reliable decision-round blocks,
+  which have all arrived; every slot below `b` is then decided on that
+  view (`decided_below_of_run`); and the decision step outputs them
+  (`Loop.OutputComplete`, with the scan's reach made explicit), reading
+  only the rounds from each slot's own up (V4), so the slots below the
+  node's horizon, already output, are not read again.
 
 Together they bound the time to decide each slot.
 
@@ -1213,7 +1227,8 @@ Together they bound the time to decide each slot.
 
 * **11.1a** The timed-trace model (`Node/Model/Timed.lean`: times,
   holdings, horizons and build times read off a trace) and the
-  statement of V11.
+  statement of V11 (`Node/Live/Statement.lean`, `Live.Progresses`;
+  built).
 * **11.1b** The wait clauses: the build rule gives `reach_or_wait` and
   `cert_or_wait` over the run's record, from `reachReady` and
   `certReady` on the store's record and from the timer.
@@ -1240,21 +1255,36 @@ which `SchemeReactive` and the node both supply; the scheme's statements
 are unchanged.
 
 **Catch-up.** Drift rests on catch-up: a reliable node holding a
-reliable round-`n` block at `t` builds round `n` by `t + proc`. The
-program does not build on sight; it builds round `n` once it holds a
-quorum of round `n − 1` and its block would reach (and certify) the
-leader block or its round's timer fired. In the simulator the gap is
-zero without faults and at most 3 ticks at delays up to 6 with a
-crashed leader (§12.5): a node that waits a timer at a round
-whose leader crashed builds when its timer fires, within the drift of
-its round entry behind the node it saw. The claim to prove is catch-up
-with `proc = Δ`, by induction over rounds past GST: a reliable block of
-round `n` was built either on the reactive exit, whose evidence the
-holder then holds, or on the timer, which the holder's timer follows
-within the drift of round `n − 1`. The liveness bound becomes `timeout ≥
-3Δ`. The reactive exit's evidence carries over when the path from the
-seen block to the leader block runs through reliable blocks, which the
-holder references alike; through a Byzantine twin it may not.
+reliable round-`n` block builds round `n` soon after. The program does
+not build on sight; it builds round `n` once it holds a quorum of round
+`n − 1` and its block would reach (and certify) the leader block, or its
+round's timer fired. In the simulator the gap is zero without faults and
+at most 3 ticks at delays up to 6 with a crashed leader (§12.5).
+
+Let `drift n` be the spread of the reliable nodes' build times of round
+`n`, and `D = Δ + Δₛ`. Past GST, `drift (n + 1) ≤ max (drift n) D`. Let
+`u` be the first reliable node to build round `n + 1`, at `t`. By `t + D`
+every reliable node `v` holds `u`'s block and its history, so a quorum
+of round `n`. If `u` built on the reach and certificate tests, `v` passes
+them with `u`'s references (§3.2, copied references) and builds by
+`t + D`. If `u` built on its timer, which fired at `u`'s build of round
+`n` plus the timeout, `v`'s fires at most `drift n` later. So the drift
+never grows past `D` once it is there, and arrival follows: a node that
+waited the timeout at round `n` holds every reliable round-`n` block,
+built at most `D` after its own and arrived `D` after that, when
+`timeout ≥ 2D`.
+
+Two things the argument needs were found missing in the program as it
+was. Through a Byzantine twin, the reach test's evidence did not carry
+over: a node behind could hold both twins and reference the one its
+peers did not build on, waiting a timeout where they did not, at every
+round the attack repeats. Copied references (§3.2) close this. And a
+node that fell behind before GST pays every timer round again, gaining
+on its peers only a round-time per round built on the tests, so its
+drift shrinks at a rate no bound in `Δ` and the timeout controls. The
+decision half therefore starts from a synchronisation point, a round
+the reliable nodes built within `D` of each other past GST, and
+production, which needs no drift bound, holds from GST.
 
 ### 13.4 From verdicts to the node's decisions
 
@@ -1273,24 +1303,29 @@ explicit.
 
 ### 13.5 Decisions for 11.1 (taken)
 
+0. **Copied references** (built): a node that would wait at a round
+   builds on the references of a held block of the round above, if they
+   do not wait (§3.2), so a twin shown to the nodes ahead does not hold
+   back a node behind.
 1. **`deadline`** is deleted from `ReactiveCore` and from Steelhead's
    copy; no proof read it (built).
 2. **`built_lt`**: the node supplies `WaveFacts`, not a `SchemeReactive`,
    so it owes no `built_lt`, and one step may build several rounds at one
    time; `reactiveLive` is unchanged.
-3. **Catch-up** is proved of the program as it is, with `proc = Δ`, as
-   in 13.3; the liveness bound is `timeout ≥ 3Δ`.
+3. **Catch-up** is proved with copied references (item 0), from a
+   synchronisation point, as in 13.3; the liveness bound is
+   `timeout ≥ 2(Δ + Δₛ)`.
 4. **Garbage collection**: the node proves production and arrival with
    holdings above its horizon, and the scheme's `reaches`, `votes` and
    `certifies` are stated over `WaveFacts`: production, arrival and the
    wait clauses (built, `docs/target-properties.md` §11.57).
 5. **The statement**: production and decision as in 13.2, with an
-   explicit time bound per slot.
+   explicit time bound per slot (`Live.Progresses`, built).
 6. **Fetching**: a fetch is asked of the author of the block that needs
    it, and answered with the blocks asked for and their histories above
    the asker's horizon, so that past GST a missing history arrives in one
    round trip, whatever its depth (§3.7, built).
 7. **Synchronisation is assumed**: the liveness claims take
    `SyncedWithin` (13.1) as an assumption on the trace, so the arrival of
-   histories is not derived from fetch answers; the bounds of 13.3 are
-   restated with `Δₛ`.
+   histories is not derived from fetch answers; 13.3 counts it in
+   `D = Δ + Δₛ`.

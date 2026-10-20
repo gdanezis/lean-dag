@@ -17,8 +17,10 @@ input `i` in the state `s`: the new state and the outputs.
   decision round (`certReady`). The block references one accepted block
   per author of round `r`, the node's own for itself when it built
   there, which is the self-parent rule of an honest node, and the least
-  identifier otherwise; it is persisted, then broadcast, then the
-  round's timer is set.
+  identifier otherwise; where these fail the tests and the references
+  of a held round-`r + 1` block of another author pass them, it takes
+  those, with its own block for itself (`refsAt`). It is persisted, then
+  broadcast, then the round's timer is set.
 * **Deciding** (`decideStep`): `tryDecide` from the next undecided slot
   to the last slot at a round the store holds; the decisions are kept
   (`State.decided`), the latest first.
@@ -196,6 +198,35 @@ def certReady (s : Store Validator BlockId Payload) (refs : Finset BlockId) (r :
           (creatorsOf s.blk (refs.filter fun b => cfg.σ.Votes s.toRecord b L)).card)
   else true
 
+/-- **The references a held round-`r + 1` block `c` lends**: `c`'s, with
+the node's own block `o` put in for itself. -/
+def lent (s : Store Validator BlockId Payload) (c : BlockId) (o : Option BlockId) :
+    Finset BlockId :=
+  ((s.blk c).refs.filter fun j => (s.blk j).creator ≠ cfg.me) ∪ o.toFinset
+
+/-- **References `R` the node can build on above round `r`**: the block
+they make is new, and valid at the row. -/
+def buildable (s : Store Validator BlockId Payload) (r : ℕ) (R : Finset BlockId) : Bool :=
+  let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, R, cfg.payload (r + 1)⟩
+  decide (cfg.idOf b ∉ s.ids ∧ s.base ≤ b.round ∧ (s.base < b.round → b.refs ⊆ s.ids) ∧
+    (s.base < b.round → ∀ j ∈ b.refs, (s.blk j).round + 1 = b.round) ∧
+    rowValid cfg.q (Function.update s.blk (cfg.idOf b) b) b)
+
+/-- **The references of the node's next block**, above round `r`: those of
+`refsFor` if they pass the reach and certificate tests; else those lent
+by the first held round-`r + 1` block of another author that pass them
+and can be built on; else those of `refsFor`. A node holding both twins
+of a Byzantine author then reaches what a peer that built on one of them
+reached. -/
+def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) :
+    Finset BlockId :=
+  let ready := fun R => reachReady cfg s R r && certReady cfg s R r
+  let own := refsFor cfg s r o
+  if ready own then own
+  else ((((blocksAt s.toRecord (r + 1)).sort (· ≤ ·)).filter fun c =>
+      decide ((s.blk c).creator ≠ cfg.me)).map (lent cfg s · o) |>.find? fun R =>
+        ready R && buildable cfg s r R).getD own
+
 /-- The candidate slot a block fills: its author and its round. -/
 def slotOf (b : Block Validator BlockId Payload) : Validator × ℕ := (b.creator, b.round)
 
@@ -210,7 +241,7 @@ def tryBuild (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
   match s.top with
   | some r =>
-    let refs := refsFor cfg s.store r s.own
+    let refs := refsAt cfg s.store r s.own
     if cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r).card ∧
         (r ∈ s.fired ∨ (reachReady cfg s.store refs r ∧ certReady cfg s.store refs r)) then
       let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, refs, cfg.payload (r + 1)⟩
