@@ -7,9 +7,13 @@ import Mathlib.Data.Finset.Sort
 input `i` in the state `s`: the new state and the outputs.
 
 * **Receipt** (`deliver`): a block whose identifier is its hash, not the
-  node's own, and new, waits in `pending` until its references are
-  accepted; it is then accepted if it satisfies `rowValid q`, and
-  dropped otherwise (`flush`).
+  node's own, new, and above the horizon or vouched for at it (`takes`),
+  waits in `pending` until its references are accepted; it is then
+  accepted if it satisfies `rowValid q`, and dropped otherwise (`flush`).
+  A block at the horizon, whose references are pruned, is taken only if
+  pending blocks of `f + 1` authors lie above it (`vouched`), and pending
+  blocks the horizon reaches are kept only if so; a store's unchecked
+  blocks are then ones an honest node built on, or an attested base.
 * **Building** (`tryBuild`): round `r + 1`, above the node's top `r`,
   once the store holds `q` authors of round `r` and either the round's
   timer fired or the block would reach every leader block of a slot
@@ -160,6 +164,26 @@ def flush : ℕ → Store Validator BlockId Payload → List (BlockId × Block V
     let split := pend.partition fun e => ready s e.2
     if split.1.isEmpty then (s, pend)
     else flush fuel (split.1.foldl (fun s e => accept cfg s e.1 e.2) s) split.2
+
+/-- **The pending blocks above the block `id`**: those whose references,
+followed through pending blocks, reach `id`. -/
+def above (pend : List (BlockId × Block Validator BlockId Payload)) (id : BlockId) :
+    List (BlockId × Block Validator BlockId Payload) :=
+  (fun R => pend.filter fun e =>
+    decide (id ∈ e.2.refs) || R.any fun r => decide (r.1 ∈ e.2.refs))^[pend.length] []
+
+/-- **A block the node's pending blocks vouch for**: blocks of `f + 1`
+distinct authors pending above it, so an honest node built on it. -/
+def vouched (s : State Validator BlockId Payload) (id : BlockId) : Bool :=
+  decide (cfg.f + 1 ≤ ((above s.pending id).map (·.2.creator)).dedup.length)
+
+/-- **A delivered block the node takes, by its round**: above the horizon,
+where its references can be checked; or at the horizon, where they are
+pruned, if it is the genesis round or the node's pending blocks vouch for
+it. Junk at the horizon is then never taken: an honest block above it
+would need an honest node to have taken it first. -/
+abbrev takes (s : State Validator BlockId Payload) (id : BlockId) (r : ℕ) : Prop :=
+  s.store.base < r ∨ (s.store.base = r ∧ (r = 0 ∨ vouched cfg s id = true))
 
 /-- **The references of the node's next block**, above round `r`: one
 accepted block per author of round `r`, the node's own block `o` there
@@ -388,7 +412,7 @@ def tryBoot (s : State Validator BlockId Payload) :
           (s.store.prune G h.le)
         let win := if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter fun e =>
           decide (G < e.2.round ∧ e.1 = cfg.idOf e.2)
-        let pend := win ++ s.pending.filter fun e => G ≤ e.2.round
+        let pend := win ++ s.pending.filter fun e => G < e.2.round
         let fl := flush cfg (pend.length + 1) st₀ pend
         let s₁ := { s with store := fl.1, pending := fl.2, top := some G, own := none }
         let ads := ds.drop s.decided.length
@@ -502,7 +526,8 @@ def collect (s : State Validator BlockId Payload) :
     let G := min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag
     if h : s.store.base < G then
       let st := s.store.prune G h.le
-      let pend := s.pending.filter fun e => G ≤ e.2.round
+      let pend := s.pending.filter fun e => decide (G < e.2.round) ||
+        (decide (G = e.2.round) && vouched cfg s e.1)
       let req := s.requested.filter fun x => G ≤ x.2.2
       let s₁ := { s with store := st, pending := pend, fired := s.fired.filter (G ≤ ·) }
       ({ s₁ with requested := req, owner := s.owner.filter fun e => G ≤ e.2.2 }, [.prune G])
@@ -615,8 +640,8 @@ def step (s : State Validator BlockId Payload) :
       else (s, [])
     else (s, [])
   | .deliver id b =>
-    if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
-        id ∉ s.pending.map Prod.fst ∧ kept cfg s id b then
+    if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
+        id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b then
       let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
       let s₁ := { s with store := fl.1, pending := fl.2, owner := charged cfg s id b ++ s.owner }
       let miss := askable cfg s₁ id (missing s₁ id b)

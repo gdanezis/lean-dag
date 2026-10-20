@@ -203,8 +203,23 @@ holds at every `G`. After each decision step the horizon rises to `G`
 if that is higher: the store drops the blocks below `G`, reads those at
 `G` without references, and keeps absolute rounds; pending blocks and
 timers below `G` are dropped, and the node outputs `prune G`. A block
-received at the horizon is kept without its references, as the cut
-keeps it; one below it is dropped.
+received below the horizon is dropped. One received at the horizon,
+whose references can no longer be checked, is taken only if pending
+blocks of `f + 1` distinct authors lie above it, following references
+through pending blocks (`vouched`); the genesis round is always taken.
+Pending blocks the horizon reaches are kept only on the same condition.
+Junk, a block that fails validity, then never enters an honest store:
+the first honest node to take it at its horizon would need an honest
+block above it, whose author checked it below its own horizon and
+dropped it, or took it at its horizon first.
+
+The rule has a cost. A block of an honest node that its peers receive
+only at their horizon, with only its author's blocks above it, is not
+taken, and the author's later blocks, which reference it, wait on it.
+A node that rejoins at its peers' horizon is cut off this way (§6,
+`W = 4`). A reliable node never meets it, since its blocks reach its
+peers above their horizon; making a rejoining node resume above it is
+part of step 11.3.
 
 The decider then runs on the original schedule. Every slot it still
 decides lies at `F` or above, and its decision reads only rounds from
@@ -438,8 +453,10 @@ node's top. After a bootstrap the top is the new horizon, which trails
 the frontier by `Λ` and the certificates' lag; a node whose window is
 shorter drops the blocks it needs to resume, and stays behind. In the
 simulator, at `Λ = 2`, a node down from tick 40 to tick 90 rejoins with a
-window of 4 rounds or of 8, the fetches bringing the histories it lacks
-at once.
+window of 8 rounds, the fetches bringing the histories it lacks at once.
+With a window of 4 it resumes at its peers' horizon, where its block is
+not taken (§3.4), and is cut off; with `τ = 8` the nodes reach round 34
+by tick 150, against 43 to 44 with the node back.
 
 **What it gives.**
 * **V10, storage** (`Node.Storage.Bounded`, proved): at every state a
@@ -1120,9 +1137,9 @@ not kept.
 | `τ = 8, W = 8`, a flood | 10 | 3 | 19 / 13.6 | 3 | 0 |
 | `τ = 0` | no round built | | | | 12 |
 | `W = 0` | 17 rounds, 8 at one node, then stuck | | | | 35 |
-| node 1 down 40–90 | 6 | 3 | 11 / 7.2 | 4 | 0 |
-| node 1 down 40–90, `τ = 8, W = 4` | 6 | 3 | 11 / 7.3 | 4 | 4 |
-| node 1 down 40–90, `τ = 2, W = 8` | 5 | 3 | 10 / 7.4 | 6 | 3 |
+| node 1 down 40–90 | 6 | 3 | 11 / 7.2 | 4 | 3 |
+| node 1 down 40–90, `τ = 8, W = 4` | 12 | 10 | 25 / 17.1 | 3 | 99 |
+| node 1 down 40–90, `τ = 2, W = 8` | 5 | 3 | 10 / 7.4 | 6 | 15 |
 
 What the numbers say for step 11:
 
@@ -1134,7 +1151,8 @@ What the numbers say for step 11:
   delay the nodes stay live and agree, at a higher latency and a longer
   certificate lag.
 * **The lag `Λ` does not affect timing**, only the store's depth; without
-  rate limiting no new honest block at or above a horizon went unkept.
+  rate limiting no new honest block at or above a horizon went unkept,
+  except a rejoining node's blocks at its peers' horizon (§3.4).
 * **The certificate lag is a few slots** past GST, ten after a GST at
   which messages had been slow. The horizon trails the certified
   frontier, so its bound enters the liveness of garbage collection
@@ -1142,8 +1160,9 @@ What the numbers say for step 11:
 * **The budget and the window are generous** for the reliable nodes: a
   budget of one and a window of one keep every honest block. A node
   rejoining after a bootstrap lands `Λ` and the certificate lag below
-  its peers, and fetches the histories it lacks at once; a window of 4
-  keeps all but 4 of the honest blocks it is sent, and it rejoins.
+  its peers, and fetches the histories it lacks at once; with a window
+  of 8 it rejoins. With a window of 4 it resumes at its peers' horizon
+  and is cut off (§3.4), its blocks never taken.
 * **Fetching fires without faults.** Blocks arrive out of order, and a
   block whose references are in flight triggers a fetch: 176 in the
   fault-free run, none with delays of one tick.
@@ -1329,3 +1348,9 @@ explicit.
    `SyncedWithin` (13.1) as an assumption on the trace, so the arrival of
    histories is not derived from fetch answers; 13.3 counts it in
    `D = Δ + Δₛ`.
+8. **No junk at the horizon** (built): a block received at the horizon
+   is taken only if vouched for by `f + 1` authors above it (§3.4), since
+   the proofs need every block a reliable node builds on to be valid with
+   its history held. The rule cuts off a node that rejoins at its peers'
+   horizon, which a reliable node never does; the resume rule that avoids
+   it belongs to 11.3.

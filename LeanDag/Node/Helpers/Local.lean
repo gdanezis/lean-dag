@@ -693,7 +693,7 @@ theorem tryBoot_some {s s' : State Validator BlockId Payload} {ads : List (ℕ �
       let st₀ := (keptBase cfg (baseAt cfg s G)).foldl (fun st e => accept cfg st e.1 e.2)
         (s.store.prune G hb.le)
       let pend := (if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun e =>
-        decide (G < e.2.round ∧ e.1 = cfg.idOf e.2))) ++ s.pending.filter fun e => G ≤ e.2.round
+        decide (G < e.2.round ∧ e.1 = cfg.idOf e.2))) ++ s.pending.filter fun e => G < e.2.round
       s'.store = (flush cfg (pend.length + 1) st₀ pend).1 ∧
       s'.pending = (flush cfg (pend.length + 1) st₀ pend).2 ∧
       s'.top = some G ∧ s'.own = none ∧ s'.lo = max s.lo c.height ∧
@@ -778,9 +778,9 @@ theorem Inv.tryBoot {s s' : State Validator BlockId Payload}
   have hfl := flush_known (cfg := cfg) (K := K)
     (((if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun x =>
       decide (G < x.2.round ∧ x.1 = cfg.idOf x.2))) ++
-      s.pending.filter fun x => G ≤ x.2.round).length + 1) h₀.1 h₀.2.2 (pend :=
+      s.pending.filter fun x => G < x.2.round).length + 1) h₀.1 h₀.2.2 (pend :=
     (if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun x =>
-      decide (G < x.2.round ∧ x.1 = cfg.idOf x.2))) ++ s.pending.filter fun x => G ≤ x.2.round)
+      decide (G < x.2.round ∧ x.1 = cfg.idOf x.2))) ++ s.pending.filter fun x => G < x.2.round)
     (fun x hx => by
       rcases List.mem_append.mp hx with hx | hx
       · obtain ⟨hx, -, hc⟩ := mem_bootWindow hx

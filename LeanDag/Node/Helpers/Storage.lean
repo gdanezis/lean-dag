@@ -366,7 +366,9 @@ theorem Lim.collect {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim 
         rw [hraw]
         exact hO _ (h.store j hj'.1) le_rfl hjr
       · obtain ⟨he, hr⟩ := List.mem_filter.mp he
-        exact hO _ (h.pend e he) le_rfl (of_decide_eq_true hr)
+        refine hO _ (h.pend e he) le_rfl ?_
+        simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at hr
+        omega
       · obtain ⟨he, hr⟩ := List.mem_filter.mp he
         exact ⟨of_decide_eq_true hr, (h.slots e he).2⟩
       · exact (charge_filter_le _ _ sl).trans (h.charge sl)
@@ -476,12 +478,12 @@ theorem Lim.tryBoot {τ W : ℕ} (hl : cfg.limit = some (τ, W))
       exact ⟨x, hx, rfl⟩, rfl, le_refl _⟩
   have hlim : cfg.limit.isSome = true := by rw [hl]; rfl
   have hpend : ∀ e ∈ (if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun e =>
-        decide (G < e.2.round ∧ e.1 = cfg.idOf e.2))) ++ s.pending.filter (fun e => G ≤ e.2.round),
+        decide (G < e.2.round ∧ e.1 = cfg.idOf e.2))) ++ s.pending.filter (fun e => G < e.2.round),
       e ∈ {y | Charged s'.owner y} := by
     intro e he
     rw [if_pos hlim, List.nil_append] at he
     obtain ⟨he, hr⟩ := List.mem_filter.mp he
-    exact hO _ (h.pend e he) (of_decide_eq_true hr)
+    exact hO _ (h.pend e he) (of_decide_eq_true hr).le
   have hbase' : s'.store.base = G := by
     rw [hst, flush_base, foldl_base]; rfl
   have hc : ∀ sl, s'.charge sl ≤ (if sl.2 = G then 1 else 0) + s.charge sl := by
@@ -564,7 +566,7 @@ theorem Lim.afterFlush {τ W : ℕ} (hl : cfg.limit = some (τ, W))
   obtain ⟨-, -, hab, -, -, hk⟩ := hc
   simp only [kept, hl] at hk
   obtain ⟨sl, hsl⟩ := Option.isSome_iff_exists.mp hk
-  obtain ⟨hbr, hlo, hhi, hroom⟩ := chargeTo_spec h hab hsl
+  obtain ⟨hbr, hlo, hhi, hroom⟩ := chargeTo_spec h (takes.le hab) hsl
   have hch : charged cfg s id b = [(id, sl)] := by simp [charged, hl, hsl]
   let s₀ : State Validator BlockId Payload :=
     { s with pending := (id, b) :: s.pending, owner := (id, sl) :: s.owner }
@@ -618,7 +620,7 @@ theorem Lim.step {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validat
     by_cases hc : Admits cfg s id b
     · rw [step_deliver hc]
       exact Lim.settle hl ((h.afterFlush hl hc).of_eq rfl rfl rfl rfl)
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
+    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc
       simp only [Node.step, if_neg h']; exact h
   | timer r => exact Lim.settle hl (h.of_eq rfl rfl rfl rfl)

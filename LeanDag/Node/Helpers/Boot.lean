@@ -416,7 +416,7 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         (IsCut.flush hg _ _ hc (hc.spans hh) hpend) (hh.grow hg₁ hb₁ rfl le_rfl)
         (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by rw [commitsOf_append]; unfold askOut; split <;> split <;> rfl) (step_deliver hA)
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
+    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ takes cfg s id b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
       exact hsame s rfl (by simp only [Node.step, if_neg h'])
   | timer r =>

@@ -48,15 +48,15 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeCert])
 
-/-- info: "[(some 51), (some 52), (some 51)] [49, 50, 50] true true true 1 2" -/
+/-- info: "[(some 52), (some 53), (some 53)] [50, 51, 51] true true true 1 2" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeCert] (seed := 3))
 
-/-- info: "[(some 49), (some 49), (some 49)] [47, 47, 47] true true true 1 0" -/
+/-- info: "[(some 50), (some 50), (some 50)] [48, 48, 48] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.conflictProposals])
 
-/-- info: "[(some 43), (some 44), (some 44)] [41, 42, 42] true true true 1 0" -/
+/-- info: "[(some 44), (some 43), (some 44)] [42, 41, 42] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks])
 
@@ -64,7 +64,7 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor])
 
-/-- info: "[(some 51), (some 51), (some 52)] [50, 50, 50] true true true 1 148" -/
+/-- info: "[(some 53), (some 53), (some 53)] [51, 51, 51] true true true 1 152" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeBase, .splitBase, .fakeCert, .conflictProposals,
   .invalidBlocks, .forgedAuthor])
