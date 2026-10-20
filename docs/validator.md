@@ -1167,8 +1167,8 @@ The proof splits in two:
   below `b` is then decided on that view (`decided_below_of_run`); and
   the decision step outputs them (`Loop.OutputComplete`, with the scan's
   reach made explicit), reading only the rounds from each slot's own up
-  (V4), so the slots below the node's horizon, already output, cost
-  nothing.
+  (V4), so the slots below the node's horizon, already output, are not
+  read again.
 
 Together they bound the time to decide each slot.
 
