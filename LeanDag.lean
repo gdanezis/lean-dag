@@ -595,3 +595,5 @@ import LeanDag.Node.Boot.Proof
 import LeanDag.Node.Helpers.Storage
 import LeanDag.Node.Storage.Statement
 import LeanDag.Node.Storage.Proof
+import LeanDag.Node.Defer.Statement
+import LeanDag.Node.Defer.Proof
