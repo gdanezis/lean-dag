@@ -23,9 +23,9 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
   restarts;
 * timely authentication, of blocks, bases, certificates and the chain's
   hash, since honest nodes outside `T` may rejoin (as for V9);
-* the injective hash, no rate limiting, at most `f` nodes outside `H`,
-  `n − f − c` reliable nodes, and `2 (3Δ + Δₛ) < timeout r` at every
-  round.
+* the injective hash, injective on every block, no rate limiting, at
+  most `f` nodes outside `H`, `n − f − c` reliable nodes, a quorum of two
+  or more, and `2 (3Δ + Δₛ) < timeout r` at every round.
 
 Then, for `A = 3Δ + Δₛ`, the time a reliable block and its history take
 to be held by every reliable node, a certificate's catch-up included:
@@ -125,7 +125,8 @@ def Progresses : Prop :=
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t₁ : ℕ),
     cfg.σ = boundedSel → cfg.Admissible → cfg.limit = none → Hᶜ.card ≤ cfg.f → T ⊆ H →
-    cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card →
+    cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
+    Function.Injective cfg.idOf →
     (∀ r, 2 * (3 * Δ + Δₛ) < cfg.timeout r) →
     Converge.TimelyAuthentic cfg H tr → Boot.TimelyOffers cfg H tr → Boot.TimelyCerts cfg H tr →
     Converge.HashInjective cfg H tr → Boot.ChainInjective cfg H tr → Converge.NoRestart T tr →

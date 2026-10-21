@@ -1288,7 +1288,15 @@ Together they bound the time to decide each slot.
   `Node.reach_or_wait_node`, `Node.cert_or_wait_node`, with holdings
   read before the build's time, `heldBefore`).
 * **11.1c** Production, arrival and catch-up past GST, with holdings
-  above the horizon: the induction of 13.3, giving `WaveFacts`.
+  above the horizon. Production is proved (`Live.produces`,
+  `Node/Live/Proof.lean`): `v`, still at round `n` a timeout after all
+  reliable nodes were at `n` or above, would be settled with the round's
+  timer fired and a quorum of round `n` held (`round_arrives`), and would
+  build (`tryBuild_isSome`). It needs two assumptions V11 states: the
+  block hash injective on every block, so no stored block has the
+  identifier of the node's next one (`fresh_before`), and `2 ≤ q`, so a
+  settle ends settled (`settle_settled`). The drift induction of 13.3,
+  for `WaveFacts`, remains.
 * **11.1d** From `WaveFacts.certifies` to the node's decisions, as in the
   decision half above.
 * **11.1e** The production rate and the time bound.
