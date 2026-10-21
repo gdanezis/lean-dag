@@ -607,3 +607,4 @@ import LeanDag.Node.Helpers.Quiet
 import LeanDag.Node.Helpers.Reliable
 import LeanDag.Node.Helpers.Hold
 import LeanDag.Node.Helpers.Catch
+import LeanDag.Node.Helpers.Shape
