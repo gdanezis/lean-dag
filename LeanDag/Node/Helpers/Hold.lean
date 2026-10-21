@@ -430,7 +430,7 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
     · rw [step_deliver_not_of hAd hs]
       exact hnot id b rfl hAd
   | timer r =>
-    exact hset { s with fired := insert r s.fired } [] rfl hA hP le_rfl
+    exact hset { s with fired := insert r s.fired } (timerAsk s r) (step_timer_eq s r) hA hP le_rfl
       (hst.elim id fun h => by cases h.1)
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>

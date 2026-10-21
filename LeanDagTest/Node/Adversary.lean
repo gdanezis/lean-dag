@@ -57,15 +57,15 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.conflictProposals])
 
-/-- info: "[(some 17), (some 16), (some 16)] [16, 16, 16] true true true 0 0" -/
+/-- info: "[(some 17), (some 17), (some 17)] [16, 16, 16] true true true 0 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks])
 
-/-- info: "[(some 2), (some 16), (some 16)] [13, 14, 14] true true true 0 0" -/
+/-- info: "[(some 49), (some 50), (some 49)] [48, 48, 47] true true true 0 139" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor])
 
-/-- info: "[(some 2), (some 3), (some 1)] [1, 1, 1] true true true 0 1" -/
+/-- info: "[(some 16), (some 16), (some 17)] [16, 16, 16] true true true 0 61" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeBase, .splitBase, .fakeCert, .conflictProposals,
   .invalidBlocks, .forgedAuthor])
@@ -76,7 +76,7 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine { attackedBy [.fakeCert] (verify := false) with recover := [(1, 40, 70)] }
 
-/-- info: "[(some 2), (some 16), (some 16)] [13, 14, 14] true true true 0 0" -/
+/-- info: "[(some 2), (some 20), (some 20)] [17, 18, 18] true true true 0 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 

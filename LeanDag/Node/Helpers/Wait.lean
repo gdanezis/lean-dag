@@ -42,7 +42,7 @@ the reach and certificate tests on the store, or the round's timer fired
 and its references are `refsFor`'s. -/
 theorem tryBuild_exit {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
-    ∃ r, s.top = some r ∧ cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r \ s.exposed).card ∧
+    ∃ r, s.top = some r ∧ cfg.q ≤ (usableAuthors s.store s.exposed r).card ∧
       ((reachReady cfg s.store (refsAt cfg s.store r s.own s.exposed) r = true ∧
           certReady cfg s.store (refsAt cfg s.store r s.own s.exposed) r = true) ∨
         (r ∈ s.fired ∧
@@ -82,14 +82,14 @@ theorem mem_refsFor {st : Store Validator BlockId Payload} {r : ℕ} {o : Option
     j ∈ refsFor cfg st r o X := by
   unfold refsFor
   dsimp only
-  have hjR : j ∈ (blocksAt st.toRecord r).filter fun i => (st.blk i).creator ∉ X :=
-    Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr ⟨hj, hr⟩, hX⟩
+  have hjR : j ∈ (blocksAt st.toRecord r).filter fun i => usable st X i :=
+    Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr ⟨hj, hr⟩, usable_of_not hX⟩
   refine Finset.mem_biUnion.mpr ⟨(st.blk j).creator, Finset.mem_image_of_mem _ hjR, ?_⟩
   split
   · rename_i h
     rw [hown h.1]
     exact Option.mem_toFinset.mpr rfl
-  · have hset : (((blocksAt st.toRecord r).filter fun i => (st.blk i).creator ∉ X).filter
+  · have hset : (((blocksAt st.toRecord r).filter fun i => usable st X i).filter
         fun i => (st.blk i).creator = (st.blk j).creator) = {j} := by
       ext i
       simp only [Finset.mem_filter, Finset.mem_singleton]
@@ -900,7 +900,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       (fun hx => ⟨hc, hh.grow (Grows.refl _) rfl rfl le_rfl, hown.grow (Grows.refl _) rfl rfl rfl,
         Retains.refl _, le_rfl, fun t ht => ?_, hframe _ rfl rfl rfl rfl rfl, Or.inl rfl, hx⟩) hs hp
       (by simp [persists])
-      (by simp only [Node.step]; rfl)
+      (by rw [step_timer_of hs]; rfl)
     rcases Finset.mem_insert.mp ht with rfl | ht
     · exact Or.inr rfl
     · exact Or.inl ht
@@ -1073,7 +1073,7 @@ theorem timersBuilt_step {s : State Validator BlockId Payload}
         · split at h <;> simp at h
       · split at h <;> simp at h
     · rw [if_neg (by simp [hs])]; exact TimersBuilt.of_none fun _ _ h => by simp at h
-  | timer t => exact hset _ hs
+  | timer t => rw [step_timer_of hs]; exact hset _ hs
   | restart => exact absurd rfl hr
   | fetchRequest peer G ids =>
     refine TimersBuilt.of_none fun r a h => ?_

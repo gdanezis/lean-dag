@@ -880,7 +880,8 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
     · rcases step_deliver_not (cfg := cfg) hc with he | ⟨a, he⟩ <;> rw [he] <;>
         simp [persists]
   | timer r =>
-    exact settle_persist_of (s₀ := { s with fired := insert r s.fired }) (pre := []) (Or.inl rfl) hb
+    exact settle_persist_of (s₀ := { s with fired := insert r s.fired }) (pre := timerAsk s r)
+      (Or.inl (out_quiet (timerAsk_isQuiet s r)).1) hb
   | fetchRequest peer G ids =>
     intro e he
     change e ∈ persists (answer s peer G ids) at he

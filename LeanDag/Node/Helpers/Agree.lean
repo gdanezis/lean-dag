@@ -193,7 +193,11 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
       · split at h <;> simp at h
       · exact absurd h (serveBase_not_mem_settle _)
     · split at h <;> simp at h
-  | timer r => exact absurd h (serveBase_not_mem_settle _)
+  | timer r =>
+    rw [step_timer_eq] at h
+    rcases List.mem_append.mp h with h | h
+    · unfold timerAsk at h; split at h <;> simp at h
+    · exact absurd h (serveBase_not_mem_settle _)
   | fetchRequest peer G' ids =>
     change Output.serveBase p G bs ∈ answer s peer G' ids at h
     unfold answer at h; simp at h

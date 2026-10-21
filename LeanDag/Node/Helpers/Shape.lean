@@ -437,6 +437,7 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
     · rw [step_deliver_not_of hA hs]
       exact Or.inl ⟨rfl, Silent.nil⟩
   | timer r =>
+    rw [step_timer_of hs]
     exact Or.inr ⟨_, [], hnil _, hs, rfl, rfl, Finset.subset_insert _ _, Or.inl ⟨Silent.nil, rfl⟩⟩
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>
@@ -621,16 +622,16 @@ end StepFacts
 
 omit [Fintype Validator] in
 /-- **`refsFor`'s references**: stored blocks of the round, one per
-author of the round outside `X`, the node's own block for itself if it
-has one. -/
+author of the round it may reference, holding `X` exposed, the node's
+own block for itself if it has one. -/
 theorem refsFor_spec {st : Store Validator BlockId Payload} {r : ℕ} {o : Option BlockId}
     {X : Finset Validator}
     (ho : ∀ j, o = some j → j ∈ st.ids ∧ (st.blk j).round = r ∧ (st.blk j).creator = cfg.me) :
     refsFor cfg st r o X ⊆ st.ids ∧ (∀ j ∈ refsFor cfg st r o X, (st.blk j).round = r) ∧
-      creatorsOf st.blk (refsFor cfg st r o X) = authorsIn st.toRecord st.ids r \ X ∧
+      creatorsOf st.blk (refsFor cfg st r o X) = usableAuthors st X r ∧
       ∀ i ∈ refsFor cfg st r o X, ∀ j ∈ refsFor cfg st r o X,
         (st.blk i).creator = (st.blk j).creator → i = j := by
-  set R := (blocksAt st.toRecord r).filter fun i => (st.blk i).creator ∉ X with hR
+  set R := (blocksAt st.toRecord r).filter fun i => usable st X i with hR
   have hRi : ∀ i ∈ R, i ∈ st.ids ∧ (st.blk i).round = r := fun i hi => by
     have := (Finset.mem_filter.mp hi).1
     simpa [blocksAt, Store.toRecord] using this
@@ -669,15 +670,7 @@ theorem refsFor_spec {st : Store Validator BlockId Payload} {r : ℕ} {o : Optio
     exact ⟨a, ha, h₁, h₂, h₃, hp⟩
   refine ⟨fun j hj => (hmem j hj).choose_spec.2.1, fun j hj => (hmem j hj).choose_spec.2.2.1,
     ?_, fun i hi j hj hij => ?_⟩
-  · have hauth : authorsIn st.toRecord st.ids r \ X = creatorsOf st.blk R := by
-      ext a
-      simp only [Finset.mem_sdiff, creatorsOf, Finset.mem_image, R, Finset.mem_filter]
-      constructor
-      · rintro ⟨ha, hax⟩
-        obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp ha
-        exact ⟨j, ⟨hj, hax⟩, rfl⟩
-      · rintro ⟨j, ⟨hj, hjx⟩, rfl⟩
-        exact ⟨Finset.mem_image_of_mem _ hj, hjx⟩
+  · have hauth : usableAuthors st X r = creatorsOf st.blk R := rfl
     rw [hauth]
     ext a
     constructor
@@ -721,7 +714,7 @@ of a next block of its own. -/
 theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.top = some r)
     (hf : r ∈ s.fired ∨ (reachReady cfg s.store (refsAt cfg s.store r s.own s.exposed) r = true ∧
       certReady cfg s.store (refsAt cfg s.store r s.own s.exposed) r = true))
-    (hq : cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r \ s.exposed).card)
+    (hq : cfg.q ≤ (usableAuthors s.store s.exposed r).card)
     (ho : ∀ j, s.own = some j → j ∈ s.store.ids ∧ (s.store.blk j).round = r ∧
       (s.store.blk j).creator = cfg.me)
     (hb : s.store.base ≤ r)

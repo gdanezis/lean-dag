@@ -127,7 +127,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
       (stateBefore cfg tr E v).store.ids n \ (stateBefore cfg tr E v).exposed).card :=
     hqT.trans (Finset.card_le_card hauth)
   -- so it builds, against its being settled
-  have hsome := tryBuild_isSome (cfg := cfg.at v) hZt (Or.inl hfired) hcard
+  have hsome := tryBuild_isSome (cfg := cfg.at v) hZt (Or.inl hfired)
+    (hcard.trans (Finset.card_le_card sdiff_subset_usableAuthors))
     (fun j hj => by rw [hj₀] at hj; cases hj; exact ⟨hj₀i, hj₀r, hj₀c⟩) hbn
     (fun R => fresh_before hid htime (hTH hv) hZt R)
   rcases settled_before (cfg := cfg) hq hnv E with h | h

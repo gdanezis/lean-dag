@@ -181,40 +181,6 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel) (hvo : cfg.p.v
     · rfl
 
 omit [Fintype Validator] in
-/-- **`refsFor` references no author of `X`.** -/
-theorem refsFor_creators {st : Store Validator BlockId Payload} {r : ℕ} {o : Option BlockId}
-    {X : Finset Validator} {j : BlockId} (hj : j ∈ refsFor cfg st r o X) :
-    (st.blk j).creator ∉ X ∨ o = some j := by
-  unfold refsFor at hj
-  dsimp only at hj
-  obtain ⟨a, ha, hja⟩ := Finset.mem_biUnion.mp hj
-  obtain ⟨i, hi, rfl⟩ := Finset.mem_image.mp ha
-  split at hja
-  · exact Or.inr (by simpa using hja)
-  · left
-    obtain ⟨hjm, -⟩ := Scheme.leastOf_eq_some (Option.mem_toFinset.mp hja)
-    obtain ⟨hjR, hjc⟩ := Finset.mem_filter.mp hjm
-    rw [hjc]
-    exact (Finset.mem_filter.mp hi).2
-
-omit [Fintype Validator] in
-/-- **`refsAt` references no author of `X`**, but for the node's own block. -/
-theorem refsAt_creators {st : Store Validator BlockId Payload} {r : ℕ} {o : Option BlockId}
-    {X : Finset Validator} {j : BlockId} (hj : j ∈ refsAt cfg st r o X) :
-    (st.blk j).creator ∉ X ∨ o = some j := by
-  unfold refsAt at hj
-  dsimp only at hj
-  split at hj
-  · exact refsFor_creators hj
-  · rcases hf : List.find? _ _ with _ | R
-    · rw [hf] at hj; exact refsFor_creators hj
-    · rw [hf] at hj
-      obtain ⟨c, -, rfl⟩ := List.mem_map.mp (List.mem_of_find?_eq_some hf)
-      rcases Finset.mem_union.mp hj with h | h
-      · exact Or.inl (Finset.mem_filter.mp h).2.2
-      · exact Or.inr (by simpa using h)
-
-omit [Fintype Validator] in
 /-- **`refsAt` passes the tests when a held block's lent references do**:
 a stored round-`r + 1` block of another author whose lent references pass
 the tests and can be built on. -/
@@ -247,17 +213,16 @@ theorem refsAt_ready {st : Store Validator BlockId Payload} {r : ℕ} {o : Optio
 
 omit [Fintype Validator] in
 /-- **A peer's block lends references the node can build on**: a stored
-round-`n + 1` block of another author, whose references hold `q` distinct
-authors one round below, none in `X`, lends them with the node's own
+round-`n + 1` block of another author outside `X`, whose references hold
+`q` distinct authors one round below, lends them with the node's own
 round-`n` block put in for its own, and they include the block's
 references. -/
 theorem lent_buildable {x Z : Store Validator BlockId Payload} (hx : IsCut U x) (hZ : IsCut U Z)
     {R : Finset BlockId} {n : ℕ} {z o : BlockId} {X : Finset Validator} (hR : R ⊆ x.ids)
-    (hRX : ∀ j ∈ R, (x.blk j).creator ∉ X)
     (hRq : cfg.q ≤ (creatorsOf x.blk R).card)
     (hRd : ∀ i ∈ R, ∀ j ∈ R, (x.blk i).creator = (x.blk j).creator → i = j)
     (hzZ : z ∈ Z.ids) (hzr : (Z.blk z).round = n + 1) (hzR : (Z.blk z).refs = R)
-    (hoZ : o ∈ Z.ids) (hor : (Z.blk o).round = n) (hoc : (Z.blk o).creator = cfg.me)
+    (hzX : (Z.blk z).creator ∉ X) (hoZ : o ∈ Z.ids) (hor : (Z.blk o).round = n) (hoc : (Z.blk o).creator = cfg.me)
     (hme : cfg.me ∈ H)
     (hfresh : ∀ R, cfg.idOf ⟨n + 1, cfg.me, R, cfg.payload (n + 1)⟩ ∉ Z.ids) :
     R ⊆ lent cfg Z z (some o) X ∧ lent cfg Z z (some o) X ⊆ Z.ids ∧
@@ -275,8 +240,9 @@ theorem lent_buildable {x Z : Store Validator BlockId Payload} (hx : IsCut U x) 
             change (Z.blk j).round + 1 = (Z.blk z).round at this
             omega)
       exact Finset.mem_union_right _ (by rw [hjo]; simp)
-    · exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨by rw [hzR]; exact hj, hjm,
-        by rw [hcre j hj]; exact hRX j hj⟩)
+    · have hjz : j ∈ (Z.blk z).refs := by rw [hzR]; exact hj
+      exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hjz, hjm,
+        usable_of_ref hzZ (Z.pred z hzZ j hjz).symm hzX hjz⟩)
   -- the lent references: `z`'s other than the node's, and its own block
   have hlent : ∀ j ∈ lent cfg Z z (some o) X,
       (j ∈ (Z.blk z).refs ∧ (Z.blk j).creator ≠ cfg.me) ∨ j = o := by
@@ -585,17 +551,6 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bo
     have := hpred hxb j (hbR ▸ hj); omega
   obtain ⟨hRq, hRd⟩ := refs_of_rowValid (cfg := cfg.at w) hnew (hrefs hxb) (by omega) hrv
   rw [hbR] at hRq hRd
-  -- the peer's references are by authors `u` does not exclude
-  have hRX : ∀ j ∈ R, (x.store.blk j).creator ∉ Z.exposed := fun j hj => by
-    rw [hZX, ← hxX]
-    rcases refsAt_creators hj with h | h
-    · exact h
-    · obtain ⟨o', ho', -, -, hoc'⟩ := hbs.own r hxt
-      rw [ho', Option.some.injEq] at h
-      subst h
-      change (x.store.blk o').creator = w at hoc'
-      rw [hoc', hxX, ← hZX]
-      exact honest_not_exposed hinj htime (hTH hu) E (hTH hw)
   -- the peer's block arrives
   obtain ⟨hzZ, hzr, hzc, hzb⟩ := block_arrives hq hl hσ hadm hf htime hoff hcert hinj hchain hTH
     hnr hmono hdel hsync hcmp hw hu (Ne.symm huw) hi he (s := time i) le_rfl (τ := τ)
@@ -618,14 +573,16 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bo
     Finset.image_congr fun j hj => by
       change (Z.store.blk j).creator = (x.store.blk j).creator
       rw [← hZcut.creator (hRZ j hj).1, hbs.cut.creator (hRx hj)]
-  have hcard : cfg.q ≤ (authorsIn Z.store.toRecord Z.store.ids r \ Z.exposed).card := by
+  -- the peer is not exposed at `u`, so `u` may reference what its block references
+  have hzX : (Z.store.blk id).creator ∉ Z.exposed := by
+    rw [hzc]; exact honest_not_exposed hinj htime (hTH hu) E (hTH hw)
+  have hcard : cfg.q ≤ (usableAuthors Z.store Z.exposed r).card := by
     refine le_trans hRq (le_trans (le_of_eq (congrArg Finset.card hcre.symm))
       (Finset.card_le_card fun a ha => ?_))
     obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp ha
-    refine Finset.mem_sdiff.mpr ⟨mem_authorsIn.mpr ⟨j, (hRZ j hj).1, (hRZ j hj).2, rfl⟩, ?_⟩
-    change (Z.store.blk j).creator ∉ Z.exposed
-    rw [← hZcut.creator (hRZ j hj).1, hbs.cut.creator (hRx hj)]
-    exact hRX j hj
+    have hj' : j ∈ (Z.store.blk id).refs := by rw [hZR]; exact hj
+    exact mem_usableAuthors.mpr ⟨j, (hRZ j hj).1, (hRZ j hj).2,
+      usable_of_ref hzZ (Z.store.pred id hzZ j hj').symm hzX hj', rfl⟩
   have hfresh := fresh_before hid htime (hTH hu) hZt
   -- the timer has fired, or the lent references pass the tests
   have hgo : r ∈ Z.fired ∨
@@ -633,8 +590,8 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bo
         certReady (cfg.at u) Z.store (refsAt (cfg.at u) Z.store r Z.own Z.exposed) r = true) := by
     rcases hexit with ⟨hre, hce⟩ | ⟨hfx, -⟩
     · right
-      obtain ⟨hRR, hlZ, hlb⟩ := lent_buildable (cfg := cfg.at u) hbs.cut hZcut hRx hRX hRq hRd
-        hzZ (hzr.trans hbr) hZR hoi hor hoc (hTH hu) hfresh
+      obtain ⟨hRR, hlZ, hlb⟩ := lent_buildable (cfg := cfg.at u) hbs.cut hZcut hRx hRq hRd
+        hzZ (hzr.trans hbr) hZR hzX hoi hor hoc (hTH hu) hfresh
       have hready := ready_transfer (cfg := cfg.at u) hσ hvo (fun h => certThreshold_pos hadm h)
         hbs.cut hZcut hRx hRR hlZ hRn hZb hre hce
       rw [hoo]

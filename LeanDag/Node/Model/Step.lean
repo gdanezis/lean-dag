@@ -21,9 +21,11 @@ input `i` in the state `s`: the new state and the outputs.
   of a held round-`r + 1` block of another author pass them, it takes
   those, with its own block for itself (`refsAt`). It is persisted, then
   broadcast, then the round's timer is set.
-* **Exclusion** (`twinned`, `State.exposed`, `evidence`): a node given
-  two blocks of one author at one round never again references a block
-  of that author, and counts only the other authors toward its quorum;
+* **Exclusion** (`twinned`, `State.exposed`, `evidence`, `usable`): a
+  node given two blocks of one author at one round holds that author
+  exposed; it references a block of an exposed author only if a held
+  block one round above, by an author not exposed, references it, and
+  counts toward its quorum only the authors of blocks it may reference;
   the first time, it relays both blocks to every peer, so its peers
   exclude the author too.
 * **Deciding** (`decideStep`): `tryDecide` from the next undecided slot
@@ -74,15 +76,16 @@ input `i` in the state `s`: the new state and the outputs.
   requests; the downtime counts as the top round's timer firing.
   `State.persisted` is what the node writes, and `resume` rebuilds a
   state from it.
-* **Resuming** (`tryResume`): a recovering node whose store holds `q`
-  authors it does not hold exposed at a round above its top, two above
+* **Resuming** (`tryResume`): a recovering node whose store holds blocks
+  of `q` authors it may reference at a round above its top, two above
   if it built at its top, moves its top there without a block of its
   own, and builds from there.
 * **Bootstrap** (`tryBoot`): a restarted node asks its peers for their
   bases, again whenever a delivered block, kept or not, lies `Λ + 2`
-  rounds above the one it last asked on, and again when a peer it holds
-  no base of asks for its base; a peer answers with its horizon, its
-  store and its certificate. Of each base offered, the node asks the
+  rounds above the one it last asked on, when the timer of its top round
+  fires (`timerAsk`), and when a peer it holds no base of asks for its
+  base; a peer answers with its horizon, its store and its certificate.
+  Of each base offered, the node asks the
   offering peer for the blocks at or above its horizon that it lacks
   (`askOffered`). It records each certificate offered, and otherwise
   takes it as any node does. Once some round `G` above the node's top has
@@ -202,13 +205,28 @@ def flush : ℕ → Store Validator BlockId Payload → List (BlockId × Block V
     if split.1.isEmpty then (s, pend)
     else flush fuel (split.1.foldl (fun s e => accept cfg s e.1 e.2) s) split.2
 
+/-- **Whether the node may reference the block `i`**, holding the authors
+`X` exposed (`docs/validator.md` §3.10): `i`'s author lies outside `X`,
+or a held block one round above, by an author outside `X`, references
+`i`. -/
+def usable (s : Store Validator BlockId Payload) (X : Finset Validator) (i : BlockId) : Bool :=
+  decide ((s.blk i).creator ∉ X) ||
+    decide (((blocksAt s.toRecord ((s.blk i).round + 1)).filter fun c =>
+      (s.blk c).creator ∉ X ∧ i ∈ (s.blk c).refs).Nonempty)
+
+/-- The authors of the held round-`r` blocks the node may reference,
+holding the authors `X` exposed. -/
+def usableAuthors (s : Store Validator BlockId Payload) (X : Finset Validator) (r : ℕ) :
+    Finset Validator :=
+  creatorsOf s.blk ((blocksAt s.toRecord r).filter fun i => usable s X i)
+
 /-- **The references of the node's next block**, above round `r`: one
-accepted block per author of round `r` outside `X`, the node's own block
-`o` there for itself if it built one, and the least identifier
-otherwise. -/
+accepted block per author of round `r` among those it may reference,
+holding `X` exposed, the node's own block `o` there for itself if it
+built one, and the least identifier otherwise. -/
 def refsFor (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
     (X : Finset Validator) : Finset BlockId :=
-  let R := (blocksAt s.toRecord r).filter fun i => (s.blk i).creator ∉ X
+  let R := (blocksAt s.toRecord r).filter fun i => usable s X i
   (creatorsOf s.blk R).biUnion fun a =>
     if a = cfg.me ∧ o.isSome then o.toFinset
     else (Scheme.leastOf (R.filter fun i => (s.blk i).creator = a)).toFinset
@@ -241,11 +259,12 @@ def certReady (s : Store Validator BlockId Payload) (refs : Finset BlockId) (r :
           (creatorsOf s.blk (refs.filter fun b => cfg.σ.Votes s.toRecord b L)).card)
   else true
 
-/-- **The references a held round-`r + 1` block `c` lends**: `c`'s by
-authors outside `X`, with the node's own block `o` put in for itself. -/
+/-- **The references a held round-`r + 1` block `c` lends**: `c`'s that
+the node may reference, holding `X` exposed, with the node's own block
+`o` put in for itself. -/
 def lent (s : Store Validator BlockId Payload) (c : BlockId) (o : Option BlockId)
     (X : Finset Validator) : Finset BlockId :=
-  ((s.blk c).refs.filter fun j => (s.blk j).creator ≠ cfg.me ∧ (s.blk j).creator ∉ X) ∪
+  ((s.blk c).refs.filter fun j => (s.blk j).creator ≠ cfg.me ∧ usable s X j = true) ∪
     o.toFinset
 
 /-- **References `R` the node can build on above round `r`**: the block
@@ -256,8 +275,8 @@ def buildable (s : Store Validator BlockId Payload) (r : ℕ) (R : Finset BlockI
     (s.base < b.round → ∀ j ∈ b.refs, (s.blk j).round + 1 = b.round) ∧
     rowValid cfg.q (Function.update s.blk (cfg.idOf b) b) b)
 
-/-- **The references of the node's next block**, above round `r`, none
-by an author in `X`: those of `refsFor` if they pass the reach and
+/-- **The references of the node's next block**, above round `r`, each
+one the node may reference, holding `X` exposed: those of `refsFor` if they pass the reach and
 certificate tests; else those lent by the first held round-`r + 1` block
 of another author that pass them and can be built on; else those of
 `refsFor`. A node behind then reaches what a peer reached. -/
@@ -285,7 +304,7 @@ def tryBuild (s : State Validator BlockId Payload) :
   match s.top with
   | some r =>
     let refs := refsAt cfg s.store r s.own s.exposed
-    if cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r \ s.exposed).card ∧
+    if cfg.q ≤ (usableAuthors s.store s.exposed r).card ∧
         (r ∈ s.fired ∨ (reachReady cfg s.store refs r ∧ certReady cfg s.store refs r)) then
       let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, refs, cfg.payload (r + 1)⟩
       let id := cfg.idOf b
@@ -615,12 +634,12 @@ def advance (s : State Validator BlockId Payload) :
   let fl := flush cfg (g.1.pending.length + 1) g.1.store g.1.pending
   ({ g.1 with store := fl.1, pending := fl.2 }, b.2 ++ d.2 ++ g.2)
 
-/-- **The highest round at or above `t` at which the store holds `q`
-authors outside `X`**, if any. -/
+/-- **The highest round at or above `t` at which the store holds blocks
+of `q` authors the node may reference, holding `X` exposed**, if any. -/
 def quorumRound (st : Store Validator BlockId Payload) (X : Finset Validator) (t : ℕ) :
     Option ℕ :=
   ((List.range (st.topRound + 1)).filter fun R =>
-    decide (t ≤ R) && decide (cfg.q ≤ (authorsIn st.toRecord st.ids R \ X).card) &&
+    decide (t ≤ R) && decide (cfg.q ≤ (usableAuthors st X R).card) &&
       decide (0 < (authorsIn st.toRecord st.ids R).card)).max?
 
 /-- **Resume after a restart** (`docs/validator.md` §11): a recovering node
@@ -785,6 +804,11 @@ def confirm (s : State Validator BlockId Payload) (c : Cert Validator BlockId) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   settle cfg { s with cert := some c, props := above (some c) s.props }
 
+/-- **The request a timer sends**: a recovering node whose top round's
+timer fires asks for bases, since it cannot build there. -/
+def timerAsk (s : State Validator BlockId Payload) (r : ℕ) : List (Output Validator BlockId Payload) :=
+  if s.recovering ∧ s.top = some r then [.requestBase] else []
+
 /-- **The node's transition function.** -/
 def step (s : State Validator BlockId Payload) :
     Input Validator BlockId Payload →
@@ -821,7 +845,9 @@ def step (s : State Validator BlockId Payload) :
     else if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.recovering ∧ s.asked + cfg.lag + 2 ≤ b.round then
       ({ s with asked := b.round }, [.requestBase])
     else (s, [])
-  | .timer r => settle cfg { s with fired := insert r s.fired }
+  | .timer r =>
+    let x := settle cfg { s with fired := insert r s.fired }
+    (x.1, timerAsk s r ++ x.2)
   | .fetchRequest peer G ids => (s, answer s peer G ids)
   | .restart => let r := settle cfg s.recover; (r.1, .requestBase :: r.2)
   | .baseRequest peer =>

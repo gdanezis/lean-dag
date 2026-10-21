@@ -225,8 +225,8 @@ the slot's round up, all above the horizon.
 
 A restarted node is recovering until it resumes (`tryResume`). Let `t`
 be its top. It resumes at the highest round `R > t` at which its store
-holds `q` authors it does not hold exposed (`quorumRound`, §3.10), the
-quorum it builds on, if it has no block of its own at `t`,
+holds blocks of `q` authors it may reference (`quorumRound`,
+`usableAuthors`, §3.10), the quorum it builds on, if it has no block of its own at `t`,
 or if `R ≥ t + 2`; with its own block at `t` and `R = t + 1` it builds
 `t + 1` on that block as usual. Its top becomes `R`, with no block of
 its own there, the timer of round `R` counts as fired, and it builds
@@ -247,9 +247,10 @@ A validator whose last own block lies below its peers' horizons cannot
 rejoin from its window, because the blocks its window references are
 pruned. A restarted node asks every peer for its base. It asks again
 whenever a delivered block lies `Λ + 2` rounds above the one it last
-asked on, whether or not it keeps the block, and again when a peer it
-holds no base of asks for its base, since that peer has restarted too
-and its earlier answer was lost. A peer answers with its horizon and
+asked on, whether or not it keeps the block; again when the timer of
+its top round fires (`timerAsk`), since it cannot build there; and again
+when a peer it holds no base of asks for its base, since that peer has
+restarted too and its earlier answer was lost. A peer answers with its horizon and
 its store (`State.window`), and with its certificate if it holds one.
 Of each base offered, the node asks the offering peer for the blocks at
 or above its own horizon that it neither holds nor has pending
@@ -544,10 +545,14 @@ at once.
 
 A node given two blocks of one author at one round, with distinct
 identifiers, holds that author exposed (`State.exposed`, `twinned`). It
-never again references a block of an exposed author, in its own
-references (`refsFor`) or in those it copies from a peer's block
-(`lent`), and it counts only authors it does not hold exposed toward the
-quorum of a round. The first time it exposes an author it relays both
+references a round-`r` block of an exposed author only if a block it
+holds at round `r + 1`, by an author it does not hold exposed, already
+references it (`usable`), in its own references (`refsFor`) and in those
+it copies from a peer's block (`lent`); and it counts toward the quorum
+of a round, to build and to resume, only the authors of blocks it may
+reference (`usableAuthors`). So once an author is exposed, none of its
+blocks enters the history of the node's blocks unless a block of an
+author not exposed carried it there first. The first time it exposes an author it relays both
 blocks to every peer (`evidence`, `Output.relay`), so each peer is given
 the twin it lacked and exposes the author too. Exposure is held in
 memory: a restart forgets it, which is safe, since it only restricts
@@ -561,14 +566,17 @@ knows one block per honest author and round. At least `n − f ≥ q`
 authors then remain to build on.
 
 What it costs: an excluded author's blocks no longer count toward a
-quorum, so a run in which the excluded author's blocks were needed to
-make a quorum slows to the pace of one with that author crashed. With
-`f` authors exposed at `n = 3f + 1`, the quorum is all `2f + 1` honest
-authors, so every honest node must hold a block of its own at every
-round. A node that bootstrapped or resumed holds none at its new top,
-and none at the rounds it missed, and it never can: each of its blocks
-needs `q` blocks of authors not exposed one round below, its own among
-them. The run then stops for good (§13.11). In the
+quorum at the frontier, so a run in which the excluded author's blocks
+were needed to make a quorum slows to the pace of one with that author
+crashed. Below the frontier the blocks other nodes built carry the
+excluded author's blocks they reference. With `f` authors exposed at
+`n = 3f + 1`, the quorum at the frontier is all `2f + 1` honest authors,
+so a node that bootstrapped or resumed, with no block of its own at the
+rounds it missed, rebuilds them on what its peers' blocks there
+reference, and the run goes on once it reaches the frontier. Without
+this, it could never build, since each of its blocks needs `q` blocks of
+authors not exposed one round below, its own among them, and the run
+stopped for good (§13.11, D10). In the
 simulator, at `n = 4`, an equivocator's runs reach about 55 rounds in
 300 ticks against 47 before, and an attacker shown equivocating, by
 invalid twins or a fake base, slows the run to a crashed node's pace,
@@ -1909,36 +1917,26 @@ what removed each:
 | D7 | one node restarting while another was down | the restarted node asked for bases once, while the other was down, and never again | a recovering node asked for its base by a peer it holds no base of asks for bases itself (§3.6) |
 | D8 | an equivocator excluded, then a restart | the node resumed at a round whose quorum counted the excluded author, where it could not build | the resume quorum leaves out exposed authors (§3.5) |
 | D9 | a random equivocator under rate limiting | the relayed twin was dropped for want of room, so the nodes excluded different authors, and the one that excluded it fell behind beyond the window | the first twin of an author not yet exposed is kept (§3.9) |
+| D10 | `f` authors exposed at `n = 3f + 1`, then a restart | the quorum was every honest author, and a node that bootstrapped or resumed had no block of its own at the rounds it missed and could never build one | a node may reference an exposed author's block that a held block of an author not exposed references (§3.10) |
+| D11 | a random equivocator under rate limiting with `W = 2`, then two restarts | the peers' blocks at a recovering node's top were dropped above its window while it was further behind, and no delivery came after it reached that round | a recovering node asks for bases when its top round's timer fires (§3.6) |
 
-Three classes remain open. Of 400 runs after the fixes, one stalled, of
-class 1; classes 2 and 3 each stalled one run of 400 before the last two
-fixes.
+Two classes remain open. Of 400 runs after the fixes, one stalled, of
+class 1; class 2 stalled one run of 400 before D10 and D11.
 
-1. **Exclusion against rejoin.** With `f` authors exposed at
-   `n = 3f + 1`, a node that bootstrapped or resumed can never build,
-   and the others need its blocks (§3.10). At `n = 7`, `f = 2`, with
-   both Byzantine nodes exposed and node 1 down from tick 231 to 297,
-   all honest nodes stay at round 27. No program change keeps the rule
-   "never reference an exposed author's block" and removes this: the
-   rejoining node lacks its own block at every round from its new top
-   down. Keeping the rule's purpose, that no new twin enters an honest
-   history once its author is exposed, a node could reference an exposed
-   author's block that a held block of an author not exposed already
-   references.
-2. **A horizon below the peers'.** A node that restarts with its top
+1. **A horizon below the peers'.** A node that restarts with its top
    above its peers' horizon but its own horizon below it may need,
    through a twin, a block its peers have pruned, and it bootstraps only
    above its top. At `n = 4`, with a random equivocator, GST at 200 and
    node 2 down from tick 83 to 218, all honest nodes stay at round 3. A
    bootstrap that raises a recovering node's horizon to an attested one
    below its top would remove it.
-3. **Exposure below the peers' horizon.** A node that lags exposes an
+2. **Exposure below the peers' horizon.** A node that lags exposes an
    author from twins below its peers' horizon; the relayed twins are
    dropped there, so it alone excludes the author. Its peers go on with
    the author's blocks, it waits for theirs without them, and once it
    lags beyond their horizon it cannot catch up: it no longer recovers,
    and only a recovering node bootstraps. At `n = 4`, with a random
    equivocator, GST at 200, `ρ = 4`, `W = 2` and node 2 down from tick 60
-   to 218, node 2 stays at round 13 while the others reach 114. Classes
-   2 and 3 both need a node to bootstrap where it may not: below its top,
-   or when it does not recover.
+   to 218, node 2 stays at round 13 while the others reach 114. Both
+   classes need a node to bootstrap where it may not: below its top, or
+   when it does not recover.

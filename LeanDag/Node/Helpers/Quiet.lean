@@ -130,8 +130,8 @@ theorem below_build {R : ℕ} (hq : 2 ≤ cfg.q) {s s' : State Validator BlockId
     · rename_i hc
       -- a second author at round `r`
       have h2 : 1 < (authorsIn s.store.toRecord s.store.ids r).card :=
-        lt_of_lt_of_le (show 1 < (authorsIn s.store.toRecord s.store.ids r \ s.exposed).card by
-          omega) (Finset.card_le_card Finset.sdiff_subset)
+        lt_of_lt_of_le (show 1 < (usableAuthors s.store s.exposed r).card by
+          omega) (Finset.card_le_card usableAuthors_subset)
       obtain ⟨a, ha, b, hb', hab⟩ := Finset.one_lt_card.mp h2
       have hne : a ≠ cfg.me ∨ b ≠ cfg.me := by
         rcases Classical.em (a = cfg.me) with ha' | ha'

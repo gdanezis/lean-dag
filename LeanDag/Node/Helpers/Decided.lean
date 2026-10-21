@@ -438,7 +438,9 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
     · split
       · exact ⟨Appends.quiet rfl rfl (by simp), hL.of_eq rfl rfl rfl rfl⟩
       · exact ⟨Appends.refl s, hL⟩
-  | timer r => exact hset _ [] rfl rfl rfl rfl rfl (by simp)
+  | timer r =>
+    exact hset _ (timerAsk s r) rfl rfl rfl rfl (commitsOf_timerAsk s r) fun k h hk => by
+      unfold timerAsk at hk; split at hk <;> simp at hk
   | restart => exact hset _ [.requestBase] rfl rfl rfl rfl rfl (by simp)
   | fetchRequest peer G ids =>
     refine ⟨Appends.quiet rfl ?_ fun k h hk => ?_, hL⟩

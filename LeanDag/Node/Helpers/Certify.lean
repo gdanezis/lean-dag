@@ -709,7 +709,7 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
       intro c; split_ifs <;> simp <;> intro h <;> obtain ⟨_, _, he⟩ := evidence_relay h <;>
         cases he
     · rw [if_neg (by simp [hrec])]; exact hnil
-  | timer r => exact hset _ rfl rfl rfl rfl rfl rfl hrec
+  | timer r => rw [step_timer_of hrec]; exact hset _ rfl rfl rfl rfl rfl rfl hrec
   | fetchRequest peer G ids => exact ⟨hK, hcov, fun c hc => by simp [Node.step, answer] at hc⟩
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>

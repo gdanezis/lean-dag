@@ -19,6 +19,82 @@ variable [LinearOrder BlockId]
 variable {cfg : Config Validator BlockId Payload}
 
 omit [Fintype Validator] in
+/-- A block by an author outside `X` may be referenced. -/
+theorem usable_of_not {st : Store Validator BlockId Payload} {X : Finset Validator}
+    {i : BlockId} (h : (st.blk i).creator ∉ X) : usable st X i = true := by
+  simp [usable, h]
+
+omit [Fintype Validator] in
+/-- A block referenced by a held block one round above, by an author
+outside `X`, may be referenced. -/
+theorem usable_of_ref {st : Store Validator BlockId Payload} {X : Finset Validator}
+    {i c : BlockId} (hc : c ∈ st.ids) (hcr : (st.blk c).round = (st.blk i).round + 1)
+    (hcX : (st.blk c).creator ∉ X) (hi : i ∈ (st.blk c).refs) : usable st X i = true := by
+  unfold usable
+  refine Bool.or_eq_true_iff.mpr (Or.inr (decide_eq_true ⟨c, ?_⟩))
+  exact Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hc, hcr⟩, hcX, hi⟩
+
+omit [Fintype Validator] in
+/-- Membership in `usableAuthors`, unfolded. -/
+theorem mem_usableAuthors {st : Store Validator BlockId Payload} {X : Finset Validator}
+    {r : ℕ} {a : Validator} :
+    a ∈ usableAuthors st X r ↔
+      ∃ i ∈ st.ids, (st.blk i).round = r ∧ usable st X i = true ∧ (st.blk i).creator = a := by
+  unfold usableAuthors
+  rw [mem_creatorsOf]
+  constructor
+  · rintro ⟨i, hi, rfl⟩
+    obtain ⟨hb, hu⟩ := Finset.mem_filter.mp hi
+    obtain ⟨hid, hr⟩ := mem_blocksAt.mp hb
+    exact ⟨i, hid, hr, hu, rfl⟩
+  · rintro ⟨i, hid, hr, hu, rfl⟩
+    exact ⟨i, Finset.mem_filter.mpr ⟨mem_blocksAt.mpr ⟨hid, hr⟩, hu⟩, rfl⟩
+
+omit [Fintype Validator] in
+/-- The authors the node may build on are authors of the round. -/
+theorem usableAuthors_subset {st : Store Validator BlockId Payload} {X : Finset Validator}
+    {r : ℕ} : usableAuthors st X r ⊆ authorsIn st.toRecord st.ids r := fun a ha => by
+  obtain ⟨i, hid, hr, -, rfl⟩ := mem_usableAuthors.mp ha
+  exact mem_authorsIn.mpr ⟨i, hid, hr, rfl⟩
+
+omit [Fintype Validator] in
+/-- The authors of the round outside `X` are authors the node may build on. -/
+theorem sdiff_subset_usableAuthors {st : Store Validator BlockId Payload}
+    {X : Finset Validator} {r : ℕ} :
+    authorsIn st.toRecord st.ids r \ X ⊆ usableAuthors st X r := fun a ha => by
+  obtain ⟨ha, haX⟩ := Finset.mem_sdiff.mp ha
+  obtain ⟨i, hid, hr, rfl⟩ := mem_authorsIn.mp ha
+  exact mem_usableAuthors.mpr ⟨i, hid, hr, usable_of_not haX, rfl⟩
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- A timer's request outputs no block. -/
+theorem timerAsk_isQuiet (s : State Validator BlockId Payload) (r : ℕ) :
+    ∀ o ∈ timerAsk s r, o.isQuiet := by
+  unfold timerAsk; split <;> simp [Output.isQuiet]
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- A timer's request outputs no decision. -/
+theorem commitsOf_timerAsk (s : State Validator BlockId Payload) (r : ℕ) :
+    commitsOf (timerAsk s r) = [] := by
+  unfold timerAsk; split <;> rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- A node not recovering requests nothing on a timer. -/
+theorem timerAsk_of {s : State Validator BlockId Payload} (hs : s.recovering = false) (r : ℕ) :
+    timerAsk s r = [] := by
+  unfold timerAsk; simp [hs]
+
+theorem step_timer_eq (s : State Validator BlockId Payload) (r : ℕ) :
+    Node.step cfg s (.timer r) =
+      ((settle cfg { s with fired := insert r s.fired }).1,
+        timerAsk s r ++ (settle cfg { s with fired := insert r s.fired }).2) := rfl
+
+/-- A timer of a node not recovering settles. -/
+theorem step_timer_of {s : State Validator BlockId Payload} (hs : s.recovering = false) (r : ℕ) :
+    Node.step cfg s (.timer r) = settle cfg { s with fired := insert r s.fired } := by
+  rw [step_timer_eq, timerAsk_of hs, List.nil_append]
+
+omit [Fintype Validator] in
 /-- **A successful build step.** -/
 theorem tryBuild_some {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
@@ -721,7 +797,7 @@ theorem tryResume_some {s s' : State Validator BlockId Payload} (h : tryResume c
         subst h
         have hm := List.mem_filter.mp (List.max?_mem hR)
         simp only [Bool.and_eq_true, decide_eq_true_eq] at hm
-        exact ⟨t, R, htop, by omega, hm.2.1.2.trans (Finset.card_le_card Finset.sdiff_subset),
+        exact ⟨t, R, htop, by omega, hm.2.1.2.trans (Finset.card_le_card usableAuthors_subset),
           hm.2.2, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
       · cases h
     · cases h
@@ -1382,7 +1458,8 @@ theorem Inv.step {s : State Validator BlockId Payload}
     exact (⟨fun j hj => hsub (hi.known j hj), fun x hx => hsub (hi.pend x hx), hi.rounds,
       fun x hx => (hi.good x hx).mono hsub, fun x hx => hsub (hi.sub x hx), hi.valid,
       fun o ho x hx hid => hsub (hi.offered o ho x hx hid), fun a ha => (hi.exposed a ha).mono hsub⟩ :
-        Inv cfg { s with fired := insert r s.fired } K' B).settle_of subset_rfl [] (by simp)
+        Inv cfg { s with fired := insert r s.fired } K' B).settle_of subset_rfl _
+          (timerAsk_isQuiet s r)
   | fetchRequest peer G ids =>
     simp only [Node.step]
     refine hnil _ fun o ho => ?_

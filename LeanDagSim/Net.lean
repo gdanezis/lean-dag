@@ -265,8 +265,8 @@ variable {n : ℕ} (sc : Scenario) (p : Scheme.Params) (q : ℕ) (hn : 0 < n)
 
 /-- The simulation's state: each agent's state, the inputs in flight, the
 seed, each agent's decisions (the latest first), the honest agents' own blocks, the blocks
-each agent made or broadcast in its own name under their hash, the
-largest honest store, the inputs processed, and the
+each agent made or broadcast in its own name under their hash, every
+block broadcast or sent under its hash, the largest honest store, the inputs processed, and the
 honest agents' skips and bootstraps. -/
 structure World (n : ℕ) where
   agents : Array (Agent n)
@@ -276,6 +276,7 @@ structure World (n : ℕ) where
   decisions : Array (List (ℕ × Option ℕ))
   honest : List (ℕ × Block (Fin n) ℕ ℕ)
   blocks : Std.TreeMap ℕ (Block (Fin n) ℕ ℕ) compare
+  seen : Std.TreeMap ℕ (Block (Fin n) ℕ ℕ) compare
   maxStore : ℕ
   maxPending : ℕ
   events : ℕ
@@ -627,6 +628,10 @@ def loop : ℕ → World n → World n
           | .persist id b => some (id, b)
           | _ => none
         let sent := out.filterMap fun
+          | .broadcast id b => if id = idOf b ∧ b.creator = a.node then some (id, b) else none
+          | .send _ id b => if id = idOf b ∧ b.creator = a.node then some (id, b) else none
+          | _ => none
+        let seen := out.filterMap fun
           | .broadcast id b => if id = idOf b then some (id, b) else none
           | .send _ id b => if id = idOf b then some (id, b) else none
           | _ => none
@@ -677,6 +682,8 @@ def loop : ℕ → World n → World n
             honest := if isHonest then own ++ w.honest else w.honest
             blocks := (own ++ sent ++ (jc.map (·.2.2)).getD []).foldl (fun m e => m.insert e.1 e.2)
               w.blocks
+            seen := (own ++ seen ++ (jc.map (·.2.2)).getD []).foldl (fun m e => m.insert e.1 e.2)
+              w.seen
             maxStore := if isHonest then max w.maxStore r.1.store.ids.card else w.maxStore
             maxPending := if isHonest then max w.maxPending r.1.pending.length else w.maxPending
             events := w.events + 1
@@ -725,6 +732,7 @@ def simulate (sc : Scenario) : Report :=
           decisions := agents.map fun _ => []
           honest := []
           blocks := ∅
+          seen := ∅
           maxStore := 0
           maxPending := 0
           events := 0
@@ -740,7 +748,7 @@ def simulate (sc : Scenario) : Report :=
       let decs := honestIdx.map fun v => (w.decisions[v]?.getD []).reverse
       let junk : Block (Fin n) ℕ ℕ := ⟨0, ⟨0, hn⟩, ∅, 0⟩
       let valid := w.honest.all fun e =>
-        e.2.round == 0 || decide (rowValid q (fun i => w.blocks.getD i junk) e.2)
+        e.2.round == 0 || decide (rowValid q (fun i => w.seen.getD i junk) e.2)
       { admissible := true
         tops := honestIdx.map fun v => (w.states[v]?.map (·.top)).getD none
         final := honestIdx.map fun v => match w.states[v]? with
