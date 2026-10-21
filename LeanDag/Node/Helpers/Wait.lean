@@ -854,7 +854,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · let s₁ := afterFlush (cfg := cfg) s id b
-      let miss := askable cfg s₁ id (missing s₁ id b)
+      let miss := missing s₁ id b
       have hx : (id, b) ∈ K := hd _ (by simp [delivered, hA.1])
       have hg₁ := Grows.flush (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
       have hb₁ := flush_base (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)

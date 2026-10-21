@@ -1309,8 +1309,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
       generalize charged cfg s id b ++ s.owner = ow
       have hX₀ := (hi.mono hsub).exposes_twin hmem hc.2.2.2.1 hc.2.2.2.2.1
       generalize (if twinned s b = true then insert b.creator s.exposed else s.exposed) = X at hX₀
-      generalize askable cfg { s with store := fl.1, pending := fl.2, owner := ow, exposed := X } id
-        (missing { s with store := fl.1, pending := fl.2, owner := ow, exposed := X } id b) = miss
+      generalize missing { s with store := fl.1, pending := fl.2, owner := ow, exposed := X } id b = miss
       let req := s.requested ++ miss.map fun x => (x.1, id, x.2)
       let s₀ := { s with store := fl.1, pending := fl.2, owner := ow, exposed := X }
       have hX : ∀ a ∈ X, Exposes K' a := hX₀

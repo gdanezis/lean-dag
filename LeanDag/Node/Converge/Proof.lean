@@ -19,14 +19,14 @@ namespace Node
 
 namespace Converge
 
+
 theorem converges : Converges := by
   intro Validator BlockId Payload _ _ _ cfg H tr hlim hdel htime hinj hbase hnr hnj i u hu huH e he
     y hy v hv
   have hkept : ∀ (s : State Validator BlockId Payload) j b, kept (cfg.at v) s j b = true := by
-    intro s j b; simp [kept, Config.at, hlim]
-  have hask : ∀ (s : State Validator BlockId Payload) j (miss : List (BlockId × ℕ)),
-      askable (cfg.at v) s j miss = miss := by
-    intro s j miss; simp [askable, Config.at, hlim]
+    intro s j b
+    unfold kept
+    rw [show (cfg.at v).limit = none from hlim]
   obtain ⟨inp, hi⟩ := event_of_map hu
   set L := tr.length
   -- `h`'s history, as the trace reads it, held by `u` from event `i + 1` on
@@ -250,9 +250,8 @@ theorem converges : Converges := by
     · exact (hxH m (by omega)).2 ((grows_before (cfg := cfg) (tr := tr) v (show A m ≤ L by omega)).2
         (by rw [base_before hbase hv, base_before hbase hv]) |>.1 h'')
   -- so it asked `h`'s author `u` for it at `h`'s arrival
-  set miss := askable (cfg.at v) s₁ (x m) (missing s₁ (x m) (raw (x m)))
+  set miss := missing s₁ (x m) (raw (x m))
   have hwm : w ∈ miss := by
-    rw [show miss = missing s₁ (x m) (raw (x m)) from hask _ _ _]
     exact List.mem_filter.mpr ⟨hw, by simpa using hnreq⟩
   obtain ⟨rest, hout⟩ : ∃ rest, outputsAt cfg tr (A m) =
       evidence (stateBefore cfg tr (A m) v) (x m) (raw (x m)) ++ (if miss.isEmpty then [] else
@@ -261,6 +260,7 @@ theorem converges : Converges := by
     ⟨_, by rw [outputsAt_eq htm, step_deliver hcm, List.append_assoc]⟩
   have hne : miss.isEmpty = false := by
     rw [List.isEmpty_eq_false_iff]; exact List.ne_nil_of_mem hwm
+  clear_value miss
   set G := (stateBefore cfg tr (A m) v).store.base
   have hxm0 : x m = e.1 := hx0
   have hcrm : (raw (x m)).creator = u := by rw [hxm0, hraw₀, hecr]

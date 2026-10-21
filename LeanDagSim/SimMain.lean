@@ -11,8 +11,8 @@ from `v`), `reveal-after`, `adv` (`node,…`: attackers), `slow` (`node,…`)
 and `slow-delay` (the least delay to or from a slow node), `leaders`
 (`node,…`: the leader schedule, cycled), `attacks`
 (`fake-base`, `split-base`, `fake-cert`, `conflict-proposals`,
-`invalid-blocks`, `forged-author`, `flood`, `junk-at-cut`, comma-separated), `limit`
-(`τ,W`: the rate limiter's budget and window) and `verify`
+`invalid-blocks`, `forged-author`, `flood`, `junk-at-cut`, `twin-split`, comma-separated), `limit`
+(`ρ,W`: the rate limiter's quota and window) and `verify`
 (`true` or `false`: whether the network checks signatures).
 -/
 
@@ -71,8 +71,8 @@ def parseArgs : List String → Scenario → Except String Scenario
       | "--slow-delay" => pure { sc with slowDelay := ← nat }
       | "--leaders" => pure { sc with leaders := parseNats v }
       | "--limit" => match parseNats v with
-        | [τ, W] => pure { sc with limit := some (τ, W) }
-        | _ => throw s!"--limit wants τ,W: {v}"
+        | [ρ, W] => pure { sc with limit := some (ρ, W) }
+        | _ => throw s!"--limit wants ρ,W: {v}"
       | "--attacks" => do
         let as ← (v.splitOn ",").mapM fun a => match a with
           | "fake-base" => pure Attack.fakeBase
@@ -83,6 +83,7 @@ def parseArgs : List String → Scenario → Except String Scenario
           | "forged-author" => pure Attack.forgedAuthor
           | "flood" => pure Attack.flood
           | "junk-at-cut" => pure Attack.junkAtCut
+          | "twin-split" => pure Attack.twinSplit
           | _ => throw s!"unknown attack {a}"
         pure { sc with attacks := as }
       | "--verify" => match v with

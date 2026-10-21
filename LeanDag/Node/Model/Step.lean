@@ -88,15 +88,15 @@ input `i` in the state `s`: the new state and the outputs.
   own, takes the offered blocks above it as pending, and outputs the
   certified decisions it lacks.
 
-* **Rate limiting** (`chargeTo`, `askable`, `docs/validator.md` §3.9),
-  when the configuration sets a budget `τ` and a window `W`: a delivered
-  block is kept only as a candidate, the first block of its author and
-  round within the window, or on the account of a candidate slot that
-  asked for it, at or above its round, while that slot is charged fewer
-  than `τ` blocks; a delivery asks for at most what its slot's budget
-  leaves. The node's own blocks and its bootstrap base are charged to
-  their own slots (`slotted`). A bootstrap then keeps one attested block
-  per author, and takes no offered block above the new horizon.
+* **Rate limiting** (`chargeTo`, `wanted`, `docs/validator.md` §3.9),
+  when the configuration sets a quota `ρ` and a window `W`: a delivered
+  block within the window is kept, charged to its slot, its author and
+  round, while that slot is charged fewer than `ρ` blocks, if it is the
+  slot's first or it is missing from the history of a pending block of
+  an author the node does not hold exposed. The node's own blocks and its
+  bootstrap base are charged to their own slots (`slotted`). A bootstrap
+  then keeps one attested block per author, and takes no offered block
+  above the new horizon.
 
 Definitions only.
 -/
@@ -333,29 +333,51 @@ def baseAt (s : State Validator BlockId Payload) (G : ℕ) :
 def State.charge (s : State Validator BlockId Payload) (sl : Validator × ℕ) : ℕ :=
   (s.owner.filter fun e => decide (e.2 = sl)).length
 
-/-- The slot a block was charged to, if any. -/
-def State.ownerOf (s : State Validator BlockId Payload) (j : BlockId) :
-    Option (Validator × ℕ) :=
-  (s.owner.find? fun e => decide (e.1 = j)).map Prod.snd
+/-- The references of a pending block, each with the round below it. -/
+def expand (s : State Validator BlockId Payload) (j : BlockId) : List (BlockId × ℕ) :=
+  match s.pending.find? (fun e => decide (e.1 = j)) with
+  | some (_, c) => (c.refs.sort (· ≤ ·)).map fun k => (k, c.round - 1)
+  | none => []
+
+/-- **One level of the walk**, from a front, the identifiers met already,
+and the missing blocks found so far: the front's blocks at or above the
+horizon, neither accepted nor met already, are missing if no pending
+block has their identifier, and their references form the next front
+otherwise. -/
+def walkLevel (s : State Validator BlockId Payload)
+    (w : List (BlockId × ℕ) × List BlockId × List (BlockId × ℕ)) :
+    List (BlockId × ℕ) × List BlockId × List (BlockId × ℕ) :=
+  let front := (w.1.filter fun x =>
+    decide (s.store.base ≤ x.2) && decide (x.1 ∉ s.store.ids) && decide (x.1 ∉ w.2.1)).dedup
+  let split := front.partition fun x => decide (x.1 ∈ s.pending.map Prod.fst)
+  (split.1.flatMap fun x => expand s x.1, w.2.1 ++ front.map Prod.fst, w.2.2 ++ split.2)
+
+/-- **Whether a block is wanted**: it is missing from the history, walked
+through the pending blocks, of a pending block whose author the node does
+not hold exposed. -/
+def wanted (s : State Validator BlockId Payload) (id : BlockId) : Bool :=
+  let roots := (s.pending.filter fun e => decide (e.2.creator ∉ s.exposed)).map
+    fun e => (e.1, e.2.round)
+  (((walkLevel s)^[s.pending.length + 2] (roots, [], [])).2.2.map Prod.fst).contains id
 
 /-- **The slot a delivery is charged to** (`docs/validator.md` §3.9), when
-the node rate-limits: the block's own, if it is a candidate — its slot
-unclaimed and its round at most `W` above the node's top — and otherwise
-the slot of a block on whose account it was asked for, if that slot is
-charged fewer than `τ` blocks and lies at or above the block's round. -/
-def chargeTo (τ W : ℕ) (s : State Validator BlockId Payload) (id : BlockId)
+the node rate-limits with a quota `ρ` and a window `W`: the block's own,
+its author and round, if it lies at most `W` above the node's top and the
+slot is charged fewer than `ρ` blocks, and it is the slot's first or is
+wanted. -/
+def chargeTo (ρ W : ℕ) (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : Option (Validator × ℕ) :=
-  if b.round ≤ s.top.getD 0 + W ∧ s.charge (slotOf b) = 0 ∧ 0 < τ then some (slotOf b)
-  else ((s.requested.find? fun e => decide (e.1 = id)).bind fun e => s.ownerOf e.2.1).filter
-    fun sl => decide (s.charge sl < τ ∧ b.round ≤ sl.2)
+  if b.round ≤ s.top.getD 0 + W ∧ s.charge (slotOf b) < ρ ∧
+      (s.charge (slotOf b) = 0 ∨ wanted s id = true) then some (slotOf b)
+  else none
 
 /-- **Whether a delivery is kept**: always, without rate limiting; with
-it, if it is charged to a slot. -/
+it, if it is charged to its slot. -/
 def kept (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : Bool :=
   match cfg.limit with
   | none => true
-  | some (τ, W) => (chargeTo τ W s id b).isSome
+  | some (ρ, W) => (chargeTo ρ W s id b).isSome
 
 /-- **A twin of a delivered block** the node holds: a stored or pending
 block of the block's author at its round, with its content. -/
@@ -384,16 +406,7 @@ def charged (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : List (BlockId × (Validator × ℕ)) :=
   match cfg.limit with
   | none => []
-  | some (τ, W) => ((chargeTo τ W s id b).map fun sl => (id, sl)).toList
-
-/-- **What a delivery asks for**: what is missing, without rate limiting;
-with it, as much as the budget of its slot leaves. -/
-def askable (s : State Validator BlockId Payload) (id : BlockId) (miss : List (BlockId × ℕ)) :
-    List (BlockId × ℕ) :=
-  match cfg.limit, s.ownerOf id with
-  | some (τ, _), some sl => miss.take (τ - s.charge sl)
-  | some _, none => []
-  | none, _ => miss
+  | some (ρ, W) => ((chargeTo ρ W s id b).map fun sl => (id, sl)).toList
 
 /-- The attested base a bootstrap keeps: all of it, without rate
 limiting; with it, one block per author. -/
@@ -537,25 +550,6 @@ def decideStep (s : State Validator BlockId Payload) :
     let r := proposeAt cfg { s with lo := s.lo + ds.length, decided := ds.reverse ++ s.decided }
     (r.1, ds.map (fun e => .commit e.1 e.2) ++ r.2)
   else proposeAt cfg s
-
-/-- The references of a pending block, each with the round below it. -/
-def expand (s : State Validator BlockId Payload) (j : BlockId) : List (BlockId × ℕ) :=
-  match s.pending.find? (fun e => decide (e.1 = j)) with
-  | some (_, c) => (c.refs.sort (· ≤ ·)).map fun k => (k, c.round - 1)
-  | none => []
-
-/-- **One level of the walk**, from a front, the identifiers met already,
-and the missing blocks found so far: the front's blocks at or above the
-horizon, neither accepted nor met already, are missing if no pending
-block has their identifier, and their references form the next front
-otherwise. -/
-def walkLevel (s : State Validator BlockId Payload)
-    (w : List (BlockId × ℕ) × List BlockId × List (BlockId × ℕ)) :
-    List (BlockId × ℕ) × List BlockId × List (BlockId × ℕ) :=
-  let front := (w.1.filter fun x =>
-    decide (s.store.base ≤ x.2) && decide (x.1 ∉ s.store.ids) && decide (x.1 ∉ w.2.1)).dedup
-  let split := front.partition fun x => decide (x.1 ∈ s.pending.map Prod.fst)
-  (split.1.flatMap fun x => expand s x.1, w.2.1 ++ front.map Prod.fst, w.2.2 ++ split.2)
 
 /-- **The blocks to ask for**, after the block `b` with identifier `id`
 arrived: the missing part of its history, walked through the pending
@@ -797,7 +791,7 @@ def step (s : State Validator BlockId Payload) :
       let X := if twinned s b then insert b.creator s.exposed else s.exposed
       let s₀ := { s with store := fl.1, pending := fl.2, owner := charged cfg s id b ++ s.owner }
       let s₁ := { s₀ with exposed := X }
-      let miss := askable cfg s₁ id (missing s₁ id b)
+      let miss := missing s₁ id b
       let req := s₁.requested ++ miss.map fun x => (x.1, id, x.2)
       let ask := s.recovering ∧ s.asked + cfg.lag + 2 ≤ b.round
       let top := if ask then b.round else s.asked

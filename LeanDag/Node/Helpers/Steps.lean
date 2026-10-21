@@ -268,7 +268,7 @@ theorem askOut_isQuiet {s : State Validator BlockId Payload} {b : Block Validato
 theorem step_deliver {s : State Validator BlockId Payload} {id : BlockId}
     {b : Block Validator BlockId Payload} (h : Admits cfg s id b) :
     let s₁ := afterFlush (cfg := cfg) s id b
-    let miss := askable cfg s₁ id (missing s₁ id b)
+    let miss := missing s₁ id b
     let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
     Node.step cfg s (.deliver id b) =
       ((Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).1,
@@ -456,7 +456,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
         · exact hd _ _ rfl hc.1
         · exact hp e he
       have hfl := ReadsAs.flush (cfg := cfg) (s.pending.length + 1) hRs hpb
-      let req := s₁.requested ++ (askable cfg s₁ id (missing s₁ id b)).map fun x => (x.1, id, x.2)
+      let req := s₁.requested ++ (missing s₁ id b).map fun x => (x.1, id, x.2)
       refine hset { s₁ with requested := req, asked := askedAfter (cfg := cfg) s b } (by rw [hstep])
         (Grows.flush _ _ _) ?_ hfl.2 ?_
       · exact hfl.1.1.trans hRs.1.symm
@@ -554,7 +554,7 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
     · rw [step_deliver hc]
       dsimp only
       let s₁ := afterFlush (cfg := cfg) s id b
-      let req := s₁.requested ++ (askable cfg s₁ id (missing s₁ id b)).map fun x => (x.1, id, x.2)
+      let req := s₁.requested ++ (missing s₁ id b).map fun x => (x.1, id, x.2)
       have := settle_sub (cfg := cfg) { s₁ with requested := req, asked := askedAfter (cfg := cfg) s b }
       refine ⟨fun e he => ?_, fun e he => ?_⟩
       · have hm := flush_pending_sub (cfg := cfg) _ _ _ e (this.1 e he)

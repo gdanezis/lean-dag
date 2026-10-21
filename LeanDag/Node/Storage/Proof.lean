@@ -14,7 +14,7 @@ namespace Node
 namespace Storage
 
 theorem bounded : Bounded := by
-  intro Validator BlockId Payload _ _ _ cfg is τ W hl
+  intro Validator BlockId Payload _ _ _ cfg is ρ W hl
   exact (Lim.run hl is Lim.init).bound
 
 theorem holds : Statement := bounded

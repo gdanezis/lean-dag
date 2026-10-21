@@ -2,12 +2,12 @@ import LeanDag.Node.Helpers.Steps
 /-!
 # Rate limiting bounds the store — the lemmas
 
-`docs/validator.md` §3.9, V10. With a budget `τ` and a window `W`, every
+`docs/validator.md` §3.9, V10. With a quota `ρ` and a window `W`, every
 block the node holds is charged to a slot at or above its round
 (`Charged`), every slot charged lies between the horizon and `W` above
-the top, and each slot is charged at most `τ + 1` blocks, at most `τ`
+the top, and each slot is charged at most `ρ + 1` blocks, at most `ρ`
 above the top (`Lim`). Every step keeps this (`Lim.step`), so the charges,
-and with them the blocks held, number at most `n·(τ + 1)` a round of the
+and with them the blocks held, number at most `n·(ρ + 1)` a round of the
 window (`length_le_of_slots`).
 -/
 
@@ -25,24 +25,24 @@ def Charged (O : List (BlockId × (Validator × ℕ))) (x : BlockId × Block Val
     Prop :=
   ∃ e ∈ O, e.1 = x.1 ∧ x.2.round ≤ e.2.2
 
-/-- **The storage invariant** at a budget `τ` and a window `W`. -/
-structure Lim (τ W : ℕ) (s : State Validator BlockId Payload) : Prop where
+/-- **The storage invariant** at a quota `ρ` and a window `W`. -/
+structure Lim (ρ W : ℕ) (s : State Validator BlockId Payload) : Prop where
   store : ∀ j ∈ s.store.ids, Charged s.owner (j, s.store.map.getD j s.store.junk)
   pend : ∀ e ∈ s.pending, Charged s.owner e
   slots : ∀ e ∈ s.owner, s.store.base ≤ e.2.2 ∧ e.2.2 ≤ s.top.getD 0 + W
-  charge : ∀ sl, s.charge sl ≤ τ + 1
-  fresh : ∀ sl, (∀ t ∈ s.top, t < sl.2) → s.charge sl ≤ τ
+  charge : ∀ sl, s.charge sl ≤ ρ + 1
+  fresh : ∀ sl, (∀ t ∈ s.top, t < sl.2) → s.charge sl ≤ ρ
   base : s.store.base ≤ s.top.getD 0
 
 /-! ## Counting -/
 
 omit [LinearOrder BlockId] in
-/-- **The count**: charges at slots between `a` and `c`, at most `τ` a
-slot, number at most `n·τ·(c + 1 − a)`. -/
-theorem length_le_of_slots {O : List (BlockId × (Validator × ℕ))} {a c τ : ℕ}
+/-- **The count**: charges at slots between `a` and `c`, at most `ρ` a
+slot, number at most `n·ρ·(c + 1 − a)`. -/
+theorem length_le_of_slots {O : List (BlockId × (Validator × ℕ))} {a c ρ : ℕ}
     (hs : ∀ e ∈ O, a ≤ e.2.2 ∧ e.2.2 ≤ c)
-    (hc : ∀ sl, (O.filter fun e => decide (e.2 = sl)).length ≤ τ) :
-    O.length ≤ Fintype.card Validator * τ * (c + 1 - a) := by
+    (hc : ∀ sl, (O.filter fun e => decide (e.2 = sl)).length ≤ ρ) :
+    O.length ≤ Fintype.card Validator * ρ * (c + 1 - a) := by
   let S : Finset (Validator × ℕ) := Finset.univ ×ˢ Finset.Icc a c
   have hS : S.card = Fintype.card Validator * (c + 1 - a) := by
     simp [S, Finset.card_product, Nat.card_Icc]
@@ -53,7 +53,7 @@ theorem length_le_of_slots {O : List (BlockId × (Validator × ℕ))} {a c τ : 
     simp only [m, Multiset.mem_toFinset, Multiset.mem_coe, List.mem_map] at hx
     obtain ⟨e, he, rfl⟩ := hx
     simpa [S] using hs e he
-  have hcount : ∀ x, m.count x ≤ τ := by
+  have hcount : ∀ x, m.count x ≤ ρ := by
     intro x
     refine le_trans (le_of_eq ?_) (hc x)
     rw [Multiset.count_eq_card_filter_eq]
@@ -65,13 +65,13 @@ theorem length_le_of_slots {O : List (BlockId × (Validator × ℕ))} {a c τ : 
   calc O.length = Multiset.card m := hm.symm
     _ = ∑ x ∈ m.toFinset, m.count x := (Multiset.toFinset_sum_count_eq m).symm
     _ ≤ ∑ x ∈ S, m.count x := Finset.sum_le_sum_of_subset hsub
-    _ ≤ ∑ _x ∈ S, τ := Finset.sum_le_sum fun x _ => hcount x
-    _ = Fintype.card Validator * τ * (c + 1 - a) := by
+    _ ≤ ∑ _x ∈ S, ρ := Finset.sum_le_sum fun x _ => hcount x
+    _ = Fintype.card Validator * ρ * (c + 1 - a) := by
       rw [Finset.sum_const, hS, smul_eq_mul, Nat.mul_right_comm]
 
 omit [Fintype Validator] in
 /-- The blocks held are among the identifiers charged. -/
-theorem held_subset {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim τ W s) :
+theorem held_subset {ρ W : ℕ} {s : State Validator BlockId Payload} (h : Lim ρ W s) :
     s.store.ids ∪ (s.pending.map Prod.fst).toFinset ⊆ (s.owner.map Prod.fst).toFinset := by
   intro j hj
   rcases Finset.mem_union.mp hj with hj | hj
@@ -82,12 +82,12 @@ theorem held_subset {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim 
     exact List.mem_toFinset.mpr (List.mem_map.mpr ⟨e, he, hej⟩)
 
 /-- **The storage bound** of a state the invariant holds of: the charges,
-and the blocks held, number at most `n·(τ + 1)` a round from the horizon
+and the blocks held, number at most `n·(ρ + 1)` a round from the horizon
 to `W` above the top. -/
-theorem Lim.bound {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim τ W s) :
+theorem Lim.bound {ρ W : ℕ} {s : State Validator BlockId Payload} (h : Lim ρ W s) :
     (s.store.ids ∪ (s.pending.map Prod.fst).toFinset).card ≤ s.owner.length ∧
       s.owner.length ≤
-        Fintype.card Validator * (τ + 1) * (s.top.getD 0 + W + 1 - s.store.base) := by
+        Fintype.card Validator * (ρ + 1) * (s.top.getD 0 + W + 1 - s.store.base) := by
   refine ⟨(Finset.card_le_card (held_subset h)).trans ?_, length_le_of_slots h.slots h.charge⟩
   exact (List.toFinset_card_le _).trans (by rw [List.length_map])
 
@@ -117,7 +117,7 @@ theorem charged_mono {O O' : List (BlockId × (Validator × ℕ))} (h : ∀ e �
 omit [Fintype Validator] in
 /-- The charges of one block of the node's own, at its own slot, with
 rate limiting. -/
-theorem slotted_one {τ W : ℕ} (hl : cfg.limit = some (τ, W))
+theorem slotted_one {ρ W : ℕ} (hl : cfg.limit = some (ρ, W))
     (x : BlockId × Block Validator BlockId Payload) :
     slotted cfg [x] = [(x.1, slotOf x.2)] := by
   simp [slotted, hl]
@@ -130,7 +130,7 @@ theorem filter_slot_one (j : BlockId) (sl sl' : Validator × ℕ) :
 omit [Fintype Validator] in
 /-- The base a bootstrap keeps charges each slot at most once: its blocks
 have distinct authors. -/
-theorem keptBase_slot_le {τ W : ℕ} (hl : cfg.limit = some (τ, W))
+theorem keptBase_slot_le {ρ W : ℕ} (hl : cfg.limit = some (ρ, W))
     (l : List (BlockId × Block Validator BlockId Payload)) (sl : Validator × ℕ) :
     ((slotted cfg (keptBase cfg l)).filter fun e => decide (e.2 = sl)).length ≤ 1 := by
   have hp : (keptBase cfg l).Pairwise fun x y => x.2.creator ≠ y.2.creator := by
@@ -155,9 +155,9 @@ theorem keptBase_slot_le {τ W : ℕ} (hl : cfg.limit = some (τ, W))
 omit [Fintype Validator] in
 /-- **A state with the same store, pending blocks, top and charges** keeps
 the invariant. -/
-theorem Lim.of_eq {τ W : ℕ} {s s' : State Validator BlockId Payload} (h : Lim τ W s)
+theorem Lim.of_eq {ρ W : ℕ} {s s' : State Validator BlockId Payload} (h : Lim ρ W s)
     (hst : s'.store = s.store) (hpd : s'.pending = s.pending) (htop : s'.top = s.top)
-    (how : s'.owner = s.owner) : Lim τ W s' := by
+    (how : s'.owner = s.owner) : Lim ρ W s' := by
   have hc : ∀ sl, s'.charge sl = s.charge sl := fun sl => by simp only [State.charge, how]
   exact ⟨by rw [hst, how]; exact h.store, by rw [hpd, how]; exact h.pend,
     by rw [how, hst, htop]; exact h.slots, fun sl => by rw [hc]; exact h.charge sl,
@@ -208,9 +208,9 @@ theorem flush_in {K : Set (BlockId × Block Validator BlockId Payload)} :
 
 omit [Fintype Validator] in
 /-- **A flush keeps the invariant.** -/
-theorem Lim.flushAll {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim τ W s) (fuel : ℕ) :
+theorem Lim.flushAll {ρ W : ℕ} {s : State Validator BlockId Payload} (h : Lim ρ W s) (fuel : ℕ) :
     let fl := flush cfg fuel s.store s.pending
-    Lim τ W { s with store := fl.1, pending := fl.2 } := by
+    Lim ρ W { s with store := fl.1, pending := fl.2 } := by
   intro fl
   have hf := flush_in (cfg := cfg) (K := {x | Charged s.owner x}) fuel (st := s.store)
     (pend := s.pending) h.store h.pend
@@ -245,15 +245,15 @@ theorem tryBuild_slot {s s' : State Validator BlockId Payload}
 omit [Fintype Validator] in
 /-- **Adding a block of the node's own** at round `r + 1`, above its top
 `r`, charged to its slot, keeps the invariant. -/
-theorem Lim.build {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s s' : State Validator BlockId Payload}
-    (h : Lim τ W s) {r : ℕ} {x : BlockId × Block Validator BlockId Payload}
+theorem Lim.build {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s s' : State Validator BlockId Payload}
+    (h : Lim ρ W s) {r : ℕ} {x : BlockId × Block Validator BlockId Payload}
     (htop : ∀ t ∈ s.top, t = r) (hr : s.store.base ≤ x.2.round) (hxr : x.2.round = r + 1 ∨
       (s.top = none ∧ x.2.round = 0))
     (hst : ∀ j ∈ s'.store.ids, (j, s'.store.map.getD j s'.store.junk) ∈
       {y | Charged s.owner y} ∪ {x})
     (hpd : s'.pending = s.pending) (htop' : s'.top = some x.2.round)
     (hbase : s'.store.base = s.store.base) (how : s'.owner = slotted cfg [x] ++ s.owner) :
-    Lim τ W s' := by
+    Lim ρ W s' := by
   rw [slotted_one hl] at how
   have hfr : ∀ t ∈ s.top, t < x.2.round := by
     intro t ht
@@ -306,10 +306,10 @@ theorem Lim.build {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s s' : State Val
 
 omit [Fintype Validator] in
 /-- **A build step keeps the invariant.** -/
-theorem Lim.tryBuild {τ W : ℕ} (hl : cfg.limit = some (τ, W))
+theorem Lim.tryBuild {ρ W : ℕ} (hl : cfg.limit = some (ρ, W))
     {s s' : State Validator BlockId Payload}
-    {out : List (Output Validator BlockId Payload)} (h : Lim τ W s)
-    (hb : tryBuild cfg s = some (s', out)) : Lim τ W s' := by
+    {out : List (Output Validator BlockId Payload)} (h : Lim ρ W s)
+    (hb : tryBuild cfg s = some (s', out)) : Lim ρ W s' := by
   obtain ⟨r, id, b, hnew, hab, hrefs, hpred, hr, hbr, hst, htop, hpd, how⟩ := tryBuild_slot hb
   refine h.build hl (x := (id, b)) (r := r)
     (fun t ht => by rw [hr] at ht; exact (Option.some.inj ht).symm)
@@ -320,9 +320,9 @@ theorem Lim.tryBuild {τ W : ℕ} (hl : cfg.limit = some (τ, W))
     (Set.mem_union_right _ (Set.mem_singleton _))
 
 omit [Fintype Validator] in
-theorem Lim.progress {τ W : ℕ} (hl : cfg.limit = some (τ, W)) :
-    ∀ (fuel : ℕ) {s : State Validator BlockId Payload}, Lim τ W s →
-      Lim τ W (progress cfg fuel s).1
+theorem Lim.progress {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) :
+    ∀ (fuel : ℕ) {s : State Validator BlockId Payload}, Lim ρ W s →
+      Lim ρ W (progress cfg fuel s).1
   | 0, _, h => h
   | fuel + 1, s, h => by
     unfold Node.progress
@@ -332,8 +332,8 @@ theorem Lim.progress {τ W : ℕ} (hl : cfg.limit = some (τ, W)) :
     · exact h
 
 omit [Fintype Validator] in
-theorem Lim.decideStep {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim τ W s) :
-    Lim τ W (decideStep cfg s).1 := by
+theorem Lim.decideStep {ρ W : ℕ} {s : State Validator BlockId Payload} (h : Lim ρ W s) :
+    Lim ρ W (decideStep cfg s).1 := by
   unfold Node.decideStep
   dsimp only
   split
@@ -342,8 +342,8 @@ theorem Lim.decideStep {τ W : ℕ} {s : State Validator BlockId Payload} (h : L
     rw [he]; exact h.of_eq rfl rfl rfl rfl
 
 omit [Fintype Validator] in
-theorem Lim.collect {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim τ W s) :
-    Lim τ W (collect cfg s).1 := by
+theorem Lim.collect {ρ W : ℕ} {s : State Validator BlockId Payload} (h : Lim ρ W s) :
+    Lim ρ W (collect cfg s).1 := by
   unfold Node.collect
   split
   · rename_i t ht
@@ -379,13 +379,13 @@ theorem Lim.collect {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim 
 
 omit [Fintype Validator] in
 /-- **Advancing keeps the invariant.** -/
-theorem Lim.advance {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validator BlockId Payload}
-    (h : Lim τ W s) : Lim τ W (advance cfg s).1 :=
+theorem Lim.advance {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s : State Validator BlockId Payload}
+    (h : Lim ρ W s) : Lim ρ W (advance cfg s).1 :=
   ((h.progress hl _).decideStep.collect).flushAll _
 
 omit [Fintype Validator] in
-theorem Lim.tryResume {τ W : ℕ} {s s' : State Validator BlockId Payload} (h : Lim τ W s)
-    (hr : tryResume cfg s = some s') : Lim τ W s' := by
+theorem Lim.tryResume {ρ W : ℕ} {s s' : State Validator BlockId Payload} (h : Lim ρ W s)
+    (hr : tryResume cfg s = some s') : Lim ρ W s' := by
   obtain ⟨t, R, ht, htR, -, -, hst, hpd, htop, -⟩ := tryResume_some hr
   have how : s'.owner = s.owner := by
     unfold Node.tryResume at hr
@@ -411,8 +411,8 @@ theorem Lim.tryResume {τ W : ℕ} {s s' : State Validator BlockId Payload} (h :
   · rw [hst, htop]; have := h.base; rw [ht] at this; simp only [Option.getD_some] at this ⊢; omega
 
 omit [Fintype Validator] in
-theorem Lim.settle {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validator BlockId Payload}
-    (h : Lim τ W s) : Lim τ W (Node.settle cfg s).1 := by
+theorem Lim.settle {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s : State Validator BlockId Payload}
+    (h : Lim ρ W s) : Lim ρ W (Node.settle cfg s).1 := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hr, he⟩ <;> rw [he]
   · exact quiesce_ind (fun _ h => h.advance hl) _ _ h
   · exact quiesce_ind (fun _ h => h.advance hl) _ _ (h.tryResume hr)
@@ -432,10 +432,10 @@ omit [Fintype Validator] in
 /-- **A bootstrap keeps the invariant**: what survives the new horizon `G`
 keeps its charge, and the kept base is charged at its own slots at `G`,
 above the old top. -/
-theorem Lim.tryBoot {τ W : ℕ} (hl : cfg.limit = some (τ, W))
+theorem Lim.tryBoot {ρ W : ℕ} (hl : cfg.limit = some (ρ, W))
     {s s' : State Validator BlockId Payload}
-    {ads : List (ℕ × Option BlockId)} (h : Lim τ W s) (hb : tryBoot cfg s = some (s', ads)) :
-    Lim τ W s' := by
+    {ads : List (ℕ × Option BlockId)} (h : Lim ρ W s) (hb : tryBoot cfg s = some (s', ads)) :
+    Lim ρ W s' := by
   obtain ⟨t, G, c, ds, hbase, ht, htG, -, -, hst, hpd, htop', -, -, -, -, -, -, -, -, -, -, -, -,
     -, how⟩ := tryBoot_some hb
   have hslot : ∀ e ∈ slotted cfg (keptBase cfg (baseAt cfg s G)), e.2.2 = G := by
@@ -519,53 +519,40 @@ theorem Lim.tryBoot {τ W : ℕ} (hl : cfg.limit = some (τ, W))
   · rw [hbase', htop']; rfl
 
 omit [Fintype Validator] in
-theorem Lim.bootFrom {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validator BlockId Payload}
-    (h : Lim τ W s) : Lim τ W (bootFrom cfg s).1 := by
+theorem Lim.bootFrom {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s : State Validator BlockId Payload}
+    (h : Lim ρ W s) : Lim ρ W (bootFrom cfg s).1 := by
   rcases bootFrom_cases (cfg := cfg) s with he | ⟨s₂, ads, hbt, he⟩ <;> rw [he]
   · exact h
   · exact (h.tryBoot hl hbt).advance hl
 
 /-! ## A step -/
 
-omit [Fintype Validator] [DecidableEq Validator] in
-/-- The slot a block was charged to is a slot of a charge. -/
-theorem mem_of_ownerOf {s : State Validator BlockId Payload} {j : BlockId} {sl : Validator × ℕ}
-    (h : s.ownerOf j = some sl) : ∃ e ∈ s.owner, e.2 = sl := by
-  unfold State.ownerOf at h
-  obtain ⟨e, he, rfl⟩ := Option.map_eq_some_iff.mp h
-  exact ⟨e, List.mem_of_find?_eq_some he, rfl⟩
-
 omit [Fintype Validator] in
-/-- **A kept delivery is charged** to a slot no lower than its round,
-within the window, with room for it. -/
-theorem chargeTo_spec {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim τ W s)
+/-- **A kept delivery is charged** to its own slot, within the window,
+with room for it. -/
+theorem chargeTo_spec {ρ W : ℕ} {s : State Validator BlockId Payload}
     {id : BlockId} {b : Block Validator BlockId Payload} (hab : s.store.base ≤ b.round)
-    {sl : Validator × ℕ} (hc : chargeTo τ W s id b = some sl) :
-    b.round ≤ sl.2 ∧ s.store.base ≤ sl.2 ∧ sl.2 ≤ s.top.getD 0 + W ∧ s.charge sl < τ := by
+    {sl : Validator × ℕ} (hc : chargeTo ρ W s id b = some sl) :
+    b.round ≤ sl.2 ∧ s.store.base ≤ sl.2 ∧ sl.2 ≤ s.top.getD 0 + W ∧ s.charge sl < ρ := by
   unfold chargeTo at hc
   split at hc
   · rename_i hw
     rw [Option.some.injEq] at hc
     subst hc
-    exact ⟨le_refl _, hab, hw.1, by rw [hw.2.1]; exact hw.2.2⟩
-  · rename_i hw
-    obtain ⟨hsl, hf⟩ := Option.filter_eq_some_iff.mp hc
-    have hf' := of_decide_eq_true hf
-    obtain ⟨e, he, hfe⟩ := Option.bind_eq_some_iff.mp hsl
-    obtain ⟨e', he', rfl⟩ := mem_of_ownerOf hfe
-    exact ⟨hf'.2, (h.slots e' he').1, (h.slots e' he').2, hf'.1⟩
+    exact ⟨le_refl _, hab, hw.1, hw.2.1⟩
+  · cases hc
 
 omit [Fintype Validator] in
 /-- **Taking a kept delivery in** keeps the invariant: it is charged to
 its slot, which has room for it. -/
-theorem Lim.afterFlush {τ W : ℕ} (hl : cfg.limit = some (τ, W))
+theorem Lim.afterFlush {ρ W : ℕ} (hl : cfg.limit = some (ρ, W))
     {s : State Validator BlockId Payload}
-    (h : Lim τ W s) {id : BlockId} {b : Block Validator BlockId Payload} (hc : Admits cfg s id b) :
-    Lim τ W (afterFlush (cfg := cfg) s id b) := by
+    (h : Lim ρ W s) {id : BlockId} {b : Block Validator BlockId Payload} (hc : Admits cfg s id b) :
+    Lim ρ W (afterFlush (cfg := cfg) s id b) := by
   obtain ⟨-, -, hab, -, -, hk⟩ := hc
   simp only [kept, hl] at hk
   obtain ⟨sl, hsl⟩ := Option.isSome_iff_exists.mp hk
-  obtain ⟨hbr, hlo, hhi, hroom⟩ := chargeTo_spec h hab hsl
+  obtain ⟨hbr, hlo, hhi, hroom⟩ := chargeTo_spec hab hsl
   have hch : charged cfg s id b = [(id, sl)] := by simp [charged, hl, hsl]
   let s₀ : State Validator BlockId Payload :=
     { s with pending := (id, b) :: s.pending, owner := (id, sl) :: s.owner }
@@ -576,7 +563,7 @@ theorem Lim.afterFlush {τ W : ℕ} (hl : cfg.limit = some (τ, W))
   have hmono : ∀ y : BlockId × Block Validator BlockId Payload,
       Charged s.owner y → Charged s₀.owner y :=
     fun y => charged_mono fun e he => List.mem_cons_of_mem _ he
-  have h₀ : Lim τ W s₀ := by
+  have h₀ : Lim ρ W s₀ := by
     refine ⟨fun j hj => hmono _ (h.store j hj), fun e he => ?_, fun e he => ?_, fun sl' => ?_,
       fun sl' hsl' => ?_, h.base⟩
     · rcases List.mem_cons.mp he with rfl | he
@@ -597,8 +584,8 @@ theorem Lim.afterFlush {τ W : ℕ} (hl : cfg.limit = some (τ, W))
   exact ⟨this.store, this.pend, this.slots, this.charge, this.fresh, this.base⟩
 
 /-- **Every step keeps the invariant.** -/
-theorem Lim.step {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validator BlockId Payload}
-    (h : Lim τ W s) (i : Input Validator BlockId Payload) : Lim τ W (Node.step cfg s i).1 := by
+theorem Lim.step {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s : State Validator BlockId Payload}
+    (h : Lim ρ W s) (i : Input Validator BlockId Payload) : Lim ρ W (Node.step cfg s i).1 := by
   cases i with
   | start =>
     simp only [Node.step]
@@ -657,15 +644,15 @@ theorem Lim.step {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validat
   | decisionRequest => exact h
 
 /-- **A run keeps the invariant.** -/
-theorem Lim.run {τ W : ℕ} (hl : cfg.limit = some (τ, W)) :
+theorem Lim.run {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) :
     ∀ (is : List (Input Validator BlockId Payload)) {s : State Validator BlockId Payload},
-      Lim τ W s → Lim τ W (Node.run cfg s is).1
+      Lim ρ W s → Lim ρ W (Node.run cfg s is).1
   | [], _, h => h
   | i :: is, _, h => Lim.run hl is (h.step hl i)
 
 omit [Fintype Validator] in
 /-- The state before start holds nothing. -/
-theorem Lim.init {τ W : ℕ} : Lim τ W (State.init cfg) where
+theorem Lim.init {ρ W : ℕ} : Lim ρ W (State.init cfg) where
   store := fun _ hj => absurd hj (Finset.notMem_empty _)
   pend := fun _ he => absurd he List.not_mem_nil
   slots := fun _ he => absurd he List.not_mem_nil

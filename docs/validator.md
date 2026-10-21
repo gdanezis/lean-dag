@@ -440,42 +440,52 @@ at it; those rest on an honest presenter's store, earlier in the trace.
 A Byzantine author can deliver any number of valid blocks a round, each
 a twin of the others, and can build a cone of them out of sight and
 reveal it at once (`docs/dos-equivocation-and-growth.md` §5). The node
-therefore keeps, above its horizon, only its own cone and the cones of
-its *candidates*, and prices each candidate's fetch.
+therefore keeps, above its horizon, a bounded number of blocks of each
+author at each round, and among a Byzantine author's twins only those a
+block of an author it does not exclude (§3.10) needs.
 
-* **Candidates.** A delivered block of round `r` within the window,
-  `base ≤ r ≤ top + W`, is a candidate if no block of its author at
-  round `r` has been one: one candidate slot per author per round,
-  claimed by the first block delivered for it. An honest author has one
-  block a round, so its slot is its block's.
-* **The budget.** Each slot is charged for the blocks taken into the
-  node's pending blocks on its account: the candidate, and every
-  ancestor fetched for it or for a block fetched for it, at or below the
-  slot's round. A slot charged
-  `τ` asks for nothing more, and the candidate waits: deferred, not
-  rejected, since what it lacks only shrinks as the store grows (the
-  novelty budget's antitone measure, §6 of the design note).
-* **Everything else is dropped.** A delivered block that is neither a
-  candidate nor asked for on a slot's account is not kept; a block above
-  `top + W` is not kept. A block a later candidate needs is fetched
-  again, on that candidate's account.
-* **References.** The node references, at the round it builds on, one
-  stored block per author, as before. Each was taken into the store on a
-  slot's account, so its novelty against the store was within the
-  budget when it came.
+* **Slots.** Each author and round is a slot (`slotOf`). A delivered
+  block of round `r` within the window, `base ≤ r ≤ top + W`, is charged
+  to its own slot, and kept, while the slot is charged fewer than `ρ`
+  blocks.
+* **The first block of a slot is kept**, so an honest author's block,
+  the only block of its slot, is kept whenever it lies within the window.
+* **A later block of a slot is kept only if it is wanted** (`wanted`):
+  missing from the history, walked through the pending blocks, of a
+  pending block whose author the node does not hold exposed. A twin the
+  honest blocks need is wanted, since the honest blocks that reference
+  it, directly or through other pending blocks, wait for it; a flood of
+  twins no block references is not, and a twin only an excluded author's
+  blocks lead to is not either.
+* **Everything else is dropped.** A dropped block that a later block
+  needs is asked for again on that block's arrival, and kept then.
+* **Missing history is accepted from the bottom**: a pending block is
+  accepted once its references are stored (§3.1), so a long missing
+  history needs no budget of its own, only room in its slots.
 * **The bootstrap base** keeps at most one attested block per author at
-  the new horizon; a block above that references another is fetched on
-  its candidate's account.
+  the new horizon.
 * **Own blocks and the base are charged too**, each to its own slot
-  (`slotted`): the node's block at round `r` to its slot at `r`, and a
-  base block to its author's slot at the horizon. So every block the node
-  holds is charged, and a slot carries at most `τ + 1` charges: `τ` from
-  deliveries and one from the node itself.
+  (`slotted`). So every block the node holds is charged, and a slot
+  carries at most `ρ + 1` charges: `ρ` from deliveries and one from the
+  node itself.
 
-The budget `τ` and the window `W` are optional in the configuration
+The quota `ρ` and the window `W` are optional in the configuration
 (`Config.limit`); without them the node behaves as without rate limiting
-(`chargeTo`, `kept`, `askable`, `keptBase`, `slotted`, and the charges
-in `State.owner`, persisted across a crash).
+(`chargeTo`, `wanted`, `kept`, `keptBase`, `slotted`, and the charges in
+`State.owner`, persisted across a crash).
+
+**The quota honest blocks need.** In the worst case the simulator found,
+a Byzantine author shows each other node its own twin of each block
+(`twin-split`), and the honest blocks of a round then reference `n − f`
+twins of one slot, besides the author's own block and the twins it shows
+the other Byzantine nodes. With `ρ = n` every run stays live: at `n = 4`
+and at `n = 7`, `f = 2`, with twin-split alone and together with a flood
+of twenty twins a block, the nodes reach about 48 and 50 rounds in 300
+ticks, as without rate limiting, holding at most 20 and 40 blocks against
+146 and 270 without it. With `ρ = n − f + 1` and below, twin-split stalls
+the nodes at round 1 or 2. Before the sponsorship rule above, a flood
+filled the slots before the needed twins arrived, and `ρ = n` stalled
+one run in three.
 
 The window must exceed the depth by which the network's frontier leads a
 node's top. After a bootstrap the top is the new horizon, which trails
@@ -489,7 +499,7 @@ at once.
 * **V10, storage** (`Node.Storage.Bounded`, proved): at every state a
   run reaches, every block the store and the pending blocks hold is
   charged, and the charges number at most
-  `n·(τ + 1)·(top + W + 1 − base)`: at most `τ + 1` for each of `n`
+  `n·(ρ + 1)·(top + W + 1 − base)`: at most `ρ + 1` for each of `n`
   slots a round, from the horizon to `W` above the top. This is a claim
   about one node, from round `0`, under any input sequence, so under any
   adversary, and it assumes nothing of the hash. With the horizon
@@ -497,10 +507,10 @@ at once.
   the run. The invariant behind it (`Node.Lim`): each held block is
   charged to a slot at or above its round, so a slot dropped at a new
   horizon takes only blocks the horizon drops; each slot lies in the
-  window; and a slot above the top carries at most `τ` charges, so the
+  window; and a slot above the top carries at most `ρ` charges, so the
   node's own block or a base block, which land above the old top, add at
-  most one. The requests are not bounded by this claim: each kept
-  delivery asks for at most `τ` blocks, and requests are dropped at the
+  most one. The requests are not bounded by this claim: a kept delivery
+  asks for what its history misses, and requests are dropped at the
   horizon and on a restart.
 * **V7, decisions** (`Node.Defer.Decides`, proved): V3, V9 and V12
   assume nothing of `Config.limit`, so they hold of the rate-limited
@@ -511,11 +521,9 @@ at once.
   decides only what a node holding more of the record decides.
 * **Convergence.** V3′ holds for the unlimited configuration. With a
   finite window a node lagging more than `W` rounds drops a block ahead
-  of it, and with a finite budget a candidate whose missing cone exceeds
-  `τ` waits; both are fetched again only once a later candidate needs
-  them. Convergence and the eventual admission of every honest block
-  under rate limiting rest on the lifted C3 (§8) and on delivery after
-  GST, and belong to step 11 with liveness.
+  of it, and with a finite quota a twin a held block needs may find its
+  slot full; both are asked for again only once a later block needs
+  them. The liveness of the rate-limited node is step 11.2 (§13).
 
 ### 3.10 Excluding equivocators
 

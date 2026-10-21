@@ -73,6 +73,9 @@ inductive Attack where
   honest blocks, its identifier the least of the attacker's at its
   round. -/
   | junkAtCut
+  /-- Instead of each block, send each other node its own twin of it,
+  with its own payload; its later blocks reference the block itself. -/
+  | twinSplit
   deriving Repr, DecidableEq
 
 /-- **A scenario.** Times are in ticks. -/
@@ -122,8 +125,8 @@ structure Scenario where
   head at its height, and a message's sender is the node that sent
   it. -/
   verify : Bool := true
-  /-- Rate limiting, if any: the budget `τ` of a candidate slot and the
-  window `W` above a node's top. -/
+  /-- Rate limiting, if any: the quota `ρ` of a slot and the window `W`
+  above a node's top. -/
   limit : Option (ℕ × ℕ) := none
   /-- Slow nodes: every message to or from one takes at least `slowDelay`
   ticks past GST. -/
@@ -515,7 +518,12 @@ def attacked (agents : Array (Agent n)) (src t : ℕ) (a : Agent n) (st : State 
           let b₄ : Block (Fin n) ℕ ℕ := { b with creator := v, payload := 4 }
           [.broadcast (idOf b₄) b₄]
         else []
-      o :: junk ++ twins ++ forged
+      if has .twinSplit then
+        ((List.finRange n).filterMap fun v =>
+          if v = b.creator then none else
+          let bv : Block (Fin n) ℕ ℕ := { b with payload := 200 + v.val }
+          some (.send v (idOf bv) bv)) ++ junk ++ twins ++ forged
+      else o :: junk ++ twins ++ forged
     | o => [o]
   -- proposals
   if has .conflictProposals then
@@ -614,6 +622,7 @@ def loop : ℕ → World n → World n
           | _ => none
         let sent := out.filterMap fun
           | .broadcast id b => if id = idOf b ∧ b.creator = a.node then some (id, b) else none
+          | .send _ id b => if id = idOf b ∧ b.creator = a.node then some (id, b) else none
           | _ => none
         let skip := st.recovering && !r.1.recovering
         let boot := match i with

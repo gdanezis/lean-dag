@@ -82,9 +82,10 @@ def attackLine (sc : Scenario) : String :=
 /-! ## Rate limiting
 
 A flood: node `3` broadcasts twenty valid twins with each block. Without
-rate limiting the honest stores take them; with a budget `τ = 8` and a
-window `W = 8` (`docs/validator.md` §3.9) each node keeps one candidate
-per author and round, and the stores stay small. Each line reads: the
+rate limiting the honest stores take them; with a quota `ρ = 8` and a
+window `W = 8` (`docs/validator.md` §3.9) each node keeps the first block
+of each author and round and drops the twins no block needs, and the
+stores stay small. Each line reads: the
 slots each honest node decided, agreement, validity, the largest honest
 store and the most pending blocks an honest node held. -/
 
@@ -101,6 +102,21 @@ def storageLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval storageLine
   { horizon := 150, row := "mysticeti", adv := [3], attacks := [.flood], limit := some (8, 8) }
+
+/-! A Byzantine node shows each other node its own twin of each block,
+and floods twenty twins besides. With a quota of `n` blocks a slot the
+honest nodes keep the twins the honest blocks need and drop the flood. -/
+
+/-- info: "[24, 24, 24] true true 127 42" -/
+#guard_msgs in
+#eval storageLine
+  { horizon := 150, row := "mysticeti", adv := [3], attacks := [.twinSplit, .flood] }
+
+/-- info: "[24, 22, 22] true true 20 3" -/
+#guard_msgs in
+#eval storageLine
+  { horizon := 150, row := "mysticeti", adv := [3], attacks := [.twinSplit, .flood],
+    limit := some (4, 8) }
 
 -- A node down from tick `40` to tick `90` rejoins under rate limiting.
 /-- info: "[48, 48, 48, 48] true true 25 6" -/
