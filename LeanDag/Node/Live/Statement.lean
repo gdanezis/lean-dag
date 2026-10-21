@@ -20,8 +20,8 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
   each block the honest nodes know in its history at or above its
   horizon that it did not make. Efficient synchronisation is out of scope
   (`docs/validator.md` §1);
-* every reliable node **starts** by `gst` (`StartedBy`), and none
-  restarts;
+* every reliable node **starts** by `gst` (`StartedBy`), none
+  restarts, and none stalls twice at a timer (`NoStall`);
 * timely authentication, of blocks, certificates and the chain's hash,
   since honest nodes outside `T` may rejoin (as for V9);
 * the injective hash, injective on every block, no rate limiting, at
@@ -100,6 +100,13 @@ def SyncedWithin (cfg : Config Validator BlockId Payload) (H T : Finset Validato
       horAt cfg tr time v (max (time j) gst + Δₛ) ≤ x.2.round → x.2.creator ≠ v →
       ∃ k, j < k ∧ tr[k]? = some (v, .deliver x.1 x.2) ∧ time k ≤ max (time j) gst + Δₛ
 
+/-- **No reliable node stalls twice**: no timer finds a reliable node stalled
+at the timer's round a second time. -/
+def NoStall (cfg : Config Validator BlockId Payload) (T : Finset Validator)
+    (tr : Trace Validator BlockId Payload) : Prop :=
+  ∀ i v r, v ∈ T → tr[i]? = some (v, .timer r) →
+    stallsTwice (cfg.at v) (stateBefore cfg tr i v) r = false
+
 /-- **Every reliable node starts by `gst`.** -/
 def StartedBy (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
     (gst : ℕ) : Prop :=
@@ -168,8 +175,9 @@ def Progresses : Prop :=
     (∀ r, 2 * (3 * Δ + Δₛ) < cfg.timeout r) →
     Converge.TimelyAuthentic cfg H tr → Boot.TimelyCerts cfg H tr →
     Converge.HashInjective cfg H tr → Boot.ChainInjective cfg H tr → Converge.NoRestart T tr →
-    TimeMono tr time → DeliveredWithin cfg T tr time gst Δ t₁ → TimersOnTime cfg T tr time t₁ →
-    SyncedWithin cfg H T tr time gst Δₛ t₁ → StartedBy T tr time gst →
+    NoStall cfg T tr → TimeMono tr time → DeliveredWithin cfg T tr time gst Δ t₁ →
+    TimersOnTime cfg T tr time t₁ → SyncedWithin cfg H T tr time gst Δₛ t₁ →
+    StartedBy T tr time gst →
     Produces cfg T tr time gst t₁ ∧ Decides cfg T tr time gst (3 * Δ + Δₛ) t₁ ∧
       DecidesBy cfg T tr time gst (3 * Δ + Δₛ) t₁
 

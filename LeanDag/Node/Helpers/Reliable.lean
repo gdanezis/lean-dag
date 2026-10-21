@@ -20,7 +20,7 @@ variable {cfg : Config Validator BlockId Payload}
 /-- **A step of a node not recovering**, other than a restart, leaves its
 state alone or settles. -/
 theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
+    (hs : s.recovering = false) (hr : inp ≠ .restart) :
     (Node.step cfg s inp).1 = s ∨ ∃ x, (Node.step cfg s inp).1 = (Node.settle cfg x).1 := by
   cases inp with
   | start =>
@@ -33,7 +33,7 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · rw [step_deliver hA]; exact Or.inr ⟨_, rfl⟩
-    · rw [step_deliver_not_of hl hA hs]; exact Or.inl rfl
+    · rw [step_deliver_not_of hA hs]; exact Or.inl rfl
   | timer r => exact Or.inr ⟨_, rfl⟩
   | restart => exact absurd rfl hr
   | baseOffer p G =>
@@ -60,10 +60,10 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
 
 /-- **A step keeps a node settled**, not recovering and other than a
 restart, for a quorum of two or more. -/
-theorem settled_step (hl : cfg.limit = none) (hq : 2 ≤ cfg.q) {s : State Validator BlockId Payload}
+theorem settled_step (hq : 2 ≤ cfg.q) {s : State Validator BlockId Payload}
     {inp : Input Validator BlockId Payload} (h : Settled cfg s) (hs : s.recovering = false)
     (hr : inp ≠ .restart) : Settled cfg (Node.step cfg s inp).1 := by
-  rcases step_settles (cfg := cfg) hl hs hr with he | ⟨x, he⟩ <;> rw [he]
+  rcases step_settles (cfg := cfg) hs hr with he | ⟨x, he⟩ <;> rw [he]
   · exact h
   · exact settle_settled hq x
 
@@ -111,19 +111,24 @@ theorem rises_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
   (quiesce_rel (P := fun _ => True) (R := fun a _ b => Rises a b) Rises.refl
     (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂) (fun s _ => ⟨rises_advance s, trivial⟩) n s trivial).1
 
-theorem rises_settle {s : State Validator BlockId Payload} (hs : s.recovering = false) :
-    Rises s (Node.settle cfg s).1 := by
-  rw [settle_of_idle hs]; exact rises_quiesce _ s
+theorem rises_settle (s : State Validator BlockId Payload) : Rises s (Node.settle cfg s).1 := by
+  rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hj, he⟩ <;> rw [he]
+  · exact rises_quiesce _ s
+  · obtain ⟨t, R, ht, htR, -, -, -, htop, -, hlo, -, -, -, -, hc, -⟩ := tryResume_some hj
+    refine Rises.trans ⟨?_, ?_, hlo.ge, ?_⟩ (rises_quiesce _ s₁)
+    · rw [ht, htop]; simpa using htR.le
+    · rw [htop]; exact fun _ => rfl
+    · simp [State.certHeight, hc]
 
 /-- **A step of a node not recovering**, other than a restart, raises
 its top, its next undecided slot and its certificate's height, or keeps
 them. -/
 theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
     (hs : s.recovering = false) (hr : inp ≠ .restart) : Rises s (Node.step cfg s inp).1 := by
-  -- settling a state that already rose from `s`, not recovering
-  have hset : ∀ x : State Validator BlockId Payload, Rises s x → x.recovering = false →
+  -- settling a state that already rose from `s`
+  have hset : ∀ x : State Validator BlockId Payload, Rises s x →
       (Node.step cfg s inp).1 = (Node.settle cfg x).1 → Rises s (Node.step cfg s inp).1 :=
-    fun x hx hxr he => by rw [he]; exact hx.trans (rises_settle hxr)
+    fun x hx he => by rw [he]; exact hx.trans (rises_settle x)
   cases inp with
   | start =>
     by_cases h₁ : s.top = none ∧ cfg.Admissible
@@ -136,7 +141,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
         let s₀ : State Validator BlockId Payload :=
           { { s with store := st, top := some 0, own := some gid } with
             owner := slotted cfg [(gid, cfg.genesis)] ++ s.owner, recovering := false }
-        refine hset s₀ ⟨by rw [h₁.1]; simp [s₀], fun _ => rfl, le_rfl, le_rfl⟩ rfl
+        refine hset s₀ ⟨by rw [h₁.1]; simp [s₀], fun _ => rfl, le_rfl, le_rfl⟩
           (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
       · rw [show (Node.step cfg s .start).1 = s by simp only [Node.step, dif_neg h₂, if_pos h₁]]
         exact Rises.refl s
@@ -144,13 +149,12 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
       exact Rises.refl s
   | deliver id b =>
     by_cases hA : Admits cfg s id b
-    · refine hset _ ?_ ?_ (by rw [step_deliver hA])
-      · exact ⟨le_rfl, fun h => h, le_rfl, le_rfl⟩
-      · exact hs
+    · refine hset _ ?_ (by rw [step_deliver hA])
+      exact ⟨le_rfl, fun h => h, le_rfl, le_rfl⟩
     · rcases step_deliver_not (cfg := cfg) hA with he | ⟨a, he⟩ <;> rw [he]
       · exact Rises.refl s
       · exact ⟨le_rfl, fun h => h, le_rfl, le_rfl⟩
-  | timer r => exact hset { s with fired := insert r s.fired } (Rises.refl s) hs rfl
+  | timer r => exact hset (timerState cfg s r) (Rises.refl s) rfl
   | restart => exact absurd rfl hr
   | baseOffer p G =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact Rises.refl s
@@ -161,13 +165,13 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
     rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
       ⟨-, hcf, he⟩ | he
     · rw [adopt_eq] at he
-      refine hset (adopted s c ds') ⟨le_rfl, id, (adoptable_lo ha).le, ?_⟩ hs (by rw [he])
+      refine hset (adopted s c ds') ⟨le_rfl, id, (adoptable_lo ha).le, ?_⟩ (by rw [he])
       unfold adopted State.certHeight; dsimp only
       split
       · rename_i h; simp only [Option.map_some, Option.getD_some]; exact h.le
       · exact le_rfl
     · refine hset { s with cert := some c, props := above (some c) s.props }
-        ⟨le_rfl, id, le_rfl, ?_⟩ hs (by rw [he]; rfl)
+        ⟨le_rfl, id, le_rfl, ?_⟩ (by rw [he]; rfl)
       unfold confirms at hcf
       simp only [Bool.and_eq_true, decide_eq_true_eq] at hcf
       exact hcf.1.1.1.2.le
@@ -175,7 +179,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, hcf, he⟩ | he | he
     · refine hset { s with cert := some c, props := above (some c) s.props }
-        ⟨le_rfl, id, le_rfl, ?_⟩ hs (by rw [he]; rfl)
+        ⟨le_rfl, id, le_rfl, ?_⟩ (by rw [he]; rfl)
       unfold confirms at hcf
       simp only [Bool.and_eq_true, decide_eq_true_eq] at hcf
       exact hcf.1.1.1.2.le
@@ -185,7 +189,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
     by_cases hpm : p ≠ cfg.me
     · refine hset (record cfg s p k kh)
         ⟨by exact le_rfl, by exact id, by exact le_rfl,
-          by exact record_certHeight s p k kh⟩ (by exact hs)
+          by exact record_certHeight s p k kh⟩
         (by rw [step_proposal, if_pos hpm])
     · rw [step_proposal, if_neg hpm]; exact Rises.refl s
 
@@ -196,13 +200,15 @@ variable {tr : Trace Validator BlockId Payload}
 /-- **An invariant of a node's states** that each of its steps keeps, not
 recovering and other than a restart, holds before every event, along a
 trace without restarts at the node. -/
-theorem inv_before (hl : cfg.limit = none) {v : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart))
+theorem inv_before {v : Validator} (hnr : Steady cfg tr v)
     (P : State Validator BlockId Payload → Prop) (h₀ : P (stateBefore cfg tr 0 v))
-    (hs : ∀ s inp, P s → s.recovering = false → inp ≠ .restart → P (Node.step (cfg.at v) s inp).1) :
+    (hs : ∀ s inp, P s → s.recovering = false → inp ≠ .restart →
+      (∀ r, inp = .timer r → stallsTwice (cfg.at v) s r = false) →
+        P (Node.step (cfg.at v) s inp).1) :
     ∀ i, P (stateBefore cfg tr i v)
   | 0 => h₀
   | i + 1 => by
-    have ih := inv_before hl hnr P h₀ hs i
+    have ih := inv_before hnr P h₀ hs i
     rcases he : tr[i]? with _ | ⟨w, inp⟩
     · have hlen : tr.length ≤ i := List.getElem?_eq_none_iff.mp he
       have heq : stateBefore cfg tr (i + 1) v = stateBefore cfg tr i v := by
@@ -213,23 +219,23 @@ theorem inv_before (hl : cfg.limit = none) {v : Validator} (hnr : ∀ i : ℕ, t
       split
       · rename_i hw
         subst hw
-        exact hs _ inp ih (fired_before (cfg := cfg) hl hnr i).1 fun h => hnr i (by rw [he, h])
+        exact hs _ inp ih (fired_before (cfg := cfg) hnr i).1 (hnr i _ he).1 (hnr i _ he).2
       · exact ih
 
 /-- **A node that never restarts is settled before every event**, once it
 has started or settled, for a quorum of two or more. -/
-theorem settled_before (hl : cfg.limit = none) (hq : 2 ≤ cfg.q) {v : Validator}
-    (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) (i : ℕ) :
+theorem settled_before (hq : 2 ≤ cfg.q) {v : Validator}
+    (hnr : Steady cfg tr v) (i : ℕ) :
     (stateBefore cfg tr i v).top = none ∨ Settled (cfg.at v) (stateBefore cfg tr i v) := by
-  refine inv_before (cfg := cfg) hl hnr (fun s => s.top = none ∨ Settled (cfg.at v) s)
-    (Or.inl rfl) (fun s inp h hs hr => ?_) i
-  rcases step_settles (cfg := cfg.at v) hl hs hr with he | ⟨x, he⟩ <;> rw [he]
+  refine inv_before (cfg := cfg) hnr (fun s => s.top = none ∨ Settled (cfg.at v) s)
+    (Or.inl rfl) (fun s inp h hs hr _ => ?_) i
+  rcases step_settles (cfg := cfg.at v) hs hr with he | ⟨x, he⟩ <;> rw [he]
   · exact h
   · exact Or.inr (settle_settled (cfg := cfg.at v) hq x)
 
 /-- **Along a trace without restarts at `v`**, its top, next undecided
 slot and certificate's height only rise. -/
-theorem rises_before (hl : cfg.limit = none) {v : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) :
+theorem rises_before {v : Validator} (hnr : Steady cfg tr v) :
     ∀ {i j : ℕ}, i ≤ j → Rises (stateBefore cfg tr i v) (stateBefore cfg tr j v) := by
   intro i j hij
   induction j, hij using Nat.le_induction with
@@ -246,8 +252,8 @@ theorem rises_before (hl : cfg.limit = none) {v : Validator} (hnr : ∀ i : ℕ,
       split
       · rename_i hw
         subst hw
-        exact rises_step (cfg := cfg.at w) (fired_before (cfg := cfg) hl hnr j).1
-          fun h => hnr j (by rw [he, h])
+        exact rises_step (cfg := cfg.at w) (fired_before (cfg := cfg) hnr j).1
+          (hnr j _ he).1
       · exact Rises.refl _
 
 /-! ## Times -/

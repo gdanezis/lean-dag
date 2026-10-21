@@ -262,8 +262,9 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       · exact hsame s [] rfl rfl he
       · exact hsame { s with asked := a, recovering := true } [.requestBase] rfl rfl he
   | timer r =>
-    exact hset { s with fired := Insert.insert r s.fired } (timerAsk s r) hc
-      (hh.grow (Grows.refl _) rfl rfl le_rfl) (fun _ => hR) hp (commitsOf_timerAsk s r)
+    exact hset (timerState cfg s r) (timerOut cfg s r) hc
+      (hh.grow (Grows.refl _) rfl rfl le_rfl (timerState_recovering r)) (fun _ => hR) hp
+      (commitsOf_timerOut s r)
       (step_timer_eq s r)
   | fetchRequest peer G ids =>
     rw [show Node.step cfg s (.fetchRequest peer G ids) = (s, answer s peer G ids) from rfl]

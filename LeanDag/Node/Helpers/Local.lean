@@ -66,33 +66,37 @@ theorem sdiff_subset_usableAuthors {st : Store Validator BlockId Payload}
   obtain ⟨i, hid, hr, rfl⟩ := mem_authorsIn.mp ha
   exact mem_usableAuthors.mpr ⟨i, hid, hr, usable_of_not haX, rfl⟩
 
-omit [Fintype Validator] [DecidableEq Validator] in
-/-- A timer's request outputs no block. -/
-theorem timerAsk_isQuiet (s : State Validator BlockId Payload) (r : ℕ) :
-    ∀ o ∈ timerAsk s r, o.isQuiet := by
-  unfold timerAsk; split <;> simp [Output.isQuiet]
+omit [Fintype Validator] in
+/-- A timer's outputs before settling hold no block. -/
+theorem timerOut_isQuiet (s : State Validator BlockId Payload) (r : ℕ) :
+    ∀ o ∈ timerOut cfg s r, o.isQuiet := by
+  unfold timerOut; split <;> split <;> simp [Output.isQuiet]
 
-omit [Fintype Validator] [DecidableEq Validator] in
-/-- A timer's request outputs no decision. -/
-theorem commitsOf_timerAsk (s : State Validator BlockId Payload) (r : ℕ) :
-    commitsOf (timerAsk s r) = [] := by
-  unfold timerAsk; split <;> rfl
+omit [Fintype Validator] in
+/-- A timer's outputs before settling hold no decision. -/
+theorem commitsOf_timerOut (s : State Validator BlockId Payload) (r : ℕ) :
+    commitsOf (timerOut cfg s r) = [] := by
+  unfold timerOut; split <;> split <;> rfl
 
-omit [Fintype Validator] [DecidableEq Validator] in
-/-- A node not recovering requests nothing on a timer. -/
-theorem timerAsk_of {s : State Validator BlockId Payload} (hs : s.recovering = false) (r : ℕ) :
-    timerAsk s r = [] := by
-  unfold timerAsk; simp [hs]
+omit [Fintype Validator] in
+/-- A node recovering still recovers after a timer. -/
+theorem timerState_recovering {s : State Validator BlockId Payload} (r : ℕ)
+    (hs : s.recovering = true) : (timerState cfg s r).recovering = true := by
+  simp [timerState, hs]
+
+omit [Fintype Validator] in
+/-- A timer that finds a node not recovering, and not stalled twice, starts
+no recovery. -/
+theorem timerState_idle {s : State Validator BlockId Payload} {r : ℕ}
+    (hs : s.recovering = false) (hst : stallsTwice cfg s r = false) :
+    (timerState cfg s r).recovering = false := by
+  simp [timerState, hs, hst]
 
 theorem step_timer_eq (s : State Validator BlockId Payload) (r : ℕ) :
     Node.step cfg s (.timer r) =
-      ((settle cfg { s with fired := insert r s.fired }).1,
-        timerAsk s r ++ (settle cfg { s with fired := insert r s.fired }).2) := rfl
-
-/-- A timer of a node not recovering settles. -/
-theorem step_timer_of {s : State Validator BlockId Payload} (hs : s.recovering = false) (r : ℕ) :
-    Node.step cfg s (.timer r) = settle cfg { s with fired := insert r s.fired } := by
-  rw [step_timer_eq, timerAsk_of hs, List.nil_append]
+      ((settle cfg (timerState cfg s r)).1,
+        timerOut cfg s r ++ (settle cfg (timerState cfg s r)).2) :=
+  rfl
 
 omit [Fintype Validator] in
 /-- The horizon a collect raises to lies at or below the top. -/
@@ -1287,8 +1291,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
     exact (⟨fun j hj => hsub (hi.known j hj), fun x hx => hsub (hi.pend x hx), hi.rounds,
       fun x hx => (hi.good x hx).mono hsub, fun x hx => hsub (hi.sub x hx), hi.valid,
       fun a ha => (hi.exposed a ha).mono hsub⟩ :
-        Inv cfg { s with fired := insert r s.fired } K' B).settle_of subset_rfl _
-          (timerAsk_isQuiet s r)
+        Inv cfg (timerState cfg s r) K' B).settle_of subset_rfl _ (timerOut_isQuiet s r)
   | fetchRequest peer G ids =>
     simp only [Node.step]
     refine hnil _ fun o ho => ?_

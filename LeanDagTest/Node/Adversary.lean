@@ -22,7 +22,7 @@ reaching round 88 by tick 600. Without the checks, a certificate of
 fabricated decisions can be adopted, and with node `1` down from tick
 `40` to tick `70` the joiner's decisions disagree with its peers'; and
 blocks forged in an honest node's name get that node excluded as an
-equivocator, which stalls the run.
+equivocator, so that it stalls until it recovers and bootstraps.
 -/
 
 namespace LeanDagTest
@@ -76,20 +76,20 @@ Node `3` sends its blocks to every node but node `2`, and answers none of
 node `2`'s requests; messages to and from node `2` take twelve ticks
 until tick `50`. The honest blocks of round `1` reference node `3`'s
 genesis block, which node `2` asks for after its peers have pruned it.
-Without rate limiting node `2` stays at round `1`, adopting its peers'
-certified decisions; with a quota and a window it falls behind, recovers
-and bootstraps (§3.9). The first line is an open case. -/
+Node `2` stays at round `1`, adopting its peers' certified decisions,
+until the timer of round `1` finds it stalled a second time; it then
+recovers and bootstraps (§3.6), with rate limiting or without. -/
 
 /-- A slow node `2`, hidden from by node `3`. -/
 def hidden (limit : Option (ℕ × ℕ)) : Scenario :=
   { horizon := 300, row := "mysticeti", adv := [3], attacks := [.hide], slow := [2],
     slowDelay := 12, slowUntil := some 50, limit := limit }
 
-/-- info: "[(some 47), (some 47), (some 1)] [47, 47, 45] true true true 0 0" -/
+/-- info: "[(some 86), (some 85), (some 85)] [84, 83, 83] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (hidden none)
 
-/-- info: "[(some 90), (some 90), (some 89)] [88, 88, 87] true true true 1 0" -/
+/-- info: "[(some 86), (some 86), (some 83)] [84, 84, 82] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (hidden (some (4, 8)))
 
@@ -99,7 +99,7 @@ def hidden (limit : Option (ℕ × ℕ)) : Scenario :=
 #guard_msgs in
 #eval attackLine { attackedBy [.fakeCert] (verify := false) with recover := [(1, 40, 70)] }
 
-/-- info: "[(some 2), (some 18), (some 17)] [15, 16, 16] true true true 0 0" -/
+/-- info: "[(some 17), (some 16), (some 16)] [15, 15, 15] true true true 0 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 

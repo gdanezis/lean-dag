@@ -327,7 +327,9 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     · split
       · exact h.grow (Grows.refl _) rfl rfl le_rfl (fun _ => rfl)
       · exact h
-  | timer r => exact Held.settle (h.grow (Grows.refl _) rfl rfl le_rfl)
+  | timer r =>
+    exact Held.settle (h.grow (s' := timerState cfg s r) (Grows.refl _) rfl rfl le_rfl
+      (timerState_recovering r))
   | restart => exact Held.settle (h.grow (Grows.refl _) rfl rfl le_rfl)
   | baseOffer p G =>
     rw [step_offer]

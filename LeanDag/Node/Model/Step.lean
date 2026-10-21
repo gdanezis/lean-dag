@@ -78,14 +78,14 @@ input `i` in the state `s`: the new state and the outputs.
   holds blocks of `q` authors it may reference at a round above its top,
   two above if it built at its top, moves its top there without a block
   of its own, and builds from there.
-* **Falling behind** (`behind`): with rate limiting, a node that drops a
-  block above its window while its certified frontier lies more than
-  `Λ` above its top recovers again, as after a restart, and asks for
-  bases.
+* **Stalling** (`stalledAt`, `stallsTwice`, `timerState`, `timerOut`): a node still at
+  round `r` when `r`'s timer fires sets the timer again. A node whose
+  certified frontier lies more than `Λ` above its top `r` at two firings
+  of `r`'s timer recovers again, as after a restart, and asks for bases.
 * **Bootstrap** (`jumpRound`, `docs/validator.md` §3.6): a restarted node
   asks its peers for their bases, again whenever a delivered block, kept
   or not, lies `Λ + 2` rounds above the one it last asked on, when the
-  timer of its top round fires (`timerAsk`), and when a peer it holds no
+  timer of its top round fires (`timerAsks`), and when a peer it holds no
   base of asks for its base; a peer answers with its horizon and its
   certificate, and sends the blocks of its store as blocks. The node
   keeps each peer's horizon, and takes certificates and blocks as any
@@ -155,6 +155,8 @@ structure State where
   owner : List (BlockId × (Validator × ℕ))
   /-- The authors the node was given two blocks of at one round. -/
   exposed : Finset Validator
+  /-- The round at whose timer the node last found itself stalled. -/
+  stalled : Option ℕ
 
 variable (cfg : Config Validator BlockId Payload)
 
@@ -164,7 +166,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
   ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false, [], 0, [], 0, cfg.root, [], none, [],
-    ∅⟩
+    ∅, none⟩
 
 /-- **Accept a block**: below the horizon it is dropped; at the horizon it
 is kept without its references, as the cut keeps it; above, it is kept if
@@ -650,12 +652,12 @@ def State.persisted (s : State Validator BlockId Payload) : Persisted Validator 
 
 /-- **The state after a crash and restart**: the store, the next slot,
 the top, the decisions and the certificate kept; nothing pending, asked
-for, proposed by peers, offered or exposed; the top round's timer fired,
-since the node was away; recovering. -/
+for, proposed by peers, offered, exposed or stalled; the top round's
+timer fired, since the node was away; recovering. -/
 def State.recover (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
   let s' := { s with pending := [], fired := (s.top.map fun t => {t}).getD ∅ }
   let s'' := { s' with requested := [], recovering := true, offers := [], asked := 0 }
-  { s'' with props := [], exposed := ∅ }
+  { s'' with props := [], exposed := ∅, stalled := none }
 
 /-- **Resume from what was persisted**: the store rebuilt from the window
 at the horizon, if the window is closed under references one round below
@@ -674,7 +676,7 @@ def resume (ps : Persisted Validator BlockId Payload) : Option (State Validator 
     let st : Store Validator BlockId Payload :=
       ⟨map, ids, cfg.genesis, ps.horizon, h.1, h.2.1, h.2.2⟩
     some ⟨st, [], ps.top, ps.own, (ps.top.map fun t => {t}).getD ∅, ps.lo, [], true, [], 0,
-      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, ps.owner, ∅⟩
+      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, ps.owner, ∅, none⟩
   else none
 
 /-- **Serve certified decisions** from slot `lo` up: the node's
@@ -724,20 +726,37 @@ def confirm (s : State Validator BlockId Payload) (c : Cert Validator BlockId) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   settle cfg { s with cert := some c, props := above (some c) s.props }
 
-/-- **Whether a dropped delivery shows the node behind**: with rate
-limiting, the block lies above the node's window, and the node's
-certified frontier lies more than `Λ` above its top, below its peers'
-horizon. -/
-def behind (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) : Bool :=
-  match cfg.limit, s.top with
-  | some (_, W), some t =>
-    decide (t + W < b.round ∧ t + cfg.lag < cfg.per * (min s.lo s.certHeight / cfg.m))
-  | _, _ => false
+/-- **Whether the node is stalled at round `r`**: it does not recover, its
+top is `r`, and its certified frontier lies more than `Λ` above `r`. -/
+def stalledAt (s : State Validator BlockId Payload) (r : ℕ) : Bool :=
+  !s.recovering && decide (s.top = some r ∧ r + cfg.lag < cfg.per * (min s.lo s.certHeight / cfg.m))
 
-/-- **The request a timer sends**: a recovering node whose top round's
-timer fires asks for bases, since it cannot build there. -/
-def timerAsk (s : State Validator BlockId Payload) (r : ℕ) : List (Output Validator BlockId Payload) :=
-  if s.recovering ∧ s.top = some r then [.requestBase] else []
+/-- **Whether the timer of round `r` finds the node stalled there a second
+time**: it is stalled at `r`, and was at an earlier firing of the timer. -/
+def stallsTwice (s : State Validator BlockId Payload) (r : ℕ) : Bool :=
+  stalledAt cfg s r && decide (s.stalled = some r)
+
+/-- **Whether the timer of round `r` makes the node ask for bases**: it
+recovers at `r`, or the timer finds it stalled there a second time. -/
+def timerAsks (s : State Validator BlockId Payload) (r : ℕ) : Bool :=
+  s.recovering && decide (s.top = some r) || stallsTwice cfg s r
+
+/-- **The state the timer of round `r` leaves before settling**: the
+round's timer fired; a node stalled at `r` notes it, and recovers if the
+timer finds it stalled there a second time. -/
+def timerState (s : State Validator BlockId Payload) (r : ℕ) : State Validator BlockId Payload :=
+  { s with
+    fired := insert r s.fired
+    recovering := s.recovering || stallsTwice cfg s r
+    asked := if stallsTwice cfg s r then r else s.asked
+    stalled := if stalledAt cfg s r then some r else s.stalled }
+
+/-- **What the timer of round `r` sends before settling**: a node still at
+`r` sets the timer again, and asks for bases if `timerAsks`. -/
+def timerOut (s : State Validator BlockId Payload) (r : ℕ) :
+    List (Output Validator BlockId Payload) :=
+  (if s.top = some r then [.setTimer r (cfg.timeout r)] else []) ++
+    if timerAsks cfg s r then [.requestBase] else []
 
 /-- **The node's transition function.** -/
 def step (s : State Validator BlockId Payload) :
@@ -772,13 +791,13 @@ def step (s : State Validator BlockId Payload) :
       (r.1, evidence s id b ++
         (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++
         (if ask then [.requestBase] else []) ++ r.2)
-    else if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ (s.recovering ∨ behind cfg s b) ∧
+    else if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.recovering ∧
         s.asked + cfg.lag + 2 ≤ b.round then
       ({ s with asked := b.round, recovering := true }, [.requestBase])
     else (s, [])
   | .timer r =>
-    let x := settle cfg { s with fired := insert r s.fired }
-    (x.1, timerAsk s r ++ x.2)
+    let x := settle cfg (timerState cfg s r)
+    (x.1, timerOut cfg s r ++ x.2)
   | .fetchRequest peer G ids => (s, answer s peer G ids)
   | .restart => let r := settle cfg s.recover; (r.1, .requestBase :: r.2)
   | .baseRequest peer =>

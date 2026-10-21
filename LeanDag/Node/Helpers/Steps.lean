@@ -283,8 +283,8 @@ theorem step_deliver {s : State Validator BlockId Payload} {id : BlockId}
   rfl
 
 /-- **A delivery the node does not take**: it changes nothing, or, when
-recovering or behind and the block lies far enough above the round it
-last asked on, it recovers and asks for bases. -/
+recovering and the block lies far enough above the round it last asked
+on, it asks for bases. -/
 theorem step_deliver_not {s : State Validator BlockId Payload} {id : BlockId}
     {b : Block Validator BlockId Payload} (h : ¬ Admits cfg s id b) :
     Node.step cfg s (.deliver id b) = (s, []) ∨
@@ -297,21 +297,14 @@ theorem step_deliver_not {s : State Validator BlockId Payload} {id : BlockId}
   · exact Or.inr ⟨_, rfl⟩
   · exact Or.inl rfl
 
-omit [Fintype Validator] in
-/-- Without rate limiting, no dropped delivery shows the node behind. -/
-theorem behind_of (hl : cfg.limit = none) (s : State Validator BlockId Payload)
-    (b : Block Validator BlockId Payload) : behind cfg s b = false := by
-  unfold behind; rw [hl]
-
-/-- A node not recovering and without rate limiting does nothing on a
-delivery it does not take. -/
+/-- A node not recovering does nothing on a delivery it does not take. -/
 theorem step_deliver_not_of {s : State Validator BlockId Payload} {id : BlockId}
-    {b : Block Validator BlockId Payload} (hl : cfg.limit = none) (h : ¬ Admits cfg s id b)
+    {b : Block Validator BlockId Payload} (h : ¬ Admits cfg s id b)
     (hs : s.recovering = false) : Node.step cfg s (.deliver id b) = (s, []) := by
   have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
       id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := h
-  simp only [Node.step, if_neg h', hs, behind_of hl]
-  simp [behind_of hl]
+  simp only [Node.step, if_neg h', hs]
+  simp
 
 /-- The state with a peer's offered horizon recorded, in place of its last. -/
 def withOffer (s : State Validator BlockId Payload) (p : Validator) (G : ℕ) :
@@ -454,7 +447,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
     · rcases step_deliver_not (cfg := cfg) hc with he | ⟨a, he⟩ <;> rw [he] <;>
         exact hy
   | timer r =>
-    exact hset { s with fired := insert r s.fired } (by simp only [Node.step]) (Grows.refl _) rfl
+    exact hset (timerState cfg s r) (by simp only [Node.step]) (Grows.refl _) rfl
       hp hy
   | fetchRequest peer G ids => exact hy
   | restart => exact absurd rfl hr
@@ -529,7 +522,7 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
     · rcases step_deliver_not (cfg := cfg) hc with he | ⟨a, he⟩ <;> rw [he] <;>
         exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
   | timer r =>
-    have := settle_sub (cfg := cfg) { s with fired := insert r s.fired }
+    have := settle_sub (cfg := cfg) (timerState cfg s r)
     exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
   | restart =>
     have := settle_sub (cfg := cfg) s.recover
@@ -761,8 +754,8 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
     · rcases step_deliver_not (cfg := cfg) hc with he | ⟨a, he⟩ <;> rw [he] <;>
         simp [persists]
   | timer r =>
-    exact settle_persist_of (s₀ := { s with fired := insert r s.fired }) (pre := timerAsk s r)
-      (Or.inl (out_quiet (timerAsk_isQuiet s r)).1) hb
+    exact settle_persist_of (s₀ := (timerState cfg s r)) (pre := timerOut cfg s r)
+      (Or.inl (out_quiet (timerOut_isQuiet s r)).1) hb
   | fetchRequest peer G ids =>
     intro e he
     change e ∈ persists (answer s peer G ids) at he

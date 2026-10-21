@@ -62,7 +62,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
     (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr)
     (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hchain : Boot.ChainInjective cfg H tr) (hnr : Converge.NoRestart T tr)
+    (hchain : Boot.ChainInjective cfg H tr) (hnr : ∀ v ∈ T, Steady cfg tr v)
     (hmono : TimeMono tr time) (hdel : DeliveredWithin cfg T tr time gst Δ t₁)
     (htimer : TimersOnTime cfg T tr time t₁) (hsync : SyncedWithin cfg H T tr time gst Δₛ t₁)
     (hstart : StartedBy T tr time gst) : Produces cfg T tr time gst t₁ := by
@@ -72,19 +72,19 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
         (stateBefore cfg tr j w).decided.reverse <+: (stateBefore cfg tr i u).decided.reverse :=
     fun u hu w hw i j => decided_comparable hσ hadm hf htime hcert hinj hchain
       (hTH hu) (hTH hw) i j
-  have hnv : ∀ k : ℕ, tr[k]? ≠ some (v, Input.restart) := fun k => hnr k v hv
+  have hnv : Steady cfg tr v := hnr v hv
   have hτ := hto n
   have hstarted : ∀ w ∈ T, (stateAt cfg tr time w s).top.isSome := fun w hw =>
-    started_at hl hadm hid htime hTH hnr hmono hstart hw hgs
+    started_at hadm hid htime hTH hnr hmono hstart hw hgs
   by_contra hlt
   have hle : topAt cfg tr time v (s + cfg.timeout n) ≤ n := by omega
   -- `v` built its round-`n` block by `s`, and the round's timer fires by `s + timeout n`
-  obtain ⟨b, hbs, hbv, e, hep, her⟩ := built_by hl hnv (eventsBy tr time s) (hstarted v hv)
+  obtain ⟨b, hbs, hbv, e, hep, her⟩ := built_by hnv (eventsBy tr time s) (hstarted v hv)
     (hall v hv)
   obtain ⟨inp, hb⟩ := Converge.event_of_map hbv
   have hbl : b < tr.length := (List.getElem?_eq_some_iff.mp hb).1
   have htb : time b ≤ s := (lt_eventsBy hmono hbl).mp hbs
-  have hset := timer_of_persist hl hnv hb hep
+  have hset := timer_of_persist hnv hb hep
   rw [her] at hset
   obtain ⟨f, hbf, hfe, htf⟩ := htimer.1 b v inp hb hv n (cfg.timeout n) hset (by omega)
   have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hfe).1
@@ -93,9 +93,9 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   set E := eventsBy tr time (s + cfg.timeout n) with hE
   have hsE : eventsBy tr time s ≤ E := eventsBy_mono (by omega)
   have hZs : (stateBefore cfg tr E v).top.isSome :=
-    (rises_before (cfg := cfg) hl hnv hsE).2.1 (hstarted v hv)
+    (rises_before (cfg := cfg) hnv hsE).2.1 (hstarted v hv)
   have hZge : n ≤ (stateBefore cfg tr E v).top.getD 0 :=
-    (hall v hv).trans (rises_before (cfg := cfg) hl hnv hsE).1
+    (hall v hv).trans (rises_before (cfg := cfg) hnv hsE).1
   have hZle : (stateBefore cfg tr E v).top.getD 0 ≤ n := hle
   have hZt : (stateBefore cfg tr E v).top = some n := by
     obtain ⟨t, ht⟩ := Option.isSome_iff_exists.mp hZs
@@ -104,13 +104,13 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
     rw [show t = n by omega]
   -- its round's timer has fired, it holds round `n`, and its horizon lies at or below
   have hfired : n ∈ (stateBefore cfg tr E v).fired :=
-    fired_stays hl hnv hfe E hfE (by rw [hZt]; simp)
+    fired_stays hnv hfe E hfE (by rw [hZt]; simp)
   have hbn : (stateBefore cfg tr E v).store.base ≤ n := by
     rcases (Converge.inv_before (cfg := cfg) (tr := tr) E v).rounds with ⟨h, -, -⟩ | ⟨t, ht, hbt, -⟩
     · rw [hZt] at h; cases h
     · rw [hZt] at ht; cases ht; exact hbt
   -- it holds a quorum of round `n`
-  have hown := ownTop_before (cfg := cfg) hl hnv E n hZt
+  have hown := ownTop_before (cfg := cfg) hnv E n hZt
   obtain ⟨j₀, hj₀, hj₀i, hj₀r, hj₀c⟩ := hown
   have hauth : T ⊆ authorsIn (stateBefore cfg tr E v).store.toRecord
       (stateBefore cfg tr E v).store.ids n \ (stateBefore cfg tr E v).exposed := by
@@ -130,8 +130,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   have hsome := tryBuild_isSome (cfg := cfg.at v) hZt (Or.inl hfired)
     (hcard.trans (Finset.card_le_card sdiff_subset_usableAuthors))
     (fun j hj => by rw [hj₀] at hj; cases hj; exact ⟨hj₀i, hj₀r, hj₀c⟩) hbn
-    (fun R => fresh_before hl hid htime (hTH hv) hZt R)
-  rcases settled_before (cfg := cfg) hl hq hnv E with h | h
+    (fun R => fresh_before hid htime (hTH hv) hZt R)
+  rcases settled_before (cfg := cfg) hq hnv E with h | h
   · rw [hZt] at h; cases h
   · rw [h.build] at hsome; cases hsome
 
@@ -148,7 +148,7 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     (hto : ∀ r, 2 * (3 * Δ + Δₛ) < cfg.timeout r)
     (htime : Converge.TimelyAuthentic cfg H tr)
     (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hchain : Boot.ChainInjective cfg H tr) (hnr : Converge.NoRestart T tr)
+    (hchain : Boot.ChainInjective cfg H tr) (hnr : ∀ v ∈ T, Steady cfg tr v)
     (hmono : TimeMono tr time) (hdel : DeliveredWithin cfg T tr time gst Δ t₁)
     (htimer : TimersOnTime cfg T tr time t₁) (hsync : SyncedWithin cfg H T tr time gst Δₛ t₁)
     (hstart : StartedBy T tr time gst) : Decides cfg T tr time gst (3 * Δ + Δₛ) t₁ := by
@@ -183,25 +183,25 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
       timeout := cfg.timeout
       holds := heldBefore cfg tr time
       populated := fun n _ hnN w hw' => by
-        have hnw : ∀ k : ℕ, tr[k]? ≠ some (w, Input.restart) := fun k => hnr k w hw'
+        have hnw : Steady cfg tr w := hnr w hw'
         obtain ⟨i, inp, e, hi, he, her, -, -⟩ :=
-          built_of_top hl hnw hmono (hst w hw') ((htop w hw').trans' hnN)
-        obtain ⟨h₁, h₂, h₃⟩ := built_mem hl hσ hadm hf htime hcert hinj hchain (hTH hw') hnw hi he
+          built_of_top hnw hmono (hst w hw') ((htop w hw').trans' hnN)
+        obtain ⟨h₁, h₂, h₃⟩ := built_mem hσ hadm hf htime hcert hinj hchain (hTH hw') hnw hi he
         exact ⟨e.1, h₁, h₃, h₂.trans her⟩
       arrives := fun w hw' u hu n hn₀ hnN c hc hcu hcr hwait =>
         waited_holds hq hl hσ hadm hf htime hcert hinj hchain hTH hnr hmono hdel hsync hcmp
           hD hst htop ht₁ hto hu hw' hn₀ hnN hc hcu hcr hwait
       reach_or_wait := fun w hw' _ _ hlk L hL _ hm _ hc hcc hcr =>
-        reach_or_wait_node time hl hσ hadm hf htime hcert hinj hchain hmono hTH htimer hw'
-          (fun k => hnr k w hw') hlk hL hm hc hcc hcr
+        reach_or_wait_node time hσ hadm hf htime hcert hinj hchain hmono hTH htimer hw'
+          (hnr w hw') hlk hL hm hc hcc hcr
       cert_or_wait := fun hvc w hw' _ _ hlk L hL _ hc hcc hcr =>
-        (cert_or_wait_node time hl hσ hadm hf htime hcert hinj hchain hmono hTH htimer hvc hw'
-          (fun k => hnr k w hw') hlk hL hc hcc hcr).imp id
+        (cert_or_wait_node time hσ hadm hf htime hcert hinj hchain hmono hTH htimer hvc hw'
+          (hnr w hw') hlk hL hc hcc hcr).imp id
           fun h => ⟨h.1, fun b hb hbc hbr hbh _ => h.2 b hb hbc hbr hbh⟩ }
   -- `v` at `t + A`, settled
-  have hnv : ∀ k : ℕ, tr[k]? ≠ some (v, Input.restart) := fun k => hnr k v hv
+  have hnv : Steady cfg tr v := hnr v hv
   set E := eventsBy tr time (t + (3 * Δ + Δₛ)) with hE
-  obtain ⟨h₁, h₂, -, -⟩ := rises_before (cfg := cfg) hl hnv
+  obtain ⟨h₁, h₂, -, -⟩ := rises_before (cfg := cfg) hnv
     (eventsBy_mono (tr := tr) (time := time) (show t ≤ t + (3 * Δ + Δₛ) by omega))
   obtain ⟨t', ht'⟩ := Option.isSome_iff_exists.mp (h₂ (hst v hv))
   change (stateBefore cfg tr E v).top = some t' at ht'
@@ -215,7 +215,7 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
   set Z := stateBefore cfg tr E v with hZ
   by_contra hlo
   have hSet : Settled (cfg.at v) Z := by
-    rcases settled_before (cfg := cfg) hl hq hnv E with h | h
+    rcases settled_before (cfg := cfg) hq hnv E with h | h
     · rw [ht'] at h; cases h
     · exact h
   have hcut := (cut_before hσ hadm hf htime hcert hinj hchain E v (hTH hv)).1
@@ -258,7 +258,7 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
         (b := b) (n := b + c - 1) (by omega) (by omega) (fun i hi => by exact hspan b i hi)
         (fun j h1 h2 => hcommit j h1 h2 (by omega)) Z.lo (by omega)
   -- and the scan reaches it
-  obtain ⟨o, -, hoi, hor, -⟩ := ownTop_before (cfg := cfg) hl hnv E t' ht'
+  obtain ⟨o, -, hoi, hor, -⟩ := ownTop_before (cfg := cfg) hnv E t' ht'
   have hoi' : o ∈ Z.store.ids := hoi
   have hor' : (Z.store.blk o).round = t' := hor
   have hdec : b + c ≤ decidable cfg Z.store.topRound := by
@@ -325,7 +325,9 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
 /-- **The reliable nodes produce rounds and decide.** -/
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hl hf hTH hqT hcT hq
-    hid hvo hto htime hcert hinj hchain hnr hmono hdel htimer hsync hstart
+    hid hvo hto htime hcert hinj hchain hnr hns hmono hdel htimer hsync hstart
+  have hnr : ∀ v ∈ T, Steady cfg tr v := fun v hv i inp he =>
+    ⟨fun h => hnr i v hv (by rw [he, h]), fun r hr => hns i v r hv (by rw [he, hr])⟩
   have hp := produces hσ hadm hl hf hTH hqT hto hq hid htime hcert hinj hchain hnr hmono hdel
     htimer hsync hstart
   have hd := decides hσ hadm hl hf hTH hqT hcT hq hid hvo hto htime hcert hinj hchain hnr

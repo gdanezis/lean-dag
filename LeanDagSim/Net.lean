@@ -219,6 +219,9 @@ structure Stats where
   adoptions : ℕ := 0
   /-- The junk chains planted, and the honest blocks that referenced one. -/
   junkChains : ℕ := 0
+  /-- The times an honest node stalled and recovered, and those past GST. -/
+  stalls : ℕ := 0
+  stallsAfterGst : ℕ := 0
   deriving Inhabited
 
 /-- **What a simulation reports.** -/
@@ -672,6 +675,13 @@ def loop : ℕ → World n → World n
               adoptions := ss.adoptions + match i with
                 | .certOffer .. => if !st.recovering && st.lo < r.1.lo then 1 else 0
                 | _ => 0 }
+            let stall := match i with
+              | .restart => false
+              | _ => !st.recovering && r.1.recovering
+            let late := if sc.gst ≤ t then 1 else 0
+            let ss := if stall then
+                { ss with stalls := ss.stalls + 1, stallsAfterGst := ss.stallsAfterGst + late }
+              else ss
             let ss := match i with
               | .deliver id b =>
                 if sc.honest b.creator.val ∧ b.creator ≠ a.node ∧ id = idOf b then

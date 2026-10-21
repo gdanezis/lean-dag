@@ -115,7 +115,8 @@ def main (args : List String) : IO UInt32 := do
     for (v, top, ds) in (honest.zip (r.tops.zip r.commits)).map fun (v, t, d) => (v, t, d) do
       let skips := (ds.filter (·.2.isNone)).length
       IO.println s!"node {v}: round {top.getD 0}, {ds.length} slots decided, {skips} skipped"
-    IO.println s!"junk chains {r.stats.junkChains}  asks {r.stats.asks}  adoptions {r.stats.adoptions}"
+    IO.println (s!"junk chains {r.stats.junkChains}  asks {r.stats.asks}  " ++
+      s!"adoptions {r.stats.adoptions}  stalls {r.stats.stalls} ({r.stats.stallsAfterGst} past GST)")
     for l in r.final do IO.println l
     IO.println s!"agree {r.agree}  prefixes {r.prefixes}  valid {r.valid}  skips {r.skips}  boots {r.boots}  dropped {r.dropped}"
     return if r.agree && r.valid then 0 else 1

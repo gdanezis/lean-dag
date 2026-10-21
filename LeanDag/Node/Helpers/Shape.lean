@@ -398,16 +398,18 @@ theorem silent_of {x : List (Output Validator BlockId Payload)}
     refine ⟨fun id b he => ?_, fun c he => ?_, fun r a he => ?_⟩ <;> subst he <;> exact this
 
 /-- **The shape of a step** of a node not recovering, other than a
-restart: it leaves the state alone with silent outputs, or settles a
-state with the node's top, fired timers and horizon, after silent outputs
-or, at its start, after its genesis block with its timer. -/
+restart and a timer that finds it stalled twice: it leaves the state
+alone with silent outputs, or settles a state with the node's top, fired
+timers and horizon, after outputs persisting nothing or, at its start,
+after its genesis block with its timer. -/
 theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
+    (hs : s.recovering = false) (hr : inp ≠ .restart)
+    (hst : ∀ r, inp = .timer r → stallsTwice cfg s r = false) :
     ((Node.step cfg s inp).1 = s ∧ Silent (Node.step cfg s inp).2) ∨
     ∃ x pre, Node.step cfg s inp = ((Node.settle cfg x).1, pre ++ (Node.settle cfg x).2) ∧
       x.recovering = false ∧ x.store.base = s.store.base ∧ x.top.getD 0 = s.top.getD 0 ∧
       s.fired ⊆ x.fired ∧
-      ((Silent pre ∧ x.top = s.top) ∨ (s.top = none ∧ x.top = some 0 ∧
+      ((persists pre = [] ∧ x.top = s.top) ∨ (s.top = none ∧ x.top = some 0 ∧
         ∃ g : BlockId × Block Validator BlockId Payload,
           pre = [.persist g.1 g.2, .broadcast g.1 g.2, .setTimer 0 (cfg.timeout 0)] ∧
           g.2.round = 0 ∧ g.1 ∈ x.store.ids ∧ (x.store.blk g.1).round = 0)) := by
@@ -432,7 +434,7 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
     by_cases hA : Admits cfg s id b
     · rw [step_deliver hA]
       refine Or.inr ⟨_, _, rfl, hs, flush_base _ _ _, rfl, subset_rfl, Or.inl ⟨?_, rfl⟩⟩
-      refine silent_of fun o ho => ?_
+      refine (silent_of fun o ho => ?_).1
       simp only [askOut, List.mem_append] at ho
       rcases ho with (ho | ho) | ho
       · obtain ⟨_, _, rfl⟩ := evidence_relay ho; trivial
@@ -442,11 +444,12 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
       · split at ho
         · rw [List.mem_singleton] at ho; subst ho; trivial
         · cases ho
-    · rw [step_deliver_not_of hl hA hs]
+    · rw [step_deliver_not_of hA hs]
       exact Or.inl ⟨rfl, Silent.nil⟩
   | timer r =>
-    rw [step_timer_of hs]
-    exact Or.inr ⟨_, [], hnil _, hs, rfl, rfl, Finset.subset_insert _ _, Or.inl ⟨Silent.nil, rfl⟩⟩
+    refine Or.inr ⟨timerState cfg s r, timerOut cfg s r, step_timer_eq s r,
+      timerState_idle hs (hst r rfl), rfl, rfl, Finset.subset_insert _ _, Or.inl ⟨?_, rfl⟩⟩
+    unfold timerOut; split <;> split <;> rfl
   | restart => exact absurd rfl hr
   | baseOffer p G =>
     rw [show Node.step cfg s (.baseOffer p G) = (s, []) by
@@ -479,14 +482,15 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
     rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, -, he⟩ |
       ⟨-, -, he⟩ | he
     · rw [he, adopt_eq]
-      refine Or.inr ⟨_, _, rfl, hs, rfl, rfl, subset_rfl, Or.inl ⟨silent_of fun o ho => ?_, rfl⟩⟩
+      refine Or.inr ⟨_, _, rfl, hs, rfl, rfl, subset_rfl,
+        Or.inl ⟨(silent_of fun o ho => ?_).1, rfl⟩⟩
       obtain ⟨_, -, rfl⟩ := List.mem_map.mp ho; trivial
     · rw [he]
-      exact Or.inr ⟨_, [], hnil _, hs, rfl, rfl, subset_rfl, Or.inl ⟨Silent.nil, rfl⟩⟩
+      exact Or.inr ⟨_, [], hnil _, hs, rfl, rfl, subset_rfl, Or.inl ⟨rfl, rfl⟩⟩
     · rw [he]; exact Or.inl ⟨rfl, Silent.nil⟩
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
-    · exact Or.inr ⟨_, [], hnil _, hs, rfl, rfl, subset_rfl, Or.inl ⟨Silent.nil, rfl⟩⟩
+    · exact Or.inr ⟨_, [], hnil _, hs, rfl, rfl, subset_rfl, Or.inl ⟨rfl, rfl⟩⟩
     · refine Or.inl ⟨rfl, silent_of fun o ho => ?_⟩
       rw [List.mem_singleton] at ho; subst ho; trivial
     · exact Or.inl ⟨rfl, Silent.nil⟩
@@ -494,8 +498,7 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
     rw [step_proposal]
     split
     · refine Or.inr ⟨_, _, rfl, by exact hs, by rfl, by rfl,
-        by exact subset_rfl, Or.inl ⟨silent_of fun o ho => ?_, by rfl⟩⟩
-      cases ho
+        by exact subset_rfl, Or.inl ⟨rfl, by rfl⟩⟩
     · exact Or.inl ⟨rfl, Silent.nil⟩
 
 section StepFacts
@@ -504,12 +507,13 @@ variable {s : State Validator BlockId Payload} {inp : Input Validator BlockId Pa
 
 /-- **A step raises the horizon only with an announced certificate**, to
 at most `Λ` below the lesser of its slot round and the top after. -/
-theorem step_rise (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart)
+theorem step_rise (hs : s.recovering = false) (hr : inp ≠ .restart)
+    (hst : ∀ r, inp = .timer r → stallsTwice cfg s r = false)
     (hlt : s.store.base < (Node.step cfg s inp).1.store.base) :
     ∃ c, Output.announce c ∈ (Node.step cfg s inp).2 ∧
       (Node.step cfg s inp).1.store.base ≤
         min (cfg.per * (c.height / cfg.m)) ((Node.step cfg s inp).1.top.getD 0) - cfg.lag := by
-  rcases step_shape (cfg := cfg) hl hs hr with ⟨he, -⟩ | ⟨x, pre, he, hx, hb, -, -, -⟩
+  rcases step_shape (cfg := cfg) hs hr hst with ⟨he, -⟩ | ⟨x, pre, he, hx, hb, -, -, -⟩
   · rw [he] at hlt; exact absurd hlt (lt_irrefl _)
   · rw [he] at hlt ⊢
     obtain ⟨c, hc, hcb⟩ := (settle_shape (cfg := cfg) hx).rise hx (by rw [hb]; exact hlt)
@@ -517,16 +521,17 @@ theorem step_rise (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp 
 
 /-- **What a step builds lies above the top before**, but the genesis
 block at the start. -/
-theorem step_above (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
+theorem step_above (hs : s.recovering = false) (hr : inp ≠ .restart)
+    (hst : ∀ r, inp = .timer r → stallsTwice cfg s r = false) :
     ∀ e ∈ persists (Node.step cfg s inp).2,
       s.top.getD 0 < e.2.round ∨ (s.top = none ∧ e.2.round = 0) := by
-  rcases step_shape (cfg := cfg) hl hs hr with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, ht, -, hpre⟩
+  rcases step_shape (cfg := cfg) hs hr hst with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, ht, -, hpre⟩
   · rw [hq.1]; intro e he; cases he
   · rw [he, persists_append]
     intro e he'
     rcases List.mem_append.mp he' with he' | he'
     · rcases hpre with ⟨hp, -⟩ | ⟨hn, -, g, rfl, hg, -⟩
-      · rw [hp.1] at he'; cases he'
+      · rw [hp] at he'; cases he'
       · simp only [persists] at he'
         simp at he'
         subst he'
@@ -538,12 +543,13 @@ theorem step_above (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp
 
 /-- **A step builds every round above the top before up to the top it
 reaches.** -/
-theorem step_every (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart)
+theorem step_every (hs : s.recovering = false) (hr : inp ≠ .restart)
+    (hst : ∀ r, inp = .timer r → stallsTwice cfg s r = false)
     (hsome : (Node.step cfg s inp).1.top.isSome) :
     ∀ ρ, (s.top = none ∨ s.top.getD 0 < ρ) → ρ ≤ (Node.step cfg s inp).1.top.getD 0 →
       ∃ e ∈ persists (Node.step cfg s inp).2, e.2.round = ρ := by
   intro ρ hρ hρt
-  rcases step_shape (cfg := cfg) hl hs hr with ⟨he, -⟩ | ⟨x, pre, he, hx, -, ht, -, hpre⟩
+  rcases step_shape (cfg := cfg) hs hr hst with ⟨he, -⟩ | ⟨x, pre, he, hx, -, ht, -, hpre⟩
   · rw [he] at hsome hρt
     rcases hρ with hρ | hρ
     · rw [hρ] at hsome; cases hsome
@@ -567,16 +573,17 @@ theorem step_every (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp
         exact ⟨e, List.mem_append_right _ he', her⟩
 
 /-- **A step sets the timer of each round it builds.** -/
-theorem step_timer (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
+theorem step_timer (hs : s.recovering = false) (hr : inp ≠ .restart)
+    (hst : ∀ r, inp = .timer r → stallsTwice cfg s r = false) :
     ∀ e ∈ persists (Node.step cfg s inp).2,
       Output.setTimer e.2.round (cfg.timeout e.2.round) ∈ (Node.step cfg s inp).2 := by
-  rcases step_shape (cfg := cfg) hl hs hr with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, -, -, hpre⟩
+  rcases step_shape (cfg := cfg) hs hr hst with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, -, -, hpre⟩
   · rw [hq.1]; intro e he; cases he
   · rw [he, persists_append]
     intro e he'
     rcases List.mem_append.mp he' with he' | he'
     · rcases hpre with ⟨hp, -⟩ | ⟨-, -, g, rfl, hg, -⟩
-      · rw [hp.1] at he'; cases he'
+      · rw [hp] at he'; cases he'
       · simp only [persists] at he'
         simp at he'
         subst he'
@@ -585,25 +592,27 @@ theorem step_timer (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp
     · exact List.mem_append_right _ ((settle_shape (cfg := cfg) hx).timer e he')
 
 /-- **A step keeps a fired timer** at or above the top it reaches. -/
-theorem step_fired (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
+theorem step_fired (hs : s.recovering = false) (hr : inp ≠ .restart)
+    (hst : ∀ r, inp = .timer r → stallsTwice cfg s r = false) :
     ∀ ρ ∈ s.fired, (Node.step cfg s inp).1.top.getD 0 ≤ ρ → ρ ∈ (Node.step cfg s inp).1.fired := by
-  rcases step_shape (cfg := cfg) hl hs hr with ⟨he, -⟩ | ⟨x, pre, he, hx, -, -, hf, -⟩
+  rcases step_shape (cfg := cfg) hs hr hst with ⟨he, -⟩ | ⟨x, pre, he, hx, -, -, hf, -⟩
   · rw [he]; exact fun ρ h _ => h
   · rw [he]
     exact fun ρ h hρ => (settle_shape (cfg := cfg) hx).fired ρ (hf h) hρ
 
 /-- **What a step builds it stores**, at its round, or the block lies
 below the horizon. -/
-theorem step_keeps_built (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
+theorem step_keeps_built (hs : s.recovering = false) (hr : inp ≠ .restart)
+    (hst : ∀ r, inp = .timer r → stallsTwice cfg s r = false) :
     KeepsBuilt (Node.step cfg s inp).2 (Node.step cfg s inp).1 := by
-  rcases step_shape (cfg := cfg) hl hs hr with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, -, -, hpre⟩
+  rcases step_shape (cfg := cfg) hs hr hst with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, -, -, hpre⟩
   · intro e he; rw [hq.1] at he; cases he
   · rw [he]
     intro e he'
     rw [persists_append] at he'
     rcases List.mem_append.mp he' with he' | he'
     · rcases hpre with ⟨hp, -⟩ | ⟨-, -, g, rfl, hg, hgi, hgr⟩
-      · rw [hp.1] at he'; cases he'
+      · rw [hp] at he'; cases he'
       · simp only [persists] at he'
         simp at he'
         subst he'

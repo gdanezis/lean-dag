@@ -80,11 +80,11 @@ theorem decidesOnView : DecidesOnView := by
   · exact proposeAt_commits _
 
 theorem certifies : Certifies := by
-  intro Validator BlockId Payload _ _ _ cfg is k S r h hl hr hk hm hkd hme hq hS
+  intro Validator BlockId Payload _ _ _ cfg is k S r h hr hk hm hkd hme hq hS
   by_contra hlt
   rw [not_le] at hlt
-  obtain ⟨hK, hcov, -⟩ := Kept.run (cfg := cfg) (P := []) hl (by simp) is Kept.init Covered.init
-    rfl hr (by simp)
+  obtain ⟨hK, hcov⟩ := Kept.run (cfg := cfg) (P := []) (by simp) is Kept.init Covered.init hr
+    (by simp)
   have hD : r.1.decided.reverse = commitsOf r.2 := (decisions Validator BlockId Payload cfg is).1
   have hlo : k ≤ r.1.lo := by
     rw [← hK.ledger.length, ← List.length_reverse, hD]; exact hkd
@@ -99,7 +99,7 @@ theorem certifies : Certifies := by
     intro u hu
     obtain ⟨is₁, is₂, his, hw, hc⟩ := hS u hu
     have hu' : u ≠ cfg.me := fun he => hme (he ▸ hu)
-    have := (kept_peer (cfg := cfg) hl hu' (his ▸ hr) hw hc).2.2
+    have := (kept_peer (cfg := cfg) hu' (his ▸ hr) hw hc).2.2
     rw [← his] at this
     exact this.resolve_right (not_le.mpr hlt)
   have hsub : insert cfg.me S ⊆ insert cfg.me (signersOf r.1.props k h) :=

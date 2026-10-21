@@ -761,8 +761,9 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         have h₁ := h.keeps (s' := { s with asked := a, recovering := true }) rfl (Keeps.refl _) hc
         exact ⟨by simpa [commitsOf] using h₁, hc⟩
   | timer r =>
-    exact hset { s with fired := insert r s.fired } (timerAsk s r) h hc
-      (hh.grow (Grows.refl _) rfl rfl le_rfl) hp (commitsOf_timerAsk s r) (step_timer_eq s r)
+    exact hset (timerState cfg s r) (timerOut cfg s r) h hc
+      (hh.grow (Grows.refl _) rfl rfl le_rfl (timerState_recovering r)) hp (commitsOf_timerOut s r)
+      (step_timer_eq s r)
   | fetchRequest peer G ids =>
     rw [show Node.step cfg s (.fetchRequest peer G ids) = (s, answer s peer G ids) from rfl]
     have : commitsOf (answer s peer G ids) = [] := by
