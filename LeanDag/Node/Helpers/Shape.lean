@@ -285,6 +285,91 @@ theorem quiesce_shape (n : ℕ) (s : State Validator BlockId Payload) :
   (quiesce_rel (P := fun _ => True) (R := PassShape cfg) PassShape.refl
     (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂) (fun s _ => ⟨advance_shape s, trivial⟩) n s trivial).1
 
+/-! ## What a pass builds it stores -/
+
+/-- **The blocks of `out` kept in `s'`**: stored at their round, or below
+the horizon. -/
+def KeepsBuilt (out : List (Output Validator BlockId Payload))
+    (s' : State Validator BlockId Payload) : Prop :=
+  ∀ e ∈ persists out, (e.1 ∈ s'.store.ids ∧ (s'.store.blk e.1).round = e.2.round) ∨
+    e.2.round < s'.store.base
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem KeepsBuilt.of_retains {out : List (Output Validator BlockId Payload)}
+    {b c : State Validator BlockId Payload} (h : KeepsBuilt out b)
+    (hr : Retains b.store c.store) (hb : b.store.base ≤ c.store.base) : KeepsBuilt out c := by
+  intro e he
+  rcases h e he with ⟨hj, hjr⟩ | hlt
+  · by_cases hc : c.store.base ≤ (b.store.blk e.1).round
+    · obtain ⟨hjc, hrc⟩ := hr e.1 hj hc
+      exact Or.inl ⟨hjc, hrc.trans hjr⟩
+    · right; rw [← hjr]; omega
+  · right; omega
+
+omit [Fintype Validator] in
+theorem progress_keeps : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
+    KeepsBuilt (Node.progress cfg fuel s).2 (Node.progress cfg fuel s).1
+  | 0, s => fun e he => absurd he (by simp [Node.progress, persists])
+  | fuel + 1, s => by
+    unfold Node.progress
+    split
+    · rename_i s₁ out hb
+      obtain ⟨r, id, b, hnew, hab, hrefs, hpred, -, -, -, -, -, hst, -, -, -, hout⟩ :=
+        tryBuild_some hb
+      dsimp only
+      intro e he
+      rw [persists_append, hout, persists_built] at he
+      rcases List.mem_append.mp he with he | he
+      · rw [List.mem_singleton] at he; subst he
+        have hg := (Grows.progress (cfg := cfg) fuel s₁).1
+        have hbs := progress_base (cfg := cfg) fuel s₁
+        have hin : id ∈ s₁.store.ids := by rw [hst]; exact Finset.mem_insert_self _ _
+        have hr₁ : (s₁.store.blk id).round = b.round := by
+          rw [hst]; simp [Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self]
+        exact Or.inl ⟨(hg.2 hbs).1 hin, by rw [Grows.blk hg hbs hin, hr₁]⟩
+      · exact progress_keeps fuel s₁ e he
+    · intro e he; simp [persists] at he
+
+omit [Fintype Validator] in
+theorem advance_keeps_built (s : State Validator BlockId Payload) :
+    KeepsBuilt (Node.advance cfg s).2 (Node.advance cfg s).1 := by
+  have h₁ := progress_keeps (cfg := cfg) (s.store.topRound + 2) s
+  simp only [Node.advance]
+  generalize Node.progress cfg (s.store.topRound + 2) s = P at h₁
+  have hd := decideStep_store (cfg := cfg) P.1
+  have hdp := decideStep_persist (cfg := cfg) P.1
+  have hcp := collect_persist (cfg := cfg) (Node.decideStep cfg P.1).1
+  have hrc := retains_collect (cfg := cfg) (Node.decideStep cfg P.1).1
+  have hbc := (Grows.collect (cfg := cfg) (Node.decideStep cfg P.1).1).1
+  generalize Node.decideStep cfg P.1 = D at hd hdp hcp hrc hbc
+  generalize Node.collect cfg D.1 = G at hcp hrc hbc
+  intro e he
+  rw [persists_append, persists_append, hdp, hcp, List.append_nil, List.append_nil] at he
+  have hfb := flush_base (cfg := cfg) (G.1.pending.length + 1) G.1.store G.1.pending
+  have hfg := Grows.flush (cfg := cfg) (G.1.pending.length + 1) G.1.store G.1.pending
+  have hR : Retains P.1.store (flush cfg (G.1.pending.length + 1) G.1.store G.1.pending).1 :=
+    (hd ▸ hrc).trans (Retains.of_grows hfg hfb) (by rw [hfb])
+  have hB : P.1.store.base ≤ (flush cfg (G.1.pending.length + 1) G.1.store G.1.pending).1.base := by
+    rw [hfb, ← hd]; exact hbc
+  exact KeepsBuilt.of_retains (c := { G.1 with
+    store := (flush cfg (G.1.pending.length + 1) G.1.store G.1.pending).1,
+    pending := (flush cfg (G.1.pending.length + 1) G.1.store G.1.pending).2 }) h₁ hR hB e he
+
+omit [Fintype Validator] in
+theorem quiesce_keeps_built (n : ℕ) (s : State Validator BlockId Payload) :
+    KeepsBuilt (quiesce cfg n s).2 (quiesce cfg n s).1 :=
+  (quiesce_rel (P := fun _ => True)
+    (R := fun a out b => KeepsBuilt out b ∧ Retains a.store b.store ∧
+      a.store.base ≤ b.store.base)
+    (fun _ => ⟨fun e he => absurd he (by simp [persists]), Retains.refl _, le_rfl⟩)
+    (fun _ _ _ _ _ h₁ h₂ => ⟨fun e he => by
+      rw [persists_append] at he
+      rcases List.mem_append.mp he with he | he
+      · exact (h₁.1.of_retains h₂.2.1 h₂.2.2) e he
+      · exact h₂.1 e he, h₁.2.1.trans h₂.2.1 h₂.2.2, h₁.2.2.trans h₂.2.2⟩)
+    (fun s _ => ⟨⟨advance_keeps_built s, retains_advance s, (Grows.advance s).1⟩, trivial⟩)
+    n s trivial).1.1
+
 /-! ## A settle and a step -/
 
 /-- **A settle of a node not recovering** holds the top it begins at and
@@ -317,7 +402,7 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
       ((Silent pre ∧ x.top = s.top) ∨ (s.top = none ∧ x.top = some 0 ∧
         ∃ g : BlockId × Block Validator BlockId Payload,
           pre = [.persist g.1 g.2, .broadcast g.1 g.2, .setTimer 0 (cfg.timeout 0)] ∧
-          g.2.round = 0)) := by
+          g.2.round = 0 ∧ g.1 ∈ x.store.ids ∧ (x.store.blk g.1).round = 0)) := by
   have hq : ∀ x, x = s → ((x, ([] : List (Output Validator BlockId Payload))).1 = s ∧
       Silent ([] : List (Output Validator BlockId Payload))) := fun x hx => ⟨hx, Silent.nil⟩
   have hnil : ∀ x : State Validator BlockId Payload,
@@ -331,7 +416,8 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
       split
       · rename_i h₂
         refine Or.inr ⟨_, _, rfl, rfl, rfl, by simp [h₁.1], subset_rfl, Or.inr ⟨h₁.1, rfl,
-          ⟨_, cfg.genesis⟩, rfl, rfl⟩⟩
+          ⟨_, cfg.genesis⟩, rfl, rfl, Finset.mem_insert_self _ _, ?_⟩⟩
+        simp [Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self, Config.genesis]
       · exact Or.inl (hq s rfl)
     · exact Or.inl (hq s rfl)
   | deliver id b =>
@@ -443,7 +529,7 @@ theorem step_above (hs : s.recovering = false) (hr : inp ≠ .restart) :
   · rw [he, persists_append]
     intro e he'
     rcases List.mem_append.mp he' with he' | he'
-    · rcases hpre with ⟨hp, -⟩ | ⟨hn, -, g, rfl, hg⟩
+    · rcases hpre with ⟨hp, -⟩ | ⟨hn, -, g, rfl, hg, -⟩
       · rw [hp.1] at he'; cases he'
       · simp only [persists] at he'
         simp at he'
@@ -469,7 +555,7 @@ theorem step_every (hs : s.recovering = false) (hr : inp ≠ .restart)
   · rw [he] at hsome hρt ⊢
     rw [persists_append]
     have hS := (settle_shape (cfg := cfg) hx).2
-    rcases hpre with ⟨-, hxt⟩ | ⟨hn, hx0, g, rfl, hg⟩
+    rcases hpre with ⟨-, hxt⟩ | ⟨hn, hx0, g, rfl, hg, -⟩
     · by_cases hn : s.top = none
       · have := hS.none (by change x.top = none; rw [hxt, hn])
         rw [this] at hsome; cases hsome
@@ -493,7 +579,7 @@ theorem step_timer (hs : s.recovering = false) (hr : inp ≠ .restart) :
   · rw [he, persists_append]
     intro e he'
     rcases List.mem_append.mp he' with he' | he'
-    · rcases hpre with ⟨hp, -⟩ | ⟨-, -, g, rfl, hg⟩
+    · rcases hpre with ⟨hp, -⟩ | ⟨-, -, g, rfl, hg, -⟩
       · rw [hp.1] at he'; cases he'
       · simp only [persists] at he'
         simp at he'
@@ -509,6 +595,32 @@ theorem step_fired (hs : s.recovering = false) (hr : inp ≠ .restart) :
   · rw [he]; exact fun ρ h _ => h
   · rw [he]
     exact fun ρ h hρ => (settle_shape (cfg := cfg) hx).2.fired ρ (hf h) hρ
+
+/-- **What a step builds it stores**, at its round, or the block lies
+below the horizon. -/
+theorem step_keeps_built (hs : s.recovering = false) (hr : inp ≠ .restart) :
+    KeepsBuilt (Node.step cfg s inp).2 (Node.step cfg s inp).1 := by
+  rcases step_shape (cfg := cfg) hs hr with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, -, -, hpre⟩
+  · intro e he; rw [hq.1] at he; cases he
+  · rw [he]
+    intro e he'
+    rw [persists_append] at he'
+    rcases List.mem_append.mp he' with he' | he'
+    · rcases hpre with ⟨hp, -⟩ | ⟨-, -, g, rfl, hg, hgi, hgr⟩
+      · rw [hp.1] at he'; cases he'
+      · simp only [persists] at he'
+        simp at he'
+        subst he'
+        have hR := retains_quiesce (cfg := cfg) (passes cfg x.hold) x.hold
+        rw [← settle_of_idle hx] at hR
+        have hk : KeepsBuilt [Output.persist e.1 e.2] x.hold := fun e' he'' => by
+          simp [persists] at he''
+          subst he''
+          exact Or.inl ⟨hgi, by rw [State.hold_store, hgr, hg]⟩
+        exact hk.of_retains hR.1 hR.2 e (by simp [persists])
+    · have := quiesce_keeps_built (cfg := cfg) (passes cfg x.hold) x.hold
+      rw [← settle_of_idle hx] at this
+      exact this e he'
 
 end StepFacts
 
