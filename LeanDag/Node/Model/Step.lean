@@ -701,12 +701,13 @@ def serveFrom (s : State Validator BlockId Payload) (peer : Validator) (lo : ℕ
   | none => []
 
 /-- **Decisions the node can adopt**: a certificate of `q` distinct
-signers above its next undecided slot, served with the decisions of the
-slots from there to its height, in order, whose chain extends the node's
-own to the certificate's head. -/
+signers at a multiple of `m` above its next undecided slot, served with
+the decisions of the slots from there to its height, in order, whose
+chain extends the node's own to the certificate's head. -/
 def adoptable (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
     (ds : List (ℕ × Option BlockId)) : Bool :=
-  decide (cfg.q ≤ c.signers.length) && decide c.signers.Nodup && decide (s.lo < c.height) &&
+  decide (cfg.q ≤ c.signers.length) && decide c.signers.Nodup &&
+    decide (s.lo < c.height ∧ cfg.m ∣ c.height) &&
     decide (ds.map Prod.fst = List.range' s.lo (c.height - s.lo)) &&
     decide (((s.decided.take (s.lo - s.lastProposed)).reverse ++ ds).foldl cfg.extend s.chain =
       c.head)

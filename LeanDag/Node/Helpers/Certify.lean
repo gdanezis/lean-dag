@@ -43,10 +43,11 @@ theorem signersOf_mono {ps ps' : List (Validator × ℕ × BlockId)} {k : ℕ} {
 
 variable (cfg) in
 /-- **A good certificate**: of `q` distinct signers, at or below the next
-undecided slot, with the head of the node's decisions at its height. -/
+undecided slot, with the head of the node's decisions at its height, a
+multiple of `m`. -/
 def CertGood (s : State Validator BlockId Payload) : Prop :=
   ∀ c, s.cert = some c → cfg.q ≤ c.signers.length ∧ c.signers.Nodup ∧ c.height ≤ s.lo ∧
-    c.head = cfg.headOf (s.decided.reverse.take c.height)
+    c.head = cfg.headOf (s.decided.reverse.take c.height) ∧ cfg.m ∣ c.height
 
 variable (cfg) in
 /-- **What a node keeps of its proposals**, with the peers' proposals `P`
@@ -56,6 +57,7 @@ structure Kept (P : List (Validator × ℕ × BlockId)) (s : State Validator Blo
   ledger : Ledger cfg s
   own_le : ∀ x ∈ s.props, x.1 = cfg.me → x.2.1 ≤ s.lo
   own_head : ∀ x ∈ s.props, x.1 = cfg.me → x.2.2 = cfg.headOf (s.decided.reverse.take x.2.1)
+  own_dvd : ∀ x ∈ s.props, x.1 = cfg.me → cfg.m ∣ x.2.1
   own_mem : ∀ k, 0 < k → cfg.m ∣ k → k ≤ s.lastProposed → s.certHeight < k →
     (cfg.me, k, cfg.headOf (s.decided.reverse.take k)) ∈ s.props
   certified : ∀ k h, (cfg.me, k, h) ∈ s.props → cfg.q ≤ (signersOf s.props k h).card →
@@ -147,10 +149,10 @@ theorem CertGood.extend {s s' : State Validator BlockId Payload} (h : CertGood c
     (hd : ∃ ds, s'.decided.reverse = s.decided.reverse ++ ds) : CertGood cfg s' := by
   obtain ⟨ds, hds⟩ := hd
   intro c hcs
-  obtain ⟨h₁, h₂, h₃, h₄⟩ := h c (hc ▸ hcs)
+  obtain ⟨h₁, h₂, h₃, h₄, h₅⟩ := h c (hc ▸ hcs)
   have hkd : c.height ≤ s.decided.reverse.length := by
     rw [List.length_reverse, hL.length]; exact h₃
-  refine ⟨h₁, h₂, h₃.trans hlo, ?_⟩
+  refine ⟨h₁, h₂, h₃.trans hlo, ?_, h₅⟩
   rw [hds, List.take_append_of_le_length hkd]; exact h₄
 
 omit [Fintype Validator] in
@@ -158,8 +160,9 @@ omit [Fintype Validator] in
 and the one recorded if its own, having the heads of its decisions. -/
 theorem CertGood.record {s : State Validator BlockId Payload} (h : CertGood cfg s)
     (hown : ∀ x ∈ s.props, x.1 = cfg.me → x.2.2 = cfg.headOf (s.decided.reverse.take x.2.1))
+    (hdvd : ∀ x ∈ s.props, x.1 = cfg.me → cfg.m ∣ x.2.1)
     {v : Validator} {k : ℕ} {hd : BlockId}
-    (hv : v = cfg.me → k ≤ s.lo ∧ hd = cfg.headOf (s.decided.reverse.take k)) :
+    (hv : v = cfg.me → k ≤ s.lo ∧ hd = cfg.headOf (s.decided.reverse.take k) ∧ cfg.m ∣ k) :
     CertGood cfg (Node.record cfg s v k hd) := by
   intro c hc
   change (certify cfg { s with props := (v, k, hd) :: s.props.filter fun x =>
@@ -170,12 +173,12 @@ theorem CertGood.record {s : State Validator BlockId Payload} (h : CertGood cfg 
   · rename_i hcond
     rw [Option.some.injEq] at hc
     subst hc
-    refine ⟨hcond.1, List.nodup_dedup _, hcond.2.2.1, ?_⟩
-    change hd = cfg.headOf (s.decided.reverse.take k)
     rcases List.mem_cons.mp hcond.2.2.2 with he | he
     · simp only [Prod.mk.injEq] at he
-      exact (hv he.1.symm).2
-    · exact hown _ (List.mem_filter.mp he).1 rfl
+      obtain ⟨-, hh, hm⟩ := hv he.1.symm
+      exact ⟨hcond.1, List.nodup_dedup _, hcond.2.2.1, hh, hm⟩
+    · exact ⟨hcond.1, List.nodup_dedup _, hcond.2.2.1, hown _ (List.mem_filter.mp he).1 rfl,
+        hdvd _ (List.mem_filter.mp he).1 rfl⟩
   · exact h c hc
 
 omit [Fintype Validator] in
@@ -184,7 +187,7 @@ it decided with the head there, a peer's with no other head at a kept
 height. -/
 theorem Kept.record {P : List (Validator × ℕ × BlockId)} {s : State Validator BlockId Payload}
     (hK : Kept cfg P s) {v : Validator} {k₀ : ℕ} {h₀ : BlockId}
-    (hv : v = cfg.me → k₀ ≤ s.lo ∧ h₀ = cfg.headOf (s.decided.reverse.take k₀))
+    (hv : v = cfg.me → k₀ ≤ s.lo ∧ h₀ = cfg.headOf (s.decided.reverse.take k₀) ∧ cfg.m ∣ k₀)
     (hc : ∀ x ∈ P, x.1 = v → x.2.1 = k₀ → x.2.2 = h₀) :
     Kept cfg P (Node.record cfg s v k₀ h₀) := by
   have hcH := record_certHeight (cfg := cfg) s v k₀ h₀
@@ -195,19 +198,23 @@ theorem Kept.record {P : List (Validator × ℕ × BlockId)} {s : State Validato
   -- what `s'` keeps came from `s` or is the recorded one
   have hsub : ∀ y ∈ s'.props, y = (v, k₀, h₀) ∨ y ∈ s.props := fun y hy =>
     (mem_record.mp hy).1.imp id (fun h => h.1)
-  refine ⟨hK.ledger, fun x hx hme => ?_, fun x hx hme => ?_, fun k hk hm hkl hkc => ?_,
-    fun k h hme hq => ?_, fun x hx => ?_, hK.cert.record hK.own_head hv⟩
+  refine ⟨hK.ledger, fun x hx hme => ?_, fun x hx hme => ?_, fun x hx hme => ?_,
+    fun k hk hm hkl hkc => ?_, fun k h hme hq => ?_, fun x hx => ?_,
+    hK.cert.record hK.own_head hK.own_dvd hv⟩
   · rcases hsub x hx with rfl | hx
     · exact (hv hme).1
     · exact hK.own_le x hx hme
   · rcases hsub x hx with rfl | hx
-    · exact (hv hme).2
+    · exact (hv hme).2.1
     · exact hK.own_head x hx hme
+  · rcases hsub x hx with rfl | hx
+    · exact (hv hme).2.2
+    · exact hK.own_dvd x hx hme
   · have hold := hK.own_mem k hk hm hkl (lt_of_le_of_lt hcH hkc)
     rw [hdec]
     refine mem_record.mpr ⟨?_, hkc⟩
     by_cases hvm : v = cfg.me
-    · obtain ⟨hk₀, hh₀⟩ := hv hvm
+    · obtain ⟨hk₀, hh₀, -⟩ := hv hvm
       by_cases hkk : k = k₀
       · subst hkk; exact Or.inl (by rw [hvm, hh₀])
       · exact Or.inr ⟨hold, Or.inr ⟨hkk, Or.inl (hk₀.trans (Nat.le_add_right _ _))⟩⟩
@@ -266,14 +273,15 @@ theorem Kept.grow {P : List (Validator × ℕ × BlockId)} {s s' : State Validat
     (hd : ∃ ds, s'.decided.reverse = s.decided.reverse ++ ds) (hcg : CertGood cfg s') :
     Kept cfg P s' := by
   obtain ⟨ds, hds⟩ := hd
-  refine ⟨hL, fun x hx hme => ?_, fun x hx hme => ?_, fun k hk hm hkl hkc => ?_,
-    fun k h hme hq => ?_, fun x hx => ?_, hcg⟩
+  refine ⟨hL, fun x hx hme => ?_, fun x hx hme => ?_, fun x hx hme => ?_,
+    fun k hk hm hkl hkc => ?_, fun k h hme hq => ?_, fun x hx => ?_, hcg⟩
   · rw [hp] at hx; exact (hK.own_le x hx hme).trans hlo
   · rw [hp] at hx
     have hkd : x.2.1 ≤ s.decided.reverse.length := by
       rw [List.length_reverse, hK.ledger.length]; exact hK.own_le x hx hme
     rw [hds, List.take_append_of_le_length hkd]
     exact hK.own_head x hx hme
+  · rw [hp] at hx; exact hK.own_dvd x hx hme
   · rw [hlp] at hkl
     have hkd : k ≤ s.decided.reverse.length := by
       rw [List.length_reverse, hK.ledger.length]; exact hkl.trans hK.ledger.2.1
@@ -298,7 +306,8 @@ theorem Kept.above {P : List (Validator × ℕ × BlockId)} {s s' : State Valida
   have hcH : s'.certHeight = s.certHeight := by simp [State.certHeight, hc]
   have hsub : ∀ y ∈ s'.props, y ∈ s.props := fun y hy => (mem_above.mp (hp ▸ hy)).1
   refine ⟨hK.ledger.of_eq hd hlo hlp hch, fun x hx hme => ?_, fun x hx hme => ?_,
-    fun k hk hm hkl hkc => ?_, fun k h hme hq => ?_, fun x hx => ?_,
+    fun x hx hme => hK.own_dvd x (hsub x hx) hme, fun k hk hm hkl hkc => ?_,
+    fun k h hme hq => ?_, fun x hx => ?_,
     hK.cert.extend hK.ledger hc hlo.ge ⟨[], by rw [hd, List.append_nil]⟩⟩
   · rw [hlo]; exact hK.own_le x (hsub x hx) hme
   · rw [hd]; exact hK.own_head x (hsub x hx) hme
@@ -344,10 +353,10 @@ theorem Kept.proposeNext {P : List (Validator × ℕ × BlockId)}
   set hd := ((s.decided.take (s.lo - s.lastProposed)).reverse.take (k₀ - s.lastProposed)).foldl
     cfg.extend s.chain
   have hhd : hd = cfg.headOf (s.decided.reverse.take k₀) := hL₁.2.2
-  have hr := hK.record (v := cfg.me) (k₀ := k₀) (h₀ := hd) (fun _ => ⟨hk₀, hhd⟩)
+  have hr := hK.record (v := cfg.me) (k₀ := k₀) (h₀ := hd) (fun _ => ⟨hk₀, hhd, Dvd.intro _ rfl⟩)
     (fun x hx h => absurd h (hP x hx))
-  refine ⟨hL₁, hr.own_le, hr.own_head, fun k hk hm hkl hkc => ?_, hr.certified, hr.peers,
-    hr.cert⟩
+  refine ⟨hL₁, hr.own_le, hr.own_head, hr.own_dvd, fun k hk hm hkl hkc => ?_, hr.certified,
+    hr.peers, hr.cert⟩
   change k ≤ k₀ at hkl
   change (Node.record cfg s cfg.me k₀ hd).certHeight < k at hkc
   by_cases hlp : k ≤ s.lastProposed
@@ -486,21 +495,150 @@ theorem Kept.advance {P : List (Validator × ℕ × BlockId)} {s : State Validat
   obtain ⟨a₃, b₃, c₃, d₃, e₃, f₃⟩ := collect_frame (cfg := cfg) d.1
   exact ⟨h₂.frame a₃ b₃ c₃ d₃ e₃ f₃, hc₂.frame b₃ c₃ d₃⟩
 
+variable (cfg) in
+/-- **A certificate good for a state**: of `q` distinct signers at a
+multiple of `m`, at or below the state's certificate's height, with the
+head of its decisions there. -/
+def GoodFor (c : Cert Validator BlockId) (s : State Validator BlockId Payload) : Prop :=
+  cfg.q ≤ c.signers.length ∧ c.signers.Nodup ∧ cfg.m ∣ c.height ∧ c.height ≤ s.certHeight ∧
+    c.head = cfg.headOf (s.decided.reverse.take c.height)
+
+omit [Fintype Validator] in
+/-- The certificate's height lies at or below the next undecided slot. -/
+theorem Kept.certHeight_le {P : List (Validator × ℕ × BlockId)}
+    {s : State Validator BlockId Payload} (hK : Kept cfg P s) : s.certHeight ≤ s.lo := by
+  unfold State.certHeight
+  rcases hc : s.cert with _ | c
+  · simp
+  · simpa using (hK.cert c hc).2.2.1
+
+omit [Fintype Validator] in
+/-- **A good certificate stays good** as the certificate rises and the
+decisions extend. -/
+theorem GoodFor.transfer {P : List (Validator × ℕ × BlockId)} {c : Cert Validator BlockId}
+    {s s' : State Validator BlockId Payload} (h : GoodFor cfg c s) (hK : Kept cfg P s)
+    (hc : s.certHeight ≤ s'.certHeight) (hd : ∃ ds, s'.decided.reverse = s.decided.reverse ++ ds) :
+    GoodFor cfg c s' := by
+  obtain ⟨ds, hds⟩ := hd
+  obtain ⟨h₁, h₂, h₃, h₄, h₅⟩ := h
+  have hkd : c.height ≤ s.decided.reverse.length := by
+    rw [List.length_reverse, hK.ledger.length]; exact h₄.trans hK.certHeight_le
+  refine ⟨h₁, h₂, h₃, h₄.trans hc, ?_⟩
+  rw [hds, List.take_append_of_le_length hkd]; exact h₅
+
+omit [Fintype Validator] in
+theorem proposeFrom_certHeight : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
+    s.certHeight ≤ (Node.proposeFrom cfg fuel s).1.certHeight
+  | 0, _ => le_rfl
+  | fuel + 1, s => by
+    rw [proposeFrom_succ]
+    split
+    · rename_i s₁ o hn
+      exact (proposeNext_frame hn).2.2.trans (proposeFrom_certHeight fuel s₁)
+    · exact le_rfl
+
+omit [Fintype Validator] in
+theorem certHeight_advance (s : State Validator BlockId Payload) :
+    s.certHeight ≤ (Node.advance cfg s).1.certHeight := by
+  simp only [Node.advance]
+  generalize hp : progress cfg (s.store.topRound + 2) s = p
+  have b₁ : p.1.cert = s.cert := hp ▸ (progress_frame (cfg := cfg) _ s).2.1
+  have h₂ : p.1.certHeight ≤ (Node.decideStep cfg p.1).1.certHeight := by
+    unfold Node.decideStep; dsimp only
+    split <;> (refine le_trans ?_ (proposeFrom_certHeight (cfg := cfg) _ _); exact le_rfl)
+  generalize Node.decideStep cfg p.1 = d at h₂
+  have b₃ : (Node.collect cfg d.1).1.cert = d.1.cert := (collect_frame (cfg := cfg) d.1).2.1
+  change s.certHeight ≤ (Node.collect cfg d.1).1.certHeight
+  unfold State.certHeight at h₂ ⊢
+  rw [b₃, ← b₁]; exact h₂
+
+omit [Fintype Validator] in
+theorem certHeight_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
+    s.certHeight ≤ (quiesce cfg n s).1.certHeight :=
+  (quiesce_rel (P := fun _ => True) (R := fun a _ b => a.certHeight ≤ b.certHeight)
+    (fun _ => le_rfl) (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂)
+    (fun s _ => ⟨certHeight_advance s, trivial⟩) n s trivial).1
+
+omit [Fintype Validator] in
+theorem collect_announce {s : State Validator BlockId Payload} {c : Cert Validator BlockId}
+    (h : Output.announce c ∈ (Node.collect cfg s).2) : s.cert = some c := by
+  unfold Node.collect at h
+  split at h
+  · dsimp only at h
+    split at h
+    · rcases List.mem_cons.mp h with h | h
+      · cases h
+      · obtain ⟨c', hc', he⟩ := List.mem_map.mp h
+        cases he
+        exact Option.mem_def.mp (Option.mem_toList.mp hc')
+    · simp at h
+  · simp at h
+
+omit [Fintype Validator] in
+/-- **A certificate a pass announces** is good for the state it leaves. -/
+theorem Kept.advance_announce {P : List (Validator × ℕ × BlockId)}
+    {s : State Validator BlockId Payload} (hK : Kept cfg P s) (hP : ∀ x ∈ P, x.1 ≠ cfg.me)
+    {c : Cert Validator BlockId} (h : Output.announce c ∈ (Node.advance cfg s).2) :
+    GoodFor cfg c (Node.advance cfg s).1 := by
+  simp only [Node.advance] at h ⊢
+  obtain ⟨a₁, b₁, c₁, d₁, e₁, f₁⟩ := progress_frame (cfg := cfg) (s.store.topRound + 2) s
+  have h₁ := hK.frame a₁ b₁ c₁ d₁ e₁ f₁
+  obtain ⟨bs, hbs⟩ := progress_built (cfg := cfg) (s.store.topRound + 2) s
+  have h₂ := (h₁.decideStep hP).1
+  have hd2 : ∀ o ∈ (Node.decideStep cfg (progress cfg (s.store.topRound + 2) s).1).2,
+      o ≠ Output.announce c := by
+    intro o ho
+    unfold Node.decideStep at ho
+    dsimp only at ho
+    split at ho
+    · rcases List.mem_append.mp ho with ho | ho
+      · obtain ⟨_, -, rfl⟩ := List.mem_map.mp ho; simp
+      · obtain ⟨-, -, -, -, -, hpo⟩ := proposeAt_eq (cfg := cfg) _
+        obtain ⟨k, hk, rfl⟩ := hpo _ ho; simp
+    · obtain ⟨-, -, -, -, -, hpo⟩ := proposeAt_eq (cfg := cfg) _
+      obtain ⟨k, hk, rfl⟩ := hpo _ ho; simp
+  generalize Node.decideStep cfg (progress cfg (s.store.topRound + 2) s).1 = d at h₂ hd2 h
+  rw [hbs] at h
+  rcases List.mem_append.mp h with h | h
+  · rcases List.mem_append.mp h with h | h
+    · simp [built] at h
+    · exact absurd rfl (hd2 _ h)
+  · have hdc := collect_announce h
+    obtain ⟨-, b₃, -, -, e₃, -⟩ := collect_frame (cfg := cfg) d.1
+    obtain ⟨q₁, q₂, q₃, q₄, q₅⟩ := h₂.cert c hdc
+    refine ⟨q₁, q₂, q₅, ?_, ?_⟩
+    · change c.height ≤ ((Node.collect cfg d.1).1.cert.map Cert.height).getD 0
+      rw [b₃, hdc]; simp
+    · change c.head = cfg.headOf ((Node.collect cfg d.1).1.decided.reverse.take c.height)
+      rw [e₃]; exact q₄
+
 omit [Fintype Validator] in
 theorem Kept.quiesce {P : List (Validator × ℕ × BlockId)} (hP : ∀ x ∈ P, x.1 ≠ cfg.me) :
     ∀ (n : ℕ) {s : State Validator BlockId Payload}, Kept cfg P s →
-      Kept cfg P (Node.quiesce cfg (n + 1) s).1 ∧ Covered cfg (Node.quiesce cfg (n + 1) s).1
+      Kept cfg P (Node.quiesce cfg (n + 1) s).1 ∧ Covered cfg (Node.quiesce cfg (n + 1) s).1 ∧
+        ∀ c, Output.announce c ∈ (Node.quiesce cfg (n + 1) s).2 →
+          GoodFor cfg c (Node.quiesce cfg (n + 1) s).1
   | n, s, hK => by
     rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he]
-    · exact hK.advance hP
+    · exact ⟨(hK.advance hP).1, (hK.advance hP).2, fun c hc => hK.advance_announce hP hc⟩
     · cases n with
-      | zero => exact hK.advance hP
-      | succ n => exact Kept.quiesce hP n (hK.advance hP).1
+      | zero =>
+        simp only [Node.quiesce, List.append_nil]
+        exact ⟨(hK.advance hP).1, (hK.advance hP).2, fun c hc => hK.advance_announce hP hc⟩
+      | succ n =>
+        obtain ⟨h₁, h₂, h₃⟩ := Kept.quiesce hP n (hK.advance hP).1
+        refine ⟨h₁, h₂, fun c hc => ?_⟩
+        rcases List.mem_append.mp hc with hc | hc
+        · exact (hK.advance_announce hP hc).transfer (hK.advance hP).1
+            (certHeight_quiesce _ _)
+            ⟨_, (quiesce_appends (cfg := cfg) (n + 1) (hK.advance hP).1.ledger).1.1⟩
+        · exact h₃ c hc
 
 omit [Fintype Validator] in
 theorem Kept.settle {P : List (Validator × ℕ × BlockId)} {s : State Validator BlockId Payload}
     (hK : Kept cfg P s) (hP : ∀ x ∈ P, x.1 ≠ cfg.me) (hr : s.recovering = false) :
-    Kept cfg P (Node.settle cfg s).1 ∧ Covered cfg (Node.settle cfg s).1 := by
+    Kept cfg P (Node.settle cfg s).1 ∧ Covered cfg (Node.settle cfg s).1 ∧
+      ∀ c, Output.announce c ∈ (Node.settle cfg s).2 → GoodFor cfg c (Node.settle cfg s).1 := by
   obtain ⟨n, hn⟩ := passes_succ (cfg := cfg) s
   rw [settle_of_idle hr, hn]; exact Kept.quiesce hP n hK
 
@@ -512,7 +650,9 @@ height reached is then proposed. -/
 theorem Kept.confirm {P : List (Validator × ℕ × BlockId)} {s : State Validator BlockId Payload}
     (hK : Kept cfg P s) (hP : ∀ x ∈ P, x.1 ≠ cfg.me) (hrec : s.recovering = false)
     {c : Cert Validator BlockId} (hcf : confirms cfg s c = true) :
-    Kept cfg P (Node.confirm cfg s c).1 ∧ Covered cfg (Node.confirm cfg s c).1 := by
+    Kept cfg P (Node.confirm cfg s c).1 ∧ Covered cfg (Node.confirm cfg s c).1 ∧
+      ∀ c', Output.announce c' ∈ (Node.confirm cfg s c).2 →
+        GoodFor cfg c' (Node.confirm cfg s c).1 := by
   unfold confirms at hcf
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hcf
   have hcH : s.certHeight ≤
@@ -521,7 +661,7 @@ theorem Kept.confirm {P : List (Validator × ℕ × BlockId)} {s : State Validat
   have hcg : CertGood cfg ({ s with cert := some c } : State Validator BlockId Payload) := by
     intro c' hc'
     rw [show c' = c from (Option.some.inj hc').symm]
-    exact ⟨hcf.1.1.1.1, hcf.1.1.1.2, hcf.1.2, hK.own_head _ hcf.2 rfl⟩
+    exact ⟨hcf.1.1.1.1, hcf.1.1.1.2, hcf.1.2, hK.own_head _ hcf.2 rfl, hK.own_dvd _ hcf.2 rfl⟩
   have hK₁ := hK.grow (s' := { s with cert := some c }) hK.ledger rfl hcH le_rfl rfl
     ⟨[], by rw [List.append_nil]⟩ hcg
   exact (hK₁.above (s' := { s with cert := some c, props := Node.above (some c) s.props })
@@ -534,33 +674,47 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
     {inp : Input Validator BlockId Payload} (hK : Kept cfg P s) (hcov : Covered cfg s)
     (hP : ∀ x ∈ P, x.1 ≠ cfg.me) (hrec : s.recovering = false) (hr : inp ≠ .restart)
     (hc : ∀ x ∈ P, ∀ u k h, inp = .proposal u k h → x.1 = u → x.2.1 = k → x.2.2 = h) :
-    Kept cfg P (Node.step cfg s inp).1 ∧ Covered cfg (Node.step cfg s inp).1 := by
+    Kept cfg P (Node.step cfg s inp).1 ∧ Covered cfg (Node.step cfg s inp).1 ∧
+      ∀ c, Output.announce c ∈ (Node.step cfg s inp).2 → GoodFor cfg c (Node.step cfg s inp).1 := by
   -- a step that settles a state that differs from `s` in nothing the claims read
   have hset : ∀ s₀ : State Validator BlockId Payload, s₀.props = s.props → s₀.cert = s.cert →
       s₀.lo = s.lo → s₀.lastProposed = s.lastProposed → s₀.decided = s.decided →
       s₀.chain = s.chain → s₀.recovering = false →
-      Kept cfg P (Node.settle cfg s₀).1 ∧ Covered cfg (Node.settle cfg s₀).1 :=
+      Kept cfg P (Node.settle cfg s₀).1 ∧ Covered cfg (Node.settle cfg s₀).1 ∧
+        ∀ c, Output.announce c ∈ (Node.settle cfg s₀).2 → GoodFor cfg c (Node.settle cfg s₀).1 :=
     fun s₀ a b c d e f g => (hK.frame a b c d e f).settle hP g
+  -- outputs before a settle's announce nothing
+  have hpre : ∀ (r : State Validator BlockId Payload × List (Output Validator BlockId Payload))
+      (outs : List (Output Validator BlockId Payload)), (∀ c, Output.announce c ∉ outs) →
+      Kept cfg P r.1 ∧ Covered cfg r.1 ∧ (∀ c, Output.announce c ∈ r.2 → GoodFor cfg c r.1) →
+      Kept cfg P r.1 ∧ Covered cfg r.1 ∧ ∀ c, Output.announce c ∈ outs ++ r.2 → GoodFor cfg c r.1 :=
+    fun r outs hn ⟨h₁, h₂, h₃⟩ => ⟨h₁, h₂, fun c hc =>
+      (List.mem_append.mp hc).elim (fun h => absurd h (hn c)) (h₃ c)⟩
+  have hnil : Kept cfg P s ∧ Covered cfg s ∧
+      ∀ c, Output.announce c ∈ ([] : List (Output Validator BlockId Payload)) → GoodFor cfg c s :=
+    ⟨hK, hcov, fun _ h => absurd h List.not_mem_nil⟩
   cases inp with
   | start =>
     simp only [Node.step]
     split
     · split
-      · exact hset _ rfl rfl rfl rfl rfl rfl rfl
-      · exact ⟨hK, hcov⟩
-    · exact ⟨hK, hcov⟩
+      · refine hpre (Node.settle cfg _) _ ?_ (hset _ rfl rfl rfl rfl rfl rfl rfl)
+        simp
+      · exact hnil
+    · exact hnil
   | deliver id b =>
     simp only [Node.step]
     split
-    · exact hset _ rfl rfl rfl rfl rfl rfl hrec
-    · exact ⟨hK, hcov⟩
+    · refine hpre (Node.settle cfg _) _ ?_ (hset _ rfl rfl rfl rfl rfl rfl hrec)
+      intro c; split_ifs <;> simp
+    · exact hnil
   | timer r => exact hset _ rfl rfl rfl rfl rfl rfl hrec
-  | fetchRequest peer G ids => exact ⟨hK, hcov⟩
+  | fetchRequest peer G ids => exact ⟨hK, hcov, fun c hc => by simp [Node.step, answer] at hc⟩
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>
     simp only [Node.step]
     rw [if_neg (by simp [hrec])]
-    exact ⟨hK, hcov⟩
+    exact hnil
   | certOffer p c ds =>
     rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
       ⟨-, -, hcf, he⟩ | ⟨-, he⟩
@@ -584,14 +738,14 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
             simp [adopted, hlt]
           rw [hcc, Option.some.injEq] at hc'
           subst hc'
-          refine ⟨ha'.1.1.1.1, ha'.1.1.1.2, le_rfl, ?_⟩
+          refine ⟨ha'.1.1.1.1, ha'.1.1.1.2, le_rfl, ?_, adoptable_dvd ha⟩
           change c.head = cfg.headOf ((ds'.reverse ++ s.decided).reverse.take c.height)
           have hlen : (ds'.reverse ++ s.decided).reverse.length = c.height := by
             rw [List.reverse_append, List.reverse_reverse, List.length_append, List.length_reverse,
               hK.ledger.length]
             have := congrArg List.length ha'.1.2
             simp only [List.length_map, List.length_range'] at this
-            have := ha'.1.1.2
+            have := ha'.1.1.2.1
             omega
           rw [← hlen, List.take_length, List.reverse_append, List.reverse_reverse]
           exact (adoptable_head hK.ledger ha).symm
@@ -602,27 +756,39 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
       have hK₁ := hK.grow (s' := { adopted s c ds' with props := s.props }) hL₁ rfl hcH
         (adoptable_lo ha).le rfl ⟨ds', hD⟩ hcg
       rw [he, adopt_eq]
-      exact (hK₁.above (s' := adopted s c ds') rfl rfl rfl rfl rfl rfl).settle hP hrec
+      exact hpre (Node.settle cfg (adopted s c ds')) _ (by simp)
+        ((hK₁.above (s' := adopted s c ds') rfl rfl rfl rfl rfl rfl).settle hP hrec)
     · rw [he]; exact hK.confirm hP hrec hcf
-    · rw [he]; exact ⟨hK, hcov⟩
+    · rw [he]; exact hnil
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, hcf, he⟩ | he | he <;> rw [he]
     · exact hK.confirm hP hrec hcf
-    · exact ⟨hK, hcov⟩
-    · exact ⟨hK, hcov⟩
+    · exact ⟨hK, hcov, fun c hc => by simp at hc⟩
+    · exact hnil
   | proposal p k kh =>
     rw [step_proposal]
     split
     · rename_i hp
       obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (Node.record cfg s p k kh) k kh
-      rw [hn]
+      have hno : ∀ c, Output.announce c ∉ (seek cfg (Node.record cfg s p k kh) k kh).2 := by
+        intro c; unfold seek; dsimp only; split <;> simp
+      rw [hn] at ⊢
       have hr := hK.record (v := p) (k₀ := k) (h₀ := kh) (fun h => absurd h hp)
         (fun x hx h1 h2 => hc x hx p k kh rfl h1 h2)
-      exact (hr.frame (s' := { Node.record cfg s p k kh with sought := n }) rfl rfl rfl rfl rfl
-        rfl).settle hP hrec
-    · exact ⟨hK, hcov⟩
-  | baseRequest => exact ⟨hK, hcov⟩
-  | decisionRequest => exact ⟨hK, hcov⟩
+      exact hpre (Node.settle cfg { Node.record cfg s p k kh with sought := n }) _ hno
+        ((hr.frame (s' := { Node.record cfg s p k kh with sought := n }) rfl rfl rfl rfl rfl
+          rfl).settle hP hrec)
+    · exact hnil
+  | baseRequest => exact ⟨hK, hcov, fun c hc => by simp [Node.step] at hc⟩
+  | decisionRequest peer lo =>
+    refine ⟨hK, hcov, fun c hc => ?_⟩
+    simp only [Node.step] at hc
+    split at hc
+    · unfold serveFrom at hc
+      split at hc
+      · split at hc <;> simp at hc
+      · simp at hc
+    · simp at hc
 
 /-- **A run keeps what the node keeps**, under the step's conditions. -/
 theorem Kept.run {P : List (Validator × ℕ × BlockId)} (hP : ∀ x ∈ P, x.1 ≠ cfg.me) :
@@ -635,7 +801,7 @@ theorem Kept.run {P : List (Validator × ℕ × BlockId)} (hP : ∀ x ∈ P, x.1
   | i :: is, s, hK, hcov, hrec, hr, hc => by
     simp only [Node.run]
     have hri : i ≠ .restart := hr i (List.mem_cons_self ..)
-    obtain ⟨hK₁, hcov₁⟩ := hK.step hcov hP hrec hri
+    obtain ⟨hK₁, hcov₁, -⟩ := hK.step hcov hP hrec hri
       (fun x hx u k h hi => hc x hx u k h (hi ▸ List.mem_cons_self ..))
     exact Kept.run hP is hK₁ hcov₁ (step_calm hrec hri).1
       (fun j hj => hr j (List.mem_cons_of_mem _ hj))
@@ -644,7 +810,7 @@ theorem Kept.run {P : List (Validator × ℕ × BlockId)} (hP : ∀ x ∈ P, x.1
 omit [Fintype Validator] in
 theorem Kept.init : Kept cfg [] (State.init cfg) :=
   ⟨Ledger.init, fun x hx => absurd hx List.not_mem_nil, fun x hx => absurd hx List.not_mem_nil,
-    fun k hk _ hkl => absurd hkl (by
+    fun x hx => absurd hx List.not_mem_nil, fun k hk _ hkl => absurd hkl (by
     change ¬ k ≤ 0; omega), fun k h hx => absurd hx List.not_mem_nil, fun x hx => absurd hx
     List.not_mem_nil, fun c hc => absurd hc (by simp [State.init])⟩
 
@@ -679,10 +845,10 @@ theorem kept_peer {u : Validator} {k : ℕ} {h : BlockId}
     rw [hs₁]
     have hr := hK₀.record (v := u) (k₀ := k) (h₀ := h) (fun h => absurd h hu) (by simp)
     have hK' : Kept cfg [(u, k, h)] { record cfg s₀ u k h with sought := n } :=
-      ⟨hr.ledger, hr.own_le, hr.own_head, hr.own_mem, hr.certified, fun x hx => by
+      ⟨hr.ledger, hr.own_le, hr.own_head, hr.own_dvd, hr.own_mem, hr.certified, fun x hx => by
         rw [List.mem_singleton.mp hx]
         exact ⟨record_self s₀ u k h, hw⟩, hr.cert⟩
-    exact hK'.settle (by simpa using hu) hrec₀
+    exact (hK'.settle (by simpa using hu) hrec₀).imp_right And.left
   obtain ⟨hK₁, hcov₁⟩ := hKc
   have hrec₁ : s₁.recovering = false :=
     (step_calm hrec₀ (hr _ (List.mem_append_right _ (List.mem_cons_self ..)))).1
@@ -695,7 +861,8 @@ theorem kept_peer {u : Validator} {k : ℕ} {h : BlockId}
   have hrun : s = (Node.run cfg s₁ is₂).1 := by
     simp only [s, run_append, Node.run, s₁, s₀]
   rw [hrun]
-  exact ⟨⟨hK₂.ledger, hK₂.own_le, hK₂.own_head, hK₂.own_mem, hK₂.certified, by simp, hK₂.cert⟩,
+  exact ⟨⟨hK₂.ledger, hK₂.own_le, hK₂.own_head, hK₂.own_dvd, hK₂.own_mem, hK₂.certified, by simp,
+    hK₂.cert⟩,
     hcov₂,
     (hK₂.peers _ (List.mem_singleton_self _)).1⟩
 

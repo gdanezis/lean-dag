@@ -432,7 +432,15 @@ theorem adoptable_lo {s : State Validator BlockId Payload} {c : Cert Validator B
     {ds : List (ℕ × Option BlockId)} (h : adoptable cfg s c ds = true) : s.lo < c.height := by
   unfold adoptable at h
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
-  exact h.1.1.2
+  exact h.1.1.2.1
+
+omit [Fintype Validator] in
+/-- Adoptable decisions lie at a multiple of `m`. -/
+theorem adoptable_dvd {s : State Validator BlockId Payload} {c : Cert Validator BlockId}
+    {ds : List (ℕ × Option BlockId)} (h : adoptable cfg s c ds = true) : cfg.m ∣ c.height := by
+  unfold adoptable at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  exact h.1.1.2.2
 
 omit [Fintype Validator] in
 /-- **Adopting certified decisions** outputs them, then settles. -/
