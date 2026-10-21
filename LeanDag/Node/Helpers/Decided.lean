@@ -435,7 +435,9 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
         · obtain ⟨_, _, he⟩ := evidence_relay hk; cases he
         · split_ifs at hk <;> simp_all
         · split_ifs at hk <;> simp_all
-    · exact ⟨Appends.refl s, hL⟩
+    · split
+      · exact ⟨Appends.quiet rfl rfl (by simp), hL.of_eq rfl rfl rfl rfl⟩
+      · exact ⟨Appends.refl s, hL⟩
   | timer r => exact hset _ [] rfl rfl rfl rfl rfl (by simp)
   | restart => exact hset _ [.requestBase] rfl rfl rfl rfl rfl (by simp)
   | fetchRequest peer G ids =>
@@ -449,15 +451,14 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
       obtain ⟨j, -, hj⟩ := List.mem_map.mp hk
       cases hj
   | baseRequest peer =>
-    refine ⟨Appends.quiet rfl ?_ fun k h hk => ?_, hL⟩
-    · change commitsOf (Output.serveBase peer s.store.base s.store.window ::
-        s.cert.toList.map (fun c => Output.serveCert peer c
-          (s.decided.drop (s.lo - c.height)).reverse)) = []
-      cases s.cert <;> rfl
-    · change Output.propose k h ∈ Output.serveBase peer s.store.base s.store.window ::
-        s.cert.toList.map (fun c => Output.serveCert peer c
-          (s.decided.drop (s.lo - c.height)).reverse) at hk
-      cases hc : s.cert <;> simp [hc] at hk
+    refine ⟨Appends.quiet rfl (commitsOf_baseRequest s peer) fun k h hk => ?_, hL⟩
+    simp only [Node.step, List.mem_cons, List.mem_append] at hk
+    rcases hk with (hk | hk) | hk
+    · cases hk
+    · obtain ⟨_, -, he⟩ := List.mem_map.mp hk; cases he
+    · split at hk
+      · rw [List.mem_singleton] at hk; cases hk
+      · simp at hk
   | proposal p k kh =>
     rw [step_proposal]
     split
@@ -489,17 +490,24 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
   | baseOffer p G bs =>
     rw [step_offer]
     split
-    · exact bootFrom_appends (s := withOffer s p G bs) hL
+    · obtain ⟨h₁, h₂⟩ := bootFrom_appends (s := withOffer s p G bs) hL
+      refine ⟨h₁.trans (Appends.quiet rfl (commitsOf_askOffered _ p bs) fun k h hk => ?_), h₂⟩
+      unfold askOffered at hk
+      dsimp only at hk
+      split at hk
+      · simp at hk
+      · rw [List.mem_singleton] at hk; cases hk
     · exact ⟨Appends.refl s, hL⟩
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩ <;> rw [he]
     · exact bootFrom_appends (s := withCert s c ds) hL
-    · exact adopt_appends hL ha
-    · have h₀ : Ledger cfg { s with cert := some c, props := above (some c) s.props } := hL
+    · exact adopt_appends (s := { s with certs := l }) (hL.of_eq rfl rfl rfl rfl) ha
+    · have h₀ : Ledger cfg { s with certs := l, cert := some c, props := above (some c) s.props } :=
+        hL.of_eq rfl rfl rfl rfl
       obtain ⟨ha, hL'⟩ := settle_appends h₀
       exact ⟨⟨ha.1, ha.2⟩, hL'⟩
-    · exact ⟨Appends.refl s, hL⟩
+    · exact ⟨Appends.quiet rfl rfl (by simp), hL.of_eq rfl rfl rfl rfl⟩
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
     · have h₀ : Ledger cfg { s with cert := some c, props := above (some c) s.props } := hL

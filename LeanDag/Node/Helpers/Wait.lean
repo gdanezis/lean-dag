@@ -197,7 +197,7 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
     · refine ⟨(key _ (by exact hs)).1, fun r h => Or.inl ?_⟩
       have := (key _ (by exact hs)).2 h
       exact this
-    · exact ⟨hs, fun r h => Or.inl h⟩
+    · rw [if_neg (by simp [hs])]; exact ⟨hs, fun r h => Or.inl h⟩
   | timer t =>
     refine ⟨(key _ (by exact hs)).1, fun r h => ?_⟩
     have := (key _ (by exact hs)).2 h
@@ -209,8 +209,9 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]
     exact ⟨trivial, fun r h => Or.inl h⟩
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
+    all_goals try obtain rfl := certs_of_not hcl hs
     · rw [hs] at h₁; cases h₁
     · rw [he, adopt_eq]
       have k := key (adopted s c ds') hs
@@ -403,14 +404,15 @@ theorem OwnTop.step {s : State Validator BlockId Payload} {inp : Input Validator
     simp only [Node.step]
     split
     · exact OwnTop.settle (h.grow (Grows.flush _ _ _) (flush_base _ _ _) rfl rfl) hs
-    · exact h
+    · rw [if_neg (by simp [hs])]; exact h
   | timer t => exact OwnTop.settle (h.grow (Grows.refl _) rfl rfl rfl) hs
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact h
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
+    all_goals try obtain rfl := certs_of_not hcl hs
     · rw [hs] at h₁; cases h₁
     · rw [he, adopt_eq]
       exact OwnTop.settle (h.grow (s' := adopted s c ds') (Grows.refl _) rfl rfl rfl) hs
@@ -892,9 +894,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
           cases hoe
         · split at he <;> simp [persists] at he
       · unfold askOut at he; split at he <;> simp [persists] at he
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
-      exact hsame (by simp only [Node.step, if_neg h'])
+    · exact hsame (step_deliver_not_of hA hs)
   | timer r =>
     refine hset { s with fired := insert r s.fired } []
       (fun hx => ⟨hc, hh.grow (Grows.refl _) rfl rfl le_rfl, hown.grow (Grows.refl _) rfl rfl rfl,
@@ -908,8 +908,9 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
   | baseOffer p G bs =>
     exact hsame (by simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false])
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
+    all_goals try obtain rfl := certs_of_not hcl hs
     · rw [hs] at h₁; cases h₁
     · refine hset (adopted s c ds') (ds'.map fun e => .commit e.1 e.2)
         (fun hx => ⟨hc, hh.grow (Grows.refl _) rfl rfl (adoptable_lo ha).le,
@@ -1071,7 +1072,7 @@ theorem timersBuilt_step {s : State Validator BlockId Payload}
         · obtain ⟨_, _, he⟩ := evidence_relay h; cases he
         · split at h <;> simp at h
       · split at h <;> simp at h
-    · exact TimersBuilt.of_none fun _ _ h => by simp at h
+    · rw [if_neg (by simp [hs])]; exact TimersBuilt.of_none fun _ _ h => by simp at h
   | timer t => exact hset _ hs
   | restart => exact absurd rfl hr
   | fetchRequest peer G ids =>
@@ -1086,8 +1087,9 @@ theorem timersBuilt_step {s : State Validator BlockId Payload}
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]
     exact TimersBuilt.of_none fun _ _ h => by simp at h
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
+    all_goals try obtain rfl := certs_of_not hcl hs
     · rw [hs] at h₁; cases h₁
     · rw [he, adopt_eq]
       refine (TimersBuilt.of_none fun r a h => ?_).append (hset _ hs)
@@ -1253,14 +1255,15 @@ theorem retains_step {s : State Validator BlockId Payload} {inp : Input Validato
     simp only [Node.step]
     split
     · exact hset _ hs (Grows.flush _ _ _) (flush_base _ _ _)
-    · exact Retains.refl _
+    · rw [if_neg (by simp [hs])]; exact Retains.refl _
   | timer t => exact hset _ hs (Grows.refl _) rfl
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact Retains.refl _
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
+    all_goals try obtain rfl := certs_of_not hcl hs
     · rw [hs] at h₁; cases h₁
     · rw [he, adopt_eq]; exact hset (adopted s c ds') hs (Grows.refl _) rfl
     · rw [he]; exact hset { s with cert := some c, props := above (some c) s.props } hs (Grows.refl _) rfl

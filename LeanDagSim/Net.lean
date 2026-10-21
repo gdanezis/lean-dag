@@ -247,6 +247,12 @@ structure Report where
   time : ℕ
   /-- The timing measurements. -/
   stats : Stats := {}
+  /-- Each honest node's final state, in brief: recovering, top, own block,
+  horizon, next undecided slot, the authors its store holds at the top and
+  the two rounds above, its pending blocks (author, round, references
+  missing, payload), the authors it holds exposed, the timers fired, and
+  whether it can build and its references reach. -/
+  final : List String := []
 
 /-- Put an input in flight, behind those arriving no later. -/
 def enqueue {α : Type} (e : ℕ × α) : List (ℕ × α) → List (ℕ × α)
@@ -621,8 +627,8 @@ def loop : ℕ → World n → World n
           | .persist id b => some (id, b)
           | _ => none
         let sent := out.filterMap fun
-          | .broadcast id b => if id = idOf b ∧ b.creator = a.node then some (id, b) else none
-          | .send _ id b => if id = idOf b ∧ b.creator = a.node then some (id, b) else none
+          | .broadcast id b => if id = idOf b then some (id, b) else none
+          | .send _ id b => if id = idOf b then some (id, b) else none
           | _ => none
         let skip := st.recovering && !r.1.recovering
         let boot := match i with
@@ -698,7 +704,7 @@ def agreeAt (ls : List (List (ℕ × Option ℕ))) : Bool :=
 
 /-- **Run a scenario.** -/
 def simulate (sc : Scenario) : Report :=
-  let empty : Report := ⟨false, [], [], true, true, true, 0, 0, 0, 0, 0, 0, 0, {}⟩
+  let empty : Report := ⟨false, [], [], true, true, true, 0, 0, 0, 0, 0, 0, 0, {}, []⟩
   match row? sc.row sc.n sc.f sc.c with
   | none => empty
   | some (p, q) =>
@@ -737,6 +743,19 @@ def simulate (sc : Scenario) : Report :=
         e.2.round == 0 || decide (rowValid q (fun i => w.blocks.getD i junk) e.2)
       { admissible := true
         tops := honestIdx.map fun v => (w.states[v]?.map (·.top)).getD none
+        final := honestIdx.map fun v => match w.states[v]? with
+          | some st =>
+            let t := st.top.getD 0
+            let auth (r : ℕ) := (authorsIn st.store.toRecord st.store.ids r).card
+            let cf := cfgFor sc p q hn ⟨v % n, Nat.mod_lt _ hn⟩ 0
+            let pend := st.pending.map fun e => (e.2.creator.val, e.2.round,
+              (e.2.refs.filter fun j => j ∉ st.store.ids).card, e.2.payload)
+            let reach := reachReady cf st.store (refsAt cf st.store t st.own st.exposed) t
+            s!"node {v}: recovering {st.recovering} top {st.top} own {st.own.isSome} " ++
+              s!"base {st.store.base} lo {st.lo} authors {auth t}/{auth (t + 1)}/{auth (t + 2)} " ++
+              s!"pending {pend} exposed {st.exposed.card} fired {st.fired.sort (· ≤ ·)} " ++
+              s!"builds {(tryBuild cf st).isSome} reach {reach}"
+          | none => s!"node {v}: none"
         commits := decs
         agree := agreeAt decs
         prefixes := comparable decs

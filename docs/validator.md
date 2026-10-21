@@ -225,7 +225,8 @@ the slot's round up, all above the horizon.
 
 A restarted node is recovering until it resumes (`tryResume`). Let `t`
 be its top. It resumes at the highest round `R > t` at which its store
-holds `q` authors (`quorumRound`), if it has no block of its own at `t`,
+holds `q` authors it does not hold exposed (`quorumRound`, §3.10), the
+quorum it builds on, if it has no block of its own at `t`,
 or if `R ≥ t + 2`; with its own block at `t` and `R = t + 1` it builds
 `t + 1` on that block as usual. Its top becomes `R`, with no block of
 its own there, the timer of round `R` counts as fired, and it builds
@@ -235,14 +236,6 @@ is an ordinary one, valid at the row.
 A node that is not recovering never resumes. A reliable node's own
 blocks therefore reference each other round by round from its first
 round on, which is what the inclusion argument reads (§11).
-
-A restart at the frontier can stall. When the nodes other than the
-restarted one that the others build on number one fewer than the quorum,
-they stay at the restarted node's top, and the restarted node waits for a
-quorum above it. In the simulator, at `n = 4` with the attacker excluded
-(§3.10) and node `1` down from tick 40 to 90, all three honest nodes
-stay at round 17 after node `1` is back. The liveness of recovery is
-step 11.3.
 
 Safe Skip, the scheme's jump over a downtime with filled blocks, is not
 part of the program. Its results stay in the shared layer
@@ -254,8 +247,14 @@ A validator whose last own block lies below its peers' horizons cannot
 rejoin from its window, because the blocks its window references are
 pruned. A restarted node asks every peer for its base. It asks again
 whenever a delivered block lies `Λ + 2` rounds above the one it last
-asked on. A peer answers with its horizon and its store
-(`State.window`), and with its certificate if it holds one.
+asked on, whether or not it keeps the block, and again when a peer it
+holds no base of asks for its base, since that peer has restarted too
+and its earlier answer was lost. A peer answers with its horizon and
+its store (`State.window`), and with its certificate if it holds one.
+Of each base offered, the node asks the offering peer for the blocks at
+or above its own horizon that it neither holds nor has pending
+(`askOffered`), so it gets the blocks made while it was down whether or
+not it bootstraps, broadcasts it missed included.
 
 The node keeps each base offered, one per peer (`State.offers`). A block
 is attested at round `G` when `f + 1` distinct peers offered it at that
@@ -279,6 +278,13 @@ references. The node stays recovering, so it resumes once its store
 holds a quorum above `G` (§3.5). Its decisions have no gap: the slots
 below the certificate's height are the certified ones, and it decides
 the rest from its new base (V9).
+
+A recovering node records every certificate offered to it, for a later
+bootstrap, and otherwise takes it as any node does: it adopts the
+certified decisions it lacks, or confirms the certificate (§3.8). It
+also confirms announced certificates and asks for the decisions behind
+them. Its horizon then rises with its peers' while it waits for a
+base.
 
 ### 3.7 Fetching missing blocks
 
@@ -457,6 +463,15 @@ block of an author it does not exclude (§3.10) needs.
   it, directly or through other pending blocks, wait for it; a flood of
   twins no block references is not, and a twin only an excluded author's
   blocks lead to is not either.
+* **The first twin of an author not yet exposed is kept** too, within
+  the quota, so that the node exposes the author (§3.10). A relayed twin
+  otherwise finds its slot taken and is dropped, and the nodes then
+  disagree on whom they exclude: in the simulator, at `n = 4` with
+  `ρ = 4`, `W = 2` and a Byzantine node equivocating at random, one node
+  excluded the equivocator, the other two did not and went on without it,
+  and it fell behind beyond the window and stayed at round 9. Once the
+  author is exposed its twins are kept only if wanted, so a flood still
+  costs one block a slot (§6).
 * **Everything else is dropped.** A dropped block that a later block
   needs is asked for again on that block's arrival, and kept then.
 * **Missing history is accepted from the bottom**: a pending block is
@@ -547,7 +562,13 @@ authors then remain to build on.
 
 What it costs: an excluded author's blocks no longer count toward a
 quorum, so a run in which the excluded author's blocks were needed to
-make a quorum slows to the pace of one with that author crashed. In the
+make a quorum slows to the pace of one with that author crashed. With
+`f` authors exposed at `n = 3f + 1`, the quorum is all `2f + 1` honest
+authors, so every honest node must hold a block of its own at every
+round. A node that bootstrapped or resumed holds none at its new top,
+and none at the rounds it missed, and it never can: each of its blocks
+needs `q` blocks of authors not exposed one round below, its own among
+them. The run then stops for good (§13.11). In the
 simulator, at `n = 4`, an equivocator's runs reach about 55 rounds in
 300 ticks against 47 before, and an attacker shown equivocating, by
 invalid twins or a fake base, slows the run to a crashed node's pace,
@@ -1866,3 +1887,46 @@ authors' blocks); a quota that grows with the store's depth, which
 makes storage quadratic in the depth; or neither for now. The last was
 taken: the rate-limited node's liveness rests on the simulator, and the
 quota's design is open.
+
+### 13.11 Deadlocks found in the simulator
+
+A fuzzer over the simulator draws `n = 4` or `n = 7`, an attack, a
+Byzantine node or a crash, up to two honest restarts ending by tick 350,
+rate limiting, the lag, the delay and GST, and flags a run in which an
+honest node that stays up gains fewer than 20 rounds from tick 600 to
+tick 900, or in which agreement or prefix-comparability fails. No run
+broke agreement or prefix-comparability. The deadlocks it found, and
+what removed each:
+
+| | Run | Cause | Fix |
+|---|---|---|---|
+| D1 | two honest nodes restarting together | blocks broadcast while a node was down are never sent again | a restarted node asks each peer that offers a base for the blocks of its window it lacks (`askOffered`, §3.6) |
+| D2 | a restart while the attacker serves junk at the cut | as D1 | as D1 |
+| D3 | a flood under rate limiting, then a restart | as D1 | as D1 |
+| D4 | `W = 2` and a long downtime | as D1 | as D1 |
+| D5 | an equivocator, then two restarts | a recovering node ignored certificates and announcements, so its horizon stayed below a twin its peers had pruned | a recovering node adopts and confirms certificates (§3.6) |
+| D6 | two restarts under rate limiting, at `W = 2` or `4` | a recovering node far behind drops every delivery above its window, so it never asks for a base again | it asks on a delivery it drops (§3.6) |
+| D7 | one node restarting while another was down | the restarted node asked for bases once, while the other was down, and never again | a recovering node asked for its base by a peer it holds no base of asks for bases itself (§3.6) |
+| D8 | an equivocator excluded, then a restart | the node resumed at a round whose quorum counted the excluded author, where it could not build | the resume quorum leaves out exposed authors (§3.5) |
+| D9 | a random equivocator under rate limiting | the relayed twin was dropped for want of room, so the nodes excluded different authors, and the one that excluded it fell behind beyond the window | the first twin of an author not yet exposed is kept (§3.9) |
+
+Two classes remain open.
+
+1. **Exclusion against rejoin.** With `f` authors exposed at
+   `n = 3f + 1`, a node that bootstrapped or resumed can never build,
+   and the others need its blocks (§3.10). At `n = 7`, `f = 2`, with
+   both Byzantine nodes exposed and node 1 down from tick 231 to 297,
+   all honest nodes stay at round 27. No program change keeps the rule
+   "never reference an exposed author's block" and removes this: the
+   rejoining node lacks its own block at every round from its new top
+   down. Keeping the rule's purpose, that no new twin enters an honest
+   history once its author is exposed, a node could reference an exposed
+   author's block that a held block of an author not exposed already
+   references.
+2. **A horizon below the peers'.** A node that restarts with its top
+   above its peers' horizon but its own horizon below it may need,
+   through a twin, a block its peers have pruned, and it bootstraps only
+   above its top. At `n = 4`, with a random equivocator, GST at 200 and
+   node 2 down from tick 83 to 218, all honest nodes stay at round 3. A
+   bootstrap that raises a recovering node's horizon to an attested one
+   below its top would remove it.

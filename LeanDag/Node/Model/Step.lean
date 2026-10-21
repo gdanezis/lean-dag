@@ -41,11 +41,11 @@ input `i` in the state `s`: the new state and the outputs.
   height; the node keeps the highest, and serves it with the decisions it
   certifies.
 * **Announcing** (`collect`, `confirms`, `confirm`): a node that raises
-  its horizon announces its certificate to every peer. A node not
-  recovering, given a certificate above its own, of `q` distinct
-  signers, at a height it has decided and of the head it proposed there,
-  keeps it; announced one at a height it has not decided, it asks the
-  sender for the decisions certified from its next undecided slot up.
+  its horizon announces its certificate to every peer. A node given a
+  certificate above its own, of `q` distinct signers, at a height it has
+  decided and of the head it proposed there, keeps it; announced one at a
+  height it has not decided, it asks the sender for the decisions
+  certified from its next undecided slot up.
 * **Adopting** (`adoptable`, `adopt`): a node that holds `q` signers'
   proposals of one head at a height above its next undecided slot asks
   them for the decisions certified from that slot up; served a
@@ -75,12 +75,17 @@ input `i` in the state `s`: the new state and the outputs.
   `State.persisted` is what the node writes, and `resume` rebuilds a
   state from it.
 * **Resuming** (`tryResume`): a recovering node whose store holds `q`
-  authors at a round above its top, two above if it built at its top,
-  moves its top there without a block of its own, and builds from there.
+  authors it does not hold exposed at a round above its top, two above
+  if it built at its top, moves its top there without a block of its
+  own, and builds from there.
 * **Bootstrap** (`tryBoot`): a restarted node asks its peers for their
-  bases, and again whenever a delivered block lies `Λ + 2` rounds above
-  the one it last asked on; a peer answers with its horizon, its store
-  and its certificate. Once some round `G` above the node's top has
+  bases, again whenever a delivered block, kept or not, lies `Λ + 2`
+  rounds above the one it last asked on, and again when a peer it holds
+  no base of asks for its base; a peer answers with its horizon, its
+  store and its certificate. Of each base offered, the node asks the
+  offering peer for the blocks at or above its horizon that it lacks
+  (`askOffered`). It records each certificate offered, and otherwise
+  takes it as any node does. Once some round `G` above the node's top has
   blocks offered by `f + 1` distinct peers and an offered certificate
   whose height reaches `G`, served with decisions whose chain has the
   certificate's head (`validCert`), the node raises its horizon to
@@ -92,8 +97,9 @@ input `i` in the state `s`: the new state and the outputs.
   when the configuration sets a quota `ρ` and a window `W`: a delivered
   block within the window is kept, charged to its slot, its author and
   round, while that slot is charged fewer than `ρ` blocks, if it is the
-  slot's first or it is missing from the history of a pending block of
-  an author the node does not hold exposed. The node's own blocks and its
+  slot's first, it is missing from the history of a pending block of an
+  author the node does not hold exposed, or it twins a block the node
+  holds of an author it does not hold exposed. The node's own blocks and its
   bootstrap base are charged to their own slots (`slotted`). A bootstrap
   then keeps one attested block per author, and takes no offered block
   above the new horizon.
@@ -360,25 +366,6 @@ def wanted (s : State Validator BlockId Payload) (id : BlockId) : Bool :=
     fun e => (e.1, e.2.round)
   (((walkLevel s)^[s.pending.length + 2] (roots, [], [])).2.2.map Prod.fst).contains id
 
-/-- **The slot a delivery is charged to** (`docs/validator.md` §3.9), when
-the node rate-limits with a quota `ρ` and a window `W`: the block's own,
-its author and round, if it lies at most `W` above the node's top and the
-slot is charged fewer than `ρ` blocks, and it is the slot's first or is
-wanted. -/
-def chargeTo (ρ W : ℕ) (s : State Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : Option (Validator × ℕ) :=
-  if b.round ≤ s.top.getD 0 + W ∧ s.charge (slotOf b) < ρ ∧
-      (s.charge (slotOf b) = 0 ∨ wanted s id = true) then some (slotOf b)
-  else none
-
-/-- **Whether a delivery is kept**: always, without rate limiting; with
-it, if it is charged to its slot. -/
-def kept (s : State Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : Bool :=
-  match cfg.limit with
-  | none => true
-  | some (ρ, W) => (chargeTo ρ W s id b).isSome
-
 /-- **A twin of a delivered block** the node holds: a stored or pending
 block of the block's author at its round, with its content. -/
 def twinOf (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) :
@@ -392,6 +379,27 @@ def twinOf (s : State Validator BlockId Payload) (b : Block Validator BlockId Pa
 another block of the block's author at its round. -/
 def twinned (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) : Bool :=
   (twinOf s b).isSome
+
+/-- **The slot a delivery is charged to** (`docs/validator.md` §3.9), when
+the node rate-limits with a quota `ρ` and a window `W`: the block's own,
+its author and round, if it lies at most `W` above the node's top and the
+slot is charged fewer than `ρ` blocks, and it is the slot's first, is
+wanted, or twins a block the node holds of an author it does not hold
+exposed. -/
+def chargeTo (ρ W : ℕ) (s : State Validator BlockId Payload) (id : BlockId)
+    (b : Block Validator BlockId Payload) : Option (Validator × ℕ) :=
+  if b.round ≤ s.top.getD 0 + W ∧ s.charge (slotOf b) < ρ ∧
+      (s.charge (slotOf b) = 0 ∨ wanted s id = true ∨
+        twinned s b = true ∧ b.creator ∉ s.exposed) then some (slotOf b)
+  else none
+
+/-- **Whether a delivery is kept**: always, without rate limiting; with
+it, if it is charged to its slot. -/
+def kept (s : State Validator BlockId Payload) (id : BlockId)
+    (b : Block Validator BlockId Payload) : Bool :=
+  match cfg.limit with
+  | none => true
+  | some (ρ, W) => (chargeTo ρ W s id b).isSome
 
 /-- **The evidence a delivery relays**: both blocks, when it first shows
 its author equivocating. -/
@@ -608,10 +616,11 @@ def advance (s : State Validator BlockId Payload) :
   ({ g.1 with store := fl.1, pending := fl.2 }, b.2 ++ d.2 ++ g.2)
 
 /-- **The highest round at or above `t` at which the store holds `q`
-authors**, if any. -/
-def quorumRound (st : Store Validator BlockId Payload) (t : ℕ) : Option ℕ :=
+authors outside `X`**, if any. -/
+def quorumRound (st : Store Validator BlockId Payload) (X : Finset Validator) (t : ℕ) :
+    Option ℕ :=
   ((List.range (st.topRound + 1)).filter fun R =>
-    decide (t ≤ R) && decide (cfg.q ≤ (authorsIn st.toRecord st.ids R).card) &&
+    decide (t ≤ R) && decide (cfg.q ≤ (authorsIn st.toRecord st.ids R \ X).card) &&
       decide (0 < (authorsIn st.toRecord st.ids R).card)).max?
 
 /-- **Resume after a restart** (`docs/validator.md` §11): a recovering node
@@ -621,7 +630,7 @@ that round's timer counts as fired. -/
 def tryResume (s : State Validator BlockId Payload) : Option (State Validator BlockId Payload) :=
   match s.recovering, s.top with
   | true, some t =>
-    match quorumRound cfg s.store (t + 1) with
+    match quorumRound cfg s.store s.exposed (t + 1) with
     | some R =>
       if s.own = none ∨ t + 2 ≤ R then
         let s' := { s with top := some R, own := none }
@@ -697,6 +706,16 @@ def resume (ps : Persisted Validator BlockId Payload) : Option (State Validator 
     some ⟨st, [], ps.top, ps.own, (ps.top.map fun t => {t}).getD ∅, ps.lo, [], true, [], 0,
       ps.decided, ps.lastProposed, ps.chain, [], ps.cert, [], ps.owner, 0, ∅⟩
   else none
+
+/-- **Ask for an offered window**: the blocks a peer offered at or above
+the node's horizon that it neither holds nor has pending, asked of that
+peer with their histories. A restarted node thus gets the blocks its
+peers made while it was down, whether or not it bootstraps. -/
+def askOffered (s : State Validator BlockId Payload) (peer : Validator)
+    (bs : List (BlockId × Block Validator BlockId Payload)) : List (Output Validator BlockId Payload) :=
+  let ids := (bs.filter fun e => decide (s.store.base ≤ e.2.round ∧ e.1 ∉ s.store.ids ∧
+    e.1 ∉ s.pending.map Prod.fst)).map Prod.fst
+  if ids.isEmpty then [] else [.fetch peer s.store.base ids]
 
 /-- **Try to bootstrap** from what was offered: if the node bootstraps,
 output the certified decisions it took, then advance. -/
@@ -799,23 +818,28 @@ def step (s : State Validator BlockId Payload) :
       (r.1, evidence s id b ++
         (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++
         (if ask then [.requestBase] else []) ++ r.2)
+    else if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.recovering ∧ s.asked + cfg.lag + 2 ≤ b.round then
+      ({ s with asked := b.round }, [.requestBase])
     else (s, [])
   | .timer r => settle cfg { s with fired := insert r s.fired }
   | .fetchRequest peer G ids => (s, answer s peer G ids)
   | .restart => let r := settle cfg s.recover; (r.1, .requestBase :: r.2)
   | .baseRequest peer =>
-    (s, .serveBase peer s.store.base s.store.window :: s.cert.toList.map fun c =>
-      .serveCert peer c (s.decided.drop (s.lo - c.height)).reverse)
+    (s, .serveBase peer s.store.base s.store.window :: s.cert.toList.map (fun c =>
+      .serveCert peer c (s.decided.drop (s.lo - c.height)).reverse) ++
+      if s.recovering ∧ peer ≠ cfg.me ∧ peer ∉ s.offers.map Prod.fst then [.requestBase] else [])
   | .baseOffer peer G blocks =>
     if s.recovering ∧ peer ≠ cfg.me then
-      bootFrom cfg { s with offers := (peer, G, blocks) :: s.offers.filter fun o => o.1 ≠ peer }
+      let r := bootFrom cfg { s with offers := (peer, G, blocks) :: s.offers.filter fun o => o.1 ≠ peer }
+      (r.1, r.2 ++ askOffered r.1 peer blocks)
     else (s, [])
   | .certOffer peer c ds =>
     let ds' := ds.filter fun e => s.lo ≤ e.1
-    if s.recovering ∧ peer ≠ cfg.me then bootFrom cfg { s with certs := (c, ds) :: s.certs }
-    else if peer ≠ cfg.me ∧ adoptable cfg s c ds' then adopt cfg s c ds'
-    else if peer ≠ cfg.me ∧ confirms cfg s c then confirm cfg s c
-    else (s, [])
+    let s₁ := if s.recovering ∧ peer ≠ cfg.me then { s with certs := (c, ds) :: s.certs } else s
+    if s.recovering ∧ peer ≠ cfg.me ∧ (tryBoot cfg s₁).isSome then bootFrom cfg s₁
+    else if peer ≠ cfg.me ∧ adoptable cfg s₁ c ds' then adopt cfg s₁ c ds'
+    else if peer ≠ cfg.me ∧ confirms cfg s₁ c then confirm cfg s₁ c
+    else (s₁, [])
   | .decisionRequest peer lo => (s, if peer ≠ cfg.me then serveFrom s peer lo else [])
   | .proposal peer k h =>
     if peer ≠ cfg.me then
@@ -824,7 +848,7 @@ def step (s : State Validator BlockId Payload) :
       (r'.1, r.2 ++ r'.2)
     else (s, [])
   | .announced peer c =>
-    if s.recovering ∨ peer = cfg.me then (s, [])
+    if peer = cfg.me then (s, [])
     else if confirms cfg s c then confirm cfg s c
     else if cfg.q ≤ c.signers.length ∧ s.lo < c.height then (s, [.requestDecisions peer s.lo])
     else (s, [])

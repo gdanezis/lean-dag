@@ -33,9 +33,7 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · rw [step_deliver hA]; exact Or.inr ⟨_, rfl⟩
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
-      simp only [Node.step, if_neg h']; exact Or.inl trivial
+    · rw [step_deliver_not_of hA hs]; exact Or.inl rfl
   | timer r => exact Or.inr ⟨_, rfl⟩
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>
@@ -43,8 +41,9 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
   | baseRequest p => exact Or.inl rfl
   | fetchRequest p G ids => exact Or.inl rfl
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, -, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, -, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
+    all_goals try obtain rfl := certs_of_not hcl hs
     · rw [hs] at h₁; cases h₁
     · rw [he, adopt_eq]; exact Or.inr ⟨_, rfl⟩
     · rw [he]; exact Or.inr ⟨_, rfl⟩
@@ -150,9 +149,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
     · refine hset _ ?_ ?_ (by rw [step_deliver hA])
       · exact ⟨le_rfl, fun h => h, le_rfl, le_rfl⟩
       · exact hs
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
-      simp only [Node.step, if_neg h']; exact Rises.refl s
+    · rw [step_deliver_not_of hA hs]; exact Rises.refl s
   | timer r => exact hset { s with fired := insert r s.fired } (Rises.refl s) hs rfl
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>
@@ -161,8 +158,9 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
   | fetchRequest p G ids => exact Rises.refl s
   | decisionRequest p lo => exact Rises.refl s
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, hcf, he⟩ | ⟨-, he⟩
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, hcf, he⟩ | ⟨l, hcl, he⟩
+    all_goals try obtain rfl := certs_of_not hcl hs
     · rw [hs] at h₁; cases h₁
     · rw [adopt_eq] at he
       refine hset (adopted s c ds') ⟨le_rfl, id, (adoptable_lo ha).le, ?_⟩ hs (by rw [he])

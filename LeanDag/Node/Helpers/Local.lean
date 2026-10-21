@@ -721,7 +721,8 @@ theorem tryResume_some {s s' : State Validator BlockId Payload} (h : tryResume c
         subst h
         have hm := List.mem_filter.mp (List.max?_mem hR)
         simp only [Bool.and_eq_true, decide_eq_true_eq] at hm
-        exact ⟨t, R, htop, by omega, hm.2.1.2, hm.2.2, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+        exact ⟨t, R, htop, by omega, hm.2.1.2.trans (Finset.card_le_card Finset.sdiff_subset),
+          hm.2.2, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
       · cases h
     · cases h
   · cases h
@@ -1175,6 +1176,44 @@ theorem evidence_isQuiet (s : State Validator BlockId Payload) (id : BlockId)
       rcases ho with rfl | rfl <;> rfl
   · simp at ho
 
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- Asking for an offered window outputs no block. -/
+theorem askOffered_isQuiet (s : State Validator BlockId Payload) (peer : Validator)
+    (bs : List (BlockId × Block Validator BlockId Payload)) :
+    ∀ o ∈ askOffered s peer bs, o.isQuiet := by
+  intro o ho
+  unfold askOffered at ho
+  dsimp only at ho
+  split at ho
+  · simp at ho
+  · rw [List.mem_singleton] at ho; subst ho; rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- Asking for an offered window outputs no decision. -/
+theorem commitsOf_askOffered (s : State Validator BlockId Payload) (peer : Validator)
+    (bs : List (BlockId × Block Validator BlockId Payload)) :
+    commitsOf (askOffered s peer bs) = [] := by
+  unfold askOffered
+  dsimp only
+  split <;> rfl
+
+/-- A base request leaves the state as it is. -/
+theorem step_baseRequest_state (s : State Validator BlockId Payload) (peer : Validator) :
+    (Node.step cfg s (.baseRequest peer)).1 = s := rfl
+
+/-- A base request outputs no decision. -/
+theorem commitsOf_baseRequest (s : State Validator BlockId Payload) (peer : Validator) :
+    commitsOf (Node.step cfg s (.baseRequest peer)).2 = [] := by
+  simp only [Node.step]
+  refine List.filterMap_eq_nil_iff.mpr fun o ho => ?_
+  simp only [List.mem_cons, List.mem_append] at ho
+  rcases ho with (rfl | ho) | ho
+  · rfl
+  · obtain ⟨_, -, rfl⟩ := List.mem_map.mp ho; rfl
+  · split at ho
+    · rw [List.mem_singleton] at ho; subst ho; rfl
+    · simp at ho
 omit [Fintype Validator] in
 /-- The evidence a delivery relays is relays only. -/
 theorem evidence_relay {s : State Validator BlockId Payload} {id : BlockId}
@@ -1287,7 +1326,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
         · exact (out_built (cfg := cfg) [e]).append ho
         · refine (by simpa using hi' : Inv cfg _ (K ∪ {x | x ∈ [e]} ∪ {x | x ∈ bs}) (B ++ e :: bs)).mono
             fun x hx => ?_
-          simp only [Set.mem_union, Set.mem_setOf_eq, List.mem_singleton, List.mem_cons,
+          simp only [Set.mem_union, Set.mem_setOf_eq, List.mem_cons,
             List.nil_append] at hx ⊢
           tauto
       · exact hnil' 
@@ -1334,7 +1373,10 @@ theorem Inv.step {s : State Validator BlockId Payload}
         · split at ho'
           · rw [List.mem_singleton] at ho'; subst ho'; rfl
           · simp at ho'
-    · exact hnil'
+    · split
+      · have h₁ := (hi.mono hsub).of_eq (s' := { s with asked := b.round }) rfl rfl rfl rfl rfl
+        exact ⟨[], out_quiet (by simp [Output.isQuiet]), by simpa using h₁⟩
+      · exact hnil'
   | timer r =>
     simp only [Node.step]
     exact (⟨fun j hj => hsub (hi.known j hj), fun x hx => hsub (hi.pend x hx), hi.rounds,
@@ -1355,7 +1397,14 @@ theorem Inv.step {s : State Validator BlockId Payload}
         subset_rfl [.requestBase] (by simp [Output.isQuiet])
   | baseRequest peer =>
     simp only [Node.step]
-    exact hnil _ (by simp [Output.isQuiet])
+    refine hnil _ fun o ho => ?_
+    simp only [List.mem_cons, List.mem_append] at ho
+    rcases ho with (rfl | ho) | ho
+    · rfl
+    · obtain ⟨_, -, rfl⟩ := List.mem_map.mp ho; rfl
+    · split at ho
+      · rw [List.mem_singleton] at ho; subst ho; rfl
+      · simp at ho
   | proposal peer k h =>
     simp only [Node.step]
     split
@@ -1368,21 +1417,26 @@ theorem Inv.step {s : State Validator BlockId Payload}
     · exact hnil'
   | certOffer peer c ds =>
     simp only [Node.step]
+    have h₁ : Inv cfg (if s.recovering = true ∧ peer ≠ cfg.me then
+        { s with certs := (c, ds) :: s.certs } else s) K' B := by
+      split
+      · exact (hi.mono hsub).of_eq rfl rfl rfl rfl rfl
+      · exact hi.mono hsub
+    generalize (if s.recovering = true ∧ peer ≠ cfg.me then
+      { s with certs := (c, ds) :: s.certs } else s) = s₁ at h₁ ⊢
     split
-    · have h₁ : Inv cfg { s with certs := (c, ds) :: s.certs } K' B :=
-        (hi.mono hsub).of_eq rfl rfl rfl rfl rfl
-      exact h₁.bootFrom
+    · exact h₁.bootFrom
     · split
       · unfold adopt
         dsimp only
         refine Inv.settle_of (K := K') ?_ subset_rfl _ (quiet_commits _)
-        exact (hi.mono hsub).of_eq rfl rfl rfl rfl rfl
+        exact h₁.of_eq rfl rfl rfl rfl rfl
       · split
         · unfold confirm
           simpa using Inv.settle_of (K := K')
-            (s := { s with cert := some c, props := above (some c) s.props })
-            ((hi.mono hsub).of_eq rfl rfl rfl rfl rfl) subset_rfl [] (by simp)
-        · exact hnil'
+            (s := { s₁ with cert := some c, props := above (some c) s₁.props })
+            (h₁.of_eq rfl rfl rfl rfl rfl) subset_rfl [] (by simp)
+        · exact ⟨[], out_quiet (by simp), by simpa using h₁⟩
   | announced peer c =>
     simp only [Node.step]
     split
@@ -1422,7 +1476,10 @@ theorem Inv.step {s : State Validator BlockId Payload}
               exact ⟨hx, hid⟩
             · exact hsub (hi.offered o (List.mem_filter.mp ho).1 x hx hid),
           fun a ha => (hi.exposed a ha).mono hsub⟩
-      exact hi₁.bootFrom
+      obtain ⟨bs', ho, hi'⟩ := hi₁.bootFrom
+      have ho' := ho.append (out_quiet (askOffered_isQuiet (Node.bootFrom cfg s₁).1 peer bs))
+      rw [List.append_nil] at ho'
+      exact ⟨bs', ho', hi'⟩
     · exact hnil'
 
 omit [Fintype Validator] in

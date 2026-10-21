@@ -708,7 +708,7 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
     · refine hpre (Node.settle cfg _) _ ?_ (hset _ rfl rfl rfl rfl rfl rfl hrec)
       intro c; split_ifs <;> simp <;> intro h <;> obtain ⟨_, _, he⟩ := evidence_relay h <;>
         cases he
-    · exact hnil
+    · rw [if_neg (by simp [hrec])]; exact hnil
   | timer r => exact hset _ rfl rfl rfl rfl rfl rfl hrec
   | fetchRequest peer G ids => exact ⟨hK, hcov, fun c hc => by simp [Node.step, answer] at hc⟩
   | restart => exact absurd rfl hr
@@ -717,8 +717,9 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
     rw [if_neg (by simp [hrec])]
     exact hnil
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, hcf, he⟩ | ⟨-, he⟩
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, hcf, he⟩ | ⟨l, hcl, he⟩
+    all_goals try obtain rfl := certs_of_not hcl hrec
     · rw [hrec] at h₁; cases h₁
     · obtain ⟨hL₁, hD⟩ := adopted_ledger hK.ledger ha
       have hcH : s.certHeight ≤ (adopted s c ds').certHeight := by

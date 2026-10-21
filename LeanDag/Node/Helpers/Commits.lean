@@ -598,9 +598,11 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         (by
           rw [commitsOf_append, commitsOf_append, commitsOf_evidence]; unfold askOut
           split <;> split <;> rfl) (step_deliver hA)
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
-      exact hsame (by simp only [Node.step, if_neg h'])
+    · rcases step_deliver_not (cfg := cfg) hA with he | ⟨a, he⟩
+      · exact hsame he
+      · rw [he]
+        have h₁ := h.keeps (s' := { s with asked := a }) rfl (Keeps.refl _) hc
+        exact ⟨by simpa [commitsOf] using h₁, hc⟩
   | timer r =>
     exact hset { s with fired := insert r s.fired } [] h hc
       (hh.grow (Grows.refl _) rfl rfl le_rfl) hp rfl (by simp only [Node.step]; rfl)
@@ -641,11 +643,8 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       · simp at ho), List.append_nil]
     exact ⟨h, hc⟩
   | baseRequest peer =>
-    rw [show Node.step cfg s (.baseRequest peer) = (s, .serveBase peer s.store.base
-      s.store.window :: s.cert.toList.map (fun c => .serveCert peer c
-        (s.decided.drop (s.lo - c.height)).reverse)) from rfl]
-    refine ⟨?_, hc⟩
-    cases hcert : s.cert <;> simpa [commitsOf] using h
+    rw [commitsOf_baseRequest, List.append_nil, step_baseRequest_state]
+    exact ⟨h, hc⟩
 
 /-- **A run keeps the invariant**, at a record grounding what the node knew. -/
 theorem CommitInv.run (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)

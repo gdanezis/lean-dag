@@ -251,8 +251,7 @@ theorem cert_catches {T : Finset Validator}
       else if cfg.q ≤ c.signers.length ∧ (stateBefore cfg tr j v).lo < c.height then
         (stateBefore cfg tr j v, [.requestDecisions u (stateBefore cfg tr j v).lo])
       else (stateBefore cfg tr j v, []) := by
-    rw [step_announced, if_neg fun h => h.elim (fun h' => by
-      rw [hrj] at h'; cases h') huv]
+    rw [step_announced, if_neg (show u ≠ (cfg.at v).me from huv)]
     rfl
   by_cases hle : c.height ≤ (stateBefore cfg tr j v).lo
   · -- the node decided the certificate's height: it confirms
@@ -311,7 +310,7 @@ theorem cert_catches {T : Finset Validator}
   have hcmpl := hcmp u hu v hv k l
   have hlenk : (stateBefore cfg tr k u).decided.reverse.length = (stateBefore cfg tr k u).lo := by
     rw [List.length_reverse, hKk.ledger.length]
-  rw [hsl, step_certOffer, if_neg (by simp [hrl])]
+  rw [hsl, step_certOffer, if_neg (by simp [hrl]), certState_of hrl]
   by_cases hlo' : (stateBefore cfg tr l v).lo < c'.height
   · -- below the height: it adopts the decisions served
     have hsl' := slots_take_drop hKk.ledger.1 hle' (by omega : lo ≤ c'.height)

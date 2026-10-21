@@ -350,7 +350,9 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     simp only [Node.step]
     split
     · exact Held.settle (h.grow (Grows.flush _ _ _) (flush_base _ _ _) rfl le_rfl)
-    · exact h
+    · split
+      · exact h.grow (Grows.refl _) rfl rfl le_rfl
+      · exact h
   | timer r => exact Held.settle (h.grow (Grows.refl _) rfl rfl le_rfl)
   | restart => exact Held.settle (h.grow (Grows.refl _) rfl rfl le_rfl)
   | baseOffer p G bs =>
@@ -359,15 +361,15 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     · exact (h.grow (s' := withOffer s p G bs) (Grows.refl _) rfl rfl le_rfl).bootFrom
     · exact h
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩ <;> rw [he]
     · exact (h.grow (s' := withCert s c ds) (Grows.refl _) rfl rfl le_rfl).bootFrom
     · rw [adopt_eq]
-      exact Held.settle (h.grow (s' := adopted s c ds') (Grows.refl _) rfl rfl
+      exact Held.settle (h.grow (s' := adopted { s with certs := l } c ds') (Grows.refl _) rfl rfl
         (adoptable_lo ha).le)
-    · exact Held.settle (h.grow (s' := { s with cert := some c, props := above (some c) s.props })
+    · exact Held.settle (h.grow (s' := { s with certs := l, cert := some c, props := above (some c) s.props })
         (Grows.refl _) rfl rfl le_rfl)
-    · exact h
+    · exact h.grow (Grows.refl _) rfl rfl le_rfl
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
     · exact Held.settle (h.grow (s' := { s with cert := some c, props := above (some c) s.props })

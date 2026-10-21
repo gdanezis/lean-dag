@@ -160,7 +160,9 @@ theorem Sparse.step {s : State Validator BlockId Payload} (h : Sparse cfg s)
     simp only [Node.step]
     split
     · exact Sparse.settle (h.frame rfl rfl le_rfl)
-    · exact h
+    · split
+      · exact h.frame rfl rfl le_rfl
+      · exact h
   | timer r => exact Sparse.settle (h.frame rfl rfl le_rfl)
   | fetchRequest peer G ids => exact h
   | restart =>
@@ -173,14 +175,15 @@ theorem Sparse.step {s : State Validator BlockId Payload} (h : Sparse cfg s)
     · exact Sparse.bootFrom (h.frame rfl rfl le_rfl)
     · exact h
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩ <;> rw [he]
     · exact Sparse.bootFrom (h.frame rfl rfl le_rfl)
     · rw [adopt_eq]
-      exact (h.above (s' := adopted s c ds') rfl (adoptable_lo ha).le).settle
-    · exact (h.above (s' := { s with cert := some c, props := Node.above (some c) s.props }) rfl
+      exact (h.above (s' := adopted { s with certs := l } c ds') rfl (adoptable_lo ha).le).settle
+    · let s₁ := { s with certs := l }
+      exact (h.above (s' := { s₁ with cert := some c, props := Node.above (some c) s.props }) rfl
         le_rfl).settle
-    · exact h
+    · exact h.frame rfl rfl le_rfl
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
     · exact (h.above (s' := { s with cert := some c, props := Node.above (some c) s.props }) rfl

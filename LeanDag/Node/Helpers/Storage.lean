@@ -606,9 +606,9 @@ theorem Lim.step {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s : State Validat
     by_cases hc : Admits cfg s id b
     · rw [step_deliver hc]
       exact Lim.settle hl ((h.afterFlush hl hc).of_eq rfl rfl rfl rfl)
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc
-      simp only [Node.step, if_neg h']; exact h
+    · rcases step_deliver_not (cfg := cfg) hc with he | ⟨a, he⟩ <;> rw [he]
+      · exact h
+      · exact h.of_eq rfl rfl rfl rfl
   | timer r => exact Lim.settle hl (h.of_eq rfl rfl rfl rfl)
   | fetchRequest peer G ids => exact h
   | restart =>
@@ -621,13 +621,13 @@ theorem Lim.step {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s : State Validat
     · exact Lim.bootFrom hl (h.of_eq rfl rfl rfl rfl)
     · exact h
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩ <;> rw [he]
     · exact Lim.bootFrom hl (h.of_eq rfl rfl rfl rfl)
-    · rw [adopt_eq]; exact Lim.settle hl (h.of_eq (s' := adopted s c ds') rfl rfl rfl rfl)
-    · exact Lim.settle hl (h.of_eq (s' := { s with cert := some c, props := above (some c) s.props })
+    · rw [adopt_eq]; exact Lim.settle hl (h.of_eq (s' := adopted { s with certs := l } c ds') rfl rfl rfl rfl)
+    · exact Lim.settle hl (h.of_eq (s' := { s with certs := l, cert := some c, props := above (some c) s.props })
         rfl rfl rfl rfl)
-    · exact h
+    · exact h.of_eq rfl rfl rfl rfl
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
     · exact Lim.settle hl (h.of_eq (s' := { s with cert := some c, props := above (some c) s.props })

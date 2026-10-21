@@ -434,9 +434,7 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
       · split at ho
         · rw [List.mem_singleton] at ho; subst ho; trivial
         · cases ho
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
-      rw [show Node.step cfg s (.deliver id b) = (s, []) by simp only [Node.step, if_neg h']]
+    · rw [step_deliver_not_of hA hs]
       exact Or.inl ⟨rfl, Silent.nil⟩
   | timer r =>
     exact Or.inr ⟨_, [], hnil _, hs, rfl, rfl, Finset.subset_insert _ _, Or.inl ⟨Silent.nil, rfl⟩⟩
@@ -447,8 +445,11 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
     exact Or.inl ⟨rfl, Silent.nil⟩
   | baseRequest p =>
     refine Or.inl ⟨rfl, silent_of fun o ho => ?_⟩
-    simp only [Node.step, List.mem_cons, List.mem_map] at ho
-    rcases ho with rfl | ⟨c, -, rfl⟩ <;> trivial
+    simp only [Node.step, List.mem_cons, List.mem_append, List.mem_map] at ho
+    rcases ho with (rfl | ⟨c, -, rfl⟩) | ho
+    · trivial
+    · trivial
+    · rw [if_neg (by simp [hs])] at ho; cases ho
   | fetchRequest p G ids =>
     refine Or.inl ⟨rfl, silent_of fun o ho => ?_⟩
     simp only [Node.step, answer, List.mem_map] at ho
@@ -465,8 +466,9 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
       · cases ho
     · cases ho
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, -, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, -, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
+    all_goals try obtain rfl := certs_of_not hcl hs
     · rw [hs] at h₁; cases h₁
     · rw [he, adopt_eq]
       refine Or.inr ⟨_, _, rfl, hs, rfl, rfl, subset_rfl, Or.inl ⟨silent_of fun o ho => ?_, rfl⟩⟩

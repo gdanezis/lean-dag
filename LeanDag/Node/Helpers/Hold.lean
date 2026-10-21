@@ -427,9 +427,7 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
           · exact (flush_stays _ hA hPf hy (not_lt.mp hlt) (Or.inr h)).imp (fun h => h) Or.inl
           · exact absurd h hlt
       exact hset _ _ (step_deliver hAd) hA₁ hP₁ hb₁.ge hst₁
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hAd
-      simp only [Node.step, if_neg h']
+    · rw [step_deliver_not_of hAd hs]
       exact hnot id b rfl hAd
   | timer r =>
     exact hset { s with fired := insert r s.fired } [] rfl hA hP le_rfl
@@ -443,8 +441,9 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
   | decisionRequest p lo => exact hst.elim id fun h => by cases h.1
   | certOffer p c ds =>
     have hst' : Stays s.store s.pending y := hst.elim id fun h => by cases h.1
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨-, ds', -, -, -, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, -, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
+    all_goals try obtain rfl := certs_of_not hcl hs
     · rw [hs] at h₁; cases h₁
     · rw [adopt_eq] at he; exact hset _ _ he hA hP le_rfl hst'
     · exact hset { s with cert := some c, props := above (some c) s.props } [] (by rw [he]; rfl)

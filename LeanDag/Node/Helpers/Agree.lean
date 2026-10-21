@@ -166,12 +166,13 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
     (h : Output.serveBase p G bs ∈ (step cfg s inp).2) : bs = s.store.window := by
   cases inp with
   | baseRequest peer =>
-    change Output.serveBase p G bs ∈ Output.serveBase peer s.store.base s.store.window ::
-      s.cert.toList.map (fun c => Output.serveCert peer c
-        (s.decided.drop (s.lo - c.height)).reverse) at h
-    rcases List.mem_cons.mp h with h | h
+    simp only [Node.step, List.mem_cons, List.mem_append] at h
+    rcases h with (h | h) | h
     · cases h; rfl
     · obtain ⟨c, -, hc⟩ := List.mem_map.mp h; cases hc
+    · split at h
+      · rw [List.mem_singleton] at h; cases h
+      · simp at h
   | start =>
     simp only [Node.step] at h
     split at h
@@ -191,7 +192,7 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
       · split at h <;> simp at h
       · split at h <;> simp at h
       · exact absurd h (serveBase_not_mem_settle _)
-    · simp at h
+    · split at h <;> simp at h
   | timer r => exact absurd h (serveBase_not_mem_settle _)
   | fetchRequest peer G' ids =>
     change Output.serveBase p G bs ∈ answer s peer G' ids at h
@@ -204,11 +205,13 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
   | baseOffer q G' bs' =>
     rw [step_offer] at h
     split at h
-    · exact absurd h (serveBase_not_mem_bootFrom _)
+    · rcases List.mem_append.mp h with h | h
+      · exact absurd h (serveBase_not_mem_bootFrom _)
+      · unfold askOffered at h; dsimp only at h; split at h <;> simp at h
     · simp at h
   | certOffer q c ds =>
-    rcases certOffer_cases (cfg := cfg) s q c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, -, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he] at h
+    rcases certOffer_cases (cfg := cfg) s q c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', -, -, -, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩ <;> rw [he] at h
     · exact absurd h (serveBase_not_mem_bootFrom _)
     · rw [adopt_eq] at h
       rcases List.mem_append.mp h with h | h

@@ -191,21 +191,24 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
       refine (Grows.flush (cfg := cfg) (s.pending.length + 1) s.store
         ((id, b) :: s.pending)).trans ?_
       exact Grows.settle_of _ rfl
-    · exact Grows.refl _
+    · split <;> exact Grows.refl s.store
   | timer r => exact Grows.settle_of _ rfl
   | restart => exact Grows.settle_of _ rfl
   | baseOffer peer G bs =>
     have h := Grows.bootFrom (cfg := cfg)
       { s with offers := (peer, G, bs) :: s.offers.filter fun o => o.1 ≠ peer }
-    simp only [Node.step]
+    dsimp only [Node.step]
     split
     · exact h
     · exact Grows.refl _
   | certOffer peer c ds =>
-    have h := Grows.bootFrom (cfg := cfg) { s with certs := (c, ds) :: s.certs }
-    simp only [Node.step]
+    dsimp only [Node.step]
+    generalize hs₁ : (if s.recovering = true ∧ peer ≠ cfg.me then
+      { s with certs := (c, ds) :: s.certs } else s) = s₁
+    have hst : s₁.store = s.store := by rw [← hs₁]; split <;> rfl
+    rw [← hst]
     split
-    · exact h
+    · exact Grows.bootFrom _
     · split
       · rw [adopt_eq]; exact Grows.settle_of _ rfl
       · split

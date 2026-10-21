@@ -141,7 +141,7 @@ theorem step_offered (s : State Validator BlockId Payload) (i : Input Validator 
     split
     · rw [(settle_offered _).1, (settle_offered _).2]
       exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
-    · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+    · split <;> exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
   | timer r =>
     simp only [Node.step]
     rw [(settle_offered _).1, (settle_offered _).2]
@@ -170,19 +170,22 @@ theorem step_offered (s : State Validator BlockId Payload) (i : Input Validator 
       · exact Or.inl (List.mem_filter.mp ho).1
     · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨-, ds', -, -, ha, he⟩ |
-      ⟨-, -, -, he⟩ | ⟨-, he⟩ <;> rw [he]
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
+      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩ <;> rw [he]
     · obtain ⟨h₁, h₂⟩ := bootFrom_offered (cfg := cfg) (withCert s c ds)
       refine ⟨fun o ho => Or.inl (h₁ o ho), fun c' hc => ?_⟩
       rcases List.mem_cons.mp (h₂ c' hc) with rfl | hc
       · exact Or.inr ⟨p, rfl⟩
       · exact Or.inl hc
+    all_goals have hm : ∀ x ∈ l, x ∈ s.certs ∨ ∃ p', Input.certOffer p c ds =
+        Input.certOffer (Validator := Validator) (BlockId := BlockId) (Payload := Payload) p' x.1 x.2 :=
+      fun x hx => (certs_mem hcl x hx).imp id fun h => ⟨p, by rw [h]⟩
     · rw [adopt_eq, (settle_offered _).1, (settle_offered _).2]
-      exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+      exact ⟨fun o ho => Or.inl ho, hm⟩
     · unfold confirm
       rw [(settle_offered _).1, (settle_offered _).2]
-      exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
-    · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
+      exact ⟨fun o ho => Or.inl ho, hm⟩
+    · exact ⟨fun o ho => Or.inl ho, hm⟩
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
     · unfold confirm
@@ -410,11 +413,11 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     rw [persists_append] at hb
     rw [commitsOf_append, hpre, List.nil_append]
     exact hc₀.settle hg hσ ht hh₀ hp₀ fun e he => hb e (List.mem_append_right _ he)
-  have hsame : ∀ s' : State Validator BlockId Payload, s'.store = s.store →
-      Node.step cfg s i = (s', []) →
+  have hsame : ∀ (s' : State Validator BlockId Payload) (out : List (Output Validator BlockId Payload)),
+      s'.store = s.store → commitsOf out = [] → Node.step cfg s i = (s', out) →
       IsCut U (Node.step cfg s i).1.store ∧
         ∀ e ∈ commitsOf (Node.step cfg s i).2, Verdict cfg U e := by
-    intro s' hs he; rw [he, hs]; exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
+    intro s' out hs ho he; rw [he, hs, ho]; exact ⟨hc, fun e he => absurd he List.not_mem_nil⟩
   cases i with
   | start =>
     by_cases h₁ : s.top = none ∧ cfg.Admissible
@@ -444,8 +447,8 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
             owner := slotted cfg [(gid, cfg.genesis)] ++ s.owner, recovering := false }
           (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)]) hcst hh₀ hp
           (commitsOf_built _) (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
-      · exact hsame s rfl (by simp only [Node.step, dif_neg h₂, if_pos h₁])
-    · exact hsame s rfl (by simp only [Node.step, if_neg h₁])
+      · exact hsame s [] rfl rfl (by simp only [Node.step, dif_neg h₂, if_pos h₁])
+    · exact hsame s [] rfl rfl (by simp only [Node.step, if_neg h₁])
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · let s₁ := afterFlush (cfg := cfg) s id b
@@ -467,9 +470,9 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         (by
           rw [commitsOf_append, commitsOf_append, commitsOf_evidence]; unfold askOut
           split <;> split <;> rfl) (step_deliver hA)
-    · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-          id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
-      exact hsame s rfl (by simp only [Node.step, if_neg h'])
+    · rcases step_deliver_not (cfg := cfg) hA with he | ⟨a, he⟩
+      · exact hsame s [] rfl rfl he
+      · exact hsame { s with asked := a } [.requestBase] rfl rfl he
   | timer r =>
     exact hset { s with fired := Insert.insert r s.fired } [] hc
       (hh.grow (Grows.refl _) rfl rfl le_rfl) hp rfl (by simp only [Node.step]; rfl)
@@ -484,10 +487,8 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       (hh.grow (Grows.refl _) rfl rfl le_rfl) (fun e he => by simp [State.recover] at he) rfl
       (by simp only [Node.step]; rfl)
   | baseRequest peer =>
-    rw [show Node.step cfg s (.baseRequest peer) = (s, .serveBase peer s.store.base
-      s.store.window :: s.cert.toList.map (fun c => .serveCert peer c
-        (s.decided.drop (s.lo - c.height)).reverse)) from rfl]
-    exact ⟨hc, fun e he => by cases hcert : s.cert <;> simp [commitsOf, hcert] at he⟩
+    rw [commitsOf_baseRequest, step_baseRequest_state]
+    exact ⟨hc, fun e he => absurd he List.not_mem_nil⟩
   | proposal p k kh =>
     by_cases hpm : p ≠ cfg.me
     · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
@@ -512,20 +513,21 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         rcases List.mem_cons.mp ho with rfl | ho
         · exact hd e (by simp [delivered, heo, hid])
         · exact hoff o (List.mem_filter.mp ho).1 e heo hid
+      dsimp only at hb ⊢
+      rw [persists_append, (out_quiet (askOffered_isQuiet _ p bs)).1, List.append_nil] at hb
+      rw [commitsOf_append, commitsOf_askOffered, List.append_nil]
       exact IsCut.bootFrom hg hσ ht (s₁ := withOffer s p G bs) hc
         (hh.grow (s' := withOffer s p G bs) (Grows.refl _) rfl rfl le_rfl) hp hoff' hcv hb hspan
-    · exact hsame s rfl (by rw [step_offer, if_neg hcnd])
+    · exact hsame s [] rfl rfl (by rw [step_offer, if_neg hcnd])
   | certOffer p c ds =>
-    by_cases hcnd : s.recovering ∧ p ≠ cfg.me
-    · rw [step_certOffer, if_pos hcnd] at hb ⊢
-      exact IsCut.bootFrom hg hσ ht (s₁ := withCert s c ds) hc
-        (hh.grow (s' := withCert s c ds) (Grows.refl _) rfl rfl le_rfl) hp hoff hcv hb hspan
-    · rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, h₂, -⟩ | ⟨-, ds', hsub, -, ha, he⟩ |
-        ⟨-, -, -, he⟩ | ⟨-, he⟩
-      · exact absurd ⟨h₁, h₂⟩ hcnd
+    · rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', hsub, -, ha, he⟩ |
+        ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
+      · rw [he] at hb ⊢
+        exact IsCut.bootFrom hg hσ ht (s₁ := withCert s c ds) hc
+          (hh.grow (s' := withCert s c ds) (Grows.refl _) rfl rfl le_rfl) hp hoff hcv hb hspan
       · rw [he, adopt_eq] at hb ⊢
         rw [persists_append] at hb
-        obtain ⟨h₁, h₂⟩ := IsCut.settle (s := adopted s c ds') hg hσ ht hc
+        obtain ⟨h₁, h₂⟩ := IsCut.settle (s := adopted { s with certs := l } c ds') hg hσ ht hc
           (hh.grow (Grows.refl _) rfl rfl (adoptable_lo ha).le) hp
           fun e he => hb e (List.mem_append_right _ he)
         refine ⟨h₁, fun e he => ?_⟩
@@ -533,15 +535,15 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         rcases List.mem_append.mp he with he | he
         · exact hadopt p c ds rfl ds' hsub ha e he
         · exact h₂ e he
-      · exact hset { s with cert := some c, props := above (some c) s.props } [] hc
+      · exact hset { s with certs := l, cert := some c, props := above (some c) s.props } [] hc
           (hh.grow (Grows.refl _) rfl rfl le_rfl) hp rfl (by rw [he]; rfl)
-      · exact hsame s rfl he
+      · exact hsame { s with certs := l } [] rfl rfl he
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he
     · exact hset { s with cert := some c, props := above (some c) s.props } [] hc
         (hh.grow (Grows.refl _) rfl rfl le_rfl) hp rfl (by rw [he]; rfl)
     · rw [he]; exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
-    · exact hsame s rfl he
+    · exact hsame s [] rfl rfl he
 
 end Node
 
