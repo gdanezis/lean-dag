@@ -203,16 +203,16 @@ theorem tryDecide_length_le {P : Validity Validator BlockId Payload} {H : Finset
   exact (List.takeWhile_sublist _).length_le.trans (by simp)
 
 omit [Fintype Validator] in
-/-- Recording keeps the certificate's height or raises it to one at or
-below the next undecided slot. -/
-theorem record_cert_le (s : State Validator BlockId Payload) (v : Validator) (k : ℕ)
-    (h : BlockId) :
-    (record cfg s v k h).certHeight = s.certHeight ∨ (record cfg s v k h).certHeight ≤ s.lo := by
-  unfold record certify
+/-- Certifying keeps the certificate's height or raises it to one at or
+below the height last proposed. -/
+theorem certifyAt_cert_le (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
+    (certifyAt cfg s k h).certHeight = s.certHeight ∨
+      (certifyAt cfg s k h).certHeight ≤ s.lastProposed := by
+  unfold certifyAt certify
   dsimp only
   split
   · rename_i hc
-    exact Or.inr hc.2.2.1
+    exact Or.inr hc.2.2.2.1
   · exact Or.inl rfl
 
 omit [Fintype Validator] in
@@ -228,15 +228,17 @@ theorem proposeFrom_cert : ∀ (fuel : ℕ) (s : State Validator BlockId Payload
     · rename_i s₁ o hn
       obtain ⟨hlo, -, hc⟩ := proposeNext_frame hn
       obtain ⟨-, rfl, -⟩ := proposeNext_some hn
+      set hd := ((s.decided.take (s.lo - s.lastProposed)).reverse.take
+          (nextHeight cfg s - s.lastProposed)).foldl cfg.extend s.chain
       obtain ⟨h₁, h₂, h₃⟩ := proposeFrom_cert fuel
-        { record cfg s cfg.me (nextHeight cfg s) _ with lastProposed := nextHeight cfg s, chain := _ }
+        (certifyAt cfg { s with lastProposed := nextHeight cfg s, chain := hd } (nextHeight cfg s) hd)
       refine ⟨h₁, hc.trans h₂, ?_⟩
-      have h₄ := record_cert_le (cfg := cfg) s cfg.me (nextHeight cfg s)
-        (((s.decided.take (s.lo - s.lastProposed)).reverse.take
-          (nextHeight cfg s - s.lastProposed)).foldl cfg.extend s.chain)
-      change _ = (record cfg s _ _ _).certHeight ∨ _ ≤ s.lo at h₃
+      have h₄ := certifyAt_cert_le (cfg := cfg)
+        { s with lastProposed := nextHeight cfg s, chain := hd } (nextHeight cfg s) hd
+      have hk := (proposeNext_some hn).1
+      change _ = (certifyAt cfg _ _ _).certHeight ∨ _ ≤ s.lo at h₃
       rcases h₃ with h₃ | h₃
-      · rw [h₃]; exact h₄.imp id id
+      · rw [h₃]; exact h₄.imp id (fun h => h.trans hk)
       · exact Or.inr h₃
     · exact ⟨rfl, le_rfl, Or.inl rfl⟩
 

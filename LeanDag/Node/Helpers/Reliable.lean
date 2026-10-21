@@ -172,7 +172,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
         ⟨le_rfl, id, le_rfl, ?_⟩ hs (by rw [he]; rfl)
       unfold confirms at hcf
       simp only [Bool.and_eq_true, decide_eq_true_eq] at hcf
-      exact hcf.1.1.2.le
+      exact hcf.1.1.1.2.le
     · rw [he]; exact Rises.refl s
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, hcf, he⟩ | he | he
@@ -180,7 +180,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
         ⟨le_rfl, id, le_rfl, ?_⟩ hs (by rw [he]; rfl)
       unfold confirms at hcf
       simp only [Bool.and_eq_true, decide_eq_true_eq] at hcf
-      exact hcf.1.1.2.le
+      exact hcf.1.1.1.2.le
     · rw [he]; exact Rises.refl s
     · rw [he]; exact Rises.refl s
   | proposal p k kh =>

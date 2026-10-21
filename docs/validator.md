@@ -393,10 +393,12 @@ Bounding the pending blocks belongs to rate limiting (step 9).
   only each signer's latest. Recording, adopting and bootstrapping drop
   the proposals at or below the certificate the node then holds, so it
   keeps at most `lo + ahead − certHeight + 1` proposals of each signer
-  (`Node.Local.Bounded`, §13.7). `q` distinct signers of one height and one
-  head, the node's own among them, make a certificate (`certify`), once
-  the node's own decisions reach the height, and the node keeps the
-  highest. Every proposal is signed, so a certificate carries the signed
+  (`Node.Local.Bounded`, §13.7). These are its peers' proposals: its own
+  it reads off its decisions (`ownHead`), since it signs at each height
+  the head of the chain of its decisions there. The node and the peers
+  whose kept proposals sign that head at a height it has proposed make a
+  certificate once they are `q` distinct signers (`certify`), and the
+  node keeps the highest. Every proposal is signed, so a certificate carries the signed
   proposals of its signers, and one an honest node made carries the head
   of its own decisions at its height.
   A node certifies every height it decides once `q − 1` other signers'
@@ -409,10 +411,9 @@ Bounding the pending blocks belongs to rate limiting (step 9).
   quorum it stops rising, and the store grows.
 * **Announcing.** A node that raises its horizon sends its certificate
   to every peer (`collect`). A node given a certificate of `q` distinct
-  signers above its own keeps it if it has decided the height and
-  proposed the certificate's head there (`confirms`), among the
-  proposals it keeps or as the head it last proposed (`lastProposed`,
-  `chain`, both persisted, so a restart keeps it); announced one at a
+  signers above its own keeps it if it has decided the height, a
+  multiple of `m`, and the certificate's head is the head of its
+  decisions there (`confirms`); announced one at a
   height it has not decided, it asks the sender for the decisions
   certified from its next undecided slot up (§13.8).
 * **Adopting.** A node announced a certificate above its next undecided
@@ -1693,19 +1694,19 @@ those signers sent another head at `k` afterwards.
 **The proof** (`Helpers/Certify.lean`) carries two invariants over the
 run.
 
-* `Kept`: the node's own proposal at every multiple of `m` up to the
-  height it last proposed and above its certificate's is kept, with the
-  head of its first decisions there; its own proposals lie at heights it
-  decided; wherever its own proposal and `q` signers of one head meet,
-  it holds a certificate at that height or above; and a peer's proposal
+* `Kept`: at every multiple of `m` up to the height it last proposed,
+  wherever the node and the kept signers of the head of its decisions
+  make `q`, it holds a certificate at that height or above; and a peer's
+  proposal
   received at most `ahead` above the frontier is kept until the
   certificate reaches its height, unless the peer sends another head at
   that height.
 * `Covered`: after each step, the next height to propose lies above the
   decided frontier.
 
-At the end, the node proposed `k` by `Covered`, so its own proposal and
-the `q − 1` peers' are kept by `Kept`, and `Kept` gives the certificate.
+At the end, the node proposed `k` by `Covered`, the `q − 1` peers'
+proposals are kept by `Kept`, and with the node they give the
+certificate.
 
 **The memory bound.** `Node.Local.Bounded`: over any inputs, restarts
 included, the node keeps at most `lo + ahead − certHeight + 1` proposals
@@ -1775,8 +1776,8 @@ can stall for good. Take `n = 4`, `f = 1`, `q = 3`, reliable nodes `u`,
   peer (`Output.announce`, received as `Input.announced`).
 * A node not recovering, given a certificate of `q` distinct signers
   above its own, announced or served:
-  * keeps it, if it has decided the height and its own proposal there
-    has the certificate's head (`confirms`), and then settles, which
+  * keeps it, if it has decided the height and the head of its decisions
+    there is the certificate's (`confirms`), and then settles, which
     raises its horizon;
   * otherwise, if the certificate was announced and its height lies
     above the node's next undecided slot, asks the sender for the
@@ -1785,9 +1786,10 @@ can stall for good. Take `n = 4`, `f = 1`, `q = 3`, reliable nodes `u`,
   so an answer that arrives after the node decided more is still
   adopted. `Boot.ChainInjective` speaks of a sublist of the served
   decisions, the part adopted.
-* A node certifies a head only with its own proposal of it among the
-  signers (`certify`), so the certificate it announces carries its own
-  head, which a peer that decided the height proposed too and confirms.
+* A node certifies only the head of its own decisions, at a height it
+  proposed, with itself among the signers (`certify`), so the
+  certificate it announces carries its own head, which a peer that
+  decided the height holds too and confirms.
 
 **Why it closes the gap.** Past GST, when a reliable node `u` raises its
 horizon at `t`, every reliable node `v` holds a certificate at least as
@@ -1923,7 +1925,7 @@ what removed each:
 | D9 | a random equivocator under rate limiting | the relayed twin was dropped for want of room, so the nodes excluded different authors, and the one that excluded it fell behind beyond the window | the first twin of an author not yet exposed is kept (§3.9) |
 | D10 | `f` authors exposed at `n = 3f + 1`, then a restart | the quorum was every honest author, and a node that bootstrapped or resumed had no block of its own at the rounds it missed and could never build one | a node may reference an exposed author's block that a held block of an author not exposed references (§3.10) |
 | D11 | a random equivocator under rate limiting with `W = 2`, then two restarts | the peers' blocks at a recovering node's top were dropped above its window while it was further behind, and no delivery came after it reached that round | a recovering node asks for bases when its top round's timer fires (§3.6) |
-| D12 | a restart after proposing at the height of the peers' latest certificate | a restart drops the proposals the node keeps, so it could neither confirm that certificate, lacking its own proposal, nor adopt it, having decided its height; its horizon stayed a round below its peers' | a node may confirm a certificate at the height it last proposed, of the head it proposed there (§3.8) |
+| D12 | a restart after proposing at the height of the peers' latest certificate | a restart drops the proposals the node keeps, so it could neither confirm that certificate, lacking its own proposal, nor adopt it, having decided its height; its horizon stayed a round below its peers' | a node confirms a certificate of the head of its own decisions at a height it decided, and reads its own proposals off its decisions instead of keeping them (§3.8) |
 | D13 | a restart one round behind its peers, with a twin below their horizon | the horizon trailed the node's own round, so it stayed a round below its peers' and needed a block they had dropped | a recovering node's horizon follows the certified frontier (§3.4) |
 
 One class remains open. Of 800 runs after the fixes, one stalled: at

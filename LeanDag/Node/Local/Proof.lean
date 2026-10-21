@@ -10,8 +10,9 @@ block of its own, and each step keeps it (`Helpers/Local.lean`); the
 claims about the node's own blocks and decisions are read off it at the end of a
 run. Decisions read only the view by `ViewsAbove.tryDecide_eq` at the
 bounded vote. A node certifies what it decides by `Kept`
-(`Helpers/Certify.lean`): its own proposal at the height and the peers'
-are kept, so `q` signers of the head meet there. The proposals it keeps
+(`Helpers/Certify.lean`): it proposed the head of its decisions at the
+height and keeps the peers' proposals there, so `q` signers of the head
+meet. The proposals it keeps
 stay sparse (`Sparse`, `Helpers/Retain.lean`), which bounds them.
 -/
 
@@ -92,8 +93,7 @@ theorem certifies : Certifies := by
     by_contra hlp
     exact absurd (lt_of_lt_of_le hcov (nextHeight_le hm (max_lt (not_le.mp hlp) hlt)))
       (not_lt.mpr hlo)
-  have hown := hK.own_mem k hk hm hlp hlt
-  rw [hD] at hown
+  have hh : ownHead cfg r.1 k = h := by unfold ownHead; rw [hD]
   -- and kept every signer's proposal
   have hpeer : ∀ u ∈ S, (u, k, h) ∈ r.1.props := by
     intro u hu
@@ -102,14 +102,12 @@ theorem certifies : Certifies := by
     have := (kept_peer (cfg := cfg) hu' (his ▸ hr) hw hc).2.2
     rw [← his] at this
     exact this.resolve_right (not_le.mpr hlt)
-  have hsub : insert cfg.me S ⊆ signersOf r.1.props k h := by
-    intro v hv
-    rcases Finset.mem_insert.mp hv with rfl | hv
-    · exact mem_signersOf.mpr hown
-    · exact mem_signersOf.mpr (hpeer v hv)
-  have hcard : cfg.q ≤ (signersOf r.1.props k h).card :=
-    hq.trans ((Finset.card_insert_of_notMem hme).symm.le.trans (Finset.card_le_card hsub))
-  exact absurd (hK.certified k h hown hcard) (not_le.mpr hlt)
+  have hsub : insert cfg.me S ⊆ insert cfg.me (signersOf r.1.props k h) :=
+    Finset.insert_subset_insert _ fun v hv => mem_signersOf.mpr (hpeer v hv)
+  have hcard : cfg.q ≤ (insert cfg.me (signersOf r.1.props k (ownHead cfg r.1 k))).card := by
+    rw [hh]
+    exact hq.trans ((Finset.card_insert_of_notMem hme).symm.le.trans (Finset.card_le_card hsub))
+  exact absurd (hK.certified k hm hlp hcard) (not_le.mpr hlt)
 
 theorem bounded : Bounded := by
   intro Validator BlockId Payload _ _ _ cfg is s

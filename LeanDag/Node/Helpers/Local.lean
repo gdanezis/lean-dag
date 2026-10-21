@@ -560,7 +560,7 @@ theorem proposeNext_some {s s₁ : State Validator BlockId Payload}
     let k := nextHeight cfg s
     let hd := ((s.decided.take (s.lo - s.lastProposed)).reverse.take (k - s.lastProposed)).foldl
       cfg.extend s.chain
-    k ≤ s.lo ∧ s₁ = { record cfg s cfg.me k hd with lastProposed := k, chain := hd } ∧
+    k ≤ s.lo ∧ s₁ = certifyAt cfg { s with lastProposed := k, chain := hd } k hd ∧
       o = .propose k hd := by
   unfold proposeNext at h
   dsimp only at h

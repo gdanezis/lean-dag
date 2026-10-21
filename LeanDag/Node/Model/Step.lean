@@ -36,16 +36,16 @@ input `i` in the state `s`: the new state and the outputs.
   the decided frontier reaches, the node signs and sends a proposal of
   the head of the chain of its decisions below it (`Config.headOf`),
   extending the head it last proposed by the decisions since. It keeps
-  one proposal per signer and height above its certificate's height,
-  its own included, and above `lo + ahead` only each signer's latest;
-  `q` distinct signers of one height and one head, the node's own among
-  them, make a certificate, once the node's own decisions reach the
-  height; the node keeps the highest, and serves it with the decisions it
-  certifies.
+  its peers' proposals, one per signer and height above its
+  certificate's height, and above `lo + ahead` only each signer's
+  latest; its own it reads off its decisions (`ownHead`). The node and
+  peers making `q` distinct signers of the head of its decisions at a
+  height it has proposed make a certificate; the node keeps the highest,
+  and serves it with the decisions it certifies.
 * **Announcing** (`collect`, `confirms`, `confirm`): a node that raises
   its horizon announces its certificate to every peer. A node given a
-  certificate above its own, of `q` distinct signers, at a height it has
-  decided and of the head it proposed there, keeps it; announced one at a
+  certificate above its own, of `q` distinct signers, at a multiple of
+  `m` it has decided and of the head of its decisions there, keeps it; announced one at a
   height it has not decided, it asks the sender for the decisions
   certified from its next undecided slot up.
 * **Adopting** (`adoptable`, `adopt`): served a certificate above its
@@ -507,26 +507,39 @@ def tryBoot (s : State Validator BlockId Payload) :
 /-- The number of slots at rounds at most `R`. -/
 def decidable (R : ℕ) : ℕ := cfg.m * (R / cfg.per + 1)
 
-/-- **Certify**: the certificate the node holds once the proposals it
-keeps include `q` distinct signers of the head `h` at height `k`, its own
-among them, if `k` lies above its certificate's height and its own
-decisions reach `k`. -/
+/-- **The head the node signs at height `k`**: the head of the chain of
+its first `k` decisions. -/
+def ownHead (s : State Validator BlockId Payload) (k : ℕ) : BlockId :=
+  cfg.headOf (s.decided.reverse.take k)
+
+/-- **Certify**: the certificate the node holds once it has proposed the
+head `h` at height `k`, a multiple of `m` it has reached, the head of its
+own decisions there, and the peers' proposals it keeps add signers of
+`h` at `k` to `q` distinct signers with itself, if `k` lies above its
+certificate's height. -/
 def certify (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
     Option (Cert Validator BlockId) :=
-  let signers := ((s.props.filter fun x => decide (x.2 = (k, h))).map Prod.fst).dedup
-  if cfg.q ≤ signers.length ∧ s.certHeight < k ∧ k ≤ s.lo ∧ (cfg.me, k, h) ∈ s.props then
+  let signers := (cfg.me :: (s.props.filter fun x => decide (x.2 = (k, h))).map Prod.fst).dedup
+  if cfg.q ≤ signers.length ∧ s.certHeight < k ∧ cfg.m ∣ k ∧ k ≤ s.lastProposed ∧
+      h = ownHead cfg s k then
     some ⟨k, h, signers⟩
   else s.cert
 
-/-- **Record a proposal**, then certify: one proposal kept per signer and
-height, the signer's others above `lo + ahead` dropped if this one lies
-there too, and none at or below the certificate's height. -/
+/-- **Certify at `k`**: keep the certificate `certify` gives, and only the
+proposals above it. -/
+def certifyAt (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
+    State Validator BlockId Payload :=
+  let c := certify cfg s k h
+  { s with props := above c s.props, cert := c }
+
+/-- **Record a peer's proposal**, then certify: one proposal kept per
+signer and height, the signer's others above `lo + ahead` dropped if this
+one lies there too, and none at or below the certificate's height. -/
 def record (s : State Validator BlockId Payload) (v : Validator) (k : ℕ) (h : BlockId) :
     State Validator BlockId Payload :=
   let w := s.lo + cfg.ahead
   let ps := (v, k, h) :: s.props.filter fun x => x.1 ≠ v ∨ x.2.1 ≠ k ∧ (k ≤ w ∨ x.2.1 ≤ w)
-  let c := certify cfg { s with props := ps } k h
-  { s with props := above c ps, cert := c }
+  certifyAt cfg { s with props := ps } k h
 
 /-- **The next height to propose**: the least multiple of `m` above both
 the height last proposed and the certificate's height. -/
@@ -536,14 +549,14 @@ def nextHeight (s : State Validator BlockId Payload) : ℕ :=
 /-- **Propose once**: if the decided frontier reaches the next height `k`,
 extend the head last proposed by the decisions of slots `lastProposed …
 k − 1`, the latest `lo − lastProposed` kept, sign the head at `k`, and
-record the proposal. -/
+certify there. -/
 def proposeNext (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × Output Validator BlockId Payload) :=
   let k := nextHeight cfg s
   if k ≤ s.lo then
     let h := ((s.decided.take (s.lo - s.lastProposed)).reverse.take (k - s.lastProposed)).foldl
       cfg.extend s.chain
-    some ({ record cfg s cfg.me k h with lastProposed := k, chain := h }, .propose k h)
+    some (certifyAt cfg { s with lastProposed := k, chain := h } k h, .propose k h)
   else none
 
 /-- Propose at most `fuel` times. -/
@@ -782,14 +795,11 @@ def adopt (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
   (r.1, ds.map (fun e => .commit e.1 e.2) ++ r.2)
 
 /-- **A certificate the node can confirm**: `q` distinct signers, above
-its certificate's height and at or below its next undecided slot, of the
-head the node itself proposed there, kept among its proposals or the one
-it last proposed. -/
+its certificate's height and at or below its next undecided slot, at a
+multiple of `m`, of the head of its own decisions there. -/
 def confirms (s : State Validator BlockId Payload) (c : Cert Validator BlockId) : Bool :=
   decide (cfg.q ≤ c.signers.length) && decide c.signers.Nodup && decide (s.certHeight < c.height) &&
-    decide (c.height ≤ s.lo) &&
-      decide ((cfg.me, c.height, c.head) ∈ s.props ∨
-        (c.height = s.lastProposed ∧ c.head = s.chain ∧ cfg.m ∣ c.height))
+    decide (c.height ≤ s.lo) && decide (cfg.m ∣ c.height) && decide (c.head = ownHead cfg s c.height)
 
 /-- **Confirm a certificate**: keep it, and only the proposals above it,
 then settle. -/

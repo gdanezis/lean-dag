@@ -38,21 +38,13 @@ theorem chain_extend {s : State Validator BlockId Payload} (hL : Ledger cfg s)
 omit [Fintype Validator] in
 /-- **A node confirms a good certificate** above its own at a height it
 decided, with the head of its decisions there. -/
-theorem confirms_of {P : List (Validator × ℕ × BlockId)} {s : State Validator BlockId Payload}
-    (hK : Kept cfg P s) (hcov : Covered cfg s) {c : Cert Validator BlockId}
+theorem confirms_of {s : State Validator BlockId Payload} {c : Cert Validator BlockId}
     (hq : cfg.q ≤ c.signers.length) (hnd : c.signers.Nodup) (hm : cfg.m ∣ c.height)
     (hlt : s.certHeight < c.height) (hle : c.height ≤ s.lo)
     (hh : c.head = cfg.headOf (s.decided.reverse.take c.height)) : confirms cfg s c = true := by
-  have hlp : c.height ≤ s.lastProposed := by
-    by_contra h
-    have := nextHeight_le (cfg := cfg) (s := s) hm (max_lt (not_le.mp h) hlt)
-    unfold Covered at hcov
-    omega
-  have hown := hK.own_mem c.height (by omega) hm hlp hlt
-  rw [← hh] at hown
   unfold confirms
   simp only [Bool.and_eq_true, decide_eq_true_eq]
-  exact ⟨⟨⟨⟨hq, hnd⟩, hlt⟩, hle⟩, Or.inl hown⟩
+  exact ⟨⟨⟨⟨⟨hq, hnd⟩, hlt⟩, hle⟩, hm⟩, hh⟩
 
 omit [Fintype Validator] in
 /-- **A node adopts decisions** served with a certificate of `q` distinct
@@ -255,7 +247,7 @@ theorem cert_catches {T : Finset Validator}
     rfl
   by_cases hle : c.height ≤ (stateBefore cfg tr j v).lo
   · -- the node decided the certificate's height: it confirms
-    have hcf := confirms_of (cfg := cfg.at v) hKj hcovj hq hnd hm hlt hle
+    have hcf := confirms_of (cfg := cfg.at v) hq hnd hm hlt hle
       (hgood.head_at hKe (hcmp u hu v hv _ _) (by
         rw [List.length_reverse, hKj.ledger.length]; exact hle))
     refine ⟨j, hej, hlj, by omega, ?_⟩
@@ -265,7 +257,7 @@ theorem cert_catches {T : Finset Validator}
   have hncf : confirms (cfg.at v) (stateBefore cfg tr j v) c = false := by
     unfold confirms
     simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not]
-    exact Or.inl (Or.inr (by omega))
+    exact Or.inl (Or.inl (Or.inr (by omega)))
   -- it asks the peer for the decisions from its next undecided slot
   have hout : outputsAt cfg tr j = [.requestDecisions u (stateBefore cfg tr j v).lo] := by
     rw [outputsAt_eq hj, hst, if_neg (by simp [hncf]), if_pos ⟨hq, hlo⟩]
@@ -342,7 +334,7 @@ theorem cert_catches {T : Finset Validator}
       by_contra h
       have := adoptable_lo (Bool.not_eq_false _ ▸ h)
       omega
-    have hcf := confirms_of (cfg := cfg.at v) hKl hcovl hq' hnd' hm' hlt' hle''
+    have hcf := confirms_of (cfg := cfg.at v) hq' hnd' hm' hlt' hle''
       (by
         rw [hhd', take_eq_of_comparable hcmpl (by omega) (by
           rw [List.length_reverse, hKl.ledger.length]; exact hle'')]; rfl)

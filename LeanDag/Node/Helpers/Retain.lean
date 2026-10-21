@@ -55,6 +55,12 @@ theorem Sparse.above {s s' : State Validator BlockId Payload} (h : Sparse cfg s)
   h.mono (hp ▸ List.filter_sublist) (fun _ hx => (mem_above.mp (hp ▸ hx)).2) hlo
 
 omit [Fintype Validator] in
+/-- **Certifying keeps them sparse.** -/
+theorem Sparse.certifyAt {s : State Validator BlockId Payload} (h : Sparse cfg s) (k : ℕ)
+    (hd : BlockId) : Sparse cfg (Node.certifyAt cfg s k hd) :=
+  h.above rfl le_rfl
+
+omit [Fintype Validator] in
 /-- **Recording a proposal keeps them sparse.** -/
 theorem Sparse.record {s : State Validator BlockId Payload} (h : Sparse cfg s) (v : Validator)
     (k : ℕ) (hd : BlockId) : Sparse cfg (Node.record cfg s v k hd) := by
@@ -96,7 +102,10 @@ theorem Sparse.proposeFrom : ∀ (fuel : ℕ) {s : State Validator BlockId Paylo
     split
     · rename_i s₁ o hn
       obtain ⟨-, rfl, -⟩ := proposeNext_some hn
-      exact Sparse.proposeFrom fuel ((h.record _ _ _).frame rfl rfl le_rfl)
+      set hd := ((s.decided.take (s.lo - s.lastProposed)).reverse.take
+          (nextHeight cfg s - s.lastProposed)).foldl cfg.extend s.chain
+      let s' : State Validator BlockId Payload := { s with lastProposed := nextHeight cfg s, chain := hd }
+      exact Sparse.proposeFrom fuel ((h.frame (s' := s') rfl rfl le_rfl).certifyAt _ _)
     · exact h
 
 omit [Fintype Validator] in
