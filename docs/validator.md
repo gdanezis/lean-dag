@@ -1910,7 +1910,9 @@ what removed each:
 | D8 | an equivocator excluded, then a restart | the node resumed at a round whose quorum counted the excluded author, where it could not build | the resume quorum leaves out exposed authors (§3.5) |
 | D9 | a random equivocator under rate limiting | the relayed twin was dropped for want of room, so the nodes excluded different authors, and the one that excluded it fell behind beyond the window | the first twin of an author not yet exposed is kept (§3.9) |
 
-Two classes remain open.
+Three classes remain open. Of 400 runs after the fixes, one stalled, of
+class 1; classes 2 and 3 each stalled one run of 400 before the last two
+fixes.
 
 1. **Exclusion against rejoin.** With `f` authors exposed at
    `n = 3f + 1`, a node that bootstrapped or resumed can never build,
@@ -1930,3 +1932,13 @@ Two classes remain open.
    node 2 down from tick 83 to 218, all honest nodes stay at round 3. A
    bootstrap that raises a recovering node's horizon to an attested one
    below its top would remove it.
+3. **Exposure below the peers' horizon.** A node that lags exposes an
+   author from twins below its peers' horizon; the relayed twins are
+   dropped there, so it alone excludes the author. Its peers go on with
+   the author's blocks, it waits for theirs without them, and once it
+   lags beyond their horizon it cannot catch up: it no longer recovers,
+   and only a recovering node bootstraps. At `n = 4`, with a random
+   equivocator, GST at 200, `ρ = 4`, `W = 2` and node 2 down from tick 60
+   to 218, node 2 stays at round 13 while the others reach 114. Classes
+   2 and 3 both need a node to bootstrap where it may not: below its top,
+   or when it does not recover.
