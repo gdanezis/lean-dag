@@ -152,7 +152,7 @@ theorem IsCut.flush (hg : Ground U K cfg.q) :
     split
     · exact hc
     · rw [List.partition_eq_filter_filter]
-      have hc₁ := IsCut.foldl hg (pend.filter fun e => ready st e.2) hc hl
+      have hc₁ := IsCut.foldl hg (pend.filter fun e => ready cfg st e) hc hl
         fun e he => hK e (List.mem_filter.mp he).1
       refine IsCut.flush hg fuel _ hc₁ ?_ ?_
       · rw [foldl_base]; exact hl

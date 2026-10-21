@@ -849,13 +849,14 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
     rw [hq] at he; exact absurd he List.not_mem_nil
   | _ => intro e he; simp [Node.step, persists] at he
 
+variable (cfg) in
 /-- No pending block is ready. -/
 def NoReady (s : State Validator BlockId Payload) : Prop :=
-  ∀ e ∈ s.pending, ready s.store e.2 = false
+  ∀ e ∈ s.pending, ready cfg s.store e = false
 
 omit [Fintype Validator] in
 theorem noReady_quiesce : ∀ (n : ℕ) (s : State Validator BlockId Payload),
-    NoReady (quiesce cfg (n + 1) s).1
+    NoReady cfg (quiesce cfg (n + 1) s).1
   | n, s => by
     rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he]
     · exact flush_no_ready _ _ _ (Nat.lt_succ_self _)
@@ -864,20 +865,21 @@ theorem noReady_quiesce : ∀ (n : ℕ) (s : State Validator BlockId Payload),
       | succ n => exact noReady_quiesce n _
 
 omit [Fintype Validator] in
-theorem noReady_settle (s : State Validator BlockId Payload) : NoReady (Node.settle cfg s).1 := by
+theorem noReady_settle (s : State Validator BlockId Payload) :
+    NoReady cfg (Node.settle cfg s).1 := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, -, h⟩ <;> rw [h] <;> exact noReady_quiesce _ _
 
 omit [Fintype Validator] in
-theorem noReady_bootFrom {s s₁ : State Validator BlockId Payload} (h : NoReady s)
+theorem noReady_bootFrom {s s₁ : State Validator BlockId Payload} (h : NoReady cfg s)
     (hs : s₁.store = s.store ∧ s₁.pending = s.pending := by exact ⟨rfl, rfl⟩) :
-    NoReady (bootFrom cfg s₁).1 := by
+    NoReady cfg (bootFrom cfg s₁).1 := by
   rcases bootFrom_cases (cfg := cfg) s₁ with he | ⟨s₂, ads, -, he⟩ <;> rw [he]
   · intro e he'; rw [hs.2] at he'; rw [hs.1]; exact h e he'
   · exact flush_no_ready _ _ _ (Nat.lt_succ_self _)
 
 /-- **After every step no pending block is ready.** -/
-theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady s)
-    (inp : Input Validator BlockId Payload) : NoReady (Node.step cfg s inp).1 := by
+theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady cfg s)
+    (inp : Input Validator BlockId Payload) : NoReady cfg (Node.step cfg s inp).1 := by
   cases inp with
   | start =>
     simp only [Node.step]

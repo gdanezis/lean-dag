@@ -8,8 +8,8 @@ input `i` in the state `s`: the new state and the outputs.
 
 * **Receipt** (`deliver`): a block whose identifier is its hash, not the
   node's own, and new, waits in `pending` until its references are
-  accepted; it is then accepted if it satisfies `rowValid q`, and
-  dropped otherwise (`flush`).
+  accepted and it satisfies `rowValid q`, or until the horizon reaches
+  it, and is then accepted (`flush`).
 * **Building** (`tryBuild`): round `r + 1`, above the node's top `r`,
   once the store holds `q` authors of round `r` and either the round's
   timer fired or the block would reach every leader block of a slot
@@ -174,17 +174,22 @@ def accept (s : Store Validator BlockId Payload) (id : BlockId)
     s.insert id b h.1 h.2.1 h.2.2.1 h.2.2.2.1
   else s
 
-/-- A pending block is ready when it is at or below the horizon or its
-references are accepted. -/
-def ready (s : Store Validator BlockId Payload) (b : Block Validator BlockId Payload) : Bool :=
-  decide (b.round ≤ s.base) || decide (b.refs ⊆ s.ids)
+/-- A pending block is ready when it is at or below the horizon, or its
+references are accepted, one round below it, and it is valid at the row.
+A block above the horizon that is not valid waits for the horizon to
+reach it, as one whose references are missing does. -/
+def ready (s : Store Validator BlockId Payload) (e : BlockId × Block Validator BlockId Payload) :
+    Bool :=
+  decide (e.2.round ≤ s.base) || decide (e.2.refs ⊆ s.ids ∧
+    (∀ j ∈ e.2.refs, (s.blk j).round + 1 = e.2.round) ∧
+    rowValid cfg.q (Function.update s.blk e.1 e.2) e.2)
 
 /-- **Accept what the pending blocks allow**, in passes, at most `fuel`. -/
 def flush : ℕ → Store Validator BlockId Payload → List (BlockId × Block Validator BlockId Payload) →
     Store Validator BlockId Payload × List (BlockId × Block Validator BlockId Payload)
   | 0, s, pend => (s, pend)
   | fuel + 1, s, pend =>
-    let split := pend.partition fun e => ready s e.2
+    let split := pend.partition fun e => ready cfg s e
     if split.1.isEmpty then (s, pend)
     else flush fuel (split.1.foldl (fun s e => accept cfg s e.1 e.2) s) split.2
 

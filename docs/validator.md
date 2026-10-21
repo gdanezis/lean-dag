@@ -115,7 +115,10 @@ A received block whose identifier is not *idOf* of its content is
 dropped, so that an identifier denotes one block. Otherwise it passes
 through three stages.
 
-1. **Pending**: some parent is missing. The block waits.
+1. **Pending**: some parent is missing, or the block fails the row's
+   validity above the horizon. The block waits, until its parents are
+   held and it is valid, or the horizon reaches it and it is taken
+   unchecked.
 2. **Held**: its parents are held and it satisfies the row's validity
    `ValidAt q C`, which is decidable.
 3. **Accepted**: it came as a candidate or on a candidate's account,
@@ -1226,16 +1229,15 @@ assumptions, over the reliable nodes:
 * **timers** (`TimersOnTime`): a timer a reliable node sets at time `t`
   for `a` ticks fires at `t + a`, neither earlier nor later;
 * **synchronisation** (`SyncedWithin`): a reliable node that receives a
-  reliable node's block at time `t` has received, by `max t gst + Δₛ`,
-  every block of that block's history at or above its horizon; and once
-  its horizon rises to `G` at `t'`, it receives again, by
-  `max t' gst + Δₛ`, the round-`G` blocks of that history. The second
-  clause covers a Byzantine block at `G` that the node dropped as invalid
-  while its horizon was lower and takes unchecked once its horizon is
-  `G` (§13.6). This is assumed of the network, not proved of the
-  program's fetch (§3.7), since efficient synchronisation is out of
-  scope (§1); the fetch meets the first clause with `Δₛ = 2Δ` when the
-  block's author answers;
+  reliable node's block at time `t` receives after it, by
+  `max t gst + Δₛ`, every block of that block's history, as its author
+  held it after the event that built it, at or above its own horizon.
+  A Byzantine block in that history at the author's horizon, invalid
+  above the receiver's horizon, waits pending until the receiver's
+  horizon reaches it (§3.1, `ready`), so it is not needed again. This is
+  assumed of the network, not proved of the program's fetch (§3.7),
+  since efficient synchronisation is out of scope (§1); the fetch meets
+  it with `Δₛ = 2Δ` when the block's author answers;
 * **completeness up to `t₁`**: every delivery and timer due by `t₁` is in
   the trace.
 
@@ -1470,9 +1472,9 @@ raises it to `G` or above in one of two ways. If B has decided `k`, it
 certifies `k` once the signers' proposals reach it (§13.7). If B has
 not, and `q` signers other than B proposed `k`, it adopts the decisions.
 B then takes `x` unchecked as A did, or drops it as lying below its
-horizon, and in both cases accepts A's blocks above `x`. A block above
-`x` that B dropped earlier is fetched again, since the pending blocks
-above it still miss it. When the honest nodes number exactly `q` and
+horizon, and in both cases accepts A's blocks above `x`. While B's
+horizon lies below `x`, `x` waits pending at B, invalid, and B takes it
+once its horizon reaches `x`'s round. When the honest nodes number exactly `q` and
 the Byzantine ones sign nothing, every certificate needs B's signature,
 so adoption cannot help B and the first way is the only one; the
 simulator's attack exercises this case (§13.7).
@@ -1500,9 +1502,8 @@ horizon is taken unchecked, so no node is cut off for being slow.
 * **V11** allows certificate offers to the reliable nodes: it assumes
   only that they do not restart, since a node not recovering ignores a
   base offer. Arrival bounds how long reliable horizons differ by the
-  announcements of §13.8, and the synchronisation assumption covers a
-  Byzantine block dropped as invalid and needed again after the
-  receiver's horizon rose to its round (§13.1).
+  announcements of §13.8; a Byzantine block invalid above the
+  receiver's horizon waits pending until that horizon reaches it.
 
 **The simulator.** Node 2 slow, every message to or from it taking at
 least the delay below; node 3 running the honest program and silent from
@@ -1686,8 +1687,9 @@ them within `2Δ` more. A block `y` of a reliable author has an invalid
 block in its history only at its author's horizon when it built `y`,
 which `v` reaches once it holds the author's certificate and is at
 `y`'s round, so `v` holds `y` and its history within
-`A = 3Δ + Δₛ` of `y`'s build past GST (13.1 for the history, and its
-second clause for an invalid block at `v`'s new horizon).
+`A = 3Δ + Δₛ` of `y`'s build past GST (13.1 for the history; an invalid
+block at the author's horizon waits pending at `v` until `v`'s horizon
+reaches it).
 
 **The proofs.** Every claim holds of the program with announcements: a
 confirmed certificate adds no decision, and adopted decisions are a

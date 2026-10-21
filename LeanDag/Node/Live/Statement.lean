@@ -15,11 +15,10 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
 * **timers** (`TimersOnTime`): a timer a reliable node sets at `t` for
   `a` ticks fires at `t + a`, and none fires earlier;
 * **synchronisation** (`SyncedWithin`): a reliable node that receives a
-  reliable node's block at `t` has received, by `max t gst + Δₛ`, each
-  block of its history at or above its horizon that it did not make;
-  and once its horizon rises to `G`, it receives again, within `Δₛ`, the
-  round-`G` blocks of those histories. Efficient synchronisation is out
-  of scope (`docs/validator.md` §1);
+  reliable node's block at `t` receives after it, by `max t gst + Δₛ`,
+  each block of its history at or above its horizon that it did not
+  make. Efficient synchronisation is out of scope (`docs/validator.md`
+  §1);
 * every reliable node **starts** by `gst` (`StartedBy`), and none
   restarts;
 * timely authentication, of blocks, bases, certificates and the chain's
@@ -75,28 +74,19 @@ def TimersOnTime (cfg : Config Validator BlockId Payload) (T : Finset Validator)
         time i + a ≤ time j
 
 /-- **Synchronisation within `Δₛ` past GST**: a reliable node `v` given
-a reliable author's block at `t` is given, by `max t gst + Δₛ`, each
-block of the history the author broadcast it with, at or above `v`'s
-horizon then, that `v` did not make; and once `v`'s horizon rises to `G`
-at `t'`, it is given again, by `max t' gst + Δₛ`, each round-`G` block of
-that history that it did not make. -/
+a reliable author's block at `t` is given after it, by `max t gst + Δₛ`,
+each block of the history the author broadcast it with, at or above
+`v`'s horizon then, that `v` did not make. -/
 def SyncedWithin (cfg : Config Validator BlockId Payload) (T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δₛ t₁ : ℕ) : Prop :=
   ∀ j v id b, tr[j]? = some (v, .deliver id b) → v ∈ T → b.creator ∈ T →
     ∀ i, (tr[i]?.map Prod.fst) = some b.creator → (id, b) ∈ broadcasts (outputsAt cfg tr i) →
       let st := (stateBefore cfg tr (i + 1) b.creator).store
-      (max (time j) gst + Δₛ ≤ t₁ → ∀ y ∈ historyFrom st.blk id,
+      max (time j) gst + Δₛ ≤ t₁ → ∀ y ∈ historyFrom st.blk id,
         horAt cfg tr time v (max (time j) gst + Δₛ) ≤ (st.blk y).round →
         (st.blk y).creator ≠ v →
-        ∃ k, tr[k]? = some (v, .deliver y (st.map.getD y st.junk)) ∧
-          time k ≤ max (time j) gst + Δₛ) ∧
-      ∀ e, j < e → (tr[e]?.map Prod.fst) = some v →
-        (stateBefore cfg tr e v).store.base < (stateBefore cfg tr (e + 1) v).store.base →
-        max (time e) gst + Δₛ ≤ t₁ → ∀ y ∈ historyFrom st.blk id,
-        (st.blk y).round = (stateBefore cfg tr (e + 1) v).store.base →
-        (st.blk y).creator ≠ v →
-        ∃ k, e < k ∧ tr[k]? = some (v, .deliver y (st.map.getD y st.junk)) ∧
-          time k ≤ max (time e) gst + Δₛ
+        ∃ k, j < k ∧ tr[k]? = some (v, .deliver y (st.map.getD y st.junk)) ∧
+          time k ≤ max (time j) gst + Δₛ
 
 /-- **Every reliable node starts by `gst`.** -/
 def StartedBy (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)

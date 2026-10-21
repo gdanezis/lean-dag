@@ -195,13 +195,13 @@ theorem keeps_after (hinj : HashInjective cfg H tr)
     · rw [same_before fun inp h => he ⟨inp, h⟩]; exact ih
 
 /-- **No pending block is ever ready.** -/
-theorem noReady_before (v : Validator) : ∀ i, NoReady (stateBefore cfg tr i v)
+theorem noReady_before (v : Validator) : ∀ i, NoReady (cfg.at v) (stateBefore cfg tr i v)
   | 0 => fun e he => by simp [stateBefore, inputsBefore, run, State.init] at he
   | i + 1 => by
     by_cases he : ∃ inp, tr[i]? = some (v, inp)
     · obtain ⟨inp, hi⟩ := he
       rw [step_before hi]
-      exact noReady_step (noReady_before v i) inp
+      exact noReady_step (cfg := cfg.at v) (noReady_before v i) inp
     · rw [same_before fun inp h => he ⟨inp, h⟩]; exact noReady_before v i
 
 /-- **A block becomes pending only by a delivery the node acts on.** -/
@@ -388,10 +388,40 @@ theorem chain {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) {τ : ℕ} {idh : 
     have h1 := hnr.1
     change ¬ (raw w).round ≤ fin.store.base at h1
     rw [hb0] at h1; omega
-  obtain ⟨r, hr, hrn⟩ := Finset.not_subset.mp hnr.2
   have hlt : st.base < (st.map.getD w st.junk).round := by
     rw [base_before hbase hu τ, ← hraw]; exact hpos
   have hblk : st.blk w = raw w := (Store.blk_of_lt hlt).trans (hraw w).symm
+  -- the block is valid as `u` stored it, so it waits only for references
+  have hst0 : st.base = 0 := base_before hbase hu τ
+  have hfin0 : fin.store.base = 0 := hb0
+  have hpredw : ∀ j ∈ (raw w).refs, (st.blk j).round + 1 = (raw w).round := fun j hj => by
+    have := st.pred w hwst j (by change j ∈ (st.blk w).refs; rw [hblk]; exact hj)
+    change (st.blk j).round + 1 = (st.blk w).round at this
+    rw [hblk] at this; exact this
+  have hagree : ∀ j ∈ (raw w).refs, j ∈ fin.store.ids → fin.store.blk j = st.blk j := by
+    intro j hj hjf
+    have hjst : j ∈ st.ids :=
+      st.complete w hwst j (by change j ∈ (st.blk w).refs; rw [hblk]; exact hj)
+    have hc := content_eq hinj (stored_known (cfg := cfg) (tr := tr) hv hjf)
+      (stored_known (cfg := cfg) (tr := tr) hu hjst) rfl
+    unfold Store.blk lookup
+    rw [hfin0, hst0]
+    exact congrArg (atBase 0) hc
+  have hval : rowValid cfg.q st.blk (raw w) := by
+    have := (inv_before (cfg := cfg) τ u).valid w hwst hlt
+    rw [hraw]; exact this
+  have hns : ¬ (raw w).refs ⊆ fin.store.ids := by
+    intro hsub'
+    refine hnr.2 ⟨hsub', fun j hj => ?_, rowValid_congr (fun j hj => ?_) hval⟩
+    · rw [hagree j hj (hsub' hj)]; exact hpredw j hj
+    · have hjw : j ≠ w := by
+        intro h; subst h
+        have := hpredw j hj
+        rw [hblk] at this
+        omega
+      rw [Function.update_of_ne hjw, hagree j hj (hsub' hj)]
+      exact ⟨rfl, rfl⟩
+  obtain ⟨r, hr, hrn⟩ := Finset.not_subset.mp hns
   have hrst : r ∈ st.ids :=
     st.complete w hwst r (by change r ∈ (st.blk w).refs; rw [hblk]; exact hr)
   have hrH : r ∈ historyFrom (gT cfg H tr) idh := by

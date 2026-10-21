@@ -316,13 +316,13 @@ theorem flush_bound : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
     · exact ⟨le_rfl, fun _ => rfl⟩
     · rename_i hE
       rw [List.partition_eq_filter_filter] at hE ⊢
-      have hl := List.length_eq_length_filter_add (fun e => ready st e.2) (l := pend)
-      have hpos : 0 < (pend.filter fun e => ready st e.2).length := by
+      have hl := List.length_eq_length_filter_add (fun e => ready cfg st e) (l := pend)
+      have hpos : 0 < (pend.filter fun e => ready cfg st e).length := by
         rw [List.isEmpty_iff] at hE
         exact List.length_pos_of_ne_nil hE
       obtain ⟨h₁, -⟩ := flush_bound fuel
-        ((pend.filter fun e => ready st e.2).foldl (fun s e => accept cfg s e.1 e.2) st)
-        (pend.filter (not ∘ fun e => ready st e.2))
+        ((pend.filter fun e => ready cfg st e).foldl (fun s e => accept cfg s e.1 e.2) st)
+        (pend.filter (not ∘ fun e => ready cfg st e))
       simp only [Function.comp_def] at hl h₁ ⊢
       refine ⟨by omega, fun h => ?_⟩
       omega
@@ -530,7 +530,7 @@ its horizon is the one its certificate, top and held round give, and it
 decides no further slot. -/
 structure Settled (s : State Validator BlockId Payload) : Prop where
   build : Node.tryBuild cfg s = none
-  ready : NoReady s
+  ready : NoReady cfg s
   collected : ∀ t, s.top = some t →
     min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) - cfg.lag ≤ s.store.base
   decided : s.lo < decidable cfg s.store.topRound →

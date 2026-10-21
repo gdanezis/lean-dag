@@ -23,7 +23,7 @@ omit [Fintype Validator] in
 pending blocks. -/
 theorem flush_no_ready : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
     (pend : List (BlockId × Block Validator BlockId Payload)), pend.length < fuel →
-    ∀ e ∈ (flush cfg fuel st pend).2, ready (flush cfg fuel st pend).1 e.2 = false
+    ∀ e ∈ (flush cfg fuel st pend).2, ready cfg (flush cfg fuel st pend).1 e = false
   | 0, _, _, h => absurd h (Nat.not_lt_zero _)
   | fuel + 1, st, pend, h => by
     unfold flush
@@ -36,8 +36,8 @@ theorem flush_no_ready : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
     · rename_i hE
       apply flush_no_ready
       rw [List.partition_eq_filter_filter] at hE ⊢
-      have hl := List.length_eq_length_filter_add (fun e => ready st e.2) (l := pend)
-      have : 0 < (pend.filter fun e => ready st e.2).length := by
+      have hl := List.length_eq_length_filter_add (fun e => ready cfg st e) (l := pend)
+      have : 0 < (pend.filter fun e => ready cfg st e).length := by
         rw [List.isEmpty_iff] at hE
         exact List.length_pos_of_ne_nil hE
       simp only [Function.comp_def] at hl ⊢
@@ -99,7 +99,7 @@ variable (cfg g) in
 /-- **`accept` takes the block whenever it is ready**, on a store reading
 as `g`. -/
 def Fits (y : BlockId × Block Validator BlockId Payload) : Prop :=
-  ∀ st : Store Validator BlockId Payload, ReadsAs g st → ready st y.2 = true →
+  ∀ st : Store Validator BlockId Payload, ReadsAs g st → ready cfg st y = true →
     y.1 ∈ (Node.accept cfg st y.1 y.2).ids
 
 omit [Fintype Validator] in
@@ -118,7 +118,7 @@ theorem fits_of_valid {y : BlockId × Block Validator BlockId Payload}
       simp only [ready, Bool.or_eq_true, decide_eq_true_eq] at hr
       rcases hr with hr | hr
       · omega
-      · exact hr
+      · exact hr.1
     have hag : ∀ j ∈ y.2.refs, st.base < y.2.round → st.blk j = g j :=
       fun j hj hlt => hst.2 j (hrefs hlt hj)
     rw [dif_pos ⟨hin, by rw [hst.1]; exact Nat.zero_le _, hrefs, fun hlt j hj => by
@@ -129,20 +129,28 @@ theorem fits_of_valid {y : BlockId × Block Validator BlockId Payload}
         (hv (by omega)).2⟩]
     exact Finset.mem_insert_self _ _
 
-omit [Fintype Validator] [DecidableEq Validator] in
+omit [Fintype Validator] in
 theorem ready_mono {st st' : Store Validator BlockId Payload} (hg : Grows st st')
-    (hb : st'.base = st.base) {b : Block Validator BlockId Payload} (h : ready st b = true) :
-    ready st' b = true := by
+    (hb : st'.base = st.base) {e : BlockId × Block Validator BlockId Payload}
+    (h : ready cfg st e = true) : ready cfg st' e = true := by
   simp only [ready, Bool.or_eq_true, decide_eq_true_eq] at h ⊢
-  rcases h with h | h
+  obtain ⟨hsub, -, hm⟩ := hg.2 hb
+  have hblk : ∀ j ∈ st.ids, st'.blk j = st.blk j := fun j hj => by
+    unfold Store.blk lookup; rw [hm j hj, hb]
+  rcases h with h | ⟨h₁, h₂, h₃⟩
   · exact Or.inl (hb ▸ h)
-  · exact Or.inr (h.trans (hg.2 hb).1)
+  · refine Or.inr ⟨h₁.trans hsub, fun j hj => by rw [hblk j (h₁ hj)]; exact h₂ j hj,
+      rowValid_congr (fun j hj => ?_) h₃⟩
+    by_cases hje : j = e.1
+    · subst hje; simp
+    · rw [Function.update_of_ne hje, Function.update_of_ne hje, hblk j (h₁ hj)]
+      exact ⟨rfl, rfl⟩
 
 omit [Fintype Validator] in
 theorem foldl_takes : ∀ (l : List (BlockId × Block Validator BlockId Payload))
     {st : Store Validator BlockId Payload} {y : BlockId × Block Validator BlockId Payload},
     ReadsAs g st → (∀ e ∈ l, g e.1 = atBase 0 e.2) → Fits cfg g y → y ∈ l →
-    ready st y.2 = true → y.1 ∈ (l.foldl (fun s e => Node.accept cfg s e.1 e.2) st).ids
+    ready cfg st y = true → y.1 ∈ (l.foldl (fun s e => Node.accept cfg s e.1 e.2) st).ids
   | [], _, _, _, _, _, hy, _ => absurd hy (List.not_mem_nil)
   | e :: l, st, y, h, hl, hf, hy, hr => by
     rw [List.foldl_cons]
@@ -170,18 +178,18 @@ theorem flush_keeps : ∀ (fuel : ℕ) {st : Store Validator BlockId Payload}
     split
     · exact Or.inl hy
     · rw [List.partition_eq_filter_filter]
-      have hst₁ := h.foldl (cfg := cfg) (pend.filter fun e => ready st e.2)
+      have hst₁ := h.foldl (cfg := cfg) (pend.filter fun e => ready cfg st e)
         fun e he => hp e (List.mem_filter.mp he).1
-      by_cases hr : ready st y.2 = true
+      by_cases hr : ready cfg st y = true
       · right
-        have hin := foldl_takes (pend.filter fun e => ready st e.2) h
+        have hin := foldl_takes (pend.filter fun e => ready cfg st e) h
           (fun e he => hp e (List.mem_filter.mp he).1) hf
           (List.mem_filter.mpr ⟨hy, hr⟩) hr
         have hg := Grows.flush (cfg := cfg) fuel
-          ((pend.filter fun e => ready st e.2).foldl (fun s e => Node.accept cfg s e.1 e.2) st)
-          (pend.filter fun e => !ready st e.2)
+          ((pend.filter fun e => ready cfg st e).foldl (fun s e => Node.accept cfg s e.1 e.2) st)
+          (pend.filter fun e => !ready cfg st e)
         have hb := (ReadsAs.flush (cfg := cfg) fuel hst₁
-          (pend := pend.filter fun e => !ready st e.2)
+          (pend := pend.filter fun e => !ready cfg st e)
           fun e he => hp e (List.mem_filter.mp he).1).1.1
         simp only [Function.comp_def]
         exact (hg.2 (hb.trans hst₁.1.symm)).1 hin

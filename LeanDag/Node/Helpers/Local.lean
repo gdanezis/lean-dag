@@ -631,8 +631,8 @@ theorem flush_known {K : Set (BlockId × Block Validator BlockId Payload)} :
     dsimp only
     split
     · exact ⟨hK, hp, rfl, hV⟩
-    · have hsplit : ∀ e ∈ (pend.partition fun e => ready st e.2).1 ++
-          (pend.partition fun e => ready st e.2).2, e ∈ K := by
+    · have hsplit : ∀ e ∈ (pend.partition fun e => ready cfg st e).1 ++
+          (pend.partition fun e => ready cfg st e).2, e ∈ K := by
         intro e he
         rw [List.partition_eq_filter_filter] at he
         rcases List.mem_append.mp he with he | he

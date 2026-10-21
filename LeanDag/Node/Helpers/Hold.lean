@@ -3,13 +3,12 @@ import LeanDag.Node.Helpers.Reliable
 # Holding a history under a rising horizon
 
 `docs/validator.md` §13.2. A store agrees with a map `g` of the blocks on
-their rounds and authors (`AgreesWith`), which pruning keeps, so whether a
-block is valid at its round reads `g` alone. A block delivered at or
-above the horizon, valid under `g` or at the horizon when delivered,
-stays stored, pending or below the horizon (`Stays`) from then on. A
-settled node whose store and pending blocks agree with `g` then holds
-every block of a set closed under references at or above its horizon,
-once each stays (`holds_of_stays`).
+their rounds and authors (`AgreesWith`), which pruning keeps. A block
+delivered at or above the horizon stays stored, pending or below the
+horizon (`Stays`) from then on, since a pending block is accepted only
+when ready and then always. A settled node then holds every block of a
+set closed under references at or above its horizon, once each stays
+and is ready when its references are accepted (`holds_of_stays`).
 -/
 
 namespace LeanDag
@@ -30,14 +29,9 @@ def AgreesWith (st : Store Validator BlockId Payload) : Prop :=
 def Agrees (y : BlockId × Block Validator BlockId Payload) : Prop :=
   (g y.1).round = y.2.round ∧ (g y.1).creator = y.2.creator
 
-variable (cfg) in
-/-- **A block valid under `g`**: above round `0`, its references lie one
-round below it, and it is valid at the row. -/
-def ValidUnder (b : Block Validator BlockId Payload) : Prop :=
-  0 < b.round → (∀ j ∈ b.refs, (g j).round + 1 = b.round) ∧ rowValid cfg.q g b
-
 /-- **A block that stays**: stored, pending, or below the horizon. -/
-def Stays (st : Store Validator BlockId Payload) (pend : List (BlockId × Block Validator BlockId Payload))
+def Stays (st : Store Validator BlockId Payload)
+    (pend : List (BlockId × Block Validator BlockId Payload))
     (y : BlockId × Block Validator BlockId Payload) : Prop :=
   y.1 ∈ st.ids ∨ y ∈ pend ∨ y.2.round < st.base
 
@@ -116,41 +110,27 @@ theorem AgreesWith.prune {st : Store Validator BlockId Payload} (h : AgreesWith 
   have := (h j hj'.1).2
   simpa [Store.blk, lookup] using this
 
-/-! ## Accepting a block valid under `g` -/
+/-! ## Accepting a ready block -/
 
 omit [Fintype Validator] in
-/-- **`accept` takes a block when it is ready**, at or above the horizon,
-valid under `g` or at the horizon, on a store agreeing with `g`. -/
-theorem accept_takes {st : Store Validator BlockId Payload} (hst : AgreesWith g st)
-    {y : BlockId × Block Validator BlockId Payload} (hr : ready st y.2 = true) (hb : st.base ≤ y.2.round)
-    (hv : ValidUnder cfg g y.2 ∨ y.2.round ≤ st.base) :
-    y.1 ∈ (Node.accept cfg st y.1 y.2).ids := by
+/-- **`accept` takes a block when it is ready**, at or above the horizon. -/
+theorem accept_takes {st : Store Validator BlockId Payload}
+    {y : BlockId × Block Validator BlockId Payload} (hr : ready cfg st y = true)
+    (hb : st.base ≤ y.2.round) : y.1 ∈ (Node.accept cfg st y.1 y.2).ids := by
   unfold Node.accept
   by_cases hin : y.1 ∈ st.ids
   · split
     · exact Finset.mem_insert_self _ _
     · exact hin
-  · have hrefs : st.base < y.2.round → y.2.refs ⊆ st.ids := by
-      intro hlt
-      simp only [ready, Bool.or_eq_true, decide_eq_true_eq] at hr
-      rcases hr with hr | hr
+  · simp only [ready, Bool.or_eq_true, decide_eq_true_eq] at hr
+    rcases Nat.lt_or_ge st.base y.2.round with hlt | hle
+    · obtain hr | ⟨h₁, h₂, h₃⟩ := hr
       · omega
-      · exact hr
-    have hval : st.base < y.2.round → (∀ j ∈ y.2.refs, (g j).round + 1 = y.2.round) ∧
-        rowValid cfg.q g y.2 := fun hlt => by
-      rcases hv with hv | hv
-      · exact hv (by omega)
-      · omega
-    have hag : ∀ j ∈ y.2.refs, st.base < y.2.round →
-        (st.blk j).round = (g j).round ∧ (st.blk j).creator = (g j).creator :=
-      fun j hj hlt => hst j (hrefs hlt hj)
-    rw [dif_pos ⟨hin, hb, hrefs, fun hlt j hj => by
-        rw [(hag j hj hlt).1]; exact (hval hlt).1 j hj,
-      fun hlt => rowValid_congr (fun j hj => by
-        have hj' : j ≠ y.1 := fun e => hin (e ▸ hrefs hlt hj)
-        rw [Function.update_of_ne hj']
-        exact ⟨(hag j hj hlt).1.symm, (hag j hj hlt).2.symm⟩) (hval hlt).2⟩]
-    exact Finset.mem_insert_self _ _
+      · rw [dif_pos ⟨hin, hb, fun _ => h₁, fun _ => h₂, fun _ => h₃⟩]
+        exact Finset.mem_insert_self _ _
+    · rw [dif_pos ⟨hin, hb, fun h => absurd h (by omega), fun h => absurd h (by omega),
+        fun h => absurd h (by omega)⟩]
+      exact Finset.mem_insert_self _ _
 
 /-! ## Staying through a flush -/
 
@@ -158,50 +138,50 @@ omit [Fintype Validator] in
 /-- **A fold of ready blocks takes each**, on a store agreeing with `g`. -/
 theorem foldl_takes_under : ∀ (l : List (BlockId × Block Validator BlockId Payload))
     {st : Store Validator BlockId Payload} {y : BlockId × Block Validator BlockId Payload},
-    AgreesWith g st → (∀ e ∈ l, Agrees g e) → ready st y.2 = true →
-    st.base ≤ y.2.round → (ValidUnder cfg g y.2 ∨ y.2.round ≤ st.base) →
+    AgreesWith g st → (∀ e ∈ l, Agrees g e) → ready cfg st y = true →
+    st.base ≤ y.2.round →
     (y ∈ l ∨ y.1 ∈ st.ids) → y.1 ∈ (l.foldl (fun s e => Node.accept cfg s e.1 e.2) st).ids
-  | [], _, _, _, _, _, _, _, h => by
+  | [], _, _, _, _, _, _, h => by
     rcases h with h | h
     · exact absurd h List.not_mem_nil
     · exact h
-  | e :: l, st, y, hA, hl, hr, hb, hv, h => by
+  | e :: l, st, y, hA, hl, hr, hb, h => by
     simp only [List.foldl_cons]
     have hg := Grows.accept (cfg := cfg) st e.1 e.2
     have hb' := accept_base (cfg := cfg) st e.1 e.2
     refine foldl_takes_under l (hA.accept (hl e List.mem_cons_self))
-      (fun x hx => hl x (List.mem_cons_of_mem _ hx)) (ready_mono hg hb' hr) (by rw [hb']; exact hb)
-      (by rw [hb']; exact hv) ?_
+      (fun x hx => hl x (List.mem_cons_of_mem _ hx)) (ready_mono hg hb' hr)
+      (by rw [hb']; exact hb) ?_
     rcases h with h | h
     · rcases List.mem_cons.mp h with rfl | h
-      · exact Or.inr (accept_takes hA hr hb hv)
+      · exact Or.inr (accept_takes hr hb)
       · exact Or.inl h
     · exact Or.inr ((hg.2 hb').1 h)
 
 omit [Fintype Validator] in
-/-- **A flush keeps a block stored or pending**, at or above the horizon
-and valid under `g` or at the horizon, on a store agreeing with `g`. -/
+/-- **A flush keeps a block stored or pending**, at or above the horizon,
+on a store agreeing with `g`. -/
 theorem flush_stays : ∀ (fuel : ℕ) {st : Store Validator BlockId Payload}
     {pend : List (BlockId × Block Validator BlockId Payload)}
     {y : BlockId × Block Validator BlockId Payload},
     AgreesWith g st → (∀ e ∈ pend, Agrees g e) → Agrees g y → st.base ≤ y.2.round →
-    (ValidUnder cfg g y.2 ∨ y.2.round ≤ st.base) → (y.1 ∈ st.ids ∨ y ∈ pend) →
+    (y.1 ∈ st.ids ∨ y ∈ pend) →
     y.1 ∈ (Node.flush cfg fuel st pend).1.ids ∨ y ∈ (Node.flush cfg fuel st pend).2
-  | 0, _, _, _, _, _, _, _, _, h => h
-  | fuel + 1, st, pend, y, hA, hp, hy, hb, hv, h => by
+  | 0, _, _, _, _, _, _, _, h => h
+  | fuel + 1, st, pend, y, hA, hp, hy, hb, h => by
     unfold Node.flush
     dsimp only
     split
     · exact h
     · rw [List.partition_eq_filter_filter]
-      set rd := pend.filter fun e => ready st e.2
+      set rd := pend.filter fun e => ready cfg st e
       have hg := Grows.foldl (cfg := cfg) rd st
       have hb' := foldl_base (cfg := cfg) rd st
       have hfold : y.1 ∈ (rd.foldl (fun s e => Node.accept cfg s e.1 e.2) st).ids ∨
-          y ∈ pend.filter (not ∘ fun e => ready st e.2) := by
-        by_cases hry : ready st y.2 = true
+          y ∈ pend.filter (not ∘ fun e => ready cfg st e) := by
+        by_cases hry : ready cfg st y = true
         · left
-          refine foldl_takes_under rd hA (fun e he => hp e (List.mem_filter.mp he).1) hry hb hv ?_
+          refine foldl_takes_under rd hA (fun e he => hp e (List.mem_filter.mp he).1) hry hb ?_
           rcases h with h | h
           · exact Or.inr h
           · exact Or.inl (List.mem_filter.mpr ⟨h, hry⟩)
@@ -212,8 +192,7 @@ theorem flush_stays : ∀ (fuel : ℕ) {st : Store Validator BlockId Payload}
             simp only [Function.comp_apply, Bool.not_eq_true'] at hry ⊢
             simp [hry]
       exact flush_stays fuel (hA.foldl _ fun e he => hp e (List.mem_filter.mp he).1)
-        (fun e he => hp e (List.mem_filter.mp he).1) hy (by rw [hb']; exact hb)
-        (by rw [hb']; exact hv) hfold
+        (fun e he => hp e (List.mem_filter.mp he).1) hy (by rw [hb']; exact hb) hfold
 
 /-! ## Staying through a pass -/
 
@@ -278,12 +257,12 @@ theorem collect_stays {s : State Validator BlockId Payload} (hA : AgreesWith g s
   · exact ⟨hA, fun e he => he, hst⟩
 
 omit [Fintype Validator] in
-/-- **A pass keeps a block staying**, valid under `g` or at the horizon,
-the store agreeing with `g` and the pending and built blocks too. -/
+/-- **A pass keeps a block staying**, the store agreeing with `g` and the
+pending and built blocks too. -/
 theorem advance_stays {x : State Validator BlockId Payload} (hA : AgreesWith g x.store)
     (hP : ∀ e ∈ x.pending, Agrees g e) (hO : ∀ e ∈ persists (Node.advance cfg x).2, Agrees g e)
     {y : BlockId × Block Validator BlockId Payload} (hy : Agrees g y)
-    (hv : ValidUnder cfg g y.2 ∨ y.2.round ≤ x.store.base) (hst : Stays x.store x.pending y) :
+    (hst : Stays x.store x.pending y) :
     AgreesWith g (Node.advance cfg x).1.store ∧ (∀ e ∈ (Node.advance cfg x).1.pending, Agrees g e) ∧
       Stays (Node.advance cfg x).1.store (Node.advance cfg x).1.pending y := by
   simp only [Node.advance] at hO ⊢
@@ -315,50 +294,46 @@ theorem advance_stays {x : State Validator BlockId Payload} (hA : AgreesWith g x
   by_cases hlt : y.2.round < c.1.store.base
   · exact Or.inr (Or.inr (by rw [hfb]; exact hlt))
   · rcases hst₃ with h | h | h
-    · exact (flush_stays _ hA₃ hpc hy (not_lt.mp hlt) (hv.imp id fun h' => h'.trans hb₃)
-        (Or.inl h)).imp id Or.inl
-    · exact (flush_stays _ hA₃ hpc hy (not_lt.mp hlt) (hv.imp id fun h' => h'.trans hb₃)
-        (Or.inr h)).imp id Or.inl
+    · exact (flush_stays _ hA₃ hpc hy (not_lt.mp hlt) (Or.inl h)).imp id Or.inl
+    · exact (flush_stays _ hA₃ hpc hy (not_lt.mp hlt) (Or.inr h)).imp id Or.inl
     · exact absurd h hlt
 
 omit [Fintype Validator] in
 theorem quiesce_stays {y : BlockId × Block Validator BlockId Payload} (hy : Agrees g y) :
     ∀ (n : ℕ) {x : State Validator BlockId Payload}, AgreesWith g x.store →
     (∀ e ∈ x.pending, Agrees g e) → (∀ e ∈ persists (quiesce cfg n x).2, Agrees g e) →
-    (ValidUnder cfg g y.2 ∨ y.2.round ≤ x.store.base) → Stays x.store x.pending y →
+    Stays x.store x.pending y →
     AgreesWith g (quiesce cfg n x).1.store ∧ (∀ e ∈ (quiesce cfg n x).1.pending, Agrees g e) ∧
       Stays (quiesce cfg n x).1.store (quiesce cfg n x).1.pending y
-  | 0, x, hA, hP, _, _, hst => ⟨hA, hP, hst⟩
-  | n + 1, x, hA, hP, hO, hv, hst => by
+  | 0, x, hA, hP, _, hst => ⟨hA, hP, hst⟩
+  | n + 1, x, hA, hP, hO, hst => by
     rcases quiesce_succ_cases (cfg := cfg) n x with he | he <;> rw [he] at hO ⊢
-    · exact advance_stays hA hP hO hy hv hst
+    · exact advance_stays hA hP hO hy hst
     · rw [persists_append] at hO
       obtain ⟨hA₁, hP₁, hst₁⟩ := advance_stays hA hP
-        (fun e he => hO e (List.mem_append_left _ he)) hy hv hst
-      exact quiesce_stays hy n hA₁ hP₁ (fun e he => hO e (List.mem_append_right _ he))
-        (hv.imp id fun h => h.trans (Grows.advance (cfg := cfg) x).1) hst₁
+        (fun e he => hO e (List.mem_append_left _ he)) hy hst
+      exact quiesce_stays hy n hA₁ hP₁ (fun e he => hO e (List.mem_append_right _ he)) hst₁
 
 omit [Fintype Validator] in
-/-- **A settle keeps a block staying**, valid under `g` or at the horizon,
-the store agreeing with `g` and the pending and built blocks too. -/
+/-- **A settle keeps a block staying**, the store agreeing with `g` and
+the pending and built blocks too. -/
 theorem settle_stays {x : State Validator BlockId Payload} (hA : AgreesWith g x.store)
     (hP : ∀ e ∈ x.pending, Agrees g e) (hO : ∀ e ∈ persists (Node.settle cfg x).2, Agrees g e)
     {y : BlockId × Block Validator BlockId Payload} (hy : Agrees g y)
-    (hv : ValidUnder cfg g y.2 ∨ y.2.round ≤ x.store.base) (hst : Stays x.store x.pending y) :
+    (hst : Stays x.store x.pending y) :
     Stays (Node.settle cfg x).1.store (Node.settle cfg x).1.pending y := by
   rcases settle_cases (cfg := cfg) x with h | ⟨x₁, hj, h⟩ <;> rw [h] at hO ⊢
-  · exact (quiesce_stays (x := x.hold) hy _ hA hP hO hv hst).2.2
+  · exact (quiesce_stays (x := x.hold) hy _ hA hP hO hst).2.2
   · obtain ⟨hst', hpd, -⟩ := tryResume_keeps hj
     refine (quiesce_stays (x := x₁.hold) hy _ (by rw [State.hold_store, hst']; exact hA)
       (by rw [State.hold_pending, hpd]; exact hP) hO
-      (by rw [State.hold_store, hst']; exact hv)
       (by rw [State.hold_store, State.hold_pending, hst', hpd]; exact hst)).2.2
 
 /-! ## Staying through a step -/
 
 /-- **A step keeps a block staying**, of a node not recovering, other than
-a restart, without rate limiting: valid under `g` or at the horizon, the
-store agreeing with `g` and the pending, built and delivered blocks too;
+a restart, without rate limiting, the store agreeing with `g` and the
+pending, built and delivered blocks too;
 and a delivery of the block, by its hash and of another author, leaves
 it staying. -/
 theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
@@ -367,7 +342,6 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
     (hD : ∀ id b, inp = .deliver id b → id = cfg.idOf b → Agrees g (id, b))
     (hO : ∀ e ∈ persists (Node.step cfg s inp).2, Agrees g e)
     {y : BlockId × Block Validator BlockId Payload} (hy : Agrees g y)
-    (hv : ValidUnder cfg g y.2 ∨ y.2.round ≤ s.store.base)
     (hst : Stays s.store s.pending y ∨ (inp = .deliver y.1 y.2 ∧ y.1 = cfg.idOf y.2 ∧
       y.2.creator ≠ cfg.me ∧ ∀ e ∈ s.pending, e.1 = y.1 → e = y)) :
     Stays (Node.step cfg s inp).1.store (Node.step cfg s inp).1.pending y := by
@@ -381,7 +355,7 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
     have hOx : ∀ e ∈ persists (Node.settle cfg x).2, Agrees g e := fun e he' =>
       hO e (by rw [he, persists_append]; exact List.mem_append_right _ he')
     rw [he]
-    exact settle_stays hAx hPx hOx hy (hv.imp id fun h => h.trans hbx) hstx
+    exact settle_stays hAx hPx hOx hy hstx
   -- the delivered block itself, not acted on, already stays
   have hnot : ∀ (id : BlockId) (b : Block Validator BlockId Payload), inp = .deliver id b →
       ¬ Admits cfg s id b → Stays s.store s.pending y := by
@@ -450,8 +424,8 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
         by_cases hlt : y.2.round < s.store.base
         · exact Or.inr (Or.inr (by rw [hb₁]; exact hlt))
         · rcases hy₁ with h | h | h
-          · exact (flush_stays _ hA hPf hy (not_lt.mp hlt) hv (Or.inl h)).imp (fun h => h) Or.inl
-          · exact (flush_stays _ hA hPf hy (not_lt.mp hlt) hv (Or.inr h)).imp (fun h => h) Or.inl
+          · exact (flush_stays _ hA hPf hy (not_lt.mp hlt) (Or.inl h)).imp (fun h => h) Or.inl
+          · exact (flush_stays _ hA hPf hy (not_lt.mp hlt) (Or.inr h)).imp (fun h => h) Or.inl
           · exact absurd h hlt
       exact hset _ _ (step_deliver hAd) hA₁ hP₁ hb₁.ge hst₁
     · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
@@ -495,16 +469,19 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
 
 /-! ## Holding a closed set -/
 
-omit [Fintype Validator] [DecidableEq Validator] in
+omit [Fintype Validator] in
 /-- **A store holds a set of blocks closed under references** at or above
-its horizon, if each of them stays and no pending block is ready. -/
+its horizon, if each of them stays, each is ready once its references
+are accepted, and no pending block is ready. -/
 theorem holds_of_stays {st : Store Validator BlockId Payload}
     {pend : List (BlockId × Block Validator BlockId Payload)}
-    (hnr : ∀ e ∈ pend, ready st e.2 = false) {Z : Finset BlockId}
+    (hnr : ∀ e ∈ pend, ready cfg st e = false) {Z : Finset BlockId}
     (raw : BlockId → Block Validator BlockId Payload)
     (hst : ∀ z ∈ Z, st.base ≤ (raw z).round → Stays st pend (z, raw z))
     (hcl : ∀ z ∈ Z, st.base < (raw z).round → ∀ r ∈ (raw z).refs,
-      r ∈ Z ∧ (raw r).round + 1 = (raw z).round) :
+      r ∈ Z ∧ (raw r).round + 1 = (raw z).round)
+    (hrd : ∀ z ∈ Z, st.base < (raw z).round → (raw z).refs ⊆ st.ids →
+      ready cfg st (z, raw z) = true) :
     ∀ z ∈ Z, st.base ≤ (raw z).round → z ∈ st.ids := by
   suffices h : ∀ n z, z ∈ Z → (raw z).round = st.base + n → z ∈ st.ids from
     fun z hz hb => h ((raw z).round - st.base) z hz (by omega)
@@ -522,11 +499,12 @@ theorem holds_of_stays {st : Store Validator BlockId Payload}
     intro z hz hr
     rcases hst z hz (by omega) with h | h | h
     · exact h
-    · have := hnr _ h
-      simp only [ready, Bool.or_eq_false_iff, decide_eq_false_iff_not] at this
-      refine absurd (fun r hr' => ?_) this.2
-      obtain ⟨hrZ, hrr⟩ := hcl z hz (by omega) r hr'
-      exact ih r hrZ (by omega)
+    · have hrefs : (raw z).refs ⊆ st.ids := fun r hr' => by
+        obtain ⟨hrZ, hrr⟩ := hcl z hz (by omega) r hr'
+        exact ih r hrZ (by omega)
+      have := hnr _ h
+      rw [hrd z hz (by omega) hrefs] at this
+      cases this
     · simp only at h; omega
 
 /-! ## Along a trace -/
@@ -559,14 +537,12 @@ theorem outputs_agree (hinj : Converge.HashInjective cfg H tr) {i : ℕ} {u : Va
   fun e he => agrees_known hinj (Or.inr ⟨i, u, hi, hu, he⟩)
 
 /-- **A step keeps a known block staying**, at an honest node that never
-restarts, without rate limiting: valid under the run's blocks or at the
-horizon; and a delivery of it, of another author, leaves it staying. -/
+restarts, without rate limiting; and a delivery of it, of another
+author, leaves it staying. -/
 theorem stays_succ (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H tr)
     {v : Validator} (hv : v ∈ H) (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart))
     {y : BlockId × Block Validator BlockId Payload} (hyk : y ∈ Converge.knownIn cfg H tr)
     {a : ℕ}
-    (hval : ValidUnder cfg (Converge.gT cfg H tr) y.2 ∨
-      y.2.round ≤ (stateBefore cfg tr a v).store.base)
     (hst : Stays (stateBefore cfg tr a v).store (stateBefore cfg tr a v).pending y ∨
       (tr[a]? = some (v, .deliver y.1 y.2) ∧ y.2.creator ≠ v)) :
     Stays (stateBefore cfg tr (a + 1) v).store (stateBefore cfg tr (a + 1) v).pending y := by
@@ -589,7 +565,7 @@ theorem stays_succ (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H 
         (fun h => hnr a (by rw [he, h])) (agreesWith_before hinj hv a)
         (pending_agree_before hinj hv a) (fun id b hib hid => agrees_known hinj (Or.inl
           ⟨a, w, inp, he, hv, by rw [hib]; simp [delivered, hid]⟩)) hio
-        (agrees_known hinj hyk) hval ?_
+        (agrees_known hinj hyk) ?_
       rcases hst with hst | ⟨h, hcr⟩
       · exact Or.inl hst
       · have h₂ : inp = .deliver y.1 y.2 := by rw [he] at h; simpa using h
@@ -603,23 +579,18 @@ theorem stays_succ (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H 
       · rw [he] at h; simp only [Option.some.injEq, Prod.mk.injEq] at h; exact absurd h.1 hw
 
 /-- **A known block stays from then on**, at an honest node that never
-restarts, without rate limiting, once it stays valid under the run's
-blocks or at the horizon. -/
+restarts, without rate limiting, once it stays. -/
 theorem stays_from (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H tr)
     {v : Validator} (hv : v ∈ H) (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart))
     {y : BlockId × Block Validator BlockId Payload} (hyk : y ∈ Converge.knownIn cfg H tr)
     {a : ℕ}
-    (hval : ValidUnder cfg (Converge.gT cfg H tr) y.2 ∨
-      y.2.round ≤ (stateBefore cfg tr a v).store.base)
     (hst : Stays (stateBefore cfg tr a v).store (stateBefore cfg tr a v).pending y) :
     ∀ b, a ≤ b →
       Stays (stateBefore cfg tr b v).store (stateBefore cfg tr b v).pending y := by
   intro b hab
   induction b, hab using Nat.le_induction with
   | base => exact hst
-  | succ b hab ih =>
-    refine stays_succ hl hinj hv hnr hyk (hval.imp id fun h => h.trans ?_) (Or.inl ih)
-    exact (grows_before (cfg := cfg) (tr := tr) v hab).1
+  | succ b hab ih => exact stays_succ hl hinj hv hnr hyk (Or.inl ih)
 
 end Node
 
