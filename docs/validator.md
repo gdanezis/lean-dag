@@ -523,7 +523,7 @@ at once.
   finite window a node lagging more than `W` rounds drops a block ahead
   of it, and with a finite quota a twin a held block needs may find its
   slot full; both are asked for again only once a later block needs
-  them. The liveness of the rate-limited node is step 11.2 (§13).
+  them. The liveness of the rate-limited node is open (§13.10).
 
 ### 3.10 Excluding equivocators
 
@@ -1247,7 +1247,7 @@ report's `stats`).
 
 **Scope.** A reliable set `T` of honest nodes that never crash, restart
 or bootstrap, at least `q` strong, from a GST on. Garbage collection is
-on; rate limiting is off (11.2); restarted nodes are 11.3. The horizon
+on; rate limiting is off (11.2, §13.10); restarted nodes are 11.3. The horizon
 waits on certificates (§3.8), but a horizon that stops rising costs
 storage, not decisions, so the liveness of checkpointing (§9.1, item 6)
 is not needed here. Skipping rounds happens only when recovering
@@ -1830,3 +1830,39 @@ decides nothing.
 of the long run hold nine to fifteen blocks, their horizons two to four
 rounds below the top, against fifteen and four before.
 
+
+### 13.10 Liveness under rate limiting (open)
+
+V11 assumes no rate limiting (`cfg.limit = none`). With a quota `ρ` and a
+window `W` (§3.9), the rate-limited node keeps its storage bound (V10)
+and its safety (V7, V3, V9, V12), and in the simulator it stays live at
+`ρ = n` under every attack tried (§3.9). Its liveness is not proved, for
+three reasons, each a delivery the liveness proof needs and the limiter
+can drop.
+
+1. **The window.** A reliable block given to a reliable node more than
+   `W` rounds above its top is dropped, and comes back only with a later
+   synchronisation. Past GST a quorum can lead a node by any number of
+   rounds within `Δ`, since a round has no least duration, so no `W`
+   bounds the delay this adds to the catch-up time `A`.
+2. **The order of synchronisation.** A later block of a slot is kept only
+   if it is wanted, missing from the history of a pending block. A twin
+   delivered before the block that leads to it is pending is dropped, so
+   the proof needs a history synchronised from the top down, which
+   `SyncedWithin` does not fix.
+3. **The quota.** Two Byzantine authors can make the twins a slot needs
+   grow with depth: one excluded, whose twins each reference another of
+   its twins, and one not excluded, whose single chain references a fresh
+   twin a round. The twins of one slot that some honest block's history
+   needs then grow by one a round below the chain's top, and once they
+   exceed `ρ` different nodes keep different subsets, so one node can
+   wait on an honest block another accepted. The construction needs a
+   store at least `ρ` rounds deep; it has not been run in the simulator.
+
+The options considered: a liveness claim under three premises on the
+run (deliveries within the window, synchronisation from the top down,
+fewer than `ρ` blocks of each slot in the histories of non-excluded
+authors' blocks); a quota that grows with the store's depth, which
+makes storage quadratic in the depth; or neither for now. The last was
+taken: the rate-limited node's liveness rests on the simulator, and the
+quota's design is open.
