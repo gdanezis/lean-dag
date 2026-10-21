@@ -616,7 +616,8 @@ theorem block_arrives (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ =
     (hbn : (stateAt cfg tr time v τ).store.base ≤ e.2.round) :
     e.1 ∈ (stateAt cfg tr time v τ).store.ids ∧
       ((stateAt cfg tr time v τ).store.blk e.1).round = e.2.round ∧
-      ((stateAt cfg tr time v τ).store.blk e.1).creator = u := by
+      ((stateAt cfg tr time v τ).store.blk e.1).creator = u ∧
+      (stateAt cfg tr time v τ).store.blk e.1 = atBase (stateAt cfg tr time v τ).store.base e.2 := by
   have hnu : ∀ k : ℕ, tr[k]? ≠ some (u, Input.restart) := fun k => hnr k u hu
   have hbu : (tr[b]?.map Prod.fst) = some u := by rw [hb]; rfl
   have hebc := broadcasts_of_persists hep
@@ -656,8 +657,7 @@ theorem block_arrives (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ =
   have hblk : Z.store.blk e.1 = atBase Z.store.base e.2 := by
     change atBase Z.store.base (Z.store.map.getD e.1 Z.store.junk) = _
     exact congrArg _ hc
-  rw [hblk, atBase_round, atBase_creator]
-  exact ⟨rfl, hgood⟩
+  exact ⟨by rw [hblk, atBase_round], by rw [hblk, atBase_creator]; exact hgood, hblk⟩
 
 /-- **A reliable peer's block of a round arrives**: past GST, a reliable
 node at its round `n` or above at `s` has its round-`n` block held by a
@@ -685,7 +685,7 @@ theorem round_arrives (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ =
   obtain ⟨inp, hb⟩ := Converge.event_of_map hbu
   have hbl : b < tr.length := (List.getElem?_eq_some_iff.mp hb).1
   have htb : time b ≤ s := (lt_eventsBy hmono hbl).mp hbs
-  obtain ⟨h₁, h₂, h₃⟩ := block_arrives hq hl hσ hadm hf htime hoff hcert hinj hchain hTH hnr
+  obtain ⟨h₁, h₂, h₃, -⟩ := block_arrives hq hl hσ hadm hf htime hoff hcert hinj hchain hTH hnr
     hmono hdel hsync hcmp hu hv huv hb hep htb (τ := τ) (by omega) ht₁ hZt (by omega)
     (by omega)
   exact ⟨e.1, h₁, h₂.trans her, h₃⟩
