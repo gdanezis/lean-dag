@@ -199,6 +199,13 @@ structure Inv (cfg : Config Validator BlockId Payload) (s : State Validator Bloc
   offered : ∀ o ∈ s.offers, ∀ e ∈ o.2.2, e.1 = cfg.idOf e.2 → e ∈ K
 
 omit [Fintype Validator] in
+theorem Inv.hold {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)} (h : Inv cfg s K B) :
+    Inv cfg s.hold K B :=
+  ⟨h.known, h.pend, h.rounds, h.good, h.sub, h.valid, h.offered⟩
+
+omit [Fintype Validator] in
 theorem Inv.mono {s : State Validator BlockId Payload}
     {K K' : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (h : Inv cfg s K B) (hK : K ⊆ K') :
@@ -563,8 +570,9 @@ theorem Inv.collect {s : State Validator BlockId Payload}
       · intro j hj
         have hj' := (Finset.mem_filter.mp hj)
         have hraw := treeMap_getD_filter_of (t := s.store.map)
-          (f := fun _ b => decide (min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤
-            b.round)) (k := j) (fb := s.store.junk) (by simpa [Store.blk, lookup] using hj'.2)
+          (f := fun _ b => decide (min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) -
+            cfg.lag ≤ b.round)) (k := j) (fb := s.store.junk)
+          (by simpa [Store.blk, lookup] using hj'.2)
         change (j, (s.store.map.filter _).getD j s.store.junk) ∈ K
         rw [hraw]
         exact hi.known j hj'.1
@@ -696,16 +704,92 @@ theorem tryResume_of_idle {s : State Validator BlockId Payload} (h : s.recoverin
     tryResume cfg s = none := by
   unfold tryResume; rw [h]
 
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_store (s : State Validator BlockId Payload) :
+    s.hold.store = s.store := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_pending (s : State Validator BlockId Payload) :
+    s.hold.pending = s.pending := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_top (s : State Validator BlockId Payload) :
+    s.hold.top = s.top := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_own (s : State Validator BlockId Payload) :
+    s.hold.own = s.own := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_fired (s : State Validator BlockId Payload) :
+    s.hold.fired = s.fired := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_lo (s : State Validator BlockId Payload) :
+    s.hold.lo = s.lo := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_requested (s : State Validator BlockId Payload) :
+    s.hold.requested = s.requested := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_recovering (s : State Validator BlockId Payload) :
+    s.hold.recovering = s.recovering := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_offers (s : State Validator BlockId Payload) :
+    s.hold.offers = s.offers := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_asked (s : State Validator BlockId Payload) :
+    s.hold.asked = s.asked := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_decided (s : State Validator BlockId Payload) :
+    s.hold.decided = s.decided := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_lastProposed (s : State Validator BlockId Payload) :
+    s.hold.lastProposed = s.lastProposed := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_chain (s : State Validator BlockId Payload) :
+    s.hold.chain = s.chain := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_props (s : State Validator BlockId Payload) :
+    s.hold.props = s.props := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_cert (s : State Validator BlockId Payload) :
+    s.hold.cert = s.cert := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_certs (s : State Validator BlockId Payload) :
+    s.hold.certs = s.certs := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_owner (s : State Validator BlockId Payload) :
+    s.hold.owner = s.owner := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_sought (s : State Validator BlockId Payload) :
+    s.hold.sought = s.sought := rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+@[simp] theorem State.hold_certHeight (s : State Validator BlockId Payload) :
+    s.hold.certHeight = s.certHeight := rfl
+
 omit [Fintype Validator] in
 theorem settle_of_idle {s : State Validator BlockId Payload} (h : s.recovering = false) :
-    settle cfg s = quiesce cfg (passes cfg s) s := by
+    settle cfg s = quiesce cfg (passes cfg s.hold) s.hold := by
   unfold settle; rw [tryResume_of_idle h]
 
 omit [Fintype Validator] in
 /-- **A settle advances until nothing changes**, after a resume or not. -/
 theorem settle_cases (s : State Validator BlockId Payload) :
-    Node.settle cfg s = quiesce cfg (passes cfg s) s ∨ ∃ s₁, tryResume cfg s = some s₁ ∧
-      Node.settle cfg s = quiesce cfg (passes cfg s₁) s₁ := by
+    Node.settle cfg s = quiesce cfg (passes cfg s.hold) s.hold ∨ ∃ s₁, tryResume cfg s = some s₁ ∧
+      Node.settle cfg s = quiesce cfg (passes cfg s₁.hold) s₁.hold := by
   unfold Node.settle
   split
   · rename_i s₁ h; exact Or.inr ⟨s₁, h, rfl⟩
@@ -818,8 +902,8 @@ theorem Inv.settle {s : State Validator BlockId Payload}
     ∃ bs, Out bs (Node.settle cfg s).2 ∧
       Inv cfg (Node.settle cfg s).1 (K ∪ {x | x ∈ bs}) (B ++ bs) := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hr, h⟩ <;> rw [h]
-  · exact Inv.quiesce _ hi
-  · exact Inv.quiesce _ (hi.tryResume hr)
+  · exact Inv.quiesce _ hi.hold
+  · exact Inv.quiesce _ (hi.tryResume hr).hold
 
 omit [Fintype Validator] in
 theorem accept_base (st : Store Validator BlockId Payload) (id : BlockId)
@@ -1092,7 +1176,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
           · rw [hB.1, List.nil_append, List.mem_singleton] at hx
             subst hx; simp
         rw [settle_of_idle rfl]
-        obtain ⟨bs, ho, hi'⟩ := Inv.quiesce _ hi₀
+        obtain ⟨bs, ho, hi'⟩ := Inv.quiesce _ hi₀.hold
         refine ⟨e :: bs, ?_, ?_⟩
         · exact (out_built (cfg := cfg) [e]).append ho
         · refine (by simpa using hi' : Inv cfg _ (K ∪ {x | x ∈ [e]} ∪ {x | x ∈ bs}) (B ++ e :: bs)).mono

@@ -198,8 +198,10 @@ decision round.
 
 ### 3.4 Garbage collection
 
-The horizon is `G = min(F, t) − Λ`, where `t` is the node's round and
-`F` the round of the first slot that is not both decided and certified:
+The horizon is `G = min(F, t) − Λ`, where `t` is the lesser of the
+node's round and the round it held when it last began to settle
+(`State.hold`), and `F` the round of the first slot that is not both
+decided and certified:
 the slot round of the lesser of the next undecided slot and the height
 of the node's certificate (§3.8). This is the depth rule of
 `garbage.md` §6, with the frontier certified.
@@ -213,6 +215,14 @@ keeps it; one below it is dropped. A node whose horizon lags its peers'
 could check, and reject, a block they kept unchecked, so a node behind
 adopts the decisions its peers certified, and its horizon rises with
 theirs (§3.8, §13.6).
+
+A node may build several rounds in one settle. Its horizon then rises,
+until the next settle, to at most `Λ` below the round it began at, so
+every block it builds keeps its history above the horizon after the
+event that built it, where a peer behind it synchronises from (13.1).
+Measured against the horizon at the node's round now, a node behind
+could find that history pruned in the event that built the block, and
+lack it for good.
 
 The decider then runs on the original schedule. Every slot it still
 decides lies at `F` or above, and its decision reads only rounds from

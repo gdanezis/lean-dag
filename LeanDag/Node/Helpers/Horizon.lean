@@ -160,6 +160,10 @@ theorem decideStep_top (s : State Validator BlockId Payload) :
   all_goals exact (proposeAt_keeps _).2.2.1
 
 omit [Fintype Validator] in
+theorem Held.hold {s : State Validator BlockId Payload} (h : Held cfg s) : Held cfg s.hold :=
+  ⟨h.top, h.horizon, h.low, h.le_top, h.junk⟩
+
+omit [Fintype Validator] in
 theorem Held.decideStep {s : State Validator BlockId Payload} (h : Held cfg s) :
     Held cfg (Node.decideStep cfg s).1 :=
   h.grow (by rw [decideStep_store]; exact Grows.refl _) (by rw [decideStep_store])
@@ -178,7 +182,7 @@ theorem Held.collect {s : State Validator BlockId Payload} (h : Held cfg s) :
       obtain ⟨o, hoi, hor⟩ := h.top t ht
       have hF : cfg.per * (min s.lo s.certHeight / cfg.m) ≤ cfg.per * (s.lo / cfg.m) :=
         Nat.mul_le_mul_left _ (Nat.div_le_div_right (min_le_left _ _))
-      have hoG : min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤
+      have hoG : min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) - cfg.lag ≤
           (s.store.blk o).round := by
         omega
       refine ⟨⟨fun t' ht' => ?_, ?_, fun ht' => absurd (ht.symm.trans ht') (by simp),
@@ -187,12 +191,12 @@ theorem Held.collect {s : State Validator BlockId Payload} (h : Held cfg s) :
         subst ht'
         exact ⟨o, (mem_prune_ids (hG := hG.le)).mpr ⟨hoi, hoG⟩,
           by rw [prune_blk_round _ _ hoG]; exact hor⟩
-      · change min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤
+      · change min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) - cfg.lag ≤
           cfg.per * (s.lo / cfg.m)
         omega
       · rw [ht, Option.some.injEq] at ht'
         subst ht'
-        change min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤ t
+        change min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) - cfg.lag ≤ t
         omega
     · exact ⟨h, Keeps.refl _⟩
   · exact ⟨h, Keeps.refl _⟩
@@ -234,8 +238,8 @@ omit [Fintype Validator] in
 theorem Held.settle {s : State Validator BlockId Payload} (h : Held cfg s) :
     Held cfg (Node.settle cfg s).1 := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hj, he⟩ <;> rw [he]
-  · exact quiesce_ind (fun _ h => h.advance) _ _ h
-  · exact quiesce_ind (fun _ h => h.advance) _ _ (h.tryResume hj)
+  · exact quiesce_ind (fun _ h => h.advance) _ _ h.hold
+  · exact quiesce_ind (fun _ h => h.advance) _ _ (h.tryResume hj).hold
 
 omit [Fintype Validator] in
 /-- A round to bootstrap at has an attested base. -/

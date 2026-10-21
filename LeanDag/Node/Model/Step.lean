@@ -56,13 +56,15 @@ input `i` in the state `s`: the new state and the outputs.
   block that needs it; a request is answered with the blocks asked for
   that the store holds and their histories above the asker's horizon.
 * **Collecting** (`collect`): the horizon rises to `Λ` below the lesser
-  of the decided frontier, the certified frontier and the node's round,
-  and what lies below it is dropped.
+  of the decided frontier, the certified frontier and the node's round
+  when it began to settle, and what lies below it is dropped.
 * **Settling** (`settle`, `quiesce`): after each change to its state,
-  peers' proposals included, the node builds, decides, collects and
-  accepts what that allows, in passes, until a pass changes none of its
-  top, its horizon, its pending blocks, its next undecided slot and its
-  certificate's height.
+  peers' proposals included, the node holds its top round
+  (`State.hold`), then builds, decides, collects and accepts what that
+  allows, in passes, until a pass changes none of its top, its horizon,
+  its pending blocks, its next undecided slot and its certificate's
+  height. A block it builds then keeps its history above the horizon
+  until the next change.
 
 * **Restarting** (`State.recover`): a crash keeps the store, the next
   slot and the top, and loses what is pending, the timers and the
@@ -148,6 +150,8 @@ structure State where
   owner : List (BlockId × (Validator × ℕ))
   /-- The highest height whose decisions the node asked for. -/
   sought : ℕ
+  /-- The top round when the node last began to settle. -/
+  held : ℕ
 
 variable (cfg : Config Validator BlockId Payload)
 
@@ -157,7 +161,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
   ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false, [], 0, [], 0, cfg.root, [], none, [],
-    [], 0⟩
+    [], 0, 0⟩
 
 /-- **Accept a block**: below the horizon it is dropped; at the horizon it
 is kept without its references, as the cut keeps it; above, it is kept if
@@ -549,13 +553,13 @@ def answer (s : State Validator BlockId Payload) (peer : Validator) (G : ℕ)
 
 /-- **Raise the horizon** (`docs/validator.md` §3.4) to `Λ` below the
 lesser of the round of the first slot neither decided nor certified,
-and the node's own round; drop what lies below it, and announce the
-certificate. -/
+and the node's own round when it began to settle; drop what lies below
+it, and announce the certificate. -/
 def collect (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   match s.top with
   | some t =>
-    let G := min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag
+    let G := min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) - cfg.lag
     if h : s.store.base < G then
       let st := s.store.prune G h.le
       let pend := s.pending.filter fun e => G ≤ e.2.round
@@ -624,13 +628,18 @@ def passes (s : State Validator BlockId Payload) : ℕ :=
   let L := max s.lo (decidable cfg B)
   s.pending.length + 2 * B + 2 * L + 1
 
+/-- The state with its top round held: what bounds the horizon until the
+next settle. -/
+def State.hold (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
+  { s with held := s.top.getD 0 }
+
 /-- **Resume if it can, then advance until nothing changes**, after a
-change to the state. -/
+change to the state, holding the top round it begins at. -/
 def settle (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   match tryResume cfg s with
-  | some s' => quiesce cfg (passes cfg s') s'
-  | none => quiesce cfg (passes cfg s) s
+  | some s' => quiesce cfg (passes cfg s'.hold) s'.hold
+  | none => quiesce cfg (passes cfg s.hold) s.hold
 
 /-- **What the node persists**: its accepted blocks, the horizon, the next
 undecided slot, its top round and its own block there, its decisions,
@@ -646,7 +655,7 @@ the node was away; recovering. -/
 def State.recover (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
   let s' := { s with pending := [], fired := (s.top.map fun t => {t}).getD ∅ }
   let s'' := { s' with requested := [], recovering := true, offers := [], asked := 0 }
-  { s'' with props := [], certs := [], sought := 0 }
+  { s'' with props := [], certs := [], sought := 0, held := 0 }
 
 /-- **Resume from what was persisted**: the store rebuilt from the window
 at the horizon, if the window is closed under references one round below
@@ -665,7 +674,7 @@ def resume (ps : Persisted Validator BlockId Payload) : Option (State Validator 
     let st : Store Validator BlockId Payload :=
       ⟨map, ids, cfg.genesis, ps.horizon, h.1, h.2.1, h.2.2⟩
     some ⟨st, [], ps.top, ps.own, (ps.top.map fun t => {t}).getD ∅, ps.lo, [], true, [], 0,
-      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, [], ps.owner, 0⟩
+      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, [], ps.owner, 0, 0⟩
   else none
 
 /-- **Try to bootstrap** from what was offered: if the node bootstraps,

@@ -116,7 +116,7 @@ theorem rises_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
 
 theorem rises_settle {s : State Validator BlockId Payload} (hs : s.recovering = false) :
     Rises s (Node.settle cfg s).1 := by
-  rw [settle_of_idle hs]; exact rises_quiesce _ s
+  rw [settle_of_idle hs]; exact rises_quiesce _ s.hold
 
 /-- **A step of a node not recovering**, other than a restart, raises
 its top, its next undecided slot and its certificate's height, or keeps

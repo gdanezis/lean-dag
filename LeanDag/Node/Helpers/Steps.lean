@@ -65,10 +65,12 @@ theorem collect_eq (s : State Validator BlockId Payload)
     (h : (Node.collect cfg s).1.store.base = s.store.base) : Node.collect cfg s = (s, []) := by
   rcases hs : s.top with _ | t
   · simp only [Node.collect, hs]
-  · by_cases hG : s.store.base < min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag
+  · by_cases hG : s.store.base < min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) -
+        cfg.lag
     · exfalso
       simp only [Node.collect, hs, dif_pos hG] at h
-      change min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag = s.store.base at h
+      change min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) - cfg.lag =
+        s.store.base at h
       omega
     · simp only [Node.collect, hs, dif_neg hG]
 
@@ -208,8 +210,9 @@ theorem settle_keeps {s : State Validator BlockId Payload}
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h] at hR hb ⊢
   · exact quiesce_keeps _ hR hb hp hf hy
   · obtain ⟨hst, hpd, -⟩ := tryResume_keeps hj
-    refine quiesce_keeps _ hR (by rw [hb, hst]) (by rw [hpd]; exact hp) hf ?_
-    rw [hpd, hst]
+    refine quiesce_keeps _ hR (by rw [hb, State.hold_store, hst])
+      (by rw [State.hold_pending, hpd]; exact hp) hf ?_
+    rw [State.hold_pending, State.hold_store, hpd, hst]
     exact hy
 
 omit [Fintype Validator] in
@@ -228,9 +231,9 @@ theorem settle_sub (s : State Validator BlockId Payload) :
     (∀ e ∈ (Node.settle cfg s).1.pending, e ∈ s.pending) ∧
       ∀ e ∈ (Node.settle cfg s).1.requested, e ∈ s.requested := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h]
-  · exact quiesce_sub _ s
+  · exact quiesce_sub _ s.hold
   · obtain ⟨-, hpd, hrq⟩ := tryResume_keeps hj
-    have := quiesce_sub (cfg := cfg) (passes cfg s₁) s₁
+    have := quiesce_sub (cfg := cfg) (passes cfg s₁.hold) s₁.hold
     exact ⟨fun e he => hpd ▸ this.1 e he, fun e he => hrq ▸ this.2 e he⟩
 
 variable (cfg) in
@@ -733,8 +736,8 @@ theorem settle_persist (s : State Validator BlockId Payload)
     ∀ e ∈ persists (Node.settle cfg s).2, e.1 ∈ (Node.settle cfg s).1.store.ids ∧
       (Node.settle cfg s).1.store.map.getD e.1 (Node.settle cfg s).1.store.junk = e.2 := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h] at hb ⊢
-  · exact quiesce_persist _ s hb
-  · exact quiesce_persist _ s₁ (by rw [hb, (tryResume_keeps hj).1])
+  · exact quiesce_persist _ s.hold hb
+  · exact quiesce_persist _ s₁.hold (by rw [hb, State.hold_store, (tryResume_keeps hj).1])
 
 omit [Fintype Validator] in
 theorem settle_persist_of {s₀ : State Validator BlockId Payload}

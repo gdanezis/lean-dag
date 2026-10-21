@@ -512,11 +512,11 @@ theorem CommitInv.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     CommitInv cfg U (Node.settle cfg s).1 (cs ++ commitsOf (Node.settle cfg s).2) ∧
       IsCut U (Node.settle cfg s).1.store := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hj, he⟩ <;> rw [he] at hb ⊢
-  · exact CommitInv.quiesce hg hσ ht _ h hc hh hp hb
+  · exact CommitInv.quiesce hg hσ ht _ h hc hh.hold hp hb
   · obtain ⟨-, -, -, -, -, -, hst, hpd, -, -, hlo, -⟩ := tryResume_some hj
     have h₁ : CommitInv cfg U s₁ cs := h.keeps hlo (by rw [hst]; exact Keeps.refl _) hc
-    exact CommitInv.quiesce hg hσ ht _ h₁ (by rw [hst]; exact hc) (hh.tryResume hj)
-      (by rw [hpd]; exact hp) hb
+    exact CommitInv.quiesce hg hσ ht _ h₁ (by rw [State.hold_store, hst]; exact hc)
+      (hh.tryResume hj).hold (by rw [State.hold_pending, hpd]; exact hp) hb
 
 /-- **A step keeps the invariant, and the store a cut.** -/
 theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)

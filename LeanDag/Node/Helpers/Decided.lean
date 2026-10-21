@@ -308,7 +308,7 @@ theorem settle_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
           · cases hr
         · cases hr
       · cases hr
-    obtain ⟨h₂, hL₂⟩ := quiesce_appends (cfg := cfg) (passes cfg s₁)
+    obtain ⟨h₂, hL₂⟩ := quiesce_appends (cfg := cfg) (passes cfg s₁.hold) (s := s₁.hold)
       (hL.of_eq hd.1 hlo hd.2.1 hd.2.2)
     exact ⟨(Appends.quiet hd.1 rfl fun _ _ h => absurd h List.not_mem_nil).trans h₂, hL₂⟩
 

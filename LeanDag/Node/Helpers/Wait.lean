@@ -175,7 +175,7 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
       (Node.settle cfg s₀).1.recovering = false ∧ (Node.settle cfg s₀).1.fired ⊆ s₀.fired :=
     fun s₀ h₀ => by
       rw [settle_of_idle h₀]
-      exact ⟨(calm_quiesce _ s₀).2.trans h₀, (calm_quiesce _ s₀).1⟩
+      exact ⟨(calm_quiesce _ s₀.hold).2.trans h₀, (calm_quiesce _ s₀.hold).1⟩
   cases inp with
   | start =>
     simp only [Node.step]
@@ -342,7 +342,7 @@ theorem OwnTop.collect {s : State Validator BlockId Payload} (h : OwnTop cfg s) 
       rw [ht, Option.some.injEq] at hr
       subst hr
       obtain ⟨j, hj, hji, hjr, hjc⟩ := h t ht
-      have hle : min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤
+      have hle : min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) - cfg.lag ≤
           (s.store.blk j).round := by rw [hjr]; omega
       refine ⟨j, hj, mem_prune_ids (hG := hG.le) |>.mpr ⟨hji, hle⟩,
         by rw [prune_blk_round _ hG.le hle, hjr], ?_⟩
@@ -528,6 +528,12 @@ structure BuildState (U : BlockRecord Validator BlockId Payload P H)
   fired : ∀ r ∈ x.fired, r ∈ s.fired ∨ inp = .timer r
 
 omit [Fintype Validator] in
+theorem BuildState.hold {U : BlockRecord Validator BlockId Payload P H}
+    {s x : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
+    (h : BuildState cfg U s inp x) : BuildState cfg U s inp x.hold :=
+  ⟨h.cut, h.held.hold, h.own, h.retains, h.base, h.fired⟩
+
+omit [Fintype Validator] in
 theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H}
     {K : Set (BlockId × Block Validator BlockId Payload)} (hg : Ground U K cfg.q)
     {s x y : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
@@ -604,7 +610,7 @@ theorem settle_witness {U : BlockRecord Validator BlockId Payload P H}
     ∀ e ∈ persists (Node.settle cfg s₀).2, ∃ x y o, BuildState cfg U s inp x ∧
       Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o := by
   rw [settle_of_idle hs] at hK ⊢
-  exact quiesce_witness hg _ s₀ h₀ hp hK
+  exact quiesce_witness hg _ s₀.hold h₀.hold hp hK
 
 /-- **Each block a step persists**, of a node not recovering and other
 than a restart, is the genesis block or comes from one build, at a state
@@ -867,7 +873,7 @@ theorem timersBuilt_step {s : State Validator BlockId Payload}
     rw [settle_of_idle h₀]
     exact (quiesce_rel (P := fun _ => True) (R := fun _ out _ => TimersBuilt cfg out)
       (fun _ => TimersBuilt.of_none fun _ _ h => absurd h List.not_mem_nil)
-      (fun _ _ _ _ _ h₁ h₂ => h₁.append h₂) (fun s _ => ⟨timersBuilt_advance s, trivial⟩) _ s₀
+      (fun _ _ _ _ _ h₁ h₂ => h₁.append h₂) (fun s _ => ⟨timersBuilt_advance s, trivial⟩) _ s₀.hold
       trivial).1
   cases inp with
   | start =>
@@ -1051,7 +1057,8 @@ theorem retains_step {s : State Validator BlockId Payload} {inp : Input Validato
       Grows s.store s₀.store → s₀.store.base = s.store.base →
       Retains s.store (Node.settle cfg s₀).1.store := fun s₀ h₀ hg hb => by
     rw [settle_of_idle h₀]
-    exact (Retains.of_grows hg hb).trans (retains_quiesce _ s₀).1 (retains_quiesce _ s₀).2
+    exact (Retains.of_grows hg hb).trans (retains_quiesce _ s₀.hold).1
+      (retains_quiesce _ s₀.hold).2
   cases inp with
   | start =>
     simp only [Node.step]

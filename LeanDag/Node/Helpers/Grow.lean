@@ -150,9 +150,9 @@ omit [Fintype Validator] in
 theorem Grows.settle (s : State Validator BlockId Payload) :
     Grows s.store (Node.settle cfg s).1.store := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h]
-  · exact Grows.quiesce _ s
+  · exact Grows.quiesce _ s.hold
   · obtain ⟨-, -, -, -, -, -, hst, -⟩ := tryResume_some hj
-    exact hst ▸ Grows.quiesce _ s₁
+    exact hst ▸ Grows.quiesce _ s₁.hold
 
 omit [Fintype Validator] in
 theorem Grows.settle_of {st : Store Validator BlockId Payload} (s : State Validator BlockId Payload)

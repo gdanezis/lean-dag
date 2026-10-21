@@ -260,7 +260,7 @@ theorem collect_stays {s : State Validator BlockId Payload} (hA : AgreesWith g s
     dsimp only
     split
     · rename_i hG
-      set G := min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag
+      set G := min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) - cfg.lag
       refine ⟨hA.prune hG.le, fun e he => (List.mem_filter.mp he).1, ?_⟩
       rcases hst with h | h | h
       · by_cases hr : G ≤ (s.store.blk y.1).round
@@ -347,10 +347,12 @@ theorem settle_stays {x : State Validator BlockId Payload} (hA : AgreesWith g x.
     (hv : ValidUnder cfg g y.2 ∨ y.2.round ≤ x.store.base) (hst : Stays x.store x.pending y) :
     Stays (Node.settle cfg x).1.store (Node.settle cfg x).1.pending y := by
   rcases settle_cases (cfg := cfg) x with h | ⟨x₁, hj, h⟩ <;> rw [h] at hO ⊢
-  · exact (quiesce_stays hy _ hA hP hO hv hst).2.2
+  · exact (quiesce_stays (x := x.hold) hy _ hA hP hO hv hst).2.2
   · obtain ⟨hst', hpd, -⟩ := tryResume_keeps hj
-    refine (quiesce_stays hy _ (by rw [hst']; exact hA) (by rw [hpd]; exact hP) hO
-      (by rw [hst']; exact hv) (by rw [hst', hpd]; exact hst)).2.2
+    refine (quiesce_stays (x := x₁.hold) hy _ (by rw [State.hold_store, hst']; exact hA)
+      (by rw [State.hold_pending, hpd]; exact hP) hO
+      (by rw [State.hold_store, hst']; exact hv)
+      (by rw [State.hold_store, State.hold_pending, hst', hpd]; exact hst)).2.2
 
 /-! ## Staying through a step -/
 
