@@ -8,10 +8,12 @@ Options, each `--name value`: `row`, `n`, `f`, `c`, `seed`, `horizon`,
 `crash` (`node@time,…`), `recover` (`node@down-up,…`), `byz` (`node,…`),
 `byz-until`, `withhold` (`z,v,R`: node `z` withholds its round-`R` block
 from `v`), `reveal-after`, `adv` (`node,…`: attackers), `slow` (`node,…`)
-and `slow-delay` (the least delay to or from a slow node), `leaders`
+and `slow-delay` (the least delay to or from a slow node) and `slow-until`
+(the tick it stops being slow), `leaders`
 (`node,…`: the leader schedule, cycled), `attacks`
 (`fake-base`, `split-base`, `fake-cert`, `conflict-proposals`,
-`invalid-blocks`, `forged-author`, `flood`, `junk-at-cut`, `twin-split`, comma-separated), `limit`
+`invalid-blocks`, `forged-author`, `flood`, `junk-at-cut`, `twin-split`, `hide`,
+comma-separated), `limit`
 (`ρ,W`: the rate limiter's quota and window) and `verify`
 (`true` or `false`: whether the network checks signatures).
 -/
@@ -69,6 +71,7 @@ def parseArgs : List String → Scenario → Except String Scenario
       | "--adv" => pure { sc with adv := parseNats v }
       | "--slow" => pure { sc with slow := parseNats v }
       | "--slow-delay" => pure { sc with slowDelay := ← nat }
+      | "--slow-until" => pure { sc with slowUntil := some (← nat) }
       | "--leaders" => pure { sc with leaders := parseNats v }
       | "--limit" => match parseNats v with
         | [ρ, W] => pure { sc with limit := some (ρ, W) }
@@ -78,6 +81,7 @@ def parseArgs : List String → Scenario → Except String Scenario
           | "fake-base" => pure Attack.fakeBase
           | "split-base" => pure Attack.splitBase
           | "fake-cert" => pure Attack.fakeCert
+          | "hide" => pure Attack.hide
           | "conflict-proposals" => pure Attack.conflictProposals
           | "invalid-blocks" => pure Attack.invalidBlocks
           | "forged-author" => pure Attack.forgedAuthor

@@ -78,6 +78,9 @@ inductive Attack where
   /-- Instead of each block, send each other node its own twin of it,
   with its own payload; its later blocks reference the block itself. -/
   | twinSplit
+  /-- Send its blocks to every node but the slow ones, and answer none of
+  their requests for blocks. -/
+  | hide
   deriving Repr, DecidableEq
 
 /-- **A scenario.** Times are in ticks. -/
@@ -131,9 +134,10 @@ structure Scenario where
   above a node's top. -/
   limit : Option (ℕ × ℕ) := none
   /-- Slow nodes: every message to or from one takes at least `slowDelay`
-  ticks past GST. -/
+  ticks past GST, and before `slowUntil` if set. -/
   slow : List ℕ := []
   slowDelay : ℕ := 0
+  slowUntil : Option ℕ := none
   /-- The leader schedule, cycled, if not round robin. -/
   leaders : List ℕ := []
   deriving Repr
@@ -316,7 +320,8 @@ def delay (t : ℕ) (g : StdGen) : ℕ × StdGen :=
 either is. -/
 def delayAt (src dst t : ℕ) (g : StdGen) : ℕ × StdGen :=
   let (dt, g') := delay sc t g
-  if sc.gst ≤ t && (sc.slow.contains src || sc.slow.contains dst) then (max dt sc.slowDelay, g')
+  if sc.gst ≤ t && (sc.slowUntil.all (t < ·)) && (sc.slow.contains src || sc.slow.contains dst) then
+    (max dt sc.slowDelay, g')
   else (dt, g')
 
 /-- The inputs an agent's outputs at time `t` send. -/
@@ -534,6 +539,13 @@ def attacked (agents : Array (Agent n)) (src t : ℕ) (a : Agent n) (st : State 
           some (.send v (idOf bv) bv)) ++ junk ++ twins ++ forged
       else o :: junk ++ twins ++ forged
     | o => [o]
+  -- blocks kept from the slow nodes
+  let out := if has .hide then out.flatMap fun (o : Output (Fin n) ℕ ℕ) => match o with
+      | .broadcast id b => (List.finRange n).filterMap fun v =>
+        if v = a.node ∨ sc.slow.contains v.val then none else some (.send v id b)
+      | .send v id b => if sc.slow.contains v.val then [] else [.send v id b]
+      | o => [o]
+    else out
   -- proposals
   if has .conflictProposals then
     let props := out.filterMap fun (o : Output (Fin n) ℕ ℕ) => match o with

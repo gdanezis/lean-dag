@@ -840,11 +840,14 @@ rejoins by bootstrap (§3.6).
      references, one referencing a block that does not exist, and one
      under an identifier that is not its hash;
    - `forgedAuthor`: with each block it broadcasts one in the next node's
-     name.
+     name;
+   - `hide`: it sends its blocks to every node but the slow ones
+     (`Scenario.slow`, until `Scenario.slowUntil`), and answers none of
+     their requests for blocks.
 
    The network checks signatures (`Scenario.verify`), which is what the
-   claims over traces assume (`TimelyAuthentic`, `TimelyCerts`): a block in an honest author's name must be one that
-   author made, a certificate's honest signers must have signed its
+   claims over traces assume (`TimelyAuthentic`, `TimelyCerts`): a block
+   in an honest author's name must be one that author made, a certificate's honest signers must have signed its
    head at its height, and a message's sender is the node that sent
    it.
 
@@ -1929,7 +1932,16 @@ what removed each:
 | D14 | rate limiting with `W = 2` and `Λ = 6`, after a restart | a node resumed, then fell behind beyond its window; it dropped every block above it and, no longer recovering, asked for no base, though its adopted decisions lay a hundred slots above its round | a node that drops a block above its window while its certified frontier lies more than `Λ` above its top recovers again (`behind`, §3.9) |
 | D15 | a restart under rate limiting with `W = 2`, then a crash | a recovering node jumped to a horizon a peer had offered and asked that peer for the blocks above it, which the peer had pruned by then | a peer answering a base request sends the blocks of its store with its answer (§3.6) |
 
-Of 400 runs after the fixes, none stalled. Without rate limiting, a
-lagging node that does not recover could still need a block its peers
-have pruned, and it does not bootstrap; the fuzzer has not produced
-such a run.
+Of 400 runs after the fixes, none stalled. One class remains open,
+found by a targeted run rather than the fuzzer
+(`LeanDagTest/Node/Adversary.lean`): without rate limiting, a node that
+is not recovering can need a block its peers have pruned, and nothing
+makes it recover. At `n = 4` and `Λ = 2`, node `3` hides its blocks from
+node `2` (`hide`), and messages to and from node `2` take twelve ticks
+until tick 50. The honest blocks of round 1 reference node `3`'s genesis
+block; node `2` asks for it after its peers have pruned round 0, and
+stays at round 1 to tick 900 while it adopts its peers' certified
+decisions, however early its delays return to normal. Its peers lose
+the slots it leads, reaching round 142 against 288 with rate limiting,
+under which it falls behind, recovers and bootstraps (`behind`, §3.9).
+At `n = 7` with two attackers it stays at round 1 in five seeds of five.

@@ -70,6 +70,29 @@ def attackLine (sc : Scenario) : String :=
 #eval attackLine (attackedBy [.fakeBase, .splitBase, .fakeCert, .conflictProposals,
   .invalidBlocks, .forgedAuthor])
 
+/-! ## A node stranded below its peers' horizon
+
+Node `3` sends its blocks to every node but node `2`, and answers none of
+node `2`'s requests; messages to and from node `2` take twelve ticks
+until tick `50`. The honest blocks of round `1` reference node `3`'s
+genesis block, which node `2` asks for after its peers have pruned it.
+Without rate limiting node `2` stays at round `1`, adopting its peers'
+certified decisions; with a quota and a window it falls behind, recovers
+and bootstraps (§3.9). The first line is an open case. -/
+
+/-- A slow node `2`, hidden from by node `3`. -/
+def hidden (limit : Option (ℕ × ℕ)) : Scenario :=
+  { horizon := 300, row := "mysticeti", adv := [3], attacks := [.hide], slow := [2],
+    slowDelay := 12, slowUntil := some 50, limit := limit }
+
+/-- info: "[(some 47), (some 47), (some 1)] [47, 47, 45] true true true 0 0" -/
+#guard_msgs in
+#eval attackLine (hidden none)
+
+/-- info: "[(some 90), (some 90), (some 89)] [88, 88, 87] true true true 1 0" -/
+#guard_msgs in
+#eval attackLine (hidden (some (4, 8)))
+
 /-! ## Without the signature checks -/
 
 /-- info: "[(some 58), (some 58), (some 58)] [56, 56, 56] false false true 1 0" -/
