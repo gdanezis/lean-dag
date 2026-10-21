@@ -706,7 +706,9 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
     · refine hpre (Node.settle cfg _) _ ?_ (hset _ rfl rfl rfl rfl rfl rfl hrec)
       intro c; split_ifs <;> simp <;> intro h <;> obtain ⟨_, _, he⟩ := evidence_relay h <;>
         cases he
-    · rw [if_neg (by simp [hrec])]; exact hnil
+    · split
+      · exact ⟨hK.frame rfl rfl rfl rfl rfl rfl, hcov.frame rfl rfl rfl, by simp⟩
+      · exact hnil
   | timer r => rw [step_timer_of hrec]; exact hset _ rfl rfl rfl rfl rfl rfl hrec
   | fetchRequest peer G ids => exact ⟨hK, hcov, fun c hc => by simp [Node.step, answer] at hc⟩
   | restart => exact absurd rfl hr
@@ -788,8 +790,10 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
       · simp at hc
     · simp at hc
 
-/-- **A run keeps what the node keeps**, under the step's conditions. -/
-theorem Kept.run {P : List (Validator × ℕ × BlockId)} (hP : ∀ x ∈ P, x.1 ≠ cfg.me) :
+/-- **A run keeps what the node keeps**, under the step's conditions,
+without rate limiting. -/
+theorem Kept.run {P : List (Validator × ℕ × BlockId)} (hl : cfg.limit = none)
+    (hP : ∀ x ∈ P, x.1 ≠ cfg.me) :
     ∀ (is : List (Input Validator BlockId Payload)) {s : State Validator BlockId Payload},
       Kept cfg P s → Covered cfg s → s.recovering = false → (∀ i ∈ is, i ≠ .restart) →
       (∀ x ∈ P, ∀ u k h, Input.proposal u k h ∈ is → x.1 = u → x.2.1 = k → x.2.2 = h) →
@@ -801,7 +805,7 @@ theorem Kept.run {P : List (Validator × ℕ × BlockId)} (hP : ∀ x ∈ P, x.1
     have hri : i ≠ .restart := hr i (List.mem_cons_self ..)
     obtain ⟨hK₁, hcov₁, -⟩ := hK.step hcov hP hrec hri
       (fun x hx u k h hi => hc x hx u k h (hi ▸ List.mem_cons_self ..))
-    exact Kept.run hP is hK₁ hcov₁ (step_calm hrec hri).1
+    exact Kept.run hl hP is hK₁ hcov₁ (step_calm hl hrec hri).1
       (fun j hj => hr j (List.mem_cons_of_mem _ hj))
       (fun x hx u k h hi => hc x hx u k h (List.mem_cons_of_mem _ hi))
 
@@ -817,11 +821,11 @@ theorem Covered.init : Covered cfg (State.init cfg) := by
   simp [cfg.m_pos]
 
 /-- **A peer's proposal kept from its receipt**: over a run without a
-restart, a proposal received at most `ahead` above the next undecided
+restart or rate limiting, a proposal received at most `ahead` above the next undecided
 slot, from a peer that sends no other head at its height, is kept at
 the end, or the certificate reaches its height. -/
 theorem kept_peer {u : Validator} {k : ℕ} {h : BlockId}
-    {is₁ is₂ : List (Input Validator BlockId Payload)} (hu : u ≠ cfg.me)
+    {is₁ is₂ : List (Input Validator BlockId Payload)} (hl : cfg.limit = none) (hu : u ≠ cfg.me)
     (hr : ∀ i ∈ is₁ ++ .proposal u k h :: is₂, i ≠ .restart)
     (hw : k ≤ (Node.run cfg (State.init cfg) is₁).1.lo + cfg.ahead)
     (hc : ∀ h', Input.proposal u k h' ∈ is₂ → h' = h) :
@@ -829,7 +833,7 @@ theorem kept_peer {u : Validator} {k : ℕ} {h : BlockId}
     Kept cfg [] s ∧ Covered cfg s ∧ ((u, k, h) ∈ s.props ∨ k ≤ s.certHeight) := by
   intro s
   have hr₁ : ∀ i ∈ is₁, i ≠ .restart := fun i hi => hr i (List.mem_append_left _ hi)
-  obtain ⟨hK₀, hcov₀, hrec₀⟩ := Kept.run (P := []) (cfg := cfg) (by simp) is₁ Kept.init
+  obtain ⟨hK₀, hcov₀, hrec₀⟩ := Kept.run (P := []) (cfg := cfg) hl (by simp) is₁ Kept.init
     Covered.init rfl hr₁ (by simp)
   set s₀ := (Node.run cfg (State.init cfg) is₁).1
   -- the receipt
@@ -846,8 +850,8 @@ theorem kept_peer {u : Validator} {k : ℕ} {h : BlockId}
     exact (hK'.settle (by simpa using hu) hrec₀).imp_right And.left
   obtain ⟨hK₁, hcov₁⟩ := hKc
   have hrec₁ : s₁.recovering = false :=
-    (step_calm hrec₀ (hr _ (List.mem_append_right _ (List.mem_cons_self ..)))).1
-  obtain ⟨hK₂, hcov₂, -⟩ := Kept.run (cfg := cfg) (P := [(u, k, h)]) (by simpa using hu) is₂
+    (step_calm hl hrec₀ (hr _ (List.mem_append_right _ (List.mem_cons_self ..)))).1
+  obtain ⟨hK₂, hcov₂, -⟩ := Kept.run (cfg := cfg) (P := [(u, k, h)]) hl (by simpa using hu) is₂
     hK₁ hcov₁ hrec₁ (fun i hi => hr i (List.mem_append_right _ (List.mem_cons_of_mem _ hi)))
     (fun x hx u' k' h' hi h1 h2 => by
       rw [List.mem_singleton.mp hx] at h1 h2 ⊢

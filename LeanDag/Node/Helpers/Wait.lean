@@ -170,10 +170,11 @@ theorem calm_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
   (quiesce_rel (P := fun _ => True) (R := fun a _ b => Calm a b) Calm.refl
     (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂) (fun s _ => ⟨calm_advance s, trivial⟩) n s trivial).1
 
-/-- **A step of a node not recovering, other than a restart**, starts no
-recovery, and fires a round's timer only on that timer's input. -/
+/-- **A step of a node not recovering, other than a restart, without rate
+limiting**, starts no recovery, and fires a round's timer only on that
+timer's input. -/
 theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (hs : s.recovering = false) (hr : inp ≠ .restart) :
+    (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
     (Node.step cfg s inp).1.recovering = false ∧
       ∀ r ∈ (Node.step cfg s inp).1.fired, r ∈ s.fired ∨ inp = .timer r := by
   have key : ∀ s₀ : State Validator BlockId Payload, s₀.recovering = false →
@@ -197,7 +198,7 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
     · refine ⟨(key _ (by exact hs)).1, fun r h => Or.inl ?_⟩
       have := (key _ (by exact hs)).2 h
       exact this
-    · rw [if_neg (by simp [hs])]; exact ⟨hs, fun r h => Or.inl h⟩
+    · rw [if_neg (by simp [hs, behind_of hl])]; exact ⟨hs, fun r h => Or.inl h⟩
   | timer t =>
     refine ⟨(key _ (by exact hs)).1, fun r h => ?_⟩
     have := (key _ (by exact hs)).2 h
@@ -234,18 +235,18 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
     · exact ⟨hs, fun r h => Or.inl h⟩
   | _ => exact ⟨hs, fun r h => Or.inl h⟩
 
-/-- **Along a trace without restarts at `v`**, node `v` never recovers,
-and each round whose timer it counts as fired before event `i` had its
-timer input at an earlier event. -/
+/-- **Along a trace without restarts at `v`, without rate limiting**, node
+`v` never recovers, and each round whose timer it counts as fired before
+event `i` had its timer input at an earlier event. -/
 theorem fired_before {tr : Trace Validator BlockId Payload} {v : Validator}
-    (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) :
+    (hl : cfg.limit = none) (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) :
     ∀ i, (stateBefore cfg tr i v).recovering = false ∧
       ∀ r ∈ (stateBefore cfg tr i v).fired, ∃ j < i, tr[j]? = some (v, Input.timer r)
   | 0 => by
     refine ⟨rfl, fun r hr => ?_⟩
     simp [stateBefore, inputsBefore, run, State.init] at hr
   | i + 1 => by
-    obtain ⟨ih₁, ih₂⟩ := fired_before hnr i
+    obtain ⟨ih₁, ih₂⟩ := fired_before hl hnr i
     rcases he : tr[i]? with _ | ⟨w, inp⟩
     · have hlen : tr.length ≤ i := List.getElem?_eq_none_iff.mp he
       have heq : stateBefore cfg tr (i + 1) v = stateBefore cfg tr i v := by
@@ -258,7 +259,7 @@ theorem fired_before {tr : Trace Validator BlockId Payload} {v : Validator}
       · rename_i hw
         subst hw
         have hr : inp ≠ .restart := fun h => hnr i (by rw [he, h])
-        obtain ⟨h₁, h₂⟩ := step_calm (cfg := cfg.at w) ih₁ hr
+        obtain ⟨h₁, h₂⟩ := step_calm (cfg := cfg.at w) hl ih₁ hr
         refine ⟨h₁, fun r hr' => ?_⟩
         rcases h₂ r hr' with h | rfl
         · exact (ih₂ r h).imp fun j ⟨hj, h⟩ => ⟨by omega, h⟩
@@ -402,7 +403,9 @@ theorem OwnTop.step {s : State Validator BlockId Payload} {inp : Input Validator
     simp only [Node.step]
     split
     · exact OwnTop.settle (h.grow (Grows.flush _ _ _) (flush_base _ _ _) rfl rfl) hs
-    · rw [if_neg (by simp [hs])]; exact h
+    · split
+      · exact h.grow (Grows.refl _) rfl rfl rfl
+      · exact h
   | timer t => exact OwnTop.settle (h.grow (Grows.refl _) rfl rfl rfl) hs
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>
@@ -431,14 +434,14 @@ theorem OwnTop.step {s : State Validator BlockId Payload} {inp : Input Validator
     · exact h
   | _ => exact h
 
-/-- **Along a trace without restarts at `v`**, node `v`'s own block at its
-top is stored before every event. -/
+/-- **Along a trace without restarts at `v`, without rate limiting**,
+node `v`'s own block at its top is stored before every event. -/
 theorem ownTop_before {tr : Trace Validator BlockId Payload} {v : Validator}
-    (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) :
+    (hl : cfg.limit = none) (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) :
     ∀ i, OwnTop (cfg.at v) (stateBefore cfg tr i v)
   | 0 => fun r hr => by simp [stateBefore, inputsBefore, run, State.init] at hr
   | i + 1 => by
-    have ih := ownTop_before hnr i
+    have ih := ownTop_before hl hnr i
     rcases he : tr[i]? with _ | ⟨w, inp⟩
     · have hlen : tr.length ≤ i := List.getElem?_eq_none_iff.mp he
       have heq : stateBefore cfg tr (i + 1) v = stateBefore cfg tr i v := by
@@ -449,7 +452,7 @@ theorem ownTop_before {tr : Trace Validator BlockId Payload} {v : Validator}
       split
       · rename_i hw
         subst hw
-        exact ih.step (fired_before (cfg := cfg) hnr i).1 fun h => hnr i (by rw [he, h])
+        exact ih.step (fired_before (cfg := cfg) hl hnr i).1 fun h => hnr i (by rw [he, h])
       · exact ih
 
 /-- **A store retains another's blocks** at or above its horizon, at
@@ -899,7 +902,9 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
           cases hoe
         · split at he <;> simp [persists] at he
       · unfold askOut at he; split at he <;> simp [persists] at he
-    · exact hsame (step_deliver_not_of hA hs)
+    · rcases step_deliver_not (cfg := cfg) hA with he | ⟨a, he⟩
+      · exact hsame he
+      · intro e hev; rw [he] at hev; simp [persists] at hev
   | timer r =>
     refine hset { s with fired := insert r s.fired } []
       (fun hx => ⟨hc, hh.grow (Grows.refl _) rfl rfl le_rfl, hown.grow (Grows.refl _) rfl rfl rfl,
@@ -1073,7 +1078,7 @@ theorem timersBuilt_step {s : State Validator BlockId Payload}
         · obtain ⟨_, _, he⟩ := evidence_relay h; cases he
         · split at h <;> simp at h
       · split at h <;> simp at h
-    · rw [if_neg (by simp [hs])]; exact TimersBuilt.of_none fun _ _ h => by simp at h
+    · split <;> exact TimersBuilt.of_none fun _ _ h => by simp at h
   | timer t => rw [step_timer_of hs]; exact hset _ hs
   | restart => exact absurd rfl hr
   | fetchRequest peer G ids =>
@@ -1255,7 +1260,7 @@ theorem retains_step {s : State Validator BlockId Payload} {inp : Input Validato
     simp only [Node.step]
     split
     · exact hset _ hs (Grows.flush _ _ _) (flush_base _ _ _)
-    · rw [if_neg (by simp [hs])]; exact Retains.refl _
+    · split <;> exact Retains.refl _
   | timer t => exact hset _ hs (Grows.refl _) rfl
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>

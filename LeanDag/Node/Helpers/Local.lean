@@ -1446,7 +1446,8 @@ theorem Inv.step {s : State Validator BlockId Payload}
           · rw [List.mem_singleton] at ho'; subst ho'; rfl
           · simp at ho'
     · split
-      · have h₁ := (hi.mono hsub).of_eq (s' := { s with asked := b.round }) rfl rfl rfl rfl rfl
+      · have h₁ := (hi.mono hsub).of_eq (s' := { s with asked := b.round, recovering := true }) rfl
+          rfl rfl rfl rfl
         exact ⟨[], out_quiet (by simp [Output.isQuiet]), by simpa using h₁⟩
       · exact hnil'
   | timer r =>

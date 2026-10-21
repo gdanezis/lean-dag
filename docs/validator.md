@@ -508,6 +508,13 @@ the nodes at round 1 or 2. Before the sponsorship rule above, a flood
 filled the slots before the needed twins arrived, and `ρ = n` stalled
 one run in three.
 
+A node that drops a block above its window while its certified
+frontier, which the certificates it adopts keep up with its peers', lies
+more than `Λ` above its top recovers again, as after a restart, and asks
+for bases (`behind`): its peers have dropped the rounds it would need,
+and it rejoins by bootstrap (§3.6). Without rate limiting no block is
+dropped above a window, and the rule does not apply.
+
 The window must exceed the depth by which the network's frontier leads a
 node's top. After a bootstrap the top is the new horizon, which trails
 the frontier by `Λ` and the certificates' lag; a node whose window is
@@ -591,7 +598,7 @@ about 50 rounds against 100 to 130.
 
 | | Claim | Route |
 |---|---|---|
-| V1 | Every block of the program's own, those it persists, satisfies `ValidAt q Clause.distinct`; they lie at strictly increasing rounds, across restarts, resumes and bootstraps; it references only what it knew; the blocks it broadcasts are those it persists; it keeps the decisions it outputs, slots `0 … lo − 1` in order, and every proposal it signs at a height `k` is the head of the chain of its first `k` decisions; its accepted set is a view; without a restart it certifies every height it decides once `q − 1` other signers' proposals of the same head reach it in time; it keeps at most `lo + ahead − certHeight + 1` proposals of each signer. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.Sends`, `Node.Local.Decisions`, `Node.Local.ValidOut` (proved, restarts, resumes and bootstraps included), `Node.Local.Certifies` (proved), `Node.Local.Bounded` (proved, restarts, resumes and bootstraps included) |
+| V1 | Every block of the program's own, those it persists, satisfies `ValidAt q Clause.distinct`; they lie at strictly increasing rounds, across restarts, resumes and bootstraps; it references only what it knew; the blocks it broadcasts are those it persists; it keeps the decisions it outputs, slots `0 … lo − 1` in order, and every proposal it signs at a height `k` is the head of the chain of its first `k` decisions; its accepted set is a view; without a restart or rate limiting it certifies every height it decides once `q − 1` other signers' proposals of the same head reach it in time; it keeps at most `lo + ahead − certHeight + 1` proposals of each signer. | `Node.Local.OneEach`, `Node.Local.Authored`, `Node.Local.Sends`, `Node.Local.Decisions`, `Node.Local.ValidOut` (proved, restarts, resumes and bootstraps included), `Node.Local.Certifies` (proved), `Node.Local.Bounded` (proved, restarts, resumes and bootstraps included) |
 | V2 | The commit outputs are `consumed` over the successive views. | `Node.Local.DecidesOnView`, `Node.ViewsAbove.tryDecide_eq` (proved); `consumed` over the run's record in step 4 |
 | V3 | Over a trace, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` whose honest set is the honest nodes, and every honest store is a cut of it; with timely authentication of blocks, an injective hash and `Params.Tolerates`, and no honest node given a base offer or a certificate, any two honest nodes' commit sequences are prefix-comparable, whatever horizons they raise and whenever they restart and resume. | `Node.Runs.Safety` (proved): `Node.authentic_of_timely`, `Node.hashInjective_of_trace`, `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | Over a trace with delivery, timely authentication and an injective hash, with no horizon raised, no honest node restarting and none given a base offer or a certificate, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
@@ -1879,7 +1886,9 @@ can drop.
    `W` rounds above its top is dropped, and comes back only with a later
    synchronisation. Past GST a quorum can lead a node by any number of
    rounds within `Δ`, since a round has no least duration, so no `W`
-   bounds the delay this adds to the catch-up time `A`.
+   bounds the delay this adds to the catch-up time `A`. A node left more
+   than `Λ` behind its certified frontier recovers again and bootstraps
+   (`behind`, §3.9), which a liveness argument would have to cover.
 2. **The order of synchronisation.** A later block of a slot is kept only
    if it is wanted, missing from the history of a pending block. A twin
    delivered before the block that leads to it is pending is dropped, so
@@ -1927,10 +1936,9 @@ what removed each:
 | D11 | a random equivocator under rate limiting with `W = 2`, then two restarts | the peers' blocks at a recovering node's top were dropped above its window while it was further behind, and no delivery came after it reached that round | a recovering node asks for bases when its top round's timer fires (§3.6) |
 | D12 | a restart after proposing at the height of the peers' latest certificate | a restart drops the proposals the node keeps, so it could neither confirm that certificate, lacking its own proposal, nor adopt it, having decided its height; its horizon stayed a round below its peers' | a node confirms a certificate of the head of its own decisions at a height it decided, and reads its own proposals off its decisions instead of keeping them (§3.8) |
 | D13 | a restart one round behind its peers, with a twin below their horizon | the horizon trailed the node's own round, so it stayed a round below its peers' and needed a block they had dropped | a recovering node's horizon follows the certified frontier (§3.4) |
+| D14 | rate limiting with `W = 2` and `Λ = 6`, after a restart | a node resumed, then fell behind beyond its window; it dropped every block above it and, no longer recovering, asked for no base, though its adopted decisions lay a hundred slots above its round | a node that drops a block above its window while its certified frontier lies more than `Λ` above its top recovers again (`behind`, §3.9) |
 
-One class remains open. Of 800 runs after the fixes, one stalled: at
-`n = 4`, with `ρ = 4`, `W = 2` and `Λ = 6`, node 2 resumed at round 49
-while its peers went on, then dropped every block above its window. It
-no longer recovers, so it asks for no base, though its decisions,
-adopted from its peers' certificates, reached slot 147 while its round
-stayed at 49. This is the window of §13.10.
+Of 400 runs after the fixes, none stalled. Without rate limiting, a
+lagging node that does not recover could still need a block its peers
+have pruned, and it does not bootstrap; the fuzzer has not produced
+such a run.

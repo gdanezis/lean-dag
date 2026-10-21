@@ -44,8 +44,8 @@ theorem before_succ_cases (v : Validator) (i : ℕ) :
     · rename_i hw; subst hw; exact Or.inr ⟨inp, rfl, rfl⟩
     · exact Or.inl rfl
 
-variable {v : Validator} (hnv : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart))
-include hnv
+variable {v : Validator} (hl : cfg.limit = none) (hnv : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart))
+include hl hnv
 
 /-- **Each round up to a node's top was built** at one of its earlier
 events. -/
@@ -58,7 +58,7 @@ theorem built_by : ∀ (i : ℕ) {n : ℕ}, (stateBefore cfg tr i v).top.isSome 
     · rw [heq] at hs hn
       obtain ⟨b, hb, h⟩ := built_by i hs hn
       exact ⟨b, by omega, h⟩
-    · have hsi := (fired_before (cfg := cfg) hnv i).1
+    · have hsi := (fired_before (cfg := cfg) hl hnv i).1
       have hri : inp ≠ .restart := fun h => hnv i (by rw [he, h])
       by_cases hold : (stateBefore cfg tr i v).top.isSome ∧
           n ≤ (stateBefore cfg tr i v).top.getD 0
@@ -70,7 +70,7 @@ theorem built_by : ∀ (i : ℕ) {n : ℕ}, (stateBefore cfg tr i v).top.isSome 
           rcases h : (stateBefore cfg tr i v).top with _ | t
           · exact Or.inl rfl
           · right; rw [h] at hold; simp at hold; simp; omega
-        obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) hsi hri hs n hρ hn
+        obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) hl hsi hri hs n hρ hn
         exact ⟨i, by omega, by rw [he]; rfl, e, by rw [outputsAt_eq he]; exact hep, her⟩
 
 /-- **A node's top before an event is at most the round of a block it
@@ -80,7 +80,7 @@ theorem top_le_built {i : ℕ} {inp : Input Validator BlockId Payload}
     (hep : e ∈ persists (outputsAt cfg tr i)) :
     (stateBefore cfg tr i v).top.getD 0 ≤ e.2.round := by
   rw [outputsAt_eq he] at hep
-  rcases step_above (cfg := cfg.at v) (fired_before (cfg := cfg) hnv i).1
+  rcases step_above (cfg := cfg.at v) hl (fired_before (cfg := cfg) hl hnv i).1
     (fun h => hnv i (by rw [he, h])) e hep with h | ⟨h, h'⟩
   · exact h.le
   · rw [h, h']; rfl
@@ -91,7 +91,7 @@ theorem timer_of_persist {i : ℕ} {inp : Input Validator BlockId Payload}
     (hep : e ∈ persists (outputsAt cfg tr i)) :
     Output.setTimer e.2.round (cfg.timeout e.2.round) ∈ outputsAt cfg tr i := by
   rw [outputsAt_eq he] at hep ⊢
-  exact step_timer (cfg := cfg.at v) (fired_before (cfg := cfg) hnv i).1
+  exact step_timer (cfg := cfg.at v) hl (fired_before (cfg := cfg) hl hnv i).1
     (fun h => hnv i (by rw [he, h])) e hep
 
 /-- **A fired timer stays fired** while the top stays at or below its
@@ -101,17 +101,17 @@ theorem fired_stays {f r : ℕ} (hf : tr[f]? = some (v, Input.timer r)) :
   | 0, h, _ => absurd h (Nat.not_lt_zero _)
   | k + 1, hfk, hk => by
     rcases Nat.lt_succ_iff_lt_or_eq.mp hfk with hlt | rfl
-    · have hrk := (rises_before (cfg := cfg) hnv (Nat.le_succ k)).1
+    · have hrk := (rises_before (cfg := cfg) hl hnv (Nat.le_succ k)).1
       have ih := fired_stays hf k hlt (hrk.trans hk)
       rcases before_succ_cases (cfg := cfg) (tr := tr) v k with heq | ⟨inp, he, heq⟩
       · rw [heq]; exact ih
       · rw [heq] at hk ⊢
-        exact step_fired (cfg := cfg.at v) (fired_before (cfg := cfg) hnv k).1
+        exact step_fired (cfg := cfg.at v) hl (fired_before (cfg := cfg) hl hnv k).1
           (fun h => hnv k (by rw [he, h])) r ih hk
     · rw [stateBefore_succ hf, if_pos rfl] at hk ⊢
       have hx : ({ stateBefore cfg tr f v with
           fired := insert r (stateBefore cfg tr f v).fired } : State Validator BlockId Payload).recovering
-          = false := (fired_before (cfg := cfg) hnv f).1
+          = false := (fired_before (cfg := cfg) hl hnv f).1
       exact (settle_shape (cfg := cfg.at v) hx).fired r (Finset.mem_insert_self _ _) hk
 
 /-- **A horizon above `0` was last raised at one of the node's events**,
@@ -130,7 +130,7 @@ theorem last_rise : ∀ (i : ℕ), 0 < (stateBefore cfg tr i v).store.base →
     · rcases before_succ_cases (cfg := cfg) (tr := tr) v i with heq | ⟨inp, he, heq⟩
       · rw [heq] at hlt; exact absurd hlt (lt_irrefl _)
       · rw [heq] at hlt
-        obtain ⟨c, hc, hcb⟩ := step_rise (cfg := cfg.at v) (fired_before (cfg := cfg) hnv i).1
+        obtain ⟨c, hc, hcb⟩ := step_rise (cfg := cfg.at v) hl (fired_before (cfg := cfg) hl hnv i).1
           (fun h => hnv i (by rw [he, h])) hlt
         refine ⟨i, by omega, inp, he, rfl, c, by rw [outputsAt_eq he]; exact hc, ?_⟩
         rw [heq]; exact hcb
@@ -147,7 +147,7 @@ theorem built_stays {p : ℕ} {inp : Input Validator BlockId Payload}
     Stays (stateBefore cfg tr (p + 1) v).store (stateBefore cfg tr (p + 1) v).pending x := by
   rw [outputsAt_eq hp] at hx
   rw [stateBefore_succ hp, if_pos rfl]
-  rcases step_keeps_built (cfg := cfg.at v) (fired_before (cfg := cfg) hnv' p).1
+  rcases step_keeps_built (cfg := cfg.at v) hl (fired_before (cfg := cfg) hl hnv' p).1
     (fun h => hnv' p (by rw [hp, h])) x hx with ⟨h, -⟩ | h
   · exact Or.inl h
   · exact Or.inr (Or.inr h)
@@ -197,7 +197,7 @@ theorem own_known {H : Finset Validator} (htime : Converge.TimelyAuthentic cfg H
     obtain ⟨p, hpd, hpv, hpb⟩ := htime d v inp hd' hv x hdel (by rw [hc]; exact hv)
     rw [hc] at hpv
     obtain ⟨inpp, hp'⟩ := Converge.event_of_map hpv
-    exact persists_before_mono v (by omega : p + 1 ≤ E) x
+    exact persists_before_mono hl v (by omega : p + 1 ≤ E) x
       (persists_of_event hp' (Converge.persists_of_broadcasts hpb))
   · exact hp
 
@@ -224,7 +224,7 @@ theorem fresh_before {H : Finset Validator} (hid : Function.Injective cfg.idOf)
   have hidk := Converge.id_of_knownIn (Converge.knownBefore_sub hv E hk)
   have hraw : st.map.getD _ st.junk = (⟨t + 1, v, R, cfg.payload (t + 1)⟩ :
       Block Validator BlockId Payload) := hid hidk.symm
-  have hB := own_known htime hv E hk (by show (st.map.getD _ st.junk).creator = v; rw [hraw])
+  have hB := own_known hl htime hv E hk (by show (st.map.getD _ st.junk).creator = v; rw [hraw])
   rcases (Converge.inv_before (cfg := cfg) (tr := tr) E v).rounds with ⟨h, -, -⟩ | ⟨t', ht', -, hR⟩
   · rw [h] at ht; cases ht
   · rw [ht] at ht'; cases ht'
@@ -254,7 +254,7 @@ theorem started_after {H : Finset Validator} (hadm : cfg.Admissible)
       · have hk := (Converge.inv_before (cfg := cfg) (tr := tr) st v).known _ hin
         have hidk := Converge.id_of_knownIn (Converge.knownBefore_sub hv st hk)
         have hraw : s.store.map.getD _ s.store.junk = (cfg.at v).genesis := hid hidk.symm
-        have hB := own_known htime hv st hk (by
+        have hB := own_known hl htime hv st hk (by
           show (s.store.map.getD _ s.store.junk).creator = v; rw [hraw]; rfl)
         rw [hB0] at hB; cases hB
       · simp [Config.genesis] at hi
@@ -330,7 +330,7 @@ variable {P : Validity Validator BlockId Payload} {H T : Finset Validator} {time
 `v`'s horizon reaches the one its author built it at, `v` holds it, or it
 lies below `v`'s horizon, after `v`'s events up to a time by which its
 history was synchronised, provided `v` is at the round below it. -/
-theorem arrives (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H tr)
+theorem arrives (hinj : Converge.HashInjective cfg H tr)
     (htime : Converge.TimelyAuthentic cfg H tr) (hTH : T ⊆ H) (hnr : Converge.NoRestart T tr)
     (hmono : Live.TimeMono tr time) (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁)
     {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) (huv : u ≠ v) {i : ℕ}
@@ -375,10 +375,10 @@ theorem arrives (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H tr)
       obtain ⟨v', hv', hk⟩ := hiX.known w hw
       exact knownOf_sub hv' hk
   have hstK : ∀ w ∈ x.store.ids, raw w = x.store.map.getD w x.store.junk := fun w hw =>
-    knownBlock_eq hinj (hknX w hw)
+    knownBlock_eq hl hinj (hknX w hw)
   have hyK : ((id', b') : BlockId × Block Validator BlockId Payload) ∈ Converge.knownIn cfg H tr :=
     Or.inr ⟨i, u, by rw [hi]; rfl, hTH hu, hy⟩
-  have hry : raw id' = b' := knownBlock_eq hinj hyK
+  have hry : raw id' = b' := knownBlock_eq hl hinj hyK
   have hbu : b'.creator = u := hbc
   have C : CausalStructure x.store.blk x.store.ids := x.store.toRecord.causal
   have hrawx : ∀ w ∈ x.store.ids, (raw w).round = (x.store.blk w).round ∧
@@ -388,7 +388,7 @@ theorem arrives (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H tr)
   have hZv : ∀ w ∈ Zs.store.ids, (Zs.store.blk w).round = (raw w).round ∧
       (Zs.store.blk w).creator = (raw w).creator := fun w hw => by
     obtain ⟨a₁, a₂⟩ := hAv w hw
-    obtain ⟨k₁, k₂⟩ := knownBlock_gT (cfg := cfg) (H := H) (tr := tr) w
+    obtain ⟨k₁, k₂⟩ := knownBlock_gT (cfg := cfg) (H := H) (tr := tr) hl w
     exact ⟨a₁.trans k₁.symm, a₂.trans k₂.symm⟩
   -- the history the author built on
   let Z : Finset BlockId := insert id' (b'.refs.biUnion (historyFrom x.store.blk))
@@ -420,17 +420,17 @@ theorem arrives (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H tr)
           have h₂ := hpred' r hr
           have h₃ : (x.store.blk z).round = xz.2.round := by simp [xz, Store.blk, lookup]
           omega
-        obtain ⟨bρ, hbρE, hbρv, e, he, her⟩ := built_by hnv E hZs hρ
+        obtain ⟨bρ, hbρE, hbρv, e, he, her⟩ := built_by hl hnv E hZs hρ
         obtain ⟨inpρ, hbρ⟩ := Converge.event_of_map hbρv
         have hep : e ∈ persists (runOf cfg tr v).2 :=
           mem_persists_iff.mpr (mem_outputs_of_event hbρ (mem_persists_iff.mp he))
         have hex : e = xz := eq_of_persists v hep hxzp her
         rw [hex] at he
-        exact stays_from hl hinj (hTH hv) hnv hxzK (built_stays hnv hbρ he) E (by omega)
+        exact stays_from hl hinj (hTH hv) hnv hxzK (built_stays hl hnv hbρ he) E (by omega)
       · -- another's, synchronised after `v` received the author's block
         have hreach : ReachesFrom raw id' z := by
           refine ReachesFrom.of_mem_refs (by rw [hry]; exact hr) ?_
-          exact (reaches_known hstK (hrefs' hr) (reaches_of_mem_historyUptoFrom hzr)).1
+          exact (reaches_known hl hstK (hrefs' hr) (reaches_of_mem_historyUptoFrom hzr)).1
         have hhor : horAt cfg tr time v (max (time j) gst + Δₛ) ≤ xz.2.round := by
           rw [← hrz]
           exact le_trans (grows_before (cfg := cfg) (tr := tr) v (eventsBy_mono hτ)).1 hzb
@@ -491,7 +491,7 @@ theorem arrives (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H tr)
 
 /-- **A reliable genesis block arrives** at a reliable node given it, at
 horizon `0`. -/
-theorem arrives_zero (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H tr)
+theorem arrives_zero (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hnr : Converge.NoRestart T tr) (hmono : Live.TimeMono tr time)
     {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) (huv : u ≠ v) {i : ℕ}
     (hiu : (tr[i]?.map Prod.fst) = some u)
@@ -554,8 +554,8 @@ theorem base_le_after (hq : 2 ≤ cfg.q)
     rcases hx.rise with h | ⟨c, hc, hcb⟩
     · rcases Nat.eq_zero_or_pos (stateBefore cfg tr i u).store.base with h0 | hpos
       · exact Or.inl (h.trans h0)
-      · obtain ⟨r, hri, inpr, hr, -, c, hc, hcb⟩ := last_rise hnu i hpos
-        have h₁ := (rises_before (cfg := cfg) hnu (show r + 1 ≤ i by omega)).1
+      · obtain ⟨r, hri, inpr, hr, -, c, hc, hcb⟩ := last_rise hl hnu i hpos
+        have h₁ := (rises_before (cfg := cfg) hl hnu (show r + 1 ≤ i by omega)).1
         refine Or.inr ⟨r, by omega, inpr, hr, c, hc, ?_⟩
         rw [h]
         have := min_le_min (le_refl (cfg.per * (c.height / cfg.m))) (h₁.trans htop)
@@ -567,24 +567,24 @@ theorem base_le_after (hq : 2 ≤ cfg.q)
   · rw [h0]; exact Nat.zero_le _
   have hel : e < tr.length := (List.getElem?_eq_some_iff.mp he).1
   have het : time e ≤ time i := hmono e i hei hil
-  obtain ⟨l, -, hlv, htl, hcl⟩ := cert_catches hcmp hnr hdel hu hv huv he hc (by omega)
+  obtain ⟨l, -, hlv, htl, hcl⟩ := cert_catches hl hcmp hnr hdel hu hv huv he hc (by omega)
   have hll : l < tr.length := by
     rcases h : tr[l]? with _ | z
     · rw [h] at hlv; cases hlv
     · exact (List.getElem?_eq_some_iff.mp h).1
   have hlE : l < E := hE l hll (by omega)
   have hcZ : c.height ≤ (stateBefore cfg tr E v).certHeight :=
-    hcl.trans (rises_before (cfg := cfg) hnv (by omega : l + 1 ≤ E)).2.2.2
+    hcl.trans (rises_before (cfg := cfg) hl hnv (by omega : l + 1 ≤ E)).2.2.2
   have hSet : Settled (cfg.at v) (stateBefore cfg tr E v) := by
-    rcases settled_before (cfg := cfg) hq hnv E with h | h
+    rcases settled_before (cfg := cfg) hl hq hnv E with h | h
     · rw [hZt] at h; cases h
     · exact h
   have hcol := hSet.collected t hZt
   have hlo : (stateBefore cfg tr E v).certHeight ≤ (stateBefore cfg tr E v).lo :=
-    (kept_before (cfg := cfg) hnv E).1.certHeight_le
+    (kept_before (cfg := cfg) hl hnv E).1.certHeight_le
   have hmin : min (stateBefore cfg tr E v).lo (stateBefore cfg tr E v).certHeight =
       (stateBefore cfg tr E v).certHeight := min_eq_right hlo
-  rw [horizonAt_of (fired_before (cfg := cfg) hnv E).1] at hcol
+  rw [horizonAt_of (fired_before (cfg := cfg) hl hnv E).1] at hcol
   change min (cfg.per * (min (stateBefore cfg tr E v).lo (stateBefore cfg tr E v).certHeight /
     cfg.m)) t - cfg.lag ≤ (stateBefore cfg tr E v).store.base at hcol
   rw [hmin] at hcol
@@ -599,7 +599,7 @@ an event at or before `s`, past GST, is held by a reliable node `v` after
 `v`'s events by `max s gst + 3Δ + Δₛ` or later, once `v` is at the round
 below the block's or above, with its horizon at or below the block's
 round. -/
-theorem block_arrives (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel)
+theorem block_arrives (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
     (hoff : Boot.TimelyOffers cfg H tr) (hcert : Boot.TimelyCerts cfg H tr)
     (hinj : Converge.HashInjective cfg H tr) (hchain : Boot.ChainInjective cfg H tr)
@@ -621,7 +621,7 @@ theorem block_arrives (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ =
       (stateAt cfg tr time v τ).store.blk e.1 = atBase (stateAt cfg tr time v τ).store.base e.2 := by
   have hnu : ∀ k : ℕ, tr[k]? ≠ some (u, Input.restart) := fun k => hnr k u hu
   have hbu : (tr[b]?.map Prod.fst) = some u := by rw [hb]; rfl
-  have hebc := broadcasts_of_persists hep
+  have hebc := broadcasts_of_persists hl hep
   obtain ⟨j, hbj, hj, htj⟩ := hdel b u inp hb hu (v, .deliver e.1 e.2)
     ⟨.broadcast e.1 e.2, mem_broadcasts.mp hebc, Ne.symm huv, rfl⟩ hv (by omega)
   have hgood := ((Converge.inv_before (cfg := cfg) (tr := tr) (b + 1) u).good e
@@ -631,16 +631,16 @@ theorem block_arrives (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ =
     by_cases hn0 : e.2.round = 0
     · exact arrives_zero hl hinj hTH hnr hmono hu hv huv hbu hep hgood hn0 hj
         (by omega) (by omega)
-    · obtain ⟨x, y', o, hx, hxb, heo⟩ := build_witness hσ hadm hf htime hoff hcert hinj hchain
+    · obtain ⟨x, y', o, hx, hxb, heo⟩ := build_witness hl hσ hadm hf htime hoff hcert hinj hchain
         (hTH hu) hnu hb hep hn0
       obtain ⟨r', id', b', -, -, -, -, hxt, hbr, -, -, -, -, -, -, -, hout⟩ := tryBuild_some hxb
       rw [hout, persists_built, List.mem_singleton] at heo
       have hr' : r' + 1 = e.2.round := by rw [heo, hbr]
       have htop : (stateBefore cfg tr b u).top.getD 0 ≤ r' := by
-        have := step_above (cfg := cfg.at u) (inp := inp) (fired_before (cfg := cfg) hnu b).1
+        have := step_above (cfg := cfg.at u) (inp := inp) hl (fired_before (cfg := cfg) hl hnu b).1
           (fun h => hnu b (by rw [hb, h])) e (by rw [← outputsAt_eq hb]; exact hep)
         rcases this with h | ⟨-, h⟩ <;> omega
-      have hbase := base_le_after (E := eventsBy tr time τ) hq hcmp hnr hdel hmono hu hv huv hb hx
+      have hbase := base_le_after (E := eventsBy tr time τ) hl hq hcmp hnr hdel hmono hu hv huv hb hx
         hxt htop (fun k hk htk => (lt_eventsBy hmono hk).mpr (by omega)) (by omega) hZt
         (by omega)
       have hZs : (stateAt cfg tr time v τ).top.isSome := by rw [hZt]; rfl
@@ -664,7 +664,7 @@ theorem block_arrives (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ =
 node at its round `n` or above at `s` has its round-`n` block held by a
 reliable node `v` after `v`'s events by `s + 3Δ + Δₛ` or later, once `v`
 is at round `n` or above with its horizon at or below `n`. -/
-theorem round_arrives (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel)
+theorem round_arrives (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
     (hoff : Boot.TimelyOffers cfg H tr) (hcert : Boot.TimelyCerts cfg H tr)
     (hinj : Converge.HashInjective cfg H tr) (hchain : Boot.ChainInjective cfg H tr)
@@ -682,11 +682,11 @@ theorem round_arrives (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ =
     ∃ j ∈ (stateAt cfg tr time v τ).store.ids, ((stateAt cfg tr time v τ).store.blk j).round = n ∧
       ((stateAt cfg tr time v τ).store.blk j).creator = u := by
   have hnu : ∀ k : ℕ, tr[k]? ≠ some (u, Input.restart) := fun k => hnr k u hu
-  obtain ⟨b, hbs, hbu, e, hep, her⟩ := built_by hnu (eventsBy tr time s) hus hun
+  obtain ⟨b, hbs, hbu, e, hep, her⟩ := built_by hl hnu (eventsBy tr time s) hus hun
   obtain ⟨inp, hb⟩ := Converge.event_of_map hbu
   have hbl : b < tr.length := (List.getElem?_eq_some_iff.mp hb).1
   have htb : time b ≤ s := (lt_eventsBy hmono hbl).mp hbs
-  obtain ⟨h₁, h₂, h₃, -⟩ := block_arrives hq hl hσ hadm hf htime hoff hcert hinj hchain hTH hnr
+  obtain ⟨h₁, h₂, h₃, -⟩ := block_arrives hl hq hσ hadm hf htime hoff hcert hinj hchain hTH hnr
     hmono hdel hsync hcmp hu hv huv hb hep htb (τ := τ) (by omega) ht₁ hZt (by omega)
     (by omega)
   exact ⟨e.1, h₁, h₂.trans her, h₃⟩

@@ -601,7 +601,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     · rcases step_deliver_not (cfg := cfg) hA with he | ⟨a, he⟩
       · exact hsame he
       · rw [he]
-        have h₁ := h.keeps (s' := { s with asked := a }) rfl (Keeps.refl _) hc
+        have h₁ := h.keeps (s' := { s with asked := a, recovering := true }) rfl (Keeps.refl _) hc
         exact ⟨by simpa [commitsOf] using h₁, hc⟩
   | timer r =>
     exact hset { s with fired := insert r s.fired } (timerAsk s r) h hc

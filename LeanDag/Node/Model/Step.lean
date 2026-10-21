@@ -78,6 +78,10 @@ input `i` in the state `s`: the new state and the outputs.
   of `q` authors it may reference at a round above its top, two above
   if it built at its top, moves its top there without a block of its
   own, and builds from there.
+* **Falling behind** (`behind`): with rate limiting, a node that drops a
+  block above its window while its certified frontier lies more than
+  `Λ` above its top recovers again, as after a restart, and asks for
+  bases.
 * **Bootstrap** (`tryBoot`): a restarted node asks its peers for their
   bases, again whenever a delivered block, kept or not, lies `Λ + 2`
   rounds above the one it last asked on, when the timer of its top round
@@ -807,6 +811,16 @@ def confirm (s : State Validator BlockId Payload) (c : Cert Validator BlockId) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   settle cfg { s with cert := some c, props := above (some c) s.props }
 
+/-- **Whether a dropped delivery shows the node behind**: with rate
+limiting, the block lies above the node's window, and the node's
+certified frontier lies more than `Λ` above its top, below its peers'
+horizon. -/
+def behind (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) : Bool :=
+  match cfg.limit, s.top with
+  | some (_, W), some t =>
+    decide (t + W < b.round ∧ t + cfg.lag < cfg.per * (min s.lo s.certHeight / cfg.m))
+  | _, _ => false
+
 /-- **The request a timer sends**: a recovering node whose top round's
 timer fires asks for bases, since it cannot build there. -/
 def timerAsk (s : State Validator BlockId Payload) (r : ℕ) : List (Output Validator BlockId Payload) :=
@@ -845,8 +859,9 @@ def step (s : State Validator BlockId Payload) :
       (r.1, evidence s id b ++
         (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++
         (if ask then [.requestBase] else []) ++ r.2)
-    else if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.recovering ∧ s.asked + cfg.lag + 2 ≤ b.round then
-      ({ s with asked := b.round }, [.requestBase])
+    else if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ (s.recovering ∨ behind cfg s b) ∧
+        s.asked + cfg.lag + 2 ≤ b.round then
+      ({ s with asked := b.round, recovering := true }, [.requestBase])
     else (s, [])
   | .timer r =>
     let x := settle cfg { s with fired := insert r s.fired }

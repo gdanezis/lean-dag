@@ -22,7 +22,7 @@ initial state:
   decision step decides what `tryDecide` decides on any record and view
   holding the store's blocks from the horizon up (`DecidesOnView`); a
   pruned store decides as the view it is a cut of;
-* **certifying what it decides**: without a restart, a node whose
+* **certifying what it decides**: without a restart or rate limiting, a node whose
   decisions reach a multiple of `m` certifies it once `q − 1` other
   signers' proposals of the same head reached it in time (`Certifies`);
 * **the proposals it keeps**: of each signer at most
@@ -104,7 +104,8 @@ def DecidesOnView : Prop :=
       if s.lo < N then Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel U V s.lo (N - 1)
       else []
 
-/-- **Certifying what it decides**: over inputs without a restart, a node
+/-- **Certifying what it decides**: without rate limiting, over inputs
+without a restart, a node
 whose decisions reach a positive multiple `k` of `m` holds a certificate
 at `k` or above, once proposals at `k` of the head of its first `k`
 decisions reached it from `q − 1` distinct other signers, each while `k`
@@ -116,7 +117,8 @@ def Certifies : Prop :=
     (is : List (Input Validator BlockId Payload)) (k : ℕ) (S : Finset Validator),
     let r := run cfg (State.init cfg) is
     let h := cfg.headOf ((commitsOf r.2).take k)
-    (∀ i ∈ is, i ≠ .restart) → 0 < k → cfg.m ∣ k → k ≤ (commitsOf r.2).length →
+    cfg.limit = none → (∀ i ∈ is, i ≠ .restart) → 0 < k → cfg.m ∣ k →
+    k ≤ (commitsOf r.2).length →
     cfg.me ∉ S → cfg.q ≤ S.card + 1 →
     (∀ u ∈ S, ∃ is₁ is₂, is = is₁ ++ .proposal u k h :: is₂ ∧
       k ≤ (run cfg (State.init cfg) is₁).1.lo + cfg.ahead ∧

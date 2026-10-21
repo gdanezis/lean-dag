@@ -283,12 +283,13 @@ theorem step_deliver {s : State Validator BlockId Payload} {id : BlockId}
   rfl
 
 /-- **A delivery the node does not take**: it changes nothing, or, when
-recovering and the block lies far enough above the round it last asked
-on, it asks for bases. -/
+recovering or behind and the block lies far enough above the round it
+last asked on, it recovers and asks for bases. -/
 theorem step_deliver_not {s : State Validator BlockId Payload} {id : BlockId}
     {b : Block Validator BlockId Payload} (h : ¬ Admits cfg s id b) :
     Node.step cfg s (.deliver id b) = (s, []) ∨
-      ∃ a, Node.step cfg s (.deliver id b) = ({ s with asked := a }, [.requestBase]) := by
+      ∃ a, Node.step cfg s (.deliver id b) =
+        ({ s with asked := a, recovering := true }, [.requestBase]) := by
   have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
       id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := h
   simp only [Node.step, if_neg h']
@@ -296,14 +297,21 @@ theorem step_deliver_not {s : State Validator BlockId Payload} {id : BlockId}
   · exact Or.inr ⟨_, rfl⟩
   · exact Or.inl rfl
 
-/-- A node not recovering does nothing on a delivery it does not take. -/
+omit [Fintype Validator] in
+/-- Without rate limiting, no dropped delivery shows the node behind. -/
+theorem behind_of (hl : cfg.limit = none) (s : State Validator BlockId Payload)
+    (b : Block Validator BlockId Payload) : behind cfg s b = false := by
+  unfold behind; rw [hl]
+
+/-- A node not recovering and without rate limiting does nothing on a
+delivery it does not take. -/
 theorem step_deliver_not_of {s : State Validator BlockId Payload} {id : BlockId}
-    {b : Block Validator BlockId Payload} (h : ¬ Admits cfg s id b) (hs : s.recovering = false) :
-    Node.step cfg s (.deliver id b) = (s, []) := by
+    {b : Block Validator BlockId Payload} (hl : cfg.limit = none) (h : ¬ Admits cfg s id b)
+    (hs : s.recovering = false) : Node.step cfg s (.deliver id b) = (s, []) := by
   have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
       id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := h
-  simp only [Node.step, if_neg h', hs]
-  simp
+  simp only [Node.step, if_neg h', hs, behind_of hl]
+  simp [behind_of hl]
 
 /-- The state with a peer's base offer recorded, in place of its last. -/
 def withOffer (s : State Validator BlockId Payload) (p : Validator) (G : ℕ)

@@ -20,7 +20,7 @@ variable {cfg : Config Validator BlockId Payload}
 /-- **A step of a node not recovering**, other than a restart, leaves its
 state alone or settles. -/
 theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (hs : s.recovering = false) (hr : inp ≠ .restart) :
+    (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
     (Node.step cfg s inp).1 = s ∨ ∃ x, (Node.step cfg s inp).1 = (Node.settle cfg x).1 := by
   cases inp with
   | start =>
@@ -33,7 +33,7 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · rw [step_deliver hA]; exact Or.inr ⟨_, rfl⟩
-    · rw [step_deliver_not_of hA hs]; exact Or.inl rfl
+    · rw [step_deliver_not_of hl hA hs]; exact Or.inl rfl
   | timer r => exact Or.inr ⟨_, rfl⟩
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>
@@ -62,10 +62,10 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
 
 /-- **A step keeps a node settled**, not recovering and other than a
 restart, for a quorum of two or more. -/
-theorem settled_step (hq : 2 ≤ cfg.q) {s : State Validator BlockId Payload}
+theorem settled_step (hl : cfg.limit = none) (hq : 2 ≤ cfg.q) {s : State Validator BlockId Payload}
     {inp : Input Validator BlockId Payload} (h : Settled cfg s) (hs : s.recovering = false)
     (hr : inp ≠ .restart) : Settled cfg (Node.step cfg s inp).1 := by
-  rcases step_settles (cfg := cfg) hs hr with he | ⟨x, he⟩ <;> rw [he]
+  rcases step_settles (cfg := cfg) hl hs hr with he | ⟨x, he⟩ <;> rw [he]
   · exact h
   · exact settle_settled hq x
 
@@ -149,7 +149,9 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
     · refine hset _ ?_ ?_ (by rw [step_deliver hA])
       · exact ⟨le_rfl, fun h => h, le_rfl, le_rfl⟩
       · exact hs
-    · rw [step_deliver_not_of hA hs]; exact Rises.refl s
+    · rcases step_deliver_not (cfg := cfg) hA with he | ⟨a, he⟩ <;> rw [he]
+      · exact Rises.refl s
+      · exact ⟨le_rfl, fun h => h, le_rfl, le_rfl⟩
   | timer r => exact hset { s with fired := insert r s.fired } (Rises.refl s) hs rfl
   | restart => exact absurd rfl hr
   | baseOffer p G bs =>
@@ -198,13 +200,13 @@ variable {tr : Trace Validator BlockId Payload}
 /-- **An invariant of a node's states** that each of its steps keeps, not
 recovering and other than a restart, holds before every event, along a
 trace without restarts at the node. -/
-theorem inv_before {v : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart))
+theorem inv_before (hl : cfg.limit = none) {v : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart))
     (P : State Validator BlockId Payload → Prop) (h₀ : P (stateBefore cfg tr 0 v))
     (hs : ∀ s inp, P s → s.recovering = false → inp ≠ .restart → P (Node.step (cfg.at v) s inp).1) :
     ∀ i, P (stateBefore cfg tr i v)
   | 0 => h₀
   | i + 1 => by
-    have ih := inv_before hnr P h₀ hs i
+    have ih := inv_before hl hnr P h₀ hs i
     rcases he : tr[i]? with _ | ⟨w, inp⟩
     · have hlen : tr.length ≤ i := List.getElem?_eq_none_iff.mp he
       have heq : stateBefore cfg tr (i + 1) v = stateBefore cfg tr i v := by
@@ -215,23 +217,23 @@ theorem inv_before {v : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input
       split
       · rename_i hw
         subst hw
-        exact hs _ inp ih (fired_before (cfg := cfg) hnr i).1 fun h => hnr i (by rw [he, h])
+        exact hs _ inp ih (fired_before (cfg := cfg) hl hnr i).1 fun h => hnr i (by rw [he, h])
       · exact ih
 
 /-- **A node that never restarts is settled before every event**, once it
 has started or settled, for a quorum of two or more. -/
-theorem settled_before (hq : 2 ≤ cfg.q) {v : Validator}
+theorem settled_before (hl : cfg.limit = none) (hq : 2 ≤ cfg.q) {v : Validator}
     (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) (i : ℕ) :
     (stateBefore cfg tr i v).top = none ∨ Settled (cfg.at v) (stateBefore cfg tr i v) := by
-  refine inv_before (cfg := cfg) hnr (fun s => s.top = none ∨ Settled (cfg.at v) s)
+  refine inv_before (cfg := cfg) hl hnr (fun s => s.top = none ∨ Settled (cfg.at v) s)
     (Or.inl rfl) (fun s inp h hs hr => ?_) i
-  rcases step_settles (cfg := cfg.at v) hs hr with he | ⟨x, he⟩ <;> rw [he]
+  rcases step_settles (cfg := cfg.at v) hl hs hr with he | ⟨x, he⟩ <;> rw [he]
   · exact h
   · exact Or.inr (settle_settled (cfg := cfg.at v) hq x)
 
 /-- **Along a trace without restarts at `v`**, its top, next undecided
 slot and certificate's height only rise. -/
-theorem rises_before {v : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) :
+theorem rises_before (hl : cfg.limit = none) {v : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) :
     ∀ {i j : ℕ}, i ≤ j → Rises (stateBefore cfg tr i v) (stateBefore cfg tr j v) := by
   intro i j hij
   induction j, hij using Nat.le_induction with
@@ -248,7 +250,7 @@ theorem rises_before {v : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Inp
       split
       · rename_i hw
         subst hw
-        exact rises_step (cfg := cfg.at w) (fired_before (cfg := cfg) hnr j).1
+        exact rises_step (cfg := cfg.at w) (fired_before (cfg := cfg) hl hnr j).1
           fun h => hnr j (by rw [he, h])
       · exact Rises.refl _
 

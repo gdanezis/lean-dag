@@ -471,7 +471,7 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
           split <;> split <;> rfl) (step_deliver hA)
     · rcases step_deliver_not (cfg := cfg) hA with he | ⟨a, he⟩
       · exact hsame s [] rfl rfl he
-      · exact hsame { s with asked := a } [.requestBase] rfl rfl he
+      · exact hsame { s with asked := a, recovering := true } [.requestBase] rfl rfl he
   | timer r =>
     exact hset { s with fired := Insert.insert r s.fired } (timerAsk s r) hc
       (hh.grow (Grows.refl _) rfl rfl le_rfl) hp (commitsOf_timerAsk s r) (step_timer_eq s r)

@@ -402,7 +402,7 @@ restart: it leaves the state alone with silent outputs, or settles a
 state with the node's top, fired timers and horizon, after silent outputs
 or, at its start, after its genesis block with its timer. -/
 theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    (hs : s.recovering = false) (hr : inp ≠ .restart) :
+    (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
     ((Node.step cfg s inp).1 = s ∧ Silent (Node.step cfg s inp).2) ∨
     ∃ x pre, Node.step cfg s inp = ((Node.settle cfg x).1, pre ++ (Node.settle cfg x).2) ∧
       x.recovering = false ∧ x.store.base = s.store.base ∧ x.top.getD 0 = s.top.getD 0 ∧
@@ -442,7 +442,7 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
       · split at ho
         · rw [List.mem_singleton] at ho; subst ho; trivial
         · cases ho
-    · rw [step_deliver_not_of hA hs]
+    · rw [step_deliver_not_of hl hA hs]
       exact Or.inl ⟨rfl, Silent.nil⟩
   | timer r =>
     rw [step_timer_of hs]
@@ -505,12 +505,12 @@ variable {s : State Validator BlockId Payload} {inp : Input Validator BlockId Pa
 
 /-- **A step raises the horizon only with an announced certificate**, to
 at most `Λ` below the lesser of its slot round and the top after. -/
-theorem step_rise (hs : s.recovering = false) (hr : inp ≠ .restart)
+theorem step_rise (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart)
     (hlt : s.store.base < (Node.step cfg s inp).1.store.base) :
     ∃ c, Output.announce c ∈ (Node.step cfg s inp).2 ∧
       (Node.step cfg s inp).1.store.base ≤
         min (cfg.per * (c.height / cfg.m)) ((Node.step cfg s inp).1.top.getD 0) - cfg.lag := by
-  rcases step_shape (cfg := cfg) hs hr with ⟨he, -⟩ | ⟨x, pre, he, hx, hb, -, -, -⟩
+  rcases step_shape (cfg := cfg) hl hs hr with ⟨he, -⟩ | ⟨x, pre, he, hx, hb, -, -, -⟩
   · rw [he] at hlt; exact absurd hlt (lt_irrefl _)
   · rw [he] at hlt ⊢
     obtain ⟨c, hc, hcb⟩ := (settle_shape (cfg := cfg) hx).rise hx (by rw [hb]; exact hlt)
@@ -518,10 +518,10 @@ theorem step_rise (hs : s.recovering = false) (hr : inp ≠ .restart)
 
 /-- **What a step builds lies above the top before**, but the genesis
 block at the start. -/
-theorem step_above (hs : s.recovering = false) (hr : inp ≠ .restart) :
+theorem step_above (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
     ∀ e ∈ persists (Node.step cfg s inp).2,
       s.top.getD 0 < e.2.round ∨ (s.top = none ∧ e.2.round = 0) := by
-  rcases step_shape (cfg := cfg) hs hr with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, ht, -, hpre⟩
+  rcases step_shape (cfg := cfg) hl hs hr with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, ht, -, hpre⟩
   · rw [hq.1]; intro e he; cases he
   · rw [he, persists_append]
     intro e he'
@@ -539,12 +539,12 @@ theorem step_above (hs : s.recovering = false) (hr : inp ≠ .restart) :
 
 /-- **A step builds every round above the top before up to the top it
 reaches.** -/
-theorem step_every (hs : s.recovering = false) (hr : inp ≠ .restart)
+theorem step_every (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart)
     (hsome : (Node.step cfg s inp).1.top.isSome) :
     ∀ ρ, (s.top = none ∨ s.top.getD 0 < ρ) → ρ ≤ (Node.step cfg s inp).1.top.getD 0 →
       ∃ e ∈ persists (Node.step cfg s inp).2, e.2.round = ρ := by
   intro ρ hρ hρt
-  rcases step_shape (cfg := cfg) hs hr with ⟨he, -⟩ | ⟨x, pre, he, hx, -, ht, -, hpre⟩
+  rcases step_shape (cfg := cfg) hl hs hr with ⟨he, -⟩ | ⟨x, pre, he, hx, -, ht, -, hpre⟩
   · rw [he] at hsome hρt
     rcases hρ with hρ | hρ
     · rw [hρ] at hsome; cases hsome
@@ -568,10 +568,10 @@ theorem step_every (hs : s.recovering = false) (hr : inp ≠ .restart)
         exact ⟨e, List.mem_append_right _ he', her⟩
 
 /-- **A step sets the timer of each round it builds.** -/
-theorem step_timer (hs : s.recovering = false) (hr : inp ≠ .restart) :
+theorem step_timer (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
     ∀ e ∈ persists (Node.step cfg s inp).2,
       Output.setTimer e.2.round (cfg.timeout e.2.round) ∈ (Node.step cfg s inp).2 := by
-  rcases step_shape (cfg := cfg) hs hr with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, -, -, hpre⟩
+  rcases step_shape (cfg := cfg) hl hs hr with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, -, -, hpre⟩
   · rw [hq.1]; intro e he; cases he
   · rw [he, persists_append]
     intro e he'
@@ -586,18 +586,18 @@ theorem step_timer (hs : s.recovering = false) (hr : inp ≠ .restart) :
     · exact List.mem_append_right _ ((settle_shape (cfg := cfg) hx).timer e he')
 
 /-- **A step keeps a fired timer** at or above the top it reaches. -/
-theorem step_fired (hs : s.recovering = false) (hr : inp ≠ .restart) :
+theorem step_fired (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
     ∀ ρ ∈ s.fired, (Node.step cfg s inp).1.top.getD 0 ≤ ρ → ρ ∈ (Node.step cfg s inp).1.fired := by
-  rcases step_shape (cfg := cfg) hs hr with ⟨he, -⟩ | ⟨x, pre, he, hx, -, -, hf, -⟩
+  rcases step_shape (cfg := cfg) hl hs hr with ⟨he, -⟩ | ⟨x, pre, he, hx, -, -, hf, -⟩
   · rw [he]; exact fun ρ h _ => h
   · rw [he]
     exact fun ρ h hρ => (settle_shape (cfg := cfg) hx).fired ρ (hf h) hρ
 
 /-- **What a step builds it stores**, at its round, or the block lies
 below the horizon. -/
-theorem step_keeps_built (hs : s.recovering = false) (hr : inp ≠ .restart) :
+theorem step_keeps_built (hl : cfg.limit = none) (hs : s.recovering = false) (hr : inp ≠ .restart) :
     KeepsBuilt (Node.step cfg s inp).2 (Node.step cfg s inp).1 := by
-  rcases step_shape (cfg := cfg) hs hr with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, -, -, hpre⟩
+  rcases step_shape (cfg := cfg) hl hs hr with ⟨-, hq⟩ | ⟨x, pre, he, hx, -, -, -, hpre⟩
   · intro e he; rw [hq.1] at he; cases he
   · rw [he]
     intro e he'

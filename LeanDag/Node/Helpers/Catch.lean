@@ -184,22 +184,22 @@ theorem decided_comparable (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
   exact AnchoredRule.decided_agree hlaws trivial h₁ h₂
 
 /-- **A reliable node keeps what it keeps** before every event. -/
-theorem kept_before {v : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) (i : ℕ) :
+theorem kept_before (hl : cfg.limit = none) {v : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) (i : ℕ) :
     Kept (cfg.at v) [] (stateBefore cfg tr i v) ∧ Covered (cfg.at v) (stateBefore cfg tr i v) :=
-  inv_before (cfg := cfg) hnr (fun s => Kept (cfg.at v) [] s ∧ Covered (cfg.at v) s)
+  inv_before (cfg := cfg) hl hnr (fun s => Kept (cfg.at v) [] s ∧ Covered (cfg.at v) s)
     ⟨Kept.init, Covered.init⟩ (fun _ _ h hs hr =>
       have h' := h.1.step h.2 (by simp) hs hr (by simp); ⟨h'.1, h'.2.1⟩) i
 
 /-- **A certificate a reliable node announces** is good for its state
 after the event. -/
-theorem announce_good {u : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (u, Input.restart)) {e : ℕ}
+theorem announce_good (hl : cfg.limit = none) {u : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (u, Input.restart)) {e : ℕ}
     {inp : Input Validator BlockId Payload} (he : tr[e]? = some (u, inp))
     {c : Cert Validator BlockId} (hc : Output.announce c ∈ outputsAt cfg tr e) :
     GoodFor (cfg.at u) c (stateBefore cfg tr (e + 1) u) := by
   rw [outputsAt_eq he] at hc
   rw [stateBefore_succ he, if_pos rfl]
-  have hk := kept_before (cfg := cfg) hnr e
-  exact (hk.1.step hk.2 (by simp) (fired_before (cfg := cfg) hnr e).1
+  have hk := kept_before (cfg := cfg) hl hnr e
+  exact (hk.1.step hk.2 (by simp) (fired_before (cfg := cfg) hl hnr e).1
     (fun h => hnr e (by rw [he, h])) (by simp)).2.2 c hc
 
 variable {time : ℕ → ℕ} {gst Δ t₁ : ℕ}
@@ -208,7 +208,7 @@ variable {time : ℕ → ℕ} {gst Δ t₁ : ℕ}
 reliable peer announces, within `3Δ` past GST: it confirms it, or asks
 the peer for the decisions it certifies and adopts or confirms what the
 peer serves. -/
-theorem cert_catches {T : Finset Validator}
+theorem cert_catches (hl : cfg.limit = none) {T : Finset Validator}
     (hcmp : ∀ u ∈ T, ∀ v ∈ T, ∀ i j, (stateBefore cfg tr i u).decided.reverse <+:
       (stateBefore cfg tr j v).decided.reverse ∨
         (stateBefore cfg tr j v).decided.reverse <+: (stateBefore cfg tr i u).decided.reverse)
@@ -221,22 +221,22 @@ theorem cert_catches {T : Finset Validator}
       c.height ≤ (stateBefore cfg tr (l + 1) v).certHeight := by
   have hnu : ∀ i : ℕ, tr[i]? ≠ some (u, Input.restart) := fun i => hnr i u hu
   have hnv : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart) := fun i => hnr i v hv
-  obtain ⟨hq, hnd, hm, -, -⟩ := announce_good (cfg := cfg) hnu he hc
-  have hgood := announce_good (cfg := cfg) hnu he hc
+  obtain ⟨hq, hnd, hm, -, -⟩ := announce_good (cfg := cfg) hl hnu he hc
+  have hgood := announce_good (cfg := cfg) hl hnu he hc
   -- the announcement arrives
   obtain ⟨j, hej, hj, htj⟩ := hdel e u inp he hu (v, .announced u c)
     ⟨.announce c, hc, Ne.symm huv, rfl⟩ hv (by omega)
-  have hrj := (fired_before (cfg := cfg) hnv j).1
+  have hrj := (fired_before (cfg := cfg) hl hnv j).1
   have hsj : stateBefore cfg tr (j + 1) v =
       (Node.step (cfg.at v) (stateBefore cfg tr j v) (.announced u c)).1 := by
     rw [stateBefore_succ hj, if_pos rfl]
   have hlj : (tr[j]?.map Prod.fst) = some v := by rw [hj]; rfl
   by_cases hge : c.height ≤ (stateBefore cfg tr j v).certHeight
   · exact ⟨j, hej, hlj, by omega,
-      hge.trans (rises_before (cfg := cfg) hnv (Nat.le_succ j)).2.2.2⟩
+      hge.trans (rises_before (cfg := cfg) hl hnv (Nat.le_succ j)).2.2.2⟩
   have hlt := not_le.mp hge
-  obtain ⟨hKj, hcovj⟩ := kept_before (cfg := cfg) hnv j
-  have hKe := (kept_before (cfg := cfg) hnu (e + 1)).1
+  obtain ⟨hKj, hcovj⟩ := kept_before (cfg := cfg) hl hnv j
+  have hKe := (kept_before (cfg := cfg) hl hnu (e + 1)).1
   have hst : Node.step (cfg.at v) (stateBefore cfg tr j v) (.announced u c) =
       if confirms (cfg.at v) (stateBefore cfg tr j v) c then
         Node.confirm (cfg.at v) (stateBefore cfg tr j v) c
@@ -266,9 +266,9 @@ theorem cert_catches {T : Finset Validator}
     ⟨.requestDecisions u lo, by rw [hout]; exact List.mem_singleton_self _, rfl, rfl⟩ hu
     (by show max (time j) gst + Δ ≤ t₁; omega)
   -- the peer serves its certificate, at or above the one it announced
-  obtain ⟨hKk, -⟩ := kept_before (cfg := cfg) hnu k
+  obtain ⟨hKk, -⟩ := kept_before (cfg := cfg) hl hnu k
   have hck : c.height ≤ (stateBefore cfg tr k u).certHeight :=
-    hgood.2.2.2.1.trans (rises_before (cfg := cfg) hnu (by omega : e + 1 ≤ k)).2.2.2
+    hgood.2.2.2.1.trans (rises_before (cfg := cfg) hl hnu (by omega : e + 1 ≤ k)).2.2.2
   obtain ⟨c', hc'⟩ : ∃ c', (stateBefore cfg tr k u).cert = some c' := by
     rcases h : (stateBefore cfg tr k u).cert with _ | c'
     · simp [State.certHeight, h] at hck; omega
@@ -282,23 +282,23 @@ theorem cert_catches {T : Finset Validator}
     rw [outputsAt_eq hk]
     change (if v ≠ (cfg.at u).me then serveFrom (stateBefore cfg tr k u) v lo else []) = _
     rw [if_pos (show v ≠ (cfg.at u).me from Ne.symm huv), hserve]
-  obtain ⟨l, hkl, hl, htl⟩ := hdel k u _ hk hu (v, .certOffer u c' ds)
+  obtain ⟨l, hkl, hlv, htl⟩ := hdel k u _ hk hu (v, .certOffer u c' ds)
     ⟨.serveCert v c' ds, by rw [houtk]; exact List.mem_singleton_self _, rfl, rfl⟩ hv
     (by omega)
-  have hll : (tr[l]?.map Prod.fst) = some v := by rw [hl]; rfl
+  have hll : (tr[l]?.map Prod.fst) = some v := by rw [hlv]; rfl
   refine ⟨l, by omega, hll, by omega, ?_⟩
   -- the node takes the served certificate
-  have hrl := (fired_before (cfg := cfg) hnv l).1
+  have hrl := (fired_before (cfg := cfg) hl hnv l).1
   have hsl : stateBefore cfg tr (l + 1) v =
       (Node.step (cfg.at v) (stateBefore cfg tr l v) (.certOffer u c' ds)).1 := by
-    rw [stateBefore_succ hl, if_pos rfl]
+    rw [stateBefore_succ hlv, if_pos rfl]
   by_cases hge' : c'.height ≤ (stateBefore cfg tr l v).certHeight
-  · exact hcc'.trans (hge'.trans (rises_before (cfg := cfg) hnv (Nat.le_succ l)).2.2.2)
+  · exact hcc'.trans (hge'.trans (rises_before (cfg := cfg) hl hnv (Nat.le_succ l)).2.2.2)
   have hlt' := not_le.mp hge'
   refine hcc'.trans ?_
-  obtain ⟨hKl, hcovl⟩ := kept_before (cfg := cfg) hnv l
+  obtain ⟨hKl, hcovl⟩ := kept_before (cfg := cfg) hl hnv l
   have hlol : lo ≤ (stateBefore cfg tr l v).lo :=
-    (rises_before (cfg := cfg) hnv (by omega : j ≤ l)).2.2.1
+    (rises_before (cfg := cfg) hl hnv (by omega : j ≤ l)).2.2.1
   have hcmpl := hcmp u hu v hv k l
   have hlenk : (stateBefore cfg tr k u).decided.reverse.length = (stateBefore cfg tr k u).lo := by
     rw [List.length_reverse, hKk.ledger.length]

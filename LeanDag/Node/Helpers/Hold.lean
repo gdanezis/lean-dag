@@ -427,7 +427,7 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
           · exact (flush_stays _ hA hPf hy (not_lt.mp hlt) (Or.inr h)).imp (fun h => h) Or.inl
           · exact absurd h hlt
       exact hset _ _ (step_deliver hAd) hA₁ hP₁ hb₁.ge hst₁
-    · rw [step_deliver_not_of hAd hs]
+    · rw [step_deliver_not_of hl hAd hs]
       exact hnot id b rfl hAd
   | timer r =>
     exact hset { s with fired := insert r s.fired } (timerAsk s r) (step_timer_eq s r) hA hP le_rfl
@@ -558,7 +558,7 @@ theorem stays_succ (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H 
       subst hw
       have hio := outputs_agree (cfg := cfg) hinj hv (i := a) (by rw [he]; rfl)
       rw [outputsAt_eq he] at hio
-      refine step_stays (cfg := cfg.at w) hl (fired_before (cfg := cfg) hnr a).1
+      refine step_stays (cfg := cfg.at w) hl (fired_before (cfg := cfg) hl hnr a).1
         (fun h => hnr a (by rw [he, h])) (agreesWith_before hinj hv a)
         (pending_agree_before hinj hv a) (fun id b hib hid => agrees_known hinj (Or.inl
           ⟨a, w, inp, he, hv, by rw [hib]; simp [delivered, hid]⟩)) hio
