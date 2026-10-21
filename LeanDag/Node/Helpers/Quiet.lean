@@ -195,14 +195,6 @@ theorem progress_below (hq : 2 ≤ cfg.q) {R : ℕ} : ∀ (fuel : ℕ) {s : Stat
         · rw [hs₁] at ht₂'; exact ⟨ht₂, by omega⟩
 
 omit [Fintype Validator] in
-theorem tryDecide_length_le {P : Validity Validator BlockId Payload} {H : Finset Validator}
-    {p : Scheme.Params} {σ : Scheme.VoteSel Validator BlockId Payload P H} [S : Slots Validator]
-    {U : BlockRecord Validator BlockId Payload P H} {V : U.View} {lo N : ℕ} (hlo : lo ≤ N + 1) :
-    (Scheme.tryDecide p σ U V lo N).length ≤ N + 1 - lo := by
-  rw [Scheme.tryDecide_eq hlo, List.length_map]
-  exact (List.takeWhile_sublist _).length_le.trans (by simp)
-
-omit [Fintype Validator] in
 /-- Certifying keeps the certificate's height or raises it to one at or
 below the height last proposed. -/
 theorem certifyAt_cert_le (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
@@ -516,8 +508,8 @@ theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
     (h : Node.tryBuild cfg s = none) (hst : s'.store = s.store) (ht : s'.top = s.top)
     (ho : s'.own = s.own) (hf : s'.fired = s.fired) (hx : s'.exposed = s.exposed) :
     Node.tryBuild cfg s' = none := by
-  obtain ⟨st, pd, top, own, fired, lo, rq, rc, of, ak, dc, lp, ch, ps, ce, cs, ow, ex⟩ := s
-  obtain ⟨st', pd', top', own', fired', lo', rq', rc', of', ak', dc', lp', ch', ps', ce', cs', ow',
+  obtain ⟨st, pd, top, own, fired, lo, rq, rc, of, ak, dc, lp, ch, ps, ce, ow, ex⟩ := s
+  obtain ⟨st', pd', top', own', fired', lo', rq', rc', of', ak', dc', lp', ch', ps', ce', ow',
     ex'⟩ := s'
   simp only at hst ht ho hf hx
   subst hst ht ho hf hx
@@ -595,7 +587,7 @@ theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
   -- the slot did not move
   have hdlo : d.lo = s.lo := by rw [← hz]; exact hlo
   refine ⟨?_, ?_, hgd.2, fun hlt => ?_⟩
-  · obtain ⟨-, -, -, hown, -, -, -, -, hfired, -, -⟩ := proposeAt_keeps (cfg := cfg)
+  · obtain ⟨-, -, -, hown, -, -, -, -, hfired, -⟩ := proposeAt_keeps (cfg := cfg)
       (if s.lo < decidable cfg s.store.topRound then
         { s with lo := s.lo + (Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ s.store.toRecord
             s.store.view s.lo (decidable cfg s.store.topRound - 1)).length,

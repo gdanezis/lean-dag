@@ -12,7 +12,7 @@ output:
   only what it persisted),
   `{"deliver":{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}}`,
   `{"fetchRequest":{"peer":v,"horizon":G,"ids":[…]}}`, `{"baseRequest":{"peer":v}}`,
-  `{"baseOffer":{"peer":v,"horizon":G,"blocks":[block…]}}`,
+  `{"baseOffer":{"peer":v,"horizon":G}}`,
   `{"proposal":{"peer":v,"height":k,"head":h}}` (a peer's signed proposal of
   the head of its chain of decisions, `LeanDagSim.chainHead`), and
   `{"certOffer":{"peer":v,"cert":{"height":k,"head":h,"signers":[…]},
@@ -27,7 +27,7 @@ output:
   and their histories above `G`),
   `{"send":{"peer":v,"block":block}}` (answer one), `{"requestBase":{}}`
   (ask every peer for its base),
-  `{"serveBase":{"peer":v,"horizon":G,"blocks":[block…]}}` (answer one),
+  `{"serveBase":{"peer":v,"horizon":G}}` (answer one),
   `{"propose":{"height":k,"head":h}}` (sign and send to every peer),
   `{"serveCert":{"peer":v,"cert":cert,"decisions":[…]}}` (answer one),
   `{"requestDecisions":{"peer":v,"lo":k}}` (ask peer `v` for the decisions
@@ -75,8 +75,8 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
   | .send peer id b => Json.mkObj [("send", Json.mkObj [("peer", peer.val),
       ("block", blockJson id b)])]
   | .requestBase => Json.mkObj [("requestBase", Json.mkObj [])]
-  | .serveBase peer G bs => Json.mkObj [("serveBase", Json.mkObj [("peer", peer.val),
-      ("horizon", G), ("blocks", Json.arr (bs.map fun e => blockJson e.1 e.2).toArray)])]
+  | .serveBase peer G => Json.mkObj [("serveBase", Json.mkObj [("peer", peer.val),
+      ("horizon", G)])]
   | .propose k h => Json.mkObj [("propose", Json.mkObj [("height", k), ("head", h)])]
   | .serveCert peer c ds => Json.mkObj [("serveCert", Json.mkObj [("peer", peer.val),
       ("cert", certJson c), ("decisions", decisionsJson ds)])]
@@ -129,8 +129,7 @@ def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ
   if let .ok m := j.getObjVal? "baseOffer" then
     let peer ← natField m "peer"
     let G ← natField m "horizon"
-    let bs ← ((← m.getObjVal? "blocks").getArr?) >>= fun a => a.toList.mapM (blockOf (n := n))
-    if h : peer < n then return .baseOffer ⟨peer, h⟩ G bs
+    if h : peer < n then return .baseOffer ⟨peer, h⟩ G
     else throw s!"peer {peer} out of range"
   if let .ok m := j.getObjVal? "proposal" then
     return .proposal (← validatorOf (← m.getObjVal? "peer")) (← natField m "height")

@@ -406,7 +406,7 @@ theorem event_of_mem (hinj : Converge.HashInjective cfg H tr)
 /-- **A reliable node's block is in the run's record**, at its round and
 by its author. -/
 theorem built_mem (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hoff : Boot.TimelyOffers cfg H tr)
+    (htime : Converge.TimelyAuthentic cfg H tr)
     (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hchain : Boot.ChainInjective cfg H tr) {v : Validator} (hv : v ∈ H)
     (hnv : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) {p : ℕ}
@@ -429,7 +429,7 @@ theorem built_mem (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel) (hadm : cf
     by simp only [globalRecord, globalBlock_creator, hcont]; exact hgood⟩
   by_cases h0 : e.2.round = 0
   · exact mem_globalIds.mpr ⟨mem_knownIds hK, by rw [hcont, h0]; trivial⟩
-  obtain ⟨x, y, o, hbs, hb, heo⟩ := build_witness hl hσ hadm hf htime hoff hcert hinj hchain hv
+  obtain ⟨x, y, o, hbs, hb, heo⟩ := build_witness hl hσ hadm hf htime hcert hinj hchain hv
     hnv hp he h0
   have hg := ground (cfg := cfg) hinjR hauthR hadm.2.2.2.1
   obtain ⟨r, id, b, hnew, hab, hrefs, hpred, -, -, -, -, -, hst, -, -, -, hout⟩ := tryBuild_some hb
@@ -473,7 +473,7 @@ tests, `u` passes them with the references the block lends; if on the
 round's timer, `u`'s has fired too. -/
 theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hoff : Boot.TimelyOffers cfg H tr)
+    (htime : Converge.TimelyAuthentic cfg H tr)
     (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hchain : Boot.ChainInjective cfg H tr) (hTH : T ⊆ H) (hnr : Converge.NoRestart T tr)
     (hmono : Live.TimeMono tr time) (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
@@ -519,11 +519,11 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bo
     rcases settled_before (cfg := cfg) hl hq hnu E with h | h
     · rw [hZt] at h; cases h
     · exact h
-  have hZcut := (cut_before hσ hadm hf htime hoff hcert hinj hchain E u (hTH hu)).1
+  have hZcut := (cut_before hσ hadm hf htime hcert hinj hchain E u (hTH hu)).1
   have hZb : Z.store.base ≤ n - cfg.lag := base_le_top_sub hl hnu E hZt
   obtain ⟨o, hoo, hoi, hor, hoc⟩ := ownTop_before (cfg := cfg) hl hnu E n hZt
   -- the peer's build
-  obtain ⟨x, y, out, hbs, hb, heo⟩ := build_witness hl hσ hadm hf htime hoff hcert hinj hchain
+  obtain ⟨x, y, out, hbs, hb, heo⟩ := build_witness hl hσ hadm hf htime hcert hinj hchain
     (hTH hw) hnw hi he (by omega)
   obtain ⟨r, hxt, -, hexit, hout⟩ := tryBuild_exit hb
   obtain ⟨r', id, b, hnew, -, hrefs, hpred, hxt', hbr, -, -, hrv, -, -, -, -, hout'⟩ :=
@@ -552,7 +552,7 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bo
   obtain ⟨hRq, hRd⟩ := refs_of_rowValid (cfg := cfg.at w) hnew (hrefs hxb) (by omega) hrv
   rw [hbR] at hRq hRd
   -- the peer's block arrives
-  obtain ⟨hzZ, hzr, hzc, hzb⟩ := block_arrives hl hq hσ hadm hf htime hoff hcert hinj hchain hTH
+  obtain ⟨hzZ, hzr, hzc, hzb⟩ := block_arrives hl hq hσ hadm hf htime hcert hinj hchain hTH
     hnr hmono hdel hsync hcmp hw hu (Ne.symm huw) hi he (s := time i) le_rfl (τ := τ)
     (by rw [max_eq_left hgi]; omega) ht₁ hZt (le_of_eq hbr)
     (by change Z.store.base ≤ b.round; omega)
@@ -649,7 +649,7 @@ built round `n₀` within `A` of each other, they build every round from
 (`catches_up`). -/
 theorem drift (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hoff : Boot.TimelyOffers cfg H tr)
+    (htime : Converge.TimelyAuthentic cfg H tr)
     (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hchain : Boot.ChainInjective cfg H tr) (hTH : T ⊆ H) (hnr : Converge.NoRestart T tr)
     (hmono : Live.TimeMono tr time) (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
@@ -695,7 +695,7 @@ theorem drift (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bounded
     have hun := (top_of_built hl hnu hmono hbu heu (τ := time i + (3 * Δ + Δₛ))
       (by have := (ih u hu w hw).2; omega)).2
     rw [heur] at hun
-    have hup := catches_up hq hl hσ hadm hf hid htime hoff hcert hinj hchain hTH hnr hmono hdel
+    have hup := catches_up hq hl hσ hadm hf hid htime hcert hinj hchain hTH hnr hmono hdel
       htimer hsync hvo hcmp hu hw huw hi he her (by omega) hus hun (ih u hu w hw).2 (by omega)
       fun v hv k hk => hex v hv k (by omega)
     have := builtAt_le_of_top hl hnu hmono hus hup

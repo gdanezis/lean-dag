@@ -132,25 +132,8 @@ theorem Sparse.settle {s : State Validator BlockId Payload} (h : Sparse cfg s) :
     Sparse cfg (Node.settle cfg s).1 := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hr, he⟩ <;> rw [he]
   · exact quiesce_ind (fun _ h => h.advance) _ _ h
-  · refine quiesce_ind (fun _ h => h.advance) _ _ (h.frame ?_ ?_ ?_) <;>
-    · unfold Node.tryResume at hr
-      split at hr
-      · dsimp only at hr
-        split at hr
-        · split at hr
-          · rw [Option.some.injEq] at hr; subst hr; rfl
-          · cases hr
-        · cases hr
-      · cases hr
-
-omit [Fintype Validator] in
-theorem Sparse.bootFrom {s : State Validator BlockId Payload} (h : Sparse cfg s) :
-    Sparse cfg (Node.bootFrom cfg s).1 := by
-  rcases bootFrom_cases (cfg := cfg) s with he | ⟨s₂, ads, hbt, he⟩ <;> rw [he]
-  · exact h
-  · obtain ⟨t, G, c, ds, -, -, -, -, -, -, -, -, -, hlo, -, -, -, -, -, -, -, hp, -⟩ :=
-      tryBoot_some hbt
-    exact (h.above hp (by rw [hlo]; exact le_max_left _ _)).advance
+  · obtain ⟨R, rc, rfl⟩ := tryResume_eq hr
+    exact quiesce_ind (fun _ h => h.advance) _ _ (h.frame rfl rfl le_rfl)
 
 /-! ## A step, and a run -/
 
@@ -178,18 +161,17 @@ theorem Sparse.step {s : State Validator BlockId Payload} (h : Sparse cfg s)
     exact Sparse.settle (h.mono (List.nil_sublist _) (fun _ hx => by simp [State.recover] at hx)
       le_rfl)
   | baseRequest => exact h
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     rw [step_offer]
     split
-    · exact Sparse.bootFrom (h.frame rfl rfl le_rfl)
+    · exact Sparse.settle (h.frame rfl rfl le_rfl)
     · exact h
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩ <;> rw [he]
-    · exact Sparse.bootFrom (h.frame rfl rfl le_rfl)
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
+      ⟨-, -, he⟩ | he <;> rw [he]
     · rw [adopt_eq]
-      exact (h.above (s' := adopted { s with certs := l } c ds') rfl (adoptable_lo ha).le).settle
-    · let s₁ := { s with certs := l }
+      exact (h.above (s' := adopted s c ds') rfl (adoptable_lo ha).le).settle
+    · let s₁ := s
       exact (h.above (s' := { s₁ with cert := some c, props := Node.above (some c) s.props }) rfl
         le_rfl).settle
     · exact h.frame rfl rfl le_rfl

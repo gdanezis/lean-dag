@@ -4,9 +4,9 @@ import LeanDag.Node.Model.Step
 
 `run cfg s is` feeds the inputs `is` to the node in turn and collects its
 outputs. `persists` reads the node's own blocks among the outputs,
-`broadcasts` those it sent, and `delivered` the blocks among the inputs,
-delivered or offered, whose identifier is their hash: together, what
-the node knew. `isQuiet` marks the outputs that neither persist nor
+`broadcasts` those it sent, and `delivered` the blocks delivered among
+the inputs whose identifier is their hash: together, what the node
+knew. `isQuiet` marks the outputs that neither persist nor
 broadcast a block.
 
 `commitsOf` reads the decisions among the outputs. Many nodes run over
@@ -33,13 +33,12 @@ def run : State Validator BlockId Payload → List (Input Validator BlockId Payl
     let r' := run r.1 is
     (r'.1, r.2 ++ r'.2)
 
-/-- The blocks among some inputs, delivered or offered, whose identifier
-is their hash. -/
+/-- The blocks among some inputs, delivered, whose identifier is their
+hash. -/
 def delivered (is : List (Input Validator BlockId Payload)) :
     List (BlockId × Block Validator BlockId Payload) :=
   is.flatMap fun
     | .deliver id b => if id = cfg.idOf b then [(id, b)] else []
-    | .baseOffer _ _ bs => bs.filter fun e => decide (e.1 = cfg.idOf e.2)
     | _ => []
 
 variable {cfg}

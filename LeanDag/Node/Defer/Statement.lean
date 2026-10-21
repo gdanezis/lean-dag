@@ -32,7 +32,7 @@ def Decides : Prop :=
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
-    Converge.TimelyAuthentic cfg H tr → Boot.TimelyOffers cfg H tr → Boot.TimelyCerts cfg H tr →
+    Converge.TimelyAuthentic cfg H tr → Boot.TimelyCerts cfg H tr →
     Converge.HashInjective cfg H tr → Boot.ChainInjective cfg H tr →
     ∃ U : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H,
       (∀ j ∈ U.ids, ∃ v ∈ H, ∃ x ∈ knownOf cfg tr v, x.1 = j) ∧

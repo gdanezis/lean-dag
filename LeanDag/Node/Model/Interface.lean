@@ -107,13 +107,14 @@ def slotsAt (r : ℕ) : List ℕ :=
 committee's size, the bound `f` and the quorum `q`, its certificates fit
 the quorum, and its commit threshold is reachable by the validators
 neither Byzantine nor crash-prone, which is what liveness reads; a row
-whose skip threshold is unreachable skips by the indirect rule; and a
+whose skip threshold is unreachable skips by the indirect rule; a
 quorum holds a node that is not Byzantine, which is what a checkpoint
-certificate reads. -/
+certificate reads; and a direct skip needs a block, which is what a
+bootstrap reads. -/
 def Admissible : Prop :=
   cfg.p.Covered (Fintype.card Validator) cfg.f cfg.q ∧ cfg.p.CertFits cfg.q ∧
     cfg.p.commitThreshold ≤ Fintype.card Validator - cfg.f - cfg.c ∧ 0 < cfg.q ∧
-    cfg.q ≤ Fintype.card Validator ∧ cfg.f < cfg.q
+    cfg.q ≤ Fintype.card Validator ∧ cfg.f < cfg.q ∧ 0 < cfg.p.skipThreshold
 
 instance : Decidable cfg.Admissible := by
   unfold Admissible Scheme.Params.Covered Scheme.Params.CertFits
@@ -173,8 +174,8 @@ inductive Input where
   | timer (r : ℕ)
   /-- A crash and restart: the node keeps only what it persisted. -/
   | restart
-  /-- A peer's base: its round-`G` blocks and its window above them. -/
-  | baseOffer (peer : Validator) (G : ℕ) (blocks : List (BlockId × Block Validator BlockId Payload))
+  /-- A peer's base: its horizon `G`. -/
+  | baseOffer (peer : Validator) (G : ℕ)
   /-- A peer asks for the base. -/
   | baseRequest (peer : Validator)
   /-- A peer at horizon `G` asks for the blocks `ids` and their histories. -/
@@ -204,8 +205,8 @@ inductive Output where
   | prune (G : ℕ)
   /-- Ask every peer for its base. -/
   | requestBase
-  /-- Send the base and window to a peer. -/
-  | serveBase (peer : Validator) (G : ℕ) (blocks : List (BlockId × Block Validator BlockId Payload))
+  /-- Send the horizon `G` to a peer as its base. -/
+  | serveBase (peer : Validator) (G : ℕ)
   /-- Ask the peer for the blocks `ids` and their histories above the
   horizon `G`. -/
   | fetch (peer : Validator) (G : ℕ) (ids : List BlockId)

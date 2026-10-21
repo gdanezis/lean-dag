@@ -48,12 +48,14 @@ def rows : List String :=
 the honest program. -/
 inductive Attack where
   /-- Answer a base request with a fabricated base: a horizon five rounds
-  above its top, and reference-free blocks there in every node's name. -/
+  above its top, and reference-free blocks there in every node's name,
+  sent to the requester. -/
   | fakeBase
   /-- As `fakeBase`, with a different horizon for each requester. -/
   | splitBase
-  /-- Answer a base request with a certificate of fabricated decisions,
-  every slot skipped, listing every node as a signer. -/
+  /-- Answer a base request with a certificate of fabricated decisions:
+  its own decisions, then every slot up to ten rounds above its top
+  skipped, listing every node as a signer. -/
   | fakeCert
   /-- Send half the nodes its proposal, and the other half one with
   another head, both signed. -/
@@ -233,7 +235,8 @@ structure Report where
   /-- The skips the honest nodes made: a recovering node resuming at a
   round above its top. -/
   skips : ℕ
-  /-- The bootstraps the honest nodes made. -/
+  /-- The bootstraps the honest nodes made: a recovering node's top
+  rising at a step at which it may jump to an offered horizon. -/
   boots : ℕ
   /-- The inputs the signature checks dropped. -/
   dropped : ℕ
@@ -366,13 +369,13 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
             ((t + dt, d, .announced s.node c) :: acc.1, g')
           else acc
         | _, _ => acc) acc
-    | .serveBase peer G bs =>
+    | .serveBase peer G =>
       (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if a.node = peer then
             let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
-            ((t + dt, d, .baseOffer s.node G bs) :: acc.1, g')
+            ((t + dt, d, .baseOffer s.node G) :: acc.1, g')
           else acc
         | _, _ => acc) acc
     | .requestDecisions peer lo =>
@@ -459,12 +462,10 @@ def authentic (w : World n) (id : ℕ) (b : Block (Fin n) ℕ ℕ) : Bool :=
   !(sc.honest b.creator.val) || (w.blocks.get? id).any (sameBlock b)
 
 /-- **The signature checks** on an input: a block in an honest author's
-name is one it made, an offered base keeps only such blocks, and an
-offered or announced certificate's honest signers signed its head at its
-height. -/
+name is one it made, and an offered or announced certificate's honest
+signers signed its head at its height. -/
 def checked (w : World n) : Input (Fin n) ℕ ℕ → Option (Input (Fin n) ℕ ℕ)
   | .deliver id b => if authentic sc w id b then some (.deliver id b) else none
-  | .baseOffer peer G bs => some (.baseOffer peer G (bs.filter fun e => authentic sc w e.1 e.2))
   | .certOffer peer c ds =>
     if c.signers.all fun v => !(sc.honest v.val) || w.signed.contains (v.val, c.height, c.head)
     then some (.certOffer peer c ds) else none
@@ -493,12 +494,13 @@ def attacked (agents : Array (Agent n)) (src t : ℕ) (a : Agent n) (st : State 
         let b : Block (Fin n) ℕ ℕ := ⟨G, v, ∅, 7⟩
         (idOf b, b)
       let out := if has .fakeBase || has .splitBase then
-          out.map fun (o : Output (Fin n) ℕ ℕ) => match o with
-          | .serveBase p _ _ => Output.serveBase p G fake
-          | o => o
+          (out.map fun (o : Output (Fin n) ℕ ℕ) => match o with
+            | .serveBase p _ => Output.serveBase p G
+            | o => o) ++ fake.map fun (e : ℕ × Block (Fin n) ℕ ℕ) => Output.send peer e.1 e.2
         else out
       let h := top + 10
-      let fds : List (ℕ × Option ℕ) := (List.range h).map fun k => (k, none)
+      let fds : List (ℕ × Option ℕ) :=
+        st.decided.reverse ++ (List.range' st.lo (h - st.lo)).map fun k => (k, none)
       let fc : Cert (Fin n) ℕ := ⟨h, chainHead fds, List.finRange n⟩
       if has .fakeCert then
         (out.filter fun (o : Output (Fin n) ℕ ℕ) => match o with
@@ -636,9 +638,9 @@ def loop : ℕ → World n → World n
           | .send _ id b => if id = idOf b then some (id, b) else none
           | _ => none
         let skip := st.recovering && !r.1.recovering
-        let boot := match i with
-          | .baseOffer .. => st.recovering && r.1.offers.isEmpty
-          | _ => false
+        let boot := st.recovering && (st.top.getD 0) < (r.1.top.getD 0) &&
+          (jumpRound cfg { st with offers := r.1.offers, lo := r.1.lo, cert := r.1.cert }
+            (st.top.getD 0)).isSome
         let decs := r.2.filterMap fun
           | .commit k x => some (k, x)
           | _ => none
@@ -762,7 +764,8 @@ def simulate (sc : Scenario) : Report :=
             s!"node {v}: recovering {st.recovering} top {st.top} own {st.own.isSome} " ++
               s!"base {st.store.base} lo {st.lo} cert {st.certHeight} authors {auth t}/{auth (t + 1)}/{auth (t + 2)} " ++
               s!"pending {pend} exposed {st.exposed.card} fired {st.fired.sort (· ≤ ·)} " ++
-              s!"builds {(tryBuild cf st).isSome} reach {reach}"
+              s!"builds {(tryBuild cf st).isSome} reach {reach} " ++
+              s!"offers {st.offers.map fun o => (o.1.val, o.2)}"
           | none => s!"node {v}: none"
         commits := decs
         agree := agreeAt decs

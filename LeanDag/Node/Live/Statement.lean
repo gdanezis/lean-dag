@@ -22,8 +22,8 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
   (`docs/validator.md` §1);
 * every reliable node **starts** by `gst` (`StartedBy`), and none
   restarts;
-* timely authentication, of blocks, bases, certificates and the chain's
-  hash, since honest nodes outside `T` may rejoin (as for V9);
+* timely authentication, of blocks, certificates and the chain's hash,
+  since honest nodes outside `T` may rejoin (as for V9);
 * the injective hash, injective on every block, no rate limiting, at
   most `f` nodes outside `H`, `n − f − c` reliable nodes, a quorum of two
   or more, `2 (3Δ + Δₛ) < timeout r` at every round, and a horizon lag
@@ -166,7 +166,7 @@ def Progresses : Prop :=
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → cfg.p.voteOffset ≤ cfg.lag →
     (∀ r, 2 * (3 * Δ + Δₛ) < cfg.timeout r) →
-    Converge.TimelyAuthentic cfg H tr → Boot.TimelyOffers cfg H tr → Boot.TimelyCerts cfg H tr →
+    Converge.TimelyAuthentic cfg H tr → Boot.TimelyCerts cfg H tr →
     Converge.HashInjective cfg H tr → Boot.ChainInjective cfg H tr → Converge.NoRestart T tr →
     TimeMono tr time → DeliveredWithin cfg T tr time gst Δ t₁ → TimersOnTime cfg T tr time t₁ →
     SyncedWithin cfg H T tr time gst Δₛ t₁ → StartedBy T tr time gst →

@@ -219,13 +219,122 @@ theorem IsCut.extend [P.Mechanised] (hc : IsCut U st) (V : U.View)
 end Cut
 
 omit [Fintype Validator] in
-/-- A started node's cut reaches its horizon, through a block at or above its top. -/
+theorem tryDecide_length_le {P : Validity Validator BlockId Payload} {H : Finset Validator}
+    {p : Scheme.Params} {σ : Scheme.VoteSel Validator BlockId Payload P H} [S : Slots Validator]
+    {U : BlockRecord Validator BlockId Payload P H} {V : U.View} {lo N : ℕ} (hlo : lo ≤ N + 1) :
+    (Scheme.tryDecide p σ U V lo N).length ≤ N + 1 - lo := by
+  rw [Scheme.tryDecide_eq hlo, List.length_map]
+  exact (List.takeWhile_sublist _).length_le.trans (by simp)
+
+omit [Fintype Validator] in
+theorem tryBuild_recovering {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
+    s'.recovering = s.recovering := by
+  unfold tryBuild at h
+  split at h
+  · dsimp only at h
+    split at h
+    · split at h
+      · rw [Option.some.injEq, Prod.mk.injEq] at h; rw [← h.1]
+      · cases h
+    · cases h
+  · cases h
+
+omit [Fintype Validator] in
+theorem progress_recovering : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
+    (Node.progress cfg fuel s).1.recovering = s.recovering
+  | 0, _ => rfl
+  | fuel + 1, s => by
+    unfold Node.progress
+    split
+    · rename_i s₁ out hb
+      exact (progress_recovering fuel s₁).trans (tryBuild_recovering hb)
+    · rfl
+
+omit [Fintype Validator] in
+theorem collect_recovering (s : State Validator BlockId Payload) :
+    (Node.collect cfg s).1.recovering = s.recovering := by
+  unfold Node.collect
+  split
+  · dsimp only; split <;> rfl
+  · rfl
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- A record that reaches a round reaches every round below it. -/
+theorem Spans.mono {G G' : ℕ} (h : Spans U G) (hle : G' ≤ G) : Spans U G' := by
+  rcases h with rfl | ⟨j, hj, hjr⟩
+  · exact Or.inl (by omega)
+  · exact Or.inr ⟨j, hj, hle.trans hjr⟩
+
+variable (cfg U) in
+/-- **The record reaches the round of every slot the node decided.** -/
+def SpansDecided (s : State Validator BlockId Payload) : Prop :=
+  ∀ k < s.lo, Spans U (cfg.slots.slotRound k)
+
+omit [Fintype Validator] in
+/-- A slot among those at rounds at most `R` lies at a round at most `R`. -/
+theorem slotRound_le_of_decidable {k R : ℕ} (hk : k < decidable cfg R) :
+    cfg.slots.slotRound k ≤ R := by
+  change cfg.per * (k / cfg.m) ≤ R
+  unfold decidable at hk
+  have h₁ : k / cfg.m ≤ R / cfg.per := by
+    have := (Nat.div_lt_iff_lt_mul cfg.m_pos).mpr (by rw [Nat.mul_comm]; exact hk)
+    omega
+  exact (Nat.mul_le_mul_left _ h₁).trans (Nat.mul_div_le _ _)
+
+omit [Fintype Validator] in
+/-- A slot at a round the store's top reaches is reached by the record. -/
+theorem IsCut.spans_slot {st : Store Validator BlockId Payload} (hc : IsCut U st) {k : ℕ}
+    (hk : k < decidable cfg st.topRound) : Spans U (cfg.slots.slotRound k) := by
+  have hkr : cfg.slots.slotRound k ≤ st.topRound := slotRound_le_of_decidable hk
+  rcases st.ids.eq_empty_or_nonempty with he | ⟨j, hj⟩
+  · have : st.topRound = 0 := by unfold Store.topRound; rw [he]; rfl
+    exact Or.inl (by omega)
+  · obtain ⟨i, hi, hmax⟩ := Finset.exists_max_image st.ids (fun i => (st.blk i).round) ⟨j, hj⟩
+    have htop : st.topRound = (st.blk i).round :=
+      le_antisymm (Finset.sup_le fun i' hi' => hmax i' hi')
+        (Finset.le_sup (f := fun i => (st.blk i).round) hi)
+    exact Or.inr ⟨i, (hc i hi).1, by rw [hc.round hi, ← htop]; exact hkr⟩
+
+omit [Fintype Validator] in
+/-- A pass decides only slots at rounds its store reaches. -/
+theorem decideStep_lo_le (s : State Validator BlockId Payload) :
+    (Node.decideStep cfg s).1.lo ≤ max s.lo (decidable cfg s.store.topRound) := by
+  unfold Node.decideStep
+  dsimp only
+  split
+  · rename_i hlt
+    generalize hds : Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ s.store.toRecord
+      s.store.view s.lo (decidable cfg s.store.topRound - 1) = ds
+    have hlen : ds.length ≤ decidable cfg s.store.topRound - 1 + 1 - s.lo := by
+      rw [← hds]; exact tryDecide_length_le (S := cfg.slots) (by omega)
+    rw [(proposeAt_keeps _).2.2.2.2.2.1]
+    change s.lo + ds.length ≤ _
+    omega
+  · rw [(proposeAt_keeps _).2.2.2.2.2.1]; exact le_max_left _ _
+
+omit [Fintype Validator] in
+/-- **Deciding keeps the record reaching the decided slots**: a pass
+decides slots at rounds its store, a cut, reaches. -/
+theorem SpansDecided.decideStep {s : State Validator BlockId Payload} (h : SpansDecided cfg U s)
+    (hc : IsCut U s.store) : SpansDecided cfg U (Node.decideStep cfg s).1 := by
+  intro k hk
+  by_cases hks : k < s.lo
+  · exact h k hks
+  · have := decideStep_lo_le (cfg := cfg) s
+    exact hc.spans_slot (by omega)
+
+omit [Fintype Validator] in
+/-- **A started node's cut reaches its horizon**, through a block at or
+above its top, or, while it recovers, the round of a slot it decided,
+which the record reaches. -/
 theorem IsCut.spans {s : State Validator BlockId Payload} (hc : IsCut U s.store)
-    (hh : Held cfg s) : Spans U s.store.base := by
+    (hh : Held cfg s) (hr : s.recovering = true → SpansDecided cfg U s) : Spans U s.store.base := by
   rcases ht : s.top with _ | t
   · exact Or.inl (hh.low ht)
-  · obtain ⟨o, hoi, hor⟩ := hh.top t ht
-    exact Or.inr ⟨o, (hc o hoi).1, by rw [hc.round hoi]; exact (hh.le_top t ht).trans hor⟩
+  · rcases hh.top t ht with ⟨o, hoi, hor⟩ | ⟨hrec, k, hk, hkt⟩
+    · exact Or.inr ⟨o, (hc o hoi).1, by rw [hc.round hoi]; exact (hh.le_top t ht).trans hor⟩
+    · exact (hr hrec k hk).mono ((hh.le_top t ht).trans hkt)
 
 omit [Fintype Validator] in
 theorem IsCut.tryBuild (hg : Ground U K cfg.q) {s s' : State Validator BlockId Payload}
@@ -422,25 +531,72 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
 omit [Fintype Validator] [P.Mechanised] in
 /-- **A pass from a cut keeps the store a cut.** -/
 theorem IsCut.advanceStore (hg : Ground U K cfg.q) {s : State Validator BlockId Payload}
-    (hc : IsCut U s.store) (hh : Held cfg s) (hp : ∀ e ∈ s.pending, e ∈ K)
-    (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : IsCut U (Node.advance cfg s).1.store := by
+    (hc : IsCut U s.store) (hh : Held cfg s) (hr : s.recovering = true → SpansDecided cfg U s)
+    (hp : ∀ e ∈ s.pending, e ∈ K)
+    (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : IsCut U (Node.advance cfg s).1.store ∧
+      ((Node.advance cfg s).1.recovering = true → SpansDecided cfg U (Node.advance cfg s).1) := by
   have hp₁ := (progress_pending (cfg := cfg) (s.store.topRound + 2) s).1
   simp only [Node.advance] at hb ⊢
   rw [persists_append, persists_append] at hb
   have hc₁ := IsCut.progress hg _ hc hh fun e he => hb e
     (List.mem_append_left _ (List.mem_append_left _ he))
   have hh₁ := Held.progress (s.store.topRound + 2) hh
-  generalize Node.progress cfg (s.store.topRound + 2) s = r at hp₁ hc₁ hh₁ ⊢
+  have hlo₁ := (Grows.progress (cfg := cfg) (s.store.topRound + 2) s).2
+  have hrc₁ := progress_recovering (cfg := cfg) (s.store.topRound + 2) s
+  generalize Node.progress cfg (s.store.topRound + 2) s = r at hp₁ hc₁ hh₁ hlo₁ hrc₁ ⊢
+  have hr₁ : r.1.recovering = true → SpansDecided cfg U r.1 := fun h k hk =>
+    hr (hrc₁ ▸ h) k (hlo₁ ▸ hk)
   have hd := decideStep_store (cfg := cfg) r.1
   have hdp := (decideStep_pending (cfg := cfg) r.1).1
   have hc₂ : IsCut U (Node.decideStep cfg r.1).1.store := by rw [hd]; exact hc₁
+  have hr₂ : (Node.decideStep cfg r.1).1.recovering = true →
+      SpansDecided cfg U (Node.decideStep cfg r.1).1 := fun h =>
+    SpansDecided.decideStep (hr₁ (by rw [← decideStep_recovering]; exact h)) hc₁
   obtain ⟨hh₃, -⟩ := Held.collect hh₁.decideStep
   have hc₃ := hc₂.collect (cfg := cfg)
   have hcp := (collect_sub (cfg := cfg) (Node.decideStep cfg r.1).1).1
-  generalize Node.collect cfg (Node.decideStep cfg r.1).1 = g at hh₃ hc₃ hcp ⊢
+  have hr₃ : (Node.collect cfg (Node.decideStep cfg r.1).1).1.recovering = true →
+      SpansDecided cfg U (Node.collect cfg (Node.decideStep cfg r.1).1).1 := fun h k hk =>
+    hr₂ (by rw [← collect_recovering]; exact h) k (by rw [← collect_lo]; exact hk)
+  generalize Node.collect cfg (Node.decideStep cfg r.1).1 = g at hh₃ hc₃ hcp hr₃ ⊢
   have hgp : ∀ e ∈ g.1.pending, e ∈ K := fun e he => hp e (by
     have := hcp e he; rwa [hdp, hp₁] at this)
-  exact IsCut.flush hg (g.1.pending.length + 1) g.1.pending hc₃ (hc₃.spans hh₃) hgp
+  exact ⟨IsCut.flush hg (g.1.pending.length + 1) g.1.pending hc₃ (hc₃.spans hh₃ hr₃) hgp, hr₃⟩
+
+omit [Fintype Validator] in
+/-- The decisions under the invariant number at most the slots at rounds
+the store's top reaches. -/
+theorem CommitInv.lo_le {s : State Validator BlockId Payload} {cs : List (ℕ × Option BlockId)}
+    (h : CommitInv cfg U s cs) : s.lo = 0 ∨ s.lo ≤ decidable cfg s.store.topRound := by
+  rcases h.2 with h0 | ⟨V, N, -, hN, hcs⟩
+  · left; rw [h.1, h0]; rfl
+  · right
+    have hlen : cs.length ≤ N + 1 := by
+      rw [hcs]
+      have := tryDecide_length_le (S := cfg.slots) (p := cfg.p) (σ := boundedSel) (U := U)
+        (V := V) (lo := 0) (N := N) (by omega)
+      omega
+    rw [h.1]; omega
+
+omit [Fintype Validator] in
+/-- **Under the invariant the record reaches each decided slot**, the
+decisions reading the store. -/
+theorem CommitInv.reaches {s : State Validator BlockId Payload} {cs : List (ℕ × Option BlockId)}
+    (h : CommitInv cfg U s cs) (hc : IsCut U s.store) : SpansDecided cfg U s := fun k hk => by
+  rcases h.lo_le with h0 | hle
+  · omega
+  · exact hc.spans_slot (by omega)
+
+omit [Fintype Validator] in
+/-- **Under the invariant the store's top round reaches the node's top.** -/
+theorem CommitInv.top_le {s : State Validator BlockId Payload} {cs : List (ℕ × Option BlockId)}
+    (h : CommitInv cfg U s cs) (hh : Held cfg s) : ∀ t, s.top = some t → t ≤ s.store.topRound := by
+  intro t ht
+  rcases hh.top t ht with ⟨o, hoi, hor⟩ | ⟨-, k, hk, hkt⟩
+  · exact hor.trans (Finset.le_sup (f := fun i => (s.store.blk i).round) hoi)
+  · rcases h.lo_le with h0 | hle
+    · omega
+    · exact hkt.trans (slotRound_le_of_decidable (by omega))
 
 theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
@@ -466,14 +622,15 @@ theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   have hc₂ : IsCut U (Node.decideStep cfg r.1).1.store := by rw [hd]; exact hc₁
   have hh₂ := hh₁.decideStep
   obtain ⟨hh₃, hk₃⟩ := Held.collect hh₂
-  have h₃ := h₂.keeps (collect_lo _) hk₃ hc₂
+  have h₃ := h₂.keeps (collect_lo _) (hk₃ (h₂.top_le hh₂)) hc₂
   have hc₃ := hc₂.collect (cfg := cfg)
   have hco := commitsOf_collect (cfg := cfg) (Node.decideStep cfg r.1).1
   have hcp := (collect_sub (cfg := cfg) (Node.decideStep cfg r.1).1).1
   generalize Node.collect cfg (Node.decideStep cfg r.1).1 = g at hh₃ h₃ hc₃ hco hcp ⊢
   have hgp : ∀ e ∈ g.1.pending, e ∈ K := fun e he => hp e (by
     have := hcp e he; rwa [hdp, hp₁] at this)
-  have hc₄ := IsCut.flush hg (g.1.pending.length + 1) g.1.pending hc₃ (hc₃.spans hh₃) hgp
+  have hc₄ := IsCut.flush hg (g.1.pending.length + 1) g.1.pending hc₃
+    (hc₃.spans hh₃ fun _ => h₃.reaches hc₃) hgp
   have hk₄ := (Grows.flush (cfg := cfg) (g.1.pending.length + 1) g.1.store g.1.pending).keeps
     (flush_base _ _ _)
   refine ⟨?_, hc₄⟩
@@ -513,7 +670,7 @@ theorem CommitInv.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       IsCut U (Node.settle cfg s).1.store := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hj, he⟩ <;> rw [he] at hb ⊢
   · exact CommitInv.quiesce hg hσ ht _ h hc hh hp hb
-  · obtain ⟨-, -, -, -, -, -, hst, hpd, -, -, hlo, -⟩ := tryResume_some hj
+  · obtain ⟨-, -, -, -, -, hst, hpd, -, -, hlo, -⟩ := tryResume_some hj
     have h₁ : CommitInv cfg U s₁ cs := h.keeps hlo (by rw [hst]; exact Keeps.refl _) hc
     exact CommitInv.quiesce hg hσ ht _ h₁ (by rw [hst]; exact hc) (hh.tryResume hj)
       (by rw [hpd]; exact hp) hb
@@ -560,7 +717,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         have hh₀ : Held cfg
             { { s with store := st, top := some 0, own := some gid } with
             owner := slotted cfg [(gid, cfg.genesis)] ++ s.owner, recovering := false } := by
-          refine ⟨fun t ht => ⟨_, Finset.mem_insert_self _ _, ?_⟩, hh.horizon,
+          refine ⟨fun t ht => Or.inl ⟨_, Finset.mem_insert_self _ _, ?_⟩, hh.horizon,
             fun ht => absurd ht (by simp), fun t _ => ?_, hh.junk⟩
           · simp only [Option.some.injEq] at ht
             simp only [st, Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self,
@@ -587,13 +744,13 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         · exact hx
         · exact hp e he
       have hc₁ : IsCut U s₁.store :=
-        IsCut.flush hg _ _ hc (hc.spans hh) hpend
+        IsCut.flush hg _ _ hc (hc.spans hh fun _ => h.reaches hc) hpend
       let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
       refine hset { s₂ with asked := askedAfter (cfg := cfg) s b }
         (evidence s id b ++
           (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++
           askOut (cfg := cfg) s b)
-        (h.keeps rfl (hg₁.keeps hb₁) hc) hc₁ (hh.grow hg₁ hb₁ rfl le_rfl)
+        (h.keeps rfl (hg₁.keeps hb₁) hc) hc₁ (hh.grow hg₁ hb₁ rfl le_rfl (fun hr => hr))
         (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by
           rw [commitsOf_append, commitsOf_append, commitsOf_evidence]; unfold askOut
@@ -618,7 +775,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     exact hset s.recover [.requestBase] (h.keeps rfl (Keeps.refl _) hc) hc
       (hh.grow (Grows.refl _) rfl rfl le_rfl) (fun e he => by simp [State.recover] at he) rfl
       (by simp only [Node.step]; rfl)
-  | baseOffer p G bs => exact absurd trivial hno
+  | baseOffer p G => exact absurd trivial hno
   | certOffer p c ds => exact absurd trivial hno
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he

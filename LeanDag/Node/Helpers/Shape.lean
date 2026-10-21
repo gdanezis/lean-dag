@@ -448,14 +448,15 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
     rw [step_timer_of hs]
     exact Or.inr ⟨_, [], hnil _, hs, rfl, rfl, Finset.subset_insert _ _, Or.inl ⟨Silent.nil, rfl⟩⟩
   | restart => exact absurd rfl hr
-  | baseOffer p G bs =>
-    rw [show Node.step cfg s (.baseOffer p G bs) = (s, []) by
+  | baseOffer p G =>
+    rw [show Node.step cfg s (.baseOffer p G) = (s, []) by
       simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]]
     exact Or.inl ⟨rfl, Silent.nil⟩
   | baseRequest p =>
     refine Or.inl ⟨rfl, silent_of fun o ho => ?_⟩
     simp only [Node.step, List.mem_cons, List.mem_append, List.mem_map] at ho
-    rcases ho with (rfl | ⟨c, -, rfl⟩) | ho
+    rcases ho with ((rfl | ⟨c, -, rfl⟩) | ⟨e, -, rfl⟩) | ho
+    · trivial
     · trivial
     · trivial
     · rw [if_neg (by simp [hs])] at ho; cases ho
@@ -475,10 +476,8 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
       · cases ho
     · cases ho
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, -, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
-    all_goals try obtain rfl := certs_of_not hcl hs
-    · rw [hs] at h₁; cases h₁
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, -, he⟩ |
+      ⟨-, -, he⟩ | he
     · rw [he, adopt_eq]
       refine Or.inr ⟨_, _, rfl, hs, rfl, rfl, subset_rfl, Or.inl ⟨silent_of fun o ho => ?_, rfl⟩⟩
       obtain ⟨_, -, rfl⟩ := List.mem_map.mp ho; trivial

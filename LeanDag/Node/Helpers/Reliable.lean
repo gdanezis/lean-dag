@@ -36,15 +36,13 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
     · rw [step_deliver_not_of hl hA hs]; exact Or.inl rfl
   | timer r => exact Or.inr ⟨_, rfl⟩
   | restart => exact absurd rfl hr
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact Or.inl trivial
   | baseRequest p => exact Or.inl rfl
   | fetchRequest p G ids => exact Or.inl rfl
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, -, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
-    all_goals try obtain rfl := certs_of_not hcl hs
-    · rw [hs] at h₁; cases h₁
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, -, he⟩ |
+      ⟨-, -, he⟩ | he
     · rw [he, adopt_eq]; exact Or.inr ⟨_, rfl⟩
     · rw [he]; exact Or.inr ⟨_, rfl⟩
     · rw [he]; exact Or.inl rfl
@@ -154,16 +152,14 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
       · exact ⟨le_rfl, fun h => h, le_rfl, le_rfl⟩
   | timer r => exact hset { s with fired := insert r s.fired } (Rises.refl s) hs rfl
   | restart => exact absurd rfl hr
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact Rises.refl s
   | baseRequest p => exact Rises.refl s
   | fetchRequest p G ids => exact Rises.refl s
   | decisionRequest p lo => exact Rises.refl s
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
-      ⟨l, hcl, -, hcf, he⟩ | ⟨l, hcl, he⟩
-    all_goals try obtain rfl := certs_of_not hcl hs
-    · rw [hs] at h₁; cases h₁
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
+      ⟨-, hcf, he⟩ | he
     · rw [adopt_eq] at he
       refine hset (adopted s c ds') ⟨le_rfl, id, (adoptable_lo ha).le, ?_⟩ hs (by rw [he])
       unfold adopted State.certHeight; dsimp only

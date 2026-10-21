@@ -153,7 +153,7 @@ variable {tr : Trace Validator BlockId Payload} {H : Finset Validator}
 events, under the assumptions of agreement. -/
 theorem decided_comparable (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
-    (hoff : Boot.TimelyOffers cfg H tr) (hcert : Boot.TimelyCerts cfg H tr)
+    (hcert : Boot.TimelyCerts cfg H tr)
     (hinj : Converge.HashInjective cfg H tr) (hchain : Boot.ChainInjective cfg H tr)
     {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) (i j : ℕ) :
     (stateBefore cfg tr i u).decided.reverse <+: (stateBefore cfg tr j v).decided.reverse ∨
@@ -162,7 +162,7 @@ theorem decided_comparable (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
   have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2.1, hadm.1⟩
-  have key := cut_before hσ hadm hf htime hoff hcert hinj hchain
+  have key := cut_before hσ hadm hf htime hcert hinj hchain
   have hD : ∀ w t, (stateBefore cfg tr t w).decided.reverse =
       commitsOf (run (cfg.at w) (State.init (cfg.at w)) (inputsBefore tr t w)).2 :=
     fun w t => (Local.decisions _ _ _ (cfg.at w) (inputsBefore tr t w)).1
@@ -302,7 +302,7 @@ theorem cert_catches (hl : cfg.limit = none) {T : Finset Validator}
   have hcmpl := hcmp u hu v hv k l
   have hlenk : (stateBefore cfg tr k u).decided.reverse.length = (stateBefore cfg tr k u).lo := by
     rw [List.length_reverse, hKk.ledger.length]
-  rw [hsl, step_certOffer, if_neg (by simp [hrl]), certState_of hrl]
+  rw [hsl, step_certOffer]
   by_cases hlo' : (stateBefore cfg tr l v).lo < c'.height
   · -- below the height: it adopts the decisions served
     have hsl' := slots_take_drop hKk.ledger.1 hle' (by omega : lo ≤ c'.height)

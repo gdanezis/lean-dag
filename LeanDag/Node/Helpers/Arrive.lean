@@ -601,7 +601,7 @@ below the block's or above, with its horizon at or below the block's
 round. -/
 theorem block_arrives (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
-    (hoff : Boot.TimelyOffers cfg H tr) (hcert : Boot.TimelyCerts cfg H tr)
+    (hcert : Boot.TimelyCerts cfg H tr)
     (hinj : Converge.HashInjective cfg H tr) (hchain : Boot.ChainInjective cfg H tr)
     (hTH : T ⊆ H) (hnr : Converge.NoRestart T tr) (hmono : Live.TimeMono tr time)
     (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
@@ -631,7 +631,7 @@ theorem block_arrives (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     by_cases hn0 : e.2.round = 0
     · exact arrives_zero hl hinj hTH hnr hmono hu hv huv hbu hep hgood hn0 hj
         (by omega) (by omega)
-    · obtain ⟨x, y', o, hx, hxb, heo⟩ := build_witness hl hσ hadm hf htime hoff hcert hinj hchain
+    · obtain ⟨x, y', o, hx, hxb, heo⟩ := build_witness hl hσ hadm hf htime hcert hinj hchain
         (hTH hu) hnu hb hep hn0
       obtain ⟨r', id', b', -, -, -, -, hxt, hbr, -, -, -, -, -, -, -, hout⟩ := tryBuild_some hxb
       rw [hout, persists_built, List.mem_singleton] at heo
@@ -666,7 +666,7 @@ reliable node `v` after `v`'s events by `s + 3Δ + Δₛ` or later, once `v`
 is at round `n` or above with its horizon at or below `n`. -/
 theorem round_arrives (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
-    (hoff : Boot.TimelyOffers cfg H tr) (hcert : Boot.TimelyCerts cfg H tr)
+    (hcert : Boot.TimelyCerts cfg H tr)
     (hinj : Converge.HashInjective cfg H tr) (hchain : Boot.ChainInjective cfg H tr)
     (hTH : T ⊆ H) (hnr : Converge.NoRestart T tr) (hmono : Live.TimeMono tr time)
     (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
@@ -686,7 +686,7 @@ theorem round_arrives (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
   obtain ⟨inp, hb⟩ := Converge.event_of_map hbu
   have hbl : b < tr.length := (List.getElem?_eq_some_iff.mp hb).1
   have htb : time b ≤ s := (lt_eventsBy hmono hbl).mp hbs
-  obtain ⟨h₁, h₂, h₃, -⟩ := block_arrives hl hq hσ hadm hf htime hoff hcert hinj hchain hTH hnr
+  obtain ⟨h₁, h₂, h₃, -⟩ := block_arrives hl hq hσ hadm hf htime hcert hinj hchain hTH hnr
     hmono hdel hsync hcmp hu hv huv hb hep htb (τ := τ) (by omega) ht₁ hZt (by omega)
     (by omega)
   exact ⟨e.1, h₁, h₂.trans her, h₃⟩

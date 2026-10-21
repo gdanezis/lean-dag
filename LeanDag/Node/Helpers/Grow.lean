@@ -134,12 +134,6 @@ theorem Grows.advance (s : State Validator BlockId Payload) :
   exact hc.trans (Grows.flush _ _ _)
 
 omit [Fintype Validator] in
-/-- **A bootstrap raises the horizon.** -/
-theorem Grows.boot {s s' : State Validator BlockId Payload} {ads : List (ℕ × Option BlockId)}
-    (h : tryBoot cfg s = some (s', ads)) : Grows s.store s'.store := by
-  refine ⟨(boot_base h).le, fun e => absurd e (ne_of_gt (boot_base h))⟩
-
-omit [Fintype Validator] in
 theorem Grows.quiesce (n : ℕ) (s : State Validator BlockId Payload) :
     Grows s.store (Node.quiesce cfg n s).1.store :=
   (quiesce_rel (P := fun _ => True) (R := fun a _ b => Grows a.store b.store)
@@ -151,22 +145,13 @@ theorem Grows.settle (s : State Validator BlockId Payload) :
     Grows s.store (Node.settle cfg s).1.store := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h]
   · exact Grows.quiesce _ s
-  · obtain ⟨-, -, -, -, -, -, hst, -⟩ := tryResume_some hj
+  · obtain ⟨-, -, -, -, -, hst, -⟩ := tryResume_some hj
     exact hst ▸ Grows.quiesce _ s₁
 
 omit [Fintype Validator] in
 theorem Grows.settle_of {st : Store Validator BlockId Payload} (s : State Validator BlockId Payload)
     (h : s.store = st) : Grows st (Node.settle cfg s).1.store :=
   h ▸ Grows.settle s
-
-omit [Fintype Validator] in
-theorem Grows.bootFrom (s : State Validator BlockId Payload) :
-    Grows s.store (Node.bootFrom cfg s).1.store := by
-  unfold Node.bootFrom
-  split
-  · rename_i s₂ ads hb
-    exact (Grows.boot hb).trans (Grows.advance _)
-  · exact Grows.refl _
 
 /-- **Across a step the store grows.** -/
 theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator BlockId Payload) :
@@ -194,26 +179,18 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     · split <;> exact Grows.refl s.store
   | timer r => exact Grows.settle_of _ rfl
   | restart => exact Grows.settle_of _ rfl
-  | baseOffer peer G bs =>
-    have h := Grows.bootFrom (cfg := cfg)
-      { s with offers := (peer, G, bs) :: s.offers.filter fun o => o.1 ≠ peer }
+  | baseOffer peer G =>
     dsimp only [Node.step]
     split
-    · exact h
+    · exact Grows.settle_of _ rfl
     · exact Grows.refl _
   | certOffer peer c ds =>
     dsimp only [Node.step]
-    generalize hs₁ : (if s.recovering = true ∧ peer ≠ cfg.me then
-      { s with certs := (c, ds) :: s.certs } else s) = s₁
-    have hst : s₁.store = s.store := by rw [← hs₁]; split <;> rfl
-    rw [← hst]
     split
-    · exact Grows.bootFrom _
+    · rw [adopt_eq]; exact Grows.settle_of _ rfl
     · split
-      · rw [adopt_eq]; exact Grows.settle_of _ rfl
-      · split
-        · exact Grows.settle_of _ rfl
-        · exact Grows.refl _
+      · exact Grows.settle_of _ rfl
+      · exact Grows.refl _
   | announced peer c =>
     simp only [Node.step]
     split

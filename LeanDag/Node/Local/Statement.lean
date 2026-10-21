@@ -15,7 +15,7 @@ initial state:
   height `k` is the head of the chain of its first `k` decisions
   (`Decisions`);
 * **valid blocks**: each of its own blocks references only blocks it
-  knew, delivered or offered with their hash, or its own, and is valid at
+  knew, delivered with their hash, or its own, and is valid at
   the row under every block map agreeing with what it knew (`ValidOut`);
 * **decisions read only the view, from the horizon up**: at the bounded
   vote, with the horizon at or below the next undecided slot's round, a

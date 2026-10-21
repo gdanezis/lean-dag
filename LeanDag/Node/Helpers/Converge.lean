@@ -126,7 +126,7 @@ theorem deliver_of_delivered (hnj : NoRejoin H tr) {j : ℕ} {v : Validator} (hv
     split at hx
     · rw [List.mem_singleton] at hx; subst hx; exact ⟨hj, hid⟩
     · exact absurd hx List.not_mem_nil
-  | baseOffer p G bs => exact absurd hj ((hnj j v hv).1 p G bs)
+  | baseOffer p G => exact absurd hj ((hnj j v hv).1 p G)
   | _ => simp [delivered] at hx
 
 theorem stateBefore_of_le {i : ℕ} (h : tr.length ≤ i) (v : Validator) :
@@ -216,7 +216,7 @@ theorem entry_before (hnj : NoRejoin H tr) {v : Validator} (hv : v ∈ H)
     · exact absurd h h₁
     · exact ⟨ha, hc⟩
     · cases inp <;> simp only [Input.isOffer] at hoff
-      · exact absurd ha ((hnj a v hv).1 _ _ _)
+      · exact absurd ha ((hnj a v hv).1 _ _)
       · exact absurd ha ((hnj a v hv).2 _ _ _)
   · rw [same_before fun inp h => he ⟨inp, h⟩] at h₂; exact absurd h₂ h₁
 

@@ -433,7 +433,7 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
     exact hset { s with fired := insert r s.fired } (timerAsk s r) (step_timer_eq s r) hA hP le_rfl
       (hst.elim id fun h => by cases h.1)
   | restart => exact absurd rfl hr
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]
     exact hst.elim id fun h => by cases h.1
   | baseRequest p => exact hst.elim id fun h => by cases h.1
@@ -441,10 +441,8 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
   | decisionRequest p lo => exact hst.elim id fun h => by cases h.1
   | certOffer p c ds =>
     have hst' : Stays s.store s.pending y := hst.elim id fun h => by cases h.1
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, -, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
-    all_goals try obtain rfl := certs_of_not hcl hs
-    · rw [hs] at h₁; cases h₁
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, -, he⟩ |
+      ⟨-, -, he⟩ | he
     · rw [adopt_eq] at he; exact hset _ _ he hA hP le_rfl hst'
     · exact hset { s with cert := some c, props := above (some c) s.props } [] (by rw [he]; rfl)
         hA hP le_rfl hst'

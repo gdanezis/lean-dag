@@ -5,11 +5,11 @@ import LeanDagSim.Net
 `docs/validator.md` §6, step 7.4. At the Mysticeti row with `n = 4` and
 `f = 1`, node `3` runs the honest program and mounts one attack, while
 node `1` is down from tick `40` to tick `90` and rejoins by bootstrap,
-from the bases and certificates its peers serve. Each line reads: the
-round each honest node reached, the slots it decided, whether two nodes
-that decide a slot decide it alike, whether any two nodes' decisions are
-prefix-comparable, whether the honest blocks are valid, the bootstraps
-made, and the inputs the signature checks dropped.
+from the horizons, blocks and certificates its peers serve. Each line
+reads: the round each honest node reached, the slots it decided, whether
+two nodes that decide a slot decide it alike, whether any two nodes'
+decisions are prefix-comparable, whether the honest blocks are valid,
+the bootstraps made, and the inputs the signature checks dropped.
 
 With the network checking signatures, which is what the claims over
 traces assume of authentication, every attack leaves agreement,
@@ -18,7 +18,7 @@ with two blocks at one round, its own fake base or its invalid twins,
 gets it excluded, and while node `1` is down the two other honest nodes
 are fewer than the quorum: the run stalls until node `1` is back. Under
 the invalid blocks it then advances at the pace of the round timers,
-reaching round 87 by tick 600. Without the checks, a certificate of
+reaching round 88 by tick 600. Without the checks, a certificate of
 fabricated decisions can be adopted, and with node `1` down from tick
 `40` to tick `70` the joiner's decisions disagree with its peers'; and
 blocks forged in an honest node's name get that node excluded as an
@@ -41,19 +41,19 @@ def attackLine (sc : Scenario) : String :=
   let r := simulate sc
   s!"{r.tops} {r.commits.map (·.length)} {r.agree} {r.prefixes} {r.valid} {r.boots} {r.dropped}"
 
-/-- info: "[(some 50), (some 49), (some 49)] [48, 47, 47] true true true 1 0" -/
+/-- info: "[(some 39), (some 39), (some 39)] [38, 38, 38] true true true 1 9" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeBase])
 
-/-- info: "[(some 50), (some 49), (some 49)] [48, 47, 47] true true true 1 0" -/
+/-- info: "[(some 39), (some 39), (some 39)] [38, 38, 38] true true true 1 9" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.splitBase])
 
-/-- info: "[(some 51), (some 51), (some 52)] [50, 49, 50] true true true 1 2" -/
+/-- info: "[(some 50), (some 50), (some 51)] [48, 49, 49] true true true 1 3" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeCert])
 
-/-- info: "[(some 51), (some 50), (some 51)] [49, 48, 49] true true true 1 0" -/
+/-- info: "[(some 50), (some 50), (some 50)] [48, 48, 48] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.conflictProposals])
 
@@ -61,11 +61,11 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks])
 
-/-- info: "[(some 49), (some 50), (some 49)] [48, 48, 47] true true true 0 139" -/
+/-- info: "[(some 50), (some 51), (some 50)] [49, 49, 48] true true true 1 142" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor])
 
-/-- info: "[(some 16), (some 16), (some 17)] [16, 16, 16] true true true 0 61" -/
+/-- info: "[(some 17), (some 17), (some 16)] [16, 16, 16] true true true 0 85" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeBase, .splitBase, .fakeCert, .conflictProposals,
   .invalidBlocks, .forgedAuthor])
@@ -76,7 +76,7 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine { attackedBy [.fakeCert] (verify := false) with recover := [(1, 40, 70)] }
 
-/-- info: "[(some 2), (some 17), (some 16)] [13, 15, 15] true true true 0 0" -/
+/-- info: "[(some 2), (some 18), (some 17)] [15, 16, 16] true true true 0 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 
@@ -120,7 +120,7 @@ honest nodes keep the twins the honest blocks need and drop the flood. -/
     limit := some (4, 8) }
 
 -- A node down from tick `40` to tick `90` rejoins under rate limiting.
-/-- info: "[48, 48, 48, 48] true true 25 5" -/
+/-- info: "[46, 46, 47, 46] true true 26 4" -/
 #guard_msgs in
 #eval storageLine
   { horizon := 150, row := "mysticeti", recover := [(1, 40, 90)], limit := some (8, 8) }

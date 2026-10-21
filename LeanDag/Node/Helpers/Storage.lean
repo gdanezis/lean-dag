@@ -128,31 +128,6 @@ theorem filter_slot_one (j : BlockId) (sl sl' : Validator × ℕ) :
   by_cases h : sl' = sl <;> simp [h]
 
 omit [Fintype Validator] in
-/-- The base a bootstrap keeps charges each slot at most once: its blocks
-have distinct authors. -/
-theorem keptBase_slot_le {ρ W : ℕ} (hl : cfg.limit = some (ρ, W))
-    (l : List (BlockId × Block Validator BlockId Payload)) (sl : Validator × ℕ) :
-    ((slotted cfg (keptBase cfg l)).filter fun e => decide (e.2 = sl)).length ≤ 1 := by
-  have hp : (keptBase cfg l).Pairwise fun x y => x.2.creator ≠ y.2.creator := by
-    simp only [keptBase, hl]; exact List.pairwise_pwFilter _
-  simp only [slotted, hl, Option.isSome_some, if_true, List.filter_map, List.length_map]
-  generalize keptBase cfg l = k at hp
-  change (k.filter fun e => decide (slotOf e.2 = sl)).length ≤ 1
-  have hq := hp.filter (fun e => decide (slotOf e.2 = sl))
-  generalize hk : k.filter _ = k' at hq ⊢
-  have hall : ∀ x ∈ k', slotOf x.2 = sl := by
-    intro x hx; rw [← hk] at hx; simpa using (List.mem_filter.mp hx).2
-  match k', hq, hall with
-  | [], _, _ => simp
-  | [_], _, _ => simp
-  | x :: y :: _, hq, hall =>
-    exfalso
-    have hxy := List.rel_of_pairwise_cons hq List.mem_cons_self
-    have h₁ := hall x List.mem_cons_self
-    have h₂ := hall y (List.mem_cons_of_mem _ List.mem_cons_self)
-    exact hxy (by rw [← h₂] at h₁; exact (Prod.mk.inj h₁).1)
-
-omit [Fintype Validator] in
 /-- **A state with the same store, pending blocks, top and charges** keeps
 the invariant. -/
 theorem Lim.of_eq {ρ W : ℕ} {s s' : State Validator BlockId Payload} (h : Lim ρ W s)
@@ -384,19 +359,25 @@ theorem Lim.advance {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s : State Vali
   ((h.progress hl _).decideStep.collect).flushAll _
 
 omit [Fintype Validator] in
+theorem tryResume_owner {s s' : State Validator BlockId Payload}
+    (h : tryResume cfg s = some s') : s'.owner = s.owner := by
+  unfold tryResume at h
+  split at h
+  · split at h
+    · rw [Option.some.injEq] at h; subst h; rfl
+    · unfold resumeAt at h
+      split at h
+      · split at h
+        · rw [Option.some.injEq] at h; subst h; rfl
+        · cases h
+      · cases h
+  · cases h
+
+omit [Fintype Validator] in
 theorem Lim.tryResume {ρ W : ℕ} {s s' : State Validator BlockId Payload} (h : Lim ρ W s)
     (hr : tryResume cfg s = some s') : Lim ρ W s' := by
-  obtain ⟨t, R, ht, htR, -, -, hst, hpd, htop, -⟩ := tryResume_some hr
-  have how : s'.owner = s.owner := by
-    unfold Node.tryResume at hr
-    split at hr
-    · dsimp only at hr
-      split at hr
-      · split at hr
-        · rw [Option.some.injEq] at hr; subst hr; rfl
-        · cases hr
-      · cases hr
-    · cases hr
+  obtain ⟨t, R, ht, htR, -, hst, hpd, htop, -⟩ := tryResume_some hr
+  have how := tryResume_owner hr
   have hc : ∀ sl, s'.charge sl = s.charge sl := fun sl => by simp only [State.charge, how]
   refine ⟨by rw [hst, how]; exact h.store, by rw [hpd, how]; exact h.pend, fun e he => ?_,
     fun sl => by rw [hc]; exact h.charge sl, fun sl hsl => ?_, ?_⟩
@@ -416,114 +397,6 @@ theorem Lim.settle {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s : State Valid
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hr, he⟩ <;> rw [he]
   · exact quiesce_ind (fun _ h => h.advance hl) _ _ h
   · exact quiesce_ind (fun _ h => h.advance hl) _ _ (h.tryResume hr)
-
-/-! ## Bootstrapping -/
-
-omit [Fintype Validator] in
-/-- The kept base lies at its round. -/
-theorem round_of_mem_keptBase {s : State Validator BlockId Payload} {G : ℕ}
-    {x : BlockId × Block Validator BlockId Payload} (hx : x ∈ keptBase cfg (baseAt cfg s G)) :
-    x.2.round = G := by
-  have := (List.mem_filter.mp (mem_keptBase hx)).2
-  simp only [decide_eq_true_eq] at this
-  exact this.1
-
-omit [Fintype Validator] in
-/-- **A bootstrap keeps the invariant**: what survives the new horizon `G`
-keeps its charge, and the kept base is charged at its own slots at `G`,
-above the old top. -/
-theorem Lim.tryBoot {ρ W : ℕ} (hl : cfg.limit = some (ρ, W))
-    {s s' : State Validator BlockId Payload}
-    {ads : List (ℕ × Option BlockId)} (h : Lim ρ W s) (hb : tryBoot cfg s = some (s', ads)) :
-    Lim ρ W s' := by
-  obtain ⟨t, G, c, ds, hbase, ht, htG, -, -, hst, hpd, htop', -, -, -, -, -, -, -, -, -, -, -, -,
-    -, how⟩ := tryBoot_some hb
-  have hslot : ∀ e ∈ slotted cfg (keptBase cfg (baseAt cfg s G)), e.2.2 = G := by
-    intro e he
-    simp only [slotted, hl, Option.isSome_some, if_true, List.mem_map] at he
-    obtain ⟨x, hx, rfl⟩ := he
-    exact round_of_mem_keptBase hx
-  have hzero : ∀ sl : Validator × ℕ, sl.2 ≠ G →
-      ((slotted cfg (keptBase cfg (baseAt cfg s G))).filter fun e => decide (e.2 = sl)).length
-        = 0 := by
-    intro sl hsl
-    rw [List.length_eq_zero_iff, List.filter_eq_nil_iff]
-    intro e he
-    have := hslot e he
-    simp only [decide_eq_true_eq]
-    rintro rfl
-    exact hsl this
-  have hO : ∀ y : BlockId × Block Validator BlockId Payload, Charged s.owner y → G ≤ y.2.round →
-      Charged s'.owner y := by
-    intro y ⟨e, he, h₁, h₂⟩ hy
-    exact ⟨e, by rw [how]; exact List.mem_append_right _ (List.mem_filter.mpr ⟨he, by simp; omega⟩),
-      h₁, h₂⟩
-  have hK₀ : ∀ j ∈ (s.store.prune G hbase.le).ids,
-      (j, (s.store.prune G hbase.le).map.getD j (s.store.prune G hbase.le).junk) ∈
-        {y | Charged s'.owner y} := by
-    intro j hj
-    have hj' := Finset.mem_filter.mp hj
-    have hraw := treeMap_getD_filter_of (t := s.store.map)
-      (f := fun _ b => decide (G ≤ b.round)) (k := j) (fb := s.store.junk)
-      (by simpa [Store.blk, lookup] using hj'.2)
-    change Charged _ (j, (s.store.map.filter _).getD j s.store.junk)
-    rw [hraw]
-    exact hO _ (h.store j hj'.1) (by simpa [Store.blk, lookup] using hj'.2)
-  have hK₁ := foldl_in (cfg := cfg) (keptBase cfg (baseAt cfg s G)) hK₀ fun x hx =>
-    ⟨(x.1, slotOf x.2), by
-      rw [how]
-      refine List.mem_append_left _ ?_
-      simp only [slotted, hl, Option.isSome_some, if_true, List.mem_map]
-      exact ⟨x, hx, rfl⟩, rfl, le_refl _⟩
-  have hlim : cfg.limit.isSome = true := by rw [hl]; rfl
-  have hpend : ∀ e ∈ (if cfg.limit.isSome then [] else (s.offers.flatMap (·.2.2)).filter (fun e =>
-        decide (G < e.2.round ∧ e.1 = cfg.idOf e.2))) ++ s.pending.filter (fun e => G ≤ e.2.round),
-      e ∈ {y | Charged s'.owner y} := by
-    intro e he
-    rw [if_pos hlim, List.nil_append] at he
-    obtain ⟨he, hr⟩ := List.mem_filter.mp he
-    exact hO _ (h.pend e he) (of_decide_eq_true hr)
-  have hbase' : s'.store.base = G := by
-    rw [hst, flush_base, foldl_base]; rfl
-  have hc : ∀ sl, s'.charge sl ≤ (if sl.2 = G then 1 else 0) + s.charge sl := by
-    intro sl
-    simp only [State.charge, how]
-    rw [charge_append]
-    have := charge_filter_le s.owner (fun e => decide (G ≤ e.2.2)) sl
-    split
-    · have := keptBase_slot_le hl (baseAt cfg s G) sl; omega
-    · rw [hzero sl (by assumption)]; omega
-  refine ⟨by rw [hst]; exact (flush_in _ hK₁ hpend).1, by rw [hpd]; exact (flush_in _ hK₁ hpend).2,
-    fun e he => ?_, fun sl => ?_,
-    fun sl hsl => ?_, ?_⟩
-  · rw [hbase', htop']
-    simp only [Option.getD_some]
-    rw [how] at he
-    rcases List.mem_append.mp he with he | he
-    · rw [hslot e he]; omega
-    · obtain ⟨he, hr⟩ := List.mem_filter.mp he
-      have := (h.slots e he).2
-      rw [ht] at this
-      simp only [Option.getD_some, decide_eq_true_eq] at this hr
-      omega
-  · refine (hc sl).trans ?_
-    split
-    · rename_i hG
-      have := h.fresh sl fun t' ht' => by rw [ht] at ht'; cases ht'; omega
-      omega
-    · have := h.charge sl; omega
-  · refine (hc sl).trans ?_
-    have hG : G < sl.2 := hsl G (by rw [htop']; rfl)
-    rw [if_neg (by omega), Nat.zero_add]
-    exact h.fresh sl fun t' ht' => by rw [ht] at ht'; cases ht'; omega
-  · rw [hbase', htop']; rfl
-
-omit [Fintype Validator] in
-theorem Lim.bootFrom {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s : State Validator BlockId Payload}
-    (h : Lim ρ W s) : Lim ρ W (bootFrom cfg s).1 := by
-  rcases bootFrom_cases (cfg := cfg) s with he | ⟨s₂, ads, hbt, he⟩ <;> rw [he]
-  · exact h
-  · exact (h.tryBoot hl hbt).advance hl
 
 /-! ## A step -/
 
@@ -615,17 +488,16 @@ theorem Lim.step {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s : State Validat
     refine Lim.settle hl ⟨h.store, fun e he => absurd he List.not_mem_nil, h.slots, h.charge,
       h.fresh, h.base⟩
   | baseRequest => exact h
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     rw [step_offer]
     split
-    · exact Lim.bootFrom hl (h.of_eq rfl rfl rfl rfl)
+    · exact Lim.settle hl (h.of_eq rfl rfl rfl rfl)
     · exact h
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩ <;> rw [he]
-    · exact Lim.bootFrom hl (h.of_eq rfl rfl rfl rfl)
-    · rw [adopt_eq]; exact Lim.settle hl (h.of_eq (s' := adopted { s with certs := l } c ds') rfl rfl rfl rfl)
-    · exact Lim.settle hl (h.of_eq (s' := { s with certs := l, cert := some c, props := above (some c) s.props })
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
+      ⟨-, -, he⟩ | he <;> rw [he]
+    · rw [adopt_eq]; exact Lim.settle hl (h.of_eq (s' := adopted s c ds') rfl rfl rfl rfl)
+    · exact Lim.settle hl (h.of_eq (s' := { s with cert := some c, props := above (some c) s.props })
         rfl rfl rfl rfl)
     · exact h.of_eq rfl rfl rfl rfl
   | announced p c =>

@@ -5,8 +5,8 @@ import LeanDag.Node.Helpers.Decided
 /-!
 # Bootstrapping nodes agree slot by slot
 
-Over a trace, what each honest node knew is what the trace delivered and
-offered it, and what it made (`knownOf_sub`). Timely authentication and
+Over a trace, what each honest node knew is what the trace delivered
+it, and what it made (`knownOf_sub`). Timely authentication and
 the hash over the trace give authentication and the hash at its end
 (`authentic_of_timely`, `hashInjective_of_trace`), so the honest nodes'
 knowledge forms the run's record. Then, by induction over the
@@ -104,184 +104,6 @@ theorem knownOf_sub {v : Validator} (hv : v ∈ H) {x : BlockId × Block Validat
     exact Or.inl ⟨j, v, inp, hj, hv, hd⟩
   · obtain ⟨j, -, hjv, hx⟩ := mem_persists_before (cfg := cfg) v tr.length hx
     exact Or.inr ⟨j, v, hjv, hv, hx⟩
-
-/-! ## The served base -/
-
-omit [Fintype Validator] in
-theorem serveBase_not_mem_proposeAt (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
-    {bs : List (BlockId × Block Validator BlockId Payload)} :
-    Output.serveBase p G bs ∉ (proposeAt cfg s).2 := by
-  intro h
-  obtain ⟨-, -, -, -, -, ho⟩ := proposeAt_eq (cfg := cfg) s
-  obtain ⟨k, h', hk⟩ := ho _ h
-  cases hk
-
-omit [Fintype Validator] in
-theorem serveBase_not_mem_advance (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
-    {bs : List (BlockId × Block Validator BlockId Payload)} :
-    Output.serveBase p G bs ∉ (advance cfg s).2 := by
-  obtain ⟨b, hb⟩ := progress_built (cfg := cfg) (s.store.topRound + 2) s
-  simp only [Node.advance]
-  generalize hr : progress cfg (s.store.topRound + 2) s = r at hb
-  intro h
-  simp only [List.mem_append] at h
-  rcases h with (h | h) | h
-  · rw [hb] at h
-    simp [built] at h
-  · unfold Node.decideStep at h
-    dsimp only at h
-    split at h
-    · rcases List.mem_append.mp h with h | h
-      · simp at h
-      · exact serveBase_not_mem_proposeAt _ h
-    · exact serveBase_not_mem_proposeAt _ h
-  · unfold Node.collect at h
-    split at h
-    · dsimp only at h; split at h <;> simp at h
-    · simp at h
-
-omit [Fintype Validator] in
-theorem serveBase_not_mem_settle (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
-    {bs : List (BlockId × Block Validator BlockId Payload)} :
-    Output.serveBase p G bs ∉ (Node.settle cfg s).2 := by
-  rcases settle_cases (cfg := cfg) s with h | ⟨s₁, -, h⟩ <;> rw [h] <;>
-    exact fun hm => quiesce_out (P := fun _ => True) (Q := fun o => o ≠ Output.serveBase p G bs)
-      (fun s _ => ⟨fun o ho he => serveBase_not_mem_advance s (he ▸ ho), trivial⟩) _ _ trivial _
-      hm rfl
-
-omit [Fintype Validator] in
-theorem serveBase_not_mem_bootFrom (s : State Validator BlockId Payload) {p : Validator} {G : ℕ}
-    {bs : List (BlockId × Block Validator BlockId Payload)} :
-    Output.serveBase p G bs ∉ (bootFrom cfg s).2 := by
-  rcases bootFrom_cases (cfg := cfg) s with he | ⟨s₂, ads, -, he⟩ <;> rw [he]
-  · simp
-  · intro h
-    rcases List.mem_append.mp h with h | h
-    · obtain ⟨e, -, he⟩ := List.mem_map.mp h; cases he
-    · exact serveBase_not_mem_advance _ h
-
-/-- **A served base is the server's store** at the step that served it. -/
-theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-    {p : Validator} {G : ℕ} {bs : List (BlockId × Block Validator BlockId Payload)}
-    (h : Output.serveBase p G bs ∈ (step cfg s inp).2) : bs = s.store.window := by
-  cases inp with
-  | baseRequest peer =>
-    simp only [Node.step, List.mem_cons, List.mem_append] at h
-    rcases h with (h | h) | h
-    · cases h; rfl
-    · obtain ⟨c, -, hc⟩ := List.mem_map.mp h; cases hc
-    · split at h
-      · rw [List.mem_singleton] at h; cases h
-      · simp at h
-  | start =>
-    simp only [Node.step] at h
-    split at h
-    · split at h
-      · simp only [List.mem_append] at h
-        rcases h with h | h
-        · simp [built] at h
-        · exact absurd h (serveBase_not_mem_settle _)
-      · simp at h
-    · simp at h
-  | deliver id b =>
-    simp only [Node.step] at h
-    split at h
-    · simp only [List.mem_append] at h
-      rcases h with ((h | h) | h) | h
-      · obtain ⟨_, _, he⟩ := evidence_relay h; cases he
-      · split at h <;> simp at h
-      · split at h <;> simp at h
-      · exact absurd h (serveBase_not_mem_settle _)
-    · split at h <;> simp at h
-  | timer r =>
-    rw [step_timer_eq] at h
-    rcases List.mem_append.mp h with h | h
-    · unfold timerAsk at h; split at h <;> simp at h
-    · exact absurd h (serveBase_not_mem_settle _)
-  | fetchRequest peer G' ids =>
-    change Output.serveBase p G bs ∈ answer s peer G' ids at h
-    unfold answer at h; simp at h
-  | restart =>
-    simp only [Node.step, List.mem_cons] at h
-    rcases h with h | h
-    · cases h
-    · exact absurd h (serveBase_not_mem_settle _)
-  | baseOffer q G' bs' =>
-    rw [step_offer] at h
-    split at h
-    · rcases List.mem_append.mp h with h | h
-      · exact absurd h (serveBase_not_mem_bootFrom _)
-      · unfold askOffered at h; dsimp only at h; split at h <;> simp at h
-    · simp at h
-  | certOffer q c ds =>
-    rcases certOffer_cases (cfg := cfg) s q c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', -, -, -, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩ <;> rw [he] at h
-    · exact absurd h (serveBase_not_mem_bootFrom _)
-    · rw [adopt_eq] at h
-      rcases List.mem_append.mp h with h | h
-      · obtain ⟨_, -, he⟩ := List.mem_map.mp h; cases he
-      · exact absurd h (serveBase_not_mem_settle _)
-    · exact absurd h (serveBase_not_mem_settle _)
-    · simp at h
-  | announced q c =>
-    rcases announced_cases (cfg := cfg) s q c with ⟨-, -, he⟩ | he | he <;> rw [he] at h
-    · exact absurd h (serveBase_not_mem_settle _)
-    · simp at h
-    · simp at h
-  | proposal q k kh =>
-    rw [step_proposal] at h
-    split at h
-    · rcases List.mem_append.mp h with h | h
-      · cases h
-      · exact absurd h (serveBase_not_mem_settle _)
-    · simp at h
-  | decisionRequest q lo =>
-    rw [step_decisionRequest] at h
-    split at h
-    · obtain ⟨_, _, he⟩ := serveFrom_out s q lo _ h; cases he
-    · simp at h
-
-/-- **The offers a node holds were given to it before.** -/
-theorem offers_before (v : Validator) : ∀ (t : ℕ), ∀ o ∈ (stateBefore cfg tr t v).offers,
-    ∃ j < t, tr[j]? = some (v, .baseOffer o.1 o.2.1 o.2.2)
-  | 0, o, ho => by simp [stateBefore, inputsBefore, run, State.init] at ho
-  | t + 1, o, ho => by
-    rcases hj : tr[t]? with _ | ⟨w, inp⟩
-    · have hL : tr.length ≤ t := List.getElem?_eq_none_iff.mp hj
-      rw [Converge.stateBefore_of_le (by omega), ← Converge.stateBefore_of_le hL] at ho
-      obtain ⟨j, hj', h⟩ := offers_before v t o ho
-      exact ⟨j, by omega, h⟩
-    · rw [stateBefore_succ hj] at ho
-      split at ho
-      · rename_i hw
-        subst hw
-        rcases (step_offered _ inp).1 o ho with ho | rfl
-        · obtain ⟨j, hj', h⟩ := offers_before w t o ho
-          exact ⟨j, by omega, h⟩
-        · exact ⟨t, by omega, hj⟩
-      · obtain ⟨j, hj', h⟩ := offers_before v t o ho
-        exact ⟨j, by omega, h⟩
-
-/-- **The certificates a node holds were offered to it before.** -/
-theorem certs_before (v : Validator) : ∀ (t : ℕ), ∀ c ∈ (stateBefore cfg tr t v).certs,
-    ∃ j < t, ∃ p, tr[j]? = some (v, .certOffer p c.1 c.2)
-  | 0, c, hc => by simp [stateBefore, inputsBefore, run, State.init] at hc
-  | t + 1, c, hc => by
-    rcases hj : tr[t]? with _ | ⟨w, inp⟩
-    · have hL : tr.length ≤ t := List.getElem?_eq_none_iff.mp hj
-      rw [Converge.stateBefore_of_le (by omega), ← Converge.stateBefore_of_le hL] at hc
-      obtain ⟨j, hj', h⟩ := certs_before v t c hc
-      exact ⟨j, by omega, h⟩
-    · rw [stateBefore_succ hj] at hc
-      split at hc
-      · rename_i hw
-        subst hw
-        rcases (step_offered _ inp).2 c hc with hc | ⟨p, rfl⟩
-        · obtain ⟨j, hj', h⟩ := certs_before w t c hc
-          exact ⟨j, by omega, h⟩
-        · exact ⟨t, by omega, p, hj⟩
-      · obtain ⟨j, hj', h⟩ := certs_before v t c hc
-        exact ⟨j, by omega, h⟩
 
 omit [LinearOrder BlockId] in
 /-- **`f + 1` distinct validators include an honest one**, with at most `f`
@@ -393,7 +215,7 @@ theorem prefix_of_slots {β : Type} {l₁ l₂ : List (ℕ × β)}
 /-- **Every honest store is a cut of the run's record, and every decision
 a verdict on a view of it**, before every event of the trace. -/
 theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hoff : Boot.TimelyOffers cfg H tr)
+    (htime : Converge.TimelyAuthentic cfg H tr)
     (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hchain : Boot.ChainInjective cfg H tr) (t : ℕ) :
     ∀ v ∈ H,
@@ -438,93 +260,31 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
           have hh : Held (cfg.at w) (stateBefore cfg tr t w) := Held.run _ Held.init
           have hi := Converge.inv_before (cfg := cfg) (tr := tr) t w
           obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hj
-          -- a bootstrap is at a round the record reaches
-          have hspan : ∀ s₂ ads,
-              tryBoot (cfg.at w) (withInput (stateBefore cfg tr t w) inp) = some (s₂, ads) →
-              Spans U s₂.store.base := by
-            intro s₂ ads hbt
-            obtain ⟨t₀, G₂, c₂, ds₂, hb₂, -, -, hroot, -, hst, -⟩ := tryBoot_some hbt
-            have hbase : s₂.store.base = G₂ := by
-              rw [hst, flush_base]
-              change ((keptBase (cfg.at w) (baseAt (cfg.at w) _ G₂)).foldl
-                (fun st e => Node.accept (cfg.at w) st e.1 e.2)
-                ((withInput (stateBefore cfg tr t w) inp).store.prune G₂ hb₂.le)).base = G₂
-              rw [foldl_base]; rfl
-            rw [hbase]
-            obtain ⟨e, he, -⟩ := baseAt_of_bootRound hroot
-            obtain ⟨-, hce⟩ := List.mem_filter.mp he
-            simp only [decide_eq_true_eq] at hce
-            obtain ⟨p', hp'l, hp'H⟩ := exists_mem_of_length hf (List.nodup_dedup _) hce.2.2
-            obtain ⟨o, ho, rfl⟩ := List.mem_map.mp (List.mem_dedup.mp hp'l)
-            obtain ⟨ho, hany⟩ := List.mem_filter.mp ho
-            obtain ⟨x, hx, hxc⟩ := List.any_eq_true.mp hany
-            simp only [decide_eq_true_eq] at hxc
-            -- the offer was given before
-            have hjo : ∃ j ≤ t, tr[j]? = some (w, .baseOffer o.1 o.2.1 o.2.2) := by
-              rcases withInput_offered.1 o ho with ho | hinp
-              · obtain ⟨j, hjt, hj'⟩ := offers_before (cfg := cfg) w t o ho
-                exact ⟨j, hjt.le, hj'⟩
-              · exact ⟨t, le_rfl, by rw [hj, hinp]⟩
-            obtain ⟨j, hjt, hj'⟩ := hjo
-            obtain ⟨i, hij, hiv, hserve⟩ := hoff j w o.1 o.2.1 o.2.2 hj' hv hp'H
-            obtain ⟨inp', hi'⟩ := Converge.event_of_map hiv
-            rw [outputsAt_eq hi'] at hserve
-            have hwin := serveBase_mem hserve
-            rw [hwin] at hx
-            obtain ⟨jid, hjid, rfl⟩ := List.mem_map.mp hx
-            have hjid' : jid ∈ (stateBefore cfg tr i o.1).store.ids := (Finset.mem_sort _).mp hjid
-            obtain ⟨hcut, -⟩ := ih i (by omega) o.1 hp'H
-            obtain ⟨hU, hUb⟩ := hcut jid hjid'
-            refine Or.inr ⟨jid, hU, ?_⟩
-            have hr := congrArg Block.round hUb
-            simp only [atBase_round, Store.blk, lookup] at hr
-            rw [hr]
-            exact hxc.2.ge
-          -- the decisions a certificate gives are an honest signer's
-          have hcv : ∀ x ∈ (withInput (stateBefore cfg tr t w) inp).certs,
-              (cfg.at w).q ≤ x.1.signers.length → x.1.signers.Nodup →
-                (cfg.at w).headOf x.2 = x.1.head → ∀ e ∈ x.2, Verdict (cfg.at w) U e := by
-            intro x hx hq hnd hhd e he
-            have hjc : ∃ j ≤ t, ∃ p, tr[j]? = some (w, .certOffer p x.1 x.2) := by
-              rcases withInput_offered.2 x hx with hx | ⟨p, hinp⟩
-              · obtain ⟨j, hjt, p, hj'⟩ := certs_before (cfg := cfg) w t x hx
-                exact ⟨j, hjt.le, p, hj'⟩
-              · exact ⟨t, le_rfl, p, by rw [hj, hinp]⟩
-            obtain ⟨j, hjt, p, hj'⟩ := hjc
-            obtain ⟨u, hu, huH⟩ := exists_mem_of_length hf hnd
-              (by have := hadm.2.2.2.2.2; change cfg.q ≤ _ at hq; omega)
-            obtain ⟨i, hij, hiu, hprop⟩ := hcert j w p x.1 x.2 hj' hv u hu huH
-            obtain ⟨inp', hi'⟩ := Converge.event_of_map hiu
-            obtain ⟨hk, hkh⟩ := propose_head hi' hprop
-            have hpre := commits_prefix (cfg := cfg) (tr := tr) u (i + 1)
-            have htk := take_of_prefix hpre hk
-            have hds := hchain j w p x.1 x.2 hj' hv x.2 (List.Sublist.refl _) [] (List.nil_prefix) u huH
-              x.1.height
-              (hk.trans hpre.length_le) (by rw [htk, ← hkh, List.nil_append]; exact hhd)
-            rw [htk, List.nil_append] at hds
-            rw [hds] at he
-            exact (ih (i + 1) (by omega) u huH).2 e (List.mem_of_mem_take he)
+          -- the record reaches every slot the node decided
+          obtain ⟨hap, hL⟩ := run_appends (cfg := cfg.at w) (inputsBefore tr t w)
+            (Ledger.init (cfg := cfg.at w))
+          have hD : (stateBefore cfg tr t w).decided.reverse =
+              commitsOf (run (cfg.at w) (State.init (cfg.at w)) (inputsBefore tr t w)).2 := by
+            have := hap.1
+            rw [show (State.init (cfg.at w)).decided.reverse = [] from rfl,
+              List.nil_append] at this
+            exact this
+          have hR : SpansDecided (cfg.at w) U (stateBefore cfg tr t w) :=
+            SpansDecided.of_verdicts hadm.2.2.2.2.2.2 hL.1 fun e he =>
+              hv₀ e (by rw [← hD]; exact List.mem_reverse.mpr he)
           -- adopted decisions are an honest signer's
           have hadopt : ∀ p c ds, inp = .certOffer p c ds → ∀ ds', ds'.Sublist ds →
               adoptable (cfg.at w) (stateBefore cfg tr t w) c ds' = true →
               ∀ e ∈ ds', Verdict (cfg.at w) U e := by
             intro p c ds hinp ds' hsub ha e he
             have hj' : tr[t]? = some (w, .certOffer p c ds) := by rw [hj, hinp]
-            obtain ⟨hap, hL⟩ := run_appends (cfg := cfg.at w) (inputsBefore tr t w)
-              (Ledger.init (cfg := cfg.at w))
-            have hD : (stateBefore cfg tr t w).decided.reverse =
-                commitsOf (run (cfg.at w) (State.init (cfg.at w)) (inputsBefore tr t w)).2 := by
-              have := hap.1
-              rw [show (State.init (cfg.at w)).decided.reverse = [] from rfl,
-                List.nil_append] at this
-              exact this
             have hhead : (cfg.at w).headOf (commitsOf (run (cfg.at w) (State.init (cfg.at w))
                 (inputsBefore tr t w)).2 ++ ds') = c.head := by
               rw [← hD]; exact adoptable_head hL ha
             unfold adoptable at ha
             simp only [Bool.and_eq_true, decide_eq_true_eq] at ha
             obtain ⟨u, hu, huH⟩ := exists_mem_of_length hf ha.1.1.1.2
-              (by have := hadm.2.2.2.2.2; have := ha.1.1.1.1; change cfg.q ≤ _ at this; omega)
+              (by have := hadm.2.2.2.2.2.1; have := ha.1.1.1.1; change cfg.q ≤ _ at this; omega)
             obtain ⟨i, hit, hiu, hprop⟩ := hcert t w p c ds hj' hv u hu huH
             obtain ⟨inp', hi'⟩ := Converge.event_of_map hiu
             obtain ⟨hk, hkh⟩ := propose_head hi' hprop
@@ -537,11 +297,10 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
                 (inputsBefore tr (i + 1) u)).2).take c.height := by
               rw [← hds]; exact List.mem_append_right _ he
             exact (ih (i + 1) (by omega) u huH).2 e (List.mem_of_mem_take he')
-          obtain ⟨hc', hv'⟩ := IsCut.step (cfg := cfg.at w) hg hσ ht inp hc hh
-            (fun e he => hK w hv e (knownBefore_knownOf (hi.pend e he)))
-            (fun o ho e he hid => hK w hv e (knownBefore_knownOf (hi.offered o ho e he hid)))
+          obtain ⟨hc', hv'⟩ := IsCut.step (cfg := cfg.at w) hg hσ ht hadm.2.2.2.2.2.2 inp hc hh
+            (fun e he => hK w hv e (knownBefore_knownOf (hi.pend e he))) hR
             (fun e he => hK w hv e (hd e he))
-            (fun e he => hK w hv e (hb e he)) hcv hspan hadopt
+            (fun e he => hK w hv e (hb e he)) hadopt
           refine ⟨by rw [stateBefore_succ hj, if_pos rfl]; exact hc', fun e he => ?_⟩
           rw [inputsBefore_succ hj, if_pos rfl, run_append_single, commitsOf_append] at he
           rcases List.mem_append.mp he with he | he

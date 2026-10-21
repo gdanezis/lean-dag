@@ -712,15 +712,13 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
   | timer r => rw [step_timer_of hrec]; exact hset _ rfl rfl rfl rfl rfl rfl hrec
   | fetchRequest peer G ids => exact ⟨hK, hcov, fun c hc => by simp [Node.step, answer] at hc⟩
   | restart => exact absurd rfl hr
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     simp only [Node.step]
     rw [if_neg (by simp [hrec])]
     exact hnil
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
-      ⟨l, hcl, -, hcf, he⟩ | ⟨l, hcl, he⟩
-    all_goals try obtain rfl := certs_of_not hcl hrec
-    · rw [hrec] at h₁; cases h₁
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
+      ⟨-, hcf, he⟩ | he
     · obtain ⟨hL₁, hD⟩ := adopted_ledger hK.ledger ha
       have hcH : s.certHeight ≤ (adopted s c ds').certHeight := by
         unfold adopted State.certHeight; dsimp only

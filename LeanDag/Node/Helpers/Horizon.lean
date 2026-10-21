@@ -2,11 +2,12 @@ import LeanDag.Node.Helpers.Steps
 /-!
 # The node's own top and its horizon
 
-Along a run the node's store holds a block at or above its top round, and
-its horizon stays at or below its top and the round of its next undecided
-slot (`Held`): building adds the block of the new top, resuming moves the
-top to a round the store holds, bootstrapping to the round of the base it
-takes, deciding moves the next slot up, and collecting raises the horizon
+Along a run the node's store holds a block at or above its top round, or
+the node has decided a slot whose round lies there, and its horizon stays
+at or below its top and the round of its next undecided slot (`Held`):
+building adds the block of the new top, resuming moves the top to a
+round the store holds, a jump to a round at or below that of a decided
+slot, deciding moves the next slot up, and collecting raises the horizon
 to at most the lesser of that round and the top. Across a step the store keeps what lies at or
 above the new horizon, and its top round does not fall (`Keeps`).
 -/
@@ -22,8 +23,10 @@ variable {cfg : Config Validator BlockId Payload}
 variable (cfg) in
 /-- **The node holds its top and keeps its horizon low.** -/
 structure Held (s : State Validator BlockId Payload) : Prop where
-  /-- A stored block lies at or above its top round. -/
-  top : ∀ t, s.top = some t → ∃ o ∈ s.store.ids, t ≤ (s.store.blk o).round
+  /-- A stored block lies at or above its top round, or, while it
+  recovers, a decided slot's round does. -/
+  top : ∀ t, s.top = some t → (∃ o ∈ s.store.ids, t ≤ (s.store.blk o).round) ∨
+    s.recovering = true ∧ ∃ k < s.lo, t ≤ cfg.slots.slotRound k
   /-- The horizon lies at or below the next undecided slot's round. -/
   horizon : s.store.base ≤ cfg.per * (s.lo / cfg.m)
   /-- Before the node starts, the horizon is `0`. -/
@@ -91,13 +94,30 @@ theorem Keeps.prune (st : Store Validator BlockId Payload) {G : ℕ} (hG : st.ba
   rw [htop, ← prune_blk_round st hG hjG]
   exact Finset.le_sup (f := fun i => ((st.prune G hG).blk i).round) (mem_prune_ids.mpr ⟨hj, hjG⟩)
 
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- **Pruning at or below the store's top round keeps the store.** -/
+theorem Keeps.prune_top (st : Store Validator BlockId Payload) {G : ℕ} (hG : st.base ≤ G)
+    (hGt : G ≤ st.topRound) : Keeps st (st.prune G hG) := by
+  rcases st.ids.eq_empty_or_nonempty with he | ⟨j, hj⟩
+  · refine ⟨hG, fun i hi => absurd hi (by rw [he]; exact Finset.notMem_empty i), ?_⟩
+    have : st.topRound = 0 := by unfold Store.topRound; rw [he]; rfl
+    omega
+  · obtain ⟨i, hi, hmax⟩ := Finset.exists_max_image st.ids (fun i => (st.blk i).round) ⟨j, hj⟩
+    have htop : st.topRound = (st.blk i).round :=
+      le_antisymm (Finset.sup_le fun i' hi' => hmax i' hi')
+        (Finset.le_sup (f := fun i => (st.blk i).round) hi)
+    exact Keeps.prune st hG hi (htop ▸ hGt)
+
 omit [Fintype Validator] in
 theorem Held.grow {s s' : State Validator BlockId Payload} (h : Held cfg s)
     (hg : Grows s.store s'.store) (hb : s'.store.base = s.store.base) (htop : s'.top = s.top)
-    (hlo : s.lo ≤ s'.lo) : Held cfg s' where
+    (hlo : s.lo ≤ s'.lo)
+    (hrec : s.recovering = true → s'.recovering = true := by first | exact id | exact fun _ => rfl) :
+    Held cfg s' where
   top t ht := by
-    obtain ⟨o, hoi, hor⟩ := h.top t (htop.symm.trans ht)
-    exact ⟨o, (hg.2 hb).1 hoi, by rw [hg.blk hb hoi]; exact hor⟩
+    rcases h.top t (htop.symm.trans ht) with ⟨o, hoi, hor⟩ | ⟨hr, k, hk, hkt⟩
+    · exact Or.inl ⟨o, (hg.2 hb).1 hoi, by rw [hg.blk hb hoi]; exact hor⟩
+    · exact Or.inr ⟨hrec hr, k, lt_of_lt_of_le hk hlo, hkt⟩
   horizon := by
     rw [hb]
     exact h.horizon.trans (Nat.mul_le_mul_left _ (Nat.div_le_div_right hlo))
@@ -117,7 +137,7 @@ theorem Held.tryBuild {s s' : State Validator BlockId Payload}
     · split at hb
       · rw [Option.some.injEq, Prod.mk.injEq] at hb
         obtain ⟨rfl, rfl⟩ := hb
-        refine ⟨fun t ht => ⟨_, Finset.mem_insert_self _ _, ?_⟩, h.horizon,
+        refine ⟨fun t ht => Or.inl ⟨_, Finset.mem_insert_self _ _, ?_⟩, h.horizon,
           fun ht => absurd ht (by simp), fun t ht => ?_, h.junk⟩
         · simp only [Option.some.injEq] at ht
           simp only [Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self, atBase_round]
@@ -160,38 +180,50 @@ theorem decideStep_top (s : State Validator BlockId Payload) :
   all_goals exact (proposeAt_keeps _).2.2.1
 
 omit [Fintype Validator] in
+theorem decideStep_recovering (s : State Validator BlockId Payload) :
+    (Node.decideStep cfg s).1.recovering = s.recovering := by
+  unfold Node.decideStep
+  dsimp only
+  split
+  all_goals exact (proposeAt_keeps _).2.2.2.2.2.2.2.1
+
+omit [Fintype Validator] in
 theorem Held.decideStep {s : State Validator BlockId Payload} (h : Held cfg s) :
     Held cfg (Node.decideStep cfg s).1 :=
   h.grow (by rw [decideStep_store]; exact Grows.refl _) (by rw [decideStep_store])
-    (decideStep_top s) (decideStep_lo s)
+    (decideStep_top s) (decideStep_lo s) (fun hr => by rw [decideStep_recovering]; exact hr)
 
 omit [Fintype Validator] in
-/-- **Collecting keeps the store, and the node its top and its horizon.** -/
+/-- **Collecting keeps the node its top and its horizon**, and keeps the
+store when its top round reaches the top. -/
 theorem Held.collect {s : State Validator BlockId Payload} (h : Held cfg s) :
-    Held cfg (Node.collect cfg s).1 ∧ Keeps s.store (Node.collect cfg s).1.store := by
+    Held cfg (Node.collect cfg s).1 ∧
+      ((∀ t, s.top = some t → t ≤ s.store.topRound) →
+        Keeps s.store (Node.collect cfg s).1.store) := by
   unfold Node.collect
   split
   · rename_i t ht
     dsimp only
     split
     · rename_i hG
-      obtain ⟨o, hoi, hor⟩ := h.top t ht
       have hF : cfg.per * (min s.lo s.certHeight / cfg.m) ≤ cfg.per * (s.lo / cfg.m) :=
         Nat.mul_le_mul_left _ (Nat.div_le_div_right (min_le_left _ _))
-      have hoG : horizonAt cfg s t ≤ (s.store.blk o).round :=
-        (horizonAt_le_top s t).trans hor
       refine ⟨⟨fun t' ht' => ?_, ?_, fun ht' => absurd (ht.symm.trans ht') (by simp),
-        fun t' ht' => ?_, h.junk⟩, Keeps.prune s.store hG.le hoi hoG⟩
+        fun t' ht' => ?_, h.junk⟩, fun hst => ?_⟩
       · rw [ht, Option.some.injEq] at ht'
         subst ht'
-        exact ⟨o, (mem_prune_ids (hG := hG.le)).mpr ⟨hoi, hoG⟩,
-          by rw [prune_blk_round _ _ hoG]; exact hor⟩
+        rcases h.top t ht with ⟨o, hoi, hor⟩ | hk
+        · have hoG : horizonAt cfg s t ≤ (s.store.blk o).round := (horizonAt_le_top s t).trans hor
+          exact Or.inl ⟨o, (mem_prune_ids (hG := hG.le)).mpr ⟨hoi, hoG⟩,
+            by rw [prune_blk_round _ _ hoG]; exact hor⟩
+        · exact Or.inr hk
       · exact (horizonAt_le_frontier s t).trans hF
       · rw [ht, Option.some.injEq] at ht'
         subst ht'
         exact horizonAt_le_top s t
-    · exact ⟨h, Keeps.refl _⟩
-  · exact ⟨h, Keeps.refl _⟩
+      · exact Keeps.prune_top s.store hG.le ((horizonAt_le_top s t).trans (hst t ht))
+    · exact ⟨h, fun _ => Keeps.refl _⟩
+  · exact ⟨h, fun _ => Keeps.refl _⟩
 
 omit [Fintype Validator] in
 theorem Held.store {s : State Validator BlockId Payload} (h : Held cfg s)
@@ -208,17 +240,24 @@ theorem Held.advance {s : State Validator BlockId Payload} (h : Held cfg s) :
 
 omit [Fintype Validator] in
 /-- **A resume keeps the store and the horizon**, its new top a round the
-store holds. -/
+store holds or, after a jump, at or below the round of a decided slot. -/
 theorem Held.tryResume {s s' : State Validator BlockId Payload} (h : Held cfg s)
     (hr : Node.tryResume cfg s = some s') : Held cfg s' := by
-  obtain ⟨t, R, ht, htR, -, hR, hst, -, htop, -, hlo, -⟩ := tryResume_some hr
-  obtain ⟨v, hv⟩ := Finset.card_pos.mp hR
-  obtain ⟨o, hoi, hor, -⟩ := mem_authorsIn.mp hv
-  refine ⟨fun t' ht' => ⟨o, hst ▸ hoi, ?_⟩, ?_, fun ht' => absurd (htop.symm.trans ht') (by simp),
+  obtain ⟨t, R, ht, htR, hcase, hst, -, htop, -, hlo, -⟩ := tryResume_some hr
+  refine ⟨fun t' ht' => ?_, ?_, fun ht' => absurd (htop.symm.trans ht') (by simp),
     fun t' ht' => ?_, by rw [hst]; exact h.junk⟩
   · rw [htop, Option.some.injEq] at ht'
-    rw [hst, ← ht']
-    exact hor.ge
+    subst ht'
+    rcases hcase with ⟨-, hR, -⟩ | hJ
+    · obtain ⟨v, hv⟩ := Finset.card_pos.mp hR
+      obtain ⟨o, hoi, hor, -⟩ := mem_authorsIn.mp hv
+      exact Or.inl ⟨o, hst ▸ hoi, by rw [hst]; exact hor.ge⟩
+    · obtain ⟨hJ, -, hrec'⟩ := hJ
+      obtain ⟨-, hpos, hJr, -⟩ := jumpRound_some hJ
+      refine Or.inr ⟨hrec', min s.lo s.certHeight - 1, ?_, hJr⟩
+      rw [hlo]
+      have := min_le_left s.lo s.certHeight
+      omega
   · rw [hst, hlo]; exact h.horizon
   · rw [htop, Option.some.injEq] at ht'
     have := h.le_top t ht
@@ -232,20 +271,6 @@ theorem Held.settle {s : State Validator BlockId Payload} (h : Held cfg s) :
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hj, he⟩ <;> rw [he]
   · exact quiesce_ind (fun _ h => h.advance) _ _ h
   · exact quiesce_ind (fun _ h => h.advance) _ _ (h.tryResume hj)
-
-omit [Fintype Validator] in
-/-- A round to bootstrap at has an attested base. -/
-theorem baseAt_of_bootRound {s : State Validator BlockId Payload} {t G : ℕ}
-    (h : bootRound cfg s t = some G) : ∃ e ∈ baseAt cfg s G, e.2.round = G := by
-  have hne := (List.mem_filter.mp (List.max?_mem h)).2
-  simp only [Bool.and_eq_true, Bool.not_eq_true', decide_eq_true_eq] at hne
-  rcases hl : baseAt cfg s G with _ | ⟨e, l⟩
-  · rw [hl] at hne; simp at hne
-  · have he : e ∈ baseAt cfg s G := by rw [hl]; exact List.mem_cons_self
-    refine ⟨e, List.mem_cons_self, ?_⟩
-    unfold baseAt at he
-    simp only [List.mem_filter, decide_eq_true_eq] at he
-    exact he.2.1
 
 omit [Fintype Validator] in
 /-- A block at the horizon is accepted, unless its identifier is. -/
@@ -276,53 +301,6 @@ theorem mem_foldl_of_base : ∀ (l : List (BlockId × Block Validator BlockId Pa
     · exact mem_foldl_of_base l _
         (fun x hx => (hl x (List.mem_cons_of_mem _ hx)).trans hb'.symm) e he
 
-omit [Fintype Validator] in
-/-- **A bootstrap keeps the store and the horizon held**: an attested base
-block lies at the new top and horizon, and the next slot moves up to the
-adopted certificate's height, whose slot round lies at or above it. -/
-theorem Held.boot {s s' : State Validator BlockId Payload} {ads : List (ℕ × Option BlockId)}
-    (h : Held cfg s) (hb : tryBoot cfg s = some (s', ads)) : Held cfg s' := by
-  obtain ⟨t, G, c, ds, hbG, -, -, hG, hc, hst, -, htop, -, hlo, -⟩ := tryBoot_some hb
-  have hcG := ((validCert_iff (cfg := cfg)).mp (certFor_valid hc).2).2.2.2
-  set st₀ := (keptBase cfg (baseAt cfg s G)).foldl (fun st e => accept cfg st e.1 e.2)
-    (s.store.prune G hbG.le) with hst₀
-  have hb₀ : st₀.base = G := by rw [hst₀, foldl_base]; rfl
-  have hj₀ : st₀.junk = s.store.junk := by
-    rw [hst₀]
-    have := (Grows.foldl (cfg := cfg) (keptBase cfg (baseAt cfg s G))
-      (s.store.prune G hbG.le)).2 (foldl_base _ _)
-    exact this.2.1
-  obtain ⟨e₁, he₁, -⟩ := baseAt_of_bootRound hG
-  obtain ⟨e, he⟩ := exists_mem_keptBase (cfg := cfg) he₁
-  have he₀ : e.1 ∈ st₀.ids := by
-    have hall : ∀ x ∈ keptBase cfg (baseAt cfg s G),
-        x.2.round = (s.store.prune G hbG.le).base := fun x hx => by
-      have hx := mem_keptBase hx
-      unfold baseAt at hx
-      simp only [List.mem_filter, decide_eq_true_eq] at hx
-      exact hx.2.1
-    exact mem_foldl_of_base _ _ hall e he
-  have hgf : Grows st₀ s'.store := by rw [hst]; exact Grows.flush _ _ _
-  have hfb : s'.store.base = st₀.base := by rw [hst]; exact flush_base _ _ _
-  have hin : e.1 ∈ s'.store.ids := (hgf.2 hfb).1 he₀
-  have hbs : s'.store.base = G := hfb.trans hb₀
-  refine ⟨fun t' ht' => ⟨e.1, hin, ?_⟩, ?_, fun ht' => absurd (htop.symm.trans ht') (by simp),
-    fun t' ht' => ?_, ?_⟩
-  · rw [htop, Option.some.injEq] at ht'
-    rw [← ht', ← hbs]
-    exact s'.store.above _ hin
-  · rw [hbs, hlo]
-    exact hcG.2.trans (Nat.mul_le_mul_left _ (Nat.div_le_div_right (le_max_right _ _)))
-  · rw [htop, Option.some.injEq] at ht'; omega
-  · rw [(hgf.2 hfb).2.1]; exact hj₀.trans h.junk
-
-omit [Fintype Validator] in
-theorem Held.bootFrom {s : State Validator BlockId Payload} (h : Held cfg s) :
-    Held cfg (Node.bootFrom cfg s).1 := by
-  rcases bootFrom_cases (cfg := cfg) s with he | ⟨s₂, ads, hb, he⟩ <;> rw [he]
-  · exact h
-  · exact (h.boot hb).advance
-
 /-- **A step keeps the node's top and its horizon.** -/
 theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     (i : Input Validator BlockId Payload) : Held cfg (Node.step cfg s i).1 := by
@@ -333,7 +311,7 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     · split
       · rename_i h₁ h₂
         have h0 := h.low h₁.1
-        refine Held.settle ⟨fun t ht => ⟨_, Finset.mem_insert_self _ _, ?_⟩, h.horizon,
+        refine Held.settle ⟨fun t ht => Or.inl ⟨_, Finset.mem_insert_self _ _, ?_⟩, h.horizon,
           fun ht => absurd ht (by simp), fun t _ => ?_, h.junk⟩
         · simp only [Option.some.injEq] at ht
           simp only [Store.blk, Store.insert, lookup, Std.TreeMap.getD_insert_self, atBase_round]
@@ -345,27 +323,26 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
   | deliver id b =>
     simp only [Node.step]
     split
-    · exact Held.settle (h.grow (Grows.flush _ _ _) (flush_base _ _ _) rfl le_rfl)
+    · exact Held.settle (h.grow (Grows.flush _ _ _) (flush_base _ _ _) rfl le_rfl (fun hr => hr))
     · split
-      · exact h.grow (Grows.refl _) rfl rfl le_rfl
+      · exact h.grow (Grows.refl _) rfl rfl le_rfl (fun _ => rfl)
       · exact h
   | timer r => exact Held.settle (h.grow (Grows.refl _) rfl rfl le_rfl)
   | restart => exact Held.settle (h.grow (Grows.refl _) rfl rfl le_rfl)
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     rw [step_offer]
     split
-    · exact (h.grow (s' := withOffer s p G bs) (Grows.refl _) rfl rfl le_rfl).bootFrom
+    · exact Held.settle (h.grow (s' := withOffer s p G) (Grows.refl _) rfl rfl le_rfl)
     · exact h
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩ <;> rw [he]
-    · exact (h.grow (s' := withCert s c ds) (Grows.refl _) rfl rfl le_rfl).bootFrom
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
+      ⟨-, -, he⟩ | he <;> rw [he]
     · rw [adopt_eq]
-      exact Held.settle (h.grow (s' := adopted { s with certs := l } c ds') (Grows.refl _) rfl rfl
+      exact Held.settle (h.grow (s' := adopted s c ds') (Grows.refl _) rfl rfl
         (adoptable_lo ha).le)
-    · exact Held.settle (h.grow (s' := { s with certs := l, cert := some c, props := above (some c) s.props })
+    · exact Held.settle (h.grow (s' := { s with cert := some c, props := above (some c) s.props })
         (Grows.refl _) rfl rfl le_rfl)
-    · exact h.grow (Grows.refl _) rfl rfl le_rfl
+    · exact h
   | announced p c =>
     rcases announced_cases (cfg := cfg) s p c with ⟨-, -, he⟩ | he | he <;> rw [he]
     · exact Held.settle (h.grow (s' := { s with cert := some c, props := above (some c) s.props })

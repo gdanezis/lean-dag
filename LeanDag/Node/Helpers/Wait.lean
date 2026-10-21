@@ -206,14 +206,12 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
     · exact Or.inr rfl
     · exact Or.inl h
   | restart => exact absurd rfl hr
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]
     exact ⟨trivial, fun r h => Or.inl h⟩
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
-    all_goals try obtain rfl := certs_of_not hcl hs
-    · rw [hs] at h₁; cases h₁
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
+      ⟨-, -, he⟩ | he
     · rw [he, adopt_eq]
       have k := key (adopted s c ds') hs
       exact ⟨k.1, fun r h => Or.inl (k.2 h)⟩
@@ -408,13 +406,11 @@ theorem OwnTop.step {s : State Validator BlockId Payload} {inp : Input Validator
       · exact h
   | timer t => exact OwnTop.settle (h.grow (Grows.refl _) rfl rfl rfl) hs
   | restart => exact absurd rfl hr
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact h
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
-    all_goals try obtain rfl := certs_of_not hcl hs
-    · rw [hs] at h₁; cases h₁
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
+      ⟨-, -, he⟩ | he
     · rw [he, adopt_eq]
       exact OwnTop.settle (h.grow (s' := adopted s c ds') (Grows.refl _) rfl rfl rfl) hs
     · rw [he]
@@ -676,7 +672,8 @@ theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H}
     (hK : ∀ e ∈ persists (Node.advance cfg x).2, e ∈ K)
     (hA : ∀ c, Output.announce c ∈ (Node.advance cfg x).2 → c ∈ A) :
     BuildState cfg U K A s inp (Node.advance cfg x).1 := by
-  refine ⟨h.cut.advanceStore hg h.held hp hK, h.held.advance, h.own.advance,
+  refine ⟨(h.cut.advanceStore hg h.held (fun hr => by rw [h.calm] at hr; cases hr) hp hK).1,
+    h.held.advance, h.own.advance,
     h.retains.trans (retains_advance x) (Grows.advance x).1, h.base.trans (Grows.advance x).1,
     fun r hr => h.fired r ((calm_advance x).1 hr), ?_, ?_,
     by rw [advance_exposed]; exact h.exposed, (calm_advance x).2.trans h.calm⟩
@@ -794,7 +791,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     intro he e hev; rw [he] at hev; simp [persists] at hev
   have hframe : ∀ x : State Validator BlockId Payload, x.store = s.store → x.pending = s.pending →
       x.top = s.top → x.offers = s.offers → x.exposed = s.exposed → ∃ B, Inv cfg x K B :=
-    fun x h₁ h₂ h₃ h₄ h₅ => ⟨B₀, hi.of_eq h₁ h₂ h₃ h₄ h₅⟩
+    fun x h₁ h₂ h₃ _ h₅ => ⟨B₀, hi.of_eq h₁ h₂ h₃ h₅⟩
   cases inp with
   | start =>
     by_cases h₁ : s.top = none ∧ cfg.Admissible
@@ -813,7 +810,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
           { { s with store := st, top := some 0, own := some gid } with
             owner := slotted cfg [(gid, cfg.genesis)] ++ s.owner, recovering := false }
         have hh₀ : Held cfg s₀ := by
-          refine ⟨fun t ht => ⟨_, Finset.mem_insert_self _ _, ?_⟩, hh.horizon,
+          refine ⟨fun t ht => Or.inl ⟨_, Finset.mem_insert_self _ _, ?_⟩, hh.horizon,
             fun ht => absurd ht (by simp [s₀]), fun t _ => ?_, hh.junk⟩
           · change some 0 = some t at ht
             simp only [Option.some.injEq] at ht
@@ -846,8 +843,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
             hi.valid.insert (hnew := h₂.1) (hab := h₂.2.1)
               (hrefs := fun _ => Finset.empty_subset _)
               (hpred := fun _ j hj => absurd hj (Finset.notMem_empty j))
-              fun h => absurd h (by simp [Config.genesis]),
-            fun o ho x hx hid => hi.offered o ho x hx hid, hi.exposed⟩
+              fun h => absurd h (by simp [Config.genesis]), hi.exposed⟩
           change s.store.base ≤ 0; omega
         refine hset s₀ (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)])
           (fun hx => ⟨hcst, hh₀, ho₀,
@@ -873,7 +869,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
         · exact hx
         · exact hp e he
       have hc₁ : IsCut U s₁.store :=
-        IsCut.flush hg _ _ hc (hc.spans hh) hpend
+        IsCut.flush hg _ _ hc (hc.spans hh fun h => by rw [hs] at h; cases h) hpend
       let s₂ := { s₁ with
         requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
       have hfl := flush_known (cfg := cfg) (K := K) (s.pending.length + 1) (st := s.store)
@@ -885,12 +881,12 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
               change (flush cfg _ _ _).1.base = 0; rw [hfl.2.2.1]; exact hb'⟩
           · exact Or.inr ⟨t, ht, by
               change (flush cfg _ _ _).1.base ≤ t; rw [hfl.2.2.1]; exact hb', hB⟩,
-          hi.good, hi.sub, hfl.2.2.2, hi.offered, hi.exposes_twin hx hA.2.2.2.1 hA.2.2.2.2.1⟩
+          hi.good, hi.sub, hfl.2.2.2, hi.exposes_twin hx hA.2.2.2.1 hA.2.2.2.2.1⟩
       refine hset { s₂ with asked := askedAfter (cfg := cfg) s b }
         (evidence s id b ++
           (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++
           askOut (cfg := cfg) s b)
-        (fun hx => ⟨hc₁, hh.grow hg₁ hb₁ rfl le_rfl, hown.grow hg₁ hb₁ rfl rfl,
+        (fun hx => ⟨hc₁, hh.grow hg₁ hb₁ rfl le_rfl (fun hr => hr), hown.grow hg₁ hb₁ rfl rfl,
           Retains.of_grows hg₁ hb₁, hb₁.ge, fun r hr => Or.inl hr, ⟨B₀, hinv₂⟩, Or.inl hb₁, hx, hs⟩) hs
         (fun e he => hpend e (flush_pending_sub _ _ _ e he)) ?_ (step_deliver hA)
       intro e he
@@ -915,13 +911,11 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     · exact Or.inr rfl
     · exact Or.inl ht
   | restart => exact absurd rfl hr
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     exact hsame (by simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false])
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
-    all_goals try obtain rfl := certs_of_not hcl hs
-    · rw [hs] at h₁; cases h₁
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
+      ⟨-, -, he⟩ | he
     · refine hset (adopted s c ds') (ds'.map fun e => .commit e.1 e.2)
         (fun hx => ⟨hc, hh.grow (Grows.refl _) rfl rfl (adoptable_lo ha).le,
           hown.grow (Grows.refl _) rfl rfl rfl, Retains.refl _, le_rfl, fun r hr => Or.inl hr,
@@ -1089,14 +1083,12 @@ theorem timersBuilt_step {s : State Validator BlockId Payload}
   | baseRequest peer =>
     refine TimersBuilt.of_none fun r a h => ?_
     simp [Node.step] at h
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]
     exact TimersBuilt.of_none fun _ _ h => by simp at h
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
-    all_goals try obtain rfl := certs_of_not hcl hs
-    · rw [hs] at h₁; cases h₁
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
+      ⟨-, -, he⟩ | he
     · rw [he, adopt_eq]
       refine (TimersBuilt.of_none fun r a h => ?_).append (hset _ hs)
       obtain ⟨_, -, he⟩ := List.mem_map.mp h; cases he
@@ -1263,13 +1255,11 @@ theorem retains_step {s : State Validator BlockId Payload} {inp : Input Validato
     · split <;> exact Retains.refl _
   | timer t => exact hset _ hs (Grows.refl _) rfl
   | restart => exact absurd rfl hr
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     simp only [Node.step, hs, Bool.false_eq_true, false_and, if_false]; exact Retains.refl _
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨h₁, -, -⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩
-    all_goals try obtain rfl := certs_of_not hcl hs
-    · rw [hs] at h₁; cases h₁
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
+      ⟨-, -, he⟩ | he
     · rw [he, adopt_eq]; exact hset (adopted s c ds') hs (Grows.refl _) rfl
     · rw [he]; exact hset { s with cert := some c, props := above (some c) s.props } hs (Grows.refl _) rfl
     · rw [he]; exact Retains.refl _

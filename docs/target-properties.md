@@ -5379,6 +5379,17 @@ statements are unchanged.
 `ReactiveCore.deadline`, the ceiling on a validator's wait, is deleted,
 with Steelhead's copy: no proof in any arc read it.
 
+### 11.58 A decided slot's round is reached
+
+An anchored rule's verdict on a slot holds a block of the record at or
+above the slot's round, given that a direct skip does
+(`AnchoredRule.Decided.reaches`, `Common/Anchored.lean`): a commit holds
+the leader block, and an indirect verdict inherits the bound from the
+anchor it reads. At the scheme's rule a direct skip holds a blamer at
+the slot's vote round once `0 < skipThreshold`. The validator reads this
+to keep a recovering node's horizon at rounds the run's record reaches
+(`docs/validator.md` §3.6).
+
 ### 11.5 Next steps, in order
 
 1. **~~`Compose.lean`~~** (**done**, §11.3). The three composition

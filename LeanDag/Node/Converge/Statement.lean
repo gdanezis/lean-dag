@@ -43,16 +43,16 @@ def Delivered (cfg : Config Validator BlockId Payload) (H : Finset Validator)
   ∀ i u inp, tr[i]? = some (u, inp) → u ∈ H → ∀ m, Sends u (outputsAt cfg tr i) m → m.1 ∈ H →
     ∃ j, i < j ∧ tr[j]? = some m
 
-/-- **Timely authentication**: a block delivered or offered to an honest
-node with an honest author's identity and its hash was broadcast by that
-author earlier. -/
+/-- **Timely authentication**: a block delivered to an honest node with an
+honest author's identity and its hash was broadcast by that author
+earlier. -/
 def TimelyAuthentic (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ j v inp, tr[j]? = some (v, inp) → v ∈ H → ∀ x ∈ delivered (cfg.at v) [inp], x.2.creator ∈ H →
     ∃ i < j, (tr[i]?.map Prod.fst) = some x.2.creator ∧ x ∈ broadcasts (outputsAt cfg tr i)
 
-/-- The blocks delivered or offered to honest nodes with their hash, and
-those honest nodes made. -/
+/-- The blocks delivered to honest nodes with their hash, and those
+honest nodes made. -/
 def knownIn (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload) : Set (BlockId × Block Validator BlockId Payload) :=
   {x | (∃ (j : ℕ) (v : Validator) (inp : Input Validator BlockId Payload),
@@ -71,7 +71,7 @@ def NoRestart (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Pr
 
 /-- **No honest node is given a base offer or a certificate offer.** -/
 def NoRejoin (H : Finset Validator) (tr : Trace Validator BlockId Payload) : Prop :=
-  ∀ (i : ℕ) v, v ∈ H → (∀ p G bs, tr[i]? ≠ some (v, Input.baseOffer p G bs)) ∧
+  ∀ (i : ℕ) v, v ∈ H → (∀ p G, tr[i]? ≠ some (v, Input.baseOffer p G)) ∧
     ∀ p c ds, tr[i]? ≠ some (v, Input.certOffer p c ds)
 
 /-- **Every block an honest node broadcast, with its history, is in every

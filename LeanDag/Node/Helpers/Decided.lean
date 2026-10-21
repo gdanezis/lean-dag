@@ -296,53 +296,23 @@ theorem settle_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
     Appends cfg s (settle cfg s).2 (settle cfg s).1 ∧ Ledger cfg (settle cfg s).1 := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hr, h⟩ <;> rw [h]
   · exact quiesce_appends _ hL
-  · obtain ⟨-, -, -, -, -, -, -, -, -, -, hlo, -⟩ := tryResume_some hr
+  · obtain ⟨-, -, -, -, -, -, -, -, -, hlo, -⟩ := tryResume_some hr
     have hd : s₁.decided = s.decided ∧ s₁.lastProposed = s.lastProposed ∧
         s₁.chain = s.chain := by
       unfold tryResume at hr
       split at hr
-      · dsimp only at hr
-        split at hr
-        · split at hr
-          · rw [Option.some.injEq] at hr; subst hr; exact ⟨rfl, rfl, rfl⟩
+      · split at hr
+        · rw [Option.some.injEq] at hr; subst hr; exact ⟨rfl, rfl, rfl⟩
+        · unfold resumeAt at hr
+          split at hr
+          · split at hr
+            · rw [Option.some.injEq] at hr; subst hr; exact ⟨rfl, rfl, rfl⟩
+            · cases hr
           · cases hr
-        · cases hr
       · cases hr
     obtain ⟨h₂, hL₂⟩ := quiesce_appends (cfg := cfg) (passes cfg s₁)
       (hL.of_eq hd.1 hlo hd.2.1 hd.2.2)
     exact ⟨(Appends.quiet hd.1 rfl fun _ _ h => absurd h List.not_mem_nil).trans h₂, hL₂⟩
-
-omit [Fintype Validator] in
-theorem bootFrom_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s) :
-    Appends cfg s (bootFrom cfg s).2 (bootFrom cfg s).1 ∧ Ledger cfg (bootFrom cfg s).1 := by
-  rcases bootFrom_cases (cfg := cfg) s with he | ⟨s₂, ads, hb, he⟩ <;> rw [he]
-  · exact ⟨Appends.refl s, hL⟩
-  · obtain ⟨t, G, c, ds, hbG, -, -, -, hc, -, -, -, -, hlo, -, -, -, -, hads, hdec, -, -, hlp,
-      hch, -⟩ := tryBoot_some hb
-    obtain ⟨-, -, hcd, -⟩ := (validCert_iff (cfg := cfg)).mp (certFor_valid hc).2
-    have hlen : s.decided.length = s.lo := hL.length
-    have hD₂ : s₂.decided.reverse = s.decided.reverse ++ ads := by
-      rw [hdec, List.reverse_append, List.reverse_reverse]
-    have hL₂ : Ledger cfg s₂ := by
-      have hlp' : s.lastProposed ≤ s.decided.reverse.length := by
-        rw [List.length_reverse, hlen]; exact hL.2.1
-      refine ⟨?_, ?_, ?_⟩
-      · rw [hD₂, hlo, hads, List.map_append, hL.1, List.map_drop, hcd, hlen]
-        rcases le_total s.lo c.height with h | h
-        · obtain ⟨k, hk⟩ := Nat.exists_eq_add_of_le h
-          rw [max_eq_right h, List.range_eq_range' (n := c.height), List.drop_range', hk,
-            Nat.add_sub_cancel_left, ← List.range_eq_range', List.range_add,
-            List.range'_eq_map_range]
-          simp
-        · rw [max_eq_left h, List.drop_eq_nil_of_le (by simpa using h), List.append_nil]
-      · rw [hlp, hlo]; exact hL.2.1.trans (le_max_left _ _)
-      · rw [hlp, hch, hD₂, List.take_append_of_le_length hlp']; exact hL.2.2
-    obtain ⟨h₃, hL₃⟩ := advance_appends (cfg := cfg) hL₂
-    have h₁ : Appends cfg s
-        (ads.map fun e => (Output.commit e.1 e.2 : Output Validator BlockId Payload)) s₂ :=
-      ⟨by rw [hD₂, commitsOf_map], fun k h hp => by
-        obtain ⟨e, -, he⟩ := List.mem_map.mp hp; cases he⟩
-    exact ⟨h₁.trans h₃, hL₃⟩
 
 omit [Fintype Validator] in
 /-- **Adoptable decisions extend the node's chain to the certificate's
@@ -455,8 +425,9 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
   | baseRequest peer =>
     refine ⟨Appends.quiet rfl (commitsOf_baseRequest s peer) fun k h hk => ?_, hL⟩
     simp only [Node.step, List.mem_cons, List.mem_append] at hk
-    rcases hk with (hk | hk) | hk
+    rcases hk with ((hk | hk) | hk) | hk
     · cases hk
+    · obtain ⟨_, -, he⟩ := List.mem_map.mp hk; cases he
     · obtain ⟨_, -, he⟩ := List.mem_map.mp hk; cases he
     · split at hk
       · rw [List.mem_singleton] at hk; cases hk
@@ -483,23 +454,16 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
       (commitsOf_requests fun o ho => Or.inr ⟨p, hout o ho⟩) fun k h hk => ?_, hL⟩
     obtain ⟨_, _, he⟩ := hout _ hk
     cases he
-  | baseOffer p G bs =>
+  | baseOffer p G =>
     rw [step_offer]
     split
-    · obtain ⟨h₁, h₂⟩ := bootFrom_appends (s := withOffer s p G bs) hL
-      refine ⟨h₁.trans (Appends.quiet rfl (commitsOf_askOffered _ p bs) fun k h hk => ?_), h₂⟩
-      unfold askOffered at hk
-      dsimp only at hk
-      split at hk
-      · simp at hk
-      · rw [List.mem_singleton] at hk; cases hk
+    · exact settle_appends (s := withOffer s p G) (hL.of_eq rfl rfl rfl rfl)
     · exact ⟨Appends.refl s, hL⟩
   | certOffer p c ds =>
-    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨-, -, he⟩ | ⟨l, hcl, ds', -, -, ha, he⟩ |
-      ⟨l, hcl, -, -, he⟩ | ⟨l, hcl, he⟩ <;> rw [he]
-    · exact bootFrom_appends (s := withCert s c ds) hL
-    · exact adopt_appends (s := { s with certs := l }) (hL.of_eq rfl rfl rfl rfl) ha
-    · have h₀ : Ledger cfg { s with certs := l, cert := some c, props := above (some c) s.props } :=
+    rcases certOffer_cases (cfg := cfg) s p c ds with ⟨ds', -, -, ha, he⟩ |
+      ⟨-, -, he⟩ | he <;> rw [he]
+    · exact adopt_appends (s := s) (hL.of_eq rfl rfl rfl rfl) ha
+    · have h₀ : Ledger cfg { s with cert := some c, props := above (some c) s.props } :=
         hL.of_eq rfl rfl rfl rfl
       obtain ⟨ha, hL'⟩ := settle_appends h₀
       exact ⟨⟨ha.1, ha.2⟩, hL'⟩

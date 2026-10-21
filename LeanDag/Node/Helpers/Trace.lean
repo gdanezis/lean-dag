@@ -128,7 +128,7 @@ theorem persists_of_event {j : ℕ} {w : Validator} {inp : Input Validator Block
 
 omit [Fintype Validator] in
 /-- **What was delivered to a node before event `i`**, its earlier events
-delivered or offered. -/
+delivered. -/
 theorem mem_delivered_before (c : Config Validator BlockId Payload) (v : Validator) :
     ∀ (i : ℕ) {x : BlockId × Block Validator BlockId Payload},
       x ∈ delivered c (inputsBefore tr i v) →

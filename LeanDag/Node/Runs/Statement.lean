@@ -7,8 +7,8 @@ import LeanDag.Node.Vote
 adversary, assume:
 
 * **timely authentication** (`Converge.TimelyAuthentic`): a block
-  delivered or offered to an honest node with an honest author's
-  identity and its hash was broadcast by that author earlier;
+  delivered to an honest node with an honest author's identity and its
+  hash was broadcast by that author earlier;
 * **the hash** (`Converge.HashInjective`): no two different blocks the
   honest nodes knew have one identifier;
 * no honest node is given a base offer (`Converge.NoRejoin`).

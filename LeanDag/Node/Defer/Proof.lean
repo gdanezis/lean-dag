@@ -18,12 +18,12 @@ namespace Node
 namespace Defer
 
 theorem decides : Decides := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hoff hcert hinj hchain
+  intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hcert hinj hchain
   haveI : Validity.Quorate (ValidAt (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
   have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2.1, hadm.1⟩
-  have key := cut_before hσ hadm hf htime hoff hcert hinj hchain tr.length
+  have key := cut_before hσ hadm hf htime hcert hinj hchain tr.length
   refine ⟨globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime),
     fun j hj => ?_, fun v hv => (key v hv).1, fun v hv e he => ?_⟩
   · obtain ⟨x, ⟨v, hv, hx⟩, rfl⟩ := exists_of_mem_knownIds (mem_globalIds.mp hj).1

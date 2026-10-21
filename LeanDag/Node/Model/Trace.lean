@@ -58,8 +58,8 @@ def runOf (tr : Trace Validator BlockId Payload) (v : Validator) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr tr.length v)
 
-/-- What node `v` knew over the trace: the blocks delivered or offered to
-it with their hash, and its own. -/
+/-- What node `v` knew over the trace: the blocks delivered to it with
+their hash, and its own. -/
 def knownOf (tr : Trace Validator BlockId Payload) (v : Validator) :
     List (BlockId × Block Validator BlockId Payload) :=
   delivered (cfg.at v) (inputsBefore tr tr.length v) ++ persists (runOf cfg tr v).2
@@ -76,7 +76,7 @@ def Sends (u : Validator) (out : List (Output Validator BlockId Payload))
   ∃ o ∈ out, match o with
     | .broadcast id b => m.1 ≠ u ∧ m.2 = .deliver id b
     | .requestBase => m.1 ≠ u ∧ m.2 = .baseRequest u
-    | .serveBase peer G bs => m.1 = peer ∧ m.2 = .baseOffer u G bs
+    | .serveBase peer G => m.1 = peer ∧ m.2 = .baseOffer u G
     | .fetch peer G ids => m.1 = peer ∧ m.2 = .fetchRequest u G ids
     | .send peer id b => m.1 = peer ∧ m.2 = .deliver id b
     | .propose k h => m.1 ≠ u ∧ m.2 = .proposal u k h
