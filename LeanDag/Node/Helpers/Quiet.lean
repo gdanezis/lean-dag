@@ -279,7 +279,7 @@ theorem collect_bound (s : State Validator BlockId Payload) :
     g.lo = s.lo ∧ g.cert = s.cert ∧ g.top = s.top ∧ g.own = s.own ∧
       g.pending.length ≤ s.pending.length ∧
       ((g = s ∧ ∀ t, s.top = some t →
-          min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) - cfg.lag ≤ s.store.base) ∨
+          min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤ s.store.base) ∨
         (s.store.base < g.store.base ∧ ∃ t, s.top = some t ∧ g.store.base ≤ t)) := by
   intro g
   unfold g Node.collect
@@ -289,7 +289,7 @@ theorem collect_bound (s : State Validator BlockId Payload) :
     split
     · rename_i hG
       refine ⟨rfl, rfl, rfl, rfl, (List.filter_sublist).length_le, Or.inr ⟨hG, t, ht, ?_⟩⟩
-      change min _ (min t s.held) - cfg.lag ≤ t
+      change min _ t - cfg.lag ≤ t
       omega
     · rename_i hG
       refine ⟨rfl, rfl, rfl, rfl, le_rfl, Or.inl ⟨rfl, fun t' ht' => ?_⟩⟩
@@ -526,13 +526,13 @@ theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
 
 variable (cfg) in
 /-- **A settled state**: it can build nothing, no pending block is ready,
-its horizon is the one its certificate, top and held round give, and it
-decides no further slot. -/
+its horizon is the one its certificate and top give, and it decides no
+further slot. -/
 structure Settled (s : State Validator BlockId Payload) : Prop where
   build : Node.tryBuild cfg s = none
   ready : NoReady cfg s
   collected : ∀ t, s.top = some t →
-    min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) - cfg.lag ≤ s.store.base
+    min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤ s.store.base
   decided : s.lo < decidable cfg s.store.topRound →
     Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ s.store.toRecord s.store.view s.lo
       (decidable cfg s.store.topRound - 1) = []
@@ -570,7 +570,7 @@ theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
   obtain ⟨hglo, hgc, hgtop, -, hgpd, hg⟩ := collect_bound (cfg := cfg) d
   -- nothing collected
   have hgd : (Node.collect cfg d).1 = d ∧ ∀ t, d.top = some t →
-      min (cfg.per * (min d.lo d.certHeight / cfg.m)) (min t d.held) - cfg.lag ≤ d.store.base := by
+      min (cfg.per * (min d.lo d.certHeight / cfg.m)) t - cfg.lag ≤ d.store.base := by
     rcases hg with hg | ⟨hlt, -⟩
     · exact hg
     · exfalso

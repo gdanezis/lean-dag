@@ -16,9 +16,9 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
   `a` ticks fires at `t + a`, and none fires earlier;
 * **synchronisation** (`SyncedWithin`): a reliable node that receives a
   reliable node's block at `t` receives after it, by `max t gst + Δₛ`,
-  each block of its history at or above its horizon that it did not
-  make. Efficient synchronisation is out of scope (`docs/validator.md`
-  §1);
+  each block the honest nodes know in its history at or above its
+  horizon that it did not make. Efficient synchronisation is out of scope
+  (`docs/validator.md` §1);
 * every reliable node **starts** by `gst` (`StartedBy`), and none
   restarts;
 * timely authentication, of blocks, bases, certificates and the chain's
@@ -73,20 +73,24 @@ def TimersOnTime (cfg : Config Validator BlockId Payload) (T : Finset Validator)
       ∃ i < j, ∃ a, (tr[i]?.map Prod.fst) = some u ∧ Output.setTimer r a ∈ outputsAt cfg tr i ∧
         time i + a ≤ time j
 
+open Classical in
+/-- **The block the honest nodes know under an identifier**, the genesis
+block under one they know none under. -/
+noncomputable def knownBlock (cfg : Config Validator BlockId Payload) (H : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (j : BlockId) : Block Validator BlockId Payload :=
+  if h : ∃ x ∈ Converge.knownIn cfg H tr, x.1 = j then (Classical.choose h).2 else cfg.genesis
+
 /-- **Synchronisation within `Δₛ` past GST**: a reliable node `v` given
 a reliable author's block at `t` is given after it, by `max t gst + Δₛ`,
-each block of the history the author broadcast it with, at or above
-`v`'s horizon then, that `v` did not make. -/
-def SyncedWithin (cfg : Config Validator BlockId Payload) (T : Finset Validator)
+each block the honest nodes `H` know that the block reaches through the
+blocks they know, at or above `v`'s horizon then, that `v` did not make. -/
+def SyncedWithin (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δₛ t₁ : ℕ) : Prop :=
-  ∀ j v id b, tr[j]? = some (v, .deliver id b) → v ∈ T → b.creator ∈ T →
-    ∀ i, (tr[i]?.map Prod.fst) = some b.creator → (id, b) ∈ broadcasts (outputsAt cfg tr i) →
-      let st := (stateBefore cfg tr (i + 1) b.creator).store
-      max (time j) gst + Δₛ ≤ t₁ → ∀ y ∈ historyFrom st.blk id,
-        horAt cfg tr time v (max (time j) gst + Δₛ) ≤ (st.blk y).round →
-        (st.blk y).creator ≠ v →
-        ∃ k, j < k ∧ tr[k]? = some (v, .deliver y (st.map.getD y st.junk)) ∧
-          time k ≤ max (time j) gst + Δₛ
+  ∀ j v id b, tr[j]? = some (v, .deliver id b) → v ∈ T → b.creator ∈ T → id = cfg.idOf b →
+    max (time j) gst + Δₛ ≤ t₁ → ∀ x ∈ Converge.knownIn cfg H tr,
+      ReachesFrom (knownBlock cfg H tr) id x.1 →
+      horAt cfg tr time v (max (time j) gst + Δₛ) ≤ x.2.round → x.2.creator ≠ v →
+      ∃ k, j < k ∧ tr[k]? = some (v, .deliver x.1 x.2) ∧ time k ≤ max (time j) gst + Δₛ
 
 /-- **Every reliable node starts by `gst`.** -/
 def StartedBy (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
@@ -131,7 +135,7 @@ def Progresses : Prop :=
     Converge.TimelyAuthentic cfg H tr → Boot.TimelyOffers cfg H tr → Boot.TimelyCerts cfg H tr →
     Converge.HashInjective cfg H tr → Boot.ChainInjective cfg H tr → Converge.NoRestart T tr →
     TimeMono tr time → DeliveredWithin cfg T tr time gst Δ t₁ → TimersOnTime cfg T tr time t₁ →
-    SyncedWithin cfg T tr time gst Δₛ t₁ → StartedBy T tr time gst →
+    SyncedWithin cfg H T tr time gst Δₛ t₁ → StartedBy T tr time gst →
     Produces cfg T tr time gst t₁ ∧ Decides cfg T tr time gst (3 * Δ + Δₛ) t₁
 
 /-- The reliable nodes' liveness. -/

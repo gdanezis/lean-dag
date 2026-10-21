@@ -504,11 +504,6 @@ def GoodFor (c : Cert Validator BlockId) (s : State Validator BlockId Payload) :
     c.head = cfg.headOf (s.decided.reverse.take c.height)
 
 omit [Fintype Validator] in
-theorem Kept.hold {P : List (Validator × ℕ × BlockId)} {s : State Validator BlockId Payload}
-    (h : Kept cfg P s) : Kept cfg P s.hold :=
-  ⟨h.ledger, h.own_le, h.own_head, h.own_dvd, h.own_mem, h.certified, h.peers, h.cert⟩
-
-omit [Fintype Validator] in
 /-- The certificate's height lies at or below the next undecided slot. -/
 theorem Kept.certHeight_le {P : List (Validator × ℕ × BlockId)}
     {s : State Validator BlockId Payload} (hK : Kept cfg P s) : s.certHeight ≤ s.lo := by
@@ -644,8 +639,8 @@ theorem Kept.settle {P : List (Validator × ℕ × BlockId)} {s : State Validato
     (hK : Kept cfg P s) (hP : ∀ x ∈ P, x.1 ≠ cfg.me) (hr : s.recovering = false) :
     Kept cfg P (Node.settle cfg s).1 ∧ Covered cfg (Node.settle cfg s).1 ∧
       ∀ c, Output.announce c ∈ (Node.settle cfg s).2 → GoodFor cfg c (Node.settle cfg s).1 := by
-  obtain ⟨n, hn⟩ := passes_succ (cfg := cfg) s.hold
-  rw [settle_of_idle hr, hn]; exact Kept.quiesce hP n hK.hold
+  obtain ⟨n, hn⟩ := passes_succ (cfg := cfg) s
+  rw [settle_of_idle hr, hn]; exact Kept.quiesce hP n hK
 
 /-! ## A step, and a run -/
 

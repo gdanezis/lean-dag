@@ -87,7 +87,7 @@ info: "true [(some 141), (some 141), (some 141), (some 141)] [139, 139, 139, 139
 #eval summary { horizon := 150, row := "mysticeti", withhold := some (3, 2, 7), delayMax := 1 }
 
 /--
-info: "true [(some 56), (some 56), (some 56), (some 57)] [54, 54, 54, 55] [1, 1, 1, 1] true true true 1 0"
+info: "true [(some 58), (some 58), (some 58), (some 58)] [56, 56, 56, 56] [1, 1, 1, 1] true true true 1 0"
 -/
 #guard_msgs in
 #eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 46)], lag := 6 }

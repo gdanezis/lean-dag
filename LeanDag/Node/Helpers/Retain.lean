@@ -119,15 +119,11 @@ theorem Sparse.advance {s : State Validator BlockId Payload} (h : Sparse cfg s) 
   exact (h₂.frame a₃ b₃ c₃.ge).frame rfl rfl le_rfl
 
 omit [Fintype Validator] in
-theorem Sparse.hold {s : State Validator BlockId Payload} (h : Sparse cfg s) : Sparse cfg s.hold :=
-  ⟨h.nodup, h.over, h.latest⟩
-
-omit [Fintype Validator] in
 theorem Sparse.settle {s : State Validator BlockId Payload} (h : Sparse cfg s) :
     Sparse cfg (Node.settle cfg s).1 := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hr, he⟩ <;> rw [he]
-  · exact quiesce_ind (fun _ h => h.advance) _ _ h.hold
-  · refine quiesce_ind (fun _ h => h.advance) _ _ (h.frame (s' := s₁.hold) ?_ ?_ ?_) <;>
+  · exact quiesce_ind (fun _ h => h.advance) _ _ h
+  · refine quiesce_ind (fun _ h => h.advance) _ _ (h.frame ?_ ?_ ?_) <;>
     · unfold Node.tryResume at hr
       split at hr
       · dsimp only at hr

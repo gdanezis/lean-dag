@@ -201,10 +201,8 @@ decision round.
 
 ### 3.4 Garbage collection
 
-The horizon is `G = min(F, t) − Λ`, where `t` is the lesser of the
-node's round and the round it held when it last began to settle
-(`State.hold`), and `F` the round of the first slot that is not both
-decided and certified:
+The horizon is `G = min(F, t) − Λ`, where `t` is the node's round and
+`F` the round of the first slot that is not both decided and certified:
 the slot round of the lesser of the next undecided slot and the height
 of the node's certificate (§3.8). This is the depth rule of
 `garbage.md` §6, with the frontier certified.
@@ -218,14 +216,6 @@ keeps it; one below it is dropped. A node whose horizon lags its peers'
 could check, and reject, a block they kept unchecked, so a node behind
 adopts the decisions its peers certified, and its horizon rises with
 theirs (§3.8, §13.6).
-
-A node may build several rounds in one settle. Its horizon then rises,
-until the next settle, to at most `Λ` below the round it began at, so
-every block it builds keeps its history above the horizon after the
-event that built it, where a peer behind it synchronises from (13.1).
-Measured against the horizon at the node's round now, a node behind
-could find that history pruned in the event that built the block, and
-lack it for good.
 
 The decider then runs on the original schedule. Every slot it still
 decides lies at `F` or above, and its decision reads only rounds from
@@ -1230,14 +1220,18 @@ assumptions, over the reliable nodes:
   for `a` ticks fires at `t + a`, neither earlier nor later;
 * **synchronisation** (`SyncedWithin`): a reliable node that receives a
   reliable node's block at time `t` receives after it, by
-  `max t gst + Δₛ`, every block of that block's history, as its author
-  held it after the event that built it, at or above its own horizon.
-  A Byzantine block in that history at the author's horizon, invalid
-  above the receiver's horizon, waits pending until the receiver's
-  horizon reaches it (§3.1, `ready`), so it is not needed again. This is
-  assumed of the network, not proved of the program's fetch (§3.7),
-  since efficient synchronisation is out of scope (§1); the fetch meets
-  it with `Δₛ = 2Δ` when the block's author answers;
+  `max t gst + Δₛ`, every block the honest nodes know that the block
+  reaches through blocks they know (`Live.knownBlock`), at or above its
+  own horizon, that it did not make. The history is read off what the
+  honest nodes know, not off the author's store after the event that
+  built the block, since that event may raise the author's horizon past
+  the block's own history. A Byzantine block in the history at the
+  author's horizon, invalid above the receiver's horizon, waits pending
+  until the receiver's horizon reaches it (§3.1, `ready`), so it is not
+  needed again. This is assumed of the network, not proved of the
+  program's fetch (§3.7), since efficient synchronisation is out of
+  scope (§1); the fetch meets it with `Δₛ = 2Δ` when the block's author
+  answers;
 * **completeness up to `t₁`**: every delivery and timer due by `t₁` is in
   the trace.
 
@@ -1292,7 +1286,11 @@ Together they bound the time to decide each slot.
   `Node/Live/Proof.lean`): `v`, still at round `n` a timeout after all
   reliable nodes were at `n` or above, would be settled with the round's
   timer fired and a quorum of round `n` held (`round_arrives`), and would
-  build (`tryBuild_isSome`). It needs two assumptions V11 states: the
+  build (`tryBuild_isSome`). A block arrives once the receiver's
+  horizon reaches the one its author built it at (`arrives`), read off
+  the state the author built from (`BuildState`, which carries the store
+  invariant and the certificate that last raised that horizon). It needs
+  two assumptions V11 states: the
   block hash injective on every block, so no stored block has the
   identifier of the node's next one (`fresh_before`), and `2 ≤ q`, so a
   settle ends settled (`settle_settled`). The drift induction of 13.3,

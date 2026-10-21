@@ -95,7 +95,7 @@ omit [Fintype Validator] in
 theorem settle_offered (s : State Validator BlockId Payload) :
     (Node.settle cfg s).1.offers = s.offers ∧ (Node.settle cfg s).1.certs = s.certs := by
   rcases settle_cases (cfg := cfg) s with h | ⟨s₁, hj, h⟩ <;> rw [h]
-  · exact quiesce_offered _ s.hold
+  · exact quiesce_offered _ s
   · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, hof, -⟩ := tryResume_some hj
     have hce : s₁.certs = s.certs := by
       unfold tryResume at hj
@@ -107,8 +107,7 @@ theorem settle_offered (s : State Validator BlockId Payload) :
           · cases hj
         · cases hj
       · cases hj
-    rw [(quiesce_offered _ s₁.hold).1, (quiesce_offered _ s₁.hold).2, State.hold_offers,
-      State.hold_certs, hof, hce]
+    rw [(quiesce_offered _ s₁).1, (quiesce_offered _ s₁).2, hof, hce]
     exact ⟨rfl, rfl⟩
 
 omit [Fintype Validator] in
@@ -315,10 +314,10 @@ theorem IsCut.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     IsCut U (Node.settle cfg s).1.store ∧
       ∀ e ∈ commitsOf (Node.settle cfg s).2, Verdict cfg U e := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hj, he⟩ <;> rw [he] at hb ⊢
-  · exact IsCut.quiesce hg hσ ht _ hc hh.hold hp hb
+  · exact IsCut.quiesce hg hσ ht _ hc hh hp hb
   · obtain ⟨hst, hpd, -⟩ := tryResume_keeps hj
-    exact IsCut.quiesce hg hσ ht _ (by rw [State.hold_store, hst]; exact hc) (hh.tryResume hj).hold
-      (by rw [State.hold_pending, hpd]; exact hp) hb
+    exact IsCut.quiesce hg hσ ht _ (by rw [hst]; exact hc) (hh.tryResume hj)
+      (by rw [hpd]; exact hp) hb
 
 /-- **Trying to bootstrap from a cut**, at a round the record reaches,
 with offered certificates whose decisions, where their chain has the

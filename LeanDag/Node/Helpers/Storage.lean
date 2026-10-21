@@ -350,7 +350,7 @@ theorem Lim.collect {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim 
     dsimp only
     split
     · rename_i hG
-      set G := min (cfg.per * (min s.lo s.certHeight / cfg.m)) (min t s.held) - cfg.lag with hGd
+      set G := min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag with hGd
       have hO : ∀ y : BlockId × Block Validator BlockId Payload, Charged s.owner y →
           cfg.lag ≤ cfg.lag → G ≤ y.2.round →
           Charged (s.owner.filter fun e => G ≤ e.2.2) y := by
@@ -411,16 +411,11 @@ theorem Lim.tryResume {τ W : ℕ} {s s' : State Validator BlockId Payload} (h :
   · rw [hst, htop]; have := h.base; rw [ht] at this; simp only [Option.getD_some] at this ⊢; omega
 
 omit [Fintype Validator] in
-theorem Lim.hold {τ W : ℕ} {s : State Validator BlockId Payload} (h : Lim τ W s) :
-    Lim τ W s.hold :=
-  ⟨h.store, h.pend, h.slots, h.charge, h.fresh, h.base⟩
-
-omit [Fintype Validator] in
 theorem Lim.settle {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validator BlockId Payload}
     (h : Lim τ W s) : Lim τ W (Node.settle cfg s).1 := by
   rcases settle_cases (cfg := cfg) s with he | ⟨s₁, hr, he⟩ <;> rw [he]
-  · exact quiesce_ind (fun _ h => h.advance hl) _ _ h.hold
-  · exact quiesce_ind (fun _ h => h.advance hl) _ _ (h.tryResume hr).hold
+  · exact quiesce_ind (fun _ h => h.advance hl) _ _ h
+  · exact quiesce_ind (fun _ h => h.advance hl) _ _ (h.tryResume hr)
 
 /-! ## Bootstrapping -/
 

@@ -33,15 +33,17 @@ theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : 
     {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr i))
     (hr : e.2.round ≠ 0) :
     ∃ x y o, BuildState (cfg.at v) (globalRecord (hashInjective_of_trace hinj)
-        (authentic_of_timely htime)) (stateBefore cfg tr i v) inp x ∧
+        (authentic_of_timely htime)) (knownAll cfg H tr)
+        {c | Output.announce c ∈ outputsAt cfg tr i} (stateBefore cfg tr i v) inp x ∧
       tryBuild (cfg.at v) x = some (y, o) ∧ e ∈ persists o := by
   have hK : ∀ x ∈ knownOf cfg tr v, x ∈ knownAll cfg H tr := fun x hx => ⟨v, hv, hx⟩
   have hg := ground (cfg := cfg) (hashInjective_of_trace hinj) (authentic_of_timely htime)
     hadm.2.2.2.1
   have hinv := Converge.inv_before (cfg := cfg) (tr := tr) i v
   obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hi
-  rw [outputsAt_eq hi] at he
+  rw [outputsAt_eq hi] at he ⊢
   rcases step_witness (cfg := cfg.at v) hg
+      (hinv.mono fun x hx => hK x (knownBefore_knownOf hx))
       (cut_before hσ hadm hf htime hoff hcert hinj hchain i v hv).1 (Held.run _ Held.init)
       (ownTop_before (cfg := cfg) hnr i) (fired_before (cfg := cfg) hnr i).1
       (fun h => hnr i (by rw [hi, h]))
@@ -168,7 +170,9 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
       c).round = r + 1) :
     ∃ i₀ inp x, tr[i₀]? = some (v, inp) ∧ builtAt cfg tr time v (r + 1) = time i₀ ∧
       BuildState (cfg.at v) (globalRecord (hashInjective_of_trace hinj)
-        (authentic_of_timely htime)) (stateBefore cfg tr i₀ v) inp x ∧ x.top = some r ∧
+        (authentic_of_timely htime)) (knownAll cfg H tr)
+        {c | Output.announce c ∈ outputsAt cfg tr i₀} (stateBefore cfg tr i₀ v) inp x ∧
+        x.top = some r ∧
       ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).refs =
         refsAt (cfg.at v) x.store r x.own ∧
       refsAt (cfg.at v) x.store r x.own ⊆ x.store.ids ∧

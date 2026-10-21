@@ -6,14 +6,13 @@ import LeanDag.Node.Helpers.Arrive
 `docs/validator.md` §13.2. Past GST, let every reliable node be at round
 `n` or above at `s`, and `v` reliable. `v` built its round-`n` block by
 `s`, with the round's timer, which fires by `s + timeout n`. Suppose `v`
-is still at round `n` then. It is settled (`settled_before`), the
-round's timer has fired and stays so (`fired_stays`), and it holds a
-round at least `n` (`held_after_timer`). Every reliable node's round-`n`
-block arrived within `3Δ + Δₛ` of `s`, less than the timeout
-(`round_arrives`): the certificate the author last announced with its
-horizon reached `v` (`cert_catches`), so `v`'s horizon reached the
-author's (`base_le_after`), and the block's history arrived after the
-block (`arrives`). So `v` holds a quorum of round `n`, its own block
+is still at round `n` then. It is settled (`settled_before`), and the
+round's timer has fired and stays so (`fired_stays`). Every reliable
+node's round-`n` block arrived within `3Δ + Δₛ` of `s`, less than the
+timeout (`round_arrives`): the certificate that last raised its author's
+horizon before it built the block reached `v` (`cert_catches`), so `v`'s
+horizon reached the author's then (`base_le_after`), and the block's
+history arrived after the block (`arrives`). So `v` holds a quorum of round `n`, its own block
 included, and no block with the identifier of its next one
 (`fresh_before`), and builds (`tryBuild_isSome`), against its being
 settled.
@@ -40,7 +39,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
     (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hchain : Boot.ChainInjective cfg H tr) (hnr : Converge.NoRestart T tr)
     (hmono : TimeMono tr time) (hdel : DeliveredWithin cfg T tr time gst Δ t₁)
-    (htimer : TimersOnTime cfg T tr time t₁) (hsync : SyncedWithin cfg T tr time gst Δₛ t₁)
+    (htimer : TimersOnTime cfg T tr time t₁) (hsync : SyncedWithin cfg H T tr time gst Δₛ t₁)
     (hstart : StartedBy T tr time gst) : Produces cfg T tr time gst t₁ := by
   intro s n hgs hst₁ hall v hv
   have hcmp : ∀ u ∈ T, ∀ w ∈ T, ∀ i j, (stateBefore cfg tr i u).decided.reverse <+:
@@ -68,8 +67,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   have htb : time b ≤ s := (lt_eventsBy hmono hbl).mp hbs
   have hset := timer_of_persist hnv hb hep
   rw [her] at hset
-  obtain ⟨f, hbf, hf, htf⟩ := htimer.1 b v inp hb hv n (cfg.timeout n) hset (by omega)
-  have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hf).1
+  obtain ⟨f, hbf, hfe, htf⟩ := htimer.1 b v inp hb hv n (cfg.timeout n) hset (by omega)
+  have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hfe).1
   have hfE : f < eventsBy tr time (s + cfg.timeout n) := (lt_eventsBy hmono hfl).mpr (by omega)
   -- at `s + timeout n`, `v` is at round `n`
   set E := eventsBy tr time (s + cfg.timeout n) with hE
@@ -86,14 +85,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
     rw [show t = n by omega]
   -- its round's timer has fired, it holds round `n`, and its horizon lies at or below
   have hfired : n ∈ (stateBefore cfg tr E v).fired :=
-    fired_stays hnv hf E hfE (by rw [hZt]; simp)
-  have hheld : n ≤ (stateBefore cfg tr E v).held := by
-    obtain ⟨t', ht', hnt'⟩ := built_le_top hb hep
-    rw [her] at hnt'
-    have h₁ := (rises_before (cfg := cfg) hnv (show b + 1 ≤ f by omega)).1
-    rw [ht'] at h₁
-    simp only [Option.getD_some] at h₁
-    exact le_trans (by omega) (held_after_timer hnv hf E hfE)
+    fired_stays hnv hfe E hfE (by rw [hZt]; simp)
   have hbn : (stateBefore cfg tr E v).store.base ≤ n := by
     rcases (Converge.inv_before (cfg := cfg) (tr := tr) E v).rounds with ⟨h, -, -⟩ | ⟨t, ht, hbt, -⟩
     · rw [hZt] at h; cases h
@@ -108,8 +100,9 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
     by_cases hwv : w = v
     · subst hwv
       exact ⟨j₀, hj₀i, hj₀r, hj₀c⟩
-    · exact round_arrives (τ := s + cfg.timeout n) hq hl hinj htime hTH hnr hmono hdel hsync
-        hcmp hw hv hwv hgs (hstarted w hw) (hall w hw) (by omega) hst₁ hZt le_rfl hheld hbn
+    · exact round_arrives (τ := s + cfg.timeout n) hq hl hσ hadm hf htime hoff hcert hinj hchain
+        hTH hnr hmono hdel hsync hcmp hw hv hwv hgs (hstarted w hw) (hall w hw) (by omega) hst₁ hZt
+        le_rfl hbn
   have hcard : cfg.q ≤ (authorsIn (stateBefore cfg tr E v).store.toRecord
       (stateBefore cfg tr E v).store.ids n).card := hqT.trans (Finset.card_le_card hauth)
   -- so it builds, against its being settled
