@@ -1685,6 +1685,16 @@ sublist of those served, which `ChainInjective` covers. V3 and
 convergence assume no base or certificate offers; an announcement is
 neither, and their proofs cover it.
 
+**The catch-up, proved** (`Helpers/Catch.lean`). Every certificate a
+reliable node announces has `q` distinct signers, lies at a multiple of
+`m`, at or below its certificate's height, and has the head of its
+decisions there (`GoodFor`, `Kept.step`). Given two reliable nodes'
+decisions prefix-comparable (`decided_comparable`), delivery within `Δ`
+and no restarts, a reliable node `v` given a certificate `c` announced
+by a reliable `u` at event `e` holds, after one of its events by
+`max (time e) gst + 3Δ`, a certificate of height at least `c`'s
+(`cert_catches`).
+
 ### 13.9 Settling until nothing changes (built)
 
 **The gap.** A pass builds, decides, collects and then flushes the
