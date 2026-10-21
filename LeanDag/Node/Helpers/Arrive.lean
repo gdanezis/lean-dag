@@ -593,6 +593,72 @@ theorem base_le_after (hq : 2 ≤ cfg.q)
   have hmm := min_le_min hP hrt
   omega
 
+/-- **A reliable peer's block arrives**: a block a reliable node built at
+an event at or before `s`, past GST, is held by a reliable node `v` after
+`v`'s events by `max s gst + 3Δ + Δₛ` or later, once `v` is at the round
+below the block's or above, with its horizon at or below the block's
+round. -/
+theorem block_arrives (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel)
+    (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
+    (hoff : Boot.TimelyOffers cfg H tr) (hcert : Boot.TimelyCerts cfg H tr)
+    (hinj : Converge.HashInjective cfg H tr) (hchain : Boot.ChainInjective cfg H tr)
+    (hTH : T ⊆ H) (hnr : Converge.NoRestart T tr) (hmono : Live.TimeMono tr time)
+    (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
+    (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁)
+    (hcmp : ∀ u ∈ T, ∀ v ∈ T, ∀ i j, (stateBefore cfg tr i u).decided.reverse <+:
+      (stateBefore cfg tr j v).decided.reverse ∨
+        (stateBefore cfg tr j v).decided.reverse <+: (stateBefore cfg tr i u).decided.reverse)
+    {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) (huv : u ≠ v) {b : ℕ}
+    {inp : Input Validator BlockId Payload} (hb : tr[b]? = some (u, inp))
+    {e : BlockId × Block Validator BlockId Payload} (hep : e ∈ persists (outputsAt cfg tr b))
+    {s : ℕ} (htb : time b ≤ s) {τ : ℕ} (hτ : max s gst + 3 * Δ + Δₛ ≤ τ) (ht₁ : τ ≤ t₁) {t : ℕ}
+    (hZt : (stateAt cfg tr time v τ).top = some t) (hnt : e.2.round ≤ t + 1)
+    (hbn : (stateAt cfg tr time v τ).store.base ≤ e.2.round) :
+    e.1 ∈ (stateAt cfg tr time v τ).store.ids ∧
+      ((stateAt cfg tr time v τ).store.blk e.1).round = e.2.round ∧
+      ((stateAt cfg tr time v τ).store.blk e.1).creator = u := by
+  have hnu : ∀ k : ℕ, tr[k]? ≠ some (u, Input.restart) := fun k => hnr k u hu
+  have hbu : (tr[b]?.map Prod.fst) = some u := by rw [hb]; rfl
+  have hebc := broadcasts_of_persists hep
+  obtain ⟨j, hbj, hj, htj⟩ := hdel b u inp hb hu (v, .deliver e.1 e.2)
+    ⟨.broadcast e.1 e.2, mem_broadcasts.mp hebc, Ne.symm huv, rfl⟩ hv (by omega)
+  have hgood := ((Converge.inv_before (cfg := cfg) (tr := tr) (b + 1) u).good e
+    (persists_of_event hb hep)).2.1
+  -- `v` holds the block
+  have hin : e.1 ∈ (stateAt cfg tr time v τ).store.ids := by
+    by_cases hn0 : e.2.round = 0
+    · exact arrives_zero hl hinj hTH hnr hmono hu hv huv hbu hep hgood hn0 hj
+        (by omega) (by omega)
+    · obtain ⟨x, y', o, hx, hxb, heo⟩ := build_witness hσ hadm hf htime hoff hcert hinj hchain
+        (hTH hu) hnu hb hep hn0
+      obtain ⟨r', id', b', -, -, -, -, hxt, hbr, -, -, -, -, -, -, -, hout⟩ := tryBuild_some hxb
+      rw [hout, persists_built, List.mem_singleton] at heo
+      have hr' : r' + 1 = e.2.round := by rw [heo, hbr]
+      have htop : (stateBefore cfg tr b u).top.getD 0 ≤ r' := by
+        have := step_above (cfg := cfg.at u) (inp := inp) (fired_before (cfg := cfg) hnu b).1
+          (fun h => hnu b (by rw [hb, h])) e (by rw [← outputsAt_eq hb]; exact hep)
+        rcases this with h | ⟨-, h⟩ <;> omega
+      have hbase := base_le_after (E := eventsBy tr time τ) hq hcmp hnr hdel hmono hu hv huv hb hx
+        hxt htop (fun k hk htk => (lt_eventsBy hmono hk).mpr (by omega)) (by omega) hZt
+        (by omega)
+      have hZs : (stateAt cfg tr time v τ).top.isSome := by rw [hZt]; rfl
+      rcases arrives hl hinj htime hTH hnr hmono hsync hu hv huv hb hep hx hxb
+        (by rw [hout, persists_built, heo]; exact List.mem_singleton_self _) hbj hj (τ := τ)
+        (by omega) (by omega) hbase hZs (by rw [hZt]; simp; omega) with h | h
+      · exact h
+      · omega
+  refine ⟨hin, ?_⟩
+  set Z := stateAt cfg tr time v τ
+  have hk := Converge.knownBefore_sub (hTH hv) (eventsBy tr time τ)
+    ((Converge.inv_before (cfg := cfg) (tr := tr) (eventsBy tr time τ) v).known e.1 hin)
+  have hc := Converge.content_eq hinj hk (Or.inr ⟨b, u, hbu, hTH hu, hep⟩) rfl
+  simp only at hc
+  have hblk : Z.store.blk e.1 = atBase Z.store.base e.2 := by
+    change atBase Z.store.base (Z.store.map.getD e.1 Z.store.junk) = _
+    exact congrArg _ hc
+  rw [hblk, atBase_round, atBase_creator]
+  exact ⟨rfl, hgood⟩
+
 /-- **A reliable peer's block of a round arrives**: past GST, a reliable
 node at its round `n` or above at `s` has its round-`n` block held by a
 reliable node `v` after `v`'s events by `s + 3Δ + Δₛ` or later, once `v`
@@ -619,46 +685,10 @@ theorem round_arrives (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ =
   obtain ⟨inp, hb⟩ := Converge.event_of_map hbu
   have hbl : b < tr.length := (List.getElem?_eq_some_iff.mp hb).1
   have htb : time b ≤ s := (lt_eventsBy hmono hbl).mp hbs
-  have hebc := broadcasts_of_persists hep
-  obtain ⟨j, hbj, hj, htj⟩ := hdel b u inp hb hu (v, .deliver e.1 e.2)
-    ⟨.broadcast e.1 e.2, mem_broadcasts.mp hebc, Ne.symm huv, rfl⟩ hv (by omega)
-  have hgood := ((Converge.inv_before (cfg := cfg) (tr := tr) (b + 1) u).good e
-    (persists_of_event hb hep)).2.1
-  -- `v` holds the block
-  have hin : e.1 ∈ (stateAt cfg tr time v τ).store.ids := by
-    by_cases hn0 : n = 0
-    · exact arrives_zero hl hinj hTH hnr hmono hu hv huv hbu hep hgood (her.trans hn0) hj
-        (by omega) (by omega)
-    · obtain ⟨x, y', o, hx, hxb, heo⟩ := build_witness hσ hadm hf htime hoff hcert hinj hchain
-        (hTH hu) hnu hb hep (by rw [her]; exact hn0)
-      obtain ⟨r', id', b', -, -, -, -, hxt, hbr, -, -, -, -, -, -, -, hout⟩ := tryBuild_some hxb
-      rw [hout, persists_built, List.mem_singleton] at heo
-      have hr' : r' + 1 = n := by rw [← her, heo, hbr]
-      have htop : (stateBefore cfg tr b u).top.getD 0 ≤ r' := by
-        have := step_above (cfg := cfg.at u) (inp := inp) (fired_before (cfg := cfg) hnu b).1
-          (fun h => hnu b (by rw [hb, h])) e (by rw [← outputsAt_eq hb]; exact hep)
-        rcases this with h | ⟨-, h⟩ <;> omega
-      have hbase := base_le_after (E := eventsBy tr time τ) hq hcmp hnr hdel hmono hu hv huv hb hx
-        hxt htop (fun k hk htk => (lt_eventsBy hmono hk).mpr (by omega)) (by omega) hZt
-        (by omega)
-      have hZs : (stateAt cfg tr time v τ).top.isSome := by rw [hZt]; rfl
-      rcases arrives hl hinj htime hTH hnr hmono hsync hu hv huv hb hep hx hxb
-        (by rw [hout, persists_built, heo]; exact List.mem_singleton_self _) hbj hj (τ := τ)
-        (by omega) (by omega)
-        hbase hZs (by rw [hZt, her]; simp; omega) with h | h
-      · exact h
-      · rw [her] at h; omega
-  refine ⟨e.1, hin, ?_⟩
-  set Z := stateAt cfg tr time v τ
-  have hk := Converge.knownBefore_sub (hTH hv) (eventsBy tr time τ)
-    ((Converge.inv_before (cfg := cfg) (tr := tr) (eventsBy tr time τ) v).known e.1 hin)
-  have hc := Converge.content_eq hinj hk (Or.inr ⟨b, u, hbu, hTH hu, hep⟩) rfl
-  simp only at hc
-  have hblk : Z.store.blk e.1 = atBase Z.store.base e.2 := by
-    change atBase Z.store.base (Z.store.map.getD e.1 Z.store.junk) = _
-    exact congrArg _ hc
-  rw [hblk, atBase_round, atBase_creator]
-  exact ⟨her, hgood⟩
+  obtain ⟨h₁, h₂, h₃⟩ := block_arrives hq hl hσ hadm hf htime hoff hcert hinj hchain hTH hnr
+    hmono hdel hsync hcmp hu hv huv hb hep htb (τ := τ) (by omega) ht₁ hZt (by omega)
+    (by omega)
+  exact ⟨e.1, h₁, h₂.trans her, h₃⟩
 
 end Rounds
 
