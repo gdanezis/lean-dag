@@ -624,6 +624,130 @@ theorem step_keeps_built (hs : s.recovering = false) (hr : inp ≠ .restart) :
 
 end StepFacts
 
+/-! ## Building on a timer -/
+
+omit [Fintype Validator] in
+/-- **`refsFor`'s references**: stored blocks of the round, one per
+author of the round, the node's own block for itself if it has one. -/
+theorem refsFor_spec {st : Store Validator BlockId Payload} {r : ℕ} {o : Option BlockId}
+    (ho : ∀ j, o = some j → j ∈ st.ids ∧ (st.blk j).round = r ∧ (st.blk j).creator = cfg.me) :
+    refsFor cfg st r o ⊆ st.ids ∧ (∀ j ∈ refsFor cfg st r o, (st.blk j).round = r) ∧
+      creatorsOf st.blk (refsFor cfg st r o) = authorsIn st.toRecord st.ids r ∧
+      ∀ i ∈ refsFor cfg st r o, ∀ j ∈ refsFor cfg st r o,
+        (st.blk i).creator = (st.blk j).creator → i = j := by
+  set R := blocksAt st.toRecord r with hR
+  have hRi : ∀ i ∈ R, i ∈ st.ids ∧ (st.blk i).round = r := fun i hi => by
+    simpa [hR, blocksAt, Store.toRecord] using hi
+  -- the block chosen for author `a`
+  let pick : Validator → Finset BlockId := fun a =>
+    if a = cfg.me ∧ o.isSome then o.toFinset
+    else (Scheme.leastOf (R.filter fun i => (st.blk i).creator = a)).toFinset
+  have hpick : ∀ a ∈ creatorsOf st.blk R, ∃ j, pick a = {j} ∧ j ∈ st.ids ∧
+      (st.blk j).round = r ∧ (st.blk j).creator = a := by
+    intro a ha
+    by_cases hc : a = cfg.me ∧ o.isSome
+    · obtain ⟨j, hj⟩ := Option.isSome_iff_exists.mp hc.2
+      obtain ⟨h₁, h₂, h₃⟩ := ho j hj
+      refine ⟨j, ?_, h₁, h₂, by rw [h₃, hc.1]⟩
+      show (if a = cfg.me ∧ o.isSome then o.toFinset else _) = {j}
+      rw [if_pos hc, hj]; rfl
+    · obtain ⟨i, hi, hia⟩ := Finset.mem_image.mp ha
+      have hne : (R.filter fun i => (st.blk i).creator = a).Nonempty :=
+        ⟨i, Finset.mem_filter.mpr ⟨hi, hia⟩⟩
+      obtain ⟨L, hL⟩ : ∃ L, Scheme.leastOf (R.filter fun i => (st.blk i).creator = a) = some L := by
+        unfold Scheme.leastOf; rw [dif_pos hne]; exact ⟨_, rfl⟩
+      obtain ⟨hLm, -⟩ := Scheme.leastOf_eq_some hL
+      obtain ⟨hLR, hLa⟩ := Finset.mem_filter.mp hLm
+      refine ⟨L, ?_, (hRi L hLR).1, (hRi L hLR).2, hLa⟩
+      show (if a = cfg.me ∧ o.isSome then o.toFinset else _) = {L}
+      rw [if_neg hc, hL]; rfl
+  have hdef : refsFor cfg st r o = (creatorsOf st.blk R).biUnion pick := rfl
+  have hmem : ∀ j ∈ refsFor cfg st r o, ∃ a ∈ creatorsOf st.blk R, j ∈ st.ids ∧
+      (st.blk j).round = r ∧ (st.blk j).creator = a ∧ pick a = {j} := by
+    intro j hj
+    rw [hdef] at hj
+    obtain ⟨a, ha, hja⟩ := Finset.mem_biUnion.mp hj
+    obtain ⟨j', hp, h₁, h₂, h₃⟩ := hpick a ha
+    rw [hp, Finset.mem_singleton] at hja
+    subst hja
+    exact ⟨a, ha, h₁, h₂, h₃, hp⟩
+  refine ⟨fun j hj => (hmem j hj).choose_spec.2.1, fun j hj => (hmem j hj).choose_spec.2.2.1,
+    ?_, fun i hi j hj hij => ?_⟩
+  · have hauth : authorsIn st.toRecord st.ids r = creatorsOf st.blk R := rfl
+    rw [hauth]
+    ext a
+    constructor
+    · intro ha
+      obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp ha
+      obtain ⟨a', ha', -, -, hja, -⟩ := hmem j hj
+      rw [hja]; exact ha'
+    · intro ha
+      obtain ⟨j, hp, -, -, hja⟩ := hpick a ha
+      refine Finset.mem_image.mpr ⟨j, ?_, hja⟩
+      rw [hdef]
+      exact Finset.mem_biUnion.mpr ⟨a, ha, by rw [hp]; exact Finset.mem_singleton_self _⟩
+  · obtain ⟨a, -, -, -, hia, hpa⟩ := hmem i hi
+    obtain ⟨b', -, -, -, hjb, hpb⟩ := hmem j hj
+    have hab : a = b' := by rw [← hia, ← hjb]; exact hij
+    subst hab
+    rw [hpa] at hpb
+    exact (Finset.singleton_inj.mp hpb).symm.symm ▸ rfl
+
+omit [Fintype Validator] in
+/-- `refsAt`'s references are `refsFor`'s, or ones the node can build on. -/
+theorem refsAt_buildable (st : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) :
+    refsAt cfg st r o = refsFor cfg st r o ∨ buildable cfg st r (refsAt cfg st r o) = true := by
+  unfold refsAt
+  dsimp only
+  split
+  · exact Or.inl rfl
+  · rcases hf : List.find? _ _ with _ | R
+    · exact Or.inl rfl
+    · right
+      have := List.find?_some hf
+      simp only [Bool.and_eq_true] at this
+      simpa using this.2
+
+omit [Fintype Validator] in
+/-- **A node whose round's timer fired builds**, given a quorum of the
+round, its own block there stored, a horizon at or below the round, and
+no stored block with the identifier of a next block of its own. -/
+theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.top = some r)
+    (hf : r ∈ s.fired) (hq : cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r).card)
+    (ho : ∀ j, s.own = some j → j ∈ s.store.ids ∧ (s.store.blk j).round = r ∧
+      (s.store.blk j).creator = cfg.me)
+    (hb : s.store.base ≤ r)
+    (hfresh : ∀ R, cfg.idOf ⟨r + 1, cfg.me, R, cfg.payload (r + 1)⟩ ∉ s.store.ids) :
+    (tryBuild cfg s).isSome := by
+  unfold tryBuild
+  rw [ht]
+  dsimp only
+  rw [if_pos ⟨hq, Or.inl hf⟩]
+  have hB : buildable cfg s.store r (refsAt cfg s.store r s.own) = true := by
+    rcases refsAt_buildable (cfg := cfg) s.store r s.own with he | he
+    · rw [he]
+      obtain ⟨hsub, hrd, hcr, hdis⟩ := refsFor_spec (cfg := cfg) (st := s.store) (r := r) ho
+      have hnin : ∀ j ∈ refsFor cfg s.store r s.own,
+          j ≠ cfg.idOf ⟨r + 1, cfg.me, refsFor cfg s.store r s.own, cfg.payload (r + 1)⟩ :=
+        fun j hj h => hfresh _ (h ▸ hsub hj)
+      unfold buildable
+      refine decide_eq_true ⟨hfresh _, by simp; omega, fun _ => hsub,
+        fun _ j hj => by simp; rw [hrd j hj], ⟨fun j hj => ?_, fun _ => ?_, fun i hi j hj hij => ?_⟩⟩
+      · simp only at hj ⊢
+        rw [Function.update_of_ne (hnin j hj), hrd j hj]
+      · simp only [creators, creatorsOf]
+        rw [Finset.image_congr (g := fun i => (s.store.blk i).creator)
+          (fun j hj => by simp only; rw [Function.update_of_ne (hnin j hj)])]
+        change cfg.q ≤ (creatorsOf s.store.blk _).card
+        rw [hcr]; exact hq
+      · simp only at hi hj hij
+        rw [Function.update_of_ne (hnin i hi), Function.update_of_ne (hnin j hj)] at hij
+        exact hdis i hi j hj hij
+    · exact he
+  unfold buildable at hB
+  rw [dif_pos (of_decide_eq_true hB)]
+  rfl
+
 end Node
 
 end LeanDag
