@@ -494,14 +494,9 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      refine Or.inr ⟨_, _, rfl, by rw [hn]; exact hs, by rw [hn]; rfl, by rw [hn]; rfl,
-        by rw [hn]; exact subset_rfl, Or.inl ⟨silent_of fun o ho => ?_, by rw [hn]; rfl⟩⟩
-      unfold seek at ho
-      dsimp only at ho
-      split at ho
-      · obtain ⟨_, -, rfl⟩ := List.mem_map.mp ho; trivial
-      · cases ho
+    · refine Or.inr ⟨_, _, rfl, by exact hs, by rfl, by rfl,
+        by exact subset_rfl, Or.inl ⟨silent_of fun o ho => ?_, by rfl⟩⟩
+      cases ho
     · exact Or.inl ⟨rfl, Silent.nil⟩
 
 section StepFacts

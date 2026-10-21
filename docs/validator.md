@@ -415,9 +415,8 @@ Bounding the pending blocks belongs to rate limiting (step 9).
   `chain`, both persisted, so a restart keeps it); announced one at a
   height it has not decided, it asks the sender for the decisions
   certified from its next undecided slot up (§13.8).
-* **Adopting.** A node that keeps `q` signers' proposals of one head
-  at a height above its next undecided slot, or is given a certificate
-  above it, asks for the decisions certified from that slot up. A signer
+* **Adopting.** A node announced a certificate above its next undecided
+  slot asks the sender for the decisions certified from that slot up. A signer
   serves its certificate with them; the node adopts those from its next
   undecided slot up if the certificate has `q` distinct signers and they
   extend the chain of its own decisions to the certificate's head, and
@@ -1562,10 +1561,10 @@ settled.
    node's certificate `c` and `t` its round.
 2. **A block at the horizon is taken unchecked**, read without its
    references, and a block below it is dropped.
-3. **A node behind adopts certified decisions** (`seek`, `serveFrom`,
-   `adoptable`, `adopt`). Once the proposals it keeps hold `q` signers of
-   one head at a height above its next undecided slot `lo`, it asks
-   those signers for the decisions certified from `lo` up. A signer
+3. **A node behind adopts certified decisions** (`serveFrom`,
+   `adoptable`, `adopt`). Announced a certificate above its next
+   undecided slot `lo`, it asks the sender for the decisions certified
+   from `lo` up (§13.8). A signer
    answers with its certificate, if higher than `lo`, and the decisions
    of slots `lo` to the certificate's height. The node adopts them if the
    certificate has `q` distinct signers and the decisions extend the

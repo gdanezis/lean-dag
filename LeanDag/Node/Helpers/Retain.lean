@@ -193,9 +193,7 @@ theorem Sparse.step {s : State Validator BlockId Payload} (h : Sparse cfg s)
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (Node.record cfg s p k kh) k kh
-      rw [hn]
-      exact Sparse.settle ((h.record p k kh).frame rfl rfl le_rfl)
+    · exact Sparse.settle ((h.record p k kh).frame rfl rfl le_rfl)
     · exact h
   | decisionRequest => exact h
 

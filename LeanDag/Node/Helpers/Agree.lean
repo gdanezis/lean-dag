@@ -232,7 +232,7 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
     rw [step_proposal] at h
     split at h
     · rcases List.mem_append.mp h with h | h
-      · obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ h; cases he
+      · cases h
       · exact absurd h (serveBase_not_mem_settle _)
     · simp at h
   | decisionRequest q lo =>

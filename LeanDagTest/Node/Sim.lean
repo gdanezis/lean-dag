@@ -87,7 +87,7 @@ info: "true [(some 141), (some 141), (some 141), (some 141)] [139, 139, 139, 139
 #eval summary { horizon := 150, row := "mysticeti", withhold := some (3, 2, 7), delayMax := 1 }
 
 /--
-info: "true [(some 58), (some 58), (some 58), (some 58)] [56, 56, 56, 56] [1, 1, 1, 1] true true true 0 0"
+info: "true [(some 57), (some 58), (some 57), (some 58)] [55, 56, 55, 56] [1, 1, 1, 1] true true true 0 0"
 -/
 #guard_msgs in
 #eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 46)], lag := 6 }
@@ -99,7 +99,7 @@ info: "true [(some 57), (some 57), (some 57), (some 57)] [55, 55, 55, 55] [1, 1,
 #eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 60)], lag := 6 }
 
 /--
-info: "true [(some 65), (some 64), (some 64), (some 64)] [63, 63, 62, 62] [0, 0, 0, 0] true true true 0 0"
+info: "true [(some 63), (some 64), (some 63), (some 64)] [61, 62, 61, 62] [0, 0, 0, 0] true true true 0 0"
 -/
 #guard_msgs in
 #eval summaryR { horizon := 150, row := "mysticeti", recover := [(1, 40, 46)] }

@@ -185,10 +185,9 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
     · rw [he]; exact Rises.refl s
   | proposal p k kh =>
     by_cases hpm : p ≠ cfg.me
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      refine hset (seek cfg (record cfg s p k kh) k kh).1
-        ⟨by rw [hn]; exact le_rfl, by rw [hn]; exact id, by rw [hn]; exact le_rfl,
-          by rw [hn]; exact record_certHeight s p k kh⟩ (by rw [hn]; exact hs)
+    · refine hset (record cfg s p k kh)
+        ⟨by exact le_rfl, by exact id, by exact le_rfl,
+          by exact record_certHeight s p k kh⟩ (by exact hs)
         (by rw [step_proposal, if_pos hpm])
     · rw [step_proposal, if_neg hpm]; exact Rises.refl s
 

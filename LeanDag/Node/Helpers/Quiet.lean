@@ -514,9 +514,9 @@ theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
     (h : Node.tryBuild cfg s = none) (hst : s'.store = s.store) (ht : s'.top = s.top)
     (ho : s'.own = s.own) (hf : s'.fired = s.fired) (hx : s'.exposed = s.exposed) :
     Node.tryBuild cfg s' = none := by
-  obtain ⟨st, pd, top, own, fired, lo, rq, rc, of, ak, dc, lp, ch, ps, ce, cs, ow, so, ex⟩ := s
+  obtain ⟨st, pd, top, own, fired, lo, rq, rc, of, ak, dc, lp, ch, ps, ce, cs, ow, ex⟩ := s
   obtain ⟨st', pd', top', own', fired', lo', rq', rc', of', ak', dc', lp', ch', ps', ce', cs', ow',
-    so', ex'⟩ := s'
+    ex'⟩ := s'
   simp only at hst ht ho hf hx
   subst hst ht ho hf hx
   unfold Node.tryBuild at h ⊢

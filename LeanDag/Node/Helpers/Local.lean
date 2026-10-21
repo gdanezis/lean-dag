@@ -501,28 +501,6 @@ theorem Inv.of_eq {s s' : State Validator BlockId Payload}
     by rw [hof]; exact hi.offered, by rw [hex]; exact hi.exposed⟩
 
 omit [Fintype Validator] in
-/-- **Seeking decisions** changes only the height sought. -/
-theorem seek_eq (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
-    ∃ n, (seek cfg s k h).1 = { s with sought := n } := by
-  unfold seek
-  dsimp only
-  split
-  · exact ⟨k, rfl⟩
-  · exact ⟨s.sought, rfl⟩
-
-omit [Fintype Validator] in
-/-- Seeking decisions outputs only requests for them. -/
-theorem seek_out (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
-    ∀ o ∈ (seek cfg s k h).2, ∃ p lo, o = .requestDecisions p lo := by
-  unfold seek
-  dsimp only
-  split
-  · intro o ho
-    obtain ⟨p, -, rfl⟩ := List.mem_map.mp ho
-    exact ⟨p, _, rfl⟩
-  · simp
-
-omit [Fintype Validator] in
 /-- Serving decisions outputs only certificates. -/
 theorem serveFrom_out (s : State Validator BlockId Payload) (peer : Validator) (lo : ℕ) :
     ∀ o ∈ serveFrom s peer lo, ∃ c ds, o = .serveCert peer c ds := by
@@ -1504,11 +1482,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
     simp only [Node.step]
     split
     · have h₁ : Inv cfg (record cfg s peer k h) K' B := (hi.mono hsub).of_eq rfl rfl rfl rfl rfl
-      obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s peer k h) k h
-      have h₂ : Inv cfg (seek cfg (record cfg s peer k h) k h).1 K' B := by
-        rw [hn]; exact h₁.of_eq rfl rfl rfl rfl rfl
-      exact h₂.settle_of subset_rfl _ fun o ho => by
-        obtain ⟨_, _, rfl⟩ := seek_out (cfg := cfg) _ k h o ho; rfl
+      simpa using h₁.settle_of subset_rfl [] (by simp)
     · exact hnil'
   | certOffer peer c ds =>
     simp only [Node.step]

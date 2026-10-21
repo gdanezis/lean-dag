@@ -459,10 +459,9 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
   | proposal p k kh =>
     have hst' : Stays s.store s.pending y := hst.elim id fun h => by cases h.1
     by_cases hpm : p ≠ cfg.me
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      refine hset (seek cfg (record cfg s p k kh) k kh).1 (seek cfg (record cfg s p k kh) k kh).2
-        (by rw [step_proposal, if_pos hpm]) (by rw [hn]; exact hA) (by rw [hn]; exact hP)
-        (by rw [hn]; exact le_rfl) (by rw [hn]; exact hst')
+    · refine hset (record cfg s p k kh) ([] : List (Output Validator BlockId Payload))
+        (by rw [step_proposal, if_pos hpm]) (by exact hA) (by exact hP)
+        (by exact le_rfl) (by exact hst')
     · rw [step_proposal, if_neg hpm]; exact hst'
 
 /-! ## Holding a closed set -/

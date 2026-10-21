@@ -637,9 +637,7 @@ theorem Lim.step {ρ W : ℕ} (hl : cfg.limit = some (ρ, W)) {s : State Validat
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]
-      exact Lim.settle hl (h.of_eq rfl rfl rfl rfl)
+    · exact Lim.settle hl (h.of_eq rfl rfl rfl rfl)
     · exact h
   | decisionRequest => exact h
 

@@ -443,9 +443,7 @@ theorem step_proposal {s : State Validator BlockId Payload} {p : Validator} {k :
     {kh : BlockId} :
     Node.step cfg s (.proposal p k kh) =
       if p ≠ cfg.me then
-        ((Node.settle cfg (seek cfg (record cfg s p k kh) k kh).1).1,
-          (seek cfg (record cfg s p k kh) k kh).2 ++
-            (Node.settle cfg (seek cfg (record cfg s p k kh) k kh).1).2)
+        ((Node.settle cfg (record cfg s p k kh)).1, [] ++ (Node.settle cfg (record cfg s p k kh)).2)
       else (s, []) := rfl
 
 theorem step_decisionRequest {s : State Validator BlockId Payload} {p : Validator} {lo : ℕ} :
@@ -573,10 +571,9 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
     · rw [he]; exact hy
   | proposal p k kh =>
     by_cases hpm : p ≠ cfg.me
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      exact hset (seek cfg (record cfg s p k kh) k kh).1 (by rw [step_proposal, if_pos hpm])
-        (by rw [hn]; exact Grows.refl _) (by rw [hn]; rfl) (by rw [hn]; exact hp)
-        (by rw [hn]; exact hy)
+    · exact hset (record cfg s p k kh) (by rw [step_proposal, if_pos hpm])
+        (by exact Grows.refl _) (by rfl) (by exact hp)
+        (by exact hy)
     · rw [step_proposal, if_neg hpm]; exact hy
   | baseRequest => exact hy
   | decisionRequest => exact hy
@@ -678,9 +675,7 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]
-      have := settle_sub (cfg := cfg) { record cfg s p k kh with sought := n }
+    · have := settle_sub (cfg := cfg) (record cfg s p k kh)
       exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
     · exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
   | _ => exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
@@ -919,10 +914,7 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
   | proposal p k kh =>
     by_cases hpm : p ≠ cfg.me
     · rw [step_proposal, if_pos hpm] at hb ⊢
-      have hq := (out_quiet (xs := (seek cfg (record cfg s p k kh) k kh).2) fun o ho => by
-        obtain ⟨_, _, rfl⟩ := seek_out (cfg := cfg) _ k kh o ho; rfl).1
-      obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      exact settle_persist_of (Or.inl hq) (by rw [hb, hn]; rfl)
+      exact settle_persist_of (pre := []) (Or.inl rfl) (by rw [hb]; rfl)
     · rw [step_proposal, if_neg hpm]; intro e he; simp [persists] at he
   | decisionRequest p lo =>
     intro e he

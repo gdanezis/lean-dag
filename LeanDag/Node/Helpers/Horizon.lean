@@ -375,9 +375,7 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]
-      exact Held.settle (h.grow (Grows.refl _) rfl rfl le_rfl)
+    · exact Held.settle (h.grow (Grows.refl _) rfl rfl le_rfl)
     · exact h
   | _ => exact h
 

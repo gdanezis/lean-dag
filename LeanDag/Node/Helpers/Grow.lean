@@ -224,8 +224,7 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
   | proposal peer k kh =>
     simp only [Node.step]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s peer k kh) k kh
-      exact Grows.settle_of _ (by rw [hn]; rfl)
+    · exact Grows.settle_of _ (by rfl)
     · exact Grows.refl _
   | _ => exact Grows.refl _
 

@@ -155,8 +155,7 @@ theorem step_offered (s : State Validator BlockId Payload) (i : Input Validator 
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn, (settle_offered _).1, (settle_offered _).2]
+    · rw [(settle_offered _).1, (settle_offered _).2]
       exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
     · exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
   | decisionRequest => exact ⟨fun o ho => Or.inl ho, fun c hc => Or.inl hc⟩
@@ -491,11 +490,10 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     exact ⟨hc, fun e he => absurd he List.not_mem_nil⟩
   | proposal p k kh =>
     by_cases hpm : p ≠ cfg.me
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      exact hset (seek cfg (record cfg s p k kh) k kh).1 (seek cfg (record cfg s p k kh) k kh).2
-        (by rw [hn]; exact hc) (by rw [hn]; exact hh.grow (Grows.refl _) rfl rfl le_rfl)
-        (by rw [hn]; exact hp)
-        (commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho))
+    · exact hset (record cfg s p k kh) ([] : List (Output Validator BlockId Payload))
+        (by exact hc) (by exact hh.grow (Grows.refl _) rfl rfl le_rfl)
+        (by exact hp)
+        rfl
         (by rw [step_proposal, if_pos hpm])
     · rw [step_proposal, if_neg hpm]; exact ⟨hc, fun e he => by simp [commitsOf] at he⟩
   | decisionRequest p lo =>

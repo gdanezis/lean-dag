@@ -629,11 +629,10 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     · exact hsame he
   | proposal p k kh =>
     by_cases hpm : p ≠ cfg.me
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      exact hset (seek cfg (record cfg s p k kh) k kh).1 (seek cfg (record cfg s p k kh) k kh).2
-        (by rw [hn]; exact h.keeps rfl (Keeps.refl _) hc) (by rw [hn]; exact hc)
-        (by rw [hn]; exact hh.grow (Grows.refl _) rfl rfl le_rfl) (by rw [hn]; exact hp)
-        (commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho))
+    · exact hset (record cfg s p k kh) ([] : List (Output Validator BlockId Payload))
+        (by exact h.keeps rfl (Keeps.refl _) hc) (by exact hc)
+        (by exact hh.grow (Grows.refl _) rfl rfl le_rfl) (by exact hp)
+        rfl
         (by rw [step_proposal, if_pos hpm])
     · rw [step_proposal, if_neg hpm]; exact ⟨by simpa [commitsOf] using h, hc⟩
   | decisionRequest p lo =>

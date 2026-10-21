@@ -229,9 +229,7 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
   | proposal p k h =>
     rw [step_proposal]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k h) k h
-      rw [hn]
-      have k := key { record cfg s p k h with sought := n } hs
+    · have k := key (record cfg s p k h) hs
       exact ⟨k.1, fun r h => Or.inl (k.2 h)⟩
     · exact ⟨hs, fun r h => Or.inl h⟩
   | _ => exact ⟨hs, fun r h => Or.inl h⟩
@@ -429,8 +427,7 @@ theorem OwnTop.step {s : State Validator BlockId Payload} {inp : Input Validator
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]; exact OwnTop.settle (h.grow (Grows.refl _) rfl rfl rfl) hs
+    · exact OwnTop.settle (h.grow (Grows.refl _) rfl rfl rfl) hs
     · exact h
   | _ => exact h
 
@@ -945,14 +942,10 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     · exact hsame he
   | proposal p k kh =>
     by_cases hpm : p ≠ cfg.me
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      have hq := (out_quiet (xs := (seek cfg (record cfg s p k kh) k kh).2) fun o ho => by
-        obtain ⟨_, _, rfl⟩ := seek_out (cfg := cfg) _ k kh o ho; rfl).1
-      refine hset (seek cfg (record cfg s p k kh) k kh).1 (seek cfg (record cfg s p k kh) k kh).2
-        ?_ (by rw [hn]; exact hs) (by rw [hn]; exact hp) (by rw [hq]; simp)
+    · refine hset (record cfg s p k kh) ([] : List (Output Validator BlockId Payload))
+        ?_ (by exact hs) (by exact hp) (by simp [persists])
         (by rw [step_proposal, if_pos hpm])
       intro hx
-      rw [hn] at hx ⊢
       exact ⟨hc, hh.grow (Grows.refl _) rfl rfl le_rfl, hown.grow (Grows.refl _) rfl rfl rfl,
         Retains.refl _, le_rfl, fun r hr => Or.inl hr, hframe _ rfl rfl rfl rfl rfl, Or.inl rfl, hx, hs⟩
     · intro e he
@@ -1113,9 +1106,8 @@ theorem timersBuilt_step {s : State Validator BlockId Payload}
     rw [step_proposal]
     split
     · refine (TimersBuilt.of_none fun r a h => ?_).append (hset _ ?_)
-      · obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ h; cases he
-      · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-        rw [hn]; exact hs
+      · cases h
+      · exact hs
     · exact TimersBuilt.of_none fun _ _ h => by simp at h
   | decisionRequest p lo =>
     rw [step_decisionRequest]
@@ -1284,8 +1276,7 @@ theorem retains_step {s : State Validator BlockId Payload} {inp : Input Validato
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-      rw [hn]; exact hset _ hs (Grows.refl _) rfl
+    · exact hset _ hs (Grows.refl _) rfl
     · exact Retains.refl _
   | _ => exact Retains.refl _
 

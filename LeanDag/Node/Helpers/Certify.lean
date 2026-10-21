@@ -775,14 +775,12 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
     rw [step_proposal]
     split
     · rename_i hp
-      obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (Node.record cfg s p k kh) k kh
-      have hno : ∀ c, Output.announce c ∉ (seek cfg (Node.record cfg s p k kh) k kh).2 := by
-        intro c; unfold seek; dsimp only; split <;> simp
-      rw [hn] at ⊢
+      have hno : ∀ c, Output.announce c ∉ ([] : List (Output Validator BlockId Payload)) := by
+        intro c; simp
       have hr := hK.record (v := p) (k₀ := k) (h₀ := kh) (fun h => absurd h hp)
         (fun x hx h1 h2 => hc x hx p k kh rfl h1 h2)
-      exact hpre (Node.settle cfg { Node.record cfg s p k kh with sought := n }) _ hno
-        ((hr.frame (s' := { Node.record cfg s p k kh with sought := n }) rfl rfl rfl rfl rfl
+      exact hpre (Node.settle cfg (Node.record cfg s p k kh)) _ hno
+        ((hr.frame (s' := (Node.record cfg s p k kh)) rfl rfl rfl rfl rfl
           rfl).settle hP hrec)
     · exact hnil
   | baseRequest => exact ⟨hK, hcov, fun c hc => by simp [Node.step] at hc⟩
@@ -843,14 +841,13 @@ theorem kept_peer {u : Validator} {k : ℕ} {h : BlockId}
     Covered.init rfl hr₁ (by simp)
   set s₀ := (Node.run cfg (State.init cfg) is₁).1
   -- the receipt
-  obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s₀ u k h) k h
   set s₁ := (Node.step cfg s₀ (.proposal u k h)).1
-  have hs₁ : s₁ = (Node.settle cfg { record cfg s₀ u k h with sought := n }).1 := by
-    simp only [s₁, step_proposal, if_pos hu, hn]
+  have hs₁ : s₁ = (Node.settle cfg (record cfg s₀ u k h)).1 := by
+    simp only [s₁, step_proposal, if_pos hu]
   have hKc : Kept cfg [(u, k, h)] s₁ ∧ Covered cfg s₁ := by
     rw [hs₁]
     have hr := hK₀.record (v := u) (k₀ := k) (h₀ := h) (fun h => absurd h hu) (by simp)
-    have hK' : Kept cfg [(u, k, h)] { record cfg s₀ u k h with sought := n } :=
+    have hK' : Kept cfg [(u, k, h)] (record cfg s₀ u k h) :=
       ⟨hr.ledger, hr.own_le, hr.own_head, hr.own_dvd, hr.own_mem, hr.certified, fun x hx => by
         rw [List.mem_singleton.mp hx]
         exact ⟨record_self s₀ u k h, hw⟩, hr.cert⟩

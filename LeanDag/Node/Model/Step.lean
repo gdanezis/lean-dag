@@ -48,10 +48,8 @@ input `i` in the state `s`: the new state and the outputs.
   decided and of the head it proposed there, keeps it; announced one at a
   height it has not decided, it asks the sender for the decisions
   certified from its next undecided slot up.
-* **Adopting** (`adoptable`, `adopt`): a node that holds `q` signers'
-  proposals of one head at a height above its next undecided slot asks
-  them for the decisions certified from that slot up; served a
-  certificate above that slot with decisions from that slot or below,
+* **Adopting** (`adoptable`, `adopt`): served a certificate above its
+  next undecided slot with decisions from that slot or below,
   whose chain extends its own to the certificate's head, it outputs
   those from that slot and moves its next slot to the certificate's
   height. Its horizon then rises with its peers', so it takes the blocks
@@ -160,8 +158,6 @@ structure State where
   /-- The candidate slot, an author and a round, each kept block was
   charged to. -/
   owner : List (BlockId × (Validator × ℕ))
-  /-- The highest height whose decisions the node asked for. -/
-  sought : ℕ
   /-- The authors the node was given two blocks of at one round. -/
   exposed : Finset Validator
 
@@ -173,7 +169,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
   ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false, [], 0, [], 0, cfg.root, [], none, [],
-    [], 0, ∅⟩
+    [], ∅⟩
 
 /-- **Accept a block**: below the horizon it is dropped; at the horizon it
 is kept without its references, as the cut keeps it; above, it is kept if
@@ -709,7 +705,7 @@ since the node was away; recovering. -/
 def State.recover (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
   let s' := { s with pending := [], fired := (s.top.map fun t => {t}).getD ∅ }
   let s'' := { s' with requested := [], recovering := true, offers := [], asked := 0 }
-  { s'' with props := [], certs := [], sought := 0, exposed := ∅ }
+  { s'' with props := [], certs := [], exposed := ∅ }
 
 /-- **Resume from what was persisted**: the store rebuilt from the window
 at the horizon, if the window is closed under references one round below
@@ -728,7 +724,7 @@ def resume (ps : Persisted Validator BlockId Payload) : Option (State Validator 
     let st : Store Validator BlockId Payload :=
       ⟨map, ids, cfg.genesis, ps.horizon, h.1, h.2.1, h.2.2⟩
     some ⟨st, [], ps.top, ps.own, (ps.top.map fun t => {t}).getD ∅, ps.lo, [], true, [], 0,
-      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, [], ps.owner, 0, ∅⟩
+      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, [], ps.owner, ∅⟩
   else none
 
 /-- **Ask for an offered window**: the blocks a peer offered at or above
@@ -750,17 +746,6 @@ def bootFrom (s : State Validator BlockId Payload) :
     let r := advance cfg s₂
     (r.1, ads.map (fun e => .commit e.1 e.2) ++ r.2)
   | none => (s, [])
-
-/-- **Seek certified decisions**: once the proposals the node keeps hold
-`q` signers of the head `h` at a height `k` above its next undecided slot,
-and it has not asked up to `k`, ask the other signers for the decisions
-certified from that slot up. -/
-def seek (s : State Validator BlockId Payload) (k : ℕ) (h : BlockId) :
-    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
-  let signers := ((s.props.filter fun x => decide (x.2 = (k, h))).map Prod.fst).dedup
-  if cfg.q ≤ signers.length ∧ s.lo < k ∧ s.sought < k then
-    ({ s with sought := k }, (signers.filter (· ≠ cfg.me)).map fun p => .requestDecisions p s.lo)
-  else (s, [])
 
 /-- **Serve certified decisions** from slot `lo` up: the node's
 certificate, if above `lo`, with the decisions of slots `lo … height − 1`. -/
@@ -876,10 +861,7 @@ def step (s : State Validator BlockId Payload) :
     else (s₁, [])
   | .decisionRequest peer lo => (s, if peer ≠ cfg.me then serveFrom s peer lo else [])
   | .proposal peer k h =>
-    if peer ≠ cfg.me then
-      let r := seek cfg (record cfg s peer k h) k h
-      let r' := settle cfg r.1
-      (r'.1, r.2 ++ r'.2)
+    if peer ≠ cfg.me then settle cfg (record cfg s peer k h)
     else (s, [])
   | .announced peer c =>
     if peer = cfg.me then (s, [])

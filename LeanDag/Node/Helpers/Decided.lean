@@ -464,17 +464,11 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
   | proposal p k kh =>
     rw [step_proposal]
     split
-    · have h₁ : Appends cfg s (seek cfg (record cfg s p k kh) k kh).2
-          (seek cfg (record cfg s p k kh) k kh).1 := by
-        obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-        refine Appends.quiet (by rw [hn]; rfl)
-          (commitsOf_requests fun o ho => Or.inl (seek_out (cfg := cfg) _ k kh o ho))
-          fun k' h' hk => ?_
-        obtain ⟨_, _, he⟩ := seek_out (cfg := cfg) _ k kh _ hk
-        cases he
-      have hL₁ : Ledger cfg (seek cfg (record cfg s p k kh) k kh).1 := by
-        obtain ⟨n, hn⟩ := seek_eq (cfg := cfg) (record cfg s p k kh) k kh
-        rw [hn]; exact hL.of_eq rfl rfl rfl rfl
+    · have h₁ : Appends cfg s ([] : List (Output Validator BlockId Payload))
+          (record cfg s p k kh) := by
+        exact Appends.quiet (by rfl) rfl fun k' h' hk => by cases hk
+      have hL₁ : Ledger cfg (record cfg s p k kh) := by
+        exact hL.of_eq rfl rfl rfl rfl
       obtain ⟨h₂, hL₂⟩ := settle_appends hL₁
       exact ⟨h₁.trans h₂, hL₂⟩
     · exact ⟨Appends.refl s, hL⟩
