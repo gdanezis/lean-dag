@@ -21,10 +21,11 @@ its next one (`fresh_before`), and builds (`tryBuild_isSome`), against
 its being settled.
 
 **Decision.** From a round `n₀` the reliable nodes built within `A` of
-each other past GST, they build every later round within `A` of each
-other (`drift`): a node behind a peer's round-`n + 1` block holds it `A`
-later, with a quorum of round `n`, and passes the tests with the
-references it lends, or its own timer of round `n` has fired
+each other past GST, agreeing from then on which authors they exclude,
+they build every later round within `A` of each other (`drift`): a node
+behind a peer's round-`n + 1` block holds it `A` later, with a quorum of
+round `n`, and passes the tests with the references it lends, none by an
+author it excludes, or its own timer of round `n` has fired
 (`catches_up`). So a node that waited the timeout holds every reliable
 block of the round (`waited_holds`), and with the build rule's wait
 clauses (`reach_or_wait_node`, `cert_or_wait_node`) the run gives the
@@ -112,8 +113,9 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   have hown := ownTop_before (cfg := cfg) hnv E n hZt
   obtain ⟨j₀, hj₀, hj₀i, hj₀r, hj₀c⟩ := hown
   have hauth : T ⊆ authorsIn (stateBefore cfg tr E v).store.toRecord
-      (stateBefore cfg tr E v).store.ids n := by
+      (stateBefore cfg tr E v).store.ids n \ (stateBefore cfg tr E v).exposed := by
     intro w hw
+    refine Finset.mem_sdiff.mpr ⟨?_, honest_not_exposed hinj htime (hTH hv) E (hTH hw)⟩
     rw [mem_authorsIn]
     by_cases hwv : w = v
     · subst hwv
@@ -122,7 +124,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
         hTH hnr hmono hdel hsync hcmp hw hv hwv hgs (hstarted w hw) (hall w hw) (by omega) hst₁ hZt
         le_rfl hbn
   have hcard : cfg.q ≤ (authorsIn (stateBefore cfg tr E v).store.toRecord
-      (stateBefore cfg tr E v).store.ids n).card := hqT.trans (Finset.card_le_card hauth)
+      (stateBefore cfg tr E v).store.ids n \ (stateBefore cfg tr E v).exposed).card :=
+    hqT.trans (Finset.card_le_card hauth)
   -- so it builds, against its being settled
   have hsome := tryBuild_isSome (cfg := cfg.at v) hZt (Or.inl hfired) hcard
     (fun j hj => by rw [hj₀] at hj; cases hj; exact ⟨hj₀i, hj₀r, hj₀c⟩) hbn
@@ -149,7 +152,8 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     (htimer : TimersOnTime cfg T tr time t₁) (hsync : SyncedWithin cfg H T tr time gst Δₛ t₁)
     (hstart : StartedBy T tr time gst) : Decides cfg T tr time gst (3 * Δ + Δₛ) t₁ := by
   letI := cfg.slots
-  intro b c n₀ s hc hspan hlead hn₀ hgs hall t htop ht₁ v hv
+  intro b c n₀ s hc hspan hlead hn₀ hgs hall hexp t htop ht₁ v hv
+  obtain ⟨X, hX⟩ := hexp
   haveI : Nonempty Validator := ⟨v⟩
   set U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime) with hU
   set N := cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) with hNdef
@@ -166,8 +170,11 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     rcases h : (stateAt cfg tr time w t).top with _ | r
     · rw [h] at this; simp at this; omega
     · rfl
-  have hD := drift hq hl hσ hadm hf hid htime hoff hcert hinj hchain hTH hnr hmono hdel htimer
-    hsync hstart hvo hcmp hgs (fun w hw' => ⟨(hall w hw').2.1, (hall w hw').2.2⟩) hst htop ht₁
+  have hDs := drift hq hl hσ hadm hf hid htime hoff hcert hinj hchain hTH hnr hmono hdel htimer
+    hsync hstart hvo hcmp hgs (fun w hw' => ⟨(hall w hw').2.1, (hall w hw').2.2⟩) hst htop ht₁ hX
+  have hD : ∀ n, n₀ ≤ n → n ≤ N → ∀ u ∈ T, ∀ w ∈ T, gst ≤ builtAt cfg tr time u n ∧
+      builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (3 * Δ + Δₛ) :=
+    fun n h₁ h₂ u hu w hw => ⟨hgs.trans (hDs n h₁ h₂ u hu w hw).1, (hDs n h₁ h₂ u hu w hw).2⟩
   -- the node's wave facts
   let wf : Scheme.WaveFacts cfg.p (boundedSel (P := ValidAt cfg.q Clause.none) (honest := H)) U T
       N n₀ :=
@@ -288,7 +295,7 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
     (hp : Produces cfg T tr time gst t₁) (hd : Decides cfg T tr time gst D t₁) :
     DecidesBy cfg T tr time gst D t₁ := by
   letI := cfg.slots
-  intro b c n₀ s hc hspan hlead hn₀ hgs hall ht₁
+  intro b c n₀ s hc hspan hlead hn₀ hgs hall hexp ht₁
   set N := cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) with hN
   have hn₀N : n₀ ≤ N := hn₀.trans ((cfg.slots.mono (by omega : b ≤ b + c - 1)).trans
     (Nat.le_add_right _ _))
@@ -312,7 +319,7 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
       exact this
   have hall' := key (N - n₀) (by omega)
   rw [Nat.add_sub_cancel' hn₀N] at hall'
-  exact hd b c n₀ s hc hspan hlead hn₀ hgs hall _ hall' ht₁
+  exact hd b c n₀ s hc hspan hlead hn₀ hgs hall hexp _ hall' ht₁
 
 /-- **The reliable nodes produce rounds and decide.** -/
 theorem holds : Statement := by

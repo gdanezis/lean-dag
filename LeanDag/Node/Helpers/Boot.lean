@@ -459,10 +459,14 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         · exact hp e he
       let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
       exact hset { s₂ with asked := askedAfter (cfg := cfg) s b }
-        ((if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b)
+        (evidence s id b ++
+          (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++
+          askOut (cfg := cfg) s b)
         (IsCut.flush hg _ _ hc (hc.spans hh) hpend) (hh.grow hg₁ hb₁ rfl le_rfl)
         (fun e he => hpend e (flush_pending_sub _ _ _ e he))
-        (by rw [commitsOf_append]; unfold askOut; split <;> split <;> rfl) (step_deliver hA)
+        (by
+          rw [commitsOf_append, commitsOf_append, commitsOf_evidence]; unfold askOut
+          split <;> split <;> rfl) (step_deliver hA)
     · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hA
       exact hsame s rfl (by simp only [Node.step, if_neg h'])

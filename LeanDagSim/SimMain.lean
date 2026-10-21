@@ -7,7 +7,9 @@ Options, each `--name value`: `row`, `n`, `f`, `c`, `seed`, `horizon`,
 `gst`, `pre-max`, `delay-min`, `delay-max`, `timeout`, `lag`, `ahead`,
 `crash` (`node@time,…`), `recover` (`node@down-up,…`), `byz` (`node,…`),
 `byz-until`, `withhold` (`z,v,R`: node `z` withholds its round-`R` block
-from `v`), `reveal-after`, `adv` (`node,…`: attackers), `attacks`
+from `v`), `reveal-after`, `adv` (`node,…`: attackers), `slow` (`node,…`)
+and `slow-delay` (the least delay to or from a slow node), `leaders`
+(`node,…`: the leader schedule, cycled), `attacks`
 (`fake-base`, `split-base`, `fake-cert`, `conflict-proposals`,
 `invalid-blocks`, `forged-author`, `flood`, `junk-at-cut`, comma-separated), `limit`
 (`τ,W`: the rate limiter's budget and window) and `verify`
@@ -65,6 +67,9 @@ def parseArgs : List String → Scenario → Except String Scenario
         | _ => throw s!"--withhold wants z,v,R: {v}"
       | "--reveal-after" => pure { sc with revealAfter := ← nat }
       | "--adv" => pure { sc with adv := parseNats v }
+      | "--slow" => pure { sc with slow := parseNats v }
+      | "--slow-delay" => pure { sc with slowDelay := ← nat }
+      | "--leaders" => pure { sc with leaders := parseNats v }
       | "--limit" => match parseNats v with
         | [τ, W] => pure { sc with limit := some (τ, W) }
         | _ => throw s!"--limit wants τ,W: {v}"

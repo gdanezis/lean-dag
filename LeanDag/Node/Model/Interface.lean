@@ -220,6 +220,9 @@ inductive Output where
   | requestDecisions (peer : Validator) (lo : ℕ)
   /-- Send the certificate to every peer, without decisions. -/
   | announce (c : Cert Validator BlockId)
+  /-- Send another author's block to every peer: one of two blocks of one
+  author at one round, the evidence of its equivocation. -/
+  | relay (id : BlockId) (b : Block Validator BlockId Payload)
 
 end Node
 

@@ -706,7 +706,8 @@ theorem Kept.step {P : List (Validator × ℕ × BlockId)} {s : State Validator 
     simp only [Node.step]
     split
     · refine hpre (Node.settle cfg _) _ ?_ (hset _ rfl rfl rfl rfl rfl rfl hrec)
-      intro c; split_ifs <;> simp
+      intro c; split_ifs <;> simp <;> intro h <;> obtain ⟨_, _, he⟩ := evidence_relay h <;>
+        cases he
     · exact hnil
   | timer r => exact hset _ rfl rfl rfl rfl rfl rfl hrec
   | fetchRequest peer G ids => exact ⟨hK, hcov, fun c hc => by simp [Node.step, answer] at hc⟩

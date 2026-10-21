@@ -83,6 +83,7 @@ def Sends (u : Validator) (out : List (Output Validator BlockId Payload))
     | .serveCert peer c ds => m.1 = peer ∧ m.2 = .certOffer u c ds
     | .requestDecisions peer lo => m.1 = peer ∧ m.2 = .decisionRequest u lo
     | .announce c => m.1 ≠ u ∧ m.2 = .announced u c
+    | .relay id b => m.1 ≠ u ∧ m.2 = .deliver id b
     | _ => False
 
 end Node

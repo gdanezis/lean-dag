@@ -426,7 +426,8 @@ theorem step_shape {s : State Validator BlockId Payload} {inp : Input Validator 
       refine Or.inr ⟨_, _, rfl, hs, flush_base _ _ _, rfl, subset_rfl, Or.inl ⟨?_, rfl⟩⟩
       refine silent_of fun o ho => ?_
       simp only [askOut, List.mem_append] at ho
-      rcases ho with ho | ho
+      rcases ho with (ho | ho) | ho
+      · obtain ⟨_, _, rfl⟩ := evidence_relay ho; trivial
       · split at ho
         · cases ho
         · rw [List.mem_singleton] at ho; subst ho; trivial
@@ -618,16 +619,19 @@ end StepFacts
 
 omit [Fintype Validator] in
 /-- **`refsFor`'s references**: stored blocks of the round, one per
-author of the round, the node's own block for itself if it has one. -/
+author of the round outside `X`, the node's own block for itself if it
+has one. -/
 theorem refsFor_spec {st : Store Validator BlockId Payload} {r : ℕ} {o : Option BlockId}
+    {X : Finset Validator}
     (ho : ∀ j, o = some j → j ∈ st.ids ∧ (st.blk j).round = r ∧ (st.blk j).creator = cfg.me) :
-    refsFor cfg st r o ⊆ st.ids ∧ (∀ j ∈ refsFor cfg st r o, (st.blk j).round = r) ∧
-      creatorsOf st.blk (refsFor cfg st r o) = authorsIn st.toRecord st.ids r ∧
-      ∀ i ∈ refsFor cfg st r o, ∀ j ∈ refsFor cfg st r o,
+    refsFor cfg st r o X ⊆ st.ids ∧ (∀ j ∈ refsFor cfg st r o X, (st.blk j).round = r) ∧
+      creatorsOf st.blk (refsFor cfg st r o X) = authorsIn st.toRecord st.ids r \ X ∧
+      ∀ i ∈ refsFor cfg st r o X, ∀ j ∈ refsFor cfg st r o X,
         (st.blk i).creator = (st.blk j).creator → i = j := by
-  set R := blocksAt st.toRecord r with hR
+  set R := (blocksAt st.toRecord r).filter fun i => (st.blk i).creator ∉ X with hR
   have hRi : ∀ i ∈ R, i ∈ st.ids ∧ (st.blk i).round = r := fun i hi => by
-    simpa [hR, blocksAt, Store.toRecord] using hi
+    have := (Finset.mem_filter.mp hi).1
+    simpa [blocksAt, Store.toRecord] using this
   -- the block chosen for author `a`
   let pick : Validator → Finset BlockId := fun a =>
     if a = cfg.me ∧ o.isSome then o.toFinset
@@ -651,8 +655,8 @@ theorem refsFor_spec {st : Store Validator BlockId Payload} {r : ℕ} {o : Optio
       refine ⟨L, ?_, (hRi L hLR).1, (hRi L hLR).2, hLa⟩
       show (if a = cfg.me ∧ o.isSome then o.toFinset else _) = {L}
       rw [if_neg hc, hL]; rfl
-  have hdef : refsFor cfg st r o = (creatorsOf st.blk R).biUnion pick := rfl
-  have hmem : ∀ j ∈ refsFor cfg st r o, ∃ a ∈ creatorsOf st.blk R, j ∈ st.ids ∧
+  have hdef : refsFor cfg st r o X = (creatorsOf st.blk R).biUnion pick := rfl
+  have hmem : ∀ j ∈ refsFor cfg st r o X, ∃ a ∈ creatorsOf st.blk R, j ∈ st.ids ∧
       (st.blk j).round = r ∧ (st.blk j).creator = a ∧ pick a = {j} := by
     intro j hj
     rw [hdef] at hj
@@ -663,7 +667,15 @@ theorem refsFor_spec {st : Store Validator BlockId Payload} {r : ℕ} {o : Optio
     exact ⟨a, ha, h₁, h₂, h₃, hp⟩
   refine ⟨fun j hj => (hmem j hj).choose_spec.2.1, fun j hj => (hmem j hj).choose_spec.2.2.1,
     ?_, fun i hi j hj hij => ?_⟩
-  · have hauth : authorsIn st.toRecord st.ids r = creatorsOf st.blk R := rfl
+  · have hauth : authorsIn st.toRecord st.ids r \ X = creatorsOf st.blk R := by
+      ext a
+      simp only [Finset.mem_sdiff, creatorsOf, Finset.mem_image, R, Finset.mem_filter]
+      constructor
+      · rintro ⟨ha, hax⟩
+        obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp ha
+        exact ⟨j, ⟨hj, hax⟩, rfl⟩
+      · rintro ⟨j, ⟨hj, hjx⟩, rfl⟩
+        exact ⟨Finset.mem_image_of_mem _ hj, hjx⟩
     rw [hauth]
     ext a
     constructor
@@ -685,8 +697,9 @@ theorem refsFor_spec {st : Store Validator BlockId Payload} {r : ℕ} {o : Optio
 
 omit [Fintype Validator] in
 /-- `refsAt`'s references are `refsFor`'s, or ones the node can build on. -/
-theorem refsAt_buildable (st : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) :
-    refsAt cfg st r o = refsFor cfg st r o ∨ buildable cfg st r (refsAt cfg st r o) = true := by
+theorem refsAt_buildable (st : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
+    (X : Finset Validator) :
+    refsAt cfg st r o X = refsFor cfg st r o X ∨ buildable cfg st r (refsAt cfg st r o X) = true := by
   unfold refsAt
   dsimp only
   split
@@ -704,8 +717,9 @@ tests, builds**, given a quorum of the round, its own block there stored,
 a horizon at or below the round, and no stored block with the identifier
 of a next block of its own. -/
 theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.top = some r)
-    (hf : r ∈ s.fired ∨ (reachReady cfg s.store (refsAt cfg s.store r s.own) r = true ∧
-      certReady cfg s.store (refsAt cfg s.store r s.own) r = true)) (hq : cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r).card)
+    (hf : r ∈ s.fired ∨ (reachReady cfg s.store (refsAt cfg s.store r s.own s.exposed) r = true ∧
+      certReady cfg s.store (refsAt cfg s.store r s.own s.exposed) r = true))
+    (hq : cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r \ s.exposed).card)
     (ho : ∀ j, s.own = some j → j ∈ s.store.ids ∧ (s.store.blk j).round = r ∧
       (s.store.blk j).creator = cfg.me)
     (hb : s.store.base ≤ r)
@@ -715,12 +729,12 @@ theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.
   rw [ht]
   dsimp only
   rw [if_pos ⟨hq, hf⟩]
-  have hB : buildable cfg s.store r (refsAt cfg s.store r s.own) = true := by
-    rcases refsAt_buildable (cfg := cfg) s.store r s.own with he | he
+  have hB : buildable cfg s.store r (refsAt cfg s.store r s.own s.exposed) = true := by
+    rcases refsAt_buildable (cfg := cfg) s.store r s.own s.exposed with he | he
     · rw [he]
-      obtain ⟨hsub, hrd, hcr, hdis⟩ := refsFor_spec (cfg := cfg) (st := s.store) (r := r) ho
-      have hnin : ∀ j ∈ refsFor cfg s.store r s.own,
-          j ≠ cfg.idOf ⟨r + 1, cfg.me, refsFor cfg s.store r s.own, cfg.payload (r + 1)⟩ :=
+      obtain ⟨hsub, hrd, hcr, hdis⟩ := refsFor_spec (cfg := cfg) (st := s.store) (r := r) (X := s.exposed) ho
+      have hnin : ∀ j ∈ refsFor cfg s.store r s.own s.exposed,
+          j ≠ cfg.idOf ⟨r + 1, cfg.me, refsFor cfg s.store r s.own s.exposed, cfg.payload (r + 1)⟩ :=
         fun j hj h => hfresh _ (h ▸ hsub hj)
       unfold buildable
       refine decide_eq_true ⟨hfresh _, by simp; omega, fun _ => hsub,

@@ -186,7 +186,9 @@ theorem serveBase_mem {s : State Validator BlockId Payload} {inp : Input Validat
     simp only [Node.step] at h
     split at h
     · simp only [List.mem_append] at h
-      rcases h with h | h
+      rcases h with ((h | h) | h) | h
+      · obtain ⟨_, _, he⟩ := evidence_relay h; cases he
+      · split at h <;> simp at h
       · split at h <;> simp at h
       · exact absurd h (serveBase_not_mem_settle _)
     · simp at h

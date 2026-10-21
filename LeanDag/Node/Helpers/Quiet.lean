@@ -129,7 +129,9 @@ theorem below_build {R : ℕ} (hq : 2 ≤ cfg.q) {s s' : State Validator BlockId
     split at hb
     · rename_i hc
       -- a second author at round `r`
-      have h2 : 1 < (authorsIn s.store.toRecord s.store.ids r).card := by omega
+      have h2 : 1 < (authorsIn s.store.toRecord s.store.ids r).card :=
+        lt_of_lt_of_le (show 1 < (authorsIn s.store.toRecord s.store.ids r \ s.exposed).card by
+          omega) (Finset.card_le_card Finset.sdiff_subset)
       obtain ⟨a, ha, b, hb', hab⟩ := Finset.one_lt_card.mp h2
       have hne : a ≠ cfg.me ∨ b ≠ cfg.me := by
         rcases Classical.em (a = cfg.me) with ha' | ha'
@@ -507,16 +509,17 @@ theorem progress_none {n : ℕ} {s : State Validator BlockId Payload}
     omega
 
 omit [Fintype Validator] in
-/-- Whether the node can build reads only its store, top, own block and
-fired timers. -/
+/-- Whether the node can build reads only its store, top, own block,
+fired timers and exposed authors. -/
 theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
     (h : Node.tryBuild cfg s = none) (hst : s'.store = s.store) (ht : s'.top = s.top)
-    (ho : s'.own = s.own) (hf : s'.fired = s.fired) : Node.tryBuild cfg s' = none := by
-  obtain ⟨st, pd, top, own, fired, lo, rq, rc, of, ak, dc, lp, ch, ps, ce, cs, ow, so⟩ := s
+    (ho : s'.own = s.own) (hf : s'.fired = s.fired) (hx : s'.exposed = s.exposed) :
+    Node.tryBuild cfg s' = none := by
+  obtain ⟨st, pd, top, own, fired, lo, rq, rc, of, ak, dc, lp, ch, ps, ce, cs, ow, so, ex⟩ := s
   obtain ⟨st', pd', top', own', fired', lo', rq', rc', of', ak', dc', lp', ch', ps', ce', cs', ow',
-    so'⟩ := s'
-  simp only at hst ht ho hf
-  subst hst ht ho hf
+    so', ex'⟩ := s'
+  simp only at hst ht ho hf hx
+  subst hst ht ho hf hx
   unfold Node.tryBuild at h ⊢
   cases top' with
   | none => rfl
@@ -598,10 +601,12 @@ theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
                  decided := (Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ s.store.toRecord
             s.store.view s.lo (decidable cfg s.store.topRound - 1)).reverse ++ s.decided }
        else s)
-    refine tryBuild_none_of hnb hdst hdtop ?_ ?_
+    refine tryBuild_none_of hnb hdst hdtop ?_ ?_ ?_
     · rw [hd]; unfold Node.decideStep; dsimp only; split <;> rw [(proposeAt_keeps _).2.2.2.1]
     · rw [hd]; unfold Node.decideStep; dsimp only
       split <;> rw [(proposeAt_keeps _).2.2.2.2.2.2.2.2.1]
+    · rw [hd]; unfold Node.decideStep; dsimp only
+      split <;> rw [proposeAt_exposed]
   · rw [← hz]; exact flush_no_ready _ _ _ (Nat.lt_succ_self _)
   · rw [hdst, hdlo] at hlt ⊢
     have : d.lo = s.lo + (Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ s.store.toRecord

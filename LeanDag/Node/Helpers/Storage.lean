@@ -594,7 +594,7 @@ theorem Lim.afterFlush {τ W : ℕ} (hl : cfg.limit = some (τ, W))
   have := h₀.flushAll (cfg := cfg) (s.pending.length + 1)
   unfold Node.afterFlush
   rw [hch]
-  exact this
+  exact ⟨this.store, this.pend, this.slots, this.charge, this.fresh, this.base⟩
 
 /-- **Every step keeps the invariant.** -/
 theorem Lim.step {τ W : ℕ} (hl : cfg.limit = some (τ, W)) {s : State Validator BlockId Payload}

@@ -242,11 +242,14 @@ def Admits (s : State Validator BlockId Payload) (id : BlockId)
     id ∉ s.pending.map Prod.fst ∧ kept cfg s id b
 
 /-- The state a delivery the node acts on settles: the store and pending
-blocks after flushing, and the slot the delivery is charged to. -/
+blocks after flushing, the slot the delivery is charged to, and its
+author exposed if the node holds a twin of the block. -/
 def afterFlush (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : State Validator BlockId Payload :=
   let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
-  { s with store := fl.1, pending := fl.2, owner := charged cfg s id b ++ s.owner }
+  let X := if twinned s b then insert b.creator s.exposed else s.exposed
+  let s₀ := { s with store := fl.1, pending := fl.2, owner := charged cfg s id b ++ s.owner }
+  { s₀ with exposed := X }
 
 /-- The round a delivery leaves the node's last request for the bases on. -/
 def askedAfter (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) : ℕ :=
@@ -269,7 +272,9 @@ theorem step_deliver {s : State Validator BlockId Payload} {id : BlockId}
     let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun (x : BlockId × ℕ) => (x.1, id, x.2) }
     Node.step cfg s (.deliver id b) =
       ((Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).1,
-        (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++ askOut (cfg := cfg) s b ++
+        evidence s id b ++
+          (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++
+          askOut (cfg := cfg) s b ++
           (Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).2) := by
   have h' : id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
       id ∉ s.pending.map Prod.fst ∧ kept cfg s id b := h
@@ -789,9 +794,11 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
       refine settle_persist_of (Or.inl ?_) (hb.trans (flush_base _ _ _).symm)
       refine (out_quiet fun o ho => ?_).1
       rcases List.mem_append.mp ho with ho | ho
-      · split at ho
-        · simp at ho
-        · rw [List.mem_singleton] at ho; subst ho; rfl
+      · rcases List.mem_append.mp ho with ho | ho
+        · exact evidence_isQuiet s id b o ho
+        · split at ho
+          · simp at ho
+          · rw [List.mem_singleton] at ho; subst ho; rfl
       · exact askOut_isQuiet o ho
     · have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
           id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := hc

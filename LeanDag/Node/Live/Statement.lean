@@ -36,9 +36,11 @@ to be held by every reliable node, a certificate's catch-up included:
 * **production** (`Produces`): past GST, once every reliable node is at
   round `n` or above, every reliable node is above `n` a timeout later;
 * **decision** (`Decides`): suppose the reliable nodes built some round
-  `n₀` past GST within `A` of each other, and the slots `b … b + c − 1`
-  at or above `n₀` are led by reliable nodes and span the rule's
-  eligibility. Once every reliable node is at the decision round of slot
+  `n₀` past GST within `A` of each other, agreeing from then on which
+  authors they exclude for equivocating (`ExposedFrom`; a node relays the
+  evidence, so this holds once every exposure has spread), and the slots
+  `b … b + c − 1` at or above `n₀` are led by reliable nodes and span the
+  rule's eligibility. Once every reliable node is at the decision round of slot
   `b + c − 1`, `A` later every reliable node has output the decisions of
   every slot below `b + c`;
 * **the time bound** (`DecidesBy`): under the same premises, every
@@ -110,11 +112,19 @@ def Produces (cfg : Config Validator BlockId Payload) (T : Finset Validator)
   ∀ s n, gst ≤ s → s + cfg.timeout n ≤ t₁ → (∀ v ∈ T, n ≤ topAt cfg tr time v s) →
     ∀ v ∈ T, n + 1 ≤ topAt cfg tr time v (s + cfg.timeout n)
 
+/-- **The reliable nodes agree on the exposed authors from `s` on**: after
+every event at `s` or later, each reliable node holds the same authors
+exposed. -/
+def ExposedFrom (cfg : Config Validator BlockId Payload) (T : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (s : ℕ) : Prop :=
+  ∃ X : Finset Validator, ∀ v ∈ T, ∀ k, s ≤ time k → (stateBefore cfg tr (k + 1) v).exposed = X
+
 /-- **Decision**: if every reliable node built round `n₀` between `s ≥ gst`
-and `s + D`, and the slots `b … b + c − 1`, at or above `n₀`, are led by
-reliable nodes and span the rule's eligibility, then once every reliable
-node is at the decision round of slot `b + c − 1` at `t`, every reliable
-node has output the decisions of the slots below `b + c` by `t + D`. -/
+and `s + D`, agreeing from `s` on which authors are exposed, and the
+slots `b … b + c − 1`, at or above `n₀`, are led by reliable nodes and
+span the rule's eligibility, then once every reliable node is at the
+decision round of slot `b + c − 1` at `t`, every reliable node has
+output the decisions of the slots below `b + c` by `t + D`. -/
 def Decides (cfg : Config Validator BlockId Payload) (T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst D t₁ : ℕ) : Prop :=
   letI := cfg.slots
@@ -123,7 +133,7 @@ def Decides (cfg : Config Validator BlockId Payload) (T : Finset Validator)
         (honest := T))).SpansEligible c →
     (∀ i < c, cfg.slots.leader (b + i) ∈ T) → n₀ ≤ cfg.slots.slotRound b → gst ≤ s →
     (∀ v ∈ T, n₀ ≤ topAt cfg tr time v (s + D) ∧ s ≤ builtAt cfg tr time v n₀ ∧
-      builtAt cfg tr time v n₀ ≤ s + D) →
+      builtAt cfg tr time v n₀ ≤ s + D) → ExposedFrom cfg T tr time s →
     ∀ t, (∀ v ∈ T, cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) ≤
         topAt cfg tr time v t) → t + D ≤ t₁ →
       ∀ v ∈ T, b + c ≤ (decisionsBy cfg tr time v (t + D)).length
@@ -140,7 +150,7 @@ def DecidesBy (cfg : Config Validator BlockId Payload) (T : Finset Validator)
         (honest := T))).SpansEligible c →
     (∀ i < c, cfg.slots.leader (b + i) ∈ T) → n₀ ≤ cfg.slots.slotRound b → gst ≤ s →
     (∀ v ∈ T, n₀ ≤ topAt cfg tr time v (s + D) ∧ s ≤ builtAt cfg tr time v n₀ ∧
-      builtAt cfg tr time v n₀ ≤ s + D) →
+      builtAt cfg tr time v n₀ ≤ s + D) → ExposedFrom cfg T tr time s →
     s + D + (∑ r ∈ Finset.Ico n₀ (cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1)),
       cfg.timeout r) + D ≤ t₁ →
     ∀ v ∈ T, b + c ≤ (decisionsBy cfg tr time v (s + D + (∑ r ∈ Finset.Ico n₀

@@ -83,6 +83,7 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
   | .requestDecisions peer lo => Json.mkObj [("requestDecisions",
       Json.mkObj [("peer", peer.val), ("lo", lo)])]
   | .announce c => Json.mkObj [("announce", certJson c)]
+  | .relay id b => Json.mkObj [("relay", blockJson id b)]
 
 /-- A block with its identifier, from JSON; the identifier is its hash
 when left out. -/

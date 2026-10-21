@@ -255,7 +255,7 @@ theorem converges : Converges := by
     rw [show miss = missing s₁ (x m) (raw (x m)) from hask _ _ _]
     exact List.mem_filter.mpr ⟨hw, by simpa using hnreq⟩
   obtain ⟨rest, hout⟩ : ∃ rest, outputsAt cfg tr (A m) =
-      (if miss.isEmpty then [] else
+      evidence (stateBefore cfg tr (A m) v) (x m) (raw (x m)) ++ (if miss.isEmpty then [] else
         [.fetch (raw (x m)).creator (stateBefore cfg tr (A m) v).store.base
           (miss.map Prod.fst)]) ++ rest :=
     ⟨_, by rw [outputsAt_eq htm, step_deliver hcm, List.append_assoc]⟩

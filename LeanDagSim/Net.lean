@@ -384,6 +384,15 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
             ((t + dt, d, .fetchRequest s.node G ids) :: acc.1, g')
           else acc
         | _, _ => acc) acc
+    | .relay id b =>
+      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
+        match agents[src]?, agents[d]? with
+        | some s, some a =>
+          if receives sc a s then
+            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
+            ((t + dt, d, .deliver id b) :: acc.1, g')
+          else acc
+        | _, _ => acc) acc
     | .send peer id b =>
       (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
         match agents[d]? with

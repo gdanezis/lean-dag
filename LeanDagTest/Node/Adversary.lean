@@ -13,11 +13,15 @@ made, and the inputs the signature checks dropped.
 
 With the network checking signatures, which is what the claims over
 traces assume of authentication, every attack leaves agreement,
-prefix-comparability and validity intact. Without the checks, a
-certificate of fabricated decisions can be adopted, and the joiner's
-decisions then disagree with its peers'; and blocks forged in an honest
-node's name halt that node, since it drops blocks claiming its identity
-and so never completes the histories that reference them.
+prefix-comparability and validity intact. An attack that shows node `3`
+with two blocks at one round, its own fake base or its invalid twins,
+gets it excluded, and while node `1` is down the two other honest nodes
+are fewer than the quorum: the run stalls until node `1` is back, and
+under the invalid blocks it stalls on, since node `1` resumes only above
+a round its peers have not reached. Without the checks, a certificate of
+fabricated decisions can be adopted, and the joiner's decisions then
+disagree with its peers'; and blocks forged in an honest node's name get
+that node excluded as an equivocator, which stalls the run.
 -/
 
 namespace LeanDagTest
@@ -36,11 +40,11 @@ def attackLine (sc : Scenario) : String :=
   let r := simulate sc
   s!"{r.tops} {r.commits.map (·.length)} {r.agree} {r.prefixes} {r.valid} {r.boots} {r.dropped}"
 
-/-- info: "[(some 49), (some 49), (some 49)] [47, 47, 47] true true true 1 0" -/
+/-- info: "[(some 37), (some 37), (some 37)] [36, 36, 36] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeBase])
 
-/-- info: "[(some 49), (some 49), (some 49)] [47, 47, 47] true true true 1 0" -/
+/-- info: "[(some 39), (some 39), (some 40)] [38, 38, 38] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.splitBase])
 
@@ -52,7 +56,7 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.conflictProposals])
 
-/-- info: "[(some 52), (some 51), (some 52)] [50, 49, 50] true true true 1 0" -/
+/-- info: "[(some 17), (some 17), (some 17)] [16, 16, 16] true true true 0 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks])
 
@@ -60,7 +64,7 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor])
 
-/-- info: "[(some 47), (some 47), (some 47)] [45, 45, 45] true true true 1 136" -/
+/-- info: "[(some 17), (some 17), (some 16)] [16, 16, 16] true true true 0 57" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeBase, .splitBase, .fakeCert, .conflictProposals,
   .invalidBlocks, .forgedAuthor])
@@ -71,7 +75,7 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeCert] (verify := false))
 
-/-- info: "[(some 2), (some 31), (some 31)] [27, 29, 29] true true false 0 0" -/
+/-- info: "[(some 2), (some 6), (some 7)] [5, 5, 6] true true true 0 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 
@@ -89,11 +93,11 @@ def storageLine (sc : Scenario) : String :=
   let r := simulate sc
   s!"{r.commits.map (·.length)} {r.agree} {r.valid} {r.maxStore} {r.maxPending}"
 
-/-- info: "[24, 24, 24] true true 57 1" -/
+/-- info: "[24, 24, 24] true true 141 15" -/
 #guard_msgs in
 #eval storageLine { horizon := 150, row := "mysticeti", adv := [3], attacks := [.flood] }
 
-/-- info: "[22, 22, 22] true true 22 3" -/
+/-- info: "[24, 22, 22] true true 20 3" -/
 #guard_msgs in
 #eval storageLine
   { horizon := 150, row := "mysticeti", adv := [3], attacks := [.flood], limit := some (8, 8) }

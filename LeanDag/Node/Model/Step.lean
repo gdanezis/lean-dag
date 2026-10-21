@@ -21,6 +21,11 @@ input `i` in the state `s`: the new state and the outputs.
   of a held round-`r + 1` block of another author pass them, it takes
   those, with its own block for itself (`refsAt`). It is persisted, then
   broadcast, then the round's timer is set.
+* **Exclusion** (`twinned`, `State.exposed`, `evidence`): a node given
+  two blocks of one author at one round never again references a block
+  of that author, and counts only the other authors toward its quorum;
+  the first time, it relays both blocks to every peer, so its peers
+  exclude the author too.
 * **Deciding** (`decideStep`): `tryDecide` from the next undecided slot
   to the last slot at a round the store holds; the decisions are kept
   (`State.decided`), the latest first.
@@ -148,6 +153,8 @@ structure State where
   owner : List (BlockId × (Validator × ℕ))
   /-- The highest height whose decisions the node asked for. -/
   sought : ℕ
+  /-- The authors the node was given two blocks of at one round. -/
+  exposed : Finset Validator
 
 variable (cfg : Config Validator BlockId Payload)
 
@@ -157,7 +164,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
   ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false, [], 0, [], 0, cfg.root, [], none, [],
-    [], 0⟩
+    [], 0, ∅⟩
 
 /-- **Accept a block**: below the horizon it is dropped; at the horizon it
 is kept without its references, as the cut keeps it; above, it is kept if
@@ -190,10 +197,12 @@ def flush : ℕ → Store Validator BlockId Payload → List (BlockId × Block V
     else flush fuel (split.1.foldl (fun s e => accept cfg s e.1 e.2) s) split.2
 
 /-- **The references of the node's next block**, above round `r`: one
-accepted block per author of round `r`, the node's own block `o` there
-for itself if it built one, and the least identifier otherwise. -/
-def refsFor (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) : Finset BlockId :=
-  let R := blocksAt s.toRecord r
+accepted block per author of round `r` outside `X`, the node's own block
+`o` there for itself if it built one, and the least identifier
+otherwise. -/
+def refsFor (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
+    (X : Finset Validator) : Finset BlockId :=
+  let R := (blocksAt s.toRecord r).filter fun i => (s.blk i).creator ∉ X
   (creatorsOf s.blk R).biUnion fun a =>
     if a = cfg.me ∧ o.isSome then o.toFinset
     else (Scheme.leastOf (R.filter fun i => (s.blk i).creator = a)).toFinset
@@ -226,11 +235,12 @@ def certReady (s : Store Validator BlockId Payload) (refs : Finset BlockId) (r :
           (creatorsOf s.blk (refs.filter fun b => cfg.σ.Votes s.toRecord b L)).card)
   else true
 
-/-- **The references a held round-`r + 1` block `c` lends**: `c`'s, with
-the node's own block `o` put in for itself. -/
-def lent (s : Store Validator BlockId Payload) (c : BlockId) (o : Option BlockId) :
-    Finset BlockId :=
-  ((s.blk c).refs.filter fun j => (s.blk j).creator ≠ cfg.me) ∪ o.toFinset
+/-- **The references a held round-`r + 1` block `c` lends**: `c`'s by
+authors outside `X`, with the node's own block `o` put in for itself. -/
+def lent (s : Store Validator BlockId Payload) (c : BlockId) (o : Option BlockId)
+    (X : Finset Validator) : Finset BlockId :=
+  ((s.blk c).refs.filter fun j => (s.blk j).creator ≠ cfg.me ∧ (s.blk j).creator ∉ X) ∪
+    o.toFinset
 
 /-- **References `R` the node can build on above round `r`**: the block
 they make is new, and valid at the row. -/
@@ -240,19 +250,18 @@ def buildable (s : Store Validator BlockId Payload) (r : ℕ) (R : Finset BlockI
     (s.base < b.round → ∀ j ∈ b.refs, (s.blk j).round + 1 = b.round) ∧
     rowValid cfg.q (Function.update s.blk (cfg.idOf b) b) b)
 
-/-- **The references of the node's next block**, above round `r`: those of
-`refsFor` if they pass the reach and certificate tests; else those lent
-by the first held round-`r + 1` block of another author that pass them
-and can be built on; else those of `refsFor`. A node holding both twins
-of a Byzantine author then reaches what a peer that built on one of them
-reached. -/
-def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) :
-    Finset BlockId :=
+/-- **The references of the node's next block**, above round `r`, none
+by an author in `X`: those of `refsFor` if they pass the reach and
+certificate tests; else those lent by the first held round-`r + 1` block
+of another author that pass them and can be built on; else those of
+`refsFor`. A node behind then reaches what a peer reached. -/
+def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
+    (X : Finset Validator) : Finset BlockId :=
   let ready := fun R => reachReady cfg s R r && certReady cfg s R r
-  let own := refsFor cfg s r o
+  let own := refsFor cfg s r o X
   if ready own then own
   else ((((blocksAt s.toRecord (r + 1)).sort (· ≤ ·)).filter fun c =>
-      decide ((s.blk c).creator ≠ cfg.me)).map (lent cfg s · o) |>.find? fun R =>
+      decide ((s.blk c).creator ≠ cfg.me)).map (lent cfg s · o X) |>.find? fun R =>
         ready R && buildable cfg s r R).getD own
 
 /-- The candidate slot a block fills: its author and its round. -/
@@ -269,8 +278,8 @@ def tryBuild (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
   match s.top with
   | some r =>
-    let refs := refsAt cfg s.store r s.own
-    if cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r).card ∧
+    let refs := refsAt cfg s.store r s.own s.exposed
+    if cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r \ s.exposed).card ∧
         (r ∈ s.fired ∨ (reachReady cfg s.store refs r ∧ certReady cfg s.store refs r)) then
       let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, refs, cfg.payload (r + 1)⟩
       let id := cfg.idOf b
@@ -347,6 +356,28 @@ def kept (s : State Validator BlockId Payload) (id : BlockId)
   match cfg.limit with
   | none => true
   | some (τ, W) => (chargeTo τ W s id b).isSome
+
+/-- **A twin of a delivered block** the node holds: a stored or pending
+block of the block's author at its round, with its content. -/
+def twinOf (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) :
+    Option (BlockId × Block Validator BlockId Payload) :=
+  match (s.store.ids.sort (· ≤ ·)).find? fun j =>
+      decide ((s.store.blk j).creator = b.creator ∧ (s.store.blk j).round = b.round) with
+  | some j => some (j, s.store.map.getD j s.store.junk)
+  | none => s.pending.find? fun e => decide (e.2.creator = b.creator ∧ e.2.round = b.round)
+
+/-- **Whether a delivery shows its author equivocating**: the node holds
+another block of the block's author at its round. -/
+def twinned (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) : Bool :=
+  (twinOf s b).isSome
+
+/-- **The evidence a delivery relays**: both blocks, when it first shows
+its author equivocating. -/
+def evidence (s : State Validator BlockId Payload) (id : BlockId)
+    (b : Block Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
+  match twinOf s b with
+  | some e => if b.creator ∈ s.exposed then [] else [.relay id b, .relay e.1 e.2]
+  | none => []
 
 /-- The charge a kept delivery adds: its slot, with rate limiting. -/
 def charged (s : State Validator BlockId Payload) (id : BlockId)
@@ -646,12 +677,12 @@ def State.persisted (s : State Validator BlockId Payload) : Persisted Validator 
 
 /-- **The state after a crash and restart**: the store, the next slot,
 the top, the decisions and the certificate kept; nothing pending, asked
-for, proposed by peers or offered; the top round's timer fired, since
-the node was away; recovering. -/
+for, proposed by peers, offered or exposed; the top round's timer fired,
+since the node was away; recovering. -/
 def State.recover (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
   let s' := { s with pending := [], fired := (s.top.map fun t => {t}).getD ∅ }
   let s'' := { s' with requested := [], recovering := true, offers := [], asked := 0 }
-  { s'' with props := [], certs := [], sought := 0 }
+  { s'' with props := [], certs := [], sought := 0, exposed := ∅ }
 
 /-- **Resume from what was persisted**: the store rebuilt from the window
 at the horizon, if the window is closed under references one round below
@@ -670,7 +701,7 @@ def resume (ps : Persisted Validator BlockId Payload) : Option (State Validator 
     let st : Store Validator BlockId Payload :=
       ⟨map, ids, cfg.genesis, ps.horizon, h.1, h.2.1, h.2.2⟩
     some ⟨st, [], ps.top, ps.own, (ps.top.map fun t => {t}).getD ∅, ps.lo, [], true, [], 0,
-      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, [], ps.owner, 0⟩
+      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, [], ps.owner, 0, ∅⟩
   else none
 
 /-- **Try to bootstrap** from what was offered: if the node bootstraps,
@@ -763,13 +794,16 @@ def step (s : State Validator BlockId Payload) :
     if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
         id ∉ s.pending.map Prod.fst ∧ kept cfg s id b then
       let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
-      let s₁ := { s with store := fl.1, pending := fl.2, owner := charged cfg s id b ++ s.owner }
+      let X := if twinned s b then insert b.creator s.exposed else s.exposed
+      let s₀ := { s with store := fl.1, pending := fl.2, owner := charged cfg s id b ++ s.owner }
+      let s₁ := { s₀ with exposed := X }
       let miss := askable cfg s₁ id (missing s₁ id b)
       let req := s₁.requested ++ miss.map fun x => (x.1, id, x.2)
       let ask := s.recovering ∧ s.asked + cfg.lag + 2 ≤ b.round
       let top := if ask then b.round else s.asked
       let r := settle cfg { s₁ with requested := req, asked := top }
-      (r.1, (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++
+      (r.1, evidence s id b ++
+        (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++
         (if ask then [.requestBase] else []) ++ r.2)
     else (s, [])
   | .timer r => settle cfg { s with fired := insert r s.fired }

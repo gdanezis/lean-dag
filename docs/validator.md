@@ -236,6 +236,14 @@ A node that is not recovering never resumes. A reliable node's own
 blocks therefore reference each other round by round from its first
 round on, which is what the inclusion argument reads (§11).
 
+A restart at the frontier can stall. When the nodes other than the
+restarted one that the others build on number one fewer than the quorum,
+they stay at the restarted node's top, and the restarted node waits for a
+quorum above it. In the simulator, at `n = 4` with the attacker excluded
+(§3.10) and node `1` down from tick 40 to 90, all three honest nodes
+stay at round 17 after node `1` is back. The liveness of recovery is
+step 11.3.
+
 Safe Skip, the scheme's jump over a downtime with filled blocks, is not
 part of the program. Its results stay in the shared layer
 (`SafeSkip/Jump.lean`), with L0.
@@ -509,6 +517,34 @@ at once.
   under rate limiting rest on the lifted C3 (§8) and on delivery after
   GST, and belong to step 11 with liveness.
 
+### 3.10 Excluding equivocators
+
+A node given two blocks of one author at one round, with distinct
+identifiers, holds that author exposed (`State.exposed`, `twinned`). It
+never again references a block of an exposed author, in its own
+references (`refsFor`) or in those it copies from a peer's block
+(`lent`), and it counts only authors it does not hold exposed toward the
+quorum of a round. The first time it exposes an author it relays both
+blocks to every peer (`evidence`, `Output.relay`), so each peer is given
+the twin it lacked and exposes the author too. Exposure is held in
+memory: a restart forgets it, which is safe, since it only restricts
+what the node builds on.
+
+Honest nodes never equivocate, restarts included (V1), so with
+authenticated blocks an honest node never holds an honest author
+exposed (`honest_not_exposed`): the store invariant records two known
+blocks for every author exposed (`Inv.exposed`, `Exposes`), and the run
+knows one block per honest author and round. At least `n − f ≥ q`
+authors then remain to build on.
+
+What it costs: an excluded author's blocks no longer count toward a
+quorum, so a run in which the excluded author's blocks were needed to
+make a quorum slows to the pace of one with that author crashed. In the
+simulator, at `n = 4`, an equivocator's runs reach about 55 rounds in
+300 ticks against 47 before, and an attacker shown equivocating, by
+invalid twins or a fake base, slows the run to a crashed node's pace,
+about 50 rounds against 100 to 130.
+
 ## 4. Conformance
 
 | | Claim | Route |
@@ -525,7 +561,7 @@ at once.
 | V9 | Over a trace with timely authentication of blocks, base offers and checkpoint proposals, an injective hash on blocks and on the decisions served with certificates (`Boot.ChainInjective`), and `Params.Tolerates`, every honest store is a cut of the run's record and every honest decision a verdict on a view of it, bootstraps and adopted decisions included; a node's decisions are slots `0, 1, …`; so any two honest nodes' decisions are prefix-comparable. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.cut_before`, `Node.IsCut.bootFrom`, `Node.IsCut.step`, `Node.verdict_decideStep`, `Node.propose_head`, `Node.prefix_of_slots`, `AnchoredRule.decided_agree`; G10 soundness lifted (`exists_honest_attester_of_mem_base`) |
 | V10 | With rate limiting, at every state a run reaches, every block the store and the pending blocks hold is charged to a slot, and the charges number at most `n·(τ + 1)·(top + W + 1 − base)`, under any input sequence; with the horizon trailing the top by a bounded depth the bound does not grow with the run. Eventual admission of every honest block is step 11's. | `Node.Storage.Bounded` (proved): `Node.Lim.run`, `Node.Lim.bound`, `Node.length_le_of_slots` |
 | V12 | Every certificate with `q` distinct signers given to an honest node carries the head of the chain of an honest node's decisions at its height, with timely signed proposals and `f < q`. | `Node.Boot.Certified` (proved): `Node.propose_head`, `Node.commits_prefix`, `Node.Local.Decisions` |
-| V11 | Over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, and timeouts above `2(3Δ + Δₛ)`, the reliable nodes produce a round per timeout, and a run of reliably led slots past a round they built within `3Δ + Δₛ` of each other is decided by all of them `3Δ + Δₛ` after they reach its last decision round (`Node.Live.Progresses`, stated, §13). | `WaveFacts` from the run, V3, V4 |
+| V11 | Over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, and timeouts above `2(3Δ + Δₛ)`, the reliable nodes produce a round per timeout, and a run of reliably led slots past a round they built within `3Δ + Δₛ` of each other, agreeing from then on which authors they exclude, is decided by all of them `3Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of the timeouts from that round. | `Node.Live.Progresses` (proved, §13): `Live.produces`, `Live.decides`, `Live.decidesBy`; `WaveFacts` from the run, V3, V4 |
 
 **The transfer.** The program decides on its own store, a record of its
 own; the run's claims are about a view of the run's record. The decider
@@ -1435,6 +1471,15 @@ holds (§3.3), its own top block's included.
     node behind, whose horizon lies `Λ` below its top, holds the leader
     blocks its tests read and reads the same votes as the peer whose
     references it copies (`ready_transfer`).
+15. **Excluding equivocators** (§3.10, built): a node never builds on an
+    author it was given two blocks of at one round, and relays the
+    evidence. Decision then assumes the reliable nodes agree, from the
+    synchronisation point on, which authors they exclude
+    (`ExposedFrom`): a node behind that excludes an author its peer
+    builds on cannot copy the peer's references, and would wait a
+    timeout where the peer did not. Each Byzantine author is exposed at
+    most once and the evidence reaches every reliable node within `Δ`
+    past GST, so such a point follows the last first exposure.
 
 ### 13.6 Blocks at the horizon (built)
 

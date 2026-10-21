@@ -52,6 +52,28 @@ theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : 
   · exact absurd h hr
   · exact h
 
+/-- **No honest author is shown equivocating** in what the honest nodes
+knew, with an injective hash and authenticated blocks. -/
+theorem not_exposes_honest (hinj : Converge.HashInjective cfg H tr)
+    (htime : Converge.TimelyAuthentic cfg H tr) {a : Validator} (ha : a ∈ H) :
+    ¬ Exposes (knownAll cfg H tr) a := by
+  rintro ⟨x, hx, y, hy, hne, hxc, hyc, hr⟩
+  have hinjR := hashInjective_of_trace hinj
+  have hauthR := authentic_of_timely htime
+  have hxp := mem_persists_of_known hinjR hauthR hx (by rw [hxc]; exact ha)
+  have hyp := mem_persists_of_known hinjR hauthR hy (by rw [hyc]; exact ha)
+  rw [hxc] at hxp
+  rw [hyc] at hyp
+  exact hne (congrArg Prod.fst (eq_of_persists a hxp hyp hr))
+
+/-- **An honest node never holds an honest author exposed.** -/
+theorem honest_not_exposed (hinj : Converge.HashInjective cfg H tr)
+    (htime : Converge.TimelyAuthentic cfg H tr) {v : Validator} (hv : v ∈ H) (E : ℕ)
+    {a : Validator} (ha : a ∈ H) : a ∉ (stateBefore cfg tr E v).exposed := fun hx =>
+  not_exposes_honest hinj htime ha
+    (((Converge.inv_before (cfg := cfg) (tr := tr) E v).exposed a hx).mono
+      fun _ hy => ⟨v, hv, knownBefore_knownOf hy⟩)
+
 /-- **A node that never restarts retains its blocks** from event to
 event, at or above its later horizon. -/
 theorem retains_before {v : Validator} (hnr : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart)) :
@@ -174,11 +196,12 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
         {c | Output.announce c ∈ outputsAt cfg tr i₀} (stateBefore cfg tr i₀ v) inp x ∧
         x.top = some r ∧
       ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).refs =
-        refsAt (cfg.at v) x.store r x.own ∧
-      refsAt (cfg.at v) x.store r x.own ⊆ x.store.ids ∧
-      ((reachReady (cfg.at v) x.store (refsAt (cfg.at v) x.store r x.own) r = true ∧
-          certReady (cfg.at v) x.store (refsAt (cfg.at v) x.store r x.own) r = true) ∨
-        (r ∈ x.fired ∧ refsAt (cfg.at v) x.store r x.own = refsFor (cfg.at v) x.store r x.own))
+        refsAt (cfg.at v) x.store r x.own x.exposed ∧
+      refsAt (cfg.at v) x.store r x.own x.exposed ⊆ x.store.ids ∧
+      ((reachReady (cfg.at v) x.store (refsAt (cfg.at v) x.store r x.own x.exposed) r = true ∧
+          certReady (cfg.at v) x.store (refsAt (cfg.at v) x.store r x.own x.exposed) r = true) ∨
+        (r ∈ x.fired ∧
+          refsAt (cfg.at v) x.store r x.own x.exposed = refsFor (cfg.at v) x.store r x.own x.exposed))
     := by
   have hinjR := hashInjective_of_trace hinj
   have hauthR := authentic_of_timely htime
@@ -235,7 +258,7 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
       show ¬ b.round ≤ x'.store.base by omega]
   have hUb : U.block e₀.1 = b :=
     (hy.cut.eq_of_lt hcy (by rw [hyb, hst]; exact hlt)).trans hyb
-  have hbrefs : b.refs = refsAt (cfg.at v) x'.store r' x'.own := by
+  have hbrefs : b.refs = refsAt (cfg.at v) x'.store r' x'.own x'.exposed := by
     have := congrArg (fun e => e.2.refs) hAB
     simp only at this
     exact this.symm
@@ -324,8 +347,11 @@ theorem reach_or_wait_node (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     have hbx : b ∈ x.store.ids := (hbs.retains b hb₀
       (by rw [hb₀r, ← hcut₀.round hbh, hbr]; exact hbs.held.le_top _ hxt)).1
     rw [hcrefs, hfor]
-    refine mem_refsFor_of_cut hbs.cut hbx (by rw [← hbs.cut.round hbx, hbr])
-      (by rw [← hbs.cut.creator hbx, hbc]; exact hTH hlead) fun hme => ?_
+    have hbH : (x.store.blk b).creator ∈ H := by
+      rw [← hbs.cut.creator hbx, hbc]; exact hTH hlead
+    refine mem_refsFor_of_cut hbs.cut hbx (by rw [← hbs.cut.round hbx, hbr]) hbH
+      (fun hX => not_exposes_honest hinj htime hbH (hbs.inv.choose_spec.exposed _ hX))
+      fun hme => ?_
     obtain ⟨o, hoo, hoi, hor, hoc⟩ := hbs.own _ hxt
     exact ⟨o, hoo, hoi, hor, hoc⟩
 
@@ -393,8 +419,11 @@ theorem cert_or_wait_node (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     have hbx : b ∈ x.store.ids := (hbs.retains b hb₀
       (by rw [hb₀r, ← hcut₀.round hbh, hbr]; exact hbs.held.le_top _ hxt)).1
     rw [hcrefs, hfor]
-    refine mem_refsFor_of_cut hbs.cut hbx (by rw [← hbs.cut.round hbx, hbr])
-      (by rw [← hbs.cut.creator hbx]; exact hTH hbc) fun hme => ?_
+    have hbH : (x.store.blk b).creator ∈ H := by
+      rw [← hbs.cut.creator hbx]; exact hTH hbc
+    refine mem_refsFor_of_cut hbs.cut hbx (by rw [← hbs.cut.round hbx, hbr]) hbH
+      (fun hX => not_exposes_honest hinj htime hbH (hbs.inv.choose_spec.exposed _ hX))
+      fun hme => ?_
     obtain ⟨o, hoo, hoi, hor, hoc⟩ := hbs.own _ hxt
     exact ⟨o, hoo, hoi, hor, hoc⟩
 

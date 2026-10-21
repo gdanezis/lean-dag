@@ -426,11 +426,15 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger cfg s)
     simp only [Node.step]
     split
     · refine hset _ _ rfl rfl rfl rfl ?_ ?_
-      · simp only [commitsOf, List.filterMap_append]
+      · rw [commitsOf_append, commitsOf_append, commitsOf_evidence, List.nil_append]
+        simp only [commitsOf, List.filterMap_append]
         split_ifs <;> rfl
       · intro k h hk
         simp only [List.mem_append] at hk
-        split_ifs at hk <;> simp_all
+        rcases hk with (hk | hk) | hk
+        · obtain ⟨_, _, he⟩ := evidence_relay hk; cases he
+        · split_ifs at hk <;> simp_all
+        · split_ifs at hk <;> simp_all
     · exact ⟨Appends.refl s, hL⟩
   | timer r => exact hset _ [] rfl rfl rfl rfl rfl (by simp)
   | restart => exact hset _ [.requestBase] rfl rfl rfl rfl rfl (by simp)
