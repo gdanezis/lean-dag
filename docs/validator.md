@@ -291,15 +291,18 @@ too: a delivery it needed came too late, or not at all, and its top
 round's references lie below its peers' horizons. It then stays at its
 top while it adopts its peers' certified decisions. A node still at
 round `r` when `r`'s timer fires sets the timer again (`timerOut`). It
-is stalled at `r` when it is not recovering and its certified frontier
-lies more than `Λ` above `r` (`stalledAt`); a firing that finds it
-stalled notes `r` (`State.stalled`), and a later firing of the same
+is stalled at `r` when it is not recovering and the round of the last
+slot it has decided and its certificate certifies, the bound of the jump
+above, lies more than `Λ` above `r` (`stalledAt`); a firing that finds
+it stalled notes `r` (`State.stalled`), and a later firing of the same
 timer that finds it stalled again (`stallsTwice`) makes it recover, as
 after a restart, and ask for bases (`timerState`). The full timeout
 between the two firings is the margin for a node that is merely behind:
-the certificate that raised its frontier rests on blocks above its top,
-and the wait lets them and their histories arrive, so that the node
-builds instead. A restart clears `State.stalled`.
+the slot it decided or adopted rests on a reliable store above its top,
+and the wait lets a reliable block of the round above its top and the
+block's history arrive, so that the node builds instead. Past GST the
+margin suffices, and no reliable node stalls twice (§13.12). A restart
+clears `State.stalled`.
 
 ### 3.7 Fetching missing blocks
 
@@ -616,7 +619,7 @@ about 50 rounds against 100 to 130.
 | V9 | Over a trace with timely authentication of blocks and checkpoint proposals, an injective hash on blocks and on the decisions served with certificates (`Boot.ChainInjective`), and `Params.Tolerates`, every honest store is a cut of the run's record and every honest decision a verdict on a view of it, bootstraps and adopted decisions included; a node's decisions are slots `0, 1, …`; so any two honest nodes' decisions are prefix-comparable. The fetch bound is step 8's. | `Node.Boot.Agrees` (proved): `Node.cut_before`, `Node.IsCut.step`, `Node.Verdict.spans`, `Node.verdict_decideStep`, `Node.propose_head`, `Node.prefix_of_slots`, `AnchoredRule.decided_agree`, `AnchoredRule.Decided.reaches` |
 | V10 | With rate limiting, at every state a run reaches, every block the store and the pending blocks hold is charged to a slot, and the charges number at most `n·(τ + 1)·(top + W + 1 − base)`, under any input sequence; with the horizon trailing the top by a bounded depth the bound does not grow with the run. Eventual admission of every honest block is step 11's. | `Node.Storage.Bounded` (proved): `Node.Lim.run`, `Node.Lim.bound`, `Node.length_le_of_slots` |
 | V12 | Every certificate with `q` distinct signers given to an honest node carries the head of the chain of an honest node's decisions at its height, with timely signed proposals and `f < q`. | `Node.Boot.Certified` (proved): `Node.propose_head`, `Node.commits_prefix`, `Node.Local.Decisions` |
-| V11 | Over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, and timeouts above `2(3Δ + Δₛ)`, the reliable nodes produce a round per timeout, and a run of reliably led slots past a round they built within `3Δ + Δₛ` of each other, agreeing from then on which authors they exclude, is decided by all of them `3Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of the timeouts from that round. | `Node.Live.Progresses` (proved, §13): `Live.produces`, `Live.decides`, `Live.decidesBy`; `WaveFacts` from the run, V3, V4 |
+| V11 | Over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, timers that fire once a setting, timeouts above `2(3Δ + Δₛ)`, a quorum that holds a reliable node, and no reliable node stalled twice by `gst + 3Δ + Δₛ`, the reliable nodes produce a round per timeout, and a run of reliably led slots past a round they built within `3Δ + Δₛ` of each other, agreeing from then on which authors they exclude, is decided by all of them `3Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of the timeouts from that round. | `Node.Live.Progresses` (proved, §13): `Live.produces`, `Live.decides`, `Live.decidesBy`; `WaveFacts` from the run, V3, V4 |
 
 **The transfer.** The program decides on its own store, a record of its
 own; the run's claims are about a view of the run's record. The decider
@@ -888,8 +891,8 @@ rejoins by bootstrap (§3.6).
    honest node's name stop that node building, for the same reason the
    attacker halts itself above, until its top round's timer finds it
    stalled twice; it then recovers and rejoins by bootstrap, and ends
-   level with its peers or a round behind them, in all 15 runs. The
-   honest blocks stay valid in all 15.
+   within a round of its peers, in all 15 runs. The honest blocks stay
+   valid in all 15.
 
    The check that honest blocks are valid reads every block a node made
    or broadcast in its own name under its hash, since an honest block
@@ -1295,10 +1298,11 @@ report's `stats`).
 
 ## 13. Step 11.1: liveness of the reliable nodes (built)
 
-**Scope.** A reliable set `T` of honest nodes that never crash, restart,
-stall or bootstrap, at least `q` strong, from a GST on. That no reliable
-node stalls twice at a timer (`Live.NoStall`) is, for now, a premise on
-the run; the next step proves it past GST. Garbage collection is
+**Scope.** A reliable set `T` of honest nodes that never crash, restart
+or bootstrap, at least `q` strong, from a GST on. That none stalls twice
+at a timer is a premise up to `gst + 3Δ + Δₛ` (`Live.NoStallBy`), and
+proved after (§13.12); a reliable node stranded before then, and its
+recovery, are outside the claim. Garbage collection is
 on; rate limiting is off (11.2, §13.10); restarted nodes are 11.3. The horizon
 waits on certificates (§3.8), but a horizon that stops rising costs
 storage, not decisions, so the liveness of checkpointing (§9.1, item 6)
@@ -1948,13 +1952,54 @@ what removed each:
 | D11 | a random equivocator under rate limiting with `W = 2`, then two restarts | the peers' blocks at a recovering node's top were dropped above its window while it was further behind, and no delivery came after it reached that round | a recovering node asks for bases when its top round's timer fires (§3.6) |
 | D12 | a restart after proposing at the height of the peers' latest certificate | a restart drops the proposals the node keeps, so it could neither confirm that certificate, lacking its own proposal, nor adopt it, having decided its height; its horizon stayed a round below its peers' | a node confirms a certificate of the head of its own decisions at a height it decided, and reads its own proposals off its decisions instead of keeping them (§3.8) |
 | D13 | a restart one round behind its peers, with a twin below their horizon | the horizon trailed the node's own round, so it stayed a round below its peers' and needed a block they had dropped | a recovering node's horizon follows the certified frontier (§3.4) |
-| D14 | rate limiting with `W = 2` and `Λ = 6`, after a restart | a node resumed, then fell behind beyond its window; it dropped every block above it and, no longer recovering, asked for no base, though its adopted decisions lay a hundred slots above its round | a node whose top round's timer finds its certified frontier more than `Λ` above its top at two firings recovers again (§3.6) |
+| D14 | rate limiting with `W = 2` and `Λ = 6`, after a restart | a node resumed, then fell behind beyond its window; it dropped every block above it and, no longer recovering, asked for no base, though its adopted decisions lay a hundred slots above its round | a node whose top round's timer finds the round of its last decided and certified slot more than `Λ` above its top at two firings recovers again (§3.6) |
 | D15 | a restart under rate limiting with `W = 2`, then a crash | a recovering node jumped to a horizon a peer had offered and asked that peer for the blocks above it, which the peer had pruned by then | a peer answering a base request sends the blocks of its store with its answer (§3.6) |
-
 | D16 | node `3` hides its blocks from node `2`, whose messages take twelve ticks until tick 50 (`hide`, a targeted run) | the honest blocks of round 1 reference node `3`'s genesis block, which node `2` asked for after its peers had pruned round 0; not recovering and without rate limiting, it stayed at round 1 while it adopted its peers' decisions | as D14 |
 
 Of 400 runs after the fixes, none stalled, and of 200 runs without
 restarts (slow nodes, a late GST, Byzantine nodes, crashes, long
 delays), in none did a node stall. In the run of D16
-(`LeanDagTest/Node/Adversary.lean`), node `2` now recovers once and ends
-a round behind its peers, with rate limiting or without.
+(`LeanDagTest/Node/Adversary.lean`), node `2` recovers once and ends
+within a round of its peers, with rate limiting or without.
+
+### 13.12 No stall past GST (built)
+
+A timer that finds a reliable node stalled twice would make it recover,
+and the liveness argument reads nodes that never do. V11 assumes no
+reliable node is stalled twice by `gst + 3Δ + Δₛ` (`Live.NoStallBy`) and
+proves it for every later firing by `t₁` (`no_stall`,
+`Helpers/Stall.lean`). The claim adds two premises: timers fire once a
+setting (`TimersOnTime`), else two firings of one setting could find
+the node stalled an instant apart, and a quorum holds a reliable node
+(`n < q + |T|`), else the certificates could rest on unreliable stores
+alone.
+
+* **What a store reaches** (`Reached`, `Helpers/Reach.lean`): a node not
+  recovering decides past its certificate only slots at rounds its store
+  holds, and proposes only heights it decided so; a proposal it outputs
+  at height `k` is then backed by a stored block at round
+  `slotRound(k − 1)` or above (`propose_reached`). Its certificate rises
+  past its store only by one it adopted, offered with `q` distinct
+  signers (`cert_backed`).
+* **The witness** (`stall_witness`): for a reliable node stalled at `r`,
+  the round of its last decided and certified slot, above `r + Λ`, is
+  reached by its own store or, through an adopted certificate and the
+  reliable signer `TimelyCerts` gives, by a reliable signer's store when
+  it proposed.
+* **A reliable block above the round** (`reliable_builder`): a reliable
+  store reaching `r + 2`, with `Λ ≥ 1` from the vote offset, holds a
+  reliable block of round `r + 1` or its node built one, since the store
+  holds the history above its horizon and a quorum's authors include a
+  reliable one.
+* **The build** (`stall_builds`): within `3Δ + Δₛ` past GST the stalled
+  node holds that block (`block_arrives`), and the block's references
+  are a quorum of round `r` it may use; the round's timer has fired, so
+  the settled node is above `r` by then.
+* **The induction** (`no_stall`, `Helpers/Prefix.lean`): the firing that
+  noted the stall lies a timeout before the second, which exceeds
+  `2(3Δ + Δₛ)`; the argument reads only the events before the second
+  firing, so it runs on that prefix, where the reliable nodes are steady
+  by induction, and the timed assumptions hold of the prefix. V11 itself
+  then holds on the events by `t₁` and transfers to the trace
+  (`produces_of_take`, `decides_of_take`).
+

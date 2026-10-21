@@ -99,7 +99,7 @@ def hidden (limit : Option (ℕ × ℕ)) : Scenario :=
 #guard_msgs in
 #eval attackLine { attackedBy [.fakeCert] (verify := false) with recover := [(1, 40, 70)] }
 
-/-- info: "[(some 17), (some 16), (some 16)] [15, 15, 15] true true true 0 0" -/
+/-- info: "[(some 9), (some 16), (some 16)] [13, 14, 14] true true true 0 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 

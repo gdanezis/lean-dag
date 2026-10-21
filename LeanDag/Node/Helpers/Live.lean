@@ -275,7 +275,7 @@ theorem timer_after_built (hmono : Live.TimeMono tr time) {T : Finset Validator}
     builtAt cfg tr time v r + cfg.timeout r ≤ time i₀ := by
   induction j using Nat.strong_induction_on generalizing i₀ with
   | _ j ih =>
-  obtain ⟨i', hi'j, a, hi'v, hset, hta⟩ := htimer.2 j v r hjt hvT
+  obtain ⟨i', hi'j, a, hi'v, hset, hta, -⟩ := htimer.2 j v r hjt hvT
   obtain ⟨inp', hi'⟩ := Converge.event_of_map hi'v
   rw [outputsAt_eq hi'] at hset
   obtain ⟨ha, hcase⟩ := timersBuilt_step (cfg := cfg.at v) (fired_before (cfg := cfg) hnr i').1

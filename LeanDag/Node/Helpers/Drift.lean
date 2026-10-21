@@ -489,7 +489,8 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bo
     (hun : n ≤ topAt cfg tr time u (time i + (3 * Δ + Δₛ)))
     (hbu : builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (3 * Δ + Δₛ))
     (ht₁ : time i + (3 * Δ + Δₛ) ≤ t₁) {X : Finset Validator}
-    (hex : ∀ v ∈ T, ∀ k, time i ≤ time k → (stateBefore cfg tr (k + 1) v).exposed = X) :
+    (hex : ∀ v ∈ T, ∀ k < tr.length, time i ≤ time k →
+      (stateBefore cfg tr (k + 1) v).exposed = X) :
     n + 1 ≤ topAt cfg tr time u (time i + (3 * Δ + Δₛ)) := by
   have hnu : Steady cfg tr u := hnr u hu
   have hnw : Steady cfg tr w := hnr w hw
@@ -512,7 +513,7 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bo
     obtain ⟨k, hk⟩ : ∃ k, E = k + 1 := ⟨E - 1, by omega⟩
     have hkl : k < tr.length := by have := eventsBy_le_length (tr := tr) (time := time) τ; omega
     rw [hk]
-    exact hex u hu k (hmono i k (by omega) hkl)
+    exact hex u hu k hkl (hmono i k (by omega) hkl)
   set Z := stateBefore cfg tr E u with hZ
   have hSet : Settled (cfg.at u) Z := by
     rcases settled_before (cfg := cfg) hq hnu E with h | h
@@ -541,7 +542,7 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bo
     exact this.symm
   have hxX : x.exposed = X := by
     rw [hbs.exposed]
-    have := hex w hw i le_rfl
+    have := hex w hw i hil le_rfl
     rwa [stateBefore_succ hi, if_pos rfl] at this
   set R := refsAt (cfg.at w) x.store r x.own x.exposed with hRdef
   have hxb : x.store.base < b.round := by have := hbs.held.le_top r hxt; omega
@@ -662,7 +663,8 @@ theorem drift (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bounded
     (h₀ : ∀ v ∈ T, s ≤ builtAt cfg tr time v n₀ ∧ builtAt cfg tr time v n₀ ≤ s + (3 * Δ + Δₛ))
     {t N : ℕ} (hst : ∀ v ∈ T, (stateAt cfg tr time v t).top.isSome)
     (hN : ∀ v ∈ T, N ≤ topAt cfg tr time v t) (ht₁ : t + (3 * Δ + Δₛ) ≤ t₁) {X : Finset Validator}
-    (hex : ∀ v ∈ T, ∀ k, s ≤ time k → (stateBefore cfg tr (k + 1) v).exposed = X) :
+    (hex : ∀ v ∈ T, ∀ k < tr.length, s ≤ time k →
+      (stateBefore cfg tr (k + 1) v).exposed = X) :
     ∀ n, n₀ ≤ n → n ≤ N → ∀ u ∈ T, ∀ w ∈ T, s ≤ builtAt cfg tr time u n ∧
       builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (3 * Δ + Δₛ) := by
   intro n hn₀ hnN
@@ -696,7 +698,7 @@ theorem drift (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bounded
     rw [heur] at hun
     have hup := catches_up hq hl hσ hadm hf hid htime hcert hinj hchain hTH hnr hmono hdel
       htimer hsync hvo hcmp hu hw huw hi he her (by omega) hus hun (ih u hu w hw).2 (by omega)
-      fun v hv k hk => hex v hv k (by omega)
+      fun v hv k hkl hk => hex v hv k hkl (by omega)
     have := builtAt_le_of_top hnu hmono hus hup
     omega
 

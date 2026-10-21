@@ -1,5 +1,6 @@
 import LeanDag.Node.Live.Statement
 import LeanDag.Node.Helpers.Wave
+import LeanDag.Node.Helpers.Stall
 import LeanDag.Scheme.Helpers.Reactive
 /-!
 # The reliable nodes produce rounds and decide — proof
@@ -41,6 +42,15 @@ against its being settled.
 **The time bound.** From the synchronisation point the reliable nodes
 gain a round a timeout (`produces`), so they reach the last slot's
 decision round within the sum of the timeouts, and decide `A` later.
+
+**No stall.** The arguments above read reliable nodes that never
+recover. Past `gst + A` a timer finds no reliable node stalled a second
+time (`no_stall`): the firing that found it stalled first lies a timeout
+before, and within `A` of it the node is above its round
+(`stall_builds`), since the certificate behind its frontier rests on a
+reliable store above it. So the reliable nodes are steady on the events
+by `t₁`, and the claims, which read nothing later, hold there
+(`produces_of_take`, `decides_of_take`).
 -/
 
 namespace LeanDag
@@ -322,17 +332,98 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
   rw [Nat.add_sub_cancel' hn₀N] at hall'
   exact hd b c n₀ s hc hspan hlead hn₀ hgs hall hexp _ hall' ht₁
 
-/-- **The reliable nodes produce rounds and decide.** -/
+/-! ## The events by `t₁` -/
+
+section Prefix
+
+variable {cfg : Config Validator BlockId Payload} {T : Finset Validator}
+  {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst t₁ N : ℕ}
+
+/-- Production on the events by `t₁` is production on the trace. -/
+theorem produces_of_take (hN : ∀ i < tr.length, time i ≤ t₁ → i < N)
+    (hp : Produces cfg T (tr.take N) time gst t₁) : Produces cfg T tr time gst t₁ := by
+  intro s n hgs hst₁ hall v hv
+  have hNs : ∀ i < tr.length, time i ≤ s → i < N := fun i hi h => hN i hi (by omega)
+  have hNt : ∀ i < tr.length, time i ≤ s + cfg.timeout n → i < N := fun i hi h => hN i hi (by omega)
+  have := hp s n hgs hst₁ (fun w hw => by rw [topAt_take hNs]; exact hall w hw) v hv
+  rwa [topAt_take hNt] at this
+
+/-- **Decision on the events by `t₁` is decision on the trace**, for nodes
+steady there and a wave of two rounds or more. -/
+theorem decides_of_take {D : ℕ} (hmono : TimeMono tr time)
+    (hN : ∀ i < tr.length, time i ≤ t₁ → i < N) (hw : 2 ≤ cfg.p.waveLength)
+    (hnr : ∀ v ∈ T, Steady cfg (tr.take N) v)
+    (hd : Decides cfg T (tr.take N) time gst D t₁) : Decides cfg T tr time gst D t₁ := by
+  letI := cfg.slots
+  intro b c n₀ s hc hspan hlead hn₀ hgs hall hexp t htop ht₁ v hv
+  set Nd := cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1)
+  have hn₀N : n₀ ≤ Nd := hn₀.trans ((cfg.slots.mono (by omega : b ≤ b + c - 1)).trans
+    (Nat.le_add_right _ _))
+  have hNt : ∀ i < tr.length, time i ≤ t → i < N := fun i hi h => hN i hi (by omega)
+  have hmono₁ := timeMono_take hmono N
+  -- every reliable node built round `n₀` by `t`, so `s ≤ t`
+  have hbt : ∀ w ∈ T, builtAt cfg tr time w n₀ ≤ t := by
+    intro w hw
+    have hNd : Nd ≤ topAt cfg (tr.take N) time w t := by rw [topAt_take hNt]; exact htop w hw
+    have hs : (stateAt cfg (tr.take N) time w t).top.isSome := by
+      rcases h : (stateAt cfg (tr.take N) time w t).top with _ | _
+      · unfold topAt at hNd; rw [h] at hNd; simp at hNd; omega
+      · rfl
+    obtain ⟨i, inp, e, hi, he, her, -, hit⟩ := built_of_top (hnr w hw) hmono₁ hs (hn₀N.trans hNd)
+    obtain ⟨hiN, hi'⟩ := take_getElem?_some hi
+    rw [outputsAt_take hiN] at he
+    obtain ⟨i₀, hi₀i, hbt, -⟩ := builtAt_first (cfg := cfg) time (by rw [hi']; rfl) ⟨e, he, her⟩
+    rw [hbt]
+    exact (hmono i₀ i hi₀i (List.getElem?_eq_some_iff.mp hi').1).trans hit
+  have hst : s ≤ t := (hall v hv).2.1.trans (hbt v hv)
+  have hNs : ∀ i < tr.length, time i ≤ s + D → i < N := fun i hi h => hN i hi (by omega)
+  have hND : ∀ i < tr.length, time i ≤ t + D → i < N := fun i hi h => hN i hi (by omega)
+  have hall₁ : ∀ w ∈ T, n₀ ≤ topAt cfg (tr.take N) time w (s + D) ∧
+      s ≤ builtAt cfg (tr.take N) time w n₀ ∧ builtAt cfg (tr.take N) time w n₀ ≤ s + D := by
+    intro w hw
+    rw [topAt_take hNs, builtAt_take hNs w (hall w hw).2.2]
+    exact hall w hw
+  have := hd b c n₀ s hc hspan hlead hn₀ hgs hall₁ (exposedFrom_take hexp N) t
+    (fun w hw => by rw [topAt_take hNt]; exact htop w hw) ht₁ v hv
+  rwa [decisionsBy_take hND] at this
+
+end Prefix
+
+/-- **The reliable nodes produce rounds and decide.** They are steady on
+the events by `t₁`, and by GST (`no_stall`); there the claims hold, and
+they read nothing later. -/
 theorem holds : Statement := by
-  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hl hf hTH hqT hcT hq
-    hid hvo hto htime hcert hinj hchain hnr hns hmono hdel htimer hsync hstart
-  have hnr : ∀ v ∈ T, Steady cfg tr v := fun v hv i inp he =>
-    ⟨fun h => hnr i v hv (by rw [he, h]), fun r hr => hns i v r hv (by rw [he, hr])⟩
-  have hp := produces hσ hadm hl hf hTH hqT hto hq hid htime hcert hinj hchain hnr hmono hdel
-    htimer hsync hstart
-  have hd := decides hσ hadm hl hf hTH hqT hcT hq hid hvo hto htime hcert hinj hchain hnr
-    hmono hdel htimer hsync hstart
-  exact ⟨hp, hd, decidesBy hp hd⟩
+  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hl hf hTH hqT hcT
+    hqR hq hid hvo hto htime hcert hinj hchain hnr hns hmono hdel htimer hsync hstart
+  set N := eventsBy tr time (max t₁ gst)
+  have hN₂ : ∀ i < tr.length, time i ≤ max t₁ gst → i < N := fun i hi h =>
+    (lt_eventsBy hmono hi).mpr h
+  have hN : ∀ i < tr.length, time i ≤ t₁ → i < N := fun i hi h => hN₂ i hi (by omega)
+  have hsteady : ∀ v ∈ T, Steady cfg (tr.take N) v := fun v hv =>
+    steady_take fun i hi inp he => by
+      have hil : i < tr.length := (List.getElem?_eq_some_iff.mp he).1
+      have hti := (lt_eventsBy hmono hil).mp hi
+      refine ⟨fun h => hnr i v hv (by rw [he, h]), fun r hr => ?_⟩
+      subst hr
+      by_cases hg : time i ≤ gst + (3 * Δ + Δₛ)
+      · exact hns i v r hv he hg
+      · exact no_stall hq hl hσ hadm hf hid hvo hto htime hcert hinj hchain hTH hqR hnr hns
+          hmono hdel htimer hsync i v r hv he (by omega)
+  have hw : 2 ≤ cfg.p.waveLength := by
+    rcases hadm.1 with ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ <;> omega
+  have hp := produces hσ hadm hl hf hTH hqT hto hq hid (timelyAuthentic_take htime N)
+    (timelyCerts_take hcert N) (hashInjective_take hinj N) (chainInjective_take hchain N) hsteady
+    (timeMono_take hmono N) (deliveredWithin_take hdel le_rfl hN)
+    (timersOnTime_take htimer le_rfl hN) (syncedWithin_take hsync hinj le_rfl hN)
+    (startedBy_take hstart fun i hi h => hN₂ i hi (by omega))
+  have hd := decides hσ hadm hl hf hTH hqT hcT hq hid hvo hto (timelyAuthentic_take htime N)
+    (timelyCerts_take hcert N) (hashInjective_take hinj N) (chainInjective_take hchain N) hsteady
+    (timeMono_take hmono N) (deliveredWithin_take hdel le_rfl hN)
+    (timersOnTime_take htimer le_rfl hN) (syncedWithin_take hsync hinj le_rfl hN)
+    (startedBy_take hstart fun i hi h => hN₂ i hi (by omega))
+  have hp' := produces_of_take hN hp
+  have hd' := decides_of_take hmono hN hw hsteady hd
+  exact ⟨hp', hd', decidesBy hp' hd'⟩
 
 end Live
 

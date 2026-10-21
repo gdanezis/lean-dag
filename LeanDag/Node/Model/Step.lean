@@ -78,10 +78,12 @@ input `i` in the state `s`: the new state and the outputs.
   holds blocks of `q` authors it may reference at a round above its top,
   two above if it built at its top, moves its top there without a block
   of its own, and builds from there.
-* **Stalling** (`stalledAt`, `stallsTwice`, `timerState`, `timerOut`): a node still at
-  round `r` when `r`'s timer fires sets the timer again. A node whose
-  certified frontier lies more than `Λ` above its top `r` at two firings
-  of `r`'s timer recovers again, as after a restart, and asks for bases.
+* **Stalling** (`stalledAt`, `stallsTwice`, `timerState`, `timerOut`): a
+  node still at round `r` when `r`'s timer fires sets the timer again. A
+  node for which the round of the last slot it has decided and its
+  certificate certifies lies more than `Λ` above its top `r`, at two
+  firings of `r`'s timer, recovers again, as after a restart, and asks
+  for bases.
 * **Bootstrap** (`jumpRound`, `docs/validator.md` §3.6): a restarted node
   asks its peers for their bases, again whenever a delivered block, kept
   or not, lies `Λ + 2` rounds above the one it last asked on, when the
@@ -727,9 +729,11 @@ def confirm (s : State Validator BlockId Payload) (c : Cert Validator BlockId) :
   settle cfg { s with cert := some c, props := above (some c) s.props }
 
 /-- **Whether the node is stalled at round `r`**: it does not recover, its
-top is `r`, and its certified frontier lies more than `Λ` above `r`. -/
+top is `r`, and the round of the last slot it has decided and its
+certificate certifies lies more than `Λ` above `r`. -/
 def stalledAt (s : State Validator BlockId Payload) (r : ℕ) : Bool :=
-  !s.recovering && decide (s.top = some r ∧ r + cfg.lag < cfg.per * (min s.lo s.certHeight / cfg.m))
+  !s.recovering && decide (s.top = some r ∧ 0 < min s.lo s.certHeight ∧
+    r + cfg.lag < cfg.slots.slotRound (min s.lo s.certHeight - 1))
 
 /-- **Whether the timer of round `r` finds the node stalled there a second
 time**: it is stalled at `r`, and was at an earlier firing of the timer. -/
