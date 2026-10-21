@@ -350,7 +350,7 @@ theorem Lim.collect {ρ W : ℕ} {s : State Validator BlockId Payload} (h : Lim 
     dsimp only
     split
     · rename_i hG
-      set G := min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag with hGd
+      set G := horizonAt cfg s t with hGd
       have hO : ∀ y : BlockId × Block Validator BlockId Payload, Charged s.owner y →
           cfg.lag ≤ cfg.lag → G ≤ y.2.round →
           Charged (s.owner.filter fun e => G ≤ e.2.2) y := by
@@ -373,7 +373,7 @@ theorem Lim.collect {ρ W : ℕ} {s : State Validator BlockId Payload} (h : Lim 
       · exact (charge_filter_le _ _ sl).trans (h.charge sl)
       · exact (charge_filter_le _ _ sl).trans (h.fresh sl hsl)
       · change G ≤ _
-        rw [ht]; simp only [Option.getD_some]; omega
+        rw [ht]; simp only [Option.getD_some]; exact horizonAt_le_top s t
     · exact h
   · exact h
 

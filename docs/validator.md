@@ -204,7 +204,10 @@ decision round.
 The horizon is `G = min(F, t) − Λ`, where `t` is the node's round and
 `F` the round of the first slot that is not both decided and certified:
 the slot round of the lesser of the next undecided slot and the height
-of the node's certificate (§3.8). This is the depth rule of
+of the node's certificate (§3.8). For a recovering node it is
+`G = min(F − Λ, t)` (`horizonAt`): its horizon follows the certified
+frontier, not its own round, since it may lag its peers by a round at
+which it needs a block they have dropped. This is the depth rule of
 `garbage.md` §6, with the frontier certified.
 Below `Λ = 2` the attested base can miss blocks a joiner needs; safety
 holds at every `G`. After each decision step the horizon rises to `G`
@@ -407,7 +410,9 @@ Bounding the pending blocks belongs to rate limiting (step 9).
 * **Announcing.** A node that raises its horizon sends its certificate
   to every peer (`collect`). A node given a certificate of `q` distinct
   signers above its own keeps it if it has decided the height and
-  proposed the certificate's head there (`confirms`); announced one at a
+  proposed the certificate's head there (`confirms`), among the
+  proposals it keeps or as the head it last proposed (`lastProposed`,
+  `chain`, both persisted, so a restart keeps it); announced one at a
   height it has not decided, it asks the sender for the decisions
   certified from its next undecided slot up (§13.8).
 * **Adopting.** A node that keeps `q` signers' proposals of one head
@@ -1919,24 +1924,12 @@ what removed each:
 | D9 | a random equivocator under rate limiting | the relayed twin was dropped for want of room, so the nodes excluded different authors, and the one that excluded it fell behind beyond the window | the first twin of an author not yet exposed is kept (§3.9) |
 | D10 | `f` authors exposed at `n = 3f + 1`, then a restart | the quorum was every honest author, and a node that bootstrapped or resumed had no block of its own at the rounds it missed and could never build one | a node may reference an exposed author's block that a held block of an author not exposed references (§3.10) |
 | D11 | a random equivocator under rate limiting with `W = 2`, then two restarts | the peers' blocks at a recovering node's top were dropped above its window while it was further behind, and no delivery came after it reached that round | a recovering node asks for bases when its top round's timer fires (§3.6) |
+| D12 | a restart after proposing at the height of the peers' latest certificate | a restart drops the proposals the node keeps, so it could neither confirm that certificate, lacking its own proposal, nor adopt it, having decided its height; its horizon stayed a round below its peers' | a node may confirm a certificate at the height it last proposed, of the head it proposed there (§3.8) |
+| D13 | a restart one round behind its peers, with a twin below their horizon | the horizon trailed the node's own round, so it stayed a round below its peers' and needed a block they had dropped | a recovering node's horizon follows the certified frontier (§3.4) |
 
-Two classes remain open. Of 400 runs after the fixes, one stalled, of
-class 1; class 2 stalled one run of 400 before D10 and D11.
-
-1. **A horizon below the peers'.** A node that restarts with its top
-   above its peers' horizon but its own horizon below it may need,
-   through a twin, a block its peers have pruned, and it bootstraps only
-   above its top. At `n = 4`, with a random equivocator, GST at 200 and
-   node 2 down from tick 83 to 218, all honest nodes stay at round 3. A
-   bootstrap that raises a recovering node's horizon to an attested one
-   below its top would remove it.
-2. **Exposure below the peers' horizon.** A node that lags exposes an
-   author from twins below its peers' horizon; the relayed twins are
-   dropped there, so it alone excludes the author. Its peers go on with
-   the author's blocks, it waits for theirs without them, and once it
-   lags beyond their horizon it cannot catch up: it no longer recovers,
-   and only a recovering node bootstraps. At `n = 4`, with a random
-   equivocator, GST at 200, `ρ = 4`, `W = 2` and node 2 down from tick 60
-   to 218, node 2 stays at round 13 while the others reach 114. Both
-   classes need a node to bootstrap where it may not: below its top, or
-   when it does not recover.
+One class remains open. Of 800 runs after the fixes, one stalled: at
+`n = 4`, with `ρ = 4`, `W = 2` and `Λ = 6`, node 2 resumed at round 49
+while its peers went on, then dropped every block above its window. It
+no longer recovers, so it asks for no base, though its decisions,
+adopted from its peers' certificates, reached slot 147 while its round
+stayed at 49. This is the window of §13.10.

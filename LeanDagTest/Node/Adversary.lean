@@ -72,7 +72,7 @@ def attackLine (sc : Scenario) : String :=
 
 /-! ## Without the signature checks -/
 
-/-- info: "[(some 57), (some 56), (some 56)] [55, 55, 54] false false true 1 0" -/
+/-- info: "[(some 58), (some 58), (some 58)] [56, 56, 56] false false true 1 0" -/
 #guard_msgs in
 #eval attackLine { attackedBy [.fakeCert] (verify := false) with recover := [(1, 40, 70)] }
 

@@ -52,7 +52,7 @@ theorem confirms_of {P : List (Validator × ℕ × BlockId)} {s : State Validato
   rw [← hh] at hown
   unfold confirms
   simp only [Bool.and_eq_true, decide_eq_true_eq]
-  exact ⟨⟨⟨⟨hq, hnd⟩, hlt⟩, hle⟩, hown⟩
+  exact ⟨⟨⟨⟨hq, hnd⟩, hlt⟩, hle⟩, Or.inl hown⟩
 
 omit [Fintype Validator] in
 /-- **A node adopts decisions** served with a certificate of `q` distinct

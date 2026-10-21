@@ -604,15 +604,20 @@ def answer (s : State Validator BlockId Payload) (peer : Validator) (G : ℕ)
     (ids : List BlockId) : List (Output Validator BlockId Payload) :=
   (answerIds s G ids).map fun j => .send peer j (s.store.map.getD j s.store.junk)
 
-/-- **Raise the horizon** (`docs/validator.md` §3.4) to `Λ` below the
-lesser of the round of the first slot neither decided nor certified,
-and the node's own round; drop what lies below it, and announce the
-certificate. -/
+/-- **The horizon a node at top `t` raises to**: `Λ` below the lesser of
+the round of the first slot neither decided nor certified and `t`; for a
+recovering node, `Λ` below that round, but not above `t`. -/
+def horizonAt (s : State Validator BlockId Payload) (t : ℕ) : ℕ :=
+  let F := cfg.per * (min s.lo s.certHeight / cfg.m)
+  if s.recovering then min (F - cfg.lag) t else min F t - cfg.lag
+
+/-- **Raise the horizon** (`docs/validator.md` §3.4) to `horizonAt`;
+drop what lies below it, and announce the certificate. -/
 def collect (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   match s.top with
   | some t =>
-    let G := min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag
+    let G := horizonAt cfg s t
     if h : s.store.base < G then
       let st := s.store.prune G h.le
       let pend := s.pending.filter fun e => G ≤ e.2.round
@@ -793,10 +798,13 @@ def adopt (s : State Validator BlockId Payload) (c : Cert Validator BlockId)
 
 /-- **A certificate the node can confirm**: `q` distinct signers, above
 its certificate's height and at or below its next undecided slot, of the
-head the node itself proposed there. -/
+head the node itself proposed there, kept among its proposals or the one
+it last proposed. -/
 def confirms (s : State Validator BlockId Payload) (c : Cert Validator BlockId) : Bool :=
   decide (cfg.q ≤ c.signers.length) && decide c.signers.Nodup && decide (s.certHeight < c.height) &&
-    decide (c.height ≤ s.lo) && decide ((cfg.me, c.height, c.head) ∈ s.props)
+    decide (c.height ≤ s.lo) &&
+      decide ((cfg.me, c.height, c.head) ∈ s.props ∨
+        (c.height = s.lastProposed ∧ c.head = s.chain ∧ cfg.m ∣ c.height))
 
 /-- **Confirm a certificate**: keep it, and only the proposals above it,
 then settle. -/

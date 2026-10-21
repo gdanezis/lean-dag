@@ -95,6 +95,25 @@ theorem step_timer_of {s : State Validator BlockId Payload} (hs : s.recovering =
   rw [step_timer_eq, timerAsk_of hs, List.nil_append]
 
 omit [Fintype Validator] in
+/-- The horizon a collect raises to lies at or below the top. -/
+theorem horizonAt_le_top (s : State Validator BlockId Payload) (t : ℕ) : horizonAt cfg s t ≤ t := by
+  unfold horizonAt; dsimp only; split <;> omega
+
+omit [Fintype Validator] in
+/-- The horizon a collect raises to lies at or below the round of the
+first slot neither decided nor certified. -/
+theorem horizonAt_le_frontier (s : State Validator BlockId Payload) (t : ℕ) :
+    horizonAt cfg s t ≤ cfg.per * (min s.lo s.certHeight / cfg.m) := by
+  unfold horizonAt; dsimp only; split <;> omega
+
+omit [Fintype Validator] in
+/-- For a node not recovering, the horizon trails the lesser of the
+frontier and the top by `Λ`. -/
+theorem horizonAt_of {s : State Validator BlockId Payload} (hs : s.recovering = false) (t : ℕ) :
+    horizonAt cfg s t = min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag := by
+  simp [horizonAt, hs]
+
+omit [Fintype Validator] in
 /-- **A successful build step.** -/
 theorem tryBuild_some {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
@@ -674,8 +693,7 @@ theorem Inv.collect {s : State Validator BlockId Payload}
       · intro j hj
         have hj' := (Finset.mem_filter.mp hj)
         have hraw := treeMap_getD_filter_of (t := s.store.map)
-          (f := fun _ b => decide (min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤
-            b.round)) (k := j) (fb := s.store.junk) (by simpa [Store.blk, lookup] using hj'.2)
+          (f := fun _ b => decide (horizonAt cfg s t ≤ b.round)) (k := j) (fb := s.store.junk) (by simpa [Store.blk, lookup] using hj'.2)
         change (j, (s.store.map.filter _).getD j s.store.junk) ∈ K
         rw [hraw]
         exact hi.known j hj'.1
@@ -686,7 +704,7 @@ theorem Inv.collect {s : State Validator BlockId Payload}
         · rw [ht] at h0; exact absurd h0 (by simp)
         · rw [ht, Option.some.injEq] at ht'
           subst ht'
-          exact ⟨t, ht, by change _ - _ ≤ t; omega, hB⟩
+          exact ⟨t, ht, horizonAt_le_top s t, hB⟩
     · exact ⟨⟨rfl, rfl⟩, hi⟩
   · exact ⟨⟨rfl, rfl⟩, hi⟩
 

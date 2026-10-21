@@ -584,6 +584,7 @@ theorem base_le_after (hq : 2 ≤ cfg.q)
     (kept_before (cfg := cfg) hnv E).1.certHeight_le
   have hmin : min (stateBefore cfg tr E v).lo (stateBefore cfg tr E v).certHeight =
       (stateBefore cfg tr E v).certHeight := min_eq_right hlo
+  rw [horizonAt_of (fired_before (cfg := cfg) hnv E).1] at hcol
   change min (cfg.per * (min (stateBefore cfg tr E v).lo (stateBefore cfg tr E v).certHeight /
     cfg.m)) t - cfg.lag ≤ (stateBefore cfg tr E v).store.base at hcol
   rw [hmin] at hcol

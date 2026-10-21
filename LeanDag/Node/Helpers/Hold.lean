@@ -239,7 +239,7 @@ theorem collect_stays {s : State Validator BlockId Payload} (hA : AgreesWith g s
     dsimp only
     split
     · rename_i hG
-      set G := min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag
+      set G := horizonAt cfg s t
       refine ⟨hA.prune hG.le, fun e he => (List.mem_filter.mp he).1, ?_⟩
       rcases hst with h | h | h
       · by_cases hr : G ≤ (s.store.blk y.1).round

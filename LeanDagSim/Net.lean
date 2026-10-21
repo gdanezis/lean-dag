@@ -248,7 +248,7 @@ structure Report where
   /-- The timing measurements. -/
   stats : Stats := {}
   /-- Each honest node's final state, in brief: recovering, top, own block,
-  horizon, next undecided slot, the authors its store holds at the top and
+  horizon, next undecided slot, certificate height, the authors its store holds at the top and
   the two rounds above, its pending blocks (author, round, references
   missing, payload), the authors it holds exposed, the timers fired, and
   whether it can build and its references reach. -/
@@ -760,7 +760,7 @@ def simulate (sc : Scenario) : Report :=
               (e.2.refs.filter fun j => j ∉ st.store.ids).card, e.2.payload)
             let reach := reachReady cf st.store (refsAt cf st.store t st.own st.exposed) t
             s!"node {v}: recovering {st.recovering} top {st.top} own {st.own.isSome} " ++
-              s!"base {st.store.base} lo {st.lo} authors {auth t}/{auth (t + 1)}/{auth (t + 2)} " ++
+              s!"base {st.store.base} lo {st.lo} cert {st.certHeight} authors {auth t}/{auth (t + 1)}/{auth (t + 2)} " ++
               s!"pending {pend} exposed {st.exposed.card} fired {st.fired.sort (· ≤ ·)} " ++
               s!"builds {(tryBuild cf st).isSome} reach {reach}"
           | none => s!"node {v}: none"

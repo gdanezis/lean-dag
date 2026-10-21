@@ -661,7 +661,11 @@ theorem Kept.confirm {P : List (Validator × ℕ × BlockId)} {s : State Validat
   have hcg : CertGood cfg ({ s with cert := some c } : State Validator BlockId Payload) := by
     intro c' hc'
     rw [show c' = c from (Option.some.inj hc').symm]
-    exact ⟨hcf.1.1.1.1, hcf.1.1.1.2, hcf.1.2, hK.own_head _ hcf.2 rfl, hK.own_dvd _ hcf.2 rfl⟩
+    have hhd : c.head = cfg.headOf (s.decided.reverse.take c.height) ∧ cfg.m ∣ c.height := by
+      rcases hcf.2 with h | ⟨h₁, h₂, h₃⟩
+      · exact ⟨hK.own_head _ h rfl, hK.own_dvd _ h rfl⟩
+      · exact ⟨by rw [h₂, hK.ledger.2.2, h₁], h₃⟩
+    exact ⟨hcf.1.1.1.1, hcf.1.1.1.2, hcf.1.2, hhd.1, hhd.2⟩
   have hK₁ := hK.grow (s' := { s with cert := some c }) hK.ledger rfl hcH le_rfl rfl
     ⟨[], by rw [List.append_nil]⟩ hcg
   exact (hK₁.above (s' := { s with cert := some c, props := Node.above (some c) s.props })

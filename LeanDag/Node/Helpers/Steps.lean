@@ -65,10 +65,10 @@ theorem collect_eq (s : State Validator BlockId Payload)
     (h : (Node.collect cfg s).1.store.base = s.store.base) : Node.collect cfg s = (s, []) := by
   rcases hs : s.top with _ | t
   · simp only [Node.collect, hs]
-  · by_cases hG : s.store.base < min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag
+  · by_cases hG : s.store.base < horizonAt cfg s t
     · exfalso
       simp only [Node.collect, hs, dif_pos hG] at h
-      change min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag = s.store.base at h
+      change horizonAt cfg s t = s.store.base at h
       omega
     · simp only [Node.collect, hs, dif_neg hG]
 

@@ -178,22 +178,18 @@ theorem Held.collect {s : State Validator BlockId Payload} (h : Held cfg s) :
       obtain ⟨o, hoi, hor⟩ := h.top t ht
       have hF : cfg.per * (min s.lo s.certHeight / cfg.m) ≤ cfg.per * (s.lo / cfg.m) :=
         Nat.mul_le_mul_left _ (Nat.div_le_div_right (min_le_left _ _))
-      have hoG : min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤
-          (s.store.blk o).round := by
-        omega
+      have hoG : horizonAt cfg s t ≤ (s.store.blk o).round :=
+        (horizonAt_le_top s t).trans hor
       refine ⟨⟨fun t' ht' => ?_, ?_, fun ht' => absurd (ht.symm.trans ht') (by simp),
         fun t' ht' => ?_, h.junk⟩, Keeps.prune s.store hG.le hoi hoG⟩
       · rw [ht, Option.some.injEq] at ht'
         subst ht'
         exact ⟨o, (mem_prune_ids (hG := hG.le)).mpr ⟨hoi, hoG⟩,
           by rw [prune_blk_round _ _ hoG]; exact hor⟩
-      · change min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤
-          cfg.per * (s.lo / cfg.m)
-        omega
+      · exact (horizonAt_le_frontier s t).trans hF
       · rw [ht, Option.some.injEq] at ht'
         subst ht'
-        change min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag ≤ t
-        omega
+        exact horizonAt_le_top s t
     · exact ⟨h, Keeps.refl _⟩
   · exact ⟨h, Keeps.refl _⟩
 
