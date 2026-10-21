@@ -2,6 +2,7 @@ import LeanDag.Node.Model.Timed
 import LeanDag.Node.Converge.Statement
 import LeanDag.Node.Boot.Statement
 import LeanDag.Node.Vote
+import Mathlib.Algebra.BigOperators.Intervals
 /-!
 # The reliable nodes produce rounds and decide — statement
 
@@ -25,7 +26,9 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
   hash, since honest nodes outside `T` may rejoin (as for V9);
 * the injective hash, injective on every block, no rate limiting, at
   most `f` nodes outside `H`, `n − f − c` reliable nodes, a quorum of two
-  or more, and `2 (3Δ + Δₛ) < timeout r` at every round.
+  or more, `2 (3Δ + Δₛ) < timeout r` at every round, and a horizon lag
+  `Λ` no smaller than the vote offset, so that the leader blocks a node's
+  reach and certificate tests read lie at or above its horizon.
 
 Then, for `A = 3Δ + Δₛ`, the time a reliable block and its history take
 to be held by every reliable node, a certificate's catch-up included:
@@ -37,7 +40,10 @@ to be held by every reliable node, a certificate's catch-up included:
   at or above `n₀` are led by reliable nodes and span the rule's
   eligibility. Once every reliable node is at the decision round of slot
   `b + c − 1`, `A` later every reliable node has output the decisions of
-  every slot below `b + c`.
+  every slot below `b + c`;
+* **the time bound** (`DecidesBy`): under the same premises, every
+  reliable node has output them by `s + A + Σ timeout r + A`, the sum
+  over the rounds `r` from `n₀` to below that decision round.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -122,6 +128,24 @@ def Decides (cfg : Config Validator BlockId Payload) (T : Finset Validator)
         topAt cfg tr time v t) → t + D ≤ t₁ →
       ∀ v ∈ T, b + c ≤ (decisionsBy cfg tr time v (t + D)).length
 
+/-- **Decision by a time bound**: under the premises of `Decides`, every
+reliable node has output the decisions of the slots below `b + c` by
+`s + D + Σ timeout r + D`, the sum over the rounds `r` from `n₀` to below
+the decision round of slot `b + c − 1`. -/
+def DecidesBy (cfg : Config Validator BlockId Payload) (T : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst D t₁ : ℕ) : Prop :=
+  letI := cfg.slots
+  ∀ b c n₀ s, 0 < c → (Scheme.schemeAnchored cfg.p
+      (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
+        (honest := T))).SpansEligible c →
+    (∀ i < c, cfg.slots.leader (b + i) ∈ T) → n₀ ≤ cfg.slots.slotRound b → gst ≤ s →
+    (∀ v ∈ T, n₀ ≤ topAt cfg tr time v (s + D) ∧ s ≤ builtAt cfg tr time v n₀ ∧
+      builtAt cfg tr time v n₀ ≤ s + D) →
+    s + D + (∑ r ∈ Finset.Ico n₀ (cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1)),
+      cfg.timeout r) + D ≤ t₁ →
+    ∀ v ∈ T, b + c ≤ (decisionsBy cfg tr time v (s + D + (∑ r ∈ Finset.Ico n₀
+      (cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1)), cfg.timeout r) + D)).length
+
 /-- **The reliable nodes produce rounds and decide**, over a timed trace
 meeting the assumptions up to `t₁`. -/
 def Progresses : Prop :=
@@ -130,13 +154,14 @@ def Progresses : Prop :=
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t₁ : ℕ),
     cfg.σ = boundedSel → cfg.Admissible → cfg.limit = none → Hᶜ.card ≤ cfg.f → T ⊆ H →
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
-    Function.Injective cfg.idOf →
+    Function.Injective cfg.idOf → cfg.p.voteOffset ≤ cfg.lag →
     (∀ r, 2 * (3 * Δ + Δₛ) < cfg.timeout r) →
     Converge.TimelyAuthentic cfg H tr → Boot.TimelyOffers cfg H tr → Boot.TimelyCerts cfg H tr →
     Converge.HashInjective cfg H tr → Boot.ChainInjective cfg H tr → Converge.NoRestart T tr →
     TimeMono tr time → DeliveredWithin cfg T tr time gst Δ t₁ → TimersOnTime cfg T tr time t₁ →
     SyncedWithin cfg H T tr time gst Δₛ t₁ → StartedBy T tr time gst →
-    Produces cfg T tr time gst t₁ ∧ Decides cfg T tr time gst (3 * Δ + Δₛ) t₁
+    Produces cfg T tr time gst t₁ ∧ Decides cfg T tr time gst (3 * Δ + Δₛ) t₁ ∧
+      DecidesBy cfg T tr time gst (3 * Δ + Δₛ) t₁
 
 /-- The reliable nodes' liveness. -/
 def Statement : Prop := Progresses

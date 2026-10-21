@@ -150,7 +150,8 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel) (hvo : cfg.p.v
           exact hvax.votes_iff (hR hb) (x.above b (hR hb)) hLx (x.above L hLx)
         -- some reference votes, so the leader block lies in its history
         have hpos := hct hvc
-        obtain ⟨a, ha⟩ : (creatorsOf x.blk (R.filter fun b => cfg.σ.Votes x.toRecord b L)).Nonempty :=
+        obtain ⟨a, ha⟩ :
+            (creatorsOf x.blk (R.filter fun b => cfg.σ.Votes x.toRecord b L)).Nonempty :=
           Finset.card_pos.mp (by omega)
         obtain ⟨b, hb, -⟩ := Finset.mem_image.mp ha
         obtain ⟨hbR, hbv⟩ := Finset.mem_filter.mp hb
@@ -299,12 +300,14 @@ theorem own_held {p : ℕ} {inp : Input Validator BlockId Payload} (hp : tr[p]? 
       (Node.step (cfg.at v) (stateBefore cfg tr p v) inp).1 :=
     step_keeps_built (fired_before (cfg := cfg) hnv p).1 (fun h => hnv p (by rw [hp, h]))
   rw [outputsAt_eq hp] at he
-  have hs : stateBefore cfg tr (p + 1) v = (Node.step (cfg.at v) (stateBefore cfg tr p v) inp).1 := by
+  have hs : stateBefore cfg tr (p + 1) v =
+      (Node.step (cfg.at v) (stateBefore cfg tr p v) inp).1 := by
     rw [stateBefore_succ hp, if_pos rfl]
   rw [← hs] at hk
   have hbE := (grows_before (cfg := cfg) (tr := tr) v (show p + 1 ≤ E by omega)).1
   rcases hk e he with ⟨hin, hr⟩ | hlt
-  · exact (retains_before (cfg := cfg) hnv (show p + 1 ≤ E by omega) e.1 hin (by rw [hr]; exact hb)).1
+  · exact (retains_before (cfg := cfg) hnv (show p + 1 ≤ E by omega) e.1 hin
+      (by rw [hr]; exact hb)).1
   · omega
 
 /-- **The horizon lies `Λ` or more below the top.** -/
@@ -571,7 +574,8 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bo
       have hready := ready_transfer (cfg := cfg.at u) hσ hvo (fun h => certThreshold_pos hadm h)
         hbs.cut hZcut hRx hRR hlZ hRn hZb hre hce
       rw [hoo]
-      exact refsAt_ready (cfg := cfg.at u) hzZ (hzr.trans hbr) (by rw [hzc]; exact Ne.symm huw) hready hlb
+      exact refsAt_ready (cfg := cfg.at u) hzZ (hzr.trans hbr) (by rw [hzc]; exact Ne.symm huw)
+        hready hlb
     · left
       obtain ⟨j, hj, hjt⟩ : ∃ j ≤ i, tr[j]? = some (w, Input.timer r) := by
         rcases hbs.fired _ hfx with h | h
@@ -592,6 +596,89 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bo
   cases hsome
 
 end Catch
+
+/-! ## The drift of build times -/
+
+section Drift
+
+variable {T : Finset Validator} {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ}
+  {gst Δ Δₛ t₁ : ℕ}
+
+/-- **A reliable node has started** at any time from GST on. -/
+theorem started_at (hadm : cfg.Admissible) (hid : Function.Injective cfg.idOf)
+    (htime : Converge.TimelyAuthentic cfg H tr) (hTH : T ⊆ H) (hnr : Converge.NoRestart T tr)
+    (hmono : Live.TimeMono tr time) (hstart : Live.StartedBy T tr time gst) {v : Validator}
+    (hv : v ∈ T) {τ : ℕ} (hτ : gst ≤ τ) : (stateAt cfg tr time v τ).top.isSome := by
+  obtain ⟨st, hst, htst⟩ := hstart v hv
+  have hstl : st < tr.length := (List.getElem?_eq_some_iff.mp hst).1
+  have hstE : st + 1 ≤ eventsBy tr time τ := (lt_eventsBy hmono hstl).mpr (by omega)
+  exact (rises_before (cfg := cfg) (fun k => hnr k v hv) hstE).2.1
+    (started_after hadm hid htime (hTH hv) hst)
+
+/-- A node at a round built it by then. -/
+theorem builtAt_le_of_top {v : Validator} (hnv : ∀ i : ℕ, tr[i]? ≠ some (v, Input.restart))
+    (hmono : Live.TimeMono tr time) {τ n : ℕ} (hs : (stateAt cfg tr time v τ).top.isSome)
+    (hn : n ≤ topAt cfg tr time v τ) : builtAt cfg tr time v n ≤ τ := by
+  obtain ⟨i, -, -, -, -, -, hbt, hiτ⟩ := built_of_top hnv hmono hs hn
+  omega
+
+/-- **Drift stays within `A = 3Δ + Δₛ`**: past GST, if the reliable nodes
+built round `n₀` within `A` of each other, they build every round from
+`n₀` up to one they all reach by `t` within `A` of each other
+(`catches_up`). -/
+theorem drift (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel)
+    (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
+    (htime : Converge.TimelyAuthentic cfg H tr) (hoff : Boot.TimelyOffers cfg H tr)
+    (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
+    (hchain : Boot.ChainInjective cfg H tr) (hTH : T ⊆ H) (hnr : Converge.NoRestart T tr)
+    (hmono : Live.TimeMono tr time) (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
+    (htimer : Live.TimersOnTime cfg T tr time t₁)
+    (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁) (hstart : Live.StartedBy T tr time gst)
+    (hvo : cfg.p.voteOffset ≤ cfg.lag)
+    (hcmp : ∀ u ∈ T, ∀ v ∈ T, ∀ i j, (stateBefore cfg tr i u).decided.reverse <+:
+      (stateBefore cfg tr j v).decided.reverse ∨
+        (stateBefore cfg tr j v).decided.reverse <+: (stateBefore cfg tr i u).decided.reverse)
+    {n₀ s : ℕ} (hgs : gst ≤ s)
+    (h₀ : ∀ v ∈ T, s ≤ builtAt cfg tr time v n₀ ∧ builtAt cfg tr time v n₀ ≤ s + (3 * Δ + Δₛ))
+    {t N : ℕ} (hst : ∀ v ∈ T, (stateAt cfg tr time v t).top.isSome)
+    (hN : ∀ v ∈ T, N ≤ topAt cfg tr time v t) (ht₁ : t + (3 * Δ + Δₛ) ≤ t₁) :
+    ∀ n, n₀ ≤ n → n ≤ N → ∀ u ∈ T, ∀ w ∈ T, gst ≤ builtAt cfg tr time u n ∧
+      builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (3 * Δ + Δₛ) := by
+  intro n hn₀ hnN
+  induction n, hn₀ using Nat.le_induction with
+  | base =>
+    intro u hu w hw
+    exact ⟨hgs.trans (h₀ u hu).1, (h₀ u hu).2.trans (by have := (h₀ w hw).1; omega)⟩
+  | succ n hn₀ ih =>
+    have ih := ih (by omega)
+    intro u hu w hw
+    have hnu : ∀ k : ℕ, tr[k]? ≠ some (u, Input.restart) := fun k => hnr k u hu
+    have hnw : ∀ k : ℕ, tr[k]? ≠ some (w, Input.restart) := fun k => hnr k w hw
+    have hgu : gst ≤ builtAt cfg tr time u (n + 1) :=
+      (ih u hu u hu).1.trans (builtAt_le_succ hnu hmono (hst u hu) ((hN u hu).trans' hnN))
+    refine ⟨hgu, ?_⟩
+    by_cases huw : u = w
+    · subst huw; omega
+    -- the peer's first build of round `n + 1`
+    obtain ⟨i, inp, e, hi, he, her, hbt, hit⟩ :=
+      built_of_top hnw hmono (hst w hw) ((hN w hw).trans' hnN)
+    have hgw : gst ≤ builtAt cfg tr time w (n + 1) :=
+      (ih w hw w hw).1.trans (builtAt_le_succ hnw hmono (hst w hw) ((hN w hw).trans' hnN))
+    have hwn := builtAt_le_succ hnw hmono (hst w hw) ((hN w hw).trans' hnN)
+    have hus := started_at hadm hid htime hTH hnr hmono hstart hu
+      (τ := time i + (3 * Δ + Δₛ)) (by omega)
+    -- `u` built round `n` by then
+    obtain ⟨bu, _inpu, eu, hbu, heu, heur, hbut, -⟩ :=
+      built_of_top hnu hmono (hst u hu) ((hN u hu).trans' (by omega : n ≤ N))
+    have hun := (top_of_built hnu hmono hbu heu (τ := time i + (3 * Δ + Δₛ))
+      (by have := (ih u hu w hw).2; omega)).2
+    rw [heur] at hun
+    have hup := catches_up hq hl hσ hadm hf hid htime hoff hcert hinj hchain hTH hnr hmono hdel
+      htimer hsync hvo hcmp hu hw huw hi he her (by omega) hus hun (ih u hu w hw).2 (by omega)
+    have := builtAt_le_of_top hnu hmono hus hup
+    omega
+
+end Drift
 
 end Node
 

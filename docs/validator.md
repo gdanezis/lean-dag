@@ -1199,7 +1199,7 @@ explained.
 The simulator records these measurements (`LeanDagSim.Stats`, in the
 report's `stats`).
 
-## 13. Step 11.1: liveness of the reliable nodes (design draft)
+## 13. Step 11.1: liveness of the reliable nodes (built)
 
 **Scope.** A reliable set `T` of honest nodes that never crash, restart
 or bootstrap, at least `q` strong, from a GST on. Garbage collection is
@@ -1233,7 +1233,11 @@ assumptions, over the reliable nodes:
   scope (§1); the fetch meets it with `Δₛ = 2Δ` when the block's author
   answers;
 * **completeness up to `t₁`**: every delivery and timer due by `t₁` is in
-  the trace.
+  the trace;
+* **a lag no smaller than the vote offset** (`voteOffset ≤ Λ`): the
+  leader blocks a node's reach and certificate tests read lie at or
+  above its horizon, so a node behind passes the tests on the references
+  a peer's block lends it (13.3).
 
 A step takes no time; the time it costs a node to act on what it holds is
 the catch-up bound below, not a processing constant.
@@ -1264,11 +1268,13 @@ The proof splits in two:
   slots commit on its view, from the reliable decision-round blocks,
   which have all arrived; every slot below `b` is then decided on that
   view (`decided_below_of_run`); and the decision step outputs them
-  (`Loop.OutputComplete`, with the scan's reach made explicit), reading
-  only the rounds from each slot's own up (V4), so the slots below the
-  node's horizon, already output, are not read again.
-
-Together they bound the time to decide each slot.
+  (`tryDecide_within`, the scan's reach made explicit), reading only the
+  rounds from each slot's own up (V4), so the slots below the node's
+  horizon, already output, are not read again;
+* **the time bound** (`DecidesBy`): from the synchronisation point the
+  reliable nodes gain a round a timeout, so they have output those
+  decisions by `s + A + Σ timeout r + A`, the sum over the rounds from
+  `n₀` to below the decision round of slot `b + c − 1`.
 
 **Sub-steps.**
 
@@ -1282,22 +1288,25 @@ Together they bound the time to decide each slot.
   `Node.reach_or_wait_node`, `Node.cert_or_wait_node`, with holdings
   read before the build's time, `heldBefore`).
 * **11.1c** Production, arrival and catch-up past GST, with holdings
-  above the horizon. Production is proved (`Live.produces`,
-  `Node/Live/Proof.lean`): `v`, still at round `n` a timeout after all
-  reliable nodes were at `n` or above, would be settled with the round's
-  timer fired and a quorum of round `n` held (`round_arrives`), and would
-  build (`tryBuild_isSome`). A block arrives once the receiver's
-  horizon reaches the one its author built it at (`arrives`), read off
-  the state the author built from (`BuildState`, which carries the store
-  invariant and the certificate that last raised that horizon). It needs
-  two assumptions V11 states: the
-  block hash injective on every block, so no stored block has the
-  identifier of the node's next one (`fresh_before`), and `2 ≤ q`, so a
-  settle ends settled (`settle_settled`). The drift induction of 13.3,
-  for `WaveFacts`, remains.
-* **11.1d** From `WaveFacts.certifies` to the node's decisions, as in the
-  decision half above.
-* **11.1e** The production rate and the time bound.
+  above the horizon (built, `Live.produces`, `Node/Live/Proof.lean`):
+  `v`, still at round `n` a timeout after all reliable nodes were at `n`
+  or above, would be settled with the round's timer fired and a quorum
+  of round `n` held (`round_arrives`), and would build
+  (`tryBuild_isSome`). A block arrives once the receiver's horizon
+  reaches the one its author built it at (`arrives`), read off the state
+  the author built from (`BuildState`, which carries the store invariant
+  and the certificate that last raised that horizon). It needs two
+  assumptions V11 states: the block hash injective on every block, so no
+  stored block has the identifier of the node's next one
+  (`fresh_before`), and `2 ≤ q`, so a settle ends settled
+  (`settle_settled`).
+* **11.1d** Decision (built, `Live.decides`): the drift induction of
+  13.3 (`catches_up`, `drift`, `Node/Helpers/Drift.lean`), the run's
+  `WaveFacts` (`waited_holds`, `Node/Helpers/Wave.lean`), and from
+  `WaveFacts.certifies` to the node's decisions (`reliable_held`,
+  `tryDecide_within`), as in the decision half above.
+* **11.1e** The time bound (built, `Live.decidesBy`): production from the
+  synchronisation point, then decision.
 
 ### 13.3 The pacing facts and where they come from
 
@@ -1334,7 +1343,13 @@ them with `u`'s references (§3.2, copied references) and builds by
 never grows past `A` once it is there, and arrival follows: a node that
 waited the timeout at round `n` holds every reliable round-`n` block,
 built at most `A` after its own and held `A` after that, when
-`2A < timeout`.
+`2A < timeout`. These are `catches_up` and `drift`
+(`Node/Helpers/Drift.lean`) and `waited_holds`
+(`Node/Helpers/Wave.lean`). The copied references pass the tests at `v`
+because its horizon lies `Λ` or more below its top and `voteOffset ≤ Λ`,
+so it holds the leader blocks the tests read, reached from the same
+references, and reads the same votes (`ready_transfer`); they can be
+built on, `v`'s own block put in for its own (`lent_buildable`).
 
 Two things the argument needs were found missing in the program as it
 was. Through a Byzantine twin, the reach test's evidence did not carry
@@ -1359,9 +1374,11 @@ view, which holds every reliable block it has received above its
 horizon, suffices. The decision step reads the store as `tryDecide` on
 a view of the run's record (V2, V4), and `tryDecide` outputs every slot
 decided on its view once its scan reaches far enough
-(`Loop.OutputComplete`); the scan reaches every slot at a round the
-store holds (§3.3), and the bound on how far it must reach is to be made
-explicit.
+(`tryDecide_within`): a verdict derived within a bound `B` (a slot of
+the run commits directly, a slot below it is decided by an anchor in the
+run, `decidedWithin_below_of_committed_run`) is output by a scan reaching
+`B − 1`, and the node's scan reaches every slot at a round its store
+holds (§3.3), its own top block's included.
 
 ### 13.5 Decisions for 11.1 (taken)
 
@@ -1414,6 +1431,10 @@ explicit.
 13. **Settling until nothing changes**: a node acts on what it holds
     before it waits for the next event, peers' proposals included
     (§13.9, built).
+14. **Lag and vote offset**: V11 assumes `voteOffset ≤ Λ`, so that a
+    node behind, whose horizon lies `Λ` below its top, holds the leader
+    blocks its tests read and reads the same votes as the peer whose
+    references it copies (`ready_transfer`).
 
 ### 13.6 Blocks at the horizon (built)
 
