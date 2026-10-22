@@ -6,6 +6,8 @@ proofs that it conforms to the scheme. The program lives in
 `LeanDag/Node`, namespace LeanDag.Node; steps 0 to 7 are built, and
 part of step 10 (§7). Names
 in backticks are existing declarations; names in italics are planned.
+`docs/validator-core.md` plans the reduction of the program to the
+scheme's consensus core.
 
 ## 1. Scope
 
