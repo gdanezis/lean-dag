@@ -39,6 +39,17 @@ to be held by every reliable node:
   reliable node has output them by `s + A + Σ timeout r + A`, the sum
   over the rounds `r` from `n₀` to below that decision round.
 
+**With crashes** (`Recovers`). Reliable nodes may crash and restart until
+a time `t_r`, losing the messages and timers of their outages, and stay
+up from `t_r` on (`UpFrom`). Delivery and synchronisation are assumed
+only from `t_r` on (`DeliveredFrom`, `SyncedFrom`), and a timer fires
+unless its node restarts before (`TimersFireUp`). Then the three
+conclusions hold with GST replaced by `max t_r gst + W`, for `W` the
+largest timeout of the round a reliable node is at by `max t_r gst`:
+within it every reliable node sends one of its blocks there again or
+builds above, and the history of that block brings the blocks the crashes
+lost.
+
 Statements only; the proofs are `Proof.lean`.
 -/
 
@@ -101,6 +112,39 @@ def SyncedWithin (cfg : Config Validator BlockId Payload) (H T : Finset Validato
     max (time j) gst + Δₛ ≤ t₁ → ∀ x ∈ Converge.knownIn cfg H tr,
       ReachesFrom (knownBlock cfg H tr) id x.1 → x.2.creator ≠ v →
       ∃ k, j < k ∧ tr[k]? = some (v, .deliver x.1 x.2) ∧ time k ≤ max (time j) gst + Δₛ
+
+/-- **Delivery within `Δ` past GST, from `t_r` on**: a message one
+reliable node sends another at a time `t ≥ t_r` arrives by
+`max t gst + Δ`, if that is by `t₁`. -/
+def DeliveredFrom (cfg : Config Validator BlockId Payload) (T : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ t_r t₁ : ℕ) : Prop :=
+  ∀ i u inp, tr[i]? = some (u, inp) → u ∈ T → t_r ≤ time i → ∀ m, Sends u (outputsAt cfg tr i) m →
+    m.1 ∈ T → max (time i) gst + Δ ≤ t₁ →
+      ∃ j, i < j ∧ tr[j]? = some m ∧ time j ≤ max (time i) gst + Δ
+
+/-- **Synchronisation within `Δₛ` past GST, from `t_r` on**: as
+`SyncedWithin`, for the blocks a reliable node is given at a time
+`t ≥ t_r`. -/
+def SyncedFrom (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δₛ t_r t₁ : ℕ) : Prop :=
+  ∀ j v id b, tr[j]? = some (v, .deliver id b) → v ∈ T → b.creator ∈ T → id = cfg.idOf b →
+    t_r ≤ time j → max (time j) gst + Δₛ ≤ t₁ → ∀ x ∈ Converge.knownIn cfg H tr,
+      ReachesFrom (knownBlock cfg H tr) id x.1 → x.2.creator ≠ v →
+      ∃ k, j < k ∧ tr[k]? = some (v, .deliver x.1 x.2) ∧ time k ≤ max (time j) gst + Δₛ
+
+/-- **Timers fire unless the node restarts**: a timer a reliable node sets
+at `t` for `a` ticks fires at `t + a`, if that is by `t₁` and the node
+does not restart by then. -/
+def TimersFireUp (cfg : Config Validator BlockId Payload) (T : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (t₁ : ℕ) : Prop :=
+  ∀ i u inp, tr[i]? = some (u, inp) → u ∈ T → ∀ r a, Output.setTimer r a ∈ outputsAt cfg tr i →
+    time i + a ≤ t₁ → (∀ k, i < k → time k ≤ time i + a → tr[k]? ≠ some (u, .restart)) →
+      ∃ j, i < j ∧ tr[j]? = some (u, .timer r) ∧ time j = time i + a
+
+/-- **Up from `t_r`**: no reliable node restarts at or after `t_r`. -/
+def UpFrom (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
+    (t_r : ℕ) : Prop :=
+  ∀ k v, tr[k]? = some (v, .restart) → v ∈ T → time k < t_r
 
 /-- **Every reliable node starts by `gst`.** -/
 def StartedBy (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
@@ -167,8 +211,28 @@ def Progresses : Prop :=
     Produces cfg T tr time gst t₁ ∧ Decides cfg T tr time gst (Δ + Δₛ) t₁ ∧
       DecidesBy cfg T tr time gst (Δ + Δₛ) t₁
 
-/-- The reliable nodes' liveness. -/
-def Statement : Prop := Progresses
+/-- **The reliable nodes recover from crashes**: over a timed trace in
+which the reliable nodes stay up from `t_r` on, meeting the assumptions
+from `t_r` on, they produce rounds and decide past `max t_r gst + W`, for
+`W` the largest timeout of the round a reliable node is at by
+`max t_r gst`. -/
+def Recovers : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t_r t₁ : ℕ),
+    cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f → T ⊆ H →
+    cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
+    Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
+    Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → TimeMono tr time →
+    DeliveredFrom cfg T tr time gst Δ t_r t₁ → TimersFireUp cfg T tr time t₁ →
+    TimersAfterSet cfg T tr time → SyncedFrom cfg H T tr time gst Δₛ t_r t₁ →
+    UpFrom T tr time t_r → StartedBy T tr time gst →
+    let G := max t_r gst + T.sup fun u => cfg.timeout (topAt cfg tr time u (max t_r gst))
+    Produces cfg T tr time G t₁ ∧ Decides cfg T tr time G (Δ + Δₛ) t₁ ∧
+      DecidesBy cfg T tr time G (Δ + Δₛ) t₁
+
+/-- The reliable nodes' liveness, without crashes and with them. -/
+def Statement : Prop := Progresses ∧ Recovers
 
 end Live
 

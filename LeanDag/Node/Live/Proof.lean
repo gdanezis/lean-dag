@@ -1,10 +1,11 @@
 import LeanDag.Node.Live.Statement
 import LeanDag.Node.Helpers.Wave
+import LeanDag.Node.Helpers.Recover
 import LeanDag.Scheme.Helpers.Reactive
 /-!
 # The reliable nodes produce rounds and decide — proof
 
-`docs/validator.md` §5.2–5.4.
+`docs/validator.md` §5.2–5.4 and §5.6.
 
 **Production.** Past GST, let every reliable node be at round `n` or
 above at `s`, and `v` reliable. `v` built its round-`n` block by `s`,
@@ -38,6 +39,12 @@ its being settled.
 **The time bound.** From the synchronisation point the reliable nodes
 gain a round a timeout (`produces`), so they reach the last slot's
 decision round within the sum of the timeouts, and decide `A` later.
+
+The argument reads the run through arrival within `A` (`Arrival`), the
+top round's timer (`TopTimerBy`) and timers set past GST
+(`TimersFireFrom`). Without crashes the assumptions give them at GST
+(`progresses`); with crashes up to `t_r`, at `max t_r gst + W`
+(`recovers`, `Helpers/Recover.lean`).
 -/
 
 namespace LeanDag
@@ -289,7 +296,7 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
   exact hd b c n₀ s hc hspan hlead hn₀ hgs hall _ hall' ht₁
 
 /-- **The reliable nodes produce rounds and decide.** -/
-theorem holds : Statement := by
+theorem progresses : Progresses := by
   intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hf hTH hqT hcT
     hq hid hto htime hinj hmono hdel htimer hsync hstart
   have harr := arrival_of_delivered hσ hadm hf htime hinj hTH hmono hdel hsync
@@ -298,6 +305,29 @@ theorem holds : Statement := by
   have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr htimer.2
     (TimersFireFrom.of_fire htimer.1) hstart
   exact ⟨hp, hd, decidesBy hp hd⟩
+
+/-- **The reliable nodes recover from crashes**: past `G = max t_r gst + W`
+blocks arrive within `A` (`arrival_of_recovered`), the top round's timer
+fires within its timeout (`topTimerBy_of_up`), and timers set fire
+(`timersFireFrom_of_up`), so production and decision hold from `G`. -/
+theorem recovers : Recovers := by
+  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t_r t₁ hσ hadm hf hTH hqT hcT
+    hq hid hto htime hinj hmono hdel hfire hwait hsync hup hstart
+  intro G
+  have hrG : t_r ≤ G := (le_max_left _ _).trans (Nat.le_add_right _ _)
+  have hgG : gst ≤ G := (le_max_right _ _).trans (Nat.le_add_right _ _)
+  have harr := arrival_of_recovered hσ hadm hf hid htime hinj hTH hmono hdel hsync hup hfire hstart
+  have hstart' : StartedBy T tr time G := fun v hv => by
+    obtain ⟨i, hi, hit⟩ := hstart v hv
+    exact ⟨i, hi, hit.trans hgG⟩
+  have hp := produces hσ hadm hf hTH hqT hto hq hid htime hinj hmono harr
+    (topTimerBy_of_up hmono hup hfire hrG) hstart'
+  have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr hwait
+    (timersFireFrom_of_up hmono hup hfire hrG) hstart'
+  exact ⟨hp, hd, decidesBy hp hd⟩
+
+/-- **The reliable nodes' liveness**, without crashes and with them. -/
+theorem holds : Statement := ⟨progresses, recovers⟩
 
 end Live
 

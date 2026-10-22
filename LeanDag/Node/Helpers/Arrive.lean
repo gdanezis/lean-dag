@@ -138,7 +138,8 @@ theorem broadcasts_of_persists {i : ℕ} {e : BlockId × Block Validator BlockId
 /-- **A block of an honest node that an honest node `w` knew** before
 event `F`, its author built before `F`. -/
 theorem own_known {H : Finset Validator} (htime : Converge.TimelyAuthentic cfg H tr) {w : Validator}
-    (hw : w ∈ H) (hv : v ∈ H) {F E : ℕ} (hFE : F ≤ E) {x : BlockId × Block Validator BlockId Payload}
+    (hw : w ∈ H) (hv : v ∈ H) {F E : ℕ} (hFE : F ≤ E)
+    {x : BlockId × Block Validator BlockId Payload}
     (hx : x ∈ Converge.knownBefore cfg tr F w) (hc : x.2.creator = v) :
     x ∈ persists (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr E v)).2 := by
   simp only [Converge.knownBefore, Set.mem_setOf_eq, List.mem_append] at hx
@@ -280,7 +281,8 @@ holds it after `v`'s events up to a time by which its history was
 synchronised. -/
 theorem arrives (hinj : Converge.HashInjective cfg H tr)
     (htime : Converge.TimelyAuthentic cfg H tr) (hTH : T ⊆ H)
-    (hmono : Live.TimeMono tr time) (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁)
+    (hmono : Live.TimeMono tr time) {t_r : ℕ}
+    (hsync : Live.SyncedFrom cfg H T tr time gst Δₛ t_r t₁)
     {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) (huv : u ≠ v) {i : ℕ}
     {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (u, inp))
     {y : BlockId × Block Validator BlockId Payload} (hy : y ∈ persists (outputsAt cfg tr i))
@@ -289,7 +291,7 @@ theorem arrives (hinj : Converge.HashInjective cfg H tr)
     (hx : BuildState (cfg.at u) U (knownAll cfg H tr) (stateBefore cfg tr i u) inp x)
     {y' : State Validator BlockId Payload} {o : List (Output Validator BlockId Payload)}
     (hb : tryBuild (cfg.at u) x = some (y', o)) (hyo : y ∈ persists o)
-    {j : ℕ} (hj : tr[j]? = some (v, .deliver y.1 y.2)) {τ : ℕ}
+    {j : ℕ} (hj : tr[j]? = some (v, .deliver y.1 y.2)) (hjr : t_r ≤ time j) {τ : ℕ}
     (hτ : max (time j) gst + Δₛ ≤ τ) (ht₁ : max (time j) gst + Δₛ ≤ t₁) :
     y.1 ∈ (stateAt cfg tr time v τ).store.ids := by
   have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj).1
@@ -370,7 +372,7 @@ theorem arrives (hinj : Converge.HashInjective cfg H tr)
         have hreach : ReachesFrom raw id' z := by
           refine ReachesFrom.of_mem_refs (by rw [hry]; exact hr) ?_
           exact (reaches_known hstK (hrefs hr) (reaches_of_mem_historyUptoFrom hzr)).1
-        obtain ⟨k, hjk, hk, htk⟩ := hsync j v id' b' hj hv (by rw [hbu]; exact hu) hid ht₁ xz
+        obtain ⟨k, hjk, hk, htk⟩ := hsync j v id' b' hj hv (by rw [hbu]; exact hu) hid hjr ht₁ xz
           hxzK hreach hcr
         have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
         have hkE : k < E := (lt_eventsBy hmono hkl).mpr (htk.trans hτ)
@@ -529,8 +531,9 @@ theorem arrival_of_delivered (hσ : cfg.σ = boundedSel)
   by_cases hn0 : e.2.round = 0
   · exact arrives_zero hinj hTH hmono hu hv huv hbu hep hgood hn0 hj (by omega)
   · obtain ⟨x, y', o, hx, hxb, heo⟩ := build_witness hσ hadm hf htime hinj (hTH hu) hb hep hn0
-    exact arrives hinj htime hTH hmono hsync hu hv huv hb hep hx hxb heo hj (τ := τ)
-      (by omega) (by omega)
+    exact arrives hinj htime hTH hmono (t_r := 0)
+      (fun j v id b hj hv hc hid _ => hsync j v id b hj hv hc hid) hu hv huv hb hep hx hxb heo
+      hj (Nat.zero_le _) (τ := τ) (by omega) (by omega)
 
 /-- **A reliable block held is as its author built it**: its round, its
 author and its content. -/

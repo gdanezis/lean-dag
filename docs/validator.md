@@ -18,8 +18,8 @@ them, fetches the histories it lacks, and decides. It keeps every block
 it accepts, and restarts after a crash from the state it persisted
 (§3.6). Garbage collection, checkpoints, bootstrap, rate limiting and
 the exclusion of equivocators are not part of it; a version with all of
-them is on branch `scheme-validator`. Liveness across crashes is planned
-(§9).
+them is on branch `scheme-validator`. Liveness holds across crashes
+(§5.6).
 
 Out of scope as well: stake weights, a mempool (the payload comes from a
 configured source), execution, and an implementation of hashing and
@@ -311,6 +311,7 @@ bootstrap, since no block is collected.
 | V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, with at most `f` nodes outside the honest set, every block an honest node broadcast, with its history, ends in every honest node's store. The fault bound makes the pruned answer (§3.4) sound: a block left out of an answer is reached from a round-`(r − 1)` block of an honest author in the asker's quorum. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain`, `Node.Quorate.run`, `Node.mem_coreSets`, `Node.pruned_chain`, `Node.eq_of_persists` |
 | V8 | The claims are about the program that runs: its store is the ordered map, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, timers on time and timeouts above `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout, and a run of reliably led slots past a round they built within `Δ + Δₛ` of each other is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of the timeouts from that round. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy` |
+| V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` on, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` the largest timeout of the round a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.armed`, `Node.own_reaches`, `Node.Chain` |
 
 Every claim depends only on the standard axioms (`propext`,
 `Classical.choice`, `Quot.sound`; `LeanDagTest/Node/Axioms.lean`).
@@ -495,6 +496,48 @@ hand-built records. Read against the program:
 | `ReactiveCore.built_lt` | no: build times strictly increase, but one step may build several rounds at once, when a lagging node catches up; the node supplies `WaveFacts`, which does not ask it |
 | `PaceCore.catchup` | no: a node holding a reliable block of a later round must build there within `proc`, while `reach_or_wait` makes it wait the timer at each round in between whose leader block its block would not reach; the drift argument (§5.3) replaces it |
 
+### 5.6 Crashes (V11′)
+
+Reliable nodes may crash and restart until a time `t_r`, and stay up from
+`t_r` on (`UpFrom`: no reliable node restarts at or after `t_r`). A
+crash loses the messages sent to the node while it is down and the
+timers it set before, so delivery and synchronisation are assumed only
+for what is sent from `t_r` on (`DeliveredFrom`, `SyncedFrom`), and a
+timer fires on time unless its node restarts before (`TimersFireUp`);
+timers fire no earlier than set (`TimersAfterSet`), and every reliable
+node starts by GST. Before `t_r` nothing is assumed: messages may be
+lost and nodes down. Let `t₀ = max t_r gst` and `W` the largest timeout
+of the round a reliable node is at by `t₀`. Then the three conclusions
+of V11 hold with GST replaced by `G = t₀ + W` (`Recovers`). The proof
+supplies the four premises of the argument of §5.2–5.4 at `G`:
+
+* **The top round's timer** (`armed`, `topTimerBy_of_up`). Past `t_r`,
+  the last event that set the timer of a node's top round, its build of
+  the round, a restart or a resend (§3.6), is followed by no restart, so
+  the timer fires a timeout after it.
+* **Timers past `G`** (`timersFireFrom_of_up`): a timer set past `t_r`
+  is followed by no restart.
+* **Arrival** (`arrival_of_recovered`). A block built from `t_r` on is
+  delivered and synchronised as without crashes. A block a reliable node
+  `u` built before `t_r` may have been lost; but by `t₀ + W` the node
+  broadcasts again a block of its own at its round at `t₀` or above
+  (`sends_again`): when that round's timer fires it builds above it or
+  resends its top block, or it built above before, and the timer cannot
+  have fired by `t₀`, since then it would have been set again later. Its
+  own blocks form a chain (`Chain`, `own_reaches`): each references its
+  block of the round below (`own_mem_refsAt`), and no block in its name
+  enters its store but those it builds. So the lost block lies in the
+  history of the block sent again, which reaches every other reliable
+  node with its history by `t₀ + W + Δ + Δₛ`, whatever round that node is
+  at (`arrives`, `mem_of_reaches_known`).
+
+The decision part still starts from a synchronisation point (§5.3),
+which after a recovery is past `G`: the nodes behind rebuild the rounds
+they missed, waiting the timeout at each round whose leader block their
+block would not reach, and the drift argument applies once they built a
+round within `A` of each other. That the run reaches such a point after
+a recovery is not proved, as without crashes.
+
 ## 6. Testing
 
 1. **Agreement with the model** (`LeanDagTest/Node/Replay.lean`). A
@@ -626,33 +669,14 @@ rule: it references its own block of the round below, and builds rounds
 in sequence (§3.2), so a reliable node's chain is unbroken from its
 genesis block.
 
-## 9. Next: liveness across crashes
+## 9. Next
 
-The restart and resending are in the program (§3.6), and V1, V2, V3,
-V3′ and V11 hold over traces with restarts. V3′ and V11 assume every
-message sent reaches its receiver, so they cover crashes that lose
-timers but not messages. The decisions taken: a restarted node builds
-every round it missed; it resends its top block on restart; liveness is
-to hold for crashes before GST and for crashes and recoveries after it;
-the state that only grows (`requested`, `pending`, `fired`) stays
-unbounded.
+The restart, resending and liveness across crashes are done (§3.6, §5.6).
+Open:
 
-**V11 with crashes.** A timed trace gives each node's down intervals;
-delivery, timers and synchronisation are assumed only of a receiver that
-stays up. Let `T` be at least `q` and at least `n − f − c` honest nodes,
-each up from a time `t_r ≥ gst` on, and restarted after its last crash.
-Then the conclusions of V11 hold with GST replaced by `t_r + X`, for `X`
-a timeout of the top round plus `Δ + Δₛ` plus the timeouts of the rounds
-the slowest node rebuilds: production resumes, and decisions follow from
-a synchronisation point as in §5.2. Crashes before GST are the case
-`t_r = gst`. The proof replaces the arrival lemmas (`block_arrives`,
-`round_arrives`, `Helpers/Arrive.lean`), through which every use of
-delivery and synchronisation passes, by their versions after `t_r + X`.
-
-The phases left:
-
-1. The timed model with down intervals, the arrival lemmas after
-   recovery, and V11 with crashes.
-2. The simulator: crash and recovery scenarios, among them the stall of
-   §3.6 and its restart, and the catch-up time measured.
-3. This document: §5 for crashes.
+* the state that only grows (`requested`, `pending`, `fired`) is
+  unbounded, and under attack `pending` grows (§6);
+* catch-up is costly to compute: the restarted node asks for the
+  missing history on account of every block it receives (§6, item 3);
+* that the run reaches a synchronisation point past GST, or past a
+  recovery, is assumed by the decision part, not proved (§5.3, §5.6).
