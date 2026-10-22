@@ -8,20 +8,17 @@ import Mathlib.Data.Finset.Sort
 network with a seeded schedule: before GST a message takes up to
 `preMax` ticks, after it between `delayMin` and `delayMax`, and a timer
 fires when it expires. A crashed node acts on nothing from its crash
-time on; a recovering node acts on nothing while it is down, then
-restarts, keeping only what it persisted, asks its peers for their bases,
-and either skips to a round its store holds a quorum at or bootstraps
-from the bases. An equivocator is two copies of the honest program with
-the same identity and different payloads, each sending to half the
-nodes, so its twins are valid blocks; it acts on nothing from `byzUntil`
-on. A node's request for blocks goes to every other node, and an answer
-to the node that asked. `simulate` runs the schedule and reports what
-each honest node reached and committed, whether their decisions agree,
+time on. An equivocator is two copies of the honest program with the
+same identity and different payloads, each sending to half the nodes, so
+its twins are valid blocks; it acts on nothing from `byzUntil` on. A
+node's request for blocks goes to the peer it names, and an answer to
+the node that asked. `simulate` runs the schedule and reports what each
+honest node reached and committed, whether their decisions agree, and
 whether every honest block above round `0` is valid under the blocks the
-nodes made, and how many skips and bootstraps the honest nodes made.
-An attacker (`Scenario.adv`) runs the honest program and mounts
-`Scenario.attacks`; the network checks signatures (`Scenario.verify`),
-which is what the claims about traces assume of authentication.
+nodes made. An attacker (`Scenario.adv`) runs the honest program and
+mounts `Scenario.attacks`; the network checks signatures
+(`Scenario.verify`), which is what the claims about traces assume of
+authentication.
 -/
 
 namespace LeanDagSim
@@ -47,37 +44,15 @@ def rows : List String :=
 /-- **An attack** a Byzantine node of `Scenario.adv` mounts, besides running
 the honest program. -/
 inductive Attack where
-  /-- Answer a base request with a fabricated base: a horizon five rounds
-  above its top, and reference-free blocks there in every node's name,
-  sent to the requester. -/
-  | fakeBase
-  /-- As `fakeBase`, with a different horizon for each requester. -/
-  | splitBase
-  /-- Answer a base request with a certificate of fabricated decisions:
-  its own decisions, then every slot up to ten rounds above its top
-  skipped, listing every node as a signer. -/
-  | fakeCert
-  /-- Send half the nodes its proposal, and the other half one with
-  another head, both signed. -/
-  | conflictProposals
   /-- With each block, broadcast one with no references, one referencing
   a block that does not exist, and one under an identifier that is not its
   hash. -/
   | invalidBlocks
   /-- With each block, broadcast a block in the next node's name. -/
   | forgedAuthor
-  /-- When the honest horizons differ, an invalid block at the highest,
-  referencing one block below it, and above it a chain of valid blocks up
-  to the highest honest top, each referencing the one below and `q − 1`
-  honest blocks, its identifier the least of the attacker's at its
-  round. -/
-  | junkAtCut
   /-- Instead of each block, send each other node its own twin of it,
   with its own payload; its later blocks reference the block itself. -/
   | twinSplit
-  /-- Send its blocks to every node but the slow ones, and answer none of
-  their requests for blocks. -/
-  | hide
   deriving Repr, DecidableEq
 
 /-- **A scenario.** Times are in ticks. -/
@@ -98,15 +73,8 @@ structure Scenario where
   delayMin : ℕ := 1
   delayMax : ℕ := 3
   timeout : ℕ := 10
-  lag : ℕ := 2
-  /-- The heights above its next undecided slot at which a node keeps
-  every proposal. -/
-  ahead : ℕ := 8
   /-- Crashed nodes, with the time each crashes. -/
   crash : List (ℕ × ℕ) := []
-  /-- Recovering nodes `(v, down, up)`: node `v` is down from `down` and
-  restarts at `up`. -/
-  recover : List (ℕ × ℕ × ℕ) := []
   /-- Equivocating nodes. -/
   byz : List ℕ := []
   /-- The time from which equivocators act on nothing. A copy of the
@@ -125,9 +93,7 @@ structure Scenario where
   /-- The attacks the nodes of `adv` mount. -/
   attacks : List Attack := []
   /-- Whether the network checks signatures: a block in an honest author's
-  name is one that author made, a certificate's honest signers signed its
-  head at its height, and a message's sender is the node that sent
-  it. -/
+  name is one that author made. -/
   verify : Bool := true
   /-- Slow nodes: every message to or from one takes at least `slowDelay`
   ticks past GST, and before `slowUntil` if set. -/
@@ -145,12 +111,6 @@ def Scenario.honest (sc : Scenario) (v : ℕ) : Bool :=
 /-- A block's identifier: a hash of its content. -/
 def idOf {n : ℕ} (b : Block (Fin n) ℕ ℕ) : ℕ :=
   (hash (b.round, b.creator.val, b.refs.sort (· ≤ ·), b.payload)).toNat
-
-/-- A chain's head extended by a decision: a hash of both. -/
-def extend (h : ℕ) (e : ℕ × Option ℕ) : ℕ := (hash (h, e.1, e.2)).toNat
-
-/-- The head of a chain of decisions. -/
-def chainHead (ds : List (ℕ × Option ℕ)) : ℕ := ds.foldl extend 0
 
 /-- The configuration of node `me`, its payload `twin` at every round. -/
 def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) (me : Fin n)
@@ -171,11 +131,7 @@ def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) 
   timeout := fun _ => sc.timeout
   σ := boundedSel
   idOf := idOf
-  lag := sc.lag
-  ahead := sc.ahead
   payload := fun _ => twin
-  extend := extend
-  root := 0
 
 /-- An agent: a node, and which copy of it (`0` unless it equivocates). -/
 structure Agent (n : ℕ) where
@@ -183,11 +139,10 @@ structure Agent (n : ℕ) where
   twin : ℕ
 
 /-- **Timing measurements** of the honest nodes, for the liveness
-conditions (`docs/validator.md` §12): when each built each round and
-decided each slot, the honest-authored blocks delivered below the
-receiver's horizon, the greatest
-lag of the certified frontier behind the decided one past GST, and the
-fetches asked for, and the certified decisions asked for and adopted. -/
+conditions (`docs/validator.md` §12): when each built each round,
+decided each slot and accepted each block of another honest author, the
+honest blocks delivered and kept neither in the store nor pending, and
+the fetches asked for. -/
 structure Stats where
   /-- Each honest node's own blocks: the node, the round and the time. -/
   built : List (ℕ × ℕ × ℕ) := []
@@ -196,27 +151,12 @@ structure Stats where
   /-- The blocks of other honest authors each honest node accepted: the
   node, the round and the time. -/
   accepted : List (ℕ × ℕ × ℕ) := []
-  /-- Honest-authored blocks delivered to an honest node below its horizon. -/
-  belowHorizon : ℕ := 0
-  /-- Those delivered past GST. -/
-  belowAfterGst : ℕ := 0
-  /-- Honest-authored blocks delivered to an honest node, new and at or
-  above its horizon, that it neither stored nor kept pending. -/
+  /-- Honest-authored blocks delivered to an honest node, new, that it
+  neither stored nor kept pending. -/
   notKept : ℕ := 0
-  /-- The greatest `lo − certHeight` of an honest node past GST. -/
-  certLag : ℕ := 0
   /-- The fetches honest nodes asked for, and the identifiers in them. -/
   fetches : ℕ := 0
   fetched : ℕ := 0
-  /-- The requests for certified decisions honest nodes sent, and the
-  times an honest node not recovering adopted decisions. -/
-  asks : ℕ := 0
-  adoptions : ℕ := 0
-  /-- The junk chains planted, and the honest blocks that referenced one. -/
-  junkChains : ℕ := 0
-  /-- The times an honest node stalled and recovered, and those past GST. -/
-  stalls : ℕ := 0
-  stallsAfterGst : ℕ := 0
   deriving Inhabited
 
 /-- **What a simulation reports.** -/
@@ -234,12 +174,6 @@ structure Report where
   /-- Every honest block above round `0` is valid at the row under the
   blocks the nodes made. -/
   valid : Bool
-  /-- The skips the honest nodes made: a recovering node resuming at a
-  round above its top. -/
-  skips : ℕ
-  /-- The bootstraps the honest nodes made: a recovering node's top
-  rising at a step at which it may jump to an offered horizon. -/
-  boots : ℕ
   /-- The inputs the signature checks dropped. -/
   dropped : ℕ
   /-- The largest store any honest node held. -/
@@ -252,11 +186,11 @@ structure Report where
   time : ℕ
   /-- The timing measurements. -/
   stats : Stats := {}
-  /-- Each honest node's final state, in brief: recovering, top, own block,
-  horizon, next undecided slot, certificate height, the authors its store holds at the top and
-  the two rounds above, its pending blocks (author, round, references
-  missing, payload), the authors it holds exposed, the timers fired, and
-  whether it can build and its references reach. -/
+  /-- Each honest node's final state, in brief: top, own block, next
+  undecided slot, the authors its store holds at the top and the two
+  rounds above, its pending blocks (author, round, references missing,
+  payload), the timers fired, and whether it can build and its references
+  reach. -/
   final : List String := []
 
 /-- Put an input in flight, behind those arriving no later. -/
@@ -269,10 +203,10 @@ section Run
 variable {n : ℕ} (sc : Scenario) (p : Scheme.Params) (q : ℕ) (hn : 0 < n)
 
 /-- The simulation's state: each agent's state, the inputs in flight, the
-seed, each agent's decisions (the latest first), the honest agents' own blocks, the blocks
-each agent made or broadcast in its own name under their hash, every
-block broadcast or sent under its hash, the largest honest store, the inputs processed, and the
-honest agents' skips and bootstraps. -/
+seed, each agent's decisions (the latest first), the honest agents' own
+blocks, the blocks each agent made or sent in its own name under their
+hash, every block broadcast or sent under its hash, the largest honest
+store, and the inputs processed. -/
 structure World (n : ℕ) where
   agents : Array (Agent n)
   states : Array (State (Fin n) ℕ ℕ)
@@ -288,22 +222,14 @@ structure World (n : ℕ) where
   time : ℕ
   /-- The withheld block, once built. -/
   withheld : Option (ℕ × Block (Fin n) ℕ ℕ)
-  skips : ℕ
-  boots : ℕ
-  /-- The proposals each node signed: the signer, the height and the
-  head. -/
-  signed : List (ℕ × ℕ × ℕ)
   /-- The inputs the signature checks dropped. -/
   dropped : ℕ
   /-- The timing measurements. -/
   stats : Stats
-  /-- The horizons a junk chain was planted at. -/
-  junked : List ℕ := []
 
 /-- Whether node `v` has crashed by time `t`. -/
 def crashed (v t : ℕ) : Bool :=
-  sc.crash.any (fun e => e.1 = v ∧ e.2 ≤ t) ||
-    sc.recover.any fun e => e.1 = v ∧ e.2.1 ≤ t ∧ t < e.2.2
+  sc.crash.any fun e => e.1 = v ∧ e.2 ≤ t
 
 /-- Whether agent `a` receives what agent `src` broadcasts. -/
 def receives (a src : Agent n) : Bool :=
@@ -336,77 +262,14 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
             ((t + dt, d, .deliver id b) :: acc.1, g')
           else acc
         | _, _ => acc) acc
-    | .requestBase =>
-      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
-        match agents[src]?, agents[d]? with
-        | some s, some a =>
-          if a.node ≠ s.node then
-            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
-            ((t + dt, d, .baseRequest s.node) :: acc.1, g')
-          else acc
-        | _, _ => acc) acc
-    | .propose k h =>
-      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
-        match agents[src]?, agents[d]? with
-        | some s, some a =>
-          if receives sc a s then
-            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
-            ((t + dt, d, .proposal s.node k h) :: acc.1, g')
-          else acc
-        | _, _ => acc) acc
-    | .serveCert peer c ds =>
-      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
-        match agents[src]?, agents[d]? with
-        | some s, some a =>
-          if a.node = peer then
-            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
-            ((t + dt, d, .certOffer s.node c ds) :: acc.1, g')
-          else acc
-        | _, _ => acc) acc
-    | .announce c =>
-      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
-        match agents[src]?, agents[d]? with
-        | some s, some a =>
-          if receives sc a s then
-            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
-            ((t + dt, d, .announced s.node c) :: acc.1, g')
-          else acc
-        | _, _ => acc) acc
-    | .serveBase peer G =>
-      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
-        match agents[src]?, agents[d]? with
-        | some s, some a =>
-          if a.node = peer then
-            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
-            ((t + dt, d, .baseOffer s.node G) :: acc.1, g')
-          else acc
-        | _, _ => acc) acc
-    | .requestDecisions peer lo =>
-      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
-        match agents[src]?, agents[d]? with
-        | some s, some a =>
-          if a.node = peer then
-            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
-            ((t + dt, d, .decisionRequest s.node lo) :: acc.1, g')
-          else acc
-        | _, _ => acc) acc
     | .setTimer r after => ((t + after, src, .timer r) :: acc.1, acc.2)
-    | .fetch peer G ids =>
+    | .fetch peer ids =>
       (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if a.node = peer then
             let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
-            ((t + dt, d, .fetchRequest s.node G ids) :: acc.1, g')
-          else acc
-        | _, _ => acc) acc
-    | .relay id b =>
-      (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
-        match agents[src]?, agents[d]? with
-        | some s, some a =>
-          if receives sc a s then
-            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
-            ((t + dt, d, .deliver id b) :: acc.1, g')
+            ((t + dt, d, .fetchRequest s.node ids) :: acc.1, g')
           else acc
         | _, _ => acc) acc
     | .send peer id b =>
@@ -464,56 +327,18 @@ def sameBlock (b c : Block (Fin n) ℕ ℕ) : Bool :=
 def authentic (w : World n) (id : ℕ) (b : Block (Fin n) ℕ ℕ) : Bool :=
   !(sc.honest b.creator.val) || (w.blocks.get? id).any (sameBlock b)
 
-/-- **The signature checks** on an input: a block in an honest author's
-name is one it made, and an offered or announced certificate's honest
-signers signed its head at its height. -/
+/-- **The signature check** on an input: a block in an honest author's
+name is one it made. -/
 def checked (w : World n) : Input (Fin n) ℕ ℕ → Option (Input (Fin n) ℕ ℕ)
   | .deliver id b => if authentic sc w id b then some (.deliver id b) else none
-  | .certOffer peer c ds =>
-    if c.signers.all fun v => !(sc.honest v.val) || w.signed.contains (v.val, c.height, c.head)
-    then some (.certOffer peer c ds) else none
-  | .announced peer c =>
-    if c.signers.all fun v => !(sc.honest v.val) || w.signed.contains (v.val, c.height, c.head)
-    then some (.announced peer c) else none
   | i => some i
 
-/-- A head other than `h`. -/
-def flip (h : ℕ) : ℕ := h + 1
-
-/-- **An attacker's outputs**: the honest program's outputs at state `st`
-on input `i`, changed by the attacks, with the proposals it signs and the
-proposals it sends to single nodes. -/
-def attacked (agents : Array (Agent n)) (src t : ℕ) (a : Agent n) (st : State (Fin n) ℕ ℕ)
-    (i : Input (Fin n) ℕ ℕ) (out : List (Output (Fin n) ℕ ℕ)) :
-    List (Output (Fin n) ℕ ℕ) × List (ℕ × ℕ) ×
-      List (ℕ × ℕ × Input (Fin n) ℕ ℕ) :=
+/-- **An attacker's outputs**: the honest program's outputs, changed by
+the attacks. -/
+def attacked (out : List (Output (Fin n) ℕ ℕ)) : List (Output (Fin n) ℕ ℕ) :=
   let has (x : Attack) := sc.attacks.contains x
-  let top := st.top.getD 0
-  -- answers to a base request
-  let out := match i with
-    | .baseRequest peer =>
-      let G := top + 5 + (if has .splitBase then peer.val else 0)
-      let fake : List (ℕ × Block (Fin n) ℕ ℕ) := (List.finRange n).map fun v =>
-        let b : Block (Fin n) ℕ ℕ := ⟨G, v, ∅, 7⟩
-        (idOf b, b)
-      let out := if has .fakeBase || has .splitBase then
-          (out.map fun (o : Output (Fin n) ℕ ℕ) => match o with
-            | .serveBase p _ => Output.serveBase p G
-            | o => o) ++ fake.map fun (e : ℕ × Block (Fin n) ℕ ℕ) => Output.send peer e.1 e.2
-        else out
-      let h := top + 10
-      let fds : List (ℕ × Option ℕ) :=
-        st.decided.reverse ++ (List.range' st.lo (h - st.lo)).map fun k => (k, none)
-      let fc : Cert (Fin n) ℕ := ⟨h, chainHead fds, List.finRange n⟩
-      if has .fakeCert then
-        (out.filter fun (o : Output (Fin n) ℕ ℕ) => match o with
-          | .serveCert .. => false
-          | _ => true) ++ [Output.serveCert peer fc fds]
-      else out
-    | _ => out
-  -- blocks besides its own
-  let out := out.flatMap fun (o : Output (Fin n) ℕ ℕ) => match o with
-    | .broadcast id b =>
+  out.flatMap fun (o : Output (Fin n) ℕ ℕ) => match o with
+    | .broadcast _ b =>
       let junk : List (Output (Fin n) ℕ ℕ) := if has .invalidBlocks then
           let b₁ : Block (Fin n) ℕ ℕ := { b with refs := ∅, payload := 1 }
           let b₂ : Block (Fin n) ℕ ℕ := { b with refs := {123456789}, payload := 2 }
@@ -532,75 +357,6 @@ def attacked (agents : Array (Agent n)) (src t : ℕ) (a : Agent n) (st : State 
           some (.send v (idOf bv) bv)) ++ junk ++ forged
       else o :: junk ++ forged
     | o => [o]
-  -- blocks kept from the slow nodes
-  let out := if has .hide then out.flatMap fun (o : Output (Fin n) ℕ ℕ) => match o with
-      | .broadcast id b => (List.finRange n).filterMap fun v =>
-        if v = a.node ∨ sc.slow.contains v.val then none else some (.send v id b)
-      | .send v id b => if sc.slow.contains v.val then [] else [.send v id b]
-      | o => [o]
-    else out
-  -- proposals
-  if has .conflictProposals then
-    let props := out.filterMap fun (o : Output (Fin n) ℕ ℕ) => match o with
-      | .propose k h => some (k, h)
-      | _ => none
-    let direct := props.flatMap fun (k, h) =>
-      (List.range agents.size).filterMap fun d => match agents[d]? with
-        | some b =>
-          if b.node ≠ a.node then
-            some (t + 1, d, .proposal a.node k (if b.node.val % 2 = 0 then h else flip h))
-          else none
-        | none => none
-    (out.filter fun (o : Output (Fin n) ℕ ℕ) => match o with
-      | .propose .. => false
-      | _ => true,
-      props ++ props.map (fun e => (e.1, flip e.2)), direct)
-  else
-    (out, out.filterMap (fun (o : Output (Fin n) ℕ ℕ) => match o with
-      | .propose k h => some (k, h)
-      | _ => none), [])
-
-/-- A block by `me` like `b`, its payload chosen to give it an identifier
-below `bound`, if one of `256` tries does. -/
-def ground (b : Block (Fin n) ℕ ℕ) (bound : ℕ) : Block (Fin n) ℕ ℕ :=
-  ((List.range 256).map fun k => { b with payload := 1000 + k }).find? (idOf · < bound) |>.getD b
-
-/-- **The junk chain** `junkAtCut` plants, in node `me`'s name at time `t`, and
-the horizon it is planted at: the deliveries to the honest agents and the
-blocks. -/
-def junkChain (w : World n) (me : Fin n) (t : ℕ) :
-    Option (ℕ × List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × List (ℕ × Block (Fin n) ℕ ℕ)) :=
-  let hs := (List.range w.agents.size).filter fun d => match w.agents[d]? with
-    | some a => a.twin = 0 && sc.honest a.node.val && !crashed sc a.node.val t
-    | none => false
-  let bases := hs.filterMap fun d => w.states[d]?.map (·.store.base)
-  let tops := hs.filterMap fun d => w.states[d]?.bind (·.top)
-  match bases.max?, bases.min?, tops.max? with
-  | some G, some g, some T =>
-    if g < G ∧ 0 < G ∧ G ∉ w.junked then
-      let atR (r : ℕ) := w.honest.filter fun e => e.2.round = r ∧ e.2.creator ≠ me
-      match atR (G - 1) with
-      | [] => none
-      | e :: _ =>
-        let x : Block (Fin n) ℕ ℕ := ⟨G, me, {e.1}, 999⟩
-        let mine (r : ℕ) := w.blocks.foldl (fun m i b =>
-          if b.round = r ∧ b.creator = me then min m i else m) (2 ^ 64)
-        let chain := (List.range (T - G)).foldl (fun (acc : List (ℕ × Block (Fin n) ℕ ℕ)) k =>
-          let r := G + 1 + k
-          match acc.head? with
-          | none => acc
-          | some (pid, _) =>
-            let others := ((atR (r - 1)).foldl (fun (l : List (ℕ × Block (Fin n) ℕ ℕ)) e =>
-              if l.any (·.2.creator = e.2.creator) then l else l ++ [e]) []).take (q - 1)
-            if others.length + 1 < q then acc else
-            let refs : Finset ℕ := insert pid (others.map (·.1)).toFinset
-            let y := ground ⟨r, me, refs, 0⟩ (mine r)
-            (idOf y, y) :: acc) [(idOf x, x)]
-        let blocks := chain.reverse
-        let msgs := hs.flatMap fun d => blocks.map fun e => (t + 1, d, Input.deliver e.1 e.2)
-        some (G, msgs, blocks)
-    else none
-  | _, _, _ => none
 
 /-- Process at most `fuel` inputs, in order of arrival, up to the horizon. -/
 def loop : ℕ → World n → World n
@@ -619,17 +375,10 @@ def loop : ℕ → World n → World n
         | some i =>
         let cfg := cfgFor sc p q hn a.node a.twin
         let r := step cfg st i
-        let (out, sig, direct) := if sc.adv.contains a.node.val then
-            attacked sc w.agents d t a st i r.2
-          else (r.2, r.2.filterMap (fun | .propose k h => some (k, h) | _ => none), [])
-        let jc := match sc.adv.head? with
-          | some z => if h : z < n ∧ sc.attacks.contains .junkAtCut then
-              junkChain sc q w ⟨z, h.1⟩ t else none
-          | none => none
-        let direct := direct ++ (jc.map (·.2.1)).getD []
+        let out := if sc.adv.contains a.node.val then attacked sc r.2 else r.2
         let (out, extra, wh) := withholding sc w.agents d t out w.withheld
         let (msgs, g) := sends sc w.agents d t out w.gen
-        let msgs := extra ++ direct ++ msgs
+        let msgs := extra ++ msgs
         let isHonest := sc.honest a.node.val
         let own := r.2.filterMap fun
           | .persist id b => some (id, b)
@@ -642,16 +391,12 @@ def loop : ℕ → World n → World n
           | .broadcast id b => if id = idOf b then some (id, b) else none
           | .send _ id b => if id = idOf b then some (id, b) else none
           | _ => none
-        let skip := st.recovering && !r.1.recovering
-        let boot := st.recovering && (st.top.getD 0) < (r.1.top.getD 0) &&
-          (jumpRound cfg { st with offers := r.1.offers, lo := r.1.lo, cert := r.1.cert }
-            (st.top.getD 0)).isSome
         let decs := r.2.filterMap fun
           | .commit k x => some (k, x)
           | _ => none
         let ss := w.stats
         let ss : Stats := if isHonest then
-            let fs := r.2.filterMap fun | .fetch _ _ ids => some ids.length | _ => none
+            let fs := r.2.filterMap fun | .fetch _ ids => some ids.length | _ => none
             let ss := { ss with
               built := own.map (fun e => (a.node.val, e.2.round, t)) ++ ss.built
               decided := decs.map (fun e => (a.node.val, e.1, t)) ++ ss.decided
@@ -660,32 +405,15 @@ def loop : ℕ → World n → World n
                   if sc.honest b.creator.val ∧ b.creator ≠ a.node then some (a.node.val, b.round, t)
                   else none) ++ ss.accepted
               fetches := ss.fetches + fs.length
-              fetched := ss.fetched + fs.foldl (· + ·) 0
-              asks := ss.asks + (r.2.filter fun | .requestDecisions .. => true | _ => false).length
-              adoptions := ss.adoptions + match i with
-                | .certOffer .. => if !st.recovering && st.lo < r.1.lo then 1 else 0
-                | _ => 0 }
-            let stall := match i with
-              | .restart => false
-              | _ => !st.recovering && r.1.recovering
-            let late := if sc.gst ≤ t then 1 else 0
-            let ss := if stall then
-                { ss with stalls := ss.stalls + 1, stallsAfterGst := ss.stallsAfterGst + late }
+              fetched := ss.fetched + fs.foldl (· + ·) 0 }
+            match i with
+            | .deliver id b =>
+              if sc.honest b.creator.val ∧ b.creator ≠ a.node ∧ id = idOf b ∧
+                  id ∉ st.store.ids ∧ id ∉ st.pending.map Prod.fst ∧
+                  id ∉ r.1.store.ids ∧ id ∉ r.1.pending.map Prod.fst then
+                { ss with notKept := ss.notKept + 1 }
               else ss
-            let ss := match i with
-              | .deliver id b =>
-                if sc.honest b.creator.val ∧ b.creator ≠ a.node ∧ id = idOf b then
-                  if b.round < st.store.base then
-                    { ss with belowHorizon := ss.belowHorizon + 1,
-                              belowAfterGst := ss.belowAfterGst + if sc.gst ≤ t then 1 else 0 }
-                  else if id ∉ st.store.ids ∧ id ∉ st.pending.map Prod.fst ∧
-                      id ∉ r.1.store.ids ∧ id ∉ r.1.pending.map Prod.fst then
-                    { ss with notKept := ss.notKept + 1 }
-                  else ss
-                else ss
-              | _ => ss
-            if sc.gst ≤ t then { ss with certLag := max ss.certLag (r.1.lo - r.1.certHeight) }
-            else ss
+            | _ => ss
           else ss
         loop fuel
           { agents := w.agents
@@ -694,23 +422,15 @@ def loop : ℕ → World n → World n
             gen := g
             decisions := w.decisions.modify d (decs.reverse ++ ·)
             honest := if isHonest then own ++ w.honest else w.honest
-            blocks := (own ++ sent ++ (jc.map (·.2.2)).getD []).foldl (fun m e => m.insert e.1 e.2)
-              w.blocks
-            seen := (own ++ seen ++ (jc.map (·.2.2)).getD []).foldl (fun m e => m.insert e.1 e.2)
-              w.seen
+            blocks := (own ++ sent).foldl (fun m e => m.insert e.1 e.2) w.blocks
+            seen := (own ++ seen).foldl (fun m e => m.insert e.1 e.2) w.seen
             maxStore := if isHonest then max w.maxStore r.1.store.ids.card else w.maxStore
             maxPending := if isHonest then max w.maxPending r.1.pending.length else w.maxPending
             events := w.events + 1
             time := t
             withheld := wh
-            skips := if isHonest && skip then w.skips + 1 else w.skips
-            boots := if isHonest && boot then w.boots + 1 else w.boots
-            signed := sig.map (fun e => (a.node.val, e.1, e.2)) ++ w.signed
             dropped := w.dropped
-            stats := match jc with
-              | some _ => { ss with junkChains := ss.junkChains + 1 }
-              | none => ss
-            junked := (jc.map (·.1)).toList ++ w.junked }
+            stats := ss }
       | _, _ => loop fuel { w with queue := rest }
 
 end Run
@@ -725,7 +445,7 @@ def agreeAt (ls : List (List (ℕ × Option ℕ))) : Bool :=
 
 /-- **Run a scenario.** -/
 def simulate (sc : Scenario) : Report :=
-  let empty : Report := ⟨false, [], [], true, true, true, 0, 0, 0, 0, 0, 0, 0, {}, []⟩
+  let empty : Report := ⟨false, [], [], true, true, true, 0, 0, 0, 0, 0, {}, []⟩
   match row? sc.row sc.n sc.f sc.c with
   | none => empty
   | some (p, q) =>
@@ -740,8 +460,7 @@ def simulate (sc : Scenario) : Report :=
       let w0 : World n :=
         { agents := agents
           states := agents.map fun a => State.init (cfgFor sc p q hn a.node a.twin)
-          queue := sc.recover.foldl (fun q e => enqueue (e.2.2, e.1, .restart) q)
-            ((List.range agents.size).map fun d => (0, d, .start))
+          queue := (List.range agents.size).map fun d => (0, d, .start)
           gen := mkStdGen sc.seed
           decisions := agents.map fun _ => []
           honest := []
@@ -752,9 +471,6 @@ def simulate (sc : Scenario) : Report :=
           events := 0
           time := 0
           withheld := none
-          skips := 0
-          boots := 0
-          signed := []
           dropped := 0
           stats := {} }
       let w := loop sc p q hn sc.fuel w0
@@ -772,19 +488,16 @@ def simulate (sc : Scenario) : Report :=
             let cf := cfgFor sc p q hn ⟨v % n, Nat.mod_lt _ hn⟩ 0
             let pend := st.pending.map fun e => (e.2.creator.val, e.2.round,
               (e.2.refs.filter fun j => j ∉ st.store.ids).card, e.2.payload)
-            let reach := reachReady cf st.store (refsAt cf st.store t st.own st.exposed) t
-            s!"node {v}: recovering {st.recovering} top {st.top} own {st.own.isSome} " ++
-              s!"base {st.store.base} lo {st.lo} cert {st.certHeight} authors {auth t}/{auth (t + 1)}/{auth (t + 2)} " ++
-              s!"pending {pend} exposed {st.exposed.card} fired {st.fired.sort (· ≤ ·)} " ++
-              s!"builds {(tryBuild cf st).isSome} reach {reach} " ++
-              s!"offers {st.offers.map fun o => (o.1.val, o.2)}"
+            let reach := reachReady cf st.store (refsAt cf st.store t st.own) t
+            s!"node {v}: top {st.top} own {st.own.isSome} " ++
+              s!"lo {st.lo} authors {auth t}/{auth (t + 1)}/{auth (t + 2)} " ++
+              s!"pending {pend} fired {st.fired.sort (· ≤ ·)} " ++
+              s!"builds {(tryBuild cf st).isSome} reach {reach}"
           | none => s!"node {v}: none"
         commits := decs
         agree := agreeAt decs
         prefixes := comparable decs
         valid := valid
-        skips := w.skips
-        boots := w.boots
         dropped := w.dropped
         maxStore := w.maxStore
         maxPending := w.maxPending

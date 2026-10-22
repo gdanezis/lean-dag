@@ -5,18 +5,12 @@ import LeanDag.Scheme.Model.TryDecide
 `docs/validator.md` §2. A node runs one row of the scheme as a pure
 transition function from inputs to outputs. `Config` fixes the row, the
 quorum, the node's identity, the schedule, the timeouts, the vote rule,
-the identifier map and the mechanisms' constants; `Input` and `Output`
-are the events it consumes and produces, with those of garbage
-collection, checkpoints and bootstrap included. A node's decisions are
-chained by the environment's hash (`Config.headOf`), and a proposal signs
-a height and the chain's head there. A checkpoint certificate (`Cert`)
-carries a height, a head, and the validators whose signed proposals of
-them it holds; the decisions themselves travel only with a certificate
-served to a joiner.
+the identifier map and the payload source; `Input` and `Output` are the
+events it consumes and produces.
 
 The node checks the row's validity `rowValid q` on receipt, and decides
 on a record of its own store at `stored`, references one round below,
-which a store cut at a horizon also meets, and the honest set `∅`.
+and the honest set `∅`.
 
 Definitions only.
 -/
@@ -70,17 +64,8 @@ structure Config where
   σ : Scheme.VoteSel Validator BlockId Payload (stored Validator BlockId Payload) ∅
   /-- The identifier of a block: the environment's hash. -/
   idOf : Block Validator BlockId Payload → BlockId
-  /-- The horizon's lag `Λ`. -/
-  lag : ℕ
-  /-- The heights above its next undecided slot at which a node keeps
-  every proposal of each signer. -/
-  ahead : ℕ
   /-- The payload of the node's round-`r` block. -/
   payload : ℕ → Payload
-  /-- The environment's hash of a chain's head extended by a decision. -/
-  extend : BlockId → ℕ × Option BlockId → BlockId
-  /-- The head of the empty chain. -/
-  root : BlockId
 
 variable {Validator BlockId Payload}
 
@@ -91,9 +76,6 @@ variable (cfg : Config Validator BlockId Payload)
 /-- The schedule. -/
 abbrev slots : Slots Validator :=
   Slots.uniform cfg.per cfg.m cfg.per_pos cfg.m_pos cfg.elect cfg.elect_block
-
-/-- **The head of a chain of decisions.** -/
-def headOf (ds : List (ℕ × Option BlockId)) : BlockId := ds.foldl cfg.extend cfg.root
 
 /-- The slots proposed at round `r`. -/
 def slotsAt (r : ℕ) : List ℕ :=
@@ -122,68 +104,16 @@ end Config
 
 variable (Validator BlockId Payload)
 
-/-- **A checkpoint certificate**: a height, the head of the chain of the
-decisions of the slots below it, and the validators whose signed
-proposals of this head at this height it carries. -/
-structure Cert where
-  /-- The number of slots certified. -/
-  height : ℕ
-  /-- The head of the chain of the decisions of slots `0 … height − 1`. -/
-  head : BlockId
-  /-- The signers. -/
-  signers : List Validator
-
-/-- **What a node persists** across a crash (`docs/validator.md` §5.1):
-its accepted blocks, from the horizon up, the horizon, the next
-undecided slot, its top round and its own block there, its decisions,
-the height it last proposed and the chain's head there, and its
-certificate. -/
-structure Persisted where
-  /-- The accepted blocks from the horizon up, the node's own among them. -/
-  window : List (BlockId × Block Validator BlockId Payload)
-  /-- The horizon. -/
-  horizon : ℕ
-  /-- The next undecided slot. -/
-  lo : ℕ
-  /-- The node's top round, once started. -/
-  top : Option ℕ
-  /-- The node's own block at its top round, if it built there. -/
-  own : Option BlockId
-  /-- The decisions the node output, the latest first. -/
-  decided : List (ℕ × Option BlockId)
-  /-- The height the node last proposed. -/
-  lastProposed : ℕ
-  /-- The head of the chain of its decisions below that height. -/
-  chain : BlockId
-  /-- The highest certificate the node holds. -/
-  cert : Option (Cert Validator BlockId)
-
 /-- **What a node consumes.** -/
 inductive Input where
-  /-- Start with nothing persisted: build the genesis block. -/
+  /-- Start: build the genesis block. -/
   | start
   /-- A block, with its identifier. -/
   | deliver (id : BlockId) (b : Block Validator BlockId Payload)
   /-- The timer of round `r` fired. -/
   | timer (r : ℕ)
-  /-- A crash and restart: the node keeps only what it persisted. -/
-  | restart
-  /-- A peer's base: its horizon `G`. -/
-  | baseOffer (peer : Validator) (G : ℕ)
-  /-- A peer asks for the base. -/
-  | baseRequest (peer : Validator)
-  /-- A peer at horizon `G` asks for the blocks `ids` and their histories. -/
-  | fetchRequest (peer : Validator) (G : ℕ) (ids : List BlockId)
-  /-- A peer's signed proposal of the head `h` of the chain of the
-  decisions of slots `0 … k − 1`. -/
-  | proposal (peer : Validator) (k : ℕ) (h : BlockId)
-  /-- A peer's certificate, with the decisions it certifies: all of them,
-  served with its base, or those from a slot asked for. -/
-  | certOffer (peer : Validator) (c : Cert Validator BlockId) (ds : List (ℕ × Option BlockId))
-  /-- A peer asks for the decisions certified from slot `lo` up. -/
-  | decisionRequest (peer : Validator) (lo : ℕ)
-  /-- A peer's certificate, announced without decisions. -/
-  | announced (peer : Validator) (c : Cert Validator BlockId)
+  /-- A peer asks for the blocks `ids` and their histories. -/
+  | fetchRequest (peer : Validator) (ids : List BlockId)
 
 /-- **What a node produces.** -/
 inductive Output where
@@ -195,29 +125,10 @@ inductive Output where
   | setTimer (r : ℕ) (after : ℕ)
   /-- Slot `k` is decided: committed to a block, or skipped. -/
   | commit (k : ℕ) (d : Option BlockId)
-  /-- Blocks below round `G` may be discarded. -/
-  | prune (G : ℕ)
-  /-- Ask every peer for its base. -/
-  | requestBase
-  /-- Send the horizon `G` to a peer as its base. -/
-  | serveBase (peer : Validator) (G : ℕ)
-  /-- Ask the peer for the blocks `ids` and their histories above the
-  horizon `G`. -/
-  | fetch (peer : Validator) (G : ℕ) (ids : List BlockId)
+  /-- Ask the peer for the blocks `ids` and their histories. -/
+  | fetch (peer : Validator) (ids : List BlockId)
   /-- Send a block to one peer. -/
   | send (peer : Validator) (id : BlockId) (b : Block Validator BlockId Payload)
-  /-- Sign and send every peer a proposal of the head `h` of the chain of
-  the decisions of slots `0 … k − 1`. -/
-  | propose (k : ℕ) (h : BlockId)
-  /-- Send the certificate to a peer, with the decisions it certifies. -/
-  | serveCert (peer : Validator) (c : Cert Validator BlockId) (ds : List (ℕ × Option BlockId))
-  /-- Ask a peer for the decisions it certified from slot `lo` up. -/
-  | requestDecisions (peer : Validator) (lo : ℕ)
-  /-- Send the certificate to every peer, without decisions. -/
-  | announce (c : Cert Validator BlockId)
-  /-- Send another author's block to every peer: one of two blocks of one
-  author at one round, the evidence of its equivocation. -/
-  | relay (id : BlockId) (b : Block Validator BlockId Payload)
 
 end Node
 

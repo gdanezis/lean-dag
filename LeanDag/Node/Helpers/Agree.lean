@@ -1,19 +1,16 @@
-import LeanDag.Node.Boot.Statement
 import LeanDag.Node.Helpers.Boot
 import LeanDag.Node.Helpers.Converge
 import LeanDag.Node.Helpers.Decided
 /-!
-# Bootstrapping nodes agree slot by slot
+# Honest stores are cuts of the run's record
 
 Over a trace, what each honest node knew is what the trace delivered
-it, and what it made (`knownOf_sub`). Timely authentication and
+it and what it made (`knownOf_sub`). Timely authentication and
 the hash over the trace give authentication and the hash at its end
 (`authentic_of_timely`, `hashInjective_of_trace`), so the honest nodes'
-knowledge forms the run's record. Then, by induction over the
-trace, every honest store is a cut of that record and every decision a
-verdict on a view of it (`cut_before`): a node bootstraps only at a round
-some honest peer offered from its store, which the record reaches, since
-that peer's store was a cut of it earlier. Two verdicts on one slot agree.
+knowledge forms the run's record. By induction over the trace, every
+honest store is a cut of that record and every decision a verdict on a
+view of it (`cut_before`).
 -/
 
 namespace LeanDag
@@ -105,17 +102,10 @@ theorem knownOf_sub {v : Validator} (hv : v ∈ H) {x : BlockId × Block Validat
   · obtain ⟨j, -, hjv, hx⟩ := mem_persists_before (cfg := cfg) v tr.length hx
     exact Or.inr ⟨j, v, hjv, hv, hx⟩
 
-omit [LinearOrder BlockId] in
-/-- **`f + 1` distinct validators include an honest one**, with at most `f`
-outside `H`. -/
-theorem exists_mem_of_length {f : ℕ} (hf : Hᶜ.card ≤ f) {l : List Validator} (hl : l.Nodup)
-    (hlen : f + 1 ≤ l.length) : ∃ p ∈ l, p ∈ H := by
-  obtain ⟨p, hp, hpH⟩ := exists_mem_of_card hf (S := l.toFinset)
-    (by rw [List.toFinset_card_of_nodup hl]; exact hlen)
-  exact ⟨p, List.mem_toFinset.mp hp, hpH⟩
-
 /-! ## The record's assumptions -/
 
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+/-- A block is among an output list's broadcasts iff the list broadcasts it. -/
 theorem mem_broadcasts {out : List (Output Validator BlockId Payload)}
     {x : BlockId × Block Validator BlockId Payload} :
     x ∈ broadcasts out ↔ Output.broadcast x.1 x.2 ∈ out := by
@@ -145,79 +135,13 @@ theorem authentic_of_timely (htime : Converge.TimelyAuthentic cfg H tr) :
   obtain ⟨inp', hi⟩ := Converge.event_of_map hiv
   exact mem_broadcasts.mpr (mem_outputs_of_event hi (mem_broadcasts.mp hxp))
 
-/-! ## Decisions and proposals over the trace -/
-
-/-- **A node's decisions before an event are a prefix of its decisions
-over the trace.** -/
-theorem commits_prefix (v : Validator) (t : ℕ) :
-    commitsOf (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr t v)).2 <+:
-      decisionsOf cfg tr v := by
-  obtain ⟨l, hl⟩ := inputsBefore_prefix_length (tr := tr) v t
-  unfold decisionsOf runOf
-  rw [hl, run_append, commitsOf_append]
-  exact List.prefix_append _ _
-
-/-- **A proposal an event outputs at a height `k` is the head of the
-chain of its node's first `k` decisions up to that event.** -/
-theorem propose_head {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
-    (hi : tr[i]? = some (u, inp)) {k : ℕ} {h : BlockId}
-    (hp : Output.propose k h ∈ outputsAt cfg tr i) :
-    let C := commitsOf (run (cfg.at u) (State.init (cfg.at u)) (inputsBefore tr (i + 1) u)).2
-    k ≤ C.length ∧ h = cfg.headOf (C.take k) := by
-  rw [outputsAt_eq hi] at hp
-  apply (Local.decisions _ _ _ (cfg.at u) (inputsBefore tr (i + 1) u)).2.2 k h
-  rw [inputsBefore_succ hi, if_pos rfl, run_append_single]
-  exact List.mem_append_right _ hp
-
-omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
-/-- A prefix's first `k` entries, `k` within it, are the whole list's. -/
-theorem take_of_prefix {α : Type} {l₁ l₂ : List α} (h : l₁ <+: l₂) {k : ℕ}
-    (hk : k ≤ l₁.length) : l₂.take k = l₁.take k := by
-  obtain ⟨t, rfl⟩ := h
-  exact List.take_append_of_le_length hk
-
-omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
-/-- The entry at position `i` of a list whose slots are `0, 1, …` is slot `i`. -/
-theorem fst_getElem_of_slots {β : Type} {l : List (ℕ × β)}
-    (hl : l.map Prod.fst = List.range l.length) {i : ℕ} (hi : i < l.length) : (l[i]).1 = i := by
-  have h := congrArg (fun m => m[i]?) hl
-  simp only [List.getElem?_map, List.getElem?_range hi, List.getElem?_eq_getElem hi,
-    Option.map_some, Option.some.injEq] at h
-  exact h
-
-omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
-/-- **Two lists of decisions of slots `0, 1, …` that agree at every slot
-both decide are prefix-comparable.** -/
-theorem prefix_of_slots {β : Type} {l₁ l₂ : List (ℕ × β)}
-    (h₁ : l₁.map Prod.fst = List.range l₁.length) (h₂ : l₂.map Prod.fst = List.range l₂.length)
-    (hag : ∀ k d d', (k, d) ∈ l₁ → (k, d') ∈ l₂ → d = d') : l₁ <+: l₂ ∨ l₂ <+: l₁ := by
-  have key : ∀ {a b : List (ℕ × β)}, a.map Prod.fst = List.range a.length →
-      b.map Prod.fst = List.range b.length → (∀ k d d', (k, d) ∈ a → (k, d') ∈ b → d = d') →
-      a.length ≤ b.length → a <+: b := by
-    intro a b ha hb hab hle
-    rw [List.prefix_iff_eq_take]
-    refine List.ext_getElem (by simp; omega) fun i hi₁ hi₂ => ?_
-    have hib : i < b.length := by omega
-    rw [List.getElem_take]
-    have e₁ := fst_getElem_of_slots ha hi₁
-    have e₂ := fst_getElem_of_slots hb hib
-    have hm₁ : (i, (a[i]).2) ∈ a := by
-      have := List.getElem_mem hi₁; rwa [← Prod.mk.eta (p := a[i]), e₁] at this
-    have hm₂ : (i, (b[i]).2) ∈ b := by
-      have := List.getElem_mem hib; rwa [← Prod.mk.eta (p := b[i]), e₂] at this
-    exact Prod.ext (e₁.trans e₂.symm) (hab i _ _ hm₁ hm₂)
-  rcases le_total l₁.length l₂.length with h | h
-  · exact Or.inl (key h₁ h₂ hag h)
-  · exact Or.inr (key h₂ h₁ (fun k d d' ha hb => (hag k d' d hb ha).symm) h)
-
 /-! ## The run's record -/
 
 /-- **Every honest store is a cut of the run's record, and every decision
 a verdict on a view of it**, before every event of the trace. -/
 theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
-    (htime : Converge.TimelyAuthentic cfg H tr)
-    (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hchain : Boot.ChainInjective cfg H tr) (t : ℕ) :
+    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
+    (t : ℕ) :
     ∀ v ∈ H,
       IsCut (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime))
         (stateBefore cfg tr t v).store ∧
@@ -232,7 +156,7 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
   let U := globalRecord hinjR hauthR
   have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2.1, hadm.1⟩
-  have hg := ground hinjR hauthR hadm.2.2.2.1
+  have hg := ground hinjR hauthR
   have hK : ∀ v ∈ H, ∀ x ∈ knownOf cfg tr v, x ∈ knownAll cfg H tr :=
     fun v hv x hx => ⟨v, hv, hx⟩
   -- every honest store is a cut, and every decision a verdict
@@ -257,50 +181,12 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
       · by_cases hw : w = v
         · subst hw
           obtain ⟨hc, hv₀⟩ := ih t (by omega) w hv
-          have hh : Held (cfg.at w) (stateBefore cfg tr t w) := Held.run _ Held.init
           have hi := Converge.inv_before (cfg := cfg) (tr := tr) t w
           obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hj
-          -- the record reaches every slot the node decided
-          obtain ⟨hap, hL⟩ := run_appends (cfg := cfg.at w) (inputsBefore tr t w)
-            (Ledger.init (cfg := cfg.at w))
-          have hD : (stateBefore cfg tr t w).decided.reverse =
-              commitsOf (run (cfg.at w) (State.init (cfg.at w)) (inputsBefore tr t w)).2 := by
-            have := hap.1
-            rw [show (State.init (cfg.at w)).decided.reverse = [] from rfl,
-              List.nil_append] at this
-            exact this
-          have hR : SpansDecided (cfg.at w) U (stateBefore cfg tr t w) :=
-            SpansDecided.of_verdicts hadm.2.2.2.2.2.2 hL.1 fun e he =>
-              hv₀ e (by rw [← hD]; exact List.mem_reverse.mpr he)
-          -- adopted decisions are an honest signer's
-          have hadopt : ∀ p c ds, inp = .certOffer p c ds → ∀ ds', ds'.Sublist ds →
-              adoptable (cfg.at w) (stateBefore cfg tr t w) c ds' = true →
-              ∀ e ∈ ds', Verdict (cfg.at w) U e := by
-            intro p c ds hinp ds' hsub ha e he
-            have hj' : tr[t]? = some (w, .certOffer p c ds) := by rw [hj, hinp]
-            have hhead : (cfg.at w).headOf (commitsOf (run (cfg.at w) (State.init (cfg.at w))
-                (inputsBefore tr t w)).2 ++ ds') = c.head := by
-              rw [← hD]; exact adoptable_head hL ha
-            unfold adoptable at ha
-            simp only [Bool.and_eq_true, decide_eq_true_eq] at ha
-            obtain ⟨u, hu, huH⟩ := exists_mem_of_length hf ha.1.1.1.2
-              (by have := hadm.2.2.2.2.2.1; have := ha.1.1.1.1; change cfg.q ≤ _ at this; omega)
-            obtain ⟨i, hit, hiu, hprop⟩ := hcert t w p c ds hj' hv u hu huH
-            obtain ⟨inp', hi'⟩ := Converge.event_of_map hiu
-            obtain ⟨hk, hkh⟩ := propose_head hi' hprop
-            have hpre := commits_prefix (cfg := cfg) (tr := tr) u (i + 1)
-            have htk := take_of_prefix hpre hk
-            have hds := hchain t w p c ds hj' hv ds' hsub _ (commits_prefix (cfg := cfg) (tr := tr) w t)
-              u huH c.height (hk.trans hpre.length_le) (by rw [htk, ← hkh]; exact hhead)
-            rw [htk] at hds
-            have he' : e ∈ (commitsOf (run (cfg.at u) (State.init (cfg.at u))
-                (inputsBefore tr (i + 1) u)).2).take c.height := by
-              rw [← hds]; exact List.mem_append_right _ he
-            exact (ih (i + 1) (by omega) u huH).2 e (List.mem_of_mem_take he')
-          obtain ⟨hc', hv'⟩ := IsCut.step (cfg := cfg.at w) hg hσ ht hadm.2.2.2.2.2.2 inp hc hh
-            (fun e he => hK w hv e (knownBefore_knownOf (hi.pend e he))) hR
+          obtain ⟨hc', hv'⟩ := IsCut.step (cfg := cfg.at w) hg hσ ht inp hc
+            (fun e he => hK w hv e (knownBefore_knownOf (hi.pend e he)))
             (fun e he => hK w hv e (hd e he))
-            (fun e he => hK w hv e (hb e he)) hadopt
+            (fun e he => hK w hv e (hb e he))
           refine ⟨by rw [stateBefore_succ hj, if_pos rfl]; exact hc', fun e he => ?_⟩
           rw [inputsBefore_succ hj, if_pos rfl, run_append_single, commitsOf_append] at he
           rcases List.mem_append.mp he with he | he

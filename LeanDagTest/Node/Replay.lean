@@ -30,8 +30,7 @@ def idIn (blk : Fin 24 → Block (Fin 4) (Fin 24) Unit) (b : Block (Fin 4) (Fin 
     (blk i).creator = b.creator ∧ (blk i).refs = b.refs)).getD 0
 
 /-- A configuration at row `p`, `n = 4`, `f = 1`, `q = 3`, with one
-leader every `per` rounds, the record's hash, and no garbage collection
-within the record's rounds. -/
+leader every `per` rounds, and the record's hash. -/
 def cfg (p : Scheme.Params) (per : ℕ) (hper : 0 < per) (elect : ℕ → Fin 4)
     (blk : Fin 24 → Block (Fin 4) (Fin 24) Unit) : Config (Fin 4) (Fin 24) Unit where
   p := p
@@ -48,11 +47,7 @@ def cfg (p : Scheme.Params) (per : ℕ) (hper : 0 < per) (elect : ℕ → Fin 4)
   timeout := fun _ => 10
   σ := boundedSel
   idOf := idIn blk
-  lag := 100
-  ahead := 8
   payload := fun _ => ()
-  extend := fun h _ => h
-  root := 0
 
 /-- The record's blocks through the store path into an empty store: the
 number of blocks the store accepted, the number left pending, and the commits of one

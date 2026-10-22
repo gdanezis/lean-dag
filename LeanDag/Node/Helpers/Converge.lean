@@ -6,12 +6,13 @@ import LeanDag.Node.Helpers.Global
 # The honest nodes along a trace
 
 The blocks honest nodes knew over a trace give one block map (`gT`); an
-honest node's store reads as it at every event, at horizon `0`
-(`reads_before`). Over time then: a block that fits stays pending or
-stored (`keeps_after`); no pending block is ever ready
-(`noReady_before`); a block becomes pending only by a delivery the node
-acts on (`entry_before`); and a request is recorded only on account of
-such a delivery (`requested_before`).
+honest node's store reads as it at every event (`reads_before`). Over
+time then: a block that fits stays pending or stored (`keeps_after`); no
+pending block is ever ready (`noReady_before`); a block becomes pending
+only by a delivery the node acts on (`entry_before`); and a request is
+recorded only on account of such a delivery (`requested_before`). Below
+a pending block of an honest history, a chain of pending blocks leads to
+a block the node lacks (`chain`).
 -/
 
 namespace LeanDag
@@ -28,9 +29,9 @@ variable {tr : Trace Validator BlockId Payload}
 variable (cfg H tr) in
 open Classical in
 /-- **The trace's block map**: an identifier denotes the block the honest
-nodes knew under it, read at horizon `0`. -/
+nodes knew under it. -/
 noncomputable def gT (id : BlockId) : Block Validator BlockId Payload :=
-  if h : ∃ x ∈ knownIn cfg H tr, x.1 = id then atBase 0 (Classical.choose h).2 else cfg.genesis
+  if h : ∃ x ∈ knownIn cfg H tr, x.1 = id then (Classical.choose h).2 else cfg.genesis
 
 omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
 theorem event_of_map {i : ℕ} {u : Validator} (h : (tr[i]?.map Prod.fst) = some u) :
@@ -53,7 +54,7 @@ theorem content_eq (hinj : HashInjective cfg H tr) {x y : BlockId × Block Valid
   hinj x hx y hy (by rw [← id_of_knownIn hx, ← id_of_knownIn hy, h])
 
 theorem gT_of_known (hinj : HashInjective cfg H tr) {x : BlockId × Block Validator BlockId Payload}
-    (hx : x ∈ knownIn cfg H tr) : gT cfg H tr x.1 = atBase 0 x.2 := by
+    (hx : x ∈ knownIn cfg H tr) : gT cfg H tr x.1 = x.2 := by
   have h : ∃ y ∈ knownIn cfg H tr, y.1 = x.1 := ⟨x, hx, rfl⟩
   unfold gT
   rw [dif_pos h]
@@ -113,9 +114,9 @@ theorem mem_inputsBefore {i : ℕ} {w : Validator} {x : Input Validator BlockId 
     · cases hj
   · cases hex
 
-/-- **A block an honest node knew from an input** was delivered to it, when
-no honest node is given a base offer. -/
-theorem deliver_of_delivered (hnj : NoRejoin H tr) {j : ℕ} {v : Validator} (hv : v ∈ H)
+omit [Fintype Validator] in
+/-- **A block an honest node knew from an input** was delivered to it. -/
+theorem deliver_of_delivered {j : ℕ} {v : Validator}
     {inp : Input Validator BlockId Payload} (hj : tr[j]? = some (v, inp))
     {x : BlockId × Block Validator BlockId Payload} (hx : x ∈ delivered (cfg.at v) [inp]) :
     tr[j]? = some (v, .deliver x.1 x.2) ∧ x.1 = cfg.idOf x.2 := by
@@ -126,34 +127,19 @@ theorem deliver_of_delivered (hnj : NoRejoin H tr) {j : ℕ} {v : Validator} (hv
     split at hx
     · rw [List.mem_singleton] at hx; subst hx; exact ⟨hj, hid⟩
     · exact absurd hx List.not_mem_nil
-  | baseOffer p G => exact absurd hj ((hnj j v hv).1 p G)
   | _ => simp [delivered] at hx
 
 theorem stateBefore_of_le {i : ℕ} (h : tr.length ≤ i) (v : Validator) :
     stateBefore cfg tr i v = stateBefore cfg tr tr.length v := by
   unfold stateBefore; rw [inputsBefore_of_le h]
 
-/-- **Every honest store is at horizon `0`**, when the last ones are. -/
-theorem base_before (hbase : ∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0)
-    {v : Validator} (hv : v ∈ H) (i : ℕ) : (stateBefore cfg tr i v).store.base = 0 := by
-  by_cases h : i ≤ tr.length
-  · have := (grows_before (cfg := cfg) (tr := tr) v h).1
-    rw [hbase v hv] at this
-    omega
-  · rw [stateBefore_of_le (by omega)]; exact hbase v hv
-
 /-- **Every honest store reads as the trace's block map.** -/
-theorem reads_before (hinj : HashInjective cfg H tr)
-    (hbase : ∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0)
-    {v : Validator} (hv : v ∈ H) (i : ℕ) :
-    ReadsAs (gT cfg H tr) (stateBefore cfg tr i v).store := by
-  refine ⟨base_before hbase hv i, fun j hj => ?_⟩
-  have hk := knownBefore_sub hv i ((inv_before (cfg := cfg) i v).known j hj)
-  rw [gT_of_known hinj hk]
-  simp only [Store.blk, lookup, base_before hbase hv i]
+theorem reads_before (hinj : HashInjective cfg H tr) {v : Validator} (hv : v ∈ H) (i : ℕ) :
+    ReadsAs (gT cfg H tr) (stateBefore cfg tr i v).store := fun j hj =>
+  (gT_of_known hinj (knownBefore_sub hv i ((inv_before (cfg := cfg) i v).known j hj))).symm
 
 theorem pend_before (hinj : HashInjective cfg H tr) {v : Validator} (hv : v ∈ H) (i : ℕ) :
-    ∀ e ∈ (stateBefore cfg tr i v).pending, gT cfg H tr e.1 = atBase 0 e.2 := fun e he =>
+    ∀ e ∈ (stateBefore cfg tr i v).pending, gT cfg H tr e.1 = e.2 := fun e he =>
   gT_of_known hinj (knownBefore_sub hv i ((inv_before (cfg := cfg) i v).pend e he))
 
 theorem step_before {a : ℕ} {v : Validator} {inp : Input Validator BlockId Payload}
@@ -171,9 +157,8 @@ theorem same_before {a : ℕ} {v : Validator} (h : ∀ inp, tr[a]? ≠ some (v, 
     exact h inp ha
 
 /-- **A block that fits stays pending or stored.** -/
-theorem keeps_after (hinj : HashInjective cfg H tr)
-    (hbase : ∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0) (hnr : NoRestart H tr)
-    (hnj : NoRejoin H tr) {v : Validator} (hv : v ∈ H) {y : BlockId × Block Validator BlockId Payload}
+theorem keeps_after (hinj : HashInjective cfg H tr) {v : Validator} (hv : v ∈ H)
+    {y : BlockId × Block Validator BlockId Payload}
     (hf : Fits (cfg.at v) (gT cfg H tr) y) {a : ℕ}
     (hy : y ∈ (stateBefore cfg tr a v).pending ∨ y.1 ∈ (stateBefore cfg tr a v).store.ids) :
     ∀ b, a ≤ b →
@@ -185,10 +170,8 @@ theorem keeps_after (hinj : HashInjective cfg H tr)
     by_cases he : ∃ inp, tr[j]? = some (v, inp)
     · obtain ⟨inp, hj⟩ := he
       rw [step_before hj]
-      refine step_keeps (by rw [← step_before hj]; exact reads_before hinj hbase hv _)
-        (by rw [← step_before hj, base_before hbase hv, base_before hbase hv])
-        (pend_before hinj hv j) (fun id b hib hid => ?_)
-        (fun h => hnr j v hv (h ▸ hj)) hf ih
+      refine step_keeps (by rw [← step_before hj]; exact reads_before hinj hv _)
+        (pend_before hinj hv j) (fun id b hib hid => ?_) hf ih
       subst hib
       exact gT_of_known (x := (id, b)) hinj
         (Or.inl ⟨j, v, .deliver id b, hj, hv, by simp [delivered, ← hid]⟩)
@@ -205,26 +188,23 @@ theorem noReady_before (v : Validator) : ∀ i, NoReady (cfg.at v) (stateBefore 
     · rw [same_before fun inp h => he ⟨inp, h⟩]; exact noReady_before v i
 
 /-- **A block becomes pending only by a delivery the node acts on.** -/
-theorem entry_before (hnj : NoRejoin H tr) {v : Validator} (hv : v ∈ H)
+theorem entry_before {v : Validator}
     {y : BlockId × Block Validator BlockId Payload} {a : ℕ}
     (h₁ : y ∉ (stateBefore cfg tr a v).pending) (h₂ : y ∈ (stateBefore cfg tr (a + 1) v).pending) :
     tr[a]? = some (v, .deliver y.1 y.2) ∧ Admits (cfg.at v) (stateBefore cfg tr a v) y.1 y.2 := by
   by_cases he : ∃ inp, tr[a]? = some (v, inp)
   · obtain ⟨inp, ha⟩ := he
     rw [step_before ha] at h₂
-    rcases (step_sub (cfg := cfg.at v) _ inp).1 y h₂ with h | ⟨rfl, hc⟩ | hoff
+    rcases (step_sub (cfg := cfg.at v) _ inp).1 y h₂ with h | ⟨rfl, hc⟩
     · exact absurd h h₁
     · exact ⟨ha, hc⟩
-    · cases inp <;> simp only [Input.isOffer] at hoff
-      · exact absurd ha ((hnj a v hv).1 _ _)
-      · exact absurd ha ((hnj a v hv).2 _ _ _)
   · rw [same_before fun inp h => he ⟨inp, h⟩] at h₂; exact absurd h₂ h₁
 
 /-- **A request is recorded only on account of a delivery the node acted
 on.** -/
 theorem requested_before (v : Validator) : ∀ t, ∀ e ∈ (stateBefore cfg tr t v).requested,
-    ∃ a < t, ∃ b, tr[a]? = some (v, .deliver e.2.1 b) ∧
-      Admits (cfg.at v) (stateBefore cfg tr a v) e.2.1 b
+    ∃ a < t, ∃ b, tr[a]? = some (v, .deliver e.2 b) ∧
+      Admits (cfg.at v) (stateBefore cfg tr a v) e.2 b
   | 0, e, he => by simp [stateBefore, inputsBefore, run, State.init] at he
   | t + 1, e, he => by
     by_cases hev : ∃ inp, tr[t]? = some (v, inp)
@@ -239,16 +219,14 @@ theorem requested_before (v : Validator) : ∀ t, ∀ e ∈ (stateBefore cfg tr 
       exact ⟨a, by omega, b, hab, hc⟩
 
 /-- **A delivery a node acts on keeps a fitting block it delivers.** -/
-theorem admit_after (hinj : HashInjective cfg H tr)
-    (hbase : ∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0)
-    {v : Validator} (hv : v ∈ H) {a : ℕ} {id : BlockId} {b : Block Validator BlockId Payload}
+theorem admit_after (hinj : HashInjective cfg H tr) {v : Validator} (hv : v ∈ H) {a : ℕ}
+    {id : BlockId} {b : Block Validator BlockId Payload}
     (ha : tr[a]? = some (v, .deliver id b)) (hc : Admits (cfg.at v) (stateBefore cfg tr a v) id b)
     (hf : Fits (cfg.at v) (gT cfg H tr) (id, b)) :
     (id, b) ∈ (stateBefore cfg tr (a + 1) v).pending ∨
       id ∈ (stateBefore cfg tr (a + 1) v).store.ids := by
   rw [step_before ha]
-  exact admit_keeps hc (by rw [← step_before ha]; exact reads_before hinj hbase hv _)
-    (by rw [← step_before ha, base_before hbase hv, base_before hbase hv])
+  exact admit_keeps hc (by rw [← step_before ha]; exact reads_before hinj hv _)
     (pend_before hinj hv a) (gT_of_known (x := (id, b)) hinj
       (Or.inl ⟨a, v, .deliver id b, ha, hv, by simp [delivered, ← hc.1]⟩)) hf
 
@@ -272,10 +250,9 @@ variable {tr : Trace Validator BlockId Payload}
 section Histories
 
 variable (hinj : HashInjective cfg H tr)
-  (hbase : ∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0)
-include hinj hbase
+include hinj
 
-omit hinj hbase in
+omit hinj in
 theorem causal_store (i : ℕ) (v : Validator) :
     CausalStructure (stateBefore cfg tr i v).store.blk (stateBefore cfg tr i v).store.ids :=
   (stateBefore cfg tr i v).store.toRecord.causal
@@ -285,56 +262,47 @@ does.** -/
 theorem hist_eq {v : Validator} (hv : v ∈ H) {i : ℕ} {b : BlockId}
     (hb : b ∈ (stateBefore cfg tr i v).store.ids) :
     historyFrom (stateBefore cfg tr i v).store.blk b = historyFrom (gT cfg H tr) b :=
-  historyFrom_congr (stateBefore cfg tr i v).store.complete (reads_before hinj hbase hv i).2 hb
+  historyFrom_congr (stateBefore cfg tr i v).store.complete (reads_before hinj hv i) hb
 
 theorem hist_sub {v : Validator} (hv : v ∈ H) {i : ℕ} {b : BlockId}
     (hb : b ∈ (stateBefore cfg tr i v).store.ids) :
     historyFrom (gT cfg H tr) b ⊆ (stateBefore cfg tr i v).store.ids := by
-  rw [← hist_eq hinj hbase hv hb]
+  rw [← hist_eq hinj hv hb]
   exact (causal_store i v).history_subset_ids hb
 
-omit hinj hbase in
+omit hinj in
 /-- **What a node stores it knew.** -/
 theorem stored_known {v : Validator} (hv : v ∈ H) {i : ℕ} {j : BlockId}
     (hj : j ∈ (stateBefore cfg tr i v).store.ids) :
-    (j, (stateBefore cfg tr i v).store.map.getD j (stateBefore cfg tr i v).store.junk) ∈
-      knownIn cfg H tr :=
+    (j, (stateBefore cfg tr i v).store.blk j) ∈ knownIn cfg H tr :=
   knownBefore_sub hv i ((inv_before (cfg := cfg) i v).known j hj)
 
 /-- **A stored block fits every honest node.** -/
 theorem fits_stored {u : Validator} (hu : u ∈ H) {i : ℕ} {j : BlockId}
     (hj : j ∈ (stateBefore cfg tr i u).store.ids) (v : Validator) :
-    Fits (cfg.at v) (gT cfg H tr)
-      (j, (stateBefore cfg tr i u).store.map.getD j (stateBefore cfg tr i u).store.junk) := by
+    Fits (cfg.at v) (gT cfg H tr) (j, (stateBefore cfg tr i u).store.blk j) := by
   set st := (stateBefore cfg tr i u).store
-  have hR := reads_before hinj hbase hu i
-  refine fits_of_valid fun hr => ?_
-  have hlt : st.base < (st.map.getD j st.junk).round := by rw [hR.1]; exact hr
-  have hblk := Store.blk_of_lt hlt
-  have href : ∀ k ∈ (st.map.getD j st.junk).refs, k ∈ st.ids := fun k hk =>
-    st.complete j hj k (by change k ∈ (st.blk j).refs; rw [hblk]; exact hk)
-  refine ⟨fun k hk => ?_, ?_⟩
-  · have := st.pred j hj k (by change k ∈ (st.blk j).refs; rw [hblk]; exact hk)
-    change (st.blk k).round + 1 = (st.blk j).round at this
-    rw [hR.2 k (href k hk), hblk] at this
-    exact this
-  · refine rowValid_congr (fun k hk => ?_) ((inv_before (cfg := cfg) i u).valid j hj hlt)
-    rw [hR.2 k (href k hk)]
+  have hR := reads_before hinj hu i
+  have href : ∀ k ∈ (st.blk j).refs, k ∈ st.ids := st.complete j hj
+  refine fits_of_valid ⟨fun k hk => ?_, ?_⟩
+  · rw [← hR k (href k hk)]
+    exact st.pred j hj k hk
+  · refine rowValid_congr (fun k hk => ?_) ((inv_before (cfg := cfg) i u).valid j hj)
+    rw [hR k (href k hk)]
     exact ⟨rfl, rfl⟩
 
 omit hinj in
 /-- **What an event makes its node stores after it.** -/
 theorem persist_stored {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
-    (hu : u ∈ H) (hi : tr[i]? = some (u, inp)) {e : BlockId × Block Validator BlockId Payload}
+    (hi : tr[i]? = some (u, inp)) {e : BlockId × Block Validator BlockId Payload}
     (he : e ∈ persists (outputsAt cfg tr i)) :
     e.1 ∈ (stateBefore cfg tr (i + 1) u).store.ids ∧
-      (stateBefore cfg tr (i + 1) u).store.map.getD e.1
-        (stateBefore cfg tr (i + 1) u).store.junk = e.2 := by
+      (stateBefore cfg tr (i + 1) u).store.blk e.1 = e.2 := by
   rw [outputsAt_eq hi] at he
   rw [step_before hi]
-  exact step_persist (by rw [← step_before hi, base_before hbase hu, base_before hbase hu]) e he
+  exact step_persist e he
 
-omit hinj hbase in
+omit hinj in
 /-- **A block pending at the end entered once and stayed.** -/
 theorem entry_time {v : Validator} {c : BlockId × Block Validator BlockId Payload}
     (hc : c ∈ (stateBefore cfg tr tr.length v).pending) :
@@ -361,9 +329,9 @@ theorem entry_time {v : Validator} {c : BlockId × Block Validator BlockId Paylo
 /-- **Below a pending block of an honest history, a chain of pending
 blocks leads to a block the node lacks.** -/
 theorem chain {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) {τ : ℕ} {idh : BlockId}
-    (hidh : idh ∈ (stateBefore cfg tr τ u).store.ids) (raw : BlockId → Block Validator BlockId Payload)
-    (hraw : ∀ j, raw j = (stateBefore cfg tr τ u).store.map.getD j
-      (stateBefore cfg tr τ u).store.junk) :
+    (hidh : idh ∈ (stateBefore cfg tr τ u).store.ids)
+    (raw : BlockId → Block Validator BlockId Payload)
+    (hraw : ∀ j, raw j = (stateBefore cfg tr τ u).store.blk j) :
     ∀ n, ∀ w ∈ historyFrom (gT cfg H tr) idh, (raw w).round = n →
       (w, raw w) ∈ (stateBefore cfg tr tr.length v).pending →
       w ∉ (stateBefore cfg tr tr.length v).store.ids →
@@ -379,40 +347,24 @@ theorem chain {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) {τ : ℕ} {idh : 
   induction n using Nat.strong_induction_on with
   | _ n ih =>
   intro w hw hn hwp hws
-  have hsub := hist_sub hinj hbase hu hidh
+  have hsub := hist_sub hinj hu hidh
   have hwst : w ∈ st.ids := hsub hw
   have hnr := noReady_before (cfg := cfg) (tr := tr) v tr.length _ hwp
-  simp only [ready, Bool.or_eq_false_iff, decide_eq_false_iff_not] at hnr
-  have hb0 := base_before hbase hv tr.length
-  have hpos : 0 < (raw w).round := by
-    have h1 := hnr.1
-    change ¬ (raw w).round ≤ fin.store.base at h1
-    rw [hb0] at h1; omega
-  have hlt : st.base < (st.map.getD w st.junk).round := by
-    rw [base_before hbase hu τ, ← hraw]; exact hpos
-  have hblk : st.blk w = raw w := (Store.blk_of_lt hlt).trans (hraw w).symm
+  simp only [ready, decide_eq_false_iff_not] at hnr
+  have hblk : st.blk w = raw w := (hraw w).symm
   -- the block is valid as `u` stored it, so it waits only for references
-  have hst0 : st.base = 0 := base_before hbase hu τ
-  have hfin0 : fin.store.base = 0 := hb0
   have hpredw : ∀ j ∈ (raw w).refs, (st.blk j).round + 1 = (raw w).round := fun j hj => by
-    have := st.pred w hwst j (by change j ∈ (st.blk w).refs; rw [hblk]; exact hj)
-    change (st.blk j).round + 1 = (st.blk w).round at this
-    rw [hblk] at this; exact this
+    rw [← hblk]; exact st.pred w hwst j (by rw [← hblk] at hj; exact hj)
   have hagree : ∀ j ∈ (raw w).refs, j ∈ fin.store.ids → fin.store.blk j = st.blk j := by
     intro j hj hjf
-    have hjst : j ∈ st.ids :=
-      st.complete w hwst j (by change j ∈ (st.blk w).refs; rw [hblk]; exact hj)
-    have hc := content_eq hinj (stored_known (cfg := cfg) (tr := tr) hv hjf)
+    have hjst : j ∈ st.ids := st.complete w hwst j (by rw [← hblk] at hj; exact hj)
+    exact content_eq hinj (stored_known (cfg := cfg) (tr := tr) hv hjf)
       (stored_known (cfg := cfg) (tr := tr) hu hjst) rfl
-    unfold Store.blk lookup
-    rw [hfin0, hst0]
-    exact congrArg (atBase 0) hc
   have hval : rowValid cfg.q st.blk (raw w) := by
-    have := (inv_before (cfg := cfg) τ u).valid w hwst hlt
-    rw [hraw]; exact this
+    rw [← hblk]; exact (inv_before (cfg := cfg) τ u).valid w hwst
   have hns : ¬ (raw w).refs ⊆ fin.store.ids := by
     intro hsub'
-    refine hnr.2 ⟨hsub', fun j hj => ?_, rowValid_congr (fun j hj => ?_) hval⟩
+    refine hnr ⟨hsub', fun j hj => ?_, rowValid_congr (fun j hj => ?_) hval⟩
     · rw [hagree j hj (hsub' hj)]; exact hpredw j hj
     · have hjw : j ≠ w := by
         intro h; subst h
@@ -422,19 +374,14 @@ theorem chain {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) {τ : ℕ} {idh : 
       rw [Function.update_of_ne hjw, hagree j hj (hsub' hj)]
       exact ⟨rfl, rfl⟩
   obtain ⟨r, hr, hrn⟩ := Finset.not_subset.mp hns
-  have hrst : r ∈ st.ids :=
-    st.complete w hwst r (by change r ∈ (st.blk w).refs; rw [hblk]; exact hr)
+  have hrst : r ∈ st.ids := st.complete w hwst r (by rw [← hblk] at hr; exact hr)
   have hrH : r ∈ historyFrom (gT cfg H tr) idh := by
-    rw [← hist_eq hinj hbase hu hidh] at hw ⊢
+    rw [← hist_eq hinj hu hidh] at hw ⊢
     have C := causal_store (cfg := cfg) (tr := tr) τ u
     exact C.history_subset_of_reaches hidh ((C.mem_history_iff hidh).mp hw)
       (C.mem_history_of_mem_refs hwst (by rw [hblk]; exact hr))
   have hround : (raw r).round + 1 = (raw w).round := by
-    have := st.pred w hwst r (by change r ∈ (st.blk w).refs; rw [hblk]; exact hr)
-    change (st.blk r).round + 1 = (st.blk w).round at this
-    rw [hblk] at this
-    rw [hraw r]
-    simpa [Store.blk, lookup] using this
+    rw [hraw r]; exact hpredw r hr
   by_cases hrp : r ∈ fin.pending.map Prod.fst
   · obtain ⟨e, he, her⟩ := List.mem_map.mp hrp
     have hke : e.2 = raw r := by

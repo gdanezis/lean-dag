@@ -10,15 +10,11 @@ adversary, assume:
   delivered to an honest node with an honest author's identity and its
   hash was broadcast by that author earlier;
 * **the hash** (`Converge.HashInjective`): no two different blocks the
-  honest nodes knew have one identifier;
-* no honest node is given a base offer (`Converge.NoRejoin`).
+  honest nodes knew have one identifier.
 
 Then, at the bounded vote, with an admissible row and at most `f` nodes
 outside `H`, **any two honest nodes' decisions are prefix-comparable**
-(`Safety`), whatever horizons they raise and whenever they restart and
-resume. A node that bootstraps skips the slots below its new horizon;
-two honest nodes then still decide each slot alike
-(`Node/Boot/Statement.lean`).
+(`Safety`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -36,7 +32,6 @@ def Safety : Prop :=
     (tr : Trace Validator BlockId Payload),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
-    Converge.NoRejoin H tr →
     ∀ v ∈ H, ∀ w ∈ H, decisionsOf cfg tr v <+: decisionsOf cfg tr w ∨
       decisionsOf cfg tr w <+: decisionsOf cfg tr v
 

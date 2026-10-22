@@ -3,26 +3,21 @@ import LeanDagSim.Net
 # Attacks, simulated
 
 `docs/validator.md` §6, step 7.4. At the Mysticeti row with `n = 4` and
-`f = 1`, node `3` runs the honest program and mounts one attack, while
-node `1` is down from tick `40` to tick `90` and rejoins by bootstrap,
-from the horizons, blocks and certificates its peers serve. Each line
-reads: the round each honest node reached, the slots it decided, whether
-two nodes that decide a slot decide it alike, whether any two nodes'
-decisions are prefix-comparable, whether the honest blocks are valid,
-the bootstraps made, and the inputs the signature checks dropped.
+`f = 1`, node `3` runs the honest program and mounts one attack. Each
+line reads: the round each honest node reached, the slots it decided,
+whether two nodes that decide a slot decide it alike, whether any two
+nodes' decisions are prefix-comparable, whether the honest blocks are
+valid, and the inputs the signature checks dropped.
 
 With the network checking signatures, which is what the claims over
 traces assume of authentication, every attack leaves agreement,
-prefix-comparability and validity intact. An attack that shows node `3`
-with two blocks at one round, its own fake base or its invalid twins,
-gets it excluded, and while node `1` is down the two other honest nodes
-are fewer than the quorum: the run stalls until node `1` is back. Under
-the invalid blocks it then advances at the pace of the round timers,
-reaching round 88 by tick 600. Without the checks, a certificate of
-fabricated decisions can be adopted, and with node `1` down from tick
-`40` to tick `70` the joiner's decisions disagree with its peers'; and
-blocks forged in an honest node's name get that node excluded as an
-equivocator, so that it stalls until it recovers and bootstraps.
+prefix-comparability and validity intact. Without the checks, blocks
+forged in node `0`'s name are accepted by its peers as node `0`'s, and
+their later blocks reference them; node `0` drops every block in its own
+name, so it never holds their histories and stays at round `2`, while
+agreement, prefix-comparability and validity still hold. The liveness
+claim assumes authenticated blocks (`Converge.TimelyAuthentic`), which
+excludes this run.
 -/
 
 namespace LeanDagTest
@@ -31,71 +26,34 @@ namespace Node
 
 open LeanDagSim
 
-/-- A scenario under attack: node `3` attacks, node `1` rejoins. -/
+/-- A scenario under attack: node `3` attacks. -/
 def attackedBy (as : List Attack) (verify : Bool := true) : Scenario :=
-  { horizon := 150, row := "mysticeti", adv := [3], attacks := as, verify := verify,
-    recover := [(1, 40, 90)] }
+  { horizon := 150, row := "mysticeti", adv := [3], attacks := as, verify := verify }
 
 /-- A scenario's outcome under attack, in one line. -/
 def attackLine (sc : Scenario) : String :=
   let r := simulate sc
-  s!"{r.tops} {r.commits.map (·.length)} {r.agree} {r.prefixes} {r.valid} {r.boots} {r.dropped}"
+  s!"{r.tops} {r.commits.map (·.length)} {r.agree} {r.prefixes} {r.valid} {r.dropped}"
 
-/-- info: "[(some 36), (some 36), (some 36)] [36, 36, 36] true true true 1 9" -/
-#guard_msgs in
-#eval attackLine (attackedBy [.fakeBase])
-
-/-- info: "[(some 39), (some 39), (some 39)] [38, 38, 38] true true true 1 9" -/
-#guard_msgs in
-#eval attackLine (attackedBy [.splitBase])
-
-/-- info: "[(some 50), (some 51), (some 51)] [49, 49, 49] true true true 1 2" -/
-#guard_msgs in
-#eval attackLine (attackedBy [.fakeCert])
-
-/-- info: "[(some 45), (some 45), (some 44)] [43, 43, 42] true true true 1 0" -/
-#guard_msgs in
-#eval attackLine (attackedBy [.conflictProposals])
-
-/-- info: "[(some 18), (some 17), (some 17)] [16, 16, 16] true true true 0 0" -/
+/-- info: "[(some 63), (some 63), (some 63)] [61, 61, 62] true true true 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks])
 
-/-- info: "[(some 52), (some 52), (some 52)] [50, 50, 50] true true true 1 149" -/
+/-- info: "[(some 64), (some 64), (some 64)] [62, 62, 62] true true true 192" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor])
 
-/-- info: "[(some 17), (some 17), (some 17)] [16, 16, 16] true true true 0 69" -/
+/-- info: "[(some 23), (some 23), (some 23)] [22, 22, 22] true true true 0" -/
 #guard_msgs in
-#eval attackLine (attackedBy [.fakeBase, .splitBase, .fakeCert, .conflictProposals,
-  .invalidBlocks, .forgedAuthor])
+#eval attackLine (attackedBy [.twinSplit])
 
-/-! ## A node stranded below its peers' horizon
-
-Node `3` sends its blocks to every node but node `2`, and answers none of
-node `2`'s requests; messages to and from node `2` take twelve ticks
-until tick `50`. The honest blocks of round `1` reference node `3`'s
-genesis block, which node `2` asks for after its peers have pruned it.
-Node `2` stays at round `1`, adopting its peers' certified decisions,
-until the timer of round `1` finds it stalled a second time; it then
-recovers, and resumes at a quorum above its top (§3.5, §3.6). -/
-
-/-- A slow node `2`, hidden from by node `3`. -/
-def hidden : Scenario :=
-  { horizon := 300, row := "mysticeti", adv := [3], attacks := [.hide], slow := [2],
-    slowDelay := 12, slowUntil := some 50 }
-
-/-- info: "[(some 86), (some 86), (some 85)] [85, 84, 83] true true true 0 0" -/
+/-- info: "[(some 24), (some 24), (some 24)] [24, 24, 24] true true true 6" -/
 #guard_msgs in
-#eval attackLine hidden
+#eval attackLine (attackedBy [.invalidBlocks, .forgedAuthor, .twinSplit])
 
 /-! ## Without the signature checks -/
 
-/-- info: "[(some 51), (some 51), (some 51)] [49, 49, 49] false false true 0 0" -/
-#guard_msgs in
-#eval attackLine { attackedBy [.fakeCert] (verify := false) with recover := [(1, 40, 70)] }
-
-/-- info: "[(some 17), (some 17), (some 17)] [17, 17, 17] true true true 0 0" -/
+/-- info: "[(some 2), (some 35), (some 35)] [0, 33, 33] true true true 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 

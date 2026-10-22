@@ -9,9 +9,7 @@ round, over a network that delivers every block a tick after it is sent
 and fires each timer when it expires. Each node builds as soon as it
 holds the round's leader block and three authors, and all four commit
 the same slots. With node `3` down, the others wait out the timer at its
-rounds and skip its slots. The nodes certify their decisions, and
-garbage collection keeps each store a few rounds deep however long the
-run.
+rounds and skip its slots, over a short run and over a long one.
 -/
 
 namespace LeanDagTest
@@ -40,11 +38,7 @@ def cfg (me : Fin 4) : Config (Fin 4) ℕ Unit where
   timeout := fun _ => 10
   σ := boundedSel
   idOf := idOf
-  lag := 2
-  ahead := 8
   payload := fun _ => ()
-  extend := fun h e => (hash (h, e.1, e.2)).toNat
-  root := 0
 
 /-- A network of four nodes: their states, the inputs in flight with the
 time each arrives, ordered by it, and the commits each node output. -/
@@ -59,16 +53,14 @@ def enqueue (e : ℕ × Fin 4 × Input (Fin 4) ℕ Unit) :
   | [] => [e]
   | x :: xs => if e.1 < x.1 then e :: x :: xs else x :: enqueue e xs
 
-/-- The inputs a node's outputs at time `t` send: each broadcast block
-and each proposal to every other node a tick later, and each timer back
-to the node when it expires. -/
+/-- The inputs a node's outputs at time `t` send: each broadcast block to
+every other node a tick later, and each timer back to the node when it
+expires. -/
 def sends (t : ℕ) (src : Fin 4) (out : List (Output (Fin 4) ℕ Unit)) :
     List (ℕ × Fin 4 × Input (Fin 4) ℕ Unit) :=
   out.flatMap fun
     | .broadcast id b =>
       ((List.finRange 4).filter (· ≠ src)).map fun d => (t + 1, d, .deliver id b)
-    | .propose k h =>
-      ((List.finRange 4).filter (· ≠ src)).map fun d => (t + 1, d, .proposal src k h)
     | .setTimer r after => [(t + after, src, .timer r)]
     | _ => []
 
@@ -123,11 +115,11 @@ def up : Net := run [] 100 net0
 def allCommit (net : Net) : Bool :=
   agree net && (List.finRange 4).all fun d => (net.commits d).all fun e => e.2.isSome
 
-/-- info: [some 6, some 5, some 5, some 6] -/
+/-- info: [some 8, some 8, some 8, some 8] -/
 #guard_msgs in
 #eval tops up
 
-/-- info: [[0, 1, 2, 3], [0, 1, 2], [0, 1, 2], [0, 1, 2, 3]] -/
+/-- info: [[0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5]] -/
 #guard_msgs in
 #eval slotsOut up
 
@@ -143,17 +135,18 @@ of round `3` fires, skip slot `3`, and commit the slots around it. -/
 /-- The network after `170` inputs, node `3` down. -/
 def down3 : Net := run [3] 170 net0
 
-/-- info: [some 8, some 8, some 8, none] -/
+/-- info: [some 14, some 14, some 14, none] -/
 #guard_msgs in
 #eval tops down3
 
 /--
-info: [(0, true), (1, true), (2, true), (3, false), (4, true), (5, true), (6, true), (7, false)]
+info: [(0, true), (1, true), (2, true), (3, false), (4, true), (5, true), (6, true), (7, false), (8, true), (9, true),
+  (10, true), (11, false)]
 -/
 #guard_msgs in
 #eval (down3.commits 0).map fun e => (e.1, e.2.isSome)
 
-/-- info: [8, 8, 8, 0] -/
+/-- info: [12, 12, 12, 0] -/
 #guard_msgs in
 #eval (List.finRange 4).map fun d => (down3.commits d).length
 
@@ -163,20 +156,21 @@ info: [(0, true), (1, true), (2, true), (3, false), (4, true), (5, true), (6, tr
 
 /-! ## A long run, node `3` down
 
-Over `236` rounds every fourth slot, node `3`'s, is skipped, and each
-store holds eighteen blocks, its horizon five rounds below its top. -/
+Over `440` slots every fourth slot, node `3`'s, is skipped, and each
+store holds one block of each of the three nodes up at each round, less
+those still in flight. -/
 
 /-- The network after `5300` inputs, node `3` down. -/
 def long3 : Net := run [3] 5300 net0
 
-/-- info: ([some 236, some 236, some 236, none], 236, 59, true) -/
+/-- info: ([some 441, some 442, some 441, none], 440, 110, true) -/
 #guard_msgs in
 #eval (tops long3, (long3.commits 0).length, ((long3.commits 0).filter (·.2.isNone)).length,
   agree long3)
 
-/-- info: [(18, 231), (18, 231), (18, 231)] -/
+/-- info: [1325, 1327, 1324] -/
 #guard_msgs in
-#eval [0, 1, 2].map fun d : Fin 4 => ((long3.states d).store.ids.card, (long3.states d).store.base)
+#eval [0, 1, 2].map fun d : Fin 4 => (long3.states d).store.ids.card
 
 end Node
 

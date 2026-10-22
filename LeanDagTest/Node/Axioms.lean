@@ -3,10 +3,7 @@ import LeanDag.Node.Store
 import LeanDag.Node.Local.Proof
 import LeanDag.Node.Runs.Proof
 import LeanDag.Node.Converge.Proof
-import LeanDag.Node.Restart.Proof
-import LeanDag.Node.Boot.Proof
-import LeanDag.Common.Record.Fill
-import LeanDag.GC.AttestedBase
+import LeanDag.Node.Live.Proof
 /-!
 # The node's theorems use only the standard axioms
 -/
@@ -22,12 +19,6 @@ info: 'LeanDag.Node.boundedSel_sel_eq' depends on axioms: [propext, Classical.ch
 -/
 #guard_msgs in
 #print axioms LeanDag.Node.boundedSel_sel_eq
-
-/--
-info: 'LeanDag.Node.treeMap_getD_filter_of' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
-#print axioms LeanDag.Node.treeMap_getD_filter_of
 
 /--
 info: 'LeanDag.Node.Local.holds' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -54,26 +45,7 @@ info: 'LeanDag.Node.Converge.holds' depends on axioms: [propext, Classical.choic
 #print axioms LeanDag.Node.Converge.holds
 
 /--
-info: 'LeanDag.Node.Restart.holds' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'LeanDag.Node.Live.holds' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
-#print axioms LeanDag.Node.Restart.holds
-
-
-/--
-info: 'LeanDag.BlockRecord.selfBlock_valid' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
-#print axioms LeanDag.BlockRecord.selfBlock_valid
-
-/--
-info: 'LeanDag.Node.Boot.holds' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
-#print axioms LeanDag.Node.Boot.holds
-
-/--
-info: 'LeanDag.exists_honest_attester_of_mem_base' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
-#print axioms LeanDag.exists_honest_attester_of_mem_base
+#print axioms LeanDag.Node.Live.holds

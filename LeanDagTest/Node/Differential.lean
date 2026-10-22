@@ -94,8 +94,8 @@ def idIn (bs : Blocks) (b : Block (Fin 4) ℕ Unit) : ℕ :=
     e.2.refs = b.refs)).map Prod.fst).getD 0
 
 /-- A configuration at row `p`, `n = 4`, `f = 1`, `q = 3`, with `m`
-leaders every `per` rounds, slot `k` led by `k % 4`, and no garbage
-collection within the record's rounds. -/
+leaders every `per` rounds, slot `k` led by `k % 4`, and the record's
+hash. -/
 def cfg (p : Scheme.Params) (per m : ℕ) (hper : 0 < per) (hm : 0 < m)
     (hb : ∀ k₁ k₂, k₁ / m = k₂ / m → (⟨k₁ % 4, by omega⟩ : Fin 4) = ⟨k₂ % 4, by omega⟩ → k₁ = k₂)
     (bs : Blocks) : Config (Fin 4) ℕ Unit where
@@ -113,11 +113,7 @@ def cfg (p : Scheme.Params) (per m : ℕ) (hper : 0 < per) (hm : 0 < m)
   timeout := fun _ => 10
   σ := boundedSel
   idOf := idIn bs
-  lag := 100
-  ahead := 8
   payload := fun _ => ()
-  extend := fun h _ => h
-  root := 0
 
 /-- The record through the store path into an empty store. -/
 def load (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : State (Fin 4) ℕ Unit :=

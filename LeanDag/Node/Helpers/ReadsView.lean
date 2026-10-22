@@ -13,14 +13,12 @@ at it, a certificate's votes one round below it, and a link's
 certificates, which the anchor reaches through blocks above them. The
 references of blocks at `R` itself are never read.
 
-At `R = 0` the two views hold the same blocks; a store pruned at its
-horizon `G` agrees from `G` up with every view it is a cut of.
+At `R = 0` the two views hold the same blocks.
 
 `ViewsAbove.of_boundedSel`: at the bounded vote, the vote clause follows
 from the others, since the vote reads only the voter's history down to
-the slot's round. `ViewsAbove.of_store`: a store agrees from its horizon
-up with every view of which it holds the blocks from the horizon up, read
-at the horizon.
+the slot's round. `ViewsAbove.of_store`: a store agrees with every view
+of which it holds the blocks, read alike.
 -/
 
 namespace LeanDag
@@ -470,34 +468,18 @@ theorem ViewsAbove.of_boundedSel [P₁.Mechanised] [P₂.Mechanised] {R : ℕ}
       rw [creator x hxV hxR, round x hxV hxR]
 
 omit [Fintype Validator] in
-/-- **A store agrees from its horizon up with every view it is a cut of**:
-one holding the store's blocks from the horizon up, read at the horizon as
-the store reads them. -/
+/-- **A store agrees with every view holding its blocks**, read as the
+store reads them. -/
 theorem ViewsAbove.of_store {P : Validity Validator BlockId Payload} [P.Mechanised]
     {H : Finset Validator} {st : Store Validator BlockId Payload}
     {U : BlockRecord Validator BlockId Payload P H} {V : U.View}
-    (hV : ∀ i, i ∈ V.ids ∧ st.base ≤ (U.block i).round ↔ i ∈ st.ids)
-    (hU : ∀ i ∈ st.ids, atBase st.base (U.block i) = st.blk i) :
-    ViewsAbove st.base boundedSel boundedSel st.view V :=
-  ViewsAbove.of_boundedSel (fun i hi _ => ((hV i).mpr hi).1)
-    (fun i hi hr => by
-      have h := (hV i).mp ⟨hi, hr⟩
-      refine ⟨h, ?_⟩
-      change st.base ≤ (st.blk i).round
-      rw [← hU i h, atBase_round]
-      exact hr)
-    (fun i hi _ => by
-      change (U.block i).round = (st.blk i).round
-      rw [← hU i hi, atBase_round])
-    (fun i hi _ => by
-      change (U.block i).creator = (st.blk i).creator
-      rw [← hU i hi, atBase_creator])
-    (fun i hi hr => by
-      change st.base < (st.blk i).round at hr
-      change (U.block i).refs = (st.blk i).refs
-      rw [← hU i hi] at hr ⊢
-      rw [atBase_round] at hr
-      exact (atBase_refs_of_lt hr).symm)
+    (hV : ∀ i, i ∈ V.ids ↔ i ∈ st.ids) (hU : ∀ i ∈ st.ids, U.block i = st.blk i) :
+    ViewsAbove 0 boundedSel boundedSel st.view V :=
+  ViewsAbove.of_boundedSel (fun i hi _ => (hV i).mpr hi)
+    (fun i hi _ => ⟨(hV i).mp hi, Nat.zero_le _⟩)
+    (fun i hi _ => by change (U.block i).round = (st.blk i).round; rw [hU i hi])
+    (fun i hi _ => by change (U.block i).creator = (st.blk i).creator; rw [hU i hi])
+    (fun i hi _ => by change (U.block i).refs = (st.blk i).refs; rw [hU i hi])
 
 end Node
 

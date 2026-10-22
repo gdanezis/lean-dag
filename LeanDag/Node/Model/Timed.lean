@@ -5,8 +5,7 @@ import LeanDag.Node.Model.Trace
 `docs/validator.md` §13.1. A timed trace is a trace with a time for each
 event (`time i` for event `i`). Read off it, for a node `v` and a time
 `t`: the events at or before `t` (`eventsBy`), `v`'s state after them
-(`stateAt`), the blocks it holds (`holdsAt`), its horizon (`horAt`), its
-top round (`topAt`), and the decisions it output by then (`decisionsBy`);
+(`stateAt`), the blocks it holds (`holdsAt`), its top round (`topAt`), and the decisions it output by then (`decisionsBy`);
 and the time at which `v` built its round-`n` block (`builtAt`), the time
 of the event whose outputs persist it.
 
@@ -32,9 +31,6 @@ def stateAt (v : Validator) (t : ℕ) : State Validator BlockId Payload :=
 
 /-- The blocks node `v` holds at `t`. -/
 def holdsAt (v : Validator) (t : ℕ) : Finset BlockId := (stateAt cfg tr time v t).store.ids
-
-/-- Node `v`'s horizon at `t`. -/
-def horAt (v : Validator) (t : ℕ) : ℕ := (stateAt cfg tr time v t).store.base
 
 /-- Node `v`'s top round at `t`, `0` before it starts. -/
 def topAt (v : Validator) (t : ℕ) : ℕ := ((stateAt cfg tr time v t).top).getD 0

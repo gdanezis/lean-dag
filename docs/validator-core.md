@@ -10,11 +10,8 @@ with every mechanism, as on branch `scheme-validator`.
 | Stage | State |
 |---|---|
 | 1. Rate limiting | removed |
-| 2. Restart, resume, bootstrap, stall | next |
-| 3. Checkpoints and certificates | |
-| 4. Exclusion | |
-| 5. Garbage collection | |
-| 6. Consolidation | |
+| 2. Restart, bootstrap, stall, checkpoints, exclusion, garbage collection | removed |
+| 3. Consolidation | next |
 
 ## 1. Goal
 
@@ -53,8 +50,10 @@ Removed: `restart`, `baseOffer`, `baseRequest`, `proposal`, `certOffer`,
 `decisionRequest`, `announced`, and the horizon argument of a fetch
 request.
 
-**Outputs.** `broadcast`, `setTimer`, `commit`, `fetch peer ids`,
-`send`. Removed: `persist` (phase 2 restores it), `prune`,
+**Outputs.** `persist`, `broadcast`, `setTimer`, `commit`,
+`fetch peer ids`, `send`. `persist` names the blocks the node builds,
+which the claims read, and phase 2 writes them to storage. Removed:
+`prune`,
 `requestBase`, `serveBase`, `propose`, `serveCert`, `requestDecisions`,
 `announce`, `relay`, and the horizon argument of a fetch.
 
@@ -88,7 +87,7 @@ records the firing and settles).
 | V3 | **Safety**: over a trace with timely authentication, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest store is a view, and any two honest nodes' commits are prefix-comparable. | `NoRejoin`; the record's construction for unchecked blocks at a horizon (`Real`, `Lives`) |
 | V3′ | **Convergence**: with delivery, every block an honest node broadcast, with its history, ends in every honest store. | `limit = none`, horizon `0`, `NoRestart`, `NoRejoin` |
 | V8 | The claims are about the code that runs: the map-backed store, the bounded vote, `@[csimp]` only; replay of the scheme's hand-built records and differential tests against the scheme's loop. | none |
-| V11 | **Liveness**: past GST, the reliable nodes produce a round per timeout and decide every run of reliably led slots within the scheme's bound; the run gives the scheme's `WaveFacts`, and the wave argument is the scheme's. | `limit = none`, `NoRestart`, `NoStallBy`, `ExposedFrom`, `TimelyCerts`, `ChainInjective`, `n < q + |T|`, `voteOffset ≤ Λ`, the horizon clause of `SyncedWithin` |
+| V11 | **Liveness**: past GST, the reliable nodes produce a round per timeout and decide every run of reliably led slots within the scheme's bound, with `A = Δ + Δₛ` the time a reliable block and its history take to reach every reliable node; the run gives the scheme's `WaveFacts`, and the wave argument is the scheme's. | `limit = none`, `NoRestart`, `NoStallBy`, `ExposedFrom`, `TimelyCerts`, `ChainInjective`, `n < q + |T|`, `voteOffset ≤ Λ`, the horizon clause of `SyncedWithin`, the timers' "fires once" clause; `A` was `3Δ + Δₛ`, the extra `2Δ` a certificate's catch-up |
 
 **Equivalence with the scheme** is V1, V2 and V11 together: the blocks
 are the scheme's (V1), the decisions are the scheme's decider on the
@@ -123,25 +122,28 @@ are theory the validator no longer uses, and the scheme
 
 ## 5. Order of removal
 
-Each stage removes one mechanism from the model, deletes the helpers,
-claims, premises, simulator options and tests that serve only it, and
+Each stage removes mechanisms from the model, deletes the helpers,
+claims, premises, simulator options and tests that serve only them, and
 repairs what remains; it ends with the build green, the standard axioms
-and the six audits, and is committed on `validator-core`. The order
-removes what others depend on last.
+and the six audits, and is committed on `validator-core`.
 
-1. **Rate limiting.** It depends on exclusion (`wanted`) and nothing
-   depends on it.
-2. **Restart, resume, bootstrap and the stall rule.** The jump reads
-   certificates, and the stall rule reads the horizon; both go before
-   them. With no restart input, every reachable state is one the node
-   reached from `start`.
-3. **Checkpoints and certificates.** The horizon then follows the
-   decided frontier alone, until stage 5.
-4. **Exclusion.** The quorum counts every author of a round.
-5. **Garbage collection.** The store keeps every block; `IsCut` becomes
-   "every honest store is a view of the record", and the record is the
-   union of what the honest nodes knew.
-6. **Consolidation.** Delete dead lemmas, merge helper files that have
+1. **Rate limiting** (done). It depended on exclusion (`wanted`) and
+   nothing depended on it.
+2. **Everything else at once**: restart, resume, bootstrap and the stall
+   rule; checkpoints and certificates; exclusion; garbage collection.
+   These are entangled: the horizon follows the certified frontier, the
+   jump reads certificates and offered horizons, the stall rule reads
+   both, and the liveness proof bounds horizons through certificates.
+   Removed one at a time, each helper file would be repaired up to four
+   times, and stages would re-prove arrival under intermediate horizon
+   rules that a later stage deletes. Removed together, the model takes
+   its final form first (`Model/Step.lean`, `Model/Interface.lean`,
+   `Store.lean`), and each surviving helper is repaired once, in import
+   order, with lemmas about removed state deleted rather than repaired.
+   The store keeps every block; `IsCut` becomes "every honest store is a
+   view of the record", and the record is the union of what the honest
+   nodes knew.
+3. **Consolidation.** Delete dead lemmas, merge helper files that have
    become small, restate the claims of §3 in their final form, shrink
    the simulator, the JSON executable and the tests, rewrite
    `docs/validator.md` to describe the core, and fold this plan's
@@ -151,15 +153,14 @@ Milestone commit: the core validator.
 
 ## 6. Risks
 
-* **Intermediate stages repair proofs that later stages delete.** The
-  order keeps that small: stages 1 to 4 mostly delete branches of
-  `step`, and the horizon stays general until stage 5 removes it.
+* **Stage 2 leaves the build red until every surviving file is
+  repaired.** Its progress is measured file by file in import order.
 * **The liveness proof's horizon bookkeeping** (`rise`, `horAt`, the
-  base bounds) runs through `Shape`, `Arrive`, `Drift` and `Wait`.
-  Stage 5 simplifies these rather than deleting them, and is the
-  largest stage.
+  base bounds) runs through `Shape`, `Arrive`, `Drift` and `Wait`. With
+  no horizon these simplify, but the arguments around them must be
+  re-checked rather than deleted.
 * **Settling.** `quiesce` passes until nothing changes, for
-  announcements and adoption. Stage 6 checks whether one pass suffices
+  announcements and adoption. Stage 3 checks whether one pass suffices
   in the core before simplifying `Quiet`.
 
 ## 7. Phase 2: crash recovery

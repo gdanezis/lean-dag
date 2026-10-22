@@ -21,36 +21,33 @@ namespace Converge
 
 
 theorem converges : Converges := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hbase hnr hnj i u hu huH e he
-    y hy v hv
+  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj i u hu huH e he y hy v hv
   obtain ⟨inp, hi⟩ := event_of_map hu
   set L := tr.length
   -- `h`'s history, as the trace reads it, held by `u` from event `i + 1` on
   have hep := persists_of_broadcasts he
-  obtain ⟨hst₁, hval₁⟩ := persist_stored hbase huH hi hep
+  obtain ⟨hst₁, hval₁⟩ := persist_stored hi hep
   have hiL : i < L := (List.getElem?_eq_some_iff.mp hi).1
   have hgr := grows_before (cfg := cfg) (tr := tr) u (show i + 1 ≤ L by omega)
-  have hb₁ : (stateBefore cfg tr L u).store.base = (stateBefore cfg tr (i + 1) u).store.base := by
-    rw [base_before hbase huH, base_before hbase huH]
-  rw [hist_eq hinj hbase huH ((hgr.2 hb₁).1 hst₁)] at hy
+  rw [hist_eq hinj huH (hgr.1 hst₁)] at hy
   -- the content of a block of the history, as `u` stored it
   set st := (stateBefore cfg tr (i + 1) u).store with hst
-  let raw : BlockId → Block Validator BlockId Payload := fun j => st.map.getD j st.junk
-  have hHsub := hist_sub hinj hbase huH hst₁
+  let raw : BlockId → Block Validator BlockId Payload := fun j => st.blk j
+  have hHsub := hist_sub hinj huH hst₁
   have hrawk : ∀ j ∈ historyFrom (gT cfg H tr) e.1, (j, raw j) ∈ knownIn cfg H tr :=
     fun j hj => stored_known huH (hHsub hj)
   have hfits : ∀ j ∈ historyFrom (gT cfg H tr) e.1, Fits (cfg.at v) (gT cfg H tr) (j, raw j) :=
-    fun j hj => fits_stored hinj hbase huH (hHsub hj) v
+    fun j hj => fits_stored hinj huH (hHsub hj) v
   set fin := stateBefore cfg tr L v
   -- a block of the history pending or stored at some time is so at the end
   have hlast : ∀ j ∈ historyFrom (gT cfg H tr) e.1, ∀ t,
       ((j, raw j) ∈ (stateBefore cfg tr t v).pending ∨ j ∈ (stateBefore cfg tr t v).store.ids) →
       t ≤ L → (j, raw j) ∈ fin.pending ∨ j ∈ fin.store.ids := fun j hj t ht htL =>
-    keeps_after hinj hbase hnr hnj hv (hfits j hj) ht L htL
+    keeps_after hinj hv (hfits j hj) ht L htL
   by_contra hyv
   -- `v` lacks `h`, since it would hold its history with it
-  have hhv : e.1 ∉ fin.store.ids := fun h' => hyv (hist_sub hinj hbase hv h' hy)
-  have hvu : v ≠ u := by rintro rfl; exact hhv ((hgr.2 hb₁).1 hst₁)
+  have hhv : e.1 ∉ fin.store.ids := fun h' => hyv (hist_sub hinj hv h' hy)
+  have hvu : v ≠ u := by rintro rfl; exact hhv (hgr.1 hst₁)
   have heH : e.1 ∈ historyFrom (gT cfg H tr) e.1 := mem_historyFrom_self
   have hraw₀ : raw e.1 = e.2 := hval₁
   have hecr : e.2.creator = u :=
@@ -61,10 +58,8 @@ theorem converges : Converges := by
       (j, raw j) ∈ fin.pending ∨ j ∈ fin.store.ids := by
     intro j hj t htL ht hcr
     by_cases hc : Admits (cfg.at v) (stateBefore cfg tr t v) j (raw j)
-    · exact hlast j hj (t + 1) (admit_after hinj hbase hv ht hc (hfits j hj)) (by omega)
+    · exact hlast j hj (t + 1) (admit_after hinj hv ht hc (hfits j hj)) (by omega)
     · have hid : j = cfg.idOf (raw j) := id_of_knownIn (hrawk j hj)
-      have hb0 : (stateBefore cfg tr t v).store.base ≤ (raw j).round := by
-        rw [base_before hbase hv]; exact Nat.zero_le _
       by_cases hs : j ∈ (stateBefore cfg tr t v).store.ids
       · exact hlast j hj t (Or.inr hs) (by omega)
       · by_cases hp : j ∈ (stateBefore cfg tr t v).pending.map Prod.fst
@@ -72,7 +67,7 @@ theorem converges : Converges := by
           have hpk := knownBefore_sub hv t ((inv_before (cfg := cfg) t v).pend p hp)
           have hpe : p = (j, raw j) := Prod.ext hpj (content_eq hinj hpk (hrawk j hj) hpj)
           exact hlast j hj t (Or.inl (hpe ▸ hp)) (by omega)
-        · exact absurd ⟨hid, hcr, hb0, hs, hp⟩ hc
+        · exact absurd ⟨hid, hcr, hs, hp⟩ hc
   -- `h` reaches `v`, and ends pending there
   obtain ⟨o, ho, hoe⟩ := List.mem_filterMap.mp he
   have hob : o = .broadcast e.1 e.2 := by
@@ -91,7 +86,7 @@ theorem converges : Converges := by
     · exact absurd h' hhv
   -- below `h`, a chain of pending blocks leads to a block `v` lacks
   obtain ⟨len, x, hlen, hx0, hxH, hxc, hxl⟩ :=
-    chain hinj hbase huH hv hst₁ raw (fun _ => rfl) (raw e.1).round e.1 heH rfl hhp hhv
+    chain hinj huH hv hst₁ raw (fun _ => rfl) (raw e.1).round e.1 heH rfl hhp hhv
   have hround : ∀ k₁ d, k₁ + d + 1 ≤ len →
       (raw (x (k₁ + d + 1))).round < (raw (x k₁)).round := by
     intro k₁ d
@@ -118,18 +113,20 @@ theorem converges : Converges := by
   choose A hAL hA1 hA2 using hent
   have hentry : ∀ k : Fin len, tr[A k]? = some (v, .deliver (x k) (raw (x k))) ∧
       Admits (cfg.at v) (stateBefore cfg tr (A k) v) (x k) (raw (x k)) := fun k =>
-    entry_before hnj hv (hA1 k) (hA2 k (A k + 1) (by omega) (by have := hAL k; omega))
+    entry_before (hA1 k) (hA2 k (A k + 1) (by omega) (by have := hAL k; omega))
   set m : Fin len := ⟨0, hlen⟩ with hm
   -- the delivery of `h`, and the state its walk ran on
   obtain ⟨htm, hcm⟩ := hentry m
   have hAmL : A m < L := hAL m
   set Sm := stateBefore cfg tr (A m) v
   let s₁ := afterFlush (cfg := cfg.at v) Sm (x m) (raw (x m))
-  have hstepm := step_before (cfg := cfg) htm
-  rw [step_deliver hcm] at hstepm
-  have hRm := reads_before hinj hbase hv (A m)
+  let s₂ : State Validator BlockId Payload := { s₁ with
+    requested := s₁.requested ++ (missing s₁ (x m) (raw (x m))).map fun x' => (x', x m) }
+  have hstepm : stateBefore cfg tr (A m + 1) v = (settle (cfg.at v) s₂).1 := by
+    rw [step_before (cfg := cfg) htm, step_deliver hcm]
+  have hRm := reads_before hinj hv (A m)
   have hxmk : (x m, raw (x m)) ∈ knownIn cfg H tr := hrawk _ (hxH m (by omega)).1
-  have hpbm : ∀ q ∈ (x m, raw (x m)) :: Sm.pending, gT cfg H tr q.1 = atBase 0 q.2 := by
+  have hpbm : ∀ q ∈ (x m, raw (x m)) :: Sm.pending, gT cfg H tr q.1 = q.2 := by
     intro q hq
     rcases List.mem_cons.mp hq with rfl | hq
     · exact gT_of_known hinj hxmk
@@ -142,14 +139,8 @@ theorem converges : Converges := by
   -- `s₁`'s store grows into the end's
   have hg₁ : Grows s₁.store (stateBefore cfg tr (A m + 1) v).store := by
     rw [hstepm]; exact Grows.settle_of _ rfl
-  have hb₁' : (stateBefore cfg tr (A m + 1) v).store.base = s₁.store.base := by
-    rw [base_before hbase hv]
-    exact ((flush_base (cfg := cfg.at v) _ _ _).trans (base_before hbase hv (A m))).symm
   have hgend := grows_before (cfg := cfg) (tr := tr) v (show A m + 1 ≤ L by omega)
-  have hbend : fin.store.base = (stateBefore cfg tr (A m + 1) v).store.base := by
-    rw [base_before hbase hv, base_before hbase hv]
-  have hs₁fin : ∀ j ∈ s₁.store.ids, j ∈ fin.store.ids := fun j hj =>
-    (hgend.2 hbend).1 ((hg₁.2 hb₁').1 hj)
+  have hs₁fin : ∀ j ∈ s₁.store.ids, j ∈ fin.store.ids := fun j hj => hgend.1 (hg₁.1 hj)
   -- the block `v` lacks is neither stored nor pending in `s₁`
   have hF2 : x len ∉ s₁.store.ids := fun h' => (hxH len le_rfl).2 (hs₁fin _ h')
   have hF3 : x len ∉ s₁.pending.map Prod.fst := by
@@ -159,11 +150,12 @@ theorem converges : Converges := by
     have hqe : q = (x len, raw (x len)) :=
       Prod.ext hqx (content_eq hinj hqk (hrawk _ (hxH len le_rfl).1) hqx)
     have hR₁ : ReadsAs (gT cfg H tr) (stateBefore cfg tr (A m + 1) v).store :=
-      reads_before hinj hbase hv _
+      reads_before hinj hv _
     rw [hstepm] at hR₁
-    have hk := settle_keeps (cfg := cfg.at v) hR₁ (by rw [← hstepm]; exact hb₁')
-      (ReadsAs.flush (cfg := cfg.at v) _ hRm hpbm).2 (hfits _ (hxH len le_rfl).1)
-      (Or.inl (hqe ▸ hq))
+    have hp₁ : ∀ q ∈ s₁.pending, gT cfg H tr q.1 = q.2 :=
+      (ReadsAs.flush (cfg := cfg.at v) _ hRm hpbm).2
+    have hq' : (x len, raw (x len)) ∈ s₁.pending := hqe ▸ hq
+    have hk := settle_keeps (cfg := cfg.at v) hR₁ hp₁ (hfits _ (hxH len le_rfl).1) (Or.inl hq')
     rw [← hstepm] at hk
     rcases hlast _ (hxH len le_rfl).1 (A m + 1) hk (by omega) with h'' | h''
     · exact hxl (List.mem_map.mpr ⟨_, h'', rfl⟩)
@@ -184,13 +176,10 @@ theorem converges : Converges := by
     rwa [show q = (x j, raw (x j)) from
       Prod.ext hqx (content_eq hinj hqk (hrawk _ (hxH j (by omega)).1) hqx)] at hq
   -- the walk from `h` reaches it
-  have hs₁b : s₁.store.base = 0 := (flush_base (cfg := cfg.at v) _ _ _).trans
-    (base_before hbase hv (A m))
   have hmlen : m.1 < len := m.2
   set n := K - m.1 - 1 with hn
-  let y : ℕ → BlockId × ℕ := fun k => (x (m.1 + 1 + k), (raw (x (m.1 + k))).round - 1)
-  have hexp : ∀ k, m.1 < k → k < K → ∀ q ∈ (raw (x k)).refs,
-      (q, (raw (x k)).round - 1) ∈ expand s₁ (x k) := by
+  let y : ℕ → BlockId := fun k => x (m.1 + 1 + k)
+  have hexp : ∀ k, m.1 < k → k < K → ∀ q ∈ (raw (x k)).refs, q ∈ expand s₁ (x k) := by
     intro k hmk hkl q hq
     have hp := hF1 k hmk hkl
     rcases hfind : s₁.pending.find? (fun e => decide (e.1 = x k)) with _ | ⟨p', b'⟩
@@ -199,70 +188,63 @@ theorem converges : Converges := by
       have hid := List.find?_some hfind
       simp only [decide_eq_true_eq] at hid
       have hb' : b' = raw (x k) := content_eq hinj
-        (hknm _ (flush_pending_sub (cfg := cfg.at v) _ _ _ _ hm')) (hrawk _ (hxH k (by omega)).1) hid
+        (hknm _ (flush_pending_sub (cfg := cfg.at v) _ _ _ _ hm'))
+        (hrawk _ (hxH k (by omega)).1) hid
       simp only [expand, hfind, hb']
-      exact List.mem_map.mpr ⟨q, (Finset.mem_sort _).mpr hq, rfl⟩
+      exact (Finset.mem_sort _).mpr hq
   have hdist : n ≤ s₁.pending.length := by
     have hsub : (Finset.range n).image (fun k => x (m.1 + 1 + k)) ⊆
         (s₁.pending.map Prod.fst).toFinset := by
       intro j hj
       obtain ⟨k, hk, rfl⟩ := Finset.mem_image.mp hj
       rw [Finset.mem_range] at hk
-      exact List.mem_toFinset.mpr (List.mem_map.mpr ⟨_, hF1 (m.1 + 1 + k) (by omega) (by omega), rfl⟩)
+      exact List.mem_toFinset.mpr
+        (List.mem_map.mpr ⟨_, hF1 (m.1 + 1 + k) (by omega) (by omega), rfl⟩)
     have hcard := Finset.card_le_card hsub
     rw [Finset.card_image_of_injOn (fun k₁ hk₁ k₂ hk₂ he' => by
       have := hxinj _ _ (by simp at hk₁; omega) (by simp at hk₂; omega) he'; omega),
       Finset.card_range] at hcard
     exact hcard.trans ((List.toFinset_card_le _).trans (by simp))
-  obtain ⟨w, hw, hwx⟩ := walk_reaches (s := s₁) (fuel := s₁.pending.length + 2)
-    (((raw (x m)).refs.sort (· ≤ ·)).map fun j => (j, (raw (x m)).round - 1)) (n := n) y
-    (List.mem_map.mpr ⟨x (m.1 + 1), (Finset.mem_sort _).mpr (by
-      simpa using (hxc m (by omega)).2.1), by simp [y]⟩)
-    (fun k hk => ⟨by rw [hs₁b]; exact Nat.zero_le _, fun h' =>
-      (hxH (m.1 + 1 + k) (by omega)).2 (hs₁fin _ h')⟩)
+  have hw := walk_reaches (s := s₁) (fuel := s₁.pending.length + 2)
+    ((raw (x m)).refs.sort (· ≤ ·)) (n := n) y
+    ((Finset.mem_sort _).mpr (by simpa [y] using (hxc m (by omega)).2.1))
+    (fun k hk h' => (hxH (m.1 + 1 + k) (by omega)).2 (hs₁fin _ h'))
     (fun k hk => List.mem_map.mpr ⟨_, hF1 (m.1 + 1 + k) (by omega) (by omega), rfl⟩)
     (fun k hk => by
       have := hexp (m.1 + 1 + k) (by omega) (by omega) (x (m.1 + 1 + (k + 1)))
         (by have := (hxc (m.1 + 1 + k) (by omega)).2.1; rwa [show m.1 + 1 + k + 1 =
           m.1 + 1 + (k + 1) by omega] at this)
-      simpa [y, show m.1 + (k + 1) = m.1 + 1 + k by omega] using this)
+      simpa [y] using this)
     (by simpa [y, show m.1 + 1 + n = K by omega] using hKp) (by omega)
-  have hwx' : w.1 = x K := by rw [hwx]; simp [y, show m.1 + 1 + n = K by omega]
+  have hwx' : y n = x K := by simp [y, show m.1 + 1 + n = K by omega]
+  rw [hwx'] at hw
   -- `v` had not asked for it on `h`'s account
-  have hnreq : (w.1, x m) ∉ s₁.requested.map fun q => (q.1, q.2.1) := by
-    intro h'
-    obtain ⟨q, hq, hqe⟩ := List.mem_map.mp h'
-    simp only [Prod.mk.injEq] at hqe
-    obtain ⟨a', ha', b, hab, hca⟩ := requested_before (cfg := cfg) (tr := tr) v (A m) q hq
-    rw [hqe.2] at hab hca
+  have hnreq : (x K, x m) ∉ s₁.requested := by
+    intro hq
+    obtain ⟨a', ha', b, hab, hca⟩ := requested_before (cfg := cfg) (tr := tr) v (A m) _ hq
     have hbk : (x m, b) ∈ knownIn cfg H tr :=
       Or.inl ⟨a', v, .deliver (x m) b, hab, hv, by simp [delivered, ← hca.1]⟩
     have hbe : b = raw (x m) := content_eq hinj hbk hxmk rfl
     rw [hbe] at hab hca
-    have hk := admit_after hinj hbase hv hab hca (hfits _ (hxH m (by omega)).1)
-    rcases keeps_after hinj hbase hnr hnj hv (hfits _ (hxH m (by omega)).1) hk (A m) (by omega) with
+    have hk := admit_after hinj hv hab hca (hfits _ (hxH m (by omega)).1)
+    rcases keeps_after hinj hv (hfits _ (hxH m (by omega)).1) hk (A m) (by omega) with
       h'' | h''
     · exact hA1 m h''
-    · exact (hxH m (by omega)).2 ((grows_before (cfg := cfg) (tr := tr) v (show A m ≤ L by omega)).2
-        (by rw [base_before hbase hv, base_before hbase hv]) |>.1 h'')
+    · exact (hxH m (by omega)).2
+        ((grows_before (cfg := cfg) (tr := tr) v (show A m ≤ L by omega)).1 h'')
   -- so it asked `h`'s author `u` for it at `h`'s arrival
   set miss := missing s₁ (x m) (raw (x m))
-  have hwm : w ∈ miss := by
-    exact List.mem_filter.mpr ⟨hw, by simpa using hnreq⟩
+  have hwm : x K ∈ miss := List.mem_filter.mpr ⟨hw, by simpa using hnreq⟩
   obtain ⟨rest, hout⟩ : ∃ rest, outputsAt cfg tr (A m) =
-      evidence (stateBefore cfg tr (A m) v) (x m) (raw (x m)) ++ (if miss.isEmpty then [] else
-        [.fetch (raw (x m)).creator (stateBefore cfg tr (A m) v).store.base
-          (miss.map Prod.fst)]) ++ rest :=
-    ⟨_, by rw [outputsAt_eq htm, step_deliver hcm, List.append_assoc]⟩
+      (if miss.isEmpty then [] else [.fetch (raw (x m)).creator miss]) ++ rest :=
+    ⟨_, by rw [outputsAt_eq htm, step_deliver hcm]⟩
   have hne : miss.isEmpty = false := by
     rw [List.isEmpty_eq_false_iff]; exact List.ne_nil_of_mem hwm
   clear_value miss
-  set G := (stateBefore cfg tr (A m) v).store.base
   have hxm0 : x m = e.1 := hx0
   have hcrm : (raw (x m)).creator = u := by rw [hxm0, hraw₀, hecr]
-  obtain ⟨k, hkm, htk⟩ := hdel (A m) v _ htm hv (u, .fetchRequest v G (miss.map Prod.fst))
-    ⟨.fetch (raw (x m)).creator G (miss.map Prod.fst), by rw [hout, hne]; simp, ⟨hcrm.symm, rfl⟩⟩
-    huH
+  obtain ⟨k, hkm, htk⟩ := hdel (A m) v _ htm hv (u, .fetchRequest v miss)
+    ⟨.fetch (raw (x m)).creator miss, by rw [hout, hne]; simp, ⟨hcrm.symm, rfl⟩⟩ huH
   have hkL : k < L := (List.getElem?_eq_some_iff.mp htk).1
   -- `u` broadcast `h` before it reached `v`, so holds its history by `k`
   have h0 : (0 : ℕ) < len := hlen
@@ -273,18 +255,16 @@ theorem converges : Converges := by
     (by simp [delivered, ← hid₀]) (by rw [hraw₀, hecr]; exact huH)
   rw [hraw₀, hecr] at hi'u
   obtain ⟨inp', hi'⟩ := event_of_map hi'u
-  have hst' := (persist_stored hbase huH hi' (by rw [hraw₀] at hi'b; exact persists_of_broadcasts hi'b)).1
+  have hst' := (persist_stored hi' (by rw [hraw₀] at hi'b; exact persists_of_broadcasts hi'b)).1
   have hA0 : A ⟨0, h0⟩ ≤ A m := le_rfl
   have hgk := grows_before (cfg := cfg) (tr := tr) u (show i' + 1 ≤ k by omega)
   have hzk : x len ∈ (stateBefore cfg tr k u).store.ids :=
-    (hgk.2 (by rw [base_before hbase huH, base_before hbase huH])).1
-      (hist_sub hinj hbase huH hst' (hxH len le_rfl).1)
+    hgk.1 (hist_sub hinj huH hst' (hxH len le_rfl).1)
   have hKk : x K ∈ (stateBefore cfg tr k u).store.ids :=
-    (hgk.2 (by rw [base_before hbase huH, base_before hbase huH])).1
-      (hist_sub hinj hbase huH hst' (hxH K hKlen).1)
+    hgk.1 (hist_sub hinj huH hst' (hxH K hKlen).1)
   -- `x len` lies in the history of `x K`, as `u` reads it at `k`
   set stk := (stateBefore cfg tr k u).store
-  have hRk := reads_before hinj hbase huH k
+  have hRk := reads_before hinj huH k
   have hreach : ∀ d, K + d ≤ len → ReachesFrom stk.blk (x K) (x (K + d)) := by
     intro d
     induction d with
@@ -292,28 +272,24 @@ theorem converges : Converges := by
     | succ d ih =>
       intro hd
       have hc := hxc (K + d) (by omega)
-      have hdk : x (K + d) ∈ stk.ids :=
-        (hgk.2 (by rw [base_before hbase huH, base_before hbase huH])).1
-          (hist_sub hinj hbase huH hst' (hxH (K + d) (by omega)).1)
-      have hblk : stk.blk (x (K + d)) = atBase 0 (raw (x (K + d))) :=
-        (hRk.2 _ hdk).trans (gT_of_known hinj (hrawk _ (hxH (K + d) (by omega)).1))
+      have hdk : x (K + d) ∈ stk.ids := hgk.1 (hist_sub hinj huH hst' (hxH (K + d) (by omega)).1)
+      have hblk : stk.blk (x (K + d)) = raw (x (K + d)) :=
+        (hRk _ hdk).trans (gT_of_known hinj (hrawk _ (hxH (K + d) (by omega)).1))
       have hr : (x (K + (d + 1))) ∈ (stk.blk (x (K + d))).refs := by
-        rw [hblk, atBase_refs_of_lt (by omega)]; exact hc.2.1
+        rw [hblk]; exact hc.2.1
       exact (ih (by omega)).trans (ReachesFrom.single hr)
   have hlenK : x len ∈ historyFrom stk.blk (x K) :=
     ((causal_store k u).mem_history_iff hKk).mpr
       (by simpa [show K + (len - K) = len by omega] using hreach (len - K) (by omega))
-  have hG0 : G = 0 := base_before hbase hv _
   -- `u` answers, and the block reaches `v`
-  set rk := stk.map.getD (x len) stk.junk
+  set rk := stk.blk (x len)
   have hans : Output.send v (x len) rk ∈ outputsAt cfg tr k := by
     rw [outputsAt_eq htk]
-    change Output.send v (x len) rk ∈ answer _ v G (miss.map Prod.fst)
+    change Output.send v (x len) rk ∈ answer _ v miss
     unfold answer answerIds
     refine List.mem_map.mpr ⟨x len, List.mem_dedup.mpr (List.mem_append_right _
-      (List.mem_flatMap.mpr ⟨x K, List.mem_filter.mpr ⟨List.mem_map.mpr ⟨w, hwm, hwx'⟩,
-        by simpa using hKk⟩, ?_⟩)), rfl⟩
-    rw [Finset.mem_sort, Finset.mem_filter, hG0, Nat.sub_zero]
+      (List.mem_flatMap.mpr ⟨x K, List.mem_filter.mpr ⟨hwm, by simpa using hKk⟩, ?_⟩)), rfl⟩
+    rw [Finset.mem_sort, Finset.mem_filter]
     exact ⟨hlenK, by simpa using hzk⟩
   obtain ⟨k', hk'k, htk'⟩ := hdel k u _ htk huH (v, .deliver (x len) rk)
     ⟨Output.send v (x len) rk, hans, ⟨rfl, rfl⟩⟩ hv
@@ -325,26 +301,24 @@ theorem converges : Converges := by
   have hcr : (raw (x len)).creator ≠ v := by
     intro hc
     rcases hrawk _ (hxH len le_rfl).1 with ⟨j, w', inp, hj₀, hw', hdl⟩ | ⟨j, w', hj, hw', hb⟩
-    · obtain ⟨hj, hid⟩ := deliver_of_delivered hnj hw' hj₀ hdl
+    · obtain ⟨hj, hid⟩ := deliver_of_delivered hj₀ hdl
       have hid' : x len = (cfg.at w').idOf (raw (x len)) := hid
       obtain ⟨i'', -, hi''v, hi''b⟩ := htime j w' _ hj hw' (x len, raw (x len))
         (by simp [delivered, ← hid']) (by rw [hc]; exact hv)
       rw [hc] at hi''v
       obtain ⟨inp'', hi''⟩ := event_of_map hi''v
-      have := (persist_stored hbase hv hi'' (persists_of_broadcasts hi''b)).1
+      have := (persist_stored hi'' (persists_of_broadcasts hi''b)).1
       exact (hxH len le_rfl).2 ((grows_before (cfg := cfg) (tr := tr) v
-        (show i'' + 1 ≤ L by have := (List.getElem?_eq_some_iff.mp hi'').1; omega)).2
-        (by rw [base_before hbase hv, base_before hbase hv]) |>.1 this)
+        (show i'' + 1 ≤ L by have := (List.getElem?_eq_some_iff.mp hi'').1; omega)).1 this)
     · obtain ⟨inp'', hj'⟩ := event_of_map hj
       have hcw := (Local.authored _ _ _ (cfg.at w') (inputsBefore tr (j + 1) w') _
         (persists_of_event hj' hb)).2
       change (raw (x len)).creator = w' at hcw
       have hwv : w' = v := hcw.symm.trans hc
       subst hwv
-      have := (persist_stored hbase hv hj' hb).1
+      have := (persist_stored hj' hb).1
       exact (hxH len le_rfl).2 ((grows_before (cfg := cfg) (tr := tr) w'
-        (show j + 1 ≤ L by have := (List.getElem?_eq_some_iff.mp hj').1; omega)).2
-        (by rw [base_before hbase hv, base_before hbase hv]) |>.1 this)
+        (show j + 1 ≤ L by have := (List.getElem?_eq_some_iff.mp hj').1; omega)).1 this)
   rcases hdeliv (x len) (hxH len le_rfl).1 k' hk'L htk' hcr with h' | h'
   · exact hxl (List.mem_map.mpr ⟨_, h', rfl⟩)
   · exact (hxH len le_rfl).2 h'

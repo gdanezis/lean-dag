@@ -19,7 +19,7 @@ namespace Node
 namespace Runs
 
 theorem safety : Safety := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hinj' hno v hv w hw
+  intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hinj' v hv w hw
   have hinj := hashInjective_of_trace hinj'
   have hauth := authentic_of_timely htime
   unfold decisionsOf
@@ -28,7 +28,7 @@ theorem safety : Safety := by
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
   let U := globalRecord hinj hauth
   have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2.1, hadm.1⟩
-  have hg := ground hinj hauth hadm.2.2.2.1
+  have hg := ground hinj hauth
   -- each honest node's decisions are nothing or one call of the loop on `U`
   have hone : ∀ u ∈ H, commitsOf (runOf cfg tr u).2 = [] ∨
       ∃ (V : U.View) (N : ℕ), commitsOf (runOf cfg tr u).2 =
@@ -36,15 +36,10 @@ theorem safety : Safety := by
     intro u hu
     have h₀ : CommitInv (cfg.at u) U (State.init (cfg.at u)) [] := ⟨rfl, Or.inl rfl⟩
     have h := CommitInv.run (cfg := cfg.at u) (U := U) (f := cfg.f) (q := cfg.q) hg hσ ht
-      (inputsBefore tr tr.length u) h₀ (isCut_init hinj hauth _) Held.init
+      (inputsBefore tr tr.length u) h₀ (isCut_init hinj hauth _)
       (fun _ h => absurd h List.not_mem_nil)
       (fun e he => ⟨u, hu, by simp only [knownOf, List.mem_append]; exact Or.inl he⟩)
       (fun e he => ⟨u, hu, by simp only [knownOf, List.mem_append]; exact Or.inr he⟩)
-      fun i hi hoff => by
-        obtain ⟨j, hj⟩ := Converge.mem_inputsBefore hi
-        cases i <;> simp only [Input.isOffer] at hoff
-        · exact (hno j u hu).1 _ _ hj
-        · exact (hno j u hu).2 _ _ _ hj
     rcases h.2 with h0 | ⟨V, N, -, -, hcs⟩
     · exact Or.inl h0
     · exact Or.inr ⟨V, N, hcs⟩

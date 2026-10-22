@@ -4,17 +4,14 @@ import LeanDagSim.Net
 
 Runs one scenario and prints what each honest node reached and decided.
 Options, each `--name value`: `row`, `n`, `f`, `c`, `seed`, `horizon`,
-`gst`, `pre-max`, `delay-min`, `delay-max`, `timeout`, `lag`, `ahead`,
-`crash` (`node@time,…`), `recover` (`node@down-up,…`), `byz` (`node,…`),
-`byz-until`, `withhold` (`z,v,R`: node `z` withholds its round-`R` block
-from `v`), `reveal-after`, `adv` (`node,…`: attackers), `slow` (`node,…`)
-and `slow-delay` (the least delay to or from a slow node) and `slow-until`
-(the tick it stops being slow), `leaders`
-(`node,…`: the leader schedule, cycled), `attacks`
-(`fake-base`, `split-base`, `fake-cert`, `conflict-proposals`,
-`invalid-blocks`, `forged-author`, `junk-at-cut`, `twin-split`, `hide`,
-comma-separated) and `verify`
-(`true` or `false`: whether the network checks signatures).
+`per`, `gst`, `pre-max`, `delay-min`, `delay-max`, `timeout`, `crash`
+(`node@time,…`), `byz` (`node,…`), `byz-until`, `withhold` (`z,v,R`:
+node `z` withholds its round-`R` block from `v`), `reveal-after`, `adv`
+(`node,…`: attackers), `slow` (`node,…`), `slow-delay` (the least delay
+to or from a slow node), `slow-until` (the tick it stops being slow),
+`leaders` (`node,…`: the leader schedule, cycled), `attacks`
+(`invalid-blocks`, `forged-author`, `twin-split`, comma-separated) and
+`verify` (`true` or `false`: whether the network checks signatures).
 -/
 
 open LeanDagSim
@@ -24,15 +21,6 @@ def parseCrash (s : String) : List (ℕ × ℕ) :=
   (s.splitOn ",").filterMap fun e =>
     match e.splitOn "@" with
     | [v, t] => do pure (← v.toNat?, ← t.toNat?)
-    | _ => none
-
-/-- Read `node@down-up,…`. -/
-def parseRecover (s : String) : List (ℕ × ℕ × ℕ) :=
-  (s.splitOn ",").filterMap fun e =>
-    match e.splitOn "@" with
-    | [v, w] => match w.splitOn "-" with
-      | [d, u] => do pure (← v.toNat?, ← d.toNat?, ← u.toNat?)
-      | _ => none
     | _ => none
 
 /-- Read `node,…`. -/
@@ -57,11 +45,8 @@ def parseArgs : List String → Scenario → Except String Scenario
       | "--delay-min" => pure { sc with delayMin := ← nat }
       | "--delay-max" => pure { sc with delayMax := ← nat }
       | "--timeout" => pure { sc with timeout := ← nat }
-      | "--lag" => pure { sc with lag := ← nat }
       | "--per" => pure { sc with per := ← nat }
-      | "--ahead" => pure { sc with ahead := ← nat }
       | "--crash" => pure { sc with crash := parseCrash v }
-      | "--recover" => pure { sc with recover := parseRecover v }
       | "--byz" => pure { sc with byz := parseNats v }
       | "--byz-until" => pure { sc with byzUntil := ← nat }
       | "--withhold" => match parseNats v with
@@ -75,14 +60,8 @@ def parseArgs : List String → Scenario → Except String Scenario
       | "--leaders" => pure { sc with leaders := parseNats v }
       | "--attacks" => do
         let as ← (v.splitOn ",").mapM fun a => match a with
-          | "fake-base" => pure Attack.fakeBase
-          | "split-base" => pure Attack.splitBase
-          | "fake-cert" => pure Attack.fakeCert
-          | "hide" => pure Attack.hide
-          | "conflict-proposals" => pure Attack.conflictProposals
           | "invalid-blocks" => pure Attack.invalidBlocks
           | "forged-author" => pure Attack.forgedAuthor
-          | "junk-at-cut" => pure Attack.junkAtCut
           | "twin-split" => pure Attack.twinSplit
           | _ => throw s!"unknown attack {a}"
         pure { sc with attacks := as }
@@ -111,8 +90,8 @@ def main (args : List String) : IO UInt32 := do
     for (v, top, ds) in (honest.zip (r.tops.zip r.commits)).map fun (v, t, d) => (v, t, d) do
       let skips := (ds.filter (·.2.isNone)).length
       IO.println s!"node {v}: round {top.getD 0}, {ds.length} slots decided, {skips} skipped"
-    IO.println (s!"junk chains {r.stats.junkChains}  asks {r.stats.asks}  " ++
-      s!"adoptions {r.stats.adoptions}  stalls {r.stats.stalls} ({r.stats.stallsAfterGst} past GST)")
+    IO.println (s!"fetches {r.stats.fetches} ({r.stats.fetched} blocks)  " ++
+      s!"honest blocks not kept {r.stats.notKept}")
     for l in r.final do IO.println l
-    IO.println s!"agree {r.agree}  prefixes {r.prefixes}  valid {r.valid}  skips {r.skips}  boots {r.boots}  dropped {r.dropped}"
+    IO.println s!"agree {r.agree}  prefixes {r.prefixes}  valid {r.valid}  dropped {r.dropped}"
     return if r.agree && r.valid then 0 else 1
