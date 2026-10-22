@@ -38,7 +38,7 @@ omit [Fintype Validator] [DecidableEq Validator] in
 theorem Grows.insert (st : Store Validator BlockId Payload) {id : BlockId}
     {b : Block Validator BlockId Payload} {hnew hrefs hpred} :
     Grows st (st.insert id b hnew hrefs hpred) :=
-  ⟨Finset.subset_insert _ _, rfl, fun _ hj =>
+  ⟨fun _ hj => Finset.mem_cons_of_mem (hb := hnew) hj, rfl, fun _ hj =>
     treeMap_getD_insert_ne (fun e => hnew (e ▸ hj))⟩
 
 omit [Fintype Validator] in

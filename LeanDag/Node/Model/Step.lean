@@ -103,7 +103,7 @@ def flush : ℕ → Store Validator BlockId Payload → List (BlockId × Block V
 accepted block per author of round `r`, the node's own block `o` there
 for itself if it built one, and the least identifier otherwise. -/
 def refsFor (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) : Finset BlockId :=
-  let R := blocksAt s.toRecord r
+  let R := s.atRound r
   (creatorsOf s.blk R).biUnion fun a =>
     if a = cfg.me ∧ o.isSome then o.toFinset
     else (Scheme.leastOf (R.filter fun i => (s.blk i).creator = a)).toFinset
@@ -160,7 +160,7 @@ def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) 
   let ready := fun R => reachReady cfg s R r && certReady cfg s R r
   let own := refsFor cfg s r o
   if ready own then own
-  else ((((blocksAt s.toRecord (r + 1)).sort (· ≤ ·)).filter fun c =>
+  else ((((s.atRound (r + 1)).sort (· ≤ ·)).filter fun c =>
       decide ((s.blk c).creator ≠ cfg.me)).map (lent cfg s · o) |>.find? fun R =>
         ready R && buildable cfg s r R).getD own
 
@@ -170,7 +170,7 @@ def tryBuild (s : State Validator BlockId Payload) :
   match s.top with
   | some r =>
     let refs := refsAt cfg s.store r s.own
-    if cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r).card ∧
+    if cfg.q ≤ (s.store.authorsAt r).card ∧
         (r ∈ s.fired ∨ (reachReady cfg s.store refs r ∧ certReady cfg s.store refs r)) then
       let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, refs, cfg.payload (r + 1)⟩
       let id := cfg.idOf b
@@ -275,7 +275,7 @@ sweep goes; nothing at `r = 0`. -/
 def coreSets (st : Store Validator BlockId Payload) (r : ℕ) :
     Std.TreeMap BlockId (Finset Validator) compare :=
   if r = 0 then ∅
-  else coreFrom cfg st r (((blocksAt st.toRecord (r - 1)).sort (· ≤ ·)).map
+  else coreFrom cfg st r (((st.atRound (r - 1)).sort (· ≤ ·)).map
     fun c => (c, {(st.blk c).creator})) ∅
 
 /-- **The store read through core sets**: a block keeps only its

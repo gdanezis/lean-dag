@@ -36,11 +36,11 @@ theorem accept_takes {st : Store Validator BlockId Payload}
   unfold Node.accept
   by_cases hin : y.1 ∈ st.ids
   · split
-    · exact Finset.mem_insert_self _ _
+    · exact Store.mem_insert_self
     · exact hin
   · simp only [ready, decide_eq_true_eq] at hr
     rw [dif_pos ⟨hin, hr.1, hr.2.1, hr.2.2⟩]
-    exact Finset.mem_insert_self _ _
+    exact Store.mem_insert_self
 
 /-! ## Staying through a flush -/
 
@@ -151,7 +151,7 @@ theorem step_stays {s : State Validator BlockId Payload}
     · split
       · apply settle_stays
         rcases hst' with h | h
-        · exact Or.inl (Finset.mem_insert_of_mem h)
+        · exact Or.inl (by simp [Store.insert_ids, h])
         · exact Or.inr h
       · exact hst'
     · exact hst'

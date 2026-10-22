@@ -88,7 +88,7 @@ omit [Fintype Validator] in
 /-- **The store's top round** within a settle is at most `R + 1`. -/
 theorem below_topRound {R : ℕ} {s : State Validator BlockId Payload}
     (h : InK (Below cfg R) s) : s.store.topRound ≤ R + 1 := by
-  unfold Store.topRound
+  rw [Store.topRound_eq]
   refine Finset.sup_le fun j hj => ?_
   rcases below_blk h hj with h | h
   · omega
@@ -107,6 +107,7 @@ theorem below_build {R : ℕ} (hq : 2 ≤ cfg.q) {s s' : State Validator BlockId
     dsimp only at hb
     split at hb
     · rename_i hc
+      rw [Store.authorsAt_eq] at hc
       -- a second author at round `r`
       have h2 : 1 < (authorsIn s.store.toRecord s.store.ids r).card := by omega
       obtain ⟨a, ha, b, hb', hab⟩ := Finset.one_lt_card.mp h2
@@ -447,7 +448,7 @@ theorem within_start (s : State Validator BlockId Payload) :
   refine ⟨⟨fun j hj => ?_, fun e he => ?_⟩, by omega, le_max_left _ _⟩
   · left
     have hle : (s.store.blk j).round ≤ s.store.topRound := by
-      unfold Store.topRound; exact Finset.le_sup (f := fun i => (s.store.blk i).round) hj
+      rw [Store.topRound_eq]; exact Finset.le_sup (f := fun i => (s.store.blk i).round) hj
     change (s.store.blk j).round ≤ _
     omega
   · left

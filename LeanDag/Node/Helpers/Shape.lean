@@ -236,7 +236,7 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
       split
       · rename_i h₂
         refine Or.inr ⟨_, _, rfl, by simp [h₁.1], subset_rfl, Or.inr ⟨h₁.1, rfl,
-          ⟨_, cfg.genesis⟩, rfl, rfl, Finset.mem_insert_self _ _, ?_⟩⟩
+          ⟨_, cfg.genesis⟩, rfl, rfl, (by simp [Store.insert_ids]), ?_⟩⟩
         simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self, Config.genesis]
       · exact Or.inl (hq s rfl)
     · exact Or.inl (hq s rfl)
@@ -356,7 +356,8 @@ theorem refsFor_spec {st : Store Validator BlockId Payload} {r : ℕ} {o : Optio
       refine ⟨L, ?_, (hRi L hLR).1, (hRi L hLR).2, hLa⟩
       show (if a = cfg.me ∧ o.isSome then o.toFinset else _) = {L}
       rw [if_neg hc, hL]; rfl
-  have hdef : refsFor cfg st r o = (creatorsOf st.blk R).biUnion pick := rfl
+  have hdef : refsFor cfg st r o = (creatorsOf st.blk R).biUnion pick := by
+    unfold refsFor; rw [Store.atRound_eq]
   have hmem : ∀ j ∈ refsFor cfg st r o, ∃ a ∈ creatorsOf st.blk R, j ∈ st.ids ∧
       (st.blk j).round = r ∧ (st.blk j).creator = a ∧ pick a = {j} := by
     intro j hj
@@ -418,7 +419,7 @@ theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.
   unfold tryBuild
   rw [ht]
   dsimp only
-  rw [if_pos ⟨hq, hf⟩]
+  rw [if_pos ⟨by rw [Store.authorsAt_eq]; exact hq, hf⟩]
   have hB : buildable cfg s.store r (refsAt cfg s.store r s.own) = true := by
     rcases refsAt_buildable (cfg := cfg) s.store r s.own with he | he
     · rw [he]

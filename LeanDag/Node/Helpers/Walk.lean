@@ -221,7 +221,7 @@ theorem mem_coreSets {r : ℕ} {j : BlockId} {a : Validator}
       (fun i a ⟨y, hy, hyr, hyc, hyi⟩ j hj => ⟨y, hy, hyr, hyc, hyi.trans (ReachesFrom.single hj)⟩)
       r _ ∅ (fun e he a ha => ?_) (fun j a ha => by simp at ha) j a ha
     obtain ⟨c, hc, rfl⟩ := List.mem_map.mp he
-    have hc' := mem_blocksAt.mp ((Finset.mem_sort _).mp hc)
+    have hc' := mem_blocksAt.mp (st.atRound_eq (r - 1) ▸ (Finset.mem_sort _).mp hc)
     exact ⟨c, hc'.1, hc'.2, (Finset.mem_singleton.mp ha).symm, ReachesFrom.refl⟩
 
 /-- **The pruned store reaches down a chain of non-core blocks**: if each

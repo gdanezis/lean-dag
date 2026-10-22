@@ -236,7 +236,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
           try rfl
         · rcases hy with hy | hy
           · exact Or.inl hy
-          · exact Or.inr (Finset.mem_insert_of_mem hy)
+          · exact Or.inr (show y.1 ∈ st.ids from Store.mem_insert_of_mem hy)
       · simp only [Node.step, dif_neg h₂, if_pos h₁]; exact hy
     · simp only [Node.step, if_neg h₁]; exact hy
   | deliver id b =>
@@ -325,7 +325,7 @@ theorem progress_persist : ∀ (fuel : ℕ) (s : State Validator BlockId Payload
       simp only [built, List.flatMap_cons, List.flatMap_nil, List.append_nil, List.cons_append,
         List.nil_append, persists, List.filterMap_cons] at he
       rcases List.mem_cons.mp he with rfl | he
-      · have hin : id ∈ s₁.store.ids := by rw [hst]; exact Finset.mem_insert_self _ _
+      · have hin : id ∈ s₁.store.ids := by rw [hst]; exact Store.mem_insert_self
         refine ⟨hg.1 hin, ?_⟩
         rw [hg.blk hin, hst]
         simp only [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
@@ -432,7 +432,7 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
           simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl
         rw [he]
         exact settle_persist_of (Or.inr ⟨(cfg.idOf cfg.genesis, cfg.genesis), by
-          simp [built, persists], Finset.mem_insert_self _ _, by
+          simp [built, persists], (by simp [s₀, st, Store.insert_ids]), by
           simp only [s₀, st, Store.blk, Store.insert, Std.TreeMap.getD_insert_self]⟩)
       · simp only [Node.step, dif_neg h₂, if_pos h₁]; simp [persists]
     · simp only [Node.step, if_neg h₁]; simp [persists]

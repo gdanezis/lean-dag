@@ -111,7 +111,7 @@ theorem StoreValid.insert {q : ℕ} {st : Store Validator BlockId Payload} (hs :
   have hlk : ∀ i, i ≠ id → (st.insert id b hnew hrefs hpred).blk i = st.blk i :=
     fun i hi => by simp only [Store.blk, Store.insert, treeMap_getD_insert_ne (Ne.symm hi)]
   intro j hj
-  change j ∈ Insert.insert id st.ids at hj
+  rw [Store.insert_ids] at hj
   by_cases h : j = id
   · subst h
     have hself : (st.insert j b hnew hrefs hpred).blk j = b := by
@@ -156,7 +156,7 @@ theorem known_insert {st : Store Validator BlockId Payload}
     {b : Block Validator BlockId Payload} (hb : (id, b) ∈ K) {hnew hrefs hpred} :
     ∀ j ∈ (st.insert id b hnew hrefs hpred).ids, (j, (st.insert id b hnew hrefs hpred).blk j) ∈ K := by
   intro j hj
-  change j ∈ Insert.insert id st.ids at hj
+  rw [Store.insert_ids] at hj
   change (j, (st.map.insert id b).getD j st.junk) ∈ K
   by_cases h : j = id
   · subst h; rw [Std.TreeMap.getD_insert_self]; exact hb

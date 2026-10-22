@@ -67,7 +67,7 @@ theorem tryBuild_exit {s s' : State Validator BlockId Payload}
     · rename_i hc
       split at h
       · rw [Option.some.injEq, Prod.mk.injEq] at h
-        refine ⟨r, hr, hc.1, ?_, by rw [← h.2]; simp [built]⟩
+        refine ⟨r, hr, by rw [← Store.authorsAt_eq]; exact hc.1, ?_, by rw [← h.2]; simp [built]⟩
         rcases hc.2 with hf | hready
         · rcases refsAt_cases (cfg := cfg) s.store r s.own with h' | h'
           · simp only [Bool.and_eq_true] at h'
@@ -90,6 +90,7 @@ theorem mem_refsFor {st : Store Validator BlockId Payload} {r : ℕ} {o : Option
     j ∈ refsFor cfg st r o := by
   unfold refsFor
   dsimp only
+  rw [Store.atRound_eq]
   have hjR : j ∈ blocksAt st.toRecord r := Finset.mem_filter.mpr ⟨hj, hr⟩
   refine Finset.mem_biUnion.mpr ⟨(st.blk j).creator, Finset.mem_image_of_mem _ hjR, ?_⟩
   split
@@ -266,7 +267,7 @@ theorem OwnTop.tryBuild {s s' : State Validator BlockId Payload}
         intro r hr
         simp only [Option.some.injEq] at hr
         subst hr
-        refine ⟨_, rfl, Finset.mem_insert_self _ _, ?_, ?_⟩ <;>
+        refine ⟨_, rfl, (by simp [Store.insert_ids]), ?_, ?_⟩ <;>
           simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
       · exact absurd h (by simp)
     · exact absurd h (by simp)
@@ -312,7 +313,7 @@ theorem OwnTop.step {s : State Validator BlockId Payload} (h : OwnTop cfg s)
         change some 0 = some r at hr
         rw [Option.some.injEq] at hr
         subst hr
-        refine ⟨_, rfl, Finset.mem_insert_self _ _, ?_, ?_⟩ <;>
+        refine ⟨_, rfl, (by simp [Store.insert_ids]), ?_, ?_⟩ <;>
           simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self, Config.genesis]
       · exact h
     · exact h
@@ -495,7 +496,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
         let s₀ : State Validator BlockId Payload :=
           { s with store := st, top := some 0, own := some gid }
         have hh₀ : Held cfg s₀ :=
-          ⟨fun t ht => ⟨_, Finset.mem_insert_self _ _, by
+          ⟨fun t ht => ⟨gid, (by simp [s₀, st, gid, Store.insert_ids]), by
             change some 0 = some t at ht
             simp only [Option.some.injEq] at ht
             omega⟩, hh.junk⟩
@@ -504,7 +505,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
           change some 0 = some r at hr
           rw [Option.some.injEq] at hr
           subst hr
-          refine ⟨gid, rfl, Finset.mem_insert_self _ _, ?_, ?_⟩
+          refine ⟨gid, rfl, (by simp [s₀, st, gid, Store.insert_ids]), ?_, ?_⟩
           · change (st.blk gid).round = 0
             simp [st, gid, Store.blk, Store.insert, Std.TreeMap.getD_insert_self,
               Config.genesis]

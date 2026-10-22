@@ -94,6 +94,30 @@ below its referrer, so it is a `BlockRecord.View` (`Store.toRecord`,
 `Store.view`); this is the view the decider reads. Byzantine twins are
 accepted, since their votes count.
 
+Beside the accepted identifiers `ids`, a `Finset`, the store keeps three
+indexes, each a field with an invariant that ties it to `ids`:
+
+* the map's keys are the accepted identifiers (`mem_map`), so that
+  `j ∈ ids` is decided by a lookup in the map (`Store.has`, `has_iff`);
+  the instances `Store.decMem` and `Store.decSubset` decide membership
+  in `ids` and inclusion in `ids` this way, and the model's tests read
+  `∈ ids` and `⊆ ids` unchanged;
+* `topRound` is the highest round of an accepted block (`topRound_eq`:
+  it equals `ids.sup` of the rounds);
+* `byRound` maps each round to the accepted identifiers of that round;
+  `Store.atRound st r` reads it, and equals `blocksAt st.toRecord r`
+  (`atRound_eq`), and `Store.authorsAt st r`, the authors of those
+  blocks, equals `authorsIn st.toRecord st.ids r` (`authorsAt_eq`).
+
+`Store.insert` maintains the three: it adds the identifier to `ids` with
+`Finset.cons`, which needs no membership test since the identifier is
+new (`insert_ids` gives `ids` as `insert id ids`), takes the maximum of
+`topRound` and the block's round, and adds the identifier to the
+block's round in `byRound`. The builder reads `atRound` in `refsFor`
+and `refsAt`, and `authorsAt` for its quorum; the answer to a fetch
+reads `atRound` in `coreSets`. The proofs read `blocksAt`, `authorsIn`
+and `ids.sup` through these equalities.
+
 ### 3.2 The builder
 
 The program builds round `r + 1` above its top `r` when its store holds
@@ -465,14 +489,20 @@ hand-built records. Read against the program:
   the library, run on fuel.
 * The executables are `[[lean_exe]]` targets of `lakefile.toml`, not
   default targets, so `lake build` and the audits are unchanged.
-* **Cost.** The store keeps every block, and the cost of an input grows
-  with it: the build and decision tests filter the whole store, and an
-  answer to a fetch sends the whole history of each block asked for.
-  Four nodes at the Mysticeti row reach round 444 over 1,000 ticks, in
-  285,262 inputs and 53 seconds, the largest store holding 1,780
-  blocks; over 2,000 ticks they reach round 886 in 1,051,005 inputs and
-  701 seconds, the largest store holding 3,547. The inputs grow as the
-  square of the run, and the time of an input with the store.
+* **Cost.** The store keeps every block. Membership in the accepted
+  identifiers costs a lookup in the map, logarithmic in the number `N`
+  of accepted blocks; the top round is read off a field; the blocks and the
+  authors of a round cost a lookup in `byRound` and the size of the
+  round. The scheme's functions (`Scheme.tryDecide`, `candidatesIn`,
+  the votes) take any record and view, and read a round by filtering
+  the record's identifiers, so the reach and certificate tests of the
+  builder and the decider still cost time linear in `N` per call; a
+  profile of a run places most of its time there. An answer to a fetch
+  sends the history of each block asked for, less the blocks the asker
+  holds. Four nodes at the Mysticeti row reach round 440 over 1,000
+  ticks, in 8,696 inputs and 3.5 seconds, the largest store holding
+  1,761 blocks; over 2,000 ticks they reach round 880 in 20,445 inputs
+  and 18 seconds, the largest store holding 3,522.
 
 ## 8. Self-parent as a build rule
 

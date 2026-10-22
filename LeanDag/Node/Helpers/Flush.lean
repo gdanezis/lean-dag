@@ -59,7 +59,7 @@ theorem ReadsAs.accept {st : Store Validator BlockId Payload} (h : ReadsAs g st)
   split
   · rename_i hc
     intro j hj
-    change j ∈ Insert.insert id st.ids at hj
+    rw [Store.insert_ids] at hj
     by_cases hj' : j = id
     · subst hj'
       simp only [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
@@ -111,7 +111,7 @@ theorem fits_of_valid {y : BlockId × Block Validator BlockId Payload}
   unfold Node.accept
   by_cases hin : y.1 ∈ st.ids
   · split
-    · exact Finset.mem_insert_self _ _
+    · exact Store.mem_insert_self
     · exact hin
   · have hrefs : y.2.refs ⊆ st.ids := by
       simp only [ready, decide_eq_true_eq] at hr
@@ -121,7 +121,7 @@ theorem fits_of_valid {y : BlockId × Block Validator BlockId Payload}
       rowValid_congr (fun j hj => by
         have hj' : j ≠ y.1 := fun e => hin (e ▸ hrefs hj)
         rw [Function.update_of_ne hj', hag j hj]; exact ⟨rfl, rfl⟩) hv.2⟩]
-    exact Finset.mem_insert_self _ _
+    exact Store.mem_insert_self
 
 omit [Fintype Validator] in
 theorem ready_mono {st st' : Store Validator BlockId Payload} (hg : Grows st st')

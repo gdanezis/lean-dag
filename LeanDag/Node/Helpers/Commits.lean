@@ -69,7 +69,7 @@ theorem IsCut.insert (hc : IsCut U st) {id : BlockId} {b : Block Validator Block
     {hnew hrefs hpred} (hb : id ∈ U.ids ∧ U.block id = b) :
     IsCut U (st.insert id b hnew hrefs hpred) := by
   intro j hj
-  change j ∈ Insert.insert id st.ids at hj
+  rw [Store.insert_ids] at hj
   by_cases h : j = id
   · subst h
     refine ⟨hb.1, ?_⟩

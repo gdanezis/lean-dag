@@ -44,7 +44,7 @@ omit [Fintype Validator] [DecidableEq Validator] in
 /-- A grown store has no lower top round. -/
 theorem Grows.topRound {st st' : Store Validator BlockId Payload} (hg : Grows st st') :
     st.topRound ≤ st'.topRound := by
-  unfold Store.topRound
+  rw [Store.topRound_eq, Store.topRound_eq]
   refine Finset.sup_le fun i hi => ?_
   rw [← hg.blk hi]
   exact Finset.le_sup (f := fun i => (st'.blk i).round) (hg.1 hi)
@@ -68,7 +68,7 @@ theorem Held.tryBuild {s s' : State Validator BlockId Payload}
     (hb : Node.tryBuild cfg s = some (s', out)) : Held cfg s' := by
   obtain ⟨r, id, b, hnew, hrefs, hpred, -, hbr, -, -, -, hst, htop, -, -, -⟩ := tryBuild_some hb
   refine ⟨fun t ht => ⟨id, ?_, ?_⟩, by rw [hst]; exact h.junk⟩
-  · rw [hst]; exact Finset.mem_insert_self _ _
+  · rw [hst]; exact Store.mem_insert_self
   · rw [htop, Option.some.injEq] at ht
     rw [hst]
     simp only [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
@@ -132,7 +132,8 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     simp only [Node.step]
     split
     · split
-      · refine Held.settle ⟨fun t ht => ⟨_, Finset.mem_insert_self _ _, ?_⟩, h.junk⟩
+      · refine Held.settle
+          ⟨fun t ht => ⟨_, by rw [Store.insert_ids]; exact Finset.mem_insert_self _ _, ?_⟩, h.junk⟩
         simp only [Option.some.injEq] at ht
         subst ht
         exact Nat.zero_le _
@@ -187,7 +188,7 @@ theorem tryBuild_quorum {s s' : State Validator BlockId Payload}
     dsimp only at h
     split at h
     · rename_i hc
-      exact ⟨r, hr, hc.1⟩
+      exact ⟨r, hr, by rw [← Store.authorsAt_eq]; exact hc.1⟩
     · exact absurd h (by simp)
   · exact absurd h (by simp)
 

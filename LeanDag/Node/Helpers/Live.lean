@@ -203,7 +203,7 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
   rw [persists_built, persists_built, List.singleton_inj] at hAB
   have heo' : e₀ = (id, b) := heo.trans hAB
   have hcy : e₀.1 ∈ y.store.ids := by
-    rw [heo', hst]; exact Finset.mem_insert_self _ _
+    rw [heo', hst]; exact Store.mem_insert_self
   have hyb : y.store.blk e₀.1 = b := by
     rw [heo', hst]
     simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]

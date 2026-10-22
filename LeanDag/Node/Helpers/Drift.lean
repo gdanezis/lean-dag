@@ -169,6 +169,7 @@ theorem refsAt_ready {st : Store Validator BlockId Payload} {r : ℕ} {o : Optio
       certReady cfg st (refsAt cfg st r o) r = true := by
   unfold refsAt
   dsimp only
+  rw [Store.atRound_eq]
   split
   · rename_i h
     simpa only [Bool.and_eq_true] using h

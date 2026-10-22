@@ -224,8 +224,8 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
   have hoi' : o ∈ Z.store.ids := hoi
   have hor' : (Z.store.blk o).round = t' := hor
   have hdec : b + c ≤ decidable cfg Z.store.topRound := by
-    have hle : (Z.store.blk o).round ≤ Z.store.topRound := Finset.le_sup (f := fun i =>
-      (Z.store.blk i).round) hoi'
+    have hle : (Z.store.blk o).round ≤ Z.store.topRound := Z.store.topRound_eq ▸
+      Finset.le_sup (f := fun i => (Z.store.blk i).round) hoi'
     have := lt_decidable (cfg := cfg) (k := b + c - 1) (R := Z.store.topRound) (by omega)
     omega
   haveI : Validity.Quorate (ValidAt (Validator := Validator) (BlockId := BlockId)
