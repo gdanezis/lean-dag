@@ -27,45 +27,45 @@ def summary (sc : Scenario) : String :=
     s!"{r.commits.map fun l => (l.filter (·.2.isNone)).length} {r.agree} {r.valid}"
 
 /--
-info: "true [(some 38), (some 24), (some 38), (some 38)] [33, 22, 37, 33] [2, 0, 3, 2] true true"
+info: "true [(some 34), (some 24), (some 35), (some 35)] [33, 22, 33, 33] [2, 0, 2, 2] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "cordial-miners", crash := [(1, 60)] }
 
 /--
-info: "true [(some 40), (some 40), (some 41), (some 40)] [38, 39, 39, 38] [0, 0, 0, 0] true true"
+info: "true [(some 44), (some 44), (some 44), (some 44)] [42, 42, 42, 42] [0, 0, 0, 0] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "mysticeti", gst := 60, preMax := 25, seed := 2 }
 
 /--
-info: "true [(some 36), (some 36), (some 36), (some 36), (some 36), none] [35, 35, 35, 35, 35, 0] [5, 5, 5, 5, 5, 0] true true"
+info: "true [(some 33), (some 33), (some 33), (some 33), (some 33), none] [32, 32, 32, 32, 32, 0] [5, 5, 5, 5, 5, 0] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "blue-bottle", n := 6, crash := [(5, 0)] }
 
 /--
-info: "true [(some 40), (some 39), none, (some 40), (some 40), (some 39), (some 40), (some 40), (some 40)] [39, 38, 0, 39, 39, 38, 39, 39, 39] [5, 4, 0, 5, 5, 4, 5, 5, 5] true true"
+info: "true [(some 38), (some 38), none, (some 38), (some 38), (some 38), (some 38), (some 38), (some 38)] [37, 38, 0, 37, 37, 38, 37, 37, 38] [4, 4, 0, 4, 4, 4, 4, 4, 4] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "orcaella", n := 9, c := 1, crash := [(2, 0)] }
 
-/-- info: "true [(some 19), (some 42), (some 42)] [18, 42, 42] [0, 7, 7] true true" -/
+/-- info: "true [(some 19), (some 39), (some 39)] [18, 39, 39] [0, 6, 6] true true" -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "nemo-nemo", n := 3, f := 0, c := 1, crash := [(0, 40)] }
 
 /--
-info: "true [(some 38), (some 38), (some 38), (some 37), (some 38), (some 12)] [36, 36, 36, 36, 36, 10] [4, 4, 4, 4, 4, 0] true true"
+info: "true [(some 35), (some 35), (some 35), (some 35), (some 35), (some 12)] [34, 34, 34, 34, 34, 10] [3, 3, 3, 3, 3, 0] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "hybrid-mysticeti", n := 6, c := 1, crash := [(5, 30)] }
 
-/-- info: "true [(some 24), (some 24), (some 24)] [24, 24, 24] [7, 7, 7] true true" -/
+/-- info: "true [(some 23), (some 23), (some 22)] [21, 21, 20] [4, 4, 4] true true" -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "mysticeti", byz := [3], byzUntil := 150 }
 
 /--
-info: "true [(some 36), (some 36), (some 36), (some 36), (some 36)] [36, 35, 36, 35, 35] [5, 5, 5, 5, 5] true true"
+info: "true [(some 31), (some 31), (some 32), (some 31), (some 31)] [30, 30, 31, 30, 30] [4, 4, 5, 4, 4] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "blue-bottle", n := 6, byz := [0], byzUntil := 150 }
@@ -97,7 +97,7 @@ def outageLine (sc : Scenario) : String :=
     s!" ({R}, {fmt t₁}, {fmt t₂})")
 
 /--
-info: "true [(some 28), (some 29), (some 28), none] [28, 28, 28, 0] [7, 7, 7, 0] true true (6, 155, 155)"
+info: "true [(some 24), (some 24), (some 24), none] [24, 24, 24, 0] [6, 6, 6, 0] true true (5, 157, 161)"
 -/
 #guard_msgs in
 #eval outageLine
@@ -106,7 +106,7 @@ info: "true [(some 28), (some 29), (some 28), none] [28, 28, 28, 0] [7, 7, 7, 0]
     crash := [(3, 0)]
     outages := [(2, 30, 150)] }
 
-/-- info: "true [(some 44), (some 45), none] [44, 44, 0] [14, 14, 0] true true (18, 270, 265)" -/
+/-- info: "true [(some 41), (some 41), none] [41, 41, 0] [13, 13, 0] true true (16, 266, 266)" -/
 #guard_msgs in
 #eval outageLine
   { horizon := 400

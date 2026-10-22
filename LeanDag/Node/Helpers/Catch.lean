@@ -1,15 +1,17 @@
-import LeanDag.Node.Helpers.Arrive
+import LeanDag.Node.Helpers.Armed
 /-!
-# Copied references and the drift of build times
+# Copied references and catch-up
 
 `docs/validator.md` §5.3. A node at round `n` holding a peer's round-`n + 1`
 block `z` passes the reach and certificate tests with the references `z`
 lends it when the peer's references passed them (`ready_transfer`,
 `refsAt_ready`, `lent_buildable`): the leader blocks the tests read are
 reached from `z`'s references, so the node holds them and reads the same
-votes. Past GST a reliable node at round `n` within `A = Δ + Δₛ` of a peer
-that built round `n + 1` is above `n` by then (`catches_up`), so the
-reliable nodes build every round within `A` of each other (`drift`).
+votes. From round `R₀` on, a quorum a node holds has `f + 1` reliable
+authors (`quorum_reliable`), and of the `f + 1` authors of a round a
+node is behind one is reliable (`behind_earlier`). Past GST, once `f + 1`
+reliable nodes are at round `n`, every reliable node is at `n` within
+`A = Δ + Δₛ` (`catches_up`).
 -/
 
 namespace LeanDag
@@ -307,18 +309,6 @@ theorem built_of_top {τ n : ℕ} (hs : (stateAt cfg tr time v τ).top.isSome)
   exact ⟨i₀, inp, e₀, hi₀, he₀, he₀r, hbt,
     (hmono i₀ b hi₀b hbl).trans ((lt_eventsBy hmono hbl).mp hbE)⟩
 
-/-- **Build times do not decrease with the round.** -/
-theorem builtAt_le_succ {τ n : ℕ} (hs : (stateAt cfg tr time v τ).top.isSome)
-    (hn : n + 1 ≤ topAt cfg tr time v τ) :
-    builtAt cfg tr time v n ≤ builtAt cfg tr time v (n + 1) := by
-  obtain ⟨i, _inp, e, hi, he, her, hbt, -⟩ := built_of_top hmono hs hn
-  obtain ⟨t, ht, hrt⟩ := built_le_top hi he
-  obtain ⟨b, hb, hbv, e', he', her'⟩ := built_by (i + 1) (by rw [ht]; rfl)
-    (show n ≤ _ by rw [ht]; simp only [Option.getD_some]; omega)
-  obtain ⟨i₀, hi₀b, hbt₀, -⟩ := builtAt_first (cfg := cfg) time hbv ⟨e', he', her'⟩
-  rw [hbt, hbt₀]
-  exact hmono i₀ i (by omega) (List.getElem?_eq_some_iff.mp hi).1
-
 end Trace
 
 section Record
@@ -389,7 +379,7 @@ end Record
 section Catch
 
 variable {T : Finset Validator} {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ}
-  {gst Δ Δₛ t₁ : ℕ}
+  {gst Δ Δₛ t₁ R₀ : ℕ}
 
 omit [Fintype Validator] in
 /-- **A valid block's references**: `q` distinct authors, none twice, read
@@ -407,13 +397,69 @@ theorem refs_of_rowValid {st : Store Validator BlockId Payload} {id : BlockId}
   rwa [Finset.image_congr (g := fun i => (st.blk i).creator) (fun j hj => by
     simp only; rw [hne j hj])] at hq
 
-/-- **A node behind a round holds an earlier reliable block of it**: with
-at most `f + c` nodes outside `T`, one of the `f + c + 1` authors of round
-`n + 1` it holds is in `T`, is not the node, and persisted the block at an
-earlier event. -/
+/-- **A block an honest node holds of an honest author was persisted by
+its author** at an earlier event. -/
+theorem persisted_of_stored (htime : Converge.TimelyAuthentic cfg H tr) {v w : Validator}
+    (hv : v ∈ H) (hw : w ∈ H) {K : ℕ} {z : BlockId} (hz : z ∈ (stateBefore cfg tr K v).store.ids)
+    (hzc : ((stateBefore cfg tr K v).store.blk z).creator = w) :
+    ∃ j < K, ∃ inp, tr[j]? = some (w, inp) ∧
+      (z, (stateBefore cfg tr K v).store.blk z) ∈ persists (outputsAt cfg tr j) := by
+  have hk := (Converge.inv_before (cfg := cfg) (tr := tr) K v).known z hz
+  have hp := own_known (v := w) htime hv hw le_rfl hk hzc
+  obtain ⟨j, hj, hjw, hjz⟩ := mem_persists_before (cfg := cfg) w K hp
+  obtain ⟨inp, hj'⟩ := Converge.event_of_map hjw
+  exact ⟨j, hj, inp, hj', hjz⟩
+
+/-- **From round `R₀` on, the honest authors a node holds are reliable**:
+an honest author of a block of round `R₀` or above that an honest node
+holds is in `T`. -/
+theorem mem_of_stored (htime : Converge.TimelyAuthentic cfg H tr)
+    (hout : Live.OutsideBelow cfg H T tr R₀) {v w : Validator} (hv : v ∈ H) (hw : w ∈ H)
+    {K r : ℕ} (hr : R₀ ≤ r) (hwA : w ∈ (stateBefore cfg tr K v).store.authorsAt r) : w ∈ T := by
+  by_contra hwT
+  obtain ⟨z, hzR, hzc⟩ := mem_creatorsOf.mp hwA
+  have hz : z ∈ (stateBefore cfg tr K v).store.ids ∧
+      ((stateBefore cfg tr K v).store.blk z).round = r := by
+    rw [Store.atRound_eq] at hzR
+    simpa [blocksAt, Store.toRecord] using hzR
+  obtain ⟨j, -, inp, hj, hjz⟩ := persisted_of_stored htime hv hw hz.1 hzc
+  have := hout j w inp hj hw hwT _ hjz
+  simp only at this
+  omega
+
+/-- **A quorum exceeds twice the faults**: `2f + 1 ≤ q` on every row the
+inequalities cover. -/
+theorem two_f_lt_q (hadm : cfg.Admissible) : 2 * cfg.f + 1 ≤ cfg.q := by
+  obtain ⟨hcov, -, hct, hq0, hqn⟩ := hadm
+  unfold Scheme.Params.Covered Scheme.Params.TwoRound Scheme.Params.ThreeRound
+    Scheme.Params.TwoRoundCrash Scheme.Params.ThreeRoundCrash at hcov
+  rcases hcov with ⟨-, -, hl, -, -, h⟩ | ⟨-, -, -, -, -, h⟩ | ⟨-, -, -, hf0, -⟩ |
+    ⟨-, -, -, -, hf0, -⟩ <;> omega
+
+/-- **From round `R₀` on, a quorum a node holds has `f + 1` reliable
+authors.** -/
+theorem quorum_reliable (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
+    (htime : Converge.TimelyAuthentic cfg H tr) (hout : Live.OutsideBelow cfg H T tr R₀)
+    {v : Validator} (hv : v ∈ H) {K r : ℕ} (hr : R₀ ≤ r)
+    (hq : cfg.q ≤ ((stateBefore cfg tr K v).store.authorsAt r).card) :
+    cfg.f + 1 ≤ (((stateBefore cfg tr K v).store.authorsAt r).filter (· ∈ T)).card := by
+  have h2f := two_f_lt_q hadm
+  have hsub : (stateBefore cfg tr K v).store.authorsAt r ⊆
+      ((stateBefore cfg tr K v).store.authorsAt r).filter (· ∈ T) ∪ Hᶜ := by
+    intro a ha
+    by_cases haH : a ∈ H
+    · exact Finset.mem_union_left _
+        (Finset.mem_filter.mpr ⟨ha, mem_of_stored htime hout hv haH hr ha⟩)
+    · exact Finset.mem_union_right _ (Finset.mem_compl.mpr haH)
+  have := (Finset.card_le_card hsub).trans (Finset.card_union_le _ _)
+  omega
+
+/-- **A node behind a round holds an earlier reliable block of it**: from
+round `R₀` on, one of the `f + 1` authors of round `n + 1` it holds is in
+`T`, is not the node, and persisted the block at an earlier event. -/
 theorem behind_earlier (htime : Converge.TimelyAuthentic cfg H tr)
-    (hinj : Converge.HashInjective cfg H tr) (hTH : T ⊆ H)
-    (hcT : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) {w : Validator} (hw : w ∈ H)
+    (hinj : Converge.HashInjective cfg H tr) (hTH : T ⊆ H) (hf : Hᶜ.card ≤ cfg.f)
+    (hout : Live.OutsideBelow cfg H T tr R₀) {w : Validator} (hw : w ∈ H)
     {i : ℕ} {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (w, inp))
     {x y : State Validator BlockId Payload} {o : List (Output Validator BlockId Payload)}
     {e : BlockId × Block Validator BlockId Payload} {n : ℕ}
@@ -422,17 +468,18 @@ theorem behind_earlier (htime : Converge.TimelyAuthentic cfg H tr)
     (hb : tryBuild (cfg.at w) x = some (y, o)) (heo : e ∈ persists o)
     (he : e ∈ persists (outputsAt cfg tr i)) (hxt : x.top = some n)
     (hgx : Grows x.store (stateBefore cfg tr (i + 1) w).store)
-    (hbeh : behind (cfg.at w) x.store n) :
+    (hbeh : behind (cfg.at w) x.store n) (hR : R₀ ≤ n + 1) :
     ∃ w' ∈ T, w' ≠ w ∧ ∃ j < i, ∃ inp' z, tr[j]? = some (w', inp') ∧
       z ∈ persists (outputsAt cfg tr j) ∧ z.2.round = n + 1 ∧ z.1 ∈ x.store.ids ∧
       x.store.blk z.1 = z.2 := by
   -- an author of round `n + 1` in `T`
-  have hTc : Tᶜ.card ≤ cfg.f + cfg.c := by rw [Finset.card_compl]; omega
   obtain ⟨w', hw'A, hw'T⟩ : ∃ w' ∈ x.store.authorsAt (n + 1), w' ∈ T := by
     by_contra h
     push_neg at h
-    have := Finset.card_le_card fun a ha => Finset.mem_compl.mpr (h a ha)
-    change cfg.f + cfg.c + 1 ≤ _ at hbeh
+    have hsub : x.store.authorsAt (n + 1) ⊆ Hᶜ := fun a ha => Finset.mem_compl.mpr fun haH =>
+      h a ha (mem_of_stored htime hout hw haH hR (Grows.authorsAt hgx _ ha))
+    have := Finset.card_le_card hsub
+    change cfg.f + 1 ≤ _ at hbeh
     omega
   obtain ⟨z, hzR, hzc⟩ := mem_creatorsOf.mp hw'A
   have hz : z ∈ x.store.ids ∧ (x.store.blk z).round = n + 1 := by
@@ -469,176 +516,38 @@ theorem behind_earlier (htime : Converge.TimelyAuthentic cfg H tr)
   obtain ⟨inp', hj'⟩ := Converge.event_of_map hjw'
   exact ⟨w', hw'T, hww, j, by omega, inp', (z, x.store.blk z), hj', hjz, hz.2, hz.1, rfl⟩
 
-/-- **Catch-up**: past `gst`, a reliable node `u` at round `n` or above
-`A = Δ + Δₛ` after a reliable peer built a round-`n + 1` block, having
-built round `n` at most `A` after every reliable node, every reliable
-node having built round `n` past `gst`, is above `n` then. It holds the
-peer's block, and with it a quorum of round `n`; if the peer built on the
-tests, `u` passes them with the references the block lends; if on the
-round's timer, `u`'s has fired too; if on being behind, an earlier
-reliable peer built the round (`behind_earlier`), and `u` catches up
-with it. -/
-theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
-    (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
+/-- **A reliable block of round `m + 1` that a node holds brings a quorum
+of round `m`**: its references, `q` authors, are held with it. -/
+theorem quorum_of_held (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
-    (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁) (hwait : Live.TimersAfterSet cfg T tr time)
-    (hfire : TimersFireFrom cfg T tr time gst t₁)
-    (hcT : Fintype.card Validator - cfg.f - cfg.c ≤ T.card)
-    {u : Validator} (hu : u ∈ T) {n : ℕ}
-    (hgall : ∀ w ∈ T, gst ≤ builtAt cfg tr time w n)
-    (hball : ∀ w ∈ T, builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (Δ + Δₛ))
-    {w : Validator} (hw : w ∈ T) (huw : u ≠ w) {i : ℕ}
-    {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (w, inp))
-    {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr i))
-    (her : e.2.round = n + 1) (hgi : gst ≤ time i)
-    (hus : (stateAt cfg tr time u (time i + (Δ + Δₛ))).top.isSome)
-    (hun : n ≤ topAt cfg tr time u (time i + (Δ + Δₛ)))
-    (ht₁ : time i + (Δ + Δₛ) ≤ t₁) :
-    n + 1 ≤ topAt cfg tr time u (time i + (Δ + Δₛ)) := by
-  induction i using Nat.strong_induction_on generalizing w inp e with
-  | _ i ih =>
-  have hgu := hgall u hu
-  have hbu := hball w hw
-  have hil : i < tr.length := (List.getElem?_eq_some_iff.mp hi).1
-  set τ := time i + (Δ + Δₛ) with hτ
-  set E := eventsBy tr time τ with hE
-  by_contra hlt
-  -- `u` is at round `n`, settled
-  have hZt : (stateBefore cfg tr E u).top = some n := by
-    obtain ⟨t, ht⟩ := Option.isSome_iff_exists.mp hus
-    change (stateBefore cfg tr E u).top = some t at ht
-    change n ≤ (stateBefore cfg tr E u).top.getD 0 at hun
-    change ¬ n + 1 ≤ (stateBefore cfg tr E u).top.getD 0 at hlt
-    rw [ht] at hun hlt ⊢
-    simp only [Option.getD_some] at hun hlt
-    rw [show t = n by omega]
-  have hiE : i < E := (lt_eventsBy hmono hil).mpr (by omega)
-  set Z := stateBefore cfg tr E u with hZ
-  have hSet : Settled (cfg.at u) Z := by
-    rcases settled_before (cfg := cfg) hq u E with h | h
-    · rw [hZt] at h; cases h
-    · exact h
-  have hZcut := (cut_before hσ hadm hf htime hinj E u (hTH hu)).1
-  obtain ⟨o, hoo, hoi, hor, hoc⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := u) E n hZt
-  -- the peer's build
-  obtain ⟨x, y, out, hbs, hb, heo, hgx⟩ := build_witness hσ hadm hf htime hinj (hTH hw) hi he
-    (by omega)
-  obtain ⟨r, hxt, -, hexit, hout⟩ := tryBuild_exit hb
-  obtain ⟨r', id, b, hnew, hrefs, hpred, hxt', hbr, -, -, hrv, -, -, -, -, hout'⟩ :=
-    tryBuild_some hb
-  rw [hxt] at hxt'
-  cases hxt'
-  have hAB := congrArg persists (hout.symm.trans hout')
-  rw [persists_built, persists_built, List.singleton_inj] at hAB
+    {v w : Validator} (hv : v ∈ H) (hw : w ∈ H) {i : ℕ} {inp : Input Validator BlockId Payload}
+    (hi : tr[i]? = some (w, inp)) {e : BlockId × Block Validator BlockId Payload}
+    (he : e ∈ persists (outputsAt cfg tr i)) {m : ℕ} (her : e.2.round = m + 1) {E : ℕ}
+    (hin : e.1 ∈ (stateBefore cfg tr E v).store.ids)
+    (hblk : (stateBefore cfg tr E v).store.blk e.1 = e.2) :
+    cfg.q ≤ (authorsIn (stateBefore cfg tr E v).store.toRecord
+      (stateBefore cfg tr E v).store.ids m).card := by
+  set Z := stateBefore cfg tr E v with hZ
+  have hZcut := (cut_before hσ hadm hf htime hinj E v hv).1
+  obtain ⟨x, y, out, hbs, hb, heo, -⟩ := build_witness hσ hadm hf htime hinj hw hi he (by omega)
+  obtain ⟨r', id, b, hnew, hrefs, -, -, hbr, -, -, hrv, -, -, -, -, hout'⟩ := tryBuild_some hb
   rw [hout', persists_built, List.mem_singleton] at heo
   subst heo
-  have hrn : r = n := by simp only at her; omega
-  subst hrn
-  have hbR : b.refs = refsAt (cfg.at w) x.store r x.own := by
-    have := congrArg (fun e => e.2.refs) hAB
-    simp only at this
-    exact this.symm
-  set R := refsAt (cfg.at w) x.store r x.own with hRdef
-  have hRx : R ⊆ x.store.ids := hbR ▸ hrefs
-  obtain ⟨hRq, hRd⟩ := refs_of_rowValid (cfg := cfg.at w) hnew hrefs (by omega) hrv
-  rw [hbR] at hRq hRd
-  -- the peer's block arrives
-  have hzZ := harr w hw u hu (Ne.symm huw) i inp hi _ he (time i) τ le_rfl
-    (by rw [max_eq_left hgi]) ht₁
-  obtain ⟨hzr, hzc, hzb⟩ := held_as_built htime hinj hTH hw hu hi he hzZ
-  change (id, b).1 ∈ Z.store.ids at hzZ
-  change (Z.store.blk (id, b).1).round = (id, b).2.round at hzr
-  change (Z.store.blk (id, b).1).creator = w at hzc
-  change Z.store.blk (id, b).1 = (id, b).2 at hzb
-  simp only at hzZ hzr hzc hzb her
-  have hZR : (Z.store.blk id).refs = R := by rw [hzb, hbR]
-  -- a quorum of round `r`
-  have hRZ : ∀ j ∈ R, j ∈ Z.store.ids ∧ (Z.store.blk j).round = r := fun j hj => by
-    have hj' : j ∈ (Z.store.blk id).refs := by rw [hZR]; exact hj
-    have := Z.store.pred id hzZ j hj'
+  simp only at her hin hblk
+  obtain ⟨hRq, -⟩ := refs_of_rowValid (cfg := cfg.at w) hnew hrefs (by omega) hrv
+  have hRZ : ∀ j ∈ b.refs, j ∈ Z.store.ids ∧ (Z.store.blk j).round = m := fun j hj => by
+    have hj' : j ∈ (Z.store.blk id).refs := by rw [hblk]; exact hj
+    have := Z.store.pred id hin j hj'
     change (Z.store.blk j).round + 1 = (Z.store.blk id).round at this
-    exact ⟨Z.store.complete id hzZ j hj', by omega⟩
-  have hcre : creatorsOf Z.store.blk R = creatorsOf x.store.blk R :=
+    rw [hblk, her] at this
+    exact ⟨Z.store.complete id hin j hj', by omega⟩
+  have hcre : creatorsOf Z.store.blk b.refs = creatorsOf x.store.blk b.refs :=
     Finset.image_congr fun j hj => by
-      rw [← hZcut.creator (hRZ j hj).1, hbs.cut.creator (hRx hj)]
-  have hcard : cfg.q ≤ (authorsIn Z.store.toRecord Z.store.ids r).card := by
-    refine le_trans hRq (le_trans (le_of_eq (congrArg Finset.card hcre.symm))
-      (Finset.card_le_card fun a ha => ?_))
-    obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp ha
-    exact mem_authorsIn.mpr ⟨j, (hRZ j hj).1, (hRZ j hj).2, rfl⟩
-  have hfresh := fresh_before hid htime (hTH hu) hZt
-  -- the timer has fired, or the lent references pass the tests
-  have hgo : r ∈ Z.fired ∨
-      (reachReady (cfg.at u) Z.store (refsAt (cfg.at u) Z.store r Z.own) r = true ∧
-        certReady (cfg.at u) Z.store (refsAt (cfg.at u) Z.store r Z.own) r = true) := by
-    rcases hexit with ⟨hre, hce⟩ | ⟨hfx, -⟩ | ⟨hbeh, -⟩
-    · right
-      obtain ⟨hRR, hlZ, hlb⟩ := lent_buildable (cfg := cfg.at u) hbs.cut hZcut hRx hRq hRd
-        hzZ (hzr.trans hbr) hZR hoi hor hoc (hTH hu) hfresh
-      have hready := ready_transfer (cfg := cfg.at u) hσ (fun h => certThreshold_pos hadm h)
-        hbs.cut hZcut hRx hRR hlZ hre hce
-      rw [hoo]
-      exact refsAt_ready (cfg := cfg.at u) hzZ (hzr.trans hbr) (by rw [hzc]; exact Ne.symm huw)
-        hready hlb
-    · left
-      obtain ⟨j, hj, hjt⟩ : ∃ j ≤ i, tr[j]? = some (w, Input.timer r) := by
-        rcases hbs.fired _ hfx with h | h
-        · obtain ⟨j, hj, hjt⟩ := fired_before (cfg := cfg) (tr := tr) (v := w) i _ h
-          exact ⟨j, hj.le, hjt⟩
-        · exact ⟨i, le_rfl, by rw [hi, h]⟩
-      have hwt := timer_after_built time hmono hwait hw hil hj hjt
-      obtain ⟨bu, inpu, eu, hbu', heu, heur, hbut, -⟩ := built_of_top hmono hus hun
-      have hset := timer_of_persist hbu' heu
-      rw [heur] at hset
-      obtain ⟨f, -, hfe, htf⟩ := hfire bu u inpu hbu' hu (by omega) r (cfg.timeout r) hset
-        (by omega)
-      have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hfe).1
-      have hfE : f < E := (lt_eventsBy hmono hfl).mpr (by omega)
-      exact fired_stays hfe E hfE
-    · -- an earlier reliable peer built the round, and `u` catches up with it
-      exfalso
-      obtain ⟨w', hw'T, -, j, hji, inp', z, hj', hz, hzr', -, -⟩ :=
-        behind_earlier htime hinj hTH hcT (hTH hw) hi hbs hb
-          (by rw [hout', persists_built]; exact List.mem_singleton_self _) he hxt hgx hbeh
-      have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj').1
-      have htji := hmono j i hji.le hil
-      have hmono' : topAt cfg tr time u (time j + (Δ + Δₛ)) ≤ topAt cfg tr time u τ :=
-        (rises_before (cfg := cfg) (tr := tr) u (eventsBy_mono (by omega))).1
-      by_cases hw'u : w' = u
-      · subst hw'u
-        have := (top_of_built hmono hj' hz (τ := τ) (by omega)).2
-        rw [hzr'] at this
-        exact hlt this
-      · -- `w'` built round `r + 1` past `gst`
-        obtain ⟨hws, hwn⟩ := top_of_built hmono hj' hz (τ := time j) le_rfl
-        rw [hzr'] at hwn
-        have hsucc := builtAt_le_succ hmono hws hwn
-        obtain ⟨i₀, hi₀j, hbt₀, -⟩ := builtAt_first (cfg := cfg) time (by rw [hj']; rfl)
-          ⟨z, hz, hzr'⟩
-        have h₀ := hmono i₀ j hi₀j hjl
-        dsimp only at hbt₀
-        have hgj : gst ≤ time j := by have := hgall w' hw'T; omega
-        -- `u` built round `r` by `A` after `w'` did
-        obtain ⟨bu, inpu, eu, hbu', heu, heur, hbut, -⟩ := built_of_top hmono hus hun
-        have hbw := hball w' hw'T
-        obtain ⟨hus', hun'⟩ := top_of_built hmono hbu' heu (τ := time j + (Δ + Δₛ)) (by omega)
-        rw [heur] at hun'
-        have := ih j hji hw'T (Ne.symm hw'u) hj' hz hzr' hgj hus' hun' (by omega)
-        exact hlt (this.trans hmono')
-  have hsome := tryBuild_isSome (cfg := cfg.at u) hZt (hgo.imp_right Or.inr) hcard
-    (fun j hj => by rw [hoo] at hj; cases hj; exact ⟨hoi, hor, hoc⟩) hfresh
-  rw [hSet.build] at hsome
-  cases hsome
-
-end Catch
-
-/-! ## The drift of build times -/
-
-section Drift
-
-variable {T : Finset Validator} {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ}
-  {gst Δ Δₛ t₁ : ℕ}
+      rw [← hZcut.creator (hRZ j hj).1, hbs.cut.creator (hrefs hj)]
+  refine le_trans hRq (le_trans (le_of_eq (congrArg Finset.card hcre.symm))
+    (Finset.card_le_card fun a ha => ?_))
+  obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp ha
+  exact mem_authorsIn.mpr ⟨j, (hRZ j hj).1, (hRZ j hj).2, rfl⟩
 
 /-- **A reliable node has started** at any time from GST on. -/
 theorem started_at (hadm : cfg.Admissible) (hid : Function.Injective cfg.idOf)
@@ -651,6 +560,71 @@ theorem started_at (hadm : cfg.Admissible) (hid : Function.Injective cfg.idOf)
   exact (rises_before (cfg := cfg) v hstE).2.1
     (started_after hadm hid htime (hTH hv) hst)
 
+/-- **Catch-up**: past GST, once `f + 1` reliable nodes are at round `n`
+or above at `τ`, every reliable node is at `n` or above at `τ + A`. Each
+of their blocks of the round above a node's top arrives, so the node is
+behind that round, with a quorum of its top round, and builds it. -/
+theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
+    (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
+    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
+    (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
+    (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁) (hstart : Live.StartedBy T tr time gst)
+    {S : Finset Validator} (hST : S ⊆ T) (hS : cfg.f + 1 ≤ S.card) {τ n : ℕ} (hgτ : gst ≤ τ)
+    (hτ₁ : τ + (Δ + Δₛ) ≤ t₁)
+    (hSn : ∀ w ∈ S, (stateAt cfg tr time w τ).top.isSome ∧ n ≤ topAt cfg tr time w τ)
+    {v : Validator} (hv : v ∈ T) : n ≤ topAt cfg tr time v (τ + (Δ + Δₛ)) := by
+  set E := eventsBy tr time (τ + (Δ + Δₛ)) with hE
+  by_contra hlt
+  obtain ⟨m, hm⟩ := Option.isSome_iff_exists.mp
+    (started_at hadm hid htime hTH hmono hstart hv (τ := τ + (Δ + Δₛ)) (by omega))
+  change (stateBefore cfg tr E v).top = some m at hm
+  have hmn : m + 1 ≤ n := by
+    change ¬ n ≤ (stateBefore cfg tr E v).top.getD 0 at hlt
+    rw [hm] at hlt
+    simp only [Option.getD_some] at hlt
+    omega
+  set Z := stateBefore cfg tr E v with hZ
+  have hSet : Settled (cfg.at v) Z := by
+    rcases settled_before (cfg := cfg) hq v E with h | h
+    · rw [hm] at h; cases h
+    · exact h
+  have hvS : v ∉ S := fun hvS =>
+    hlt ((hSn v hvS).2.trans (rises_before (cfg := cfg) (tr := tr) v (eventsBy_mono
+      (tr := tr) (time := time) (show τ ≤ τ + (Δ + Δₛ) by omega))).1)
+  -- each of their blocks of round `m + 1` arrives
+  have hbeh : behind (cfg.at v) Z.store m := by
+    change cfg.f + 1 ≤ (Z.store.authorsAt (m + 1)).card
+    refine hS.trans (Finset.card_le_card fun w hw => ?_)
+    obtain ⟨j, hj, hjr, hjc⟩ := round_arrives htime hinj hTH hmono harr (hST hw) hv
+      (ne_of_mem_of_not_mem hw hvS) hgτ (hSn w hw).1 ((hSn w hw).2.trans' hmn) le_rfl hτ₁
+    rw [Store.authorsAt_eq]
+    exact mem_authorsIn.mpr ⟨j, hj, hjr, hjc⟩
+  -- one of them brings a quorum of round `m`
+  obtain ⟨w, hw⟩ : S.Nonempty := Finset.card_pos.mp (by omega)
+  obtain ⟨k, hk, hkw, e, he, her⟩ := built_by (cfg := cfg) (tr := tr) (eventsBy tr time τ)
+    (hSn w hw).1 ((hSn w hw).2.trans' hmn)
+  obtain ⟨inpk, hk'⟩ := Converge.event_of_map hkw
+  have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hk').1
+  have htk : time k ≤ τ := (lt_eventsBy hmono hkl).mp hk
+  have hin := harr w (hST hw) v hv (ne_of_mem_of_not_mem hw hvS) k inpk hk' e he τ
+    (τ + (Δ + Δₛ)) htk (by rw [max_eq_left hgτ]) hτ₁
+  obtain ⟨-, -, hblk⟩ := held_as_built htime hinj hTH (hST hw) hv hk' he hin
+  have hcard := quorum_of_held hσ hadm hf htime hinj (hTH hv) (hTH (hST hw)) hk' he her hin hblk
+  obtain ⟨o, hoo, hoi, hor, hoc⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E m hm
+  have hsome := tryBuild_isSome (cfg := cfg.at v) hm (Or.inr (Or.inl hbeh)) hcard
+    (fun j hj => by rw [hoo] at hj; cases hj; exact ⟨hoi, hor, hoc⟩)
+    (fresh_before hid htime (hTH hv) hm)
+  rw [hSet.build] at hsome
+  cases hsome
+
+end Catch
+
+/-! ## Build times -/
+
+section Built
+
+variable {T : Finset Validator} {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ}
+
 /-- A node at a round built it by then. -/
 theorem builtAt_le_of_top {v : Validator}
     (hmono : Live.TimeMono tr time) {τ n : ℕ} (hs : (stateAt cfg tr time v τ).top.isSome)
@@ -658,57 +632,7 @@ theorem builtAt_le_of_top {v : Validator}
   obtain ⟨i, -, -, -, -, -, hbt, hiτ⟩ := built_of_top hmono hs hn
   omega
 
-/-- **Drift stays within `A = Δ + Δₛ`**: past GST, if the reliable nodes
-built round `n₀` within `A` of each other, they build every round from
-`n₀` up to one they all reach by `t` within `A` of each other
-(`catches_up`). -/
-theorem drift (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
-    (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
-    (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
-    (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁) (hwait : Live.TimersAfterSet cfg T tr time)
-    (hfire : TimersFireFrom cfg T tr time gst t₁) (hstart : Live.StartedBy T tr time gst)
-    (hcT : Fintype.card Validator - cfg.f - cfg.c ≤ T.card)
-    {n₀ s : ℕ} (hgs : gst ≤ s)
-    (h₀ : ∀ v ∈ T, s ≤ builtAt cfg tr time v n₀ ∧ builtAt cfg tr time v n₀ ≤ s + (Δ + Δₛ))
-    {t N : ℕ} (hst : ∀ v ∈ T, (stateAt cfg tr time v t).top.isSome)
-    (hN : ∀ v ∈ T, N ≤ topAt cfg tr time v t) (ht₁ : t + (Δ + Δₛ) ≤ t₁) :
-    ∀ n, n₀ ≤ n → n ≤ N → ∀ u ∈ T, ∀ w ∈ T, s ≤ builtAt cfg tr time u n ∧
-      builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (Δ + Δₛ) := by
-  intro n hn₀ hnN
-  induction n, hn₀ using Nat.le_induction with
-  | base =>
-    intro u hu w hw
-    exact ⟨(h₀ u hu).1, (h₀ u hu).2.trans (by have := (h₀ w hw).1; omega)⟩
-  | succ n hn₀ ih =>
-    have ih := ih (by omega)
-    intro u hu w hw
-    have hgu : s ≤ builtAt cfg tr time u (n + 1) :=
-      (ih u hu u hu).1.trans (builtAt_le_succ hmono (hst u hu) ((hN u hu).trans' hnN))
-    refine ⟨hgu, ?_⟩
-    by_cases huw : u = w
-    · subst huw; omega
-    -- the peer's first build of round `n + 1`
-    obtain ⟨i, inp, e, hi, he, her, hbt, hit⟩ :=
-      built_of_top hmono (hst w hw) ((hN w hw).trans' hnN)
-    have hgw : s ≤ builtAt cfg tr time w (n + 1) :=
-      (ih w hw w hw).1.trans (builtAt_le_succ hmono (hst w hw) ((hN w hw).trans' hnN))
-    have hwn := builtAt_le_succ hmono (hst w hw) ((hN w hw).trans' hnN)
-    have hus := started_at hadm hid htime hTH hmono hstart hu
-      (τ := time i + (Δ + Δₛ)) (by omega)
-    -- `u` built round `n` by then
-    obtain ⟨bu, _inpu, eu, hbu, heu, heur, hbut, -⟩ :=
-      built_of_top hmono (hst u hu) ((hN u hu).trans' (by omega : n ≤ N))
-    have hun := (top_of_built hmono hbu heu (τ := time i + (Δ + Δₛ))
-      (by have := (ih u hu w hw).2; omega)).2
-    rw [heur] at hun
-    have hup := catches_up hq hσ hadm hf hid htime hinj hTH hmono harr hwait hfire hcT hu
-      (fun w hw => hgs.trans (ih w hw w hw).1) (fun w hw => (ih u hu w hw).2) hw huw hi he her
-      (by omega) hus hun (by omega)
-    have := builtAt_le_of_top hmono hus hup
-    omega
-
-end Drift
+end Built
 
 end Node
 

@@ -223,8 +223,9 @@ theorem IsCut.advanceStore (hg : Ground U K cfg.q) {s : State Validator BlockId 
     (hc : IsCut U s.store) (hp : ∀ e ∈ s.pending, e ∈ K)
     (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : IsCut U (Node.advance cfg s).1.store := by
   have hp₁ := (progress_pending (cfg := cfg) (s.store.topRound + 2) s).1
-  simp only [Node.advance] at hb ⊢
-  rw [persists_append] at hb
+  simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
+      arm_requested, arm_decided] at hb ⊢
+  rw [persists_append, persists_arm, List.append_nil, persists_append] at hb
   have hc₁ := IsCut.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.store.topRound + 2) s = r at hp₁ hc₁ ⊢
   have hc₂ : IsCut U (Node.decideStep cfg r.1).1.store := by
@@ -340,7 +341,11 @@ theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   have hcut := IsCut.advanceStore hg hc hp hb
   obtain ⟨bs, hbs⟩ := progress_built (cfg := cfg) (s.store.topRound + 2) s
   obtain ⟨hg₁, hlo₁⟩ := Grows.progress (cfg := cfg) (s.store.topRound + 2) s
-  simp only [Node.advance] at hb hcut ⊢
+  rw [advance_snd, persists_append, persists_arm, List.append_nil] at hb
+  rw [advance_snd, commitsOf_append, commitsOf_arm, List.append_nil]
+  refine ⟨CommitInv.keeps ?_ (advance_lo s) (by rw [advance_store]; exact Keeps.refl _), hcut⟩
+  rw [advance_store] at hcut
+  simp only [Node.pass] at hb hcut ⊢
   rw [persists_append] at hb
   have hc₁ := IsCut.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.store.topRound + 2) s = r at hbs hg₁ hlo₁ hc₁ hcut ⊢
@@ -348,7 +353,6 @@ theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   have h₂ := h₁.decideStep hσ ht hc₁
   have hk := (Grows.flush (cfg := cfg) ((Node.decideStep cfg r.1).1.pending.length + 1)
     (Node.decideStep cfg r.1).1.store (Node.decideStep cfg r.1).1.pending).keeps
-  refine ⟨?_, hcut⟩
   rw [commitsOf_append, hbs, commitsOf_built, List.nil_append]
   exact h₂.keeps rfl hk
 
@@ -458,8 +462,9 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     rw [this, List.append_nil]
     exact ⟨h, hc⟩
   | restart =>
-    show CommitInv cfg U s (cs ++ commitsOf (Node.resend cfg s)) ∧ IsCut U s.store
-    rw [commitsOf_resend, List.append_nil]
+    show CommitInv cfg U s (cs ++ commitsOf (Node.resend cfg s ++ Node.rearm cfg s)) ∧
+      IsCut U s.store
+    rw [commitsOf_append, commitsOf_resend, commitsOf_rearm, List.append_nil, List.append_nil]
     exact ⟨h, hc⟩
 
 /-- **A run keeps the invariant**, at a record grounding what the node knew. -/

@@ -4,11 +4,11 @@ import LeanDag.Node.Helpers.Reliable
 
 `docs/validator.md` §5.2. A pass builds every round from the top it
 starts at up to the top it reaches, at rounds above that top, each with
-its timer, and keeps the fired timers (`PassShape`). A step either changes
-nothing and outputs no block and no timer, or settles a state with the
-same top (`step_shape`). A node whose round's timer fired, or whose
-references pass the tests, builds given a quorum of the round
-(`tryBuild_isSome`).
+its retry timer, and keeps the fired timers (`PassShape`). A step either
+changes nothing and outputs no block and no timer, or settles a state
+with the same top (`step_shape`). A node whose round's timer fired, that
+is behind the round above, or whose references pass the tests, builds
+given a quorum of the round (`tryBuild_isSome`).
 -/
 
 namespace LeanDag
@@ -111,12 +111,13 @@ theorem decideStep_shape (s : State Validator BlockId Payload) :
 omit [Fintype Validator] in
 theorem timer_of_built {bs : List (BlockId × Block Validator BlockId Payload)}
     {e : BlockId × Block Validator BlockId Payload} (he : e ∈ bs) :
-    Output.setTimer e.2.round (cfg.timeout e.2.round) ∈ built cfg bs :=
+    Output.setTimer (e.2.round - 1) (2 * cfg.timeout (e.2.round - 1)) ∈ built cfg bs :=
   List.mem_flatMap.mpr ⟨e, he, by simp⟩
 
 variable (cfg) in
 /-- **The shape of a pass**: its blocks lie above the top it starts at,
-one at each round up to the top it reaches, each with its timer; it keeps
+one at each round up to the top it reaches, each with the timer of the
+round below it, the retry timer; it keeps
 the fired timers and rises. -/
 structure PassShape (s : State Validator BlockId Payload)
     (out : List (Output Validator BlockId Payload)) (s' : State Validator BlockId Payload) :
@@ -124,7 +125,8 @@ structure PassShape (s : State Validator BlockId Payload)
   above : ∀ e ∈ persists out, s.top.getD 0 < e.2.round
   every : s.top.isSome → ∀ ρ, s.top.getD 0 < ρ → ρ ≤ s'.top.getD 0 →
     ∃ e ∈ persists out, e.2.round = ρ
-  timer : ∀ e ∈ persists out, Output.setTimer e.2.round (cfg.timeout e.2.round) ∈ out
+  timer : ∀ e ∈ persists out,
+    Output.setTimer (e.2.round - 1) (2 * cfg.timeout (e.2.round - 1)) ∈ out
   fired : s.fired ⊆ s'.fired
   rises : Rises s s'
   none : s.top = none → s'.top = none
@@ -165,30 +167,29 @@ theorem advance_shape (s : State Validator BlockId Payload) :
   generalize hP : Node.progress cfg (s.store.topRound + 2) s = P at p₂ p₀ p₃ p₄ hbs
   obtain ⟨d₂, d₃, -, d₅⟩ := decideStep_shape (cfg := cfg) P.1
   generalize hD : Node.decideStep cfg P.1 = D at d₂ d₃ d₅
-  have hadv : Node.advance cfg s = ({ D.1 with
+  have hadv : Node.pass cfg s = ({ D.1 with
       store := (flush cfg (D.1.pending.length + 1) D.1.store D.1.pending).1,
       pending := (flush cfg (D.1.pending.length + 1) D.1.store D.1.pending).2 },
       P.2 ++ D.2) := by
-    simp only [Node.advance, hP, hD]
-  rw [hadv] at hra ⊢
-  have hpers : persists (P.2 ++ D.2) = bs := by
-    rw [persists_append, hbs, persists_built, d₅.1]; simp
+    simp only [Node.pass, hP, hD]
+  have hpers : persists (Node.advance cfg s).2 = bs := by
+    rw [advance_snd, persists_append, persists_arm, List.append_nil, hadv, persists_append, hbs,
+      persists_built, d₅.1]; simp
+  have htop : (Node.advance cfg s).1.top = D.1.top := by rw [advance_top, hadv]
   refine ⟨fun e he => ?_, fun hs ρ h₁ h₂ => ?_, fun e he => ?_, ?_, hra, fun h => ?_⟩
   · rw [hpers] at he
     exact p₃ e (by rw [hbs, persists_built]; exact he)
   · rw [hpers]
-    obtain ⟨e, he, her⟩ := p₄ hs ρ h₁ (by
-      change ρ ≤ D.1.top.getD 0 at h₂
-      rw [d₃] at h₂; exact h₂)
+    obtain ⟨e, he, her⟩ := p₄ hs ρ h₁ (by rw [htop, d₃] at h₂; exact h₂)
     rw [hbs, persists_built] at he
     exact ⟨e, he, her⟩
   · rw [hpers] at he
-    rw [hbs]
-    exact List.mem_append_left _ (timer_of_built he)
-  · change s.fired ⊆ D.1.fired
+    rw [advance_snd, hadv, hbs]
+    exact List.mem_append_left _ (List.mem_append_left _ (timer_of_built he))
+  · rw [advance_fired, hadv]
+    change s.fired ⊆ D.1.fired
     rw [d₂, p₂]
-  · change D.1.top = none
-    rw [d₃]; exact p₀ h
+  · rw [htop, d₃]; exact p₀ h
 
 theorem quiesce_shape (n : ℕ) (s : State Validator BlockId Payload) :
     PassShape cfg s (quiesce cfg n s).2 (quiesce cfg n s).1 :=
@@ -222,7 +223,7 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
       x.top.getD 0 = s.top.getD 0 ∧ s.fired ⊆ x.fired ∧
       ((persists pre = [] ∧ x.top = s.top) ∨ (s.top = none ∧ x.top = some 0 ∧
         ∃ g : BlockId × Block Validator BlockId Payload,
-          pre = [.persist g.1 g.2, .broadcast g.1 g.2, .setTimer 0 (cfg.timeout 0)] ∧
+          pre = [.persist g.1 g.2, .broadcast g.1 g.2, .setTimer 0 (2 * cfg.timeout 0)] ∧
           g.2.round = 0 ∧ g.1 ∈ x.store.ids ∧ (x.store.blk g.1).round = 0)) := by
   have hq : ∀ x, x = s → ((x, ([] : List (Output Validator BlockId Payload))).1 = s ∧
       persists ([] : List (Output Validator BlockId Payload)) = []) := fun x hx => ⟨hx, rfl⟩
@@ -262,7 +263,10 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
     refine Or.inl ⟨rfl, (silent_of fun o ho => ?_).1⟩
     simp only [Node.step, answer, List.mem_map] at ho
     obtain ⟨j, -, rfl⟩ := ho; trivial
-  | restart => exact Or.inl ⟨rfl, persists_resend s⟩
+  | restart =>
+    refine Or.inl ⟨rfl, ?_⟩
+    change persists (Node.resend cfg s ++ Node.rearm cfg s) = []
+    rw [persists_append, persists_resend, persists_rearm, List.append_nil]
 
 section StepFacts
 
@@ -298,10 +302,11 @@ theorem step_every
           (by rw [hx0]; simp; omega) hρt
         exact ⟨e, List.mem_append_right _ he', her⟩
 
-/-- **A step sets the timer of each round it builds.** -/
+/-- **A step sets the retry timer of each round it builds.** -/
 theorem step_timer :
     ∀ e ∈ persists (Node.step cfg s inp).2,
-      Output.setTimer e.2.round (cfg.timeout e.2.round) ∈ (Node.step cfg s inp).2 := by
+      Output.setTimer (e.2.round - 1) (2 * cfg.timeout (e.2.round - 1)) ∈
+        (Node.step cfg s inp).2 := by
   rcases step_shape (cfg := cfg) s inp with ⟨-, hq⟩ | ⟨x, pre, post, -, he, hpost, -, -, hpre⟩
   · rw [hq]; intro e he; cases he
   · rw [he, persists_append, hpost, List.append_nil]

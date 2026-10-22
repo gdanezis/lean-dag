@@ -480,6 +480,129 @@ theorem Inv.flushAll {s : State Validator BlockId Payload}
     ⟨hg.1 (hi.own j hj).1, by rw [hg.blk (hi.own j hj).1]; exact (hi.own j hj).2⟩⟩
 
 omit [Fintype Validator] in
+/-- **Arming changes only the armed round.** -/
+theorem arm_eq (s : State Validator BlockId Payload) :
+    ∃ a, (Node.arm cfg s).1 = { s with armed := a } := by
+  unfold Node.arm
+  split
+  · split
+    · exact ⟨_, rfl⟩
+    · exact ⟨s.armed, rfl⟩
+  · exact ⟨s.armed, rfl⟩
+
+omit [Fintype Validator] in
+@[simp] theorem arm_store (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.store = s.store := by
+  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
+
+omit [Fintype Validator] in
+@[simp] theorem arm_pending (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.pending = s.pending := by
+  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
+
+omit [Fintype Validator] in
+@[simp] theorem arm_top (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.top = s.top := by
+  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
+
+omit [Fintype Validator] in
+@[simp] theorem arm_own (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.own = s.own := by
+  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
+
+omit [Fintype Validator] in
+@[simp] theorem arm_fired (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.fired = s.fired := by
+  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
+
+omit [Fintype Validator] in
+@[simp] theorem arm_lo (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.lo = s.lo := by
+  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
+
+omit [Fintype Validator] in
+@[simp] theorem arm_requested (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.requested = s.requested := by
+  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
+
+omit [Fintype Validator] in
+@[simp] theorem arm_decided (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.decided = s.decided := by
+  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
+
+omit [Fintype Validator] in
+theorem advance_store (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.store = (Node.pass cfg s).1.store := arm_store _
+
+omit [Fintype Validator] in
+theorem advance_pending (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.pending = (Node.pass cfg s).1.pending := arm_pending _
+
+omit [Fintype Validator] in
+theorem advance_top (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.top = (Node.pass cfg s).1.top := arm_top _
+
+omit [Fintype Validator] in
+theorem advance_own (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.own = (Node.pass cfg s).1.own := arm_own _
+
+omit [Fintype Validator] in
+theorem advance_fired (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.fired = (Node.pass cfg s).1.fired := arm_fired _
+
+omit [Fintype Validator] in
+theorem advance_lo (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.lo = (Node.pass cfg s).1.lo := arm_lo _
+
+omit [Fintype Validator] in
+theorem advance_requested (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.requested = (Node.pass cfg s).1.requested := arm_requested _
+
+omit [Fintype Validator] in
+theorem advance_decided (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.decided = (Node.pass cfg s).1.decided := arm_decided _
+
+omit [Fintype Validator] in
+theorem advance_snd (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).2 = (Node.pass cfg s).2 ++ (Node.arm cfg (Node.pass cfg s).1).2 := rfl
+
+omit [Fintype Validator] in
+/-- **Arming outputs only the timer of the top round**, set once the store
+holds `q` authors of it. -/
+theorem mem_arm {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
+    (h : o ∈ (Node.arm cfg s).2) :
+    ∃ r, s.top = some r ∧ cfg.q ≤ (s.store.authorsAt r).card ∧ (Node.arm cfg s).1.armed = some r ∧
+      o = .setTimer r (cfg.timeout r) := by
+  unfold Node.arm at h ⊢
+  split at h
+  · rename_i r ht
+    split at h
+    · rename_i hc
+      rw [List.mem_singleton] at h
+      refine ⟨r, ht, hc.2, ?_, h⟩
+      simp only [ht, if_pos hc]
+    · exact absurd h List.not_mem_nil
+  · exact absurd h List.not_mem_nil
+
+omit [Fintype Validator] in
+theorem arm_quiet (s : State Validator BlockId Payload) :
+    ∀ o ∈ (Node.arm cfg s).2, o.isQuiet := fun o ho => by
+  obtain ⟨r, -, -, -, rfl⟩ := mem_arm ho; rfl
+
+omit [Fintype Validator] in
+theorem persists_arm (s : State Validator BlockId Payload) : persists (Node.arm cfg s).2 = [] :=
+  List.filterMap_eq_nil_iff.mpr fun o ho => by obtain ⟨r, -, -, -, rfl⟩ := mem_arm ho; rfl
+
+omit [Fintype Validator] in
+theorem broadcasts_arm (s : State Validator BlockId Payload) :
+    broadcasts (Node.arm cfg s).2 = [] :=
+  List.filterMap_eq_nil_iff.mpr fun o ho => by obtain ⟨r, -, -, -, rfl⟩ := mem_arm ho; rfl
+
+omit [Fintype Validator] in
+theorem commitsOf_arm (s : State Validator BlockId Payload) : commitsOf (Node.arm cfg s).2 = [] :=
+  List.filterMap_eq_nil_iff.mpr fun o ho => by obtain ⟨r, -, -, -, rfl⟩ := mem_arm ho; rfl
+
+omit [Fintype Validator] in
 /-- **Advancing keeps the invariant**, and its own blocks are the built
 ones. -/
 theorem Inv.advance {s : State Validator BlockId Payload}
@@ -488,10 +611,16 @@ theorem Inv.advance {s : State Validator BlockId Payload}
     ∃ bs, Out bs (advance cfg s).2 ∧ Inv cfg (advance cfg s).1 (K ∪ {x | x ∈ bs}) (B ++ bs) := by
   obtain ⟨bs, hbs, hi₁⟩ := hi.progress (s.store.topRound + 2)
   obtain ⟨hds, hi₂⟩ := hi₁.decideStep
-  refine ⟨bs, ?_, hi₂.flushAll _⟩
-  simp only [Node.advance]
-  rw [hbs]
-  simpa using (out_built (cfg := cfg) bs).append hds
+  have hi₃ := hi₂.flushAll (fuel := ((Node.decideStep cfg
+    (Node.progress cfg (s.store.topRound + 2) s).1).1.pending.length + 1))
+  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) (Node.pass cfg s).1
+  refine ⟨bs, ?_, ?_⟩
+  · simp only [Node.advance, Node.pass]
+    rw [hbs]
+    simpa using ((out_built bs).append hds).append (out_quiet (arm_quiet _))
+  · simp only [Node.advance]
+    rw [ha]
+    exact hi₃.of_eq rfl rfl rfl rfl
 
 omit [Fintype Validator] in
 /-- A settle takes at least one pass. -/
@@ -635,11 +764,12 @@ theorem mem_refetch {s : State Validator BlockId Payload} {o : Output Validator 
   · rw [Option.some.injEq] at he; exact ⟨_, _, _, he.symm⟩
 
 omit [Fintype Validator] in
-/-- **Resending outputs, besides fetches, the top block and its timer.** -/
+/-- **Resending outputs, besides fetches, the top block and the retry
+timer.** -/
 theorem mem_resend {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
     (h : o ∈ Node.resend cfg s) :
     (∃ peer r ids, o = .fetch peer r ids) ∨ ∃ r j, s.top = some r ∧ s.own = some j ∧
-      (o = .broadcast j (s.store.blk j) ∨ o = .setTimer r (cfg.timeout r)) := by
+      (o = .broadcast j (s.store.blk j) ∨ o = .setTimer (r - 1) (2 * cfg.timeout (r - 1))) := by
   unfold Node.resend at h
   rcases List.mem_append.mp h with h | h
   · split at h
@@ -648,6 +778,44 @@ theorem mem_resend {s : State Validator BlockId Payload} {o : Output Validator B
       exact Or.inr ⟨r, j, ht, ho, h⟩
     · exact absurd h List.not_mem_nil
   · exact Or.inl (mem_refetch h)
+
+omit [Fintype Validator] in
+/-- **Setting the top round's timer again** sets it, if it was set. -/
+theorem mem_rearm {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
+    (h : o ∈ Node.rearm cfg s) :
+    ∃ r, s.top = some r ∧ s.armed = some r ∧ o = .setTimer r (cfg.timeout r) := by
+  unfold Node.rearm at h
+  split at h
+  · rename_i r ht
+    split at h
+    · rename_i ha
+      rw [List.mem_singleton] at h; exact ⟨r, ht, ha, h⟩
+    · exact absurd h List.not_mem_nil
+  · exact absurd h List.not_mem_nil
+
+omit [Fintype Validator] in
+theorem persists_rearm (s : State Validator BlockId Payload) : persists (Node.rearm cfg s) = [] :=
+  List.filterMap_eq_nil_iff.mpr fun o ho => by obtain ⟨r, -, -, rfl⟩ := mem_rearm ho; rfl
+
+omit [Fintype Validator] in
+theorem commitsOf_rearm (s : State Validator BlockId Payload) :
+    commitsOf (Node.rearm cfg s) = [] :=
+  List.filterMap_eq_nil_iff.mpr fun o ho => by obtain ⟨r, -, -, rfl⟩ := mem_rearm ho; rfl
+
+omit [Fintype Validator] in
+theorem rearm_quiet (s : State Validator BlockId Payload) :
+    ∀ o ∈ Node.rearm cfg s, o.isQuiet := fun o ho => by
+  obtain ⟨r, -, -, rfl⟩ := mem_rearm ho; rfl
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+/-- **Outputs with no block of the node's own keep a step's blocks.** -/
+theorem Sent.quiet_append {B bs : List (BlockId × Block Validator BlockId Payload)}
+    {out out' : List (Output Validator BlockId Payload)} (h : Sent B bs out)
+    (hq : ∀ o ∈ out', o.isQuiet) : Sent B bs (out ++ out') := by
+  obtain ⟨hp, hb⟩ := out_quiet hq
+  refine ⟨by rw [persists_append, hp, h.1, List.append_nil], fun e he => ?_, fun e he => ?_⟩
+  · rw [broadcasts_append]; exact List.mem_append_left _ (h.2.1 e he)
+  · rw [broadcasts_append, hb, List.append_nil] at he; exact h.2.2 e he
 
 omit [Fintype Validator] in
 /-- Resending outputs no decision. -/
@@ -678,15 +846,17 @@ theorem commitsOf_step_timer (s : State Validator BlockId Payload) (r : ℕ) :
   rw [commitsOf_append, commitsOf_resend, List.append_nil]
 
 omit [Fintype Validator] in
-/-- **The timer a resend sets** is the top round's, for its timeout. -/
+/-- **The timer a resend sets** is the round's below the top, for twice
+its timeout. -/
 theorem mem_resend_setTimer {s : State Validator BlockId Payload} {r a : ℕ}
-    (h : Output.setTimer r a ∈ Node.resend cfg s) : s.top = some r ∧ a = cfg.timeout r := by
+    (h : Output.setTimer r a ∈ Node.resend cfg s) :
+    ∃ t, s.top = some t ∧ r = t - 1 ∧ a = 2 * cfg.timeout r := by
   rcases mem_resend h with ⟨_, _, _, h⟩ | ⟨t, j, ht, -, h | h⟩
   · cases h
   · cases h
   · rw [Output.setTimer.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-    exact ⟨ht, rfl⟩
+    exact ⟨t, ht, rfl, rfl⟩
 
 omit [Fintype Validator] in
 /-- **Resending broadcasts one of the node's own blocks** and persists
@@ -768,7 +938,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
             simp
         obtain ⟨bs, ho, hi'⟩ := hi₀.settle
         refine ⟨e :: bs, ?_, ?_⟩
-        · exact Sent.of_out ((out_built (cfg := cfg) [e]).append ho)
+        · exact Sent.of_out ((out_built [e]).append ho)
         · refine (by simpa using hi' : Inv cfg _ (K ∪ {x | x ∈ [e]} ∪ {x | x ∈ bs}) (B ++ e :: bs)).mono
             fun x hx => ?_
           simp only [Set.mem_union, Set.mem_setOf_eq, List.mem_cons] at hx ⊢
@@ -819,7 +989,9 @@ theorem Inv.step {s : State Validator BlockId Payload}
     simp only [Node.step]
     have h := (Sent.of_out (B := B) (bs := []) (out := []) ⟨rfl, rfl⟩).resend (cfg := cfg)
       (s := s) (K := K) (by simpa using hi)
-    exact ⟨[], by simpa using h, by simpa using hi.mono hsub⟩
+    refine ⟨[], ?_, by simpa using hi.mono hsub⟩
+    have h' := h.quiet_append (rearm_quiet (cfg := cfg) s)
+    simpa using h'
 
 omit [Fintype Validator] in
 /-- What was delivered is identified by its hash. -/

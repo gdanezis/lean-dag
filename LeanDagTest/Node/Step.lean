@@ -140,7 +140,7 @@ of round `3` fires, skip slot `3`, and commit the slots around it. -/
 /-- The network after `170` inputs, node `3` down. -/
 def down3 : Net := run (fun _ d => d = 3) 170 net0
 
-/-- info: [some 14, some 14, some 14, none] -/
+/-- info: [some 12, some 12, some 12, none] -/
 #guard_msgs in
 #eval tops down3
 
@@ -161,19 +161,19 @@ info: [(0, true), (1, true), (2, true), (3, false), (4, true), (5, true), (6, tr
 
 /-! ## A long run, node `3` down
 
-Over `440` slots every fourth slot, node `3`'s, is skipped, and each
+Over `392` slots every fourth slot, node `3`'s, is skipped, and each
 store holds one block of each of the three nodes up at each round, less
 those still in flight. -/
 
 /-- The network after `5300` inputs, node `3` down. -/
 def long3 : Net := run (fun _ d => d = 3) 5300 net0
 
-/-- info: ([some 441, some 442, some 441, none], 440, 110, true) -/
+/-- info: ([some 392, some 392, some 392, none], 392, 98, true) -/
 #guard_msgs in
 #eval (tops long3, (long3.commits 0).length, ((long3.commits 0).filter (·.2.isNone)).length,
   agree long3)
 
-/-- info: [1325, 1327, 1324] -/
+/-- info: [1179, 1179, 1179] -/
 #guard_msgs in
 #eval [0, 1, 2].map fun d : Fin 4 => (long3.states d).store.ids.card
 
@@ -202,7 +202,7 @@ def restarted : Net :=
 #guard_msgs in
 #eval (tops stalled, (List.finRange 4).map fun d => (stalled.commits d).length, agree stalled)
 
-/-- info: ([some 30, some 30, some 30, none], [28, 28, 28, 0], true) -/
+/-- info: ([some 28, some 28, some 28, none], [28, 28, 28, 0], true) -/
 #guard_msgs in
 #eval (tops restarted, (List.finRange 4).map fun d => (restarted.commits d).length,
   agree restarted)

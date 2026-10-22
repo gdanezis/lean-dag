@@ -68,7 +68,9 @@ theorem IsCut.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       ∀ e ∈ commitsOf (Node.advance cfg s).2, Verdict cfg U e := by
   refine ⟨hc.advanceStore hg hp hb, ?_⟩
   obtain ⟨bs, hbs⟩ := progress_built (cfg := cfg) (s.store.topRound + 2) s
-  simp only [Node.advance] at hb ⊢
+  rw [advance_snd, persists_append, persists_arm, List.append_nil] at hb
+  rw [advance_snd, commitsOf_append, commitsOf_arm, List.append_nil]
+  simp only [Node.pass] at hb ⊢
   rw [persists_append] at hb
   have hc₁ := IsCut.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.store.topRound + 2) s = r at hbs hc₁ ⊢
@@ -181,8 +183,8 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     rw [List.filterMap_map] at he
     simp at he
   | restart =>
-    show IsCut U s.store ∧ ∀ e ∈ commitsOf (Node.resend cfg s), Verdict cfg U e
-    rw [commitsOf_resend]
+    show IsCut U s.store ∧ ∀ e ∈ commitsOf (Node.resend cfg s ++ Node.rearm cfg s), Verdict cfg U e
+    rw [commitsOf_append, commitsOf_resend, commitsOf_rearm, List.append_nil]
     exact ⟨hc, fun e he => absurd he List.not_mem_nil⟩
 
 end Node

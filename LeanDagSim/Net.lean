@@ -248,10 +248,10 @@ def isDown (v t : ℕ) : Bool :=
   sc.crash.any (fun e => e.1 = v ∧ e.2 ≤ t) ||
     sc.outages.any fun e => e.1 = v ∧ e.2.1 ≤ t ∧ t < e.2.2
 
-/-- Whether node `v` lost a timer firing at `t`: it was down since the
-timer was set, `timeout` before. -/
-def timerLost (v t : ℕ) : Bool :=
-  sc.outages.any fun e => e.1 = v ∧ e.2.1 ≤ t ∧ t - sc.timeout < e.2.2
+/-- Whether node `v` loses a timer it sets at `t` to fire at `t'`: an
+outage of `v` begins after `t` and by `t'`. -/
+def timerLost (v t t' : ℕ) : Bool :=
+  sc.outages.any fun e => e.1 = v ∧ t < e.2.1 ∧ e.2.1 ≤ t'
 
 /-- Whether agent `a` receives what agent `src` broadcasts. -/
 def receives (a src : Agent n) : Bool :=
@@ -284,7 +284,9 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
             ((t + dt, d, .deliver id b) :: acc.1, g')
           else acc
         | _, _ => acc) acc
-    | .setTimer r after => ((t + after, src, .timer r) :: acc.1, acc.2)
+    | .setTimer r after =>
+      if (agents[src]?.map fun s => timerLost sc s.node.val t (t + after)).getD false then acc
+      else ((t + after, src, .timer r) :: acc.1, acc.2)
     | .fetch peer r ids =>
       (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
         match agents[src]?, agents[d]? with
@@ -392,8 +394,7 @@ def loop : ℕ → World n → World n
       if t > sc.horizon then { w with time := t } else
       match w.agents[d]?, w.states[d]? with
       | some a, some st =>
-        if isDown sc a.node.val t || (sc.byz.contains a.node.val && sc.byzUntil ≤ t) ||
-            (match i with | .timer _ => timerLost sc a.node.val t | _ => false) then
+        if isDown sc a.node.val t || (sc.byz.contains a.node.val && sc.byzUntil ≤ t) then
           loop fuel { w with queue := rest, time := t } else
         match (if sc.verify then checked sc w i else some i) with
         | none => loop fuel { w with queue := rest, time := t, dropped := w.dropped + 1 }

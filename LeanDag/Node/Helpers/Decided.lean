@@ -163,8 +163,15 @@ theorem advance_appends {s : State Validator BlockId Payload} (hL : Ledger s) :
     Appends s (advance cfg s).2 (advance cfg s).1 ∧ Ledger (advance cfg s).1 := by
   obtain ⟨h₁, hd₁, hl₁⟩ := progress_appends (cfg := cfg) (s.store.topRound + 2) s
   obtain ⟨h₂, hL₂⟩ := decideStep_appends (cfg := cfg) (hL.of_eq hd₁ hl₁)
-  simp only [Node.advance]
-  exact ⟨h₁.trans h₂, hL₂⟩
+  have hp : Appends s (pass cfg s).2 (pass cfg s).1 ∧ Ledger (pass cfg s).1 := by
+    simp only [Node.pass]; exact ⟨h₁.trans h₂, hL₂⟩
+  refine ⟨?_, ?_⟩
+  · unfold Appends
+    simp only [Node.advance, arm_decided, commitsOf_append, commitsOf_arm, List.append_nil]
+    exact hp.1
+  · unfold Ledger
+    simp only [Node.advance, arm_decided, arm_lo]
+    exact hp.2
 
 omit [Fintype Validator] in
 theorem quiesce_appends (n : ℕ) {s : State Validator BlockId Payload} (hL : Ledger s) :
@@ -215,7 +222,10 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
     unfold answer commitsOf
     rw [List.filterMap_map]
     exact List.filterMap_eq_nil_iff.mpr fun _ _ => rfl
-  | restart => exact ⟨Appends.quiet rfl (commitsOf_resend s), hL⟩
+  | restart =>
+    refine ⟨Appends.quiet rfl ?_, hL⟩
+    change commitsOf (Node.resend cfg s ++ Node.rearm cfg s) = []
+    rw [commitsOf_append, commitsOf_resend, commitsOf_rearm, List.append_nil]
 
 /-- **A run appends its decisions**, and keeps the ledger. -/
 theorem run_appends : ∀ (is : List (Input Validator BlockId Payload))

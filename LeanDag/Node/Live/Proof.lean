@@ -8,45 +8,40 @@ import LeanDag.Scheme.Helpers.Reactive
 `docs/validator.md` §5.2–5.4 and §5.6.
 
 **Production.** Past GST, let every reliable node be at round `n` or
-above at `s`, and `v` reliable. `v` built its round-`n` block by `s`,
-with the round's timer, which fires by `s + timeout n`. Suppose `v` is
-still at round `n` then. It is settled (`settled_before`), and the
-round's timer has fired and stays so (`fired_stays`). Every reliable
-node's round-`n` block arrived within `A = Δ + Δₛ` of `s`, less than the
-timeout (`round_arrives`): the block reached `v` within `Δ`, and its
-history within `Δₛ` after it (`arrives`). So `v` holds a quorum of
-authors at round `n`, its own block included, and no block with the
-identifier of its next one (`fresh_before`), and builds
+above at `s`, and `v` reliable and at round `n` at `s + A`, for
+`A = Δ + Δₛ`. Every reliable node's round-`n` block arrived by `s + A`
+(`round_arrives`), so `v` holds a quorum of the round and has armed its
+timer (`armed_before`), which fires by `s + A + timeout n` (`TopTimerBy`).
+Suppose `v` is still at round `n` then. It is settled (`settled_before`),
+the round's timer has fired and stays so (`fired_stays`), and it holds no
+block with the identifier of its next one (`fresh_before`), so it builds
 (`tryBuild_isSome`), against its being settled.
 
-**Decision.** From a round `n₀` the reliable nodes built within `A` of
-each other past GST, they build every later round within `A` of each
-other (`drift`): a node behind a peer's round-`n + 1` block holds it `A`
-later, with a quorum of round `n`, and passes the tests with the
-references it lends, or its own timer of round `n` has fired
-(`catches_up`). So a node that waited the timeout holds every reliable
-block of the round (`waited_holds`); a node behind a reliable one
-references them too (`refs_all`), so each reliable block reaches or
-certifies the leader block, or references what it needs
-(`reach_or_refs_node`, `cert_or_refs_node`), and the run gives the
-scheme's `WaveFacts`, whose reliable decision-round blocks certify each
-reliable leader's block (`WaveFacts.certifies`). `A` after every
-reliable node reached the last slot's decision round, each holds those
-blocks (`reliable_held`), so on its view each slot of the run from its
-next undecided one commits, and every slot below the run is decided
-within the run (`decidedWithin_below_of_committed_run`). Its next
-undecided slot is then output by its scan (`tryDecide_within`), against
-its being settled.
+**Decision.** Let every reliable node be below a round `n₀ ≥ R₀` at GST.
+A reliable node that waited a round's timer from `n₀` on armed it past
+GST with a quorum of the round, whose `f + 1` reliable authors bring every
+reliable node to the round within `A` (`catches_up`); their blocks arrive
+`A` after, before the timer fired, so the node holds every reliable block
+of the round (`waited_holds`). A node behind a reliable one references
+them too (`refs_all`), so each reliable block reaches or certifies the
+leader block, or references what it needs (`reach_or_refs_node`,
+`cert_or_refs_node`), and the run gives the scheme's `WaveFacts`, whose
+reliable decision-round blocks certify each reliable leader's block
+(`WaveFacts.certifies`). `A` after every reliable node reached the last
+slot's decision round, each holds those blocks (`reliable_held`), so on
+its view each slot of the run from its next undecided one commits, and
+every slot below the run is decided within the run
+(`decidedWithin_below_of_committed_run`). Its next undecided slot is then
+output by its scan (`tryDecide_within`), against its being settled.
 
-**The time bound.** From the synchronisation point the reliable nodes
-gain a round a timeout (`produces`), so they reach the last slot's
-decision round within the sum of the timeouts, and decide `A` later.
+**The time bound.** The reliable nodes gain a round every `timeout + A`
+(`produces`), so they reach the last slot's decision round within the sum,
+and decide `A` later.
 
-The argument reads the run through arrival within `A` (`Arrival`), the
-top round's timer (`TopTimerBy`) and timers set past GST
-(`TimersFireFrom`). Without crashes the assumptions give them at GST
-(`progresses`); with crashes up to `t_r`, at `max t_r gst + W`
-(`recovers`, `Helpers/Recover.lean`).
+The argument reads the run through arrival within `A` (`Arrival`) and the
+armed top round's timer (`TopTimerBy`). Without crashes the assumptions
+give them at GST (`progresses`); with crashes up to `t_r`, at
+`max t_r gst + W` (`recovers`, `Helpers/Recover.lean`).
 -/
 
 namespace LeanDag
@@ -59,91 +54,89 @@ variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Val
 variable [LinearOrder BlockId]
 
 /-- **Production**: past GST, the reliable nodes are above round `n` a
-timeout after all were at `n` or above. -/
+timeout and `A` after all were at `n` or above. -/
 theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
     {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
     (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
-    (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card)
-    (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) (hq : 2 ≤ cfg.q)
+    (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card) (hq : 2 ≤ cfg.q)
     (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
     (htop : TopTimerBy cfg T tr time gst t₁)
-    (hstart : StartedBy T tr time gst) : Produces cfg T tr time gst t₁ := by
+    (hstart : StartedBy T tr time gst) : Produces cfg T tr time gst (Δ + Δₛ) t₁ := by
   intro s n hgs hst₁ hall v hv
-  have hτ := hto n
   have hstarted : ∀ w ∈ T, (stateAt cfg tr time w s).top.isSome := fun w hw =>
     started_at hadm hid htime hTH hmono hstart hw hgs
   by_contra hlt
-  have hle : topAt cfg tr time v (s + cfg.timeout n) ≤ n := by omega
-  set E := eventsBy tr time (s + cfg.timeout n) with hE
-  have hsE : eventsBy tr time s ≤ E := eventsBy_mono (by omega)
-  -- `v` is at round `n` at `s`, and the round's timer fires by `s + timeout n`
-  have hts : (stateAt cfg tr time v s).top = some n := by
-    obtain ⟨t, ht⟩ := Option.isSome_iff_exists.mp (hstarted v hv)
-    have h₁ := hall v hv
-    have h₂ := (rises_before (cfg := cfg) (tr := tr) v hsE).1
-    change n ≤ (stateBefore cfg tr (eventsBy tr time s) v).top.getD 0 at h₁
-    change (stateBefore cfg tr (eventsBy tr time s) v).top = some t at ht
-    change (stateBefore cfg tr E v).top.getD 0 ≤ n at hle
-    rw [ht] at h₁ h₂
-    simp only [Option.getD_some] at h₁ h₂
-    change (stateBefore cfg tr (eventsBy tr time s) v).top = some n
-    rw [ht, show t = n by omega]
-  obtain ⟨f, hfe, htf⟩ := htop v hv s n hgs hst₁ hts
-  have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hfe).1
-  have hfE : f < eventsBy tr time (s + cfg.timeout n) := (lt_eventsBy hmono hfl).mpr (by omega)
-  -- at `s + timeout n`, `v` is at round `n`
-  have hZs : (stateBefore cfg tr E v).top.isSome :=
-    (rises_before (cfg := cfg) v hsE).2.1 (hstarted v hv)
-  have hZge : n ≤ (stateBefore cfg tr E v).top.getD 0 :=
-    (hall v hv).trans (rises_before (cfg := cfg) v hsE).1
-  have hZle : (stateBefore cfg tr E v).top.getD 0 ≤ n := hle
+  have hle : topAt cfg tr time v (s + (Δ + Δₛ) + cfg.timeout n) ≤ n := by omega
+  set τ := s + (Δ + Δₛ) with hτ
+  set E := eventsBy tr time (τ + cfg.timeout n) with hE
+  have hsτ : eventsBy tr time s ≤ eventsBy tr time τ := eventsBy_mono (by omega)
+  have hτE : eventsBy tr time τ ≤ E := eventsBy_mono (by omega)
+  -- `v` is at round `n` from `s` to `τ + timeout n`
   have hZt : (stateBefore cfg tr E v).top = some n := by
+    have hZs : (stateBefore cfg tr E v).top.isSome :=
+      (rises_before (cfg := cfg) v (hsτ.trans hτE)).2.1 (hstarted v hv)
+    have hZge : n ≤ (stateBefore cfg tr E v).top.getD 0 :=
+      (hall v hv).trans (rises_before (cfg := cfg) v (hsτ.trans hτE)).1
     obtain ⟨t, ht⟩ := Option.isSome_iff_exists.mp hZs
-    rw [ht] at hZge hZle ⊢
-    simp only [Option.getD_some] at hZge hZle
+    change (stateBefore cfg tr E v).top.getD 0 ≤ n at hle
+    rw [ht] at hZge hle ⊢
+    simp only [Option.getD_some] at hZge hle
     rw [show t = n by omega]
-  -- its round's timer has fired
-  have hfired : n ∈ (stateBefore cfg tr E v).fired := fired_stays hfe E hfE
-  -- it holds a quorum of round `n`
-  obtain ⟨j₀, hj₀, hj₀i, hj₀r, hj₀c⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E n hZt
-  have hauth : T ⊆ authorsIn (stateBefore cfg tr E v).store.toRecord
-      (stateBefore cfg tr E v).store.ids n := by
+  have hτt : (stateAt cfg tr time v τ).top = some n :=
+    top_between hτE ((rises_before (cfg := cfg) v hsτ).2.1 (hstarted v hv))
+      ((hall v hv).trans (rises_before (cfg := cfg) v hsτ).1) hZt
+  -- it holds a quorum of round `n` at `τ`, so it armed the round's timer
+  obtain ⟨j₀, hj₀, hj₀i, hj₀r, hj₀c⟩ :=
+    ownTop_before (cfg := cfg) (tr := tr) (v := v) (eventsBy tr time τ) n hτt
+  have hauth : T ⊆ authorsIn (stateAt cfg tr time v τ).store.toRecord
+      (stateAt cfg tr time v τ).store.ids n := by
     intro w hw
     rw [mem_authorsIn]
     by_cases hwv : w = v
     · subst hwv
       exact ⟨j₀, hj₀i, hj₀r, hj₀c⟩
-    · exact round_arrives (τ := s + cfg.timeout n) htime hinj hTH hmono harr hw hv hwv hgs
-        (hstarted w hw) (hall w hw) (by omega) hst₁
-  have hcard : cfg.q ≤ (authorsIn (stateBefore cfg tr E v).store.toRecord
-      (stateBefore cfg tr E v).store.ids n).card :=
-    hqT.trans (Finset.card_le_card hauth)
+    · exact round_arrives htime hinj hTH hmono harr hw hv hwv hgs (hstarted w hw) (hall w hw)
+        le_rfl (by omega)
+  have hcard : cfg.q ≤ ((stateAt cfg tr time v τ).store.authorsAt n).card := by
+    rw [Store.authorsAt_eq]
+    exact hqT.trans (Finset.card_le_card hauth)
+  have harm := armed_before (cfg := cfg) (tr := tr) v (eventsBy tr time τ) n hτt hcard
+  obtain ⟨f, hfe, htf⟩ := htop v hv τ n (by omega) (by omega) hτt harm
+  have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hfe).1
+  have hfE : f < E := (lt_eventsBy hmono hfl).mpr htf
+  -- at `τ + timeout n` its round's timer has fired, with the quorum held
+  have hfired : n ∈ (stateBefore cfg tr E v).fired := fired_stays hfe E hfE
+  have hcardE : cfg.q ≤ (authorsIn (stateBefore cfg tr E v).store.toRecord
+      (stateBefore cfg tr E v).store.ids n).card := by
+    rw [← Store.authorsAt_eq]
+    exact hcard.trans (Finset.card_le_card (Grows.authorsAt (grows_before v hτE) n))
+  obtain ⟨j₁, hj₁, hj₁i, hj₁r, hj₁c⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E n hZt
   -- so it builds, against its being settled
-  have hsome := tryBuild_isSome (cfg := cfg.at v) hZt (Or.inl hfired) hcard
-    (fun j hj => by rw [hj₀] at hj; cases hj; exact ⟨hj₀i, hj₀r, hj₀c⟩)
+  have hsome := tryBuild_isSome (cfg := cfg.at v) hZt (Or.inl hfired) hcardE
+    (fun j hj => by rw [hj₁] at hj; cases hj; exact ⟨hj₁i, hj₁r, hj₁c⟩)
     (fun R => fresh_before hid htime (hTH hv) hZt R)
   rcases settled_before (cfg := cfg) hq v E with h | h
   · rw [hZt] at h; cases h
   · rw [h.build] at hsome; cases hsome
 
-/-- **Decision**: past a synchronisation point, once every reliable node is
-at the decision round of the last of `c` reliably led slots spanning the
-rule's eligibility, `A` later every reliable node has output the
-decisions of every slot below them. -/
+/-- **Decision**: from a round `n₀ ≥ R₀` above every reliable node's round
+at GST, once every reliable node is at the decision round of the last of
+`c` reliably led slots spanning the rule's eligibility, `A` later every
+reliable node has output the decisions of every slot below them. -/
 theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
-    {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
+    {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst Δ Δₛ R₀ t₁ : ℕ}
     (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card)
     (hcT : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hq : 2 ≤ cfg.q)
     (hid : Function.Injective cfg.idOf) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
-    (hwait : TimersAfterSet cfg T tr time) (hfire : TimersFireFrom cfg T tr time gst t₁)
-    (hstart : StartedBy T tr time gst) : Decides cfg T tr time gst (Δ + Δₛ) t₁ := by
+    (hwait : TimersAfterSet cfg T tr time) (hstart : StartedBy T tr time gst)
+    (hout : OutsideBelow cfg H T tr R₀) : Decides cfg T tr time gst (Δ + Δₛ) R₀ t₁ := by
   letI := cfg.slots
-  intro b c n₀ s hc hspan hlead hn₀ hgs hall t htop ht₁ v hv
+  intro b c n₀ hc hspan hlead hn₀ hR₀ hbelow t htop ht₁ v hv
   haveI : Nonempty Validator := ⟨v⟩
   set U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime) with hU
   set N := cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) with hNdef
@@ -155,11 +148,6 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     rcases h : (stateAt cfg tr time w t).top with _ | r
     · rw [h] at this; simp at this; omega
     · rfl
-  have hDs := drift hq hσ hadm hf hid htime hinj hTH hmono harr hwait hfire
-    hstart hcT hgs (fun w hw' => ⟨(hall w hw').2.1, (hall w hw').2.2⟩) hst htop ht₁
-  have hD : ∀ n, n₀ ≤ n → n ≤ N → ∀ u ∈ T, ∀ w ∈ T, gst ≤ builtAt cfg tr time u n ∧
-      builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (Δ + Δₛ) :=
-    fun n h₁ h₂ u hu w hw => ⟨hgs.trans (hDs n h₁ h₂ u hu w hw).1, (hDs n h₁ h₂ u hu w hw).2⟩
   -- the node's wave facts
   let wf : Scheme.WaveFacts cfg.p (boundedSel (P := ValidAt cfg.q Clause.none) (honest := H)) U T
       N n₀ :=
@@ -169,11 +157,11 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
         obtain ⟨h₁, h₂, h₃⟩ := built_mem hσ hadm hf htime hinj (hTH hw') hi he
         exact ⟨e.1, h₁, h₃, h₂.trans her⟩
       reach_or_refs := fun w hw' _ hRk hNk hlk L hL _ hm _ hc hcc hcr =>
-        reach_or_refs_node hσ hadm hf htime hinj hTH hmono harr hD hst htop ht₁ hto hwait hid
-          hcT hw' hRk hlk hL hm (by omega) hc hcc hcr
+        reach_or_refs_node hσ hadm hf htime hinj hTH hmono harr hbelow hst htop ht₁ hq hto hwait
+          hid hstart hout hR₀ hw' hRk hlk hL hm (by omega) hc hcc hcr
       cert_or_refs := fun hvc w hw' _ hRk hNk hlk L hL _ hc hcc hcr =>
-        cert_or_refs_node hσ hadm hf htime hinj hTH hmono harr hD hst htop ht₁ hto hwait hid
-          hcT hvc hw' hRk hlk hL hNk hc hcc hcr }
+        cert_or_refs_node hσ hadm hf htime hinj hTH hmono harr hbelow hst htop ht₁ hq hto hwait
+          hid hstart hout hR₀ hvc hw' hRk hlk hL hNk hc hcc hcr }
   -- `v` at `t + A`, settled
   set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
   obtain ⟨h₁, h₂, -⟩ := rises_before (cfg := cfg) v
@@ -213,7 +201,7 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
       (Scheme.commit_of_certified hcm (wf.populated _ (by omega) hsN) fun C hC hCT hCr => ⟨?_, ?_⟩)⟩
     · exact wf.certifies hw hadm.2.1.2 hTH hqT hsr hsN hlj' hL _ hCT C hC rfl hCr
     · exact (hiff C).mpr (reliable_held hσ hadm hf htime hinj hTH
-        hmono harr hD hst htop ht₁ hCT hv (r := (U.block C).round) (by omega) (by omega)
+        hmono harr hbelow hst htop ht₁ hCT hv (r := (U.block C).round) (by omega) (by omega)
         hC rfl rfl)
   -- so does slot `lo`
   have hlow : ∃ w, (Scheme.schemeAnchored cfg.p boundedSel).DecidedWithin U V (b + c) Z.lo w := by
@@ -256,58 +244,63 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
   rw [hempty] at hmem
   simp at hmem
 
-/-- **Decision by a time bound**: from the synchronisation point, the
-reliable nodes reach the last slot's decision round a timeout a round
-(`produces`), and decide `A` after (`decides`). -/
+/-- **Decision by a time bound**: the reliable nodes gain a round every
+timeout and `A` (`produces`), so they reach the last slot's decision round
+within the sum, and decide `A` after (`decides`). -/
 theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator}
-    {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst D t₁ : ℕ}
-    (hp : Produces cfg T tr time gst t₁) (hd : Decides cfg T tr time gst D t₁) :
-    DecidesBy cfg T tr time gst D t₁ := by
+    {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst D R₀ t₁ : ℕ}
+    (hp : Produces cfg T tr time gst D t₁) (hd : Decides cfg T tr time gst D R₀ t₁) :
+    DecidesBy cfg T tr time gst D R₀ t₁ := by
   letI := cfg.slots
-  intro b c n₀ s hc hspan hlead hn₀ hgs hall ht₁
+  intro b c n₀ n₁ s hc hspan hlead hn₀ hR₀ hbelow hgs hall ht₁
   set N := cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) with hN
-  have hn₀N : n₀ ≤ N := hn₀.trans ((cfg.slots.mono (by omega : b ≤ b + c - 1)).trans
-    (Nat.le_add_right _ _))
-  -- a round a timeout
-  have key : ∀ k, n₀ + k ≤ N → ∀ v ∈ T,
-      n₀ + k ≤ topAt cfg tr time v (s + D + ∑ r ∈ Finset.Ico n₀ (n₀ + k), cfg.timeout r) := by
+  -- a round every timeout and `D`
+  have key : ∀ k, n₁ + k ≤ N → ∀ v ∈ T,
+      n₁ + k ≤ topAt cfg tr time v (s + ∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D)) := by
     intro k
     induction k with
-    | zero => intro _ v hv; simpa using (hall v hv).1
+    | zero => intro _ v hv; simpa using hall v hv
     | succ k ih =>
       intro hk v hv
-      have hsum : ∑ r ∈ Finset.Ico n₀ (n₀ + (k + 1)), cfg.timeout r =
-          ∑ r ∈ Finset.Ico n₀ (n₀ + k), cfg.timeout r + cfg.timeout (n₀ + k) :=
-        Finset.sum_Ico_succ_top (show n₀ ≤ n₀ + k by omega) _
-      have hsub : ∑ r ∈ Finset.Ico n₀ (n₀ + (k + 1)), cfg.timeout r ≤
-          ∑ r ∈ Finset.Ico n₀ N, cfg.timeout r :=
+      have hsum : ∑ r ∈ Finset.Ico n₁ (n₁ + (k + 1)), (cfg.timeout r + D) =
+          ∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D) + (cfg.timeout (n₁ + k) + D) :=
+        Finset.sum_Ico_succ_top (show n₁ ≤ n₁ + k by omega) _
+      have hsub : ∑ r ∈ Finset.Ico n₁ (n₁ + (k + 1)), (cfg.timeout r + D) ≤
+          ∑ r ∈ Finset.Ico n₁ N, (cfg.timeout r + D) :=
         Finset.sum_le_sum_of_subset (Finset.Ico_subset_Ico_right hk)
-      have := hp (s + D + ∑ r ∈ Finset.Ico n₀ (n₀ + k), cfg.timeout r) (n₀ + k) (by omega)
+      have := hp (s + ∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D)) (n₁ + k) (by omega)
         (by omega) (ih (by omega)) v hv
-      rw [hsum, ← Nat.add_assoc (s + D)]
+      rw [hsum, show s + (∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D) +
+        (cfg.timeout (n₁ + k) + D)) = s + ∑ r ∈ Finset.Ico n₁ (n₁ + k), (cfg.timeout r + D) +
+          D + cfg.timeout (n₁ + k) by omega]
       exact this
-  have hall' := key (N - n₀) (by omega)
-  rw [Nat.add_sub_cancel' hn₀N] at hall'
-  exact hd b c n₀ s hc hspan hlead hn₀ hgs hall _ hall' ht₁
+  have hall' : ∀ v ∈ T, N ≤ topAt cfg tr time v
+      (s + ∑ r ∈ Finset.Ico n₁ N, (cfg.timeout r + D)) := by
+    by_cases hn₁N : n₁ ≤ N
+    · have := key (N - n₁) (by omega)
+      rwa [Nat.add_sub_cancel' hn₁N] at this
+    · intro v hv
+      rw [Finset.Ico_eq_empty (by omega), Finset.sum_empty, Nat.add_zero]
+      exact (show N ≤ n₁ by omega).trans (hall v hv)
+  exact hd b c n₀ hc hspan hlead hn₀ hR₀ hbelow _ hall' ht₁
 
 /-- **The reliable nodes produce rounds and decide.** -/
 theorem progresses : Progresses := by
-  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hf hTH hqT hcT
-    hq hid hto htime hinj hmono hdel htimer hsync hstart
+  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ R₀ t₁ hσ hadm hf hTH hqT hcT
+    hq hid hto htime hinj hmono hdel htimer hsync hstart hout
   have harr := arrival_of_delivered hσ hadm hf htime hinj hTH hmono hdel hsync
-  have hp := produces hσ hadm hf hTH hqT hto hq hid htime hinj hmono harr
+  have hp := produces hσ hadm hf hTH hqT hq hid htime hinj hmono harr
     (TopTimerBy.of_fire hmono htimer.1) hstart
-  have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr htimer.2
-    (TimersFireFrom.of_fire htimer.1) hstart
+  have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr htimer.2 hstart hout
   exact ⟨hp, hd, decidesBy hp hd⟩
 
 /-- **The reliable nodes recover from crashes**: past `G = max t_r gst + W`
-blocks arrive within `A` (`arrival_of_recovered`), the top round's timer
-fires within its timeout (`topTimerBy_of_up`), and timers set fire
-(`timersFireFrom_of_up`), so production and decision hold from `G`. -/
+blocks arrive within `A` (`arrival_of_recovered`) and the armed top
+round's timer fires within its timeout (`topTimerBy_of_up`), so
+production and decision hold from `G`. -/
 theorem recovers : Recovers := by
-  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t_r t₁ hσ hadm hf hTH hqT hcT
-    hq hid hto htime hinj hmono hdel hfire hwait hsync hup hstart
+  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t_r R₀ t₁ hσ hadm hf hTH hqT
+    hcT hq hid hto htime hinj hmono hdel hfire hwait hsync hup hstart hout
   intro G
   have hrG : t_r ≤ G := (le_max_left _ _).trans (Nat.le_add_right _ _)
   have hgG : gst ≤ G := (le_max_right _ _).trans (Nat.le_add_right _ _)
@@ -315,10 +308,9 @@ theorem recovers : Recovers := by
   have hstart' : StartedBy T tr time G := fun v hv => by
     obtain ⟨i, hi, hit⟩ := hstart v hv
     exact ⟨i, hi, hit.trans hgG⟩
-  have hp := produces hσ hadm hf hTH hqT hto hq hid htime hinj hmono harr
+  have hp := produces hσ hadm hf hTH hqT hq hid htime hinj hmono harr
     (topTimerBy_of_up hmono hup hfire hrG) hstart'
-  have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr hwait
-    (timersFireFrom_of_up hmono hup hfire hrG) hstart'
+  have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr hwait hstart' hout
   exact ⟨hp, hd, decidesBy hp hd⟩
 
 /-- **The reliable nodes' liveness**, without crashes and with them. -/

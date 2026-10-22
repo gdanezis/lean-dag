@@ -6,8 +6,9 @@ import LeanDag.Node.Helpers.Live
 
 `docs/validator.md` §5.2. Along a trace, a node's state changes only at
 its own events (`before_succ_cases`). Each of its rounds up to its top was
-built at one of its events, with the round's timer (`built_by`,
-`timer_of_persist`), and a round's timer, once fired, stays fired
+built at one of its events, with the retry timer (`built_by`,
+`timer_of_persist`), and a round's timer, once fired, stays
+fired
 (`fired_stays`). A reliable block that a reliable node `v` is given is
 held by `v` once its history has been synchronised (`arrives`,
 `arrives_zero`). Past GST a reliable node's block built at `s` is
@@ -69,11 +70,12 @@ theorem built_by : ∀ (i : ℕ) {n : ℕ}, (stateBefore cfg tr i v).top.isSome 
         obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) hs n hρ hn
         exact ⟨i, by omega, by rw [he]; rfl, e, by rw [outputsAt_eq he]; exact hep, her⟩
 
-/-- **The timer of each round a node builds is set at the same event.** -/
+/-- **The retry timer of each round a node builds is set at the same
+event**: the timer of the round below it, for twice its timeout. -/
 theorem timer_of_persist {i : ℕ} {inp : Input Validator BlockId Payload}
     (he : tr[i]? = some (v, inp)) {e : BlockId × Block Validator BlockId Payload}
     (hep : e ∈ persists (outputsAt cfg tr i)) :
-    Output.setTimer e.2.round (cfg.timeout e.2.round) ∈ outputsAt cfg tr i := by
+    Output.setTimer (e.2.round - 1) (2 * cfg.timeout (e.2.round - 1)) ∈ outputsAt cfg tr i := by
   rw [outputsAt_eq he] at hep ⊢
   exact step_timer (cfg := cfg.at v) e hep
 
@@ -479,46 +481,6 @@ section Rounds
 
 variable {P : Validity Validator BlockId Payload} {H T : Finset Validator} {time : ℕ → ℕ}
   {gst Δ Δₛ t₁ : ℕ}
-
-variable (cfg) in
-/-- **Timers set past `G` fire**: a timer a reliable node sets at an
-event at or after time `G` fires on time, if by `t₁`. -/
-def TimersFireFrom (T : Finset Validator) (tr : Trace Validator BlockId Payload)
-    (time : ℕ → ℕ) (G t₁ : ℕ) : Prop :=
-  ∀ i u inp, tr[i]? = some (u, inp) → u ∈ T → G ≤ time i → ∀ r a,
-    Output.setTimer r a ∈ outputsAt cfg tr i → time i + a ≤ t₁ →
-      ∃ j, i < j ∧ tr[j]? = some (u, .timer r) ∧ time j = time i + a
-
-theorem TimersFireFrom.of_fire {G : ℕ} (h : Live.TimersFire cfg T tr time t₁) :
-    TimersFireFrom cfg T tr time G t₁ :=
-  fun i u inp hi hu _ => h i u inp hi hu
-
-variable (cfg) in
-/-- **The top round's timer fires within its timeout past `G`**: a
-reliable node at round `n` at a time `s ≥ G` is given round `n`'s timer
-by `s + timeout n`. -/
-def TopTimerBy (T : Finset Validator) (tr : Trace Validator BlockId Payload)
-    (time : ℕ → ℕ) (G t₁ : ℕ) : Prop :=
-  ∀ v ∈ T, ∀ s n, G ≤ s → s + cfg.timeout n ≤ t₁ → (stateAt cfg tr time v s).top = some n →
-    ∃ f, tr[f]? = some (v, .timer n) ∧ time f ≤ s + cfg.timeout n
-
-/-- **The timer of the round a node built fires**, a timeout after it
-built the round, when timers fire. -/
-theorem TopTimerBy.of_fire {G : ℕ} (hmono : Live.TimeMono tr time)
-    (h : Live.TimersFire cfg T tr time t₁) : TopTimerBy cfg T tr time G t₁ := by
-  intro v hv s n _ hst₁ hZt
-  obtain ⟨b, hbs, hbv, e, hep, her⟩ := built_by (eventsBy tr time s)
-    (by change (stateBefore cfg tr _ v).top.isSome; change (stateBefore cfg tr _ v).top = _ at hZt
-        rw [hZt]; rfl)
-    (show n ≤ (stateBefore cfg tr (eventsBy tr time s) v).top.getD 0 by
-      change (stateBefore cfg tr _ v).top = _ at hZt; rw [hZt]; rfl)
-  obtain ⟨inp, hb⟩ := Converge.event_of_map hbv
-  have hbl : b < tr.length := (List.getElem?_eq_some_iff.mp hb).1
-  have htb : time b ≤ s := (lt_eventsBy hmono hbl).mp hbs
-  have hset := timer_of_persist hb hep
-  rw [her] at hset
-  obtain ⟨f, -, hfe, htf⟩ := h b v inp hb hv n (cfg.timeout n) hset (by omega)
-  exact ⟨f, hfe, by omega⟩
 
 variable (cfg) in
 /-- **Reliable blocks arrive within `A` past `G`**: a block a reliable

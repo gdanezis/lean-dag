@@ -74,7 +74,8 @@ theorem advance_keeps {s : State Validator BlockId Payload}
     y ∈ (Node.advance cfg s).1.pending ∨ y.1 ∈ (Node.advance cfg s).1.store.ids := by
   have hg₁ := (Grows.progress (cfg := cfg) (s.store.topRound + 2) s).1
   have hp₁ := (progress_pending (cfg := cfg) (s.store.topRound + 2) s).1
-  simp only [Node.advance] at hR ⊢
+  simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
+      arm_requested, arm_decided] at hR ⊢
   generalize Node.progress cfg (s.store.topRound + 2) s = r at hg₁ hp₁ hR ⊢
   have hd := decideStep_store (cfg := cfg) r.1
   have hdp := (decideStep_pending (cfg := cfg) r.1).1
@@ -113,9 +114,11 @@ theorem advance_sub (s : State Validator BlockId Payload) :
   have hp := progress_pending (cfg := cfg) (s.store.topRound + 2) s
   have hd := decideStep_pending (cfg := cfg) (Node.progress cfg (s.store.topRound + 2) s).1
   refine ⟨fun e he => ?_, fun e he => ?_⟩
-  · have := flush_pending_sub (cfg := cfg) _ _ _ e he
+  · simp only [Node.advance, Node.pass, arm_pending] at he
+    have := flush_pending_sub (cfg := cfg) _ _ _ e he
     rwa [hd.1, hp.1] at this
-  · have : e ∈ (Node.decideStep cfg (Node.progress cfg (s.store.topRound + 2) s).1).1.requested :=
+  · simp only [Node.advance, Node.pass, arm_requested] at he
+    have : e ∈ (Node.decideStep cfg (Node.progress cfg (s.store.topRound + 2) s).1).1.requested :=
       he
     rwa [hd.2, hp.2] at this
 
@@ -360,9 +363,11 @@ theorem advance_persist (s : State Validator BlockId Payload) :
       (Node.advance cfg s).1.store.blk e.1 = e.2 := by
   intro e he
   have hp := progress_persist (cfg := cfg) (s.store.topRound + 2) s
-  simp only [Node.advance] at he ⊢
+  simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
+      arm_requested, arm_decided] at he ⊢
   generalize Node.progress cfg (s.store.topRound + 2) s = r at hp he ⊢
-  rw [persists_append, decideStep_persist, List.append_nil] at he
+  rw [persists_append, persists_append, decideStep_persist, persists_arm, List.append_nil,
+    List.append_nil] at he
   obtain ⟨hin, hval⟩ := hp e he
   have hd := decideStep_store (cfg := cfg) r.1
   generalize Node.decideStep cfg r.1 = d at hd ⊢
@@ -461,8 +466,8 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
     simp at he
   | restart =>
     intro e he
-    change e ∈ persists (Node.resend cfg s) at he
-    rw [persists_resend] at he
+    change e ∈ persists (Node.resend cfg s ++ Node.rearm cfg s) at he
+    rw [persists_append, persists_resend, persists_rearm, List.append_nil] at he
     exact absurd he List.not_mem_nil
 
 variable (cfg) in
@@ -476,9 +481,12 @@ theorem noReady_quiesce : ∀ (n : ℕ) (s : State Validator BlockId Payload),
     NoReady cfg (quiesce cfg (n + 1) s).1
   | n, s => by
     rcases quiesce_succ_cases (cfg := cfg) n s with he | he <;> rw [he]
-    · exact flush_no_ready _ _ _ (Nat.lt_succ_self _)
+    · simp only [NoReady, Node.advance, Node.pass, arm_pending, arm_store]
+      exact flush_no_ready _ _ _ (Nat.lt_succ_self _)
     · cases n with
-      | zero => exact flush_no_ready _ _ _ (Nat.lt_succ_self _)
+      | zero =>
+        simp only [NoReady, Node.quiesce, Node.advance, Node.pass, arm_pending, arm_store]
+        exact flush_no_ready _ _ _ (Nat.lt_succ_self _)
       | succ n => exact noReady_quiesce n _
 
 omit [Fintype Validator] in

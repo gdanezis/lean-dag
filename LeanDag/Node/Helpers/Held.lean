@@ -116,7 +116,8 @@ theorem Held.store {s : State Validator BlockId Payload} (h : Held cfg s)
 omit [Fintype Validator] in
 theorem Held.advance {s : State Validator BlockId Payload} (h : Held cfg s) :
     Held cfg (Node.advance cfg s).1 :=
-  (Held.progress (s.store.topRound + 2) h).decideStep.store _ (Grows.flush _ _ _)
+  ((Held.progress (s.store.topRound + 2) h).decideStep.store _ (Grows.flush _ _ _)).grow
+    (by rw [advance_store]; exact Grows.refl _) (advance_top s)
 
 omit [Fintype Validator] in
 /-- **Settling keeps `Held`.** -/
@@ -233,7 +234,8 @@ theorem Quorate.advance {s : State Validator BlockId Payload} (h : Quorate cfg s
   have hp := Quorate.progress (s.store.topRound + 2) h
   have hd : Quorate cfg (Node.decideStep cfg (Node.progress cfg (s.store.topRound + 2) s).1).1 :=
     hp.grow (by rw [decideStep_store]; exact Grows.refl _) (decideStep_top _)
-  exact hd.grow (Grows.flush _ _ _) rfl
+  exact (hd.grow (Grows.flush _ _ _) rfl : Quorate cfg (Node.pass cfg s).1).grow
+    (by rw [advance_store]; exact Grows.refl _) (advance_top s)
 
 omit [Fintype Validator] in
 /-- **Settling keeps `Quorate`.** -/

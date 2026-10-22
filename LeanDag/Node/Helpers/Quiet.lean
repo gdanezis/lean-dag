@@ -66,7 +66,9 @@ omit [Fintype Validator] in
 theorem InK.advance {K : Set (BlockId × Block Validator BlockId Payload)}
     {s : State Validator BlockId Payload} (h : InK K s)
     (hK : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : InK K (Node.advance cfg s).1 := by
-  simp only [Node.advance] at hK ⊢
+  rw [advance_snd, persists_append, persists_arm, List.append_nil] at hK
+  rw [InK, advance_store, advance_pending]
+  simp only [Node.pass] at hK ⊢
   rw [persists_append] at hK
   have h₁ := InK.progress _ h fun e he => hK e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.store.topRound + 2) s = r at h₁ ⊢
@@ -241,24 +243,41 @@ def passMeasure (B L : ℕ) (s : State Validator BlockId Payload) : ℕ :=
   s.pending.length + (B - s.top.getD 0) + (L - s.lo)
 
 omit [Fintype Validator] in
+theorem within_advance {R L : ℕ} (s : State Validator BlockId Payload) :
+    Within cfg R L (Node.advance cfg s).1 ↔ Within cfg R L (Node.pass cfg s).1 := by
+  simp only [Within, InK, advance_store, advance_pending, advance_top, advance_lo]
+
+omit [Fintype Validator] in
+theorem passMeasure_advance (B L : ℕ) (s : State Validator BlockId Payload) :
+    passMeasure B L (Node.advance cfg s).1 = passMeasure B L (Node.pass cfg s).1 := by
+  simp only [passMeasure, advance_pending, advance_top, advance_lo]
+
+omit [Fintype Validator] in
+theorem stops_iff (s : State Validator BlockId Payload) :
+    Stops cfg s ↔ (Node.pass cfg s).1.top = s.top ∧
+      (Node.pass cfg s).1.pending.length = s.pending.length ∧ (Node.pass cfg s).1.lo = s.lo := by
+  simp only [Stops, advance_top, advance_pending, advance_lo]
+
+omit [Fintype Validator] in
 /-- **A pass within a settle** stays within it, and lowers the measure
 unless it stops. -/
 theorem Within.advance (hq : 2 ≤ cfg.q) {R L : ℕ} (hL : decidable cfg (R + 1) ≤ L)
     {s : State Validator BlockId Payload} (h : Within cfg R L s) :
     Within cfg R L (Node.advance cfg s).1 ∧
       (¬ Stops cfg s → passMeasure (R + 1) L (Node.advance cfg s).1 < passMeasure (R + 1) L s) := by
+  rw [within_advance, passMeasure_advance]
   obtain ⟨hp₁, hK₁, ht₁⟩ := progress_below (cfg := cfg) hq (s.store.topRound + 2) h.1
   set r := Node.progress cfg (s.store.topRound + 2) s with hr
   obtain ⟨hdst, hdpd, hdtop, hdlo, hdlo'⟩ := decideStep_bound (cfg := cfg) r.1
   set d := (Node.decideStep cfg r.1).1 with hd
   obtain ⟨hfl, -⟩ := flush_bound (cfg := cfg) (d.pending.length + 1) d.store d.pending
-  have hadv : (Node.advance cfg s).1 = { d with
+  have hadv : (Node.pass cfg s).1 = { d with
       store := (flush cfg (d.pending.length + 1) d.store d.pending).1
       pending := (flush cfg (d.pending.length + 1) d.store d.pending).2 } := rfl
   have hrpd : r.1.pending = s.pending := (progress_pending (cfg := cfg) _ s).1
   have hrlo : r.1.lo = s.lo := (Grows.progress (cfg := cfg) _ s).2
   -- the new top
-  have htop' : (Node.advance cfg s).1.top = r.1.top := by rw [hadv]; exact hdtop
+  have htop' : (Node.pass cfg s).1.top = r.1.top := by rw [hadv]; exact hdtop
   have hrt : r.1.top.getD 0 ≤ R + 1 := by
     rcases ht₁ with ht₁ | ⟨ht₁, -⟩
     · rw [ht₁]; exact h.2.1
@@ -269,12 +288,14 @@ theorem Within.advance (hq : 2 ≤ cfg.q) {R L : ℕ} (hL : decidable cfg (R + 1
     rw [hrlo] at hdlo'
     have := h.2.2
     omega
-  have hlo' : (Node.advance cfg s).1.lo = d.lo := by rw [hadv]
-  refine ⟨⟨InK.advance h.1 ?_, by rw [htop']; exact hrt, by rw [hlo']; exact hdL⟩,
-    fun hns => ?_⟩
-  · simp only [Node.advance]
-    rw [persists_append, decideStep_persist, List.append_nil]
-    exact hK₁
+  have hlo' : (Node.pass cfg s).1.lo = d.lo := by rw [hadv]
+  refine ⟨⟨?_, by rw [htop']; exact hrt, by rw [hlo']; exact hdL⟩, fun hns => ?_⟩
+  · have := InK.advance (cfg := cfg) h.1 (by
+      rw [advance_snd, persists_append, persists_arm, List.append_nil]
+      simp only [Node.pass]
+      rw [persists_append, decideStep_persist, List.append_nil]
+      exact hK₁)
+    rwa [InK, advance_store, advance_pending] at this
   unfold passMeasure
   rw [htop', hlo']
   -- the slot
@@ -285,7 +306,7 @@ theorem Within.advance (hq : 2 ≤ cfg.q) {R L : ℕ} (hL : decidable cfg (R + 1
     · exact Or.inr ⟨hlt, hdL⟩
   set P := (flush cfg (d.pending.length + 1) d.store d.pending).2.length with hP
   have hPle : P ≤ s.pending.length := hfl.trans (by rw [hdpd, hrpd])
-  simp only [Stops] at hns
+  rw [stops_iff] at hns
   rw [htop', hlo'] at hns
   have hall : r.1.top = s.top → P = s.pending.length → d.lo = s.lo → False := by
     intro a b c; apply hns; rw [hadv]; exact ⟨a, b, c⟩
@@ -353,8 +374,8 @@ theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
     (h : Node.tryBuild cfg s = none) (hst : s'.store = s.store) (ht : s'.top = s.top)
     (ho : s'.own = s.own) (hf : s'.fired = s.fired) :
     Node.tryBuild cfg s' = none := by
-  obtain ⟨st, pd, top, own, fired, lo, rq, dc⟩ := s
-  obtain ⟨st', pd', top', own', fired', lo', rq', dc'⟩ := s'
+  obtain ⟨st, pd, top, own, fired, lo, rq, dc, ar⟩ := s
+  obtain ⟨st', pd', top', own', fired', lo', rq', dc', ar'⟩ := s'
   simp only at hst ht ho hf
   subst hst ht ho hf
   unfold Node.tryBuild at h ⊢
@@ -379,8 +400,12 @@ omit [Fintype Validator] in
 /-- **A pass that stops leaves a settled state.** -/
 theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
     Settled cfg (Node.advance cfg s).1 := by
-  obtain ⟨htop, hpend, hlo⟩ := h
-  have hadv : (Node.advance cfg s).1 = { (Node.decideStep cfg
+  suffices hp : Settled cfg (Node.pass cfg s).1 from
+    ⟨tryBuild_none_of hp.build (advance_store s) (advance_top s) (advance_own s) (advance_fired s),
+      by unfold NoReady; rw [advance_pending, advance_store]; exact hp.ready,
+      by rw [advance_lo, advance_store]; exact hp.decided⟩
+  obtain ⟨htop, hpend, hlo⟩ := (stops_iff s).1 h
+  have hadv : (Node.pass cfg s).1 = { (Node.decideStep cfg
       (Node.progress cfg (s.store.topRound + 2) s).1).1 with
         store := (flush cfg ((Node.decideStep cfg
           (Node.progress cfg (s.store.topRound + 2) s).1).1.pending.length + 1)
@@ -403,11 +428,11 @@ theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
   -- nothing flushed
   obtain ⟨-, hfl⟩ := flush_bound (cfg := cfg) (d.pending.length + 1) d.store d.pending
   have hfe := hfl (by
-    have : (Node.advance cfg s).1.pending.length = (flush cfg (d.pending.length + 1) d.store
+    have : (Node.pass cfg s).1.pending.length = (flush cfg (d.pending.length + 1) d.store
         d.pending).2.length := by rw [hadv]
     rw [← this, hpend, ← hdpd])
   rw [hfe] at hadv
-  have hz : (Node.advance cfg s).1 = d := by rw [hadv]
+  have hz : (Node.pass cfg s).1 = d := by rw [hadv]
   rw [hz]
   -- the slot did not move
   have hdlo : d.lo = s.lo := by rw [← hz]; exact hlo

@@ -1,4 +1,4 @@
-import LeanDag.Node.Helpers.Drift
+import LeanDag.Node.Helpers.Catch
 /-!
 # Recovery from crashes
 
@@ -239,7 +239,8 @@ theorem Chain.progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payload},
 omit [Fintype Validator] in
 theorem Chain.advance {s : State Validator BlockId Payload} (h : Chain cfg s)
     (hown : OwnTop cfg s) : Chain cfg (Node.advance cfg s).1 := by
-  simp only [Node.advance]
+  refine Chain.congr ?_ (advance_store s) (advance_pending s) (advance_top s)
+  simp only [Node.pass]
   have h₁ := Chain.progress (s.store.topRound + 2) h hown
   generalize Node.progress cfg (s.store.topRound + 2) s = r at h₁
   have h₂ : Chain cfg (Node.decideStep cfg r.1).1 := by
@@ -375,10 +376,10 @@ section Timers
 variable {T : Finset Validator} {time : ℕ → ℕ} {t_r t₁ : ℕ}
 
 omit [Fintype Validator] in
-/-- Resending sets the top round's timer. -/
+/-- Resending sets the retry timer. -/
 theorem setTimer_mem_resend {s : State Validator BlockId Payload} {n : ℕ} {j : BlockId}
     (ht : s.top = some n) (ho : s.own = some j) :
-    Output.setTimer n (cfg.timeout n) ∈ Node.resend cfg s := by
+    Output.setTimer (n - 1) (2 * cfg.timeout (n - 1)) ∈ Node.resend cfg s := by
   simp [Node.resend, ht, ho]
 
 omit [Fintype Validator] in
@@ -388,39 +389,26 @@ theorem broadcast_mem_resend {s : State Validator BlockId Payload} {n : ℕ} {j 
     Output.broadcast j (s.store.blk j) ∈ Node.resend cfg s := by
   simp [Node.resend, ht, ho]
 
-/-- **The top between two events**: a node at round `n` at a later event
-was at round `n` at every event in between at which it was at `n` or
-above. -/
-theorem top_between {v : Validator} {p q : ℕ} (hpq : p ≤ q) {n : ℕ}
-    (hp : (stateBefore cfg tr p v).top.isSome) (hpn : n ≤ (stateBefore cfg tr p v).top.getD 0)
-    (hq : (stateBefore cfg tr q v).top = some n) : (stateBefore cfg tr p v).top = some n := by
-  have h := rises_before (cfg := cfg) (tr := tr) v hpq
-  obtain ⟨t, ht⟩ := Option.isSome_iff_exists.mp hp
-  have h₁ := h.1
-  rw [ht, hq] at h₁
-  rw [ht] at hpn
-  simp only [Option.getD_some] at h₁ hpn
-  rw [ht, show t = n by omega]
-
 open Classical in
-/-- **The top round's timer is armed past the last restart**: a reliable
-node at round `n` at `s ≥ t_r` had its round-`n` timer set at a last event
-before `s`, its build of the round, a restart or a resend, and that timer
-fires a timeout later. -/
-theorem armed (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r)
+/-- **The retry timer is set past the last restart**: a reliable node at
+round `n` at `s ≥ t_r` set the timer of round `n - 1` at a last event
+before `s`, its build of round `n`, a restart or a resend, and that timer
+fires twice the round's timeout later. -/
+theorem retry_last (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r)
     (hfire : Live.TimersFireUp cfg T tr time t₁) {v : Validator} (hv : v ∈ T) {s n : ℕ}
     (hrs : t_r ≤ s) (hts : (stateAt cfg tr time v s).top = some n)
-    (ht₁ : s + cfg.timeout n ≤ t₁) :
+    (ht₁ : s + 2 * cfg.timeout (n - 1) ≤ t₁) :
     ∃ a f, a < eventsBy tr time s ∧ (tr[a]?.map Prod.fst) = some v ∧
-      Output.setTimer n (cfg.timeout n) ∈ outputsAt cfg tr a ∧
+      Output.setTimer (n - 1) (2 * cfg.timeout (n - 1)) ∈ outputsAt cfg tr a ∧
       (∀ a', a < a' → a' < eventsBy tr time s → (tr[a']?.map Prod.fst) = some v →
-        Output.setTimer n (cfg.timeout n) ∉ outputsAt cfg tr a') ∧
+        Output.setTimer (n - 1) (2 * cfg.timeout (n - 1)) ∉ outputsAt cfg tr a') ∧
       (∀ k, a < k → k ≤ eventsBy tr time s → (stateBefore cfg tr k v).top = some n) ∧
-      a < f ∧ tr[f]? = some (v, .timer n) ∧ time f = time a + cfg.timeout n := by
+      a < f ∧ tr[f]? = some (v, .timer (n - 1)) ∧ time f = time a + 2 * cfg.timeout (n - 1) := by
   set E := eventsBy tr time s with hE
   change (stateBefore cfg tr E v).top = some n at hts
   let P : ℕ → Prop := fun a =>
-    (tr[a]?.map Prod.fst) = some v ∧ Output.setTimer n (cfg.timeout n) ∈ outputsAt cfg tr a
+    (tr[a]?.map Prod.fst) = some v ∧
+      Output.setTimer (n - 1) (2 * cfg.timeout (n - 1)) ∈ outputsAt cfg tr a
   -- the build of round `n` set the timer
   obtain ⟨b, hbE, hbv, e, hep, her⟩ := built_by (cfg := cfg) (tr := tr) E
     (by rw [hts]; rfl) (show n ≤ _ by rw [hts]; rfl)
@@ -445,7 +433,8 @@ theorem armed (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r)
     have := hr.1
     rw [ht₀] at this; simp only [Option.getD_some] at this; omega
   -- no restart after it
-  have hnr : ∀ k, a < k → time k ≤ time a + cfg.timeout n → tr[k]? ≠ some (v, .restart) := by
+  have hnr : ∀ k, a < k → time k ≤ time a + 2 * cfg.timeout (n - 1) →
+      tr[k]? ≠ some (v, .restart) := by
     intro k hak _ hk
     have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
     by_cases hkE : k < E
@@ -454,49 +443,27 @@ theorem armed (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r)
       obtain ⟨j, hj, -⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) k n htk
       refine hmax k hak hkE ⟨by rw [hk]; rfl, ?_⟩
       rw [outputsAt_eq hk]
-      exact setTimer_mem_resend (cfg := cfg.at v) htk hj
+      exact List.mem_append_left _ (setTimer_mem_resend (cfg := cfg.at v) htk hj)
     · have := hup k v hk hv
       have := (lt_eventsBy hmono hkl).not.mp hkE
       omega
-  obtain ⟨f, haf, hf, htf⟩ := hfire a v inpa hai hv n (cfg.timeout n) hPa.2 (by omega) hnr
+  obtain ⟨f, haf, hf, htf⟩ :=
+    hfire a v inpa hai hv (n - 1) (2 * cfg.timeout (n - 1)) hPa.2 (by omega) hnr
   exact ⟨a, f, haE, hPa.1, hPa.2, fun a' h₁ h₂ h₃ h₄ => hmax a' h₁ h₂ ⟨h₃, h₄⟩,
     fun k hak hkE => hat k (by omega) hkE, haf, hf, htf⟩
 
-/-- **Past the last restart, the top round's timer fires within its
-timeout.** -/
-theorem topTimerBy_of_up (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r)
-    (hfire : Live.TimersFireUp cfg T tr time t₁) {G : ℕ} (hG : t_r ≤ G) :
-    TopTimerBy cfg T tr time G t₁ := by
-  intro v hv s n hgs hst₁ hts
-  obtain ⟨a, f, haE, -, -, -, -, -, hf, htf⟩ := armed hmono hup hfire hv (by omega) hts hst₁
-  have hal : a < tr.length := lt_of_lt_of_le haE (eventsBy_le_length s)
-  have hta : time a ≤ s := (lt_eventsBy hmono hal).mp haE
-  exact ⟨f, hf, by omega⟩
-
-/-- **Past the last restart, timers fire**: no reliable node restarts
-after setting one. -/
-theorem timersFireFrom_of_up (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r)
-    (hfire : Live.TimersFireUp cfg T tr time t₁) {G : ℕ} (hG : t_r ≤ G) :
-    TimersFireFrom cfg T tr time G t₁ := by
-  intro i u inp hi hu hGi r a hset ht₁
-  refine hfire i u inp hi hu r a hset ht₁ fun k hik _ hk => ?_
-  have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
-  have := hup k u hk hu
-  have := hmono i k hik.le hkl
-  omega
-
 /-- **A reliable node sends one of its blocks again past the last
 restart**: at round `m` at `t₀ ≥ t_r`, it broadcasts a block of its own of
-round `m` or above after `t₀` and within the round's timeout. When the
-round's timer fires, it builds above `m`, or resends its round-`m` block,
-or it built above `m` before. -/
+round `m` or above after `t₀` and within twice the timeout of round
+`m - 1`. When the retry timer fires, it builds above `m`, or resends its round-`m`
+block, or it built above `m` before. -/
 theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r)
     (hfire : Live.TimersFireUp cfg T tr time t₁) {u : Validator} (hu : u ∈ T) {t₀ m : ℕ}
     (hrt : t_r ≤ t₀) (hts : (stateAt cfg tr time u t₀).top = some m)
-    (ht₁ : t₀ + cfg.timeout m ≤ t₁) :
-    ∃ k inp y, tr[k]? = some (u, inp) ∧ t₀ < time k ∧ time k ≤ t₀ + cfg.timeout m ∧
+    (ht₁ : t₀ + 2 * cfg.timeout (m - 1) ≤ t₁) :
+    ∃ k inp y, tr[k]? = some (u, inp) ∧ t₀ < time k ∧ time k ≤ t₀ + 2 * cfg.timeout (m - 1) ∧
       y ∈ broadcasts (outputsAt cfg tr k) ∧ m ≤ y.2.round ∧ y.2.creator = u := by
-  obtain ⟨a, f, haE, -, -, hmax, hat, haf, hf, htf⟩ := armed hmono hup hfire hu hrt hts ht₁
+  obtain ⟨a, f, haE, -, -, hmax, hat, haf, hf, htf⟩ := retry_last hmono hup hfire hu hrt hts ht₁
   set E := eventsBy tr time t₀ with hE
   have hal : a < tr.length := lt_of_lt_of_le haE (eventsBy_le_length t₀)
   have hta : time a ≤ t₀ := (lt_eventsBy hmono hal).mp haE
@@ -504,29 +471,35 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
   change (stateBefore cfg tr E u).top = some m at hts
   -- the node after its timer's event
   have hsucc : stateBefore cfg tr (f + 1) u =
-      (Node.step (cfg.at u) (stateBefore cfg tr f u) (.timer m)).1 := by
+      (Node.step (cfg.at u) (stateBefore cfg tr f u) (.timer (m - 1))).1 := by
     rw [stateBefore_succ hf, if_pos rfl]
   -- the step of the timer, when the node stays at `m`, resends
   have hres : (stateBefore cfg tr f u).top = some m → (stateBefore cfg tr (f + 1) u).top = some m →
       (∃ j, (stateBefore cfg tr (f + 1) u).own = some j ∧
         ((stateBefore cfg tr (f + 1) u).store.blk j).round = m ∧
         ((stateBefore cfg tr (f + 1) u).store.blk j).creator = u ∧
-        Output.setTimer m (cfg.timeout m) ∈ outputsAt cfg tr f ∧
+        Output.setTimer (m - 1) (2 * cfg.timeout (m - 1)) ∈ outputsAt cfg tr f ∧
         Output.broadcast j ((stateBefore cfg tr (f + 1) u).store.blk j) ∈ outputsAt cfg tr f) := by
-    intro _ h₂
+    intro h₁ h₂
     obtain ⟨j, hj, -, hjr, hjc⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := u) (f + 1) m h₂
     have h₂' := h₂
     rw [hsucc, step_timer_fst] at h₂'
     have hout : outputsAt cfg tr f =
         (Node.settle (cfg.at u) { stateBefore cfg tr f u with
-          fired := insert m (stateBefore cfg tr f u).fired }).2 ++
+          fired := insert (m - 1) (stateBefore cfg tr f u).fired }).2 ++
         Node.resend (cfg.at u) (Node.settle (cfg.at u) { stateBefore cfg tr f u with
-          fired := insert m (stateBefore cfg tr f u).fired }).1 := by
+          fired := insert (m - 1) (stateBefore cfg tr f u).fired }).1 := by
+      have hm : (stateBefore cfg tr f u).top = some (m - 1) ∨
+          (stateBefore cfg tr f u).top = some (m - 1 + 1) := by
+        rcases Nat.eq_zero_or_pos m with h0 | hpos
+        · left; rw [h₁, h0]
+        · right; rw [h₁, Nat.sub_add_cancel hpos]
       rw [outputsAt_eq hf]
       simp only [Node.step]
-      rw [if_pos h₂']
+      rw [if_pos ⟨h₂'.trans h₁.symm, hm⟩]
     have hsame : stateBefore cfg tr (f + 1) u = (Node.settle (cfg.at u)
-        { stateBefore cfg tr f u with fired := insert m (stateBefore cfg tr f u).fired }).1 := by
+        { stateBefore cfg tr f u with
+          fired := insert (m - 1) (stateBefore cfg tr f u).fired }).1 := by
       rw [hsucc, step_timer_fst]
     refine ⟨j, hj, hjr, hjc, ?_, ?_⟩
     · rw [hout]
@@ -548,7 +521,7 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
     by_contra h
     have : f < E := (lt_eventsBy hmono hfl).mpr (by omega)
     omega
-  have hfle : time f ≤ t₀ + cfg.timeout m := by omega
+  have hfle : time f ≤ t₀ + 2 * cfg.timeout (m - 1) := by omega
   -- the node at the timer's event is at `m` or above
   have hsf : (stateBefore cfg tr f u).top.isSome ∧ m ≤ (stateBefore cfg tr f u).top.getD 0 := by
     obtain ⟨h₁, h₂, -⟩ := rises_before (cfg := cfg) (tr := tr) u hfE
@@ -573,7 +546,7 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
         omega
       rw [hsucc] at ht
       obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at u) (s := stateBefore cfg tr f u)
-        (inp := .timer m) (by rw [ht]; rfl) (m + 1) (Or.inr (by rw [hfm]; simp))
+        (inp := .timer (m - 1)) (by rw [ht]; rfl) (m + 1) (Or.inr (by rw [hfm]; simp))
         (by rw [ht]; simpa using hmt)
       rw [← outputsAt_eq hf] at hep
       exact ⟨f, _, e, hf, htf₀, hfle, broadcasts_of_persists hep, by omega, hcre hf hep⟩
@@ -613,8 +586,9 @@ variable {P : Validity Validator BlockId Payload} {H T : Finset Validator} {time
 
 /-- **Reliable blocks arrive past the recovery**: with the reliable nodes
 up from `t_r` on, a reliable block built at `s` is held by every other
-reliable node by `max s G + Δ + Δₛ`, for `G = max t_r gst + W` and `W` the
-largest timeout of the round a reliable node is at by `max t_r gst`. A
+reliable node by `max s G + Δ + Δₛ`, for `G = max t_r gst + W` and `W`
+twice the largest timeout of the round below the one a reliable node is
+at by `max t_r gst`. A
 block built from `t_r` on is delivered and synchronised as before; one
 built earlier lies in the history of a block its author sends again
 within `W` (`sends_again`), which is delivered and synchronised, and its
@@ -627,11 +601,11 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (hsync : Live.SyncedFrom cfg H T tr time gst Δₛ t_r t₁) (hup : Live.UpFrom T tr time t_r)
     (hfire : Live.TimersFireUp cfg T tr time t₁) (hstart : Live.StartedBy T tr time gst) :
     Arrival cfg T tr time
-      (max t_r gst + T.sup fun u => cfg.timeout (topAt cfg tr time u (max t_r gst)))
+      (max t_r gst + T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1))
       (Δ + Δₛ) t₁ := by
   intro u hu v hv huv b inp hb e hep s τ htb hτ ht₁
   set t₀ := max t_r gst with ht₀
-  set W := T.sup fun u => cfg.timeout (topAt cfg tr time u t₀) with hW
+  set W := T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u t₀ - 1) with hW
   have hbl : b < tr.length := (List.getElem?_eq_some_iff.mp hb).1
   -- a block of `u` delivered to `v` at `j`, from `t_r` on, is held by `τ`
   have hheld : ∀ {q k j : ℕ} {inpq : Input Validator BlockId Payload}
@@ -666,8 +640,9 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     have hem : e.2.round ≤ m := by
       have := (top_of_built hmono hb hep (τ := t₀) (by omega)).2
       rw [htm] at this; exact this
-    have hmW : cfg.timeout m ≤ W := by
-      rw [← htm]; exact Finset.le_sup (f := fun u => cfg.timeout (topAt cfg tr time u t₀)) hu
+    have hmW : 2 * cfg.timeout (m - 1) ≤ W := by
+      rw [← htm]
+      exact Finset.le_sup (f := fun u => 2 * cfg.timeout (topAt cfg tr time u t₀ - 1)) hu
     obtain ⟨k, inpk, y, hk, htk, hkle, hyb, hym, hyc⟩ :=
       sends_again hmono hup hfire hu (le_max_left _ _) hm (by omega)
     obtain ⟨q, hqk, inpq, hq, hyq⟩ := Converge.persists_of_broadcasts hk hyb

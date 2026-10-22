@@ -38,7 +38,7 @@ theorem decideStep_store (s : State Validator BlockId Payload) :
 omit [Fintype Validator] in
 theorem Grows.advance (s : State Validator BlockId Payload) :
     Grows s.store (Node.advance cfg s).1.store := by
-  simp only [Node.advance]
+  simp only [Node.advance, Node.pass, arm_store]
   refine (Grows.progress (cfg := cfg) (s.store.topRound + 2) s).1.trans ?_
   rw [← decideStep_store (cfg := cfg) (Node.progress cfg (s.store.topRound + 2) s).1]
   exact Grows.flush _ _ _

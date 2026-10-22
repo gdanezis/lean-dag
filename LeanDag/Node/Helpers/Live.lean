@@ -9,9 +9,7 @@ stores are cuts of the run's record (`cut_before`), each block a reliable
 node builds at an event comes from one build, at a state whose store is a
 cut of the record grown from the store before the event (`build_witness`).
 A block of the record by a reliable node was built at the node's first
-event persisting a block of its round (`builtAt_first`, `built_block`), and
-a timer that fired for round `r` fired a timeout after the node built
-round `r` (`timer_after_built`).
+event persisting a block of its round (`builtAt_first`, `built_block`).
 -/
 
 namespace LeanDag
@@ -63,16 +61,6 @@ theorem mem_persists_iff {out : List (Output Validator BlockId Payload)}
     rw [← h]; exact ho
   · intro h; exact ⟨_, h, rfl⟩
 
-/-- **The events strictly before `t`**, counted. -/
-def eventsBefore (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (t : ℕ) : ℕ :=
-  ((List.range tr.length).filter fun i => time i < t).length
-
-/-- **The blocks node `v` held before `t`**: after the events strictly
-before `t`. -/
-def heldBefore (cfg : Config Validator BlockId Payload) (tr : Trace Validator BlockId Payload)
-    (time : ℕ → ℕ) (v : Validator) (t : ℕ) : Finset BlockId :=
-  (stateBefore cfg tr (eventsBefore tr time t) v).store.ids
-
 variable (time : ℕ → ℕ) {t₁ : ℕ}
 
 /-- **When `v` built its round-`n` block**: at the first of `v`'s events
@@ -108,25 +96,6 @@ theorem builtAt_first {v : Validator} {n i : ℕ}
   · simp only [p, Bool.and_eq_true, decide_eq_true_eq, List.any_eq_true] at hp₀
     obtain ⟨hv₀, e, he, her⟩ := hp₀
     exact ⟨hv₀, e, he, by simpa using her⟩
-
-omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
-/-- Under nondecreasing times, the events strictly before event `i`'s time
-all come before it. -/
-theorem eventsBefore_le (hmono : Live.TimeMono tr time) (i : ℕ) :
-    eventsBefore tr time (time i) ≤ i := by
-  unfold eventsBefore
-  have hsub : ((List.range tr.length).filter fun j => time j < time i).toFinset ⊆
-      Finset.range i := by
-    intro j hj
-    simp only [List.mem_toFinset, List.mem_filter, List.mem_range, decide_eq_true_eq] at hj
-    simp only [Finset.mem_range]
-    by_contra h
-    have := hmono i j (by omega) hj.1
-    omega
-  have hnd : ((List.range tr.length).filter fun j => time j < time i).Nodup :=
-    (List.nodup_range).filter _
-  rw [← List.toFinset_card_of_nodup hnd]
-  exact (Finset.card_le_card hsub).trans (by simp)
 
 /-- **A reliable node's block in the run's record was built at `v`'s
 first event building its round**, from a state it builds from, whose
@@ -224,39 +193,6 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
       by rw [hce]; exact he₀⟩, by rw [hUb, hbrefs], ?_, hgx, hexit⟩
   rw [← hbrefs]
   exact hrefs
-
-/-- **A timer that fired at `v` by event `i₀` for round `r` fired a
-timeout after `v` built round `r`.** -/
-theorem timer_after_built (hmono : Live.TimeMono tr time) {T : Finset Validator}
-    (hwait : Live.TimersAfterSet cfg T tr time) {v : Validator} (hvT : v ∈ T)
-    {i₀ r : ℕ} (hi₀ : i₀ < tr.length)
-    {j : ℕ} (hj : j ≤ i₀) (hjt : tr[j]? = some (v, Input.timer r)) :
-    builtAt cfg tr time v r + cfg.timeout r ≤ time i₀ := by
-  induction j using Nat.strong_induction_on generalizing i₀ with
-  | _ j ih =>
-  obtain ⟨i', hi'j, a, hi'v, hset, hta⟩ := hwait j v r hjt hvT
-  obtain ⟨inp', hi'⟩ := Converge.event_of_map hi'v
-  rw [outputsAt_eq hi'] at hset
-  obtain ⟨ha, hcase⟩ := timersBuilt_step (cfg := cfg.at v) _ _ r a hset
-  have hjl : j < tr.length := by omega
-  have h₂ := hmono j i₀ hj hi₀
-  have h₃ : a = cfg.timeout r := ha
-  rcases hcase with ⟨e, he, her⟩ | hre
-  · rw [← outputsAt_eq hi'] at he
-    obtain ⟨i₀', hi₀', hbt, -⟩ := builtAt_first (cfg := cfg) time hi'v ⟨e, he, her⟩
-    have h₁ := hmono i₀' i' hi₀' (by omega)
-    omega
-  · rcases hre with hre | ⟨-, htop⟩
-    · subst hre
-      have := ih i' hi'j (by omega) le_rfl hi'
-      omega
-    · -- a restart at top `r`: `v` persisted its round-`r` block before
-      obtain ⟨o, ho, -, hor, -⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) i' r htop
-      have hB := (Converge.inv_before (cfg := cfg) (tr := tr) i' v).own o ho
-      obtain ⟨j', hj', hj'v, hj'e⟩ := mem_persists_before (cfg := cfg) v i' hB.2
-      obtain ⟨i₀', hi₀', hbt, -⟩ := builtAt_first (cfg := cfg) time hj'v ⟨_, hj'e, hor⟩
-      have h₁ := hmono i₀' i' (by omega) (by omega)
-      omega
 
 end Node
 

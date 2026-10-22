@@ -69,9 +69,12 @@ theorem rises_advance (s : State Validator BlockId Payload) : Rises s (Node.adva
   obtain ⟨-, -, hdtop, hdlo, -⟩ := decideStep_bound (cfg := cfg)
     (Node.progress cfg (s.store.topRound + 2) s).1
   refine h₁.trans ⟨?_, ?_, ?_⟩
-  · simp only [Node.advance]; rw [hdtop]
-  · simp only [Node.advance]; rw [hdtop]; exact id
-  · simp only [Node.advance]; exact hdlo
+  · simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
+      arm_requested, arm_decided]; rw [hdtop]
+  · simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
+      arm_requested, arm_decided]; rw [hdtop]; exact id
+  · simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
+      arm_requested, arm_decided]; exact hdlo
 
 theorem rises_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
     Rises s (quiesce cfg n s).1 :=

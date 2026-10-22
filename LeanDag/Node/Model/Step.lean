@@ -11,8 +11,9 @@ input `i` in the state `s`: the new state and the outputs.
   accepted and it satisfies `rowValid q`, and is then accepted (`flush`).
 * **Building** (`tryBuild`): round `r + 1`, above the node's top `r`,
   once the store holds `q` authors of round `r` and either the round's
-  timer fired, or the store holds round-`r + 1` blocks of `f + c + 1`
-  authors, so the node is behind a reliable one (`behind`), or the block
+  timer fired, or the store holds round-`r + 1` blocks of `f + 1`
+  authors, so a node other than a Byzantine one built the round
+  (`behind`), or the block
   would reach every leader block of a slot whose wave is at a vote round
   (`reachReady`) and certify one at a decision round (`certReady`). A
   node behind thus builds each round below the highest block it holds
@@ -22,7 +23,12 @@ input `i` in the state `s`: the new state and the outputs.
   identifier otherwise; where these fail the tests and the references
   of a held round-`r + 1` block of another author pass them, it takes
   those, with its own block for itself (`refsAt`). It is persisted, then
-  broadcast, then the round's timer is set.
+  broadcast, and the retry timer is set: the timer of the round below
+  it, for twice that round's timeout.
+* **Timers** (`arm`): the timer of the node's top round is set once the
+  store holds `q` authors of that round, so a node that gets ahead of a
+  quorum does not start waiting before the quorum is there. After a
+  restart it is set again if it was (`rearm`).
 * **Deciding** (`decideStep`): `tryDecide` from the next undecided slot
   to the last slot at a round the store holds, on the store's window at
   the round of that slot (`Store.window`); the decisions are kept
@@ -34,10 +40,13 @@ input `i` in the state `s`: the new state and the outputs.
   with the blocks asked for that the store holds and their histories,
   less the blocks a node at round `r` holds whatever it built on
   (`coreThreshold`, `pruned`).
-* **Resending** (`resend`): when the timer of the node's top round fires
-  and the node does not build, and when it restarts, it broadcasts its
-  top block again, sets that round's timer again, and asks again for the
-  missing histories of its pending blocks (`refetch`). A crash loses the
+* **Resending** (`resend`): when the retry timer, or the top round's,
+  fires and the node does not build, and when it restarts, the node
+  broadcasts its top block again, sets the retry timer again, and asks
+  again for the missing histories of its pending blocks (`refetch`). A
+  node with a quorum of its round builds within its timeout and the time
+  the quorum takes to arrive, before the retry timer fires, so it resends
+  only when it is stuck. A crash loses the
   messages sent to a node while it is down, and the requests and answers
   sent to it; resending lets a peer that lost blocks fetch them again, and
   the node itself ask again for what it lost.
@@ -75,6 +84,8 @@ structure State where
   requested : List (BlockId × BlockId)
   /-- The decisions the node output, the latest first. -/
   decided : List (ℕ × Option BlockId)
+  /-- The round whose timer is set. -/
+  armed : Option ℕ
 
 variable (cfg : Config Validator BlockId Payload)
 
@@ -83,7 +94,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
-  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], []⟩
+  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], [], none⟩
 
 /-- **Accept a block**: it is kept if it is new, its references are
 accepted, one round below it, and it is valid at the row. -/
@@ -176,9 +187,10 @@ def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) 
         ready R && buildable cfg s r R).getD own
 
 /-- **The node is behind round `r + 1`**: its store holds round-`r + 1`
-blocks of `f + c + 1` authors, so a reliable node built the round. -/
+blocks of `f + 1` authors, so a node other than a Byzantine one built the
+round. -/
 def behind (st : Store Validator BlockId Payload) (r : ℕ) : Prop :=
-  cfg.f + cfg.c + 1 ≤ (st.authorsAt (r + 1)).card
+  cfg.f + 1 ≤ (st.authorsAt (r + 1)).card
 
 instance (st : Store Validator BlockId Payload) (r : ℕ) : Decidable (behind cfg st r) :=
   inferInstanceAs (Decidable (_ ≤ _))
@@ -198,7 +210,7 @@ def tryBuild (s : State Validator BlockId Payload) :
           rowValid cfg.q (Function.update s.store.blk id b) b then
         let st := s.store.insert id b h.1 h.2.1 h.2.2.1
         some ({ s with store := st, top := some (r + 1), own := some id },
-          [.persist id b, .broadcast id b, .setTimer (r + 1) (cfg.timeout (r + 1))])
+          [.persist id b, .broadcast id b, .setTimer r (2 * cfg.timeout r)])
       else none
     else none
   | none => none
@@ -213,11 +225,12 @@ def progress : ℕ → State Validator BlockId Payload →
     | none => (s, [])
 
 /-- **The outputs that build some blocks**: for each, persist, broadcast,
-then set the timer of its round. -/
+then set the retry timer, which resends (`resend`). -/
 def built (bs : List (BlockId × Block Validator BlockId Payload)) :
     List (Output Validator BlockId Payload) :=
   bs.flatMap fun e =>
-    [.persist e.1 e.2, .broadcast e.1 e.2, .setTimer e.2.round (cfg.timeout e.2.round)]
+    [.persist e.1 e.2, .broadcast e.1 e.2,
+      .setTimer (e.2.round - 1) (2 * cfg.timeout (e.2.round - 1))]
 
 /-- The references of a pending block. -/
 def expand (s : State Validator BlockId Payload) (j : BlockId) : List BlockId :=
@@ -344,22 +357,47 @@ def refetch (s : State Validator BlockId Payload) : List (Output Validator Block
     if miss.isEmpty then none else some (.fetch e.2.creator (s.top.getD 0) miss)
 
 /-- **Send the node's top block again**: broadcast its block at its top
-round and set that round's timer, then ask again for the pending blocks'
-histories. -/
+round and set the retry timer again, then ask again for the pending
+blocks' histories. -/
 def resend (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
   (match s.top, s.own with
-    | some r, some id => [.broadcast id (s.store.blk id), .setTimer r (cfg.timeout r)]
+    | some r, some id =>
+      [.broadcast id (s.store.blk id), .setTimer (r - 1) (2 * cfg.timeout (r - 1))]
     | _, _ => []) ++ refetch s
+
+/-- **Set the top round's timer again**, after a restart, if it was set. -/
+def rearm (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
+  match s.top with
+  | some r => if s.armed = some r then [.setTimer r (cfg.timeout r)] else []
+  | none => []
+
+/-- **Arm the top round's timer**, once the store holds `q` authors of
+the node's top round and the timer is not set yet. -/
+def arm (s : State Validator BlockId Payload) :
+    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
+  match s.top with
+  | some r =>
+    if s.armed ≠ some r ∧ cfg.q ≤ (s.store.authorsAt r).card then
+      ({ s with armed := some r }, [.setTimer r (cfg.timeout r)])
+    else (s, [])
+  | none => (s, [])
 
 /-- **Build, decide, then accept what that allows**: a block built can
 make a pending block ready, so this ends by flushing, and no pending
 block is left ready. -/
-def advance (s : State Validator BlockId Payload) :
+def pass (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   let b := progress cfg (s.store.topRound + 2) s
   let d := decideStep cfg b.1
   let fl := flush cfg (d.1.pending.length + 1) d.1.store d.1.pending
   ({ d.1 with store := fl.1, pending := fl.2 }, b.2 ++ d.2)
+
+/-- **A pass, then arming the top round's timer.** -/
+def advance (s : State Validator BlockId Payload) :
+    State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
+  let p := pass cfg s
+  let a := arm cfg p.1
+  (a.1, p.2 ++ a.2)
 
 /-- **Advance until a pass changes nothing the next would read**: the
 top, the pending blocks and the next undecided slot; at most `fuel`
@@ -401,7 +439,7 @@ def step (s : State Validator BlockId Payload) :
         let st := s.store.insert id b h.1 (fun _ hj => absurd hj (Finset.notMem_empty _))
           (fun j hj => absurd hj (Finset.notMem_empty j))
         let r := settle cfg { s with store := st, top := some 0, own := some id }
-        (r.1, [.persist id b, .broadcast id b, .setTimer 0 (cfg.timeout 0)] ++ r.2)
+        (r.1, [.persist id b, .broadcast id b, .setTimer 0 (2 * cfg.timeout 0)] ++ r.2)
       else (s, [])
     else (s, [])
   | .deliver id b =>
@@ -415,9 +453,11 @@ def step (s : State Validator BlockId Payload) :
     else (s, [])
   | .timer r =>
     let res := settle cfg { s with fired := insert r s.fired }
-    if res.1.top = some r then (res.1, res.2 ++ resend cfg res.1) else res
+    if res.1.top = s.top ∧ (s.top = some r ∨ s.top = some (r + 1)) then
+      (res.1, res.2 ++ resend cfg res.1)
+    else res
   | .fetchRequest peer r ids => (s, answer cfg s peer r ids)
-  | .restart => (s, resend cfg s)
+  | .restart => (s, resend cfg s ++ rearm cfg s)
 
 end Node
 

@@ -103,7 +103,8 @@ omit [Fintype Validator] in
 theorem advance_stays {x : State Validator BlockId Payload}
     {y : BlockId × Block Validator BlockId Payload} (hst : Stays x.store x.pending y) :
     Stays (Node.advance cfg x).1.store (Node.advance cfg x).1.pending y := by
-  simp only [Node.advance]
+  simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
+      arm_requested, arm_decided]
   have hg₁ := (Grows.progress (cfg := cfg) (x.store.topRound + 2) x).1
   have hp₁ := (progress_pending (cfg := cfg) (x.store.topRound + 2) x).1
   generalize Node.progress cfg (x.store.topRound + 2) x = r at hg₁ hp₁ ⊢
