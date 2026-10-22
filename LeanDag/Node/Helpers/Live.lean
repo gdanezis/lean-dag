@@ -219,13 +219,13 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
 /-- **A timer that fired at `v` by event `i₀` for round `r` fired a
 timeout after `v` built round `r`.** -/
 theorem timer_after_built (hmono : Live.TimeMono tr time) {T : Finset Validator}
-    (htimer : Live.TimersOnTime cfg T tr time t₁) {v : Validator} (hvT : v ∈ T)
+    (hwait : Live.TimersAfterSet cfg T tr time) {v : Validator} (hvT : v ∈ T)
     {i₀ r : ℕ} (hi₀ : i₀ < tr.length)
     {j : ℕ} (hj : j ≤ i₀) (hjt : tr[j]? = some (v, Input.timer r)) :
     builtAt cfg tr time v r + cfg.timeout r ≤ time i₀ := by
   induction j using Nat.strong_induction_on generalizing i₀ with
   | _ j ih =>
-  obtain ⟨i', hi'j, a, hi'v, hset, hta⟩ := htimer.2 j v r hjt hvT
+  obtain ⟨i', hi'j, a, hi'v, hset, hta⟩ := hwait j v r hjt hvT
   obtain ⟨inp', hi'⟩ := Converge.event_of_map hi'v
   rw [outputsAt_eq hi'] at hset
   obtain ⟨ha, hcase⟩ := timersBuilt_step (cfg := cfg.at v) _ _ r a hset
@@ -258,7 +258,7 @@ theorem reach_or_wait_node (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
     (hinj : Converge.HashInjective cfg H tr) (hmono : Live.TimeMono tr time)
     {T : Finset Validator} (hTH : T ⊆ H)
-    (htimer : Live.TimersOnTime cfg T tr time t₁) {v : Validator} (hvT : v ∈ T) {k m : ℕ}
+    (hwait : Live.TimersAfterSet cfg T tr time) {v : Validator} (hvT : v ∈ T) {k m : ℕ}
     (hlead : cfg.slots.leader k ∈ T) {L : BlockId}
     (hL : IsLeaderBlock (S := cfg.slots)
       (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) k L)
@@ -294,7 +294,7 @@ theorem reach_or_wait_node (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
         exact ⟨j, hj.le, hjt⟩
       · exact ⟨i₀, le_rfl, by rw [hi₀, h]⟩
     obtain ⟨j, hj, hjt⟩ := hj
-    refine ⟨by rw [hbt]; exact timer_after_built time hmono htimer hvT hi₀l hj hjt,
+    refine ⟨by rw [hbt]; exact timer_after_built time hmono hwait hvT hi₀l hj hjt,
       fun b hbU hbc hbr hbh => ?_⟩
     -- a block held before is held at the build
     rw [hbt] at hbh
@@ -315,7 +315,7 @@ theorem cert_or_wait_node (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
     (hinj : Converge.HashInjective cfg H tr) (hmono : Live.TimeMono tr time)
     {T : Finset Validator} (hTH : T ⊆ H)
-    (htimer : Live.TimersOnTime cfg T tr time t₁) (hvc : cfg.p.voteIsCert = false)
+    (hwait : Live.TimersAfterSet cfg T tr time) (hvc : cfg.p.voteIsCert = false)
     {v : Validator} (hvT : v ∈ T) {k : ℕ}
     (hlead : cfg.slots.leader k ∈ T) {L : BlockId}
     (hL : IsLeaderBlock (S := cfg.slots)
@@ -355,7 +355,7 @@ theorem cert_or_wait_node (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
         exact ⟨j, hj.le, hjt⟩
       · exact ⟨i₀, le_rfl, by rw [hi₀, h]⟩
     obtain ⟨j, hj, hjt⟩ := hj
-    refine ⟨by rw [hbt]; exact timer_after_built time hmono htimer hvT hi₀l hj hjt,
+    refine ⟨by rw [hbt]; exact timer_after_built time hmono hwait hvT hi₀l hj hjt,
       fun b hbU hbc hbr hbh => ?_⟩
     rw [hbt] at hbh
     have hbx : b ∈ x.store.ids :=

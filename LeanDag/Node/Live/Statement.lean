@@ -62,16 +62,27 @@ def DeliveredWithin (cfg : Config Validator BlockId Payload) (T : Finset Validat
   ∀ i u inp, tr[i]? = some (u, inp) → u ∈ T → ∀ m, Sends u (outputsAt cfg tr i) m → m.1 ∈ T →
     max (time i) gst + Δ ≤ t₁ → ∃ j, i < j ∧ tr[j]? = some m ∧ time j ≤ max (time i) gst + Δ
 
+/-- **Timers fire**: a timer a reliable node sets at `t` for `a` ticks
+fires at `t + a`, if that is by `t₁`. -/
+def TimersFire (cfg : Config Validator BlockId Payload) (T : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (t₁ : ℕ) : Prop :=
+  ∀ i u inp, tr[i]? = some (u, inp) → u ∈ T → ∀ r a, Output.setTimer r a ∈ outputsAt cfg tr i →
+    time i + a ≤ t₁ → ∃ j, i < j ∧ tr[j]? = some (u, .timer r) ∧ time j = time i + a
+
+/-- **Timers fire no earlier than set**: every timer a reliable node is
+given was set, no less than its delay before. -/
+def TimersAfterSet (cfg : Config Validator BlockId Payload) (T : Finset Validator)
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) : Prop :=
+  ∀ j u r, tr[j]? = some (u, .timer r) → u ∈ T →
+    ∃ i < j, ∃ a, (tr[i]?.map Prod.fst) = some u ∧ Output.setTimer r a ∈ outputsAt cfg tr i ∧
+      time i + a ≤ time j
+
 /-- **Timers fire on time**: a timer a reliable node sets at `t` for `a`
 ticks fires at `t + a`, if that is by `t₁`; and every timer a reliable
 node is given was set, no less than its delay before. -/
 def TimersOnTime (cfg : Config Validator BlockId Payload) (T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (t₁ : ℕ) : Prop :=
-  (∀ i u inp, tr[i]? = some (u, inp) → u ∈ T → ∀ r a, Output.setTimer r a ∈ outputsAt cfg tr i →
-      time i + a ≤ t₁ → ∃ j, i < j ∧ tr[j]? = some (u, .timer r) ∧ time j = time i + a) ∧
-    ∀ j u r, tr[j]? = some (u, .timer r) → u ∈ T →
-      ∃ i < j, ∃ a, (tr[i]?.map Prod.fst) = some u ∧ Output.setTimer r a ∈ outputsAt cfg tr i ∧
-        time i + a ≤ time j
+  TimersFire cfg T tr time t₁ ∧ TimersAfterSet cfg T tr time
 
 open Classical in
 /-- **The block the honest nodes know under an identifier**, the genesis

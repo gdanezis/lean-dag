@@ -79,13 +79,12 @@ variable {N n₀ t : ℕ} (hσ : cfg.σ = boundedSel)
   (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
   (hinj : Converge.HashInjective cfg H tr)
   (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
-  (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
-  (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁)
+  (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
   (hD : ∀ n, n₀ ≤ n → n ≤ N → ∀ u ∈ T, ∀ w ∈ T, gst ≤ builtAt cfg tr time u n ∧
     builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (Δ + Δₛ))
   (hst : ∀ v ∈ T, (stateAt cfg tr time v t).top.isSome)
   (hN : ∀ v ∈ T, N ≤ topAt cfg tr time v t) (ht₁ : t + (Δ + Δₛ) ≤ t₁)
-include hσ hadm hf htime hinj hTH hmono hdel hsync hD hst hN ht₁
+include hσ hadm hf htime hinj hTH hmono harr hD hst hN ht₁
 
 /-- **A reliable node that waited the timeout holds the reliable blocks of
 the round**, before it builds the next, when `2A < timeout`. -/
@@ -131,9 +130,8 @@ theorem waited_holds (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) {u v : Vali
   have hZt : (stateAt cfg tr time v τ).top = some n :=
     top_eq_between hmono hi₀ he₀ he₀r ((lt_eventsBy hmono hi₀l).mpr (by omega))
       fun k hk hkl => hlt k (by omega) hkl
-  obtain ⟨hin, -, -, -⟩ := block_arrives hσ hadm hf htime hinj hTH
-    hmono hdel hsync hu hv huv hi he (s := time i) le_rfl (τ := τ)
-    (by rw [max_eq_left (by omega)]; omega) (by omega) hZt (by omega)
+  have hin := harr u hu v hv huv i inp hi e he (time i) τ le_rfl
+    (by rw [max_eq_left (by omega)]) (by omega)
   exact (grows_before (cfg := cfg) (tr := tr) v hτE).1 hin
 
 /-- **By `A` after every reliable node reached a round, each holds every
@@ -163,9 +161,8 @@ theorem reliable_held {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) {r : ℕ} 
     change N ≤ (stateBefore cfg tr (eventsBy tr time (t + (Δ + Δₛ))) v).top.getD 0 at this
     rw [ht'] at this
     exact this
-  exact (block_arrives hσ hadm hf htime hinj hTH hmono hdel hsync
-    hu hv huv hi he (s := time i) le_rfl (τ := t + (Δ + Δₛ))
-    (by rw [max_eq_left hgi]; omega) ht₁ ht' (by omega)).1
+  exact harr u hu v hv huv i inp hi e he (time i) (t + (Δ + Δₛ)) le_rfl
+    (by rw [max_eq_left hgi]; omega) ht₁
 
 end Holds
 

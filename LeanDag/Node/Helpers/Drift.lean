@@ -407,9 +407,10 @@ theorem refs_of_rowValid {st : Store Validator BlockId Payload} {id : BlockId}
   rwa [Finset.image_congr (g := fun i => (st.blk i).creator) (fun j hj => by
     simp only; rw [hne j hj])] at hq
 
-/-- **Catch-up**: past GST, a reliable node `u` at round `n` or above `A =
-Δ + Δₛ` after a reliable peer built a round-`n + 1` block, having built
-round `n` at most `A` after the peer, is above `n` then. It holds the
+/-- **Catch-up**: past `gst`, a reliable node `u` at round `n` or above
+`A = Δ + Δₛ` after a reliable peer built a round-`n + 1` block, having
+built round `n` past `gst` and at most `A` after the peer, is above `n`
+then. It holds the
 peer's block, and with it a quorum of round `n`; if the peer built on the
 tests, `u` passes them with the references the block lends; if on the
 round's timer, `u`'s has fired too. -/
@@ -417,15 +418,15 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
-    (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
-    (htimer : Live.TimersOnTime cfg T tr time t₁)
-    (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁)
+    (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁) (hwait : Live.TimersAfterSet cfg T tr time)
+    (hfire : TimersFireFrom cfg T tr time gst t₁)
     {u w : Validator} (hu : u ∈ T) (hw : w ∈ T) (huw : u ≠ w) {n i : ℕ}
     {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (w, inp))
     {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr i))
     (her : e.2.round = n + 1) (hgi : gst ≤ time i)
     (hus : (stateAt cfg tr time u (time i + (Δ + Δₛ))).top.isSome)
     (hun : n ≤ topAt cfg tr time u (time i + (Δ + Δₛ)))
+    (hgu : gst ≤ builtAt cfg tr time u n)
     (hbu : builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (Δ + Δₛ))
     (ht₁ : time i + (Δ + Δₛ) ≤ t₁) :
     n + 1 ≤ topAt cfg tr time u (time i + (Δ + Δₛ)) := by
@@ -473,9 +474,9 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
   obtain ⟨hRq, hRd⟩ := refs_of_rowValid (cfg := cfg.at w) hnew hrefs (by omega) hrv
   rw [hbR] at hRq hRd
   -- the peer's block arrives
-  obtain ⟨hzZ, hzr, hzc, hzb⟩ := block_arrives hσ hadm hf htime hinj hTH hmono hdel hsync
-    hw hu (Ne.symm huw) hi he (s := time i) le_rfl (τ := τ)
-    (by rw [max_eq_left hgi]; omega) ht₁ hZt (le_of_eq hbr)
+  have hzZ := harr w hw u hu (Ne.symm huw) i inp hi _ he (time i) τ le_rfl
+    (by rw [max_eq_left hgi]) ht₁
+  obtain ⟨hzr, hzc, hzb⟩ := held_as_built htime hinj hTH hw hu hi he hzZ
   change (id, b).1 ∈ Z.store.ids at hzZ
   change (Z.store.blk (id, b).1).round = (id, b).2.round at hzr
   change (Z.store.blk (id, b).1).creator = w at hzc
@@ -516,11 +517,12 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
         · obtain ⟨j, hj, hjt⟩ := fired_before (cfg := cfg) (tr := tr) (v := w) i _ h
           exact ⟨j, hj.le, hjt⟩
         · exact ⟨i, le_rfl, by rw [hi, h]⟩
-      have hwt := timer_after_built time hmono htimer hw hil hj hjt
+      have hwt := timer_after_built time hmono hwait hw hil hj hjt
       obtain ⟨bu, inpu, eu, hbu', heu, heur, hbut, -⟩ := built_of_top hmono hus hun
       have hset := timer_of_persist hbu' heu
       rw [heur] at hset
-      obtain ⟨f, -, hfe, htf⟩ := htimer.1 bu u inpu hbu' hu r (cfg.timeout r) hset (by omega)
+      obtain ⟨f, -, hfe, htf⟩ := hfire bu u inpu hbu' hu (by omega) r (cfg.timeout r) hset
+        (by omega)
       have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hfe).1
       have hfE : f < E := (lt_eventsBy hmono hfl).mpr (by omega)
       exact fired_stays hfe E hfE
@@ -564,9 +566,8 @@ theorem drift (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
-    (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
-    (htimer : Live.TimersOnTime cfg T tr time t₁)
-    (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁) (hstart : Live.StartedBy T tr time gst)
+    (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁) (hwait : Live.TimersAfterSet cfg T tr time)
+    (hfire : TimersFireFrom cfg T tr time gst t₁) (hstart : Live.StartedBy T tr time gst)
     {n₀ s : ℕ} (hgs : gst ≤ s)
     (h₀ : ∀ v ∈ T, s ≤ builtAt cfg tr time v n₀ ∧ builtAt cfg tr time v n₀ ≤ s + (Δ + Δₛ))
     {t N : ℕ} (hst : ∀ v ∈ T, (stateAt cfg tr time v t).top.isSome)
@@ -600,8 +601,9 @@ theorem drift (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     have hun := (top_of_built hmono hbu heu (τ := time i + (Δ + Δₛ))
       (by have := (ih u hu w hw).2; omega)).2
     rw [heur] at hun
-    have hup := catches_up hq hσ hadm hf hid htime hinj hTH hmono hdel htimer hsync
-      hu hw huw hi he her (by omega) hus hun (ih u hu w hw).2 (by omega)
+    have hup := catches_up hq hσ hadm hf hid htime hinj hTH hmono harr hwait hfire
+      hu hw huw hi he her (by omega) hus hun (by have := (ih u hu u hu).1; omega)
+      (ih u hu w hw).2 (by omega)
     have := builtAt_le_of_top hmono hus hup
     omega
 

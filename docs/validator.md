@@ -406,7 +406,14 @@ the catch-up bound below, not a processing constant.
 
 Let `A = Δ + Δₛ`: a reliable block built at `s` past GST is delivered to
 every reliable node by `max s gst + Δ`, and its history arrives `Δₛ`
-later (`block_arrives`, `round_arrives`, `Helpers/Arrive.lean`). The
+later, so every other reliable node holds it by `max s gst + A`,
+whatever round it is at (`arrival_of_delivered`, `Helpers/Arrive.lean`).
+The argument below reads the run only through this arrival (`Arrival`),
+through the timer of a node's top round firing within its timeout
+(`TopTimerBy`), through timers set past GST firing (`TimersFireFrom`),
+and through timers firing no earlier than set (`TimersAfterSet`); the
+assumptions of §5.1 give all four at GST (`TopTimerBy.of_fire`,
+`TimersFireFrom.of_fire`). The
 claim has three parts.
 
 * **Production** (`Produces`): past GST, once every reliable node is at
