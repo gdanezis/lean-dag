@@ -33,9 +33,11 @@ input `i` in the state `s`: the new state and the outputs.
   (`coreThreshold`, `pruned`).
 * **Resending** (`resend`): when the timer of the node's top round fires
   and the node does not build, and when it restarts, it broadcasts its
-  top block again and sets that round's timer again. A crash loses the
-  messages sent to the node while it is down; resending lets a peer that
-  lost them fetch the history again.
+  top block again, sets that round's timer again, and asks again for the
+  missing histories of its pending blocks (`refetch`). A crash loses the
+  messages sent to a node while it is down, and the requests and answers
+  sent to it; resending lets a peer that lost blocks fetch them again, and
+  the node itself ask again for what it lost.
 * **Settling** (`settle`, `quiesce`): after each change to its state,
   the node builds, decides and accepts what that allows, in passes,
   until a pass changes none of its top, its pending blocks and its next
@@ -241,6 +243,12 @@ def decideStep (s : State Validator BlockId Payload) :
       ds.map fun e => .commit e.1 e.2)
   else (s, [])
 
+/-- **The missing part of the history of a block `b`**, walked through the
+pending blocks. -/
+def missingAll (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) :
+    List BlockId :=
+  ((walkLevel s)^[s.pending.length + 2] (b.refs.sort (· ≤ ·), [], [])).2.2
+
 /-- **The blocks to ask for**, after the block `b` with identifier `id`
 arrived: the missing part of its history, walked through the pending
 blocks, less those already asked for on `b`'s account. Asking again on
@@ -248,8 +256,7 @@ account of a new block is what lets an honest block's author answer
 what a Byzantine block's author would not. -/
 def missing (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : List BlockId :=
-  ((walkLevel s)^[s.pending.length + 2] (b.refs.sort (· ≤ ·), [], [])).2.2.filter
-    fun x => decide ((x, id) ∉ s.requested)
+  (missingAll s b).filter fun x => decide ((x, id) ∉ s.requested)
 
 /-- **The authors a block must have reached to lie in every view at round
 `r`**: `n − q + f + 1`. A node at round `r` built on blocks of `q`
@@ -318,12 +325,20 @@ def answer (s : State Validator BlockId Payload) (peer : Validator) (r : ℕ) (i
     List (Output Validator BlockId Payload) :=
   (answerIds cfg s r ids).map fun j => .send peer j (s.store.blk j)
 
+/-- **Ask again for the pending blocks' histories**: for each pending
+block, the missing part of its history, of its author. -/
+def refetch (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
+  s.pending.filterMap fun e =>
+    let miss := missingAll s e.2
+    if miss.isEmpty then none else some (.fetch e.2.creator (s.top.getD 0) miss)
+
 /-- **Send the node's top block again**: broadcast its block at its top
-round and set that round's timer. -/
+round and set that round's timer, then ask again for the pending blocks'
+histories. -/
 def resend (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
-  match s.top, s.own with
-  | some r, some id => [.broadcast id (s.store.blk id), .setTimer r (cfg.timeout r)]
-  | _, _ => []
+  (match s.top, s.own with
+    | some r, some id => [.broadcast id (s.store.blk id), .setTimer r (cfg.timeout r)]
+    | _, _ => []) ++ refetch s
 
 /-- **Build, decide, then accept what that allows**: a block built can
 make a pending block ready, so this ends by flushing, and no pending

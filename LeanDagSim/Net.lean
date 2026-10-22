@@ -8,7 +8,9 @@ import Mathlib.Data.Finset.Sort
 network with a seeded schedule: before GST a message takes up to
 `preMax` ticks, after it between `delayMin` and `delayMax`, and a timer
 fires when it expires. A crashed node acts on nothing from its crash
-time on. An equivocator is two copies of the honest program with the
+time on. A node with an outage is down for a while: it loses what
+arrives meanwhile and the timers it set before, and then restarts from
+its state. An equivocator is two copies of the honest program with the
 same identity and different payloads, each sending to half the nodes, so
 its twins are valid blocks; it acts on nothing from `byzUntil` on. A
 node's request for blocks goes to the peer it names, and an answer to
@@ -75,6 +77,9 @@ structure Scenario where
   timeout : ℕ := 10
   /-- Crashed nodes, with the time each crashes. -/
   crash : List (ℕ × ℕ) := []
+  /-- Outages `(v, a, b)`: node `v` is down from `a` until `b`, and
+  restarts at `b`. -/
+  outages : List (ℕ × ℕ × ℕ) := []
   /-- Equivocating nodes. -/
   byz : List ℕ := []
   /-- The time from which equivocators act on nothing. A copy of the
@@ -237,9 +242,16 @@ structure World (n : ℕ) where
   /-- The timing measurements. -/
   stats : Stats
 
-/-- Whether node `v` has crashed by time `t`. -/
-def crashed (v t : ℕ) : Bool :=
-  sc.crash.any fun e => e.1 = v ∧ e.2 ≤ t
+/-- Whether node `v` is down at time `t`: crashed by then, or in an
+outage. -/
+def isDown (v t : ℕ) : Bool :=
+  sc.crash.any (fun e => e.1 = v ∧ e.2 ≤ t) ||
+    sc.outages.any fun e => e.1 = v ∧ e.2.1 ≤ t ∧ t < e.2.2
+
+/-- Whether node `v` lost a timer firing at `t`: it was down since the
+timer was set, `timeout` before. -/
+def timerLost (v t : ℕ) : Bool :=
+  sc.outages.any fun e => e.1 = v ∧ e.2.1 ≤ t ∧ t - sc.timeout < e.2.2
 
 /-- Whether agent `a` receives what agent `src` broadcasts. -/
 def receives (a src : Agent n) : Bool :=
@@ -380,7 +392,8 @@ def loop : ℕ → World n → World n
       if t > sc.horizon then { w with time := t } else
       match w.agents[d]?, w.states[d]? with
       | some a, some st =>
-        if crashed sc a.node.val t || (sc.byz.contains a.node.val && sc.byzUntil ≤ t) then
+        if isDown sc a.node.val t || (sc.byz.contains a.node.val && sc.byzUntil ≤ t) ||
+            (match i with | .timer _ => timerLost sc a.node.val t | _ => false) then
           loop fuel { w with queue := rest, time := t } else
         match (if sc.verify then checked sc w i else some i) with
         | none => loop fuel { w with queue := rest, time := t, dropped := w.dropped + 1 }
@@ -473,11 +486,14 @@ def simulate (sc : Scenario) : Report :=
       let agents := (honestAgents ++ twins).toArray
       let cfg0 := cfgFor sc p q hn ⟨0, hn⟩ 0
       if ¬ cfg0.Admissible then empty else
+      let q0 := enqueueAll ∅ 0 ((List.range agents.size).map (fun d => (0, d, .start)) ++
+        sc.outages.flatMap fun e => ((List.range agents.size).filter fun d =>
+          (agents[d]?.map (·.node.val)) = some e.1).map fun d => (e.2.2, d, .restart))
       let w0 : World n :=
         { agents := agents
           states := agents.map fun a => State.init (cfgFor sc p q hn a.node a.twin)
-          queue := (enqueueAll ∅ 0 ((List.range agents.size).map fun d => (0, d, .start))).1
-          seq := agents.size
+          queue := q0.1
+          seq := q0.2
           gen := mkStdGen sc.seed
           decisions := agents.map fun _ => []
           honest := []
@@ -522,5 +538,15 @@ def simulate (sc : Scenario) : Report :=
         time := w.time
         stats := w.stats }
     else empty
+
+/-- **Recovery from an outage** of node `v` ending at `b`: the highest
+round an honest node built by `b`, the first time from `b` on that `v`
+built above it, and the first time from `b` on that any honest node
+decided a slot. -/
+def recovery (r : Report) (v b : ℕ) : ℕ × Option ℕ × Option ℕ :=
+  let R := (r.stats.built.filter (·.2.2 ≤ b)).foldl (fun m e => max m e.2.1) 0
+  let above := (r.stats.built.filter fun e => e.1 = v ∧ R < e.2.1 ∧ b ≤ e.2.2).map (·.2.2)
+  let decs := (r.stats.decided.filter fun e => b ≤ e.2.2).map (·.2.2)
+  (R, above.min?, decs.min?)
 
 end LeanDagSim

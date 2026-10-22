@@ -624,16 +624,44 @@ theorem step_timer_snd (s : State Validator BlockId Payload) (r : ℕ) :
   · exact Or.inl rfl
 
 omit [Fintype Validator] in
+/-- **Asking again is a request**: its outputs are fetches. -/
+theorem mem_refetch {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
+    (h : o ∈ Node.refetch s) : ∃ peer r ids, o = .fetch peer r ids := by
+  unfold Node.refetch at h
+  obtain ⟨e, -, he⟩ := List.mem_filterMap.mp h
+  dsimp only at he
+  split at he
+  · cases he
+  · rw [Option.some.injEq] at he; exact ⟨_, _, _, he.symm⟩
+
+omit [Fintype Validator] in
+/-- **Resending outputs, besides fetches, the top block and its timer.** -/
+theorem mem_resend {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
+    (h : o ∈ Node.resend cfg s) :
+    (∃ peer r ids, o = .fetch peer r ids) ∨ ∃ r j, s.top = some r ∧ s.own = some j ∧
+      (o = .broadcast j (s.store.blk j) ∨ o = .setTimer r (cfg.timeout r)) := by
+  unfold Node.resend at h
+  rcases List.mem_append.mp h with h | h
+  · split at h
+    · rename_i r j ht ho
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at h
+      exact Or.inr ⟨r, j, ht, ho, h⟩
+    · exact absurd h List.not_mem_nil
+  · exact Or.inl (mem_refetch h)
+
+omit [Fintype Validator] in
 /-- Resending outputs no decision. -/
 theorem commitsOf_resend (s : State Validator BlockId Payload) :
-    commitsOf (Node.resend cfg s) = [] := by
-  unfold Node.resend; split <;> rfl
+    commitsOf (Node.resend cfg s) = [] :=
+  List.filterMap_eq_nil_iff.mpr fun o ho => by
+    rcases mem_resend ho with ⟨_, _, _, rfl⟩ | ⟨_, _, -, -, rfl | rfl⟩ <;> rfl
 
 omit [Fintype Validator] in
 /-- Resending persists no block. -/
 theorem persists_resend (s : State Validator BlockId Payload) :
-    persists (Node.resend cfg s) = [] := by
-  unfold Node.resend; split <;> rfl
+    persists (Node.resend cfg s) = [] :=
+  List.filterMap_eq_nil_iff.mpr fun o ho => by
+    rcases mem_resend ho with ⟨_, _, _, rfl⟩ | ⟨_, _, -, -, rfl | rfl⟩ <;> rfl
 
 /-- A timer step persists what its settle persists. -/
 theorem persists_step_timer (s : State Validator BlockId Payload) (r : ℕ) :
@@ -653,14 +681,12 @@ omit [Fintype Validator] in
 /-- **The timer a resend sets** is the top round's, for its timeout. -/
 theorem mem_resend_setTimer {s : State Validator BlockId Payload} {r a : ℕ}
     (h : Output.setTimer r a ∈ Node.resend cfg s) : s.top = some r ∧ a = cfg.timeout r := by
-  unfold Node.resend at h
-  split at h
-  · rename_i t j ht _
-    simp only [List.mem_cons, reduceCtorEq, Output.setTimer.injEq, List.not_mem_nil,
-      or_false, false_or] at h
+  rcases mem_resend h with ⟨_, _, _, h⟩ | ⟨t, j, ht, -, h | h⟩
+  · cases h
+  · cases h
+  · rw [Output.setTimer.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
     exact ⟨ht, rfl⟩
-  · exact absurd h List.not_mem_nil
 
 omit [Fintype Validator] in
 /-- **Resending broadcasts one of the node's own blocks** and persists
@@ -672,14 +698,14 @@ theorem Sent.resend {s : State Validator BlockId Payload}
     (hi : Inv cfg s K (B ++ bs)) : Sent B bs (out ++ Node.resend cfg s) := by
   have hr : persists (Node.resend cfg s) = [] ∧
       ∀ e ∈ broadcasts (Node.resend cfg s), e ∈ B ++ bs := by
-    unfold Node.resend
-    split
-    · rename_i r j ht ho
-      refine ⟨rfl, fun e he => ?_⟩
-      simp only [broadcasts, List.filterMap_cons, List.filterMap_nil, List.mem_singleton] at he
+    refine ⟨persists_resend s, fun e he => ?_⟩
+    obtain ⟨o, ho, he⟩ := List.mem_filterMap.mp he
+    rcases mem_resend ho with ⟨_, _, _, rfl⟩ | ⟨r, j, -, hj, rfl | rfl⟩
+    · cases he
+    · simp only [Option.some.injEq] at he
       subst he
-      exact (hi.own j ho).2
-    · exact ⟨rfl, fun e he => absurd he (by simp [broadcasts])⟩
+      exact (hi.own j hj).2
+    · cases he
   refine ⟨by rw [persists_append, hr.1, h.1, List.append_nil], fun e he => ?_, fun e he => ?_⟩
   · rw [broadcasts_append]; exact List.mem_append_left _ (h.2.1 e he)
   · rw [broadcasts_append] at he

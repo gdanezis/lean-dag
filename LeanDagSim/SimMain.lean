@@ -5,7 +5,8 @@ import LeanDagSim.Net
 Runs one scenario and prints what each honest node reached and decided.
 Options, each `--name value`: `row`, `n`, `f`, `c`, `seed`, `horizon`,
 `per`, `gst`, `pre-max`, `delay-min`, `delay-max`, `timeout`, `crash`
-(`node@time,…`), `byz` (`node,…`), `byz-until`, `withhold` (`z,v,R`:
+(`node@time,…`), `outage` (`node@from-until,…`: down from `from`,
+restarting at `until`), `byz` (`node,…`), `byz-until`, `withhold` (`z,v,R`:
 node `z` withholds its round-`R` block from `v`), `reveal-after`, `adv`
 (`node,…`: attackers), `slow` (`node,…`), `slow-delay` (the least delay
 to or from a slow node), `slow-until` (the tick it stops being slow),
@@ -21,6 +22,15 @@ def parseCrash (s : String) : List (ℕ × ℕ) :=
   (s.splitOn ",").filterMap fun e =>
     match e.splitOn "@" with
     | [v, t] => do pure (← v.toNat?, ← t.toNat?)
+    | _ => none
+
+/-- Read `node@from-until,…`. -/
+def parseOutages (s : String) : List (ℕ × ℕ × ℕ) :=
+  (s.splitOn ",").filterMap fun e =>
+    match e.splitOn "@" with
+    | [v, t] => match t.splitOn "-" with
+      | [a, b] => do pure (← v.toNat?, ← a.toNat?, ← b.toNat?)
+      | _ => none
     | _ => none
 
 /-- Read `node,…`. -/
@@ -47,6 +57,7 @@ def parseArgs : List String → Scenario → Except String Scenario
       | "--timeout" => pure { sc with timeout := ← nat }
       | "--per" => pure { sc with per := ← nat }
       | "--crash" => pure { sc with crash := parseCrash v }
+      | "--outage" => pure { sc with outages := parseOutages v }
       | "--byz" => pure { sc with byz := parseNats v }
       | "--byz-until" => pure { sc with byzUntil := ← nat }
       | "--withhold" => match parseNats v with
@@ -92,6 +103,11 @@ def main (args : List String) : IO UInt32 := do
       IO.println s!"node {v}: round {top.getD 0}, {ds.length} slots decided, {skips} skipped"
     IO.println (s!"fetches {r.stats.fetches} ({r.stats.fetched} blocks)  " ++
       s!"honest blocks not kept {r.stats.notKept}")
+    for (v, _, b) in sc.outages do
+      let (R, t₁, t₂) := recovery r v b
+      let fmt (t : Option ℕ) := (t.map toString).getD "none"
+      IO.println (s!"node {v} back at {b}: top round then {R}, node {v} above it at {fmt t₁}, " ++
+        s!"first decision from then at {fmt t₂}")
     for l in r.final do IO.println l
     IO.println s!"agree {r.agree}  prefixes {r.prefixes}  valid {r.valid}  dropped {r.dropped}"
     return if r.agree && r.valid then 0 else 1

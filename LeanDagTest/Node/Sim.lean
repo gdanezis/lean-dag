@@ -33,7 +33,7 @@ info: "true [(some 38), (some 24), (some 38), (some 38)] [33, 22, 37, 33] [2, 0,
 #eval summary { horizon := 150, row := "cordial-miners", crash := [(1, 60)] }
 
 /--
-info: "true [(some 42), (some 42), (some 42), (some 41)] [40, 40, 40, 40] [2, 2, 2, 2] true true"
+info: "true [(some 40), (some 40), (some 41), (some 40)] [38, 39, 39, 38] [0, 0, 0, 0] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "mysticeti", gst := 60, preMax := 25, seed := 2 }
@@ -60,12 +60,12 @@ info: "true [(some 38), (some 38), (some 38), (some 37), (some 38), (some 12)] [
 #guard_msgs in
 #eval summary { horizon := 150, row := "hybrid-mysticeti", n := 6, c := 1, crash := [(5, 30)] }
 
-/-- info: "true [(some 24), (some 24), (some 24)] [24, 24, 24] [7, 7, 7] true true" -/
+/-- info: "true [(some 23), (some 23), (some 23)] [22, 22, 22] [6, 6, 6] true true" -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "mysticeti", byz := [3], byzUntil := 150 }
 
 /--
-info: "true [(some 36), (some 36), (some 36), (some 36), (some 36)] [36, 36, 36, 36, 36] [5, 5, 5, 5, 5] true true"
+info: "true [(some 36), (some 36), (some 36), (some 36), (some 36)] [36, 35, 36, 35, 35] [5, 5, 5, 5, 5] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "blue-bottle", n := 6, byz := [0], byzUntil := 150 }
@@ -75,6 +75,60 @@ info: "true [(some 141), (some 141), (some 141), (some 141)] [139, 139, 139, 139
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "mysticeti", withhold := some (3, 2, 7), delayMax := 1 }
+
+/-! ## Outages
+
+A node down for a while loses what is sent to it, and restarts from its
+state. Each line adds, for each outage, the highest round an honest node
+built by the restart, when the restarted node built above it, and when
+an honest node next decided. With `f` nodes silent, an outage of one more
+stalls the others until it restarts. At Nemo-Nemo the restarted node
+holds a block pending whose history it asked for before the crash, and
+the answer was lost; resending asks for it again. -/
+
+/-- A scenario's outcome, with each outage's recovery: the top round at
+the restart, when the restarted node built above it, and when an honest
+node next decided. -/
+def outageLine (sc : Scenario) : String :=
+  let r := simulate sc
+  let fmt (t : Option ℕ) := (t.map toString).getD "none"
+  summary sc ++ String.join (sc.outages.map fun (v, _, b) =>
+    let (R, t₁, t₂) := recovery r v b
+    s!" ({R}, {fmt t₁}, {fmt t₂})")
+
+/--
+info: "true [(some 28), (some 28), (some 28), none] [28, 28, 28, 0] [7, 7, 7, 0] true true (6, 155, 155)"
+-/
+#guard_msgs in
+#eval outageLine
+  { horizon := 300
+    row := "mysticeti"
+    crash := [(3, 0)]
+    outages := [(2, 30, 150)] }
+
+/-- info: "true [(some 44), (some 45), none] [44, 44, 0] [14, 14, 0] true true (18, 270, 265)" -/
+#guard_msgs in
+#eval outageLine
+  { horizon := 400
+    row := "nemo-nemo"
+    n := 3
+    f := 0
+    c := 1
+    gst := 100
+    preMax := 25
+    crash := [(2, 0)]
+    outages := [(0, 150, 260)] }
+
+/--
+info: "true [(some 100), (some 100), (some 101), (some 100), (some 101), (some 101)] [98, 99, 99, 98, 99, 99] [0, 0, 0, 0, 0, 0] true true (17, 106, 103) (17, 107, 103) (17, 107, 103) (17, 108, 103) (17, 109, 103) (17, 104, 103)"
+-/
+#guard_msgs in
+#eval outageLine
+  { horizon := 300
+    row := "hybrid-mysticeti"
+    n := 6
+    c := 1
+    outages := (List.range 6).map fun v => (v, 40, 100) }
 
 end Node
 

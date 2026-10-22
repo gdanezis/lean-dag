@@ -268,15 +268,15 @@ of the step's outputs take effect. A crash loses the timers set and not
 fired, the outputs of the last step that have not taken effect, and the
 messages that arrive while the node is down; the state survives. On a
 restart (`Input.restart`) the state is unchanged, and the node resends
-its top block (`resend`): it broadcasts its block at its top round and
-sets that round's timer. A block is persisted before it is broadcast, so
+(`resend`): it broadcasts its block at its top round, sets that round's
+timer, and asks again for the missing history of each pending block
+(`refetch`), since a request or its answer may have been lost. A block is persisted before it is broadcast, so
 a restarted node never builds a second block at a round it built. A
 decision whose output was lost is in the persisted `decided`.
 
 When the timer of the node's top round fires and the node does not
-build, it resends its top block in the same way. Lost messages are not
-sent again otherwise, and without this a crash can stall the reliable
-nodes. At `n = 4`, `f = 1`, `q = 3`, with node `3` silent, node `2`
+build, it resends in the same way. Lost messages are not sent again
+otherwise, and without this a crash can stall the reliable nodes. At `n = 4`, `f = 1`, `q = 3`, with node `3` silent, node `2`
 crashes at round `t` before it receives the round-`t` blocks of nodes
 `0` and `1`. They build round `t + 1` on its round-`t` block and wait
 for its round-`t + 1` block, while node `2` restarts at round `t` without
@@ -286,6 +286,16 @@ round `t + 1`, and the three go on. In `LeanDagTest/Node/Step.lean`,
 with node `2` down from time `20`, nodes `0` and `1` stop at round `5`
 after four decisions; with node `2` restarting at time `60`, after 400
 inputs the three are at round `30` with 28 decisions each, alike.
+
+Asking again matters as much as sending again. At Nemo-Nemo with
+`n = 3`, `c = 1`, node `2` silent and node `0` down from time `150` to
+`260`, node `0` held node `1`'s round-`16` block pending and had asked
+for its missing round-`15` block; the answer arrived while it was down.
+Node `1`, stalled at round `16`, sends that block again each timeout,
+but node `0` drops a block it holds pending, so without `refetch` the
+two waited for each other for good. The re-request is tied to the timer,
+not to the repeated delivery: an answer to a request can itself carry
+the asker's pending blocks, and asking again on each of them would loop.
 
 A restarted node builds each round it missed, on lent references (§3.2)
 or on its timer, so its own blocks still form a chain (§8). It needs no
@@ -501,7 +511,9 @@ hand-built records. Read against the program:
 3. **The simulator** (`LeanDagSim/Net.lean`, `lake exe sim`). `n`
    programs over a seeded network: before GST a message takes up to
    `preMax` ticks, after it between `delayMin` and `delayMax`; nodes
-   crash at given times, and stay down; equivocators are two copies of
+   crash at given times and stay down, or are down for an outage, losing
+   what is sent to them and the timers they set before, and restart
+   (`Scenario.outages`, `--outage`); equivocators are two copies of
    the program with one identity and different payloads, each copy
    sending to half the nodes. It reports the rounds reached, the slots
    decided and skipped, whether two honest nodes that decide a slot
@@ -510,6 +522,26 @@ hand-built records. Read against the program:
    the nodes made. One scenario per row runs in the build
    (`LeanDagTest/Node/Sim.lean`). `lake exe node` runs one node over
    JSON lines.
+
+   Outages (§3.6), swept over the six rows with three seeds each: one
+   node down for 10 to 850 ticks, before, across and after GST; `f` (and
+   `c`) nodes silent and one more down; every node down at once, or in a
+   staggered way; more than `f` nodes down overlapping; and one node down
+   three times. In all 234 runs agreement, prefix-comparability and
+   validity hold, every node up ends five rounds or more above the top
+   round at the last restart, the restarted node builds above that round,
+   and an honest node decides again, within 43 ticks of the restart.
+   The restarted node reaches the top round within 4 to 11 ticks after a
+   350-tick outage at Blue Bottle and Orcaella, where it builds the rounds
+   it missed on lent references (§3.2); where it waits timers instead,
+   catch-up grows with the outage: at Mysticeti with `n = 4`, 155 missed
+   rounds take about 335 ticks, a timeout at each round the restarted
+   node's block reaches no leader block (§5.3). Catch-up is costly to
+   compute: the restarted node asks for the missing history on account of
+   every block it receives (§3.4), so a 250-tick outage at Orcaella with
+   `n = 9` takes 197,365 inputs and 1,317 fetches, against 20,033 inputs
+   without it. Three outage scenarios run in the build
+   (`LeanDagTest/Node/Sim.lean`).
 
    An equivocator's copies each drop blocks that claim their identity,
    so neither copy accepts blocks built on its twin: it stops building
