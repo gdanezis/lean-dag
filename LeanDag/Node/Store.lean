@@ -1,4 +1,5 @@
 import LeanDag.Node.Model.Interface
+import Mathlib.Order.Interval.Finset.Nat
 /-!
 # An honest node — its store
 
@@ -15,6 +16,12 @@ lookup (`has`, and the instances `decMem` and `decSubset`); the highest
 round (`topRound`, `topRound_eq`); and the accepted identifiers of each
 round (`byRound`), read by `atRound` and `authorsAt`, which equal
 `blocksAt` and `authorsIn` of the record (`atRound_eq`, `authorsAt_eq`).
+
+`leaderBlocks` reads a slot's leader blocks off `atRound`, and equals
+the scheme's `candidatesIn` on the store's view (`leaderBlocks_eq`).
+`window st R` is the record of the blocks at rounds `R` and above,
+gathered from `byRound`, those at `R` read without references, and
+`windowView st R` its view of all its blocks.
 -/
 
 namespace LeanDag
@@ -219,6 +226,97 @@ def authorsAt (r : ℕ) : Finset Validator := creatorsOf s.blk (s.atRound r)
 
 theorem authorsAt_eq (r : ℕ) : s.authorsAt r = authorsIn s.toRecord s.ids r := by
   rw [authorsAt, atRound_eq]; rfl
+
+/-- **The leader blocks of slot `k`**: the accepted blocks of the slot's
+round whose author is the slot's leader, read off `atRound`. -/
+def leaderBlocks [S : Slots Validator] (k : ℕ) : Finset BlockId :=
+  (s.atRound (S.slotRound k)).filter fun b => (s.blk b).creator = S.leader k
+
+theorem leaderBlocks_eq [S : Slots Validator] (k : ℕ) :
+    s.leaderBlocks k = Scheme.candidatesIn s.toRecord s.view k := by
+  ext x
+  rw [leaderBlocks, Finset.mem_filter, atRound_eq, mem_blocksAt]
+  simp only [Scheme.candidatesIn, Finset.mem_filter]
+  exact ⟨fun ⟨⟨h₁, h₂⟩, h₃⟩ => ⟨h₁, h₃, h₂⟩, fun ⟨h₁, h₃, h₂⟩ => ⟨⟨h₁, h₂⟩, h₃⟩⟩
+
+omit [DecidableEq Validator] in
+/-- The rounds `R … topRound`, each read off `byRound`, hold disjoint sets. -/
+theorem atRound_disjoint (R : ℕ) :
+    ((Finset.Ico R (s.topRound + 1) : Finset ℕ) : Set ℕ).PairwiseDisjoint s.atRound := by
+  intro r₁ _ r₂ _ hne
+  change Disjoint (s.byRound.getD r₁ ∅) (s.byRound.getD r₂ ∅)
+  rw [s.byRound_spec, s.byRound_spec]
+  exact Finset.disjoint_filter.mpr fun _ _ h₁ h₂ => hne (h₁.symm.trans h₂)
+
+/-- The accepted identifiers at rounds `R` and above, gathered from
+`byRound` at the rounds `R … topRound`. -/
+def windowIds (R : ℕ) : Finset BlockId :=
+  (Finset.Ico R (s.topRound + 1)).disjiUnion s.atRound (s.atRound_disjoint R)
+
+omit [DecidableEq Validator] in
+theorem mem_windowIds {R : ℕ} {i : BlockId} :
+    i ∈ s.windowIds R ↔ i ∈ s.ids ∧ R ≤ (s.blk i).round := by
+  rw [windowIds, Finset.mem_disjiUnion]
+  constructor
+  · rintro ⟨r, hr, hi⟩
+    change i ∈ s.byRound.getD r ∅ at hi
+    rw [s.byRound_spec, Finset.mem_filter] at hi
+    rw [Finset.mem_Ico] at hr
+    exact ⟨hi.1, hi.2 ▸ hr.1⟩
+  · rintro ⟨hi, hR⟩
+    refine ⟨(s.blk i).round, Finset.mem_Ico.mpr ⟨hR, Nat.lt_succ_of_le ?_⟩, ?_⟩
+    · rw [topRound_eq]
+      exact Finset.le_sup (f := fun i => (s.blk i).round) hi
+    · change i ∈ s.byRound.getD _ ∅
+      rw [s.byRound_spec, Finset.mem_filter]
+      exact ⟨hi, rfl⟩
+
+/-- The block map of the window at `R`: a block at or below round `R`
+without its references, any other as stored. -/
+def windowBlk (R : ℕ) (i : BlockId) : Block Validator BlockId Payload :=
+  let b := s.blk i
+  if b.round ≤ R then { b with refs := ∅ } else b
+
+omit [DecidableEq Validator] in
+theorem windowBlk_round (R : ℕ) (i : BlockId) : (s.windowBlk R i).round = (s.blk i).round := by
+  unfold windowBlk
+  dsimp only
+  split <;> rfl
+
+omit [DecidableEq Validator] in
+theorem refs_windowBlk {R : ℕ} {i j : BlockId} (hj : j ∈ (s.windowBlk R i).refs) :
+    R < (s.blk i).round ∧ j ∈ (s.blk i).refs := by
+  unfold windowBlk at hj
+  dsimp only at hj
+  split at hj
+  · exact absurd hj (Finset.notMem_empty j)
+  · exact ⟨by omega, hj⟩
+
+/-- **The window of the store at round `R`**: its blocks at rounds `R`
+and above, those at `R` without references, as a block record at
+`stored`. A reference of a block above `R` lies one round below it,
+hence at `R` or above. -/
+def window (R : ℕ) :
+    BlockRecord Validator BlockId Payload (stored Validator BlockId Payload) ∅ where
+  ids := s.windowIds R
+  block := s.windowBlk R
+  complete := fun i hi j hj => by
+    obtain ⟨hi, -⟩ := s.mem_windowIds.mp hi
+    obtain ⟨hlt, hj⟩ := s.refs_windowBlk hj
+    have h := s.pred i hi j hj
+    change (s.blk j).round + 1 = (s.blk i).round at h
+    exact s.mem_windowIds.mpr ⟨s.complete i hi j hj, by omega⟩
+  valid := fun i hi => ⟨fun j hj => by
+      rw [windowBlk_round, windowBlk_round]
+      exact s.pred i (s.mem_windowIds.mp hi).1 j (s.refs_windowBlk hj).2,
+    fun _ => Nat.zero_le _, trivial⟩
+  no_equivocation := fun _ _ _ _ h => absurd h (Finset.notMem_empty _)
+
+/-- **The view of the window**: all its blocks. -/
+def windowView (R : ℕ) : (s.window R).View where
+  ids := s.windowIds R
+  subset_ids := subset_rfl
+  complete := (s.window R).complete
 
 end Store
 

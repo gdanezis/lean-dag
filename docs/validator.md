@@ -114,8 +114,10 @@ indexes, each a field with an invariant that ties it to `ids`:
 new (`insert_ids` gives `ids` as `insert id ids`), takes the maximum of
 `topRound` and the block's round, and adds the identifier to the
 block's round in `byRound`. The builder reads `atRound` in `refsFor`
-and `refsAt`, and `authorsAt` for its quorum; the answer to a fetch
-reads `atRound` in `coreSets`. The proofs read `blocksAt`, `authorsIn`
+and `refsAt`, in its reach and certificate tests through
+`leaderBlocks` (§3.2), and `authorsAt` for its quorum; the decider
+reads `byRound` through the window (§3.3); the answer to a fetch reads
+`atRound` in `coreSets`. The proofs read `blocksAt`, `authorsIn`
 and `ids.sup` through these equalities.
 
 ### 3.2 The builder
@@ -129,6 +131,12 @@ wave is in progress, either
   certifies it at the decision round of a three-round row
   (`certReady`); or
 * the timer for round `r` has fired.
+
+Both tests read a slot's leader blocks off the round index:
+`Store.leaderBlocks st k` is the set of blocks of `atRound` at the
+slot's round whose author is the slot's leader, and it equals the
+scheme's `candidatesIn` on the store's view (`leaderBlocks_eq`), which
+the proofs read.
 
 These are the clauses `advancesAt`, `reach_or_wait` and `cert_or_wait`
 of the scheme's reactive run (`SchemeReactive`), written as a rule the
@@ -153,11 +161,31 @@ then broadcasts it, then sets the timer for round `r + 1`.
 
 ### 3.3 The decider
 
-After each change to its state the program runs `tryDecide p σ U V lo N`
-on its store's view, where `lo` is its next undecided slot and `N` the
-last slot at a round its store holds (`decidable`), as the scheme's
-TryDecide scans to the highest round, and outputs the new decisions
-(`decideStep`). Over successive views this is `consumed`. A slot can be
+After each change to its state the program runs `tryDecide p σ W V lo N`,
+where `lo` is its next undecided slot, `N` the last slot at a round its
+store holds (`decidable`), as the scheme's TryDecide scans to the
+highest round, `W` the store's window at the round `R` of slot `lo`
+(`Store.window`) and `V` the view of all its blocks
+(`Store.windowView`), and outputs the new decisions (`decideStep`).
+
+The window holds the store's blocks at rounds `R` and above, gathered
+from `byRound` at the rounds `R … topRound`. A block at round `R` is
+read without its references, so that the window is closed under
+references; a block above `R` is read as stored, and its references lie
+one round below it, at `R` or above. The decisions on the window are
+those on the store's view. Every set the loop counts from slot `lo` on
+lies at or above `R`: the candidates at a slot's round, the blamers and
+certificates above it, a vote's slot at it, a certificate's votes one
+round below it, and a link's certificates, which the anchor reaches
+through blocks above them; for a wave of two rounds or more, which an
+admissible row has, the references of blocks at `R` are never read
+(`ViewsAbove.tryDecide_eq`). At the bounded vote, a vote reads only the
+voter's history down to the slot's round, so the store's view and the
+window agree from `R` up (`ViewsAbove.window`), and the two give the
+same decisions (`tryDecide_window`). The proofs rewrite the decision
+step with this equality and reason about the store's view.
+
+Over successive views this is `consumed`. A slot can be
 skipped directly once its voting round holds `skipThreshold` blamers,
 before its decision round.
 
@@ -237,7 +265,7 @@ moves that what it holds allows is left for a later event.
 | | Claim | Proof |
 |---|---|---|
 | V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; the blocks it broadcasts are those it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`. | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions` (proved, `Local/Proof.lean`) |
-| V2 | **The decisions are the scheme's**: at the bounded vote, a decision step outputs what `Scheme.tryDecide` decides on any record and view holding the store's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
+| V2 | **The decisions are the scheme's**: at the bounded vote, a decision step outputs what `Scheme.tryDecide` decides on any record and view holding the store's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.tryDecide_window`, `Node.ViewsAbove.window`, `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest store is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, with at most `f` nodes outside the honest set, every block an honest node broadcast, with its history, ends in every honest node's store. The fault bound makes the pruned answer (§3.4) sound: a block left out of an answer is reached from a round-`(r − 1)` block of an honest author in the asker's quorum. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain`, `Node.Quorate.run`, `Node.mem_coreSets`, `Node.pruned_chain`, `Node.eq_of_persists` |
 | V8 | The claims are about the program that runs: its store is the ordered map, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
@@ -260,7 +288,9 @@ own; the run's claims are about a view of the run's record. The decider
 reads a view and the block map on it alone, so the two give the same
 decisions when the store's identifiers are the view's and its block map
 agrees on them (`ViewsAbove.of_store`, `ViewsAbove.tryDecide_eq`, for
-the bounded vote, which reads only histories).
+the bounded vote, which reads only histories). The decision step runs
+on the store's window, which decides as the store's view
+(`tryDecide_window`, §3.3).
 
 **Authentication.** A block delivered to an honest node in an honest
 author's name was broadcast by that author earlier in the trace
@@ -495,14 +525,20 @@ hand-built records. Read against the program:
   authors of a round cost a lookup in `byRound` and the size of the
   round. The scheme's functions (`Scheme.tryDecide`, `candidatesIn`,
   the votes) take any record and view, and read a round by filtering
-  the record's identifiers, so the reach and certificate tests of the
-  builder and the decider still cost time linear in `N` per call; a
-  profile of a run places most of its time there. An answer to a fetch
-  sends the history of each block asked for, less the blocks the asker
-  holds. Four nodes at the Mysticeti row reach round 440 over 1,000
-  ticks, in 8,696 inputs and 3.5 seconds, the largest store holding
-  1,761 blocks; over 2,000 ticks they reach round 880 in 20,445 inputs
-  and 18 seconds, the largest store holding 3,522.
+  the record's identifiers. The builder's reach and certificate tests
+  read the leader blocks off `byRound` (`leaderBlocks`), and the
+  decider runs on the window at the round of the next undecided slot
+  (§3.3), whose identifiers are gathered from `byRound`; the decider's
+  scans therefore cost time in the number of blocks at and above that
+  round, not in `N`. An answer to a fetch sends the history of each
+  block asked for, less the blocks the asker holds. Four nodes at the
+  Mysticeti row reach round 440 over 1,000 ticks, in 8,696 inputs and
+  0.2 seconds, the largest store holding 1,761 blocks; over 2,000
+  ticks they reach round 880 in 20,445 inputs and 1.8 seconds, the
+  largest store holding 3,522; over 4,000 ticks round 1,755 in 37,525
+  inputs and 2.5 seconds, the largest store holding 7,020. A profile of
+  an 8,000-tick run (4.4 seconds) places about half of its time in
+  answering fetches (`answerIds`) and about a fifth in the decider.
 
 ## 8. Self-parent as a build rule
 

@@ -180,8 +180,9 @@ theorem decideStep_lo_le (s : State Validator BlockId Payload) :
   dsimp only
   split
   · rename_i hlt
-    generalize hds : Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ s.store.toRecord
-      s.store.view s.lo (decidable cfg s.store.topRound - 1) = ds
+    generalize hds : Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ
+      (s.store.window (cfg.slots.slotRound s.lo)) (s.store.windowView (cfg.slots.slotRound s.lo))
+      s.lo (decidable cfg s.store.topRound - 1) = ds
     have hlen : ds.length ≤ decidable cfg s.store.topRound - 1 + 1 - s.lo := by
       rw [← hds]; exact tryDecide_length_le (S := cfg.slots) (by omega)
     change s.lo + ds.length ≤ _
@@ -306,7 +307,7 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
   dsimp only
   split
   · rename_i hlt
-    rw [commitsOf_map]
+    rw [commitsOf_map, tryDecide_window cfg hσ hw]
     refine ⟨?_, Or.inr ?_⟩
     · change s.lo + _ = _
       rw [List.length_append, h.1]

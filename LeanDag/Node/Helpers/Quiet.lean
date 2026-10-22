@@ -371,8 +371,9 @@ structure Settled (s : State Validator BlockId Payload) : Prop where
   build : Node.tryBuild cfg s = none
   ready : NoReady cfg s
   decided : s.lo < decidable cfg s.store.topRound →
-    Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ s.store.toRecord s.store.view s.lo
-      (decidable cfg s.store.topRound - 1) = []
+    Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ (s.store.window (cfg.slots.slotRound s.lo))
+      (s.store.windowView (cfg.slots.slotRound s.lo)) s.lo (decidable cfg s.store.topRound - 1) =
+      []
 
 omit [Fintype Validator] in
 /-- **A pass that stops leaves a settled state.** -/
@@ -416,8 +417,9 @@ theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
     · rw [hd]; unfold Node.decideStep; dsimp only; split <;> rfl
   · rw [← hz]; exact flush_no_ready _ _ _ (Nat.lt_succ_self _)
   · rw [hdst, hdlo] at hlt ⊢
-    have : d.lo = s.lo + (Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ s.store.toRecord
-        s.store.view s.lo (decidable cfg s.store.topRound - 1)).length := by
+    have : d.lo = s.lo + (Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ
+        (s.store.window (cfg.slots.slotRound s.lo)) (s.store.windowView (cfg.slots.slotRound s.lo))
+        s.lo (decidable cfg s.store.topRound - 1)).length := by
       rw [hd]; unfold Node.decideStep; dsimp only; rw [if_pos hlt]
     rw [hdlo] at this
     exact List.length_eq_zero_iff.mp (by omega)

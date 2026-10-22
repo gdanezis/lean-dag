@@ -21,7 +21,8 @@ input `i` in the state `s`: the new state and the outputs.
   those, with its own block for itself (`refsAt`). It is persisted, then
   broadcast, then the round's timer is set.
 * **Deciding** (`decideStep`): `tryDecide` from the next undecided slot
-  to the last slot at a round the store holds; the decisions are kept
+  to the last slot at a round the store holds, on the store's window at
+  the round of that slot (`Store.window`); the decisions are kept
   (`State.decided`), the latest first.
 * **Fetching** (`walkLevel`, `missing`, `answer`): after a delivery, the
   missing part of the delivered block's history, walked through the
@@ -110,15 +111,15 @@ def refsFor (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
 
 /-- **The reach test** for a block at round `r + 1` referencing `refs`:
 for each slot whose wave has `r + 1` at or below its vote round, the
-block reaches one of the slot's leader blocks. A leader block `m` rounds
-below a reference lies within `m` steps of it, so the search stops
-there. -/
+block reaches one of the slot's leader blocks (`Store.leaderBlocks`). A
+leader block `m` rounds below a reference lies within `m` steps of it,
+so the search stops there. -/
 def reachReady (s : Store Validator BlockId Payload) (refs : Finset BlockId) (r : ℕ) : Bool :=
   letI := cfg.slots
   (List.range cfg.p.voteOffset).all fun m =>
     if m ≤ r then
       (cfg.slotsAt (r - m)).all fun k =>
-        decide (∃ L ∈ Scheme.candidatesIn s.toRecord s.view k,
+        decide (∃ L ∈ s.leaderBlocks k,
           ∃ c ∈ refs, L ∈ historyUptoFrom s.blk m c)
     else true
 
@@ -131,7 +132,7 @@ def certReady (s : Store Validator BlockId Payload) (refs : Finset BlockId) (r :
   if cfg.p.voteIsCert then true
   else if cfg.p.voteOffset ≤ r then
     (cfg.slotsAt (r - cfg.p.voteOffset)).all fun k =>
-      decide (∃ L ∈ Scheme.candidatesIn s.toRecord s.view k,
+      decide (∃ L ∈ s.leaderBlocks k,
         cfg.p.certThreshold ≤
           (creatorsOf s.blk (refs.filter fun b => cfg.σ.Votes s.toRecord b L)).card)
   else true
@@ -222,13 +223,15 @@ reach on a store whose top round is `R`. -/
 def decidable (R : ℕ) : ℕ := cfg.m * (R / cfg.per + 1)
 
 /-- **Decide**: `tryDecide` from the next undecided slot to the last slot
-at a round the store holds; output and keep what it decides. -/
+at a round the store holds, on the store's window at the round of the
+first slot; output and keep what it decides. -/
 def decideStep (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   letI := cfg.slots
   let N := decidable cfg s.store.topRound
   if s.lo < N then
-    let ds := Scheme.tryDecide cfg.p cfg.σ s.store.toRecord s.store.view s.lo (N - 1)
+    let R := cfg.slots.slotRound s.lo
+    let ds := Scheme.tryDecide cfg.p cfg.σ (s.store.window R) (s.store.windowView R) s.lo (N - 1)
     ({ s with lo := s.lo + ds.length, decided := ds.reverse ++ s.decided },
       ds.map fun e => .commit e.1 e.2)
   else (s, [])

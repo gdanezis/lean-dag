@@ -54,7 +54,7 @@ theorem verdict_decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H f
       rw [hσ]
       exact (ViewsAbove.of_store hiff fun i hi => hc.eq hi).tryDecide_eq cfg.p hw _
         (Nat.zero_le _)
-    rw [hT] at he
+    rw [tryDecide_window cfg hσ hw, hT] at he
     exact ⟨V', (Loop.sound _ _ _ P H cfg.p boundedSel U V' s.lo _ hl hcv (by omega)).2 e he⟩
   · simp [commitsOf] at he
 

@@ -66,7 +66,8 @@ theorem decidesOnView : DecidesOnView := by
   unfold decideStep
   dsimp only
   split
-  · rw [commitsOf_map, hσ, h.tryDecide_eq cfg.p hadm.2.1.1 _ (Nat.zero_le _)]
+  · rw [commitsOf_map, tryDecide_window cfg hσ hadm.2.1.1, hσ,
+      h.tryDecide_eq cfg.p hadm.2.1.1 _ (Nat.zero_le _)]
   · rfl
 
 theorem holds : Statement :=

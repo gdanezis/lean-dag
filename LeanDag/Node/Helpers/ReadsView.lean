@@ -18,7 +18,10 @@ At `R = 0` the two views hold the same blocks.
 `ViewsAbove.of_boundedSel`: at the bounded vote, the vote clause follows
 from the others, since the vote reads only the voter's history down to
 the slot's round. `ViewsAbove.of_store`: a store agrees with every view
-of which it holds the blocks, read alike.
+of which it holds the blocks, read alike. `ViewsAbove.window`: a store
+agrees with its window at `R` from `R` up, so the decisions on the
+window from a slot at round `R` are those on the store
+(`tryDecide_window`).
 -/
 
 namespace LeanDag
@@ -480,6 +483,40 @@ theorem ViewsAbove.of_store {P : Validity Validator BlockId Payload} [P.Mechanis
     (fun i hi _ => by change (U.block i).round = (st.blk i).round; rw [hU i hi])
     (fun i hi _ => by change (U.block i).creator = (st.blk i).creator; rw [hU i hi])
     (fun i hi _ => by change (U.block i).refs = (st.blk i).refs; rw [hU i hi])
+
+omit [Fintype Validator] in
+/-- **A store and its window at `R` agree from `R` up**, at the bounded
+vote. -/
+theorem ViewsAbove.window (st : Store Validator BlockId Payload) (R : ℕ) :
+    ViewsAbove R boundedSel boundedSel st.view (st.windowView R) :=
+  ViewsAbove.of_boundedSel (fun i hi hR => st.mem_windowIds.mpr ⟨hi, hR⟩)
+    (fun i hi hR => by
+      change R ≤ (st.windowBlk R i).round at hR
+      rw [Store.windowBlk_round] at hR
+      exact ⟨(st.mem_windowIds.mp hi).1, hR⟩)
+    (fun i _ _ => st.windowBlk_round R i)
+    (fun i _ _ => by
+      change (st.windowBlk R i).creator = (st.blk i).creator
+      unfold Store.windowBlk
+      dsimp only
+      split <;> rfl)
+    (fun i _ hr => by
+      change R < (st.blk i).round at hr
+      change (st.windowBlk R i).refs = (st.blk i).refs
+      unfold Store.windowBlk
+      dsimp only
+      rw [if_neg (by omega)])
+
+omit [Fintype Validator] in
+/-- **The decisions on the window from the round of the first slot up
+are those on the store**, at the bounded vote. -/
+theorem tryDecide_window (cfg : Config Validator BlockId Payload) (hσ : cfg.σ = boundedSel)
+    (hw : 2 ≤ cfg.p.waveLength) (st : Store Validator BlockId Payload) (lo N : ℕ) :
+    Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ (st.window (cfg.slots.slotRound lo))
+        (st.windowView (cfg.slots.slotRound lo)) lo N =
+      Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ st.toRecord st.view lo N := by
+  rw [hσ]
+  exact ((ViewsAbove.window st _).tryDecide_eq (S := cfg.slots) cfg.p hw N le_rfl).symm
 
 end Node
 

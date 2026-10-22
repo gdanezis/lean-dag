@@ -720,6 +720,7 @@ theorem reaches_of_reachReady {U : BlockRecord Validator BlockId Payload P H}
   rw [if_pos (by omega)] at h₁
   have h₂ := List.all_eq_true.mp h₁ k (by rw [← hk, Nat.add_sub_cancel]; exact mem_slotsAt k)
   obtain ⟨L', hL', c', hc', hhist⟩ := of_decide_eq_true h₂
+  rw [Store.leaderBlocks_eq] at hL'
   obtain ⟨hL's, hL'c, hL'r⟩ := Finset.mem_filter.mp hL'
   have hreach : ReachesFrom U.block c' L' :=
     hc.reachesFrom (hrefs hc') (reaches_of_mem_historyUptoFrom hhist)
@@ -764,6 +765,7 @@ theorem isCert_of_certReady [P.Mechanised] (hσ : cfg.σ = boundedSel)
   have h₂ := List.all_eq_true.mp hready k
     (by rw [← hk, Nat.add_sub_cancel]; exact mem_slotsAt k)
   obtain ⟨L', hL', hcount⟩ := of_decide_eq_true h₂
+  rw [Store.leaderBlocks_eq] at hL'
   obtain ⟨hL's, hL'c, hL'r⟩ := Finset.mem_filter.mp hL'
   have hlead' : IsLeaderBlock (S := cfg.slots) U k L' :=
     ⟨(hc L' hL's).1, by rw [hc.round hL's]; exact hL'r, by rw [hc.creator hL's]; exact hL'c⟩

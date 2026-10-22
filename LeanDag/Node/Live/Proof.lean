@@ -244,9 +244,10 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
       Scheme.tryDecide cfg.p boundedSel U V Z.lo (decidable cfg Z.store.topRound - 1) := by
     rw [hσ]
     exact hva.tryDecide_eq cfg.p hw _ (Nat.zero_le _)
-  change Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ Z.store.toRecord Z.store.view Z.lo
+  change Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ (Z.store.window (cfg.slots.slotRound Z.lo))
+    (Z.store.windowView (cfg.slots.slotRound Z.lo)) Z.lo
     (decidable cfg Z.store.topRound - 1) = [] at hempty
-  rw [heq] at hempty
+  rw [tryDecide_window cfg hσ hw, heq] at hempty
   rw [hempty] at hmem
   simp at hmem
 

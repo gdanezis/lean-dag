@@ -149,8 +149,9 @@ theorem decideStep_appends {s : State Validator BlockId Payload} (hL : Ledger s)
   dsimp only
   split
   · rename_i hlt
-    generalize hds : Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ s.store.toRecord
-      s.store.view s.lo (decidable cfg s.store.topRound - 1) = ds
+    generalize hds : Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ
+      (s.store.window (cfg.slots.slotRound s.lo)) (s.store.windowView (cfg.slots.slotRound s.lo))
+      s.lo (decidable cfg s.store.topRound - 1) = ds
     have hfst : ds.map Prod.fst = List.range' s.lo ds.length := by
       rw [← hds]; exact tryDecide_fst (S := cfg.slots) (by omega)
     have hD₁ : (ds.reverse ++ s.decided).reverse = s.decided.reverse ++ ds := by

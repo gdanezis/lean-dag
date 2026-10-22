@@ -91,6 +91,7 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
       rw [← hZ.round hLZ, hx.round hLx]; exact hLr
   constructor
   · unfold reachReady at hreach ⊢
+    simp only [Store.leaderBlocks_eq] at hreach ⊢
     refine List.all_eq_true.mpr fun m hm => ?_
     have h₁ := List.all_eq_true.mp hreach m hm
     by_cases hmn : m ≤ n
@@ -109,6 +110,7 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
       rw [hx.round hcx, hx.round hLx]; exact hrd
     · rw [if_neg hmn]
   · unfold certReady at hcert ⊢
+    simp only [Store.leaderBlocks_eq] at hcert ⊢
     cases hvc : cfg.p.voteIsCert
     · rw [hvc, if_neg (by simp)] at hcert
       rw [if_neg (by simp)]
