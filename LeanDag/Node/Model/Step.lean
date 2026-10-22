@@ -11,9 +11,12 @@ input `i` in the state `s`: the new state and the outputs.
   accepted and it satisfies `rowValid q`, and is then accepted (`flush`).
 * **Building** (`tryBuild`): round `r + 1`, above the node's top `r`,
   once the store holds `q` authors of round `r` and either the round's
-  timer fired or the block would reach every leader block of a slot
-  whose wave is at a vote round (`reachReady`) and certify one at a
-  decision round (`certReady`). The block references one accepted block
+  timer fired, or the store holds round-`r + 1` blocks of `f + c + 1`
+  authors, so the node is behind a reliable one (`behind`), or the block
+  would reach every leader block of a slot whose wave is at a vote round
+  (`reachReady`) and certify one at a decision round (`certReady`). A
+  node behind thus builds each round below the highest block it holds
+  without waiting its timers. The block references one accepted block
   per author of round `r`, the node's own for itself when it built
   there, which is the self-parent rule of an honest node, and the least
   identifier otherwise; where these fail the tests and the references
@@ -172,14 +175,22 @@ def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) 
       decide ((s.blk c).creator ≠ cfg.me)).map (lent cfg s · o) |>.find? fun R =>
         ready R && buildable cfg s r R).getD own
 
+/-- **The node is behind round `r + 1`**: its store holds round-`r + 1`
+blocks of `f + c + 1` authors, so a reliable node built the round. -/
+def behind (st : Store Validator BlockId Payload) (r : ℕ) : Prop :=
+  cfg.f + cfg.c + 1 ≤ (st.authorsAt (r + 1)).card
+
+instance (st : Store Validator BlockId Payload) (r : ℕ) : Decidable (behind cfg st r) :=
+  inferInstanceAs (Decidable (_ ≤ _))
+
 /-- **Build the next round**, if the build rule allows it. -/
 def tryBuild (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
   match s.top with
   | some r =>
     let refs := refsAt cfg s.store r s.own
-    if cfg.q ≤ (s.store.authorsAt r).card ∧
-        (r ∈ s.fired ∨ (reachReady cfg s.store refs r ∧ certReady cfg s.store refs r)) then
+    if cfg.q ≤ (s.store.authorsAt r).card ∧ (r ∈ s.fired ∨ behind cfg s.store r ∨
+        (reachReady cfg s.store refs r ∧ certReady cfg s.store refs r)) then
       let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, refs, cfg.payload (r + 1)⟩
       let id := cfg.idOf b
       if h : id ∉ s.store.ids ∧ b.refs ⊆ s.store.ids ∧

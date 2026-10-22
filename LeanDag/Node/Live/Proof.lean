@@ -25,8 +25,10 @@ other (`drift`): a node behind a peer's round-`n + 1` block holds it `A`
 later, with a quorum of round `n`, and passes the tests with the
 references it lends, or its own timer of round `n` has fired
 (`catches_up`). So a node that waited the timeout holds every reliable
-block of the round (`waited_holds`), and with the build rule's wait
-clauses (`reach_or_wait_node`, `cert_or_wait_node`) the run gives the
+block of the round (`waited_holds`); a node behind a reliable one
+references them too (`refs_all`), so each reliable block reaches or
+certifies the leader block, or references what it needs
+(`reach_or_refs_node`, `cert_or_refs_node`), and the run gives the
 scheme's `WaveFacts`, whose reliable decision-round blocks certify each
 reliable leader's block (`WaveFacts.certifies`). `A` after every
 reliable node reached the last slot's decision round, each holds those
@@ -154,31 +156,24 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     · rw [h] at this; simp at this; omega
     · rfl
   have hDs := drift hq hσ hadm hf hid htime hinj hTH hmono harr hwait hfire
-    hstart hgs (fun w hw' => ⟨(hall w hw').2.1, (hall w hw').2.2⟩) hst htop ht₁
+    hstart hcT hgs (fun w hw' => ⟨(hall w hw').2.1, (hall w hw').2.2⟩) hst htop ht₁
   have hD : ∀ n, n₀ ≤ n → n ≤ N → ∀ u ∈ T, ∀ w ∈ T, gst ≤ builtAt cfg tr time u n ∧
       builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (Δ + Δₛ) :=
     fun n h₁ h₂ u hu w hw => ⟨hgs.trans (hDs n h₁ h₂ u hu w hw).1, (hDs n h₁ h₂ u hu w hw).2⟩
   -- the node's wave facts
   let wf : Scheme.WaveFacts cfg.p (boundedSel (P := ValidAt cfg.q Clause.none) (honest := H)) U T
       N n₀ :=
-    { built := builtAt cfg tr time
-      timeout := cfg.timeout
-      holds := heldBefore cfg tr time
-      populated := fun n _ hnN w hw' => by
+    { populated := fun n _ hnN w hw' => by
         obtain ⟨i, inp, e, hi, he, her, -, -⟩ :=
           built_of_top hmono (hst w hw') ((htop w hw').trans' hnN)
         obtain ⟨h₁, h₂, h₃⟩ := built_mem hσ hadm hf htime hinj (hTH hw') hi he
         exact ⟨e.1, h₁, h₃, h₂.trans her⟩
-      arrives := fun w hw' u hu n hn₀ hnN c hc hcu hcr hwait =>
-        waited_holds hσ hadm hf htime hinj hTH hmono harr
-          hD hst htop ht₁ hto hu hw' hn₀ hnN hc hcu hcr hwait
-      reach_or_wait := fun w hw' _ _ hlk L hL _ hm _ hc hcc hcr =>
-        reach_or_wait_node time hσ hadm hf htime hinj hmono hTH hwait hw'
-          hlk hL hm hc hcc hcr
-      cert_or_wait := fun hvc w hw' _ _ hlk L hL _ hc hcc hcr =>
-        (cert_or_wait_node time hσ hadm hf htime hinj hmono hTH hwait hvc hw'
-          hlk hL hc hcc hcr).imp id
-          fun h => ⟨h.1, fun b hb hbc hbr hbh _ => h.2 b hb hbc hbr hbh⟩ }
+      reach_or_refs := fun w hw' _ hRk hNk hlk L hL _ hm _ hc hcc hcr =>
+        reach_or_refs_node hσ hadm hf htime hinj hTH hmono harr hD hst htop ht₁ hto hwait hid
+          hcT hw' hRk hlk hL hm (by omega) hc hcc hcr
+      cert_or_refs := fun hvc w hw' _ hRk hNk hlk L hL _ hc hcc hcr =>
+        cert_or_refs_node hσ hadm hf htime hinj hTH hmono harr hD hst htop ht₁ hto hwait hid
+          hcT hvc hw' hRk hlk hL hNk hc hcc hcr }
   -- `v` at `t + A`, settled
   set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
   obtain ⟨h₁, h₂, -⟩ := rises_before (cfg := cfg) v

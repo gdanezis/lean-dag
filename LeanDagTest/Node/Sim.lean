@@ -60,7 +60,7 @@ info: "true [(some 38), (some 38), (some 38), (some 37), (some 38), (some 12)] [
 #guard_msgs in
 #eval summary { horizon := 150, row := "hybrid-mysticeti", n := 6, c := 1, crash := [(5, 30)] }
 
-/-- info: "true [(some 23), (some 23), (some 23)] [22, 22, 22] [6, 6, 6] true true" -/
+/-- info: "true [(some 24), (some 24), (some 24)] [24, 24, 24] [7, 7, 7] true true" -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "mysticeti", byz := [3], byzUntil := 150 }
 
@@ -97,7 +97,7 @@ def outageLine (sc : Scenario) : String :=
     s!" ({R}, {fmt t₁}, {fmt t₂})")
 
 /--
-info: "true [(some 28), (some 28), (some 28), none] [28, 28, 28, 0] [7, 7, 7, 0] true true (6, 155, 155)"
+info: "true [(some 28), (some 29), (some 28), none] [28, 28, 28, 0] [7, 7, 7, 0] true true (6, 155, 155)"
 -/
 #guard_msgs in
 #eval outageLine

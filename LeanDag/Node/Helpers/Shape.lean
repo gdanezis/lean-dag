@@ -413,12 +413,14 @@ theorem refsAt_buildable (st : Store Validator BlockId Payload) (r : ℕ) (o : O
       simpa using this.2
 
 omit [Fintype Validator] in
-/-- **A node whose round's timer fired, or whose references pass the
-tests, builds**, given a quorum of the round, its own block there stored,
-and no stored block with the identifier of a next block of its own. -/
+/-- **A node whose round's timer fired, or that is behind the round
+above, or whose references pass the tests, builds**, given a quorum of the
+round, its own block there stored, and no stored block with the
+identifier of a next block of its own. -/
 theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.top = some r)
-    (hf : r ∈ s.fired ∨ (reachReady cfg s.store (refsAt cfg s.store r s.own) r = true ∧
-      certReady cfg s.store (refsAt cfg s.store r s.own) r = true))
+    (hf : r ∈ s.fired ∨ behind cfg s.store r ∨
+      (reachReady cfg s.store (refsAt cfg s.store r s.own) r = true ∧
+        certReady cfg s.store (refsAt cfg s.store r s.own) r = true))
     (hq : cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r).card)
     (ho : ∀ j, s.own = some j → j ∈ s.store.ids ∧ (s.store.blk j).round = r ∧
       (s.store.blk j).creator = cfg.me)

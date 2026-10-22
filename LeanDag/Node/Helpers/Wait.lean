@@ -47,15 +47,17 @@ theorem refsAt_cases (st : Store Validator BlockId Payload) (r : ℕ) (o : Optio
       exact Or.inl (by simpa using this.1)
 
 omit [Fintype Validator] in
-/-- **The build rule's two exits**: a block built above round `r` passes
+/-- **The build rule's three exits**: a block built above round `r` passes
 the reach and certificate tests on the store, or the round's timer fired
+and its references are `refsFor`'s, or the node is behind round `r + 1`
 and its references are `refsFor`'s. -/
 theorem tryBuild_exit {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
     ∃ r, s.top = some r ∧ cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r).card ∧
       ((reachReady cfg s.store (refsAt cfg s.store r s.own) r = true ∧
           certReady cfg s.store (refsAt cfg s.store r s.own) r = true) ∨
-        (r ∈ s.fired ∧ refsAt cfg s.store r s.own = refsFor cfg s.store r s.own)) ∧
+        (r ∈ s.fired ∧ refsAt cfg s.store r s.own = refsFor cfg s.store r s.own) ∨
+        (behind cfg s.store r ∧ refsAt cfg s.store r s.own = refsFor cfg s.store r s.own)) ∧
       out = built cfg [(cfg.idOf ⟨r + 1, cfg.me, refsAt cfg s.store r s.own,
           cfg.payload (r + 1)⟩,
         ⟨r + 1, cfg.me, refsAt cfg s.store r s.own, cfg.payload (r + 1)⟩)] := by
@@ -68,11 +70,15 @@ theorem tryBuild_exit {s s' : State Validator BlockId Payload}
       split at h
       · rw [Option.some.injEq, Prod.mk.injEq] at h
         refine ⟨r, hr, by rw [← Store.authorsAt_eq]; exact hc.1, ?_, by rw [← h.2]; simp [built]⟩
-        rcases hc.2 with hf | hready
+        rcases hc.2 with hf | hb | hready
         · rcases refsAt_cases (cfg := cfg) s.store r s.own with h' | h'
           · simp only [Bool.and_eq_true] at h'
             exact Or.inl h'
-          · exact Or.inr ⟨hf, h'⟩
+          · exact Or.inr (Or.inl ⟨hf, h'⟩)
+        · rcases refsAt_cases (cfg := cfg) s.store r s.own with h' | h'
+          · simp only [Bool.and_eq_true] at h'
+            exact Or.inl h'
+          · exact Or.inr (Or.inr ⟨hb, h'⟩)
         · exact Or.inl hready
       · exact absurd h (by simp)
     · exact absurd h (by simp)
@@ -228,16 +234,19 @@ theorem progress_witness (Q : State Validator BlockId Payload → Prop)
     ∀ (fuel : ℕ) (s : State Validator BlockId Payload), Q s →
       (∀ e ∈ persists (Node.progress cfg fuel s).2, e ∈ K) →
       ∀ e ∈ persists (Node.progress cfg fuel s).2, ∃ x y o, Q x ∧
-        tryBuild cfg x = some (y, o) ∧ e ∈ persists o
+        tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
+        Grows x.store (Node.progress cfg fuel s).1.store
   | 0, s, _, _, e, he => by simp [Node.progress, persists] at he
   | fuel + 1, s, hs, hK, e, he => by
     rcases hb : tryBuild cfg s with _ | ⟨s₁, out⟩
     · simp [Node.progress, hb, persists] at he
-    · simp only [Node.progress, hb] at he hK
+    · simp only [Node.progress, hb] at he hK ⊢
       rw [persists_append] at he hK
       have hK₁ : ∀ e ∈ persists out, e ∈ K := fun e he => hK e (List.mem_append_left _ he)
       rcases List.mem_append.mp he with he | he
-      · exact ⟨s, s₁, out, hs, hb, he⟩
+      · obtain ⟨r, id, b, hnew, hrefs, hpred, -, -, -, -, -, hst, -⟩ := tryBuild_some hb
+        have hg₁ : Grows s.store s₁.store := by rw [hst]; exact Grows.insert s.store
+        exact ⟨s, s₁, out, hs, hb, he, hg₁.trans (Grows.progress (cfg := cfg) fuel s₁).1⟩
       · exact progress_witness Q K hQ fuel s₁ (hQ s s₁ out hs hb hK₁)
           (fun e he => hK e (List.mem_append_right _ he)) e he
 
@@ -406,15 +415,23 @@ theorem advance_witness {U : BlockRecord Validator BlockId Payload P H}
     {s s₀ : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
     (h₀ : BuildState cfg U K s inp s₀) (hK : ∀ e ∈ persists (Node.advance cfg s₀).2, e ∈ K) :
     ∀ e ∈ persists (Node.advance cfg s₀).2, ∃ x y o, BuildState cfg U K s inp x ∧
-      Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o := by
+      Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
+      Grows x.store (Node.advance cfg s₀).1.store := by
   have hpe : persists (Node.advance cfg s₀).2 =
       persists (Node.progress cfg (s₀.store.topRound + 2) s₀).2 := by
     simp only [Node.advance]
     rw [persists_append, decideStep_persist, List.append_nil]
-  rw [hpe] at hK ⊢
-  exact progress_witness (BuildState cfg U K s inp) K
-    (fun _ _ _ hx hb hK => hx.tryBuild hg hb hK)
-    _ s₀ h₀ hK
+  have hga : Grows (Node.progress cfg (s₀.store.topRound + 2) s₀).1.store
+      (Node.advance cfg s₀).1.store := by
+    simp only [Node.advance]
+    rw [← decideStep_store (cfg := cfg) (Node.progress cfg (s₀.store.topRound + 2) s₀).1]
+    exact Grows.flush _ _ _
+  rw [hpe] at hK
+  intro e he
+  rw [hpe] at he
+  obtain ⟨x, y, o, hx, hb, heo, hg'⟩ := progress_witness (BuildState cfg U K s inp) K
+    (fun _ _ _ hx hb hK => hx.tryBuild hg hb hK) _ s₀ h₀ hK e he
+  exact ⟨x, y, o, hx, hb, heo, hg'.trans hga⟩
 
 omit [Fintype Validator] in
 theorem quiesce_witness {U : BlockRecord Validator BlockId Payload P H}
@@ -423,7 +440,8 @@ theorem quiesce_witness {U : BlockRecord Validator BlockId Payload P H}
     ∀ (n : ℕ) (s₀ : State Validator BlockId Payload), BuildState cfg U K s inp s₀ →
     (∀ e ∈ s₀.pending, e ∈ K) → (∀ e ∈ persists (quiesce cfg n s₀).2, e ∈ K) →
     ∀ e ∈ persists (quiesce cfg n s₀).2, ∃ x y o, BuildState cfg U K s inp x ∧
-      Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o
+      Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
+      Grows x.store (quiesce cfg n s₀).1.store
   | 0, s₀, _, _, _ => by intro e he; simp [Node.quiesce, persists] at he
   | n + 1, s₀, h₀, hp, hK => by
     rcases quiesce_succ_cases (cfg := cfg) n s₀ with he | he <;> rw [he] at hK ⊢
@@ -432,7 +450,9 @@ theorem quiesce_witness {U : BlockRecord Validator BlockId Payload P H}
       intro e he'
       rw [persists_append] at he'
       rcases List.mem_append.mp he' with he' | he'
-      · exact advance_witness hg h₀ (fun e he => hK e (List.mem_append_left _ he)) e he'
+      · obtain ⟨x, y, o, hx, hb, heo, hg'⟩ :=
+          advance_witness hg h₀ (fun e he => hK e (List.mem_append_left _ he)) e he'
+        exact ⟨x, y, o, hx, hb, heo, hg'.trans (Grows.quiesce (cfg := cfg) n _)⟩
       · exact quiesce_witness hg n _
           (h₀.advance hg hp (fun e he => hK e (List.mem_append_left _ he)))
           (fun e he => hp e ((advance_sub (cfg := cfg) s₀).1 e he))
@@ -447,7 +467,8 @@ theorem settle_witness {U : BlockRecord Validator BlockId Payload P H}
     (h₀ : BuildState cfg U K s inp s₀) (hp : ∀ e ∈ s₀.pending, e ∈ K)
     (hK : ∀ e ∈ persists (Node.settle cfg s₀).2, e ∈ K) :
     ∀ e ∈ persists (Node.settle cfg s₀).2, ∃ x y o, BuildState cfg U K s inp x ∧
-      Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o :=
+      Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
+      Grows x.store (Node.settle cfg s₀).1.store :=
   quiesce_witness hg _ s₀ h₀ hp hK
 
 /-- **Each block a step persists is the genesis block or comes from one
@@ -460,7 +481,8 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     (hp : ∀ e ∈ s.pending, e ∈ K) (hd : ∀ e ∈ delivered cfg [inp], e ∈ K)
     (hb : ∀ e ∈ persists (Node.step cfg s inp).2, e ∈ K) :
     ∀ e ∈ persists (Node.step cfg s inp).2, e.2.round = 0 ∨ ∃ x y o,
-      BuildState cfg U K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o := by
+      BuildState cfg U K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
+      Grows x.store (Node.step cfg s inp).1.store := by
   -- a step that settles `s₀` after outputs persisting only round-`0` blocks
   have hset : ∀ (s₀ : State Validator BlockId Payload)
       (pre : List (Output Validator BlockId Payload)),
@@ -468,9 +490,10 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       (∀ e ∈ persists pre, e.2.round = 0) →
       Node.step cfg s inp = ((Node.settle cfg s₀).1, pre ++ (Node.settle cfg s₀).2) →
       ∀ e ∈ persists (Node.step cfg s inp).2, e.2.round = 0 ∨ ∃ x y o,
-        BuildState cfg U K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o := by
+        BuildState cfg U K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
+        Grows x.store (Node.step cfg s inp).1.store := by
     intro s₀ pre h₀ hp₀ hpre he e hev
-    rw [he] at hb hev
+    rw [he] at hb hev ⊢
     rw [persists_append] at hb hev
     rcases List.mem_append.mp hev with hev | hev
     · exact Or.inl (hpre e hev)
@@ -478,7 +501,8 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
         e hev)
   have hsame : Node.step cfg s inp = (s, []) →
       ∀ e ∈ persists (Node.step cfg s inp).2, e.2.round = 0 ∨ ∃ x y o,
-        BuildState cfg U K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o := by
+        BuildState cfg U K s inp x ∧ Node.tryBuild cfg x = some (y, o) ∧ e ∈ persists o ∧
+        Grows x.store (Node.step cfg s inp).1.store := by
     intro he e hev; rw [he] at hev; simp [persists] at hev
   cases inp with
   | start =>
@@ -576,6 +600,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
   | timer r =>
     intro e hev
     rw [persists_step_timer] at hb hev
+    rw [step_timer_fst]
     refine Or.inr (settle_witness hg (s := s) (inp := .timer r)
       (s₀ := { s with fired := insert r s.fired })
       ⟨hc, hh.grow (Grows.refl _) rfl, hown.grow (Grows.refl _) rfl rfl, Grows.refl _,

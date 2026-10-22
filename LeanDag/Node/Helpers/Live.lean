@@ -11,11 +11,7 @@ cut of the record grown from the store before the event (`build_witness`).
 A block of the record by a reliable node was built at the node's first
 event persisting a block of its round (`builtAt_first`, `built_block`), and
 a timer that fired for round `r` fired a timeout after the node built
-round `r` (`timer_after_built`). From these, a reliable node's block above
-an honest leader's slot round reaches the leader block or waited for the
-timer and references every leader block the node held before
-(`reach_or_wait_node`), and likewise for certificates
-(`cert_or_wait_node`).
+round `r` (`timer_after_built`).
 -/
 
 namespace LeanDag
@@ -38,7 +34,8 @@ theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : 
     (hr : e.2.round ≠ 0) :
     ∃ x y o, BuildState (cfg.at v) (globalRecord (hashInjective_of_trace hinj)
         (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i v) inp x ∧
-      tryBuild (cfg.at v) x = some (y, o) ∧ e ∈ persists o := by
+      tryBuild (cfg.at v) x = some (y, o) ∧ e ∈ persists o ∧
+      Grows x.store (stateBefore cfg tr (i + 1) v).store := by
   have hK : ∀ x ∈ knownOf cfg tr v, x ∈ knownAll cfg H tr := fun x hx => ⟨v, hv, hx⟩
   have hg := ground (cfg := cfg) (hashInjective_of_trace hinj) (authentic_of_timely htime)
   have hinv := Converge.inv_before (cfg := cfg) (tr := tr) i v
@@ -51,7 +48,7 @@ theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : 
       (fun x hx => hK x (knownBefore_knownOf (hinv.pend x hx)))
       (fun x hx => hK x (hd x hx)) (fun x hx => hK x (hb x hx)) e he with h | h
   · exact absurd h hr
-  · exact h
+  · rw [stateBefore_succ hi, if_pos rfl]; exact h
 
 omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
 /-- A pair is persisted by outputs exactly when its `persist` output is among them. -/
@@ -132,10 +129,11 @@ theorem eventsBefore_le (hmono : Live.TimeMono tr time) (i : ℕ) :
   exact (Finset.card_le_card hsub).trans (by simp)
 
 /-- **A reliable node's block in the run's record was built at `v`'s
-first event building its round**, from a state it builds from, by the
-build rule: its references are `refsAt`'s on that state's store, stored
-there, and pass the reach and certificate tests or follow the round's
-timer with `refsFor`'s. -/
+first event building its round**, from a state it builds from, whose
+store grows into the store after the event, by the build rule: its
+references are `refsAt`'s on that state's store, stored there, and pass
+the reach and certificate tests, or follow the round's timer with
+`refsFor`'s, or follow the node's being behind with `refsFor`'s. -/
 theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     {v : Validator} (hv : v ∈ H) {c : BlockId} {r : ℕ}
@@ -147,13 +145,21 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     ∃ i₀ inp x, tr[i₀]? = some (v, inp) ∧ builtAt cfg tr time v (r + 1) = time i₀ ∧
       BuildState (cfg.at v) (globalRecord (hashInjective_of_trace hinj)
         (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x ∧
-        x.top = some r ∧
+        x.top = some r ∧ c ∉ x.store.ids ∧
+      (∃ y o, tryBuild (cfg.at v) x = some (y, o) ∧
+        (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
+          persists o ∧
+        (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
+          persists (outputsAt cfg tr i₀)) ∧
       ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).refs =
         refsAt (cfg.at v) x.store r x.own ∧
       refsAt (cfg.at v) x.store r x.own ⊆ x.store.ids ∧
+      Grows x.store (stateBefore cfg tr (i₀ + 1) v).store ∧
       ((reachReady (cfg.at v) x.store (refsAt (cfg.at v) x.store r x.own) r = true ∧
           certReady (cfg.at v) x.store (refsAt (cfg.at v) x.store r x.own) r = true) ∨
         (r ∈ x.fired ∧
+          refsAt (cfg.at v) x.store r x.own = refsFor (cfg.at v) x.store r x.own) ∨
+        (behind (cfg.at v) x.store r ∧
           refsAt (cfg.at v) x.store r x.own = refsFor (cfg.at v) x.store r x.own))
     := by
   have hinjR := hashInjective_of_trace hinj
@@ -181,7 +187,7 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     mem_persists_iff.mpr (mem_outputs_of_event hi₀ (mem_persists_iff.mp he₀))
   have hex : e₀ = x := eq_of_persists v he₀p hxp (by rw [he₀r, hxr])
   subst hex
-  obtain ⟨x', y, o, hbs, hb, heo⟩ := build_witness hσ hadm hf htime hinj hv hi₀ he₀
+  obtain ⟨x', y, o, hbs, hb, heo, hgx⟩ := build_witness hσ hadm hf htime hinj hv hi₀ he₀
     (by rw [he₀r]; omega)
   obtain ⟨r', hr', -, hexit, hout⟩ := tryBuild_exit hb
   obtain ⟨r'', id, b, hnew, hrefs, hpred, hr'', hbr, -, hid, -, hst, -, -, -, hout'⟩ :=
@@ -212,7 +218,10 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     have := congrArg (fun e => e.2.refs) hAB
     simp only at this
     exact this.symm
-  refine ⟨i₀, inp, x', hi₀, hbt, hbs, hr', by rw [hUb, hbrefs], ?_, hexit⟩
+  have hce : (e₀.1, U.block e₀.1) = e₀ := by rw [hUb, heo']
+  refine ⟨i₀, inp, x', hi₀, hbt, hbs, hr', by rw [heo']; exact hnew,
+    ⟨y, o, hb, by rw [hce, hout, persists_built, List.mem_singleton]; exact heo,
+      by rw [hce]; exact he₀⟩, by rw [hUb, hbrefs], ?_, hgx, hexit⟩
   rw [← hbrefs]
   exact hrefs
 
@@ -248,123 +257,6 @@ theorem timer_after_built (hmono : Live.TimeMono tr time) {T : Finset Validator}
       obtain ⟨i₀', hi₀', hbt, -⟩ := builtAt_first (cfg := cfg) time hj'v ⟨_, hj'e, hor⟩
       have h₁ := hmono i₀' i' (by omega) (by omega)
       omega
-
-/-- **Reach or wait, at a reliable node**: a block `c` of `v` at the round
-above slot `k`'s round plus `m`, below the vote offset, reaches the slot's
-honest leader block in the run's record; or `v` built it a timeout after
-its block of the round below, referencing every block of the leader at
-that round it held before. -/
-theorem reach_or_wait_node (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
-    (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
-    (hinj : Converge.HashInjective cfg H tr) (hmono : Live.TimeMono tr time)
-    {T : Finset Validator} (hTH : T ⊆ H)
-    (hwait : Live.TimersAfterSet cfg T tr time) {v : Validator} (hvT : v ∈ T) {k m : ℕ}
-    (hlead : cfg.slots.leader k ∈ T) {L : BlockId}
-    (hL : IsLeaderBlock (S := cfg.slots)
-      (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) k L)
-    (hm : m < cfg.p.voteOffset) {c : BlockId}
-    (hcU : c ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids)
-    (hcv : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).creator = v)
-    (hcr : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).round = cfg.slots.slotRound k + m + 1) :
-    Reaches (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) c L ∨
-      (builtAt cfg tr time v (cfg.slots.slotRound k + m) + cfg.timeout (cfg.slots.slotRound k + m)
-          ≤ builtAt cfg tr time v (cfg.slots.slotRound k + m + 1) ∧
-        ∀ b ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids,
-          ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-            b).creator = cfg.slots.leader k →
-          ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-            b).round = cfg.slots.slotRound k + m →
-          b ∈ heldBefore cfg tr time v (builtAt cfg tr time v (cfg.slots.slotRound k + m + 1)) →
-          b ∈ ((globalRecord (hashInjective_of_trace hinj)
-            (authentic_of_timely htime)).block c).refs) := by
-  set U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime) with hU
-  obtain ⟨i₀, inp, x, hi₀, hbt, hbs, hxt, hcrefs, hsub, hexit⟩ :=
-    built_block time hσ hadm hf htime hinj (hTH hvT) hcU hcv hcr
-  have hi₀l : i₀ < tr.length := (List.getElem?_eq_some_iff.mp hi₀).1
-  rcases hexit with ⟨hready, -⟩ | ⟨hfired, hfor⟩
-  · exact Or.inl (reaches_of_reachReady (cfg := cfg.at v) hbs.cut hready hsub hm rfl
-      (hTH hlead) hL hcrefs)
-  · right
-    -- the timer
-    have hj : ∃ j ≤ i₀, tr[j]? = some (v, Input.timer (cfg.slots.slotRound k + m)) := by
-      rcases hbs.fired _ hfired with h | h
-      · obtain ⟨j, hj, hjt⟩ := fired_before (cfg := cfg) i₀ _ h
-        exact ⟨j, hj.le, hjt⟩
-      · exact ⟨i₀, le_rfl, by rw [hi₀, h]⟩
-    obtain ⟨j, hj, hjt⟩ := hj
-    refine ⟨by rw [hbt]; exact timer_after_built time hmono hwait hvT hi₀l hj hjt,
-      fun b hbU hbc hbr hbh => ?_⟩
-    -- a block held before is held at the build
-    rw [hbt] at hbh
-    have hbx : b ∈ x.store.ids :=
-      hbs.grows.1 ((grows_before (cfg := cfg) (tr := tr) v (eventsBefore_le time hmono i₀)).1 hbh)
-    rw [hcrefs, hfor]
-    have hbH : (x.store.blk b).creator ∈ H := by
-      rw [← hbs.cut.creator hbx, hbc]; exact hTH hlead
-    exact mem_refsFor_of_cut hbs.cut hbx (by rw [← hbs.cut.round hbx, hbr]) hbH
-      fun _ => hbs.own _ hxt
-
-/-- **Certify or wait, at a reliable node**: where votes are certified a
-round later, a block `c` of `v` at the round above slot `k`'s vote round
-certifies the slot's honest leader block in the run's record; or `v`
-built it a timeout after its block of the vote round, referencing every
-vote for the leader block by a node of `T` that it held before. -/
-theorem cert_or_wait_node (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
-    (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
-    (hinj : Converge.HashInjective cfg H tr) (hmono : Live.TimeMono tr time)
-    {T : Finset Validator} (hTH : T ⊆ H)
-    (hwait : Live.TimersAfterSet cfg T tr time) (hvc : cfg.p.voteIsCert = false)
-    {v : Validator} (hvT : v ∈ T) {k : ℕ}
-    (hlead : cfg.slots.leader k ∈ T) {L : BlockId}
-    (hL : IsLeaderBlock (S := cfg.slots)
-      (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) k L)
-    {c : BlockId}
-    (hcU : c ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids)
-    (hcv : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).creator = v)
-    (hcr : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).round = cfg.slots.slotRound k + cfg.p.voteOffset + 1) :
-    Scheme.IsCert cfg.p boundedSel
-        (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) c L ∨
-      (builtAt cfg tr time v (cfg.slots.slotRound k + cfg.p.voteOffset) +
-          cfg.timeout (cfg.slots.slotRound k + cfg.p.voteOffset)
-          ≤ builtAt cfg tr time v (cfg.slots.slotRound k + cfg.p.voteOffset + 1) ∧
-        ∀ b ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids,
-          ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-            b).creator ∈ T →
-          ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-            b).round = cfg.slots.slotRound k + cfg.p.voteOffset →
-          b ∈ heldBefore cfg tr time v
-            (builtAt cfg tr time v (cfg.slots.slotRound k + cfg.p.voteOffset + 1)) →
-          b ∈ ((globalRecord (hashInjective_of_trace hinj)
-            (authentic_of_timely htime)).block c).refs) := by
-  set U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime) with hU
-  obtain ⟨i₀, inp, x, hi₀, hbt, hbs, hxt, hcrefs, hsub, hexit⟩ :=
-    built_block time hσ hadm hf htime hinj (hTH hvT) hcU hcv hcr
-  have hi₀l : i₀ < tr.length := (List.getElem?_eq_some_iff.mp hi₀).1
-  rcases hexit with ⟨-, hready⟩ | ⟨hfired, hfor⟩
-  · exact Or.inl (isCert_of_certReady (cfg := cfg.at v) hσ hbs.cut hready hsub hvc rfl
-      (hTH hlead) hL hcrefs)
-  · right
-    have hj : ∃ j ≤ i₀,
-        tr[j]? = some (v, Input.timer (cfg.slots.slotRound k + cfg.p.voteOffset)) := by
-      rcases hbs.fired _ hfired with h | h
-      · obtain ⟨j, hj, hjt⟩ := fired_before (cfg := cfg) i₀ _ h
-        exact ⟨j, hj.le, hjt⟩
-      · exact ⟨i₀, le_rfl, by rw [hi₀, h]⟩
-    obtain ⟨j, hj, hjt⟩ := hj
-    refine ⟨by rw [hbt]; exact timer_after_built time hmono hwait hvT hi₀l hj hjt,
-      fun b hbU hbc hbr hbh => ?_⟩
-    rw [hbt] at hbh
-    have hbx : b ∈ x.store.ids :=
-      hbs.grows.1 ((grows_before (cfg := cfg) (tr := tr) v (eventsBefore_le time hmono i₀)).1 hbh)
-    rw [hcrefs, hfor]
-    have hbH : (x.store.blk b).creator ∈ H := by
-      rw [← hbs.cut.creator hbx]; exact hTH hbc
-    exact mem_refsFor_of_cut hbs.cut hbx (by rw [← hbs.cut.round hbx, hbr]) hbH
-      fun _ => hbs.own _ hxt
 
 end Node
 

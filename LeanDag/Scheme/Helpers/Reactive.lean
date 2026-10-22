@@ -21,9 +21,10 @@ a reliable decision-round block certifies it (`certifies`): the vote is the
 certificate, or on the fallback the block references every reliable vote.
 That is the family support's liveness precondition (`live_of_reactiveLive`),
 from which the generic `LeaderCommits` follows. `reaches`, `votes` and
-`certifies` read only production, arrival and the wait clauses
-(`WaveFacts`), which a reactive execution past GST supplies
-(`SchemeReactive.toWaveFacts`). On records whose blocks reference their
+`certifies` read only production and that each reliable block reaches or
+certifies the leader block or references what it needs (`WaveFacts`),
+which a reactive execution past GST supplies through arrival and its wait
+clauses (`SchemeReactive.toWaveFacts`). On records whose blocks reference their
 author's previous block, inclusion follows (`includes_reactive`): a reliable block enters the ledger through the next
 slot its author leads, reached down the author's own chain.
 -/
@@ -77,14 +78,15 @@ theorem arrives (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
 /-- **The wave facts of a reactive execution past GST.** -/
 def toWaveFacts (hq : q ≤ T.card) (hgst : rs.gst ≤ R)
     (hto : ∀ n, R ≤ n → 2 * rs.delay + rs.proc ≤ rs.timeout n) : WaveFacts p σ U T N R where
-  built := rs.built
-  timeout := rs.timeout
-  holds := rs.holds
   populated := fun n _ hn => rs.toAsyncPace.populated hq n hn
-  arrives := fun _ hv _ hu _ hRn hn _ hb hbc hbr hwait =>
-    rs.arrives hq hgst hto hv hu hRn hn hb hbc hbr hwait
-  reach_or_wait := rs.reach_or_wait
-  cert_or_wait := rs.cert_or_wait
+  reach_or_refs := fun v hv k hR hN hlead L hL m hm c hc hcc hcr =>
+    (rs.reach_or_wait v hv k hN hlead L hL m hm c hc hcc hcr).imp id
+      fun ⟨hwait, hincl⟩ b hb hbc hbr => hincl b hb hbc hbr
+        (rs.arrives hq hgst hto hv hlead (by omega) (by omega) hb hbc hbr hwait)
+  cert_or_refs := fun hvc v hv k hR hN hlead L hL c hc hcc hcr =>
+    (rs.cert_or_wait hvc v hv k hN hlead L hL c hc hcc hcr).imp id
+      fun ⟨hwait, hincl⟩ b hb hbc hbr hvote => hincl b hb hbc hbr
+        (rs.arrives hq hgst hto hv hbc (by omega) (by omega) hb rfl hbr hwait) hvote
 
 end SchemeReactive
 
@@ -106,13 +108,11 @@ theorem reaches (hTh : T ⊆ honest) {k : ℕ} {L : BlockId}
       ∀ v ∈ T, ∀ c ∈ U.ids, (U.block c).creator = v →
         (U.block c).round = S.slotRound k + m + 1 → Reaches U c L := by
     intro m hm hbelow v hv c hc hcc hcr
-    rcases wf.reach_or_wait v hv k hN hlead L hL m hm c hc hcc hcr with h | ⟨hwait, hincl⟩
+    rcases wf.reach_or_refs v hv k hR hN hlead L hL m hm c hc hcc hcr with h | hincl
     · exact h
     obtain ⟨b, hb, hbc, hbr⟩ := wf.populated (S.slotRound k + m) (by omega) (by omega)
       (S.leader k) hlead
-    have harr := wf.arrives v hv _ hlead (S.slotRound k + m) (by omega) (by omega) b hb hbc hbr
-      hwait
-    exact Reaches.of_mem_refs (hincl b hb hbc hbr harr) (hbelow b hb hbc hbr)
+    exact Reaches.of_mem_refs (hincl b hb hbc hbr) (hbelow b hb hbc hbr)
   intro m
   induction m with
   | zero =>
@@ -154,17 +154,15 @@ theorem certifies (hw : 2 ≤ p.waveLength)
   | false =>
     obtain ⟨hw3, hcq⟩ := hcv hvc
     have hoff := Params.voteOffset_of_false hvc hw3
-    rcases wf.cert_or_wait hvc v hv k (by omega) hlead L hL c hc hcc (by omega) with
-      h | ⟨hwait, hincl⟩
+    rcases wf.cert_or_refs hvc v hv k hR (by omega) hlead L hL c hc hcc (by omega) with
+      h | hincl
     · exact h
     refine isCert_of_votes σ p (fun h => absurd (hvc.symm.trans h) (by simp))
       fun _ => ⟨T, le_trans hcq hq, fun u hu => ?_⟩
     obtain ⟨b, hb, hbc, hbr⟩ :=
       wf.populated (S.slotRound k + p.voteOffset) (by omega) (by omega) u hu
-    have harr := wf.arrives v hv u hu (S.slotRound k + p.voteOffset) (by omega) (by omega) b hb
-      hbc hbr hwait
     have hvote := wf.votes hw hTh hR (by omega) hlead hL u hu b hb hbc hbr
-    exact ⟨b, hincl b hb (hbc ▸ hu) hbr harr hvote, hbc, hvote⟩
+    exact ⟨b, hincl b hb (hbc ▸ hu) hbr hvote, hbc, hvote⟩
 
 end WaveFacts
 

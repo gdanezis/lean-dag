@@ -131,7 +131,13 @@ wave is in progress, either
   from the one above the proposal to the vote round (`reachReady`), and
   certifies it at the decision round of a three-round row
   (`certReady`); or
-* the timer for round `r` has fired.
+* the timer for round `r` has fired; or
+* the store holds round-`r + 1` blocks of `f + c + 1` authors (`behind`):
+  at most `f + c` nodes lie outside a reliable set, so a reliable node
+  built the round, either on the tests or after its timeout, and a node
+  behind builds it without waiting. With a valid block of a round in
+  hand, whose history holds `q` authors of each round below, a node
+  thus builds every round below it at once.
 
 Both tests read a slot's leader blocks off the round index:
 `Store.leaderBlocks st k` is the set of blocks of `atRound` at the
@@ -139,10 +145,13 @@ slot's round whose author is the slot's leader, and it equals the
 scheme's `candidatesIn` on the store's view (`leaderBlocks_eq`), which
 the proofs read.
 
-These are the clauses `advancesAt`, `reach_or_wait` and `cert_or_wait`
-of the scheme's reactive run (`SchemeReactive`), written as a rule the
-program runs, so the liveness argument's wait clauses hold by
-construction (§5.3). The rule is reactive: the program builds as soon as
+The first two are the clauses `advancesAt`, `reach_or_wait` and
+`cert_or_wait` of the scheme's reactive run (`SchemeReactive`), written
+as a rule the program runs; the third is a form of its catch-up rule
+(`PaceCore.catchup`). A single block of round `r + 1` would not do: a
+Byzantine node can build one on `q` round-`r` blocks without the
+leader's, as soon as they exist, and prompt correct nodes to build round
+`r + 1` before the leader's block arrives, so that it gets no votes. The rule is reactive: the program builds as soon as
 what the decider counts has arrived, and the timer is only the fallback
 for a leader block, or for votes, that do not arrive.
 
@@ -157,8 +166,10 @@ block is reached, to the nodes ahead and the other to a node behind: the
 node behind holds both once it receives the history of a block built on
 the first, but the least identifier may be the second, and it then waits
 its timer where its peers did not, by a timeout at each round the attack
-repeats. The program builds rounds in sequence. It persists the block,
-then broadcasts it, then sets the timer for round `r + 1`.
+repeats. When it builds on being behind and the tests fail, it builds on
+`refsFor`'s references. The program builds rounds in sequence. It
+persists the block, then broadcasts it, then sets the timer for round
+`r + 1`.
 
 ### 3.3 The decider
 
@@ -297,9 +308,9 @@ two waited for each other for good. The re-request is tied to the timer,
 not to the repeated delivery: an answer to a request can itself carry
 the asker's pending blocks, and asking again on each of them would loop.
 
-A restarted node builds each round it missed, on lent references (§3.2)
-or on its timer, so its own blocks still form a chain (§8). It needs no
-bootstrap, since no block is collected.
+A restarted node builds each round it missed at once, on being behind
+(§3.2), so its own blocks still form a chain (§8). It needs no bootstrap,
+since no block is collected.
 
 ## 4. Conformance
 
@@ -441,12 +452,21 @@ claim has three parts.
 ### 5.3 Drift and the wave facts
 
 The family's argument (`Scheme/Helpers/Reactive.lean`) reads, of a run,
-production, arrival after a wait, and the wait clauses (`WaveFacts`);
-`reaches`, `votes` and `certifies` read only these. The program meets
-the wait clauses by its build rule (`reach_or_wait_node`,
-`cert_or_wait_node`, `Helpers/Live.lean`), read over the run's record
-from `reachReady` and `certReady` on the store's record and from the
-timer.
+production, and that each reliable block of a wave reaches or certifies
+the leader block, or references the leader's block of the round below,
+or every reliable vote (`WaveFacts`); `reaches`, `votes` and `certifies`
+read only these. A reactive execution supplies the references by arrival
+after a wait. The program supplies them past the synchronisation point
+(`reach_or_refs_node`, `cert_or_refs_node`, `Helpers/Wave.lean`): a block
+built on the tests reaches or certifies the leader block; one built on
+the timer references every reliable block of the round below, which its
+builder holds by arrival (`waited_holds`); and one built on being behind
+does too (`refs_all`). Its builder holds an earlier block of the round by
+a reliable node (`behind_earlier`). That block did not pass the tests,
+or the references it lends would have, and the node would have built on
+those (`ready_transfer`). So it waited or was behind in turn, and by
+induction on the event that built it references every reliable block of
+the round below, which the node then holds.
 
 **Drift.** Let `drift n` be the spread of the reliable nodes' build times
 of round `n`. Past GST, `drift (n + 1) ≤ max (drift n) A`. Let `u` be
@@ -456,18 +476,21 @@ round `n`. If `u` built on the reach and certificate tests, `v` passes
 them with `u`'s references (`ready_transfer`), which it can build on
 with its own block for its own (`lent_buildable`), and builds by
 `t + A`. If `u` built on its timer, which fired at `u`'s build of round
-`n` plus the timeout, `v`'s fires at most `drift n` later. So the drift
+`n` plus the timeout, `v`'s fires at most `drift n` later. If `u` was
+behind, an earlier reliable node built the round, and `v` catches up with
+that one, by induction on the event. So the drift
 never grows past `A` once it is there (`catches_up`, `drift`,
 `Helpers/Drift.lean`), and arrival follows: a node that waited the
 timeout at round `n` holds every reliable round-`n` block, built at most
 `A` after its own and held `A` after that, when `2A < timeout`
 (`waited_holds`, `Helpers/Wave.lean`).
 
-A node that fell behind before GST pays every timer round again, gaining
-on its peers only a round time per round built on the tests, so its
-drift shrinks at a rate no bound in `Δ` and the timeout controls. The
-decision part therefore starts from a synchronisation point, and
-production, which needs no drift bound, holds from GST.
+The decision part starts from a synchronisation point, a round the
+reliable nodes built within `A` of each other past GST, and production,
+which needs no drift bound, holds from GST. With the catch-up rule a node
+behind builds every round below one that `f + c + 1` authors built within
+`A` of the last of them; that this gives a synchronisation point is the
+next step (§9).
 
 ### 5.4 From verdicts to the node's decisions
 
@@ -494,7 +517,7 @@ hand-built records. Read against the program:
 | `SchemeReactive.reach_or_wait`, `cert_or_wait` | yes, by the build rule (§3.2) |
 | `PaceCore.holds_mono` | yes: the store only grows (`Grows`) |
 | `ReactiveCore.built_lt` | no: build times strictly increase, but one step may build several rounds at once, when a lagging node catches up; the node supplies `WaveFacts`, which does not ask it |
-| `PaceCore.catchup` | no: a node holding a reliable block of a later round must build there within `proc`, while `reach_or_wait` makes it wait the timer at each round in between whose leader block its block would not reach; the drift argument (§5.3) replaces it |
+| `PaceCore.catchup` | in part: a node holding round-`n` blocks of `f + c + 1` authors builds round `n` at once (`behind`), but one reliable block does not suffice, since the node cannot tell which are reliable (§3.2) |
 
 ### 5.6 Crashes (V11′)
 
@@ -580,13 +603,15 @@ a recovery is not proved, as without crashes.
    three times. In all 234 runs agreement, prefix-comparability and
    validity hold, every node up ends five rounds or more above the top
    round at the last restart, the restarted node builds above that round,
-   and an honest node decides again, within 43 ticks of the restart.
-   The restarted node reaches the top round within 4 to 11 ticks after a
-   350-tick outage at Blue Bottle and Orcaella, where it builds the rounds
-   it missed on lent references (§3.2); where it waits timers instead,
-   catch-up grows with the outage: at Mysticeti with `n = 4`, 155 missed
-   rounds take about 335 ticks, a timeout at each round the restarted
-   node's block reaches no leader block (§5.3). Catch-up is costly to
+   and an honest node decides again, within 38 ticks of the restart.
+   The restarted node reaches the top round within 13 ticks of
+   restarting after a single outage of up to 850 ticks that ends past
+   GST, at every row, building the rounds it missed at once on being
+   behind (§3.2); within 35 ticks when it restarts before GST, and within
+   55 when several nodes restart at staggered times and wait for each
+   other. Before the catch-up rule, 155 missed rounds at
+   Mysticeti with `n = 4` took about 335 ticks, a timeout at each round
+   the restarted node's block reached no leader block. Catch-up is costly to
    compute: the restarted node asks for the missing history on account of
    every block it receives (§3.4), so a 250-tick outage at Orcaella with
    `n = 9` takes 197,365 inputs and 1,317 fetches, against 20,033 inputs

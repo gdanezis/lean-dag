@@ -125,6 +125,25 @@ theorem persists_before_mono (v : Validator) {a : ℕ} :
       · rw [run_append_single, persists_append]; exact List.mem_append_left _ this
       · rw [List.append_nil]; exact this
 
+/-- **A node persists a block of a round at one event only**: its own
+blocks lie at strictly increasing rounds (V1). -/
+theorem persist_events_eq {j j' : ℕ} {inp inp' : Input Validator BlockId Payload}
+    (hj : tr[j]? = some (v, inp)) (hj' : tr[j']? = some (v, inp'))
+    {e e' : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr j))
+    (he' : e' ∈ persists (outputsAt cfg tr j')) (hr : e.2.round = e'.2.round) : j = j' := by
+  by_contra hne
+  wlog hlt : j < j' generalizing j j' inp inp' e e'
+  · exact this hj' hj he' he hr.symm (Ne.symm hne) (by omega)
+  have hpw := Local.oneEach _ _ _ (cfg.at v) (inputsBefore tr (j' + 1) v)
+  dsimp only at hpw
+  rw [inputsBefore_succ hj', if_pos rfl, run_append_single, persists_append] at hpw
+  have hA := persists_before_mono (cfg := cfg) (tr := tr) v (show j + 1 ≤ j' by omega) e
+    (persists_of_event hj he)
+  rw [outputsAt_eq hj'] at he'
+  rw [List.map_append, List.pairwise_append] at hpw
+  have := hpw.2.2 _ (List.mem_map.mpr ⟨e, hA, rfl⟩) _ (List.mem_map.mpr ⟨e', he', rfl⟩)
+  omega
+
 theorem broadcasts_of_persists {i : ℕ} {e : BlockId × Block Validator BlockId Payload}
     (he : e ∈ persists (outputsAt cfg tr i)) : e ∈ broadcasts (outputsAt cfg tr i) := by
   unfold outputsAt at he ⊢
@@ -530,7 +549,7 @@ theorem arrival_of_delivered (hσ : cfg.σ = boundedSel)
     (persists_of_event hb hep)).2.1
   by_cases hn0 : e.2.round = 0
   · exact arrives_zero hinj hTH hmono hu hv huv hbu hep hgood hn0 hj (by omega)
-  · obtain ⟨x, y', o, hx, hxb, heo⟩ := build_witness hσ hadm hf htime hinj (hTH hu) hb hep hn0
+  · obtain ⟨x, y', o, hx, hxb, heo, -⟩ := build_witness hσ hadm hf htime hinj (hTH hu) hb hep hn0
     exact arrives hinj htime hTH hmono (t_r := 0)
       (fun j v id b hj hv hc hid _ => hsync j v id b hj hv hc hid) hu hv huv hb hep hx hxb heo
       hj (Nat.zero_le _) (τ := τ) (by omega) (by omega)

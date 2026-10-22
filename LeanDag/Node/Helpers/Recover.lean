@@ -646,7 +646,7 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
       (persists_of_event hq hyq)).2.1
     by_cases hn0 : y.2.round = 0
     · exact arrives_zero hinj hTH hmono hu hv huv (by rw [hq]; rfl) hyq hgood hn0 hj (by omega)
-    · obtain ⟨x, y', o, hx, hxb, heo⟩ := build_witness hσ hadm hf htime hinj (hTH hu) hq hyq hn0
+    · obtain ⟨x, y', o, hx, hxb, heo, -⟩ := build_witness hσ hadm hf htime hinj (hTH hu) hq hyq hn0
       exact arrives hinj htime hTH hmono hsync hu hv huv hq hyq hx hxb heo hj hjr hjτ (by omega)
   have hsend : ∀ {k : ℕ} {inpk : Input Validator BlockId Payload}
       {y : BlockId × Block Validator BlockId Payload}, tr[k]? = some (u, inpk) →
