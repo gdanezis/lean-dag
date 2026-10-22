@@ -1,4 +1,4 @@
-import LeanDag.Node.Helpers.Horizon
+import LeanDag.Node.Helpers.Held
 import LeanDag.Node.Helpers.Decided
 import LeanDag.Scheme.Loop.Proof
 /-!
@@ -173,17 +173,6 @@ theorem tryDecide_length_le {P : Validity Validator BlockId Payload} {H : Finset
   exact (List.takeWhile_sublist _).length_le.trans (by simp)
 
 omit [Fintype Validator] in
-/-- A slot among those at rounds at most `R` lies at a round at most `R`. -/
-theorem slotRound_le_of_decidable {k R : ℕ} (hk : k < decidable cfg R) :
-    cfg.slots.slotRound k ≤ R := by
-  change cfg.per * (k / cfg.m) ≤ R
-  unfold decidable at hk
-  have h₁ : k / cfg.m ≤ R / cfg.per := by
-    have := (Nat.div_lt_iff_lt_mul cfg.m_pos).mpr (by rw [Nat.mul_comm]; exact hk)
-    omega
-  exact (Nat.mul_le_mul_left _ h₁).trans (Nat.mul_div_le _ _)
-
-omit [Fintype Validator] in
 /-- A pass decides only slots at rounds its store reaches. -/
 theorem decideStep_lo_le (s : State Validator BlockId Payload) :
     (Node.decideStep cfg s).1.lo ≤ max s.lo (decidable cfg s.store.topRound) := by
@@ -339,21 +328,6 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
   · rw [show commitsOf ([] : List (Output Validator BlockId Payload)) = [] from rfl,
       List.append_nil]
     exact h
-
-omit [Fintype Validator] in
-/-- The decisions under the invariant number at most the slots at rounds
-the store's top reaches. -/
-theorem CommitInv.lo_le {s : State Validator BlockId Payload} {cs : List (ℕ × Option BlockId)}
-    (h : CommitInv cfg U s cs) : s.lo = 0 ∨ s.lo ≤ decidable cfg s.store.topRound := by
-  rcases h.2 with h0 | ⟨V, N, -, hN, hcs⟩
-  · left; rw [h.1, h0]; rfl
-  · right
-    have hlen : cs.length ≤ N + 1 := by
-      rw [hcs]
-      have := tryDecide_length_le (S := cfg.slots) (p := cfg.p) (σ := boundedSel) (U := U)
-        (V := V) (lo := 0) (N := N) (by omega)
-      omega
-    rw [h.1]; omega
 
 /-- **A pass keeps the invariant, and the store a cut.** -/
 theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)

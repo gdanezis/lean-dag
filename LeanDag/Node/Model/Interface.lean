@@ -85,14 +85,11 @@ def slotsAt (r : ℕ) : List ℕ :=
 committee's size, the bound `f` and the quorum `q`, its certificates fit
 the quorum, and its commit threshold is reachable by the validators
 neither Byzantine nor crash-prone, which is what liveness reads; a row
-whose skip threshold is unreachable skips by the indirect rule; a
-quorum holds a node that is not Byzantine, which is what a checkpoint
-certificate reads; and a direct skip needs a block, which is what a
-bootstrap reads. -/
+whose skip threshold is unreachable skips by the indirect rule. -/
 def Admissible : Prop :=
   cfg.p.Covered (Fintype.card Validator) cfg.f cfg.q ∧ cfg.p.CertFits cfg.q ∧
     cfg.p.commitThreshold ≤ Fintype.card Validator - cfg.f - cfg.c ∧ 0 < cfg.q ∧
-    cfg.q ≤ Fintype.card Validator ∧ cfg.f < cfg.q ∧ 0 < cfg.p.skipThreshold
+    cfg.q ≤ Fintype.card Validator
 
 instance : Decidable cfg.Admissible := by
   unfold Admissible Scheme.Params.Covered Scheme.Params.CertFits

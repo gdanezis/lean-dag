@@ -231,7 +231,7 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
   haveI : Validity.Quorate (ValidAt (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
-  have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2.1, hadm.1⟩
+  have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2, hadm.1⟩
   obtain ⟨hls, hcms, hcs, hlaws⟩ := Scheme.coveredLaws (boundedSel (P := ValidAt cfg.q Clause.none)
     (honest := H) (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) ht
   obtain ⟨w, hwd⟩ := hlow

@@ -141,12 +141,6 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
   | timer r => exact Grows.settle_of _ rfl
   | fetchRequest peer ids => exact Grows.refl _
 
-/-- **Across a run the store grows.** -/
-theorem Grows.run : ∀ (is : List (Input Validator BlockId Payload))
-    (s : State Validator BlockId Payload), Grows s.store (Node.run cfg s is).1.store
-  | [], _ => Grows.refl _
-  | i :: is, s => (Grows.step s i).trans (Grows.run is _)
-
 end Node
 
 end LeanDag

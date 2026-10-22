@@ -82,11 +82,6 @@ def Rounds (B : List (BlockId × Block Validator BlockId Payload)) (t : ℕ) : P
   (B.map fun e => e.2.round).Pairwise (· < ·) ∧ ∀ e ∈ B, e.2.round ≤ t
 
 omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
-theorem Rounds.mono {B : List (BlockId × Block Validator BlockId Payload)} {t t' : ℕ}
-    (h : Rounds B t) (htt : t ≤ t') : Rounds B t' :=
-  ⟨h.1, fun e he => (h.2 e he).trans htt⟩
-
-omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
 /-- Blocks above the top, at strictly increasing rounds, extend the own
 blocks to a new top. -/
 theorem Rounds.append {B F : List (BlockId × Block Validator BlockId Payload)} {t t' : ℕ}
@@ -449,16 +444,6 @@ theorem quiesce_ind {P : State Validator BlockId Payload → Prop}
     (h : P s) : P (quiesce cfg n s).1 :=
   (quiesce_rel (P := P) (R := fun _ _ _ => True) (fun _ => trivial) (fun _ _ _ _ _ _ _ => trivial)
     (fun s h => ⟨trivial, hadv s h⟩) n s h).2
-
-omit [Fintype Validator] in
-/-- **A property of each pass's outputs** holds of all of them. -/
-theorem quiesce_out {P : State Validator BlockId Payload → Prop}
-    {Q : Output Validator BlockId Payload → Prop}
-    (hadv : ∀ s, P s → (∀ o ∈ (advance cfg s).2, Q o) ∧ P (advance cfg s).1) (n : ℕ)
-    (s : State Validator BlockId Payload) (h : P s) : ∀ o ∈ (quiesce cfg n s).2, Q o :=
-  (quiesce_rel (P := P) (R := fun _ out _ => ∀ o ∈ out, Q o)
-    (fun _ _ h => absurd h List.not_mem_nil)
-    (fun _ _ _ _ _ h₁ h₂ o ho => (List.mem_append.mp ho).elim (h₁ o) (h₂ o)) hadv n s h).1
 
 omit [Fintype Validator] in
 /-- **Advancing until nothing changes keeps the invariant**, and its own

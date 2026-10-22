@@ -35,14 +35,6 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
   | timer r => exact Or.inr ⟨_, rfl⟩
   | fetchRequest p ids => exact Or.inl rfl
 
-/-- **A step keeps a node settled**, for a quorum of two or more. -/
-theorem settled_step (hq : 2 ≤ cfg.q) {s : State Validator BlockId Payload}
-    {inp : Input Validator BlockId Payload} (h : Settled cfg s) :
-    Settled cfg (Node.step cfg s inp).1 := by
-  rcases step_settles (cfg := cfg) (s := s) (inp := inp) with he | ⟨x, he⟩ <;> rw [he]
-  · exact h
-  · exact settle_settled hq x
-
 /-! ## What only rises -/
 
 /-- **Rising from `s` to `s'`**: the top, once there, and the next

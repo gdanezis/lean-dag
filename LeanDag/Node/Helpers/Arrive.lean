@@ -67,17 +67,6 @@ theorem built_by : ∀ (i : ℕ) {n : ℕ}, (stateBefore cfg tr i v).top.isSome 
         obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) hs n hρ hn
         exact ⟨i, by omega, by rw [he]; rfl, e, by rw [outputsAt_eq he]; exact hep, her⟩
 
-/-- **A node's top before an event is at most the round of a block it
-builds there.** -/
-theorem top_le_built {i : ℕ} {inp : Input Validator BlockId Payload}
-    (he : tr[i]? = some (v, inp)) {e : BlockId × Block Validator BlockId Payload}
-    (hep : e ∈ persists (outputsAt cfg tr i)) :
-    (stateBefore cfg tr i v).top.getD 0 ≤ e.2.round := by
-  rw [outputsAt_eq he] at hep
-  rcases step_above (cfg := cfg.at v) e hep with h | ⟨h, h'⟩
-  · exact h.le
-  · rw [h, h']; rfl
-
 /-- **The timer of each round a node builds is set at the same event.** -/
 theorem timer_of_persist {i : ℕ} {inp : Input Validator BlockId Payload}
     (he : tr[i]? = some (v, inp)) {e : BlockId × Block Validator BlockId Payload}
@@ -311,12 +300,12 @@ theorem arrives (hinj : Converge.HashInjective cfg H tr)
   have hry : raw id' = b' := knownBlock_eq hinj hyK
   have hbu : b'.creator = u := hbc
   have C : CausalStructure x.store.blk x.store.ids := x.store.toRecord.causal
-  have hAv := agreesWith_before hinj (hTH hv) E
+  have hAv := Converge.reads_before hinj (hTH hv) E
   have hZv : ∀ w ∈ Zs.store.ids, (Zs.store.blk w).round = (raw w).round ∧
       (Zs.store.blk w).creator = (raw w).creator := fun w hw => by
-    obtain ⟨a₁, a₂⟩ := hAv w hw
+    have a := hAv w hw
     obtain ⟨k₁, k₂⟩ := knownBlock_gT (cfg := cfg) (H := H) (tr := tr) w
-    exact ⟨a₁.trans k₁.symm, a₂.trans k₂.symm⟩
+    exact ⟨(congrArg Block.round a).trans k₁.symm, (congrArg Block.creator a).trans k₂.symm⟩
   -- the history the author built on
   let Z : Finset BlockId := insert id' (b'.refs.biUnion (historyFrom x.store.blk))
   have hZmem : ∀ z ∈ Z, z = id' ∨ ∃ r ∈ b'.refs, z ∈ historyFrom x.store.blk r ∧ z ∈ x.store.ids :=

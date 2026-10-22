@@ -28,12 +28,6 @@ theorem Silent.nil : Silent ([] : List (Output Validator BlockId Payload)) :=
   ⟨rfl, fun _ _ h => absurd h List.not_mem_nil⟩
 
 omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
-theorem Silent.append {x y : List (Output Validator BlockId Payload)} (hx : Silent x)
-    (hy : Silent y) : Silent (x ++ y) :=
-  ⟨by rw [persists_append, hx.1, hy.1]; rfl,
-    fun r a h => (List.mem_append.mp h).elim (hx.2 r a) (hy.2 r a)⟩
-
-omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
 theorem Silent.of_quiet {x : List (Output Validator BlockId Payload)}
     (h : ∀ o ∈ x, (∀ id b, o ≠ .persist id b) ∧ ∀ r a, o ≠ .setTimer r a) : Silent x := by
   refine ⟨List.filterMap_eq_nil_iff.mpr fun o ho => ?_, fun r a hr => (h _ hr).2 r a rfl⟩
@@ -267,27 +261,6 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
 section StepFacts
 
 variable {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
-
-/-- **What a step builds lies above the top before**, but the genesis
-block at the start. -/
-theorem step_above :
-    ∀ e ∈ persists (Node.step cfg s inp).2,
-      s.top.getD 0 < e.2.round ∨ (s.top = none ∧ e.2.round = 0) := by
-  rcases step_shape (cfg := cfg) s inp with ⟨-, hq⟩ | ⟨x, pre, he, ht, -, hpre⟩
-  · rw [hq.1]; intro e he; cases he
-  · rw [he, persists_append]
-    intro e he'
-    rcases List.mem_append.mp he' with he' | he'
-    · rcases hpre with ⟨hp, -⟩ | ⟨hn, -, g, rfl, hg, -⟩
-      · rw [hp] at he'; cases he'
-      · simp only [persists] at he'
-        simp at he'
-        subst he'
-        exact Or.inr ⟨hn, hg⟩
-    · left
-      have := (settle_shape (cfg := cfg) x).above e he'
-      change x.top.getD 0 < _ at this
-      rw [← ht]; exact this
 
 /-- **A step builds every round above the top before up to the top it
 reaches.** -/

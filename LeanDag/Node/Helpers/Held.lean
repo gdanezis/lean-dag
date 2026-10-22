@@ -37,11 +37,6 @@ theorem Keeps.refl (st : Store Validator BlockId Payload) : Keeps st st :=
   ⟨subset_rfl, fun _ _ => rfl, le_rfl⟩
 
 omit [Fintype Validator] [DecidableEq Validator] in
-theorem Keeps.trans {a b c : Store Validator BlockId Payload} (h₁ : Keeps a b) (h₂ : Keeps b c) :
-    Keeps a c :=
-  ⟨h₁.1.trans h₂.1, fun i hi => (h₂.2.1 i (h₁.1 hi)).trans (h₁.2.1 i hi), h₁.2.2.trans h₂.2.2⟩
-
-omit [Fintype Validator] [DecidableEq Validator] in
 /-- A grown store has no lower top round. -/
 theorem Grows.topRound {st st' : Store Validator BlockId Payload} (hg : Grows st st') :
     st.topRound ≤ st'.topRound := by

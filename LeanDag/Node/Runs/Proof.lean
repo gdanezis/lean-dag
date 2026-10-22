@@ -27,7 +27,7 @@ theorem safety : Safety := by
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
   let U := globalRecord hinj hauth
-  have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2.1, hadm.1⟩
+  have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2, hadm.1⟩
   have hg := ground hinj hauth
   -- each honest node's decisions are nothing or one call of the loop on `U`
   have hone : ∀ u ∈ H, commitsOf (runOf cfg tr u).2 = [] ∨

@@ -589,7 +589,7 @@ import LeanDag.Node.Helpers.Steps
 import LeanDag.Node.Helpers.Trace
 import LeanDag.Node.Helpers.Converge
 import LeanDag.Node.Converge.Proof
-import LeanDag.Node.Helpers.Boot
+import LeanDag.Node.Helpers.Verdict
 import LeanDag.Node.Helpers.Agree
 import LeanDag.Node.Live.Statement
 import LeanDag.Node.Live.Proof

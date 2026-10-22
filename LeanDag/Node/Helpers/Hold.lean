@@ -2,14 +2,12 @@ import LeanDag.Node.Helpers.Reliable
 /-!
 # Holding a history
 
-`docs/validator.md` §13.2. A store agrees with a map `g` of the blocks on
-their rounds and authors (`AgreesWith`), which accepting and building
-keep. A block stored or pending stays stored or pending (`Stays`) from
-then on, since a pending block is accepted once it is ready. A delivery
-of a block by its hash and of another author leaves it stored or pending.
-A store with no pending block ready then holds every block of a set
-closed under references, once each stays and is ready when its
-references are accepted (`holds_of_stays`).
+`docs/validator.md` §13.2. A block stored or pending stays stored or
+pending (`Stays`) from then on, since a pending block is accepted once
+it is ready. A delivery of a block by its hash and of another author
+leaves it stored or pending. A store with no pending block ready then
+holds every block of a set closed under references, once each stays and
+is ready when its references are accepted (`holds_of_stays`).
 -/
 
 namespace LeanDag
@@ -20,18 +18,6 @@ variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Val
 variable [LinearOrder BlockId]
 variable {cfg : Config Validator BlockId Payload}
 
-variable (g : BlockId → Block Validator BlockId Payload)
-
-/-- **A store agreeing with `g`** on the rounds and authors of its blocks. -/
-def AgreesWith (st : Store Validator BlockId Payload) : Prop :=
-  ∀ j ∈ st.ids, (st.blk j).round = (g j).round ∧ (st.blk j).creator = (g j).creator
-
-/-- **A block agreeing with `g`** under its identifier. -/
-def Agrees (y : BlockId × Block Validator BlockId Payload) : Prop :=
-  (g y.1).round = y.2.round ∧ (g y.1).creator = y.2.creator
-
-variable {g}
-
 /-- **A block that stays**: stored or pending. -/
 def Stays (st : Store Validator BlockId Payload)
     (pend : List (BlockId × Block Validator BlockId Payload))
@@ -39,82 +25,6 @@ def Stays (st : Store Validator BlockId Payload)
   y.1 ∈ st.ids ∨ y ∈ pend
 
 /-! ## Agreeing with `g` -/
-
-omit [Fintype Validator] in
-theorem AgreesWith.accept {st : Store Validator BlockId Payload} (h : AgreesWith g st)
-    {id : BlockId} {b : Block Validator BlockId Payload} (hb : Agrees g (id, b)) :
-    AgreesWith g (Node.accept cfg st id b) := by
-  unfold Node.accept
-  split
-  · rename_i hc
-    intro j hj
-    change j ∈ Insert.insert id st.ids at hj
-    by_cases hj' : j = id
-    · subst hj'
-      simp only [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
-      exact ⟨hb.1.symm, hb.2.symm⟩
-    · have := Grows.blk (Grows.insert st (hnew := hc.1) (hrefs := hc.2.1)
-        (hpred := hc.2.2.1)) ((Finset.mem_insert.mp hj).resolve_left hj')
-      rw [this]
-      exact h j ((Finset.mem_insert.mp hj).resolve_left hj')
-  · exact h
-
-omit [Fintype Validator] [DecidableEq Validator] in
-theorem AgreesWith.insert {st : Store Validator BlockId Payload} (h : AgreesWith g st)
-    {id : BlockId} {b : Block Validator BlockId Payload} (hb : Agrees g (id, b))
-    {hnew hrefs hpred} :
-    AgreesWith g (st.insert id b hnew hrefs hpred) := by
-  intro j hj
-  change j ∈ Insert.insert id st.ids at hj
-  by_cases hj' : j = id
-  · subst hj'
-    simp only [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
-    exact ⟨hb.1.symm, hb.2.symm⟩
-  · have := Grows.blk (Grows.insert st (hnew := hnew) (hrefs := hrefs)
-      (hpred := hpred)) ((Finset.mem_insert.mp hj).resolve_left hj')
-    rw [this]
-    exact h j ((Finset.mem_insert.mp hj).resolve_left hj')
-
-omit [Fintype Validator] in
-theorem AgreesWith.foldl : ∀ (l : List (BlockId × Block Validator BlockId Payload))
-    {st : Store Validator BlockId Payload}, AgreesWith g st → (∀ e ∈ l, Agrees g e) →
-    AgreesWith g (l.foldl (fun s e => Node.accept cfg s e.1 e.2) st)
-  | [], _, h, _ => h
-  | e :: l, _, h, hl =>
-    AgreesWith.foldl l (h.accept (hl e List.mem_cons_self))
-      fun x hx => hl x (List.mem_cons_of_mem _ hx)
-
-omit [Fintype Validator] in
-theorem AgreesWith.flush : ∀ (fuel : ℕ) {st : Store Validator BlockId Payload}
-    {pend : List (BlockId × Block Validator BlockId Payload)}, AgreesWith g st →
-    (∀ e ∈ pend, Agrees g e) → AgreesWith g (Node.flush cfg fuel st pend).1
-  | 0, _, _, h, _ => h
-  | fuel + 1, st, pend, h, hp => by
-    unfold Node.flush
-    dsimp only
-    split
-    · exact h
-    · rw [List.partition_eq_filter_filter]
-      exact AgreesWith.flush fuel (h.foldl _ fun e he => hp e (List.mem_filter.mp he).1)
-        fun e he => hp e (List.mem_filter.mp he).1
-
-omit [Fintype Validator] in
-theorem AgreesWith.progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payload},
-    AgreesWith g s.store → (∀ e ∈ persists (Node.progress cfg fuel s).2, Agrees g e) →
-    AgreesWith g (Node.progress cfg fuel s).1.store
-  | 0, _, h, _ => h
-  | fuel + 1, s, h, hK => by
-    rcases hb : Node.tryBuild cfg s with _ | ⟨s₁, out⟩
-    · simp only [Node.progress, hb]; exact h
-    · simp only [Node.progress, hb] at hK ⊢
-      rw [persists_append] at hK
-      obtain ⟨r, id, b, hnew, hrefs, hpred, -, -, -, -, -, hst, -, -, -, hout⟩ :=
-        tryBuild_some hb
-      have hyb : Agrees g (id, b) := hK _ (List.mem_append_left _ (by rw [hout]; simp [built,
-        persists]))
-      refine AgreesWith.progress fuel ?_ fun e he => hK e (List.mem_append_right _ he)
-      rw [hst]
-      exact h.insert hyb
 
 /-! ## Accepting a ready block -/
 
@@ -303,30 +213,6 @@ theorem holds_of_stays {st : Store Validator BlockId Payload}
 /-! ## Along a trace -/
 
 variable {tr : Trace Validator BlockId Payload} {H : Finset Validator}
-
-theorem agrees_known (hinj : Converge.HashInjective cfg H tr)
-    {x : BlockId × Block Validator BlockId Payload} (hx : x ∈ Converge.knownIn cfg H tr) :
-    Agrees (Converge.gT cfg H tr) x := by
-  unfold Agrees
-  rw [Converge.gT_of_known hinj hx]
-  simp
-
-theorem agreesWith_before (hinj : Converge.HashInjective cfg H tr) {v : Validator} (hv : v ∈ H)
-    (i : ℕ) : AgreesWith (Converge.gT cfg H tr) (stateBefore cfg tr i v).store := by
-  intro j hj
-  have hk := Converge.knownBefore_sub hv i ((Converge.inv_before (cfg := cfg) i v).known j hj)
-  have := agrees_known hinj hk
-  exact ⟨this.1.symm, this.2.symm⟩
-
-theorem pending_agree_before (hinj : Converge.HashInjective cfg H tr) {v : Validator} (hv : v ∈ H)
-    (i : ℕ) : ∀ e ∈ (stateBefore cfg tr i v).pending, Agrees (Converge.gT cfg H tr) e :=
-  fun e he => agrees_known hinj
-    (Converge.knownBefore_sub hv i ((Converge.inv_before (cfg := cfg) i v).pend e he))
-
-theorem outputs_agree (hinj : Converge.HashInjective cfg H tr) {i : ℕ} {u : Validator}
-    (hu : u ∈ H) (hi : (tr[i]?.map Prod.fst) = some u) :
-    ∀ e ∈ persists (outputsAt cfg tr i), Agrees (Converge.gT cfg H tr) e :=
-  fun _ he => agrees_known hinj (Or.inr ⟨i, u, hi, hu, he⟩)
 
 /-- **A step keeps a known block staying**, at an honest node; and a
 delivery of it, of another author, leaves it staying. -/

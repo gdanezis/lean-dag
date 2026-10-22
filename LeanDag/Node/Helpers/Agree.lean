@@ -1,4 +1,4 @@
-import LeanDag.Node.Helpers.Boot
+import LeanDag.Node.Helpers.Verdict
 import LeanDag.Node.Helpers.Converge
 import LeanDag.Node.Helpers.Decided
 /-!
@@ -155,7 +155,7 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
     Validity.Quorate.of_validAt hadm.2.2.2.1 fun _ _ => Iff.rfl
   let U := globalRecord hinjR hauthR
-  have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2.1, hadm.1⟩
+  have ht : cfg.p.Tolerates H cfg.f cfg.q := ⟨hf, hadm.2.2.2.2, hadm.1⟩
   have hg := ground hinjR hauthR
   have hK : ∀ v ∈ H, ∀ x ∈ knownOf cfg tr v, x ∈ knownAll cfg H tr :=
     fun v hv x hx => ⟨v, hv, hx⟩

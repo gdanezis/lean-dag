@@ -99,21 +99,6 @@ theorem persists_of_broadcasts {i : ℕ} {e : BlockId × Block Validator BlockId
     exact he
   · exact absurd he List.not_mem_nil
 
-omit [Fintype Validator] [LinearOrder BlockId] in
-theorem mem_inputsBefore {i : ℕ} {w : Validator} {x : Input Validator BlockId Payload}
-    (h : x ∈ inputsBefore tr i w) : ∃ j : ℕ, tr[j]? = some (w, x) := by
-  obtain ⟨e, he, hex⟩ := List.mem_filterMap.mp h
-  split at hex
-  · rename_i hw
-    rw [Option.some.injEq] at hex
-    obtain ⟨j, hj⟩ := List.mem_iff_getElem?.mp he
-    rw [List.getElem?_take] at hj
-    split at hj
-    · refine ⟨j, ?_⟩
-      rw [hj, ← hw, ← hex]
-    · cases hj
-  · cases hex
-
 omit [Fintype Validator] in
 /-- **A block an honest node knew from an input** was delivered to it. -/
 theorem deliver_of_delivered {j : ℕ} {v : Validator}
