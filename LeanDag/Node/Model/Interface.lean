@@ -109,8 +109,8 @@ inductive Input where
   | deliver (id : BlockId) (b : Block Validator BlockId Payload)
   /-- The timer of round `r` fired. -/
   | timer (r : ℕ)
-  /-- A peer asks for the blocks `ids` and their histories. -/
-  | fetchRequest (peer : Validator) (ids : List BlockId)
+  /-- A peer at round `r` asks for the blocks `ids` and their histories. -/
+  | fetchRequest (peer : Validator) (r : ℕ) (ids : List BlockId)
 
 /-- **What a node produces.** -/
 inductive Output where
@@ -122,8 +122,8 @@ inductive Output where
   | setTimer (r : ℕ) (after : ℕ)
   /-- Slot `k` is decided: committed to a block, or skipped. -/
   | commit (k : ℕ) (d : Option BlockId)
-  /-- Ask the peer for the blocks `ids` and their histories. -/
-  | fetch (peer : Validator) (ids : List BlockId)
+  /-- Ask the peer for the blocks `ids` and their histories, from round `r`. -/
+  | fetch (peer : Validator) (r : ℕ) (ids : List BlockId)
   /-- Send a block to one peer. -/
   | send (peer : Validator) (id : BlockId) (b : Block Validator BlockId Payload)
 

@@ -1,5 +1,7 @@
 import LeanDag.Node.Converge.Statement
 import LeanDag.Node.Helpers.Converge
+import LeanDag.Node.Helpers.Agree
+import LeanDag.Node.Helpers.Held
 /-!
 # Fetching makes the honest nodes converge — proof
 
@@ -8,9 +10,18 @@ broadcast. Then `h` is pending at `v`, and below it a chain of pending
 blocks leads to a block `z` that `v` lacks (`chain`). The last of the
 chain's pending blocks to arrive arrived after `u` broadcast `h`, when the
 rest were pending; its walk reached `z` (`walk_reaches`), so `v` asked for
-`z` on its account, for the first time; `u`, which holds `h`'s history
-since it broadcast `h`, answered; and `z` arrived, after which it stays
-pending or stored, which it is not.
+`z` on its account, for the first time, from its round `r`; `u`, which
+holds `h`'s history since it broadcast `h`, answered; and `z` arrived,
+after which it stays pending or stored, which it is not.
+
+The answer leaves out what a block of `v`'s core reaches. If a block of
+the chain below the asked one has round-`(r − 1)` blocks of at least
+`n − q + f + 1` authors reaching it in `u`'s store (`mem_coreSets`), at
+least `n − q + 1` of these authors are honest. At round `r`, `v` held
+round-`(r − 1)` blocks of `q` authors (`Quorate`), so one of them is such
+an honest author, whose one block of that round (`eq_of_persists`) `v`
+then holds, with `z` in its history. Otherwise the pruned history of the
+asked block contains `z` (`pruned_chain`), and `u` sends it.
 -/
 
 namespace LeanDag
@@ -21,7 +32,7 @@ namespace Converge
 
 
 theorem converges : Converges := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj i u hu huH e he y hy v hv
+  intro Validator BlockId Payload _ _ _ cfg H tr hf hdel htime hinj i u hu huH e he y hy v hv
   obtain ⟨inp, hi⟩ := event_of_map hu
   set L := tr.length
   -- `h`'s history, as the trace reads it, held by `u` from event `i + 1` on
@@ -232,19 +243,20 @@ theorem converges : Converges := by
     · exact hA1 m h''
     · exact (hxH m (by omega)).2
         ((grows_before (cfg := cfg) (tr := tr) v (show A m ≤ L by omega)).1 h'')
-  -- so it asked `h`'s author `u` for it at `h`'s arrival
+  -- so it asked `h`'s author `u` for it at `h`'s arrival, from its round `r`
   set miss := missing s₁ (x m) (raw (x m))
+  set r := Sm.top.getD 0 with hr
   have hwm : x K ∈ miss := List.mem_filter.mpr ⟨hw, by simpa using hnreq⟩
   obtain ⟨rest, hout⟩ : ∃ rest, outputsAt cfg tr (A m) =
-      (if miss.isEmpty then [] else [.fetch (raw (x m)).creator miss]) ++ rest :=
+      (if miss.isEmpty then [] else [.fetch (raw (x m)).creator r miss]) ++ rest :=
     ⟨_, by rw [outputsAt_eq htm, step_deliver hcm]⟩
   have hne : miss.isEmpty = false := by
     rw [List.isEmpty_eq_false_iff]; exact List.ne_nil_of_mem hwm
   clear_value miss
   have hxm0 : x m = e.1 := hx0
   have hcrm : (raw (x m)).creator = u := by rw [hxm0, hraw₀, hecr]
-  obtain ⟨k, hkm, htk⟩ := hdel (A m) v _ htm hv (u, .fetchRequest v miss)
-    ⟨.fetch (raw (x m)).creator miss, by rw [hout, hne]; simp, ⟨hcrm.symm, rfl⟩⟩ huH
+  obtain ⟨k, hkm, htk⟩ := hdel (A m) v _ htm hv (u, .fetchRequest v r miss)
+    ⟨.fetch (raw (x m)).creator r miss, by rw [hout, hne]; simp, ⟨hcrm.symm, rfl⟩⟩ huH
   have hkL : k < L := (List.getElem?_eq_some_iff.mp htk).1
   -- `u` broadcast `h` before it reached `v`, so holds its history by `k`
   have h0 : (0 : ℕ) < len := hlen
@@ -262,35 +274,116 @@ theorem converges : Converges := by
     hgk.1 (hist_sub hinj huH hst' (hxH len le_rfl).1)
   have hKk : x K ∈ (stateBefore cfg tr k u).store.ids :=
     hgk.1 (hist_sub hinj huH hst' (hxH K hKlen).1)
-  -- `x len` lies in the history of `x K`, as `u` reads it at `k`
+  -- the chain from `x K` down, as `u` reads it at `k`
   set stk := (stateBefore cfg tr k u).store
   have hRk := reads_before hinj huH k
-  have hreach : ∀ d, K + d ≤ len → ReachesFrom stk.blk (x K) (x (K + d)) := by
-    intro d
+  have hblkk : ∀ k₀, k₀ ≤ len → stk.blk (x k₀) = raw (x k₀) := fun k₀ hk₀ =>
+    (hRk _ (hgk.1 (hist_sub hinj huH hst' (hxH k₀ hk₀).1))).trans
+      (gT_of_known hinj (hrawk _ (hxH k₀ hk₀).1))
+  have hreach : ∀ k₀ d, k₀ + d ≤ len → ReachesFrom stk.blk (x k₀) (x (k₀ + d)) := by
+    intro k₀ d
     induction d with
     | zero => intro _; exact ReachesFrom.refl
     | succ d ih =>
       intro hd
-      have hc := hxc (K + d) (by omega)
-      have hdk : x (K + d) ∈ stk.ids := hgk.1 (hist_sub hinj huH hst' (hxH (K + d) (by omega)).1)
-      have hblk : stk.blk (x (K + d)) = raw (x (K + d)) :=
-        (hRk _ hdk).trans (gT_of_known hinj (hrawk _ (hxH (K + d) (by omega)).1))
-      have hr : (x (K + (d + 1))) ∈ (stk.blk (x (K + d))).refs := by
-        rw [hblk]; exact hc.2.1
-      exact (ih (by omega)).trans (ReachesFrom.single hr)
-  have hlenK : x len ∈ historyFrom stk.blk (x K) :=
-    ((causal_store k u).mem_history_iff hKk).mpr
-      (by simpa [show K + (len - K) = len by omega] using hreach (len - K) (by omega))
-  -- `u` answers, and the block reaches `v`
+      have hr' : (x (k₀ + (d + 1))) ∈ (stk.blk (x (k₀ + d))).refs := by
+        rw [hblkk _ (by omega)]; exact (hxc (k₀ + d) (by omega)).2.1
+      exact (ih (by omega)).trans (ReachesFrom.single hr')
+  have hrounds : ∀ d, K + d ≤ len → (raw (x (K + d))).round + d = (raw (x K)).round := by
+    intro d
+    induction d with
+    | zero => intro _; rfl
+    | succ d ih =>
+      intro hd
+      have := (hxc (K + d) (by omega)).2.2
+      rw [show K + d + 1 = K + (d + 1) by omega] at this
+      have := ih (by omega)
+      omega
+  -- `u` answers with `x len`: no block of the chain below `x K` is in the
+  -- asker's core, since `v` holds what such a block reaches
+  have hsent : x len ∈ historyUptoFrom (pruned (cfg.at u) stk r)
+      ((stk.blk (x K)).round + 1) (x K) := by
+    by_cases hnc : ∀ k', K < k' → k' ≤ len →
+        ¬ coreThreshold (cfg.at u) ≤ ((coreSets (cfg.at u) stk r).getD (x k') ∅).card
+    · have hd := pruned_chain (cfg.at u) stk (r := r) (K := K) (len := len) (x := x)
+        (fun k' _ h₂ => by rw [hblkk k' (by omega)]; exact (hxc k' h₂).2.1) hnc (len - K)
+        (by omega)
+      rw [show len - (len - K) = K by omega] at hd
+      refine historyUptoFrom_mono ?_ _ hd
+      have := hrounds (len - K) (by omega)
+      rw [hblkk K hKlen]
+      omega
+    · exfalso
+      push Not at hnc
+      obtain ⟨k', hKk', hk'len, hcore⟩ := hnc
+      -- the round is positive, since the sweep records nothing at round 0
+      have hr0 : r ≠ 0 := by
+        intro h0
+        rw [h0] at hcore
+        unfold coreSets at hcore
+        simp [coreThreshold] at hcore
+      obtain ⟨r', hr'⟩ : ∃ r', Sm.top = some r' := by
+        rcases h : Sm.top with _ | r'
+        · exact absurd (by rw [hr, h]; rfl) hr0
+        · exact ⟨r', rfl⟩
+      have hrr : r = r' := by rw [hr, hr']; rfl
+      -- `v` held blocks of a quorum `Q` of round-`(r − 1)` authors
+      have hQ : cfg.q ≤ (authorsIn Sm.store.toRecord Sm.store.ids (r - 1)).card := by
+        have := Quorate.run (cfg := cfg.at v) (inputsBefore tr (A m) v) Quorate.init r' hr'
+          (by omega)
+        rw [hrr]; exact this
+      -- an honest author lies in both `Q` and the core set of `x k'`
+      set C := (coreSets (cfg.at u) stk r).getD (x k') ∅
+      set Q := authorsIn Sm.store.toRecord Sm.store.ids (r - 1)
+      have hCH : (C \ H).card ≤ cfg.f :=
+        (Finset.card_le_card fun a ha => Finset.mem_compl.mpr (Finset.mem_sdiff.mp ha).2).trans hf
+      have h₁ := Finset.card_inter_add_card_sdiff C H
+      have h₂ := Finset.card_union_add_card_inter Q (C ∩ H)
+      have h₃ : (Q ∪ (C ∩ H)).card ≤ Fintype.card Validator := Finset.card_le_univ _
+      have h₄ : Q.card ≤ Fintype.card Validator := Finset.card_le_univ _
+      have hthr : coreThreshold (cfg.at u) = Fintype.card Validator - cfg.q + cfg.f + 1 := rfl
+      obtain ⟨a, ha⟩ : (Q ∩ (C ∩ H)).Nonempty := Finset.card_pos.mp (by omega)
+      obtain ⟨haQ, haC, haH⟩ : a ∈ Q ∧ a ∈ C ∧ a ∈ H := by
+        simp only [Finset.mem_inter] at ha; exact ⟨ha.1, ha.2.1, ha.2.2⟩
+      obtain ⟨yv, hyv, hyvr, hyvc⟩ := mem_authorsIn.mp haQ
+      obtain ⟨yu, hyu, hyur, hyuc, hyureach⟩ := mem_coreSets (cfg.at u) stk haC
+      have hyvr' : (Sm.store.blk yv).round = r - 1 := hyvr
+      have hyvc' : (Sm.store.blk yv).creator = a := hyvc
+      -- an honest author has one block a round, so `v` held the one `u` reads
+      have hinjR := hashInjective_of_trace hinj
+      have hauthR := authentic_of_timely htime
+      have hkv : (yv, Sm.store.blk yv) ∈ knownAll cfg H tr :=
+        ⟨v, hv, knownBefore_knownOf ((inv_before (cfg := cfg) (A m) v).known yv hyv)⟩
+      have hku : (yu, stk.blk yu) ∈ knownAll cfg H tr :=
+        ⟨u, huH, knownBefore_knownOf ((inv_before (cfg := cfg) k u).known yu hyu)⟩
+      have hpv := mem_persists_of_known hinjR hauthR hkv (by dsimp only; rw [hyvc']; exact haH)
+      have hpu := mem_persists_of_known hinjR hauthR hku (by dsimp only; rw [hyuc]; exact haH)
+      dsimp only at hpv hpu
+      rw [hyvc'] at hpv
+      rw [hyuc] at hpu
+      have hyy : yv = yu :=
+        congrArg Prod.fst (eq_of_persists a hpv hpu (by dsimp only; rw [hyvr', hyur]))
+      subst hyy
+      -- the block reaches `x len`, which `v` then holds
+      have hyl : ReachesFrom stk.blk yv (x len) := by
+        have := hreach k' (len - k') (by omega)
+        rw [show k' + (len - k') = len by omega] at this
+        exact hyureach.trans this
+      have hyH : x len ∈ historyFrom (gT cfg H tr) yv := by
+        rw [← hist_eq hinj huH hyu]
+        exact ((causal_store k u).mem_history_iff hyu).mpr hyl
+      have hyfin : yv ∈ fin.store.ids :=
+        (grows_before (cfg := cfg) (tr := tr) v (show A m ≤ L by omega)).1 hyv
+      exact (hxH len le_rfl).2 (hist_sub hinj hv hyfin hyH)
   set rk := stk.blk (x len)
   have hans : Output.send v (x len) rk ∈ outputsAt cfg tr k := by
     rw [outputsAt_eq htk]
-    change Output.send v (x len) rk ∈ answer _ v miss
+    change Output.send v (x len) rk ∈ answer _ _ v r miss
     unfold answer answerIds
     refine List.mem_map.mpr ⟨x len, List.mem_dedup.mpr (List.mem_append_right _
       (List.mem_flatMap.mpr ⟨x K, List.mem_filter.mpr ⟨hwm, by simpa using hKk⟩, ?_⟩)), rfl⟩
     rw [Finset.mem_sort, Finset.mem_filter]
-    exact ⟨hlenK, by simpa using hzk⟩
+    exact ⟨hsent, by simpa using hzk⟩
   obtain ⟨k', hk'k, htk'⟩ := hdel k u _ htk huH (v, .deliver (x len) rk)
     ⟨Output.send v (x len) rk, hans, ⟨rfl, rfl⟩⟩ hv
   have hk'L : k' < L := (List.getElem?_eq_some_iff.mp htk').1

@@ -67,12 +67,13 @@ history needed it, and the decisions output, the latest first.
 
 **Inputs** (`Input`): a start, which builds the genesis block; a
 delivered block, with its identifier; a timer for round `r` that fired;
-and a peer's request for some blocks and their histories.
+and a request from a peer at round `r` for some blocks and their
+histories.
 
 **Outputs** (`Output`): persist one of its own blocks, before it is
 broadcast; broadcast a block; set a timer for round `r`; commit slot `k`
 with a decision `Option BlockId`; ask a peer for some blocks and their
-histories; and send a block to one peer.
+histories, stating the node's top round; and send a block to one peer.
 
 Time is discrete (`ℕ`).
 
@@ -146,13 +147,38 @@ block referencing the other; the program fetches what it lacks.
 **The rule.** After a block `h` arrives, the node walks `h`'s references
 down through its pending blocks and collects those it neither stores
 nor holds pending: the missing part of `h`'s history (`walkLevel`,
-`missing`). It asks `h`'s author for them in one `fetch` output, and
-records each with `h`, so as to ask for a block at most once on account
-of each block that needs it. A node asked for blocks sends the asker
-each one its store holds, and their histories in its store
-(`answerIds`, `answer`). If `h`'s author is honest, it accepted all of
-`h`'s history before building `h`, so it holds everything asked for, and
-answers.
+`missing`). It asks `h`'s author for them in one `fetch` output, which
+carries the asker's top round `r` (`0` before the start), and records
+each with `h`, so as to ask for a block at most once on account of each
+block that needs it. A node asked for blocks sends the asker each one
+its store holds, and their histories in its store less the blocks the
+asker holds already (`answerIds`, `answer`). If `h`'s author is honest,
+it accepted all of `h`'s history before building `h`, so it holds
+everything asked for, and answers.
+
+**The pruned answer.** Let `n` be the committee's size and
+`T = n − q + f + 1` (`coreThreshold`). For `r ≥ 1` the answering node
+sweeps its store from its round-`(r − 1)` blocks downwards and records,
+for each block `i` it meets, a set of authors of round-`(r − 1)` blocks
+that reach `i` (`coreSets`, `coreFrom`, `coreLevel`). The sweep starts
+by giving each round-`(r − 1)` block its own author, passes the set of a
+block to each of its references, and stops at a level whose blocks all
+have sets of at least `T` authors. The histories are then walked in the
+store with every reference to a block of `T` or more recorded authors
+removed (`pruned`); for `r = 0` nothing is removed.
+
+**Why the pruned answer is sound.** A node at top round `r ≥ 1` holds
+round-`(r − 1)` blocks of at least `q` distinct authors, since it built
+on them (`Quorate`). Let `i` be a block with a set `A` of `T` or more
+recorded authors, and let at most `f` nodes be Byzantine. Then at least
+`n − q + 1` authors in `A` are honest, so `A` and the asker's quorum
+share an honest author `a`. An honest author has one block in round
+`r − 1`, so the asker holds the round-`(r − 1)` block of `a` that
+reaches `i` in the answering node's store; its store is closed under
+references, so it holds `i` and the history of `i`. A block of the asked
+history is therefore either sent or reached from a block the asker
+holds. The sweep follows the store's references only, so the answering
+node computes the sets once per request, from its own store.
 
 **Why histories.** The walk sees a missing block only once the block
 that references it has arrived. Asked for the missing blocks alone, a
@@ -189,7 +215,7 @@ moves that what it holds allows is left for a later event.
 | V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; the blocks it broadcasts are those it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`. | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions` (proved, `Local/Proof.lean`) |
 | V2 | **The decisions are the scheme's**: at the bounded vote, a decision step outputs what `Scheme.tryDecide` decides on any record and view holding the store's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest store is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
-| V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, every block an honest node broadcast, with its history, ends in every honest node's store. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain` |
+| V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, with at most `f` nodes outside the honest set, every block an honest node broadcast, with its history, ends in every honest node's store. The fault bound makes the pruned answer (§3.4) sound: a block left out of an answer is reached from a round-`(r − 1)` block of an honest author in the asker's quorum. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain`, `Node.Quorate.run`, `Node.mem_coreSets`, `Node.pruned_chain`, `Node.eq_of_persists` |
 | V8 | The claims are about the program that runs: its store is the ordered map, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, timers on time and timeouts above `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout, and a run of reliably led slots past a round they built within `Δ + Δₛ` of each other is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of the timeouts from that round. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy` |
 

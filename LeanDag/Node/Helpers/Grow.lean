@@ -139,7 +139,7 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
       exact Grows.settle_of _ rfl
     · exact Grows.refl s.store
   | timer r => exact Grows.settle_of _ rfl
-  | fetchRequest peer ids => exact Grows.refl _
+  | fetchRequest peer r ids => exact Grows.refl _
 
 end Node
 

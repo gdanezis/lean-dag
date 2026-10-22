@@ -25,9 +25,11 @@ input `i` in the state `s`: the new state and the outputs.
   (`State.decided`), the latest first.
 * **Fetching** (`walkLevel`, `missing`, `answer`): after a delivery, the
   missing part of the delivered block's history, walked through the
-  pending blocks, is asked of its author, once on account of each block
-  that needs it; a request is answered with the blocks asked for that
-  the store holds and their histories.
+  pending blocks, is asked of its author, with the asker's round `r`,
+  once on account of each block that needs it; a request is answered
+  with the blocks asked for that the store holds and their histories,
+  less the blocks a node at round `r` holds whatever it built on
+  (`coreThreshold`, `pruned`).
 * **Settling** (`settle`, `quiesce`): after each change to its state,
   the node builds, decides and accepts what that allows, in passes,
   until a pass changes none of its top, its pending blocks and its next
@@ -241,19 +243,72 @@ def missing (s : State Validator BlockId Payload) (id : BlockId)
   ((walkLevel s)^[s.pending.length + 2] (b.refs.sort (· ≤ ·), [], [])).2.2.filter
     fun x => decide ((x, id) ∉ s.requested)
 
-/-- **The blocks a request is answered with**: each block asked for that
-the store holds, then their histories in the store. -/
-def answerIds (s : State Validator BlockId Payload) (ids : List BlockId) : List BlockId :=
+/-- **The authors a block must have reached to lie in every view at round
+`r`**: `n − q + f + 1`. A node at round `r` built on blocks of `q`
+distinct authors of round `r − 1`; a block reached by round-`(r − 1)`
+blocks of this many authors is reached by one of an honest author among
+them, which has one block there. -/
+def coreThreshold : ℕ := Fintype.card Validator - cfg.q + cfg.f + 1
+
+/-- **One level of the core sweep**: each reference of a block of the
+level receives the authors that reach the block. -/
+def coreLevel (st : Store Validator BlockId Payload) (lvl : List (BlockId × Finset Validator)) :
+    List (BlockId × Finset Validator) :=
+  (lvl.foldl (fun (m : Std.TreeMap BlockId (Finset Validator) compare) e =>
+      ((st.blk e.1).refs.sort (· ≤ ·)).foldl (fun m j => m.insert j (m.getD j ∅ ∪ e.2)) m)
+    ∅).toList
+
+/-- **The core sweep** from a level down, at most `fuel` levels, stopping at
+a level whose blocks all reach the threshold: each block met, with
+authors of round-`(r − 1)` blocks that reach it. -/
+def coreFrom (st : Store Validator BlockId Payload) :
+    ℕ → List (BlockId × Finset Validator) → Std.TreeMap BlockId (Finset Validator) compare →
+      Std.TreeMap BlockId (Finset Validator) compare
+  | 0, _, acc => acc
+  | fuel + 1, lvl, acc =>
+    let acc := lvl.foldl (fun m e => m.insert e.1 e.2) acc
+    if lvl.all fun e => decide (coreThreshold cfg ≤ e.2.card) then acc
+    else coreFrom st fuel (coreLevel st lvl) acc
+
+/-- **Authors reaching each block from round `r − 1`**, as far as the
+sweep goes; nothing at `r = 0`. -/
+def coreSets (st : Store Validator BlockId Payload) (r : ℕ) :
+    Std.TreeMap BlockId (Finset Validator) compare :=
+  if r = 0 then ∅
+  else coreFrom cfg st r (((blocksAt st.toRecord (r - 1)).sort (· ≤ ·)).map
+    fun c => (c, {(st.blk c).creator})) ∅
+
+/-- **The store read through core sets**: a block keeps only its
+references whose recorded set falls short of `coreThreshold`. -/
+def prunedBy (st : Store Validator BlockId Payload)
+    (core : Std.TreeMap BlockId (Finset Validator) compare) (x : BlockId) :
+    Block Validator BlockId Payload :=
+  { st.blk x with
+    refs := (st.blk x).refs.filter fun i => ¬ coreThreshold cfg ≤ (core.getD i ∅).card }
+
+/-- **The store read for an answer to a node at round `r`**: a block keeps
+only its references that round-`(r − 1)` blocks of fewer than
+`coreThreshold` authors reach. -/
+def pruned (st : Store Validator BlockId Payload) (r : ℕ) : BlockId →
+    Block Validator BlockId Payload :=
+  prunedBy cfg st (coreSets cfg st r)
+
+/-- **The blocks a request from a node at round `r` is answered with**:
+each block asked for that the store holds, then their histories in the
+store through blocks the asker need not hold. -/
+def answerIds (s : State Validator BlockId Payload) (r : ℕ) (ids : List BlockId) :
+    List BlockId :=
   let held := ids.filter fun j => decide (j ∈ s.store.ids)
+  let core := coreSets cfg s.store r
   (held ++ held.flatMap fun j =>
-    ((historyUptoFrom s.store.blk ((s.store.blk j).round + 1) j).filter fun x =>
+    ((historyUptoFrom (prunedBy cfg s.store core) ((s.store.blk j).round + 1) j).filter fun x =>
       decide (x ∈ s.store.ids)).sort (· ≤ ·)).dedup
 
-/-- **Answer a request**: send the peer the blocks of `answerIds`. A
-missing history then arrives in one round trip, whatever its depth. -/
-def answer (s : State Validator BlockId Payload) (peer : Validator) (ids : List BlockId) :
+/-- **Answer a request** from a node at round `r`: send the peer the
+blocks of `answerIds`. -/
+def answer (s : State Validator BlockId Payload) (peer : Validator) (r : ℕ) (ids : List BlockId) :
     List (Output Validator BlockId Payload) :=
-  (answerIds s ids).map fun j => .send peer j (s.store.blk j)
+  (answerIds cfg s r ids).map fun j => .send peer j (s.store.blk j)
 
 /-- **Build, decide, then accept what that allows**: a block built can
 make a pending block ready, so this ends by flushing, and no pending
@@ -315,10 +370,10 @@ def step (s : State Validator BlockId Payload) :
       let s₁ := { s with store := fl.1, pending := fl.2 }
       let miss := missing s₁ id b
       let r := settle cfg { s₁ with requested := s₁.requested ++ miss.map fun x => (x, id) }
-      (r.1, (if miss.isEmpty then [] else [.fetch b.creator miss]) ++ r.2)
+      (r.1, (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss]) ++ r.2)
     else (s, [])
   | .timer r => settle cfg { s with fired := insert r s.fired }
-  | .fetchRequest peer ids => (s, answer s peer ids)
+  | .fetchRequest peer r ids => (s, answer cfg s peer r ids)
 
 end Node
 

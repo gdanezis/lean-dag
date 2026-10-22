@@ -253,7 +253,7 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
   | timer r =>
     exact Or.inr ⟨{ s with fired := insert r s.fired }, [], hnil _, rfl,
       Finset.subset_insert _ _, Or.inl ⟨rfl, rfl⟩⟩
-  | fetchRequest p ids =>
+  | fetchRequest p r ids =>
     refine Or.inl ⟨rfl, silent_of fun o ho => ?_⟩
     simp only [Node.step, answer, List.mem_map] at ho
     obtain ⟨j, -, rfl⟩ := ho; trivial

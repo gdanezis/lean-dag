@@ -71,7 +71,7 @@ def Sends (u : Validator) (out : List (Output Validator BlockId Payload))
     (m : Validator × Input Validator BlockId Payload) : Prop :=
   ∃ o ∈ out, match o with
     | .broadcast id b => m.1 ≠ u ∧ m.2 = .deliver id b
-    | .fetch peer ids => m.1 = peer ∧ m.2 = .fetchRequest u ids
+    | .fetch peer r ids => m.1 = peer ∧ m.2 = .fetchRequest u r ids
     | .send peer id b => m.1 = peer ∧ m.2 = .deliver id b
     | _ => False
 

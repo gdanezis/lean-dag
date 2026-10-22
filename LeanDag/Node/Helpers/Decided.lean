@@ -207,9 +207,9 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
       split_ifs <;> rfl
     · exact ⟨Appends.refl s, hL⟩
   | timer r => exact hset _ [] rfl rfl rfl
-  | fetchRequest peer ids =>
+  | fetchRequest peer r ids =>
     refine ⟨Appends.quiet rfl ?_, hL⟩
-    change commitsOf (answer s peer ids) = []
+    change commitsOf (answer cfg s peer r ids) = []
     unfold answer commitsOf
     rw [List.filterMap_map]
     exact List.filterMap_eq_nil_iff.mpr fun _ _ => rfl

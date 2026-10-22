@@ -12,7 +12,8 @@ adversary, assume:
   an honest node with an honest author's identity and its hash was
   broadcast by that author earlier in the trace;
 * **the hash** (`HashInjective`): no two different blocks the honest
-  nodes knew have one identifier.
+  nodes knew have one identifier;
+* **the fault bound**: at most `f` nodes are outside `H`.
 
 Then **every block an honest node broadcast, with its history, is in
 every honest node's store at the end** (`Converges`).
@@ -59,12 +60,12 @@ def HashInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator
   ∀ x ∈ knownIn cfg H tr, ∀ y ∈ knownIn cfg H tr, cfg.idOf x.2 = cfg.idOf y.2 → x.2 = y.2
 
 /-- **Every block an honest node broadcast, with its history, is in every
-honest node's store at the end.** -/
+honest node's store at the end**, when at most `f` nodes are outside `H`. -/
 def Converges : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload),
-    Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
+    Hᶜ.card ≤ cfg.f → Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
     ∀ i u, (tr[i]?.map Prod.fst) = some u → u ∈ H → ∀ e ∈ broadcasts (outputsAt cfg tr i),
       ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).store.blk e.1, ∀ v ∈ H,
         y ∈ (stateBefore cfg tr tr.length v).store.ids

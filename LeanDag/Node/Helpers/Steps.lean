@@ -187,7 +187,7 @@ theorem step_deliver {s : State Validator BlockId Payload} {id : BlockId}
     let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun x => (x, id) }
     Node.step cfg s (.deliver id b) =
       ((Node.settle cfg s₂).1,
-        (if miss.isEmpty then [] else [.fetch b.creator miss]) ++ (Node.settle cfg s₂).2) := by
+        (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss]) ++ (Node.settle cfg s₂).2) := by
   have h' : id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ id ∉ s.store.ids ∧
       id ∉ s.pending.map Prod.fst := h
   simp only [Node.step]
@@ -257,7 +257,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
           ((id, b) :: s.pending)).1 hy)
     · rw [step_deliver_not hc]; exact hy
   | timer r => exact hset { s with fired := insert r s.fired } rfl hp hy
-  | fetchRequest peer ids => exact hy
+  | fetchRequest peer r ids => exact hy
 
 /-- **A block becomes pending only by being delivered**, and only when the
 node acts on the delivery; a request is recorded only on account of such
@@ -306,7 +306,7 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
   | timer r =>
     have := settle_sub (cfg := cfg) { s with fired := insert r s.fired }
     exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
-  | fetchRequest peer ids => exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
+  | fetchRequest peer r ids => exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
 
 omit [Fintype Validator] in
 /-- **What building persists it stores.** -/
@@ -444,9 +444,9 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
       split <;> rfl
     · rw [step_deliver_not hc]; simp [persists]
   | timer r => exact settle_persist { s with fired := insert r s.fired }
-  | fetchRequest peer ids =>
+  | fetchRequest peer r ids =>
     intro e he
-    change e ∈ persists (answer s peer ids) at he
+    change e ∈ persists (answer cfg s peer r ids) at he
     unfold answer persists at he
     rw [List.filterMap_map] at he
     simp at he
@@ -492,7 +492,7 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady cfg s)
     · rw [step_deliver hc]; exact noReady_settle _
     · rw [step_deliver_not hc]; exact h
   | timer r => exact noReady_settle _
-  | fetchRequest peer ids => exact h
+  | fetchRequest peer r ids => exact h
 
 /-- **A delivery the node acts on keeps a fitting block it delivers**
 pending or stored. -/

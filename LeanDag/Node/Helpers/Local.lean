@@ -576,7 +576,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
   | timer r =>
     simp only [Node.step]
     exact ((hi.mono hsub).of_eq (s' := { s with fired := insert r s.fired }) rfl rfl rfl).settle
-  | fetchRequest peer ids =>
+  | fetchRequest peer r ids =>
     simp only [Node.step]
     refine hnil _ fun o ho => ?_
     obtain ⟨j, -, rfl⟩ := List.mem_map.mp ho

@@ -33,7 +33,7 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
     · rw [step_deliver hA]; exact Or.inr ⟨_, rfl⟩
     · rw [step_deliver_not hA]; exact Or.inl rfl
   | timer r => exact Or.inr ⟨_, rfl⟩
-  | fetchRequest p ids => exact Or.inl rfl
+  | fetchRequest p r ids => exact Or.inl rfl
 
 /-! ## What only rises -/
 
@@ -112,7 +112,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
       exact ⟨le_rfl, fun h => h, le_rfl⟩
     · rw [step_deliver_not hA]; exact Rises.refl s
   | timer r => exact hset { s with fired := insert r s.fired } ⟨le_rfl, id, le_rfl⟩ rfl
-  | fetchRequest p ids => exact Rises.refl s
+  | fetchRequest p r ids => exact Rises.refl s
 
 /-! ## Along a trace -/
 

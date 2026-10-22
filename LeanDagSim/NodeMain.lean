@@ -10,12 +10,12 @@ output:
 
 * inputs: `{"start":{}}`, `{"timer":r}`,
   `{"deliver":{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}}`, and
-  `{"fetchRequest":{"peer":v,"ids":[…]}}` (peer `v` asks for the blocks
-  `ids` and their histories);
+  `{"fetchRequest":{"peer":v,"round":r,"ids":[…]}}` (peer `v`, at round
+  `r`, asks for the blocks `ids` and their histories);
 * outputs: `{"persist":block}`, `{"broadcast":block}`,
   `{"setTimer":{"round":r,"after":t}}`, `{"commit":{"slot":k,"block":i}}`
-  (`null` for a skip), `{"fetch":{"peer":v,"ids":[…]}}` (ask peer `v` for
-  the blocks and their histories), and `{"send":{"peer":v,"block":block}}`
+  (`null` for a skip), `{"fetch":{"peer":v,"round":r,"ids":[…]}}` (ask
+  peer `v` for the blocks and their histories, from round `r`), and `{"send":{"peer":v,"block":block}}`
   (answer one).
 
 A delivered block's identifier, if given, must be its hash
@@ -43,7 +43,7 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
   | .setTimer r t => Json.mkObj [("setTimer", Json.mkObj [("round", r), ("after", t)])]
   | .commit k d => Json.mkObj [("commit", Json.mkObj [("slot", k),
       ("block", match d with | some i => (i : Json) | none => Json.null)])]
-  | .fetch peer ids => Json.mkObj [("fetch", Json.mkObj [("peer", peer.val),
+  | .fetch peer r ids => Json.mkObj [("fetch", Json.mkObj [("peer", peer.val), ("round", r),
       ("ids", Json.arr (ids.map fun i => (i : Json)).toArray)])]
   | .send peer id b => Json.mkObj [("send", Json.mkObj [("peer", peer.val),
       ("block", blockJson id b)])]
@@ -67,8 +67,9 @@ def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ
   if let .ok r := natField j "timer" then return .timer r
   if let .ok f := j.getObjVal? "fetchRequest" then
     let peer ← natField f "peer"
+    let r ← natField f "round"
     let ids ← ((← f.getObjVal? "ids").getArr?) >>= fun a => a.toList.mapM Json.getNat?
-    if h : peer < n then return .fetchRequest ⟨peer, h⟩ ids
+    if h : peer < n then return .fetchRequest ⟨peer, h⟩ r ids
     else throw s!"peer {peer} out of range"
   let d ← j.getObjVal? "deliver"
   let _ := hn

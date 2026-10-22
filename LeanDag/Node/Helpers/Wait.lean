@@ -188,7 +188,7 @@ theorem step_calm (s : State Validator BlockId Payload) (inp : Input Validator B
     rcases Finset.mem_insert.mp (calm_quiesce (cfg := cfg) _ _ h) with rfl | h
     · exact Or.inr rfl
     · exact Or.inl h
-  | fetchRequest peer ids => exact fun r h => Or.inl h
+  | fetchRequest peer r ids => exact fun r h => Or.inl h
 
 /-- **Each round whose timer node `v` counts as fired before event `i`**
 had its timer input at an earlier event. -/
@@ -322,7 +322,7 @@ theorem OwnTop.step {s : State Validator BlockId Payload} (h : OwnTop cfg s)
     · exact OwnTop.settle (h.grow (Grows.flush _ _ _) rfl rfl)
     · exact h
   | timer t => exact OwnTop.settle (h.grow (Grows.refl _) rfl rfl)
-  | fetchRequest peer ids => exact h
+  | fetchRequest peer r ids => exact h
 
 /-- **Node `v`'s own block at its top is stored before every event.** -/
 theorem ownTop_before {tr : Trace Validator BlockId Payload} {v : Validator} :
@@ -547,7 +547,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
         (pend := (id, b) :: s.pending) (fun j hj => hi.known j hj) hi.valid hpend
       have hinv₂ : Inv cfg s₂ K B₀ :=
         ⟨hfl.1, hfl.2.1, hi.rounds, hi.good, hi.sub, hfl.2.2⟩
-      refine hset s₂ (if miss.isEmpty then [] else [.fetch b.creator miss])
+      refine hset s₂ (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss])
         ⟨hc₁, hh.grow hg₁ rfl, hown.grow hg₁ rfl rfl, hg₁, fun r hr => Or.inl hr, ⟨B₀, hinv₂⟩⟩
         (fun e he => hpend e (flush_pending_sub _ _ _ e he)) ?_ (step_deliver hA)
       intro e he
@@ -561,9 +561,9 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     rcases Finset.mem_insert.mp ht with rfl | ht
     · exact Or.inr rfl
     · exact Or.inl ht
-  | fetchRequest peer ids =>
+  | fetchRequest peer r ids =>
     intro e he
-    change e ∈ persists (answer s peer ids) at he
+    change e ∈ persists (answer cfg s peer r ids) at he
     unfold answer persists at he
     rw [List.filterMap_map] at he
     simp at he
@@ -672,9 +672,9 @@ theorem timersBuilt_step (s : State Validator BlockId Payload)
       split at h <;> simp at h
     · exact TimersBuilt.of_none fun _ _ h => by simp at h
   | timer t => exact hset _
-  | fetchRequest peer ids =>
-    refine TimersBuilt.of_none fun r a h => ?_
-    change Output.setTimer r a ∈ answer s peer ids at h
+  | fetchRequest peer r ids =>
+    refine TimersBuilt.of_none fun t a h => ?_
+    change Output.setTimer t a ∈ answer cfg s peer r ids at h
     unfold answer at h
     simp at h
 

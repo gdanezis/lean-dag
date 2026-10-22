@@ -35,11 +35,11 @@ def attackLine (sc : Scenario) : String :=
   let r := simulate sc
   s!"{r.tops} {r.commits.map (·.length)} {r.agree} {r.prefixes} {r.valid} {r.dropped}"
 
-/-- info: "[(some 63), (some 63), (some 63)] [61, 61, 62] true true true 0" -/
+/-- info: "[(some 61), (some 62), (some 61)] [59, 60, 60] true true true 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks])
 
-/-- info: "[(some 64), (some 64), (some 64)] [62, 62, 62] true true true 192" -/
+/-- info: "[(some 65), (some 65), (some 65)] [63, 63, 63] true true true 195" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor])
 
@@ -53,7 +53,7 @@ def attackLine (sc : Scenario) : String :=
 
 /-! ## Without the signature checks -/
 
-/-- info: "[(some 2), (some 35), (some 35)] [0, 33, 33] true true true 0" -/
+/-- info: "[(some 2), (some 37), (some 38)] [0, 32, 36] true true true 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 

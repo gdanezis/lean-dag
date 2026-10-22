@@ -166,14 +166,14 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         · exact hp e he
       have hc₁ : IsCut U s₁.store := IsCut.flush hg _ _ hc hpend
       exact hset { s₁ with requested := s₁.requested ++ miss.map fun x => (x, id) }
-        (if miss.isEmpty then [] else [.fetch b.creator miss])
+        (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss])
         hc₁ (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by split <;> rfl) (step_deliver hA)
     · exact hsame (step_deliver_not hA)
   | timer r =>
     exact hset { s with fired := Insert.insert r s.fired } [] hc hp rfl rfl
-  | fetchRequest peer ids =>
-    rw [show Node.step cfg s (.fetchRequest peer ids) = (s, answer s peer ids) from rfl]
+  | fetchRequest peer r ids =>
+    rw [show Node.step cfg s (.fetchRequest peer r ids) = (s, answer cfg s peer r ids) from rfl]
     refine ⟨hc, fun e he => ?_⟩
     unfold answer commitsOf at he
     rw [List.filterMap_map] at he
