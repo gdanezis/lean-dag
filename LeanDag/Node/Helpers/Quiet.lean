@@ -3,7 +3,7 @@ import LeanDag.Node.Helpers.Steps
 /-!
 # A settle stops because nothing changes
 
-`docs/validator.md` §13.9. Within a settle the node's blocks of other
+`docs/validator.md` §3.5. Within a settle the node's blocks of other
 authors lie at or below a round the state fixes, so it builds only up to
 the round above it, and its next undecided slot is bounded too. Each pass
 but the last raises its top or its next undecided slot, or leaves fewer

@@ -4,7 +4,7 @@ import LeanDag.Node.Live.Statement
 /-!
 # A reliable node's builds along a trace
 
-`docs/validator.md` §13.2, step 11.1b. Over a trace on which honest
+`docs/validator.md` §5.3. Over a trace on which honest
 stores are cuts of the run's record (`cut_before`), each block a reliable
 node builds at an event comes from one build, at a state whose store is a
 cut of the record grown from the store before the event (`build_witness`).

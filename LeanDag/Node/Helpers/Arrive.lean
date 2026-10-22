@@ -4,7 +4,7 @@ import LeanDag.Node.Helpers.Live
 /-!
 # A reliable node's rounds and timers, and the arrival of blocks
 
-`docs/validator.md` §13.2. Along a trace, a node's state changes only at
+`docs/validator.md` §5.2. Along a trace, a node's state changes only at
 its own events (`before_succ_cases`). Each of its rounds up to its top was
 built at one of its events, with the round's timer (`built_by`,
 `timer_of_persist`), and a round's timer, once fired, stays fired

@@ -5293,7 +5293,8 @@ G10's base and its soundness were stated on the core's universe, with
 lifted lemma at `card_compl_correct_le`, and `exists_correct_of_card` is
 `exists_mem_of_card` there. Completeness (`correct_mem_base`,
 `accepted_mem_base`) stays on the core's universe, at `Base U F.f t G`,
-until the delivery model is lifted (`docs/validator.md` §8).
+until the delivery model is lifted (`docs/validator.md` §8 on branch
+`scheme-validator`).
 
 ### 11.55 Self-reference for the reliable authors, from a round on
 
@@ -5317,7 +5318,8 @@ nodes only from the round their chains are unbroken (§11 there).
 
 The delivery model, the novelty budgets, the liveness half of rate
 limiting and linear storage, and the bootstrap results that read them
-were stated on the core's universe. `docs/validator.md` §8 lifts them to
+were stated on the core's universe. `docs/validator.md` §8 on branch
+`scheme-validator` lifts them to
 block records, in sub-steps. A validity predicate now says whether it
 carries the self-parent clause (`Validity.SelfParent`, with
 `BlockRecord.self_parent`), as it says whether it is quorate or
@@ -5373,7 +5375,7 @@ are stated over them (`WaveFacts.reaches`, `WaveFacts.votes`,
 `WaveFacts.certifies`). A reactive execution past GST supplies them
 (`SchemeReactive.toWaveFacts`), from its drift and production, and so
 can a run whose holdings shrink below a horizon, which meets no
-`PaceCore`: the validator of `docs/validator.md` §13. The scheme's
+`PaceCore`: the validator of `docs/validator.md` §5. The scheme's
 statements are unchanged.
 
 `ReactiveCore.deadline`, the ceiling on a validator's wait, is deleted,
@@ -5388,7 +5390,7 @@ the leader block, and an indirect verdict inherits the bound from the
 anchor it reads. At the scheme's rule a direct skip holds a blamer at
 the slot's vote round once `0 < skipThreshold`. The validator reads this
 to keep a recovering node's horizon at rounds the run's record reaches
-(`docs/validator.md` §3.6).
+(`docs/validator.md` §3.6 on branch `scheme-validator`).
 
 ### 11.5 Next steps, in order
 

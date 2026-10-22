@@ -2,7 +2,7 @@ import LeanDag.Node.Helpers.Reliable
 /-!
 # Holding a history
 
-`docs/validator.md` §13.2. A block stored or pending stays stored or
+`docs/validator.md` §5.2. A block stored or pending stays stored or
 pending (`Stays`) from then on, since a pending block is accepted once
 it is ready. A delivery of a block by its hash and of another author
 leaves it stored or pending. A store with no pending block ready then

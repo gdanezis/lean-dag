@@ -5,7 +5,7 @@ import Mathlib.Algebra.BigOperators.Intervals
 /-!
 # The reliable nodes produce rounds and decide — statement
 
-`docs/validator.md` §13, V11. Over a timed trace (`time i` the time of
+`docs/validator.md` §5, V11. Over a timed trace (`time i` the time of
 event `i`) of honest nodes `H` and an adversary, a reliable set `T ⊆ H`
 of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
 

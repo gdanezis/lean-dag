@@ -2,7 +2,7 @@ import LeanDag.Node.Model.Trace
 /-!
 # Timed traces
 
-`docs/validator.md` §13.1. A timed trace is a trace with a time for each
+`docs/validator.md` §5.1. A timed trace is a trace with a time for each
 event (`time i` for event `i`). Read off it, for a node `v` and a time
 `t`: the events at or before `t` (`eventsBy`), `v`'s state after them
 (`stateAt`), the blocks it holds (`holdsAt`), its top round (`topAt`), and the decisions it output by then (`decisionsBy`);

@@ -4,7 +4,7 @@ import LeanDag.Scheme.Helpers.Reactive
 /-!
 # The reliable nodes produce rounds and decide — proof
 
-`docs/validator.md` §13.2–13.3.
+`docs/validator.md` §5.2–5.4.
 
 **Production.** Past GST, let every reliable node be at round `n` or
 above at `s`, and `v` reliable. `v` built its round-`n` block by `s`,

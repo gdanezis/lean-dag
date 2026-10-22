@@ -2,7 +2,7 @@ import LeanDagSim.Net
 /-!
 # Attacks, simulated
 
-`docs/validator.md` §6, step 7.4. At the Mysticeti row with `n = 4` and
+`docs/validator.md` §6, item 4. At the Mysticeti row with `n = 4` and
 `f = 1`, node `3` runs the honest program and mounts one attack. Each
 line reads: the round each honest node reached, the slots it decided,
 whether two nodes that decide a slot decide it alike, whether any two

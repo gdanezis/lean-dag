@@ -2,7 +2,7 @@ import LeanDag.Node.Helpers.Drift
 /-!
 # The wave facts of a node's timed run
 
-`docs/validator.md` §13.3. Past a synchronisation point, with drift
+`docs/validator.md` §5.3. Past a synchronisation point, with drift
 within `A = Δ + Δₛ` (`drift`) and `2A < timeout`, a reliable node that
 waited the timeout at a round holds every reliable block of it before it
 builds the next (`waited_holds`): its own stays stored, and another's

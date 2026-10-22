@@ -2,7 +2,7 @@ import LeanDag.Node.Helpers.Reliable
 /-!
 # The shape of a reliable node's step
 
-`docs/validator.md` §13.2. A pass builds every round from the top it
+`docs/validator.md` §5.2. A pass builds every round from the top it
 starts at up to the top it reaches, at rounds above that top, each with
 its timer, and keeps the fired timers (`PassShape`). A step either changes
 nothing and outputs no block and no timer, or settles a state with the

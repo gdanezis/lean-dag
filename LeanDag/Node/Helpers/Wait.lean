@@ -3,7 +3,7 @@ import LeanDag.Node.Helpers.Commits
 /-!
 # The build rule's two exits
 
-`docs/validator.md` §13.2, step 11.1b. A block the node builds above
+`docs/validator.md` §5.3. A block the node builds above
 round `r` either passes the reach and certificate tests on the store, or
 was built after the round's timer fired, on `refsFor`'s references
 (`tryBuild_exit`). Those reference every block of the round below that is

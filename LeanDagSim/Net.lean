@@ -139,7 +139,7 @@ structure Agent (n : ℕ) where
   twin : ℕ
 
 /-- **Timing measurements** of the honest nodes, for the liveness
-conditions (`docs/validator.md` §12): when each built each round,
+conditions (`docs/validator.md` §5): when each built each round,
 decided each slot and accepted each block of another honest author, the
 honest blocks delivered and kept neither in the store nor pending, and
 the fetches asked for. -/

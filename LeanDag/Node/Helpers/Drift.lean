@@ -2,7 +2,7 @@ import LeanDag.Node.Helpers.Arrive
 /-!
 # Copied references and the drift of build times
 
-`docs/validator.md` §13.3. A node at round `n` holding a peer's round-`n + 1`
+`docs/validator.md` §5.3. A node at round `n` holding a peer's round-`n + 1`
 block `z` passes the reach and certificate tests with the references `z`
 lends it when the peer's references passed them (`ready_transfer`,
 `refsAt_ready`, `lent_buildable`): the leader blocks the tests read are

@@ -2,7 +2,7 @@ import LeanDag.Node.Model.Trace
 /-!
 # Fetching makes the honest nodes converge — statement
 
-`docs/validator.md` §3.7. Over a trace of honest nodes `H` and an
+`docs/validator.md` §3.4. Over a trace of honest nodes `H` and an
 adversary, assume:
 
 * **delivery** (`Delivered`): every message an honest node sends another
