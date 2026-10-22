@@ -558,12 +558,74 @@ genesis block.
 
 ## 9. Next: crash recovery
 
-A crashed node restarts from what it persisted. Without garbage
-collection a node can persist everything a step leaves (its store, top,
-own block, next slot and decisions), so a restart can resume the state
-the crash left, with its timers lost. The claims to state are: resuming
-gives the state the crash left; V1 and V3 hold across restarts; and
-liveness holds for reliable nodes that crash and recover before GST. The
-first design question is whether a restarted node may skip rounds,
-resuming at the highest round its store holds a quorum at, which breaks
-its chain (§8), or must build each round it missed.
+A crashed node restarts from what it persisted. The decisions taken:
+a restarted node builds every round it missed, so its chain (§8) is
+unbroken; it rebroadcasts its top block on restart; liveness is to hold
+for crashes before GST and for crashes and recoveries after it; the
+state that only grows (`requested`, `pending`, `fired`) stays unbounded.
+
+### 9.1 The model
+
+* **What a crash loses.** The environment persists the state a step
+  leaves, atomically, before any of the step's outputs take effect. A
+  crash loses the timers set and not fired, the outputs of the last step
+  not yet taken effect, and the messages that arrive while the node is
+  down. The persisted state is the whole `State`; keeping `pending`
+  makes convergence (V3′) hold across restarts without a later block to
+  fetch the lost ones on account of.
+* **Restart** (`Input.restart`). The state is unchanged; the outputs
+  broadcast the node's block at its top round and set that round's
+  timer. A block is persisted before it is broadcast, so a restarted
+  node never builds a second block at a round it built: no
+  self-equivocation. A node that restarts before it started does
+  nothing, and `start` still applies.
+* **Retransmission.** Crashes lose messages, and lost blocks are not
+  sent again. With `f` nodes Byzantine and silent and one crashed, the
+  reliable nodes can stall: at `n = 4`, `f = 1`, `q = 3`, node `C`
+  crashes at round `t` before receiving `A`'s and `B`'s round-`t`
+  blocks; `A` and `B` build round `t + 1` on `C`'s round-`t` block and
+  wait for `C`'s round-`t + 1` block; `C` restarts at round `t` without
+  a quorum, and waits for theirs. The proposed rule: when the timer of
+  the node's top round fires and the node does not build, it
+  rebroadcasts its top block and sets the timer again. A node that
+  receives the block then synchronises its history (§5.1) and builds the
+  rounds it missed.
+* **Catch-up.** A restarted node needs no bootstrap, since no block is
+  collected: it receives blocks, synchronises their histories, and
+  builds each missed round on the lent references (§3.2), or on its
+  timer where they fail the tests.
+
+### 9.2 The claims
+
+* **V1** across restarts: `Sends` becomes "each block the node
+  broadcasts it persisted at or before, and each block it persists it
+  broadcasts"; the others stand, so the node's blocks lie at strictly
+  increasing rounds and no decision is output twice. An output lost in
+  a crash is the environment's to recover: a lost commit is in the
+  persisted `decided`.
+* **V2** is about one decision step and stands.
+* **V3 and V3′** over traces with restarts: the restart case of each
+  step invariant. V3′ keeps its premise that every message sent reaches
+  its receiver, so it covers crashes that lose timers but not messages.
+* **V11 with crashes.** A timed trace gives each node's down
+  intervals; delivery, timers and synchronisation are assumed only of a
+  receiver that stays up. Let `T` be at least `q` and at least
+  `n − f − c` honest nodes, each up from a time `t_r ≥ gst` on, and
+  restarted after its last crash. Then the conclusions of V11 hold with
+  GST replaced by `t_r + X`, for `X` a timeout of the top round plus
+  `Δ + Δₛ` plus the timeouts of the rounds the slowest node rebuilds:
+  production resumes, and decisions follow from a synchronisation point
+  as in §5.2. Crashes before GST are the case `t_r = gst`. The proof
+  replaces the arrival lemmas (`block_arrives`, `round_arrives`,
+  `Helpers/Arrive.lean`), through which every use of delivery and
+  synchronisation passes, by their versions after `t_r + X`.
+
+### 9.3 Phases
+
+1. The model: `restart`, retransmission, the executables' input;
+   V1, V3 and V3′ re-proved.
+2. The timed model with down intervals, the arrival lemmas after
+   recovery, and V11 with crashes.
+3. The simulator: crash and recovery scenarios, among them the stall
+   above and its restart, and the catch-up time measured.
+4. This document: §3 and §4 for the restart, §5 for crashes.
