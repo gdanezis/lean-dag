@@ -184,7 +184,7 @@ theorem one_le_lag (hadm : cfg.Admissible) (hvo : cfg.p.voteOffset ≤ cfg.lag) 
 /-- **No reliable node stalls twice by `t₁`**, if none does by
 `gst + 3Δ + Δₛ`: a quorum holds a reliable node, the timeouts exceed
 `2(3Δ + Δₛ)`, and the reliable nodes never restart. -/
-theorem no_stall (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel)
+theorem no_stall (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
     (hvo : cfg.p.voteOffset ≤ cfg.lag) (hto : ∀ r, 2 * (3 * Δ + Δₛ) < cfg.timeout r)
     (htime : Converge.TimelyAuthentic cfg H tr)
@@ -236,7 +236,7 @@ theorem no_stall (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boun
   have hτ := hto r
   have ht₁' : time j - 1 ≤ t₁ := by omega
   -- the stalled node is above `r` by `max (time j') gst + 3Δ + Δₛ`, before `j`
-  have hb := stall_builds (tr := tr.take j) (time := time) hq hl hσ hadm hf hid
+  have hb := stall_builds (tr := tr.take j) (time := time) hq hσ hadm hf hid
     (timelyAuthentic_take htime j) (timelyCerts_take hcert j) (hashInjective_take hinj j)
     (chainInjective_take hchain j) hTH hsteady hqT (one_le_lag hadm hvo) (timeMono_take hmono j)
     (deliveredWithin_take hdel ht₁' hN) (syncedWithin_take hsync hinj ht₁' hN) hv

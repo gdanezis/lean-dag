@@ -331,11 +331,11 @@ theorem settle_stays {x : State Validator BlockId Payload} (hA : AgreesWith g x.
 /-! ## Staying through a step -/
 
 /-- **A step keeps a block staying**, of a node not recovering, other than
-a restart, without rate limiting, the store agreeing with `g` and the
+a restart, the store agreeing with `g` and the
 pending, built and delivered blocks too;
 and a delivery of the block, by its hash and of another author, leaves
 it staying. -/
-theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
+theorem step_stays {s : State Validator BlockId Payload}
     {inp : Input Validator BlockId Payload} (hs : s.recovering = false) (hr : inp ≠ .restart)
     (hA : AgreesWith g s.store) (hP : ∀ e ∈ s.pending, Agrees g e)
     (hD : ∀ id b, inp = .deliver id b → id = cfg.idOf b → Agrees g (id, b))
@@ -364,14 +364,13 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
     · rw [hi] at hinp
       injection hinp with h₁ h₂
       subst h₁ h₂
-      have hk : kept cfg s y.1 y.2 = true := by simp [kept, hl]
       by_cases hb : s.store.base ≤ y.2.round
       · by_cases hin : y.1 ∈ s.store.ids
         · exact Or.inl hin
         · by_cases hp : y.1 ∈ s.pending.map Prod.fst
           · obtain ⟨e, he, he1⟩ := List.mem_map.mp hp
             exact Or.inr (Or.inl (huniq e he he1 ▸ he))
-          · exact absurd ⟨hid, hcr, hb, hin, hp, hk⟩ hna
+          · exact absurd ⟨hid, hcr, hb, hin, hp⟩ hna
       · exact Or.inr (Or.inr (not_le.mp hb))
   cases inp with
   | start =>
@@ -385,7 +384,7 @@ theorem step_stays (hl : cfg.limit = none) {s : State Validator BlockId Payload}
         let gid := cfg.idOf cfg.genesis
         let s₀ : State Validator BlockId Payload :=
           { { s with store := st, top := some 0, own := some gid } with
-            owner := slotted cfg [(gid, cfg.genesis)] ++ s.owner, recovering := false }
+            recovering := false }
         refine hset s₀ (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)])
           (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl) ?_ hP le_rfl ?_
         · exact hA.insert (hnew := h₂.1) (hab := h₂.2.1) (hrefs := fun _ => Finset.empty_subset _)
@@ -534,7 +533,7 @@ theorem outputs_agree (hinj : Converge.HashInjective cfg H tr) {i : ℕ} {u : Va
 /-- **A step keeps a known block staying**, at an honest node that never
 restarts, without rate limiting; and a delivery of it, of another
 author, leaves it staying. -/
-theorem stays_succ (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H tr)
+theorem stays_succ (hinj : Converge.HashInjective cfg H tr)
     {v : Validator} (hv : v ∈ H) (hnr : Steady cfg tr v)
     {y : BlockId × Block Validator BlockId Payload} (hyk : y ∈ Converge.knownIn cfg H tr)
     {a : ℕ}
@@ -556,7 +555,7 @@ theorem stays_succ (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H 
       subst hw
       have hio := outputs_agree (cfg := cfg) hinj hv (i := a) (by rw [he]; rfl)
       rw [outputsAt_eq he] at hio
-      refine step_stays (cfg := cfg.at w) hl (fired_before (cfg := cfg) hnr a).1
+      refine step_stays (cfg := cfg.at w) (fired_before (cfg := cfg) hnr a).1
         ((hnr a _ he).1) (agreesWith_before hinj hv a)
         (pending_agree_before hinj hv a) (fun id b hib hid => agrees_known hinj (Or.inl
           ⟨a, w, inp, he, hv, by rw [hib]; simp [delivered, hid]⟩)) hio
@@ -575,7 +574,7 @@ theorem stays_succ (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H 
 
 /-- **A known block stays from then on**, at an honest node that never
 restarts, without rate limiting, once it stays. -/
-theorem stays_from (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H tr)
+theorem stays_from (hinj : Converge.HashInjective cfg H tr)
     {v : Validator} (hv : v ∈ H) (hnr : Steady cfg tr v)
     {y : BlockId × Block Validator BlockId Payload} (hyk : y ∈ Converge.knownIn cfg H tr)
     {a : ℕ}
@@ -585,7 +584,7 @@ theorem stays_from (hl : cfg.limit = none) (hinj : Converge.HashInjective cfg H 
   intro b hab
   induction b, hab using Nat.le_induction with
   | base => exact hst
-  | succ b hab ih => exact stays_succ hl hinj hv hnr hyk (Or.inl ih)
+  | succ b hab ih => exact stays_succ hinj hv hnr hyk (Or.inl ih)
 
 end Node
 

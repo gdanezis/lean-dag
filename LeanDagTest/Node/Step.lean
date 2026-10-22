@@ -42,7 +42,6 @@ def cfg (me : Fin 4) : Config (Fin 4) ℕ Unit where
   idOf := idOf
   lag := 2
   ahead := 8
-  limit := none
   payload := fun _ => ()
   extend := fun h e => (hash (h, e.1, e.2)).toNat
   root := 0

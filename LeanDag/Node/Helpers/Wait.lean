@@ -822,7 +822,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
         let gid := cfg.idOf cfg.genesis
         let s₀ : State Validator BlockId Payload :=
           { { s with store := st, top := some 0, own := some gid } with
-            owner := slotted cfg [(gid, cfg.genesis)] ++ s.owner, recovering := false }
+            recovering := false }
         have hh₀ : Held cfg s₀ := by
           refine ⟨fun t ht => Or.inl ⟨_, Finset.mem_insert_self _ _, ?_⟩, hh.horizon,
             fun ht => absurd ht (by simp [s₀]), fun t _ => ?_, hh.junk⟩
@@ -895,7 +895,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
               change (flush cfg _ _ _).1.base = 0; rw [hfl.2.2.1]; exact hb'⟩
           · exact Or.inr ⟨t, ht, by
               change (flush cfg _ _ _).1.base ≤ t; rw [hfl.2.2.1]; exact hb', hB⟩,
-          hi.good, hi.sub, hfl.2.2.2, hi.exposes_twin hx hA.2.2.2.1 hA.2.2.2.2.1⟩
+          hi.good, hi.sub, hfl.2.2.2, hi.exposes_twin hx hA.2.2.2.1 hA.2.2.2.2⟩
       refine hset { s₂ with asked := askedAfter (cfg := cfg) s b }
         (evidence s id b ++
           (if miss.isEmpty then [] else [.fetch b.creator s.store.base (miss.map Prod.fst)]) ++

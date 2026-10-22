@@ -75,10 +75,6 @@ structure Config where
   /-- The heights above its next undecided slot at which a node keeps
   every proposal of each signer. -/
   ahead : ℕ
-  /-- **Rate limiting**, if the node rate-limits: the novelty budget `τ`
-  of a candidate slot and the window `W` above the node's top
-  (`docs/validator.md` §3.9). -/
-  limit : Option (ℕ × ℕ)
   /-- The payload of the node's round-`r` block. -/
   payload : ℕ → Payload
   /-- The environment's hash of a chain's head extended by a decision. -/
@@ -140,8 +136,8 @@ structure Cert where
 /-- **What a node persists** across a crash (`docs/validator.md` §5.1):
 its accepted blocks, from the horizon up, the horizon, the next
 undecided slot, its top round and its own block there, its decisions,
-the height it last proposed and the chain's head there, its certificate,
-and the slots its blocks were charged to. -/
+the height it last proposed and the chain's head there, and its
+certificate. -/
 structure Persisted where
   /-- The accepted blocks from the horizon up, the node's own among them. -/
   window : List (BlockId × Block Validator BlockId Payload)
@@ -161,8 +157,6 @@ structure Persisted where
   chain : BlockId
   /-- The highest certificate the node holds. -/
   cert : Option (Cert Validator BlockId)
-  /-- The candidate slot each block was charged to. -/
-  owner : List (BlockId × (Validator × ℕ))
 
 /-- **What a node consumes.** -/
 inductive Input where

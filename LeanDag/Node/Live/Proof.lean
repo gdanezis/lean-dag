@@ -66,7 +66,7 @@ variable [LinearOrder BlockId]
 timeout after all were at `n` or above. -/
 theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
     {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
-    (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hl : cfg.limit = none)
+    (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card)
     (hto : ∀ r, 2 * (3 * Δ + Δₛ) < cfg.timeout r) (hq : 2 ≤ cfg.q)
     (hid : Function.Injective cfg.idOf)
@@ -130,7 +130,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
     by_cases hwv : w = v
     · subst hwv
       exact ⟨j₀, hj₀i, hj₀r, hj₀c⟩
-    · exact round_arrives (τ := s + cfg.timeout n) hl hq hσ hadm hf htime hcert hinj hchain
+    · exact round_arrives (τ := s + cfg.timeout n) hq hσ hadm hf htime hcert hinj hchain
         hTH hnr hmono hdel hsync hcmp hw hv hwv hgs (hstarted w hw) (hall w hw) (by omega) hst₁ hZt
         le_rfl hbn
   have hcard : cfg.q ≤ (authorsIn (stateBefore cfg tr E v).store.toRecord
@@ -151,7 +151,7 @@ rule's eligibility, `A` later every reliable node has output the
 decisions of every slot below them. -/
 theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
     {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
-    (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hl : cfg.limit = none)
+    (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card)
     (hcT : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) (hq : 2 ≤ cfg.q)
     (hid : Function.Injective cfg.idOf) (hvo : cfg.p.voteOffset ≤ cfg.lag)
@@ -181,7 +181,7 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     rcases h : (stateAt cfg tr time w t).top with _ | r
     · rw [h] at this; simp at this; omega
     · rfl
-  have hDs := drift hq hl hσ hadm hf hid htime hcert hinj hchain hTH hnr hmono hdel htimer
+  have hDs := drift hq hσ hadm hf hid htime hcert hinj hchain hTH hnr hmono hdel htimer
     hsync hstart hvo hcmp hgs (fun w hw' => ⟨(hall w hw').2.1, (hall w hw').2.2⟩) hst htop ht₁ hX
   have hD : ∀ n, n₀ ≤ n → n ≤ N → ∀ u ∈ T, ∀ w ∈ T, gst ≤ builtAt cfg tr time u n ∧
       builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (3 * Δ + Δₛ) :=
@@ -199,7 +199,7 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
         obtain ⟨h₁, h₂, h₃⟩ := built_mem hσ hadm hf htime hcert hinj hchain (hTH hw') hnw hi he
         exact ⟨e.1, h₁, h₃, h₂.trans her⟩
       arrives := fun w hw' u hu n hn₀ hnN c hc hcu hcr hwait =>
-        waited_holds hq hl hσ hadm hf htime hcert hinj hchain hTH hnr hmono hdel hsync hcmp
+        waited_holds hq hσ hadm hf htime hcert hinj hchain hTH hnr hmono hdel hsync hcmp
           hD hst htop ht₁ hto hu hw' hn₀ hnN hc hcu hcr hwait
       reach_or_wait := fun w hw' _ _ hlk L hL _ hm _ hc hcc hcr =>
         reach_or_wait_node time hσ hadm hf htime hcert hinj hchain hmono hTH htimer hw'
@@ -254,7 +254,7 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
         change Z.store.base ≤ cfg.per * (Z.lo / cfg.m) at h₁
         change cfg.per * (Z.lo / cfg.m) ≤ cfg.slots.slotRound j at h₂
         omega
-      exact ((hiff C).mpr (reliable_held hq hl hσ hadm hf htime hcert hinj hchain hTH hnr
+      exact ((hiff C).mpr (reliable_held hq hσ hadm hf htime hcert hinj hchain hTH hnr
         hmono hdel hsync hcmp hD hst htop ht₁ hCT hv (r := (U.block C).round) (by omega) (by omega)
         hC
         rfl rfl hCb)).1
@@ -393,7 +393,7 @@ end Prefix
 the events by `t₁`, and by GST (`no_stall`); there the claims hold, and
 they read nothing later. -/
 theorem holds : Statement := by
-  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hl hf hTH hqT hcT
+  intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hf hTH hqT hcT
     hqR hq hid hvo hto htime hcert hinj hchain hnr hns hmono hdel htimer hsync hstart
   set N := eventsBy tr time (max t₁ gst)
   have hN₂ : ∀ i < tr.length, time i ≤ max t₁ gst → i < N := fun i hi h =>
@@ -407,16 +407,16 @@ theorem holds : Statement := by
       subst hr
       by_cases hg : time i ≤ gst + (3 * Δ + Δₛ)
       · exact hns i v r hv he hg
-      · exact no_stall hq hl hσ hadm hf hid hvo hto htime hcert hinj hchain hTH hqR hnr hns
+      · exact no_stall hq hσ hadm hf hid hvo hto htime hcert hinj hchain hTH hqR hnr hns
           hmono hdel htimer hsync i v r hv he (by omega)
   have hw : 2 ≤ cfg.p.waveLength := by
     rcases hadm.1 with ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ <;> omega
-  have hp := produces hσ hadm hl hf hTH hqT hto hq hid (timelyAuthentic_take htime N)
+  have hp := produces hσ hadm hf hTH hqT hto hq hid (timelyAuthentic_take htime N)
     (timelyCerts_take hcert N) (hashInjective_take hinj N) (chainInjective_take hchain N) hsteady
     (timeMono_take hmono N) (deliveredWithin_take hdel le_rfl hN)
     (timersOnTime_take htimer le_rfl hN) (syncedWithin_take hsync hinj le_rfl hN)
     (startedBy_take hstart fun i hi h => hN₂ i hi (by omega))
-  have hd := decides hσ hadm hl hf hTH hqT hcT hq hid hvo hto (timelyAuthentic_take htime N)
+  have hd := decides hσ hadm hf hTH hqT hcT hq hid hvo hto (timelyAuthentic_take htime N)
     (timelyCerts_take hcert N) (hashInjective_take hinj N) (chainInjective_take hchain N) hsteady
     (timeMono_take hmono N) (deliveredWithin_take hdel le_rfl hN)
     (timersOnTime_take htimer le_rfl hN) (syncedWithin_take hsync hinj le_rfl hN)

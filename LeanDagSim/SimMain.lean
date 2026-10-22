@@ -12,9 +12,8 @@ and `slow-delay` (the least delay to or from a slow node) and `slow-until`
 (the tick it stops being slow), `leaders`
 (`node,…`: the leader schedule, cycled), `attacks`
 (`fake-base`, `split-base`, `fake-cert`, `conflict-proposals`,
-`invalid-blocks`, `forged-author`, `flood`, `junk-at-cut`, `twin-split`, `hide`,
-comma-separated), `limit`
-(`ρ,W`: the rate limiter's quota and window) and `verify`
+`invalid-blocks`, `forged-author`, `junk-at-cut`, `twin-split`, `hide`,
+comma-separated) and `verify`
 (`true` or `false`: whether the network checks signatures).
 -/
 
@@ -74,9 +73,6 @@ def parseArgs : List String → Scenario → Except String Scenario
       | "--slow-delay" => pure { sc with slowDelay := ← nat }
       | "--slow-until" => pure { sc with slowUntil := some (← nat) }
       | "--leaders" => pure { sc with leaders := parseNats v }
-      | "--limit" => match parseNats v with
-        | [ρ, W] => pure { sc with limit := some (ρ, W) }
-        | _ => throw s!"--limit wants ρ,W: {v}"
       | "--attacks" => do
         let as ← (v.splitOn ",").mapM fun a => match a with
           | "fake-base" => pure Attack.fakeBase
@@ -86,7 +82,6 @@ def parseArgs : List String → Scenario → Except String Scenario
           | "conflict-proposals" => pure Attack.conflictProposals
           | "invalid-blocks" => pure Attack.invalidBlocks
           | "forged-author" => pure Attack.forgedAuthor
-          | "flood" => pure Attack.flood
           | "junk-at-cut" => pure Attack.junkAtCut
           | "twin-split" => pure Attack.twinSplit
           | _ => throw s!"unknown attack {a}"

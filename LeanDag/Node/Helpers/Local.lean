@@ -1206,7 +1206,6 @@ theorem Inv.step {s : State Validator BlockId Payload}
         let st := s.store.insert e.1 e.2 h₂.1 h₂.2.1 (fun _ => Finset.empty_subset _)
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
         let s₀ := { s with store := st, top := some 0, own := some e.1 }
-        let s₀ := { s₀ with owner := slotted cfg [e] ++ s.owner }
         have hi₀ : Inv cfg { s₀ with recovering := false } (K ∪ {x | x ∈ [e]}) (B ++ [e]) := by
           refine ⟨known_insert (hnew := h₂.1) (hab := h₂.2.1)
               (hrefs := fun _ => Finset.empty_subset _)
@@ -1234,8 +1233,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
         · exact (out_built (cfg := cfg) [e]).append ho
         · refine (by simpa using hi' : Inv cfg _ (K ∪ {x | x ∈ [e]} ∪ {x | x ∈ bs}) (B ++ e :: bs)).mono
             fun x hx => ?_
-          simp only [Set.mem_union, Set.mem_setOf_eq, List.mem_cons,
-            List.nil_append] at hx ⊢
+          simp only [Set.mem_union, Set.mem_setOf_eq, List.mem_cons] at hx ⊢
           tauto
       · exact hnil' 
     · exact hnil'
@@ -1253,12 +1251,11 @@ theorem Inv.step {s : State Validator BlockId Payload}
           · exact hsub (hi.pend x hx))
       dsimp only at hfl ⊢
       generalize flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending) = fl at hfl ⊢
-      generalize charged cfg s id b ++ s.owner = ow
-      have hX₀ := (hi.mono hsub).exposes_twin hmem hc.2.2.2.1 hc.2.2.2.2.1
+      have hX₀ := (hi.mono hsub).exposes_twin hmem hc.2.2.2.1 hc.2.2.2.2
       generalize (if twinned s b = true then insert b.creator s.exposed else s.exposed) = X at hX₀
-      generalize missing { s with store := fl.1, pending := fl.2, owner := ow, exposed := X } id b = miss
+      generalize missing { s with store := fl.1, pending := fl.2, exposed := X } id b = miss
       let req := s.requested ++ miss.map fun x => (x.1, id, x.2)
-      let s₀ := { s with store := fl.1, pending := fl.2, owner := ow, exposed := X }
+      let s₀ := { s with store := fl.1, pending := fl.2, exposed := X }
       have hX : ∀ a ∈ X, Exposes K' a := hX₀
       have hi₀ : ∀ a, Inv cfg { s₀ with requested := req, asked := a } K' B :=
         fun _ => ⟨hfl.1, hfl.2.1, by

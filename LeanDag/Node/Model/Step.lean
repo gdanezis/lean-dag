@@ -101,15 +101,6 @@ input `i` in the state `s`: the new state and the outputs.
   follows (`horizonAt`), taking the blocks there without their
   references.
 
-* **Rate limiting** (`chargeTo`, `wanted`, `docs/validator.md` §3.9),
-  when the configuration sets a quota `ρ` and a window `W`: a delivered
-  block within the window is kept, charged to its slot, its author and
-  round, while that slot is charged fewer than `ρ` blocks, if it is the
-  slot's first, it is missing from the history of a pending block of an
-  author the node does not hold exposed, or it twins a block the node
-  holds of an author it does not hold exposed. The node's own blocks are
-  charged to their own slots (`slotted`).
-
 Definitions only.
 -/
 
@@ -156,9 +147,6 @@ structure State where
   props : List (Validator × ℕ × BlockId)
   /-- The highest certificate the node holds. -/
   cert : Option (Cert Validator BlockId)
-  /-- The candidate slot, an author and a round, each kept block was
-  charged to. -/
-  owner : List (BlockId × (Validator × ℕ))
   /-- The authors the node was given two blocks of at one round. -/
   exposed : Finset Validator
   /-- The round at whose timer the node last found itself stalled. -/
@@ -171,7 +159,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
-  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false, [], 0, [], 0, cfg.root, [], none, [],
+  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], false, [], 0, [], 0, cfg.root, [], none,
     ∅, none⟩
 
 /-- **Accept a block**: below the horizon it is dropped; at the horizon it
@@ -288,15 +276,6 @@ def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId)
       decide ((s.blk c).creator ≠ cfg.me)).map (lent cfg s · o X) |>.find? fun R =>
         ready R && buildable cfg s r R).getD own
 
-/-- The candidate slot a block fills: its author and its round. -/
-def slotOf (b : Block Validator BlockId Payload) : Validator × ℕ := (b.creator, b.round)
-
-/-- **The charges of blocks taken without a delivery**, the node's own and
-its bootstrap base, with rate limiting: each to its own slot. -/
-def slotted (l : List (BlockId × Block Validator BlockId Payload)) :
-    List (BlockId × (Validator × ℕ)) :=
-  if cfg.limit.isSome then l.map fun e => (e.1, slotOf e.2) else []
-
 /-- **The authors of blocks the node holds or has pending above round
 `t + 1`.** -/
 def aheadOf (s : State Validator BlockId Payload) (t : ℕ) : Finset Validator :=
@@ -329,7 +308,7 @@ def tryBuild (s : State Validator BlockId Payload) :
         let st := s.store.insert id b h.1 h.2.1 h.2.2.1 h.2.2.2.1
         let s₁ := { s with store := st, top := some (r + 1), own := some id }
         let s₂ := { s₁ with recovering := s.recovering && !caughtUp cfg s (r + 1) }
-        some ({ s₂ with owner := slotted cfg [(id, b)] ++ s.owner },
+        some (s₂,
           [.persist id b, .broadcast id b, .setTimer (r + 1) (cfg.timeout (r + 1))])
       else none
     else none
@@ -357,10 +336,6 @@ def Store.window (st : Store Validator BlockId Payload) :
     List (BlockId × Block Validator BlockId Payload) :=
   (st.ids.sort (· ≤ ·)).map fun j => (j, st.map.getD j st.junk)
 
-/-- The blocks charged to a slot. -/
-def State.charge (s : State Validator BlockId Payload) (sl : Validator × ℕ) : ℕ :=
-  (s.owner.filter fun e => decide (e.2 = sl)).length
-
 /-- The references of a pending block, each with the round below it. -/
 def expand (s : State Validator BlockId Payload) (j : BlockId) : List (BlockId × ℕ) :=
   match s.pending.find? (fun e => decide (e.1 = j)) with
@@ -380,14 +355,6 @@ def walkLevel (s : State Validator BlockId Payload)
   let split := front.partition fun x => decide (x.1 ∈ s.pending.map Prod.fst)
   (split.1.flatMap fun x => expand s x.1, w.2.1 ++ front.map Prod.fst, w.2.2 ++ split.2)
 
-/-- **Whether a block is wanted**: it is missing from the history, walked
-through the pending blocks, of a pending block whose author the node does
-not hold exposed. -/
-def wanted (s : State Validator BlockId Payload) (id : BlockId) : Bool :=
-  let roots := (s.pending.filter fun e => decide (e.2.creator ∉ s.exposed)).map
-    fun e => (e.1, e.2.round)
-  (((walkLevel s)^[s.pending.length + 2] (roots, [], [])).2.2.map Prod.fst).contains id
-
 /-- **A twin of a delivered block** the node holds: a stored or pending
 block of the block's author at its round, with its content. -/
 def twinOf (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) :
@@ -402,27 +369,6 @@ another block of the block's author at its round. -/
 def twinned (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) : Bool :=
   (twinOf s b).isSome
 
-/-- **The slot a delivery is charged to** (`docs/validator.md` §3.9), when
-the node rate-limits with a quota `ρ` and a window `W`: the block's own,
-its author and round, if it lies at most `W` above the node's top and the
-slot is charged fewer than `ρ` blocks, and it is the slot's first, is
-wanted, or twins a block the node holds of an author it does not hold
-exposed. -/
-def chargeTo (ρ W : ℕ) (s : State Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : Option (Validator × ℕ) :=
-  if b.round ≤ s.top.getD 0 + W ∧ s.charge (slotOf b) < ρ ∧
-      (s.charge (slotOf b) = 0 ∨ wanted s id = true ∨
-        twinned s b = true ∧ b.creator ∉ s.exposed) then some (slotOf b)
-  else none
-
-/-- **Whether a delivery is kept**: always, without rate limiting; with
-it, if it is charged to its slot. -/
-def kept (s : State Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : Bool :=
-  match cfg.limit with
-  | none => true
-  | some (ρ, W) => (chargeTo ρ W s id b).isSome
-
 /-- **The evidence a delivery relays**: both blocks, when it first shows
 its author equivocating. -/
 def evidence (s : State Validator BlockId Payload) (id : BlockId)
@@ -430,13 +376,6 @@ def evidence (s : State Validator BlockId Payload) (id : BlockId)
   match twinOf s b with
   | some e => if b.creator ∈ s.exposed then [] else [.relay id b, .relay e.1 e.2]
   | none => []
-
-/-- The charge a kept delivery adds: its slot, with rate limiting. -/
-def charged (s : State Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : List (BlockId × (Validator × ℕ)) :=
-  match cfg.limit with
-  | none => []
-  | some (ρ, W) => ((chargeTo ρ W s id b).map fun sl => (id, sl)).toList
 
 /-- The height of the node's certificate, `0` without one. -/
 def State.certHeight (s : State Validator BlockId Payload) : ℕ :=
@@ -575,7 +514,7 @@ def collect (s : State Validator BlockId Payload) :
       let pend := s.pending.filter fun e => G ≤ e.2.round
       let req := s.requested.filter fun x => G ≤ x.2.2
       let s₁ := { s with store := st, pending := pend, fired := s.fired.filter (G ≤ ·) }
-      ({ s₁ with requested := req, owner := s.owner.filter fun e => G ≤ e.2.2 },
+      ({ s₁ with requested := req },
         .prune G :: s.cert.toList.map .announce)
     else (s, [])
   | none => (s, [])
@@ -669,8 +608,7 @@ def settle (s : State Validator BlockId Payload) :
 undecided slot, its top round and its own block there, its decisions,
 the height it last proposed and the head there, and its certificate. -/
 def State.persisted (s : State Validator BlockId Payload) : Persisted Validator BlockId Payload :=
-  ⟨s.store.window, s.store.base, s.lo, s.top, s.own, s.decided, s.lastProposed, s.chain, s.cert,
-    s.owner⟩
+  ⟨s.store.window, s.store.base, s.lo, s.top, s.own, s.decided, s.lastProposed, s.chain, s.cert⟩
 
 /-- **The state after a crash and restart**: the store, the next slot,
 the top, the decisions and the certificate kept; nothing pending, asked
@@ -698,7 +636,7 @@ def resume (ps : Persisted Validator BlockId Payload) : Option (State Validator 
     let st : Store Validator BlockId Payload :=
       ⟨map, ids, cfg.genesis, ps.horizon, h.1, h.2.1, h.2.2⟩
     some ⟨st, [], ps.top, ps.own, (ps.top.map fun t => {t}).getD ∅, ps.lo, [], true, [], 0,
-      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, ps.owner, ∅, none⟩
+      ps.decided, ps.lastProposed, ps.chain, [], ps.cert, ∅, none⟩
   else none
 
 /-- **Serve certified decisions** from slot `lo` up: the node's
@@ -795,17 +733,16 @@ def step (s : State Validator BlockId Payload) :
         let st := s.store.insert id b h.1 h.2.1 (fun _ => Finset.empty_subset _)
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
         let s₀ := { s with store := st, top := some 0, own := some id }
-        let s₀ := { s₀ with owner := slotted cfg [(id, b)] ++ s.owner }
         let r := settle cfg { s₀ with recovering := false }
         (r.1, [.persist id b, .broadcast id b, .setTimer 0 (cfg.timeout 0)] ++ r.2)
       else (s, [])
     else (s, [])
   | .deliver id b =>
     if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
-        id ∉ s.pending.map Prod.fst ∧ kept cfg s id b then
+        id ∉ s.pending.map Prod.fst then
       let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
       let X := if twinned s b then insert b.creator s.exposed else s.exposed
-      let s₀ := { s with store := fl.1, pending := fl.2, owner := charged cfg s id b ++ s.owner }
+      let s₀ := { s with store := fl.1, pending := fl.2 }
       let s₁ := { s₀ with exposed := X }
       let miss := missing s₁ id b
       let req := s₁.requested ++ miss.map fun x => (x.1, id, x.2)

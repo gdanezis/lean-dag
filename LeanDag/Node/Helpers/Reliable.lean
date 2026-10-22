@@ -140,7 +140,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
         let gid := cfg.idOf cfg.genesis
         let s₀ : State Validator BlockId Payload :=
           { { s with store := st, top := some 0, own := some gid } with
-            owner := slotted cfg [(gid, cfg.genesis)] ++ s.owner, recovering := false }
+            recovering := false }
         refine hset s₀ ⟨by rw [h₁.1]; simp [s₀], fun _ => rfl, le_rfl, le_rfl⟩
           (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
       · rw [show (Node.step cfg s .start).1 = s by simp only [Node.step, dif_neg h₂, if_pos h₁]]

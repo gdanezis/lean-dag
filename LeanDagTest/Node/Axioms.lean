@@ -5,8 +5,6 @@ import LeanDag.Node.Runs.Proof
 import LeanDag.Node.Converge.Proof
 import LeanDag.Node.Restart.Proof
 import LeanDag.Node.Boot.Proof
-import LeanDag.Node.Storage.Proof
-import LeanDag.Node.Defer.Proof
 import LeanDag.Common.Record.Fill
 import LeanDag.GC.AttestedBase
 /-!
@@ -73,18 +71,6 @@ info: 'LeanDag.Node.Boot.holds' depends on axioms: [propext, Classical.choice, Q
 -/
 #guard_msgs in
 #print axioms LeanDag.Node.Boot.holds
-
-/--
-info: 'LeanDag.Node.Storage.holds' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
-#print axioms LeanDag.Node.Storage.holds
-
-/--
-info: 'LeanDag.Node.Defer.holds' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
-#print axioms LeanDag.Node.Defer.holds
 
 /--
 info: 'LeanDag.exists_honest_attester_of_mem_base' depends on axioms: [propext, Classical.choice, Quot.sound]

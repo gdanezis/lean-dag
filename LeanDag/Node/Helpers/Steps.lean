@@ -235,20 +235,20 @@ theorem settle_sub (s : State Validator BlockId Payload) :
 
 variable (cfg) in
 /-- **A delivery the node acts on**: identified by its hash, not the
-node's own, at or above the horizon, new, and kept by the rate limiter. -/
+node's own, at or above the horizon, and new. -/
 def Admits (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : Prop :=
   id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
-    id ∉ s.pending.map Prod.fst ∧ kept cfg s id b
+    id ∉ s.pending.map Prod.fst
 
 /-- The state a delivery the node acts on settles: the store and pending
-blocks after flushing, the slot the delivery is charged to, and its
-author exposed if the node holds a twin of the block. -/
+blocks after flushing, and its author exposed if the node holds a twin
+of the block. -/
 def afterFlush (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : State Validator BlockId Payload :=
   let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
   let X := if twinned s b then insert b.creator s.exposed else s.exposed
-  let s₀ := { s with store := fl.1, pending := fl.2, owner := charged cfg s id b ++ s.owner }
+  let s₀ := { s with store := fl.1, pending := fl.2 }
   { s₀ with exposed := X }
 
 /-- The round a delivery leaves the node's last request for the bases on. -/
@@ -277,7 +277,7 @@ theorem step_deliver {s : State Validator BlockId Payload} {id : BlockId}
           askOut (cfg := cfg) s b ++
           (Node.settle cfg { s₂ with asked := askedAfter (cfg := cfg) s b }).2) := by
   have h' : id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧ id ∉ s.store.ids ∧
-      id ∉ s.pending.map Prod.fst ∧ kept cfg s id b := h
+      id ∉ s.pending.map Prod.fst  := h
   simp only [Node.step]
   rw [if_pos h']
   rfl
@@ -291,7 +291,7 @@ theorem step_deliver_not {s : State Validator BlockId Payload} {id : BlockId}
       ∃ a, Node.step cfg s (.deliver id b) =
         ({ s with asked := a, recovering := true }, [.requestBase]) := by
   have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-      id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := h
+      id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ) := h
   simp only [Node.step, if_neg h']
   split
   · exact Or.inr ⟨_, rfl⟩
@@ -302,7 +302,7 @@ theorem step_deliver_not_of {s : State Validator BlockId Payload} {id : BlockId}
     {b : Block Validator BlockId Payload} (h : ¬ Admits cfg s id b)
     (hs : s.recovering = false) : Node.step cfg s (.deliver id b) = (s, []) := by
   have h' : ¬ (id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ s.store.base ≤ b.round ∧
-      id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ∧ kept cfg s id b) := h
+      id ∉ s.store.ids ∧ id ∉ s.pending.map Prod.fst ) := h
   simp only [Node.step, if_neg h', hs]
   simp
 
@@ -416,7 +416,6 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
       · let st := s.store.insert _ _ h₂.1 h₂.2.1 (fun _ => Finset.empty_subset _)
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
         let s₀ := { s with store := st, top := some 0, own := some (cfg.idOf cfg.genesis) }
-        let s₀ := { s₀ with owner := slotted cfg [(cfg.idOf cfg.genesis, cfg.genesis)] ++ s.owner }
         refine hset { s₀ with recovering := false }
           ?_ (show Grows s.store st from Grows.insert _) rfl hp ?_
         · simp only [Node.step, dif_pos h₂, if_pos h₁]
@@ -496,7 +495,6 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
         let s₀ : State Validator BlockId Payload :=
           { s with store := st, top := some 0, own := some (cfg.idOf cfg.genesis) }
-        let s₀ := { s₀ with owner := slotted cfg [(cfg.idOf cfg.genesis, cfg.genesis)] ++ s.owner }
         have := settle_sub (cfg := cfg) { s₀ with recovering := false }
         exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
       · simp only [Node.step, dif_neg h₂, if_pos h₁]
@@ -726,7 +724,6 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
           (fun _ j hj => absurd hj (Finset.notMem_empty j))
         let s₁ : State Validator BlockId Payload :=
           { s with store := st, top := some 0, own := some (cfg.idOf cfg.genesis) }
-        let s₁ := { s₁ with owner := slotted cfg [(cfg.idOf cfg.genesis, cfg.genesis)] ++ s.owner }
         let s₀ : State Validator BlockId Payload := { s₁ with recovering := false }
         have he : Node.step cfg s .start =
             ((Node.settle cfg s₀).1, built cfg [(cfg.idOf cfg.genesis, cfg.genesis)] ++

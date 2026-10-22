@@ -176,7 +176,7 @@ def Progresses : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t₁ : ℕ),
-    cfg.σ = boundedSel → cfg.Admissible → cfg.limit = none → Hᶜ.card ≤ cfg.f → T ⊆ H →
+    cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f → T ⊆ H →
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card →
     Fintype.card Validator < cfg.q + T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → cfg.p.voteOffset ≤ cfg.lag →

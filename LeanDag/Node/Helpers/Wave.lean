@@ -73,7 +73,7 @@ theorem top_eq_between {v : Validator} (hnv : Steady cfg tr v)
   have := hmono i' k hi'k hkl
   omega
 
-variable {N n₀ t : ℕ} (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel)
+variable {N n₀ t : ℕ} (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
   (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
   (hcert : Boot.TimelyCerts cfg H tr)
   (hinj : Converge.HashInjective cfg H tr) (hchain : Boot.ChainInjective cfg H tr)
@@ -87,7 +87,7 @@ variable {N n₀ t : ℕ} (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.
     builtAt cfg tr time u n ≤ builtAt cfg tr time w n + (3 * Δ + Δₛ))
   (hst : ∀ v ∈ T, (stateAt cfg tr time v t).top.isSome)
   (hN : ∀ v ∈ T, N ≤ topAt cfg tr time v t) (ht₁ : t + (3 * Δ + Δₛ) ≤ t₁)
-include hq hl hσ hadm hf htime hcert hinj hchain hTH hnr hmono hdel hsync hcmp hD hst hN ht₁
+include hq hσ hadm hf htime hcert hinj hchain hTH hnr hmono hdel hsync hcmp hD hst hN ht₁
 
 /-- **A reliable node that waited the timeout holds the reliable blocks of
 the round**, before it builds the next, when `2A < timeout`. -/
@@ -141,7 +141,7 @@ theorem waited_holds (hto : ∀ r, 2 * (3 * Δ + Δₛ) < cfg.timeout r) {u v : 
     have := (grows_before (cfg := cfg) (tr := tr) v hτE).1
     change (stateBefore cfg tr (eventsBy tr time τ) v).store.base ≤ _
     omega
-  obtain ⟨hin, hinr, -, -⟩ := block_arrives hl hq hσ hadm hf htime hcert hinj hchain hTH
+  obtain ⟨hin, hinr, -, -⟩ := block_arrives hq hσ hadm hf htime hcert hinj hchain hTH
     hnr hmono hdel hsync hcmp hu hv huv hi he (s := time i) le_rfl (τ := τ)
     (by rw [max_eq_left (by omega)]; omega) (by omega) hZt (by omega) hZb
   have hinr' : ((stateBefore cfg tr (eventsBy tr time τ) v).store.blk e.1).round = e.2.round :=
@@ -178,7 +178,7 @@ theorem reliable_held {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) {r : ℕ} 
     change N ≤ (stateBefore cfg tr (eventsBy tr time (t + (3 * Δ + Δₛ))) v).top.getD 0 at this
     rw [ht'] at this
     exact this
-  exact (block_arrives hl hq hσ hadm hf htime hcert hinj hchain hTH hnr hmono hdel hsync
+  exact (block_arrives hq hσ hadm hf htime hcert hinj hchain hTH hnr hmono hdel hsync
     hcmp hu hv huv hi he (s := time i) le_rfl (τ := t + (3 * Δ + Δₛ))
     (by rw [max_eq_left hgi]; omega) ht₁ ht' (by omega) (by rw [her]; exact hb)).1
 

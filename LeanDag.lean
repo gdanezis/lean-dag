@@ -593,11 +593,6 @@ import LeanDag.Node.Helpers.Boot
 import LeanDag.Node.Helpers.Agree
 import LeanDag.Node.Boot.Statement
 import LeanDag.Node.Boot.Proof
-import LeanDag.Node.Helpers.Storage
-import LeanDag.Node.Storage.Statement
-import LeanDag.Node.Storage.Proof
-import LeanDag.Node.Defer.Statement
-import LeanDag.Node.Defer.Proof
 import LeanDag.Node.Live.Statement
 import LeanDag.Node.Live.Proof
 import LeanDag.Node.Helpers.Wait

@@ -4,8 +4,17 @@ This document plans the reduction of the validator (`LeanDag/Node`,
 `docs/validator.md`) to the consensus core of the scheme
 (`docs/scheme.md`), on branch `validator-core`. It lists what the core
 is, what it must prove, what is removed, and the order of removal.
-`docs/validator.md` describes the program as it stands until stage 6
-rewrites it.
+Until stage 6 rewrites it, `docs/validator.md` describes the program
+with every mechanism, as on branch `scheme-validator`.
+
+| Stage | State |
+|---|---|
+| 1. Rate limiting | removed |
+| 2. Restart, resume, bootstrap, stall | next |
+| 3. Checkpoints and certificates | |
+| 4. Exclusion | |
+| 5. Garbage collection | |
+| 6. Consolidation | |
 
 ## 1. Goal
 

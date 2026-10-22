@@ -21,12 +21,8 @@ namespace Converge
 
 
 theorem converges : Converges := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hlim hdel htime hinj hbase hnr hnj i u hu huH e he
+  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hbase hnr hnj i u hu huH e he
     y hy v hv
-  have hkept : ∀ (s : State Validator BlockId Payload) j b, kept (cfg.at v) s j b = true := by
-    intro s j b
-    unfold kept
-    rw [show (cfg.at v).limit = none from hlim]
   obtain ⟨inp, hi⟩ := event_of_map hu
   set L := tr.length
   -- `h`'s history, as the trace reads it, held by `u` from event `i + 1` on
@@ -76,7 +72,7 @@ theorem converges : Converges := by
           have hpk := knownBefore_sub hv t ((inv_before (cfg := cfg) t v).pend p hp)
           have hpe : p = (j, raw j) := Prod.ext hpj (content_eq hinj hpk (hrawk j hj) hpj)
           exact hlast j hj t (Or.inl (hpe ▸ hp)) (by omega)
-        · exact absurd ⟨hid, hcr, hb0, hs, hp, hkept _ _ _⟩ hc
+        · exact absurd ⟨hid, hcr, hb0, hs, hp⟩ hc
   -- `h` reaches `v`, and ends pending there
   obtain ⟨o, ho, hoe⟩ := List.mem_filterMap.mp he
   have hob : o = .broadcast e.1 e.2 := by

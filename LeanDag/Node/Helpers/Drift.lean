@@ -470,7 +470,7 @@ round `n` at most `A` after the peer, is above `n` then. It holds the
 peer's block, and with it a quorum of round `n`; if the peer built on the
 tests, `u` passes them with the references the block lends; if on the
 round's timer, `u`'s has fired too. -/
-theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel)
+theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr)
     (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
@@ -552,7 +552,7 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bo
   obtain ⟨hRq, hRd⟩ := refs_of_rowValid (cfg := cfg.at w) hnew (hrefs hxb) (by omega) hrv
   rw [hbR] at hRq hRd
   -- the peer's block arrives
-  obtain ⟨hzZ, hzr, hzc, hzb⟩ := block_arrives hl hq hσ hadm hf htime hcert hinj hchain hTH
+  obtain ⟨hzZ, hzr, hzc, hzb⟩ := block_arrives hq hσ hadm hf htime hcert hinj hchain hTH
     hnr hmono hdel hsync hcmp hw hu (Ne.symm huw) hi he (s := time i) le_rfl (τ := τ)
     (by rw [max_eq_left hgi]; omega) ht₁ hZt (le_of_eq hbr)
     (by change Z.store.base ≤ b.round; omega)
@@ -647,7 +647,7 @@ theorem builtAt_le_of_top {v : Validator} (hnv : Steady cfg tr v)
 built round `n₀` within `A` of each other, they build every round from
 `n₀` up to one they all reach by `t` within `A` of each other
 (`catches_up`). -/
-theorem drift (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel)
+theorem drift (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr)
     (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
@@ -696,7 +696,7 @@ theorem drift (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = bounded
     have hun := (top_of_built hnu hmono hbu heu (τ := time i + (3 * Δ + Δₛ))
       (by have := (ih u hu w hw).2; omega)).2
     rw [heur] at hun
-    have hup := catches_up hq hl hσ hadm hf hid htime hcert hinj hchain hTH hnr hmono hdel
+    have hup := catches_up hq hσ hadm hf hid htime hcert hinj hchain hTH hnr hmono hdel
       htimer hsync hvo hcmp hu hw huw hi he her (by omega) hus hun (ih u hu w hw).2 (by omega)
       fun v hv k hkl hk => hex v hv k hkl (by omega)
     have := builtAt_le_of_top hnu hmono hus hup

@@ -676,7 +676,7 @@ frontier rests on a reliable store above `r + 1`, so a reliable node
 built a block of round `r + 1` (`stall_witness`, `reliable_builder`); the
 block arrives by then with `q` authors of round `r` it lends, and the
 round's timer has fired. -/
-theorem stall_builds (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = boundedSel)
+theorem stall_builds (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr)
     (hcert : Boot.TimelyCerts cfg H tr) (hinj : Converge.HashInjective cfg H tr)
@@ -732,7 +732,7 @@ theorem stall_builds (hq : 2 ≤ cfg.q) (hl : cfg.limit = none) (hσ : cfg.σ = 
   -- it arrives, with its references
   have hbn : (stateBefore cfg tr E v).store.base ≤ r := by
     have := base_le_top_sub hnv E hZt; omega
-  obtain ⟨hxi, hxround, hxc, -⟩ := block_arrives hl hq hσ hadm hf htime hcert hinj hchain hTH hnr
+  obtain ⟨hxi, hxround, hxc, -⟩ := block_arrives hq hσ hadm hf htime hcert hinj hchain hTH hnr
     hmono hdel hsync hcmp hu hv huv hb hx htb hτ ht₁ (t := r) hZt (by omega)
     (by rw [hxr]; exact hbn.trans (Nat.le_succ r))
   set st := (stateBefore cfg tr E v).store

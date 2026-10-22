@@ -66,9 +66,6 @@ inductive Attack where
   | invalidBlocks
   /-- With each block, broadcast a block in the next node's name. -/
   | forgedAuthor
-  /-- With each block, broadcast twenty valid twins of it, each with its
-  own payload: what rate limiting bounds. -/
-  | flood
   /-- When the honest horizons differ, an invalid block at the highest,
   referencing one block below it, and above it a chain of valid blocks up
   to the highest honest top, each referencing the one below and `q − 1`
@@ -132,9 +129,6 @@ structure Scenario where
   head at its height, and a message's sender is the node that sent
   it. -/
   verify : Bool := true
-  /-- Rate limiting, if any: the quota `ρ` of a slot and the window `W`
-  above a node's top. -/
-  limit : Option (ℕ × ℕ) := none
   /-- Slow nodes: every message to or from one takes at least `slowDelay`
   ticks past GST, and before `slowUntil` if set. -/
   slow : List ℕ := []
@@ -179,7 +173,6 @@ def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) 
   idOf := idOf
   lag := sc.lag
   ahead := sc.ahead
-  limit := sc.limit
   payload := fun _ => twin
   extend := extend
   root := 0
@@ -192,7 +185,7 @@ structure Agent (n : ℕ) where
 /-- **Timing measurements** of the honest nodes, for the liveness
 conditions (`docs/validator.md` §12): when each built each round and
 decided each slot, the honest-authored blocks delivered below the
-receiver's horizon and those the rate limiter did not keep, the greatest
+receiver's horizon, the greatest
 lag of the certified frontier behind the decided one past GST, and the
 fetches asked for, and the certified decisions asked for and adopted. -/
 structure Stats where
@@ -527,11 +520,6 @@ def attacked (agents : Array (Agent n)) (src t : ℕ) (a : Agent n) (st : State 
           let b₃ : Block (Fin n) ℕ ℕ := { b with payload := 3 }
           [.broadcast (idOf b₁) b₁, .broadcast (idOf b₂) b₂, .broadcast (idOf b₃ + 1) b₃]
         else []
-      let twins : List (Output (Fin n) ℕ ℕ) := if has .flood then
-          (List.range 20).map fun k =>
-            let bk : Block (Fin n) ℕ ℕ := { b with payload := 100 + k }
-            .broadcast (idOf bk) bk
-        else []
       let forged : List (Output (Fin n) ℕ ℕ) := if has .forgedAuthor then
           let v : Fin n := ⟨(b.creator.val + 1) % n, Nat.mod_lt _ (Fin.pos b.creator)⟩
           let b₄ : Block (Fin n) ℕ ℕ := { b with creator := v, payload := 4 }
@@ -541,8 +529,8 @@ def attacked (agents : Array (Agent n)) (src t : ℕ) (a : Agent n) (st : State 
         ((List.finRange n).filterMap fun v =>
           if v = b.creator then none else
           let bv : Block (Fin n) ℕ ℕ := { b with payload := 200 + v.val }
-          some (.send v (idOf bv) bv)) ++ junk ++ twins ++ forged
-      else o :: junk ++ twins ++ forged
+          some (.send v (idOf bv) bv)) ++ junk ++ forged
+      else o :: junk ++ forged
     | o => [o]
   -- blocks kept from the slow nodes
   let out := if has .hide then out.flatMap fun (o : Output (Fin n) ℕ ℕ) => match o with

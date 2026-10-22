@@ -197,6 +197,46 @@ theorem flush_keeps : ∀ (fuel : ℕ) {st : Store Validator BlockId Payload}
         exact flush_keeps fuel hst₁ (fun e he => hp e (List.mem_filter.mp he).1) hf
           (List.mem_filter.mpr ⟨hy, by simpa using hr⟩)
 
+omit [Fintype Validator] in
+theorem accept_in {K : Set (BlockId × Block Validator BlockId Payload)}
+    {st : Store Validator BlockId Payload} (hK : ∀ j ∈ st.ids, (j, st.map.getD j st.junk) ∈ K)
+    {id : BlockId} {b : Block Validator BlockId Payload} (hb : (id, b) ∈ K) :
+    ∀ j ∈ (accept cfg st id b).ids,
+      (j, (accept cfg st id b).map.getD j (accept cfg st id b).junk) ∈ K := by
+  unfold accept
+  split
+  · exact known_insert hK hb
+  · exact hK
+
+omit [Fintype Validator] in
+theorem foldl_in {K : Set (BlockId × Block Validator BlockId Payload)} :
+    ∀ (l : List (BlockId × Block Validator BlockId Payload)) {st : Store Validator BlockId Payload},
+    (∀ j ∈ st.ids, (j, st.map.getD j st.junk) ∈ K) → (∀ e ∈ l, e ∈ K) →
+    let st' := l.foldl (fun s e => accept cfg s e.1 e.2) st
+    ∀ j ∈ st'.ids, (j, st'.map.getD j st'.junk) ∈ K
+  | [], _, hK, _ => hK
+  | e :: l, _, hK, hl =>
+    foldl_in l (accept_in hK (hl e List.mem_cons_self)) fun x hx => hl x (List.mem_cons_of_mem _ hx)
+
+omit [Fintype Validator] in
+/-- **A flush holds only what it was given**: the store's blocks and the
+pending ones. -/
+theorem flush_in {K : Set (BlockId × Block Validator BlockId Payload)} :
+    ∀ (fuel : ℕ) {st : Store Validator BlockId Payload}
+      {pend : List (BlockId × Block Validator BlockId Payload)},
+    (∀ j ∈ st.ids, (j, st.map.getD j st.junk) ∈ K) → (∀ e ∈ pend, e ∈ K) →
+    let r := flush cfg fuel st pend
+    (∀ j ∈ r.1.ids, (j, r.1.map.getD j r.1.junk) ∈ K) ∧ ∀ e ∈ r.2, e ∈ K
+  | 0, _, _, hK, hp => ⟨hK, hp⟩
+  | fuel + 1, st, pend, hK, hp => by
+    unfold flush
+    dsimp only
+    split
+    · exact ⟨hK, hp⟩
+    · rw [List.partition_eq_filter_filter]
+      exact flush_in fuel (foldl_in _ hK fun e he => hp e (List.mem_filter.mp he).1)
+        fun e he => hp e (List.mem_filter.mp he).1
+
 end Node
 
 end LeanDag

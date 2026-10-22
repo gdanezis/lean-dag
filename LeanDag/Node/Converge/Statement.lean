@@ -80,7 +80,7 @@ def Converges : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload),
-    cfg.limit = none → Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
+    Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
     (∀ v ∈ H, (stateBefore cfg tr tr.length v).store.base = 0) → NoRestart H tr → NoRejoin H tr →
     ∀ i u, (tr[i]?.map Prod.fst) = some u → u ∈ H → ∀ e ∈ broadcasts (outputsAt cfg tr i),
       ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).store.blk e.1, ∀ v ∈ H,

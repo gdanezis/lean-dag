@@ -115,7 +115,6 @@ def cfg (p : Scheme.Params) (per m : ℕ) (hper : 0 < per) (hm : 0 < m)
   idOf := idIn bs
   lag := 100
   ahead := 8
-  limit := none
   payload := fun _ => ()
   extend := fun h _ => h
   root := 0

@@ -323,9 +323,6 @@ section Arrival
 
 omit hnv
 
-variable (hl : cfg.limit = none)
-include hl
-
 variable {P : Validity Validator BlockId Payload} {H T : Finset Validator} {time : ℕ → ℕ}
   {gst Δₛ t₁ : ℕ}
 
@@ -406,8 +403,8 @@ theorem arrives (hinj : Converge.HashInjective cfg H tr)
     intro z hz hzb
     rcases hZmem z hz with rfl | ⟨r, hr, hzr, hzx⟩
     · rw [hry]
-      exact stays_from hl hinj (hTH hv) hnv hyK
-        (stays_succ hl hinj (hTH hv) hnv hyK (Or.inr ⟨hj, by rw [hbu]; exact huv⟩)) E (by omega)
+      exact stays_from hinj (hTH hv) hnv hyK
+        (stays_succ hinj (hTH hv) hnv hyK (Or.inr ⟨hj, by rw [hbu]; exact huv⟩)) E (by omega)
     · set xz : BlockId × Block Validator BlockId Payload := (z, x.store.map.getD z x.store.junk)
       have hxzK := hknX z hzx
       have hrz : raw z = xz.2 := hstK z hzx
@@ -429,7 +426,7 @@ theorem arrives (hinj : Converge.HashInjective cfg H tr)
           mem_persists_iff.mpr (mem_outputs_of_event hbρ (mem_persists_iff.mp he))
         have hex : e = xz := eq_of_persists v hep hxzp her
         rw [hex] at he
-        exact stays_from hl hinj (hTH hv) hnv hxzK (built_stays hnv hbρ he) E (by omega)
+        exact stays_from hinj (hTH hv) hnv hxzK (built_stays hnv hbρ he) E (by omega)
       · -- another's, synchronised after `v` received the author's block
         have hreach : ReachesFrom raw id' z := by
           refine ReachesFrom.of_mem_refs (by rw [hry]; exact hr) ?_
@@ -441,8 +438,8 @@ theorem arrives (hinj : Converge.HashInjective cfg H tr)
           hxzK hreach hhor hcr
         have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
         have hkE : k < E := (lt_eventsBy hmono hkl).mpr (htk.trans hτ)
-        exact stays_from hl hinj (hTH hv) hnv hxzK
-          (stays_succ hl hinj (hTH hv) hnv hxzK (Or.inr ⟨hk, hcr⟩)) E (by omega)
+        exact stays_from hinj (hTH hv) hnv hxzK
+          (stays_succ hinj (hTH hv) hnv hxzK (Or.inr ⟨hk, hcr⟩)) E (by omega)
   -- it is closed under references above `v`'s horizon
   have hcl : ∀ z ∈ Z, Zs.store.base < (raw z).round →
       ∀ r ∈ (raw z).refs, r ∈ Z ∧ (raw r).round + 1 = (raw z).round := by
@@ -507,8 +504,8 @@ theorem arrives_zero (hinj : Converge.HashInjective cfg H tr)
   have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj).1
   have hjE : j < eventsBy tr time τ := (lt_eventsBy hmono hjl).mpr hjτ
   have hyK : y ∈ Converge.knownIn cfg H tr := Or.inr ⟨i, u, hiu, hTH hu, hy⟩
-  have hst := stays_from hl hinj (hTH hv) hnv hyK
-    (stays_succ hl hinj (hTH hv) hnv hyK (Or.inr ⟨hj, by rw [hyu]; exact huv⟩))
+  have hst := stays_from hinj (hTH hv) hnv hyK
+    (stays_succ hinj (hTH hv) hnv hyK (Or.inr ⟨hj, by rw [hyu]; exact huv⟩))
     (eventsBy tr time τ) (by omega)
   change y.1 ∈ (stateBefore cfg tr (eventsBy tr time τ) v).store.ids
   change (stateBefore cfg tr (eventsBy tr time τ) v).store.base = 0 at hb0
@@ -526,13 +523,9 @@ section Rounds
 
 omit hnv
 
-variable (hl : cfg.limit = none)
-include hl
-
 variable {P : Validity Validator BlockId Payload} {H T : Finset Validator} {time : ℕ → ℕ}
   {gst Δ Δₛ t₁ : ℕ}
 
-omit hl in
 /-- **A reliable node's horizon reaches the one its peer built a block
 at**, once its certificate caught up with the one that raised the peer's
 horizon, and its top reaches the round the peer built on. -/
@@ -636,7 +629,7 @@ theorem block_arrives (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
   -- `v` holds the block
   have hin : e.1 ∈ (stateAt cfg tr time v τ).store.ids := by
     by_cases hn0 : e.2.round = 0
-    · exact arrives_zero hl hinj hTH hnr hmono hu hv huv hbu hep hgood hn0 hj
+    · exact arrives_zero hinj hTH hnr hmono hu hv huv hbu hep hgood hn0 hj
         (by omega) (by omega)
     · obtain ⟨x, y', o, hx, hxb, heo⟩ := build_witness hσ hadm hf htime hcert hinj hchain
         (hTH hu) hnu hb hep hn0
@@ -651,7 +644,7 @@ theorem block_arrives (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
         hxt htop (fun k hk htk => (lt_eventsBy hmono hk).mpr (by omega)) (by omega) hZt
         (by omega)
       have hZs : (stateAt cfg tr time v τ).top.isSome := by rw [hZt]; rfl
-      rcases arrives hl hinj htime hTH hnr hmono hsync hu hv huv hb hep hx hxb
+      rcases arrives hinj htime hTH hnr hmono hsync hu hv huv hb hep hx hxb
         (by rw [hout, persists_built, heo]; exact List.mem_singleton_self _) hbj hj (τ := τ)
         (by omega) (by omega) hbase hZs (by rw [hZt]; simp; omega) with h | h
       · exact h
@@ -693,7 +686,7 @@ theorem round_arrives (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
   obtain ⟨inp, hb⟩ := Converge.event_of_map hbu
   have hbl : b < tr.length := (List.getElem?_eq_some_iff.mp hb).1
   have htb : time b ≤ s := (lt_eventsBy hmono hbl).mp hbs
-  obtain ⟨h₁, h₂, h₃, -⟩ := block_arrives hl hq hσ hadm hf htime hcert hinj hchain hTH hnr
+  obtain ⟨h₁, h₂, h₃, -⟩ := block_arrives hq hσ hadm hf htime hcert hinj hchain hTH hnr
     hmono hdel hsync hcmp hu hv huv hb hep htb (τ := τ) (by omega) ht₁ hZt (by omega)
     (by omega)
   exact ⟨e.1, h₁, h₂.trans her, h₃⟩
