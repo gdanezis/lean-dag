@@ -110,7 +110,7 @@ def Scenario.honest (sc : Scenario) (v : ℕ) : Bool :=
 
 /-- A block's identifier: a hash of its content. -/
 def idOf {n : ℕ} (b : Block (Fin n) ℕ ℕ) : ℕ :=
-  (hash (b.round, b.creator.val, b.refs.sort (· ≤ ·), b.payload)).toNat
+  (hash (b.round, b.creator.val, b.refs.sort (· ≤ ·), b.payload)).toNat % 2 ^ 62
 
 /-- The configuration of node `me`, its payload `twin` at every round. -/
 def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) (me : Fin n)
@@ -193,10 +193,17 @@ structure Report where
   reach. -/
   final : List String := []
 
-/-- Put an input in flight, behind those arriving no later. -/
-def enqueue {α : Type} (e : ℕ × α) : List (ℕ × α) → List (ℕ × α)
-  | [] => [e]
-  | x :: xs => if e.1 < x.1 then e :: x :: xs else x :: enqueue e xs
+/-- The key of an input in flight: its arrival time, then the order in
+which it was sent, so inputs arriving together keep that order. -/
+def queueKey (t seq : ℕ) : ℕ := t * 2 ^ 32 + seq
+
+/-- The arrival time of a key. -/
+def keyTime (k : ℕ) : ℕ := k / 2 ^ 32
+
+/-- Put inputs in flight, numbered from `seq` on. -/
+def enqueueAll {α : Type} (q : Std.TreeMap ℕ α compare) (seq : ℕ) (es : List (ℕ × α)) :
+    Std.TreeMap ℕ α compare × ℕ :=
+  es.foldl (fun acc e => (acc.1.insert (queueKey e.1 acc.2) e.2, acc.2 + 1)) (q, seq)
 
 section Run
 
@@ -210,7 +217,10 @@ store, and the inputs processed. -/
 structure World (n : ℕ) where
   agents : Array (Agent n)
   states : Array (State (Fin n) ℕ ℕ)
-  queue : List (ℕ × ℕ × Input (Fin n) ℕ ℕ)
+  /-- The inputs in flight, by `queueKey`: the agent and the input. -/
+  queue : Std.TreeMap ℕ (ℕ × Input (Fin n) ℕ ℕ) compare
+  /-- The number of inputs put in flight so far. -/
+  seq : ℕ
   gen : StdGen
   decisions : Array (List (ℕ × Option ℕ))
   honest : List (ℕ × Block (Fin n) ℕ ℕ)
@@ -362,9 +372,11 @@ def attacked (out : List (Output (Fin n) ℕ ℕ)) : List (Output (Fin n) ℕ �
 def loop : ℕ → World n → World n
   | 0, w => w
   | fuel + 1, w =>
-    match w.queue with
-    | [] => w
-    | (t, d, i) :: rest =>
+    match w.queue.minEntry? with
+    | none => w
+    | some (key, (d, i)) =>
+      let t := keyTime key
+      let rest := w.queue.erase key
       if t > sc.horizon then { w with time := t } else
       match w.agents[d]?, w.states[d]? with
       | some a, some st =>
@@ -400,7 +412,9 @@ def loop : ℕ → World n → World n
             let ss := { ss with
               built := own.map (fun e => (a.node.val, e.2.round, t)) ++ ss.built
               decided := decs.map (fun e => (a.node.val, e.1, t)) ++ ss.decided
-              accepted := (((r.1.store.ids \ st.store.ids).sort (· ≤ ·)).filterMap fun j =>
+              accepted := ((((match i with | .deliver id _ => [id] | _ => []) ++
+                  st.pending.map Prod.fst).filter fun j =>
+                    r.1.store.map.contains j && !st.store.map.contains j).filterMap fun j =>
                   let b := r.1.store.blk j
                   if sc.honest b.creator.val ∧ b.creator ≠ a.node then some (a.node.val, b.round, t)
                   else none) ++ ss.accepted
@@ -409,22 +423,24 @@ def loop : ℕ → World n → World n
             match i with
             | .deliver id b =>
               if sc.honest b.creator.val ∧ b.creator ≠ a.node ∧ id = idOf b ∧
-                  id ∉ st.store.ids ∧ id ∉ st.pending.map Prod.fst ∧
-                  id ∉ r.1.store.ids ∧ id ∉ r.1.pending.map Prod.fst then
+                  !st.store.map.contains id ∧ id ∉ st.pending.map Prod.fst ∧
+                  !r.1.store.map.contains id ∧ id ∉ r.1.pending.map Prod.fst then
                 { ss with notKept := ss.notKept + 1 }
               else ss
             | _ => ss
           else ss
+        let (queue, seq) := enqueueAll rest w.seq msgs
         loop fuel
           { agents := w.agents
             states := w.states.set! d r.1
-            queue := msgs.foldl (fun q e => enqueue e q) rest
+            queue := queue
+            seq := seq
             gen := g
             decisions := w.decisions.modify d (decs.reverse ++ ·)
             honest := if isHonest then own ++ w.honest else w.honest
             blocks := (own ++ sent).foldl (fun m e => m.insert e.1 e.2) w.blocks
             seen := (own ++ seen).foldl (fun m e => m.insert e.1 e.2) w.seen
-            maxStore := if isHonest then max w.maxStore r.1.store.ids.card else w.maxStore
+            maxStore := if isHonest then max w.maxStore r.1.store.map.size else w.maxStore
             maxPending := if isHonest then max w.maxPending r.1.pending.length else w.maxPending
             events := w.events + 1
             time := t
@@ -460,7 +476,8 @@ def simulate (sc : Scenario) : Report :=
       let w0 : World n :=
         { agents := agents
           states := agents.map fun a => State.init (cfgFor sc p q hn a.node a.twin)
-          queue := (List.range agents.size).map fun d => (0, d, .start)
+          queue := (enqueueAll ∅ 0 ((List.range agents.size).map fun d => (0, d, .start))).1
+          seq := agents.size
           gen := mkStdGen sc.seed
           decisions := agents.map fun _ => []
           honest := []

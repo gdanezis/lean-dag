@@ -47,13 +47,13 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.twinSplit])
 
-/-- info: "[(some 24), (some 24), (some 24)] [24, 24, 24] true true true 6" -/
+/-- info: "[(some 23), (some 23), (some 23)] [22, 22, 22] true true true 6" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks, .forgedAuthor, .twinSplit])
 
 /-! ## Without the signature checks -/
 
-/-- info: "[(some 2), (some 37), (some 38)] [0, 32, 36] true true true 0" -/
+/-- info: "[(some 2), (some 39), (some 39)] [0, 37, 37] true true true 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 
