@@ -321,7 +321,7 @@ theorem base_le_top_sub (E : ℕ) {t : ℕ} (ht : (stateBefore cfg tr E v).top =
     have h₁ := (rises_before (cfg := cfg) hnv (show r + 1 ≤ E by omega)).1
     rw [ht] at h₁
     simp only [Option.getD_some] at h₁
-    have := min_le_right (cfg.per * (c.height / cfg.m)) ((stateBefore cfg tr (r + 1) v).top.getD 0)
+    have := min_le_right (cfg.per * ((c.height - 1) / cfg.m)) ((stateBefore cfg tr (r + 1) v).top.getD 0)
     omega
 
 variable {time : ℕ → ℕ} (hmono : Live.TimeMono tr time)

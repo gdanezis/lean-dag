@@ -202,9 +202,10 @@ decision round.
 ### 3.4 Garbage collection
 
 The horizon is `G = min(F, t) − Λ`, where `t` is the node's round and
-`F` the round of the first slot that is not both decided and certified:
-the slot round of the lesser of the next undecided slot and the height
-of the node's certificate (§3.8). For a recovering node it is
+`F` the round of the last slot that is both decided and certified:
+`F = slotRound(k − 1)`, with `k` the lesser of the next undecided slot
+and the height of the node's certificate (§3.8), and `F = 0` if
+`k = 0`. For a recovering node it is
 `G = min(F − Λ, t)` (`horizonAt`): its horizon follows the certified
 frontier, not its own round, since it may lag its peers by a round at
 which it needs a block they have dropped. This is the depth rule of
@@ -222,12 +223,15 @@ theirs (§3.8, §13.6).
 
 The decider then runs on the original schedule. Every slot it still
 decides lies at `F` or above, and its decision reads only rounds from
-the slot's round up, all above the horizon.
+the slot's round up, all above the horizon. The frontier is the last
+certified slot, not the first uncertified one, so that a peer's horizon
+lies at or below the bound a recovering node jumps to (§3.6) whatever
+`per` and `Λ` are; the window keeps up to `per` rounds more.
 
 ### 3.5 Resuming after a restart
 
-A restarted node is recovering until it resumes (`tryResume`). Let `t`
-be its top. It resumes at the highest round `R > t` at which its store
+A restarted node is recovering until it resumes (`tryResume`) or
+builds a block once it has caught up (`caughtUp`). Let `t` be its top. It resumes at the highest round `R > t` at which its store
 holds blocks of `q` authors it may reference (`quorumRound`,
 `usableAuthors`, §3.10), the quorum it builds on, if it has no block of its own at `t`,
 or if `R ≥ t + 2`; with its own block at `t` and `R = t + 1` it builds
@@ -235,6 +239,19 @@ or if `R ≥ t + 2`; with its own block at `t` and `R = t + 1` it builds
 its own there, the timer of round `R` counts as fired, and it builds
 `R + 1` by the rule of §3.2. Resuming sends nothing, and the next block
 is an ordinary one, valid at the row.
+
+A recovering node that builds round `r + 1` no longer recovers if it has
+caught up there: some peer offered it a horizon (§3.6), at most `f` of
+the horizons offered lie above `r + 1`, and at most `f` authors of the
+blocks it holds or has pending lie above `r + 2`. From there it builds
+round by round as any node does, and its horizon follows its own round
+again. A node that left recovery while a quorum lay two rounds above it
+could not skip there, and would build each round it missed, one timeout
+at a time, while its peers wait for it as a leader; blocks of `f + 1`
+authors above it show that it is behind, and its window and its peers'
+broadcasts arrive in parts, so the node waits for them. The bounds count
+`f`, so a Byzantine peer that offers a high horizon or sends blocks at
+high rounds keeps no node recovering.
 
 A node that is not recovering never resumes, and it recovers again only
 when it stalls (§3.6). The own blocks of a node that neither restarts
@@ -272,9 +289,10 @@ Let `t` be the node's top and `k` the lesser of its next undecided slot
 and its certificate's height. If `k > 0`, the node jumps to the highest
 offered horizon `G` with `t < G ≤ slotRound(k − 1)` (`jumpRound`,
 `tryResume`): its top moves to `G`, with no block of its own there, and
-the timer of round `G` counts as fired. It stays recovering, so it
-resumes once its store holds a quorum above its top (§3.5), and it
-builds the next round by the rule of §3.2, a block valid at the row.
+the timer of round `G` counts as fired. It builds the next round by the
+rule of §3.2, a block valid at the row, and stays recovering until it
+resumes at a quorum above its top or builds a block once it has caught
+up (§3.5).
 
 The jump stays at rounds the record reaches. Slot `k − 1` is decided, a
 decision is a verdict on a view of the record, and a verdict's slot
@@ -890,8 +908,8 @@ rejoins by bootstrap (§3.6).
    15 runs, and its decisions then disagree with its peers'. Blocks in an
    honest node's name stop that node building, for the same reason the
    attacker halts itself above, until its top round's timer finds it
-   stalled twice; it then recovers and rejoins by bootstrap, and ends
-   within a round of its peers, in all 15 runs. The honest blocks stay
+   stalled twice; it then recovers and rejoins, by a resume or a
+   bootstrap, and ends within a round of its peers, in all 15 runs. The honest blocks stay
    valid in all 15.
 
    The check that honest blocks are valid reads every block a node made
@@ -1931,9 +1949,10 @@ quota's design is open.
 
 A fuzzer over the simulator draws `n = 4` or `n = 7`, an attack, a
 Byzantine node or a crash, up to two honest restarts ending by tick 350,
-rate limiting, the lag, the delay and GST, and flags a run in which an
-honest node that stays up gains fewer than 20 rounds from tick 600 to
-tick 900, or in which agreement or prefix-comparability fails. No run
+rate limiting, the lag, `per`, the delay and GST, and flags a run in
+which an honest node that stays up gains fewer than 20 rounds from tick
+600 to tick 900, in which an honest node is still recovering at tick
+900, or in which agreement or prefix-comparability fails. No run
 broke agreement or prefix-comparability. The deadlocks it found, and
 what removed each:
 
@@ -1955,10 +1974,18 @@ what removed each:
 | D14 | rate limiting with `W = 2` and `Λ = 6`, after a restart | a node resumed, then fell behind beyond its window; it dropped every block above it and, no longer recovering, asked for no base, though its adopted decisions lay a hundred slots above its round | a node whose top round's timer finds the round of its last decided and certified slot more than `Λ` above its top at two firings recovers again (§3.6) |
 | D15 | a restart under rate limiting with `W = 2`, then a crash | a recovering node jumped to a horizon a peer had offered and asked that peer for the blocks above it, which the peer had pruned by then | a peer answering a base request sends the blocks of its store with its answer (§3.6) |
 | D16 | node `3` hides its blocks from node `2`, whose messages take twelve ticks until tick 50 (`hide`, a targeted run) | the honest blocks of round 1 reference node `3`'s genesis block, which node `2` asked for after its peers had pruned round 0; not recovering and without rate limiting, it stayed at round 1 while it adopted its peers' decisions | as D14 |
+| D17 | `per = 3`, `Λ = 2`, after a restart | a node that jumped built round by round from there and never resumed, since a node building as its peers do never holds a quorum two rounds above its top, so it stayed recovering | a recovering node that builds a block once it has caught up no longer recovers (§3.5) |
+| D18 | `per = 3`, `Λ = 2`, after a restart, the nodes' certificates level | a peer's horizon lay `Λ` below the slot round of its first uncertified slot, `per` rounds above the jump's bound, so no offer qualified and the node stayed below its peers' horizons | the horizon trails the last certified slot (§3.4) |
 
-Of 400 runs after the fixes, none stalled, and of 200 runs without
-restarts (slow nodes, a late GST, Byzantine nodes, crashes, long
-delays), in none did a node stall. In the run of D16
+Of 800 runs after the fixes, no node stayed recovering, and one run
+deadlocked, under rate limiting with `ρ = 4` and `W = 2` and an attacker
+showing each node its own twins: a restarted node's quota for the
+attacker's genesis slot was full of twins when the twin its peers'
+blocks reference arrived, and it drops that twin each time it is sent.
+This is the order of synchronisation of §13.10, and is open; it
+deadlocks alike without D17 and D18. Of 200 runs without restarts (slow
+nodes, a late GST, Byzantine nodes, crashes, long delays, `per` up to
+4), in none did a node stall. In the run of D16
 (`LeanDagTest/Node/Adversary.lean`), node `2` recovers once and ends
 within a round of its peers, with rate limiting or without.
 

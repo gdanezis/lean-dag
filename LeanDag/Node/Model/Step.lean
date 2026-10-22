@@ -61,8 +61,8 @@ input `i` in the state `s`: the new state and the outputs.
   block that needs it; a request is answered with the blocks asked for
   that the store holds and their histories above the asker's horizon.
 * **Collecting** (`collect`): the horizon rises to `Λ` below the lesser
-  of the decided frontier, the certified frontier and the node's round,
-  and what lies below it is dropped.
+  of the round of the last slot decided and certified and the node's
+  round, and what lies below it is dropped.
 * **Settling** (`settle`, `quiesce`): after each change to its state,
   peers' proposals included, the node builds, decides, collects and
   accepts what that allows, in passes, until a pass changes none of its
@@ -74,10 +74,14 @@ input `i` in the state `s`: the new state and the outputs.
   requests; the downtime counts as the top round's timer firing.
   `State.persisted` is what the node writes, and `resume` rebuilds a
   state from it.
-* **Resuming** (`tryResume`, `resumeAt`): a recovering node whose store
-  holds blocks of `q` authors it may reference at a round above its top,
-  two above if it built at its top, moves its top there without a block
-  of its own, and builds from there.
+* **Resuming** (`tryResume`, `resumeAt`, `caughtUp`): a recovering node
+  whose store holds blocks of `q` authors it may reference at a round
+  above its top, two above if it built at its top, moves its top there
+  without a block of its own, and builds from there. A recovering node
+  that builds a block once some peer offered it a horizon, at most `f`
+  horizons offered lie above the block's round, and at most `f` authors
+  of blocks it holds or has pending lie more than one round above it, no
+  longer recovers.
 * **Stalling** (`stalledAt`, `stallsTwice`, `timerState`, `timerOut`): a
   node still at round `r` when `r`'s timer fires sets the timer again. A
   node for which the round of the last slot it has decided and its
@@ -293,7 +297,22 @@ def slotted (l : List (BlockId × Block Validator BlockId Payload)) :
     List (BlockId × (Validator × ℕ)) :=
   if cfg.limit.isSome then l.map fun e => (e.1, slotOf e.2) else []
 
-/-- **Build the next round**, if the build rule allows it. -/
+/-- **The authors of blocks the node holds or has pending above round
+`t + 1`.** -/
+def aheadOf (s : State Validator BlockId Payload) (t : ℕ) : Finset Validator :=
+  (s.store.ids.filter fun i => t + 1 < (s.store.blk i).round).image
+      (fun i => (s.store.blk i).creator) ∪
+    ((s.pending.filter fun e => decide (t + 1 < e.2.round)).map (·.2.creator)).toFinset
+
+/-- **Whether the node has caught up at round `t`**: some peer offered it
+a horizon, at most `f` of the horizons offered lie above `t`, and at
+most `f` authors of blocks it holds or has pending lie above `t + 1`. -/
+def caughtUp (s : State Validator BlockId Payload) (t : ℕ) : Bool :=
+  !s.offers.isEmpty && decide ((s.offers.filter fun o => t < o.2).length ≤ cfg.f) &&
+    decide ((aheadOf s t).card ≤ cfg.f)
+
+/-- **Build the next round**, if the build rule allows it; a recovering
+node that catches up there no longer recovers. -/
 def tryBuild (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
   match s.top with
@@ -309,7 +328,8 @@ def tryBuild (s : State Validator BlockId Payload) :
           rowValid cfg.q (Function.update s.store.blk id b) b then
         let st := s.store.insert id b h.1 h.2.1 h.2.2.1 h.2.2.2.1
         let s₁ := { s with store := st, top := some (r + 1), own := some id }
-        some ({ s₁ with owner := slotted cfg [(id, b)] ++ s.owner },
+        let s₂ := { s₁ with recovering := s.recovering && !caughtUp cfg s (r + 1) }
+        some ({ s₂ with owner := slotted cfg [(id, b)] ++ s.owner },
           [.persist id b, .broadcast id b, .setTimer (r + 1) (cfg.timeout (r + 1))])
       else none
     else none
@@ -537,10 +557,10 @@ def answer (s : State Validator BlockId Payload) (peer : Validator) (G : ℕ)
   (answerIds s G ids).map fun j => .send peer j (s.store.map.getD j s.store.junk)
 
 /-- **The horizon a node at top `t` raises to**: `Λ` below the lesser of
-the round of the first slot neither decided nor certified and `t`; for a
+the round of the last slot both decided and certified and `t`; for a
 recovering node, `Λ` below that round, but not above `t`. -/
 def horizonAt (s : State Validator BlockId Payload) (t : ℕ) : ℕ :=
-  let F := cfg.per * (min s.lo s.certHeight / cfg.m)
+  let F := cfg.per * ((min s.lo s.certHeight - 1) / cfg.m)
   if s.recovering then min (F - cfg.lag) t else min F t - cfg.lag
 
 /-- **Raise the horizon** (`docs/validator.md` §3.4) to `horizonAt`;

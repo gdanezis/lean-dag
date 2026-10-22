@@ -206,8 +206,8 @@ theorem Held.collect {s : State Validator BlockId Payload} (h : Held cfg s) :
     dsimp only
     split
     · rename_i hG
-      have hF : cfg.per * (min s.lo s.certHeight / cfg.m) ≤ cfg.per * (s.lo / cfg.m) :=
-        Nat.mul_le_mul_left _ (Nat.div_le_div_right (min_le_left _ _))
+      have hF : cfg.per * ((min s.lo s.certHeight - 1) / cfg.m) ≤ cfg.per * (s.lo / cfg.m) :=
+        Nat.mul_le_mul_left _ (Nat.div_le_div_right ((Nat.sub_le _ _).trans (min_le_left _ _)))
       refine ⟨⟨fun t' ht' => ?_, ?_, fun ht' => absurd (ht.symm.trans ht') (by simp),
         fun t' ht' => ?_, h.junk⟩, fun hst => ?_⟩
       · rw [ht, Option.some.injEq] at ht'

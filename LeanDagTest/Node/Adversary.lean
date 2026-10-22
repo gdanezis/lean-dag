@@ -41,7 +41,7 @@ def attackLine (sc : Scenario) : String :=
   let r := simulate sc
   s!"{r.tops} {r.commits.map (·.length)} {r.agree} {r.prefixes} {r.valid} {r.boots} {r.dropped}"
 
-/-- info: "[(some 39), (some 39), (some 39)] [38, 38, 38] true true true 1 9" -/
+/-- info: "[(some 36), (some 36), (some 36)] [36, 36, 36] true true true 1 9" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeBase])
 
@@ -49,23 +49,23 @@ def attackLine (sc : Scenario) : String :=
 #guard_msgs in
 #eval attackLine (attackedBy [.splitBase])
 
-/-- info: "[(some 50), (some 50), (some 51)] [48, 49, 49] true true true 1 3" -/
+/-- info: "[(some 50), (some 51), (some 51)] [49, 49, 49] true true true 1 2" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeCert])
 
-/-- info: "[(some 50), (some 50), (some 50)] [48, 48, 48] true true true 1 0" -/
+/-- info: "[(some 45), (some 45), (some 44)] [43, 43, 42] true true true 1 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.conflictProposals])
 
-/-- info: "[(some 17), (some 17), (some 17)] [16, 16, 16] true true true 0 0" -/
+/-- info: "[(some 18), (some 17), (some 17)] [16, 16, 16] true true true 0 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks])
 
-/-- info: "[(some 50), (some 51), (some 50)] [49, 49, 48] true true true 1 142" -/
+/-- info: "[(some 52), (some 52), (some 52)] [50, 50, 50] true true true 1 149" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor])
 
-/-- info: "[(some 17), (some 17), (some 16)] [16, 16, 16] true true true 0 85" -/
+/-- info: "[(some 17), (some 17), (some 17)] [16, 16, 16] true true true 0 69" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.fakeBase, .splitBase, .fakeCert, .conflictProposals,
   .invalidBlocks, .forgedAuthor])
@@ -78,28 +78,29 @@ until tick `50`. The honest blocks of round `1` reference node `3`'s
 genesis block, which node `2` asks for after its peers have pruned it.
 Node `2` stays at round `1`, adopting its peers' certified decisions,
 until the timer of round `1` finds it stalled a second time; it then
-recovers and bootstraps (§3.6), with rate limiting or without. -/
+recovers, and resumes at a quorum above its top (§3.5, §3.6), with rate
+limiting or without. -/
 
 /-- A slow node `2`, hidden from by node `3`. -/
 def hidden (limit : Option (ℕ × ℕ)) : Scenario :=
   { horizon := 300, row := "mysticeti", adv := [3], attacks := [.hide], slow := [2],
     slowDelay := 12, slowUntil := some 50, limit := limit }
 
-/-- info: "[(some 86), (some 85), (some 85)] [84, 83, 83] true true true 1 0" -/
+/-- info: "[(some 86), (some 86), (some 85)] [85, 84, 83] true true true 0 0" -/
 #guard_msgs in
 #eval attackLine (hidden none)
 
-/-- info: "[(some 86), (some 86), (some 83)] [84, 84, 82] true true true 1 0" -/
+/-- info: "[(some 86), (some 86), (some 85)] [85, 84, 83] true true true 0 0" -/
 #guard_msgs in
 #eval attackLine (hidden (some (4, 8)))
 
 /-! ## Without the signature checks -/
 
-/-- info: "[(some 58), (some 58), (some 58)] [56, 56, 56] false false true 1 0" -/
+/-- info: "[(some 51), (some 51), (some 51)] [49, 49, 49] false false true 0 0" -/
 #guard_msgs in
 #eval attackLine { attackedBy [.fakeCert] (verify := false) with recover := [(1, 40, 70)] }
 
-/-- info: "[(some 9), (some 16), (some 16)] [13, 14, 14] true true true 0 0" -/
+/-- info: "[(some 17), (some 17), (some 17)] [17, 17, 17] true true true 0 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 
@@ -118,11 +119,11 @@ def storageLine (sc : Scenario) : String :=
   let r := simulate sc
   s!"{r.commits.map (·.length)} {r.agree} {r.valid} {r.maxStore} {r.maxPending}"
 
-/-- info: "[24, 24, 24] true true 141 15" -/
+/-- info: "[24, 24, 24] true true 168 10" -/
 #guard_msgs in
 #eval storageLine { horizon := 150, row := "mysticeti", adv := [3], attacks := [.flood] }
 
-/-- info: "[24, 24, 24] true true 18 5" -/
+/-- info: "[24, 24, 24] true true 22 7" -/
 #guard_msgs in
 #eval storageLine
   { horizon := 150, row := "mysticeti", adv := [3], attacks := [.flood], limit := some (8, 8) }
@@ -131,19 +132,19 @@ def storageLine (sc : Scenario) : String :=
 and floods twenty twins besides. With a quota of `n` blocks a slot the
 honest nodes keep the twins the honest blocks need and drop the flood. -/
 
-/-- info: "[24, 24, 24] true true 127 42" -/
+/-- info: "[24, 24, 24] true true 152 50" -/
 #guard_msgs in
 #eval storageLine
   { horizon := 150, row := "mysticeti", adv := [3], attacks := [.twinSplit, .flood] }
 
-/-- info: "[24, 24, 24] true true 18 5" -/
+/-- info: "[24, 24, 24] true true 22 7" -/
 #guard_msgs in
 #eval storageLine
   { horizon := 150, row := "mysticeti", adv := [3], attacks := [.twinSplit, .flood],
     limit := some (4, 8) }
 
 -- A node down from tick `40` to tick `90` rejoins under rate limiting.
-/-- info: "[46, 46, 47, 46] true true 26 4" -/
+/-- info: "[49, 49, 49, 49] true true 30 9" -/
 #guard_msgs in
 #eval storageLine
   { horizon := 150, row := "mysticeti", recover := [(1, 40, 90)], limit := some (8, 8) }

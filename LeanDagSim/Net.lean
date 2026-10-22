@@ -92,6 +92,8 @@ structure Scenario where
   seed : ℕ := 1
   /-- The simulated time to run to. -/
   horizon : ℕ := 500
+  /-- Rounds between slot rounds. -/
+  per : ℕ := 1
   /-- At most this many inputs are processed. -/
   fuel : ℕ := 10000000
   gst : ℕ := 0
@@ -164,9 +166,9 @@ def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) 
   c := sc.c
   q := q
   me := me
-  per := 1
+  per := max sc.per 1
   m := 1
-  per_pos := Nat.one_pos
+  per_pos := Nat.lt_of_lt_of_le Nat.one_pos (le_max_right _ _)
   m_pos := Nat.one_pos
   elect := fun k =>
     if sc.leaders.isEmpty then ⟨k % n, Nat.mod_lt _ hn⟩

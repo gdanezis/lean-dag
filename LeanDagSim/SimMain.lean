@@ -59,6 +59,7 @@ def parseArgs : List String → Scenario → Except String Scenario
       | "--delay-max" => pure { sc with delayMax := ← nat }
       | "--timeout" => pure { sc with timeout := ← nat }
       | "--lag" => pure { sc with lag := ← nat }
+      | "--per" => pure { sc with per := ← nat }
       | "--ahead" => pure { sc with ahead := ← nat }
       | "--crash" => pure { sc with crash := parseCrash v }
       | "--recover" => pure { sc with recover := parseRecover v }

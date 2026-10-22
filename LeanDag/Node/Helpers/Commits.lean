@@ -229,27 +229,28 @@ theorem tryDecide_length_le {P : Validity Validator BlockId Payload} {H : Finset
 omit [Fintype Validator] in
 theorem tryBuild_recovering {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
-    s'.recovering = s.recovering := by
+    s'.recovering = true → s.recovering = true := by
   unfold tryBuild at h
   split at h
   · dsimp only at h
     split at h
     · split at h
       · rw [Option.some.injEq, Prod.mk.injEq] at h; rw [← h.1]
+        intro hr; simp only [Bool.and_eq_true] at hr; exact hr.1
       · cases h
     · cases h
   · cases h
 
 omit [Fintype Validator] in
 theorem progress_recovering : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
-    (Node.progress cfg fuel s).1.recovering = s.recovering
-  | 0, _ => rfl
+    (Node.progress cfg fuel s).1.recovering = true → s.recovering = true
+  | 0, _ => id
   | fuel + 1, s => by
     unfold Node.progress
     split
     · rename_i s₁ out hb
-      exact (progress_recovering fuel s₁).trans (tryBuild_recovering hb)
-    · rfl
+      exact fun h => tryBuild_recovering hb (progress_recovering fuel s₁ h)
+    · exact id
 
 omit [Fintype Validator] in
 theorem collect_recovering (s : State Validator BlockId Payload) :
@@ -545,7 +546,7 @@ theorem IsCut.advanceStore (hg : Ground U K cfg.q) {s : State Validator BlockId 
   have hrc₁ := progress_recovering (cfg := cfg) (s.store.topRound + 2) s
   generalize Node.progress cfg (s.store.topRound + 2) s = r at hp₁ hc₁ hh₁ hlo₁ hrc₁ ⊢
   have hr₁ : r.1.recovering = true → SpansDecided cfg U r.1 := fun h k hk =>
-    hr (hrc₁ ▸ h) k (hlo₁ ▸ hk)
+    hr (hrc₁ h) k (hlo₁ ▸ hk)
   have hd := decideStep_store (cfg := cfg) r.1
   have hdp := (decideStep_pending (cfg := cfg) r.1).1
   have hc₂ : IsCut U (Node.decideStep cfg r.1).1.store := by rw [hd]; exact hc₁

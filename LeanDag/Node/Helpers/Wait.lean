@@ -103,14 +103,14 @@ theorem mem_refsFor {st : Store Validator BlockId Payload} {r : ℕ} {o : Option
 
 /-- **A change that fires no timer and starts no recovery.** -/
 def Calm (s s' : State Validator BlockId Payload) : Prop :=
-  s'.fired ⊆ s.fired ∧ s'.recovering = s.recovering
+  s'.fired ⊆ s.fired ∧ (s.recovering = false → s'.recovering = false)
 
 omit [Fintype Validator] [DecidableEq Validator] in
-theorem Calm.refl (s : State Validator BlockId Payload) : Calm s s := ⟨subset_rfl, rfl⟩
+theorem Calm.refl (s : State Validator BlockId Payload) : Calm s s := ⟨subset_rfl, id⟩
 
 omit [Fintype Validator] [DecidableEq Validator] in
 theorem Calm.trans {a b c : State Validator BlockId Payload} (h₁ : Calm a b) (h₂ : Calm b c) :
-    Calm a c := ⟨h₂.1.trans h₁.1, h₂.2.trans h₁.2⟩
+    Calm a c := ⟨h₂.1.trans h₁.1, fun h => h₂.2 (h₁.2 h)⟩
 
 omit [Fintype Validator] in
 theorem calm_tryBuild {s s' : State Validator BlockId Payload}
@@ -122,7 +122,7 @@ theorem calm_tryBuild {s s' : State Validator BlockId Payload}
     split at h
     · split at h
       · rw [Option.some.injEq, Prod.mk.injEq] at h
-        rw [← h.1]; exact Calm.refl _
+        rw [← h.1]; exact ⟨subset_rfl, fun hs => by simp [hs]⟩
       · exact absurd h (by simp)
     · exact absurd h (by simp)
   · exact absurd h (by simp)
@@ -155,7 +155,7 @@ theorem calm_collect (s : State Validator BlockId Payload) :
   split
   · dsimp only
     split
-    · exact ⟨Finset.filter_subset _ _, rfl⟩
+    · exact ⟨Finset.filter_subset _ _, id⟩
     · exact Calm.refl _
   · exact Calm.refl _
 
@@ -182,7 +182,7 @@ theorem step_calm {s : State Validator BlockId Payload} {inp : Input Validator B
       (Node.settle cfg s₀).1.recovering = false ∧ (Node.settle cfg s₀).1.fired ⊆ s₀.fired :=
     fun s₀ h₀ => by
       rw [settle_of_idle h₀]
-      exact ⟨(calm_quiesce _ s₀).2.trans h₀, (calm_quiesce _ s₀).1⟩
+      exact ⟨(calm_quiesce _ s₀).2 h₀, (calm_quiesce _ s₀).1⟩
   cases inp with
   | start =>
     simp only [Node.step]
@@ -562,7 +562,7 @@ round and the top. -/
 theorem collect_rise {s : State Validator BlockId Payload} (hs : s.recovering = false)
     (hlt : s.store.base < (Node.collect cfg s).1.store.base) :
     ∃ c, Output.announce c ∈ (Node.collect cfg s).2 ∧ (Node.collect cfg s).1.store.base ≤
-      min (cfg.per * (c.height / cfg.m)) (s.top.getD 0) - cfg.lag := by
+      min (cfg.per * ((c.height - 1) / cfg.m)) (s.top.getD 0) - cfg.lag := by
   revert hlt
   unfold Node.collect
   split
@@ -582,8 +582,9 @@ theorem collect_rise {s : State Validator BlockId Payload} (hs : s.recovering = 
         change horizonAt cfg s t ≤ _
         rw [horizonAt_of hs]
         have hcH : s.certHeight = c.height := by simp [State.certHeight, hc]
-        have h₁ : cfg.per * (min s.lo s.certHeight / cfg.m) ≤ cfg.per * (c.height / cfg.m) :=
-          Nat.mul_le_mul_left _ (Nat.div_le_div_right (by rw [hcH]; exact min_le_right _ _))
+        have h₁ : cfg.per * ((min s.lo s.certHeight - 1) / cfg.m) ≤ cfg.per * ((c.height - 1) / cfg.m) :=
+          Nat.mul_le_mul_left _ (Nat.div_le_div_right (Nat.sub_le_sub_right
+            (by rw [hcH]; exact min_le_right _ _) 1))
         rw [hts]
         have := min_le_min h₁ (le_refl t)
         simp only [Option.getD_some]
@@ -598,15 +599,15 @@ and the top it reaches. -/
 theorem advance_rise {s : State Validator BlockId Payload} (hs : s.recovering = false)
     (hlt : s.store.base < (Node.advance cfg s).1.store.base) :
     ∃ c, Output.announce c ∈ (Node.advance cfg s).2 ∧ (Node.advance cfg s).1.store.base ≤
-      min (cfg.per * (c.height / cfg.m)) ((Node.advance cfg s).1.top.getD 0) - cfg.lag := by
+      min (cfg.per * ((c.height - 1) / cfg.m)) ((Node.advance cfg s).1.top.getD 0) - cfg.lag := by
   have hpb := progress_base (cfg := cfg) (s.store.topRound + 2) s
-  have hPs := (calm_progress (cfg := cfg) (s.store.topRound + 2) s).2.trans hs
+  have hPs := (calm_progress (cfg := cfg) (s.store.topRound + 2) s).2 hs
   revert hlt
   simp only [Node.advance]
   generalize Node.progress cfg (s.store.topRound + 2) s = P at hpb hPs
   have hd := decideStep_store (cfg := cfg) P.1
   have hdt := decideStep_top (cfg := cfg) P.1
-  have hDs := (calm_decideStep (cfg := cfg) P.1).2.trans hPs
+  have hDs := (calm_decideStep (cfg := cfg) P.1).2 hPs
   generalize Node.decideStep cfg P.1 = D at hd hdt hDs
   intro hlt
   have hfb := flush_base (cfg := cfg) ((Node.collect cfg D.1).1.pending.length + 1)
@@ -641,7 +642,7 @@ structure BuildState (U : BlockRecord Validator BlockId Payload P H)
   fired : ∀ r ∈ x.fired, r ∈ s.fired ∨ inp = .timer r
   inv : ∃ B, Inv cfg x K B
   rise : x.store.base = s.store.base ∨ ∃ c ∈ A,
-    x.store.base ≤ min (cfg.per * (c.height / cfg.m)) (x.top.getD 0) - cfg.lag
+    x.store.base ≤ min (cfg.per * ((c.height - 1) / cfg.m)) (x.top.getD 0) - cfg.lag
   exposed : x.exposed = (Node.step cfg s inp).1.exposed
   calm : x.recovering = false
 
@@ -658,7 +659,7 @@ theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H}
   refine ⟨h.cut.tryBuild hg h.held hb hK, h.held.tryBuild hb, OwnTop.tryBuild hb,
     h.retains.trans (Retains.of_grows hgy hby) hby.ge, h.base.trans hby.ge,
     fun r hr => h.fired r ((calm_tryBuild hb).1 hr), ?_, ?_,
-    by rw [tryBuild_exposed hb]; exact h.exposed, (calm_tryBuild hb).2.trans h.calm⟩
+    by rw [tryBuild_exposed hb]; exact h.exposed, (calm_tryBuild hb).2 h.calm⟩
   · obtain ⟨B, hi⟩ := h.inv
     obtain ⟨e, he, hi'⟩ := hi.tryBuild hb
     refine ⟨_, hi'.mono fun z hz => ?_⟩
@@ -672,7 +673,7 @@ theorem BuildState.tryBuild {U : BlockRecord Validator BlockId Payload P H}
       rw [hby, hyt]
       rw [hr] at hcb
       simp only [Option.getD_some] at hcb ⊢
-      have := min_le_min (le_refl (cfg.per * (c.height / cfg.m))) (Nat.le_succ r)
+      have := min_le_min (le_refl (cfg.per * ((c.height - 1) / cfg.m))) (Nat.le_succ r)
       omega
 
 /-- **A pass keeps a state the node builds from.** -/
@@ -688,7 +689,7 @@ theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H}
     h.held.advance, h.own.advance,
     h.retains.trans (retains_advance x) (Grows.advance x).1, h.base.trans (Grows.advance x).1,
     fun r hr => h.fired r ((calm_advance x).1 hr), ?_, ?_,
-    by rw [advance_exposed]; exact h.exposed, (calm_advance x).2.trans h.calm⟩
+    by rw [advance_exposed]; exact h.exposed, (calm_advance x).2 h.calm⟩
   · obtain ⟨B, hi⟩ := h.inv
     obtain ⟨bs, ho, hi'⟩ := hi.advance
     exact ⟨_, hi'.mono fun z hz => hz.elim id fun hz => hK z (by rw [ho.1]; exact hz)⟩
@@ -702,7 +703,7 @@ theorem BuildState.advance {U : BlockRecord Validator BlockId Payload P H}
       · exact Or.inl (heq.trans h')
       · refine Or.inr ⟨c, hc, ?_⟩
         rw [heq]
-        have := min_le_min (le_refl (cfg.per * (c.height / cfg.m))) ht
+        have := min_le_min (le_refl (cfg.per * ((c.height - 1) / cfg.m))) ht
         omega
 
 /-- **Each block a pass persists comes from one build**, at a state the

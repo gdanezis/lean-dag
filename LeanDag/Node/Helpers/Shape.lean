@@ -139,7 +139,7 @@ theorem collect_shape (s : State Validator BlockId Payload) :
     g.1.top = s.top ∧ persists g.2 = [] ∧ (∀ r a, Output.setTimer r a ∉ g.2) ∧
       (∀ r ∈ s.fired, s.top.getD 0 ≤ r → r ∈ g.1.fired) ∧ s.store.base ≤ g.1.store.base ∧
       (s.recovering = false → s.store.base < g.1.store.base → ∃ c, Output.announce c ∈ g.2 ∧
-        g.1.store.base ≤ min (cfg.per * (c.height / cfg.m)) (s.top.getD 0) - cfg.lag) := by
+        g.1.store.base ≤ min (cfg.per * ((c.height - 1) / cfg.m)) (s.top.getD 0) - cfg.lag) := by
   intro g
   unfold g Node.collect
   split
@@ -162,8 +162,9 @@ theorem collect_shape (s : State Validator BlockId Payload) :
           change horizonAt cfg s t ≤ _
           rw [horizonAt_of hs]
           have hcH : s.certHeight = c.height := by simp [State.certHeight, hc]
-          have h₁ : cfg.per * (min s.lo s.certHeight / cfg.m) ≤ cfg.per * (c.height / cfg.m) :=
-            Nat.mul_le_mul_left _ (Nat.div_le_div_right (by rw [hcH]; exact min_le_right _ _))
+          have h₁ : cfg.per * ((min s.lo s.certHeight - 1) / cfg.m) ≤ cfg.per * ((c.height - 1) / cfg.m) :=
+            Nat.mul_le_mul_left _ (Nat.div_le_div_right (Nat.sub_le_sub_right
+              (by rw [hcH]; exact min_le_right _ _) 1))
           rw [hts]
           have := min_le_min h₁ (le_refl t)
           simp only [Option.getD_some]
@@ -189,15 +190,15 @@ structure PassShape (s : State Validator BlockId Payload)
   fired : ∀ r ∈ s.fired, s'.top.getD 0 ≤ r → r ∈ s'.fired
   base : s.store.base ≤ s'.store.base
   rise : s.recovering = false → s.store.base < s'.store.base → ∃ c, Output.announce c ∈ out ∧
-    s'.store.base ≤ min (cfg.per * (c.height / cfg.m)) (s'.top.getD 0) - cfg.lag
+    s'.store.base ≤ min (cfg.per * ((c.height - 1) / cfg.m)) (s'.top.getD 0) - cfg.lag
   rises : Rises s s'
   none : s.top = none → s'.top = none
-  calm : s'.recovering = s.recovering
+  calm : s.recovering = false → s'.recovering = false
 
 theorem PassShape.refl (s : State Validator BlockId Payload) : PassShape cfg s [] s :=
   ⟨fun e he => absurd he (by simp [persists]),
     fun _ ρ h₁ h₂ => absurd h₂ (by omega), fun e he => absurd he (by simp [persists]),
-    fun _ hr _ => hr, le_rfl, fun _ h => absurd h (lt_irrefl _), Rises.refl s, id, rfl⟩
+    fun _ hr _ => hr, le_rfl, fun _ h => absurd h (lt_irrefl _), Rises.refl s, id, id⟩
 
 theorem PassShape.trans {a b c : State Validator BlockId Payload}
     {o₁ o₂ : List (Output Validator BlockId Payload)} (h₁ : PassShape cfg a o₁ b)
@@ -206,7 +207,7 @@ theorem PassShape.trans {a b c : State Validator BlockId Payload}
   have hbc := h₂.rises
   refine ⟨fun e he => ?_, fun hs ρ hρ₁ hρ₂ => ?_, fun e he => ?_,
     fun r hr hrc => ?_, h₁.base.trans h₂.base, fun hrec hlt => ?_, hab.trans hbc,
-    fun h => h₂.none (h₁.none h), h₂.calm.trans h₁.calm⟩
+    fun h => h₂.none (h₁.none h), fun h => h₂.calm (h₁.calm h)⟩
   · rw [persists_append] at he
     rcases List.mem_append.mp he with he | he
     · exact h₁.above e he
@@ -223,14 +224,14 @@ theorem PassShape.trans {a b c : State Validator BlockId Payload}
     · exact List.mem_append_right _ (h₂.timer e he)
   · exact h₂.fired r (h₁.fired r hr (le_trans hbc.1 hrc)) hrc
   · by_cases hbc' : b.store.base < c.store.base
-    · obtain ⟨x, hx, hxb⟩ := h₂.rise (h₁.calm.trans hrec) hbc'
+    · obtain ⟨x, hx, hxb⟩ := h₂.rise (h₁.calm hrec) hbc'
       exact ⟨x, List.mem_append_right _ hx, hxb⟩
     · have heq : c.store.base = b.store.base := le_antisymm (not_lt.mp hbc') h₂.base
       obtain ⟨x, hx, hxb⟩ := h₁.rise hrec (by rw [← heq]; exact hlt)
       have := hbc.1
       exact ⟨x, List.mem_append_left _ hx, by
         rw [heq]
-        have := min_le_min (le_refl (cfg.per * (x.height / cfg.m))) this
+        have := min_le_min (le_refl (cfg.per * ((x.height - 1) / cfg.m))) this
         omega⟩
 
 /-- **The shape of one pass.** -/
@@ -244,7 +245,7 @@ theorem advance_shape (s : State Validator BlockId Payload) :
   have hPs := (calm_progress (cfg := cfg) (s.store.topRound + 2) s).2
   generalize hP : Node.progress cfg (s.store.topRound + 2) s = P at p₂ p₀ p₃ p₄ hbs hpb hrp hPs
   obtain ⟨d₂, d₃, d₄, d₅⟩ := decideStep_shape (cfg := cfg) P.1
-  have hDs := (calm_decideStep (cfg := cfg) P.1).2.trans hPs
+  have hDs := fun h => (calm_decideStep (cfg := cfg) P.1).2 (hPs h)
   generalize hD : Node.decideStep cfg P.1 = D at d₂ d₃ d₄ d₅ hDs
   obtain ⟨g₂, g₃, g₄, g₅, g₆, g₇⟩ := collect_shape (cfg := cfg) D.1
   have hra := rises_advance (cfg := cfg) s
@@ -282,10 +283,10 @@ theorem advance_shape (s : State Validator BlockId Payload) :
   · change s.store.base < (flush cfg _ G.1.store G.1.pending).1.base at hlt
     rw [hfb] at hlt
     have hbD : D.1.store.base = s.store.base := by rw [d₄, hpb]
-    obtain ⟨c, hc, hcb⟩ := g₇ (hDs.trans hrec) (by rw [hbD]; exact hlt)
+    obtain ⟨c, hc, hcb⟩ := g₇ (hDs hrec) (by rw [hbD]; exact hlt)
     refine ⟨c, List.mem_append_right _ hc, ?_⟩
     change (flush cfg _ G.1.store G.1.pending).1.base ≤
-      min (cfg.per * (c.height / cfg.m)) (G.1.top.getD 0) - cfg.lag
+      min (cfg.per * ((c.height - 1) / cfg.m)) (G.1.top.getD 0) - cfg.lag
     rw [hfb, g₂]; exact hcb
   · change G.1.top = none
     rw [g₂, d₃]; exact p₀ h
@@ -512,7 +513,7 @@ theorem step_rise (hs : s.recovering = false) (hr : inp ≠ .restart)
     (hlt : s.store.base < (Node.step cfg s inp).1.store.base) :
     ∃ c, Output.announce c ∈ (Node.step cfg s inp).2 ∧
       (Node.step cfg s inp).1.store.base ≤
-        min (cfg.per * (c.height / cfg.m)) ((Node.step cfg s inp).1.top.getD 0) - cfg.lag := by
+        min (cfg.per * ((c.height - 1) / cfg.m)) ((Node.step cfg s inp).1.top.getD 0) - cfg.lag := by
   rcases step_shape (cfg := cfg) hs hr hst with ⟨he, -⟩ | ⟨x, pre, he, hx, hb, -, -, -⟩
   · rw [he] at hlt; exact absurd hlt (lt_irrefl _)
   · rw [he] at hlt ⊢

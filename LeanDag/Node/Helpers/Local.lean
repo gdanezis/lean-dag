@@ -105,16 +105,16 @@ theorem horizonAt_le_top (s : State Validator BlockId Payload) (t : ℕ) : horiz
 
 omit [Fintype Validator] in
 /-- The horizon a collect raises to lies at or below the round of the
-first slot neither decided nor certified. -/
+last slot both decided and certified. -/
 theorem horizonAt_le_frontier (s : State Validator BlockId Payload) (t : ℕ) :
-    horizonAt cfg s t ≤ cfg.per * (min s.lo s.certHeight / cfg.m) := by
+    horizonAt cfg s t ≤ cfg.per * ((min s.lo s.certHeight - 1) / cfg.m) := by
   unfold horizonAt; dsimp only; split <;> omega
 
 omit [Fintype Validator] in
 /-- For a node not recovering, the horizon trails the lesser of the
 frontier and the top by `Λ`. -/
 theorem horizonAt_of {s : State Validator BlockId Payload} (hs : s.recovering = false) (t : ℕ) :
-    horizonAt cfg s t = min (cfg.per * (min s.lo s.certHeight / cfg.m)) t - cfg.lag := by
+    horizonAt cfg s t = min (cfg.per * ((min s.lo s.certHeight - 1) / cfg.m)) t - cfg.lag := by
   simp [horizonAt, hs]
 
 omit [Fintype Validator] in

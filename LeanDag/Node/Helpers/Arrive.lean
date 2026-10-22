@@ -122,7 +122,7 @@ theorem last_rise : ∀ (i : ℕ), 0 < (stateBefore cfg tr i v).store.base →
       (stateBefore cfg tr (r + 1) v).store.base = (stateBefore cfg tr i v).store.base ∧
       ∃ c, Output.announce c ∈ outputsAt cfg tr r ∧
         (stateBefore cfg tr i v).store.base ≤
-          min (cfg.per * (c.height / cfg.m)) ((stateBefore cfg tr (r + 1) v).top.getD 0) - cfg.lag
+          min (cfg.per * ((c.height - 1) / cfg.m)) ((stateBefore cfg tr (r + 1) v).top.getD 0) - cfg.lag
   | 0, h => by simp [stateBefore, inputsBefore, run, State.init, Store.empty] at h
   | i + 1, h => by
     have hmono := (grows_before (cfg := cfg) (tr := tr) v (Nat.le_succ i)).1
@@ -557,7 +557,7 @@ theorem base_le_after (hq : 2 ≤ cfg.q)
   -- the certificate that raised the peer's horizon, announced by event `i`, and its bound
   have hcase : x.store.base = 0 ∨ ∃ e ≤ i, ∃ inpe, tr[e]? = some (u, inpe) ∧ ∃ c,
       Output.announce c ∈ outputsAt cfg tr e ∧
-      x.store.base ≤ min (cfg.per * (c.height / cfg.m)) r' - cfg.lag := by
+      x.store.base ≤ min (cfg.per * ((c.height - 1) / cfg.m)) r' - cfg.lag := by
     rcases hx.rise with h | ⟨c, hc, hcb⟩
     · rcases Nat.eq_zero_or_pos (stateBefore cfg tr i u).store.base with h0 | hpos
       · exact Or.inl (h.trans h0)
@@ -565,7 +565,7 @@ theorem base_le_after (hq : 2 ≤ cfg.q)
         have h₁ := (rises_before (cfg := cfg) hnu (show r + 1 ≤ i by omega)).1
         refine Or.inr ⟨r, by omega, inpr, hr, c, hc, ?_⟩
         rw [h]
-        have := min_le_min (le_refl (cfg.per * (c.height / cfg.m))) (h₁.trans htop)
+        have := min_le_min (le_refl (cfg.per * ((c.height - 1) / cfg.m))) (h₁.trans htop)
         omega
     · refine Or.inr ⟨i, le_rfl, inp, hi, c, hc, ?_⟩
       rw [hxt] at hcb
@@ -592,12 +592,12 @@ theorem base_le_after (hq : 2 ≤ cfg.q)
   have hmin : min (stateBefore cfg tr E v).lo (stateBefore cfg tr E v).certHeight =
       (stateBefore cfg tr E v).certHeight := min_eq_right hlo
   rw [horizonAt_of (fired_before (cfg := cfg) hnv E).1] at hcol
-  change min (cfg.per * (min (stateBefore cfg tr E v).lo (stateBefore cfg tr E v).certHeight /
+  change min (cfg.per * ((min (stateBefore cfg tr E v).lo (stateBefore cfg tr E v).certHeight - 1) /
     cfg.m)) t - cfg.lag ≤ (stateBefore cfg tr E v).store.base at hcol
   rw [hmin] at hcol
-  have hP : cfg.per * (c.height / cfg.m) ≤
-      cfg.per * ((stateBefore cfg tr E v).certHeight / cfg.m) :=
-    Nat.mul_le_mul_left _ (Nat.div_le_div_right hcZ)
+  have hP : cfg.per * ((c.height - 1) / cfg.m) ≤
+      cfg.per * (((stateBefore cfg tr E v).certHeight - 1) / cfg.m) :=
+    Nat.mul_le_mul_left _ (Nat.div_le_div_right (Nat.sub_le_sub_right hcZ 1))
   have hmm := min_le_min hP hrt
   omega
 
