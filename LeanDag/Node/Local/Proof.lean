@@ -33,7 +33,8 @@ theorem authored : Authored := by
 
 theorem sends : Sends := by
   intro Validator BlockId Payload _ _ _ cfg is
-  exact broadcasts_run is Inv.init
+  obtain ⟨h₁, h₂⟩ := broadcasts_run is (Inv.init (cfg := cfg))
+  exact ⟨h₁, fun e he => by simpa using h₂ e he⟩
 
 theorem decisions : Decisions := by
   intro Validator BlockId Payload _ _ _ cfg is

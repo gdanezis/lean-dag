@@ -36,8 +36,7 @@ theorem converges : Converges := by
   obtain ⟨inp, hi⟩ := event_of_map hu
   set L := tr.length
   -- `h`'s history, as the trace reads it, held by `u` from event `i + 1` on
-  have hep := persists_of_broadcasts he
-  obtain ⟨hst₁, hval₁⟩ := persist_stored hi hep
+  obtain ⟨hst₁, hval₁⟩ := broadcast_stored hi he
   have hiL : i < L := (List.getElem?_eq_some_iff.mp hi).1
   have hgr := grows_before (cfg := cfg) (tr := tr) u (show i + 1 ≤ L by omega)
   rw [hist_eq hinj huH (hgr.1 hst₁)] at hy
@@ -61,8 +60,10 @@ theorem converges : Converges := by
   have hvu : v ≠ u := by rintro rfl; exact hhv (hgr.1 hst₁)
   have heH : e.1 ∈ historyFrom (gT cfg H tr) e.1 := mem_historyFrom_self
   have hraw₀ : raw e.1 = e.2 := hval₁
-  have hecr : e.2.creator = u :=
-    (Local.authored _ _ _ (cfg.at u) (inputsBefore tr (i + 1) u) e (persists_of_event hi hep)).2
+  have hecr : e.2.creator = u := by
+    obtain ⟨j, -, inp', hj', hje⟩ := persists_of_broadcasts hi he
+    exact (Local.authored _ _ _ (cfg.at u) (inputsBefore tr (j + 1) u) e
+      (persists_of_event hj' hje)).2
   -- a block of the history delivered to `v` ends pending or stored there
   have hdeliv : ∀ j ∈ historyFrom (gT cfg H tr) e.1, ∀ t, t < L →
       tr[t]? = some (v, .deliver j (raw j)) → (raw j).creator ≠ v →
@@ -267,7 +268,7 @@ theorem converges : Converges := by
     (by simp [delivered, ← hid₀]) (by rw [hraw₀, hecr]; exact huH)
   rw [hraw₀, hecr] at hi'u
   obtain ⟨inp', hi'⟩ := event_of_map hi'u
-  have hst' := (persist_stored hi' (by rw [hraw₀] at hi'b; exact persists_of_broadcasts hi'b)).1
+  have hst' := (broadcast_stored hi' (by rw [hraw₀] at hi'b; exact hi'b)).1
   have hA0 : A ⟨0, h0⟩ ≤ A m := le_rfl
   have hgk := grows_before (cfg := cfg) (tr := tr) u (show i' + 1 ≤ k by omega)
   have hzk : x len ∈ (stateBefore cfg tr k u).store.ids :=
@@ -400,7 +401,7 @@ theorem converges : Converges := by
         (by simp [delivered, ← hid']) (by rw [hc]; exact hv)
       rw [hc] at hi''v
       obtain ⟨inp'', hi''⟩ := event_of_map hi''v
-      have := (persist_stored hi'' (persists_of_broadcasts hi''b)).1
+      have := (broadcast_stored hi'' hi''b).1
       exact (hxH len le_rfl).2 ((grows_before (cfg := cfg) (tr := tr) v
         (show i'' + 1 ≤ L by have := (List.getElem?_eq_some_iff.mp hi'').1; omega)).1 this)
     · obtain ⟨inp'', hj'⟩ := event_of_map hj

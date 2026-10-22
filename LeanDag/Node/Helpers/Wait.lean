@@ -186,10 +186,12 @@ theorem step_calm (s : State Validator BlockId Payload) (inp : Input Validator B
     · exact fun r h => Or.inl h
   | timer t =>
     intro r h
+    rw [step_timer_fst] at h
     rcases Finset.mem_insert.mp (calm_quiesce (cfg := cfg) _ _ h) with rfl | h
     · exact Or.inr rfl
     · exact Or.inl h
   | fetchRequest peer r ids => exact fun r h => Or.inl h
+  | restart => exact fun r h => Or.inl h
 
 /-- **Each round whose timer node `v` counts as fired before event `i`**
 had its timer input at an earlier event. -/
@@ -322,8 +324,9 @@ theorem OwnTop.step {s : State Validator BlockId Payload} (h : OwnTop cfg s)
     split
     · exact OwnTop.settle (h.grow (Grows.flush _ _ _) rfl rfl)
     · exact h
-  | timer t => exact OwnTop.settle (h.grow (Grows.refl _) rfl rfl)
+  | timer t => rw [step_timer_fst]; exact OwnTop.settle (h.grow (Grows.refl _) rfl rfl)
   | fetchRequest peer r ids => exact h
+  | restart => exact h
 
 /-- **Node `v`'s own block at its top is stored before every event.** -/
 theorem ownTop_before {tr : Trace Validator BlockId Payload} {v : Validator} :
@@ -512,18 +515,31 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
           · change (st.blk gid).creator = cfg.me
             simp [st, gid, Store.blk, Store.insert, Std.TreeMap.getD_insert_self,
               Config.genesis]
-        have hi₀ : Inv cfg s₀ K [] :=
+        have hi₀ : Inv cfg s₀ K [(gid, cfg.genesis)] :=
           ⟨known_insert (hnew := h₂.1) (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
               (hpred := fun j hj => absurd hj (Finset.notMem_empty j))
               (fun j hj => hi.known j hj) hx,
             fun x hx => hi.pend x hx,
-            Or.inr ⟨0, rfl, ⟨by simp, fun x hx => absurd hx List.not_mem_nil⟩⟩,
-            fun x hx => absurd hx List.not_mem_nil, fun x hx => absurd hx List.not_mem_nil,
+            Or.inr ⟨0, rfl, ⟨by simp, fun x hx => by
+              rw [List.mem_singleton] at hx; subst hx; rfl⟩⟩,
+            fun x hx => by
+              rw [List.mem_singleton] at hx; subst hx
+              refine ⟨rfl, rfl, fun j hj => absurd hj (Finset.notMem_empty j), fun blk _ => ?_⟩
+              exact rowValid_congr (fun j hj => absurd hj (Finset.notMem_empty j)) h₂.2,
+            fun x hx => by rw [List.mem_singleton] at hx; subst hx; exact hx,
             hi.valid.insert (hnew := h₂.1) (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
-              (hpred := fun j hj => absurd hj (Finset.notMem_empty j)) h₂.2⟩
+              (hpred := fun j hj => absurd hj (Finset.notMem_empty j)) h₂.2,
+            fun j hj => by
+              change some gid = some j at hj
+              rw [Option.some.injEq] at hj
+              subst hj
+              refine ⟨by simp [s₀, st, gid, Store.insert_ids], ?_⟩
+              change (gid, (s.store.map.insert gid cfg.genesis).getD gid s.store.junk) ∈ _
+              rw [Std.TreeMap.getD_insert_self]
+              exact List.mem_singleton_self _⟩
         refine hset s₀ (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)])
           ⟨hcst, hh₀, ho₀, (Grows.insert s.store : Grows s.store st), fun r hr => Or.inl hr,
-            ⟨[], hi₀⟩⟩ hp ?_
+            ⟨_, hi₀⟩⟩ hp ?_
           (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
         intro e he
         simp only [built, persists, List.flatMap_cons, List.flatMap_nil, List.append_nil,
@@ -547,7 +563,10 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       have hfl := flush_known (cfg := cfg) (K := K) (s.pending.length + 1) (st := s.store)
         (pend := (id, b) :: s.pending) (fun j hj => hi.known j hj) hi.valid hpend
       have hinv₂ : Inv cfg s₂ K B₀ :=
-        ⟨hfl.1, hfl.2.1, hi.rounds, hi.good, hi.sub, hfl.2.2⟩
+        ⟨hfl.1, hfl.2.1, hi.rounds, hi.good, hi.sub, hfl.2.2, fun j hj => by
+          change j ∈ (flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)).1.ids ∧
+            (j, (flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)).1.blk j) ∈ B₀
+          exact ⟨hg₁.1 (hi.own j hj).1, by rw [hg₁.blk (hi.own j hj).1]; exact (hi.own j hj).2⟩⟩
       refine hset s₂ (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss])
         ⟨hc₁, hh.grow hg₁ rfl, hown.grow hg₁ rfl rfl, hg₁, fun r hr => Or.inl hr, ⟨B₀, hinv₂⟩⟩
         (fun e he => hpend e (flush_pending_sub _ _ _ e he)) ?_ (step_deliver hA)
@@ -555,10 +574,12 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
       split at he <;> simp [persists] at he
     · exact hsame (step_deliver_not hA)
   | timer r =>
-    refine hset { s with fired := insert r s.fired } []
+    intro e hev
+    rw [persists_step_timer] at hb hev
+    refine Or.inr (settle_witness hg (s := s) (inp := .timer r)
+      (s₀ := { s with fired := insert r s.fired })
       ⟨hc, hh.grow (Grows.refl _) rfl, hown.grow (Grows.refl _) rfl rfl, Grows.refl _,
-        fun t ht => ?_,
-        ⟨B₀, hi.of_eq rfl rfl rfl⟩⟩ hp (by simp [persists]) rfl
+        fun t ht => ?_, ⟨B₀, hi.of_eq rfl rfl rfl rfl⟩⟩ hp hb e hev)
     rcases Finset.mem_insert.mp ht with rfl | ht
     · exact Or.inr rfl
     · exact Or.inl ht
@@ -568,6 +589,11 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     unfold answer persists at he
     rw [List.filterMap_map] at he
     simp at he
+  | restart =>
+    intro e he
+    change e ∈ persists (Node.resend cfg s) at he
+    rw [persists_resend] at he
+    exact absurd he List.not_mem_nil
 
 variable (cfg) in
 /-- **Outputs whose timers follow builds**: each timer set for round `r` is
@@ -633,32 +659,35 @@ theorem timersBuilt_advance (s : State Validator BlockId Payload) :
   · simp at h
 
 variable (cfg) in
-/-- **Outputs whose timers follow builds, or the timer's own firing**: each
-timer set for round `r` is set for `timeout r`, beside a block of round
-`r` persisted, or on round `r`'s timer. -/
-def TimersSet (inp : Input Validator BlockId Payload)
+/-- **Outputs whose timers follow builds, the timer's own firing, or a
+restart at the round**: each timer set for round `r` is set for
+`timeout r`, beside a block of round `r` persisted, on round `r`'s timer,
+or on a restart from the state `s` at top `r`. -/
+def TimersSet (s : State Validator BlockId Payload) (inp : Input Validator BlockId Payload)
     (out : List (Output Validator BlockId Payload)) : Prop :=
   ∀ r a, Output.setTimer r a ∈ out →
-    a = cfg.timeout r ∧ ((∃ e ∈ persists out, e.2.round = r) ∨ inp = .timer r)
+    a = cfg.timeout r ∧ ((∃ e ∈ persists out, e.2.round = r) ∨ inp = .timer r ∨
+      (inp = .restart ∧ s.top = some r))
 
 omit [Fintype Validator] in
-theorem TimersBuilt.set {inp : Input Validator BlockId Payload}
+theorem TimersBuilt.set {s : State Validator BlockId Payload}
+    {inp : Input Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : TimersBuilt cfg out) :
-    TimersSet cfg inp out :=
+    TimersSet cfg s inp out :=
   fun r a hm => ⟨(h r a hm).1, Or.inl (h r a hm).2⟩
 
 /-- **A step sets its timers beside its builds.** -/
 theorem timersBuilt_step (s : State Validator BlockId Payload)
-    (inp : Input Validator BlockId Payload) : TimersSet cfg inp (Node.step cfg s inp).2 := by
+    (inp : Input Validator BlockId Payload) : TimersSet cfg s inp (Node.step cfg s inp).2 := by
   have hset : ∀ s₀ : State Validator BlockId Payload, TimersBuilt cfg (Node.settle cfg s₀).2 :=
     fun s₀ =>
       (quiesce_rel (P := fun _ => True) (R := fun _ out _ => TimersBuilt cfg out)
         (fun _ => TimersBuilt.of_none fun _ _ h => absurd h List.not_mem_nil)
         (fun _ _ _ _ _ h₁ h₂ => h₁.append h₂) (fun s _ => ⟨timersBuilt_advance s, trivial⟩) _ s₀
         trivial).1
-  refine TimersBuilt.set ?_
   cases inp with
   | start =>
+    refine TimersBuilt.set ?_
     simp only [Node.step]
     split
     · split
@@ -667,17 +696,33 @@ theorem timersBuilt_step (s : State Validator BlockId Payload)
       · exact TimersBuilt.of_none fun _ _ h => by simp at h
     · exact TimersBuilt.of_none fun _ _ h => by simp at h
   | deliver id b =>
+    refine TimersBuilt.set ?_
     simp only [Node.step]
     split
     · refine (TimersBuilt.of_none fun r a h => ?_).append (hset _)
       split at h <;> simp at h
     · exact TimersBuilt.of_none fun _ _ h => by simp at h
-  | timer t => exact hset _
+  | timer t =>
+    simp only [Node.step]
+    split
+    · rename_i htop
+      intro r a h
+      rcases List.mem_append.mp h with h | h
+      · obtain ⟨ha, e, he, her⟩ := hset _ r a h
+        exact ⟨ha, Or.inl ⟨e, by rw [persists_append]; exact List.mem_append_left _ he, her⟩⟩
+      · obtain ⟨ht, ha⟩ := mem_resend_setTimer h
+        rw [htop, Option.some.injEq] at ht
+        exact ⟨ha, Or.inr (Or.inl (by rw [ht]))⟩
+    · exact TimersBuilt.set (hset _)
   | fetchRequest peer r ids =>
-    refine TimersBuilt.of_none fun t a h => ?_
+    refine TimersBuilt.set (TimersBuilt.of_none fun t a h => ?_)
     change Output.setTimer t a ∈ answer cfg s peer r ids at h
     unfold answer at h
     simp at h
+  | restart =>
+    intro r a h
+    obtain ⟨ht, ha⟩ := mem_resend_setTimer h
+    exact ⟨ha, Or.inr (Or.inr ⟨rfl, ht⟩)⟩
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- **A cut's paths are the record's**: what a stored block reaches in the

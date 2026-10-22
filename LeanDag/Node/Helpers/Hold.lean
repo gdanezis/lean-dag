@@ -178,8 +178,9 @@ theorem step_stays {s : State Validator BlockId Payload}
           · obtain ⟨e, he, he1⟩ := List.mem_map.mp hp
             exact Or.inr (huniq e he he1 ▸ he)
           · exact absurd ⟨hid, hcr, hin, hp⟩ hAd
-  | timer r => exact settle_stays (hst.elim id fun h => by cases h.1)
+  | timer r => rw [step_timer_fst]; exact settle_stays (hst.elim id fun h => by cases h.1)
   | fetchRequest p r ids => exact hst.elim id fun h => by cases h.1
+  | restart => exact hst.elim id fun h => by cases h.1
 
 /-! ## Holding a closed set -/
 

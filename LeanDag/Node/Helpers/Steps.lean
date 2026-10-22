@@ -256,8 +256,9 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
       · exact Or.inr ((Grows.flush (cfg := cfg) (s.pending.length + 1) s.store
           ((id, b) :: s.pending)).1 hy)
     · rw [step_deliver_not hc]; exact hy
-  | timer r => exact hset { s with fired := insert r s.fired } rfl hp hy
+  | timer r => exact hset { s with fired := insert r s.fired } (step_timer_eq s r) hp hy
   | fetchRequest peer r ids => exact hy
+  | restart => exact hy
 
 /-- **A block becomes pending only by being delivered**, and only when the
 node acts on the delivery; a request is recorded only on account of such
@@ -305,8 +306,10 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
       exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
   | timer r =>
     have := settle_sub (cfg := cfg) { s with fired := insert r s.fired }
+    rw [step_timer_fst]
     exact ⟨fun e he => Or.inl (this.1 e he), fun e he => Or.inl (this.2 e he)⟩
   | fetchRequest peer r ids => exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
+  | restart => exact ⟨fun e he => Or.inl he, fun e he => Or.inl he⟩
 
 omit [Fintype Validator] in
 /-- **What building persists it stores.** -/
@@ -443,13 +446,24 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
       refine settle_persist_of (Or.inl ?_)
       split <;> rfl
     · rw [step_deliver_not hc]; simp [persists]
-  | timer r => exact settle_persist { s with fired := insert r s.fired }
+  | timer r =>
+    intro e he
+    rw [step_timer_fst]
+    rcases step_timer_snd (cfg := cfg) s r with h | h <;> rw [h] at he
+    · exact settle_persist { s with fired := insert r s.fired } e he
+    · rw [persists_append, persists_resend, List.append_nil] at he
+      exact settle_persist { s with fired := insert r s.fired } e he
   | fetchRequest peer r ids =>
     intro e he
     change e ∈ persists (answer cfg s peer r ids) at he
     unfold answer persists at he
     rw [List.filterMap_map] at he
     simp at he
+  | restart =>
+    intro e he
+    change e ∈ persists (Node.resend cfg s) at he
+    rw [persists_resend] at he
+    exact absurd he List.not_mem_nil
 
 variable (cfg) in
 /-- No pending block is ready. -/
@@ -491,8 +505,9 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady cfg s)
     by_cases hc : Admits cfg s id b
     · rw [step_deliver hc]; exact noReady_settle _
     · rw [step_deliver_not hc]; exact h
-  | timer r => exact noReady_settle _
+  | timer r => rw [step_timer_fst]; exact noReady_settle _
   | fetchRequest peer r ids => exact h
+  | restart => exact h
 
 /-- **A delivery the node acts on keeps a fitting block it delivers**
 pending or stored. -/

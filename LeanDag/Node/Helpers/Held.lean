@@ -144,8 +144,9 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     split
     · exact Held.settle (h.grow (Grows.flush _ _ _) rfl)
     · exact h
-  | timer r => exact Held.settle (h.grow (Grows.refl _) rfl)
+  | timer r => rw [step_timer_fst]; exact Held.settle (h.grow (Grows.refl _) rfl)
   | fetchRequest peer r ids => exact h
+  | restart => exact h
 
 /-- **A run keeps `Held`.** -/
 theorem Held.run : ∀ (is : List (Input Validator BlockId Payload))
@@ -258,8 +259,9 @@ theorem Quorate.step {s : State Validator BlockId Payload} (h : Quorate cfg s)
     split
     · exact Quorate.settle (h.grow (Grows.flush _ _ _) rfl)
     · exact h
-  | timer r => exact Quorate.settle (h.grow (Grows.refl _) rfl)
+  | timer r => rw [step_timer_fst]; exact Quorate.settle (h.grow (Grows.refl _) rfl)
   | fetchRequest peer r ids => exact h
+  | restart => exact h
 
 /-- **A run keeps `Quorate`.** -/
 theorem Quorate.run : ∀ (is : List (Input Validator BlockId Payload))

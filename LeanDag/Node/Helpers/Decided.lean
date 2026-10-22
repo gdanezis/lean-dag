@@ -18,11 +18,6 @@ variable [LinearOrder BlockId]
 variable {cfg : Config Validator BlockId Payload}
 
 omit [Fintype Validator] in
-theorem commitsOf_append (a b : List (Output Validator BlockId Payload)) :
-    commitsOf (a ++ b) = commitsOf a ++ commitsOf b :=
-  List.filterMap_append
-
-omit [Fintype Validator] in
 theorem commitsOf_built (bs : List (BlockId × Block Validator BlockId Payload)) :
     commitsOf (built cfg bs) = [] := by
   induction bs with
@@ -207,13 +202,20 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
     · refine hset _ _ rfl rfl ?_
       split_ifs <;> rfl
     · exact ⟨Appends.refl s, hL⟩
-  | timer r => exact hset _ [] rfl rfl rfl
+  | timer r =>
+    obtain ⟨h₁, h₂⟩ := hset { s with fired := insert r s.fired } [] rfl rfl rfl
+    rw [List.nil_append] at h₁
+    simp only [Node.step]
+    split
+    · exact ⟨h₁.trans (Appends.quiet rfl (commitsOf_resend _)), h₂⟩
+    · exact ⟨h₁, h₂⟩
   | fetchRequest peer r ids =>
     refine ⟨Appends.quiet rfl ?_, hL⟩
     change commitsOf (answer cfg s peer r ids) = []
     unfold answer commitsOf
     rw [List.filterMap_map]
     exact List.filterMap_eq_nil_iff.mpr fun _ _ => rfl
+  | restart => exact ⟨Appends.quiet rfl (commitsOf_resend s), hL⟩
 
 /-- **A run appends its decisions**, and keeps the ledger. -/
 theorem run_appends : ∀ (is : List (Input Validator BlockId Payload))

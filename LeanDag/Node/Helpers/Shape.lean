@@ -211,23 +211,21 @@ theorem silent_of {x : List (Output Validator BlockId Payload)}
     have := h o ho
     refine ⟨fun id b he => ?_, fun r a he => ?_⟩ <;> subst he <;> exact this
 
-/-- **The shape of a step**: it leaves the state alone with silent
-outputs, or settles a state with the node's top and fired timers, after
+/-- **The shape of a step**: it leaves the state alone and persists
+nothing, or settles a state with the node's top and fired timers, after
 outputs persisting nothing or, at its start, after its genesis block with
-its timer. -/
+its timer, and before outputs persisting nothing. -/
 theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator BlockId Payload) :
-    ((Node.step cfg s inp).1 = s ∧ Silent (Node.step cfg s inp).2) ∨
-    ∃ x pre, Node.step cfg s inp = ((Node.settle cfg x).1, pre ++ (Node.settle cfg x).2) ∧
+    ((Node.step cfg s inp).1 = s ∧ persists (Node.step cfg s inp).2 = []) ∨
+    ∃ x pre post, (Node.step cfg s inp).1 = (Node.settle cfg x).1 ∧
+      (Node.step cfg s inp).2 = pre ++ (Node.settle cfg x).2 ++ post ∧ persists post = [] ∧
       x.top.getD 0 = s.top.getD 0 ∧ s.fired ⊆ x.fired ∧
       ((persists pre = [] ∧ x.top = s.top) ∨ (s.top = none ∧ x.top = some 0 ∧
         ∃ g : BlockId × Block Validator BlockId Payload,
           pre = [.persist g.1 g.2, .broadcast g.1 g.2, .setTimer 0 (cfg.timeout 0)] ∧
           g.2.round = 0 ∧ g.1 ∈ x.store.ids ∧ (x.store.blk g.1).round = 0)) := by
   have hq : ∀ x, x = s → ((x, ([] : List (Output Validator BlockId Payload))).1 = s ∧
-      Silent ([] : List (Output Validator BlockId Payload))) := fun x hx => ⟨hx, Silent.nil⟩
-  have hnil : ∀ x : State Validator BlockId Payload,
-      (Node.settle cfg x) = ((Node.settle cfg x).1, [] ++ (Node.settle cfg x).2) := fun x => by
-    simp
+      persists ([] : List (Output Validator BlockId Payload)) = []) := fun x hx => ⟨hx, rfl⟩
   cases inp with
   | start =>
     simp only [Node.step]
@@ -235,28 +233,36 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
     · rename_i h₁
       split
       · rename_i h₂
-        refine Or.inr ⟨_, _, rfl, by simp [h₁.1], subset_rfl, Or.inr ⟨h₁.1, rfl,
-          ⟨_, cfg.genesis⟩, rfl, rfl, (by simp [Store.insert_ids]), ?_⟩⟩
+        refine Or.inr ⟨_, _, [], rfl, by rw [List.append_nil], rfl, by simp [h₁.1], subset_rfl,
+          Or.inr ⟨h₁.1, rfl, ⟨_, cfg.genesis⟩, rfl, rfl, (by simp [Store.insert_ids]), ?_⟩⟩
         simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self, Config.genesis]
       · exact Or.inl (hq s rfl)
     · exact Or.inl (hq s rfl)
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · rw [step_deliver hA]
-      refine Or.inr ⟨_, _, rfl, rfl, subset_rfl, Or.inl ⟨?_, rfl⟩⟩
+      refine Or.inr ⟨_, _, [], rfl, by rw [List.append_nil], rfl, rfl, subset_rfl,
+        Or.inl ⟨?_, rfl⟩⟩
       refine (silent_of fun o ho => ?_).1
       split at ho
       · cases ho
       · rw [List.mem_singleton] at ho; subst ho; trivial
     · rw [step_deliver_not hA]
-      exact Or.inl ⟨rfl, Silent.nil⟩
+      exact Or.inl ⟨rfl, rfl⟩
   | timer r =>
-    exact Or.inr ⟨{ s with fired := insert r s.fired }, [], hnil _, rfl,
-      Finset.subset_insert _ _, Or.inl ⟨rfl, rfl⟩⟩
+    right
+    rcases step_timer_snd (cfg := cfg) s r with h | h
+    · exact ⟨{ s with fired := insert r s.fired }, [], [], step_timer_fst s r, by rw [h]; simp,
+        rfl, rfl, Finset.subset_insert _ _, Or.inl ⟨rfl, rfl⟩⟩
+    · exact ⟨{ s with fired := insert r s.fired }, [],
+        Node.resend cfg (Node.settle cfg { s with fired := insert r s.fired }).1,
+        step_timer_fst s r, by rw [h]; simp,
+        persists_resend _, rfl, Finset.subset_insert _ _, Or.inl ⟨rfl, rfl⟩⟩
   | fetchRequest p r ids =>
-    refine Or.inl ⟨rfl, silent_of fun o ho => ?_⟩
+    refine Or.inl ⟨rfl, (silent_of fun o ho => ?_).1⟩
     simp only [Node.step, answer, List.mem_map] at ho
     obtain ⟨j, -, rfl⟩ := ho; trivial
+  | restart => exact Or.inl ⟨rfl, persists_resend s⟩
 
 section StepFacts
 
@@ -269,13 +275,13 @@ theorem step_every
     ∀ ρ, (s.top = none ∨ s.top.getD 0 < ρ) → ρ ≤ (Node.step cfg s inp).1.top.getD 0 →
       ∃ e ∈ persists (Node.step cfg s inp).2, e.2.round = ρ := by
   intro ρ hρ hρt
-  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ | ⟨x, pre, he, ht, -, hpre⟩
+  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ | ⟨x, pre, post, he, ho, hpost, ht, -, hpre⟩
   · rw [he] at hsome hρt
     rcases hρ with hρ | hρ
     · rw [hρ] at hsome; cases hsome
     · omega
-  · rw [he] at hsome hρt ⊢
-    rw [persists_append]
+  · rw [he] at hsome hρt
+    rw [ho, persists_append, hpost, List.append_nil, persists_append]
     have hS := settle_shape (cfg := cfg) x
     rcases hpre with ⟨-, hxt⟩ | ⟨hn, hx0, g, rfl, hg, -⟩
     · by_cases hn : s.top = none
@@ -296,10 +302,12 @@ theorem step_every
 theorem step_timer :
     ∀ e ∈ persists (Node.step cfg s inp).2,
       Output.setTimer e.2.round (cfg.timeout e.2.round) ∈ (Node.step cfg s inp).2 := by
-  rcases step_shape (cfg := cfg) s inp with ⟨-, hq⟩ | ⟨x, pre, he, -, -, hpre⟩
-  · rw [hq.1]; intro e he; cases he
-  · rw [he, persists_append]
+  rcases step_shape (cfg := cfg) s inp with ⟨-, hq⟩ | ⟨x, pre, post, -, he, hpost, -, -, hpre⟩
+  · rw [hq]; intro e he; cases he
+  · rw [he, persists_append, hpost, List.append_nil]
     intro e he'
+    refine List.mem_append_left _ ?_
+    rw [persists_append] at he'
     rcases List.mem_append.mp he' with he' | he'
     · rcases hpre with ⟨hp, -⟩ | ⟨-, -, g, rfl, hg, -⟩
       · rw [hp] at he'; cases he'
@@ -312,7 +320,7 @@ theorem step_timer :
 
 /-- **A step keeps the fired timers.** -/
 theorem step_fired : s.fired ⊆ (Node.step cfg s inp).1.fired := by
-  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ | ⟨x, pre, he, -, hf, -⟩
+  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ | ⟨x, pre, post, he, -, -, -, hf, -⟩
   · rw [he]
   · rw [he]
     exact hf.trans (settle_shape (cfg := cfg) x).fired

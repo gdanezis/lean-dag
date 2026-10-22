@@ -86,7 +86,7 @@ theorem fired_stays {f r : ℕ} (hf : tr[f]? = some (v, Input.timer r)) :
       · rw [heq]; exact ih
       · rw [heq]
         exact step_fired (cfg := cfg.at v) ih
-    · rw [stateBefore_succ hf, if_pos rfl]
+    · rw [stateBefore_succ hf, if_pos rfl, step_timer_fst]
       exact (settle_shape (cfg := cfg.at v)
         { stateBefore cfg tr f v with fired := insert r (stateBefore cfg tr f v).fired }).fired
         (Finset.mem_insert_self _ _)
@@ -130,7 +130,7 @@ theorem broadcasts_of_persists {i : ℕ} {e : BlockId × Block Validator BlockId
   · rename_i w inp _
     obtain ⟨bs, ho, -⟩ := (Converge.inv_before (cfg := cfg) (tr := tr) i w).step inp
     rw [ho.1] at he
-    rw [ho.2]; exact he
+    exact ho.2.1 e he
   · simp [persists] at he
 
 /-- **A block of a node that the node knew it built** before. -/
@@ -144,8 +144,8 @@ theorem own_known {H : Finset Validator} (htime : Converge.TimelyAuthentic cfg H
     obtain ⟨p, hpd, hpv, hpb⟩ := htime d v inp hd' hv x hdel (by rw [hc]; exact hv)
     rw [hc] at hpv
     obtain ⟨inpp, hp'⟩ := Converge.event_of_map hpv
-    exact persists_before_mono v (by omega : p + 1 ≤ E) x
-      (persists_of_event hp' (Converge.persists_of_broadcasts hpb))
+    obtain ⟨j, hjp, inpj, hj', hjx⟩ := Converge.persists_of_broadcasts hp' hpb
+    exact persists_before_mono v (by omega : j + 1 ≤ E) x (persists_of_event hj' hjx)
   · exact hp
 
 /-- **A block a node builds lies at or below its top after.** -/

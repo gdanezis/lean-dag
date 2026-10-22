@@ -8,8 +8,8 @@ initial state:
 
 * **one block per round**: the node's own blocks, those it persists, lie
   at strictly increasing rounds (`OneEach`), each its own and identified
-  by its hash (`Authored`); the blocks it broadcasts are those it
-  persists (`Sends`);
+  by its hash (`Authored`); it broadcasts each block it persists, and
+  only blocks it persists (`Sends`);
 * **its decisions**: the node keeps the decisions it outputs, the latest
   first, which are slots `0 … lo − 1` (`Decisions`);
 * **valid blocks**: each of its own blocks references only blocks it
@@ -45,13 +45,14 @@ def Authored : Prop :=
     (is : List (Input Validator BlockId Payload)),
     ∀ e ∈ persists (run cfg (State.init cfg) is).2, e.1 = cfg.idOf e.2 ∧ e.2.creator = cfg.me
 
-/-- **It sends its own blocks**: the blocks the node broadcasts are those
-it persists. -/
+/-- **It sends its own blocks**: the node broadcasts each block it
+persists, and only blocks it persists. -/
 def Sends : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
     (is : List (Input Validator BlockId Payload)),
-    broadcasts (run cfg (State.init cfg) is).2 = persists (run cfg (State.init cfg) is).2
+    let out := (run cfg (State.init cfg) is).2
+    (∀ e ∈ persists out, e ∈ broadcasts out) ∧ ∀ e ∈ broadcasts out, e ∈ persists out
 
 /-- **Its decisions**: the node keeps the decisions it outputs, the latest
 first, which are slots `0 … lo − 1`. -/

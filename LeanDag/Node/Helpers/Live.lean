@@ -237,9 +237,17 @@ theorem timer_after_built (hmono : Live.TimeMono tr time) {T : Finset Validator}
     obtain ⟨i₀', hi₀', hbt, -⟩ := builtAt_first (cfg := cfg) time hi'v ⟨e, he, her⟩
     have h₁ := hmono i₀' i' hi₀' (by omega)
     omega
-  · subst hre
-    have := ih i' hi'j (by omega) le_rfl hi'
-    omega
+  · rcases hre with hre | ⟨-, htop⟩
+    · subst hre
+      have := ih i' hi'j (by omega) le_rfl hi'
+      omega
+    · -- a restart at top `r`: `v` persisted its round-`r` block before
+      obtain ⟨o, ho, -, hor, -⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) i' r htop
+      have hB := (Converge.inv_before (cfg := cfg) (tr := tr) i' v).own o ho
+      obtain ⟨j', hj', hj'v, hj'e⟩ := mem_persists_before (cfg := cfg) v i' hB.2
+      obtain ⟨i₀', hi₀', hbt, -⟩ := builtAt_first (cfg := cfg) time hj'v ⟨_, hj'e, hor⟩
+      have h₁ := hmono i₀' i' (by omega) (by omega)
+      omega
 
 /-- **Reach or wait, at a reliable node**: a block `c` of `v` at the round
 above slot `k`'s round plus `m`, below the vote offset, reaches the slot's

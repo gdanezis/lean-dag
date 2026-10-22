@@ -111,6 +111,8 @@ inductive Input where
   | timer (r : ℕ)
   /-- A peer at round `r` asks for the blocks `ids` and their histories. -/
   | fetchRequest (peer : Validator) (r : ℕ) (ids : List BlockId)
+  /-- The node restarts after a crash, from the state it persisted. -/
+  | restart
 
 /-- **What a node produces.** -/
 inductive Output where

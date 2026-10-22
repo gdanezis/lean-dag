@@ -9,8 +9,11 @@ under the store's map (`tryBuild_some`); building, deciding and flushing
 change the parts of the state the claims read only so. Along any run the
 node's state meets `Inv`: what it holds and has pending it was given or
 made, its own blocks lie at strictly increasing rounds up to its top,
-each its own, identified by its hash and valid against what it knew, and
-its store is valid at the row.
+each its own, identified by its hash and valid against what it knew, its
+store is valid at the row, and its block at its top is stored and one
+of its own blocks. A step persists the blocks it builds and broadcasts
+them, and broadcasts besides only its own blocks of earlier steps, which
+it resends (`Sent`). Across these the store only gains blocks (`Grows`).
 -/
 
 namespace LeanDag
@@ -42,6 +45,27 @@ theorem tryBuild_some {s s' : State Validator BlockId Payload}
         refine ⟨r, _, _, hc.1, hc.2.1, hc.2.2.1, hr, rfl, rfl, rfl,
           hc.2.2.2, rfl, rfl, rfl, rfl, ?_⟩
         simp [built]
+      · exact absurd h (by simp)
+    · exact absurd h (by simp)
+  · exact absurd h (by simp)
+
+omit [Fintype Validator] in
+/-- **A successful build step makes its block the node's own**, stored. -/
+theorem tryBuild_own {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
+    ∃ id b, out = built cfg [(id, b)] ∧ s'.own = some id ∧ id ∈ s'.store.ids ∧
+      s'.store.blk id = b := by
+  unfold tryBuild at h
+  split at h
+  · rename_i r hr
+    dsimp only at h
+    split at h
+    · split at h
+      · rw [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        refine ⟨_, ⟨r + 1, cfg.me, refsAt cfg s.store r s.own, cfg.payload (r + 1)⟩,
+          by simp [built], rfl, by simp [Store.insert_ids], ?_⟩
+        exact Std.TreeMap.getD_insert_self
       · exact absurd h (by simp)
     · exact absurd h (by simp)
   · exact absurd h (by simp)
@@ -128,6 +152,59 @@ theorem StoreValid.insert {q : ℕ} {st : Store Validator BlockId Payload} (hs :
     rw [hlk i hi']
     exact ⟨rfl, rfl⟩
 
+/-- **The store grows**: no block is lost and none changes. -/
+def Grows (st st' : Store Validator BlockId Payload) : Prop :=
+  st.ids ⊆ st'.ids ∧ st'.junk = st.junk ∧ ∀ j ∈ st.ids, st'.blk j = st.blk j
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem Grows.refl (st : Store Validator BlockId Payload) : Grows st st :=
+  ⟨subset_rfl, rfl, fun _ _ => rfl⟩
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem Grows.trans {a b c : Store Validator BlockId Payload} (h₁ : Grows a b) (h₂ : Grows b c) :
+    Grows a c :=
+  ⟨h₁.1.trans h₂.1, h₂.2.1.trans h₁.2.1, fun j hj => (h₂.2.2 j (h₁.1 hj)).trans (h₁.2.2 j hj)⟩
+
+omit [Fintype Validator] [DecidableEq Validator] in
+/-- A grown store reads its old blocks alike. -/
+theorem Grows.blk {st st' : Store Validator BlockId Payload} (h : Grows st st')
+    {j : BlockId} (hj : j ∈ st.ids) : st'.blk j = st.blk j :=
+  h.2.2 j hj
+
+omit [Fintype Validator] [DecidableEq Validator] in
+theorem Grows.insert (st : Store Validator BlockId Payload) {id : BlockId}
+    {b : Block Validator BlockId Payload} {hnew hrefs hpred} :
+    Grows st (st.insert id b hnew hrefs hpred) :=
+  ⟨fun _ hj => Finset.mem_cons_of_mem (hb := hnew) hj, rfl, fun _ hj =>
+    treeMap_getD_insert_ne (fun e => hnew (e ▸ hj))⟩
+
+omit [Fintype Validator] in
+theorem Grows.accept (st : Store Validator BlockId Payload) (id : BlockId)
+    (b : Block Validator BlockId Payload) : Grows st (Node.accept cfg st id b) := by
+  unfold Node.accept
+  split
+  · exact Grows.insert st
+  · exact Grows.refl st
+
+omit [Fintype Validator] in
+theorem Grows.foldl : ∀ (l : List (BlockId × Block Validator BlockId Payload))
+    (st : Store Validator BlockId Payload),
+    Grows st (l.foldl (fun s e => Node.accept cfg s e.1 e.2) st)
+  | [], st => Grows.refl st
+  | e :: l, st => (Grows.accept st e.1 e.2).trans (Grows.foldl l _)
+
+omit [Fintype Validator] in
+theorem Grows.flush : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
+    (pend : List (BlockId × Block Validator BlockId Payload)),
+    Grows st (Node.flush cfg fuel st pend).1
+  | 0, st, _ => Grows.refl st
+  | fuel + 1, st, pend => by
+    unfold Node.flush
+    dsimp only
+    split
+    · exact Grows.refl st
+    · exact (Grows.foldl _ st).trans (Grows.flush fuel _ _)
+
 /-- **The invariant** of a node's state, against what it knew, `K`, and
 its own blocks, `B`. -/
 structure Inv (cfg : Config Validator BlockId Payload) (s : State Validator BlockId Payload)
@@ -139,6 +216,7 @@ structure Inv (cfg : Config Validator BlockId Payload) (s : State Validator Bloc
   good : ∀ e ∈ B, Good cfg K e
   sub : ∀ e ∈ B, e ∈ K
   valid : StoreValid cfg.q s.store
+  own : ∀ j, s.own = some j → j ∈ s.store.ids ∧ (j, s.store.blk j) ∈ B
 
 omit [Fintype Validator] in
 theorem Inv.mono {s : State Validator BlockId Payload}
@@ -146,7 +224,7 @@ theorem Inv.mono {s : State Validator BlockId Payload}
     {B : List (BlockId × Block Validator BlockId Payload)} (h : Inv cfg s K B) (hK : K ⊆ K') :
     Inv cfg s K' B :=
   ⟨fun j hj => hK (h.known j hj), fun e he => hK (h.pend e he), h.rounds,
-    fun e he => (h.good e he).mono hK, fun e he => hK (h.sub e he), h.valid⟩
+    fun e he => (h.good e he).mono hK, fun e he => hK (h.sub e he), h.valid, h.own⟩
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- Accepting a known block keeps the store known. -/
@@ -173,9 +251,10 @@ theorem Inv.tryBuild {s s' : State Validator BlockId Payload}
     ∃ e, out = built cfg [e] ∧ Inv cfg s' (K ∪ {e}) (B ++ [e]) := by
   obtain ⟨r, id, b, hnew, hrefs, hpred, hr, hbr, hbc, hid, hv, hst, htop, hpd, -, hout⟩ :=
     tryBuild_some h
+  obtain ⟨id', b', hout', hown, hid', hblk⟩ := tryBuild_own h
   have hK : K ⊆ K ∪ {(id, b)} := Set.subset_union_left
   have hmem : (id, b) ∈ K ∪ {(id, b)} := Set.mem_union_right _ rfl
-  refine ⟨(id, b), hout, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩⟩
+  refine ⟨(id, b), hout, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
   · rw [hst]
     exact known_insert (fun j hj => hK (hi.known j hj)) hmem
   · rw [hpd]; exact fun e he => hK (hi.pend e he)
@@ -202,6 +281,16 @@ theorem Inv.tryBuild {s s' : State Validator BlockId Payload}
     · exact hK (hi.sub e he)
     · rw [List.mem_singleton] at he; subst he; exact hmem
   · rw [hst]; exact hi.valid.insert hv
+  · have he : id' = id ∧ b' = b := by
+      have h' := hout'.symm.trans hout
+      simp only [built, List.flatMap_cons, List.flatMap_nil, List.append_nil, List.cons.injEq,
+        Output.persist.injEq] at h'
+      exact h'.1
+    obtain ⟨rfl, rfl⟩ := he
+    intro j hj
+    rw [hown, Option.some.injEq] at hj
+    subst hj
+    exact ⟨hid', by rw [hblk]; simp⟩
 
 omit [Fintype Validator] in
 /-- **Building keeps the invariant**, the new blocks known and good. -/
@@ -229,6 +318,11 @@ theorem Inv.progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payload}
 omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
 theorem broadcasts_append (a b : List (Output Validator BlockId Payload)) :
     broadcasts (a ++ b) = broadcasts a ++ broadcasts b :=
+  List.filterMap_append
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem commitsOf_append (a b : List (Output Validator BlockId Payload)) :
+    commitsOf (a ++ b) = commitsOf a ++ commitsOf b :=
   List.filterMap_append
 
 omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
@@ -296,15 +390,17 @@ theorem quiet_commits (ds : List (ℕ × Option BlockId)) :
   rfl
 
 omit [Fintype Validator] in
-/-- An invariant read only from the store, the pending blocks and the top
-carries over to a state that keeps them. -/
+/-- An invariant read only from the store, the pending blocks, the top
+and the own block carries over to a state that keeps them. -/
 theorem Inv.of_eq {s s' : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
-    (hst : s'.store = s.store) (hpd : s'.pending = s.pending) (htop : s'.top = s.top) :
+    (hst : s'.store = s.store) (hpd : s'.pending = s.pending) (htop : s'.top = s.top)
+    (hown : s'.own = s.own) :
     Inv cfg s' K B :=
   ⟨by rw [hst]; exact hi.known, by rw [hpd]; exact hi.pend,
-    by rw [htop]; exact hi.rounds, hi.good, hi.sub, by rw [hst]; exact hi.valid⟩
+    by rw [htop]; exact hi.rounds, hi.good, hi.sub, by rw [hst]; exact hi.valid,
+    by rw [hst, hown]; exact hi.own⟩
 
 omit [Fintype Validator] in
 /-- **Deciding keeps the invariant** and outputs no block. -/
@@ -315,7 +411,7 @@ theorem Inv.decideStep {s : State Validator BlockId Payload}
   unfold Node.decideStep
   dsimp only
   split
-  · exact ⟨out_quiet (quiet_commits _), hi.of_eq rfl rfl rfl⟩
+  · exact ⟨out_quiet (quiet_commits _), hi.of_eq rfl rfl rfl rfl⟩
   · exact ⟨⟨rfl, rfl⟩, hi⟩
 
 omit [Fintype Validator] in
@@ -379,7 +475,9 @@ theorem Inv.flushAll {s : State Validator BlockId Payload}
   intro fl
   have hfl := flush_known (cfg := cfg) (K := K) fuel (st := s.store) (pend := s.pending)
     hi.known hi.valid hi.pend
-  exact ⟨hfl.1, hfl.2.1, hi.rounds, hi.good, hi.sub, hfl.2.2⟩
+  have hg := Grows.flush (cfg := cfg) fuel s.store s.pending
+  exact ⟨hfl.1, hfl.2.1, hi.rounds, hi.good, hi.sub, hfl.2.2, fun j hj =>
+    ⟨hg.1 (hi.own j hj).1, by rw [hg.blk (hi.own j hj).1]; exact (hi.own j hj).2⟩⟩
 
 omit [Fintype Validator] in
 /-- **Advancing keeps the invariant**, and its own blocks are the built
@@ -492,19 +590,116 @@ theorem Inv.settle_of {s : State Validator BlockId Payload}
   · exact Or.inl (hK hx)
   · exact Or.inr hx
 
+/-- **A step's blocks**: its outputs persist exactly `bs` and broadcast
+each of them, and besides broadcast only blocks of `B`, the node's own
+blocks before the step. -/
+def Sent (B bs : List (BlockId × Block Validator BlockId Payload))
+    (out : List (Output Validator BlockId Payload)) : Prop :=
+  persists out = bs ∧ (∀ e ∈ bs, e ∈ broadcasts out) ∧ ∀ e ∈ broadcasts out, e ∈ B ++ bs
+
+omit [Fintype Validator] [DecidableEq Validator] [LinearOrder BlockId] in
+theorem Sent.of_out {B bs : List (BlockId × Block Validator BlockId Payload)}
+    {out : List (Output Validator BlockId Payload)} (h : Out bs out) : Sent B bs out :=
+  ⟨h.1, fun e he => h.2 ▸ he, fun e he => List.mem_append_right _ (h.2 ▸ he)⟩
+
+/-- **A timer step's state** is the settle's after the timer fires,
+whether or not the node resends. -/
+theorem step_timer_fst (s : State Validator BlockId Payload) (r : ℕ) :
+    (Node.step cfg s (.timer r)).1 = (Node.settle cfg { s with fired := insert r s.fired }).1 := by
+  simp only [Node.step]; split <;> rfl
+
+/-- A timer step, read as the settle's state and the step's outputs. -/
+theorem step_timer_eq (s : State Validator BlockId Payload) (r : ℕ) :
+    Node.step cfg s (.timer r) =
+      ((Node.settle cfg { s with fired := insert r s.fired }).1, (Node.step cfg s (.timer r)).2) :=
+  Prod.ext (step_timer_fst s r) rfl
+
+/-- **A timer step's outputs**: the settle's, then possibly a resend. -/
+theorem step_timer_snd (s : State Validator BlockId Payload) (r : ℕ) :
+    (Node.step cfg s (.timer r)).2 = (Node.settle cfg { s with fired := insert r s.fired }).2 ∨
+      (Node.step cfg s (.timer r)).2 = (Node.settle cfg { s with fired := insert r s.fired }).2 ++
+        Node.resend cfg (Node.settle cfg { s with fired := insert r s.fired }).1 := by
+  simp only [Node.step]; split
+  · exact Or.inr rfl
+  · exact Or.inl rfl
+
+omit [Fintype Validator] in
+/-- Resending outputs no decision. -/
+theorem commitsOf_resend (s : State Validator BlockId Payload) :
+    commitsOf (Node.resend cfg s) = [] := by
+  unfold Node.resend; split <;> rfl
+
+omit [Fintype Validator] in
+/-- Resending persists no block. -/
+theorem persists_resend (s : State Validator BlockId Payload) :
+    persists (Node.resend cfg s) = [] := by
+  unfold Node.resend; split <;> rfl
+
+/-- A timer step persists what its settle persists. -/
+theorem persists_step_timer (s : State Validator BlockId Payload) (r : ℕ) :
+    persists (Node.step cfg s (.timer r)).2 =
+      persists (Node.settle cfg { s with fired := insert r s.fired }).2 := by
+  rcases step_timer_snd (cfg := cfg) s r with h | h <;> rw [h]
+  rw [persists_append, persists_resend, List.append_nil]
+
+/-- A timer step outputs the decisions its settle outputs. -/
+theorem commitsOf_step_timer (s : State Validator BlockId Payload) (r : ℕ) :
+    commitsOf (Node.step cfg s (.timer r)).2 =
+      commitsOf (Node.settle cfg { s with fired := insert r s.fired }).2 := by
+  rcases step_timer_snd (cfg := cfg) s r with h | h <;> rw [h]
+  rw [commitsOf_append, commitsOf_resend, List.append_nil]
+
+omit [Fintype Validator] in
+/-- **The timer a resend sets** is the top round's, for its timeout. -/
+theorem mem_resend_setTimer {s : State Validator BlockId Payload} {r a : ℕ}
+    (h : Output.setTimer r a ∈ Node.resend cfg s) : s.top = some r ∧ a = cfg.timeout r := by
+  unfold Node.resend at h
+  split at h
+  · rename_i t j ht _
+    simp only [List.mem_cons, reduceCtorEq, Output.setTimer.injEq, List.not_mem_nil,
+      or_false, false_or] at h
+    obtain ⟨rfl, rfl⟩ := h
+    exact ⟨ht, rfl⟩
+  · exact absurd h List.not_mem_nil
+
+omit [Fintype Validator] in
+/-- **Resending broadcasts one of the node's own blocks** and persists
+none. -/
+theorem Sent.resend {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B bs : List (BlockId × Block Validator BlockId Payload)}
+    {out : List (Output Validator BlockId Payload)} (h : Sent B bs out)
+    (hi : Inv cfg s K (B ++ bs)) : Sent B bs (out ++ Node.resend cfg s) := by
+  have hr : persists (Node.resend cfg s) = [] ∧
+      ∀ e ∈ broadcasts (Node.resend cfg s), e ∈ B ++ bs := by
+    unfold Node.resend
+    split
+    · rename_i r j ht ho
+      refine ⟨rfl, fun e he => ?_⟩
+      simp only [broadcasts, List.filterMap_cons, List.filterMap_nil, List.mem_singleton] at he
+      subst he
+      exact (hi.own j ho).2
+    · exact ⟨rfl, fun e he => absurd he (by simp [broadcasts])⟩
+  refine ⟨by rw [persists_append, hr.1, h.1, List.append_nil], fun e he => ?_, fun e he => ?_⟩
+  · rw [broadcasts_append]; exact List.mem_append_left _ (h.2.1 e he)
+  · rw [broadcasts_append] at he
+    rcases List.mem_append.mp he with he | he
+    · exact h.2.2 e he
+    · exact hr.2 e he
+
 /-- **A step keeps the invariant**: what it was given and its own blocks
 are known, and its own blocks are good. -/
 theorem Inv.step {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
     (i : Input Validator BlockId Payload) :
-    ∃ bs, Out bs (Node.step cfg s i).2 ∧
+    ∃ bs, Sent B bs (Node.step cfg s i).2 ∧
       Inv cfg (Node.step cfg s i).1 (K ∪ {x | x ∈ delivered cfg [i]} ∪ {x | x ∈ bs}) (B ++ bs) := by
   let K' := K ∪ {x | x ∈ delivered cfg [i]}
   have hsub : K ⊆ K' := fun x hx => Or.inl hx
   have hnil : ∀ (xs : List (Output Validator BlockId Payload)), (∀ o ∈ xs, o.isQuiet) →
-      ∃ bs, Out bs xs ∧ Inv cfg s (K' ∪ {x | x ∈ bs}) (B ++ bs) :=
-    fun xs hxs => ⟨[], out_quiet hxs, by simpa using hi.mono hsub⟩
+      ∃ bs, Sent B bs xs ∧ Inv cfg s (K' ∪ {x | x ∈ bs}) (B ++ bs) :=
+    fun xs hxs => ⟨[], Sent.of_out (out_quiet hxs), by simpa using hi.mono hsub⟩
   have hnil' := hnil [] (by simp)
   cases i with
   | start =>
@@ -530,7 +725,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
               (fun j hj => Set.subset_union_left (hi.known j hj)) (by simp [e]),
             fun x hx => Set.subset_union_left (hi.pend x hx), Or.inr ⟨0, rfl, ?_⟩,
             fun x hx => ?_, fun x hx => ?_, hi.valid.insert (hnew := h₂.1) (hrefs := hr₀)
-              (hpred := hp₀) h₂.2⟩
+              (hpred := hp₀) h₂.2, fun j hj => ?_⟩
           · rw [hB, List.nil_append]
             exact ⟨by simp, fun x hx => by rw [List.mem_singleton] at hx; subst hx; rfl⟩
           · rw [hB, List.nil_append, List.mem_singleton] at hx
@@ -539,9 +734,15 @@ theorem Inv.step {s : State Validator BlockId Payload}
             exact rowValid_congr (fun j hj => absurd hj (Finset.notMem_empty j)) h₂.2
           · rw [hB, List.nil_append, List.mem_singleton] at hx
             subst hx; simp
+          · rw [Option.some.injEq] at hj
+            subst hj
+            refine ⟨by simp [Store.insert_ids], ?_⟩
+            change (e.1, (s.store.map.insert e.1 e.2).getD e.1 s.store.junk) ∈ B ++ [e]
+            rw [Std.TreeMap.getD_insert_self]
+            simp
         obtain ⟨bs, ho, hi'⟩ := hi₀.settle
         refine ⟨e :: bs, ?_, ?_⟩
-        · exact (out_built (cfg := cfg) [e]).append ho
+        · exact Sent.of_out ((out_built (cfg := cfg) [e]).append ho)
         · refine (by simpa using hi' : Inv cfg _ (K ∪ {x | x ∈ [e]} ∪ {x | x ∈ bs}) (B ++ e :: bs)).mono
             fun x hx => ?_
           simp only [Set.mem_union, Set.mem_setOf_eq, List.mem_cons] at hx ⊢
@@ -560,27 +761,39 @@ theorem Inv.step {s : State Validator BlockId Payload}
           rcases List.mem_cons.mp hx with rfl | hx
           · exact hmem
           · exact hsub (hi.pend x hx))
-      dsimp only at hfl ⊢
-      generalize flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending) = fl at hfl ⊢
+      have hg := Grows.flush (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
+      dsimp only at hfl hg ⊢
+      generalize flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending) = fl at hfl hg ⊢
       generalize missing { s with store := fl.1, pending := fl.2 } id b = miss
       have hi₀ : Inv cfg
           { s with store := fl.1, pending := fl.2, requested := s.requested ++ miss.map (·, id) }
           K' B :=
         ⟨hfl.1, hfl.2.1, hi.rounds, fun x hx => (hi.good x hx).mono hsub,
-          fun x hx => hsub (hi.sub x hx), hfl.2.2⟩
-      refine hi₀.settle_of subset_rfl _ fun o ho => ?_
+          fun x hx => hsub (hi.sub x hx), hfl.2.2, fun j hj =>
+            ⟨hg.1 (hi.own j hj).1, by rw [hg.blk (hi.own j hj).1]; exact (hi.own j hj).2⟩⟩
+      refine Exists.imp (fun bs h => ⟨Sent.of_out h.1, h.2⟩)
+        (hi₀.settle_of subset_rfl _ fun o ho => ?_)
       split at ho
       · simp at ho
       · rw [List.mem_singleton] at ho; subst ho; rfl
     · exact hnil'
   | timer r =>
     simp only [Node.step]
-    exact ((hi.mono hsub).of_eq (s' := { s with fired := insert r s.fired }) rfl rfl rfl).settle
+    obtain ⟨bs, ho, hi'⟩ :=
+      ((hi.mono hsub).of_eq (s' := { s with fired := insert r s.fired }) rfl rfl rfl rfl).settle
+    split
+    · exact ⟨bs, (Sent.of_out ho).resend hi', hi'⟩
+    · exact ⟨bs, Sent.of_out ho, hi'⟩
   | fetchRequest peer r ids =>
     simp only [Node.step]
     refine hnil _ fun o ho => ?_
     obtain ⟨j, -, rfl⟩ := List.mem_map.mp ho
     rfl
+  | restart =>
+    simp only [Node.step]
+    have h := (Sent.of_out (B := B) (bs := []) (out := []) ⟨rfl, rfl⟩).resend (cfg := cfg)
+      (s := s) (K := K) (by simpa using hi)
+    exact ⟨[], by simpa using h, by simpa using hi.mono hsub⟩
 
 omit [Fintype Validator] in
 /-- What was delivered is identified by its hash. -/
@@ -628,16 +841,27 @@ theorem Inv.run : ∀ (is : List (Input Validator BlockId Payload))
     rw [← hK, ← List.append_assoc]
     exact ih
 
-/-- **A run broadcasts what it persists.** -/
+/-- **A run broadcasts what it persists**, and besides only the node's
+own blocks before it. -/
 theorem broadcasts_run : ∀ (is : List (Input Validator BlockId Payload))
     {s : State Validator BlockId Payload} {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)}, Inv cfg s K B →
-    broadcasts (Node.run cfg s is).2 = persists (Node.run cfg s is).2
-  | [], _, _, _, _ => rfl
-  | i :: is, _, _, _, hi => by
+    (∀ e ∈ persists (Node.run cfg s is).2, e ∈ broadcasts (Node.run cfg s is).2) ∧
+      ∀ e ∈ broadcasts (Node.run cfg s is).2, e ∈ B ++ persists (Node.run cfg s is).2
+  | [], _, _, _, _ => ⟨fun _ h => absurd h (by simp [Node.run, persists]),
+      fun _ h => absurd h (by simp [Node.run, broadcasts])⟩
+  | i :: is, _, _, B, hi => by
     obtain ⟨bs, ho, hi₁⟩ := hi.step i
+    obtain ⟨ih₁, ih₂⟩ := broadcasts_run is hi₁
     simp only [Node.run]
-    rw [broadcasts_append, persists_append, ho.1, ho.2, broadcasts_run is hi₁]
+    rw [broadcasts_append, persists_append, ho.1]
+    refine ⟨fun e he => ?_, fun e he => ?_⟩
+    · rcases List.mem_append.mp he with he | he
+      · exact List.mem_append_left _ (ho.2.1 e he)
+      · exact List.mem_append_right _ (ih₁ e he)
+    · rcases List.mem_append.mp he with he | he
+      · rw [← List.append_assoc]; exact List.mem_append_left _ (ho.2.2 e he)
+      · rw [← List.append_assoc]; exact ih₂ e he
 
 omit [Fintype Validator] in
 /-- The initial state meets the invariant, with nothing known or broadcast. -/
@@ -648,6 +872,7 @@ theorem Inv.init : Inv cfg (State.init cfg) ∅ [] where
   good := fun _ h => absurd h (List.not_mem_nil)
   sub := fun _ h => absurd h (List.not_mem_nil)
   valid := fun _ h => absurd h (Finset.notMem_empty _)
+  own := fun _ h => absurd h (by simp [State.init])
 
 end Node
 

@@ -31,6 +31,11 @@ input `i` in the state `s`: the new state and the outputs.
   with the blocks asked for that the store holds and their histories,
   less the blocks a node at round `r` holds whatever it built on
   (`coreThreshold`, `pruned`).
+* **Resending** (`resend`): when the timer of the node's top round fires
+  and the node does not build, and when it restarts, it broadcasts its
+  top block again and sets that round's timer again. A crash loses the
+  messages sent to the node while it is down; resending lets a peer that
+  lost them fetch the history again.
 * **Settling** (`settle`, `quiesce`): after each change to its state,
   the node builds, decides and accepts what that allows, in passes,
   until a pass changes none of its top, its pending blocks and its next
@@ -313,6 +318,13 @@ def answer (s : State Validator BlockId Payload) (peer : Validator) (r : ℕ) (i
     List (Output Validator BlockId Payload) :=
   (answerIds cfg s r ids).map fun j => .send peer j (s.store.blk j)
 
+/-- **Send the node's top block again**: broadcast its block at its top
+round and set that round's timer. -/
+def resend (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
+  match s.top, s.own with
+  | some r, some id => [.broadcast id (s.store.blk id), .setTimer r (cfg.timeout r)]
+  | _, _ => []
+
 /-- **Build, decide, then accept what that allows**: a block built can
 make a pending block ready, so this ends by flushing, and no pending
 block is left ready. -/
@@ -375,8 +387,11 @@ def step (s : State Validator BlockId Payload) :
       let r := settle cfg { s₁ with requested := s₁.requested ++ miss.map fun x => (x, id) }
       (r.1, (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss]) ++ r.2)
     else (s, [])
-  | .timer r => settle cfg { s with fired := insert r s.fired }
+  | .timer r =>
+    let res := settle cfg { s with fired := insert r s.fired }
+    if res.1.top = some r then (res.1, res.2 ++ resend cfg res.1) else res
   | .fetchRequest peer r ids => (s, answer cfg s peer r ids)
+  | .restart => (s, resend cfg s)
 
 end Node
 

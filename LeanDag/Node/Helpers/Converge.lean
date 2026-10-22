@@ -87,17 +87,18 @@ theorem knownBefore_sub {v : Validator} (hv : v ∈ H) (i : ℕ) :
   · obtain ⟨j, -, hjv, hx⟩ := mem_persists_before (cfg := cfg) v i hx
     exact Or.inr ⟨j, v, hjv, hv, hx⟩
 
-/-- **What an event broadcasts it made.** -/
-theorem persists_of_broadcasts {i : ℕ} {e : BlockId × Block Validator BlockId Payload}
-    (he : e ∈ broadcasts (outputsAt cfg tr i)) : e ∈ persists (outputsAt cfg tr i) := by
-  unfold outputsAt at he ⊢
-  split at he
-  · rename_i v inp _
-    obtain ⟨bs, ho, -⟩ := (inv_before (cfg := cfg) (tr := tr) i v).step inp
-    rw [ho.2] at he
-    rw [ho.1]
-    exact he
-  · exact absurd he List.not_mem_nil
+/-- **What an event broadcasts its node made**, at that event or before. -/
+theorem persists_of_broadcasts {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
+    (hi : tr[i]? = some (u, inp)) {e : BlockId × Block Validator BlockId Payload}
+    (he : e ∈ broadcasts (outputsAt cfg tr i)) :
+    ∃ j ≤ i, ∃ inp', tr[j]? = some (u, inp') ∧ e ∈ persists (outputsAt cfg tr j) := by
+  obtain ⟨bs, ho, -⟩ := (inv_before (cfg := cfg) (tr := tr) i u).step inp
+  rw [outputsAt_eq hi] at he
+  rcases List.mem_append.mp (ho.2.2 e he) with he | he
+  · obtain ⟨j, hj, hju, hje⟩ := mem_persists_before (cfg := cfg) u i he
+    obtain ⟨inp', hj'⟩ := event_of_map hju
+    exact ⟨j, hj.le, inp', hj', hje⟩
+  · exact ⟨i, le_rfl, inp, hi, by rw [outputsAt_eq hi, ho.1]; exact he⟩
 
 omit [Fintype Validator] in
 /-- **A block an honest node knew from an input** was delivered to it. -/
@@ -286,6 +287,18 @@ theorem persist_stored {i : ℕ} {u : Validator} {inp : Input Validator BlockId 
   rw [outputsAt_eq hi] at he
   rw [step_before hi]
   exact step_persist e he
+
+omit hinj in
+/-- **What an event broadcasts its node stores after it.** -/
+theorem broadcast_stored {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
+    (hi : tr[i]? = some (u, inp)) {e : BlockId × Block Validator BlockId Payload}
+    (he : e ∈ broadcasts (outputsAt cfg tr i)) :
+    e.1 ∈ (stateBefore cfg tr (i + 1) u).store.ids ∧
+      (stateBefore cfg tr (i + 1) u).store.blk e.1 = e.2 := by
+  obtain ⟨j, hj, inp', hj', hje⟩ := persists_of_broadcasts hi he
+  obtain ⟨h₁, h₂⟩ := persist_stored hj' hje
+  have hg := grows_before (cfg := cfg) (tr := tr) u (show j + 1 ≤ i + 1 by omega)
+  exact ⟨hg.1 h₁, by rw [hg.blk h₁]; exact h₂⟩
 
 omit hinj in
 /-- **A block pending at the end entered once and stayed.** -/

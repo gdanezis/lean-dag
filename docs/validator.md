@@ -15,10 +15,11 @@ asynchronous rows, the coin and `AsyncPace` are out of scope.
 
 The program is the scheme's consensus core: it builds blocks, receives
 them, fetches the histories it lacks, and decides. It keeps every block
-it accepts and never restarts. Garbage collection, crash recovery,
-checkpoints, bootstrap, rate limiting and the exclusion of equivocators
-are not part of it; a version with all of them is on branch
-`scheme-validator`. Crash recovery is planned on the core (§9).
+it accepts, and restarts after a crash from the state it persisted
+(§3.6). Garbage collection, checkpoints, bootstrap, rate limiting and
+the exclusion of equivocators are not part of it; a version with all of
+them is on branch `scheme-validator`. Liveness across crashes is planned
+(§9).
 
 Out of scope as well: stake weights, a mempool (the payload comes from a
 configured source), execution, and an implementation of hashing and
@@ -67,8 +68,8 @@ history needed it, and the decisions output, the latest first.
 
 **Inputs** (`Input`): a start, which builds the genesis block; a
 delivered block, with its identifier; a timer for round `r` that fired;
-and a request from a peer at round `r` for some blocks and their
-histories.
+a request from a peer at round `r` for some blocks and their histories;
+and a restart after a crash (§3.6).
 
 **Outputs** (`Output`): persist one of its own blocks, before it is
 broadcast; broadcast a block; set a timer for round `r`; commit slot `k`
@@ -260,11 +261,41 @@ bounded by the state (`passes`), and with `2 ≤ q` a settle ends settled
 block is ready, and nothing more can be decided. So none of the node's
 moves that what it holds allows is left for a later event.
 
+### 3.6 Restart and resending
+
+The environment persists the state a step leaves, atomically, before any
+of the step's outputs take effect. A crash loses the timers set and not
+fired, the outputs of the last step that have not taken effect, and the
+messages that arrive while the node is down; the state survives. On a
+restart (`Input.restart`) the state is unchanged, and the node resends
+its top block (`resend`): it broadcasts its block at its top round and
+sets that round's timer. A block is persisted before it is broadcast, so
+a restarted node never builds a second block at a round it built. A
+decision whose output was lost is in the persisted `decided`.
+
+When the timer of the node's top round fires and the node does not
+build, it resends its top block in the same way. Lost messages are not
+sent again otherwise, and without this a crash can stall the reliable
+nodes. At `n = 4`, `f = 1`, `q = 3`, with node `3` silent, node `2`
+crashes at round `t` before it receives the round-`t` blocks of nodes
+`0` and `1`. They build round `t + 1` on its round-`t` block and wait
+for its round-`t + 1` block, while node `2` restarts at round `t` without
+a quorum. With resending, nodes `0` and `1` send their round-`t + 1`
+blocks again each timeout; node `2` fetches their histories, builds
+round `t + 1`, and the three go on. In `LeanDagTest/Node/Step.lean`,
+with node `2` down from time `20`, nodes `0` and `1` stop at round `5`
+after four decisions; with node `2` restarting at time `60`, after 400
+inputs the three are at round `30` with 28 decisions each, alike.
+
+A restarted node builds each round it missed, on lent references (§3.2)
+or on its timer, so its own blocks still form a chain (§8). It needs no
+bootstrap, since no block is collected.
+
 ## 4. Conformance
 
 | | Claim | Proof |
 |---|---|---|
-| V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; the blocks it broadcasts are those it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`. | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions` (proved, `Local/Proof.lean`) |
+| V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; it broadcasts each block it persists, and only blocks it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`. | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions` (proved, `Local/Proof.lean`) |
 | V2 | **The decisions are the scheme's**: at the bounded vote, a decision step outputs what `Scheme.tryDecide` decides on any record and view holding the store's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.tryDecide_window`, `Node.ViewsAbove.window`, `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest store is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, with at most `f` nodes outside the honest set, every block an honest node broadcast, with its history, ends in every honest node's store. The fault bound makes the pruned answer (§3.4) sound: a block left out of an answer is reached from a round-`(r − 1)` block of an honest author in the asker's quorum. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain`, `Node.Quorate.run`, `Node.mem_coreSets`, `Node.pruned_chain`, `Node.eq_of_persists` |
@@ -556,76 +587,33 @@ rule: it references its own block of the round below, and builds rounds
 in sequence (§3.2), so a reliable node's chain is unbroken from its
 genesis block.
 
-## 9. Next: crash recovery
+## 9. Next: liveness across crashes
 
-A crashed node restarts from what it persisted. The decisions taken:
-a restarted node builds every round it missed, so its chain (§8) is
-unbroken; it rebroadcasts its top block on restart; liveness is to hold
-for crashes before GST and for crashes and recoveries after it; the
-state that only grows (`requested`, `pending`, `fired`) stays unbounded.
+The restart and resending are in the program (§3.6), and V1, V2, V3,
+V3′ and V11 hold over traces with restarts. V3′ and V11 assume every
+message sent reaches its receiver, so they cover crashes that lose
+timers but not messages. The decisions taken: a restarted node builds
+every round it missed; it resends its top block on restart; liveness is
+to hold for crashes before GST and for crashes and recoveries after it;
+the state that only grows (`requested`, `pending`, `fired`) stays
+unbounded.
 
-### 9.1 The model
+**V11 with crashes.** A timed trace gives each node's down intervals;
+delivery, timers and synchronisation are assumed only of a receiver that
+stays up. Let `T` be at least `q` and at least `n − f − c` honest nodes,
+each up from a time `t_r ≥ gst` on, and restarted after its last crash.
+Then the conclusions of V11 hold with GST replaced by `t_r + X`, for `X`
+a timeout of the top round plus `Δ + Δₛ` plus the timeouts of the rounds
+the slowest node rebuilds: production resumes, and decisions follow from
+a synchronisation point as in §5.2. Crashes before GST are the case
+`t_r = gst`. The proof replaces the arrival lemmas (`block_arrives`,
+`round_arrives`, `Helpers/Arrive.lean`), through which every use of
+delivery and synchronisation passes, by their versions after `t_r + X`.
 
-* **What a crash loses.** The environment persists the state a step
-  leaves, atomically, before any of the step's outputs take effect. A
-  crash loses the timers set and not fired, the outputs of the last step
-  not yet taken effect, and the messages that arrive while the node is
-  down. The persisted state is the whole `State`; keeping `pending`
-  makes convergence (V3′) hold across restarts without a later block to
-  fetch the lost ones on account of.
-* **Restart** (`Input.restart`). The state is unchanged; the outputs
-  broadcast the node's block at its top round and set that round's
-  timer. A block is persisted before it is broadcast, so a restarted
-  node never builds a second block at a round it built: no
-  self-equivocation. A node that restarts before it started does
-  nothing, and `start` still applies.
-* **Retransmission.** Crashes lose messages, and lost blocks are not
-  sent again. With `f` nodes Byzantine and silent and one crashed, the
-  reliable nodes can stall: at `n = 4`, `f = 1`, `q = 3`, node `C`
-  crashes at round `t` before receiving `A`'s and `B`'s round-`t`
-  blocks; `A` and `B` build round `t + 1` on `C`'s round-`t` block and
-  wait for `C`'s round-`t + 1` block; `C` restarts at round `t` without
-  a quorum, and waits for theirs. The proposed rule: when the timer of
-  the node's top round fires and the node does not build, it
-  rebroadcasts its top block and sets the timer again. A node that
-  receives the block then synchronises its history (§5.1) and builds the
-  rounds it missed.
-* **Catch-up.** A restarted node needs no bootstrap, since no block is
-  collected: it receives blocks, synchronises their histories, and
-  builds each missed round on the lent references (§3.2), or on its
-  timer where they fail the tests.
+The phases left:
 
-### 9.2 The claims
-
-* **V1** across restarts: `Sends` becomes "each block the node
-  broadcasts it persisted at or before, and each block it persists it
-  broadcasts"; the others stand, so the node's blocks lie at strictly
-  increasing rounds and no decision is output twice. An output lost in
-  a crash is the environment's to recover: a lost commit is in the
-  persisted `decided`.
-* **V2** is about one decision step and stands.
-* **V3 and V3′** over traces with restarts: the restart case of each
-  step invariant. V3′ keeps its premise that every message sent reaches
-  its receiver, so it covers crashes that lose timers but not messages.
-* **V11 with crashes.** A timed trace gives each node's down
-  intervals; delivery, timers and synchronisation are assumed only of a
-  receiver that stays up. Let `T` be at least `q` and at least
-  `n − f − c` honest nodes, each up from a time `t_r ≥ gst` on, and
-  restarted after its last crash. Then the conclusions of V11 hold with
-  GST replaced by `t_r + X`, for `X` a timeout of the top round plus
-  `Δ + Δₛ` plus the timeouts of the rounds the slowest node rebuilds:
-  production resumes, and decisions follow from a synchronisation point
-  as in §5.2. Crashes before GST are the case `t_r = gst`. The proof
-  replaces the arrival lemmas (`block_arrives`, `round_arrives`,
-  `Helpers/Arrive.lean`), through which every use of delivery and
-  synchronisation passes, by their versions after `t_r + X`.
-
-### 9.3 Phases
-
-1. The model: `restart`, retransmission, the executables' input;
-   V1, V3 and V3′ re-proved.
-2. The timed model with down intervals, the arrival lemmas after
+1. The timed model with down intervals, the arrival lemmas after
    recovery, and V11 with crashes.
-3. The simulator: crash and recovery scenarios, among them the stall
-   above and its restart, and the catch-up time measured.
-4. This document: §3 and §4 for the restart, §5 for crashes.
+2. The simulator: crash and recovery scenarios, among them the stall of
+   §3.6 and its restart, and the catch-up time measured.
+3. This document: §5 for crashes.

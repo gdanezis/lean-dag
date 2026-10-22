@@ -171,13 +171,19 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         (by split <;> rfl) (step_deliver hA)
     · exact hsame (step_deliver_not hA)
   | timer r =>
-    exact hset { s with fired := Insert.insert r s.fired } [] hc hp rfl rfl
+    rw [persists_step_timer] at hb
+    rw [step_timer_fst, commitsOf_step_timer]
+    exact (hc : IsCut U { s with fired := Insert.insert r s.fired }.store).settle hg hσ ht hp hb
   | fetchRequest peer r ids =>
     rw [show Node.step cfg s (.fetchRequest peer r ids) = (s, answer cfg s peer r ids) from rfl]
     refine ⟨hc, fun e he => ?_⟩
     unfold answer commitsOf at he
     rw [List.filterMap_map] at he
     simp at he
+  | restart =>
+    show IsCut U s.store ∧ ∀ e ∈ commitsOf (Node.resend cfg s), Verdict cfg U e
+    rw [commitsOf_resend]
+    exact ⟨hc, fun e he => absurd he List.not_mem_nil⟩
 
 end Node
 

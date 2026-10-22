@@ -106,7 +106,7 @@ theorem mem_persists_of_known {x : BlockId × Block Validator BlockId Payload}
   simp only [knownOf, List.mem_append] at hx
   rcases hx with hx | hx
   · have := hauth v hv x hx hc
-    rwa [runOf, Local.sends] at this
+    exact (Local.sends _ _ _ (cfg.at x.2.creator) _).2 x this
   · have := (Local.authored _ _ _ (cfg.at v) (inputsBefore tr tr.length v) x hx).2
     change x.2.creator = v at this
     rw [this]

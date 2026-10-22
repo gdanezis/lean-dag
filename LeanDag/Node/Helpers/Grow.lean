@@ -2,9 +2,8 @@ import LeanDag.Node.Helpers.Local
 /-!
 # A node's store grows
 
-Across a step the store only gains blocks (`Grows`): inserting adds a
-block, flushing and building insert, and deciding leaves the store
-alone.
+Across a step the store only gains blocks (`Grows`, `Helpers/Local.lean`):
+building inserts, and deciding leaves the store alone.
 -/
 
 namespace LeanDag
@@ -14,59 +13,6 @@ namespace Node
 variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Validator]
 variable [LinearOrder BlockId]
 variable {cfg : Config Validator BlockId Payload}
-
-/-- **The store grows**: no block is lost and none changes. -/
-def Grows (st st' : Store Validator BlockId Payload) : Prop :=
-  st.ids ⊆ st'.ids ∧ st'.junk = st.junk ∧ ∀ j ∈ st.ids, st'.blk j = st.blk j
-
-omit [Fintype Validator] [DecidableEq Validator] in
-theorem Grows.refl (st : Store Validator BlockId Payload) : Grows st st :=
-  ⟨subset_rfl, rfl, fun _ _ => rfl⟩
-
-omit [Fintype Validator] [DecidableEq Validator] in
-theorem Grows.trans {a b c : Store Validator BlockId Payload} (h₁ : Grows a b) (h₂ : Grows b c) :
-    Grows a c :=
-  ⟨h₁.1.trans h₂.1, h₂.2.1.trans h₁.2.1, fun j hj => (h₂.2.2 j (h₁.1 hj)).trans (h₁.2.2 j hj)⟩
-
-omit [Fintype Validator] [DecidableEq Validator] in
-/-- A grown store reads its old blocks alike. -/
-theorem Grows.blk {st st' : Store Validator BlockId Payload} (h : Grows st st')
-    {j : BlockId} (hj : j ∈ st.ids) : st'.blk j = st.blk j :=
-  h.2.2 j hj
-
-omit [Fintype Validator] [DecidableEq Validator] in
-theorem Grows.insert (st : Store Validator BlockId Payload) {id : BlockId}
-    {b : Block Validator BlockId Payload} {hnew hrefs hpred} :
-    Grows st (st.insert id b hnew hrefs hpred) :=
-  ⟨fun _ hj => Finset.mem_cons_of_mem (hb := hnew) hj, rfl, fun _ hj =>
-    treeMap_getD_insert_ne (fun e => hnew (e ▸ hj))⟩
-
-omit [Fintype Validator] in
-theorem Grows.accept (st : Store Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : Grows st (Node.accept cfg st id b) := by
-  unfold Node.accept
-  split
-  · exact Grows.insert st
-  · exact Grows.refl st
-
-omit [Fintype Validator] in
-theorem Grows.foldl : ∀ (l : List (BlockId × Block Validator BlockId Payload))
-    (st : Store Validator BlockId Payload),
-    Grows st (l.foldl (fun s e => Node.accept cfg s e.1 e.2) st)
-  | [], st => Grows.refl st
-  | e :: l, st => (Grows.accept st e.1 e.2).trans (Grows.foldl l _)
-
-omit [Fintype Validator] in
-theorem Grows.flush : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
-    (pend : List (BlockId × Block Validator BlockId Payload)),
-    Grows st (Node.flush cfg fuel st pend).1
-  | 0, st, _ => Grows.refl st
-  | fuel + 1, st, pend => by
-    unfold Node.flush
-    dsimp only
-    split
-    · exact Grows.refl st
-    · exact (Grows.foldl _ st).trans (Grows.flush fuel _ _)
 
 omit [Fintype Validator] in
 theorem Grows.progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
@@ -138,8 +84,9 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
         ((id, b) :: s.pending)).trans ?_
       exact Grows.settle_of _ rfl
     · exact Grows.refl s.store
-  | timer r => exact Grows.settle_of _ rfl
+  | timer r => rw [step_timer_fst]; exact Grows.settle_of _ rfl
   | fetchRequest peer r ids => exact Grows.refl _
+  | restart => exact Grows.refl _
 
 end Node
 

@@ -33,7 +33,7 @@ info: "true [(some 38), (some 24), (some 38), (some 38)] [33, 22, 37, 33] [2, 0,
 #eval summary { horizon := 150, row := "cordial-miners", crash := [(1, 60)] }
 
 /--
-info: "true [(some 42), (some 42), (some 42), (some 43)] [40, 40, 40, 41] [1, 1, 1, 1] true true"
+info: "true [(some 42), (some 42), (some 42), (some 41)] [40, 40, 40, 40] [2, 2, 2, 2] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "mysticeti", gst := 60, preMax := 25, seed := 2 }
@@ -60,12 +60,12 @@ info: "true [(some 38), (some 38), (some 38), (some 37), (some 38), (some 12)] [
 #guard_msgs in
 #eval summary { horizon := 150, row := "hybrid-mysticeti", n := 6, c := 1, crash := [(5, 30)] }
 
-/-- info: "true [(some 24), (some 24), (some 24)] [22, 24, 22] [6, 7, 6] true true" -/
+/-- info: "true [(some 24), (some 24), (some 24)] [24, 24, 24] [7, 7, 7] true true" -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "mysticeti", byz := [3], byzUntil := 150 }
 
 /--
-info: "true [(some 36), (some 36), (some 36), (some 36), (some 36)] [36, 35, 35, 35, 35] [5, 5, 5, 5, 5] true true"
+info: "true [(some 36), (some 36), (some 36), (some 36), (some 36)] [36, 36, 36, 36, 36] [5, 5, 5, 5, 5] true true"
 -/
 #guard_msgs in
 #eval summary { horizon := 150, row := "blue-bottle", n := 6, byz := [0], byzUntil := 150 }

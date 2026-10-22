@@ -445,7 +445,10 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         (by split <;> rfl) (step_deliver hA)
     · exact hsame (step_deliver_not hA)
   | timer r =>
-    exact hset { s with fired := insert r s.fired } [] (h.keeps rfl (Keeps.refl _)) hc hp rfl rfl
+    rw [persists_step_timer] at hb
+    rw [step_timer_fst, commitsOf_step_timer]
+    exact (h.keeps (s' := { s with fired := insert r s.fired }) rfl (Keeps.refl _)).settle
+      hg hσ ht hc hp hb
   | fetchRequest peer r ids =>
     rw [show Node.step cfg s (.fetchRequest peer r ids) = (s, answer cfg s peer r ids) from rfl]
     have : commitsOf (answer cfg s peer r ids) = [] := by
@@ -453,6 +456,10 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       rw [List.filterMap_map]
       exact List.filterMap_eq_nil_iff.mpr fun _ _ => rfl
     rw [this, List.append_nil]
+    exact ⟨h, hc⟩
+  | restart =>
+    show CommitInv cfg U s (cs ++ commitsOf (Node.resend cfg s)) ∧ IsCut U s.store
+    rw [commitsOf_resend, List.append_nil]
     exact ⟨h, hc⟩
 
 /-- **A run keeps the invariant**, at a record grounding what the node knew. -/
