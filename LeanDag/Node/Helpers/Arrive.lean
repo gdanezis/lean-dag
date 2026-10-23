@@ -7,10 +7,10 @@ import LeanDag.Node.Helpers.Live
 `docs/validator.md` §5.2. Along a trace, a node's state changes only at
 its own events (`before_succ_cases`). Each of its rounds up to its top was
 built at one of its events, with the retry timer (`built_by`,
-`timer_of_persist`), and a round's timer, once fired, stays
-fired
-(`fired_stays`). A reliable block that a reliable node `v` is given is
-held by `v` once its history has been synchronised (`arrives`,
+`timer_of_persist`), and a round's timer, once fired, stays fired while
+the node's top is not above the round (`fired_stays`). A reliable block
+that a reliable node `v` is given is held by `v` once its history has
+been synchronised (`arrives`,
 `arrives_zero`). Past GST a reliable node's block built at `s` is
 therefore held by every reliable node by `max s gst + Δ + Δₛ`
 (`arrival_of_delivered`): the arrival the liveness argument reads
@@ -79,20 +79,23 @@ theorem timer_of_persist {i : ℕ} {inp : Input Validator BlockId Payload}
   rw [outputsAt_eq he] at hep ⊢
   exact step_timer (cfg := cfg.at v) e hep
 
-/-- **A fired timer stays fired** at every later event. -/
+/-- **A fired timer stays fired** at every later event while the node's
+top is not above its round. -/
 theorem fired_stays {f r : ℕ} (hf : tr[f]? = some (v, Input.timer r)) :
-    ∀ k, f < k → r ∈ (stateBefore cfg tr k v).fired
-  | 0, h => absurd h (Nat.not_lt_zero _)
-  | k + 1, hfk => by
+    ∀ k, f < k → (stateBefore cfg tr k v).top.getD 0 ≤ r → r ∈ (stateBefore cfg tr k v).fired
+  | 0, h, _ => absurd h (Nat.not_lt_zero _)
+  | k + 1, hfk, htk => by
     rcases Nat.lt_succ_iff_lt_or_eq.mp hfk with hlt | rfl
-    · have ih := fired_stays hf k hlt
+    · have htk' : (stateBefore cfg tr k v).top.getD 0 ≤ r :=
+        ((rises_before (cfg := cfg) (tr := tr) v (Nat.le_succ k)).1).trans htk
+      have ih := fired_stays hf k hlt htk'
       rcases before_succ_cases (cfg := cfg) (tr := tr) v k with heq | ⟨inp, -, heq⟩
       · rw [heq]; exact ih
       · rw [heq]
-        exact step_fired (cfg := cfg.at v) ih
+        exact step_fired (cfg := cfg.at v) ih htk'
     · rw [stateBefore_succ hf, if_pos rfl, step_timer_fst]
       exact (settle_shape (cfg := cfg.at v)
-        { stateBefore cfg tr f v with fired := insert r (stateBefore cfg tr f v).fired }).fired
+        { stateBefore cfg tr f v with fired := fire (stateBefore cfg tr f v) r }).fired
         (Finset.mem_insert_self _ _)
 
 /-- **A block a node builds at an event is stored** from the next event

@@ -107,7 +107,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hfe).1
   have hfE : f < E := (lt_eventsBy hmono hfl).mpr htf
   -- at `τ + timeout n` its round's timer has fired, with the quorum held
-  have hfired : n ∈ (stateBefore cfg tr E v).fired := fired_stays hfe E hfE
+  have hfired : n ∈ (stateBefore cfg tr E v).fired :=
+    fired_stays hfe E hfE (by rw [hZt]; rfl)
   have hcardE : cfg.q ≤ (authorsIn (stateBefore cfg tr E v).store.toRecord
       (stateBefore cfg tr E v).store.ids n).card := by
     rw [← Store.authorsAt_eq]

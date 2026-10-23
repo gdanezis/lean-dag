@@ -199,7 +199,7 @@ theorem step_calm (s : State Validator BlockId Payload) (inp : Input Validator B
     rw [step_timer_fst] at h
     rcases Finset.mem_insert.mp (calm_quiesce (cfg := cfg) _ _ h) with rfl | h
     · exact Or.inr rfl
-    · exact Or.inl h
+    · exact Or.inl (Finset.mem_filter.mp h).1
   | fetchRequest peer r ids => exact fun r h => Or.inl h
   | restart => exact fun r h => Or.inl h
 
@@ -463,7 +463,7 @@ theorem quiesce_witness {U : BlockRecord Validator BlockId Payload P H}
         exact ⟨x, y, o, hx, hb, heo, hg'.trans (Grows.quiesce (cfg := cfg) n _)⟩
       · exact quiesce_witness hg n _
           (h₀.advance hg hp (fun e he => hK e (List.mem_append_left _ he)))
-          (fun e he => hp e ((advance_sub (cfg := cfg) s₀).1 e he))
+          (fun e he => hp e (advance_sub (cfg := cfg) s₀ e he))
           (fun e he => hK e (List.mem_append_right _ he)) e he'
 
 omit [Fintype Validator] in
@@ -583,7 +583,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · let s₁ := afterFlush (cfg := cfg) s id b
-      let miss := missing s₁ id b
+      let miss := missing s₁ b
       have hx : (id, b) ∈ K := hd _ (by simp [delivered, hA.1])
       have hg₁ := Grows.flush (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
       have hpend : ∀ e ∈ (id, b) :: s.pending, e ∈ K := fun e he => by
@@ -591,15 +591,14 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
         · exact hx
         · exact hp e he
       have hc₁ : IsCut U s₁.store := IsCut.flush hg _ _ hc hpend
-      let s₂ := { s₁ with requested := s₁.requested ++ miss.map fun x => (x, id) }
       have hfl := flush_known (cfg := cfg) (K := K) (s.pending.length + 1) (st := s.store)
         (pend := (id, b) :: s.pending) (fun j hj => hi.known j hj) hi.valid hpend
-      have hinv₂ : Inv cfg s₂ K B₀ :=
+      have hinv₂ : Inv cfg s₁ K B₀ :=
         ⟨hfl.1, hfl.2.1, hi.rounds, hi.good, hi.sub, hfl.2.2, fun j hj => by
           change j ∈ (flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)).1.ids ∧
             (j, (flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)).1.blk j) ∈ B₀
           exact ⟨hg₁.1 (hi.own j hj).1, by rw [hg₁.blk (hi.own j hj).1]; exact (hi.own j hj).2⟩⟩
-      refine hset s₂ (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss])
+      refine hset s₁ (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss])
         ⟨hc₁, hh.grow hg₁ rfl, hown.grow hg₁ rfl rfl, hg₁, fun r hr => Or.inl hr, ⟨B₀, hinv₂⟩⟩
         (fun e he => hpend e (flush_pending_sub _ _ _ e he)) ?_ (step_deliver hA)
       intro e he
@@ -610,12 +609,12 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     rw [persists_step_timer] at hb hev
     rw [step_timer_fst]
     refine Or.inr (settle_witness hg (s := s) (inp := .timer r)
-      (s₀ := { s with fired := insert r s.fired })
+      (s₀ := { s with fired := fire s r })
       ⟨hc, hh.grow (Grows.refl _) rfl, hown.grow (Grows.refl _) rfl rfl, Grows.refl _,
         fun t ht => ?_, ⟨B₀, hi.of_eq rfl rfl rfl rfl⟩⟩ hp hb e hev)
     rcases Finset.mem_insert.mp ht with rfl | ht
     · exact Or.inr rfl
-    · exact Or.inl ht
+    · exact Or.inl (Finset.mem_filter.mp ht).1
   | fetchRequest peer r ids =>
     intro e he
     change e ∈ persists (answer cfg s peer r ids) at he
@@ -897,10 +896,10 @@ theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum c
       · rw [List.mem_singleton] at h; cases h
     · exact ⟨TimersSet.of_none fun _ _ h => absurd h List.not_mem_nil, hA⟩
   | timer r =>
-    have hAs : ArmedQuorum cfg (Node.settle cfg { s with fired := insert r s.fired }).1 :=
-      ArmedQuorum.settle (s := { s with fired := insert r s.fired }) hA
-    have hts := (timersSet_quiesce (cfg := cfg) (passes cfg { s with fired := insert r s.fired })
-      { s with fired := insert r s.fired }).1
+    have hAs : ArmedQuorum cfg (Node.settle cfg { s with fired := fire s r }).1 :=
+      ArmedQuorum.settle (s := { s with fired := fire s r }) hA
+    have hts := (timersSet_quiesce (cfg := cfg) (passes cfg { s with fired := fire s r })
+      { s with fired := fire s r }).1
     simp only [Node.step]
     split
     · exact ⟨TimersSet.append hts (timersSet_resend _), hAs⟩

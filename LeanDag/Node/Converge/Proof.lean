@@ -132,9 +132,7 @@ theorem converges : Converges := by
   have hAmL : A m < L := hAL m
   set Sm := stateBefore cfg tr (A m) v
   let s₁ := afterFlush (cfg := cfg.at v) Sm (x m) (raw (x m))
-  let s₂ : State Validator BlockId Payload := { s₁ with
-    requested := s₁.requested ++ (missing s₁ (x m) (raw (x m))).map fun x' => (x', x m) }
-  have hstepm : stateBefore cfg tr (A m + 1) v = (settle (cfg.at v) s₂).1 := by
+  have hstepm : stateBefore cfg tr (A m + 1) v = (settle (cfg.at v) s₁).1 := by
     rw [step_before (cfg := cfg) htm, step_deliver hcm]
   have hRm := reads_before hinj hv (A m)
   have hxmk : (x m, raw (x m)) ∈ knownIn cfg H tr := hrawk _ (hxH m (by omega)).1
@@ -230,24 +228,10 @@ theorem converges : Converges := by
     (by simpa [y, show m.1 + 1 + n = K by omega] using hKp) (by omega)
   have hwx' : y n = x K := by simp [y, show m.1 + 1 + n = K by omega]
   rw [hwx'] at hw
-  -- `v` had not asked for it on `h`'s account
-  have hnreq : (x K, x m) ∉ s₁.requested := by
-    intro hq
-    obtain ⟨a', ha', b, hab, hca⟩ := requested_before (cfg := cfg) (tr := tr) v (A m) _ hq
-    have hbk : (x m, b) ∈ knownIn cfg H tr :=
-      Or.inl ⟨a', v, .deliver (x m) b, hab, hv, by simp [delivered, ← hca.1]⟩
-    have hbe : b = raw (x m) := content_eq hinj hbk hxmk rfl
-    rw [hbe] at hab hca
-    have hk := admit_after hinj hv hab hca (hfits _ (hxH m (by omega)).1)
-    rcases keeps_after hinj hv (hfits _ (hxH m (by omega)).1) hk (A m) (by omega) with
-      h'' | h''
-    · exact hA1 m h''
-    · exact (hxH m (by omega)).2
-        ((grows_before (cfg := cfg) (tr := tr) v (show A m ≤ L by omega)).1 h'')
   -- so it asked `h`'s author `u` for it at `h`'s arrival, from its round `r`
-  set miss := missing s₁ (x m) (raw (x m))
+  set miss := missing s₁ (raw (x m))
   set r := Sm.top.getD 0 with hr
-  have hwm : x K ∈ miss := List.mem_filter.mpr ⟨hw, by simpa using hnreq⟩
+  have hwm : x K ∈ miss := hw
   obtain ⟨rest, hout⟩ : ∃ rest, outputsAt cfg tr (A m) =
       (if miss.isEmpty then [] else [.fetch (raw (x m)).creator r miss]) ++ rest :=
     ⟨_, by rw [outputsAt_eq htm, step_deliver hcm]⟩

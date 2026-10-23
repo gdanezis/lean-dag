@@ -521,11 +521,6 @@ omit [Fintype Validator] in
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
 
 omit [Fintype Validator] in
-@[simp] theorem arm_requested (s : State Validator BlockId Payload) :
-    (Node.arm cfg s).1.requested = s.requested := by
-  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
-
-omit [Fintype Validator] in
 @[simp] theorem arm_decided (s : State Validator BlockId Payload) :
     (Node.arm cfg s).1.decided = s.decided := by
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
@@ -553,10 +548,6 @@ theorem advance_fired (s : State Validator BlockId Payload) :
 omit [Fintype Validator] in
 theorem advance_lo (s : State Validator BlockId Payload) :
     (Node.advance cfg s).1.lo = (Node.pass cfg s).1.lo := arm_lo _
-
-omit [Fintype Validator] in
-theorem advance_requested (s : State Validator BlockId Payload) :
-    (Node.advance cfg s).1.requested = (Node.pass cfg s).1.requested := arm_requested _
 
 omit [Fintype Validator] in
 theorem advance_decided (s : State Validator BlockId Payload) :
@@ -734,20 +725,20 @@ theorem Sent.of_out {B bs : List (BlockId × Block Validator BlockId Payload)}
 /-- **A timer step's state** is the settle's after the timer fires,
 whether or not the node resends. -/
 theorem step_timer_fst (s : State Validator BlockId Payload) (r : ℕ) :
-    (Node.step cfg s (.timer r)).1 = (Node.settle cfg { s with fired := insert r s.fired }).1 := by
+    (Node.step cfg s (.timer r)).1 = (Node.settle cfg { s with fired := fire s r }).1 := by
   simp only [Node.step]; split <;> rfl
 
 /-- A timer step, read as the settle's state and the step's outputs. -/
 theorem step_timer_eq (s : State Validator BlockId Payload) (r : ℕ) :
     Node.step cfg s (.timer r) =
-      ((Node.settle cfg { s with fired := insert r s.fired }).1, (Node.step cfg s (.timer r)).2) :=
+      ((Node.settle cfg { s with fired := fire s r }).1, (Node.step cfg s (.timer r)).2) :=
   Prod.ext (step_timer_fst s r) rfl
 
 /-- **A timer step's outputs**: the settle's, then possibly a resend. -/
 theorem step_timer_snd (s : State Validator BlockId Payload) (r : ℕ) :
-    (Node.step cfg s (.timer r)).2 = (Node.settle cfg { s with fired := insert r s.fired }).2 ∨
-      (Node.step cfg s (.timer r)).2 = (Node.settle cfg { s with fired := insert r s.fired }).2 ++
-        Node.resend cfg (Node.settle cfg { s with fired := insert r s.fired }).1 := by
+    (Node.step cfg s (.timer r)).2 = (Node.settle cfg { s with fired := fire s r }).2 ∨
+      (Node.step cfg s (.timer r)).2 = (Node.settle cfg { s with fired := fire s r }).2 ++
+        Node.resend cfg (Node.settle cfg { s with fired := fire s r }).1 := by
   simp only [Node.step]; split
   · exact Or.inr rfl
   · exact Or.inl rfl
@@ -834,14 +825,14 @@ theorem persists_resend (s : State Validator BlockId Payload) :
 /-- A timer step persists what its settle persists. -/
 theorem persists_step_timer (s : State Validator BlockId Payload) (r : ℕ) :
     persists (Node.step cfg s (.timer r)).2 =
-      persists (Node.settle cfg { s with fired := insert r s.fired }).2 := by
+      persists (Node.settle cfg { s with fired := fire s r }).2 := by
   rcases step_timer_snd (cfg := cfg) s r with h | h <;> rw [h]
   rw [persists_append, persists_resend, List.append_nil]
 
 /-- A timer step outputs the decisions its settle outputs. -/
 theorem commitsOf_step_timer (s : State Validator BlockId Payload) (r : ℕ) :
     commitsOf (Node.step cfg s (.timer r)).2 =
-      commitsOf (Node.settle cfg { s with fired := insert r s.fired }).2 := by
+      commitsOf (Node.settle cfg { s with fired := fire s r }).2 := by
   rcases step_timer_snd (cfg := cfg) s r with h | h <;> rw [h]
   rw [commitsOf_append, commitsOf_resend, List.append_nil]
 
@@ -960,10 +951,8 @@ theorem Inv.step {s : State Validator BlockId Payload}
       have hg := Grows.flush (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
       dsimp only at hfl hg ⊢
       generalize flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending) = fl at hfl hg ⊢
-      generalize missing { s with store := fl.1, pending := fl.2 } id b = miss
-      have hi₀ : Inv cfg
-          { s with store := fl.1, pending := fl.2, requested := s.requested ++ miss.map (·, id) }
-          K' B :=
+      generalize missing { s with store := fl.1, pending := fl.2 } b = miss
+      have hi₀ : Inv cfg { s with store := fl.1, pending := fl.2 } K' B :=
         ⟨hfl.1, hfl.2.1, hi.rounds, fun x hx => (hi.good x hx).mono hsub,
           fun x hx => hsub (hi.sub x hx), hfl.2.2, fun j hj =>
             ⟨hg.1 (hi.own j hj).1, by rw [hg.blk (hi.own j hj).1]; exact (hi.own j hj).2⟩⟩
@@ -976,7 +965,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
   | timer r =>
     simp only [Node.step]
     obtain ⟨bs, ho, hi'⟩ :=
-      ((hi.mono hsub).of_eq (s' := { s with fired := insert r s.fired }) rfl rfl rfl rfl).settle
+      ((hi.mono hsub).of_eq (s' := { s with fired := fire s r }) rfl rfl rfl rfl).settle
     split
     · exact ⟨bs, (Sent.of_out ho).resend hi', hi'⟩
     · exact ⟨bs, Sent.of_out ho, hi'⟩

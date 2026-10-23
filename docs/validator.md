@@ -63,9 +63,9 @@ block is the build rule (§3.2, §8), not a validity clause.
 **State** (`State`). The accepted blocks (`store`), the blocks received
 whose references are not all accepted (`pending`), the top round and
 the node's own block there, the rounds whose timer fired, the next
-undecided slot `lo`, the blocks asked for, each with the block whose
-history needed it, the decisions output, the latest first, and the round
-whose timer is set (`armed`).
+undecided slot `lo`, the decisions output, the latest first, and the
+round whose timer is set (`armed`). A timer drops the fired rounds below
+the top, which the node no longer reads (`fire`).
 
 **Inputs** (`Input`): a start, which builds the genesis block; a
 delivered block, with its identifier; a timer for round `r` that fired;
@@ -220,9 +220,10 @@ block referencing the other; the program fetches what it lacks.
 down through its pending blocks and collects those it neither stores
 nor holds pending: the missing part of `h`'s history (`walkLevel`,
 `missing`). It asks `h`'s author for them in one `fetch` output, which
-carries the asker's top round `r` (`0` before the start), and records
-each with `h`, so as to ask for a block at most once on account of each
-block that needs it. A node asked for blocks sends the asker each one
+carries the asker's top round `r` (`0` before the start). A block is
+delivered to the node at most once, since a block it stores or holds
+pending is not taken again, so it asks at most once on account of each
+block. A node asked for blocks sends the asker each one
 its store holds, and their histories in its store less the blocks the
 asker holds already (`answerIds`, `answer`). If `h`'s author is honest,
 it accepted all of `h`'s history before building `h`, so it holds
@@ -538,7 +539,7 @@ hand-built records. Read against the program:
 
 | Clause | Met by the program? |
 |---|---|
-| `SchemeReactive.advancesAt` | yes, once the round's timer fires: the timer stays fired, so a quorum arriving later builds at once |
+| `SchemeReactive.advancesAt` | yes, once the round's timer fires: the timer stays fired while the node is at the round, so a quorum arriving later builds at once |
 | `SchemeReactive.reach_or_wait`, `cert_or_wait` | yes, by the build rule (§3.2) |
 | `PaceCore.holds_mono` | yes: the store only grows (`Grows`) |
 | `ReactiveCore.built_lt` | no: build times strictly increase, but one step may build several rounds at once, when a lagging node catches up; the node supplies `WaveFacts`, which does not ask it |
@@ -725,7 +726,7 @@ genesis block.
 The restart, resending and liveness across crashes are done, including
 decisions resuming after every node crashed (§3.6, §5.6). Open:
 
-* the state that only grows (`requested`, `pending`, `fired`) is
+* the state that only grows (`store`, `pending`, `decided`) is
   unbounded, and under attack `pending` grows (§6);
 * catch-up is costly to compute: the restarted node asks for the
   missing history on account of every block it receives (§6, item 3);

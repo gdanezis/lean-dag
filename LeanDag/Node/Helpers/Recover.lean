@@ -319,7 +319,7 @@ theorem Chain.step {s : State Validator BlockId Payload} (h : Chain cfg s) (hown
   | timer r =>
     rw [step_timer_fst]
     exact Chain.settle (h.congr rfl rfl rfl)
-      (hown.grow (s' := { s with fired := insert r s.fired }) (Grows.refl _) rfl rfl)
+      (hown.grow (s' := { s with fired := fire s r }) (Grows.refl _) rfl rfl)
   | fetchRequest peer r ids => exact h
   | restart => exact h
 
@@ -486,9 +486,9 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
     rw [hsucc, step_timer_fst] at h₂'
     have hout : outputsAt cfg tr f =
         (Node.settle (cfg.at u) { stateBefore cfg tr f u with
-          fired := insert (m - 1) (stateBefore cfg tr f u).fired }).2 ++
+          fired := fire (stateBefore cfg tr f u) (m - 1) }).2 ++
         Node.resend (cfg.at u) (Node.settle (cfg.at u) { stateBefore cfg tr f u with
-          fired := insert (m - 1) (stateBefore cfg tr f u).fired }).1 := by
+          fired := fire (stateBefore cfg tr f u) (m - 1) }).1 := by
       have hm : (stateBefore cfg tr f u).top = some (m - 1) ∨
           (stateBefore cfg tr f u).top = some (m - 1 + 1) := by
         rcases Nat.eq_zero_or_pos m with h0 | hpos
@@ -499,7 +499,7 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
       rw [if_pos ⟨h₂'.trans h₁.symm, hm⟩]
     have hsame : stateBefore cfg tr (f + 1) u = (Node.settle (cfg.at u)
         { stateBefore cfg tr f u with
-          fired := insert (m - 1) (stateBefore cfg tr f u).fired }).1 := by
+          fired := fire (stateBefore cfg tr f u) (m - 1) }).1 := by
       rw [hsucc, step_timer_fst]
     refine ⟨j, hj, hjr, hjc, ?_, ?_⟩
     · rw [hout]

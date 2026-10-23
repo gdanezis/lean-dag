@@ -9,8 +9,7 @@ The blocks honest nodes knew over a trace give one block map (`gT`); an
 honest node's store reads as it at every event (`reads_before`). Over
 time then: a block that fits stays pending or stored (`keeps_after`); no
 pending block is ever ready (`noReady_before`); a block becomes pending
-only by a delivery the node acts on (`entry_before`); and a request is
-recorded only on account of such a delivery (`requested_before`). Below
+only by a delivery the node acts on (`entry_before`). Below
 a pending block of an honest history, a chain of pending blocks leads to
 a block the node lacks (`chain`).
 -/
@@ -181,28 +180,10 @@ theorem entry_before {v : Validator}
   by_cases he : ∃ inp, tr[a]? = some (v, inp)
   · obtain ⟨inp, ha⟩ := he
     rw [step_before ha] at h₂
-    rcases (step_sub (cfg := cfg.at v) _ inp).1 y h₂ with h | ⟨rfl, hc⟩
+    rcases step_sub (cfg := cfg.at v) _ inp y h₂ with h | ⟨rfl, hc⟩
     · exact absurd h h₁
     · exact ⟨ha, hc⟩
   · rw [same_before fun inp h => he ⟨inp, h⟩] at h₂; exact absurd h₂ h₁
-
-/-- **A request is recorded only on account of a delivery the node acted
-on.** -/
-theorem requested_before (v : Validator) : ∀ t, ∀ e ∈ (stateBefore cfg tr t v).requested,
-    ∃ a < t, ∃ b, tr[a]? = some (v, .deliver e.2 b) ∧
-      Admits (cfg.at v) (stateBefore cfg tr a v) e.2 b
-  | 0, e, he => by simp [stateBefore, inputsBefore, run, State.init] at he
-  | t + 1, e, he => by
-    by_cases hev : ∃ inp, tr[t]? = some (v, inp)
-    · obtain ⟨inp, ht⟩ := hev
-      rw [step_before ht] at he
-      rcases (step_sub (cfg := cfg.at v) _ inp).2 e he with he | ⟨b, rfl, hc⟩
-      · obtain ⟨a, ha, b, hab, hc⟩ := requested_before v t e he
-        exact ⟨a, by omega, b, hab, hc⟩
-      · exact ⟨t, by omega, b, ht, hc⟩
-    · rw [same_before fun inp h => hev ⟨inp, h⟩] at he
-      obtain ⟨a, ha, b, hab, hc⟩ := requested_before v t e he
-      exact ⟨a, by omega, b, hab, hc⟩
 
 /-- **A delivery a node acts on keeps a fitting block it delivers.** -/
 theorem admit_after (hinj : HashInjective cfg H tr) {v : Validator} (hv : v ∈ H) {a : ℕ}

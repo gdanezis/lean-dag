@@ -222,16 +222,16 @@ omit [Fintype Validator] in
 theorem IsCut.advanceStore (hg : Ground U K cfg.q) {s : State Validator BlockId Payload}
     (hc : IsCut U s.store) (hp : ∀ e ∈ s.pending, e ∈ K)
     (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : IsCut U (Node.advance cfg s).1.store := by
-  have hp₁ := (progress_pending (cfg := cfg) (s.store.topRound + 2) s).1
+  have hp₁ := progress_pending (cfg := cfg) (s.store.topRound + 2) s
   simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
-      arm_requested, arm_decided] at hb ⊢
+      arm_decided] at hb ⊢
   rw [persists_append, persists_arm, List.append_nil, persists_append] at hb
   have hc₁ := IsCut.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.store.topRound + 2) s = r at hp₁ hc₁ ⊢
   have hc₂ : IsCut U (Node.decideStep cfg r.1).1.store := by
     rw [decideStep_store]; exact hc₁
   have hgp : ∀ e ∈ (Node.decideStep cfg r.1).1.pending, e ∈ K := by
-    rw [(decideStep_pending (cfg := cfg) r.1).1, hp₁]; exact hp
+    rw [decideStep_pending (cfg := cfg) r.1, hp₁]; exact hp
   exact IsCut.flush hg _ _ hc₂ hgp
 
 /-! ## The decisions -/
@@ -371,7 +371,7 @@ theorem CommitInv.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     · rw [persists_append] at hb
       obtain ⟨h₁, hc₁⟩ := h.advance hg hσ ht hc hp fun e he => hb e (List.mem_append_left _ he)
       have := CommitInv.quiesce hg hσ ht n h₁ hc₁
-        (fun e he => hp e ((advance_sub (cfg := cfg) s).1 e he))
+        (fun e he => hp e (advance_sub (cfg := cfg) s e he))
         fun e he => hb e (List.mem_append_right _ he)
       rw [commitsOf_append, ← List.append_assoc]; exact this
 
@@ -435,7 +435,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · let s₁ := afterFlush (cfg := cfg) s id b
-      let miss := missing s₁ id b
+      let miss := missing s₁ b
       have hx : (id, b) ∈ K := hd _ (by simp [delivered, hA.1])
       have hg₁ := Grows.flush (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
       have hpend : ∀ e ∈ (id, b) :: s.pending, e ∈ K := fun e he => by
@@ -443,7 +443,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         · exact hx
         · exact hp e he
       have hc₁ : IsCut U s₁.store := IsCut.flush hg _ _ hc hpend
-      exact hset { s₁ with requested := s₁.requested ++ miss.map fun x => (x, id) }
+      exact hset s₁
         (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss])
         (h.keeps rfl hg₁.keeps) hc₁ (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by split <;> rfl) (step_deliver hA)
@@ -451,7 +451,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | timer r =>
     rw [persists_step_timer] at hb
     rw [step_timer_fst, commitsOf_step_timer]
-    exact (h.keeps (s' := { s with fired := insert r s.fired }) rfl (Keeps.refl _)).settle
+    exact (h.keeps (s' := { s with fired := fire s r }) rfl (Keeps.refl _)).settle
       hg hσ ht hc hp hb
   | fetchRequest peer r ids =>
     rw [show Node.step cfg s (.fetchRequest peer r ids) = (s, answer cfg s peer r ids) from rfl]
@@ -483,7 +483,7 @@ theorem CommitInv.run (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     obtain ⟨h₁, hc₁⟩ := h.step hg hσ ht i hc hp (fun e he => hd e (List.mem_append_left _ he))
       (fun e he => hb e (List.mem_append_left _ he))
     have hp₁ : ∀ e ∈ (Node.step cfg s i).1.pending, e ∈ K := fun e he => by
-      rcases (step_sub s i).1 e he with he | ⟨hi, hA⟩
+      rcases step_sub s i e he with he | ⟨hi, hA⟩
       · exact hp e he
       · refine hd e (List.mem_append_left _ ?_)
         rw [hi]

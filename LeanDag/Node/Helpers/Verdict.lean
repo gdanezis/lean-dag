@@ -94,7 +94,7 @@ theorem IsCut.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     · rw [persists_append] at hb
       obtain ⟨hc₁, hv₁⟩ := hc.advance hg hσ ht hp fun e he => hb e (List.mem_append_left _ he)
       obtain ⟨hc₂, hv₂⟩ := IsCut.quiesce hg hσ ht n hc₁
-        (fun e he => hp e ((advance_sub (cfg := cfg) s).1 e he))
+        (fun e he => hp e (advance_sub (cfg := cfg) s e he))
         fun e he => hb e (List.mem_append_right _ he)
       refine ⟨hc₂, fun e he => ?_⟩
       rw [commitsOf_append] at he
@@ -160,14 +160,14 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · let s₁ := afterFlush (cfg := cfg) s id b
-      let miss := missing s₁ id b
+      let miss := missing s₁ b
       have hx : (id, b) ∈ K := hd _ (by simp [delivered, hA.1])
       have hpend : ∀ e ∈ (id, b) :: s.pending, e ∈ K := fun e he => by
         rcases List.mem_cons.mp he with rfl | he
         · exact hx
         · exact hp e he
       have hc₁ : IsCut U s₁.store := IsCut.flush hg _ _ hc hpend
-      exact hset { s₁ with requested := s₁.requested ++ miss.map fun x => (x, id) }
+      exact hset s₁
         (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss])
         hc₁ (fun e he => hpend e (flush_pending_sub _ _ _ e he))
         (by split <;> rfl) (step_deliver hA)

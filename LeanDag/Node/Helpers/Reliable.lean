@@ -70,11 +70,11 @@ theorem rises_advance (s : State Validator BlockId Payload) : Rises s (Node.adva
     (Node.progress cfg (s.store.topRound + 2) s).1
   refine h₁.trans ⟨?_, ?_, ?_⟩
   · simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
-      arm_requested, arm_decided]; rw [hdtop]
+      arm_decided]; rw [hdtop]
   · simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
-      arm_requested, arm_decided]; rw [hdtop]; exact id
+      arm_decided]; rw [hdtop]; exact id
   · simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
-      arm_requested, arm_decided]; exact hdlo
+      arm_decided]; exact hdlo
 
 theorem rises_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
     Rises s (quiesce cfg n s).1 :=
@@ -115,7 +115,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
     · refine hset _ ?_ (by rw [step_deliver hA])
       exact ⟨le_rfl, fun h => h, le_rfl⟩
     · rw [step_deliver_not hA]; exact Rises.refl s
-  | timer r => exact hset { s with fired := insert r s.fired } ⟨le_rfl, id, le_rfl⟩ (step_timer_fst s r)
+  | timer r => exact hset { s with fired := fire s r } ⟨le_rfl, id, le_rfl⟩ (step_timer_fst s r)
   | fetchRequest p r ids => exact Rises.refl s
   | restart => exact Rises.refl s
 

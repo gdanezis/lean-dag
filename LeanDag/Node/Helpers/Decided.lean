@@ -210,7 +210,7 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
       split_ifs <;> rfl
     · exact ⟨Appends.refl s, hL⟩
   | timer r =>
-    obtain ⟨h₁, h₂⟩ := hset { s with fired := insert r s.fired } [] rfl rfl rfl
+    obtain ⟨h₁, h₂⟩ := hset { s with fired := fire s r } [] rfl rfl rfl
     rw [List.nil_append] at h₁
     simp only [Node.step]
     split

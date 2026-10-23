@@ -35,8 +35,8 @@ input `i` in the state `s`: the new state and the outputs.
   (`State.decided`), the latest first.
 * **Fetching** (`walkLevel`, `missing`, `answer`): after a delivery, the
   missing part of the delivered block's history, walked through the
-  pending blocks, is asked of its author, with the asker's round `r`,
-  once on account of each block that needs it; a request is answered
+  pending blocks, is asked of its author, with the asker's round `r`; a
+  request is answered
   with the blocks asked for that the store holds and their histories,
   less the blocks a node at round `r` holds whatever it built on
   (`coreThreshold`, `pruned`).
@@ -76,12 +76,11 @@ structure State where
   top : Option ℕ
   /-- The node's block at `top`. -/
   own : Option BlockId
-  /-- The rounds whose timer fired. -/
+  /-- The rounds whose timer fired; each timer drops the rounds below the
+  top, which the node no longer reads. -/
   fired : Finset ℕ
   /-- The next undecided slot. -/
   lo : ℕ
-  /-- The blocks asked for, each with the block whose history needed it. -/
-  requested : List (BlockId × BlockId)
   /-- The decisions the node output, the latest first. -/
   decided : List (ℕ × Option BlockId)
   /-- The round whose timer is set. -/
@@ -94,7 +93,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
-  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], [], none⟩
+  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], none⟩
 
 /-- **Accept a block**: it is kept if it is new, its references are
 accepted, one round below it, and it is valid at the row. -/
@@ -267,20 +266,13 @@ def decideStep (s : State Validator BlockId Payload) :
       ds.map fun e => .commit e.1 e.2)
   else (s, [])
 
-/-- **The missing part of the history of a block `b`**, walked through the
-pending blocks. -/
-def missingAll (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) :
+/-- **The blocks to ask for**, after the block `b` arrived: the missing
+part of its history, walked through the pending blocks. Asking on account
+of each block delivered is what lets an honest block's author answer
+what a Byzantine block's author would not. -/
+def missing (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) :
     List BlockId :=
   ((walkLevel s)^[s.pending.length + 2] (b.refs.sort (· ≤ ·), [], [])).2.2
-
-/-- **The blocks to ask for**, after the block `b` with identifier `id`
-arrived: the missing part of its history, walked through the pending
-blocks, less those already asked for on `b`'s account. Asking again on
-account of a new block is what lets an honest block's author answer
-what a Byzantine block's author would not. -/
-def missing (s : State Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : List BlockId :=
-  (missingAll s b).filter fun x => decide ((x, id) ∉ s.requested)
 
 /-- **The authors a block must have reached to lie in every view at round
 `r`**: `n − q + f + 1`. A node at round `r` built on blocks of `q`
@@ -353,7 +345,7 @@ def answer (s : State Validator BlockId Payload) (peer : Validator) (r : ℕ) (i
 block, the missing part of its history, of its author. -/
 def refetch (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
   s.pending.filterMap fun e =>
-    let miss := missingAll s e.2
+    let miss := missing s e.2
     if miss.isEmpty then none else some (.fetch e.2.creator (s.top.getD 0) miss)
 
 /-- **Send the node's top block again**: broadcast its block at its top
@@ -427,6 +419,11 @@ def settle (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   quiesce cfg (passes cfg s) s
 
+/-- **The fired rounds after the timer of round `r`**: `r`, and those not
+below the top. -/
+def fire (s : State Validator BlockId Payload) (r : ℕ) : Finset ℕ :=
+  insert r (s.fired.filter (s.top.getD 0 ≤ ·))
+
 /-- **The node's transition function.** -/
 def step (s : State Validator BlockId Payload) :
     Input Validator BlockId Payload →
@@ -447,12 +444,12 @@ def step (s : State Validator BlockId Payload) :
         id ∉ s.pending.map Prod.fst then
       let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
       let s₁ := { s with store := fl.1, pending := fl.2 }
-      let miss := missing s₁ id b
-      let r := settle cfg { s₁ with requested := s₁.requested ++ miss.map fun x => (x, id) }
+      let miss := missing s₁ b
+      let r := settle cfg s₁
       (r.1, (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss]) ++ r.2)
     else (s, [])
   | .timer r =>
-    let res := settle cfg { s with fired := insert r s.fired }
+    let res := settle cfg { s with fired := fire s r }
     if res.1.top = s.top ∧ (s.top = some r ∨ s.top = some (r + 1)) then
       (res.1, res.2 ++ resend cfg res.1)
     else res

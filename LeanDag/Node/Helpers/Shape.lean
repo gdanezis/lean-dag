@@ -212,6 +212,12 @@ theorem silent_of {x : List (Output Validator BlockId Payload)}
     have := h o ho
     refine ⟨fun id b he => ?_, fun r a he => ?_⟩ <;> subst he <;> exact this
 
+omit [Fintype Validator] in
+/-- A timer keeps the fired rounds not below the top. -/
+theorem fired_timer {s : State Validator BlockId Payload} {r : ℕ} :
+    ∀ y ∈ s.fired, s.top.getD 0 ≤ y → y ∈ fire s r :=
+  fun _ hy ht => Finset.mem_insert_of_mem (Finset.mem_filter.mpr ⟨hy, ht⟩)
+
 /-- **The shape of a step**: it leaves the state alone and persists
 nothing, or settles a state with the node's top and fired timers, after
 outputs persisting nothing or, at its start, after its genesis block with
@@ -220,7 +226,7 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
     ((Node.step cfg s inp).1 = s ∧ persists (Node.step cfg s inp).2 = []) ∨
     ∃ x pre post, (Node.step cfg s inp).1 = (Node.settle cfg x).1 ∧
       (Node.step cfg s inp).2 = pre ++ (Node.settle cfg x).2 ++ post ∧ persists post = [] ∧
-      x.top.getD 0 = s.top.getD 0 ∧ s.fired ⊆ x.fired ∧
+      x.top.getD 0 = s.top.getD 0 ∧ (∀ y ∈ s.fired, s.top.getD 0 ≤ y → y ∈ x.fired) ∧
       ((persists pre = [] ∧ x.top = s.top) ∨ (s.top = none ∧ x.top = some 0 ∧
         ∃ g : BlockId × Block Validator BlockId Payload,
           pre = [.persist g.1 g.2, .broadcast g.1 g.2, .setTimer 0 (2 * cfg.timeout 0)] ∧
@@ -234,7 +240,7 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
     · rename_i h₁
       split
       · rename_i h₂
-        refine Or.inr ⟨_, _, [], rfl, by rw [List.append_nil], rfl, by simp [h₁.1], subset_rfl,
+        refine Or.inr ⟨_, _, [], rfl, by rw [List.append_nil], rfl, by simp [h₁.1], fun _ h _ => h,
           Or.inr ⟨h₁.1, rfl, ⟨_, cfg.genesis⟩, rfl, rfl, (by simp [Store.insert_ids]), ?_⟩⟩
         simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self, Config.genesis]
       · exact Or.inl (hq s rfl)
@@ -242,7 +248,7 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · rw [step_deliver hA]
-      refine Or.inr ⟨_, _, [], rfl, by rw [List.append_nil], rfl, rfl, subset_rfl,
+      refine Or.inr ⟨_, _, [], rfl, by rw [List.append_nil], rfl, rfl, fun _ h _ => h,
         Or.inl ⟨?_, rfl⟩⟩
       refine (silent_of fun o ho => ?_).1
       split at ho
@@ -253,12 +259,12 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
   | timer r =>
     right
     rcases step_timer_snd (cfg := cfg) s r with h | h
-    · exact ⟨{ s with fired := insert r s.fired }, [], [], step_timer_fst s r, by rw [h]; simp,
-        rfl, rfl, Finset.subset_insert _ _, Or.inl ⟨rfl, rfl⟩⟩
-    · exact ⟨{ s with fired := insert r s.fired }, [],
-        Node.resend cfg (Node.settle cfg { s with fired := insert r s.fired }).1,
+    · exact ⟨{ s with fired := fire s r }, [], [], step_timer_fst s r, by rw [h]; simp,
+        rfl, rfl, fired_timer, Or.inl ⟨rfl, rfl⟩⟩
+    · exact ⟨{ s with fired := fire s r }, [],
+        Node.resend cfg (Node.settle cfg { s with fired := fire s r }).1,
         step_timer_fst s r, by rw [h]; simp,
-        persists_resend _, rfl, Finset.subset_insert _ _, Or.inl ⟨rfl, rfl⟩⟩
+        persists_resend _, rfl, fired_timer, Or.inl ⟨rfl, rfl⟩⟩
   | fetchRequest p r ids =>
     refine Or.inl ⟨rfl, (silent_of fun o ho => ?_).1⟩
     simp only [Node.step, answer, List.mem_map] at ho
@@ -323,12 +329,13 @@ theorem step_timer :
         exact List.mem_append_left _ (by simp)
     · exact List.mem_append_right _ ((settle_shape (cfg := cfg) x).timer e he')
 
-/-- **A step keeps the fired timers.** -/
-theorem step_fired : s.fired ⊆ (Node.step cfg s inp).1.fired := by
+/-- **A step keeps the fired timers** not below the top. -/
+theorem step_fired {r : ℕ} (hr : r ∈ s.fired) (ht : s.top.getD 0 ≤ r) :
+    r ∈ (Node.step cfg s inp).1.fired := by
   rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ | ⟨x, pre, post, he, -, -, -, hf, -⟩
+  · rw [he]; exact hr
   · rw [he]
-  · rw [he]
-    exact hf.trans (settle_shape (cfg := cfg) x).fired
+    exact (settle_shape (cfg := cfg) x).fired (hf r hr ht)
 
 end StepFacts
 

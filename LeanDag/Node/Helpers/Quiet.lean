@@ -73,7 +73,7 @@ theorem InK.advance {K : Set (BlockId × Block Validator BlockId Payload)}
   have h₁ := InK.progress _ h fun e he => hK e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.store.topRound + 2) s = r at h₁ ⊢
   have h₂ : InK K (Node.decideStep cfg r.1).1 := by
-    rw [InK, decideStep_store, (decideStep_pending (cfg := cfg) r.1).1]; exact h₁
+    rw [InK, decideStep_store, decideStep_pending (cfg := cfg) r.1]; exact h₁
   exact flush_in (cfg := cfg) ((Node.decideStep cfg r.1).1.pending.length + 1) h₂.1 h₂.2
 
 /-! ## Bounds within a settle -/
@@ -182,7 +182,7 @@ theorem decideStep_bound (s : State Validator BlockId Payload) :
     let d := (Node.decideStep cfg s).1
     d.store = s.store ∧ d.pending = s.pending ∧ d.top = s.top ∧ s.lo ≤ d.lo ∧
       d.lo ≤ max s.lo (decidable cfg s.store.topRound) :=
-  ⟨decideStep_store s, (decideStep_pending s).1, decideStep_top s, decideStep_lo s,
+  ⟨decideStep_store s, decideStep_pending s, decideStep_top s, decideStep_lo s,
     decideStep_lo_le s⟩
 
 /-! ## A pass -/
@@ -274,7 +274,7 @@ theorem Within.advance (hq : 2 ≤ cfg.q) {R L : ℕ} (hL : decidable cfg (R + 1
   have hadv : (Node.pass cfg s).1 = { d with
       store := (flush cfg (d.pending.length + 1) d.store d.pending).1
       pending := (flush cfg (d.pending.length + 1) d.store d.pending).2 } := rfl
-  have hrpd : r.1.pending = s.pending := (progress_pending (cfg := cfg) _ s).1
+  have hrpd : r.1.pending = s.pending := progress_pending (cfg := cfg) _ s
   have hrlo : r.1.lo = s.lo := (Grows.progress (cfg := cfg) _ s).2
   -- the new top
   have htop' : (Node.pass cfg s).1.top = r.1.top := by rw [hadv]; exact hdtop
@@ -374,8 +374,8 @@ theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
     (h : Node.tryBuild cfg s = none) (hst : s'.store = s.store) (ht : s'.top = s.top)
     (ho : s'.own = s.own) (hf : s'.fired = s.fired) :
     Node.tryBuild cfg s' = none := by
-  obtain ⟨st, pd, top, own, fired, lo, rq, dc, ar⟩ := s
-  obtain ⟨st', pd', top', own', fired', lo', rq', dc', ar'⟩ := s'
+  obtain ⟨st, pd, top, own, fired, lo, dc, ar⟩ := s
+  obtain ⟨st', pd', top', own', fired', lo', dc', ar'⟩ := s'
   simp only at hst ht ho hf
   subst hst ht ho hf
   unfold Node.tryBuild at h ⊢
