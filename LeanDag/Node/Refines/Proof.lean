@@ -5,8 +5,8 @@ import LeanDag.Node.Local.Proof
 # The node refines the scheme — proof
 
 `docs/validator.md` §5, V12. The record is the run's (`globalRecord`).
-Its holdings and the verdicts on it are `cut_before`, the loop is
-`commitInv_before`, and the self-parents are `selfParent_of_honest`.
+Its holdings and the verdicts on it are `cut_before`, and the loop is
+`commitInv_before`.
 
 Over a timed trace, delivery and synchronisation make blocks arrive
 within `A` (`arrival_of_delivered`; with crashes, `arrival_of_recovered`
@@ -15,8 +15,7 @@ and, on a reliable node's view, a leader block decided for each slot of a
 reliably led run (`run_commits`). By `Live.decides` the node has output a
 decision for each such slot; that decision is a verdict on some view of
 the record (`cut_before`), so by the uniqueness of verdicts
-(`AnchoredRule.decided_unique`) it is the leader block. The leader block
-is honest, so it reaches its author's lower blocks (`own_reaches_record`).
+(`AnchoredRule.decided_unique`) it is the leader block.
 -/
 
 namespace LeanDag
@@ -77,22 +76,14 @@ theorem waves_leads {cfg : Config Validator BlockId Payload} {H T : Finset Valid
     (honest := H) (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) ht
   have hdL : some L = d := AnchoredRule.decided_unique hlaws trivial hLd.toDecided V' _ hV'
   subst hdL
-  -- the leader is honest, so its block reaches its lower blocks
-  have hLH : (U.block L).creator ∈ H := by
-    rw [hL.2.2]
-    have := hlead (j' - b) (by omega)
-    rw [Nat.add_sub_cancel' hbj] at this
-    exact hTH this
-  exact ⟨L, hL, hmem, fun x hx hxc hle =>
-    own_reaches_record hσ hadm hf htime hinj hL.1 hx hLH hxc hle⟩
+  exact ⟨L, hL, hmem⟩
 
 /-- **The node refines the scheme.** -/
 theorem holds : Statement := by
   intro Validator BlockId Payload _ _ _ cfg H tr hσ hadm hf htime hinj
   refine ⟨globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime),
     fun v hv i => (cut_before hσ hadm hf htime hinj i v hv).1,
-    fun v hv i => commitInv_before hσ hadm hf htime hinj hv i,
-    fun c hc hcH hr => selfParent_of_honest hσ hadm hf htime hinj hc hcH hr, ?_, ?_⟩
+    fun v hv i => commitInv_before hσ hadm hf htime hinj hv i, ?_, ?_⟩
   · intro T time gst Δ Δₛ t₁ hTH hqT hcT hq hid hto hmono hdel hwait hsync hstart
     exact waves_leads hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono
       (arrival_of_delivered hσ hadm hf htime hinj hTH hmono hdel hsync) hwait hstart

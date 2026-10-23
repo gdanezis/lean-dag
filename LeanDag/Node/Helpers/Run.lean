@@ -6,10 +6,8 @@ import LeanDag.Scheme.Helpers.Reactive
 
 `docs/validator.md` §4, V12. Over a trace, the honest nodes' decisions
 before each event are nothing or one call of the scheme's loop on a view
-of the run's record that the node holds (`commitInv_before`); a block of
-an honest author above round `0` references a block of its author
-(`selfParent_of_honest`), and of two of its blocks the higher reaches the
-lower in the record (`own_reaches_record`). Over a timed trace meeting
+of the run's record that the node holds (`commitInv_before`). Over a
+timed trace meeting
 the liveness assumptions, a window of rounds above every reliable node's
 round at GST gives the scheme's `WaveFacts` (`waveFacts_of_run`), and on
 a reliable node's view each slot of a reliably led run is decided, its
@@ -62,95 +60,6 @@ theorem commitInv_before {v : Validator} (hv : v ∈ H) (t : ℕ) :
   rcases h.2 with h0 | ⟨V, N, hV, -, hcs⟩
   · exact Or.inl ((List.nil_append _).symm.trans h0)
   · exact Or.inr ⟨V, N, hV, (List.nil_append _).symm.trans hcs⟩
-
-/-- **An honest block above round `0` references a block of its author**:
-its author built on its own block of the round below. -/
-theorem selfParent_of_honest {c : BlockId}
-    (hcU : c ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids)
-    (hcH : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).creator ∈ H)
-    (hr : 0 < ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).round) :
-    ∃ p ∈ ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).refs, ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-        p).creator =
-      ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-        c).creator := by
-  set U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime) with hU
-  set h := (U.block c).creator with hh
-  obtain ⟨i, inp, e, hi, he, rfl, her, -⟩ :=
-    event_of_mem (time := fun _ => 0) hinj htime hcH hcU rfl
-  have her' : e.2.round = (U.block e.1).round := her
-  obtain ⟨x, y, o, hbs, hb, heo, -⟩ := build_witness hσ hadm hf htime hinj hcH hi he (by omega)
-  obtain ⟨r, id, b, hnew, hrefs, hpred, hxt, hbr, -, -, -, hdisk, -, -, -, hout⟩ := tryBuild_some hb
-  obtain ⟨r', hr', -, -, hout'⟩ := tryBuild_exit hb
-  rw [hxt, Option.some.injEq] at hr'
-  subst hr'
-  rw [hout, persists_built, List.mem_singleton] at heo
-  subst heo
-  have hAB := congrArg persists (hout.symm.trans hout')
-  rw [persists_built, persists_built, List.singleton_inj] at hAB
-  have hbrefs : b.refs = refsAt (cfg.at h) x.memory r x.own := congrArg (fun e => e.2.refs) hAB
-  -- the record reads the block as built
-  have hy := BuildState.tryBuild (cfg := cfg.at h) (ground (cfg := cfg) _ _) hbs hb
-    (fun e' he' => by
-      rw [hout, persists_built, List.mem_singleton] at he'
-      subst he'
-      obtain ⟨hd, hb'⟩ := event_knownOf (cfg := cfg) hi
-      exact ⟨h, hcH, hb' _ (by rw [outputsAt_eq hi] at he; exact he)⟩)
-  have hcy : id ∈ y.disk.ids := by rw [hdisk]; exact Store.mem_insert_self
-  have hyb : y.disk.blk id = b := by rw [hdisk, Store.insert_blk, if_pos rfl]
-  have hUb : U.block id = b := (hy.cut.eq hcy).trans hyb
-  -- its own block of the round below, in memory, is among the references
-  obtain ⟨o', hoo, hoi, hor, hoc⟩ := hbs.own r hxt
-  obtain ⟨B, hiX⟩ := hbs.inv
-  have hfl : x.floor ≤ r :=
-    hiX.floor.trans ((min_le_right _ _).trans (by rw [hxt]; exact Nat.sub_le _ _))
-  have hom := x.mirrors.mem_of hoi (by rw [hor]; exact hfl)
-  have hoR : o' ∈ b.refs := by
-    rw [hbrefs, hoo]
-    exact own_mem_refsAt hom (by rw [x.mirrors.round hom, hor])
-      (by rw [x.mirrors.creator hom, hoc])
-  refine ⟨o', by rw [hUb]; exact hoR, ?_⟩
-  rw [hbs.cut.eq hoi, hoc]
-  rfl
-
-/-- **Of two blocks of an honest author, the higher reaches the lower** in
-the run's record. -/
-theorem own_reaches_record {c x : BlockId}
-    (hcU : c ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids)
-    (hxU : x ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids)
-    (hcH : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c).creator ∈ H)
-    (hxc : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      x).creator =
-      ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).creator)
-    (hle : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      x).round ≤
-      ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).round) :
-    ReachesFrom (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
-      c x := by
-  set U := globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime) with hU
-  set u := (U.block c).creator with hu
-  obtain ⟨a, inpa, ec, ha, hec, rfl, -, -⟩ :=
-    event_of_mem (time := fun _ => 0) hinj htime hcH hcU rfl
-  obtain ⟨b', inpb, ex, hb', hex, rfl, -, -⟩ :=
-    event_of_mem (time := fun _ => 0) hinj htime hcH hxU hxc
-  set E := max a b' + 1
-  set st := (stateBefore cfg tr E u).disk
-  have hca := Converge.persist_stored (cfg := cfg) ha hec
-  have hxb := Converge.persist_stored (cfg := cfg) hb' hex
-  have hga := grows_before (cfg := cfg) (tr := tr) u (show a + 1 ≤ E by omega)
-  have hgb := grows_before (cfg := cfg) (tr := tr) u (show b' + 1 ≤ E by omega)
-  have hcS : ec.1 ∈ st.ids := hga.1 hca.1
-  have hxS : ex.1 ∈ st.ids := hgb.1 hxb.1
-  have hcut := (cut_before hσ hadm hf htime hinj E u hcH).1
-  have hcb : st.blk ec.1 = U.block ec.1 := (hcut _ hcS).2.symm
-  have hxb' : st.blk ex.1 = U.block ex.1 := (hcut _ hxS).2.symm
-  have hreach : ReachesFrom st.blk ec.1 ex.1 :=
-    (chain_before (cfg := cfg) tr u E).reach ec.1 hcS ex.1 hxS (by rw [hcb]; rfl)
-      (by rw [hxb', hxc]; rfl) (by rw [hcb, hxb']; exact hle)
-  exact hcut.reachesFrom hcS hreach
 
 end Record
 

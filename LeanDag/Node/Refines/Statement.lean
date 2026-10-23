@@ -14,9 +14,7 @@ that:
   a cut of `U`;
 * **decisions** (`Loops`): every honest node's decisions before every
   event are none, or the scheme's loop `tryDecide` from slot `0` on a view
-  of `U` the node's disk holds;
-* **self-parents** (`SelfParented`): a block of `U` by an honest author
-  above round `0` references a block of its author.
+  of `U` the node's disk holds.
 
 Over a timed trace meeting the assumptions of `Live.Progresses`, but that
 no timer need fire, a reliable set `T` gives, for `A = Δ + Δₛ`:
@@ -28,8 +26,7 @@ no timer need fire, a reliable set `T` gives, for `A = Δ + Δₛ`:
 * **leaders** (`Leads`): under the premises of `Live.Decides`, `A` after
   every reliable node reached the decision round of slot `b + c − 1`,
   every reliable node has decided each slot `j` of `b … b + c − 1` to a
-  leader block `L` of `U`, and `L` reaches every block of its author at
-  or below its round.
+  leader block `L` of `U`.
 
 With crashes (`Recovering`), under the assumptions of `Live.Recovers`,
 the same hold with GST replaced by `max t_r gst + W`.
@@ -66,14 +63,6 @@ def Loops (cfg : Config Validator BlockId Payload) (H : Finset Validator)
         commitsOf (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr i v)).2 =
           Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel U V 0 N
 
-/-- **Self-parents**: a block of `U` by an honest author above round `0`
-references a block of its author. -/
-def SelfParented {P : (BlockId → Block Validator BlockId Payload) →
-      Block Validator BlockId Payload → Prop} (H : Finset Validator)
-    (U : BlockRecord Validator BlockId Payload P H) : Prop :=
-  ∀ c ∈ U.ids, (U.block c).creator ∈ H → 0 < (U.block c).round →
-    ∃ p ∈ (U.block c).refs, (U.block p).creator = (U.block c).creator
-
 /-- **Wave facts**: from a round `n₀` above every reliable node's round
 at `gst` to a round `N` every reliable node has reached at `t ≥ gst`, with
 `t + D ≤ t₁`, the scheme's `WaveFacts` hold on `U`. -/
@@ -88,8 +77,7 @@ def Waves (cfg : Config Validator BlockId Payload) {H : Finset Validator}
 
 /-- **Leaders**: under the premises of `Live.Decides`, by `t + D` every
 reliable node has decided each slot `j` of `b … b + c − 1` to a leader
-block `L` of `U`, which reaches every block of its author at or below its
-round. -/
+block `L` of `U`. -/
 def Leads (cfg : Config Validator BlockId Payload) {H : Finset Validator}
     (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
     (gst D t₁ : ℕ) (U : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H) :
@@ -103,9 +91,7 @@ def Leads (cfg : Config Validator BlockId Payload) {H : Finset Validator}
     ∀ t, (∀ v ∈ T, cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) ≤
         topAt cfg tr time v t) → t + D ≤ t₁ →
       ∀ v ∈ T, ∀ j, b ≤ j → j < b + c → ∃ L, IsLeaderBlock U j L ∧
-        (j, some L) ∈ decisionsBy cfg tr time v (t + D) ∧
-        ∀ x ∈ U.ids, (U.block x).creator = (U.block L).creator →
-          (U.block x).round ≤ (U.block L).round → ReachesFrom U.block L x
+        (j, some L) ∈ decisionsBy cfg tr time v (t + D)
 
 /-- **Without crashes**: under the assumptions of `Live.Progresses`, but
 that no timer need fire, `U` has the wave facts and the leaders. -/
@@ -137,9 +123,8 @@ def Recovering (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     Waves cfg T tr time G (Δ + Δₛ) t₁ U ∧ Leads cfg T tr time G (Δ + Δₛ) t₁ U
 
 /-- **The node refines the scheme**: a run has a record on which the
-honest nodes' disks are cuts and their decisions the scheme's loop, whose
-honest blocks are self-parented, and which has the wave facts and the
-leaders the timing assumptions give. -/
+honest nodes' disks are cuts and their decisions the scheme's loop, and
+which has the wave facts and the leaders the timing assumptions give. -/
 def HasRecord : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
@@ -147,8 +132,7 @@ def HasRecord : Prop :=
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f →
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr →
     ∃ U : BlockRecord Validator BlockId Payload (ValidAt cfg.q Clause.none) H,
-      Holds cfg H tr U ∧ Loops cfg H tr U ∧ SelfParented H U ∧ Timed cfg H tr U ∧
-        Recovering cfg H tr U
+      Holds cfg H tr U ∧ Loops cfg H tr U ∧ Timed cfg H tr U ∧ Recovering cfg H tr U
 
 /-- The node refines the scheme. -/
 def Statement : Prop := HasRecord

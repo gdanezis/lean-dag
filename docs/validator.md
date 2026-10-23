@@ -386,7 +386,7 @@ since no block is collected.
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes' timers on time, no honest node's timer early, and timeouts above `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
 | V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` on, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
-| V12 | **Refinement**: for an admissible configuration at the bounded vote, over a trace with timely authentication, an injective hash and at most `f` nodes outside the honest set, there is a `BlockRecord` at quorum `q` of which every honest disk, before every event, is a cut; every honest node's decisions are none or `Scheme.tryDecide` from slot `0` on a view of it that the node's disk holds; and every honest block above round `0` references a block of its author. Under the assumptions of V11 (no timer need fire) or of V11′, it has the scheme's `WaveFacts` over every window of rounds from one above every reliable node's round at GST, and every slot of a reliably led run is decided by every reliable node to a leader block that reaches every block of its author at or below its round. | `Node.Refines.HasRecord` (proved, §5.7): `Node.commitInv_before`, `Node.selfParent_of_honest`, `Node.own_reaches_record`, `Node.waveFacts_of_run`, `Node.run_commits`, `Refines.waves_leads` |
+| V12 | **Refinement**: for an admissible configuration at the bounded vote, over a trace with timely authentication, an injective hash and at most `f` nodes outside the honest set, there is a `BlockRecord` at quorum `q` of which every honest disk, before every event, is a cut; every honest node's decisions are none or `Scheme.tryDecide` from slot `0` on a view of it that the node's disk holds. Under the assumptions of V11 (no timer need fire) or of V11′, it has the scheme's `WaveFacts` over every window of rounds from one above every reliable node's round at GST, and every slot of a reliably led run is decided by every reliable node to a leader block. | `Node.Refines.HasRecord` (proved, §5.7): `Node.commitInv_before`, `Node.waveFacts_of_run`, `Node.run_commits`, `Refines.waves_leads` |
 
 Every claim depends only on the standard axioms (`propext`,
 `Classical.choice`, `Quot.sound`; `LeanDagTest/Node/Axioms.lean`).
@@ -394,12 +394,12 @@ Every claim depends only on the standard axioms (`propext`,
 **Equivalence with the scheme.** V12 states the relation in one
 theorem at the scheme's interfaces. The run's record is a `BlockRecord`,
 the scheme's universe. The program's decisions are the scheme's loop on a
-view of it (V2, V3). Its honest blocks are self-parented, the build rule
-the scheme's inclusion argument reads (§8). A timed run gives the
-scheme's `WaveFacts`, the clauses the scheme's wave argument reads, so the
-scheme's liveness argument applies to it (V11, §5.3), and each slot of a
-reliably led run is decided to a leader block that includes its author's
-earlier blocks. The parts V1, V2, V3 and V11 prove separately.
+view of it (V2, V3). A timed run gives the scheme's `WaveFacts`, the
+clauses the scheme's wave argument reads, so the scheme's liveness
+argument applies to it (V11, §5.3), and each slot of a reliably led run
+is decided to a leader block. The parts V1, V2, V3 and V11 prove
+separately. The scheme's inclusion of an author's earlier blocks is not
+claimed (§8).
 
 **The transfer.** The program decides on its own disk, a record of its
 own; the run's claims are about a view of the run's record. The decider
@@ -667,9 +667,7 @@ restarted, the chain decides again.
 
 The record is the run's (`globalRecord`). Its holdings are `cut_before`,
 and the loop is `CommitInv.run` read before each event
-(`commitInv_before`). An honest block above round `0` was built by
-`tryBuild`, which references the author's own block of the round below
-from the memory (`selfParent_of_honest`).
+(`commitInv_before`).
 
 Over a timed trace, delivery and synchronisation give arrival within `A`
 (`arrival_of_delivered`; with crashes, `arrival_of_recovered` from
@@ -678,10 +676,7 @@ On a reliable node's view `A` after the last decision round, each slot of
 the run commits a leader block `L` (`run_commits`). By V11 the node has
 output a decision `d` for the slot. That decision is a verdict on some
 view of the record (`cut_before`), and verdicts on one slot agree
-(`AnchoredRule.decided_unique`), so `d = some L`. The leader is reliable,
-so `L` reaches every block of its author at or below its round
-(`own_reaches_record`): the author's disk, a cut of the record, holds its
-chain of own blocks (`chain_before`).
+(`AnchoredRule.decided_unique`), so `d = some L`.
 
 ## 6. Testing
 
@@ -805,24 +800,21 @@ chain of own blocks (`chain_before`).
   an 8,000-tick run (4.6 seconds) places about half of its time in
   answering fetches (`answerIds`) and about a fifth in the decider.
 
-## 8. Self-parent as a build rule
+## 8. Self-references
 
 The row's validity does not ask a block to reference a block by its own
-author. No safety argument reads this. Liveness reads it once, for
-inclusion (`SelfParent.reaches_of_creator`): a reliable author's
+author, and no claim of the program reads such a reference: not safety
+(V1–V3, V12's holdings and loop), nor liveness without or with crashes
+(V11, V11′, §5.6). The build rule references one block of each author of
+the round below (§3.2), the node's own among them when it holds one, but
+nothing depends on it.
+
+The shared layer's `SelfParent` gives inclusion: a reliable author's
 committed leader block reaches each earlier block of that author, by
-walking the author's chain down. The shared layer's `SelfParent` takes
-a reliability and a round `R₀`: every block by a reliable author above
-`R₀` references a block by its author, and the chain walk and inclusion
-(`mem_history_of_decided_commit`, `includes_of_leads`,
-`committed_of_correct_block`, `Support.inclusion`, `Support.liveness`)
-cover reliable blocks above `R₀`. The program meets it by its build
-rule: it references its own block of the round below, and builds rounds
-in sequence (§3.2), so a reliable node's chain is unbroken from its
-genesis block. V12 proves it for every honest block above round `0`
-(`selfParent_of_honest`), and the inclusion it gives a reliable
-leader's committed block (`own_reaches_record`). V11 and V11′ read no
-reference of a node to its own blocks (§5.6).
+walking the author's chain down (`SelfParent.reaches_of_creator`,
+`mem_history_of_decided_commit`, `includes_of_leads`,
+`committed_of_correct_block`, `Support.inclusion`). The program claims
+no inclusion, so a node need not reference its own blocks.
 
 ## 9. Next
 
