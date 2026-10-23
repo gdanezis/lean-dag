@@ -16,7 +16,8 @@ target's missing history in order of round. A node that has detected an
 equivocator syncs no block of it.
 
 Four claims are proved (§4). The time a block takes to reach the honest
-nodes is studied with a simulation (§5), `scripts/sync-prefeed.py`.
+nodes is studied with a simulation (§5), `scripts/sync-prefeed.py`, and
+reference budgets with another (§6), `scripts/sync-budget.py`.
 
 Blocks are named by identifier, and a single function `blk` gives what
 each identifier denotes: the hash is taken to be injective. Signatures
@@ -169,13 +170,52 @@ allows. With `τ` from 7 to 14 no round takes more than 2 ticks; with
 ticks. With or without the attack, a budget of `7` or `14` excludes no
 honest block.
 
-## 6. Open
+## 6. Budgets and catch-up
 
-* **The budget is not modelled in Lean.** An honest block then adds at
-  most `1 + (n − 1)·τ` blocks to its author's last block's history, which
-  is immediate. That honest blocks always pass the budget is the hard
-  half, as in the `DoS` arc (`card_novelty_le_viewGap_add_one`); it needs
-  a bound on what one honest node holds that another has not received.
+A budget must never stop a node referencing the honest blocks it needs
+for a quorum. The simulation `scripts/sync-budget.py` tries three rules,
+each comparing a candidate block's history with the history of the
+node's own last block: at most `τ` new blocks (`plain`); at most `τ` new
+blocks of each author (`per-author`); at most `τ` new blocks reached by
+held blocks of at most `f` authors (`vouched`). Over 600 ticks, with
+`τ = 14`, in rounds reached and the longest round in ticks:
+
+| Scenario | No budget | `plain` | `per-author` | `vouched` |
+|---|---|---|---|---|
+| No attack | 300, 2 | 300, 2 | 300, 2 | 300, 2 |
+| Prefeed (§5) | 256, 28 | 300, 2 | 300, 2 | 300, 2 |
+| `Y` names a fresh chain of depth 13 each round | 243, 3 | **17** | 243, 3 | 243, 3 |
+| `X` and `Y` each show node 0 a private chain of depth 13 | 281, 5 | **21** | 281, 5 | **21** |
+| Node 4 slow until tick 200, `Y` applying the rule | 300 | 300 | 300 | 300 |
+| Node 4 slow until tick 200, `Y` relaying | 300 | **141** | **141** | **141** |
+
+In the bold cells every honest node stops. Chain depth 13 makes `Y`'s
+block add exactly `τ` blocks at its client, so the client's next block
+adds `τ + 1` everywhere else and is refused; with two private chains the
+client's block holds `2τ` blocks reached by two authors each.
+
+**Catch-up.** A node that falls behind builds every round it missed,
+each block referencing its own block of the round below, so its next
+block at the frontier carries a chain of its own blocks, one a round,
+that no other node referenced. This is the shape of a prefeed. In the
+last two rows node 4 falls 140 rounds behind and catches up. With `Y`
+applying the rule, the other nodes never reference node 4's blocks
+again (no reference after tick 250, against 800 without a budget). With
+`Y` referencing node 4's catch-up block, `Y`'s block carries the chain
+too; nodes 0 to 3 refuse both and hold only four authors, and every
+node stops at round 141.
+
+So no rule that refuses a prefeed chain admits the catch-up chain of an
+honest node that fell as far behind, and the lemma that a reliable node
+always admits the reliable blocks it needs is false for all three rules.
+Rounds have no least duration, so a reliable node can fall arbitrarily
+far behind its peers in rounds within `Δ`.
+
+## 7. Open
+
+* **A budget that admits honest blocks.** §6 rules out the three rules
+  tried as they stand. The catch-up chain reaches the frontier block only
+  through the node's references to its own blocks.
 * **Liveness.** The node's V11 assumes synchronisation of the network
   (`SyncedWithin`, section 5.1 of `docs/validator.md`); deriving it from these
   syncs, with the budget, is open.
