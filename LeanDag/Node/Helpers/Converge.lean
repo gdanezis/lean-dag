@@ -6,8 +6,8 @@ import LeanDag.Node.Helpers.Global
 # The honest nodes along a trace
 
 The blocks honest nodes knew over a trace give one block map (`gT`); an
-honest node's store reads as it at every event (`reads_before`). Over
-time then: a block that fits stays pending or stored (`keeps_after`); no
+honest node's disk reads as it at every event (`reads_before`). Over
+time then: a block that fits stays pending or on disk (`keeps_after`); no
 pending block is ever ready (`noReady_before`); a block becomes pending
 only by a delivery the node acts on (`entry_before`). Below
 a pending block of an honest history, a chain of pending blocks leads to
@@ -129,7 +129,7 @@ theorem stateBefore_of_le {i : ℕ} (h : tr.length ≤ i) (v : Validator) :
     stateBefore cfg tr i v = stateBefore cfg tr tr.length v := by
   unfold stateBefore; rw [inputsBefore_of_le h]
 
-/-- **Every honest store reads as the trace's block map.** -/
+/-- **Every honest disk reads as the trace's block map.** -/
 theorem reads_before (hinj : HashInjective cfg H tr) {v : Validator} (hv : v ∈ H) (i : ℕ) :
     ReadsAs (gT cfg H tr) (stateBefore cfg tr i v).disk := fun j hj =>
   (gT_of_known hinj (knownBefore_sub hv i ((inv_before (cfg := cfg) i v).known j hj))).symm
@@ -152,7 +152,7 @@ theorem same_before {a : ℕ} {v : Validator} (h : ∀ inp, tr[a]? ≠ some (v, 
     rintro rfl
     exact h inp ha
 
-/-- **A block that fits stays pending or stored.** -/
+/-- **A block that fits stays pending or on disk.** -/
 theorem keeps_after (hinj : HashInjective cfg H tr) {v : Validator} (hv : v ∈ H)
     {y : BlockId × Block Validator BlockId Payload}
     (hf : Fits (cfg.at v) (gT cfg H tr) y) {a : ℕ}
@@ -235,7 +235,7 @@ theorem causal_store (i : ℕ) (v : Validator) :
     CausalStructure (stateBefore cfg tr i v).disk.blk (stateBefore cfg tr i v).disk.ids :=
   (stateBefore cfg tr i v).disk.toRecord.causal
 
-/-- **An honest store holding a block reads its history as the trace
+/-- **An honest disk holding a block reads its history as the trace
 does.** -/
 theorem hist_eq {v : Validator} (hv : v ∈ H) {i : ℕ} {b : BlockId}
     (hb : b ∈ (stateBefore cfg tr i v).disk.ids) :
@@ -249,13 +249,13 @@ theorem hist_sub {v : Validator} (hv : v ∈ H) {i : ℕ} {b : BlockId}
   exact (causal_store i v).history_subset_ids hb
 
 omit hinj in
-/-- **What a node stores it knew.** -/
+/-- **What a node holds on disk it knew.** -/
 theorem stored_known {v : Validator} (hv : v ∈ H) {i : ℕ} {j : BlockId}
     (hj : j ∈ (stateBefore cfg tr i v).disk.ids) :
     (j, (stateBefore cfg tr i v).disk.blk j) ∈ knownIn cfg H tr :=
   knownBefore_sub hv i ((inv_before (cfg := cfg) i v).known j hj)
 
-/-- **A stored block fits every honest node.** -/
+/-- **A block on an honest disk fits every honest node.** -/
 theorem fits_stored {u : Validator} (hu : u ∈ H) {i : ℕ} {j : BlockId}
     (hj : j ∈ (stateBefore cfg tr i u).disk.ids) (v : Validator) :
     Fits (cfg.at v) (gT cfg H tr) (j, (stateBefore cfg tr i u).disk.blk j) := by
@@ -270,7 +270,7 @@ theorem fits_stored {u : Validator} (hu : u ∈ H) {i : ℕ} {j : BlockId}
     exact ⟨rfl, rfl⟩
 
 omit hinj in
-/-- **What an event makes its node stores after it.** -/
+/-- **What an event makes is on its node's disk after it.** -/
 theorem persist_stored {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
     (hi : tr[i]? = some (u, inp)) {e : BlockId × Block Validator BlockId Payload}
     (he : e ∈ persists (outputsAt cfg tr i)) :
@@ -281,7 +281,7 @@ theorem persist_stored {i : ℕ} {u : Validator} {inp : Input Validator BlockId 
   exact step_persist e he
 
 omit hinj in
-/-- **What an event broadcasts its node stores after it.** -/
+/-- **What an event broadcasts is on its node's disk after it.** -/
 theorem broadcast_stored {i : ℕ} {u : Validator} {inp : Input Validator BlockId Payload}
     (hi : tr[i]? = some (u, inp)) {e : BlockId × Block Validator BlockId Payload}
     (he : e ∈ broadcasts (outputsAt cfg tr i)) :
@@ -342,7 +342,7 @@ theorem chain {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) {τ : ℕ} {idh : 
   have hnr := noReady_before (cfg := cfg) (tr := tr) v tr.length _ hwp
   simp only [readyOn, Store.Checks, decide_eq_false_iff_not] at hnr
   have hblk : st.blk w = raw w := (hraw w).symm
-  -- the block is valid as `u` stored it, so it waits only for references
+  -- the block is valid as `u`'s disk holds it, so it waits only for references
   have hpredw : ∀ j ∈ (raw w).refs, (st.blk j).round + 1 = (raw w).round := fun j hj => by
     rw [← hblk]; exact st.pred w hwst j (by rw [← hblk] at hj; exact hj)
   have hagree : ∀ j ∈ (raw w).refs, j ∈ fin.disk.ids → fin.disk.blk j = st.blk j := by

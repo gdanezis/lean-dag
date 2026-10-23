@@ -339,7 +339,7 @@ end StepFacts
 /-! ## Building on a timer -/
 
 omit [Fintype Validator] in
-/-- **`refsFor`'s references**: stored blocks of the round, one per
+/-- **`refsFor`'s references**: blocks of the store at the round, one per
 author of the round, the node's own block for itself if it has one. -/
 theorem refsFor_spec {st : Store Validator BlockId Payload} {r : ℕ} {o : Option BlockId}
     (ho : ∀ j, o = some j → j ∈ st.ids ∧ (st.blk j).round = r ∧ (st.blk j).creator = cfg.me) :
@@ -423,8 +423,8 @@ theorem refsAt_buildable (st : Store Validator BlockId Payload) (r : ℕ) (o : O
 
 omit [Fintype Validator] in
 /-- **A node whose round's timer fired, or that is behind the round
-above, builds**, given a quorum of the round, its own block there stored,
-no stored block with the identifier of a next block of its own, and its
+above, builds**, given a quorum of the round, its own block there on disk,
+no block on disk with the identifier of a next block of its own, and its
 memory from the round up. -/
 theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.top = some r)
     (hf : r ∈ s.fired ∨ behind cfg s.disk r)

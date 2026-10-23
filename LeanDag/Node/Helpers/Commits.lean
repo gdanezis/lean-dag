@@ -5,14 +5,14 @@ import LeanDag.Scheme.Loop.Proof
 # A node's decisions are one call of the loop
 
 A record `U` grounds what a node knows, `K` (`Ground`), when a known
-block valid over blocks of `U` is the record's block. Then every store
+block valid over blocks of `U` is the record's block. Then every disk
 along the node's run is a cut of `U` (`IsCut`): its blocks are blocks of
 `U`, read as `U` reads them.
 
 On such a record the decisions a node output so far are nothing, or
-`tryDecide` from slot `0` on a view of `U` whose blocks the store holds
+`tryDecide` from slot `0` on a view of `U` whose blocks the disk holds
 (`CommitInv`). A decision step appends `tryDecide` from the next slot on
-the store, which reads as the view of `U` holding exactly the store's
+the disk, which reads as the view of `U` holding exactly the disk's
 blocks (`IsCut.extend`, `ViewsAbove.of_store`), and the scheme's
 `Loop.resume` folds the two calls into one. Building and accepting keep
 what the view's condition reads (`CommitInv.keeps`).
@@ -173,7 +173,7 @@ theorem tryDecide_length_le {P : Validity Validator BlockId Payload} {H : Finset
   exact (List.takeWhile_sublist _).length_le.trans (by simp)
 
 omit [Fintype Validator] in
-/-- A pass decides only slots at rounds its store reaches. -/
+/-- A pass decides only slots at rounds its disk reaches. -/
 theorem decideStep_lo_le (s : State Validator BlockId Payload) :
     (Node.decideStep cfg s).1.lo ≤ max s.lo (decidable cfg s.disk.topRound) := by
   unfold Node.decideStep
@@ -204,7 +204,7 @@ theorem IsCut.tryBuild (hg : Ground U K cfg.q) {s s' : State Validator BlockId P
   exact hc.insert ⟨h₁, h₂⟩
 
 omit [Fintype Validator] in
-/-- **Building known blocks keeps the store a cut.** -/
+/-- **Building known blocks keeps the disk a cut.** -/
 theorem IsCut.progress (hg : Ground U K cfg.q) :
     ∀ (fuel : ℕ) {s : State Validator BlockId Payload}, IsCut U s.disk →
       (∀ e ∈ persists (Node.progress cfg fuel s).2, e ∈ K) →
@@ -220,7 +220,7 @@ theorem IsCut.progress (hg : Ground U K cfg.q) :
         (List.mem_append_left _ he)) fun e he => hb e (List.mem_append_right _ he)
 
 omit [Fintype Validator] in
-/-- **A pass from a cut keeps the store a cut.** -/
+/-- **A pass from a cut keeps the disk a cut.** -/
 theorem IsCut.advanceStore (hg : Ground U K cfg.q) {s : State Validator BlockId Payload}
     (hc : IsCut U s.disk) (hp : ∀ e ∈ s.pending, e ∈ K)
     (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : IsCut U (Node.advance cfg s).1.disk := by
@@ -263,8 +263,8 @@ variable [P.Mechanised]
 
 variable (cfg) in
 /-- **The decisions so far are one call of the loop**: nothing, or
-`tryDecide` from slot `0` on a view whose blocks the store holds, scanned
-no further than the store allows; and the next slot is the one after
+`tryDecide` from slot `0` on a view whose blocks the disk holds, scanned
+no further than the disk allows; and the next slot is the one after
 them. -/
 def CommitInv (U : BlockRecord Validator BlockId Payload P H) (s : State Validator BlockId Payload)
     (cs : List (ℕ × Option BlockId)) : Prop :=
@@ -276,7 +276,7 @@ def CommitInv (U : BlockRecord Validator BlockId Payload P H) (s : State Validat
 variable {q f : ℕ} [P.Quorate q]
 
 omit [Fintype Validator] in
-/-- The invariant survives a change that keeps the store and the next slot. -/
+/-- The invariant survives a change that keeps the disk and the next slot. -/
 theorem CommitInv.keeps {s s' : State Validator BlockId Payload} {cs : List (ℕ × Option BlockId)}
     (h : CommitInv cfg U s cs) (hlo : s'.lo = s.lo) (hk : Keeps s.disk s'.disk) :
     CommitInv cfg U s' cs := by
@@ -293,7 +293,7 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
   letI := cfg.slots
   have hw : 2 ≤ cfg.p.waveLength := by
     rcases ht.2.2 with ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ <;> omega
-  -- the store decides as a view of `U` grown from any view the invariant allows
+  -- the disk decides as a view of `U` grown from any view the invariant allows
   have hgrow : ∀ V : U.View, (∀ i ∈ V.ids, i ∈ s.disk.ids) →
       ∃ V' : U.View, V.ids ⊆ V'.ids ∧ (∀ i ∈ V'.ids, i ∈ s.disk.ids) ∧
         ∀ N, tryDecide cfg.p boundedSel s.disk.toRecord s.disk.view s.lo N =
@@ -336,7 +336,7 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
       List.append_nil]
     exact h
 
-/-- **A pass keeps the invariant, and the store a cut.** -/
+/-- **A pass keeps the invariant, and the disk a cut.** -/
 theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)} (h : CommitInv cfg U s cs) (hc : IsCut U s.disk)
@@ -361,7 +361,7 @@ theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   rw [commitsOf_append, hbs, commitsOf_built, List.nil_append]
   exact h₂.keeps (flush_lo _ _) (by rw [flush_disk]; exact hk)
 
-/-- **The passes keep the invariant, and the store a cut.** -/
+/-- **The passes keep the invariant, and the disk a cut.** -/
 theorem CommitInv.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) : ∀ (n : ℕ) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)}, CommitInv cfg U s cs → IsCut U s.disk →
@@ -380,7 +380,7 @@ theorem CommitInv.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         fun e he => hb e (List.mem_append_right _ he)
       rw [commitsOf_append, ← List.append_assoc]; exact this
 
-/-- **Settling keeps the invariant, and the store a cut.** -/
+/-- **Settling keeps the invariant, and the disk a cut.** -/
 theorem CommitInv.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)} (h : CommitInv cfg U s cs) (hc : IsCut U s.disk)
@@ -389,7 +389,7 @@ theorem CommitInv.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       IsCut U (Node.settle cfg s).1.disk :=
   CommitInv.quiesce hg hσ ht (passes cfg s) h hc hp hb
 
-/-- **A step keeps the invariant, and the store a cut.** -/
+/-- **A step keeps the invariant, and the disk a cut.** -/
 theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)} (i : Input Validator BlockId Payload)

@@ -96,7 +96,7 @@ def main (args : List String) : IO UInt32 := do
       IO.eprintln s!"row {sc.row} is not admissible at n={sc.n} f={sc.f} c={sc.c}"
       return 2
     IO.println s!"row {sc.row}  n={sc.n} f={sc.f} c={sc.c}  seed={sc.seed}  gst={sc.gst}"
-    IO.println s!"time {r.time}  inputs {r.events}  largest store {r.maxStore} blocks  most pending {r.maxPending}"
+    IO.println s!"time {r.time}  inputs {r.events}  largest disk {r.maxDisk} blocks  most pending {r.maxPending}"
     let honest := (List.range sc.n).filter sc.honest
     for (v, top, ds) in (honest.zip (r.tops.zip r.commits)).map fun (v, t, d) => (v, t, d) do
       let skips := (ds.filter (·.2.isNone)).length

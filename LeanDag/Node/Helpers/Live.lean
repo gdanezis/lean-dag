@@ -5,9 +5,9 @@ import LeanDag.Node.Live.Statement
 # A reliable node's builds along a trace
 
 `docs/validator.md` §5.3. Over a trace on which honest
-stores are cuts of the run's record (`cut_before`), each block a reliable
-node builds at an event comes from one build, at a state whose store is a
-cut of the record grown from the store before the event (`build_witness`).
+disks are cuts of the run's record (`cut_before`), each block a reliable
+node builds at an event comes from one build, at a state whose disk is a
+cut of the record grown from the disk before the event (`build_witness`).
 A block of the record by a reliable node was built at the node's first
 event persisting a block of its round (`builtAt_first`, `built_block`).
 -/
@@ -22,8 +22,8 @@ variable {cfg : Config Validator BlockId Payload} {tr : Trace Validator BlockId 
 variable {H : Finset Validator}
 
 /-- **Each block a reliable node builds at an event comes from one
-build**, at a state whose store is a cut of the run's record grown from
-the store before the event. -/
+build**, at a state whose disk is a cut of the run's record grown from
+the disk before the event. -/
 theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     {v : Validator} (hv : v ∈ H) {i : ℕ}
@@ -99,8 +99,8 @@ theorem builtAt_first {v : Validator} {n i : ℕ}
 
 /-- **A reliable node's block in the run's record was built at `v`'s
 first event building its round**, from a state it builds from, whose
-store grows into the store after the event, by the build rule: its
-references are `refsAt`'s on that state's store, stored there, and pass
+disk grows into the disk after the event, by the build rule: its
+references are `refsAt`'s on that state's disk, held there, and pass
 the reach and certificate tests, or follow the round's timer with
 `refsFor`'s, or follow the node's being behind with `refsFor`'s. -/
 theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)

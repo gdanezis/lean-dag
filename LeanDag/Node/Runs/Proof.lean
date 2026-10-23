@@ -6,7 +6,7 @@ import LeanDag.Node.Helpers.Agree
 Timely authentication and the hash over the trace give them at its end,
 so the blocks the honest nodes knew form a record at the quorum with
 honest set `H` (`globalRecord`), which grounds what they knew (`ground`). Along
-each node's run every store is a cut of the record, and the node's
+each node's run every disk is a cut of the record, and the node's
 decisions are nothing or one call of the loop on a view of the record
 (`CommitInv.run`); two calls on views of one record are
 prefix-comparable (`Loop.prefixComparable`).

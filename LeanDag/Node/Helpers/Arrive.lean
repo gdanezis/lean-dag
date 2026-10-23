@@ -98,7 +98,7 @@ theorem fired_stays {f r : ℕ} (hf : tr[f]? = some (v, Input.timer r)) :
         { stateBefore cfg tr f v with fired := fire (stateBefore cfg tr f v) r }).fired
         (Finset.mem_insert_self _ _)
 
-/-- **A block a node builds at an event is stored** from the next event
+/-- **A block a node builds at an event is on its disk** from the next event
 on. -/
 theorem built_stays {p : ℕ} {inp : Input Validator BlockId Payload}
     (hp : tr[p]? = some (v, inp))
@@ -189,7 +189,7 @@ theorem built_le_top {b : ℕ} {inp : Input Validator BlockId Payload} (hb : tr[
   · rw [h] at hB; cases hB
   · exact ⟨t, ht, hR.2 e hB⟩
 
-/-- **No stored block has the identifier of a node's next block**, with
+/-- **No block on a node's disk has the identifier of its next block**, with
 an injective hash and its peers' blocks authenticated. -/
 theorem fresh_before {H : Finset Validator} (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hv : v ∈ H) {E t : ℕ}

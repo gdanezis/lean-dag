@@ -207,7 +207,7 @@ def refsAt (s : Store Validator BlockId Payload) (r : ℕ) (o : Option BlockId) 
       decide ((s.blk c).creator ≠ cfg.me)).map (lent cfg s · o) |>.find? fun R =>
         ready R && buildable cfg s r R).getD own
 
-/-- **The node is behind round `r + 1`**: its store holds round-`r + 1`
+/-- **The node is behind round `r + 1`**: the store `st` holds round-`r + 1`
 blocks of `f + 1` authors, so a node other than a Byzantine one built the
 round. -/
 def behind (st : Store Validator BlockId Payload) (r : ℕ) : Prop :=
@@ -284,7 +284,7 @@ def walkLevel (s : State Validator BlockId Payload)
   (split.1.flatMap fun x => expand s x, w.2.1 ++ front, w.2.2 ++ split.2)
 
 /-- The slots below the slot rounds up to `R`: the slots `tryDecide` may
-reach on a store whose top round is `R`. -/
+reach on a disk whose top round is `R`. -/
 def decidable (R : ℕ) : ℕ := cfg.m * (R / cfg.per + 1)
 
 /-- **Decide**: `tryDecide` from the next undecided slot to the last slot

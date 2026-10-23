@@ -1,11 +1,11 @@
 import LeanDag.Node.Helpers.Flush
 /-!
-# What one step does to pending and stored blocks
+# What one step does to the pending blocks and the disk
 
-On stores reading as a block map `g`, a step keeps every block that fits
-pending or stored (`step_keeps`). A block becomes pending only on account
+On disks reading as a block map `g`, a step keeps every block that fits
+pending or on disk (`step_keeps`). A block becomes pending only on account
 of a delivery the node acts on (`Admits`, `step_sub`). Every block of the
-node's own that a step outputs is in the store after it
+node's own that a step outputs is on the disk after it
 (`step_persist`), and after every step no pending block is ready
 (`noReady_step`).
 -/
@@ -63,7 +63,7 @@ theorem ReadsAs.of_grows {st st' : Store Validator BlockId Payload} (h : ReadsAs
   fun j hj => by rw [← hg.blk hj]; exact h j (hg.1 hj)
 
 omit [Fintype Validator] in
-/-- **A block that fits stays pending or stored across a pass.** -/
+/-- **A block that fits stays pending or on disk across a pass.** -/
 theorem advance_keeps {s : State Validator BlockId Payload}
     (hR : ReadsAs g (Node.advance cfg s).1.disk)
     (hp : ∀ e ∈ s.pending, g e.1 = e.2) {y : BlockId × Block Validator BlockId Payload}
@@ -117,7 +117,7 @@ theorem advance_sub (s : State Validator BlockId Payload) :
   rwa [hd, hp] at this
 
 omit [Fintype Validator] in
-/-- **A block that fits stays pending or stored across the passes.** -/
+/-- **A block that fits stays pending or on disk across the passes.** -/
 theorem quiesce_keeps : ∀ (n : ℕ) {s : State Validator BlockId Payload},
     ReadsAs g (quiesce cfg n s).1.disk →
     (∀ e ∈ s.pending, g e.1 = e.2) → ∀ {y : BlockId × Block Validator BlockId Payload},
@@ -135,7 +135,7 @@ theorem quiesce_keeps : ∀ (n : ℕ) {s : State Validator BlockId Payload},
         (advance_keeps hRa hp hf hy)
 
 omit [Fintype Validator] in
-/-- **A block that fits stays pending or stored across a settle.** -/
+/-- **A block that fits stays pending or on disk across a settle.** -/
 theorem settle_keeps {s : State Validator BlockId Payload}
     (hR : ReadsAs g (Node.settle cfg s).1.disk)
     (hp : ∀ e ∈ s.pending, g e.1 = e.2) {y : BlockId × Block Validator BlockId Payload}
@@ -203,14 +203,6 @@ omit [Fintype Validator] in
 omit [Fintype Validator] in
 @[simp] theorem afterFlush_lo : (afterFlush (cfg := cfg) s id b).lo = s.lo := flush_lo _ _
 
-omit [Fintype Validator] in
-@[simp] theorem afterFlush_decided : (afterFlush (cfg := cfg) s id b).decided = s.decided :=
-  flush_decided _ _
-
-omit [Fintype Validator] in
-@[simp] theorem afterFlush_armed : (afterFlush (cfg := cfg) s id b).armed = s.armed :=
-  flush_armed _ _
-
 end AfterFlush
 
 /-- **A delivery the node acts on**: it flushes, asks for the missing
@@ -237,7 +229,7 @@ theorem step_deliver_not {s : State Validator BlockId Payload} {id : BlockId}
   simp only [Node.step]
   rw [if_neg h']
 
-/-- **Across a step a fitting block stays pending or stored**, on stores
+/-- **Across a step a fitting block stays pending or on disk**, on disks
 reading as `g`. -/
 theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
     (hR : ReadsAs g (Node.step cfg s inp).1.disk)
@@ -343,7 +335,7 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
   | restart => exact fun e he => Or.inl he
 
 omit [Fintype Validator] in
-/-- **What building persists it stores.** -/
+/-- **What building persists is on the disk after it.** -/
 theorem progress_persist : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     ∀ e ∈ persists (Node.progress cfg fuel s).2, e.1 ∈ (Node.progress cfg fuel s).1.disk.ids ∧
       (Node.progress cfg fuel s).1.disk.blk e.1 = e.2
@@ -385,7 +377,7 @@ theorem decideStep_persist (s : State Validator BlockId Payload) :
   · rfl
 
 omit [Fintype Validator] in
-/-- **What a pass persists it stores.** -/
+/-- **What a pass persists is on the disk after it.** -/
 theorem advance_persist (s : State Validator BlockId Payload) :
     ∀ e ∈ persists (Node.advance cfg s).2, e.1 ∈ (Node.advance cfg s).1.disk.ids ∧
       (Node.advance cfg s).1.disk.blk e.1 = e.2 := by
@@ -404,7 +396,7 @@ theorem advance_persist (s : State Validator BlockId Payload) :
   exact ⟨hgf.1 hin, by rw [hgf.blk hin]; exact hval⟩
 
 omit [Fintype Validator] in
-/-- **What the passes persist they store.** -/
+/-- **What the passes persist is on the disk after them.** -/
 theorem quiesce_persist : ∀ (n : ℕ) (s : State Validator BlockId Payload),
     ∀ e ∈ persists (quiesce cfg n s).2, e.1 ∈ (quiesce cfg n s).1.disk.ids ∧
       (quiesce cfg n s).1.disk.blk e.1 = e.2
@@ -421,15 +413,15 @@ theorem quiesce_persist : ∀ (n : ℕ) (s : State Validator BlockId Payload),
       · exact quiesce_persist n _ e he
 
 omit [Fintype Validator] in
-/-- **What a settle persists it stores.** -/
+/-- **What a settle persists is on the disk after it.** -/
 theorem settle_persist (s : State Validator BlockId Payload) :
     ∀ e ∈ persists (Node.settle cfg s).2, e.1 ∈ (Node.settle cfg s).1.disk.ids ∧
       (Node.settle cfg s).1.disk.blk e.1 = e.2 :=
   quiesce_persist _ s
 
 omit [Fintype Validator] in
-/-- What a settle persists, after outputs persisting at most one stored
-block, it stores. -/
+/-- What a settle persists, after outputs persisting at most one block on
+disk, is on the disk after it. -/
 theorem settle_persist_of {s₀ : State Validator BlockId Payload}
     {pre : List (Output Validator BlockId Payload)}
     (hpre : persists pre = [] ∨ ∃ e₀, persists pre = [e₀] ∧ e₀.1 ∈ s₀.disk.ids ∧
@@ -447,7 +439,7 @@ theorem settle_persist_of {s₀ : State Validator BlockId Payload}
       exact ⟨hg.1 hin, by rw [hg.blk hin]; exact hval⟩
   · exact settle_persist s₀ e he
 
-/-- **What a step persists it stores.** -/
+/-- **What a step persists is on the disk after it.** -/
 theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload} :
     ∀ e ∈ persists (Node.step cfg s inp).2, e.1 ∈ (Node.step cfg s inp).1.disk.ids ∧
       (Node.step cfg s inp).1.disk.blk e.1 = e.2 := by
@@ -550,7 +542,7 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady cfg s)
   | restart => exact h
 
 /-- **A delivery the node acts on keeps a fitting block it delivers**
-pending or stored. -/
+pending or on disk. -/
 theorem admit_keeps {s : State Validator BlockId Payload} {id : BlockId}
     {b : Block Validator BlockId Payload} (hc : Admits cfg s id b)
     (hR : ReadsAs g (Node.step cfg s (.deliver id b)).1.disk)

@@ -12,11 +12,11 @@ chain's pending blocks to arrive arrived after `u` broadcast `h`, when the
 rest were pending; its walk reached `z` (`walk_reaches`), so `v` asked for
 `z` on its account, for the first time, from its round `r`; `u`, which
 holds `h`'s history since it broadcast `h`, answered; and `z` arrived,
-after which it stays pending or stored, which it is not.
+after which it stays pending or on disk, which it is not.
 
 The answer leaves out what a block of `v`'s core reaches. If a block of
 the chain below the asked one has round-`(r − 1)` blocks of at least
-`n − q + f + 1` authors reaching it in `u`'s store (`mem_coreSets`), at
+`n − q + f + 1` authors reaching it on `u`'s disk (`mem_coreSets`), at
 least `n − q + 1` of these authors are honest. At round `r`, `v` held
 round-`(r − 1)` blocks of `q` authors (`Quorate`), so one of them is such
 an honest author, whose one block of that round (`eq_of_persists`) `v`
@@ -40,7 +40,7 @@ theorem converges : Converges := by
   have hiL : i < L := (List.getElem?_eq_some_iff.mp hi).1
   have hgr := grows_before (cfg := cfg) (tr := tr) u (show i + 1 ≤ L by omega)
   rw [hist_eq hinj huH (hgr.1 hst₁)] at hy
-  -- the content of a block of the history, as `u` stored it
+  -- the content of a block of the history, as `u`'s disk holds it
   set st := (stateBefore cfg tr (i + 1) u).disk with hst
   let raw : BlockId → Block Validator BlockId Payload := fun j => st.blk j
   have hHsub := hist_sub hinj huH hst₁
@@ -49,7 +49,7 @@ theorem converges : Converges := by
   have hfits : ∀ j ∈ historyFrom (gT cfg H tr) e.1, Fits (cfg.at v) (gT cfg H tr) (j, raw j) :=
     fun j hj => fits_stored hinj huH (hHsub hj) v
   set fin := stateBefore cfg tr L v
-  -- a block of the history pending or stored at some time is so at the end
+  -- a block of the history pending or on disk at some time is so at the end
   have hlast : ∀ j ∈ historyFrom (gT cfg H tr) e.1, ∀ t,
       ((j, raw j) ∈ (stateBefore cfg tr t v).pending ∨ j ∈ (stateBefore cfg tr t v).disk.ids) →
       t ≤ L → (j, raw j) ∈ fin.pending ∨ j ∈ fin.disk.ids := fun j hj t ht htL =>
@@ -64,7 +64,7 @@ theorem converges : Converges := by
     obtain ⟨j, -, inp', hj', hje⟩ := persists_of_broadcasts hi he
     exact (Local.authored _ _ _ (cfg.at u) (inputsBefore tr (j + 1) u) e
       (persists_of_event hj' hje)).2
-  -- a block of the history delivered to `v` ends pending or stored there
+  -- a block of the history delivered to `v` ends pending or on disk there
   have hdeliv : ∀ j ∈ historyFrom (gT cfg H tr) e.1, ∀ t, t < L →
       tr[t]? = some (v, .deliver j (raw j)) → (raw j).creator ≠ v →
       (j, raw j) ∈ fin.pending ∨ j ∈ fin.disk.ids := by
@@ -148,12 +148,12 @@ theorem converges : Converges := by
     rcases List.mem_cons.mp hq with rfl | hq
     · exact hxmk
     · exact knownBefore_sub hv (A m) ((inv_before (cfg := cfg) (A m) v).pend q hq)
-  -- `s₁`'s store grows into the end's
+  -- `s₁`'s disk grows into the end's
   have hg₁ : Grows s₁.disk (stateBefore cfg tr (A m + 1) v).disk := by
     rw [hstepm]; exact Grows.settle_of _ rfl
   have hgend := grows_before (cfg := cfg) (tr := tr) v (show A m + 1 ≤ L by omega)
   have hs₁fin : ∀ j ∈ s₁.disk.ids, j ∈ fin.disk.ids := fun j hj => hgend.1 (hg₁.1 hj)
-  -- the block `v` lacks is neither stored nor pending in `s₁`
+  -- the block `v` lacks is neither on disk nor pending in `s₁`
   have hF2 : x len ∉ s₁.disk.ids := fun h' => (hxH len le_rfl).2 (hs₁fin _ h')
   have hF3 : x len ∉ s₁.pending.map Prod.fst := by
     intro h'
@@ -377,7 +377,7 @@ theorem converges : Converges := by
   have hrk : rk = raw (x len) :=
     content_eq hinj (stored_known huH hzk) (hrawk _ (hxH len le_rfl).1) rfl
   rw [hrk] at htk'
-  -- `v` acts on it, so it ends pending or stored there, which it does not
+  -- `v` acts on it, so it ends pending or on disk there, which it does not
   have hcr : (raw (x len)).creator ≠ v := by
     intro hc
     rcases hrawk _ (hxH len le_rfl).1 with ⟨j, w', inp, hj₀, hw', hdl⟩ | ⟨j, w', hj, hw', hb⟩

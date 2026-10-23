@@ -4,24 +4,24 @@ import LeanDag.Node.Helpers.Commits
 # The build rule's three exits
 
 `docs/validator.md` §5.3. A block the node builds above
-round `r` passes the reach and certificate tests on the store, or was
+round `r` passes the reach and certificate tests on the memory, or was
 built after the round's timer fired or on being behind, on `refsFor`'s
 references (`tryBuild_exit`). Those reference every block of the round below that is
-the only one of its author the store holds, and the node's own block
+the only one of its author the memory holds, and the node's own block
 (`mem_refsFor`).
 
 Along a trace, each round whose timer node `v` counts as fired had its
 timer input at an earlier event (`fired_before`), and `v`'s own block at
-its top is stored (`ownTop_before`). Each block a step persists is the
-genesis block or comes from one build, at a state whose store is a cut of
+its top is on its disk (`ownTop_before`). Each block a step persists is the
+genesis block or comes from one build, at a state whose disk is a cut of
 the record (`BuildState`, `step_witness`). Each timer a step sets is at
 or below the node's top, and one of its top round above `0` is set for
-its timeout once the store holds a quorum of the round (`TimersSet`,
+its timeout once the disk holds a quorum of the round (`TimersSet`,
 `timersSet_step`).
 On a cut, the reach test reads as reaching the record's leader blocks
 (`reaches_of_reachReady`), the certificate test as certifying them
-(`isCert_of_certReady`), and `refsFor` references each honest stored
-block at its round (`mem_refsFor_of_cut`).
+(`isCert_of_certReady`), and `refsFor` references each honest block
+of the store at its round (`mem_refsFor_of_cut`).
 -/
 
 namespace LeanDag
@@ -262,7 +262,7 @@ theorem progress_witness (Q : State Validator BlockId Payload → Prop)
           (fun e he => hK e (List.mem_append_right _ he)) e he
 
 variable (cfg) in
-/-- **The node's own block at its top is stored**, as `own`. -/
+/-- **The node's own block at its top is on its disk**, as `own`. -/
 def OwnTop (s : State Validator BlockId Payload) : Prop :=
   ∀ r, s.top = some r → ∃ j, s.own = some j ∧ j ∈ s.disk.ids ∧ (s.disk.blk j).round = r ∧
     (s.disk.blk j).creator = cfg.me
@@ -326,7 +326,7 @@ theorem OwnTop.settle {s : State Validator BlockId Payload} (h : OwnTop cfg s) :
     OwnTop cfg (Node.settle cfg s).1 :=
   quiesce_ind (fun _ h => h.advance) _ _ h
 
-/-- **A step keeps the node's own block at its top stored.** -/
+/-- **A step keeps the node's own block at its top on its disk.** -/
 theorem OwnTop.step {s : State Validator BlockId Payload} (h : OwnTop cfg s)
     (inp : Input Validator BlockId Payload) : OwnTop cfg (Node.step cfg s inp).1 := by
   cases inp with
@@ -352,7 +352,7 @@ theorem OwnTop.step {s : State Validator BlockId Payload} (h : OwnTop cfg s)
   | fetchRequest peer r ids => exact h
   | restart => exact h
 
-/-- **Node `v`'s own block at its top is stored before every event.** -/
+/-- **Node `v`'s own block at its top is on its disk before every event.** -/
 theorem ownTop_before {tr : Trace Validator BlockId Payload} {v : Validator} :
     ∀ i, OwnTop (cfg.at v) (stateBefore cfg tr i v)
   | 0 => fun r hr => by simp [stateBefore, inputsBefore, run, State.init] at hr
@@ -375,8 +375,8 @@ variable {P : Validity Validator BlockId Payload} {H : Finset Validator}
 
 variable (cfg) in
 /-- **A state the node builds from during a step at `s` on `inp`**: its
-store a cut of `U` grown from `s`'s, its top held and its own block at
-its top stored, each round it counts as fired fired before or by `inp`,
+disk a cut of `U` grown from `s`'s, its top held and its own block at
+its top on the disk, each round it counts as fired fired before or by `inp`,
 and its blocks known in `K` and valid. -/
 structure BuildState (U : BlockRecord Validator BlockId Payload P H)
     (K : Set (BlockId × Block Validator BlockId Payload))
@@ -692,14 +692,14 @@ theorem TopRises.of_eq {s s' : State Validator BlockId Payload} (h : s'.top = s.
 variable (cfg) in
 /-- **The timers a node sets, read on the state after**: each at a round
 at or below the top, and one of the top round above `0` for its timeout,
-only once the store holds a quorum of it. -/
+only once the disk holds a quorum of it. -/
 def TimersSet (s : State Validator BlockId Payload)
     (out : List (Output Validator BlockId Payload)) : Prop :=
   ∀ r a, Output.setTimer r a ∈ out → ∃ t, s.top = some t ∧ r ≤ t ∧
     (r = t → 1 ≤ r → a = cfg.timeout r ∧ cfg.q ≤ (s.disk.authorsAt r).card)
 
 variable (cfg) in
-/-- **An armed round has a quorum** in the store. -/
+/-- **An armed round has a quorum** on the disk. -/
 def ArmedQuorum (s : State Validator BlockId Payload) : Prop :=
   ∀ r, s.armed = some r → cfg.q ≤ (s.disk.authorsAt r).card
 
@@ -735,12 +735,6 @@ theorem TimersSet.of_none {s : State Validator BlockId Payload}
     TimersSet cfg s x := fun r a hm => absurd hm (h r a)
 
 omit [Fintype Validator] in
-theorem TimersSet.of_quiet {s : State Validator BlockId Payload}
-    {x : List (Output Validator BlockId Payload)}
-    (h : ∀ o ∈ x, match o with | .setTimer _ _ => False | _ => True) :
-    TimersSet cfg s x := fun r a hm => absurd (h _ hm) (by simp)
-
-omit [Fintype Validator] in
 /-- **Building sets the timer of the round below** the new top. -/
 theorem timersSet_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     TimersSet cfg (Node.progress cfg fuel s).1 (Node.progress cfg fuel s).2 ∧
@@ -767,7 +761,7 @@ theorem timersSet_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Paylo
     · exact ⟨TimersSet.of_none fun _ _ h => by simp at h, Grows.refl _, TopRises.refl _⟩
 
 omit [Fintype Validator] in
-/-- **Arming sets the top round's timer** once the store holds a quorum of
+/-- **Arming sets the top round's timer** once the disk holds a quorum of
 it. -/
 theorem timersSet_arm (s : State Validator BlockId Payload) :
     TimersSet cfg (Node.arm cfg s).1 (Node.arm cfg s).2 := by
@@ -930,8 +924,8 @@ theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum c
     exact ⟨TimersSet.append (timersSet_resend s) (timersSet_rearm hA), hA⟩
 
 omit [Fintype Validator] [DecidableEq Validator] in
-/-- **A cut's paths are the record's**: what a stored block reaches in the
-store it reaches in the record. -/
+/-- **A cut's paths are the record's**: what a block of the store reaches in
+the store it reaches in the record. -/
 theorem IsCut.reachesFrom {U : BlockRecord Validator BlockId Payload P H}
     {st : Store Validator BlockId Payload} (hc : IsCut U st) {i : BlockId} :
     ∀ {j : BlockId}, j ∈ st.ids → ReachesFrom st.blk j i → ReachesFrom U.block j i := by
@@ -980,7 +974,7 @@ theorem reaches_of_reachReady {U : BlockRecord Validator BlockId Payload P H}
   exact Relation.ReflTransGen.head (show c' ∈ (U.block c).refs by rw [hcrefs]; exact hc') hreach
 
 omit [Fintype Validator] in
-/-- **`refsFor` on a cut references each stored block of an honest author
+/-- **`refsFor` on a cut references each block of the store by an honest author
 at its round**, given the node's own block there as `o` if the author is
 the node. -/
 theorem mem_refsFor_of_cut {U : BlockRecord Validator BlockId Payload P H}

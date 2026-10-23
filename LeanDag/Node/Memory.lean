@@ -50,9 +50,6 @@ omit [DecidableEq Validator] in
 theorem sub {i : BlockId} (hi : i ∈ m.ids) : i ∈ d.ids := ((h.mem i).mp hi).1
 
 omit [DecidableEq Validator] in
-theorem le {i : BlockId} (hi : i ∈ m.ids) : F ≤ (d.blk i).round := ((h.mem i).mp hi).2
-
-omit [DecidableEq Validator] in
 theorem mem_of {i : BlockId} (hi : i ∈ d.ids) (hr : F ≤ (d.blk i).round) : i ∈ m.ids :=
   (h.mem i).mpr ⟨hi, hr⟩
 

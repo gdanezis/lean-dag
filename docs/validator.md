@@ -234,8 +234,8 @@ does so only when the memory holds round `R`, which it always does
 The window holds a store's blocks at rounds `R` and above, gathered
 from `byRound` at the rounds `R … topRound`. A block at round `R` is
 read without its references, so that the window is closed under
-references; a block above `R` is read as stored, and its references lie
-one round below it, at `R` or above. The decisions on the window are
+references; a block above `R` is read as the store reads it, and its
+references lie one round below it, at `R` or above. The decisions on the window are
 those on the store's view. Every set the loop counts from slot `lo` on
 lies at or above `R`: the candidates at a slot's round, the blamers and
 certificates above it, a vote's slot at it, a certificate's votes one
@@ -263,11 +263,11 @@ rest, a node holding only one twin cannot complete the history of a
 block referencing the other; the program fetches what it lacks.
 
 **The rule.** After a block `h` arrives, the node walks `h`'s references
-down through its pending blocks and collects those it neither stores
-nor holds pending: the missing part of `h`'s history (`walkLevel`,
+down through its pending blocks and collects those it holds neither on
+disk nor pending: the missing part of `h`'s history (`walkLevel`,
 `missing`). It asks `h`'s author for them in one `fetch` output, which
 carries the asker's top round `r` (`0` before the start). A block is
-delivered to the node at most once, since a block it stores or holds
+delivered to the node at most once, since a block on its disk or
 pending is not taken again, so it asks at most once on account of each
 block. A node asked for blocks sends the asker each one
 its disk holds, and their histories on its disk less the blocks the
@@ -474,7 +474,7 @@ assumptions up to a time `t₁`, over a reliable set `T ⊆ H` of at least
   the fetch meets it with `Δₛ = 2Δ` when the block's author answers;
 * every reliable node **starts** by GST (`StartedBy`);
 * timely authentication of blocks, a block hash injective on every
-  block, so no stored block has the identifier of the node's next one
+  block, so no block on its disk has the identifier of the node's next one
   (`fresh_before`), and `2 (Δ + Δₛ) < timeout r` at every round.
 
 A step takes no time; the time it costs a node to act on what it holds is
@@ -773,7 +773,7 @@ chain of own blocks (`chain_before`).
   default targets, so `lake build` and the audits are unchanged.
 * **Cost.** The disk keeps every block, and the memory the blocks from
   the floor up (§3.1). Membership in the accepted identifiers costs a
-  lookup in the map, logarithmic in the number `N` of blocks stored; the
+  lookup in the map, logarithmic in the number `N` of blocks in the map; the
   top round is read off a field; the blocks and the authors of a round
   cost a lookup in `byRound` and the size of the round. Releasing the
   memory rebuilds it from the blocks it keeps, in time linear in its

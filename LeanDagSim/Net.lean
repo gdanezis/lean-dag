@@ -146,7 +146,7 @@ structure Agent (n : ℕ) where
 /-- **Timing measurements** of the honest nodes, for the liveness
 conditions (`docs/validator.md` §5): when each built each round,
 decided each slot and accepted each block of another honest author, the
-honest blocks delivered and kept neither in the store nor pending, and
+honest blocks delivered and kept neither on its disk nor pending, and
 the fetches asked for. -/
 structure Stats where
   /-- Each honest node's own blocks: the node, the round and the time. -/
@@ -157,7 +157,7 @@ structure Stats where
   node, the round and the time. -/
   accepted : List (ℕ × ℕ × ℕ) := []
   /-- Honest-authored blocks delivered to an honest node, new, that it
-  neither stored nor kept pending. -/
+  neither put on its disk nor kept pending. -/
   notKept : ℕ := 0
   /-- The fetches honest nodes asked for, and the identifiers in them. -/
   fetches : ℕ := 0
@@ -181,8 +181,8 @@ structure Report where
   valid : Bool
   /-- The inputs the signature checks dropped. -/
   dropped : ℕ
-  /-- The largest store any honest node held. -/
-  maxStore : ℕ
+  /-- The largest disk any honest node held. -/
+  maxDisk : ℕ
   /-- The most pending blocks any honest node held. -/
   maxPending : ℕ
   /-- The inputs processed. -/
@@ -192,7 +192,7 @@ structure Report where
   /-- The timing measurements. -/
   stats : Stats := {}
   /-- Each honest node's final state, in brief: top, own block, next
-  undecided slot, the authors its store holds at the top and the two
+  undecided slot, the authors its disk holds at the top and the two
   rounds above, its pending blocks (author, round, references missing,
   payload), the timers fired, whether it can build and its references
   reach, and the blocks in its memory, from which round, and on disk. -/
@@ -218,7 +218,7 @@ variable {n : ℕ} (sc : Scenario) (p : Scheme.Params) (q : ℕ) (hn : 0 < n)
 seed, each agent's decisions (the latest first), the honest agents' own
 blocks, the blocks each agent made or sent in its own name under their
 hash, every block broadcast or sent under its hash, the largest honest
-store, and the inputs processed. -/
+disk, and the inputs processed. -/
 structure World (n : ℕ) where
   agents : Array (Agent n)
   states : Array (State (Fin n) ℕ ℕ)
@@ -231,7 +231,7 @@ structure World (n : ℕ) where
   honest : List (ℕ × Block (Fin n) ℕ ℕ)
   blocks : Std.TreeMap ℕ (Block (Fin n) ℕ ℕ) compare
   seen : Std.TreeMap ℕ (Block (Fin n) ℕ ℕ) compare
-  maxStore : ℕ
+  maxDisk : ℕ
   maxPending : ℕ
   events : ℕ
   time : ℕ
@@ -454,7 +454,7 @@ def loop : ℕ → World n → World n
             honest := if isHonest then own ++ w.honest else w.honest
             blocks := (own ++ sent).foldl (fun m e => m.insert e.1 e.2) w.blocks
             seen := (own ++ seen).foldl (fun m e => m.insert e.1 e.2) w.seen
-            maxStore := if isHonest then max w.maxStore r.1.disk.map.size else w.maxStore
+            maxDisk := if isHonest then max w.maxDisk r.1.disk.map.size else w.maxDisk
             maxPending := if isHonest then max w.maxPending r.1.pending.length else w.maxPending
             events := w.events + 1
             time := t
@@ -500,7 +500,7 @@ def simulate (sc : Scenario) : Report :=
           honest := []
           blocks := ∅
           seen := ∅
-          maxStore := 0
+          maxDisk := 0
           maxPending := 0
           events := 0
           time := 0
@@ -534,7 +534,7 @@ def simulate (sc : Scenario) : Report :=
         prefixes := comparable decs
         valid := valid
         dropped := w.dropped
-        maxStore := w.maxStore
+        maxDisk := w.maxDisk
         maxPending := w.maxPending
         events := w.events
         time := w.time

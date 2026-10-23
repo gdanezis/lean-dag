@@ -5,7 +5,7 @@ import LeanDag.Node.Helpers.Catch
 `docs/validator.md` §5.6. A node's own blocks form a chain (`Chain`): each
 reaches every one of a round at or below its own, since each references
 the node's block of the round below (`own_mem_refsAt`), and no block of
-the node's own enters its store but those it builds (`Chain.step`).
+the node's own enters its disk but those it builds (`Chain.step`).
 -/
 
 namespace LeanDag
@@ -195,8 +195,8 @@ theorem FloorTop.step {s : State Validator BlockId Payload} (h : FloorTop s)
   | restart => exact h
 
 variable (cfg) in
-/-- **A node's chain**: no pending block is its own; its own blocks in its
-store lie at or below its top, none before it starts; and each reaches
+/-- **A node's chain**: no pending block is its own; its own blocks on its
+disk lie at or below its top, none before it starts; and each reaches
 every one of a round at or below its own. -/
 structure Chain (s : State Validator BlockId Payload) : Prop where
   pend : ∀ e ∈ s.pending, e.2.creator ≠ cfg.me
@@ -207,14 +207,14 @@ structure Chain (s : State Validator BlockId Payload) : Prop where
       ReachesFrom s.disk.blk j j'
 
 omit [Fintype Validator] in
-/-- The chain reads only the store, the pending blocks and the top. -/
+/-- The chain reads only the disk, the pending blocks and the top. -/
 theorem Chain.congr {s s' : State Validator BlockId Payload} (h : Chain cfg s)
     (hst : s'.disk = s.disk) (hpd : s'.pending = s.pending) (ht : s'.top = s.top) :
     Chain cfg s' :=
   ⟨hpd ▸ h.pend, hst ▸ ht ▸ h.top, hst ▸ h.reach⟩
 
 omit [Fintype Validator] in
-/-- **The chain survives a store grown by blocks of others**, with the
+/-- **The chain survives a disk grown by blocks of others**, with the
 top kept and no pending block of the node's own. -/
 theorem Chain.grow {s s' : State Validator BlockId Payload} (h : Chain cfg s)
     (hg : Grows s.disk s'.disk)

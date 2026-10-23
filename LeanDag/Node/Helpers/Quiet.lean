@@ -22,7 +22,7 @@ variable {cfg : Config Validator BlockId Payload}
 
 /-! ## The blocks a settle holds -/
 
-/-- **The blocks a state holds lie in `K`**: its stored blocks and its
+/-- **The blocks a state holds lie in `K`**: the blocks on its disk and its
 pending ones. -/
 def InK (K : Set (BlockId × Block Validator BlockId Payload)) (s : State Validator BlockId Payload) :
     Prop :=
@@ -79,7 +79,7 @@ theorem InK.advance {K : Set (BlockId × Block Validator BlockId Payload)}
 /-! ## Bounds within a settle -/
 
 omit [Fintype Validator] in
-/-- A block in `Below R` read from the store is the node's own, or at a
+/-- A block in `Below R` read from the disk is the node's own, or at a
 round at most `R`. -/
 theorem below_blk {R : ℕ} {s : State Validator BlockId Payload} (h : InK (Below cfg R) s)
     {j : BlockId} (hj : j ∈ s.disk.ids) :
@@ -87,7 +87,7 @@ theorem below_blk {R : ℕ} {s : State Validator BlockId Payload} (h : InK (Belo
   h.1 j hj
 
 omit [Fintype Validator] in
-/-- **The store's top round** within a settle is at most `R + 1`. -/
+/-- **The disk's top round** within a settle is at most `R + 1`. -/
 theorem below_topRound {R : ℕ} {s : State Validator BlockId Payload}
     (h : InK (Below cfg R) s) : s.disk.topRound ≤ R + 1 := by
   rw [Store.topRound_eq]
@@ -176,8 +176,8 @@ theorem progress_below (hq : 2 ≤ cfg.q) {R : ℕ} : ∀ (fuel : ℕ) {s : Stat
         · rw [hs₁] at ht₂'; exact ⟨ht₂, by omega⟩
 
 omit [Fintype Validator] in
-/-- **Deciding** keeps the store, the pending blocks and the top, and
-raises the next undecided slot to at most the slots at the store's
+/-- **Deciding** keeps the disk, the pending blocks and the top, and
+raises the next undecided slot to at most the slots at the disk's
 rounds. -/
 theorem decideStep_bound (s : State Validator BlockId Payload) :
     let d := (Node.decideStep cfg s).1

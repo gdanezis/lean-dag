@@ -6,15 +6,15 @@ import LeanDag.Node.Helpers.ReadsView
 
 A successful build step adds one block at the round above the node's top,
 its own, identified by its hash, with accepted references, and valid
-under the store's map (`tryBuild_some`); building, deciding and flushing
+under the disk's map (`tryBuild_some`); building, deciding and flushing
 change the parts of the state the claims read only so. Along any run the
 node's state meets `Inv`: what it holds and has pending it was given or
 made, its own blocks lie at strictly increasing rounds up to its top,
 each its own, identified by its hash and valid against what it knew, its
-store is valid at the row, and its block at its top is stored and one
+disk is valid at the row, and its block at its top is on disk and one
 of its own blocks. A step persists the blocks it builds and broadcasts
 them, and broadcasts besides only its own blocks of earlier steps, which
-it resends (`Sent`). Across these the store only gains blocks (`Grows`).
+it resends (`Sent`). Across these the disk only gains blocks (`Grows`).
 -/
 
 namespace LeanDag
@@ -52,7 +52,7 @@ theorem tryBuild_some {s s' : State Validator BlockId Payload}
   · exact absurd h (by simp)
 
 omit [Fintype Validator] in
-/-- **A successful build step makes its block the node's own**, stored. -/
+/-- **A successful build step makes its block the node's own**, on its disk. -/
 theorem tryBuild_own {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
     ∃ id b, out = built cfg [(id, b)] ∧ s'.own = some id ∧ id ∈ s'.disk.ids ∧
@@ -123,7 +123,7 @@ theorem Rounds.append {B F : List (BlockId × Block Validator BlockId Payload)} 
     · exact (h.2 e he).trans htt
     · exact (hFt e he).2
 
-/-- **Every stored block is valid at the row**, under the store's map. -/
+/-- **Every block of the store is valid at the row**, under its map. -/
 def StoreValid (q : ℕ) (st : Store Validator BlockId Payload) : Prop :=
   ∀ j ∈ st.ids, rowValid q st.blk (st.blk j)
 
@@ -420,7 +420,7 @@ theorem quiet_commits (ds : List (ℕ × Option BlockId)) :
   rfl
 
 omit [Fintype Validator] in
-/-- An invariant read only from the store, the pending blocks, the top
+/-- An invariant read only from the disk, the pending blocks, the top
 and the own block carries over to a state that keeps them. -/
 theorem Inv.of_eq {s s' : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
@@ -624,10 +624,6 @@ theorem advance_lo (s : State Validator BlockId Payload) :
     (Node.advance cfg s).1.lo = (Node.pass cfg s).1.lo := arm_lo _
 
 omit [Fintype Validator] in
-theorem advance_decided (s : State Validator BlockId Payload) :
-    (Node.advance cfg s).1.decided = (Node.pass cfg s).1.decided := arm_decided _
-
-omit [Fintype Validator] in
 theorem advance_snd (s : State Validator BlockId Payload) :
     (Node.advance cfg s).2 = (Node.pass cfg s).2 ++ (Node.arm cfg (Node.pass cfg s).1).2 := rfl
 
@@ -656,11 +652,6 @@ theorem arm_quiet (s : State Validator BlockId Payload) :
 
 omit [Fintype Validator] in
 theorem persists_arm (s : State Validator BlockId Payload) : persists (Node.arm cfg s).2 = [] :=
-  List.filterMap_eq_nil_iff.mpr fun o ho => by obtain ⟨r, -, -, -, rfl⟩ := mem_arm ho; rfl
-
-omit [Fintype Validator] in
-theorem broadcasts_arm (s : State Validator BlockId Payload) :
-    broadcasts (Node.arm cfg s).2 = [] :=
   List.filterMap_eq_nil_iff.mpr fun o ho => by obtain ⟨r, -, -, -, rfl⟩ := mem_arm ho; rfl
 
 omit [Fintype Validator] in

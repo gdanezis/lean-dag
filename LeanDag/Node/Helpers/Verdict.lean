@@ -1,11 +1,11 @@
 import LeanDag.Node.Helpers.Commits
 /-!
-# A node's store stays a cut along a run
+# A node's disk stays a cut along a run
 
-With every step (`IsCut.step`), the store stays a cut of the record and
+With every step (`IsCut.step`), the disk stays a cut of the record and
 every decision a step outputs is a verdict on a view of the record
 (`Verdict`). The decision step reads as `tryDecide` on the view of the
-record holding exactly the store's blocks, and `Loop.sound` derives what
+record holding exactly the disk's blocks, and `Loop.sound` derives what
 it outputs (`verdict_decideStep`).
 -/
 
@@ -32,7 +32,7 @@ def Verdict (e : ℕ × Option BlockId) : Prop :=
 variable {q f : ℕ} [P.Quorate q]
 
 /-- **What a decision step outputs is a verdict on the record**, from a
-store that is a cut of it. -/
+disk that is a cut of it. -/
 theorem verdict_decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H f q)
     {s : State Validator BlockId Payload} (hc : IsCut U s.disk) :
     ∀ e ∈ commitsOf (decideStep cfg s).2, Verdict cfg U e := by
@@ -57,7 +57,7 @@ theorem verdict_decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H f
     exact ⟨V', (Loop.sound _ _ _ P H cfg.p boundedSel U V' s.lo _ hl hcv (by omega)).2 e he⟩
   · simp [commitsOf] at he
 
-/-- **Advancing from a cut**: the store stays one, and the decisions are
+/-- **Advancing from a cut**: the disk stays one, and the decisions are
 verdicts. -/
 theorem IsCut.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload} (hc : IsCut U s.disk)
@@ -78,7 +78,7 @@ theorem IsCut.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   rw [commitsOf_append, hbs, commitsOf_built, List.nil_append] at he
   exact hv e he
 
-/-- **The passes from a cut**: the store stays one, and the decisions are
+/-- **The passes from a cut**: the disk stays one, and the decisions are
 verdicts. -/
 theorem IsCut.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) : ∀ (n : ℕ) {s : State Validator BlockId Payload},
@@ -99,7 +99,7 @@ theorem IsCut.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       rw [commitsOf_append] at he
       exact (List.mem_append.mp he).elim (hv₁ e) (hv₂ e)
 
-/-- **Settling from a cut**: the store stays one, and the decisions are
+/-- **Settling from a cut**: the disk stays one, and the decisions are
 verdicts. -/
 theorem IsCut.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload} (hc : IsCut U s.disk)
@@ -109,7 +109,7 @@ theorem IsCut.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
       ∀ e ∈ commitsOf (Node.settle cfg s).2, Verdict cfg U e :=
   IsCut.quiesce hg hσ ht (passes cfg s) hc hp hb
 
-/-- **A step from a cut**: the store stays a cut, and the decisions are
+/-- **A step from a cut**: the disk stays a cut, and the decisions are
 verdicts. -/
 theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}

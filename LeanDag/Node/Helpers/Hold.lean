@@ -2,10 +2,10 @@ import LeanDag.Node.Helpers.Reliable
 /-!
 # Holding a history
 
-`docs/validator.md` §5.2. A block stored or pending stays stored or
+`docs/validator.md` §5.2. A block on disk or pending stays on disk or
 pending (`Stays`) from then on, since a pending block is accepted once
 it is ready. A delivery of a block by its hash and of another author
-leaves it stored or pending. A store with no pending block ready then
+leaves it on disk or pending. A disk with no pending block ready then
 holds every block of a set closed under references, once each stays and
 is ready when its references are accepted (`holds_of_stays`).
 -/
@@ -18,7 +18,7 @@ variable {Validator BlockId Payload : Type} [Fintype Validator] [DecidableEq Val
 variable [LinearOrder BlockId]
 variable {cfg : Config Validator BlockId Payload}
 
-/-- **A block that stays**: stored or pending. -/
+/-- **A block that stays**: in the store or pending. -/
 def Stays (st : Store Validator BlockId Payload)
     (pend : List (BlockId × Block Validator BlockId Payload))
     (y : BlockId × Block Validator BlockId Payload) : Prop :=
@@ -65,7 +65,7 @@ theorem foldl_takes_under : ∀ (l : List (BlockId × Block Validator BlockId Pa
     · exact Or.inr (hg.1 h)
 
 omit [Fintype Validator] in
-/-- **A flush keeps a block stored or pending.** -/
+/-- **A flush keeps a block in the store or pending.** -/
 theorem flush_stays : ∀ (fuel : ℕ) {st : Store Validator BlockId Payload}
     {pend : List (BlockId × Block Validator BlockId Payload)}
     {y : BlockId × Block Validator BlockId Payload},

@@ -249,7 +249,7 @@ theorem held_before (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.time
       obtain ⟨o', hoo, hoi, hor, hoc⟩ := hbs.own n hxt
       have hZR : (x.disk.blk z.1).refs = refsAt (cfg.at w') xw.disk n xw.own := by
         rw [← hbs.cut.eq hzx, hzrefs]
-      -- no stored block has the identifier of a next block of the node's own
+      -- no block on disk has the identifier of a next block of the node's own
       have hfresh : ∀ R, (cfg.at h).idOf ⟨n + 1, (cfg.at h).me, R, (cfg.at h).payload (n + 1)⟩ ∉
           x.disk.ids := by
         intro R hin

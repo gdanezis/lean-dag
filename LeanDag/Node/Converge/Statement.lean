@@ -15,8 +15,8 @@ adversary, assume:
   nodes knew have one identifier;
 * **the fault bound**: at most `f` nodes are outside `H`.
 
-Then **every block an honest node broadcast, with its history, is in
-every honest node's store at the end** (`Converges`).
+Then **every block an honest node broadcast, with its history, is on
+every honest node's disk at the end** (`Converges`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -59,8 +59,8 @@ def HashInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator
     (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ x ∈ knownIn cfg H tr, ∀ y ∈ knownIn cfg H tr, cfg.idOf x.2 = cfg.idOf y.2 → x.2 = y.2
 
-/-- **Every block an honest node broadcast, with its history, is in every
-honest node's store at the end**, when at most `f` nodes are outside `H`. -/
+/-- **Every block an honest node broadcast, with its history, is on every
+honest node's disk at the end**, when at most `f` nodes are outside `H`. -/
 def Converges : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)

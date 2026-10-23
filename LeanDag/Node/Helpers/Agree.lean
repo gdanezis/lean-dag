@@ -2,14 +2,14 @@ import LeanDag.Node.Helpers.Verdict
 import LeanDag.Node.Helpers.Converge
 import LeanDag.Node.Helpers.Decided
 /-!
-# Honest stores are cuts of the run's record
+# Honest disks are cuts of the run's record
 
 Over a trace, what each honest node knew is what the trace delivered
 it and what it made (`knownOf_sub`). Timely authentication and
 the hash over the trace give authentication and the hash at its end
 (`authentic_of_timely`, `hashInjective_of_trace`), so the honest nodes'
 knowledge forms the run's record. By induction over the trace, every
-honest store is a cut of that record and every decision a verdict on a
+honest disk is a cut of that record and every decision a verdict on a
 view of it (`cut_before`).
 -/
 
@@ -137,7 +137,7 @@ theorem authentic_of_timely (htime : Converge.TimelyAuthentic cfg H tr) :
 
 /-! ## The run's record -/
 
-/-- **Every honest store is a cut of the run's record, and every decision
+/-- **Every honest disk is a cut of the run's record, and every decision
 a verdict on a view of it**, before every event of the trace. -/
 theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
@@ -159,7 +159,7 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
   have hg := ground hinjR hauthR
   have hK : ∀ v ∈ H, ∀ x ∈ knownOf cfg tr v, x ∈ knownAll cfg H tr :=
     fun v hv x hx => ⟨v, hv, hx⟩
-  -- every honest store is a cut, and every decision a verdict
+  -- every honest disk is a cut, and every decision a verdict
   have key : ∀ t, ∀ v ∈ H, IsCut U (stateBefore cfg tr t v).disk ∧
       ∀ e ∈ commitsOf (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr t v)).2,
         Verdict (cfg.at v) U e := by

@@ -2,16 +2,16 @@ import LeanDag.Node.Helpers.Steps
 /-!
 # The node's own top
 
-Along a run the node's store holds a block at or above its top round, and
-an identifier outside the store denotes the genesis block (`Held`):
+Along a run the node's disk holds a block at or above its top round, and
+an identifier outside the disk denotes the genesis block (`Held`):
 building adds the block of the new top, and every other change only adds
-blocks to the store and leaves the top alone. Across a step the store
+blocks to the disk and leaves the top alone. Across a step the disk
 holds the blocks it held, read alike, and its top round does not fall
 (`Keeps`).
 
-At a top round `r ≥ 1` the store holds blocks of at least `q` distinct
+At a top round `r ≥ 1` the disk holds blocks of at least `q` distinct
 authors of round `r − 1` (`Quorate`): the top rises only by a build,
-whose rule asks for that quorum, and the store only grows.
+whose rule asks for that quorum, and the disk only grows.
 -/
 
 namespace LeanDag
@@ -23,12 +23,12 @@ variable [LinearOrder BlockId]
 variable {cfg : Config Validator BlockId Payload}
 
 variable (cfg) in
-/-- **The node holds its top**: a stored block lies at or above its top
-round, and an identifier outside the store denotes the genesis block. -/
+/-- **The node holds its top**: its disk holds a block at or above its top
+round, and an identifier outside the disk denotes the genesis block. -/
 structure Held (s : State Validator BlockId Payload) : Prop where
-  /-- A stored block lies at or above its top round. -/
+  /-- The disk holds a block at or above the top round. -/
   top : ∀ t, s.top = some t → ∃ o ∈ s.disk.ids, t ≤ (s.disk.blk o).round
-  /-- An identifier outside the store denotes the genesis block. -/
+  /-- An identifier outside the disk denotes the genesis block. -/
   junk : s.disk.junk = cfg.genesis
 
 /-- **A store keeps another**: it holds the other's blocks, reads them
@@ -54,7 +54,7 @@ theorem Grows.keeps {st st' : Store Validator BlockId Payload} (hg : Grows st st
   ⟨hg.1, hg.2.2, hg.topRound⟩
 
 omit [Fintype Validator] in
-/-- A change that grows the store and leaves the top alone keeps `Held`. -/
+/-- A change that grows the disk and leaves the top alone keeps `Held`. -/
 theorem Held.grow {s s' : State Validator BlockId Payload} (h : Held cfg s)
     (hg : Grows s.disk s'.disk) (htop : s'.top = s.top) : Held cfg s' where
   top t ht := by
@@ -164,7 +164,7 @@ theorem Held.init : Held cfg (State.init cfg) :=
 /-! ## The quorum below the top -/
 
 variable (cfg) in
-/-- **The node built on a quorum**: at a top round `r ≥ 1` the store holds
+/-- **The node built on a quorum**: at a top round `r ≥ 1` the disk holds
 blocks of at least `q` distinct authors of round `r − 1`. -/
 def Quorate (s : State Validator BlockId Payload) : Prop :=
   ∀ r, s.top = some r → 1 ≤ r → cfg.q ≤ (authorsIn s.disk.toRecord s.disk.ids (r - 1)).card
@@ -199,14 +199,14 @@ theorem tryBuild_quorum {s s' : State Validator BlockId Payload}
   · exact absurd h (by simp)
 
 omit [Fintype Validator] in
-/-- A change that grows the store and leaves the top alone keeps `Quorate`. -/
+/-- A change that grows the disk and leaves the top alone keeps `Quorate`. -/
 theorem Quorate.grow {s s' : State Validator BlockId Payload} (h : Quorate cfg s)
     (hg : Grows s.disk s'.disk) (htop : s'.top = s.top) : Quorate cfg s' :=
   fun r hr h1 => (h r (htop.symm.trans hr) h1).trans
     (Finset.card_le_card (hg.authorsIn _))
 
 omit [Fintype Validator] in
-/-- **A build leaves the store a quorum below its new top.** -/
+/-- **A build leaves the disk a quorum below its new top.** -/
 theorem Quorate.tryBuild {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)}
     (hb : Node.tryBuild cfg s = some (s', out)) : Quorate cfg s' := by

@@ -8,8 +8,8 @@ import LeanDag.Scheme.Model.LeastSel
 eight rounds over four validators: at each round one validator may be
 absent and validator `3` may equivocate, and each block references one
 block of each of at least three authors of the round below, drawn at
-random among twins. Each record goes into an empty store through the
-program's store path (`flush`). On it, at five rows and schedules,
+random among twins. Each record goes onto an empty disk through the
+program's acceptance path (`flush`). On it, at five rows and schedules,
 three computations give one decided prefix:
 
 * the program's decision step at the bounded vote (`decideStep`), the
@@ -115,7 +115,7 @@ def cfg (p : Scheme.Params) (per m : ℕ) (hper : 0 < per) (hm : 0 < m)
   idOf := idIn bs
   payload := fun _ => ()
 
-/-- The record through the store path into an empty store. -/
+/-- The record through the acceptance path onto an empty disk. -/
 def load (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : State (Fin 4) ℕ Unit :=
   flush c bs.length { State.init c with pending := bs }
 
@@ -123,7 +123,7 @@ def load (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : State (Fin 4) ℕ Unit :=
 def once (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : List (ℕ × Option ℕ) :=
   commitsOf (decideStep c (load c bs)).2
 
-/-- The scheme's *TryDecide* in its own order on the loaded store. -/
+/-- The scheme's *TryDecide* in its own order on the loaded disk. -/
 def scheme (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : List (ℕ × Option ℕ) :=
   letI := c.slots
   let st := (load c bs).disk

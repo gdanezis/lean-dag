@@ -164,7 +164,7 @@ theorem ground : Ground (globalRecord hinj hauth) (knownAll cfg H tr) cfg.q wher
     · rw [hcx]; exact hv
     · rw [hcx]; exact fun j hj => (mem_globalIds.mp (hs hj)).2
 
-/-- **A started node's store is a cut of the record.** -/
+/-- **A started node's disk is a cut of the record.** -/
 theorem isCut_init (c : Config Validator BlockId Payload) :
     IsCut (globalRecord hinj hauth) (State.init c).disk :=
   fun _ h => absurd h (Finset.notMem_empty _)

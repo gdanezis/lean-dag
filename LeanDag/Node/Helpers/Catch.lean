@@ -43,8 +43,8 @@ theorem IsCut.reachesFrom_store (hc : IsCut U st) {i : BlockId} :
     exact Relation.ReflTransGen.head hcs (ih (st.complete a hj c hcs))
 
 omit [Fintype Validator] [DecidableEq Validator] in
-/-- **A cut holds a record path's short history**: a block that a stored
-block reaches in the record, at most `m` rounds below it, lies within `m`
+/-- **A cut holds a record path's short history**: a block that a block of
+the store reaches in the record, at most `m` rounds below it, lies within `m`
 steps of it in the store. -/
 theorem IsCut.mem_historyUptoFrom [P.Mechanised] (hc : IsCut U st) {j i : BlockId} {m : ℕ}
     (hj : j ∈ st.ids) (hm : (U.block j).round ≤ m + (U.block i).round)
@@ -79,7 +79,7 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
     {R R' : Finset BlockId} {n : ℕ} (hR : R ⊆ x.ids) (hRR : R ⊆ R') (hR'Z : R' ⊆ Z.ids)
     (hreach : reachReady cfg x R n = true) (hcert : certReady cfg x R n = true) :
     reachReady cfg Z R' n = true ∧ certReady cfg Z R' n = true := by
-  -- a candidate of the peer's store reached from a reference
+  -- a candidate of the store `x` reached from a reference
   have hcand : ∀ k L, L ∈ candidatesIn (S := cfg.slots) x.toRecord x.view k →
       ∀ c ∈ R, ReachesFrom U.block c L →
       L ∈ candidatesIn (S := cfg.slots) Z.toRecord Z.view k ∧ L ∈ Z.ids := by
@@ -161,7 +161,7 @@ theorem ready_transfer [P.Mechanised] (hσ : cfg.σ = boundedSel)
 
 omit [Fintype Validator] in
 /-- **`refsAt` passes the tests when a held block's lent references do**:
-a stored round-`r + 1` block of another author whose lent references pass
+a round-`r + 1` block of the store by another author whose lent references pass
 the tests and can be built on. -/
 theorem refsAt_ready {st : Store Validator BlockId Payload} {r : ℕ} {o : Option BlockId}
     {c : BlockId} (hc : c ∈ st.ids) (hcr : (st.blk c).round = r + 1)
@@ -192,8 +192,8 @@ theorem refsAt_ready {st : Store Validator BlockId Payload} {r : ℕ} {o : Optio
     exact this.1
 
 omit [Fintype Validator] in
-/-- **A peer's block lends references the node can build on**: a stored
-round-`n + 1` block of another author, whose references hold `q` distinct
+/-- **A peer's block lends references the node can build on**: a
+round-`n + 1` block of the store by another author, whose references hold `q` distinct
 authors one round below, lends them with the node's own round-`n` block
 put in for its own, and they include the block's references. -/
 theorem lent_buildable {x Z : Store Validator BlockId Payload} (hx : IsCut U x) (hZ : IsCut U Z)
@@ -267,7 +267,7 @@ section Trace
 
 variable {tr : Trace Validator BlockId Payload} {v : Validator}
 
-/-- **A node's own block stays stored** at every later event. -/
+/-- **A node's own block stays on its disk** at every later event. -/
 theorem own_held {p : ℕ} {inp : Input Validator BlockId Payload} (hp : tr[p]? = some (v, inp))
     {e : BlockId × Block Validator BlockId Payload} (he : e ∈ persists (outputsAt cfg tr p))
     {E : ℕ} (hpE : p < E) :
@@ -347,7 +347,7 @@ theorem event_of_mem (hinj : Converge.HashInjective cfg H tr)
   exact ⟨i₀, inp, e₀, hi₀, he₀, by rw [hex], he₀r, hbt⟩
 
 /-- **A reliable node's block is in the run's record**, at its round and
-by its author: the store after the event holds it, and is a cut. -/
+by its author: the disk after the event holds it, and is a cut. -/
 theorem built_mem (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     {v : Validator} (hv : v ∈ H) {p : ℕ}
@@ -466,7 +466,7 @@ theorem behind_honest (htime : Converge.TimelyAuthentic cfg H tr)
     simpa [blocksAt, Store.toRecord] using hzR
   obtain ⟨B, hiX⟩ := hx.inv
   have hzK : (z, x.disk.blk z) ∈ knownAll cfg H tr := hiX.known z hz.1
-  -- it is not the node: its round-`n + 1` block is the one it builds, not yet stored
+  -- it is not the node: its round-`n + 1` block is the one it builds, not yet on disk
   have hww : w' ≠ w := by
     rintro rfl
     obtain ⟨r, id, b, hnew, -, -, hxt', hbr, -, -, -, -, -, -, -, hout⟩ := tryBuild_some hb

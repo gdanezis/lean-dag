@@ -61,30 +61,6 @@ omit [Fintype Validator] [DecidableEq Validator] in
 @[simp] theorem keep_disk :
     (keep s id b hnew hrefs hpred).disk = s.disk.insert id b hnew hrefs hpred := rfl
 
-omit [Fintype Validator] [DecidableEq Validator] in
-@[simp] theorem keep_floor : (keep s id b hnew hrefs hpred).floor = s.floor := rfl
-
-omit [Fintype Validator] [DecidableEq Validator] in
-@[simp] theorem keep_pending : (keep s id b hnew hrefs hpred).pending = s.pending := rfl
-
-omit [Fintype Validator] [DecidableEq Validator] in
-@[simp] theorem keep_top : (keep s id b hnew hrefs hpred).top = s.top := rfl
-
-omit [Fintype Validator] [DecidableEq Validator] in
-@[simp] theorem keep_own : (keep s id b hnew hrefs hpred).own = s.own := rfl
-
-omit [Fintype Validator] [DecidableEq Validator] in
-@[simp] theorem keep_fired : (keep s id b hnew hrefs hpred).fired = s.fired := rfl
-
-omit [Fintype Validator] [DecidableEq Validator] in
-@[simp] theorem keep_lo : (keep s id b hnew hrefs hpred).lo = s.lo := rfl
-
-omit [Fintype Validator] [DecidableEq Validator] in
-@[simp] theorem keep_decided : (keep s id b hnew hrefs hpred).decided = s.decided := rfl
-
-omit [Fintype Validator] [DecidableEq Validator] in
-@[simp] theorem keep_armed : (keep s id b hnew hrefs hpred).armed = s.armed := rfl
-
 end Keep
 
 section Accept

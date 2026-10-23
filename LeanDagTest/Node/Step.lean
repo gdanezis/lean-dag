@@ -162,7 +162,7 @@ info: [(0, true), (1, true), (2, true), (3, false), (4, true), (5, true), (6, tr
 /-! ## A long run, node `3` down
 
 Over `392` slots every fourth slot, node `3`'s, is skipped, and each
-store holds one block of each of the three nodes up at each round, less
+disk holds one block of each of the three nodes up at each round, less
 those still in flight. -/
 
 /-- The network after `5300` inputs, node `3` down. -/

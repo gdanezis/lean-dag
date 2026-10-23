@@ -9,7 +9,7 @@ the identifier map and the payload source; `Input` and `Output` are the
 events it consumes and produces.
 
 The node checks the row's validity `rowValid q` on receipt, and decides
-on a record of its own store at `stored`, references one round below,
+on a record of its memory at `stored`, references one round below,
 and the honest set `∅`.
 
 Definitions only.

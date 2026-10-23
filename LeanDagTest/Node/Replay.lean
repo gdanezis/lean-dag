@@ -6,8 +6,8 @@ import LeanDagTest.Mysticeti.Model
 # The program on the scheme's hand-built records
 
 `docs/validator.md` §6, item 1. A record's blocks go through the
-program's store path (`flush`, which accepts each block once its
-references are accepted and it is valid at the row) into an empty store,
+program's acceptance path (`flush`, which accepts each block once its
+references are accepted and it is valid at the row) onto an empty disk,
 and the program's decider (`decideStep`) runs once on the result. Its
 commits are those the scheme's tests record for `tryDecide` on the same
 record (`LeanDagTest/Scheme/TryDecide.lean`): slots `0`, `1` and `2` of
@@ -49,8 +49,8 @@ def cfg (p : Scheme.Params) (per : ℕ) (hper : 0 < per) (elect : ℕ → Fin 4)
   idOf := idIn blk
   payload := fun _ => ()
 
-/-- The record's blocks through the store path into an empty store: the
-number of blocks the store accepted, the number left pending, and the commits of one
+/-- The record's blocks through the acceptance path onto an empty disk: the
+number of blocks the disk accepted, the number left pending, and the commits of one
 decision step. -/
 def replay (c : Config (Fin 4) (Fin 24) Unit) (blk : Fin 24 → Block (Fin 4) (Fin 24) Unit) :
     ℕ × ℕ × List (ℕ × Option (Fin 24)) :=
