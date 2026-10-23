@@ -87,17 +87,9 @@ theorem waveFacts_of_run (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
       (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)) T N n₀ :=
   letI := cfg.slots
   { populated := fun n hn0 hnN w hw' => by
-      have hgt : gst ≤ t₁ := by
-        have h₁ := hbelow w hw'
-        have h₂ := htop w hw'
-        by_contra hlt
-        have h₃ := (rises_before (cfg := cfg) (tr := tr) w
-          (eventsBy_mono (tr := tr) (time := time) (show t ≤ gst by omega))).1
-        change topAt cfg tr time w t ≤ topAt cfg tr time w gst at h₃
-        omega
       obtain ⟨i, inp, e, hi, he, her, -, -⟩ :=
         built_of_top hmono (hst w hw') ((htop w hw').trans' hnN)
-          (harr.no_jump hmono hw' ((hbelow w hw').trans_le hn0) hgt)
+          (harr.no_jump hmono hw' ((hbelow w hw').trans_le hn0) (by omega))
       obtain ⟨h₁, h₂, h₃⟩ := built_mem hσ hadm hf htime hinj (hTH hw') hi he
       exact ⟨e.1, h₁, h₃, h₂.trans her⟩
     reach_or_refs := fun w hw' _ hRk hNk hlk L hL _ hm _ hc hcc hcr =>

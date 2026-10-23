@@ -42,7 +42,7 @@ open Classical in
 round `n` at `s ≥ t_r` set the timer of round `n - 1` at a last event
 before `s`, its build of round `n`, a restart or a resend, and that timer
 fires twice the round's timeout later. -/
-theorem retry_last (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r)
+theorem retry_last (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r t₁)
     (hfire : Live.TimersFireUp cfg T tr time t₁) {v : Validator} (hv : v ∈ T) {s n : ℕ}
     (hrs : t_r ≤ s) (hts : (stateAt cfg tr time v s).top = some n)
     (ht₁ : s + 2 * cfg.timeout (n - 1) ≤ t₁) :
@@ -83,7 +83,7 @@ theorem retry_last (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time 
   -- no restart after it
   have hnr : ∀ k, a < k → time k ≤ time a + 2 * cfg.timeout (n - 1) →
       tr[k]? ≠ some (v, .restart) := by
-    intro k hak _ hk
+    intro k hak hkt hk
     have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
     by_cases hkE : k < E
     · -- a restart before `E` would set the timer again
@@ -93,7 +93,7 @@ theorem retry_last (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time 
       rw [outputsAt_eq hk]
       exact List.mem_append_left _
         (List.mem_append_left _ (setTimer_mem_resend (cfg := cfg.at v) htk hj))
-    · have := hup k v hk hv
+    · have := hup k v hk hv (by omega)
       have := (lt_eventsBy hmono hkl).not.mp hkE
       omega
   obtain ⟨f, haf, hf, htf⟩ :=
@@ -106,7 +106,7 @@ restart**: at round `m` at `t₀ ≥ t_r`, it broadcasts a block of its own of
 round `m` or above after `t₀` and within twice the timeout of round
 `m - 1`. When the retry timer fires, it builds above `m`, or resends its round-`m`
 block, or it built above `m` before. -/
-theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r)
+theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r t₁)
     (hfire : Live.TimersFireUp cfg T tr time t₁) {u : Validator} (hu : u ∈ T) {t₀ m : ℕ}
     (hrt : t_r ≤ t₀) (hts : (stateAt cfg tr time u t₀).top = some m)
     (ht₁ : t₀ + 2 * cfg.timeout (m - 1) ≤ t₁) :
@@ -248,7 +248,7 @@ theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (hdel : Live.DeliveredFrom cfg T tr time gst Δ t_r t₁)
-    (hsync : Live.SyncedFrom cfg H T tr time gst Δₛ t_r t₁) (hup : Live.UpFrom T tr time t_r)
+    (hsync : Live.SyncedFrom cfg H T tr time gst Δₛ t_r t₁) (hup : Live.UpFrom T tr time t_r t₁)
     (hfire : Live.TimersFireUp cfg T tr time t₁) (hstart : Live.StartedBy T tr time gst) :
     ∀ u ∈ T, ∀ v ∈ T, u ≠ v → ∀ b inp, tr[b]? = some (u, inp) →
       ∀ e ∈ persists (outputsAt cfg tr b),
@@ -319,12 +319,13 @@ before `t_r` at its round at `t₀`, so the retry timer the restart sets
 fires within `W`, before `G`, and a timer ends the recovery. -/
 theorem recovered_by (hadm : cfg.Admissible) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
-    (hup : Live.UpFrom T tr time t_r) (hfire : Live.TimersFireUp cfg T tr time t₁)
+    (hup : Live.UpFrom T tr time t_r t₁) (hfire : Live.TimersFireUp cfg T tr time t₁)
     (hstart : Live.StartedBy T tr time gst)
     (hG : max t_r gst + T.sup (fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1))
       ≤ t₁) {v : Validator} (hv : v ∈ T) {k : ℕ}
     (hk : eventsBy tr time (max t_r gst +
-      T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1)) ≤ k) :
+      T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1)) ≤ k)
+    (hk₁ : k ≤ eventsBy tr time t₁) :
     (stateBefore cfg tr k v).recovering = false := by
   set t₀ := max t_r gst with ht₀
   set W := T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u t₀ - 1) with hW
@@ -333,7 +334,7 @@ theorem recovered_by (hadm : cfg.Admissible) (hid : Function.Injective cfg.idOf)
   exfalso
   obtain ⟨j, hjk, hj, hno, htop⟩ := recovering_restart (cfg := cfg) (tr := tr) (v := v) k hrec
   have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj).1
-  have htj : time j < t_r := hup j v hj hv
+  have htj : time j < t_r := hup j v hj hv ((lt_eventsBy hmono hjl).mp (by omega))
   -- the node is at a round `m` from `j` to `k`, so at `t₀`
   have hE₀k : eventsBy tr time t₀ ≤ k := (eventsBy_mono (by omega)).trans hk
   have hks : (stateBefore cfg tr k v).top.isSome :=
@@ -387,16 +388,17 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (hdel : Live.DeliveredFrom cfg T tr time gst Δ t_r t₁)
-    (hsync : Live.SyncedFrom cfg H T tr time gst Δₛ t_r t₁) (hup : Live.UpFrom T tr time t_r)
-    (hfire : Live.TimersFireUp cfg T tr time t₁) (hstart : Live.StartedBy T tr time gst) :
+    (hsync : Live.SyncedFrom cfg H T tr time gst Δₛ t_r t₁)
+    (hup : Live.UpFrom T tr time t_r t₁) (hfire : Live.TimersFireUp cfg T tr time t₁)
+    (hstart : Live.StartedBy T tr time gst) :
     Arrival cfg T tr time
       (max t_r gst + T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1))
       (Δ + Δₛ) t₁ :=
   ⟨arrives_recovered hσ hadm hf hid htime hinj hTH hmono hdel hsync hup hfire hstart,
-    fun hG _ hv _ hk => recovered_by hadm hid htime hTH hmono hup hfire hstart hG hv hk,
-    fun v hv k inp hk hGk h => by
+    fun hG _ hv _ hk hk₁ => recovered_by hadm hid htime hTH hmono hup hfire hstart hG hv hk hk₁,
+    fun v hv k inp hk hGk hk₁ h => by
       subst h
-      have := hup k v hk hv
+      have := hup k v hk hv hk₁
       omega⟩
 
 end Arrival

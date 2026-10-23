@@ -283,7 +283,7 @@ theorem TopTimerBy.of_fire {G : ℕ} (hmono : Live.TimeMono tr time)
 /-- **Past the last restart, the armed top round's timer fires within its
 timeout**: a restart after its last setting, while armed, would have set
 it again. -/
-theorem topTimerBy_of_up (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r)
+theorem topTimerBy_of_up (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time t_r t₁)
     (hfire : Live.TimersFireUp cfg T tr time t₁) {G : ℕ} (hG : t_r ≤ G) :
     TopTimerBy cfg T tr time G t₁ := by
   intro v hv s n hgs hst₁ hts has
@@ -292,7 +292,7 @@ theorem topTimerBy_of_up (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr
   have hal : a < tr.length := (List.getElem?_eq_some_iff.mp hai).1
   have hta : time a ≤ s := (lt_eventsBy hmono hal).mp haE
   have hnr : ∀ k, a < k → time k ≤ time a + cfg.timeout n → tr[k]? ≠ some (v, .restart) := by
-    intro k hak _ hk
+    intro k hak hkt hk
     have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
     by_cases hkE : k < eventsBy tr time s
     · obtain ⟨htk, hak'⟩ := hat k hak hkE.le
@@ -301,7 +301,7 @@ theorem topTimerBy_of_up (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr
       change _ ∈ Node.resend (cfg.at v) _ ++ Node.rearm (cfg.at v) _ ++ _
       refine List.mem_append_left _ (List.mem_append_right _ ?_)
       simp [Node.rearm, htk, hak', Config.at]
-    · have := hup k v hk hv
+    · have := hup k v hk hv (by omega)
       have := (lt_eventsBy hmono hkl).not.mp hkE
       omega
   obtain ⟨f, -, hfe, htf⟩ := hfire a v inp hai hv n (cfg.timeout n) hset (by omega) hnr

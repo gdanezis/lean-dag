@@ -131,7 +131,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   obtain ⟨j₁, hj₁, hj₁i, hj₁r, hj₁c⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E n hZt
   -- so it builds, against its being settled
   have hsome := tryBuild_isSome (cfg := cfg.at v) hZt
-    (harr.recovered (by omega) v hv E (eventsBy_mono (tr := tr) (time := time) (by omega)))
+    (harr.recovered (by omega) v hv E (eventsBy_mono (tr := tr) (time := time) (by omega))
+      (eventsBy_mono (by omega)))
     (Or.inl hfired) hcardE
     (fun j hj => by rw [hj₁] at hj; cases hj; exact ⟨hj₁i, hj₁r, hj₁c⟩)
     (fun R => fresh_before hid htime (hTH hv) hZt R)

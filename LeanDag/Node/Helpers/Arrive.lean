@@ -574,30 +574,32 @@ structure Arrival (T : Finset Validator) (tr : Trace Validator BlockId Payload) 
   arrives : ∀ u ∈ T, ∀ v ∈ T, u ≠ v → ∀ b inp, tr[b]? = some (u, inp) →
     ∀ e ∈ persists (outputsAt cfg tr b), topAt cfg tr time u G ≤ e.2.round →
       ∀ s τ, time b ≤ s → max s G + A ≤ τ → τ ≤ t₁ → e.1 ∈ (stateAt cfg tr time v τ).disk.ids
-  /-- The reliable nodes do not recover from `G` on. -/
-  recovered : G ≤ t₁ → ∀ v ∈ T, ∀ k, eventsBy tr time G ≤ k →
+  /-- The reliable nodes do not recover from `G` to `t₁`. -/
+  recovered : G ≤ t₁ → ∀ v ∈ T, ∀ k, eventsBy tr time G ≤ k → k ≤ eventsBy tr time t₁ →
     (stateBefore cfg tr k v).recovering = false
-  /-- The reliable nodes do not restart past `G`. -/
-  up : ∀ v ∈ T, ∀ k inp, tr[k]? = some (v, inp) → G < time k → inp ≠ .restart
+  /-- The reliable nodes do not restart past `G` and by `t₁`. -/
+  up : ∀ v ∈ T, ∀ k inp, tr[k]? = some (v, inp) → G < time k → time k ≤ t₁ → inp ≠ .restart
 
 /-- **No reliable node jumps past `G`**: a step it takes recovering, or
-restarting, before `τ` leaves it below a round above its round at `G`. -/
+restarting, by `τ ≤ t₁` leaves it below a round above its round at `G`. -/
 theorem Arrival.no_jump {G A : ℕ} (harr : Arrival cfg T tr time G A t₁)
-    (hmono : Live.TimeMono tr time) {v : Validator} (hv : v ∈ T) {n i : ℕ}
-    (hn : topAt cfg tr time v G < n) (hG : G ≤ t₁) :
-    ∀ k < i, ∀ inp, tr[k]? = some (v, inp) →
+    (hmono : Live.TimeMono tr time) {v : Validator} (hv : v ∈ T) {n τ : ℕ}
+    (hn : topAt cfg tr time v G < n) (hτ : τ ≤ t₁) :
+    ∀ k < eventsBy tr time τ, ∀ inp, tr[k]? = some (v, inp) →
       ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
       (stateBefore cfg tr (k + 1) v).top.getD 0 < n := by
-  intro k _ inp hki hrec
+  intro k hkτ inp hki hrec
   have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hki).1
+  have hkt : time k ≤ τ := (lt_eventsBy hmono hkl).mp hkτ
   have hkG : time k ≤ G := by
     by_contra hlt
     rcases hrec with h | h
     · have hkE : eventsBy tr time G ≤ k := by
         by_contra hk
         exact hlt ((lt_eventsBy hmono hkl).mp (by omega))
-      rw [harr.recovered hG v hv k hkE] at h; cases h
-    · exact harr.up v hv k inp hki (by omega) h
+      rw [harr.recovered (by omega) v hv k hkE
+        (hkτ.le.trans (eventsBy_mono hτ))] at h; cases h
+    · exact harr.up v hv k inp hki (by omega) (by omega) h
   have hkE : k + 1 ≤ eventsBy tr time G := (lt_eventsBy hmono hkl).mpr hkG
   have := (rises_before (cfg := cfg) (tr := tr) v hkE).1
   change _ ≤ topAt cfg tr time v G at this
@@ -611,16 +613,19 @@ theorem arrival_of_delivered (hσ : cfg.σ = boundedSel)
     (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
-    (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁) (hup : Live.UpFrom T tr time 0) :
+    (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁) (hup : Live.UpFrom T tr time 0 t₁) :
     Arrival cfg T tr time gst (Δ + Δₛ) t₁ := by
-  refine ⟨fun u hu v hv huv b inp hb e hep _ s τ htb hτ ht₁ => ?_, fun _ v hv k _ => ?_,
-    fun v hv k inp hki _ h => by subst h; exact absurd (hup k v hki hv) (Nat.not_lt_zero _)⟩
+  refine ⟨fun u hu v hv huv b inp hb e hep _ s τ htb hτ ht₁ => ?_, fun _ v hv k _ hk₁ => ?_,
+    fun v hv k inp hki _ hk₁ h => by
+      subst h; exact absurd (hup k v hki hv hk₁) (Nat.not_lt_zero _)⟩
   swap
   · -- no reliable node restarts, so none recovers
     cases hr : (stateBefore cfg tr k v).recovering
     · rfl
-    · obtain ⟨j, -, hj, -⟩ := recovering_restart (cfg := cfg) (tr := tr) (v := v) k hr
-      exact absurd (hup j v hj hv) (Nat.not_lt_zero _)
+    · obtain ⟨j, hjk, hj, -⟩ := recovering_restart (cfg := cfg) (tr := tr) (v := v) k hr
+      have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj).1
+      exact absurd (hup j v hj hv ((lt_eventsBy hmono hjl).mp (by omega)))
+        (Nat.not_lt_zero _)
   have hbu : (tr[b]?.map Prod.fst) = some u := by rw [hb]; rfl
   have hebc := broadcasts_of_persists hep
   obtain ⟨j, hbj, hj, htj⟩ := hdel b u inp hb hu (v, .deliver e.1 e.2)

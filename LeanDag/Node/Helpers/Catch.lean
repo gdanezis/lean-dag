@@ -647,7 +647,8 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
       exact mem_authorsIn.mpr ⟨j, hj, hjr.trans hwm, hjc⟩
   obtain ⟨o, hoo, hoi, hor, hoc⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E m hm
   have hsome := tryBuild_isSome (cfg := cfg.at v) hm
-    (harr.recovered (by omega) v hv E (eventsBy_mono (tr := tr) (time := time) (by omega)))
+    (harr.recovered (by omega) v hv E (eventsBy_mono (tr := tr) (time := time) (by omega))
+      (eventsBy_mono (by omega)))
     (Or.inr hbeh) hcard
     (fun j hj => by rw [hoo] at hj; cases hj; exact ⟨hoi, hor, hoc⟩)
     (fresh_before hid htime (hTH hv) hm) ((Converge.floor_before hm).trans (Nat.sub_le _ _))

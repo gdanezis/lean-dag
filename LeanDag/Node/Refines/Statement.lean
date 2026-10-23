@@ -103,7 +103,7 @@ def Timed (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Live.TimeMono tr time → Live.DeliveredWithin cfg T tr time gst Δ t₁ →
     Live.TimersAfterSet cfg H tr time → Live.SyncedWithin cfg H T tr time gst Δₛ t₁ →
-    Live.StartedBy T tr time gst → Live.UpFrom T tr time 0 →
+    Live.StartedBy T tr time gst → Live.UpFrom T tr time 0 t₁ →
     Waves cfg T tr time gst (Δ + Δₛ) t₁ U ∧ Leads cfg T tr time gst (Δ + Δₛ) t₁ U
 
 /-- **With crashes**: under the assumptions of `Live.Recovers`, `U` has
@@ -116,7 +116,7 @@ def Recovering (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Live.TimeMono tr time → Live.DeliveredFrom cfg T tr time gst Δ t_r t₁ →
     Live.TimersFireUp cfg T tr time t₁ → Live.TimersAfterSet cfg H tr time →
-    Live.SyncedFrom cfg H T tr time gst Δₛ t_r t₁ → Live.UpFrom T tr time t_r →
+    Live.SyncedFrom cfg H T tr time gst Δₛ t_r t₁ → Live.UpFrom T tr time t_r t₁ →
     Live.StartedBy T tr time gst →
     let G := max t_r gst +
       T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1)

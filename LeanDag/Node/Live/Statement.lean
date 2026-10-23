@@ -19,8 +19,8 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
   reliable node's block at `t` receives after it, by `max t gst + Δₛ`,
   each block the honest nodes know in its history that it did not make.
   Efficient synchronisation is out of scope (`docs/validator.md` §1);
-* every reliable node **starts** by `gst` (`StartedBy`), and **never
-  restarts** (`UpFrom` from `0`);
+* every reliable node **starts** by `gst` (`StartedBy`), and does not
+  **restart** by `t₁` (`UpFrom` from `0`);
 * timely authentication of blocks;
 * the injective hash, injective on every block, at most `f` nodes
   outside `H`, `n − f − c` reliable nodes, a quorum of two or more, and
@@ -45,9 +45,10 @@ to be held by every reliable node:
 
 **With crashes** (`Recovers`). Reliable nodes may crash and restart until
 a time `t_r`, losing the messages and timers of their outages, and stay
-up from `t_r` on (`UpFrom`). Delivery and synchronisation are assumed
-only from `t_r` on (`DeliveredFrom`, `SyncedFrom`), and a timer fires
-unless its node restarts before (`TimersFireUp`). Then the three
+up from `t_r` to `t₁` (`UpFrom`); restarts after `t₁` are not read.
+Delivery and synchronisation are assumed only from `t_r` on
+(`DeliveredFrom`, `SyncedFrom`), and a timer fires unless its node
+restarts before (`TimersFireUp`). Then the three
 conclusions hold with GST replaced by `max t_r gst + W`, for `W` twice
 the largest timeout of the round below the one a reliable node is at by
 `max t_r gst`, the delay of its retry timer: within it every reliable
@@ -144,10 +145,11 @@ def TimersFireUp (cfg : Config Validator BlockId Payload) (T : Finset Validator)
     time i + a ≤ t₁ → (∀ k, i < k → time k ≤ time i + a → tr[k]? ≠ some (u, .restart)) →
       ∃ j, i < j ∧ tr[j]? = some (u, .timer r) ∧ time j = time i + a
 
-/-- **Up from `t_r`**: no reliable node restarts at or after `t_r`. -/
+/-- **Up from `t_r` to `t₁`**: no reliable node restarts at or after `t_r`
+and at or before `t₁`. -/
 def UpFrom (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
-    (t_r : ℕ) : Prop :=
-  ∀ k v, tr[k]? = some (v, .restart) → v ∈ T → time k < t_r
+    (t_r t₁ : ℕ) : Prop :=
+  ∀ k v, tr[k]? = some (v, .restart) → v ∈ T → time k ≤ t₁ → time k < t_r
 
 /-- **Every reliable node starts by `gst`.** -/
 def StartedBy (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
@@ -209,15 +211,15 @@ def Progresses : Prop :=
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → TimeMono tr time →
     DeliveredWithin cfg T tr time gst Δ t₁ →
     TimersFire cfg T tr time t₁ → TimersAfterSet cfg H tr time →
-    SyncedWithin cfg H T tr time gst Δₛ t₁ → StartedBy T tr time gst → UpFrom T tr time 0 →
+    SyncedWithin cfg H T tr time gst Δₛ t₁ → StartedBy T tr time gst → UpFrom T tr time 0 t₁ →
     Produces cfg T tr time gst (Δ + Δₛ) t₁ ∧ Decides cfg T tr time gst (Δ + Δₛ) t₁ ∧
       DecidesBy cfg T tr time gst (Δ + Δₛ) t₁
 
 /-- **The reliable nodes recover from crashes**: over a timed trace in
-which the reliable nodes stay up from `t_r` on, meeting the assumptions
-from `t_r` on, they produce rounds and decide past `max t_r gst + W`, for
-`W` twice the largest timeout of the round below the one a reliable node
-is at by `max t_r gst`. -/
+which the reliable nodes stay up from `t_r` to `t₁`, meeting the
+assumptions from `t_r` on, they produce rounds and decide past
+`max t_r gst + W`, for `W` twice the largest timeout of the round below
+the one a reliable node is at by `max t_r gst`. -/
 def Recovers : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
@@ -228,7 +230,7 @@ def Recovers : Prop :=
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → TimeMono tr time →
     DeliveredFrom cfg T tr time gst Δ t_r t₁ → TimersFireUp cfg T tr time t₁ →
     TimersAfterSet cfg H tr time → SyncedFrom cfg H T tr time gst Δₛ t_r t₁ →
-    UpFrom T tr time t_r → StartedBy T tr time gst →
+    UpFrom T tr time t_r t₁ → StartedBy T tr time gst →
     let G := max t_r gst +
       T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1)
     Produces cfg T tr time G (Δ + Δₛ) t₁ ∧ Decides cfg T tr time G (Δ + Δₛ) t₁ ∧

@@ -399,8 +399,8 @@ no block is collected.
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest disk is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, with at most `f` nodes outside the honest set, every block an honest node broadcast, with its history, ends on every honest node's disk. The fault bound makes the pruned answer (§3.4) sound: a block left out of an answer is reached from a round-`(r − 1)` block of an honest author in the asker's quorum. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain`, `Node.Quorate.run`, `Node.mem_coreSets`, `Node.pruned_chain`, `Node.eq_of_persists` |
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
-| V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that never restart, their timers on time, no honest node's timer early, and timeouts above `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
-| V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` on, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.recovered_by`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
+| V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that do not restart, their timers on time, no honest node's timer early, and timeouts above `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
+| V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` to the horizon `t₁`, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.recovered_by`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
 | V12 | **Refinement**: for an admissible configuration at the bounded vote, over a trace with timely authentication, an injective hash and at most `f` nodes outside the honest set, there is a `BlockRecord` at quorum `q` of which every honest disk, before every event, is a cut; every honest node's decisions are none or `Scheme.tryDecide` from slot `0` on a view of it that the node's disk holds. Under the assumptions of V11 (no timer need fire) or of V11′, it has the scheme's `WaveFacts` over every window of rounds from one above every reliable node's round at GST, and every slot of a reliably led run is decided by every reliable node to a leader block. | `Node.Refines.HasRecord` (proved, §5.7): `Node.commitInv_before`, `Node.waveFacts_of_run`, `Node.run_commits`, `Refines.waves_leads` |
 
 Every claim depends only on the standard axioms (`propext`,
@@ -487,8 +487,8 @@ assumptions up to a time `t₁`, over a reliable set `T ⊆ H` of at least
   not make. This is assumed of the network, not proved of the program's
   fetch (§3.4), since efficient synchronisation is out of scope (§1);
   the fetch meets it with `Δₛ = 2Δ` when the block's author answers;
-* every reliable node **starts** by GST (`StartedBy`) and **never
-  restarts** (`UpFrom T tr time 0`), so none jumps (§3.6);
+* every reliable node **starts** by GST (`StartedBy`) and does not
+  **restart** by `t₁` (`UpFrom T tr time 0 t₁`), so none jumps (§3.6);
 * timely authentication of blocks, a block hash injective on every
   block, so no block on its disk has the identifier of the node's next one
   (`fresh_before`), and `2 (Δ + Δₛ) < timeout r` at every round.
@@ -637,9 +637,9 @@ hand-built records. Read against the program:
 ### 5.6 Crashes (V11′)
 
 Reliable nodes may crash and restart until a time `t_r`, and stay up from
-`t_r` on (`UpFrom`: no reliable node restarts at or after `t_r`). A
-crash loses the messages sent to the node while it is down and the
-timers it set before, so delivery and synchronisation are assumed only
+`t_r` to `t₁` (`UpFrom`: no reliable node restarts at or after `t_r` and
+at or before `t₁`). A crash loses the messages sent to the node while it
+is down and the timers it set before, so delivery and synchronisation are assumed only
 for what is sent from `t_r` on (`DeliveredFrom`, `SyncedFrom`), and a
 timer fires on time unless its node restarts before (`TimersFireUp`);
 timers fire no earlier than set (`TimersAfterSet`), and every reliable
@@ -679,6 +679,13 @@ the argument of §5.2–5.4 at `G`:
   reliable node is recovering (`Arrival.recovered`), and none restarts
   (`Arrival.up`). A node that does not recover builds each round above
   its top in turn (`built_by`).
+
+Restarts after `t₁` are not read, so the claims hold over each interval
+from `t_r` to `t₁` in which no node of `T` restarts. A node that
+restarts at a time `t` is in `T` for an interval that ends before `t`,
+and for an interval that starts at its restart or later; between them
+it is one of the at most `f + c` nodes outside `T`
+(`n − f − c ≤ |T|`), with the Byzantine nodes.
 
 The decision part needs no synchronisation point (§5.3), so after a
 recovery the reliable nodes decide every reliably led run of slots from
@@ -852,7 +859,11 @@ decisions resuming after every node crashed (§3.6, §5.6). Open:
 * catch-up is costly to compute: the restarted node asks for the
   missing history on account of every block it receives (§6, item 3).
 * only a node that restarted jumps: a node that falls behind without
-  crashing builds each round it missed, on being behind (§3.2), and V11
-  assumes that the reliable nodes never restart, since a jump leaves a
-  reliable node without a block at the rounds it jumped over, which the
-  wave facts read (§5.6).
+  crashing builds each round it missed, on being behind (§3.2);
+* a node of `T` that restarts between `t_r` and `t₁` falls outside the
+  claims for that interval, since a jump leaves it without a block at
+  the rounds it jumped over, which the wave facts read (§5.6). A claim
+  for each slot whose rounds no node of `T` jumped over would admit
+  restarts at any time; the production and catch-up arguments run
+  forward from one time `G` and would have to start again at each
+  recovery.
