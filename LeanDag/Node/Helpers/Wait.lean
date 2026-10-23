@@ -55,39 +55,50 @@ and its references are `refsFor`'s, or the node is behind round `r + 1`
 and its references are `refsFor`'s. -/
 theorem tryBuild_exit {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
-    ∃ r, s.top = some r ∧ cfg.q ≤ (authorsIn s.disk.toRecord s.disk.ids r).card ∧
-      ((reachReady cfg s.memory (refsAt cfg s.memory r s.own) r = true ∧
-          certReady cfg s.memory (refsAt cfg s.memory r s.own) r = true) ∨
-        (r ∈ s.fired ∧ refsAt cfg s.memory r s.own = refsFor cfg s.memory r s.own) ∨
-        (behind cfg s.memory r ∧ refsAt cfg s.memory r s.own = refsFor cfg s.memory r s.own)) ∧
-      out = built cfg [(cfg.idOf ⟨r + 1, cfg.me, refsAt cfg s.memory r s.own,
-          cfg.payload (r + 1)⟩,
-        ⟨r + 1, cfg.me, refsAt cfg s.memory r s.own, cfg.payload (r + 1)⟩)] := by
-  unfold tryBuild at h
-  split at h
-  · rename_i r hr
-    dsimp only at h
-    split at h
-    · rename_i hc
-      split at h
-      · rw [Option.some.injEq, Prod.mk.injEq] at h
-        refine ⟨r, hr, by
-          rw [← Store.authorsAt_eq]
-          exact hc.1.trans (Finset.card_le_card (s.mirrors.authorsAt_sub r)), ?_,
-          by rw [← h.2]; simp [built]⟩
-        rcases hc.2 with hf | hb | hready
-        · rcases refsAt_cases (cfg := cfg) s.memory r s.own with h' | h'
-          · simp only [Bool.and_eq_true] at h'
-            exact Or.inl h'
-          · exact Or.inr (Or.inl ⟨hf, h'⟩)
-        · rcases refsAt_cases (cfg := cfg) s.memory r s.own with h' | h'
-          · simp only [Bool.and_eq_true] at h'
-            exact Or.inl h'
-          · exact Or.inr (Or.inr ⟨hb, h'⟩)
-        · exact Or.inl hready
-      · exact absurd h (by simp)
-    · exact absurd h (by simp)
-  · exact absurd h (by simp)
+    ∃ r o, s.top.isSome ∧ s.top.getD 0 ≤ r ∧
+      ((s.top = some r ∧ o = s.own) ∨ (s.recovering = true ∧ o = none ∧
+        reachReady cfg s.memory (refsAt cfg s.memory r o) r = true ∧
+        certReady cfg s.memory (refsAt cfg s.memory r o) r = true)) ∧
+      cfg.q ≤ (authorsIn s.disk.toRecord s.disk.ids r).card ∧
+      ((reachReady cfg s.memory (refsAt cfg s.memory r o) r = true ∧
+          certReady cfg s.memory (refsAt cfg s.memory r o) r = true) ∨
+        (s.top = some r ∧ r ∈ s.fired ∧ refsAt cfg s.memory r o = refsFor cfg s.memory r o) ∨
+        (behind cfg s.memory r ∧ refsAt cfg s.memory r o = refsFor cfg s.memory r o)) ∧
+      out = built cfg [(cfg.idOf ⟨r + 1, cfg.me, refsAt cfg s.memory r o, cfg.payload (r + 1)⟩,
+        ⟨r + 1, cfg.me, refsAt cfg s.memory r o, cfg.payload (r + 1)⟩)] := by
+  obtain ⟨t, r, o, ht, hb, hro⟩ := tryBuild_cases h
+  have hshape : s.top.isSome ∧ s.top.getD 0 ≤ r ∧
+      ((s.top = some r ∧ o = s.own) ∨ (s.recovering = true ∧ o = none ∧
+        reachReady cfg s.memory (refsAt cfg s.memory r o) r = true ∧
+        certReady cfg s.memory (refsAt cfg s.memory r o) r = true)) := by
+    rw [ht]
+    rcases hro with ⟨rfl, rfl⟩ | ⟨hrec, hlt, rfl, -, -, ht₁, ht₂⟩
+    · exact ⟨rfl, le_rfl, Or.inl ⟨rfl, rfl⟩⟩
+    · exact ⟨rfl, hlt.le, Or.inr ⟨hrec, rfl, ht₁, ht₂⟩⟩
+  unfold buildAbove at hb
+  dsimp only at hb
+  split at hb
+  · rename_i hc
+    split at hb
+    · rw [Option.some.injEq, Prod.mk.injEq] at hb
+      refine ⟨r, o, hshape.1, hshape.2.1, hshape.2.2, by
+        rw [← Store.authorsAt_eq]
+        exact hc.1.trans (Finset.card_le_card (s.mirrors.authorsAt_sub r)), ?_,
+        by rw [← hb.2]; simp [built]⟩
+      rcases hc.2 with hf | hbeh | hready
+      · rcases refsAt_cases (cfg := cfg) s.memory r o with h' | h'
+        · simp only [Bool.and_eq_true] at h'
+          exact Or.inl h'
+        · rcases hro with ⟨rfl, -⟩ | ⟨-, -, rfl, -, -, ht₁, ht₂⟩
+          · exact Or.inr (Or.inl ⟨ht, hf, h'⟩)
+          · exact Or.inl ⟨ht₁, ht₂⟩
+      · rcases refsAt_cases (cfg := cfg) s.memory r o with h' | h'
+        · simp only [Bool.and_eq_true] at h'
+          exact Or.inl h'
+        · exact Or.inr (Or.inr ⟨hbeh, h'⟩)
+      · exact Or.inl hready
+    · exact absurd hb (by simp)
+  · exact absurd hb (by simp)
 
 omit [Fintype Validator] in
 /-- **What `refsFor` references**: a round-`r` block the store holds that
@@ -135,14 +146,13 @@ omit [Fintype Validator] in
 theorem calm_tryBuild {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
     Calm s s' := by
-  unfold tryBuild at h
+  obtain ⟨_, _, _, -, h, -⟩ := tryBuild_cases h
+  unfold buildAbove at h
+  dsimp only at h
   split at h
-  · dsimp only at h
-    split at h
-    · split at h
-      · rw [Option.some.injEq, Prod.mk.injEq] at h
-        rw [← h.1]; intro r hr; rwa [release_fired] at hr
-      · exact absurd h (by simp)
+  · split at h
+    · rw [Option.some.injEq, Prod.mk.injEq] at h
+      rw [← h.1]; intro r hr; rwa [release_fired] at hr
     · exact absurd h (by simp)
   · exact absurd h (by simp)
 
@@ -208,7 +218,10 @@ theorem step_calm (s : State Validator BlockId Payload) (inp : Input Validator B
     · exact Or.inr rfl
     · exact Or.inl (Finset.mem_filter.mp h).1
   | fetchRequest peer r ids => exact fun r h => Or.inl h
-  | restart => exact fun r h => Or.inl h
+  | restart =>
+    intro r h
+    rw [step_restart_fst] at h
+    exact Or.inl (calm_quiesce (cfg := cfg) _ { s with recovering := true } h)
 
 /-- **Each round whose timer node `v` counts as fired before event `i`**
 had its timer input at an earlier event. -/
@@ -279,20 +292,19 @@ omit [Fintype Validator] in
 theorem OwnTop.tryBuild {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
     OwnTop cfg s' := by
-  unfold Node.tryBuild at h
+  obtain ⟨_, _, _, -, h, -⟩ := tryBuild_cases h
+  unfold buildAbove at h
+  dsimp only at h
   split at h
-  · dsimp only at h
-    split at h
-    · split at h
-      · rw [Option.some.injEq, Prod.mk.injEq] at h
-        rw [← h.1]
-        intro r hr
-        simp only [release_top, release_own, release_disk] at hr ⊢
-        simp only [Option.some.injEq] at hr
-        subst hr
-        refine ⟨_, rfl, (by simp [Store.insert_ids]), ?_, ?_⟩ <;>
-          simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
-      · exact absurd h (by simp)
+  · split at h
+    · rw [Option.some.injEq, Prod.mk.injEq] at h
+      rw [← h.1]
+      intro r hr
+      simp only [release_top, release_own, release_disk] at hr ⊢
+      simp only [Option.some.injEq] at hr
+      subst hr
+      refine ⟨_, rfl, (by simp [Store.insert_ids]), ?_, ?_⟩ <;>
+        simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
     · exact absurd h (by simp)
   · exact absurd h (by simp)
 
@@ -350,7 +362,9 @@ theorem OwnTop.step {s : State Validator BlockId Payload} (h : OwnTop cfg s)
     · exact h
   | timer t => rw [step_timer_fst]; exact OwnTop.settle (h.grow (Grows.refl _) rfl rfl)
   | fetchRequest peer r ids => exact h
-  | restart => exact h
+  | restart =>
+    rw [step_restart_fst]
+    exact OwnTop.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl rfl)
 
 /-- **Node `v`'s own block at its top is on its disk before every event.** -/
 theorem ownTop_before {tr : Trace Validator BlockId Payload} {v : Validator} :
@@ -541,7 +555,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
           { keep s (cfg.idOf cfg.genesis) cfg.genesis h₂.1
               (fun _ hj => absurd hj (Finset.notMem_empty _))
               (fun j hj => absurd hj (Finset.notMem_empty j)) with
-              top := some 0, own := some gid }
+              top := some 0, own := some gid, recovering := false }
         have hh₀ : Held cfg s₀ :=
           ⟨fun t ht => ⟨gid, (by simp [s₀, st, gid, Store.insert_ids]), by
             change some 0 = some t at ht
@@ -623,7 +637,7 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     rw [persists_step_timer] at hb hev
     rw [step_timer_fst]
     refine Or.inr (settle_witness hg (s := s) (inp := .timer r)
-      (s₀ := { s with fired := fire s r })
+      (s₀ := { s with fired := fire s r, recovering := false })
       ⟨hc, hh.grow (Grows.refl _) rfl, hown.grow (Grows.refl _) rfl rfl, Grows.refl _,
         fun t ht => ?_, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl⟩⟩ hp hb e hev)
     rcases Finset.mem_insert.mp ht with rfl | ht
@@ -636,11 +650,13 @@ theorem step_witness {U : BlockRecord Validator BlockId Payload P H}
     rw [List.filterMap_map] at he
     simp at he
   | restart =>
-    intro e he
-    change e ∈ persists (Node.resend cfg s ++ Node.rearm cfg s) at he
-    rw [persists_append, persists_rearm, List.append_nil] at he
-    rw [persists_resend] at he
-    exact absurd he List.not_mem_nil
+    intro e hev
+    rw [persists_step_restart] at hb hev
+    rw [step_restart_fst]
+    exact Or.inr (settle_witness hg (s := s) (inp := .restart)
+      (s₀ := { s with recovering := true })
+      ⟨hc, hh.grow (Grows.refl _) rfl, hown.grow (Grows.refl _) rfl rfl, Grows.refl _,
+        fun t ht => Or.inl ht, ⟨B₀, hi.of_eq rfl rfl rfl rfl rfl le_rfl⟩⟩ hp hb e hev)
 
 omit [Fintype Validator] in
 theorem decideStep_armed (s : State Validator BlockId Payload) :
@@ -657,14 +673,13 @@ theorem progress_armed : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     split
     · rename_i s₁ out hb
       rw [progress_armed fuel s₁]
-      unfold Node.tryBuild at hb
+      obtain ⟨_, _, _, -, hb, -⟩ := tryBuild_cases hb
+      unfold buildAbove at hb
+      dsimp only at hb
       split at hb
-      · dsimp only at hb
-        split at hb
-        · split at hb
-          · rw [Option.some.injEq, Prod.mk.injEq] at hb
-            rw [← hb.1, release_armed]; rfl
-          · exact absurd hb (by simp)
+      · split at hb
+        · rw [Option.some.injEq, Prod.mk.injEq] at hb
+          rw [← hb.1, release_armed]; rfl
         · exact absurd hb (by simp)
       · exact absurd hb (by simp)
     · rfl
@@ -730,6 +745,17 @@ theorem TimersSet.append {s : State Validator BlockId Payload}
   · exact hy r a hm
 
 omit [Fintype Validator] in
+/-- Timers set on a state stay set as its top rises and its disk grows. -/
+theorem TimersSet.rise {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (h : TimersSet cfg s out)
+    (ht : TopRises s s') (hg : Grows s.disk s'.disk) : TimersSet cfg s' out := fun r a hm => by
+  obtain ⟨t, hts, hrt, hq⟩ := h r a hm
+  obtain ⟨t', ht', htt'⟩ := ht t hts
+  refine ⟨t', ht', hrt.trans htt', fun hr h1 => ?_⟩
+  obtain ⟨ha, hq'⟩ := hq (by omega) h1
+  exact ⟨ha, hq'.trans (Finset.card_le_card (hg.authorsAt r))⟩
+
+omit [Fintype Validator] in
 theorem TimersSet.of_none {s : State Validator BlockId Payload}
     {x : List (Output Validator BlockId Payload)} (h : ∀ r a, Output.setTimer r a ∉ x) :
     TimersSet cfg s x := fun r a hm => absurd hm (h r a)
@@ -749,7 +775,8 @@ theorem timersSet_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Paylo
         tryBuild_some hb
       obtain ⟨h₁, h₂, h₃⟩ := timersSet_progress fuel s₁
       have hg : Grows s.disk s₁.disk := by rw [hst]; exact Grows.insert s.disk
-      have ht : TopRises s s₁ := fun t ht => ⟨r + 1, htop, by rw [hr] at ht; cases ht; omega⟩
+      have ht : TopRises s s₁ := fun t ht => ⟨r + 1, htop, by
+        have := hr.2.1; rw [ht] at this; simp only [Option.getD_some] at this; omega⟩
       refine ⟨TimersSet.append ?_ h₁, hg.trans h₂, ht.trans h₃⟩
       intro r' a hm
       rw [hout] at hm
@@ -881,7 +908,8 @@ theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum c
           { keep s g cfg.genesis h₂.1 (fun _ hj => absurd hj (Finset.notMem_empty _))
               (fun j hj => absurd hj (Finset.notMem_empty j)) with
             top := some 0
-            own := some g }
+            own := some g
+            recovering := false }
         have hA₀ : ArmedQuorum cfg s₀ := hA.grow (Grows.insert s.disk (hnew := h₂.1)
           (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
           (hpred := fun j hj => absurd hj (Finset.notMem_empty j))) rfl
@@ -907,10 +935,12 @@ theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum c
       · rw [List.mem_singleton] at h; cases h
     · exact ⟨TimersSet.of_none fun _ _ h => absurd h List.not_mem_nil, hA⟩
   | timer r =>
-    have hAs : ArmedQuorum cfg (Node.settle cfg { s with fired := fire s r }).1 :=
-      ArmedQuorum.settle (s := { s with fired := fire s r }) hA
-    have hts := (timersSet_quiesce (cfg := cfg) (passes cfg { s with fired := fire s r })
-      { s with fired := fire s r }).1
+    have hAs :
+        ArmedQuorum cfg (Node.settle cfg { s with fired := fire s r, recovering := false }).1 :=
+      ArmedQuorum.settle (s := { s with fired := fire s r, recovering := false }) hA
+    have hts := (timersSet_quiesce (cfg := cfg)
+      (passes cfg { s with fired := fire s r, recovering := false })
+      { s with fired := fire s r, recovering := false }).1
     simp only [Node.step]
     split
     · exact ⟨TimersSet.append hts (timersSet_resend _), hAs⟩
@@ -921,7 +951,13 @@ theorem timersSet_step {s : State Validator BlockId Payload} (hA : ArmedQuorum c
     unfold answer at h
     simp at h
   | restart =>
-    exact ⟨TimersSet.append (timersSet_resend s) (timersSet_rearm hA), hA⟩
+    have hAs : ArmedQuorum cfg (Node.settle cfg { s with recovering := true }).1 :=
+      ArmedQuorum.settle (s := { s with recovering := true }) hA
+    obtain ⟨hts, hg, hr⟩ :=
+      timersSet_quiesce (cfg := cfg) (passes cfg { s with recovering := true })
+        { s with recovering := true }
+    refine ⟨TimersSet.append (TimersSet.append ((timersSet_resend s).rise hr hg)
+      ((timersSet_rearm hA).rise hr hg)) hts, hAs⟩
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- **A cut's paths are the record's**: what a block of the store reaches in

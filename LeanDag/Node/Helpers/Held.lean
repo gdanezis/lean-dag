@@ -149,7 +149,8 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     · exact h
   | timer r => rw [step_timer_fst]; exact Held.settle (h.grow (Grows.refl _) rfl)
   | fetchRequest peer r ids => exact h
-  | restart => exact h
+  | restart =>
+    exact Held.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl)
 
 /-- **A run keeps `Held`.** -/
 theorem Held.run : ∀ (is : List (Input Validator BlockId Payload))
@@ -182,21 +183,20 @@ theorem Grows.authorsIn {st st' : Store Validator BlockId Payload} (hg : Grows s
     rw [hg.blk hb]; exact hc
 
 omit [Fintype Validator] in
-/-- **A build sees a quorum at the top.** -/
+/-- **A build sees a quorum of the round it builds above.** -/
 theorem tryBuild_quorum {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : Node.tryBuild cfg s = some (s', out)) :
-    ∃ r, s.top = some r ∧ cfg.q ≤ (authorsIn s.disk.toRecord s.disk.ids r).card := by
-  unfold Node.tryBuild at h
-  split at h
-  · rename_i r hr
-    dsimp only at h
-    split at h
-    · rename_i hc
-      exact ⟨r, hr, by
-        rw [← Store.authorsAt_eq]
-        exact hc.1.trans (Finset.card_le_card (s.mirrors.authorsAt_sub r))⟩
-    · exact absurd h (by simp)
-  · exact absurd h (by simp)
+    ∃ r, s'.top = some (r + 1) ∧ cfg.q ≤ (authorsIn s.disk.toRecord s.disk.ids r).card := by
+  obtain ⟨_, r, _, -, hb, -⟩ := tryBuild_cases h
+  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, htop, -⟩ := buildAbove_some hb
+  unfold buildAbove at hb
+  dsimp only at hb
+  split at hb
+  · rename_i hc
+    exact ⟨r, htop, by
+      rw [← Store.authorsAt_eq]
+      exact hc.1.trans (Finset.card_le_card (s.mirrors.authorsAt_sub r))⟩
+  · exact absurd hb (by simp)
 
 omit [Fintype Validator] in
 /-- A change that grows the disk and leaves the top alone keeps `Quorate`. -/
@@ -210,10 +210,8 @@ omit [Fintype Validator] in
 theorem Quorate.tryBuild {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)}
     (hb : Node.tryBuild cfg s = some (s', out)) : Quorate cfg s' := by
-  obtain ⟨r, id, b, hnew, hrefs, hpred, htop₀, -, -, -, -, hst, htop, -, -, -⟩ := tryBuild_some hb
-  obtain ⟨r', htop', hq⟩ := tryBuild_quorum hb
-  rw [htop₀, Option.some.injEq] at htop'
-  subst htop'
+  obtain ⟨-, id, b, hnew, hrefs, hpred, -, -, -, -, -, hst, -, -, -, -⟩ := tryBuild_some hb
+  obtain ⟨r, htop, hq⟩ := tryBuild_quorum hb
   intro t ht _
   rw [htop, Option.some.injEq] at ht
   subst ht
@@ -268,7 +266,8 @@ theorem Quorate.step {s : State Validator BlockId Payload} (h : Quorate cfg s)
     · exact h
   | timer r => rw [step_timer_fst]; exact Quorate.settle (h.grow (Grows.refl _) rfl)
   | fetchRequest peer r ids => exact h
-  | restart => exact h
+  | restart =>
+    exact Quorate.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl)
 
 /-- **A run keeps `Quorate`.** -/
 theorem Quorate.run : ∀ (is : List (Input Validator BlockId Payload))

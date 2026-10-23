@@ -19,7 +19,8 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
   reliable node's block at `t` receives after it, by `max t gst + Δₛ`,
   each block the honest nodes know in its history that it did not make.
   Efficient synchronisation is out of scope (`docs/validator.md` §1);
-* every reliable node **starts** by `gst` (`StartedBy`);
+* every reliable node **starts** by `gst` (`StartedBy`), and **never
+  restarts** (`UpFrom` from `0`);
 * timely authentication of blocks;
 * the injective hash, injective on every block, at most `f` nodes
   outside `H`, `n − f − c` reliable nodes, a quorum of two or more, and
@@ -208,7 +209,7 @@ def Progresses : Prop :=
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → TimeMono tr time →
     DeliveredWithin cfg T tr time gst Δ t₁ →
     TimersFire cfg T tr time t₁ → TimersAfterSet cfg H tr time →
-    SyncedWithin cfg H T tr time gst Δₛ t₁ → StartedBy T tr time gst →
+    SyncedWithin cfg H T tr time gst Δₛ t₁ → StartedBy T tr time gst → UpFrom T tr time 0 →
     Produces cfg T tr time gst (Δ + Δₛ) t₁ ∧ Decides cfg T tr time gst (Δ + Δₛ) t₁ ∧
       DecidesBy cfg T tr time gst (Δ + Δₛ) t₁
 

@@ -81,15 +81,14 @@ omit [Fintype Validator] in
 theorem tryBuild_appends {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
     Appends s out s' ∧ s'.decided = s.decided ∧ s'.lo = s.lo := by
-  unfold tryBuild at h
+  obtain ⟨_, _, _, -, h, -⟩ := tryBuild_cases h
+  unfold buildAbove at h
+  dsimp only at h
   split at h
-  · dsimp only at h
-    split at h
-    · split at h
-      · rw [Option.some.injEq, Prod.mk.injEq] at h
-        obtain ⟨rfl, rfl⟩ := h
-        exact ⟨Appends.quiet (release_decided _) rfl, release_decided _, release_lo _⟩
-      · exact absurd h (by simp)
+  · split at h
+    · rw [Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨Appends.quiet (release_decided _) rfl, release_decided _, release_lo _⟩
     · exact absurd h (by simp)
   · exact absurd h (by simp)
 
@@ -208,7 +207,7 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
       split_ifs <;> rfl
     · exact ⟨Appends.refl s, hL⟩
   | timer r =>
-    obtain ⟨h₁, h₂⟩ := hset { s with fired := fire s r } [] rfl rfl rfl
+    obtain ⟨h₁, h₂⟩ := hset { s with fired := fire s r, recovering := false } [] rfl rfl rfl
     rw [List.nil_append] at h₁
     simp only [Node.step]
     split
@@ -221,9 +220,8 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
     rw [List.filterMap_map]
     exact List.filterMap_eq_nil_iff.mpr fun _ _ => rfl
   | restart =>
-    refine ⟨Appends.quiet rfl ?_, hL⟩
-    change commitsOf (Node.resend cfg s ++ Node.rearm cfg s) = []
-    rw [commitsOf_append, commitsOf_resend, commitsOf_rearm, List.append_nil]
+    exact hset { s with recovering := true } (Node.resend cfg s ++ Node.rearm cfg s) rfl rfl
+      (by rw [commitsOf_append, commitsOf_resend, commitsOf_rearm, List.append_nil])
 
 /-- **A run appends its decisions**, and keeps the ledger. -/
 theorem run_appends : ∀ (is : List (Input Validator BlockId Payload))

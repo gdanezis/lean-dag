@@ -6,8 +6,9 @@ import LeanDag.Node.Helpers.Live
 
 `docs/validator.md` §5.2. Along a trace, a node's state changes only at
 its own events (`before_succ_cases`). Each of its rounds up to its top was
-built at one of its events, with the retry timer (`built_by`,
-`timer_of_persist`), and a round's timer, once fired, stays fired while
+built at one of its events, with the retry timer, when it did not jump
+(`built_by`, `timer_of_persist`), and past `G` no reliable node jumps
+(`Arrival.no_jump`). A round's timer, once fired, stays fired while
 the node's top is not above the round (`fired_stays`). A reliable block
 that a reliable node `v` is given is held by `v` once its history has
 been synchronised (`arrives`,
@@ -47,29 +48,104 @@ theorem before_succ_cases (v : Validator) (i : ℕ) :
 
 variable {v : Validator}
 
+/-- **A node's top round was built** at one of its earlier events. -/
+theorem built_top : ∀ (i : ℕ), (stateBefore cfg tr i v).top.isSome →
+    ∃ b < i, (tr[b]?.map Prod.fst) = some v ∧ ∃ e ∈ persists (outputsAt cfg tr b),
+      e.2.round = (stateBefore cfg tr i v).top.getD 0
+  | 0, hs => by simp [stateBefore, inputsBefore, run, State.init] at hs
+  | i + 1, hs => by
+    rcases before_succ_cases (cfg := cfg) (tr := tr) v i with heq | ⟨inp, he, heq⟩
+    · rw [heq] at hs ⊢
+      obtain ⟨b, hb, h⟩ := built_top i hs
+      exact ⟨b, by omega, h⟩
+    · by_cases hsame : (stateBefore cfg tr (i + 1) v).top = (stateBefore cfg tr i v).top
+      · rw [hsame] at hs ⊢
+        obtain ⟨b, hb, h⟩ := built_top i hs
+        exact ⟨b, by omega, h⟩
+      · rw [heq] at hsame ⊢
+        obtain ⟨e, hep, het⟩ := step_built_top (cfg := cfg.at v) hsame
+        exact ⟨i, by omega, by rw [he]; rfl, e, by rw [outputsAt_eq he]; exact hep,
+          by rw [het]; rfl⟩
+
 /-- **Each round up to a node's top was built** at one of its earlier
-events. -/
+events, if no step it took recovering, or restarting, reached the
+round. -/
 theorem built_by : ∀ (i : ℕ) {n : ℕ}, (stateBefore cfg tr i v).top.isSome →
     n ≤ (stateBefore cfg tr i v).top.getD 0 →
+    (∀ k < i, ∀ inp, tr[k]? = some (v, inp) →
+      ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
+      (stateBefore cfg tr (k + 1) v).top.getD 0 < n) →
     ∃ b < i, (tr[b]?.map Prod.fst) = some v ∧ ∃ e ∈ persists (outputsAt cfg tr b), e.2.round = n
-  | 0, n, hs, _ => by simp [stateBefore, inputsBefore, run, State.init] at hs
-  | i + 1, n, hs, hn => by
+  | 0, n, hs, _, _ => by simp [stateBefore, inputsBefore, run, State.init] at hs
+  | i + 1, n, hs, hn, hj => by
+    have hj' : ∀ k < i, ∀ inp, tr[k]? = some (v, inp) →
+        ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
+        (stateBefore cfg tr (k + 1) v).top.getD 0 < n := fun k hk => hj k (by omega)
     rcases before_succ_cases (cfg := cfg) (tr := tr) v i with heq | ⟨inp, he, heq⟩
     · rw [heq] at hs hn
-      obtain ⟨b, hb, h⟩ := built_by i hs hn
+      obtain ⟨b, hb, h⟩ := built_by i hs hn hj'
       exact ⟨b, by omega, h⟩
     · by_cases hold : (stateBefore cfg tr i v).top.isSome ∧
           n ≤ (stateBefore cfg tr i v).top.getD 0
-      · obtain ⟨b, hb, h⟩ := built_by i hold.1 hold.2
+      · obtain ⟨b, hb, h⟩ := built_by i hold.1 hold.2 hj'
         exact ⟨b, by omega, h⟩
-      · rw [heq] at hs hn
+      · have hnot : ¬ ((stateBefore cfg tr i v).recovering = true ∨ inp = .restart) :=
+          fun hr => by have := hj i (by omega) inp he hr; omega
+        push Not at hnot
+        rw [heq] at hs hn
         have hρ : (stateBefore cfg tr i v).top = none ∨
             (stateBefore cfg tr i v).top.getD 0 < n := by
           rcases h : (stateBefore cfg tr i v).top with _ | t
           · exact Or.inl rfl
           · right; rw [h] at hold; simp at hold; simp; omega
-        obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) hs n hρ hn
+        obtain ⟨e, hep, her⟩ := step_every (cfg := cfg.at v) hnot.2
+          (Or.inl (by simpa using hnot.1)) hs n hρ hn
         exact ⟨i, by omega, by rw [he]; rfl, e, by rw [outputsAt_eq he]; exact hep, her⟩
+
+/-- **A node recovering at an event restarted before**, at an event after
+which it had no timer and no restart up to this one, and kept its top. -/
+theorem recovering_restart : ∀ (k : ℕ), (stateBefore cfg tr k v).recovering = true →
+    ∃ j < k, tr[j]? = some (v, .restart) ∧
+      (∀ m inp, j < m → m < k → tr[m]? = some (v, inp) →
+        inp ≠ .restart ∧ ∀ r, inp ≠ .timer r) ∧
+      (stateBefore cfg tr k v).top = (stateBefore cfg tr j v).top
+  | 0, h => by simp [stateBefore, inputsBefore, run, State.init] at h
+  | k + 1, h => by
+    -- the event at `k`, if not `v`'s, leaves `v` alone
+    have hother : (∀ inp', tr[k]? ≠ some (v, inp')) →
+        stateBefore cfg tr (k + 1) v = stateBefore cfg tr k v := by
+      intro hno
+      rcases he : tr[k]? with _ | ⟨w, inp''⟩
+      · exact stateBefore_of_none he
+      · rw [stateBefore_succ he]
+        split
+        · rename_i hw; subst hw
+          exact absurd he (hno inp'')
+        · rfl
+    by_cases hv : ∃ inp, tr[k]? = some (v, inp)
+    · obtain ⟨inp, he⟩ := hv
+      rw [stateBefore_succ he, if_pos rfl] at h ⊢
+      obtain ⟨htop, htimer, hcase⟩ := step_recovering (cfg := cfg.at v) h
+      by_cases hr : inp = .restart
+      · subst hr
+        exact ⟨k, by omega, he, fun m _ hkm hmk _ => absurd hmk (by omega), htop⟩
+      · rcases hcase with hcase | hcase
+        · exact absurd hcase hr
+        · obtain ⟨j, hj, hjr, hno, htop'⟩ := recovering_restart k hcase
+          refine ⟨j, by omega, hjr, fun m inp' hjm hmk hm => ?_, htop.trans htop'⟩
+          rcases Nat.lt_succ_iff_lt_or_eq.mp hmk with hmk | rfl
+          · exact hno m inp' hjm hmk hm
+          · rw [he] at hm
+            cases hm
+            exact ⟨hr, htimer⟩
+    · push Not at hv
+      have heq := hother hv
+      rw [heq] at h ⊢
+      obtain ⟨j, hj, hjr, hno, htop⟩ := recovering_restart k h
+      refine ⟨j, by omega, hjr, fun m inp hjm hmk hm => ?_, htop⟩
+      rcases Nat.lt_succ_iff_lt_or_eq.mp hmk with hmk | rfl
+      · exact hno m inp hjm hmk hm
+      · exact absurd hm (hv inp)
 
 /-- **The retry timer of each round a node builds is set at the same
 event**: the timer of the round below it, for twice its timeout. -/
@@ -96,7 +172,8 @@ theorem fired_stays {f r : ℕ} (hf : tr[f]? = some (v, Input.timer r)) :
         exact step_fired (cfg := cfg.at v) ih htk'
     · rw [stateBefore_succ hf, if_pos rfl, step_timer_fst]
       exact (settle_shape (cfg := cfg.at v)
-        { stateBefore cfg tr f v with fired := fire (stateBefore cfg tr f v) r }).fired
+        { stateBefore cfg tr f v with
+            fired := fire (stateBefore cfg tr f v) r, recovering := false }).fired
         (Finset.mem_insert_self _ _)
 
 /-- **A block a node builds at an event is on its disk** from the next event
@@ -487,15 +564,44 @@ variable {P : Validity Validator BlockId Payload} {H T : Finset Validator} {time
   {gst Δ Δₛ t₁ : ℕ}
 
 variable (cfg) in
-/-- **Reliable blocks arrive within `A` past `G`**: a block a reliable
-node `u` built at an event at or before `s`, at `u`'s round at `G` or
-above, is held by every other reliable node `v` after `v`'s events by
-`max s G + A`. -/
-def Arrival (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
-    (G A t₁ : ℕ) : Prop :=
-  ∀ u ∈ T, ∀ v ∈ T, u ≠ v → ∀ b inp, tr[b]? = some (u, inp) →
+/-- **The run past `G`**: a block a reliable node `u` built at an event at
+or before `s`, at `u`'s round at `G` or above, is held by every other
+reliable node `v` after `v`'s events by `max s G + A`; and past `G` no
+reliable node restarts or recovers. -/
+structure Arrival (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
+    (G A t₁ : ℕ) : Prop where
+  /-- Reliable blocks arrive. -/
+  arrives : ∀ u ∈ T, ∀ v ∈ T, u ≠ v → ∀ b inp, tr[b]? = some (u, inp) →
     ∀ e ∈ persists (outputsAt cfg tr b), topAt cfg tr time u G ≤ e.2.round →
       ∀ s τ, time b ≤ s → max s G + A ≤ τ → τ ≤ t₁ → e.1 ∈ (stateAt cfg tr time v τ).disk.ids
+  /-- The reliable nodes do not recover from `G` on. -/
+  recovered : G ≤ t₁ → ∀ v ∈ T, ∀ k, eventsBy tr time G ≤ k →
+    (stateBefore cfg tr k v).recovering = false
+  /-- The reliable nodes do not restart past `G`. -/
+  up : ∀ v ∈ T, ∀ k inp, tr[k]? = some (v, inp) → G < time k → inp ≠ .restart
+
+/-- **No reliable node jumps past `G`**: a step it takes recovering, or
+restarting, before `τ` leaves it below a round above its round at `G`. -/
+theorem Arrival.no_jump {G A : ℕ} (harr : Arrival cfg T tr time G A t₁)
+    (hmono : Live.TimeMono tr time) {v : Validator} (hv : v ∈ T) {n i : ℕ}
+    (hn : topAt cfg tr time v G < n) (hG : G ≤ t₁) :
+    ∀ k < i, ∀ inp, tr[k]? = some (v, inp) →
+      ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
+      (stateBefore cfg tr (k + 1) v).top.getD 0 < n := by
+  intro k _ inp hki hrec
+  have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hki).1
+  have hkG : time k ≤ G := by
+    by_contra hlt
+    rcases hrec with h | h
+    · have hkE : eventsBy tr time G ≤ k := by
+        by_contra hk
+        exact hlt ((lt_eventsBy hmono hkl).mp (by omega))
+      rw [harr.recovered hG v hv k hkE] at h; cases h
+    · exact harr.up v hv k inp hki (by omega) h
+  have hkE : k + 1 ≤ eventsBy tr time G := (lt_eventsBy hmono hkl).mpr hkG
+  have := (rises_before (cfg := cfg) (tr := tr) v hkE).1
+  change _ ≤ topAt cfg tr time v G at this
+  omega
 
 /-- **Delivery and synchronisation make blocks arrive**: past GST, a
 reliable block built at `s` is delivered to every other reliable node by
@@ -505,9 +611,16 @@ theorem arrival_of_delivered (hσ : cfg.σ = boundedSel)
     (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
-    (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁) :
+    (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁) (hup : Live.UpFrom T tr time 0) :
     Arrival cfg T tr time gst (Δ + Δₛ) t₁ := by
-  intro u hu v hv huv b inp hb e hep _ s τ htb hτ ht₁
+  refine ⟨fun u hu v hv huv b inp hb e hep _ s τ htb hτ ht₁ => ?_, fun _ v hv k _ => ?_,
+    fun v hv k inp hki _ h => by subst h; exact absurd (hup k v hki hv) (Nat.not_lt_zero _)⟩
+  swap
+  · -- no reliable node restarts, so none recovers
+    cases hr : (stateBefore cfg tr k v).recovering
+    · rfl
+    · obtain ⟨j, -, hj, -⟩ := recovering_restart (cfg := cfg) (tr := tr) (v := v) k hr
+      exact absurd (hup j v hj hv) (Nat.not_lt_zero _)
   have hbu : (tr[b]?.map Prod.fst) = some u := by rw [hb]; rfl
   have hebc := broadcasts_of_persists hep
   obtain ⟨j, hbj, hj, htj⟩ := hdel b u inp hb hu (v, .deliver e.1 e.2)
@@ -553,14 +666,14 @@ theorem top_arrives (htime : Converge.TimelyAuthentic cfg H tr)
     ∃ j ∈ (stateAt cfg tr time v τ).disk.ids,
       ((stateAt cfg tr time v τ).disk.blk j).round = topAt cfg tr time u s ∧
       ((stateAt cfg tr time v τ).disk.blk j).creator = u := by
-  obtain ⟨b, hbs, hbu, e, hep, her⟩ := built_by (eventsBy tr time s) hus le_rfl
+  obtain ⟨b, hbs, hbu, e, hep, her⟩ := built_top (eventsBy tr time s) hus
   change e.2.round = topAt cfg tr time u s at her
   obtain ⟨inp, hb⟩ := Converge.event_of_map hbu
   have hbl : b < tr.length := (List.getElem?_eq_some_iff.mp hb).1
   have htb : time b ≤ s := (lt_eventsBy hmono hbl).mp hbs
   have hGs : topAt cfg tr time u G ≤ topAt cfg tr time u s :=
     (rises_before (cfg := cfg) (tr := tr) u (eventsBy_mono (tr := tr) (time := time) hgs)).1
-  have h₁ := harr u hu v hv huv b inp hb e hep (her ▸ hGs) s τ htb
+  have h₁ := harr.arrives u hu v hv huv b inp hb e hep (her ▸ hGs) s τ htb
     (by rw [max_eq_left hgs]; omega) ht₁
   obtain ⟨h₂, h₃, -⟩ := held_as_built htime hinj hTH hu hv hb hep h₁
   exact ⟨e.1, h₁, h₂.trans her, h₃⟩

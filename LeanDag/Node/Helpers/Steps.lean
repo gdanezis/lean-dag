@@ -23,15 +23,14 @@ omit [Fintype Validator] in
 theorem tryBuild_pending {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
     s'.pending = s.pending := by
-  unfold tryBuild at h
+  obtain ⟨_, _, _, -, h, -⟩ := tryBuild_cases h
+  unfold buildAbove at h
+  dsimp only at h
   split at h
-  · dsimp only at h
-    split at h
-    · split at h
-      · rw [Option.some.injEq, Prod.mk.injEq] at h
-        obtain ⟨rfl, -⟩ := h
-        exact release_pending _
-      · exact absurd h (by simp)
+  · split at h
+    · rw [Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, -⟩ := h
+      exact release_pending _
     · exact absurd h (by simp)
   · exact absurd h (by simp)
 
@@ -259,7 +258,7 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
         let s₀ := { keep s (cfg.idOf cfg.genesis) cfg.genesis h₂.1
             (fun _ hj => absurd hj (Finset.notMem_empty _))
             (fun j hj => absurd hj (Finset.notMem_empty j)) with
-            top := some 0, own := some (cfg.idOf cfg.genesis) }
+            top := some 0, own := some (cfg.idOf cfg.genesis), recovering := false }
         refine hset s₀ ?_ hp ?_
         · simp only [Node.step, dif_pos h₂, if_pos h₁]
           try rfl
@@ -285,9 +284,10 @@ theorem step_keeps {s : State Validator BlockId Payload} {inp : Input Validator 
       · exact Or.inr ((Grows.flush (cfg := cfg) (s.pending.length + 1) s.disk
           ((id, b) :: s.pending)).1 hy)
     · rw [step_deliver_not hc]; exact hy
-  | timer r => exact hset { s with fired := fire s r } (step_timer_eq s r) hp hy
+  | timer r =>
+    exact hset { s with fired := fire s r, recovering := false } (step_timer_eq s r) hp hy
   | fetchRequest peer r ids => exact hy
-  | restart => exact hy
+  | restart => exact hset { s with recovering := true } rfl hp hy
 
 /-- **A block becomes pending only by being delivered**, and only when the
 node acts on the delivery. -/
@@ -308,7 +308,7 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
           { keep s (cfg.idOf cfg.genesis) cfg.genesis h₂.1
               (fun _ hj => absurd hj (Finset.notMem_empty _))
               (fun j hj => absurd hj (Finset.notMem_empty j)) with
-              top := some 0, own := some (cfg.idOf cfg.genesis) }
+              top := some 0, own := some (cfg.idOf cfg.genesis), recovering := false }
         exact fun e he => Or.inl (settle_sub (cfg := cfg) s₀ e he)
       · simp only [Node.step, dif_neg h₂, if_pos h₁]
         exact fun e he => Or.inl he
@@ -330,9 +330,9 @@ theorem step_sub (s : State Validator BlockId Payload) (inp : Input Validator Bl
   | timer r =>
     rw [step_timer_fst]
     exact fun e he => Or.inl
-      (settle_sub (cfg := cfg) { s with fired := fire s r } e he)
+      (settle_sub (cfg := cfg) { s with fired := fire s r, recovering := false } e he)
   | fetchRequest peer r ids => exact fun e he => Or.inl he
-  | restart => exact fun e he => Or.inl he
+  | restart => exact fun e he => Or.inl (settle_sub (cfg := cfg) { s with recovering := true } e he)
 
 omit [Fintype Validator] in
 /-- **What building persists is on the disk after it.** -/
@@ -456,7 +456,7 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
           { keep s (cfg.idOf cfg.genesis) cfg.genesis h₂.1
               (fun _ hj => absurd hj (Finset.notMem_empty _))
               (fun j hj => absurd hj (Finset.notMem_empty j)) with
-              top := some 0, own := some (cfg.idOf cfg.genesis) }
+              top := some 0, own := some (cfg.idOf cfg.genesis), recovering := false }
         have he : Node.step cfg s .start =
             ((Node.settle cfg s₀).1, built cfg [(cfg.idOf cfg.genesis, cfg.genesis)] ++
               (Node.settle cfg s₀).2) := by
@@ -478,9 +478,9 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
     intro e he
     rw [step_timer_fst]
     rcases step_timer_snd (cfg := cfg) s r with h | h <;> rw [h] at he
-    · exact settle_persist { s with fired := fire s r } e he
+    · exact settle_persist { s with fired := fire s r, recovering := false } e he
     · rw [persists_append, persists_resend, List.append_nil] at he
-      exact settle_persist { s with fired := fire s r } e he
+      exact settle_persist { s with fired := fire s r, recovering := false } e he
   | fetchRequest peer r ids =>
     intro e he
     change e ∈ persists (answer cfg s peer r ids) at he
@@ -489,9 +489,11 @@ theorem step_persist {s : State Validator BlockId Payload} {inp : Input Validato
     simp at he
   | restart =>
     intro e he
-    change e ∈ persists (Node.resend cfg s ++ Node.rearm cfg s) at he
-    rw [persists_append, persists_resend, persists_rearm, List.append_nil] at he
-    exact absurd he List.not_mem_nil
+    change e ∈ persists (Node.resend cfg s ++ Node.rearm cfg s ++
+      (Node.settle cfg { s with recovering := true }).2) at he
+    rw [persists_append, persists_append, persists_resend, persists_rearm, List.nil_append,
+      List.nil_append] at he
+    exact settle_persist { s with recovering := true } e he
 
 variable (cfg) in
 /-- No pending block is ready. -/
@@ -539,7 +541,7 @@ theorem noReady_step {s : State Validator BlockId Payload} (h : NoReady cfg s)
     · rw [step_deliver_not hc]; exact h
   | timer r => rw [step_timer_fst]; exact noReady_settle _
   | fetchRequest peer r ids => exact h
-  | restart => exact h
+  | restart => exact noReady_settle _
 
 /-- **A delivery the node acts on keeps a fitting block it delivers**
 pending or on disk. -/

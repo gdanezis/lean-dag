@@ -103,7 +103,7 @@ def Timed (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Live.TimeMono tr time → Live.DeliveredWithin cfg T tr time gst Δ t₁ →
     Live.TimersAfterSet cfg H tr time → Live.SyncedWithin cfg H T tr time gst Δₛ t₁ →
-    Live.StartedBy T tr time gst →
+    Live.StartedBy T tr time gst → Live.UpFrom T tr time 0 →
     Waves cfg T tr time gst (Δ + Δₛ) t₁ U ∧ Leads cfg T tr time gst (Δ + Δₛ) t₁ U
 
 /-- **With crashes**: under the assumptions of `Live.Recovers`, `U` has

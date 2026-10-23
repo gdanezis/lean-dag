@@ -111,7 +111,9 @@ theorem armsBy_step (s : State Validator BlockId Payload) (inp : Input Validator
     · exact ArmsBy.congr rfl (armsBy_quiesce _ _) (List.Subset.refl _)
     · exact ArmsBy.congr rfl (armsBy_quiesce _ _) (List.subset_append_left _ _)
   | fetchRequest p r ids => exact ArmsBy.of_armed rfl
-  | restart => exact ArmsBy.of_armed rfl
+  | restart =>
+    exact ArmsBy.congr (x := { s with recovering := true }) rfl (armsBy_quiesce _ _)
+      (List.subset_append_right _ _)
 
 variable (cfg) in
 /-- **The top round is armed once the memory holds a quorum of it.** -/
@@ -296,8 +298,8 @@ theorem topTimerBy_of_up (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr
     · obtain ⟨htk, hak'⟩ := hat k hak hkE.le
       refine hmax k hak hkE (by rw [hk]; rfl) ?_
       rw [outputsAt_eq hk]
-      change _ ∈ Node.resend (cfg.at v) _ ++ Node.rearm (cfg.at v) _
-      refine List.mem_append_right _ ?_
+      change _ ∈ Node.resend (cfg.at v) _ ++ Node.rearm (cfg.at v) _ ++ _
+      refine List.mem_append_left _ (List.mem_append_right _ ?_)
       simp [Node.rearm, htk, hak', Config.at]
     · have := hup k v hk hv
       have := (lt_eventsBy hmono hkl).not.mp hkE

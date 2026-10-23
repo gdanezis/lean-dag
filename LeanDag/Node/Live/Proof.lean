@@ -130,7 +130,9 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
     exact hcard.trans (Finset.card_le_card (Grows.authorsAt (grows_before v hτE) n))
   obtain ⟨j₁, hj₁, hj₁i, hj₁r, hj₁c⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E n hZt
   -- so it builds, against its being settled
-  have hsome := tryBuild_isSome (cfg := cfg.at v) hZt (Or.inl hfired) hcardE
+  have hsome := tryBuild_isSome (cfg := cfg.at v) hZt
+    (harr.recovered (by omega) v hv E (eventsBy_mono (tr := tr) (time := time) (by omega)))
+    (Or.inl hfired) hcardE
     (fun j hj => by rw [hj₁] at hj; cases hj; exact ⟨hj₁i, hj₁r, hj₁c⟩)
     (fun R => fresh_before hid htime (hTH hv) hZt R)
     ((Converge.floor_before hZt).trans (Nat.sub_le _ _))
@@ -265,8 +267,8 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
 /-- **The reliable nodes produce rounds and decide.** -/
 theorem progresses : Progresses := by
   intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hf hTH hqT hcT
-    hq hid hto htime hinj hmono hdel hfire hwait hsync hstart
-  have harr := arrival_of_delivered hσ hadm hf htime hinj hTH hmono hdel hsync
+    hq hid hto htime hinj hmono hdel hfire hwait hsync hstart hup
+  have harr := arrival_of_delivered hσ hadm hf htime hinj hTH hmono hdel hsync hup
   have hp := produces hσ hadm hf hTH hqT hq hid htime hinj hmono harr
     (TopTimerBy.of_fire hmono hfire) hstart
   have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr hwait hstart

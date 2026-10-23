@@ -435,7 +435,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         exact hset { keep s (cfg.idOf cfg.genesis) cfg.genesis h₂.1
             (fun _ hj => absurd hj (Finset.notMem_empty _))
             (fun j hj => absurd hj (Finset.notMem_empty j)) with
-            top := some 0, own := some gid }
+            top := some 0, own := some gid, recovering := false }
           (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)]) (h.keeps rfl hk) hcst hp
           (commitsOf_built _) (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
       · exact hsame (by simp only [Node.step, dif_neg h₂, if_pos h₁])
@@ -460,8 +460,8 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   | timer r =>
     rw [persists_step_timer] at hb
     rw [step_timer_fst, commitsOf_step_timer]
-    exact (h.keeps (s' := { s with fired := fire s r }) rfl (Keeps.refl _)).settle
-      hg hσ ht hc hp hb
+    exact (h.keeps (s' := { s with fired := fire s r, recovering := false }) rfl
+      (Keeps.refl _)).settle hg hσ ht hc hp hb
   | fetchRequest peer r ids =>
     rw [show Node.step cfg s (.fetchRequest peer r ids) = (s, answer cfg s peer r ids) from rfl]
     have : commitsOf (answer cfg s peer r ids) = [] := by
@@ -471,10 +471,10 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     rw [this, List.append_nil]
     exact ⟨h, hc⟩
   | restart =>
-    show CommitInv cfg U s (cs ++ commitsOf (Node.resend cfg s ++ Node.rearm cfg s)) ∧
-      IsCut U s.disk
-    rw [commitsOf_append, commitsOf_resend, commitsOf_rearm, List.append_nil, List.append_nil]
-    exact ⟨h, hc⟩
+    rw [persists_step_restart] at hb
+    rw [step_restart_fst, commitsOf_step_restart]
+    exact (h.keeps (s' := { s with recovering := true }) rfl (Keeps.refl _)).settle
+      hg hσ ht hc hp hb
 
 /-- **A run keeps the invariant**, at a record grounding what the node knew. -/
 theorem CommitInv.run (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)

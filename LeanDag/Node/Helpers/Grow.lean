@@ -89,7 +89,7 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     · exact Grows.refl s.disk
   | timer r => rw [step_timer_fst]; exact Grows.settle_of _ rfl
   | fetchRequest peer r ids => exact Grows.refl _
-  | restart => exact Grows.refl _
+  | restart => exact Grows.settle_of { s with recovering := true } rfl
 
 end Node
 

@@ -34,7 +34,7 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
     · rw [step_deliver_not hA]; exact Or.inl rfl
   | timer r => rw [step_timer_fst]; exact Or.inr ⟨_, rfl⟩
   | fetchRequest p r ids => exact Or.inl rfl
-  | restart => exact Or.inl rfl
+  | restart => exact Or.inr ⟨_, rfl⟩
 
 /-! ## What only rises -/
 
@@ -59,7 +59,7 @@ theorem rises_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     · rename_i s₁ out hb
       obtain ⟨r, -, -, -, -, -, hr, -, -, -, -, -, ht₁, -, hlo, -⟩ := tryBuild_some hb
       refine Rises.trans ⟨?_, ?_, ?_⟩ (rises_progress fuel s₁)
-      · rw [hr, ht₁]; simp
+      · rw [ht₁]; exact hr.2.1.trans (Nat.le_succ r)
       · rw [ht₁]; exact fun _ => rfl
       · rw [hlo]
     · exact Rises.refl s
@@ -103,7 +103,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
           { keep s (cfg.idOf cfg.genesis) cfg.genesis h₂.1
               (fun _ hj => absurd hj (Finset.notMem_empty _))
               (fun j hj => absurd hj (Finset.notMem_empty j)) with
-              top := some 0, own := some gid }
+              top := some 0, own := some gid, recovering := false }
         refine hset s₀ ⟨by rw [h₁.1]; simp [s₀], fun _ => rfl, le_rfl⟩
           (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
       · rw [show (Node.step cfg s .start).1 = s by simp only [Node.step, dif_neg h₂, if_pos h₁]]
@@ -116,9 +116,11 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
       simp only [Rises, afterFlush_top, afterFlush_lo]
       exact ⟨le_rfl, fun h => h, le_rfl⟩
     · rw [step_deliver_not hA]; exact Rises.refl s
-  | timer r => exact hset { s with fired := fire s r } ⟨le_rfl, id, le_rfl⟩ (step_timer_fst s r)
+  | timer r =>
+    exact hset { s with fired := fire s r, recovering := false } ⟨le_rfl, id, le_rfl⟩
+      (step_timer_fst s r)
   | fetchRequest p r ids => exact Rises.refl s
-  | restart => exact Rises.refl s
+  | restart => exact hset { s with recovering := true } ⟨le_rfl, id, le_rfl⟩ rfl
 
 /-! ## Along a trace -/
 

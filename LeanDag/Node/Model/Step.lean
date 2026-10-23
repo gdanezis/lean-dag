@@ -33,6 +33,13 @@ input `i` in the state `s`: the new state and the outputs.
   author pass them, it takes those, with its own block for itself
   (`refsAt`). It is persisted, then broadcast, and the retry timer is
   set: the timer of the round below it, for twice that round's timeout.
+* **The jump** (`jumpRound`): a node that restarted, until it builds or
+  a timer fires (`State.recovering`), builds above the highest round `r`
+  above its top at which the memory holds `q` authors and is behind,
+  with no block of its own among the references, once no pending block
+  lies above round `r + 1` and the references pass the reach and
+  certificate tests. Without such a round it builds above its top, once
+  no pending block lies above the round it builds.
 * **Timers** (`arm`): the timer of the node's top round is set once the
   memory holds `q` authors of that round, so a node that gets ahead of a
   quorum does not start waiting before the quorum is there. After a
@@ -48,9 +55,10 @@ input `i` in the state `s`: the new state and the outputs.
   their histories, less the blocks a node at round `r` holds whatever it
   built on (`coreThreshold`, `pruned`).
 * **Resending** (`resend`): when the retry timer, or the top round's,
-  fires and the node does not build, and when it restarts, the node
-  broadcasts its top block again, sets the retry timer again, and asks
-  again for the missing histories of its pending blocks (`refetch`). A
+  fires and the node does not build, and when it restarts, before it
+  settles, the node broadcasts its top block again, sets the retry timer
+  again, and asks again for the missing histories of its pending blocks
+  (`refetch`). A
   node with a quorum of its round builds within its timeout and the time
   the quorum takes to arrive, before the retry timer fires, so it resends
   only when it is stuck. A crash loses the messages sent to a node while
@@ -99,6 +107,8 @@ structure State where
   decided : List (ℕ × Option BlockId)
   /-- The round whose timer is set. -/
   armed : Option ℕ
+  /-- Restarted, and since neither built nor had a timer fire. -/
+  recovering : Bool
 
 variable (cfg : Config Validator BlockId Payload)
 
@@ -108,7 +118,7 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
   ⟨Store.empty cfg.genesis, Store.empty cfg.genesis, 0, Store.Mirrors.empty, [], none, none, ∅, 0,
-    [], none⟩
+    [], none, false⟩
 
 /-- **Keep a block**: on disk, and in memory if its round is the floor or
 above. -/
@@ -230,23 +240,51 @@ def release (s : State Validator BlockId Payload) : State Validator BlockId Payl
       mirrors := s.mirrors.above h.le }
   else s
 
-/-- **Build the next round**, if the build rule allows it, and release the
-memory below the lowest round the node then reads. -/
+/-- The highest round of a pending block, `0` without one. -/
+def pendingTop (s : State Validator BlockId Payload) : ℕ :=
+  (s.pending.map (·.2.round)).foldr max 0
+
+/-- **The round a recovering node builds above**: the highest round above
+`t` at which the store `st` holds `q` authors and is behind, or `t`. -/
+def jumpRound (st : Store Validator BlockId Payload) (t : ℕ) : ℕ :=
+  ((List.range (st.topRound + 1)).filter fun r =>
+    decide (t < r ∧ cfg.q ≤ (st.authorsAt r).card ∧ behind cfg st r)).foldr max t
+
+/-- **Build the round above `r`**, referencing the node's own block `o`
+there, if the build rule allows it, and release the memory below the
+lowest round the node then reads. -/
+def buildAbove (s : State Validator BlockId Payload) (r : ℕ) (o : Option BlockId) :
+    Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
+  let refs := refsAt cfg s.memory r o
+  if cfg.q ≤ (s.memory.authorsAt r).card ∧ (r ∈ s.fired ∨ behind cfg s.memory r ∨
+      (reachReady cfg s.memory refs r ∧ certReady cfg s.memory refs r)) then
+    let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, refs, cfg.payload (r + 1)⟩
+    let id := cfg.idOf b
+    if h : id ∉ s.disk.ids ∧ s.memory.Checks cfg.q id b then
+      let s' := keep s id b h.1 (s.mirrors.checks_disk h.2).1 (s.mirrors.checks_disk h.2).2.1
+      some (release cfg { s' with top := some (r + 1), own := some id, recovering := false },
+        [.persist id b, .broadcast id b, .setTimer r (2 * cfg.timeout r)])
+    else none
+  else none
+
+/-- **Build the next round**: above the node's top, referencing its own
+block there; while recovering, above `jumpRound` with no own reference if
+that round is above the top, and in either case only once no pending block
+lies above the round built. -/
 def tryBuild (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
   match s.top with
-  | some r =>
-    let refs := refsAt cfg s.memory r s.own
-    if cfg.q ≤ (s.memory.authorsAt r).card ∧ (r ∈ s.fired ∨ behind cfg s.memory r ∨
-        (reachReady cfg s.memory refs r ∧ certReady cfg s.memory refs r)) then
-      let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, refs, cfg.payload (r + 1)⟩
-      let id := cfg.idOf b
-      if h : id ∉ s.disk.ids ∧ s.memory.Checks cfg.q id b then
-        let s' := keep s id b h.1 (s.mirrors.checks_disk h.2).1 (s.mirrors.checks_disk h.2).2.1
-        some (release cfg { s' with top := some (r + 1), own := some id },
-          [.persist id b, .broadcast id b, .setTimer r (2 * cfg.timeout r)])
-      else none
-    else none
+  | some t =>
+    if s.recovering then
+      let r := jumpRound cfg s.memory t
+      if t < r then
+        if pendingTop s ≤ r + 1 ∧
+            reachReady cfg s.memory (refsAt cfg s.memory r none) r = true ∧
+            certReady cfg s.memory (refsAt cfg s.memory r none) r = true then
+          buildAbove cfg s r none
+        else none
+      else if pendingTop s ≤ t + 1 then buildAbove cfg s t s.own else none
+    else buildAbove cfg s t s.own
   | none => none
 
 /-- **Build while the rule allows**, at most `fuel` rounds. -/
@@ -438,10 +476,6 @@ def quiesce : ℕ → State Validator BlockId Payload →
     if r.1.top = s.top ∧ r.1.pending.length = s.pending.length ∧ r.1.lo = s.lo then r
     else let r' := quiesce fuel r.1; (r'.1, r.2 ++ r'.2)
 
-/-- The highest round of a pending block, `0` without one. -/
-def pendingTop (s : State Validator BlockId Payload) : ℕ :=
-  (s.pending.map (·.2.round)).foldr max 0
-
 /-- **The passes a settle takes at most**: each but the last raises the
 top or the next undecided slot, or leaves fewer blocks pending, within
 bounds the state fixes. -/
@@ -471,7 +505,7 @@ def step (s : State Validator BlockId Payload) :
       if h : id ∉ s.disk.ids ∧ rowValid cfg.q (Function.update s.disk.blk id b) b then
         let s' := keep s id b h.1 (fun _ hj => absurd hj (Finset.notMem_empty _))
           (fun j hj => absurd hj (Finset.notMem_empty j))
-        let r := settle cfg { s' with top := some 0, own := some id }
+        let r := settle cfg { s' with top := some 0, own := some id, recovering := false }
         (r.1, [.persist id b, .broadcast id b, .setTimer 0 (2 * cfg.timeout 0)] ++ r.2)
       else (s, [])
     else (s, [])
@@ -484,12 +518,14 @@ def step (s : State Validator BlockId Payload) :
       (r.1, (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss]) ++ r.2)
     else (s, [])
   | .timer r =>
-    let res := settle cfg { s with fired := fire s r }
+    let res := settle cfg { s with fired := fire s r, recovering := false }
     if res.1.top = s.top ∧ (s.top = some r ∨ s.top = some (r + 1)) then
       (res.1, res.2 ++ resend cfg res.1)
     else res
   | .fetchRequest peer r ids => (s, answer cfg s peer r ids)
-  | .restart => (s, resend cfg s ++ rearm cfg s)
+  | .restart =>
+    let r := settle cfg { s with recovering := true }
+    (r.1, resend cfg s ++ rearm cfg s ++ r.2)
 
 end Node
 

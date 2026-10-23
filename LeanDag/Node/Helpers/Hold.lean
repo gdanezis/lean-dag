@@ -182,7 +182,7 @@ theorem step_stays {s : State Validator BlockId Payload}
           · exact absurd ⟨hid, hcr, hin, hp⟩ hAd
   | timer r => rw [step_timer_fst]; exact settle_stays (hst.elim id fun h => by cases h.1)
   | fetchRequest p r ids => exact hst.elim id fun h => by cases h.1
-  | restart => exact hst.elim id fun h => by cases h.1
+  | restart => rw [step_restart_fst]; exact settle_stays (hst.elim id fun h => by cases h.1)
 
 /-! ## Holding a closed set -/
 

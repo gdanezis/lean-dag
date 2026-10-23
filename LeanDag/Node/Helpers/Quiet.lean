@@ -97,41 +97,41 @@ theorem below_topRound {R : ℕ} {s : State Validator BlockId Payload}
   · exact h.2
 
 omit [Fintype Validator] in
-/-- **A build within a settle** is at a top at most `R`, for a quorum of
-two or more. -/
+/-- **A build within a settle** is above a round at most `R`, for a quorum
+of two or more. -/
 theorem below_build {R : ℕ} (hq : 2 ≤ cfg.q) {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : InK (Below cfg R) s)
-    (hb : Node.tryBuild cfg s = some (s', out)) : ∃ r, s.top = some r ∧ r ≤ R := by
-  unfold Node.tryBuild at hb
+    (hb : Node.tryBuild cfg s = some (s', out)) :
+    ∃ r, s'.top = some (r + 1) ∧ s.top.getD 0 ≤ r ∧ r ≤ R := by
+  obtain ⟨t, r, o, ht, hb, hro⟩ := tryBuild_cases hb
+  obtain ⟨-, -, -, -, -, -, -, -, -, -, -, htop, -⟩ := buildAbove_some hb
+  refine ⟨r, htop, by rw [ht]; rcases hro with ⟨rfl, -⟩ | ⟨-, hlt, -⟩ <;> simp <;> omega, ?_⟩
+  unfold buildAbove at hb
+  dsimp only at hb
   split at hb
-  · rename_i r hr
-    refine ⟨r, hr, ?_⟩
-    dsimp only at hb
-    split at hb
-    · rename_i hc
-      have hc := hc.1.trans (Finset.card_le_card (s.mirrors.authorsAt_sub r))
-      rw [Store.authorsAt_eq] at hc
-      -- a second author at round `r`
-      have h2 : 1 < (authorsIn s.disk.toRecord s.disk.ids r).card := by omega
-      obtain ⟨a, ha, b, hb', hab⟩ := Finset.one_lt_card.mp h2
-      have hne : a ≠ cfg.me ∨ b ≠ cfg.me := by
-        rcases Classical.em (a = cfg.me) with ha' | ha'
-        · exact Or.inr fun hb'' => hab (ha'.trans hb''.symm)
-        · exact Or.inl ha'
-      rcases hne with hne | hne
-      · obtain ⟨j, hj, hjr, hjc⟩ := mem_authorsIn.mp ha
-        have hjs : j ∈ s.disk.ids := hj
-        rcases below_blk h hjs with h' | h'
-        · have : (s.disk.blk j).round = r := hjr
-          omega
-        · exact absurd (hjc ▸ h'.1) hne
-      · obtain ⟨j, hj, hjr, hjc⟩ := mem_authorsIn.mp hb'
-        have hjs : j ∈ s.disk.ids := hj
-        rcases below_blk h hjs with h' | h'
-        · have : (s.disk.blk j).round = r := hjr
-          omega
-        · exact absurd (hjc ▸ h'.1) hne
-    · exact absurd hb (by simp)
+  · rename_i hc
+    have hc := hc.1.trans (Finset.card_le_card (s.mirrors.authorsAt_sub r))
+    rw [Store.authorsAt_eq] at hc
+    -- a second author at round `r`
+    have h2 : 1 < (authorsIn s.disk.toRecord s.disk.ids r).card := by omega
+    obtain ⟨a, ha, b, hb', hab⟩ := Finset.one_lt_card.mp h2
+    have hne : a ≠ cfg.me ∨ b ≠ cfg.me := by
+      rcases Classical.em (a = cfg.me) with ha' | ha'
+      · exact Or.inr fun hb'' => hab (ha'.trans hb''.symm)
+      · exact Or.inl ha'
+    rcases hne with hne | hne
+    · obtain ⟨j, hj, hjr, hjc⟩ := mem_authorsIn.mp ha
+      have hjs : j ∈ s.disk.ids := hj
+      rcases below_blk h hjs with h' | h'
+      · have : (s.disk.blk j).round = r := hjr
+        omega
+      · exact absurd (hjc ▸ h'.1) hne
+    · obtain ⟨j, hj, hjr, hjc⟩ := mem_authorsIn.mp hb'
+      have hjs : j ∈ s.disk.ids := hj
+      rcases below_blk h hjs with h' | h'
+      · have : (s.disk.blk j).round = r := hjr
+        omega
+      · exact absurd (hjc ▸ h'.1) hne
   · exact absurd hb (by simp)
 
 omit [Fintype Validator] in
@@ -152,9 +152,10 @@ theorem progress_below (hq : 2 ≤ cfg.q) {R : ℕ} : ∀ (fuel : ℕ) {s : Stat
     · simp only [Node.progress, hb]
       exact ⟨h, fun e he => by simp [persists] at he, by simp⟩
     · simp only [Node.progress, hb]
-      obtain ⟨r, hr, hrR⟩ := below_build hq h hb
-      obtain ⟨r', id, b, -, -, -, hr', hbr, hbc, -, -, -, htop, -, -, hout⟩ := tryBuild_some hb
-      have hrr : r' = r := by rw [hr] at hr'; exact (Option.some.inj hr').symm
+      obtain ⟨r, htop', hsr, hrR⟩ := below_build hq h hb
+      obtain ⟨r', id, b, -, -, -, -, hbr, hbc, -, -, -, htop, -, -, hout⟩ := tryBuild_some hb
+      have hrr : r' = r := by
+        rw [htop'] at htop; have := Option.some.inj htop; omega
       have hbR : b.round ≤ R + 1 := by rw [hbr, hrr]; omega
       have hout' : ∀ e ∈ persists out, e ∈ Below cfg R := by
         intro e he
@@ -166,12 +167,10 @@ theorem progress_below (hq : 2 ≤ cfg.q) {R : ℕ} : ∀ (fuel : ℕ) {s : Stat
       have h₁ := h.tryBuild hb hout'
       obtain ⟨h₂, hK₂, ht₂⟩ := progress_below hq fuel h₁
       have hs₁ : s₁.top.getD 0 = r + 1 := by rw [htop, hrr]; rfl
-      have hs : s.top.getD 0 = r := by rw [hr]; rfl
       refine ⟨h₂, fun e he => ?_, Or.inr ?_⟩
       · rw [persists_append] at he
         exact (List.mem_append.mp he).elim (hout' e) (hK₂ e)
-      · rw [hs]
-        rcases ht₂ with ht₂ | ⟨ht₂, ht₂'⟩
+      · rcases ht₂ with ht₂ | ⟨ht₂, ht₂'⟩
         · rw [ht₂, hs₁]; omega
         · rw [hs₁] at ht₂'; exact ⟨ht₂, by omega⟩
 
@@ -395,8 +394,7 @@ theorem progress_top : ∀ (n : ℕ) {s : State Validator BlockId Payload} {t : 
     · simp only [Node.progress, hb]; exact ⟨t, le_rfl, h⟩
     · simp only [Node.progress, hb]
       obtain ⟨r, -, -, -, -, -, hr, -, -, -, -, -, htop, -⟩ := tryBuild_some hb
-      rw [h, Option.some.injEq] at hr
-      subst hr
+      have htr : t ≤ r := by have := hr.2.1; rw [h] at this; exact this
       obtain ⟨t', ht', ht''⟩ := progress_top n htop
       exact ⟨t', by omega, ht''⟩
 
@@ -411,26 +409,29 @@ theorem progress_none {n : ℕ} {s : State Validator BlockId Payload}
     simp only [Node.progress, hb] at h
     obtain ⟨r, -, -, -, -, -, hr, -, -, -, -, -, htop, -⟩ := tryBuild_some hb
     obtain ⟨t', ht', ht''⟩ := progress_top (cfg := cfg) n htop
-    rw [ht'', hr, Option.some.injEq] at h
+    obtain ⟨t, ht⟩ := Option.isSome_iff_exists.mp hr.1
+    have htr : t ≤ r := by have := hr.2.1; rw [ht] at this; exact this
+    rw [ht'', ht, Option.some.injEq] at h
     omega
 
 omit [Fintype Validator] in
 /-- Whether the node can build reads only its disk, memory, top, own
-block and fired timers. -/
+block, fired timers, pending blocks and whether it recovers. -/
 theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
     (h : Node.tryBuild cfg s = none) (hst : s'.disk = s.disk) (hm : s'.memory = s.memory)
-    (ht : s'.top = s.top) (ho : s'.own = s.own) (hf : s'.fired = s.fired) :
+    (ht : s'.top = s.top) (ho : s'.own = s.own) (hf : s'.fired = s.fired)
+    (hrc : s'.recovering = s.recovering) (hp : s'.pending = s.pending) :
     Node.tryBuild cfg s' = none := by
-  obtain ⟨st, mem, fl, mir, pd, top, own, fired, lo, dc, ar⟩ := s
-  obtain ⟨st', mem', fl', mir', pd', top', own', fired', lo', dc', ar'⟩ := s'
-  simp only at hst hm ht ho hf
-  subst hst hm ht ho hf
-  unfold Node.tryBuild at h ⊢
+  obtain ⟨st, mem, fl, mir, pd, top, own, fired, lo, dc, ar, rc⟩ := s
+  obtain ⟨st', mem', fl', mir', pd', top', own', fired', lo', dc', ar', rc'⟩ := s'
+  simp only at hst hm ht ho hf hrc hp
+  subst hst hm ht ho hf hrc hp
+  unfold Node.tryBuild Node.buildAbove Node.pendingTop at h ⊢
   cases top' with
   | none => rfl
   | some r =>
     dsimp only at h ⊢
-    split_ifs at h ⊢ with h₁ h₂ <;> simp_all
+    split_ifs at h ⊢ <;> simp_all
 
 variable (cfg) in
 /-- **A settled state**: it can build nothing, no pending block is ready,
@@ -449,7 +450,7 @@ theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
     Settled cfg (Node.advance cfg s).1 := by
   suffices hp : Settled cfg (Node.pass cfg s).1 from
     ⟨tryBuild_none_of hp.build (advance_disk s) (advance_memory s) (advance_top s)
-        (advance_own s) (advance_fired s),
+        (advance_own s) (advance_fired s) (advance_recovering s) (advance_pending s),
       by unfold NoReady; rw [advance_pending, advance_disk]; exact hp.ready,
       by rw [advance_lo, advance_disk, advance_floor, advance_memory]; exact hp.decided⟩
   obtain ⟨htop, hpend, hlo⟩ := (stops_iff s).1 h

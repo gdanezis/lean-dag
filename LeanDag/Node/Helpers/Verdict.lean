@@ -154,7 +154,7 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
         exact hset { keep s (cfg.idOf cfg.genesis) cfg.genesis h₂.1
             (fun _ hj => absurd hj (Finset.notMem_empty _))
             (fun j hj => absurd hj (Finset.notMem_empty j)) with
-            top := some 0, own := some gid }
+            top := some 0, own := some gid, recovering := false }
           (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)]) hcst hp
           (commitsOf_built _) (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
       · exact hsame (by simp only [Node.step, dif_neg h₂, if_pos h₁])
@@ -185,9 +185,9 @@ theorem IsCut.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     rw [List.filterMap_map] at he
     simp at he
   | restart =>
-    show IsCut U s.disk ∧ ∀ e ∈ commitsOf (Node.resend cfg s ++ Node.rearm cfg s), Verdict cfg U e
-    rw [commitsOf_append, commitsOf_resend, commitsOf_rearm, List.append_nil]
-    exact ⟨hc, fun e he => absurd he List.not_mem_nil⟩
+    rw [persists_step_restart] at hb
+    rw [step_restart_fst, commitsOf_step_restart]
+    exact (hc : IsCut U { s with recovering := true }.disk).settle hg hσ ht hp hb
 
 end Node
 

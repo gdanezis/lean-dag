@@ -174,6 +174,29 @@ omit [Fintype Validator] in
 @[simp] theorem flush_armed : (flush cfg fuel s).armed = s.armed :=
   (flush_eq fuel s).2.2.2.2.2.2.2.2
 
+omit [Fintype Validator] in
+theorem foldl_accept_recovering (l : List (BlockId × Block Validator BlockId Payload)) :
+    ∀ s : State Validator BlockId Payload,
+      (l.foldl (fun s e => accept cfg s e.1 e.2) s).recovering = s.recovering := by
+  induction l with
+  | nil => intro s; rfl
+  | cons e l ih =>
+    intro s
+    rw [List.foldl_cons, ih]
+    unfold accept
+    split <;> rfl
+
+omit [Fintype Validator] in
+@[simp] theorem flush_recovering : (flush cfg fuel s).recovering = s.recovering := by
+  induction fuel generalizing s with
+  | zero => rfl
+  | succ fuel ih =>
+    unfold flush
+    dsimp only
+    split
+    · rfl
+    · rw [ih]; exact foldl_accept_recovering _ s
+
 end Flush
 
 section Release
@@ -206,6 +229,9 @@ omit [Fintype Validator] in
   (release_eq s).2.2.2.2.2.2.1
 omit [Fintype Validator] in
 @[simp] theorem release_armed : (release cfg s).armed = s.armed := (release_eq s).2.2.2.2.2.2.2
+omit [Fintype Validator] in
+@[simp] theorem release_recovering : (release cfg s).recovering = s.recovering := by
+  unfold release; split <;> rfl
 
 omit [Fintype Validator] in
 theorem release_floor : (release cfg s).floor = max s.floor (floorOf cfg s) := by

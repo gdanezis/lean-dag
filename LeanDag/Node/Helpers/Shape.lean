@@ -40,59 +40,80 @@ theorem Silent.of_quiet {x : List (Output Validator BlockId Payload)}
 omit [Fintype Validator] in
 theorem tryBuild_fired {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
-    s'.fired = s.fired := by
-  unfold tryBuild at h
+    s'.fired = s.fired ∧ s'.recovering = false := by
+  obtain ⟨_, _, _, -, h, -⟩ := tryBuild_cases h
+  unfold buildAbove at h
+  dsimp only at h
   split at h
-  · dsimp only at h
-    split at h
-    · split at h
-      · rw [Option.some.injEq, Prod.mk.injEq] at h
-        obtain ⟨rfl, -⟩ := h
-        exact release_fired _
-      · cases h
+  · split at h
+    · rw [Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, -⟩ := h
+      exact ⟨release_fired _, release_recovering _⟩
     · cases h
   · cases h
 
 omit [Fintype Validator] in
-/-- **Building** keeps the fired timers, and builds
-every round above the top it starts at up to the top it reaches, above
-that top. -/
+theorem decideStep_recovering (s : State Validator BlockId Payload) :
+    (Node.decideStep cfg s).1.recovering = s.recovering := by
+  unfold Node.decideStep
+  dsimp only
+  split
+  · exact release_recovering _
+  · rfl
+
+omit [Fintype Validator] in
+/-- **Building** keeps the fired timers; builds above the top it starts at;
+when it starts not recovering, builds every round up to the top it
+reaches and stays not recovering; and builds the top it reaches. -/
 theorem progress_shape : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     let p := Node.progress cfg fuel s
     p.1.fired = s.fired ∧ (s.top = none → p.1.top = none) ∧
       (∀ e ∈ persists p.2, s.top.getD 0 < e.2.round) ∧
-      (s.top.isSome → ∀ ρ, s.top.getD 0 < ρ → ρ ≤ p.1.top.getD 0 →
-        ∃ e ∈ persists p.2, e.2.round = ρ)
+      (s.top.isSome → s.recovering = false → ∀ ρ, s.top.getD 0 < ρ → ρ ≤ p.1.top.getD 0 →
+        ∃ e ∈ persists p.2, e.2.round = ρ) ∧
+      (s.recovering = false → p.1.recovering = false) ∧
+      (p.1.top ≠ s.top → ∃ e ∈ persists p.2, p.1.top = some e.2.round) ∧
+      (p.1.top ≠ s.top → p.1.recovering = false)
   | 0, s => ⟨rfl, id, fun e he => absurd he (by simp [Node.progress, persists]),
-      fun _ ρ h₁ h₂ => absurd h₂ (by simp [Node.progress]; omega)⟩
+      fun _ _ ρ h₁ h₂ => absurd h₂ (by simp [Node.progress]; omega), id,
+      fun h => absurd rfl h, fun h => absurd rfl h⟩
   | fuel + 1, s => by
     intro p
     unfold p Node.progress
     split
     · rename_i s₁ out hb
       obtain ⟨r, id, b, -, -, -, hr, hbr, -, -, -, -, ht₁, -, -, hout⟩ := tryBuild_some hb
-      have hf := tryBuild_fired hb
-      obtain ⟨ih₂, -, ih₃, ih₄⟩ := progress_shape fuel s₁
+      obtain ⟨hf, hrec₁⟩ := tryBuild_fired hb
+      obtain ⟨ih₂, -, ih₃, ih₄, ih₅, ih₆, -⟩ := progress_shape fuel s₁
       dsimp only
       have hp : persists (out ++ (Node.progress cfg fuel s₁).2) =
           (id, b) :: persists (Node.progress cfg fuel s₁).2 := by
         rw [persists_append, hout, persists_built]; rfl
-      refine ⟨ih₂.trans hf, (fun h => by rw [hr] at h; cases h), fun e he => ?_,
-        fun _ ρ h₁ h₂ => ?_⟩
+      have hsr : s.top.getD 0 ≤ r := hr.2.1
+      refine ⟨ih₂.trans hf, (fun h => by rw [h] at hr; exact absurd hr.1 (by simp)),
+        fun e he => ?_, fun _ hrec ρ h₁ h₂ => ?_, fun _ => ih₅ hrec₁, fun _ => ?_,
+        fun _ => ih₅ hrec₁⟩
       · rw [hp] at he
         rcases List.mem_cons.mp he with rfl | he
-        · rw [hr]; simp [hbr]
+        · simp only [hbr]; omega
         · have := ih₃ e he
-          rw [ht₁] at this; rw [hr]; simp only [Option.getD_some] at this ⊢; omega
+          rw [ht₁] at this; simp only [Option.getD_some] at this; omega
       · rw [hp]
-        rw [hr] at h₁
+        have hrt : s.top = some r := hr.2.2 hrec
+        rw [hrt] at h₁
         simp only [Option.getD_some] at h₁
         by_cases hρ : ρ = r + 1
         · exact ⟨(id, b), List.mem_cons_self .., by rw [hbr, hρ]⟩
-        · obtain ⟨e, he, her⟩ := ih₄ (by rw [ht₁]; rfl) ρ (by rw [ht₁]; simp; omega) h₂
+        · obtain ⟨e, he, her⟩ := ih₄ (by rw [ht₁]; rfl) hrec₁ ρ (by rw [ht₁]; simp; omega) h₂
           exact ⟨e, List.mem_cons_of_mem _ he, her⟩
+      · rw [hp]
+        by_cases hpt : (Node.progress cfg fuel s₁).1.top = s₁.top
+        · exact ⟨(id, b), List.mem_cons_self .., by rw [hpt, ht₁, hbr]⟩
+        · obtain ⟨e, he, het⟩ := ih₆ hpt
+          exact ⟨e, List.mem_cons_of_mem _ he, het⟩
     · exact ⟨rfl, id, fun e he => absurd he (by simp [persists]),
-        fun _ ρ h₁ h₂ => absurd h₂ (by simp only; omega)⟩
+        fun _ _ ρ h₁ h₂ => absurd h₂ (by simp only; omega), id, fun h => absurd rfl h,
+        fun h => absurd rfl h⟩
 
 omit [Fintype Validator] in
 theorem decideStep_shape (s : State Validator BlockId Payload) :
@@ -123,48 +144,61 @@ structure PassShape (s : State Validator BlockId Payload)
     (out : List (Output Validator BlockId Payload)) (s' : State Validator BlockId Payload) :
     Prop where
   above : ∀ e ∈ persists out, s.top.getD 0 < e.2.round
-  every : s.top.isSome → ∀ ρ, s.top.getD 0 < ρ → ρ ≤ s'.top.getD 0 →
+  every : s.top.isSome → s.recovering = false → ∀ ρ, s.top.getD 0 < ρ → ρ ≤ s'.top.getD 0 →
     ∃ e ∈ persists out, e.2.round = ρ
   timer : ∀ e ∈ persists out,
     Output.setTimer (e.2.round - 1) (2 * cfg.timeout (e.2.round - 1)) ∈ out
   fired : s.fired ⊆ s'.fired
   rises : Rises s s'
   none : s.top = none → s'.top = none
+  stays : s.recovering = false → s'.recovering = false
+  built : s'.top ≠ s.top → ∃ e ∈ persists out, s'.top = some e.2.round
+  clears : s'.top ≠ s.top → s'.recovering = false
 
 theorem PassShape.refl (s : State Validator BlockId Payload) : PassShape cfg s [] s :=
   ⟨fun e he => absurd he (by simp [persists]),
-    fun _ ρ h₁ h₂ => absurd h₂ (by omega), fun e he => absurd he (by simp [persists]),
-    subset_rfl, Rises.refl s, id⟩
+    fun _ _ ρ h₁ h₂ => absurd h₂ (by omega), fun e he => absurd he (by simp [persists]),
+    subset_rfl, Rises.refl s, id, id, fun h => absurd rfl h, fun h => absurd rfl h⟩
 
 theorem PassShape.trans {a b c : State Validator BlockId Payload}
     {o₁ o₂ : List (Output Validator BlockId Payload)} (h₁ : PassShape cfg a o₁ b)
     (h₂ : PassShape cfg b o₂ c) : PassShape cfg a (o₁ ++ o₂) c := by
   have hab := h₁.rises
   have hbc := h₂.rises
-  refine ⟨fun e he => ?_, fun hs ρ hρ₁ hρ₂ => ?_, fun e he => ?_,
-    h₁.fired.trans h₂.fired, hab.trans hbc, fun h => h₂.none (h₁.none h)⟩
+  refine ⟨fun e he => ?_, fun hs hrec ρ hρ₁ hρ₂ => ?_, fun e he => ?_,
+    h₁.fired.trans h₂.fired, hab.trans hbc, fun h => h₂.none (h₁.none h),
+    fun h => h₂.stays (h₁.stays h), fun hne => ?_, fun hne => ?_⟩
   · rw [persists_append] at he
     rcases List.mem_append.mp he with he | he
     · exact h₁.above e he
     · exact lt_of_le_of_lt hab.1 (h₂.above e he)
   · rw [persists_append]
     by_cases hρ : ρ ≤ b.top.getD 0
-    · obtain ⟨e, he, her⟩ := h₁.every hs ρ hρ₁ hρ
+    · obtain ⟨e, he, her⟩ := h₁.every hs hrec ρ hρ₁ hρ
       exact ⟨e, List.mem_append_left _ he, her⟩
-    · obtain ⟨e, he, her⟩ := h₂.every (hab.2.1 hs) ρ (by omega) hρ₂
+    · obtain ⟨e, he, her⟩ := h₂.every (hab.2.1 hs) (h₁.stays hrec) ρ (by omega) hρ₂
       exact ⟨e, List.mem_append_right _ he, her⟩
   · rw [persists_append] at he
     rcases List.mem_append.mp he with he | he
     · exact List.mem_append_left _ (h₁.timer e he)
     · exact List.mem_append_right _ (h₂.timer e he)
+  · rw [persists_append]
+    by_cases hcb : c.top = b.top
+    · obtain ⟨e, he, het⟩ := h₁.built (by rw [← hcb]; exact hne)
+      exact ⟨e, List.mem_append_left _ he, by rw [hcb, het]⟩
+    · obtain ⟨e, he, het⟩ := h₂.built hcb
+      exact ⟨e, List.mem_append_right _ he, het⟩
+  · by_cases hcb : c.top = b.top
+    · exact h₂.stays (h₁.clears (by rw [← hcb]; exact hne))
+    · exact h₂.clears hcb
 
 /-- **The shape of one pass.** -/
 theorem advance_shape (s : State Validator BlockId Payload) :
     PassShape cfg s (Node.advance cfg s).2 (Node.advance cfg s).1 := by
-  obtain ⟨p₂, p₀, p₃, p₄⟩ := progress_shape (cfg := cfg) (s.disk.topRound + 2) s
+  obtain ⟨p₂, p₀, p₃, p₄, p₅, p₆, p₇⟩ := progress_shape (cfg := cfg) (s.disk.topRound + 2) s
   obtain ⟨bs, hbs⟩ := progress_built (cfg := cfg) (s.disk.topRound + 2) s
   have hra := rises_advance (cfg := cfg) s
-  generalize hP : Node.progress cfg (s.disk.topRound + 2) s = P at p₂ p₀ p₃ p₄ hbs
+  generalize hP : Node.progress cfg (s.disk.topRound + 2) s = P at p₂ p₀ p₃ p₄ p₅ p₆ p₇ hbs
   obtain ⟨d₂, d₃, -, d₅⟩ := decideStep_shape (cfg := cfg) P.1
   generalize hD : Node.decideStep cfg P.1 = D at d₂ d₃ d₅
   have hadv : Node.pass cfg s = (flush cfg (D.1.pending.length + 1) D.1, P.2 ++ D.2) := by
@@ -173,11 +207,17 @@ theorem advance_shape (s : State Validator BlockId Payload) :
     rw [advance_snd, persists_append, persists_arm, List.append_nil, hadv, persists_append, hbs,
       persists_built, d₅.1]; simp
   have htop : (Node.advance cfg s).1.top = D.1.top := by rw [advance_top, hadv, flush_top]
-  refine ⟨fun e he => ?_, fun hs ρ h₁ h₂ => ?_, fun e he => ?_, ?_, hra, fun h => ?_⟩
+  have hrec : (Node.advance cfg s).1.recovering = P.1.recovering := by
+    rw [advance_recovering, hadv]
+    change (flush cfg (D.1.pending.length + 1) D.1).recovering = _
+    rw [flush_recovering, ← hD, decideStep_recovering]
+  refine ⟨fun e he => ?_, fun hs hr ρ h₁ h₂ => ?_, fun e he => ?_, ?_, hra, fun h => ?_,
+    fun h => by rw [hrec]; exact p₅ h, fun hne => ?_, fun hne => by
+      rw [hrec]; rw [htop, d₃] at hne; exact p₇ hne⟩
   · rw [hpers] at he
     exact p₃ e (by rw [hbs, persists_built]; exact he)
   · rw [hpers]
-    obtain ⟨e, he, her⟩ := p₄ hs ρ h₁ (by rw [htop, d₃] at h₂; exact h₂)
+    obtain ⟨e, he, her⟩ := p₄ hs hr ρ h₁ (by rw [htop, d₃] at h₂; exact h₂)
     rw [hbs, persists_built] at he
     exact ⟨e, he, her⟩
   · rw [hpers] at he
@@ -187,6 +227,10 @@ theorem advance_shape (s : State Validator BlockId Payload) :
     change s.fired ⊆ (flush cfg (D.1.pending.length + 1) D.1).fired
     rw [flush_fired, d₂, p₂]
   · rw [htop, d₃]; exact p₀ h
+  · rw [htop, d₃] at hne ⊢
+    obtain ⟨e, he, het⟩ := p₆ hne
+    rw [hbs, persists_built] at he
+    exact ⟨e, by rw [hpers]; exact he, het⟩
 
 theorem quiesce_shape (n : ℕ) (s : State Validator BlockId Payload) :
     PassShape cfg s (quiesce cfg n s).2 (quiesce cfg n s).1 :=
@@ -227,7 +271,9 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
       ((persists pre = [] ∧ x.top = s.top) ∨ (s.top = none ∧ x.top = some 0 ∧
         ∃ g : BlockId × Block Validator BlockId Payload,
           pre = [.persist g.1 g.2, .broadcast g.1 g.2, .setTimer 0 (2 * cfg.timeout 0)] ∧
-          g.2.round = 0 ∧ g.1 ∈ x.disk.ids ∧ (x.disk.blk g.1).round = 0)) := by
+          g.2.round = 0 ∧ g.1 ∈ x.disk.ids ∧ (x.disk.blk g.1).round = 0 ∧
+          x.recovering = false)) ∧
+      (x.recovering = true → (s.recovering = true ∧ ∀ r, inp ≠ .timer r) ∨ inp = .restart) := by
   have hq : ∀ x, x = s → ((x, ([] : List (Output Validator BlockId Payload))).1 = s ∧
       persists ([] : List (Output Validator BlockId Payload)) = []) := fun x hx => ⟨hx, rfl⟩
   cases inp with
@@ -238,15 +284,19 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
       split
       · rename_i h₂
         refine Or.inr ⟨_, _, [], rfl, by rw [List.append_nil], rfl, by simp [h₁.1], fun _ h _ => h,
-          Or.inr ⟨h₁.1, rfl, ⟨_, cfg.genesis⟩, rfl, rfl, (by simp [Store.insert_ids]), ?_⟩⟩
-        simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self, Config.genesis]
+          Or.inr ⟨h₁.1, rfl, ⟨_, cfg.genesis⟩, rfl, rfl, (by simp [Store.insert_ids]), ?_⟩,
+          fun h => by cases h⟩
+        exact ⟨by simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self, Config.genesis],
+          rfl⟩
       · exact Or.inl (hq s rfl)
     · exact Or.inl (hq s rfl)
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · rw [step_deliver hA]
       refine Or.inr ⟨_, _, [], rfl, by rw [List.append_nil], rfl, by rw [afterFlush_top],
-        fun _ h _ => by rwa [afterFlush_fired], Or.inl ⟨?_, afterFlush_top _ _ _⟩⟩
+        fun _ h _ => by rwa [afterFlush_fired], Or.inl ⟨?_, afterFlush_top _ _ _⟩,
+        fun h => Or.inl ⟨by rw [afterFlush, flush_recovering] at h; exact h,
+          fun r hr => by cases hr⟩⟩
       refine (silent_of fun o ho => ?_).1
       split at ho
       · cases ho
@@ -256,19 +306,20 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
   | timer r =>
     right
     rcases step_timer_snd (cfg := cfg) s r with h | h
-    · exact ⟨{ s with fired := fire s r }, [], [], step_timer_fst s r, by rw [h]; simp,
-        rfl, rfl, fired_timer, Or.inl ⟨rfl, rfl⟩⟩
-    · exact ⟨{ s with fired := fire s r }, [],
-        Node.resend cfg (Node.settle cfg { s with fired := fire s r }).1,
+    · exact ⟨{ s with fired := fire s r, recovering := false }, [], [], step_timer_fst s r,
+        by rw [h]; simp, rfl, rfl, fired_timer, Or.inl ⟨rfl, rfl⟩, fun h => by cases h⟩
+    · exact ⟨{ s with fired := fire s r, recovering := false }, [],
+        Node.resend cfg (Node.settle cfg { s with fired := fire s r, recovering := false }).1,
         step_timer_fst s r, by rw [h]; simp,
-        persists_resend _, rfl, fired_timer, Or.inl ⟨rfl, rfl⟩⟩
+        persists_resend _, rfl, fired_timer, Or.inl ⟨rfl, rfl⟩, fun h => by cases h⟩
   | fetchRequest p r ids =>
     refine Or.inl ⟨rfl, (silent_of fun o ho => ?_).1⟩
     simp only [Node.step, answer, List.mem_map] at ho
     obtain ⟨j, -, rfl⟩ := ho; trivial
   | restart =>
-    refine Or.inl ⟨rfl, ?_⟩
-    change persists (Node.resend cfg s ++ Node.rearm cfg s) = []
+    refine Or.inr ⟨{ s with recovering := true }, Node.resend cfg s ++ Node.rearm cfg s, [],
+      rfl, by simp only [Node.step, List.append_nil], rfl, rfl, fun _ h _ => h,
+      Or.inl ⟨?_, rfl⟩, fun _ => Or.inr rfl⟩
     rw [persists_append, persists_resend, persists_rearm, List.append_nil]
 
 section StepFacts
@@ -276,13 +327,14 @@ section StepFacts
 variable {s : State Validator BlockId Payload} {inp : Input Validator BlockId Payload}
 
 /-- **A step builds every round above the top before up to the top it
-reaches.** -/
-theorem step_every
+reaches**, when it is no restart, and a timer or starts not recovering. -/
+theorem step_every (hinp : inp ≠ .restart) (hrec : s.recovering = false ∨ ∃ r, inp = .timer r)
     (hsome : (Node.step cfg s inp).1.top.isSome) :
     ∀ ρ, (s.top = none ∨ s.top.getD 0 < ρ) → ρ ≤ (Node.step cfg s inp).1.top.getD 0 →
       ∃ e ∈ persists (Node.step cfg s inp).2, e.2.round = ρ := by
   intro ρ hρ hρt
-  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ | ⟨x, pre, post, he, ho, hpost, ht, -, hpre⟩
+  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ |
+      ⟨x, pre, post, he, ho, hpost, ht, -, hpre, hxr⟩
   · rw [he] at hsome hρt
     rcases hρ with hρ | hρ
     · rw [hρ] at hsome; cases hsome
@@ -290,27 +342,92 @@ theorem step_every
   · rw [he] at hsome hρt
     rw [ho, persists_append, hpost, List.append_nil, persists_append]
     have hS := settle_shape (cfg := cfg) x
+    have hx : x.recovering = false := by
+      cases h : x.recovering
+      · rfl
+      · rcases hxr h with ⟨h', ht'⟩ | h'
+        · rcases hrec with hrec | ⟨r, hr⟩
+          · rw [hrec] at h'; cases h'
+          · exact absurd hr (ht' r)
+        · exact absurd h' hinp
     rcases hpre with ⟨-, hxt⟩ | ⟨hn, hx0, g, rfl, hg, -⟩
     · by_cases hn : s.top = none
       · have := hS.none (by rw [hxt, hn])
         rw [this] at hsome; cases hsome
       · have hρ' : s.top.getD 0 < ρ := hρ.resolve_left hn
         obtain ⟨e, he', her⟩ := hS.every (by
-          rw [hxt]; exact Option.ne_none_iff_isSome.mp hn) ρ
+          rw [hxt]; exact Option.ne_none_iff_isSome.mp hn) hx ρ
           (by rw [ht]; exact hρ') hρt
         exact ⟨e, List.mem_append_right _ he', her⟩
     · by_cases h0 : ρ = 0
       · exact ⟨g, List.mem_append_left _ (by simp [persists]), by rw [hg, h0]⟩
-      · obtain ⟨e, he', her⟩ := hS.every (by rw [hx0]; rfl) ρ
+      · obtain ⟨e, he', her⟩ := hS.every (by rw [hx0]; rfl) hx ρ
           (by rw [hx0]; simp; omega) hρt
         exact ⟨e, List.mem_append_right _ he', her⟩
+
+/-- **A step builds only above the top it starts at.** -/
+theorem step_above :
+    ∀ e ∈ persists (Node.step cfg s inp).2, s.top = none ∨ s.top.getD 0 < e.2.round := by
+  rcases step_shape (cfg := cfg) s inp with ⟨-, hq⟩ | ⟨x, pre, post, -, he, hpost, hxt, -, hpre, -⟩
+  · rw [hq]; intro e he; cases he
+  · rw [he, persists_append, hpost, List.append_nil, persists_append]
+    intro e he'
+    rcases List.mem_append.mp he' with he' | he'
+    · rcases hpre with ⟨hp, -⟩ | ⟨hn, -⟩
+      · rw [hp] at he'; cases he'
+      · exact Or.inl hn
+    · right; rw [← hxt]; exact (settle_shape (cfg := cfg) x).above e he'
+
+/-- **A step that moves the top builds the round it reaches.** -/
+theorem step_built_top (h : (Node.step cfg s inp).1.top ≠ s.top) :
+    ∃ e ∈ persists (Node.step cfg s inp).2, (Node.step cfg s inp).1.top = some e.2.round := by
+  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ | ⟨x, pre, post, hs, he, hpost, -, -, hpre, -⟩
+  · rw [he] at h; exact absurd rfl h
+  · rw [hs] at h ⊢
+    rw [he, persists_append, hpost, List.append_nil, persists_append]
+    by_cases hx : (Node.settle cfg x).1.top = x.top
+    · rcases hpre with ⟨-, hxt⟩ | ⟨-, hx0, g, rfl, hg, -⟩
+      · rw [hx, hxt] at h; exact absurd rfl h
+      · refine ⟨g, List.mem_append_left _ (by simp [persists]), by rw [hx, hx0, hg]⟩
+    · obtain ⟨e, he', het⟩ := (settle_shape (cfg := cfg) x).built hx
+      exact ⟨e, List.mem_append_right _ he', het⟩
+
+/-- **A step after which the node still recovers** was no timer, and left
+the top alone; the node recovered before, or the step is a restart. -/
+theorem step_recovering (h : (Node.step cfg s inp).1.recovering = true) :
+    (Node.step cfg s inp).1.top = s.top ∧ (∀ r, inp ≠ .timer r) ∧
+      (inp = .restart ∨ s.recovering = true) := by
+  have htimer : ∀ r, inp ≠ .timer r := by
+    intro r hr
+    subst hr
+    rw [step_timer_fst] at h
+    rw [(settle_shape (cfg := cfg)
+      { s with fired := fire s r, recovering := false }).stays rfl] at h
+    cases h
+  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ | ⟨x, pre, post, hs, -, -, -, -, hpre, hxr⟩
+  · rw [he] at h ⊢
+    exact ⟨rfl, htimer, Or.inr h⟩
+  · rw [hs] at h ⊢
+    have hS := settle_shape (cfg := cfg) x
+    have hxt : (Node.settle cfg x).1.top = x.top := by
+      by_contra hne; rw [hS.clears hne] at h; cases h
+    have hxrec : x.recovering = true := by
+      cases hx : x.recovering
+      · rw [hS.stays hx] at h; cases h
+      · rfl
+    rcases hpre with ⟨-, h₁⟩ | ⟨-, -, -, -, -, -, -, hx0⟩
+    · refine ⟨hxt.trans h₁, htimer, ?_⟩
+      rcases hxr hxrec with ⟨h', -⟩ | h'
+      · exact Or.inr h'
+      · exact Or.inl h'
+    · rw [hx0] at hxrec; cases hxrec
 
 /-- **A step sets the retry timer of each round it builds.** -/
 theorem step_timer :
     ∀ e ∈ persists (Node.step cfg s inp).2,
       Output.setTimer (e.2.round - 1) (2 * cfg.timeout (e.2.round - 1)) ∈
         (Node.step cfg s inp).2 := by
-  rcases step_shape (cfg := cfg) s inp with ⟨-, hq⟩ | ⟨x, pre, post, -, he, hpost, -, -, hpre⟩
+  rcases step_shape (cfg := cfg) s inp with ⟨-, hq⟩ | ⟨x, pre, post, -, he, hpost, -, -, hpre, -⟩
   · rw [hq]; intro e he; cases he
   · rw [he, persists_append, hpost, List.append_nil]
     intro e he'
@@ -329,7 +446,7 @@ theorem step_timer :
 /-- **A step keeps the fired timers** not below the top. -/
 theorem step_fired {r : ℕ} (hr : r ∈ s.fired) (ht : s.top.getD 0 ≤ r) :
     r ∈ (Node.step cfg s inp).1.fired := by
-  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ | ⟨x, pre, post, he, -, -, -, hf, -⟩
+  rcases step_shape (cfg := cfg) s inp with ⟨he, -⟩ | ⟨x, pre, post, he, -, -, -, hf, -, -⟩
   · rw [he]; exact hr
   · rw [he]
     exact (settle_shape (cfg := cfg) x).fired (hf r hr ht)
@@ -422,11 +539,12 @@ theorem refsAt_buildable (st : Store Validator BlockId Payload) (r : ℕ) (o : O
       simpa using this.2
 
 omit [Fintype Validator] in
-/-- **A node whose round's timer fired, or that is behind the round
-above, builds**, given a quorum of the round, its own block there on disk,
+/-- **A node not recovering whose round's timer fired, or that is behind
+the round above, builds**, given a quorum of the round, its own block there on disk,
 no block on disk with the identifier of a next block of its own, and its
 memory from the round up. -/
 theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.top = some r)
+    (hrec : s.recovering = false)
     (hf : r ∈ s.fired ∨ behind cfg s.disk r)
     (hq : cfg.q ≤ (authorsIn s.disk.toRecord s.disk.ids r).card)
     (ho : ∀ j, s.own = some j → j ∈ s.disk.ids ∧ (s.disk.blk j).round = r ∧
@@ -436,6 +554,9 @@ theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.
     (tryBuild cfg s).isSome := by
   unfold tryBuild
   rw [ht]
+  dsimp only
+  rw [if_neg (by simp [hrec])]
+  unfold buildAbove
   dsimp only
   rw [if_pos ⟨by rw [s.mirrors.authorsAt_eq hF, Store.authorsAt_eq]; exact hq,
     hf.imp id fun h => Or.inl ((s.mirrors.behind_iff (by omega)).mpr h)⟩]

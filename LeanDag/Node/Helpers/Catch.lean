@@ -299,10 +299,13 @@ theorem top_of_built {b : ℕ} {inp : Input Validator BlockId Payload}
 /-- **A node at a round built it**, at its first event building it, by
 then. -/
 theorem built_of_top {τ n : ℕ} (hs : (stateAt cfg tr time v τ).top.isSome)
-    (hn : n ≤ topAt cfg tr time v τ) :
+    (hn : n ≤ topAt cfg tr time v τ)
+    (hj : ∀ k < eventsBy tr time τ, ∀ inp, tr[k]? = some (v, inp) →
+      ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
+      (stateBefore cfg tr (k + 1) v).top.getD 0 < n) :
     ∃ i inp e, tr[i]? = some (v, inp) ∧ e ∈ persists (outputsAt cfg tr i) ∧ e.2.round = n ∧
       builtAt cfg tr time v n = time i ∧ time i ≤ τ := by
-  obtain ⟨b, hbE, hbv, e, he, her⟩ := built_by (eventsBy tr time τ) hs hn
+  obtain ⟨b, hbE, hbv, e, he, her⟩ := built_by (eventsBy tr time τ) hs hn hj
   obtain ⟨i₀, hi₀b, hbt, hi₀v, e₀, he₀, he₀r⟩ := builtAt_first (cfg := cfg) time hbv ⟨e, he, her⟩
   obtain ⟨inp, hi₀⟩ := Converge.event_of_map hi₀v
   obtain ⟨inpb, hb⟩ := Converge.event_of_map hbv
@@ -447,7 +450,7 @@ theorem behind_honest (htime : Converge.TimelyAuthentic cfg H tr)
     (hx : BuildState (cfg.at w) (globalRecord (hashInjective_of_trace hinj)
       (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i w) inp x)
     (hb : tryBuild (cfg.at w) x = some (y, o)) (heo : e ∈ persists o)
-    (he : e ∈ persists (outputsAt cfg tr i)) (hxt : x.top = some n)
+    (he : e ∈ persists (outputsAt cfg tr i)) (her : e.2.round = n + 1)
     (hgx : Grows x.disk (stateBefore cfg tr (i + 1) w).disk)
     (hbeh : behind (cfg.at w) x.disk n) :
     ∃ w' ∈ H, w' ≠ w ∧ ∃ j < i, ∃ inp' z, tr[j]? = some (w', inp') ∧
@@ -473,15 +476,14 @@ theorem behind_honest (htime : Converge.TimelyAuthentic cfg H tr)
     obtain ⟨r, id, b, hnew, -, -, hxt', hbr, -, -, -, -, -, -, -, hout⟩ := tryBuild_some hb
     rw [hout, persists_built, List.mem_singleton] at heo
     subst heo
-    rw [hxt, Option.some.injEq] at hxt'
-    subst hxt'
     have hzp := mem_persists_of_known (hashInjective_of_trace hinj) (authentic_of_timely htime)
       hzK (by change (x.disk.blk z).creator ∈ H; rw [hzc]; exact hw)
     have hep : (id, b) ∈ persists (runOf cfg tr w').2 :=
       mem_persists_iff.mpr (mem_outputs_of_event hi (mem_persists_iff.mp he))
     change (z, x.disk.blk z).2.creator = w' at hzc
     rw [hzc] at hzp
-    have := eq_of_persists w' hzp hep (by change (x.disk.blk z).round = b.round; rw [hz.2, hbr])
+    have := eq_of_persists w' hzp hep
+      (by change (x.disk.blk z).round = b.round; rw [hz.2]; exact her.symm)
     exact hnew (by rw [← (Prod.mk.inj this).1]; exact hz.1)
   -- it persisted the block before the event
   have hzF := hgx.1 hz.1
@@ -644,7 +646,9 @@ theorem catches_up (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
         le_antisymm (hup w hw) ((hSn w hw).2.trans' hmn)
       exact mem_authorsIn.mpr ⟨j, hj, hjr.trans hwm, hjc⟩
   obtain ⟨o, hoo, hoi, hor, hoc⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E m hm
-  have hsome := tryBuild_isSome (cfg := cfg.at v) hm (Or.inr hbeh) hcard
+  have hsome := tryBuild_isSome (cfg := cfg.at v) hm
+    (harr.recovered (by omega) v hv E (eventsBy_mono (tr := tr) (time := time) (by omega)))
+    (Or.inr hbeh) hcard
     (fun j hj => by rw [hoo] at hj; cases hj; exact ⟨hoi, hor, hoc⟩)
     (fresh_before hid htime (hTH hv) hm) ((Converge.floor_before hm).trans (Nat.sub_le _ _))
   rw [hSet.build] at hsome
@@ -661,8 +665,11 @@ variable {T : Finset Validator} {tr : Trace Validator BlockId Payload} {time : �
 /-- A node at a round built it by then. -/
 theorem builtAt_le_of_top {v : Validator}
     (hmono : Live.TimeMono tr time) {τ n : ℕ} (hs : (stateAt cfg tr time v τ).top.isSome)
-    (hn : n ≤ topAt cfg tr time v τ) : builtAt cfg tr time v n ≤ τ := by
-  obtain ⟨i, -, -, -, -, -, hbt, hiτ⟩ := built_of_top hmono hs hn
+    (hn : n ≤ topAt cfg tr time v τ)
+    (hj : ∀ k < eventsBy tr time τ, ∀ inp, tr[k]? = some (v, inp) →
+      ((stateBefore cfg tr k v).recovering = true ∨ inp = .restart) →
+      (stateBefore cfg tr (k + 1) v).top.getD 0 < n) : builtAt cfg tr time v n ≤ τ := by
+  obtain ⟨i, -, -, -, -, -, hbt, hiτ⟩ := built_of_top hmono hs hn hj
   omega
 
 end Built

@@ -111,25 +111,29 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
       c).creator = v)
     (hcr : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
       c).round = r + 1) :
-    ∃ i₀ inp x, tr[i₀]? = some (v, inp) ∧ builtAt cfg tr time v (r + 1) = time i₀ ∧
+    ∃ i₀ inp x ow, tr[i₀]? = some (v, inp) ∧ builtAt cfg tr time v (r + 1) = time i₀ ∧
       BuildState (cfg.at v) (globalRecord (hashInjective_of_trace hinj)
         (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x ∧
-        x.top = some r ∧ c ∉ x.disk.ids ∧
+        (x.top.isSome ∧ x.top.getD 0 ≤ r ∧
+          ((x.top = some r ∧ ow = x.own) ∨ (x.recovering = true ∧ ow = none ∧
+            reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow) r = true ∧
+            certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow) r = true))) ∧
+        c ∉ x.disk.ids ∧
       (∃ y o, tryBuild (cfg.at v) x = some (y, o) ∧
         (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
           persists o ∧
         (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
           persists (outputsAt cfg tr i₀)) ∧
       ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).refs =
-        refsAt (cfg.at v) x.disk r x.own ∧
-      refsAt (cfg.at v) x.disk r x.own ⊆ x.disk.ids ∧
+        refsAt (cfg.at v) x.disk r ow ∧
+      refsAt (cfg.at v) x.disk r ow ⊆ x.disk.ids ∧
       Grows x.disk (stateBefore cfg tr (i₀ + 1) v).disk ∧
-      ((reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r x.own) r = true ∧
-          certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r x.own) r = true) ∨
-        (r ∈ x.fired ∧
-          refsAt (cfg.at v) x.disk r x.own = refsFor (cfg.at v) x.disk r x.own) ∨
+      ((reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow) r = true ∧
+          certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r ow) r = true) ∨
+        (x.top = some r ∧ r ∈ x.fired ∧
+          refsAt (cfg.at v) x.disk r ow = refsFor (cfg.at v) x.disk r ow) ∨
         (behind (cfg.at v) x.disk r ∧
-          refsAt (cfg.at v) x.disk r x.own = refsFor (cfg.at v) x.disk r x.own))
+          refsAt (cfg.at v) x.disk r ow = refsFor (cfg.at v) x.disk r ow))
     := by
   have hinjR := hashInjective_of_trace hinj
   have hauthR := authentic_of_timely htime
@@ -158,22 +162,30 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
   subst hex
   obtain ⟨x', y, o, hbs, hb, heo, hgx⟩ := build_witness hσ hadm hf htime hinj hv hi₀ he₀
     (by rw [he₀r]; omega)
-  obtain ⟨r', hr', -, hexit, hout⟩ := tryBuild_exit hb
+  obtain ⟨r', ow, hsome, hle, hro, -, hexit, hout⟩ := tryBuild_exit hb
   -- the build read in memory as on disk
-  have hreads := x'.mirrors.build_reads (cfg := cfg.at v) hσ (r := r') (o := x'.own) (by
+  have hreads := x'.mirrors.build_reads (cfg := cfg.at v) hσ (r := r') (o := ow) (by
       obtain ⟨B, hi⟩ := hbs.inv
-      exact hi.floor.trans ((min_le_right _ _).trans (by rw [hr']; rfl)))
+      exact hi.floor.trans ((min_le_right _ _).trans (Nat.sub_le_sub_right hle _)))
     (fun j hj => by
-      obtain ⟨j', hj', hjd, hjr, -⟩ := hbs.own r' hr'
-      rw [hj', Option.some.injEq] at hj
-      exact hj ▸ ⟨hjd, hjr⟩)
+      rcases hro with ⟨hr', rfl⟩ | ⟨-, hnone, -⟩
+      · obtain ⟨j', hj', hjd, hjr, -⟩ := hbs.own r' hr'
+        rw [hj', Option.some.injEq] at hj
+        exact hj ▸ ⟨hjd, hjr⟩
+      · rw [hnone] at hj; cases hj)
   obtain ⟨e₁, e₂, e₃, e₄, e₅⟩ := hreads
   rw [e₁, e₂, e₄, e₅, e₃] at hexit
+  rw [e₁, e₄, e₅] at hro
   rw [e₁] at hout
-  obtain ⟨r'', id, b, hnew, hrefs, hpred, hr'', hbr, -, hid, -, hst, -, -, -, hout'⟩ :=
+  obtain ⟨r'', id, b, hnew, hrefs, hpred, -, hbr, -, hid, -, hst, -, -, -, hout'⟩ :=
     tryBuild_some hb
-  rw [hr'] at hr''
-  cases hr''
+  have hrr' : r'' = r' := by
+    have h1 := congrArg persists (hout.symm.trans hout')
+    rw [persists_built, persists_built, List.singleton_inj] at h1
+    have := congrArg (fun e => e.2.round) h1
+    simp only at this
+    omega
+  subst r''
   rw [hout, persists_built, List.mem_singleton] at heo
   have hrr : r' = r := by
     have := congrArg (fun e => e.2.round) heo
@@ -194,12 +206,12 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     rw [heo', hst]
     simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
   have hUb : U.block e₀.1 = b := (hy.cut.eq hcy).trans hyb
-  have hbrefs : b.refs = refsAt (cfg.at v) x'.disk r' x'.own := by
+  have hbrefs : b.refs = refsAt (cfg.at v) x'.disk r' ow := by
     have := congrArg (fun e => e.2.refs) hAB
     simp only at this
     exact this.symm
   have hce : (e₀.1, U.block e₀.1) = e₀ := by rw [hUb, heo']
-  refine ⟨i₀, inp, x', hi₀, hbt, hbs, hr', by rw [heo']; exact hnew,
+  refine ⟨i₀, inp, x', ow, hi₀, hbt, hbs, ⟨hsome, hle, hro⟩, by rw [heo']; exact hnew,
     ⟨y, o, hb, by rw [hce, hout, persists_built, List.mem_singleton]; exact heo,
       by rw [hce]; exact he₀⟩, by rw [hUb, hbrefs], ?_, hgx, hexit⟩
   rw [← hbrefs]
