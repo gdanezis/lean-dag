@@ -12,15 +12,14 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
 * **times do not decrease** (`TimeMono`);
 * **delivery** (`DeliveredWithin`): a message one reliable node sends
   another at `t` arrives by `max t gst + Δ`;
-* **timers** (`TimersOnTime`): a timer a reliable node sets at `t` for
-  `a` ticks fires at `t + a`, and none fires earlier;
+* **timers** (`TimersFire`, `TimersAfterSet`): a timer a reliable node
+  sets at `t` for `a` ticks fires at `t + a`, and no honest node's timer
+  fires earlier than its delay after it was set;
 * **synchronisation** (`SyncedWithin`): a reliable node that receives a
   reliable node's block at `t` receives after it, by `max t gst + Δₛ`,
   each block the honest nodes know in its history that it did not make.
   Efficient synchronisation is out of scope (`docs/validator.md` §1);
 * every reliable node **starts** by `gst` (`StartedBy`);
-* the honest nodes outside `T` build **only below a round** `R₀`
-  (`OutsideBelow`);
 * timely authentication of blocks;
 * the injective hash, injective on every block, at most `f` nodes
   outside `H`, `n − f − c` reliable nodes, a quorum of two or more, and
@@ -33,7 +32,7 @@ to be held by every reliable node:
   round `n` or above at `s`, every reliable node is above `n` at
   `s + A + timeout n`;
 * **decision** (`Decides`): suppose every reliable node is below a round
-  `n₀ ≥ R₀` at GST, and the slots `b … b + c − 1` at or above `n₀` are
+  `n₀` at GST, and the slots `b … b + c − 1` at or above `n₀` are
   led by reliable nodes and span the rule's eligibility. Once every
   reliable node is at the decision round of slot `b + c − 1`, `A` later
   every reliable node has output the decisions of every slot below
@@ -52,10 +51,12 @@ conclusions hold with GST replaced by `max t_r gst + W`, for `W` twice
 the largest timeout of the round below the one a reliable node is at by
 `max t_r gst`, the delay of its retry timer: within it every reliable
 node sends one of its blocks there again or builds above, and the
-history of that block brings the blocks the crashes lost. Where `T` is
-every honest node, `OutsideBelow` holds with `R₀ = 0`: after every node
-crashed and restarted, the nodes decide each reliably led run of slots
-above the rounds they reached by then.
+history of that block brings the blocks the crashes lost. The honest
+nodes outside `T` may crash and restart at any time, and need meet no
+timing assumption but that their timers do not fire early. With `T`
+every honest node: after every node crashed and restarted, the nodes
+decide each reliably led run of slots above the rounds they reached by
+then.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -87,7 +88,7 @@ def TimersFire (cfg : Config Validator BlockId Payload) (T : Finset Validator)
   ∀ i u inp, tr[i]? = some (u, inp) → u ∈ T → ∀ r a, Output.setTimer r a ∈ outputsAt cfg tr i →
     time i + a ≤ t₁ → ∃ j, i < j ∧ tr[j]? = some (u, .timer r) ∧ time j = time i + a
 
-/-- **Timers fire no earlier than set**: every timer a reliable node is
+/-- **Timers fire no earlier than set**: every timer a node of `T` is
 given was set, no less than its delay before. -/
 def TimersAfterSet (cfg : Config Validator BlockId Payload) (T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) : Prop :=
@@ -95,12 +96,6 @@ def TimersAfterSet (cfg : Config Validator BlockId Payload) (T : Finset Validato
     ∃ i < j, ∃ a, (tr[i]?.map Prod.fst) = some u ∧ Output.setTimer r a ∈ outputsAt cfg tr i ∧
       time i + a ≤ time j
 
-/-- **Timers fire on time**: a timer a reliable node sets at `t` for `a`
-ticks fires at `t + a`, if that is by `t₁`; and every timer a reliable
-node is given was set, no less than its delay before. -/
-def TimersOnTime (cfg : Config Validator BlockId Payload) (T : Finset Validator)
-    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (t₁ : ℕ) : Prop :=
-  TimersFire cfg T tr time t₁ ∧ TimersAfterSet cfg T tr time
 
 open Classical in
 /-- **The block the honest nodes know under an identifier**, the genesis
@@ -153,13 +148,6 @@ def UpFrom (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time :
     (t_r : ℕ) : Prop :=
   ∀ k v, tr[k]? = some (v, .restart) → v ∈ T → time k < t_r
 
-/-- **The honest nodes outside `T` build only below `R₀`**: every block
-an honest node outside `T` builds is of a round below `R₀`. -/
-def OutsideBelow (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
-    (tr : Trace Validator BlockId Payload) (R₀ : ℕ) : Prop :=
-  ∀ i u inp, tr[i]? = some (u, inp) → u ∈ H → u ∉ T →
-    ∀ e ∈ persists (outputsAt cfg tr i), e.2.round < R₀
-
 /-- **Every reliable node starts by `gst`.** -/
 def StartedBy (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
     (gst : ℕ) : Prop :=
@@ -172,18 +160,18 @@ def Produces (cfg : Config Validator BlockId Payload) (T : Finset Validator)
   ∀ s n, gst ≤ s → s + D + cfg.timeout n ≤ t₁ → (∀ v ∈ T, n ≤ topAt cfg tr time v s) →
     ∀ v ∈ T, n + 1 ≤ topAt cfg tr time v (s + D + cfg.timeout n)
 
-/-- **Decision**: if every reliable node is below round `n₀ ≥ R₀` at
+/-- **Decision**: if every reliable node is below round `n₀` at
 `gst`, and the slots `b … b + c − 1`, at or above `n₀`, are led by
 reliable nodes and span the rule's eligibility, then once every reliable
 node is at the decision round of slot `b + c − 1` at `t`, every reliable
 node has output the decisions of the slots below `b + c` by `t + D`. -/
 def Decides (cfg : Config Validator BlockId Payload) (T : Finset Validator)
-    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst D R₀ t₁ : ℕ) : Prop :=
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst D t₁ : ℕ) : Prop :=
   letI := cfg.slots
   ∀ b c n₀, 0 < c → (Scheme.schemeAnchored cfg.p
       (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
         (honest := T))).SpansEligible c →
-    (∀ i < c, cfg.slots.leader (b + i) ∈ T) → n₀ ≤ cfg.slots.slotRound b → R₀ ≤ n₀ →
+    (∀ i < c, cfg.slots.leader (b + i) ∈ T) → n₀ ≤ cfg.slots.slotRound b →
     (∀ v ∈ T, topAt cfg tr time v gst < n₀) →
     ∀ t, (∀ v ∈ T, cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1) ≤
         topAt cfg tr time v t) → t + D ≤ t₁ →
@@ -195,12 +183,12 @@ has output the decisions of the slots below `b + c` by
 `s + Σ (timeout r + D) + D`, the sum over the rounds `r` from `n₁` to
 below the decision round of slot `b + c − 1`. -/
 def DecidesBy (cfg : Config Validator BlockId Payload) (T : Finset Validator)
-    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst D R₀ t₁ : ℕ) : Prop :=
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst D t₁ : ℕ) : Prop :=
   letI := cfg.slots
   ∀ b c n₀ n₁ s, 0 < c → (Scheme.schemeAnchored cfg.p
       (boundedSel (BlockId := BlockId) (Payload := Payload) (P := ValidAt cfg.q Clause.none)
         (honest := T))).SpansEligible c →
-    (∀ i < c, cfg.slots.leader (b + i) ∈ T) → n₀ ≤ cfg.slots.slotRound b → R₀ ≤ n₀ →
+    (∀ i < c, cfg.slots.leader (b + i) ∈ T) → n₀ ≤ cfg.slots.slotRound b →
     (∀ v ∈ T, topAt cfg tr time v gst < n₀) → gst ≤ s →
     (∀ v ∈ T, n₁ ≤ topAt cfg tr time v s) →
     s + (∑ r ∈ Finset.Ico n₁ (cfg.slots.slotRound (b + c - 1) + (cfg.p.waveLength - 1)),
@@ -213,16 +201,16 @@ meeting the assumptions up to `t₁`. -/
 def Progresses : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
-    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ R₀ t₁ : ℕ),
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t₁ : ℕ),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f → T ⊆ H →
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → TimeMono tr time →
     DeliveredWithin cfg T tr time gst Δ t₁ →
-    TimersOnTime cfg T tr time t₁ → SyncedWithin cfg H T tr time gst Δₛ t₁ →
-    StartedBy T tr time gst → OutsideBelow cfg H T tr R₀ →
-    Produces cfg T tr time gst (Δ + Δₛ) t₁ ∧ Decides cfg T tr time gst (Δ + Δₛ) R₀ t₁ ∧
-      DecidesBy cfg T tr time gst (Δ + Δₛ) R₀ t₁
+    TimersFire cfg T tr time t₁ → TimersAfterSet cfg H tr time →
+    SyncedWithin cfg H T tr time gst Δₛ t₁ → StartedBy T tr time gst →
+    Produces cfg T tr time gst (Δ + Δₛ) t₁ ∧ Decides cfg T tr time gst (Δ + Δₛ) t₁ ∧
+      DecidesBy cfg T tr time gst (Δ + Δₛ) t₁
 
 /-- **The reliable nodes recover from crashes**: over a timed trace in
 which the reliable nodes stay up from `t_r` on, meeting the assumptions
@@ -232,18 +220,18 @@ is at by `max t_r gst`. -/
 def Recovers : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
-    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t_r R₀ t₁ : ℕ),
+    (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δ Δₛ t_r t₁ : ℕ),
     cfg.σ = boundedSel → cfg.Admissible → Hᶜ.card ≤ cfg.f → T ⊆ H →
     cfg.q ≤ T.card → Fintype.card Validator - cfg.f - cfg.c ≤ T.card → 2 ≤ cfg.q →
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → TimeMono tr time →
     DeliveredFrom cfg T tr time gst Δ t_r t₁ → TimersFireUp cfg T tr time t₁ →
-    TimersAfterSet cfg T tr time → SyncedFrom cfg H T tr time gst Δₛ t_r t₁ →
-    UpFrom T tr time t_r → StartedBy T tr time gst → OutsideBelow cfg H T tr R₀ →
+    TimersAfterSet cfg H tr time → SyncedFrom cfg H T tr time gst Δₛ t_r t₁ →
+    UpFrom T tr time t_r → StartedBy T tr time gst →
     let G := max t_r gst +
       T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1)
-    Produces cfg T tr time G (Δ + Δₛ) t₁ ∧ Decides cfg T tr time G (Δ + Δₛ) R₀ t₁ ∧
-      DecidesBy cfg T tr time G (Δ + Δₛ) R₀ t₁
+    Produces cfg T tr time G (Δ + Δₛ) t₁ ∧ Decides cfg T tr time G (Δ + Δₛ) t₁ ∧
+      DecidesBy cfg T tr time G (Δ + Δₛ) t₁
 
 /-- The reliable nodes' liveness, without crashes and with them. -/
 def Statement : Prop := Progresses ∧ Recovers

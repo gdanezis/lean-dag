@@ -7,9 +7,9 @@ block `z` passes the reach and certificate tests with the references `z`
 lends it when the peer's references passed them (`ready_transfer`,
 `refsAt_ready`, `lent_buildable`): the leader blocks the tests read are
 reached from `z`'s references, so the node holds them and reads the same
-votes. From round `R₀` on, a quorum a node holds has `f + 1` reliable
-authors (`quorum_reliable`), and of the `f + 1` authors of a round a
-node is behind one is reliable (`behind_earlier`). Past GST, once `f + 1`
+votes. A quorum has `f + 1` reliable authors, since `2f + c + 1 ≤ q`
+(`two_f_c_lt_q`, `quorum_reliable`), and of the `f + 1` authors of a
+round a node is behind one is honest (`behind_honest`). Past GST, once `f + 1`
 reliable nodes are at round `n`, every reliable node is at `n` within
 `A = Δ + Δₛ` (`catches_up`).
 -/
@@ -379,7 +379,7 @@ end Record
 section Catch
 
 variable {T : Finset Validator} {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ}
-  {gst Δ Δₛ t₁ R₀ : ℕ}
+  {gst Δ Δₛ t₁ : ℕ}
 
 omit [Fintype Validator] in
 /-- **A valid block's references**: `q` distinct authors, none twice, read
@@ -410,56 +410,36 @@ theorem persisted_of_stored (htime : Converge.TimelyAuthentic cfg H tr) {v w : V
   obtain ⟨inp, hj'⟩ := Converge.event_of_map hjw
   exact ⟨j, hj, inp, hj', hjz⟩
 
-/-- **From round `R₀` on, the honest authors a node holds are reliable**:
-an honest author of a block of round `R₀` or above that an honest node
-holds is in `T`. -/
-theorem mem_of_stored (htime : Converge.TimelyAuthentic cfg H tr)
-    (hout : Live.OutsideBelow cfg H T tr R₀) {v w : Validator} (hv : v ∈ H) (hw : w ∈ H)
-    {K r : ℕ} (hr : R₀ ≤ r) (hwA : w ∈ (stateBefore cfg tr K v).disk.authorsAt r) : w ∈ T := by
-  by_contra hwT
-  obtain ⟨z, hzR, hzc⟩ := mem_creatorsOf.mp hwA
-  have hz : z ∈ (stateBefore cfg tr K v).disk.ids ∧
-      ((stateBefore cfg tr K v).disk.blk z).round = r := by
-    rw [Store.atRound_eq] at hzR
-    simpa [blocksAt, Store.toRecord] using hzR
-  obtain ⟨j, -, inp, hj, hjz⟩ := persisted_of_stored htime hv hw hz.1 hzc
-  have := hout j w inp hj hw hwT _ hjz
-  simp only at this
-  omega
-
-/-- **A quorum exceeds twice the faults**: `2f + 1 ≤ q` on every row the
-inequalities cover. -/
-theorem two_f_lt_q (hadm : cfg.Admissible) : 2 * cfg.f + 1 ≤ cfg.q := by
+/-- **A quorum exceeds twice the Byzantine faults and the crash faults**:
+`2f + c + 1 ≤ q` on every admissible row, since a commit's threshold
+leaves room for neither. -/
+theorem two_f_c_lt_q (hadm : cfg.Admissible) : 2 * cfg.f + cfg.c + 1 ≤ cfg.q := by
   obtain ⟨hcov, -, hct, hq0, hqn⟩ := hadm
   unfold Scheme.Params.Covered Scheme.Params.TwoRound Scheme.Params.ThreeRound
     Scheme.Params.TwoRoundCrash Scheme.Params.ThreeRoundCrash at hcov
-  rcases hcov with ⟨-, -, hl, -, -, h⟩ | ⟨-, -, -, -, -, h⟩ | ⟨-, -, -, hf0, -⟩ |
-    ⟨-, -, -, -, hf0, -⟩ <;> omega
+  rcases hcov with ⟨-, -, hl, -, -, h⟩ | ⟨-, -, -, -, -, h⟩ | ⟨-, -, hl, hf0, -, h⟩ |
+    ⟨-, -, -, -, hf0, -, h⟩ <;> omega
 
-/-- **From round `R₀` on, a quorum a node holds has `f + 1` reliable
-authors.** -/
-theorem quorum_reliable (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hout : Live.OutsideBelow cfg H T tr R₀)
-    {v : Validator} (hv : v ∈ H) {K r : ℕ} (hr : R₀ ≤ r)
-    (hq : cfg.q ≤ ((stateBefore cfg tr K v).disk.authorsAt r).card) :
-    cfg.f + 1 ≤ (((stateBefore cfg tr K v).disk.authorsAt r).filter (· ∈ T)).card := by
-  have h2f := two_f_lt_q hadm
-  have hsub : (stateBefore cfg tr K v).disk.authorsAt r ⊆
-      ((stateBefore cfg tr K v).disk.authorsAt r).filter (· ∈ T) ∪ Hᶜ := by
-    intro a ha
-    by_cases haH : a ∈ H
-    · exact Finset.mem_union_left _
-        (Finset.mem_filter.mpr ⟨ha, mem_of_stored htime hout hv haH hr ha⟩)
-    · exact Finset.mem_union_right _ (Finset.mem_compl.mpr haH)
+/-- **A quorum has `f + 1` reliable authors**: at most `f + c` validators
+are outside the `n − f − c` reliable ones. -/
+theorem quorum_reliable (hadm : cfg.Admissible)
+    (hcT : Fintype.card Validator - cfg.f - cfg.c ≤ T.card) {A : Finset Validator}
+    (hq : cfg.q ≤ A.card) : cfg.f + 1 ≤ (A.filter (· ∈ T)).card := by
+  have h2f := two_f_c_lt_q hadm
+  have hsub : A ⊆ A.filter (· ∈ T) ∪ Tᶜ := fun a ha => by
+    by_cases haT : a ∈ T
+    · exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨ha, haT⟩)
+    · exact Finset.mem_union_right _ (Finset.mem_compl.mpr haT)
   have := (Finset.card_le_card hsub).trans (Finset.card_union_le _ _)
+  rw [Finset.card_compl] at this
+  have := T.card_le_univ
   omega
 
-/-- **A node behind a round holds an earlier reliable block of it**: from
-round `R₀` on, one of the `f + 1` authors of round `n + 1` it holds is in
-`T`, is not the node, and persisted the block at an earlier event. -/
-theorem behind_earlier (htime : Converge.TimelyAuthentic cfg H tr)
-    (hinj : Converge.HashInjective cfg H tr) (hTH : T ⊆ H) (hf : Hᶜ.card ≤ cfg.f)
-    (hout : Live.OutsideBelow cfg H T tr R₀) {w : Validator} (hw : w ∈ H)
+/-- **A node behind a round holds an earlier honest block of it**: one of
+the `f + 1` authors of round `n + 1` it holds is honest, is not the node,
+and persisted the block at an earlier event. -/
+theorem behind_honest (htime : Converge.TimelyAuthentic cfg H tr)
+    (hinj : Converge.HashInjective cfg H tr) (hf : Hᶜ.card ≤ cfg.f) {w : Validator} (hw : w ∈ H)
     {i : ℕ} {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (w, inp))
     {x y : State Validator BlockId Payload} {o : List (Output Validator BlockId Payload)}
     {e : BlockId × Block Validator BlockId Payload} {n : ℕ}
@@ -468,16 +448,15 @@ theorem behind_earlier (htime : Converge.TimelyAuthentic cfg H tr)
     (hb : tryBuild (cfg.at w) x = some (y, o)) (heo : e ∈ persists o)
     (he : e ∈ persists (outputsAt cfg tr i)) (hxt : x.top = some n)
     (hgx : Grows x.disk (stateBefore cfg tr (i + 1) w).disk)
-    (hbeh : behind (cfg.at w) x.disk n) (hR : R₀ ≤ n + 1) :
-    ∃ w' ∈ T, w' ≠ w ∧ ∃ j < i, ∃ inp' z, tr[j]? = some (w', inp') ∧
+    (hbeh : behind (cfg.at w) x.disk n) :
+    ∃ w' ∈ H, w' ≠ w ∧ ∃ j < i, ∃ inp' z, tr[j]? = some (w', inp') ∧
       z ∈ persists (outputsAt cfg tr j) ∧ z.2.round = n + 1 ∧ z.1 ∈ x.disk.ids ∧
       x.disk.blk z.1 = z.2 := by
-  -- an author of round `n + 1` in `T`
-  obtain ⟨w', hw'A, hw'T⟩ : ∃ w' ∈ x.disk.authorsAt (n + 1), w' ∈ T := by
+  -- an honest author of round `n + 1`
+  obtain ⟨w', hw'A, hw'T⟩ : ∃ w' ∈ x.disk.authorsAt (n + 1), w' ∈ H := by
     by_contra h
     push_neg at h
-    have hsub : x.disk.authorsAt (n + 1) ⊆ Hᶜ := fun a ha => Finset.mem_compl.mpr fun haH =>
-      h a ha (mem_of_stored htime hout hw haH hR (Grows.authorsAt hgx _ ha))
+    have hsub : x.disk.authorsAt (n + 1) ⊆ Hᶜ := fun a ha => Finset.mem_compl.mpr (h a ha)
     have := Finset.card_le_card hsub
     change cfg.f + 1 ≤ _ at hbeh
     omega
@@ -507,7 +486,7 @@ theorem behind_earlier (htime : Converge.TimelyAuthentic cfg H tr)
   have hzF := hgx.1 hz.1
   have hk := (Converge.inv_before (cfg := cfg) (tr := tr) (i + 1) w).known z hzF
   rw [hgx.blk hz.1] at hk
-  have hp := own_known htime hw (hTH hw'T) le_rfl hk hzc
+  have hp := own_known htime hw hw'T le_rfl hk hzc
   obtain ⟨j, hj, hjw', hjz⟩ := mem_persists_before (cfg := cfg) w' (i + 1) hp
   have hji : j ≠ i := by
     rintro rfl

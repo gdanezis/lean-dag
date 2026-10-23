@@ -179,8 +179,8 @@ wave is in progress, either
   and a node behind builds it without waiting. With a valid block of a
   round in hand, whose history holds `q` authors of each round below, a
   node thus builds every round below it at once. The liveness argument
-  reads that honest author as a reliable one, from a round `R₀` above
-  which the honest nodes outside the reliable set build nothing (§5.1).
+  traces that honest author's block back to a timer armed with a quorum
+  of the round, or to the tests (§5.3).
 
 Both tests read a slot's leader blocks off the round index:
 `Store.leaderBlocks st k` is the set of blocks of `atRound` at the
@@ -384,8 +384,8 @@ since no block is collected.
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest disk is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
 | V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, with at most `f` nodes outside the honest set, every block an honest node broadcast, with its history, ends on every honest node's disk. The fault bound makes the pruned answer (§3.4) sound: a block left out of an answer is reached from a round-`(r − 1)` block of an honest author in the asker's quorum. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain`, `Node.Quorate.run`, `Node.mem_coreSets`, `Node.pruned_chain`, `Node.eq_of_persists` |
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
-| V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, timers on time, timeouts above `2(Δ + Δₛ)`, and the honest nodes outside the reliable set building only below a round `R₀`, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round at or above `R₀` that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy` |
-| V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` on, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. With every honest node reliable, `R₀ = 0`: after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.topTimerBy_of_up`, `Node.own_reaches`, `Node.Chain` |
+| V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes' timers on time, no honest node's timer early, and timeouts above `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
+| V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` on, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.topTimerBy_of_up`, `Node.own_reaches`, `Node.Chain` |
 
 Every claim depends only on the standard axioms (`propext`,
 `Classical.choice`, `Quot.sound`; `LeanDagTest/Node/Axioms.lean`).
@@ -460,8 +460,9 @@ assumptions up to a time `t₁`, over a reliable set `T ⊆ H` of at least
 * **times do not decrease** (`TimeMono`);
 * **delivery** (`DeliveredWithin`): a message one reliable node sends
   another at time `t` arrives by `max t gst + Δ`;
-* **timers** (`TimersOnTime`): a timer a reliable node sets at time `t`
-  for `a` ticks fires at `t + a`, and none fires earlier;
+* **timers** (`TimersFire`, `TimersAfterSet`): a timer a reliable node
+  sets at time `t` for `a` ticks fires at `t + a`, and no honest node's
+  timer fires earlier than its delay after it was set;
 * **synchronisation** (`SyncedWithin`): a reliable node that receives a
   reliable node's block at time `t` receives after it, by
   `max t gst + Δₛ`, every block the honest nodes know that the block
@@ -470,9 +471,6 @@ assumptions up to a time `t₁`, over a reliable set `T ⊆ H` of at least
   fetch (§3.4), since efficient synchronisation is out of scope (§1);
   the fetch meets it with `Δₛ = 2Δ` when the block's author answers;
 * every reliable node **starts** by GST (`StartedBy`);
-* the honest nodes outside `T` build **only below a round** `R₀`
-  (`OutsideBelow`): a node that crashed for good built nothing above its
-  last round, and `R₀ = 0` when `T` is every honest node;
 * timely authentication of blocks, a block hash injective on every
   block, so no stored block has the identifier of the node's next one
   (`fresh_before`), and `2 (Δ + Δₛ) < timeout r` at every round.
@@ -503,7 +501,7 @@ first two at GST (`TopTimerBy.of_fire`). The claim has three parts.
   one; so it builds (`tryBuild_isSome`), against its being settled.
 * **Decision** (`Decides`): a node outputs a slot's decision only once
   every slot below it is decided, so the claim is about runs. Suppose
-  every reliable node is below a round `n₀ ≥ R₀` at GST, and slots
+  every reliable node is below a round `n₀` at GST, and slots
   `b … b + c − 1`, at or above `n₀`, are led by reliable nodes with `c`
   spanning the rule's eligibility (`SpansEligible c`). Once every
   reliable node is at the decision round of slot `b + c − 1`, at `t`,
@@ -527,12 +525,28 @@ after a wait. The program supplies them from round `n₀` on
 block built on the tests reaches or certifies the leader block; one
 built on the timer references every reliable block of the round below,
 which its builder holds (`waited_holds`); and one built on being behind
-does too (`refs_all`). Its builder holds an earlier block of the round by
-a reliable node (`behind_earlier`). That block did not pass the tests,
-or the references it lends would have, and the node would have built on
-those (`ready_transfer`). So it waited or was behind in turn, and by
-induction on the event that built it references every reliable block of
-the round below, which the node then holds.
+does too (`refs_all`). The argument is about time, over every honest
+builder, reliable or not (`held_before`): when an honest block of round
+`n + 1` that did not pass the tests is built, every reliable block of
+round `n` has already reached every reliable node. If it was built on
+the timer, its builder armed the timer with a quorum of round `n` a
+timeout before, and `2A` after that every reliable node holds the
+reliable blocks of the round. If it was built on being behind, its
+builder holds an earlier honest block of the round (`behind_honest`),
+which did not pass the tests either, or the references it lends would
+have and the node would have built on those (`ready_transfer`); the
+claim follows by induction on the event that built it. A reliable node
+building on the timer or behind therefore holds, and references, every
+reliable block of the round below.
+
+This needs of an honest node outside the reliable set only that its
+timers do not fire early. Without it the claim fails: at Orcaella with
+`n = 9`, `f = 1` and `c = 1`, a Byzantine node and an honest node
+whose round timer fires at once can build the vote round before a
+reliable leader's block reaches three reliable nodes, which are then
+behind and build without it; with the other four voting, the slot has
+neither the seven votes a commit needs nor the seven blamers a skip
+needs, and the same at every slot leaves every slot undecided.
 
 **The armed timer.** A node sets the timer of its top round only once
 its memory holds `q` authors of the round (`arm`, `Armed`), which it
@@ -542,24 +556,26 @@ timer it sets is at or below its top, one of its top round above `0`
 only so (`TimersSet`, `timersSet_before`). A node that built round
 `n + 1 > n₀` on the timer of round `n` therefore set it past GST, at an
 event at which it held `q` authors of round `n`, a timeout before it
-fired (`timer_set`, `Helpers/Armed.lean`). From `R₀` on those authors
-are reliable but for at most `f`, and `2f + 1 ≤ q` on every row the
-inequalities cover (`two_f_lt_q`), so `f + 1` of them are reliable
-(`quorum_reliable`).
+fired (`timer_set`, `Helpers/Armed.lean`). Those authors are reliable but
+for the at most `f + c` validators outside the reliable set, and
+`2f + c + 1 ≤ q` on every admissible row, from its commit threshold and
+its link or certificate inequality (`two_f_c_lt_q`), so `f + 1` of them
+are reliable (`quorum_reliable`). The same holds of an honest node
+outside the reliable set, given that its timers do not fire early.
 
 **Catch-up.** Past GST, once `f + 1` reliable nodes are at round `n` or
 above at `τ`, every reliable node is at `n` or above at `τ + A`
 (`catches_up`, `Helpers/Catch.lean`). A node at a lower round `m` at
 `τ + A` holds the round-`m + 1` blocks of those nodes, so it is behind
 round `m + 1`, and with them `q` authors of round `m`
-(`quorum_of_held`); settled, it would build. So a node that waited round
-`n`'s timer holds every reliable round-`n` block: every reliable node is
-at round `n` `A` after the timer was armed, and its block arrives `A`
-after that, before the timer fires, when `2A < timeout`
-(`waited_holds`).
+(`quorum_of_held`); settled, it would build. So once an honest node armed
+round `n`'s timer, every reliable node holds every reliable round-`n`
+block `2A` later: every reliable node is at round `n` `A` after the timer
+was armed, and its block arrives `A` after that, before the timer fires,
+when `2A < timeout` (`waited_holds`).
 
 No bound on how far apart the reliable nodes build is needed, so the
-decision part starts from any round `n₀ ≥ R₀` above the reliable nodes'
+decision part starts from any round `n₀` above the reliable nodes'
 rounds at GST, and production holds from GST. Setting the timer at the
 build would not do: a node could build on the tests, with blocks of
 Byzantine authors in its quorum, ahead of some reliable nodes, and its
@@ -632,9 +648,10 @@ the argument of §5.2–5.4 at `G`:
 
 The decision part needs no synchronisation point (§5.3), so after a
 recovery the reliable nodes decide every reliably led run of slots from
-a round at or above `R₀` that every reliable node was below at `G`.
-Where every honest node is reliable, `R₀ = 0`: after every node crashed
-and restarted, the chain decides again.
+a round that every reliable node was below at `G`, whatever the honest
+nodes outside the reliable set do, provided their timers do not fire
+early. Where every honest node is reliable: after every node crashed and
+restarted, the chain decides again.
 
 ## 6. Testing
 
@@ -785,7 +802,4 @@ decisions resuming after every node crashed (§3.6, §5.6). Open:
   and the memory holds every block of its rounds, so an equivocator can
   grow it by its twins;
 * catch-up is costly to compute: the restarted node asks for the
-  missing history on account of every block it receives (§6, item 3);
-* the liveness claim covers honest nodes outside the reliable set only
-  once they build nothing above a round `R₀` (§5.1): an honest node that
-  stays slow and keeps building is not covered.
+  missing history on account of every block it receives (§6, item 3).
