@@ -5,6 +5,7 @@ import LeanDag.Node.Runs.Proof
 import LeanDag.Node.Converge.Proof
 import LeanDag.Node.Live.Proof
 import LeanDag.Node.Refines.Proof
+import LeanDag.Node.Sync.Proof
 /-!
 # The node's theorems use only the standard axioms
 -/
@@ -56,3 +57,9 @@ info: 'LeanDag.Node.Refines.holds' depends on axioms: [propext, Classical.choice
 -/
 #guard_msgs in
 #print axioms LeanDag.Node.Refines.holds
+
+/--
+info: 'LeanDag.Node.Sync.holds' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms LeanDag.Node.Sync.holds

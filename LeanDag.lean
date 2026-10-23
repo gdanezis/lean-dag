@@ -607,3 +607,9 @@ import LeanDag.Node.Helpers.Recover
 import LeanDag.Node.Helpers.Run
 import LeanDag.Node.Refines.Statement
 import LeanDag.Node.Refines.Proof
+import LeanDag.Node.Sync.Model.Stream
+import LeanDag.Node.Sync.Model.Net
+import LeanDag.Node.Sync.Statement
+import LeanDag.Node.Sync.Helpers.Stream
+import LeanDag.Node.Sync.Helpers.Net
+import LeanDag.Node.Sync.Proof
