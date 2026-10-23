@@ -385,7 +385,7 @@ since no block is collected.
 | V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, with at most `f` nodes outside the honest set, every block an honest node broadcast, with its history, ends on every honest node's disk. The fault bound makes the pruned answer (§3.4) sound: a block left out of an answer is reached from a round-`(r − 1)` block of an honest author in the asker's quorum. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain`, `Node.Quorate.run`, `Node.mem_coreSets`, `Node.pruned_chain`, `Node.eq_of_persists` |
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes' timers on time, no honest node's timer early, and timeouts above `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
-| V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` on, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.topTimerBy_of_up`, `Node.own_reaches`, `Node.Chain` |
+| V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` on, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
 | V12 | **Refinement**: for an admissible configuration at the bounded vote, over a trace with timely authentication, an injective hash and at most `f` nodes outside the honest set, there is a `BlockRecord` at quorum `q` of which every honest disk, before every event, is a cut; every honest node's decisions are none or `Scheme.tryDecide` from slot `0` on a view of it that the node's disk holds; and every honest block above round `0` references a block of its author. Under the assumptions of V11 (no timer need fire) or of V11′, it has the scheme's `WaveFacts` over every window of rounds from one above every reliable node's round at GST, and every slot of a reliably led run is decided by every reliable node to a leader block that reaches every block of its author at or below its round. | `Node.Refines.HasRecord` (proved, §5.7): `Node.commitInv_before`, `Node.selfParent_of_honest`, `Node.own_reaches_record`, `Node.waveFacts_of_run`, `Node.run_commits`, `Refines.waves_leads` |
 
 Every claim depends only on the standard axioms (`propext`,
@@ -486,8 +486,10 @@ Let `A = Δ + Δₛ`: a reliable block built at `s` past GST is delivered to
 every reliable node by `max s gst + Δ`, and its history arrives `Δₛ`
 later, so every other reliable node holds it by `max s gst + A`,
 whatever round it is at (`arrival_of_delivered`, `Helpers/Arrive.lean`).
-The argument below reads the run only through this arrival (`Arrival`),
-through the armed timer of a node's top round firing within its timeout
+The argument below reads the run only through this arrival, and only for
+blocks at their author's round at GST or above (`Arrival`): a node's top
+block past GST (`top_arrives`), and blocks above every reliable node's
+round at GST. It also reads the run through the armed timer of a node's top round firing within its timeout
 (`TopTimerBy`, `Helpers/Armed.lean`), and through timers firing no
 earlier than set (`TimersAfterSet`); the assumptions of §5.1 give the
 first two at GST (`TopTimerBy.of_fire`). The claim has three parts.
@@ -495,8 +497,11 @@ first two at GST (`TopTimerBy.of_fire`). The claim has three parts.
 * **Production** (`Produces`): past GST, once every reliable node is at
   round `n` or above at `s`, every reliable node is above `n` at
   `s + A + timeout n`. By `s + A` a reliable node at round `n` holds
-  every reliable round-`n` block (`round_arrives`), so a quorum of the
-  round, and has armed the round's timer (`armed_before`), which fires by
+  every reliable node's top block at `s` (`top_arrives`). If one is above
+  round `n`, its history holds `q` authors of round `n`
+  (`quorum_below`); otherwise they are all of round `n`. So the node holds
+  a quorum of the round, and has armed the round's timer
+  (`armed_before`), which fires by
   `s + A + timeout n`. A node still at round `n` then is settled
   (`settled_before`), the round's timer has fired and stays so
   (`fired_stays`), and it holds no block with the identifier of its next
@@ -568,9 +573,11 @@ outside the reliable set, given that its timers do not fire early.
 **Catch-up.** Past GST, once `f + 1` reliable nodes are at round `n` or
 above at `τ`, every reliable node is at `n` or above at `τ + A`
 (`catches_up`, `Helpers/Catch.lean`). A node at a lower round `m` at
-`τ + A` holds the round-`m + 1` blocks of those nodes, so it is behind
-round `m + 1`, and with them `q` authors of round `m`
-(`quorum_of_held`); settled, it would build. So once an honest node armed
+`τ + A` holds the top blocks of those nodes. If they are all of round
+`m + 1`, they are `f + 1` authors of that round; if one is above it, its
+history holds `q` of them (`quorum_below`). Either way the node is behind
+round `m + 1` and holds `q` authors of round `m`; settled, it would
+build. So once an honest node armed
 round `n`'s timer, every reliable node holds every reliable round-`n`
 block `2A` later: every reliable node is at round `n` `A` after the timer
 was armed, and its block arrives `A` after that, before the timer fires,
@@ -640,13 +647,14 @@ the argument of §5.2–5.4 at `G`:
   (`sends_again`): when its retry timer fires it builds above that round
   or resends its top block, or it built above before, and the retry
   timer cannot have fired by `t₀`, since then it would have been set
-  again later (`retry_last`). Its
-  own blocks form a chain (`Chain`, `own_reaches`): each references its
-  block of the round below (`own_mem_refsAt`), and no block in its name
-  enters its disk but those it builds. So the lost block lies in the
-  history of the block sent again, which reaches every other reliable
-  node with its history by `t₀ + W + Δ + Δₛ`, whatever round that node is
-  at (`arrives`, `mem_of_reaches_known`).
+  again later (`retry_last`). The argument reads only blocks at their
+  author's round at `G` or above (`Arrival`). A lost block of that round
+  lies at the node's round at `t₀` and at `G`, so the block sent again
+  is of its round and, an honest node having one block a round
+  (`eq_of_persists`), is that block; it reaches every other reliable node
+  with its history by `t₀ + W + Δ + Δₛ`, whatever round that node is at
+  (`arrives`). The argument reads no reference of a node to its own
+  blocks.
 
 The decision part needs no synchronisation point (§5.3), so after a
 recovery the reliable nodes decide every reliably led run of slots from
@@ -813,7 +821,8 @@ rule: it references its own block of the round below, and builds rounds
 in sequence (§3.2), so a reliable node's chain is unbroken from its
 genesis block. V12 proves it for every honest block above round `0`
 (`selfParent_of_honest`), and the inclusion it gives a reliable
-leader's committed block (`own_reaches_record`).
+leader's committed block (`own_reaches_record`). V11 and V11′ read no
+reference of a node to its own blocks (§5.6).
 
 ## 9. Next
 

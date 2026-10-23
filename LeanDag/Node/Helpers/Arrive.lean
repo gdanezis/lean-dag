@@ -13,8 +13,9 @@ that a reliable node `v` is given is held by `v` once its history has
 been synchronised (`arrives`,
 `arrives_zero`). Past GST a reliable node's block built at `s` is
 therefore held by every reliable node by `max s gst + Δ + Δₛ`
-(`arrival_of_delivered`): the arrival the liveness argument reads
-(`Arrival`, `round_arrives`), and a block held is as built
+(`arrival_of_delivered`). The liveness argument reads arrival only for
+blocks at their author's round at `G` or above (`Arrival`), so for a
+node's top block past `G` (`top_arrives`); a block held is as built
 (`held_as_built`).
 -/
 
@@ -487,13 +488,14 @@ variable {P : Validity Validator BlockId Payload} {H T : Finset Validator} {time
 
 variable (cfg) in
 /-- **Reliable blocks arrive within `A` past `G`**: a block a reliable
-node `u` built at an event at or before `s` is held by every other
-reliable node `v` after `v`'s events by `max s G + A`. -/
+node `u` built at an event at or before `s`, at `u`'s round at `G` or
+above, is held by every other reliable node `v` after `v`'s events by
+`max s G + A`. -/
 def Arrival (T : Finset Validator) (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ)
     (G A t₁ : ℕ) : Prop :=
   ∀ u ∈ T, ∀ v ∈ T, u ≠ v → ∀ b inp, tr[b]? = some (u, inp) →
-    ∀ e ∈ persists (outputsAt cfg tr b), ∀ s τ, time b ≤ s → max s G + A ≤ τ → τ ≤ t₁ →
-      e.1 ∈ (stateAt cfg tr time v τ).disk.ids
+    ∀ e ∈ persists (outputsAt cfg tr b), topAt cfg tr time u G ≤ e.2.round →
+      ∀ s τ, time b ≤ s → max s G + A ≤ τ → τ ≤ t₁ → e.1 ∈ (stateAt cfg tr time v τ).disk.ids
 
 /-- **Delivery and synchronisation make blocks arrive**: past GST, a
 reliable block built at `s` is delivered to every other reliable node by
@@ -505,7 +507,7 @@ theorem arrival_of_delivered (hσ : cfg.σ = boundedSel)
     (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
     (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁) :
     Arrival cfg T tr time gst (Δ + Δₛ) t₁ := by
-  intro u hu v hv huv b inp hb e hep s τ htb hτ ht₁
+  intro u hu v hv huv b inp hb e hep _ s τ htb hτ ht₁
   have hbu : (tr[b]?.map Prod.fst) = some u := by rw [hb]; rfl
   have hebc := broadcasts_of_persists hep
   obtain ⟨j, hbj, hj, htj⟩ := hdel b u inp hb hu (v, .deliver e.1 e.2)
@@ -540,22 +542,26 @@ theorem held_as_built (htime : Converge.TimelyAuthentic cfg H tr)
     Converge.content_eq hinj hk (Or.inr ⟨b, u, hbu, hTH hu, hep⟩) rfl
   exact ⟨by rw [hblk], by rw [hblk]; exact hgood, hblk⟩
 
-/-- **A reliable peer's block of a round arrives**: past `G`, a reliable
-node at its round `n` or above at `s` has its round-`n` block held by a
-reliable node `v` after `v`'s events by `s + A`. -/
-theorem round_arrives (htime : Converge.TimelyAuthentic cfg H tr)
+/-- **A reliable peer's top block arrives**: past `G`, a reliable node's
+block of its round at `s` is held by a reliable node `v` after `v`'s events
+by `s + A`. -/
+theorem top_arrives (htime : Converge.TimelyAuthentic cfg H tr)
     (hinj : Converge.HashInjective cfg H tr) (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     {G A : ℕ} (harr : Arrival cfg T tr time G A t₁)
-    {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) (huv : u ≠ v) {s n : ℕ} (hgs : G ≤ s)
-    (hus : (stateAt cfg tr time u s).top.isSome) (hun : n ≤ topAt cfg tr time u s) {τ : ℕ}
-    (hτ : s + A ≤ τ) (ht₁ : τ ≤ t₁) :
-    ∃ j ∈ (stateAt cfg tr time v τ).disk.ids, ((stateAt cfg tr time v τ).disk.blk j).round = n ∧
+    {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) (huv : u ≠ v) {s : ℕ} (hgs : G ≤ s)
+    (hus : (stateAt cfg tr time u s).top.isSome) {τ : ℕ} (hτ : s + A ≤ τ) (ht₁ : τ ≤ t₁) :
+    ∃ j ∈ (stateAt cfg tr time v τ).disk.ids,
+      ((stateAt cfg tr time v τ).disk.blk j).round = topAt cfg tr time u s ∧
       ((stateAt cfg tr time v τ).disk.blk j).creator = u := by
-  obtain ⟨b, hbs, hbu, e, hep, her⟩ := built_by (eventsBy tr time s) hus hun
+  obtain ⟨b, hbs, hbu, e, hep, her⟩ := built_by (eventsBy tr time s) hus le_rfl
+  change e.2.round = topAt cfg tr time u s at her
   obtain ⟨inp, hb⟩ := Converge.event_of_map hbu
   have hbl : b < tr.length := (List.getElem?_eq_some_iff.mp hb).1
   have htb : time b ≤ s := (lt_eventsBy hmono hbl).mp hbs
-  have h₁ := harr u hu v hv huv b inp hb e hep s τ htb (by rw [max_eq_left hgs]; omega) ht₁
+  have hGs : topAt cfg tr time u G ≤ topAt cfg tr time u s :=
+    (rises_before (cfg := cfg) (tr := tr) u (eventsBy_mono (tr := tr) (time := time) hgs)).1
+  have h₁ := harr u hu v hv huv b inp hb e hep (her ▸ hGs) s τ htb
+    (by rw [max_eq_left hgs]; omega) ht₁
   obtain ⟨h₂, h₃, -⟩ := held_as_built htime hinj hTH hu hv hb hep h₁
   exact ⟨e.1, h₁, h₂.trans her, h₃⟩
 

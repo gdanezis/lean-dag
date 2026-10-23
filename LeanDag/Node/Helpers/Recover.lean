@@ -2,10 +2,12 @@ import LeanDag.Node.Helpers.Catch
 /-!
 # Recovery from crashes
 
-`docs/validator.md` §5.6. A node's own blocks form a chain (`Chain`): each
-reaches every one of a round at or below its own, since each references
-the node's block of the round below (`own_mem_refsAt`), and no block of
-the node's own enters its disk but those it builds (`Chain.step`).
+`docs/validator.md` §5.6 and §8. A node's own blocks form a chain
+(`Chain`), which inclusion reads (§8): each reaches every one of a round
+at or below its own, since each references the node's block of the round
+below (`own_mem_refsAt`), and no block of the node's own enters its disk
+but those it builds (`Chain.step`). Past the recovery, a reliable block
+at its author's round at `G` or above arrives (`arrival_of_recovered`).
 -/
 
 namespace LeanDag
@@ -425,38 +427,6 @@ theorem chain_before (tr : Trace Validator BlockId Payload) (v : Validator) (i :
       by simp [FloorTop, stateBefore, inputsBefore, run, State.init]⟩
     (fun s inp h => ⟨h.1.step h.2.1 h.2.2 inp, h.2.1.step inp, h.2.2.step inp⟩) i).1
 
-/-- **A node's own blocks reach each other**: of two blocks an honest node
-built, the higher reaches the lower through the blocks the honest nodes
-know. -/
-theorem own_reaches {H : Finset Validator} (hinj : Converge.HashInjective cfg H tr)
-    {u : Validator} (hu : u ∈ H) {a b : ℕ} {inpa inpb : Input Validator BlockId Payload}
-    (ha : tr[a]? = some (u, inpa)) (hb : tr[b]? = some (u, inpb))
-    {y e : BlockId × Block Validator BlockId Payload} (hy : y ∈ persists (outputsAt cfg tr a))
-    (he : e ∈ persists (outputsAt cfg tr b)) (hr : e.2.round ≤ y.2.round) :
-    ReachesFrom (Live.knownBlock cfg H tr) y.1 e.1 := by
-  set E := max a b + 1
-  set st := (stateBefore cfg tr E u).disk
-  have hya := Converge.persist_stored (cfg := cfg) ha hy
-  have heb := Converge.persist_stored (cfg := cfg) hb he
-  have hga := grows_before (cfg := cfg) (tr := tr) u (show a + 1 ≤ E by omega)
-  have hgb := grows_before (cfg := cfg) (tr := tr) u (show b + 1 ≤ E by omega)
-  have hyS : y.1 ∈ st.ids := hga.1 hya.1
-  have heS : e.1 ∈ st.ids := hgb.1 heb.1
-  have hyb : st.blk y.1 = y.2 := by rw [hga.blk hya.1]; exact hya.2
-  have heb' : st.blk e.1 = e.2 := by rw [hgb.blk heb.1]; exact heb.2
-  have hcy : y.2.creator = u :=
-    (Local.authored _ _ _ (cfg.at u) (inputsBefore tr (a + 1) u) y (persists_of_event ha hy)).2
-  have hce : e.2.creator = u :=
-    (Local.authored _ _ _ (cfg.at u) (inputsBefore tr (b + 1) u) e (persists_of_event hb he)).2
-  have hch := chain_before (cfg := cfg) tr u E
-  have hreach : ReachesFrom st.blk y.1 e.1 :=
-    hch.reach y.1 hyS e.1 heS (by rw [hyb]; exact hcy) (by rw [heb']; exact hce)
-      (by rw [hyb, heb']; exact hr)
-  have hK : ∀ w ∈ st.ids, Live.knownBlock cfg H tr w = st.blk w := fun w hw =>
-    knownBlock_eq hinj (Converge.knownBefore_sub hu E
-      ((Converge.inv_before (cfg := cfg) (tr := tr) E u).known w hw))
-  exact (reaches_known hK hyS hreach).1
-
 end Chain
 
 /-! ## Timers past the last restart -/
@@ -678,11 +648,11 @@ variable {P : Validity Validator BlockId Payload} {H T : Finset Validator} {time
 up from `t_r` on, a reliable block built at `s` is held by every other
 reliable node by `max s G + Δ + Δₛ`, for `G = max t_r gst + W` and `W`
 twice the largest timeout of the round below the one a reliable node is
-at by `max t_r gst`. A
-block built from `t_r` on is delivered and synchronised as before; one
-built earlier lies in the history of a block its author sends again
-within `W` (`sends_again`), which is delivered and synchronised, and its
-author's blocks reach each other (`own_reaches`). -/
+at by `max t_r gst`, if its round is its author's round at `G` or above.
+A block built from `t_r` on is delivered and synchronised as before; one
+built earlier is then its author's block of its round at `t₀`, which its
+author sends again within `W` (`sends_again`), delivered and
+synchronised. -/
 theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (hf : Hᶜ.card ≤ cfg.f) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
@@ -693,7 +663,7 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     Arrival cfg T tr time
       (max t_r gst + T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1))
       (Δ + Δₛ) t₁ := by
-  intro u hu v hv huv b inp hb e hep s τ htb hτ ht₁
+  intro u hu v hv huv b inp hb e hep hGe s τ htb hτ ht₁
   set t₀ := max t_r gst with ht₀
   set W := T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u t₀ - 1) with hW
   have hbl : b < tr.length := (List.getElem?_eq_some_iff.mp hb).1
@@ -722,7 +692,7 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
   · -- built from `t_r` on: delivered and synchronised
     obtain ⟨j, hbj, hj, htj⟩ := hsend hb (broadcasts_of_persists hep) hbr (by omega)
     exact hheld hb hep hj hbj hbr (by omega)
-  · -- built before: in the history of a block `u` sends again
+  · -- built before: at `u`'s round at `t₀`, the block `u` sends again
     have hus : (stateAt cfg tr time u t₀).top.isSome :=
       started_at hadm hid htime hTH hmono hstart hu (le_max_right _ _)
     obtain ⟨m, hm⟩ := Option.isSome_iff_exists.mp hus
@@ -733,17 +703,20 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     have hmW : 2 * cfg.timeout (m - 1) ≤ W := by
       rw [← htm]
       exact Finset.le_sup (f := fun u => 2 * cfg.timeout (topAt cfg tr time u t₀ - 1)) hu
-    obtain ⟨k, inpk, y, hk, htk, hkle, hyb, hym, hyc⟩ :=
+    obtain ⟨k, inpk, y, hk, htk, hkle, hyb, hym, -⟩ :=
       sends_again hmono hup hfire hu (le_max_left _ _) hm (by omega)
     obtain ⟨q, hqk, inpq, hq, hyq⟩ := Converge.persists_of_broadcasts hk hyb
+    have hql : q < tr.length := (List.getElem?_eq_some_iff.mp hq).1
+    have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
+    -- it is `u`'s block of `e`'s round, so it is `e`
+    have hyG : y.2.round ≤ topAt cfg tr time u (t₀ + W) :=
+      (top_of_built hmono hq hyq (τ := t₀ + W) ((hmono q k hqk hkl).trans (by omega))).2
+    have hye : y = e := eq_of_persists u
+      (mem_persists_iff.mpr (mem_outputs_of_event hq (mem_persists_iff.mp hyq)))
+      (mem_persists_iff.mpr (mem_outputs_of_event hb (mem_persists_iff.mp hep))) (by omega)
     obtain ⟨j, hkj, hj, htj⟩ := hsend hk hyb (by omega) (by omega)
-    have hyin := hheld hq hyq hj hkj (by omega) (by omega)
-    have hreach := own_reaches hinj (hTH hu) hq hb hyq hep (hem.trans hym)
-    set Z := stateBefore cfg tr (eventsBy tr time τ) v
-    have hK : ∀ w ∈ Z.disk.ids, Live.knownBlock cfg H tr w = Z.disk.blk w := fun w hw =>
-      knownBlock_eq hinj (Converge.knownBefore_sub (hTH hv) _
-        ((Converge.inv_before (cfg := cfg) (tr := tr) _ v).known w hw))
-    exact mem_of_reaches_known hK hyin hreach
+    rw [← hye]
+    exact hheld hq hyq hj hkj (by omega) (by omega)
 
 end Arrival
 

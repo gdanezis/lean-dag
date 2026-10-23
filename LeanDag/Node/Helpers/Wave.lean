@@ -98,7 +98,8 @@ theorem waited_holds (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel) (hadm : cfg.
       (authentic_of_timely htime)).block e.1).creator = v
   · rw [hvw] at hic
     exact own_held hic he ((lt_eventsBy hmono hicl).mpr (by omega))
-  · exact harr _ hcT v hv hvw ic inpc hic e he (time i + (Δ + Δₛ)) τ (by omega)
+  · exact harr _ hcT v hv hvw ic inpc hic e he
+      (by rw [her]; exact ((hbelow _ hcT).trans_le hn₀).le) (time i + (Δ + Δₛ)) τ (by omega)
       (by rw [max_eq_left (by omega)]; omega) hτ₁
 
 variable {N n₀ t : ℕ} (hσ : cfg.σ = boundedSel)
@@ -137,7 +138,8 @@ theorem reliable_held {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) {r : ℕ} 
   by_cases huv : u = v
   · subst huv
     exact own_held hi he ((lt_eventsBy hmono hil).mpr (by omega))
-  exact harr u hu v hv huv i inp hi e he t (t + (Δ + Δₛ)) hit (by rw [max_eq_left hgt]) ht₁
+  exact harr u hu v hv huv i inp hi e he (by rw [her]; exact ((hbelow u hu).trans_le hr₀).le) t
+    (t + (Δ + Δₛ)) hit (by rw [max_eq_left hgt]) ht₁
 
 /-- **An honest block that did not pass the tests comes after every
 reliable block of the round below reached every reliable node**, from

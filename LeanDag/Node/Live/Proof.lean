@@ -10,9 +10,11 @@ import LeanDag.Scheme.Helpers.Reactive
 
 **Production.** Past GST, let every reliable node be at round `n` or
 above at `s`, and `v` reliable and at round `n` at `s + A`, for
-`A = Δ + Δₛ`. Every reliable node's round-`n` block arrived by `s + A`
-(`round_arrives`), so `v` holds a quorum of the round and has armed its
-timer (`armed_before`), which fires by `s + A + timeout n` (`TopTimerBy`).
+`A = Δ + Δₛ`. Every reliable node's top block at `s` arrived by `s + A`
+(`top_arrives`): if one is above round `n` it brings a quorum of the round
+(`quorum_below`), and otherwise they are all of round `n`. So `v` holds a
+quorum of the round and has armed its timer (`armed_before`), which fires
+by `s + A + timeout n` (`TopTimerBy`).
 Suppose `v` is still at round `n` then. It is settled (`settled_before`),
 the round's timer has fired and stays so (`fired_stays`), and it holds no
 block with the identifier of its next one (`fresh_before`), so it builds
@@ -60,8 +62,8 @@ variable [LinearOrder BlockId]
 timeout and `A` after all were at `n` or above. -/
 theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
     {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
-    (hadm : cfg.Admissible) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card) (hq : 2 ≤ cfg.q)
-    (hid : Function.Injective cfg.idOf)
+    (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H)
+    (hqT : cfg.q ≤ T.card) (hq : 2 ≤ cfg.q) (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
     (htop : TopTimerBy cfg T tr time gst t₁)
@@ -92,18 +94,26 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   -- it holds a quorum of round `n` at `τ`, so it armed the round's timer
   obtain ⟨j₀, hj₀, hj₀i, hj₀r, hj₀c⟩ :=
     ownTop_before (cfg := cfg) (tr := tr) (v := v) (eventsBy tr time τ) n hτt
-  have hauth : T ⊆ authorsIn (stateAt cfg tr time v τ).disk.toRecord
-      (stateAt cfg tr time v τ).disk.ids n := by
-    intro w hw
-    rw [mem_authorsIn]
-    by_cases hwv : w = v
-    · subst hwv
-      exact ⟨j₀, hj₀i, hj₀r, hj₀c⟩
-    · exact round_arrives htime hinj hTH hmono harr hw hv hwv hgs (hstarted w hw) (hall w hw)
-        le_rfl (by omega)
+  -- the reliable nodes' top blocks arrive: one above `n` brings a quorum of
+  -- round `n`, and otherwise they are all of round `n`
   have hcard : cfg.q ≤ ((stateAt cfg tr time v τ).disk.authorsAt n).card := by
     rw [Store.authorsAt_eq]
-    exact hqT.trans (Finset.card_le_card hauth)
+    by_cases hup : ∃ w ∈ T, w ≠ v ∧ n < topAt cfg tr time w s
+    · obtain ⟨w, hw, hwv, hwn⟩ := hup
+      obtain ⟨j, hj, hjr, -⟩ :=
+        top_arrives htime hinj hTH hmono harr hw hv hwv hgs (hstarted w hw) (τ := τ) le_rfl
+          (by omega)
+      exact quorum_below hσ hadm hf htime hinj (hTH hv) _ _ hj hjr n hwn
+    · push Not at hup
+      refine hqT.trans (Finset.card_le_card fun w hw => ?_)
+      rw [mem_authorsIn]
+      by_cases hwv : w = v
+      · subst hwv
+        exact ⟨j₀, hj₀i, hj₀r, hj₀c⟩
+      · obtain ⟨j, hj, hjr, hjc⟩ :=
+          top_arrives htime hinj hTH hmono harr hw hv hwv hgs (hstarted w hw) (τ := τ) le_rfl
+            (by omega)
+        exact ⟨j, hj, hjr.trans (le_antisymm (hup w hw hwv) (hall w hw)), hjc⟩
   have harm := armed_before (cfg := cfg) (tr := tr) v (eventsBy tr time τ) n hτt (by
     rw [(stateBefore cfg tr (eventsBy tr time τ) v).mirrors.authorsAt_eq
       ((Converge.floor_before hτt).trans (Nat.sub_le _ _))]
@@ -257,7 +267,7 @@ theorem progresses : Progresses := by
   intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hf hTH hqT hcT
     hq hid hto htime hinj hmono hdel hfire hwait hsync hstart
   have harr := arrival_of_delivered hσ hadm hf htime hinj hTH hmono hdel hsync
-  have hp := produces hadm hTH hqT hq hid htime hinj hmono harr
+  have hp := produces hσ hadm hf hTH hqT hq hid htime hinj hmono harr
     (TopTimerBy.of_fire hmono hfire) hstart
   have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr hwait hstart
   exact ⟨hp, hd, decidesBy hp hd⟩
@@ -275,7 +285,7 @@ theorem recovers : Recovers := by
   have hstart' : StartedBy T tr time G := fun v hv => by
     obtain ⟨i, hi, hit⟩ := hstart v hv
     exact ⟨i, hi, hit.trans hgG⟩
-  have hp := produces hadm hTH hqT hq hid htime hinj hmono harr
+  have hp := produces hσ hadm hf hTH hqT hq hid htime hinj hmono harr
     (topTimerBy_of_up hmono hup hfire hrG) hstart'
   have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr hwait hstart'
   exact ⟨hp, hd, decidesBy hp hd⟩
