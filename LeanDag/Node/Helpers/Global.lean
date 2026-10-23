@@ -166,7 +166,7 @@ theorem ground : Ground (globalRecord hinj hauth) (knownAll cfg H tr) cfg.q wher
 
 /-- **A started node's store is a cut of the record.** -/
 theorem isCut_init (c : Config Validator BlockId Payload) :
-    IsCut (globalRecord hinj hauth) (State.init c).store :=
+    IsCut (globalRecord hinj hauth) (State.init c).disk :=
   fun _ h => absurd h (Finset.notMem_empty _)
 
 end Node

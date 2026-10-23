@@ -33,7 +33,7 @@ theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : 
     ∃ x y o, BuildState (cfg.at v) (globalRecord (hashInjective_of_trace hinj)
         (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i v) inp x ∧
       tryBuild (cfg.at v) x = some (y, o) ∧ e ∈ persists o ∧
-      Grows x.store (stateBefore cfg tr (i + 1) v).store := by
+      Grows x.disk (stateBefore cfg tr (i + 1) v).disk := by
   have hK : ∀ x ∈ knownOf cfg tr v, x ∈ knownAll cfg H tr := fun x hx => ⟨v, hv, hx⟩
   have hg := ground (cfg := cfg) (hashInjective_of_trace hinj) (authentic_of_timely htime)
   have hinv := Converge.inv_before (cfg := cfg) (tr := tr) i v
@@ -114,22 +114,22 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     ∃ i₀ inp x, tr[i₀]? = some (v, inp) ∧ builtAt cfg tr time v (r + 1) = time i₀ ∧
       BuildState (cfg.at v) (globalRecord (hashInjective_of_trace hinj)
         (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x ∧
-        x.top = some r ∧ c ∉ x.store.ids ∧
+        x.top = some r ∧ c ∉ x.disk.ids ∧
       (∃ y o, tryBuild (cfg.at v) x = some (y, o) ∧
         (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
           persists o ∧
         (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
           persists (outputsAt cfg tr i₀)) ∧
       ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).refs =
-        refsAt (cfg.at v) x.store r x.own ∧
-      refsAt (cfg.at v) x.store r x.own ⊆ x.store.ids ∧
-      Grows x.store (stateBefore cfg tr (i₀ + 1) v).store ∧
-      ((reachReady (cfg.at v) x.store (refsAt (cfg.at v) x.store r x.own) r = true ∧
-          certReady (cfg.at v) x.store (refsAt (cfg.at v) x.store r x.own) r = true) ∨
+        refsAt (cfg.at v) x.disk r x.own ∧
+      refsAt (cfg.at v) x.disk r x.own ⊆ x.disk.ids ∧
+      Grows x.disk (stateBefore cfg tr (i₀ + 1) v).disk ∧
+      ((reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r x.own) r = true ∧
+          certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk r x.own) r = true) ∨
         (r ∈ x.fired ∧
-          refsAt (cfg.at v) x.store r x.own = refsFor (cfg.at v) x.store r x.own) ∨
-        (behind (cfg.at v) x.store r ∧
-          refsAt (cfg.at v) x.store r x.own = refsFor (cfg.at v) x.store r x.own))
+          refsAt (cfg.at v) x.disk r x.own = refsFor (cfg.at v) x.disk r x.own) ∨
+        (behind (cfg.at v) x.disk r ∧
+          refsAt (cfg.at v) x.disk r x.own = refsFor (cfg.at v) x.disk r x.own))
     := by
   have hinjR := hashInjective_of_trace hinj
   have hauthR := authentic_of_timely htime
@@ -159,6 +159,17 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
   obtain ⟨x', y, o, hbs, hb, heo, hgx⟩ := build_witness hσ hadm hf htime hinj hv hi₀ he₀
     (by rw [he₀r]; omega)
   obtain ⟨r', hr', -, hexit, hout⟩ := tryBuild_exit hb
+  -- the build read in memory as on disk
+  have hreads := x'.mirrors.build_reads (cfg := cfg.at v) hσ (r := r') (o := x'.own) (by
+      obtain ⟨B, hi⟩ := hbs.inv
+      exact hi.floor.trans ((min_le_right _ _).trans (by rw [hr']; rfl)))
+    (fun j hj => by
+      obtain ⟨j', hj', hjd, hjr, -⟩ := hbs.own r' hr'
+      rw [hj', Option.some.injEq] at hj
+      exact hj ▸ ⟨hjd, hjr⟩)
+  obtain ⟨e₁, e₂, e₃, e₄, e₅⟩ := hreads
+  rw [e₁, e₂, e₄, e₅, e₃] at hexit
+  rw [e₁] at hout
   obtain ⟨r'', id, b, hnew, hrefs, hpred, hr'', hbr, -, hid, -, hst, -, -, -, hout'⟩ :=
     tryBuild_some hb
   rw [hr'] at hr''
@@ -177,13 +188,13 @@ theorem built_block (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
   have hAB := congrArg persists (hout.symm.trans hout')
   rw [persists_built, persists_built, List.singleton_inj] at hAB
   have heo' : e₀ = (id, b) := heo.trans hAB
-  have hcy : e₀.1 ∈ y.store.ids := by
+  have hcy : e₀.1 ∈ y.disk.ids := by
     rw [heo', hst]; exact Store.mem_insert_self
-  have hyb : y.store.blk e₀.1 = b := by
+  have hyb : y.disk.blk e₀.1 = b := by
     rw [heo', hst]
     simp [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
   have hUb : U.block e₀.1 = b := (hy.cut.eq hcy).trans hyb
-  have hbrefs : b.refs = refsAt (cfg.at v) x'.store r' x'.own := by
+  have hbrefs : b.refs = refsAt (cfg.at v) x'.disk r' x'.own := by
     have := congrArg (fun e => e.2.refs) hAB
     simp only at this
     exact this.symm

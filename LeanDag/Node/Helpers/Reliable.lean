@@ -65,16 +65,13 @@ theorem rises_progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     · exact Rises.refl s
 
 theorem rises_advance (s : State Validator BlockId Payload) : Rises s (Node.advance cfg s).1 := by
-  have h₁ := rises_progress (cfg := cfg) (s.store.topRound + 2) s
+  have h₁ := rises_progress (cfg := cfg) (s.disk.topRound + 2) s
   obtain ⟨-, -, hdtop, hdlo, -⟩ := decideStep_bound (cfg := cfg)
-    (Node.progress cfg (s.store.topRound + 2) s).1
+    (Node.progress cfg (s.disk.topRound + 2) s).1
   refine h₁.trans ⟨?_, ?_, ?_⟩
-  · simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
-      arm_decided]; rw [hdtop]
-  · simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
-      arm_decided]; rw [hdtop]; exact id
-  · simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
-      arm_decided]; exact hdlo
+  · simp only [Node.advance, Node.pass, arm_top, flush_top]; rw [hdtop]
+  · simp only [Node.advance, Node.pass, arm_top, flush_top]; rw [hdtop]; exact id
+  · simp only [Node.advance, Node.pass, arm_lo, flush_lo]; exact hdlo
 
 theorem rises_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
     Rises s (quiesce cfg n s).1 :=
@@ -95,15 +92,18 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
   cases inp with
   | start =>
     by_cases h₁ : s.top = none ∧ cfg.Admissible
-    · by_cases h₂ : cfg.idOf cfg.genesis ∉ s.store.ids ∧
-          rowValid cfg.q (Function.update s.store.blk (cfg.idOf cfg.genesis) cfg.genesis)
+    · by_cases h₂ : cfg.idOf cfg.genesis ∉ s.disk.ids ∧
+          rowValid cfg.q (Function.update s.disk.blk (cfg.idOf cfg.genesis) cfg.genesis)
             cfg.genesis
-      · let st := s.store.insert (cfg.idOf cfg.genesis) cfg.genesis h₂.1
+      · let st := s.disk.insert (cfg.idOf cfg.genesis) cfg.genesis h₂.1
           (fun _ hj => absurd hj (Finset.notMem_empty _))
           (fun j hj => absurd hj (Finset.notMem_empty j))
         let gid := cfg.idOf cfg.genesis
         let s₀ : State Validator BlockId Payload :=
-          { s with store := st, top := some 0, own := some gid }
+          { keep s (cfg.idOf cfg.genesis) cfg.genesis h₂.1
+              (fun _ hj => absurd hj (Finset.notMem_empty _))
+              (fun j hj => absurd hj (Finset.notMem_empty j)) with
+              top := some 0, own := some gid }
         refine hset s₀ ⟨by rw [h₁.1]; simp [s₀], fun _ => rfl, le_rfl⟩
           (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
       · rw [show (Node.step cfg s .start).1 = s by simp only [Node.step, dif_neg h₂, if_pos h₁]]
@@ -113,6 +113,7 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · refine hset _ ?_ (by rw [step_deliver hA])
+      simp only [Rises, afterFlush_top, afterFlush_lo]
       exact ⟨le_rfl, fun h => h, le_rfl⟩
     · rw [step_deliver_not hA]; exact Rises.refl s
   | timer r => exact hset { s with fired := fire s r } ⟨le_rfl, id, le_rfl⟩ (step_timer_fst s r)

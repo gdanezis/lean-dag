@@ -62,16 +62,16 @@ omit [Fintype Validator] in
 /-- **The blocks accepting adds come from the list accepted**. -/
 theorem foldl_accept_new : ∀ (l : List (BlockId × Block Validator BlockId Payload))
     (st : Store Validator BlockId Payload) {j : BlockId},
-    j ∈ (l.foldl (fun s e => accept cfg s e.1 e.2) st).ids → j ∉ st.ids →
-      ∃ e ∈ l, (l.foldl (fun s e => accept cfg s e.1 e.2) st).blk j = e.2
+    j ∈ (l.foldl (fun s e => acceptOn cfg s e.1 e.2) st).ids → j ∉ st.ids →
+      ∃ e ∈ l, (l.foldl (fun s e => acceptOn cfg s e.1 e.2) st).blk j = e.2
   | [], st, j, hj, hn => absurd hj hn
   | e :: l, st, j, hj, hn => by
     simp only [List.foldl_cons] at hj ⊢
-    by_cases hj₁ : j ∈ (accept cfg st e.1 e.2).ids
+    by_cases hj₁ : j ∈ (acceptOn cfg st e.1 e.2).ids
     · -- `j` is `e`'s, accepted first
-      have hg := Grows.foldl (cfg := cfg) l (accept cfg st e.1 e.2)
+      have hg := Grows.foldl (cfg := cfg) l (acceptOn cfg st e.1 e.2)
       rw [hg.blk hj₁]
-      unfold accept at hj₁ ⊢
+      unfold acceptOn at hj₁ ⊢
       split
       · rename_i h
         rw [dif_pos h, Store.insert_ids] at hj₁
@@ -88,32 +88,111 @@ omit [Fintype Validator] in
 /-- **The blocks a flush adds come from the pending blocks**. -/
 theorem flush_new : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
     (pend : List (BlockId × Block Validator BlockId Payload)) {j : BlockId},
-    j ∈ (flush cfg fuel st pend).1.ids → j ∉ st.ids →
-      ∃ e ∈ pend, (flush cfg fuel st pend).1.blk j = e.2
+    j ∈ (flushOn cfg fuel st pend).1.ids → j ∉ st.ids →
+      ∃ e ∈ pend, (flushOn cfg fuel st pend).1.blk j = e.2
   | 0, st, pend, j, hj, hn => absurd hj hn
   | fuel + 1, st, pend, j, hj, hn => by
-    unfold flush at hj ⊢
+    unfold flushOn at hj ⊢
     dsimp only at hj ⊢
     split at hj
     · rename_i h; rw [if_pos h]; exact absurd hj hn
     · rename_i h
       rw [if_neg h]
-      have hsub : ∀ e ∈ (pend.partition fun e => ready cfg st e).1 ++
-          (pend.partition fun e => ready cfg st e).2, e ∈ pend := by
+      have hsub : ∀ e ∈ (pend.partition fun e => readyOn cfg st e).1 ++
+          (pend.partition fun e => readyOn cfg st e).2, e ∈ pend := by
         intro e he
         rw [List.partition_eq_filter_filter] at he
         rcases List.mem_append.mp he with he | he
         · exact (List.mem_filter.mp he).1
         · exact (List.mem_filter.mp he).1
-      set st₁ := (pend.partition fun e => ready cfg st e).1.foldl
-        (fun s e => accept cfg s e.1 e.2) st with hst₁
+      set st₁ := (pend.partition fun e => readyOn cfg st e).1.foldl
+        (fun s e => acceptOn cfg s e.1 e.2) st with hst₁
       by_cases hj₁ : j ∈ st₁.ids
-      · have hg := Grows.flush (cfg := cfg) fuel st₁ (pend.partition fun e => ready cfg st e).2
+      · have hg := Grows.flush (cfg := cfg) fuel st₁ (pend.partition fun e => readyOn cfg st e).2
         rw [hg.blk hj₁]
         obtain ⟨e, he, hb⟩ := foldl_accept_new _ st hj₁ hn
         exact ⟨e, hsub e (List.mem_append_left _ he), hb⟩
       · obtain ⟨e, he, hb⟩ := flush_new fuel st₁ _ hj hj₁
         exact ⟨e, hsub e (List.mem_append_right _ he), hb⟩
+
+/-- **The memory holds the round of the top.** -/
+def FloorTop (s : State Validator BlockId Payload) : Prop := s.floor ≤ s.top.getD 0
+
+omit [Fintype Validator] in
+theorem FloorTop.tryBuild {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (h : FloorTop s)
+    (hb : tryBuild cfg s = some (s', out)) : FloorTop s' := by
+  obtain ⟨r, -, -, -, -, -, hr, -, -, -, -, -, htop, -, -, -⟩ := tryBuild_some hb
+  unfold FloorTop at h ⊢
+  rw [tryBuild_floor hb, htop]
+  rw [hr] at h
+  simp only [Option.getD_some] at h ⊢
+  refine max_le (by omega) ?_
+  unfold floorOf
+  rw [htop]
+  exact (min_le_right _ _).trans (by simp)
+
+omit [Fintype Validator] in
+theorem FloorTop.progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payload}, FloorTop s →
+    FloorTop (Node.progress cfg fuel s).1
+  | 0, _, h => h
+  | fuel + 1, s, h => by
+    unfold Node.progress
+    split
+    · rename_i s₁ out hb
+      exact FloorTop.progress fuel (h.tryBuild hb)
+    · exact h
+
+omit [Fintype Validator] in
+theorem FloorTop.decideStep {s : State Validator BlockId Payload} (h : FloorTop s) :
+    FloorTop (Node.decideStep cfg s).1 := by
+  unfold Node.decideStep
+  dsimp only
+  split
+  · unfold FloorTop
+    rw [release_floor, release_top]
+    exact max_le h ((min_le_right _ _).trans (Nat.sub_le _ _))
+  · exact h
+
+omit [Fintype Validator] in
+theorem FloorTop.advance {s : State Validator BlockId Payload} (h : FloorTop s) :
+    FloorTop (Node.advance cfg s).1 := by
+  have h₁ := (h.progress (cfg := cfg) (s.disk.topRound + 2)).decideStep (cfg := cfg)
+  unfold FloorTop at h₁ ⊢
+  simp only [Node.advance, Node.pass, arm_floor, arm_top, flush_floor, flush_top]
+  exact h₁
+
+omit [Fintype Validator] in
+theorem FloorTop.settle {s : State Validator BlockId Payload} (h : FloorTop s) :
+    FloorTop (Node.settle cfg s).1 :=
+  quiesce_ind (fun _ h => h.advance) _ _ h
+
+/-- **A step keeps the memory at the round of the top.** -/
+theorem FloorTop.step {s : State Validator BlockId Payload} (h : FloorTop s)
+    (inp : Input Validator BlockId Payload) : FloorTop (Node.step cfg s inp).1 := by
+  cases inp with
+  | start =>
+    simp only [Node.step]
+    split
+    · rename_i h₁
+      split
+      · refine FloorTop.settle ?_
+        unfold FloorTop at h ⊢
+        rw [h₁.1] at h
+        exact h
+      · exact h
+    · exact h
+  | deliver id b =>
+    simp only [Node.step]
+    split
+    · refine FloorTop.settle ?_
+      unfold FloorTop at h ⊢
+      rw [flush_floor, flush_top]
+      exact h
+    · exact h
+  | timer r => rw [step_timer_fst]; exact FloorTop.settle h
+  | fetchRequest peer r ids => exact h
+  | restart => exact h
 
 variable (cfg) in
 /-- **A node's chain**: no pending block is its own; its own blocks in its
@@ -121,16 +200,16 @@ store lie at or below its top, none before it starts; and each reaches
 every one of a round at or below its own. -/
 structure Chain (s : State Validator BlockId Payload) : Prop where
   pend : ∀ e ∈ s.pending, e.2.creator ≠ cfg.me
-  top : ∀ j ∈ s.store.ids, (s.store.blk j).creator = cfg.me →
-    s.top.isSome ∧ (s.store.blk j).round ≤ s.top.getD 0
-  reach : ∀ j ∈ s.store.ids, ∀ j' ∈ s.store.ids, (s.store.blk j).creator = cfg.me →
-    (s.store.blk j').creator = cfg.me → (s.store.blk j').round ≤ (s.store.blk j).round →
-      ReachesFrom s.store.blk j j'
+  top : ∀ j ∈ s.disk.ids, (s.disk.blk j).creator = cfg.me →
+    s.top.isSome ∧ (s.disk.blk j).round ≤ s.top.getD 0
+  reach : ∀ j ∈ s.disk.ids, ∀ j' ∈ s.disk.ids, (s.disk.blk j).creator = cfg.me →
+    (s.disk.blk j').creator = cfg.me → (s.disk.blk j').round ≤ (s.disk.blk j).round →
+      ReachesFrom s.disk.blk j j'
 
 omit [Fintype Validator] in
 /-- The chain reads only the store, the pending blocks and the top. -/
 theorem Chain.congr {s s' : State Validator BlockId Payload} (h : Chain cfg s)
-    (hst : s'.store = s.store) (hpd : s'.pending = s.pending) (ht : s'.top = s.top) :
+    (hst : s'.disk = s.disk) (hpd : s'.pending = s.pending) (ht : s'.top = s.top) :
     Chain cfg s' :=
   ⟨hpd ▸ h.pend, hst ▸ ht ▸ h.top, hst ▸ h.reach⟩
 
@@ -138,12 +217,12 @@ omit [Fintype Validator] in
 /-- **The chain survives a store grown by blocks of others**, with the
 top kept and no pending block of the node's own. -/
 theorem Chain.grow {s s' : State Validator BlockId Payload} (h : Chain cfg s)
-    (hg : Grows s.store s'.store)
-    (hnew : ∀ j ∈ s'.store.ids, j ∉ s.store.ids → (s'.store.blk j).creator ≠ cfg.me)
+    (hg : Grows s.disk s'.disk)
+    (hnew : ∀ j ∈ s'.disk.ids, j ∉ s.disk.ids → (s'.disk.blk j).creator ≠ cfg.me)
     (hpend : ∀ e ∈ s'.pending, e.2.creator ≠ cfg.me) (ht : s'.top = s.top) : Chain cfg s' := by
-  have hold : ∀ j ∈ s'.store.ids, (s'.store.blk j).creator = cfg.me →
-      j ∈ s.store.ids ∧ s'.store.blk j = s.store.blk j := fun j hj hc => by
-    by_cases hjs : j ∈ s.store.ids
+  have hold : ∀ j ∈ s'.disk.ids, (s'.disk.blk j).creator = cfg.me →
+      j ∈ s.disk.ids ∧ s'.disk.blk j = s.disk.blk j := fun j hj hc => by
+    by_cases hjs : j ∈ s.disk.ids
     · exact ⟨hjs, hg.blk hjs⟩
     · exact absurd hc (hnew j hj hjs)
   refine ⟨hpend, fun j hj hc => ?_, fun j hj j' hj' hc hc' hr => ?_⟩
@@ -160,24 +239,22 @@ theorem Chain.grow {s s' : State Validator BlockId Payload} (h : Chain cfg s)
 omit [Fintype Validator] in
 /-- **Flushing keeps the chain.** -/
 theorem Chain.flushAll {s : State Validator BlockId Payload} (h : Chain cfg s) (fuel : ℕ) :
-    Chain cfg
-      { s with
-        store := (flush cfg fuel s.store s.pending).1
-        pending := (flush cfg fuel s.store s.pending).2 } := by
-  refine h.grow (Grows.flush _ _ _) (fun j hj hn => ?_) (fun e he => ?_) rfl
-  · obtain ⟨e, he, hb⟩ := flush_new (cfg := cfg) fuel s.store s.pending hj hn
-    change (flush cfg fuel s.store s.pending).1.blk j = e.2 at hb
-    change ((flush cfg fuel s.store s.pending).1.blk j).creator ≠ cfg.me
+    Chain cfg (flush cfg fuel s) := by
+  refine h.grow (by rw [flush_disk]; exact Grows.flush _ _ _) (fun j hj hn => ?_)
+    (fun e he => ?_) (flush_top _ _)
+  · rw [flush_disk] at hj ⊢
+    obtain ⟨e, he, hb⟩ := flush_new (cfg := cfg) fuel s.disk s.pending hj hn
     rw [hb]
     exact h.pend e he
-  · exact h.pend e (flush_pending_sub _ _ _ e he)
+  · rw [flush_pending] at he
+    exact h.pend e (flush_pending_sub _ _ _ e he)
 
 omit [Fintype Validator] in
 /-- **Building keeps the chain**: the new block references the node's
 block of the round below, which reaches the rest. -/
 theorem Chain.tryBuild {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : Chain cfg s) (hown : OwnTop cfg s)
-    (hb : tryBuild cfg s = some (s', out)) : Chain cfg s' := by
+    (hfl : FloorTop s) (hb : tryBuild cfg s = some (s', out)) : Chain cfg s' := by
   obtain ⟨r, id, b, hnew, hrefs, hpred, hr, hbr, hbc, hid, -, hst, htop, hpd, -, hout⟩ :=
     tryBuild_some hb
   obtain ⟨r', hr', -, -, hout'⟩ := tryBuild_exit hb
@@ -185,23 +262,28 @@ theorem Chain.tryBuild {s s' : State Validator BlockId Payload}
   cases hr'
   have hAB := congrArg persists (hout.symm.trans hout')
   rw [persists_built, persists_built, List.singleton_inj] at hAB
-  have hbR : b.refs = refsAt cfg s.store r s.own := by
+  have hbR : b.refs = refsAt cfg s.memory r s.own := by
     have := congrArg (fun e => e.2.refs) hAB
     simp only at this
     exact this
   obtain ⟨o, ho, hoi, hor, hoc⟩ := hown r hr
-  have hoR : o ∈ b.refs := by rw [hbR, ho]; exact own_mem_refsAt hoi hor hoc
-  have hblk : ∀ j ∈ s.store.ids, s'.store.blk j = s.store.blk j := fun j hj => by
-    rw [hst]; exact (Grows.insert s.store).blk hj
-  have hid' : s'.store.blk id = b := by
+  have hom : o ∈ s.memory.ids := s.mirrors.mem_of hoi (by
+    unfold FloorTop at hfl; rw [hr] at hfl; rw [hor]; exact hfl)
+  have hoR : o ∈ b.refs := by
+    rw [hbR, ho]
+    exact own_mem_refsAt hom (by rw [s.mirrors.round hom, hor])
+      (by rw [s.mirrors.creator hom, hoc])
+  have hblk : ∀ j ∈ s.disk.ids, s'.disk.blk j = s.disk.blk j := fun j hj => by
+    rw [hst]; exact (Grows.insert s.disk).blk hj
+  have hid' : s'.disk.blk id = b := by
     rw [hst]; exact Std.TreeMap.getD_insert_self
-  have hmem : ∀ j ∈ s'.store.ids, j = id ∨ j ∈ s.store.ids := fun j hj => by
+  have hmem : ∀ j ∈ s'.disk.ids, j = id ∨ j ∈ s.disk.ids := fun j hj => by
     rw [hst, Store.insert_ids] at hj
     exact Finset.mem_insert.mp hj
-  have hg : Grows s.store s'.store := hst ▸ Grows.insert s.store
-  have hidm : id ∈ s'.store.ids := by rw [hst, Store.insert_ids]; exact Finset.mem_insert_self _ _
+  have hg : Grows s.disk s'.disk := hst ▸ Grows.insert s.disk
+  have hidm : id ∈ s'.disk.ids := by rw [hst, Store.insert_ids]; exact Finset.mem_insert_self _ _
   -- the old blocks of the node's own lie at or below `r`
-  have hle : ∀ j ∈ s.store.ids, (s.store.blk j).creator = cfg.me → (s.store.blk j).round ≤ r :=
+  have hle : ∀ j ∈ s.disk.ids, (s.disk.blk j).creator = cfg.me → (s.disk.blk j).round ≤ r :=
     fun j hj hc => by have := (h.top j hj hc).2; rw [hr] at this; exact this
   refine ⟨by rw [hpd]; exact h.pend, fun j hj hc => ?_, fun j hj j' hj' hc hc' hjr => ?_⟩
   · rw [htop]
@@ -213,7 +295,7 @@ theorem Chain.tryBuild {s s' : State Validator BlockId Payload}
     · exact ReachesFrom.refl
     · -- the new block, through the node's block of round `r`
       rw [hblk j' hjs'] at hc' hjr
-      have hoj : ReachesFrom s.store.blk o j' :=
+      have hoj : ReachesFrom s.disk.blk o j' :=
         h.reach o hoi j' hjs' hoc hc' (by rw [hor]; exact hle j' hjs' hc')
       refine ReachesFrom.of_mem_refs (by rw [hid']; exact hoR) (ReachesFrom.grows hg hoi hoj)
     · -- an old block below the new one: impossible
@@ -227,40 +309,36 @@ theorem Chain.tryBuild {s s' : State Validator BlockId Payload}
 
 omit [Fintype Validator] in
 theorem Chain.progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payload}, Chain cfg s →
-    OwnTop cfg s → Chain cfg (Node.progress cfg fuel s).1
-  | 0, _, h, _ => h
-  | fuel + 1, s, h, hown => by
+    OwnTop cfg s → FloorTop s → Chain cfg (Node.progress cfg fuel s).1
+  | 0, _, h, _, _ => h
+  | fuel + 1, s, h, hown, hfl => by
     unfold Node.progress
     split
     · rename_i s₁ out hb
-      exact Chain.progress fuel (h.tryBuild hown hb) (OwnTop.tryBuild hb)
+      exact Chain.progress fuel (h.tryBuild hown hfl hb) (OwnTop.tryBuild hb) (hfl.tryBuild hb)
     · exact h
 
 omit [Fintype Validator] in
 theorem Chain.advance {s : State Validator BlockId Payload} (h : Chain cfg s)
-    (hown : OwnTop cfg s) : Chain cfg (Node.advance cfg s).1 := by
-  refine Chain.congr ?_ (advance_store s) (advance_pending s) (advance_top s)
+    (hown : OwnTop cfg s) (hfl : FloorTop s) : Chain cfg (Node.advance cfg s).1 := by
+  refine Chain.congr ?_ (advance_disk s) (advance_pending s) (advance_top s)
   simp only [Node.pass]
-  have h₁ := Chain.progress (s.store.topRound + 2) h hown
-  generalize Node.progress cfg (s.store.topRound + 2) s = r at h₁
-  have h₂ : Chain cfg (Node.decideStep cfg r.1).1 := by
-    have hd : (Node.decideStep cfg r.1).1 =
-        { r.1 with
-          lo := (Node.decideStep cfg r.1).1.lo
-          decided := (Node.decideStep cfg r.1).1.decided } := by
-      unfold Node.decideStep; dsimp only; split <;> rfl
-    rw [hd]; exact h₁.congr rfl rfl rfl
+  have h₁ := Chain.progress (s.disk.topRound + 2) h hown hfl
+  generalize Node.progress cfg (s.disk.topRound + 2) s = r at h₁
+  have h₂ : Chain cfg (Node.decideStep cfg r.1).1 :=
+    h₁.congr (decideStep_disk _) (decideStep_pending _) (decideStep_top _)
   exact h₂.flushAll _
 
 omit [Fintype Validator] in
 theorem Chain.settle {s : State Validator BlockId Payload} (h : Chain cfg s)
-    (hown : OwnTop cfg s) : Chain cfg (Node.settle cfg s).1 :=
-  (quiesce_ind (P := fun s => Chain cfg s ∧ OwnTop cfg s)
-    (fun _ h => ⟨h.1.advance h.2, h.2.advance⟩) _ _ ⟨h, hown⟩).1
+    (hown : OwnTop cfg s) (hfl : FloorTop s) : Chain cfg (Node.settle cfg s).1 :=
+  (quiesce_ind (P := fun s => Chain cfg s ∧ OwnTop cfg s ∧ FloorTop s)
+    (fun _ h => ⟨h.1.advance h.2.1 h.2.2, h.2.1.advance, h.2.2.advance⟩) _ _
+    ⟨h, hown, hfl⟩).1
 
 /-- **A step keeps the chain.** -/
 theorem Chain.step {s : State Validator BlockId Payload} (h : Chain cfg s) (hown : OwnTop cfg s)
-    (i : Input Validator BlockId Payload) : Chain cfg (Node.step cfg s i).1 := by
+    (hfl : FloorTop s) (i : Input Validator BlockId Payload) : Chain cfg (Node.step cfg s i).1 := by
   cases i with
   | start =>
     simp only [Node.step]
@@ -269,16 +347,18 @@ theorem Chain.step {s : State Validator BlockId Payload} (h : Chain cfg s) (hown
       split
       · rename_i h₂
         set g := cfg.idOf cfg.genesis
-        let st := s.store.insert g cfg.genesis h₂.1 (fun _ hj => absurd hj (Finset.notMem_empty _))
+        let st := s.disk.insert g cfg.genesis h₂.1 (fun _ hj => absurd hj (Finset.notMem_empty _))
           (fun j hj => absurd hj (Finset.notMem_empty j))
         let s₀ : State Validator BlockId Payload :=
-          { s with store := st, top := some 0, own := some g }
-        have hnone : ∀ j ∈ s.store.ids, (s.store.blk j).creator ≠ cfg.me := fun j hj hc => by
+          { keep s g cfg.genesis h₂.1 (fun _ hj => absurd hj (Finset.notMem_empty _))
+              (fun j hj => absurd hj (Finset.notMem_empty j)) with
+              top := some 0, own := some g }
+        have hnone : ∀ j ∈ s.disk.ids, (s.disk.blk j).creator ≠ cfg.me := fun j hj hc => by
           have := (h.top j hj hc).1; rw [h₁.1] at this; cases this
-        have hmem : ∀ j ∈ st.ids, j = g ∨ j ∈ s.store.ids := fun j hj => by
+        have hmem : ∀ j ∈ st.ids, j = g ∨ j ∈ s.disk.ids := fun j hj => by
           rw [Store.insert_ids] at hj; exact Finset.mem_insert.mp hj
-        have hblk : ∀ j ∈ s.store.ids, st.blk j = s.store.blk j :=
-          fun j hj => (Grows.insert s.store).blk hj
+        have hblk : ∀ j ∈ s.disk.ids, st.blk j = s.disk.blk j :=
+          fun j hj => (Grows.insert s.disk).blk hj
         have hg : st.blk g = cfg.genesis := Std.TreeMap.getD_insert_self
         have hown₀ : OwnTop cfg s₀ := by
           intro r hr
@@ -288,7 +368,11 @@ theorem Chain.step {s : State Validator BlockId Payload} (h : Chain cfg s) (hown
           refine ⟨g, rfl, (by simp [s₀, st, Store.insert_ids]), ?_, ?_⟩
           · change (st.blk g).round = 0; rw [hg]; rfl
           · change (st.blk g).creator = cfg.me; rw [hg]; rfl
-        refine Chain.settle ⟨h.pend, fun j hj hc => ?_, fun j hj j' hj' hc hc' _ => ?_⟩ hown₀
+        have hfl₀ : FloorTop s₀ := by
+          unfold FloorTop at hfl ⊢
+          rw [h₁.1] at hfl
+          exact hfl
+        refine Chain.settle ⟨h.pend, fun j hj hc => ?_, fun j hj j' hj' hc hc' _ => ?_⟩ hown₀ hfl₀
         · refine ⟨rfl, ?_⟩
           rcases hmem j hj with rfl | hjs
           · change (st.blk _).round ≤ 0; rw [hg]; rfl
@@ -307,19 +391,23 @@ theorem Chain.step {s : State Validator BlockId Payload} (h : Chain cfg s) (hown
     by_cases hA : Admits cfg s id b
     · rw [step_deliver hA]
       dsimp only
-      refine Chain.settle ?_ ?_
+      refine Chain.settle ?_ ?_ ?_
       · have h₀ : Chain cfg { s with pending := (id, b) :: s.pending } :=
           ⟨fun e he => by
             rcases List.mem_cons.mp he with rfl | he
             · exact hA.2.1
             · exact h.pend e he, h.top, h.reach⟩
-        exact (h₀.flushAll (s.pending.length + 1)).congr rfl rfl rfl
-      · exact hown.grow (Grows.flush _ _ _) rfl rfl
+        exact h₀.flushAll (s.pending.length + 1)
+      · exact hown.grow (by rw [afterFlush_disk]; exact Grows.flush _ _ _) (afterFlush_top _ _ _)
+          (afterFlush_own _ _ _)
+      · unfold FloorTop at hfl ⊢
+        rw [afterFlush_floor, afterFlush_top]
+        exact hfl
     · rw [step_deliver_not hA]; exact h
   | timer r =>
     rw [step_timer_fst]
     exact Chain.settle (h.congr rfl rfl rfl)
-      (hown.grow (s' := { s with fired := fire s r }) (Grows.refl _) rfl rfl)
+      (hown.grow (s' := { s with fired := fire s r }) (Grows.refl _) rfl rfl) hfl
   | fetchRequest peer r ids => exact h
   | restart => exact h
 
@@ -331,9 +419,11 @@ theorem Chain.init : Chain cfg (State.init cfg) :=
 /-- **A node's chain holds before every event.** -/
 theorem chain_before (tr : Trace Validator BlockId Payload) (v : Validator) (i : ℕ) :
     Chain (cfg.at v) (stateBefore cfg tr i v) :=
-  (inv_before (cfg := cfg) (tr := tr) v (fun s => Chain (cfg.at v) s ∧ OwnTop (cfg.at v) s)
-    ⟨Chain.init, fun _ h => by simp [stateBefore, inputsBefore, run, State.init] at h⟩
-    (fun s inp h => ⟨h.1.step h.2 inp, h.2.step inp⟩) i).1
+  (inv_before (cfg := cfg) (tr := tr) v
+    (fun s => Chain (cfg.at v) s ∧ OwnTop (cfg.at v) s ∧ FloorTop s)
+    ⟨Chain.init, fun _ h => by simp [stateBefore, inputsBefore, run, State.init] at h,
+      by simp [FloorTop, stateBefore, inputsBefore, run, State.init]⟩
+    (fun s inp h => ⟨h.1.step h.2.1 h.2.2 inp, h.2.1.step inp, h.2.2.step inp⟩) i).1
 
 /-- **A node's own blocks reach each other**: of two blocks an honest node
 built, the higher reaches the lower through the blocks the honest nodes
@@ -345,7 +435,7 @@ theorem own_reaches {H : Finset Validator} (hinj : Converge.HashInjective cfg H 
     (he : e ∈ persists (outputsAt cfg tr b)) (hr : e.2.round ≤ y.2.round) :
     ReachesFrom (Live.knownBlock cfg H tr) y.1 e.1 := by
   set E := max a b + 1
-  set st := (stateBefore cfg tr E u).store
+  set st := (stateBefore cfg tr E u).disk
   have hya := Converge.persist_stored (cfg := cfg) ha hy
   have heb := Converge.persist_stored (cfg := cfg) hb he
   have hga := grows_before (cfg := cfg) (tr := tr) u (show a + 1 ≤ E by omega)
@@ -386,7 +476,7 @@ omit [Fintype Validator] in
 /-- Resending broadcasts the node's own block at its top. -/
 theorem broadcast_mem_resend {s : State Validator BlockId Payload} {n : ℕ} {j : BlockId}
     (ht : s.top = some n) (ho : s.own = some j) :
-    Output.broadcast j (s.store.blk j) ∈ Node.resend cfg s := by
+    Output.broadcast j (s.disk.blk j) ∈ Node.resend cfg s := by
   simp [Node.resend, ht, ho]
 
 open Classical in
@@ -476,10 +566,10 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
   -- the step of the timer, when the node stays at `m`, resends
   have hres : (stateBefore cfg tr f u).top = some m → (stateBefore cfg tr (f + 1) u).top = some m →
       (∃ j, (stateBefore cfg tr (f + 1) u).own = some j ∧
-        ((stateBefore cfg tr (f + 1) u).store.blk j).round = m ∧
-        ((stateBefore cfg tr (f + 1) u).store.blk j).creator = u ∧
+        ((stateBefore cfg tr (f + 1) u).disk.blk j).round = m ∧
+        ((stateBefore cfg tr (f + 1) u).disk.blk j).creator = u ∧
         Output.setTimer (m - 1) (2 * cfg.timeout (m - 1)) ∈ outputsAt cfg tr f ∧
-        Output.broadcast j ((stateBefore cfg tr (f + 1) u).store.blk j) ∈ outputsAt cfg tr f) := by
+        Output.broadcast j ((stateBefore cfg tr (f + 1) u).disk.blk j) ∈ outputsAt cfg tr f) := by
     intro h₁ h₂
     obtain ⟨j, hj, -, hjr, hjc⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := u) (f + 1) m h₂
     have h₂' := h₂
@@ -534,7 +624,7 @@ theorem sends_again (hmono : Live.TimeMono tr time) (hup : Live.UpFrom T tr time
   · by_cases hstay : (stateBefore cfg tr (f + 1) u).top = some m
     · -- it resends its round-`m` block
       obtain ⟨j, -, hjr, hjc, -, hb⟩ := hres hfm hstay
-      exact ⟨f, _, (j, (stateBefore cfg tr (f + 1) u).store.blk j), hf, htf₀, hfle,
+      exact ⟨f, _, (j, (stateBefore cfg tr (f + 1) u).disk.blk j), hf, htf₀, hfle,
         mem_broadcasts.mpr hb, by simp [hjr], hjc⟩
     · -- it builds above `m`
       obtain ⟨h₁, h₂, -⟩ := rises_before (cfg := cfg) (tr := tr) u (show f ≤ f + 1 by omega)
@@ -612,7 +702,7 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
       {y : BlockId × Block Validator BlockId Payload},
       tr[q]? = some (u, inpq) → y ∈ persists (outputsAt cfg tr q) →
       tr[j]? = some (v, .deliver y.1 y.2) → k < j → t_r ≤ time k →
-      max (time j) gst + Δₛ ≤ τ → y.1 ∈ (stateAt cfg tr time v τ).store.ids := by
+      max (time j) gst + Δₛ ≤ τ → y.1 ∈ (stateAt cfg tr time v τ).disk.ids := by
     intro q k j inpq y hq hyq hj hkj hrk hjτ
     have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj).1
     have hjr : t_r ≤ time j := hrk.trans (hmono k j hkj.le hjl)
@@ -650,7 +740,7 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     have hyin := hheld hq hyq hj hkj (by omega) (by omega)
     have hreach := own_reaches hinj (hTH hu) hq hb hyq hep (hem.trans hym)
     set Z := stateBefore cfg tr (eventsBy tr time τ) v
-    have hK : ∀ w ∈ Z.store.ids, Live.knownBlock cfg H tr w = Z.store.blk w := fun w hw =>
+    have hK : ∀ w ∈ Z.disk.ids, Live.knownBlock cfg H tr w = Z.disk.blk w := fun w hw =>
       knownBlock_eq hinj (Converge.knownBefore_sub (hTH hv) _
         ((Converge.inv_before (cfg := cfg) (tr := tr) _ v).known w hw))
     exact mem_of_reaches_known hK hyin hreach

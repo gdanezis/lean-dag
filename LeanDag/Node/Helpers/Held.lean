@@ -27,9 +27,9 @@ variable (cfg) in
 round, and an identifier outside the store denotes the genesis block. -/
 structure Held (s : State Validator BlockId Payload) : Prop where
   /-- A stored block lies at or above its top round. -/
-  top : ∀ t, s.top = some t → ∃ o ∈ s.store.ids, t ≤ (s.store.blk o).round
+  top : ∀ t, s.top = some t → ∃ o ∈ s.disk.ids, t ≤ (s.disk.blk o).round
   /-- An identifier outside the store denotes the genesis block. -/
-  junk : s.store.junk = cfg.genesis
+  junk : s.disk.junk = cfg.genesis
 
 /-- **A store keeps another**: it holds the other's blocks, reads them
 alike, and its top round is no lower. -/
@@ -56,7 +56,7 @@ theorem Grows.keeps {st st' : Store Validator BlockId Payload} (hg : Grows st st
 omit [Fintype Validator] in
 /-- A change that grows the store and leaves the top alone keeps `Held`. -/
 theorem Held.grow {s s' : State Validator BlockId Payload} (h : Held cfg s)
-    (hg : Grows s.store s'.store) (htop : s'.top = s.top) : Held cfg s' where
+    (hg : Grows s.disk s'.disk) (htop : s'.top = s.top) : Held cfg s' where
   top t ht := by
     obtain ⟨o, hoi, hor⟩ := h.top t (htop.symm.trans ht)
     exact ⟨o, hg.1 hoi, by rw [hg.blk hoi]; exact hor⟩
@@ -70,8 +70,7 @@ theorem Held.tryBuild {s s' : State Validator BlockId Payload}
   refine ⟨fun t ht => ⟨id, ?_, ?_⟩, by rw [hst]; exact h.junk⟩
   · rw [hst]; exact Store.mem_insert_self
   · rw [htop, Option.some.injEq] at ht
-    rw [hst]
-    simp only [Store.blk, Store.insert, Std.TreeMap.getD_insert_self]
+    rw [hst, Store.insert_blk, if_pos rfl]
     omega
 
 omit [Fintype Validator] in
@@ -92,7 +91,7 @@ theorem decideStep_lo (s : State Validator BlockId Payload) :
   unfold Node.decideStep
   dsimp only
   split
-  · exact Nat.le_add_right _ _
+  · rw [release_lo]; exact Nat.le_add_right _ _
   · exact le_rfl
 
 omit [Fintype Validator] in
@@ -100,24 +99,24 @@ theorem decideStep_top (s : State Validator BlockId Payload) :
     (Node.decideStep cfg s).1.top = s.top := by
   unfold Node.decideStep
   dsimp only
-  split <;> rfl
+  split <;> simp only [release_disk, release_pending, release_top, release_own,
+    release_fired, release_lo, release_decided, release_armed]
 
 omit [Fintype Validator] in
 theorem Held.decideStep {s : State Validator BlockId Payload} (h : Held cfg s) :
     Held cfg (Node.decideStep cfg s).1 :=
-  h.grow (by rw [decideStep_store]; exact Grows.refl _) (decideStep_top s)
+  h.grow (by rw [decideStep_disk]; exact Grows.refl _) (decideStep_top s)
 
 omit [Fintype Validator] in
-theorem Held.store {s : State Validator BlockId Payload} (h : Held cfg s)
-    {st : Store Validator BlockId Payload} (pend : List (BlockId × Block Validator BlockId Payload))
-    (hg : Grows s.store st) : Held cfg { s with store := st, pending := pend } :=
-  h.grow hg rfl
+theorem Held.flush {s : State Validator BlockId Payload} (h : Held cfg s) (fuel : ℕ) :
+    Held cfg (flush cfg fuel s) :=
+  h.grow (by rw [flush_disk]; exact Grows.flush _ _ _) (flush_top _ _)
 
 omit [Fintype Validator] in
 theorem Held.advance {s : State Validator BlockId Payload} (h : Held cfg s) :
     Held cfg (Node.advance cfg s).1 :=
-  ((Held.progress (s.store.topRound + 2) h).decideStep.store _ (Grows.flush _ _ _)).grow
-    (by rw [advance_store]; exact Grows.refl _) (advance_top s)
+  ((Held.progress (s.disk.topRound + 2) h).decideStep.flush _).grow
+    (by rw [advance_disk]; exact Grows.refl _) (advance_top s)
 
 omit [Fintype Validator] in
 /-- **Settling keeps `Held`.** -/
@@ -134,7 +133,9 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
     split
     · split
       · refine Held.settle
-          ⟨fun t ht => ⟨_, by rw [Store.insert_ids]; exact Finset.mem_insert_self _ _, ?_⟩, h.junk⟩
+          ⟨fun t ht => ⟨_, Store.mem_insert_self (hrefs := fun _ hj => absurd hj
+            (Finset.notMem_empty _)) (hpred := fun j hj => absurd hj (Finset.notMem_empty j)),
+            ?_⟩, h.junk⟩
         simp only [Option.some.injEq] at ht
         subst ht
         exact Nat.zero_le _
@@ -143,7 +144,8 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
   | deliver id b =>
     simp only [Node.step]
     split
-    · exact Held.settle (h.grow (Grows.flush _ _ _) rfl)
+    · exact Held.settle ((h.grow (Grows.refl _) rfl :
+        Held cfg { s with pending := (id, b) :: s.pending }).flush _)
     · exact h
   | timer r => rw [step_timer_fst]; exact Held.settle (h.grow (Grows.refl _) rfl)
   | fetchRequest peer r ids => exact h
@@ -165,7 +167,7 @@ variable (cfg) in
 /-- **The node built on a quorum**: at a top round `r ≥ 1` the store holds
 blocks of at least `q` distinct authors of round `r − 1`. -/
 def Quorate (s : State Validator BlockId Payload) : Prop :=
-  ∀ r, s.top = some r → 1 ≤ r → cfg.q ≤ (authorsIn s.store.toRecord s.store.ids (r - 1)).card
+  ∀ r, s.top = some r → 1 ≤ r → cfg.q ≤ (authorsIn s.disk.toRecord s.disk.ids (r - 1)).card
 
 omit [Fintype Validator] in
 /-- A grown store has the authors of each round it had. -/
@@ -183,21 +185,23 @@ omit [Fintype Validator] in
 /-- **A build sees a quorum at the top.** -/
 theorem tryBuild_quorum {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : Node.tryBuild cfg s = some (s', out)) :
-    ∃ r, s.top = some r ∧ cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r).card := by
+    ∃ r, s.top = some r ∧ cfg.q ≤ (authorsIn s.disk.toRecord s.disk.ids r).card := by
   unfold Node.tryBuild at h
   split at h
   · rename_i r hr
     dsimp only at h
     split at h
     · rename_i hc
-      exact ⟨r, hr, by rw [← Store.authorsAt_eq]; exact hc.1⟩
+      exact ⟨r, hr, by
+        rw [← Store.authorsAt_eq]
+        exact hc.1.trans (Finset.card_le_card (s.mirrors.authorsAt_sub r))⟩
     · exact absurd h (by simp)
   · exact absurd h (by simp)
 
 omit [Fintype Validator] in
 /-- A change that grows the store and leaves the top alone keeps `Quorate`. -/
 theorem Quorate.grow {s s' : State Validator BlockId Payload} (h : Quorate cfg s)
-    (hg : Grows s.store s'.store) (htop : s'.top = s.top) : Quorate cfg s' :=
+    (hg : Grows s.disk s'.disk) (htop : s'.top = s.top) : Quorate cfg s' :=
   fun r hr h1 => (h r (htop.symm.trans hr) h1).trans
     (Finset.card_le_card (hg.authorsIn _))
 
@@ -214,7 +218,7 @@ theorem Quorate.tryBuild {s s' : State Validator BlockId Payload}
   rw [htop, Option.some.injEq] at ht
   subst ht
   rw [Nat.add_sub_cancel, hst]
-  exact hq.trans (Finset.card_le_card ((Grows.insert s.store).authorsIn _))
+  exact hq.trans (Finset.card_le_card ((Grows.insert s.disk).authorsIn _))
 
 omit [Fintype Validator] in
 /-- **Building keeps `Quorate`.** -/
@@ -231,11 +235,12 @@ theorem Quorate.progress : ∀ (fuel : ℕ) {s : State Validator BlockId Payload
 omit [Fintype Validator] in
 theorem Quorate.advance {s : State Validator BlockId Payload} (h : Quorate cfg s) :
     Quorate cfg (Node.advance cfg s).1 := by
-  have hp := Quorate.progress (s.store.topRound + 2) h
-  have hd : Quorate cfg (Node.decideStep cfg (Node.progress cfg (s.store.topRound + 2) s).1).1 :=
-    hp.grow (by rw [decideStep_store]; exact Grows.refl _) (decideStep_top _)
-  exact (hd.grow (Grows.flush _ _ _) rfl : Quorate cfg (Node.pass cfg s).1).grow
-    (by rw [advance_store]; exact Grows.refl _) (advance_top s)
+  have hp := Quorate.progress (s.disk.topRound + 2) h
+  have hd : Quorate cfg (Node.decideStep cfg (Node.progress cfg (s.disk.topRound + 2) s).1).1 :=
+    hp.grow (by rw [decideStep_disk]; exact Grows.refl _) (decideStep_top _)
+  exact (hd.grow (by simp only [Node.pass, flush_disk]; exact Grows.flush _ _ _)
+    (by simp only [Node.pass, flush_top]) : Quorate cfg (Node.pass cfg s).1).grow
+    (by rw [advance_disk]; exact Grows.refl _) (advance_top s)
 
 omit [Fintype Validator] in
 /-- **Settling keeps `Quorate`.** -/
@@ -259,7 +264,7 @@ theorem Quorate.step {s : State Validator BlockId Payload} (h : Quorate cfg s)
   | deliver id b =>
     simp only [Node.step]
     split
-    · exact Quorate.settle (h.grow (Grows.flush _ _ _) rfl)
+    · exact Quorate.settle (h.grow (by rw [flush_disk]; exact Grows.flush _ _ _) (flush_top _ _))
     · exact h
   | timer r => rw [step_timer_fst]; exact Quorate.settle (h.grow (Grows.refl _) rfl)
   | fetchRequest peer r ids => exact h

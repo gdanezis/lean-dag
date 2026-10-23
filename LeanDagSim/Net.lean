@@ -194,8 +194,8 @@ structure Report where
   /-- Each honest node's final state, in brief: top, own block, next
   undecided slot, the authors its store holds at the top and the two
   rounds above, its pending blocks (author, round, references missing,
-  payload), the timers fired, and whether it can build and its references
-  reach. -/
+  payload), the timers fired, whether it can build and its references
+  reach, and the blocks in its memory, from which round, and on disk. -/
   final : List String := []
 
 /-- The key of an input in flight: its arrival time, then the order in
@@ -428,8 +428,8 @@ def loop : ℕ → World n → World n
               decided := decs.map (fun e => (a.node.val, e.1, t)) ++ ss.decided
               accepted := ((((match i with | .deliver id _ => [id] | _ => []) ++
                   st.pending.map Prod.fst).filter fun j =>
-                    r.1.store.map.contains j && !st.store.map.contains j).filterMap fun j =>
-                  let b := r.1.store.blk j
+                    r.1.disk.map.contains j && !st.disk.map.contains j).filterMap fun j =>
+                  let b := r.1.disk.blk j
                   if sc.honest b.creator.val ∧ b.creator ≠ a.node then some (a.node.val, b.round, t)
                   else none) ++ ss.accepted
               fetches := ss.fetches + fs.length
@@ -437,8 +437,8 @@ def loop : ℕ → World n → World n
             match i with
             | .deliver id b =>
               if sc.honest b.creator.val ∧ b.creator ≠ a.node ∧ id = idOf b ∧
-                  !st.store.map.contains id ∧ id ∉ st.pending.map Prod.fst ∧
-                  !r.1.store.map.contains id ∧ id ∉ r.1.pending.map Prod.fst then
+                  !st.disk.map.contains id ∧ id ∉ st.pending.map Prod.fst ∧
+                  !r.1.disk.map.contains id ∧ id ∉ r.1.pending.map Prod.fst then
                 { ss with notKept := ss.notKept + 1 }
               else ss
             | _ => ss
@@ -454,7 +454,7 @@ def loop : ℕ → World n → World n
             honest := if isHonest then own ++ w.honest else w.honest
             blocks := (own ++ sent).foldl (fun m e => m.insert e.1 e.2) w.blocks
             seen := (own ++ seen).foldl (fun m e => m.insert e.1 e.2) w.seen
-            maxStore := if isHonest then max w.maxStore r.1.store.map.size else w.maxStore
+            maxStore := if isHonest then max w.maxStore r.1.disk.map.size else w.maxStore
             maxPending := if isHonest then max w.maxPending r.1.pending.length else w.maxPending
             events := w.events + 1
             time := t
@@ -518,15 +518,16 @@ def simulate (sc : Scenario) : Report :=
         final := honestIdx.map fun v => match w.states[v]? with
           | some st =>
             let t := st.top.getD 0
-            let auth (r : ℕ) := (authorsIn st.store.toRecord st.store.ids r).card
+            let auth (r : ℕ) := (authorsIn st.disk.toRecord st.disk.ids r).card
             let cf := cfgFor sc p q hn ⟨v % n, Nat.mod_lt _ hn⟩ 0
             let pend := st.pending.map fun e => (e.2.creator.val, e.2.round,
-              (e.2.refs.filter fun j => j ∉ st.store.ids).card, e.2.payload)
-            let reach := reachReady cf st.store (refsAt cf st.store t st.own) t
+              (e.2.refs.filter fun j => j ∉ st.disk.ids).card, e.2.payload)
+            let reach := reachReady cf st.memory (refsAt cf st.memory t st.own) t
             s!"node {v}: top {st.top} own {st.own.isSome} " ++
               s!"lo {st.lo} authors {auth t}/{auth (t + 1)}/{auth (t + 2)} " ++
               s!"pending {pend} fired {st.fired.sort (· ≤ ·)} " ++
-              s!"builds {(tryBuild cf st).isSome} reach {reach}"
+              s!"builds {(tryBuild cf st).isSome} reach {reach} " ++
+              s!"memory {st.memory.ids.card} from {st.floor} disk {st.disk.ids.card}"
           | none => s!"node {v}: none"
         commits := decs
         agree := agreeAt decs

@@ -102,8 +102,8 @@ omit [Fintype Validator] in
 /-- **Accepting a known block keeps the store a cut.** -/
 theorem IsCut.accept (hg : Ground U K cfg.q) (hc : IsCut U st)
     {id : BlockId} {b : Block Validator BlockId Payload} (hx : (id, b) ∈ K) :
-    IsCut U (Node.accept cfg st id b) := by
-  unfold Node.accept
+    IsCut U (acceptOn cfg st id b) := by
+  unfold acceptOn
   split
   · rename_i h
     obtain ⟨h₁, h₂⟩ := hg.real _ hx (fun j hj => (hc j (h.2.1 hj)).1)
@@ -115,7 +115,7 @@ omit [Fintype Validator] in
 theorem IsCut.foldl (hg : Ground U K cfg.q) :
     ∀ (l : List (BlockId × Block Validator BlockId Payload)) {st : Store Validator BlockId Payload},
     IsCut U st → (∀ e ∈ l, e ∈ K) →
-      IsCut U (l.foldl (fun s e => Node.accept cfg s e.1 e.2) st)
+      IsCut U (l.foldl (fun s e => acceptOn cfg s e.1 e.2) st)
   | [], _, hc, _ => hc
   | e :: l, st, hc, hK => by
     rw [List.foldl_cons]
@@ -127,15 +127,15 @@ omit [Fintype Validator] in
 theorem IsCut.flush (hg : Ground U K cfg.q) :
     ∀ (fuel : ℕ) {st : Store Validator BlockId Payload}
       (pend : List (BlockId × Block Validator BlockId Payload)),
-    IsCut U st → (∀ e ∈ pend, e ∈ K) → IsCut U (Node.flush cfg fuel st pend).1
+    IsCut U st → (∀ e ∈ pend, e ∈ K) → IsCut U (flushOn cfg fuel st pend).1
   | 0, _, _, hc, _ => hc
   | fuel + 1, st, pend, hc, hK => by
-    unfold Node.flush
+    unfold flushOn
     dsimp only
     split
     · exact hc
     · rw [List.partition_eq_filter_filter]
-      have hc₁ := IsCut.foldl hg (pend.filter fun e => ready cfg st e) hc
+      have hc₁ := IsCut.foldl hg (pend.filter fun e => readyOn cfg st e) hc
         fun e he => hK e (List.mem_filter.mp he).1
       exact IsCut.flush hg fuel _ hc₁ fun e he => hK e (List.mem_filter.mp he).1
 
@@ -175,25 +175,27 @@ theorem tryDecide_length_le {P : Validity Validator BlockId Payload} {H : Finset
 omit [Fintype Validator] in
 /-- A pass decides only slots at rounds its store reaches. -/
 theorem decideStep_lo_le (s : State Validator BlockId Payload) :
-    (Node.decideStep cfg s).1.lo ≤ max s.lo (decidable cfg s.store.topRound) := by
+    (Node.decideStep cfg s).1.lo ≤ max s.lo (decidable cfg s.disk.topRound) := by
   unfold Node.decideStep
   dsimp only
   split
   · rename_i hlt
+    obtain ⟨hlt, -⟩ := hlt
     generalize hds : Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ
-      (s.store.window (cfg.slots.slotRound s.lo)) (s.store.windowView (cfg.slots.slotRound s.lo))
-      s.lo (decidable cfg s.store.topRound - 1) = ds
-    have hlen : ds.length ≤ decidable cfg s.store.topRound - 1 + 1 - s.lo := by
+      (s.memory.window (cfg.slots.slotRound s.lo)) (s.memory.windowView (cfg.slots.slotRound s.lo))
+      s.lo (decidable cfg s.disk.topRound - 1) = ds
+    have hlen : ds.length ≤ decidable cfg s.disk.topRound - 1 + 1 - s.lo := by
       rw [← hds]; exact tryDecide_length_le (S := cfg.slots) (by omega)
+    rw [release_lo]
     change s.lo + ds.length ≤ _
     omega
   · exact le_max_left _ _
 
 omit [Fintype Validator] in
 theorem IsCut.tryBuild (hg : Ground U K cfg.q) {s s' : State Validator BlockId Payload}
-    {out : List (Output Validator BlockId Payload)} (hc : IsCut U s.store)
+    {out : List (Output Validator BlockId Payload)} (hc : IsCut U s.disk)
     (h : Node.tryBuild cfg s = some (s', out)) (hb : ∀ e ∈ persists out, e ∈ K) :
-    IsCut U s'.store := by
+    IsCut U s'.disk := by
   obtain ⟨r, id, b, hnew, hrefs, hpred, -, -, -, -, hv, hst, -, -, -, hout⟩ := tryBuild_some h
   have hx : (id, b) ∈ K := hb _ (by rw [hout, persists_built]; exact List.mem_singleton_self _)
   obtain ⟨h₁, h₂⟩ := hg.real _ hx (fun j hj => (hc j (hrefs hj)).1)
@@ -204,9 +206,9 @@ theorem IsCut.tryBuild (hg : Ground U K cfg.q) {s s' : State Validator BlockId P
 omit [Fintype Validator] in
 /-- **Building known blocks keeps the store a cut.** -/
 theorem IsCut.progress (hg : Ground U K cfg.q) :
-    ∀ (fuel : ℕ) {s : State Validator BlockId Payload}, IsCut U s.store →
+    ∀ (fuel : ℕ) {s : State Validator BlockId Payload}, IsCut U s.disk →
       (∀ e ∈ persists (Node.progress cfg fuel s).2, e ∈ K) →
-      IsCut U (Node.progress cfg fuel s).1.store
+      IsCut U (Node.progress cfg fuel s).1.disk
   | 0, _, hc, _ => hc
   | fuel + 1, s, hc, hb => by
     rcases htb : Node.tryBuild cfg s with _ | ⟨s₁, out⟩
@@ -220,16 +222,17 @@ theorem IsCut.progress (hg : Ground U K cfg.q) :
 omit [Fintype Validator] in
 /-- **A pass from a cut keeps the store a cut.** -/
 theorem IsCut.advanceStore (hg : Ground U K cfg.q) {s : State Validator BlockId Payload}
-    (hc : IsCut U s.store) (hp : ∀ e ∈ s.pending, e ∈ K)
-    (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : IsCut U (Node.advance cfg s).1.store := by
-  have hp₁ := progress_pending (cfg := cfg) (s.store.topRound + 2) s
-  simp only [Node.advance, Node.pass, arm_store, arm_pending, arm_top, arm_own, arm_fired, arm_lo,
-      arm_decided] at hb ⊢
-  rw [persists_append, persists_arm, List.append_nil, persists_append] at hb
+    (hc : IsCut U s.disk) (hp : ∀ e ∈ s.pending, e ∈ K)
+    (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : IsCut U (Node.advance cfg s).1.disk := by
+  have hp₁ := progress_pending (cfg := cfg) (s.disk.topRound + 2) s
+  rw [advance_snd, persists_append, persists_arm, List.append_nil] at hb
+  rw [advance_disk]
+  simp only [Node.pass, flush_disk] at hb ⊢
+  rw [persists_append] at hb
   have hc₁ := IsCut.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
-  generalize Node.progress cfg (s.store.topRound + 2) s = r at hp₁ hc₁ ⊢
-  have hc₂ : IsCut U (Node.decideStep cfg r.1).1.store := by
-    rw [decideStep_store]; exact hc₁
+  generalize Node.progress cfg (s.disk.topRound + 2) s = r at hp₁ hc₁ ⊢
+  have hc₂ : IsCut U (Node.decideStep cfg r.1).1.disk := by
+    rw [decideStep_disk]; exact hc₁
   have hgp : ∀ e ∈ (Node.decideStep cfg r.1).1.pending, e ∈ K := by
     rw [decideStep_pending (cfg := cfg) r.1, hp₁]; exact hp
   exact IsCut.flush hg _ _ hc₂ hgp
@@ -266,8 +269,8 @@ them. -/
 def CommitInv (U : BlockRecord Validator BlockId Payload P H) (s : State Validator BlockId Payload)
     (cs : List (ℕ × Option BlockId)) : Prop :=
   s.lo = cs.length ∧ (cs = [] ∨ ∃ (V : U.View) (N : ℕ),
-    (∀ i ∈ V.ids, i ∈ s.store.ids) ∧
-    N + 1 ≤ decidable cfg s.store.topRound ∧
+    (∀ i ∈ V.ids, i ∈ s.disk.ids) ∧
+    N + 1 ≤ decidable cfg s.disk.topRound ∧
     cs = tryDecide (S := cfg.slots) cfg.p boundedSel U V 0 N)
 
 variable {q f : ℕ} [P.Quorate q]
@@ -275,7 +278,7 @@ variable {q f : ℕ} [P.Quorate q]
 omit [Fintype Validator] in
 /-- The invariant survives a change that keeps the store and the next slot. -/
 theorem CommitInv.keeps {s s' : State Validator BlockId Payload} {cs : List (ℕ × Option BlockId)}
-    (h : CommitInv cfg U s cs) (hlo : s'.lo = s.lo) (hk : Keeps s.store s'.store) :
+    (h : CommitInv cfg U s cs) (hlo : s'.lo = s.lo) (hk : Keeps s.disk s'.disk) :
     CommitInv cfg U s' cs := by
   refine ⟨hlo.trans h.1, ?_⟩
   rcases h.2 with h0 | ⟨V, N, hV, hN, hcs⟩
@@ -285,30 +288,32 @@ theorem CommitInv.keeps {s s' : State Validator BlockId Payload} {cs : List (ℕ
 /-- **A decision step keeps the invariant.** -/
 theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H f q)
     {s : State Validator BlockId Payload} {cs : List (ℕ × Option BlockId)}
-    (h : CommitInv cfg U s cs) (hc : IsCut U s.store) :
+    (h : CommitInv cfg U s cs) (hc : IsCut U s.disk) :
     CommitInv cfg U (Node.decideStep cfg s).1 (cs ++ commitsOf (Node.decideStep cfg s).2) := by
   letI := cfg.slots
   have hw : 2 ≤ cfg.p.waveLength := by
     rcases ht.2.2 with ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ | ⟨-, hw, -⟩ <;> omega
   -- the store decides as a view of `U` grown from any view the invariant allows
-  have hgrow : ∀ V : U.View, (∀ i ∈ V.ids, i ∈ s.store.ids) →
-      ∃ V' : U.View, V.ids ⊆ V'.ids ∧ (∀ i ∈ V'.ids, i ∈ s.store.ids) ∧
-        ∀ N, tryDecide cfg.p cfg.σ s.store.toRecord s.store.view s.lo N =
+  have hgrow : ∀ V : U.View, (∀ i ∈ V.ids, i ∈ s.disk.ids) →
+      ∃ V' : U.View, V.ids ⊆ V'.ids ∧ (∀ i ∈ V'.ids, i ∈ s.disk.ids) ∧
+        ∀ N, tryDecide cfg.p boundedSel s.disk.toRecord s.disk.view s.lo N =
           tryDecide cfg.p boundedSel U V' s.lo N := by
     intro V hV
     obtain ⟨V', hVV, hiff⟩ := hc.extend V hV
     refine ⟨V', hVV, fun i hi => (hiff i).mp hi, fun N => ?_⟩
-    rw [hσ]
     exact (ViewsAbove.of_store hiff fun i hi => hc.eq hi).tryDecide_eq cfg.p hw N
       (Nat.zero_le _)
   have hempty : ∀ i ∈ (⟨∅, Finset.empty_subset _,
-      fun _ h => absurd h (Finset.notMem_empty _)⟩ : U.View).ids, i ∈ s.store.ids :=
+      fun _ h => absurd h (Finset.notMem_empty _)⟩ : U.View).ids, i ∈ s.disk.ids :=
     fun i hi => absurd hi (Finset.notMem_empty i)
   unfold Node.decideStep
   dsimp only
   split
   · rename_i hlt
-    rw [commitsOf_map, tryDecide_window cfg hσ hw]
+    obtain ⟨hlt, hfl, -⟩ := hlt
+    rw [commitsOf_map, tryDecide_memory hσ hw s hfl]
+    unfold CommitInv
+    simp only [release_lo, release_disk]
     refine ⟨?_, Or.inr ?_⟩
     · change s.lo + _ = _
       rw [List.length_append, h.1]
@@ -316,15 +321,15 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
     · subst h0
       obtain ⟨V', -, hV', hT⟩ := hgrow _ hempty
       have hlo : s.lo = 0 := h.1
-      refine ⟨V', decidable cfg s.store.topRound - 1, hV',
-        by change _ ≤ decidable cfg s.store.topRound; omega, ?_⟩
+      refine ⟨V', decidable cfg s.disk.topRound - 1, hV',
+        by change _ ≤ decidable cfg s.disk.topRound; omega, ?_⟩
       rw [List.nil_append, hT, hlo]
     · obtain ⟨V', hVV, hV', hT⟩ := hgrow V hV
-      refine ⟨V', decidable cfg s.store.topRound - 1, hV',
-        by change _ ≤ decidable cfg s.store.topRound; omega, ?_⟩
+      refine ⟨V', decidable cfg s.disk.topRound - 1, hV',
+        by change _ ≤ decidable cfg s.disk.topRound; omega, ?_⟩
       rw [hT, h.1, hcs]
       have := Loop.resume _ _ _ P q H f cfg.p boundedSel U V V' 0 N
-        (decidable cfg s.store.topRound - 1) ht hVV (by omega)
+        (decidable cfg s.disk.topRound - 1) ht hVV (by omega)
       rw [Nat.zero_add] at this
       exact this
   · rw [show commitsOf ([] : List (Output Validator BlockId Payload)) = [] from rfl,
@@ -334,35 +339,35 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
 /-- **A pass keeps the invariant, and the store a cut.** -/
 theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
-    {cs : List (ℕ × Option BlockId)} (h : CommitInv cfg U s cs) (hc : IsCut U s.store)
+    {cs : List (ℕ × Option BlockId)} (h : CommitInv cfg U s cs) (hc : IsCut U s.disk)
     (hp : ∀ e ∈ s.pending, e ∈ K) (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) :
     CommitInv cfg U (Node.advance cfg s).1 (cs ++ commitsOf (Node.advance cfg s).2) ∧
-      IsCut U (Node.advance cfg s).1.store := by
+      IsCut U (Node.advance cfg s).1.disk := by
   have hcut := IsCut.advanceStore hg hc hp hb
-  obtain ⟨bs, hbs⟩ := progress_built (cfg := cfg) (s.store.topRound + 2) s
-  obtain ⟨hg₁, hlo₁⟩ := Grows.progress (cfg := cfg) (s.store.topRound + 2) s
+  obtain ⟨bs, hbs⟩ := progress_built (cfg := cfg) (s.disk.topRound + 2) s
+  obtain ⟨hg₁, hlo₁⟩ := Grows.progress (cfg := cfg) (s.disk.topRound + 2) s
   rw [advance_snd, persists_append, persists_arm, List.append_nil] at hb
   rw [advance_snd, commitsOf_append, commitsOf_arm, List.append_nil]
-  refine ⟨CommitInv.keeps ?_ (advance_lo s) (by rw [advance_store]; exact Keeps.refl _), hcut⟩
-  rw [advance_store] at hcut
+  refine ⟨CommitInv.keeps ?_ (advance_lo s) (by rw [advance_disk]; exact Keeps.refl _), hcut⟩
+  rw [advance_disk] at hcut
   simp only [Node.pass] at hb hcut ⊢
   rw [persists_append] at hb
   have hc₁ := IsCut.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
-  generalize Node.progress cfg (s.store.topRound + 2) s = r at hbs hg₁ hlo₁ hc₁ hcut ⊢
+  generalize Node.progress cfg (s.disk.topRound + 2) s = r at hbs hg₁ hlo₁ hc₁ hcut ⊢
   have h₁ : CommitInv cfg U r.1 cs := h.keeps hlo₁ hg₁.keeps
   have h₂ := h₁.decideStep hσ ht hc₁
   have hk := (Grows.flush (cfg := cfg) ((Node.decideStep cfg r.1).1.pending.length + 1)
-    (Node.decideStep cfg r.1).1.store (Node.decideStep cfg r.1).1.pending).keeps
+    (Node.decideStep cfg r.1).1.disk (Node.decideStep cfg r.1).1.pending).keeps
   rw [commitsOf_append, hbs, commitsOf_built, List.nil_append]
-  exact h₂.keeps rfl hk
+  exact h₂.keeps (flush_lo _ _) (by rw [flush_disk]; exact hk)
 
 /-- **The passes keep the invariant, and the store a cut.** -/
 theorem CommitInv.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) : ∀ (n : ℕ) {s : State Validator BlockId Payload}
-    {cs : List (ℕ × Option BlockId)}, CommitInv cfg U s cs → IsCut U s.store →
+    {cs : List (ℕ × Option BlockId)}, CommitInv cfg U s cs → IsCut U s.disk →
     (∀ e ∈ s.pending, e ∈ K) → (∀ e ∈ persists (Node.quiesce cfg n s).2, e ∈ K) →
     CommitInv cfg U (Node.quiesce cfg n s).1 (cs ++ commitsOf (Node.quiesce cfg n s).2) ∧
-      IsCut U (Node.quiesce cfg n s).1.store
+      IsCut U (Node.quiesce cfg n s).1.disk
   | 0, s, cs, h, hc, _, _ => by
     simp only [Node.quiesce, commitsOf, List.filterMap_nil, List.append_nil]; exact ⟨h, hc⟩
   | n + 1, s, cs, h, hc, hp, hb => by
@@ -378,29 +383,29 @@ theorem CommitInv.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
 /-- **Settling keeps the invariant, and the store a cut.** -/
 theorem CommitInv.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
-    {cs : List (ℕ × Option BlockId)} (h : CommitInv cfg U s cs) (hc : IsCut U s.store)
+    {cs : List (ℕ × Option BlockId)} (h : CommitInv cfg U s cs) (hc : IsCut U s.disk)
     (hp : ∀ e ∈ s.pending, e ∈ K) (hb : ∀ e ∈ persists (Node.settle cfg s).2, e ∈ K) :
     CommitInv cfg U (Node.settle cfg s).1 (cs ++ commitsOf (Node.settle cfg s).2) ∧
-      IsCut U (Node.settle cfg s).1.store :=
+      IsCut U (Node.settle cfg s).1.disk :=
   CommitInv.quiesce hg hσ ht (passes cfg s) h hc hp hb
 
 /-- **A step keeps the invariant, and the store a cut.** -/
 theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)} (i : Input Validator BlockId Payload)
-    (h : CommitInv cfg U s cs) (hc : IsCut U s.store)
+    (h : CommitInv cfg U s cs) (hc : IsCut U s.disk)
     (hp : ∀ e ∈ s.pending, e ∈ K) (hd : ∀ e ∈ delivered cfg [i], e ∈ K)
     (hb : ∀ e ∈ persists (Node.step cfg s i).2, e ∈ K) :
     CommitInv cfg U (Node.step cfg s i).1 (cs ++ commitsOf (Node.step cfg s i).2) ∧
-      IsCut U (Node.step cfg s i).1.store := by
+      IsCut U (Node.step cfg s i).1.disk := by
   -- a step that settles a state `s₀`, after outputs without decisions
   have hset : ∀ (s₀ : State Validator BlockId Payload)
       (pre : List (Output Validator BlockId Payload)),
-      CommitInv cfg U s₀ cs → IsCut U s₀.store → (∀ e ∈ s₀.pending, e ∈ K) →
+      CommitInv cfg U s₀ cs → IsCut U s₀.disk → (∀ e ∈ s₀.pending, e ∈ K) →
       commitsOf pre = [] →
       Node.step cfg s i = ((Node.settle cfg s₀).1, pre ++ (Node.settle cfg s₀).2) →
       CommitInv cfg U (Node.step cfg s i).1 (cs ++ commitsOf (Node.step cfg s i).2) ∧
-        IsCut U (Node.step cfg s i).1.store := by
+        IsCut U (Node.step cfg s i).1.disk := by
     intro s₀ pre h₀ hc₀ hp₀ hpre he
     rw [he] at hb ⊢
     rw [persists_append] at hb
@@ -408,26 +413,29 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     exact h₀.settle hg hσ ht hc₀ hp₀ fun e he => hb e (List.mem_append_right _ he)
   have hsame : Node.step cfg s i = (s, []) →
       CommitInv cfg U (Node.step cfg s i).1 (cs ++ commitsOf (Node.step cfg s i).2) ∧
-        IsCut U (Node.step cfg s i).1.store := by
+        IsCut U (Node.step cfg s i).1.disk := by
     intro he; rw [he]; exact ⟨by simpa [commitsOf] using h, hc⟩
   cases i with
   | start =>
     by_cases h₁ : s.top = none ∧ cfg.Admissible
-    · by_cases h₂ : cfg.idOf cfg.genesis ∉ s.store.ids ∧
-          rowValid cfg.q (Function.update s.store.blk (cfg.idOf cfg.genesis) cfg.genesis)
+    · by_cases h₂ : cfg.idOf cfg.genesis ∉ s.disk.ids ∧
+          rowValid cfg.q (Function.update s.disk.blk (cfg.idOf cfg.genesis) cfg.genesis)
             cfg.genesis
-      · let st := s.store.insert (cfg.idOf cfg.genesis) cfg.genesis h₂.1
+      · let st := s.disk.insert (cfg.idOf cfg.genesis) cfg.genesis h₂.1
           (fun _ hj => absurd hj (Finset.notMem_empty _))
           (fun j hj => absurd hj (Finset.notMem_empty j))
         have hx : (cfg.idOf cfg.genesis, cfg.genesis) ∈ K :=
           hb _ (by simp only [Node.step, dif_pos h₂, if_pos h₁]; simp [persists])
-        have hnil : cfg.genesis.refs ⊆ s.store.ids := fun _ hj => absurd hj (Finset.notMem_empty _)
+        have hnil : cfg.genesis.refs ⊆ s.disk.ids := fun _ hj => absurd hj (Finset.notMem_empty _)
         obtain ⟨hU₁, hU₂⟩ := hg.real _ hx (fun _ hj => absurd hj (Finset.notMem_empty _))
           (validAt_of_cut hc h₂.1 hnil h₂.2)
         have hcst : IsCut U st := hc.insert ⟨hU₁, hU₂⟩
         let gid := cfg.idOf cfg.genesis
-        have hk : Keeps s.store st := (Grows.insert s.store).keeps
-        exact hset { s with store := st, top := some 0, own := some gid }
+        have hk : Keeps s.disk st := (Grows.insert s.disk).keeps
+        exact hset { keep s (cfg.idOf cfg.genesis) cfg.genesis h₂.1
+            (fun _ hj => absurd hj (Finset.notMem_empty _))
+            (fun j hj => absurd hj (Finset.notMem_empty j)) with
+            top := some 0, own := some gid }
           (built cfg [(cfg.idOf cfg.genesis, cfg.genesis)]) (h.keeps rfl hk) hcst hp
           (commitsOf_built _) (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
       · exact hsame (by simp only [Node.step, dif_neg h₂, if_pos h₁])
@@ -437,15 +445,16 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     · let s₁ := afterFlush (cfg := cfg) s id b
       let miss := missing s₁ b
       have hx : (id, b) ∈ K := hd _ (by simp [delivered, hA.1])
-      have hg₁ := Grows.flush (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
+      have hg₁ := Grows.flush (cfg := cfg) (s.pending.length + 1) s.disk ((id, b) :: s.pending)
       have hpend : ∀ e ∈ (id, b) :: s.pending, e ∈ K := fun e he => by
         rcases List.mem_cons.mp he with rfl | he
         · exact hx
         · exact hp e he
-      have hc₁ : IsCut U s₁.store := IsCut.flush hg _ _ hc hpend
+      have hc₁ : IsCut U s₁.disk := by rw [afterFlush_disk]; exact IsCut.flush hg _ _ hc hpend
       exact hset s₁
         (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss])
-        (h.keeps rfl hg₁.keeps) hc₁ (fun e he => hpend e (flush_pending_sub _ _ _ e he))
+        (h.keeps (afterFlush_lo _ _ _) (by rw [afterFlush_disk]; exact hg₁.keeps)) hc₁
+        (fun e he => hpend e (flush_pending_sub _ _ _ e (by rwa [afterFlush_pending] at he)))
         (by split <;> rfl) (step_deliver hA)
     · exact hsame (step_deliver_not hA)
   | timer r =>
@@ -463,7 +472,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     exact ⟨h, hc⟩
   | restart =>
     show CommitInv cfg U s (cs ++ commitsOf (Node.resend cfg s ++ Node.rearm cfg s)) ∧
-      IsCut U s.store
+      IsCut U s.disk
     rw [commitsOf_append, commitsOf_resend, commitsOf_rearm, List.append_nil, List.append_nil]
     exact ⟨h, hc⟩
 
@@ -471,7 +480,7 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
 theorem CommitInv.run (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) :
     ∀ (is : List (Input Validator BlockId Payload)) {s : State Validator BlockId Payload}
-      {cs : List (ℕ × Option BlockId)}, CommitInv cfg U s cs → IsCut U s.store →
+      {cs : List (ℕ × Option BlockId)}, CommitInv cfg U s cs → IsCut U s.disk →
       (∀ e ∈ s.pending, e ∈ K) → (∀ e ∈ delivered cfg is, e ∈ K) →
       (∀ e ∈ persists (Node.run cfg s is).2, e ∈ K) →
       CommitInv cfg U (Node.run cfg s is).1 (cs ++ commitsOf (Node.run cfg s is).2)

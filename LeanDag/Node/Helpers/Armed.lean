@@ -58,7 +58,7 @@ theorem ArmsBy.congr {s x s' : State Validator BlockId Payload}
 
 omit [Fintype Validator] in
 theorem pass_armed (s : State Validator BlockId Payload) : (Node.pass cfg s).1.armed = s.armed := by
-  change (Node.decideStep cfg (Node.progress cfg (s.store.topRound + 2) s).1).1.armed = s.armed
+  simp only [Node.pass, flush_armed]
   rw [decideStep_armed, progress_armed]
 
 omit [Fintype Validator] in
@@ -69,7 +69,7 @@ theorem armsBy_arm (s : State Validator BlockId Payload) :
   rcases ht : s.top with _ | r
   · simp only [ht] at h₁; exact absurd h₁ h₂
   · simp only [ht] at h₁ ⊢
-    by_cases hc : s.armed ≠ some r ∧ cfg.q ≤ (s.store.authorsAt r).card
+    by_cases hc : s.armed ≠ some r ∧ cfg.q ≤ (s.memory.authorsAt r).card
     · rw [if_pos hc] at h₁ ⊢
       obtain rfl : r = n := Option.some.inj h₁
       exact List.mem_singleton_self _
@@ -101,7 +101,9 @@ theorem armsBy_step (s : State Validator BlockId Payload) (inp : Input Validator
   | deliver id b =>
     simp only [Node.step]
     split
-    · exact ArmsBy.congr rfl (armsBy_quiesce _ _) (List.subset_append_right _ _)
+    · exact ArmsBy.congr
+        (flush_armed (cfg := cfg) (s.pending.length + 1) { s with pending := (id, b) :: s.pending })
+        (armsBy_quiesce _ _) (List.subset_append_right _ _)
     · exact ArmsBy.refl _
   | timer r =>
     rw [step_timer_fst]
@@ -112,15 +114,15 @@ theorem armsBy_step (s : State Validator BlockId Payload) (inp : Input Validator
   | restart => exact ArmsBy.of_armed rfl
 
 variable (cfg) in
-/-- **The top round is armed once the store holds a quorum of it.** -/
+/-- **The top round is armed once the memory holds a quorum of it.** -/
 def Armed (s : State Validator BlockId Payload) : Prop :=
-  ∀ r, s.top = some r → cfg.q ≤ (s.store.authorsAt r).card → s.armed = some r
+  ∀ r, s.top = some r → cfg.q ≤ (s.memory.authorsAt r).card → s.armed = some r
 
 omit [Fintype Validator] in
 theorem armed_arm (s : State Validator BlockId Payload) : Armed cfg (Node.arm cfg s).1 := by
   intro r ht hq
   rw [arm_top] at ht
-  rw [arm_store] at hq
+  rw [arm_memory] at hq
   unfold Node.arm
   simp only [ht]
   by_cases h : s.armed = some r
@@ -311,7 +313,7 @@ theorem timer_set (hwait : Live.TimersAfterSet cfg T tr time) (hv : v ∈ T) {j 
     ∃ i < j, (tr[i]?.map Prod.fst) = some v ∧
       ∃ t, (stateBefore cfg tr (i + 1) v).top = some t ∧ n ≤ t ∧
         (n = t → 1 ≤ n → time i + cfg.timeout n ≤ time j ∧
-          cfg.q ≤ ((stateBefore cfg tr (i + 1) v).store.authorsAt n).card) := by
+          cfg.q ≤ ((stateBefore cfg tr (i + 1) v).disk.authorsAt n).card) := by
   obtain ⟨i, hij, a, hiv, hset, hta⟩ := hwait j v n hj hv
   obtain ⟨inp, hi⟩ := Converge.event_of_map hiv
   obtain ⟨t, ht, hnt, hq⟩ := timersSet_before hi n a hset

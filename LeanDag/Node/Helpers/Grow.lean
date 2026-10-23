@@ -1,9 +1,9 @@
 import LeanDag.Node.Helpers.Local
 /-!
-# A node's store grows
+# A node's disk grows
 
-Across a step the store only gains blocks (`Grows`, `Helpers/Local.lean`):
-building inserts, and deciding leaves the store alone.
+Across a step the disk only gains blocks (`Grows`, `Helpers/Local.lean`):
+building inserts, and deciding leaves the disk alone.
 -/
 
 namespace LeanDag
@@ -16,7 +16,7 @@ variable {cfg : Config Validator BlockId Payload}
 
 omit [Fintype Validator] in
 theorem Grows.progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
-    Grows s.store (Node.progress cfg fuel s).1.store ∧ (Node.progress cfg fuel s).1.lo = s.lo
+    Grows s.disk (Node.progress cfg fuel s).1.disk ∧ (Node.progress cfg fuel s).1.lo = s.lo
   | 0, s => ⟨Grows.refl _, rfl⟩
   | fuel + 1, s => by
     unfold Node.progress
@@ -24,45 +24,48 @@ theorem Grows.progress : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     · rename_i s₁ out h
       obtain ⟨r, id, b, hnew, hrefs, hpred, -, -, -, -, -, hst, -, -, hlo, -⟩ := tryBuild_some h
       have ih := Grows.progress fuel s₁
-      have hg : Grows s.store s₁.store := hst ▸ Grows.insert s.store
+      have hg : Grows s.disk s₁.disk := hst ▸ Grows.insert s.disk
       exact ⟨hg.trans ih.1, ih.2.trans hlo⟩
     · exact ⟨Grows.refl _, rfl⟩
 
 omit [Fintype Validator] in
-theorem decideStep_store (s : State Validator BlockId Payload) :
-    (Node.decideStep cfg s).1.store = s.store := by
+theorem decideStep_disk (s : State Validator BlockId Payload) :
+    (Node.decideStep cfg s).1.disk = s.disk := by
   unfold Node.decideStep
   dsimp only
-  split <;> rfl
+  split
+  · exact release_disk _
+  · rfl
 
 omit [Fintype Validator] in
 theorem Grows.advance (s : State Validator BlockId Payload) :
-    Grows s.store (Node.advance cfg s).1.store := by
-  simp only [Node.advance, Node.pass, arm_store]
-  refine (Grows.progress (cfg := cfg) (s.store.topRound + 2) s).1.trans ?_
-  rw [← decideStep_store (cfg := cfg) (Node.progress cfg (s.store.topRound + 2) s).1]
+    Grows s.disk (Node.advance cfg s).1.disk := by
+  rw [advance_disk]
+  simp only [Node.pass, flush_disk]
+  refine (Grows.progress (cfg := cfg) (s.disk.topRound + 2) s).1.trans ?_
+  rw [← decideStep_disk (cfg := cfg) (Node.progress cfg (s.disk.topRound + 2) s).1]
   exact Grows.flush _ _ _
 
 omit [Fintype Validator] in
 theorem Grows.quiesce (n : ℕ) (s : State Validator BlockId Payload) :
-    Grows s.store (Node.quiesce cfg n s).1.store :=
-  (quiesce_rel (P := fun _ => True) (R := fun a _ b => Grows a.store b.store)
+    Grows s.disk (Node.quiesce cfg n s).1.disk :=
+  (quiesce_rel (P := fun _ => True) (R := fun a _ b => Grows a.disk b.disk)
     (fun s => Grows.refl _) (fun _ _ _ _ _ h₁ h₂ => h₁.trans h₂)
     (fun s _ => ⟨Grows.advance s, trivial⟩) n s trivial).1
 
 omit [Fintype Validator] in
 theorem Grows.settle (s : State Validator BlockId Payload) :
-    Grows s.store (Node.settle cfg s).1.store :=
+    Grows s.disk (Node.settle cfg s).1.disk :=
   Grows.quiesce _ s
 
 omit [Fintype Validator] in
 theorem Grows.settle_of {st : Store Validator BlockId Payload} (s : State Validator BlockId Payload)
-    (h : s.store = st) : Grows st (Node.settle cfg s).1.store :=
+    (h : s.disk = st) : Grows st (Node.settle cfg s).1.disk :=
   h ▸ Grows.settle s
 
-/-- **Across a step the store grows.** -/
+/-- **Across a step the disk grows.** -/
 theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator BlockId Payload) :
-    Grows s.store (Node.step cfg s i).1.store := by
+    Grows s.disk (Node.step cfg s i).1.disk := by
   cases i with
   | start =>
     simp only [Node.step]
@@ -70,7 +73,7 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     · split
       · rename_i h₂
         dsimp only
-        refine (Grows.insert s.store (id := cfg.idOf cfg.genesis) (b := cfg.genesis) (hnew := h₂.1)
+        refine (Grows.insert s.disk (id := cfg.idOf cfg.genesis) (b := cfg.genesis) (hnew := h₂.1)
           (hrefs := fun _ hj => absurd hj (Finset.notMem_empty _))
           (hpred := fun j hj => absurd hj (Finset.notMem_empty j))).trans ?_
         exact Grows.settle_of _ rfl
@@ -80,10 +83,10 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     simp only [Node.step]
     split
     · dsimp only
-      refine (Grows.flush (cfg := cfg) (s.pending.length + 1) s.store
+      refine (Grows.flush (cfg := cfg) (s.pending.length + 1) s.disk
         ((id, b) :: s.pending)).trans ?_
-      exact Grows.settle_of _ rfl
-    · exact Grows.refl s.store
+      exact Grows.settle_of _ (flush_disk _ _)
+    · exact Grows.refl s.disk
   | timer r => rw [step_timer_fst]; exact Grows.settle_of _ rfl
   | fetchRequest peer r ids => exact Grows.refl _
   | restart => exact Grows.refl _

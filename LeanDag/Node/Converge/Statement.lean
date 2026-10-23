@@ -67,8 +67,8 @@ def Converges : Prop :=
     (tr : Trace Validator BlockId Payload),
     Hᶜ.card ≤ cfg.f → Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
     ∀ i u, (tr[i]?.map Prod.fst) = some u → u ∈ H → ∀ e ∈ broadcasts (outputsAt cfg tr i),
-      ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).store.blk e.1, ∀ v ∈ H,
-        y ∈ (stateBefore cfg tr tr.length v).store.ids
+      ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).disk.blk e.1, ∀ v ∈ H,
+        y ∈ (stateBefore cfg tr tr.length v).disk.ids
 
 /-- Fetching makes the honest nodes converge. -/
 def Statement : Prop := Converges

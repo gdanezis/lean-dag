@@ -16,8 +16,9 @@ initial state:
   knew, delivered with their hash, or its own, and is valid at
   the row under every block map agreeing with what it knew (`ValidOut`);
 * **decisions are the scheme's on the view**: at the bounded vote, a
-  decision step decides what `tryDecide` decides on any record and view
-  holding the store's blocks, read alike (`DecidesOnView`).
+  decision step of a node whose memory holds the round of its next
+  undecided slot decides what `tryDecide` decides on any record and view
+  holding the disk's blocks, read alike (`DecidesOnView`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -77,16 +78,17 @@ def ValidOut : Prop :=
         rowValid cfg.q blk e.2
 
 /-- **Decisions are the scheme's on the view**: at the bounded vote, a
-decision step decides what `tryDecide` decides on any record and view
-holding the store's blocks, read alike. -/
+decision step of a node whose memory holds the round of its next
+undecided slot decides what `tryDecide` decides on any record and view
+holding the disk's blocks, read alike. -/
 def DecidesOnView : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
     (s : State Validator BlockId Payload) (P : Validity Validator BlockId Payload) [P.Mechanised]
     (H : Finset Validator) (U : BlockRecord Validator BlockId Payload P H) (V : U.View),
-    cfg.σ = boundedSel → cfg.Admissible →
-    (∀ i, i ∈ V.ids ↔ i ∈ s.store.ids) → (∀ i ∈ s.store.ids, U.block i = s.store.blk i) →
-    let N := decidable cfg s.store.topRound
+    cfg.σ = boundedSel → cfg.Admissible → s.floor ≤ cfg.slots.slotRound s.lo →
+    (∀ i, i ∈ V.ids ↔ i ∈ s.disk.ids) → (∀ i ∈ s.disk.ids, U.block i = s.disk.blk i) →
+    let N := decidable cfg s.disk.topRound
     commitsOf (decideStep cfg s).2 =
       if s.lo < N then Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel U V s.lo (N - 1)
       else []

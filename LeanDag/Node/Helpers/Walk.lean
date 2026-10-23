@@ -29,7 +29,7 @@ variable (s : State Validator BlockId Payload)
 /-- The blocks a level of the walk meets: its front, neither accepted nor
 met already. -/
 def walkFront (w : List BlockId × List BlockId × List BlockId) : List BlockId :=
-  (w.1.filter fun x => decide (x ∉ s.store.ids) && decide (x ∉ w.2.1)).dedup
+  (w.1.filter fun x => decide (x ∉ s.disk.ids) && decide (x ∉ w.2.1)).dedup
 
 variable {s}
 
@@ -45,7 +45,7 @@ theorem walkLevel_eq (w : List BlockId × List BlockId × List BlockId) :
 
 omit [Fintype Validator] [DecidableEq Validator] in
 theorem mem_walkFront {w : List BlockId × List BlockId × List BlockId} {x : BlockId} :
-    x ∈ walkFront s w ↔ x ∈ w.1 ∧ x ∉ s.store.ids ∧ x ∉ w.2.1 := by
+    x ∈ walkFront s w ↔ x ∈ w.1 ∧ x ∉ s.disk.ids ∧ x ∉ w.2.1 := by
   simp only [walkFront, List.mem_dedup, List.mem_filter, Bool.and_eq_true, decide_eq_true_eq]
 
 variable (s) in
@@ -84,7 +84,7 @@ omit [Fintype Validator] [DecidableEq Validator] in
 blocks.** -/
 theorem walk_reaches (init : List BlockId) {n : ℕ} (x : ℕ → BlockId)
     (h0 : x 0 ∈ init)
-    (hok : ∀ i ≤ n, x i ∉ s.store.ids)
+    (hok : ∀ i ≤ n, x i ∉ s.disk.ids)
     (hpend : ∀ i < n, x i ∈ s.pending.map Prod.fst)
     (hstep : ∀ i < n, x (i + 1) ∈ expand s (x i))
     (hz : x n ∉ s.pending.map Prod.fst) {fuel : ℕ} (hfuel : n + 1 ≤ fuel) :

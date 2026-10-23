@@ -60,8 +60,10 @@ and distinct by `Validity.Quorate.of_validAt` and
 `Validity.Distinct.of_validAt`. A reference to the author's own previous
 block is the build rule (§3.2, §8), not a validity clause.
 
-**State** (`State`). The accepted blocks (`store`), the blocks received
-whose references are not all accepted (`pending`), the top round and
+**State** (`State`). The accepted blocks, on disk (`disk`), and those
+from a round `floor` up in memory (`memory`, `floor`), with the proof
+that the memory is the disk's window there (`mirrors`, §3.1); the blocks
+received whose references are not all accepted (`pending`), the top round and
 the node's own block there, the rounds whose timer fired, the next
 undecided slot `lo`, the decisions output, the latest first, and the
 round whose timer is set (`armed`). A timer drops the fired rounds below
@@ -81,20 +83,58 @@ Time is discrete (`ℕ`).
 
 ## 3. The program
 
-### 3.1 The store
+### 3.1 The disk and the memory
 
-The store is an ordered map from identifiers to blocks (Std.TreeMap),
-with the accepted identifiers (`Store`). A received block whose
-identifier is not `idOf` of its content, or which is the node's own, is
-dropped, so that an identifier denotes one block. Otherwise it is
-pending until its references are accepted, one round below it, and it
-is valid at the row (`ready`), and is then accepted (`accept`, `flush`).
-A Byzantine block that is never valid stays pending.
+A store is an ordered map from identifiers to blocks (Std.TreeMap),
+with the accepted identifiers (`Store`). The node keeps two. The disk
+(`State.disk`) holds every block it accepted, and is what it answers
+requests from (§3.4) and resends from (§3.6). The memory
+(`State.memory`) holds the disk's blocks at rounds `floor` and above,
+those at `floor` without their references (`Store.Mirrors`), and is
+what it builds, decides and arms its timers on (§3.2, §3.3). A received
+block whose identifier is not `idOf` of its content, which is the
+node's own, or which is on disk, is dropped, so that an identifier
+denotes one block. Otherwise it is pending until its references are
+accepted, one round below it, and it is valid at the row (`ready`), and
+is then accepted (`accept`, `flush`). A Byzantine block that is never
+valid stays pending.
 
-The accepted set is closed under references, every reference one round
-below its referrer, so it is a `BlockRecord.View` (`Store.toRecord`,
-`Store.view`); this is the view the decider reads. Byzantine twins are
-accepted, since their votes count.
+Each store is closed under references, every reference one round below
+its referrer, so it is a `BlockRecord.View` (`Store.toRecord`,
+`Store.view`). Byzantine twins are accepted, since their votes count.
+
+**Keeping a block.** An accepted block goes to the disk and, if its round
+is `floor` or above, to the memory, without its references at `floor`
+(`keep`, `Store.put`, `Mirrors.put`). A pending block is checked in
+memory when its round is above `floor`, since its references then lie at
+`floor` or above, and on disk otherwise; the two checks agree
+(`Store.pick`, `Mirrors.checks_pick`), so the node accepts what a node
+reading its disk alone would accept (`ready_eq`, `accept_disk`,
+`flush_disk`), and the proofs read the disk alone (`readyOn`,
+`acceptOn`, `flushOn`). The test that a block is new reads the disk's
+identifiers.
+
+**Releasing memory.** The node reads its memory at the round of its
+next undecided slot and up (§3.3), and from `voteOffset` below its top
+up (§3.2). This round is `floorOf`. When it builds or decides a slot, it
+releases the memory below `floorOf` (`release`, `Store.above`,
+`Mirrors.above`); a pass that builds and decides nothing releases
+nothing. The floor never passes `floorOf`, since the next undecided slot
+and the top only rise (`Inv.floor`). The memory therefore holds the
+blocks from the lower of the round of the next undecided slot and
+`voteOffset` below the top, up to the highest round the disk holds.
+
+**Reading memory as the disk.** From `floor` up the memory holds the
+disk's blocks at each round, with their rounds and authors, and their
+references above `floor` (`Mirrors.atRound_eq`, `Mirrors.authorsAt_eq`,
+`Mirrors.refs`). The builder's reads, at its top `r` with `floor` at
+most `r − voteOffset`, are therefore those on the disk
+(`Mirrors.build_reads`, at the bounded vote, where a vote reads only the
+voter's history down to the slot's round), and the decisions on the
+memory's window are those on the disk's view (`tryDecide_memory`). The
+proofs rewrite the node's reads with these equalities and reason about
+the disk. After a restart the memory is the disk's window at `floor`,
+which the disk and `floor` determine.
 
 Beside the accepted identifiers `ids`, a `Finset`, the store keeps three
 indexes, each a field with an invariant that ties it to `ids`:
@@ -115,16 +155,17 @@ indexes, each a field with an invariant that ties it to `ids`:
 `Finset.cons`, which needs no membership test since the identifier is
 new (`insert_ids` gives `ids` as `insert id ids`), takes the maximum of
 `topRound` and the block's round, and adds the identifier to the
-block's round in `byRound`. The builder reads `atRound` in `refsFor`
-and `refsAt`, in its reach and certificate tests through
-`leaderBlocks` (§3.2), and `authorsAt` for its quorum; the decider
-reads `byRound` through the window (§3.3); the answer to a fetch reads
-`atRound` in `coreSets`. The proofs read `blocksAt`, `authorsIn`
+block's round in `byRound`. `Store.above` keeps them for the blocks it
+keeps. The builder reads the memory's `atRound` in `refsFor` and
+`refsAt`, in its reach and certificate tests through `leaderBlocks`
+(§3.2), and `authorsAt` for its quorum; the decider reads the memory's
+`byRound` through the window (§3.3); the answer to a fetch reads the
+disk's `atRound` in `coreSets`. The proofs read `blocksAt`, `authorsIn`
 and `ids.sup` through these equalities.
 
 ### 3.2 The builder
 
-The program builds round `r + 1` above its top `r` when its store holds
+The program builds round `r + 1` above its top `r` when its memory holds
 blocks of `q` distinct authors of round `r` and, for the slots whose
 wave is in progress, either
 
@@ -133,7 +174,7 @@ wave is in progress, either
   certifies it at the decision round of a three-round row
   (`certReady`); or
 * the timer for round `r` has fired; or
-* the store holds round-`r + 1` blocks of `f + 1` authors (`behind`):
+* the memory holds round-`r + 1` blocks of `f + 1` authors (`behind`):
   at most `f` of them are Byzantine, so an honest node built the round,
   and a node behind builds it without waiting. With a valid block of a
   round in hand, whose history holds `q` authors of each round below, a
@@ -162,7 +203,7 @@ own block of round `r` for itself, and the least identifier between
 twins otherwise (`refsFor`). Where these would wait, and a held
 round-`r + 1` block of another author has references that would not, it
 builds on those instead, with its own block for itself (`refsAt`,
-`lent`), provided the block they make is valid (`buildable`). Without
+`lent`), provided they make a valid block (`buildable`). Without
 this a Byzantine author could show one twin, through which the leader
 block is reached, to the nodes ahead and the other to a node behind: the
 node behind holds both once it receives the history of a block built on
@@ -173,7 +214,7 @@ repeats. When it builds on being behind and the tests fail, it builds on
 persists the block, then broadcasts it, then sets the retry timer: the
 timer of round `r`, for twice its timeout (§3.6).
 
-The timer of round `r + 1` is set once the store holds `q` authors of
+The timer of round `r + 1` is set once the memory holds `q` authors of
 that round (`arm`), not at the build. A node that builds ahead of a
 quorum, on the tests or on being behind, starts waiting only once the
 quorum is there, so a node that waited the timeout held a quorum of the
@@ -183,12 +224,14 @@ round a timeout before (§5.3).
 
 After each change to its state the program runs `tryDecide p σ W V lo N`,
 where `lo` is its next undecided slot, `N` the last slot at a round its
-store holds (`decidable`), as the scheme's TryDecide scans to the
-highest round, `W` the store's window at the round `R` of slot `lo`
+disk holds (`decidable`), as the scheme's TryDecide scans to the
+highest round, `W` the memory's window at the round `R` of slot `lo`
 (`Store.window`) and `V` the view of all its blocks
-(`Store.windowView`), and outputs the new decisions (`decideStep`).
+(`Store.windowView`), and outputs the new decisions (`decideStep`). It
+does so only when the memory holds round `R`, which it always does
+(§3.1); when it decides a slot it releases the memory below `floorOf`.
 
-The window holds the store's blocks at rounds `R` and above, gathered
+The window holds a store's blocks at rounds `R` and above, gathered
 from `byRound` at the rounds `R … topRound`. A block at round `R` is
 read without its references, so that the window is closed under
 references; a block above `R` is read as stored, and its references lie
@@ -202,8 +245,11 @@ admissible row has, the references of blocks at `R` are never read
 (`ViewsAbove.tryDecide_eq`). At the bounded vote, a vote reads only the
 voter's history down to the slot's round, so the store's view and the
 window agree from `R` up (`ViewsAbove.window`), and the two give the
-same decisions (`tryDecide_window`). The proofs rewrite the decision
-step with this equality and reason about the store's view.
+same decisions (`tryDecide_window`); so do the memory and the disk from
+`floor` up (`Mirrors.viewsAbove`), and the decisions on the memory's
+window are those on the disk's view (`tryDecide_memory`). The proofs
+rewrite the decision step with this equality and reason about the
+disk's view.
 
 Over successive views this is `consumed`. A slot can be
 skipped directly once its voting round holds `skipThreshold` blamers,
@@ -224,20 +270,20 @@ carries the asker's top round `r` (`0` before the start). A block is
 delivered to the node at most once, since a block it stores or holds
 pending is not taken again, so it asks at most once on account of each
 block. A node asked for blocks sends the asker each one
-its store holds, and their histories in its store less the blocks the
+its disk holds, and their histories on its disk less the blocks the
 asker holds already (`answerIds`, `answer`). If `h`'s author is honest,
 it accepted all of `h`'s history before building `h`, so it holds
 everything asked for, and answers.
 
 **The pruned answer.** Let `n` be the committee's size and
 `T = n − q + f + 1` (`coreThreshold`). For `r ≥ 1` the answering node
-sweeps its store from its round-`(r − 1)` blocks downwards and records,
+sweeps its disk from its round-`(r − 1)` blocks downwards and records,
 for each block `i` it meets, a set of authors of round-`(r − 1)` blocks
 that reach `i` (`coreSets`, `coreFrom`, `coreLevel`). The sweep starts
 by giving each round-`(r − 1)` block its own author, passes the set of a
 block to each of its references, and stops at a level whose blocks all
-have sets of at least `T` authors. The histories are then walked in the
-store with every reference to a block of `T` or more recorded authors
+have sets of at least `T` authors. The histories are then walked on the
+disk with every reference to a block of `T` or more recorded authors
 removed (`pruned`); for `r = 0` nothing is removed.
 
 **Why the pruned answer is sound.** A node at top round `r ≥ 1` holds
@@ -247,11 +293,11 @@ recorded authors, and let at most `f` nodes be Byzantine. Then at least
 `n − q + 1` authors in `A` are honest, so `A` and the asker's quorum
 share an honest author `a`. An honest author has one block in round
 `r − 1`, so the asker holds the round-`(r − 1)` block of `a` that
-reaches `i` in the answering node's store; its store is closed under
-references, so it holds `i` and the history of `i`. A block of the asked
-history is therefore either sent or reached from a block the asker
-holds. The sweep follows the store's references only, so the answering
-node computes the sets once per request, from its own store.
+reaches `i` on the answering node's disk; the asker's disk is closed
+under references, so it holds `i` and the history of `i`. A block of the
+asked history is therefore either sent or reached from a block the asker
+holds. The sweep follows the disk's references only, so the answering
+node computes the sets once per request, from its own disk.
 
 **Why histories.** The walk sees a missing block only once the block
 that references it has arrived. Asked for the missing blocks alone, a
@@ -334,10 +380,10 @@ since no block is collected.
 | | Claim | Proof |
 |---|---|---|
 | V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; it broadcasts each block it persists, and only blocks it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`. | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions` (proved, `Local/Proof.lean`) |
-| V2 | **The decisions are the scheme's**: at the bounded vote, a decision step outputs what `Scheme.tryDecide` decides on any record and view holding the store's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.tryDecide_window`, `Node.ViewsAbove.window`, `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
-| V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest store is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
-| V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, with at most `f` nodes outside the honest set, every block an honest node broadcast, with its history, ends in every honest node's store. The fault bound makes the pruned answer (§3.4) sound: a block left out of an answer is reached from a round-`(r − 1)` block of an honest author in the asker's quorum. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain`, `Node.Quorate.run`, `Node.mem_coreSets`, `Node.pruned_chain`, `Node.eq_of_persists` |
-| V8 | The claims are about the program that runs: its store is the ordered map, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
+| V2 | **The decisions are the scheme's**: at the bounded vote, a decision step of a node whose memory holds the round of its next undecided slot, as it always does (§3.1), outputs what `Scheme.tryDecide` decides on any record and view holding the disk's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.tryDecide_memory`, `Node.Store.Mirrors.viewsAbove`, `Node.tryDecide_window`, `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
+| V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest disk is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
+| V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, with at most `f` nodes outside the honest set, every block an honest node broadcast, with its history, ends on every honest node's disk. The fault bound makes the pruned answer (§3.4) sound: a block left out of an answer is reached from a round-`(r − 1)` block of an honest author in the asker's quorum. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain`, `Node.Quorate.run`, `Node.mem_coreSets`, `Node.pruned_chain`, `Node.eq_of_persists` |
+| V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, timers on time, timeouts above `2(Δ + Δₛ)`, and the honest nodes outside the reliable set building only below a round `R₀`, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round at or above `R₀` that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy` |
 | V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` on, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. With every honest node reliable, `R₀ = 0`: after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.topTimerBy_of_up`, `Node.own_reaches`, `Node.Chain` |
 
@@ -348,19 +394,19 @@ Every claim depends only on the standard axioms (`propext`,
 program to the scheme. The blocks it builds are valid at the row and
 follow the scheme's build rule, its own block of the round below
 referenced (V1, §3.2). The decisions it outputs are the scheme's decider
-on its store's view (V2). A timed run of the program gives the scheme's
+on its disk's view (V2). A timed run of the program gives the scheme's
 `WaveFacts`, the production, arrival and wait clauses the scheme's wave
 argument reads, so the scheme's liveness argument applies to it (V11,
 §5.3).
 
-**The transfer.** The program decides on its own store, a record of its
+**The transfer.** The program decides on its own disk, a record of its
 own; the run's claims are about a view of the run's record. The decider
 reads a view and the block map on it alone, so the two give the same
-decisions when the store's identifiers are the view's and its block map
+decisions when the disk's identifiers are the view's and its block map
 agrees on them (`ViewsAbove.of_store`, `ViewsAbove.tryDecide_eq`, for
 the bounded vote, which reads only histories). The decision step runs
-on the store's window, which decides as the store's view
-(`tryDecide_window`, §3.3).
+on the memory's window, which decides as the disk's view
+(`tryDecide_memory`, §3.1, §3.3).
 
 **Authentication.** A block delivered to an honest node in an honest
 author's name was broadcast by that author earlier in the trace
@@ -389,7 +435,7 @@ honest nodes knew under each identifier (`content`), one block by the
 injective hash, so the record is closed and valid by construction
 (`Node.globalRecord`). It grounds what each honest node knows: a known
 block valid over blocks of the record is the record's block
-(`Node.ground`). Every honest store, at every event, is a cut of it,
+(`Node.ground`). Every honest disk, at every event, is a cut of it,
 its blocks the record's and read alike (`Node.IsCut`, `Node.cut_before`),
 and every decision a node outputs is a verdict on a view of it
 (`Node.Verdict`). No node computes the record; it exists to state the
@@ -489,7 +535,9 @@ induction on the event that built it references every reliable block of
 the round below, which the node then holds.
 
 **The armed timer.** A node sets the timer of its top round only once
-its store holds `q` authors of the round (`arm`, `Armed`), and each
+its memory holds `q` authors of the round (`arm`, `Armed`), which it
+does once its disk does, since the memory holds the top round
+(`Converge.floor_before`), and each
 timer it sets is at or below its top, one of its top round above `0`
 only so (`TimersSet`, `timersSet_before`). A node that built round
 `n + 1 > n₀` on the timer of round `n` therefore set it past GST, at an
@@ -522,15 +570,15 @@ arrive.
 
 The family's results conclude `Decided` on a view holding every block up
 to a round (`CoversUpto`), Byzantine blocks included, which a node's
-store need not hold. A direct commit needs only the reliable
+disk need not hold. A direct commit needs only the reliable
 decision-round blocks (`decided_of_safe_of_holds`), and the prefix needs
 only the run's (`decided_below_of_run`), so the node's view, which holds
 every reliable block it has received (`reliable_held`), suffices. The
-decision step reads the store as `tryDecide` on a view of the run's
+decision step reads the disk as `tryDecide` on a view of the run's
 record (V2), and `tryDecide` outputs every slot decided on its view once
 its scan reaches far enough (`tryDecide_within`): a verdict derived
 within a bound `B` is output by a scan reaching `B − 1`, and the node's
-scan reaches every slot at a round its store holds (§3.3).
+scan reaches every slot at a round its disk holds (§3.3).
 
 ### 5.5 The timing check
 
@@ -541,7 +589,7 @@ hand-built records. Read against the program:
 |---|---|
 | `SchemeReactive.advancesAt` | yes, once the round's timer fires: the timer stays fired while the node is at the round, so a quorum arriving later builds at once |
 | `SchemeReactive.reach_or_wait`, `cert_or_wait` | yes, by the build rule (§3.2) |
-| `PaceCore.holds_mono` | yes: the store only grows (`Grows`) |
+| `PaceCore.holds_mono` | yes: the disk only grows (`Grows`) |
 | `ReactiveCore.built_lt` | no: build times strictly increase, but one step may build several rounds at once, when a lagging node catches up; the node supplies `WaveFacts`, which does not ask it |
 | `PaceCore.catchup` | in part: a node holding round-`n` blocks of `f + 1` authors builds round `n` at once (`behind`), so once `f + 1` reliable nodes are at a round every reliable node is there `A` later (`catches_up`); one reliable block does not suffice, since the node cannot tell which are reliable (§3.2) |
 
@@ -577,7 +625,7 @@ the argument of §5.2–5.4 at `G`:
   again later (`retry_last`). Its
   own blocks form a chain (`Chain`, `own_reaches`): each references its
   block of the round below (`own_mem_refsAt`), and no block in its name
-  enters its store but those it builds. So the lost block lies in the
+  enters its disk but those it builds. So the lost block lies in the
   history of the block sent again, which reaches every other reliable
   node with its history by `t₀ + W + Δ + Δₛ`, whatever round that node is
   at (`arrives`, `mem_of_reaches_known`).
@@ -592,7 +640,7 @@ and restarted, the chain decides again.
 
 1. **Agreement with the model** (`LeanDagTest/Node/Replay.lean`). A
    hand-built record of the scheme's tests goes through the program's
-   store path (`flush`) into an empty store, and one decision step
+   receipt path (`flush`) into an empty disk and memory, and one decision step
    (`decideStep`) runs on it. Its commits are those the scheme's tests
    record for `tryDecide`: slots `0`, `1` and `2` of Mahi-Mahi's `full4`
    at the Mahi-Mahi row of wave four, and slots `0`, indirectly, and `1`
@@ -674,8 +722,8 @@ and restarted, the chain decides again.
   `@[csimp]` in `Common/Causality.lean`), which removes its exponential
   cost. The vote rule is `boundedSel`, the least vote searched only as
   deep as the slot, a `VoteSel` that selects what `leastSel` selects at
-  every block of a record (`boundedSel_sel_eq`); for that the store's
-  record carries `stored`, references one round below. The store's
+  every block of a record (`boundedSel_sel_eq`); for that a store's
+  record carries `stored`, references one round below. A store's
   block map is an ordered map rather than a chain of updates.
 * `scripts/check-arc-holes.py` forbids `partial`, `unsafe`,
   `implemented_by` and `extern` in the arcs it lists, `LeanDag/Node`
@@ -684,11 +732,13 @@ and restarted, the chain decides again.
   the library, run on fuel.
 * The executables are `[[lean_exe]]` targets of `lakefile.toml`, not
   default targets, so `lake build` and the audits are unchanged.
-* **Cost.** The store keeps every block. Membership in the accepted
-  identifiers costs a lookup in the map, logarithmic in the number `N`
-  of accepted blocks; the top round is read off a field; the blocks and the
-  authors of a round cost a lookup in `byRound` and the size of the
-  round. The scheme's functions (`Scheme.tryDecide`, `candidatesIn`,
+* **Cost.** The disk keeps every block, and the memory the blocks from
+  the floor up (§3.1). Membership in the accepted identifiers costs a
+  lookup in the map, logarithmic in the number `N` of blocks stored; the
+  top round is read off a field; the blocks and the authors of a round
+  cost a lookup in `byRound` and the size of the round. Releasing the
+  memory rebuilds it from the blocks it keeps, in time linear in its
+  size. The scheme's functions (`Scheme.tryDecide`, `candidatesIn`,
   the votes) take any record and view, and read a round by filtering
   the record's identifiers. The builder's reach and certificate tests
   read the leader blocks off `byRound` (`leaderBlocks`), and the
@@ -697,11 +747,14 @@ and restarted, the chain decides again.
   scans therefore cost time in the number of blocks at and above that
   round, not in `N`. An answer to a fetch sends the history of each
   block asked for, less the blocks the asker holds. Four nodes at the
-  Mysticeti row reach round 439 over 1,000 ticks, in 9,145 inputs and
-  0.2 seconds, the largest store holding 1,761 blocks; over 2,000
-  ticks they reach round 880 in 21,353 inputs and 1.8 seconds, the
-  largest store holding 3,522; over 4,000 ticks round 1,754 in 39,370
-  inputs and 2.5 seconds, the largest store holding 7,020. A profile of
+  Mysticeti row reach round 439 over 1,000 ticks, the largest disk
+  holding 1,761 blocks and the largest memory 9; over 4,000 ticks round
+  1,754, the largest disk holding 7,020 and the largest memory 10. With
+  GST at 300, a node down from the start or for 250 ticks, an attacker
+  sending invalid blocks or showing each node its own twins, or an
+  equivocator, the memory holds at most 10 blocks; at Orcaella with
+  `n = 9`, after a node is down for 350 ticks, at most 16, against 1,972
+  on disk. A profile of
   an 8,000-tick run (4.6 seconds) places about half of its time in
   answering fetches (`answerIds`) and about a fifth in the decider.
 
@@ -726,8 +779,11 @@ genesis block.
 The restart, resending and liveness across crashes are done, including
 decisions resuming after every node crashed (§3.6, §5.6). Open:
 
-* the state that only grows (`store`, `pending`, `decided`) is
-  unbounded, and under attack `pending` grows (§6);
+* the disk and the decisions grow with the chain, which they record;
+  `pending` grows under attack, by about two blocks a round when an
+  attacker sends blocks that reference blocks that do not exist (§6);
+  and the memory holds every block of its rounds, so an equivocator can
+  grow it by its twins;
 * catch-up is costly to compute: the restarted node asks for the
   missing history on account of every block it receives (§6, item 3);
 * the liveness claim covers honest nodes outside the reliable set only

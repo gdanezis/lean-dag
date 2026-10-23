@@ -1,4 +1,5 @@
 import LeanDag.Node.Model.Run
+import LeanDag.Node.Helpers.Memory
 import LeanDag.Node.Helpers.ReadsView
 /-!
 # One node at a time — the lemmas
@@ -30,8 +31,8 @@ theorem tryBuild_some {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
     ∃ r id, ∃ b : Block Validator BlockId Payload, ∃ hnew hrefs hpred,
       s.top = some r ∧ b.round = r + 1 ∧ b.creator = cfg.me ∧ id = cfg.idOf b ∧
-      rowValid cfg.q (Function.update s.store.blk id b) b ∧
-      s'.store = s.store.insert id b hnew hrefs hpred ∧ s'.top = some (r + 1) ∧
+      rowValid cfg.q (Function.update s.disk.blk id b) b ∧
+      s'.disk = s.disk.insert id b hnew hrefs hpred ∧ s'.top = some (r + 1) ∧
       s'.pending = s.pending ∧ s'.lo = s.lo ∧ out = built cfg [(id, b)] := by
   unfold tryBuild at h
   split at h
@@ -42,8 +43,9 @@ theorem tryBuild_some {s s' : State Validator BlockId Payload}
       · rename_i hc
         rw [Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        refine ⟨r, _, _, hc.1, hc.2.1, hc.2.2.1, hr, rfl, rfl, rfl,
-          hc.2.2.2, rfl, rfl, rfl, rfl, ?_⟩
+        have hd := s.mirrors.checks_disk hc.2
+        refine ⟨r, _, _, hc.1, hd.1, hd.2.1, hr, rfl, rfl, rfl,
+          hd.2.2, release_disk _, release_top _, release_pending _, release_lo _, ?_⟩
         simp [built]
       · exact absurd h (by simp)
     · exact absurd h (by simp)
@@ -53,8 +55,8 @@ omit [Fintype Validator] in
 /-- **A successful build step makes its block the node's own**, stored. -/
 theorem tryBuild_own {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
-    ∃ id b, out = built cfg [(id, b)] ∧ s'.own = some id ∧ id ∈ s'.store.ids ∧
-      s'.store.blk id = b := by
+    ∃ id b, out = built cfg [(id, b)] ∧ s'.own = some id ∧ id ∈ s'.disk.ids ∧
+      s'.disk.blk id = b := by
   unfold tryBuild at h
   split at h
   · rename_i r hr
@@ -63,9 +65,9 @@ theorem tryBuild_own {s s' : State Validator BlockId Payload}
     · split at h
       · rw [Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        refine ⟨_, ⟨r + 1, cfg.me, refsAt cfg s.store r s.own, cfg.payload (r + 1)⟩,
-          by simp [built], rfl, by simp [Store.insert_ids], ?_⟩
-        exact Std.TreeMap.getD_insert_self
+        refine ⟨_, ⟨r + 1, cfg.me, refsAt cfg s.memory r s.own, cfg.payload (r + 1)⟩,
+          by simp [built], release_own _, by simp [keep, Store.insert_ids], ?_⟩
+        simp [keep, Store.insert_blk]
       · exact absurd h (by simp)
     · exact absurd h (by simp)
   · exact absurd h (by simp)
@@ -180,8 +182,8 @@ theorem Grows.insert (st : Store Validator BlockId Payload) {id : BlockId}
 
 omit [Fintype Validator] in
 theorem Grows.accept (st : Store Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : Grows st (Node.accept cfg st id b) := by
-  unfold Node.accept
+    (b : Block Validator BlockId Payload) : Grows st (acceptOn cfg st id b) := by
+  unfold acceptOn
   split
   · exact Grows.insert st
   · exact Grows.refl st
@@ -189,34 +191,60 @@ theorem Grows.accept (st : Store Validator BlockId Payload) (id : BlockId)
 omit [Fintype Validator] in
 theorem Grows.foldl : ∀ (l : List (BlockId × Block Validator BlockId Payload))
     (st : Store Validator BlockId Payload),
-    Grows st (l.foldl (fun s e => Node.accept cfg s e.1 e.2) st)
+    Grows st (l.foldl (fun s e => acceptOn cfg s e.1 e.2) st)
   | [], st => Grows.refl st
   | e :: l, st => (Grows.accept st e.1 e.2).trans (Grows.foldl l _)
 
 omit [Fintype Validator] in
 theorem Grows.flush : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
     (pend : List (BlockId × Block Validator BlockId Payload)),
-    Grows st (Node.flush cfg fuel st pend).1
+    Grows st (flushOn cfg fuel st pend).1
   | 0, st, _ => Grows.refl st
   | fuel + 1, st, pend => by
-    unfold Node.flush
+    unfold flushOn
     dsimp only
     split
     · exact Grows.refl st
     · exact (Grows.foldl _ st).trans (Grows.flush fuel _ _)
+
+omit [Fintype Validator] in
+/-- The lowest round the node reads does not fall as its next undecided
+slot and its top rise. -/
+theorem floorOf_mono {s s' : State Validator BlockId Payload} (hlo : s.lo ≤ s'.lo)
+    (ht : s.top.getD 0 ≤ s'.top.getD 0) : floorOf cfg s ≤ floorOf cfg s' :=
+  min_le_min (cfg.slots.mono hlo) (Nat.sub_le_sub_right ht _)
+
+omit [Fintype Validator] in
+theorem tryBuild_floor {s s' : State Validator BlockId Payload}
+    {out : List (Output Validator BlockId Payload)} (h : tryBuild cfg s = some (s', out)) :
+    s'.floor = max s.floor (floorOf cfg s') := by
+  unfold tryBuild at h
+  split at h
+  · dsimp only at h
+    split at h
+    · split at h
+      · rw [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, -⟩ := h
+        rw [release_floor]
+        simp only [floorOf, release_lo, release_top]
+        rfl
+      · exact absurd h (by simp)
+    · exact absurd h (by simp)
+  · exact absurd h (by simp)
 
 /-- **The invariant** of a node's state, against what it knew, `K`, and
 its own blocks, `B`. -/
 structure Inv (cfg : Config Validator BlockId Payload) (s : State Validator BlockId Payload)
     (K : Set (BlockId × Block Validator BlockId Payload))
     (B : List (BlockId × Block Validator BlockId Payload)) : Prop where
-  known : ∀ j ∈ s.store.ids, (j, s.store.blk j) ∈ K
+  known : ∀ j ∈ s.disk.ids, (j, s.disk.blk j) ∈ K
   pend : ∀ e ∈ s.pending, e ∈ K
   rounds : (s.top = none ∧ B = []) ∨ ∃ t, s.top = some t ∧ Rounds B t
   good : ∀ e ∈ B, Good cfg K e
   sub : ∀ e ∈ B, e ∈ K
-  valid : StoreValid cfg.q s.store
-  own : ∀ j, s.own = some j → j ∈ s.store.ids ∧ (j, s.store.blk j) ∈ B
+  valid : StoreValid cfg.q s.disk
+  own : ∀ j, s.own = some j → j ∈ s.disk.ids ∧ (j, s.disk.blk j) ∈ B
+  floor : s.floor ≤ floorOf cfg s
 
 omit [Fintype Validator] in
 theorem Inv.mono {s : State Validator BlockId Payload}
@@ -224,7 +252,7 @@ theorem Inv.mono {s : State Validator BlockId Payload}
     {B : List (BlockId × Block Validator BlockId Payload)} (h : Inv cfg s K B) (hK : K ⊆ K') :
     Inv cfg s K' B :=
   ⟨fun j hj => hK (h.known j hj), fun e he => hK (h.pend e he), h.rounds,
-    fun e he => (h.good e he).mono hK, fun e he => hK (h.sub e he), h.valid, h.own⟩
+    fun e he => (h.good e he).mono hK, fun e he => hK (h.sub e he), h.valid, h.own, h.floor⟩
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- Accepting a known block keeps the store known. -/
@@ -249,12 +277,12 @@ theorem Inv.tryBuild {s s' : State Validator BlockId Payload}
     {out : List (Output Validator BlockId Payload)} (hi : Inv cfg s K B)
     (h : tryBuild cfg s = some (s', out)) :
     ∃ e, out = built cfg [e] ∧ Inv cfg s' (K ∪ {e}) (B ++ [e]) := by
-  obtain ⟨r, id, b, hnew, hrefs, hpred, hr, hbr, hbc, hid, hv, hst, htop, hpd, -, hout⟩ :=
+  obtain ⟨r, id, b, hnew, hrefs, hpred, hr, hbr, hbc, hid, hv, hst, htop, hpd, hlo, hout⟩ :=
     tryBuild_some h
   obtain ⟨id', b', hout', hown, hid', hblk⟩ := tryBuild_own h
   have hK : K ⊆ K ∪ {(id, b)} := Set.subset_union_left
   have hmem : (id, b) ∈ K ∪ {(id, b)} := Set.mem_union_right _ rfl
-  refine ⟨(id, b), hout, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
+  refine ⟨(id, b), hout, ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
   · rw [hst]
     exact known_insert (fun j hj => hK (hi.known j hj)) hmem
   · rw [hpd]; exact fun e he => hK (hi.pend e he)
@@ -291,6 +319,8 @@ theorem Inv.tryBuild {s s' : State Validator BlockId Payload}
     rw [hown, Option.some.injEq] at hj
     subst hj
     exact ⟨hid', by rw [hblk]; simp⟩
+  · rw [tryBuild_floor h]
+    exact max_le (hi.floor.trans (floorOf_mono hlo.ge (by rw [hr, htop]; simp))) le_rfl
 
 omit [Fintype Validator] in
 /-- **Building keeps the invariant**, the new blocks known and good. -/
@@ -395,12 +425,29 @@ and the own block carries over to a state that keeps them. -/
 theorem Inv.of_eq {s s' : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
-    (hst : s'.store = s.store) (hpd : s'.pending = s.pending) (htop : s'.top = s.top)
-    (hown : s'.own = s.own) :
+    (hst : s'.disk = s.disk) (hpd : s'.pending = s.pending) (htop : s'.top = s.top)
+    (hown : s'.own = s.own) (hfl : s'.floor = s.floor) (hlo : s.lo ≤ s'.lo) :
     Inv cfg s' K B :=
   ⟨by rw [hst]; exact hi.known, by rw [hpd]; exact hi.pend,
     by rw [htop]; exact hi.rounds, hi.good, hi.sub, by rw [hst]; exact hi.valid,
-    by rw [hst, hown]; exact hi.own⟩
+    by rw [hst, hown]; exact hi.own,
+    by rw [hfl]; exact hi.floor.trans (floorOf_mono hlo (by rw [htop]))⟩
+
+omit [Fintype Validator] in
+/-- **Releasing the memory keeps the invariant.** -/
+theorem Inv.release {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) :
+    Inv cfg (Node.release cfg s) K B := by
+  have hf : floorOf cfg (Node.release cfg s) = floorOf cfg s := by
+    simp only [floorOf, release_lo, release_top]
+  refine ⟨?_, ?_, ?_, hi.good, hi.sub, ?_, ?_, ?_⟩
+  · rw [release_disk]; exact hi.known
+  · rw [release_pending]; exact hi.pend
+  · rw [release_top]; exact hi.rounds
+  · rw [release_disk]; exact hi.valid
+  · rw [release_own, release_disk]; exact hi.own
+  · rw [hf, release_floor]; exact max_le hi.floor le_rfl
 
 omit [Fintype Validator] in
 /-- **Deciding keeps the invariant** and outputs no block. -/
@@ -411,7 +458,8 @@ theorem Inv.decideStep {s : State Validator BlockId Payload}
   unfold Node.decideStep
   dsimp only
   split
-  · exact ⟨out_quiet (quiet_commits _), hi.of_eq rfl rfl rfl rfl⟩
+  · exact ⟨out_quiet (quiet_commits _), Inv.release (hi.of_eq rfl rfl rfl rfl rfl
+      (Nat.le_add_right _ _))⟩
   · exact ⟨⟨rfl, rfl⟩, hi⟩
 
 omit [Fintype Validator] in
@@ -420,9 +468,9 @@ theorem accept_known {st : Store Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     (hK : ∀ j ∈ st.ids, (j, st.blk j) ∈ K) (hV : StoreValid cfg.q st)
     {id : BlockId} {b : Block Validator BlockId Payload} (hb : (id, b) ∈ K) :
-    (∀ j ∈ (accept cfg st id b).ids, (j, (accept cfg st id b).blk j) ∈ K) ∧
-      StoreValid cfg.q (accept cfg st id b) := by
-  unfold accept
+    (∀ j ∈ (acceptOn cfg st id b).ids, (j, (acceptOn cfg st id b).blk j) ∈ K) ∧
+      StoreValid cfg.q (acceptOn cfg st id b) := by
+  unfold acceptOn
   split
   · rename_i h
     exact ⟨known_insert hK hb, hV.insert h.2.2.2⟩
@@ -432,7 +480,7 @@ omit [Fintype Validator] in
 theorem foldl_accept_known {K : Set (BlockId × Block Validator BlockId Payload)} :
     ∀ (l : List (BlockId × Block Validator BlockId Payload)) {st : Store Validator BlockId Payload},
     (∀ j ∈ st.ids, (j, st.blk j) ∈ K) → StoreValid cfg.q st → (∀ e ∈ l, e ∈ K) →
-    let st' := l.foldl (fun s e => accept cfg s e.1 e.2) st
+    let st' := l.foldl (fun s e => acceptOn cfg s e.1 e.2) st
     (∀ j ∈ st'.ids, (j, st'.blk j) ∈ K) ∧ StoreValid cfg.q st'
   | [], _, hK, hV, _ => ⟨hK, hV⟩
   | e :: l, st, hK, hV, hl => by
@@ -446,16 +494,16 @@ theorem flush_known {K : Set (BlockId × Block Validator BlockId Payload)} :
     ∀ (fuel : ℕ) {st : Store Validator BlockId Payload}
       {pend : List (BlockId × Block Validator BlockId Payload)},
     (∀ j ∈ st.ids, (j, st.blk j) ∈ K) → StoreValid cfg.q st → (∀ e ∈ pend, e ∈ K) →
-    let r := flush cfg fuel st pend
+    let r := flushOn cfg fuel st pend
     (∀ j ∈ r.1.ids, (j, r.1.blk j) ∈ K) ∧ (∀ e ∈ r.2, e ∈ K) ∧ StoreValid cfg.q r.1
   | 0, _, _, hK, hV, hp => ⟨hK, hp, hV⟩
   | fuel + 1, st, pend, hK, hV, hp => by
-    unfold flush
+    unfold flushOn
     dsimp only
     split
     · exact ⟨hK, hp, hV⟩
-    · have hsplit : ∀ e ∈ (pend.partition fun e => ready cfg st e).1 ++
-          (pend.partition fun e => ready cfg st e).2, e ∈ K := by
+    · have hsplit : ∀ e ∈ (pend.partition fun e => readyOn cfg st e).1 ++
+          (pend.partition fun e => readyOn cfg st e).2, e ∈ K := by
         intro e he
         rw [List.partition_eq_filter_filter] at he
         rcases List.mem_append.mp he with he | he
@@ -470,14 +518,22 @@ omit [Fintype Validator] in
 theorem Inv.flushAll {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) (fuel : ℕ) :
-    let fl := flush cfg fuel s.store s.pending
-    Inv cfg { s with store := fl.1, pending := fl.2 } K B := by
-  intro fl
-  have hfl := flush_known (cfg := cfg) (K := K) fuel (st := s.store) (pend := s.pending)
+    Inv cfg (flush cfg fuel s) K B := by
+  have hfl := flush_known (cfg := cfg) (K := K) fuel (st := s.disk) (pend := s.pending)
     hi.known hi.valid hi.pend
-  have hg := Grows.flush (cfg := cfg) fuel s.store s.pending
-  exact ⟨hfl.1, hfl.2.1, hi.rounds, hi.good, hi.sub, hfl.2.2, fun j hj =>
-    ⟨hg.1 (hi.own j hj).1, by rw [hg.blk (hi.own j hj).1]; exact (hi.own j hj).2⟩⟩
+  have hg := Grows.flush (cfg := cfg) fuel s.disk s.pending
+  refine ⟨?_, ?_, ?_, hi.good, hi.sub, ?_, ?_, ?_⟩
+  · rw [flush_disk]; exact hfl.1
+  · rw [flush_pending]; exact hfl.2.1
+  · rw [flush_top]; exact hi.rounds
+  · rw [flush_disk]; exact hfl.2.2
+  · intro j hj
+    rw [flush_own] at hj
+    rw [flush_disk]
+    exact ⟨hg.1 (hi.own j hj).1, by rw [hg.blk (hi.own j hj).1]; exact (hi.own j hj).2⟩
+  · rw [flush_floor, show floorOf cfg (flush cfg fuel s) = floorOf cfg s by
+      simp only [floorOf, flush_lo, flush_top]]
+    exact hi.floor
 
 omit [Fintype Validator] in
 /-- **Arming changes only the armed round.** -/
@@ -491,8 +547,8 @@ theorem arm_eq (s : State Validator BlockId Payload) :
   · exact ⟨s.armed, rfl⟩
 
 omit [Fintype Validator] in
-@[simp] theorem arm_store (s : State Validator BlockId Payload) :
-    (Node.arm cfg s).1.store = s.store := by
+@[simp] theorem arm_disk (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.disk = s.disk := by
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
 
 omit [Fintype Validator] in
@@ -526,8 +582,26 @@ omit [Fintype Validator] in
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
 
 omit [Fintype Validator] in
-theorem advance_store (s : State Validator BlockId Payload) :
-    (Node.advance cfg s).1.store = (Node.pass cfg s).1.store := arm_store _
+@[simp] theorem arm_memory (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.memory = s.memory := by
+  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
+
+omit [Fintype Validator] in
+@[simp] theorem arm_floor (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.floor = s.floor := by
+  obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
+
+omit [Fintype Validator] in
+theorem advance_memory (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.memory = (Node.pass cfg s).1.memory := arm_memory _
+
+omit [Fintype Validator] in
+theorem advance_floor (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.floor = (Node.pass cfg s).1.floor := arm_floor _
+
+omit [Fintype Validator] in
+theorem advance_disk (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.disk = (Node.pass cfg s).1.disk := arm_disk _
 
 omit [Fintype Validator] in
 theorem advance_pending (s : State Validator BlockId Payload) :
@@ -558,11 +632,11 @@ theorem advance_snd (s : State Validator BlockId Payload) :
     (Node.advance cfg s).2 = (Node.pass cfg s).2 ++ (Node.arm cfg (Node.pass cfg s).1).2 := rfl
 
 omit [Fintype Validator] in
-/-- **Arming outputs only the timer of the top round**, set once the store
+/-- **Arming outputs only the timer of the top round**, set once the disk
 holds `q` authors of it. -/
 theorem mem_arm {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
     (h : o ∈ (Node.arm cfg s).2) :
-    ∃ r, s.top = some r ∧ cfg.q ≤ (s.store.authorsAt r).card ∧ (Node.arm cfg s).1.armed = some r ∧
+    ∃ r, s.top = some r ∧ cfg.q ≤ (s.disk.authorsAt r).card ∧ (Node.arm cfg s).1.armed = some r ∧
       o = .setTimer r (cfg.timeout r) := by
   unfold Node.arm at h ⊢
   split at h
@@ -570,7 +644,7 @@ theorem mem_arm {s : State Validator BlockId Payload} {o : Output Validator Bloc
     split at h
     · rename_i hc
       rw [List.mem_singleton] at h
-      refine ⟨r, ht, hc.2, ?_, h⟩
+      refine ⟨r, ht, hc.2.trans (Finset.card_le_card (s.mirrors.authorsAt_sub r)), ?_, h⟩
       simp only [ht, if_pos hc]
     · exact absurd h List.not_mem_nil
   · exact absurd h List.not_mem_nil
@@ -600,10 +674,10 @@ theorem Inv.advance {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) :
     ∃ bs, Out bs (advance cfg s).2 ∧ Inv cfg (advance cfg s).1 (K ∪ {x | x ∈ bs}) (B ++ bs) := by
-  obtain ⟨bs, hbs, hi₁⟩ := hi.progress (s.store.topRound + 2)
+  obtain ⟨bs, hbs, hi₁⟩ := hi.progress (s.disk.topRound + 2)
   obtain ⟨hds, hi₂⟩ := hi₁.decideStep
   have hi₃ := hi₂.flushAll (fuel := ((Node.decideStep cfg
-    (Node.progress cfg (s.store.topRound + 2) s).1).1.pending.length + 1))
+    (Node.progress cfg (s.disk.topRound + 2) s).1).1.pending.length + 1))
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) (Node.pass cfg s).1
   refine ⟨bs, ?_, ?_⟩
   · simp only [Node.advance, Node.pass]
@@ -611,7 +685,7 @@ theorem Inv.advance {s : State Validator BlockId Payload}
     simpa using ((out_built bs).append hds).append (out_quiet (arm_quiet _))
   · simp only [Node.advance]
     rw [ha]
-    exact hi₃.of_eq rfl rfl rfl rfl
+    exact hi₃.of_eq rfl rfl rfl rfl rfl le_rfl
 
 omit [Fintype Validator] in
 /-- A settle takes at least one pass. -/
@@ -760,7 +834,7 @@ timer.** -/
 theorem mem_resend {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
     (h : o ∈ Node.resend cfg s) :
     (∃ peer r ids, o = .fetch peer r ids) ∨ ∃ r j, s.top = some r ∧ s.own = some j ∧
-      (o = .broadcast j (s.store.blk j) ∨ o = .setTimer (r - 1) (2 * cfg.timeout (r - 1))) := by
+      (o = .broadcast j (s.disk.blk j) ∨ o = .setTimer (r - 1) (2 * cfg.timeout (r - 1))) := by
   unfold Node.resend at h
   rcases List.mem_append.mp h with h | h
   · split at h
@@ -900,19 +974,16 @@ theorem Inv.step {s : State Validator BlockId Payload}
           · exact hB
           · rw [h₁.1] at ht; exact absurd ht (by simp)
         let e : BlockId × Block Validator BlockId Payload := (cfg.idOf cfg.genesis, cfg.genesis)
-        have hr₀ : e.2.refs ⊆ s.store.ids := fun _ hj => absurd hj (Finset.notMem_empty _)
-        have hp₀ : ∀ j ∈ e.2.refs, (s.store.blk j).round + 1 = e.2.round :=
+        have hr₀ : e.2.refs ⊆ s.disk.ids := fun _ hj => absurd hj (Finset.notMem_empty _)
+        have hp₀ : ∀ j ∈ e.2.refs, (s.disk.blk j).round + 1 = e.2.round :=
           fun j hj => absurd hj (Finset.notMem_empty j)
-        have hi₀ : Inv cfg
-            { s with
-              store := s.store.insert e.1 e.2 h₂.1 hr₀ hp₀
-              top := some 0
-              own := some e.1 } (K ∪ {x | x ∈ [e]}) (B ++ [e]) := by
+        have hi₀ : Inv cfg { keep s e.1 e.2 h₂.1 hr₀ hp₀ with top := some 0, own := some e.1 }
+            (K ∪ {x | x ∈ [e]}) (B ++ [e]) := by
           refine ⟨known_insert (hnew := h₂.1) (hrefs := hr₀) (hpred := hp₀)
               (fun j hj => Set.subset_union_left (hi.known j hj)) (by simp [e]),
             fun x hx => Set.subset_union_left (hi.pend x hx), Or.inr ⟨0, rfl, ?_⟩,
             fun x hx => ?_, fun x hx => ?_, hi.valid.insert (hnew := h₂.1) (hrefs := hr₀)
-              (hpred := hp₀) h₂.2, fun j hj => ?_⟩
+              (hpred := hp₀) h₂.2, fun j hj => ?_, ?_⟩
           · rw [hB, List.nil_append]
             exact ⟨by simp, fun x hx => by rw [List.mem_singleton] at hx; subst hx; rfl⟩
           · rw [hB, List.nil_append, List.mem_singleton] at hx
@@ -923,10 +994,11 @@ theorem Inv.step {s : State Validator BlockId Payload}
             subst hx; simp
           · rw [Option.some.injEq] at hj
             subst hj
-            refine ⟨by simp [Store.insert_ids], ?_⟩
-            change (e.1, (s.store.map.insert e.1 e.2).getD e.1 s.store.junk) ∈ B ++ [e]
-            rw [Std.TreeMap.getD_insert_self]
-            simp
+            refine ⟨by simp [keep, Store.insert_ids], ?_⟩
+            simp [keep, Store.insert_blk, e]
+          · have := hi.floor
+            simp only [floorOf, h₁.1, Option.getD_none] at this
+            simpa [floorOf, keep] using this
         obtain ⟨bs, ho, hi'⟩ := hi₀.settle
         refine ⟨e :: bs, ?_, ?_⟩
         · exact Sent.of_out ((out_built [e]).append ho)
@@ -942,20 +1014,15 @@ theorem Inv.step {s : State Validator BlockId Payload}
     · rename_i hc
       have hd : delivered cfg [Input.deliver id b] = [(id, b)] := by simp [delivered, hc.1]
       have hmem : (id, b) ∈ K' := Or.inr (by rw [hd]; exact List.mem_singleton_self _)
-      have hfl := flush_known (cfg := cfg) (K := K') (s.pending.length + 1) (st := s.store)
-        (pend := (id, b) :: s.pending) (fun j hj => hsub (hi.known j hj)) hi.valid
-        (fun x hx => by
+      have hi₁ : Inv cfg { s with pending := (id, b) :: s.pending } K' B :=
+        ⟨fun j hj => hsub (hi.known j hj), fun x hx => by
           rcases List.mem_cons.mp hx with rfl | hx
           · exact hmem
-          · exact hsub (hi.pend x hx))
-      have hg := Grows.flush (cfg := cfg) (s.pending.length + 1) s.store ((id, b) :: s.pending)
-      dsimp only at hfl hg ⊢
-      generalize flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending) = fl at hfl hg ⊢
-      generalize missing { s with store := fl.1, pending := fl.2 } b = miss
-      have hi₀ : Inv cfg { s with store := fl.1, pending := fl.2 } K' B :=
-        ⟨hfl.1, hfl.2.1, hi.rounds, fun x hx => (hi.good x hx).mono hsub,
-          fun x hx => hsub (hi.sub x hx), hfl.2.2, fun j hj =>
-            ⟨hg.1 (hi.own j hj).1, by rw [hg.blk (hi.own j hj).1]; exact (hi.own j hj).2⟩⟩
+          · exact hsub (hi.pend x hx), hi.rounds, fun x hx => (hi.good x hx).mono hsub,
+          fun x hx => hsub (hi.sub x hx), hi.valid, hi.own, hi.floor⟩
+      have hi₀ := hi₁.flushAll (s.pending.length + 1)
+      generalize missing
+        (flush cfg (s.pending.length + 1) { s with pending := (id, b) :: s.pending }) b = miss
       refine Exists.imp (fun bs h => ⟨Sent.of_out h.1, h.2⟩)
         (hi₀.settle_of subset_rfl _ fun o ho => ?_)
       split at ho
@@ -965,7 +1032,7 @@ theorem Inv.step {s : State Validator BlockId Payload}
   | timer r =>
     simp only [Node.step]
     obtain ⟨bs, ho, hi'⟩ :=
-      ((hi.mono hsub).of_eq (s' := { s with fired := fire s r }) rfl rfl rfl rfl).settle
+      ((hi.mono hsub).of_eq (s' := { s with fired := fire s r }) rfl rfl rfl rfl rfl le_rfl).settle
     split
     · exact ⟨bs, (Sent.of_out ho).resend hi', hi'⟩
     · exact ⟨bs, Sent.of_out ho, hi'⟩
@@ -1060,6 +1127,7 @@ theorem Inv.init : Inv cfg (State.init cfg) ∅ [] where
   sub := fun _ h => absurd h (List.not_mem_nil)
   valid := fun _ h => absurd h (Finset.notMem_empty _)
   own := fun _ h => absurd h (by simp [State.init])
+  floor := Nat.zero_le _
 
 end Node
 

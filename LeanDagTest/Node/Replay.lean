@@ -54,9 +54,8 @@ number of blocks the store accepted, the number left pending, and the commits of
 decision step. -/
 def replay (c : Config (Fin 4) (Fin 24) Unit) (blk : Fin 24 → Block (Fin 4) (Fin 24) Unit) :
     ℕ × ℕ × List (ℕ × Option (Fin 24)) :=
-  let fl := flush c 24 (Store.empty c.genesis) ((List.finRange 24).map fun i => (i, blk i))
-  let s := { State.init c with store := fl.1 }
-  (fl.1.ids.card, fl.2.length, commitsOf (decideStep c s).2)
+  let s := flush c 24 { State.init c with pending := (List.finRange 24).map fun i => (i, blk i) }
+  (s.disk.ids.card, s.pending.length, commitsOf (decideStep c s).2)
 
 /-! ## Mahi-Mahi's `full4` at the Mahi-Mahi row of wave four -/
 

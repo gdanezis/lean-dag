@@ -88,7 +88,7 @@ theorem tryBuild_appends {s s' : State Validator BlockId Payload}
     · split at h
       · rw [Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        exact ⟨Appends.quiet rfl rfl, rfl, rfl⟩
+        exact ⟨Appends.quiet (release_decided _) rfl, release_decided _, release_lo _⟩
       · exact absurd h (by simp)
     · exact absurd h (by simp)
   · exact absurd h (by simp)
@@ -145,12 +145,14 @@ theorem decideStep_appends {s : State Validator BlockId Payload} (hL : Ledger s)
   split
   · rename_i hlt
     generalize hds : Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ
-      (s.store.window (cfg.slots.slotRound s.lo)) (s.store.windowView (cfg.slots.slotRound s.lo))
-      s.lo (decidable cfg s.store.topRound - 1) = ds
+      (s.memory.window (cfg.slots.slotRound s.lo)) (s.memory.windowView (cfg.slots.slotRound s.lo))
+      s.lo (decidable cfg s.disk.topRound - 1) = ds
     have hfst : ds.map Prod.fst = List.range' s.lo ds.length := by
       rw [← hds]; exact tryDecide_fst (S := cfg.slots) (by omega)
     have hD₁ : (ds.reverse ++ s.decided).reverse = s.decided.reverse ++ ds := by
       simp [List.reverse_append]
+    unfold Appends Ledger
+    simp only [release_decided, release_lo]
     refine ⟨?_, ?_⟩
     · change (ds.reverse ++ s.decided).reverse = s.decided.reverse ++ commitsOf (ds.map _)
       rw [hD₁, commitsOf_map]
@@ -161,17 +163,13 @@ theorem decideStep_appends {s : State Validator BlockId Payload} (hL : Ledger s)
 omit [Fintype Validator] in
 theorem advance_appends {s : State Validator BlockId Payload} (hL : Ledger s) :
     Appends s (advance cfg s).2 (advance cfg s).1 ∧ Ledger (advance cfg s).1 := by
-  obtain ⟨h₁, hd₁, hl₁⟩ := progress_appends (cfg := cfg) (s.store.topRound + 2) s
+  obtain ⟨h₁, hd₁, hl₁⟩ := progress_appends (cfg := cfg) (s.disk.topRound + 2) s
   obtain ⟨h₂, hL₂⟩ := decideStep_appends (cfg := cfg) (hL.of_eq hd₁ hl₁)
-  have hp : Appends s (pass cfg s).2 (pass cfg s).1 ∧ Ledger (pass cfg s).1 := by
-    simp only [Node.pass]; exact ⟨h₁.trans h₂, hL₂⟩
-  refine ⟨?_, ?_⟩
-  · unfold Appends
-    simp only [Node.advance, arm_decided, commitsOf_append, commitsOf_arm, List.append_nil]
-    exact hp.1
-  · unfold Ledger
-    simp only [Node.advance, arm_decided, arm_lo]
-    exact hp.2
+  have h₃ := h₁.trans h₂
+  unfold Appends Ledger at *
+  simp only [Node.advance, Node.pass, release_decided, release_lo, arm_decided, arm_lo,
+    flush_decided, flush_lo, commitsOf_append, commitsOf_arm, List.append_nil] at h₃ ⊢
+  exact ⟨h₃, hL₂⟩
 
 omit [Fintype Validator] in
 theorem quiesce_appends (n : ℕ) {s : State Validator BlockId Payload} (hL : Ledger s) :
@@ -206,7 +204,7 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
   | deliver id b =>
     simp only [Node.step]
     split
-    · refine hset _ _ rfl rfl ?_
+    · refine hset _ _ (flush_decided _ _) (flush_lo _ _) ?_
       split_ifs <;> rfl
     · exact ⟨Appends.refl s, hL⟩
   | timer r =>

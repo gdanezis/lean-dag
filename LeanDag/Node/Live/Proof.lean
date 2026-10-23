@@ -90,8 +90,8 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   -- it holds a quorum of round `n` at `τ`, so it armed the round's timer
   obtain ⟨j₀, hj₀, hj₀i, hj₀r, hj₀c⟩ :=
     ownTop_before (cfg := cfg) (tr := tr) (v := v) (eventsBy tr time τ) n hτt
-  have hauth : T ⊆ authorsIn (stateAt cfg tr time v τ).store.toRecord
-      (stateAt cfg tr time v τ).store.ids n := by
+  have hauth : T ⊆ authorsIn (stateAt cfg tr time v τ).disk.toRecord
+      (stateAt cfg tr time v τ).disk.ids n := by
     intro w hw
     rw [mem_authorsIn]
     by_cases hwv : w = v
@@ -99,18 +99,21 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
       exact ⟨j₀, hj₀i, hj₀r, hj₀c⟩
     · exact round_arrives htime hinj hTH hmono harr hw hv hwv hgs (hstarted w hw) (hall w hw)
         le_rfl (by omega)
-  have hcard : cfg.q ≤ ((stateAt cfg tr time v τ).store.authorsAt n).card := by
+  have hcard : cfg.q ≤ ((stateAt cfg tr time v τ).disk.authorsAt n).card := by
     rw [Store.authorsAt_eq]
     exact hqT.trans (Finset.card_le_card hauth)
-  have harm := armed_before (cfg := cfg) (tr := tr) v (eventsBy tr time τ) n hτt hcard
+  have harm := armed_before (cfg := cfg) (tr := tr) v (eventsBy tr time τ) n hτt (by
+    rw [(stateBefore cfg tr (eventsBy tr time τ) v).mirrors.authorsAt_eq
+      ((Converge.floor_before hτt).trans (Nat.sub_le _ _))]
+    exact hcard)
   obtain ⟨f, hfe, htf⟩ := htop v hv τ n (by omega) (by omega) hτt harm
   have hfl : f < tr.length := (List.getElem?_eq_some_iff.mp hfe).1
   have hfE : f < E := (lt_eventsBy hmono hfl).mpr htf
   -- at `τ + timeout n` its round's timer has fired, with the quorum held
   have hfired : n ∈ (stateBefore cfg tr E v).fired :=
     fired_stays hfe E hfE (by rw [hZt]; rfl)
-  have hcardE : cfg.q ≤ (authorsIn (stateBefore cfg tr E v).store.toRecord
-      (stateBefore cfg tr E v).store.ids n).card := by
+  have hcardE : cfg.q ≤ (authorsIn (stateBefore cfg tr E v).disk.toRecord
+      (stateBefore cfg tr E v).disk.ids n).card := by
     rw [← Store.authorsAt_eq]
     exact hcard.trans (Finset.card_le_card (Grows.authorsAt (grows_before v hτE) n))
   obtain ⟨j₁, hj₁, hj₁i, hj₁r, hj₁c⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E n hZt
@@ -118,6 +121,7 @@ theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validato
   have hsome := tryBuild_isSome (cfg := cfg.at v) hZt (Or.inl hfired) hcardE
     (fun j hj => by rw [hj₁] at hj; cases hj; exact ⟨hj₁i, hj₁r, hj₁c⟩)
     (fun R => fresh_before hid htime (hTH hv) hZt R)
+    ((Converge.floor_before hZt).trans (Nat.sub_le _ _))
   rcases settled_before (cfg := cfg) hq v E with h | h
   · rw [hZt] at h; cases h
   · rw [h.build] at hsome; cases hsome
@@ -215,12 +219,12 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
         (fun j h1 h2 => hcommit j h1 h2) Z.lo (by omega)
   -- and the scan reaches it
   obtain ⟨o, -, hoi, hor, -⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E t' ht'
-  have hoi' : o ∈ Z.store.ids := hoi
-  have hor' : (Z.store.blk o).round = t' := hor
-  have hdec : b + c ≤ decidable cfg Z.store.topRound := by
-    have hle : (Z.store.blk o).round ≤ Z.store.topRound := Z.store.topRound_eq ▸
-      Finset.le_sup (f := fun i => (Z.store.blk i).round) hoi'
-    have := lt_decidable (cfg := cfg) (k := b + c - 1) (R := Z.store.topRound) (by omega)
+  have hoi' : o ∈ Z.disk.ids := hoi
+  have hor' : (Z.disk.blk o).round = t' := hor
+  have hdec : b + c ≤ decidable cfg Z.disk.topRound := by
+    have hle : (Z.disk.blk o).round ≤ Z.disk.topRound := Z.disk.topRound_eq ▸
+      Finset.le_sup (f := fun i => (Z.disk.blk i).round) hoi'
+    have := lt_decidable (cfg := cfg) (k := b + c - 1) (R := Z.disk.topRound) (by omega)
     omega
   haveI : Validity.Quorate (ValidAt (Validator := Validator) (BlockId := BlockId)
       (Payload := Payload) cfg.q Clause.none) cfg.q :=
@@ -230,18 +234,18 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     (honest := H) (Validator := Validator) (BlockId := BlockId) (Payload := Payload)) ht
   obtain ⟨w, hwd⟩ := hlow
   have hmem := Scheme.tryDecide_within hls hcms hcs hlaws trivial (lo := Z.lo) (k := Z.lo)
-    (B := b + c) (N := decidable cfg Z.store.topRound - 1) le_rfl (by omega) (by omega)
+    (B := b + c) (N := decidable cfg Z.disk.topRound - 1) le_rfl (by omega) (by omega)
     (fun m h1 h2 => ⟨w, by rwa [show m = Z.lo by omega]⟩) w hwd.toDecided
-  have hempty := hSet.decided (show Z.lo < decidable cfg Z.store.topRound by omega)
-  have heq : Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ Z.store.toRecord Z.store.view Z.lo
-      (decidable cfg Z.store.topRound - 1) =
-      Scheme.tryDecide cfg.p boundedSel U V Z.lo (decidable cfg Z.store.topRound - 1) := by
-    rw [hσ]
-    exact hva.tryDecide_eq cfg.p hw _ (Nat.zero_le _)
-  change Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ (Z.store.window (cfg.slots.slotRound Z.lo))
-    (Z.store.windowView (cfg.slots.slotRound Z.lo)) Z.lo
-    (decidable cfg Z.store.topRound - 1) = [] at hempty
-  rw [tryDecide_window cfg hσ hw, heq] at hempty
+  have hfZ : Z.floor ≤ cfg.slots.slotRound Z.lo := Converge.floor_lo_before (cfg := cfg) E v
+  have hempty := hSet.decided (show Z.lo < decidable cfg Z.disk.topRound by omega) hfZ
+  have heq : Scheme.tryDecide (S := cfg.slots) cfg.p boundedSel Z.disk.toRecord Z.disk.view Z.lo
+      (decidable cfg Z.disk.topRound - 1) =
+      Scheme.tryDecide cfg.p boundedSel U V Z.lo (decidable cfg Z.disk.topRound - 1) :=
+    hva.tryDecide_eq cfg.p hw _ (Nat.zero_le _)
+  change Scheme.tryDecide (S := cfg.slots) cfg.p cfg.σ (Z.memory.window (cfg.slots.slotRound Z.lo))
+    (Z.memory.windowView (cfg.slots.slotRound Z.lo)) Z.lo
+    (decidable cfg Z.disk.topRound - 1) = [] at hempty
+  rw [tryDecide_memory (cfg := cfg) hσ hw Z hfZ, heq] at hempty
   rw [hempty] at hmem
   simp at hmem
 

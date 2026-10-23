@@ -61,15 +61,23 @@ theorem validOut : ValidOut := by
     simpa only [List.mem_append, or_assoc] using hx
 
 theorem decidesOnView : DecidesOnView := by
-  intro Validator BlockId Payload _ _ _ cfg s P _ H U V hσ hadm hV hU
+  intro Validator BlockId Payload _ _ _ cfg s P _ H U V hσ hadm hfl hV hU
   have h := ViewsAbove.of_store hV hU
   letI := cfg.slots
   unfold decideStep
   dsimp only
+  have hT := tryDecide_memory hσ hadm.2.1.1 s hfl (decidable cfg s.disk.topRound - 1)
+  rw [h.tryDecide_eq cfg.p hadm.2.1.1 _ (Nat.zero_le _)] at hT
   split
-  · rw [commitsOf_map, tryDecide_window cfg hσ hadm.2.1.1, hσ,
-      h.tryDecide_eq cfg.p hadm.2.1.1 _ (Nat.zero_le _)]
-  · rfl
+  · rename_i hc
+    rw [if_pos hc.1, commitsOf_map, hT]
+  · rename_i hc
+    by_cases hlt : s.lo < decidable cfg s.disk.topRound
+    · rw [if_pos hlt, ← hT]
+      by_contra hne
+      exact hc ⟨hlt, hfl, fun h' => hne (by rw [h']; rfl)⟩
+    · rw [if_neg hlt]
+      rfl
 
 theorem holds : Statement :=
   ⟨oneEach, authored, sends, decisions, validOut, decidesOnView⟩

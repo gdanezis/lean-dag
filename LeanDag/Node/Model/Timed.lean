@@ -30,7 +30,7 @@ def stateAt (v : Validator) (t : ℕ) : State Validator BlockId Payload :=
   stateBefore cfg tr (eventsBy tr time t) v
 
 /-- The blocks node `v` holds at `t`. -/
-def holdsAt (v : Validator) (t : ℕ) : Finset BlockId := (stateAt cfg tr time v t).store.ids
+def holdsAt (v : Validator) (t : ℕ) : Finset BlockId := (stateAt cfg tr time v t).disk.ids
 
 /-- Node `v`'s top round at `t`, `0` before it starts. -/
 def topAt (v : Validator) (t : ℕ) : ℕ := ((stateAt cfg tr time v t).top).getD 0

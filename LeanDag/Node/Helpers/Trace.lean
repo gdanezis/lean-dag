@@ -73,7 +73,7 @@ theorem outputsAt_eq {i : ℕ} {w : Validator} {inp : Input Validator BlockId Pa
 
 /-- **A node's store grows from event to event.** -/
 theorem grows_before (v : Validator) : ∀ {i j : ℕ}, i ≤ j →
-    Grows (stateBefore cfg tr i v).store (stateBefore cfg tr j v).store := by
+    Grows (stateBefore cfg tr i v).disk (stateBefore cfg tr j v).disk := by
   intro i j hij
   induction j, hij using Nat.le_induction with
   | base => exact Grows.refl _

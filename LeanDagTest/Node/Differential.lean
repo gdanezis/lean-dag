@@ -117,7 +117,7 @@ def cfg (p : Scheme.Params) (per m : ℕ) (hper : 0 < per) (hm : 0 < m)
 
 /-- The record through the store path into an empty store. -/
 def load (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : State (Fin 4) ℕ Unit :=
-  { State.init c with store := (flush c bs.length (Store.empty c.genesis) bs).1 }
+  flush c bs.length { State.init c with pending := bs }
 
 /-- The decided prefix of one decision step. -/
 def once (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : List (ℕ × Option ℕ) :=
@@ -126,7 +126,7 @@ def once (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : List (ℕ × Option ℕ) 
 /-- The scheme's *TryDecide* in its own order on the loaded store. -/
 def scheme (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : List (ℕ × Option ℕ) :=
   letI := c.slots
-  let st := (load c bs).store
+  let st := (load c bs).disk
   Scheme.schemeTryDecide c.p Scheme.leastSel st.toRecord st.view c.per c.m 0 st.topRound
 
 /-- The program as it runs: the rounds arrive one at a time, each
@@ -135,7 +135,7 @@ def stepwise (c : Config (Fin 4) ℕ Unit) (bs : Blocks) (R : ℕ) : List (ℕ �
   ((List.range (R + 1)).foldl (fun (acc : State (Fin 4) ℕ Unit × List (ℕ × Option ℕ)) r =>
     let (s, out) := acc
     let rb := bs.filter fun e => e.2.round = r
-    let s := { s with store := (flush c rb.length s.store rb).1 }
+    let s := flush c rb.length { s with pending := rb }
     let d := decideStep c s
     (d.1, out ++ commitsOf d.2)) (State.init c, [])).2
 
@@ -161,7 +161,7 @@ def summary (k : ℕ) : ℕ × ℕ × ℕ × ℕ :=
     (cfgs bs).foldl (fun (n, ok, cm, sk) c =>
       let d := once c bs
       let same := d = once { c with σ := Scheme.leastSel } bs ∧ d = scheme c bs ∧
-        d = stepwise c bs 8 ∧ (load c bs).store.ids.card = bs.length
+        d = stepwise c bs 8 ∧ (load c bs).disk.ids.card = bs.length
       (n + 1, if same then ok + 1 else ok, cm + (d.filter fun e => e.2.isSome).length,
         sk + (d.filter fun e => e.2.isNone).length)) acc) (0, 0, 0, 0)
 

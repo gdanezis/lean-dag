@@ -48,7 +48,7 @@ theorem tryBuild_fired {s s' : State Validator BlockId Payload}
     · split at h
       · rw [Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, -⟩ := h
-        rfl
+        exact release_fired _
       · cases h
     · cases h
   · cases h
@@ -97,13 +97,13 @@ theorem progress_shape : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
 omit [Fintype Validator] in
 theorem decideStep_shape (s : State Validator BlockId Payload) :
     let d := Node.decideStep cfg s
-    d.1.fired = s.fired ∧ d.1.top = s.top ∧ d.1.store = s.store ∧
+    d.1.fired = s.fired ∧ d.1.top = s.top ∧ d.1.disk = s.disk ∧
       Silent d.2 := by
   intro d
   unfold d Node.decideStep
   dsimp only
   split
-  · refine ⟨rfl, rfl, rfl, Silent.of_quiet fun o h => ?_⟩
+  · refine ⟨release_fired _, release_top _, release_disk _, Silent.of_quiet fun o h => ?_⟩
     obtain ⟨_, -, rfl⟩ := List.mem_map.mp h
     exact ⟨fun _ _ h => (nomatch h), fun _ _ h => (nomatch h)⟩
   · exact ⟨rfl, rfl, rfl, Silent.nil⟩
@@ -161,21 +161,18 @@ theorem PassShape.trans {a b c : State Validator BlockId Payload}
 /-- **The shape of one pass.** -/
 theorem advance_shape (s : State Validator BlockId Payload) :
     PassShape cfg s (Node.advance cfg s).2 (Node.advance cfg s).1 := by
-  obtain ⟨p₂, p₀, p₃, p₄⟩ := progress_shape (cfg := cfg) (s.store.topRound + 2) s
-  obtain ⟨bs, hbs⟩ := progress_built (cfg := cfg) (s.store.topRound + 2) s
+  obtain ⟨p₂, p₀, p₃, p₄⟩ := progress_shape (cfg := cfg) (s.disk.topRound + 2) s
+  obtain ⟨bs, hbs⟩ := progress_built (cfg := cfg) (s.disk.topRound + 2) s
   have hra := rises_advance (cfg := cfg) s
-  generalize hP : Node.progress cfg (s.store.topRound + 2) s = P at p₂ p₀ p₃ p₄ hbs
+  generalize hP : Node.progress cfg (s.disk.topRound + 2) s = P at p₂ p₀ p₃ p₄ hbs
   obtain ⟨d₂, d₃, -, d₅⟩ := decideStep_shape (cfg := cfg) P.1
   generalize hD : Node.decideStep cfg P.1 = D at d₂ d₃ d₅
-  have hadv : Node.pass cfg s = ({ D.1 with
-      store := (flush cfg (D.1.pending.length + 1) D.1.store D.1.pending).1,
-      pending := (flush cfg (D.1.pending.length + 1) D.1.store D.1.pending).2 },
-      P.2 ++ D.2) := by
+  have hadv : Node.pass cfg s = (flush cfg (D.1.pending.length + 1) D.1, P.2 ++ D.2) := by
     simp only [Node.pass, hP, hD]
   have hpers : persists (Node.advance cfg s).2 = bs := by
     rw [advance_snd, persists_append, persists_arm, List.append_nil, hadv, persists_append, hbs,
       persists_built, d₅.1]; simp
-  have htop : (Node.advance cfg s).1.top = D.1.top := by rw [advance_top, hadv]
+  have htop : (Node.advance cfg s).1.top = D.1.top := by rw [advance_top, hadv, flush_top]
   refine ⟨fun e he => ?_, fun hs ρ h₁ h₂ => ?_, fun e he => ?_, ?_, hra, fun h => ?_⟩
   · rw [hpers] at he
     exact p₃ e (by rw [hbs, persists_built]; exact he)
@@ -187,8 +184,8 @@ theorem advance_shape (s : State Validator BlockId Payload) :
     rw [advance_snd, hadv, hbs]
     exact List.mem_append_left _ (List.mem_append_left _ (timer_of_built he))
   · rw [advance_fired, hadv]
-    change s.fired ⊆ D.1.fired
-    rw [d₂, p₂]
+    change s.fired ⊆ (flush cfg (D.1.pending.length + 1) D.1).fired
+    rw [flush_fired, d₂, p₂]
   · rw [htop, d₃]; exact p₀ h
 
 theorem quiesce_shape (n : ℕ) (s : State Validator BlockId Payload) :
@@ -230,7 +227,7 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
       ((persists pre = [] ∧ x.top = s.top) ∨ (s.top = none ∧ x.top = some 0 ∧
         ∃ g : BlockId × Block Validator BlockId Payload,
           pre = [.persist g.1 g.2, .broadcast g.1 g.2, .setTimer 0 (2 * cfg.timeout 0)] ∧
-          g.2.round = 0 ∧ g.1 ∈ x.store.ids ∧ (x.store.blk g.1).round = 0)) := by
+          g.2.round = 0 ∧ g.1 ∈ x.disk.ids ∧ (x.disk.blk g.1).round = 0)) := by
   have hq : ∀ x, x = s → ((x, ([] : List (Output Validator BlockId Payload))).1 = s ∧
       persists ([] : List (Output Validator BlockId Payload)) = []) := fun x hx => ⟨hx, rfl⟩
   cases inp with
@@ -248,8 +245,8 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
   | deliver id b =>
     by_cases hA : Admits cfg s id b
     · rw [step_deliver hA]
-      refine Or.inr ⟨_, _, [], rfl, by rw [List.append_nil], rfl, rfl, fun _ h _ => h,
-        Or.inl ⟨?_, rfl⟩⟩
+      refine Or.inr ⟨_, _, [], rfl, by rw [List.append_nil], rfl, by rw [afterFlush_top],
+        fun _ h _ => by rwa [afterFlush_fired], Or.inl ⟨?_, afterFlush_top _ _ _⟩⟩
       refine (silent_of fun o ho => ?_).1
       split at ho
       · cases ho
@@ -426,45 +423,45 @@ theorem refsAt_buildable (st : Store Validator BlockId Payload) (r : ℕ) (o : O
 
 omit [Fintype Validator] in
 /-- **A node whose round's timer fired, or that is behind the round
-above, or whose references pass the tests, builds**, given a quorum of the
-round, its own block there stored, and no stored block with the
-identifier of a next block of its own. -/
+above, builds**, given a quorum of the round, its own block there stored,
+no stored block with the identifier of a next block of its own, and its
+memory from the round up. -/
 theorem tryBuild_isSome {s : State Validator BlockId Payload} {r : ℕ} (ht : s.top = some r)
-    (hf : r ∈ s.fired ∨ behind cfg s.store r ∨
-      (reachReady cfg s.store (refsAt cfg s.store r s.own) r = true ∧
-        certReady cfg s.store (refsAt cfg s.store r s.own) r = true))
-    (hq : cfg.q ≤ (authorsIn s.store.toRecord s.store.ids r).card)
-    (ho : ∀ j, s.own = some j → j ∈ s.store.ids ∧ (s.store.blk j).round = r ∧
-      (s.store.blk j).creator = cfg.me)
-    (hfresh : ∀ R, cfg.idOf ⟨r + 1, cfg.me, R, cfg.payload (r + 1)⟩ ∉ s.store.ids) :
+    (hf : r ∈ s.fired ∨ behind cfg s.disk r)
+    (hq : cfg.q ≤ (authorsIn s.disk.toRecord s.disk.ids r).card)
+    (ho : ∀ j, s.own = some j → j ∈ s.disk.ids ∧ (s.disk.blk j).round = r ∧
+      (s.disk.blk j).creator = cfg.me)
+    (hfresh : ∀ R, cfg.idOf ⟨r + 1, cfg.me, R, cfg.payload (r + 1)⟩ ∉ s.disk.ids)
+    (hF : s.floor ≤ r) :
     (tryBuild cfg s).isSome := by
   unfold tryBuild
   rw [ht]
   dsimp only
-  rw [if_pos ⟨by rw [Store.authorsAt_eq]; exact hq, hf⟩]
-  have hB : buildable cfg s.store r (refsAt cfg s.store r s.own) = true := by
-    rcases refsAt_buildable (cfg := cfg) s.store r s.own with he | he
-    · rw [he]
-      obtain ⟨hsub, hrd, hcr, hdis⟩ := refsFor_spec (cfg := cfg) (st := s.store) (r := r) ho
-      have hnin : ∀ j ∈ refsFor cfg s.store r s.own,
-          j ≠ cfg.idOf ⟨r + 1, cfg.me, refsFor cfg s.store r s.own, cfg.payload (r + 1)⟩ :=
+  rw [if_pos ⟨by rw [s.mirrors.authorsAt_eq hF, Store.authorsAt_eq]; exact hq,
+    hf.imp id fun h => Or.inl ((s.mirrors.behind_iff (by omega)).mpr h)⟩]
+  have hB : buildable cfg s.memory r (refsAt cfg s.memory r s.own) = true := by
+    rcases refsAt_buildable (cfg := cfg) s.memory r s.own with he | he
+    · rw [he, s.mirrors.refsFor_eq hF, s.mirrors.buildable_eq hF]
+      obtain ⟨hsub, hrd, hcr, hdis⟩ := refsFor_spec (cfg := cfg) (st := s.disk) (r := r) ho
+      have hnin : ∀ j ∈ refsFor cfg s.disk r s.own,
+          j ≠ cfg.idOf ⟨r + 1, cfg.me, refsFor cfg s.disk r s.own, cfg.payload (r + 1)⟩ :=
         fun j hj h => hfresh _ (h ▸ hsub hj)
       unfold buildable
-      refine decide_eq_true ⟨hfresh _, hsub, fun j hj => by simp; rw [hrd j hj],
+      refine decide_eq_true ⟨hsub, fun j hj => by simp; rw [hrd j hj],
         ⟨fun j hj => ?_, fun _ => ?_, fun i hi j hj hij => ?_⟩⟩
       · simp only at hj ⊢
         rw [Function.update_of_ne (hnin j hj), hrd j hj]
       · simp only [creators, creatorsOf]
-        rw [Finset.image_congr (g := fun i => (s.store.blk i).creator)
+        rw [Finset.image_congr (g := fun i => (s.disk.blk i).creator)
           (fun j hj => by simp only; rw [Function.update_of_ne (hnin j hj)])]
-        change cfg.q ≤ (creatorsOf s.store.blk _).card
+        change cfg.q ≤ (creatorsOf s.disk.blk _).card
         rw [hcr]; exact hq
       · simp only at hi hj hij
         rw [Function.update_of_ne (hnin i hi), Function.update_of_ne (hnin j hj)] at hij
         exact hdis i hi j hj hij
     · exact he
   unfold buildable at hB
-  rw [dif_pos (of_decide_eq_true hB)]
+  rw [dif_pos ⟨hfresh _, of_decide_eq_true hB⟩]
   rfl
 
 end Node

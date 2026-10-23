@@ -41,7 +41,7 @@ theorem converges : Converges := by
   have hgr := grows_before (cfg := cfg) (tr := tr) u (show i + 1 ≤ L by omega)
   rw [hist_eq hinj huH (hgr.1 hst₁)] at hy
   -- the content of a block of the history, as `u` stored it
-  set st := (stateBefore cfg tr (i + 1) u).store with hst
+  set st := (stateBefore cfg tr (i + 1) u).disk with hst
   let raw : BlockId → Block Validator BlockId Payload := fun j => st.blk j
   have hHsub := hist_sub hinj huH hst₁
   have hrawk : ∀ j ∈ historyFrom (gT cfg H tr) e.1, (j, raw j) ∈ knownIn cfg H tr :=
@@ -51,12 +51,12 @@ theorem converges : Converges := by
   set fin := stateBefore cfg tr L v
   -- a block of the history pending or stored at some time is so at the end
   have hlast : ∀ j ∈ historyFrom (gT cfg H tr) e.1, ∀ t,
-      ((j, raw j) ∈ (stateBefore cfg tr t v).pending ∨ j ∈ (stateBefore cfg tr t v).store.ids) →
-      t ≤ L → (j, raw j) ∈ fin.pending ∨ j ∈ fin.store.ids := fun j hj t ht htL =>
+      ((j, raw j) ∈ (stateBefore cfg tr t v).pending ∨ j ∈ (stateBefore cfg tr t v).disk.ids) →
+      t ≤ L → (j, raw j) ∈ fin.pending ∨ j ∈ fin.disk.ids := fun j hj t ht htL =>
     keeps_after hinj hv (hfits j hj) ht L htL
   by_contra hyv
   -- `v` lacks `h`, since it would hold its history with it
-  have hhv : e.1 ∉ fin.store.ids := fun h' => hyv (hist_sub hinj hv h' hy)
+  have hhv : e.1 ∉ fin.disk.ids := fun h' => hyv (hist_sub hinj hv h' hy)
   have hvu : v ≠ u := by rintro rfl; exact hhv (hgr.1 hst₁)
   have heH : e.1 ∈ historyFrom (gT cfg H tr) e.1 := mem_historyFrom_self
   have hraw₀ : raw e.1 = e.2 := hval₁
@@ -67,12 +67,12 @@ theorem converges : Converges := by
   -- a block of the history delivered to `v` ends pending or stored there
   have hdeliv : ∀ j ∈ historyFrom (gT cfg H tr) e.1, ∀ t, t < L →
       tr[t]? = some (v, .deliver j (raw j)) → (raw j).creator ≠ v →
-      (j, raw j) ∈ fin.pending ∨ j ∈ fin.store.ids := by
+      (j, raw j) ∈ fin.pending ∨ j ∈ fin.disk.ids := by
     intro j hj t htL ht hcr
     by_cases hc : Admits (cfg.at v) (stateBefore cfg tr t v) j (raw j)
     · exact hlast j hj (t + 1) (admit_after hinj hv ht hc (hfits j hj)) (by omega)
     · have hid : j = cfg.idOf (raw j) := id_of_knownIn (hrawk j hj)
-      by_cases hs : j ∈ (stateBefore cfg tr t v).store.ids
+      by_cases hs : j ∈ (stateBefore cfg tr t v).disk.ids
       · exact hlast j hj t (Or.inr hs) (by omega)
       · by_cases hp : j ∈ (stateBefore cfg tr t v).pending.map Prod.fst
         · obtain ⟨p, hp, hpj⟩ := List.mem_map.mp hp
@@ -132,6 +132,8 @@ theorem converges : Converges := by
   have hAmL : A m < L := hAL m
   set Sm := stateBefore cfg tr (A m) v
   let s₁ := afterFlush (cfg := cfg.at v) Sm (x m) (raw (x m))
+  have hs₁p : s₁.pending = (flushOn (cfg.at v) (Sm.pending.length + 1) Sm.disk
+      ((x m, raw (x m)) :: Sm.pending)).2 := afterFlush_pending _ _ _
   have hstepm : stateBefore cfg tr (A m + 1) v = (settle (cfg.at v) s₁).1 := by
     rw [step_before (cfg := cfg) htm, step_deliver hcm]
   have hRm := reads_before hinj hv (A m)
@@ -147,23 +149,23 @@ theorem converges : Converges := by
     · exact hxmk
     · exact knownBefore_sub hv (A m) ((inv_before (cfg := cfg) (A m) v).pend q hq)
   -- `s₁`'s store grows into the end's
-  have hg₁ : Grows s₁.store (stateBefore cfg tr (A m + 1) v).store := by
+  have hg₁ : Grows s₁.disk (stateBefore cfg tr (A m + 1) v).disk := by
     rw [hstepm]; exact Grows.settle_of _ rfl
   have hgend := grows_before (cfg := cfg) (tr := tr) v (show A m + 1 ≤ L by omega)
-  have hs₁fin : ∀ j ∈ s₁.store.ids, j ∈ fin.store.ids := fun j hj => hgend.1 (hg₁.1 hj)
+  have hs₁fin : ∀ j ∈ s₁.disk.ids, j ∈ fin.disk.ids := fun j hj => hgend.1 (hg₁.1 hj)
   -- the block `v` lacks is neither stored nor pending in `s₁`
-  have hF2 : x len ∉ s₁.store.ids := fun h' => (hxH len le_rfl).2 (hs₁fin _ h')
+  have hF2 : x len ∉ s₁.disk.ids := fun h' => (hxH len le_rfl).2 (hs₁fin _ h')
   have hF3 : x len ∉ s₁.pending.map Prod.fst := by
     intro h'
     obtain ⟨q, hq, hqx⟩ := List.mem_map.mp h'
-    have hqk := hknm q (flush_pending_sub (cfg := cfg.at v) _ _ _ q hq)
+    have hqk := hknm q (flush_pending_sub (cfg := cfg.at v) _ _ _ q (hs₁p ▸ hq))
     have hqe : q = (x len, raw (x len)) :=
       Prod.ext hqx (content_eq hinj hqk (hrawk _ (hxH len le_rfl).1) hqx)
-    have hR₁ : ReadsAs (gT cfg H tr) (stateBefore cfg tr (A m + 1) v).store :=
+    have hR₁ : ReadsAs (gT cfg H tr) (stateBefore cfg tr (A m + 1) v).disk :=
       reads_before hinj hv _
     rw [hstepm] at hR₁
-    have hp₁ : ∀ q ∈ s₁.pending, gT cfg H tr q.1 = q.2 :=
-      (ReadsAs.flush (cfg := cfg.at v) _ hRm hpbm).2
+    have hp₁ : ∀ q ∈ s₁.pending, gT cfg H tr q.1 = q.2 := by
+      rw [hs₁p]; exact (ReadsAs.flush (cfg := cfg.at v) _ hRm hpbm).2
     have hq' : (x len, raw (x len)) ∈ s₁.pending := hqe ▸ hq
     have hk := settle_keeps (cfg := cfg.at v) hR₁ hp₁ (hfits _ (hxH len le_rfl).1) (Or.inl hq')
     rw [← hstepm] at hk
@@ -182,7 +184,7 @@ theorem converges : Converges := by
     have hj : x j ∈ s₁.pending.map Prod.fst := by
       by_contra hn; exact Nat.find_min hP hjK ⟨hmj, by omega, hn⟩
     obtain ⟨q, hq, hqx⟩ := List.mem_map.mp hj
-    have hqk := hknm q (flush_pending_sub (cfg := cfg.at v) _ _ _ q hq)
+    have hqk := hknm q (flush_pending_sub (cfg := cfg.at v) _ _ _ q (hs₁p ▸ hq))
     rwa [show q = (x j, raw (x j)) from
       Prod.ext hqx (content_eq hinj hqk (hrawk _ (hxH j (by omega)).1) hqx)] at hq
   -- the walk from `h` reaches it
@@ -198,7 +200,7 @@ theorem converges : Converges := by
       have hid := List.find?_some hfind
       simp only [decide_eq_true_eq] at hid
       have hb' : b' = raw (x k) := content_eq hinj
-        (hknm _ (flush_pending_sub (cfg := cfg.at v) _ _ _ _ hm'))
+        (hknm _ (flush_pending_sub (cfg := cfg.at v) _ _ _ _ (hs₁p ▸ hm')))
         (hrawk _ (hxH k (by omega)).1) hid
       simp only [expand, hfind, hb']
       exact (Finset.mem_sort _).mpr hq
@@ -255,12 +257,12 @@ theorem converges : Converges := by
   have hst' := (broadcast_stored hi' (by rw [hraw₀] at hi'b; exact hi'b)).1
   have hA0 : A ⟨0, h0⟩ ≤ A m := le_rfl
   have hgk := grows_before (cfg := cfg) (tr := tr) u (show i' + 1 ≤ k by omega)
-  have hzk : x len ∈ (stateBefore cfg tr k u).store.ids :=
+  have hzk : x len ∈ (stateBefore cfg tr k u).disk.ids :=
     hgk.1 (hist_sub hinj huH hst' (hxH len le_rfl).1)
-  have hKk : x K ∈ (stateBefore cfg tr k u).store.ids :=
+  have hKk : x K ∈ (stateBefore cfg tr k u).disk.ids :=
     hgk.1 (hist_sub hinj huH hst' (hxH K hKlen).1)
   -- the chain from `x K` down, as `u` reads it at `k`
-  set stk := (stateBefore cfg tr k u).store
+  set stk := (stateBefore cfg tr k u).disk
   have hRk := reads_before hinj huH k
   have hblkk : ∀ k₀, k₀ ≤ len → stk.blk (x k₀) = raw (x k₀) := fun k₀ hk₀ =>
     (hRk _ (hgk.1 (hist_sub hinj huH hst' (hxH k₀ hk₀).1))).trans
@@ -313,13 +315,13 @@ theorem converges : Converges := by
         · exact ⟨r', rfl⟩
       have hrr : r = r' := by rw [hr, hr']; rfl
       -- `v` held blocks of a quorum `Q` of round-`(r − 1)` authors
-      have hQ : cfg.q ≤ (authorsIn Sm.store.toRecord Sm.store.ids (r - 1)).card := by
+      have hQ : cfg.q ≤ (authorsIn Sm.disk.toRecord Sm.disk.ids (r - 1)).card := by
         have := Quorate.run (cfg := cfg.at v) (inputsBefore tr (A m) v) Quorate.init r' hr'
           (by omega)
         rw [hrr]; exact this
       -- an honest author lies in both `Q` and the core set of `x k'`
       set C := (coreSets (cfg.at u) stk r).getD (x k') ∅
-      set Q := authorsIn Sm.store.toRecord Sm.store.ids (r - 1)
+      set Q := authorsIn Sm.disk.toRecord Sm.disk.ids (r - 1)
       have hCH : (C \ H).card ≤ cfg.f :=
         (Finset.card_le_card fun a ha => Finset.mem_compl.mpr (Finset.mem_sdiff.mp ha).2).trans hf
       have h₁ := Finset.card_inter_add_card_sdiff C H
@@ -332,12 +334,12 @@ theorem converges : Converges := by
         simp only [Finset.mem_inter] at ha; exact ⟨ha.1, ha.2.1, ha.2.2⟩
       obtain ⟨yv, hyv, hyvr, hyvc⟩ := mem_authorsIn.mp haQ
       obtain ⟨yu, hyu, hyur, hyuc, hyureach⟩ := mem_coreSets (cfg.at u) stk haC
-      have hyvr' : (Sm.store.blk yv).round = r - 1 := hyvr
-      have hyvc' : (Sm.store.blk yv).creator = a := hyvc
+      have hyvr' : (Sm.disk.blk yv).round = r - 1 := hyvr
+      have hyvc' : (Sm.disk.blk yv).creator = a := hyvc
       -- an honest author has one block a round, so `v` held the one `u` reads
       have hinjR := hashInjective_of_trace hinj
       have hauthR := authentic_of_timely htime
-      have hkv : (yv, Sm.store.blk yv) ∈ knownAll cfg H tr :=
+      have hkv : (yv, Sm.disk.blk yv) ∈ knownAll cfg H tr :=
         ⟨v, hv, knownBefore_knownOf ((inv_before (cfg := cfg) (A m) v).known yv hyv)⟩
       have hku : (yu, stk.blk yu) ∈ knownAll cfg H tr :=
         ⟨u, huH, knownBefore_knownOf ((inv_before (cfg := cfg) k u).known yu hyu)⟩
@@ -357,7 +359,7 @@ theorem converges : Converges := by
       have hyH : x len ∈ historyFrom (gT cfg H tr) yv := by
         rw [← hist_eq hinj huH hyu]
         exact ((causal_store k u).mem_history_iff hyu).mpr hyl
-      have hyfin : yv ∈ fin.store.ids :=
+      have hyfin : yv ∈ fin.disk.ids :=
         (grows_before (cfg := cfg) (tr := tr) v (show A m ≤ L by omega)).1 hyv
       exact (hxH len le_rfl).2 (hist_sub hinj hv hyfin hyH)
   set rk := stk.blk (x len)

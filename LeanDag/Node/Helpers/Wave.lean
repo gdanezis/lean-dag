@@ -42,7 +42,7 @@ theorem waited_holds {R₀ : ℕ} (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     (hstart : Live.StartedBy T tr time gst) (hout : Live.OutsideBelow cfg H T tr R₀)
     {u : Validator} (hu : u ∈ T) {i : ℕ} {inp : Input Validator BlockId Payload}
     (hi : tr[i]? = some (u, inp)) {n : ℕ} (htop : (stateBefore cfg tr (i + 1) u).top = some n)
-    (hqn : cfg.q ≤ ((stateBefore cfg tr (i + 1) u).store.authorsAt n).card)
+    (hqn : cfg.q ≤ ((stateBefore cfg tr (i + 1) u).disk.authorsAt n).card)
     (hgi : gst ≤ time i) (hRn : R₀ ≤ n) {τ : ℕ} (hτ : time i + 2 * (Δ + Δₛ) ≤ τ) (hτ₁ : τ ≤ t₁)
     {c : BlockId}
     (hcU : c ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids)
@@ -50,9 +50,9 @@ theorem waited_holds {R₀ : ℕ} (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
       c).creator ∈ T)
     (hcr : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
       c).round = n) :
-    c ∈ (stateAt cfg tr time u τ).store.ids := by
+    c ∈ (stateAt cfg tr time u τ).disk.ids := by
   have hil : i < tr.length := (List.getElem?_eq_some_iff.mp hi).1
-  set S := ((stateBefore cfg tr (i + 1) u).store.authorsAt n).filter (· ∈ T) with hSdef
+  set S := ((stateBefore cfg tr (i + 1) u).disk.authorsAt n).filter (· ∈ T) with hSdef
   have hS := quorum_reliable hadm hf htime hout (hTH hu) hRn hqn
   -- its reliable authors are at the round by `time i`
   have hSn : ∀ w ∈ S, (stateAt cfg tr time w (time i)).top.isSome ∧
@@ -60,8 +60,8 @@ theorem waited_holds {R₀ : ℕ} (hq : 2 ≤ cfg.q) (hσ : cfg.σ = boundedSel)
     intro w hw
     obtain ⟨hwA, hwT⟩ := Finset.mem_filter.mp hw
     obtain ⟨z, hzR, hzc⟩ := mem_creatorsOf.mp hwA
-    have hz : z ∈ (stateBefore cfg tr (i + 1) u).store.ids ∧
-        ((stateBefore cfg tr (i + 1) u).store.blk z).round = n := by
+    have hz : z ∈ (stateBefore cfg tr (i + 1) u).disk.ids ∧
+        ((stateBefore cfg tr (i + 1) u).disk.blk z).round = n := by
       rw [Store.atRound_eq] at hzR
       simpa [blocksAt, Store.toRecord] using hzR
     obtain ⟨j, hj, inpj, hj', hjz⟩ := persisted_of_stored htime (hTH hu) (hTH hwT) hz.1 hzc
@@ -104,7 +104,7 @@ theorem reliable_held {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) {r : ℕ} 
       c).creator = u)
     (hcr : ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
       c).round = r) :
-    c ∈ (stateAt cfg tr time v (t + (Δ + Δₛ))).store.ids := by
+    c ∈ (stateAt cfg tr time v (t + (Δ + Δₛ))).disk.ids := by
   obtain ⟨i, inp, e, hi, he, rfl, her, hbt⟩ :=
     event_of_mem (time := time) hinj htime (hTH hu) hcU hcu
   rw [hcr] at her hbt
@@ -144,19 +144,19 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
     tr[i₀]? = some (v, inp) → builtAt cfg tr time v (n + 1) = time i₀ →
     BuildState (cfg.at v) (globalRecord (hashInjective_of_trace hinj)
       (authentic_of_timely htime)) (knownAll cfg H tr) (stateBefore cfg tr i₀ v) inp x →
-    x.top = some n → c ∉ x.store.ids →
+    x.top = some n → c ∉ x.disk.ids →
     (∃ y o, tryBuild (cfg.at v) x = some (y, o) ∧
       (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
         persists o ∧
       (c, (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c) ∈
         persists (outputsAt cfg tr i₀)) →
     ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block c).refs =
-      refsAt (cfg.at v) x.store n x.own →
-    Grows x.store (stateBefore cfg tr (i₀ + 1) v).store →
-    (n ∈ x.fired ∨ behind (cfg.at v) x.store n) →
-    refsAt (cfg.at v) x.store n x.own = refsFor (cfg.at v) x.store n x.own →
-    ¬ (reachReady (cfg.at v) x.store (refsAt (cfg.at v) x.store n x.own) n = true ∧
-      certReady (cfg.at v) x.store (refsAt (cfg.at v) x.store n x.own) n = true) →
+      refsAt (cfg.at v) x.disk n x.own →
+    Grows x.disk (stateBefore cfg tr (i₀ + 1) v).disk →
+    (n ∈ x.fired ∨ behind (cfg.at v) x.disk n) →
+    refsAt (cfg.at v) x.disk n x.own = refsFor (cfg.at v) x.disk n x.own →
+    ¬ (reachReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk n x.own) n = true ∧
+      certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk n x.own) n = true) →
     ∀ b ∈ (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).ids,
       ((globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime)).block
         b).creator ∈ T →
@@ -173,7 +173,7 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
   obtain ⟨y, o, hb, heo, he⟩ := hbuild
   have hi₀l : i₀ < tr.length := (List.getElem?_eq_some_iff.mp hi₀).1
   -- it suffices that the build state holds the block
-  suffices hbx : b ∈ x.store.ids by
+  suffices hbx : b ∈ x.disk.ids by
     rw [hcrefs, hfor]
     exact mem_refsFor_of_cut hbs.cut hbx (by rw [← hbs.cut.round hbx, hbr])
       (by rw [← hbs.cut.creator hbx]; exact hTH hbT) fun _ => hbs.own _ hxt
@@ -241,8 +241,8 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
     have hiwj : iw = j := persist_events_eq hiw hj' hew hz (by rw [hzr', hzr])
     subst hiwj
     -- the earlier block did not pass the tests, else the node would have
-    have hnrw : ¬ (reachReady (cfg.at w') xw.store (refsAt (cfg.at w') xw.store n xw.own) n = true ∧
-        certReady (cfg.at w') xw.store (refsAt (cfg.at w') xw.store n xw.own) n = true) := by
+    have hnrw : ¬ (reachReady (cfg.at w') xw.disk (refsAt (cfg.at w') xw.disk n xw.own) n = true ∧
+        certReady (cfg.at w') xw.disk (refsAt (cfg.at w') xw.disk n xw.own) n = true) := by
       intro hrw
       apply hnr
       obtain ⟨r', id, bb, hnew, hrefs, -, hxt', hbbr, -, -, hrv, -, -, -, -, hout'⟩ :=
@@ -252,21 +252,21 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
       have hzbb : U.block z.1 = bb := (Prod.mk.inj heow).2
       rw [hxtw, Option.some.injEq] at hxt'
       subst hxt'
-      have hbbrefs : bb.refs = refsAt (cfg.at w') xw.store n xw.own := by
+      have hbbrefs : bb.refs = refsAt (cfg.at w') xw.disk n xw.own := by
         rw [← hzbb]; exact hzrefs
       obtain ⟨hRq, hRd⟩ := refs_of_rowValid (cfg := cfg.at w') hnew hrefs (by omega) hrv
       rw [hbbrefs] at hRq hRd
       obtain ⟨o', hoo, hoi, hor, hoc⟩ := hbs.own n hxt
-      have hZR : (x.store.blk z.1).refs = refsAt (cfg.at w') xw.store n xw.own := by
+      have hZR : (x.disk.blk z.1).refs = refsAt (cfg.at w') xw.disk n xw.own := by
         rw [← hbs.cut.eq hzx, hzrefs]
       -- no stored block has the identifier of a next block of the node's own
       have hfresh : ∀ R, (cfg.at v).idOf ⟨n + 1, (cfg.at v).me, R, (cfg.at v).payload (n + 1)⟩ ∉
-          x.store.ids := by
+          x.disk.ids := by
         intro R hin
         obtain ⟨B, hiX⟩ := hbs.inv
         obtain ⟨v', hv', hk⟩ := hiX.known _ hin
         have hidk := Converge.id_of_knownIn (knownOf_sub hv' hk)
-        have hraw : x.store.blk _ = (⟨n + 1, v, R, cfg.payload (n + 1)⟩ :
+        have hraw : x.disk.blk _ = (⟨n + 1, v, R, cfg.payload (n + 1)⟩ :
             Block Validator BlockId Payload) := hid hidk.symm
         have := U.eq_of_creator_eq (hbs.cut _ hin).1 hcU (hTH hv)
           (by rw [hbs.cut.eq hin, hraw]) hcv (by rw [hbs.cut.eq hin, hraw, hcr])
@@ -278,8 +278,8 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
       rw [hoo]
       exact refsAt_ready (cfg := cfg.at v) hzx (by rw [hzb, hzr])
         (by rw [← hbs.cut.creator hzx, hzc]; exact hw'v) hready hlb
-    have hexitw' : (n ∈ xw.fired ∨ behind (cfg.at w') xw.store n) ∧
-        refsAt (cfg.at w') xw.store n xw.own = refsFor (cfg.at w') xw.store n xw.own := by
+    have hexitw' : (n ∈ xw.fired ∨ behind (cfg.at w') xw.disk n) ∧
+        refsAt (cfg.at w') xw.disk n xw.own = refsFor (cfg.at w') xw.disk n xw.own := by
       rcases hexitw with h | ⟨h₁, h₂⟩ | ⟨h₁, h₂⟩
       · exact absurd h hnrw
       · exact ⟨Or.inl h₁, h₂⟩
@@ -287,7 +287,7 @@ theorem refs_all (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cfg.timeout
     have hbz := ih iw hji hw'T hn₀ hnN hzU hzc hzr' hiw hbtw hbsw hxtw hzxw
       ⟨yw, ow, hbw, heow, hew⟩ hzrefs hgxw hexitw'.1 hexitw'.2 hnrw b hbU hbT hbr
     rw [hbs.cut.eq hzx] at hbz
-    exact x.store.complete z.1 hzx b hbz
+    exact x.disk.complete z.1 hzx b hbz
 
 /-- **Reach or reference, at a reliable node**, from round `n₀` on: a block
 of `v` at the round above slot `k`'s round plus `m`, below
@@ -316,19 +316,19 @@ theorem reach_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < c
           (authentic_of_timely htime)).block c).refs := by
   obtain ⟨i₀, inp, x, hi₀, hbt, hbs, hxt, hcx, hbuild, hcrefs, hsub, hgx, hexit⟩ :=
     built_block time hσ hadm hf htime hinj (hTH hv) hcU hcv hcr
-  by_cases hready : reachReady (cfg.at v) x.store
-        (refsAt (cfg.at v) x.store (cfg.slots.slotRound k + m) x.own)
+  by_cases hready : reachReady (cfg.at v) x.disk
+        (refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + m) x.own)
         (cfg.slots.slotRound k + m) = true ∧
-      certReady (cfg.at v) x.store (refsAt (cfg.at v) x.store (cfg.slots.slotRound k + m) x.own)
+      certReady (cfg.at v) x.disk (refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + m) x.own)
         (cfg.slots.slotRound k + m) = true
   · exact Or.inl (reaches_of_reachReady (cfg := cfg.at v) hbs.cut hready.1 hsub hm rfl
       (hTH hlead) hL hcrefs)
   · right
     have hexit' := hexit.resolve_left hready
     have h₁ : (cfg.slots.slotRound k + m ∈ x.fired ∨
-        behind (cfg.at v) x.store (cfg.slots.slotRound k + m)) ∧
-        refsAt (cfg.at v) x.store (cfg.slots.slotRound k + m) x.own =
-          refsFor (cfg.at v) x.store (cfg.slots.slotRound k + m) x.own := by
+        behind (cfg.at v) x.disk (cfg.slots.slotRound k + m)) ∧
+        refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + m) x.own =
+          refsFor (cfg.at v) x.disk (cfg.slots.slotRound k + m) x.own := by
       rcases hexit' with ⟨h, h'⟩ | ⟨h, h'⟩
       · exact ⟨Or.inl h, h'⟩
       · exact ⟨Or.inr h, h'⟩
@@ -369,20 +369,20 @@ theorem cert_or_refs_node (hq : 2 ≤ cfg.q) (hto : ∀ r, 2 * (Δ + Δₛ) < cf
           (authentic_of_timely htime)).block c).refs := by
   obtain ⟨i₀, inp, x, hi₀, hbt, hbs, hxt, hcx, hbuild, hcrefs, hsub, hgx, hexit⟩ :=
     built_block time hσ hadm hf htime hinj (hTH hv) hcU hcv hcr
-  by_cases hready : reachReady (cfg.at v) x.store
-        (refsAt (cfg.at v) x.store (cfg.slots.slotRound k + cfg.p.voteOffset) x.own)
+  by_cases hready : reachReady (cfg.at v) x.disk
+        (refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset) x.own)
         (cfg.slots.slotRound k + cfg.p.voteOffset) = true ∧
-      certReady (cfg.at v) x.store
-        (refsAt (cfg.at v) x.store (cfg.slots.slotRound k + cfg.p.voteOffset) x.own)
+      certReady (cfg.at v) x.disk
+        (refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset) x.own)
         (cfg.slots.slotRound k + cfg.p.voteOffset) = true
   · exact Or.inl (isCert_of_certReady (cfg := cfg.at v) hσ hbs.cut hready.2 hsub hvc rfl
       (hTH hlead) hL hcrefs)
   · right
     have hexit' := hexit.resolve_left hready
     have h₁ : (cfg.slots.slotRound k + cfg.p.voteOffset ∈ x.fired ∨
-        behind (cfg.at v) x.store (cfg.slots.slotRound k + cfg.p.voteOffset)) ∧
-        refsAt (cfg.at v) x.store (cfg.slots.slotRound k + cfg.p.voteOffset) x.own =
-          refsFor (cfg.at v) x.store (cfg.slots.slotRound k + cfg.p.voteOffset) x.own := by
+        behind (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset)) ∧
+        refsAt (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset) x.own =
+          refsFor (cfg.at v) x.disk (cfg.slots.slotRound k + cfg.p.voteOffset) x.own := by
       rcases hexit' with ⟨h, h'⟩ | ⟨h, h'⟩
       · exact ⟨Or.inl h, h'⟩
       · exact ⟨Or.inr h, h'⟩

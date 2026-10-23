@@ -1,4 +1,4 @@
-import LeanDag.Node.Store
+import LeanDag.Node.Memory
 import Mathlib.Data.Finset.Sort
 /-!
 # An honest node — its transition function
@@ -6,50 +6,57 @@ import Mathlib.Data.Finset.Sort
 `docs/validator.md` §3. `step cfg s i` is the node's response to the
 input `i` in the state `s`: the new state and the outputs.
 
+* **Memory and disk** (`State.memory`, `State.disk`, `keep`, `release`):
+  every accepted block is kept on disk, and in memory if its round is
+  the floor or above, without references at the floor. The node builds,
+  decides and arms its timers on the memory, and answers requests and
+  resends from the disk. When it builds or decides, it releases the
+  memory below the lowest round it reads, the round of its next
+  undecided slot and `voteOffset` below its top (`floorOf`).
 * **Receipt** (`deliver`): a block whose identifier is its hash, not the
-  node's own, and new, waits in `pending` until its references are
-  accepted and it satisfies `rowValid q`, and is then accepted (`flush`).
+  node's own, and not on disk, waits in `pending` until its references
+  are accepted and it satisfies `rowValid q`, checked in memory if its
+  round is above the floor and on disk otherwise, and is then accepted
+  (`ready`, `flush`).
 * **Building** (`tryBuild`): round `r + 1`, above the node's top `r`,
-  once the store holds `q` authors of round `r` and either the round's
-  timer fired, or the store holds round-`r + 1` blocks of `f + 1`
+  once the memory holds `q` authors of round `r` and either the round's
+  timer fired, or the memory holds round-`r + 1` blocks of `f + 1`
   authors, so a node other than a Byzantine one built the round
-  (`behind`), or the block
-  would reach every leader block of a slot whose wave is at a vote round
-  (`reachReady`) and certify one at a decision round (`certReady`). A
-  node behind thus builds each round below the highest block it holds
-  without waiting its timers. The block references one accepted block
-  per author of round `r`, the node's own for itself when it built
-  there, which is the self-parent rule of an honest node, and the least
-  identifier otherwise; where these fail the tests and the references
-  of a held round-`r + 1` block of another author pass them, it takes
-  those, with its own block for itself (`refsAt`). It is persisted, then
-  broadcast, and the retry timer is set: the timer of the round below
-  it, for twice that round's timeout.
+  (`behind`), or the block would reach every leader block of a slot
+  whose wave is at a vote round (`reachReady`) and certify one at a
+  decision round (`certReady`). A node behind thus builds each round
+  below the highest block it holds without waiting its timers. The block
+  references one accepted block per author of round `r`, the node's own
+  for itself when it built there, which is the self-parent rule of an
+  honest node, and the least identifier otherwise; where these fail the
+  tests and the references of a held round-`r + 1` block of another
+  author pass them, it takes those, with its own block for itself
+  (`refsAt`). It is persisted, then broadcast, and the retry timer is
+  set: the timer of the round below it, for twice that round's timeout.
 * **Timers** (`arm`): the timer of the node's top round is set once the
-  store holds `q` authors of that round, so a node that gets ahead of a
+  memory holds `q` authors of that round, so a node that gets ahead of a
   quorum does not start waiting before the quorum is there. After a
   restart it is set again if it was (`rearm`).
 * **Deciding** (`decideStep`): `tryDecide` from the next undecided slot
-  to the last slot at a round the store holds, on the store's window at
+  to the last slot at a round the disk holds, on the memory's window at
   the round of that slot (`Store.window`); the decisions are kept
   (`State.decided`), the latest first.
 * **Fetching** (`walkLevel`, `missing`, `answer`): after a delivery, the
   missing part of the delivered block's history, walked through the
   pending blocks, is asked of its author, with the asker's round `r`; a
-  request is answered
-  with the blocks asked for that the store holds and their histories,
-  less the blocks a node at round `r` holds whatever it built on
-  (`coreThreshold`, `pruned`).
+  request is answered with the blocks asked for that the disk holds and
+  their histories, less the blocks a node at round `r` holds whatever it
+  built on (`coreThreshold`, `pruned`).
 * **Resending** (`resend`): when the retry timer, or the top round's,
   fires and the node does not build, and when it restarts, the node
   broadcasts its top block again, sets the retry timer again, and asks
   again for the missing histories of its pending blocks (`refetch`). A
   node with a quorum of its round builds within its timeout and the time
   the quorum takes to arrive, before the retry timer fires, so it resends
-  only when it is stuck. A crash loses the
-  messages sent to a node while it is down, and the requests and answers
-  sent to it; resending lets a peer that lost blocks fetch them again, and
-  the node itself ask again for what it lost.
+  only when it is stuck. A crash loses the messages sent to a node while
+  it is down, and the requests and answers sent to it; resending lets a
+  peer that lost blocks fetch them again, and the node itself ask again
+  for what it lost.
 * **Settling** (`settle`, `quiesce`): after each change to its state,
   the node builds, decides and accepts what that allows, in passes,
   until a pass changes none of its top, its pending blocks and its next
@@ -68,8 +75,15 @@ variable [LinearOrder BlockId]
 variable (Validator BlockId Payload) in
 /-- **A node's state.** -/
 structure State where
-  /-- The accepted blocks. -/
-  store : Store Validator BlockId Payload
+  /-- The accepted blocks, on disk: what the node answers requests from. -/
+  disk : Store Validator BlockId Payload
+  /-- The accepted blocks from round `floor` up, those at `floor` without
+  references, in memory: what the node computes on. -/
+  memory : Store Validator BlockId Payload
+  /-- The lowest round in memory. -/
+  floor : ℕ
+  /-- The memory holds the disk's blocks from `floor` up. -/
+  mirrors : memory.Mirrors disk floor
   /-- Blocks received whose references are not all accepted. -/
   pending : List (BlockId × Block Validator BlockId Payload)
   /-- The highest round the node built, once started. -/
@@ -93,32 +107,41 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
-  ⟨Store.empty cfg.genesis, [], none, none, ∅, 0, [], none⟩
+  ⟨Store.empty cfg.genesis, Store.empty cfg.genesis, 0, Store.Mirrors.empty, [], none, none, ∅, 0,
+    [], none⟩
 
-/-- **Accept a block**: it is kept if it is new, its references are
-accepted, one round below it, and it is valid at the row. -/
-def accept (s : Store Validator BlockId Payload) (id : BlockId)
-    (b : Block Validator BlockId Payload) : Store Validator BlockId Payload :=
-  if h : id ∉ s.ids ∧ b.refs ⊆ s.ids ∧ (∀ j ∈ b.refs, (s.blk j).round + 1 = b.round) ∧
-      rowValid cfg.q (Function.update s.blk id b) b then
-    s.insert id b h.1 h.2.1 h.2.2.1
+/-- **Keep a block**: on disk, and in memory if its round is the floor or
+above. -/
+def keep (s : State Validator BlockId Payload) (id : BlockId) (b : Block Validator BlockId Payload)
+    (hnew : id ∉ s.disk.ids) (hrefs : b.refs ⊆ s.disk.ids)
+    (hpred : ∀ j ∈ b.refs, (s.disk.blk j).round + 1 = b.round) : State Validator BlockId Payload :=
+  { s with
+    disk := s.disk.insert id b hnew hrefs hpred
+    memory := s.memory.put s.floor id b (s.mirrors.notMem hnew) (s.mirrors.refs_mem hrefs hpred)
+      (s.mirrors.pred_mem hrefs hpred)
+    mirrors := s.mirrors.put hnew hrefs hpred }
+
+/-- **A pending block is ready** when its references are accepted, one
+round below it, and it is valid at the row: checked in memory if its
+round is above the floor, on disk otherwise. -/
+def ready (s : State Validator BlockId Payload) (e : BlockId × Block Validator BlockId Payload) :
+    Bool :=
+  decide ((Store.pick s.memory s.disk s.floor e.2.round).Checks cfg.q e.1 e.2)
+
+/-- **Accept a block**: it is kept if it is new and ready. -/
+def accept (s : State Validator BlockId Payload) (id : BlockId)
+    (b : Block Validator BlockId Payload) : State Validator BlockId Payload :=
+  if h : id ∉ s.disk.ids ∧ (Store.pick s.memory s.disk s.floor b.round).Checks cfg.q id b then
+    keep s id b h.1 (s.mirrors.checks_pick.mp h.2).1 (s.mirrors.checks_pick.mp h.2).2.1
   else s
 
-/-- A pending block is ready when its references are accepted, one round
-below it, and it is valid at the row. -/
-def ready (s : Store Validator BlockId Payload) (e : BlockId × Block Validator BlockId Payload) :
-    Bool :=
-  decide (e.2.refs ⊆ s.ids ∧ (∀ j ∈ e.2.refs, (s.blk j).round + 1 = e.2.round) ∧
-    rowValid cfg.q (Function.update s.blk e.1 e.2) e.2)
-
 /-- **Accept what the pending blocks allow**, in passes, at most `fuel`. -/
-def flush : ℕ → Store Validator BlockId Payload → List (BlockId × Block Validator BlockId Payload) →
-    Store Validator BlockId Payload × List (BlockId × Block Validator BlockId Payload)
-  | 0, s, pend => (s, pend)
-  | fuel + 1, s, pend =>
-    let split := pend.partition fun e => ready cfg s e
-    if split.1.isEmpty then (s, pend)
-    else flush fuel (split.1.foldl (fun s e => accept cfg s e.1 e.2) s) split.2
+def flush : ℕ → State Validator BlockId Payload → State Validator BlockId Payload
+  | 0, s => s
+  | fuel + 1, s =>
+    let split := s.pending.partition fun e => ready cfg s e
+    if split.1.isEmpty then s
+    else flush fuel { split.1.foldl (fun s e => accept cfg s e.1 e.2) s with pending := split.2 }
 
 /-- **The references of the node's next block**, above round `r`: one
 accepted block per author of round `r`, the node's own block `o` there
@@ -163,13 +186,12 @@ def lent (s : Store Validator BlockId Payload) (c : BlockId) (o : Option BlockId
     Finset BlockId :=
   ((s.blk c).refs.filter fun j => (s.blk j).creator ≠ cfg.me) ∪ o.toFinset
 
-/-- **References `R` the node can build on above round `r`**: the block
-they make is new, its references are accepted and one round below it,
-and it is valid at the row. -/
+/-- **References `R` the node can build on above round `r`**: they are
+accepted and one round below the block they make, which is valid at the
+row. -/
 def buildable (s : Store Validator BlockId Payload) (r : ℕ) (R : Finset BlockId) : Bool :=
   let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, R, cfg.payload (r + 1)⟩
-  decide (cfg.idOf b ∉ s.ids ∧ b.refs ⊆ s.ids ∧ (∀ j ∈ b.refs, (s.blk j).round + 1 = b.round) ∧
-    rowValid cfg.q (Function.update s.blk (cfg.idOf b) b) b)
+  decide (s.Checks cfg.q (cfg.idOf b) b)
 
 /-- **The references of the node's next block**, above round `r`: those of
 `refsFor` if they pass the reach and certificate tests; else those lent
@@ -194,21 +216,34 @@ def behind (st : Store Validator BlockId Payload) (r : ℕ) : Prop :=
 instance (st : Store Validator BlockId Payload) (r : ℕ) : Decidable (behind cfg st r) :=
   inferInstanceAs (Decidable (_ ≤ _))
 
-/-- **Build the next round**, if the build rule allows it. -/
+/-- **The lowest round the node reads**: the round of its next undecided
+slot, and `voteOffset` below its top. -/
+def floorOf (s : State Validator BlockId Payload) : ℕ :=
+  min (cfg.slots.slotRound s.lo) (s.top.getD 0 - cfg.p.voteOffset)
+
+/-- **Release the memory below the lowest round the node reads.** -/
+def release (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
+  if h : s.floor < floorOf cfg s then
+    { s with
+      memory := s.memory.above (floorOf cfg s)
+      floor := floorOf cfg s
+      mirrors := s.mirrors.above h.le }
+  else s
+
+/-- **Build the next round**, if the build rule allows it, and release the
+memory below the lowest round the node then reads. -/
 def tryBuild (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
   match s.top with
   | some r =>
-    let refs := refsAt cfg s.store r s.own
-    if cfg.q ≤ (s.store.authorsAt r).card ∧ (r ∈ s.fired ∨ behind cfg s.store r ∨
-        (reachReady cfg s.store refs r ∧ certReady cfg s.store refs r)) then
+    let refs := refsAt cfg s.memory r s.own
+    if cfg.q ≤ (s.memory.authorsAt r).card ∧ (r ∈ s.fired ∨ behind cfg s.memory r ∨
+        (reachReady cfg s.memory refs r ∧ certReady cfg s.memory refs r)) then
       let b : Block Validator BlockId Payload := ⟨r + 1, cfg.me, refs, cfg.payload (r + 1)⟩
       let id := cfg.idOf b
-      if h : id ∉ s.store.ids ∧ b.refs ⊆ s.store.ids ∧
-          (∀ j ∈ b.refs, (s.store.blk j).round + 1 = b.round) ∧
-          rowValid cfg.q (Function.update s.store.blk id b) b then
-        let st := s.store.insert id b h.1 h.2.1 h.2.2.1
-        some ({ s with store := st, top := some (r + 1), own := some id },
+      if h : id ∉ s.disk.ids ∧ s.memory.Checks cfg.q id b then
+        let s' := keep s id b h.1 (s.mirrors.checks_disk h.2).1 (s.mirrors.checks_disk h.2).2.1
+        some (release cfg { s' with top := some (r + 1), own := some id },
           [.persist id b, .broadcast id b, .setTimer r (2 * cfg.timeout r)])
       else none
     else none
@@ -244,7 +279,7 @@ and their references form the next front otherwise. -/
 def walkLevel (s : State Validator BlockId Payload)
     (w : List BlockId × List BlockId × List BlockId) :
     List BlockId × List BlockId × List BlockId :=
-  let front := (w.1.filter fun x => decide (x ∉ s.store.ids) && decide (x ∉ w.2.1)).dedup
+  let front := (w.1.filter fun x => decide (x ∉ s.disk.ids) && decide (x ∉ w.2.1)).dedup
   let split := front.partition fun x => decide (x ∈ s.pending.map Prod.fst)
   (split.1.flatMap fun x => expand s x, w.2.1 ++ front, w.2.2 ++ split.2)
 
@@ -253,16 +288,18 @@ reach on a store whose top round is `R`. -/
 def decidable (R : ℕ) : ℕ := cfg.m * (R / cfg.per + 1)
 
 /-- **Decide**: `tryDecide` from the next undecided slot to the last slot
-at a round the store holds, on the store's window at the round of the
-first slot; output and keep what it decides. -/
+at a round the disk holds, on the memory's window at the round of the
+first slot, if the memory holds that round; output and keep what it
+decides, if anything, and release the memory below the lowest round the
+node then reads. -/
 def decideStep (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   letI := cfg.slots
-  let N := decidable cfg s.store.topRound
-  if s.lo < N then
-    let R := cfg.slots.slotRound s.lo
-    let ds := Scheme.tryDecide cfg.p cfg.σ (s.store.window R) (s.store.windowView R) s.lo (N - 1)
-    ({ s with lo := s.lo + ds.length, decided := ds.reverse ++ s.decided },
+  let N := decidable cfg s.disk.topRound
+  let R := cfg.slots.slotRound s.lo
+  let ds := Scheme.tryDecide cfg.p cfg.σ (s.memory.window R) (s.memory.windowView R) s.lo (N - 1)
+  if s.lo < N ∧ s.floor ≤ R ∧ ds ≠ [] then
+    (release cfg { s with lo := s.lo + ds.length, decided := ds.reverse ++ s.decided },
       ds.map fun e => .commit e.1 e.2)
   else (s, [])
 
@@ -325,21 +362,21 @@ def pruned (st : Store Validator BlockId Payload) (r : ℕ) : BlockId →
   prunedBy cfg st (coreSets cfg st r)
 
 /-- **The blocks a request from a node at round `r` is answered with**:
-each block asked for that the store holds, then their histories in the
-store through blocks the asker need not hold. -/
+each block asked for that the disk holds, then their histories on disk
+through blocks the asker need not hold. -/
 def answerIds (s : State Validator BlockId Payload) (r : ℕ) (ids : List BlockId) :
     List BlockId :=
-  let held := ids.filter fun j => decide (j ∈ s.store.ids)
-  let core := coreSets cfg s.store r
+  let held := ids.filter fun j => decide (j ∈ s.disk.ids)
+  let core := coreSets cfg s.disk r
   (held ++ held.flatMap fun j =>
-    ((historyUptoFrom (prunedBy cfg s.store core) ((s.store.blk j).round + 1) j).filter fun x =>
-      decide (x ∈ s.store.ids)).sort (· ≤ ·)).dedup
+    ((historyUptoFrom (prunedBy cfg s.disk core) ((s.disk.blk j).round + 1) j).filter fun x =>
+      decide (x ∈ s.disk.ids)).sort (· ≤ ·)).dedup
 
 /-- **Answer a request** from a node at round `r`: send the peer the
 blocks of `answerIds`. -/
 def answer (s : State Validator BlockId Payload) (peer : Validator) (r : ℕ) (ids : List BlockId) :
     List (Output Validator BlockId Payload) :=
-  (answerIds cfg s r ids).map fun j => .send peer j (s.store.blk j)
+  (answerIds cfg s r ids).map fun j => .send peer j (s.disk.blk j)
 
 /-- **Ask again for the pending blocks' histories**: for each pending
 block, the missing part of its history, of its author. -/
@@ -354,7 +391,7 @@ blocks' histories. -/
 def resend (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
   (match s.top, s.own with
     | some r, some id =>
-      [.broadcast id (s.store.blk id), .setTimer (r - 1) (2 * cfg.timeout (r - 1))]
+      [.broadcast id (s.disk.blk id), .setTimer (r - 1) (2 * cfg.timeout (r - 1))]
     | _, _ => []) ++ refetch s
 
 /-- **Set the top round's timer again**, after a restart, if it was set. -/
@@ -363,13 +400,13 @@ def rearm (s : State Validator BlockId Payload) : List (Output Validator BlockId
   | some r => if s.armed = some r then [.setTimer r (cfg.timeout r)] else []
   | none => []
 
-/-- **Arm the top round's timer**, once the store holds `q` authors of
+/-- **Arm the top round's timer**, once the memory holds `q` authors of
 the node's top round and the timer is not set yet. -/
 def arm (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   match s.top with
   | some r =>
-    if s.armed ≠ some r ∧ cfg.q ≤ (s.store.authorsAt r).card then
+    if s.armed ≠ some r ∧ cfg.q ≤ (s.memory.authorsAt r).card then
       ({ s with armed := some r }, [.setTimer r (cfg.timeout r)])
     else (s, [])
   | none => (s, [])
@@ -379,10 +416,9 @@ make a pending block ready, so this ends by flushing, and no pending
 block is left ready. -/
 def pass (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
-  let b := progress cfg (s.store.topRound + 2) s
+  let b := progress cfg (s.disk.topRound + 2) s
   let d := decideStep cfg b.1
-  let fl := flush cfg (d.1.pending.length + 1) d.1.store d.1.pending
-  ({ d.1 with store := fl.1, pending := fl.2 }, b.2 ++ d.2)
+  (flush cfg (d.1.pending.length + 1) d.1, b.2 ++ d.2)
 
 /-- **A pass, then arming the top round's timer.** -/
 def advance (s : State Validator BlockId Payload) :
@@ -410,7 +446,7 @@ def pendingTop (s : State Validator BlockId Payload) : ℕ :=
 top or the next undecided slot, or leaves fewer blocks pending, within
 bounds the state fixes. -/
 def passes (s : State Validator BlockId Payload) : ℕ :=
-  let B := max (s.top.getD 0) (max s.store.topRound (pendingTop s)) + 1
+  let B := max (s.top.getD 0) (max s.disk.topRound (pendingTop s)) + 1
   let L := max s.lo (decidable cfg B)
   s.pending.length + 2 * B + 2 * L + 1
 
@@ -432,18 +468,17 @@ def step (s : State Validator BlockId Payload) :
     if s.top = none ∧ cfg.Admissible then
       let b := cfg.genesis
       let id := cfg.idOf b
-      if h : id ∉ s.store.ids ∧ rowValid cfg.q (Function.update s.store.blk id b) b then
-        let st := s.store.insert id b h.1 (fun _ hj => absurd hj (Finset.notMem_empty _))
+      if h : id ∉ s.disk.ids ∧ rowValid cfg.q (Function.update s.disk.blk id b) b then
+        let s' := keep s id b h.1 (fun _ hj => absurd hj (Finset.notMem_empty _))
           (fun j hj => absurd hj (Finset.notMem_empty j))
-        let r := settle cfg { s with store := st, top := some 0, own := some id }
+        let r := settle cfg { s' with top := some 0, own := some id }
         (r.1, [.persist id b, .broadcast id b, .setTimer 0 (2 * cfg.timeout 0)] ++ r.2)
       else (s, [])
     else (s, [])
   | .deliver id b =>
-    if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ id ∉ s.store.ids ∧
+    if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ id ∉ s.disk.ids ∧
         id ∉ s.pending.map Prod.fst then
-      let fl := flush cfg (s.pending.length + 1) s.store ((id, b) :: s.pending)
-      let s₁ := { s with store := fl.1, pending := fl.2 }
+      let s₁ := flush cfg (s.pending.length + 1) { s with pending := (id, b) :: s.pending }
       let miss := missing s₁ b
       let r := settle cfg s₁
       (r.1, (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss]) ++ r.2)

@@ -175,7 +175,7 @@ def long3 : Net := run (fun _ d => d = 3) 5300 net0
 
 /-- info: [1179, 1179, 1179] -/
 #guard_msgs in
-#eval [0, 1, 2].map fun d : Fin 4 => (long3.states d).store.ids.card
+#eval [0, 1, 2].map fun d : Fin 4 => (long3.states d).disk.ids.card
 
 /-! ## Node `3` down, node `2` crashing
 

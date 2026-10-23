@@ -144,7 +144,7 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
     (t : ℕ) :
     ∀ v ∈ H,
       IsCut (globalRecord (hashInjective_of_trace hinj) (authentic_of_timely htime))
-        (stateBefore cfg tr t v).store ∧
+        (stateBefore cfg tr t v).disk ∧
       ∀ e ∈ commitsOf (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr t v)).2,
         Verdict (cfg.at v) (globalRecord (hashInjective_of_trace hinj)
           (authentic_of_timely htime)) e := by
@@ -160,7 +160,7 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
   have hK : ∀ v ∈ H, ∀ x ∈ knownOf cfg tr v, x ∈ knownAll cfg H tr :=
     fun v hv x hx => ⟨v, hv, hx⟩
   -- every honest store is a cut, and every decision a verdict
-  have key : ∀ t, ∀ v ∈ H, IsCut U (stateBefore cfg tr t v).store ∧
+  have key : ∀ t, ∀ v ∈ H, IsCut U (stateBefore cfg tr t v).disk ∧
       ∀ e ∈ commitsOf (run (cfg.at v) (State.init (cfg.at v)) (inputsBefore tr t v)).2,
         Verdict (cfg.at v) U e := by
     intro t
