@@ -1,6 +1,7 @@
 import LeanDag.Node.Live.Statement
 import LeanDag.Node.Helpers.Wave
 import LeanDag.Node.Helpers.Recover
+import LeanDag.Node.Helpers.Run
 import LeanDag.Scheme.Helpers.Reactive
 /-!
 # The reliable nodes produce rounds and decide — proof
@@ -59,8 +60,7 @@ variable [LinearOrder BlockId]
 timeout and `A` after all were at `n` or above. -/
 theorem produces {cfg : Config Validator BlockId Payload} {H T : Finset Validator}
     {tr : Trace Validator BlockId Payload} {time : ℕ → ℕ} {gst Δ Δₛ t₁ : ℕ}
-    (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
-    (hf : Hᶜ.card ≤ cfg.f) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card) (hq : 2 ≤ cfg.q)
+    (hadm : cfg.Admissible) (hTH : T ⊆ H) (hqT : cfg.q ≤ T.card) (hq : 2 ≤ cfg.q)
     (hid : Function.Injective cfg.idOf)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hmono : TimeMono tr time) (harr : Arrival cfg T tr time gst (Δ + Δₛ) t₁)
@@ -155,20 +155,9 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     rcases h : (stateAt cfg tr time w t).top with _ | r
     · rw [h] at this; simp at this; omega
     · rfl
-  -- the node's wave facts
-  let wf : Scheme.WaveFacts cfg.p (boundedSel (P := ValidAt cfg.q Clause.none) (honest := H)) U T
-      N n₀ :=
-    { populated := fun n _ hnN w hw' => by
-        obtain ⟨i, inp, e, hi, he, her, -, -⟩ :=
-          built_of_top hmono (hst w hw') ((htop w hw').trans' hnN)
-        obtain ⟨h₁, h₂, h₃⟩ := built_mem hσ hadm hf htime hinj (hTH hw') hi he
-        exact ⟨e.1, h₁, h₃, h₂.trans her⟩
-      reach_or_refs := fun w hw' _ hRk hNk hlk L hL _ hm _ hc hcc hcr =>
-        reach_or_refs_node hσ hadm hf htime hinj hTH hmono harr hbelow hst htop ht₁ hq hto hwait
-          hid hstart hcT hw' hRk hlk hL hm (by omega) hc hcc hcr
-      cert_or_refs := fun hvc w hw' _ hRk hNk hlk L hL _ hc hcc hcr =>
-        cert_or_refs_node hσ hadm hf htime hinj hTH hmono harr hbelow hst htop ht₁ hq hto hwait
-          hid hstart hcT hvc hw' hRk hlk hL hNk hc hcc hcr }
+  -- on its view the run is decided
+  obtain ⟨V, hiff, hdw, -⟩ := run_commits hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr
+    hwait hstart hc hspan hlead hn₀ hbelow htop ht₁ hv
   -- `v` at `t + A`, settled
   set E := eventsBy tr time (t + (Δ + Δₛ)) with hE
   obtain ⟨h₁, h₂, -⟩ := rises_before (cfg := cfg) v
@@ -189,36 +178,8 @@ theorem decides {cfg : Config Validator BlockId Payload} {H T : Finset Validator
     · rw [ht'] at h; cases h
     · exact h
   have hcut := (cut_before hσ hadm hf htime hinj E v (hTH hv)).1
-  obtain ⟨V, -, hiff⟩ := hcut.extend ⟨∅, Finset.empty_subset _, fun i hi => absurd hi
-    (Finset.notMem_empty _)⟩ (fun i hi => absurd hi (Finset.notMem_empty _))
   have hva := ViewsAbove.of_store hiff fun i hi => (hcut i hi).2
-  -- each run slot from `lo` on commits on the view
-  have hcm : cfg.p.commitThreshold ≤ T.card := hadm.2.2.1.trans hcT
-  have hcommit : ∀ j, b ≤ j → j ≤ b + c - 1 →
-      ∃ L, (Scheme.schemeAnchored cfg.p boundedSel).DecidedWithin U V (b + c) j (some L) := by
-    intro j hbj hjc
-    have hlj' : cfg.slots.leader j ∈ T := by
-      have := hlead (j - b) (by omega); rwa [Nat.add_sub_cancel' hbj] at this
-    have hsr : n₀ ≤ cfg.slots.slotRound j := hn₀.trans (cfg.slots.mono hbj)
-    have hsN : cfg.slots.slotRound j + (cfg.p.waveLength - 1) ≤ N := by
-      have := cfg.slots.mono hjc; omega
-    obtain ⟨L, hLU, hLc, hLr⟩ := wf.populated _ hsr (by omega) _ hlj'
-    have hL : IsLeaderBlock U j L := ⟨hLU, hLr, hLc⟩
-    refine ⟨L, AnchoredRule.DecidedWithin.directCommit (by omega) hL
-      (Scheme.commit_of_certified hcm (wf.populated _ (by omega) hsN) fun C hC hCT hCr => ⟨?_, ?_⟩)⟩
-    · exact wf.certifies hw hadm.2.1.2 hTH hqT hsr hsN hlj' hL _ hCT C hC rfl hCr
-    · exact (hiff C).mpr (reliable_held hσ hadm hf htime hinj hTH
-        hmono harr hbelow hst htop ht₁ hCT hv (r := (U.block C).round) (by omega) (by omega)
-        hC rfl rfl)
-  -- so does slot `lo`
-  have hlow : ∃ w, (Scheme.schemeAnchored cfg.p boundedSel).DecidedWithin U V (b + c) Z.lo w := by
-    by_cases hb : b ≤ Z.lo
-    · obtain ⟨L, hL⟩ := hcommit Z.lo hb (by omega)
-      exact ⟨_, hL⟩
-    · exact AnchoredRule.decidedWithin_below_of_committed_run
-        (fun _ h => AnchoredRule.exists_least_of_lt (fun _ _ => Iff.rfl) h)
-        (b := b) (n := b + c - 1) (by omega) (by omega) (fun i hi => by exact hspan b i hi)
-        (fun j h1 h2 => hcommit j h1 h2) Z.lo (by omega)
+  have hlow := hdw Z.lo (by omega)
   -- and the scan reaches it
   obtain ⟨o, -, hoi, hor, -⟩ := ownTop_before (cfg := cfg) (tr := tr) (v := v) E t' ht'
   have hoi' : o ∈ Z.disk.ids := hoi
@@ -296,7 +257,7 @@ theorem progresses : Progresses := by
   intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hf hTH hqT hcT
     hq hid hto htime hinj hmono hdel hfire hwait hsync hstart
   have harr := arrival_of_delivered hσ hadm hf htime hinj hTH hmono hdel hsync
-  have hp := produces hσ hadm hf hTH hqT hq hid htime hinj hmono harr
+  have hp := produces hadm hTH hqT hq hid htime hinj hmono harr
     (TopTimerBy.of_fire hmono hfire) hstart
   have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr hwait hstart
   exact ⟨hp, hd, decidesBy hp hd⟩
@@ -307,15 +268,14 @@ round's timer fires within its timeout (`topTimerBy_of_up`), so
 production and decision hold from `G`. -/
 theorem recovers : Recovers := by
   intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t_r t₁ hσ hadm hf hTH hqT
-    hcT hq hid hto htime hinj hmono hdel hfire hwait hsync hup hstart
-  intro G
+    hcT hq hid hto htime hinj hmono hdel hfire hwait hsync hup hstart G
   have hrG : t_r ≤ G := (le_max_left _ _).trans (Nat.le_add_right _ _)
   have hgG : gst ≤ G := (le_max_right _ _).trans (Nat.le_add_right _ _)
   have harr := arrival_of_recovered hσ hadm hf hid htime hinj hTH hmono hdel hsync hup hfire hstart
   have hstart' : StartedBy T tr time G := fun v hv => by
     obtain ⟨i, hi, hit⟩ := hstart v hv
     exact ⟨i, hi, hit.trans hgG⟩
-  have hp := produces hσ hadm hf hTH hqT hq hid htime hinj hmono harr
+  have hp := produces hadm hTH hqT hq hid htime hinj hmono harr
     (topTimerBy_of_up hmono hup hfire hrG) hstart'
   have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr hwait hstart'
   exact ⟨hp, hd, decidesBy hp hd⟩

@@ -386,18 +386,20 @@ since no block is collected.
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes' timers on time, no honest node's timer early, and timeouts above `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
 | V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` on, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.topTimerBy_of_up`, `Node.own_reaches`, `Node.Chain` |
+| V12 | **Refinement**: for an admissible configuration at the bounded vote, over a trace with timely authentication, an injective hash and at most `f` nodes outside the honest set, there is a `BlockRecord` at quorum `q` of which every honest disk, before every event, is a cut; every honest node's decisions are none or `Scheme.tryDecide` from slot `0` on a view of it that the node's disk holds; and every honest block above round `0` references a block of its author. Under the assumptions of V11 (no timer need fire) or of V11′, it has the scheme's `WaveFacts` over every window of rounds from one above every reliable node's round at GST, and every slot of a reliably led run is decided by every reliable node to a leader block that reaches every block of its author at or below its round. | `Node.Refines.HasRecord` (proved, §5.7): `Node.commitInv_before`, `Node.selfParent_of_honest`, `Node.own_reaches_record`, `Node.waveFacts_of_run`, `Node.run_commits`, `Refines.waves_leads` |
 
 Every claim depends only on the standard axioms (`propext`,
 `Classical.choice`, `Quot.sound`; `LeanDagTest/Node/Axioms.lean`).
 
-**Equivalence with the scheme.** V1, V2 and V11 together relate the
-program to the scheme. The blocks it builds are valid at the row and
-follow the scheme's build rule, its own block of the round below
-referenced (V1, §3.2). The decisions it outputs are the scheme's decider
-on its disk's view (V2). A timed run of the program gives the scheme's
-`WaveFacts`, the production, arrival and wait clauses the scheme's wave
-argument reads, so the scheme's liveness argument applies to it (V11,
-§5.3).
+**Equivalence with the scheme.** V12 states the relation in one
+theorem at the scheme's interfaces. The run's record is a `BlockRecord`,
+the scheme's universe. The program's decisions are the scheme's loop on a
+view of it (V2, V3). Its honest blocks are self-parented, the build rule
+the scheme's inclusion argument reads (§8). A timed run gives the
+scheme's `WaveFacts`, the clauses the scheme's wave argument reads, so the
+scheme's liveness argument applies to it (V11, §5.3), and each slot of a
+reliably led run is decided to a leader block that includes its author's
+earlier blocks. The parts V1, V2, V3 and V11 prove separately.
 
 **The transfer.** The program decides on its own disk, a record of its
 own; the run's claims are about a view of the run's record. The decider
@@ -653,6 +655,26 @@ nodes outside the reliable set do, provided their timers do not fire
 early. Where every honest node is reliable: after every node crashed and
 restarted, the chain decides again.
 
+### 5.7 Refinement (V12)
+
+The record is the run's (`globalRecord`). Its holdings are `cut_before`,
+and the loop is `CommitInv.run` read before each event
+(`commitInv_before`). An honest block above round `0` was built by
+`tryBuild`, which references the author's own block of the round below
+from the memory (`selfParent_of_honest`).
+
+Over a timed trace, delivery and synchronisation give arrival within `A`
+(`arrival_of_delivered`; with crashes, `arrival_of_recovered` from
+`max t_r gst + W`). Arrival gives the wave facts (`waveFacts_of_run`).
+On a reliable node's view `A` after the last decision round, each slot of
+the run commits a leader block `L` (`run_commits`). By V11 the node has
+output a decision `d` for the slot. That decision is a verdict on some
+view of the record (`cut_before`), and verdicts on one slot agree
+(`AnchoredRule.decided_unique`), so `d = some L`. The leader is reliable,
+so `L` reaches every block of its author at or below its round
+(`own_reaches_record`): the author's disk, a cut of the record, holds its
+chain of own blocks (`chain_before`).
+
 ## 6. Testing
 
 1. **Agreement with the model** (`LeanDagTest/Node/Replay.lean`). A
@@ -789,7 +811,9 @@ a reliability and a round `R₀`: every block by a reliable author above
 cover reliable blocks above `R₀`. The program meets it by its build
 rule: it references its own block of the round below, and builds rounds
 in sequence (§3.2), so a reliable node's chain is unbroken from its
-genesis block.
+genesis block. V12 proves it for every honest block above round `0`
+(`selfParent_of_honest`), and the inclusion it gives a reliable
+leader's committed block (`own_reaches_record`).
 
 ## 9. Next
 
