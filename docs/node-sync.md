@@ -94,30 +94,30 @@ the history of their targets.
   target of a convicted author and ignores its announcements. Evidence
   travels in blocks, so no report message is needed: after GST an honest
   block carrying it reaches every reliable node within `Δ + Δₛ`.
-* **Admission.** A target is taken only once every block of its history
-  above the frontier passes the checks (§3, D1).
+* **Checks on arrival.** Each streamed block is taken in only if it is
+  ready and passes the checks, the validity clause among them (§3, D1).
 
-With these, S5 says a node holds at most `n + |D|` blocks of each round
-from the round at which every honest admitted block exposes the convicted
-authors `D`; after GST that round is one above the highest round an
-honest node built at before every reliable node held the evidence.
+With header-first admission in place of the check on arrival (Stage 3),
+S5 says a node holds at most `n + |D|` blocks of each round from the round
+at which every honest admitted block exposes the convicted authors `D`;
+after GST that round is one above the highest round an honest node built
+at before every reliable node held the evidence.
 
 ## 3. Decisions
 
-* **D1. Header-first admission or a check on arrival.** Checking each
-  streamed block on arrival takes in the valid blocks of an invalid
-  history before its violation is reached: a Byzantine target can carry
-  any number of a convicted author's valid twins under blocks that break
-  the exposure rule, and S5 fails. Admission reads the headers of the
-  target's history above the frontier first, top down, and stops at the
-  first that fails; only then are blocks taken in. *Recommended:
-  header-first.* Its cost is a buffer of headers per target. Once honest
-  blocks carry evidence, a violation shows one level below the offending
-  block, so a Byzantine target is refused after a few headers. A cap on the
-  buffer per target bounds the cost before that; the cap must exceed the
-  history of any honest target above the frontier. From the exposure round
-  on, S5 bounds that history by `n + f` blocks a round over the rounds a
-  node is behind; before it, only by the rate of S4.
+* **D1. Header-first admission or a check on arrival.** *Decided: a
+  check on arrival, first.* Each streamed block is checked when it
+  arrives, and taken in if it is ready and valid. This needs no buffer.
+  It does not give S5: a Byzantine target can carry any number of a
+  convicted author's valid twins under blocks that break the exposure
+  rule, and they arrive, and are taken in, before the blocks that break
+  it. Header-first admission reads the headers of the target's history
+  above the frontier first, top down, and takes blocks in only if all
+  pass; a target refused proves its announcer faulty to the node, which
+  then syncs nothing more from it. It costs a buffer of headers per
+  target, with a cap that must exceed the history of any honest target
+  above the frontier (from the exposure round on, `n + f` blocks a round
+  over the rounds a node is behind). It is left for after Stage 2.
 * **D2. Authenticated links.** An announcement and a stream must name
   their sender: `Input.deliver` gains the peer. The proofs already assume
   timely authentication (`TimelyAuthentic`); this asks it of links too.
@@ -169,19 +169,19 @@ audits, the documents updated, and a commit.
   equivocates and its builder drops the authors its block exposes, and
   that the quorum survives the drop: exposed authors are Byzantine, and
   the honest authors alone make a quorum.
-* **Stage 3 — admission** (D1). The header pass and its cap; the
-  simulator's attacks of `scripts/sync-reports.py` (trees of twins, twins
-  per node, chains carried each round) on the node, with the blocks
+* **Stage 3 — admission, later** (D1). The header pass and its cap;
+  the simulator's attacks of `scripts/sync-reports.py` (trees of twins,
+  twins per node, chains carried each round) on the node, with the blocks
   processed per round reported.
-* **Stage 4 — the exposure bound on the node.** S5's proof read on the
-  node's disk: D27 (`creator_ne_of_correct_exposed`) on an admitted
+* **Stage 4 — the exposure bound on the node, later.** S5's proof read
+  on the node's disk: D27 (`creator_ne_of_correct_exposed`) on an admitted
   history, a convicted author's blocks taken in only as its own target
-  before conviction, and an author not convicted holding one block a round.
-  Then the premise in time, which the Sync model does not prove: past
-  GST, every honest block built `Δ + Δₛ` after an honest node convicted `X`
-  carries or inherits the evidence, from `Arrival`; so from the round above
-  the highest round built by then, the node holds at most `n + f` blocks a
-  round.
+  before conviction, and an author not convicted holding one block a
+  round. Then the premise in time, which the Sync model does not prove:
+  past GST, every honest block built `Δ + Δₛ` after an honest node
+  convicted `X` carries or inherits the evidence, from `Arrival`; so from
+  the round above the highest round built by then, the node holds at most
+  `n + f` blocks a round.
 
 Stages 1 and 2 are independent of each other; 3 needs both, and 4 needs 3.
 Stage 1 alone bounds what a node holds waiting, and Stage 2 alone stops
