@@ -147,11 +147,7 @@ theorem eq_of_mem_admitted {H : Finset Validator} (hHc : Hᶜ.card ≤ f)
   have hup : InheritedOn blk (historyFrom blk t) (Exposes blk ev) := by
     intro b hb j hj Y hY
     obtain ⟨x, hx, hxY⟩ := hY
-    have hsub := C.history_subset_of_reaches hb (ReachesFrom.single hj)
-    refine ⟨x, hsub hx, ?_⟩
-    rcases hxY with ⟨hc, y, hy, hxy⟩ | hcv
-    · exact Or.inl ⟨hc, y, hsub hy, hxy⟩
-    · exact Or.inr hcv
+    exact ⟨x, C.history_subset_of_reaches hb (ReachesFrom.single hj) hx, hxY⟩
   have hexp' : ∀ c ∈ historyFrom blk t, (blk c).round = n + 1 →
       (blk c).creator ∈ rel.correct → Exposes blk ev c X :=
     fun c hc hcr hcH => hexp c (fun x hx => ht x (C.history_subset_ids hc hx)) hcr hcH

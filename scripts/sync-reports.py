@@ -14,12 +14,12 @@ Rules (honest):
   dos    DoSValid: a block references no author with twins in its history
          (within L rounds); targets and arriving blocks must pass; twins on
          the disk detect their author, whose targets are dropped;
-  rep    dos, with exposure = twins in the history or evidence carried by a
-         block of the history; a node holding twins of X, or evidence
-         against X, convicts X, reports it to every honest node and carries
-         the evidence in its blocks; it builds nothing within Delta ticks of
-         a conviction; from GST + Delta a target that exposes an author the
-         node has not convicted ends the sync from that peer.
+  rep    as dos, with exposure = evidence carried by a block of the history
+         (twins in the history do not count); a node holding twins of X, or
+         evidence against X, convicts X, reports it to every honest node and
+         carries the evidence in its blocks; it builds nothing within Delta
+         ticks of a conviction; from GST + Delta a target that exposes an
+         author the node has not convicted ends the sync from that peer.
 
 Processing counts every streamed block that arrives not held and above the
 horizon. The slope is the processing per round between tick `mark` and the
@@ -86,7 +86,8 @@ def analyze(refs, rnd, L, ev_root, evidence):
         slots[blocks[x][:2]] += 1
         if evidence:
             exposed |= EV[x]
-    exposed |= {a for (a, r), c in slots.items() if c > 1}
+    if not evidence:
+        exposed |= {a for (a, r), c in slots.items() if c > 1}
     return exposed, len(cone)
 
 

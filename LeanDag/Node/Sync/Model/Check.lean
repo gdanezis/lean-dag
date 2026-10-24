@@ -4,8 +4,7 @@ import LeanDag.Node.Sync.Model.Stream
 
 `docs/sync.md` §3. A block carries evidence: pairs of identifiers it names
 as twins, read from its payload by `ev`. A block exposes `X` when its
-history holds twins by `X` or a block carrying evidence against `X`
-(`Exposes`). A block passes the checks when its references sit one round
+history holds a block carrying evidence against `X` (`Exposes`). A block passes the checks when its references sit one round
 below it, name a quorum of `n − f` authors unless it is at round `0`, and
 name no author it exposes (`Checks`). A target is admitted when every block
 of its history passes them (`Admits`): a pass over the headers before the
@@ -33,11 +32,10 @@ def Convicts (b : BlockId) (X : Validator) : Prop :=
 instance (b : BlockId) (X : Validator) : Decidable (Convicts blk ev b X) :=
   inferInstanceAs (Decidable (∃ p ∈ ev (blk b).payload, _))
 
-/-- **`b` exposes `X`**: `b`'s history holds twins by `X`, or a block
-carrying evidence against `X`. -/
+/-- **`b` exposes `X`**: `b`'s history holds a block carrying evidence
+against `X`. -/
 def Exposes (b : BlockId) (X : Validator) : Prop :=
-  ∃ i ∈ historyFrom blk b,
-    ((blk i).creator = X ∧ ∃ j ∈ historyFrom blk b, Twins blk i j) ∨ Convicts blk ev i X
+  ∃ i ∈ historyFrom blk b, Convicts blk ev i X
 
 instance (b : BlockId) (X : Validator) : Decidable (Exposes blk ev b X) :=
   inferInstanceAs (Decidable (∃ i ∈ historyFrom blk b, _))

@@ -63,15 +63,17 @@ records the references of streamed blocks that are still missing
 
 **Checks.** A block carries evidence: pairs of identifiers its payload
 names as twins, read by a function `ev`. A block exposes `X` when its
-history holds twins by `X`, or a block carrying evidence against `X`
-(`Exposes`). A block passes the checks when its references sit one round
-below it, name a quorum of `n − f` authors unless it is at round `0`, and
-name no author it exposes (`Checks`): the quorum of block validity and
-`DoSValid` of the `DoS` arc, with evidence counted as exposure. A target is
-admitted when every block of its history passes the checks (`Admits`): a
-pass over the headers before the stream. The authors a set of blocks
-catches are those with twins in it and those its blocks carry evidence
-against (`caught`).
+history holds a block carrying evidence against `X` (`Exposes`). A block
+passes the checks when its references sit one round below it, name a
+quorum of `n − f` authors unless it is at round `0`, and name no author it
+exposes (`Checks`): the quorum of block validity and the condition of the
+`DoS` arc (`DoSValidOn`), with exposure read from evidence alone. The
+authors a block exposes are those its references expose and those its own
+payload names, at most `f`, so a check needs no walk of the history. A
+target is admitted when every block of its history passes the checks
+(`Admits`): a pass over the headers before the stream. The authors a set
+of blocks catches are those with twins in it and those its blocks carry
+evidence against (`caught`).
 
 **A node** (`State`) holds its blocks, the authors it has detected, and
 for each other node the target of its sync. Its inputs (`Input`) are an
@@ -282,17 +284,17 @@ holds.
 **The simulation** (`scripts/sync-reports.py`) runs the honest nodes of
 `n = 7, f = 2` and `n = 10, f = 3` over 900 ticks, GST at tick 200,
 `Δ = 3`, horizon `L = 20`, with three rules: none, `DoSValid` alone, and
-`DoSValid` with reports (`rep`). The table gives the blocks a node
-processes per round between ticks 400 and 900, all / Byzantine, at
-`n = 10, f = 3`, for the node that processes most:
+the rule with reports (`rep`). The table gives the blocks a node processes
+per round between ticks 400 and 900, all / Byzantine, at `n = 10, f = 3`,
+for the node that processes most:
 
 | Attack | No rule | `DoSValid` | Reports |
 |---|---|---|---|
 | No attack | 6.1 / 0 | 6.1 / 0 | 6.1 / 0 |
 | `X` chain to node 0 every 40 rounds | 9.5 / 3.0 | 9.5 / 3.0 | 9.5 / 3.0 |
 | `Y` carries a fresh `X` chain each round | 20.1 / 14.0 | 6.0 / 0 | 6.0 / 0 |
-| `Y` announces a tree of twins each round | 69.1 / 63.0 | 6.0 / 0 | 6.0 / 0 |
-| a tree of twins for each node, each round | 454.3 / 447.4 | 6.0 / 0 | 6.0 / 0 |
+| `Y` announces a tree of twins each round | 69.1 / 63.0 | 6.0 / 0 | 6.1 / 0 |
+| a tree of twins for each node, each round | 454.3 / 447.4 | 6.0 / 0 | 6.1 / 0 |
 | fresh chains of length 5 from every Byzantine author | 137.2 / 130.9 | 6.0 / 0 | 6.0 / 0 |
 | `X` gives each node its own twin, `Y` relays one | 15.1 / 8.0 | 8.2 / 2.0 | 6.0 / 0 |
 
@@ -304,6 +306,13 @@ holds both twins of `X`, so `X` is never exposed, and `Y`'s blocks carry a
 block of `X` into honest histories every round. No honest node stops: the
 rounds reached match the run without attack, and no node ends a sync from
 an honest peer. `n = 7, f = 2` gives the same picture.
+
+Exposure in the rule with reports is read from evidence alone, as in the
+checks of §3. Before the first conviction this costs more than counting
+twins in the history too, since a block carrying a tree of twins passes
+until its twins have been seen: under the tree attack a node processes 66
+Byzantine blocks in all, against 6 under `DoSValid`. The rate per round
+after GST is the same.
 
 ## 8. Open
 
