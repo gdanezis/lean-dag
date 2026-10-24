@@ -105,12 +105,16 @@ variable (Validator BlockId Payload)
 inductive Input where
   /-- Start: build the genesis block. -/
   | start
-  /-- A block, with its identifier. -/
-  | deliver (id : BlockId) (b : Block Validator BlockId Payload)
+  /-- A block a peer sent in its own name, with its identifier: an
+  announcement of its latest block. -/
+  | deliver (peer : Validator) (id : BlockId) (b : Block Validator BlockId Payload)
+  /-- A piece of a peer's stream. -/
+  | stream (peer : Validator) (L : List (BlockId × Block Validator BlockId Payload))
   /-- The timer of round `r` fired. -/
   | timer (r : ℕ)
-  /-- A peer at round `r` asks for the blocks `ids` and their histories. -/
-  | fetchRequest (peer : Validator) (r : ℕ) (ids : List BlockId)
+  /-- A peer asks for the history of the block `t` from its frontier `fr`,
+  and for the blocks `ids` by name. -/
+  | syncRequest (peer : Validator) (t : BlockId) (fr : Validator → ℕ) (ids : List BlockId)
   /-- The node restarts after a crash, from the state it persisted. -/
   | restart
 
@@ -124,10 +128,11 @@ inductive Output where
   | setTimer (r : ℕ) (after : ℕ)
   /-- Slot `k` is decided: committed to a block, or skipped. -/
   | commit (k : ℕ) (d : Option BlockId)
-  /-- Ask the peer for the blocks `ids` and their histories, from round `r`. -/
-  | fetch (peer : Validator) (r : ℕ) (ids : List BlockId)
-  /-- Send a block to one peer. -/
-  | send (peer : Validator) (id : BlockId) (b : Block Validator BlockId Payload)
+  /-- Ask the peer for the history of `t` from the frontier `fr`, and for
+  the blocks `ids` by name. -/
+  | sync (peer : Validator) (t : BlockId) (fr : Validator → ℕ) (ids : List BlockId)
+  /-- Stream blocks to one peer, in order of round. -/
+  | stream (peer : Validator) (L : List (BlockId × Block Validator BlockId Payload))
 
 end Node
 

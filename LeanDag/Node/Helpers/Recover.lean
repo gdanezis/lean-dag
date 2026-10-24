@@ -248,7 +248,7 @@ theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (hdel : Live.DeliveredFrom cfg T tr time gst Δ t_r t₁)
-    (hsync : Live.SyncedFrom cfg H T tr time gst Δₛ t_r t₁) (hup : Live.UpFrom T tr time t_r t₁)
+    (hsync : Live.SyncedFrom cfg T tr time gst Δₛ t_r t₁) (hup : Live.UpFrom T tr time t_r t₁)
     (hfire : Live.TimersFireUp cfg T tr time t₁) (hstart : Live.StartedBy T tr time gst) :
     ∀ u ∈ T, ∀ v ∈ T, u ≠ v → ∀ b inp, tr[b]? = some (u, inp) →
       ∀ e ∈ persists (outputsAt cfg tr b),
@@ -267,22 +267,19 @@ theorem arrives_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
   have hheld : ∀ {q k j : ℕ} {inpq : Input Validator BlockId Payload}
       {y : BlockId × Block Validator BlockId Payload},
       tr[q]? = some (u, inpq) → y ∈ persists (outputsAt cfg tr q) →
-      tr[j]? = some (v, .deliver y.1 y.2) → k < j → t_r ≤ time k →
+      tr[j]? = some (v, .deliver u y.1 y.2) → k < j → t_r ≤ time k →
       max (time j) gst + Δₛ ≤ τ → y.1 ∈ (stateAt cfg tr time v τ).disk.ids := by
     intro q k j inpq y hq hyq hj hkj hrk hjτ
     have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj).1
     have hjr : t_r ≤ time j := hrk.trans (hmono k j hkj.le hjl)
-    have hgood := ((Converge.inv_before (cfg := cfg) (tr := tr) (q + 1) u).good y
-      (persists_of_event hq hyq)).2.1
-    by_cases hn0 : y.2.round = 0
-    · exact arrives_zero hinj hTH hmono hu hv huv (by rw [hq]; rfl) hyq hgood hn0 hj (by omega)
-    · obtain ⟨x, y', o, hx, hxb, heo, -⟩ := build_witness hσ hadm hf htime hinj (hTH hu) hq hyq hn0
-      exact arrives hinj htime hTH hmono hsync hu hv huv hq hyq hx hxb heo hj hjr hjτ (by omega)
+    have hgood := (Converge.inv_before (cfg := cfg) (tr := tr) (q + 1) u).good y
+      (persists_of_event hq hyq)
+    exact arrives hsync hu hv hgood.2.1 hgood.1 hj hjr hjτ ht₁
   have hsend : ∀ {k : ℕ} {inpk : Input Validator BlockId Payload}
       {y : BlockId × Block Validator BlockId Payload}, tr[k]? = some (u, inpk) →
       y ∈ broadcasts (outputsAt cfg tr k) → t_r ≤ time k → max (time k) gst + Δ ≤ t₁ →
-      ∃ j, k < j ∧ tr[j]? = some (v, .deliver y.1 y.2) ∧ time j ≤ max (time k) gst + Δ :=
-    fun hk hy hrk ht => hdel _ u _ hk hu hrk (v, .deliver _ _)
+      ∃ j, k < j ∧ tr[j]? = some (v, .deliver u y.1 y.2) ∧ time j ≤ max (time k) gst + Δ :=
+    fun hk hy hrk ht => hdel _ u _ hk hu hrk (v, .deliver u _ _)
       ⟨.broadcast _ _, mem_broadcasts.mp hy, Ne.symm huv, rfl⟩ hv ht
   by_cases hbr : t_r ≤ time b
   · -- built from `t_r` on: delivered and synchronised
@@ -388,7 +385,7 @@ theorem arrival_of_recovered (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible)
     (htime : Converge.TimelyAuthentic cfg H tr) (hinj : Converge.HashInjective cfg H tr)
     (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (hdel : Live.DeliveredFrom cfg T tr time gst Δ t_r t₁)
-    (hsync : Live.SyncedFrom cfg H T tr time gst Δₛ t_r t₁)
+    (hsync : Live.SyncedFrom cfg T tr time gst Δₛ t_r t₁)
     (hup : Live.UpFrom T tr time t_r t₁) (hfire : Live.TimersFireUp cfg T tr time t₁)
     (hstart : Live.StartedBy T tr time gst) :
     Arrival cfg T tr time

@@ -1,17 +1,12 @@
 import LeanDag.Node.Converge.Statement
 import LeanDag.Node.Helpers.Trace
-import LeanDag.Node.Helpers.Walk
 import LeanDag.Node.Helpers.Global
 /-!
 # The honest nodes along a trace
 
 The blocks honest nodes knew over a trace give one block map (`gT`); an
-honest node's disk reads as it at every event (`reads_before`). Over
-time then: a block that fits stays pending or on disk (`keeps_after`); no
-pending block is ever ready (`noReady_before`); a block becomes pending
-only by a delivery the node acts on (`entry_before`). Below
-a pending block of an honest history, a chain of pending blocks leads to
-a block the node lacks (`chain`).
+honest node's disk reads as it at every event (`reads_before`), and no
+sync's block is ever ready (`noReady_before`).
 -/
 
 namespace LeanDag
@@ -111,18 +106,24 @@ theorem persists_of_broadcasts {i : ℕ} {u : Validator} {inp : Input Validator 
   · exact ⟨i, le_rfl, inp, hi, by rw [outputsAt_eq hi, ho.1]; exact he⟩
 
 omit [Fintype Validator] in
-/-- **A block an honest node knew from an input** was delivered to it. -/
+/-- **A block an honest node knew from an input** was delivered to it, or
+streamed. -/
 theorem deliver_of_delivered {j : ℕ} {v : Validator}
     {inp : Input Validator BlockId Payload} (hj : tr[j]? = some (v, inp))
     {x : BlockId × Block Validator BlockId Payload} (hx : x ∈ delivered (cfg.at v) [inp]) :
-    tr[j]? = some (v, .deliver x.1 x.2) ∧ x.1 = cfg.idOf x.2 := by
+    ((∃ u, tr[j]? = some (v, .deliver u x.1 x.2)) ∨
+      ∃ u L, tr[j]? = some (v, .stream u L) ∧ x ∈ L) ∧ x.1 = cfg.idOf x.2 := by
   have hid := id_of_delivered hx
+  refine ⟨?_, hid⟩
   cases inp with
-  | deliver id b =>
+  | deliver u id b =>
     simp only [delivered, List.flatMap_cons, List.flatMap_nil, List.append_nil] at hx
     split at hx
-    · rw [List.mem_singleton] at hx; subst hx; exact ⟨hj, hid⟩
+    · rw [List.mem_singleton] at hx; subst hx; exact Or.inl ⟨u, hj⟩
     · exact absurd hx List.not_mem_nil
+  | stream u L =>
+    simp only [delivered, List.flatMap_cons, List.flatMap_nil, List.append_nil] at hx
+    exact Or.inr ⟨u, L, hj, (List.mem_filter.mp hx).1⟩
   | _ => simp [delivered] at hx
 
 theorem stateBefore_of_le {i : ℕ} (h : tr.length ≤ i) (v : Validator) :
@@ -135,7 +136,7 @@ theorem reads_before (hinj : HashInjective cfg H tr) {v : Validator} (hv : v ∈
   (gT_of_known hinj (knownBefore_sub hv i ((inv_before (cfg := cfg) i v).known j hj))).symm
 
 theorem pend_before (hinj : HashInjective cfg H tr) {v : Validator} (hv : v ∈ H) (i : ℕ) :
-    ∀ e ∈ (stateBefore cfg tr i v).pending, gT cfg H tr e.1 = e.2 := fun e he =>
+    ∀ e ∈ (stateBefore cfg tr i v).syncs, gT cfg H tr e.2.1.1 = e.2.1.2 := fun e he =>
   gT_of_known hinj (knownBefore_sub hv i ((inv_before (cfg := cfg) i v).pend e he))
 
 theorem step_before {a : ℕ} {v : Validator} {inp : Input Validator BlockId Payload}
@@ -152,28 +153,7 @@ theorem same_before {a : ℕ} {v : Validator} (h : ∀ inp, tr[a]? ≠ some (v, 
     rintro rfl
     exact h inp ha
 
-/-- **A block that fits stays pending or on disk.** -/
-theorem keeps_after (hinj : HashInjective cfg H tr) {v : Validator} (hv : v ∈ H)
-    {y : BlockId × Block Validator BlockId Payload}
-    (hf : Fits (cfg.at v) (gT cfg H tr) y) {a : ℕ}
-    (hy : y ∈ (stateBefore cfg tr a v).pending ∨ y.1 ∈ (stateBefore cfg tr a v).disk.ids) :
-    ∀ b, a ≤ b →
-      y ∈ (stateBefore cfg tr b v).pending ∨ y.1 ∈ (stateBefore cfg tr b v).disk.ids := by
-  intro b hab
-  induction b, hab using Nat.le_induction with
-  | base => exact hy
-  | succ j _ ih =>
-    by_cases he : ∃ inp, tr[j]? = some (v, inp)
-    · obtain ⟨inp, hj⟩ := he
-      rw [step_before hj]
-      refine step_keeps (by rw [← step_before hj]; exact reads_before hinj hv _)
-        (pend_before hinj hv j) (fun id b hib hid => ?_) hf ih
-      subst hib
-      exact gT_of_known (x := (id, b)) hinj
-        (Or.inl ⟨j, v, .deliver id b, hj, hv, by simp [delivered, ← hid]⟩)
-    · rw [same_before fun inp h => he ⟨inp, h⟩]; exact ih
-
-/-- **No pending block is ever ready.** -/
+/-- **No sync's block is ever ready.** -/
 theorem noReady_before (v : Validator) : ∀ i, NoReady (cfg.at v) (stateBefore cfg tr i v)
   | 0 => fun e he => by simp [stateBefore, inputsBefore, run, State.init] at he
   | i + 1 => by
@@ -182,31 +162,6 @@ theorem noReady_before (v : Validator) : ∀ i, NoReady (cfg.at v) (stateBefore 
       rw [step_before hi]
       exact noReady_step (cfg := cfg.at v) (noReady_before v i) inp
     · rw [same_before fun inp h => he ⟨inp, h⟩]; exact noReady_before v i
-
-/-- **A block becomes pending only by a delivery the node acts on.** -/
-theorem entry_before {v : Validator}
-    {y : BlockId × Block Validator BlockId Payload} {a : ℕ}
-    (h₁ : y ∉ (stateBefore cfg tr a v).pending) (h₂ : y ∈ (stateBefore cfg tr (a + 1) v).pending) :
-    tr[a]? = some (v, .deliver y.1 y.2) ∧ Admits (cfg.at v) (stateBefore cfg tr a v) y.1 y.2 := by
-  by_cases he : ∃ inp, tr[a]? = some (v, inp)
-  · obtain ⟨inp, ha⟩ := he
-    rw [step_before ha] at h₂
-    rcases step_sub (cfg := cfg.at v) _ inp y h₂ with h | ⟨rfl, hc⟩
-    · exact absurd h h₁
-    · exact ⟨ha, hc⟩
-  · rw [same_before fun inp h => he ⟨inp, h⟩] at h₂; exact absurd h₂ h₁
-
-/-- **A delivery a node acts on keeps a fitting block it delivers.** -/
-theorem admit_after (hinj : HashInjective cfg H tr) {v : Validator} (hv : v ∈ H) {a : ℕ}
-    {id : BlockId} {b : Block Validator BlockId Payload}
-    (ha : tr[a]? = some (v, .deliver id b)) (hc : Admits (cfg.at v) (stateBefore cfg tr a v) id b)
-    (hf : Fits (cfg.at v) (gT cfg H tr) (id, b)) :
-    (id, b) ∈ (stateBefore cfg tr (a + 1) v).pending ∨
-      id ∈ (stateBefore cfg tr (a + 1) v).disk.ids := by
-  rw [step_before ha]
-  exact admit_keeps hc (by rw [← step_before ha]; exact reads_before hinj hv _)
-    (pend_before hinj hv a) (gT_of_known (x := (id, b)) hinj
-      (Or.inl ⟨a, v, .deliver id b, ha, hv, by simp [delivered, ← hc.1]⟩)) hf
 
 end Converge
 
@@ -291,117 +246,6 @@ theorem broadcast_stored {i : ℕ} {u : Validator} {inp : Input Validator BlockI
   obtain ⟨h₁, h₂⟩ := persist_stored hj' hje
   have hg := grows_before (cfg := cfg) (tr := tr) u (show j + 1 ≤ i + 1 by omega)
   exact ⟨hg.1 h₁, by rw [hg.blk h₁]; exact h₂⟩
-
-omit hinj in
-/-- **A block pending at the end entered once and stayed.** -/
-theorem entry_time {v : Validator} {c : BlockId × Block Validator BlockId Payload}
-    (hc : c ∈ (stateBefore cfg tr tr.length v).pending) :
-    ∃ a < tr.length, c ∉ (stateBefore cfg tr a v).pending ∧
-      ∀ t, a < t → t ≤ tr.length → c ∈ (stateBefore cfg tr t v).pending := by
-  classical
-  let Q : ℕ → Prop := fun x => ∀ t, x ≤ t → t ≤ tr.length → c ∈ (stateBefore cfg tr t v).pending
-  have hQ : ∃ x, Q x := ⟨tr.length, fun t h₁ h₂ => by rw [show t = tr.length by omega]; exact hc⟩
-  have hx0 : Nat.find hQ ≠ 0 := by
-    intro h0
-    have := Nat.find_spec hQ 0 (by omega) (Nat.zero_le _)
-    simp [stateBefore, inputsBefore, run, State.init] at this
-  have hxL : Nat.find hQ ≤ tr.length :=
-    Nat.find_min' hQ fun t h₁ h₂ => by rw [show t = tr.length by omega]; exact hc
-  refine ⟨Nat.find hQ - 1, by omega, ?_, fun t ht htL => Nat.find_spec hQ t (by omega) htL⟩
-  intro hin
-  have hmin := Nat.find_min hQ (show Nat.find hQ - 1 < Nat.find hQ by omega)
-  apply hmin
-  intro t ht htL
-  rcases Nat.eq_or_lt_of_le ht with h | h
-  · rw [← h]; exact hin
-  · exact Nat.find_spec hQ t (by omega) htL
-
-/-- **Below a pending block of an honest history, a chain of pending
-blocks leads to a block the node lacks.** -/
-theorem chain {u v : Validator} (hu : u ∈ H) (hv : v ∈ H) {τ : ℕ} {idh : BlockId}
-    (hidh : idh ∈ (stateBefore cfg tr τ u).disk.ids)
-    (raw : BlockId → Block Validator BlockId Payload)
-    (hraw : ∀ j, raw j = (stateBefore cfg tr τ u).disk.blk j) :
-    ∀ n, ∀ w ∈ historyFrom (gT cfg H tr) idh, (raw w).round = n →
-      (w, raw w) ∈ (stateBefore cfg tr tr.length v).pending →
-      w ∉ (stateBefore cfg tr tr.length v).disk.ids →
-      ∃ (len : ℕ) (x : ℕ → BlockId), 0 < len ∧ x 0 = w ∧
-        (∀ k ≤ len, x k ∈ historyFrom (gT cfg H tr) idh ∧
-          x k ∉ (stateBefore cfg tr tr.length v).disk.ids) ∧
-        (∀ k < len, (x k, raw (x k)) ∈ (stateBefore cfg tr tr.length v).pending ∧
-          x (k + 1) ∈ (raw (x k)).refs ∧ (raw (x (k + 1))).round + 1 = (raw (x k)).round) ∧
-        x len ∉ (stateBefore cfg tr tr.length v).pending.map Prod.fst := by
-  set st := (stateBefore cfg tr τ u).disk with hst
-  set fin := stateBefore cfg tr tr.length v with hfin
-  intro n
-  induction n using Nat.strong_induction_on with
-  | _ n ih =>
-  intro w hw hn hwp hws
-  have hsub := hist_sub hinj hu hidh
-  have hwst : w ∈ st.ids := hsub hw
-  have hnr := noReady_before (cfg := cfg) (tr := tr) v tr.length _ hwp
-  simp only [readyOn, Store.Checks, decide_eq_false_iff_not] at hnr
-  have hblk : st.blk w = raw w := (hraw w).symm
-  -- the block is valid as `u`'s disk holds it, so it waits only for references
-  have hpredw : ∀ j ∈ (raw w).refs, (st.blk j).round + 1 = (raw w).round := fun j hj => by
-    rw [← hblk]; exact st.pred w hwst j (by rw [← hblk] at hj; exact hj)
-  have hagree : ∀ j ∈ (raw w).refs, j ∈ fin.disk.ids → fin.disk.blk j = st.blk j := by
-    intro j hj hjf
-    have hjst : j ∈ st.ids := st.complete w hwst j (by rw [← hblk] at hj; exact hj)
-    exact content_eq hinj (stored_known (cfg := cfg) (tr := tr) hv hjf)
-      (stored_known (cfg := cfg) (tr := tr) hu hjst) rfl
-  have hval : rowValid cfg.q st.blk (raw w) := by
-    rw [← hblk]; exact (inv_before (cfg := cfg) τ u).valid w hwst
-  have hns : ¬ (raw w).refs ⊆ fin.disk.ids := by
-    intro hsub'
-    refine hnr ⟨hsub', fun j hj => ?_, rowValid_congr (fun j hj => ?_) hval⟩
-    · rw [hagree j hj (hsub' hj)]; exact hpredw j hj
-    · have hjw : j ≠ w := by
-        intro h; subst h
-        have := hpredw j hj
-        rw [hblk] at this
-        omega
-      rw [Function.update_of_ne hjw, hagree j hj (hsub' hj)]
-      exact ⟨rfl, rfl⟩
-  obtain ⟨r, hr, hrn⟩ := Finset.not_subset.mp hns
-  have hrst : r ∈ st.ids := st.complete w hwst r (by rw [← hblk] at hr; exact hr)
-  have hrH : r ∈ historyFrom (gT cfg H tr) idh := by
-    rw [← hist_eq hinj hu hidh] at hw ⊢
-    have C := causal_store (cfg := cfg) (tr := tr) τ u
-    exact C.history_subset_of_reaches hidh ((C.mem_history_iff hidh).mp hw)
-      (C.mem_history_of_mem_refs hwst (by rw [hblk]; exact hr))
-  have hround : (raw r).round + 1 = (raw w).round := by
-    rw [hraw r]; exact hpredw r hr
-  by_cases hrp : r ∈ fin.pending.map Prod.fst
-  · obtain ⟨e, he, her⟩ := List.mem_map.mp hrp
-    have hke : e.2 = raw r := by
-      have h₁ := knownBefore_sub hv tr.length ((inv_before (cfg := cfg) tr.length v).pend e he)
-      have h₂ := stored_known (cfg := cfg) (tr := tr) hu hrst
-      rw [hraw]
-      exact content_eq hinj h₁ h₂ her
-    have hrp' : (r, raw r) ∈ fin.pending := by rw [← hke, ← her]; exact he
-    obtain ⟨len, x, hlen, hx0, hxH, hxc, hxl⟩ := ih (raw r).round (by omega) r hrH rfl hrp' hrn
-    refine ⟨len + 1, fun k => if k = 0 then w else x (k - 1), by omega, by simp, ?_, ?_, ?_⟩
-    · intro k hk
-      rcases k with _ | k
-      · exact ⟨hw, hws⟩
-      · simpa using hxH k (by omega)
-    · intro k hk
-      rcases k with _ | k
-      · simp only [if_true, if_neg (Nat.succ_ne_zero 0), Nat.add_sub_cancel, hx0]
-        exact ⟨hwp, hr, hround⟩
-      · simp only [if_neg (Nat.succ_ne_zero _), Nat.add_sub_cancel]
-        exact hxc k (by omega)
-    · simpa using hxl
-  · refine ⟨1, fun k => if k = 0 then w else r, Nat.one_pos, by simp, ?_, ?_, by simpa using hrp⟩
-    · intro k hk
-      rcases k with _ | k
-      · exact ⟨hw, hws⟩
-      · simp only [if_neg (Nat.succ_ne_zero _)]; exact ⟨hrH, hrn⟩
-    · intro k hk
-      rw [show k = 0 by omega]
-      simp only [if_true, if_neg (Nat.succ_ne_zero 0)]
-      exact ⟨hwp, hr, hround⟩
 
 end Histories
 

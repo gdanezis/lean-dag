@@ -4,17 +4,18 @@ import LeanDag.Node.Helpers.ReadsView
 /-!
 # One node at a time — the lemmas
 
-A successful build step adds one block at the round above the node's top,
-its own, identified by its hash, with accepted references, and valid
-under the disk's map (`tryBuild_some`); building, deciding and flushing
-change the parts of the state the claims read only so. Along any run the
-node's state meets `Inv`: what it holds and has pending it was given or
-made, its own blocks lie at strictly increasing rounds up to its top,
-each its own, identified by its hash and valid against what it knew, its
-disk is valid at the row, and its block at its top is on disk and one
-of its own blocks. A step persists the blocks it builds and broadcasts
-them, and broadcasts besides only its own blocks of earlier steps, which
-it resends (`Sent`). Across these the disk only gains blocks (`Grows`).
+A successful build step adds one block at the round above the node's
+top, its own, identified by its hash, with accepted references, and
+valid under the disk's map (`tryBuild_some`); building, deciding and
+accepting the syncs' blocks change the parts of the state the claims
+read only so. Along any run the node's state meets `Inv`: what it holds
+and its syncs' blocks it was given or made, its own blocks lie at
+strictly increasing rounds up to its top, each its own, identified by
+its hash and valid against what it knew, its disk is valid at the row,
+and its block at its top is on disk and one of its own blocks. A step
+persists the blocks it builds and broadcasts them, and broadcasts
+besides only its own blocks of earlier steps, which it resends (`Sent`).
+Across these the disk only gains blocks (`Grows`).
 -/
 
 namespace LeanDag
@@ -89,7 +90,7 @@ theorem buildAbove_some {s s' : State Validator BlockId Payload} {r : ℕ} {o : 
       b.round = r + 1 ∧ b.creator = cfg.me ∧ id = cfg.idOf b ∧ b.refs = refsAt cfg s.memory r o ∧
       rowValid cfg.q (Function.update s.disk.blk id b) b ∧
       s'.disk = s.disk.insert id b hnew hrefs hpred ∧ s'.top = some (r + 1) ∧
-      s'.own = some id ∧ s'.pending = s.pending ∧ s'.lo = s.lo ∧ out = built cfg [(id, b)] := by
+      s'.own = some id ∧ s'.syncs = s.syncs ∧ s'.lo = s.lo ∧ out = built cfg [(id, b)] := by
   unfold buildAbove at h
   dsimp only at h
   split at h
@@ -99,7 +100,7 @@ theorem buildAbove_some {s s' : State Validator BlockId Payload} {r : ℕ} {o : 
       obtain ⟨rfl, rfl⟩ := h
       have hd := s.mirrors.checks_disk hc.2
       exact ⟨_, _, hc.1, hd.1, hd.2.1, rfl, rfl, rfl, rfl, hd.2.2, release_disk _,
-        release_top _, release_own _, release_pending _, release_lo _, by simp [built]⟩
+        release_top _, release_own _, release_syncs _, release_lo _, by simp [built]⟩
     · exact absurd h (by simp)
   · exact absurd h (by simp)
 
@@ -113,7 +114,7 @@ theorem tryBuild_some {s s' : State Validator BlockId Payload}
       b.round = r + 1 ∧ b.creator = cfg.me ∧ id = cfg.idOf b ∧
       rowValid cfg.q (Function.update s.disk.blk id b) b ∧
       s'.disk = s.disk.insert id b hnew hrefs hpred ∧ s'.top = some (r + 1) ∧
-      s'.pending = s.pending ∧ s'.lo = s.lo ∧ out = built cfg [(id, b)] := by
+      s'.syncs = s.syncs ∧ s'.lo = s.lo ∧ out = built cfg [(id, b)] := by
   obtain ⟨t, r, o, ht, hb, hro⟩ := tryBuild_cases h
   obtain ⟨id, b, hnew, hrefs, hpred, hbr, hbc, hid, -, hrv, hst, htop, -, hpend, hlo, hout⟩ :=
     buildAbove_some hb
@@ -262,18 +263,6 @@ theorem Grows.foldl : ∀ (l : List (BlockId × Block Validator BlockId Payload)
   | e :: l, st => (Grows.accept st e.1 e.2).trans (Grows.foldl l _)
 
 omit [Fintype Validator] in
-theorem Grows.flush : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
-    (pend : List (BlockId × Block Validator BlockId Payload)),
-    Grows st (flushOn cfg fuel st pend).1
-  | 0, st, _ => Grows.refl st
-  | fuel + 1, st, pend => by
-    unfold flushOn
-    dsimp only
-    split
-    · exact Grows.refl st
-    · exact (Grows.foldl _ st).trans (Grows.flush fuel _ _)
-
-omit [Fintype Validator] in
 /-- The lowest round the node reads does not fall as its next undecided
 slot and its top rise. -/
 theorem floorOf_mono {s s' : State Validator BlockId Payload} (hlo : s.lo ≤ s'.lo)
@@ -309,7 +298,7 @@ structure Inv (cfg : Config Validator BlockId Payload) (s : State Validator Bloc
     (K : Set (BlockId × Block Validator BlockId Payload))
     (B : List (BlockId × Block Validator BlockId Payload)) : Prop where
   known : ∀ j ∈ s.disk.ids, (j, s.disk.blk j) ∈ K
-  pend : ∀ e ∈ s.pending, e ∈ K
+  pend : ∀ e ∈ s.syncs, e.2.1 ∈ K
   rounds : (s.top = none ∧ B = []) ∨ ∃ t, s.top = some t ∧ Rounds B t
   good : ∀ e ∈ B, Good cfg K e
   sub : ∀ e ∈ B, e ∈ K
@@ -491,12 +480,12 @@ theorem quiet_commits (ds : List (ℕ × Option BlockId)) :
   rfl
 
 omit [Fintype Validator] in
-/-- An invariant read only from the disk, the pending blocks, the top
-and the own block carries over to a state that keeps them. -/
+/-- An invariant read only from the disk, the syncs, the top and the own
+block carries over to a state that keeps them. -/
 theorem Inv.of_eq {s s' : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
     {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
-    (hst : s'.disk = s.disk) (hpd : s'.pending = s.pending) (htop : s'.top = s.top)
+    (hst : s'.disk = s.disk) (hpd : s'.syncs = s.syncs) (htop : s'.top = s.top)
     (hown : s'.own = s.own) (hfl : s'.floor = s.floor) (hlo : s.lo ≤ s'.lo) :
     Inv cfg s' K B :=
   ⟨by rw [hst]; exact hi.known, by rw [hpd]; exact hi.pend,
@@ -514,7 +503,7 @@ theorem Inv.release {s : State Validator BlockId Payload}
     simp only [floorOf, release_lo, release_top]
   refine ⟨?_, ?_, ?_, hi.good, hi.sub, ?_, ?_, ?_⟩
   · rw [release_disk]; exact hi.known
-  · rw [release_pending]; exact hi.pend
+  · rw [release_syncs]; exact hi.pend
   · rw [release_top]; exact hi.rounds
   · rw [release_disk]; exact hi.valid
   · rw [release_own, release_disk]; exact hi.own
@@ -559,52 +548,53 @@ theorem foldl_accept_known {K : Set (BlockId × Block Validator BlockId Payload)
     exact foldl_accept_known l h₁.1 h₁.2 fun x hx => hl x (List.mem_cons_of_mem _ hx)
 
 omit [Fintype Validator] in
-/-- **Flushing the pending blocks keeps store and pending known**, and the
-store valid. -/
-theorem flush_known {K : Set (BlockId × Block Validator BlockId Payload)} :
-    ∀ (fuel : ℕ) {st : Store Validator BlockId Payload}
-      {pend : List (BlockId × Block Validator BlockId Payload)},
-    (∀ j ∈ st.ids, (j, st.blk j) ∈ K) → StoreValid cfg.q st → (∀ e ∈ pend, e ∈ K) →
-    let r := flushOn cfg fuel st pend
-    (∀ j ∈ r.1.ids, (j, r.1.blk j) ∈ K) ∧ (∀ e ∈ r.2, e ∈ K) ∧ StoreValid cfg.q r.1
-  | 0, _, _, hK, hV, hp => ⟨hK, hp, hV⟩
-  | fuel + 1, st, pend, hK, hV, hp => by
-    unfold flushOn
-    dsimp only
-    split
-    · exact ⟨hK, hp, hV⟩
-    · have hsplit : ∀ e ∈ (pend.partition fun e => readyOn cfg st e).1 ++
-          (pend.partition fun e => readyOn cfg st e).2, e ∈ K := by
-        intro e he
-        rw [List.partition_eq_filter_filter] at he
-        rcases List.mem_append.mp he with he | he
-        · exact hp e (List.mem_filter.mp he).1
-        · exact hp e (List.mem_filter.mp he).1
-      have h₁ := foldl_accept_known (cfg := cfg) _ hK hV
-        fun e he => hsplit e (List.mem_append_left _ he)
-      exact flush_known fuel h₁.1 h₁.2 fun e he => hsplit e (List.mem_append_right _ he)
+/-- **Taking known blocks in keeps the invariant.** -/
+theorem Inv.absorb {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B)
+    {L : List (BlockId × Block Validator BlockId Payload)} (hL : ∀ e ∈ L, e ∈ K) :
+    Inv cfg (Node.absorb cfg s L) K B := by
+  have hfl := foldl_accept_known (cfg := cfg) L hi.known hi.valid hL
+  have hg := Grows.foldl (cfg := cfg) L s.disk
+  obtain ⟨h₁, h₂, h₃, h₄, -, h₆, -, -, -, -⟩ := absorb_rest (cfg := cfg) s L
+  refine ⟨?_, ?_, ?_, hi.good, hi.sub, ?_, ?_, ?_⟩
+  · rw [absorb_disk]; exact hfl.1
+  · rw [h₂]; exact hi.pend
+  · rw [h₃]; exact hi.rounds
+  · rw [absorb_disk]; exact hfl.2
+  · intro j hj
+    rw [h₄] at hj
+    rw [absorb_disk]
+    exact ⟨hg.1 (hi.own j hj).1, by rw [hg.blk (hi.own j hj).1]; exact (hi.own j hj).2⟩
+  · rw [h₁, show floorOf cfg (Node.absorb cfg s L) = floorOf cfg s by
+      simp only [floorOf, h₆, h₃]]
+    exact hi.floor
 
 omit [Fintype Validator] in
-/-- **A flush keeps the invariant.** -/
-theorem Inv.flushAll {s : State Validator BlockId Payload}
+/-- **Dropping syncs keeps the invariant.** -/
+theorem Inv.tidy {s : State Validator BlockId Payload}
     {K : Set (BlockId × Block Validator BlockId Payload)}
-    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) (fuel : ℕ) :
-    Inv cfg (flush cfg fuel s) K B := by
-  have hfl := flush_known (cfg := cfg) (K := K) fuel (st := s.disk) (pend := s.pending)
-    hi.known hi.valid hi.pend
-  have hg := Grows.flush (cfg := cfg) fuel s.disk s.pending
-  refine ⟨?_, ?_, ?_, hi.good, hi.sub, ?_, ?_, ?_⟩
-  · rw [flush_disk]; exact hfl.1
-  · rw [flush_pending]; exact hfl.2.1
-  · rw [flush_top]; exact hi.rounds
-  · rw [flush_disk]; exact hfl.2.2
-  · intro j hj
-    rw [flush_own] at hj
-    rw [flush_disk]
-    exact ⟨hg.1 (hi.own j hj).1, by rw [hg.blk (hi.own j hj).1]; exact (hi.own j hj).2⟩
-  · rw [flush_floor, show floorOf cfg (flush cfg fuel s) = floorOf cfg s by
-      simp only [floorOf, flush_lo, flush_top]]
-    exact hi.floor
+    {B : List (BlockId × Block Validator BlockId Payload)} (hi : Inv cfg s K B) :
+    Inv cfg (Node.tidy s) K B :=
+  ⟨hi.known, fun e he => hi.pend e (List.mem_of_mem_filter he), hi.rounds, hi.good, hi.sub,
+    hi.valid, hi.own, hi.floor⟩
+
+omit [Fintype Validator] in
+/-- **Accepting the syncs' blocks keeps the invariant.** -/
+theorem Inv.flushSyncs : ∀ (fuel : ℕ) {s : State Validator BlockId Payload}
+    {K : Set (BlockId × Block Validator BlockId Payload)}
+    {B : List (BlockId × Block Validator BlockId Payload)}, Inv cfg s K B →
+    Inv cfg (Node.flushSyncs cfg fuel s) K B
+  | 0, _, _, _, hi => hi
+  | fuel + 1, s, K, B, hi => by
+    unfold Node.flushSyncs
+    dsimp only
+    split
+    · exact hi
+    · refine Inv.flushSyncs fuel (hi.absorb fun e he => ?_).tidy
+      obtain ⟨x, hx, rfl⟩ := List.mem_map.mp he
+      rw [List.partition_eq_filter_filter] at hx
+      exact hi.pend x (List.mem_filter.mp hx).1
 
 omit [Fintype Validator] in
 /-- **Arming changes only the armed round.** -/
@@ -623,8 +613,8 @@ omit [Fintype Validator] in
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
 
 omit [Fintype Validator] in
-@[simp] theorem arm_pending (s : State Validator BlockId Payload) :
-    (Node.arm cfg s).1.pending = s.pending := by
+@[simp] theorem arm_syncs (s : State Validator BlockId Payload) :
+    (Node.arm cfg s).1.syncs = s.syncs := by
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) s; rw [ha]
 
 omit [Fintype Validator] in
@@ -680,8 +670,8 @@ theorem advance_disk (s : State Validator BlockId Payload) :
     (Node.advance cfg s).1.disk = (Node.pass cfg s).1.disk := arm_disk _
 
 omit [Fintype Validator] in
-theorem advance_pending (s : State Validator BlockId Payload) :
-    (Node.advance cfg s).1.pending = (Node.pass cfg s).1.pending := arm_pending _
+theorem advance_syncs (s : State Validator BlockId Payload) :
+    (Node.advance cfg s).1.syncs = (Node.pass cfg s).1.syncs := arm_syncs _
 
 omit [Fintype Validator] in
 theorem advance_top (s : State Validator BlockId Payload) :
@@ -747,8 +737,8 @@ theorem Inv.advance {s : State Validator BlockId Payload}
     ∃ bs, Out bs (advance cfg s).2 ∧ Inv cfg (advance cfg s).1 (K ∪ {x | x ∈ bs}) (B ++ bs) := by
   obtain ⟨bs, hbs, hi₁⟩ := hi.progress (s.disk.topRound + 2)
   obtain ⟨hds, hi₂⟩ := hi₁.decideStep
-  have hi₃ := hi₂.flushAll (fuel := ((Node.decideStep cfg
-    (Node.progress cfg (s.disk.topRound + 2) s).1).1.pending.length + 1))
+  have hi₃ := Inv.flushSyncs (cfg := cfg) ((Node.decideStep cfg
+    (Node.progress cfg (s.disk.topRound + 2) s).1).1.syncs.length + 1) hi₂
   obtain ⟨a, ha⟩ := arm_eq (cfg := cfg) (Node.pass cfg s).1
   refine ⟨bs, ?_, ?_⟩
   · simp only [Node.advance, Node.pass]
@@ -765,7 +755,7 @@ theorem passes_succ (s : State Validator BlockId Payload) : ∃ n, passes cfg s 
 omit [Fintype Validator] in
 theorem quiesce_succ (n : ℕ) (s : State Validator BlockId Payload) :
     quiesce cfg (n + 1) s =
-      if (advance cfg s).1.top = s.top ∧ (advance cfg s).1.pending.length = s.pending.length ∧
+      if (advance cfg s).1.top = s.top ∧ (advance cfg s).1.syncs.length = s.syncs.length ∧
           (advance cfg s).1.lo = s.lo then advance cfg s
       else ((quiesce cfg n (advance cfg s).1).1,
         (advance cfg s).2 ++ (quiesce cfg n (advance cfg s).1).2) := rfl
@@ -894,22 +884,19 @@ theorem step_timer_snd (s : State Validator BlockId Payload) (r : ℕ) :
   · exact Or.inl rfl
 
 omit [Fintype Validator] in
-/-- **Asking again is a request**: its outputs are fetches. -/
-theorem mem_refetch {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
-    (h : o ∈ Node.refetch s) : ∃ peer r ids, o = .fetch peer r ids := by
-  unfold Node.refetch at h
-  obtain ⟨e, -, he⟩ := List.mem_filterMap.mp h
-  dsimp only at he
-  split at he
-  · cases he
-  · rw [Option.some.injEq] at he; exact ⟨_, _, _, he.symm⟩
+/-- **Asking again is a request**: its outputs are requests. -/
+theorem mem_resync {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
+    (h : o ∈ Node.resync s) : ∃ peer t fr ids, o = .sync peer t fr ids := by
+  unfold Node.resync at h
+  obtain ⟨e, -, rfl⟩ := List.mem_map.mp h
+  exact ⟨_, _, _, _, rfl⟩
 
 omit [Fintype Validator] in
-/-- **Resending outputs, besides fetches, the top block and the retry
+/-- **Resending outputs, besides requests, the top block and the retry
 timer.** -/
 theorem mem_resend {s : State Validator BlockId Payload} {o : Output Validator BlockId Payload}
     (h : o ∈ Node.resend cfg s) :
-    (∃ peer r ids, o = .fetch peer r ids) ∨ ∃ r j, s.top = some r ∧ s.own = some j ∧
+    (∃ peer t fr ids, o = .sync peer t fr ids) ∨ ∃ r j, s.top = some r ∧ s.own = some j ∧
       (o = .broadcast j (s.disk.blk j) ∨ o = .setTimer (r - 1) (2 * cfg.timeout (r - 1))) := by
   unfold Node.resend at h
   rcases List.mem_append.mp h with h | h
@@ -918,7 +905,7 @@ theorem mem_resend {s : State Validator BlockId Payload} {o : Output Validator B
       simp only [List.mem_cons, List.not_mem_nil, or_false] at h
       exact Or.inr ⟨r, j, ht, ho, h⟩
     · exact absurd h List.not_mem_nil
-  · exact Or.inl (mem_refetch h)
+  · exact Or.inl (mem_resync h)
 
 omit [Fintype Validator] in
 /-- **Setting the top round's timer again** sets it, if it was set. -/
@@ -977,14 +964,14 @@ omit [Fintype Validator] in
 theorem commitsOf_resend (s : State Validator BlockId Payload) :
     commitsOf (Node.resend cfg s) = [] :=
   List.filterMap_eq_nil_iff.mpr fun o ho => by
-    rcases mem_resend ho with ⟨_, _, _, rfl⟩ | ⟨_, _, -, -, rfl | rfl⟩ <;> rfl
+    rcases mem_resend ho with ⟨_, _, _, _, rfl⟩ | ⟨_, _, -, -, rfl | rfl⟩ <;> rfl
 
 omit [Fintype Validator] in
 /-- Resending persists no block. -/
 theorem persists_resend (s : State Validator BlockId Payload) :
     persists (Node.resend cfg s) = [] :=
   List.filterMap_eq_nil_iff.mpr fun o ho => by
-    rcases mem_resend ho with ⟨_, _, _, rfl⟩ | ⟨_, _, -, -, rfl | rfl⟩ <;> rfl
+    rcases mem_resend ho with ⟨_, _, _, _, rfl⟩ | ⟨_, _, -, -, rfl | rfl⟩ <;> rfl
 
 /-- A timer step persists what its settle persists. -/
 theorem persists_step_timer (s : State Validator BlockId Payload) (r : ℕ) :
@@ -1028,7 +1015,7 @@ its timeout. -/
 theorem mem_resend_setTimer {s : State Validator BlockId Payload} {r a : ℕ}
     (h : Output.setTimer r a ∈ Node.resend cfg s) :
     ∃ t, s.top = some t ∧ r = t - 1 ∧ a = 2 * cfg.timeout r := by
-  rcases mem_resend h with ⟨_, _, _, h⟩ | ⟨t, j, ht, -, h | h⟩
+  rcases mem_resend h with ⟨_, _, _, _, h⟩ | ⟨t, j, ht, -, h | h⟩
   · cases h
   · cases h
   · rw [Output.setTimer.injEq] at h
@@ -1047,7 +1034,7 @@ theorem Sent.resend {s : State Validator BlockId Payload}
       ∀ e ∈ broadcasts (Node.resend cfg s), e ∈ B ++ bs := by
     refine ⟨persists_resend s, fun e he => ?_⟩
     obtain ⟨o, ho, he⟩ := List.mem_filterMap.mp he
-    rcases mem_resend ho with ⟨_, _, _, rfl⟩ | ⟨r, j, -, hj, rfl | rfl⟩
+    rcases mem_resend ho with ⟨_, _, _, _, rfl⟩ | ⟨r, j, -, hj, rfl | rfl⟩
     · cases he
     · simp only [Option.some.injEq] at he
       subst he
@@ -1121,27 +1108,67 @@ theorem Inv.step {s : State Validator BlockId Payload}
           tauto
       · exact hnil'
     · exact hnil'
-  | deliver id b =>
+  | deliver u id b =>
     simp only [Node.step]
     split
     · rename_i hc
-      have hd : delivered cfg [Input.deliver id b] = [(id, b)] := by simp [delivered, hc.1]
+      have hd : delivered cfg [Input.deliver u id b] = [(id, b)] := by simp [delivered, hc.1]
       have hmem : (id, b) ∈ K' := Or.inr (by rw [hd]; exact List.mem_singleton_self _)
-      have hi₁ : Inv cfg { s with pending := (id, b) :: s.pending } K' B :=
-        ⟨fun j hj => hsub (hi.known j hj), fun x hx => by
-          rcases List.mem_cons.mp hx with rfl | hx
-          · exact hmem
-          · exact hsub (hi.pend x hx), hi.rounds, fun x hx => (hi.good x hx).mono hsub,
-          fun x hx => hsub (hi.sub x hx), hi.valid, hi.own, hi.floor⟩
-      have hi₀ := hi₁.flushAll (s.pending.length + 1)
-      generalize missing
-        (flush cfg (s.pending.length + 1) { s with pending := (id, b) :: s.pending }) b = miss
-      refine Exists.imp (fun bs h => ⟨Sent.of_out h.1, h.2⟩)
-        (hi₀.settle_of subset_rfl _ fun o ho => ?_)
-      split at ho
-      · simp at ho
-      · rw [List.mem_singleton] at ho; subst ho; rfl
+      have hiK := hi.mono hsub
+      split
+      · exact Exists.imp (fun bs h => ⟨Sent.of_out h.1, h.2⟩)
+          ((hiK.absorb (L := [(id, b)]) fun x hx => by
+            rw [List.mem_singleton] at hx; subst hx; exact hmem).tidy.settle_of subset_rfl []
+            (by simp))
+      · split
+        · have hi₁ : Inv cfg { s with syncs := (u, (id, b), ([] : List BlockId)) ::
+              (s.syncs.filter fun e => decide (e.1 ≠ u)) } K' B :=
+            ⟨hiK.known, fun x hx => by
+              rcases List.mem_cons.mp hx with rfl | hx
+              · exact hmem
+              · exact hiK.pend x (List.mem_of_mem_filter hx), hiK.rounds, hiK.good, hiK.sub,
+              hiK.valid, hiK.own, hiK.floor⟩
+          refine Exists.imp (fun bs h => ⟨Sent.of_out h.1, h.2⟩)
+            (hi₁.settle_of subset_rfl [_] ?_)
+          intro o ho
+          rw [List.mem_singleton] at ho; subst ho; rfl
+        · exact hnil'
     · exact hnil'
+  | stream u L =>
+    simp only [Node.step]
+    have hiK := hi.mono hsub
+    split
+    · exact hnil'
+    · rename_i e he
+      have hL : ∀ x ∈ inHistory cfg e.2.1 L, x ∈ K' := fun x hx => by
+        unfold inHistory at hx
+        have hx' := (List.mem_mergeSort.mp hx)
+        obtain ⟨hxL, hxp⟩ := List.mem_filter.mp hx'
+        simp only [Bool.and_eq_true, decide_eq_true_eq] at hxp
+        exact Or.inr (by simp [delivered, List.mem_filter, hxL, hxp.1.1])
+      have hi₁ := (hiK.absorb hL).tidy
+      split
+      · exact Exists.imp (fun bs h => ⟨Sent.of_out h.1, h.2⟩)
+          (hi₁.settle_of subset_rfl [] (by simp))
+      · rename_i e₁ he₁
+        have he₁K : e₁.2.1 ∈ K' := hi₁.pend e₁ (List.mem_of_find?_eq_some he₁)
+        have hi₂ : Inv cfg { Node.tidy (Node.absorb cfg s (inHistory cfg e.2.1 L)) with
+            syncs := (Node.tidy (Node.absorb cfg s (inHistory cfg e.2.1 L))).syncs.map fun x =>
+              if x.1 = u then (u, e₁.2.1, (e₁.2.2 ++ missingIn
+                (Node.tidy (Node.absorb cfg s (inHistory cfg e.2.1 L)))
+                (e₁.2.1 :: inHistory cfg e.2.1 L)).dedup) else x } K' B := by
+          refine ⟨hi₁.known, fun x hx => ?_, hi₁.rounds, hi₁.good, hi₁.sub, hi₁.valid, hi₁.own,
+            hi₁.floor⟩
+          obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
+          split
+          · exact he₁K
+          · exact hi₁.pend y hy
+        refine Exists.imp (fun bs h => ⟨Sent.of_out h.1, h.2⟩)
+          (hi₂.settle_of subset_rfl _ ?_)
+        intro o ho
+        split at ho
+        · rw [List.mem_singleton] at ho; subst ho; rfl
+        · exact absurd ho List.not_mem_nil
   | timer r =>
     simp only [Node.step]
     obtain ⟨bs, ho, hi'⟩ :=
@@ -1150,11 +1177,12 @@ theorem Inv.step {s : State Validator BlockId Payload}
     split
     · exact ⟨bs, (Sent.of_out ho).resend hi', hi'⟩
     · exact ⟨bs, Sent.of_out ho, hi'⟩
-  | fetchRequest peer r ids =>
+  | syncRequest peer t fr ids =>
     simp only [Node.step]
     refine hnil _ fun o ho => ?_
-    obtain ⟨j, -, rfl⟩ := List.mem_map.mp ho
-    rfl
+    split at ho
+    · exact absurd ho List.not_mem_nil
+    · rw [List.mem_singleton] at ho; subst ho; rfl
   | restart =>
     simp only [Node.step]
     have h := (Sent.of_out (B := B) (bs := []) (out := []) ⟨rfl, rfl⟩).resend (cfg := cfg)
@@ -1172,11 +1200,14 @@ theorem id_of_delivered {is : List (Input Validator BlockId Payload)}
     x.1 = cfg.idOf x.2 := by
   obtain ⟨i, -, hx⟩ := List.mem_flatMap.mp hx
   cases i with
-  | deliver id b =>
+  | deliver u id b =>
     simp only at hx
     split at hx
     · rename_i h; rw [List.mem_singleton] at hx; subst hx; exact h
     · exact absurd hx List.not_mem_nil
+  | stream u L =>
+    simp only at hx
+    exact of_decide_eq_true (List.mem_filter.mp hx).2
   | _ => exact absurd hx List.not_mem_nil
 
 omit [Fintype Validator] in

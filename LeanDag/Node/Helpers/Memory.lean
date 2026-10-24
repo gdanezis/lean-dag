@@ -5,11 +5,12 @@ import LeanDag.Node.Helpers.ReadsView
 
 What the node accepts is what the disk alone would accept: a block is
 ready in the state exactly when it is ready on the disk (`ready_eq`), and
-accepting and flushing change the disk as `acceptOn` and `flushOn` change
-it read alone (`accept_disk`, `flush_disk`, `flush_pending`), and leave
-the rest of the state but the memory (`accept_top`, `flush_top`, …).
-Keeping a block inserts it on disk (`keep_disk`), and releasing the
-memory changes nothing else (`release_disk`, …).
+accepting a block, a stream piece and the syncs' blocks change the disk
+as `acceptOn` changes it read alone (`accept_disk`, `absorb_disk`,
+`flushSyncs_eq`), and leave the rest of the state but the memory, the
+detected authors and the syncs (`accept_rest`, `absorb_rest`). Keeping a
+block inserts it on disk (`keep_disk`), and releasing the memory changes
+nothing else (`release_disk`, …).
 -/
 
 namespace LeanDag
@@ -31,17 +32,6 @@ ready. -/
 def acceptOn (st : Store Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : Store Validator BlockId Payload :=
   if h : id ∉ st.ids ∧ st.Checks cfg.q id b then st.insert id b h.1 h.2.1 h.2.2.1 else st
-
-/-- **Flush on the store `st`**: accept what the pending blocks allow, in
-passes, at most `fuel`. -/
-def flushOn : ℕ → Store Validator BlockId Payload →
-    List (BlockId × Block Validator BlockId Payload) →
-    Store Validator BlockId Payload × List (BlockId × Block Validator BlockId Payload)
-  | 0, s, pend => (s, pend)
-  | fuel + 1, s, pend =>
-    let split := pend.partition fun e => readyOn cfg s e
-    if split.1.isEmpty then (s, pend)
-    else flushOn fuel (split.1.foldl (fun s e => acceptOn cfg s e.1 e.2) s) split.2
 
 variable {cfg}
 
@@ -74,18 +64,25 @@ theorem accept_disk : (accept cfg s id b).disk = acceptOn cfg s.disk id b := by
   by_cases h : id ∉ s.disk.ids ∧ s.disk.Checks cfg.q id b
   · rw [dif_pos (show id ∉ s.disk.ids ∧ (Store.pick s.memory s.disk s.floor b.round).Checks
       cfg.q id b from ⟨h.1, s.mirrors.checks_pick.mpr h.2⟩), dif_pos h]
-    rfl
+    split <;> rfl
   · rw [dif_neg (fun h' => h ⟨h'.1, s.mirrors.checks_pick.mp h'.2⟩), dif_neg h]
 
 omit [Fintype Validator] in
-/-- **Accepting a block changes only the disk and the memory.** -/
+/-- **Accepting a block changes only the disk, the memory and the
+detected authors**, which only grow. -/
 theorem accept_rest :
-    (accept cfg s id b).floor = s.floor ∧ (accept cfg s id b).pending = s.pending ∧
+    (accept cfg s id b).floor = s.floor ∧ (accept cfg s id b).syncs = s.syncs ∧
     (accept cfg s id b).top = s.top ∧ (accept cfg s id b).own = s.own ∧
     (accept cfg s id b).fired = s.fired ∧ (accept cfg s id b).lo = s.lo ∧
-    (accept cfg s id b).decided = s.decided ∧ (accept cfg s id b).armed = s.armed := by
+    (accept cfg s id b).decided = s.decided ∧ (accept cfg s id b).armed = s.armed ∧
+    (accept cfg s id b).recovering = s.recovering ∧
+    s.detected ⊆ (accept cfg s id b).detected := by
   unfold accept
-  split <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  split
+  · split
+    · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, Finset.subset_insert _ _⟩
+    · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, subset_rfl⟩
+  · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, subset_rfl⟩
 
 end Accept
 
@@ -95,109 +92,134 @@ theorem foldl_accept (l : List (BlockId × Block Validator BlockId Payload)) :
       (l.foldl (fun s e => accept cfg s e.1 e.2) s).disk =
         l.foldl (fun st e => acceptOn cfg st e.1 e.2) s.disk ∧
       (l.foldl (fun s e => accept cfg s e.1 e.2) s).floor = s.floor ∧
-      (l.foldl (fun s e => accept cfg s e.1 e.2) s).pending = s.pending ∧
+      (l.foldl (fun s e => accept cfg s e.1 e.2) s).syncs = s.syncs ∧
       (l.foldl (fun s e => accept cfg s e.1 e.2) s).top = s.top ∧
       (l.foldl (fun s e => accept cfg s e.1 e.2) s).own = s.own ∧
       (l.foldl (fun s e => accept cfg s e.1 e.2) s).fired = s.fired ∧
       (l.foldl (fun s e => accept cfg s e.1 e.2) s).lo = s.lo ∧
       (l.foldl (fun s e => accept cfg s e.1 e.2) s).decided = s.decided ∧
-      (l.foldl (fun s e => accept cfg s e.1 e.2) s).armed = s.armed := by
+      (l.foldl (fun s e => accept cfg s e.1 e.2) s).armed = s.armed ∧
+      (l.foldl (fun s e => accept cfg s e.1 e.2) s).recovering = s.recovering ∧
+      s.detected ⊆ (l.foldl (fun s e => accept cfg s e.1 e.2) s).detected := by
   induction l with
-  | nil => intro s; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  | nil => intro s; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, subset_rfl⟩
   | cons e l ih =>
     intro s
-    obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉⟩ := ih (accept cfg s e.1 e.2)
-    obtain ⟨a₂, a₃, a₄, a₅, a₆, a₇, a₈, a₉⟩ := accept_rest (cfg := cfg) s e.1 e.2
+    obtain ⟨h₁, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀, h₁₁⟩ := ih (accept cfg s e.1 e.2)
+    obtain ⟨a₂, a₃, a₄, a₅, a₆, a₇, a₈, a₉, a₁₀, a₁₁⟩ := accept_rest (cfg := cfg) s e.1 e.2
     simp only [List.foldl_cons]
     exact ⟨h₁.trans (by rw [accept_disk]), h₂.trans a₂, h₃.trans a₃, h₄.trans a₄, h₅.trans a₅,
-      h₆.trans a₆, h₇.trans a₇, h₈.trans a₈, h₉.trans a₉⟩
+      h₆.trans a₆, h₇.trans a₇, h₈.trans a₈, h₉.trans a₉, h₁₀.trans a₁₀, a₁₁.trans h₁₁⟩
+
+section Absorb
+
+variable (s : State Validator BlockId Payload)
+variable (L : List (BlockId × Block Validator BlockId Payload))
 
 omit [Fintype Validator] in
-/-- **A flush changes the disk and the pending blocks as a flush on the
-disk alone, and nothing else but the memory.** -/
-theorem flush_eq : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
-    (flush cfg fuel s).disk = (flushOn cfg fuel s.disk s.pending).1 ∧
-    (flush cfg fuel s).pending = (flushOn cfg fuel s.disk s.pending).2 ∧
-    (flush cfg fuel s).floor = s.floor ∧ (flush cfg fuel s).top = s.top ∧
-    (flush cfg fuel s).own = s.own ∧ (flush cfg fuel s).fired = s.fired ∧
-    (flush cfg fuel s).lo = s.lo ∧ (flush cfg fuel s).decided = s.decided ∧
-    (flush cfg fuel s).armed = s.armed
-  | 0, s => ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
-  | fuel + 1, s => by
-    have hr : (fun e => ready cfg s e) = fun e => readyOn cfg s.disk e := funext (ready_eq s)
-    unfold flush flushOn
-    dsimp only
-    rw [hr]
-    split
-    · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
-    · set l := (s.pending.partition fun e => readyOn cfg s.disk e).1
-      obtain ⟨h₁, h₂, -, h₄, h₅, h₆, h₇, h₈, h₉⟩ := foldl_accept (cfg := cfg) l s
-      obtain ⟨k₁, k₂, k₃, k₄, k₅, k₆, k₇, k₈, k₉⟩ := flush_eq fuel
-        { l.foldl (fun s e => accept cfg s e.1 e.2) s with
-          pending := (s.pending.partition fun e => readyOn cfg s.disk e).2 }
-      refine ⟨k₁.trans (by rw [← h₁]), k₂.trans (by rw [← h₁]), k₃.trans h₂, k₄.trans h₄,
-        k₅.trans h₅, k₆.trans h₆, k₇.trans h₇, k₈.trans h₈, k₉.trans h₉⟩
+/-- **Taking a stream piece in changes the disk as accepting its blocks on
+the disk alone.** -/
+@[simp] theorem absorb_disk :
+    (absorb cfg s L).disk = L.foldl (fun st e => acceptOn cfg st e.1 e.2) s.disk :=
+  (foldl_accept L s).1
 
-section Flush
+omit [Fintype Validator] in
+/-- **Taking a stream piece in changes only the disk, the memory and the
+detected authors.** -/
+theorem absorb_rest :
+    (absorb cfg s L).floor = s.floor ∧ (absorb cfg s L).syncs = s.syncs ∧
+    (absorb cfg s L).top = s.top ∧ (absorb cfg s L).own = s.own ∧
+    (absorb cfg s L).fired = s.fired ∧ (absorb cfg s L).lo = s.lo ∧
+    (absorb cfg s L).decided = s.decided ∧ (absorb cfg s L).armed = s.armed ∧
+    (absorb cfg s L).recovering = s.recovering ∧ s.detected ⊆ (absorb cfg s L).detected :=
+  (foldl_accept L s).2
+
+omit [Fintype Validator] in
+/-- **Dropping the syncs done changes only the syncs, to a part of them.** -/
+theorem tidy_eq :
+    (tidy s).disk = s.disk ∧ (tidy s).floor = s.floor ∧ (tidy s).top = s.top ∧
+    (tidy s).own = s.own ∧ (tidy s).fired = s.fired ∧ (tidy s).lo = s.lo ∧
+    (tidy s).decided = s.decided ∧ (tidy s).armed = s.armed ∧
+    (tidy s).recovering = s.recovering ∧ (tidy s).detected = s.detected ∧
+    (tidy s).syncs ⊆ s.syncs :=
+  ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, List.filter_subset_self _⟩
+
+omit [Fintype Validator] in
+/-- **Accepting the syncs' blocks changes the disk as accepting some of
+them on the disk alone, and only the disk, the memory, the detected
+authors and the syncs, to a part of them.** -/
+theorem flushSyncs_eq : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
+    (∃ L : List (BlockId × Block Validator BlockId Payload), (∀ e ∈ L, e ∈ s.syncs.map (·.2.1)) ∧
+      (flushSyncs cfg fuel s).disk = L.foldl (fun st e => acceptOn cfg st e.1 e.2) s.disk) ∧
+    (flushSyncs cfg fuel s).floor = s.floor ∧ (flushSyncs cfg fuel s).syncs ⊆ s.syncs ∧
+    (flushSyncs cfg fuel s).top = s.top ∧ (flushSyncs cfg fuel s).own = s.own ∧
+    (flushSyncs cfg fuel s).fired = s.fired ∧ (flushSyncs cfg fuel s).lo = s.lo ∧
+    (flushSyncs cfg fuel s).decided = s.decided ∧ (flushSyncs cfg fuel s).armed = s.armed ∧
+    (flushSyncs cfg fuel s).recovering = s.recovering ∧
+    s.detected ⊆ (flushSyncs cfg fuel s).detected
+  | 0, s => ⟨⟨[], fun _ h => absurd h List.not_mem_nil, rfl⟩, rfl, List.Subset.refl _, rfl, rfl,
+      rfl, rfl, rfl, rfl, rfl, subset_rfl⟩
+  | fuel + 1, s => by
+    unfold flushSyncs
+    dsimp only
+    split
+    · exact ⟨⟨[], fun _ h => absurd h List.not_mem_nil, rfl⟩, rfl, List.Subset.refl _, rfl, rfl,
+        rfl, rfl, rfl, rfl, rfl, subset_rfl⟩
+    · set l := ((s.syncs.partition fun e => ready cfg s e.2.1).1.map (·.2.1))
+      have hl : ∀ e ∈ l, e ∈ s.syncs.map (·.2.1) := by
+        intro e he
+        obtain ⟨x, hx, rfl⟩ := List.mem_map.mp he
+        rw [List.partition_eq_filter_filter] at hx
+        exact List.mem_map_of_mem (List.mem_filter.mp hx).1
+      obtain ⟨⟨L, hL, hd⟩, h₂, h₃, h₄, h₅, h₆, h₇, h₈, h₉, h₁₀, h₁₁⟩ :=
+        flushSyncs_eq fuel (tidy (absorb cfg s l))
+      obtain ⟨a₂, a₃, a₄, a₅, a₆, a₇, a₈, a₉, a₁₀, a₁₁⟩ := absorb_rest (cfg := cfg) s l
+      have ht := tidy_eq (absorb cfg s l)
+      refine ⟨⟨l ++ L, fun e he => ?_, ?_⟩, h₂.trans a₂, fun x hx => ?_, h₄.trans a₄,
+        h₅.trans a₅, h₆.trans a₆, h₇.trans a₇, h₈.trans a₈, h₉.trans a₉, h₁₀.trans a₁₀,
+        a₁₁.trans h₁₁⟩
+      · rcases List.mem_append.mp he with he | he
+        · exact hl e he
+        · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp (hL e he)
+          have := ht.2.2.2.2.2.2.2.2.2.2 hx
+          rw [a₃] at this
+          exact List.mem_map_of_mem this
+      · rw [hd, List.foldl_append, ht.1, absorb_disk]
+      · have := ht.2.2.2.2.2.2.2.2.2.2 (h₃ hx)
+        rwa [a₃] at this
+
+section FlushSyncs
 
 variable (fuel : ℕ) (s : State Validator BlockId Payload)
 
 omit [Fintype Validator] in
-@[simp] theorem flush_disk : (flush cfg fuel s).disk = (flushOn cfg fuel s.disk s.pending).1 :=
-  (flush_eq fuel s).1
-
+@[simp] theorem flushSyncs_floor : (flushSyncs cfg fuel s).floor = s.floor :=
+  (flushSyncs_eq fuel s).2.1
 omit [Fintype Validator] in
-@[simp] theorem flush_pending :
-    (flush cfg fuel s).pending = (flushOn cfg fuel s.disk s.pending).2 :=
-  (flush_eq fuel s).2.1
-
+@[simp] theorem flushSyncs_top : (flushSyncs cfg fuel s).top = s.top :=
+  (flushSyncs_eq fuel s).2.2.2.1
 omit [Fintype Validator] in
-@[simp] theorem flush_floor : (flush cfg fuel s).floor = s.floor := (flush_eq fuel s).2.2.1
-
+@[simp] theorem flushSyncs_own : (flushSyncs cfg fuel s).own = s.own :=
+  (flushSyncs_eq fuel s).2.2.2.2.1
 omit [Fintype Validator] in
-@[simp] theorem flush_top : (flush cfg fuel s).top = s.top := (flush_eq fuel s).2.2.2.1
-
+@[simp] theorem flushSyncs_fired : (flushSyncs cfg fuel s).fired = s.fired :=
+  (flushSyncs_eq fuel s).2.2.2.2.2.1
 omit [Fintype Validator] in
-@[simp] theorem flush_own : (flush cfg fuel s).own = s.own := (flush_eq fuel s).2.2.2.2.1
-
+@[simp] theorem flushSyncs_lo : (flushSyncs cfg fuel s).lo = s.lo :=
+  (flushSyncs_eq fuel s).2.2.2.2.2.2.1
 omit [Fintype Validator] in
-@[simp] theorem flush_fired : (flush cfg fuel s).fired = s.fired := (flush_eq fuel s).2.2.2.2.2.1
-
+@[simp] theorem flushSyncs_decided : (flushSyncs cfg fuel s).decided = s.decided :=
+  (flushSyncs_eq fuel s).2.2.2.2.2.2.2.1
 omit [Fintype Validator] in
-@[simp] theorem flush_lo : (flush cfg fuel s).lo = s.lo := (flush_eq fuel s).2.2.2.2.2.2.1
-
+@[simp] theorem flushSyncs_armed : (flushSyncs cfg fuel s).armed = s.armed :=
+  (flushSyncs_eq fuel s).2.2.2.2.2.2.2.2.1
 omit [Fintype Validator] in
-@[simp] theorem flush_decided : (flush cfg fuel s).decided = s.decided :=
-  (flush_eq fuel s).2.2.2.2.2.2.2.1
+@[simp] theorem flushSyncs_recovering : (flushSyncs cfg fuel s).recovering = s.recovering :=
+  (flushSyncs_eq fuel s).2.2.2.2.2.2.2.2.2.1
 
-omit [Fintype Validator] in
-@[simp] theorem flush_armed : (flush cfg fuel s).armed = s.armed :=
-  (flush_eq fuel s).2.2.2.2.2.2.2.2
+end FlushSyncs
 
-omit [Fintype Validator] in
-theorem foldl_accept_recovering (l : List (BlockId × Block Validator BlockId Payload)) :
-    ∀ s : State Validator BlockId Payload,
-      (l.foldl (fun s e => accept cfg s e.1 e.2) s).recovering = s.recovering := by
-  induction l with
-  | nil => intro s; rfl
-  | cons e l ih =>
-    intro s
-    rw [List.foldl_cons, ih]
-    unfold accept
-    split <;> rfl
-
-omit [Fintype Validator] in
-@[simp] theorem flush_recovering : (flush cfg fuel s).recovering = s.recovering := by
-  induction fuel generalizing s with
-  | zero => rfl
-  | succ fuel ih =>
-    unfold flush
-    dsimp only
-    split
-    · rfl
-    · rw [ih]; exact foldl_accept_recovering _ s
-
-end Flush
+end Absorb
 
 section Release
 
@@ -205,17 +227,18 @@ variable (s : State Validator BlockId Payload)
 
 omit [Fintype Validator] in
 /-- **Releasing the memory changes nothing else.** -/
-theorem release_eq : (release cfg s).disk = s.disk ∧ (release cfg s).pending = s.pending ∧
+theorem release_eq : (release cfg s).disk = s.disk ∧ (release cfg s).syncs = s.syncs ∧
     (release cfg s).top = s.top ∧ (release cfg s).own = s.own ∧
     (release cfg s).fired = s.fired ∧ (release cfg s).lo = s.lo ∧
-    (release cfg s).decided = s.decided ∧ (release cfg s).armed = s.armed := by
+    (release cfg s).decided = s.decided ∧ (release cfg s).armed = s.armed ∧
+    (release cfg s).detected = s.detected := by
   unfold release
-  split <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  split <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 omit [Fintype Validator] in
 @[simp] theorem release_disk : (release cfg s).disk = s.disk := (release_eq s).1
 omit [Fintype Validator] in
-@[simp] theorem release_pending : (release cfg s).pending = s.pending := (release_eq s).2.1
+@[simp] theorem release_syncs : (release cfg s).syncs = s.syncs := (release_eq s).2.1
 omit [Fintype Validator] in
 @[simp] theorem release_top : (release cfg s).top = s.top := (release_eq s).2.2.1
 omit [Fintype Validator] in
@@ -228,7 +251,10 @@ omit [Fintype Validator] in
 @[simp] theorem release_decided : (release cfg s).decided = s.decided :=
   (release_eq s).2.2.2.2.2.2.1
 omit [Fintype Validator] in
-@[simp] theorem release_armed : (release cfg s).armed = s.armed := (release_eq s).2.2.2.2.2.2.2
+@[simp] theorem release_armed : (release cfg s).armed = s.armed := (release_eq s).2.2.2.2.2.2.2.1
+omit [Fintype Validator] in
+@[simp] theorem release_detected : (release cfg s).detected = s.detected :=
+  (release_eq s).2.2.2.2.2.2.2.2
 omit [Fintype Validator] in
 @[simp] theorem release_recovering : (release cfg s).recovering = s.recovering := by
   unfold release; split <;> rfl

@@ -28,12 +28,16 @@ theorem step_settles {s : State Validator BlockId Payload} {inp : Input Validato
       · exact Or.inr ⟨_, rfl⟩
       · exact Or.inl rfl
     · exact Or.inl rfl
-  | deliver id b =>
-    by_cases hA : Admits cfg s id b
-    · rw [step_deliver hA]; exact Or.inr ⟨_, rfl⟩
-    · rw [step_deliver_not hA]; exact Or.inl rfl
+  | deliver u id b =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with he | ⟨s₁, pre, -, -, he⟩
+    · rw [he]; exact Or.inl rfl
+    · rw [he]; exact Or.inr ⟨_, rfl⟩
+  | stream u L =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, -, -, he⟩
+    · rw [he]; exact Or.inl rfl
+    · rw [he]; exact Or.inr ⟨_, rfl⟩
   | timer r => rw [step_timer_fst]; exact Or.inr ⟨_, rfl⟩
-  | fetchRequest p r ids => exact Or.inl rfl
+  | syncRequest p t fr ids => exact Or.inl rfl
   | restart => exact Or.inr ⟨_, rfl⟩
 
 /-! ## What only rises -/
@@ -69,9 +73,9 @@ theorem rises_advance (s : State Validator BlockId Payload) : Rises s (Node.adva
   obtain ⟨-, -, hdtop, hdlo, -⟩ := decideStep_bound (cfg := cfg)
     (Node.progress cfg (s.disk.topRound + 2) s).1
   refine h₁.trans ⟨?_, ?_, ?_⟩
-  · simp only [Node.advance, Node.pass, arm_top, flush_top]; rw [hdtop]
-  · simp only [Node.advance, Node.pass, arm_top, flush_top]; rw [hdtop]; exact id
-  · simp only [Node.advance, Node.pass, arm_lo, flush_lo]; exact hdlo
+  · simp only [Node.advance, Node.pass, arm_top, flushSyncs_top]; rw [hdtop]
+  · simp only [Node.advance, Node.pass, arm_top, flushSyncs_top]; rw [hdtop]; exact id
+  · simp only [Node.advance, Node.pass, arm_lo, flushSyncs_lo]; exact hdlo
 
 theorem rises_quiesce (n : ℕ) (s : State Validator BlockId Payload) :
     Rises s (quiesce cfg n s).1 :=
@@ -110,16 +114,23 @@ theorem rises_step {s : State Validator BlockId Payload} {inp : Input Validator 
         exact Rises.refl s
     · rw [show (Node.step cfg s .start).1 = s by simp only [Node.step, if_neg h₁]]
       exact Rises.refl s
-  | deliver id b =>
-    by_cases hA : Admits cfg s id b
-    · refine hset _ ?_ (by rw [step_deliver hA])
-      simp only [Rises, afterFlush_top, afterFlush_lo]
+  | deliver u id b =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
+      he | ⟨s₁, pre, hr, -, he⟩
+    · rw [he]; exact Rises.refl s
+    · refine hset s₁ ?_ (by rw [he])
+      simp only [Rises, hr.top, hr.lo]
       exact ⟨le_rfl, fun h => h, le_rfl⟩
-    · rw [step_deliver_not hA]; exact Rises.refl s
+  | stream u L =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, -, he⟩
+    · rw [he]; exact Rises.refl s
+    · refine hset s₁ ?_ (by rw [he])
+      simp only [Rises, hr.top, hr.lo]
+      exact ⟨le_rfl, fun h => h, le_rfl⟩
   | timer r =>
     exact hset { s with fired := fire s r, recovering := false } ⟨le_rfl, id, le_rfl⟩
       (step_timer_fst s r)
-  | fetchRequest p r ids => exact Rises.refl s
+  | syncRequest p t fr ids => exact Rises.refl s
   | restart => exact hset { s with recovering := true } ⟨le_rfl, id, le_rfl⟩ rfl
 
 /-! ## Along a trace -/

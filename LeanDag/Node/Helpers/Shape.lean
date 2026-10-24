@@ -201,16 +201,16 @@ theorem advance_shape (s : State Validator BlockId Payload) :
   generalize hP : Node.progress cfg (s.disk.topRound + 2) s = P at p₂ p₀ p₃ p₄ p₅ p₆ p₇ hbs
   obtain ⟨d₂, d₃, -, d₅⟩ := decideStep_shape (cfg := cfg) P.1
   generalize hD : Node.decideStep cfg P.1 = D at d₂ d₃ d₅
-  have hadv : Node.pass cfg s = (flush cfg (D.1.pending.length + 1) D.1, P.2 ++ D.2) := by
+  have hadv : Node.pass cfg s = (flushSyncs cfg (D.1.syncs.length + 1) D.1, P.2 ++ D.2) := by
     simp only [Node.pass, hP, hD]
   have hpers : persists (Node.advance cfg s).2 = bs := by
     rw [advance_snd, persists_append, persists_arm, List.append_nil, hadv, persists_append, hbs,
       persists_built, d₅.1]; simp
-  have htop : (Node.advance cfg s).1.top = D.1.top := by rw [advance_top, hadv, flush_top]
+  have htop : (Node.advance cfg s).1.top = D.1.top := by rw [advance_top, hadv, flushSyncs_top]
   have hrec : (Node.advance cfg s).1.recovering = P.1.recovering := by
     rw [advance_recovering, hadv]
-    change (flush cfg (D.1.pending.length + 1) D.1).recovering = _
-    rw [flush_recovering, ← hD, decideStep_recovering]
+    change (flushSyncs cfg (D.1.syncs.length + 1) D.1).recovering = _
+    rw [flushSyncs_recovering, ← hD, decideStep_recovering]
   refine ⟨fun e he => ?_, fun hs hr ρ h₁ h₂ => ?_, fun e he => ?_, ?_, hra, fun h => ?_,
     fun h => by rw [hrec]; exact p₅ h, fun hne => ?_, fun hne => by
       rw [hrec]; rw [htop, d₃] at hne; exact p₇ hne⟩
@@ -224,8 +224,8 @@ theorem advance_shape (s : State Validator BlockId Payload) :
     rw [advance_snd, hadv, hbs]
     exact List.mem_append_left _ (List.mem_append_left _ (timer_of_built he))
   · rw [advance_fired, hadv]
-    change s.fired ⊆ (flush cfg (D.1.pending.length + 1) D.1).fired
-    rw [flush_fired, d₂, p₂]
+    change s.fired ⊆ (flushSyncs cfg (D.1.syncs.length + 1) D.1).fired
+    rw [flushSyncs_fired, d₂, p₂]
   · rw [htop, d₃]; exact p₀ h
   · rw [htop, d₃] at hne ⊢
     obtain ⟨e, he, het⟩ := p₆ hne
@@ -290,19 +290,25 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
           rfl⟩
       · exact Or.inl (hq s rfl)
     · exact Or.inl (hq s rfl)
-  | deliver id b =>
-    by_cases hA : Admits cfg s id b
-    · rw [step_deliver hA]
-      refine Or.inr ⟨_, _, [], rfl, by rw [List.append_nil], rfl, by rw [afterFlush_top],
-        fun _ h _ => by rwa [afterFlush_fired], Or.inl ⟨?_, afterFlush_top _ _ _⟩,
-        fun h => Or.inl ⟨by rw [afterFlush, flush_recovering] at h; exact h,
-          fun r hr => by cases hr⟩⟩
+  | deliver u id b =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
+      he | ⟨s₁, pre, hr, hpre, he⟩
+    · rw [he]; exact Or.inl ⟨rfl, rfl⟩
+    · rw [he]
+      refine Or.inr ⟨s₁, pre, [], rfl, by rw [List.append_nil], rfl, by rw [hr.top],
+        fun _ h _ => by rwa [hr.fired], Or.inl ⟨?_, hr.top⟩,
+        fun h => Or.inl ⟨by rw [hr.recovering] at h; exact h, fun r hr => by cases hr⟩⟩
       refine (silent_of fun o ho => ?_).1
-      split at ho
-      · cases ho
-      · rw [List.mem_singleton] at ho; subst ho; trivial
-    · rw [step_deliver_not hA]
-      exact Or.inl ⟨rfl, rfl⟩
+      obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; trivial
+  | stream u L =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, hpre, he⟩
+    · rw [he]; exact Or.inl ⟨rfl, rfl⟩
+    · rw [he]
+      refine Or.inr ⟨s₁, pre, [], rfl, by rw [List.append_nil], rfl, by rw [hr.top],
+        fun _ h _ => by rwa [hr.fired], Or.inl ⟨?_, hr.top⟩,
+        fun h => Or.inl ⟨by rw [hr.recovering] at h; exact h, fun r hr => by cases hr⟩⟩
+      refine (silent_of fun o ho => ?_).1
+      obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; trivial
   | timer r =>
     right
     rcases step_timer_snd (cfg := cfg) s r with h | h
@@ -312,10 +318,12 @@ theorem step_shape (s : State Validator BlockId Payload) (inp : Input Validator 
         Node.resend cfg (Node.settle cfg { s with fired := fire s r, recovering := false }).1,
         step_timer_fst s r, by rw [h]; simp,
         persists_resend _, rfl, fired_timer, Or.inl ⟨rfl, rfl⟩, fun h => by cases h⟩
-  | fetchRequest p r ids =>
+  | syncRequest p t fr ids =>
     refine Or.inl ⟨rfl, (silent_of fun o ho => ?_).1⟩
-    simp only [Node.step, answer, List.mem_map] at ho
-    obtain ⟨j, -, rfl⟩ := ho; trivial
+    simp only [Node.step] at ho
+    split at ho
+    · cases ho
+    · rw [List.mem_singleton] at ho; subst ho; trivial
   | restart =>
     refine Or.inr ⟨{ s with recovering := true }, Node.resend cfg s ++ Node.rearm cfg s, [],
       rfl, by simp only [Node.step, List.append_nil], rfl, rfl, fun _ h _ => h,

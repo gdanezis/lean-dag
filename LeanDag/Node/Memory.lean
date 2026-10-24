@@ -13,7 +13,7 @@ memory the disk's window (`Mirrors.put`, `Mirrors.above`). A block's
 references are accepted, one round below it, and it is valid at the row
 in memory exactly when on disk, if its round is above `F`
 (`Mirrors.checks_iff`), and in memory only if on disk
-(`Mirrors.checks_disk`); `ready` checks a pending block on the memory
+(`Mirrors.checks_disk`); `ready` checks a block on the memory
 above `F` and on the disk otherwise (`pick`, `Mirrors.ready_pick`).
 -/
 

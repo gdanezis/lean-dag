@@ -1,4 +1,4 @@
-import LeanDag.Node.Helpers.Local
+import LeanDag.Node.Helpers.Steps
 import LeanDag.Scheme.Helpers.Restart
 /-!
 # The decisions a node keeps
@@ -167,7 +167,7 @@ theorem advance_appends {s : State Validator BlockId Payload} (hL : Ledger s) :
   have h₃ := h₁.trans h₂
   unfold Appends Ledger at *
   simp only [Node.advance, Node.pass, release_decided, release_lo, arm_decided, arm_lo,
-    flush_decided, flush_lo, commitsOf_append, commitsOf_arm, List.append_nil] at h₃ ⊢
+    flushSyncs_decided, flushSyncs_lo, commitsOf_append, commitsOf_arm, List.append_nil] at h₃ ⊢
   exact ⟨h₃, hL₂⟩
 
 omit [Fintype Validator] in
@@ -200,12 +200,19 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
       · exact hset _ _ rfl rfl rfl
       · exact ⟨Appends.refl s, hL⟩
     · exact ⟨Appends.refl s, hL⟩
-  | deliver id b =>
-    simp only [Node.step]
-    split
-    · refine hset _ _ (flush_decided _ _) (flush_lo _ _) ?_
-      split_ifs <;> rfl
-    · exact ⟨Appends.refl s, hL⟩
+  | deliver u id b =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
+      h | ⟨s₁, pre, hr, hpre, h⟩
+    · rw [h]; exact ⟨Appends.refl s, hL⟩
+    · rw [h]
+      refine hset _ _ hr.decided hr.lo (List.filterMap_eq_nil_iff.mpr fun o ho => ?_)
+      obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; rfl
+  | stream u L =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with h | ⟨s₁, pre, hr, hpre, h⟩
+    · rw [h]; exact ⟨Appends.refl s, hL⟩
+    · rw [h]
+      refine hset _ _ hr.decided hr.lo (List.filterMap_eq_nil_iff.mpr fun o ho => ?_)
+      obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; rfl
   | timer r =>
     obtain ⟨h₁, h₂⟩ := hset { s with fired := fire s r, recovering := false } [] rfl rfl rfl
     rw [List.nil_append] at h₁
@@ -213,12 +220,10 @@ theorem step_appends {s : State Validator BlockId Payload} (hL : Ledger s)
     split
     · exact ⟨h₁.trans (Appends.quiet rfl (commitsOf_resend _)), h₂⟩
     · exact ⟨h₁, h₂⟩
-  | fetchRequest peer r ids =>
+  | syncRequest peer t fr ids =>
     refine ⟨Appends.quiet rfl ?_, hL⟩
-    change commitsOf (answer cfg s peer r ids) = []
-    unfold answer commitsOf
-    rw [List.filterMap_map]
-    exact List.filterMap_eq_nil_iff.mpr fun _ _ => rfl
+    simp only [Node.step]
+    split <;> rfl
   | restart =>
     exact hset { s with recovering := true } (Node.resend cfg s ++ Node.rearm cfg s) rfl rfl
       (by rw [commitsOf_append, commitsOf_resend, commitsOf_rearm, List.append_nil])

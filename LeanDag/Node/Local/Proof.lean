@@ -1,12 +1,14 @@
 import LeanDag.Node.Local.Statement
 import LeanDag.Node.Helpers.Decided
+import LeanDag.Node.Helpers.SyncSteps
 /-!
 # An honest node, one node at a time — proof
 
 The invariant `Inv` holds of the initial state with nothing known and no
 block of its own, and each step keeps it (`Helpers/Local.lean`); the
 claims about the node's own blocks and decisions are read off it at the end of a
-run. The decisions are the scheme's on the view by
+run. The syncs keep distinct peers, none the node itself (`syncsOn_run`),
+so there are at most `n − 1` (`syncs_length_le`). The decisions are the scheme's on the view by
 `ViewsAbove.tryDecide_eq` at the bounded vote.
 -/
 
@@ -79,8 +81,14 @@ theorem decidesOnView : DecidesOnView := by
     · rw [if_neg hlt]
       rfl
 
+theorem syncsBound : SyncsBound := by
+  intro Validator BlockId Payload _ _ _ cfg is
+  obtain ⟨hs, hm⟩ := syncsOn_run (cfg := cfg) is (State.init cfg)
+    ⟨List.nodup_nil, fun _ h => absurd h List.not_mem_nil⟩ fun _ h => absurd h List.not_mem_nil
+  exact syncs_length_le hs hm
+
 theorem holds : Statement :=
-  ⟨oneEach, authored, sends, decisions, validOut, decidesOnView⟩
+  ⟨oneEach, authored, sends, decisions, syncsBound, validOut, decidesOnView⟩
 
 end Local
 

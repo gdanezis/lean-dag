@@ -3,7 +3,7 @@ import LeanDag.Node.Helpers.Local
 # A node's disk grows
 
 Across a step the disk only gains blocks (`Grows`, `Helpers/Local.lean`):
-building inserts, and deciding leaves the disk alone.
+building and taking blocks in insert, and deciding leaves the disk alone.
 -/
 
 namespace LeanDag
@@ -38,13 +38,21 @@ theorem decideStep_disk (s : State Validator BlockId Payload) :
   · rfl
 
 omit [Fintype Validator] in
+theorem Grows.absorb (s : State Validator BlockId Payload)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    Grows s.disk (Node.absorb cfg s L).disk := by
+  rw [absorb_disk]; exact Grows.foldl _ _
+
+omit [Fintype Validator] in
 theorem Grows.advance (s : State Validator BlockId Payload) :
     Grows s.disk (Node.advance cfg s).1.disk := by
   rw [advance_disk]
-  simp only [Node.pass, flush_disk]
+  simp only [Node.pass]
   refine (Grows.progress (cfg := cfg) (s.disk.topRound + 2) s).1.trans ?_
   rw [← decideStep_disk (cfg := cfg) (Node.progress cfg (s.disk.topRound + 2) s).1]
-  exact Grows.flush _ _ _
+  obtain ⟨L, -, hL⟩ := (flushSyncs_eq (cfg := cfg) _ _).1
+  rw [hL]
+  exact Grows.foldl _ _
 
 omit [Fintype Validator] in
 theorem Grows.quiesce (n : ℕ) (s : State Validator BlockId Payload) :
@@ -79,16 +87,24 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
         exact Grows.settle_of _ rfl
       · exact Grows.refl _
     · exact Grows.refl _
-  | deliver id b =>
+  | deliver u id b =>
     simp only [Node.step]
     split
-    · dsimp only
-      refine (Grows.flush (cfg := cfg) (s.pending.length + 1) s.disk
-        ((id, b) :: s.pending)).trans ?_
-      exact Grows.settle_of _ (flush_disk _ _)
+    · split
+      · exact (Grows.absorb (cfg := cfg) s [(id, b)]).trans (Grows.settle_of _ rfl)
+      · split
+        · exact Grows.settle_of _ rfl
+        · exact Grows.refl _
     · exact Grows.refl s.disk
+  | stream u L =>
+    simp only [Node.step]
+    split
+    · exact Grows.refl _
+    · split
+      · exact (Grows.absorb (cfg := cfg) s _).trans (Grows.settle_of _ rfl)
+      · exact (Grows.absorb (cfg := cfg) s _).trans (Grows.settle_of _ rfl)
   | timer r => rw [step_timer_fst]; exact Grows.settle_of _ rfl
-  | fetchRequest peer r ids => exact Grows.refl _
+  | syncRequest peer t fr ids => exact Grows.refl _
   | restart => exact Grows.settle_of { s with recovering := true } rfl
 
 end Node

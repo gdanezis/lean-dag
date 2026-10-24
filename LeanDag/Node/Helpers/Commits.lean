@@ -123,21 +123,33 @@ theorem IsCut.foldl (hg : Ground U K cfg.q) :
       fun x hx => hK x (List.mem_cons_of_mem _ hx)
 
 omit [Fintype Validator] in
-/-- **Flushing known blocks keeps the store a cut.** -/
-theorem IsCut.flush (hg : Ground U K cfg.q) :
-    ∀ (fuel : ℕ) {st : Store Validator BlockId Payload}
-      (pend : List (BlockId × Block Validator BlockId Payload)),
-    IsCut U st → (∀ e ∈ pend, e ∈ K) → IsCut U (flushOn cfg fuel st pend).1
-  | 0, _, _, hc, _ => hc
-  | fuel + 1, st, pend, hc, hK => by
-    unfold flushOn
-    dsimp only
-    split
-    · exact hc
-    · rw [List.partition_eq_filter_filter]
-      have hc₁ := IsCut.foldl hg (pend.filter fun e => readyOn cfg st e) hc
-        fun e he => hK e (List.mem_filter.mp he).1
-      exact IsCut.flush hg fuel _ hc₁ fun e he => hK e (List.mem_filter.mp he).1
+/-- **Accepting known syncs' blocks keeps the store a cut.** -/
+theorem IsCut.flushSyncs (hg : Ground U K cfg.q) (fuel : ℕ) {s : State Validator BlockId Payload}
+    (hc : IsCut U s.disk) (hK : ∀ e ∈ s.syncs, e.2.1 ∈ K) :
+    IsCut U (Node.flushSyncs cfg fuel s).disk := by
+  obtain ⟨L, hL, hd⟩ := (flushSyncs_eq (cfg := cfg) fuel s).1
+  rw [hd]
+  refine IsCut.foldl hg L hc fun e he => ?_
+  obtain ⟨x, hx, rfl⟩ := List.mem_map.mp (hL e he)
+  exact hK x hx
+
+omit [Fintype Validator] in
+/-- **A receipt of known blocks keeps the store a cut**, and the syncs'
+blocks known. -/
+theorem Received.cut (hg : Ground U K cfg.q) {inp : Input Validator BlockId Payload}
+    {s s₁ : State Validator BlockId Payload} (hr : Received cfg inp s s₁) (hc : IsCut U s.disk)
+    (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K) (hd : ∀ e ∈ delivered cfg [inp], e ∈ K) :
+    IsCut U s₁.disk ∧ ∀ e ∈ s₁.syncs, e.2.1 ∈ K := by
+  obtain ⟨L, hL, hdk⟩ := hr.disk
+  refine ⟨by
+    rw [hdk]
+    refine IsCut.foldl hg L hc fun e he => ?_
+    rcases hL e he with h | h
+    · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp h; exact hp x hx
+    · exact hd e h, fun e he => ?_⟩
+  rcases hr.syncs e he with h | h
+  · obtain ⟨x, hx, hxe⟩ := List.mem_map.mp h; rw [← hxe]; exact hp x hx
+  · exact hd _ h
 
 omit [Fintype Validator] [DecidableEq Validator] in
 /-- **Reaching down from a cut**: a block that a block of the cut reaches
@@ -222,20 +234,20 @@ theorem IsCut.progress (hg : Ground U K cfg.q) :
 omit [Fintype Validator] in
 /-- **A pass from a cut keeps the disk a cut.** -/
 theorem IsCut.advanceStore (hg : Ground U K cfg.q) {s : State Validator BlockId Payload}
-    (hc : IsCut U s.disk) (hp : ∀ e ∈ s.pending, e ∈ K)
+    (hc : IsCut U s.disk) (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K)
     (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : IsCut U (Node.advance cfg s).1.disk := by
-  have hp₁ := progress_pending (cfg := cfg) (s.disk.topRound + 2) s
+  have hp₁ := progress_syncs (cfg := cfg) (s.disk.topRound + 2) s
   rw [advance_snd, persists_append, persists_arm, List.append_nil] at hb
   rw [advance_disk]
-  simp only [Node.pass, flush_disk] at hb ⊢
+  simp only [Node.pass] at hb ⊢
   rw [persists_append] at hb
   have hc₁ := IsCut.progress hg _ hc fun e he => hb e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.disk.topRound + 2) s = r at hp₁ hc₁ ⊢
   have hc₂ : IsCut U (Node.decideStep cfg r.1).1.disk := by
     rw [decideStep_disk]; exact hc₁
-  have hgp : ∀ e ∈ (Node.decideStep cfg r.1).1.pending, e ∈ K := by
-    rw [decideStep_pending (cfg := cfg) r.1, hp₁]; exact hp
-  exact IsCut.flush hg _ _ hc₂ hgp
+  have hgp : ∀ e ∈ (Node.decideStep cfg r.1).1.syncs, e.2.1 ∈ K := by
+    rw [decideStep_syncs (cfg := cfg) r.1, hp₁]; exact hp
+  exact IsCut.flushSyncs hg _ hc₂ hgp
 
 /-! ## The decisions -/
 
@@ -340,7 +352,7 @@ theorem CommitInv.decideStep (hσ : cfg.σ = boundedSel) (ht : cfg.p.Tolerates H
 theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)} (h : CommitInv cfg U s cs) (hc : IsCut U s.disk)
-    (hp : ∀ e ∈ s.pending, e ∈ K) (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) :
+    (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K) (hb : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) :
     CommitInv cfg U (Node.advance cfg s).1 (cs ++ commitsOf (Node.advance cfg s).2) ∧
       IsCut U (Node.advance cfg s).1.disk := by
   have hcut := IsCut.advanceStore hg hc hp hb
@@ -356,16 +368,16 @@ theorem CommitInv.advance (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
   generalize Node.progress cfg (s.disk.topRound + 2) s = r at hbs hg₁ hlo₁ hc₁ hcut ⊢
   have h₁ : CommitInv cfg U r.1 cs := h.keeps hlo₁ hg₁.keeps
   have h₂ := h₁.decideStep hσ ht hc₁
-  have hk := (Grows.flush (cfg := cfg) ((Node.decideStep cfg r.1).1.pending.length + 1)
-    (Node.decideStep cfg r.1).1.disk (Node.decideStep cfg r.1).1.pending).keeps
+  have hk := (Grows.flushSyncs (cfg := cfg) ((Node.decideStep cfg r.1).1.syncs.length + 1)
+    (Node.decideStep cfg r.1).1).keeps
   rw [commitsOf_append, hbs, commitsOf_built, List.nil_append]
-  exact h₂.keeps (flush_lo _ _) (by rw [flush_disk]; exact hk)
+  exact h₂.keeps (flushSyncs_lo _ _) hk
 
 /-- **The passes keep the invariant, and the disk a cut.** -/
 theorem CommitInv.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) : ∀ (n : ℕ) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)}, CommitInv cfg U s cs → IsCut U s.disk →
-    (∀ e ∈ s.pending, e ∈ K) → (∀ e ∈ persists (Node.quiesce cfg n s).2, e ∈ K) →
+    (∀ e ∈ s.syncs, e.2.1 ∈ K) → (∀ e ∈ persists (Node.quiesce cfg n s).2, e ∈ K) →
     CommitInv cfg U (Node.quiesce cfg n s).1 (cs ++ commitsOf (Node.quiesce cfg n s).2) ∧
       IsCut U (Node.quiesce cfg n s).1.disk
   | 0, s, cs, h, hc, _, _ => by
@@ -384,7 +396,7 @@ theorem CommitInv.quiesce (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
 theorem CommitInv.settle (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)} (h : CommitInv cfg U s cs) (hc : IsCut U s.disk)
-    (hp : ∀ e ∈ s.pending, e ∈ K) (hb : ∀ e ∈ persists (Node.settle cfg s).2, e ∈ K) :
+    (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K) (hb : ∀ e ∈ persists (Node.settle cfg s).2, e ∈ K) :
     CommitInv cfg U (Node.settle cfg s).1 (cs ++ commitsOf (Node.settle cfg s).2) ∧
       IsCut U (Node.settle cfg s).1.disk :=
   CommitInv.quiesce hg hσ ht (passes cfg s) h hc hp hb
@@ -394,14 +406,14 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) {s : State Validator BlockId Payload}
     {cs : List (ℕ × Option BlockId)} (i : Input Validator BlockId Payload)
     (h : CommitInv cfg U s cs) (hc : IsCut U s.disk)
-    (hp : ∀ e ∈ s.pending, e ∈ K) (hd : ∀ e ∈ delivered cfg [i], e ∈ K)
+    (hp : ∀ e ∈ s.syncs, e.2.1 ∈ K) (hd : ∀ e ∈ delivered cfg [i], e ∈ K)
     (hb : ∀ e ∈ persists (Node.step cfg s i).2, e ∈ K) :
     CommitInv cfg U (Node.step cfg s i).1 (cs ++ commitsOf (Node.step cfg s i).2) ∧
       IsCut U (Node.step cfg s i).1.disk := by
   -- a step that settles a state `s₀`, after outputs without decisions
   have hset : ∀ (s₀ : State Validator BlockId Payload)
       (pre : List (Output Validator BlockId Payload)),
-      CommitInv cfg U s₀ cs → IsCut U s₀.disk → (∀ e ∈ s₀.pending, e ∈ K) →
+      CommitInv cfg U s₀ cs → IsCut U s₀.disk → (∀ e ∈ s₀.syncs, e.2.1 ∈ K) →
       commitsOf pre = [] →
       Node.step cfg s i = ((Node.settle cfg s₀).1, pre ++ (Node.settle cfg s₀).2) →
       CommitInv cfg U (Node.step cfg s i).1 (cs ++ commitsOf (Node.step cfg s i).2) ∧
@@ -440,35 +452,47 @@ theorem CommitInv.step (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
           (commitsOf_built _) (by simp only [Node.step, dif_pos h₂, if_pos h₁]; rfl)
       · exact hsame (by simp only [Node.step, dif_neg h₂, if_pos h₁])
     · exact hsame (by simp only [Node.step, if_neg h₁])
-  | deliver id b =>
-    by_cases hA : Admits cfg s id b
-    · let s₁ := afterFlush (cfg := cfg) s id b
-      let miss := missing s₁ b
-      have hx : (id, b) ∈ K := hd _ (by simp [delivered, hA.1])
-      have hg₁ := Grows.flush (cfg := cfg) (s.pending.length + 1) s.disk ((id, b) :: s.pending)
-      have hpend : ∀ e ∈ (id, b) :: s.pending, e ∈ K := fun e he => by
-        rcases List.mem_cons.mp he with rfl | he
-        · exact hx
-        · exact hp e he
-      have hc₁ : IsCut U s₁.disk := by rw [afterFlush_disk]; exact IsCut.flush hg _ _ hc hpend
-      exact hset s₁
-        (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss])
-        (h.keeps (afterFlush_lo _ _ _) (by rw [afterFlush_disk]; exact hg₁.keeps)) hc₁
-        (fun e he => hpend e (flush_pending_sub _ _ _ e (by rwa [afterFlush_pending] at he)))
-        (by split <;> rfl) (step_deliver hA)
-    · exact hsame (step_deliver_not hA)
+  | deliver u id b =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
+      he | ⟨s₁, pre, hr, hpre, he⟩
+    · exact hsame he
+    · obtain ⟨L, hL, hdk⟩ := hr.disk
+      have hLK : ∀ e ∈ L, e ∈ K := fun e he => by
+        rcases hL e he with h | h
+        · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp h; exact hp x hx
+        · exact hd e h
+      have hc₁ : IsCut U s₁.disk := by rw [hdk]; exact IsCut.foldl hg L hc hLK
+      refine hset s₁ pre (h.keeps hr.lo hr.grows.keeps) hc₁ (fun e he => ?_)
+        (List.filterMap_eq_nil_iff.mpr fun o ho => ?_) he
+      · rcases hr.syncs e he with h | h
+        · obtain ⟨x, hx, hxe⟩ := List.mem_map.mp h; rw [← hxe]; exact hp x hx
+        · exact hd _ h
+      · obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; rfl
+  | stream u L =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, hpre, he⟩
+    · exact hsame he
+    · obtain ⟨L', hL, hdk⟩ := hr.disk
+      have hLK : ∀ e ∈ L', e ∈ K := fun e he => by
+        rcases hL e he with h | h
+        · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp h; exact hp x hx
+        · exact hd e h
+      have hc₁ : IsCut U s₁.disk := by rw [hdk]; exact IsCut.foldl hg L' hc hLK
+      refine hset s₁ pre (h.keeps hr.lo hr.grows.keeps) hc₁ (fun e he => ?_)
+        (List.filterMap_eq_nil_iff.mpr fun o ho => ?_) he
+      · rcases hr.syncs e he with h | h
+        · obtain ⟨x, hx, hxe⟩ := List.mem_map.mp h; rw [← hxe]; exact hp x hx
+        · exact hd _ h
+      · obtain ⟨_, _, _, _, rfl⟩ := hpre o ho; rfl
   | timer r =>
     rw [persists_step_timer] at hb
     rw [step_timer_fst, commitsOf_step_timer]
     exact (h.keeps (s' := { s with fired := fire s r, recovering := false }) rfl
       (Keeps.refl _)).settle hg hσ ht hc hp hb
-  | fetchRequest peer r ids =>
-    rw [show Node.step cfg s (.fetchRequest peer r ids) = (s, answer cfg s peer r ids) from rfl]
-    have : commitsOf (answer cfg s peer r ids) = [] := by
-      unfold answer commitsOf
-      rw [List.filterMap_map]
-      exact List.filterMap_eq_nil_iff.mpr fun _ _ => rfl
-    rw [this, List.append_nil]
+  | syncRequest peer t fr ids =>
+    have he : (Node.step cfg s (.syncRequest peer t fr ids)).1 = s := rfl
+    have hc' : commitsOf (Node.step cfg s (.syncRequest peer t fr ids)).2 = [] := by
+      simp only [Node.step]; split <;> rfl
+    rw [he, hc', List.append_nil]
     exact ⟨h, hc⟩
   | restart =>
     rw [persists_step_restart] at hb
@@ -481,7 +505,7 @@ theorem CommitInv.run (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     (ht : cfg.p.Tolerates H f q) :
     ∀ (is : List (Input Validator BlockId Payload)) {s : State Validator BlockId Payload}
       {cs : List (ℕ × Option BlockId)}, CommitInv cfg U s cs → IsCut U s.disk →
-      (∀ e ∈ s.pending, e ∈ K) → (∀ e ∈ delivered cfg is, e ∈ K) →
+      (∀ e ∈ s.syncs, e.2.1 ∈ K) → (∀ e ∈ delivered cfg is, e ∈ K) →
       (∀ e ∈ persists (Node.run cfg s is).2, e ∈ K) →
       CommitInv cfg U (Node.run cfg s is).1 (cs ++ commitsOf (Node.run cfg s is).2)
   | [], s, cs, h, _, _, _, _ => by simpa [Node.run, commitsOf] using h
@@ -491,13 +515,10 @@ theorem CommitInv.run (hg : Ground U K cfg.q) (hσ : cfg.σ = boundedSel)
     rw [delivered_cons] at hd
     obtain ⟨h₁, hc₁⟩ := h.step hg hσ ht i hc hp (fun e he => hd e (List.mem_append_left _ he))
       (fun e he => hb e (List.mem_append_left _ he))
-    have hp₁ : ∀ e ∈ (Node.step cfg s i).1.pending, e ∈ K := fun e he => by
-      rcases step_sub s i e he with he | ⟨hi, hA⟩
-      · exact hp e he
-      · refine hd e (List.mem_append_left _ ?_)
-        rw [hi]
-        simp only [delivered, List.flatMap_cons, List.flatMap_nil, List.append_nil, if_pos hA.1]
-        exact List.mem_singleton.mpr rfl
+    have hp₁ : ∀ e ∈ (Node.step cfg s i).1.syncs, e.2.1 ∈ K := fun e he => by
+      rcases step_syncs s i e he with h | h
+      · obtain ⟨x, hx, hxe⟩ := List.mem_map.mp h; rw [← hxe]; exact hp x hx
+      · exact hd _ (List.mem_append_left _ h)
     have := CommitInv.run hg hσ ht is h₁ hc₁ hp₁
       (fun e he => hd e (List.mem_append_right _ he))
       (fun e he => hb e (List.mem_append_right _ he))

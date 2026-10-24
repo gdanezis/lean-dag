@@ -5,10 +5,11 @@ import LeanDagTest.Mysticeti.Model
 /-!
 # The program on the scheme's hand-built records
 
-`docs/validator.md` §6, item 1. A record's blocks go through the
-program's acceptance path (`flush`, which accepts each block once its
-references are accepted and it is valid at the row) onto an empty disk,
-and the program's decider (`decideStep`) runs once on the result. Its
+`docs/validator.md` §6, item 1. A record's blocks, in order of round,
+go through the program's acceptance path (`absorb`, which takes a stream
+piece in block by block, accepting each block whose references are
+accepted and which is valid at the row) onto an empty disk, and the
+program's decider (`decideStep`) runs once on the result. Its
 commits are those the scheme's tests record for `tryDecide` on the same
 record (`LeanDagTest/Scheme/TryDecide.lean`): slots `0`, `1` and `2` of
 Mahi-Mahi's `full4` at the Mahi-Mahi row of wave four, and slots `0`
@@ -49,13 +50,15 @@ def cfg (p : Scheme.Params) (per : ℕ) (hper : 0 < per) (elect : ℕ → Fin 4)
   idOf := idIn blk
   payload := fun _ => ()
 
-/-- The record's blocks through the acceptance path onto an empty disk: the
-number of blocks the disk accepted, the number left pending, and the commits of one
-decision step. -/
+/-- The record's blocks, in order of round, through the acceptance path onto
+an empty disk: the number of blocks the disk accepted, the number it did
+not, and the commits of one decision step. -/
 def replay (c : Config (Fin 4) (Fin 24) Unit) (blk : Fin 24 → Block (Fin 4) (Fin 24) Unit) :
     ℕ × ℕ × List (ℕ × Option (Fin 24)) :=
-  let s := flush c 24 { State.init c with pending := (List.finRange 24).map fun i => (i, blk i) }
-  (s.disk.ids.card, s.pending.length, commitsOf (decideStep c s).2)
+  let L := ((List.finRange 24).map fun i => (i, blk i)).mergeSort fun x y =>
+    decide (x.2.round ≤ y.2.round)
+  let s := absorb c (State.init c) L
+  (s.disk.ids.card, 24 - s.disk.ids.card, commitsOf (decideStep c s).2)
 
 /-! ## Mahi-Mahi's `full4` at the Mahi-Mahi row of wave four -/
 

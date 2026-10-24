@@ -14,23 +14,28 @@ Blue Bottle PS, Orcaella, Nemo-Nemo and Hybrid Mysticeti. The
 asynchronous rows, the coin and `AsyncPace` are out of scope.
 
 The program is the scheme's consensus core: it builds blocks, receives
-them, fetches the histories it lacks, and decides. It keeps every block
+them, syncs the histories it lacks, and decides. It keeps every block
 it accepts, and restarts after a crash from the state it persisted
-(§3.6). Garbage collection, checkpoints, bootstrap, rate limiting and
-the exclusion of equivocators are not part of it; a version with all of
-them is on branch `scheme-validator`. Liveness holds across crashes
-(§5.6).
+(§3.6). It detects an author whose twins it accepts and takes no
+announcement from it after (§3.4). Garbage collection, checkpoints,
+bootstrap, rate limiting and the exclusion of equivocators from validity
+are not part of it; a version with all of them is on branch
+`scheme-validator`, and the plan for the last here is
+`docs/node-sync.md`. Liveness holds across crashes (§5.6).
 
 Out of scope as well: stake weights, a mempool (the payload comes from a
 configured source), execution, and an implementation of hashing and
 signatures. Identifiers are the environment's hash, assumed injective
 on the blocks of a run. Blocks are signed by their author, and the
 proofs assume what the signatures give (authentication); the
-executables check no signature and trust their inputs. Efficient
-synchronisation is out of scope too: the program's fetch (§3.4) asks one
-peer and is answered with whole histories, and the liveness claim
-assumes of the network that a reliable node receives the history of
-each reliable block it receives (§5.1).
+executables check no signature and trust their inputs. The links are
+authenticated: an input from a peer names the peer. Synchronisation
+follows the Sync model (`docs/sync.md`): one sync for each peer, which
+asks the peer for a block's history above the node's frontier and takes
+in what is ready on arrival (§3.4). The program proves that the syncs
+complete (V3′), not how fast; the liveness claim assumes of the network
+and the syncs together that a reliable block given to a reliable node is
+on its disk within `Δₛ` past GST (§5.1).
 
 ## 2. Interface
 
@@ -62,22 +67,26 @@ block is the build rule (§3.2, §8), not a validity clause.
 
 **State** (`State`). The accepted blocks, on disk (`disk`), and those
 from a round `floor` up in memory (`memory`, `floor`), with the proof
-that the memory is the disk's window there (`mirrors`, §3.1); the blocks
-received whose references are not all accepted (`pending`), the top round and
+that the memory is the disk's window there (`mirrors`, §3.1); the syncs,
+at most one for each peer, each with the peer, its block the node lacks
+and the identifiers asked for by name (`syncs`, §3.4); the authors whose
+twins the node accepted (`detected`); the top round and
 the node's own block there, the rounds whose timer fired, the next
 undecided slot `lo`, the decisions output, the latest first, and the
 round whose timer is set (`armed`). A timer drops the fired rounds below
 the top, which the node no longer reads (`fire`).
 
-**Inputs** (`Input`): a start, which builds the genesis block; a
-delivered block, with its identifier; a timer for round `r` that fired;
-a request from a peer at round `r` for some blocks and their histories;
-and a restart after a crash (§3.6).
+**Inputs** (`Input`): a start, which builds the genesis block; a block a
+peer announced, with its identifier (`deliver`); a stream piece from a
+peer (`stream`); a timer for round `r` that fired; a request from a peer
+for the history of a block, with the peer's frontier and the identifiers
+it asks for by name (`syncRequest`); and a restart after a crash (§3.6).
 
 **Outputs** (`Output`): persist one of its own blocks, before it is
 broadcast; broadcast a block; set a timer for round `r`; commit slot `k`
-with a decision `Option BlockId`; ask a peer for some blocks and their
-histories, stating the node's top round; and send a block to one peer.
+with a decision `Option BlockId`; a request to a peer for the history of
+a block, with the node's frontier and the identifiers it asks for by
+name (`sync`); and a stream piece to a peer (`stream`).
 
 Time is discrete (`ℕ`).
 
@@ -94,10 +103,11 @@ those at `floor` without their references (`Store.Mirrors`), and is
 what it builds, decides and arms its timers on (§3.2, §3.3). A received
 block whose identifier is not `idOf` of its content, which is the
 node's own, or which is on disk, is dropped, so that an identifier
-denotes one block. Otherwise it is pending until its references are
-accepted, one round below it, and it is valid at the row (`ready`), and
-is then accepted (`accept`, `flush`). A Byzantine block that is never
-valid stays pending.
+denotes one block. A block is accepted once its references are
+accepted, one round below it, and it is valid at the row (`ready`,
+`accept`); one that is not is synced (§3.4) or dropped. Accepting a
+block of an author whose block of that round the disk holds detects the
+author (`State.detected`).
 
 Each store is closed under references, every reference one round below
 its referrer, so it is a `BlockRecord.View` (`Store.toRecord`,
@@ -105,13 +115,13 @@ its referrer, so it is a `BlockRecord.View` (`Store.toRecord`,
 
 **Keeping a block.** An accepted block goes to the disk and, if its round
 is `floor` or above, to the memory, without its references at `floor`
-(`keep`, `Store.put`, `Mirrors.put`). A pending block is checked in
-memory when its round is above `floor`, since its references then lie at
-`floor` or above, and on disk otherwise; the two checks agree
-(`Store.pick`, `Mirrors.checks_pick`), so the node accepts what a node
-reading its disk alone would accept (`ready_eq`, `accept_disk`,
-`flush_disk`), and the proofs read the disk alone (`readyOn`,
-`acceptOn`, `flushOn`). The test that a block is new reads the disk's
+(`keep`, `Store.put`, `Mirrors.put`). A block is checked in memory when
+its round is above `floor`, since its references then lie at `floor` or
+above, and on disk otherwise; the two checks agree (`Store.pick`,
+`Mirrors.checks_pick`), so the node accepts what a node reading its disk
+alone would accept (`ready_eq`, `accept_disk`, `absorb_disk`,
+`flushSyncs_eq`), and the proofs read the disk alone (`readyOn`,
+`acceptOn`). The test that a block is new reads the disk's
 identifiers.
 
 **Releasing memory.** The node reads its memory at the round of its
@@ -159,9 +169,9 @@ block's round in `byRound`. `Store.above` keeps them for the blocks it
 keeps. The builder reads the memory's `atRound` in `refsFor` and
 `refsAt`, in its reach and certificate tests through `leaderBlocks`
 (§3.2), and `authorsAt` for its quorum; the decider reads the memory's
-`byRound` through the window (§3.3); the answer to a fetch reads the
-disk's `atRound` in `coreSets`. The proofs read `blocksAt`, `authorsIn`
-and `ids.sup` through these equalities.
+`byRound` through the window (§3.3); the frontier of a request reads the
+disk's `authorsAt` from round `0` up (`gapOf`). The proofs read
+`blocksAt`, `authorsIn` and `ids.sup` through these equalities.
 
 ### 3.2 The builder
 
@@ -255,76 +265,81 @@ Over successive views this is `consumed`. A slot can be
 skipped directly once its voting round holds `skipThreshold` blamers,
 before its decision round.
 
-### 3.4 Fetching missing blocks
+### 3.4 Syncing missing blocks
 
 A node accepts a block only once it holds the block's references. When
 an equivocator sends one twin to some nodes and the other twin to the
 rest, a node holding only one twin cannot complete the history of a
-block referencing the other; the program fetches what it lacks.
+block referencing the other; a node that was down lacks what was sent
+meanwhile. The node syncs what it lacks, as in the Sync model
+(`docs/sync.md` §2), with one sync for each peer.
 
-**The rule.** After a block `h` arrives, the node walks `h`'s references
-down through its pending blocks and collects those it holds neither on
-disk nor pending: the missing part of `h`'s history (`walkLevel`,
-`missing`). It asks `h`'s author for them in one `fetch` output, which
-carries the asker's top round `r` (`0` before the start). A block is
-delivered to the node at most once, since a block on its disk or
-pending is not taken again, so it asks at most once on account of each
-block. A node asked for blocks sends the asker each one
-its disk holds, and their histories on its disk less the blocks the
-asker holds already (`answerIds`, `answer`). If `h`'s author is honest,
-it accepted all of `h`'s history before building `h`, so it holds
-everything asked for, and answers.
+**Announcements.** A peer's broadcast of its own block is an
+announcement (`Input.deliver`, which names the peer). It is dropped
+unless the block is the peer's, the peer is neither the node nor
+detected, the identifier is the block's hash, and the block is not on
+disk. A block ready on arrival is accepted. Otherwise, if its round is
+`0` or it references `q` blocks, and it lies above the block of the
+node's sync with the peer, it becomes the block of that sync, with no
+name asked for yet, and the node sends the peer a request (`request`).
+So the node holds at most one sync for each other node, `n − 1` at
+most (V1).
 
-**The pruned answer.** Let `n` be the committee's size and
-`T = n − q + f + 1` (`coreThreshold`). For `r ≥ 1` the answering node
-sweeps its disk from its round-`(r − 1)` blocks downwards and records,
-for each block `i` it meets, a set of authors of round-`(r − 1)` blocks
-that reach `i` (`coreSets`, `coreFrom`, `coreLevel`). The sweep starts
-by giving each round-`(r − 1)` block its own author, passes the set of a
-block to each of its references, and stops at a level whose blocks all
-have sets of at least `T` authors. The histories are then walked on the
-disk with every reference to a block of `T` or more recorded authors
-removed (`pruned`); for `r = 0` nothing is removed.
+**Requests and streams.** A request names the sync's block `t`, the
+node's frontier and the identifiers asked for by name. The frontier
+gives, for each author, the least round at which the disk holds no block
+of the author, and `0` for a detected author (`frontierOf`, `gapOf`):
+below it the node holds a block of the author at every round. The peer answers with the blocks of its
+disk in `t`'s history that are `t`, are asked for, or lie at or above
+their author's frontier, reached from `t` through such blocks, in order
+of round (`streamOf`), and with nothing if it holds none.
 
-**Why the pruned answer is sound.** A node at top round `r ≥ 1` holds
-round-`(r − 1)` blocks of at least `q` distinct authors, since it built
-on them (`Quorate`). Let `i` be a block with a set `A` of `T` or more
-recorded authors, and let at most `f` nodes be Byzantine. Then at least
-`n − q + 1` authors in `A` are honest, so `A` and the asker's quorum
-share an honest author `a`. An honest author has one block in round
-`r − 1`, so the asker holds the round-`(r − 1)` block of `a` that
-reaches `i` on the answering node's disk; the asker's disk is closed
-under references, so it holds `i` and the history of `i`. A block of the
-asked history is therefore either sent or reached from a block the asker
-holds. The sweep follows the disk's references only, so the answering
-node computes the sets once per request, from its own disk.
+**Taking a stream in.** Of a stream piece from a peer with which it has
+a sync, the node takes the blocks reached from the sync's block through
+blocks of the piece, identified by their hash and not its own
+(`inHistory`), in order of round, each accepted if it is ready then
+(`absorb`). It then drops the syncs whose block it holds or whose peer
+it has detected (`tidy`). If the sync stays, the references of its block
+and of the blocks taken that the disk lacks are added to the names asked
+for (`missingIn`), and if the piece gained a block or a name, the node
+asks again. A piece that gains nothing asks nothing, so streams cannot
+make two nodes loop. After each step the node accepts the syncs' blocks
+that have become ready, in passes (`flushSyncs`).
 
-**Why histories.** The walk sees a missing block only once the block
-that references it has arrived. Asked for the missing blocks alone, a
-history `d` levels deep arrives in `d` round trips. Answered with
-histories, it arrives in one, whatever its depth.
+**Why names.** The frontier says which rounds of an author the node
+holds, not which blocks. A block below its author's frontier is left out
+of the stream; a streamed block that references it is then not ready,
+and the node asks for the reference by name. An honest peer holds the
+history of every block it holds, so it streams the block asked for. If
+`v` never held honest `u`'s top block, the last request of `v`'s sync
+for it was answered with a piece that gained nothing and asked nothing:
+a block of that piece in the block's history that `v` lacks, at the
+least round, is not ready, so it references a block `v` lacks; that block
+was asked for by name, so the piece holds it, one round lower (V3′).
 
-**Why the author.** A fetch asked of every peer is answered `n − 1`
-times. A Byzantine author that does not answer stalls nothing: a later
-honest block needing the same blocks is asked of its own author.
+**Detection.** Accepting a second block of an author at one round
+detects the author: the node takes no announcement from it after and
+drops its sync with it. Its blocks still arrive in the streams of other
+syncs, since honest blocks may reference them. An honest node never
+detects an honest one (`Converge.not_detected`), since an honest author
+makes one block a round.
 
-**Why per referrer.** Asking for a block at most once lets a Byzantine
-node stall an honest node `v`: it sends `v` a block referencing a block
-`x` no one else has seen, so that `v` asks for `x` and nobody can
-answer; then it reveals `x` to the others, who build on it; `v`, having
-asked once, never asks again. The simulator's withholding attack
-(`--withhold z,v,R`) does this; under the per-referrer rule `v` asks
-again on account of the honest blocks and keeps pace.
+**Withholding.** A Byzantine node that shows one node `v` a block
+referencing a block it reveals only to the others stalls nothing: the
+honest peers that built on the revealed block hold it in the history of
+their blocks, which `v` syncs. The simulator's withholding attack
+(`--withhold z,v,R`) runs in the build (`LeanDagTest/Node/Sim.lean`).
 
 ### 3.5 Settling
 
-A step that changes the state (the start, a delivery acted on, a timer)
-ends by settling: the node builds, decides and flushes its pending
-blocks in passes, until a pass changes none of its top, its pending
-blocks and its next undecided slot (`settle`, `quiesce`). The passes are
-bounded by the state (`passes`), and with `2 ≤ q` a settle ends settled
-(`Settled`, `settle_settled`): nothing more can be built, no pending
-block is ready, and nothing more can be decided. So none of the node's
+A step that changes the state (the start, an announcement or a stream
+piece acted on, a timer) ends by settling: the node builds, decides and
+accepts the syncs' blocks that are ready, in passes, until a pass changes
+none of its top, the number of its syncs and its next undecided slot
+(`settle`, `quiesce`). The passes are bounded by the state (`passes`),
+and with `2 ≤ q` a settle ends settled (`Settled`, `settle_settled`):
+nothing more can be built, no sync's block is ready, and nothing more
+can be decided. So none of the node's
 moves that what it holds allows is left for a later event.
 
 ### 3.6 Restart and resending
@@ -334,9 +349,9 @@ of the step's outputs take effect. A crash loses the timers set and not
 fired, the outputs of the last step that have not taken effect, and the
 messages that arrive while the node is down; the state survives. On a
 restart (`Input.restart`) the node resends (`resend`): it broadcasts its
-block at its top round, sets the retry timer again, and asks again for
-the missing history of each pending block (`refetch`), since a request or
-its answer may have been lost. It also sets the timer of its top round
+block at its top round, sets the retry timer again, and asks again in
+every sync (`resync`), since a request or its answer may have been
+lost. It also sets the timer of its top round
 again if it had set it (`rearm`). It then marks itself recovering
 (`State.recovering`) and settles. A block is persisted before it is
 broadcast, so a restarted node never builds a second block at a round it
@@ -349,55 +364,58 @@ timeout. A node with a quorum of its round builds within its timeout of
 the quorum's arrival, before the retry timer fires, so it resends only
 when it is stuck; at one timeout the retry timer would fire first in
 every round that waits its timer. Lost messages are not sent again
-otherwise, and without this a crash can stall the reliable nodes. At `n = 4`, `f = 1`, `q = 3`, with node `3` silent, node `2`
+otherwise, and without this a crash can stall the reliable nodes. At
+`n = 4`, `f = 1`, `q = 3`, with node `3` silent, node `2`
 crashes at round `t` before it receives the round-`t` blocks of nodes
 `0` and `1`. They build round `t + 1` on its round-`t` block and wait
 for its round-`t + 1` block, while node `2` restarts at round `t` without
 a quorum. With resending, nodes `0` and `1` send their round-`t + 1`
-blocks again every two timeouts; node `2` fetches their histories,
+blocks again every two timeouts; node `2` syncs their histories,
 builds round `t + 1`, and the three go on. In
 `LeanDagTest/Node/Step.lean`, with node `2` down from time `20`, nodes
 `0` and `1` stop at round `5` after four decisions; with node `2`
 restarting at time `60`, after 400 inputs the three are at round `28`
 with 28 decisions each, alike.
 
-Asking again matters as much as sending again. At Nemo-Nemo with
-`n = 3`, `c = 1`, node `2` silent and node `0` down from time `150` to
-`260`, node `0` held node `1`'s round-`16` block pending and had asked
-for its missing round-`15` block; the answer arrived while it was down.
-Node `1`, stalled at round `16`, sends that block again every two
-timeouts,
-but node `0` drops a block it holds pending, so without `refetch` the
-two waited for each other for good. The re-request is tied to the timer,
-not to the repeated delivery: an answer to a request can itself carry
-the asker's pending blocks, and asking again on each of them would loop.
+Asking again matters as much as sending again: a request, or its answer,
+lost while the node was down is not sent again otherwise. The node asks
+again in every sync on its restart and when its retry timer fires; it
+does not ask again on a stream piece that gains nothing, which keeps two
+nodes from asking each other in a loop. At Nemo-Nemo with `n = 3`,
+`c = 1`, node `2` silent and node `0` down from time `150` to `260`, node
+`1` alone stalls at round `16` and sends its top block again every two
+timeouts; once node `0` is back, the block brings it a sync of the
+rounds it missed, and it builds above round `16` at `266`.
 
 A recovering node, one that restarted and has since neither built nor
 had a timer fire, does not build the rounds it missed. It jumps: it
 builds above the highest round `r` above its top at which its memory
 holds `q` authors and is behind (`jumpRound`), on the round-`r` blocks of
 the other authors, with no block of its own among the references, once
-no pending block lies above round `r + 1` and the references pass the
-reach and certificate tests (`tryBuild`). Waiting for the pending blocks
-to be accepted keeps the node from jumping to a round that the history it
-is still fetching would raise. Without a round to jump to, it builds
-above its top once no pending block lies above the round it builds, and
+no sync's block lies above round `r + 1` (`syncTop`) and the references
+pass the reach and certificate tests (`tryBuild`). Waiting for the
+syncs' blocks keeps the node from jumping to a round that the history it
+is still syncing would raise. Without a round to jump to, it builds
+above its top once no sync's block lies above the round it builds, and
 the first build or timer ends the recovery. The jump is safe because no
-claim reads a node's reference to its own block (§8). At Mysticeti with
-`n = 4`, node `3` down from tick `200` to `900` and a horizon of `1500`
-ticks, the nodes end at round `435`, and the largest disk holds 1648
-blocks, 92 fewer than four a round: node `3` built no block at the 92
-rounds it jumped over. It needs no bootstrap, since
-no block is collected.
+claim reads a node's reference to its own block (§8). A recovering node
+jumps only if the history it syncs arrives before a timer fires. At
+Mysticeti with `n = 4`, node `3` down from tick `200` to `900` and a
+horizon of `1500` ticks, node `3` restarts at round `85`; its top round's
+timer, set again at the restart, fires at tick `910`, before the stream
+of the rounds it missed, which ends the recovery, and once the stream is
+in it builds each round from `86` to `178` in one step. The nodes end at
+round `435`, and the largest disk holds 1,740 blocks, four fewer than
+four a round. It needs no bootstrap, since no block is collected.
 
 ## 4. Conformance
 
 | | Claim | Proof |
 |---|---|---|
-| V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; it broadcasts each block it persists, and only blocks it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`. | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions` (proved, `Local/Proof.lean`) |
+| V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; it broadcasts each block it persists, and only blocks it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`; it holds at most `n − 1` syncs. | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions`, `SyncsBound` (proved, `Local/Proof.lean`): `Node.syncsOn_run`, `Node.syncs_length_le` |
 | V2 | **The decisions are the scheme's**: at the bounded vote, a decision step of a node whose memory holds the round of its next undecided slot, as it always does (§3.1), outputs what `Scheme.tryDecide` decides on any record and view holding the disk's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.tryDecide_memory`, `Node.Store.Mirrors.viewsAbove`, `Node.tryDecide_window`, `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest disk is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
-| V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, with at most `f` nodes outside the honest set, every block an honest node broadcast, with its history, ends on every honest node's disk. The fault bound makes the pruned answer (§3.4) sound: a block left out of an answer is reached from a round-`(r − 1)` block of an honest author in the asker's quorum. | `Node.Converge.Converges` (proved): `Node.walk_reaches`, `Node.flush_no_ready`, `Node.Converge.chain`, `Node.Quorate.run`, `Node.mem_coreSets`, `Node.pruned_chain`, `Node.eq_of_persists` |
+| V3′ | **Convergence**: over a trace with delivery, timely authentication and an injective hash, every block in the history of an honest node's own block at its top at the end is on every honest node's disk at the end. No fault bound is needed: an honest node given the block has a sync for it until it holds it, and the answer to the sync's last request leads to no request, which it would if the node still lacked the block (§3.4). | `Node.Converge.Converges` (proved): `Node.Converge.sync_made`, `Node.Converge.sync_stays`, `Node.Converge.last_ask`, `Node.step_stream_stuck`, `Node.Converge.not_detected`, `Node.eq_of_persists` |
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that do not restart, their timers on time, no honest node's timer early, and timeouts above `2(Δ + Δₛ)`, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
 | V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` to the horizon `t₁`, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.recovered_by`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
@@ -430,8 +448,10 @@ author's name was broadcast by that author earlier in the trace
 (`Converge.TimelyAuthentic`); at the end of the trace this gives
 `Node.Authentic` (`Node.authentic_of_timely`). The program broadcasts
 exactly the blocks it persists (`Node.Local.Sends`), so such a block is
-one of the author's own, one a round. A block a peer sends in answer to
-a fetch is covered, since its author broadcast it.
+one of the author's own, one a round. A block in a stream piece is
+covered, since its author broadcast it. The links are authenticated as
+well: an announcement names its sender, and the node takes an announced
+block only from its author (§3.4).
 
 **One run model.** Every claim about many nodes is stated over a trace
 (`Model/Trace.lean`), which orders all nodes' inputs in one list. An
@@ -480,13 +500,12 @@ assumptions up to a time `t₁`, over a reliable set `T ⊆ H` of at least
 * **timers** (`TimersFire`, `TimersAfterSet`): a timer a reliable node
   sets at time `t` for `a` ticks fires at `t + a`, and no honest node's
   timer fires earlier than its delay after it was set;
-* **synchronisation** (`SyncedWithin`): a reliable node that receives a
-  reliable node's block at time `t` receives after it, by
-  `max t gst + Δₛ`, every block the honest nodes know that the block
-  reaches through blocks they know (`Live.knownBlock`) and that it did
-  not make. This is assumed of the network, not proved of the program's
-  fetch (§3.4), since efficient synchronisation is out of scope (§1);
-  the fetch meets it with `Δₛ = 2Δ` when the block's author answers;
+* **synchronisation** (`SyncedWithin`): a reliable node given a reliable
+  node's block at time `t` holds it on its disk by `max t gst + Δₛ`,
+  having synced its history. This is assumed of the network and the
+  syncs together, not proved: the program proves that the syncs
+  complete (V3′), not how fast. A sync completes in one request and
+  answer when no gap occurs (§3.4), so `Δₛ = 2Δ` then;
 * every reliable node **starts** by GST (`StartedBy`) and does not
   **restart** by `t₁` (`UpFrom T tr time 0 t₁`), so none jumps (§3.6);
 * timely authentication of blocks, a block hash injective on every
@@ -712,9 +731,9 @@ view of the record (`cut_before`), and verdicts on one slot agree
 ## 6. Testing
 
 1. **Agreement with the model** (`LeanDagTest/Node/Replay.lean`). A
-   hand-built record of the scheme's tests goes through the program's
-   receipt path (`flush`) into an empty disk and memory, and one decision step
-   (`decideStep`) runs on it. Its commits are those the scheme's tests
+   hand-built record of the scheme's tests goes, in order of round,
+   through the program's acceptance path (`absorb`) into an empty disk
+   and memory, and one decision step (`decideStep`) runs on it. Its commits are those the scheme's tests
    record for `tryDecide`: slots `0`, `1` and `2` of Mahi-Mahi's `full4`
    at the Mahi-Mahi row of wave four, and slots `0`, indirectly, and `1`
    of Mysticeti's `U7` at the Mysticeti row.
@@ -748,27 +767,23 @@ view of the record (`cut_before`), and verdicts on one slot agree
    node down for 10 to 850 ticks, with GST at `0` or after the restart;
    two nodes down at staggered times; every node down at once, or in a
    staggered way; `f + c + 1` nodes down overlapping; one node down three
-   times; and `f + c` nodes silent and one more down. In all 285 runs
-   agreement, prefix-comparability and validity hold, every node up ends
-   110 rounds or more above the top round at the last restart, the
-   restarted node builds above that round within 30 ticks of the restart
-   when it restarts past GST and within 46 ticks before GST, and an
-   honest node decides again within 22 ticks past GST and 57 before.
-   The restarted node jumps over the rounds it missed (§3.6). Before
-   the catch-up rule, 155 missed rounds at
-   Mysticeti with `n = 4` took about 335 ticks, a timeout at each round
-   the restarted node's block reached no leader block. Catch-up is costly to
-   compute: the restarted node asks for the missing history on account of
-   every block it receives (§3.4), so over 650 ticks at Orcaella with
-   `n = 9` a 250-tick outage takes 156,381 inputs and 815 fetches,
-   against 22,146 inputs and 357 fetches without it, and an 850-tick
-   outage takes over an hour to simulate. Three outage scenarios run in the build
+   times; and `f + c` nodes silent and one more down. In all 288 runs
+   agreement, prefix-comparability and validity hold; every node up ends
+   108 rounds or more above the top round at the last restart, and 44 or
+   more with `f + c` nodes silent; the restarted node builds above that
+   round within 30 ticks of the restart when it restarts past GST and
+   within 56 ticks before GST; and an honest node decides again within 21
+   ticks past GST and 49 before. Catch-up is cheap: over 650 ticks at
+   Orcaella with `n = 9`, a 250-tick outage takes 17,194 inputs and 296
+   requests, 90 of them naming blocks, against 21,114 inputs and 339
+   requests without it, and an 850-tick outage over 1,250 ticks takes 3.2
+   seconds to simulate. Three outage scenarios run in the build
    (`LeanDagTest/Node/Sim.lean`).
 
-   An equivocator's copies each drop blocks that claim their identity,
-   so neither copy accepts blocks built on its twin: it stops building
-   and its pending blocks grow. From `byzUntil` on it therefore acts on
-   nothing.
+   An equivocator's copies each drop blocks in their own name, so neither
+   copy accepts blocks built on its twin, and it stops building. The
+   honest nodes that accept both twins detect it. From `byzUntil` on it
+   acts on nothing.
 4. **Attacks** (`LeanDagTest/Node/Adversary.lean`, `--adv` and
    `--attacks` of `lake exe sim`). An attacker runs the honest program
    and also mounts attacks: `invalidBlocks` (with each block it
@@ -780,12 +795,15 @@ view of the record (`cut_before`), and verdicts on one slot agree
    an honest author's name must be one that author made, which is what
    the claims over traces assume (`TimelyAuthentic`). At the Mysticeti
    row with `n = 4`, every attack leaves agreement,
-   prefix-comparability and validity intact. Under `twinSplit` every
-   round waits for its timer. Without the checks, blocks forged in node
-   `0`'s name are accepted by its peers, and their later blocks reference
-   them; node `0` drops every block in its own name, so it never holds
-   their histories and stays at round `2`, while agreement,
-   prefix-comparability and validity still hold.
+   prefix-comparability and validity intact. A node that accepts two
+   blocks of the attacker at one round detects it, under `twinSplit` and
+   under `invalidBlocks`, whose block without references at round `0` is
+   a twin of the attacker's genesis block. It then takes no announcement
+   from the attacker, whose blocks reach it only in streams, and the
+   honest nodes build 20 rounds in 150 ticks, against 66 under
+   `forgedAuthor`. Without the checks, the blocks forged in node `0`'s
+   name still reach no node: a node takes an announced block only from
+   its author, and the attacker streams only blocks it holds.
 
 ## 7. Tooling and cost
 
@@ -817,18 +835,20 @@ view of the record (`cut_before`), and verdicts on one slot agree
   decider runs on the window at the round of the next undecided slot
   (§3.3), whose identifiers are gathered from `byRound`; the decider's
   scans therefore cost time in the number of blocks at and above that
-  round, not in `N`. An answer to a fetch sends the history of each
-  block asked for, less the blocks the asker holds. Four nodes at the
-  Mysticeti row reach round 439 over 1,000 ticks, the largest disk
-  holding 1,761 blocks and the largest memory 9; over 4,000 ticks round
-  1,754, the largest disk holding 7,020 and the largest memory 10. With
-  GST at 300, a node down from the start or for 250 ticks, an attacker
-  sending invalid blocks or showing each node its own twins, or an
-  equivocator, the memory holds at most 10 blocks; at Orcaella with
-  `n = 9`, after a node is down for 350 ticks, at most 16, against 1,972
-  on disk. A profile of
-  an 8,000-tick run (4.6 seconds) places about half of its time in
-  answering fetches (`answerIds`) and about a fifth in the decider.
+  round, not in `N`. A stream sends the blocks of a block's history
+  above the asker's frontier, those asked for by name, and the block.
+  The frontier scans the disk's rounds from `0` for each author
+  (`gapOf`); the executables read it once a request. Four nodes at the
+  Mysticeti row reach round 435 over 1,000 ticks, the largest disk
+  holding 1,740 blocks and each memory at most 10 at the end; over 4,000
+  ticks round 1,736, the largest disk holding 6,945 and each memory at
+  most 10. With GST at 300, a node down from the start or for 250 ticks,
+  an attacker sending invalid blocks or showing each node its own twins,
+  or an equivocator, each memory holds at most 10 blocks at the end; at
+  Orcaella with `n = 9`, after a node is down for 350 ticks, at most 12,
+  against 2,880 on disk. A node holds at most 3 syncs at `n = 4` and 8 at
+  `n = 9`. An 8,000-tick run takes 14 seconds, about nine tenths of it
+  computing frontiers.
 
 ## 8. Self-references
 
@@ -849,17 +869,21 @@ no inclusion, so a node need not reference its own blocks.
 ## 9. Next
 
 The restart, resending and liveness across crashes are done, including
-decisions resuming after every node crashed (§3.6, §5.6). The plan to
-replace receipt and fetching by the syncs of `docs/sync.md`, and to add
-its DoS protections, is `docs/node-sync.md`. Open:
+decisions resuming after every node crashed (§3.6, §5.6), and the syncs
+of `docs/sync.md` on the node (§3.4), Stage 1 of `docs/node-sync.md`.
+Stage 2 of that plan adds evidence of equivocation to blocks and
+excludes exposed authors from validity. Open:
 
 * the disk and the decisions grow with the chain, which they record;
-  `pending` grows under attack, by about two blocks a round when an
-  attacker sends blocks that reference blocks that do not exist (§6);
   and the memory holds every block of its rounds, so an equivocator can
   grow it by its twins;
-* catch-up is costly to compute: the restarted node asks for the
-  missing history on account of every block it receives (§6, item 3).
+* the frontier costs a scan of the disk's rounds for each author at each
+  request (§7); and an author whose blocks skip a round below its
+  latest, as a node that jumped, keeps its frontier at that round, so
+  each stream carries its blocks above that round in the history of the
+  stream's block, as it does a detected author's, whose frontier is `0`;
+* a recovering node jumps only if the history it syncs arrives before a
+  timer fires (§3.6);
 * only a node that restarted jumps: a node that falls behind without
   crashing builds each round it missed, on being behind (§3.2);
 * a node of `T` that restarts between `t_r` and `t₁` falls outside the

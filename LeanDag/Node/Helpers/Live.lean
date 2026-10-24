@@ -43,7 +43,7 @@ theorem build_witness (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : 
       (hinv.mono fun x hx => hK x (knownBefore_knownOf hx))
       (cut_before hσ hadm hf htime hinj i v hv).1 (Held.run _ Held.init)
       (ownTop_before (cfg := cfg) i)
-      (fun x hx => hK x (knownBefore_knownOf (hinv.pend x hx)))
+      (fun x hx => hK _ (knownBefore_knownOf (hinv.pend x hx)))
       (fun x hx => hK x (hd x hx)) (fun x hx => hK x (hb x hx)) e he with h | h
   · exact absurd h hr
   · rw [stateBefore_succ hi, if_pos rfl]; exact h

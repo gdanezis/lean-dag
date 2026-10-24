@@ -66,13 +66,13 @@ def decisionsOf (tr : Trace Validator BlockId Payload) (v : Validator) : List (�
   commitsOf (runOf cfg tr v).2
 
 /-- **What node `u`'s outputs send**: a broadcast block to every other
-node, a request for blocks and a block sent to the node it names. -/
+node, and a request and a stream to the node they name. -/
 def Sends (u : Validator) (out : List (Output Validator BlockId Payload))
     (m : Validator × Input Validator BlockId Payload) : Prop :=
   ∃ o ∈ out, match o with
-    | .broadcast id b => m.1 ≠ u ∧ m.2 = .deliver id b
-    | .fetch peer r ids => m.1 = peer ∧ m.2 = .fetchRequest u r ids
-    | .send peer id b => m.1 = peer ∧ m.2 = .deliver id b
+    | .broadcast id b => m.1 ≠ u ∧ m.2 = .deliver u id b
+    | .sync peer t fr ids => m.1 = peer ∧ m.2 = .syncRequest u t fr ids
+    | .stream peer L => m.1 = peer ∧ m.2 = .stream u L
     | _ => False
 
 end Node

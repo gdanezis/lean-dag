@@ -583,7 +583,6 @@ import LeanDag.Node.Runs.Statement
 import LeanDag.Node.Runs.Proof
 import LeanDag.Node.Model.Trace
 import LeanDag.Node.Model.Timed
-import LeanDag.Node.Helpers.Walk
 import LeanDag.Node.Converge.Statement
 import LeanDag.Node.Helpers.Flush
 import LeanDag.Node.Helpers.Steps
@@ -598,9 +597,11 @@ import LeanDag.Node.Helpers.Wait
 import LeanDag.Node.Helpers.Live
 import LeanDag.Node.Helpers.Quiet
 import LeanDag.Node.Helpers.Reliable
-import LeanDag.Node.Helpers.Hold
 import LeanDag.Node.Helpers.Shape
 import LeanDag.Node.Helpers.Arrive
+import LeanDag.Node.Helpers.SyncWalk
+import LeanDag.Node.Helpers.SyncSteps
+import LeanDag.Node.Helpers.SyncTrace
 import LeanDag.Node.Helpers.Armed
 import LeanDag.Node.Helpers.Catch
 import LeanDag.Node.Helpers.Wave

@@ -99,8 +99,7 @@ theorem decideStep_top (s : State Validator BlockId Payload) :
     (Node.decideStep cfg s).1.top = s.top := by
   unfold Node.decideStep
   dsimp only
-  split <;> simp only [release_disk, release_pending, release_top, release_own,
-    release_fired, release_lo, release_decided, release_armed]
+  split <;> simp only [release_top]
 
 omit [Fintype Validator] in
 theorem Held.decideStep {s : State Validator BlockId Payload} (h : Held cfg s) :
@@ -108,14 +107,14 @@ theorem Held.decideStep {s : State Validator BlockId Payload} (h : Held cfg s) :
   h.grow (by rw [decideStep_disk]; exact Grows.refl _) (decideStep_top s)
 
 omit [Fintype Validator] in
-theorem Held.flush {s : State Validator BlockId Payload} (h : Held cfg s) (fuel : ℕ) :
-    Held cfg (flush cfg fuel s) :=
-  h.grow (by rw [flush_disk]; exact Grows.flush _ _ _) (flush_top _ _)
+theorem Held.flushSyncs {s : State Validator BlockId Payload} (h : Held cfg s) (fuel : ℕ) :
+    Held cfg (Node.flushSyncs cfg fuel s) :=
+  h.grow (Grows.flushSyncs fuel s) (flushSyncs_top _ _)
 
 omit [Fintype Validator] in
 theorem Held.advance {s : State Validator BlockId Payload} (h : Held cfg s) :
     Held cfg (Node.advance cfg s).1 :=
-  ((Held.progress (s.disk.topRound + 2) h).decideStep.flush _).grow
+  ((Held.progress (s.disk.topRound + 2) h).decideStep.flushSyncs _).grow
     (by rw [advance_disk]; exact Grows.refl _) (advance_top s)
 
 omit [Fintype Validator] in
@@ -141,14 +140,17 @@ theorem Held.step {s : State Validator BlockId Payload} (h : Held cfg s)
         exact Nat.zero_le _
       · exact h
     · exact h
-  | deliver id b =>
-    simp only [Node.step]
-    split
-    · exact Held.settle ((h.grow (Grows.refl _) rfl :
-        Held cfg { s with pending := (id, b) :: s.pending }).flush _)
-    · exact h
+  | deliver u id b =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
+      he | ⟨s₁, pre, hr, -, he⟩
+    · rw [he]; exact h
+    · rw [he]; exact Held.settle (h.grow hr.grows hr.top)
+  | stream u L =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, -, he⟩
+    · rw [he]; exact h
+    · rw [he]; exact Held.settle (h.grow hr.grows hr.top)
   | timer r => rw [step_timer_fst]; exact Held.settle (h.grow (Grows.refl _) rfl)
-  | fetchRequest peer r ids => exact h
+  | syncRequest peer t fr ids => simp only [Node.step]; exact h
   | restart =>
     exact Held.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl)
 
@@ -236,8 +238,8 @@ theorem Quorate.advance {s : State Validator BlockId Payload} (h : Quorate cfg s
   have hp := Quorate.progress (s.disk.topRound + 2) h
   have hd : Quorate cfg (Node.decideStep cfg (Node.progress cfg (s.disk.topRound + 2) s).1).1 :=
     hp.grow (by rw [decideStep_disk]; exact Grows.refl _) (decideStep_top _)
-  exact (hd.grow (by simp only [Node.pass, flush_disk]; exact Grows.flush _ _ _)
-    (by simp only [Node.pass, flush_top]) : Quorate cfg (Node.pass cfg s).1).grow
+  exact (hd.grow (by simp only [Node.pass]; exact Grows.flushSyncs _ _)
+    (by simp only [Node.pass, flushSyncs_top]) : Quorate cfg (Node.pass cfg s).1).grow
     (by rw [advance_disk]; exact Grows.refl _) (advance_top s)
 
 omit [Fintype Validator] in
@@ -259,13 +261,17 @@ theorem Quorate.step {s : State Validator BlockId Payload} (h : Quorate cfg s)
         omega
       · exact h
     · exact h
-  | deliver id b =>
-    simp only [Node.step]
-    split
-    · exact Quorate.settle (h.grow (by rw [flush_disk]; exact Grows.flush _ _ _) (flush_top _ _))
-    · exact h
+  | deliver u id b =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
+      he | ⟨s₁, pre, hr, -, he⟩
+    · rw [he]; exact h
+    · rw [he]; exact Quorate.settle (h.grow hr.grows hr.top)
+  | stream u L =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, -, he⟩
+    · rw [he]; exact h
+    · rw [he]; exact Quorate.settle (h.grow hr.grows hr.top)
   | timer r => rw [step_timer_fst]; exact Quorate.settle (h.grow (Grows.refl _) rfl)
-  | fetchRequest peer r ids => exact h
+  | syncRequest peer t fr ids => simp only [Node.step]; exact h
   | restart =>
     exact Quorate.settle (h.grow (s' := { s with recovering := true }) (Grows.refl _) rfl)
 

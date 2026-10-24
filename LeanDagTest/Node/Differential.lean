@@ -9,7 +9,7 @@ eight rounds over four validators: at each round one validator may be
 absent and validator `3` may equivocate, and each block references one
 block of each of at least three authors of the round below, drawn at
 random among twins. Each record goes onto an empty disk through the
-program's acceptance path (`flush`). On it, at five rows and schedules,
+program's acceptance path (`absorb`), in order of round. On it, at five rows and schedules,
 three computations give one decided prefix:
 
 * the program's decision step at the bounded vote (`decideStep`), the
@@ -115,9 +115,10 @@ def cfg (p : Scheme.Params) (per m : ℕ) (hper : 0 < per) (hm : 0 < m)
   idOf := idIn bs
   payload := fun _ => ()
 
-/-- The record through the acceptance path onto an empty disk. -/
+/-- The record, in order of round, through the acceptance path onto an
+empty disk. -/
 def load (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : State (Fin 4) ℕ Unit :=
-  flush c bs.length { State.init c with pending := bs }
+  absorb c (State.init c) (bs.mergeSort fun x y => decide (x.2.round ≤ y.2.round))
 
 /-- The decided prefix of one decision step. -/
 def once (c : Config (Fin 4) ℕ Unit) (bs : Blocks) : List (ℕ × Option ℕ) :=
@@ -135,7 +136,7 @@ def stepwise (c : Config (Fin 4) ℕ Unit) (bs : Blocks) (R : ℕ) : List (ℕ �
   ((List.range (R + 1)).foldl (fun (acc : State (Fin 4) ℕ Unit × List (ℕ × Option ℕ)) r =>
     let (s, out) := acc
     let rb := bs.filter fun e => e.2.round = r
-    let s := flush c rb.length { s with pending := rb }
+    let s := absorb c s rb
     let d := decideStep c s
     (d.1, out ++ commitsOf d.2)) (State.init c, [])).2
 

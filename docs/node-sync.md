@@ -11,37 +11,24 @@ the stages, and what each stage keeps proved.
 
 ## 1. Where the node stands
 
-The node receives blocks in two ways, both as `Input.deliver`: an author's
-broadcast of its block, and a peer's answer to a fetch. A received block
-whose references are not all accepted waits in `pending`, without a bound;
-when its references are accepted and it is valid at the row (`rowValid`),
-it is accepted (`flush`). After each delivery the node walks the missing
-part of the block's history through its pending blocks and asks the
-block's author for it (`walkLevel`, `missing`); a node asked answers with
-the blocks and their histories, less what the asker holds whatever it built
-on (`answerIds`, `coreSets`, `pruned`). On its retry timer it asks again
-(`refetch`). Every valid block is accepted, Byzantine twins included.
+Stages 0 and 1 are done (§4). The node receives blocks by announcements
+and syncs, one sync for each peer (`docs/validator.md` §3.4); it holds at
+most `n − 1` syncs (V1, `SyncsBound`), and the honest nodes converge
+(V3′). It detects an author whose twins it accepts, and takes no
+announcement from it after.
 
-Three consequences.
+Two consequences of the node before Stage 1 remain.
 
-* **`pending` is unbounded.** An attacker that sends blocks referencing
-  blocks that do not exist grows it by about two blocks a round
-  (`docs/validator.md` §6).
-* **Fetching follows unchecked blocks.** A pending block is checked only
-  once its history is held, so a Byzantine pending block can claim any
-  history, and the walk asks for it.
 * **A convicted author still makes valid blocks.** An author whose twins
   are known can build blocks that reference only honest blocks; they are
-  valid, and the node accepts as many as it is sent. A rule that drops a
-  convicted author's blocks except those fetched cannot be stated, since
-  a fetched block and a pushed one arrive alike, and a Byzantine peer can
-  make the node fetch them by sending a pending block that references
-  them.
+  valid, and the node accepts those it is sent in streams, since honest
+  blocks may reference them.
+* **Nothing bounds what a node takes in a round.** A Byzantine target
+  can carry any number of valid twins of an author not yet detected.
 
-The Sync model has none of these: one sync per peer bounds the blocks a
-node holds waiting by `n − 1` (S2); a target is admitted only if every
-block of its history passes the checks, and only blocks of the target's
-history are taken in, which S5 needs (§3 of `docs/sync.md`).
+Stage 2 makes honest blocks stop referencing convicted authors; Stages 3
+and 4 bound what a node takes in a round once every equivocator is
+exposed (S5 of `docs/sync.md`).
 
 ## 2. The design
 
@@ -64,10 +51,9 @@ history are taken in, which S5 needs (§3 of `docs/sync.md`).
   missing references by name (S1: within `2e + 1` passes, for `e`
   equivocators).
 * **Pending is the targets**, at most one for each other node not
-  detected (S2). The pending list, the walk, the pruned answer and the
-  per-block refetch go. On the retry timer the node sends its requests
-  again. The jump waits for no target above the round it jumps to, in
-  place of `pendingTop`.
+  detected (S2). On the retry timer and on a restart the node sends its
+  requests again (`resync`). The jump waits for no target above the round
+  it jumps to (`syncTop`).
 
 The withholding attack of `docs/validator.md` §3.4 (a Byzantine node shows
 one node a block referencing a block it reveals only to the others) stays
@@ -141,24 +127,25 @@ at before every reliable node held the evidence.
 Each stage ends with `lake build` green, the standard axioms, the six
 audits, the documents updated, and a commit.
 
-* **Stage 0 — isolate receipt in the proofs.** The proofs read `pending`
-  and the fetch in 19 of the node's files (`Flush`, `Walk`, `Converge`,
-  `Arrive`, `Shape`, `Steps`, `Local`, …). First restate what they use as a
-  few lemmas about receipt — what a step does to the disk, that the disk
-  stays a cut, that a settled node has nothing ready, that a block whose
-  history a reliable node holds is accepted — and prove the claims from
-  those. No program change.
-* **Stage 1 — syncs on the node** (§2.1, D2, D5). The program: state
-  `target`, `detected` and the names asked for, inputs for announcements,
-  requests and stream pieces, outputs for requests and streams; the
-  pending list, walk and pruned answer removed. Proofs: V1–V3 and V12
-  through the Stage 0 lemmas; V3′ (convergence) re-proved from S1, since
-  the pruned answer it used is gone; V11 and V11′ keep `Arrival`, with
-  synchronisation (`SyncedWithin`) now meaning that a reliable node's
-  stream for a reliable target arrives within `Δₛ`. New claim: pending is
-  at most `n − 1` (S2 on the node). The simulator gains requests and
-  streams; the outage sweep, the attacks and the withholding scenario run
-  again; `docs/validator.md` §3.4 is rewritten.
+* **Stage 0 — isolate receipt in the proofs.** *Done.* What the proofs
+  use of receipt is a few lemmas: a delivery or a stream piece changes
+  nothing or is a receipt (`Received`, `step_receipt`), which grows the
+  disk with blocks of the syncs or the input and keeps the rest of what
+  the claims read; after every step no sync's block is ready
+  (`noReady_step`).
+* **Stage 1 — syncs on the node** (§2.1, D2, D5). *Done.* The program:
+  state `syncs` (the peer, its block and the names asked for) and
+  `detected`; inputs for announcements, which name their sender, stream
+  pieces and requests; outputs for requests and streams; the pending
+  list, walk, pruned answer and refetch removed. Proofs: V1–V3, V11, V11′
+  and V12 through the Stage 0 lemmas. V3′ (convergence) is re-proved by
+  the sync's last request (`last_ask`, `step_stream_stuck`), with no
+  fault bound, for the history of each honest node's top block.
+  Synchronisation (`SyncedWithin`) now says that a reliable block given
+  to a reliable node is on its disk within `Δₛ` past GST. New clause of
+  V1: at most `n − 1` syncs (`SyncsBound`). The simulator sends requests
+  and streams; the outage sweep, the attacks and the withholding
+  scenario ran again (`docs/validator.md` §6).
 * **Stage 2 — evidence and validity** (§2.2, D3, D4). Evidence in the
   payload, exposure kept in the store, the validity clause, the builder
   rule and conviction. The scheme's record is then at the stronger

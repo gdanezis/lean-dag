@@ -7,7 +7,7 @@ import LeanDag.Node.Helpers.Steps
 authors lie at or below a round the state fixes, so it builds only up to
 the round above it, and its next undecided slot is bounded too. Each pass
 but the last raises its top or its next undecided slot, or leaves fewer
-blocks pending, so `passes s` passes reach one that changes none of them
+syncs, so `passes s` passes reach one that changes none of them
 (`quiesce_stops`). The state it leaves can build, decide and accept
 nothing more (`Settled`, `settle_settled`).
 -/
@@ -23,10 +23,10 @@ variable {cfg : Config Validator BlockId Payload}
 /-! ## The blocks a settle holds -/
 
 /-- **The blocks a state holds lie in `K`**: the blocks on its disk and its
-pending ones. -/
+syncs' blocks. -/
 def InK (K : Set (BlockId × Block Validator BlockId Payload)) (s : State Validator BlockId Payload) :
     Prop :=
-  (∀ j ∈ s.disk.ids, (j, s.disk.blk j) ∈ K) ∧ ∀ e ∈ s.pending, e ∈ K
+  (∀ j ∈ s.disk.ids, (j, s.disk.blk j) ∈ K) ∧ ∀ e ∈ s.syncs, e.2.1 ∈ K
 
 variable (cfg) in
 /-- **The blocks of a settle from a state of rounds at most `R`**: of any
@@ -67,14 +67,20 @@ theorem InK.advance {K : Set (BlockId × Block Validator BlockId Payload)}
     {s : State Validator BlockId Payload} (h : InK K s)
     (hK : ∀ e ∈ persists (Node.advance cfg s).2, e ∈ K) : InK K (Node.advance cfg s).1 := by
   rw [advance_snd, persists_append, persists_arm, List.append_nil] at hK
-  rw [InK, advance_disk, advance_pending]
-  simp only [Node.pass, flush_disk, flush_pending] at hK ⊢
+  rw [InK, advance_disk, advance_syncs]
+  simp only [Node.pass] at hK ⊢
   rw [persists_append] at hK
   have h₁ := InK.progress _ h fun e he => hK e (List.mem_append_left _ he)
   generalize Node.progress cfg (s.disk.topRound + 2) s = r at h₁ ⊢
   have h₂ : InK K (Node.decideStep cfg r.1).1 := by
-    rw [InK, decideStep_disk, decideStep_pending (cfg := cfg) r.1]; exact h₁
-  exact flush_in (cfg := cfg) ((Node.decideStep cfg r.1).1.pending.length + 1) h₂.1 h₂.2
+    rw [InK, decideStep_disk, decideStep_syncs (cfg := cfg) r.1]; exact h₁
+  set d := (Node.decideStep cfg r.1).1
+  obtain ⟨⟨L, hL, hd⟩, -, hsub, -⟩ := flushSyncs_eq (cfg := cfg) (d.syncs.length + 1) d
+  refine ⟨by
+    rw [hd]
+    exact foldl_in L h₂.1 fun e he => by
+      obtain ⟨x, hx, rfl⟩ := List.mem_map.mp (hL e he); exact h₂.2 x hx,
+    fun e he => h₂.2 e (hsub he)⟩
 
 /-! ## Bounds within a settle -/
 
@@ -175,76 +181,17 @@ theorem progress_below (hq : 2 ≤ cfg.q) {R : ℕ} : ∀ (fuel : ℕ) {s : Stat
         · rw [hs₁] at ht₂'; exact ⟨ht₂, by omega⟩
 
 omit [Fintype Validator] in
-/-- **Deciding** keeps the disk, the pending blocks and the top, and
+/-- **Deciding** keeps the disk, the syncs and the top, and
 raises the next undecided slot to at most the slots at the disk's
 rounds. -/
 theorem decideStep_bound (s : State Validator BlockId Payload) :
     let d := (Node.decideStep cfg s).1
-    d.disk = s.disk ∧ d.pending = s.pending ∧ d.top = s.top ∧ s.lo ≤ d.lo ∧
+    d.disk = s.disk ∧ d.syncs = s.syncs ∧ d.top = s.top ∧ s.lo ≤ d.lo ∧
       d.lo ≤ max s.lo (decidable cfg s.disk.topRound) :=
-  ⟨decideStep_disk s, decideStep_pending s, decideStep_top s, decideStep_lo s,
+  ⟨decideStep_disk s, decideStep_syncs s, decideStep_top s, decideStep_lo s,
     decideStep_lo_le s⟩
 
 /-! ## A pass -/
-
-omit [Fintype Validator] in
-/-- **A flush** keeps fewer pending blocks, and leaves the store and the
-pending blocks as they were if it keeps as many. -/
-theorem flush_bound : ∀ (fuel : ℕ) (st : Store Validator BlockId Payload)
-    (pend : List (BlockId × Block Validator BlockId Payload)),
-    (flushOn cfg fuel st pend).2.length ≤ pend.length ∧
-      ((flushOn cfg fuel st pend).2.length = pend.length →
-        flushOn cfg fuel st pend = (st, pend))
-  | 0, _, _ => ⟨le_rfl, fun _ => rfl⟩
-  | fuel + 1, st, pend => by
-    unfold flushOn
-    dsimp only
-    split
-    · exact ⟨le_rfl, fun _ => rfl⟩
-    · rename_i hE
-      rw [List.partition_eq_filter_filter] at hE ⊢
-      have hl := List.length_eq_length_filter_add (fun e => readyOn cfg st e) (l := pend)
-      have hpos : 0 < (pend.filter fun e => readyOn cfg st e).length := by
-        rw [List.isEmpty_iff] at hE
-        exact List.length_pos_of_ne_nil hE
-      obtain ⟨h₁, -⟩ := flush_bound fuel
-        ((pend.filter fun e => readyOn cfg st e).foldl (fun s e => acceptOn cfg s e.1 e.2) st)
-        (pend.filter (not ∘ fun e => readyOn cfg st e))
-      simp only [Function.comp_def] at hl h₁ ⊢
-      refine ⟨by omega, fun h => ?_⟩
-      omega
-
-omit [Fintype Validator] in
-/-- **A flush that leaves the disk and the pending blocks leaves the
-state.** -/
-theorem flush_self : ∀ {fuel : ℕ} {s : State Validator BlockId Payload},
-    flushOn cfg fuel s.disk s.pending = (s.disk, s.pending) → flush cfg fuel s = s
-  | 0, _, _ => rfl
-  | fuel + 1, s, h => by
-    have hr : (fun e => ready cfg s e) = fun e => readyOn cfg s.disk e := funext (ready_eq s)
-    unfold flush
-    dsimp only
-    rw [hr]
-    split
-    · rfl
-    · rename_i hE
-      exfalso
-      have hlen := congrArg (fun p => p.2.length) h
-      simp only at hlen
-      unfold flushOn at hlen
-      dsimp only at hlen
-      rw [if_neg hE] at hlen
-      have h₁ := (flush_bound (cfg := cfg) fuel
-        ((s.pending.partition fun e => readyOn cfg s.disk e).1.foldl
-          (fun st e => acceptOn cfg st e.1 e.2) s.disk)
-        (s.pending.partition fun e => readyOn cfg s.disk e).2).1
-      rw [List.partition_eq_filter_filter] at hE hlen h₁
-      have hl := List.length_eq_length_filter_add (fun e => readyOn cfg s.disk e) (l := s.pending)
-      have hpos : 0 < (s.pending.filter fun e => readyOn cfg s.disk e).length := by
-        rw [List.isEmpty_iff] at hE
-        exact List.length_pos_of_ne_nil hE
-      simp only [Function.comp_def] at hl h₁ hlen
-      omega
 
 omit [Fintype Validator] in
 /-- **A decision step that leaves the next undecided slot changes
@@ -262,10 +209,10 @@ theorem decideStep_eq_of_lo {s : State Validator BlockId Payload}
     rw [if_neg hc]
 
 variable (cfg) in
-/-- **A pass that stops**: it changes none of the top, the number of
-pending blocks and the next undecided slot. -/
+/-- **A pass that stops**: it changes none of the top, the number of syncs
+and the next undecided slot. -/
 def Stops (s : State Validator BlockId Payload) : Prop :=
-  (advance cfg s).1.top = s.top ∧ (advance cfg s).1.pending.length = s.pending.length ∧
+  (advance cfg s).1.top = s.top ∧ (advance cfg s).1.syncs.length = s.syncs.length ∧
     (advance cfg s).1.lo = s.lo
 
 omit [Fintype Validator] in
@@ -287,23 +234,23 @@ def Within (R L : ℕ) (s : State Validator BlockId Payload) : Prop :=
 
 /-- What a pass that does not stop lowers. -/
 def passMeasure (B L : ℕ) (s : State Validator BlockId Payload) : ℕ :=
-  s.pending.length + (B - s.top.getD 0) + (L - s.lo)
+  s.syncs.length + (B - s.top.getD 0) + (L - s.lo)
 
 omit [Fintype Validator] in
 theorem within_advance {R L : ℕ} (s : State Validator BlockId Payload) :
     Within cfg R L (Node.advance cfg s).1 ↔ Within cfg R L (Node.pass cfg s).1 := by
-  simp only [Within, InK, advance_disk, advance_pending, advance_top, advance_lo]
+  simp only [Within, InK, advance_disk, advance_syncs, advance_top, advance_lo]
 
 omit [Fintype Validator] in
 theorem passMeasure_advance (B L : ℕ) (s : State Validator BlockId Payload) :
     passMeasure B L (Node.advance cfg s).1 = passMeasure B L (Node.pass cfg s).1 := by
-  simp only [passMeasure, advance_pending, advance_top, advance_lo]
+  simp only [passMeasure, advance_syncs, advance_top, advance_lo]
 
 omit [Fintype Validator] in
 theorem stops_iff (s : State Validator BlockId Payload) :
     Stops cfg s ↔ (Node.pass cfg s).1.top = s.top ∧
-      (Node.pass cfg s).1.pending.length = s.pending.length ∧ (Node.pass cfg s).1.lo = s.lo := by
-  simp only [Stops, advance_top, advance_pending, advance_lo]
+      (Node.pass cfg s).1.syncs.length = s.syncs.length ∧ (Node.pass cfg s).1.lo = s.lo := by
+  simp only [Stops, advance_top, advance_syncs, advance_lo]
 
 omit [Fintype Validator] in
 /-- **A pass within a settle** stays within it, and lowers the measure
@@ -317,12 +264,12 @@ theorem Within.advance (hq : 2 ≤ cfg.q) {R L : ℕ} (hL : decidable cfg (R + 1
   set r := Node.progress cfg (s.disk.topRound + 2) s with hr
   obtain ⟨hdst, hdpd, hdtop, hdlo, hdlo'⟩ := decideStep_bound (cfg := cfg) r.1
   set d := (Node.decideStep cfg r.1).1 with hd
-  obtain ⟨hfl, -⟩ := flush_bound (cfg := cfg) (d.pending.length + 1) d.disk d.pending
-  have hadv : (Node.pass cfg s).1 = flush cfg (d.pending.length + 1) d := rfl
-  have hrpd : r.1.pending = s.pending := progress_pending (cfg := cfg) _ s
+  obtain ⟨hfl, -⟩ := flushSyncs_bound (cfg := cfg) (d.syncs.length + 1) d
+  have hadv : (Node.pass cfg s).1 = flushSyncs cfg (d.syncs.length + 1) d := rfl
+  have hrpd : r.1.syncs = s.syncs := progress_syncs (cfg := cfg) _ s
   have hrlo : r.1.lo = s.lo := (Grows.progress (cfg := cfg) _ s).2
   -- the new top
-  have htop' : (Node.pass cfg s).1.top = r.1.top := by rw [hadv, flush_top]; exact hdtop
+  have htop' : (Node.pass cfg s).1.top = r.1.top := by rw [hadv, flushSyncs_top]; exact hdtop
   have hrt : r.1.top.getD 0 ≤ R + 1 := by
     rcases ht₁ with ht₁ | ⟨ht₁, -⟩
     · rw [ht₁]; exact h.2.1
@@ -333,14 +280,14 @@ theorem Within.advance (hq : 2 ≤ cfg.q) {R L : ℕ} (hL : decidable cfg (R + 1
     rw [hrlo] at hdlo'
     have := h.2.2
     omega
-  have hlo' : (Node.pass cfg s).1.lo = d.lo := by rw [hadv, flush_lo]
+  have hlo' : (Node.pass cfg s).1.lo = d.lo := by rw [hadv, flushSyncs_lo]
   refine ⟨⟨?_, by rw [htop']; exact hrt, by rw [hlo']; exact hdL⟩, fun hns => ?_⟩
   · have := InK.advance (cfg := cfg) h.1 (by
       rw [advance_snd, persists_append, persists_arm, List.append_nil]
       simp only [Node.pass]
       rw [persists_append, decideStep_persist, List.append_nil]
       exact hK₁)
-    rwa [InK, advance_disk, advance_pending] at this
+    rwa [InK, advance_disk, advance_syncs] at this
   unfold passMeasure
   rw [htop', hlo']
   -- the slot
@@ -349,14 +296,14 @@ theorem Within.advance (hq : 2 ≤ cfg.q) {R L : ℕ} (hL : decidable cfg (R + 1
     rcases Nat.eq_or_lt_of_le hdlo with he | hlt
     · exact Or.inl he.symm
     · exact Or.inr ⟨hlt, hdL⟩
-  set P := (flushOn cfg (d.pending.length + 1) d.disk d.pending).2.length with hP
-  have hPle : P ≤ s.pending.length := hfl.trans (by rw [hdpd, hrpd])
+  set P := (flushSyncs cfg (d.syncs.length + 1) d).syncs.length with hP
+  have hPle : P ≤ s.syncs.length := hfl.trans (by rw [hdpd, hrpd])
   rw [stops_iff] at hns
   rw [htop', hlo'] at hns
-  have hall : r.1.top = s.top → P = s.pending.length → d.lo = s.lo → False := by
-    intro a b c; apply hns; rw [hadv, flush_pending]; exact ⟨a, b, c⟩
-  rw [hadv, flush_pending]
-  change P + _ + _ < s.pending.length + _ + _
+  have hall : r.1.top = s.top → P = s.syncs.length → d.lo = s.lo → False := by
+    intro a b c; apply hns; rw [hadv]; exact ⟨a, b, c⟩
+  rw [hadv]
+  change P + _ + _ < s.syncs.length + _ + _
   rcases ht₁ with ht | ⟨htR, htlt⟩
   · have hTg : r.1.top.getD 0 = s.top.getD 0 := by rw [ht]
     rw [hTg]
@@ -416,17 +363,17 @@ theorem progress_none {n : ℕ} {s : State Validator BlockId Payload}
 
 omit [Fintype Validator] in
 /-- Whether the node can build reads only its disk, memory, top, own
-block, fired timers, pending blocks and whether it recovers. -/
+block, fired timers, syncs and whether it recovers. -/
 theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
     (h : Node.tryBuild cfg s = none) (hst : s'.disk = s.disk) (hm : s'.memory = s.memory)
     (ht : s'.top = s.top) (ho : s'.own = s.own) (hf : s'.fired = s.fired)
-    (hrc : s'.recovering = s.recovering) (hp : s'.pending = s.pending) :
+    (hrc : s'.recovering = s.recovering) (hp : s'.syncs = s.syncs) :
     Node.tryBuild cfg s' = none := by
-  obtain ⟨st, mem, fl, mir, pd, top, own, fired, lo, dc, ar, rc⟩ := s
-  obtain ⟨st', mem', fl', mir', pd', top', own', fired', lo', dc', ar', rc'⟩ := s'
+  obtain ⟨st, mem, fl, mir, pd, dt, top, own, fired, lo, dc, ar, rc⟩ := s
+  obtain ⟨st', mem', fl', mir', pd', dt', top', own', fired', lo', dc', ar', rc'⟩ := s'
   simp only at hst hm ht ho hf hrc hp
   subst hst hm ht ho hf hrc hp
-  unfold Node.tryBuild Node.buildAbove Node.pendingTop at h ⊢
+  unfold Node.tryBuild Node.buildAbove Node.syncTop at h ⊢
   cases top' with
   | none => rfl
   | some r =>
@@ -434,7 +381,7 @@ theorem tryBuild_none_of {s s' : State Validator BlockId Payload}
     split_ifs at h ⊢ <;> simp_all
 
 variable (cfg) in
-/-- **A settled state**: it can build nothing, no pending block is ready,
+/-- **A settled state**: it can build nothing, no sync's block is ready,
 and it decides no further slot. -/
 structure Settled (s : State Validator BlockId Payload) : Prop where
   build : Node.tryBuild cfg s = none
@@ -450,33 +397,32 @@ theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
     Settled cfg (Node.advance cfg s).1 := by
   suffices hp : Settled cfg (Node.pass cfg s).1 from
     ⟨tryBuild_none_of hp.build (advance_disk s) (advance_memory s) (advance_top s)
-        (advance_own s) (advance_fired s) (advance_recovering s) (advance_pending s),
-      by unfold NoReady; rw [advance_pending, advance_disk]; exact hp.ready,
+        (advance_own s) (advance_fired s) (advance_recovering s) (advance_syncs s),
+      by unfold NoReady; rw [advance_syncs, advance_disk]; exact hp.ready,
       by rw [advance_lo, advance_disk, advance_floor, advance_memory]; exact hp.decided⟩
   obtain ⟨htop, hpend, hlo⟩ := (stops_iff s).1 h
-  have hadv : (Node.pass cfg s).1 = flush cfg ((Node.decideStep cfg
-      (Node.progress cfg (s.disk.topRound + 2) s).1).1.pending.length + 1)
+  have hadv : (Node.pass cfg s).1 = flushSyncs cfg ((Node.decideStep cfg
+      (Node.progress cfg (s.disk.topRound + 2) s).1).1.syncs.length + 1)
       (Node.decideStep cfg (Node.progress cfg (s.disk.topRound + 2) s).1).1 := rfl
   -- nothing built
   have hrt : (Node.progress cfg (s.disk.topRound + 1 + 1) s).1.top = s.top := by
-    rw [← htop, hadv, flush_top]
+    rw [← htop, hadv, flushSyncs_top]
     exact (decideStep_top _).symm
   obtain ⟨hnb, hpr⟩ := progress_none hrt
   have hpr' : Node.progress cfg (s.disk.topRound + 2) s = (s, []) := hpr
   rw [hpr'] at hadv
   -- nothing decided
   have hds : Node.decideStep cfg s = (s, []) :=
-    decideStep_eq_of_lo (by rw [← flush_lo (cfg := cfg) _ (Node.decideStep cfg s).1, ← hadv, hlo])
+    decideStep_eq_of_lo (by
+      rw [← flushSyncs_lo (cfg := cfg) _ (Node.decideStep cfg s).1, ← hadv, hlo])
   rw [hds] at hadv
   -- nothing flushed
-  obtain ⟨-, hfl⟩ := flush_bound (cfg := cfg) (s.pending.length + 1) s.disk s.pending
-  have hfe : flushOn cfg (s.pending.length + 1) s.disk s.pending = (s.disk, s.pending) :=
-    hfl (by rw [← flush_pending, ← hadv, hpend])
-  have hz : (Node.pass cfg s).1 = s := by rw [hadv]; exact flush_self hfe
+  obtain ⟨-, hfl⟩ := flushSyncs_bound (cfg := cfg) (s.syncs.length + 1) s
+  have hfe : flushSyncs cfg (s.syncs.length + 1) s = s := hfl (by rw [← hadv, hpend])
+  have hz : (Node.pass cfg s).1 = s := by rw [hadv]; exact hfe
   rw [hz]
   refine ⟨hnb, ?_, fun hlt hfl' => ?_⟩
-  · have := flush_no_ready (cfg := cfg) (s.pending.length + 1) s.disk s.pending
-      (Nat.lt_succ_self _)
+  · have := flushSyncs_no_ready (cfg := cfg) (s.syncs.length + 1) s (Nat.lt_succ_self _)
     rw [hfe] at this
     exact this
   · by_contra hne
@@ -492,12 +438,12 @@ theorem Stops.settled {s : State Validator BlockId Payload} (h : Stops cfg s) :
 /-! ## A settle ends settled -/
 
 omit [Fintype Validator] [DecidableEq Validator] in
-/-- A pending block's round is at most `pendingTop`. -/
-theorem le_pendingTop {s : State Validator BlockId Payload}
-    {e : BlockId × Block Validator BlockId Payload} (he : e ∈ s.pending) :
-    e.2.round ≤ pendingTop s := by
-  unfold pendingTop
-  generalize s.pending = l at he
+/-- A sync's block's round is at most `syncTop`. -/
+theorem le_syncTop {s : State Validator BlockId Payload}
+    {e : Validator × (BlockId × Block Validator BlockId Payload) × List BlockId}
+    (he : e ∈ s.syncs) : e.2.1.2.round ≤ syncTop s := by
+  unfold syncTop
+  generalize s.syncs = l at he
   induction l with
   | nil => exact absurd he List.not_mem_nil
   | cons x l ih =>
@@ -509,8 +455,8 @@ theorem le_pendingTop {s : State Validator BlockId Payload}
 omit [Fintype Validator] in
 /-- **A state is within the settle from it.** -/
 theorem within_start (s : State Validator BlockId Payload) :
-    Within cfg (max (s.top.getD 0) (max s.disk.topRound (pendingTop s)))
-      (max s.lo (decidable cfg (max (s.top.getD 0) (max s.disk.topRound (pendingTop s)) + 1)))
+    Within cfg (max (s.top.getD 0) (max s.disk.topRound (syncTop s)))
+      (max s.lo (decidable cfg (max (s.top.getD 0) (max s.disk.topRound (syncTop s)) + 1)))
       s := by
   refine ⟨⟨fun j hj => ?_, fun e he => ?_⟩, by omega, le_max_left _ _⟩
   · left
@@ -519,8 +465,8 @@ theorem within_start (s : State Validator BlockId Payload) :
     change (s.disk.blk j).round ≤ _
     omega
   · left
-    have := le_pendingTop he
-    change e.2.round ≤ _
+    have := le_syncTop he
+    change e.2.1.2.round ≤ _
     omega
 
 omit [Fintype Validator] in

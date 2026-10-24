@@ -85,7 +85,7 @@ structure Scenario where
   /-- The time from which equivocators act on nothing. A copy of the
   honest program drops blocks that claim its identity, so neither copy of
   an equivocator accepts blocks built on its twin; it stops building, and
-  its pending blocks grow. -/
+  it falls behind. -/
   byzUntil : ℕ := 200
   /-- A withholding attack `(z, v, R)`: node `z` holds back its round-`R`
   block `x`, sends its round-`R + 1` block, which references `x`, to `v`
@@ -146,8 +146,8 @@ structure Agent (n : ℕ) where
 /-- **Timing measurements** of the honest nodes, for the liveness
 conditions (`docs/validator.md` §5): when each built each round,
 decided each slot and accepted each block of another honest author, the
-honest blocks delivered and kept neither on its disk nor pending, and
-the fetches asked for. -/
+honest blocks delivered and kept neither on its disk nor as a sync's
+block, and the requests sent. -/
 structure Stats where
   /-- Each honest node's own blocks: the node, the round and the time. -/
   built : List (ℕ × ℕ × ℕ) := []
@@ -157,11 +157,12 @@ structure Stats where
   node, the round and the time. -/
   accepted : List (ℕ × ℕ × ℕ) := []
   /-- Honest-authored blocks delivered to an honest node, new, that it
-  neither put on its disk nor kept pending. -/
+  neither put on its disk nor kept as a sync's block. -/
   notKept : ℕ := 0
-  /-- The fetches honest nodes asked for, and the identifiers in them. -/
-  fetches : ℕ := 0
-  fetched : ℕ := 0
+  /-- The requests honest nodes sent, and the identifiers asked for by name
+  in them. -/
+  requests : ℕ := 0
+  named : ℕ := 0
   deriving Inhabited
 
 /-- **What a simulation reports.** -/
@@ -183,8 +184,8 @@ structure Report where
   dropped : ℕ
   /-- The largest disk any honest node held. -/
   maxDisk : ℕ
-  /-- The most pending blocks any honest node held. -/
-  maxPending : ℕ
+  /-- The most syncs any honest node held. -/
+  maxSyncs : ℕ
   /-- The inputs processed. -/
   events : ℕ
   /-- The simulated time reached. -/
@@ -193,8 +194,8 @@ structure Report where
   stats : Stats := {}
   /-- Each honest node's final state, in brief: top, own block, next
   undecided slot, the authors its disk holds at the top and the two
-  rounds above, its pending blocks (author, round, references missing,
-  payload), the timers fired, whether it can build and its references
+  rounds above, its syncs (peer, round, references missing, names asked),
+  the authors it detected, the timers fired, whether it can build and its references
   reach, and the blocks in its memory, from which round, and on disk. -/
   final : List String := []
 
@@ -232,7 +233,7 @@ structure World (n : ℕ) where
   blocks : Std.TreeMap ℕ (Block (Fin n) ℕ ℕ) compare
   seen : Std.TreeMap ℕ (Block (Fin n) ℕ ℕ) compare
   maxDisk : ℕ
-  maxPending : ℕ
+  maxSyncs : ℕ
   events : ℕ
   time : ℕ
   /-- The withheld block, once built. -/
@@ -281,30 +282,33 @@ def sends (agents : Array (Agent n)) (src : ℕ) (t : ℕ) (out : List (Output (
         | some s, some a =>
           if receives sc a s then
             let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
-            ((t + dt, d, .deliver id b) :: acc.1, g')
+            ((t + dt, d, .deliver s.node id b) :: acc.1, g')
           else acc
         | _, _ => acc) acc
     | .setTimer r after =>
       if (agents[src]?.map fun s => timerLost sc s.node.val t (t + after)).getD false then acc
       else ((t + after, src, .timer r) :: acc.1, acc.2)
-    | .fetch peer r ids =>
+    | .sync peer tg fr ids =>
+      -- the frontier, read once, as a request on the wire carries it
+      let tbl := (List.finRange n).map fr
+      let fr : Fin n → ℕ := fun a => tbl.getD a.val 0
       (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
         match agents[src]?, agents[d]? with
         | some s, some a =>
           if a.node = peer then
             let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
-            ((t + dt, d, .fetchRequest s.node r ids) :: acc.1, g')
+            ((t + dt, d, .syncRequest s.node tg fr ids) :: acc.1, g')
           else acc
         | _, _ => acc) acc
-    | .send peer id b =>
+    | .stream peer L =>
       (List.range agents.size).foldl (fun (acc : List (ℕ × ℕ × Input (Fin n) ℕ ℕ) × StdGen) d =>
-        match agents[d]? with
-        | some a =>
+        match agents[src]?, agents[d]? with
+        | some s, some a =>
           if a.node = peer then
-            let (dt, g') := delayAt sc ((agents[src]?.map (·.node.val)).getD src) a.node.val t acc.2
-            ((t + dt, d, .deliver id b) :: acc.1, g')
+            let (dt, g') := delayAt sc s.node.val a.node.val t acc.2
+            ((t + dt, d, .stream s.node L) :: acc.1, g')
           else acc
-        | none => acc) acc
+        | _, _ => acc) acc
     | _ => acc) ([], g)
 
 /-- **The withholding attack**, applied to agent `src`'s outputs at time
@@ -324,21 +328,23 @@ def withholding (agents : Array (Agent n)) (src t : ℕ) (out : List (Output (Fi
         else if b.round = R + 1 then
           let toV := (List.range agents.size).filterMap fun d =>
             match agents[d]? with
-            | some a' => if a'.node.val = v then some (t + 1, d, .deliver id b) else none
+            | some a' => if a'.node.val = v then some (t + 1, d, .deliver a.node id b) else none
             | none => none
           let reveal := match acc.2.2 with
             | some (xid, x) => (List.range agents.size).filterMap fun d =>
                 match agents[d]? with
                 | some a' =>
                   if a'.node.val ≠ v ∧ a'.node.val ≠ z then
-                    some (t + sc.revealAfter, d, .deliver xid x)
+                    some (t + sc.revealAfter, d, .deliver a.node xid x)
                   else none
                 | none => none
             | none => []
           (acc.1, acc.2.1 ++ toV ++ reveal, acc.2.2)
         else (acc.1 ++ [o], acc.2.1, acc.2.2)
-      | .send peer id _ =>
-        if peer.val = v ∧ (acc.2.2.map (·.1)) = some id then acc
+      | .stream peer L =>
+        if peer.val = v then
+          (acc.1 ++ [.stream peer (L.filter fun e => (acc.2.2.map (·.1)) ≠ some e.1)], acc.2.1,
+            acc.2.2)
         else (acc.1 ++ [o], acc.2.1, acc.2.2)
       | _ => (acc.1 ++ [o], acc.2.1, acc.2.2)) ([], [], wh)
   | _, _ => (out, [], wh)
@@ -354,14 +360,17 @@ def authentic (w : World n) (id : ℕ) (b : Block (Fin n) ℕ ℕ) : Bool :=
 /-- **The signature check** on an input: a block in an honest author's
 name is one it made. -/
 def checked (w : World n) : Input (Fin n) ℕ ℕ → Option (Input (Fin n) ℕ ℕ)
-  | .deliver id b => if authentic sc w id b then some (.deliver id b) else none
+  | .deliver u id b => if authentic sc w id b then some (.deliver u id b) else none
+  | .stream u L => some (.stream u (L.filter fun e => authentic sc w e.1 e.2))
   | i => some i
 
 /-- **An attacker's outputs**: the honest program's outputs, changed by
-the attacks. -/
-def attacked (out : List (Output (Fin n) ℕ ℕ)) : List (Output (Fin n) ℕ ℕ) :=
+the attacks, and the blocks it sends each node in its own name. -/
+def attacked (out : List (Output (Fin n) ℕ ℕ)) :
+    List (Output (Fin n) ℕ ℕ) × List (Fin n × ℕ × Block (Fin n) ℕ ℕ) :=
   let has (x : Attack) := sc.attacks.contains x
-  out.flatMap fun (o : Output (Fin n) ℕ ℕ) => match o with
+  out.foldl (fun (acc : List (Output (Fin n) ℕ ℕ) × List (Fin n × ℕ × Block (Fin n) ℕ ℕ)) o =>
+    match o with
     | .broadcast _ b =>
       let junk : List (Output (Fin n) ℕ ℕ) := if has .invalidBlocks then
           let b₁ : Block (Fin n) ℕ ℕ := { b with refs := ∅, payload := 1 }
@@ -375,12 +384,12 @@ def attacked (out : List (Output (Fin n) ℕ ℕ)) : List (Output (Fin n) ℕ �
           [.broadcast (idOf b₄) b₄]
         else []
       if has .twinSplit then
-        ((List.finRange n).filterMap fun v =>
+        (acc.1 ++ junk ++ forged, acc.2 ++ (List.finRange n).filterMap fun v =>
           if v = b.creator then none else
           let bv : Block (Fin n) ℕ ℕ := { b with payload := 200 + v.val }
-          some (.send v (idOf bv) bv)) ++ junk ++ forged
-      else o :: junk ++ forged
-    | o => [o]
+          some (v, idOf bv, bv))
+      else (acc.1 ++ o :: junk ++ forged, acc.2)
+    | o => (acc.1 ++ [o], acc.2)) ([], [])
 
 /-- Process at most `fuel` inputs, in order of arrival, up to the horizon. -/
 def loop : ℕ → World n → World n
@@ -401,44 +410,52 @@ def loop : ℕ → World n → World n
         | some i =>
         let cfg := cfgFor sc p q hn a.node a.twin
         let r := step cfg st i
-        let out := if sc.adv.contains a.node.val then attacked sc r.2 else r.2
+        let (out, direct) := if sc.adv.contains a.node.val then attacked sc r.2 else (r.2, [])
+        let direct := direct.flatMap fun e => (List.range w.agents.size).filterMap fun d' =>
+          match w.agents[d']? with
+          | some a' => if a'.node = e.1 then some (t + 1, d', .deliver a.node e.2.1 e.2.2) else none
+          | none => none
         let (out, extra, wh) := withholding sc w.agents d t out w.withheld
         let (msgs, g) := sends sc w.agents d t out w.gen
-        let msgs := extra ++ msgs
+        let msgs := direct ++ extra ++ msgs
         let isHonest := sc.honest a.node.val
         let own := r.2.filterMap fun
           | .persist id b => some (id, b)
           | _ => none
-        let sent := out.filterMap fun
-          | .broadcast id b => if id = idOf b ∧ b.creator = a.node then some (id, b) else none
-          | .send _ id b => if id = idOf b ∧ b.creator = a.node then some (id, b) else none
+        let directBlocks := direct.filterMap fun (e : ℕ × ℕ × Input (Fin n) ℕ ℕ) =>
+          match e.2.2 with
+          | .deliver _ id b => if id = idOf b then some (id, b) else none
           | _ => none
-        let seen := out.filterMap fun
-          | .broadcast id b => if id = idOf b then some (id, b) else none
-          | .send _ id b => if id = idOf b then some (id, b) else none
-          | _ => none
+        let sent := (out.flatMap fun
+          | .broadcast id b => if id = idOf b ∧ b.creator = a.node then [(id, b)] else []
+          | _ => []) ++ directBlocks.filter fun e => e.2.creator = a.node
+        let seen := (out.flatMap fun
+          | .broadcast id b => if id = idOf b then [(id, b)] else []
+          | .stream _ L => L.filter fun e => e.1 = idOf e.2
+          | _ => []) ++ directBlocks
         let decs := r.2.filterMap fun
           | .commit k x => some (k, x)
           | _ => none
         let ss := w.stats
         let ss : Stats := if isHonest then
-            let fs := r.2.filterMap fun | .fetch _ _ ids => some ids.length | _ => none
+            let fs := r.2.filterMap fun | .sync _ _ _ ids => some ids.length | _ => none
             let ss := { ss with
               built := own.map (fun e => (a.node.val, e.2.round, t)) ++ ss.built
               decided := decs.map (fun e => (a.node.val, e.1, t)) ++ ss.decided
-              accepted := ((((match i with | .deliver id _ => [id] | _ => []) ++
-                  st.pending.map Prod.fst).filter fun j =>
+              accepted := ((((match i with
+                  | .deliver _ id _ => [id] | .stream _ L => L.map Prod.fst | _ => []) ++
+                  st.syncs.map (·.2.1.1)).filter fun j =>
                     r.1.disk.map.contains j && !st.disk.map.contains j).filterMap fun j =>
                   let b := r.1.disk.blk j
                   if sc.honest b.creator.val ∧ b.creator ≠ a.node then some (a.node.val, b.round, t)
                   else none) ++ ss.accepted
-              fetches := ss.fetches + fs.length
-              fetched := ss.fetched + fs.foldl (· + ·) 0 }
+              requests := ss.requests + fs.length
+              named := ss.named + fs.foldl (· + ·) 0 }
             match i with
-            | .deliver id b =>
+            | .deliver _ id b =>
               if sc.honest b.creator.val ∧ b.creator ≠ a.node ∧ id = idOf b ∧
-                  !st.disk.map.contains id ∧ id ∉ st.pending.map Prod.fst ∧
-                  !r.1.disk.map.contains id ∧ id ∉ r.1.pending.map Prod.fst then
+                  !st.disk.map.contains id ∧ id ∉ st.syncs.map (·.2.1.1) ∧
+                  !r.1.disk.map.contains id ∧ id ∉ r.1.syncs.map (·.2.1.1) then
                 { ss with notKept := ss.notKept + 1 }
               else ss
             | _ => ss
@@ -455,7 +472,7 @@ def loop : ℕ → World n → World n
             blocks := (own ++ sent).foldl (fun m e => m.insert e.1 e.2) w.blocks
             seen := (own ++ seen).foldl (fun m e => m.insert e.1 e.2) w.seen
             maxDisk := if isHonest then max w.maxDisk r.1.disk.map.size else w.maxDisk
-            maxPending := if isHonest then max w.maxPending r.1.pending.length else w.maxPending
+            maxSyncs := if isHonest then max w.maxSyncs r.1.syncs.length else w.maxSyncs
             events := w.events + 1
             time := t
             withheld := wh
@@ -501,7 +518,7 @@ def simulate (sc : Scenario) : Report :=
           blocks := ∅
           seen := ∅
           maxDisk := 0
-          maxPending := 0
+          maxSyncs := 0
           events := 0
           time := 0
           withheld := none
@@ -520,12 +537,13 @@ def simulate (sc : Scenario) : Report :=
             let t := st.top.getD 0
             let auth (r : ℕ) := (authorsIn st.disk.toRecord st.disk.ids r).card
             let cf := cfgFor sc p q hn ⟨v % n, Nat.mod_lt _ hn⟩ 0
-            let pend := st.pending.map fun e => (e.2.creator.val, e.2.round,
-              (e.2.refs.filter fun j => j ∉ st.disk.ids).card, e.2.payload)
+            let pend := st.syncs.map fun e => (e.1.val, e.2.1.2.round,
+              (e.2.1.2.refs.filter fun j => j ∉ st.disk.ids).card, e.2.2.length)
             let reach := reachReady cf st.memory (refsAt cf st.memory t st.own) t
             s!"node {v}: top {st.top} own {st.own.isSome} " ++
               s!"lo {st.lo} authors {auth t}/{auth (t + 1)}/{auth (t + 2)} " ++
-              s!"pending {pend} fired {st.fired.sort (· ≤ ·)} " ++
+              s!"syncs {pend} detected {(st.detected.image (·.val)).sort (· ≤ ·)} " ++
+              s!"fired {st.fired.sort (· ≤ ·)} " ++
               s!"builds {(tryBuild cf st).isSome} reach {reach} " ++
               s!"memory {st.memory.ids.card} from {st.floor} disk {st.disk.ids.card}"
           | none => s!"node {v}: none"
@@ -535,7 +553,7 @@ def simulate (sc : Scenario) : Report :=
         valid := valid
         dropped := w.dropped
         maxDisk := w.maxDisk
-        maxPending := w.maxPending
+        maxSyncs := w.maxSyncs
         events := w.events
         time := w.time
         stats := w.stats }

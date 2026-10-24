@@ -1,6 +1,6 @@
 import LeanDag.Node.Model.Trace
 /-!
-# Fetching makes the honest nodes converge — statement
+# Syncing makes the honest nodes converge — statement
 
 `docs/validator.md` §3.4. Over a trace of honest nodes `H` and an
 adversary, assume:
@@ -12,11 +12,10 @@ adversary, assume:
   an honest node with an honest author's identity and its hash was
   broadcast by that author earlier in the trace;
 * **the hash** (`HashInjective`): no two different blocks the honest
-  nodes knew have one identifier;
-* **the fault bound**: at most `f` nodes are outside `H`.
+  nodes knew have one identifier.
 
-Then **every block an honest node broadcast, with its history, is on
-every honest node's disk at the end** (`Converges`).
+Then **every block in the history of an honest node's block at its top
+is on every honest node's disk at the end** (`Converges`).
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -59,18 +58,18 @@ def HashInjective (cfg : Config Validator BlockId Payload) (H : Finset Validator
     (tr : Trace Validator BlockId Payload) : Prop :=
   ∀ x ∈ knownIn cfg H tr, ∀ y ∈ knownIn cfg H tr, cfg.idOf x.2 = cfg.idOf y.2 → x.2 = y.2
 
-/-- **Every block an honest node broadcast, with its history, is on every
-honest node's disk at the end**, when at most `f` nodes are outside `H`. -/
+/-- **Every block in the history of an honest node's block at its top is on
+every honest node's disk at the end.** -/
 def Converges : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (cfg : Config Validator BlockId Payload) (H : Finset Validator)
     (tr : Trace Validator BlockId Payload),
-    Hᶜ.card ≤ cfg.f → Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
-    ∀ i u, (tr[i]?.map Prod.fst) = some u → u ∈ H → ∀ e ∈ broadcasts (outputsAt cfg tr i),
-      ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).disk.blk e.1, ∀ v ∈ H,
+    Delivered cfg H tr → TimelyAuthentic cfg H tr → HashInjective cfg H tr →
+    ∀ u ∈ H, ∀ j, (stateBefore cfg tr tr.length u).own = some j →
+      ∀ y ∈ historyFrom (stateBefore cfg tr tr.length u).disk.blk j, ∀ v ∈ H,
         y ∈ (stateBefore cfg tr tr.length v).disk.ids
 
-/-- Fetching makes the honest nodes converge. -/
+/-- Syncing makes the honest nodes converge. -/
 def Statement : Prop := Converges
 
 end Converge

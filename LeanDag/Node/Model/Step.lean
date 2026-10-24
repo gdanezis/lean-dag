@@ -13,11 +13,17 @@ input `i` in the state `s`: the new state and the outputs.
   resends from the disk. When it builds or decides, it releases the
   memory below the lowest round it reads, the round of its next
   undecided slot and `voteOffset` below its top (`floorOf`).
-* **Receipt** (`deliver`): a block whose identifier is its hash, not the
-  node's own, and not on disk, waits in `pending` until its references
-  are accepted and it satisfies `rowValid q`, checked in memory if its
-  round is above the floor and on disk otherwise, and is then accepted
-  (`ready`, `flush`).
+* **Receipt** (`deliver`, `stream`): a block a peer sends in its own
+  name, under its hash, not on disk, from a peer not detected, is
+  accepted if its references are accepted and it satisfies `rowValid q`,
+  checked in memory if its round is above the floor and on disk otherwise
+  (`ready`, `accept`). Otherwise, if it names `q` references unless it is
+  at round `0`, it becomes the block of the sync with that peer if it lies
+  above the sync's block, and the node asks the peer for its history
+  (`syncs`, `request`). A block accepted while the disk holds
+  a block of its author at its round detects the author (`detected`), and
+  the syncs with detected peers and the syncs whose block is held are
+  dropped (`tidy`).
 * **Building** (`tryBuild`): round `r + 1`, above the node's top `r`,
   once the memory holds `q` authors of round `r` and either the round's
   timer fired, or the memory holds round-`r + 1` blocks of `f + 1`
@@ -36,10 +42,10 @@ input `i` in the state `s`: the new state and the outputs.
 * **The jump** (`jumpRound`): a node that restarted, until it builds or
   a timer fires (`State.recovering`), builds above the highest round `r`
   above its top at which the memory holds `q` authors and is behind,
-  with no block of its own among the references, once no pending block
+  with no block of its own among the references, once no sync's block
   lies above round `r + 1` and the references pass the reach and
   certificate tests. Without such a round it builds above its top, once
-  no pending block lies above the round it builds.
+  no sync's block lies above the round it builds.
 * **Timers** (`arm`): the timer of the node's top round is set once the
   memory holds `q` authors of that round, so a node that gets ahead of a
   quorum does not start waiting before the quorum is there. After a
@@ -48,27 +54,28 @@ input `i` in the state `s`: the new state and the outputs.
   to the last slot at a round the disk holds, on the memory's window at
   the round of that slot (`Store.window`); the decisions are kept
   (`State.decided`), the latest first.
-* **Fetching** (`walkLevel`, `missing`, `answer`): after a delivery, the
-  missing part of the delivered block's history, walked through the
-  pending blocks, is asked of its author, with the asker's round `r`; a
-  request is answered with the blocks asked for that the disk holds and
-  their histories, less the blocks a node at round `r` holds whatever it
-  built on (`coreThreshold`, `pruned`).
+* **Syncing** (`request`, `streamOf`, `inHistory`, `absorb`): a request
+  names the sync's block, the node's frontier (for each author the least
+  round at which its disk holds no block of it, `0` for a detected author,
+  `frontierOf`), and the identifiers asked for by name. It is answered with
+  the blocks of the disk in the block's history that are the block, asked
+  for, or at or above their author's frontier, in order of round. Of a
+  stream piece the node takes the blocks in the history of the sync's
+  block, each accepted if it is ready on arrival; the references still
+  missing are asked for by name in the next request (`missingIn`).
 * **Resending** (`resend`): when the retry timer, or the top round's,
   fires and the node does not build, and when it restarts, before it
   settles, the node broadcasts its top block again, sets the retry timer
-  again, and asks again for the missing histories of its pending blocks
-  (`refetch`). A
-  node with a quorum of its round builds within its timeout and the time
-  the quorum takes to arrive, before the retry timer fires, so it resends
-  only when it is stuck. A crash loses the messages sent to a node while
-  it is down, and the requests and answers sent to it; resending lets a
-  peer that lost blocks fetch them again, and the node itself ask again
-  for what it lost.
+  again, and asks again in every sync (`resync`). A node with a quorum of
+  its round builds within its timeout and the time the quorum takes to
+  arrive, before the retry timer fires, so it resends only when it is
+  stuck. A crash loses the messages sent to a node while it is down, and
+  the requests and streams sent to it; resending lets a peer that lost
+  blocks sync them again, and the node itself ask again for what it lost.
 * **Settling** (`settle`, `quiesce`): after each change to its state,
-  the node builds, decides and accepts what that allows, in passes,
-  until a pass changes none of its top, its pending blocks and its next
-  undecided slot.
+  the node builds, decides and accepts the syncs' blocks that this makes
+  ready, in passes, until a pass changes none of its top, its syncs and
+  its next undecided slot (`flushSyncs`).
 
 Definitions only.
 -/
@@ -92,8 +99,11 @@ structure State where
   floor : ℕ
   /-- The memory holds the disk's blocks from `floor` up. -/
   mirrors : memory.Mirrors disk floor
-  /-- Blocks received whose references are not all accepted. -/
-  pending : List (BlockId × Block Validator BlockId Payload)
+  /-- The syncs with peers, at most one each: the peer, its block the
+  node lacks, and the identifiers asked for by name. -/
+  syncs : List (Validator × (BlockId × Block Validator BlockId Payload) × List BlockId)
+  /-- The authors whose twins the node accepted. -/
+  detected : Finset Validator
   /-- The highest round the node built, once started. -/
   top : Option ℕ
   /-- The node's block at `top`. -/
@@ -117,8 +127,8 @@ def Config.genesis : Block Validator BlockId Payload := ⟨0, cfg.me, ∅, cfg.p
 
 /-- The state before start. -/
 def State.init : State Validator BlockId Payload :=
-  ⟨Store.empty cfg.genesis, Store.empty cfg.genesis, 0, Store.Mirrors.empty, [], none, none, ∅, 0,
-    [], none, false⟩
+  ⟨Store.empty cfg.genesis, Store.empty cfg.genesis, 0, Store.Mirrors.empty, [], ∅, none, none,
+    ∅, 0, [], none, false⟩
 
 /-- **Keep a block**: on disk, and in memory if its round is the floor or
 above. -/
@@ -131,27 +141,28 @@ def keep (s : State Validator BlockId Payload) (id : BlockId) (b : Block Validat
       (s.mirrors.pred_mem hrefs hpred)
     mirrors := s.mirrors.put hnew hrefs hpred }
 
-/-- **A pending block is ready** when its references are accepted, one
-round below it, and it is valid at the row: checked in memory if its
-round is above the floor, on disk otherwise. -/
+/-- **A block is ready** when its references are accepted, one round below
+it, and it is valid at the row: checked in memory if its round is above
+the floor, on disk otherwise. -/
 def ready (s : State Validator BlockId Payload) (e : BlockId × Block Validator BlockId Payload) :
     Bool :=
   decide ((Store.pick s.memory s.disk s.floor e.2.round).Checks cfg.q e.1 e.2)
 
-/-- **Accept a block**: it is kept if it is new and ready. -/
+/-- **Accept a block**: it is kept if it is new and ready; a block of an
+author the disk holds at the block's round detects the author. -/
 def accept (s : State Validator BlockId Payload) (id : BlockId)
     (b : Block Validator BlockId Payload) : State Validator BlockId Payload :=
   if h : id ∉ s.disk.ids ∧ (Store.pick s.memory s.disk s.floor b.round).Checks cfg.q id b then
-    keep s id b h.1 (s.mirrors.checks_pick.mp h.2).1 (s.mirrors.checks_pick.mp h.2).2.1
+    let s' := keep s id b h.1 (s.mirrors.checks_pick.mp h.2).1 (s.mirrors.checks_pick.mp h.2).2.1
+    if b.creator ∈ s.disk.authorsAt b.round then
+      { s' with detected := insert b.creator s'.detected }
+    else s'
   else s
 
-/-- **Accept what the pending blocks allow**, in passes, at most `fuel`. -/
-def flush : ℕ → State Validator BlockId Payload → State Validator BlockId Payload
-  | 0, s => s
-  | fuel + 1, s =>
-    let split := s.pending.partition fun e => ready cfg s e
-    if split.1.isEmpty then s
-    else flush fuel { split.1.foldl (fun s e => accept cfg s e.1 e.2) s with pending := split.2 }
+/-- **Drop the syncs done**: those whose block is held, and those with a
+detected peer. -/
+def tidy (s : State Validator BlockId Payload) : State Validator BlockId Payload :=
+  { s with syncs := s.syncs.filter fun e => decide (e.2.1.1 ∉ s.disk.ids ∧ e.1 ∉ s.detected) }
 
 /-- **The references of the node's next block**, above round `r`: one
 accepted block per author of round `r`, the node's own block `o` there
@@ -240,9 +251,9 @@ def release (s : State Validator BlockId Payload) : State Validator BlockId Payl
       mirrors := s.mirrors.above h.le }
   else s
 
-/-- The highest round of a pending block, `0` without one. -/
-def pendingTop (s : State Validator BlockId Payload) : ℕ :=
-  (s.pending.map (·.2.round)).foldr max 0
+/-- The highest round of a sync's block, `0` without one. -/
+def syncTop (s : State Validator BlockId Payload) : ℕ :=
+  (s.syncs.map (·.2.1.2.round)).foldr max 0
 
 /-- **The round a recovering node builds above**: the highest round above
 `t` at which the store `st` holds `q` authors and is behind, or `t`. -/
@@ -269,7 +280,7 @@ def buildAbove (s : State Validator BlockId Payload) (r : ℕ) (o : Option Block
 
 /-- **Build the next round**: above the node's top, referencing its own
 block there; while recovering, above `jumpRound` with no own reference if
-that round is above the top, and in either case only once no pending block
+that round is above the top, and in either case only once no sync's block
 lies above the round built. -/
 def tryBuild (s : State Validator BlockId Payload) :
     Option (State Validator BlockId Payload × List (Output Validator BlockId Payload)) :=
@@ -278,12 +289,12 @@ def tryBuild (s : State Validator BlockId Payload) :
     if s.recovering then
       let r := jumpRound cfg s.memory t
       if t < r then
-        if pendingTop s ≤ r + 1 ∧
+        if syncTop s ≤ r + 1 ∧
             reachReady cfg s.memory (refsAt cfg s.memory r none) r = true ∧
             certReady cfg s.memory (refsAt cfg s.memory r none) r = true then
           buildAbove cfg s r none
         else none
-      else if pendingTop s ≤ t + 1 then buildAbove cfg s t s.own else none
+      else if syncTop s ≤ t + 1 then buildAbove cfg s t s.own else none
     else buildAbove cfg s t s.own
   | none => none
 
@@ -303,23 +314,6 @@ def built (bs : List (BlockId × Block Validator BlockId Payload)) :
   bs.flatMap fun e =>
     [.persist e.1 e.2, .broadcast e.1 e.2,
       .setTimer (e.2.round - 1) (2 * cfg.timeout (e.2.round - 1))]
-
-/-- The references of a pending block. -/
-def expand (s : State Validator BlockId Payload) (j : BlockId) : List BlockId :=
-  match s.pending.find? (fun e => decide (e.1 = j)) with
-  | some (_, c) => c.refs.sort (· ≤ ·)
-  | none => []
-
-/-- **One level of the walk**, from a front, the identifiers met already,
-and the missing blocks found so far: the front's blocks neither accepted
-nor met already are missing if no pending block has their identifier,
-and their references form the next front otherwise. -/
-def walkLevel (s : State Validator BlockId Payload)
-    (w : List BlockId × List BlockId × List BlockId) :
-    List BlockId × List BlockId × List BlockId :=
-  let front := (w.1.filter fun x => decide (x ∉ s.disk.ids) && decide (x ∉ w.2.1)).dedup
-  let split := front.partition fun x => decide (x ∈ s.pending.map Prod.fst)
-  (split.1.flatMap fun x => expand s x, w.2.1 ++ front, w.2.2 ++ split.2)
 
 /-- The slots below the slot rounds up to `R`: the slots `tryDecide` may
 reach on a disk whose top round is `R`. -/
@@ -341,96 +335,90 @@ def decideStep (s : State Validator BlockId Payload) :
       ds.map fun e => .commit e.1 e.2)
   else (s, [])
 
-/-- **The blocks to ask for**, after the block `b` arrived: the missing
-part of its history, walked through the pending blocks. Asking on account
-of each block delivered is what lets an honest block's author answer
-what a Byzantine block's author would not. -/
-def missing (s : State Validator BlockId Payload) (b : Block Validator BlockId Payload) :
-    List BlockId :=
-  ((walkLevel s)^[s.pending.length + 2] (b.refs.sort (· ≤ ·), [], [])).2.2
+/-- **The frontier of a store for an author**: the least round at which it
+holds no block of the author. -/
+def gapOf (st : Store Validator BlockId Payload) (a : Validator) : ℕ :=
+  ((List.range (st.topRound + 1)).find? fun r => decide (a ∉ st.authorsAt r)).getD
+    (st.topRound + 1)
 
-/-- **The authors a block must have reached to lie in every view at round
-`r`**: `n − q + f + 1`. A node at round `r` built on blocks of `q`
-distinct authors of round `r − 1`; a block reached by round-`(r − 1)`
-blocks of this many authors is reached by one of an honest author among
-them, which has one block there. -/
-def coreThreshold : ℕ := Fintype.card Validator - cfg.q + cfg.f + 1
+/-- **The frontier a request carries**: for each author, the least round
+at which the disk holds no block of it, and `0` for a detected author. -/
+def frontierOf (s : State Validator BlockId Payload) (a : Validator) : ℕ :=
+  if a ∈ s.detected then 0 else gapOf s.disk a
 
-/-- **One level of the core sweep**: each reference of a block of the
-level receives the authors that reach the block. -/
-def coreLevel (st : Store Validator BlockId Payload) (lvl : List (BlockId × Finset Validator)) :
-    List (BlockId × Finset Validator) :=
-  (lvl.foldl (fun (m : Std.TreeMap BlockId (Finset Validator) compare) e =>
-      ((st.blk e.1).refs.sort (· ≤ ·)).foldl (fun m j => m.insert j (m.getD j ∅ ∪ e.2)) m)
-    ∅).toList
+/-- **One level of the stream's walk**: the front's blocks on the store,
+not met already, that the stream carries, and their references next. -/
+def streamLevel (st : Store Validator BlockId Payload) (carries : BlockId → Bool)
+    (w : List BlockId × List BlockId) : List BlockId × List BlockId :=
+  let front := (w.1.filter fun x => decide (x ∈ st.ids) && carries x && decide (x ∉ w.2)).dedup
+  (front.flatMap fun x => (st.blk x).refs.sort (· ≤ ·), w.2 ++ front)
 
-/-- **The core sweep** from a level down, at most `fuel` levels, stopping at
-a level whose blocks all reach the threshold: each block met, with
-authors of round-`(r − 1)` blocks that reach it. -/
-def coreFrom (st : Store Validator BlockId Payload) :
-    ℕ → List (BlockId × Finset Validator) → Std.TreeMap BlockId (Finset Validator) compare →
-      Std.TreeMap BlockId (Finset Validator) compare
-  | 0, _, acc => acc
-  | fuel + 1, lvl, acc =>
-    let acc := lvl.foldl (fun m e => m.insert e.1 e.2) acc
-    if lvl.all fun e => decide (coreThreshold cfg ≤ e.2.card) then acc
-    else coreFrom st fuel (coreLevel st lvl) acc
+/-- **The stream for a request**: the blocks of the store in the history
+of `t` that are `t`, asked for by name, or at or above their author's
+frontier, reached through such blocks, in order of round. -/
+def streamOf (st : Store Validator BlockId Payload) (t : BlockId) (fr : Validator → ℕ)
+    (ids : List BlockId) : List (BlockId × Block Validator BlockId Payload) :=
+  let carries := fun i =>
+    decide (i = t ∨ i ∈ ids ∨ fr (st.blk i).creator ≤ (st.blk i).round)
+  let found := ((streamLevel st carries)^[(st.blk t).round + 1] ([t], [])).2
+  (found.map fun i => (i, st.blk i)).mergeSort fun x y => decide (x.2.round ≤ y.2.round)
 
-/-- **Authors reaching each block from round `r − 1`**, as far as the
-sweep goes; nothing at `r = 0`. -/
-def coreSets (st : Store Validator BlockId Payload) (r : ℕ) :
-    Std.TreeMap BlockId (Finset Validator) compare :=
-  if r = 0 then ∅
-  else coreFrom cfg st r (((st.atRound (r - 1)).sort (· ≤ ·)).map
-    fun c => (c, {(st.blk c).creator})) ∅
+/-- **One level of the walk through a stream piece**: the front's
+identifiers the piece holds, not met already, and their references next. -/
+def pieceLevel (L : List (BlockId × Block Validator BlockId Payload))
+    (w : List BlockId × List BlockId) : List BlockId × List BlockId :=
+  let front := (w.1.filter fun x => decide (x ∈ L.map Prod.fst) && decide (x ∉ w.2)).dedup
+  (front.flatMap fun x => ((L.find? fun e => decide (e.1 = x)).map fun e =>
+    e.2.refs.sort (· ≤ ·)).getD [], w.2 ++ front)
 
-/-- **The store read through core sets**: a block keeps only its
-references whose recorded set falls short of `coreThreshold`. -/
-def prunedBy (st : Store Validator BlockId Payload)
-    (core : Std.TreeMap BlockId (Finset Validator) compare) (x : BlockId) :
-    Block Validator BlockId Payload :=
-  { st.blk x with
-    refs := (st.blk x).refs.filter fun i => ¬ coreThreshold cfg ≤ (core.getD i ∅).card }
+/-- **The part of a stream piece in the history of the block `t`**: its
+blocks reached from `t` through its blocks, identified by their hash and
+not the node's own, in order of round. -/
+def inHistory (t : BlockId × Block Validator BlockId Payload)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    List (BlockId × Block Validator BlockId Payload) :=
+  let found := ((pieceLevel L)^[L.length + 1] ([t.1], [])).2
+  (L.filter fun e => decide (e.1 = cfg.idOf e.2) && decide (e.2.creator ≠ cfg.me) &&
+    decide (e.1 ∈ found)).mergeSort fun x y => decide (x.2.round ≤ y.2.round)
 
-/-- **The store read for an answer to a node at round `r`**: a block keeps
-only its references that round-`(r − 1)` blocks of fewer than
-`coreThreshold` authors reach. -/
-def pruned (st : Store Validator BlockId Payload) (r : ℕ) : BlockId →
-    Block Validator BlockId Payload :=
-  prunedBy cfg st (coreSets cfg st r)
+/-- **The identifiers to ask for by name** after a stream piece: the
+references of its blocks that the disk does not hold. -/
+def missingIn (s : State Validator BlockId Payload)
+    (L : List (BlockId × Block Validator BlockId Payload)) : List BlockId :=
+  ((L.flatMap fun e => e.2.refs.sort (· ≤ ·)).filter fun j => decide (j ∉ s.disk.ids)).dedup
 
-/-- **The blocks a request from a node at round `r` is answered with**:
-each block asked for that the disk holds, then their histories on disk
-through blocks the asker need not hold. -/
-def answerIds (s : State Validator BlockId Payload) (r : ℕ) (ids : List BlockId) :
-    List BlockId :=
-  let held := ids.filter fun j => decide (j ∈ s.disk.ids)
-  let core := coreSets cfg s.disk r
-  (held ++ held.flatMap fun j =>
-    ((historyUptoFrom (prunedBy cfg s.disk core) ((s.disk.blk j).round + 1) j).filter fun x =>
-      decide (x ∈ s.disk.ids)).sort (· ≤ ·)).dedup
+/-- **Take a stream piece in**: its blocks, in order, each accepted if it
+is new and ready. -/
+def absorb (s : State Validator BlockId Payload)
+    (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
+  L.foldl (fun s e => accept cfg s e.1 e.2) s
 
-/-- **Answer a request** from a node at round `r`: send the peer the
-blocks of `answerIds`. -/
-def answer (s : State Validator BlockId Payload) (peer : Validator) (r : ℕ) (ids : List BlockId) :
-    List (Output Validator BlockId Payload) :=
-  (answerIds cfg s r ids).map fun j => .send peer j (s.disk.blk j)
+/-- **Accept the syncs' blocks that are ready**, and drop the syncs done, in
+passes, at most `fuel`. -/
+def flushSyncs : ℕ → State Validator BlockId Payload → State Validator BlockId Payload
+  | 0, s => s
+  | fuel + 1, s =>
+    let split := s.syncs.partition fun e => ready cfg s e.2.1
+    if split.1.isEmpty then s
+    else flushSyncs fuel (tidy (absorb cfg s (split.1.map (·.2.1))))
 
-/-- **Ask again for the pending blocks' histories**: for each pending
-block, the missing part of its history, of its author. -/
-def refetch (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
-  s.pending.filterMap fun e =>
-    let miss := missing s e.2
-    if miss.isEmpty then none else some (.fetch e.2.creator (s.top.getD 0) miss)
+/-- **The request of a sync**. -/
+def request (s : State Validator BlockId Payload)
+    (e : Validator × (BlockId × Block Validator BlockId Payload) × List BlockId) :
+    Output Validator BlockId Payload :=
+  .sync e.1 e.2.1.1 (frontierOf s) e.2.2
+
+/-- **Ask again** in every sync. -/
+def resync (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
+  s.syncs.map (request s)
 
 /-- **Send the node's top block again**: broadcast its block at its top
-round and set the retry timer again, then ask again for the pending
-blocks' histories. -/
+round and set the retry timer again, then ask again in every sync. -/
 def resend (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
   (match s.top, s.own with
     | some r, some id =>
       [.broadcast id (s.disk.blk id), .setTimer (r - 1) (2 * cfg.timeout (r - 1))]
-    | _, _ => []) ++ refetch s
+    | _, _ => []) ++ resync s
 
 /-- **Set the top round's timer again**, after a restart, if it was set. -/
 def rearm (s : State Validator BlockId Payload) : List (Output Validator BlockId Payload) :=
@@ -449,14 +437,13 @@ def arm (s : State Validator BlockId Payload) :
     else (s, [])
   | none => (s, [])
 
-/-- **Build, decide, then accept what that allows**: a block built can
-make a pending block ready, so this ends by flushing, and no pending
-block is left ready. -/
+/-- **Build, decide, then accept the syncs' blocks that are ready**: a
+block built can make one ready. -/
 def pass (s : State Validator BlockId Payload) :
     State Validator BlockId Payload × List (Output Validator BlockId Payload) :=
   let b := progress cfg (s.disk.topRound + 2) s
   let d := decideStep cfg b.1
-  (flush cfg (d.1.pending.length + 1) d.1, b.2 ++ d.2)
+  (flushSyncs cfg (d.1.syncs.length + 1) d.1, b.2 ++ d.2)
 
 /-- **A pass, then arming the top round's timer.** -/
 def advance (s : State Validator BlockId Payload) :
@@ -466,23 +453,22 @@ def advance (s : State Validator BlockId Payload) :
   (a.1, p.2 ++ a.2)
 
 /-- **Advance until a pass changes nothing the next would read**: the
-top, the pending blocks and the next undecided slot; at most `fuel`
-passes. -/
+top, the syncs and the next undecided slot; at most `fuel` passes. -/
 def quiesce : ℕ → State Validator BlockId Payload →
     State Validator BlockId Payload × List (Output Validator BlockId Payload)
   | 0, s => (s, [])
   | fuel + 1, s =>
     let r := advance cfg s
-    if r.1.top = s.top ∧ r.1.pending.length = s.pending.length ∧ r.1.lo = s.lo then r
+    if r.1.top = s.top ∧ r.1.syncs.length = s.syncs.length ∧ r.1.lo = s.lo then r
     else let r' := quiesce fuel r.1; (r'.1, r.2 ++ r'.2)
 
 /-- **The passes a settle takes at most**: each but the last raises the
-top or the next undecided slot, or leaves fewer blocks pending, within
-bounds the state fixes. -/
+top or the next undecided slot, or leaves fewer syncs, within bounds the
+state fixes. -/
 def passes (s : State Validator BlockId Payload) : ℕ :=
-  let B := max (s.top.getD 0) (max s.disk.topRound (pendingTop s)) + 1
+  let B := max (s.top.getD 0) (max s.disk.topRound (syncTop s)) + 1
   let L := max s.lo (decidable cfg B)
-  s.pending.length + 2 * B + 2 * L + 1
+  s.syncs.length + 2 * B + 2 * L + 1
 
 /-- **Advance until nothing changes**, after a change to the state. -/
 def settle (s : State Validator BlockId Payload) :
@@ -509,20 +495,40 @@ def step (s : State Validator BlockId Payload) :
         (r.1, [.persist id b, .broadcast id b, .setTimer 0 (2 * cfg.timeout 0)] ++ r.2)
       else (s, [])
     else (s, [])
-  | .deliver id b =>
-    if id = cfg.idOf b ∧ b.creator ≠ cfg.me ∧ id ∉ s.disk.ids ∧
-        id ∉ s.pending.map Prod.fst then
-      let s₁ := flush cfg (s.pending.length + 1) { s with pending := (id, b) :: s.pending }
-      let miss := missing s₁ b
-      let r := settle cfg s₁
-      (r.1, (if miss.isEmpty then [] else [.fetch b.creator (s.top.getD 0) miss]) ++ r.2)
+  | .deliver u id b =>
+    if id = cfg.idOf b ∧ b.creator = u ∧ u ≠ cfg.me ∧ u ∉ s.detected ∧ id ∉ s.disk.ids then
+      if ready cfg s (id, b) then settle cfg (tidy (accept cfg s id b))
+      else if (0 < b.round → cfg.q ≤ b.refs.card) ∧ (s.syncs.find? fun e => decide (e.1 = u)).all
+          (fun e => decide (e.2.1.2.round < b.round)) then
+        let e := (u, (id, b), ([] : List BlockId))
+        let s₁ := { s with syncs := e :: s.syncs.filter fun e => decide (e.1 ≠ u) }
+        let r := settle cfg s₁
+        (r.1, request s₁ e :: r.2)
+      else (s, [])
     else (s, [])
+  | .stream u L =>
+    match s.syncs.find? fun e => decide (e.1 = u) with
+    | none => (s, [])
+    | some e =>
+      let L' := inHistory cfg e.2.1 L
+      let s₁ := tidy (absorb cfg s L')
+      match s₁.syncs.find? fun e => decide (e.1 = u) with
+      | none => settle cfg s₁
+      | some e₁ =>
+        let asked := (e₁.2.2 ++ missingIn s₁ (e₁.2.1 :: L')).dedup
+        let e₂ := (u, e₁.2.1, asked)
+        let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then e₂ else x }
+        let r := settle cfg s₂
+        let moved := s₂.disk.ids.card ≠ s.disk.ids.card ∨ asked.length ≠ e₁.2.2.length
+        (r.1, (if moved then [request s₂ e₂] else []) ++ r.2)
   | .timer r =>
     let res := settle cfg { s with fired := fire s r, recovering := false }
     if res.1.top = s.top ∧ (s.top = some r ∨ s.top = some (r + 1)) then
       (res.1, res.2 ++ resend cfg res.1)
     else res
-  | .fetchRequest peer r ids => (s, answer cfg s peer r ids)
+  | .syncRequest peer t fr ids =>
+    let L := streamOf s.disk t fr ids
+    (s, if L.isEmpty then [] else [.stream peer L])
   | .restart =>
     let r := settle cfg { s with recovering := true }
     (r.1, resend cfg s ++ rearm cfg s ++ r.2)

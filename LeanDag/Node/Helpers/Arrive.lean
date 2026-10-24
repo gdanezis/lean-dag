@@ -1,5 +1,4 @@
 import LeanDag.Node.Helpers.Shape
-import LeanDag.Node.Helpers.Hold
 import LeanDag.Node.Helpers.Live
 /-!
 # A reliable node's rounds and timers, and the arrival of blocks
@@ -176,16 +175,6 @@ theorem fired_stays {f r : ℕ} (hf : tr[f]? = some (v, Input.timer r)) :
             fired := fire (stateBefore cfg tr f v) r, recovering := false }).fired
         (Finset.mem_insert_self _ _)
 
-/-- **A block a node builds at an event is on its disk** from the next event
-on. -/
-theorem built_stays {p : ℕ} {inp : Input Validator BlockId Payload}
-    (hp : tr[p]? = some (v, inp))
-    {x : BlockId × Block Validator BlockId Payload} (hx : x ∈ persists (outputsAt cfg tr p)) :
-    Stays (stateBefore cfg tr (p + 1) v).disk (stateBefore cfg tr (p + 1) v).pending x := by
-  rw [outputsAt_eq hp] at hx
-  rw [stateBefore_succ hp, if_pos rfl]
-  exact Or.inl (step_persist (cfg := cfg.at v) x hx).1
-
 /-! ## A node's own blocks -/
 
 theorem persists_before_mono (v : Validator) {a : ℕ} :
@@ -319,58 +308,6 @@ theorem started_after {H : Finset Validator} (hadm : cfg.Admissible)
     rw [hstep]
     exact Option.ne_none_iff_isSome.mp hn
 
-/-! ## The blocks the honest nodes know -/
-
-section Known
-
-variable {H : Finset Validator}
-
-theorem knownBlock_eq (hinj : Converge.HashInjective cfg H tr)
-    {x : BlockId × Block Validator BlockId Payload} (hx : x ∈ Converge.knownIn cfg H tr) :
-    Live.knownBlock cfg H tr x.1 = x.2 := by
-  have h : ∃ y ∈ Converge.knownIn cfg H tr, y.1 = x.1 := ⟨x, hx, rfl⟩
-  unfold Live.knownBlock
-  rw [dif_pos h]
-  obtain ⟨hm, he⟩ := Classical.choose_spec h
-  exact Converge.content_eq hinj hm hx he
-
-theorem knownBlock_gT (z : BlockId) :
-    (Live.knownBlock cfg H tr z).round = (Converge.gT cfg H tr z).round ∧
-      (Live.knownBlock cfg H tr z).creator = (Converge.gT cfg H tr z).creator := by
-  unfold Live.knownBlock Converge.gT
-  split <;> simp
-
-/-- **A path through a store's blocks** is one through the blocks known,
-when the store's blocks are the ones known. -/
-theorem reaches_known {st : Store Validator BlockId Payload}
-    (hst : ∀ w ∈ st.ids, Live.knownBlock cfg H tr w = st.blk w) {r : BlockId}
-    (hr : r ∈ st.ids) {z : BlockId} (h : ReachesFrom st.blk r z) :
-    ReachesFrom (Live.knownBlock cfg H tr) r z ∧ z ∈ st.ids := by
-  induction h with
-  | refl => exact ⟨ReachesFrom.refl, hr⟩
-  | tail hrw hstep ih =>
-    rename_i w z'
-    obtain ⟨ih₁, hw⟩ := ih
-    change z' ∈ (st.blk w).refs at hstep
-    refine ⟨ih₁.trans (ReachesFrom.single ?_), st.complete w hw z' hstep⟩
-    rw [hst w hw]; exact hstep
-
-/-- **A path through the blocks known** from a block of a store stays in
-the store, when the store's blocks are the ones known. -/
-theorem mem_of_reaches_known {st : Store Validator BlockId Payload}
-    (hst : ∀ w ∈ st.ids, Live.knownBlock cfg H tr w = st.blk w) {r : BlockId}
-    (hr : r ∈ st.ids) {z : BlockId} (h : ReachesFrom (Live.knownBlock cfg H tr) r z) :
-    z ∈ st.ids := by
-  induction h with
-  | refl => exact hr
-  | tail hrw hstep ih =>
-    rename_i w z'
-    change z' ∈ (Live.knownBlock cfg H tr w).refs at hstep
-    rw [hst w ih] at hstep
-    exact st.complete w ih z' hstep
-
-end Known
-
 /-! ## Arrival -/
 
 section Arrival
@@ -379,180 +316,14 @@ variable {P : Validity Validator BlockId Payload} {H T : Finset Validator} {time
   {gst Δₛ t₁ : ℕ}
 
 /-- **A reliable block arrives** at a reliable node `v` given it: `v`
-holds it after `v`'s events up to a time by which its history was
-synchronised. -/
-theorem arrives (hinj : Converge.HashInjective cfg H tr)
-    (htime : Converge.TimelyAuthentic cfg H tr) (hTH : T ⊆ H)
-    (hmono : Live.TimeMono tr time) {t_r : ℕ}
-    (hsync : Live.SyncedFrom cfg H T tr time gst Δₛ t_r t₁)
-    {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) (huv : u ≠ v) {i : ℕ}
-    {inp : Input Validator BlockId Payload} (hi : tr[i]? = some (u, inp))
-    {y : BlockId × Block Validator BlockId Payload} (hy : y ∈ persists (outputsAt cfg tr i))
-    {U : BlockRecord Validator BlockId Payload P H}
-    {x : State Validator BlockId Payload}
-    (hx : BuildState (cfg.at u) U (knownAll cfg H tr) (stateBefore cfg tr i u) inp x)
-    {y' : State Validator BlockId Payload} {o : List (Output Validator BlockId Payload)}
-    (hb : tryBuild (cfg.at u) x = some (y', o)) (hyo : y ∈ persists o)
-    {j : ℕ} (hj : tr[j]? = some (v, .deliver y.1 y.2)) (hjr : t_r ≤ time j) {τ : ℕ}
-    (hτ : max (time j) gst + Δₛ ≤ τ) (ht₁ : max (time j) gst + Δₛ ≤ t₁) :
-    y.1 ∈ (stateAt cfg tr time v τ).disk.ids := by
-  have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj).1
-  have hjE : j < eventsBy tr time τ :=
-    (lt_eventsBy hmono hjl).mpr (le_trans (le_max_left _ _) (le_trans (Nat.le_add_right _ _) hτ))
-  change y.1 ∈ (stateBefore cfg tr (eventsBy tr time τ) v).disk.ids
-  set E := eventsBy tr time τ with hE
-  set Zs := stateBefore cfg tr E v with hZsdef
-  -- the build
-  obtain ⟨r', id', b', hnew, hrefs, hpred, hxt, hbr, hbc, hid, hrv, -, -, -, -, hout⟩ :=
-    tryBuild_some hb
-  rw [hout, persists_built, List.mem_singleton] at hyo
-  subst hyo
-  simp only at hj ⊢
-  obtain ⟨B, hiX⟩ := hx.inv
-  set raw := Live.knownBlock cfg H tr with hraw
-  have hknX : ∀ w ∈ x.disk.ids, (w, x.disk.blk w) ∈ Converge.knownIn cfg H tr :=
-    fun w hw => by
-      obtain ⟨v', hv', hk⟩ := hiX.known w hw
-      exact knownOf_sub hv' hk
-  have hstK : ∀ w ∈ x.disk.ids, raw w = x.disk.blk w := fun w hw =>
-    knownBlock_eq hinj (hknX w hw)
-  have hyK : ((id', b') : BlockId × Block Validator BlockId Payload) ∈ Converge.knownIn cfg H tr :=
-    Or.inr ⟨i, u, by rw [hi]; rfl, hTH hu, hy⟩
-  have hry : raw id' = b' := knownBlock_eq hinj hyK
-  have hbu : b'.creator = u := hbc
-  have C : CausalStructure x.disk.blk x.disk.ids := x.disk.toRecord.causal
-  have hAv := Converge.reads_before hinj (hTH hv) E
-  have hZv : ∀ w ∈ Zs.disk.ids, (Zs.disk.blk w).round = (raw w).round ∧
-      (Zs.disk.blk w).creator = (raw w).creator := fun w hw => by
-    have a := hAv w hw
-    obtain ⟨k₁, k₂⟩ := knownBlock_gT (cfg := cfg) (H := H) (tr := tr) w
-    exact ⟨(congrArg Block.round a).trans k₁.symm, (congrArg Block.creator a).trans k₂.symm⟩
-  -- the history the author built on
-  let Z : Finset BlockId := insert id' (b'.refs.biUnion (historyFrom x.disk.blk))
-  have hZmem : ∀ z ∈ Z, z = id' ∨ ∃ r ∈ b'.refs, z ∈ historyFrom x.disk.blk r ∧ z ∈ x.disk.ids :=
-    fun z hz => by
-      rcases Finset.mem_insert.mp hz with h | h
-      · exact Or.inl h
-      · obtain ⟨r, hr, hzr⟩ := Finset.mem_biUnion.mp h
-        exact Or.inr ⟨r, hr, hzr, C.history_subset_ids (hrefs hr) hzr⟩
-  -- each of its blocks stays at `v`
-  have hstays : ∀ z ∈ Z, Stays Zs.disk Zs.pending (z, raw z) := by
-    intro z hz
-    rcases hZmem z hz with rfl | ⟨r, hr, hzr, hzx⟩
-    · rw [hry]
-      exact stays_from hinj (hTH hv) hyK
-        (stays_succ hinj (hTH hv) hyK (Or.inr ⟨hj, by rw [hbu]; exact huv⟩)) E (by omega)
-    · set xz : BlockId × Block Validator BlockId Payload := (z, x.disk.blk z)
-      have hxzK := hknX z hzx
-      have hrz : raw z = xz.2 := hstK z hzx
-      rw [hrz]
-      by_cases hcr : xz.2.creator = v
-      · -- one of `v`'s own blocks, which the author knew, so `v` built it before
-        have hreach : ReachesFrom raw id' z := by
-          refine ReachesFrom.of_mem_refs (by rw [hry]; exact hr) ?_
-          exact (reaches_known hstK (hrefs hr) (reaches_of_mem_historyUptoFrom hzr)).1
-        obtain ⟨p, hpj, hpu, hpb⟩ := htime j v _ hj (hTH hv) (id', b')
-          (by simp only [delivered, List.flatMap_cons, List.flatMap_nil, List.append_nil]
-              rw [if_pos (show id' = (cfg.at v).idOf b' from hid)]
-              exact List.mem_singleton_self _) (by rw [hbu]; exact hTH hu)
-        rw [hbu] at hpu
-        obtain ⟨inpp, hp'⟩ := Converge.event_of_map hpu
-        obtain ⟨q, hqp, inpq, hq', hqy⟩ := Converge.persists_of_broadcasts hp' hpb
-        have hyS := Converge.persist_stored (cfg := cfg) hq' hqy
-        set S := (stateBefore cfg tr (q + 1) u).disk
-        have hSK : ∀ w ∈ S.ids, raw w = S.blk w := fun w hw =>
-          knownBlock_eq hinj (Converge.knownBefore_sub (hTH hu) (q + 1)
-            ((Converge.inv_before (cfg := cfg) (tr := tr) (q + 1) u).known w hw))
-        have hzS : z ∈ S.ids := mem_of_reaches_known hSK hyS.1 hreach
-        have hk := (Converge.inv_before (cfg := cfg) (tr := tr) (q + 1) u).known z hzS
-        rw [← hSK z hzS, hrz] at hk
-        have hxzp := own_known htime (hTH hu) (hTH hv) (show q + 1 ≤ E by omega) hk hcr
-        obtain ⟨bρ, hbρE, hbρv, hbρx⟩ := mem_persists_before (cfg := cfg) v E hxzp
-        obtain ⟨inpρ, hbρ⟩ := Converge.event_of_map hbρv
-        exact stays_from hinj (hTH hv) hxzK (built_stays hbρ hbρx) E (by omega)
-      · -- another's, synchronised after `v` received the author's block
-        have hreach : ReachesFrom raw id' z := by
-          refine ReachesFrom.of_mem_refs (by rw [hry]; exact hr) ?_
-          exact (reaches_known hstK (hrefs hr) (reaches_of_mem_historyUptoFrom hzr)).1
-        obtain ⟨k, hjk, hk, htk⟩ := hsync j v id' b' hj hv (by rw [hbu]; exact hu) hid hjr ht₁ xz
-          hxzK hreach hcr
-        have hkl : k < tr.length := (List.getElem?_eq_some_iff.mp hk).1
-        have hkE : k < E := (lt_eventsBy hmono hkl).mpr (htk.trans hτ)
-        exact stays_from hinj (hTH hv) hxzK
-          (stays_succ hinj (hTH hv) hxzK (Or.inr ⟨hk, hcr⟩)) E (by omega)
-  -- it is closed under references
-  have hcl : ∀ z ∈ Z, ∀ r ∈ (raw z).refs, r ∈ Z ∧ (raw r).round + 1 = (raw z).round := by
-    intro z hz r hr
-    rcases hZmem z hz with rfl | ⟨r₀, hr₀, hzr, hzx⟩
-    · rw [hry] at hr ⊢
-      refine ⟨Finset.mem_insert_of_mem (Finset.mem_biUnion.mpr ⟨r, hr, mem_historyFrom_self⟩), ?_⟩
-      rw [hstK r (hrefs hr)]; exact hpred r hr
-    · have hbz : x.disk.blk z = raw z := (hstK z hzx).symm
-      have hr' : r ∈ (x.disk.blk z).refs := by rw [hbz]; exact hr
-      have hrx := C.complete z hzx r hr'
-      refine ⟨Finset.mem_insert_of_mem (Finset.mem_biUnion.mpr ⟨r₀, hr₀,
-        C.history_subset_of_reaches (hrefs hr₀) ((C.mem_history_iff (hrefs hr₀)).mp hzr)
-          (C.mem_history_of_mem_refs hzx hr')⟩), ?_⟩
-      rw [hstK r hrx, ← hbz]; exact C.refs_round z hzx r hr'
-  -- and valid at `v` once its references are
-  have hrd : ∀ z ∈ Z, (raw z).refs ⊆ Zs.disk.ids →
-      readyOn (cfg.at v) Zs.disk (z, raw z) = true := by
-    intro z hz hzr
-    have hcl' := hcl z hz
-    simp only [readyOn, Store.Checks, decide_eq_true_eq]
-    refine ⟨hzr, fun r hr => by rw [(hZv r (hzr hr)).1]; exact (hcl' r hr).2, ?_⟩
-    have hne : ∀ r ∈ (raw z).refs, r ≠ z := fun r hr h => by
-      have := (hcl' r hr).2; rw [h] at this; omega
-    rcases hZmem z hz with rfl | ⟨r₀, hr₀, hzr₀, hzx⟩
-    · rw [hry] at hzr hne ⊢
-      refine rowValid_congr (fun r hr => ?_) hrv
-      rw [Function.update_of_ne (fun h => hnew (by rw [← h]; exact hrefs hr)),
-        Function.update_of_ne (hne r hr)]
-      rw [(hZv r (hzr hr)).1, (hZv r (hzr hr)).2, hstK r (hrefs hr)]
-      exact ⟨rfl, rfl⟩
-    · have hval := hiX.valid z hzx
-      have hbz : x.disk.blk z = raw z := (hstK z hzx).symm
-      rw [hbz] at hval
-      refine rowValid_congr (fun r hr => ?_) hval
-      have hrx : r ∈ x.disk.ids := C.complete z hzx r (by rw [hbz]; exact hr)
-      rw [Function.update_of_ne (hne r hr), (hZv r (hzr hr)).1, (hZv r (hzr hr)).2,
-        hstK r hrx]
-      exact ⟨rfl, rfl⟩
-  exact holds_of_stays (cfg := cfg.at v) (Converge.noReady_before (cfg := cfg) v E)
-    (Z := Z) raw hstays hcl hrd id' (Finset.mem_insert_self _ _)
-
-/-- **A reliable genesis block arrives** at a reliable node given it. -/
-theorem arrives_zero (hinj : Converge.HashInjective cfg H tr)
-    (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
-    {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) (huv : u ≠ v) {i : ℕ}
-    (hiu : (tr[i]?.map Prod.fst) = some u)
-    {y : BlockId × Block Validator BlockId Payload} (hy : y ∈ persists (outputsAt cfg tr i))
-    (hyu : y.2.creator = u) (hy0 : y.2.round = 0)
-    {j : ℕ} (hj : tr[j]? = some (v, .deliver y.1 y.2)) {τ : ℕ} (hjτ : time j ≤ τ) :
-    y.1 ∈ (stateAt cfg tr time v τ).disk.ids := by
-  have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj).1
-  have hjE : j < eventsBy tr time τ := (lt_eventsBy hmono hjl).mpr hjτ
-  have hyK : y ∈ Converge.knownIn cfg H tr := Or.inr ⟨i, u, hiu, hTH hu, hy⟩
-  have hst := stays_from hinj (hTH hv) hyK
-    (stays_succ hinj (hTH hv) hyK (Or.inr ⟨hj, by rw [hyu]; exact huv⟩))
-    (eventsBy tr time τ) (by omega)
-  change y.1 ∈ (stateBefore cfg tr (eventsBy tr time τ) v).disk.ids
-  rcases hst with h | h
-  · exact h
-  · -- an honest round-0 block has no references, so it is ready
-    obtain ⟨inp, hi⟩ := Converge.event_of_map hiu
-    have hgood := (Converge.inv_before (cfg := cfg) (tr := tr) (i + 1) u).good y
-      (persists_of_event hi hy)
-    have hval := hgood.2.2.2 (Converge.gT cfg H tr) fun x hx =>
-      Converge.gT_of_known hinj (Converge.knownBefore_sub (hTH hu) (i + 1) hx)
-    have hr0 : ∀ r ∈ y.2.refs, False := fun r hr => by
-      have := hval.predecessor r hr; omega
-    have hrd : readyOn (cfg.at v) (stateBefore cfg tr (eventsBy tr time τ) v).disk y = true := by
-      simp only [readyOn, Store.Checks, decide_eq_true_eq]
-      exact ⟨fun r hr => (hr0 r hr).elim, fun r hr => (hr0 r hr).elim,
-        rowValid_congr (fun r hr => (hr0 r hr).elim) hval⟩
-    have := Converge.noReady_before (cfg := cfg) (tr := tr) v (eventsBy tr time τ) y h
-    rw [hrd] at this; cases this
+holds it from the time by which it was synchronised. -/
+theorem arrives {t_r : ℕ} (hsync : Live.SyncedFrom cfg T tr time gst Δₛ t_r t₁)
+    {u v : Validator} (hu : u ∈ T) (hv : v ∈ T) {y : BlockId × Block Validator BlockId Payload}
+    (hyu : y.2.creator = u) (hid : y.1 = cfg.idOf y.2)
+    {j : ℕ} (hj : tr[j]? = some (v, .deliver u y.1 y.2)) (hjr : t_r ≤ time j) {τ : ℕ}
+    (hτ : max (time j) gst + Δₛ ≤ τ) (ht₁ : τ ≤ t₁) :
+    y.1 ∈ (stateAt cfg tr time v τ).disk.ids :=
+  hsync j v u y.1 y.2 hj hv (hyu ▸ hu) hid hjr τ hτ ht₁
 
 end Arrival
 
@@ -608,12 +379,9 @@ theorem Arrival.no_jump {G A : ℕ} (harr : Arrival cfg T tr time G A t₁)
 /-- **Delivery and synchronisation make blocks arrive**: past GST, a
 reliable block built at `s` is delivered to every other reliable node by
 `max s gst + Δ` and its history `Δₛ` later. -/
-theorem arrival_of_delivered (hσ : cfg.σ = boundedSel)
-    (hadm : cfg.Admissible) (hf : Hᶜ.card ≤ cfg.f) (htime : Converge.TimelyAuthentic cfg H tr)
-    (hinj : Converge.HashInjective cfg H tr)
-    (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
+theorem arrival_of_delivered (hTH : T ⊆ H) (hmono : Live.TimeMono tr time)
     (hdel : Live.DeliveredWithin cfg T tr time gst Δ t₁)
-    (hsync : Live.SyncedWithin cfg H T tr time gst Δₛ t₁) (hup : Live.UpFrom T tr time 0 t₁) :
+    (hsync : Live.SyncedWithin cfg T tr time gst Δₛ t₁) (hup : Live.UpFrom T tr time 0 t₁) :
     Arrival cfg T tr time gst (Δ + Δₛ) t₁ := by
   refine ⟨fun u hu v hv huv b inp hb e hep _ s τ htb hτ ht₁ => ?_, fun _ v hv k _ hk₁ => ?_,
     fun v hv k inp hki _ hk₁ h => by
@@ -626,18 +394,13 @@ theorem arrival_of_delivered (hσ : cfg.σ = boundedSel)
       have hjl : j < tr.length := (List.getElem?_eq_some_iff.mp hj).1
       exact absurd (hup j v hj hv ((lt_eventsBy hmono hjl).mp (by omega)))
         (Nat.not_lt_zero _)
-  have hbu : (tr[b]?.map Prod.fst) = some u := by rw [hb]; rfl
   have hebc := broadcasts_of_persists hep
-  obtain ⟨j, hbj, hj, htj⟩ := hdel b u inp hb hu (v, .deliver e.1 e.2)
+  obtain ⟨j, -, hj, htj⟩ := hdel b u inp hb hu (v, .deliver u e.1 e.2)
     ⟨.broadcast e.1 e.2, mem_broadcasts.mp hebc, Ne.symm huv, rfl⟩ hv (by omega)
-  have hgood := ((Converge.inv_before (cfg := cfg) (tr := tr) (b + 1) u).good e
-    (persists_of_event hb hep)).2.1
-  by_cases hn0 : e.2.round = 0
-  · exact arrives_zero hinj hTH hmono hu hv huv hbu hep hgood hn0 hj (by omega)
-  · obtain ⟨x, y', o, hx, hxb, heo, -⟩ := build_witness hσ hadm hf htime hinj (hTH hu) hb hep hn0
-    exact arrives hinj htime hTH hmono (t_r := 0)
-      (fun j v id b hj hv hc hid _ => hsync j v id b hj hv hc hid) hu hv huv hb hep hx hxb heo
-      hj (Nat.zero_le _) (τ := τ) (by omega) (by omega)
+  have hgood := (Converge.inv_before (cfg := cfg) (tr := tr) (b + 1) u).good e
+    (persists_of_event hb hep)
+  exact arrives (t_r := 0) (fun j v u id b hj hv hc hid _ => hsync j v u id b hj hv hc hid) hu hv
+    hgood.2.1 hgood.1 hj (Nat.zero_le _) (by omega) ht₁
 
 /-- **A reliable block held is as its author built it**: its round, its
 author and its content. -/

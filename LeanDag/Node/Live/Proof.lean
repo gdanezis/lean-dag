@@ -269,7 +269,7 @@ theorem decidesBy {cfg : Config Validator BlockId Payload} {T : Finset Validator
 theorem progresses : Progresses := by
   intro Validator BlockId Payload _ _ _ cfg H T tr time gst Δ Δₛ t₁ hσ hadm hf hTH hqT hcT
     hq hid hto htime hinj hmono hdel hfire hwait hsync hstart hup
-  have harr := arrival_of_delivered hσ hadm hf htime hinj hTH hmono hdel hsync hup
+  have harr := arrival_of_delivered (H := H) hTH hmono hdel hsync hup
   have hp := produces hσ hadm hf hTH hqT hq hid htime hinj hmono harr
     (TopTimerBy.of_fire hmono hfire) hstart
   have hd := decides hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono harr hwait hstart

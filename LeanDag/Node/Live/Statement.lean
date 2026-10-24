@@ -16,9 +16,9 @@ of at least `q` nodes, and a GST `gst`, assume up to a time `t₁`:
   sets at `t` for `a` ticks fires at `t + a`, and no honest node's timer
   fires earlier than its delay after it was set;
 * **synchronisation** (`SyncedWithin`): a reliable node that receives a
-  reliable node's block at `t` receives after it, by `max t gst + Δₛ`,
-  each block the honest nodes know in its history that it did not make.
-  Efficient synchronisation is out of scope (`docs/validator.md` §1);
+  reliable node's block at `t` holds it on its disk by `max t gst + Δₛ`,
+  having synced its history. This is assumed of the syncs, not proved
+  (`docs/validator.md` §5.1);
 * every reliable node **starts** by `gst` (`StartedBy`), and does not
   **restart** by `t₁` (`UpFrom` from `0`);
 * timely authentication of blocks;
@@ -99,23 +99,12 @@ def TimersAfterSet (cfg : Config Validator BlockId Payload) (T : Finset Validato
       time i + a ≤ time j
 
 
-open Classical in
-/-- **The block the honest nodes know under an identifier**, the genesis
-block under one they know none under. -/
-noncomputable def knownBlock (cfg : Config Validator BlockId Payload) (H : Finset Validator)
-    (tr : Trace Validator BlockId Payload) (j : BlockId) : Block Validator BlockId Payload :=
-  if h : ∃ x ∈ Converge.knownIn cfg H tr, x.1 = j then (Classical.choose h).2 else cfg.genesis
-
-/-- **Synchronisation within `Δₛ` past GST**: a reliable node `v` given
-a reliable author's block at `t` is given after it, by `max t gst + Δₛ`,
-each block the honest nodes `H` know that the block reaches through the
-blocks they know, that `v` did not make. -/
-def SyncedWithin (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
+/-- **Synchronisation within `Δₛ` past GST**: a reliable node `v` given a
+reliable author's block at `t` holds it on its disk by `max t gst + Δₛ`. -/
+def SyncedWithin (cfg : Config Validator BlockId Payload) (T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δₛ t₁ : ℕ) : Prop :=
-  ∀ j v id b, tr[j]? = some (v, .deliver id b) → v ∈ T → b.creator ∈ T → id = cfg.idOf b →
-    max (time j) gst + Δₛ ≤ t₁ → ∀ x ∈ Converge.knownIn cfg H tr,
-      ReachesFrom (knownBlock cfg H tr) id x.1 → x.2.creator ≠ v →
-      ∃ k, j < k ∧ tr[k]? = some (v, .deliver x.1 x.2) ∧ time k ≤ max (time j) gst + Δₛ
+  ∀ j v u id b, tr[j]? = some (v, .deliver u id b) → v ∈ T → b.creator ∈ T → id = cfg.idOf b →
+    ∀ τ, max (time j) gst + Δₛ ≤ τ → τ ≤ t₁ → id ∈ (stateAt cfg tr time v τ).disk.ids
 
 /-- **Delivery within `Δ` past GST, from `t_r` on**: a message one
 reliable node sends another at a time `t ≥ t_r` arrives by
@@ -129,12 +118,11 @@ def DeliveredFrom (cfg : Config Validator BlockId Payload) (T : Finset Validator
 /-- **Synchronisation within `Δₛ` past GST, from `t_r` on**: as
 `SyncedWithin`, for the blocks a reliable node is given at a time
 `t ≥ t_r`. -/
-def SyncedFrom (cfg : Config Validator BlockId Payload) (H T : Finset Validator)
+def SyncedFrom (cfg : Config Validator BlockId Payload) (T : Finset Validator)
     (tr : Trace Validator BlockId Payload) (time : ℕ → ℕ) (gst Δₛ t_r t₁ : ℕ) : Prop :=
-  ∀ j v id b, tr[j]? = some (v, .deliver id b) → v ∈ T → b.creator ∈ T → id = cfg.idOf b →
-    t_r ≤ time j → max (time j) gst + Δₛ ≤ t₁ → ∀ x ∈ Converge.knownIn cfg H tr,
-      ReachesFrom (knownBlock cfg H tr) id x.1 → x.2.creator ≠ v →
-      ∃ k, j < k ∧ tr[k]? = some (v, .deliver x.1 x.2) ∧ time k ≤ max (time j) gst + Δₛ
+  ∀ j v u id b, tr[j]? = some (v, .deliver u id b) → v ∈ T → b.creator ∈ T → id = cfg.idOf b →
+    t_r ≤ time j → ∀ τ, max (time j) gst + Δₛ ≤ τ → τ ≤ t₁ →
+      id ∈ (stateAt cfg tr time v τ).disk.ids
 
 /-- **Timers fire unless the node restarts**: a timer a reliable node sets
 at `t` for `a` ticks fires at `t + a`, if that is by `t₁` and the node
@@ -211,7 +199,7 @@ def Progresses : Prop :=
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → TimeMono tr time →
     DeliveredWithin cfg T tr time gst Δ t₁ →
     TimersFire cfg T tr time t₁ → TimersAfterSet cfg H tr time →
-    SyncedWithin cfg H T tr time gst Δₛ t₁ → StartedBy T tr time gst → UpFrom T tr time 0 t₁ →
+    SyncedWithin cfg T tr time gst Δₛ t₁ → StartedBy T tr time gst → UpFrom T tr time 0 t₁ →
     Produces cfg T tr time gst (Δ + Δₛ) t₁ ∧ Decides cfg T tr time gst (Δ + Δₛ) t₁ ∧
       DecidesBy cfg T tr time gst (Δ + Δₛ) t₁
 
@@ -229,7 +217,7 @@ def Recovers : Prop :=
     Function.Injective cfg.idOf → (∀ r, 2 * (Δ + Δₛ) < cfg.timeout r) →
     Converge.TimelyAuthentic cfg H tr → Converge.HashInjective cfg H tr → TimeMono tr time →
     DeliveredFrom cfg T tr time gst Δ t_r t₁ → TimersFireUp cfg T tr time t₁ →
-    TimersAfterSet cfg H tr time → SyncedFrom cfg H T tr time gst Δₛ t_r t₁ →
+    TimersAfterSet cfg H tr time → SyncedFrom cfg T tr time gst Δₛ t_r t₁ →
     UpFrom T tr time t_r t₁ → StartedBy T tr time gst →
     let G := max t_r gst +
       T.sup fun u => 2 * cfg.timeout (topAt cfg tr time u (max t_r gst) - 1)

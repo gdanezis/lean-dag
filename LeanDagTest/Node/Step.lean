@@ -63,10 +63,10 @@ def sends (t : ℕ) (src : Fin 4) (out : List (Output (Fin 4) ℕ Unit)) :
     List (ℕ × Fin 4 × Input (Fin 4) ℕ Unit) :=
   out.flatMap fun
     | .broadcast id b =>
-      ((List.finRange 4).filter (· ≠ src)).map fun d => (t + 1, d, .deliver id b)
+      ((List.finRange 4).filter (· ≠ src)).map fun d => (t + 1, d, .deliver src id b)
     | .setTimer r after => [(t + after, src, .timer r)]
-    | .fetch peer r ids => [(t + 1, peer, .fetchRequest src r ids)]
-    | .send peer id b => [(t + 1, peer, .deliver id b)]
+    | .sync peer r fr ids => [(t + 1, peer, .syncRequest src r fr ids)]
+    | .stream peer L => [(t + 1, peer, .stream src L)]
     | _ => []
 
 /-- The commits among a node's outputs. -/
@@ -182,7 +182,7 @@ def long3 : Net := run (fun _ d => d = 3) 5300 net0
 Node `2` is down from time `20` and restarts at `60`, losing what is sent
 to it meanwhile. Without it nodes `0` and `1` lack a quorum and stall,
 resending their top blocks each timeout. Once node `2` restarts it
-receives them, fetches the blocks it lost, builds the rounds it missed,
+receives them, syncs the blocks it lost, builds the rounds it missed,
 and the three go on deciding. -/
 
 /-- Node `3` down; node `2` down from `20` on. -/

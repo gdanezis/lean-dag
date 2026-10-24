@@ -86,7 +86,7 @@ theorem holds : Statement := by
     fun v hv i => commitInv_before hσ hadm hf htime hinj hv i, ?_, ?_⟩
   · intro T time gst Δ Δₛ t₁ hTH hqT hcT hq hid hto hmono hdel hwait hsync hstart hup
     exact waves_leads hσ hadm hf hTH hqT hcT hq hid hto htime hinj hmono
-      (arrival_of_delivered hσ hadm hf htime hinj hTH hmono hdel hsync hup) hwait hstart
+      (arrival_of_delivered (H := H) hTH hmono hdel hsync hup) hwait hstart
   · intro T time gst Δ Δₛ t_r t₁ hTH hqT hcT hq hid hto hmono hdel hfire hwait hsync hup hstart G
     have hgG : gst ≤ G := (le_max_right _ _).trans (Nat.le_add_right _ _)
     have hstart' : Live.StartedBy T tr time G := fun v hv => by

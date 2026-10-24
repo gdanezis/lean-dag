@@ -9,15 +9,18 @@ Each further line is an input, and the node answers with one line per
 output:
 
 * inputs: `{"start":{}}`, `{"restart":{}}` (after a crash, from the
-  persisted state), `{"timer":r}`,
-  `{"deliver":{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}}`, and
-  `{"fetchRequest":{"peer":v,"round":r,"ids":[…]}}` (peer `v`, at round
-  `r`, asks for the blocks `ids` and their histories);
+  persisted state), `{"timer":r}`, `{"deliver":{"peer":v,"block":block}}`
+  (peer `v` announces its block), `{"stream":{"peer":v,"blocks":[…]}}` (a
+  piece of peer `v`'s stream), and
+  `{"syncRequest":{"peer":v,"target":t,"frontier":[…],"ids":[…]}}` (peer
+  `v` asks for the history of `t` from its frontier, one round per
+  validator, and for the blocks `ids` by name), with a block
+  `{"id":i,"round":r,"creator":v,"refs":[…],"payload":p}`;
 * outputs: `{"persist":block}`, `{"broadcast":block}`,
   `{"setTimer":{"round":r,"after":t}}`, `{"commit":{"slot":k,"block":i}}`
-  (`null` for a skip), `{"fetch":{"peer":v,"round":r,"ids":[…]}}` (ask
-  peer `v` for the blocks and their histories, from round `r`), and `{"send":{"peer":v,"block":block}}`
-  (answer one).
+  (`null` for a skip), `{"sync":{"peer":v,"target":t,"frontier":[…],"ids":[…]}}`
+  (ask peer `v` for the history of `t`), and
+  `{"stream":{"peer":v,"blocks":[…]}}` (answer one).
 
 A delivered block's identifier, if given, must be its hash
 (`LeanDagSim.idOf`), and the node drops one that is not; if it is left
@@ -44,10 +47,11 @@ def outputJson {n : ℕ} : Output (Fin n) ℕ ℕ → Json
   | .setTimer r t => Json.mkObj [("setTimer", Json.mkObj [("round", r), ("after", t)])]
   | .commit k d => Json.mkObj [("commit", Json.mkObj [("slot", k),
       ("block", match d with | some i => (i : Json) | none => Json.null)])]
-  | .fetch peer r ids => Json.mkObj [("fetch", Json.mkObj [("peer", peer.val), ("round", r),
+  | .sync peer t fr ids => Json.mkObj [("sync", Json.mkObj [("peer", peer.val), ("target", t),
+      ("frontier", Json.arr ((List.finRange n).map fun v => (fr v : Json)).toArray),
       ("ids", Json.arr (ids.map fun i => (i : Json)).toArray)])]
-  | .send peer id b => Json.mkObj [("send", Json.mkObj [("peer", peer.val),
-      ("block", blockJson id b)])]
+  | .stream peer L => Json.mkObj [("stream", Json.mkObj [("peer", peer.val),
+      ("blocks", Json.arr (L.map fun e => blockJson e.1 e.2).toArray)])]
 
 /-- A block with its identifier, from JSON; the identifier is its hash
 when left out. -/
@@ -67,16 +71,24 @@ def inputOf {n : ℕ} (hn : 0 < n) (j : Json) : Except String (Input (Fin n) ℕ
   if (j.getObjVal? "start").isOk then return .start
   if (j.getObjVal? "restart").isOk then return .restart
   if let .ok r := natField j "timer" then return .timer r
-  if let .ok f := j.getObjVal? "fetchRequest" then
+  if let .ok f := j.getObjVal? "syncRequest" then
     let peer ← natField f "peer"
-    let r ← natField f "round"
+    let t ← natField f "target"
+    let fr ← ((← f.getObjVal? "frontier").getArr?) >>= fun a => a.toList.mapM Json.getNat?
     let ids ← ((← f.getObjVal? "ids").getArr?) >>= fun a => a.toList.mapM Json.getNat?
-    if h : peer < n then return .fetchRequest ⟨peer, h⟩ r ids
+    if h : peer < n then return .syncRequest ⟨peer, h⟩ t (fun v => fr.getD v.val 0) ids
+    else throw s!"peer {peer} out of range"
+  if let .ok f := j.getObjVal? "stream" then
+    let peer ← natField f "peer"
+    let L ← ((← f.getObjVal? "blocks").getArr?) >>= fun a => a.toList.mapM blockOf
+    if h : peer < n then return .stream ⟨peer, h⟩ L
     else throw s!"peer {peer} out of range"
   let d ← j.getObjVal? "deliver"
   let _ := hn
-  let (id, b) ← blockOf d
-  return .deliver id b
+  let peer ← natField d "peer"
+  let (id, b) ← blockOf (← d.getObjVal? "block")
+  if h : peer < n then return .deliver ⟨peer, h⟩ id b
+  else throw s!"peer {peer} out of range"
 
 def main : IO UInt32 := do
   let stdin ← IO.getStdin

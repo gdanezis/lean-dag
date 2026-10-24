@@ -96,12 +96,13 @@ def main (args : List String) : IO UInt32 := do
       IO.eprintln s!"row {sc.row} is not admissible at n={sc.n} f={sc.f} c={sc.c}"
       return 2
     IO.println s!"row {sc.row}  n={sc.n} f={sc.f} c={sc.c}  seed={sc.seed}  gst={sc.gst}"
-    IO.println s!"time {r.time}  inputs {r.events}  largest disk {r.maxDisk} blocks  most pending {r.maxPending}"
+    IO.println (s!"time {r.time}  inputs {r.events}  largest disk {r.maxDisk} blocks  " ++
+      s!"most syncs {r.maxSyncs}")
     let honest := (List.range sc.n).filter sc.honest
     for (v, top, ds) in (honest.zip (r.tops.zip r.commits)).map fun (v, t, d) => (v, t, d) do
       let skips := (ds.filter (·.2.isNone)).length
       IO.println s!"node {v}: round {top.getD 0}, {ds.length} slots decided, {skips} skipped"
-    IO.println (s!"fetches {r.stats.fetches} ({r.stats.fetched} blocks)  " ++
+    IO.println (s!"requests {r.stats.requests} ({r.stats.named} asked by name)  " ++
       s!"honest blocks not kept {r.stats.notKept}")
     for (v, _, b) in sc.outages do
       let (R, t₁, t₂) := recovery r v b

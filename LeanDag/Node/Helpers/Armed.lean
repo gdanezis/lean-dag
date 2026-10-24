@@ -58,7 +58,7 @@ theorem ArmsBy.congr {s x s' : State Validator BlockId Payload}
 
 omit [Fintype Validator] in
 theorem pass_armed (s : State Validator BlockId Payload) : (Node.pass cfg s).1.armed = s.armed := by
-  simp only [Node.pass, flush_armed]
+  simp only [Node.pass, flushSyncs_armed]
   rw [decideStep_armed, progress_armed]
 
 omit [Fintype Validator] in
@@ -98,19 +98,21 @@ theorem armsBy_step (s : State Validator BlockId Payload) (inp : Input Validator
       · exact ArmsBy.congr rfl (armsBy_quiesce _ _) (List.subset_append_right _ _)
       · exact ArmsBy.refl _
     · exact ArmsBy.refl _
-  | deliver id b =>
-    simp only [Node.step]
-    split
-    · exact ArmsBy.congr
-        (flush_armed (cfg := cfg) (s.pending.length + 1) { s with pending := (id, b) :: s.pending })
-        (armsBy_quiesce _ _) (List.subset_append_right _ _)
-    · exact ArmsBy.refl _
+  | deliver u id b =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inl ⟨u, id, b, rfl⟩) with
+      he | ⟨s₁, pre, hr, -, he⟩
+    · rw [he]; exact ArmsBy.refl _
+    · rw [he]; exact ArmsBy.congr hr.armed (armsBy_quiesce _ _) (List.subset_append_right _ _)
+  | stream u L =>
+    rcases step_receipt (cfg := cfg) (s := s) (Or.inr ⟨u, L, rfl⟩) with he | ⟨s₁, pre, hr, -, he⟩
+    · rw [he]; exact ArmsBy.refl _
+    · rw [he]; exact ArmsBy.congr hr.armed (armsBy_quiesce _ _) (List.subset_append_right _ _)
   | timer r =>
     rw [step_timer_fst]
     rcases step_timer_snd (cfg := cfg) s r with h | h <;> rw [h]
     · exact ArmsBy.congr rfl (armsBy_quiesce _ _) (List.Subset.refl _)
     · exact ArmsBy.congr rfl (armsBy_quiesce _ _) (List.subset_append_left _ _)
-  | fetchRequest p r ids => exact ArmsBy.of_armed rfl
+  | syncRequest p t fr ids => exact ArmsBy.of_armed rfl
   | restart =>
     exact ArmsBy.congr (x := { s with recovering := true }) rfl (armsBy_quiesce _ _)
       (List.subset_append_right _ _)

@@ -184,7 +184,7 @@ theorem cut_before (hσ : cfg.σ = boundedSel) (hadm : cfg.Admissible) (hf : H�
           have hi := Converge.inv_before (cfg := cfg) (tr := tr) t w
           obtain ⟨hd, hb⟩ := event_knownOf (cfg := cfg) hj
           obtain ⟨hc', hv'⟩ := IsCut.step (cfg := cfg.at w) hg hσ ht inp hc
-            (fun e he => hK w hv e (knownBefore_knownOf (hi.pend e he)))
+            (fun e he => hK w hv _ (knownBefore_knownOf (hi.pend e he)))
             (fun e he => hK w hv e (hd e he))
             (fun e he => hK w hv e (hb e he))
           refine ⟨by rw [stateBefore_succ hj, if_pos rfl]; exact hc', fun e he => ?_⟩

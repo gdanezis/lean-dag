@@ -12,6 +12,8 @@ initial state:
   only blocks it persists (`Sends`);
 * **its decisions**: the node keeps the decisions it outputs, the latest
   first, which are slots `0 … lo − 1` (`Decisions`);
+* **its syncs**: the node holds at most `n − 1` syncs, one for each other
+  node at most (`SyncsBound`);
 * **valid blocks**: each of its own blocks references only blocks it
   knew, delivered with their hash, or its own, and is valid at
   the row under every block map agreeing with what it knew (`ValidOut`);
@@ -64,6 +66,13 @@ def Decisions : Prop :=
     let r := run cfg (State.init cfg) is
     r.1.decided.reverse = commitsOf r.2 ∧ (commitsOf r.2).map Prod.fst = List.range r.1.lo
 
+/-- **Its syncs**: the node holds at most `n − 1` syncs. -/
+def SyncsBound : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (cfg : Config Validator BlockId Payload)
+    (is : List (Input Validator BlockId Payload)),
+    (run cfg (State.init cfg) is).1.syncs.length ≤ Fintype.card Validator - 1
+
 /-- **Valid blocks**: each of the node's own blocks references only blocks
 it knew, and is valid at the row under every block map agreeing with
 what it knew. -/
@@ -95,7 +104,7 @@ def DecidesOnView : Prop :=
 
 /-- One node at a time. -/
 def Statement : Prop :=
-  OneEach ∧ Authored ∧ Sends ∧ Decisions ∧ ValidOut ∧ DecidesOnView
+  OneEach ∧ Authored ∧ Sends ∧ Decisions ∧ SyncsBound ∧ ValidOut ∧ DecidesOnView
 
 end Local
 

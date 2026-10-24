@@ -11,13 +11,13 @@ valid, and the inputs the signature checks dropped.
 
 With the network checking signatures, which is what the claims over
 traces assume of authentication, every attack leaves agreement,
-prefix-comparability and validity intact. Without the checks, blocks
-forged in node `0`'s name are accepted by its peers as node `0`'s, and
-their later blocks reference them; node `0` drops every block in its own
-name, so it never holds their histories and stays at round `2`, while
-agreement, prefix-comparability and validity still hold. The liveness
-claim assumes authenticated blocks (`Converge.TimelyAuthentic`), which
-excludes this run.
+prefix-comparability and validity intact. A node that accepts two blocks
+of the attacker at one round, as with the invalid blocks' twin of its
+genesis block or with twins, detects it and takes no block from it after;
+the honest nodes then wait out the timer at its slots, and build fewer
+rounds. Without the checks, the blocks forged in node `0`'s name still
+reach no node: a node takes an announced block only from its author, and
+the attacker streams only blocks it holds.
 -/
 
 namespace LeanDagTest
@@ -35,25 +35,25 @@ def attackLine (sc : Scenario) : String :=
   let r := simulate sc
   s!"{r.tops} {r.commits.map (·.length)} {r.agree} {r.prefixes} {r.valid} {r.dropped}"
 
-/-- info: "[(some 61), (some 62), (some 61)] [59, 60, 60] true true true 0" -/
+/-- info: "[(some 20), (some 20), (some 20)] [20, 20, 20] true true true 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks])
 
-/-- info: "[(some 65), (some 65), (some 65)] [63, 63, 63] true true true 195" -/
+/-- info: "[(some 66), (some 66), (some 65)] [64, 64, 63] true true true 195" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor])
 
-/-- info: "[(some 19), (some 20), (some 20)] [18, 18, 18] true true true 0" -/
+/-- info: "[(some 19), (some 19), (some 19)] [18, 18, 18] true true true 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.twinSplit])
 
-/-- info: "[(some 19), (some 19), (some 19)] [18, 18, 18] true true true 48" -/
+/-- info: "[(some 20), (some 20), (some 20)] [18, 18, 18] true true true 48" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.invalidBlocks, .forgedAuthor, .twinSplit])
 
 /-! ## Without the signature checks -/
 
-/-- info: "[(some 2), (some 36), (some 36)] [0, 34, 34] true true true 0" -/
+/-- info: "[(some 66), (some 66), (some 65)] [64, 64, 63] true true true 0" -/
 #guard_msgs in
 #eval attackLine (attackedBy [.forgedAuthor] (verify := false))
 

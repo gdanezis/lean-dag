@@ -33,12 +33,13 @@ def run : State Validator BlockId Payload → List (Input Validator BlockId Payl
     let r' := run r.1 is
     (r'.1, r.2 ++ r'.2)
 
-/-- The blocks among some inputs, delivered, whose identifier is their
-hash. -/
+/-- The blocks among some inputs, delivered or streamed, whose identifier
+is their hash. -/
 def delivered (is : List (Input Validator BlockId Payload)) :
     List (BlockId × Block Validator BlockId Payload) :=
   is.flatMap fun
-    | .deliver id b => if id = cfg.idOf b then [(id, b)] else []
+    | .deliver _ id b => if id = cfg.idOf b then [(id, b)] else []
+    | .stream _ L => L.filter fun e => decide (e.1 = cfg.idOf e.2)
     | _ => []
 
 variable {cfg}
