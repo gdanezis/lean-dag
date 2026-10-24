@@ -358,9 +358,11 @@ developed in §6 (*no amplification*).
   exposed to `X`, *no valid block* of any later round may reference `X` —
   Byzantine blocks included, since every valid block leans on `f+1` correct
   blocks of the round below. This holds for any exposure a block inherits
-  from its references (`Inherited`) under the matching condition
-  (`DoSValidFor`): twins in the history (`ExposedIn`, so `DoSValid`), or
-  evidence of an equivocation carried by a block of the history.
+  from its references (`InheritedOn`) under the matching condition
+  (`DoSValidOn`), stated over the raw block data: twins in the history
+  (`ExposedIn`, so `DoSValid`), or evidence of an equivocation carried by a
+  block of the history. The Sync model applies it to a target's history
+  (`docs/sync.md`, S5).
 - **D27 — histories above the exposure.** Then no block of any history at
   that round or above, other than the history's top, is by `X`: it is
   referenced by a block one round up, which may not name `X`.
@@ -778,10 +780,10 @@ form — `card_viewUpto_le` / `card_viewUpto_le'`,
 | **D15a** | the margin is `f − k`, and zero at the bound | `card_creators_refs_add_card_exposedTo_le`, `creators_refs_eq_correct` | `Exposure` |
 | **D15b** | the correct set alone meets the threshold | `correctBlocksAt_admissible_quorum` | `Exclusion` |
 | **D16** | after `R`, agree or be exposed | `exposedIn_of_correct_disagree` | `Exclusion` |
-| **D17** | exclusion is total and permanent | `Inherited`, `DoSValidFor`, `exposed_of_correct_exposed`, `not_mem_creators_refs_of_correct_exposed` | `Exclusion` |
+| **D17** | exclusion is total and permanent | `InheritedOn`, `DoSValidOn`, `exposed_of_correct_exposed`, `not_mem_creators_refs_of_correct_exposed` | `Common/Exclusion` |
 | **D18** | pinning | `mem_history_of_pinned` | `Exclusion` |
-| **D27** | histories above the exposure name no exposed author | `creator_ne_of_correct_exposed` | `Exclusion` |
-| **D28** | one block a round for each author not exposed | `card_union_history_round_le`, `exists_mem_history_of_round_between` | `Exclusion` |
+| **D27** | histories above the exposure name no exposed author | `creator_ne_of_correct_exposed` | `Common/Exclusion` |
+| **D28** | one block a round for each author not exposed | `card_union_history_round_le`, `CausalStructure.exists_mem_history_of_round_between` | `Common/Exclusion` |
 | **D19a** | a clean history is linear | `card_history_le_of_not_exposed` | `Counting` |
 | **D19b** | a block is clean about what it references | `card_filter_creator_le_of_mem_refs` | `Counting` |
 | — | the intersection lemma | `exists_shared_correct_ref`, `eq_of_both_name_of_shared` | `Exclusion` |

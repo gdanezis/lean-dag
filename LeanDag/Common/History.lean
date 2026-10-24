@@ -124,36 +124,6 @@ theorem mem_history_of_mem_refs {b j : BlockId} (hb : b ∈ U.ids) (hj : j ∈ (
     j ∈ history U b :=
   U.causal.mem_history_of_mem_refs hb hj
 
-/-- A block of `b`'s history other than `b` is referenced by a block of that
-history. -/
-theorem exists_mem_refs_of_mem_history {b i : BlockId} (hb : b ∈ U.ids)
-    (hi : i ∈ history U b) (hne : i ≠ b) : ∃ j ∈ history U b, i ∈ (U.block j).refs := by
-  rcases Relation.ReflTransGen.cases_tail ((mem_history_iff hb).mp hi) with h | ⟨j, hj, hji⟩
-  · exact absurd h hne
-  · exact ⟨j, (mem_history_iff hb).mpr hj, hji⟩
-
-/-- **Every round between is crossed.** For `i` in `b`'s history and a round
-`k` between theirs, `b`'s history holds a block of round `k` whose history
-holds `i`. -/
-theorem exists_mem_history_of_round_between {b i : BlockId} (hb : b ∈ U.ids)
-    (hi : i ∈ history U b) {k : ℕ} (hik : (U.block i).round ≤ k)
-    (hkb : k ≤ (U.block b).round) :
-    ∃ j ∈ history U b, (U.block j).round = k ∧ i ∈ history U j := by
-  obtain ⟨d, hd⟩ : ∃ d, (U.block b).round = k + d := ⟨(U.block b).round - k, by omega⟩
-  induction d generalizing b with
-  | zero => exact ⟨b, mem_history_self, by omega, hi⟩
-  | succ d ih =>
-      have hne : i ≠ b := by
-        rintro rfl
-        omega
-      rcases Relation.ReflTransGen.cases_head ((mem_history_iff hb).mp hi) with h | ⟨c, hc, hci⟩
-      · exact absurd h.symm hne
-      · have hc_ids : c ∈ U.ids := U.complete b hb c hc
-        have hcr := U.round_of_mem_refs hb hc
-        obtain ⟨j, hj, hjr, hij⟩ :=
-          ih hc_ids ((mem_history_iff hc_ids).mpr hci) (by omega) (by omega)
-        exact ⟨j, history_subset_of_reaches hb (Reaches.single hc) hj, hjr, hij⟩
-
 /-! ## A block of a set in the anchor's cone
 
 The indirect rules ask whether a certificate or vote lies in the

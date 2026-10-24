@@ -21,6 +21,12 @@ import LeanDag.Node.Sync.Model.Net
 * **The rate bound** (`RateBound`): if moreover an honest node receives
   at most `k` blocks at a time from each node outside `H`, then by time
   `t` those blocks number at most `|H| · |Hᶜ| · k · (t + 1)`.
+* **The exposure bound** (`ExposureBound`): if honest authors have no
+  twins and every honest block of round `m + 1` whose history passes the
+  checks exposes every author an honest node has detected, the node holds
+  at most `|V| + |D|` blocks of each round from `m + 1` on, for `D` the
+  authors it has detected: one of each author not detected, two of each
+  detected.
 
 Statements only; the proofs are `Proof.lean`.
 -/
@@ -43,19 +49,21 @@ def Completes : Prop :=
 detected. -/
 def PendingBounded : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
-    [LinearOrder BlockId] (blk : BlockId → Block Validator BlockId Payload) (me : Validator)
+    [LinearOrder BlockId] (blk : BlockId → Block Validator BlockId Payload)
+    (ev : Payload → Finset (BlockId × BlockId)) (f : ℕ) (me : Validator)
     (ins : List (Input Validator BlockId)),
-    (pending (run blk me State.init ins)).card ≤
-      ((Finset.univ.erase me) \ (run blk me State.init ins).detected).card
+    (pending (run blk ev f me State.init ins)).card ≤
+      ((Finset.univ.erase me) \ (run blk ev f me State.init ins).detected).card
 
 /-- **No amplification**: the blocks of authors outside `H` on an honest
 disk number at most those honest nodes received from outside `H`. -/
 def NoAmplification : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (blk : BlockId → Block Validator BlockId Payload)
+    (ev : Payload → Finset (BlockId × BlockId)) (f : ℕ)
     (H : Finset Validator) (tr : Trace Validator BlockId),
-    Faithful blk H tr → ∀ v ∈ H, ∀ i,
-      ((stateBefore blk tr i v).disk.filter fun x => (blk x).creator ∉ H).card ≤
+    Faithful blk ev f H tr → ∀ v ∈ H, ∀ i,
+      ((stateBefore blk ev f tr i v).disk.filter fun x => (blk x).creator ∉ H).card ≤
         fromOutside H tr i
 
 /-- **The rate bound**: by time `t`, at most `|H| · |Hᶜ| · k · (t + 1)`
@@ -63,13 +71,31 @@ blocks of authors outside `H` on an honest disk. -/
 def RateBound : Prop :=
   ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
     [LinearOrder BlockId] (blk : BlockId → Block Validator BlockId Payload)
+    (ev : Payload → Finset (BlockId × BlockId)) (f : ℕ)
     (H : Finset Validator) (tr : Trace Validator BlockId) (time : ℕ → ℕ) (k t : ℕ),
-    Faithful blk H tr → RateBounded H tr time k → ∀ v ∈ H, ∀ i, (∀ j < i, time j ≤ t) →
-      ((stateBefore blk tr i v).disk.filter fun x => (blk x).creator ∉ H).card ≤
+    Faithful blk ev f H tr → RateBounded H tr time k → ∀ v ∈ H, ∀ i, (∀ j < i, time j ≤ t) →
+      ((stateBefore blk ev f tr i v).disk.filter fun x => (blk x).creator ∉ H).card ≤
         H.card * Hᶜ.card * k * (t + 1)
 
-/-- **Sync by causal streams**: the four claims. -/
-def Statement : Prop := Completes ∧ PendingBounded ∧ NoAmplification ∧ RateBound
+/-- **The exposure bound**: at most `|V| + |D|` blocks of each round from
+`m + 1` on, once every honest admitted block of round `m + 1` exposes the
+detected authors `D`. -/
+def ExposureBound : Prop :=
+  ∀ (Validator BlockId Payload : Type) [Fintype Validator] [DecidableEq Validator]
+    [LinearOrder BlockId] (blk : BlockId → Block Validator BlockId Payload)
+    (ev : Payload → Finset (BlockId × BlockId)) (f : ℕ) (H : Finset Validator) (me : Validator)
+    (ins : List (Input Validator BlockId)) (m k : ℕ),
+    Hᶜ.card ≤ f → 2 * f < Fintype.card Validator → me ∈ H →
+    (∀ i j, Twins blk i j → (blk i).creator ∉ H) →
+    (∀ c, Admits blk ev f c → (blk c).round = m + 1 → (blk c).creator ∈ H →
+      ∀ X ∈ (run blk ev f me State.init ins).detected, Exposes blk ev c X) →
+    m + 1 ≤ k →
+    ((run blk ev f me State.init ins).disk.filter fun i => (blk i).round = k).card ≤
+      Fintype.card Validator + (run blk ev f me State.init ins).detected.card
+
+/-- **Sync by causal streams**: the five claims. -/
+def Statement : Prop :=
+  Completes ∧ PendingBounded ∧ NoAmplification ∧ RateBound ∧ ExposureBound
 
 end Sync
 

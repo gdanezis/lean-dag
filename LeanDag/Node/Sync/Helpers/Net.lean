@@ -21,17 +21,30 @@ namespace Sync
 
 variable {Validator BlockId Payload : Type} [DecidableEq Validator] [LinearOrder BlockId]
 variable {blk : BlockId → Block Validator BlockId Payload}
+variable {ev : Payload → Finset (BlockId × BlockId)} [Fintype Validator] {f : ℕ}
 
 /-- **A clean state**: only another node not detected has a target. -/
 def Clean (me : Validator) (s : State Validator BlockId) : Prop :=
   ∀ a, (s.target a).isSome → a ≠ me ∧ a ∉ s.detected
 
-omit [DecidableEq Validator] [LinearOrder BlockId] in
+omit [DecidableEq Validator] [LinearOrder BlockId] [Fintype Validator] in
 theorem init_clean (me : Validator) : Clean me (State.init : State Validator BlockId) :=
   fun _ h => by simp [State.init] at h
 
+omit [Fintype Validator] in
+theorem settle_clean {me : Validator} {s : State Validator BlockId} (hs : Clean me s)
+    (S : Finset BlockId) (D : Finset Validator) : Clean me (settle s S D) := by
+  intro a ha
+  simp only [settle] at ha ⊢
+  split_ifs at ha with hD
+  · simp at ha
+  · refine ⟨(hs a ?_).1, hD⟩
+    cases h : s.target a with
+    | none => simp [h] at ha
+    | some c => rfl
+
 theorem step_clean {me : Validator} {s : State Validator BlockId} (hs : Clean me s)
-    (inp : Input Validator BlockId) : Clean me (step blk me s inp) := by
+    (inp : Input Validator BlockId) : Clean me (step blk ev f me s inp) := by
   cases inp with
   | announce u t =>
     simp only [step]
@@ -43,29 +56,26 @@ theorem step_clean {me : Validator} {s : State Validator BlockId} (hs : Clean me
       · simp only [Function.update_of_ne hau] at ha
         exact hs a ha
     · exact hs
-  | chunk u L =>
-    intro a ha
-    simp only [step] at ha ⊢
-    split_ifs at ha with hD
-    · simp at ha
-    · refine ⟨(hs a ?_).1, hD⟩
-      cases h : s.target a with
-      | none => simp [h] at ha
-      | some c => rfl
+  | chunk u L => exact settle_clean hs _ _
   | build x =>
     simp only [step]
     split_ifs
+    · exact settle_clean hs _ _
     · exact hs
+  | report i j =>
+    simp only [step]
+    split_ifs
+    · exact settle_clean hs _ _
     · exact hs
 
 theorem run_clean {me : Validator} :
     ∀ (s : State Validator BlockId) (ins : List (Input Validator BlockId)),
-      Clean me s → Clean me (run blk me s ins)
+      Clean me s → Clean me (run blk ev f me s ins)
   | _, [], hs => hs
-  | s, inp :: ins, hs => run_clean (step blk me s inp) ins (step_clean hs inp)
+  | s, inp :: ins, hs => run_clean (step blk ev f me s inp) ins (step_clean hs inp)
 
 omit [LinearOrder BlockId] in
-theorem pending_subset [Fintype Validator] {me : Validator} {s : State Validator BlockId}
+theorem pending_subset {me : Validator} {s : State Validator BlockId}
     (hs : Clean me s) : pending s ⊆ (Finset.univ.erase me) \ s.detected := by
   intro a ha
   obtain ⟨hme, hD⟩ := hs a (Finset.mem_filter.mp ha).2
@@ -73,7 +83,7 @@ theorem pending_subset [Fintype Validator] {me : Validator} {s : State Validator
 
 /-- **A block enters a disk only by a stream or the node's own build.** -/
 theorem step_disk {me : Validator} {s : State Validator BlockId} {inp : Input Validator BlockId}
-    {x : BlockId} (hx : x ∈ (step blk me s inp).disk) :
+    {x : BlockId} (hx : x ∈ (step blk ev f me s inp).disk) :
     x ∈ s.disk ∨ (∃ u L, inp = .chunk u L ∧ x ∈ L) ∨ (inp = .build x ∧ (blk x).creator = me) := by
   cases inp with
   | announce u t =>
@@ -82,10 +92,10 @@ theorem step_disk {me : Validator} {s : State Validator BlockId} {inp : Input Va
     · exact Or.inl hx
     · exact Or.inl hx
   | chunk u L =>
-    simp only [step] at hx
+    simp only [step, settle] at hx
     rcases Finset.mem_union.mp (absorb_sub _ _ hx) with h | h
     · exact Or.inl h
-    · exact Or.inr (Or.inl ⟨u, L, rfl, List.mem_toFinset.mp h⟩)
+    · exact Or.inr (Or.inl ⟨u, L, rfl, List.mem_of_mem_filter (List.mem_toFinset.mp h)⟩)
   | build y =>
     simp only [step] at hx
     split_ifs at hx with h
@@ -93,17 +103,22 @@ theorem step_disk {me : Validator} {s : State Validator BlockId} {inp : Input Va
       · exact Or.inr (Or.inr ⟨rfl, h.1⟩)
       · exact Or.inl hx
     · exact Or.inl hx
+  | report i j =>
+    simp only [step] at hx
+    split_ifs at hx
+    · exact Or.inl hx
+    · exact Or.inl hx
 
 theorem stateBefore_zero (tr : Trace Validator BlockId) (v : Validator) :
-    stateBefore blk tr 0 v = State.init := by
+    stateBefore blk ev f tr 0 v = State.init := by
   simp [stateBefore, inputsOf, run]
 
 theorem stateBefore_succ (tr : Trace Validator BlockId) (i : ℕ) (v : Validator) :
-    stateBefore blk tr (i + 1) v =
+    stateBefore blk ev f tr (i + 1) v =
       match tr[i]? with
-      | some (w, inp) => if w = v then step blk v (stateBefore blk tr i v) inp
-          else stateBefore blk tr i v
-      | none => stateBefore blk tr i v := by
+      | some (w, inp) => if w = v then step blk ev f v (stateBefore blk ev f tr i v) inp
+          else stateBefore blk ev f tr i v
+      | none => stateBefore blk ev f tr i v := by
   unfold stateBefore inputsOf run
   rw [List.take_add_one, List.filterMap_append, List.foldl_append]
   cases h : tr[i]? with
@@ -116,9 +131,9 @@ theorem stateBefore_succ (tr : Trace Validator BlockId) (i : ℕ) (v : Validator
 
 /-- **The entry lemma**: a block of an author outside `H` on an honest
 disk was received by an honest node from a node outside `H` before. -/
-theorem entry [Fintype Validator] {H : Finset Validator} {tr : Trace Validator BlockId}
-    (hfaith : Faithful blk H tr) :
-    ∀ i, ∀ v ∈ H, ∀ x ∈ (stateBefore blk tr i v).disk, (blk x).creator ∉ H →
+theorem entry {H : Finset Validator} {tr : Trace Validator BlockId}
+    (hfaith : Faithful blk ev f H tr) :
+    ∀ i, ∀ v ∈ H, ∀ x ∈ (stateBefore blk ev f tr i v).disk, (blk x).creator ∉ H →
       ∃ j < i, ∃ w ∈ H, ∃ u ∈ Hᶜ, x ∈ chunkBlocks tr j w u
   | 0, v, _, x, hx, _ => by simp [stateBefore_zero, State.init] at hx
   | i + 1, v, hv, x, hx, hxH => by
@@ -147,6 +162,7 @@ theorem entry [Fintype Validator] {H : Finset Validator} {tr : Trace Validator B
       · obtain ⟨j, hj, rest⟩ := entry hfaith i v hv x hx hxH
         exact ⟨j, by omega, rest⟩
 
+omit [Fintype Validator] in
 theorem card_chunkBlocks_le (tr : Trace Validator BlockId) (j : ℕ) (w u : Validator) :
     (chunkBlocks tr j w u).card ≤ chunkLen tr j w u := by
   unfold chunkBlocks chunkLen
@@ -157,6 +173,7 @@ theorem card_chunkBlocks_le (tr : Trace Validator BlockId) (j : ℕ) (w u : Vali
     cases inp with
     | announce => simp
     | build => simp
+    | report => simp
     | chunk u' L =>
       simp only
       split_ifs
@@ -165,12 +182,12 @@ theorem card_chunkBlocks_le (tr : Trace Validator BlockId) (j : ℕ) (w u : Vali
 
 /-- **No amplification**: the blocks of authors outside `H` on an honest
 disk number at most the blocks honest nodes received from outside `H`. -/
-theorem card_outside_le [Fintype Validator] {H : Finset Validator}
-    {tr : Trace Validator BlockId} (hfaith : Faithful blk H tr) {v : Validator} (hv : v ∈ H)
+theorem card_outside_le {H : Finset Validator}
+    {tr : Trace Validator BlockId} (hfaith : Faithful blk ev f H tr) {v : Validator} (hv : v ∈ H)
     (i : ℕ) :
-    ((stateBefore blk tr i v).disk.filter fun x => (blk x).creator ∉ H).card ≤
+    ((stateBefore blk ev f tr i v).disk.filter fun x => (blk x).creator ∉ H).card ≤
       fromOutside H tr i := by
-  have hsub : ((stateBefore blk tr i v).disk.filter fun x => (blk x).creator ∉ H) ⊆
+  have hsub : ((stateBefore blk ev f tr i v).disk.filter fun x => (blk x).creator ∉ H) ⊆
       (Finset.range i).biUnion fun j => H.biUnion fun w => Hᶜ.biUnion fun u =>
         chunkBlocks tr j w u := by
     intro x hx
@@ -183,7 +200,7 @@ theorem card_outside_le [Fintype Validator] {H : Finset Validator}
   refine Finset.sum_le_sum fun w _ => Finset.card_biUnion_le.trans ?_
   exact Finset.sum_le_sum fun u _ => card_chunkBlocks_le tr j w u
 
-omit [LinearOrder BlockId] in
+omit [LinearOrder BlockId] [Fintype Validator] in
 theorem chunkLen_of_ge {tr : Trace Validator BlockId} {j : ℕ} (hj : tr.length ≤ j)
     (w u : Validator) : chunkLen tr j w u = 0 := by
   simp [chunkLen, List.getElem?_eq_none hj]
@@ -191,7 +208,7 @@ theorem chunkLen_of_ge {tr : Trace Validator BlockId} {j : ℕ} (hj : tr.length 
 omit [LinearOrder BlockId] in
 /-- **The rate bound**: by time `t`, the blocks honest nodes received
 from outside `H` number at most `|H| · |Hᶜ| · k · (t + 1)`. -/
-theorem fromOutside_le [Fintype Validator] {H : Finset Validator}
+theorem fromOutside_le {H : Finset Validator}
     {tr : Trace Validator BlockId} {time : ℕ → ℕ} {k t i : ℕ}
     (hrate : RateBounded H tr time k) (ht : ∀ j < i, time j ≤ t) :
     fromOutside H tr i ≤ H.card * Hᶜ.card * k * (t + 1) := by
