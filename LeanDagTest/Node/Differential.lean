@@ -115,6 +115,7 @@ def cfg (p : Scheme.Params) (per m : ℕ) (hper : 0 < per) (hm : 0 < m)
   idOf := idIn bs
   xp := ⟨fun _ => ∅, fun _ => ∅⟩
   payload := fun _ _ _ => ()
+  cap := 1000
 
 /-- The record, in order of round, through the acceptance path onto an
 empty disk. -/

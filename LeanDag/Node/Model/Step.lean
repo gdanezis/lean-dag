@@ -67,9 +67,12 @@ input `i` in the state `s`: the new state and the outputs.
   `frontierOf`), and the identifiers asked for by name. It is answered with
   the blocks of the disk in the block's history that are the block, asked
   for, or at or above their author's frontier, in order of round. Of a
-  stream piece the node takes the blocks in the history of the sync's
-  block, each accepted if it is ready on arrival; the references still
-  missing are asked for by name in the next request (`missingIn`).
+  stream piece the node reads the blocks in the history of the sync's
+  block, and takes them in, in order of round, each accepted if it is
+  ready, only if they are at most `cap` and the sync's block is then
+  held: all of them or none (`takeIn`). Otherwise the references that
+  neither the disk nor the piece holds are asked for by name in the next
+  request (`missingIn`).
 * **Resending** (`resend`): when the retry timer, or the top round's,
   fires and the node does not build, and when it restarts, before it
   settles, the node broadcasts its top block again, sets the retry timer
@@ -434,16 +437,24 @@ def inHistory (t : BlockId × Block Validator BlockId Payload)
     decide (e.1 ∈ found)).mergeSort fun x y => decide (x.2.round ≤ y.2.round)
 
 /-- **The identifiers to ask for by name** after a stream piece: the
-references of its blocks that the disk does not hold. -/
+references of its blocks that neither the disk nor the piece holds. -/
 def missingIn (s : State Validator BlockId Payload)
     (L : List (BlockId × Block Validator BlockId Payload)) : List BlockId :=
-  ((L.flatMap fun e => e.2.refs.sort (· ≤ ·)).filter fun j => decide (j ∉ s.disk.ids)).dedup
+  ((L.flatMap fun e => e.2.refs.sort (· ≤ ·)).filter fun j =>
+    decide (j ∉ s.disk.ids) && decide (j ∉ L.map Prod.fst)).dedup
 
 /-- **Take a stream piece in**: its blocks, in order, each accepted if it
 is new and ready. -/
 def absorb (s : State Validator BlockId Payload)
     (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
   L.foldl (fun s e => accept cfg s e.1 e.2) s
+
+/-- **Take a stream piece in, header first**: its part `L` in the history
+of the sync's block `t`, if `L` has at most `cap` blocks and taking it in
+makes `t` held; otherwise nothing. -/
+def takeIn (s : State Validator BlockId Payload) (t : BlockId × Block Validator BlockId Payload)
+    (L : List (BlockId × Block Validator BlockId Payload)) : State Validator BlockId Payload :=
+  if L.length ≤ cfg.cap ∧ t.1 ∈ (absorb cfg s L).disk.ids then tidy (absorb cfg s L) else s
 
 /-- **Accept the syncs' blocks that are ready**, and drop the syncs done, in
 passes, at most `fuel`. -/
@@ -568,7 +579,7 @@ def step (s : State Validator BlockId Payload) :
     | none => (s, [])
     | some e =>
       let L' := inHistory cfg e.2.1 L
-      let s₁ := tidy (absorb cfg s L')
+      let s₁ := takeIn cfg s e.2.1 L'
       match s₁.syncs.find? fun e => decide (e.1 = u) with
       | none => settle cfg s₁
       | some e₁ =>

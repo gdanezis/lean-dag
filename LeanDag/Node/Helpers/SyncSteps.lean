@@ -93,6 +93,16 @@ theorem Thins.tidy (s : State Validator BlockId Payload) : Thins cfg s (Node.tid
     · exact Or.inr (by by_contra h₂; exact hk ⟨h₁, h₂⟩)
 
 omit [Fintype Validator] in
+theorem Thins.takeIn (s : State Validator BlockId Payload)
+    (t : BlockId × Block Validator BlockId Payload)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    Thins cfg s (Node.takeIn cfg s t L) := by
+  unfold Node.takeIn
+  split
+  · exact (Thins.absorb s L).trans (Thins.tidy _)
+  · exact Thins.refl s
+
+omit [Fintype Validator] in
 theorem Thins.flushSyncs : ∀ (fuel : ℕ) (s : State Validator BlockId Payload),
     Thins cfg s (Node.flushSyncs cfg fuel s)
   | 0, s => Thins.refl s
@@ -314,11 +324,11 @@ taken in, then the sync dropped, or its names asked for extended. -/
 theorem step_stream_cases {s : State Validator BlockId Payload} (hs : SyncsOn s) {u : Validator}
     {t : BlockId × Block Validator BlockId Payload} {A : List BlockId} (he : (u, t, A) ∈ s.syncs)
     (L : List (BlockId × Block Validator BlockId Payload)) :
-    ((u, t, A) ∉ (tidy (absorb cfg s (inHistory cfg t L))).syncs ∧
-      Node.step cfg s (.stream u L) = Node.settle cfg (tidy (absorb cfg s (inHistory cfg t L)))) ∨
-    ((u, t, A) ∈ (tidy (absorb cfg s (inHistory cfg t L))).syncs ∧
+    ((u, t, A) ∉ (takeIn cfg s t (inHistory cfg t L)).syncs ∧
+      Node.step cfg s (.stream u L) = Node.settle cfg (takeIn cfg s t (inHistory cfg t L))) ∨
+    ((u, t, A) ∈ (takeIn cfg s t (inHistory cfg t L)).syncs ∧
       Node.step cfg s (.stream u L) =
-        let s₁ := tidy (absorb cfg s (inHistory cfg t L))
+        let s₁ := takeIn cfg s t (inHistory cfg t L)
         let asked := (A ++ missingIn s₁ (t :: inHistory cfg t L)).dedup
         let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then (u, t, asked) else x }
         ((Node.settle cfg s₂).1,
@@ -335,7 +345,7 @@ theorem step_stream_cases {s : State Validator BlockId Payload} (hs : SyncsOn s)
     have he₁ := List.mem_of_find?_eq_some hn
     have hp := List.find?_some hn
     simp only [decide_eq_true_eq] at hp
-    have hsub := (Thins.absorb (cfg := cfg) s (inHistory cfg t L)).trans (Thins.tidy _)
+    have hsub := Thins.takeIn (cfg := cfg) s t (inHistory cfg t L)
     obtain rfl : e₁ = (u, t, A) := hs.eq (hsub.sub.subset he₁) he hp
     exact Or.inr ⟨he₁, rfl⟩
 
@@ -450,8 +460,8 @@ theorem step_form {s : State Validator BlockId Payload} (hs : SyncsOn s)
         peer = u ∧ i = id ∧ ids = []) ∧
       ∃ fr, Output.sync u id fr [] ∈ (Node.step cfg s inp).2) ∨
     (∃ u L t A, inp = .stream u L ∧ (u, t, A) ∈ s.syncs ∧
-      (u, t, A) ∈ (tidy (absorb cfg s (inHistory cfg t L))).syncs ∧
-      let s₁ := tidy (absorb cfg s (inHistory cfg t L))
+      (u, t, A) ∈ (takeIn cfg s t (inHistory cfg t L)).syncs ∧
+      let s₁ := takeIn cfg s t (inHistory cfg t L)
       let asked := (A ++ missingIn s₁ (t :: inHistory cfg t L)).dedup
       let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then (u, t, asked) else x }
       Thins cfg s₂ (Node.step cfg s inp).1 ∧
@@ -491,7 +501,7 @@ theorem step_form {s : State Validator BlockId Payload} (hs : SyncsOn s)
       subst hp
       rcases step_stream_cases (cfg := cfg) hs he L with ⟨-, h⟩ | ⟨hin, h⟩
       · left; rw [h]
-        exact Plain.of (((Thins.absorb s _).trans (Thins.tidy _)).trans (Thins.settle _))
+        exact Plain.of ((Thins.takeIn s _ _).trans (Thins.settle _))
           (noAsk_settle _)
       · right; right
         refine ⟨w, L, t, A, rfl, he, hin, ?_, fun peer i fr ids ho => ?_, fun hno => ?_⟩
@@ -577,7 +587,7 @@ theorem SyncsOn.step {s : State Validator BlockId Payload} (h : SyncsOn s)
       ⟨u, L, t, A, rfl, he, -, ht, -, -⟩
   · exact h.sublist hp.thins.sub
   · exact (h.fresh hc).sublist ht.sub
-  · exact (h.extend ((Thins.absorb s _).trans (Thins.tidy _)).sub he).sublist ht.sub
+  · exact (h.extend (Thins.takeIn s _ _).sub he).sublist ht.sub
 
 /-- **Only evidence convicts an author.** -/
 theorem EvidenceOn.step {s : State Validator BlockId Payload} (hs : SyncsOn s)
@@ -587,7 +597,7 @@ theorem EvidenceOn.step {s : State Validator BlockId Payload} (hs : SyncsOn s)
       ⟨u, L, t, A, rfl, -, -, ht, -, -⟩
   · exact hp.thins.twins h
   · exact ht.twins h
-  · exact ht.twins (((Thins.absorb s _).trans (Thins.tidy _)).twins h)
+  · exact ht.twins ((Thins.takeIn s _ _).twins h)
 
 /-- **A sync is kept by a step** unless its block is then held, its peer
 detected, or the step delivers from its peer a block above its block. -/
@@ -613,7 +623,7 @@ theorem step_keeps {s : State Validator BlockId Payload} (hs : SyncsOn s) {w : V
       · exact Or.inr (Or.inr (Or.inr ⟨A, h⟩))
       · exact Or.inl h
       · exact Or.inr (Or.inl h)
-  · have h₁ := (Thins.absorb (cfg := cfg) s (inHistory cfg t₀ L)).trans (Thins.tidy _)
+  · have h₁ := Thins.takeIn (cfg := cfg) s t₀ (inHistory cfg t₀ L)
     rcases h₁.kept _ he with h | h | h
     · by_cases hwu : w = u
       · subst hwu
@@ -645,7 +655,7 @@ theorem step_origin {s : State Validator BlockId Payload} (hs : SyncsOn s) {w : 
     · exact Or.inr ⟨A', List.mem_of_mem_filter h⟩
   · rcases mem_extend (ht.sub.subset he) with ⟨rfl, rfl, -⟩ | ⟨-, h⟩
     · exact Or.inr ⟨A₀, he₀⟩
-    · exact Or.inr ⟨A', ((Thins.absorb s _).trans (Thins.tidy _)).sub.subset h⟩
+    · exact Or.inr ⟨A', (Thins.takeIn s _ _).sub.subset h⟩
 
 /-- **A request for a sync asks for its names after the step.** -/
 theorem step_ask {s : State Validator BlockId Payload} (hs : SyncsOn s) {w : Validator}
@@ -662,9 +672,9 @@ theorem step_ask {s : State Validator BlockId Payload} (hs : SyncsOn s) {w : Val
     simp only [Prod.mk.injEq] at this
     exact this.2.2
   · obtain ⟨rfl, -, rfl⟩ := hask _ _ _ _ ho
-    have hs₂ := hs.extend (s₁ := tidy (absorb cfg s (inHistory cfg t₀ L)))
-      (M := missingIn (tidy (absorb cfg s (inHistory cfg t₀ L))) (t₀ :: inHistory cfg t₀ L))
-      ((Thins.absorb (cfg := cfg) s _).trans (Thins.tidy _)).sub he₀
+    have hs₂ := hs.extend (s₁ := takeIn cfg s t₀ (inHistory cfg t₀ L))
+      (M := missingIn (takeIn cfg s t₀ (inHistory cfg t₀ L)) (t₀ :: inHistory cfg t₀ L))
+      (Thins.takeIn (cfg := cfg) s _ _).sub he₀
     have := hs₂.eq (ht.sub.subset he) (List.mem_map.mpr ⟨_, hin, if_pos rfl⟩) rfl
     simp only [Prod.mk.injEq] at this
     exact this.2.2
@@ -693,47 +703,50 @@ theorem step_same {s : State Validator BlockId Payload} (hs : SyncsOn s) {w : Va
       rcases List.mem_append.mp (List.mem_dedup.mp hx) with hx | hx
       · exact hx
       · exact mem_of_dedup_length (hs.2 _ he).1 hlen hx
-    · have := hs.eq (((Thins.absorb s _).trans (Thins.tidy _)).sub.subset h) he rfl
+    · have := hs.eq ((Thins.takeIn s _ _).sub.subset h) he rfl
       simp only [Prod.mk.injEq] at this
       rw [this.2.2]; exact fun x hx => hx
 
 /-- **A stream piece that leads to no request for its sync**, which keeps
-it, gains no block, and each reference of the sync's block or of the
-piece's part in its history that the disk lacks was asked for by name. -/
+it, is not taken in, and each reference of the sync's block or of the
+piece's part in its history that neither the disk nor that part holds was
+asked for by name. -/
 theorem step_stream_stuck {s : State Validator BlockId Payload} (hs : SyncsOn s) {u : Validator}
     {t : BlockId × Block Validator BlockId Payload} {A : List BlockId} (he : (u, t, A) ∈ s.syncs)
     {L : List (BlockId × Block Validator BlockId Payload)}
     (hno : ∀ fr ids, Output.sync u t.1 fr ids ∉ (Node.step cfg s (.stream u L)).2)
     (hheld : t.1 ∉ (Node.step cfg s (.stream u L)).1.disk.ids)
     (hdet : u ∉ (Node.step cfg s (.stream u L)).1.detected) :
-    (∀ x ∈ inHistory cfg t L, x.1 ∈ s.disk.ids ∨ readyOn cfg s.disk x = false) ∧
-      ∀ x ∈ t :: inHistory cfg t L, ∀ y ∈ x.2.refs, y ∉ s.disk.ids → y ∈ A := by
-  have h₁ := (Thins.absorb (cfg := cfg) s (inHistory cfg t L)).trans (Thins.tidy _)
+    ¬ ((inHistory cfg t L).length ≤ cfg.cap ∧
+        t.1 ∈ (absorb cfg s (inHistory cfg t L)).disk.ids) ∧
+      ∀ x ∈ t :: inHistory cfg t L, ∀ y ∈ x.2.refs, y ∉ s.disk.ids →
+        y ∉ (t :: inHistory cfg t L).map Prod.fst → y ∈ A := by
+  have h₁ := Thins.takeIn (cfg := cfg) s t (inHistory cfg t L)
   rcases step_stream_cases (cfg := cfg) hs he L with ⟨hnin, h⟩ | ⟨hin, h⟩
   · rw [h] at hheld hdet
     rcases h₁.kept _ he with h' | h' | h'
     · exact absurd h' hnin
     · exact absurd ((Thins.settle _).grows.1 h') hheld
     · exact absurd ((Thins.settle _).det h') hdet
-  · rw [h] at hno
-    have hnm : (tidy (absorb cfg s (inHistory cfg t L))).disk.ids.card = s.disk.ids.card ∧
-        (A ++ missingIn (tidy (absorb cfg s (inHistory cfg t L)))
-          (t :: inHistory cfg t L)).dedup.length = A.length := by
+  · have hadm : ¬ ((inHistory cfg t L).length ≤ cfg.cap ∧
+        t.1 ∈ (absorb cfg s (inHistory cfg t L)).disk.ids) := by
+      intro hc
+      unfold takeIn at hin
+      rw [if_pos hc] at hin
+      have := (List.mem_filter.mp hin).2
+      simp only [decide_eq_true_eq] at this
+      exact this.1 hc.2
+    have hs₁ : takeIn cfg s t (inHistory cfg t L) = s := by unfold takeIn; rw [if_neg hadm]
+    rw [h, hs₁] at hno
+    have hnm : (A ++ missingIn s (t :: inHistory cfg t L)).dedup.length = A.length := by
       by_contra hm
       exact hno _ _ (List.mem_append_left _
-        (List.mem_ite_nil_right.mpr ⟨not_and_or.mp hm, List.mem_singleton_self _⟩))
-    have hd : (tidy (absorb cfg s (inHistory cfg t L))).disk =
-        (inHistory cfg t L).foldl (fun st e => acceptOn cfg st e.1 e.2) s.disk :=
-      (tidy_eq _).1.trans (absorb_disk _ _)
-    have hids : s.disk.ids = (tidy (absorb cfg s (inHistory cfg t L))).disk.ids :=
-      Finset.eq_of_subset_of_card_le h₁.grows.1 hnm.1.le
-    refine ⟨foldl_stuck _ _ (by rw [← hd]; exact hnm.1), fun x hx y hy hyn => ?_⟩
-    refine mem_of_dedup_length (hs.2 _ he).1 hnm.2 ?_
+        (List.mem_ite_nil_right.mpr ⟨Or.inr hm, List.mem_singleton_self _⟩))
+    refine ⟨hadm, fun x hx y hy hyn hyL => mem_of_dedup_length (hs.2 _ he).1 hnm ?_⟩
     unfold missingIn
     refine List.mem_dedup.mpr (List.mem_filter.mpr ⟨List.mem_flatMap.mpr
       ⟨x, hx, (Finset.mem_sort _).mpr hy⟩, ?_⟩)
-    have : y ∉ (tidy (absorb cfg s (inHistory cfg t L))).disk.ids := hids ▸ hyn
-    simpa using this
+    simpa [hyn] using hyL
 
 /-- **No sync is with the node itself.** -/
 theorem step_peer_ne {s : State Validator BlockId Payload} (hs : SyncsOn s)
@@ -750,7 +763,7 @@ theorem step_peer_ne {s : State Validator BlockId Payload} (hs : SyncsOn s)
     obtain ⟨w, t', A'⟩ := e
     rcases mem_extend (ht.sub.subset he') with ⟨rfl, -, -⟩ | ⟨-, h⟩
     · exact hm (w, t, A) he
-    · exact hm _ (((Thins.absorb s _).trans (Thins.tidy _)).sub.subset h)
+    · exact hm _ ((Thins.takeIn s _ _).sub.subset h)
 
 /-- **A run keeps the syncs' shape, none with the node itself.** -/
 theorem syncsOn_run : ∀ (is : List (Input Validator BlockId Payload))

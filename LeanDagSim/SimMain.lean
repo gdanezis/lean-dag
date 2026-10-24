@@ -97,7 +97,8 @@ def main (args : List String) : IO UInt32 := do
       return 2
     IO.println s!"row {sc.row}  n={sc.n} f={sc.f} c={sc.c}  seed={sc.seed}  gst={sc.gst}"
     IO.println (s!"time {r.time}  inputs {r.events}  largest disk {r.maxDisk} blocks  " ++
-      s!"most syncs {r.maxSyncs}")
+      s!"most syncs {r.maxSyncs}  most blocks a round {r.perRound.1} " ++
+      s!"({r.perRound.2} not honest)")
     let honest := (List.range sc.n).filter sc.honest
     for (v, top, ds) in (honest.zip (r.tops.zip r.commits)).map fun (v, t, d) => (v, t, d) do
       let skips := (ds.filter (·.2.isNone)).length

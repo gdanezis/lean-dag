@@ -71,6 +71,16 @@ theorem Grows.settle_of {st : Store Validator BlockId Payload} (s : State Valida
     (h : s.disk = st) : Grows st (Node.settle cfg s).1.disk :=
   h ▸ Grows.settle s
 
+omit [Fintype Validator] in
+theorem Grows.takeIn (s : State Validator BlockId Payload)
+    (t : BlockId × Block Validator BlockId Payload)
+    (L : List (BlockId × Block Validator BlockId Payload)) :
+    Grows s.disk (Node.takeIn cfg s t L).disk := by
+  unfold Node.takeIn
+  split
+  · exact Grows.absorb s L
+  · exact Grows.refl _
+
 /-- **Across a step the disk grows.** -/
 theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator BlockId Payload) :
     Grows s.disk (Node.step cfg s i).1.disk := by
@@ -101,8 +111,8 @@ theorem Grows.step (s : State Validator BlockId Payload) (i : Input Validator Bl
     split
     · exact Grows.refl _
     · split
-      · exact (Grows.absorb (cfg := cfg) s _).trans (Grows.settle_of _ rfl)
-      · exact (Grows.absorb (cfg := cfg) s _).trans (Grows.settle_of _ rfl)
+      · exact (Grows.takeIn (cfg := cfg) s _ _).trans (Grows.settle_of _ rfl)
+      · exact (Grows.takeIn (cfg := cfg) s _ _).trans (Grows.settle_of _ rfl)
   | timer r => rw [step_timer_fst]; exact Grows.settle_of _ rfl
   | syncRequest peer t fr ids => exact Grows.refl _
   | ask peer r => exact Grows.refl _

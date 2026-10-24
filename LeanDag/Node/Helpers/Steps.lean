@@ -392,10 +392,10 @@ theorem step_stream_eq (s : State Validator BlockId Payload) (u : Validator)
     {e : Validator × (BlockId × Block Validator BlockId Payload) × List BlockId}
     (he : (s.syncs.find? fun e => decide (e.1 = u)) = some e) :
     Node.step cfg s (.stream u L) =
-      match (tidy (absorb cfg s (inHistory cfg e.2.1 L))).syncs.find? fun e => decide (e.1 = u) with
-      | none => Node.settle cfg (tidy (absorb cfg s (inHistory cfg e.2.1 L)))
+      match (takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)).syncs.find? fun e => decide (e.1 = u) with
+      | none => Node.settle cfg (takeIn cfg s e.2.1 (inHistory cfg e.2.1 L))
       | some e₁ =>
-        let s₁ := tidy (absorb cfg s (inHistory cfg e.2.1 L))
+        let s₁ := takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)
         let asked := (e₁.2.2 ++ missingIn s₁ (e₁.2.1 :: inHistory cfg e.2.1 L)).dedup
         let e₂ := (u, e₁.2.1, asked)
         let s₂ := { s₁ with syncs := s₁.syncs.map fun x => if x.1 = u then e₂ else x }
@@ -423,8 +423,12 @@ theorem step_receipt_stream (s : State Validator BlockId Payload) (u : Validator
       obtain ⟨hxL, hxp⟩ := List.mem_filter.mp (List.mem_mergeSort.mp hx)
       simp only [Bool.and_eq_true, decide_eq_true_eq] at hxp
       exact Or.inr (by simp [delivered, List.mem_filter, hxL, hxp.1.1])
-    have hr := received_absorb (cfg := cfg) (s := s) hL
-    cases hf₁ : (tidy (absorb cfg s (inHistory cfg e.2.1 L))).syncs.find?
+    have hr : Received cfg (.stream u L) s (takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)) := by
+      unfold takeIn
+      split
+      · exact received_absorb hL
+      · exact received_syncs (S := s.syncs) fun x hx => Or.inl (List.mem_map_of_mem hx)
+    cases hf₁ : (takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)).syncs.find?
         fun e => decide (e.1 = u) with
     | none => exact Or.inr ⟨_, [], hr, fun _ h => absurd h List.not_mem_nil, rfl⟩
     | some e₁ =>

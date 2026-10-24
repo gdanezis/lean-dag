@@ -1166,16 +1166,20 @@ theorem Inv.step {s : State Validator BlockId Payload}
         obtain ⟨hxL, hxp⟩ := List.mem_filter.mp hx'
         simp only [Bool.and_eq_true, decide_eq_true_eq] at hxp
         exact Or.inr (by simp [delivered, List.mem_filter, hxL, hxp.1.1])
-      have hi₁ := (hiK.absorb hL).tidy
+      have hi₁ : Inv cfg (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)) K' B := by
+        unfold Node.takeIn
+        split
+        · exact (hiK.absorb hL).tidy
+        · exact hiK
       split
       · exact Exists.imp (fun bs h => ⟨Sent.of_out h.1, h.2⟩)
           (hi₁.settle_of subset_rfl [] (by simp))
       · rename_i e₁ he₁
         have he₁K : e₁.2.1 ∈ K' := hi₁.pend e₁ (List.mem_of_find?_eq_some he₁)
-        have hi₂ : Inv cfg { Node.tidy (Node.absorb cfg s (inHistory cfg e.2.1 L)) with
-            syncs := (Node.tidy (Node.absorb cfg s (inHistory cfg e.2.1 L))).syncs.map fun x =>
+        have hi₂ : Inv cfg { Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L) with
+            syncs := (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L)).syncs.map fun x =>
               if x.1 = u then (u, e₁.2.1, (e₁.2.2 ++ missingIn
-                (Node.tidy (Node.absorb cfg s (inHistory cfg e.2.1 L)))
+                (Node.takeIn cfg s e.2.1 (inHistory cfg e.2.1 L))
                 (e₁.2.1 :: inHistory cfg e.2.1 L)).dedup) else x } K' B := by
           refine ⟨hi₁.known, fun x hx => ?_, hi₁.rounds, hi₁.good, hi₁.sub, hi₁.valid, hi₁.own,
             hi₁.floor⟩

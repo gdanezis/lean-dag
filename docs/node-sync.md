@@ -11,7 +11,7 @@ the stages, and what each stage keeps proved.
 
 ## 1. Where the node stands
 
-Stages 0, 1 and 2 are done (§4). The node receives blocks by
+Stages 0 to 3 are done (§4). The node receives blocks by
 announcements and syncs, one sync for each peer (`docs/validator.md`
 §3.4); it holds at most `n − 1` syncs (V1, `SyncsBound`), and the honest
 nodes converge (V3′). Its blocks carry evidence of equivocation and the
@@ -20,16 +20,12 @@ exposes (`Clause.exposes`). The node convicts the authors its evidence
 names, takes no announcement from them, answers none of their requests,
 and leaves them out of its references.
 
-One consequence of the node before Stage 3 remains.
-
-* **Nothing bounds what a node takes in a round.** A Byzantine target
-  can carry any number of valid twins of an author not yet convicted,
-  and, since each streamed block is checked on arrival, the twins of a
-  convicted author under blocks that break the exposure rule, which
-  arrive before those blocks.
-
-Stages 3 and 4 bound what a node takes in a round once every equivocator
-is exposed (S5 of `docs/sync.md`).
+A stream piece is taken in only if it brings the whole history of the
+sync's block, every block of which passes the checks (`takeIn`), so a
+convicted author's twins under blocks that break the exposure rule are
+not taken in. What remains is Stage 4: to prove on the node the bound of
+S5 (`docs/sync.md`) on what a node holds a round once every equivocator
+is exposed, and the round from which its premise holds.
 
 ## 2. The design
 
@@ -100,18 +96,20 @@ at before every reliable node held the evidence.
 ## 3. Decisions
 
 * **D1. Header-first admission or a check on arrival.** *Decided: a
-  check on arrival, first.* Each streamed block is checked when it
-  arrives, and taken in if it is ready and valid. This needs no buffer.
-  It does not give S5: a Byzantine target can carry any number of a
-  convicted author's valid twins under blocks that break the exposure
-  rule, and they arrive, and are taken in, before the blocks that break
-  it. Header-first admission reads the headers of the target's history
-  above the frontier first, top down, and takes blocks in only if all
-  pass; a target refused proves its announcer faulty to the node, which
-  then syncs nothing more from it. It costs a buffer of headers per
-  target, with a cap that must exceed the history of any honest target
-  above the frontier (from the exposure round on, `n + f` blocks a round
-  over the rounds a node is behind). It is left for after Stage 2.
+  check on arrival in Stages 1 and 2, header first from Stage 3.* A check
+  on arrival takes each streamed block in if it is ready and valid when
+  it arrives. It does not give S5: a Byzantine target can carry any
+  number of a convicted author's valid twins under blocks that break the
+  exposure rule, and they arrive, and are taken in, before the blocks
+  that break it. Header-first admission takes a piece's part in the
+  target's history in only if the target is then held, and none of it
+  otherwise (`takeIn`). The piece is the buffer: a part not taken in is
+  dropped, and the next answer streams it again with the names asked
+  for, so the node keeps no buffer across pieces. A part above the cap
+  (`Config.cap`) is not taken in; the cap must exceed the history of any
+  honest target above the frontier, which V3′ assumes (`StreamsFit`). A
+  target refused does not mark its announcer: the node keeps no record
+  of faults that it cannot pass on as evidence.
 * **D2. Authenticated links.** An announcement and a stream must name
   their sender: `Input.deliver` gains the peer. The proofs already assume
   timely authentication (`TimelyAuthentic`); this asks it of links too.
@@ -135,8 +133,8 @@ at before every reliable node held the evidence.
 * **D9. Requests of convicted peers.** *Decided: ignored.* An
   equivocator's copy that rejects every block built on its twin keeps a
   low frontier, and each of its requests would stream the history above
-  it (411,549 blocks in 200 ticks at Orcaella with `n = 9`, against 323
-  in 1,000 ticks once ignored).
+  it (411,549 blocks in 200 ticks at Orcaella with `n = 9`, against 181
+  in all in 1,000 ticks once ignored).
 * **D5. The fast path.** A broadcast block ready on arrival is accepted
   without a sync, as now. *Recommended*: it is the common case.
 * **D6. What stays with the environment.** Rate limits on streams from a
@@ -178,10 +176,15 @@ audits, the documents updated, and a commit.
   V12 gain the premise `EvidenceAuthentic`, and V11, V11′ and V12
   `Faithful`. Where fewer than `q` authors are left, the proofs build on
   a lent reference set (`lent_buildable`).
-* **Stage 3 — admission, later** (D1). The header pass and its cap;
-  the simulator's attacks of `scripts/sync-reports.py` (trees of twins,
-  twins per node, chains carried each round) on the node, with the blocks
-  processed per round reported.
+* **Stage 3 — admission** (D1). *Done.* `takeIn` and `Config.cap`; V3′
+  re-proved with the premise `StreamsFit`: a valid part in order of
+  round whose references are held or in it is taken in whole
+  (`foldl_all`), so the last request's piece lacks a reference, which was
+  asked for. The simulator reports the most blocks of one round on an
+  honest disk; the outage sweep, the attacks and the equivocator runs
+  give the same results as in Stage 2. The attacks of
+  `scripts/sync-reports.py` (trees of twins, twins per node, chains
+  carried each round) are not ported to the node's simulator.
 * **Stage 4 — the exposure bound on the node, later.** S5's proof read
   on the node's disk: D27 (`creator_ne_of_correct_exposed`) on an admitted
   history, a convicted author's blocks taken in only as its own target

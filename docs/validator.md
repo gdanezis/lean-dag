@@ -313,28 +313,35 @@ disk in `t`'s history that are `t`, are asked for, or lie at or above
 their author's frontier, reached from `t` through such blocks, in order
 of round (`streamOf`), and with nothing if it holds none.
 
-**Taking a stream in.** Of a stream piece from a peer with which it has
-a sync, the node takes the blocks reached from the sync's block through
-blocks of the piece, identified by their hash and not its own
-(`inHistory`), in order of round, each accepted if it is ready then
-(`absorb`). It then drops the syncs whose block it holds or whose peer
-it has detected (`tidy`). If the sync stays, the references of its block
-and of the blocks taken that the disk lacks are added to the names asked
-for (`missingIn`), and if the piece gained a block or a name, the node
-asks again. A piece that gains nothing asks nothing, so streams cannot
-make two nodes loop. After each step the node accepts the syncs' blocks
-that have become ready, in passes (`flushSyncs`).
+**Taking a stream in, header first.** Of a stream piece from a peer with
+which it has a sync, the node reads the blocks reached from the sync's
+block through blocks of the piece, identified by their hash and not its
+own (`inHistory`). It takes them in, in order of round, each accepted if
+it is ready then (`absorb`), only if they are at most `cap` and the
+sync's block is then held; otherwise it takes none of them (`takeIn`).
+So a block of a stream enters the disk only with the whole history of
+the sync's block, every block of which passes the checks: a block that
+breaks the exposure rule keeps out the blocks below it in the piece,
+which check on arrival would have taken in first. The node then drops
+the syncs whose block it holds or whose peer it has convicted (`tidy`).
+If the sync stays, the references of its block and of the piece's blocks
+that neither the disk nor the piece holds are added to the names asked
+for (`missingIn`), and if a name was added, the node asks again. A piece
+that adds nothing asks nothing, so streams cannot make two nodes loop.
+After each step the node accepts the syncs' blocks that have become
+ready, in passes (`flushSyncs`).
 
 **Why names.** The frontier says which rounds of an author the node
 holds, not which blocks. A block below its author's frontier is left out
-of the stream; a streamed block that references it is then not ready,
-and the node asks for the reference by name. An honest peer holds the
-history of every block it holds, so it streams the block asked for. If
-`v` never held honest `u`'s top block, the last request of `v`'s sync
-for it was answered with a piece that gained nothing and asked nothing:
-a block of that piece in the block's history that `v` lacks, at the
-least round, is not ready, so it references a block `v` lacks; that block
-was asked for by name, so the piece holds it, one round lower (V3′).
+of the stream; a streamed block that references it then has a reference
+neither held nor streamed, and the node asks for it by name. An honest
+peer holds the history of every block it holds, so it streams the block
+asked for. If `v` never held honest `u`'s top block, the last request of
+`v`'s sync for it was answered with a piece that was not taken in and
+asked nothing. The piece's part in the block's history is valid, in
+order of round and within the cap (`StreamsFit`), so some reference of
+it is neither held by `v` nor in it (`foldl_all`); that reference was
+asked for by name, so the piece holds it, in the part (V3′).
 
 **Conviction.** Accepting a second block of an author at one round gives
 evidence of the author: the two blocks (`evidenceOf`). The evidence a
@@ -356,7 +363,7 @@ equivocator's copy that rejects every block built on its twin keeps a
 low frontier, and each of its requests would stream the history above
 it. At Orcaella with `n = 9` and an equivocator, the honest nodes
 streamed 411,549 blocks in 200 ticks to its copies before this rule, and
-323 in 1,000 ticks with it.
+181 to all nodes in 1,000 ticks with it.
 
 **Asking authors.** When its retry timer fires and it does not build,
 the node asks every peer for its block of the node's top round (`ask`),
@@ -456,7 +463,7 @@ four a round. It needs no bootstrap, since no block is collected.
 | V1 | Over any input sequence: the node's own blocks, those it persists, are its own and identified by their hash; they lie at strictly increasing rounds; each references only blocks it knew, and is valid at the row under every block map agreeing with what it knew; it broadcasts each block it persists, and only blocks it persists; it keeps the decisions it outputs, which are slots `0 … lo − 1`; it holds at most `n − 1` syncs. | `Node.Local.OneEach`, `Authored`, `Sends`, `ValidOut`, `Decisions`, `SyncsBound` (proved, `Local/Proof.lean`): `Node.syncsOn_run`, `Node.syncs_length_le` |
 | V2 | **The decisions are the scheme's**: at the bounded vote, a decision step of a node whose memory holds the round of its next undecided slot, as it always does (§3.1), outputs what `Scheme.tryDecide` decides on any record and view holding the disk's blocks, read alike; over successive views this is the scheme's loop. | `Node.Local.DecidesOnView` (proved): `Node.tryDecide_memory`, `Node.Store.Mirrors.viewsAbove`, `Node.tryDecide_window`, `Node.ViewsAbove.of_store`, `Node.ViewsAbove.tryDecide_eq` |
 | V3 | **Safety**: over a trace with timely authentication of blocks, an injective hash and `Params.Tolerates`, the blocks the honest nodes knew form a `BlockRecord` at quorum `q` of which every honest disk is a cut, and any two honest nodes' decisions are prefix-comparable. | `Node.Runs.Safety` (proved): `Node.globalRecord`, `Node.ground`, `Node.CommitInv.run`, `Scheme.Loop.resume`, `Scheme.Loop.prefixComparable` |
-| V3′ | **Convergence**: over a trace with delivery, timely authentication, an injective hash and authentic evidence, every block in the history of an honest node's own block at its top at the end is on every honest node's disk at the end. No fault bound is needed: an honest node given the block has a sync for it until it holds it, and the answer to the sync's last request leads to no request, which it would if the node still lacked the block (§3.4). | `Node.Converge.Converges` (proved): `Node.Converge.sync_made`, `Node.Converge.sync_stays`, `Node.Converge.last_ask`, `Node.step_stream_stuck`, `Node.Converge.not_detected`, `Node.eq_of_persists` |
+| V3′ | **Convergence**: over a trace with delivery, timely authentication, an injective hash, authentic evidence and streams within the cap, every block in the history of an honest node's own block at its top at the end is on every honest node's disk at the end. No fault bound is needed: an honest node given the block has a sync for it until it holds it, and the answer to the sync's last request leads to no request, which it would if the node still lacked the block (§3.4). | `Node.Converge.Converges` (proved): `Node.Converge.sync_made`, `Node.Converge.sync_stays`, `Node.Converge.last_ask`, `Node.step_stream_stuck`, `Node.foldl_all`, `Node.Converge.not_detected`, `Node.eq_of_persists` |
 | V8 | The claims are about the program that runs: its disk and memory are ordered maps, its vote the bounded one, and compiled code departs from the definitions only by proved `@[csimp]` equalities; on the scheme's hand-built records its commits are those the scheme's tests record, and on random records its decided prefix is the least vote's, the scheme's loop's in its own order, and the same run a round at a time. | by construction: `historyUptoFrom_eq_levels` (`@[csimp]`), `boundedSel_sel_eq`; `check-arc-holes` forbids `implemented_by` and `extern`; tests `LeanDagTest/Node/Replay.lean`, `LeanDagTest/Node/Differential.lean` (§6) |
 | V11 | **Liveness**: over a timed trace with delivery within `Δ` and synchronisation within `Δₛ` past GST, reliable nodes that do not restart, their timers on time, no honest node's timer early, timeouts above `2(Δ + Δₛ)`, authentic evidence and a faithful payload source, the reliable nodes produce a round per timeout and `Δ + Δₛ`, and a run of reliably led slots from a round that every reliable node was below at GST is decided by all of them `Δ + Δₛ` after they reach its last decision round, and within a bound of the sum of a timeout and `Δ + Δₛ` per round. The honest nodes outside the reliable set need meet no other timing assumption. | `Node.Live.Progresses` (proved, §5): `Live.produces`, `Live.decides`, `Live.decidesBy`, `Node.held_before` |
 | V11′ | **Liveness across crashes**: if the reliable nodes stay up from `t_r` to the horizon `t₁`, with delivery, synchronisation and timers assumed only from then on, and timers lost only to a restart, with authentic evidence and a faithful payload source, the conclusions of V11 hold with GST replaced by `max t_r gst + W`, for `W` twice the largest timeout of the round below the one a reliable node is at by `max t_r gst`. Crashes before GST are the case `t_r ≤ gst`. The honest nodes outside the reliable set may keep crashing and restarting; with every honest node reliable, after every node crashed and restarted, the nodes decide again. | `Node.Live.Recovers` (proved, §5.6): `Node.arrival_of_recovered`, `Node.sends_again`, `Node.retry_last`, `Node.recovered_by`, `Node.topTimerBy_of_up`, `Node.top_arrives`, `Node.quorum_below` |
@@ -831,7 +838,7 @@ view of the record (`cut_before`), and verdicts on one slot agree
    ticks past GST and 49 before. Catch-up is cheap: over 650 ticks at
    Orcaella with `n = 9`, a 250-tick outage takes 17,194 inputs and 296
    requests, 90 of them naming blocks, against 21,114 inputs and 339
-   requests without it, and an 850-tick outage over 1,250 ticks takes 3.6
+   requests without it, and an 850-tick outage over 1,250 ticks takes 3.5
    seconds to simulate. Three outage scenarios run in the build
    (`LeanDagTest/Node/Sim.lean`).
 
@@ -842,9 +849,17 @@ view of the record (`cut_before`), and verdicts on one slot agree
    convict it on that evidence. The honest nodes then wait out the timer
    at its slots: at the Mysticeti row with `n = 4` they build 20 rounds
    in 150 ticks, skipping 4 or 5 slots. Over 1,000 ticks at Orcaella
-   with `n = 9`, they reach round 251 with 27 skips, and stream 323
-   blocks to the equivocator's copies (§3.4). From `byzUntil` on it acts
+   with `n = 9`, they reach round 242 with 26 skips, and stream 181
+   blocks in all (§3.4). From `byzUntil` on it acts
    on nothing.
+
+   The simulator reports the most blocks of one round on an honest disk,
+   and of those the most by other authors. Without faults it is `n`. Under
+   `invalidBlocks` and `twinSplit` at Mysticeti with `n = 4` over 1,000
+   ticks it is 5 and 6, with 2 and 3 by the attacker, all below round 5;
+   from round 5 on each honest disk holds the 3 honest blocks of each
+   round and no block of the attacker. With an equivocator at Orcaella
+   with `n = 9` it is 10, 2 by the equivocator, and 8 from round 5 on.
 4. **Attacks** (`LeanDagTest/Node/Adversary.lean`, `--adv` and
    `--attacks` of `lake exe sim`). An attacker runs the honest program
    and also mounts attacks: `invalidBlocks` (with each block it
@@ -931,10 +946,11 @@ no inclusion, so a node need not reference its own blocks.
 
 The restart, resending and liveness across crashes are done, including
 decisions resuming after every node crashed (§3.6, §5.6), and the syncs
-of `docs/sync.md` on the node (§3.4), and the evidence, conviction and
+of `docs/sync.md` on the node (§3.4), the evidence, conviction and
 exclusion of equivocators (§3.2, §3.4), Stages 1 and 2 of
-`docs/node-sync.md`. Stage 3 admits streamed blocks by header first, and
-Stage 4 bounds the blocks a node processes a round. Open:
+`docs/node-sync.md`, and header-first admission of streams (§3.4), Stage
+3. Stage 4 proves on the node the bound on the blocks a node holds a
+round. Open:
 
 * the disk and the decisions grow with the chain, which they record;
   and the memory holds every block of its rounds, so an equivocator can
@@ -948,6 +964,11 @@ Stage 4 bounds the blocks a node processes a round. Open:
   exposure clause the node checks;
 * a node answers every request of a peer it has not convicted, so before
   conviction a node can be made to stream any amount;
+* a piece above the cap is never taken in, so a node behind by more than
+  the cap's blocks above its frontier does not catch up by syncing; V3′
+  assumes the streams fit (`StreamsFit`), and the core has no bootstrap;
+* a piece not taken in is streamed again whole with the names it lacked,
+  since the node keeps no part of it;
 * a recovering node jumps only if the history it syncs arrives before a
   timer fires (§3.6);
 * only a node that restarted jumps: a node that falls behind without

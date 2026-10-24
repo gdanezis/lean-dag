@@ -90,6 +90,8 @@ structure Scenario where
   an equivocator accepts blocks built on its twin; it stops building, and
   it falls behind. -/
   byzUntil : ℕ := 200
+  /-- The most blocks of a stream piece a node takes in at once. -/
+  cap : ℕ := 100000
   /-- A withholding attack `(z, v, R)`: node `z` holds back its round-`R`
   block `x`, sends its round-`R + 1` block, which references `x`, to `v`
   alone, reveals `x` to the others `revealAfter` ticks later, and never
@@ -160,6 +162,7 @@ def cfgFor (sc : Scenario) (p : Scheme.Params) (q : ℕ) {n : ℕ} (hn : 0 < n) 
   idOf := idOf
   xp := payXp
   payload := fun _ E X => ⟨twin, E, X⟩
+  cap := sc.cap
 
 /-- An agent: a node, and which copy of it (`0` unless it equivocates). -/
 structure Agent (n : ℕ) where
@@ -214,6 +217,9 @@ structure Report where
   maxDisk : ℕ
   /-- The most syncs any honest node held. -/
   maxSyncs : ℕ
+  /-- The most blocks of one round on an honest node's disk, and the most
+  of one round by authors that are not honest. -/
+  perRound : ℕ × ℕ := (0, 0)
   /-- The inputs processed. -/
   events : ℕ
   /-- The simulated time reached. -/
@@ -533,7 +539,7 @@ def agreeAt (ls : List (List (ℕ × Option ℕ))) : Bool :=
 
 /-- **Run a scenario.** -/
 def simulate (sc : Scenario) : Report :=
-  let empty : Report := ⟨false, [], [], true, true, true, 0, 0, 0, 0, 0, {}, []⟩
+  let empty : Report := ⟨false, [], [], true, true, true, 0, 0, 0, (0, 0), 0, 0, {}, []⟩
   match row? sc.row sc.n sc.f sc.c with
   | none => empty
   | some (p, q) =>
@@ -595,6 +601,12 @@ def simulate (sc : Scenario) : Report :=
         dropped := w.dropped
         maxDisk := w.maxDisk
         maxSyncs := w.maxSyncs
+        perRound := honestIdx.foldl (fun m v => match w.states[v]? with
+          | some st => (List.range (st.disk.topRound + 1)).foldl (fun m r =>
+              let R := st.disk.atRound r
+              (max m.1 R.card,
+                max m.2 (R.filter fun i => !sc.honest (st.disk.blk i).creator.val).card)) m
+          | none => m) (0, 0)
         events := w.events
         time := w.time
         stats := w.stats }

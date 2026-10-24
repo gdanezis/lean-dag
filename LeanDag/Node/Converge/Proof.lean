@@ -8,13 +8,14 @@ Let honest `u` end with its own block `(j, b)` at its top, so every block
 `j`. Then `u` broadcast `(j, b)`, and `v`, given it, has had a sync for it
 with `u` since (`sync_made`, `sync_stays`). Take the sync's last request,
 at `R` (`last_ask`). `u` answered it with the stream of `j`'s history,
-which `v` received and which led to no request. So the piece gained `v`
-no block, and each reference that `v` lacks of `b` or of the piece's part
-in `j`'s history was asked for by name at `R` (`step_stream_stuck`). A
-block of that part that `v` lacks, at the least round, is not ready, so
-it references a block `v` lacks. That block was asked for, so the stream
-holds it, in the part, one round lower: a contradiction. So `v` holds `j`,
-and `j`'s history with it.
+which `v` received and which led to no request. So `v` did not take the
+piece's part in `j`'s history in, which fits the cap, and each reference of
+`b` or of that part that neither `v` nor the part holds was asked for by
+name at `R` (`step_stream_stuck`). The part is valid and in order of
+round, so if each of its references were held or in it, it would have
+been taken in whole and `j` with it (`foldl_all`). So some reference is
+neither; it was asked for, so the stream holds it, and so does the part:
+a contradiction. So `v` holds `j`, and `j`'s history with it.
 -/
 
 namespace LeanDag
@@ -24,7 +25,7 @@ namespace Node
 namespace Converge
 
 theorem converges : Converges := by
-  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hev u hu j hown y hy v hv
+  intro Validator BlockId Payload _ _ _ cfg H tr hdel htime hinj hev hfit u hu j hown y hy v hv
   have hiu := inv_before (cfg := cfg) (tr := tr) tr.length u
   obtain ⟨hjd, hjB⟩ := hiu.own j hown
   set b := (stateBefore cfg tr tr.length u).disk.blk j with hb
@@ -97,58 +98,72 @@ theorem converges : Converges := by
     rw [← step_before hR'']; exact hlack _
   have hdet : u ∉ (Node.step (cfg.at v) s (.stream u Lu)).1.detected := by
     rw [← step_before hR'']; exact not_detected htime hev hu hv _
-  obtain ⟨hstuck, hasked⟩ := step_stream_stuck (syncsOn_before v R'') heA hno hheld hdet
-  -- a block of the part in `j`'s history that `v` lacks, at the least round
+  obtain ⟨hadm, hasked⟩ := step_stream_stuck (syncsOn_before v R'') heA hno hheld hdet
+  -- the piece's part in `j`'s history, which fits the cap
   set P := inHistory (cfg.at v) (j, b) Lu with hP
   have hjP : (j, b) ∈ P := by
     obtain ⟨e, he, hej⟩ := List.mem_map.mp hjLu
     have hjb : e = (j, b) := Prod.ext hej (by rw [hLmap e he, hej, hjbu])
     exact (mem_inHistory Lu).mpr ⟨hjb ▸ he, hid, by change b.creator ≠ v; rw [hc]; exact huv,
       found_self Lu j hjLu⟩
-  classical
-  have hex : ∃ r, ∃ x ∈ P, x.1 ∉ s.disk.ids ∧ x.2.round = r := ⟨_, (j, b), hjP, hlack R'', rfl⟩
-  obtain ⟨x, hxP, hxn, hxr⟩ := Nat.find_spec hex
-  have hmin : ∀ x' ∈ P, x'.1 ∉ s.disk.ids → Nat.find hex ≤ x'.2.round :=
-    fun x' hx' hn => Nat.find_min' hex ⟨x', hx', hn, rfl⟩
-  obtain ⟨hxLu, -, -, hxf⟩ := (mem_inHistory Lu).mp hxP
-  obtain ⟨hxst, hxb⟩ := mem_streamOf st j hxLu
+  have hcap : P.length ≤ (cfg.at v).cap := by
+    have h₁ : P.length ≤ Lu.length := by
+      rw [hP]; unfold inHistory; rw [List.length_mergeSort]; exact List.length_filter_le _ _
+    exact h₁.trans (hfit R' u _ hR' hu v Lu hout hv)
+  have hRu := reads_before hinj hu R'
+  have hPLu : ∀ e ∈ P, e ∈ Lu ∧ e.1 ∈ st.ids ∧ e.2 = st.blk e.1 := fun e he => by
+    have heL := ((mem_inHistory Lu).mp he).1
+    exact ⟨heL, (mem_streamOf st j heL).1, hLmap e heL⟩
+  -- some block of the part references a block neither `v` nor the part holds
+  obtain ⟨x, hxP, y', hy', hyn, hyP⟩ :
+      ∃ x ∈ P, ∃ y' ∈ x.2.refs, y' ∉ s.disk.ids ∧ y' ∉ P.map Prod.fst := by
+    by_contra hall'
+    push Not at hall'
+    refine hadm ⟨hcap, ?_⟩
+    rw [absorb_disk]
+    refine foldl_all (g := gT cfg H tr) P s.disk ?_ (reads_before hinj hv R'') (fun e he => ?_)
+      (fun e he => ?_) (fun e he y hy => ?_) (j, b) hjP
+    · rw [hP]; unfold inHistory
+      exact (List.pairwise_mergeSort
+        (fun a b c h₁ h₂ => by simp only [decide_eq_true_eq] at *; omega)
+        (fun a b => by simp only [Bool.or_eq_true, decide_eq_true_eq]; omega) _).imp
+        (fun h => by simpa using h)
+    · obtain ⟨-, hest, heb⟩ := hPLu e he
+      rw [heb, hRu _ hest]
+    · obtain ⟨-, hest, heb⟩ := hPLu e he
+      rw [heb]
+      refine ⟨fun k hk => ?_, rowValid_congr (fun k hk => ?_) ((inv_before R' u).valid _ hest)⟩
+      · rw [← hRu k (st.complete _ hest k hk)]
+        exact st.pred _ hest k hk
+      · rw [hRu k (st.complete _ hest k hk)]
+        exact ⟨rfl, rfl, rfl⟩
+    · by_cases hyd : y ∈ s.disk.ids
+      · exact Or.inl hyd
+      · exact Or.inr (hall' e he y hy hyd)
+  obtain ⟨hxLu, hxst, hxb⟩ := hPLu x hxP
+  have hxf := ((mem_inHistory Lu).mp hxP).2.2.2
   obtain ⟨xi, xb⟩ := x
   change xb = st.blk xi at hxb
   subst hxb
-  have hxi : xi ∈ Lu.map Prod.fst := List.mem_map_of_mem hxLu
-  -- it is not ready, so it references a block `v` lacks
-  have hnr : readyOn (cfg.at v) s.disk (xi, st.blk xi) = false := (hstuck _ hxP).resolve_left hxn
-  have hRu := reads_before hinj hu R'
-  obtain ⟨y', hy', hyn⟩ : ∃ y' ∈ (st.blk xi).refs, y' ∉ s.disk.ids := by
-    by_contra hall'
-    push Not at hall'
-    have hvalid : (∀ k ∈ (st.blk xi).refs, (gT cfg H tr k).round + 1 = (st.blk xi).round) ∧
-        rowValid (cfg.at v).q (cfg.at v).xp (gT cfg H tr) (st.blk xi) := by
-      refine ⟨fun k hk => ?_, rowValid_congr (fun k hk => ?_) ((inv_before R' u).valid xi hxst)⟩
-      · rw [← hRu k (st.complete xi hxst k hk)]
-        exact st.pred xi hxst k hk
-      · rw [hRu k (st.complete xi hxst k hk)]
-        exact ⟨rfl, rfl, rfl⟩
-    have := ready_of_refs hvalid (reads_before hinj hv R'') (fun k hk => hall' k hk) hxn
-    rw [hnr] at this
-    cases this
-  -- that block was asked for by name, so the stream holds it, one round lower
-  have hyids : y' ∈ ids := hAids y' (hasked _ (List.mem_cons_of_mem _ hxP) y' hy' hyn)
+  have hxi : xi ∈ Lu.map Prod.fst := List.mem_map_of_mem (f := Prod.fst) hxLu
+  -- that block was asked for by name, so the stream holds it, and so does the part
+  have hyids : y' ∈ ids := hAids y' (hasked _ (List.mem_cons_of_mem _ hxP) y' hy' hyn (by
+    intro h
+    rcases List.mem_cons.mp h with h | h
+    · exact hyP (h ▸ List.mem_map_of_mem (f := Prod.fst) hjP)
+    · exact hyP h))
   have hyst : y' ∈ st.ids := st.complete xi hxst y' hy'
   have hyLu : y' ∈ Lu.map Prod.fst := streamOf_closed st j hxi hy' hyst (Or.inr (Or.inl hyids))
   have hyLu' : (y', st.blk y') ∈ Lu := by
     obtain ⟨e, he, hey⟩ := List.mem_map.mp hyLu
     have : e = (y', st.blk y') := Prod.ext hey (by rw [hLmap e he, hey])
     exact this ▸ he
-  have hyP : (y', st.blk y') ∈ P := by
+  have hyP' : (y', st.blk y') ∈ P := by
     refine (mem_inHistory Lu).mpr ⟨hyLu', id_of_knownIn (stored_known hu hyst), fun hcv => ?_,
       found_closed Lu j hxf ((pieceRefs_of_map Lu hLmap hxi).mpr hy') hyLu⟩
     exact hyn (own_stored (own_known (v := v) htime hu hv (show R' ≤ R'' by omega)
       ((inv_before R' u).known y' hyst) hcv)).1
-  have h₁ : Nat.find hex ≤ (st.blk y').round := hmin _ hyP hyn
-  have h₂ : (st.blk y').round + 1 = (st.blk xi).round := st.pred xi hxst y' hy'
-  have h₃ : (st.blk xi).round = Nat.find hex := hxr
-  omega
+  exact hyP (List.mem_map_of_mem (f := Prod.fst) hyP')
 
 theorem holds : Statement := converges
 

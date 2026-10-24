@@ -43,6 +43,7 @@ def cfg (me : Fin 4) : Config (Fin 4) ℕ Unit where
   idOf := idOf
   xp := ⟨fun _ => ∅, fun _ => ∅⟩
   payload := fun _ _ _ => ()
+  cap := 1000
 
 /-- A network of four nodes: their states, the inputs in flight with the
 time each arrives, ordered by it, and the commits each node output. -/
