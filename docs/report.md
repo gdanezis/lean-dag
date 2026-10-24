@@ -1654,14 +1654,20 @@ are enforceable by a correct validator acting alone, which is the
 property that makes them deployable; the other two are structural.
 
 ```lean
+def DoSValidFor (U : BlockUniverse Validator BlockId Payload)
+    (Exp : BlockId → Validator → Prop) : Prop :=
+  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ Exp b (U.block i).creator
+
 def DoSValid (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ ExposedIn U b (U.block i).creator
+  DoSValidFor U (ExposedIn U)
 ```
 
 **D (`DoSValid`) — do not build on an exposed author.** A block never
 references a block whose author is already exposed as an equivocator
 within the referencing block's own history. Checkable locally, since
 exposure is a fact about the cone a validator already holds.
+`DoSValidFor` states the condition for any exposure `Exp`; `DoSValid` reads
+exposure as twins in the history (`ExposedIn`).
 
 ```lean
 def UniformBudget (D : Delivery U) (τ : ℕ) : Prop :=
@@ -3096,8 +3102,11 @@ def EquivPair (U) (X : Validator) (i j : BlockId) : Prop :=
 def ExposedIn (U) (b : BlockId) (X : Validator) : Prop :=
   ∃ i ∈ history U b, ∃ j ∈ history U b, EquivPair U X i j
 
+def DoSValidFor (U) (Exp : BlockId → Validator → Prop) : Prop :=
+  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ Exp b (U.block i).creator
+
 def DoSValid (U) : Prop :=
-  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ ExposedIn U b (U.block i).creator
+  DoSValidFor U (ExposedIn U)
 ```
 
 Exposure is objective — a property of the cone, checkable by any holder —
@@ -13496,7 +13505,7 @@ reused.
 
 ## Appendix B. The definition reference
 
-The 428 definitions and structures the report names, in
+The 429 definitions and structures the report names, in
 the order a reader meets them. Each entry is the source text,
 unabridged, with the explanation the source carries. This
 appendix is generated from the compiled development by
@@ -14156,13 +14165,25 @@ def ExposedIn (U : BlockUniverse Validator BlockId Payload) (b : BlockId) (X : V
 
 **`X` is exposed in `b`'s history**: two distinct blocks by `X` at one round lie below `b`.
 
+#### `DoSValidFor`
+
+*def, `DoS.Exposure.lean`*
+
+```lean
+def DoSValidFor (U : BlockUniverse Validator BlockId Payload)
+    (Exp : BlockId → Validator → Prop) : Prop :=
+  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ Exp b (U.block i).creator
+```
+
+**DoS validity for an exposure `Exp`**: a block may not reference an author it exposes.
+
 #### `DoSValid`
 
 *def, `DoS.Exposure.lean`*
 
 ```lean
 def DoSValid (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ ExposedIn U b (U.block i).creator
+  DoSValidFor U (ExposedIn U)
 ```
 
 **The DoS-protection condition** (`dos-equivocation-and-growth.md` §3): a block may not reference an author exposed in its own history. A predicate on the universe, not a field of `ValidWrt`, so results that need it take it as an extra hypothesis.

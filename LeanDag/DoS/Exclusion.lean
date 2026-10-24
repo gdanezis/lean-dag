@@ -131,36 +131,97 @@ theorem exists_correct_mem_refs {b : BlockId} (hb : b ∈ U.ids)
       (U.block i).round + 1 = (U.block b).round :=
   exists_correct_memRefs U.causal U.quorateOn hb hround
 
+omit [DecidableEq BlockId] in
 /-- **D17 — exclusion is total, and permanent.** If every correct block of
-round `n+1` is exposed to `X`, so is every block from round `n+2` on,
-whoever authored it. The induction uses no synchrony, only that every
-block leans on a correct block below. -/
-theorem exposedIn_of_correct_exposed {X : Validator} {n : ℕ}
+round `n+1` passes an exposure `Exp` for `X` carried upward, so does every
+block from round `n+2` on, whoever authored it. The induction uses no
+synchrony, only that every block leans on a correct block below. -/
+theorem exposed_of_correct_exposed {Exp : BlockId → Validator → Prop}
+    (hup : Inherited U Exp) {X : Validator} {n : ℕ}
     (hexp : ∀ c ∈ U.ids, (U.block c).round = n + 1 →
-      (U.block c).creator ∈ (Correct : Finset Validator) → ExposedIn U c X) :
-    ∀ k, ∀ b ∈ U.ids, (U.block b).round = n + 2 + k → ExposedIn U b X := by
+      (U.block c).creator ∈ (Correct : Finset Validator) → Exp c X) :
+    ∀ k, ∀ b ∈ U.ids, (U.block b).round = n + 2 + k → Exp b X := by
   intro k
   induction k with
   | zero =>
       intro b hb hbr
       obtain ⟨i, hi, hi_ids, hi_correct, hi_round⟩ :=
         exists_correct_mem_refs hb (by omega)
-      exact (hexp i hi_ids (by omega) hi_correct).of_mem_refs hb hi
+      exact hup b hb i hi X (hexp i hi_ids (by omega) hi_correct)
   | succ k ih =>
       intro b hb hbr
       obtain ⟨i, hi, hi_ids, _, hi_round⟩ := exists_correct_mem_refs hb (by omega)
-      exact (ih i hi_ids (by omega)).of_mem_refs hb hi
+      exact hup b hb i hi X (ih i hi_ids (by omega))
 
+omit [DecidableEq BlockId] in
 /-- The form the condition consumes: from `n+2` on, nobody may name `X`. -/
-theorem not_mem_creators_refs_of_correct_exposed (hdos : DoSValid U) {X : Validator} {n : ℕ}
+theorem not_mem_creators_refs_of_correct_exposed {Exp : BlockId → Validator → Prop}
+    (hdos : DoSValidFor U Exp) (hup : Inherited U Exp) {X : Validator} {n : ℕ}
     (hexp : ∀ c ∈ U.ids, (U.block c).round = n + 1 →
-      (U.block c).creator ∈ (Correct : Finset Validator) → ExposedIn U c X)
+      (U.block c).creator ∈ (Correct : Finset Validator) → Exp c X)
     {b : BlockId} (hb : b ∈ U.ids) (hbr : n + 2 ≤ (U.block b).round) :
     X ∉ creatorsOf U.block (U.block b).refs := by
   obtain ⟨k, hk⟩ : ∃ k, (U.block b).round = n + 2 + k := ⟨(U.block b).round - (n + 2), by omega⟩
   intro hX
   obtain ⟨i, hi, rfl⟩ := mem_creatorsOf.mp hX
-  exact hdos b hb i hi (exposedIn_of_correct_exposed hexp k b hb hk)
+  exact hdos b hb i hi (exposed_of_correct_exposed hup hexp k b hb hk)
+
+/-- **D27 — a history names no exposed author from the exposure up.** Once
+every correct block of round `n+1` exposes `X`, no block of a history at
+round `n+1` or above other than its top is by `X`. -/
+theorem creator_ne_of_correct_exposed {Exp : BlockId → Validator → Prop}
+    (hdos : DoSValidFor U Exp) (hup : Inherited U Exp) {X : Validator} {n : ℕ}
+    (hexp : ∀ c ∈ U.ids, (U.block c).round = n + 1 →
+      (U.block c).creator ∈ (Correct : Finset Validator) → Exp c X)
+    {b i : BlockId} (hb : b ∈ U.ids) (hi : i ∈ history U b) (hne : i ≠ b)
+    (hir : n + 1 ≤ (U.block i).round) : (U.block i).creator ≠ X := by
+  obtain ⟨j, hj, hij⟩ := exists_mem_refs_of_mem_history hb hi hne
+  have hj_ids := history_subset_ids hb hj
+  have hjr := U.round_of_mem_refs hj_ids hij
+  intro hX
+  exact not_mem_creators_refs_of_correct_exposed hdos hup hexp hj_ids (by omega)
+    (mem_creatorsOf.mpr ⟨i, hij, hX⟩)
+
+/-- **D28 — one block a round for each author not exposed.** Let every
+correct block of round `n+1` expose each author of `E`, and let `S` be the
+union of the histories of the blocks `B`. If no author outside `E` has two
+blocks of `S` at round `k ≥ n+1`, then `S` holds at most one block of round
+`k` for each author outside `E`, besides the blocks of `B` by authors of
+`E`. -/
+theorem card_union_history_round_le {Exp : BlockId → Validator → Prop}
+    (hdos : DoSValidFor U Exp) (hup : Inherited U Exp) {E : Finset Validator} {n k : ℕ}
+    (hexp : ∀ X ∈ E, ∀ c ∈ U.ids, (U.block c).round = n + 1 →
+      (U.block c).creator ∈ (Correct : Finset Validator) → Exp c X)
+    {B : Finset BlockId} (hB : B ⊆ U.ids) (hk : n + 1 ≤ k)
+    (htw : ∀ i ∈ B.biUnion (history U), ∀ j ∈ B.biUnion (history U),
+      (U.block i).round = k → (U.block j).round = k →
+      (U.block i).creator = (U.block j).creator → (U.block i).creator ∉ E → i = j) :
+    ((B.biUnion (history U)).filter fun i => (U.block i).round = k).card ≤
+      (Fintype.card Validator - E.card) +
+        (B.filter fun t => (U.block t).creator ∈ E ∧ (U.block t).round = k).card := by
+  classical
+  set S := (B.biUnion (history U)).filter fun i => (U.block i).round = k with hS
+  have hsplit : S ⊆ (S.filter fun i => (U.block i).creator ∉ E) ∪
+      (B.filter fun t => (U.block t).creator ∈ E ∧ (U.block t).round = k) := by
+    intro i hi
+    obtain ⟨hiu, hir⟩ := Finset.mem_filter.mp hi
+    by_cases hiE : (U.block i).creator ∈ E
+    · refine Finset.mem_union_right _ (Finset.mem_filter.mpr ⟨?_, hiE, hir⟩)
+      obtain ⟨t, ht, hit⟩ := Finset.mem_biUnion.mp hiu
+      by_contra hiB
+      exact creator_ne_of_correct_exposed hdos hup (hexp _ hiE) (hB ht) hit
+        (fun h => hiB (h ▸ ht)) (by omega) rfl
+    · exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨hi, hiE⟩)
+  refine (Finset.card_le_card hsplit).trans
+    ((Finset.card_union_le _ _).trans (Nat.add_le_add_right ?_ _))
+  rw [← Finset.card_compl]
+  refine Finset.card_le_card_of_injOn (fun i => (U.block i).creator) ?_ ?_
+  · intro i hi
+    rw [Finset.mem_coe, Finset.mem_filter] at hi
+    exact Finset.mem_coe.mpr (Finset.mem_compl.mpr hi.2)
+  · intro i hi j hj h
+    rw [Finset.mem_coe, Finset.mem_filter, hS, Finset.mem_filter] at hi hj
+    exact htw i hi.1.1 j hj.1.1 hi.1.2 hj.1.2 h hi.2
 
 /-- **D16 — after `R`, agree or be exposed.** If the histories of two
 correct round-`n` blocks between them hold an equivocation by `X`, every

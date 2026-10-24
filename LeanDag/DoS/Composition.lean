@@ -45,7 +45,7 @@ theorem accepted_correct_of_allExposed (hdos : DoSValid U)
   by_contra htc
   obtain ⟨b, hb, hbc, hbr⟩ := hpop
   have href : t ∈ (U.block b).refs := D.includes v hv n b hb hbc hbr ht
-  exact not_mem_creators_refs_of_correct_exposed hdos
+  exact not_mem_creators_refs_of_correct_exposed hdos inherited_exposedIn
     (hexp (U.block t).creator htc) hb (by omega)
     (mem_creatorsOf.mpr ⟨t, href, rfl⟩)
 

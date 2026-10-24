@@ -70,12 +70,25 @@ theorem exposedIn_iff_reaches {b : BlockId} {X : Validator} (hb : b ∈ U.ids) :
   · rintro ⟨i, j, hi, hj, hpair⟩
     exact ⟨i, (mem_history_iff hb).mpr hi, j, (mem_history_iff hb).mpr hj, hpair⟩
 
+/-- **An exposure carried upward**: a block passes the test for `X` whenever
+one of its references does. Twins in the history (`ExposedIn`) are one such
+test; evidence carried by a block of the history is another. -/
+def Inherited (U : BlockUniverse Validator BlockId Payload)
+    (Exp : BlockId → Validator → Prop) : Prop :=
+  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ∀ X, Exp i X → Exp b X
+
+/-- **DoS validity for an exposure `Exp`**: a block may not reference an author
+it exposes. -/
+def DoSValidFor (U : BlockUniverse Validator BlockId Payload)
+    (Exp : BlockId → Validator → Prop) : Prop :=
+  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ Exp b (U.block i).creator
+
 /-- **The DoS-protection condition** (`dos-equivocation-and-growth.md` §3):
 a block may not reference an author exposed in its own history. A
 predicate on the universe, not a field of `ValidWrt`, so results that need
 it take it as an extra hypothesis. -/
 def DoSValid (U : BlockUniverse Validator BlockId Payload) : Prop :=
-  ∀ b ∈ U.ids, ∀ i ∈ (U.block b).refs, ¬ ExposedIn U b (U.block i).creator
+  DoSValidFor U (ExposedIn U)
 
 /-- Decidable on concrete data, so a small DAG can be checked by `decide`. -/
 instance decidableDoSValid : Decidable (DoSValid U) :=
@@ -176,6 +189,10 @@ theorem ExposedIn.mono {c b : BlockId} {X : Validator} (hc : c ∈ U.ids)
 theorem ExposedIn.of_mem_refs {c b : BlockId} {X : Validator} (hc : c ∈ U.ids)
     (hb : b ∈ (U.block c).refs) (h : ExposedIn U b X) : ExposedIn U c X :=
   h.mono hc (Reaches.single hb)
+
+/-- Twins in the history are an exposure carried upward. -/
+theorem inherited_exposedIn : Inherited U (ExposedIn U) :=
+  fun _ hc _ hb _ h => h.of_mem_refs hc hb
 
 /-! ## D15, D15a — who can be excluded, and what it costs (§4). Exposure
 never lands on a correct validator; each exposed author costs one unit
